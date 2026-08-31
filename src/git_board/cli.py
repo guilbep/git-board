@@ -43,6 +43,9 @@ def _field_value(issue: dict, field_name: str) -> str | None:
 
 def _render(issues: list[dict], *, group: str | None, sort: str | None, md: bool, as_json: bool) -> None:
     if sort:
+        # ponytail: string sort — correct for "prio asc" (the only sort a
+        # shipped view uses); wrong for numeric fields like "est" ("16" <
+        # "2"). Add a numeric-field lookup from config if that's ever sorted.
         key, _, direction = sort.partition(" ")
         issues = sorted(issues, key=lambda i: _field_value(i, key) or "", reverse=direction.strip() == "desc")
 
