@@ -1,0 +1,26 @@
+[project]
+name = "git-board"
+version = "0.1.0"
+description = "Fields, sprints and views over git-bug issues"
+readme = "README.md"
+requires-python = ">=3.12"
+license = "MIT"
+dependencies = [
+    "typer>=0.12",
+    "rich>=13.7",
+]
+
+[project.scripts]
+git-board = "git_board.cli:app"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/git_board"]

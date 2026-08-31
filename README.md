@@ -1,0 +1,123 @@
+# git-board
+
+Fields, sprints and views over [git-bug](https://github.com/MichaelMure/git-bug)
+issues — a lightweight, config-as-code replacement for GitHub Projects.
+
+Field values live as namespaced git-bug labels (`status:ready`, `prio:p1`,
+`sprint:delivery`, ...) instead of a separate Projects database, so they merge
+like any other git-bug operation. Sprints and saved views are just a
+`.git-board.toml` file, reviewed and diffed like the rest of your repo.
+
+This is the **M1** milestone: fields, `set` / `get` / `ls`, the filter
+grammar, and config loading. Named views (`board view <name>`), `lint`,
+`sprint`, and the static HTML site are later milestones — see the PRD.
+
+## Install
+
+```bash
+uv tool install git-board
+```
+
+## Config: `.git-board.toml`
+
+```toml
+[repos]
+list = ["EPFL-ENAC/co2-calculator", "EPFL-ENAC/co2-calculator-back-office-doc"]
+
+[fields.status]
+single = true
+options = ["backlog", "comite", "ready", "in-progress", "in-review", "ready-for-validation", "qa", "tests-metier", "validated"]
+
+[fields.prio]
+single = true
+options = ["p0", "p1", "p2", "p3"]
+
+[fields.est]
+single = true
+options = ["0.5", "1", "2", "3", "4", "6", "8", "16"]
+numeric = true
+
+[fields.assignee]
+single = false
+
+[sprints]
+length_days = 14
+start_weekday = "monday"
+
+[[sprints.list]]
+slug = "delivery"
+title = "Delivery"
+start = 2026-08-24
+
+[[sprints.list]]
+slug = "post-delivery"
+title = "Post-delivery"
+start = 2026-09-07
+
+[views.current-sprint]
+layout = "board"
+group = "status"
+filter = "sprint:@current is:open -title:*spec*"
+
+[views.backlog]
+layout = "table"
+filter = "is:open"
+group = "sprint"
+sort = "prio asc"
+
+[views.mine]
+layout = "table"
+filter = "assignee:@me is:open"
+```
+
+## Usage
+
+```bash
+# default view: open issues
+git board
+
+# ad-hoc filter, grouped and sorted
+git board ls "is:open -title:*spec*" --group status --sort "prio asc"
+
+# a named view from .git-board.toml, rendered as markdown or JSON
+git board view current-sprint --md
+git board view backlog --json
+
+# set fields on an issue (single-cardinality fields swap; assignee is multi)
+git board set <issue-id> status=ready prio=p1 sprint=@next assignee=+guilbep
+
+# show an issue's fields (labels)
+git board get <issue-id>
+```
+
+`@me` (in filters, e.g. the `mine` view, or as a field value) resolves from
+`--me` on `ls`/`view`/`set`, falling back to the `GIT_BOARD_ME` env var. It
+errors if neither is set.
+
+### Filter grammar
+
+| Syntax | Meaning |
+|---|---|
+| `field:value` | issue has label `field:value` |
+| `-field:value` | issue does **not** have that label |
+| `field:@current` / `@next` / `@previous` | resolves against `[sprints]` |
+| `field:@me` | resolves to the current user |
+| `is:open` / `is:closed` | issue status |
+| `title:*glob*` | glob match on title |
+| free text | substring match on title |
+
+Conditions are AND'd together.
+
+## Development
+
+```bash
+uv sync
+uv run pytest
+```
+
+## Scope
+
+M1 only: config loading, the git-bug label adapter (mockable, no real
+`git-bug` binary required for tests), the filter grammar, and
+`set`/`get`/`ls`/`view`. `lint`, `move`, `close`, `sprint`, `html`, and `sync`
+are M2+ and not implemented here.
