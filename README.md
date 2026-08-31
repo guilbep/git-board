@@ -1,6 +1,6 @@
 # git-board
 
-Fields, sprints and views over [git-bug](https://github.com/MichaelMure/git-bug)
+Fields, sprints and views over [git-bug](https://github.com/git-bug/git-bug)
 issues — a lightweight, config-as-code replacement for GitHub Projects.
 
 Field values live as namespaced git-bug labels (`status:ready`, `prio:p1`,
@@ -8,15 +8,23 @@ Field values live as namespaced git-bug labels (`status:ready`, `prio:p1`,
 like any other git-bug operation. Sprints and saved views are just a
 `.git-board.toml` file, reviewed and diffed like the rest of your repo.
 
-This is the **M1** milestone: fields, `set` / `get` / `ls`, the filter
-grammar, and config loading. Named views (`board view <name>`), `lint`,
-`sprint`, and the static HTML site are later milestones — see the PRD.
+Field writes go through git-bug's `cache.RepoCache` API **in-process**
+(`github.com/git-bug/git-bug` imported as a Go library), not the `git-bug`
+CLI binary — so `git-board` needs the target repo to be a normal
+git-bug-initialized repo, but does **not** need `git-bug` installed on PATH.
+
+This is the **M1** milestone: fields, `set` / `get` / `ls` / `view`, the
+filter grammar, and config loading. `lint`, `move`, `close`, `sprint`, the
+static HTML site, and `sync` are later milestones and not implemented here.
 
 ## Install
 
 ```bash
-uv tool install git-board
+go install github.com/guilbep/git-board/cmd/git-board@latest
 ```
+
+Requires Go 1.24+ (git-bug's own module requirement); `go install` fetches
+the matching toolchain automatically if needed.
 
 ## Config: `.git-board.toml`
 
@@ -72,22 +80,25 @@ filter = "assignee:@me is:open"
 
 ## Usage
 
+Run from inside a git-bug-initialized repo (or a subdirectory of one), next
+to a `.git-board.toml`.
+
 ```bash
 # default view: open issues
-git board
+git-board
 
 # ad-hoc filter, grouped and sorted
-git board ls "is:open -title:*spec*" --group status --sort "prio asc"
+git-board ls "is:open -title:*spec*" --group status --sort "prio asc"
 
 # a named view from .git-board.toml, rendered as markdown or JSON
-git board view current-sprint --md
-git board view backlog --json
+git-board view current-sprint --md
+git-board view backlog --json
 
 # set fields on an issue (single-cardinality fields swap; assignee is multi)
-git board set <issue-id> status=ready prio=p1 sprint=@next assignee=+guilbep
+git-board set <issue-id> status=ready prio=p1 sprint=@next assignee=+guilbep
 
 # show an issue's fields (labels)
-git board get <issue-id>
+git-board get <issue-id>
 ```
 
 `@me` (in filters, e.g. the `mine` view, or as a field value) resolves from
@@ -108,16 +119,35 @@ errors if neither is set.
 
 Conditions are AND'd together.
 
+## Layout
+
+```
+internal/config/     TOML parsing, sprint resolution — pure, no I/O beyond reading the file.
+internal/gitbugio/    thin wrapper around git-bug's cache.RepoCache API.
+internal/fields/      ApplyField single/multi-cardinality logic and alias resolution.
+internal/filter/      grammar parser, Matches(issue, conditions, config, me).
+cmd/git-board/         main.go + cobra commands, thin rendering.
+```
+
+Split this way so a future TUI or web frontend can reuse `internal/*`
+without touching the CLI.
+
 ## Development
 
 ```bash
-uv sync
-uv run pytest
+go build ./...
+go vet ./...
+go test ./...
+gofmt -l .
 ```
+
+Tests exercise real git-bug repo caches in `t.TempDir()` (via git-bug's own
+`repository.CreateGoGitTestRepo` test helper) rather than a hand-rolled fake
+— it's fast (single-digit milliseconds per test) and the most honest test of
+the real integration.
 
 ## Scope
 
-M1 only: config loading, the git-bug label adapter (mockable, no real
-`git-bug` binary required for tests), the filter grammar, and
-`set`/`get`/`ls`/`view`. `lint`, `move`, `close`, `sprint`, `html`, and `sync`
-are M2+ and not implemented here.
+M1 only: config loading, the in-process git-bug cache adapter, the filter
+grammar, and `set`/`get`/`ls`/`view`. `lint`, `move`, `close`, `sprint`,
+`html`, and `sync` are M2+ and not implemented here.
