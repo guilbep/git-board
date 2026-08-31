@@ -18,7 +18,7 @@ class FakeGitBug:
 
     def __call__(self, args: list[str]) -> str:
         self.calls.append(args)
-        if args[:2] == ["bug", "ls"]:
+        if args[:2] == ["bug", "--format"]:
             return json.dumps(
                 [
                     {"id": iid, "title": "t", "status": "open", "labels": labels}

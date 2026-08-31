@@ -24,10 +24,10 @@ class GitBugAdapter:
         self.cwd = cwd
 
     def _subprocess_run(self, args: list[str]) -> str:
-        # ponytail: assumes `git bug bug ls --format json` / `git bug label
-        # new|rm <id> <label>`. Not exercised against a real binary in this
-        # environment — check `git bug ls --help` against the installed
-        # git-bug version and adjust the args below if they differ.
+        # Verified against github.com/git-bug/git-bug commands/bug/*.go:
+        # listing is `git bug bug --format json` (the `bug` command itself
+        # lists — there is no `ls` subcommand), labels are `git bug bug
+        # label new|rm <id> <label>`.
         try:
             result = subprocess.run(
                 ["git", "bug", *args], cwd=self.cwd, capture_output=True, text=True, check=True
@@ -39,7 +39,7 @@ class GitBugAdapter:
         return result.stdout
 
     def list_issues(self) -> list[dict]:
-        out = self._run(["bug", "ls", "--format", "json"])
+        out = self._run(["bug", "--format", "json"])
         return json.loads(out) if out.strip() else []
 
     def get_labels(self, issue_id: str) -> list[str]:
