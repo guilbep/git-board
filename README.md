@@ -19,12 +19,30 @@ static HTML site, and `sync` are later milestones and not implemented here.
 
 ## Install
 
+This repo is **private**, so Go's default module proxy/checksum database
+can't fetch it — tell Go to go straight to GitHub instead, and make sure
+`git` can authenticate to it (SSH key on your GitHub account, or an HTTPS
+credential helper with a token that has `repo` scope):
+
 ```bash
+export GOPRIVATE=github.com/guilbep/*   # add to your shell profile to persist
 go install github.com/guilbep/git-board/cmd/git-board@latest
 ```
 
 Requires Go 1.24+ (git-bug's own module requirement); `go install` fetches
-the matching toolchain automatically if needed.
+the matching toolchain automatically if needed. Verify it worked:
+
+```bash
+git-board --help
+```
+
+### From a local clone (no GOPRIVATE needed)
+
+```bash
+git clone git@github.com:guilbep/git-board.git
+cd git-board
+go install ./cmd/git-board
+```
 
 ## Config: `.git-board.toml`
 
@@ -135,16 +153,26 @@ without touching the CLI.
 ## Development
 
 ```bash
-go build ./...
-go vet ./...
-go test ./...
-gofmt -l .
+git clone git@github.com:guilbep/git-board.git
+cd git-board
+go build ./...      # compile everything
+go vet ./...         # static checks
+go test ./...        # full suite
+gofmt -l .            # should print nothing; if it does, gofmt -w .
+```
+
+Run one package or one test by name:
+
+```bash
+go test ./internal/filter/...
+go test ./internal/fields/... -run TestApplySingleCardinalitySwapsLabel -v
 ```
 
 Tests exercise real git-bug repo caches in `t.TempDir()` (via git-bug's own
 `repository.CreateGoGitTestRepo` test helper) rather than a hand-rolled fake
 — it's fast (single-digit milliseconds per test) and the most honest test of
-the real integration.
+the real integration. **No `git-bug` binary or network access is needed to
+test** — everything runs against on-disk repo fixtures.
 
 ## Scope
 
