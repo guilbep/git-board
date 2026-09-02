@@ -151,9 +151,16 @@ func TestBridgePullApplyWritesLabelsAndIsIdempotent(t *testing.T) {
 	}
 
 	// Re-running must not error (git-bug's ChangeLabels rejects an all-no-op
-	// call) and must leave the same labels in place.
-	if _, err := execute(t, []string{"bridge", "pull", "--owner", "EPFL-ENAC", "--project", "40", "--apply"}); err != nil {
-		t.Fatalf("second (idempotent) execute: %v", err)
+	// call) and must leave the same labels in place. The summary must also
+	// report 0 fields set the second time — the fixture bug still carries a
+	// status warning (persists every run since it's never written), which
+	// must not be miscounted as a "field set" once its diff is empty.
+	rerunOut, err := execute(t, []string{"bridge", "pull", "--owner", "EPFL-ENAC", "--project", "40", "--apply"})
+	if err != nil {
+		t.Fatalf("second (idempotent) execute: %v\noutput:\n%s", err, rerunOut)
+	}
+	if !strings.Contains(rerunOut, "0 field(s) set") {
+		t.Errorf("expected 0 field(s) set on idempotent re-run, got:\n%s", rerunOut)
 	}
 	lsOut2, err := execute(t, []string{"ls", "is:open"})
 	if err != nil {

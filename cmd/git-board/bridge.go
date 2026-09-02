@@ -134,7 +134,11 @@ func printBridgePlan(out io.Writer, plan ghbridge.Plan) {
 			continue
 		}
 		changed++
-		fieldsSet += len(c.Fields)
+		for _, f := range c.Fields {
+			if len(f.Added) > 0 || len(f.Removed) > 0 {
+				fieldsSet++
+			}
+		}
 		warnings += len(c.Warnings)
 		fmt.Fprintf(out, "#%d %s\n", c.Number, c.Title)
 		for _, l := range c.Added {

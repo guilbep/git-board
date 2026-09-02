@@ -163,7 +163,15 @@ this is meant to run repeatedly.
   (`"Generic"` / `" generic "` / `"GENERIC"`), `normalizeModule` folds any
   case-insensitive match of "generic" to the canonical `"Generic"` before
   slugifying to `mod:generic` — covered by a test with two differently-cased
-  fixture rows.
+  fixture rows. **Unverified**: `gh project field-list 40 --owner
+  EPFL-ENAC --format json` — the one call that would show the two
+  duplicate "Generic" options' actual display names and settle whether
+  they really are a casing/whitespace variant (handled) versus something
+  like `"Generic"` vs `"Generic (misc)"` (not handled by this regex) — hit
+  the GitHub Projects secondary rate limit on every attempt during this
+  work (shared across all agents/tools, not just this one) and was never
+  retrieved. Re-run `field-list` before relying on this normalization for
+  the real `--apply`.
 - **Unmatched-value handling**: a non-empty field value that doesn't
   slugify to one of a configured `[fields.<name>].options` list is skipped
   with a warning (printed per-issue and rolled into the summary line), not
