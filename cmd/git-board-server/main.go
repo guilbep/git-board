@@ -38,7 +38,10 @@ func main() {
 	}
 	defer b.Close()
 
-	dist, err := fs.Sub(boardweb.DistFS, "dist")
+	// Quasar's default build output is nested under dist/spa (the mode
+	// name) — web/dist/.gitkeep lives in the parent dist/, which Quasar's
+	// build never cleans, so the embed target survives repeated builds.
+	dist, err := fs.Sub(boardweb.DistFS, "dist/spa")
 	if err != nil {
 		log.Fatalf("web/dist embed: %v", err)
 	}

@@ -20,11 +20,12 @@ CORS, no separate process) once built and embedded for production.
 ## Production build
 
 ```bash
-npm run build      # writes web/dist (flat — see quasar.config.ts distDir)
+npm run build      # writes web/dist/spa (Quasar's default SPA output dir)
 ```
 
 Then `go build ./cmd/git-board-server` from the repo root embeds `web/dist`
-(`web/embed.go`) into a single binary that serves both the API and the UI.
+(`web/embed.go`) and serves `dist/spa` from it, into a single binary that
+serves both the API and the UI.
 
 ## Type-check
 

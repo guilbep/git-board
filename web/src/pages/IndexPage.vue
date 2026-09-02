@@ -169,19 +169,19 @@ function openIssue(issue: Issue) {
   dialogOpen.value = true;
 }
 
-async function refreshActiveIssue(updated: Issue) {
+// Re-fetches and re-buckets after any field change — a patched group field
+// (e.g. status on the current-sprint view) must move the row to a new
+// bucket, not just update it in place.
+async function refreshAfterPatch(updated: Issue) {
   activeIssue.value = updated;
-  for (const bucket of buckets.value) {
-    const idx = bucket.issues.findIndex((i) => i.id === updated.id);
-    if (idx !== -1) bucket.issues[idx] = updated;
-  }
+  await load();
 }
 
 async function setSingleField(name: string, value: string) {
   if (!activeIssue.value || !value) return;
   try {
     const updated = await patchIssue(activeIssue.value.id, { [name]: value });
-    await refreshActiveIssue(updated);
+    await refreshAfterPatch(updated);
   } catch (e: unknown) {
     $q.notify({ type: 'negative', message: e instanceof Error ? e.message : String(e) });
   }
@@ -196,7 +196,7 @@ async function setMultiField(name: string, newValues: string[]) {
     let updated = activeIssue.value;
     for (const v of added) updated = await patchIssue(updated.id, { [name]: v });
     for (const v of removed) updated = await patchIssue(updated.id, { [name]: `-${v}` });
-    await refreshActiveIssue(updated);
+    await refreshAfterPatch(updated);
   } catch (e: unknown) {
     $q.notify({ type: 'negative', message: e instanceof Error ? e.message : String(e) });
   }

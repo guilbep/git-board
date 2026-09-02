@@ -111,10 +111,15 @@ no longer exists after the Go rewrite.
   with the scaffold (no Vitest) — not added for this MVP; `vue-tsc`
   type-checks clean and `npm run build` produces a real `web/dist`.
 - Production is one binary: `web/embed.go` (`//go:embed all:dist`) embeds
-  `web/dist`, which required overriding Quasar's default `dist/spa` nesting
-  to a flat `distDir: 'dist'` in `quasar.config.ts` so the embed target
-  matches. `web/dist/.gitkeep` is tracked (via a `.gitignore` carve-out) so
-  `go build ./...` succeeds even before the frontend has ever been built.
+  `web/dist`, and `cmd/git-board-server` serves `dist/spa` (Quasar's
+  default nested output — a first attempt flattened `distDir` to match a
+  simpler `fs.Sub` target, but `quasar build` recreates its dist dir from
+  scratch every run and took the tracked `web/dist/.gitkeep` placeholder
+  with it; keeping Quasar's default means the build only ever touches
+  `dist/spa`, leaving `.gitkeep` in the untouched parent). `web/dist/.gitkeep`
+  is tracked (via a `.gitignore` carve-out) so `go build ./...` succeeds
+  even before the frontend has ever been built — verified with
+  `npm run build && git status` showing no changes to `web/dist/.gitkeep`.
 - Genuinely MVP-missing, deliberately deferred: no auth (see above), no
   issue creation from the UI (the CLI itself has no `new` command either —
   git-bug's own tooling owns that), no bulk edit, no optimistic UI (each

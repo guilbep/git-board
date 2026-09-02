@@ -15,6 +15,13 @@ import (
 // apiServer holds what every handler needs: the parsed config, an open
 // git-bug repo cache, and the server-wide "current user" for @me values (no
 // per-request auth in v1 — see README).
+//
+// ponytail: one *gitbugio.Backend shared across every request goroutine, no
+// serialization beyond git-bug's own per-entity locking (cache/*.go). Fine
+// for the expected single-browser-tab usage this MVP targets; if concurrent
+// PATCHes from multiple clients ever race, wrap handlePatchIssue's body in
+// a sync.Mutex on apiServer first — cheapest fix before reaching for
+// per-request Backend instances.
 type apiServer struct {
 	cfg *config.Config
 	b   *gitbugio.Backend

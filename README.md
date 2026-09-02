@@ -209,6 +209,8 @@ test** — everything runs against on-disk repo fixtures.
 
 ## Scope
 
-M1 only: config loading, the in-process git-bug cache adapter, the filter
-grammar, and `set`/`get`/`ls`/`view`. `lint`, `move`, `close`, `sprint`,
-`html`, and `sync` are M2+ and not implemented here.
+Shipped: config loading, the in-process git-bug cache adapter, the filter
+grammar, `set`/`get`/`ls`/`view`, an interactive TUI (`git-board tui`), and
+the web UI above. `lint`, `move`, `close`, `sprint`, the cron-published
+static HTML site, and multi-repo `sync` are not implemented — see
+`docs/implementation-plan.md` for what's tracked next.
