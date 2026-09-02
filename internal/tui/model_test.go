@@ -197,3 +197,34 @@ func containsLabel(labels []string, label string) bool {
 	}
 	return false
 }
+
+// TestWindowSizeMsgOnFreshModelDoesNotPanic is a regression test for a real
+// crash: bubbletea sends a WindowSizeMsg immediately on startup, before the
+// user has pressed anything, and Update's WindowSizeMsg case calls SetSize
+// on all four pickers (list, fieldPicker, valuePicker, catPicker)
+// unconditionally. valuePicker/catPicker used to be left as the zero-value
+// list.Model until the user actually opened them (updateFieldPicker, the
+// "c" key) — SetSize on a zero-value list.Model panics (nil delegate),
+// so every `git-board tui` launch crashed before this was fixed.
+func TestWindowSizeMsgOnFreshModelDoesNotPanic(t *testing.T) {
+	cfg := mustLoadConfig(t)
+	b := gitbugiotest.New(t)
+	gitbugiotest.NewIssue(t, b, "widget")
+	issues, err := b.ListIssues()
+	if err != nil {
+		t.Fatalf("ListIssues: %v", err)
+	}
+
+	m := New(issues, "is:open", b, cfg, "", today)
+
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("Update(WindowSizeMsg) on a fresh Model panicked: %v", r)
+		}
+	}()
+	m = send(m, tea.WindowSizeMsg{Width: 80, Height: 24})
+
+	if v := m.View(); v == "" {
+		t.Error("View() empty after the initial resize")
+	}
+}
