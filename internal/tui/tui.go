@@ -17,6 +17,7 @@ import (
 
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/fields"
+	"github.com/guilbep/git-board/internal/filter"
 	"github.com/guilbep/git-board/internal/gitbugio"
 )
 
@@ -64,10 +65,12 @@ const (
 	modeValuePicker
 	modeValueInput
 	modeCatFilter
+	modeFilterInput
 )
 
 // Model is the bubbletea model: the issue list, an optional detail view,
-// and the edit-field/value and category-filter pickers layered on top.
+// and the edit-field/value, category-filter and structured-filter layers on
+// top.
 type Model struct {
 	list     list.Model
 	mode     mode
@@ -84,10 +87,21 @@ type Model struct {
 	valueInput  textinput.Model
 	editField   string
 
+	// filterInput is the "f" structured-filter box (internal/filter's
+	// field:value grammar — the same one ls/view/tui's launch argument
+	// use), distinct from bubbles/list's own "/" fuzzy text search.
+	// filterExpr is the currently-applied expression (empty = none);
+	// defaultTitle is what the list title reverts to on clear.
+	filterInput  textinput.Model
+	filterExpr   string
+	defaultTitle string
+
 	status string
 
-	// allIssues is the unfiltered set, kept so the category filter can be
-	// cleared back to it.
+	// allIssues is the unfiltered set, kept so the category filter and the
+	// structured filter can both be cleared back to it (and so applying
+	// one after the other narrows from the full set, not compounds off
+	// whatever the other left in m.list).
 	allIssues []gitbugio.Issue
 }
 
@@ -120,17 +134,23 @@ func New(issues []gitbugio.Issue, title string, backend fields.Backend, cfg *con
 	vi := textinput.New()
 	vi.Placeholder = "value"
 
+	fi := textinput.New()
+	fi.Placeholder = `assignee:guilbep -status:validated`
+	fi.Prompt = "filter: "
+
 	return Model{
-		list:        l,
-		backend:     backend,
-		cfg:         cfg,
-		me:          me,
-		today:       today,
-		fieldPicker: fp,
-		valuePicker: vp,
-		catPicker:   cp,
-		valueInput:  vi,
-		allIssues:   issues,
+		list:         l,
+		backend:      backend,
+		cfg:          cfg,
+		me:           me,
+		today:        today,
+		fieldPicker:  fp,
+		valuePicker:  vp,
+		catPicker:    cp,
+		valueInput:   vi,
+		filterInput:  fi,
+		defaultTitle: title,
+		allIssues:    issues,
 	}
 }
 
@@ -160,6 +180,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateValueInput(msg)
 		case modeCatFilter:
 			return m.updateCatFilter(msg)
+		case modeFilterInput:
+			return m.updateFilterInput(msg)
 		default:
 			return m.updateList(msg)
 		}
@@ -172,7 +194,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m Model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// While the filter input is being typed into, every key (including
-	// "q"/"esc"/"c") belongs to the list's own filter handling — don't
+	// "q"/"esc"/"c"/"f") belongs to the list's own filter handling — don't
 	// intercept.
 	if m.list.FilterState() != list.Filtering {
 		switch msg.String() {
@@ -194,6 +216,15 @@ func (m Model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.status = fmt.Sprintf("no %q field configured for the quick filter", catFieldName)
 			}
 			return m, nil
+		case "f":
+			// Always opens empty (not pre-filled with the active filter):
+			// keeps "press f, enter" a predictable clear, and re-typing a
+			// short filter expression isn't a real burden. The active
+			// filter (if any) is still visible in the list title.
+			m.filterInput.SetValue("")
+			m.filterInput.Focus()
+			m.mode = modeFilterInput
+			return m, textinput.Blink
 		case "q", "ctrl+c":
 			return m, tea.Quit
 		}
@@ -292,6 +323,21 @@ func (m Model) updateCatFilter(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
+func (m Model) updateFilterInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc":
+		m.mode = modeList
+		return m, nil
+	case "enter":
+		m = m.applyStructuredFilter(strings.TrimSpace(m.filterInput.Value()))
+		m.mode = modeList
+		return m, nil
+	}
+	var cmd tea.Cmd
+	m.filterInput, cmd = m.filterInput.Update(msg)
+	return m, cmd
+}
+
 // applyEdit writes m.editField=value on the selected issue and returns to
 // the detail view with a status line — a confirmation on success, the error
 // message on failure. It never panics/crashes the program on a write error
@@ -346,6 +392,45 @@ func (m Model) applyCatFilter(value string) Model {
 	return m
 }
 
+// applyStructuredFilter re-filters the full issue set (m.allIssues, not
+// whatever's currently visible) against expr, using the same
+// internal/filter grammar as ls/view/tui's launch argument — field:value,
+// negation, is:open/closed, title globs, free text, all AND'd. Distinct
+// from bubbles/list's own "/" fuzzy search. An empty expr clears back to
+// the full set, same as the category picker's "(all)".
+//
+// filter.Parse never fails syntactically (an unrecognized token just
+// becomes a free-text condition), so the only failure mode is @me used
+// with no current user configured — surfaced as a status line, not a
+// crash, same as every other write/parse error in this model.
+func (m Model) applyStructuredFilter(expr string) Model {
+	if expr == "" {
+		m.list.SetItems(ToItems(m.allIssues))
+		m.list.Title = m.defaultTitle
+		m.filterExpr = ""
+		m.status = "cleared filter"
+		return m
+	}
+
+	conditions := filter.Parse(expr)
+	if filter.RequiresMe(conditions) && m.me == "" {
+		m.status = fmt.Sprintf("filter %q uses @me but no current user configured (--me or GIT_BOARD_ME)", expr)
+		return m
+	}
+
+	var matched []gitbugio.Issue
+	for _, issue := range m.allIssues {
+		if filter.Matches(issue, conditions, m.cfg, m.me, m.today) {
+			matched = append(matched, issue)
+		}
+	}
+	m.list.SetItems(ToItems(matched))
+	m.list.Title = expr
+	m.filterExpr = expr
+	m.status = fmt.Sprintf("filtered: %s (%d issues)", expr, len(matched))
+	return m
+}
+
 func (m Model) View() string {
 	switch m.mode {
 	case modeDetail:
@@ -360,6 +445,14 @@ func (m Model) View() string {
 			displayFieldName(m.editField), m.valueInput.View())
 	case modeCatFilter:
 		return m.catPicker.View()
+	case modeFilterInput:
+		current := "none"
+		if m.filterExpr != "" {
+			current = m.filterExpr
+		}
+		return fmt.Sprintf(
+			"Current filter: %s\n\n%s\n\nfield:value  -field:value  is:open/closed  title:*glob*  free text  (AND'd)\nenter: apply   empty+enter: clear   esc: cancel\n",
+			current, m.filterInput.View())
 	default:
 		view := m.list.View()
 		if m.status != "" {

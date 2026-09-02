@@ -145,12 +145,15 @@ func newTuiCmd() *cobra.Command {
 		Long: `Interactive scrollable, searchable issue browser.
 
 Keys: enter open detail, e edit a field (from detail), c quick-filter by
-category, / bubbles/list's own fuzzy search, esc/q back or quit.
+category, f structured filter (same grammar as "ls" — see below — empty
+input clears it), / bubbles/list's own fuzzy text search, esc/q back or
+quit.
 
 The optional [filter] argument uses the same grammar as "ls" (see
 "git-board --help") and narrows what's loaded before you even start
-browsing — the in-TUI "/" search is a separate, fuzzy text search on top
-of that, not the structured field:value grammar.`,
+browsing. "f" re-applies that same structured grammar live from inside
+the TUI; "/" is a separate, fuzzy text search on top of whatever's
+currently shown — the two compose, they don't replace each other.`,
 		Example: `  git-board tui
   git-board tui "assignee:guilbep -status:validated"
   git-board tui "sprint:@current is:open" --me guilbep`,

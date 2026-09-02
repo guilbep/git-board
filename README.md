@@ -221,12 +221,18 @@ git-board tui "is:open prio:p1"
 
 | Key | Where | Does |
 |---|---|---|
-| `↑`/`↓`, `/` | list | native `bubbles/list` scroll and text search |
+| `↑`/`↓`, `/` | list | native `bubbles/list` scroll and fuzzy text search (title + labels) |
 | `enter` | list | open the detail view for the selected issue |
 | `c` | list | quick-filter by the configured `cat` field's options (`(all)` clears it); coexists with `/` search |
+| `f` | list | structured filter — the same `field:value`/`-field:value`/`is:open`/`title:*glob*` grammar as `ls`/`view`/the launch argument, not the fuzzy `/` search. Empty input + enter clears it. |
 | `e` | detail | edit a field: pick the field, then a value from its configured options, or type free text if it has none (e.g. `assignee`, using the same `+value`/`-value` syntax as `git-board set`) |
 | `esc`/`q` | detail, pickers | back |
 | `q`/`ctrl+c` | list | quit |
+
+`f` and `/` are two different tools: `/` is a quick fuzzy text match, useful
+for "I remember a word in the title." `f` is precise and composable —
+`assignee:guilbep -status:validated` narrows exactly like it would on the
+CLI, because it's the exact same `internal/filter` grammar and code path.
 
 The detail view renders each label under its configured field name (e.g.
 `Status: ready`, `Assignee: alice, bob`); anything not matching a configured

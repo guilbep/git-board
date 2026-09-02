@@ -288,3 +288,49 @@ this is meant to run repeatedly.
   ceiling on 2000) — the first real run may need a smaller `--limit` and a
   retry if it hits that limit; no retry logic was added for it (kept
   simple, surfaces as a plain error to the human running it).
+
+## Status update (2026-09-02): first real `bridge pull --apply`, a TUI crash fix, structured filter in the TUI, `--help` examples
+
+- **Ran for real against EPFL-ENAC/co2-calculator project 40** (`--apply`,
+  not the earlier dry-run-only state): 291 matched (284 changed), 563
+  unmatched (16 not-an-issue, 547 not yet bridged into git-bug), 840
+  fields set, 261 value warnings — all as predicted by the dry-run
+  numbers above. Confirmed real field data (`status`, `prio`, `est`,
+  `assignee`, `mod`) now renders correctly via `git-board ls`/`get`. Local
+  only — not pushed to `origin` (that's a deliberate, separate decision
+  for whoever owns the target repo).
+- **Fixed a real crash**: `git-board tui` panicked on every launch
+  (nil-pointer in `bubbles/list`'s `updatePagination`). Root cause:
+  `valuePicker`/`catPicker` were left as the zero-value `list.Model`
+  until the user opened them, but `Update`'s `WindowSizeMsg` handler
+  calls `SetSize` on all four pickers unconditionally — and bubbletea
+  sends that message immediately on startup. Fix: construct them as real
+  (empty) `list.Model`s in `New`, same as `list`/`fieldPicker` already
+  were. Regression test reproduces the exact panic against the
+  pre-fix code (verified by reverting the fix and re-running) and passes
+  with it.
+- **`f`: structured filter inside the TUI**, distinct from `bubbles/list`'s
+  native `/` fuzzy search. Reuses `internal/filter.Parse`/`Matches`
+  directly — the exact same grammar and code path `ls`/`view`/the launch
+  argument already use, not a reimplementation. Opens empty (not
+  pre-filled with the active filter — an earlier draft did that, but then
+  "press f, enter" without editing just silently re-applied the same
+  filter instead of the expected "empty submit = clear," so it was
+  simplified); the currently-active filter is shown in the input view and
+  the list title instead. `@me` with no `--me`/`GIT_BOARD_ME` configured
+  surfaces as a status line (mirrors `runLs`'s CLI-side check), doesn't
+  crash. Tests: narrows correctly, empty clears back to the full set and
+  original title, `esc` cancels without applying, the `@me`-without-`--me`
+  path. `f` and `c` (category quick-filter) both always re-derive from
+  `allIssues` — last one applied wins, they don't compose with each
+  other, only with `/`.
+- **`--help` overhaul**: every command had only a one-line `Short`
+  description before this — no `Long`, no `Example`. Root `--help` now
+  documents the filter grammar inline; every subcommand (`ls`, `view`,
+  `set`, `tui`, `get`, `bridge configure`/`pull`) has realistic examples,
+  including the compound-filter pattern
+  (`assignee:guilbep -status:validated`) that prompted this — it already
+  worked, it just wasn't discoverable without reading the README.
+- **Not done here**: switching to git-bug's own `termui`/`bug show` (or
+  an inline body/comment preview) from the TUI detail view; sorting in
+  the TUI. Both real asks, not built yet.

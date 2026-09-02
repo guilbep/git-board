@@ -152,6 +152,111 @@ func TestUpdateCategoryFilterNarrowsList(t *testing.T) {
 	}
 }
 
+func TestUpdateStructuredFilterNarrowsList(t *testing.T) {
+	cfg := mustLoadConfig(t)
+	b := gitbugiotest.New(t)
+	mine := gitbugiotest.NewIssue(t, b, "mine, not validated")
+	other := gitbugiotest.NewIssue(t, b, "someone else's")
+	validated := gitbugiotest.NewIssue(t, b, "mine, validated")
+	for id, labels := range map[string][]string{
+		mine:      {"assignee:guilbep"},
+		other:     {"assignee:someone-else"},
+		validated: {"assignee:guilbep", "status:validated"},
+	} {
+		if _, err := b.ApplyLabelChange(id, labels, nil); err != nil {
+			t.Fatalf("seed: %v", err)
+		}
+	}
+	issues, err := b.ListIssues()
+	if err != nil {
+		t.Fatalf("ListIssues: %v", err)
+	}
+
+	m := New(issues, "is:open", b, cfg, "", today)
+
+	m = send(m, key('f'))
+	if m.mode != modeFilterInput {
+		t.Fatalf("mode = %v, want modeFilterInput", m.mode)
+	}
+
+	m = send(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("assignee:guilbep -status:validated")})
+	m = send(m, tea.KeyMsg{Type: tea.KeyEnter})
+
+	if m.mode != modeList {
+		t.Fatalf("mode = %v, want modeList after applying the filter", m.mode)
+	}
+	if got := len(m.list.Items()); got != 1 {
+		t.Fatalf("filtered list items = %d, want 1", got)
+	}
+	it, ok := m.list.Items()[0].(item)
+	if !ok || it.issue.ID != mine {
+		t.Errorf("filtered item = %+v, want issue %q", m.list.Items()[0], mine)
+	}
+	if m.list.Title != "assignee:guilbep -status:validated" {
+		t.Errorf("list title = %q, want it to reflect the active filter", m.list.Title)
+	}
+
+	// Empty input clears back to the full set and the original title.
+	m = send(m, key('f'))
+	m = send(m, tea.KeyMsg{Type: tea.KeyEnter})
+	if got := len(m.list.Items()); got != 3 {
+		t.Fatalf("list items after clearing = %d, want 3 (back to the full set)", got)
+	}
+	if m.list.Title != "is:open" {
+		t.Errorf("list title after clearing = %q, want the original launch title back", m.list.Title)
+	}
+}
+
+func TestUpdateStructuredFilterEscCancelsWithoutApplying(t *testing.T) {
+	cfg := mustLoadConfig(t)
+	b := gitbugiotest.New(t)
+	gitbugiotest.NewIssue(t, b, "widget")
+	issues, err := b.ListIssues()
+	if err != nil {
+		t.Fatalf("ListIssues: %v", err)
+	}
+
+	m := New(issues, "is:open", b, cfg, "", today)
+	m = send(m, key('f'))
+	m = send(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("title:*nomatch*")})
+	m = send(m, tea.KeyMsg{Type: tea.KeyEsc})
+
+	if m.mode != modeList {
+		t.Fatalf("mode = %v, want modeList after esc", m.mode)
+	}
+	if got := len(m.list.Items()); got != 1 {
+		t.Errorf("list items after esc = %d, want 1 (unfiltered, esc must not apply)", got)
+	}
+}
+
+// TestUpdateStructuredFilterRequiresMeDoesNotCrash mirrors runLs's CLI-side
+// check (filter.RequiresMe): @me with no --me/GIT_BOARD_ME configured must
+// surface as a status line, not panic or silently match nothing.
+func TestUpdateStructuredFilterRequiresMeDoesNotCrash(t *testing.T) {
+	cfg := mustLoadConfig(t)
+	b := gitbugiotest.New(t)
+	gitbugiotest.NewIssue(t, b, "widget")
+	issues, err := b.ListIssues()
+	if err != nil {
+		t.Fatalf("ListIssues: %v", err)
+	}
+
+	m := New(issues, "is:open", b, cfg, "" /* no me */, today)
+	m = send(m, key('f'))
+	m = send(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("assignee:@me")})
+	m = send(m, tea.KeyMsg{Type: tea.KeyEnter})
+
+	if m.mode != modeList {
+		t.Fatalf("mode = %v, want modeList", m.mode)
+	}
+	if !strings.Contains(m.status, "@me") {
+		t.Errorf("status = %q, want it to explain the missing --me", m.status)
+	}
+	if got := len(m.list.Items()); got != 1 {
+		t.Errorf("list items = %d, want the list untouched (filter never applied)", got)
+	}
+}
+
 // errBackend is a fields.Backend stub whose write always fails, for the
 // write-error-must-not-crash case. It's the one place a stub replaces
 // gitbugiotest: every other test drives a real repo.
