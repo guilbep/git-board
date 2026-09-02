@@ -77,6 +77,10 @@ numeric = true
 [fields.assignee]
 single = false
 
+[fields.cat]
+single = true
+options = ["bug", "feature", "chore"]
+
 [sprints]
 length_days = 14
 start_weekday = "monday"
@@ -147,6 +151,29 @@ errors if neither is set.
 | free text | substring match on title |
 
 Conditions are AND'd together.
+
+### TUI
+
+```bash
+git-board tui                  # default filter (is:open)
+git-board tui "is:open prio:p1"
+```
+
+| Key | Where | Does |
+|---|---|---|
+| `↑`/`↓`, `/` | list | native `bubbles/list` scroll and text search |
+| `enter` | list | open the detail view for the selected issue |
+| `c` | list | quick-filter by the configured `cat` field's options (`(all)` clears it); coexists with `/` search |
+| `e` | detail | edit a field: pick the field, then a value from its configured options, or type free text if it has none (e.g. `assignee`, using the same `+value`/`-value` syntax as `git-board set`) |
+| `esc`/`q` | detail, pickers | back |
+| `q`/`ctrl+c` | list | quit |
+
+The detail view renders each label under its configured field name (e.g.
+`Status: ready`, `Assignee: alice, bob`); anything not matching a configured
+field namespace is listed under "Other labels" rather than dropped. Field
+edits write through the same `fields.Apply` primitive as `git-board set` and
+the web UI's `PATCH`, so the write is real and immediate — a failure (e.g. a
+repo/network issue) is shown inline and the TUI stays open.
 
 ## Web UI
 
