@@ -20,14 +20,25 @@ static HTML site, and `sync` are later milestones and not implemented here.
 ## Install
 
 This repo is **private**, so Go's default module proxy/checksum database
-can't fetch it — tell Go to go straight to GitHub instead, and make sure
-`git` can authenticate to it (SSH key on your GitHub account, or an HTTPS
-credential helper with a token that has `repo` scope):
+can't fetch it — tell Go to go straight to GitHub instead. That alone isn't
+enough: `go install` fetches `github.com/...` paths over **HTTPS** by
+default, which fails non-interactively even if you have an SSH key on your
+GitHub account, unless `git` is told to use it for that host:
 
 ```bash
+git config --global url."git@github.com:".insteadOf "https://github.com/"
 export GOPRIVATE=github.com/guilbep/*   # add to your shell profile to persist
 go install github.com/guilbep/git-board/cmd/git-board@latest
 ```
+
+(No SSH key set up? Use an HTTPS credential helper with a token that has
+`repo` scope instead, and skip the `git config` line above.)
+
+If you see `reading https://sum.golang.org/...: 404` — `GOPRIVATE` isn't
+actually set in this shell (it doesn't persist across shells unless it's in
+your profile). If you see `could not read Username ... terminal prompts
+disabled` — the `git config` line above is missing or your SSH key isn't
+registered with GitHub.
 
 Requires Go 1.24+ (git-bug's own module requirement); `go install` fetches
 the matching toolchain automatically if needed. Verify it worked:
