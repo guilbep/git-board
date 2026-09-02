@@ -21,6 +21,21 @@ func newBridgeCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "bridge",
 		Short: "Bridge GitHub Project (v2) field values into git-bug labels",
+		Long: `Bridge GitHub Project (v2) field values into git-bug labels.
+
+Read-only against GitHub — only calls "gh project item-list", never
+writes back to the Project or any GitHub issue. Matches project items
+to git-bug issues that are already bridged in locally via
+"git-bug bridge pull" (a separate, earlier step); an item with no
+matching git-bug issue is reported unmatched, not an error.
+
+Meant to run repeatedly, not once: a Project's fields keep changing as
+work progresses, and every run recomputes the diff, so a second run
+with nothing changed is a no-op.`,
+		Example: `  git-board bridge configure --owner EPFL-ENAC --project 40
+  git-board bridge pull                    # dry-run preview (default)
+  git-board bridge pull --apply            # actually write the labels
+  git-board bridge pull --owner EPFL-ENAC --project 40 --dry-run`,
 	}
 	cmd.AddCommand(newBridgeConfigureCmd(), newBridgePullCmd())
 	return cmd
@@ -31,9 +46,10 @@ func newBridgeConfigureCmd() *cobra.Command {
 	var project int
 
 	cmd := &cobra.Command{
-		Use:   "configure",
-		Short: "Store the GitHub Project owner/number in .git-board.toml",
-		Args:  cobra.NoArgs,
+		Use:     "configure",
+		Short:   "Store the GitHub Project owner/number in .git-board.toml",
+		Example: `  git-board bridge configure --owner EPFL-ENAC --project 40`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := config.SetGithubProject(configPath, owner, project); err != nil {
 				return err
@@ -58,7 +74,11 @@ func newBridgePullCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "pull",
 		Short: "Sync GitHub Project field values into git-bug labels on matching issues",
-		Args:  cobra.NoArgs,
+		Example: `  git-board bridge pull                              # dry-run preview
+  git-board bridge pull --apply                       # write the labels
+  git-board bridge pull --owner EPFL-ENAC --project 40 --apply
+  git-board bridge pull --limit 500 --apply           # smaller batch, avoids rate limits`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if apply && dryRun {
 				return fmt.Errorf("--apply and --dry-run are mutually exclusive")

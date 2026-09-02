@@ -35,8 +35,28 @@ func resolveMe(flag string) string {
 
 func newRootCmd() *cobra.Command {
 	root := &cobra.Command{
-		Use:           "git-board",
-		Short:         "Fields, sprints and views over git-bug issues",
+		Use:   "git-board",
+		Short: "Fields, sprints and views over git-bug issues",
+		Long: `Fields, sprints and views over git-bug issues — a config-as-code
+replacement for GitHub Projects. Field values (status, priority, sprint,
+assignees, ...) live as namespaced git-bug labels; run "git-board bridge
+--help" to pull them from an actual GitHub Project.
+
+FILTER GRAMMAR (used by ls/view/tui):
+  field:value             issue has the label field:value
+  -field:value            issue does NOT have that label
+  field:@current/@next/@previous   resolves against [sprints] in .git-board.toml
+  field:@me               resolves to --me / GIT_BOARD_ME
+  is:open / is:closed     issue status
+  title:*glob*            glob match on title
+  free text               substring match on title
+  Conditions are AND'd together — combine as many as you like.`,
+		Example: `  git-board                                    # default: open issues
+  git-board ls "assignee:guilbep -status:validated"
+  git-board ls "sprint:@current is:open" --group status
+  git-board view backlog --md
+  git-board set a1b2c3 status=ready prio=p1
+  git-board tui "assignee:@me is:open" --me guilbep`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -54,7 +74,12 @@ func newLsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "ls [filter]",
 		Short: "List issues matching a filter expression",
-		Args:  cobra.MaximumNArgs(1),
+		Example: `  git-board ls                                          # is:open (default)
+  git-board ls "assignee:guilbep -status:validated"
+  git-board ls "sprint:delivery is:open" --group status --sort "prio asc"
+  git-board ls "assignee:@me is:open" --me guilbep
+  git-board ls "title:*login*" --json`,
+		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			filterStr := defaultFilter
 			if len(args) > 0 {
@@ -78,7 +103,10 @@ func newViewCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "view <name>",
 		Short: "Render a named view from .git-board.toml",
-		Args:  cobra.ExactArgs(1),
+		Example: `  git-board view backlog
+  git-board view current-sprint --md
+  git-board view mine --me guilbep --json`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runView(cmd.OutOrStdout(), args[0], md, asJSON, resolveMe(me))
 		},
@@ -95,7 +123,11 @@ func newSetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "set <id> field=value [field=value...]",
 		Short: "Set one or more fields on an issue",
-		Args:  cobra.MinimumNArgs(2),
+		Example: `  git-board set a1b2c3 status=ready prio=p1
+  git-board set a1b2c3 sprint=@next --me guilbep
+  git-board set a1b2c3 assignee=+guilbep     # multi-cardinality: add
+  git-board set a1b2c3 assignee=-guilbep     # multi-cardinality: remove`,
+		Args: cobra.MinimumNArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runSet(cmd.OutOrStdout(), args[0], args[1:], resolveMe(me))
 		},
@@ -110,7 +142,19 @@ func newTuiCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "tui [filter]",
 		Short: "Interactive scrollable, searchable issue browser",
-		Args:  cobra.MaximumNArgs(1),
+		Long: `Interactive scrollable, searchable issue browser.
+
+Keys: enter open detail, e edit a field (from detail), c quick-filter by
+category, / bubbles/list's own fuzzy search, esc/q back or quit.
+
+The optional [filter] argument uses the same grammar as "ls" (see
+"git-board --help") and narrows what's loaded before you even start
+browsing — the in-TUI "/" search is a separate, fuzzy text search on top
+of that, not the structured field:value grammar.`,
+		Example: `  git-board tui
+  git-board tui "assignee:guilbep -status:validated"
+  git-board tui "sprint:@current is:open" --me guilbep`,
+		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			filterStr := defaultFilter
 			if len(args) > 0 {
@@ -125,9 +169,10 @@ func newTuiCmd() *cobra.Command {
 
 func newGetCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "get <id>",
-		Short: "Show fields (labels) for an issue",
-		Args:  cobra.ExactArgs(1),
+		Use:     "get <id>",
+		Short:   "Show fields (labels) for an issue",
+		Example: `  git-board get a1b2c3`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runGet(cmd.OutOrStdout(), args[0])
 		},
