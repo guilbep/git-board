@@ -4,41 +4,17 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"sort"
 	"strings"
 	"text/tabwriter"
 
+	"github.com/guilbep/git-board/internal/board"
 	"github.com/guilbep/git-board/internal/gitbugio"
 )
-
-func fieldValue(issue gitbugio.Issue, fieldName string) string {
-	prefix := fieldName + ":"
-	for _, l := range issue.Labels {
-		if strings.HasPrefix(l, prefix) {
-			return strings.TrimPrefix(l, prefix)
-		}
-	}
-	return ""
-}
 
 // render prints issues as a table, markdown, or JSON, optionally sorted and
 // grouped. JSON output ignores grouping and prints the flat sorted list.
 func render(out io.Writer, issues []gitbugio.Issue, group, sortSpec string, md, asJSON bool) error {
-	if sortSpec != "" {
-		key, direction, _ := strings.Cut(sortSpec, " ")
-		desc := strings.TrimSpace(direction) == "desc"
-		// ponytail: string sort — fine for label fields like "prio" (the
-		// only sort a shipped view uses); wrong for numeric fields like
-		// "est" ("16" < "2"). Add a numeric-field lookup from config if
-		// that's ever sorted.
-		sort.SliceStable(issues, func(i, j int) bool {
-			vi, vj := fieldValue(issues[i], key), fieldValue(issues[j], key)
-			if desc {
-				return vi > vj
-			}
-			return vi < vj
-		})
-	}
+	board.SortByField(issues, sortSpec)
 
 	if asJSON {
 		enc := json.NewEncoder(out)
@@ -46,41 +22,21 @@ func render(out io.Writer, issues []gitbugio.Issue, group, sortSpec string, md, 
 		return enc.Encode(issues)
 	}
 
-	buckets, order := bucketBy(issues, group)
-	for _, name := range order {
+	for _, bucket := range board.BucketBy(issues, group) {
 		if group != "" {
 			if md {
-				fmt.Fprintf(out, "### %s\n", name)
+				fmt.Fprintf(out, "### %s\n", bucket.Group)
 			} else {
-				fmt.Fprintf(out, "== %s ==\n", name)
+				fmt.Fprintf(out, "== %s ==\n", bucket.Group)
 			}
 		}
 		if md {
-			writeMarkdownTable(out, buckets[name])
+			writeMarkdownTable(out, bucket.Issues)
 		} else {
-			writeTable(out, buckets[name])
+			writeTable(out, bucket.Issues)
 		}
 	}
 	return nil
-}
-
-func bucketBy(issues []gitbugio.Issue, group string) (map[string][]gitbugio.Issue, []string) {
-	buckets := map[string][]gitbugio.Issue{}
-	var order []string
-	for _, issue := range issues {
-		key := ""
-		if group != "" {
-			key = fieldValue(issue, group)
-			if key == "" {
-				key = "(none)"
-			}
-		}
-		if _, seen := buckets[key]; !seen {
-			order = append(order, key)
-		}
-		buckets[key] = append(buckets[key], issue)
-	}
-	return buckets, order
 }
 
 func writeTable(out io.Writer, issues []gitbugio.Issue) {

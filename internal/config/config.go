@@ -12,9 +12,9 @@ import (
 
 // Field describes one namespaced-label field (e.g. "status", "prio").
 type Field struct {
-	Single  bool     `toml:"single"`
-	Options []string `toml:"options"`
-	Numeric bool     `toml:"numeric"`
+	Single  bool     `toml:"single" json:"single"`
+	Options []string `toml:"options" json:"options"`
+	Numeric bool     `toml:"numeric" json:"numeric"`
 }
 
 // Sprint is one entry in [[sprints.list]].
@@ -33,10 +33,10 @@ type SprintsConfig struct {
 
 // View is one [views.<name>] table.
 type View struct {
-	Layout string `toml:"layout"`
-	Filter string `toml:"filter"`
-	Group  string `toml:"group"`
-	Sort   string `toml:"sort"`
+	Layout string `toml:"layout" json:"layout"`
+	Filter string `toml:"filter" json:"filter"`
+	Group  string `toml:"group" json:"group"`
+	Sort   string `toml:"sort" json:"sort"`
 }
 
 // reposTable mirrors the [repos] table shape (`list = [...]`).

@@ -137,17 +137,50 @@ errors if neither is set.
 
 Conditions are AND'd together.
 
+## Web UI
+
+A one-page board, backed by a Go HTTP API in the same module — no Python,
+no separate service. `cmd/git-board-server` reuses `internal/config`,
+`internal/gitbugio`, `internal/fields` and `internal/board` directly, so
+`ls`/`view`/`set` and the API apply the exact same filter/sort/group and
+field-write logic.
+
+**No auth in v1** — same trusted-internal-network assumption as git-bug's
+own `git bug webui`. Anyone who can reach the port can read and write every
+issue. Upgrade path when that stops being fine: a reverse proxy doing auth
+in front of it (simplest), or a token check in `withCORS`/a new middleware
+in `cmd/git-board-server` (more work, still small).
+
+```bash
+# backend — run from inside the git-bug repo, next to .git-board.toml
+go run ./cmd/git-board-server              # listens on :8080
+go run ./cmd/git-board-server --addr :9090 --me guilbep
+
+# frontend, dev mode (separate terminal) — talks to the backend on :8080
+# via CORS (see cmd/git-board-server/cors.go); Quasar's dev server is :9000
+cd web && npm install && npm run dev
+
+# production: build the frontend into web/dist, then build one binary that
+# embeds it (web/embed.go) — no separate frontend deploy/CDN needed
+cd web && npm install && npm run build
+cd .. && go build -o git-board-server ./cmd/git-board-server
+./git-board-server   # serves the API and the built UI on the same origin
+```
+
 ## Layout
 
 ```
-internal/config/     TOML parsing, sprint resolution — pure, no I/O beyond reading the file.
-internal/gitbugio/    thin wrapper around git-bug's cache.RepoCache API.
-internal/fields/      ApplyField single/multi-cardinality logic and alias resolution.
-internal/filter/      grammar parser, Matches(issue, conditions, config, me).
-cmd/git-board/         main.go + cobra commands, thin rendering.
+internal/config/       TOML parsing, sprint resolution — pure, no I/O beyond reading the file.
+internal/gitbugio/     thin wrapper around git-bug's cache.RepoCache API.
+internal/fields/       ApplyField single/multi-cardinality logic and alias resolution.
+internal/filter/       grammar parser, Matches(issue, conditions, config, me).
+internal/board/        load/sort/group issues — shared by the CLI, the TUI and the web API.
+cmd/git-board/          main.go + cobra commands, thin rendering.
+cmd/git-board-server/   HTTP API (net/http, no framework) + embeds web/dist for prod.
+web/                    Quasar/Vue frontend — one board page, api/board.ts is the only HTTP client.
 ```
 
-Split this way so a future TUI or web frontend can reuse `internal/*`
+Split this way so the TUI and the web frontend both reuse `internal/*`
 without touching the CLI.
 
 ## Development
@@ -176,6 +209,8 @@ test** — everything runs against on-disk repo fixtures.
 
 ## Scope
 
-M1 only: config loading, the in-process git-bug cache adapter, the filter
-grammar, and `set`/`get`/`ls`/`view`. `lint`, `move`, `close`, `sprint`,
-`html`, and `sync` are M2+ and not implemented here.
+Shipped: config loading, the in-process git-bug cache adapter, the filter
+grammar, `set`/`get`/`ls`/`view`, an interactive TUI (`git-board tui`), and
+the web UI above. `lint`, `move`, `close`, `sprint`, the cron-published
+static HTML site, and multi-repo `sync` are not implemented — see
+`docs/implementation-plan.md` for what's tracked next.
