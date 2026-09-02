@@ -175,11 +175,18 @@ func runTui(filterStr, me string) error {
 	if err != nil {
 		return err
 	}
-	matched, err := loadMatchingIssues(cfg, filterStr, me)
+
+	b, err := gitbugio.OpenCwd()
 	if err != nil {
 		return err
 	}
-	return tui.Run(matched, filterStr)
+	defer b.Close()
+
+	matched, err := board.LoadMatching(b, cfg, filterStr, me)
+	if err != nil {
+		return err
+	}
+	return tui.Run(matched, filterStr, b, cfg, me, time.Now())
 }
 
 // loadMatchingIssues opens the git-bug repo cache in cwd and returns issues

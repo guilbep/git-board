@@ -126,3 +126,58 @@ no longer exists after the Go rewrite.
   `PATCH` round-trips before the row updates), clearing a single-cardinality
   field to empty isn't wired up in the dialog (only picking one of the
   configured options is).
+
+## Status update (2026-09-02): TUI editing, on `feat/tui-editing`
+
+Follow-up on the "Dogfood feedback" section above. Re-diagnosed: the detail
+view and "nothing to edit/see" complaints were mostly because the real
+issues dogfooded against had **zero board-relevant labels yet** (a separate
+bridge command — `import-github`, tracked above under "Not done" — is being
+built elsewhere to populate those from GitHub Projects). Rather than wait for
+that, this closes the three concrete TUI gaps against fixtures with
+realistic populated labels, so the behavior is properly testable now:
+
+- **Nicer detail view**: labels are parsed against `cfg.Fields` and rendered
+  as `Field: value(s)` lines (multi-cardinality joined, e.g.
+  `Assignee: alice, bob`), sorted by field name; anything not matching a
+  configured field namespace is listed under "Other labels" instead of
+  silently dropped. Pure logic in `ParseLabels` (`internal/tui/detail.go`),
+  independent of bubbletea's `Update`/`View`.
+- **Inline field editing**: `e` from the detail view opens a field picker
+  (`bubbles/list`, config-driven, not a hardcoded field list) → a value
+  picker over that field's configured `Options`, or a free-text
+  `bubbles/textinput` for fields with none (only `assignee` in the current
+  fixture — same `+value`/`-value` semantics `fields.Apply` already defines).
+  The write goes through `fields.Apply` (`ApplyField` in `detail.go`
+  wraps it and re-reads labels from the backend afterward, rather than
+  re-deriving the single/multi-cardinality swap logic client-side) and shows
+  a confirmation or error status line — a write failure doesn't crash the
+  TUI, it's shown inline and the user can retry or back out (`esc`).
+- **Quick category filter**: `c` from the list opens a picker over the
+  configured `cat` field's options (plus a `(all)` entry to clear) and
+  narrows the visible list via `FilterByField`; layers on top of
+  `bubbles/list`'s own `/` text filter rather than replacing it.
+- **Wiring**: `tui.Run`/`tui.New` now take `backend fields.Backend, cfg
+  *config.Config, me string, today time.Time` in addition to the existing
+  `issues []gitbugio.Issue, title string` — the `fields.Backend` interface
+  (not the concrete `*gitbugio.Backend`) so tests can drive it through
+  `gitbugiotest` fixtures like the rest of the repo. `cmd/git-board`'s
+  `runTui` now opens the backend itself (previously `loadMatchingIssues`
+  opened-and-closed it before `tui.Run` even started) and keeps it open for
+  the life of the TUI session so edits can write through it.
+- Testdata: `internal/config/testdata/git-board.toml` (the shared fixture
+  already used by `fields`/`filter`/server tests) gained `[fields.cat]`
+  (`bug`/`feature`/`chore`) so the category filter has something realistic
+  to filter on — no other fixture change needed since `status`/`prio`/`est`/
+  `assignee` already covered the single/multi-cardinality and options/
+  free-text cases.
+- Tests: known-vs-unrecognized label parsing, field/value picker
+  construction from config (including the free-text fallback when a field
+  has no `Options`), single-cardinality edit (old label gone, new one
+  present, same assertion style as `fields_test.go`), multi-cardinality
+  edit, category quick-filter narrowing — all via real `gitbugiotest`
+  fixtures, no mocks. `go build ./...`, `go vet ./...`, `gofmt -l .`, `go
+  test ./...` all clean.
+- Not done here, still tracked above: `import-github` bridge itself (a
+  parallel effort), numeric-aware sort, `lint`/`move`/`close`/`sprint`
+  subcommands.

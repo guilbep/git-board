@@ -17,6 +17,10 @@ numeric = true
 [fields.assignee]
 single = false
 
+[fields.cat]
+single = true
+options = ["bug", "feature", "chore"]
+
 [sprints]
 length_days = 14
 start_weekday = "monday"
