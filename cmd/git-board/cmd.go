@@ -13,6 +13,7 @@ import (
 	"github.com/guilbep/git-board/internal/fields"
 	"github.com/guilbep/git-board/internal/filter"
 	"github.com/guilbep/git-board/internal/gitbugio"
+	"github.com/guilbep/git-board/internal/tui"
 )
 
 const (
@@ -42,7 +43,7 @@ func newRootCmd() *cobra.Command {
 			return runLs(cmd.OutOrStdout(), defaultFilter, "", "", false, false, "")
 		},
 	}
-	root.AddCommand(newViewCmd(), newLsCmd(), newSetCmd(), newGetCmd())
+	root.AddCommand(newViewCmd(), newLsCmd(), newSetCmd(), newGetCmd(), newTuiCmd())
 	return root
 }
 
@@ -103,6 +104,25 @@ func newSetCmd() *cobra.Command {
 	return cmd
 }
 
+func newTuiCmd() *cobra.Command {
+	var me string
+
+	cmd := &cobra.Command{
+		Use:   "tui [filter]",
+		Short: "Interactive scrollable, searchable issue browser",
+		Args:  cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			filterStr := defaultFilter
+			if len(args) > 0 {
+				filterStr = args[0]
+			}
+			return runTui(filterStr, resolveMe(me))
+		},
+	}
+	meFlag(cmd, &me)
+	return cmd
+}
+
 func newGetCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "get <id>",
@@ -143,20 +163,43 @@ func runView(out io.Writer, name string, md, asJSON bool, me string) error {
 }
 
 func listAndRender(out io.Writer, cfg *config.Config, filterStr, group, sort string, md, asJSON bool, me string) error {
+	matched, err := loadMatchingIssues(cfg, filterStr, me)
+	if err != nil {
+		return err
+	}
+	return render(out, matched, group, sort, md, asJSON)
+}
+
+func runTui(filterStr, me string) error {
+	cfg, err := loadConfig()
+	if err != nil {
+		return err
+	}
+	matched, err := loadMatchingIssues(cfg, filterStr, me)
+	if err != nil {
+		return err
+	}
+	return tui.Run(matched, filterStr)
+}
+
+// loadMatchingIssues opens the git-bug repo cache in cwd, lists issues, and
+// returns those matching filterStr — the shared core behind ls/view's table
+// render and the tui's interactive list.
+func loadMatchingIssues(cfg *config.Config, filterStr, me string) ([]gitbugio.Issue, error) {
 	conditions := filter.Parse(filterStr)
 	if filter.RequiresMe(conditions) && me == "" {
-		return fmt.Errorf("filter uses @me but no current user configured (--me or GIT_BOARD_ME)")
+		return nil, fmt.Errorf("filter uses @me but no current user configured (--me or GIT_BOARD_ME)")
 	}
 
 	b, err := gitbugio.OpenCwd()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer b.Close()
 
 	issues, err := b.ListIssues()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	today := time.Now()
@@ -166,8 +209,7 @@ func listAndRender(out io.Writer, cfg *config.Config, filterStr, group, sort str
 			matched = append(matched, issue)
 		}
 	}
-
-	return render(out, matched, group, sort, md, asJSON)
+	return matched, nil
 }
 
 func runSet(out io.Writer, idPrefix string, assignments []string, me string) error {
