@@ -74,3 +74,50 @@ criteria. Revisit this note once the TUI's been tried; don't build both.
   assumptions once — recheck compatibility before bumping past `v0.10.1`.
 - Sub-issues / `parent:` label: decide at M2 whether co2-calculator's
   linked-PR items need it before v2.
+
+## Status update (2026-09-02): web UI landed
+
+Despite the TUI-first recommendation above, the web UI was built next
+(explicit ask, not a re-litigation of that note) — **Go backend, not the
+PRD's old FastAPI sketch**, since that assumed a Python implementation that
+no longer exists after the Go rewrite.
+
+- `internal/board` (new): `loadMatchingIssues`/`fieldValue`/sort/`bucketBy`
+  pulled out of `cmd/git-board`'s `package main` into an importable package
+  — it had exactly one caller before, now it has three (CLI, TUI, web API).
+  No behavior change for the CLI; `go test ./...` stayed green throughout.
+- `cmd/git-board-server` (new): stdlib `net/http` + Go 1.22 method-pattern
+  `ServeMux`, no router framework. `GET /api/views`, `GET
+  /api/config/fields`, `GET /api/issues` (filter+sort+group — group is
+  applied server-side via `board.BucketBy`, unlike the CLI's own `--json`
+  which ignores it), `GET`/`PATCH /api/issues/{id}` (PATCH goes through
+  `fields.Apply`, same swap semantics as `set`). Tested with
+  `httptest.Server` + `gitbugiotest` real-repo fixtures, no mocks — plus a
+  manual end-to-end smoke run (built binary, real git-bug repo, `curl`
+  against every endpoint including the embedded static UI and a CORS
+  preflight) before calling it done.
+- **No auth in v1**, matching git-bug's own `webui` precedent (trusted
+  internal network). Loud caveat in the README, not a silent gap.
+- `web/` (continued the existing Quasar/Vue scaffold, not restarted): one
+  board page — view/filter picker, a table per group (Quasar's `QTable` has
+  no built-in `group-by` row-grouping like Vuetify does, so grouping is
+  server-side buckets rendered as one table per bucket instead), click a
+  row for a detail dialog with per-field inputs (`QSelect` for
+  single-cardinality fields, chip input diffed into add/remove `PATCH`
+  calls for multi-cardinality `assignee`). All HTTP through
+  `web/src/api/board.ts`. No routing library added; the generated
+  vue-router scaffold was trimmed to one route instead of ripped out
+  (smaller diff, still effectively one page). No test framework shipped
+  with the scaffold (no Vitest) — not added for this MVP; `vue-tsc`
+  type-checks clean and `npm run build` produces a real `web/dist`.
+- Production is one binary: `web/embed.go` (`//go:embed all:dist`) embeds
+  `web/dist`, which required overriding Quasar's default `dist/spa` nesting
+  to a flat `distDir: 'dist'` in `quasar.config.ts` so the embed target
+  matches. `web/dist/.gitkeep` is tracked (via a `.gitignore` carve-out) so
+  `go build ./...` succeeds even before the frontend has ever been built.
+- Genuinely MVP-missing, deliberately deferred: no auth (see above), no
+  issue creation from the UI (the CLI itself has no `new` command either —
+  git-bug's own tooling owns that), no bulk edit, no optimistic UI (each
+  `PATCH` round-trips before the row updates), clearing a single-cardinality
+  field to empty isn't wired up in the dialog (only picking one of the
+  configured options is).

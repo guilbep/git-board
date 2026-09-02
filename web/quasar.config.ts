@@ -57,7 +57,10 @@ export default defineConfig((/* ctx */) => {
       // defineEnv: {}
       // ignorePublicFolder: true,
       // minify: false,
-      // distDir
+
+      // cmd/git-board-server embeds web/dist directly (web/embed.go) —
+      // skip Quasar's default dist/spa nesting.
+      distDir: 'dist',
 
       // extendViteConf (viteConf) {},
       // viteVuePluginOptions: {},
@@ -93,7 +96,7 @@ export default defineConfig((/* ctx */) => {
       // directives: [],
 
       // Quasar plugins
-      plugins: []
+      plugins: ['Notify']
     },
 
     // animations: 'all', // --- includes all animations
