@@ -134,6 +134,66 @@ git-board get <issue-id>
 `--me` on `ls`/`view`/`set`, falling back to the `GIT_BOARD_ME` env var. It
 errors if neither is set.
 
+## Bridging GitHub Projects into labels (`git-board bridge`)
+
+`git-board bridge` maps a GitHub Project (v2)'s custom field values onto the
+`ns:value` labels above, on git-bug issues already bridged in locally via
+`git-bug bridge pull` (matched by GitHub issue URL, not title — a git-bug
+bug carries the original issue URL in its Create-operation metadata when it
+came from `git-bug`'s own GitHub bridge).
+
+It is **read-only against GitHub**: it only runs `gh project item-list`
+(needs `gh` authenticated with at least `read:project` scope) and never
+writes back to the Project or to any GitHub issue. All writes land on the
+local git-bug repo, via the same `ApplyLabelChange`/`ChangeLabels` call
+`git-board set` uses.
+
+This is meant to be run **repeatedly**, not once — a GitHub Project's field
+values (status, priority, sprint, assignees, ...) keep changing as work
+progresses, so re-running `bridge pull` is how the label model stays in
+sync. Every run recomputes the diff against the issue's current labels, so
+running it twice back-to-back is a no-op the second time.
+
+```bash
+# one-time: remember which GitHub Project to pull from
+git-board bridge configure --owner EPFL-ENAC --project 40
+
+# preview only — prints the labels that would be added/removed, and a
+# matched/unmatched/warnings summary. This is the default; no flags needed.
+git-board bridge pull
+
+# actually write the labels
+git-board bridge pull --apply
+
+# override the configured project for one run
+git-board bridge pull --owner EPFL-ENAC --project 40 --dry-run
+```
+
+Field mapping:
+
+| GitHub Project field | Label | Cardinality |
+|---|---|---|
+| Status | `status:<value>` | single |
+| Priority | `prio:<value>` | single |
+| Category | `cat:<value>` | single |
+| Module | `mod:<value>` | single — the two duplicate "Generic" options are merged into one `mod:generic` |
+| Est. hours | `est:<value>` | single |
+| Sprint | `sprint:<slug>` | single, matched against `[[sprints.list]]` titles |
+| Assignees | `assignee:<user>` | multi — one label per assignee, added *and* removed to mirror GitHub exactly |
+
+`Milestone` and `Size` are **not** imported — the PRD calls them dead/unused
+fields.
+
+A field value that doesn't slugify to one of a configured `[fields.<name>]`
+`options` list is **skipped with a warning**, not silently dropped or
+guessed at — real Project data has drift (the PRD's own numbers: dozens of
+open items with no status or priority set at all). An empty GitHub value
+just leaves that label untouched, no warning; a non-empty value with no
+matching option prints a warning line and leaves the label untouched too.
+A project item that isn't a GitHub Issue (a PR added straight to the
+Project) is excluded outright and reported as unmatched, same as an Issue
+that hasn't been bridged into git-bug yet.
+
 ### Filter grammar
 
 | Syntax | Meaning |
@@ -186,6 +246,7 @@ internal/gitbugio/     thin wrapper around git-bug's cache.RepoCache API.
 internal/fields/       ApplyField single/multi-cardinality logic and alias resolution.
 internal/filter/       grammar parser, Matches(issue, conditions, config, me).
 internal/board/        load/sort/group issues — shared by the CLI, the TUI and the web API.
+internal/ghbridge/     `gh project item-list` parsing + field-mapping/diff logic for `bridge pull`.
 cmd/git-board/          main.go + cobra commands, thin rendering.
 cmd/git-board-server/   HTTP API (net/http, no framework) + embeds web/dist for prod.
 web/                    Quasar/Vue frontend — one board page, api/board.ts is the only HTTP client.
@@ -221,7 +282,8 @@ test** — everything runs against on-disk repo fixtures.
 ## Scope
 
 Shipped: config loading, the in-process git-bug cache adapter, the filter
-grammar, `set`/`get`/`ls`/`view`, an interactive TUI (`git-board tui`), and
-the web UI above. `lint`, `move`, `close`, `sprint`, the cron-published
-static HTML site, and multi-repo `sync` are not implemented — see
-`docs/implementation-plan.md` for what's tracked next.
+grammar, `set`/`get`/`ls`/`view`, an interactive TUI (`git-board tui`), the
+web UI above, and `git-board bridge configure`/`bridge pull` (GitHub
+Project → label bridge). `lint`, `move`, `close`, `sprint`, the
+cron-published static HTML site, and multi-repo `sync` are not implemented
+— see `docs/implementation-plan.md` for what's tracked next.
