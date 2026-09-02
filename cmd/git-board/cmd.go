@@ -9,16 +9,16 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/guilbep/git-board/internal/board"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/fields"
-	"github.com/guilbep/git-board/internal/filter"
 	"github.com/guilbep/git-board/internal/gitbugio"
 	"github.com/guilbep/git-board/internal/tui"
 )
 
 const (
 	configPath    = ".git-board.toml"
-	defaultFilter = "is:open"
+	defaultFilter = board.DefaultFilter
 )
 
 // meFlag is shared by ls/view/set: --me, falling back to GIT_BOARD_ME.
@@ -182,34 +182,18 @@ func runTui(filterStr, me string) error {
 	return tui.Run(matched, filterStr)
 }
 
-// loadMatchingIssues opens the git-bug repo cache in cwd, lists issues, and
-// returns those matching filterStr — the shared core behind ls/view's table
-// render and the tui's interactive list.
+// loadMatchingIssues opens the git-bug repo cache in cwd and returns issues
+// matching filterStr — the shared core behind ls/view's table render and the
+// tui's interactive list. The actual matching logic lives in internal/board
+// so cmd/git-board-server can reuse it too.
 func loadMatchingIssues(cfg *config.Config, filterStr, me string) ([]gitbugio.Issue, error) {
-	conditions := filter.Parse(filterStr)
-	if filter.RequiresMe(conditions) && me == "" {
-		return nil, fmt.Errorf("filter uses @me but no current user configured (--me or GIT_BOARD_ME)")
-	}
-
 	b, err := gitbugio.OpenCwd()
 	if err != nil {
 		return nil, err
 	}
 	defer b.Close()
 
-	issues, err := b.ListIssues()
-	if err != nil {
-		return nil, err
-	}
-
-	today := time.Now()
-	matched := make([]gitbugio.Issue, 0, len(issues))
-	for _, issue := range issues {
-		if filter.Matches(issue, conditions, cfg, me, today) {
-			matched = append(matched, issue)
-		}
-	}
-	return matched, nil
+	return board.LoadMatching(b, cfg, filterStr, me)
 }
 
 func runSet(out io.Writer, idPrefix string, assignments []string, me string) error {
