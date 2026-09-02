@@ -2,9 +2,11 @@ package tui
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 
+	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/guilbep/git-board/internal/gitbugio"
@@ -331,5 +333,129 @@ func TestWindowSizeMsgOnFreshModelDoesNotPanic(t *testing.T) {
 
 	if v := m.View(); v == "" {
 		t.Error("View() empty after the initial resize")
+	}
+}
+
+func titles(items []list.Item) []string {
+	out := make([]string, len(items))
+	for i, li := range items {
+		out[i] = li.(item).issue.Title
+	}
+	return out
+}
+
+func TestUpdateSortOrdersList(t *testing.T) {
+	cfg := mustLoadConfig(t)
+	b := gitbugiotest.New(t)
+	p2 := gitbugiotest.NewIssue(t, b, "p2 issue")
+	p0 := gitbugiotest.NewIssue(t, b, "p0 issue")
+	p1 := gitbugiotest.NewIssue(t, b, "p1 issue")
+	for id, prio := range map[string]string{p2: "prio:p2", p0: "prio:p0", p1: "prio:p1"} {
+		if _, err := b.ApplyLabelChange(id, []string{prio}, nil); err != nil {
+			t.Fatalf("seed: %v", err)
+		}
+	}
+	issues, err := b.ListIssues()
+	if err != nil {
+		t.Fatalf("ListIssues: %v", err)
+	}
+
+	m := New(issues, "is:open", b, cfg, "", today)
+
+	m = send(m, key('s'))
+	if m.mode != modeSortInput {
+		t.Fatalf("mode = %v, want modeSortInput", m.mode)
+	}
+	m = send(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("prio")})
+	m = send(m, tea.KeyMsg{Type: tea.KeyEnter})
+
+	if m.mode != modeList {
+		t.Fatalf("mode = %v, want modeList after applying the sort", m.mode)
+	}
+	want := []string{"p0 issue", "p1 issue", "p2 issue"}
+	if got := titles(m.list.Items()); !slices.Equal(got, want) {
+		t.Errorf("order after sort by prio = %v, want %v", got, want)
+	}
+
+	// "prio desc" reverses it.
+	m = send(m, key('s'))
+	m = send(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("prio desc")})
+	m = send(m, tea.KeyMsg{Type: tea.KeyEnter})
+	wantDesc := []string{"p2 issue", "p1 issue", "p0 issue"}
+	if got := titles(m.list.Items()); !slices.Equal(got, wantDesc) {
+		t.Errorf("order after sort by prio desc = %v, want %v", got, wantDesc)
+	}
+}
+
+func TestUpdateSortPersistsAcrossFilter(t *testing.T) {
+	cfg := mustLoadConfig(t)
+	b := gitbugiotest.New(t)
+	p2 := gitbugiotest.NewIssue(t, b, "p2 issue")
+	p0 := gitbugiotest.NewIssue(t, b, "p0 issue")
+	closed := gitbugiotest.NewIssue(t, b, "p1 issue, will be excluded")
+	for id, prio := range map[string]string{p2: "prio:p2", p0: "prio:p0", closed: "prio:p1"} {
+		if _, err := b.ApplyLabelChange(id, []string{prio}, nil); err != nil {
+			t.Fatalf("seed: %v", err)
+		}
+	}
+	issues, err := b.ListIssues()
+	if err != nil {
+		t.Fatalf("ListIssues: %v", err)
+	}
+
+	m := New(issues, "is:open", b, cfg, "", today)
+	m = send(m, key('s'))
+	m = send(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("prio")})
+	m = send(m, tea.KeyMsg{Type: tea.KeyEnter})
+
+	// Narrowing afterward must not lose the sort.
+	m = send(m, key('f'))
+	m = send(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("-title:*excluded*")})
+	m = send(m, tea.KeyMsg{Type: tea.KeyEnter})
+
+	want := []string{"p0 issue", "p2 issue"}
+	if got := titles(m.list.Items()); !slices.Equal(got, want) {
+		t.Errorf("order after filtering a sorted list = %v, want %v (sort should persist)", got, want)
+	}
+}
+
+func TestUpdateSortClearRestoresNaturalOrder(t *testing.T) {
+	cfg := mustLoadConfig(t)
+	b := gitbugiotest.New(t)
+	p2 := gitbugiotest.NewIssue(t, b, "p2 issue")
+	p0 := gitbugiotest.NewIssue(t, b, "p0 issue")
+	p1 := gitbugiotest.NewIssue(t, b, "p1 issue")
+	for id, prio := range map[string]string{p2: "prio:p2", p0: "prio:p0", p1: "prio:p1"} {
+		if _, err := b.ApplyLabelChange(id, []string{prio}, nil); err != nil {
+			t.Fatalf("seed: %v", err)
+		}
+	}
+	issues, err := b.ListIssues() // natural (unsorted) order
+	if err != nil {
+		t.Fatalf("ListIssues: %v", err)
+	}
+	natural := titles(ToItems(issues))
+
+	m := New(issues, "is:open", b, cfg, "", today)
+	m = send(m, key('s'))
+	m = send(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("prio")})
+	m = send(m, tea.KeyMsg{Type: tea.KeyEnter})
+	// Regression check for the sort itself, independent of what "natural"
+	// happens to be (with 3 distinct prio values this is an unambiguous
+	// assertion, not a coin-flip like a 2-item natural-order comparison
+	// would be).
+	wantSorted := []string{"p0 issue", "p1 issue", "p2 issue"}
+	if got := titles(m.list.Items()); !slices.Equal(got, wantSorted) {
+		t.Fatalf("order after sort by prio = %v, want %v", got, wantSorted)
+	}
+
+	// Empty input clears the sort — this must recompute from the
+	// still-narrowed base set in its natural order, not just re-run a
+	// no-op sort over the already-sorted visible items (which would
+	// silently leave the stale sorted order in place).
+	m = send(m, key('s'))
+	m = send(m, tea.KeyMsg{Type: tea.KeyEnter})
+	if got := titles(m.list.Items()); !slices.Equal(got, natural) {
+		t.Errorf("order after clearing sort = %v, want the natural order %v back", got, natural)
 	}
 }

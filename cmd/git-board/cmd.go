@@ -146,8 +146,9 @@ func newTuiCmd() *cobra.Command {
 
 Keys: enter open detail, e edit a field (from detail), c quick-filter by
 category, f structured filter (same grammar as "ls" — see below — empty
-input clears it), / bubbles/list's own fuzzy text search, esc/q back or
-quit.
+input clears it), s sort by field e.g. "prio" or "prio desc" (same as
+--sort, persists across a later f/c filter, empty input clears it),
+/ bubbles/list's own fuzzy text search, esc/q back or quit.
 
 The optional [filter] argument uses the same grammar as "ls" (see
 "git-board --help") and narrows what's loaded before you even start

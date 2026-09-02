@@ -225,6 +225,7 @@ git-board tui "is:open prio:p1"
 | `enter` | list | open the detail view for the selected issue |
 | `c` | list | quick-filter by the configured `cat` field's options (`(all)` clears it); coexists with `/` search |
 | `f` | list | structured filter — the same `field:value`/`-field:value`/`is:open`/`title:*glob*` grammar as `ls`/`view`/the launch argument, not the fuzzy `/` search. Empty input + enter clears it. |
+| `s` | list | sort by field, e.g. `prio` (ascending) or `prio desc` — same syntax as `ls --sort`. Persists across a later `f`/`c` filter change. Empty input + enter clears it back to natural order. |
 | `e` | detail | edit a field: pick the field, then a value from its configured options, or type free text if it has none (e.g. `assignee`, using the same `+value`/`-value` syntax as `git-board set`) |
 | `esc`/`q` | detail, pickers | back |
 | `q`/`ctrl+c` | list | quit |

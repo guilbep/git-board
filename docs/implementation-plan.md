@@ -334,3 +334,27 @@ this is meant to run repeatedly.
 - **Not done here**: switching to git-bug's own `termui`/`bug show` (or
   an inline body/comment preview) from the TUI detail view; sorting in
   the TUI. Both real asks, not built yet.
+
+## Status update (2026-09-02): `s` sort in the TUI
+
+- **`s`: sort by field**, same `"field"`/`"field desc"` spec syntax
+  `internal/board.SortByField` (and the CLI's `--sort`) already use — no
+  new sort implementation, just wiring. Opens empty, same convention as
+  `f`; the active spec shows in the input view.
+- **Persists across a later `f`/`c` filter**: added `Model.baseIssues`
+  (the currently-narrowed set *before* sorting, distinct from
+  `m.allIssues` the unfiltered set and from whatever's currently in
+  `m.list`), which `applyCatFilter`/`applyStructuredFilter` update and
+  `applySort` reads. Everywhere the visible list gets rebuilt routes
+  through a `sortedItems` helper that applies `m.sortSpec` (a no-op on
+  `""`) to a copy of the base set.
+- **Caught before shipping**: a first draft had `applySort("")` (the
+  "clear" path) re-sort whatever was *currently visible* with a no-op
+  spec — which doesn't restore natural order at all, it just leaves the
+  already-sorted order in place (a no-op over already-sorted data is
+  still that sorted data). Same "clear that doesn't actually clear" bug
+  class as `applyStructuredFilter`'s design went through earlier. Fixed
+  by having `applySort` always read from `baseIssues`, not the visible
+  list. A test asserts the true natural order (captured via a fresh
+  `ListIssues()` before any sort) comes back on clear, not just "some
+  order."

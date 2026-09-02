@@ -15,6 +15,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/guilbep/git-board/internal/board"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/fields"
 	"github.com/guilbep/git-board/internal/filter"
@@ -66,6 +67,7 @@ const (
 	modeValueInput
 	modeCatFilter
 	modeFilterInput
+	modeSortInput
 )
 
 // Model is the bubbletea model: the issue list, an optional detail view,
@@ -96,6 +98,14 @@ type Model struct {
 	filterExpr   string
 	defaultTitle string
 
+	// sortInput is the "s" sort box — same "field" / "field desc" spec
+	// board.SortByField (and the CLI's --sort) already use. sortSpec
+	// persists across filter/category-filter changes, so narrowing after
+	// sorting doesn't lose the order — every place list items get
+	// (re)built routes through sortedItems.
+	sortInput textinput.Model
+	sortSpec  string
+
 	status string
 
 	// allIssues is the unfiltered set, kept so the category filter and the
@@ -103,6 +113,15 @@ type Model struct {
 	// one after the other narrows from the full set, not compounds off
 	// whatever the other left in m.list).
 	allIssues []gitbugio.Issue
+
+	// baseIssues is the currently narrowed set *before* sorting — set by
+	// applyCatFilter/applyStructuredFilter (== allIssues when nothing's
+	// narrowed), read by applySort. Keeping this separate from m.list's
+	// actual items means clearing the sort (empty spec) restores the true
+	// natural order of whatever's currently narrowed, instead of "no-op
+	// sorting" an already-sorted list — sortedItems copies before sorting,
+	// it never mutates baseIssues itself.
+	baseIssues []gitbugio.Issue
 }
 
 // New builds a Model over issues. title is shown as the list header (the
@@ -138,6 +157,10 @@ func New(issues []gitbugio.Issue, title string, backend fields.Backend, cfg *con
 	fi.Placeholder = `assignee:guilbep -status:validated`
 	fi.Prompt = "filter: "
 
+	si := textinput.New()
+	si.Placeholder = `prio asc`
+	si.Prompt = "sort: "
+
 	return Model{
 		list:         l,
 		backend:      backend,
@@ -149,8 +172,10 @@ func New(issues []gitbugio.Issue, title string, backend fields.Backend, cfg *con
 		catPicker:    cp,
 		valueInput:   vi,
 		filterInput:  fi,
+		sortInput:    si,
 		defaultTitle: title,
 		allIssues:    issues,
+		baseIssues:   issues,
 	}
 }
 
@@ -182,6 +207,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateCatFilter(msg)
 		case modeFilterInput:
 			return m.updateFilterInput(msg)
+		case modeSortInput:
+			return m.updateSortInput(msg)
 		default:
 			return m.updateList(msg)
 		}
@@ -194,7 +221,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m Model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// While the filter input is being typed into, every key (including
-	// "q"/"esc"/"c"/"f") belongs to the list's own filter handling — don't
+	// "q"/"esc"/"c"/"f"/"s") belongs to the list's own filter handling — don't
 	// intercept.
 	if m.list.FilterState() != list.Filtering {
 		switch msg.String() {
@@ -224,6 +251,11 @@ func (m Model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.filterInput.SetValue("")
 			m.filterInput.Focus()
 			m.mode = modeFilterInput
+			return m, textinput.Blink
+		case "s":
+			m.sortInput.SetValue("")
+			m.sortInput.Focus()
+			m.mode = modeSortInput
 			return m, textinput.Blink
 		case "q", "ctrl+c":
 			return m, tea.Quit
@@ -338,6 +370,21 @@ func (m Model) updateFilterInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
+func (m Model) updateSortInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc":
+		m.mode = modeList
+		return m, nil
+	case "enter":
+		m = m.applySort(strings.TrimSpace(m.sortInput.Value()))
+		m.mode = modeList
+		return m, nil
+	}
+	var cmd tea.Cmd
+	m.sortInput, cmd = m.sortInput.Update(msg)
+	return m, cmd
+}
+
 // applyEdit writes m.editField=value on the selected issue and returns to
 // the detail view with a status line — a confirmation on success, the error
 // message on failure. It never panics/crashes the program on a write error
@@ -382,13 +429,42 @@ func (m *Model) syncIssueLabels(issueID string, labels []string) {
 // "(all)" entry.
 func (m Model) applyCatFilter(value string) Model {
 	if value == "(all)" {
-		m.list.SetItems(ToItems(m.allIssues))
+		m.baseIssues = m.allIssues
+		m.list.SetItems(m.sortedItems(m.baseIssues))
 		m.status = "cleared category filter"
 		return m
 	}
-	filtered := FilterByField(m.allIssues, catFieldName, value)
-	m.list.SetItems(ToItems(filtered))
-	m.status = fmt.Sprintf("filtered by %s:%s (%d issues)", catFieldName, value, len(filtered))
+	m.baseIssues = FilterByField(m.allIssues, catFieldName, value)
+	m.list.SetItems(m.sortedItems(m.baseIssues))
+	m.status = fmt.Sprintf("filtered by %s:%s (%d issues)", catFieldName, value, len(m.baseIssues))
+	return m
+}
+
+// sortedItems applies m.sortSpec (if any — a no-op on "") to a copy of
+// issues and converts to list.Items. Routed through by every place that
+// (re)builds the visible list (filter, category filter, sort itself) so a
+// sort persists across a later filter/category-filter change instead of
+// being silently lost.
+func (m Model) sortedItems(issues []gitbugio.Issue) []list.Item {
+	sorted := append([]gitbugio.Issue(nil), issues...)
+	board.SortByField(sorted, m.sortSpec)
+	return ToItems(sorted)
+}
+
+// applySort sorts the currently-visible issues by spec ("field" or "field
+// desc", the same syntax board.SortByField/the CLI's --sort already use)
+// and remembers it in m.sortSpec so it survives a later filter change.
+// board.SortByField is a no-op on "", so an empty spec both clears and
+// re-renders in whatever order the current filter naturally returned —
+// same "empty clears" convention as the filter/category-filter inputs.
+func (m Model) applySort(spec string) Model {
+	m.sortSpec = spec
+	m.list.SetItems(m.sortedItems(m.baseIssues))
+	if spec == "" {
+		m.status = "cleared sort"
+	} else {
+		m.status = fmt.Sprintf("sorted by %s", spec)
+	}
 	return m
 }
 
@@ -405,7 +481,8 @@ func (m Model) applyCatFilter(value string) Model {
 // crash, same as every other write/parse error in this model.
 func (m Model) applyStructuredFilter(expr string) Model {
 	if expr == "" {
-		m.list.SetItems(ToItems(m.allIssues))
+		m.baseIssues = m.allIssues
+		m.list.SetItems(m.sortedItems(m.baseIssues))
 		m.list.Title = m.defaultTitle
 		m.filterExpr = ""
 		m.status = "cleared filter"
@@ -424,7 +501,8 @@ func (m Model) applyStructuredFilter(expr string) Model {
 			matched = append(matched, issue)
 		}
 	}
-	m.list.SetItems(ToItems(matched))
+	m.baseIssues = matched
+	m.list.SetItems(m.sortedItems(m.baseIssues))
 	m.list.Title = expr
 	m.filterExpr = expr
 	m.status = fmt.Sprintf("filtered: %s (%d issues)", expr, len(matched))
@@ -453,6 +531,14 @@ func (m Model) View() string {
 		return fmt.Sprintf(
 			"Current filter: %s\n\n%s\n\nfield:value  -field:value  is:open/closed  title:*glob*  free text  (AND'd)\nenter: apply   empty+enter: clear   esc: cancel\n",
 			current, m.filterInput.View())
+	case modeSortInput:
+		current := "none"
+		if m.sortSpec != "" {
+			current = m.sortSpec
+		}
+		return fmt.Sprintf(
+			"Current sort: %s\n\n%s\n\n\"field\" (ascending) or \"field desc\" — e.g. prio desc\nenter: apply   empty+enter: clear   esc: cancel\n",
+			current, m.sortInput.View())
 	default:
 		view := m.list.View()
 		if m.status != "" {
