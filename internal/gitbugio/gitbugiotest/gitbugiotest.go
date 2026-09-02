@@ -8,6 +8,7 @@ package gitbugiotest
 
 import (
 	"testing"
+	"time"
 
 	"github.com/git-bug/git-bug/repository"
 
@@ -43,6 +44,24 @@ func NewIssue(t testing.TB, b *gitbugio.Backend, title string) string {
 	bug, _, err := b.TestCache().Bugs().New(title, "")
 	if err != nil {
 		t.Fatalf("Bugs().New: %v", err)
+	}
+	return bug.Id().String()
+}
+
+// NewImportedIssue creates a bug the same way NewIssue does, but stamps a
+// "github-url" Create-metadata value on it — simulating a bug that came in
+// via `git-bug bridge pull` from GitHub, so internal/ghbridge's
+// issue-matching-by-URL has something real to match against.
+func NewImportedIssue(t testing.TB, b *gitbugio.Backend, title, githubURL string) string {
+	t.Helper()
+	author, err := b.TestCache().GetUserIdentity()
+	if err != nil {
+		t.Fatalf("GetUserIdentity: %v", err)
+	}
+	bug, _, err := b.TestCache().Bugs().NewRaw(author, time.Now().Unix(), title, "", nil,
+		map[string]string{"github-url": githubURL})
+	if err != nil {
+		t.Fatalf("Bugs().NewRaw: %v", err)
 	}
 	return bug.Id().String()
 }

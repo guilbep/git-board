@@ -1,0 +1,141 @@
+{
+  "items": [
+    {
+      "assignees": ["BenBotros", "guilbep"],
+      "content": {
+        "body": "",
+        "number": 2605,
+        "repository": "EPFL-ENAC/co2-calculator",
+        "title": "[BUG]: cannot change equipment_class in grant (#2605)",
+        "type": "Issue",
+        "url": "https://github.com/EPFL-ENAC/co2-calculator/issues/2605"
+      },
+      "id": "PVTI_lADOA62qLM4BE4-5zg44YNA",
+      "labels": ["bug"],
+      "linked pull requests": ["https://github.com/EPFL-ENAC/co2-calculator/pull/2633"],
+      "priority": "P0",
+      "repository": "https://github.com/EPFL-ENAC/co2-calculator",
+      "sprint": {
+        "duration": 14,
+        "iterationId": "912a52aa",
+        "startDate": "2026-08-24",
+        "title": "Delivery"
+      },
+      "status": "QA Validation",
+      "module": "BackOffice",
+      "category": "FEAT",
+      "est. hours": 2,
+      "title": "[BUG]: cannot change equipment_class in grant"
+    },
+    {
+      "assignees": [],
+      "content": {
+        "body": "",
+        "number": 2606,
+        "repository": "EPFL-ENAC/co2-calculator",
+        "title": "[BUG]: module graph do not change i18n (#2606)",
+        "type": "Issue",
+        "url": "https://github.com/EPFL-ENAC/co2-calculator/issues/2606"
+      },
+      "id": "PVTI_lADOA62qLM4BE4-5zg44ZVI",
+      "repository": "EPFL-ENAC/co2-calculator",
+      "status": "Validated",
+      "module": "Generic",
+      "est. hours": 0.5,
+      "title": "[BUG]: module graph do not change i18n"
+    },
+    {
+      "assignees": ["guilbep"],
+      "content": {
+        "body": "",
+        "number": 2610,
+        "repository": "EPFL-ENAC/co2-calculator",
+        "title": "[FEAT]: dedupe module option (#2610)",
+        "type": "Issue",
+        "url": "https://github.com/EPFL-ENAC/co2-calculator/issues/2610"
+      },
+      "id": "PVTI_dedupe1",
+      "repository": "EPFL-ENAC/co2-calculator",
+      "status": "Backlog",
+      "priority": "P2",
+      "module": " generic ",
+      "title": "[FEAT]: dedupe module option, variant one"
+    },
+    {
+      "assignees": [],
+      "content": {
+        "body": "",
+        "number": 2611,
+        "repository": "EPFL-ENAC/co2-calculator",
+        "title": "[FEAT]: dedupe module option two (#2611)",
+        "type": "Issue",
+        "url": "https://github.com/EPFL-ENAC/co2-calculator/issues/2611"
+      },
+      "id": "PVTI_dedupe2",
+      "repository": "EPFL-ENAC/co2-calculator",
+      "status": "Backlog",
+      "module": "GENERIC",
+      "title": "[FEAT]: dedupe module option, variant two"
+    },
+    {
+      "assignees": ["BenBotros"],
+      "content": {
+        "body": "",
+        "number": 2620,
+        "repository": "EPFL-ENAC/co2-calculator",
+        "title": "[BUG]: no status or priority set yet (#2620)",
+        "type": "Issue",
+        "url": "https://github.com/EPFL-ENAC/co2-calculator/issues/2620"
+      },
+      "id": "PVTI_empty",
+      "repository": "EPFL-ENAC/co2-calculator",
+      "title": "[BUG]: no status or priority set yet"
+    },
+    {
+      "assignees": [],
+      "content": {
+        "body": "",
+        "number": 2621,
+        "repository": "EPFL-ENAC/co2-calculator",
+        "title": "[BUG]: status not in the configured list (#2621)",
+        "type": "Issue",
+        "url": "https://github.com/EPFL-ENAC/co2-calculator/issues/2621"
+      },
+      "id": "PVTI_weirdstatus",
+      "repository": "EPFL-ENAC/co2-calculator",
+      "status": "Some New Status",
+      "priority": "P9",
+      "title": "[BUG]: status not in the configured list"
+    },
+    {
+      "assignees": ["guilbep"],
+      "content": {
+        "body": "",
+        "number": 2650,
+        "repository": "EPFL-ENAC/co2-calculator",
+        "title": "not bridged into git-bug yet (#2650)",
+        "type": "Issue",
+        "url": "https://github.com/EPFL-ENAC/co2-calculator/issues/2650"
+      },
+      "id": "PVTI_notbridged",
+      "repository": "EPFL-ENAC/co2-calculator",
+      "status": "Backlog",
+      "title": "not bridged into git-bug yet"
+    },
+    {
+      "assignees": ["guilbep"],
+      "content": {
+        "body": "",
+        "number": 2633,
+        "repository": "EPFL-ENAC/co2-calculator",
+        "title": "fix: equipment_class swap (#2633)",
+        "type": "PullRequest",
+        "url": "https://github.com/EPFL-ENAC/co2-calculator/pull/2633"
+      },
+      "id": "PVTI_pr",
+      "repository": "EPFL-ENAC/co2-calculator",
+      "status": "In Review",
+      "title": "fix: equipment_class swap"
+    }
+  ]
+}

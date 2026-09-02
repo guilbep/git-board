@@ -88,6 +88,27 @@ func TestApplyLabelChangeNoOpDoesNotError(t *testing.T) {
 	}
 }
 
+func TestListIssuesExposesGithubURL(t *testing.T) {
+	b := gitbugiotest.New(t)
+	gitbugiotest.NewIssue(t, b, "local only")
+	gitbugiotest.NewImportedIssue(t, b, "from github", "https://github.com/o/r/issues/42")
+
+	issues, err := b.ListIssues()
+	if err != nil {
+		t.Fatalf("ListIssues: %v", err)
+	}
+	byTitle := map[string]gitbugio.Issue{}
+	for _, i := range issues {
+		byTitle[i.Title] = i
+	}
+	if byTitle["local only"].GithubURL != "" {
+		t.Errorf("local only GithubURL = %q, want empty", byTitle["local only"].GithubURL)
+	}
+	if got := byTitle["from github"].GithubURL; got != "https://github.com/o/r/issues/42" {
+		t.Errorf("GithubURL = %q, want https://github.com/o/r/issues/42", got)
+	}
+}
+
 func TestGetIssueResolvesByIDPrefix(t *testing.T) {
 	b := gitbugiotest.New(t)
 	id := gitbugiotest.NewIssue(t, b, "prefix test")

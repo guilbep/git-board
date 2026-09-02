@@ -28,8 +28,6 @@ conversation, not checked in here yet) for full context; this tracks state.
 - [ ] `sprint ls|current|new|report`.
 - [ ] `html` (static site for PM/non-dev browsing, cron-published).
 - [ ] `sync` (multi-repo `git bug` pull/push).
-- [ ] `import-github` (bridges GitHub Project 40 into the label model —
-  needed before real dogfooding on co2-calculator's actual 811 items).
 - [ ] Numeric-aware `--sort` (currently lexical; fine for the one shipped
   sort `prio asc`, marked `ponytail:` in `cmd.go`).
 
@@ -181,3 +179,112 @@ realistic populated labels, so the behavior is properly testable now:
 - Not done here, still tracked above: `import-github` bridge itself (a
   parallel effort), numeric-aware sort, `lint`/`move`/`close`/`sprint`
   subcommands.
+## Status update (2026-09-02): `git-board bridge` (PRD §11 migration bridge)
+
+`git-board bridge configure`/`bridge pull` bridges GitHub Project 40's
+custom field values into the label model, for git-bug issues already
+imported via `git-bug bridge pull` (that import step is out of scope here —
+this only maps fields onto bugs that already exist locally). Shaped as a
+`bridge` subcommand namespace mirroring git-bug's own `bridge` UX
+(`configure` persists owner/project, `pull` does the sync), not a one-shot
+migration script — Project 40's fields keep changing as work progresses, so
+this is meant to run repeatedly.
+
+- **Real shape verified**, not guessed: ran `gh project item-list 40
+  --owner EPFL-ENAC --format json` against the actual project before
+  writing the parser. Top-level item keys: `assignees`, `content`
+  (`body`/`number`/`repository`/`title`/`type`/`url`), `id`, `labels`,
+  `linked pull requests`, `priority`, `repository`, `sprint`
+  (`duration`/`iterationId`/`startDate`/`title`), `status`, `module`,
+  `category`, `est. hours` (JSON number, int or float), `title`.
+  `content.type` was `"Issue"` on every row fetched live; `"PullRequest"`/
+  `"DraftIssue"` are documented GitHub Project item content types, handled
+  defensively (excluded, reported as unmatched) with a synthetic fixture
+  row since none turned up live in the sample pulled. `milestone`/`size`
+  never appeared with a value, consistent with the PRD calling them
+  dead — not decoded at all, so any value present is silently ignored by
+  omission (not mapped to a label).
+- **Matching by GitHub URL, not title**: `git-bug`'s own GitHub bridge
+  stamps the issue's URL under a `"github-url"` Create-operation metadata
+  key on import (`bridge/github/github.go`'s unexported
+  `metaKeyGithubUrl`, set via `Bugs().NewRaw`'s metadata map). Surfaced as
+  `gitbugio.Issue.GithubURL`; `ghbridge.BuildPlan` looks bugs up by exact
+  URL match against the project item's `content.url`. A bug not bridged in
+  from GitHub carries no such metadata and simply never matches.
+- **Module dedup**: gh's JSON only exposes an option's display name, not
+  its id, so two *identically-named* duplicate options already collapse in
+  the JSON with no code needed. To also cover a casing/whitespace variant
+  (`"Generic"` / `" generic "` / `"GENERIC"`), `normalizeModule` folds any
+  case-insensitive match of "generic" to the canonical `"Generic"` before
+  slugifying to `mod:generic` — covered by a test with two differently-cased
+  fixture rows. **Unverified**: `gh project field-list 40 --owner
+  EPFL-ENAC --format json` — the one call that would show the two
+  duplicate "Generic" options' actual display names and settle whether
+  they really are a casing/whitespace variant (handled) versus something
+  like `"Generic"` vs `"Generic (misc)"` (not handled by this regex) — hit
+  the GitHub Projects secondary rate limit on every attempt during this
+  work (shared across all agents/tools, not just this one) and was never
+  retrieved. Re-run `field-list` before relying on this normalization for
+  the real `--apply`.
+- **Unmatched-value handling**: a non-empty field value that doesn't
+  slugify to one of a configured `[fields.<name>].options` list is skipped
+  with a warning (printed per-issue and rolled into the summary line), not
+  silently dropped — matches the PRD's own acknowledgment of real drift
+  (documented example: dozens of empty-status/empty-priority items). An
+  *empty* source value is treated as "leave untouched", not a warning —
+  expected, not an error.
+  **Verified against the real 100-item sample pulled live from Project 40**
+  (fields decoded through the actual `BuildPlan`, not a guess): 6 items
+  warn on `status value "qa-validation" has no matching [fields.status]
+  option` — the board's "QA Validation" status slugifies to
+  `qa-validation`, but `.git-board.toml`'s `[fields.status].options` has
+  `qa`, not `qa-validation`. 47 items warn on sprint titles
+  ("Simulator Sprint 2", "Simulator Sprint 3 (QA & Fixes)") with no
+  matching `[[sprints.list]]` entry — expected, since the shipped sample
+  config only defines two placeholder sprints. 1 item warns on
+  `est value "0.1"` (not in the sample `[fields.est].options` list).
+  **Action for whoever runs the first real `--apply`**: reconcile
+  `.git-board.toml`'s `[fields.status]`/`[fields.est]` options and
+  `[[sprints.list]]` entries against the board's actual current values
+  first, or these will warn-and-skip on every run rather than just once.
+- **Idempotency**: `internal/fields.Diff` was extracted (pure, no I/O) out
+  of the existing `fields.Apply` so both `set` and `ghbridge.BuildPlan`
+  share the exact same single/multi-cardinality swap-diff logic — `Apply`
+  itself is now a thin wrapper over `Diff` + the write, no behavior change
+  (all existing `internal/fields` tests still pass unmodified). Assignees
+  (multi) reconcile the full set (add *and* remove) each run so an
+  unassign on GitHub is mirrored, not just accumulated. Verified with a
+  real-repo (`gitbugiotest`) test that runs `BuildPlan`+`ApplyPlan` twice
+  and asserts an identical label set the second time, plus a CLI-level
+  `bridge pull --apply` run-twice test.
+- **Tests**: `internal/ghbridge` — pure `BuildPlan` tests against a fixture
+  JSON (`testdata/project-items.json`, based on the real captured shape
+  plus a few documented synthetic rows for dedup/unmatched/PR-exclusion
+  cases) and plain `gitbugio.Issue` literals, no real repo needed for
+  those; `ApplyPlan` idempotency/assignee-reconciliation tests via
+  `gitbugiotest` (real git-bug repo cache, no mocks). `cmd/git-board` —
+  CLI-level tests for `bridge configure` (config file written, rest of the
+  file untouched) and `bridge pull` (dry-run writes nothing, `--apply`
+  writes and is idempotent on rerun, `--apply`+`--dry-run` rejected,
+  missing owner/project rejected) via a `fetchGithubItems` seam that swaps
+  in the fixture instead of shelling out to the real `gh` binary — no
+  network or `gh` needed to test.
+- `internal/config`: new `[github-project]` table (`owner`/`number`),
+  written by `SetGithubProject` via targeted find-the-table-or-append text
+  surgery rather than a full TOML decode+re-encode round trip (which would
+  drop every comment and reorder the rest of the file) — every other table
+  is left byte-for-byte alone. Round-trip-tested against the real sample
+  `.git-board.toml` fixture, including a second-call-overwrites-the-first
+  idempotency check.
+- **Not done / manual**: the GitHub→git-bug issue import itself
+  (`git-bug bridge pull`) is a separate, already-existing step, out of
+  scope here. Not run against the real EPFL-ENAC/co2-calculator project
+  with `--apply` — that first real run is for a human to trigger. The
+  `[fields.*]`/`[[sprints.list]]` drift noted above should be reconciled
+  before that first `--apply`. `--limit`'s default (2000) is untested at
+  that size — `gh project item-list` hit a secondary GraphQL rate limit
+  during this work at `--limit 900`/`1000` (shared across all agents/tools
+  per its own error message, so may just have been contention, not a hard
+  ceiling on 2000) — the first real run may need a smaller `--limit` and a
+  retry if it hits that limit; no retry logic was added for it (kept
+  simple, surfaces as a plain error to the human running it).

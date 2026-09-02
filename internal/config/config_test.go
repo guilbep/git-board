@@ -1,6 +1,8 @@
 package config
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -96,6 +98,81 @@ func TestResolveSprintCurrentNextPrevious(t *testing.T) {
 	previous, err := ResolveSprint(cfg.Sprints, "previous", today)
 	if err != nil || previous != nil {
 		t.Fatalf("previous = %+v, err = %v, want nil", previous, err)
+	}
+}
+
+func TestSetGithubProjectAppendsToExistingFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "git-board.toml")
+	original, err := os.ReadFile(fixture)
+	if err != nil {
+		t.Fatalf("read fixture: %v", err)
+	}
+	if err := os.WriteFile(path, original, 0o644); err != nil {
+		t.Fatalf("write copy: %v", err)
+	}
+
+	if err := SetGithubProject(path, "EPFL-ENAC", 40); err != nil {
+		t.Fatalf("SetGithubProject: %v", err)
+	}
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load after set: %v", err)
+	}
+	if cfg.GithubProject.Owner != "EPFL-ENAC" || cfg.GithubProject.Number != 40 {
+		t.Fatalf("GithubProject = %+v, want {EPFL-ENAC 40}", cfg.GithubProject)
+	}
+	// Untouched tables must still parse fine.
+	if len(cfg.Fields["status"].Options) != 9 {
+		t.Errorf("status options lost after SetGithubProject: %v", cfg.Fields["status"].Options)
+	}
+	if cfg.Views["backlog"].Sort != "prio asc" {
+		t.Errorf("views lost after SetGithubProject: %+v", cfg.Views["backlog"])
+	}
+}
+
+func TestSetGithubProjectIsIdempotentOnRerun(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "git-board.toml")
+	original, err := os.ReadFile(fixture)
+	if err != nil {
+		t.Fatalf("read fixture: %v", err)
+	}
+	if err := os.WriteFile(path, original, 0o644); err != nil {
+		t.Fatalf("write copy: %v", err)
+	}
+
+	if err := SetGithubProject(path, "old-owner", 1); err != nil {
+		t.Fatalf("first SetGithubProject: %v", err)
+	}
+	if err := SetGithubProject(path, "EPFL-ENAC", 40); err != nil {
+		t.Fatalf("second SetGithubProject: %v", err)
+	}
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.GithubProject.Owner != "EPFL-ENAC" || cfg.GithubProject.Number != 40 {
+		t.Fatalf("GithubProject = %+v, want the second call's values, not both", cfg.GithubProject)
+	}
+}
+
+func TestSetGithubProjectCreatesNewFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "git-board.toml")
+
+	if err := SetGithubProject(path, "EPFL-ENAC", 40); err != nil {
+		t.Fatalf("SetGithubProject on missing file: %v", err)
+	}
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.GithubProject.Owner != "EPFL-ENAC" || cfg.GithubProject.Number != 40 {
+		t.Fatalf("GithubProject = %+v", cfg.GithubProject)
 	}
 }
 

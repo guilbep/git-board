@@ -18,12 +18,23 @@ import (
 // gitBugNamespace matches git-bug's own CLI (commands/execenv/env.go).
 const gitBugNamespace = "git-bug"
 
+// githubURLMetaKey is the Create-operation metadata key git-bug's own
+// GitHub bridge stamps on every bug it imports (bridge/github/github.go's
+// unexported metaKeyGithubUrl = "github-url"; bridge/github/import.go sets
+// it via Bugs().NewRaw's metadata map at creation time). A bug that was
+// bridged in from GitHub carries the issue's GitHub URL under this key on
+// its first operation; a bug created locally in git-bug has no such key.
+// This is how internal/ghbridge matches a GitHub Project item back to the
+// git-bug issue it corresponds to, without parsing titles.
+const githubURLMetaKey = "github-url"
+
 // Issue is the subset of a git-bug bug that git-board fields/filters need.
 type Issue struct {
-	ID     string   `json:"id"`
-	Title  string   `json:"title"`
-	Status string   `json:"status"` // "open" or "closed"
-	Labels []string `json:"labels"`
+	ID        string   `json:"id"`
+	Title     string   `json:"title"`
+	Status    string   `json:"status"` // "open" or "closed"
+	Labels    []string `json:"labels"`
+	GithubURL string   `json:"github_url,omitempty"` // "" if not bridged in from GitHub
 }
 
 // Backend is an open connection to a git-bug repo cache.
@@ -104,7 +115,7 @@ func excerptToIssue(id string, e *cache.BugExcerpt) Issue {
 	if e.Status == common.ClosedStatus {
 		status = "closed"
 	}
-	return Issue{ID: id, Title: e.Title, Status: status, Labels: labels}
+	return Issue{ID: id, Title: e.Title, Status: status, Labels: labels, GithubURL: e.CreateMetadata[githubURLMetaKey]}
 }
 
 // GetIssue resolves a bug by id prefix.

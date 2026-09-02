@@ -37,6 +37,20 @@ func Apply(b Backend, cfg *config.Config, idPrefix, fieldName, value, me string,
 	if err != nil {
 		return "", err
 	}
+
+	label, added, removed := Diff(current, fieldName, resolved, single)
+	if _, err := b.ApplyLabelChange(idPrefix, added, removed); err != nil {
+		return "", err
+	}
+	return label, nil
+}
+
+// Diff computes the label add/remove needed to set fieldName to a resolved
+// value against current labels, without writing anything. Apply uses it for
+// the actual write; internal/ghbridge uses it to preview a bridge pull
+// (dry-run) without touching the backend. Same single/multi-cardinality
+// swap semantics described in the package doc.
+func Diff(current []string, fieldName, resolved string, single bool) (label string, added, removed []string) {
 	currentSet := make(map[string]bool, len(current))
 	for _, l := range current {
 		currentSet[l] = true
@@ -44,37 +58,27 @@ func Apply(b Backend, cfg *config.Config, idPrefix, fieldName, value, me string,
 
 	if single {
 		newLabel := fieldName + ":" + resolved
-		var removed []string
 		for _, l := range current {
 			if strings.HasPrefix(l, fieldName+":") && l != newLabel {
 				removed = append(removed, l)
 			}
 		}
-		var added []string
 		if !currentSet[newLabel] {
 			added = []string{newLabel}
 		}
-		if _, err := b.ApplyLabelChange(idPrefix, added, removed); err != nil {
-			return "", err
-		}
-		return newLabel, nil
+		return newLabel, added, removed
 	}
 
 	remove := strings.HasPrefix(resolved, "-")
 	target := strings.TrimLeft(resolved, "+-")
 	newLabel := fieldName + ":" + target
-
-	var added, removed []string
 	switch {
 	case remove && currentSet[newLabel]:
 		removed = []string{newLabel}
 	case !remove && !currentSet[newLabel]:
 		added = []string{newLabel}
 	}
-	if _, err := b.ApplyLabelChange(idPrefix, added, removed); err != nil {
-		return "", err
-	}
-	return newLabel, nil
+	return newLabel, added, removed
 }
 
 func resolveAssignedValue(cfg *config.Config, value, me string, today time.Time) (string, error) {
