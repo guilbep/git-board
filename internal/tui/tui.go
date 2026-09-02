@@ -8,6 +8,7 @@ package tui
 
 import (
 	"fmt"
+	"os/exec"
 	"strings"
 	"time"
 
@@ -181,8 +182,20 @@ func New(issues []gitbugio.Issue, title string, backend fields.Backend, cfg *con
 
 func (m Model) Init() tea.Cmd { return nil }
 
+// gitBugShowFinishedMsg is what tea.ExecProcess sends back once
+// `git bug bug show` exits and the terminal is handed back to us.
+type gitBugShowFinishedMsg struct{ err error }
+
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case gitBugShowFinishedMsg:
+		if msg.err != nil {
+			m.status = fmt.Sprintf("git bug bug show failed: %v (is git-bug installed as a git subcommand?)", msg.err)
+		} else {
+			m.status = ""
+		}
+		return m, nil
+
 	case tea.WindowSizeMsg:
 		// Reserve one line for the status message View() appends below
 		// the list; the pickers don't append one, so they get the full
@@ -274,6 +287,16 @@ func (m Model) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "e":
 		m.fieldPicker.SetItems(fieldPickerItems(m.cfg))
 		m.mode = modeFieldPicker
+	case "g":
+		// Body/comments aren't git-board's data at all — they're
+		// git-bug's. Shell out to git-bug's own `bug show` rather than
+		// reimplementing a comment/body viewer: tea.ExecProcess suspends
+		// this program, hands the terminal to `git bug bug show <id>`,
+		// and resumes here (via gitBugShowFinishedMsg) when it exits.
+		id := m.selected.ID
+		return m, tea.ExecProcess(exec.Command("git", "bug", "bug", "show", id), func(err error) tea.Msg {
+			return gitBugShowFinishedMsg{err: err}
+		})
 	}
 	return m, nil
 }

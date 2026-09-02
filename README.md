@@ -227,6 +227,7 @@ git-board tui "is:open prio:p1"
 | `f` | list | structured filter — the same `field:value`/`-field:value`/`is:open`/`title:*glob*` grammar as `ls`/`view`/the launch argument, not the fuzzy `/` search. Empty input + enter clears it. |
 | `s` | list | sort by field, e.g. `prio` (ascending) or `prio desc` — same syntax as `ls --sort`. Persists across a later `f`/`c` filter change. Empty input + enter clears it back to natural order. |
 | `e` | detail | edit a field: pick the field, then a value from its configured options, or type free text if it has none (e.g. `assignee`, using the same `+value`/`-value` syntax as `git-board set`) |
+| `g` | detail | view the issue's body and comments — shells out to `git bug bug show <id>` (requires `git-bug` installed as a git subcommand; git-board itself never needs it), suspending the TUI and resuming when it exits |
 | `esc`/`q` | detail, pickers | back |
 | `q`/`ctrl+c` | list | quit |
 
@@ -234,6 +235,12 @@ git-board tui "is:open prio:p1"
 for "I remember a word in the title." `f` is precise and composable —
 `assignee:guilbep -status:validated` narrows exactly like it would on the
 CLI, because it's the exact same `internal/filter` grammar and code path.
+
+git-board's own data model is fields (labels) only — it doesn't store or
+render issue bodies/comments, and doesn't need `git-bug` on PATH for
+anything else (writes go through the library, not the CLI). `g` is the one
+place that changes: it's a deliberate, narrow exception to reuse git-bug's
+own mature viewer instead of building a second one.
 
 The detail view renders each label under its configured field name (e.g.
 `Status: ready`, `Assignee: alice, bob`); anything not matching a configured

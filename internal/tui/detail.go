@@ -95,7 +95,7 @@ func renderDetail(issue gitbugio.Issue, cfg *config.Config, status string) strin
 	if status != "" {
 		fmt.Fprintf(&b, "\n%s\n", status)
 	}
-	b.WriteString("\ne: edit field   esc/q: back\n")
+	b.WriteString("\ne: edit field   g: view body/comments in git-bug   esc/q: back\n")
 	return b.String()
 }
 

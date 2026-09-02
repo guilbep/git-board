@@ -358,3 +358,35 @@ this is meant to run repeatedly.
   list. A test asserts the true natural order (captured via a fresh
   `ListIssues()` before any sort) comes back on clear, not just "some
   order."
+
+## Status update (2026-09-02): web UI smoke-tested against real data, `g` for body/comments via git-bug
+
+- **First real smoke test of the web UI** (previously only ever tested
+  against synthetic fixtures/`httptest`). Against the actual bridged
+  co2-calculator data: `GET /api/issues` returns correctly bucketed real
+  field data (status/prio/assignee/est), `GET /` serves the embedded UI
+  and its referenced JS/CSS assets resolve, a real `PATCH` (setting
+  `prio:p3` on a live issue) round-tripped correctly — verified via the
+  PATCH response and independently via `git-board get` after stopping
+  the server. No bugs found this time.
+- **Real operational constraint, not a bug**: `git-board-server` and any
+  `git-board` CLI/TUI invocation can't run concurrently against the same
+  repo — git-bug's own cache holds a repo-level lock. Confirmed directly
+  (`git-board get` failed with "already locked by process pid ..." while
+  the server was still up, succeeded once it exited). Not a git-board
+  defect to fix — it's git-bug's own concurrency-safety mechanism
+  working as intended — but worth knowing before running the server
+  long-lived on a box where you also want to use the CLI/TUI.
+- **`g`: view an issue's body/comments via git-bug**, from the TUI's
+  detail view. Shells out to `git bug bug show <id>` via
+  `tea.ExecProcess` (suspends git-board's TUI, hands the terminal to
+  git-bug, resumes on exit) rather than reimplementing a comment/body
+  viewer — git-board's own data model is fields/labels only, it never
+  stores or reads issue content. This is the one place git-board expects
+  `git-bug` installed as a git subcommand; everything else (including
+  `bridge`) only needs the Go library. A failed exec (e.g. `git-bug` not
+  installed as a subcommand) surfaces as a status line, doesn't crash.
+  Verified the underlying command directly against real data (`git bug
+  bug show cb7ca37e` — real title/body/comments/actors came back)
+  since `tea.ExecProcess` itself isn't practically unit-testable
+  (needs a live terminal).
