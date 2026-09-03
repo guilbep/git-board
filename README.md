@@ -306,6 +306,28 @@ git-board lint             # exit 0 even with findings — a report, not a build
 git-board lint --strict    # exit 1 if anything is found, e.g. in CI
 ```
 
+### Creating GitHub labels (`git-board lint --create-labels`)
+
+The labels git-board writes (`status:ready`, `prio:p0`, `sprint:delivery`,
+…) live inside git-bug's own label store, not GitHub's — so they don't
+exist as real, colorable GitHub labels until someone creates them.
+`--create-labels` closes that gap: it diffs every `ns:value` label
+`.git-board.toml`'s `[fields.*]` options and `[[sprints.list]]` entries
+imply against each configured `[repos]` entry's real GitHub labels (via
+`gh label list`), and reports what's missing. Preview only by default,
+same convention as `bridge pull`; `--apply` actually runs `gh label
+create` for each missing one.
+
+```bash
+git-board lint --create-labels           # preview what's missing, writes nothing
+git-board lint --create-labels --apply   # create the missing labels on GitHub
+```
+
+Free-form fields (no `options` configured — `assignee`, `est`) have no
+fixed value set, so nothing to create labels for; Category isn't a
+configured field at all anymore (see "Bridging GitHub Projects" above),
+so it's not part of this check either.
+
 ## Sprints (`git-board sprint`)
 
 Thin presentation over the date-window math already in `internal/config`
@@ -472,6 +494,7 @@ internal/filter/       grammar parser, Matches(issue, conditions, config, me).
 internal/board/        load/sort/group issues — shared by the CLI, the TUI and the web API.
 internal/ghbridge/     `gh project item-list` parsing + field-mapping/diff logic for `bridge pull`.
 internal/lint/          read-only drift checks (labels vs. .git-board.toml) — internal/lint.Run.
+internal/ghlabels/      `gh label list`/`gh label create` — GitHub-side label creation for `lint --create-labels`.
 cmd/git-board/          main.go + cobra commands, thin rendering (incl. html.go, the static-site generator).
 cmd/git-board-server/   HTTP API (net/http, no framework) + embeds web/dist for prod.
 web/                    Quasar/Vue frontend — one board page, api/board.ts is the only HTTP client.

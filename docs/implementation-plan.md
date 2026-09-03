@@ -969,9 +969,17 @@ duplicated a label that usually already exists on the issue.
     equally unused duplicate, but the user only confirmed dropping
     `cat`; pruning `mod` from the shipped example config needs its own
     explicit go-ahead before touching it.
-- **Open question, not yet acted on**: whether project maintainers need
-  a documented way to pre-create the labels git-board writes (`status:*`,
-  `prio:*`, …) on the GitHub side via `gh label create`, so they exist
-  and are visibly styled/colored in GitHub's UI. No decision made yet on
-  whether this belongs in git-board itself or stays a README/onboarding
-  checklist item for the PM to run by hand.
+- **Answered**: both — a README checklist *and* a `lint --create-labels`
+  mode, per explicit follow-up. `internal/ghlabels` (new package) diffs
+  `.git-board.toml`'s implied `ns:value` label set (`Desired`: one per
+  `[fields.<name>]` option, one per `[[sprints.list]]` entry — mirrors
+  `ghbridge`'s own field-mapping logic, not duplicated ad hoc) against
+  each `[repos]` entry's real GitHub labels (`gh label list`), and
+  `lint --create-labels`/`--apply` reports/creates the gap via `gh label
+  create`. Same preview-by-default/`--apply`-writes convention as
+  `bridge pull`. `existingGithubLabels`/`createGithubLabel` func-var
+  seams in `cmd/git-board/lint.go` mirror `bridge.go`'s own
+  `fetchGithubItems` seam, so the CLI wiring is tested end-to-end
+  (`TestLintCreateLabelsPreviewsMissingLabelsWithoutWriting`,
+  `TestLintCreateLabelsApplyCreatesMissingLabels`,
+  `TestLintApplyWithoutCreateLabelsErrors`) without a real `gh` binary.

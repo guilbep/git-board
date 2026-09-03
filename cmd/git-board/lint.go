@@ -7,12 +7,22 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/guilbep/git-board/internal/config"
+	"github.com/guilbep/git-board/internal/ghlabels"
 	"github.com/guilbep/git-board/internal/gitbugio"
 	"github.com/guilbep/git-board/internal/lint"
 )
 
+// existingGithubLabels/createGithubLabel are seams over ghlabels.Existing/
+// ghlabels.Create so tests can swap in a fixture instead of shelling out to
+// the real `gh` binary — same pattern as bridge.go's fetchGithubItems.
+var (
+	existingGithubLabels = ghlabels.Existing
+	createGithubLabel    = ghlabels.Create
+)
+
 func newLintCmd() *cobra.Command {
-	var strict bool
+	var strict, createLabels, apply bool
 
 	cmd := &cobra.Command{
 		Use:   "lint",
@@ -26,24 +36,40 @@ labels (no matching [[sprints.list]] entry), and configured options no
 issue in the repo actually carries.
 
 Exits 0 even with findings — this is a report, not a build gate — unless
---strict is given.`,
+--strict is given.
+
+--create-labels checks a different thing: whether every ns:value label
+git-board's config implies (one per [fields.<name>] option, plus one per
+[[sprints.list]] entry) exists as a real GitHub label on each configured
+[repos] entry, via "gh label list"/"gh label create" — so they're visible
+and colorable in the GitHub Issues UI, not just inside git-bug's own
+label store. Preview only by default; --apply actually creates them.`,
 		Example: `  git-board lint
-  git-board lint --strict   # exit 1 if anything is found, e.g. in CI`,
+  git-board lint --strict            # exit 1 if anything is found, e.g. in CI
+  git-board lint --create-labels     # preview missing GitHub labels
+  git-board lint --create-labels --apply   # actually create them`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runLint(cmd.OutOrStdout(), strict)
+			if apply && !createLabels {
+				return fmt.Errorf("--apply only applies together with --create-labels")
+			}
+			cfg, err := loadConfig()
+			if err != nil {
+				return err
+			}
+			if createLabels {
+				return runCreateLabels(cmd.OutOrStdout(), cfg, apply)
+			}
+			return runLint(cmd.OutOrStdout(), cfg, strict)
 		},
 	}
 	cmd.Flags().BoolVar(&strict, "strict", false, "exit 1 if any finding is reported")
+	cmd.Flags().BoolVar(&createLabels, "create-labels", false, "check .git-board.toml's implied labels against each configured repo's real GitHub labels")
+	cmd.Flags().BoolVar(&apply, "apply", false, "with --create-labels, actually create the missing labels (default is preview only)")
 	return cmd
 }
 
-func runLint(out io.Writer, strict bool) error {
-	cfg, err := loadConfig()
-	if err != nil {
-		return err
-	}
-
+func runLint(out io.Writer, cfg *config.Config, strict bool) error {
 	b, err := gitbugio.OpenCwd()
 	if err != nil {
 		return err
@@ -60,6 +86,49 @@ func runLint(out io.Writer, strict bool) error {
 
 	if strict && len(findings) > 0 {
 		return fmt.Errorf("%d lint finding(s)", len(findings))
+	}
+	return nil
+}
+
+// runCreateLabels checks each [repos] entry's real GitHub labels against
+// .git-board.toml's implied set (internal/ghlabels.Desired) and, with
+// apply, creates whatever's missing via "gh label create".
+func runCreateLabels(out io.Writer, cfg *config.Config, apply bool) error {
+	if len(cfg.Repos) == 0 {
+		return fmt.Errorf("no [repos] configured in .git-board.toml")
+	}
+	desired := ghlabels.Desired(cfg)
+	var failed bool
+	for _, repo := range cfg.Repos {
+		existing, err := existingGithubLabels(repo)
+		if err != nil {
+			fmt.Fprintf(out, "%s: %v\n", repo, err)
+			failed = true
+			continue
+		}
+		missing := ghlabels.MissingFrom(desired, existing)
+		if len(missing) == 0 {
+			fmt.Fprintf(out, "%s: all labels present\n", repo)
+			continue
+		}
+		for _, name := range missing {
+			if !apply {
+				fmt.Fprintf(out, "%s: missing %s\n", repo, name)
+				continue
+			}
+			if err := createGithubLabel(repo, name); err != nil {
+				fmt.Fprintf(out, "%s: create %s: %v\n", repo, name, err)
+				failed = true
+				continue
+			}
+			fmt.Fprintf(out, "%s: created %s\n", repo, name)
+		}
+	}
+	if !apply {
+		fmt.Fprintln(out, "\ndry run — nothing written. Re-run with --apply to create these labels.")
+	}
+	if failed {
+		return fmt.Errorf("one or more repos failed")
 	}
 	return nil
 }
