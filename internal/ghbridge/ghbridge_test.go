@@ -107,13 +107,15 @@ func TestBuildPlanMapsFields(t *testing.T) {
 	if len(change.Warnings) != 1 {
 		t.Fatalf("Warnings = %v, want exactly 1 (status)", change.Warnings)
 	}
-	// module/category aren't configured with Options in the sample config,
-	// so they pass through unvalidated.
+	// module isn't configured with Options in the sample config, so it
+	// passes through unvalidated.
 	if !got["mod:backoffice"] {
 		t.Errorf("mod:backoffice missing from Added = %v", change.Added)
 	}
-	if !got["cat:feat"] {
-		t.Errorf("cat:feat missing from Added = %v", change.Added)
+	// category is a bare label, not a field:value pair -- and not
+	// slugified, so it lands exactly as GitHub had it ("FEAT").
+	if !got["FEAT"] {
+		t.Errorf("FEAT missing from Added = %v", change.Added)
 	}
 }
 

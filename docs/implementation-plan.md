@@ -937,3 +937,41 @@ covers the "import" half.
   tagging `v0.3.1`): `git-board version v0.3.1`, clean. Deliberately no
   `-v` shorthand — that commonly means "verbose" in other CLIs, and
   `--version` alone already matches `go`/`docker`/`kubectl` convention.
+
+## Status update (2026-09-03): category dropped as a structured field
+
+Raised as an architecture question: Status/Priority/Category/Module were
+all bridged as `field:value` labels, but Category and Module aren't
+really project-management state the way Status/Priority are — they're
+classifications GitHub's own native issue labels already carry. Having
+git-board re-encode Category as a second `cat:<value>` mechanism just
+duplicated a label that usually already exists on the issue.
+
+- **Category is now a plain, unnamespaced label**, not a `[fields.cat]`
+  entry: `ghbridge.planPlainLabel` adds the bare GitHub value verbatim
+  (not slugified — a plain label should look like the project's other
+  plain labels, not the hyphenated form the field-matching convention
+  needs) and additive-only (no configured `options` to validate against,
+  nothing to remove on a later re-run — the same tradeoff every other
+  plain label already has). The example `.git-board.toml` no longer
+  ships `[fields.cat]`; the bridge field-mapping table in the README
+  reflects the new "none — plain label" cardinality.
+  - Regression test updated (`ghbridge_test.go`): asserts the bare,
+    unslugified `"FEAT"` label lands in `Added`, not `"cat:feat"`.
+  - Deliberately left untouched: the TUI's `c` quick-filter still looks
+    for a configured `cat` field by name (`internal/tui/detail.go`). With
+    no `[fields.cat]` in the shipped config it now shows "no cat field
+    configured" — existing, already-tested behavior, not a regression.
+    A project that wants the old Category-as-field UX can still define
+    its own `[fields.cat]`; generalizing `c` to work over arbitrary plain
+    labels wasn't requested and wasn't built.
+  - `Module` was *not* changed — raised in the same conversation as an
+    equally unused duplicate, but the user only confirmed dropping
+    `cat`; pruning `mod` from the shipped example config needs its own
+    explicit go-ahead before touching it.
+- **Open question, not yet acted on**: whether project maintainers need
+  a documented way to pre-create the labels git-board writes (`status:*`,
+  `prio:*`, …) on the GitHub side via `gh label create`, so they exist
+  and are visibly styled/colored in GitHub's UI. No decision made yet on
+  whether this belongs in git-board itself or stays a README/onboarding
+  checklist item for the PM to run by hand.

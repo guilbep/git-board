@@ -198,7 +198,7 @@ func planIssue(item Item, bug gitbugio.Issue, cfg *config.Config) IssueChange {
 
 	add(planSingleValue(cfg, bug.Labels, "status", slugify(item.Status)))
 	add(planSingleValue(cfg, bug.Labels, "prio", slugify(item.Priority)))
-	add(planSingleValue(cfg, bug.Labels, "cat", slugify(item.Category)))
+	add(planPlainLabel(bug.Labels, "category", item.Category))
 	add(planSingleValue(cfg, bug.Labels, "mod", slugify(normalizeModule(item.Module))))
 	add(planSingleValue(cfg, bug.Labels, "est", formatEstHours(item.EstHours)))
 	add(planSprint(cfg, bug.Labels, sprintTitle(item)))
@@ -228,6 +228,31 @@ func planSingleValue(cfg *config.Config, current []string, name, value string) (
 	}
 	_, added, removed := fields.Diff(current, name, value, true)
 	return FieldResult{Field: name, Value: value, Added: added, Removed: removed}, ""
+}
+
+// planPlainLabel adds value as a bare, unnamespaced label — not a
+// field:value pair — for classifications that are just plain git-bug/
+// GitHub labels, not a structured single-cardinality field (Category:
+// GitHub's own native issue labels already do this job, no need for a
+// second cat:value mechanism duplicating them). Additive only, matching
+// git-bug's own native-label import: a bare label carries no "this came
+// from field X" marker, so there's nothing to safely remove if the
+// source value changes on a later re-run — same tradeoff plain labels
+// have always had, not new here. Empty value is a no-op, matching every
+// other field's "leave untouched" convention. Not slugified — a plain
+// label should look like the other plain labels on the issue (whatever
+// casing GitHub used), not the hyphenated form the structured-field
+// option-matching convention needs.
+func planPlainLabel(current []string, reportAs, value string) (FieldResult, string) {
+	if value == "" {
+		return FieldResult{}, ""
+	}
+	for _, l := range current {
+		if l == value {
+			return FieldResult{}, "" // already present, no-op
+		}
+	}
+	return FieldResult{Field: reportAs, Value: value, Added: []string{value}}, ""
 }
 
 func sprintTitle(item Item) string {

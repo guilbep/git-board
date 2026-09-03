@@ -56,6 +56,27 @@ cd git-board
 go install ./cmd/git-board
 ```
 
+## Display convention: known fields get their own column/line
+
+Every surface that shows an issue's fields — `ls`/`view`'s table (and
+`--md`), the TUI's detail view, and the `html` static site — follows the
+same rule: a label matching a field configured in `.git-board.toml`'s
+`[fields.*]` renders under that field's own column or line, with a
+capitalized display name (`status:ready` → a `Status` column showing
+`ready`), not as a raw `field:value` string. This is driven **dynamically**
+by whatever a project's own config actually defines — not a hardcoded
+field list — so it stays correct as fields are added, renamed, or
+removed, and it's the same classification logic
+(`internal/tui.ParseLabels`/`DisplayFieldName`) everywhere, not
+reimplemented per surface.
+
+A label that doesn't match any configured field still shows — under
+"other" in tables, "Other labels" in the TUI/`html` — never silently
+dropped. The one field-specific special case: a numeric field literally
+named `est` gets an `h` (hours) suffix per value; this isn't a general
+"numeric implies hours" rule, `est` is the only field this project has
+ever needed it for.
+
 ## Config: `.git-board.toml`
 
 ```toml
@@ -77,10 +98,6 @@ numeric = true
 
 [fields.assignee]
 single = false
-
-[fields.cat]
-single = true
-options = ["bug", "feature", "chore"]
 
 [sprints]
 length_days = 14
@@ -215,7 +232,7 @@ Field mapping:
 |---|---|---|
 | Status | `status:<value>` | single |
 | Priority | `prio:<value>` | single |
-| Category | `cat:<value>` | single |
+| Category | `<value>` (bare label, verbatim — not slugified) | none — plain label, not a field:value pair |
 | Module | `mod:<value>` | single — the two duplicate "Generic" options are merged into one `mod:generic` |
 | Est. hours | `est:<value>` | single |
 | Sprint | `sprint:<slug>` | single, matched against `[[sprints.list]]` titles |
@@ -223,6 +240,13 @@ Field mapping:
 
 `Milestone` and `Size` are **not** imported — the PRD calls them dead/unused
 fields.
+
+Category isn't a structured field like Status/Priority — it's added as a
+plain, unnamespaced label instead. Category and GitHub's own native issue
+labels do the same job; a `cat:<value>` field would just be a second,
+duplicate way to say the same thing. Being a plain label, it's additive
+only (no configured options, no removal on re-run) — same tradeoff every
+other plain label already has.
 
 A field value that doesn't slugify to one of a configured `[fields.<name>]`
 `options` list is **skipped with a warning**, not silently dropped or
@@ -330,7 +354,7 @@ git-board tui "is:open prio:p1"
 |---|---|---|
 | `↑`/`↓`, `/` | list | native `bubbles/list` scroll and fuzzy text search (title + labels) |
 | `enter` | list | open the detail view for the selected issue |
-| `c` | list | quick-filter by the configured `cat` field's options (`(all)` clears it); coexists with `/` search |
+| `c` | list | quick-filter by the configured `cat` field's options (`(all)` clears it); coexists with `/` search. The shipped example config no longer defines `[fields.cat]` (category is a plain label now — see the bridge field mapping below), so `c` shows "no cat field configured" unless a project opts back into one. |
 | `f` | list | structured filter — the same `field:value`/`-field:value`/`is:open`/`title:*glob*` grammar as `ls`/`view`/the launch argument, not the fuzzy `/` search. Empty input + enter clears it. |
 | `s` | list | sort by field, e.g. `prio` (ascending) or `prio desc` — same syntax as `ls --sort`. Persists across a later `f`/`c` filter change. Empty input + enter clears it back to natural order. |
 | `i` | list | preview the GitHub Project bridge (`git-board bridge pull`, dry-run) — matches git-bug's own termui, where `i` is "Pull". Requires `git-board bridge configure` to have been run first. Runs in the background; the TUI stays responsive while it fetches. |
