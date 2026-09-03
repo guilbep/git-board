@@ -63,7 +63,7 @@ func (s *apiServer) handleListIssues(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	board.SortByField(issues, q.Get("sort"))
+	board.SortByField(issues, q.Get("sort"), s.cfg)
 	writeJSON(w, http.StatusOK, board.BucketBy(issues, q.Get("group")))
 }
 

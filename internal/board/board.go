@@ -6,6 +6,7 @@ package board
 import (
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -57,24 +58,50 @@ func FieldValue(issue gitbugio.Issue, fieldName string) string {
 	return ""
 }
 
-// SortByField sorts issues in place by a "field" or "field desc" spec.
-// A no-op if spec is "". ponytail: string sort — fine for label fields like
-// "prio" (the only sort a shipped view uses); wrong for numeric fields like
-// "est" ("16" < "2"). Add a numeric-field lookup from config if that's ever
-// sorted.
-func SortByField(issues []gitbugio.Issue, spec string) {
+// SortByField sorts issues in place by a "field" or "field desc" spec. A
+// no-op if spec is "". Compares numerically when cfg marks the field
+// [fields.<name>].numeric = true (e.g. "est"), lexically otherwise (fine
+// for label fields like "prio", where "p0" < "p1" already sorts right).
+func SortByField(issues []gitbugio.Issue, spec string, cfg *config.Config) {
 	if spec == "" {
 		return
 	}
 	key, direction, _ := strings.Cut(spec, " ")
 	desc := strings.TrimSpace(direction) == "desc"
+	numeric := cfg != nil && cfg.Fields[key].Numeric
 	sort.SliceStable(issues, func(i, j int) bool {
 		vi, vj := FieldValue(issues[i], key), FieldValue(issues[j], key)
+		if numeric {
+			return lessNumeric(vi, vj, desc)
+		}
 		if desc {
 			return vi > vj
 		}
 		return vi < vj
 	})
+}
+
+// lessNumeric compares two field values as numbers when both parse. A
+// value that doesn't parse (typically: the field just isn't set on that
+// issue) always sorts last, regardless of direction — "no value" isn't
+// meaningfully "less than zero" or "greater than everything", it's just
+// absent, so pinning it to one end is more predictable than having it
+// swap ends depending on asc/desc.
+func lessNumeric(a, b string, desc bool) bool {
+	fa, aerr := strconv.ParseFloat(a, 64)
+	fb, berr := strconv.ParseFloat(b, 64)
+	switch {
+	case aerr != nil && berr != nil:
+		return false
+	case aerr != nil:
+		return false // a (no value) never sorts before b
+	case berr != nil:
+		return true // a (has a value) sorts before b (no value)
+	case desc:
+		return fa > fb
+	default:
+		return fa < fb
+	}
 }
 
 // Bucket is one named group of issues, in first-seen order.

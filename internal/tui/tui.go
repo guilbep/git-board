@@ -581,7 +581,7 @@ func (m Model) applyCatFilter(value string) Model {
 // being silently lost.
 func (m Model) sortedItems(issues []gitbugio.Issue) []list.Item {
 	sorted := append([]gitbugio.Issue(nil), issues...)
-	board.SortByField(sorted, m.sortSpec)
+	board.SortByField(sorted, m.sortSpec, m.cfg)
 	return ToItems(sorted)
 }
 

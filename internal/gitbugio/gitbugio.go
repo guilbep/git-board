@@ -81,6 +81,21 @@ func (b *Backend) Close() error {
 	return b.c.Close()
 }
 
+// Pull fetches remote and merges its refs/bugs/* (and identities) into the
+// local cache — equivalent to `git bug pull <remote>`, but via the library
+// (cache.RepoCache.Pull, which is itself Fetch+MergeAll) rather than
+// shelling out, consistent with how git-board reads/writes labels
+// in-process everywhere else.
+func (b *Backend) Pull(remote string) error {
+	return b.c.Pull(remote)
+}
+
+// Push pushes local refs/bugs/* (and identities) to remote — equivalent
+// to `git bug push <remote>`. Returns the underlying git push's output.
+func (b *Backend) Push(remote string) (string, error) {
+	return b.c.Push(remote)
+}
+
 // TestCache exposes the underlying *cache.RepoCache for test fixture setup
 // (creating bugs/identities) in the gitbugiotest package. Production code
 // should go through the Backend methods above instead.

@@ -63,7 +63,7 @@ FILTER GRAMMAR (used by ls/view/tui):
 			return runLs(cmd.OutOrStdout(), defaultFilter, "", "", false, false, "")
 		},
 	}
-	root.AddCommand(newViewCmd(), newLsCmd(), newSetCmd(), newGetCmd(), newTuiCmd(), newBridgeCmd(), newLintCmd(), newMoveCmd(), newCloseCmd())
+	root.AddCommand(newViewCmd(), newLsCmd(), newSetCmd(), newGetCmd(), newTuiCmd(), newBridgeCmd(), newLintCmd(), newMoveCmd(), newCloseCmd(), newSyncCmd())
 	return root
 }
 
@@ -221,7 +221,7 @@ func listAndRender(out io.Writer, cfg *config.Config, filterStr, group, sort str
 	if err != nil {
 		return err
 	}
-	return render(out, matched, group, sort, md, asJSON)
+	return render(out, matched, group, sort, md, asJSON, cfg)
 }
 
 func runTui(filterStr, me string) error {

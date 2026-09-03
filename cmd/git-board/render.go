@@ -8,13 +8,14 @@ import (
 	"text/tabwriter"
 
 	"github.com/guilbep/git-board/internal/board"
+	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/gitbugio"
 )
 
 // render prints issues as a table, markdown, or JSON, optionally sorted and
 // grouped. JSON output ignores grouping and prints the flat sorted list.
-func render(out io.Writer, issues []gitbugio.Issue, group, sortSpec string, md, asJSON bool) error {
-	board.SortByField(issues, sortSpec)
+func render(out io.Writer, issues []gitbugio.Issue, group, sortSpec string, md, asJSON bool, cfg *config.Config) error {
+	board.SortByField(issues, sortSpec, cfg)
 
 	if asJSON {
 		enc := json.NewEncoder(out)

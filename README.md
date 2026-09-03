@@ -14,9 +14,9 @@ CLI binary — so `git-board` needs the target repo to be a normal
 git-bug-initialized repo, but does **not** need `git-bug` installed on PATH.
 
 This is the **M1** milestone (fields, `set` / `get` / `ls` / `view`, the
-filter grammar, and config loading) plus `lint`, `move`, `close` from
-**M2**. `sprint`, the static HTML site, and `sync` are later M2 items and
-not implemented here yet.
+filter grammar, and config loading) plus `lint`, `move`, `close`, `sync`
+and numeric-aware `--sort` from **M2**. `sprint` and the cron-published
+static HTML site are the remaining M2 items, not implemented here yet.
 
 ## Install
 
@@ -143,11 +143,30 @@ git-board close <issue-id>
 
 # report label/config drift, read-only (see "Linting" below)
 git-board lint
+
+# git bug pull/push on one or more git-bug repos (defaults to cwd)
+git-board sync
+git-board sync ../co2-calculator ../git-time
 ```
 
 `@me` (in filters, e.g. the `mine` view, or as a field value) resolves from
 `--me` on `ls`/`view`/`set`, falling back to the `GIT_BOARD_ME` env var. It
 errors if neither is set.
+
+## Syncing (`git-board sync`)
+
+`git-board sync [path...] [--remote origin]` runs `git bug pull` then
+`git bug push` on each path — via the library (`cache.RepoCache.Pull`/
+`Push`), not a `git bug` subprocess, same as everywhere else in git-board.
+Defaults to the current directory if no paths are given; keeps going past
+a path that fails so one broken repo doesn't block the rest, then reports
+every failure together at the end.
+
+Takes explicit local paths, **not** `.git-board.toml`'s `[repos]` list —
+that table holds `"owner/repo"` display names, not filesystem locations,
+and there's no established convention yet for mapping one to the other.
+Config-driven multi-repo sync is tracked as a follow-up in
+`docs/implementation-plan.md`, not solved here.
 
 ## Bridging GitHub Projects into labels (`git-board bridge`)
 
@@ -378,10 +397,11 @@ test** — everything runs against on-disk repo fixtures.
 ## Scope
 
 Shipped: config loading, the in-process git-bug cache adapter, the filter
-grammar, `set`/`get`/`ls`/`view`, an interactive TUI (`git-board tui`), the
-web UI above, `git-board bridge configure`/`bridge pull` (GitHub Project →
-label bridge, plus `i`/`o` from inside the TUI), `git-board lint`
-(read-only drift report), and `git-board move`/`close`. `sprint`, the
-cron-published static HTML site, and multi-repo `sync` are not
-implemented — see `docs/implementation-plan.md` for what's
+grammar (with numeric-aware `--sort`), `set`/`get`/`ls`/`view`, an
+interactive TUI (`git-board tui`), the web UI above, `git-board bridge
+configure`/`bridge pull` (GitHub Project → label bridge, plus `i`/`o`
+from inside the TUI), `git-board lint` (read-only drift report),
+`git-board move`/`close`, and `git-board sync` (explicit local paths,
+not `[repos].list`). `sprint` and the cron-published static HTML site
+are not implemented — see `docs/implementation-plan.md` for what's
 tracked next.

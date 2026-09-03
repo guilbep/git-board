@@ -22,14 +22,21 @@ conversation, not checked in here yet) for full context; this tracks state.
 
 ## Not done (M2+ by design)
 
-- [ ] `lint` (double singles, unknown options, open w/o prio, orphan
-  sprints, unknown assignees, dead options).
-- [ ] `move`, `close`.
+Superseded by "## M2 plan" further down (dated 2026-09-03) — that section
+is the current, actively-maintained checklist; this one is a snapshot
+from when M2 was still entirely ahead. Left as-is rather than deleted, it's
+still an accurate one-line "what M1 didn't include" summary.
+
+- [x] `lint` (double singles, unknown options, open w/o prio, orphan
+  sprints, dead options; unknown assignees explicitly skipped — no
+  configured roster to validate against). Shipped.
+- [x] `move`, `close`. Shipped.
 - [ ] `sprint ls|current|new|report`.
 - [ ] `html` (static site for PM/non-dev browsing, cron-published).
-- [ ] `sync` (multi-repo `git bug` pull/push).
-- [ ] Numeric-aware `--sort` (currently lexical; fine for the one shipped
-  sort `prio asc`, marked `ponytail:` in `cmd.go`).
+- [x] `sync` (multi-repo `git bug` pull/push — explicit paths, not
+  `[repos].list` auto-resolution, see the M2 plan section). Shipped.
+- [x] Numeric-aware `--sort` (`[fields.<name>].numeric` fields now compare
+  as numbers; missing values sort last regardless of direction). Shipped.
 
 ## Dogfood feedback (first real try, 2026-09-02)
 
@@ -487,11 +494,13 @@ next" does).
   templating power for a handful of table/board layouts). Meant to be
   cron-published for PM/non-dev read access. No auth, matches the web
   UI's own v1 stance.
-- [ ] **`sync`** — `git bug pull`/`push` across every repo in
+- [x] **`sync`** — shipped as `git-board sync [path...]` taking
+  **explicit local paths**, not `[repos].list` — see the status update
+  below for why. `git bug pull`/`push` across every repo in
   `[repos].list`, wrapping `internal/gitbugio`'s existing per-repo
   backend. Multi-repo is the main new thing here — everything else
   already assumes one repo.
-- [ ] **Numeric-aware `--sort`** — `internal/board.SortByField` sorts
+- [x] **Numeric-aware `--sort`** — `internal/board.SortByField` sorts
   lexically (marked `ponytail:` — "16" < "2"). Needs a numeric-field
   lookup from `[fields.<name>].numeric` in config. Small, low priority
   since only `est` is numeric and nothing ships a shipped view sorting
@@ -588,3 +597,49 @@ bound in its main list/table view — confirmed, not guessed.
   tidy` after adding the delegate's styles) — it was already pulled in
   transitively by `bubbletea`/`bubbles`, so this is bookkeeping, not a
   new dependency.
+
+## Status update (2026-09-03): `sync`, numeric-aware `--sort`
+
+- **`sync [path...]`**: real design decision, not just wiring. `[repos].list`
+  in `.git-board.toml` holds `"owner/repo"` display names (used nowhere
+  else in the codebase either — checked, it's currently dead schema), not
+  filesystem paths, and there's no established convention mapping one to
+  the other. Rather than guess (e.g. "sibling directory named after the
+  repo's basename" — fragile, presumptuous about layout) or invent a
+  schema extension without being sure it's right, `sync` takes explicit
+  paths (defaulting to cwd). Config-driven resolution is a real follow-up,
+  not solved here — needs an actual path-mapping convention decided first.
+  Uses `cache.RepoCache.Pull`/`Push` directly (new
+  `(*gitbugio.Backend).Pull`/`Push`) — in-process, no `git bug` subprocess,
+  consistent with everywhere else in git-board.
+  - Real bug caught by the test, not assumed away: pulling from a
+    never-pushed-to remote (the normal state before anyone's first sync)
+    returned `transport.ErrEmptyRemoteRepository` and was originally
+    treated as fatal. Fixed to treat it as "nothing to pull," not a
+    failure — found via a real two-repo-plus-bare-remote test (the same
+    shape git-bug's own pull/push tests use), not a hypothetical.
+  - Also caught: the test fixture initially only set up a git-bug identity
+    on whichever repo happened to seed a bug, and pulling into the other
+    (identity-less) repo failed with "No identity is set" — a test-setup
+    gap, not a `sync` bug, but a real one: every repo needs an identity to
+    pull/merge at all, not just the one authoring changes.
+  - Continues past a failing path (one broken repo doesn't block the
+    rest), reports every failure together at the end.
+  - **Not smoke-tested against the real co2-calculator repo** — deliberately.
+    That would push the local git-bug data to the real EPFL-ENAC/co2-calculator
+    remote, which the user already said they'd trigger themselves. The
+    real Pull/Push code paths are still genuinely exercised, just against
+    a disposable two-repo fixture instead of production data.
+- **Numeric-aware `--sort`**: `SortByField` now takes `*config.Config` and
+  compares numerically when `[fields.<name>].numeric = true`. A value
+  that doesn't parse (the field just isn't set on that issue) sorts last
+  regardless of direction — deliberate, not a bug: "no value" isn't
+  meaningfully less-than-zero or greater-than-everything for either
+  direction, so pinning it to one end is more predictable than having it
+  jump ends with `asc`/`desc`. Verified against real bridged data (`--sort
+  "est asc"` on the actual co2-calculator issues): ascending order correct,
+  issues with no `est` label landed last, not scattered. `internal/board`
+  had zero test files before this — added `board_test.go` covering
+  lexical-still-works, numeric-orders-correctly (not lexically), missing-
+  value-sorts-last-both-directions, empty-spec-is-a-no-op, and a nil-config
+  doesn't-panic case.
