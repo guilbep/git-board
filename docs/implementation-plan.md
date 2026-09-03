@@ -390,3 +390,51 @@ this is meant to run repeatedly.
   bug show cb7ca37e` — real title/body/comments/actors came back)
   since `tea.ExecProcess` itself isn't practically unit-testable
   (needs a live terminal).
+
+## M2 plan (2026-09-03)
+
+Ordered by value/dependency, not strictly PRD section order. Each item
+gets its own commit(s); check off here as they land, don't let this go
+stale (grep `docs/implementation-plans` convention from co2-calculator
+doesn't apply here, but "the plan is the source of truth for what's
+next" does).
+
+- [ ] **`lint`** — double singles (two `status:*` on one issue), unknown
+  option values, open issues with no `prio`, orphan sprint labels (no
+  matching `[[sprints.list]]`), unknown assignees, dead options in
+  config nothing uses. Read-only, no writes. Highest priority: directly
+  serves the real drift already found bridging co2-calculator (6×
+  unmatched status, 47× unmatched sprint, 315×/41× empty priority/status
+  per the PRD's own numbers) — right now there's no tool that surfaces
+  that except manually reading `bridge pull`'s warning output.
+- [ ] **`move`/`close`** — `move <id> --next` advances `status` to the
+  next option in `[fields.status].options`' configured order; `close`
+  sets `status:validated` (or whatever the config calls the terminal
+  state — don't hardcode "validated") then closes the git-bug bug via
+  `internal/gitbugio`. Small, builds directly on `fields.Apply`.
+- [ ] **`sprint ls|current|new|report`** — `ls` lists configured
+  sprints with computed date ranges; `current`/`next`/`previous` show
+  the resolved one; `new <slug> --start <date>` appends a
+  `[[sprints.list]]` entry (mirror `config.SetGithubProject`'s
+  targeted-text-surgery approach — don't decode+re-encode the whole
+  TOML); `report <slug>` aggregates issues in that sprint by
+  status/assignee (this is also most of what git-time's `est` will
+  need later — shared sprint-math surface, don't duplicate it there).
+- [ ] **`html`** — static site, one page per configured view, from
+  `html/template` (stdlib — this doesn't need `jinja2`-equivalent
+  templating power for a handful of table/board layouts). Meant to be
+  cron-published for PM/non-dev read access. No auth, matches the web
+  UI's own v1 stance.
+- [ ] **`sync`** — `git bug pull`/`push` across every repo in
+  `[repos].list`, wrapping `internal/gitbugio`'s existing per-repo
+  backend. Multi-repo is the main new thing here — everything else
+  already assumes one repo.
+- [ ] **Numeric-aware `--sort`** — `internal/board.SortByField` sorts
+  lexically (marked `ponytail:` — "16" < "2"). Needs a numeric-field
+  lookup from `[fields.<name>].numeric` in config. Small, low priority
+  since only `est` is numeric and nothing ships a shipped view sorting
+  by it yet.
+
+Not in this pass, decide later: `parent:`/sub-issues (PRD leaves this
+an open M2 decision, not a commitment), the git-bug version-pin
+recheck (`v0.10.1`, still fine as of this writing).
