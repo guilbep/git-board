@@ -231,13 +231,16 @@ func runTui(filterStr, me string) error {
 	if err != nil {
 		return err
 	}
-	defer b.Close()
 
 	matched, err := board.LoadMatching(b, cfg, filterStr, me)
 	if err != nil {
+		b.Close()
 		return err
 	}
-	return tui.Run(matched, filterStr, b, cfg, me, time.Now())
+	// tui.Run owns b from here — including across a "g" close/reopen
+	// cycle — and closes whichever backend is live when it returns.
+	reopen := func() (tui.Backend, error) { return gitbugio.OpenCwd() }
+	return tui.Run(matched, filterStr, b, cfg, me, time.Now(), reopen)
 }
 
 // loadMatchingIssues opens the git-bug repo cache in cwd and returns issues
