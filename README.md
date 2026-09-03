@@ -13,9 +13,10 @@ Field writes go through git-bug's `cache.RepoCache` API **in-process**
 CLI binary — so `git-board` needs the target repo to be a normal
 git-bug-initialized repo, but does **not** need `git-bug` installed on PATH.
 
-This is the **M1** milestone: fields, `set` / `get` / `ls` / `view`, the
-filter grammar, and config loading. `lint`, `move`, `close`, `sprint`, the
-static HTML site, and `sync` are later milestones and not implemented here.
+This is the **M1** milestone (fields, `set` / `get` / `ls` / `view`, the
+filter grammar, and config loading) plus `lint` from **M2**. `move`, `close`,
+`sprint`, the static HTML site, and `sync` are later M2 items and not
+implemented here yet.
 
 ## Install
 
@@ -132,6 +133,9 @@ git-board set <issue-id> status=ready prio=p1 sprint=@next assignee=+guilbep
 
 # show an issue's fields (labels)
 git-board get <issue-id>
+
+# report label/config drift, read-only (see "Linting" below)
+git-board lint
 ```
 
 `@me` (in filters, e.g. the `mine` view, or as a field value) resolves from
@@ -212,6 +216,40 @@ that hasn't been bridged into git-bug yet.
 
 Conditions are AND'd together.
 
+## Linting (`git-board lint`)
+
+`git-board lint` is **read-only** — it reports drift, writes nothing, unlike
+everything else in this CLI. It checks every `is:open` issue in the current
+git-bug repo against `.git-board.toml`:
+
+- **double singles** — more than one `ns:*` label for a `[fields.<ns>]` entry
+  with `single = true` (e.g. two `status:*` labels). Structurally rare going
+  forward (`fields.Apply`'s swap logic prevents it), but concurrent git-bug
+  operations from two people could still produce it.
+- **unknown option values** — a `field:value` label where `value` isn't in
+  that field's configured `options` (fields with no configured `options` are
+  free-form and skipped). Same check `bridge pull` already warns on.
+- **missing values** — an open issue with no value at all for a configured
+  single-cardinality field (the PRD calls out `prio` specifically; every
+  configured single field is checked, since real drift shows up on `status`
+  too, not just priority).
+- **orphan sprint labels** — a `sprint:<slug>` label with no matching
+  `[[sprints.list]]` entry.
+- **dead options** — an option value listed in `[fields.<name>].options`
+  that no issue in the repo (open or closed) actually carries. This is the
+  one check that isn't `is:open`-scoped: it's a config-inventory question,
+  and an option only used on a closed issue (e.g. a terminal `validated`
+  status) is still in use.
+
+Not checked: "unknown assignees" — the PRD lists it, but there's no
+configured roster of valid assignees in `.git-board.toml` to validate labels
+against, unlike every other check above.
+
+```bash
+git-board lint             # exit 0 even with findings — a report, not a build gate
+git-board lint --strict    # exit 1 if anything is found, e.g. in CI
+```
+
 ### TUI
 
 ```bash
@@ -288,6 +326,7 @@ internal/fields/       ApplyField single/multi-cardinality logic and alias resol
 internal/filter/       grammar parser, Matches(issue, conditions, config, me).
 internal/board/        load/sort/group issues — shared by the CLI, the TUI and the web API.
 internal/ghbridge/     `gh project item-list` parsing + field-mapping/diff logic for `bridge pull`.
+internal/lint/          read-only drift checks (labels vs. .git-board.toml) — internal/lint.Run.
 cmd/git-board/          main.go + cobra commands, thin rendering.
 cmd/git-board-server/   HTTP API (net/http, no framework) + embeds web/dist for prod.
 web/                    Quasar/Vue frontend — one board page, api/board.ts is the only HTTP client.
@@ -324,7 +363,8 @@ test** — everything runs against on-disk repo fixtures.
 
 Shipped: config loading, the in-process git-bug cache adapter, the filter
 grammar, `set`/`get`/`ls`/`view`, an interactive TUI (`git-board tui`), the
-web UI above, and `git-board bridge configure`/`bridge pull` (GitHub
-Project → label bridge). `lint`, `move`, `close`, `sprint`, the
-cron-published static HTML site, and multi-repo `sync` are not implemented
-— see `docs/implementation-plan.md` for what's tracked next.
+web UI above, `git-board bridge configure`/`bridge pull` (GitHub Project →
+label bridge), and `git-board lint` (read-only drift report). `move`,
+`close`, `sprint`, the cron-published static HTML site, and multi-repo
+`sync` are not implemented — see `docs/implementation-plan.md` for what's
+tracked next.

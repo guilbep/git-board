@@ -391,6 +391,68 @@ this is meant to run repeatedly.
   since `tea.ExecProcess` itself isn't practically unit-testable
   (needs a live terminal).
 
+## Status update (2026-09-03): `lint` (first M2 item), on `feat/lint`
+
+- **`internal/lint`** — pure package, `lint.Run(issues []gitbugio.Issue, cfg
+  *config.Config) []Finding`, plus a thin `cmd/git-board/lint.go` cobra
+  wrapper, matching how `internal/board`/`internal/fields`/`internal/filter`
+  are each shaped. Read-only end to end: no new write paths anywhere.
+- **All 5 in-scope checks shipped as scoped**, generalizing check 3 as the
+  plan flagged as worth considering: instead of hardcoding just `prio`, it
+  walks every configured `single = true` field and reports any with zero
+  matching labels on an open issue. Same loop already needed to count
+  labels for the double-singles check, so it was less code to do both at
+  once, not more — and it matches the PRD's own drift numbers, which show
+  empty `status` alongside empty `prio`, not just one field.
+- **Unknown-assignees skipped, as the issue said to**: no configured roster
+  of valid assignees exists in `.git-board.toml` to validate an
+  `assignee:*` label against (every other check validates against config
+  that exists), so there's nothing concrete to check. Noted in the README
+  rather than guessed at.
+- **Reused, not duplicated, the unknown-value check**: pulled
+  `internal/ghbridge`'s existing `value ∈ options` logic out into
+  `config.Field.KnownValue`, used by both `ghbridge.planSingleValue` (a
+  `bridge pull` warning) and `lint.checkUnknownValues` — one predicate,
+  two call sites, `ghbridge`'s existing tests confirm the extraction didn't
+  change its behavior.
+- **Open/closed scope needed a second look mid-build**: the task's intro
+  frames every check as `is:open`-scoped, but check 5 (dead options) reads
+  "no issue in the *repo*" — literally, including closed ones. Scoping dead
+  options to `is:open` only would make any terminal-state option (e.g.
+  `status:validated`, which by definition only ever lands on closed issues)
+  report as dead on every real repo — a confidently wrong finding from a
+  tool whose entire job is not being confidently wrong. Resolved it as: `Run`
+  takes the full issue list, splits to open-only for checks 1-4 (double
+  singles, unknown values, missing values, orphan sprints — all genuinely
+  per-issue, actionable questions a closed issue doesn't need), and check 5
+  runs over the whole list, since it's a config-inventory question ("is this
+  option used anywhere"), not a per-issue one. Regression-tested directly: a
+  closed issue carrying `status:validated` must not report `status:validated`
+  as dead.
+- **`--strict` flag, opt-in**: default exit code is 0 even with findings —
+  matches the task's "report, not a build gate" framing. `--strict` exits 1
+  if any finding is reported, for a CI use case, without changing the
+  default.
+- **CLI output**: findings grouped by check (double singles first, dead
+  options last — rarer/higher-signal checks aren't buried under a
+  potentially large missing-value count), each line `<short-id> <title>:
+  <message>` (dead options have no issue, just the message), then a summary
+  line with a per-check breakdown, e.g. `summary: 4 finding(s) (double-single:
+  1, missing-value: 3)`.
+- **Tests**: `internal/lint/lint_test.go` — real git-bug repo fixtures via
+  `gitbugiotest`, one test per check with a tripping + a clean fixture
+  issue, the open/closed dead-option regression case above, plus a
+  clean-repo-reports-nothing case. That last one needed its own minimal
+  one-option-per-field config rather than the shared `config/testdata`
+  fixture — with `config/testdata`'s much larger option lists, no single
+  fixture issue can exercise every option, so dead-option findings are
+  unavoidable noise against it; asserting zero findings needed a config
+  where "every option is used" is actually achievable. `cmd/git-board/lint_test.go`
+  adds a thin CLI-wiring smoke test plus a `--strict` exit-code test.
+- **Verification**: `go build ./...`, `go vet ./...`, `gofmt -l .` clean,
+  `go test ./...` green (all packages, `internal/lint` and
+  `cmd/git-board` included).
+
 ## M2 plan (2026-09-03)
 
 Ordered by value/dependency, not strictly PRD section order. Each item
@@ -399,7 +461,7 @@ stale (grep `docs/implementation-plans` convention from co2-calculator
 doesn't apply here, but "the plan is the source of truth for what's
 next" does).
 
-- [ ] **`lint`** — double singles (two `status:*` on one issue), unknown
+- [x] **`lint`** — double singles (two `status:*` on one issue), unknown
   option values, open issues with no `prio`, orphan sprint labels (no
   matching `[[sprints.list]]`), unknown assignees, dead options in
   config nothing uses. Read-only, no writes. Highest priority: directly

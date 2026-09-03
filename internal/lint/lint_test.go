@@ -1,0 +1,241 @@
+package lint_test
+
+import (
+	"testing"
+
+	"github.com/guilbep/git-board/internal/config"
+	"github.com/guilbep/git-board/internal/gitbugio"
+	"github.com/guilbep/git-board/internal/gitbugio/gitbugiotest"
+	"github.com/guilbep/git-board/internal/lint"
+)
+
+func mustLoadConfig(t *testing.T) *config.Config {
+	t.Helper()
+	cfg, err := config.Load("../config/testdata/git-board.toml")
+	if err != nil {
+		t.Fatalf("config.Load: %v", err)
+	}
+	return cfg
+}
+
+// countChecks tallies how many findings of each check name are present, so
+// tests assert "this check fired N times" without depending on ListIssues'
+// iteration order.
+func countChecks(findings []lint.Finding) map[string]int {
+	counts := map[string]int{}
+	for _, f := range findings {
+		counts[f.Check]++
+	}
+	return counts
+}
+
+func labelIssue(t *testing.T, b *gitbugio.Backend, id string, labels ...string) {
+	t.Helper()
+	if _, err := b.ApplyLabelChange(id, labels, nil); err != nil {
+		t.Fatalf("ApplyLabelChange: %v", err)
+	}
+}
+
+// A "clean" repo is one where every check has nothing to say: every open
+// issue carries exactly one value per single-cardinality field, from the
+// configured options, every sprint label matches a configured sprint, and
+// (for dead-option, which scans the config's options against the whole
+// repo) every configured option is actually used somewhere. The shared
+// testdata config has far more options than a single fixture issue could
+// exercise, so this test uses its own minimal one-option-per-field config
+// instead — the only way to construct a repo with truly zero drift.
+func TestCleanRepoReportsNothing(t *testing.T) {
+	cfg := &config.Config{
+		Fields: map[string]config.Field{
+			"status": {Single: true, Options: []string{"ready"}},
+			"prio":   {Single: true, Options: []string{"p1"}},
+			"cat":    {Single: true, Options: []string{"bug"}},
+		},
+		Sprints: config.SprintsConfig{List: []config.Sprint{{Slug: "delivery", Title: "Delivery"}}},
+	}
+	b := gitbugiotest.New(t)
+	id := gitbugiotest.NewIssue(t, b, "clean issue")
+	labelIssue(t, b, id, "status:ready", "prio:p1", "cat:bug", "sprint:delivery")
+
+	issues, err := b.ListIssues()
+	if err != nil {
+		t.Fatalf("ListIssues: %v", err)
+	}
+	findings := lint.Run(issues, cfg)
+	if len(findings) != 0 {
+		t.Errorf("expected no findings on a fully-compliant repo, got %+v", findings)
+	}
+}
+
+func TestDoubleSingleDetected(t *testing.T) {
+	cfg := mustLoadConfig(t)
+	b := gitbugiotest.New(t)
+	tripping := gitbugiotest.NewIssue(t, b, "double status")
+	labelIssue(t, b, tripping, "status:ready", "status:qa", "prio:p1", "est:1", "cat:bug")
+	clean := gitbugiotest.NewIssue(t, b, "single status")
+	labelIssue(t, b, clean, "status:ready", "prio:p1", "est:1", "cat:bug")
+
+	issues, err := b.ListIssues()
+	if err != nil {
+		t.Fatalf("ListIssues: %v", err)
+	}
+	findings := lint.Run(issues, cfg)
+	counts := countChecks(findings)
+	if counts[lint.CheckDoubleSingle] != 1 {
+		t.Errorf("CheckDoubleSingle count = %d, want 1: %+v", counts[lint.CheckDoubleSingle], findings)
+	}
+	for _, f := range findings {
+		if f.Check == lint.CheckDoubleSingle && f.IssueID != tripping {
+			t.Errorf("double-single reported on %s, want %s", f.IssueID, tripping)
+		}
+	}
+}
+
+func TestUnknownOptionValueDetected(t *testing.T) {
+	cfg := mustLoadConfig(t)
+	b := gitbugiotest.New(t)
+	tripping := gitbugiotest.NewIssue(t, b, "bad prio")
+	labelIssue(t, b, tripping, "status:ready", "prio:p9", "est:1", "cat:bug")
+	clean := gitbugiotest.NewIssue(t, b, "good prio")
+	labelIssue(t, b, clean, "status:ready", "prio:p1", "est:1", "cat:bug")
+
+	issues, err := b.ListIssues()
+	if err != nil {
+		t.Fatalf("ListIssues: %v", err)
+	}
+	findings := lint.Run(issues, cfg)
+	counts := countChecks(findings)
+	if counts[lint.CheckUnknownValue] != 1 {
+		t.Errorf("CheckUnknownValue count = %d, want 1: %+v", counts[lint.CheckUnknownValue], findings)
+	}
+	for _, f := range findings {
+		if f.Check == lint.CheckUnknownValue && f.IssueID != tripping {
+			t.Errorf("unknown-value reported on %s, want %s", f.IssueID, tripping)
+		}
+	}
+}
+
+func TestMissingRequiredValueDetected(t *testing.T) {
+	cfg := mustLoadConfig(t)
+	b := gitbugiotest.New(t)
+	tripping := gitbugiotest.NewIssue(t, b, "no prio")
+	labelIssue(t, b, tripping, "status:ready", "est:1", "cat:bug")
+	clean := gitbugiotest.NewIssue(t, b, "has prio")
+	labelIssue(t, b, clean, "status:ready", "prio:p1", "est:1", "cat:bug")
+
+	issues, err := b.ListIssues()
+	if err != nil {
+		t.Fatalf("ListIssues: %v", err)
+	}
+	findings := lint.Run(issues, cfg)
+
+	var got []string
+	for _, f := range findings {
+		if f.Check == lint.CheckMissingRequired && f.IssueID == tripping {
+			got = append(got, f.Message)
+		}
+	}
+	if len(got) != 1 || got[0] != "no prio value" {
+		t.Errorf("missing-value findings on tripping issue = %v, want exactly [\"no prio value\"]", got)
+	}
+	for _, f := range findings {
+		if f.Check == lint.CheckMissingRequired && f.IssueID == clean {
+			t.Errorf("clean issue unexpectedly flagged missing: %+v", f)
+		}
+	}
+}
+
+func TestClosedIssueSkipsOpenOnlyChecks(t *testing.T) {
+	cfg := mustLoadConfig(t)
+	b := gitbugiotest.New(t)
+	id := gitbugiotest.NewIssue(t, b, "closed, no prio")
+	labelIssue(t, b, id, "status:ready", "status:qa") // would trip double-single AND missing-prio if open
+	gitbugiotest.CloseIssue(t, b, id)
+
+	issues, err := b.ListIssues()
+	if err != nil {
+		t.Fatalf("ListIssues: %v", err)
+	}
+	findings := lint.Run(issues, cfg)
+	counts := countChecks(findings)
+	if counts[lint.CheckDoubleSingle] != 0 || counts[lint.CheckMissingRequired] != 0 {
+		t.Errorf("closed issue should not trip open-only checks, got %+v", findings)
+	}
+}
+
+func TestOrphanSprintDetected(t *testing.T) {
+	cfg := mustLoadConfig(t)
+	b := gitbugiotest.New(t)
+	tripping := gitbugiotest.NewIssue(t, b, "orphan sprint")
+	labelIssue(t, b, tripping, "status:ready", "prio:p1", "est:1", "cat:bug", "sprint:nonexistent")
+	clean := gitbugiotest.NewIssue(t, b, "known sprint")
+	labelIssue(t, b, clean, "status:ready", "prio:p1", "est:1", "cat:bug", "sprint:delivery")
+
+	issues, err := b.ListIssues()
+	if err != nil {
+		t.Fatalf("ListIssues: %v", err)
+	}
+	findings := lint.Run(issues, cfg)
+	counts := countChecks(findings)
+	if counts[lint.CheckOrphanSprint] != 1 {
+		t.Errorf("CheckOrphanSprint count = %d, want 1: %+v", counts[lint.CheckOrphanSprint], findings)
+	}
+	for _, f := range findings {
+		if f.Check == lint.CheckOrphanSprint && f.IssueID != tripping {
+			t.Errorf("orphan-sprint reported on %s, want %s", f.IssueID, tripping)
+		}
+	}
+}
+
+func TestDeadOptionDetected(t *testing.T) {
+	cfg := mustLoadConfig(t)
+	b := gitbugiotest.New(t)
+	// cat has options bug/feature/chore; only "bug" gets used, so
+	// "feature" and "chore" should be reported dead.
+	id := gitbugiotest.NewIssue(t, b, "only cat:bug used")
+	labelIssue(t, b, id, "status:ready", "prio:p1", "est:1", "cat:bug")
+
+	issues, err := b.ListIssues()
+	if err != nil {
+		t.Fatalf("ListIssues: %v", err)
+	}
+	findings := lint.Run(issues, cfg)
+
+	dead := map[string]bool{}
+	for _, f := range findings {
+		if f.Check == lint.CheckDeadOption {
+			dead[f.Message] = true
+		}
+	}
+	if !dead["cat:feature: no issue carries it"] || !dead["cat:chore: no issue carries it"] {
+		t.Errorf("expected cat:feature and cat:chore reported dead, got dead findings: %+v", findings)
+	}
+	for _, f := range findings {
+		if f.Check == lint.CheckDeadOption && f.Message == "cat:bug: no issue carries it" {
+			t.Errorf("cat:bug is used, should not be reported dead: %+v", f)
+		}
+	}
+}
+
+// The regression case for dead-option's open/closed asymmetry: a status
+// value that only appears on a closed issue (e.g. a terminal "validated"
+// status) is still in use — checkDeadOptions must not report it, even
+// though the open-only checks never see the issue that carries it.
+func TestDeadOptionSeesClosedIssues(t *testing.T) {
+	cfg := mustLoadConfig(t)
+	b := gitbugiotest.New(t)
+	id := gitbugiotest.NewIssue(t, b, "validated and closed")
+	labelIssue(t, b, id, "status:validated", "prio:p1", "est:1", "cat:bug")
+	gitbugiotest.CloseIssue(t, b, id)
+
+	issues, err := b.ListIssues()
+	if err != nil {
+		t.Fatalf("ListIssues: %v", err)
+	}
+	findings := lint.Run(issues, cfg)
+	for _, f := range findings {
+		if f.Check == lint.CheckDeadOption && f.Message == "status:validated: no issue carries it" {
+			t.Errorf("status:validated is used by a closed issue, must not be reported dead: %+v", f)
+		}
+	}
+}

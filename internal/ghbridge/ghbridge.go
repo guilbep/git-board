@@ -223,7 +223,7 @@ func planSingleValue(cfg *config.Config, current []string, name, value string) (
 	if value == "" {
 		return FieldResult{}, ""
 	}
-	if opts := cfg.Fields[name].Options; len(opts) > 0 && !slices.Contains(opts, value) {
+	if !cfg.Fields[name].KnownValue(value) {
 		return FieldResult{}, fmt.Sprintf("%s value %q has no matching [fields.%s] option, skipped", name, value, name)
 	}
 	_, added, removed := fields.Diff(current, name, value, true)
