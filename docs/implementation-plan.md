@@ -3,6 +3,53 @@
 Living doc — update as milestones land. See the PRD (in the original design
 conversation, not checked in here yet) for full context; this tracks state.
 
+## Why this exists
+
+Replaces GitHub Projects (Project 40, "Calculator CO2" on
+`EPFL-ENAC/co2-calculator`): 811 items, 19 fields, 13 views, 4 automations,
+all living outside git in GitHub's Projects database — drifting silently
+(duplicate option values, dead fields, hand-edited views with hardcoded
+denylists), non-portable. git-board's field values live as namespaced
+git-bug labels instead, and sprints/views are `.git-board.toml`, reviewed
+and diffed like the rest of the repo. Same principle as
+[git-time](https://github.com/guilbep/git-time) (a sibling tool, same
+owner, replacing Toggl the same way): store data git already knows how to
+sync/auth/version, don't stand up a server or a new SaaS.
+
+This tracking doc originally lived in co2-calculator itself
+(`docs/implementation-plans/git-time-git-board.md`, never merged to
+`dev`) since neither tool is a co2-calculator GitHub issue. Moved here
+— the doc's authoritative home is each tool's own repo, not the project
+it happens to be adopted by first.
+
+### Adoption status against the real co2-calculator repo
+
+- git-bug initialized locally, ~325 of ~811 GitHub issues bridged in
+  (`git-bug bridge pull`, stopped short of the full history to avoid
+  grinding on GitHub's secondary rate limit — resumable, not a hard cap).
+- `git-board bridge pull --apply` run for real once: 291 matched (284
+  changed), 840 fields set, 261 value warnings (real drift — see the
+  bridge-specific status update below for the exact numbers and what
+  they mean for `.git-board.toml`'s field options).
+- **Nothing pushed to the real `EPFL-ENAC/co2-calculator` remote yet** —
+  every git-bug ref and every labeled field is still local-only. That's
+  a deliberate, separate decision for whoever owns that repo to trigger,
+  not something to do unilaterally from here.
+
+### Open questions carried from the PRD (adoption-level, not implementation)
+
+- git-bug is pre-1.0; its CLI/library surface has already diverged from
+  assumptions once during this build (no `bug ls` subcommand existed —
+  see the M1 status entries below). Recheck compatibility before bumping
+  past the pinned `v0.10.1`.
+- Sub-issues / `parent:` label: co2-calculator has items with linked PRs
+  and an unknown number with parents — decide whether `parent:` is needed
+  before a real team rollout.
+- Non-dev adoption (PM/QA) is the biggest named risk in the original PRD.
+  The web UI (below) is the current answer; if it doesn't land for those
+  users, the PRD's fallback is a cron-published static HTML site (the
+  one M2 item still not built — see "Not done").
+
 ## Done
 
 - [x] M1 (fields, `set`/`get`/`ls`/`view`, filter grammar, config):
