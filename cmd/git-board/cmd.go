@@ -57,6 +57,7 @@ FILTER GRAMMAR (used by ls/view/tui):
   git-board view backlog --md
   git-board set a1b2c3 status=ready prio=p1
   git-board tui "assignee:@me is:open" --me guilbep`,
+		Version:       buildVersion(),
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
