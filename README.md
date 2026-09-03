@@ -14,9 +14,9 @@ CLI binary — so `git-board` needs the target repo to be a normal
 git-bug-initialized repo, but does **not** need `git-bug` installed on PATH.
 
 This is the **M1** milestone (fields, `set` / `get` / `ls` / `view`, the
-filter grammar, and config loading) plus `lint`, `move`, `close`, `sync`
-and numeric-aware `--sort` from **M2**. `sprint` and the cron-published
-static HTML site are the remaining M2 items, not implemented here yet.
+filter grammar, and config loading) plus `lint`, `move`, `close`, `sync`,
+`sprint`, and numeric-aware `--sort` from **M2**. The cron-published static
+HTML site is the remaining M2 item, not implemented here yet.
 
 ## Install
 
@@ -147,6 +147,12 @@ git-board lint
 # git bug pull/push on one or more git-bug repos (defaults to cwd)
 git-board sync
 git-board sync ../co2-calculator ../git-time
+
+# sprints: list/resolve/create/report (see "Sprints" below)
+git-board sprint ls
+git-board sprint current
+git-board sprint new q1-hardening --title "Q1 Hardening" --start 2026-10-05
+git-board sprint report delivery
 ```
 
 `@me` (in filters, e.g. the `mine` view, or as a field value) resolves from
@@ -276,6 +282,43 @@ git-board lint             # exit 0 even with findings — a report, not a build
 git-board lint --strict    # exit 1 if anything is found, e.g. in CI
 ```
 
+## Sprints (`git-board sprint`)
+
+Thin presentation over the date-window math already in `internal/config`
+(`ResolveSprint`, used by `@current`/`@next`/`@previous` in the filter
+grammar) — this command doesn't reimplement resolution, it exposes it.
+
+```bash
+git-board sprint ls                    # every configured sprint, with computed date ranges
+git-board sprint current               # the sprint @current resolves to
+git-board sprint next                  # same for @next
+git-board sprint previous              # same for @previous
+git-board sprint new <slug> --title <t> --start <date>   # appends a [[sprints.list]] entry
+git-board sprint report <slug>         # issues in that sprint, aggregated by status
+```
+
+- **`ls`**'s end date is computed, not stored: a sprint's end is the next
+  sprint's start, or `start + [sprints].length_days` for the last one.
+  `current`/`next`/`previous` print the same computed range for the sprint
+  they resolve to.
+- **No sprint resolves** (before the first configured sprint has started, or
+  nothing configured at all) is a normal outcome, not an error: `current`
+  prints `no sprint currently active` and exits 0, same idea for
+  `next`/`previous`. Matches `ResolveSprint`'s own `(nil, nil)` return for
+  "nothing resolves" — it's not a `%!s(<nil>)` crash waiting to happen.
+- **`new`** appends `[[sprints.list]]` via the same targeted text-surgery
+  `git-board bridge configure` uses to write `[github-project]` — find the
+  right spot in the raw file and splice text in, rather than decode the
+  whole TOML document and re-encode it (which would silently drop comments
+  and reorder tables). Refuses a slug that's already used, or a `--start`
+  that doesn't parse as `YYYY-MM-DD`, without touching the file.
+- **`report <slug>`** loads `sprint:<slug>` (open and closed issues both —
+  a sprint retro wants to see what shipped, not just what's still open),
+  groups by `status`, and prints a count per bucket plus a total. Same
+  `internal/board.BucketBy` aggregation the `--group` flag on `ls`/`view`
+  already uses. Errors on an unconfigured slug rather than silently
+  printing `total: 0` for a typo.
+
 ### TUI
 
 ```bash
@@ -401,7 +444,7 @@ grammar (with numeric-aware `--sort`), `set`/`get`/`ls`/`view`, an
 interactive TUI (`git-board tui`), the web UI above, `git-board bridge
 configure`/`bridge pull` (GitHub Project → label bridge, plus `i`/`o`
 from inside the TUI), `git-board lint` (read-only drift report),
-`git-board move`/`close`, and `git-board sync` (explicit local paths,
-not `[repos].list`). `sprint` and the cron-published static HTML site
-are not implemented — see `docs/implementation-plan.md` for what's
-tracked next.
+`git-board move`/`close`, `git-board sync` (explicit local paths,
+not `[repos].list`), and `git-board sprint` (`ls`/`current`/`next`/
+`previous`/`new`/`report`). The cron-published static HTML site is not
+implemented — see `docs/implementation-plan.md` for what's tracked next.
