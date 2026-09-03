@@ -505,13 +505,13 @@ without touching the CLI.
 
 ## Development
 
+See [`CONTRIBUTING.md`](CONTRIBUTING.md) for setup (including the
+`GOPRIVATE` step above) and conventions.
+
 ```bash
 git clone git@github.com:guilbep/git-board.git
 cd git-board
-go build ./...      # compile everything
-go vet ./...         # static checks
-go test ./...        # full suite
-gofmt -l .            # should print nothing; if it does, gofmt -w .
+make ci    # build + vet + test + gofmt check, in one shot
 ```
 
 Run one package or one test by name:
