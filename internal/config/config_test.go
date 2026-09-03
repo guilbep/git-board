@@ -176,6 +176,100 @@ func TestSetGithubProjectCreatesNewFile(t *testing.T) {
 	}
 }
 
+func TestSprintWindowsComputesEndFromNextStartOrLength(t *testing.T) {
+	cfg := mustLoad(t)
+
+	windows := SprintWindows(cfg.Sprints)
+	if len(windows) != 2 {
+		t.Fatalf("len(windows) = %d, want 2", len(windows))
+	}
+	// Compared as Y-M-D strings, not instants — dateOnly() (used inside
+	// SprintWindows) normalizes to UTC, while a bare TOML date decodes in
+	// the local zone, so a raw .Equal would fail on timezone offset alone
+	// despite naming the same calendar day.
+	const layout = "2006-01-02"
+	// delivery's end is post-delivery's start (2026-09-07), not
+	// delivery.Start + length_days (which would also land on 2026-09-07
+	// here by coincidence — the real assertion is against post-delivery's
+	// own start value, not the arithmetic).
+	if got := windows[0].End.Format(layout); got != "2026-09-07" {
+		t.Errorf("delivery.End = %s, want 2026-09-07 (post-delivery's start)", got)
+	}
+	// post-delivery is last, so its end is Start + length_days (14).
+	if got := windows[1].End.Format(layout); got != "2026-09-21" {
+		t.Errorf("post-delivery.End = %s, want 2026-09-21 (start + 14d)", got)
+	}
+}
+
+func TestAppendSprintRoundTrips(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "git-board.toml")
+	original, err := os.ReadFile(fixture)
+	if err != nil {
+		t.Fatalf("read fixture: %v", err)
+	}
+	if err := os.WriteFile(path, original, 0o644); err != nil {
+		t.Fatalf("write copy: %v", err)
+	}
+
+	start := time.Date(2026, 10, 5, 0, 0, 0, 0, time.UTC)
+	if err := AppendSprint(path, "q1-hardening", "Q1 Hardening", start); err != nil {
+		t.Fatalf("AppendSprint: %v", err)
+	}
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load after AppendSprint: %v", err)
+	}
+	if len(cfg.Sprints.List) != 3 {
+		t.Fatalf("len(Sprints.List) = %d, want 3", len(cfg.Sprints.List))
+	}
+	added := cfg.Sprints.List[2]
+	if added.Slug != "q1-hardening" || added.Title != "Q1 Hardening" || added.Start.Format("2006-01-02") != start.Format("2006-01-02") {
+		t.Fatalf("added sprint = %+v, want start 2026-10-05", added)
+	}
+	// The two pre-existing sprints must still be there, untouched.
+	if cfg.Sprints.List[0].Slug != "delivery" || cfg.Sprints.List[1].Slug != "post-delivery" {
+		t.Fatalf("existing sprints lost: %+v", cfg.Sprints.List)
+	}
+	// Everything else in the file must still parse fine.
+	if len(cfg.Fields["status"].Options) != 9 {
+		t.Errorf("status options lost after AppendSprint: %v", cfg.Fields["status"].Options)
+	}
+	if cfg.Views["backlog"].Sort != "prio asc" {
+		t.Errorf("views lost after AppendSprint: %+v", cfg.Views["backlog"])
+	}
+	if cfg.Repos[0] != "EPFL-ENAC/co2-calculator" {
+		t.Errorf("repos lost after AppendSprint: %v", cfg.Repos)
+	}
+}
+
+func TestAppendSprintRejectsDuplicateSlug(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "git-board.toml")
+	original, err := os.ReadFile(fixture)
+	if err != nil {
+		t.Fatalf("read fixture: %v", err)
+	}
+	if err := os.WriteFile(path, original, 0o644); err != nil {
+		t.Fatalf("write copy: %v", err)
+	}
+
+	err = AppendSprint(path, "delivery", "Duplicate", time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
+	if err == nil {
+		t.Fatal("expected an error for a duplicate slug, got nil")
+	}
+
+	// The file must be untouched — no partial write on the rejected path.
+	after, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read after rejected AppendSprint: %v", err)
+	}
+	if string(after) != string(original) {
+		t.Errorf("file changed despite rejected AppendSprint")
+	}
+}
+
 func TestResolveSprintBeforeFirstStart(t *testing.T) {
 	cfg := mustLoad(t)
 	today := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)

@@ -31,7 +31,7 @@ still an accurate one-line "what M1 didn't include" summary.
   sprints, dead options; unknown assignees explicitly skipped — no
   configured roster to validate against). Shipped.
 - [x] `move`, `close`. Shipped.
-- [ ] `sprint ls|current|new|report`.
+- [x] `sprint ls|current|new|report`. Shipped.
 - [ ] `html` (static site for PM/non-dev browsing, cron-published).
 - [x] `sync` (multi-repo `git bug` pull/push — explicit paths, not
   `[repos].list` auto-resolution, see the M2 plan section). Shipped.
@@ -481,7 +481,7 @@ next" does).
   sets `status:validated` (or whatever the config calls the terminal
   state — don't hardcode "validated") then closes the git-bug bug via
   `internal/gitbugio`. Small, builds directly on `fields.Apply`.
-- [ ] **`sprint ls|current|new|report`** — `ls` lists configured
+- [x] **`sprint ls|current|new|report`** — `ls` lists configured
   sprints with computed date ranges; `current`/`next`/`previous` show
   the resolved one; `new <slug> --start <date>` appends a
   `[[sprints.list]]` entry (mirror `config.SetGithubProject`'s
@@ -489,6 +489,8 @@ next" does).
   TOML); `report <slug>` aggregates issues in that sprint by
   status/assignee (this is also most of what git-time's `est` will
   need later — shared sprint-math surface, don't duplicate it there).
+  Shipped — see the status update below (`report` ended up
+  status-only, not status/assignee; see there for why).
 - [ ] **`html`** — static site, one page per configured view, from
   `html/template` (stdlib — this doesn't need `jinja2`-equivalent
   templating power for a handful of table/board layouts). Meant to be
@@ -643,3 +645,100 @@ bound in its main list/table view — confirmed, not guessed.
   lexical-still-works, numeric-orders-correctly (not lexically), missing-
   value-sorts-last-both-directions, empty-spec-is-a-no-op, and a nil-config
   doesn't-panic case.
+
+## Status update (2026-09-03): `sprint ls|current|next|previous|new|report`, on `feat/sprint`
+
+- **End-date computation, factored, not duplicated**: checked
+  `ResolveSprint` first, as instructed, rather than assuming it already did
+  window math. It doesn't — it only sorts sprints by start date to resolve
+  `current`/`next`/`previous` as neighbours in that order; there's no
+  end-date arithmetic in it at all (`[sprints].length_days`/`start_weekday`
+  were parsed into `SprintsConfig` but genuinely unused anywhere in the
+  codebase before this — checked with a repo-wide grep, not assumed). So
+  `ls`'s end-date column is new code, not a duplicate of anything — but the
+  *sort-by-start-date* step it needs is exactly what `ResolveSprint` already
+  did inline, so that part is factored out into a shared `sortedSprints`
+  helper both now call, rather than a second `sort.Slice` copy. New
+  `config.SprintWindows(sprints)` returns every sprint ordered by start with
+  `End` computed as the next sprint's start, or `Start + length_days` for
+  the last one.
+- **"No sprint currently active" — confirmed via `ResolveSprint`'s actual
+  return, not assumed**: it returns `(nil, nil)` — a normal value, not an
+  error — when nothing resolves (empty sprint list, or `today` before every
+  configured sprint's start). `current`/`next`/`previous` in the CLI print a
+  clear one-line message (`no sprint currently active` / `no next sprint
+  configured` / `no previous sprint`) and exit 0. One real implication
+  worth flagging, not glossed over: `current` has **no upper bound** on a
+  sprint's window — `ResolveSprint` picks "the last sprint whose start is
+  on or before today" with nothing checking whether that sprint's computed
+  *end* has also passed. A sprint calendar with a gap after the last
+  configured entry never reports "no sprint currently active" once at least
+  one sprint has started; it keeps reporting that last sprint as current
+  indefinitely. Correct per `ResolveSprint`'s existing, already-shipped
+  semantics (`sprint ls|current` are presentation only, not a redesign of
+  resolution) — but real behavior worth someone's attention if a sprint
+  calendar goes stale, not a bug introduced here.
+- **`new`**: appends `[[sprints.list]]` via the same targeted-text-surgery
+  technique `config.SetGithubProject` uses for `[github-project]` — new
+  `config.AppendSprint`, sharing the same "splice text, don't decode +
+  re-encode" idea but not the same code path, since `SetGithubProject`
+  upserts a single named table (replace-or-append) while a sprint always
+  *adds* a new array-of-tables entry. Placed right after the last existing
+  `[[sprints.list]]` entry (not just appended at EOF) so repeated sprints
+  stay grouped together the way a hand-written file would, even after
+  `[github-project]` has already been appended at the end by `bridge
+  configure`. Verified against a real copy of the `internal/config`
+  fixture: round-trips (existing sprints, fields, views, repos all still
+  parse afterward), rejects a duplicate slug and an unparseable `--start`
+  without touching the file (checked the file's bytes are unchanged on the
+  rejected path, not just that an error came back).
+- **`report <slug>`**: loads `sprint:<slug>` via `board.LoadMatching` (open
+  *and* closed issues — no `is:open` in the filter, deliberately: a sprint
+  report is a retro tool, and excluding what shipped would make it useless
+  for that), groups by `status` via the existing `board.BucketBy`, prints a
+  count per bucket plus a total. **Deviates from the M2 plan's original
+  scope note** ("aggregates issues in that sprint by status/assignee") —
+  the task that actually drove this work specified status-only grouping,
+  and `BucketBy` groups by one field at a time, so a status/assignee
+  cross-tab would've been new aggregation logic, not the "reuse
+  `board.BucketBy`" this was scoped as. Deferred, not silently dropped: if
+  a status×assignee breakdown is wanted later, it's a new, explicit
+  aggregation shape, not scope creep on this pass. Rejects an unconfigured
+  slug with a clear error (checked against `cfg.Sprints.List` before
+  loading issues) rather than silently printing `total: 0` for a typo —
+  a zero that *looks* complete is exactly the "no silent fallbacks" case.
+- One caught-in-review fix worth naming: the first pass of
+  `runSprintResolve` looked up the resolved sprint's window by re-scanning
+  `SprintWindows` and returned an `"internal error"` if the slug wasn't
+  found there — a guard for a state that can't actually happen (both
+  functions order the same `cfg.Sprints.List` the same way), scarier than
+  the real risk it covered. Replaced with a `ponytail:`-commented graceful
+  degrade (print the bare slug/title, skip the computed range) instead of
+  an alarming error message for an unreachable branch.
+- Tests: real fixtures throughout, no mocks. `internal/config`:
+  `SprintWindows`' end-date math (both the "next sprint's start" and
+  "last sprint, `+length_days`" branches, compared as Y-M-D strings rather
+  than `time.Time.Equal` — a bare TOML date decodes at local-zone midnight
+  while `SprintWindows`' own `dateOnly` normalizes to UTC, so a raw instant
+  comparison fails on offset alone despite naming the same calendar day;
+  caught by a real test run, not anticipated up front), `AppendSprint`'s
+  round-trip and its two rejection paths (including a byte-for-byte
+  untouched-file assertion on the duplicate-slug rejection). `cmd/git-board`
+  (real git-bug repos via `newTestRepo`, matching `move`/`close`'s own
+  pattern): `ls` with sprints configured and with none at all, `current`/
+  `next`/`previous` resolving correctly *and* the no-sprint-active case,
+  `new`'s CLI wiring (append, duplicate, bad date, missing required flags),
+  `report` aggregating a mix of `status:ready` and no-status-at-all issues
+  into the right buckets, asserting the actual per-row counts (two
+  `status:ready` issues plus one status-less one — a report that printed
+  `len(issues)` instead of `len(bucket.Issues)` per row would have passed
+  a weaker single-issue-per-bucket version of this test undetected, so
+  the fixture deliberately has an uneven bucket; verified by temporarily
+  breaking the aggregation and confirming the test actually fails), plus
+  the `report`-on-an-empty-but-configured-sprint (`total: 0`) and
+  `report`-on-an-unconfigured-slug (rejected) cases. The current/next/previous fixture uses two sprints
+  dated `2020-01-01` and `2099-01-01` instead of dates near "today" — makes
+  the CLI-level `execute()` tests genuinely deterministic against real
+  wall-clock time (same as everywhere else in this test suite, no injected
+  clock) without depending on when the test happens to run, rather than
+  fixture dates that would eventually drift stale.

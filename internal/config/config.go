@@ -165,15 +165,22 @@ func dateOnly(t time.Time) time.Time {
 	return time.Date(y, m, d, 0, 0, 0, 0, time.UTC)
 }
 
+// sortedSprints returns a copy of list ordered by start date — shared by
+// ResolveSprint (current/next/previous neighbour lookup) and SprintWindows
+// (end-date computation), so the ordering rule lives in one place.
+func sortedSprints(list []Sprint) []Sprint {
+	ordered := make([]Sprint, len(list))
+	copy(ordered, list)
+	sort.Slice(ordered, func(i, j int) bool { return ordered[i].Start.Before(ordered[j].Start) })
+	return ordered
+}
+
 // ResolveSprint resolves "current" / "next" / "previous" against the sprint
 // calendar. The "current" sprint is the last one whose start date is on or
 // before today; next/previous are its neighbours in start-date order.
 func ResolveSprint(sprints SprintsConfig, which string, today time.Time) (*Sprint, error) {
 	today = dateOnly(today)
-
-	ordered := make([]Sprint, len(sprints.List))
-	copy(ordered, sprints.List)
-	sort.Slice(ordered, func(i, j int) bool { return ordered[i].Start.Before(ordered[j].Start) })
+	ordered := sortedSprints(sprints.List)
 
 	idx := -1
 	for i, s := range ordered {
@@ -204,4 +211,99 @@ func ResolveSprint(sprints SprintsConfig, which string, today time.Time) (*Sprin
 	default:
 		return nil, fmt.Errorf("unknown sprint alias: %q", which)
 	}
+}
+
+// SprintWindow is a configured sprint plus its computed end date.
+type SprintWindow struct {
+	Sprint
+	End time.Time
+}
+
+// SprintWindows returns every configured sprint, ordered by start date (the
+// same ordering ResolveSprint uses — see sortedSprints), with End computed
+// as the next sprint's start date, or Start+LengthDays for the last one.
+// This window math isn't in ResolveSprint itself (which only needs
+// start-date ordering to resolve @current/@next/@previous), so it's new
+// here rather than duplicated from anywhere.
+func SprintWindows(sprints SprintsConfig) []SprintWindow {
+	ordered := sortedSprints(sprints.List)
+	windows := make([]SprintWindow, len(ordered))
+	for i, s := range ordered {
+		end := dateOnly(s.Start).AddDate(0, 0, sprints.LengthDays)
+		if i+1 < len(ordered) {
+			end = dateOnly(ordered[i+1].Start)
+		}
+		windows[i] = SprintWindow{Sprint: s, End: end}
+	}
+	return windows
+}
+
+// AppendSprint appends a new [[sprints.list]] entry to the .git-board.toml
+// at path, via the same targeted text-surgery SetGithubProject uses (find
+// the right spot, splice text) rather than decode+re-encode, which would
+// drop comments/formatting elsewhere in the file. Errors if slug is already
+// used by a sprint in the current file.
+func AppendSprint(path, slug, title string, start time.Time) error {
+	cfg, err := Load(path)
+	if err != nil {
+		return fmt.Errorf("reading %s: %w", path, err)
+	}
+	for _, s := range cfg.Sprints.List {
+		if s.Slug == slug {
+			return fmt.Errorf("sprint %q already exists in %s", slug, path)
+		}
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("reading %s: %w", path, err)
+	}
+	block := fmt.Sprintf("[[sprints.list]]\nslug = %q\ntitle = %q\nstart = %s\n",
+		slug, title, start.Format("2006-01-02"))
+	updated := appendAfterLastMatch(string(data), "[[sprints.list]]", block)
+	if err := os.WriteFile(path, []byte(updated), 0o644); err != nil {
+		return fmt.Errorf("writing %s: %w", path, err)
+	}
+	return nil
+}
+
+// appendAfterLastMatch inserts block right after the last line-exact-match
+// of header (through the line before the next "[" header, or EOF) — so a
+// new [[sprints.list]] entry lands grouped with the existing ones instead
+// of at the end of unrelated tables. Appends at EOF (blank-line separated)
+// if header doesn't occur in content at all.
+func appendAfterLastMatch(content, header, block string) string {
+	lines := strings.Split(content, "\n")
+	end := -1
+	for i, line := range lines {
+		if strings.TrimSpace(line) != header {
+			continue
+		}
+		end = len(lines)
+		for j := i + 1; j < len(lines); j++ {
+			if strings.HasPrefix(strings.TrimSpace(lines[j]), "[") {
+				end = j
+				break
+			}
+		}
+	}
+
+	if end < 0 {
+		if strings.TrimSpace(content) == "" {
+			return block
+		}
+		return strings.TrimRight(content, "\n") + "\n\n" + block
+	}
+
+	before := strings.TrimRight(strings.Join(lines[:end], "\n"), "\n")
+	after := strings.Join(lines[end:], "\n")
+	var b strings.Builder
+	b.WriteString(before)
+	b.WriteString("\n\n")
+	b.WriteString(block)
+	if strings.TrimSpace(after) != "" {
+		b.WriteString("\n")
+		b.WriteString(after)
+	}
+	return b.String()
 }
