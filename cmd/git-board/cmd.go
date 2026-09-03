@@ -150,7 +150,10 @@ as a git subcommand, not needed for anything else here), c quick-filter
 by category, f structured filter (same grammar as "ls" — see below —
 empty input clears it), s sort by field e.g. "prio" or "prio desc"
 (same as --sort, persists across a later f/c filter, empty input
-clears it), / bubbles/list's own fuzzy text search, esc/q back or quit.
+clears it), i/o preview/apply the GitHub Project bridge (same
+pull/push mnemonic as git-bug's own termui, bound to
+"bridge pull"/"...--apply" instead — requires "bridge configure" first),
+/ bubbles/list's own fuzzy text search, esc/q back or quit.
 
 The optional [filter] argument uses the same grammar as "ls" (see
 "git-board --help") and narrows what's loaded before you even start

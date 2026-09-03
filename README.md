@@ -264,6 +264,8 @@ git-board tui "is:open prio:p1"
 | `c` | list | quick-filter by the configured `cat` field's options (`(all)` clears it); coexists with `/` search |
 | `f` | list | structured filter — the same `field:value`/`-field:value`/`is:open`/`title:*glob*` grammar as `ls`/`view`/the launch argument, not the fuzzy `/` search. Empty input + enter clears it. |
 | `s` | list | sort by field, e.g. `prio` (ascending) or `prio desc` — same syntax as `ls --sort`. Persists across a later `f`/`c` filter change. Empty input + enter clears it back to natural order. |
+| `i` | list | preview the GitHub Project bridge (`git-board bridge pull`, dry-run) — matches git-bug's own termui, where `i` is "Pull". Requires `git-board bridge configure` to have been run first. Runs in the background; the TUI stays responsive while it fetches. |
+| `o` | list | apply the plan `i` just previewed (`bridge pull --apply`) — matches git-bug's termui `o`, "Push". Refuses to run before an `i` (no blind apply); the plan is cleared after applying so `o` can't silently re-apply stale data. |
 | `e` | detail | edit a field: pick the field, then a value from its configured options, or type free text if it has none (e.g. `assignee`, using the same `+value`/`-value` syntax as `git-board set`) |
 | `g` | detail | view the issue's body and comments — shells out to `git bug bug show <id>` (requires `git-bug` installed as a git subcommand; git-board itself never needs it), suspending the TUI and resuming when it exits |
 | `esc`/`q` | detail, pickers | back |
@@ -273,6 +275,13 @@ git-board tui "is:open prio:p1"
 for "I remember a word in the title." `f` is precise and composable —
 `assignee:guilbep -status:validated` narrows exactly like it would on the
 CLI, because it's the exact same `internal/filter` grammar and code path.
+
+`i`/`o` show a one-line summary (matched/changed/unmatched/field/warning
+counts), not the full per-issue diff — that's what `git-board bridge pull`
+on the CLI is still for. Note these are **not** git-bug's own `i`/`o`
+(which sync git-bug's issue refs with a remote) — same keys, same
+pull/push mnemonic, but bound to git-board's GitHub Project bridge
+instead, since that's the sync a git-board session actually needs.
 
 git-board's own data model is fields (labels) only — it doesn't store or
 render issue bodies/comments, and doesn't need `git-bug` on PATH for

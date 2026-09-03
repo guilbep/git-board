@@ -500,3 +500,52 @@ next" does).
 Not in this pass, decide later: `parent:`/sub-issues (PRD leaves this
 an open M2 decision, not a commitment), the git-bug version-pin
 recheck (`v0.10.1`, still fine as of this writing).
+
+## Status update (2026-09-03): `i`/`o` bridge pull/push in the TUI
+
+Real ask: `[i]`/`[o]` for the GitHub Project bridge, matching git-bug's
+own termui convention. Checked git-bug's actual source first
+(`termui/bug_table.go`) rather than assuming: `i`="Pull", `o`="Push",
+bound in its main list/table view — confirmed, not guessed.
+
+- **`i`**: previews `bridge pull` (dry-run) as an async `tea.Cmd` — a
+  network call (shells out to `gh`, not `git`/`git-bug`), so it must not
+  block the event loop; the TUI stays responsive and shows "pulling…"
+  while it runs. Reuses `m.allIssues` (already loaded) instead of a
+  second `ListIssues()` call, and needs no new `*gitbugio.Backend` at
+  all — `ghbridge.BuildPlan`/`FetchItems` don't touch git-bug's repo
+  lock, only `internal/config`'s `[github-project]` and the network.
+  `bridgeBusy` guards a second `i` firing mid-fetch. No project
+  configured → a clear status pointing at `bridge configure`, not a
+  crash or a silent no-op.
+- **`o`**: applies the plan `i` loaded, via `ghbridge.ApplyPlan(m.backend,
+  plan)` — this one *does* go through `m.backend` since it's a real
+  write, but it's an ordinary Go call (no subprocess), so no lock
+  interplay with "g"'s close/reopen dance. Refuses to apply with no
+  plan loaded (dry-run-first stays the pattern every write path here
+  follows) rather than silently pulling-then-applying blind. The list
+  is patched in place from the plan's own `Added`/`Removed` per issue
+  (same "patch by ID, don't re-list" approach `syncIssueLabels` already
+  uses for a single-field edit) instead of a fresh `ListIssues()` call,
+  and the plan is cleared after applying so a second `o` can't silently
+  re-apply stale data.
+- Status line only shows a summary (matched/changed/unmatched/
+  field/warning counts) — the full per-issue diff stays a CLI-only
+  thing (`git-board bridge pull`); a hundreds-of-lines dump doesn't fit
+  a status line and this wasn't asked for as a new full-screen view.
+- **Explicitly not git-bug's own `i`/`o`** (which sync git-bug's issue
+  refs with a remote) — same keys, same pull/push mnemonic, bound to
+  git-board's own GitHub Project bridge instead, since that's the sync
+  a git-board session actually needs. Documented clearly in the README
+  to avoid the mix-up.
+- Tests: real `gitbugiotest` backends throughout (no mocks) —
+  configured-vs-not for `i`, busy-guards-a-second-i, both
+  `bridgePullFinishedMsg` outcomes, `o`-with-no-plan, and the real
+  end-to-end case (`o` applies a plan naming a real seeded issue: the
+  write lands on the real backend, the in-memory list reflects it
+  without a re-list, the plan clears). Did not re-run a live `gh`
+  fetch for this verification pass — `FetchItems`/`BuildPlan`/
+  `ApplyPlan` are the unchanged functions already verified for real
+  against EPFL-ENAC/co2-calculator earlier in this project (the actual
+  `bridge pull --apply` run); re-hitting the network here would only
+  have spent more of GitHub's secondary rate limit for no new signal.

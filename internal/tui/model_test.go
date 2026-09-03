@@ -9,6 +9,8 @@ import (
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/guilbep/git-board/internal/config"
+	"github.com/guilbep/git-board/internal/ghbridge"
 	"github.com/guilbep/git-board/internal/gitbugio"
 	"github.com/guilbep/git-board/internal/gitbugio/gitbugiotest"
 )
@@ -566,4 +568,155 @@ func TestGitBugShowFinishedReopensBackend(t *testing.T) {
 			t.Errorf("status = %q, want it to surface the reopen failure", m.status)
 		}
 	})
+}
+
+func TestIKeyRequiresGithubProjectConfigured(t *testing.T) {
+	cfg := mustLoadConfig(t) // no [github-project] in the shared fixture
+	b := gitbugiotest.New(t)
+	m := New(nil, "is:open", b, cfg, "", today, noopReopen(b))
+
+	m = send(m, key('i'))
+
+	if m.bridgeBusy {
+		t.Error("bridgeBusy = true, want false — nothing should start without a configured project")
+	}
+	if !strings.Contains(m.status, "bridge configure") {
+		t.Errorf("status = %q, want it to point at `git-board bridge configure`", m.status)
+	}
+}
+
+func TestIKeyStartsPullWhenConfigured(t *testing.T) {
+	cfg := mustLoadConfig(t)
+	cfg.GithubProject = config.GithubProject{Owner: "acme", Number: 40}
+	b := gitbugiotest.New(t)
+	m := New(nil, "is:open", b, cfg, "", today, noopReopen(b))
+
+	next, cmd := m.Update(key('i'))
+	m = next.(Model)
+
+	if !m.bridgeBusy {
+		t.Error("bridgeBusy = false, want true once a pull has started")
+	}
+	if cmd == nil {
+		t.Error("Update after \"i\" returned a nil Cmd, want the pull command")
+	}
+	if !strings.Contains(m.status, "acme/40") {
+		t.Errorf("status = %q, want it to name the project being pulled", m.status)
+	}
+
+	// A second "i" while busy must not double-fire.
+	next, cmd = m.Update(key('i'))
+	m = next.(Model)
+	if cmd != nil {
+		t.Error("a second \"i\" while bridgeBusy should be a no-op, got a non-nil Cmd")
+	}
+}
+
+func TestBridgePullFinishedStoresPlanForO(t *testing.T) {
+	cfg := mustLoadConfig(t)
+	b := gitbugiotest.New(t)
+	m := New(nil, "is:open", b, cfg, "", today, noopReopen(b))
+	m.bridgeBusy = true
+
+	t.Run("success", func(t *testing.T) {
+		plan := ghbridge.Plan{Changes: []ghbridge.IssueChange{{BugID: "x", Added: []string{"prio:p1"}}}}
+		got := send(m, bridgePullFinishedMsg{plan: plan})
+
+		if got.bridgeBusy {
+			t.Error("bridgeBusy still true after the pull finished")
+		}
+		if got.bridgePlan == nil {
+			t.Fatal("bridgePlan not stored after a successful pull")
+		}
+		if !strings.Contains(got.status, "press o to apply") {
+			t.Errorf("status = %q, want it to prompt for o", got.status)
+		}
+	})
+
+	t.Run("error", func(t *testing.T) {
+		got := send(m, bridgePullFinishedMsg{err: fmt.Errorf("rate limited")})
+
+		if got.bridgeBusy {
+			t.Error("bridgeBusy still true after a failed pull")
+		}
+		if got.bridgePlan != nil {
+			t.Error("bridgePlan set despite the fetch failing")
+		}
+		if !strings.Contains(got.status, "rate limited") {
+			t.Errorf("status = %q, want it to surface the fetch error", got.status)
+		}
+	})
+}
+
+func TestOKeyRequiresAPreviewFirst(t *testing.T) {
+	cfg := mustLoadConfig(t)
+	b := gitbugiotest.New(t)
+	m := New(nil, "is:open", b, cfg, "", today, noopReopen(b))
+
+	m = send(m, key('o'))
+
+	if !strings.Contains(m.status, "press i first") {
+		t.Errorf("status = %q, want it to say to preview with i first", m.status)
+	}
+}
+
+// TestOKeyAppliesThePreviewedPlan is the real end-to-end check: a plan
+// naming a real seeded issue, applied via a real backend (no mocks) --
+// the write must land for real (old label gone, new one present, same
+// standard as every other write in this test file), the in-memory list
+// must reflect it without a re-list, and the plan must be cleared so o
+// can't be pressed twice on stale data.
+func TestOKeyAppliesThePreviewedPlan(t *testing.T) {
+	cfg := mustLoadConfig(t)
+	b := gitbugiotest.New(t)
+	id := gitbugiotest.NewIssue(t, b, "widget")
+	if _, err := b.ApplyLabelChange(id, []string{"status:backlog"}, nil); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	issues, err := b.ListIssues()
+	if err != nil {
+		t.Fatalf("ListIssues: %v", err)
+	}
+
+	m := New(issues, "is:open", b, cfg, "", today, noopReopen(b))
+	m.bridgePlan = &ghbridge.Plan{
+		Changes: []ghbridge.IssueChange{
+			{BugID: id, Added: []string{"status:ready"}, Removed: []string{"status:backlog"}},
+		},
+	}
+
+	m = send(m, key('o'))
+
+	if m.bridgePlan != nil {
+		t.Error("bridgePlan not cleared after applying — a second o would silently re-apply stale data")
+	}
+	if !strings.Contains(m.status, "1 issue(s) updated") {
+		t.Errorf("status = %q, want an applied-count confirmation", m.status)
+	}
+
+	got, err := b.GetLabels(id)
+	if err != nil {
+		t.Fatalf("GetLabels: %v", err)
+	}
+	if !containsLabel(got, "status:ready") {
+		t.Errorf("backend labels = %v, want status:ready (the real write)", got)
+	}
+	if containsLabel(got, "status:backlog") {
+		t.Errorf("backend labels = %v, want status:backlog gone", got)
+	}
+
+	found := false
+	for _, li := range m.list.Items() {
+		it, ok := li.(item)
+		if !ok || it.issue.ID != id {
+			continue
+		}
+		found = true
+		if !containsLabel(it.issue.Labels, "status:ready") || containsLabel(it.issue.Labels, "status:backlog") {
+			t.Errorf("re-rendered list item labels = %v, want status:ready without a re-list from the backend", it.issue.Labels)
+		}
+	}
+	if !found {
+		t.Fatalf("issue %q not found in list items after applying the bridge plan", id)
+	}
 }
