@@ -47,8 +47,8 @@ it happens to be adopted by first.
   before a real team rollout.
 - Non-dev adoption (PM/QA) is the biggest named risk in the original PRD.
   The web UI (below) is the current answer; if it doesn't land for those
-  users, the PRD's fallback is a cron-published static HTML site (the
-  one M2 item still not built — see "Not done").
+  users, the PRD's fallback is a cron-published static HTML site (`git-board
+  html`, shipped — see the M2-item status update near the end of this doc).
 
 ## Done
 
@@ -79,7 +79,7 @@ still an accurate one-line "what M1 didn't include" summary.
   configured roster to validate against). Shipped.
 - [x] `move`, `close`. Shipped.
 - [x] `sprint ls|current|new|report`. Shipped.
-- [ ] `html` (static site for PM/non-dev browsing, cron-published).
+- [x] `html` (static site for PM/non-dev browsing, cron-published). Shipped.
 - [x] `sync` (multi-repo `git bug` pull/push — explicit paths, not
   `[repos].list` auto-resolution, see the M2 plan section). Shipped.
 - [x] Numeric-aware `--sort` (`[fields.<name>].numeric` fields now compare
@@ -538,11 +538,12 @@ next" does).
   need later — shared sprint-math surface, don't duplicate it there).
   Shipped — see the status update below (`report` ended up
   status-only, not status/assignee; see there for why).
-- [ ] **`html`** — static site, one page per configured view, from
+- [x] **`html`** — static site, one page per configured view, from
   `html/template` (stdlib — this doesn't need `jinja2`-equivalent
   templating power for a handful of table/board layouts). Meant to be
   cron-published for PM/non-dev read access. No auth, matches the web
-  UI's own v1 stance.
+  UI's own v1 stance. Shipped — see the status update below. **Last M2
+  item — M2 is now fully closed out.**
 - [x] **`sync`** — shipped as `git-board sync [path...]` taking
   **explicit local paths**, not `[repos].list` — see the status update
   below for why. `git bug pull`/`push` across every repo in
@@ -789,3 +790,97 @@ bound in its main list/table view — confirmed, not guessed.
   wall-clock time (same as everywhere else in this test suite, no injected
   clock) without depending on when the test happens to run, rather than
   fixture dates that would eventually drift stale.
+
+## Status update (2026-09-03): `html`, on `feat/html` — last M2 item, M2 closed out
+
+- **`layout = "table"` vs `"board"` was parsed but never consumed anywhere
+  — confirmed by grep, not assumed.** `config.View.Layout` has existed
+  since the web UI landed (it's in the `/api/views` JSON response and
+  `web/src/api/board.ts`'s `ViewConfig.layout`), but `grep -rn "\.Layout\b"`
+  across the whole module turns up exactly one hit outside this change: a
+  `config_test.go` assertion that parsing round-trips the value. Neither
+  `cmd/git-board/render.go` (the CLI's `ls`/`view` table/markdown renderer)
+  nor `web/src/pages/IndexPage.vue` (the Vue board — `grep -n "layout"` on
+  it returns nothing) ever branches on it; the web UI always renders the
+  same stacked `q-table`-per-bucket regardless of a view's configured
+  layout. `git-board html` is the first thing in the codebase to actually
+  read `Layout`: `"board"` renders one flex column per `board.Bucket`
+  (kanban cards), anything else renders a flat `<table>` per bucket — a new
+  distinction invented for this command, not one recovered from existing
+  behavior, because there wasn't one to recover.
+- **Known-field-vs-raw-label rendering reused, not duplicated.** The
+  classification (which labels are configured fields vs. free-form) already
+  lived in `internal/tui/detail.go`'s `ParseLabels` — exported, pure,
+  already covered by `detail_test.go` — so `html.go` calls it directly
+  rather than re-deriving field/value parsing. The one thing it needed that
+  wasn't exported was the cosmetic "status" → "Status" capitalization
+  (`displayFieldName`, lowercase, 5 call sites inside `internal/tui`);
+  exported it as `DisplayFieldName` (`sed` rename across `detail.go` and
+  `tui.go`, no behavior change — `go test ./internal/tui/...` stayed green)
+  rather than duplicating a second capitalization helper in `cmd/git-board`.
+  `cmd/git-board` already imports `internal/tui` for the `tui` subcommand,
+  so this added no new dependency.
+- **Read-only, confirmed against the actual write paths**: `html.go` only
+  calls `gitbugio.OpenCwd()` to read (`board.LoadMatching` →
+  `Backend.ListIssues()`), `os.MkdirAll`/`os.Create` under `-o`'s target
+  directory, and `html/template.Execute`. No `ChangeLabels`, `Close()` (the
+  bug-close operation, not the backend handle), or `fields.Apply` call
+  anywhere in the new file — matches `lint`'s existing "read-only, unlike
+  everything else in this CLI" framing, extended to name `html` alongside
+  it in both docstrings.
+- **`@me` in a static site has no per-viewer meaning, documented rather
+  than silently broken or silently ignored**: a view's filter can use
+  `assignee:@me` (see the `mine` view in `internal/config/testdata`), and
+  `board.LoadMatching` errors outright if `@me` is used with no `--me`
+  resolved. `git-board html` accepts the same `--me`/`GIT_BOARD_ME` as
+  every other command and resolves it **once, at generation time** — the
+  same single-shared-"current user" stance `cmd/git-board-server`'s
+  `apiServer.me` already documents for the live API. Called out explicitly
+  in the command's `--help` text and the README's new "Static site" section
+  rather than left as a surprise the first time someone points `@me` at a
+  cron job with no owner.
+- **The CLI's `view` and the web API's `handleListIssues` already disagree
+  on an empty `Filter`, so `html` had to pick one, not "not diverge" from a
+  single existing behavior** — `handleListIssues` (`cmd/git-board-server/
+  server.go`) defaults an empty `filter` query param to `board.
+  DefaultFilter` ("is:open"); `runView` (`cmd/git-board/cmd.go`) passes
+  `view.Filter` straight through, so a view with no `filter =` key matches
+  every issue, open and closed. `git-board html` follows `runView` — it
+  renders configured *views*, the same job `view` already does, so it
+  matches that one rather than the server's. Only matters for a view that
+  omits `filter` entirely; every view in this repo's own fixtures sets one.
+- **stdlib `html/template`, not `text/template`** — deliberate, not just
+  "the package name PRD mentioned": `html/template` context-aware-escapes
+  issue titles/labels (real data, some bridged in from GitHub) into the
+  generated pages, so a title containing `<`/`&`/`"` can't break the page
+  or inject markup. No template-engine dependency added, per the PRD's own
+  estimate table and this repo's existing avoidance of one.
+- Tests: real fixtures throughout (`newHTMLTestRepo` in `html_test.go`,
+  same on-disk `repository.InitGoGitRepo` + `t.Chdir` pattern as
+  `cmd_test.go`'s `newTestRepo`, extended with actual `[views.*]` — the
+  shared `newTestRepo`/`testConfig` fixture has none, so a second, local
+  fixture was added rather than growing the shared one and risking
+  unrelated tests). Covers: two configured views generate two files plus
+  `index.html` linking both; each view's own `filter` is actually applied
+  (the closed issue never appears in an `is:open` view, and a second,
+  narrower view's `status:backlog` filter excludes an otherwise-open,
+  otherwise-matching issue) — not just "the file is non-empty"; known
+  fields (`status`, `prio`, `assignee`) render as `Status:`/`Prio:`/
+  `Assignee:` with their values, the one genuinely unrecognized label
+  (`needs-triage`) is the only raw label text in the page, and the raw
+  `status:ready`/`prio:p1` label forms are asserted absent; `board` layout
+  actually produces `class="board"` column markup with one `<h2>` per
+  `board.BucketBy` group while a `table`-layout view never does (renders
+  `<table>` instead) for the same grouped data; no-views-configured writes
+  a real `index.html` saying so instead of an empty file; the bare `git-board
+  html` with no `-o` defaults to `./site/`. `go build ./...`, `go vet
+  ./...`, `gofmt -l .` (empty), and `go test ./...` all clean, full suite
+  green including the untouched packages (`internal/tui`'s existing tests
+  confirm the `DisplayFieldName` rename didn't change behavior).
+- **This was the last item on the M2 plan checklist above — M2 is now
+  fully shipped**: `lint`, `move`/`close`, `sprint`, `sync`, numeric-aware
+  `--sort`, and now `html` are all checked off in both the M2 plan section
+  and the older "Not done (M2+ by design)" list. Nothing from that list is
+  still open; M2-scoped follow-on work (`parent:`/sub-issues, the git-bug
+  version-pin recheck) was explicitly deferred as "not in this pass" from
+  the start, not dropped.

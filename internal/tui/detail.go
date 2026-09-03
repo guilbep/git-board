@@ -59,9 +59,9 @@ func ParseLabels(labels []string, cfgFields map[string]config.Field) (known []Kn
 	return known, other
 }
 
-// displayFieldName renders a field namespace (e.g. "status") as a detail
+// DisplayFieldName renders a field namespace (e.g. "status") as a detail
 // line label (e.g. "Status").
-func displayFieldName(name string) string {
+func DisplayFieldName(name string) string {
 	if name == "" {
 		return name
 	}
@@ -79,7 +79,7 @@ func renderDetail(issue gitbugio.Issue, cfg *config.Config, status string) strin
 
 	known, other := ParseLabels(issue.Labels, cfg.Fields)
 	for _, f := range known {
-		fmt.Fprintf(&b, "%s: %s\n", displayFieldName(f.Name), strings.Join(f.Values, ", "))
+		fmt.Fprintf(&b, "%s: %s\n", DisplayFieldName(f.Name), strings.Join(f.Values, ", "))
 	}
 	if len(known) == 0 {
 		b.WriteString("(no recognized fields)\n")
@@ -103,7 +103,7 @@ func renderDetail(issue gitbugio.Issue, cfg *config.Config, status string) strin
 // the edit-field picker.
 type fieldItem struct{ name string }
 
-func (f fieldItem) Title() string       { return displayFieldName(f.name) }
+func (f fieldItem) Title() string       { return DisplayFieldName(f.name) }
 func (f fieldItem) Description() string { return f.name }
 func (f fieldItem) FilterValue() string { return f.name }
 
