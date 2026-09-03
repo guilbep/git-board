@@ -884,3 +884,56 @@ bound in its main list/table view — confirmed, not guessed.
   still open; M2-scoped follow-on work (`parent:`/sub-issues, the git-bug
   version-pin recheck) was explicitly deferred as "not in this pass" from
   the start, not dropped.
+
+## M3 plan (2026-09-03)
+
+Per the PRD, M3 was "HTML site + cron, hooks" — the HTML site already
+shipped as part of the (relabeled) M2 above. Only **hooks** remain, and
+they're smaller than the PRD's phrasing suggests: `move`/`set`/`close`
+already exist as CLI primitives; a hook is just a Lefthook config entry
+calling one of them, not new git-board code. PRD's M4 ("import + freeze
+Project 40") is an adoption/process step, not code — `bridge` already
+covers the "import" half.
+
+- [x] **Documented Lefthook examples** for a project adopting git-board:
+  a `post-merge` hook on `main` parsing `issue/<n>-…` from the merged
+  branch name and running `git-board set <id> status=ready-for-validation`;
+  a non-blocking `commit-msg` hook warning (not failing) when the
+  current branch's issue isn't in `sprint:@current`. README section,
+  not a new subcommand — nothing to build beyond documentation and a
+  sanity-check that the example commands actually work as written.
+
+## Status update (2026-09-03): hooks (M3 complete), `--version`
+
+- **Lefthook examples**, both verified against real bridged co2-calculator
+  data before writing them down, not just transcribed from the PRD sketch:
+  - The PRD's original `post-merge` sketch assumed parsing the merged
+    branch name for the issue number. Real-world check against actual
+    co2-calculator commit history changed this: GitHub's own squash-merge
+    convention appends the *PR* number as a second `(#NNNN)` to the
+    commit subject (e.g. `"...span (#2566) (#2576)"` — `2566` is the
+    real issue, `2576` is the PR that closed it, confirmed via `gh issue
+    view`/`gh pr view`). Extracting the *first* `(#NNNN)` from `git log -1
+    --format=%s` is simpler than branch-name parsing and matches how
+    GitHub actually writes these commits — branch-name parsing would
+    have silently grabbed nothing on a normal squash-merge (no branch
+    name survives into the merge commit's subject).
+  - Both examples resolve a GitHub issue number to a git-bug id via
+    `git-board ls "is:open" --json | jq ... select(.github_url |
+    endswith(...))` — there's no filter-grammar primitive for this today
+    (`field:value`/`is:`/`title:` don't match on GitHub URL/number), and
+    adding one wasn't warranted for two doc examples; `--json` + `jq`
+    already does the job with zero new git-board code.
+  - This closes M3 — PRD's M4 (import + freeze Project 40) is an
+    adoption/process step, not code; `bridge` already covers the import
+    half.
+- **`--version`**: real gap, reported directly ("no --version or -v in
+  both binary"). `runtime/debug.ReadBuildInfo()` reads the tag `go
+  install .../git-board@v0.3.0` stamps into the binary automatically —
+  no hand-maintained version constant to forget to bump, which is
+  exactly the failure mode that let `@latest` silently serve a stale
+  `v0.1.0` for most of this session (see the earlier status update).
+  Verified on a real tagged install (`go install ...@latest` after
+  tagging `v0.3.1`): `git-board version v0.3.1`, clean. Deliberately no
+  `-v` shorthand — that commonly means "verbose" in other CLIs, and
+  `--version` alone already matches `go`/`docker`/`kubectl` convention.

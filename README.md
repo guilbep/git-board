@@ -480,6 +480,46 @@ Tests exercise real git-bug repo caches in `t.TempDir()` (via git-bug's own
 the real integration. **No `git-bug` binary or network access is needed to
 test** — everything runs against on-disk repo fixtures.
 
+## Lefthook automation examples
+
+Two [Lefthook](https://github.com/evilmartians/lefthook) hooks a project
+adopting git-board can add to its own `lefthook.yml` — these are examples
+to copy in, not something `git-board` installs itself. Both verified
+against a real repo before documenting, not just written from the PRD
+sketch. Need `jq` on PATH.
+
+```yaml
+# Advance status to ready-for-validation when a commit whose subject
+# references an issue lands (e.g. a squash-merged PR). GitHub's own
+# squash-merge appends the *PR* number as a second "(#NNNN)" — take the
+# *first* match, that's the referenced issue, not the merging PR.
+post-merge:
+  commands:
+    board-status-on-merge:
+      run: |
+        NUM=$(git log -1 --format=%s | grep -oE '\(#[0-9]+\)' | head -1 | tr -d '()#')
+        [ -z "$NUM" ] && exit 0
+        ID=$(git-board ls "is:open" --json | jq -r --arg n "$NUM" '.[] | select(.github_url | endswith("/" + $n)) | .id')
+        [ -z "$ID" ] && exit 0
+        git-board set "$ID" status=ready-for-validation
+
+# Non-blocking warning (always exits 0) if the current branch's issue
+# (from a name like issue/123-slug or fix/123-slug) isn't in the
+# current sprint.
+commit-msg:
+  commands:
+    board-sprint-check:
+      run: |
+        NUM=$(git branch --show-current | sed -n 's|.*/\([0-9][0-9]*\).*|\1|p')
+        [ -z "$NUM" ] && exit 0
+        CURRENT=$(git-board sprint current 2>/dev/null | cut -d: -f1)
+        [ -z "$CURRENT" ] && exit 0
+        ID=$(git-board ls "is:open" --json | jq -r --arg n "$NUM" '.[] | select(.github_url | endswith("/" + $n)) | .id')
+        [ -z "$ID" ] && exit 0
+        git-board get "$ID" | grep -q "sprint:$CURRENT" || echo "⚠️  issue #$NUM is not in the current sprint ($CURRENT)"
+        exit 0
+```
+
 ## Scope
 
 Shipped: config loading, the in-process git-bug cache adapter, the filter
