@@ -1,0 +1,294 @@
+package main
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/git-bug/git-bug/cache"
+	"github.com/git-bug/git-bug/repository"
+)
+
+const htmlTestConfig = `
+[fields.status]
+single = true
+options = ["backlog", "ready", "done"]
+
+[fields.prio]
+single = true
+options = ["p0", "p1"]
+
+[fields.assignee]
+single = false
+
+[views.current-sprint]
+layout = "board"
+filter = "is:open"
+group = "status"
+sort = "prio asc"
+
+[views.backlog]
+layout = "table"
+filter = "is:open status:backlog"
+sort = "prio asc"
+`
+
+// newHTMLTestRepo seeds a real on-disk git-bug repo with four open issues
+// spread across two statuses/prios (so grouping/sorting has something real
+// to show), a raw non-field label ("needs-triage", to check known-vs-other
+// rendering), and one closed issue that no configured view's filter should
+// ever surface. Two of the open issues share status:ready: prio:p0 ("Speed
+// up build") is created BEFORE prio:p1 ("Fix invoice bug"). git-bug's
+// unsorted listing order is newest-first (query.NewQuery's default is
+// OrderByCreation/OrderDescending — checked, not assumed), so without an
+// explicit sort the p1 issue would list before the p0 one — the opposite of
+// the view's "sort = \"prio asc\"" — letting a sort test tell real
+// board.SortByField output apart from mere listing order. Chdirs the test
+// into it and writes htmlTestConfig, mirroring newTestRepo in cmd_test.go
+// but with real [views.*] entries.
+func newHTMLTestRepo(t *testing.T) {
+	t.Helper()
+	dir := t.TempDir()
+
+	repo, err := repository.InitGoGitRepo(dir, "git-bug")
+	if err != nil {
+		t.Fatalf("InitGoGitRepo: %v", err)
+	}
+	if err := repo.LocalConfig().StoreString("user.name", "guilbep"); err != nil {
+		t.Fatalf("set user.name: %v", err)
+	}
+	if err := repo.LocalConfig().StoreString("user.email", "guilbep@example.com"); err != nil {
+		t.Fatalf("set user.email: %v", err)
+	}
+
+	c, err := cache.NewRepoCacheNoEvents(repo)
+	if err != nil {
+		t.Fatalf("NewRepoCacheNoEvents: %v", err)
+	}
+	id, err := c.Identities().NewFromGitUser()
+	if err != nil {
+		t.Fatalf("NewFromGitUser: %v", err)
+	}
+	if err := c.SetUserIdentity(id); err != nil {
+		t.Fatalf("SetUserIdentity: %v", err)
+	}
+
+	newLabeled := func(title string, labels ...string) {
+		bug, _, err := c.Bugs().New(title, "")
+		if err != nil {
+			t.Fatalf("new bug %q: %v", title, err)
+		}
+		if _, _, err := bug.ChangeLabels(labels, nil); err != nil {
+			t.Fatalf("label bug %q: %v", title, err)
+		}
+		if err := bug.Commit(); err != nil {
+			t.Fatalf("commit bug %q: %v", title, err)
+		}
+	}
+	newLabeled("Speed up build", "status:ready", "prio:p0")
+	newLabeled("Fix invoice bug", "status:ready", "prio:p1", "assignee:guilbep", "needs-triage")
+	newLabeled("Groom backlog item", "status:backlog", "prio:p0")
+
+	closed, _, err := c.Bugs().New("Write specs", "")
+	if err != nil {
+		t.Fatalf("new closed bug: %v", err)
+	}
+	if _, _, err := closed.ChangeLabels([]string{"status:done"}, nil); err != nil {
+		t.Fatalf("label closed bug: %v", err)
+	}
+	if _, err := closed.Close(); err != nil {
+		t.Fatalf("close bug: %v", err)
+	}
+	if err := closed.Commit(); err != nil {
+		t.Fatalf("commit closed bug: %v", err)
+	}
+
+	if err := c.Close(); err != nil {
+		t.Fatalf("close cache: %v", err)
+	}
+
+	if err := os.WriteFile(filepath.Join(dir, configPath), []byte(htmlTestConfig), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	t.Chdir(dir)
+}
+
+func readGenerated(t *testing.T, siteDir, name string) string {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(siteDir, name))
+	if err != nil {
+		t.Fatalf("reading %s: %v", name, err)
+	}
+	return string(data)
+}
+
+func TestHTMLGeneratesOnePageAndIndexPerView(t *testing.T) {
+	newHTMLTestRepo(t)
+	site := filepath.Join(t.TempDir(), "site")
+
+	out, err := execute(t, []string{"html", "-o", site})
+	if err != nil {
+		t.Fatalf("execute: %v\noutput:\n%s", err, out)
+	}
+
+	for _, name := range []string{"current-sprint.html", "backlog.html", "index.html"} {
+		if _, err := os.Stat(filepath.Join(site, name)); err != nil {
+			t.Errorf("expected %s to exist: %v", name, err)
+		}
+	}
+
+	index := readGenerated(t, site, "index.html")
+	if !strings.Contains(index, `href="current-sprint.html"`) {
+		t.Errorf("index.html missing link to current-sprint.html:\n%s", index)
+	}
+	if !strings.Contains(index, `href="backlog.html"`) {
+		t.Errorf("index.html missing link to backlog.html:\n%s", index)
+	}
+}
+
+// The current-sprint view is is:open, so it must show both open issues and
+// never the closed "Write specs" bug — the filter isn't reimplemented here,
+// just applied via internal/board same as everywhere else.
+func TestHTMLRespectsViewFilter(t *testing.T) {
+	newHTMLTestRepo(t)
+	site := filepath.Join(t.TempDir(), "site")
+
+	if _, err := execute(t, []string{"html", "-o", site}); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+
+	page := readGenerated(t, site, "current-sprint.html")
+	if !strings.Contains(page, "Fix invoice bug") {
+		t.Errorf("expected open issue in current-sprint.html:\n%s", page)
+	}
+	if !strings.Contains(page, "Groom backlog item") {
+		t.Errorf("expected open issue in current-sprint.html:\n%s", page)
+	}
+	if strings.Contains(page, "Write specs") {
+		t.Errorf("closed issue should not appear in an is:open view:\n%s", page)
+	}
+
+	// backlog's filter narrows further to status:backlog — "Fix invoice bug"
+	// (status:ready) must not appear even though it's open.
+	backlogPage := readGenerated(t, site, "backlog.html")
+	if !strings.Contains(backlogPage, "Groom backlog item") {
+		t.Errorf("expected status:backlog issue in backlog.html:\n%s", backlogPage)
+	}
+	if strings.Contains(backlogPage, "Fix invoice bug") {
+		t.Errorf("status:ready issue should be excluded from the backlog view's filter:\n%s", backlogPage)
+	}
+}
+
+// Known fields (status, prio, assignee) must render with their display name
+// and value, never as raw "status:ready" label text; the one genuinely
+// unrecognized label ("needs-triage") is the only raw label allowed through.
+func TestHTMLRendersKnownFieldsNotRawLabels(t *testing.T) {
+	newHTMLTestRepo(t)
+	site := filepath.Join(t.TempDir(), "site")
+
+	if _, err := execute(t, []string{"html", "-o", site}); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+
+	page := readGenerated(t, site, "current-sprint.html")
+	for _, want := range []string{"Status:", "ready", "Prio:", "p1", "Assignee:", "guilbep", "needs-triage"} {
+		if !strings.Contains(page, want) {
+			t.Errorf("expected %q in current-sprint.html:\n%s", want, page)
+		}
+	}
+	if strings.Contains(page, "status:ready") {
+		t.Errorf("raw label %q leaked into rendered output:\n%s", "status:ready", page)
+	}
+	if strings.Contains(page, "prio:p1") {
+		t.Errorf("raw label %q leaked into rendered output:\n%s", "prio:p1", page)
+	}
+}
+
+// current-sprint groups by status ("board" layout): the two open issues
+// carry different status values, so they land in separate columns/buckets —
+// board.BucketBy's behavior, not reimplemented here.
+func TestHTMLGroupingReflectsBoardBucketBy(t *testing.T) {
+	newHTMLTestRepo(t)
+	site := filepath.Join(t.TempDir(), "site")
+
+	if _, err := execute(t, []string{"html", "-o", site}); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+
+	page := readGenerated(t, site, "current-sprint.html")
+	// One column per configured group value; each present exactly once as a
+	// column heading, distinct from the "Status:" field label rendered per
+	// card, so anchor on the <h2> group heading form.
+	if !strings.Contains(page, "<h2>ready</h2>") {
+		t.Errorf("expected a %q group column heading:\n%s", "ready", page)
+	}
+	if !strings.Contains(page, "<h2>backlog</h2>") {
+		t.Errorf("expected a %q group column heading:\n%s", "backlog", page)
+	}
+	if !strings.Contains(page, `class="board"`) {
+		t.Errorf("expected board-layout columns in current-sprint.html:\n%s", page)
+	}
+
+	// backlog.html has no "board" layout — it renders a flat table, not
+	// board columns, even though it also happens to bucket into one group.
+	backlogPage := readGenerated(t, site, "backlog.html")
+	if strings.Contains(backlogPage, `class="board"`) {
+		t.Errorf("table-layout view should not render board columns:\n%s", backlogPage)
+	}
+	if !strings.Contains(backlogPage, "<table>") {
+		t.Errorf("expected a table in backlog.html:\n%s", backlogPage)
+	}
+}
+
+// current-sprint's "ready" column holds two issues created in prio:p1-then-
+// prio:p0 order — the opposite of the view's "sort = \"prio asc\"". If the
+// output merely reflected creation/listing order, "Fix invoice bug" (p1)
+// would come first; board.SortByField must reorder it after "Speed up
+// build" (p0).
+func TestHTMLSortReflectsBoardSortByField(t *testing.T) {
+	newHTMLTestRepo(t)
+	site := filepath.Join(t.TempDir(), "site")
+
+	if _, err := execute(t, []string{"html", "-o", site}); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+
+	page := readGenerated(t, site, "current-sprint.html")
+	p0Index := strings.Index(page, "Speed up build")
+	p1Index := strings.Index(page, "Fix invoice bug")
+	if p0Index < 0 || p1Index < 0 {
+		t.Fatalf("expected both ready-status issues in current-sprint.html:\n%s", page)
+	}
+	if p0Index > p1Index {
+		t.Errorf("expected prio:p0 (%q) before prio:p1 (%q) under \"sort = prio asc\", got p0 at %d, p1 at %d:\n%s",
+			"Speed up build", "Fix invoice bug", p0Index, p1Index, page)
+	}
+}
+
+func TestHTMLNoViewsConfiguredWritesEmptyIndex(t *testing.T) {
+	newTestRepo(t) // testConfig in cmd_test.go has no [views.*]
+	site := filepath.Join(t.TempDir(), "site")
+
+	out, err := execute(t, []string{"html", "-o", site})
+	if err != nil {
+		t.Fatalf("execute: %v\noutput:\n%s", err, out)
+	}
+
+	index := readGenerated(t, site, "index.html")
+	if !strings.Contains(index, "No views configured") {
+		t.Errorf("expected the no-views message in index.html:\n%s", index)
+	}
+}
+
+func TestHTMLDefaultsOutputToSiteDir(t *testing.T) {
+	newHTMLTestRepo(t)
+
+	if _, err := execute(t, []string{"html"}); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(".", defaultHTMLOutput, "index.html")); err != nil {
+		t.Errorf("expected %s/index.html with no -o flag: %v", defaultHTMLOutput, err)
+	}
+}

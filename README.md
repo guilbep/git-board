@@ -15,8 +15,8 @@ git-bug-initialized repo, but does **not** need `git-bug` installed on PATH.
 
 This is the **M1** milestone (fields, `set` / `get` / `ls` / `view`, the
 filter grammar, and config loading) plus `lint`, `move`, `close`, `sync`,
-`sprint`, and numeric-aware `--sort` from **M2**. The cron-published static
-HTML site is the remaining M2 item, not implemented here yet.
+`sprint`, numeric-aware `--sort`, and `html` (cron-published static site)
+from **M2** — the last M2 item, so M2 is now fully shipped.
 
 ## Install
 
@@ -395,6 +395,49 @@ cd .. && go build -o git-board-server ./cmd/git-board-server
 ./git-board-server   # serves the API and the built UI on the same origin
 ```
 
+## Static site (`git-board html`)
+
+Generates a static HTML site, one page per configured `[views.*]`, plus an
+`index.html` linking to all of them — for PM/non-dev users who don't want a
+CLI and shouldn't need the (also-unauthenticated) live web UI above. Reuses
+`internal/board`'s `LoadMatching`/`SortByField`/`BucketBy` — the exact same
+filter/sort/group semantics as `ls`/`view`/the web API — and the TUI's
+`tui.ParseLabels`/`tui.DisplayFieldName` to render known fields under their
+display name (`Status: ready`) instead of raw `status:ready` label text.
+**Read-only** — writes nothing to git-bug, unlike everything else in this
+CLI except `ls`/`view`/`get`/`lint`.
+
+`layout = "table"` vs `"board"` in a view's config picks the page shape: a
+`"board"` view renders one column per bucket (kanban-style, cards); anything
+else renders a flat table per bucket. This is a new distinction — `layout`
+was parsed by `internal/config` and shipped to the web UI's API from the
+start, but nothing (not the CLI's own `render.go`, not the web frontend)
+actually branched on it before this command; the Vue board always rendered
+a stacked table regardless of the configured value. `git-board html` is the
+first thing to read it.
+
+```bash
+# run from inside the git-bug repo, next to .git-board.toml
+git-board html                          # writes site/*.html
+git-board html -o /var/www/board        # custom output dir
+
+# intended usage: cron-publish on a timer, e.g. a crontab entry running
+git-board html -o /var/www/board && rsync -a --delete /var/www/board/ host:/srv/board/
+```
+
+`-o`'s directory is regenerated in full on every run but never emptied first
+— an old page whose `[views.*]` entry gets renamed or removed stays on disk,
+just no longer linked from `index.html`. `rsync --delete` (above) is enough
+to keep the *published* copy in sync; if `-o`'s own local directory needs to
+mirror the config exactly between runs, `rm -rf` it first.
+
+**No auth, no JS required to view** — plain server-rendered HTML, same
+trusted-network stance as `git-board-server` above (see its "No auth in v1"
+note): anyone who can reach the published files can read every issue in
+every configured view. A view whose filter uses `@me` resolves once at
+generation time against `--me`/`GIT_BOARD_ME`, the same single shared
+"current user" the web API uses — not per-viewer, there's no login here.
+
 ## Layout
 
 ```
@@ -405,7 +448,7 @@ internal/filter/       grammar parser, Matches(issue, conditions, config, me).
 internal/board/        load/sort/group issues — shared by the CLI, the TUI and the web API.
 internal/ghbridge/     `gh project item-list` parsing + field-mapping/diff logic for `bridge pull`.
 internal/lint/          read-only drift checks (labels vs. .git-board.toml) — internal/lint.Run.
-cmd/git-board/          main.go + cobra commands, thin rendering.
+cmd/git-board/          main.go + cobra commands, thin rendering (incl. html.go, the static-site generator).
 cmd/git-board-server/   HTTP API (net/http, no framework) + embeds web/dist for prod.
 web/                    Quasar/Vue frontend — one board page, api/board.ts is the only HTTP client.
 ```
@@ -445,6 +488,7 @@ interactive TUI (`git-board tui`), the web UI above, `git-board bridge
 configure`/`bridge pull` (GitHub Project → label bridge, plus `i`/`o`
 from inside the TUI), `git-board lint` (read-only drift report),
 `git-board move`/`close`, `git-board sync` (explicit local paths,
-not `[repos].list`), and `git-board sprint` (`ls`/`current`/`next`/
-`previous`/`new`/`report`). The cron-published static HTML site is not
-implemented — see `docs/implementation-plan.md` for what's tracked next.
+not `[repos].list`), `git-board sprint` (`ls`/`current`/`next`/
+`previous`/`new`/`report`), and `git-board html` (cron-published static
+site) — the last planned M2 item, so M2 is now fully shipped. See
+`docs/implementation-plan.md` for what's tracked next.

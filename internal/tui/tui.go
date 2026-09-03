@@ -320,7 +320,7 @@ func (m Model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case "c":
 			if f, ok := catField(m.cfg); ok {
-				m.catPicker = newPicker(catFilterItems(f), "Filter by "+displayFieldName(catFieldName))
+				m.catPicker = newPicker(catFilterItems(f), "Filter by "+DisplayFieldName(catFieldName))
 				m.mode = modeCatFilter
 			} else {
 				m.status = fmt.Sprintf("no %q field configured for the quick filter", catFieldName)
@@ -433,7 +433,7 @@ func (m Model) updateFieldPicker(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.mode = modeValueInput
 			return m, textinput.Blink
 		}
-		m.valuePicker = newPicker(opts, "Set "+displayFieldName(fi.name))
+		m.valuePicker = newPicker(opts, "Set "+DisplayFieldName(fi.name))
 		m.mode = modeValuePicker
 		return m, nil
 	}
@@ -723,7 +723,7 @@ func (m Model) View() string {
 	case modeValueInput:
 		return fmt.Sprintf(
 			"Set %s (free text — no fixed options; use +value/-value for multi-cardinality fields):\n\n%s\n\nenter: submit   esc: cancel\n",
-			displayFieldName(m.editField), m.valueInput.View())
+			DisplayFieldName(m.editField), m.valueInput.View())
 	case modeCatFilter:
 		return m.catPicker.View()
 	case modeFilterInput:
