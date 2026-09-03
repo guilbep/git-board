@@ -163,3 +163,19 @@ func (b *Backend) ApplyLabelChange(idPrefix string, added, removed []string) ([]
 	}
 	return labels, nil
 }
+
+// CloseBug marks a bug closed and commits it — the underlying operation
+// `close` layers a status:* label swap on top of. Named CloseBug, not
+// Close, so it can't be confused with (*Backend).Close (the repo cache).
+// git-bug's own bug.Close() is a no-op status-wise if already closed, so
+// this is safe to call more than once.
+func (b *Backend) CloseBug(idPrefix string) error {
+	bug, err := b.c.Bugs().ResolvePrefix(idPrefix)
+	if err != nil {
+		return fmt.Errorf("resolving %s: %w", idPrefix, err)
+	}
+	if _, err := bug.Close(); err != nil {
+		return fmt.Errorf("closing %s: %w", idPrefix, err)
+	}
+	return bug.Commit()
+}

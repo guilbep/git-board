@@ -160,23 +160,17 @@ func New(issues []gitbugio.Issue, title string, backend Backend, cfg *config.Con
 	l.Title = title
 	l.SetFilteringEnabled(true)
 
-	fp := list.New(fieldPickerItems(cfg), list.NewDefaultDelegate(), 0, 0)
-	fp.Title = "Edit field"
-	fp.SetFilteringEnabled(false)
+	fp := newPicker(fieldPickerItems(cfg), "Edit field")
 
-	// valuePicker and catPicker are re-populated with real items when the
-	// user actually opens them (updateFieldPicker, the "c" key), but they
-	// still need to be real list.Models — not the zero value — from the
-	// start: Update's WindowSizeMsg case calls SetSize on all four pickers
-	// unconditionally, and bubbletea sends that message immediately on
-	// startup, before the user has pressed anything. A zero-value
-	// list.Model's internal delegate/paginator are nil, so SetSize on one
-	// panics on every launch (confirmed: this exact panic was reported).
-	vp := list.New(nil, list.NewDefaultDelegate(), 0, 0)
-	vp.SetFilteringEnabled(false)
-
-	cp := list.New(nil, list.NewDefaultDelegate(), 0, 0)
-	cp.SetFilteringEnabled(false)
+	// valuePicker and catPicker are re-populated with real items (and
+	// resized to fit them, via newPicker) when the user actually opens
+	// them (updateFieldPicker, the "c" key) — but they still need to be
+	// real list.Models — not the zero value — from construction: a
+	// zero-value list.Model's internal delegate/paginator are nil, and
+	// calling SetSize on one panics (confirmed: this exact panic was
+	// reported). newPicker(nil, "") builds a real, empty one.
+	vp := newPicker(nil, "")
+	cp := newPicker(nil, "")
 
 	vi := textinput.New()
 	vi.Placeholder = "value"
@@ -277,12 +271,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.WindowSizeMsg:
 		// Reserve one line for the status message View() appends below
-		// the list; the pickers don't append one, so they get the full
-		// height.
+		// the list. The pickers are deliberately *not* resized to the
+		// terminal here — newPicker already sized them to their own
+		// content (a handful of short options, not a full screen); we
+		// want them to keep looking like a compact dropdown, not stretch
+		// to fill whatever terminal they're shown in.
 		m.list.SetSize(msg.Width, msg.Height-1)
-		m.fieldPicker.SetSize(msg.Width, msg.Height)
-		m.valuePicker.SetSize(msg.Width, msg.Height)
-		m.catPicker.SetSize(msg.Width, msg.Height)
 		return m, nil
 
 	case tea.KeyMsg:
@@ -326,10 +320,7 @@ func (m Model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case "c":
 			if f, ok := catField(m.cfg); ok {
-				cp := list.New(catFilterItems(f), list.NewDefaultDelegate(), m.list.Width(), m.list.Height())
-				cp.Title = "Filter by " + displayFieldName(catFieldName)
-				cp.SetFilteringEnabled(false)
-				m.catPicker = cp
+				m.catPicker = newPicker(catFilterItems(f), "Filter by "+displayFieldName(catFieldName))
 				m.mode = modeCatFilter
 			} else {
 				m.status = fmt.Sprintf("no %q field configured for the quick filter", catFieldName)
@@ -442,10 +433,7 @@ func (m Model) updateFieldPicker(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.mode = modeValueInput
 			return m, textinput.Blink
 		}
-		vp := list.New(opts, list.NewDefaultDelegate(), m.fieldPicker.Width(), m.fieldPicker.Height())
-		vp.Title = "Set " + displayFieldName(fi.name)
-		vp.SetFilteringEnabled(false)
-		m.valuePicker = vp
+		m.valuePicker = newPicker(opts, "Set "+displayFieldName(fi.name))
 		m.mode = modeValuePicker
 		return m, nil
 	}

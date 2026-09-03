@@ -469,7 +469,7 @@ next" does).
   unmatched status, 47× unmatched sprint, 315×/41× empty priority/status
   per the PRD's own numbers) — right now there's no tool that surfaces
   that except manually reading `bridge pull`'s warning output.
-- [ ] **`move`/`close`** — `move <id> --next` advances `status` to the
+- [x] **`move`/`close`** — `move <id> --next` advances `status` to the
   next option in `[fields.status].options`' configured order; `close`
   sets `status:validated` (or whatever the config calls the terminal
   state — don't hardcode "validated") then closes the git-bug bug via
@@ -549,3 +549,42 @@ bound in its main list/table view — confirmed, not guessed.
   against EPFL-ENAC/co2-calculator earlier in this project (the actual
   `bridge pull --apply` run); re-hitting the network here would only
   have spent more of GitHub's secondary rate limit for no new signal.
+
+## Status update (2026-09-03): `move`/`close`, compact TUI pickers
+
+- **`move <id> --next`**: advances `status` to the next option in
+  `[fields.status].options` order (an unset status goes to the first
+  option, starting the pipeline; the last option errors rather than
+  wrapping around). **`close <id>`**: sets `status` to the *last*
+  configured option — never hardcoded as `"validated"`, since that's
+  just the PRD example config's name for it — then closes the bug via
+  a new `(*gitbugio.Backend).CloseBug` (named to not collide with
+  `Backend.Close`, the repo-cache close). Both are thin wrappers over
+  `fields.Apply`, matching every other write path here. Tests: real
+  `newTestRepo` fixtures (extended with an actual `[fields.status]`
+  options list — the shared minimal fixture doesn't have one), the
+  old-value-really-gone assertion style used throughout, the
+  no-`--next`-flag and past-the-last-option error paths, and closing
+  with no configured options erroring cleanly instead of a nil panic.
+- **Compact TUI pickers** — real ask, not just polish: the field/value/
+  category pickers were rendering as a second full-screen list
+  (`bubbles/list`'s `DefaultDelegate`, two lines per item, a status bar,
+  pagination dots) for what's really "pick one of 3-4 short values."
+  Considered and rejected third-party dropdown packages (`teafields`,
+  `teadrpdwn`) — single-maintainer, unproven, and `bubbles/list`
+  (already a direct dependency, already used for the main list and
+  every other picker) does the job with a ~60-line custom delegate:
+  one line per item, no status bar/pagination chrome, sized to its own
+  content (longest item + padding, capped) instead of stretching to
+  fill the terminal. New `internal/tui/picker.go`; `newPicker(items,
+  title)` replaces every `list.New(..., list.NewDefaultDelegate(),
+  ...)` call site for these four pickers. Verified visually (not just
+  "it compiles") — rendered a real picker's `View()` output directly in
+  a test, caught and fixed my own test-script mistake along the way
+  (sent `e` from list mode instead of detail mode first, so the first
+  attempt was accidentally viewing the main list, not the picker at
+  all) before trusting the result.
+- `lipgloss` promoted from an indirect to a direct dependency (`go mod
+  tidy` after adding the delegate's styles) — it was already pulled in
+  transitively by `bubbletea`/`bubbles`, so this is bookkeeping, not a
+  new dependency.

@@ -14,9 +14,9 @@ CLI binary — so `git-board` needs the target repo to be a normal
 git-bug-initialized repo, but does **not** need `git-bug` installed on PATH.
 
 This is the **M1** milestone (fields, `set` / `get` / `ls` / `view`, the
-filter grammar, and config loading) plus `lint` from **M2**. `move`, `close`,
-`sprint`, the static HTML site, and `sync` are later M2 items and not
-implemented here yet.
+filter grammar, and config loading) plus `lint`, `move`, `close` from
+**M2**. `sprint`, the static HTML site, and `sync` are later M2 items and
+not implemented here yet.
 
 ## Install
 
@@ -133,6 +133,13 @@ git-board set <issue-id> status=ready prio=p1 sprint=@next assignee=+guilbep
 
 # show an issue's fields (labels)
 git-board get <issue-id>
+
+# advance status to the next configured option (backlog -> ready -> ...)
+git-board move <issue-id> --next
+
+# set status to the last configured option (the terminal state, whatever
+# it's called in your config) and close the issue
+git-board close <issue-id>
 
 # report label/config drift, read-only (see "Linting" below)
 git-board lint
@@ -373,7 +380,8 @@ test** — everything runs against on-disk repo fixtures.
 Shipped: config loading, the in-process git-bug cache adapter, the filter
 grammar, `set`/`get`/`ls`/`view`, an interactive TUI (`git-board tui`), the
 web UI above, `git-board bridge configure`/`bridge pull` (GitHub Project →
-label bridge), and `git-board lint` (read-only drift report). `move`,
-`close`, `sprint`, the cron-published static HTML site, and multi-repo
-`sync` are not implemented — see `docs/implementation-plan.md` for what's
+label bridge, plus `i`/`o` from inside the TUI), `git-board lint`
+(read-only drift report), and `git-board move`/`close`. `sprint`, the
+cron-published static HTML site, and multi-repo `sync` are not
+implemented — see `docs/implementation-plan.md` for what's
 tracked next.
