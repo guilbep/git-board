@@ -34,7 +34,7 @@ func TestUpdateEditFieldWritesThroughAndRerendersList(t *testing.T) {
 		t.Fatalf("ListIssues: %v", err)
 	}
 
-	m := New(issues, "is:open", b, cfg, "", today)
+	m := New(issues, "is:open", b, cfg, "", today, noopReopen(b))
 
 	m = send(m, tea.KeyMsg{Type: tea.KeyEnter}) // list -> detail
 	if m.mode != modeDetail {
@@ -120,7 +120,7 @@ func TestUpdateCategoryFilterNarrowsList(t *testing.T) {
 		t.Fatalf("ListIssues: %v", err)
 	}
 
-	m := New(issues, "is:open", b, cfg, "", today)
+	m := New(issues, "is:open", b, cfg, "", today, noopReopen(b))
 	if got := len(m.list.Items()); got != 2 {
 		t.Fatalf("initial list items = %d, want 2", got)
 	}
@@ -174,7 +174,7 @@ func TestUpdateStructuredFilterNarrowsList(t *testing.T) {
 		t.Fatalf("ListIssues: %v", err)
 	}
 
-	m := New(issues, "is:open", b, cfg, "", today)
+	m := New(issues, "is:open", b, cfg, "", today, noopReopen(b))
 
 	m = send(m, key('f'))
 	if m.mode != modeFilterInput {
@@ -218,7 +218,7 @@ func TestUpdateStructuredFilterEscCancelsWithoutApplying(t *testing.T) {
 		t.Fatalf("ListIssues: %v", err)
 	}
 
-	m := New(issues, "is:open", b, cfg, "", today)
+	m := New(issues, "is:open", b, cfg, "", today, noopReopen(b))
 	m = send(m, key('f'))
 	m = send(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("title:*nomatch*")})
 	m = send(m, tea.KeyMsg{Type: tea.KeyEsc})
@@ -243,7 +243,7 @@ func TestUpdateStructuredFilterRequiresMeDoesNotCrash(t *testing.T) {
 		t.Fatalf("ListIssues: %v", err)
 	}
 
-	m := New(issues, "is:open", b, cfg, "" /* no me */, today)
+	m := New(issues, "is:open", b, cfg, "" /* no me */, today, noopReopen(b))
 	m = send(m, key('f'))
 	m = send(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("assignee:@me")})
 	m = send(m, tea.KeyMsg{Type: tea.KeyEnter})
@@ -259,7 +259,7 @@ func TestUpdateStructuredFilterRequiresMeDoesNotCrash(t *testing.T) {
 	}
 }
 
-// errBackend is a fields.Backend stub whose write always fails, for the
+// errBackend is a tui.Backend stub whose write always fails, for the
 // write-error-must-not-crash case. It's the one place a stub replaces
 // gitbugiotest: every other test drives a real repo.
 type errBackend struct{}
@@ -270,12 +270,20 @@ func (errBackend) ApplyLabelChange(string, []string, []string) ([]string, error)
 	return nil, fmt.Errorf("boom: simulated write failure")
 }
 
+func (errBackend) Close() error { return nil }
+
+// noopReopen is a reopen stub for tests that don't exercise "g" — it's
+// never actually called, but New/Model need a non-nil func regardless.
+func noopReopen(b Backend) func() (Backend, error) {
+	return func() (Backend, error) { return b, nil }
+}
+
 func TestUpdateEditWriteErrorShowsStatusAndDoesNotCrash(t *testing.T) {
 	cfg := mustLoadConfig(t)
 	issues := []gitbugio.Issue{
 		{ID: "deadbeef", Title: "x", Status: "open", Labels: []string{"status:backlog"}},
 	}
-	m := New(issues, "is:open", errBackend{}, cfg, "", today)
+	m := New(issues, "is:open", errBackend{}, cfg, "", today, noopReopen(errBackend{}))
 
 	m = send(m, tea.KeyMsg{Type: tea.KeyEnter}) // detail
 	m = send(m, key('e'))                       // field picker
@@ -322,7 +330,7 @@ func TestWindowSizeMsgOnFreshModelDoesNotPanic(t *testing.T) {
 		t.Fatalf("ListIssues: %v", err)
 	}
 
-	m := New(issues, "is:open", b, cfg, "", today)
+	m := New(issues, "is:open", b, cfg, "", today, noopReopen(b))
 
 	defer func() {
 		if r := recover(); r != nil {
@@ -360,7 +368,7 @@ func TestUpdateSortOrdersList(t *testing.T) {
 		t.Fatalf("ListIssues: %v", err)
 	}
 
-	m := New(issues, "is:open", b, cfg, "", today)
+	m := New(issues, "is:open", b, cfg, "", today, noopReopen(b))
 
 	m = send(m, key('s'))
 	if m.mode != modeSortInput {
@@ -403,7 +411,7 @@ func TestUpdateSortPersistsAcrossFilter(t *testing.T) {
 		t.Fatalf("ListIssues: %v", err)
 	}
 
-	m := New(issues, "is:open", b, cfg, "", today)
+	m := New(issues, "is:open", b, cfg, "", today, noopReopen(b))
 	m = send(m, key('s'))
 	m = send(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("prio")})
 	m = send(m, tea.KeyMsg{Type: tea.KeyEnter})
@@ -436,7 +444,7 @@ func TestUpdateSortClearRestoresNaturalOrder(t *testing.T) {
 	}
 	natural := titles(ToItems(issues))
 
-	m := New(issues, "is:open", b, cfg, "", today)
+	m := New(issues, "is:open", b, cfg, "", today, noopReopen(b))
 	m = send(m, key('s'))
 	m = send(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("prio")})
 	m = send(m, tea.KeyMsg{Type: tea.KeyEnter})
@@ -458,4 +466,104 @@ func TestUpdateSortClearRestoresNaturalOrder(t *testing.T) {
 	if got := titles(m.list.Items()); !slices.Equal(got, natural) {
 		t.Errorf("order after clearing sort = %v, want the natural order %v back", got, natural)
 	}
+}
+
+// TestGKeyClosesBackendBeforeShellingOut is a regression test for a real
+// bug: "g" shells out to `git bug bug show`, but git-board's own backend
+// holds git-bug's repo-level lock open for the TUI's whole session —
+// confirmed directly (outside this test suite, against the real
+// co2-calculator repo) that the subprocess fails with "already locked by
+// process <our own pid>" unless we release it first. This checks the
+// release actually happens, using a real repo (no mock): after "g", the
+// *original* backend reference must be genuinely closed.
+func TestGKeyClosesBackendBeforeShellingOut(t *testing.T) {
+	cfg := mustLoadConfig(t)
+	b := gitbugiotest.New(t)
+	id := gitbugiotest.NewIssue(t, b, "widget")
+	issues, err := b.ListIssues()
+	if err != nil {
+		t.Fatalf("ListIssues: %v", err)
+	}
+
+	m := New(issues, "is:open", b, cfg, "", today, noopReopen(b))
+	m = send(m, tea.KeyMsg{Type: tea.KeyEnter}) // list -> detail
+	if m.mode != modeDetail {
+		t.Fatalf("mode = %v, want modeDetail", m.mode)
+	}
+
+	next, cmd := m.Update(key('g'))
+	m = next.(Model)
+	if cmd == nil {
+		t.Error("Update after \"g\" returned a nil Cmd, want the ExecProcess command")
+	}
+	if m.mode != modeDetail {
+		t.Errorf("mode = %v, want modeDetail (g doesn't change mode, the exec suspends the whole program)", m.mode)
+	}
+
+	// The real check: b (captured before New, same backend the Model
+	// started with) must now be genuinely closed — a real operation on
+	// it fails. If "g" forgot to Close(), this would still succeed and
+	// the bug would still be present.
+	if _, err := b.GetLabels(id); err == nil {
+		t.Error("backend still usable after \"g\" — it should have been closed to release the repo lock before shelling out")
+	}
+}
+
+// TestGitBugShowFinishedReopensBackend covers gitBugShowFinishedMsg's
+// three outcomes: subprocess ok, subprocess failed (but reopen still
+// must succeed so further edits keep working), and reopen itself
+// failing.
+func TestGitBugShowFinishedReopensBackend(t *testing.T) {
+	cfg := mustLoadConfig(t)
+
+	t.Run("subprocess ok", func(t *testing.T) {
+		stale := gitbugiotest.New(t) // simulates the backend "g" already closed
+		_ = stale.Close()
+		fresh := gitbugiotest.New(t)
+		id := gitbugiotest.NewIssue(t, fresh, "widget")
+		m := New(nil, "is:open", stale, cfg, "", today, func() (Backend, error) { return fresh, nil })
+
+		m = send(m, gitBugShowFinishedMsg{err: nil})
+
+		if m.status != "" {
+			t.Errorf("status = %q, want empty after a clean git bug bug show", m.status)
+		}
+		if _, err := m.backend.GetLabels(id); err != nil {
+			t.Errorf("reopened backend not usable: %v", err)
+		}
+	})
+
+	t.Run("subprocess failed, reopen still succeeds", func(t *testing.T) {
+		stale := gitbugiotest.New(t) // simulates the backend "g" already closed
+		_ = stale.Close()
+		fresh := gitbugiotest.New(t)
+		id := gitbugiotest.NewIssue(t, fresh, "widget")
+		m := New(nil, "is:open", stale, cfg, "", today, func() (Backend, error) { return fresh, nil })
+
+		m = send(m, gitBugShowFinishedMsg{err: fmt.Errorf("git-bug not found")})
+
+		if !strings.Contains(m.status, "git-bug not found") {
+			t.Errorf("status = %q, want it to surface the subprocess error", m.status)
+		}
+		if _, err := m.backend.GetLabels(id); err != nil {
+			t.Errorf("reopened backend not usable even though the subprocess itself failed: %v", err)
+		}
+	})
+
+	t.Run("reopen itself fails", func(t *testing.T) {
+		stale := gitbugiotest.New(t) // simulates the backend "g" already closed
+		_ = stale.Close()
+		m := New(nil, "is:open", stale, cfg, "", today, func() (Backend, error) {
+			return nil, fmt.Errorf("repo vanished")
+		})
+
+		m = send(m, gitBugShowFinishedMsg{err: nil})
+
+		if m.backend != nil {
+			t.Error("backend should be nil after a failed reopen, not left pointing at a closed handle")
+		}
+		if !strings.Contains(m.status, "repo vanished") {
+			t.Errorf("status = %q, want it to surface the reopen failure", m.status)
+		}
+	})
 }

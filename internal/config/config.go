@@ -5,6 +5,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -17,6 +18,14 @@ type Field struct {
 	Single  bool     `toml:"single" json:"single"`
 	Options []string `toml:"options" json:"options"`
 	Numeric bool     `toml:"numeric" json:"numeric"`
+}
+
+// KnownValue reports whether value is one of Options — or true if Options is
+// empty (a free-form field, nothing configured to validate against). Shared
+// by internal/ghbridge (warns on a bridge pull) and internal/lint (the same
+// check, run over the local repo instead of an incoming GitHub value).
+func (f Field) KnownValue(value string) bool {
+	return len(f.Options) == 0 || slices.Contains(f.Options, value)
 }
 
 // Sprint is one entry in [[sprints.list]].

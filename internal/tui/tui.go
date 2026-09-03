@@ -23,6 +23,17 @@ import (
 	"github.com/guilbep/git-board/internal/gitbugio"
 )
 
+// Backend is what the TUI needs from a git-bug repo handle: everything
+// fields.Backend needs for writes, plus Close() — "g" must release
+// git-bug's repo-level lock before shelling out to git-bug (confirmed:
+// the subprocess collides with our own held lock otherwise), and the
+// program must release it again when it exits. *gitbugio.Backend already
+// satisfies this.
+type Backend interface {
+	fields.Backend
+	Close() error
+}
+
 // item adapts a gitbugio.Issue to bubbles/list's DefaultItem interface.
 type item struct {
 	issue gitbugio.Issue
@@ -79,7 +90,10 @@ type Model struct {
 	mode     mode
 	selected gitbugio.Issue
 
-	backend fields.Backend
+	// backend/reopen: see the Backend type doc above — "g" closes it
+	// before shelling out to git-bug, reopen re-acquires it after.
+	backend Backend
+	reopen  func() (Backend, error)
 	cfg     *config.Config
 	me      string
 	today   time.Time
@@ -127,8 +141,10 @@ type Model struct {
 
 // New builds a Model over issues. title is shown as the list header (the
 // filter expression the caller ran, e.g. "is:open"). backend/cfg/me/today
-// are what field edits need to write through fields.Apply.
-func New(issues []gitbugio.Issue, title string, backend fields.Backend, cfg *config.Config, me string, today time.Time) Model {
+// are what field edits need to write through fields.Apply. reopen re-opens
+// the backend against the same repo after "g" closes it to shell out to
+// git-bug — typically gitbugio.OpenCwd.
+func New(issues []gitbugio.Issue, title string, backend Backend, cfg *config.Config, me string, today time.Time, reopen func() (Backend, error)) Model {
 	l := list.New(ToItems(issues), list.NewDefaultDelegate(), 0, 0)
 	l.Title = title
 	l.SetFilteringEnabled(true)
@@ -165,6 +181,7 @@ func New(issues []gitbugio.Issue, title string, backend fields.Backend, cfg *con
 	return Model{
 		list:         l,
 		backend:      backend,
+		reopen:       reopen,
 		cfg:          cfg,
 		me:           me,
 		today:        today,
@@ -189,6 +206,17 @@ type gitBugShowFinishedMsg struct{ err error }
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case gitBugShowFinishedMsg:
+		// Reopen first regardless of msg.err (the subprocess itself
+		// failing, e.g. git-bug not installed, is orthogonal to whether
+		// we can get our own lock back) — every further edit in this
+		// session depends on m.backend being live again.
+		fresh, reopenErr := m.reopen()
+		if reopenErr != nil {
+			m.backend = nil
+			m.status = fmt.Sprintf("reopening the repo after git bug bug show failed: %v — edits won't work until you restart", reopenErr)
+			return m, nil
+		}
+		m.backend = fresh
 		if msg.err != nil {
 			m.status = fmt.Sprintf("git bug bug show failed: %v (is git-bug installed as a git subcommand?)", msg.err)
 		} else {
@@ -293,7 +321,19 @@ func (m Model) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// reimplementing a comment/body viewer: tea.ExecProcess suspends
 		// this program, hands the terminal to `git bug bug show <id>`,
 		// and resumes here (via gitBugShowFinishedMsg) when it exits.
+		//
+		// Close our own backend first: git-bug's cache holds a
+		// repo-level lock for as long as it's open, which is our whole
+		// TUI session — the subprocess would collide with our own lock
+		// otherwise (confirmed: this was a real bug, not hypothetical —
+		// `git bug bug show` failed with "already locked by process
+		// <our own pid>" while the TUI held it open). Reopened in the
+		// gitBugShowFinishedMsg handler once the subprocess exits.
 		id := m.selected.ID
+		if err := m.backend.Close(); err != nil {
+			m.status = fmt.Sprintf("could not release the repo lock before running git-bug: %v", err)
+			return m, nil
+		}
 		return m, tea.ExecProcess(exec.Command("git", "bug", "bug", "show", id), func(err error) tea.Msg {
 			return gitBugShowFinishedMsg{err: err}
 		})
@@ -571,9 +611,14 @@ func (m Model) View() string {
 	}
 }
 
-// Run launches the interactive TUI over issues until the user quits.
-// backend/cfg/me/today are threaded through to field edits (fields.Apply).
-func Run(issues []gitbugio.Issue, title string, backend fields.Backend, cfg *config.Config, me string, today time.Time) error {
-	_, err := tea.NewProgram(New(issues, title, backend, cfg, me, today), tea.WithAltScreen()).Run()
+// Run launches the interactive TUI over issues until the user quits. It
+// owns backend for the duration of the run — including across a "g"
+// close/reopen cycle — and closes whichever backend is live when it
+// returns; callers should not also close the one they passed in.
+func Run(issues []gitbugio.Issue, title string, backend Backend, cfg *config.Config, me string, today time.Time, reopen func() (Backend, error)) error {
+	final, err := tea.NewProgram(New(issues, title, backend, cfg, me, today, reopen), tea.WithAltScreen()).Run()
+	if fm, ok := final.(Model); ok && fm.backend != nil {
+		_ = fm.backend.Close()
+	}
 	return err
 }
