@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"fmt"
 	"html/template"
 	"io"
@@ -16,6 +17,7 @@ import (
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/gitbugio"
 	"github.com/guilbep/git-board/internal/tui"
+	boardweb "github.com/guilbep/git-board/web"
 )
 
 const defaultHTMLOutput = "site"
@@ -82,7 +84,7 @@ func runHTML(out io.Writer, outputDir, me string) error {
 
 	generated := time.Now()
 	for _, name := range names {
-		if err := writeViewPage(outputDir, name, cfg.Views[name], b, cfg, me, generated); err != nil {
+		if err := writeViewPage(outputDir, name, names, cfg.Views[name], b, cfg, me, generated); err != nil {
 			return fmt.Errorf("view %q: %w", name, err)
 		}
 		fmt.Fprintf(out, "%s.html\n", name)
@@ -113,6 +115,7 @@ type htmlBucket struct {
 
 type pageData struct {
 	ViewName  string
+	Views     []string // every view, for the header navigation
 	Layout    string
 	Buckets   []htmlBucket
 	Generated time.Time
@@ -130,7 +133,7 @@ type pageData struct {
 // ("is:open"). The two existing consumers already disagree with each
 // other; this follows "view" since "html" renders configured views, the
 // same thing "view" does.
-func writeViewPage(outputDir, name string, view config.View, b *gitbugio.Backend, cfg *config.Config, me string, generated time.Time) error {
+func writeViewPage(outputDir, name string, views []string, view config.View, b *gitbugio.Backend, cfg *config.Config, me string, generated time.Time) error {
 	issues, err := board.LoadMatching(b, cfg, view.Filter, me)
 	if err != nil {
 		return err
@@ -139,6 +142,7 @@ func writeViewPage(outputDir, name string, view config.View, b *gitbugio.Backend
 
 	data := pageData{
 		ViewName:  name,
+		Views:     views,
 		Layout:    view.Layout,
 		Buckets:   toHTMLBuckets(board.BucketBy(issues, view.Group), cfg),
 		Generated: generated,
@@ -178,6 +182,7 @@ func writeIndexPage(outputDir string, viewNames []string, generated time.Time) e
 	}
 	defer f.Close()
 	return indexTmpl.Execute(f, struct {
+		ViewName  string // none: the index is no view (pageHeader marks none active)
 		Views     []string
 		Generated time.Time
 	}{Views: viewNames, Generated: generated})
@@ -189,33 +194,77 @@ var tmplFuncs = template.FuncMap{
 }
 
 // pageCSS is shared by every generated page — inlined, no external assets,
-// so the site works from a plain rsync target with no build step.
-const pageCSS = `
-body { font-family: system-ui, sans-serif; margin: 2rem; color: #1a1a1a; }
-a { color: #0b5fff; }
-table { border-collapse: collapse; width: 100%; margin-bottom: 1.5rem; }
-th, td { border: 1px solid #ddd; padding: 0.4rem 0.6rem; text-align: left; vertical-align: top; }
-th { background: #f5f5f5; }
-h2 { margin-top: 2rem; }
-.fields div { font-size: 0.9rem; }
-.field-name { font-weight: 600; }
-.other { color: #777; font-size: 0.85rem; }
-.board { display: flex; gap: 1rem; align-items: flex-start; overflow-x: auto; }
-.column { flex: 0 0 260px; background: #fafafa; border: 1px solid #ddd; border-radius: 6px; padding: 0.6rem; }
-.card { background: #fff; border: 1px solid #ddd; border-radius: 4px; padding: 0.5rem; margin-bottom: 0.5rem; }
-.card .title { font-weight: 600; }
-footer { margin-top: 2rem; color: #999; font-size: 0.8rem; }
+// so the site works from a plain rsync target with no build step. It is
+// the EPFL design system (tokens, fonts, header/layout classes; see
+// web/epfl.go) plus this page's own layout, written in its tokens only:
+// no raw colors or px, borders not shadows, 2px radii.
+//
+// The logo is inlined as a data URI and drawn as a mask over
+// var(--primary), like the web UI's header: the vendored epfl-logo.svg has
+// no fill of its own (black as an <img>), the brand logo is red.
+var pageCSS = boardweb.EPFLCSS + `
+.logo-mark { display: block; height: 2rem; aspect-ratio: 182.4 / 53; background: var(--primary); mask: url("data:image/svg+xml;base64,` + base64.StdEncoding.EncodeToString(boardweb.EPFLLogoSVG) + `") center / contain no-repeat; }
+body { margin: 0; }
+.app-name { margin-left: var(--space-3); padding-left: var(--space-3); border-left: var(--border-w) solid var(--border); font-weight: var(--w-bold); font-size: var(--fs-h5); line-height: var(--lh-tight); white-space: nowrap; }
+.epfl-breadcrumb { padding-left: var(--gutter); padding-right: var(--gutter); }
+main { padding: var(--space-4) var(--gutter) var(--space-5); }
+main > h1 { font-size: var(--fs-h3); margin: 0 0 var(--space-4); overflow-wrap: anywhere; }
+h2 { font-size: var(--fs-h5); font-weight: var(--w-bold); line-height: var(--lh-normal); margin: var(--space-5) 0 var(--space-3); }
+.table-scroll { overflow-x: auto; border: var(--border-w) solid var(--border); margin-bottom: var(--space-4); }
+table { border-collapse: collapse; width: 100%; font-size: var(--fs-sm); line-height: var(--lh-normal); }
+th, td { padding: var(--space-2) var(--space-3); text-align: left; vertical-align: top; border-bottom: var(--border-w) solid var(--border-subtle); }
+th { background: var(--bg-subtle); border-bottom-color: var(--border); white-space: nowrap; }
+tbody tr:last-child td { border-bottom: 0; }
+td:first-child { min-width: 18rem; }
+.fields div { font-size: var(--fs-sm); }
+.field-name { color: var(--fg-muted); }
+.other { color: var(--fg-muted); font-size: var(--fs-xs); }
+.board { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(16rem, 1fr); gap: var(--space-3); align-items: start; overflow-x: auto; padding-bottom: var(--space-3); }
+.column { background: var(--bg-subtle); border: var(--border-w) solid var(--border-subtle); padding: var(--space-3); }
+.column h2 { margin: 0 0 var(--space-3); font-size: var(--fs-sm); text-transform: uppercase; letter-spacing: .04em; }
+.card { display: grid; gap: var(--space-1); background: var(--bg); border: var(--border-w) solid var(--border); border-radius: var(--radius); padding: var(--space-2) var(--space-3) var(--space-3); margin-bottom: var(--space-2); }
+.card .title { font-size: 0.9375rem; font-weight: var(--w-bold); line-height: var(--lh-normal); overflow-wrap: anywhere; }
+.views { list-style: none; margin: 0; padding: 0; border-top: var(--border-w) solid var(--border); max-width: 40rem; }
+.views li { border-bottom: var(--border-w) solid var(--border); }
+.views a { display: block; padding: var(--space-3) 0; font-weight: var(--w-bold); text-decoration: none; transition: color var(--t-fast); }
+.views a:hover { color: var(--primary-hover); }
+a:focus-visible { outline: var(--focus-w) solid var(--primary-hover); outline-offset: 0.125rem; }
+footer { margin: 0 var(--gutter); padding: var(--space-3) 0 var(--space-4); border-top: var(--border-w) solid var(--border-subtle); color: var(--fg-muted); font-size: var(--fs-sm); }
+@media (max-width: 47.99rem) {
+  .epfl-header { flex-wrap: wrap; height: auto; padding: var(--space-3) var(--space-3) 0; }
+  .epfl-nav { flex-basis: 100%; margin-left: calc(-1 * var(--space-3)); margin-right: calc(-1 * var(--space-3)); padding: 0 var(--space-2); overflow-x: auto; }
+  .epfl-nav a { white-space: nowrap; }
+  .epfl-breadcrumb, main { padding-left: var(--space-3); padding-right: var(--space-3); }
+  footer { margin: 0 var(--space-3); }
+}
 `
 
-const pageTmplSrc = `<!doctype html>
+// pageHead is the <head> every page shares, after its <title>: viewport,
+// the font origin preconnect (INSTALL.md of the EPFL design system;
+// crossorigin, or the font server answers 403) and the inlined CSS.
+var pageHead = `<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://enac-it-fonts.epfl.ch" crossorigin>
+<style>` + pageCSS + `</style>
+</head>`
+
+// pageHeader is the EPFL header: logo, app name and one nav entry per
+// view, the current one marked with the red dot (class="active").
+const pageHeader = `<header class="epfl-header" role="banner">
+<a class="epfl-logo" href="index.html"><span class="logo-mark" role="img" aria-label="EPFL"></span></a>
+<span class="app-name">git-board</span>
+<nav class="epfl-nav" aria-label="Views">{{range .Views}}<a href="{{.}}.html"{{if eq . $.ViewName}} class="active" aria-current="page"{{end}}>{{.}}</a>{{end}}</nav>
+</header>`
+
+var pageTmplSrc = `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <title>{{.ViewName}} — git-board</title>
-<style>` + pageCSS + `</style>
-</head>
+` + pageHead + `
 <body>
-<p><a href="index.html">&larr; all views</a></p>
+` + pageHeader + `
+<nav class="epfl-breadcrumb" aria-label="Breadcrumb"><a href="index.html">All views</a><span class="sep">›</span><span>{{.ViewName}}</span></nav>
+<main>
 <h1>{{.ViewName}}</h1>
 {{if eq .Layout "board"}}
 <div class="board">
@@ -235,8 +284,9 @@ const pageTmplSrc = `<!doctype html>
 {{else}}
 {{range .Buckets}}
 {{if .Group}}<h2>{{.Group}}</h2>{{end}}
+<div class="table-scroll">
 <table>
-<thead><tr><th>Title</th><th>Status</th><th>Fields</th><th>Other labels</th></tr></thead>
+<thead><tr><th>Title</th><th>State</th><th>Fields</th><th>Other labels</th></tr></thead>
 <tbody>
 {{range .Issues}}
 <tr>
@@ -248,29 +298,34 @@ const pageTmplSrc = `<!doctype html>
 {{end}}
 </tbody>
 </table>
+</div>
 {{end}}
 {{end}}
+</main>
 <footer>Generated {{.Generated.Format "2006-01-02 15:04:05 MST"}} by git-board html — read-only, no auth.</footer>
 </body>
 </html>
 `
 
-const indexTmplSrc = `<!doctype html>
+var indexTmplSrc = `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <title>git-board</title>
-<style>` + pageCSS + `</style>
-</head>
+` + pageHead + `
 <body>
-<h1>git-board</h1>
+` + pageHeader + `
+<main>
+<div class="epfl-eyebrow">git-board</div>
+<h1>Views</h1>
 {{if .Views}}
-<ul>
+<ul class="views">
 {{range .Views}}<li><a href="{{.}}.html">{{.}}</a></li>{{end}}
 </ul>
 {{else}}
 <p>No views configured in .git-board.toml.</p>
 {{end}}
+</main>
 <footer>Generated {{.Generated.Format "2006-01-02 15:04:05 MST"}} by git-board html.</footer>
 </body>
 </html>

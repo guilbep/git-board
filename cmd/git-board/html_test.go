@@ -293,3 +293,35 @@ func TestHTMLDefaultsOutputToSiteDir(t *testing.T) {
 		t.Errorf("expected %s/index.html with no -o flag: %v", defaultHTMLOutput, err)
 	}
 }
+
+// The page inlines the EPFL design system standalone: the token file's
+// relative @import "fonts.css" can't resolve on a published site, so its
+// @font-face rules (Suisse Int'l from enac-it-fonts.epfl.ch) must be inlined
+// in its place, and the logo must be a data URI, not a file to ship.
+func TestHTMLInlinesEPFLDesignSystem(t *testing.T) {
+	newHTMLTestRepo(t)
+	site := filepath.Join(t.TempDir(), "site")
+
+	if _, err := execute(t, []string{"html", "-o", site}); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+
+	for _, name := range []string{"index.html", "current-sprint.html"} {
+		page := readGenerated(t, site, name)
+		if strings.Contains(page, "@import") {
+			t.Errorf("%s: unresolvable @import left in the inlined CSS", name)
+		}
+		for _, want := range []string{
+			"https://enac-it-fonts.epfl.ch/SuisseIntl-Regular-WebS.woff2",
+			`class="epfl-header"`,
+			`mask: url("data:image/svg+xml;base64,`,
+		} {
+			if !strings.Contains(page, want) {
+				t.Errorf("%s: expected %q", name, want)
+			}
+		}
+	}
+	if page := readGenerated(t, site, "current-sprint.html"); !strings.Contains(page, `class="active" aria-current="page">current-sprint<`) {
+		t.Errorf("current-sprint.html: expected its own nav entry marked active")
+	}
+}
