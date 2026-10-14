@@ -41,7 +41,9 @@ it happens to be adopted by first.
 - git-bug is pre-1.0; its CLI/library surface has already diverged from
   assumptions once during this build (no `bug ls` subcommand existed —
   see the M1 status entries below). Recheck compatibility before bumping
-  past the pinned `v0.10.1`.
+  past the pinned `v0.10.1`. Done 2026-10-14: moved to git-bug's
+  `bridge-sync` fork (forge sync); the API changes stayed in
+  `internal/gitbugio` and the test helpers.
 - Sub-issues / `parent:` label: co2-calculator has items with linked PRs
   and an unknown number with parents — decide whether `parent:` is needed
   before a real team rollout.

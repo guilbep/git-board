@@ -20,41 +20,23 @@ from **M2** — the last M2 item, so M2 is now fully shipped.
 
 ## Install
 
-This repo is **private**, so Go's default module proxy/checksum database
-can't fetch it — tell Go to go straight to GitHub instead. That alone isn't
-enough: `go install` fetches `github.com/...` paths over **HTTPS** by
-default, which fails non-interactively even if you have an SSH key on your
-GitHub account, unless `git` is told to use it for that host:
-
-```bash
-git config --global url."git@github.com:".insteadOf "https://github.com/"
-export GOPRIVATE=github.com/guilbep/*   # add to your shell profile to persist
-go install github.com/guilbep/git-board/cmd/git-board@latest
-```
-
-(No SSH key set up? Use an HTTPS credential helper with a token that has
-`repo` scope instead, and skip the `git config` line above.)
-
-If you see `reading https://sum.golang.org/...: 404` — `GOPRIVATE` isn't
-actually set in this shell (it doesn't persist across shells unless it's in
-your profile). If you see `could not read Username ... terminal prompts
-disabled` — the `git config` line above is missing or your SSH key isn't
-registered with GitHub.
-
-Requires Go 1.24+ (git-bug's own module requirement); `go install` fetches
-the matching toolchain automatically if needed. Verify it worked:
-
-```bash
-git-board --help
-```
-
-### From a local clone (no GOPRIVATE needed)
+git-board builds against the `bridge-sync` fork of git-bug
+([guilbep/git-bug](https://github.com/guilbep/git-bug/tree/bridge-sync)),
+through a `replace` in `go.mod`: the fork adds two-way sync with GitHub,
+GitLab and Gitea (`git bug bridge sync`). Go refuses `go install ...@latest`
+for a module with a `replace`, so install from a clone:
 
 ```bash
 git clone git@github.com:guilbep/git-board.git
 cd git-board
 go install ./cmd/git-board
+git-board --help
 ```
+
+Requires Go 1.26+ (git-bug's module requirement); `go install` fetches the
+matching toolchain automatically if needed. Install the fork's `git-bug`
+too (see its `INSTALLATION.md`, "The bridge-sync fork"), so that both read
+and write the repository the same way.
 
 ## Display convention: known fields get their own column/line
 
@@ -195,9 +177,9 @@ Config-driven multi-repo sync is tracked as a follow-up in
 
 `git-board bridge` maps a GitHub Project (v2)'s custom field values onto the
 `ns:value` labels above, on git-bug issues already bridged in locally via
-`git-bug bridge pull` (matched by GitHub issue URL, not title — a git-bug
-bug carries the original issue URL in its Create-operation metadata when it
-came from `git-bug`'s own GitHub bridge).
+`git bug bridge pull` or `git bug bridge sync` (matched by GitHub issue
+URL, not title — a git-bug bug carries the original issue URL in its
+Create-operation metadata when it came from `git-bug`'s own GitHub bridge).
 
 It is **read-only against GitHub**: it only runs `gh project item-list`
 (needs `gh` authenticated with at least `read:project` scope) and never

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -8,6 +9,7 @@ import (
 
 	"github.com/git-bug/git-bug/cache"
 	"github.com/git-bug/git-bug/repository"
+	"github.com/git-bug/gitconfig"
 
 	"github.com/guilbep/git-board/internal/ghbridge"
 )
@@ -19,18 +21,17 @@ func newBridgeTestRepo(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
 
-	repo, err := repository.InitGoGitRepo(dir, "git-bug")
+	repo, err := repository.InitDefault(dir, "git-bug")
 	if err != nil {
 		t.Fatalf("InitGoGitRepo: %v", err)
 	}
-	if err := repo.LocalConfig().StoreString("user.name", "guilbep"); err != nil {
-		t.Fatalf("set user.name: %v", err)
-	}
-	if err := repo.LocalConfig().StoreString("user.email", "guilbep@example.com"); err != nil {
-		t.Fatalf("set user.email: %v", err)
+	if err := repo.Config().Update(func(f *gitconfig.File) error {
+		return errors.Join(f.Set("user.name", "guilbep"), f.Set("user.email", "guilbep@example.com"))
+	}); err != nil {
+		t.Fatalf("set user: %v", err)
 	}
 
-	c, err := cache.NewRepoCacheNoEvents(repo)
+	c, err := cache.NewRepoCacheNoEvents(repo, nil)
 	if err != nil {
 		t.Fatalf("NewRepoCacheNoEvents: %v", err)
 	}

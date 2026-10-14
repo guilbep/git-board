@@ -7,6 +7,7 @@ import (
 
 	"github.com/git-bug/git-bug/cache"
 	"github.com/git-bug/git-bug/repository"
+	"github.com/git-bug/git-bug/repository/repotest"
 
 	"github.com/guilbep/git-board/internal/gitbugio"
 )
@@ -18,37 +19,8 @@ import (
 // in-memory repo handles.
 func twoReposWithRemote(t *testing.T) (pathA, pathB string) {
 	t.Helper()
-	base := t.TempDir()
-	pathA = filepath.Join(base, "a")
-	pathB = filepath.Join(base, "b")
-	remotePath := filepath.Join(base, "remote.git")
-
-	repoA, err := repository.InitGoGitRepo(pathA, "git-bug")
-	if err != nil {
-		t.Fatalf("init repo A: %v", err)
-	}
-	repoB, err := repository.InitGoGitRepo(pathB, "git-bug")
-	if err != nil {
-		t.Fatalf("init repo B: %v", err)
-	}
-	remote, err := repository.InitBareGoGitRepo(remotePath, "git-bug")
-	if err != nil {
-		t.Fatalf("init bare remote: %v", err)
-	}
-	if err := repoA.AddRemote("origin", remote.GetLocalRemote()); err != nil {
-		t.Fatalf("A: add remote: %v", err)
-	}
-	if err := repoB.AddRemote("origin", remote.GetLocalRemote()); err != nil {
-		t.Fatalf("B: add remote: %v", err)
-	}
-	for _, r := range []*repository.GoGitRepo{repoA, repoB} {
-		if err := r.LocalConfig().StoreString("user.name", "guilbep"); err != nil {
-			t.Fatalf("set user.name: %v", err)
-		}
-		if err := r.LocalConfig().StoreString("user.email", "guilbep@example.com"); err != nil {
-			t.Fatalf("set user.email: %v", err)
-		}
-	}
+	repoA, repoB, _ := repotest.SetupGoGitReposAndRemote(t)
+	pathA, pathB = filepath.Dir(repoA.GitDir), filepath.Dir(repoB.GitDir)
 	// Every repo needs its own local identity set before it can
 	// pull/merge at all — not just the one that happens to seed a bug.
 	// Caught by a real test failure ("No identity is set") on the repo
@@ -62,11 +34,15 @@ func twoReposWithRemote(t *testing.T) (pathA, pathB string) {
 
 func setIdentity(t *testing.T, path string) {
 	t.Helper()
-	repo, err := repository.OpenGoGitRepo(path, "git-bug", nil)
+	gitDir, err := repository.FindGitDir(path)
+	if err != nil {
+		t.Fatalf("find %s: %v", path, err)
+	}
+	repo, err := repository.OpenDefault(gitDir, "git-bug")
 	if err != nil {
 		t.Fatalf("open %s: %v", path, err)
 	}
-	c, err := cache.NewRepoCacheNoEvents(repo)
+	c, err := cache.NewRepoCacheNoEvents(repo, nil)
 	if err != nil {
 		t.Fatalf("cache for %s: %v", path, err)
 	}
@@ -82,11 +58,15 @@ func setIdentity(t *testing.T, path string) {
 
 func seedBug(t *testing.T, path, title string) {
 	t.Helper()
-	repo, err := repository.OpenGoGitRepo(path, "git-bug", nil)
+	gitDir, err := repository.FindGitDir(path)
+	if err != nil {
+		t.Fatalf("find %s: %v", path, err)
+	}
+	repo, err := repository.OpenDefault(gitDir, "git-bug")
 	if err != nil {
 		t.Fatalf("open %s: %v", path, err)
 	}
-	c, err := cache.NewRepoCacheNoEvents(repo)
+	c, err := cache.NewRepoCacheNoEvents(repo, nil)
 	if err != nil {
 		t.Fatalf("cache for %s: %v", path, err)
 	}

@@ -2,8 +2,11 @@
 
 ## Setup
 
-- Go 1.24.2+ (`GOTOOLCHAIN=auto` will fetch a newer one automatically if
+- Go 1.26+ (`GOTOOLCHAIN=auto` will fetch a newer one automatically if
   `go.mod` needs it).
+- git-bug comes from its `bridge-sync` fork, through the `replace` in
+  `go.mod`: bump it with
+  `go mod edit -replace=github.com/git-bug/git-bug=github.com/guilbep/git-bug@<commit> && go mod tidy`.
 - This is a private module: `go install`/`go get` need
   ```
   go env -w GOPRIVATE=github.com/guilbep/*

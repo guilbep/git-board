@@ -10,8 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/git-bug/git-bug/repository"
-
+	"github.com/git-bug/git-bug/repository/repotest"
 	"github.com/guilbep/git-board/internal/gitbugio"
 )
 
@@ -20,7 +19,7 @@ import (
 func New(t testing.TB) *gitbugio.Backend {
 	t.Helper()
 
-	repo := repository.CreateGoGitTestRepo(t, false)
+	repo := repotest.NewGoGitRepo(t, false)
 	b, err := gitbugio.NewForRepo(repo)
 	if err != nil {
 		t.Fatalf("NewForRepo: %v", err)

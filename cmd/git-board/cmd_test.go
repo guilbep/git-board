@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/git-bug/git-bug/cache"
 	"github.com/git-bug/git-bug/repository"
+	"github.com/git-bug/gitconfig"
 )
 
 const testConfig = `
@@ -19,24 +21,23 @@ single = true
 // newTestRepo initializes a real, on-disk git-bug repo with one open bug
 // ("Fix invoice bug", status:ready) and one closed bug ("Write specs"),
 // chdirs the test into it, and writes a minimal .git-board.toml. This
-// exercises the exact repo-discovery path (repository.OpenGoGitRepo) the
+// exercises the exact repo-discovery path (repository.OpenDefault) the
 // CLI uses in production, not a mock.
 func newTestRepo(t *testing.T) {
 	t.Helper()
 	dir := t.TempDir()
 
-	repo, err := repository.InitGoGitRepo(dir, "git-bug")
+	repo, err := repository.InitDefault(dir, "git-bug")
 	if err != nil {
 		t.Fatalf("InitGoGitRepo: %v", err)
 	}
-	if err := repo.LocalConfig().StoreString("user.name", "guilbep"); err != nil {
-		t.Fatalf("set user.name: %v", err)
-	}
-	if err := repo.LocalConfig().StoreString("user.email", "guilbep@example.com"); err != nil {
-		t.Fatalf("set user.email: %v", err)
+	if err := repo.Config().Update(func(f *gitconfig.File) error {
+		return errors.Join(f.Set("user.name", "guilbep"), f.Set("user.email", "guilbep@example.com"))
+	}); err != nil {
+		t.Fatalf("set user: %v", err)
 	}
 
-	c, err := cache.NewRepoCacheNoEvents(repo)
+	c, err := cache.NewRepoCacheNoEvents(repo, nil)
 	if err != nil {
 		t.Fatalf("NewRepoCacheNoEvents: %v", err)
 	}

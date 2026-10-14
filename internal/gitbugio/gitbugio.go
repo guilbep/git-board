@@ -39,18 +39,22 @@ type Issue struct {
 
 // Backend is an open connection to a git-bug repo cache.
 type Backend struct {
-	repo repository.ClockedRepo
+	repo repository.Repo
 	c    *cache.RepoCache
 }
 
 // Open opens the git-bug repo cache rooted at path (or an ancestor of it,
 // same discovery as `git-bug`/`git` itself).
 func Open(path string) (*Backend, error) {
-	repo, err := repository.OpenGoGitRepo(path, gitBugNamespace, nil)
+	gitDir, err := repository.FindGitDir(path)
 	if err != nil {
 		return nil, fmt.Errorf("opening git-bug repo: %w", err)
 	}
-	c, err := cache.NewRepoCacheNoEvents(repo)
+	repo, err := repository.OpenDefault(gitDir, gitBugNamespace)
+	if err != nil {
+		return nil, fmt.Errorf("opening git-bug repo: %w", err)
+	}
+	c, err := cache.NewRepoCacheNoEvents(repo, nil)
 	if err != nil {
 		return nil, fmt.Errorf("building git-bug cache: %w", err)
 	}
@@ -66,10 +70,10 @@ func OpenCwd() (*Backend, error) {
 	return Open(cwd)
 }
 
-// NewForRepo wraps an already-open repo (e.g. repository.CreateGoGitTestRepo
+// NewForRepo wraps an already-open repo (e.g. repotest.NewGoGitRepo
 // in tests) in a Backend, skipping the on-disk lookup Open does.
-func NewForRepo(repo repository.ClockedRepo) (*Backend, error) {
-	c, err := cache.NewRepoCacheNoEvents(repo)
+func NewForRepo(repo repository.Repo) (*Backend, error) {
+	c, err := cache.NewRepoCacheNoEvents(repo, nil)
 	if err != nil {
 		return nil, fmt.Errorf("building git-bug cache: %w", err)
 	}
