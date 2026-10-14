@@ -1,8 +1,8 @@
 {
   "name": "git-board-web",
   "version": "0.0.1",
-  "description": "A Quasar Project",
-  "productName": "Quasar App",
+  "description": "git-board web UI",
+  "productName": "git-board",
   "author": "guilbep",
   "type": "module",
   "private": true,

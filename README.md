@@ -439,10 +439,9 @@ CLI except `ls`/`view`/`get`/`lint`.
 `"board"` view renders one column per bucket (kanban-style, cards); anything
 else renders a flat table per bucket. This is a new distinction — `layout`
 was parsed by `internal/config` and shipped to the web UI's API from the
-start, but nothing (not the CLI's own `render.go`, not the web frontend)
-actually branched on it before this command; the Vue board always rendered
-a stacked table regardless of the configured value. `git-board html` is the
-first thing to read it.
+start; `git-board html` was the first thing to branch on it, and the web
+UI now does too (board columns or grouped tables). The CLI's own
+`render.go` still prints tables only.
 
 ```bash
 # run from inside the git-bug repo, next to .git-board.toml

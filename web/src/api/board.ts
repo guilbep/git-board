@@ -11,6 +11,7 @@ export interface Issue {
   title: string;
   status: string;
   labels: string[];
+  github_url?: string; // absent when the issue wasn't bridged in from GitHub
 }
 
 export interface Bucket {
@@ -32,10 +33,21 @@ export interface FieldConfig {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(API_BASE + path, init);
+  const res = await fetch(API_BASE + path, init).catch(() => {
+    throw new Error('The git-board server is not reachable.');
+  });
   if (!res.ok) {
+    // The server answers errors as {"error": "..."} (writeError in
+    // cmd/git-board-server); surface that message, e.g. "@me" with no
+    // --me set.
     const body = await res.text();
-    throw new Error(`${init?.method ?? 'GET'} ${path} -> ${res.status}: ${body}`);
+    let message = body;
+    try {
+      message = (JSON.parse(body) as { error?: string }).error ?? body;
+    } catch {
+      // not JSON: keep the raw body
+    }
+    throw new Error(message || `${init?.method ?? 'GET'} ${path} failed (${res.status})`);
   }
   return res.json() as Promise<T>;
 }

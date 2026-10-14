@@ -1,23 +1,17 @@
 <template>
-  <div class="fullscreen bg-blue text-white text-center q-pa-md flex flex-center">
-    <div>
-      <div style="font-size: 30vh">
-        404
-      </div>
-
-      <div class="text-h2" style="opacity:.4">
-        Oops. Nothing here...
-      </div>
-
-      <q-btn
-        class="q-mt-xl"
-        color="white"
-        text-color="blue"
-        unelevated
-        to="/"
-        label="Go Home"
-        no-caps
-      />
-    </div>
-  </div>
+  <AppHeader :views="[]" active="" />
+  <main class="not-found">
+    <div class="epfl-eyebrow">Error 404</div>
+    <h1 class="h3">Page not found</h1>
+    <p>This address doesn't match anything in git-board.</p>
+    <router-link to="/" class="epfl-btn epfl-btn-primary">Back to the board</router-link>
+  </main>
 </template>
+
+<script setup lang="ts">
+import AppHeader from '@/components/AppHeader.vue';
+</script>
+
+<style scoped>
+.not-found { padding: var(--space-5) var(--gutter); }
+</style>

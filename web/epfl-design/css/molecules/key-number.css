@@ -1,0 +1,20 @@
+/* MOLECULE — KeyNumber
+   Large light-weight numeral + short red accent bar + label. A hero stat pattern
+   (faculty/landing pages). `--pre` is the small leading glyph (+, %, …). */
+
+.epfl-keynumber-num {
+  font-size: 4rem;
+  font-weight: var(--w-light);
+  line-height: 1;
+  color: var(--fg);
+}
+.epfl-keynumber-num .pre { font-size: 2rem; vertical-align: top; }
+
+.epfl-keynumber-bar {
+  width: 2rem;
+  height: 0.1875rem;
+  background: var(--primary);
+  margin: 0.75rem 0;
+}
+
+.epfl-keynumber-label { font-size: var(--fs-sm); color: var(--fg-muted); line-height: 1.4; }

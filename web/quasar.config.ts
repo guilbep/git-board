@@ -29,8 +29,9 @@ export default defineConfig((/* ctx */) => {
       // 'line-awesome',
       // 'roboto-font-latin-ext', // this or either 'roboto-font', NEVER both!
 
-      'roboto-font', // optional, you are not bound to it
-      'material-icons', // optional, you are not bound to it
+      // None: the EPFL design system's Suisse Int'l loads from
+      // enac-it-fonts.epfl.ch (web/epfl-design/tokens/fonts.css), and the
+      // few icons are inline SVG. Never bundle font files.
     ],
 
     // https://v2.quasar.dev/quasar-cli-vite/quasar-config-file#build
@@ -93,7 +94,7 @@ export default defineConfig((/* ctx */) => {
       // directives: [],
 
       // Quasar plugins
-      plugins: ['Notify']
+      plugins: []
     },
 
     // animations: 'all', // --- includes all animations

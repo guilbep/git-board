@@ -1,1 +1,10 @@
-/* app global css */
+/* EPFL design system, vendored in web/epfl-design (see web/README.md).
+   Loaded after Quasar's CSS, as kits/quasar/README.md asks: the tokens and
+   .epfl-* classes, then the Quasar brand mapping (EPFL tokens -> --q-*). */
+@import '../../epfl-design/css/epfl.css';
+@import '../../epfl-design/kits/quasar/epfl-quasar-brand.css';
+
+/* Quasar's dialog backdrop -> EPFL's modal backdrop token; the issue side
+   panel (a right-hand q-dialog) runs the full height, no inset. */
+.q-dialog__backdrop { background: var(--bg-overlay); }
+.q-dialog__inner--right { padding: 0; }
