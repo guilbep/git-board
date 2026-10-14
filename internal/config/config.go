@@ -18,6 +18,10 @@ type Field struct {
 	Single  bool     `toml:"single" json:"single"`
 	Options []string `toml:"options" json:"options"`
 	Numeric bool     `toml:"numeric" json:"numeric"`
+	// Project names the GitHub Project's option for a value, where the
+	// slug of the Project's name isn't the value: comite = "Comité
+	// Spécialisé".
+	Project map[string]string `toml:"project" json:"project,omitempty"`
 }
 
 // KnownValue reports whether value is one of Options — or true if Options is
@@ -61,6 +65,9 @@ type reposTable struct {
 type GithubProject struct {
 	Owner  string `toml:"owner" json:"owner"`
 	Number int    `toml:"number" json:"number"`
+	// Write lets `bridge sync` write git-board's changes to the Project.
+	// Off by default: the Project is only read.
+	Write bool `toml:"write" json:"write"`
 }
 
 // raw mirrors the on-disk TOML shape for decoding.

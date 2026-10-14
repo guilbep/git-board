@@ -37,7 +37,7 @@ with nothing changed is a no-op.`,
   git-board bridge pull --apply            # actually write the labels
   git-board bridge pull --owner EPFL-ENAC --project 40 --dry-run`,
 	}
-	cmd.AddCommand(newBridgeConfigureCmd(), newBridgePullCmd())
+	cmd.AddCommand(newBridgeConfigureCmd(), newBridgePullCmd(), newBridgeSyncCmd(), newBridgeResolveCmd())
 	return cmd
 }
 

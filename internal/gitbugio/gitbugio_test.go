@@ -1,6 +1,7 @@
 package gitbugio_test
 
 import (
+	"maps"
 	"testing"
 
 	"github.com/guilbep/git-board/internal/gitbugio"
@@ -119,5 +120,34 @@ func TestGetIssueResolvesByIDPrefix(t *testing.T) {
 	}
 	if issue.Title != "prefix test" {
 		t.Errorf("Title = %q", issue.Title)
+	}
+}
+
+// What a GitHub Project and git-board last agreed on is kept per Project,
+// the last record of a field winning, and an empty value is a value.
+func TestProjectBasesRoundTrip(t *testing.T) {
+	b := gitbugiotest.New(t)
+	id := gitbugiotest.NewIssue(t, b, "title")
+
+	got, err := b.ProjectBases(id, "git-board:o/1:")
+	if err != nil || len(got) != 0 {
+		t.Fatalf("fresh bases = %v, %v", got, err)
+	}
+	if err := b.SetProjectBases(id, "git-board:o/1:", map[string]string{"status": "ready", "prio": "p1"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.SetProjectBases(id, "git-board:o/1:", map[string]string{"status": ""}); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.SetProjectBases(id, "git-board:o/2:", map[string]string{"status": "qa"}); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err = b.ProjectBases(id, "git-board:o/1:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := map[string]string{"status": "", "prio": "p1"}; !maps.Equal(got, want) {
+		t.Errorf("bases = %v, want %v", got, want)
 	}
 }

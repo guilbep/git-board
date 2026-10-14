@@ -218,7 +218,7 @@ Field mapping:
 | Module | `mod:<value>` | single — the two duplicate "Generic" options are merged into one `mod:generic` |
 | Est. hours | `est:<value>` | single |
 | Sprint | `sprint:<slug>` | single, matched against `[[sprints.list]]` titles |
-| Assignees | `assignee:<user>` | multi — one label per assignee, added *and* removed to mirror GitHub exactly |
+| Assignees | `assignee:<user>` | multi — one label per assignee, added *and* removed to mirror GitHub exactly (`bridge sync` keeps the ones added in git-board) |
 
 `Milestone` and `Size` are **not** imported — the PRD calls them dead/unused
 fields.
@@ -239,6 +239,48 @@ matching option prints a warning line and leaves the label untouched too.
 A project item that isn't a GitHub Issue (a PR added straight to the
 Project) is excluded outright and reported as unmatched, same as an Issue
 that hasn't been bridged into git-bug yet.
+
+### Syncing both ways (`git-board bridge sync`)
+
+`bridge pull` only reads the Project. `bridge sync` keeps status, prio,
+mod, est and sprint in step both ways, the git way: each field is compared
+with the value both sides last agreed on, which git-board records on the
+issue (in git-bug's history, so it travels with the issue).
+
+- Only the Project changed: the label follows.
+- Only git-board changed: the Project follows.
+- Both changed differently: a **conflict**, left alone on both sides until
+  you resolve it, `--ours` writing git-board's value to the Project,
+  `--theirs` setting the Project's on the label.
+- The first sync of an issue takes the Project's values. A field the
+  Project has empty while git-board has a value is a conflict: a field
+  never set can't be told from one a teammate cleared.
+- A value the other side has no option for leaves the field alone, with a
+  warning.
+- Assignees only go from the Project to the labels, as changes since the
+  last sync: assignees added in git-board stay.
+
+```bash
+git-board bridge sync                         # what would change, on each side
+git-board bridge sync --apply
+git-board bridge resolve 2605 status --theirs # or --ours
+```
+
+Writing to the Project is off unless the config says so, and needs a `gh`
+token with the `project` scope (`gh auth refresh -s project`):
+
+```toml
+[github-project]
+owner = "guilbep"
+number = 1
+write = true
+
+[fields.status]
+single = true
+options = ["backlog", "comite", "ready", "qa"]
+# the Project's name for a value, where its slug isn't the value
+project = { comite = "Comité Spécialisé", qa = "QA Validation" }
+```
 
 ### Filter grammar
 

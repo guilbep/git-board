@@ -8,9 +8,12 @@ package gitbugio
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/git-bug/git-bug/cache"
+	bugent "github.com/git-bug/git-bug/entities/bug"
 	"github.com/git-bug/git-bug/entities/common"
+	"github.com/git-bug/git-bug/entity/dag"
 	"github.com/git-bug/git-bug/query"
 	"github.com/git-bug/git-bug/repository"
 )
@@ -181,6 +184,46 @@ func (b *Backend) ApplyLabelChange(idPrefix string, added, removed []string) ([]
 		labels[i] = l.String()
 	}
 	return labels, nil
+}
+
+// ProjectBases returns what a GitHub Project and git-board last agreed on for
+// a bug, by field: the records under prefix (one per Project), the last
+// record of a field winning.
+func (b *Backend) ProjectBases(idPrefix, prefix string) (map[string]string, error) {
+	bug, err := b.c.Bugs().ResolvePrefix(idPrefix)
+	if err != nil {
+		return nil, fmt.Errorf("resolving %s: %w", idPrefix, err)
+	}
+	res := map[string]string{}
+	for _, op := range bug.Snapshot().Operations {
+		set, ok := op.(*dag.SetMetadataOperation[*bugent.Snapshot])
+		if !ok {
+			continue
+		}
+		for k, v := range set.NewMetadata {
+			if field, ok := strings.CutPrefix(k, prefix); ok {
+				res[field] = v
+			}
+		}
+	}
+	return res, nil
+}
+
+// SetProjectBases records what a GitHub Project and git-board now agree on,
+// in the bug's history, so it travels with the bug.
+func (b *Backend) SetProjectBases(idPrefix, prefix string, values map[string]string) error {
+	bug, err := b.c.Bugs().ResolvePrefix(idPrefix)
+	if err != nil {
+		return fmt.Errorf("resolving %s: %w", idPrefix, err)
+	}
+	meta := make(map[string]string, len(values))
+	for field, v := range values {
+		meta[prefix+field] = v
+	}
+	if _, err := bug.SetMetadata(bug.Snapshot().Operations[0].Id(), meta); err != nil {
+		return fmt.Errorf("recording Project values on %s: %w", idPrefix, err)
+	}
+	return bug.Commit()
 }
 
 // CloseBug marks a bug closed and commits it — the underlying operation

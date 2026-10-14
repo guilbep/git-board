@@ -35,6 +35,9 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"unicode"
+
+	"golang.org/x/text/unicode/norm"
 
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/fields"
@@ -43,6 +46,7 @@ import (
 
 // Item is one row of `gh project item-list --format json`'s "items" array.
 type Item struct {
+	ID        string   `json:"id"`
 	Assignees []string `json:"assignees"`
 	Content   Content  `json:"content"`
 	Priority  string   `json:"priority"`
@@ -333,11 +337,18 @@ func normalizeModule(value string) string {
 var slugNonAlnum = regexp.MustCompile(`[^a-z0-9]+`)
 
 // slugify normalizes a GitHub Project field's display value (e.g. "QA
-// Validation") into a label-safe slug ("qa-validation"), matching the
-// lowercase-hyphenated convention .git-board.toml's [fields.*].options use.
+// Validation", "Comité Spécialisé") into a label-safe slug ("qa-validation",
+// "comite-specialise"), matching the lowercase-hyphenated convention
+// .git-board.toml's [fields.*].options use. Accents are dropped from their
+// letter, not the letter with them.
 func slugify(value string) string {
-	s := slugNonAlnum.ReplaceAllString(strings.ToLower(strings.TrimSpace(value)), "-")
-	return strings.Trim(s, "-")
+	var b strings.Builder
+	for _, r := range norm.NFD.String(strings.ToLower(strings.TrimSpace(value))) {
+		if !unicode.Is(unicode.Mn, r) {
+			b.WriteRune(r)
+		}
+	}
+	return strings.Trim(slugNonAlnum.ReplaceAllString(b.String(), "-"), "-")
 }
 
 // LabelWriter is the subset of gitbugio.Backend ApplyPlan needs.
