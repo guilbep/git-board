@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/guilbep/git-board/internal/board"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/fields"
 	"github.com/guilbep/git-board/internal/gitbugio/gitbugiotest"
@@ -196,5 +197,28 @@ func TestApplyUnconfiguredMultiValuedFields(t *testing.T) {
 	want := []string{"assignee:alice", "assignee:bob", "sprint:s2", "team:api", "team:data", "team:web"}
 	if !slices.Equal(got, want) {
 		t.Errorf("labels = %v, want %v", got, want)
+	}
+}
+
+// Without --me, @me is the forge login of the git-bug identity.
+func TestApplyMeFallsBackToTheIdentitysLogin(t *testing.T) {
+	cfg := mustLoadConfig(t)
+	b := gitbugiotest.New(t)
+	id := gitbugiotest.NewIssue(t, b, "x")
+	me, err := b.TestCache().GetUserIdentity()
+	if err != nil {
+		t.Fatal(err)
+	}
+	me.SetMetadata("github-login", "guilbep")
+	if err := me.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	label, err := fields.Apply(b, cfg, id, "assignee", "@me", "", today)
+	if err != nil || label != "assignee:guilbep" {
+		t.Errorf("Apply @me = %q, %v; want assignee:guilbep", label, err)
+	}
+	issues, err := board.LoadMatching(b, cfg, "assignee:@me", "")
+	if err != nil || len(issues) != 1 {
+		t.Errorf("LoadMatching assignee:@me = %d issues, %v; want the one", len(issues), err)
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/git-bug/git-bug/bridge/core/auth"
+	"github.com/git-bug/gitconfig"
 
 	"github.com/guilbep/git-board/internal/gitbugio"
 	"github.com/guilbep/git-board/internal/gitbugio/gitbugiotest"
@@ -210,5 +211,33 @@ func TestEditingAChangedCommentIsRefused(t *testing.T) {
 	}
 	if err := b.EditComment(id, comment, "mine", "v1"); !errors.Is(err, gitbugio.ErrChangedMeanwhile) {
 		t.Errorf("err = %v, want ErrChangedMeanwhile", err)
+	}
+}
+
+// @me is the forge login of the identity git-board writes as: a bridge
+// tags it (github-login…), or a sync link names it.
+func TestMyLogin(t *testing.T) {
+	b := gitbugiotest.New(t)
+	if got := b.MyLogin(); got != "" {
+		t.Errorf("MyLogin = %q before any tag, want empty", got)
+	}
+	me, err := b.TestCache().GetUserIdentity()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := b.TestCache().Config().Update(func(f *gitconfig.File) error {
+		return f.Set("git-bug.bridge.gl.login-"+me.Id().String(), "bob")
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if got := b.MyLogin(); got != "bob" {
+		t.Errorf("MyLogin = %q, want the sync link's bob", got)
+	}
+	me.SetMetadata("github-login", "alice")
+	if err := me.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	if got := b.MyLogin(); got != "alice" {
+		t.Errorf("MyLogin = %q, want the bridge's alice", got)
 	}
 }

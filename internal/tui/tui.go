@@ -694,7 +694,10 @@ func (m Model) applyStructuredFilter(expr string) Model {
 
 	conditions := filter.Parse(expr)
 	if filter.RequiresMe(conditions) && m.me == "" {
-		m.status = fmt.Sprintf("filter %q uses @me but no current user configured (--me or GIT_BOARD_ME)", expr)
+		m.me = board.MyLogin(m.backend)
+	}
+	if filter.RequiresMe(conditions) && m.me == "" {
+		m.status = fmt.Sprintf("filter %q: %v", expr, board.ErrNoMe)
 		return m
 	}
 

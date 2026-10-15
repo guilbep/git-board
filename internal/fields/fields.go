@@ -25,6 +25,11 @@ var _ Backend = (*gitbugio.Backend)(nil)
 // Apply sets fieldName to value on the issue identified by idPrefix.
 // Returns the resulting label (e.g. "status:ready").
 func Apply(b Backend, cfg *config.Config, idPrefix, fieldName, value, me string, today time.Time) (string, error) {
+	if me == "" {
+		if l, ok := b.(interface{ MyLogin() string }); ok {
+			me = l.MyLogin() // @me without --me: the git-bug identity's login
+		}
+	}
 	resolved, err := resolveAssignedValue(cfg, value, me, today)
 	if err != nil {
 		return "", err
@@ -109,7 +114,7 @@ func resolveAssignedValue(cfg *config.Config, value, me string, today time.Time)
 		return sprint.Slug, nil
 	case value == "@me":
 		if me == "" {
-			return "", fmt.Errorf("@me used but no current user configured")
+			return "", fmt.Errorf("@me needs your forge login: a bridge (git bug bridge new) tags your git-bug identity with it, or pass --me / set GIT_BOARD_ME")
 		}
 		return me, nil
 	default:

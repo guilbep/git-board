@@ -29,7 +29,10 @@ type issueBackend interface {
 func LoadMatching(b issueBackend, cfg *config.Config, filterStr, me string) ([]gitbugio.Issue, error) {
 	conditions := filter.Parse(filterStr)
 	if filter.RequiresMe(conditions) && me == "" {
-		return nil, fmt.Errorf("filter uses @me but no current user configured (--me or GIT_BOARD_ME)")
+		me = MyLogin(b)
+	}
+	if filter.RequiresMe(conditions) && me == "" {
+		return nil, ErrNoMe
 	}
 
 	issues, err := b.ListIssues()
@@ -45,6 +48,19 @@ func LoadMatching(b issueBackend, cfg *config.Config, filterStr, me string) ([]g
 		}
 	}
 	return matched, nil
+}
+
+// ErrNoMe is returned when @me means nobody: no --me, and no forge login on
+// the git-bug identity.
+var ErrNoMe = fmt.Errorf("@me needs your forge login: a bridge (git bug bridge new) tags your git-bug identity with it, or pass --me / set GIT_BOARD_ME")
+
+// MyLogin is what @me means without --me: the forge login of the git-bug
+// identity git-board writes as, when b knows it (gitbugio.Backend does).
+func MyLogin(b any) string {
+	if l, ok := b.(interface{ MyLogin() string }); ok {
+		return l.MyLogin()
+	}
+	return ""
 }
 
 // FieldValue returns the value of a namespaced label (e.g. "prio" from

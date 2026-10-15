@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/git-bug/git-bug/bridge" // registers every forge, for the sync
 	"github.com/git-bug/git-bug/bridge/core"
@@ -97,4 +98,40 @@ func (b *Backend) PushURLs(remote string) []string {
 		}
 	}
 	return nil
+}
+
+// MyLogin is the forge login of the identity git-board writes as: what
+// @me means (assignee:@me), since assignee labels hold forge logins. Its own
+// login, else the one a bridge tagged it with (github-login, gitlab-login,
+// gitea-login), else a sync link (git-bug.bridge.<name>.login-<identity>).
+// "" when none says.
+func (b *Backend) MyLogin() string {
+	set, err := b.c.IsUserIdentitySet()
+	if err != nil || !set {
+		return ""
+	}
+	me, err := b.c.GetUserIdentity()
+	if err != nil {
+		return ""
+	}
+	if l := me.Login(); l != "" {
+		return l
+	}
+	meta := me.ImmutableMetadata()
+	for _, key := range []string{"github-login", "gitlab-login", "gitea-login"} {
+		if l := meta[key]; l != "" {
+			return l
+		}
+	}
+	cfg, err := b.c.Config().Read()
+	if err != nil {
+		return ""
+	}
+	suffix := ".login-" + me.Id().String()
+	for e := range cfg.All() {
+		if k := e.Key.String(); strings.HasPrefix(k, "git-bug.bridge.") && strings.HasSuffix(k, suffix) && e.Value != "" {
+			return e.Value
+		}
+	}
+	return ""
 }
