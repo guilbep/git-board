@@ -241,3 +241,47 @@ func TestMyLogin(t *testing.T) {
 		t.Errorf("MyLogin = %q, want the bridge's alice", got)
 	}
 }
+
+// An edit waiting for a forge says what the forge has now: the newest
+// version that reached it, under any number of edits still waiting.
+func TestThreadEditWasIsWhatTheForgesHave(t *testing.T) {
+	b := gitbugiotest.New(t)
+	author, _ := b.TestCache().GetUserIdentity()
+	bug, _, err := b.TestCache().Bugs().NewRaw(author, 1, "synced", "", nil, map[string]string{
+		"sync:github.com/o/r:id":  "I_1",
+		"sync:github.com/o/r:url": "https://github.com/o/r/issues/7",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := bug.Id().String()
+	pushLast := func() {
+		t.Helper()
+		cached, _ := b.TestCache().Bugs().ResolvePrefix(id)
+		ops := cached.Snapshot().Operations
+		if _, err := cached.SetMetadata(ops[len(ops)-1].Id(), map[string]string{"sync:github.com/o/r:pushed": "1"}); err != nil {
+			t.Fatal(err)
+		}
+		if err := cached.Commit(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	comment, _ := b.AddComment(id, "v1")
+	pushLast()
+	_ = b.EditComment(id, comment, "v2", "")
+	pushLast()
+	_ = b.EditComment(id, comment, "v3", "")
+	_ = b.EditComment(id, comment, "v4", "")
+
+	th, _ := b.Thread(id)
+	c := th.Events[len(th.Events)-1]
+	if !slices.Equal(c.EditPending, []string{"GitHub"}) || c.EditWas != "v2" || c.Body != "v4" {
+		t.Errorf("edit pending %v, was %q, body %q; want GitHub, v2, v4", c.EditPending, c.EditWas, c.Body)
+	}
+	// every version says who wrote it (git-bug leaves some out)
+	for i, v := range c.History {
+		if v.Author.Name == "" || v.Author.Name != c.Author.Name {
+			t.Errorf("version %d by %q, want %q", i, v.Author.Name, c.Author.Name)
+		}
+	}
+}

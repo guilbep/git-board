@@ -64,6 +64,9 @@ type Event struct {
 	// comment already there: its latest edit hasn't.
 	Pending     []string `json:"pending,omitempty"`
 	EditPending []string `json:"edit_pending,omitempty"`
+	// EditWas, with EditPending, is the text the forges have: the newest
+	// version that reached them, for a diff of what the sync will change.
+	EditWas string `json:"edit_was,omitempty"`
 
 	Added   []string `json:"added,omitempty"` // labels
 	Removed []string `json:"removed,omitempty"`
@@ -116,6 +119,7 @@ type forgeState struct {
 	pending  func(opID entity.Id) []string
 	ops      map[entity.CombinedId]dag.Operation // by the timeline's ids
 	lastEdit map[entity.Id]entity.Id             // comment's op → its latest edit
+	edits    map[entity.Id][]dag.Operation       // comment's op → its edits, oldest first
 }
 
 // onForges works out where each operation is, as the sync engine records it
@@ -125,7 +129,7 @@ type forgeState struct {
 func onForges(snap *bugent.Snapshot, remotes map[string]string) forgeState {
 	meta := map[entity.Id]map[string]string{}
 	since := map[string]int{} // remote prefix → index from which operations must be pushed
-	st := forgeState{ops: map[entity.CombinedId]dag.Operation{}, lastEdit: map[entity.Id]entity.Id{}}
+	st := forgeState{ops: map[entity.CombinedId]dag.Operation{}, lastEdit: map[entity.Id]entity.Id{}, edits: map[entity.Id][]dag.Operation{}}
 	index := map[entity.Id]int{}
 	createID := snap.Operations[0].Id()
 	for prefix := range remotes {
@@ -153,6 +157,7 @@ func onForges(snap *bugent.Snapshot, remotes map[string]string) forgeState {
 			}
 		case *bugent.EditCommentOperation:
 			st.lastEdit[o.Target] = op.Id()
+			st.edits[o.Target] = append(st.edits[o.Target], op)
 		}
 	}
 	st.pending = func(opID entity.Id) []string {
@@ -178,18 +183,54 @@ func onForges(snap *bugent.Snapshot, remotes map[string]string) forgeState {
 	return st
 }
 
+// forgeVersion is the text of a comment the forges have: the newest of its
+// versions (the comment, then each edit) that reached every forge.
+func (st forgeState) forgeVersion(target entity.Id, history []bugent.CommentHistoryStep) string {
+	ops := []entity.Id{target}
+	for _, e := range st.edits[target] {
+		ops = append(ops, e.Id())
+	}
+	if len(ops) != len(history) {
+		return "" // ponytail: versions and edits always pair up; no diff if not
+	}
+	for i := len(ops) - 1; i >= 0; i-- {
+		if len(st.pending(ops[i])) == 0 {
+			return history[i].Message
+		}
+	}
+	return ""
+}
+
 func event(snap *bugent.Snapshot, item bugent.TimelineItem, on forgeState) Event {
 	comment := func(kind string, c bugent.CommentTimelineItem) Event {
 		e := Event{Kind: kind, ID: string(item.CombinedId()), Author: person(c.Author), At: at(c.CreatedAt), Body: c.Message, Edited: len(c.History) > 1}
+		found, err := snap.SearchComment(item.CombinedId())
 		if e.Edited {
-			for _, h := range c.History {
-				e.History = append(e.History, Version{Author: person(h.Author), At: at(h.UnixTime), Body: h.Message})
+			var edits []dag.Operation
+			if err == nil {
+				edits = on.edits[found.TargetId()]
+			}
+			for i, h := range c.History {
+				// git-bug leaves out who wrote the first version, and an
+				// edit's author: the comment's, and the edit operation's
+				who := h.Author
+				switch {
+				case who != nil:
+				case i == 0:
+					who = c.Author
+				case i-1 < len(edits):
+					who = edits[i-1].Author()
+				}
+				e.History = append(e.History, Version{Author: person(who), At: at(h.UnixTime), Body: h.Message})
 			}
 		}
-		if found, err := snap.SearchComment(item.CombinedId()); err == nil {
+		if err == nil {
 			e.Pending = on.pending(found.TargetId())
 			if edit, ok := on.lastEdit[found.TargetId()]; ok && len(e.Pending) == 0 {
 				e.EditPending = on.pending(edit)
+				if len(e.EditPending) > 0 {
+					e.EditWas = on.forgeVersion(found.TargetId(), c.History)
+				}
 			}
 		}
 		return e

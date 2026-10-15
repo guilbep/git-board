@@ -71,13 +71,13 @@
 
       <div class="gb-cols">
         <div class="gb-maincol">
-          <CommentCard v-if="created" :event="created" :forges="thread.forges" :mine="created.author.id === meId" :save="edit" @ref="onRef" />
+          <CommentCard v-if="created" :data-event="created.id" :event="created" :forges="thread.forges" :mine="created.author.id === meId" :save="edit" @ref="onRef" />
           <ol class="gb-tl" aria-label="History">
             <template v-for="e in rest" :key="e.id">
-              <li v-if="e.kind === 'comment'">
+              <li v-if="e.kind === 'comment'" :data-event="e.id">
                 <CommentCard :event="e" :forges="thread.forges" :mine="e.author.id === meId" :save="edit" @ref="onRef" />
               </li>
-              <TimelineEvent v-else :event="e" :fields="fields" />
+              <TimelineEvent v-else :data-event="e.id" :event="e" :fields="fields" />
             </template>
           </ol>
           <IssueComposer :status="thread.status" :forges="thread.forges" :busy="saving" :waiting="waiting" :error="saveError" :comment="comment" />
@@ -93,6 +93,7 @@
           :saving="saving"
           @changed="fieldsChanged"
           @labels="labels"
+          @reveal="reveal"
         />
       </div>
     </template>
@@ -171,6 +172,17 @@ async function copyLink() {
 }
 
 // #123 of a local issue opens it here, else the link goes to the forge
+// reveal scrolls to a history item and flashes it (a waiting change's row).
+function reveal(id: string) {
+  const el = document.querySelector<HTMLElement>(`[data-event="${CSS.escape(id)}"]`);
+  if (!el) return;
+  el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  el.classList.remove('gb-flash');
+  void el.offsetWidth; // restart the animation on a second click
+  el.classList.add('gb-flash');
+  setTimeout(() => el.classList.remove('gb-flash'), 1800);
+}
+
 function onRef(n: string, e: MouseEvent) {
   const local = props.findRef?.(n);
   if (local) {

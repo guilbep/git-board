@@ -176,6 +176,7 @@ export interface IssueEvent {
   history?: { author: Person; at: string; body: string }[];
   pending?: string[]; // forges the next sync hasn't taken this change to yet
   edit_pending?: string[]; // a comment there already: forges its latest edit hasn't reached
+  edit_was?: string; // with edit_pending: the text the forges have
   added?: string[];
   removed?: string[];
   status?: 'open' | 'closed';

@@ -1,5 +1,6 @@
 // An issue's history in words: a label change is, field by field, what
 // people did ("set Status to qa", "added assignee bob").
+import type { IssueEvent, Person } from './api/board';
 
 export interface LabelChange {
   verb: 'set' | 'cleared' | 'added' | 'removed';
@@ -50,4 +51,31 @@ export function describeLabels(added: string[], removed: string[]): LabelChange[
     }
   }
   return out;
+}
+
+// A change git-board holds that a forge doesn't have yet: the next forge
+// sync takes it there (gitbugio's pending / edit_pending).
+export interface WaitingChange {
+  event: IssueEvent; // its timeline event
+  what: string; // in words: "Comment edited"
+  author: Person; // for an edit, the edit's
+  at: string;
+  waiting: string[]; // the forges it hasn't reached
+}
+
+const whatOf: Record<string, string> = { created: 'Issue created', comment: 'Comment added', title: 'Title changed', labels: 'Labels changed' };
+
+// waitingChanges lists an issue's waiting changes, newest first.
+export function waitingChanges(events: IssueEvent[]): WaitingChange[] {
+  const out: WaitingChange[] = [];
+  for (const e of events) {
+    if (e.pending?.length) {
+      const what = e.kind === 'status' ? (e.status === 'closed' ? 'Closed' : 'Reopened') : (whatOf[e.kind] ?? 'Changed');
+      out.push({ event: e, what, author: e.author, at: e.at, waiting: e.pending });
+    } else if (e.edit_pending?.length) {
+      const last = e.history?.[e.history.length - 1];
+      out.push({ event: e, what: e.kind === 'created' ? 'Description edited' : 'Comment edited', author: last?.author ?? e.author, at: last?.at ?? e.at, waiting: e.edit_pending });
+    }
+  }
+  return out.sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
 }

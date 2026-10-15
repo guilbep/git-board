@@ -330,3 +330,8 @@
 .gb-val:not([class*="gb-c-"]){padding:0;background:none;color:var(--fg);font-weight:400}
 .gb-chip[class*="gb-c-"]{background:var(--c-bg);color:var(--c-fg);border-color:var(--c-dot);font-weight:700}
 .gb-chip[class*="gb-c-"] button{color:var(--c-fg)}
+
+/* a history item a waiting change points at, for a moment */
+@keyframes gb-flash{0%,40%{outline-color:var(--epfl-red-dark);background:var(--gb-amber-bg)}100%{outline-color:transparent}}
+.gb-flash{outline:2px solid transparent;outline-offset:2px;animation:gb-flash 1.8s ease-out}
+@media (prefers-reduced-motion:reduce){.gb-flash{animation:none;outline-color:var(--epfl-red-dark)}}

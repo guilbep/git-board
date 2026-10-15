@@ -63,6 +63,13 @@
           <span class="gb-hint">{{ waitingFor(f.name) ? `${waitingFor(f.name)} change${waitingFor(f.name) === 1 ? '' : 's'} waiting` : 'in sync' }}</span>
         </li>
       </ul>
+      <template v-if="waiting.length">
+        <button type="button" class="gb-waiting-toggle" :aria-expanded="showWaiting" @click="showWaiting = !showWaiting">
+          <GbIcon :name="showWaiting ? 'up' : 'down'" small />
+          {{ showWaiting ? 'Hide' : 'See' }} the {{ waiting.length }} waiting change{{ waiting.length === 1 ? '' : 's' }}
+        </button>
+        <WaitingChanges v-if="showWaiting" :changes="waiting" :forges="forges" @reveal="(id) => emit('reveal', id)" />
+      </template>
       <p class="gb-hint">Waiting changes go out at the next <router-link to="/sync">sync with GitHub/GitLab</router-link><!-- -->.</p>
     </section>
 
@@ -86,7 +93,9 @@ import { displayName, fieldValues, formatValue, type Fields } from '@/fields';
 import { message } from '@/issue';
 import { initials, me } from '@/me';
 import { syncStatus } from '@/sync';
+import { waitingChanges } from '@/history';
 import GbIcon from '@/components/GbIcon.vue';
+import WaitingChanges from '@/components/WaitingChanges.vue';
 
 const props = defineProps<{
   id: string;
@@ -98,7 +107,10 @@ const props = defineProps<{
   events: IssueEvent[];
   saving: boolean;
 }>();
-const emit = defineEmits<{ changed: []; labels: [add: string[], remove: string[]] }>();
+const emit = defineEmits<{ changed: []; labels: [add: string[], remove: string[]]; reveal: [id: string] }>();
+
+const showWaiting = ref(false);
+const waiting = computed(() => waitingChanges(props.events));
 
 const busy = ref(false);
 const saving = computed(() => busy.value || props.saving);
@@ -188,4 +200,5 @@ function addLabel() {
 .gb-person .gb-avatar { align-self: center; }
 .gb-held-tag { display: inline-flex; align-items: center; gap: .25rem; text-decoration: none; }
 .gb-field-label { display: inline-flex; align-items: center; gap: var(--space-2); }
+.gb-waiting-toggle { display: inline-flex; align-items: center; gap: .375rem; margin-top: .5rem; padding: 0; border: 0; background: none; font: inherit; font-size: .875rem; font-weight: 700; color: var(--fg); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
 </style>
