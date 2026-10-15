@@ -76,7 +76,7 @@
           </select>
         </div>
         <div v-if="layout === 'board' && groupField" class="toolbar-field">
-          <span class="epfl-label">Lanes <span class="search-hint">a board per role</span></span>
+          <span class="epfl-label">Lanes <span class="search-hint">· which columns this board shows</span></span>
           <LaneChooser v-model:lanes="lanes" v-model:limits="limits" :values="laneValues" :field="groupField" />
         </div>
         <!-- A table sorts from its column headers; a board has none. -->

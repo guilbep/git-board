@@ -399,7 +399,7 @@ func (r *Report) headlines() {
 		end, _ := time.Parse(dayFmt, b.End)
 		today, _ := time.Parse(dayFmt, b.Days[last])
 		left := int(end.Sub(today).Hours()/24) - 1
-		h := fmt.Sprintf("%s: %d of %d done", b.Title, b.Done[last], b.Scope[last])
+		h := fmt.Sprintf("%s: %d of %d closed", b.Title, b.Done[last], b.Scope[last])
 		if left > 0 {
 			h += fmt.Sprintf(", %d day%s left.", left, plural(left))
 		} else {

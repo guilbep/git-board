@@ -60,7 +60,7 @@
         <div v-if="r.burnup" class="ins-tile">
           <span class="ins-tile-label">{{ r.burnup.title }}</span>
           <span class="ins-tile-value">{{ sprintPct }}%</span>
-          <span class="ins-tile-delta">{{ r.burnup.done.at(-1) }} of {{ r.burnup.scope.at(-1) }} done</span>
+          <span class="ins-tile-delta">{{ r.burnup.done.at(-1) }} of {{ r.burnup.scope.at(-1) }} closed</span>
         </div>
       </div>
 

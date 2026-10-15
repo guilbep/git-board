@@ -77,7 +77,7 @@ func TestThroughputCycleAndBurnup(t *testing.T) {
 			t.Errorf("no %s headline: %v", k, r.Headlines)
 		}
 	}
-	if !strings.Contains(r.Headlines["burnup"], "1 of 2 done") {
+	if !strings.Contains(r.Headlines["burnup"], "1 of 2 closed") {
 		t.Errorf("burnup headline %q", r.Headlines["burnup"])
 	}
 }

@@ -117,7 +117,7 @@ group = "status"
 | `filter` | string | `is:open` | Which issues show; see Filters. |
 | `group` | field name | none | The board's columns, or the table's sections: `status`, `sprint`, any field. |
 | `sort` | `"<field> asc"` or `"<field> desc"` | none | Order within a column or section: by the field's `options` order, numerically for a numeric field, else alphabetically. |
-| `columns` | list of strings | the default ones | A table's columns, in order: `id`, `title`, `is` (open or closed), any field, `links` (the issue on each forge), `other` (labels without a namespace). Without it, the table shows id, title, state, every field and other, so a new field gets its column; `links` only when listed. Set from the table's **Columns** button and Save view. |
+| `columns` | list of strings | the default ones | A table's columns, in order: `id`, `title`, `is` (open or closed), any field, `links` (the issue on each forge), `other` (labels without a namespace). Without it, the table shows id, forge links, title, state, every field and other, so a new field gets its column. Set from the table's **Columns** button and Save view. |
 | `lanes` | list of values | every value | A board's columns: which values of `group` it shows, in this order; `"(none)"` for the issues without one. The other issues are left out, and the board says how many. Set from the board's **Lanes** button. |
 | `limits` | inline table | none | At most this many cards in a lane, work in progress: `limits = { in-progress = 5 }`. The lane shows "4 / 5", amber at the limit, red over it. |
 

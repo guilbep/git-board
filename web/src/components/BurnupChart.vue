@@ -19,7 +19,7 @@
     <circle class="bu-dot bu-dot-scope" :cx="x(scope.length - 1)" :cy="y(lastScope)" r="4" />
     <circle class="bu-dot bu-dot-done" :cx="x(done.length - 1)" :cy="y(done.at(-1) ?? 0)" r="4" />
     <text class="bu-lab" :x="x(scope.length - 1) + 8" :y="y(lastScope) + 4">Scope {{ lastScope }}</text>
-    <text class="bu-lab" :x="x(done.length - 1) + 8" :y="doneLabelY">Done {{ done.at(-1) }}</text>
+    <text class="bu-lab" :x="x(done.length - 1) + 8" :y="doneLabelY">Closed {{ done.at(-1) }}</text>
   </svg></div>
 </template>
 
