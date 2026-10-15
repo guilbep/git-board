@@ -297,3 +297,7 @@
 .epfl-btn .gb-icon { margin-right: .25rem; vertical-align: -.15em; }
 .gb-tl, .gb-chips, .gb-plain-list { list-style: none; margin-left: 0; padding: 0; }
 .gb-chips { display: flex; flex-wrap: wrap; gap: .5rem; margin: 0; }
+@media (max-width: 47.99rem) {
+  .gb-ititle { flex-wrap: wrap; }
+  .gb-ititle h2 { flex-basis: 100%; font-size: 1.25rem; }
+}

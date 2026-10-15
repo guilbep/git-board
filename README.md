@@ -463,6 +463,31 @@ other filters), a search box, and table headers that sort on click
 live in the URL (`#/?view=backlog&f.status=ready&sort=-est`), so a link
 keeps them.
 
+**Issue management.** git-board is the one interface to the issues; it
+replaces git-bug's own `git bug webui`. The panel (and the full page,
+`#/issues/<git-bug id>`, a link to share; `?issue=<id>` on the board)
+shows an issue's whole history from git-bug: the description and the
+comments with their edit history, field changes in words ("set Status to
+qa"), closed/reopened, renames, and per forge what hasn't reached it yet.
+From it: comment (Write/Preview, "Close with comment"), edit any comment
+or the description (refused if someone changed it meanwhile), rename,
+close/reopen, set fields and labels. **New issue** (or `c`) prefills the
+fields from the view's filter. `j`/`k` move through the board's issues.
+Every write is signed by the repository's git-bug identity: the page asks
+who you are when none is set (`git bug user adopt`). Issue text is
+rendered on the server (GitHub-flavored Markdown) and cleaned to what
+GitHub allows; forge images go through `/api/media`, which fetches only
+forge image addresses, with your token for private repositories, and
+keeps them in `.git/git-bug/git-board-media`.
+
+**Sync with GitHub/GitLab** (`#/sync`) runs git-bug's forge sync — the
+fork's `git bug bridge sync` — in the server, which holds the repository
+(so the command can't run beside it): always a dry run first with its
+counts per forge both ways, then a run you confirm (an explicit "I
+understand" when it creates 50 issues or more on a forge), then
+optionally push the git-bug data to `origin` so other clones know the
+links. While it runs, edits wait and are saved after it.
+
 With a `[github-project]`, a **Conflicts** page (`#/conflicts`) is the web
 side of `git-board bridge sync`/`resolve`: "Check the Project" lists the
 fields both sides changed since they last agreed, each with git-board's
