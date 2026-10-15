@@ -19,7 +19,7 @@
             <option value="" disabled>Not set</option>
             <option v-for="opt in selectOptions(name)" :key="opt" :value="opt">{{ formatValue(name, opt, fields) }}</option>
           </select>
-          <input v-else-if="isSingle(name)" :id="`f-${name}`" class="epfl-input" :value="single(name)" :disabled="saving" @change="onText(name, $event)" />
+          <input autocomplete="off" data-1p-ignore data-lpignore="true" data-form-type="other" v-else-if="isSingle(name)" :id="`f-${name}`" class="epfl-input" :value="single(name)" :disabled="saving" @change="onText(name, $event)" />
           <template v-else>
             <ul v-if="values(name).length" class="gb-chips" :aria-label="displayName(name)">
               <li v-for="v in values(name)" :key="v" class="gb-chip" :class="colorClass(name, v)">
@@ -28,7 +28,7 @@
               </li>
             </ul>
             <form class="gb-addrow" @submit.prevent="onAdd(name)">
-              <input :id="`f-${name}`" v-model="drafts[name]" class="epfl-input" placeholder="Add, or @me" :disabled="saving" />
+              <input autocomplete="off" data-1p-ignore data-lpignore="true" data-form-type="other" :id="`f-${name}`" v-model="drafts[name]" class="epfl-input" placeholder="Add, or @me" :disabled="saving" />
               <button type="submit" class="epfl-btn epfl-btn-secondary epfl-btn-sm" :disabled="saving"><GbIcon name="plus" small /> Add</button>
             </form>
           </template>
@@ -50,7 +50,7 @@
         </li>
       </ul>
       <form class="gb-addrow" @submit.prevent="addLabel">
-        <input v-model="newLabel" class="epfl-input" aria-label="New label" placeholder="Add label" :disabled="saving" />
+        <input autocomplete="off" data-1p-ignore data-lpignore="true" data-form-type="other" v-model="newLabel" class="epfl-input" aria-label="New label" placeholder="Add label" :disabled="saving" />
         <button type="submit" class="epfl-btn epfl-btn-secondary epfl-btn-sm" :disabled="saving || !newLabel.trim()"><GbIcon name="plus" small /> Add</button>
       </form>
     </section>

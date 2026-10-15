@@ -14,7 +14,7 @@
     <IdentityChooser v-if="me && !me.me" class="gb-dialog-body" />
     <form v-else class="gb-dialog-body" @submit.prevent="create(false)">
       <label class="epfl-label" for="new-title">Title (required)</label>
-      <input id="new-title" ref="titleInput" v-model="title" class="epfl-input" required @keydown.enter.ctrl.prevent="create(false)" />
+      <input autocomplete="off" data-1p-ignore data-lpignore="true" data-form-type="other" id="new-title" ref="titleInput" v-model="title" class="epfl-input" required @keydown.enter.ctrl.prevent="create(false)" />
 
       <span class="epfl-label gb-gap">Description</span>
       <div class="gb-composer">
@@ -31,12 +31,12 @@
             <option v-if="values[name] && !fields[name]?.options?.includes(values[name]!)" :value="values[name]">{{ values[name] }}</option>
             <option v-for="o in fields[name]?.options ?? []" :key="o" :value="o">{{ formatValue(name, o, fields) }}</option>
           </select>
-          <input v-else :id="`new-${name}`" v-model="values[name]" class="epfl-input" :placeholder="isMulti(name) ? 'comma-separated, or @me' : ''" />
+          <input autocomplete="off" data-1p-ignore data-lpignore="true" data-form-type="other" v-else :id="`new-${name}`" v-model="values[name]" class="epfl-input" :placeholder="isMulti(name) ? 'comma-separated, or @me' : ''" />
           <small v-if="from[name]" class="gb-from-view">from the view: {{ name }}:{{ from[name] }}</small>
         </div>
         <div class="gb-field">
           <label class="epfl-label" for="new-labels">Labels</label>
-          <input id="new-labels" v-model="plain" class="epfl-input" placeholder="comma-separated" />
+          <input autocomplete="off" data-1p-ignore data-lpignore="true" data-form-type="other" id="new-labels" v-model="plain" class="epfl-input" placeholder="comma-separated" />
         </div>
       </div>
       <p v-if="error" class="gb-save-error" role="alert"><GbIcon name="error" small /> {{ error }}</p>

@@ -8,7 +8,8 @@
     :class="page ? 'gb-panel-page' : panelMode === 'wide' ? 'gb-panel-wide' : 'gb-panel-xl'"
     :style="!page && panelMode === 'side' && panelWidth ? { width: `${panelWidth}px` } : undefined"
     :aria-labelledby="`title-${uid}`"
-    :tabindex="page ? undefined : -1"
+    :tabindex="page ? undefined : 0"
+    :data-autofocus="page ? undefined : ''"
     ref="root"
     @keydown.esc="leaveField"
   >
@@ -65,7 +66,7 @@
         <div class="gb-ititle">
           <h2 v-if="!renaming" :id="`title-${uid}`">{{ thread.title }}</h2>
           <form v-else class="gb-rename" @submit.prevent="saveTitle">
-            <input ref="titleInput" v-model="newTitle" class="epfl-input" aria-label="Title" :disabled="saving" @keydown.esc.stop="renaming = false" />
+            <input autocomplete="off" data-1p-ignore data-lpignore="true" data-form-type="other" ref="titleInput" v-model="newTitle" class="epfl-input" aria-label="Title" :disabled="saving" @keydown.esc.stop="renaming = false" />
             <button type="submit" class="epfl-btn epfl-btn-primary epfl-btn-sm" :disabled="saving || !newTitle.trim()">Save</button>
             <button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" @click="renaming = false">Cancel</button>
           </form>
@@ -243,7 +244,10 @@ function nudge(px: number) {
   panelWidth.value = clampWidth(now + px, window.innerWidth);
 }
 // The panel opens with the keyboard on itself, not in a field (the dialog
-// has no-focus): j / k / f / Esc work at once, Tab goes to the fields. Esc
+// has no-focus): j / k / f / Esc work at once, Tab goes to the fields. It
+// is also the first thing the dialog puts focus back on (tabindex 0,
+// data-autofocus) when a browser loses it, as Safari does when j swaps the
+// panel for the next one. Esc
 // in a field leaves the field, stopped here before the dialog's own Esc
 // (a window listener) closes the panel; a second Esc closes it.
 const root = ref<{ $el?: HTMLElement } | HTMLElement | null>(null);
