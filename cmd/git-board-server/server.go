@@ -71,6 +71,7 @@ func newMux(s *apiServer, static http.Handler) http.Handler {
 	mux.HandleFunc("GET /api/me", s.handleMe)
 	mux.HandleFunc("POST /api/me", s.handleSetMe)
 	mux.HandleFunc("GET /api/media", s.handleMedia)
+	mux.HandleFunc("POST /api/markdown", s.handleMarkdown)
 	mux.HandleFunc("GET /api/forges", s.handleForges)
 	mux.HandleFunc("POST /api/forges/sync", s.handleForgeSync)
 	mux.HandleFunc("GET /api/sync", s.handleSyncStatus)

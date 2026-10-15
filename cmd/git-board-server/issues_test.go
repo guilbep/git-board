@@ -201,3 +201,16 @@ func TestForgeSyncRunsADryRunFirst(t *testing.T) {
 		t.Errorf("a second real run without a new dry run: %d, want 409", code)
 	}
 }
+
+func TestMarkdownPreview(t *testing.T) {
+	ts, _ := newIssueServer(t)
+	var res struct {
+		HTML string `json:"html"`
+	}
+	if code := call(t, "POST", ts.URL+"/api/markdown", map[string]any{"body": "**hi** <script>x</script>"}, &res); code != http.StatusOK {
+		t.Fatalf("preview: %d", code)
+	}
+	if !strings.Contains(res.HTML, "<strong>hi</strong>") || strings.Contains(res.HTML, "<script") {
+		t.Errorf("html %q", res.HTML)
+	}
+}

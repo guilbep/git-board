@@ -240,6 +240,18 @@ func (s *apiServer) handleLabels(w http.ResponseWriter, r *http.Request) {
 	s.writeThread(w, http.StatusOK, id)
 }
 
+// handleMarkdown renders a text as a comment would be: the composer's
+// preview. A POST for the body's size; it writes nothing.
+func (s *apiServer) handleMarkdown(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Body string `json:"body"`
+	}
+	if !decode(w, r, &req) {
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"html": markdown.Render(req.Body, s.mediaURL)})
+}
+
 // meResponse is who git-board writes as, and who it could.
 type meResponse struct {
 	Me         *gitbugio.Person  `json:"me"`

@@ -262,3 +262,8 @@ export function startForgeSync(dryRun: boolean, push: boolean): Promise<ForgeSta
 
 // Where the page loads a server path from (the API's origin in dev).
 export const apiURL = (path: string) => API_BASE + path;
+
+// renderMarkdown is the composer's preview, rendered as a comment would be.
+export function renderMarkdown(body: string): Promise<{ html: string }> {
+  return request('/api/markdown', json('POST', { body }));
+}
