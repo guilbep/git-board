@@ -52,12 +52,21 @@ func newMux(s *apiServer, static http.Handler) *http.ServeMux {
 	return mux
 }
 
+// Both answer {} without a config: a nil map would encode as null.
 func (s *apiServer) handleViews(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, s.cfg.Views)
+	views := s.cfg.Views
+	if views == nil {
+		views = map[string]config.View{}
+	}
+	writeJSON(w, http.StatusOK, views)
 }
 
 func (s *apiServer) handleFields(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, s.cfg.Fields)
+	fields := s.cfg.Fields
+	if fields == nil {
+		fields = map[string]config.Field{}
+	}
+	writeJSON(w, http.StatusOK, fields)
 }
 
 // handleListIssues applies filter, then sort, then group — same semantics as

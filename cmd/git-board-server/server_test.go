@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/guilbep/git-board/internal/board"
@@ -172,4 +173,20 @@ func contains(ss []string, s string) bool {
 		}
 	}
 	return false
+}
+
+// Without a .git-board.toml the page still gets objects, not null.
+func TestNoConfigServesEmptyObjects(t *testing.T) {
+	ts := newTestServer(t, gitbugiotest.New(t), &config.Config{})
+	for _, path := range []string{"/api/views", "/api/config/fields"} {
+		resp, err := http.Get(ts.URL + path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		body, _ := io.ReadAll(resp.Body)
+		_ = resp.Body.Close()
+		if got := strings.TrimSpace(string(body)); got != "{}" {
+			t.Errorf("%s = %s, want {}", path, got)
+		}
+	}
 }

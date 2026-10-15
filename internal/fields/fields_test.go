@@ -1,6 +1,7 @@
 package fields_test
 
 import (
+	"slices"
 	"testing"
 	"time"
 
@@ -170,5 +171,30 @@ func TestApplyMeWithoutMeConfiguredErrors(t *testing.T) {
 
 	if _, err := fields.Apply(b, cfg, id, "assignee", "@me", "", today); err == nil {
 		t.Error("expected error when @me used without a configured user")
+	}
+}
+
+// Without a config, assignee still holds several people, and a field that
+// already holds several values keeps them.
+func TestApplyUnconfiguredMultiValuedFields(t *testing.T) {
+	b := gitbugiotest.New(t)
+	id := gitbugiotest.NewIssue(t, b, "x")
+	if _, err := b.ApplyLabelChange(id, []string{"assignee:alice", "team:web", "team:api", "sprint:s1"}, nil); err != nil {
+		t.Fatalf("seed labels: %v", err)
+	}
+	cfg := &config.Config{}
+	for _, set := range [][2]string{{"assignee", "bob"}, {"team", "data"}, {"sprint", "s2"}} {
+		if _, err := fields.Apply(b, cfg, id, set[0], set[1], "", today); err != nil {
+			t.Fatalf("Apply %v: %v", set, err)
+		}
+	}
+	got, err := b.GetLabels(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	slices.Sort(got)
+	want := []string{"assignee:alice", "assignee:bob", "sprint:s2", "team:api", "team:data", "team:web"}
+	if !slices.Equal(got, want) {
+		t.Errorf("labels = %v, want %v", got, want)
 	}
 }

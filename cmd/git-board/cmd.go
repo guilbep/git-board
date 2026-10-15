@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	configPath    = ".git-board.toml"
+	configPath    = config.FileName // at the root: where the tests write it
 	defaultFilter = board.DefaultFilter
 )
 
@@ -192,7 +192,7 @@ func newGetCmd() *cobra.Command {
 // loadConfig reads .git-board.toml: an empty config without one, an error
 // ("parsing .git-board.toml: …") when it's invalid.
 func loadConfig() (*config.Config, error) {
-	return config.Load(configPath)
+	return config.Load(config.Path())
 }
 
 func runLs(out io.Writer, filterStr, group, sort string, md, asJSON bool, me string) error {

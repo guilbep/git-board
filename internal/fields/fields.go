@@ -25,9 +25,6 @@ var _ Backend = (*gitbugio.Backend)(nil)
 // Apply sets fieldName to value on the issue identified by idPrefix.
 // Returns the resulting label (e.g. "status:ready").
 func Apply(b Backend, cfg *config.Config, idPrefix, fieldName, value, me string, today time.Time) (string, error) {
-	fieldCfg, known := cfg.Fields[fieldName]
-	single := !known || fieldCfg.Single
-
 	resolved, err := resolveAssignedValue(cfg, value, me, today)
 	if err != nil {
 		return "", err
@@ -37,12 +34,30 @@ func Apply(b Backend, cfg *config.Config, idPrefix, fieldName, value, me string,
 	if err != nil {
 		return "", err
 	}
+	single := Single(cfg, fieldName, current)
 
 	label, added, removed := Diff(current, fieldName, resolved, single)
 	if _, err := b.ApplyLabelChange(idPrefix, added, removed); err != nil {
 		return "", err
 	}
 	return label, nil
+}
+
+// Single tells whether fieldName holds one value on an issue with labels
+// current: as configured; else, not configured, one value, but for
+// assignee (people) and a field the issue already holds several values of.
+// The web side panel decides the same way (web/src/components/IssueDetail.vue).
+func Single(cfg *config.Config, fieldName string, current []string) bool {
+	if f, known := cfg.Fields[fieldName]; known {
+		return f.Single
+	}
+	n := 0
+	for _, l := range current {
+		if strings.HasPrefix(l, fieldName+":") {
+			n++
+		}
+	}
+	return fieldName != "assignee" && n < 2
 }
 
 // Diff computes the label add/remove needed to set fieldName to a resolved

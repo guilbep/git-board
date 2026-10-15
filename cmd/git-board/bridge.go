@@ -51,10 +51,11 @@ func newBridgeConfigureCmd() *cobra.Command {
 		Example: `  git-board bridge configure --owner EPFL-ENAC --project 40`,
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := config.SetGithubProject(configPath, owner, project); err != nil {
+			path := config.Path()
+			if err := config.SetGithubProject(path, owner, project); err != nil {
 				return err
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "configured [github-project] owner=%q number=%d in %s\n", owner, project, configPath)
+			fmt.Fprintf(cmd.OutOrStdout(), "configured [github-project] owner=%q number=%d in %s\n", owner, project, path)
 			return nil
 		},
 	}

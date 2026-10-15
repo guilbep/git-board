@@ -49,9 +49,8 @@
           </select>
         </template>
 
-        <!-- single free-form field, or one not configured (the server sets
-             those as single too): saved on Enter or when leaving it -->
-        <template v-else-if="fields[name]?.single ?? true">
+        <!-- single free-form field: saved on Enter or when leaving it -->
+        <template v-else-if="isSingle(name)">
           <label class="epfl-label" :for="`field-${name}`">{{ displayName(name) }}</label>
           <input
             :id="`field-${name}`"
@@ -129,6 +128,13 @@ const drafts = reactive<Record<string, string>>({});
 const other = computed(() => otherLabels(props.issue.labels, props.names));
 
 const values = (name: string) => fieldValues(props.issue.labels, name);
+
+// As configured; else one value, but for assignee and a field the issue
+// already holds several values of — as the server decides (fields.Single).
+function isSingle(name: string): boolean {
+  const f = props.fields[name];
+  return f ? f.single : name !== 'assignee' && values(name).length < 2;
+}
 const single = (name: string) => values(name)[0] ?? '';
 
 // The configured options, plus the current value if it isn't one of them
@@ -157,7 +163,7 @@ async function save(name: string, value: string): Promise<boolean> {
 
 function savedText(name: string, value: string): string {
   const field = displayName(name);
-  if (props.fields[name]?.single ?? true) return `Saved: ${field} is now ${formatValue(name, value, props.fields)}.`;
+  if (isSingle(name)) return `Saved: ${field} is now ${formatValue(name, value, props.fields)}.`;
   if (value.startsWith('-')) return `Saved: removed ${value.slice(1)} from ${field}.`;
   return `Saved: added ${value} to ${field}.`;
 }

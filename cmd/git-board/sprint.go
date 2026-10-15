@@ -136,10 +136,11 @@ func runSprintNew(out io.Writer, slug, title, start string) error {
 	if err != nil {
 		return fmt.Errorf("invalid --start %q, want YYYY-MM-DD: %w", start, err)
 	}
-	if err := config.AppendSprint(configPath, slug, title, startDate); err != nil {
+	path := config.Path()
+	if err := config.AppendSprint(path, slug, title, startDate); err != nil {
 		return err
 	}
-	fmt.Fprintf(out, "added sprint %q %q starting %s to %s\n", slug, title, dateStr(startDate), configPath)
+	fmt.Fprintf(out, "added sprint %q %q starting %s to %s\n", slug, title, dateStr(startDate), path)
 	return nil
 }
 

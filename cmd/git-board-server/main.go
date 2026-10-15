@@ -21,14 +21,12 @@ import (
 	boardweb "github.com/guilbep/git-board/web"
 )
 
-const configPath = ".git-board.toml"
-
 func main() {
 	addr := flag.String("addr", ":8080", "listen address")
 	me := flag.String("me", "", "current user, for @me filters/values (env GIT_BOARD_ME)")
 	flag.Parse()
 
-	cfg, err := config.Load(configPath)
+	cfg, err := config.Load(config.Path())
 	if err != nil {
 		log.Fatal(err)
 	}

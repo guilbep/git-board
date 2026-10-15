@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"path/filepath"
 	"slices"
 	"sort"
 	"strconv"
@@ -94,6 +95,34 @@ type Config struct {
 	Sprints       SprintsConfig
 	Views         map[string]View
 	GithubProject GithubProject
+}
+
+// FileName is the config's name, at the root of the repository.
+const FileName = ".git-board.toml"
+
+// Path is the config of the repository holding the current directory: the
+// nearest FileName up to the repository's root (the directory holding
+// .git), else where it goes at that root — so git-board reads the same
+// config from any subdirectory, and doesn't quietly start without one.
+func Path() string {
+	dir, err := os.Getwd()
+	if err != nil {
+		return FileName
+	}
+	for {
+		p := filepath.Join(dir, FileName)
+		if _, err := os.Stat(p); err == nil {
+			return p
+		}
+		if _, err := os.Stat(filepath.Join(dir, ".git")); err == nil {
+			return p
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return FileName
+		}
+		dir = parent
+	}
 }
 
 // Load reads and parses a .git-board.toml file at path; an empty config

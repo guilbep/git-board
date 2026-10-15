@@ -305,3 +305,31 @@ func TestKnownValueNumericTakesAnyNumber(t *testing.T) {
 		t.Error("a non-number was taken")
 	}
 }
+
+// From a subdirectory, the config is the repository root's, found or not.
+func TestPathFindsTheRepositoryRoot(t *testing.T) {
+	root := t.TempDir()
+	sub := filepath.Join(root, "frontend", "src")
+	if err := os.MkdirAll(filepath.Join(root, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(sub, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(sub)
+	same := func(a, b string) bool { // macOS: /var is /private/var
+		a, _ = filepath.EvalSymlinks(a)
+		b, _ = filepath.EvalSymlinks(b)
+		return a == b
+	}
+	if p := Path(); filepath.Base(p) != FileName || !same(filepath.Dir(p), root) {
+		t.Errorf("without a config: Path = %q, want %s at %q", p, FileName, root)
+	}
+	if err := os.WriteFile(filepath.Join(root, FileName), []byte("[fields.prio]\nsingle = true\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(Path())
+	if err != nil || !cfg.Fields["prio"].Single {
+		t.Errorf("Load(Path()) = %+v, %v, want the root's config", cfg, err)
+	}
+}
