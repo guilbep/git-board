@@ -12,7 +12,16 @@
       </summary>
       <div class="filters-head">
         <h2 class="filters-title">Filters</h2>
-        <button type="button" class="filters-reset" :disabled="!modified" @click="emit('reset')">Reset</button>
+        <span class="filters-head-r">
+          <details class="filters-help">
+            <summary aria-label="Filter shortcuts">?</summary>
+            <p>
+              <b>Click</b> adds or removes a value. <b>Alt-click</b> (⌥ on a Mac) keeps only that value; again: every value but it.
+              <b>Shift-click</b> sets a range from the last one clicked. <b>Space</b> toggles the focused box.
+            </p>
+          </details>
+          <button type="button" class="filters-reset" :disabled="!modified" @click="emit('reset')">Reset</button>
+        </span>
       </div>
 
       <details class="filters-item" :open="openAtStart.has('query')">
@@ -42,16 +51,46 @@
           <span class="filters-item-label">{{ facetLabel(f.key) }}</span>
           <span v-if="sel[f.key]?.length" class="filters-badge">{{ sel[f.key]!.length }}</span>
         </summary>
+        <div class="filters-tools">
+          <span class="filters-sort" role="group" :aria-label="`Sort ${facetLabel(f.key)}`">
+            <button
+              v-for="m in sortModes(f.key)"
+              :key="m"
+              type="button"
+              :aria-pressed="sortOf(f.key) === m"
+              @click="setSort(f.key, m)"
+            >{{ m === 'count' ? 'Count' : m === 'alpha' ? 'A–Z' : 'Workflow' }}</button>
+          </span>
+          <button v-if="sel[f.key]?.length" type="button" class="filters-clear" @click="emit('set', f.key, [])">Clear</button>
+        </div>
+        <input
+          v-if="f.options.length > 8"
+          v-model="find[f.key]"
+          class="epfl-input filters-find"
+          type="search"
+          :placeholder="`Find a ${facetLabel(f.key).toLowerCase()}…`"
+          :aria-label="`Find in ${facetLabel(f.key)}`"
+        />
         <div class="filters-options">
-          <label v-for="[value, count] in f.options" :key="value" class="filters-option">
-            <input
-              type="checkbox"
-              :checked="!!sel[f.key]?.includes(value)"
-              @change="emit('toggle', f.key, value)"
-            />
+          <label
+            v-for="[value, count] in shown(f)"
+            :key="value"
+            class="filters-option"
+            :class="{ on: sel[f.key]?.includes(value) }"
+            @click.prevent="onPick(f, value, $event)"
+          >
+            <span class="filters-bar" :style="{ width: `${(count / maxCount(f)) * 100}%` }" aria-hidden="true" />
+            <input type="checkbox" :checked="!!sel[f.key]?.includes(value)" />
             <span class="filters-option-label"><span v-if="colorClass(f.key, value)" class="gb-dot" :class="colorClass(f.key, value)" aria-hidden="true" /> {{ valueLabel(f.key, value, fields) }}</span>
+            <button
+              type="button"
+              class="filters-only"
+              :title="onlyThis(f.key, value) ? 'Every value but this one (Alt-click)' : 'Only this value (Alt-click)'"
+              @click.stop.prevent="emit('set', f.key, pick(sel[f.key] ?? [], value, order(f), { alt: true }))"
+            >{{ onlyThis(f.key, value) ? 'all but' : 'only' }}</button>
             <span class="filters-count">{{ count }}</span>
           </label>
+          <p v-if="!shown(f).length" class="filters-none">No value matches.</p>
         </div>
       </details>
     </details>
@@ -60,14 +99,56 @@
 
 <script setup lang="ts">
 import { colorClass } from '@/colors';
-import { facetLabel, valueLabel, type Facet, type Selection } from '@/facets';
+import { facetLabel, pick, sortOptions, valueLabel, type Facet, type OptionSort, type Selection } from '@/facets';
 import type { Fields } from '@/fields';
 
-import { computed } from 'vue';
+import { computed, reactive } from 'vue';
 
 const props = defineProps<{ facets: Facet[]; sel: Selection; fields: Fields; modified: boolean; queryChanged: boolean }>();
 const query = defineModel<string>('query', { required: true });
-const emit = defineEmits<{ toggle: [key: string, value: string]; reset: []; apply: [] }>();
+const emit = defineEmits<{ set: [key: string, values: string[]]; reset: []; apply: [] }>();
+
+// Each section's order: workflow when the field has configured options,
+// else by count; a choice is kept in this browser.
+const SORT_KEY = 'gb-facet-sort';
+const sorts = reactive<Record<string, OptionSort>>(readSorts());
+function readSorts(): Record<string, OptionSort> {
+  try {
+    return JSON.parse(localStorage.getItem(SORT_KEY) ?? '{}') as Record<string, OptionSort>;
+  } catch {
+    return {};
+  }
+}
+const configured = (key: string) => props.fields[key]?.options ?? [];
+const sortModes = (key: string): OptionSort[] => (configured(key).length ? ['workflow', 'count', 'alpha'] : ['count', 'alpha']);
+const sortOf = (key: string): OptionSort => (sortModes(key).includes(sorts[key]!) ? sorts[key]! : sortModes(key)[0]!);
+function setSort(key: string, mode: OptionSort) {
+  sorts[key] = mode;
+  try {
+    localStorage.setItem(SORT_KEY, JSON.stringify(sorts));
+  } catch {
+    // private window: the order lasts until reload
+  }
+}
+
+const find = reactive<Record<string, string>>({});
+const order = (f: Facet) => sortOptions(f.options, sortOf(f.key), configured(f.key)).map(([v]) => v);
+function shown(f: Facet): [string, number][] {
+  const sorted = sortOptions(f.options, sortOf(f.key), configured(f.key));
+  const needle = (find[f.key] ?? '').trim().toLowerCase();
+  return needle ? sorted.filter(([v]) => `${v} ${valueLabel(f.key, v, props.fields)}`.toLowerCase().includes(needle)) : sorted;
+}
+const maxCount = (f: Facet) => Math.max(1, ...f.options.map(([, n]) => n));
+const onlyThis = (key: string, value: string) => props.sel[key]?.length === 1 && props.sel[key]![0] === value;
+
+// Click toggles, Alt keeps only one (then all but it), Shift a range from
+// the last value clicked in the section (facets.ts pick).
+const anchors: Record<string, string> = {};
+function onPick(f: Facet, value: string, e: MouseEvent) {
+  const next = pick(props.sel[f.key] ?? [], value, order(f), { alt: e.altKey, shift: e.shiftKey, anchor: anchors[f.key] });
+  if (!e.shiftKey) anchors[f.key] = value;
+  emit('set', f.key, next);
+}
 
 // Open state is set once: re-deriving it from the selection would fold a
 // group under the pointer as its last box is unticked.
@@ -139,11 +220,33 @@ const active = computed(() => Object.values(props.sel).flat().length + Number(pr
   border-radius: var(--radius);
 }
 
-.filters-options { display: flex; flex-direction: column; gap: var(--space-2); padding: 0.375rem 0 0 1.25rem; }
-.filters-option { display: flex; align-items: center; gap: var(--space-2); font-size: var(--fs-sm); cursor: pointer; }
-.filters-option input { width: 1rem; height: 1rem; margin: 0; accent-color: var(--primary); }
+.filters-head-r { display: inline-flex; align-items: center; gap: var(--space-2); }
+.filters-help { position: relative; }
+.filters-help summary { display: inline-flex; align-items: center; justify-content: center; width: 1.5rem; height: 1.5rem; border: var(--border-w) solid var(--border); border-radius: 50%; font-size: 0.75rem; font-weight: var(--w-bold); color: var(--fg-muted); list-style: none; cursor: pointer; }
+.filters-help summary::-webkit-details-marker { display: none; }
+.filters-help p { position: absolute; right: 0; z-index: 5; width: 17rem; margin: 0.375rem 0 0; padding: 0.625rem 0.75rem; font-size: 0.8125rem; line-height: 1.5; background: var(--bg); border: var(--border-w) solid var(--border-strong); box-shadow: var(--shadow); }
+
+.filters-tools { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); padding: 0.25rem 0 0 1.25rem; }
+.filters-sort { display: inline-flex; border: var(--border-w) solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.filters-sort button { padding: 0.0625rem 0.4375rem; font: inherit; font-size: 0.75rem; color: var(--fg-muted); background: var(--bg); border: 0; cursor: pointer; }
+.filters-sort button + button { border-left: var(--border-w) solid var(--border); }
+.filters-sort button[aria-pressed='true'] { color: var(--fg); background: var(--bg-subtle); font-weight: var(--w-bold); }
+.filters-clear { padding: 0; font: inherit; font-size: 0.75rem; color: var(--fg); background: none; border: 0; text-decoration: underline; cursor: pointer; }
+.filters-find { margin: 0.5rem 0 0 1.25rem; width: calc(100% - 1.25rem); padding: 0.25rem 0.5rem; font-size: var(--fs-sm); }
+
+.filters-options { display: flex; flex-direction: column; gap: 0.125rem; padding: 0.375rem 0 0 1.25rem; }
+/* the bar behind a value is its count against the section's largest
+   (from resslab-hub's filter rail) */
+.filters-option { position: relative; display: flex; align-items: center; gap: var(--space-2); padding: 0.1875rem 0.375rem; font-size: var(--fs-sm); cursor: pointer; user-select: none; border-radius: var(--radius); }
+.filters-option > * { position: relative; }
+.filters-option > .filters-bar { position: absolute; inset: 0 auto 0 0; background: var(--bg-subtle); border-radius: var(--radius); pointer-events: none; }
+.filters-option.on > .filters-bar { background: color-mix(in srgb, var(--primary) 12%, transparent); }
+.filters-option input { width: 1rem; height: 1rem; margin: 0; flex: none; accent-color: var(--primary); }
 .filters-option-label { flex: 1; overflow-wrap: anywhere; }
-.filters-count { color: var(--fg-muted); font-variant-numeric: tabular-nums; }
+.filters-only { visibility: hidden; padding: 0 0.25rem; font: inherit; font-size: 0.6875rem; color: var(--fg); background: var(--bg); border: var(--border-w) solid var(--border); border-radius: var(--radius); cursor: pointer; }
+.filters-option:hover .filters-only, .filters-option:focus-within .filters-only { visibility: visible; }
+.filters-count { min-width: 1.75rem; text-align: right; color: var(--fg-muted); font-variant-numeric: tabular-nums; }
+.filters-none { margin: 0.25rem 0 0; font-size: var(--fs-sm); color: var(--fg-muted); }
 
 .filters-query { display: grid; gap: var(--space-2); padding: 0.375rem 0 0 1.25rem; }
 .filters-query .epfl-input { font-family: var(--font-mono); font-size: var(--fs-sm); }

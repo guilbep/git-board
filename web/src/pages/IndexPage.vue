@@ -9,7 +9,7 @@
       :fields="fields"
       :modified="modified"
       :query-changed="queryChanged"
-      @toggle="toggle"
+      @set="setFacet"
       @reset="resetAll"
       @apply="load"
     />
@@ -280,10 +280,8 @@ const chips = computed(() => {
   return out;
 });
 
-function toggle(key: string, value: string) {
-  const cur = sel.value[key] ?? [];
-  const next = cur.includes(value) ? cur.filter((x) => x !== value) : [...cur, value];
-  void setQuery({ [`f.${key}`]: next.length ? next : undefined });
+function setFacet(key: string, values: string[]) {
+  void setQuery({ [`f.${key}`]: values.length ? values : undefined });
 }
 
 // A header click sorts ascending, a second one descending.
