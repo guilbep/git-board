@@ -26,6 +26,9 @@
       @keydown.left.prevent="nudge(32)"
       @keydown.right.prevent="nudge(-32)"
     />
+    <p v-if="stale" class="gb-stale" role="status">
+      Someone else changed this issue. <button type="button" class="gb-stale-btn" @click="reloadStale">Reload</button>
+    </p>
     <div class="gb-ptop">
       <p class="gb-ptop-crumb">
         <template v-if="page"><router-link :to="{ path: '/' }"><GbIcon name="back" small /> Board</router-link></template>
@@ -135,6 +138,7 @@
 </template>
 
 <script setup lang="ts">
+import { onLive } from '@/live';
 import { clampWidth, panelMode, panelWidth, togglePanelMode } from '@/panelsize';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, toRef, useId } from 'vue';
 import type { Thread } from '@/api/board';
@@ -283,9 +287,35 @@ onMounted(() => {
   if (!props.page) void nextTick(() => rootEl()?.focus({ preventScroll: true }));
 });
 onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
+
+// live updates (live.ts): this issue changed elsewhere. Reloaded at once,
+// unless someone is writing here (a draft, an edit, a rename): then a
+// notice offers the reload, and nothing typed is lost.
+const stale = ref(false);
+function writing(): boolean {
+  if (renaming.value) return true;
+  const el = rootEl();
+  if (!el) return false;
+  const active = document.activeElement;
+  if (active && el.contains(active) && active.matches('input, textarea, select')) return true;
+  return [...el.querySelectorAll('textarea')].some((t) => t.value.trim() !== '');
+}
+const offLive = onLive((e) => {
+  if (e.kind !== 'issues' && e.kind !== 'sync') return;
+  if (e.id && !props.id.startsWith(e.id) && !e.id.startsWith(props.id)) return;
+  if (writing()) stale.value = true;
+  else void load();
+});
+onBeforeUnmount(offLive);
+async function reloadStale() {
+  stale.value = false;
+  await load();
+}
 </script>
 
 <style scoped>
+.gb-stale { display: flex; align-items: center; gap: .5rem; margin: 0; padding: .5rem 1rem; background: var(--info-bg); color: var(--info-fg); border-bottom: 1px solid var(--info-border); font-size: .875rem; }
+.gb-stale-btn { padding: 0; border: 0; background: none; color: inherit; font: inherit; font-weight: 700; text-decoration: underline; cursor: pointer; }
 .gb-modes { margin-bottom: 1rem; }
 .gb-modes-count { margin-left: .25rem; padding: 0 .375rem; border-radius: var(--radius); background: var(--bg-subtle); color: var(--fg-muted); font-size: .75rem; font-weight: 700; }
 .gb-rename { flex: 1; display: flex; gap: .5rem; }

@@ -31,7 +31,7 @@ func withCORS(next http.Handler) http.Handler {
 		}
 		if r.Method == http.MethodOptions {
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-Git-Board-Upload")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-Git-Board-Upload, X-Git-Board-Client")
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}

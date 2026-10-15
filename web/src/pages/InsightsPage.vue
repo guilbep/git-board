@@ -34,7 +34,9 @@
         </select>
       </label>
       <span v-if="loading" class="gb-hint" role="status">Replaying the history…</span>
+      <button v-if="r?.burnup" type="button" class="epfl-btn epfl-btn-secondary ins-report" @click="reportOpen = true">Sprint report</button>
     </div>
+    <SprintReportDialog v-model="reportOpen" />
 
     <p v-if="error" class="epfl-alert epfl-alert-danger" role="alert">{{ error }}</p>
 
@@ -115,7 +117,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue';
+import SprintReportDialog from '@/components/SprintReportDialog.vue';
+import { debounced, onLive } from '@/live';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { getFields, getInsights, getViews, type FieldConfig, type InsightsReport } from '@/api/board';
 import { colorClass, loadColors } from '@/colors';
 import { displayName } from '@/fields';
@@ -155,6 +159,12 @@ async function load() {
   }
 }
 watch([view, field, days], () => void load());
+
+// the sprint report, and a new replay when the issues changed elsewhere
+const reportOpen = ref(false);
+const replay = debounced(() => void load(), 2000);
+const offLive = onLive((e) => (e.kind === 'issues' || e.kind === 'sync') && replay());
+onBeforeUnmount(offLive);
 
 onMounted(async () => {
   try {
@@ -217,6 +227,7 @@ const days1 = (d: number) => (d < 1 ? `${Math.round(d * 24)} h` : `${Math.round(
 </script>
 
 <style scoped>
+.ins-report { align-self: end; margin-left: auto; }
 .ins-none { --c-dot: #cfcfcf; }
 .ins-controls { display: flex; flex-wrap: wrap; align-items: flex-end; gap: .75rem 1rem; margin: 1.5rem 0; }
 .ins-control { display: grid; gap: .25rem; min-width: 12rem; }

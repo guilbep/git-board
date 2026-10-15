@@ -85,7 +85,8 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue';
+import { onLive } from '@/live';
+import { onMounted, ref, watch, onBeforeUnmount } from 'vue';
 import { getSettings, getViews, removeBridge, setBridgeSync, type Bridge, type Settings } from '@/api/board';
 import { loadForges } from '@/forges';
 import { message } from '@/issue';
@@ -165,6 +166,8 @@ onMounted(() => {
   if (!me.value) void loadMe();
   void reload();
 });
+const offLive = onLive((e) => (e.kind === 'settings' || e.kind === 'config') && void reload());
+onBeforeUnmount(offLive);
 </script>
 
 <style scoped>

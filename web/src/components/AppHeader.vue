@@ -46,9 +46,11 @@
     </div>
   </header>
   <KeyboardHelp />
+  <LiveNotice />
 </template>
 
 <script setup lang="ts">
+import LiveNotice from '@/components/LiveNotice.vue';
 import { computed, onBeforeUnmount, onMounted } from 'vue';
 import { helpOpen } from '@/shortcuts';
 import KeyboardHelp from '@/components/KeyboardHelp.vue';

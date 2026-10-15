@@ -15,6 +15,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/ghbridge"
@@ -55,6 +56,7 @@ func main() {
 	}
 	s := &apiServer{cfg: cfg, cfgPath: cfgPath, b: b, me: resolveMe(*me), project: ghbridge.Gh, exposed: exposed}
 	handler := withCORS(newMux(s, http.FileServerFS(dist)))
+	go s.watchRefs(3*time.Second, nil) // changes made outside the API reach the pages
 
 	_, port, _ := net.SplitHostPort(*addr)
 	fmt.Printf("git-board-server listening on http://localhost:%s\n", port)

@@ -56,18 +56,7 @@ func (s *apiServer) handleInsights(w http.ResponseWriter, r *http.Request) {
 // burnupSprint is the sprint the burn-up follows: today's, when an issue
 // is in it, else the latest started one that has issues.
 func burnupSprint(cfg *config.Config, now time.Time, values map[string][]string) *insights.Sprint {
-	field := ""
-	for _, name := range []string{"sprint", "iteration"} {
-		if cfg.TypeOf(name, nil) == config.TypeIteration {
-			field = name
-			break
-		}
-	}
-	for name := range cfg.Fields {
-		if field == "" && cfg.TypeOf(name, nil) == config.TypeIteration {
-			field = name
-		}
-	}
+	field := iterationField(cfg)
 	if field == "" {
 		return nil
 	}
@@ -82,6 +71,22 @@ func burnupSprint(cfg *config.Config, now time.Time, values map[string][]string)
 		}
 	}
 	return nil
+}
+
+// iterationField is the field holding sprints: sprint, iteration, else a
+// field of type iteration.
+func iterationField(cfg *config.Config) string {
+	for _, name := range []string{"sprint", "iteration"} {
+		if cfg.TypeOf(name, nil) == config.TypeIteration {
+			return name
+		}
+	}
+	for name := range cfg.Fields {
+		if cfg.TypeOf(name, nil) == config.TypeIteration {
+			return name
+		}
+	}
+	return ""
 }
 
 func or(v, def string) string {

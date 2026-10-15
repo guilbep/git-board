@@ -59,6 +59,11 @@ type apiServer struct {
 	// environment, at the first upload
 	store *uploads.Store
 
+	// live updates (events.go): the pages listening, and the refs last seen
+	events broker
+	refsMu sync.Mutex
+	refs   string
+
 	lazyOnce
 }
 
@@ -67,6 +72,7 @@ type apiServer struct {
 // framework.
 func newMux(s *apiServer, static http.Handler) http.Handler {
 	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/events", s.handleEvents)
 	mux.HandleFunc("GET /api/views", s.handleViews)
 	mux.HandleFunc("PUT /api/views/{name}", s.handleSaveView)
 	mux.HandleFunc("GET /api/config/fields", s.handleFields)
@@ -89,6 +95,7 @@ func newMux(s *apiServer, static http.Handler) http.Handler {
 	mux.HandleFunc("GET /api/uploads", s.handleUploadStatus)
 	mux.HandleFunc("POST /api/uploads", s.handleUpload)
 	mux.HandleFunc("GET /api/insights", s.handleInsights)
+	mux.HandleFunc("GET /api/report", s.handleReport)
 	mux.HandleFunc("GET /api/sprints", s.handleSprints)
 	mux.HandleFunc("GET /api/settings", s.handleSettings)
 	mux.HandleFunc("GET /api/config", s.handleConfigFile)
@@ -106,7 +113,7 @@ func newMux(s *apiServer, static http.Handler) http.Handler {
 	mux.HandleFunc("POST /api/sync/apply", s.handleSyncApply)
 	mux.HandleFunc("POST /api/sync/resolve", s.handleSyncResolve)
 	mux.Handle("/", static)
-	return withGuard(mux, s.exposed)
+	return withGuard(s.withEvents(mux), s.exposed)
 }
 
 // Both answer {} without a config: a nil map would encode as null.
