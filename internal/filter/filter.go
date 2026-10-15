@@ -2,7 +2,8 @@
 // syntax where they meet: field:value, -field:value,
 // field:@current|@next|@previous|@me, is:open|closed, title:*glob*,
 // author:login, label:name, no:field (no:label: no plain label), free text
-// and "quoted phrases". Conditions are AND'd. Pure logic.
+// and "quoted phrases". Conditions are AND'd; a,b is either value
+// (status:ready,qa), as in GitHub's search. Pure logic.
 package filter
 
 import (
@@ -122,8 +123,12 @@ func resolveValue(value string, cfg *config.Config, me string, today time.Time) 
 // can require --me/GIT_BOARD_ME before evaluating the filter.
 func RequiresMe(conditions []Condition) bool {
 	for _, c := range conditions {
-		if (c.Kind == KindField || c.Kind == KindAuthor) && c.Value == "@me" {
-			return true
+		if c.Kind == KindField || c.Kind == KindAuthor {
+			for _, v := range strings.Split(c.Value, ",") {
+				if v == "@me" {
+					return true
+				}
+			}
 		}
 	}
 	return false
@@ -137,44 +142,14 @@ func Matches(issue gitbugio.Issue, conditions []Condition, cfg *config.Config, m
 	}
 
 	for _, c := range conditions {
-		var ok bool
-		switch c.Kind {
-		case KindIs:
-			ok = issue.Status == c.Value
-		case KindTitle:
-			// ponytail: path.Match's "*" doesn't cross "/" like Python's
-			// fnmatch does; titles containing "/" may not glob-match as
-			// expected. Switch to a manual glob if that bites.
-			ok, _ = path.Match(strings.ToLower(c.Value), strings.ToLower(issue.Title))
-		case KindText:
-			if c.Hits != nil {
-				ok = c.Hits[issue.ID]
-			} else {
-				ok = strings.Contains(strings.ToLower(issue.Title), strings.ToLower(c.Value))
-			}
-		case KindAuthor:
-			want := c.Value
-			if want == "@me" {
-				want = me
-			}
-			for _, l := range issue.AuthorLogins {
-				ok = ok || strings.EqualFold(l, want)
-			}
-		case KindLabel:
-			for _, l := range issue.Labels {
-				ok = ok || strings.EqualFold(l, c.Value)
-			}
-		case KindNo:
-			ok = true
-			for _, l := range issue.Labels {
-				ns, _, hasNS := strings.Cut(l, ":")
-				if (c.Value == "label" && !hasNS) || (hasNS && ns == c.Value) {
-					ok = false
-				}
-			}
-		case KindField:
-			value := resolveValue(c.Value, cfg, me, today)
-			ok = labels[c.Field+":"+value]
+		ok := false
+		// a,b: either value matches (no: and free text take no list)
+		values := []string{c.Value}
+		if c.Kind != KindText && c.Kind != KindNo && c.Kind != KindTitle {
+			values = strings.Split(c.Value, ",")
+		}
+		for _, v := range values {
+			ok = ok || matchOne(issue, labels, c, v, cfg, me, today)
 		}
 		if c.Negated {
 			ok = !ok
@@ -184,4 +159,47 @@ func Matches(issue gitbugio.Issue, conditions []Condition, cfg *config.Config, m
 		}
 	}
 	return true
+}
+
+// matchOne is one condition with one value.
+func matchOne(issue gitbugio.Issue, labels map[string]bool, c Condition, value string, cfg *config.Config, me string, today time.Time) bool {
+	var ok bool
+	switch c.Kind {
+	case KindIs:
+		ok = issue.Status == value
+	case KindTitle:
+		// ponytail: path.Match's "*" doesn't cross "/" like Python's
+		// fnmatch does; titles containing "/" may not glob-match as
+		// expected. Switch to a manual glob if that bites.
+		ok, _ = path.Match(strings.ToLower(value), strings.ToLower(issue.Title))
+	case KindText:
+		if c.Hits != nil {
+			ok = c.Hits[issue.ID]
+		} else {
+			ok = strings.Contains(strings.ToLower(issue.Title), strings.ToLower(value))
+		}
+	case KindAuthor:
+		want := value
+		if want == "@me" {
+			want = me
+		}
+		for _, l := range issue.AuthorLogins {
+			ok = ok || strings.EqualFold(l, want)
+		}
+	case KindLabel:
+		for _, l := range issue.Labels {
+			ok = ok || strings.EqualFold(l, value)
+		}
+	case KindNo:
+		ok = true
+		for _, l := range issue.Labels {
+			ns, _, hasNS := strings.Cut(l, ":")
+			if (value == "label" && !hasNS) || (hasNS && ns == value) {
+				ok = false
+			}
+		}
+	case KindField:
+		ok = labels[c.Field+":"+resolveValue(value, cfg, me, today)]
+	}
+	return ok
 }

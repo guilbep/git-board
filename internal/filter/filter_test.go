@@ -183,3 +183,33 @@ func TestGitHubStyleSearch(t *testing.T) {
 		t.Error("free text didn't follow the search hits")
 	}
 }
+
+// a,b is either, as in GitHub's search (label:bug,wip): what a facet with
+// several values ticked saves into a view.
+func TestMatchesCommaIsEither(t *testing.T) {
+	cfg := mustLoad(t)
+	qa := gitbugio.Issue{ID: "a", Status: "open", Labels: []string{"status:qa", "bug", "assignee:guilbep"}}
+	backlog := gitbugio.Issue{ID: "b", Status: "closed", Labels: []string{"status:backlog"}}
+	for _, c := range []struct {
+		filter   string
+		qa, back bool
+	}{
+		{"status:ready,qa", true, false},
+		{"-status:ready,qa", false, true},
+		{"status:qa,backlog", true, true},
+		{"is:open,closed", true, true},
+		{"label:wip,bug", true, false},
+		{"assignee:@me,someone", true, false},
+	} {
+		conds := Parse(c.filter)
+		if got := Matches(qa, conds, cfg, "guilbep", today); got != c.qa {
+			t.Errorf("%s on the qa issue: %v", c.filter, got)
+		}
+		if got := Matches(backlog, conds, cfg, "guilbep", today); got != c.back {
+			t.Errorf("%s on the backlog issue: %v", c.filter, got)
+		}
+	}
+	if !RequiresMe(Parse("assignee:someone,@me")) {
+		t.Error("@me inside a list isn't seen")
+	}
+}
