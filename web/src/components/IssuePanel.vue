@@ -56,7 +56,7 @@
           <span :class="['epfl-badge', thread.status === 'open' ? 'epfl-badge-tertiary' : 'epfl-badge-dark']">
             <GbIcon :name="thread.status === 'open' ? 'open' : 'closed'" small />{{ thread.status === 'open' ? 'Open' : 'Closed' }}
           </span>
-          <span><b>{{ thread.author.name }}</b> opened this on {{ when(thread.created_at) }} · {{ comments }} comment{{ comments === 1 ? '' : 's' }}</span>
+          <span><b>{{ thread.author.name }}</b> opened this {{ on(thread.created_at) }} · {{ comments }} comment{{ comments === 1 ? '' : 's' }}</span>
           <span v-if="thread.forges?.length" class="gb-forgelinks">
             <template v-for="(f, i) in thread.forges" :key="f.url">
               <span v-if="i" aria-hidden="true">·</span>
@@ -85,7 +85,7 @@
         <IssueSide
           :id="thread.id"
           :labels="thread.labels"
-          :names="names"
+          :names="sideNames"
           :fields="fields"
           :forges="thread.forges"
           :participants="thread.participants"
@@ -104,7 +104,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, toRef, useId } fro
 import type { Thread } from '@/api/board';
 import type { Fields } from '@/fields';
 import { useIssue } from '@/issue';
-import { me, when } from '@/me';
+import { me, on } from '@/me';
 import CommentCard from '@/components/CommentCard.vue';
 import GbIcon from '@/components/GbIcon.vue';
 import IssueComposer from '@/components/IssueComposer.vue';
@@ -132,6 +132,11 @@ const meId = computed(() => me.value?.me?.id ?? '');
 const created = computed(() => thread.value?.events.find((e) => e.kind === 'created'));
 const rest = computed(() => thread.value?.events.filter((e) => e.kind !== 'created') ?? []);
 const comments = computed(() => rest.value.filter((e) => e.kind === 'comment').length);
+// the board's fields, and any namespace this issue has besides
+const sideNames = computed(() => {
+  const own = (thread.value?.labels ?? []).filter((l) => l.includes(':')).map((l) => l.slice(0, l.indexOf(':')));
+  return [...props.names, ...[...new Set(own)].filter((n) => !props.names.includes(n)).sort()];
+});
 
 const renaming = ref(false);
 const newTitle = ref('');

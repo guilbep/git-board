@@ -4,6 +4,8 @@ const routes: RouteRecordRaw[] = [
   // The active saved view is the ?view= query, so a view is bookmarkable.
   { path: '/', component: () => import('@/pages/IndexPage.vue') },
   { path: '/conflicts', component: () => import('@/pages/ConflictsPage.vue') },
+  { path: '/issues/:id', component: () => import('@/pages/IssuePage.vue') },
+  { path: '/sync', component: () => import('@/pages/ForgeSyncPage.vue') },
 
   // Always leave this as the last one.
   {

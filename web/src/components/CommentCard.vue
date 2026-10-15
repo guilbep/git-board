@@ -7,7 +7,7 @@
       <img v-if="event.author.avatar_url" class="gb-avatar gb-avatar-sm" :src="event.author.avatar_url" alt="" />
       <span v-else class="gb-avatar gb-avatar-sm" :class="{ 'gb-avatar-dark': mine }" aria-hidden="true">{{ initials(event.author.name) }}</span>
       <b>{{ event.author.name }}</b>
-      <span class="gb-time">{{ event.kind === 'created' ? 'opened' : 'commented' }} on {{ when(event.at, true) }}</span>
+      <span class="gb-time">{{ event.kind === 'created' ? 'opened' : 'commented' }} {{ on(event.at, true) }}</span>
       <span v-if="event.kind === 'created'" class="gb-tag">Description</span>
       <details v-if="event.edited && event.history" class="gb-hist">
         <summary>edited<GbIcon name="down" small /></summary>
@@ -59,7 +59,7 @@
 <script setup lang="ts">
 import { computed, ref, useId } from 'vue';
 import { ApiError, type Forge, type IssueEvent } from '@/api/board';
-import { initials, when } from '@/me';
+import { initials, on, when } from '@/me';
 import GbIcon from '@/components/GbIcon.vue';
 import MarkdownBody from '@/components/MarkdownBody.vue';
 import MarkdownEditor from '@/components/MarkdownEditor.vue';

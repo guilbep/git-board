@@ -27,19 +27,42 @@
         aria-current-value="page"
       >Conflicts<span v-if="conflicts" class="nav-count" :aria-label="`, ${conflicts} held`">{{ conflicts }}</span></router-link>
     </nav>
+    <div class="app-right">
+      <!-- shown once a bridge has sync enabled; live while a run goes on -->
+      <router-link v-if="forgeStatus?.bridges.length" to="/sync" class="gb-synclink" :class="{ 'gb-synclink-run': running }">
+        <GbIcon name="sync" small />
+        <span>{{ running ? 'Syncing with GitHub/GitLab…' : 'Sync with GitHub/GitLab' }}</span>
+        <span v-if="lastRun" class="gb-hint">{{ lastRun }}</span>
+      </router-link>
+      <span v-if="me?.me" class="gb-me" :title="`You write as ${me.me.name}`">
+        <span class="gb-avatar gb-avatar-sm gb-avatar-dark" aria-hidden="true">{{ initials(me.me.name) }}</span>
+        <span class="gb-me-name">{{ me.me.name }}</span>
+      </span>
+    </div>
   </header>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted } from 'vue';
+import { forgeStatus, loadForges } from '@/forges';
+import { initials, loadMe, me, when } from '@/me';
 import { loadSyncStatus, syncStatus } from '@/sync';
+import GbIcon from '@/components/GbIcon.vue';
 
 defineProps<{ views: string[]; active: string }>();
 
 const conflicts = computed(() => syncStatus.value?.last?.conflicts.length ?? 0);
+const running = computed(() => forgeStatus.value?.job?.state === 'running');
+const lastRun = computed(() => {
+  const j = forgeStatus.value?.job;
+  if (!j || running.value) return '';
+  return `${j.dry_run ? 'dry run' : 'last run'} ${when(j.ended ?? j.started)}`;
+});
 
 onMounted(() => {
   if (!syncStatus.value) void loadSyncStatus();
+  if (!forgeStatus.value) void loadForges();
+  if (!me.value) void loadMe();
 });
 </script>
 
@@ -51,6 +74,12 @@ onMounted(() => {
   background: var(--primary);
   mask: url('/epfl-logo.svg') center / contain no-repeat;
 }
+
+.app-right { display: flex; align-items: center; gap: 1rem; margin-left: auto; }
+.gb-synclink { display: inline-flex; align-items: center; gap: .5rem; min-height: 2.75rem; padding: 0 1rem; border: 1px solid var(--border-strong); color: var(--fg); font-weight: 700; font-size: .875rem; text-decoration: none; white-space: nowrap; }
+.gb-synclink:hover { border-color: var(--fg); }
+.gb-synclink-run { border-color: var(--fg); }
+.gb-me { display: inline-flex; align-items: center; gap: .5rem; font-weight: 700; font-size: .875rem; white-space: nowrap; }
 
 .nav-count {
   margin-left: var(--space-1);
@@ -88,5 +117,7 @@ onMounted(() => {
     overflow-x: auto;
   }
   .app-header .epfl-nav a { white-space: nowrap; }
+  .app-right { order: 2; }
+  .gb-synclink .gb-hint, .gb-me-name { display: none; }
 }
 </style>

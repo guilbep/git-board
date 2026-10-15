@@ -61,6 +61,10 @@
             <option v-for="o in sortChoices" :key="o.value" :value="o.value">{{ o.label }}</option>
           </select>
         </div>
+        <div class="toolbar-new">
+          <button type="button" class="epfl-btn epfl-btn-primary" @click="newOpen = true"><GbIcon name="plus" small /> New issue</button>
+          <span class="gb-keys" aria-hidden="true"><kbd>c</kbd></span>
+        </div>
       </div>
 
       <div v-if="buckets" class="status" role="status">
@@ -109,21 +113,34 @@
     </main>
   </div>
 
-  <q-dialog v-model="detailOpen" position="right" full-height aria-labelledby="issue-detail-title">
-    <IssueDetail
-      v-if="detailIssue"
-      :key="detailIssue.id"
-      :issue="detailIssue"
+  <q-dialog v-model="detailOpen" position="right" full-height @hide="closePanel">
+    <IssuePanel
+      v-if="detailId"
+      :id="detailId"
+      :key="detailId"
       :names="names"
       :fields="fields"
-      @updated="onUpdated"
+      :title="detailTitle"
+      :crumb="activeView || 'All open issues'"
+      :position="position"
+      :has-prev="index > 0"
+      :has-next="index >= 0 && index < flat.length - 1"
+      :find-ref="findRef"
       @close="detailOpen = false"
+      @prev="step(-1)"
+      @next="step(1)"
+      @changed="load"
+      @open="openId"
     />
+  </q-dialog>
+
+  <q-dialog v-model="newOpen">
+    <NewIssueDialog :names="names" :fields="fields" :view="activeView" :filter="filterText" @close="newOpen = false" @created="onCreated" />
   </q-dialog>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import {
   getFields, getIssues, getViews,
@@ -137,7 +154,9 @@ import AppHeader from '@/components/AppHeader.vue';
 import FilterSidebar from '@/components/FilterSidebar.vue';
 import IssueBoard from '@/components/IssueBoard.vue';
 import IssueTable from '@/components/IssueTable.vue';
-import IssueDetail from '@/components/IssueDetail.vue';
+import GbIcon from '@/components/GbIcon.vue';
+import IssuePanel from '@/components/IssuePanel.vue';
+import NewIssueDialog from '@/components/NewIssueDialog.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -185,7 +204,7 @@ const modified = computed(
   () =>
     queryChanged.value ||
     groupField.value !== (view.value?.group ?? '') ||
-    Object.keys(route.query).some((k) => k !== 'view'),
+    Object.keys(route.query).some((k) => k !== 'view' && k !== 'issue'),
 );
 
 const all = computed(() => (buckets.value ?? []).flatMap((b) => b.issues));
@@ -308,20 +327,71 @@ onMounted(async () => {
   if (!activeView.value) resetView();
 });
 
+// The issue panel: ?issue=<id> in the URL, so a link opens it; j / k move
+// through the issues as the board shows them.
 const detailOpen = ref(false);
-const detailIssue = ref<Issue | null>(null);
+const detailId = ref('');
+const flat = computed(() => shown.value.flatMap((b) => b.issues));
+const index = computed(() => flat.value.findIndex((i) => i.id === detailId.value));
+const detailTitle = computed(() => all.value.find((i) => i.id === detailId.value)?.title ?? '');
+const position = computed(() => {
+  if (index.value < 0) return '';
+  const b = shown.value.find((x) => x.issues.some((i) => i.id === detailId.value));
+  if (groupField.value && b) {
+    const at = b.issues.findIndex((i) => i.id === detailId.value);
+    return `${b.group === '(none)' ? `no ${groupField.value}` : b.group}, ${at + 1} of ${b.issues.length}`;
+  }
+  return `${index.value + 1} of ${flat.value.length}`;
+});
 
 function openIssue(issue: Issue) {
-  detailIssue.value = issue;
-  detailOpen.value = true;
+  openId(issue.id);
+}
+function openId(id: string) {
+  void setQuery({ issue: id });
+}
+function step(delta: number) {
+  const next = flat.value[index.value + delta];
+  if (next) openId(next.id);
+}
+function closePanel() {
+  if (route.query.issue) void setQuery({ issue: undefined });
+}
+watch(
+  () => route.query.issue,
+  (id) => {
+    if (typeof id === 'string' && id) {
+      detailId.value = id;
+      detailOpen.value = true;
+    } else detailOpen.value = false;
+  },
+  { immediate: true },
+);
+
+// #n in a text: the local issue on the same forge as the open one
+function findRef(n: string): string | undefined {
+  const base = all.value.find((i) => i.id === detailId.value)?.forges?.[0]?.url.replace(/\d+$/, '');
+  if (!base) return undefined;
+  return all.value.find((i) => i.forges?.some((f) => f.url === base + n))?.id;
 }
 
-// A changed group field (say status, on a board) moves the issue to another
-// bucket, so re-fetch rather than patch the list in place.
-function onUpdated(issue: Issue) {
-  detailIssue.value = issue;
+// New issue: the button, or c
+const newOpen = ref(false);
+function onCreated(id: string, another: boolean) {
   void load();
+  if (!another) {
+    newOpen.value = false;
+    openId(id);
+  }
 }
+function onKey(e: KeyboardEvent) {
+  if (e.key !== 'c' || e.ctrlKey || e.metaKey || e.altKey || detailOpen.value || newOpen.value) return;
+  if ((e.target as HTMLElement).closest('input, textarea, select, [contenteditable]')) return;
+  e.preventDefault();
+  newOpen.value = true;
+}
+onMounted(() => window.addEventListener('keydown', onKey));
+onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
 </script>
 
 <style scoped>
@@ -350,6 +420,8 @@ function onUpdated(issue: Issue) {
 }
 .toolbar-field { flex: 0 1 13rem; min-width: 0; }
 .toolbar-search { flex: 1 1 16rem; max-width: 24rem; }
+.toolbar-new { display: flex; align-items: center; gap: .5rem; margin-left: auto; align-self: flex-end; }
+.toolbar-new .epfl-btn { display: inline-flex; align-items: center; gap: .375rem; }
 
 .status {
   display: flex;

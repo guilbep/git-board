@@ -14,3 +14,6 @@
    panel (a right-hand q-dialog) runs the full height, no inset. */
 .q-dialog__backdrop { background: var(--bg-overlay); }
 .q-dialog__inner--right { padding: 0; }
+/* Quasar only lets a dialog's direct child <div> take clicks; the panel is
+   an <aside>, the dialogs <section>s */
+.q-dialog__inner > * { pointer-events: all; }

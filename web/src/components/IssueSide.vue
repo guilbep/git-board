@@ -8,6 +8,7 @@
         <h3 id="side-fields" class="gb-section-title">Fields</h3>
         <span class="gb-saved" role="status">{{ saving ? 'Saving…' : saved ? '✓ Saved' : '' }}</span>
       </div>
+      <p v-if="!names.length" class="gb-hint">No fields yet. A label like <code>status:ready</code> or <code>prio:p1</code> is one.</p>
       <div class="gb-fields">
         <div v-for="name in names" :key="name" class="gb-field">
           <div class="gb-field-head">
@@ -62,7 +63,7 @@
           <span class="gb-hint">{{ waitingFor(f.name) ? `${waitingFor(f.name)} change${waitingFor(f.name) === 1 ? '' : 's'} waiting` : 'in sync' }}</span>
         </li>
       </ul>
-      <p class="gb-hint">Waiting changes go out at the next <router-link to="/sync">sync with GitHub/GitLab</router-link>.</p>
+      <p class="gb-hint">Waiting changes go out at the next <router-link to="/sync">sync with GitHub/GitLab</router-link><!-- -->.</p>
     </section>
 
     <section v-if="participants?.length" class="gb-side-sec" aria-labelledby="side-people">
@@ -181,6 +182,7 @@ function addLabel() {
 .gb-addrow .epfl-input { flex: 1; min-width: 0; }
 .gb-forgerow { display: flex; justify-content: space-between; gap: .5rem; padding: .25rem 0; }
 .gb-forgerow a { display: inline-flex; align-items: center; gap: .25rem; font-weight: 700; color: var(--fg); }
-.gb-person { display: flex; align-items: center; gap: .5rem; padding: .25rem 0; }
+.gb-person { display: flex; align-items: baseline; gap: .5rem; padding: .25rem 0; }
+.gb-person .gb-avatar { align-self: center; }
 .gb-held-tag { display: inline-flex; align-items: center; gap: .25rem; text-decoration: none; }
 </style>
