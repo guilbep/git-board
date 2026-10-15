@@ -4,11 +4,13 @@ import (
 	"encoding/json"
 	"net/http"
 	"sort"
+	"sync"
 	"time"
 
 	"github.com/guilbep/git-board/internal/board"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/fields"
+	"github.com/guilbep/git-board/internal/ghbridge"
 	"github.com/guilbep/git-board/internal/gitbugio"
 )
 
@@ -26,6 +28,11 @@ type apiServer struct {
 	cfg *config.Config
 	b   *gitbugio.Backend
 	me  string
+
+	// The GitHub Project sync (sync.go): one at a time, and the last check.
+	project ghbridge.Project
+	syncMu  sync.Mutex
+	last    *syncReport
 }
 
 // newMux wires the API routes plus a static handler (the built frontend) at
@@ -37,6 +44,10 @@ func newMux(s *apiServer, static http.Handler) *http.ServeMux {
 	mux.HandleFunc("GET /api/issues", s.handleListIssues)
 	mux.HandleFunc("GET /api/issues/{id}", s.handleGetIssue)
 	mux.HandleFunc("PATCH /api/issues/{id}", s.handlePatchIssue)
+	mux.HandleFunc("GET /api/sync", s.handleSyncStatus)
+	mux.HandleFunc("POST /api/sync/check", s.handleSyncCheck)
+	mux.HandleFunc("POST /api/sync/apply", s.handleSyncApply)
+	mux.HandleFunc("POST /api/sync/resolve", s.handleSyncResolve)
 	mux.Handle("/", static)
 	return mux
 }

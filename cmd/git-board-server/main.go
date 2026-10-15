@@ -16,6 +16,7 @@ import (
 	"os"
 
 	"github.com/guilbep/git-board/internal/config"
+	"github.com/guilbep/git-board/internal/ghbridge"
 	"github.com/guilbep/git-board/internal/gitbugio"
 	boardweb "github.com/guilbep/git-board/web"
 )
@@ -46,7 +47,7 @@ func main() {
 		log.Fatalf("web/dist embed: %v", err)
 	}
 
-	s := &apiServer{cfg: cfg, b: b, me: resolveMe(*me)}
+	s := &apiServer{cfg: cfg, b: b, me: resolveMe(*me), project: ghbridge.Gh}
 	mux := newMux(s, http.FileServerFS(dist))
 
 	fmt.Printf("git-board-server listening on %s\n", *addr)

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"strconv"
@@ -77,62 +78,47 @@ the label). Both then agree on it.`,
 	return cmd
 }
 
-// syncState is what both commands read before deciding anything.
-type syncState struct {
-	cfg    *config.Config
-	b      *gitbugio.Backend
-	issues []gitbugio.Issue
-	items  []ghbridge.Item
-	meta   ghbridge.ProjectMeta
-	bases  map[string]map[string]string
+// project is the GitHub Project through the seams above.
+func project() ghbridge.Project {
+	return ghbridge.Project{Items: fetchGithubItems, Meta: fetchProjectMeta, Writer: projectWriter}
 }
 
-func loadSyncState(limit int) (*syncState, error) {
+// openSync loads the config, opens the repository and reads both sides.
+func openSync(limit int) (*config.Config, *gitbugio.Backend, ghbridge.State, error) {
 	cfg, err := loadConfig()
 	if err != nil {
-		return nil, err
-	}
-	gp := cfg.GithubProject
-	if gp.Owner == "" || gp.Number == 0 {
-		return nil, fmt.Errorf("no GitHub project configured: run `git-board bridge configure` first")
+		return nil, nil, ghbridge.State{}, err
 	}
 	b, err := gitbugio.OpenCwd()
 	if err != nil {
-		return nil, err
+		return nil, nil, ghbridge.State{}, err
 	}
-	s := &syncState{cfg: cfg, b: b}
-	if s.issues, err = b.ListIssues(); err == nil {
-		if s.items, err = fetchGithubItems(gp.Owner, gp.Number, limit); err == nil {
-			if s.meta, err = fetchProjectMeta(gp.Owner, gp.Number); err == nil {
-				s.bases, err = ghbridge.LoadBases(b, ghbridge.BasePrefix(gp), s.items, s.issues)
-			}
-		}
-	}
+	s, err := ghbridge.LoadState(b, project(), cfg, limit)
 	if err != nil {
 		_ = b.Close()
-		return nil, err
+		return nil, nil, ghbridge.State{}, err
 	}
-	return s, nil
+	return cfg, b, s, nil
 }
 
 func runBridgeSync(out io.Writer, limit int, apply bool) error {
-	s, err := loadSyncState(limit)
+	cfg, b, s, err := openSync(limit)
 	if err != nil {
 		return err
 	}
-	defer s.b.Close()
+	defer b.Close()
 
-	plan := ghbridge.BuildSyncPlan(s.items, s.issues, s.bases, s.meta, s.cfg)
+	plan := s.Plan(cfg)
 	printSyncPlan(out, plan)
 
 	if !apply {
 		fmt.Fprintln(out, "\ndry run — nothing written. Re-run with --apply to write these changes.")
-		if len(plan.Edits) > 0 && !s.cfg.GithubProject.Write {
+		if len(plan.Edits) > 0 && !cfg.GithubProject.Write {
 			fmt.Fprintln(out, "Writing to the Project also needs write = true under [github-project] in .git-board.toml.")
 		}
 		return nil
 	}
-	skipped, err := ghbridge.ApplySync(s.b, projectWriter, s.b, plan, s.cfg, s.meta)
+	skipped, err := ghbridge.ApplySync(b, projectWriter, b, plan, cfg, s.Meta)
 	if err != nil {
 		return err
 	}
@@ -147,48 +133,20 @@ func runBridgeSync(out io.Writer, limit int, apply bool) error {
 }
 
 func runBridgeResolve(out io.Writer, number int, field string, ours bool) error {
-	s, err := loadSyncState(defaultBridgePullLimit)
+	cfg, b, s, err := openSync(ghbridge.DefaultItemLimit)
 	if err != nil {
 		return err
 	}
-	defer s.b.Close()
-	if ours && !s.cfg.GithubProject.Write {
-		return fmt.Errorf("--ours writes to the Project: set write = true under [github-project] in .git-board.toml")
+	defer b.Close()
+	kept, err := ghbridge.ResolveConflict(b, project(), cfg, s, number, field, ours)
+	if errors.Is(err, ghbridge.ErrNotConflict) {
+		return fmt.Errorf("%w: run `git-board bridge sync` to see the conflicts", err)
 	}
-
-	// decided again from what both sides hold now
-	plan := ghbridge.BuildSyncPlan(s.items, s.issues, s.bases, s.meta, s.cfg)
-	for _, c := range plan.Conflicts {
-		if c.Number != number || c.Field != field {
-			continue
-		}
-		var item ghbridge.Item
-		for _, it := range s.items {
-			if it.Content.Number == number && it.Content.URL == c.URL {
-				item = it
-			}
-		}
-		var bug gitbugio.Issue
-		for _, b := range s.issues {
-			if b.ID == c.BugID {
-				bug = b
-			}
-		}
-		resolved, err := ghbridge.Resolve(c, ours, item, bug, s.meta, s.cfg)
-		if err != nil {
-			return err
-		}
-		if _, err := ghbridge.ApplySync(s.b, projectWriter, s.b, resolved, s.cfg, s.meta); err != nil {
-			return err
-		}
-		kept := c.Project
-		if ours {
-			kept = c.Local
-		}
-		fmt.Fprintf(out, "#%d %s: kept %s on both sides\n", number, field, show(kept))
-		return nil
+	if err != nil {
+		return err
 	}
-	return fmt.Errorf("#%d %s isn't a conflict now: run `git-board bridge sync` to see it", number, field)
+	fmt.Fprintf(out, "#%d %s: kept %s on both sides\n", number, field, show(kept))
+	return nil
 }
 
 // printSyncPlan renders a sync plan: per issue, label changes, Project

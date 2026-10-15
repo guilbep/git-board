@@ -100,15 +100,15 @@ type ProjectEdit struct {
 
 // Conflict is a field both sides changed differently since they last agreed.
 type Conflict struct {
-	BugID   string
-	Number  int
-	URL     string
-	Title   string
-	Field   string
-	Base    string
-	HasBase bool
-	Local   string
-	Project string
+	BugID   string `json:"bug_id"`
+	Number  int    `json:"number"`
+	URL     string `json:"url"`
+	Title   string `json:"title"`
+	Field   string `json:"field"`
+	Base    string `json:"base"`
+	HasBase bool   `json:"has_base"`
+	Local   string `json:"local"`   // git-board's value
+	Project string `json:"project"` // the Project's
 }
 
 // SyncPlan is what a sync would do.

@@ -76,3 +76,52 @@ export function patchIssue(id: string, changes: Record<string, string>): Promise
     body: JSON.stringify(changes),
   });
 }
+
+// The GitHub Project sync (cmd/git-board-server/sync.go). Only check, apply
+// and resolve read the Project; getSync returns the last check.
+export interface Conflict {
+  bug_id: string;
+  number: number;
+  url: string;
+  title: string;
+  field: string;
+  base: string;
+  has_base: boolean;
+  local: string; // git-board's value, "" when unset
+  project: string; // the Project's
+}
+
+export interface SyncReport {
+  checked_at: string;
+  conflicts: Conflict[];
+  label_changes: number;
+  project_writes: number;
+  warnings: number;
+  unmatched: number;
+}
+
+export interface SyncStatus {
+  project: string; // "owner/number", "" when none is configured
+  write: boolean;
+  last: SyncReport | null;
+}
+
+export function getSync(): Promise<SyncStatus> {
+  return request('/api/sync');
+}
+
+export function checkSync(): Promise<SyncStatus> {
+  return request('/api/sync/check', { method: 'POST' });
+}
+
+export function applySync(): Promise<SyncStatus> {
+  return request('/api/sync/apply', { method: 'POST' });
+}
+
+export function resolveConflict(number: number, field: string, keep: 'git-board' | 'project'): Promise<SyncStatus> {
+  return request('/api/sync/resolve', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ number, field, keep }),
+  });
+}

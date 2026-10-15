@@ -15,7 +15,7 @@ import (
 // a fixture instead of shelling out to the real `gh` binary.
 var fetchGithubItems = ghbridge.FetchItems
 
-const defaultBridgePullLimit = 2000
+const defaultBridgePullLimit = ghbridge.DefaultItemLimit
 
 func newBridgeCmd() *cobra.Command {
 	cmd := &cobra.Command{

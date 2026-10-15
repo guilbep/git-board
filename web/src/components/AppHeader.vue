@@ -11,7 +11,7 @@
       <span class="logo-mark" role="img" aria-label="EPFL" />
     </router-link>
     <span class="app-name">git-board</span>
-    <nav v-if="views.length" class="epfl-nav" aria-label="Saved views">
+    <nav v-if="views.length || syncStatus?.project" class="epfl-nav" aria-label="Saved views">
       <router-link
         v-for="name in views"
         :key="name"
@@ -19,12 +19,28 @@
         :class="{ active: name === active }"
         :aria-current="name === active ? 'page' : undefined"
       >{{ name }}</router-link>
+      <!-- The count is the last check's: the header never reads the Project. -->
+      <router-link
+        v-if="syncStatus?.project"
+        to="/conflicts"
+        active-class="active"
+        aria-current-value="page"
+      >Conflicts<span v-if="conflicts" class="nav-count" :aria-label="`, ${conflicts} held`">{{ conflicts }}</span></router-link>
     </nav>
   </header>
 </template>
 
 <script setup lang="ts">
+import { computed, onMounted } from 'vue';
+import { loadSyncStatus, syncStatus } from '@/sync';
+
 defineProps<{ views: string[]; active: string }>();
+
+const conflicts = computed(() => syncStatus.value?.last?.conflicts.length ?? 0);
+
+onMounted(() => {
+  if (!syncStatus.value) void loadSyncStatus();
+});
 </script>
 
 <style scoped>
@@ -34,6 +50,16 @@ defineProps<{ views: string[]; active: string }>();
   aspect-ratio: 182.4 / 53;
   background: var(--primary);
   mask: url('/epfl-logo.svg') center / contain no-repeat;
+}
+
+.nav-count {
+  margin-left: var(--space-1);
+  padding: 0 0.375rem;
+  font-size: 0.75rem;
+  font-weight: var(--w-bold);
+  color: var(--epfl-white);
+  background: var(--primary);
+  border-radius: var(--radius);
 }
 
 .app-name {

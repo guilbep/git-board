@@ -458,6 +458,15 @@ other filters), a search box, and table headers that sort on click
 live in the URL (`#/?view=backlog&f.status=ready&sort=-est`), so a link
 keeps them.
 
+With a `[github-project]`, a **Conflicts** page (`#/conflicts`) is the web
+side of `git-board bridge sync`/`resolve`: "Check the Project" lists the
+fields both sides changed since they last agreed, each with git-board's
+value, the Project's and the last agreed one, and "Keep git-board's" /
+"Keep the Project's" resolves it; "Sync now" is `bridge sync --apply`. The
+Project is read only when you press one of those (it costs GitHub API
+points and takes seconds on a big Project); the header's count is the last
+check's. Keeping git-board's value needs `write = true`, like the CLI.
+
 **No auth in v1** — same trusted-internal-network assumption as git-bug's
 own `git bug webui`. Anyone who can reach the port can read and write every
 issue. Upgrade path when that stops being fine: a reverse proxy doing auth
