@@ -13,7 +13,7 @@
     </select>
     <button type="button" class="board-picked-clear" @click="picked = []">Clear (Esc)</button>
   </p>
-  <div class="board">
+  <div class="board" :class="{ 'has-picked': picked.length }">
     <section
       v-for="bucket in buckets"
       :key="bucket.group"
@@ -103,8 +103,9 @@ function onCard(issue: Issue, bucket: Bucket, e: MouseEvent) {
   else emit('open', issue);
 }
 function onPickBox(issue: Issue, bucket: Bucket, e: MouseEvent) {
-  e.preventDefault(); // the box shows the picked list, set below
   pick(issue, bucket, e.shiftKey && !!anchor);
+  // the box says what the list holds, even when a range left it picked
+  (e.target as HTMLInputElement).checked = picked.value.includes(issue.id);
 }
 function pickedMoves(): { issue: Issue; from: string }[] {
   return props.buckets.flatMap((b) => b.issues.filter((i) => picked.value.includes(i.id)).map((issue) => ({ issue, from: b.group })));
@@ -225,10 +226,13 @@ function meta(issue: Issue) {
 .column-move { width: 1.75rem; height: 1.5rem; padding: 0; border: 1px solid transparent; background: none; color: var(--fg-muted); font: inherit; font-weight: var(--w-bold); text-align: center; cursor: pointer; appearance: none; -webkit-appearance: none; }
 .column-move:hover, .column-move:focus-visible { border-color: var(--border-strong); color: var(--fg); }
 .cards li { position: relative; }
-.card-pick { position: absolute; top: .5rem; right: .5rem; z-index: 1; width: 1rem; height: 1rem; margin: 0; opacity: 0; accent-color: var(--primary-hover); cursor: pointer; }
+.card-pick { position: absolute; top: .5rem; right: 1rem; /* clear of the lane's scrollbar */ z-index: 1; width: 1rem; height: 1rem; margin: 0; opacity: 0; accent-color: var(--primary-hover); cursor: pointer; }
 .cards li:hover .card-pick, .card-pick:focus-visible, .card-pick.is-on, .card-pick:checked { opacity: 1; }
 .issue-card.is-picked { outline: 2px solid var(--primary-hover); outline-offset: -2px; }
-.board-picked { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem .75rem; margin: 0 0 var(--space-3); padding: .5rem .75rem; border: 1px solid var(--border-strong); border-left: 4px solid var(--primary-hover); background: var(--bg); }
+/* room to scroll a lane's last cards above the bar */
+.board.has-picked .cards { padding-bottom: 5rem; }
+/* over the board's foot, as the table's bulk bar: picking moves nothing */
+.board-picked { position: fixed; bottom: var(--space-3); left: 50%; z-index: 20; transform: translateX(-50%); display: flex; flex-wrap: wrap; align-items: center; gap: .5rem .75rem; width: max-content; max-width: calc(100vw - 2rem); margin: 0; padding: var(--space-3) var(--space-4); border: var(--border-w) solid var(--fg); background: var(--bg); box-shadow: var(--shadow); }
 .board-picked-hint { color: var(--fg-muted); font-size: var(--fs-sm); }
 .board-picked-move { width: auto; min-width: 10rem; }
 .board-picked-clear { padding: 0; border: 0; background: none; color: var(--fg); font: inherit; text-decoration: underline; cursor: pointer; }

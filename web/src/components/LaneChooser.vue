@@ -62,7 +62,7 @@ onBeforeUnmount(() => document.removeEventListener('click', fold));
 
 <style scoped>
 .lanes { position: relative; }
-.lanes summary { display: inline-flex; align-items: center; gap: .375rem; min-height: var(--control-h, 2.5rem); list-style: none; cursor: pointer; }
+.lanes summary { box-sizing: border-box; display: inline-flex; align-items: center; gap: .375rem; min-height: var(--control-h, 2.5rem); list-style: none; cursor: pointer; }
 .lanes summary::-webkit-details-marker { display: none; }
 .lanes-n { padding: 0 .375rem; border-radius: 10rem; background: var(--bg-dark); color: var(--fg-inverse); font-size: .75rem; }
 .lanes-panel { position: absolute; left: 0; z-index: 30; width: 20rem; margin-top: .375rem; padding: .5rem; background: var(--bg); border: var(--border-w) solid var(--border-strong); box-shadow: var(--shadow); }

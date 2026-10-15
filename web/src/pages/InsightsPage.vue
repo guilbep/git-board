@@ -72,12 +72,12 @@
 
       <div class="ins-grid">
         <section v-if="r.burnup" class="ins-card" aria-labelledby="h-sd">
-          <h2 id="h-sd" class="ins-headline">{{ standsHeadline(sprintEntries, r.burnup.title) }}</h2>
-          <p class="ins-sub">Where the sprint stands: its issues by {{ displayName(r.field).toLowerCase() }}, today.</p>
+          <h2 id="h-sd" class="ins-headline">{{ standsHeadline(sprintEntries, r.burnup.title, 'is') }}</h2>
+          <p class="ins-sub">Where the sprint stands: its issues by {{ displayName(r.field).toLowerCase() }}, {{ (r.days.at(-1) ?? '') >= r.burnup.end ? 'on its last day' : 'today' }}.</p>
           <DonutChart :entries="sprintEntries" :field="r.field" :caption="r.burnup.title" :label="`${r.burnup.title} by ${r.field}`" />
         </section>
         <section class="ins-card" aria-labelledby="h-od">
-          <h2 id="h-od" class="ins-headline">{{ standsHeadline(openEntries, 'the open issues') }}</h2>
+          <h2 id="h-od" class="ins-headline">{{ standsHeadline(openEntries, 'the open issues', 'are') }}</h2>
           <p class="ins-sub">The open issues today, by {{ displayName(r.field).toLowerCase() }}.</p>
           <DonutChart :entries="openEntries" :field="r.field" caption="open" :label="`Open issues by ${r.field}`" />
         </section>
@@ -211,16 +211,16 @@ const sprintEntries = computed(() => ordered(r.value?.burnup?.status ?? {}));
 const openEntries = computed(() => ordered(Object.fromEntries((r.value?.values ?? []).map((v) => [v, count(v, last.value)]))));
 // "61% of Hypercare is validated or done", from the values whose words
 // say done (valueicons.ts); else the biggest share
-function standsHeadline(entries: { key: string; n: number }[], what: string): string {
+function standsHeadline(entries: { key: string; n: number }[], what: string, is: 'is' | 'are'): string {
   const total = entries.reduce((t, e) => t + e.n, 0);
   if (!total || !r.value) return `Nothing in ${what} yet.`;
   const done = entries.filter((e) => valueIcon(r.value!.field, e.key) === 'st-done');
   if (done.length) {
     const pct = Math.round((done.reduce((t, e) => t + e.n, 0) / total) * 100);
-    return `${pct}% of ${what} is ${done.map((e) => e.key).join(' or ')}.`;
+    return `${pct}% of ${what} ${is} ${done.map((e) => e.key).join(' or ')}.`;
   }
   const top = [...entries].sort((a, b) => b.n - a.n)[0]!;
-  return `Most of ${what} is ${top.key === '(none)' ? 'without a ' + r.value.field : top.key}: ${Math.round((top.n / total) * 100)}%.`;
+  return `Most of ${what} ${is} ${top.key === '(none)' ? 'without a ' + r.value.field : top.key}: ${Math.round((top.n / total) * 100)}%.`;
 }
 const tmMax = computed(() => {
   if (!r.value) return 1;
