@@ -28,6 +28,9 @@ var errDryRunFirst = errors.New("run a dry run first: a real sync writes to GitH
 type forgeStatus struct {
 	Bridges []gitbugio.SyncBridge `json:"bridges"`
 	Job     *forgeJob             `json:"job"`
+	// Origin is where pushing the git-bug data after a run goes: the page
+	// shows it beside the (unchecked) box.
+	Origin []string `json:"origin"`
 }
 
 // forgeJob is one run of git-bug's forge sync, in the background: a co2
@@ -163,7 +166,11 @@ func (s *apiServer) forgeSnapshot() forgeStatus {
 	if bridges == nil {
 		bridges = []gitbugio.SyncBridge{}
 	}
-	return forgeStatus{Bridges: bridges, Job: s.job}
+	origin := s.b.PushURLs("origin")
+	if origin == nil {
+		origin = []string{}
+	}
+	return forgeStatus{Bridges: bridges, Job: s.job, Origin: origin}
 }
 
 func (s *apiServer) handleForges(w http.ResponseWriter, r *http.Request) {
@@ -195,6 +202,10 @@ func (s *apiServer) handleForgeSync(w http.ResponseWriter, r *http.Request) {
 		last := s.job
 		if last == nil || !last.DryRun || last.State != "done" || last.Ended == nil || time.Since(*last.Ended) > dryRunFresh {
 			writeError(w, http.StatusConflict, errDryRunFirst)
+			return
+		}
+		if last.Errors > 0 {
+			writeError(w, http.StatusConflict, errors.New("the dry run had errors: fix them and run it again"))
 			return
 		}
 		for _, name := range req.Bridges {

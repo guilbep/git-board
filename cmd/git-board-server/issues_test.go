@@ -214,6 +214,18 @@ func TestForgeSyncRunsADryRunFirst(t *testing.T) {
 	if code := call(t, "POST", ts.URL+"/api/forges/sync", map[string]any{"dry_run": false}, nil); code != http.StatusConflict {
 		t.Errorf("a second real run without a new dry run: %d, want 409", code)
 	}
+
+	// a dry run with errors doesn't open the way to a real run
+	release = make(chan struct{})
+	close(release)
+	s.runSync = fakeSync([]core.SyncResult{{Bridge: "gl", Import: &core.ImportResult{Event: core.ImportEventError, Err: context.Canceled}}}, release)
+	call(t, "POST", ts.URL+"/api/forges/sync", map[string]any{"dry_run": true}, nil)
+	if st = waitJob(t, ts); st.Job.Errors != 1 {
+		t.Fatalf("dry run with an error: %+v", st.Job)
+	}
+	if code := call(t, "POST", ts.URL+"/api/forges/sync", map[string]any{"dry_run": false}, nil); code != http.StatusConflict {
+		t.Errorf("a real run after a dry run with errors: %d, want 409", code)
+	}
 }
 
 func TestMarkdownPreview(t *testing.T) {

@@ -11,7 +11,7 @@
       Mirrors issues, comments, titles, open/closed and labels between git-board and the forges, both ways.
       Every run starts with a dry run: nothing is written until you confirm.
     </p>
-    <p class="gb-hint">Project fields (status, prio, sprint…) have their own sync, <router-link to="/conflicts">Sync with the Project</router-link>.</p>
+    <p class="gb-hint">Project fields (status, prio, sprint…) have their own sync, <router-link to="/conflicts">Sync with the Project</router-link><!-- -->.</p>
 
     <div v-if="status && !status.bridges.length" class="epfl-alert epfl-alert-warning">
       No bridge has sync enabled. Set one up with <code>git bug bridge new --name gh --url https://github.com/owner/repo --sync</code>.
@@ -27,6 +27,9 @@
       <div v-if="error" class="epfl-alert epfl-alert-danger" role="alert"><b>Not started.</b> {{ error }}</div>
 
       <!-- 1: nothing to review yet -->
+      <p v-if="job?.dry_run && job.state === 'done' && job.errors" class="epfl-alert epfl-alert-danger" role="alert">
+        <b>The dry run had {{ job.errors }} error{{ job.errors === 1 ? '' : 's' }}</b> (see the details below). Fix {{ job.errors === 1 ? 'it' : 'them' }} and dry run again: a real run needs a clean dry run.
+      </p>
       <section v-if="step === 0" class="gb-run">
         <p v-if="job && !job.dry_run && job.state !== 'running'" class="gb-hint">Last run {{ when(job.started, true) }}.</p>
         <button type="button" class="epfl-btn epfl-btn-primary" :disabled="starting" @click="start(true)">
@@ -103,7 +106,10 @@
           <legend class="gb-hint">Forges in this run</legend>
           <label v-for="b in bridgeRows" :key="b.name"><input v-model="chosen" type="checkbox" :value="b.name" /> {{ b.label }}</label>
         </fieldset>
-        <label class="gb-check"><input v-model="push" type="checkbox" /> Then push the git-bug data to <code>origin</code>, for other clones to know the links</label>
+        <label v-if="status?.origin.length" class="gb-check">
+          <input v-model="push" type="checkbox" />
+          <span>Then push the git-bug data to <code>origin</code> ({{ status.origin.join(', ') }}), for other clones to know the links</span>
+        </label>
         <p class="gb-hint">While it runs, edits in git-board wait and are saved right after it. It goes on if you leave this page.</p>
         <button type="button" class="epfl-btn epfl-btn-primary" :disabled="!chosen.length" @click="confirming = true">Run the sync…</button>
       </section>
@@ -120,8 +126,8 @@
           <p>From the dry run of {{ job ? when(job.started, true) : '' }}. If the forges changed since, the run does what is true then.</p>
           <ul class="gb-plain-list">
             <li v-for="b in chosenRows" :key="b.name">
-              <b>{{ b.label }}</b>: create {{ n(b.tally?.to.issues) }} issues, post {{ n(b.tally?.to.comments) }} comments,
-              push {{ n((b.tally?.to.edits ?? 0) + (b.tally?.to.changes ?? 0)) }} edits and changes, pull {{ n((b.tally?.from.issues ?? 0) + (b.tally?.from.changed ?? 0)) }} issues
+              <b>{{ b.label }}</b>: create {{ count(b.tally?.to.issues, 'issue') }}, post {{ count(b.tally?.to.comments, 'comment') }},
+              push {{ count((b.tally?.to.edits ?? 0) + (b.tally?.to.changes ?? 0), 'edit or change', 'edits and changes') }}, pull {{ count((b.tally?.from.issues ?? 0) + (b.tally?.from.changed ?? 0), 'issue') }}
             </li>
           </ul>
           <div v-for="b in bigRows" :key="b.name" class="epfl-alert epfl-alert-danger">
@@ -134,7 +140,7 @@
           <span class="gb-grow" />
           <button type="button" class="epfl-btn epfl-btn-secondary" @click="confirming = false">Cancel</button>
           <button type="button" class="epfl-btn epfl-btn-primary" :disabled="bigRows.some((b) => !understood.includes(b.name)) || starting" @click="runReal">
-            Run: {{ n(chosenRows.reduce((s, b) => s + (b.tally?.to.issues ?? 0), 0)) }} issues, {{ n(chosenRows.reduce((s, b) => s + (b.tally?.to.comments ?? 0), 0)) }} comments
+            Run: {{ count(chosenRows.reduce((s, b) => s + (b.tally?.to.issues ?? 0), 0), 'issue') }}, {{ count(chosenRows.reduce((s, b) => s + (b.tally?.to.comments ?? 0), 0), 'comment') }}
           </button>
         </footer>
       </section>
@@ -161,14 +167,15 @@ const starting = ref(false);
 const confirming = ref(false);
 const chosen = ref<string[]>([]);
 const understood = ref<string[]>([]);
-const push = ref(true);
+const push = ref(false); // an outward write: the user's choice, each run
 
 const job = computed(() => status.value?.job ?? null);
 // where we are: 0 dry run to do, 1 review, 2 running, 3 results
 const step = computed(() => {
   const j = job.value;
   if (!j || j.state === 'failed') return 0;
-  if (j.dry_run) return j.state === 'running' ? 0 : 1;
+  // a dry run with errors: fix them, run it again (the server refuses a real run)
+  if (j.dry_run) return j.state === 'running' || j.errors > 0 ? 0 : 1;
   return j.state === 'running' ? 2 : 3;
 });
 
@@ -179,6 +186,7 @@ const bridgeRows = computed(() =>
 const chosenRows = computed(() => bridgeRows.value.filter((b) => chosen.value.includes(b.name)));
 const bigRows = computed(() => chosenRows.value.filter((b) => (b.tally?.to.issues ?? 0) >= bigRun));
 const n = (v: number | undefined) => (v ?? 0).toLocaleString();
+const count = (v: number | undefined, one: string, many = `${one}s`) => `${n(v)} ${(v ?? 0) === 1 ? one : many}`;
 
 // a fresh dry run: every forge in, nothing understood yet
 watch(() => job.value?.started, () => {

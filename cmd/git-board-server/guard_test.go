@@ -53,3 +53,41 @@ func TestWritesFromAnotherSiteAreRefused(t *testing.T) {
 		t.Errorf("no origin (curl): %d, want 200", got)
 	}
 }
+
+// DNS rebinding: a page on evil.example re-resolves its own name to this
+// machine; the browser then sends Host and Origin evil.example, which agree.
+// Only this machine's names are served.
+func TestRequestsForAnotherHostAreRefused(t *testing.T) {
+	cfg := mustLoadConfig(t)
+	b := gitbugiotest.New(t)
+	id := gitbugiotest.NewIssue(t, b, "x")
+	ts := newTestServer(t, b, cfg)
+	for _, method := range []string{http.MethodGet, http.MethodPatch} {
+		req, err := http.NewRequest(method, ts.URL+"/api/issues/"+id, strings.NewReader(`{"prio":"p1"}`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Host = "evil.example:8080"
+		req.Header.Set("Origin", "http://evil.example:8080")
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = resp.Body.Close()
+		if resp.StatusCode != http.StatusForbidden {
+			t.Errorf("%s with Host evil.example: %d, want 403", method, resp.StatusCode)
+		}
+	}
+	// localhost is this machine
+	req, _ := http.NewRequest(http.MethodGet, ts.URL+"/api/views", nil)
+	req.Host = "localhost:8080"
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("Host localhost: %d, want 200", resp.StatusCode)
+	}
+}

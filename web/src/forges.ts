@@ -11,13 +11,14 @@ let polling: ReturnType<typeof setTimeout> | undefined;
 let waiters: (() => void)[] = [];
 
 export async function loadForges(): Promise<void> {
+  let reached = true;
   try {
     forgeStatus.value = await getForges();
   } catch {
-    // the header just shows no sync entry
+    reached = false; // unreachable for now: not "ended", ask again
   }
-  const running = forgeStatus.value?.job?.state === 'running';
-  if (running && !polling) {
+  const running = !reached || forgeStatus.value?.job?.state === 'running';
+  if (running && !polling && (reached ? true : waiters.length > 0)) {
     polling = setTimeout(() => {
       polling = undefined;
       void loadForges();
@@ -30,10 +31,11 @@ export async function loadForges(): Promise<void> {
   }
 }
 
-// untilSyncEnds resolves when no forge sync runs.
+// untilSyncEnds resolves when no forge sync runs, asked one poll later at
+// the soonest: a write refused for a running sync doesn't retry at once.
 export function untilSyncEnds(): Promise<void> {
   return new Promise((resolve) => {
     waiters.push(resolve);
-    void loadForges();
+    setTimeout(() => void loadForges(), pollMs);
   });
 }

@@ -48,6 +48,9 @@ type apiServer struct {
 	job     *forgeJob
 	runSync func(context.Context, bool, []string) (<-chan core.SyncResult, error) // nil: git-bug's
 
+	// exposed are names --addr exposes beyond the loopback ones (withGuard)
+	exposed []string
+
 	lazyOnce
 }
 
@@ -79,7 +82,7 @@ func newMux(s *apiServer, static http.Handler) http.Handler {
 	mux.HandleFunc("POST /api/sync/apply", s.handleSyncApply)
 	mux.HandleFunc("POST /api/sync/resolve", s.handleSyncResolve)
 	mux.Handle("/", static)
-	return withGuard(mux)
+	return withGuard(mux, s.exposed)
 }
 
 // Both answer {} without a config: a nil map would encode as null.
@@ -164,6 +167,7 @@ func (s *apiServer) handlePatchIssue(w http.ResponseWriter, r *http.Request) {
 var (
 	errForbiddenOrigin = errors.New("refused: a write from another site")
 	errNotJSON         = errors.New("refused: a write must be JSON (Content-Type: application/json)")
+	errForeignHost     = errors.New("refused: this server answers to localhost (see --addr)")
 )
 
 func writeJSON(w http.ResponseWriter, status int, v any) {

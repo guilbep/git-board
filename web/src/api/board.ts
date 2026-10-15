@@ -269,6 +269,7 @@ export interface ForgeJob {
 export interface ForgeStatus {
   bridges: { name: string; target: string }[];
   job: ForgeJob | null;
+  origin: string[]; // where pushing the git-bug data after a run goes
 }
 
 export function getForges(): Promise<ForgeStatus> {

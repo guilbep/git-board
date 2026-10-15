@@ -2,8 +2,10 @@ package main
 
 import (
 	"mime"
+	"net"
 	"net/http"
 	"net/url"
+	"strings"
 )
 
 // devOrigins are the Quasar/Vite dev server's default origin (see
@@ -43,8 +45,17 @@ func withCORS(next http.Handler) http.Handler {
 // behind a request, and a cross-site request can only be JSON after a CORS
 // preflight, which only the dev server passes. Clients without an Origin
 // (curl, scripts) are the user's own.
-func withGuard(next http.Handler) http.Handler {
+//
+// Every request, a read too, must name this machine: a page can point its
+// own domain at 127.0.0.1 ("DNS rebinding"), and its requests then carry
+// Host and Origin of that domain, which agree. extraHosts are the names
+// --addr exposes beyond the loopback ones; "*" serves any.
+func withGuard(next http.Handler, extraHosts []string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !servedHost(r.Host, extraHosts) {
+			writeError(w, http.StatusForbidden, errForeignHost)
+			return
+		}
 		switch r.Method {
 		case http.MethodGet, http.MethodHead, http.MethodOptions:
 			next.ServeHTTP(w, r)
@@ -65,4 +76,23 @@ func withGuard(next http.Handler) http.Handler {
 func sameHost(origin, host string) bool {
 	u, err := url.Parse(origin)
 	return err == nil && u.Host == host
+}
+
+// servedHost tells whether a request's Host names this server.
+func servedHost(hostport string, extra []string) bool {
+	host := hostport
+	if h, _, err := net.SplitHostPort(hostport); err == nil {
+		host = h
+	}
+	host = strings.Trim(host, "[]")
+	switch host {
+	case "localhost", "127.0.0.1", "::1":
+		return true
+	}
+	for _, h := range extra {
+		if h == "*" || h == host {
+			return true
+		}
+	}
+	return false
 }

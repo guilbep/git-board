@@ -79,3 +79,22 @@ func (b *Backend) SyncBridges() ([]SyncBridge, error) {
 func (b *Backend) SyncForges(ctx context.Context, dryRun bool, names []string) (<-chan core.SyncResult, error) {
 	return core.SyncAll(ctx, b.c, names, dryRun)
 }
+
+// PushURLs are where a push to remote goes, as git's does: its pushurls,
+// else its urls. Empty without such a remote.
+func (b *Backend) PushURLs(remote string) []string {
+	cfg, err := b.c.Config().Read()
+	if err != nil {
+		return nil
+	}
+	var res []string
+	for _, key := range []string{"remote." + remote + ".pushurl", "remote." + remote + ".url"} {
+		for _, e := range cfg.GetAll(key) {
+			res = append(res, e.Value)
+		}
+		if len(res) > 0 {
+			return res
+		}
+	}
+	return nil
+}
