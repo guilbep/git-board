@@ -10,7 +10,7 @@ var viewName = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
 
 // keyLine is `key = "value"  # comment`: the key, the value as written,
 // and what follows it.
-var keyLine = regexp.MustCompile(`^(\s*([A-Za-z0-9_-]+)\s*=\s*)("(?:[^"\\]|\\.)*"|'[^']*'|[^#\s]+)(.*)$`)
+var keyLine = regexp.MustCompile(`^(\s*([A-Za-z0-9_-]+)\s*=\s*)(\[[^\]]*\]|"(?:[^"\\]|\\.)*"|'[^']*'|[^#\s]+)(.*)$`)
 
 // SetViewText is text with the [views.<name>] table holding v, the way the
 // board's "Save view" writes it: its layout, filter, group and sort lines
@@ -21,8 +21,14 @@ func SetViewText(text, name string, v View) (string, error) {
 	if !viewName.MatchString(name) {
 		return "", fmt.Errorf("a view's name is letters, digits, - and _, not %q", name)
 	}
-	keys := []string{"layout", "filter", "group", "sort"}
-	vals := map[string]string{"layout": v.Layout, "filter": v.Filter, "group": v.Group, "sort": v.Sort}
+	keys := []string{"layout", "filter", "group", "sort", "columns"}
+	// written as TOML: a string quoted, the columns an array
+	vals := map[string]string{"layout": tomlString(v.Layout), "filter": tomlString(v.Filter), "group": tomlString(v.Group), "sort": tomlString(v.Sort), "columns": tomlArray(v.Columns)}
+	for k, val := range vals {
+		if val == `""` {
+			vals[k] = "" // empty: no line
+		}
+	}
 	header := "[views." + name + "]"
 
 	lines := strings.Split(text, "\n")
@@ -38,7 +44,7 @@ func SetViewText(text, name string, v View) (string, error) {
 		b.WriteString(header + "\n")
 		for _, k := range keys {
 			if vals[k] != "" {
-				b.WriteString(k + " = " + tomlString(vals[k]) + "\n")
+				b.WriteString(k + " = " + vals[k] + "\n")
 			}
 		}
 		if base := strings.TrimRight(text, "\n"); base != "" {
@@ -74,8 +80,8 @@ func SetViewText(text, name string, v View) (string, error) {
 		if want == "" {
 			continue
 		}
-		if unquote(m[3]) != want {
-			l = m[1] + tomlString(want) + m[4]
+		if m[3] != want && unquote(m[3]) != unquote(want) {
+			l = m[1] + want + m[4]
 		}
 		block = append(block, l)
 		lastKey = len(block) - 1
@@ -83,13 +89,25 @@ func SetViewText(text, name string, v View) (string, error) {
 	var missing []string
 	for _, k := range keys {
 		if !seen[k] && vals[k] != "" {
-			missing = append(missing, k+" = "+tomlString(vals[k]))
+			missing = append(missing, k+" = "+vals[k])
 		}
 	}
 	block = append(block[:lastKey+1], append(missing, block[lastKey+1:]...)...)
 
 	out := append(append(append([]string{}, lines[:start+1]...), block...), lines[end:]...)
 	return strings.Join(out, "\n"), nil
+}
+
+// tomlArray writes strings as a TOML array, "" for none.
+func tomlArray(list []string) string {
+	if len(list) == 0 {
+		return ""
+	}
+	quoted := make([]string, len(list))
+	for i, s := range list {
+		quoted[i] = tomlString(s)
+	}
+	return "[" + strings.Join(quoted, ", ") + "]"
 }
 
 // tomlString quotes s as a TOML basic string.

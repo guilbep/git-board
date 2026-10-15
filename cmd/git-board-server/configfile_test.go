@@ -116,6 +116,11 @@ func TestSaveViewWritesItsTable(t *testing.T) {
 	if code := call(t, "PUT", ts.URL+"/api/views/in-review", map[string]string{"layout": "board", "filter": "status:in-review,qa", "group": "assignee"}, nil); code != http.StatusOK {
 		t.Errorf("a new view: %d", code)
 	}
+	withCols := map[string]any{"layout": "table", "filter": "is:open", "columns": []string{"title", "status", "links"}}
+	var saved map[string]struct{ Columns []string }
+	if code := call(t, "PUT", ts.URL+"/api/views/cols", withCols, &saved); code != http.StatusOK || strings.Join(saved["cols"].Columns, ",") != "title,status,links" {
+		t.Errorf("a view's columns: %d %+v", code, saved["cols"])
+	}
 	if code := call(t, "PUT", ts.URL+"/api/views/my%20view", body, nil); code != http.StatusBadRequest {
 		t.Errorf("a name with a space: %d, want 400", code)
 	}

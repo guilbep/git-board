@@ -68,6 +68,9 @@ type View struct {
 	Filter string `toml:"filter" json:"filter"`
 	Group  string `toml:"group" json:"group"`
 	Sort   string `toml:"sort" json:"sort"`
+	// Columns a table shows, in order (id, title, is, a field, links,
+	// other); none: the default ones.
+	Columns []string `toml:"columns" json:"columns,omitempty"`
 }
 
 // reposTable mirrors the [repos] table shape (`list = [...]`).
