@@ -12,7 +12,17 @@ test('composeFilter saves what the page shows', () => {
     filter: 'is:open no:assignee label:"nice to have" is:open,closed',
     skipped: [],
   });
-  // "no value, or ready" has no single condition
+  // "not set" with values: the values left out, negated (all but validated)
+  const options = { status: ['backlog', 'ready', 'qa', 'validated', '(none)'] };
+  assert.deepEqual(composeFilter('is:open', { status: ['backlog', 'ready', 'qa', '(none)'] }, '', options), {
+    filter: 'is:open -status:validated',
+    skipped: [],
+  });
+  assert.deepEqual(composeFilter('is:open', { status: ['ready', '(none)'] }, '', options), {
+    filter: 'is:open -status:backlog,qa,validated',
+    skipped: [],
+  });
+  // without the facet's values to negate, it can't be said
   assert.deepEqual(composeFilter('is:open', { status: ['(none)', 'ready'] }, ''), { filter: 'is:open', skipped: ['status'] });
   // a condition already there isn't added twice
   assert.deepEqual(composeFilter('is:open status:ready', { status: ['ready'] }, '  '), { filter: 'is:open status:ready', skipped: [] });

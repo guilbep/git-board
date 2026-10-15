@@ -341,7 +341,9 @@ function message(e: unknown): string {
 
 // The view as the page shows it now, and whether that differs from the
 // saved one: the bar offers to save it into .git-board.toml.
-const composed = computed(() => composeFilter(filterText.value, sel.value, q.value));
+const composed = computed(() =>
+  composeFilter(filterText.value, sel.value, q.value, Object.fromEntries(facetList.value.map((f) => [f.key, f.options.map(([v]) => v)]))),
+);
 const draftSkipped = computed(() => composed.value.skipped);
 const draft = computed<ViewConfig>(() => ({
   layout: layout.value,
@@ -352,6 +354,7 @@ const draft = computed<ViewConfig>(() => ({
 const viewDirty = computed(() => {
   const v = view.value;
   const d = draft.value;
+  if (draftSkipped.value.length) return true; // the page differs, even what can't be saved
   if (!v) return d.filter !== 'is:open' || d.group !== '' || d.sort !== '';
   return d.filter !== v.filter || d.group !== (v.group ?? '') || d.sort !== (v.sort ?? '');
 });
