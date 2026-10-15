@@ -32,7 +32,7 @@ type syncReport struct {
 }
 
 func (s *apiServer) status() syncStatus {
-	gp := s.cfg.GithubProject
+	gp := s.config().GithubProject
 	st := syncStatus{Write: gp.Write, Last: s.last}
 	if gp.Owner != "" && gp.Number != 0 {
 		st.Project = fmt.Sprintf("%s/%d", gp.Owner, gp.Number)
@@ -49,11 +49,11 @@ func (s *apiServer) handleSyncStatus(w http.ResponseWriter, r *http.Request) {
 // check reads both sides and keeps the dry run's outcome. The caller holds
 // syncMu.
 func (s *apiServer) check() error {
-	state, err := ghbridge.LoadState(s.b, s.project, s.cfg, ghbridge.DefaultItemLimit)
+	state, err := ghbridge.LoadState(s.b, s.project, s.config(), ghbridge.DefaultItemLimit)
 	if err != nil {
 		return err
 	}
-	plan := state.Plan(s.cfg)
+	plan := state.Plan(s.config())
 	report := &syncReport{CheckedAt: time.Now(), Conflicts: plan.Conflicts, ProjectWrites: len(plan.Edits), Unmatched: len(plan.Unmatched)}
 	if report.Conflicts == nil {
 		report.Conflicts = []ghbridge.Conflict{}
@@ -93,9 +93,9 @@ func (s *apiServer) handleSyncApply(w http.ResponseWriter, r *http.Request) {
 	defer done()
 	s.syncMu.Lock()
 	defer s.syncMu.Unlock()
-	state, err := ghbridge.LoadState(s.b, s.project, s.cfg, ghbridge.DefaultItemLimit)
+	state, err := ghbridge.LoadState(s.b, s.project, s.config(), ghbridge.DefaultItemLimit)
 	if err == nil {
-		_, err = ghbridge.ApplySync(s.b, s.project.Writer, s.b, state.Plan(s.cfg), s.cfg, state.Meta)
+		_, err = ghbridge.ApplySync(s.b, s.project.Writer, s.b, state.Plan(s.config()), s.config(), state.Meta)
 	}
 	if err == nil {
 		err = s.check()
@@ -131,9 +131,9 @@ func (s *apiServer) handleSyncResolve(w http.ResponseWriter, r *http.Request) {
 	defer done()
 	s.syncMu.Lock()
 	defer s.syncMu.Unlock()
-	state, err := ghbridge.LoadState(s.b, s.project, s.cfg, ghbridge.DefaultItemLimit)
+	state, err := ghbridge.LoadState(s.b, s.project, s.config(), ghbridge.DefaultItemLimit)
 	if err == nil {
-		_, err = ghbridge.ResolveConflict(s.b, s.project, s.cfg, state, req.Number, req.Field, req.Keep == "git-board")
+		_, err = ghbridge.ResolveConflict(s.b, s.project, s.config(), state, req.Number, req.Field, req.Keep == "git-board")
 	}
 	if err == nil {
 		err = s.check()

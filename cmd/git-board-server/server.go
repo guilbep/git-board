@@ -32,9 +32,12 @@ import (
 // a sync.Mutex on apiServer first — cheapest fix before reaching for
 // per-request Backend instances.
 type apiServer struct {
-	cfg *config.Config
+	cfg *config.Config // read with config(): the settings page replaces it
 	b   *gitbugio.Backend
 	me  string
+
+	cfgMu   sync.RWMutex
+	cfgPath string // .git-board.toml; empty: config.Path()
 
 	// The GitHub Project sync (sync.go): one at a time, and the last check.
 	project ghbridge.Project
@@ -84,6 +87,9 @@ func newMux(s *apiServer, static http.Handler) http.Handler {
 	mux.HandleFunc("GET /api/uploads", s.handleUploadStatus)
 	mux.HandleFunc("POST /api/uploads", s.handleUpload)
 	mux.HandleFunc("GET /api/settings", s.handleSettings)
+	mux.HandleFunc("GET /api/config", s.handleConfigFile)
+	mux.HandleFunc("POST /api/config/check", s.handleConfigCheck)
+	mux.HandleFunc("PUT /api/config", s.handleConfigSave)
 	mux.HandleFunc("PUT /api/bridges/{name}/sync", s.handleBridgeSync)
 	mux.HandleFunc("GET /api/forges", s.handleForges)
 	mux.HandleFunc("POST /api/forges/sync", s.handleForgeSync)
@@ -97,7 +103,7 @@ func newMux(s *apiServer, static http.Handler) http.Handler {
 
 // Both answer {} without a config: a nil map would encode as null.
 func (s *apiServer) handleViews(w http.ResponseWriter, r *http.Request) {
-	views := s.cfg.Views
+	views := s.config().Views
 	if views == nil {
 		views = map[string]config.View{}
 	}
@@ -105,7 +111,7 @@ func (s *apiServer) handleViews(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *apiServer) handleFields(w http.ResponseWriter, r *http.Request) {
-	fields := s.cfg.Fields
+	fields := s.config().Fields
 	if fields == nil {
 		fields = map[string]config.Field{}
 	}
@@ -116,13 +122,14 @@ func (s *apiServer) handleFields(w http.ResponseWriter, r *http.Request) {
 // labels in use and of the configured options, so a value shows the same
 // color everywhere.
 func (s *apiServer) handleColors(w http.ResponseWriter, r *http.Request) {
+	cfg := s.config()
 	values := map[string][]string{}
 	for _, l := range s.b.Labels() {
 		if field, value, ok := strings.Cut(l, ":"); ok {
 			values[field] = append(values[field], value)
 		}
 	}
-	for name, f := range s.cfg.Fields {
+	for name, f := range cfg.Fields {
 		values[name] = append(values[name], f.Options...)
 		for v := range f.Colors {
 			values[name] = append(values[name], v)
@@ -130,7 +137,7 @@ func (s *apiServer) handleColors(w http.ResponseWriter, r *http.Request) {
 	}
 	res := map[string]map[string]string{}
 	for field, vs := range values {
-		if colors := s.cfg.Colors(field, vs); len(colors) > 0 {
+		if colors := cfg.Colors(field, vs); len(colors) > 0 {
 			res[field] = colors
 		}
 	}
@@ -148,12 +155,12 @@ func (s *apiServer) handleListIssues(w http.ResponseWriter, r *http.Request) {
 
 	// q is the page's search box, GitHub's syntax: free text (titles,
 	// descriptions, comments) and qualifiers, on top of the view's filter
-	issues, err := board.LoadMatching(s.b, s.cfg, filterStr+" "+q.Get("q"), s.me)
+	issues, err := board.LoadMatching(s.b, s.config(), filterStr+" "+q.Get("q"), s.me)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	board.SortByField(issues, q.Get("sort"), s.cfg)
+	board.SortByField(issues, q.Get("sort"), s.config())
 	writeJSON(w, http.StatusOK, board.BucketBy(issues, q.Get("group")))
 }
 
@@ -192,7 +199,7 @@ func (s *apiServer) handlePatchIssue(w http.ResponseWriter, r *http.Request) {
 
 	today := time.Now()
 	for _, name := range names {
-		if _, err := fields.Apply(s.b, s.cfg, id, name, assignments[name], s.me, today); err != nil {
+		if _, err := fields.Apply(s.b, s.config(), id, name, assignments[name], s.me, today); err != nil {
 			writeError(w, http.StatusBadRequest, err)
 			return
 		}

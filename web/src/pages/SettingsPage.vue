@@ -1,6 +1,6 @@
-<!-- Settings: who you write as, which bridges sync, and how attachments
-     and the GitHub Project are set up. Bridges are added with git-bug
-     (`git bug bridge new … --sync`); .git-board.toml is edited as a file. -->
+<!-- Settings: who you write as, which bridges sync, how attachments and
+     the GitHub Project are set up, and .git-board.toml itself. Bridges are
+     added with git-bug (`git bug bridge new … --sync`). -->
 <template>
   <AppHeader :views="viewNames" active="" />
   <main class="gb-page gb-settings">
@@ -11,7 +11,7 @@
     <section aria-labelledby="set-me">
       <h2 id="set-me" class="h5">You</h2>
       <p v-if="me?.me && !choosing">
-        You write as <b>{{ me.me.name }}</b><span v-if="me.me.login" class="gb-hint"> ({{ me.me.login }})</span>.
+        You write as <b>{{ me.me.name }}</b><span v-if="me.me.login && !me.me.name.includes(me.me.login)" class="set-login"> ({{ me.me.login }})</span>.
         <button type="button" class="gb-linkbtn" @click="choosing = true">Change</button>
       </p>
       <template v-else>
@@ -67,10 +67,7 @@
       <p v-else-if="settings">None. Set <code>[github-project]</code> in <code>.git-board.toml</code>, or run <code>git board bridge pull --owner … --project …</code>.</p>
     </section>
 
-    <section aria-labelledby="set-file">
-      <h2 id="set-file" class="h5">Configuration file</h2>
-      <p v-if="settings">Fields, views and sprints are in <code>{{ settings.config_path }}</code>. Restart git-board-server after editing it.</p>
-    </section>
+    <ConfigEditor @saved="reload" />
   </main>
 </template>
 
@@ -82,6 +79,7 @@ import { message } from '@/issue';
 import { loadMe, me } from '@/me';
 import AppHeader from '@/components/AppHeader.vue';
 import IdentityChooser from '@/components/IdentityChooser.vue';
+import ConfigEditor from '@/components/ConfigEditor.vue';
 
 const settings = ref<Settings | null>(null);
 const viewNames = ref<string[]>([]);
@@ -111,8 +109,8 @@ async function toggle(b: Bridge, on: boolean) {
   }
 }
 
-onMounted(async () => {
-  if (!me.value) void loadMe();
+// after a save of .git-board.toml: the header's views, the Project's line
+async function reload() {
   try {
     settings.value = await getSettings();
   } catch (e) {
@@ -123,6 +121,11 @@ onMounted(async () => {
   } catch {
     // the header shows no views
   }
+}
+
+onMounted(() => {
+  if (!me.value) void loadMe();
+  void reload();
 });
 </script>
 
@@ -131,6 +134,7 @@ onMounted(async () => {
 .gb-settings section h2 { margin: 0; }
 .gb-settings section p { margin: 0; }
 .gb-linkbtn { justify-self: start; padding: 0; border: 0; background: none; color: var(--fg); text-decoration: underline; cursor: pointer; font: inherit; }
+.set-login { color: var(--fg-muted); }
 .gb-switch { display: inline-flex; align-items: center; gap: .5rem; cursor: pointer; font-weight: 700; }
 .gb-switch input { width: 1.125rem; height: 1.125rem; accent-color: var(--epfl-red-dark); }
 </style>

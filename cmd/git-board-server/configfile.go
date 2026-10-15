@@ -1,0 +1,140 @@
+package main
+
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"errors"
+	"io/fs"
+	"net/http"
+	"os"
+	"sort"
+
+	"github.com/guilbep/git-board/internal/config"
+)
+
+// The settings page edits .git-board.toml whole: read it, check a draft
+// (where it breaks, what git-board won't use), save it, and the server
+// takes it at once, no restart.
+
+func (s *apiServer) config() *config.Config {
+	s.cfgMu.RLock()
+	defer s.cfgMu.RUnlock()
+	return s.cfg
+}
+
+func (s *apiServer) configPath() string {
+	if s.cfgPath != "" {
+		return s.cfgPath
+	}
+	return config.Path()
+}
+
+// readConfigFile is the file and its hash: what a save must start from.
+func (s *apiServer) readConfigFile() (text string, exists bool, hash string, err error) {
+	data, err := os.ReadFile(s.configPath())
+	if errors.Is(err, fs.ErrNotExist) {
+		return "", false, "none", nil
+	}
+	if err != nil {
+		return "", false, "", err
+	}
+	sum := sha256.Sum256(data)
+	return string(data), true, hex.EncodeToString(sum[:]), nil
+}
+
+func (s *apiServer) handleConfigFile(w http.ResponseWriter, r *http.Request) {
+	text, exists, hash, err := s.readConfigFile()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"path": s.configPath(), "text": text, "exists": exists, "hash": hash})
+}
+
+type configCheckResponse struct {
+	OK       bool                `json:"ok"`
+	Error    *config.SyntaxError `json:"error,omitempty"`
+	Message  string              `json:"message,omitempty"` // an error without a position
+	Warnings []string            `json:"warnings"`
+	Summary  struct {
+		Fields  []string `json:"fields"`
+		Views   []string `json:"views"`
+		Sprints int      `json:"sprints"`
+	} `json:"summary"`
+}
+
+func checkConfig(text string) (*config.Config, configCheckResponse) {
+	var res configCheckResponse
+	res.Warnings = []string{}
+	cfg, warnings, err := config.Check([]byte(text))
+	var se *config.SyntaxError
+	switch {
+	case errors.As(err, &se):
+		res.Error = se
+		return nil, res
+	case err != nil:
+		res.Message = err.Error()
+		return nil, res
+	}
+	res.OK, res.Warnings = true, append(res.Warnings, warnings...)
+	for name := range cfg.Fields {
+		res.Summary.Fields = append(res.Summary.Fields, name)
+	}
+	for name := range cfg.Views {
+		res.Summary.Views = append(res.Summary.Views, name)
+	}
+	sort.Strings(res.Summary.Fields)
+	sort.Strings(res.Summary.Views)
+	res.Summary.Sprints = len(cfg.Sprints.List)
+	return cfg, res
+}
+
+func (s *apiServer) handleConfigCheck(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Text string `json:"text"`
+	}
+	if !decode(w, r, &req) {
+		return
+	}
+	_, res := checkConfig(req.Text)
+	writeJSON(w, http.StatusOK, res)
+}
+
+// handleConfigSave writes the file when it is still the one the page read
+// (base: its hash), then serves the new config.
+func (s *apiServer) handleConfigSave(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Text string `json:"text"`
+		Base string `json:"base"`
+	}
+	if !decode(w, r, &req) {
+		return
+	}
+	cfg, res := checkConfig(req.Text)
+	if !res.OK {
+		writeJSON(w, http.StatusBadRequest, res)
+		return
+	}
+	done, ok := s.beginWrite(w)
+	if !ok {
+		return
+	}
+	defer done()
+	_, _, hash, err := s.readConfigFile()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	if hash != req.Base {
+		writeCoded(w, http.StatusConflict, "changed", errors.New("the file changed since you opened it: reload to see the new version"))
+		return
+	}
+	if err := config.Save(s.configPath(), []byte(req.Text)); err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	s.cfgMu.Lock()
+	s.cfg = cfg
+	s.cfgMu.Unlock()
+	writeJSON(w, http.StatusOK, res)
+}

@@ -527,9 +527,13 @@ Images (not SVG), PDF, video, text, CSV, zip and office files, 25 MB at
 most.
 
 **Settings** (`#/settings`, the gear in the header): who you write
-as, each bridge's sync on or off, and how attachments and the GitHub
-Project are set up. Bridges are added with `git bug bridge new … --sync`;
-`.git-board.toml` is edited as a file (restart the server after).
+as, each bridge's sync on or off, how attachments and the GitHub Project
+are set up, and `.git-board.toml` itself: colored, checked as you type
+(the line where it breaks, keys git-board doesn't know), "+ View",
+"+ Sprint" (follows the last one) and "+ Field" to start from, a diff
+to review, and saved without a restart. A save is refused when the file
+changed on disk since the page read it. Bridges are added with
+`git bug bridge new … --sync`.
 
 **Sync with GitHub/GitLab** (`#/sync`) runs git-bug's forge sync — the
 fork's `git bug bridge sync` — in the server, which holds the repository

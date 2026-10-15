@@ -346,3 +346,31 @@ export function getSettings(): Promise<Settings> {
 export function setBridgeSync(name: string, sync: boolean): Promise<{ sync: boolean }> {
   return request(`/api/bridges/${encodeURIComponent(name)}/sync`, json('PUT', { sync }));
 }
+
+// .git-board.toml, edited from the settings page (configfile.go).
+export interface ConfigFile {
+  path: string;
+  text: string;
+  exists: boolean;
+  hash: string;
+}
+
+export interface ConfigCheck {
+  ok: boolean;
+  error?: { line: number; col: number; message: string };
+  message?: string;
+  warnings: string[];
+  summary: { fields: string[] | null; views: string[] | null; sprints: number };
+}
+
+export function getConfigFile(): Promise<ConfigFile> {
+  return request('/api/config');
+}
+
+export function checkConfig(text: string): Promise<ConfigCheck> {
+  return request('/api/config/check', json('POST', { text }));
+}
+
+export function saveConfig(text: string, base: string): Promise<ConfigCheck> {
+  return request('/api/config', json('PUT', { text, base }));
+}

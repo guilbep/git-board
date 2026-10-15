@@ -29,7 +29,8 @@ func main() {
 	me := flag.String("me", "", "current user, for @me filters/values (env GIT_BOARD_ME)")
 	flag.Parse()
 
-	cfg, err := config.Load(config.Path())
+	cfgPath := config.Path()
+	cfg, err := config.Load(cfgPath)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -52,7 +53,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("%v (another server on this port? pass --addr localhost:8090)", err)
 	}
-	s := &apiServer{cfg: cfg, b: b, me: resolveMe(*me), project: ghbridge.Gh, exposed: exposed}
+	s := &apiServer{cfg: cfg, cfgPath: cfgPath, b: b, me: resolveMe(*me), project: ghbridge.Gh, exposed: exposed}
 	handler := withCORS(newMux(s, http.FileServerFS(dist)))
 
 	_, port, _ := net.SplitHostPort(*addr)
