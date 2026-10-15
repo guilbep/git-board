@@ -17,6 +17,7 @@ import (
 	"github.com/guilbep/git-board/internal/fields"
 	"github.com/guilbep/git-board/internal/ghbridge"
 	"github.com/guilbep/git-board/internal/gitbugio"
+	"github.com/guilbep/git-board/internal/uploads"
 )
 
 // apiServer holds what every handler needs: the parsed config, an open
@@ -50,6 +51,9 @@ type apiServer struct {
 
 	// exposed are names --addr exposes beyond the loopback ones (withGuard)
 	exposed []string
+	// store is where attached files go (uploads.go); nil: from the
+	// environment, at the first upload
+	store *uploads.Store
 
 	lazyOnce
 }
@@ -75,6 +79,8 @@ func newMux(s *apiServer, static http.Handler) http.Handler {
 	mux.HandleFunc("POST /api/me", s.handleSetMe)
 	mux.HandleFunc("GET /api/media", s.handleMedia)
 	mux.HandleFunc("POST /api/markdown", s.handleMarkdown)
+	mux.HandleFunc("GET /api/uploads", s.handleUploadStatus)
+	mux.HandleFunc("POST /api/uploads", s.handleUpload)
 	mux.HandleFunc("GET /api/forges", s.handleForges)
 	mux.HandleFunc("POST /api/forges/sync", s.handleForgeSync)
 	mux.HandleFunc("GET /api/sync", s.handleSyncStatus)

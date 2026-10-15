@@ -485,6 +485,26 @@ GitHub allows; forge images go through `/api/media`, which fetches only
 forge image addresses, with your token for private repositories, and
 keeps them in `.git/git-bug/git-board-media`.
 
+**Attachments.** Files pasted, dropped or picked in a comment go to an
+S3 bucket a CDN serves — EPFL ENAC's `enacit4r-cdn.epfl.ch` (bucket on
+`s3.epfl.ch`) by default — and the comment gets their Markdown (an image
+shows, other files link), so they show in git-board, on GitHub and on
+GitLab alike. Set where `git-board-server` runs:
+`ACCESS_KEY_ID`, `ACCESS_KEY_SECRET`, `BUCKET_NAME`; optionally in
+`.git-board.toml`:
+
+```toml
+[uploads]
+endpoint = "https://s3.epfl.ch"              # S3
+public_url = "https://enacit4r-cdn.epfl.ch"  # where the bucket is served
+prefix = "git-board/co2-calculator"          # default git-board/<repository>
+```
+
+Files are public-read, under a random path (the CDN isn't browsable):
+anyone with the link can open them, as with GitHub's own attachments.
+Images (not SVG), PDF, video, text, CSV, zip and office files, 25 MB at
+most.
+
 **Sync with GitHub/GitLab** (`#/sync`) runs git-bug's forge sync — the
 fork's `git bug bridge sync` — in the server, which holds the repository
 (so the command can't run beside it): always a dry run first with its

@@ -31,7 +31,7 @@ func withCORS(next http.Handler) http.Handler {
 		}
 		if r.Method == http.MethodOptions {
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-Git-Board-Upload")
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
@@ -65,7 +65,16 @@ func withGuard(next http.Handler, extraHosts []string) http.Handler {
 			writeError(w, http.StatusForbidden, errForbiddenOrigin)
 			return
 		}
-		if mt, _, err := mime.ParseMediaType(r.Header.Get("Content-Type")); err != nil || mt != "application/json" {
+		mt, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+		switch {
+		case r.URL.Path == "/api/uploads" && mt == "multipart/form-data":
+			// a file can't be JSON: the page's header instead, which another
+			// site can't send without a preflight only the dev server passes
+			if r.Header.Get("X-Git-Board-Upload") != "1" {
+				writeError(w, http.StatusForbidden, errForbiddenOrigin)
+				return
+			}
+		case err != nil || mt != "application/json":
 			writeError(w, http.StatusUnsupportedMediaType, errNotJSON)
 			return
 		}

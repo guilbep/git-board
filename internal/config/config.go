@@ -86,6 +86,17 @@ type raw struct {
 	Sprints       SprintsConfig    `toml:"sprints"`
 	Views         map[string]View  `toml:"views"`
 	GithubProject GithubProject    `toml:"github-project"`
+	Uploads       Uploads          `toml:"uploads"`
+}
+
+// Uploads is the [uploads] table: where files attached to issues go. The
+// keys stay out of the file: ACCESS_KEY_ID, ACCESS_KEY_SECRET and
+// BUCKET_NAME in the environment (internal/uploads).
+type Uploads struct {
+	Endpoint  string `toml:"endpoint"`   // S3, default https://s3.epfl.ch
+	PublicURL string `toml:"public_url"` // where the bucket is served, default https://enacit4r-cdn.epfl.ch
+	Prefix    string `toml:"prefix"`     // default git-board/<repository>
+	Region    string `toml:"region"`     // default us-east-1
 }
 
 // Config is the parsed .git-board.toml.
@@ -95,6 +106,7 @@ type Config struct {
 	Sprints       SprintsConfig
 	Views         map[string]View
 	GithubProject GithubProject
+	Uploads       Uploads
 }
 
 // FileName is the config's name, at the root of the repository.
@@ -142,6 +154,7 @@ func Load(path string) (*Config, error) {
 		Sprints:       r.Sprints,
 		Views:         r.Views,
 		GithubProject: r.GithubProject,
+		Uploads:       r.Uploads,
 	}, nil
 }
 

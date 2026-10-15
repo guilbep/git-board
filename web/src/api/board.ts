@@ -291,3 +291,28 @@ export const apiURL = (path: string) => API_BASE + path;
 export function renderMarkdown(body: string): Promise<{ html: string }> {
   return request('/api/markdown', json('POST', { body }));
 }
+
+// Attachments (cmd/git-board-server/uploads.go): on S3, served by a CDN to
+// git-board and the forges alike.
+export interface UploadStatus {
+  enabled: boolean;
+  max_bytes: number;
+  public_url?: string;
+}
+
+export function getUploadStatus(): Promise<UploadStatus> {
+  return request('/api/uploads');
+}
+
+// uploadFile sends one file; the answer's markdown shows it (an image) or
+// links it. Not JSON: the page's header stands in (withGuard).
+export async function uploadFile(file: File): Promise<{ url: string; name: string; markdown: string }> {
+  const body = new FormData();
+  body.append('file', file);
+  const res = await fetch(API_BASE + '/api/uploads', { method: 'POST', body, headers: { 'X-Git-Board-Upload': '1' } }).catch(() => {
+    throw new Error('The git-board server is not reachable.');
+  });
+  const data = (await res.json().catch(() => ({}))) as { error?: string; url: string; name: string; markdown: string };
+  if (!res.ok) throw new ApiError(data.error ?? `upload failed (${res.status})`, res.status, '');
+  return data;
+}
