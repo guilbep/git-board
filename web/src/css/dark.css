@@ -1,0 +1,63 @@
+/* Dark mode: the design system's decision tokens and git-board's value
+   colors, re-valued. On when <html data-theme="dark">, which
+   public/theme.js sets before the first paint from the person's choice
+   (Settings → Appearance: System, Light, Dark; System follows the
+   computer). Components use decision tokens only (--fg, --bg, --primary,
+   --border…), so this block is the whole of it. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --bg: #121212;
+  --bg-muted: #1E1E1E;
+  --bg-subtle: #1A1A1A;
+  --bg-dark: #E0E0E0; /* the inverted tile (avatars, counts, steps): light, with --fg-inverse text */
+  --bg-overlay: rgba(0, 0, 0, .6);
+
+  --fg: #ECECEC;
+  --fg-muted: #A8A8A8;
+  --fg-subtle: #8A8A8A;
+  --fg-disabled: #5C5C5C;
+  --fg-inverse: #121212;
+
+  --border: #333333;
+  --border-strong: #6B6B6B;
+  --border-subtle: #262626;
+  --border-hairline: rgba(255, 255, 255, .1);
+  --border-on-dark: rgba(255, 255, 255, .15);
+
+  --primary: #FF3B3B;
+  --primary-hover: #FF6B6B;
+  --primary-active: #CC1F1F;
+  --on-primary: #FFFFFF;
+
+  --info-bg: #10263B; --info-border: #1F4A70; --info-fg: #9CC7F0;
+  --success-bg: #16260F; --success-border: #2E5016; --success-fg: #A9D98A;
+  --warning-bg: #2E2208; --warning-border: #5C440F; --warning-fg: #F0CF8A;
+  --danger-bg: #2E0B0B; --danger-border: #6B1A1A; --danger-fg: #FFB3B3;
+
+  --link: #ECECEC;
+  --link-hover: #FF6B6B;
+  --link-visited: #B0B0B0;
+  --mark-bg: rgba(255, 80, 80, .35);
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, .4);
+  --shadow: 0 .5rem 1rem rgba(0, 0, 0, .5);
+  --shadow-lg: 0 1rem 2rem rgba(0, 0, 0, .6);
+
+  /* value colors: a dark tint, light text, a brighter dot */
+  --gb-grey-bg: #2A2A2A; --gb-grey-fg: #D6D6D6; --gb-grey-dot: #9A9A9A;
+  --gb-blue-bg: #132A40; --gb-blue-fg: #A8CDF2; --gb-blue-dot: #5B9BE0;
+  --gb-purple-bg: #2A1A3B; --gb-purple-fg: #D4B3F0; --gb-purple-dot: #B07AD6;
+  --gb-amber-bg: #33270B; --gb-amber-fg: #F2D38E; --gb-amber-dot: #E6A817;
+  --gb-orange-bg: #3A210C; --gb-orange-fg: #FFC08A; --gb-orange-dot: #FF8A2A;
+  --gb-green-bg: #18290F; --gb-green-fg: #B5E092; --gb-green-dot: #6CBF2F;
+  --gb-red-bg: #3A1010; --gb-red-fg: #FFB3B3; --gb-red-dot: #FF4D4D;
+  --gb-teal-bg: #0B2D2B; --gb-teal-fg: #93DDD6; --gb-teal-dot: #2BB3A7;
+  --gb-pink-bg: #3A1229; --gb-pink-fg: #F5B3D6; --gb-pink-dot: #E05AA4;
+}
+/* the select's chevron, drawn light */
+:root[data-theme="dark"] .epfl-select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ECECEC' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+}
+:root[data-theme="dark"] body { background: var(--bg); color: var(--fg); }
+:root[data-theme="dark"] .epfl-badge-dark { color: var(--fg-inverse); }

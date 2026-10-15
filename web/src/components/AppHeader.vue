@@ -51,6 +51,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted } from 'vue';
 import { helpOpen } from '@/shortcuts';
+import '@/theme'; // keeps <html data-theme> in step with the choice
 import KeyboardHelp from '@/components/KeyboardHelp.vue';
 import { forgeStatus, loadForges } from '@/forges';
 import { initials, loadMe, me, when } from '@/me';

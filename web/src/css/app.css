@@ -4,6 +4,7 @@
 @import '../../epfl-design/css/epfl.css';
 @import '../../epfl-design/kits/quasar/epfl-quasar-brand.css';
 @import './gitboard.css';
+@import './dark.css';
 
 /* Primary buttons fill the dark red: white on #FF0000 is 4.0:1, under the
    4.5:1 small text needs (the canvas's rule). */

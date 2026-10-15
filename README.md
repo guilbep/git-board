@@ -508,6 +508,10 @@ for up to a year.
 Images (not SVG), PDF, video, text, CSV, zip and office files, 25 MB at
 most.
 
+**Dark mode**: Settings → Appearance, System (as the computer is set),
+Light or Dark; `web/src/css/dark.css` re-values the design system's
+decision tokens.
+
 **Settings** (`#/settings`, the gear in the header): who you write
 as, the bridges (add one from the forge, the project's address and a
 stored credential or a pasted token, which the forge checks before

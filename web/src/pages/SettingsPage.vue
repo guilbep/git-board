@@ -20,6 +20,16 @@
       </template>
     </section>
 
+    <section aria-labelledby="set-look">
+      <h2 id="set-look" class="h5">Appearance</h2>
+      <div class="set-theme" role="radiogroup" aria-labelledby="set-look">
+        <label v-for="o in themeOptions" :key="o.value" class="set-theme-opt" :class="{ on: themePref === o.value }">
+          <input v-model="themePref" type="radio" name="theme" :value="o.value" />
+          <span><b>{{ o.label }}</b><br /><span class="gb-hint">{{ o.hint }}</span></span>
+        </label>
+      </div>
+    </section>
+
     <section aria-labelledby="set-bridges">
       <h2 id="set-bridges" class="h5">Bridges</h2>
       <p class="gb-hint">A bridge links this repository's issues to a forge's. With sync on, it takes part in <router-link to="/sync">Sync with forges</router-link>.</p>
@@ -85,6 +95,7 @@
 </template>
 
 <script setup lang="ts">
+import { themePref } from '@/theme';
 import { onMounted, ref, watch } from 'vue';
 import { getSettings, getViews, removeBridge, setBridgeSync, type Bridge, type Settings } from '@/api/board';
 import { loadForges } from '@/forges';
@@ -96,6 +107,11 @@ import ConfigEditor from '@/components/ConfigEditor.vue';
 import BridgeAddForm from '@/components/BridgeAddForm.vue';
 
 const settings = ref<Settings | null>(null);
+const themeOptions = [
+  { value: 'system', label: 'System', hint: 'as the computer is set' },
+  { value: 'light', label: 'Light', hint: 'always' },
+  { value: 'dark', label: 'Dark', hint: 'always' },
+] as const;
 const viewNames = ref<string[]>([]);
 const error = ref('');
 const busy = ref('');
@@ -173,6 +189,10 @@ onMounted(() => {
 .gb-settings section p { margin: 0; }
 .gb-linkbtn { justify-self: start; padding: 0; border: 0; background: none; color: var(--fg); text-decoration: underline; cursor: pointer; font: inherit; }
 .set-login { color: var(--fg-muted); }
+.set-theme { display: flex; flex-wrap: wrap; gap: .5rem; }
+.set-theme-opt { display: flex; align-items: flex-start; gap: .5rem; min-width: 10rem; padding: .625rem .875rem; border: 1px solid var(--border); cursor: pointer; }
+.set-theme-opt.on { border-color: var(--fg); }
+.set-theme-opt input { margin-top: .3rem; accent-color: var(--primary-hover); }
 .gb-confirm-row td { background: var(--warning-bg); }
 .gb-confirm-row p { margin: 0 0 .5rem; }
 .gb-confirm-row .epfl-btn + .epfl-btn { margin-left: .5rem; }
