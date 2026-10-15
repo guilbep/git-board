@@ -104,11 +104,16 @@ group = "status"
 layout = "table"
 filter = "is:open no:sprint"
 sort = "prio asc"
+
+[views.roadmap]
+layout = "roadmap"
+filter = "is:open"
+group = "status"
 ```
 
 | Key | Type | Default | What it does |
 | --- | --- | --- | --- |
-| `layout` | `"board"` or `"table"` | `"table"` | A board has a column per value of `group`, and cards move between columns by drag and drop. A table has a row per issue. |
+| `layout` | `"board"`, `"table"` or `"roadmap"` | `"table"` | A board has a column per value of `group`, and cards move between columns by drag and drop. A table has a row per issue. A roadmap puts each issue on a time line: a bar over its sprint's dates, a diamond on its date fields (`due`), today marked; issues with neither are listed below it, unscheduled. |
 | `filter` | string | `is:open` | Which issues show; see Filters. |
 | `group` | field name | none | The board's columns, or the table's sections: `status`, `sprint`, any field. |
 | `sort` | `"<field> asc"` or `"<field> desc"` | none | Order within a column or section: by the field's `options` order, numerically for a numeric field, else alphabetically. |

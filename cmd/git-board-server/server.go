@@ -88,6 +88,8 @@ func newMux(s *apiServer, static http.Handler) http.Handler {
 	mux.HandleFunc("POST /api/markdown", s.handleMarkdown)
 	mux.HandleFunc("GET /api/uploads", s.handleUploadStatus)
 	mux.HandleFunc("POST /api/uploads", s.handleUpload)
+	mux.HandleFunc("GET /api/insights", s.handleInsights)
+	mux.HandleFunc("GET /api/sprints", s.handleSprints)
 	mux.HandleFunc("GET /api/settings", s.handleSettings)
 	mux.HandleFunc("GET /api/config", s.handleConfigFile)
 	mux.HandleFunc("POST /api/config/check", s.handleConfigCheck)

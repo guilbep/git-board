@@ -411,3 +411,34 @@ export interface IssueRefs {
 export function getRefs(id: string): Promise<IssueRefs> {
   return request(`${issuePath(id)}/refs`);
 }
+
+// Insights (cmd/git-board-server/insights.go): the issues' history
+// replayed day by day.
+export interface InsightsReport {
+  field: string;
+  values: string[];
+  days: string[];
+  all: Record<string, number[]>;
+  open: Record<string, number[]>;
+  weeks: { start: string; opened: number; closed: number }[];
+  cycle: { from: 'started' | 'opened'; start: string; days: number[]; median: number; p85: number };
+  burnup?: { sprint: string; title: string; start: string; end: string; days: string[]; scope: number[]; done: number[] };
+  headlines: Record<string, string>;
+}
+
+export function getInsights(field: string, days: number, view: string): Promise<InsightsReport> {
+  const q = new URLSearchParams({ field, days: String(days) });
+  if (view) q.set('view', view);
+  return request(`/api/insights?${q}`);
+}
+
+export interface SprintWindow {
+  slug: string;
+  title: string;
+  start: string;
+  end: string;
+}
+
+export function getSprints(): Promise<SprintWindow[]> {
+  return request('/api/sprints');
+}
