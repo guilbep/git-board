@@ -32,13 +32,13 @@ func TestCheckTakesWhatForgesShow(t *testing.T) {
 		ok   bool
 		typ  string
 	}{
-		"shot.png":   {png, true, "image/png"},
-		"notes.txt":  {[]byte("plain text"), true, "text/plain; charset=utf-8"},
-		"data.csv":   {[]byte("a,b\n1,2\n"), true, "text/csv"},
-		"logo.svg":   {[]byte(`<svg xmlns="http://www.w3.org/2000/svg"><script>x</script></svg>`), false, ""},
-		"page.html":  {[]byte("<html><script>x</script></html>"), false, ""},
-		"fake.png":   {[]byte("<html><script>x</script></html>"), false, ""}, // the bytes decide
-		"run.sh":     {[]byte("#!/bin/sh\nrm -rf /"), false, ""},
+		"shot.png":  {png, true, "image/png"},
+		"notes.txt": {[]byte("plain text"), true, "text/plain; charset=utf-8"},
+		"data.csv":  {[]byte("a,b\n1,2\n"), true, "text/csv"},
+		"logo.svg":  {[]byte(`<svg xmlns="http://www.w3.org/2000/svg"><script>x</script></svg>`), false, ""},
+		"page.html": {[]byte("<html><script>x</script></html>"), false, ""},
+		"fake.png":  {[]byte("<html><script>x</script></html>"), false, ""}, // the bytes decide
+		"run.sh":    {[]byte("#!/bin/sh\nrm -rf /"), false, ""},
 	} {
 		typ, err := Check(name, c.data)
 		if (err == nil) != c.ok || (c.ok && typ != c.typ) {
