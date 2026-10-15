@@ -37,7 +37,7 @@ export function useIssue(id: Ref<string>, onChange: (t: Thread) => void = () => 
 
   // run a write; true when it went through. Refused because a forge sync
   // runs, it waits for the end of the sync and goes again.
-  async function write(fn: () => Promise<Thread>): Promise<boolean> {
+  async function write(fn: () => Promise<Thread>, rethrow = false): Promise<boolean> {
     saving.value = true;
     saveError.value = '';
     saveCode.value = '';
@@ -55,6 +55,7 @@ export function useIssue(id: Ref<string>, onChange: (t: Thread) => void = () => 
         }
       }
     } catch (e) {
+      if (rethrow) throw e; // the caller shows it (an edit: "changed meanwhile")
       saveError.value = message(e);
       saveCode.value = e instanceof ApiError ? e.code : '';
       return false;
@@ -76,7 +77,8 @@ export function useIssue(id: Ref<string>, onChange: (t: Thread) => void = () => 
     saveCode,
     load,
     comment: (body: string, status?: 'open' | 'closed') => write(() => addComment(id.value, body, status)),
-    edit: (commentId: string, body: string, base: string) => write(() => editComment(id.value, commentId, body, base)),
+    // throws: the comment card shows why (ApiError code "changed")
+    edit: (commentId: string, body: string, base: string) => write(() => editComment(id.value, commentId, body, base), true),
     rename: (title: string) => write(() => setTitle(id.value, title)),
     setStatus: (status: 'open' | 'closed') => write(() => setStatus(id.value, status)),
     labels: (add: string[], remove: string[]) => write(() => changeLabels(id.value, add, remove)),

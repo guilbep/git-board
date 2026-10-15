@@ -12,6 +12,7 @@ export interface Issue {
   status: string;
   labels: string[];
   github_url?: string; // absent when the issue wasn't bridged in from GitHub
+  forges?: Forge[]; // where it is on forges
 }
 
 export interface Bucket {
@@ -177,7 +178,6 @@ export interface Thread extends Issue {
   author: Person;
   created_at: string;
   edited_at: string;
-  forges: Forge[] | null;
   participants: Person[] | null;
   events: IssueEvent[];
 }

@@ -38,6 +38,7 @@ type Issue struct {
 	Status    string   `json:"status"` // "open" or "closed"
 	Labels    []string `json:"labels"`
 	GithubURL string   `json:"github_url,omitempty"` // "" if not bridged in from GitHub
+	Forges    []Forge  `json:"forges,omitempty"`     // where it is on forges
 }
 
 // Backend is an open connection to a git-bug repo cache.
@@ -137,7 +138,8 @@ func excerptToIssue(id string, e *cache.BugExcerpt) Issue {
 	if e.Status == common.ClosedStatus {
 		status = "closed"
 	}
-	return Issue{ID: id, Title: e.Title, Status: status, Labels: labels, GithubURL: e.CreateMetadata[githubURLMetaKey]}
+	forges, _ := forgesOf(e.CreateMetadata)
+	return Issue{ID: id, Title: e.Title, Status: status, Labels: labels, GithubURL: e.CreateMetadata[githubURLMetaKey], Forges: forges}
 }
 
 // GetIssue resolves a bug by id prefix.

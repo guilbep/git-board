@@ -3,6 +3,12 @@
    .epfl-* classes, then the Quasar brand mapping (EPFL tokens -> --q-*). */
 @import '../../epfl-design/css/epfl.css';
 @import '../../epfl-design/kits/quasar/epfl-quasar-brand.css';
+@import './gitboard.css';
+
+/* Primary buttons fill the dark red: white on #FF0000 is 4.0:1, under the
+   4.5:1 small text needs (the canvas's rule). */
+.epfl-btn-primary { background: var(--epfl-red-dark); border-color: var(--epfl-red-dark); }
+.epfl-btn-primary:hover:not(:disabled) { background: var(--primary-active, #871717); border-color: var(--primary-active, #871717); }
 
 /* Quasar's dialog backdrop -> EPFL's modal backdrop token; the issue side
    panel (a right-hand q-dialog) runs the full height, no inset. */

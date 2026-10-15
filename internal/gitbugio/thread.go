@@ -76,7 +76,6 @@ type Thread struct {
 	Author       Person    `json:"author"`
 	CreatedAt    time.Time `json:"created_at"`
 	EditedAt     time.Time `json:"edited_at"`
-	Forges       []Forge   `json:"forges"`
 	Participants []Person  `json:"participants"`
 	Events       []Event   `json:"events"`
 }
@@ -93,7 +92,7 @@ func (b *Backend) Thread(idPrefix string) (Thread, error) {
 		return Thread{}, err
 	}
 	createMeta := snap.Operations[0].AllMetadata()
-	forges, remotes := forgesOf(createMeta)
+	_, remotes := forgesOf(createMeta)
 
 	ops := map[entity.Id]dag.Operation{}
 	for _, op := range snap.Operations {
@@ -104,7 +103,6 @@ func (b *Backend) Thread(idPrefix string) (Thread, error) {
 		Author:    person(snap.Author),
 		CreatedAt: snap.CreateTime,
 		EditedAt:  snap.EditTime(),
-		Forges:    forges,
 	}
 	for _, p := range snap.Participants {
 		th.Participants = append(th.Participants, person(p))
