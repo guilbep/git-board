@@ -22,7 +22,9 @@ import (
 )
 
 func main() {
-	addr := flag.String("addr", ":8080", "listen address")
+	// This machine only by default: the server writes to git, and to the
+	// forges with the user's tokens. Anyone who can reach it can.
+	addr := flag.String("addr", "127.0.0.1:8080", "listen address (an address reachable from other machines exposes your git-bug data and forge tokens to them)")
 	me := flag.String("me", "", "current user, for @me filters/values (env GIT_BOARD_ME)")
 	flag.Parse()
 

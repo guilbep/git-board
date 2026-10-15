@@ -472,16 +472,19 @@ Project is read only when you press one of those (it costs GitHub API
 points and takes seconds on a big Project); the header's count is the last
 check's. Keeping git-board's value needs `write = true`, like the CLI.
 
-**No auth in v1** — same trusted-internal-network assumption as git-bug's
-own `git bug webui`. Anyone who can reach the port can read and write every
-issue. Upgrade path when that stops being fine: a reverse proxy doing auth
+**No auth in v1.** The server listens on this machine only
+(`127.0.0.1:8080`) by default, and refuses writes from other sites (a
+browser's `Origin`, or a body that isn't JSON). Anyone who can reach the
+port can read and write every issue, and through the forge sync post to
+GitHub and GitLab with your tokens: only pass an `--addr` other machines
+can reach on a network you trust. Upgrade path when that stops being fine: a reverse proxy doing auth
 in front of it (simplest), or a token check in `withCORS`/a new middleware
 in `cmd/git-board-server` (more work, still small).
 
 ```bash
 # backend — run from inside the git-bug repo, next to .git-board.toml
-go run ./cmd/git-board-server              # listens on :8080
-go run ./cmd/git-board-server --addr :9090 --me guilbep
+go run ./cmd/git-board-server              # listens on 127.0.0.1:8080
+go run ./cmd/git-board-server --addr 127.0.0.1:9090 --me guilbep
 
 # frontend, dev mode (separate terminal) — talks to the backend on :8080
 # via CORS (see cmd/git-board-server/cors.go); Quasar's dev server is :9000

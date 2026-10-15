@@ -33,6 +33,10 @@ export interface FieldConfig {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  // The server only takes JSON writes (withGuard in cmd/git-board-server).
+  if (init?.method && init.method !== 'GET') {
+    init = { ...init, headers: { 'Content-Type': 'application/json', ...init.headers }, body: init.body ?? '{}' };
+  }
   const res = await fetch(API_BASE + path, init).catch(() => {
     throw new Error('The git-board server is not reachable.');
   });

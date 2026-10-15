@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"sort"
 	"sync"
@@ -36,8 +37,9 @@ type apiServer struct {
 }
 
 // newMux wires the API routes plus a static handler (the built frontend) at
-// "/". Go 1.22 method-pattern routing needs no router framework.
-func newMux(s *apiServer, static http.Handler) *http.ServeMux {
+// "/", behind withGuard. Go 1.22 method-pattern routing needs no router
+// framework.
+func newMux(s *apiServer, static http.Handler) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/views", s.handleViews)
 	mux.HandleFunc("GET /api/config/fields", s.handleFields)
@@ -49,7 +51,7 @@ func newMux(s *apiServer, static http.Handler) *http.ServeMux {
 	mux.HandleFunc("POST /api/sync/apply", s.handleSyncApply)
 	mux.HandleFunc("POST /api/sync/resolve", s.handleSyncResolve)
 	mux.Handle("/", static)
-	return mux
+	return withGuard(mux)
 }
 
 // Both answer {} without a config: a nil map would encode as null.
@@ -124,6 +126,11 @@ func (s *apiServer) handlePatchIssue(w http.ResponseWriter, r *http.Request) {
 
 	s.handleGetIssue(w, r)
 }
+
+var (
+	errForbiddenOrigin = errors.New("refused: a write from another site")
+	errNotJSON         = errors.New("refused: a write must be JSON (Content-Type: application/json)")
+)
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
