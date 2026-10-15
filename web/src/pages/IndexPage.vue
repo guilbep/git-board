@@ -91,14 +91,17 @@
           <p class="state-title">No issues match these filters.</p>
           <p><button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" @click="resetAll">Reset filters</button></p>
         </div>
-        <IssueBoard
-          v-else-if="layout === 'board'"
-          :buckets="shown"
-          :names="names"
-          :fields="fields"
-          :group="groupField"
-          @open="openIssue"
-        />
+        <div v-else-if="layout === 'board'">
+          <p v-if="moveError" class="epfl-alert epfl-alert-danger notice" role="alert"><b>Not moved.</b> {{ moveError }}</p>
+          <IssueBoard
+            :buckets="boardBuckets"
+            :names="names"
+            :fields="fields"
+            :group="groupField"
+            @open="openIssue"
+            @move="onMove"
+          />
+        </div>
         <IssueTable
           v-else
           :buckets="shown.filter((b) => b.issues.length)"
@@ -143,7 +146,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import {
-  getFields, getIssues, getViews,
+  changeLabels, getFields, getIssues, getViews,
   type Bucket, type FieldConfig, type Issue, type ViewConfig,
 } from '@/api/board';
 import {
@@ -220,6 +223,33 @@ const shown = computed(() =>
     ),
   })),
 );
+// A kanban shows every option of the field it's grouped by, empty or not,
+// so a card can be dropped there.
+const boardBuckets = computed(() => {
+  const options = fields.value[groupField.value]?.options ?? [];
+  const present = new Set(shown.value.map((b) => b.group));
+  const empty = options.filter((o) => !present.has(o)).map((o) => ({ group: o, issues: [] as Issue[] }));
+  return orderBuckets([...shown.value, ...empty], groupField.value, fields.value);
+});
+
+// A card dropped in another column takes its value: moved at once, saved
+// in one label change (the old value out, the new in), the board reloaded.
+const moveError = ref('');
+async function onMove(issue: Issue, from: string, to: string) {
+  const field = groupField.value;
+  moveError.value = '';
+  for (const b of buckets.value ?? []) b.issues = b.issues.filter((i) => i.id !== issue.id);
+  const target = (buckets.value ?? []).find((b) => b.group === to);
+  if (target) target.issues.push(issue);
+  else buckets.value?.push({ group: to, issues: [issue] });
+  try {
+    await changeLabels(issue.id, to === '(none)' ? [] : [`${field}:${to}`], from === '(none)' ? [] : [`${field}:${from}`]);
+  } catch (e: unknown) {
+    moveError.value = message(e);
+  }
+  void load();
+}
+
 const total = computed(() => all.value.length);
 const count = computed(() => shown.value.reduce((n, b) => n + b.issues.length, 0));
 

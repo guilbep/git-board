@@ -1,12 +1,19 @@
 <!-- layout = "board": one column per group, cards in the chosen sort
-     order. Columns scroll sideways inside the board, never the page. -->
+     order. Columns scroll sideways inside the board, never the page.
+     Grouped by a field, a card dragged to another column takes that
+     column's value (the browser's drag and drop; the panel's field is the
+     keyboard way). -->
 <template>
   <div class="board">
     <section
       v-for="bucket in buckets"
       :key="bucket.group"
       class="board-column"
+      :class="{ 'is-over': over === bucket.group && dragFrom !== bucket.group }"
       :aria-label="`${groupLabel(bucket.group)}, ${bucket.issues.length} issues`"
+      @dragover="onOver(bucket.group, $event)"
+      @dragleave="onLeave(bucket.group, $event)"
+      @drop="onDrop(bucket.group, $event)"
     >
       <h2 class="column-title">
         {{ groupLabel(bucket.group) }}
@@ -14,7 +21,15 @@
       </h2>
       <ul class="cards">
         <li v-for="issue in bucket.issues" :key="issue.id">
-          <button type="button" class="issue-card" @click="emit('open', issue)">
+          <button
+            type="button"
+            class="issue-card"
+            :class="{ 'is-dragging': dragging === issue.id }"
+            :draggable="!!group"
+            @dragstart="onStart(issue, bucket.group, $event)"
+            @dragend="onEnd"
+            @click="emit('open', issue)"
+          >
             <span class="card-id">{{ issue.id.slice(0, 8) }}</span>
             <span class="card-title">{{ issue.title }}</span>
             <span v-if="meta(issue).length" class="card-meta">
@@ -33,11 +48,46 @@
 </template>
 
 <script setup lang="ts">
+import { ref } from 'vue';
 import type { Bucket, Issue } from '@/api/board';
 import { displayName, fieldValues, formatValue, otherLabels, type Fields } from '@/fields';
 
 const props = defineProps<{ buckets: Bucket[]; names: string[]; fields: Fields; group: string }>();
-const emit = defineEmits<{ open: [issue: Issue] }>();
+const emit = defineEmits<{ open: [issue: Issue]; move: [issue: Issue, from: string, to: string] }>();
+
+const dragging = ref(''); // the card's issue id
+const dragFrom = ref('');
+const over = ref('');
+let dragged: Issue | null = null;
+
+function onStart(issue: Issue, from: string, e: DragEvent) {
+  dragged = issue;
+  dragging.value = issue.id;
+  dragFrom.value = from;
+  e.dataTransfer?.setData('text/plain', issue.id);
+  if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
+}
+function onOver(group: string, e: DragEvent) {
+  if (!dragged) return;
+  e.preventDefault(); // a drop target
+  if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+  over.value = group;
+}
+function onLeave(group: string, e: DragEvent) {
+  const to = e.relatedTarget as Node | null;
+  if (over.value === group && !(e.currentTarget as HTMLElement).contains(to)) over.value = '';
+}
+function onDrop(group: string, e: DragEvent) {
+  e.preventDefault();
+  if (dragged && group !== dragFrom.value) emit('move', dragged, dragFrom.value, group);
+  onEnd();
+}
+function onEnd() {
+  dragged = null;
+  dragging.value = '';
+  dragFrom.value = '';
+  over.value = '';
+}
 
 function groupLabel(value: string): string {
   if (!props.group) return 'All issues';
@@ -111,6 +161,10 @@ function meta(issue: Issue) {
   transition: border-color var(--t-fast);
 }
 .issue-card:hover { border-color: var(--fg); }
+.issue-card[draggable="true"] { cursor: grab; }
+.issue-card.is-dragging { opacity: .4; }
+.board-column.is-over { background: var(--bg); outline: 2px dashed var(--epfl-black); outline-offset: -2px; }
+.cards { min-height: 3rem; }
 .issue-card:focus-visible { outline: var(--focus-w) solid var(--primary-hover); outline-offset: 0.125rem; }
 
 .card-id { font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--fg-muted); }
