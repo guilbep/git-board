@@ -101,4 +101,4 @@ require (
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 )
 
-replace github.com/git-bug/git-bug => github.com/guilbep/git-bug v0.11.1-0.20261014194434-36368df0b926
+replace github.com/git-bug/git-bug => github.com/guilbep/git-bug v0.11.1-0.20261015084536-05179fc37b52
