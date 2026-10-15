@@ -59,7 +59,7 @@
               type="button"
               :aria-pressed="sortOf(f.key) === m"
               @click="setSort(f.key, m)"
-            >{{ m === 'count' ? 'Count' : m === 'alpha' ? 'A–Z' : 'Workflow' }}</button>
+            >{{ m === 'count' ? 'Count' : m === 'alpha' ? 'A–Z' : f.key === 'sprint' ? 'Dates' : 'Workflow' }}</button>
           </span>
           <button v-if="sel[f.key]?.length" type="button" class="filters-clear" @click="emit('set', f.key, [])">Clear</button>
         </div>
@@ -81,7 +81,7 @@
           >
             <span class="filters-bar" :style="{ width: `${(count / maxCount(f)) * 100}%` }" aria-hidden="true" />
             <input type="checkbox" :checked="!!sel[f.key]?.includes(value)" />
-            <span class="filters-option-label"><span v-if="colorClass(f.key, value)" class="gb-dot" :class="colorClass(f.key, value)" aria-hidden="true" /> {{ valueLabel(f.key, value, fields) }}</span>
+            <span class="filters-option-label"><span v-if="colorClass(f.key, value)" class="gb-dot" :class="colorClass(f.key, value)" aria-hidden="true" /> {{ valueLabel(f.key, value, fields) }}<span v-if="value === fields[f.key]?.current" class="filters-current">current</span></span>
             <button
               type="button"
               class="filters-only"
@@ -158,6 +158,7 @@ const active = computed(() => Object.values(props.sel).flat().length + Number(pr
 </script>
 
 <style scoped>
+.filters-current { margin-left: .375rem; padding: 0 .3rem; border: 1px solid var(--fg); font-size: .6875rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; vertical-align: 1px; }
 .filters {
   padding: var(--space-4) var(--space-4) var(--space-5) 0;
   border-right: var(--border-w) solid var(--border-subtle);

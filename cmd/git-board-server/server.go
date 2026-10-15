@@ -112,12 +112,38 @@ func (s *apiServer) handleViews(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, views)
 }
 
+// fieldResponse is a field as the page gets it: the config's, and for the
+// sprint field the current sprint.
+type fieldResponse struct {
+	config.Field
+	Current string `json:"current,omitempty"`
+}
+
+// handleFields answers the configured fields. The sprint field follows
+// [[sprints.list]]: its values by start date, unless it has options of its
+// own, so filters, board columns and sorting go in date order.
 func (s *apiServer) handleFields(w http.ResponseWriter, r *http.Request) {
-	fields := s.config().Fields
-	if fields == nil {
-		fields = map[string]config.Field{}
+	cfg := s.config()
+	res := map[string]fieldResponse{}
+	for name, f := range cfg.Fields {
+		res[name] = fieldResponse{Field: f}
 	}
-	writeJSON(w, http.StatusOK, fields)
+	if windows := config.SprintWindows(cfg.Sprints); len(windows) > 0 {
+		sprint := res["sprint"]
+		if len(sprint.Options) == 0 {
+			if _, declared := cfg.Fields["sprint"]; !declared {
+				sprint.Single = true // one sprint at a time, picked from the list
+			}
+			for _, w := range windows {
+				sprint.Options = append(sprint.Options, w.Slug)
+			}
+		}
+		if cur, err := config.ResolveSprint(cfg.Sprints, "current", time.Now()); err == nil && cur != nil {
+			sprint.Current = cur.Slug
+		}
+		res["sprint"] = sprint
+	}
+	writeJSON(w, http.StatusOK, res)
 }
 
 // handleColors answers each field value's color (config.Colors): of the

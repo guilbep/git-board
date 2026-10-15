@@ -31,6 +31,7 @@ export interface FieldConfig {
   single: boolean;
   options: string[] | null;
   numeric: boolean;
+  current?: string; // the sprint field: today's sprint
 }
 
 // ApiError carries the server's status and code: syncing (a sync with

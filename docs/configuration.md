@@ -128,6 +128,8 @@ start = 2026-10-19
 
 **+ Sprint** adds the next one after the last: its start plus `length_days`, its number plus one.
 
+The `sprint` field follows these dates: in the filters (sorted by **Dates**, today's sprint tagged *current*), on a board grouped by sprint, in a table's sections and when sorting. In an issue, the sprint is picked from the list. Give `[fields.sprint]` its own `options` to choose another order.
+
 ## GitHub Project
 
 The GitHub Project whose fields (status, priority, sprint…) `git board bridge pull` and `sync` turn into labels and back.
