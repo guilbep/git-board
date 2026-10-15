@@ -480,3 +480,16 @@ export interface SprintReport {
 export function getReport(sprint = '@current'): Promise<SprintReport> {
   return request(`/api/report?sprint=${encodeURIComponent(sprint)}`);
 }
+
+// One issue synced with every sync bridge (issuesync.go): a dry run first,
+// which a real run needs.
+export interface IssueSyncResult {
+  dry_run: boolean;
+  writes: number; // sent, or would be sent, to the forges
+  errors: number;
+  bridges: Record<string, BridgeTally>;
+}
+
+export function syncIssue(id: string, dryRun: boolean): Promise<IssueSyncResult> {
+  return request(`${issuePath(id)}/sync`, json('POST', { dry_run: dryRun }));
+}

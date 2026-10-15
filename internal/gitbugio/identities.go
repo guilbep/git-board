@@ -186,6 +186,12 @@ func (b *Backend) SyncForges(ctx context.Context, dryRun bool, names []string) (
 	return core.SyncAll(ctx, b.c, names, dryRun)
 }
 
+// SyncIssue syncs one issue (git bug bridge sync --issue) with every
+// bridge with sync enabled, in this process.
+func (b *Backend) SyncIssue(ctx context.Context, dryRun bool, id string) (<-chan core.SyncResult, error) {
+	return core.SyncIssue(ctx, b.c, id, nil, dryRun)
+}
+
 // PushURLs are where a push to remote goes, as git's does: its pushurls,
 // else its urls. Empty without such a remote.
 func (b *Backend) PushURLs(remote string) []string {

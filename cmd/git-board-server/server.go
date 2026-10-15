@@ -52,6 +52,10 @@ type apiServer struct {
 	forgeMu sync.Mutex // guards job
 	job     *forgeJob
 	runSync func(context.Context, bool, []string) (<-chan core.SyncResult, error) // nil: git-bug's
+	// one issue's sync (issuesync.go): nil, git-bug's; issueDry is when
+	// each issue's last clean dry run ended
+	runIssueSync func(ctx context.Context, dryRun bool, id string) (<-chan core.SyncResult, error)
+	issueDry     map[string]time.Time
 
 	// exposed are names --addr exposes beyond the loopback ones (withGuard)
 	exposed []string
@@ -82,6 +86,7 @@ func newMux(s *apiServer, static http.Handler) http.Handler {
 	mux.HandleFunc("PATCH /api/issues/{id}", s.handlePatchIssue)
 	mux.HandleFunc("POST /api/issues", s.handleNewIssue)
 	mux.HandleFunc("GET /api/issues/{id}/thread", s.handleThread)
+	mux.HandleFunc("POST /api/issues/{id}/sync", s.handleIssueSync)
 	mux.HandleFunc("GET /api/issues/{id}/refs", s.handleRefs)
 	mux.HandleFunc("POST /api/issues/{id}/comments", s.handleComment)
 	mux.HandleFunc("PUT /api/issues/{id}/comments/{comment}", s.handleEditComment)

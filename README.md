@@ -547,6 +547,12 @@ understand" when it creates 50 issues or more on a forge), then
 optionally push the git-bug data to `origin` so other clones know the
 links. While it runs, edits wait and are saved after it.
 
+One issue syncs on its own from its panel ("On the forges"): **Send now**
+when it has changes waiting, **Refresh from forges** otherwise — the
+fork's `git bug bridge sync --issue`, a few calls per forge. It dry-runs
+first, goes ahead when nothing would change on a forge, else says what it
+would send and asks.
+
 With a `[github-project]`, a **Conflicts** page (`#/conflicts`) is the web
 side of `git-board bridge sync`/`resolve`: "Check the Project" lists the
 fields both sides changed since they last agreed, each with git-board's

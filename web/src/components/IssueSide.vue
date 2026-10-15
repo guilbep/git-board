@@ -98,7 +98,13 @@
         </button>
         <WaitingChanges v-if="showWaiting" :changes="waiting" :forges="forges" @reveal="(id) => emit('reveal', id)" />
       </template>
-      <p class="gb-hint">Waiting changes go out at the next <router-link to="/sync">sync with the forges</router-link><!-- -->.</p>
+      <p class="gb-hint">Waiting changes go out at the next <router-link to="/sync">sync with the forges</router-link>, or now:</p>
+      <IssueSync :id="id" :waiting="waiting.length" on-forges @synced="emit('changed')" />
+    </section>
+    <section v-else-if="forgeStatus?.bridges.length" class="gb-side-sec" aria-labelledby="side-forges">
+      <h3 id="side-forges" class="gb-section-title">On the forges</h3>
+      <p class="gb-hint">Not on the forges yet. The next <router-link to="/sync">sync with the forges</router-link> puts it there, or now:</p>
+      <IssueSync :id="id" :waiting="waiting.length" :on-forges="false" @synced="emit('changed')" />
     </section>
 
     <section v-if="participants?.length" class="gb-side-sec" aria-labelledby="side-people">
@@ -114,6 +120,8 @@
 </template>
 
 <script setup lang="ts">
+import IssueSync from '@/components/IssueSync.vue';
+import { forgeStatus } from '@/forges';
 import ValueMark from '@/components/ValueMark.vue';
 import { colorClass } from '@/colors';
 import { computed, reactive, ref, watch } from 'vue';
