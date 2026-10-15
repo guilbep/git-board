@@ -1,0 +1,45 @@
+# Every push and pull request: the web UI's checks and build (embedded in
+# git-board-server), then `make ci` (build, vet, test, gofmt).
+name: ci
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24 # runs web/src/facets.test.ts as is (type stripping)
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Web UI
+        working-directory: web
+        run: |
+          npm ci
+          npm run typecheck
+          npm test
+          npm run build
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Git identity for the tests' throwaway repositories
+        run: |
+          git config --global user.name ci
+          git config --global user.email ci@example.com
+
+      - run: make ci
