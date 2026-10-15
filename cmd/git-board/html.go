@@ -161,7 +161,7 @@ func toHTMLBuckets(buckets []board.Bucket, cfg *config.Config) []htmlBucket {
 	for i, bucket := range buckets {
 		issues := make([]htmlIssue, len(bucket.Issues))
 		for j, issue := range bucket.Issues {
-			known, other := tui.ParseLabels(issue.Labels, cfg.Fields)
+			known, other := tui.ParseLabels(issue.Labels)
 			issues[j] = htmlIssue{
 				ID:     shortID(issue.ID),
 				Title:  issue.Title,

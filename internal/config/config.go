@@ -3,10 +3,13 @@
 package config
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -25,10 +28,15 @@ type Field struct {
 }
 
 // KnownValue reports whether value is one of Options — or true if Options is
-// empty (a free-form field, nothing configured to validate against). Shared
-// by internal/ghbridge (warns on a bridge pull) and internal/lint (the same
-// check, run over the local repo instead of an incoming GitHub value).
+// empty (a free-form field, nothing configured to validate against), or the
+// field is numeric and value a number (its options are then the usual
+// picks, est 3.5 is still an estimate). Shared by internal/ghbridge (warns
+// on a bridge pull) and internal/lint (the same check, run over the local
+// repo instead of an incoming GitHub value).
 func (f Field) KnownValue(value string) bool {
+	if _, err := strconv.ParseFloat(value, 64); err == nil && f.Numeric {
+		return true
+	}
 	return len(f.Options) == 0 || slices.Contains(f.Options, value)
 }
 
@@ -88,8 +96,13 @@ type Config struct {
 	GithubProject GithubProject
 }
 
-// Load reads and parses a .git-board.toml file at path.
+// Load reads and parses a .git-board.toml file at path; an empty config
+// when there is none.
 func Load(path string) (*Config, error) {
+	// No config is a valid start: fields are the labels' own namespaces.
+	if _, err := os.Stat(path); errors.Is(err, fs.ErrNotExist) {
+		return &Config{}, nil
+	}
 	var r raw
 	if _, err := toml.DecodeFile(path, &r); err != nil {
 		return nil, fmt.Errorf("parsing %s: %w", path, err)

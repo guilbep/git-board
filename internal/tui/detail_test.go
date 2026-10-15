@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -21,8 +22,9 @@ func mustLoadConfig(t *testing.T) *config.Config {
 	return cfg
 }
 
+// Every "ns:value" label is a field, configured or not; only labels without
+// a namespace are "other".
 func TestParseLabelsSeparatesKnownFromOtherLabels(t *testing.T) {
-	cfg := mustLoadConfig(t)
 	labels := []string{
 		"status:ready",
 		"prio:p1",
@@ -32,12 +34,13 @@ func TestParseLabelsSeparatesKnownFromOtherLabels(t *testing.T) {
 		"unconfigured:value",
 	}
 
-	known, other := ParseLabels(labels, cfg.Fields)
+	known, other := ParseLabels(labels)
 
 	want := map[string][]string{
-		"assignee": {"alice", "bob"},
-		"prio":     {"p1"},
-		"status":   {"ready"},
+		"assignee":     {"alice", "bob"},
+		"prio":         {"p1"},
+		"status":       {"ready"},
+		"unconfigured": {"value"},
 	}
 	if len(known) != len(want) {
 		t.Fatalf("known = %+v, want %d fields", known, len(want))
@@ -59,7 +62,7 @@ func TestParseLabelsSeparatesKnownFromOtherLabels(t *testing.T) {
 		}
 	}
 
-	wantOther := map[string]bool{"random-flag": true, "unconfigured:value": true}
+	wantOther := map[string]bool{"random-flag": true}
 	if len(other) != len(wantOther) {
 		t.Fatalf("other = %v, want %v", other, wantOther)
 	}
@@ -71,8 +74,7 @@ func TestParseLabelsSeparatesKnownFromOtherLabels(t *testing.T) {
 }
 
 func TestParseLabelsNoLabelsYieldsNothingKnown(t *testing.T) {
-	cfg := mustLoadConfig(t)
-	known, other := ParseLabels(nil, cfg.Fields)
+	known, other := ParseLabels(nil)
 	if len(known) != 0 || len(other) != 0 {
 		t.Errorf("known = %v, other = %v, want both empty", known, other)
 	}
@@ -85,7 +87,7 @@ func TestRenderDetailShowsKnownFieldsAndOtherLabels(t *testing.T) {
 		Labels: []string{"status:ready", "assignee:alice", "assignee:bob", "random-flag", "unconfigured:value"},
 	}
 	view := renderDetail(iss, cfg, "")
-	for _, want := range []string{"Status: ready", "Assignee: alice, bob", "Other labels:", "random-flag", "unconfigured:value"} {
+	for _, want := range []string{"Status: ready", "Assignee: alice, bob", "Unconfigured: value", "Other labels:", "random-flag"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("view missing %q:\n%s", want, view)
 		}
@@ -103,22 +105,13 @@ func TestRenderDetailShowsKnownFieldsAndOtherLabels(t *testing.T) {
 	}
 }
 
-func TestFieldNamesSorted(t *testing.T) {
+func TestFieldNamesAreConfiguredPlusFoundSorted(t *testing.T) {
 	cfg := mustLoadConfig(t)
-	names := FieldNames(cfg)
-	for i := 1; i < len(names); i++ {
-		if names[i-1] >= names[i] {
-			t.Fatalf("FieldNames() not sorted: %v", names)
-		}
-	}
-	want := map[string]bool{"status": true, "prio": true, "est": true, "assignee": true, "cat": true}
-	if len(names) != len(want) {
-		t.Fatalf("names = %v, want %d entries", names, len(want))
-	}
-	for _, n := range names {
-		if !want[n] {
-			t.Errorf("unexpected field name %q", n)
-		}
+	issues := []gitbugio.Issue{{Labels: []string{"sprint:s1", "status:ready", "plain"}}, {Labels: []string{"mod:travel"}}}
+	got := FieldNames(cfg, issues)
+	want := []string{"assignee", "cat", "est", "mod", "prio", "sprint", "status"}
+	if !slices.Equal(got, want) {
+		t.Errorf("FieldNames = %v, want %v", got, want)
 	}
 }
 

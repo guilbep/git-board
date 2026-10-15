@@ -22,26 +22,22 @@ import (
 // wants the quick filter on a differently-named field.
 const catFieldName = "cat"
 
-// KnownField is one configured field's current value(s) on an issue, ready
-// to render as a labeled detail line (e.g. "Assignee: alice, bob").
+// KnownField is one field's current value(s) on an issue, ready to render
+// as a labeled detail line (e.g. "Assignee: alice, bob").
 type KnownField struct {
 	Name   string
 	Values []string
 }
 
-// ParseLabels splits an issue's labels into values for fields configured in
-// cfgFields (grouped by field name, one entry per field, field-value order
-// preserved) and everything else. Pure — no bubbletea — so it's covered
-// directly by tests.
-func ParseLabels(labels []string, cfgFields map[string]config.Field) (known []KnownField, other []string) {
+// ParseLabels splits an issue's labels into field values — every
+// "ns:value" label, configured or not (grouped by field name, one entry per
+// field, field-value order preserved) — and labels without a namespace.
+// Pure — no bubbletea — so it's covered directly by tests.
+func ParseLabels(labels []string) (known []KnownField, other []string) {
 	byField := make(map[string][]string)
 	for _, l := range labels {
 		ns, val, ok := strings.Cut(l, ":")
 		if !ok {
-			other = append(other, l)
-			continue
-		}
-		if _, isField := cfgFields[ns]; !isField {
 			other = append(other, l)
 			continue
 		}
@@ -77,7 +73,7 @@ func renderDetail(issue gitbugio.Issue, cfg *config.Config, status string) strin
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s\n\n%s  (%s)\n\n", issue.Title, shortID(issue.ID), issue.Status)
 
-	known, other := ParseLabels(issue.Labels, cfg.Fields)
+	known, other := ParseLabels(issue.Labels)
 	for _, f := range known {
 		fmt.Fprintf(&b, "%s: %s\n", DisplayFieldName(f.Name), strings.Join(f.Values, ", "))
 	}
@@ -115,19 +111,31 @@ func (v valueItem) Title() string       { return v.value }
 func (v valueItem) Description() string { return v.desc }
 func (v valueItem) FilterValue() string { return v.value }
 
-// FieldNames returns cfg's configured field namespaces, sorted, for the
-// edit-field picker.
-func FieldNames(cfg *config.Config) []string {
-	names := make([]string, 0, len(cfg.Fields))
+// FieldNames returns the fields shown and editable, sorted: cfg's
+// configured ones plus every label namespace found on issues, so a new
+// "ns:value" label needs no config to get its column.
+func FieldNames(cfg *config.Config, issues []gitbugio.Issue) []string {
+	seen := make(map[string]bool, len(cfg.Fields))
 	for n := range cfg.Fields {
+		seen[n] = true
+	}
+	for _, issue := range issues {
+		for _, l := range issue.Labels {
+			if ns, _, ok := strings.Cut(l, ":"); ok {
+				seen[ns] = true
+			}
+		}
+	}
+	names := make([]string, 0, len(seen))
+	for n := range seen {
 		names = append(names, n)
 	}
 	sort.Strings(names)
 	return names
 }
 
-func fieldPickerItems(cfg *config.Config) []list.Item {
-	names := FieldNames(cfg)
+func fieldPickerItems(cfg *config.Config, issues []gitbugio.Issue) []list.Item {
+	names := FieldNames(cfg, issues)
 	items := make([]list.Item, len(names))
 	for i, n := range names {
 		items[i] = fieldItem{name: n}

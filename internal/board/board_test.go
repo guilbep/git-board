@@ -88,3 +88,30 @@ func TestSortByFieldNilConfigDoesNotPanic(t *testing.T) {
 	}()
 	SortByField(issues, "est", nil)
 }
+
+// A field with options sorts in their order (status follows the workflow,
+// not the alphabet); values outside them after, missing values last.
+func TestSortByFieldFollowsOptionOrder(t *testing.T) {
+	cfg := &config.Config{Fields: map[string]config.Field{
+		"status": {Single: true, Options: []string{"backlog", "ready", "in-progress"}},
+	}}
+	issues := func() []gitbugio.Issue {
+		return []gitbugio.Issue{
+			{Title: "none"},
+			{Title: "in-progress", Labels: []string{"status:in-progress"}},
+			{Title: "zzz", Labels: []string{"status:zzz"}},
+			{Title: "backlog", Labels: []string{"status:backlog"}},
+			{Title: "ready", Labels: []string{"status:ready"}},
+		}
+	}
+	asc := issues()
+	SortByField(asc, "status", cfg)
+	if got := titles(asc); !slices.Equal(got, []string{"backlog", "ready", "in-progress", "zzz", "none"}) {
+		t.Errorf("asc = %v", got)
+	}
+	desc := issues()
+	SortByField(desc, "status desc", cfg)
+	if got := titles(desc); !slices.Equal(got, []string{"zzz", "in-progress", "ready", "backlog", "none"}) {
+		t.Errorf("desc = %v", got)
+	}
+}

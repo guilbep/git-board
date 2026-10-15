@@ -335,3 +335,42 @@ func TestResolveKeepsOneSide(t *testing.T) {
 		t.Errorf("theirs base %q", got)
 	}
 }
+
+func TestSyncSprintsOutsideTheListComeFromTheirTitle(t *testing.T) {
+	meta := syncMeta()
+	meta.Fields["Sprint"].Options["Hypercare"] = "i-h"
+	it := item(1, "Ready")
+	it.Sprint = &ghbridge.Sprint{Title: "Hypercare"}
+	p := ghbridge.BuildSyncPlan([]ghbridge.Item{it}, oneBug("status:ready"), nil, meta, syncConfig())
+	if a := p.Changes[0].Added; !slices.Contains(a, "sprint:hypercare") || len(p.Changes[0].Warnings) != 0 {
+		t.Errorf("added %v warnings %v", a, p.Changes[0].Warnings)
+	}
+
+	// and back: a local sprint named after an iteration is written to it
+	it.Sprint = nil
+	bases := map[string]map[string]string{"bug1": {"status": "ready", "sprint": ""}}
+	p = ghbridge.BuildSyncPlan([]ghbridge.Item{it}, oneBug("status:ready", "sprint:hypercare"), bases, meta, syncConfig())
+	if len(p.Edits) != 1 || p.Edits[0].Kind != ghbridge.EditIteration || p.Edits[0].Arg != "i-h" {
+		t.Errorf("edits %+v, want the Hypercare iteration", p.Edits)
+	}
+}
+
+func TestSyncNumericFieldTakesAnyNumber(t *testing.T) {
+	v := 3.5
+	it := item(1, "Ready")
+	it.EstHours = &v
+	p := plan(it, oneBug("status:ready"), nil)
+	if a := p.Changes[0].Added; !slices.Contains(a, "est:3.5") || len(p.Changes[0].Warnings) != 0 {
+		t.Errorf("added %v warnings %v", a, p.Changes[0].Warnings)
+	}
+}
+
+// A Project value with nothing to slug ("-") isn't read as "cleared".
+func TestSyncValueWithAnEmptySlugIsLeftAlone(t *testing.T) {
+	it := item(1, "Ready")
+	it.Sprint = &ghbridge.Sprint{Title: "-"}
+	p := plan(it, oneBug("status:ready", "sprint:sprint-4"), map[string]string{"status": "ready", "sprint": "sprint-4"})
+	if len(p.Changes[0].Removed) != 0 || len(p.Changes[0].Warnings) == 0 {
+		t.Errorf("removed %v warnings %v, want the sprint left alone with a warning", p.Changes[0].Removed, p.Changes[0].Warnings)
+	}
+}

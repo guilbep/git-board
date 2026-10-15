@@ -38,28 +38,32 @@ matching toolchain automatically if needed. Install the fork's `git-bug`
 too (see its `INSTALLATION.md`, "The bridge-sync fork"), so that both read
 and write the repository the same way.
 
-## Display convention: known fields get their own column/line
+## Display convention: every `ns:value` label is a field
 
 Every surface that shows an issue's fields — `ls`/`view`'s table (and
-`--md`), the TUI's detail view, and the `html` static site — follows the
-same rule: a label matching a field configured in `.git-board.toml`'s
-`[fields.*]` renders under that field's own column or line, with a
+`--md`), the TUI, the `html` static site and the web UI — follows the same
+rule: a `ns:value` label renders under its own column or line, with a
 capitalized display name (`status:ready` → a `Status` column showing
-`ready`), not as a raw `field:value` string. This is driven **dynamically**
-by whatever a project's own config actually defines — not a hardcoded
-field list — so it stays correct as fields are added, renamed, or
-removed, and it's the same classification logic
-(`internal/tui.ParseLabels`/`DisplayFieldName`) everywhere, not
-reimplemented per surface.
+`ready`), not as a raw `field:value` string. The fields are the configured
+ones **plus every namespace found on the issues**: a new `sprint:` or
+`mod:` label gets its column, its filter and its editable field without
+touching `.git-board.toml`. The same classification
+(`internal/tui.ParseLabels`/`FieldNames`, `web/src/facets.ts`) is used
+everywhere, not reimplemented per surface.
 
-A label that doesn't match any configured field still shows — under
-"other" in tables, "Other labels" in the TUI/`html` — never silently
-dropped. The one field-specific special case: a numeric field literally
-named `est` gets an `h` (hours) suffix per value; this isn't a general
-"numeric implies hours" rule, `est` is the only field this project has
-ever needed it for.
+A label without a namespace still shows — under "other" in tables, "Other
+labels" elsewhere — never silently dropped. The one field-specific special
+case: a numeric field literally named `est` gets an `h` (hours) suffix per
+value; this isn't a general "numeric implies hours" rule, `est` is the
+only field this project has ever needed it for.
 
 ## Config: `.git-board.toml`
+
+Optional: without it, every `ns:value` label is a field and `git board`
+works on any git-bug repository. It adds what labels can't say: the order
+of a field's values (`options`: status follows the workflow when sorted
+and on a board), single or multiple values, sprint dates (`@current`),
+saved views, and the GitHub Project to sync with.
 
 ```toml
 [repos]
@@ -217,7 +221,7 @@ Field mapping:
 | Category | `<value>` (bare label, verbatim — not slugified) | none — plain label, not a field:value pair |
 | Module | `mod:<value>` | single — the two duplicate "Generic" options are merged into one `mod:generic` |
 | Est. hours | `est:<value>` | single |
-| Sprint | `sprint:<slug>` | single, matched against `[[sprints.list]]` titles |
+| Sprint | `sprint:<slug>` | single — the `[[sprints.list]]` slug of the iteration's title, else the title as a slug (`Hypercare` → `sprint:hypercare`); list the iterations for `@current` to find them |
 | Assignees | `assignee:<user>` | multi — one label per assignee, added *and* removed to mirror GitHub exactly (`bridge sync` keeps the ones added in git-board) |
 
 `Milestone` and `Size` are **not** imported — the PRD calls them dead/unused
@@ -230,8 +234,11 @@ duplicate way to say the same thing. Being a plain label, it's additive
 only (no configured options, no removal on re-run) — same tradeoff every
 other plain label already has.
 
-A field value that doesn't slugify to one of a configured `[fields.<name>]`
-`options` list is **skipped with a warning**, not silently dropped or
+`bridge pull` reads values exactly as `bridge sync` does: a
+`[fields.<name>] project = { … }` alias first, then the slug of the
+Project's name; a numeric field takes any number (its `options` are the
+usual picks, not a limit). A value that doesn't slugify to one of a
+configured `[fields.<name>]` `options` list is **skipped with a warning**, not silently dropped or
 guessed at — real Project data has drift (the PRD's own numbers: dozens of
 open items with no status or priority set at all). An empty GitHub value
 just leaves that label untouched, no warning; a non-empty value with no
@@ -440,8 +447,16 @@ repo/network issue) is shown inline and the TUI stays open.
 A one-page board, backed by a Go HTTP API in the same module — no Python,
 no separate service. `cmd/git-board-server` reuses `internal/config`,
 `internal/gitbugio`, `internal/fields` and `internal/board` directly, so
-`ls`/`view`/`set` and the API apply the exact same filter/sort/group and
+`ls`/`view`/`set` and the API apply the exact same filter/group and
 field-write logic.
+
+The page asks the server for a view's filter expression, then narrows and
+sorts the answer itself: a sidebar of checkbox filters, one per field
+(OR within a field, AND across fields, each value counted against the
+other filters), a search box, and table headers that sort on click
+(option order, numbers as numbers, missing values last). Filters and sort
+live in the URL (`#/?view=backlog&f.status=ready&sort=-est`), so a link
+keeps them.
 
 **No auth in v1** — same trusted-internal-network assumption as git-bug's
 own `git bug webui`. Anyone who can reach the port can read and write every

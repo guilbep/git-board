@@ -200,12 +200,10 @@ func planIssue(item Item, bug gitbugio.Issue, cfg *config.Config) IssueChange {
 		// left untouched — expected GitHub Project drift, not an error.
 	}
 
-	add(planSingleValue(cfg, bug.Labels, "status", slugify(item.Status)))
-	add(planSingleValue(cfg, bug.Labels, "prio", slugify(item.Priority)))
+	for _, f := range synced {
+		add(planField(cfg, bug.Labels, f.name, f.value(item)))
+	}
 	add(planPlainLabel(bug.Labels, "category", item.Category))
-	add(planSingleValue(cfg, bug.Labels, "mod", slugify(normalizeModule(item.Module))))
-	add(planSingleValue(cfg, bug.Labels, "est", formatEstHours(item.EstHours)))
-	add(planSprint(cfg, bug.Labels, sprintTitle(item)))
 
 	assigneeRes := planAssignees(bug.Labels, item.Assignees)
 	if len(assigneeRes.Added) > 0 || len(assigneeRes.Removed) > 0 {
@@ -217,18 +215,17 @@ func planIssue(item Item, bug gitbugio.Issue, cfg *config.Config) IssueChange {
 	return change
 }
 
-// planSingleValue plans one single-cardinality field. An empty value
-// (returned FieldResult.Field == "", no warning) means "leave untouched" —
-// GitHub Project drift like the PRD's documented empty-status/empty-priority
-// items is expected, not an error. A non-empty value that doesn't match a
-// configured [fields.<name>] option list produces a warning instead of a
-// label, matching git-bug's "no silent fallbacks" rule.
-func planSingleValue(cfg *config.Config, current []string, name, value string) (FieldResult, string) {
-	if value == "" {
+// planField reads the Project's raw value of a field as bridge sync does
+// (toLabel: option aliases, slugs, sprints by title). An empty value leaves
+// the field untouched: Project drift, not an error. A value with no
+// configured option warns instead of writing a label.
+func planField(cfg *config.Config, current []string, name, raw string) (FieldResult, string) {
+	value, ok := toLabel(cfg, name, raw)
+	switch {
+	case !ok:
+		return FieldResult{}, fmt.Sprintf("%s value %q has no matching [fields.%s] option, skipped", name, raw, name)
+	case value == "":
 		return FieldResult{}, ""
-	}
-	if !cfg.Fields[name].KnownValue(value) {
-		return FieldResult{}, fmt.Sprintf("%s value %q has no matching [fields.%s] option, skipped", name, value, name)
 	}
 	_, added, removed := fields.Diff(current, name, value, true)
 	return FieldResult{Field: name, Value: value, Added: added, Removed: removed}, ""
@@ -264,19 +261,6 @@ func sprintTitle(item Item) string {
 		return ""
 	}
 	return item.Sprint.Title
-}
-
-func planSprint(cfg *config.Config, current []string, title string) (FieldResult, string) {
-	if title == "" {
-		return FieldResult{}, ""
-	}
-	for _, s := range cfg.Sprints.List {
-		if strings.EqualFold(strings.TrimSpace(s.Title), strings.TrimSpace(title)) {
-			_, added, removed := fields.Diff(current, "sprint", s.Slug, true)
-			return FieldResult{Field: "sprint", Value: s.Slug, Added: added, Removed: removed}, ""
-		}
-	}
-	return FieldResult{}, fmt.Sprintf("sprint %q has no matching [[sprints.list]] title, skipped", title)
 }
 
 // planAssignees reconciles the full "assignee:*" label set against the

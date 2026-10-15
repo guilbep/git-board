@@ -5,6 +5,7 @@ package board
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -60,21 +61,36 @@ func FieldValue(issue gitbugio.Issue, fieldName string) string {
 
 // SortByField sorts issues in place by a "field" or "field desc" spec. A
 // no-op if spec is "". Compares numerically when cfg marks the field
-// [fields.<name>].numeric = true (e.g. "est"), lexically otherwise (fine
-// for label fields like "prio", where "p0" < "p1" already sorts right).
+// [fields.<name>].numeric = true (e.g. "est"); otherwise in the order of
+// its configured options (status follows the workflow), values outside
+// them after, lexically. Issues without the field sort last either way —
+// the web page sorts the same way (web/src/facets.ts).
 func SortByField(issues []gitbugio.Issue, spec string, cfg *config.Config) {
 	if spec == "" {
 		return
 	}
 	key, direction, _ := strings.Cut(spec, " ")
 	desc := strings.TrimSpace(direction) == "desc"
-	numeric := cfg != nil && cfg.Fields[key].Numeric
+	var field config.Field
+	if cfg != nil {
+		field = cfg.Fields[key]
+	}
+	rank := func(v string) int {
+		if i := slices.Index(field.Options, v); i >= 0 {
+			return i
+		}
+		return len(field.Options)
+	}
 	sort.SliceStable(issues, func(i, j int) bool {
 		vi, vj := FieldValue(issues[i], key), FieldValue(issues[j], key)
-		if numeric {
+		switch {
+		case field.Numeric:
 			return lessNumeric(vi, vj, desc)
-		}
-		if desc {
+		case vi == "" || vj == "":
+			return vi != "" // a value before none, either way
+		case rank(vi) != rank(vj):
+			return (rank(vi) < rank(vj)) != desc
+		case desc:
 			return vi > vj
 		}
 		return vi < vj

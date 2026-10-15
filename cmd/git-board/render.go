@@ -24,14 +24,12 @@ func render(out io.Writer, issues []gitbugio.Issue, group, sortSpec string, md, 
 		return enc.Encode(issues)
 	}
 
-	// One column per field configured in .git-board.toml (sorted, same
-	// order tui.ParseLabels/FieldNames already use), plus a trailing
-	// "other" column for any label that doesn't match a configured field
-	// — never silently dropped. This is the convention: a known field
-	// always gets its own column with its display name, driven by
-	// whatever a project's own config defines, not a hardcoded field
-	// list — so it stays correct as fields are added/renamed/removed.
-	fieldNames := tui.FieldNames(cfg)
+	// One column per field (sorted, same order tui.ParseLabels/FieldNames
+	// use): the configured ones plus every label namespace on the issues,
+	// then a trailing "other" column for labels without a namespace —
+	// never silently dropped. Driven by the labels themselves, not a
+	// hardcoded list, so it stays correct as fields come and go.
+	fieldNames := tui.FieldNames(cfg, issues)
 
 	for _, bucket := range board.BucketBy(issues, group) {
 		if group != "" {
@@ -50,11 +48,11 @@ func render(out io.Writer, issues []gitbugio.Issue, group, sortSpec string, md, 
 	return nil
 }
 
-// fieldColumns renders issue's known fields as fieldNames-ordered cell
-// values (one per configured field, blank if unset) plus a joined "other"
-// cell for any label that isn't a configured field at all.
+// fieldColumns renders issue's fields as fieldNames-ordered cell values
+// (blank if unset) plus a joined "other" cell for labels without a
+// namespace.
 func fieldColumns(issue gitbugio.Issue, cfg *config.Config, fieldNames []string) (cells []string, other string) {
-	known, otherLabels := tui.ParseLabels(issue.Labels, cfg.Fields)
+	known, otherLabels := tui.ParseLabels(issue.Labels)
 	byName := make(map[string][]string, len(known))
 	for _, f := range known {
 		byName[f.Name] = f.Values

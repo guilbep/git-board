@@ -189,12 +189,10 @@ func newGetCmd() *cobra.Command {
 	}
 }
 
+// loadConfig reads .git-board.toml: an empty config without one, an error
+// ("parsing .git-board.toml: …") when it's invalid.
 func loadConfig() (*config.Config, error) {
-	cfg, err := config.Load(configPath)
-	if err != nil {
-		return nil, fmt.Errorf("%s not found or invalid: %w", configPath, err)
-	}
-	return cfg, nil
+	return config.Load(configPath)
 }
 
 func runLs(out io.Writer, filterStr, group, sort string, md, asJSON bool, me string) error {

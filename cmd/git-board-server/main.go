@@ -29,7 +29,7 @@ func main() {
 
 	cfg, err := config.Load(configPath)
 	if err != nil {
-		log.Fatalf("%s not found or invalid: %v", configPath, err)
+		log.Fatal(err)
 	}
 
 	b, err := gitbugio.OpenCwd()

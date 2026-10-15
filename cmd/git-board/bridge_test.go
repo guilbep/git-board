@@ -143,11 +143,11 @@ func TestBridgePullApplyWritesLabelsAndIsIdempotent(t *testing.T) {
 		t.Errorf("expected apply confirmation in output:\n%s", out)
 	}
 
-	lsOut, err := execute(t, []string{"ls", "is:open"})
+	lsOut, err := execute(t, []string{"ls", "is:open", "--json"})
 	if err != nil {
 		t.Fatalf("ls: %v", err)
 	}
-	if !strings.Contains(lsOut, "prio:p0") {
+	if !strings.Contains(lsOut, `"prio:p0"`) {
 		t.Errorf("expected prio:p0 written after --apply:\n%s", lsOut)
 	}
 
@@ -163,7 +163,7 @@ func TestBridgePullApplyWritesLabelsAndIsIdempotent(t *testing.T) {
 	if !strings.Contains(rerunOut, "0 field(s) set") {
 		t.Errorf("expected 0 field(s) set on idempotent re-run, got:\n%s", rerunOut)
 	}
-	lsOut2, err := execute(t, []string{"ls", "is:open"})
+	lsOut2, err := execute(t, []string{"ls", "is:open", "--json"})
 	if err != nil {
 		t.Fatalf("ls after re-run: %v", err)
 	}

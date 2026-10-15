@@ -210,3 +210,29 @@ func TestBuildPlanIsPureNoMutationOfInputs(t *testing.T) {
 		t.Errorf("BuildPlan mutated the input Issue's Labels: %v vs %v", b.Labels, bugsBefore)
 	}
 }
+
+// bridge pull reads the Project the way bridge sync does: option aliases,
+// any number for a numeric field, sprints outside the list by their title.
+func TestBuildPlanUsesTheSyncMapping(t *testing.T) {
+	cfg := &config.Config{Fields: map[string]config.Field{
+		"status": {Single: true, Options: []string{"qa"}, Project: map[string]string{"qa": "QA Validation"}},
+		"est":    {Single: true, Options: []string{"1", "2"}, Numeric: true},
+	}}
+	est := 3.5
+	items := []ghbridge.Item{{Status: "QA Validation", EstHours: &est, Sprint: &ghbridge.Sprint{Title: "Hypercare"},
+		Content: ghbridge.Content{Number: 7, Type: "Issue", URL: bug("b7", 7).GithubURL}}}
+
+	change := changeFor(t, ghbridge.BuildPlan(items, []gitbugio.Issue{bug("b7", 7)}, cfg), 7)
+	got := map[string]bool{}
+	for _, l := range change.Added {
+		got[l] = true
+	}
+	for _, want := range []string{"status:qa", "est:3.5", "sprint:hypercare"} {
+		if !got[want] {
+			t.Errorf("%s missing from Added = %v", want, change.Added)
+		}
+	}
+	if len(change.Warnings) != 0 {
+		t.Errorf("Warnings = %v, want none", change.Warnings)
+	}
+}

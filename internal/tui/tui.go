@@ -160,7 +160,7 @@ func New(issues []gitbugio.Issue, title string, backend Backend, cfg *config.Con
 	l.Title = title
 	l.SetFilteringEnabled(true)
 
-	fp := newPicker(fieldPickerItems(cfg), "Edit field")
+	fp := newPicker(fieldPickerItems(cfg, issues), "Edit field")
 
 	// valuePicker and catPicker are re-populated with real items (and
 	// resized to fit them, via newPicker) when the user actually opens
@@ -387,7 +387,7 @@ func (m Model) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.mode = modeList
 		m.status = ""
 	case "e":
-		m.fieldPicker.SetItems(fieldPickerItems(m.cfg))
+		m.fieldPicker.SetItems(fieldPickerItems(m.cfg, m.allIssues))
 		m.mode = modeFieldPicker
 	case "g":
 		// Body/comments aren't git-board's data at all — they're

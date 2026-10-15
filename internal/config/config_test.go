@@ -285,3 +285,23 @@ func TestResolveSprintBeforeFirstStart(t *testing.T) {
 		t.Errorf("previous = %+v, want nil", previous)
 	}
 }
+
+func TestLoadMissingFileIsAnEmptyConfig(t *testing.T) {
+	cfg, err := Load(filepath.Join(t.TempDir(), ".git-board.toml"))
+	if err != nil || cfg == nil {
+		t.Fatalf("Load = %v, %v; want an empty config", cfg, err)
+	}
+	if len(cfg.Fields)+len(cfg.Views)+len(cfg.Sprints.List) != 0 {
+		t.Errorf("config not empty: %+v", cfg)
+	}
+}
+
+func TestKnownValueNumericTakesAnyNumber(t *testing.T) {
+	f := Field{Single: true, Numeric: true, Options: []string{"1", "2"}}
+	if !f.KnownValue("3.5") || !f.KnownValue("33") {
+		t.Error("a number outside the options was refused")
+	}
+	if f.KnownValue("lots") {
+		t.Error("a non-number was taken")
+	}
+}

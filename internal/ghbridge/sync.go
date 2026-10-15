@@ -334,7 +334,7 @@ func localValue(labels []string, field string) (string, bool) {
 }
 
 // toLabel turns the Project's raw value of a field into git-board's value;
-// false when no option matches.
+// false when no option matches, or nothing is left of it as a slug.
 func toLabel(cfg *config.Config, field, raw string) (string, bool) {
 	if raw == "" {
 		return "", true
@@ -342,12 +342,8 @@ func toLabel(cfg *config.Config, field, raw string) (string, bool) {
 	f := cfg.Fields[field]
 	switch field {
 	case "sprint":
-		for _, s := range cfg.Sprints.List {
-			if strings.EqualFold(strings.TrimSpace(s.Title), strings.TrimSpace(raw)) {
-				return s.Slug, true
-			}
-		}
-		return "", false
+		value := sprintSlug(cfg, raw)
+		return value, value != ""
 	case "est":
 		return raw, f.KnownValue(raw)
 	}
@@ -356,8 +352,21 @@ func toLabel(cfg *config.Config, field, raw string) (string, bool) {
 			return value, true
 		}
 	}
+	// "-" slugs to nothing: not a value, and not "cleared" either
 	value := slugify(raw)
-	return value, f.KnownValue(value)
+	return value, value != "" && f.KnownValue(value)
+}
+
+// sprintSlug is the label value of a Project iteration: its [[sprints.list]]
+// slug when listed (that's where @current finds its dates), else its title
+// as a slug, so a new iteration needs no config.
+func sprintSlug(cfg *config.Config, title string) string {
+	for _, s := range cfg.Sprints.List {
+		if strings.EqualFold(strings.TrimSpace(s.Title), strings.TrimSpace(title)) {
+			return s.Slug
+		}
+	}
+	return slugify(title)
 }
 
 // toProject turns git-board's value of a field into a Project edit; false
@@ -373,14 +382,9 @@ func toProject(cfg *config.Config, pf ProjectField, field, value string) (kind, 
 		}
 		return EditNumber, value, true
 	case "sprint":
-		for _, s := range cfg.Sprints.List {
-			if s.Slug != value {
-				continue
-			}
-			for title, id := range pf.Options {
-				if strings.EqualFold(strings.TrimSpace(title), strings.TrimSpace(s.Title)) {
-					return EditIteration, id, true
-				}
+		for _, title := range slices.Sorted(maps.Keys(pf.Options)) {
+			if sprintSlug(cfg, title) == value {
+				return EditIteration, pf.Options[title], true
 			}
 		}
 		return "", "", false
