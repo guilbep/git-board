@@ -62,13 +62,13 @@ Then `go build ./cmd/git-board-server` from the repo root embeds `web/dist`
 (`web/embed.go`) and serves `dist/spa` from it, into a single binary that
 serves both the API and the UI.
 
-## Type-check
+## Type-check and test
 
 ```bash
 npm run typecheck   # vue-tsc --noEmit
+npm test            # node --test src/facets.test.ts
 ```
 
-No test framework came with the generated scaffold (no Vitest, no test
-script in `package.json`) — not added for this MVP. `internal/board`'s
-sort/group logic and the API handlers are covered on the Go side instead
-(`cmd/git-board-server/server_test.go`).
+The filters and sort (`src/facets.ts`) run in the page, so they're tested
+here, with Node's own test runner (Node strips the types; no Vitest). The
+API handlers are covered on the Go side (`cmd/git-board-server/server_test.go`).

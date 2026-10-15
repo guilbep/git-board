@@ -1,3 +1,7 @@
 {
-  "extends": "./.quasar/tsconfig.json"
+  "extends": "./.quasar/tsconfig.json",
+  "compilerOptions": {
+    // facets.ts imports ./fields.ts by its file name, so node can run its test
+    "allowImportingTsExtensions": true
+  }
 }

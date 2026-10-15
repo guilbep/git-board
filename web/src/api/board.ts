@@ -60,10 +60,11 @@ export function getFields(): Promise<Record<string, FieldConfig>> {
   return request('/api/config/fields');
 }
 
-export function getIssues(filter: string, sort: string, group: string): Promise<Bucket[]> {
+// Unsorted: the page sorts (facets.sortIssues), by option order where the
+// server would sort alphabetically.
+export function getIssues(filter: string, group: string): Promise<Bucket[]> {
   const params = new URLSearchParams();
   if (filter) params.set('filter', filter);
-  if (sort) params.set('sort', sort);
   if (group) params.set('group', group);
   return request(`/api/issues?${params}`);
 }

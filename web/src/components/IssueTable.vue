@@ -1,6 +1,6 @@
 <!-- layout = "table": one table per group, the CLI's columns (cmd/git-board
-     render.go): id, title, state, one column per configured field, then the
-     labels no field claims. -->
+     render.go): id, title, state, one column per field, then the labels
+     without a namespace. Every column but the last sorts on click. -->
 <template>
   <section v-for="bucket in buckets" :key="bucket.group" class="table-group">
     <h2 v-if="group" class="group-title">
@@ -11,10 +11,18 @@
       <table class="issue-table">
         <thead>
           <tr>
-            <th scope="col">ID</th>
-            <th scope="col">Title</th>
-            <th scope="col">State</th>
-            <th v-for="name in names" :key="name" scope="col">{{ displayName(name) }}</th>
+            <th
+              v-for="col in columns"
+              :key="col.key"
+              scope="col"
+              :class="{ 'cell-id': col.key === 'id', 'cell-title': col.key === 'title' }"
+              :aria-sort="sort?.key === col.key ? (sort.desc ? 'descending' : 'ascending') : undefined"
+            >
+              <button type="button" class="th-sort" @click="emit('sort', col.key)">
+                {{ col.label
+                }}<span class="th-arrow" aria-hidden="true">{{ sort?.key === col.key ? (sort.desc ? '↓' : '↑') : '' }}</span>
+              </button>
+            </th>
             <th scope="col">Other labels</th>
           </tr>
         </thead>
@@ -26,7 +34,7 @@
             <td class="cell-title"><button type="button" class="title-button">{{ issue.title }}</button></td>
             <td>{{ issue.status }}</td>
             <td v-for="name in names" :key="name">{{ cell(issue, name) }}</td>
-            <td class="cell-other">{{ otherLabels(issue.labels, fields).join(', ') }}</td>
+            <td class="cell-other">{{ otherLabels(issue.labels, names).join(', ') }}</td>
           </tr>
         </tbody>
       </table>
@@ -37,14 +45,24 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import type { Bucket, Issue } from '@/api/board';
-import {
-  displayName, fieldNames, fieldValues, formatValue, otherLabels, type Fields,
-} from '@/fields';
+import type { Sort } from '@/facets';
+import { displayName, fieldValues, formatValue, otherLabels, type Fields } from '@/fields';
 
-const props = defineProps<{ buckets: Bucket[]; fields: Fields; group: string }>();
-const emit = defineEmits<{ open: [issue: Issue] }>();
+const props = defineProps<{
+  buckets: Bucket[];
+  names: string[];
+  fields: Fields;
+  group: string;
+  sort: Sort | null;
+}>();
+const emit = defineEmits<{ open: [issue: Issue]; sort: [key: string] }>();
 
-const names = computed(() => fieldNames(props.fields));
+const columns = computed(() => [
+  { key: 'id', label: 'ID' },
+  { key: 'title', label: 'Title' },
+  { key: 'is', label: 'State' },
+  ...props.names.map((name) => ({ key: name, label: displayName(name) })),
+]);
 
 function groupLabel(value: string): string {
   if (value === '(none)') return `No ${props.group}`;
@@ -87,13 +105,38 @@ function cell(issue: Issue, name: string): string {
 }
 .issue-table th {
   background: var(--bg-subtle);
-  border-bottom-color: var(--border);
+  border-bottom-color: var(--border-strong);
   font-weight: var(--w-bold);
   white-space: nowrap;
 }
+.issue-table th:has(.th-sort) { padding: 0; }
+.th-sort {
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  font: inherit;
+  color: var(--fg);
+  text-align: inherit;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+.th-sort:hover { color: var(--primary-hover); }
+.th-sort:focus-visible { outline: var(--focus-w) solid var(--primary-hover); outline-offset: -0.125rem; }
+.th-arrow { display: inline-block; min-width: 1em; padding-left: var(--space-1); }
+
+/* ID and Title stay put when the table scrolls sideways (not on phones:
+   together they'd be wider than the screen). */
+@media (min-width: 48rem) {
+  .cell-id,
+  .cell-title { position: sticky; z-index: 1; background: var(--bg); }
+  .cell-id { left: 0; width: 6.5rem; min-width: 6.5rem; box-sizing: border-box; }
+  .cell-title { left: 6.5rem; border-right: var(--border-w) solid var(--border-subtle); }
+  th.cell-id,
+  th.cell-title { background: var(--bg-subtle); }
+}
+.issue-table tbody tr:hover td { background: var(--bg-subtle); }
 .issue-table tbody tr:last-child td { border-bottom: 0; }
 .issue-table tbody tr { cursor: pointer; transition: background var(--t-fast); }
-.issue-table tbody tr:hover { background: var(--bg-subtle); }
 
 .cell-id { font-family: var(--font-mono); color: var(--fg-muted); white-space: nowrap; }
 .cell-title { min-width: 18rem; }

@@ -49,8 +49,9 @@
           </select>
         </template>
 
-        <!-- single free-form field: saved on Enter or when leaving it -->
-        <template v-else-if="fields[name]?.single">
+        <!-- single free-form field, or one not configured (the server sets
+             those as single too): saved on Enter or when leaving it -->
+        <template v-else-if="fields[name]?.single ?? true">
           <label class="epfl-label" :for="`field-${name}`">{{ displayName(name) }}</label>
           <input
             :id="`field-${name}`"
@@ -115,11 +116,9 @@
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue';
 import { patchIssue, type Issue } from '@/api/board';
-import {
-  displayName, fieldNames, fieldValues, formatValue, otherLabels, type Fields,
-} from '@/fields';
+import { displayName, fieldValues, formatValue, otherLabels, type Fields } from '@/fields';
 
-const props = defineProps<{ issue: Issue; fields: Fields }>();
+const props = defineProps<{ issue: Issue; names: string[]; fields: Fields }>();
 const emit = defineEmits<{ close: []; updated: [issue: Issue] }>();
 
 const saving = ref(false);
@@ -127,8 +126,7 @@ const saved = ref(''); // what the last successful save did, in words
 const error = ref('');
 const drafts = reactive<Record<string, string>>({});
 
-const names = computed(() => fieldNames(props.fields));
-const other = computed(() => otherLabels(props.issue.labels, props.fields));
+const other = computed(() => otherLabels(props.issue.labels, props.names));
 
 const values = (name: string) => fieldValues(props.issue.labels, name);
 const single = (name: string) => values(name)[0] ?? '';
@@ -159,7 +157,7 @@ async function save(name: string, value: string): Promise<boolean> {
 
 function savedText(name: string, value: string): string {
   const field = displayName(name);
-  if (props.fields[name]?.single) return `Saved: ${field} is now ${formatValue(name, value, props.fields)}.`;
+  if (props.fields[name]?.single ?? true) return `Saved: ${field} is now ${formatValue(name, value, props.fields)}.`;
   if (value.startsWith('-')) return `Saved: removed ${value.slice(1)} from ${field}.`;
   return `Saved: added ${value} to ${field}.`;
 }

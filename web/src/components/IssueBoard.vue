@@ -1,4 +1,4 @@
-<!-- layout = "board": one column per group, cards in the server's sort
+<!-- layout = "board": one column per group, cards in the chosen sort
      order. Columns scroll sideways inside the board, never the page. -->
 <template>
   <div class="board">
@@ -22,8 +22,8 @@
                 <span class="meta-name">{{ displayName(m.name) }}</span> {{ m.value }}
               </span>
             </span>
-            <span v-if="otherLabels(issue.labels, fields).length" class="card-other">
-              {{ otherLabels(issue.labels, fields).join(', ') }}
+            <span v-if="otherLabels(issue.labels, names).length" class="card-other">
+              {{ otherLabels(issue.labels, names).join(', ') }}
             </span>
           </button>
         </li>
@@ -34,11 +34,9 @@
 
 <script setup lang="ts">
 import type { Bucket, Issue } from '@/api/board';
-import {
-  displayName, fieldNames, fieldValues, formatValue, otherLabels, type Fields,
-} from '@/fields';
+import { displayName, fieldValues, formatValue, otherLabels, type Fields } from '@/fields';
 
-const props = defineProps<{ buckets: Bucket[]; fields: Fields; group: string }>();
+const props = defineProps<{ buckets: Bucket[]; names: string[]; fields: Fields; group: string }>();
 const emit = defineEmits<{ open: [issue: Issue] }>();
 
 function groupLabel(value: string): string {
@@ -47,10 +45,9 @@ function groupLabel(value: string): string {
   return formatValue(props.group, value, props.fields);
 }
 
-// Every configured field but the one the board is grouped by: the column
-// already says it.
+// Every field but the one the board is grouped by: the column already says it.
 function meta(issue: Issue) {
-  return fieldNames(props.fields)
+  return props.names
     .filter((name) => name !== props.group)
     .map((name) => ({
       name,

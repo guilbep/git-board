@@ -1,8 +1,7 @@
-// The display convention from the root README ("Display convention"),
-// mirrored from internal/tui.ParseLabels/DisplayFieldName and
-// cmd/git-board/render.go's formatFieldValues: a label matching a
-// configured field shows under that field's name, everything else under
-// "Other labels". No component re-derives this.
+// The display convention from the root README ("Display convention"): a
+// "ns:value" label shows under the field "ns", configured or not; labels
+// without a namespace show under "Other labels". No component re-derives
+// this.
 import type { Bucket, FieldConfig } from './api/board';
 
 export type Fields = Record<string, FieldConfig>;
@@ -22,11 +21,13 @@ export function fieldValues(labels: string[], name: string): string[] {
   return labels.filter((l) => l.startsWith(prefix)).map((l) => l.slice(prefix.length));
 }
 
-// Labels that aren't a configured field's value.
-export function otherLabels(labels: string[], fields: Fields): string[] {
+// Labels that aren't the value of one of the shown fields (`names`: the
+// configured fields plus the namespaces found on the issues, see
+// facets.namespaces).
+export function otherLabels(labels: string[], names: string[]): string[] {
   return labels.filter((l) => {
     const i = l.indexOf(':');
-    return i < 0 || !(l.slice(0, i) in fields);
+    return i < 0 || !names.includes(l.slice(0, i));
   });
 }
 
