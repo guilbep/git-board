@@ -1,3 +1,4 @@
+import { fieldTypes } from '@/fieldtypes';
 // Typed client for the git-board-server API. All HTTP for the board page
 // goes through here — never fetch() from a component directly.
 
@@ -80,8 +81,10 @@ export function getViews(): Promise<Record<string, ViewConfig>> {
   return request('/api/views');
 }
 
-export function getFields(): Promise<Record<string, FieldConfig>> {
-  return request('/api/config/fields');
+export async function getFields(): Promise<Record<string, FieldConfig>> {
+  const fields = await request<Record<string, FieldConfig>>('/api/config/fields');
+  fieldTypes.value = Object.fromEntries(Object.entries(fields).map(([k, f]) => [k, f.type ?? 'select']));
+  return fields;
 }
 
 // Each field value's color name (field → value → grey, blue, …).

@@ -112,3 +112,11 @@ test('pick: a click toggles, Alt keeps only one then all but it, Shift a range',
   assert.deepEqual(pick(['a', 'b', 'c', 'd'], 'c', order, { shift: true, anchor: 'a' }), ['d']);
   assert.deepEqual(pick([], 'c', order, { shift: true }), ['c']); // no anchor: a plain toggle
 });
+
+test('sortIssues sorts by forge number, issues without one last', () => {
+  const withForge = (id: string, n?: string): Issue => ({ ...issue(id, id, []), forges: n ? [{ name: 'GitHub', url: `https://github.com/o/r/issues/${n}`, number: n }] : [] });
+  const sorted = sortIssues([withForge('a', '1436'), withForge('b'), withForge('c', '87'), withForge('d', '2528')], { key: 'links', desc: false }, {});
+  assert.deepEqual(sorted.map((i) => i.id), ['c', 'a', 'd', 'b']);
+  const desc = sortIssues([withForge('a', '1436'), withForge('b'), withForge('c', '87')], { key: 'links', desc: true }, {});
+  assert.deepEqual(desc.map((i) => i.id), ['a', 'c', 'b']);
+});

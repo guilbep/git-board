@@ -140,14 +140,17 @@ export function sortIssues(issues: Issue[], sort: Sort | null, fields: Fields): 
   if (!sort) return issues;
   const { key, desc } = sort;
   const field = fields[key];
+  // links: the number on the issue's first forge
+  const numeric = key === 'links' || field?.numeric || field?.type === 'number';
   const value = (i: Issue) => {
+    if (key === 'links') return i.forges?.find((f) => f.number)?.number ?? null;
     const v = key === 'id' ? i.id : key === 'title' ? i.title : valuesOf(i, key)[0]!;
     return v === NONE || ((field?.numeric || field?.type === 'number') && Number.isNaN(Number(v))) ? null : v;
   };
   const options = field?.options ?? [];
   const rank = (v: string) => (options.includes(v) ? options.indexOf(v) : options.length);
   const compare = (a: string, b: string) =>
-    field?.numeric || field?.type === 'number'
+    numeric
       ? Number(a) - Number(b)
       : rank(a) - rank(b) || a.localeCompare(b, undefined, { numeric: true });
 

@@ -1,14 +1,15 @@
-// The table's columns: id, title, is (open/closed), one per field, links
+// The table's columns: id, links (the issue on its forges, #1436), title,
+// is (open/closed), one per field,
 // (the forge issues), other (labels without a namespace). A view without
 // `columns` shows the default ones, so a new field gets its column; a
 // view with them shows those, in that order. The title is always shown.
 export function defaultColumns(names: string[]): string[] {
-  return ['id', 'title', 'is', ...names, 'other'];
+  return ['id', 'links', 'title', 'is', ...names, 'other'];
 }
 
 export function shownColumns(saved: string[] | undefined, names: string[]): string[] {
   if (!saved?.length) return defaultColumns(names);
-  const known = new Set([...defaultColumns(names), 'links']);
+  const known = new Set(defaultColumns(names));
   const out = saved.filter((k, i) => known.has(k) && saved.indexOf(k) === i);
   if (!out.includes('title')) out.splice(Math.min(1, out.length), 0, 'title');
   return out;
@@ -17,7 +18,7 @@ export function shownColumns(saved: string[] | undefined, names: string[]): stri
 // the chooser's list: the shown columns in their order, then the hidden ones
 export function chooserColumns(saved: string[] | undefined, names: string[]): string[] {
   const shown = shownColumns(saved, names);
-  return [...shown, ...[...defaultColumns(names), 'links'].filter((k) => !shown.includes(k))];
+  return [...shown, ...defaultColumns(names).filter((k) => !shown.includes(k))];
 }
 
 export function toggleColumn(cols: string[], key: string): string[] {

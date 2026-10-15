@@ -182,7 +182,7 @@ const active = computed(() => Object.values(props.sel).flat().length + Number(pr
 </script>
 
 <style scoped>
-.filters-current { margin-left: .375rem; padding: 0 .3rem; border: 1px solid var(--fg); font-size: .6875rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; vertical-align: 1px; }
+.filters-current { white-space: nowrap; margin-left: .375rem; padding: 0 .3rem; border: 1px solid var(--fg); font-size: .6875rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; vertical-align: 1px; }
 .filters {
   padding: var(--space-4) var(--space-4) var(--space-5) 0;
   border-right: var(--border-w) solid var(--border-subtle);

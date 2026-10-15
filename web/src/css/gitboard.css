@@ -364,3 +364,6 @@
    sticky tools, so its column titles stick inside it and a wide table
    still scrolls sideways */
 @media (min-width:48rem){.page .main .table-scroll{overflow:auto;max-height:calc(100vh - var(--header-h) - var(--gb-tools-h,0px) - var(--space-3))}.page .main .issue-table thead th{position:sticky;top:0;z-index:10;box-shadow:0 1px 0 var(--border)}}
+/* a badge with an icon (Open, Closed): the icon centred on the text */
+.epfl-badge{display:inline-flex;align-items:center;gap:.25rem;vertical-align:middle}
+.epfl-badge>.gb-icon{flex:none;width:.875em;height:.875em}

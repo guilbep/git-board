@@ -33,7 +33,7 @@ const emit = defineEmits<{ 'update:columns': [columns: string[] | undefined] }>(
 
 const shown = computed(() => shownColumns(props.columns, props.names));
 const list = computed(() => chooserColumns(props.columns, props.names));
-const labels: Record<string, string> = { id: 'ID', title: 'Title', is: 'State', other: 'Other labels', links: 'Links' };
+const labels: Record<string, string> = { id: 'ID', title: 'Title', is: 'State', other: 'Other labels', links: 'Forge' };
 const label = (key: string) => labels[key] ?? displayName(key);
 const move = (key: string, by: -1 | 1) => emit('update:columns', savedColumns(moveColumn(shown.value, key, by), props.names));
 
@@ -50,7 +50,7 @@ onBeforeUnmount(() => document.removeEventListener('click', fold));
 .cols { position: relative; }
 .cols summary { display: inline-flex; align-items: center; gap: .375rem; list-style: none; cursor: pointer; }
 .cols summary::-webkit-details-marker { display: none; }
-.cols-panel { position: absolute; right: 0; z-index: 6; width: 16rem; margin-top: .375rem; padding: .5rem; background: var(--bg); border: var(--border-w) solid var(--border-strong); box-shadow: var(--shadow); }
+.cols-panel { position: absolute; right: 0; z-index: 15; /* above the sticky column titles */ width: 16rem; margin-top: .375rem; padding: .5rem; background: var(--bg); border: var(--border-w) solid var(--border-strong); box-shadow: var(--shadow); }
 .cols-list { margin: 0; padding: 0; list-style: none; max-height: 22rem; overflow: auto; }
 .cols-row { display: flex; align-items: center; justify-content: space-between; gap: .5rem; padding: .25rem .25rem; }
 .cols-row + .cols-row { border-top: 1px solid var(--border-subtle); }

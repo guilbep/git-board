@@ -30,9 +30,10 @@
 import { computed } from 'vue';
 import { colorClass } from '@/colors';
 import { valueIcon } from '@/valueicons';
+import { iconsFor } from '@/fieldtypes';
 
 const props = defineProps<{ field: string; value: string; chip?: boolean }>();
-const icon = computed(() => valueIcon(props.field, props.value));
+const icon = computed(() => (iconsFor(props.field) ? valueIcon(props.field, props.value) : ''));
 const cls = computed(() => colorClass(props.field, props.value));
 </script>
 

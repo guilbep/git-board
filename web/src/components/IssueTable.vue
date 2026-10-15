@@ -10,65 +10,6 @@
       <ColumnChooser :columns="columns" :names="names" @update:columns="(c) => emit('update:columns', c)" />
     </div>
 
-    <section v-for="bucket in buckets" :key="bucket.group" class="table-group">
-      <h2 v-if="group" class="group-title">
-        <ValueMark :field="group" :value="bucket.group" />
-        {{ groupLabel(bucket.group) }}
-        <span class="group-count">{{ bucket.issues.length }}</span>
-      </h2>
-      <div class="table-scroll">
-        <table class="issue-table" :class="{ 'lead-sticky': cols[0] === 'id' && cols[1] === 'title' }">
-          <thead>
-            <tr>
-              <th scope="col" class="cell-pick">
-                <input
-                  type="checkbox"
-                  :aria-label="`Select all ${bucket.issues.length} issues${group ? ` in ${groupLabel(bucket.group)}` : ''}`"
-                  :checked="bucket.issues.length > 0 && bucket.issues.every((i) => selected.has(i.id))"
-                  :indeterminate.prop="bucket.issues.some((i) => selected.has(i.id)) && !bucket.issues.every((i) => selected.has(i.id))"
-                  @change="toggleGroup(bucket)"
-                />
-              </th>
-              <th
-                v-for="key in cols"
-                :key="key"
-                scope="col"
-                :class="{ 'cell-id': key === 'id', 'cell-title': key === 'title' }"
-                :aria-sort="sort?.key === key ? (sort.desc ? 'descending' : 'ascending') : undefined"
-              >
-                <button v-if="key !== 'links' && key !== 'other'" type="button" class="th-sort" @click="emit('sort', key)">
-                  {{ label(key) }}<span class="th-arrow" aria-hidden="true">{{ sort?.key === key ? (sort.desc ? '↓' : '↑') : '' }}</span>
-                </button>
-                <template v-else>{{ label(key) }}</template>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            <!-- The whole row opens the issue, but its box and its field
-                 cells (edited in place); the title button is the keyboard
-                 entry point (its click bubbles up to the row). -->
-            <tr v-for="issue in bucket.issues" :key="issue.id" :class="{ 'is-picked': selected.has(issue.id) }" @click="emit('open', issue)">
-              <td class="cell-pick" @click.stop>
-                <input type="checkbox" :aria-label="`Select ${issue.title}`" :checked="selected.has(issue.id)" @click="toggleRow(issue.id, $event)" />
-              </td>
-              <template v-for="key in cols" :key="key">
-                <td v-if="key === 'id'" class="cell-id">{{ issue.id.slice(0, 8) }}</td>
-                <td v-else-if="key === 'title'" class="cell-title"><span v-if="changed?.has(issue.id)" class="gb-changed-dot" title="Changed since your last visit" /><button type="button" class="title-button">{{ issue.title }}</button></td>
-                <td v-else-if="key === 'is'">{{ issue.status }}</td>
-                <td v-else-if="key === 'links'" class="cell-links" @click.stop>
-                  <a v-for="f in issue.forges ?? []" :key="f.url" :href="f.url" target="_blank" rel="noopener noreferrer" class="forge-link" :title="`Open on ${f.name}`">
-                    {{ f.name }}<template v-if="f.number"> #{{ f.number }}</template> <GbIcon name="external" small />
-                  </a>
-                </td>
-                <td v-else-if="key === 'other'" class="cell-other">{{ otherLabels(issue.labels, names).join(', ') }}</td>
-                <FieldCell v-else :issue="issue" :name="key" :fields="fields" @saved="emit('changed')" />
-              </template>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </section>
-
     <!-- what to do with the picked rows: one change per issue, in turn -->
     <div v-if="picked.length" class="bulk" role="region" aria-label="Edit the selected issues">
       <b class="bulk-count">{{ picked.length }} selected</b>
@@ -99,6 +40,66 @@
       <span v-if="bulkStatus" class="bulk-status" role="status">{{ bulkStatus }}</span>
       <p v-if="bulkError" class="bulk-error" role="alert">{{ bulkError }}</p>
     </div>
+
+    <section v-for="bucket in buckets" :key="bucket.group" class="table-group">
+      <h2 v-if="group" class="group-title">
+        <ValueMark :field="group" :value="bucket.group" />
+        {{ groupLabel(bucket.group) }}
+        <span class="group-count">{{ bucket.issues.length }}</span>
+      </h2>
+      <div class="table-scroll">
+        <table class="issue-table" :class="{ 'lead-sticky': cols[0] === 'id' && cols[1] === 'title' }">
+          <thead>
+            <tr>
+              <th scope="col" class="cell-pick">
+                <input
+                  type="checkbox"
+                  :aria-label="`Select all ${bucket.issues.length} issues${group ? ` in ${groupLabel(bucket.group)}` : ''}`"
+                  :checked="bucket.issues.length > 0 && bucket.issues.every((i) => selected.has(i.id))"
+                  :indeterminate.prop="bucket.issues.some((i) => selected.has(i.id)) && !bucket.issues.every((i) => selected.has(i.id))"
+                  @change="toggleGroup(bucket)"
+                />
+              </th>
+              <th
+                v-for="key in cols"
+                :key="key"
+                scope="col"
+                :class="{ 'cell-id': key === 'id', 'cell-title': key === 'title' }"
+                :aria-sort="sort?.key === key ? (sort.desc ? 'descending' : 'ascending') : undefined"
+              >
+                <button v-if="key !== 'other'" type="button" class="th-sort" @click="emit('sort', key)">
+                  {{ label(key) }}<span class="th-arrow" aria-hidden="true">{{ sort?.key === key ? (sort.desc ? '↓' : '↑') : '' }}</span>
+                </button>
+                <template v-else>{{ label(key) }}</template>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            <!-- The whole row opens the issue, but its box and its field
+                 cells (edited in place); the title button is the keyboard
+                 entry point (its click bubbles up to the row). -->
+            <tr v-for="issue in bucket.issues" :key="issue.id" :class="{ 'is-picked': selected.has(issue.id) }" @click="emit('open', issue)">
+              <td class="cell-pick" @click.stop>
+                <input type="checkbox" :aria-label="`Select ${issue.title}`" :checked="selected.has(issue.id)" @click="toggleRow(issue.id, $event)" />
+              </td>
+              <template v-for="key in cols" :key="key">
+                <td v-if="key === 'id'" class="cell-id">{{ issue.id.slice(0, 8) }}</td>
+                <td v-else-if="key === 'title'" class="cell-title"><span v-if="changed?.has(issue.id)" class="gb-changed-dot" title="Changed since your last visit" /><button type="button" class="title-button">{{ issue.title }}</button></td>
+                <td v-else-if="key === 'is'">{{ issue.status }}</td>
+                <td v-else-if="key === 'links'" class="cell-links" @click.stop>
+                  <a v-for="f in issue.forges ?? []" :key="f.url" :href="f.url" target="_blank" rel="noopener noreferrer" class="forge-link" :title="`Open on ${f.name}${f.number ? ` #${f.number}` : ''}`">
+                    <span v-if="f.name !== 'GitHub'" class="forge-tag">{{ f.name === 'GitLab' ? 'GL' : f.name }}</span>#{{ f.number || '?' }}
+                  </a>
+                </td>
+                <td v-else-if="key === 'other'" class="cell-other">{{ otherLabels(issue.labels, names).join(', ') }}</td>
+                <FieldCell v-else :issue="issue" :name="key" :fields="fields" @saved="emit('changed')" />
+              </template>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
   </div>
 </template>
 
@@ -126,7 +127,7 @@ const props = defineProps<{
 const emit = defineEmits<{ open: [issue: Issue]; sort: [key: string]; changed: []; 'update:columns': [columns: string[] | undefined] }>();
 
 const cols = computed(() => shownColumns(props.columns, props.names));
-const labels: Record<string, string> = { id: 'ID', title: 'Title', is: 'State', other: 'Other labels', links: 'Links' };
+const labels: Record<string, string> = { id: 'ID', title: 'Title', is: 'State', other: 'Other labels', links: 'Forge' };
 const label = (key: string) => labels[key] ?? displayName(key);
 
 function groupLabel(value: string): string {
@@ -292,7 +293,8 @@ function bulkClose() {
 .cell-title { min-width: 18rem; }
 .cell-other { color: var(--fg-muted); }
 .cell-links { white-space: nowrap; cursor: default; }
-.forge-link { display: flex; align-items: center; gap: .25rem; color: var(--fg); font-weight: var(--w-bold); text-decoration: none; }
+.forge-link { display: flex; align-items: center; gap: .25rem; color: var(--fg-muted); font-family: var(--font-mono); font-size: var(--fs-sm); text-decoration: none; }
+.forge-tag { padding: 0 .25rem; border: 1px solid var(--border); font-size: .6875rem; font-family: inherit; }
 .forge-link:hover { text-decoration: underline; }
 .forge-link + .forge-link { margin-top: .25rem; }
 
@@ -309,19 +311,21 @@ function bulkClose() {
 .issue-table tbody tr:hover .title-button { color: var(--primary-hover); }
 .title-button:focus-visible { outline: var(--focus-w) solid var(--primary-hover); outline-offset: 0.125rem; }
 
-/* the bulk bar sticks to the bottom of the window while rows are picked */
+/* the bulk bar, while rows are picked: on top, stuck under the page's
+   toolbar, above the tables' sticky column titles (z-index 10) */
 .bulk {
   position: sticky;
-  bottom: var(--space-3);
-  z-index: 5;
+  top: calc(var(--header-h, 0px) + var(--gb-tools-h, 0px));
+  z-index: 15;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2) var(--space-3);
-  margin-top: var(--space-4);
-  padding: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-3);
+  padding: var(--space-2) var(--space-3);
   background: var(--bg);
   border: var(--border-w) solid var(--fg);
+  border-left: 4px solid var(--primary-hover);
   box-shadow: var(--shadow);
 }
 .bulk-count { margin-right: var(--space-2); }
