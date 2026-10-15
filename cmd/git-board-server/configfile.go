@@ -8,8 +8,12 @@ import (
 	"net/http"
 	"os"
 	"sort"
+	"strings"
+	"sync"
 
+	"github.com/guilbep/git-board/docs"
 	"github.com/guilbep/git-board/internal/config"
+	"github.com/guilbep/git-board/internal/markdown"
 )
 
 // The settings page edits .git-board.toml whole: read it, check a draft
@@ -137,4 +141,39 @@ func (s *apiServer) handleConfigSave(w http.ResponseWriter, r *http.Request) {
 	s.cfg = cfg
 	s.cfgMu.Unlock()
 	writeJSON(w, http.StatusOK, res)
+}
+
+// docSection is a part of docs/configuration.md, one ## heading each: the
+// settings page shows the one for the table under the cursor.
+type docSection struct {
+	ID    string `json:"id"`    // the heading's first word: fields, views…
+	Title string `json:"title"` // the heading
+	HTML  string `json:"html"`  // what follows it, rendered
+}
+
+var configDocs = sync.OnceValue(func() []docSection {
+	var res []docSection
+	var title string
+	var body []string
+	flush := func() {
+		if title == "" {
+			return
+		}
+		id, _, _ := strings.Cut(strings.ToLower(title), " ")
+		res = append(res, docSection{ID: id, Title: title, HTML: markdown.Render(strings.Join(body, "\n"), func(u string) string { return u })})
+	}
+	for _, line := range strings.Split(docs.Configuration, "\n") {
+		if t, ok := strings.CutPrefix(line, "## "); ok {
+			flush()
+			title, body = t, nil
+			continue
+		}
+		body = append(body, line)
+	}
+	flush()
+	return res
+})
+
+func (s *apiServer) handleConfigDocs(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, configDocs())
 }

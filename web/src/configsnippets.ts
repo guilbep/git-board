@@ -41,3 +41,21 @@ export function addSprint(text: string, today = new Date()): Snippet {
   const at = insertAt + 2 + block.indexOf(slug);
   return { text: out, select: [at, at + slug.length] };
 }
+
+// docSectionAt names the reference section (docs/configuration.md, one per
+// ## heading) for the table the cursor is in: a view's filter line is the
+// filter syntax, a colors table the colors.
+export function docSectionAt(text: string, pos: number): string {
+  const before = text.slice(0, pos).split('\n');
+  const end = text.indexOf('\n', pos);
+  const line = (before.at(-1) ?? '') + text.slice(pos, end < 0 ? undefined : end);
+  const header = [...before.slice(0, -1), line].reverse().find((l) => /^\s*\[/.test(l))?.trim() ?? '';
+  if (/^\[\[?sprints/.test(header)) return 'sprints';
+  if (/^\[fields\.[^\]]+\.colors\]/.test(header)) return 'colors';
+  if (header.startsWith('[fields.')) return /^\s*colors\b/.test(line) ? 'colors' : 'fields';
+  if (header.startsWith('[views.')) return /^\s*filter\b/.test(line) ? 'filters' : 'views';
+  if (header.startsWith('[github-project]')) return 'github';
+  if (header.startsWith('[uploads]')) return 'attachments';
+  if (header.startsWith('[repos]')) return 'repos';
+  return 'overview';
+}

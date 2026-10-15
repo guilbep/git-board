@@ -115,23 +115,10 @@ layout = "table"
 filter = "assignee:@me is:open"
 ```
 
-**Colors.** Every field value gets a color, in the table, on the board
-(column edge, card chips), in the panel and the filters. Without any
-config, a word in the value picks it: done/validated/closed green,
-review/qa purple, validation pink, in-progress/doing blue, ready/feat
-teal, waiting/comite/p2 amber, test/p1/high orange, blocked/bug/fix/p0
-red, backlog/todo/p3/low grey; other values take blue, purple, teal and
-pink in turn (sorted, so adding a value can shift the ones after it).
-Numbers and assignees stay plain. To pick one yourself:
-
-```toml
-[fields.status.colors]
-"in-review" = "purple"
-validated = "green"
-```
-
-Colors: grey, blue, purple, amber (or yellow), orange, green, red, teal,
-pink.
+Every key, with what it does and its default — fields, colors, views,
+filters, sprints, the GitHub Project, attachments: **[docs/configuration.md](docs/configuration.md)**.
+The settings page shows the same reference next to its editor, at the
+section of the table under the cursor.
 
 ## Usage
 
@@ -314,22 +301,9 @@ project = { comite = "Comité Spécialisé", qa = "QA Validation" }
 
 ### Filter grammar
 
-| Syntax | Meaning |
-|---|---|
-| `field:value` | issue has label `field:value` |
-| `-field:value` | issue does **not** have that label |
-| `field:@current` / `@next` / `@previous` | resolves against `[sprints]` |
-| `field:@me` | resolves to the current user: `--me`, else your git-bug identity's forge login |
-| `is:open` / `is:closed` | issue status |
-| `title:*glob*` | glob match on title |
-| `author:login` / `author:@me` | who opened it (name, login, forge login) |
-| `label:name` | has that label, e.g. `label:bug` or `label:status:ready` |
-| `no:field` | has no `field:` label (`no:assignee`); `no:label`: no plain label |
-| free text, `"a phrase"` | in the title, the description or a comment (git-bug's full-text index) |
-
-Conditions are AND'd together, as in GitHub's search; `-` negates any of
-them. The web UI's search box takes the same syntax, on top of the view's
-filter.
+Views, `--filter` and the web UI's search box share one syntax:
+`status:ready -prio:p3 assignee:@me is:open "car sharing"`. Every
+qualifier: [Filters in docs/configuration.md](docs/configuration.md#filters).
 
 ## Linting (`git-board lint`)
 

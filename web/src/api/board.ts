@@ -374,3 +374,14 @@ export function checkConfig(text: string): Promise<ConfigCheck> {
 export function saveConfig(text: string, base: string): Promise<ConfigCheck> {
   return request('/api/config', json('PUT', { text, base }));
 }
+
+// docs/configuration.md, a section per ## heading, rendered.
+export interface DocSection {
+  id: string;
+  title: string;
+  html: string;
+}
+
+export function getConfigDocs(): Promise<DocSection[]> {
+  return request('/api/config/docs');
+}

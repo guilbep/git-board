@@ -7,7 +7,7 @@
       <h2 id="set-file" class="h5">Project configuration</h2>
       <code class="cfg-path">{{ file?.path }}</code>
     </div>
-    <p class="gb-hint">Fields, views and sprints. Changes apply as soon as you save, no restart.</p>
+    <p class="gb-hint">Fields, colors, views, sprints, the GitHub Project, attachments. The reference beside the editor follows your cursor; changes apply as soon as you save.</p>
 
     <div class="cfg-tools" role="toolbar" aria-label="Add to the file">
       <button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" @click="snippet(addView)">+ View</button>
@@ -17,66 +17,89 @@
       <span class="cfg-state" :class="stateClass" role="status">{{ stateText }}</span>
     </div>
 
-    <div class="cfg-editor" :class="{ 'cfg-editor-err': errLine }">
-      <div ref="gutter" class="cfg-gutter" aria-hidden="true">
-        <div v-for="n in lines.length" :key="n" :class="{ 'cfg-err': n === errLine }">{{ n }}</div>
-      </div>
-      <div class="cfg-code">
-        <div ref="hl" class="cfg-hl" aria-hidden="true">
-          <div v-for="(line, i) in lines" :key="i" class="cfg-line" :class="{ 'cfg-err': i + 1 === errLine }">
-            <span v-for="(t, j) in tomlTokens(line)" :key="j" :class="t.cls && `tk-${t.cls}`">{{ t.text }}</span>
-          </div>
+    <div class="cfg-body">
+      <div class="cfg-main">
+      <div class="cfg-editor" :class="{ 'cfg-editor-err': errLine }">
+        <div ref="gutter" class="cfg-gutter" aria-hidden="true">
+          <div v-for="n in lines.length" :key="n" :class="{ 'cfg-err': n === errLine }">{{ n }}</div>
         </div>
-        <textarea
-          ref="area"
-          v-model="text"
-          class="cfg-area"
-          spellcheck="false"
-          autocapitalize="off"
-          autocomplete="off"
-          aria-label=".git-board.toml"
-          @scroll="syncScroll"
-          @keydown.meta.s.prevent="review"
-          @keydown.ctrl.s.prevent="review"
-        />
+        <div class="cfg-code">
+          <div ref="hl" class="cfg-hl" aria-hidden="true">
+            <div v-for="(line, i) in lines" :key="i" class="cfg-line" :class="{ 'cfg-err': i + 1 === errLine }">
+              <span v-for="(t, j) in tomlTokens(line)" :key="j" :class="t.cls && `tk-${t.cls}`">{{ t.text }}</span>
+            </div>
+          </div>
+          <textarea
+            ref="area"
+            v-model="text"
+            class="cfg-area"
+            spellcheck="false"
+            autocapitalize="off"
+            autocomplete="off"
+            aria-label=".git-board.toml"
+            @scroll="syncScroll"
+          @click="followCursor"
+          @keyup="followCursor"
+          @focus="followCursor"
+            @keydown.meta.s.prevent="review"
+            @keydown.ctrl.s.prevent="review"
+          />
+        </div>
       </div>
-    </div>
 
-    <p v-if="check?.error" class="cfg-msg cfg-msg-err" role="alert">
-      <button type="button" class="gb-linkbtn" @click="goTo(check.error.line, check.error.col)">Line {{ check.error.line }}</button>: {{ check.error.message }}
-    </p>
-    <p v-else-if="check?.message" class="cfg-msg cfg-msg-err" role="alert">{{ check.message }}</p>
-    <ul v-if="check?.warnings.length" class="cfg-msg cfg-msg-warn">
-      <li v-for="w in check.warnings" :key="w">{{ w }}</li>
-    </ul>
+      <p v-if="check?.error" class="cfg-msg cfg-msg-err" role="alert">
+        <button type="button" class="gb-linkbtn" @click="goTo(check.error.line, check.error.col)">Line {{ check.error.line }}</button>: {{ check.error.message }}
+      </p>
+      <p v-else-if="check?.message" class="cfg-msg cfg-msg-err" role="alert">{{ check.message }}</p>
+      <ul v-if="check?.warnings.length" class="cfg-msg cfg-msg-warn">
+        <li v-for="w in check.warnings" :key="w">{{ w }}</li>
+      </ul>
 
-    <div v-if="reviewing && dirty" class="cfg-diff" aria-label="Changes to save">
-      <div v-for="(h, i) in hunks" :key="i" :class="`cfg-d cfg-d${h.op === ' ' ? 'same' : h.op === '+' ? 'add' : h.op === '-' ? 'del' : 'skip'}`">
-        <span class="cfg-d-op">{{ h.op === '~' ? '' : h.op }}</span>{{ h.text }}
+      <div v-if="reviewing && dirty" class="cfg-diff" aria-label="Changes to save">
+        <div v-for="(h, i) in hunks" :key="i" :class="`cfg-d cfg-d${h.op === ' ' ? 'same' : h.op === '+' ? 'add' : h.op === '-' ? 'del' : 'skip'}`">
+          <span class="cfg-d-op">{{ h.op === '~' ? '' : h.op }}</span>{{ h.text }}
+        </div>
       </div>
-    </div>
 
-    <p v-if="saveError" class="epfl-alert epfl-alert-danger" role="alert">
-      {{ saveError }}
-      <button v-if="conflict" type="button" class="gb-linkbtn" @click="load()">Load the file as it is now (your edits are dropped)</button>
-    </p>
-    <p v-if="saved" class="cfg-msg cfg-msg-ok" role="status">Saved. Views, fields and sprints are live.</p>
+      <p v-if="saveError" class="epfl-alert epfl-alert-danger" role="alert">
+        {{ saveError }}
+        <button v-if="conflict" type="button" class="gb-linkbtn" @click="load()">Load the file as it is now (your edits are dropped)</button>
+      </p>
+      <p v-if="saved" class="cfg-msg cfg-msg-ok" role="status">Saved. Views, fields and sprints are live.</p>
 
-    <div class="cfg-actions">
-      <button v-if="!reviewing" type="button" class="epfl-btn epfl-btn-primary epfl-btn-sm" :disabled="!dirty || !check?.ok" @click="review">Review changes</button>
-      <template v-else>
-        <button type="button" class="epfl-btn epfl-btn-primary epfl-btn-sm" :disabled="!dirty || !check?.ok || saving" @click="save">{{ saving ? 'Saving…' : 'Save and apply' }}</button>
-        <button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" @click="reviewing = false">Keep editing</button>
-      </template>
-      <button v-if="dirty" type="button" class="gb-linkbtn" @click="discard">Discard changes</button>
+      <div class="cfg-actions">
+        <button v-if="!reviewing" type="button" class="epfl-btn epfl-btn-primary epfl-btn-sm" :disabled="!dirty || !check?.ok" @click="review">Review changes</button>
+        <template v-else>
+          <button type="button" class="epfl-btn epfl-btn-primary epfl-btn-sm" :disabled="!dirty || !check?.ok || saving" @click="save">{{ saving ? 'Saving…' : 'Save and apply' }}</button>
+          <button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" @click="reviewing = false">Keep editing</button>
+        </template>
+        <button v-if="dirty" type="button" class="gb-linkbtn" @click="discard">Discard changes</button>
+      </div>
+      </div>
+      <aside class="cfg-doc" aria-labelledby="cfg-doc-title">
+        <div class="cfg-doc-head">
+          <h3 id="cfg-doc-title" class="cfg-doc-title">Reference</h3>
+          <span class="gb-hint">follows your cursor</span>
+        </div>
+        <nav class="cfg-doc-nav" aria-label="Reference sections">
+          <button v-for="d in docs" :key="d.id" type="button" class="cfg-doc-tab" :aria-current="d.id === docId ? 'true' : undefined" @click="docId = d.id">{{ d.title }}</button>
+        </nav>
+        <div v-if="doc" class="cfg-doc-body">
+          <h4 class="cfg-doc-section">{{ doc.title }}</h4>
+          <div v-if="doc.id === 'colors'" class="cfg-swatches" aria-label="The colors">
+            <span v-for="c in palette" :key="c" class="gb-val" :class="`gb-c-${c}`">{{ c }}</span>
+          </div>
+          <div class="gb-md" v-html="doc.html" />
+        </div>
+      </aside>
     </div>
   </section>
 </template>
 
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
-import { ApiError, checkConfig, getConfigFile, saveConfig, type ConfigCheck, type ConfigFile } from '@/api/board';
-import { addField, addSprint, addView, type Snippet } from '@/configsnippets';
+import { ApiError, checkConfig, getConfigDocs, getConfigFile, saveConfig, type ConfigCheck, type ConfigFile, type DocSection } from '@/api/board';
+import { addField, addSprint, addView, docSectionAt, type Snippet } from '@/configsnippets';
 import { message } from '@/issue';
 import { lineDiff } from '@/linediff';
 import { tomlTokens } from '@/toml';
@@ -96,6 +119,21 @@ const hl = ref<HTMLElement | null>(null);
 const gutter = ref<HTMLElement | null>(null);
 
 const lines = computed(() => text.value.split('\n'));
+
+// the reference: the section of the table under the cursor, until a tab
+// is picked by hand (kept until the cursor moves to another table)
+const docs = ref<DocSection[]>([]);
+const docId = ref('overview');
+let cursorDoc = 'overview';
+const doc = computed(() => docs.value.find((d) => d.id === docId.value) ?? docs.value[0]);
+const palette = ['grey', 'blue', 'purple', 'amber', 'orange', 'green', 'red', 'teal', 'pink'];
+
+function followCursor() {
+  const a = area.value;
+  if (!a) return;
+  const id = docSectionAt(text.value, a.selectionStart);
+  if (id !== cursorDoc) docId.value = cursorDoc = id;
+}
 const dirty = computed(() => file.value !== null && text.value !== file.value.text);
 const errLine = computed(() => check.value?.error?.line ?? 0);
 
@@ -160,6 +198,7 @@ async function select(start: number, end: number) {
   const line = text.value.slice(0, start).split('\n').length;
   a.scrollTop = Math.max(0, (line - 5) * 20);
   syncScroll();
+  followCursor();
 }
 
 function goTo(line: number, col: number) {
@@ -216,7 +255,13 @@ async function load(keepSaved = false) {
   }
 }
 
-onMounted(() => void load());
+onMounted(() => {
+  void load();
+  getConfigDocs().then(
+    (d) => (docs.value = d),
+    () => (docs.value = []),
+  );
+});
 </script>
 
 <style scoped>
@@ -233,6 +278,24 @@ onMounted(() => void load());
 
 /* the editor: gutter + code; the textarea's text is transparent over the
    colored copy, both with the same font, line height and padding */
+.cfg-body { display: grid; grid-template-columns: minmax(0, 1fr) 24rem; gap: 1rem; align-items: start; }
+.cfg-main { display: grid; gap: .5rem; min-width: 0; }
+@media (max-width: 68rem) { .cfg-body { grid-template-columns: minmax(0, 1fr); } }
+.cfg-doc { display: grid; gap: .5rem; max-height: min(32rem, 60vh); min-height: 0; padding: .75rem 1rem; border: 1px solid var(--border); background: var(--bg-subtle); overflow: auto; }
+@media (max-width: 68rem) { .cfg-doc { max-height: none; } }
+.cfg-doc-head { display: flex; align-items: baseline; gap: .5rem; }
+.cfg-doc-title { margin: 0; font-size: .8125rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--primary); }
+.cfg-doc-nav { display: flex; flex-wrap: wrap; gap: .25rem; }
+.cfg-doc-tab { padding: .125rem .5rem; border: 1px solid var(--border); background: var(--bg); color: var(--fg); font: inherit; font-size: .75rem; cursor: pointer; }
+.cfg-doc-tab:hover { border-color: var(--fg); }
+.cfg-doc-tab[aria-current] { border-color: var(--fg); background: var(--fg); color: var(--bg); font-weight: 700; }
+.cfg-doc-section { margin: .5rem 0 0; font-size: 1.0625rem; font-weight: 700; }
+.cfg-doc-body .gb-md { font-size: .875rem; }
+.cfg-doc-body :deep(table) { width: 100%; border-collapse: collapse; font-size: .8125rem; }
+.cfg-doc-body :deep(th), .cfg-doc-body :deep(td) { padding: .25rem .375rem; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
+.cfg-doc-body :deep(pre) { padding: .5rem .75rem; background: var(--bg); border: 1px solid var(--border); overflow-x: auto; font-size: .8125rem; }
+.cfg-doc-body :deep(code) { font-size: .8125rem; }
+.cfg-swatches { display: flex; flex-wrap: wrap; gap: .25rem; }
 .cfg-editor { display: flex; height: min(32rem, 60vh); border: 1px solid var(--border-strong); background: var(--bg); overflow: hidden; }
 .cfg-editor:focus-within { border-color: var(--fg); }
 .cfg-editor-err { border-color: var(--danger-border); }

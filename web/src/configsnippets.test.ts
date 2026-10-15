@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { addSprint, addView } from './configsnippets.ts';
+import { addSprint, addView, docSectionAt } from './configsnippets.ts';
 
 test('addSprint follows the last sprint', () => {
   const text = '[sprints]\nlength_days = 14\n\n[[sprints.list]]\nslug = "sprint-6"\ntitle = "Sprint 6"\nstart = 2026-02-03\n\n[views.mine]\nfilter = "assignee:@me"\n';
@@ -18,4 +18,18 @@ test('addView appends a table and selects its name', () => {
   const s = addView('[fields.status]\nsingle = true\n');
   assert.ok(s.text.endsWith('\n\n[views.new-view]\nlayout = "board"\nfilter = "is:open"\ngroup = "status"\n'));
   assert.equal(s.text.slice(...s.select), 'new-view');
+});
+
+test('docSectionAt follows the table under the cursor', () => {
+  const text = 'list = []\n[fields.status]\noptions = ["a"]\n[fields.status.colors]\na = "red"\n[views.mine]\nlayout = "board"\nfilter = "is:open"\n[[sprints.list]]\nslug = "s1"\n[github-project]\n[uploads]\n[repos]\n';
+  const at = (needle: string) => docSectionAt(text, text.indexOf(needle) + 1);
+  assert.equal(docSectionAt(text, 0), 'overview');
+  assert.equal(at('options'), 'fields');
+  assert.equal(at('a = "red"'), 'colors');
+  assert.equal(at('layout'), 'views');
+  assert.equal(at('filter'), 'filters');
+  assert.equal(at('slug'), 'sprints');
+  assert.equal(at('[github-project]'), 'github');
+  assert.equal(at('[uploads]'), 'attachments');
+  assert.equal(at('[repos]'), 'repos');
 });

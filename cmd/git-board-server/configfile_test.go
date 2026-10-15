@@ -75,3 +75,21 @@ func TestConfigFileEditedFromThePage(t *testing.T) {
 		t.Errorf("a stale base: %d, want 409", code)
 	}
 }
+
+func TestConfigDocsComeInSections(t *testing.T) {
+	ts, _ := newIssueServer(t)
+	var docs []struct {
+		ID, Title, HTML string
+	}
+	call(t, "GET", ts.URL+"/api/config/docs", nil, &docs)
+	var ids []string
+	for _, d := range docs {
+		ids = append(ids, d.ID)
+	}
+	if strings.Join(ids, ",") != "overview,fields,colors,views,filters,sprints,github,attachments,repos" {
+		t.Errorf("sections %v", ids)
+	}
+	if len(docs) > 1 && (!strings.Contains(docs[1].HTML, "<table>") || docs[1].Title != "Fields" || strings.Contains(docs[1].HTML, "<h2")) {
+		t.Errorf("fields section: %s %q", docs[1].Title, docs[1].HTML[:min(200, len(docs[1].HTML))])
+	}
+}
