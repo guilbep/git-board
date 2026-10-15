@@ -470,6 +470,10 @@ From it: comment (Write/Preview, "Close with comment"), edit any comment
 or the description (refused if someone changed it meanwhile), rename,
 close/reopen, set fields and labels. **New issue** (or `c`) prefills the
 fields from the view's filter. `j`/`k` move through the board's issues.
+The panel opens at the side, resized by dragging its left edge
+(double-click: the default width), or wide over the blurred board with
+2.5rem around it: the expand button or `f` switches; this browser
+remembers both.
 Every write is signed by the repository's git-bug identity: the page asks
 who you are when none is set (`git bug user adopt`). Issue text is
 rendered on the server (GitHub-flavored Markdown) and cleaned to what

@@ -116,7 +116,15 @@
     </main>
   </div>
 
-  <q-dialog v-model="detailOpen" position="right" full-height no-route-dismiss @hide="closePanel">
+  <q-dialog
+    v-model="detailOpen"
+    :position="panelMode === 'side' ? 'right' : 'standard'"
+    :full-height="panelMode === 'side'"
+    :class="`gb-dialog-${panelMode}`"
+    :backdrop-filter="panelMode === 'wide' ? 'blur(6px)' : undefined"
+    no-route-dismiss
+    @hide="closePanel"
+  >
     <IssuePanel
       v-if="detailId"
       :id="detailId"
@@ -143,6 +151,7 @@
 </template>
 
 <script setup lang="ts">
+import { panelMode } from '@/panelsize';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import {
@@ -425,7 +434,7 @@ function onCreated(id: string, another: boolean) {
 }
 function onKey(e: KeyboardEvent) {
   if (e.key !== 'c' || e.ctrlKey || e.metaKey || e.altKey || detailOpen.value || newOpen.value) return;
-  if ((e.target as HTMLElement).closest('input, textarea, select, [contenteditable]')) return;
+  if (e.target instanceof Element && e.target.closest('input, textarea, select, [contenteditable]')) return;
   e.preventDefault();
   newOpen.value = true;
 }

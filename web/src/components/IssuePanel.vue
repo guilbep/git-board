@@ -2,7 +2,26 @@
      page (#/issues/<id>). Design: the canvas's "Issue side panel" and "Full
      page" artboards. Every write answers with the whole history (issue.ts). -->
 <template>
-  <component :is="page ? 'div' : 'aside'" class="gb-panel" :class="page ? 'gb-panel-page' : 'gb-panel-xl'" :aria-labelledby="`title-${uid}`">
+  <component
+    :is="page ? 'div' : 'aside'"
+    class="gb-panel"
+    :class="page ? 'gb-panel-page' : panelMode === 'wide' ? 'gb-panel-wide' : 'gb-panel-xl'"
+    :style="!page && panelMode === 'side' && panelWidth ? { width: `${panelWidth}px` } : undefined"
+    :aria-labelledby="`title-${uid}`"
+  >
+    <div
+      v-if="!page && panelMode === 'side'"
+      class="gb-resize"
+      :class="{ 'is-dragging': dragging }"
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="Resize the panel: drag, or use the arrow keys; double-click for the default width"
+      tabindex="0"
+      @pointerdown="startResize"
+      @dblclick="panelWidth = 0"
+      @keydown.left.prevent="nudge(32)"
+      @keydown.right.prevent="nudge(-32)"
+    />
     <div class="gb-ptop">
       <p class="gb-ptop-crumb">
         <template v-if="page"><router-link :to="{ path: '/' }"><GbIcon name="back" small /> Board</router-link></template>
@@ -18,7 +37,8 @@
         <span class="gb-tbsep" aria-hidden="true" />
       </template>
       <button type="button" class="gb-icon-btn" :aria-label="copied ? 'Link copied' : 'Copy link to this issue'" @click="copyLink"><GbIcon :name="copied ? 'check' : 'link'" /></button>
-      <router-link v-if="!page" class="gb-icon-btn" :to="`/issues/${id}`" aria-label="Open as a full page"><GbIcon name="expand" /></router-link>
+      <button v-if="!page" type="button" class="gb-icon-btn" :aria-label="panelMode === 'side' ? 'Expand over the board (f)' : 'Back to the side panel (f)'" :aria-pressed="panelMode === 'wide'" @click="togglePanelMode"><GbIcon name="expand" /></button>
+      <router-link v-if="!page" class="gb-icon-btn" :to="`/issues/${id}`" aria-label="Open as a page of its own"><GbIcon name="external" /></router-link>
       <template v-if="!page">
         <span class="gb-tbsep" aria-hidden="true" />
         <span class="gb-keys" aria-hidden="true"><kbd>Esc</kbd></span>
@@ -101,6 +121,7 @@
 </template>
 
 <script setup lang="ts">
+import { clampWidth, panelMode, panelWidth, togglePanelMode } from '@/panelsize';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, toRef, useId } from 'vue';
 import type { Thread } from '@/api/board';
 import type { Fields } from '@/fields';
@@ -194,10 +215,29 @@ function onRef(n: string, e: MouseEvent) {
 // j / k move through the board's issues, unless typing
 function onKey(e: KeyboardEvent) {
   if (props.page || e.ctrlKey || e.metaKey || e.altKey) return;
-  const t = e.target as HTMLElement;
-  if (t.closest('input, textarea, select, [contenteditable]')) return;
+  if (e.target instanceof Element && e.target.closest('input, textarea, select, [contenteditable]')) return;
   if (e.key === 'j' && props.hasNext) emit('next');
   if (e.key === 'k' && props.hasPrev) emit('prev');
+  if (e.key === 'f') togglePanelMode();
+}
+
+// the side panel's width: dragged from its left edge, or ←/→ on it
+const dragging = ref(false);
+function startResize(e: PointerEvent) {
+  e.preventDefault();
+  dragging.value = true;
+  const move = (m: PointerEvent) => (panelWidth.value = clampWidth(window.innerWidth - m.clientX, window.innerWidth));
+  const up = () => {
+    dragging.value = false;
+    window.removeEventListener('pointermove', move);
+    window.removeEventListener('pointerup', up);
+  };
+  window.addEventListener('pointermove', move);
+  window.addEventListener('pointerup', up);
+}
+function nudge(px: number) {
+  const now = panelWidth.value || (document.querySelector('.gb-panel-xl') as HTMLElement | null)?.offsetWidth || 1024;
+  panelWidth.value = clampWidth(now + px, window.innerWidth);
 }
 onMounted(() => window.addEventListener('keydown', onKey));
 onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
