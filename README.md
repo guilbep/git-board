@@ -59,6 +59,10 @@ only field this project has ever needed it for.
 
 ## Config: `.git-board.toml`
 
+git-board tracks its own work with git-board: its `.git-board.toml` is at
+the root of this repository, and its issues are git-bug data here
+(`git bug pull origin` fetches them, then run `git-board-server`).
+
 Optional: without it, every `ns:value` label is a field and `git board`
 works on any git-bug repository. It adds what labels can't say: the order
 of a field's values (`options`: status follows the workflow when sorted

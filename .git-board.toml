@@ -1,0 +1,42 @@
+# git-board's own board: its issues are git-bug data in this repository
+# (refs/bugs, pushed with `git bug push origin`), managed with git-board
+# itself. Every key is explained in docs/configuration.md, and beside the
+# editor in Settings → Project configuration.
+
+[fields.status]
+single = true
+options = ["draft", "backlog", "ready", "in-progress", "in-review", "done"]
+
+[fields.prio]
+single = true
+options = ["p0", "p1", "p2", "p3"]
+
+[fields.kind]
+single = true
+options = ["feat", "bug", "doc", "chore"]
+
+[fields.est]
+single = true
+numeric = true
+options = ["1", "2", "4", "8", "16"]
+
+# the ontology's links and dates (docs/configuration.md, Types)
+[fields.due]
+type = "date"
+
+[fields.parent]
+type = "issue"
+
+[views.board]
+layout = "board"
+filter = "is:open"
+group = "status"
+sort = "prio asc"
+
+[views.drafts]
+layout = "table"
+filter = "is:open status:draft"
+
+[views.mine]
+layout = "table"
+filter = "assignee:@me is:open -status:done"
