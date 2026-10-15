@@ -95,16 +95,25 @@
 
       <div class="gb-cols">
         <div class="gb-maincol">
-          <CommentCard v-if="created" :data-event="created.id" :event="created" :forges="thread.forges" :mine="created.author.id === meId" :save="edit" @ref="onRef" />
-          <ol class="gb-tl" aria-label="History">
-            <template v-for="e in rest" :key="e.id">
-              <li v-if="e.kind === 'comment'" :data-event="e.id">
-                <CommentCard :event="e" :forges="thread.forges" :mine="e.author.id === meId" :save="edit" @ref="onRef" />
-              </li>
-              <TimelineEvent v-else :data-event="e.id" :event="e" :fields="fields" />
-            </template>
-          </ol>
-          <IssueComposer :status="thread.status" :forges="thread.forges" :busy="saving" :waiting="waiting" :error="saveError" :comment="comment" />
+          <div class="gb-tabs gb-modes" role="tablist" aria-label="Show">
+            <button type="button" class="gb-tab" role="tab" :aria-selected="mode === 'talk'" @click="mode = 'talk'">Conversation</button>
+            <button type="button" class="gb-tab" role="tab" :aria-selected="mode === 'history'" @click="mode = 'history'">
+              History <span class="gb-modes-count">{{ changeCount }}</span>
+            </button>
+          </div>
+          <template v-if="mode === 'talk'">
+            <CommentCard v-if="created" :data-event="created.id" :event="created" :forges="thread.forges" :mine="created.author.id === meId" :save="edit" @ref="onRef" />
+            <ol class="gb-tl" aria-label="History">
+              <template v-for="e in rest" :key="e.id">
+                <li v-if="e.kind === 'comment'" :data-event="e.id">
+                  <CommentCard :event="e" :forges="thread.forges" :mine="e.author.id === meId" :save="edit" @ref="onRef" />
+                </li>
+                <TimelineEvent v-else :data-event="e.id" :event="e" :fields="fields" />
+              </template>
+            </ol>
+            <IssueComposer :status="thread.status" :forges="thread.forges" :busy="saving" :waiting="waiting" :error="saveError" :comment="comment" />
+          </template>
+          <HistoryView v-else :thread="thread" :fields="fields" />
         </div>
         <IssueSide
           :id="thread.id"
@@ -133,6 +142,8 @@ import type { Fields } from '@/fields';
 import { useIssue } from '@/issue';
 import { me, on } from '@/me';
 import CommentCard from '@/components/CommentCard.vue';
+import HistoryView from '@/components/HistoryView.vue';
+import { steps } from '@/replay';
 import GbIcon from '@/components/GbIcon.vue';
 import IssueComposer from '@/components/IssueComposer.vue';
 import IssueSide from '@/components/IssueSide.vue';
@@ -158,6 +169,10 @@ const { thread, error, saving, waiting, saveError, load, comment, edit, rename, 
 const meId = computed(() => me.value?.me?.id ?? '');
 const created = computed(() => thread.value?.events.find((e) => e.kind === 'created'));
 const rest = computed(() => thread.value?.events.filter((e) => e.kind !== 'created') ?? []);
+
+// the conversation, or every change in order with the issue as it was
+const mode = ref<'talk' | 'history'>('talk');
+const changeCount = computed(() => (thread.value ? steps(thread.value.events).length : 0));
 const comments = computed(() => rest.value.filter((e) => e.kind === 'comment').length);
 // the board's fields, and any namespace this issue has besides
 const sideNames = computed(() => {
@@ -271,6 +286,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
 </script>
 
 <style scoped>
+.gb-modes { margin-bottom: 1rem; }
+.gb-modes-count { margin-left: .25rem; padding: 0 .375rem; border-radius: var(--radius); background: var(--bg-subtle); color: var(--fg-muted); font-size: .75rem; font-weight: 700; }
 .gb-rename { flex: 1; display: flex; gap: .5rem; }
 .gb-rename .epfl-input { flex: 1; font-size: 1.25rem; font-weight: 700; }
 .gb-save-error, .gb-wait { display: flex; gap: .375rem; align-items: center; margin: .75rem 0 0; padding: .5rem .75rem; font-size: .875rem; }
