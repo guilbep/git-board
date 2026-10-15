@@ -1,4 +1,4 @@
-// The sync with GitHub/GitLab, shared by the header (its running state)
+// The sync with the forges, shared by the header (its running state)
 // and the sync page. While a run goes on it's polled; edits refused
 // meanwhile wait for its end (issue.ts).
 import { ref } from 'vue';

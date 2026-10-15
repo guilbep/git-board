@@ -90,7 +90,7 @@
           <span class="gb-mono" title="git-bug id">git-bug {{ thread.id.slice(0, 7) }}</span>
         </div>
         <p v-if="saveError && !renaming" class="gb-save-error" role="alert"><GbIcon name="error" small /> <b>Not saved.</b> {{ saveError }}</p>
-        <p v-if="waiting" class="gb-wait" role="status"><GbIcon name="clock" small /> Syncing with GitHub/GitLab… your change is saved after it.</p>
+        <p v-if="waiting" class="gb-wait" role="status"><GbIcon name="clock" small /> Syncing with the forges… your change is saved after it.</p>
       </div>
 
       <div class="gb-cols">

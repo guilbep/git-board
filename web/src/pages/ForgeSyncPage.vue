@@ -1,12 +1,12 @@
-<!-- Sync with GitHub/GitLab: git-bug's forge sync, run by the server.
+<!-- Sync with forges: git-bug's forge sync, run by the server.
      Always a dry run first; the real run is confirmed with its counts, and
      with an explicit "I understand" when it creates many issues on a forge.
      Design: the canvas's "Forge sync" and "Sync run" artboards. -->
 <template>
   <AppHeader :views="viewNames" active="" />
   <main class="gb-page gb-syncpage">
-    <div class="epfl-eyebrow">Sync with GitHub/GitLab</div>
-    <h1 class="h3">Sync with GitHub/GitLab</h1>
+    <div class="epfl-eyebrow">Sync with forges</div>
+    <h1 class="h3">Sync with forges</h1>
     <p class="gb-lead">
       Mirrors issues, comments, titles, open/closed and labels between git-board and the forges, both ways.
       Every run starts with a dry run: nothing is written until you confirm.
@@ -14,7 +14,7 @@
     <p class="gb-hint">Project fields (status, prio, sprint…) have their own sync, <router-link to="/conflicts">Sync with the Project</router-link><!-- -->.</p>
 
     <div v-if="status && !status.bridges.length" class="epfl-alert epfl-alert-warning">
-      No bridge has sync enabled. Set one up with <code>git bug bridge new --name gh --url https://github.com/owner/repo --sync</code>.
+      No bridge has sync on. Add one, or switch one on, in <router-link to="/settings">Settings</router-link> (or <code>git bug bridge new --name gh --url https://github.com/owner/repo --sync</code>).
     </div>
 
     <template v-else-if="status">
@@ -119,7 +119,7 @@
     <q-dialog v-model="confirming">
       <section class="gb-dialog" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
         <header class="gb-dialog-head">
-          <h2 id="confirm-title" class="h5">Run the sync with GitHub/GitLab?</h2>
+          <h2 id="confirm-title" class="h5">Run the sync with the forges?</h2>
           <button type="button" class="gb-icon-btn" aria-label="Cancel" @click="confirming = false"><GbIcon name="close" /></button>
         </header>
         <div class="gb-dialog-body">

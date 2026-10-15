@@ -98,7 +98,7 @@
         </button>
         <WaitingChanges v-if="showWaiting" :changes="waiting" :forges="forges" @reveal="(id) => emit('reveal', id)" />
       </template>
-      <p class="gb-hint">Waiting changes go out at the next <router-link to="/sync">sync with GitHub/GitLab</router-link><!-- -->.</p>
+      <p class="gb-hint">Waiting changes go out at the next <router-link to="/sync">sync with the forges</router-link><!-- -->.</p>
     </section>
 
     <section v-if="participants?.length" class="gb-side-sec" aria-labelledby="side-people">
