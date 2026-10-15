@@ -31,6 +31,8 @@ export interface ViewConfig {
   group: string;
   sort: string;
   columns?: string[] | undefined; // a table's columns, in order (tablecols.ts); none: the default
+  lanes?: string[] | undefined; // a board's lanes, in order (lanes.ts); none: every value
+  limits?: Record<string, number> | undefined; // a lane's limit (work in progress)
 }
 
 export interface FieldConfig {
@@ -451,7 +453,7 @@ export interface InsightsReport {
   open: Record<string, number[]>;
   weeks: { start: string; opened: number; closed: number }[];
   cycle: { from: 'started' | 'opened'; start: string; days: number[]; median: number; p85: number };
-  burnup?: { sprint: string; title: string; start: string; end: string; days: string[]; scope: number[]; done: number[] };
+  burnup?: { sprint: string; title: string; start: string; end: string; days: string[]; scope: number[]; done: number[]; status: Record<string, number> };
   headlines: Record<string, string>;
 }
 

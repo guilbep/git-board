@@ -71,6 +71,16 @@
       </section>
 
       <div class="ins-grid">
+        <section v-if="r.burnup" class="ins-card" aria-labelledby="h-sd">
+          <h2 id="h-sd" class="ins-headline">{{ standsHeadline(sprintEntries, r.burnup.title, 'is') }}</h2>
+          <p class="ins-sub">Where the sprint stands: its issues by {{ displayName(r.field).toLowerCase() }}, {{ (r.days.at(-1) ?? '') >= r.burnup.end ? 'on its last day' : 'today' }}.</p>
+          <DonutChart :entries="sprintEntries" :field="r.field" :caption="r.burnup.title" :label="`${r.burnup.title} by ${r.field}`" />
+        </section>
+        <section class="ins-card" aria-labelledby="h-od">
+          <h2 id="h-od" class="ins-headline">{{ standsHeadline(openEntries, 'the open issues', 'are') }}</h2>
+          <p class="ins-sub">The open issues today, by {{ displayName(r.field).toLowerCase() }}.</p>
+          <DonutChart :entries="openEntries" :field="r.field" caption="open" :label="`Open issues by ${r.field}`" />
+        </section>
         <section class="ins-card" aria-labelledby="h-thr">
           <h2 id="h-thr" class="ins-headline">{{ r.headlines.throughput }}</h2>
           <p class="ins-sub">Throughput: issues closed each week. This week in red.</p>
@@ -128,6 +138,8 @@ import AppHeader from '@/components/AppHeader.vue';
 import BurnupChart from '@/components/BurnupChart.vue';
 import ColumnChart from '@/components/ColumnChart.vue';
 import FlowChart from '@/components/FlowChart.vue';
+import DonutChart from '@/components/DonutChart.vue';
+import { valueIcon } from '@/valueicons';
 
 const viewNames = ref<string[]>([]);
 const fields = ref<Record<string, FieldConfig>>({});
@@ -191,6 +203,25 @@ const sprintPct = computed(() => {
   return scope ? Math.round(((b?.done.at(-1) ?? 0) / scope) * 100) : 0;
 });
 const tmTotal = computed(() => openAt(tm.value));
+
+// the donuts: in workflow order, no value last
+const ordered = (counts: Record<string, number>) =>
+  r.value ? [...r.value.values, ...Object.keys(counts).filter((k) => !r.value!.values.includes(k))].map((key) => ({ key, n: counts[key] ?? 0 })).filter((e) => e.n) : [];
+const sprintEntries = computed(() => ordered(r.value?.burnup?.status ?? {}));
+const openEntries = computed(() => ordered(Object.fromEntries((r.value?.values ?? []).map((v) => [v, count(v, last.value)]))));
+// "61% of Hypercare is validated or done", from the values whose words
+// say done (valueicons.ts); else the biggest share
+function standsHeadline(entries: { key: string; n: number }[], what: string, is: 'is' | 'are'): string {
+  const total = entries.reduce((t, e) => t + e.n, 0);
+  if (!total || !r.value) return `Nothing in ${what} yet.`;
+  const done = entries.filter((e) => valueIcon(r.value!.field, e.key) === 'st-done');
+  if (done.length) {
+    const pct = Math.round((done.reduce((t, e) => t + e.n, 0) / total) * 100);
+    return `${pct}% of ${what} ${is} ${done.map((e) => e.key).join(' or ')}.`;
+  }
+  const top = [...entries].sort((a, b) => b.n - a.n)[0]!;
+  return `Most of ${what} ${is} ${top.key === '(none)' ? 'without a ' + r.value.field : top.key}: ${Math.round((top.n / total) * 100)}%.`;
+}
 const tmMax = computed(() => {
   if (!r.value) return 1;
   let m = 1;

@@ -87,6 +87,9 @@ type Burnup struct {
 	Days   []string `json:"days"`
 	Scope  []int    `json:"scope"`
 	Done   []int    `json:"done"`
+	// Status is where the sprint's issues stand on its last day (or today):
+	// how many have each value of the report's field, None for none.
+	Status map[string]int `json:"status"`
 }
 
 // state is an issue at a moment: its labels and whether it is open.
@@ -169,7 +172,7 @@ func Compute(issues []Issue, o Options) Report {
 	r.Weeks = weeks(issues, from, o.To)
 	r.Cycle = cycle(issues, o)
 	if o.Sprint != nil {
-		r.Burnup = burnup(issues, *o.Sprint, o.To)
+		r.Burnup = burnup(issues, *o.Sprint, o.Field, o.To)
 	}
 	r.headlines()
 	return r
@@ -311,8 +314,8 @@ func quantile(sorted []float64, q float64) float64 {
 	return sorted[int(math.Ceil(q*float64(len(sorted))))-1]
 }
 
-func burnup(issues []Issue, sp Sprint, to time.Time) *Burnup {
-	b := &Burnup{Sprint: sp.Slug, Title: sp.Title, Start: sp.Start.Format(dayFmt), End: sp.End.Format(dayFmt)}
+func burnup(issues []Issue, sp Sprint, field string, to time.Time) *Burnup {
+	b := &Burnup{Sprint: sp.Slug, Title: sp.Title, Start: sp.Start.Format(dayFmt), End: sp.End.Format(dayFmt), Status: map[string]int{}}
 	last := sp.End.Add(-time.Nanosecond)
 	if to.Before(last) {
 		last = to
@@ -330,6 +333,11 @@ func burnup(issues []Issue, sp Sprint, to time.Time) *Burnup {
 			}
 		}
 		b.Days, b.Scope, b.Done = append(b.Days, d.Format(dayFmt)), append(b.Scope, scope), append(b.Done, done)
+	}
+	for _, is := range issues {
+		if s, ok := is.at(last); ok && s.labels[label] {
+			b.Status[s.value(field)]++
+		}
 	}
 	return b
 }

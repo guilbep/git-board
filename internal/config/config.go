@@ -71,6 +71,11 @@ type View struct {
 	// Columns a table shows, in order (id, title, is, a field, links,
 	// other); none: the default ones.
 	Columns []string `toml:"columns" json:"columns,omitempty"`
+	// Lanes a board shows, in order: values of the group field ("(none)"
+	// for the issues without one); none: every value.
+	Lanes []string `toml:"lanes" json:"lanes,omitempty"`
+	// Limits caps a lane's cards (work in progress): in-progress = 5.
+	Limits map[string]int `toml:"limits" json:"limits,omitempty"`
 }
 
 // reposTable mirrors the [repos] table shape (`list = [...]`).

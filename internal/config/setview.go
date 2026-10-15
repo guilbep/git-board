@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"regexp"
+	"sort"
 	"strings"
 )
 
@@ -10,7 +11,7 @@ var viewName = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
 
 // keyLine is `key = "value"  # comment`: the key, the value as written,
 // and what follows it.
-var keyLine = regexp.MustCompile(`^(\s*([A-Za-z0-9_-]+)\s*=\s*)(\[[^\]]*\]|"(?:[^"\\]|\\.)*"|'[^']*'|[^#\s]+)(.*)$`)
+var keyLine = regexp.MustCompile(`^(\s*([A-Za-z0-9_-]+)\s*=\s*)(\[[^\]]*\]|\{[^}]*\}|"(?:[^"\\]|\\.)*"|'[^']*'|[^#\s]+)(.*)$`)
 
 // SetViewText is text with the [views.<name>] table holding v, the way the
 // board's "Save view" writes it: its layout, filter, group and sort lines
@@ -21,9 +22,11 @@ func SetViewText(text, name string, v View) (string, error) {
 	if !viewName.MatchString(name) {
 		return "", fmt.Errorf("a view's name is letters, digits, - and _, not %q", name)
 	}
-	keys := []string{"layout", "filter", "group", "sort", "columns"}
-	// written as TOML: a string quoted, the columns an array
-	vals := map[string]string{"layout": tomlString(v.Layout), "filter": tomlString(v.Filter), "group": tomlString(v.Group), "sort": tomlString(v.Sort), "columns": tomlArray(v.Columns)}
+	keys := []string{"layout", "filter", "group", "sort", "columns", "lanes", "limits"}
+	// written as TOML: a string quoted, the columns and lanes an array,
+	// the limits an inline table
+	vals := map[string]string{"layout": tomlString(v.Layout), "filter": tomlString(v.Filter), "group": tomlString(v.Group), "sort": tomlString(v.Sort),
+		"columns": tomlArray(v.Columns), "lanes": tomlArray(v.Lanes), "limits": tomlTable(v.Limits)}
 	for k, val := range vals {
 		if val == `""` {
 			vals[k] = "" // empty: no line
@@ -108,6 +111,27 @@ func tomlArray(list []string) string {
 		quoted[i] = tomlString(s)
 	}
 	return "[" + strings.Join(quoted, ", ") + "]"
+}
+
+// tomlTable writes counts as a TOML inline table, keys sorted, "" for none.
+func tomlTable(m map[string]int) string {
+	if len(m) == 0 {
+		return ""
+	}
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	parts := make([]string, len(keys))
+	for i, k := range keys {
+		key := k
+		if !viewName.MatchString(k) { // a bare key is letters, digits, - and _
+			key = tomlString(k)
+		}
+		parts[i] = fmt.Sprintf("%s = %d", key, m[k])
+	}
+	return "{ " + strings.Join(parts, ", ") + " }"
 }
 
 // tomlString quotes s as a TOML basic string.
