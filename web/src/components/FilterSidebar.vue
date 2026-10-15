@@ -2,7 +2,7 @@
      then one collapsible checkbox list per facet, counted against the other
      facets (see facets.ts). Design from the EPFL masonry-walls database. -->
 <template>
-  <aside class="filters" aria-label="Filters">
+  <aside ref="panel" class="filters" aria-label="Filters">
     <!-- Folded on narrow screens, where the sidebar sits above the issues;
          always open beside them (the toggle is hidden there). -->
     <details class="filters-fold" :open="wide">
@@ -72,10 +72,10 @@
             :key="value"
             class="filters-option"
             :class="{ on: sel[f.key]?.includes(value) }"
-            @click.prevent="onPick(f, value, $event)"
+            @click="onOptionClick(f, value, $event)"
           >
             <span class="filters-bar" :style="{ width: `${(count / maxCount(f)) * 100}%` }" aria-hidden="true" />
-            <input type="checkbox" :checked="!!sel[f.key]?.includes(value)" />
+            <input type="checkbox" :data-facet="f.key" :value="value" :checked="!!sel[f.key]?.includes(value)" />
             <span class="filters-option-label"><ValueMark :field="f.key" :value="value" /> {{ valueLabel(f.key, value, fields) }}<span v-if="value === fields[f.key]?.current" class="filters-current">current</span></span>
             <button
               type="button"
@@ -100,7 +100,7 @@ import { colorClass } from '@/colors';
 import { facetLabel, pick, sortOptions, valueLabel, type Facet, type OptionSort, type Selection } from '@/facets';
 import type { Fields } from '@/fields';
 
-import { computed, reactive } from 'vue';
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue';
 
 const props = defineProps<{ facets: Facet[]; sel: Selection; fields: Fields; modified: boolean; queryChanged: boolean }>();
 const query = defineModel<string>('query', { required: true });
@@ -150,6 +150,24 @@ const onlyThis = (key: string, value: string) => props.sel[key]?.length === 1 &&
 // Click toggles, Alt keeps only one (then all but it), Shift a range from
 // the last value clicked in the section (facets.ts pick).
 const anchors: Record<string, string> = {};
+// The box toggles by itself (its new state is the new selection's, for
+// Alt and Shift too); the choice is made on the click the box gets, the
+// label forwarding a click on its text to it. Cancelling that click made
+// Safari undo the toggle after the page had redrawn the box, which then
+// stayed unticked while its value was selected. After every change the
+// boxes are set from the selection, so they never drift.
+function onOptionClick(f: Facet, value: string, e: MouseEvent) {
+  if (e.target instanceof HTMLInputElement) onPick(f, value, e);
+}
+const panel = ref<HTMLElement | null>(null);
+function syncChecks() {
+  for (const box of panel.value?.querySelectorAll<HTMLInputElement>('input[data-facet]') ?? []) {
+    box.checked = !!props.sel[box.dataset.facet!]?.includes(box.value);
+  }
+}
+watch(() => props.sel, () => void nextTick(syncChecks), { deep: true });
+onMounted(syncChecks);
+
 function onPick(f: Facet, value: string, e: MouseEvent) {
   const next = pick(props.sel[f.key] ?? [], value, order(f), { alt: e.altKey, shift: e.shiftKey, anchor: anchors[f.key] });
   if (!e.shiftKey) anchors[f.key] = value;
