@@ -69,6 +69,9 @@ func Decide(project, local, base string, hasBase bool) Decision {
 type ProjectMeta struct {
 	ID     string
 	Fields map[string]ProjectField
+	// Assignable is who can be assigned, by repository ("owner/name"):
+	// GitHub silently drops anyone else. nil when not looked up.
+	Assignable map[string][]string
 }
 
 // ProjectField is a Project field: its id, and its options or iterations, by
@@ -84,6 +87,9 @@ const (
 	EditNumber    = "number"
 	EditIteration = "iteration"
 	EditClear     = "clear"
+	// EditAssignees edits the GitHub issue itself (URL), not a Project
+	// field: assignees are the issue's.
+	EditAssignees = "assignees"
 )
 
 // ProjectEdit is one field written to one Project item.
@@ -96,6 +102,9 @@ type ProjectEdit struct {
 	FieldID string
 	Kind    string
 	Arg     string // the option or iteration id, or the number
+
+	URL         string   // EditAssignees: the issue
+	Add, Remove []string // EditAssignees: the logins
 }
 
 // Conflict is a field both sides changed differently since they last agreed.
@@ -222,17 +231,33 @@ func syncIssue(plan *SyncPlan, item Item, bug gitbugio.Issue, bases map[string]s
 		}
 	}
 
-	// ponytail: assignees only flow from the Project to the labels, as
-	// changes since the last sync, so local additions stay; writing them
-	// back is a write to the GitHub issue itself
-	_, hasAssignees := bases["assignee"]
-	added, removed, assigned := syncAssignees(item, bug.Labels, bases["assignee"], hasAssignees)
-	if len(added)+len(removed) > 0 {
-		change.Fields = append(change.Fields, FieldResult{Field: "assignee", Added: added, Removed: removed})
-		change.Added = append(change.Added, added...)
-		change.Removed = append(change.Removed, removed...)
+	// Assignees merge as a set, person by person, so they never conflict.
+	assignable, checked := meta.Assignable[repoOf(item.Content.URL)]
+	a := syncAssignees(item, bug.Labels, bases["assignee"], cfg.GithubProject.Write)
+	if checked {
+		var refused []string
+		a.ghAdd = slices.DeleteFunc(a.ghAdd, func(login string) bool {
+			if slices.Contains(assignable, login) {
+				return false
+			}
+			refused = append(refused, login)
+			return true
+		})
+		for _, login := range refused {
+			change.Warnings = append(change.Warnings, fmt.Sprintf("%s can't be assigned on GitHub (no access to %s), kept in git-board only", login, repoOf(item.Content.URL)))
+			a.base = strings.Join(slices.DeleteFunc(strings.Split(a.base, ","), func(s string) bool { return s == login }), ",")
+		}
 	}
-	record("assignee", assigned)
+	if len(a.added)+len(a.removed) > 0 {
+		change.Fields = append(change.Fields, FieldResult{Field: "assignee", Added: a.added, Removed: a.removed})
+		change.Added = append(change.Added, a.added...)
+		change.Removed = append(change.Removed, a.removed...)
+	}
+	if len(a.ghAdd)+len(a.ghRemove) > 0 {
+		plan.Edits = append(plan.Edits, ProjectEdit{BugID: bug.ID, ItemID: item.ID, Number: item.Content.Number,
+			Field: "assignee", Value: a.base, Kind: EditAssignees, URL: item.Content.URL, Add: a.ghAdd, Remove: a.ghRemove})
+	}
+	record("assignee", a.base)
 
 	if res, _ := planPlainLabel(bug.Labels, "category", item.Category); res.Field != "" {
 		change.Fields = append(change.Fields, res)
@@ -290,29 +315,70 @@ func Resolve(c Conflict, ours bool, item Item, bug gitbugio.Issue, meta ProjectM
 	return plan, nil
 }
 
-// syncAssignees applies the Project's assignee changes since base to the
-// labels, and returns the new base.
-func syncAssignees(item Item, labels []string, base string, hasBase bool) (added, removed []string, newBase string) {
+// repoOf is "owner/name" of an issue URL.
+func repoOf(issueURL string) string {
+	parts := strings.Split(strings.TrimPrefix(issueURL, "https://github.com/"), "/")
+	if len(parts) < 2 {
+		return ""
+	}
+	return parts[0] + "/" + parts[1]
+}
+
+// assigneeSync is how one issue's assignees merge.
+type assigneeSync struct {
+	added, removed  []string // labels
+	ghAdd, ghRemove []string // logins, on the GitHub issue
+	base            string   // what both then hold, recorded as the base
+}
+
+// syncAssignees merges an issue's assignees person by person against base,
+// what both sides last agreed on: a change on GitHub reaches the labels,
+// a change in git-board reaches the issue — with write, else assignees only
+// come from GitHub and base is GitHub's. With no base yet, both sides'
+// assignees are kept.
+func syncAssignees(item Item, labels []string, base string, write bool) assigneeSync {
 	project := slices.Sorted(slices.Values(item.Assignees))
 	var before []string
-	if hasBase && base != "" {
+	if base != "" {
 		before = strings.Split(base, ",")
 	}
-	have := map[string]bool{}
+	var local []string
 	for _, l := range labels {
-		have[l] = true
+		if a, ok := strings.CutPrefix(l, "assignee:"); ok {
+			local = append(local, a)
+		}
 	}
+
+	var res assigneeSync
 	for _, a := range project {
-		if !slices.Contains(before, a) && !have["assignee:"+a] {
-			added = append(added, "assignee:"+a)
+		if !slices.Contains(before, a) && !slices.Contains(local, a) {
+			res.added = append(res.added, "assignee:"+a)
 		}
 	}
 	for _, a := range before {
-		if !slices.Contains(project, a) && have["assignee:"+a] {
-			removed = append(removed, "assignee:"+a)
+		if !slices.Contains(project, a) && slices.Contains(local, a) {
+			res.removed = append(res.removed, "assignee:"+a)
 		}
 	}
-	return added, removed, strings.Join(project, ",")
+	if !write {
+		res.base = strings.Join(project, ",")
+		return res
+	}
+	for _, a := range local {
+		if !slices.Contains(before, a) && !slices.Contains(project, a) {
+			res.ghAdd = append(res.ghAdd, a)
+		}
+	}
+	for _, a := range before {
+		if slices.Contains(project, a) && !slices.Contains(local, a) {
+			res.ghRemove = append(res.ghRemove, a)
+		}
+	}
+	agreed := slices.Concat(project, res.ghAdd)
+	agreed = slices.DeleteFunc(agreed, func(a string) bool { return slices.Contains(res.ghRemove, a) })
+	slices.Sort(agreed)
+	res.base = strings.Join(agreed, ",")
+	return res
 }
 
 // localValue returns git-board's value of a single field, "" without a
@@ -533,6 +599,15 @@ func FetchProjectMeta(owner string, number int) (ProjectMeta, error) {
 	return meta, nil
 }
 
+// FetchAssignable lists who can be assigned on a repository ("owner/name").
+func FetchAssignable(repo string) ([]string, error) {
+	out, err := gh("api", "--paginate", "repos/"+repo+"/assignees?per_page=100", "--jq", ".[].login")
+	if err != nil {
+		return nil, err
+	}
+	return strings.Fields(string(out)), nil
+}
+
 // GhWriter writes Project fields with `gh project item-edit`.
 type GhWriter struct{}
 
@@ -547,6 +622,14 @@ func (GhWriter) Edit(projectID string, e ProjectEdit) error {
 		args = append(args, "--iteration-id", e.Arg)
 	case EditClear:
 		args = append(args, "--clear")
+	case EditAssignees:
+		args = []string{"issue", "edit", e.URL}
+		if len(e.Add) > 0 {
+			args = append(args, "--add-assignee", strings.Join(e.Add, ","))
+		}
+		if len(e.Remove) > 0 {
+			args = append(args, "--remove-assignee", strings.Join(e.Remove, ","))
+		}
 	default:
 		return fmt.Errorf("unknown edit kind %q", e.Kind)
 	}

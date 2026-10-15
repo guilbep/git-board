@@ -25,11 +25,12 @@ func withFakeProject(t *testing.T, write bool) *recordedEdits {
 	withFixtureFetch(t)
 	meta := ghbridge.ProjectMeta{ID: "P", Fields: map[string]ghbridge.ProjectField{
 		"Status": {ID: "F-status", Options: map[string]string{"QA Validation": "o-qa", "In review": "o-review"}}}}
-	origMeta, origWriter := fetchProjectMeta, projectWriter
+	origMeta, origWriter, origAssignable := fetchProjectMeta, projectWriter, fetchAssignable
 	fetchProjectMeta = func(string, int) (ghbridge.ProjectMeta, error) { return meta, nil }
 	rec := &recordedEdits{}
 	projectWriter = rec
-	t.Cleanup(func() { fetchProjectMeta, projectWriter = origMeta, origWriter })
+	fetchAssignable = nil // no assignee check: no gh in tests
+	t.Cleanup(func() { fetchProjectMeta, projectWriter, fetchAssignable = origMeta, origWriter, origAssignable })
 
 	cfg, err := os.ReadFile(configPath)
 	if err != nil {

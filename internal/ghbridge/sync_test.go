@@ -4,6 +4,7 @@ import (
 	"errors"
 	"reflect"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -214,7 +215,16 @@ func TestSlugTransliteratesAccents(t *testing.T) {
 	}
 }
 
-func TestSyncAssigneesKeepLocalAdditions(t *testing.T) {
+func assigneeEdit(p ghbridge.SyncPlan) (ghbridge.ProjectEdit, bool) {
+	for _, e := range p.Edits {
+		if e.Field == "assignee" {
+			return e, true
+		}
+	}
+	return ghbridge.ProjectEdit{}, false
+}
+
+func TestSyncAssigneesMergeBothWays(t *testing.T) {
 	it := item(1, "Ready")
 	it.Assignees = []string{"alice", "bob"}
 	p := plan(it, oneBug("status:ready", "assignee:alice", "assignee:carol"), map[string]string{"status": "ready", "assignee": "alice"})
@@ -222,7 +232,10 @@ func TestSyncAssigneesKeepLocalAdditions(t *testing.T) {
 	if !slices.Equal(c.Added, []string{"assignee:bob"}) || len(c.Removed) != 0 {
 		t.Errorf("added %v removed %v, want bob added and carol kept", c.Added, c.Removed)
 	}
-	if got := p.Bases["bug1"]["assignee"]; got != "alice,bob" {
+	if e, ok := assigneeEdit(p); !ok || !slices.Equal(e.Add, []string{"carol"}) || len(e.Remove) != 0 {
+		t.Errorf("edit %+v, want carol added on GitHub", e)
+	}
+	if got := p.Bases["bug1"]["assignee"]; got != "alice,bob,carol" {
 		t.Errorf("base %q", got)
 	}
 
@@ -372,5 +385,61 @@ func TestSyncValueWithAnEmptySlugIsLeftAlone(t *testing.T) {
 	p := plan(it, oneBug("status:ready", "sprint:sprint-4"), map[string]string{"status": "ready", "sprint": "sprint-4"})
 	if len(p.Changes[0].Removed) != 0 || len(p.Changes[0].Warnings) == 0 {
 		t.Errorf("removed %v warnings %v, want the sprint left alone with a warning", p.Changes[0].Removed, p.Changes[0].Warnings)
+	}
+}
+
+// Since they agreed on alice and bob, git-board removed bob and added
+// carol: both reach the GitHub issue, the labels stay.
+func TestSyncAssigneesWriteBackLocalChanges(t *testing.T) {
+	it := item(1, "Ready")
+	it.Assignees = []string{"alice", "bob"}
+	p := plan(it, oneBug("status:ready", "assignee:alice", "assignee:carol"), map[string]string{"status": "ready", "assignee": "alice,bob"})
+	e, ok := assigneeEdit(p)
+	if !ok || e.Kind != ghbridge.EditAssignees || e.URL != testURL+"1" ||
+		!slices.Equal(e.Add, []string{"carol"}) || !slices.Equal(e.Remove, []string{"bob"}) {
+		t.Fatalf("edit %+v, want +carol -bob on the issue", e)
+	}
+	if c := p.Changes[0]; len(c.Added)+len(c.Removed) != 0 {
+		t.Errorf("labels changed: +%v -%v", c.Added, c.Removed)
+	}
+	if got := p.Bases["bug1"]["assignee"]; got != "alice,carol" {
+		t.Errorf("base %q, want alice,carol", got)
+	}
+}
+
+// Without write = true assignees only come from GitHub, as before.
+func TestSyncAssigneesStayLocalWithoutWrite(t *testing.T) {
+	cfg := syncConfig()
+	cfg.GithubProject.Write = false
+	it := item(1, "Ready")
+	it.Assignees = []string{"alice", "bob"}
+	p := ghbridge.BuildSyncPlan([]ghbridge.Item{it}, oneBug("status:ready", "assignee:alice", "assignee:carol"),
+		map[string]map[string]string{"bug1": {"status": "ready", "assignee": "alice,bob"}}, syncMeta(), cfg)
+	if e, ok := assigneeEdit(p); ok {
+		t.Errorf("edit %+v without write", e)
+	}
+	if got, changed := p.Bases["bug1"]["assignee"]; changed {
+		t.Errorf("base changed to %q, want GitHub's alice,bob kept", got)
+	}
+}
+
+// GitHub silently drops an assignee without access to the repository: such
+// a login stays in git-board, with a warning, and isn't recorded as agreed
+// (else the next sync would read GitHub's "no" as a removal).
+func TestSyncAssigneesSkipWhoCantBeAssigned(t *testing.T) {
+	meta := syncMeta()
+	meta.Assignable = map[string][]string{"o/r": {"alice", "bob"}}
+	it := item(1, "Ready")
+	it.Assignees = []string{"alice"}
+	p := ghbridge.BuildSyncPlan([]ghbridge.Item{it}, oneBug("status:ready", "assignee:alice", "assignee:bob", "assignee:dave"),
+		map[string]map[string]string{"bug1": {"status": "ready", "assignee": "alice"}}, meta, syncConfig())
+	if e, ok := assigneeEdit(p); !ok || !slices.Equal(e.Add, []string{"bob"}) {
+		t.Errorf("edit %+v, want only bob added", e)
+	}
+	if len(p.Changes[0].Warnings) != 1 || !strings.Contains(p.Changes[0].Warnings[0], "dave") {
+		t.Errorf("warnings %v, want one about dave", p.Changes[0].Warnings)
+	}
+	if got := p.Bases["bug1"]["assignee"]; got != "alice,bob" {
+		t.Errorf("base %q, want alice,bob", got)
 	}
 }

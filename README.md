@@ -222,7 +222,7 @@ Field mapping:
 | Module | `mod:<value>` | single — the two duplicate "Generic" options are merged into one `mod:generic` |
 | Est. hours | `est:<value>` | single |
 | Sprint | `sprint:<slug>` | single — the `[[sprints.list]]` slug of the iteration's title, else the title as a slug (`Hypercare` → `sprint:hypercare`); list the iterations for `@current` to find them |
-| Assignees | `assignee:<user>` | multi — one label per assignee, added *and* removed to mirror GitHub exactly (`bridge sync` keeps the ones added in git-board) |
+| Assignees | `assignee:<user>` | multi — one label per assignee, added *and* removed to mirror GitHub exactly (`bridge sync` merges both ways instead) |
 
 `Milestone` and `Size` are **not** imported — the PRD calls them dead/unused
 fields.
@@ -264,8 +264,13 @@ issue (in git-bug's history, so it travels with the issue).
   never set can't be told from one a teammate cleared.
 - A value the other side has no option for leaves the field alone, with a
   warning.
-- Assignees only go from the Project to the labels, as changes since the
-  last sync: assignees added in git-board stay.
+- Assignees merge person by person, never as a conflict: someone assigned
+  or unassigned on GitHub since the last sync is on the labels, and with
+  `write = true` someone added or removed in git-board is on the GitHub
+  issue (`gh issue edit`). GitHub silently drops an assignee without access
+  to the repository, so the sync first reads who can be assigned (one REST
+  call per repository): anyone else stays in git-board only, with a
+  warning. Without `write`, assignees only come from GitHub.
 
 ```bash
 git-board bridge sync                         # what would change, on each side

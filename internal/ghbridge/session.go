@@ -27,10 +27,13 @@ type Project struct {
 	Items  func(owner string, number, limit int) ([]Item, error)
 	Meta   func(owner string, number int) (ProjectMeta, error)
 	Writer ProjectWriter
+	// Assignable lists who can be assigned on a repository; nil skips the
+	// check.
+	Assignable func(repo string) ([]string, error)
 }
 
 // Gh is the Project through the gh CLI.
-var Gh = Project{Items: FetchItems, Meta: FetchProjectMeta, Writer: GhWriter{}}
+var Gh = Project{Items: FetchItems, Meta: FetchProjectMeta, Writer: GhWriter{}, Assignable: FetchAssignable}
 
 // Repo is the git-bug side of a sync.
 type Repo interface {
@@ -67,6 +70,19 @@ func LoadState(repo Repo, p Project, cfg *config.Config, limit int) (State, erro
 	}
 	if s.Meta, err = p.Meta(gp.Owner, gp.Number); err != nil {
 		return State{}, err
+	}
+	// Only a sync allowed to write assigns anyone.
+	if p.Assignable != nil && gp.Write {
+		s.Meta.Assignable = map[string][]string{}
+		for _, it := range s.Items {
+			repo := repoOf(it.Content.URL)
+			if _, done := s.Meta.Assignable[repo]; done || it.Content.Type != "Issue" {
+				continue
+			}
+			if s.Meta.Assignable[repo], err = p.Assignable(repo); err != nil {
+				return State{}, err
+			}
+		}
 	}
 	if s.Bases, err = LoadBases(repo, BasePrefix(gp), s.Items, s.Issues); err != nil {
 		return State{}, err

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"strconv"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -17,6 +18,7 @@ import (
 var (
 	fetchProjectMeta                        = ghbridge.FetchProjectMeta
 	projectWriter    ghbridge.ProjectWriter = ghbridge.GhWriter{}
+	fetchAssignable                         = ghbridge.FetchAssignable
 )
 
 func newBridgeSyncCmd() *cobra.Command {
@@ -31,8 +33,10 @@ the labels: status, prio, mod, est and sprint.
 Each field is compared with the value both sides last agreed on, which
 git-board records on the issue: only the side that changed since is
 taken. When both changed differently the field is a conflict, left alone
-on both sides until "git-board bridge resolve". Assignees only go from
-the Project to the labels, keeping the ones added in git-board.
+on both sides until "git-board bridge resolve". Assignees merge person
+by person: changes on GitHub reach the labels, changes in git-board reach
+the GitHub issue (with write = true; someone GitHub can't assign stays in
+git-board, with a warning).
 
 A dry run by default. Writing to the Project needs, in .git-board.toml:
 
@@ -80,7 +84,7 @@ the label). Both then agree on it.`,
 
 // project is the GitHub Project through the seams above.
 func project() ghbridge.Project {
-	return ghbridge.Project{Items: fetchGithubItems, Meta: fetchProjectMeta, Writer: projectWriter}
+	return ghbridge.Project{Items: fetchGithubItems, Meta: fetchProjectMeta, Writer: projectWriter, Assignable: fetchAssignable}
 }
 
 // openSync loads the config, opens the repository and reads both sides.
@@ -175,6 +179,10 @@ func printSyncPlan(out io.Writer, plan ghbridge.SyncPlan) {
 			fmt.Fprintf(out, "  - %s\n", l)
 		}
 		for _, e := range es {
+			if e.Kind == ghbridge.EditAssignees {
+				fmt.Fprintf(out, "  -> GitHub issue: assignee%s%s\n", signed("+", e.Add), signed("-", e.Remove))
+				continue
+			}
 			fmt.Fprintf(out, "  -> Project: %s = %s\n", e.Field, show(e.Value))
 		}
 		for _, k := range cs {
@@ -197,6 +205,15 @@ func printSyncPlan(out io.Writer, plan ghbridge.SyncPlan) {
 	}
 	fmt.Fprintf(out, "\nsummary: %d issue(s) matched, %d with label changes, %d Project write(s), %d conflict(s), %d warning(s), %d unmatched\n",
 		len(plan.Changes), labelChanges, len(plan.Edits), len(plan.Conflicts), warnings, len(plan.Unmatched))
+}
+
+// signed is " +alice +bob" for sign "+".
+func signed(sign string, logins []string) string {
+	var b strings.Builder
+	for _, l := range logins {
+		b.WriteString(" " + sign + l)
+	}
+	return b.String()
 }
 
 func show(value string) string {
