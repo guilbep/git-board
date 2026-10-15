@@ -65,8 +65,11 @@ func TestIssueLifecycle(t *testing.T) {
 		t.Fatalf("comment: %d", code)
 	}
 	c := th.Events[len(th.Events)-1]
-	if code := call(t, "PUT", base+"/comments/"+c.ID, map[string]any{"body": "*first*"}, &th); code != http.StatusOK {
+	if code := call(t, "PUT", base+"/comments/"+c.ID, map[string]any{"body": "*first*", "base": "first"}, &th); code != http.StatusOK {
 		t.Fatalf("edit: %d", code)
+	}
+	if code := call(t, "PUT", base+"/comments/"+c.ID, map[string]any{"body": "mine", "base": "first"}, nil); code != http.StatusConflict {
+		t.Errorf("an edit of a comment changed meanwhile: %d, want 409", code)
 	}
 	if last := th.Events[len(th.Events)-1]; !last.Edited || !strings.Contains(last.HTML, "<em>first</em>") {
 		t.Errorf("edited %+v", last)

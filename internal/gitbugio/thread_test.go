@@ -29,7 +29,7 @@ func TestThreadTellsTheStory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := b.EditComment(id, comment, "second try"); err != nil {
+	if err := b.EditComment(id, comment, "second try", "first try"); err != nil {
 		t.Fatal(err)
 	}
 	if err := b.SetTitle(id, "Export CSV and XLSX"); err != nil {
@@ -64,7 +64,7 @@ func TestThreadTellsTheStory(t *testing.T) {
 	}
 
 	// the description is the created event's text, edited the same way
-	if err := b.EditComment(id, created.ID, "the new body"); err != nil {
+	if err := b.EditComment(id, created.ID, "the new body", ""); err != nil {
 		t.Fatal(err)
 	}
 	if th, _ = b.Thread(id); th.Events[0].Body != "the new body" || !th.Events[0].Edited {
@@ -80,7 +80,7 @@ func TestEditingAnotherIssuesCommentIsRefused(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := b.EditComment(two, comment, "hijacked"); !errors.Is(err, gitbugio.ErrNoSuchComment) {
+	if err := b.EditComment(two, comment, "hijacked", ""); !errors.Is(err, gitbugio.ErrNoSuchComment) {
 		t.Errorf("err = %v, want ErrNoSuchComment", err)
 	}
 }
@@ -166,5 +166,19 @@ func TestIdentities(t *testing.T) {
 	}
 	if me, _, _ := b.Me(); me.ID != other.ID {
 		t.Errorf("Me = %+v, want Bob", me)
+	}
+}
+
+// An edit says which text it started from: if someone changed the comment
+// since, it's refused, not silently replacing theirs.
+func TestEditingAChangedCommentIsRefused(t *testing.T) {
+	b := gitbugiotest.New(t)
+	id, _ := b.NewIssue("x", "", nil)
+	comment, _ := b.AddComment(id, "v1")
+	if err := b.EditComment(id, comment, "v2", "v1"); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.EditComment(id, comment, "mine", "v1"); !errors.Is(err, gitbugio.ErrChangedMeanwhile) {
+		t.Errorf("err = %v, want ErrChangedMeanwhile", err)
 	}
 }

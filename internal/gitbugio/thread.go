@@ -21,6 +21,10 @@ import (
 // ErrNoSuchComment is returned when a comment id isn't one of the issue's.
 var ErrNoSuchComment = errors.New("no such comment on this issue")
 
+// ErrChangedMeanwhile is returned when a comment changed since the edit
+// started: saving would silently replace someone else's text.
+var ErrChangedMeanwhile = errors.New("someone changed this comment meanwhile")
+
 // Person is a git-bug identity, as the page shows it.
 type Person struct {
 	ID        string `json:"id"`
@@ -277,12 +281,17 @@ func (b *Backend) AddComment(idPrefix, body string) (string, error) {
 }
 
 // EditComment replaces the text of one of an issue's comments, or of its
-// description (the created event's id).
-func (b *Backend) EditComment(idPrefix, commentID, body string) error {
+// description (the created event's id). base is the text the edit started
+// from: if the comment holds another one now, the edit is refused ("" skips
+// the check).
+func (b *Backend) EditComment(idPrefix, commentID, body, base string) error {
 	return b.write(idPrefix, func(bug *cache.BugCache) error {
 		c, err := bug.Snapshot().SearchComment(entity.CombinedId(commentID))
 		if err != nil {
 			return ErrNoSuchComment
+		}
+		if base != "" && c.Message != base {
+			return ErrChangedMeanwhile
 		}
 		_, err = bug.EditComment(c.CombinedId(), body)
 		return err

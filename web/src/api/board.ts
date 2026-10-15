@@ -32,6 +32,14 @@ export interface FieldConfig {
   numeric: boolean;
 }
 
+// ApiError carries the server's status and code: syncing (a sync with
+// GitHub/GitLab runs: retry after it), changed (edited meanwhile).
+export class ApiError extends Error {
+  constructor(message: string, readonly status: number, readonly code: string) {
+    super(message);
+  }
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   // The server only takes JSON writes (withGuard in cmd/git-board-server).
   if (init?.method && init.method !== 'GET') {
@@ -41,17 +49,20 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     throw new Error('The git-board server is not reachable.');
   });
   if (!res.ok) {
-    // The server answers errors as {"error": "..."} (writeError in
-    // cmd/git-board-server); surface that message, e.g. "@me" with no
-    // --me set.
+    // The server answers errors as {"error": "...", "code"?: "..."}
+    // (writeError, writeCoded in cmd/git-board-server); surface that
+    // message, e.g. "@me" with no --me set.
     const body = await res.text();
     let message = body;
+    let code = '';
     try {
-      message = (JSON.parse(body) as { error?: string }).error ?? body;
+      const parsed = JSON.parse(body) as { error?: string; code?: string };
+      message = parsed.error ?? body;
+      code = parsed.code ?? '';
     } catch {
       // not JSON: keep the raw body
     }
-    throw new Error(message || `${init?.method ?? 'GET'} ${path} failed (${res.status})`);
+    throw new ApiError(message || `${init?.method ?? 'GET'} ${path} failed (${res.status})`, res.status, code);
   }
   return res.json() as Promise<T>;
 }
@@ -187,8 +198,9 @@ export function addComment(id: string, body: string, status?: 'open' | 'closed')
   return request(`${issuePath(id)}/comments`, json('POST', { body, status: status ?? '' }));
 }
 
-export function editComment(id: string, commentId: string, body: string): Promise<Thread> {
-  return request(`${issuePath(id)}/comments/${encodeURIComponent(commentId)}`, json('PUT', { body }));
+// base is the text the edit started from: 409 if the comment changed since.
+export function editComment(id: string, commentId: string, body: string, base: string): Promise<Thread> {
+  return request(`${issuePath(id)}/comments/${encodeURIComponent(commentId)}`, json('PUT', { body, base }));
 }
 
 export function setTitle(id: string, title: string): Promise<Thread> {

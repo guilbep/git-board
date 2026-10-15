@@ -3,8 +3,9 @@
 // the page never patches it by hand.
 import { ref, watch, type Ref } from 'vue';
 import {
-  addComment, changeLabels, editComment, getThread, setStatus, setTitle, type Thread,
+  addComment, ApiError, changeLabels, editComment, getThread, setStatus, setTitle, type Thread,
 } from '@/api/board';
+import { untilSyncEnds } from '@/forges';
 
 export function message(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
@@ -15,7 +16,9 @@ export function useIssue(id: Ref<string>, onChange: (t: Thread) => void = () => 
   const loading = ref(false);
   const error = ref(''); // loading failed
   const saving = ref(false);
-  const saveError = ref(''); // the last write failed, e.g. a sync with GitHub/GitLab runs
+  const waiting = ref(false); // a sync with GitHub/GitLab runs: the change is saved after it
+  const saveError = ref(''); // the last write failed
+  const saveCode = ref(''); // its code: changed (someone edited meanwhile)
 
   let latest = 0;
   async function load() {
@@ -32,19 +35,32 @@ export function useIssue(id: Ref<string>, onChange: (t: Thread) => void = () => 
     }
   }
 
-  // run a write; true when it went through
+  // run a write; true when it went through. Refused because a forge sync
+  // runs, it waits for the end of the sync and goes again.
   async function write(fn: () => Promise<Thread>): Promise<boolean> {
     saving.value = true;
     saveError.value = '';
+    saveCode.value = '';
     try {
-      thread.value = await fn();
-      onChange(thread.value);
-      return true;
+      for (;;) {
+        try {
+          thread.value = await fn();
+          onChange(thread.value);
+          return true;
+        } catch (e) {
+          if (!(e instanceof ApiError && e.code === 'syncing')) throw e;
+          waiting.value = true;
+          await untilSyncEnds();
+          waiting.value = false;
+        }
+      }
     } catch (e) {
       saveError.value = message(e);
+      saveCode.value = e instanceof ApiError ? e.code : '';
       return false;
     } finally {
       saving.value = false;
+      waiting.value = false;
     }
   }
 
@@ -55,10 +71,12 @@ export function useIssue(id: Ref<string>, onChange: (t: Thread) => void = () => 
     loading,
     error,
     saving,
+    waiting,
     saveError,
+    saveCode,
     load,
     comment: (body: string, status?: 'open' | 'closed') => write(() => addComment(id.value, body, status)),
-    edit: (commentId: string, body: string) => write(() => editComment(id.value, commentId, body)),
+    edit: (commentId: string, body: string, base: string) => write(() => editComment(id.value, commentId, body, base)),
     rename: (title: string) => write(() => setTitle(id.value, title)),
     setStatus: (status: 'open' | 'closed') => write(() => setStatus(id.value, status)),
     labels: (add: string[], remove: string[]) => write(() => changeLabels(id.value, add, remove)),

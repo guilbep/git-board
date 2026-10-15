@@ -175,3 +175,9 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 func writeError(w http.ResponseWriter, status int, err error) {
 	writeJSON(w, status, map[string]string{"error": err.Error()})
 }
+
+// writeCoded is writeError with a code the page acts on: syncing (retry
+// when the forge sync ends), changed (someone edited meanwhile).
+func writeCoded(w http.ResponseWriter, status int, code string, err error) {
+	writeJSON(w, status, map[string]string{"error": err.Error(), "code": code})
+}

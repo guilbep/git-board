@@ -22,7 +22,7 @@ var errSyncing = errors.New("a sync with GitHub/GitLab is running: try again whe
 // for minutes. The caller defers the returned unlock.
 func (s *apiServer) beginWrite(w http.ResponseWriter) (func(), bool) {
 	if s.syncing.Load() {
-		writeError(w, http.StatusConflict, errSyncing)
+		writeCoded(w, http.StatusConflict, "syncing", errSyncing)
 		return nil, false
 	}
 	s.writeMu.Lock()
@@ -151,6 +151,7 @@ func (s *apiServer) handleComment(w http.ResponseWriter, r *http.Request) {
 func (s *apiServer) handleEditComment(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Body string `json:"body"`
+		Base string `json:"base"` // the text the edit started from
 	}
 	if !decode(w, r, &req) {
 		return
@@ -160,7 +161,11 @@ func (s *apiServer) handleEditComment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer done()
-	if err := s.b.EditComment(r.PathValue("id"), r.PathValue("comment"), req.Body); err != nil {
+	if err := s.b.EditComment(r.PathValue("id"), r.PathValue("comment"), req.Body, req.Base); err != nil {
+		if errors.Is(err, gitbugio.ErrChangedMeanwhile) {
+			writeCoded(w, http.StatusConflict, "changed", err)
+			return
+		}
 		writeIssueError(w, err)
 		return
 	}

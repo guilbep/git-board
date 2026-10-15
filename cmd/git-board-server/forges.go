@@ -188,7 +188,7 @@ func (s *apiServer) handleForgeSync(w http.ResponseWriter, r *http.Request) {
 	s.forgeMu.Lock()
 	defer s.forgeMu.Unlock()
 	if s.syncing.Load() {
-		writeError(w, http.StatusConflict, errSyncing)
+		writeCoded(w, http.StatusConflict, "syncing", errSyncing)
 		return
 	}
 	if !req.DryRun {
