@@ -10,7 +10,7 @@
     "dev": "quasar dev",
     "build": "quasar build",
     "typecheck": "vue-tsc --noEmit",
-    "test": "node --test src/facets.test.ts",
+    "test": "node --test src/facets.test.ts src/richtext.test.ts",
     "postinstall": "quasar prepare --silent"
   },
   "dependencies": {

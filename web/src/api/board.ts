@@ -129,3 +129,136 @@ export function resolveConflict(number: number, field: string, keep: 'git-board'
     body: JSON.stringify({ number, field, keep }),
   });
 }
+
+// Issue management (cmd/git-board-server/issues.go): every write answers
+// with the issue's whole history, re-read from git-bug.
+export interface Person {
+  id: string;
+  name: string;
+  login?: string;
+  avatar_url?: string;
+}
+
+export interface Forge {
+  name: string; // GitHub, GitLab, or the host
+  url: string;
+  number?: string;
+}
+
+export interface IssueEvent {
+  kind: 'created' | 'comment' | 'labels' | 'status' | 'title' | 'unknown';
+  id: string; // created, comment: what editComment takes
+  author: Person;
+  at: string;
+  body?: string; // Markdown
+  html?: string; // rendered and cleaned by the server
+  edited?: boolean;
+  history?: { author: Person; at: string; body: string }[];
+  pending?: string[]; // forges the next sync hasn't posted this text to yet
+  added?: string[];
+  removed?: string[];
+  status?: 'open' | 'closed';
+  title?: string;
+  was?: string;
+}
+
+export interface Thread extends Issue {
+  author: Person;
+  created_at: string;
+  edited_at: string;
+  forges: Forge[] | null;
+  participants: Person[] | null;
+  events: IssueEvent[];
+}
+
+const json = (method: string, body: unknown): RequestInit => ({ method, body: JSON.stringify(body) });
+const issuePath = (id: string) => `/api/issues/${encodeURIComponent(id)}`;
+
+export function getThread(id: string): Promise<Thread> {
+  return request(`${issuePath(id)}/thread`);
+}
+
+export function createIssue(title: string, body: string, labels: string[]): Promise<Thread> {
+  return request('/api/issues', json('POST', { title, body, labels }));
+}
+
+// A comment, and/or a status: "Close with comment".
+export function addComment(id: string, body: string, status?: 'open' | 'closed'): Promise<Thread> {
+  return request(`${issuePath(id)}/comments`, json('POST', { body, status: status ?? '' }));
+}
+
+export function editComment(id: string, commentId: string, body: string): Promise<Thread> {
+  return request(`${issuePath(id)}/comments/${encodeURIComponent(commentId)}`, json('PUT', { body }));
+}
+
+export function setTitle(id: string, title: string): Promise<Thread> {
+  return request(`${issuePath(id)}/title`, json('PUT', { title }));
+}
+
+export function setStatus(id: string, status: 'open' | 'closed'): Promise<Thread> {
+  return request(`${issuePath(id)}/status`, json('PUT', { status }));
+}
+
+export function changeLabels(id: string, add: string[], remove: string[]): Promise<Thread> {
+  return request(`${issuePath(id)}/labels`, json('POST', { add, remove }));
+}
+
+export interface MeResponse {
+  me: Person | null;
+  identities: Person[] | null;
+}
+
+export function getMe(): Promise<MeResponse> {
+  return request('/api/me');
+}
+
+export function adoptIdentity(id: string): Promise<MeResponse> {
+  return request('/api/me', json('POST', { id }));
+}
+
+export function createIdentity(name: string, email: string): Promise<MeResponse> {
+  return request('/api/me', json('POST', { name, email }));
+}
+
+// The sync with GitHub/GitLab (cmd/git-board-server/forges.go).
+export interface BridgeTally {
+  imported: number;
+  pulled: number;
+  created: number;
+  pushed: number;
+  would_import: number;
+  would_pull: number;
+  would_create: number;
+  would_push: number;
+  warnings: number;
+  errors: number;
+  lines: string[];
+}
+
+export interface ForgeJob {
+  dry_run: boolean;
+  push: boolean;
+  state: 'running' | 'done' | 'failed';
+  started: string;
+  ended?: string;
+  bridges: Record<string, BridgeTally>;
+  errors: number;
+  error?: string;
+  pushed?: string;
+}
+
+export interface ForgeStatus {
+  bridges: { name: string; target: string }[];
+  job: ForgeJob | null;
+}
+
+export function getForges(): Promise<ForgeStatus> {
+  return request('/api/forges');
+}
+
+export function startForgeSync(dryRun: boolean, push: boolean): Promise<ForgeStatus> {
+  return request('/api/forges/sync', json('POST', { dry_run: dryRun, push }));
+}
+
+// Where the page loads a server path from (the API's origin in dev).
+export const apiURL = (path: string) => API_BASE + path;
