@@ -3,6 +3,7 @@ package gitbugio
 import (
 	"net/url"
 	"slices"
+	"strings"
 
 	"github.com/git-bug/git-bug/bridge/core/auth"
 	"github.com/git-bug/git-bug/repository"
@@ -60,4 +61,30 @@ func credentialHost(c auth.Credential) string {
 		return ""
 	}
 	return u.Hostname()
+}
+
+// Credential is a token in git-bug's credential store, as the settings
+// page lists it: never its value.
+type Credential struct {
+	ID     string `json:"id"` // its first 7 characters, enough to pick it
+	Target string `json:"target"`
+	Host   string `json:"host"`
+	Login  string `json:"login"`
+}
+
+// Credentials lists git-bug's stored tokens, without their values.
+func (b *Backend) Credentials() ([]Credential, error) {
+	creds, err := auth.List(b.c, auth.WithKind(auth.KindToken))
+	if err != nil {
+		return nil, err
+	}
+	res := []Credential{}
+	for _, c := range creds {
+		login, _ := c.GetMetadata(auth.MetaKeyLogin)
+		res = append(res, Credential{ID: c.ID().Human(), Target: c.Target(), Host: credentialHost(c), Login: login})
+	}
+	slices.SortFunc(res, func(a, b Credential) int {
+		return strings.Compare(a.Target+a.Host+a.Login, b.Target+b.Host+b.Login)
+	})
+	return res, nil
 }

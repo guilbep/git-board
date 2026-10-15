@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -132,6 +133,50 @@ func (b *Backend) SetBridgeSync(name string, on bool) error {
 		return fmt.Errorf("bridge %s can't sync: its forge isn't supported", name)
 	}
 	return core.SetBridgeConfig(b.c, name, core.ConfigKeySync, strconv.FormatBool(on))
+}
+
+// the name a bridge of a forge gets by default, as in the README's setup
+var shortName = map[string]string{"github": "gh", "gitlab": "gl", "gitea": "gitea"}
+
+var bridgeName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]*$`)
+
+// AddBridge configures a bridge in this process, as `git bug bridge new
+// --sync` does: the forge checks the credential (a pasted token, then kept
+// in git-bug's credential store, or a stored one by id) and the project.
+// An empty name takes the forge's short one, gh, gl or gitea, made unique.
+// It answers the name.
+func (b *Backend) AddBridge(target, name, projectURL, credID, token string) (string, error) {
+	switch {
+	case name == "":
+		name = shortName[target]
+		for n := 2; name != "" && core.BridgeExist(b.c, name); n++ {
+			name = shortName[target] + strconv.Itoa(n)
+		}
+	case !bridgeName.MatchString(name):
+		return "", fmt.Errorf("a bridge's name is letters, digits, - and _, not %q", name)
+	case core.BridgeExist(b.c, name):
+		return "", fmt.Errorf("a bridge named %s exists already", name)
+	}
+	br, err := core.NewBridge(b.c, target, name)
+	if err != nil || !br.SupportsSync() {
+		return "", fmt.Errorf("git-board syncs with GitHub, GitLab and Gitea, not %q", target)
+	}
+	if credID == "" && token == "" {
+		return "", errors.New("pick a stored credential or paste a token")
+	}
+	if err := br.Configure(core.BridgeParams{URL: projectURL, CredPrefix: credID, TokenRaw: token}, false); err != nil {
+		return "", err
+	}
+	return name, core.SetBridgeConfig(b.c, name, core.ConfigKeySync, "true")
+}
+
+// RemoveBridge removes a bridge's configuration. The issues it imported
+// stay, with their links to the forge.
+func (b *Backend) RemoveBridge(name string) error {
+	if !core.BridgeExist(b.c, name) {
+		return ErrNoBridge
+	}
+	return core.RemoveBridge(b.c, name)
 }
 
 // SyncForges runs git-bug's forge sync (git bug bridge sync) on the named

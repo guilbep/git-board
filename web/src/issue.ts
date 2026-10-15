@@ -16,7 +16,7 @@ export function useIssue(id: Ref<string>, onChange: (t: Thread) => void = () => 
   const loading = ref(false);
   const error = ref(''); // loading failed
   const saving = ref(false);
-  const waiting = ref(false); // a sync with GitHub/GitLab runs: the change is saved after it
+  const waiting = ref(false); // a sync with the forges runs: the change is saved after it
   const saveError = ref(''); // the last write failed
   const saveCode = ref(''); // its code: changed (someone edited meanwhile)
 

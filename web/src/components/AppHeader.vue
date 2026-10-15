@@ -29,9 +29,9 @@
     </nav>
     <div class="app-right">
       <!-- shown once a bridge has sync enabled; live while a run goes on -->
-      <router-link v-if="forgeStatus?.bridges.length" to="/sync" class="gb-synclink" :class="{ 'gb-synclink-run': running }">
+      <router-link v-if="forgeStatus?.bridges.length" to="/sync" class="gb-synclink" :class="{ 'gb-synclink-run': running }" :title="syncTitle">
         <GbIcon name="sync" small />
-        <span>{{ running ? 'Syncing with GitHub/GitLab…' : 'Sync with GitHub/GitLab' }}</span>
+        <span>{{ running ? 'Syncing…' : 'Sync' }}</span>
         <span v-if="lastRun" class="gb-hint">{{ lastRun }}</span>
       </router-link>
       <router-link v-if="me?.me" to="/settings" class="gb-me" :title="`You write as ${me.me.name}. Settings`">
@@ -60,6 +60,11 @@ defineProps<{ views: string[]; active: string }>();
 
 const conflicts = computed(() => syncStatus.value?.last?.conflicts.length ?? 0);
 const running = computed(() => forgeStatus.value?.job?.state === 'running');
+// the button says Sync; its tooltip, with what: "Sync with gh (GitHub), gl (GitLab)"
+const forgeNames: Record<string, string> = { github: 'GitHub', gitlab: 'GitLab', gitea: 'Gitea' };
+const syncTitle = computed(
+  () => `Sync with ${(forgeStatus.value?.bridges ?? []).map((b) => `${b.name} (${forgeNames[b.target] ?? b.target})`).join(', ')}`,
+);
 const lastRun = computed(() => {
   const j = forgeStatus.value?.job;
   if (!j || running.value) return '';

@@ -15,7 +15,7 @@ import (
 	"github.com/guilbep/git-board/internal/markdown"
 )
 
-var errSyncing = errors.New("a sync with GitHub/GitLab is running: try again when it ends")
+var errSyncing = errors.New("a sync with the forges is running: try again when it ends")
 
 // beginWrite takes the write lock, which every change to the repository
 // holds — but answers 409 at once while a forge sync runs, which holds it

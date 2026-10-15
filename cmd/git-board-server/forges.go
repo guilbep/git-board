@@ -21,9 +21,9 @@ const dryRunFresh = 15 * time.Minute
 // maxLines caps the lines kept per bridge.
 const maxLines = 1000
 
-var errDryRunFirst = errors.New("run a dry run first: a real sync writes to GitHub/GitLab, the dry run says what it would do")
+var errDryRunFirst = errors.New("run a dry run first: a real sync writes to the forges, the dry run says what it would do")
 
-// forgeStatus is the sync with GitHub/GitLab: which bridges take part, and
+// forgeStatus is the sync with the forges: which bridges take part, and
 // the last run.
 type forgeStatus struct {
 	Bridges []gitbugio.SyncBridge `json:"bridges"`

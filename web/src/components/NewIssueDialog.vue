@@ -43,7 +43,7 @@
     </form>
 
     <footer v-if="!(me && !me.me)" class="gb-dialog-foot">
-      <p class="gb-hint gb-grow">Created as <b>{{ me?.me?.name }}</b>, saved in git-bug at once. GitHub and GitLab get it at the next sync. <kbd>Ctrl</kbd> <kbd>Enter</kbd> creates.</p>
+      <p class="gb-hint gb-grow">Created as <b>{{ me?.me?.name }}</b>, saved in git-bug at once. The forges get it at the next sync. <kbd>Ctrl</kbd> <kbd>Enter</kbd> creates.</p>
       <button type="button" class="epfl-btn epfl-btn-secondary" :disabled="busy || !title.trim()" @click="create(true)">Create and open another</button>
       <button type="button" class="epfl-btn epfl-btn-primary" :disabled="busy || !title.trim()" @click="create(false)">{{ busy ? 'Creating…' : 'Create' }}</button>
     </footer>

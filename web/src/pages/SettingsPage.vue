@@ -22,12 +22,13 @@
 
     <section aria-labelledby="set-bridges">
       <h2 id="set-bridges" class="h5">Bridges</h2>
-      <p class="gb-hint">A bridge with sync on takes part in <router-link to="/sync">Sync with GitHub/GitLab</router-link>.</p>
+      <p class="gb-hint">A bridge links this repository's issues to a forge's. With sync on, it takes part in <router-link to="/sync">Sync with forges</router-link>.</p>
       <div v-if="settings?.bridges.length" class="gb-table-wrap">
         <table class="gb-table">
-          <thead><tr><th>Bridge</th><th>Forge</th><th>Project</th><th>Sync</th></tr></thead>
+          <thead><tr><th>Bridge</th><th>Forge</th><th>Project</th><th>Sync</th><th><span class="visually-hidden">Remove</span></th></tr></thead>
           <tbody>
-            <tr v-for="b in settings.bridges" :key="b.name">
+            <template v-for="b in settings.bridges" :key="b.name">
+            <tr>
               <td><b>{{ b.name }}</b></td>
               <td>{{ forgeName(b.target) }}</td>
               <td><a v-if="b.where.startsWith('https://') && !b.where.includes(' ')" :href="b.where" target="_blank" rel="noopener noreferrer">{{ b.where }}</a><span v-else>{{ b.where || '—' }}</span></td>
@@ -38,12 +39,24 @@
                 </label>
                 <span v-else class="gb-hint">import/export only</span>
               </td>
+              <td><button type="button" class="gb-linkbtn" :disabled="busy === b.name" @click="confirming = b.name">Remove</button></td>
             </tr>
+            <tr v-if="confirming === b.name" class="gb-confirm-row">
+              <td colspan="5">
+                <p role="alert">
+                  <b>Remove the bridge {{ b.name }}?</b> Its settings go. The issues it brought stay, still linked to {{ forgeName(b.target) }}, and the stored credential stays too.
+                </p>
+                <button type="button" class="epfl-btn epfl-btn-primary epfl-btn-sm" :disabled="busy === b.name" @click="remove(b)">Remove {{ b.name }}</button>
+                <button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" @click="confirming = ''">Cancel</button>
+              </td>
+            </tr>
+            </template>
           </tbody>
         </table>
       </div>
       <p v-else-if="settings" class="gb-hint">No bridge yet.</p>
-      <p class="gb-hint">Add one with <code>git bug bridge new --name gh --url https://github.com/owner/repo --sync</code>.</p>
+      <p v-if="added" class="gb-hint" role="status">Bridge {{ added }} added, with sync on.</p>
+      <BridgeAddForm @added="onAdded" />
     </section>
 
     <section aria-labelledby="set-uploads">
@@ -73,13 +86,14 @@
 
 <script setup lang="ts">
 import { onMounted, ref, watch } from 'vue';
-import { getSettings, getViews, setBridgeSync, type Bridge, type Settings } from '@/api/board';
+import { getSettings, getViews, removeBridge, setBridgeSync, type Bridge, type Settings } from '@/api/board';
 import { loadForges } from '@/forges';
 import { message } from '@/issue';
 import { loadMe, me } from '@/me';
 import AppHeader from '@/components/AppHeader.vue';
 import IdentityChooser from '@/components/IdentityChooser.vue';
 import ConfigEditor from '@/components/ConfigEditor.vue';
+import BridgeAddForm from '@/components/BridgeAddForm.vue';
 
 const settings = ref<Settings | null>(null);
 const viewNames = ref<string[]>([]);
@@ -92,6 +106,30 @@ watch(() => me.value?.me?.id, () => (choosing.value = false));
 
 function forgeName(target: string) {
   return ({ github: 'GitHub', gitlab: 'GitLab', gitea: 'Gitea' } as Record<string, string>)[target] ?? target;
+}
+
+const confirming = ref('');
+const added = ref('');
+
+async function remove(b: Bridge) {
+  busy.value = b.name;
+  error.value = '';
+  try {
+    await removeBridge(b.name);
+    confirming.value = '';
+    await reload();
+    void loadForges(); // the header's sync link
+  } catch (e) {
+    error.value = `${b.name} not removed: ${message(e)}`;
+  } finally {
+    busy.value = '';
+  }
+}
+
+async function onAdded(name: string) {
+  added.value = name;
+  await reload();
+  void loadForges();
 }
 
 async function toggle(b: Bridge, on: boolean) {
@@ -135,6 +173,10 @@ onMounted(() => {
 .gb-settings section p { margin: 0; }
 .gb-linkbtn { justify-self: start; padding: 0; border: 0; background: none; color: var(--fg); text-decoration: underline; cursor: pointer; font: inherit; }
 .set-login { color: var(--fg-muted); }
+.gb-confirm-row td { background: var(--warning-bg); }
+.gb-confirm-row p { margin: 0 0 .5rem; }
+.gb-confirm-row .epfl-btn + .epfl-btn { margin-left: .5rem; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .gb-switch { display: inline-flex; align-items: center; gap: .5rem; cursor: pointer; font-weight: 700; }
 .gb-switch input { width: 1.125rem; height: 1.125rem; accent-color: var(--primary-hover); }
 </style>

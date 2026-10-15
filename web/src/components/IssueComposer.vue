@@ -1,5 +1,5 @@
 <!-- Commenting as …: a comment, "Close with comment" / "Reopen", and while a
-     sync with GitHub/GitLab runs, the change waits and is saved after it. -->
+     sync with the forges runs, the change waits and is saved after it. -->
 <template>
   <IdentityChooser v-if="me && !me.me" />
   <template v-else>
@@ -9,7 +9,7 @@
     </p>
     <div class="gb-composer">
       <MarkdownEditor v-model="text" :forges="forges" label="Comment" placeholder="Leave a comment" :disabled="busy" @submit="send()" />
-      <p v-if="waiting" class="gb-wait" role="status"><GbIcon name="clock" small /> Syncing with GitHub/GitLab… your comment is saved after it.</p>
+      <p v-if="waiting" class="gb-wait" role="status"><GbIcon name="clock" small /> Syncing with the forges… your comment is saved after it.</p>
       <p v-else-if="error" class="gb-save-error" role="alert"><GbIcon name="error" small /> <b>Your comment was not posted.</b> {{ error }} Your text is still here.</p>
       <div class="gb-composer-foot">
         <p class="gb-hint">Saved in git-bug now, on {{ forgeNames }} at the next sync.</p>
