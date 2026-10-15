@@ -38,15 +38,19 @@
         <span class="gb-avatar gb-avatar-sm gb-avatar-dark" aria-hidden="true">{{ initials(me.me.name) }}</span>
         <span class="gb-me-name">{{ me.me.name }}</span>
       </router-link>
+      <button type="button" class="gb-settingslink" aria-label="Keyboard shortcuts (?)" title="Keyboard shortcuts (?)" @click="helpOpen = true">?</button>
       <router-link to="/settings" class="gb-settingslink" active-class="active" aria-label="Settings" title="Settings">
         <GbIcon name="settings" small />
       </router-link>
     </div>
   </header>
+  <KeyboardHelp />
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted } from 'vue';
+import { computed, onBeforeUnmount, onMounted } from 'vue';
+import { helpOpen } from '@/shortcuts';
+import KeyboardHelp from '@/components/KeyboardHelp.vue';
 import { forgeStatus, loadForges } from '@/forges';
 import { initials, loadMe, me, when } from '@/me';
 import { loadSyncStatus, syncStatus } from '@/sync';
@@ -62,7 +66,17 @@ const lastRun = computed(() => {
   return `${j.dry_run ? 'dry run' : 'last run'} ${when(j.ended ?? j.started)}`;
 });
 
+// ? opens the shortcuts, unless typing
+function onKey(e: KeyboardEvent) {
+  if (e.key !== '?' || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.target instanceof Element && e.target.closest('input, textarea, select, [contenteditable]')) return;
+  e.preventDefault();
+  helpOpen.value = true;
+}
+onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
+
 onMounted(() => {
+  window.addEventListener('keydown', onKey);
   if (!syncStatus.value) void loadSyncStatus();
   if (!forgeStatus.value) void loadForges();
   if (!me.value) void loadMe();
@@ -83,7 +97,7 @@ onMounted(() => {
 .gb-synclink:hover { border-color: var(--fg); }
 .gb-synclink-run { border-color: var(--fg); }
 .gb-me { display: inline-flex; align-items: center; gap: .5rem; font-weight: 700; font-size: .875rem; white-space: nowrap; color: var(--fg); text-decoration: none; }
-.gb-settingslink { display: inline-flex; align-items: center; justify-content: center; width: 2.75rem; height: 2.75rem; border: 1px solid var(--border-strong); color: var(--fg); }
+.gb-settingslink { font: inherit; font-weight: 700; background: none; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; width: 2.75rem; height: 2.75rem; border: 1px solid var(--border-strong); color: var(--fg); }
 .gb-settingslink:hover, .gb-settingslink.active { border-color: var(--fg); }
 
 .nav-count {
