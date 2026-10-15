@@ -45,7 +45,7 @@ type apiServer struct {
 	last    *syncReport
 
 	// Every change to the repository holds writeMu (issues.go,
-	// beginWrite); the sync with GitHub/GitLab (forges.go) holds it for
+	// beginWrite); the sync with the forges (forges.go) holds it for
 	// its whole run, and syncing tells writes to answer 409 meanwhile.
 	writeMu sync.Mutex
 	syncing atomic.Bool
@@ -94,6 +94,9 @@ func newMux(s *apiServer, static http.Handler) http.Handler {
 	mux.HandleFunc("GET /api/config/docs", s.handleConfigDocs)
 	mux.HandleFunc("PUT /api/config", s.handleConfigSave)
 	mux.HandleFunc("PUT /api/bridges/{name}/sync", s.handleBridgeSync)
+	mux.HandleFunc("GET /api/credentials", s.handleCredentials)
+	mux.HandleFunc("POST /api/bridges", s.handleAddBridge)
+	mux.HandleFunc("DELETE /api/bridges/{name}", s.handleRemoveBridge)
 	mux.HandleFunc("GET /api/forges", s.handleForges)
 	mux.HandleFunc("POST /api/forges/sync", s.handleForgeSync)
 	mux.HandleFunc("GET /api/sync", s.handleSyncStatus)

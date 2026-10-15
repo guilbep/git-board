@@ -37,7 +37,7 @@ export interface FieldConfig {
 }
 
 // ApiError carries the server's status and code: syncing (a sync with
-// GitHub/GitLab runs: retry after it), changed (edited meanwhile).
+// the forges runs: retry after it), changed (edited meanwhile).
 export class ApiError extends Error {
   constructor(message: string, readonly status: number, readonly code: string) {
     super(message);
@@ -245,7 +245,7 @@ export function createIdentity(name: string, email: string): Promise<MeResponse>
   return request('/api/me', json('POST', { name, email }));
 }
 
-// The sync with GitHub/GitLab (cmd/git-board-server/forges.go).
+// The sync with the forges (cmd/git-board-server/forges.go).
 // One way of a sync; a dry run of a pull only knows "up to N changes".
 export interface SyncDirection {
   issues: number; // created on the forge / imported from it
@@ -410,4 +410,25 @@ export interface IssueRefs {
 
 export function getRefs(id: string): Promise<IssueRefs> {
   return request(`${issuePath(id)}/refs`);
+}
+
+// Bridges set up from the settings page (settings.go). A credential is
+// listed without its token; a pasted token goes to git-bug's store.
+export interface Credential {
+  id: string;
+  target: string;
+  host: string;
+  login: string;
+}
+
+export function getCredentials(): Promise<Credential[]> {
+  return request('/api/credentials');
+}
+
+export function addBridge(b: { target: string; url: string; name?: string | undefined; credential?: string | undefined; token?: string | undefined }): Promise<{ name: string }> {
+  return request('/api/bridges', json('POST', b));
+}
+
+export function removeBridge(name: string): Promise<Record<string, never>> {
+  return request(`/api/bridges/${encodeURIComponent(name)}`, json('DELETE', {}));
 }

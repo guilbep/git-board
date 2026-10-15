@@ -2,7 +2,9 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/gitbugio"
@@ -57,4 +59,79 @@ func (s *apiServer) handleBridgeSync(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"sync": req.Sync})
+}
+
+// handleCredentials lists git-bug's stored tokens: forge, host and login,
+// never a value.
+func (s *apiServer) handleCredentials(w http.ResponseWriter, r *http.Request) {
+	creds, err := s.b.Credentials()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, creds)
+}
+
+// handleAddBridge configures a bridge with sync on, checking the token and
+// the project with the forge (gitbugio.AddBridge). The token, when pasted,
+// goes to git-bug's credential store and is never sent back.
+func (s *apiServer) handleAddBridge(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Target     string `json:"target"`
+		Name       string `json:"name"`
+		URL        string `json:"url"`
+		Credential string `json:"credential"`
+		Token      string `json:"token"`
+	}
+	if !decode(w, r, &req) {
+		return
+	}
+	done, ok := s.beginWrite(w)
+	if !ok {
+		return
+	}
+	defer done()
+	name, err := s.b.AddBridge(req.Target, req.Name, strings.TrimSpace(req.URL), req.Credential, strings.TrimSpace(req.Token))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, fmt.Errorf("the bridge isn't added: %w", plainBridgeError(err)))
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"name": name})
+}
+
+// handleRemoveBridge removes a bridge's configuration; its issues stay.
+func (s *apiServer) handleRemoveBridge(w http.ResponseWriter, r *http.Request) {
+	done, ok := s.beginWrite(w)
+	if !ok {
+		return
+	}
+	defer done()
+	if err := s.b.RemoveBridge(r.PathValue("name")); err != nil {
+		code := http.StatusInternalServerError
+		if errors.Is(err, gitbugio.ErrNoBridge) {
+			code = http.StatusNotFound
+		}
+		writeError(w, code, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{})
+}
+
+// plainBridgeError says in words what a forge answered a bridge's
+// configuration, the forge's own message kept at the end.
+func plainBridgeError(err error) error {
+	msg := err.Error()
+	low := strings.ToLower(msg)
+	var plain string
+	switch {
+	case strings.Contains(low, "401") || strings.Contains(low, "bad credentials") || strings.Contains(low, "unauthorized"):
+		plain = "the forge refused the token: wrong, expired, or without the scope it needs (api, or repo)"
+	case strings.Contains(low, "404") || strings.Contains(low, "doesn't exist") || strings.Contains(low, "non-existent"):
+		plain = "the forge doesn't know this project, or the token can't see it"
+	case strings.Contains(low, "no such host") || strings.Contains(low, "connection refused") || strings.Contains(low, "timeout"):
+		plain = "git-board can't reach the forge at that address"
+	default:
+		return err
+	}
+	return fmt.Errorf("%s (%s)", plain, msg)
 }
