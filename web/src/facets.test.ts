@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { Issue } from './api/board';
 import type { Fields } from './fields.ts';
-import { NONE, facets, matches, parseSelection, parseSort, sortIssues } from './facets.ts';
+import { NONE, facets, matches, parseSelection, parseSort, pick, sortIssues, sortOptions } from './facets.ts';
 
 const issue = (id: string, title: string, labels: string[], status = 'open'): Issue => ({ id, title, status, labels });
 
@@ -90,4 +90,25 @@ test('the selection lives under f.<facet> query keys, one per value', () => {
     status: ['ready', 'qa'],
     is: ['open'],
   });
+});
+
+test('a section sorts its options by count, alphabetically or in workflow order, (none) last', () => {
+  const opts: [string, number][] = [['ready', 2], [NONE, 9], ['backlog', 5], ['qa', 5]];
+  const show = (mode: 'count' | 'alpha' | 'workflow') => sortOptions(opts, mode, ['backlog', 'ready', 'qa']).map(([v]) => v).join(' ');
+  assert.equal(show('count'), `backlog qa ready ${NONE}`);
+  assert.equal(show('alpha'), `backlog qa ready ${NONE}`);
+  assert.equal(show('workflow'), `backlog ready qa ${NONE}`);
+  assert.equal(sortOptions([['b', 1], ['a10', 1], ['a9', 1]], 'alpha', []).map(([v]) => v).join(' '), 'a9 a10 b');
+});
+
+test('pick: a click toggles, Alt keeps only one then all but it, Shift a range', () => {
+  const order = ['a', 'b', 'c', 'd', 'e'];
+  assert.deepEqual(pick(['a'], 'c', order, {}), ['a', 'c']);
+  assert.deepEqual(pick(['a', 'c'], 'c', order, {}), ['a']);
+  assert.deepEqual(pick(['a', 'c'], 'd', order, { alt: true }), ['d']);
+  assert.deepEqual(pick(['d'], 'd', order, { alt: true }), ['a', 'b', 'c', 'e']);
+  // shift from the last clicked: the range takes the clicked box's new state
+  assert.deepEqual(pick(['a'], 'd', order, { shift: true, anchor: 'b' }), ['a', 'b', 'c', 'd']);
+  assert.deepEqual(pick(['a', 'b', 'c', 'd'], 'c', order, { shift: true, anchor: 'a' }), ['d']);
+  assert.deepEqual(pick([], 'c', order, { shift: true }), ['c']); // no anchor: a plain toggle
 });

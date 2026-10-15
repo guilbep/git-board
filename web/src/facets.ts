@@ -78,6 +78,52 @@ export function facets(issues: Issue[], sel: Selection, q: string, fields: Field
     .filter((f) => f.options.length > 1 || sel[f.key]?.length);
 }
 
+export type OptionSort = 'count' | 'alpha' | 'workflow';
+
+/**
+ * A section's options by count (most first), alphabetically (a9 before
+ * a10), or in the field's configured order; "(none)" last in every order.
+ */
+export function sortOptions(options: [string, number][], mode: OptionSort, configured: string[]): [string, number][] {
+  const alpha = (a: string, b: string) => a.localeCompare(b, undefined, { numeric: true });
+  const rank = (v: string) => (configured.includes(v) ? configured.indexOf(v) : configured.length);
+  return [...options].sort(([a, na], [b, nb]) => {
+    if ((a === NONE) !== (b === NONE)) return a === NONE ? 1 : -1;
+    if (mode === 'count') return nb - na || alpha(a, b);
+    if (mode === 'workflow') return rank(a) - rank(b) || nb - na || alpha(a, b);
+    return alpha(a, b);
+  });
+}
+
+/**
+ * A section's selection after a click on value: a plain (or Ctrl/Cmd)
+ * click toggles it; Alt keeps only it, and when it already is the only one,
+ * all but it; Shift sets the range from the last clicked value (anchor) to
+ * the state the clicked box takes. In the list's order.
+ */
+export function pick(
+  cur: string[],
+  value: string,
+  order: string[],
+  mods: { alt?: boolean; shift?: boolean; anchor?: string | undefined },
+): string[] {
+  // a selected value no longer listed stays selected, after the others
+  const inOrder = (set: Set<string>) => [...order.filter((v) => set.has(v)), ...[...set].filter((v) => !order.includes(v))];
+  if (mods.alt) {
+    return cur.length === 1 && cur[0] === value ? order.filter((v) => v !== value) : [value];
+  }
+  const on = !cur.includes(value);
+  const next = new Set(cur);
+  const from = mods.shift && mods.anchor ? order.indexOf(mods.anchor) : -1;
+  const to = order.indexOf(value);
+  const range = from >= 0 && to >= 0 ? order.slice(Math.min(from, to), Math.max(from, to) + 1) : [value];
+  for (const v of range) {
+    if (on) next.add(v);
+    else next.delete(v);
+  }
+  return inOrder(next);
+}
+
 /** "-prio" (the URL's form), or "prio desc" / "prio asc" (a view's). */
 export function parseSort(spec: string): Sort | null {
   const [key = '', dir] = spec.trim().split(/\s+/);
