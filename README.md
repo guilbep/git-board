@@ -301,12 +301,17 @@ project = { comite = "Comité Spécialisé", qa = "QA Validation" }
 | `field:value` | issue has label `field:value` |
 | `-field:value` | issue does **not** have that label |
 | `field:@current` / `@next` / `@previous` | resolves against `[sprints]` |
-| `field:@me` | resolves to the current user |
+| `field:@me` | resolves to the current user: `--me`, else your git-bug identity's forge login |
 | `is:open` / `is:closed` | issue status |
 | `title:*glob*` | glob match on title |
-| free text | substring match on title |
+| `author:login` / `author:@me` | who opened it (name, login, forge login) |
+| `label:name` | has that label, e.g. `label:bug` or `label:status:ready` |
+| `no:field` | has no `field:` label (`no:assignee`); `no:label`: no plain label |
+| free text, `"a phrase"` | in the title, the description or a comment (git-bug's full-text index) |
 
-Conditions are AND'd together.
+Conditions are AND'd together, as in GitHub's search; `-` negates any of
+them. The web UI's search box takes the same syntax, on top of the view's
+filter.
 
 ## Linting (`git-board lint`)
 

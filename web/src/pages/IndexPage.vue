@@ -35,12 +35,12 @@
 
       <div class="toolbar">
         <div class="toolbar-field toolbar-search">
-          <label class="epfl-label" for="search">Search</label>
+          <label class="epfl-label" for="search">Search <span class="search-hint">titles, descriptions, comments</span></label>
           <input
             id="search"
             class="epfl-input"
             type="search"
-            placeholder="Title or ID"
+            placeholder="Text, assignee:guilbep, label:bug, no:assignee…"
             autocomplete="off"
             :value="q"
             @input="setQuery({ q: ($event.target as HTMLInputElement).value || undefined })"
@@ -212,12 +212,12 @@ const modified = computed(
 
 const all = computed(() => (buckets.value ?? []).flatMap((b) => b.issues));
 const names = computed(() => namespaces(all.value, fields.value));
-const facetList = computed(() => facets(all.value, sel.value, q.value, fields.value));
+const facetList = computed(() => facets(all.value, sel.value, '', fields.value));
 const shown = computed(() =>
   orderBuckets(buckets.value ?? [], groupField.value, fields.value).map((b) => ({
     group: b.group,
     issues: sortIssues(
-      b.issues.filter((i) => matches(i, sel.value, q.value)),
+      b.issues.filter((i) => matches(i, sel.value, '')),
       sort.value,
       fields.value,
     ),
@@ -336,7 +336,7 @@ async function load() {
   loading.value = true;
   listError.value = '';
   try {
-    const result = await getIssues(filterText.value, groupField.value);
+    const result = await getIssues(filterText.value, groupField.value, q.value);
     if (mine === latest) buckets.value = result;
   } catch (e: unknown) {
     if (mine === latest) {
@@ -349,6 +349,14 @@ async function load() {
 }
 
 watch(activeView, resetView);
+
+// the search runs on the server (git-bug's full-text index): asked once
+// typing pauses
+let searchTimer: ReturnType<typeof setTimeout> | undefined;
+watch(q, () => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => void load(), 300);
+});
 
 onMounted(async () => {
   await loadConfig();
@@ -449,7 +457,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
   margin-bottom: var(--space-3);
 }
 .toolbar-field { flex: 0 1 13rem; min-width: 0; }
-.toolbar-search { flex: 1 1 16rem; max-width: 24rem; }
+.toolbar-search { flex: 1 1 20rem; max-width: 32rem; }
+.search-hint { font-weight: var(--w-normal); color: var(--fg-muted); }
 .toolbar-new { display: flex; align-items: center; gap: .5rem; margin-left: auto; align-self: flex-end; }
 .toolbar-new .epfl-btn { display: inline-flex; align-items: center; gap: .375rem; }
 

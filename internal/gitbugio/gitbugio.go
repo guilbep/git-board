@@ -39,6 +39,9 @@ type Issue struct {
 	Labels    []string `json:"labels"`
 	GithubURL string   `json:"github_url,omitempty"` // "" if not bridged in from GitHub
 	Forges    []Forge  `json:"forges,omitempty"`     // where it is on forges
+	// AuthorLogins are who opened it, for author:: name, login, forge
+	// logins.
+	AuthorLogins []string `json:"-"`
 }
 
 // Backend is an open connection to a git-bug repo cache.
@@ -124,9 +127,22 @@ func (b *Backend) ListIssues() ([]Issue, error) {
 		if err != nil {
 			return nil, fmt.Errorf("resolving %s: %w", id, err)
 		}
-		issues[i] = excerptToIssue(id.String(), excerpt)
+		issues[i] = b.issueFrom(id.String(), excerpt)
 	}
 	return issues, nil
+}
+
+// issueFrom is excerptToIssue with who opened it, for author:.
+func (b *Backend) issueFrom(id string, e *cache.BugExcerpt) Issue {
+	issue := excerptToIssue(id, e)
+	if a, err := b.c.Identities().ResolveExcerpt(e.AuthorId); err == nil {
+		for _, l := range []string{a.Name, a.Login, a.ImmutableMetadata["github-login"], a.ImmutableMetadata["gitlab-login"], a.ImmutableMetadata["gitea-login"]} {
+			if l != "" {
+				issue.AuthorLogins = append(issue.AuthorLogins, l)
+			}
+		}
+	}
+	return issue
 }
 
 func excerptToIssue(id string, e *cache.BugExcerpt) Issue {
@@ -148,7 +164,7 @@ func (b *Backend) GetIssue(idPrefix string) (Issue, error) {
 	if err != nil {
 		return Issue{}, fmt.Errorf("resolving %s: %w", idPrefix, err)
 	}
-	return excerptToIssue(excerpt.Id().String(), excerpt), nil
+	return b.issueFrom(excerpt.Id().String(), excerpt), nil
 }
 
 // GetLabels returns the current labels for a bug, by id prefix.
@@ -242,4 +258,20 @@ func (b *Backend) CloseBug(idPrefix string) error {
 		return fmt.Errorf("closing %s: %w", idPrefix, err)
 	}
 	return bug.Commit()
+}
+
+// SearchText returns the issues whose title, description or a comment hold
+// text (git-bug's full-text index), by id.
+func (b *Backend) SearchText(text string) (map[string]bool, error) {
+	q := query.NewQuery()
+	q.Search = query.Search{text}
+	ids, err := b.c.Bugs().Query(q)
+	if err != nil {
+		return nil, err
+	}
+	res := make(map[string]bool, len(ids))
+	for _, id := range ids {
+		res[id.String()] = true
+	}
+	return res, nil
 }

@@ -27,12 +27,27 @@ type issueBackend interface {
 // LoadMatching lists issues in b matching filterStr, using cfg for @me/sprint
 // alias resolution.
 func LoadMatching(b issueBackend, cfg *config.Config, filterStr, me string) ([]gitbugio.Issue, error) {
+	var err error
 	conditions := filter.Parse(filterStr)
 	if filter.RequiresMe(conditions) && me == "" {
 		me = MyLogin(b)
 	}
 	if filter.RequiresMe(conditions) && me == "" {
 		return nil, ErrNoMe
+	}
+
+	// free text: title, description and comments, when b has a full-text
+	// index (gitbugio.Backend has git-bug's); else Matches looks at titles
+	if s, ok := b.(interface {
+		SearchText(string) (map[string]bool, error)
+	}); ok {
+		for i, c := range conditions {
+			if c.Kind == filter.KindText {
+				if conditions[i].Hits, err = s.SearchText(c.Value); err != nil {
+					return nil, err
+				}
+			}
+		}
 	}
 
 	issues, err := b.ListIssues()

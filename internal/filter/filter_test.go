@@ -1,6 +1,7 @@
 package filter
 
 import (
+	"reflect"
 	"testing"
 	"time"
 
@@ -24,7 +25,7 @@ func mustLoad(t *testing.T) *config.Config {
 func TestParseFieldCondition(t *testing.T) {
 	c := Parse("status:ready")
 	want := Condition{Kind: KindField, Field: "status", Value: "ready"}
-	if len(c) != 1 || c[0] != want {
+	if len(c) != 1 || !reflect.DeepEqual(c[0], want) {
 		t.Fatalf("Parse = %+v, want [%+v]", c, want)
 	}
 }
@@ -32,7 +33,7 @@ func TestParseFieldCondition(t *testing.T) {
 func TestParseNegatedTitleCondition(t *testing.T) {
 	c := Parse("-title:*spec*")
 	want := Condition{Kind: KindTitle, Value: "*spec*", Negated: true}
-	if len(c) != 1 || c[0] != want {
+	if len(c) != 1 || !reflect.DeepEqual(c[0], want) {
 		t.Fatalf("Parse = %+v, want [%+v]", c, want)
 	}
 }
@@ -40,7 +41,7 @@ func TestParseNegatedTitleCondition(t *testing.T) {
 func TestParseIsCondition(t *testing.T) {
 	c := Parse("is:open")
 	want := Condition{Kind: KindIs, Value: "open"}
-	if len(c) != 1 || c[0] != want {
+	if len(c) != 1 || !reflect.DeepEqual(c[0], want) {
 		t.Fatalf("Parse = %+v, want [%+v]", c, want)
 	}
 }
@@ -48,7 +49,7 @@ func TestParseIsCondition(t *testing.T) {
 func TestParseFreeText(t *testing.T) {
 	c := Parse("bicycle")
 	want := Condition{Kind: KindText, Value: "bicycle"}
-	if len(c) != 1 || c[0] != want {
+	if len(c) != 1 || !reflect.DeepEqual(c[0], want) {
 		t.Fatalf("Parse = %+v, want [%+v]", c, want)
 	}
 }
@@ -138,5 +139,47 @@ func TestRequiresMe(t *testing.T) {
 	}
 	if RequiresMe(Parse("status:ready is:open")) {
 		t.Error("expected RequiresMe to be false")
+	}
+}
+
+// GitHub-style search: quoted phrases, author:, label:, no:, free text
+// matched through the full-text hits a caller fills in.
+func TestGitHubStyleSearch(t *testing.T) {
+	cfg := mustLoad(t)
+	today := time.Date(2026, 10, 15, 0, 0, 0, 0, time.UTC)
+	issue := gitbugio.Issue{ID: "abc", Title: "Train distances", Status: "open",
+		Labels: []string{"assignee:guilbep", "status:ready", "bug"}, AuthorLogins: []string{"guilbep", "Pierre Guilbert"}}
+	bare := gitbugio.Issue{ID: "def", Title: "Other", Status: "open"}
+
+	conds := Parse(`"wrong table" assignee:guilbep`)
+	if len(conds) != 2 || conds[0].Kind != KindText || conds[0].Value != "wrong table" {
+		t.Fatalf("quoted phrase: %+v", conds)
+	}
+	for expr, want := range map[string][2]bool{ // [issue, bare]
+		"author:guilbep":           {true, false},
+		"author:@me":               {true, false},
+		"label:bug":                {true, false},
+		"label:status:ready":       {true, false},
+		"-label:bug":               {false, true},
+		"no:assignee":              {false, true},
+		"no:label":                 {false, true},
+		"no:prio":                  {true, true},
+		"assignee:guilbep is:open": {true, false},
+	} {
+		c := Parse(expr)
+		got := [2]bool{Matches(issue, c, cfg, "guilbep", today), Matches(bare, c, cfg, "guilbep", today)}
+		if got != want {
+			t.Errorf("%q: %v, want %v", expr, got, want)
+		}
+	}
+	if !RequiresMe(Parse("author:@me")) {
+		t.Error("author:@me doesn't ask for @me")
+	}
+
+	// free text: the hits of the full-text index (title, description, comments)
+	c := Parse("distances")
+	c[0].Hits = map[string]bool{"def": true}
+	if Matches(issue, c, cfg, "", today) || !Matches(bare, c, cfg, "", today) {
+		t.Error("free text didn't follow the search hits")
 	}
 }

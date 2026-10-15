@@ -78,9 +78,12 @@ export function getFields(): Promise<Record<string, FieldConfig>> {
 
 // Unsorted: the page sorts (facets.sortIssues), by option order where the
 // server would sort alphabetically.
-export function getIssues(filter: string, group: string): Promise<Bucket[]> {
+// q: the search box, GitHub's syntax (free text in titles, descriptions
+// and comments; assignee:x, label:x, author:x, no:x, is:closed…).
+export function getIssues(filter: string, group: string, q = ''): Promise<Bucket[]> {
   const params = new URLSearchParams();
   if (filter) params.set('filter', filter);
+  if (q.trim()) params.set('q', q);
   if (group) params.set('group', group);
   return request(`/api/issues?${params}`);
 }

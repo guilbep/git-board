@@ -111,7 +111,9 @@ func (s *apiServer) handleListIssues(w http.ResponseWriter, r *http.Request) {
 		filterStr = board.DefaultFilter
 	}
 
-	issues, err := board.LoadMatching(s.b, s.cfg, filterStr, s.me)
+	// q is the page's search box, GitHub's syntax: free text (titles,
+	// descriptions, comments) and qualifiers, on top of the view's filter
+	issues, err := board.LoadMatching(s.b, s.cfg, filterStr+" "+q.Get("q"), s.me)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
