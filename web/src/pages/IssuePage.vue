@@ -3,13 +3,13 @@
 <template>
   <AppHeader :views="viewNames" active="" />
   <main class="gb-issuepage">
-    <IssuePanel :id="String(route.params.id)" :names="names" :fields="fields" page />
+    <IssuePanel :id="String(route.params.id)" :key="String(route.params.id)" :names="names" :fields="fields" page @open="(other: string) => router.push(`/issues/${other}`)" />
   </main>
 </template>
 
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { getFields, getViews, type FieldConfig } from '@/api/board';
 import { loadColors } from '@/colors';
 import { namespaces } from '@/facets';
@@ -17,6 +17,7 @@ import AppHeader from '@/components/AppHeader.vue';
 import IssuePanel from '@/components/IssuePanel.vue';
 
 const route = useRoute();
+const router = useRouter();
 const viewNames = ref<string[]>([]);
 const fields = ref<Record<string, FieldConfig>>({});
 const names = ref<string[]>([]);

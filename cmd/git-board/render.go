@@ -64,15 +64,13 @@ func fieldColumns(issue gitbugio.Issue, cfg *config.Config, fieldNames []string)
 	return cells, strings.Join(otherLabels, ", ")
 }
 
-// formatFieldValues joins a field's values for display. A numeric field
-// named "est" gets an "h" (hours) suffix per value — the one field this
-// convention is known to apply to; a general numeric-field-implies-hours
-// rule would be presumptuous for a field this codebase has never seen.
+// formatFieldValues joins a field's values for display, a number field's
+// with its unit (est: h, config.UnitOf).
 func formatFieldValues(name string, values []string, cfg *config.Config) string {
-	if name == "est" && cfg.Fields[name].Numeric {
+	if unit := cfg.UnitOf(name); unit != "" {
 		suffixed := make([]string, len(values))
 		for i, v := range values {
-			suffixed[i] = v + "h"
+			suffixed[i] = v + unit
 		}
 		return strings.Join(suffixed, ", ")
 	}

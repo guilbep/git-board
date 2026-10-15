@@ -31,7 +31,9 @@ export interface FieldConfig {
   single: boolean;
   options: string[] | null;
   numeric: boolean;
-  current?: string; // the sprint field: today's sprint
+  current?: string; // an iteration field: today's sprint
+  type?: string; // select, iteration, person, number, date, issue, text (config.TypeOf)
+  unit?: string; // a number's: h
 }
 
 // ApiError carries the server's status and code: syncing (a sync with
@@ -391,4 +393,21 @@ export function getConfigDocs(): Promise<DocSection[]> {
 // view"); the answer is every view, as GET /api/views.
 export function saveView(name: string, v: ViewConfig): Promise<Record<string, ViewConfig>> {
   return request(`/api/views/${encodeURIComponent(name)}`, json('PUT', v));
+}
+
+// An issue's links through its issue fields (refs.go): out, the issues it
+// names (parent, blocked-by…); in, the issues naming it.
+export interface IssueRef {
+  value: string;
+  id?: string;
+  title?: string;
+  status?: string;
+}
+export interface IssueRefs {
+  out: Record<string, IssueRef[]>;
+  in: Record<string, IssueRef[]>;
+}
+
+export function getRefs(id: string): Promise<IssueRefs> {
+  return request(`${issuePath(id)}/refs`);
 }

@@ -60,7 +60,7 @@
               type="button"
               :aria-pressed="sortOf(f.key) === m"
               @click="setSort(f.key, m)"
-            >{{ m === 'count' ? 'Count' : m === 'alpha' ? 'A–Z' : f.key === 'sprint' ? 'Dates' : 'Workflow' }}</button>
+            >{{ modeLabel(f.key, m) }}</button>
           </span>
           <button v-if="sel[f.key]?.length" type="button" class="filters-clear" @click="emit('set', f.key, [])">Clear</button>
         </div>
@@ -122,7 +122,15 @@ function readSorts(): Record<string, OptionSort> {
   }
 }
 const configured = (key: string) => props.fields[key]?.options ?? [];
-const sortModes = (key: string): OptionSort[] => (configured(key).length ? ['workflow', 'count', 'alpha'] : ['count', 'alpha']);
+// a date field reads in date order: A–Z of ISO dates, named Dates
+const isDate = (key: string) => props.fields[key]?.type === 'date';
+const sortModes = (key: string): OptionSort[] =>
+  configured(key).length ? ['workflow', 'count', 'alpha'] : isDate(key) ? ['alpha', 'count'] : ['count', 'alpha'];
+function modeLabel(key: string, m: OptionSort): string {
+  if (m === 'count') return 'Count';
+  if (m === 'alpha') return isDate(key) ? 'Dates' : 'A–Z';
+  return props.fields[key]?.type === 'iteration' ? 'Dates' : 'Workflow';
+}
 const sortOf = (key: string): OptionSort => (sortModes(key).includes(sorts[key]!) ? sorts[key]! : sortModes(key)[0]!);
 function setSort(key: string, mode: OptionSort) {
   sorts[key] = mode;

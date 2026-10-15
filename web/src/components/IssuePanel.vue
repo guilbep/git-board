@@ -118,6 +118,7 @@
           @changed="fieldsChanged"
           @labels="labels"
           @reveal="reveal"
+          @open="(other: string) => emit('open', other)"
         />
       </div>
     </template>

@@ -52,7 +52,7 @@ export function docSectionAt(text: string, pos: number): string {
   const header = [...before.slice(0, -1), line].reverse().find((l) => /^\s*\[/.test(l))?.trim() ?? '';
   if (/^\[\[?sprints/.test(header)) return 'sprints';
   if (/^\[fields\.[^\]]+\.colors\]/.test(header)) return 'colors';
-  if (header.startsWith('[fields.')) return /^\s*colors\b/.test(line) ? 'colors' : 'fields';
+  if (header.startsWith('[fields.')) return /^\s*colors\b/.test(line) ? 'colors' : /^\s*(type|unit)\b/.test(line) ? 'types' : 'fields';
   if (header.startsWith('[views.')) return /^\s*filter\b/.test(line) ? 'filters' : 'views';
   if (header.startsWith('[github-project]')) return 'github';
   if (header.startsWith('[uploads]')) return 'attachments';

@@ -76,6 +76,7 @@ func newMux(s *apiServer, static http.Handler) http.Handler {
 	mux.HandleFunc("PATCH /api/issues/{id}", s.handlePatchIssue)
 	mux.HandleFunc("POST /api/issues", s.handleNewIssue)
 	mux.HandleFunc("GET /api/issues/{id}/thread", s.handleThread)
+	mux.HandleFunc("GET /api/issues/{id}/refs", s.handleRefs)
 	mux.HandleFunc("POST /api/issues/{id}/comments", s.handleComment)
 	mux.HandleFunc("PUT /api/issues/{id}/comments/{comment}", s.handleEditComment)
 	mux.HandleFunc("PUT /api/issues/{id}/title", s.handleTitle)
@@ -112,60 +113,118 @@ func (s *apiServer) handleViews(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, views)
 }
 
-// fieldResponse is a field as the page gets it: the config's, and for the
-// sprint field the current sprint.
+// fieldResponse is a field as the page gets it: the config's, its type
+// and unit resolved (config.TypeOf), and for an iteration the current one.
 type fieldResponse struct {
 	config.Field
 	Current string `json:"current,omitempty"`
 }
 
-// handleFields answers the configured fields. The sprint field follows
-// [[sprints.list]]: its values by start date, unless it has options of its
-// own, so filters, board columns and sorting go in date order.
-func (s *apiServer) handleFields(w http.ResponseWriter, r *http.Request) {
-	cfg := s.config()
-	res := map[string]fieldResponse{}
-	for name, f := range cfg.Fields {
-		res[name] = fieldResponse{Field: f}
-	}
-	if windows := config.SprintWindows(cfg.Sprints); len(windows) > 0 {
-		sprint := res["sprint"]
-		if len(sprint.Options) == 0 {
-			if _, declared := cfg.Fields["sprint"]; !declared {
-				sprint.Single = true // one sprint at a time, picked from the list
-			}
-			for _, w := range windows {
-				sprint.Options = append(sprint.Options, w.Slug)
-			}
-		}
-		if cur, err := config.ResolveSprint(cfg.Sprints, "current", time.Now()); err == nil && cur != nil {
-			sprint.Current = cur.Slug
-		}
-		res["sprint"] = sprint
-	}
-	writeJSON(w, http.StatusOK, res)
-}
-
-// handleColors answers each field value's color (config.Colors): of the
-// labels in use and of the configured options, so a value shows the same
-// color everywhere.
-func (s *apiServer) handleColors(w http.ResponseWriter, r *http.Request) {
-	cfg := s.config()
+// labelValues is every field's values on the issues.
+func (s *apiServer) labelValues() map[string][]string {
 	values := map[string][]string{}
 	for _, l := range s.b.Labels() {
 		if field, value, ok := strings.Cut(l, ":"); ok {
 			values[field] = append(values[field], value)
 		}
 	}
+	return values
+}
+
+// one value at a time, unless the type holds several: people, the issues
+// one blocks or depends on
+var multiByName = map[string]bool{"blocks": true, "blocked-by": true, "depends-on": true}
+
+// handleFields answers the fields with their types: the configured ones,
+// and the undeclared ones whose type isn't a plain select (a date, a
+// person, an issue…), which the page can't guess from values alone. An
+// iteration takes [[sprints.list]]'s slugs by start date as options,
+// unless it has its own, and names the current one.
+func (s *apiServer) handleFields(w http.ResponseWriter, r *http.Request) {
+	cfg := s.config()
+	values := s.labelValues()
+	res := map[string]fieldResponse{}
+	for name, f := range cfg.Fields {
+		f.Type, f.Unit = cfg.TypeOf(name, values[name]), cfg.UnitOf(name)
+		res[name] = fieldResponse{Field: f}
+	}
+	for name, vs := range values {
+		if _, declared := cfg.Fields[name]; declared {
+			continue
+		}
+		t := cfg.TypeOf(name, vs)
+		if t == config.TypeSelect {
+			continue
+		}
+		single := t != config.TypePerson && !(t == config.TypeIssue && multiByName[name])
+		res[name] = fieldResponse{Field: config.Field{Type: t, Unit: cfg.UnitOf(name), Single: single, Numeric: t == config.TypeNumber}}
+	}
+	if windows := config.SprintWindows(cfg.Sprints); len(windows) > 0 {
+		current := ""
+		if cur, err := config.ResolveSprint(cfg.Sprints, "current", time.Now()); err == nil && cur != nil {
+			current = cur.Slug
+		}
+		for _, name := range iterationFields(cfg, res) {
+			f := res[name]
+			if f.Type == "" {
+				f.Type, f.Single = config.TypeIteration, true // the sprint field, no label yet
+			}
+			if len(f.Options) == 0 {
+				for _, w := range windows {
+					f.Options = append(f.Options, w.Slug)
+				}
+			}
+			f.Current = current
+			res[name] = f
+		}
+	}
+	writeJSON(w, http.StatusOK, res)
+}
+
+// iterationFields are the fields taking [[sprints.list]]: of type
+// iteration, and sprint even before any issue has one.
+func iterationFields(cfg *config.Config, res map[string]fieldResponse) []string {
+	names := []string{}
+	for name, f := range res {
+		if f.Type == config.TypeIteration {
+			names = append(names, name)
+		}
+	}
+	if _, ok := res["sprint"]; !ok && cfg.TypeOf("sprint", nil) == config.TypeIteration {
+		names = append(names, "sprint")
+	}
+	return names
+}
+
+// handleColors answers each field value's color (config.Colors): of the
+// labels in use and of the configured options, so a value shows the same
+// color everywhere. A date is red once past, amber within a week.
+func (s *apiServer) handleColors(w http.ResponseWriter, r *http.Request) {
+	cfg := s.config()
+	values := s.labelValues()
 	for name, f := range cfg.Fields {
 		values[name] = append(values[name], f.Options...)
 		for v := range f.Colors {
 			values[name] = append(values[name], v)
 		}
 	}
+	today := time.Now().Format("2006-01-02")
+	soon := time.Now().AddDate(0, 0, 7).Format("2006-01-02")
 	res := map[string]map[string]string{}
 	for field, vs := range values {
-		if colors := cfg.Colors(field, vs); len(colors) > 0 {
+		colors := cfg.Colors(field, vs)
+		if cfg.TypeOf(field, vs) == config.TypeDate {
+			for _, v := range vs {
+				switch {
+				case colors[v] != "":
+				case v < today: // ISO dates sort as dates
+					colors[v] = "red"
+				case v <= soon:
+					colors[v] = "amber"
+				}
+			}
+		}
+		if len(colors) > 0 {
 			res[field] = colors
 		}
 	}

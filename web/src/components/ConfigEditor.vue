@@ -7,7 +7,7 @@
       <h2 id="set-file" class="h5">Project configuration</h2>
       <code class="cfg-path">{{ file?.path }}</code>
     </div>
-    <p class="gb-hint">Fields, colors, views, sprints, the GitHub Project, attachments. The reference beside the editor follows your cursor; changes apply as soon as you save.</p>
+    <p class="gb-hint">The project's ontology (its fields and their types: what an issue can say about itself), its colors, views and sprints, the GitHub Project, attachments. The reference beside the editor follows your cursor; changes apply as soon as you save.</p>
 
     <div class="cfg-tools" role="toolbar" aria-label="Add to the file">
       <button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" @click="snippet(addView)">+ View</button>

@@ -8,7 +8,7 @@ It lives at the root of the repository. Edit it in **Settings → Project config
 
 | Table | What it sets |
 | --- | --- |
-| `[fields.<name>]` | a field's values, their order, single or multiple |
+| `[fields.<name>]` | a field's type, values, order, single or multiple: together, the project's ontology |
 | `[fields.<name>.colors]` | the color of each value |
 | `[views.<name>]` | a saved view: layout, filter, grouping, sort |
 | `[sprints]`, `[[sprints.list]]` | sprint length and dates, for `sprint:@current` |
@@ -40,6 +40,38 @@ single = false
 | `single` | true / false | false | One value at a time: setting a new one replaces the old. Multiple values (`false`) suit assignees or modules. |
 | `numeric` | true / false | false | Sorts as numbers. A field named `est` shows its values in hours (`3h`). |
 | `project` | inline table | none | The GitHub Project's option name for a value, when it isn't the value: `project = { comite = "Comité Spécialisé" }`. |
+| `type` | one of the types below | guessed | What the values are; see Types. |
+| `unit` | string | none (`h` for `est`) | Written after a number field's values: `unit = "pt"`. |
+
+## Types
+
+The fields and their types are the project's **ontology**: the kinds of things an issue can say about itself, and how they relate. An assignee is a person, a sprint is a span of dates, a parent is another issue. The type decides how a field sorts, filters, shows and is edited; its values stay labels (`due:2026-10-30`, `parent:#12`), so they travel to GitHub and GitLab like any label.
+
+| Type | For | What it gives | Guessed from |
+| --- | --- | --- | --- |
+| `select` | status, priority, module | ordered values (`options`), colors, board columns | `options`; any field nothing else fits |
+| `iteration` | sprint | the dates of `[[sprints.list]]`, `@current`, sorting by Dates, today's sprint tagged | the names `sprint`, `iteration` |
+| `person` | assignee, reviewer | logins, `@me`, several at once | the names `assignee`, `assignees`, `reviewer`, `owner` |
+| `number` | estimate, points | numeric sorting, a `unit` after the values | `numeric = true` |
+| `date` | due date, deadline | a date picker, red once past, amber within a week, "3 days late" | the names `due`, `deadline`; values that are all `YYYY-MM-DD` |
+| `issue` | parent, blocked-by | a link to the other issue, and on it the reverse: Sub-issues, Blocks | the names `parent`, `blocked-by`, `blocks`, `depends-on`, `duplicate-of`; values that are all `#12` or git-bug ids |
+| `text` | anything free | a plain text box | only when set |
+
+Set a type when the guess is wrong, or for a field no issue uses yet:
+
+```toml
+[fields.due]
+type = "date"
+
+[fields.points]
+type = "number"
+unit = "pt"
+
+[fields.parent]
+type = "issue"
+```
+
+An issue field names the other issue by its forge number, `#12`, or by its git-bug id, at least its first 7 characters.
 
 ## Colors
 

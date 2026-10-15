@@ -31,9 +31,25 @@ export function otherLabels(labels: string[], names: string[]): string[] {
   });
 }
 
-// One value as shown to people: a numeric field named "est" is hours.
+// One value as shown to people: a number with its unit (est: 3h), a date
+// in words (30 Oct).
 export function formatValue(name: string, value: string, fields: Fields): string {
-  return name === 'est' && fields[name]?.numeric ? `${value}h` : value;
+  const f = fields[name];
+  if (f?.unit) return `${value}${f.unit}`;
+  if (f?.type === 'date' && /^\d{4}-\d{2}-\d{2}$/.test(value)) return dateLabel(value);
+  return value;
+}
+
+const thisYear = new Date().getFullYear();
+function dateLabel(iso: string): string {
+  const d = new Date(`${iso}T12:00:00`);
+  return d.toLocaleDateString(undefined, d.getFullYear() === thisYear ? { day: 'numeric', month: 'short' } : { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+// A field's type, as the server resolved it; select for the ones it
+// leaves to the page (undeclared, plain values).
+export function typeOf(name: string, fields: Fields): string {
+  return fields[name]?.type ?? 'select';
 }
 
 // Buckets in the group field's configured option order; values outside the

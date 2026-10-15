@@ -19,16 +19,34 @@
             <option value="" disabled>Not set</option>
             <option v-for="opt in selectOptions(name)" :key="opt" :value="opt">{{ formatValue(name, opt, fields) }}</option>
           </select>
-          <input autocomplete="off" data-1p-ignore data-lpignore="true" data-form-type="other" v-else-if="isSingle(name)" :id="`f-${name}`" class="epfl-input" :value="single(name)" :disabled="saving" @change="onText(name, $event)" />
+          <template v-else-if="isSingle(name)">
+            <input
+              :id="`f-${name}`"
+              autocomplete="off" data-1p-ignore data-lpignore="true" data-form-type="other"
+              class="epfl-input"
+              :class="{ 'gb-date-input': typeOf(name, fields) === 'date' }"
+              :type="typeOf(name, fields) === 'date' ? 'date' : typeOf(name, fields) === 'number' ? 'number' : 'text'"
+              :step="typeOf(name, fields) === 'number' ? 'any' : undefined"
+              :placeholder="typeOf(name, fields) === 'issue' ? '#12, or a git-bug id' : undefined"
+              :value="single(name)"
+              :disabled="saving"
+              @change="onText(name, $event)"
+            />
+            <p v-if="typeOf(name, fields) === 'date' && single(name)" class="gb-field-note" :class="colorClass(name, single(name))">{{ dueNote(single(name)) }}</p>
+            <button v-for="r in linked(name)" :key="r.value" type="button" class="gb-ref" :disabled="!r.id" @click="r.id && emit('open', r.id)">
+              <GbIcon :name="r.status === 'closed' ? 'closed' : 'open'" small /> {{ r.title || `${r.value}: no such issue here` }}
+            </button>
+          </template>
           <template v-else>
             <ul v-if="values(name).length" class="gb-chips" :aria-label="displayName(name)">
               <li v-for="v in values(name)" :key="v" class="gb-chip" :class="colorClass(name, v)">
-                {{ formatValue(name, v, fields) }}
+                <button v-if="typeOf(name, fields) === 'issue'" type="button" class="gb-chip-ref" :disabled="!refOf(name, v)?.id" @click="openRef(name, v)">{{ v }} {{ refOf(name, v)?.title ?? '' }}</button>
+                <template v-else>{{ formatValue(name, v, fields) }}</template>
                 <button type="button" class="gb-chip-x" :aria-label="`Remove ${v} from ${name}`" :disabled="saving" @click="save(name, `-${v}`)">×</button>
               </li>
             </ul>
             <form class="gb-addrow" @submit.prevent="onAdd(name)">
-              <input autocomplete="off" data-1p-ignore data-lpignore="true" data-form-type="other" :id="`f-${name}`" v-model="drafts[name]" class="epfl-input" placeholder="Add, or @me" :disabled="saving" />
+              <input autocomplete="off" data-1p-ignore data-lpignore="true" data-form-type="other" :id="`f-${name}`" v-model="drafts[name]" class="epfl-input" :placeholder="typeOf(name, fields) === 'issue' ? 'Add #12, or a git-bug id' : typeOf(name, fields) === 'person' ? 'Add, or @me' : 'Add'" :disabled="saving" />
               <button type="submit" class="epfl-btn epfl-btn-secondary epfl-btn-sm" :disabled="saving"><GbIcon name="plus" small /> Add</button>
             </form>
           </template>
@@ -39,6 +57,16 @@
         </div>
       </div>
       <p v-if="error" class="gb-hint" role="alert"><b>Not saved.</b> {{ error }}</p>
+    </section>
+
+    <section v-if="incoming.length" class="gb-side-sec" aria-labelledby="side-linked">
+      <h3 id="side-linked" class="gb-section-title">Linked issues</h3>
+      <div v-for="[field, list] in incoming" :key="field" class="gb-linked">
+        <p class="gb-linked-name">{{ inverseName(field) }} <span class="gb-hint">{{ list.length }}</span></p>
+        <button v-for="r in list" :key="r.id" type="button" class="gb-ref" @click="r.id && emit('open', r.id)">
+          <GbIcon :name="r.status === 'closed' ? 'closed' : 'open'" small /> {{ r.title }}
+        </button>
+      </div>
     </section>
 
     <section class="gb-side-sec" aria-labelledby="side-labels">
@@ -87,9 +115,9 @@
 
 <script setup lang="ts">
 import { colorClass } from '@/colors';
-import { computed, reactive, ref } from 'vue';
-import { patchIssue, type Forge, type IssueEvent, type Person } from '@/api/board';
-import { displayName, fieldValues, formatValue, type Fields } from '@/fields';
+import { computed, reactive, ref, watch } from 'vue';
+import { getRefs, patchIssue, type Forge, type IssueEvent, type IssueRefs, type Person } from '@/api/board';
+import { displayName, fieldValues, formatValue, typeOf, type Fields } from '@/fields';
 import { message } from '@/issue';
 import { initials, me } from '@/me';
 import { syncStatus } from '@/sync';
@@ -107,7 +135,36 @@ const props = defineProps<{
   events: IssueEvent[];
   saving: boolean;
 }>();
-const emit = defineEmits<{ changed: []; labels: [add: string[], remove: string[]]; reveal: [id: string] }>();
+const emit = defineEmits<{ changed: []; labels: [add: string[], remove: string[]]; reveal: [id: string]; open: [id: string] }>();
+
+// issue fields, both ways: the issues this one names, and those naming it
+const refs = ref<IssueRefs>({ out: {}, in: {} });
+async function loadRefs() {
+  try {
+    refs.value = await getRefs(props.id);
+  } catch {
+    refs.value = { out: {}, in: {} };
+  }
+}
+watch(() => [props.id, props.labels.join(' ')], loadRefs, { immediate: true });
+const linked = (name: string) => (typeOf(name, props.fields) === 'issue' ? (refs.value.out[name] ?? []) : []);
+const refOf = (name: string, v: string) => refs.value.out[name]?.find((r) => r.value === v);
+function openRef(name: string, v: string) {
+  const id = refOf(name, v)?.id;
+  if (id) emit('open', id);
+}
+const incoming = computed(() => Object.entries(refs.value.in).sort(([a], [b]) => a.localeCompare(b)));
+// what an issue is to the issues naming it in that field
+const inverses: Record<string, string> = { parent: 'Sub-issues', 'blocked-by': 'Blocks', blocks: 'Blocked by', 'depends-on': 'Needed by', 'duplicate-of': 'Duplicates' };
+const inverseName = (field: string) => inverses[field] ?? `Named in ${displayName(field)}`;
+
+// a date against today: late, today, in n days
+function dueNote(iso: string): string {
+  const days = Math.round((new Date(`${iso}T12:00:00`).getTime() - new Date(new Date().toDateString() + ' 12:00').getTime()) / 864e5);
+  if (days < 0) return `${-days} day${days === -1 ? '' : 's'} late`;
+  if (days === 0) return 'Today';
+  return `In ${days} day${days === 1 ? '' : 's'}`;
+}
 
 const showWaiting = ref(false);
 const waiting = computed(() => waitingChanges(props.events));
@@ -124,11 +181,12 @@ const values = (name: string) => fieldValues(props.labels, name);
 const single = (name: string) => values(name)[0] ?? '';
 const plain = computed(() => props.labels.filter((l) => !l.includes(':')));
 
-// As configured; else one value, but for assignee and a field the issue
-// already holds several values of — as the server decides (fields.Single).
+// As configured; else one value, but for a person field and a field the
+// issue already holds several values of — as the server decides
+// (fields.Single).
 function isSingle(name: string): boolean {
   const f = props.fields[name];
-  return f ? f.single : name !== 'assignee' && values(name).length < 2;
+  return f ? f.single : typeOf(name, props.fields) !== 'person' && values(name).length < 2;
 }
 
 function selectOptions(name: string): string[] {
@@ -200,5 +258,14 @@ function addLabel() {
 .gb-person .gb-avatar { align-self: center; }
 .gb-held-tag { display: inline-flex; align-items: center; gap: .25rem; text-decoration: none; }
 .gb-field-label { display: inline-flex; align-items: center; gap: var(--space-2); }
+.gb-field-note { display: inline-block; margin: .375rem 0 0; padding: 0 .375rem; font-size: .8125rem; font-weight: 700; background: var(--c-bg, transparent); color: var(--c-fg, var(--fg-muted)); }
+.gb-ref { display: flex; align-items: center; gap: .375rem; width: 100%; margin-top: .375rem; padding: .25rem 0; border: 0; background: none; color: var(--fg); font: inherit; font-size: .875rem; text-align: left; cursor: pointer; }
+.gb-ref:hover:not(:disabled) { text-decoration: underline; }
+.gb-ref:disabled { color: var(--fg-muted); cursor: default; }
+.gb-chip-ref { padding: 0; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; text-align: left; }
+.gb-chip-ref:hover:not(:disabled) { text-decoration: underline; }
+.gb-linked + .gb-linked { margin-top: .75rem; }
+.gb-linked-name { margin: 0; font-size: .8125rem; font-weight: 700; }
+.gb-linked-name .gb-hint { display: inline; margin-left: .25rem; font-weight: 400; }
 .gb-waiting-toggle { display: inline-flex; align-items: center; gap: .375rem; margin-top: .5rem; padding: 0; border: 0; background: none; font: inherit; font-size: .875rem; font-weight: 700; color: var(--fg); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
 </style>

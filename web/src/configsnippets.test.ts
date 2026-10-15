@@ -21,10 +21,11 @@ test('addView appends a table and selects its name', () => {
 });
 
 test('docSectionAt follows the table under the cursor', () => {
-  const text = 'list = []\n[fields.status]\noptions = ["a"]\n[fields.status.colors]\na = "red"\n[views.mine]\nlayout = "board"\nfilter = "is:open"\n[[sprints.list]]\nslug = "s1"\n[github-project]\n[uploads]\n[repos]\n';
+  const text = 'list = []\n[fields.due]\ntype = "date"\n[fields.status]\noptions = ["a"]\n[fields.status.colors]\na = "red"\n[views.mine]\nlayout = "board"\nfilter = "is:open"\n[[sprints.list]]\nslug = "s1"\n[github-project]\n[uploads]\n[repos]\n';
   const at = (needle: string) => docSectionAt(text, text.indexOf(needle) + 1);
   assert.equal(docSectionAt(text, 0), 'overview');
   assert.equal(at('options'), 'fields');
+  assert.equal(at('type = "date"'), 'types');
   assert.equal(at('a = "red"'), 'colors');
   assert.equal(at('layout'), 'views');
   assert.equal(at('filter'), 'filters');

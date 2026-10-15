@@ -29,6 +29,10 @@ type Field struct {
 	// Colors picks a value's color from Palette: "in review" = "purple".
 	// Values without one get a default (Config.Color).
 	Colors map[string]string `toml:"colors" json:"colors,omitempty"`
+	// Type is what the values are (types.go); empty: guessed (TypeOf).
+	Type string `toml:"type" json:"type,omitempty"`
+	// Unit follows a number field's values: "h" for hours.
+	Unit string `toml:"unit" json:"unit,omitempty"`
 }
 
 // KnownValue reports whether value is one of Options — or true if Options is
@@ -38,7 +42,7 @@ type Field struct {
 // on a bridge pull) and internal/lint (the same check, run over the local
 // repo instead of an incoming GitHub value).
 func (f Field) KnownValue(value string) bool {
-	if _, err := strconv.ParseFloat(value, 64); err == nil && f.Numeric {
+	if _, err := strconv.ParseFloat(value, 64); err == nil && (f.Numeric || f.Type == TypeNumber) {
 		return true
 	}
 	return len(f.Options) == 0 || slices.Contains(f.Options, value)
@@ -165,6 +169,9 @@ func parse(data []byte) (*Config, toml.MetaData, error) {
 		return nil, md, err
 	}
 	if err := checkColors(r.Fields); err != nil {
+		return nil, md, err
+	}
+	if err := checkTypes(r.Fields); err != nil {
 		return nil, md, err
 	}
 	return &Config{

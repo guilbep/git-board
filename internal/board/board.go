@@ -115,7 +115,7 @@ func SortByField(issues []gitbugio.Issue, spec string, cfg *config.Config) {
 	sort.SliceStable(issues, func(i, j int) bool {
 		vi, vj := FieldValue(issues[i], key), FieldValue(issues[j], key)
 		switch {
-		case field.Numeric:
+		case field.Numeric || field.Type == config.TypeNumber:
 			return lessNumeric(vi, vj, desc)
 		case vi == "" || vj == "":
 			return vi != "" // a value before none, either way

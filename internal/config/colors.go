@@ -39,19 +39,28 @@ var keywordColors = []struct {
 var spread = []string{"blue", "purple", "teal", "pink"}
 
 // Colors is the color of each of a field's values: the config's, else a
-// keyword's, else the next of spread in the values' sorted order. Numbers
-// and assignees stay plain (absent).
+// keyword's, else the next of spread in the values' sorted order. Only
+// select and iteration fields take colors of their own: people, numbers,
+// dates (colored by the server against today), issues and text stay plain.
 //
 // ponytail: turns in sorted order spread colors evenly (a hash clumps a
 // handful of values); a new value can shift the turn colors of the values
 // after it. Pin one in [fields.<name>.colors] to keep it.
 func (c *Config) Colors(field string, values []string) map[string]string {
 	res := map[string]string{}
+	if t := c.TypeOf(field, values); t != TypeSelect && t != TypeIteration {
+		for _, v := range values {
+			if color := c.configured(field, v); color != "" {
+				res[v] = color
+			}
+		}
+		return res
+	}
 	var rest []string
 	for _, v := range values {
 		if color := c.color(field, v); color != "" {
 			res[v] = color
-		} else if _, err := strconv.ParseFloat(v, 64); err != nil && field != "assignee" {
+		} else if _, err := strconv.ParseFloat(v, 64); err != nil {
 			rest = append(rest, v)
 		}
 	}
@@ -63,14 +72,22 @@ func (c *Config) Colors(field string, values []string) map[string]string {
 	return res
 }
 
-// color is a value's configured or keyword color, "" for none.
-func (c *Config) color(field, value string) string {
+// configured is a value's color from [fields.<name>.colors], "" for none.
+func (c *Config) configured(field, value string) string {
 	for v, color := range c.Fields[field].Colors {
 		if strings.EqualFold(v, value) {
 			return normColor(color)
 		}
 	}
-	if _, err := strconv.ParseFloat(value, 64); err == nil || field == "assignee" {
+	return ""
+}
+
+// color is a value's configured or keyword color, "" for none.
+func (c *Config) color(field, value string) string {
+	if color := c.configured(field, value); color != "" {
+		return color
+	}
+	if _, err := strconv.ParseFloat(value, 64); err == nil {
 		return ""
 	}
 	words := strings.FieldsFunc(strings.ToLower(value), func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) })

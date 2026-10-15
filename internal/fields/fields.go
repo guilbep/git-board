@@ -62,7 +62,7 @@ func Single(cfg *config.Config, fieldName string, current []string) bool {
 			n++
 		}
 	}
-	return fieldName != "assignee" && n < 2
+	return cfg.TypeOf(fieldName, nil) != config.TypePerson && n < 2
 }
 
 // Diff computes the label add/remove needed to set fieldName to a resolved

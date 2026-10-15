@@ -142,12 +142,12 @@ export function sortIssues(issues: Issue[], sort: Sort | null, fields: Fields): 
   const field = fields[key];
   const value = (i: Issue) => {
     const v = key === 'id' ? i.id : key === 'title' ? i.title : valuesOf(i, key)[0]!;
-    return v === NONE || (field?.numeric && Number.isNaN(Number(v))) ? null : v;
+    return v === NONE || ((field?.numeric || field?.type === 'number') && Number.isNaN(Number(v))) ? null : v;
   };
   const options = field?.options ?? [];
   const rank = (v: string) => (options.includes(v) ? options.indexOf(v) : options.length);
   const compare = (a: string, b: string) =>
-    field?.numeric
+    field?.numeric || field?.type === 'number'
       ? Number(a) - Number(b)
       : rank(a) - rank(b) || a.localeCompare(b, undefined, { numeric: true });
 
