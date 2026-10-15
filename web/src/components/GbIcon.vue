@@ -9,7 +9,7 @@
 <script setup lang="ts">
 export type IconName =
   | 'close' | 'up' | 'down' | 'link' | 'expand' | 'edit' | 'check' | 'clock' | 'local' | 'tag'
-  | 'user' | 'title' | 'open' | 'closed' | 'sync' | 'plus' | 'warn' | 'external' | 'error' | 'back';
+  | 'user' | 'title' | 'open' | 'closed' | 'sync' | 'plus' | 'warn' | 'external' | 'error' | 'back' | 'settings';
 
 defineProps<{ name: IconName; small?: boolean }>();
 
@@ -34,5 +34,6 @@ const paths: Record<IconName, string[]> = {
   external: ['M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6', 'M15 3h6v6', 'M10 14 21 3'],
   error: ['M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20Z', 'M12 8v4', 'M12 16h.01'],
   back: ['M19 12H5', 'M12 19l-7-7 7-7'],
+  settings: ['M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z', 'M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z'],
 };
 </script>

@@ -507,6 +507,11 @@ for up to a year.
 Images (not SVG), PDF, video, text, CSV, zip and office files, 25 MB at
 most.
 
+**Settings** (`#/settings`, the gear in the header): who you write
+as, each bridge's sync on or off, and how attachments and the GitHub
+Project are set up. Bridges are added with `git bug bridge new … --sync`;
+`.git-board.toml` is edited as a file (restart the server after).
+
 **Sync with GitHub/GitLab** (`#/sync`) runs git-bug's forge sync — the
 fork's `git bug bridge sync` — in the server, which holds the repository
 (so the command can't run beside it): always a dry run first with its

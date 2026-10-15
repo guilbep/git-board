@@ -6,6 +6,7 @@ const routes: RouteRecordRaw[] = [
   { path: '/conflicts', component: () => import('@/pages/ConflictsPage.vue') },
   { path: '/issues/:id', component: () => import('@/pages/IssuePage.vue') },
   { path: '/sync', component: () => import('@/pages/ForgeSyncPage.vue') },
+  { path: '/settings', component: () => import('@/pages/SettingsPage.vue') },
 
   // Always leave this as the last one.
   {

@@ -65,6 +65,7 @@ const create = () => run(() => createIdentity(name.value, email.value));
 .gb-me-choose { display: grid; gap: .75rem; padding: 1.25rem; border: 1px solid var(--border-strong); }
 .gb-me-choose h3 { margin: 0; }
 .gb-me-choose p { margin: 0; }
+.gb-me-choose > .epfl-btn { justify-self: start; }
 .gb-pick { display: grid; gap: .5rem; margin: 0; padding: 0; border: 0; }
 .gb-pick-row { display: flex; gap: .5rem; align-items: flex-start; cursor: pointer; }
 .gb-pick-row input { margin-top: .3rem; accent-color: var(--epfl-red-dark); }

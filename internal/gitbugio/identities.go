@@ -2,8 +2,10 @@ package gitbugio
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/git-bug/git-bug/bridge" // registers every forge, for the sync
@@ -72,6 +74,64 @@ func (b *Backend) SyncBridges() ([]SyncBridge, error) {
 		res = append(res, SyncBridge{Name: name, Target: cfg.Value("git-bug.bridge."+name+".target", "")})
 	}
 	return res, nil
+}
+
+// Bridge is a configured bridge, as the settings page shows it.
+type Bridge struct {
+	Name    string `json:"name"`
+	Target  string `json:"target"` // github, gitlab, gitea…
+	Where   string `json:"where"`  // the project it syncs with
+	Sync    bool   `json:"sync"`
+	CanSync bool   `json:"can_sync"` // the target supports sync (not jira, launchpad)
+}
+
+// ErrNoBridge: no bridge has that name.
+var ErrNoBridge = errors.New("no bridge has that name")
+
+// Bridges lists the configured bridges, sync on or off.
+func (b *Backend) Bridges() ([]Bridge, error) {
+	names, err := core.ConfiguredBridges(b.c)
+	if err != nil {
+		return nil, err
+	}
+	cfg, err := b.c.Config().Read()
+	if err != nil {
+		return nil, err
+	}
+	res := []Bridge{}
+	for _, name := range names {
+		get := func(k string) string { return cfg.Value("git-bug.bridge."+name+"."+k, "") }
+		br := Bridge{Name: name, Target: get("target")}
+		br.Sync, _ = strconv.ParseBool(get("sync"))
+		if nb, err := core.NewBridge(b.c, br.Target, name); err == nil {
+			br.CanSync = nb.SupportsSync()
+		}
+		switch br.Target {
+		case "github":
+			br.Where = "https://github.com/" + get("owner") + "/" + get("project")
+		case "gitlab":
+			br.Where = get("base-url") + " project " + get("project-id")
+		case "gitea":
+			br.Where = strings.TrimSuffix(get("base-url"), "/") + "/" + get("owner") + "/" + get("project")
+		}
+		res = append(res, br)
+	}
+	return res, nil
+}
+
+// SetBridgeSync turns a bridge's sync on or off (git-bug's sync key).
+func (b *Backend) SetBridgeSync(name string, on bool) error {
+	if !core.BridgeExist(b.c, name) {
+		return ErrNoBridge
+	}
+	br, err := core.LoadBridge(b.c, name)
+	if err != nil {
+		return err
+	}
+	if !br.SupportsSync() {
+		return fmt.Errorf("bridge %s can't sync: its forge isn't supported", name)
+	}
+	return core.SetBridgeConfig(b.c, name, core.ConfigKeySync, strconv.FormatBool(on))
 }
 
 // SyncForges runs git-bug's forge sync (git bug bridge sync) on the named

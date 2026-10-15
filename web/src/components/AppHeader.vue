@@ -34,10 +34,13 @@
         <span>{{ running ? 'Syncing with GitHub/GitLab…' : 'Sync with GitHub/GitLab' }}</span>
         <span v-if="lastRun" class="gb-hint">{{ lastRun }}</span>
       </router-link>
-      <span v-if="me?.me" class="gb-me" :title="`You write as ${me.me.name}`">
+      <router-link v-if="me?.me" to="/settings" class="gb-me" :title="`You write as ${me.me.name}. Settings`">
         <span class="gb-avatar gb-avatar-sm gb-avatar-dark" aria-hidden="true">{{ initials(me.me.name) }}</span>
         <span class="gb-me-name">{{ me.me.name }}</span>
-      </span>
+      </router-link>
+      <router-link to="/settings" class="gb-settingslink" active-class="active" aria-label="Settings" title="Settings">
+        <GbIcon name="settings" small />
+      </router-link>
     </div>
   </header>
 </template>
@@ -79,7 +82,9 @@ onMounted(() => {
 .gb-synclink { display: inline-flex; align-items: center; gap: .5rem; min-height: 2.75rem; padding: 0 1rem; border: 1px solid var(--border-strong); color: var(--fg); font-weight: 700; font-size: .875rem; text-decoration: none; white-space: nowrap; }
 .gb-synclink:hover { border-color: var(--fg); }
 .gb-synclink-run { border-color: var(--fg); }
-.gb-me { display: inline-flex; align-items: center; gap: .5rem; font-weight: 700; font-size: .875rem; white-space: nowrap; }
+.gb-me { display: inline-flex; align-items: center; gap: .5rem; font-weight: 700; font-size: .875rem; white-space: nowrap; color: var(--fg); text-decoration: none; }
+.gb-settingslink { display: inline-flex; align-items: center; justify-content: center; width: 2.75rem; height: 2.75rem; border: 1px solid var(--border-strong); color: var(--fg); }
+.gb-settingslink:hover, .gb-settingslink.active { border-color: var(--fg); }
 
 .nav-count {
   margin-left: var(--space-1);

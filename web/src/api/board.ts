@@ -316,3 +316,27 @@ export async function uploadFile(file: File): Promise<{ url: string; name: strin
   if (!res.ok) throw new ApiError(data.error ?? `upload failed (${res.status})`, res.status, '');
   return data;
 }
+
+// Settings (cmd/git-board-server/settings.go).
+export interface Bridge {
+  name: string;
+  target: string;
+  where: string;
+  sync: boolean;
+  can_sync: boolean;
+}
+
+export interface Settings {
+  bridges: Bridge[];
+  uploads: { enabled: boolean; endpoint?: string; public_url?: string; prefix?: string };
+  github_project: { owner: string; number: number; write?: boolean };
+  config_path: string;
+}
+
+export function getSettings(): Promise<Settings> {
+  return request('/api/settings');
+}
+
+export function setBridgeSync(name: string, sync: boolean): Promise<{ sync: boolean }> {
+  return request(`/api/bridges/${encodeURIComponent(name)}/sync`, json('PUT', { sync }));
+}
