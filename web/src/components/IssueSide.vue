@@ -128,7 +128,8 @@ function selectOptions(name: string): string[] {
 const held = (name: string) => syncStatus.value?.last?.conflicts.find((c) => c.bug_id === props.id && c.field === name);
 
 // texts and changes not on a forge yet
-const waitingFor = (forge: string) => props.events.filter((e) => e.pending?.includes(forge)).length;
+const waitingFor = (forge: string) =>
+  props.events.filter((e) => e.pending?.includes(forge) || e.edit_pending?.includes(forge)).length;
 
 async function save(name: string, value: string): Promise<boolean> {
   busy.value = true;

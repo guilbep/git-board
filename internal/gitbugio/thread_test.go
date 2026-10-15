@@ -114,12 +114,42 @@ func TestThreadForgeLinks(t *testing.T) {
 	}
 
 	// a comment the sync hasn't posted yet waits for the forges the issue is on
-	if _, err := b.AddComment(bug.Id().String(), "not posted"); err != nil {
+	id := bug.Id().String()
+	comment, err := b.AddComment(id, "not posted")
+	if err != nil {
 		t.Fatal(err)
 	}
-	th, _ = b.Thread(bug.Id().String())
+	th, _ = b.Thread(id)
 	if last := th.Events[len(th.Events)-1]; !slices.Equal(last.Pending, []string{"GitHub"}) {
 		t.Errorf("pending %v, want GitHub", last.Pending)
+	}
+
+	// once pushed it's there; its edit, and a status change, wait again
+	cached, _ := b.TestCache().Bugs().ResolvePrefix(id)
+	op := cached.Snapshot().Operations[len(cached.Snapshot().Operations)-1]
+	if _, err := cached.SetMetadata(op.Id(), map[string]string{"sync:github.com/o/r:pushed": "1"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := cached.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.EditComment(id, comment, "edited", ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.SetStatus(id, "closed"); err != nil {
+		t.Fatal(err)
+	}
+	th, _ = b.Thread(id)
+	c, status := th.Events[len(th.Events)-2], th.Events[len(th.Events)-1]
+	if len(c.Pending) != 0 || !slices.Equal(c.EditPending, []string{"GitHub"}) {
+		t.Errorf("comment pending %v, edit pending %v, want the edit waiting for GitHub", c.Pending, c.EditPending)
+	}
+	if !slices.Equal(status.Pending, []string{"GitHub"}) {
+		t.Errorf("status pending %v, want GitHub", status.Pending)
+	}
+	// what came before the issue was on GitHub went with it
+	if th.Events[0].Pending != nil {
+		t.Errorf("description pending %v, want none", th.Events[0].Pending)
 	}
 }
 

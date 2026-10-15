@@ -59,9 +59,11 @@ type Event struct {
 	HTML    string    `json:"html,omitempty"` // filled by the server
 	Edited  bool      `json:"edited,omitempty"`
 	History []Version `json:"history,omitempty"`
-	// Pending are the forges the issue is on that this text hasn't reached
-	// yet: the next forge sync posts it.
-	Pending []string `json:"pending,omitempty"`
+	// Pending are the forges the issue is on that this change hasn't
+	// reached yet: the next forge sync takes it there. EditPending, for a
+	// comment already there: its latest edit hasn't.
+	Pending     []string `json:"pending,omitempty"`
+	EditPending []string `json:"edit_pending,omitempty"`
 
 	Added   []string `json:"added,omitempty"` // labels
 	Removed []string `json:"removed,omitempty"`
@@ -93,11 +95,7 @@ func (b *Backend) Thread(idPrefix string) (Thread, error) {
 	}
 	createMeta := snap.Operations[0].AllMetadata()
 	_, remotes := forgesOf(createMeta)
-
-	ops := map[entity.Id]dag.Operation{}
-	for _, op := range snap.Operations {
-		ops[op.Id()] = op
-	}
+	on := onForges(snap, remotes)
 	th := Thread{
 		Issue:     issue,
 		Author:    person(snap.Author),
@@ -108,12 +106,79 @@ func (b *Backend) Thread(idPrefix string) (Thread, error) {
 		th.Participants = append(th.Participants, person(p))
 	}
 	for _, item := range snap.Timeline {
-		th.Events = append(th.Events, event(snap, item, ops, remotes))
+		th.Events = append(th.Events, event(snap, item, on))
 	}
 	return th, nil
 }
 
-func event(snap *bugent.Snapshot, item bugent.TimelineItem, ops map[entity.Id]dag.Operation, remotes map[string]string) Event {
+// forgeState tells, per operation, which forges a change hasn't reached.
+type forgeState struct {
+	pending  func(opID entity.Id) []string
+	ops      map[entity.CombinedId]dag.Operation // by the timeline's ids
+	lastEdit map[entity.Id]entity.Id             // comment's op → its latest edit
+}
+
+// onForges works out where each operation is, as the sync engine records it
+// (bridge/core synctags): an operation pulled from a forge or pushed to it
+// carries sync:<remote>: keys, its own or set later by a SetMetadata. What
+// came before the issue was created on a forge by a push went with it.
+func onForges(snap *bugent.Snapshot, remotes map[string]string) forgeState {
+	meta := map[entity.Id]map[string]string{}
+	since := map[string]int{} // remote prefix → index from which operations must be pushed
+	st := forgeState{ops: map[entity.CombinedId]dag.Operation{}, lastEdit: map[entity.Id]entity.Id{}}
+	index := map[entity.Id]int{}
+	createID := snap.Operations[0].Id()
+	for prefix := range remotes {
+		if _, ok := snap.Operations[0].GetMetadata(prefix + "id"); ok {
+			since[prefix] = 0 // created by the push itself, or pulled from it
+		}
+	}
+	for i, op := range snap.Operations {
+		index[op.Id()] = i
+		st.ops[entity.CombineIds(snap.Id(), op.Id())] = op
+		meta[op.Id()] = op.AllMetadata()
+		switch o := op.(type) {
+		case *dag.SetMetadataOperation[*bugent.Snapshot]:
+			if meta[o.Target] == nil {
+				meta[o.Target] = map[string]string{}
+			}
+			for k, v := range o.NewMetadata {
+				meta[o.Target][k] = v
+			}
+			// the push that created the issue on a forge records it here
+			for prefix := range remotes {
+				if _, ok := o.NewMetadata[prefix+"id"]; ok && o.Target == createID {
+					since[prefix] = i
+				}
+			}
+		case *bugent.EditCommentOperation:
+			st.lastEdit[o.Target] = op.Id()
+		}
+	}
+	st.pending = func(opID entity.Id) []string {
+		var res []string
+		for prefix, name := range remotes {
+			if index[opID] <= since[prefix] {
+				continue
+			}
+			there := false
+			for k := range meta[opID] {
+				if strings.HasPrefix(k, prefix) {
+					there = true
+					break
+				}
+			}
+			if !there {
+				res = append(res, name)
+			}
+		}
+		sort.Strings(res)
+		return res
+	}
+	return st
+}
+
+func event(snap *bugent.Snapshot, item bugent.TimelineItem, on forgeState) Event {
 	comment := func(kind string, c bugent.CommentTimelineItem) Event {
 		e := Event{Kind: kind, ID: string(item.CombinedId()), Author: person(c.Author), At: at(c.CreatedAt), Body: c.Message, Edited: len(c.History) > 1}
 		if e.Edited {
@@ -122,14 +187,16 @@ func event(snap *bugent.Snapshot, item bugent.TimelineItem, ops map[entity.Id]da
 			}
 		}
 		if found, err := snap.SearchComment(item.CombinedId()); err == nil {
-			if op, ok := ops[found.TargetId()]; ok {
-				for key, name := range remotes {
-					if _, posted := op.GetMetadata(key + "id"); !posted {
-						e.Pending = append(e.Pending, name)
-					}
-				}
-				sort.Strings(e.Pending)
+			e.Pending = on.pending(found.TargetId())
+			if edit, ok := on.lastEdit[found.TargetId()]; ok && len(e.Pending) == 0 {
+				e.EditPending = on.pending(edit)
 			}
+		}
+		return e
+	}
+	change := func(e Event) Event {
+		if op, ok := on.ops[item.CombinedId()]; ok {
+			e.Pending = on.pending(op.Id())
 		}
 		return e
 	}
@@ -139,15 +206,15 @@ func event(snap *bugent.Snapshot, item bugent.TimelineItem, ops map[entity.Id]da
 	case *bugent.AddCommentTimelineItem:
 		return comment("comment", it.CommentTimelineItem)
 	case *bugent.LabelChangeTimelineItem:
-		return Event{Kind: "labels", ID: string(it.CombinedId()), Author: person(it.Author), At: at(it.UnixTime), Added: labelStrings(it.Added), Removed: labelStrings(it.Removed)}
+		return change(Event{Kind: "labels", ID: string(it.CombinedId()), Author: person(it.Author), At: at(it.UnixTime), Added: labelStrings(it.Added), Removed: labelStrings(it.Removed)})
 	case *bugent.SetStatusTimelineItem:
 		status := "open"
 		if it.Status == common.ClosedStatus {
 			status = "closed"
 		}
-		return Event{Kind: "status", ID: string(it.CombinedId()), Author: person(it.Author), At: at(it.UnixTime), Status: status}
+		return change(Event{Kind: "status", ID: string(it.CombinedId()), Author: person(it.Author), At: at(it.UnixTime), Status: status})
 	case *bugent.SetTitleTimelineItem:
-		return Event{Kind: "title", ID: string(it.CombinedId()), Author: person(it.Author), At: at(it.UnixTime), Title: it.Title, Was: it.Was}
+		return change(Event{Kind: "title", ID: string(it.CombinedId()), Author: person(it.Author), At: at(it.UnixTime), Title: it.Title, Was: it.Was})
 	}
 	return Event{Kind: "unknown", ID: string(item.CombinedId())}
 }

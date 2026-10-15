@@ -16,7 +16,7 @@
           </template>
         </template>
       </template>
-      <template v-else-if="event.kind === 'status'"> {{ event.status === 'closed' ? 'closed this' : 'reopened this' }}</template>
+      <template v-else-if="event.kind === 'status'">{{ event.status === 'closed' ? ' closed this' : ' reopened this' }}</template>
       <template v-else-if="event.kind === 'title'">
         changed the title <span class="gb-strike">{{ event.was }}</span> to <b>{{ event.title }}</b>
       </template>

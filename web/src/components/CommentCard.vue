@@ -48,8 +48,9 @@
     </template>
 
     <footer v-if="forges?.length" class="gb-comment-foot">
-      <span v-for="f in forges" :key="f.url" class="gb-fstate" :class="{ 'gb-fstate-local': event.pending?.includes(f.name) }">
+      <span v-for="f in forges" :key="f.url" class="gb-fstate" :class="{ 'gb-fstate-local': event.pending?.includes(f.name) || event.edit_pending?.includes(f.name) }">
         <template v-if="event.pending?.includes(f.name)"><GbIcon name="clock" small /> Not on {{ f.name }} yet, next sync</template>
+        <template v-else-if="event.edit_pending?.includes(f.name)"><GbIcon name="clock" small /> Latest edit not on {{ f.name }} yet, next sync</template>
         <template v-else><GbIcon name="check" small /><a :href="f.url" target="_blank" rel="noopener noreferrer">On {{ f.name }}</a></template>
       </span>
     </footer>

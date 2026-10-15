@@ -166,7 +166,8 @@ export interface IssueEvent {
   html?: string; // rendered and cleaned by the server
   edited?: boolean;
   history?: { author: Person; at: string; body: string }[];
-  pending?: string[]; // forges the next sync hasn't posted this text to yet
+  pending?: string[]; // forges the next sync hasn't taken this change to yet
+  edit_pending?: string[]; // a comment there already: forges its latest edit hasn't reached
   added?: string[];
   removed?: string[];
   status?: 'open' | 'closed';
