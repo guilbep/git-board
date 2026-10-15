@@ -70,7 +70,7 @@
         </div>
         <div class="toolbar-field">
           <label class="epfl-label" for="group">Group by</label>
-          <select id="group" v-model="groupField" class="epfl-select" @change="load">
+          <select id="group" v-model="groupField" class="epfl-select" @change="regroup">
             <option value="">No grouping</option>
             <option v-for="name in groupChoices" :key="name" :value="name">{{ displayName(name) }}</option>
           </select>
@@ -371,6 +371,14 @@ const boardBuckets = computed(() => {
   return orderBuckets([...shown.value, ...empty], groupField.value, fields.value);
 });
 
+// lanes are values of the field grouped by: another field, every lane
+function regroup() {
+  lanes.value = undefined;
+  limits.value = undefined;
+  showAllLanes.value = false;
+  void load();
+}
+
 // the board's lanes (a board per role), the other values' issues counted
 const laneView = computed(() => (showAllLanes.value ? { shown: boardBuckets.value, hidden: 0 } : boardLanes(boardBuckets.value, lanes.value)));
 const laneValues = computed(() => {
@@ -391,7 +399,8 @@ async function onMoveMany(moves: { issue: Issue; from: string }[], to: string) {
     try {
       await changeLabels(issue.id, to === '(none)' ? [] : [`${field}:${to}`], from === '(none)' ? [] : [`${field}:${from}`]);
     } catch (e: unknown) {
-      moveError.value = `${n} of ${moves.length} moved; stopped at “${issue.title}”: ${message(e)}`;
+      // after the alert's "Not moved."
+      moveError.value = `“${issue.title}”: ${message(e)}. ${n} of ${moves.length} moved before it, the rest not tried.`;
       break;
     }
   }
