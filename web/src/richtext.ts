@@ -18,7 +18,7 @@ export function refTokens(text: string): RefToken[] {
     const start = m.index + lead.length;
     if (start > last) out.push({ text: text.slice(last, start) });
     if (m[2] !== undefined) out.push({ ref: m[2], text: `#${m[2]}` });
-    else out.push({ mention: m[4], text: `@${m[4]}` });
+    else out.push({ mention: m[4] ?? "", text: `@${m[4] ?? ""}` });
     last = m.index + m[0].length;
   }
   if (last < text.length || out.length === 0) out.push({ text: text.slice(last) });
