@@ -25,6 +25,7 @@ export interface ViewConfig {
   filter: string;
   group: string;
   sort: string;
+  columns?: string[] | undefined; // a table's columns, in order (tablecols.ts); none: the default
 }
 
 export interface FieldConfig {

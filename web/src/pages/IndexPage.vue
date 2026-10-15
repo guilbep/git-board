@@ -90,6 +90,7 @@
           <code class="viewbar-filter">{{ draft.filter }}</code>
           <span v-if="draft.group" class="viewbar-meta">grouped by {{ draft.group }}</span>
           <span v-if="draft.sort" class="viewbar-meta">sorted by {{ draft.sort }}</span>
+          <span v-if="!sameColumns(draft.columns, view?.columns)" class="viewbar-meta">{{ draft.columns ? 'columns of its own' : 'default columns' }}</span>
         </span>
         <form v-if="naming" class="viewbar-name" @submit.prevent="saveAs">
           <input id="viewname" aria-label="New view name" ref="nameInput" v-model="newName" class="epfl-input" placeholder="new-view-name" pattern="[A-Za-z0-9_\-]+" title="Letters, digits, - and _" required @keydown.esc.stop="naming = false" />
@@ -154,8 +155,11 @@
           :fields="fields"
           :group="groupField"
           :sort="sort"
+          :columns="columns"
           @open="openIssue"
           @sort="sortBy"
+          @changed="load"
+          @update:columns="(c) => (columns = c)"
         />
       </div>
     </main>
@@ -230,6 +234,7 @@ const configError = ref('');
 // search and sort below refine its answer here, and live in the URL.
 const filterText = ref('is:open');
 const groupField = ref('');
+const columns = ref<string[] | undefined>(); // the table's, the view's until changed (tablecols.ts)
 
 const buckets = ref<Bucket[] | null>(null); // null until a load lands
 const loading = ref(false);
@@ -392,13 +397,15 @@ const draft = computed<ViewConfig>(() => ({
   filter: composed.value.filter,
   group: groupField.value,
   sort: sortValue.value || (view.value?.sort ?? ''),
+  columns: columns.value,
 }));
+const sameColumns = (a?: string[], b?: string[]) => (a ?? []).join(',') === (b ?? []).join(',');
 const viewDirty = computed(() => {
   const v = view.value;
   const d = draft.value;
   if (draftSkipped.value.length) return true; // the page differs, even what can't be saved
-  if (!v) return d.filter !== 'is:open' || d.group !== '' || d.sort !== '';
-  return d.filter !== v.filter || d.group !== (v.group ?? '') || d.sort !== (v.sort ?? '');
+  if (!v) return d.filter !== 'is:open' || d.group !== '' || d.sort !== '' || !!d.columns;
+  return d.filter !== v.filter || d.group !== (v.group ?? '') || d.sort !== (v.sort ?? '') || !sameColumns(d.columns, v.columns);
 });
 const naming = ref(false);
 const newName = ref('');
@@ -444,6 +451,7 @@ async function loadConfig() {
 function resetView() {
   filterText.value = view.value ? view.value.filter : 'is:open';
   groupField.value = view.value?.group ?? '';
+  columns.value = view.value?.columns;
   void load();
 }
 
