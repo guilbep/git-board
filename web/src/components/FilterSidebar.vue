@@ -13,13 +13,7 @@
       <div class="filters-head">
         <h2 class="filters-title">Filters</h2>
         <span class="filters-head-r">
-          <details class="filters-help">
-            <summary aria-label="Filter shortcuts">?</summary>
-            <p>
-              <b>Click</b> adds or removes a value. <b>Alt-click</b> (⌥ on a Mac) keeps only that value; again: every value but it.
-              <b>Shift-click</b> sets a range from the last one clicked. <b>Space</b> toggles the focused box.
-            </p>
-          </details>
+          <button type="button" class="filters-help" aria-label="Keyboard shortcuts for the filters" title="Keyboard shortcuts (?)" @click="helpOpen = true">?</button>
           <button type="button" class="filters-reset" :disabled="!modified" @click="emit('reset')">Reset</button>
           <button type="button" class="filters-hide" aria-label="Hide filters" title="Hide filters" @click="emit('hide')"><GbIcon name="collapse" small /></button>
         </span>
@@ -82,7 +76,7 @@
           >
             <span class="filters-bar" :style="{ width: `${(count / maxCount(f)) * 100}%` }" aria-hidden="true" />
             <input type="checkbox" :checked="!!sel[f.key]?.includes(value)" />
-            <span class="filters-option-label"><span v-if="colorClass(f.key, value)" class="gb-dot" :class="colorClass(f.key, value)" aria-hidden="true" /> {{ valueLabel(f.key, value, fields) }}<span v-if="value === fields[f.key]?.current" class="filters-current">current</span></span>
+            <span class="filters-option-label"><ValueMark :field="f.key" :value="value" /> {{ valueLabel(f.key, value, fields) }}<span v-if="value === fields[f.key]?.current" class="filters-current">current</span></span>
             <button
               type="button"
               class="filters-only"
@@ -99,7 +93,9 @@
 </template>
 
 <script setup lang="ts">
+import ValueMark from '@/components/ValueMark.vue';
 import GbIcon from '@/components/GbIcon.vue';
+import { helpOpen } from '@/shortcuts';
 import { colorClass } from '@/colors';
 import { facetLabel, pick, sortOptions, valueLabel, type Facet, type OptionSort, type Selection } from '@/facets';
 import type { Fields } from '@/fields';
@@ -226,7 +222,7 @@ const active = computed(() => Object.values(props.sel).flat().length + Number(pr
   padding: 0 0.375rem;
   font-size: 0.75rem;
   font-weight: var(--w-bold);
-  color: var(--epfl-white);
+  color: var(--on-primary);
   background: var(--primary);
   border-radius: var(--radius);
 }
@@ -235,10 +231,8 @@ const active = computed(() => Object.values(props.sel).flat().length + Number(pr
 .filters-hide { display: inline-flex; align-items: center; justify-content: center; width: 2rem; height: 2rem; padding: 0; border: 1px solid var(--border); background: none; color: var(--fg); cursor: pointer; }
 .filters-hide:hover, .filters-hide:focus-visible { border-color: var(--fg); }
 @media (max-width: 63.99rem) { .filters-hide { display: none; } }
-.filters-help { position: relative; }
-.filters-help summary { display: inline-flex; align-items: center; justify-content: center; width: 1.5rem; height: 1.5rem; border: var(--border-w) solid var(--border); border-radius: 50%; font-size: 0.75rem; font-weight: var(--w-bold); color: var(--fg-muted); list-style: none; cursor: pointer; }
-.filters-help summary::-webkit-details-marker { display: none; }
-.filters-help p { position: absolute; right: 0; z-index: 5; width: 17rem; margin: 0.375rem 0 0; padding: 0.625rem 0.75rem; font-size: 0.8125rem; line-height: 1.5; background: var(--bg); border: var(--border-w) solid var(--border-strong); box-shadow: var(--shadow); }
+.filters-help { display: inline-flex; align-items: center; justify-content: center; width: 1.5rem; height: 1.5rem; border: var(--border-w) solid var(--border); border-radius: 50%; font-size: 0.75rem; font-weight: var(--w-bold); color: var(--fg-muted); cursor: pointer;  padding: 0; background: none; }
+.filters-help:hover, .filters-help:focus-visible { border-color: var(--fg); color: var(--fg); }
 
 .filters-tools { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); padding: 0.25rem 0 0 1.25rem; }
 .filters-sort { display: inline-flex; border: var(--border-w) solid var(--border); border-radius: var(--radius); overflow: hidden; }

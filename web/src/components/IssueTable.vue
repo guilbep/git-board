@@ -4,7 +4,7 @@
 <template>
   <section v-for="bucket in buckets" :key="bucket.group" class="table-group">
     <h2 v-if="group" class="group-title">
-      <span v-if="colorClass(group, bucket.group)" class="gb-dot" :class="colorClass(group, bucket.group)" aria-hidden="true" />
+      <ValueMark :field="group" :value="bucket.group" />
       {{ groupLabel(bucket.group) }}
       <span class="group-count">{{ bucket.issues.length }}</span>
     </h2>
@@ -36,7 +36,7 @@
             <td>{{ issue.status }}</td>
             <td v-for="name in names" :key="name">
               <span class="cell-tags">
-                <span v-for="v in fieldValues(issue.labels, name)" :key="v" class="gb-val" :class="colorClass(name, v)">{{ formatValue(name, v, fields) }}</span>
+                <span v-for="v in fieldValues(issue.labels, name)" :key="v" class="gb-val" :class="colorClass(name, v)"><ValueMark chip :field="name" :value="v" />{{ formatValue(name, v, fields) }}</span>
               </span>
             </td>
             <td class="cell-other">{{ otherLabels(issue.labels, names).join(', ') }}</td>
@@ -48,6 +48,7 @@
 </template>
 
 <script setup lang="ts">
+import ValueMark from '@/components/ValueMark.vue';
 import { computed } from 'vue';
 import type { Bucket, Issue } from '@/api/board';
 import type { Sort } from '@/facets';

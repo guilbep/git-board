@@ -277,7 +277,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
 .gb-save-error { color: var(--danger-fg); background: var(--danger-bg); }
 .gb-wait { background: var(--bg-subtle); }
 .gb-skel-title { margin: 0 0 1rem; font-size: 1.5rem; }
-.gb-skel { height: 1rem; margin-top: .5rem; background: var(--epfl-gray-100); }
+.gb-skel { height: 1rem; margin-top: .5rem; background: var(--bg-muted); }
 .gb-skel-short { width: 40%; }
 .gb-ptop-crumb a { display: inline-flex; align-items: center; gap: .25rem; color: var(--fg); }
 </style>

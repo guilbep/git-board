@@ -236,6 +236,6 @@ onMounted(async () => {
 .gb-countlist > dt { margin-bottom: .25rem; }
 .gb-lines pre { max-height: 20rem; overflow: auto; padding: .75rem; background: var(--bg-subtle); font-size: .75rem; }
 .gb-check { display: flex; gap: .5rem; align-items: center; margin-top: .5rem; }
-.gb-check input, .gb-pick input { accent-color: var(--epfl-red-dark); }
+.gb-check input, .gb-pick input { accent-color: var(--primary-hover); }
 .gb-pick { display: flex; gap: 1.25rem; margin: 0; padding: 0; border: 0; }
 </style>

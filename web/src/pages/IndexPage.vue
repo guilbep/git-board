@@ -571,7 +571,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
 .filters-rail { position: sticky; top: 0; align-self: start; display: flex; flex-direction: column; align-items: center; gap: var(--space-2); width: 2.75rem; min-height: 12rem; margin-top: var(--space-4); padding: var(--space-3) 0; border: var(--border-w) solid var(--border); background: var(--bg-subtle); color: var(--fg); cursor: pointer; font: inherit; }
 .filters-rail:hover, .filters-rail:focus-visible { border-color: var(--fg); }
 .filters-rail-label { writing-mode: vertical-rl; transform: rotate(180deg); font-weight: var(--w-bold); font-size: var(--fs-sm); letter-spacing: .04em; }
-.filters-rail-badge { min-width: 1.25rem; padding: 0 .25rem; background: var(--primary); color: var(--epfl-white); font-size: .75rem; font-weight: var(--w-bold); text-align: center; border-radius: var(--radius); }
+.filters-rail-badge { min-width: 1.25rem; padding: 0 .25rem; background: var(--primary); color: var(--on-primary); font-size: .75rem; font-weight: var(--w-bold); text-align: center; border-radius: var(--radius); }
 
 .notice { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-bottom: var(--space-3); }
 
@@ -602,13 +602,13 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
   font-size: var(--fs-sm);
   border-bottom: var(--border-w) solid var(--border-subtle);
 }
-.status-sep { color: var(--epfl-gray-300); }
+.status-sep { color: var(--fg-disabled); }
 .chip {
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
   padding: 0.125rem 0.125rem 0.125rem var(--space-2);
-  border: var(--border-w) solid var(--epfl-gray-300);
+  border: var(--border-w) solid var(--border);
   border-radius: var(--radius);
 }
 .chip button {

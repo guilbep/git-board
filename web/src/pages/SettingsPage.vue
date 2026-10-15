@@ -136,5 +136,5 @@ onMounted(() => {
 .gb-linkbtn { justify-self: start; padding: 0; border: 0; background: none; color: var(--fg); text-decoration: underline; cursor: pointer; font: inherit; }
 .set-login { color: var(--fg-muted); }
 .gb-switch { display: inline-flex; align-items: center; gap: .5rem; cursor: pointer; font-weight: 700; }
-.gb-switch input { width: 1.125rem; height: 1.125rem; accent-color: var(--epfl-red-dark); }
+.gb-switch input { width: 1.125rem; height: 1.125rem; accent-color: var(--primary-hover); }
 </style>

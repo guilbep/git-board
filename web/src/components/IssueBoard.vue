@@ -16,7 +16,7 @@
       @drop="onDrop(bucket.group, $event)"
     >
       <h2 class="column-title">
-        <span class="column-name"><span v-if="group && colorClass(group, bucket.group)" class="gb-dot" aria-hidden="true" />{{ groupLabel(bucket.group) }}</span>
+        <span class="column-name"><ValueMark v-if="group" :field="group" :value="bucket.group" />{{ groupLabel(bucket.group) }}</span>
         <span class="column-count">{{ bucket.issues.length }}</span>
       </h2>
       <ul class="cards">
@@ -35,7 +35,7 @@
             <span v-if="meta(issue).length" class="card-meta">
               <span v-for="m in meta(issue)" :key="m.name" class="meta-item">
                 <span class="meta-name">{{ displayName(m.name) }}</span>
-                <span v-for="v in m.values" :key="v" class="gb-val" :class="colorClass(m.name, v)">{{ formatValue(m.name, v, fields) }}</span>
+                <span v-for="v in m.values" :key="v" class="gb-val" :class="colorClass(m.name, v)"><ValueMark chip :field="m.name" :value="v" />{{ formatValue(m.name, v, fields) }}</span>
               </span>
             </span>
             <span v-if="otherLabels(issue.labels, names).length" class="card-other">
@@ -49,6 +49,7 @@
 </template>
 
 <script setup lang="ts">
+import ValueMark from '@/components/ValueMark.vue';
 import { ref } from 'vue';
 import type { Bucket, Issue } from '@/api/board';
 import { colorClass } from '@/colors';
@@ -166,7 +167,7 @@ function meta(issue: Issue) {
 .issue-card:hover { border-color: var(--fg); }
 .issue-card[draggable="true"] { cursor: grab; }
 .issue-card.is-dragging { opacity: .4; }
-.board-column.is-over { background: var(--bg); outline: 2px dashed var(--epfl-black); outline-offset: -2px; }
+.board-column.is-over { background: var(--bg); outline: 2px dashed var(--fg); outline-offset: -2px; }
 .cards { min-height: 3rem; }
 .issue-card:focus-visible { outline: var(--focus-w) solid var(--primary-hover); outline-offset: 0.125rem; }
 

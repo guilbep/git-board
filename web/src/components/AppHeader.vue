@@ -105,7 +105,7 @@ onMounted(() => {
   padding: 0 0.375rem;
   font-size: 0.75rem;
   font-weight: var(--w-bold);
-  color: var(--epfl-white);
+  color: var(--on-primary);
   background: var(--primary);
   border-radius: var(--radius);
 }

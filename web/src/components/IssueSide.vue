@@ -12,7 +12,7 @@
       <div class="gb-fields">
         <div v-for="name in names" :key="name" class="gb-field">
           <div class="gb-field-head">
-            <label class="epfl-label gb-field-label" :for="`f-${name}`"><span v-if="isSingle(name) && colorClass(name, single(name))" class="gb-dot" :class="colorClass(name, single(name))" aria-hidden="true" />{{ displayName(name) }}</label>
+            <label class="epfl-label gb-field-label" :for="`f-${name}`"><ValueMark v-if="isSingle(name) && single(name)" :field="name" :value="single(name)" />{{ displayName(name) }}</label>
             <router-link v-if="held(name)" to="/conflicts" class="gb-held-tag"><GbIcon name="warn" small /> Held</router-link>
           </div>
           <select v-if="isSingle(name) && fields[name]?.options?.length" :id="`f-${name}`" class="epfl-select" :value="single(name)" :disabled="saving" @change="onSelect(name, $event)">
@@ -114,6 +114,7 @@
 </template>
 
 <script setup lang="ts">
+import ValueMark from '@/components/ValueMark.vue';
 import { colorClass } from '@/colors';
 import { computed, reactive, ref, watch } from 'vue';
 import { getRefs, patchIssue, type Forge, type IssueEvent, type IssueRefs, type Person } from '@/api/board';
