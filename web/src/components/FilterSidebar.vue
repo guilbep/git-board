@@ -21,6 +21,7 @@
             </p>
           </details>
           <button type="button" class="filters-reset" :disabled="!modified" @click="emit('reset')">Reset</button>
+          <button type="button" class="filters-hide" aria-label="Hide filters" title="Hide filters" @click="emit('hide')"><GbIcon name="collapse" small /></button>
         </span>
       </div>
 
@@ -98,6 +99,7 @@
 </template>
 
 <script setup lang="ts">
+import GbIcon from '@/components/GbIcon.vue';
 import { colorClass } from '@/colors';
 import { facetLabel, pick, sortOptions, valueLabel, type Facet, type OptionSort, type Selection } from '@/facets';
 import type { Fields } from '@/fields';
@@ -106,7 +108,7 @@ import { computed, reactive } from 'vue';
 
 const props = defineProps<{ facets: Facet[]; sel: Selection; fields: Fields; modified: boolean; queryChanged: boolean }>();
 const query = defineModel<string>('query', { required: true });
-const emit = defineEmits<{ set: [key: string, values: string[]]; reset: []; apply: [] }>();
+const emit = defineEmits<{ set: [key: string, values: string[]]; reset: []; apply: []; hide: [] }>();
 
 // Each section's order: workflow when the field has configured options,
 // else by count; a choice is kept in this browser.
@@ -222,6 +224,9 @@ const active = computed(() => Object.values(props.sel).flat().length + Number(pr
 }
 
 .filters-head-r { display: inline-flex; align-items: center; gap: var(--space-2); }
+.filters-hide { display: inline-flex; align-items: center; justify-content: center; width: 2rem; height: 2rem; padding: 0; border: 1px solid var(--border); background: none; color: var(--fg); cursor: pointer; }
+.filters-hide:hover, .filters-hide:focus-visible { border-color: var(--fg); }
+@media (max-width: 63.99rem) { .filters-hide { display: none; } }
 .filters-help { position: relative; }
 .filters-help summary { display: inline-flex; align-items: center; justify-content: center; width: 1.5rem; height: 1.5rem; border: var(--border-w) solid var(--border); border-radius: 50%; font-size: 0.75rem; font-weight: var(--w-bold); color: var(--fg-muted); list-style: none; cursor: pointer; }
 .filters-help summary::-webkit-details-marker { display: none; }

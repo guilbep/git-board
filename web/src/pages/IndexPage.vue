@@ -1,8 +1,24 @@
 <template>
   <AppHeader :views="viewNames" :active="activeView" />
 
-  <div class="page">
+  <div class="page" :class="{ 'page-filters-hidden': filtersHidden }">
+    <!-- the filters folded to a rail (wide screens): its badge counts the
+         filters still applied -->
+    <button
+      v-if="filtersHidden"
+      type="button"
+      class="filters-rail"
+      :aria-label="activeFilters ? `Show filters, ${activeFilters} applied` : 'Show filters'"
+      title="Show filters"
+      @click="filtersHidden = false"
+    >
+      <GbIcon name="filter" small />
+      <span class="filters-rail-label">Filters</span>
+      <span v-if="activeFilters" class="filters-rail-badge">{{ activeFilters }}</span>
+    </button>
     <FilterSidebar
+      v-show="!filtersHidden"
+      @hide="filtersHidden = true"
       v-model:query="filterText"
       :facets="facetList"
       :sel="sel"
@@ -62,8 +78,7 @@
           </select>
         </div>
         <div class="toolbar-new">
-          <button type="button" class="epfl-btn epfl-btn-primary" @click="newOpen = true"><GbIcon name="plus" small /> New issue</button>
-          <span class="gb-keys" aria-hidden="true"><kbd>c</kbd></span>
+          <button type="button" class="epfl-btn epfl-btn-primary" title="New issue (keyboard: c)" aria-keyshortcuts="c" @click="newOpen = true"><GbIcon name="plus" small /> New issue</button>
         </div>
       </div>
 
@@ -238,6 +253,25 @@ const sort = computed(() =>
 const sortValue = computed(() => (typeof route.query.sort === 'string' ? route.query.sort : ''));
 
 const queryChanged = computed(() => filterText.value !== (view.value?.filter ?? 'is:open'));
+
+// the filters panel hidden to a rail, kept in this browser
+const filtersHidden = ref(readFlag('gb-filters-hidden'));
+watch(filtersHidden, (v) => writeFlag('gb-filters-hidden', v));
+const activeFilters = computed(() => Object.values(sel.value).flat().length + Number(queryChanged.value));
+function readFlag(key: string): boolean {
+  try {
+    return localStorage.getItem(key) === '1';
+  } catch {
+    return false;
+  }
+}
+function writeFlag(key: string, v: boolean) {
+  try {
+    localStorage.setItem(key, v ? '1' : '0');
+  } catch {
+    // private window: lasts until reload
+  }
+}
 const modified = computed(
   () =>
     queryChanged.value ||
@@ -533,6 +567,11 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
   padding: 0 var(--gutter);
 }
 .main { min-width: 0; padding: var(--space-4) 0 var(--space-5); }
+.page-filters-hidden { grid-template-columns: 2.75rem minmax(0, 1fr); }
+.filters-rail { position: sticky; top: 0; align-self: start; display: flex; flex-direction: column; align-items: center; gap: var(--space-2); width: 2.75rem; min-height: 12rem; margin-top: var(--space-4); padding: var(--space-3) 0; border: var(--border-w) solid var(--border); background: var(--bg-subtle); color: var(--fg); cursor: pointer; font: inherit; }
+.filters-rail:hover, .filters-rail:focus-visible { border-color: var(--fg); }
+.filters-rail-label { writing-mode: vertical-rl; transform: rotate(180deg); font-weight: var(--w-bold); font-size: var(--fs-sm); letter-spacing: .04em; }
+.filters-rail-badge { min-width: 1.25rem; padding: 0 .25rem; background: var(--primary); color: var(--epfl-white); font-size: .75rem; font-weight: var(--w-bold); text-align: center; border-radius: var(--radius); }
 
 .notice { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-bottom: var(--space-3); }
 
@@ -590,7 +629,10 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
 .state-title { color: var(--fg); font-weight: var(--w-bold); margin-bottom: var(--space-1); }
 
 @media (max-width: 63.99rem) {
-  .page { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .page, .page-filters-hidden { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  /* narrow: the filters fold on top of the issues by themselves */
+  .filters-rail { display: none; }
+  .page-filters-hidden > .filters { display: block !important; }
 }
 @media (max-width: 47.99rem) {
   .page { padding: 0 var(--space-3); }
