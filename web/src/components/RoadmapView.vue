@@ -14,7 +14,7 @@
 
     <section v-for="b in rows" :key="b.group" class="rm-group" :aria-label="group ? groupLabel(b.group) : 'Scheduled issues'">
       <h2 v-if="group" class="rm-group-title">
-        <span v-if="colorClass(group, b.group)" class="gb-dot" :class="colorClass(group, b.group)" aria-hidden="true" />
+        <ValueMark :field="group" :value="b.group" />
         {{ groupLabel(b.group) }} <span class="rm-count">{{ b.items.length }}</span>
       </h2>
       <div v-for="it in b.items" :key="it.issue.id" class="rm-row" @click="emit('open', it.issue)">
@@ -48,6 +48,7 @@
 </template>
 
 <script setup lang="ts">
+import ValueMark from '@/components/ValueMark.vue';
 import { computed, onMounted, ref } from 'vue';
 import { getSprints, type Bucket, type Issue, type SprintWindow } from '@/api/board';
 import { colorClass } from '@/colors';
