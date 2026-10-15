@@ -112,7 +112,7 @@ func s3Error(body []byte) string {
 // files. The bytes decide, then the name for text and zip kinds.
 func Check(name string, data []byte) (string, error) {
 	if len(data) > MaxBytes {
-		return "", fmt.Errorf("%s is over %d MB", name, MaxBytes>>20)
+		return "", fmt.Errorf("over %d MB", MaxBytes>>20)
 	}
 	detected := http.DetectContentType(data)
 	ext := strings.ToLower(path.Ext(name))
@@ -129,7 +129,7 @@ func Check(name string, data []byte) (string, error) {
 			return t, nil
 		}
 	}
-	return "", fmt.Errorf("%s: %s files can't be attached (images, PDF, video, text, CSV, zip and office files can)", name, strings.TrimPrefix(ext, "."))
+	return "", fmt.Errorf("%s files can't be attached (images, PDF, video, text, CSV, zip and office files can)", strings.TrimPrefix(or(ext, "these"), "."))
 }
 
 var textTypes = map[string]string{

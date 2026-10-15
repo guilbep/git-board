@@ -502,6 +502,8 @@ prefix = "git-board/co2-calculator"          # default git-board/<repository>
 
 Files are public-read, under a random path (the CDN isn't browsable):
 anyone with the link can open them, as with GitHub's own attachments.
+Deleting one from the bucket doesn't unpublish it: the CDN caches files
+for up to a year.
 Images (not SVG), PDF, video, text, CSV, zip and office files, 25 MB at
 most.
 
