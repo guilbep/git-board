@@ -144,9 +144,22 @@ func Load(path string) (*Config, error) {
 	if _, err := os.Stat(path); errors.Is(err, fs.ErrNotExist) {
 		return &Config{}, nil
 	}
-	var r raw
-	if _, err := toml.DecodeFile(path, &r); err != nil {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	cfg, _, err := parse(data)
+	if err != nil {
 		return nil, fmt.Errorf("parsing %s: %w", path, err)
+	}
+	return cfg, nil
+}
+
+func parse(data []byte) (*Config, toml.MetaData, error) {
+	var r raw
+	md, err := toml.Decode(string(data), &r)
+	if err != nil {
+		return nil, md, err
 	}
 	return &Config{
 		Repos:         r.Repos.List,
@@ -155,7 +168,7 @@ func Load(path string) (*Config, error) {
 		Views:         r.Views,
 		GithubProject: r.GithubProject,
 		Uploads:       r.Uploads,
-	}, nil
+	}, md, nil
 }
 
 // SetGithubProject upserts the [github-project] table in the

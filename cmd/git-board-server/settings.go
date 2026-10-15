@@ -28,7 +28,7 @@ func (s *apiServer) handleSettings(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
-	res := settingsResponse{Bridges: bridges, GithubProject: s.cfg.GithubProject, ConfigPath: config.Path()}
+	res := settingsResponse{Bridges: bridges, GithubProject: s.config().GithubProject, ConfigPath: s.configPath()}
 	if st := s.uploadStore(); st != nil {
 		res.Uploads.Enabled, res.Uploads.Endpoint, res.Uploads.PublicURL, res.Uploads.Prefix = true, st.Endpoint, st.PublicURL, st.Prefix
 	}

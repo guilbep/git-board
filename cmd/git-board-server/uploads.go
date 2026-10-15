@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/uploads"
 )
 
@@ -19,8 +18,8 @@ func (s *apiServer) uploadStore() *uploads.Store {
 	if s.store != nil {
 		return s.store
 	}
-	repo := filepath.Base(filepath.Dir(config.Path()))
-	if st, ok := uploads.FromEnv(s.cfg.Uploads, repo); ok {
+	repo := filepath.Base(filepath.Dir(s.configPath()))
+	if st, ok := uploads.FromEnv(s.config().Uploads, repo); ok {
 		return st
 	}
 	return nil
