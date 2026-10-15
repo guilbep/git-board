@@ -192,7 +192,11 @@
 .gb-md table{border-collapse:collapse;font-size:.875rem}
 .gb-md th,.gb-md td{padding:.375rem .75rem;border:1px solid var(--border);text-align:left;vertical-align:top}
 .gb-md th{background:var(--bg-subtle);font-weight:700}
-.gb-md blockquote{margin:0;padding:0 0 0 1rem;border-left:2px solid var(--border);color:var(--fg-muted)}
+/* a quote in issue text as GitHub shows it: the text's own size, upright,
+   a grey bar; not the EPFL pull quote (1.5rem italic between “ ”) */
+.gb-md blockquote{margin:0;padding:0 0 0 1rem;border-left:3px solid var(--border);color:var(--fg-muted);font-size:inherit;font-style:normal;line-height:inherit}
+.gb-md blockquote::before,.gb-md blockquote::after{content:none}
+.gb-md blockquote>*+*{margin-top:.5rem}
 .gb-iref{font-weight:700;text-decoration:none}
 .gb-iref:hover{text-decoration:underline}
 .gb-mention{font-weight:700;text-decoration:none}
