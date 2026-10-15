@@ -113,7 +113,7 @@
     </main>
   </div>
 
-  <q-dialog v-model="detailOpen" position="right" full-height @hide="closePanel">
+  <q-dialog v-model="detailOpen" position="right" full-height no-route-dismiss @hide="closePanel">
     <IssuePanel
       v-if="detailId"
       :id="detailId"
