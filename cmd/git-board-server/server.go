@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -65,6 +66,7 @@ func newMux(s *apiServer, static http.Handler) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/views", s.handleViews)
 	mux.HandleFunc("GET /api/config/fields", s.handleFields)
+	mux.HandleFunc("GET /api/colors", s.handleColors)
 	mux.HandleFunc("GET /api/issues", s.handleListIssues)
 	mux.HandleFunc("GET /api/issues/{id}", s.handleGetIssue)
 	mux.HandleFunc("PATCH /api/issues/{id}", s.handlePatchIssue)
@@ -108,6 +110,31 @@ func (s *apiServer) handleFields(w http.ResponseWriter, r *http.Request) {
 		fields = map[string]config.Field{}
 	}
 	writeJSON(w, http.StatusOK, fields)
+}
+
+// handleColors answers each field value's color (config.Colors): of the
+// labels in use and of the configured options, so a value shows the same
+// color everywhere.
+func (s *apiServer) handleColors(w http.ResponseWriter, r *http.Request) {
+	values := map[string][]string{}
+	for _, l := range s.b.Labels() {
+		if field, value, ok := strings.Cut(l, ":"); ok {
+			values[field] = append(values[field], value)
+		}
+	}
+	for name, f := range s.cfg.Fields {
+		values[name] = append(values[name], f.Options...)
+		for v := range f.Colors {
+			values[name] = append(values[name], v)
+		}
+	}
+	res := map[string]map[string]string{}
+	for field, vs := range values {
+		if colors := s.cfg.Colors(field, vs); len(colors) > 0 {
+			res[field] = colors
+		}
+	}
+	writeJSON(w, http.StatusOK, res)
 }
 
 // handleListIssues applies filter, then sort, then group — same semantics as

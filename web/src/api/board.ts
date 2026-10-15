@@ -76,6 +76,11 @@ export function getFields(): Promise<Record<string, FieldConfig>> {
   return request('/api/config/fields');
 }
 
+// Each field value's color name (field → value → grey, blue, …).
+export function getColors(): Promise<Record<string, Record<string, string>>> {
+  return request('/api/colors');
+}
+
 // Unsorted: the page sorts (facets.sortIssues), by option order where the
 // server would sort alphabetically.
 // q: the search box, GitHub's syntax (free text in titles, descriptions

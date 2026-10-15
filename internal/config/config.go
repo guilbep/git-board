@@ -26,6 +26,9 @@ type Field struct {
 	// slug of the Project's name isn't the value: comite = "Comité
 	// Spécialisé".
 	Project map[string]string `toml:"project" json:"project,omitempty"`
+	// Colors picks a value's color from Palette: "in review" = "purple".
+	// Values without one get a default (Config.Color).
+	Colors map[string]string `toml:"colors" json:"colors,omitempty"`
 }
 
 // KnownValue reports whether value is one of Options — or true if Options is
@@ -147,6 +150,9 @@ func Load(path string) (*Config, error) {
 	var r raw
 	if _, err := toml.DecodeFile(path, &r); err != nil {
 		return nil, fmt.Errorf("parsing %s: %w", path, err)
+	}
+	if err := checkColors(r.Fields); err != nil {
+		return nil, fmt.Errorf("%s: %w", path, err)
 	}
 	return &Config{
 		Repos:         r.Repos.List,

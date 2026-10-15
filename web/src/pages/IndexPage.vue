@@ -152,6 +152,7 @@ import {
 import {
   facetLabel, facets, matches, namespaces, parseSelection, parseSort, sortIssues, valueLabel,
 } from '@/facets';
+import { loadColors } from '@/colors';
 import { displayName, orderBuckets } from '@/fields';
 import AppHeader from '@/components/AppHeader.vue';
 import FilterSidebar from '@/components/FilterSidebar.vue';
@@ -336,7 +337,7 @@ async function load() {
   loading.value = true;
   listError.value = '';
   try {
-    const result = await getIssues(filterText.value, groupField.value, q.value);
+    const [result] = await Promise.all([getIssues(filterText.value, groupField.value, q.value), loadColors()]);
     if (mine === latest) buckets.value = result;
   } catch (e: unknown) {
     if (mine === latest) {

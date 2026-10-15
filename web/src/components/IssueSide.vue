@@ -12,7 +12,7 @@
       <div class="gb-fields">
         <div v-for="name in names" :key="name" class="gb-field">
           <div class="gb-field-head">
-            <label class="epfl-label" :for="`f-${name}`">{{ displayName(name) }}</label>
+            <label class="epfl-label gb-field-label" :for="`f-${name}`"><span v-if="isSingle(name) && colorClass(name, single(name))" class="gb-dot" :class="colorClass(name, single(name))" aria-hidden="true" />{{ displayName(name) }}</label>
             <router-link v-if="held(name)" to="/conflicts" class="gb-held-tag"><GbIcon name="warn" small /> Held</router-link>
           </div>
           <select v-if="isSingle(name) && fields[name]?.options?.length" :id="`f-${name}`" class="epfl-select" :value="single(name)" :disabled="saving" @change="onSelect(name, $event)">
@@ -22,7 +22,7 @@
           <input v-else-if="isSingle(name)" :id="`f-${name}`" class="epfl-input" :value="single(name)" :disabled="saving" @change="onText(name, $event)" />
           <template v-else>
             <ul v-if="values(name).length" class="gb-chips" :aria-label="displayName(name)">
-              <li v-for="v in values(name)" :key="v" class="gb-chip">
+              <li v-for="v in values(name)" :key="v" class="gb-chip" :class="colorClass(name, v)">
                 {{ formatValue(name, v, fields) }}
                 <button type="button" class="gb-chip-x" :aria-label="`Remove ${v} from ${name}`" :disabled="saving" @click="save(name, `-${v}`)">×</button>
               </li>
@@ -79,6 +79,7 @@
 </template>
 
 <script setup lang="ts">
+import { colorClass } from '@/colors';
 import { computed, reactive, ref } from 'vue';
 import { patchIssue, type Forge, type IssueEvent, type Person } from '@/api/board';
 import { displayName, fieldValues, formatValue, type Fields } from '@/fields';
@@ -186,4 +187,5 @@ function addLabel() {
 .gb-person { display: flex; align-items: baseline; gap: .5rem; padding: .25rem 0; }
 .gb-person .gb-avatar { align-self: center; }
 .gb-held-tag { display: inline-flex; align-items: center; gap: .25rem; text-decoration: none; }
+.gb-field-label { display: inline-flex; align-items: center; gap: var(--space-2); }
 </style>

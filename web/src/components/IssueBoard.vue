@@ -9,14 +9,14 @@
       v-for="bucket in buckets"
       :key="bucket.group"
       class="board-column"
-      :class="{ 'is-over': over === bucket.group && dragFrom !== bucket.group }"
+      :class="[colorClass(group, bucket.group), { 'is-over': over === bucket.group && dragFrom !== bucket.group }]"
       :aria-label="`${groupLabel(bucket.group)}, ${bucket.issues.length} issues`"
       @dragover="onOver(bucket.group, $event)"
       @dragleave="onLeave(bucket.group, $event)"
       @drop="onDrop(bucket.group, $event)"
     >
       <h2 class="column-title">
-        {{ groupLabel(bucket.group) }}
+        <span class="column-name"><span v-if="group && colorClass(group, bucket.group)" class="gb-dot" aria-hidden="true" />{{ groupLabel(bucket.group) }}</span>
         <span class="column-count">{{ bucket.issues.length }}</span>
       </h2>
       <ul class="cards">
@@ -33,8 +33,9 @@
             <span class="card-id">{{ issue.id.slice(0, 8) }}</span>
             <span class="card-title">{{ issue.title }}</span>
             <span v-if="meta(issue).length" class="card-meta">
-              <span v-for="m in meta(issue)" :key="m.name">
-                <span class="meta-name">{{ displayName(m.name) }}</span> {{ m.value }}
+              <span v-for="m in meta(issue)" :key="m.name" class="meta-item">
+                <span class="meta-name">{{ displayName(m.name) }}</span>
+                <span v-for="v in m.values" :key="v" class="gb-val" :class="colorClass(m.name, v)">{{ formatValue(m.name, v, fields) }}</span>
               </span>
             </span>
             <span v-if="otherLabels(issue.labels, names).length" class="card-other">
@@ -50,6 +51,7 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import type { Bucket, Issue } from '@/api/board';
+import { colorClass } from '@/colors';
 import { displayName, fieldValues, formatValue, otherLabels, type Fields } from '@/fields';
 
 const props = defineProps<{ buckets: Bucket[]; names: string[]; fields: Fields; group: string }>();
@@ -99,11 +101,8 @@ function groupLabel(value: string): string {
 function meta(issue: Issue) {
   return props.names
     .filter((name) => name !== props.group)
-    .map((name) => ({
-      name,
-      value: fieldValues(issue.labels, name).map((v) => formatValue(name, v, props.fields)).join(', '),
-    }))
-    .filter((m) => m.value);
+    .map((name) => ({ name, values: fieldValues(issue.labels, name) }))
+    .filter((m) => m.values.length);
 }
 </script>
 
@@ -137,6 +136,9 @@ function meta(issue: Issue) {
   letter-spacing: .04em;
 }
 .column-count { color: var(--fg-muted); font-weight: var(--w-normal); }
+.column-name { display: inline-flex; align-items: center; gap: var(--space-2); }
+.board-column[class*="gb-c-"] { border-top: 3px solid var(--c-dot); }
+.meta-item { display: inline-flex; align-items: center; gap: var(--space-1); }
 
 .cards {
   list-style: none;
@@ -169,7 +171,7 @@ function meta(issue: Issue) {
 
 .card-id { font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--fg-muted); }
 .card-title { font-size: 0.9375rem; font-weight: var(--w-bold); line-height: var(--lh-normal); overflow-wrap: anywhere; }
-.card-meta { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-3); font-size: var(--fs-sm); }
+.card-meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-3); font-size: var(--fs-sm); }
 .meta-name { color: var(--fg-muted); }
 .card-other { font-size: var(--fs-xs); color: var(--fg-muted); }
 </style>

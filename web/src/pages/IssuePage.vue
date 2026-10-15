@@ -11,6 +11,7 @@
 import { onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import { getFields, getViews, type FieldConfig } from '@/api/board';
+import { loadColors } from '@/colors';
 import { namespaces } from '@/facets';
 import AppHeader from '@/components/AppHeader.vue';
 import IssuePanel from '@/components/IssuePanel.vue';
@@ -22,7 +23,7 @@ const names = ref<string[]>([]);
 
 onMounted(async () => {
   try {
-    const [views, f] = await Promise.all([getViews(), getFields()]);
+    const [views, f] = await Promise.all([getViews(), getFields(), loadColors()]);
     viewNames.value = Object.keys(views).sort();
     fields.value = f;
     names.value = namespaces([], f);

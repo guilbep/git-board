@@ -49,7 +49,7 @@
               :checked="!!sel[f.key]?.includes(value)"
               @change="emit('toggle', f.key, value)"
             />
-            <span class="filters-option-label">{{ valueLabel(f.key, value, fields) }}</span>
+            <span class="filters-option-label"><span v-if="colorClass(f.key, value)" class="gb-dot" :class="colorClass(f.key, value)" aria-hidden="true" /> {{ valueLabel(f.key, value, fields) }}</span>
             <span class="filters-count">{{ count }}</span>
           </label>
         </div>
@@ -59,6 +59,7 @@
 </template>
 
 <script setup lang="ts">
+import { colorClass } from '@/colors';
 import { facetLabel, valueLabel, type Facet, type Selection } from '@/facets';
 import type { Fields } from '@/fields';
 

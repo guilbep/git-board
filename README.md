@@ -115,6 +115,24 @@ layout = "table"
 filter = "assignee:@me is:open"
 ```
 
+**Colors.** Every field value gets a color, in the table, on the board
+(column edge, card chips), in the panel and the filters. Without any
+config, a word in the value picks it: done/validated/closed green,
+review/qa purple, validation pink, in-progress/doing blue, ready/feat
+teal, waiting/comite/p2 amber, test/p1/high orange, blocked/bug/fix/p0
+red, backlog/todo/p3/low grey; other values take blue, purple, teal and
+pink in turn (sorted, so adding a value can shift the ones after it).
+Numbers and assignees stay plain. To pick one yourself:
+
+```toml
+[fields.status.colors]
+"in-review" = "purple"
+validated = "green"
+```
+
+Colors: grey, blue, purple, amber (or yellow), orange, green, red, teal,
+pink.
+
 ## Usage
 
 Run from inside a git-bug-initialized repo (or a subdirectory of one), next

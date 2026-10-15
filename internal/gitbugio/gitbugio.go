@@ -132,6 +132,15 @@ func (b *Backend) ListIssues() ([]Issue, error) {
 	return issues, nil
 }
 
+// Labels is every label in use, on any issue.
+func (b *Backend) Labels() []string {
+	var res []string
+	for _, l := range b.c.Bugs().ValidLabels() {
+		res = append(res, l.String())
+	}
+	return res
+}
+
 // issueFrom is excerptToIssue with who opened it, for author:.
 func (b *Backend) issueFrom(id string, e *cache.BugExcerpt) Issue {
 	issue := excerptToIssue(id, e)

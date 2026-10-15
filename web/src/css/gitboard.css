@@ -301,3 +301,32 @@
   .gb-ititle { flex-wrap: wrap; }
   .gb-ititle h2 { flex-basis: 100%; font-size: 1.25rem; }
 }
+
+/* Field value colors (config.Color, GET /api/colors): a tinted chip with
+   strong text (6.6:1 or more), a dot or a top border for columns. Light
+   only, like the EPFL tokens; a dark theme would redefine these. */
+:root{
+  --gb-grey-bg:#EEEEEE;--gb-grey-fg:#424242;--gb-grey-dot:#8A8A8A;
+  --gb-blue-bg:#E8F1FB;--gb-blue-fg:#1E4A72;--gb-blue-dot:#3A7BC8;
+  --gb-purple-bg:#F1E8FA;--gb-purple-fg:#5B2A86;--gb-purple-dot:#8E44AD;
+  --gb-amber-bg:#FDF2DC;--gb-amber-fg:#6E4D0B;--gb-amber-dot:#D99100;
+  --gb-orange-bg:#FFE9D6;--gb-orange-fg:#8A3B00;--gb-orange-dot:#E06A00;
+  --gb-green-bg:#ECFAE0;--gb-green-fg:#33531A;--gb-green-dot:#4F9A1A;
+  --gb-red-bg:#FFE5E5;--gb-red-fg:#80000C;--gb-red-dot:#E00000;
+  --gb-teal-bg:#DFF5F3;--gb-teal-fg:#00524F;--gb-teal-dot:#00897F;
+  --gb-pink-bg:#FCE4F1;--gb-pink-fg:#8A1453;--gb-pink-dot:#D63A8E
+}
+.gb-c-grey{--c-bg:var(--gb-grey-bg);--c-fg:var(--gb-grey-fg);--c-dot:var(--gb-grey-dot)}
+.gb-c-blue{--c-bg:var(--gb-blue-bg);--c-fg:var(--gb-blue-fg);--c-dot:var(--gb-blue-dot)}
+.gb-c-purple{--c-bg:var(--gb-purple-bg);--c-fg:var(--gb-purple-fg);--c-dot:var(--gb-purple-dot)}
+.gb-c-amber{--c-bg:var(--gb-amber-bg);--c-fg:var(--gb-amber-fg);--c-dot:var(--gb-amber-dot)}
+.gb-c-orange{--c-bg:var(--gb-orange-bg);--c-fg:var(--gb-orange-fg);--c-dot:var(--gb-orange-dot)}
+.gb-c-green{--c-bg:var(--gb-green-bg);--c-fg:var(--gb-green-fg);--c-dot:var(--gb-green-dot)}
+.gb-c-red{--c-bg:var(--gb-red-bg);--c-fg:var(--gb-red-fg);--c-dot:var(--gb-red-dot)}
+.gb-c-teal{--c-bg:var(--gb-teal-bg);--c-fg:var(--gb-teal-fg);--c-dot:var(--gb-teal-dot)}
+.gb-c-pink{--c-bg:var(--gb-pink-bg);--c-fg:var(--gb-pink-fg);--c-dot:var(--gb-pink-dot)}
+.gb-val{display:inline-flex;align-items:center;padding:.0625rem .5rem;border-radius:var(--radius);background:var(--c-bg,var(--bg-subtle));color:var(--c-fg,var(--fg));font-size:.8125rem;font-weight:700;line-height:1.5;white-space:nowrap}
+.gb-dot{display:inline-block;flex:none;width:.625rem;height:.625rem;border-radius:50%;background:var(--c-dot,var(--border-strong))}
+.gb-val:not([class*="gb-c-"]){padding:0;background:none;color:var(--fg);font-weight:400}
+.gb-chip[class*="gb-c-"]{background:var(--c-bg);color:var(--c-fg);border-color:var(--c-dot);font-weight:700}
+.gb-chip[class*="gb-c-"] button{color:var(--c-fg)}

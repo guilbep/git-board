@@ -4,6 +4,7 @@
 <template>
   <section v-for="bucket in buckets" :key="bucket.group" class="table-group">
     <h2 v-if="group" class="group-title">
+      <span v-if="colorClass(group, bucket.group)" class="gb-dot" :class="colorClass(group, bucket.group)" aria-hidden="true" />
       {{ groupLabel(bucket.group) }}
       <span class="group-count">{{ bucket.issues.length }}</span>
     </h2>
@@ -33,7 +34,11 @@
             <td class="cell-id">{{ issue.id.slice(0, 8) }}</td>
             <td class="cell-title"><button type="button" class="title-button">{{ issue.title }}</button></td>
             <td>{{ issue.status }}</td>
-            <td v-for="name in names" :key="name">{{ cell(issue, name) }}</td>
+            <td v-for="name in names" :key="name">
+              <span class="cell-tags">
+                <span v-for="v in fieldValues(issue.labels, name)" :key="v" class="gb-val" :class="colorClass(name, v)">{{ formatValue(name, v, fields) }}</span>
+              </span>
+            </td>
             <td class="cell-other">{{ otherLabels(issue.labels, names).join(', ') }}</td>
           </tr>
         </tbody>
@@ -46,6 +51,7 @@
 import { computed } from 'vue';
 import type { Bucket, Issue } from '@/api/board';
 import type { Sort } from '@/facets';
+import { colorClass } from '@/colors';
 import { displayName, fieldValues, formatValue, otherLabels, type Fields } from '@/fields';
 
 const props = defineProps<{
@@ -69,13 +75,11 @@ function groupLabel(value: string): string {
   return formatValue(props.group, value, props.fields);
 }
 
-function cell(issue: Issue, name: string): string {
-  return fieldValues(issue.labels, name).map((v) => formatValue(name, v, props.fields)).join(', ');
-}
 </script>
 
 <style scoped>
 .table-group + .table-group { margin-top: var(--space-5); }
+.cell-tags { display: inline-flex; flex-wrap: wrap; gap: var(--space-1); }
 
 .group-title {
   display: flex;
