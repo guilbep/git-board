@@ -68,6 +68,7 @@ type apiServer struct {
 func newMux(s *apiServer, static http.Handler) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/views", s.handleViews)
+	mux.HandleFunc("PUT /api/views/{name}", s.handleSaveView)
 	mux.HandleFunc("GET /api/config/fields", s.handleFields)
 	mux.HandleFunc("GET /api/colors", s.handleColors)
 	mux.HandleFunc("GET /api/issues", s.handleListIssues)

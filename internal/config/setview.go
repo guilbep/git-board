@@ -1,0 +1,109 @@
+package config
+
+import (
+	"fmt"
+	"regexp"
+	"strings"
+)
+
+var viewName = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
+
+// keyLine is `key = "value"  # comment`: the key, the value as written,
+// and what follows it.
+var keyLine = regexp.MustCompile(`^(\s*([A-Za-z0-9_-]+)\s*=\s*)("(?:[^"\\]|\\.)*"|'[^']*'|[^#\s]+)(.*)$`)
+
+// SetViewText is text with the [views.<name>] table holding v, the way the
+// board's "Save view" writes it: its layout, filter, group and sort lines
+// rewritten in place (trailing comments kept, an empty value removed, a
+// missing one added after the table's last key), every other line of the
+// file untouched; a new table appended when there is none.
+func SetViewText(text, name string, v View) (string, error) {
+	if !viewName.MatchString(name) {
+		return "", fmt.Errorf("a view's name is letters, digits, - and _, not %q", name)
+	}
+	keys := []string{"layout", "filter", "group", "sort"}
+	vals := map[string]string{"layout": v.Layout, "filter": v.Filter, "group": v.Group, "sort": v.Sort}
+	header := "[views." + name + "]"
+
+	lines := strings.Split(text, "\n")
+	start := -1
+	for i, l := range lines {
+		if strings.TrimSpace(l) == header {
+			start = i
+			break
+		}
+	}
+	if start < 0 {
+		var b strings.Builder
+		b.WriteString(header + "\n")
+		for _, k := range keys {
+			if vals[k] != "" {
+				b.WriteString(k + " = " + tomlString(vals[k]) + "\n")
+			}
+		}
+		if base := strings.TrimRight(text, "\n"); base != "" {
+			return base + "\n\n" + b.String(), nil
+		}
+		return b.String(), nil
+	}
+
+	end := len(lines)
+	for i := start + 1; i < len(lines); i++ {
+		if strings.HasPrefix(strings.TrimSpace(lines[i]), "[") {
+			end = i
+			break
+		}
+	}
+	var block []string
+	seen := map[string]bool{}
+	lastKey := -1 // in block: where missing keys go
+	for _, l := range lines[start+1 : end] {
+		m := keyLine.FindStringSubmatch(l)
+		if m == nil {
+			block = append(block, l)
+			continue
+		}
+		k := m[2]
+		want, ours := vals[k]
+		if !ours {
+			block = append(block, l)
+			lastKey = len(block) - 1
+			continue
+		}
+		seen[k] = true
+		if want == "" {
+			continue
+		}
+		if unquote(m[3]) != want {
+			l = m[1] + tomlString(want) + m[4]
+		}
+		block = append(block, l)
+		lastKey = len(block) - 1
+	}
+	var missing []string
+	for _, k := range keys {
+		if !seen[k] && vals[k] != "" {
+			missing = append(missing, k+" = "+tomlString(vals[k]))
+		}
+	}
+	block = append(block[:lastKey+1], append(missing, block[lastKey+1:]...)...)
+
+	out := append(append(append([]string{}, lines[:start+1]...), block...), lines[end:]...)
+	return strings.Join(out, "\n"), nil
+}
+
+// tomlString quotes s as a TOML basic string.
+func tomlString(s string) string {
+	return `"` + strings.NewReplacer(`\`, `\\`, `"`, `\"`, "\n", `\n`, "\t", `\t`).Replace(s) + `"`
+}
+
+// unquote reads back a value tomlString wrote, or a literal 'string'.
+func unquote(v string) string {
+	switch {
+	case len(v) >= 2 && v[0] == '\'':
+		return v[1 : len(v)-1]
+	case len(v) >= 2 && v[0] == '"':
+		return strings.NewReplacer(`\\`, `\`, `\"`, `"`, `\n`, "\n", `\t`, "\t").Replace(v[1 : len(v)-1])
+	}
+	return v
+}

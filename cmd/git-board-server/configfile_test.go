@@ -93,3 +93,34 @@ func TestConfigDocsComeInSections(t *testing.T) {
 		t.Errorf("fields section: %s %q", docs[1].Title, docs[1].HTML[:min(200, len(docs[1].HTML))])
 	}
 }
+
+func TestSaveViewWritesItsTable(t *testing.T) {
+	ts, s := newIssueServer(t)
+	s.cfgPath = filepath.Join(t.TempDir(), ".git-board.toml")
+	if err := os.WriteFile(s.cfgPath, []byte("# team board\n[views.backlog]\nfilter = \"is:open\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	body := map[string]string{"layout": "table", "filter": "is:open -status:validated", "group": "sprint", "sort": "prio asc"}
+	if code := call(t, "PUT", ts.URL+"/api/views/backlog", body, nil); code != http.StatusOK {
+		t.Fatalf("save: %d", code)
+	}
+	var views map[string]struct{ Filter, Group, Sort string }
+	call(t, "GET", ts.URL+"/api/views", nil, &views)
+	if v := views["backlog"]; v.Filter != "is:open -status:validated" || v.Group != "sprint" || v.Sort != "prio asc" {
+		t.Errorf("served at once: %+v", v)
+	}
+	got, _ := os.ReadFile(s.cfgPath)
+	if !strings.HasPrefix(string(got), "# team board\n[views.backlog]\n") {
+		t.Errorf("file %q", got)
+	}
+	if code := call(t, "PUT", ts.URL+"/api/views/in-review", map[string]string{"layout": "board", "filter": "status:in-review,qa", "group": "assignee"}, nil); code != http.StatusOK {
+		t.Errorf("a new view: %d", code)
+	}
+	if code := call(t, "PUT", ts.URL+"/api/views/my%20view", body, nil); code != http.StatusBadRequest {
+		t.Errorf("a name with a space: %d, want 400", code)
+	}
+	s.syncing.Store(true)
+	if code := call(t, "PUT", ts.URL+"/api/views/backlog", body, nil); code != http.StatusConflict {
+		t.Errorf("during a forge sync: %d, want 409", code)
+	}
+}

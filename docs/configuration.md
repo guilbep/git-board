@@ -60,6 +60,8 @@ The colors are grey, blue, purple, amber (or yellow), orange, green, red, teal a
 
 A view is a saved page: it appears in the header, in alphabetical order, and its address can be bookmarked.
 
+You rarely need to write one by hand. On the board, change the search, the filters, the grouping or the sort, and a bar offers **Save view** (into this view, for everyone) or **Save as new view…**; **Discard** goes back to the saved one. Only the view's table changes in the file, comments included.
+
 ```toml
 [views.current-sprint]
 layout = "board"
@@ -87,6 +89,7 @@ A view's `filter` and the page's search box take the same syntax. Conditions com
 | --- | --- |
 | `status:ready` | issues with the label `status:ready` |
 | `-status:ready` | issues without it |
+| `status:ready,qa` | either value, as in GitHub's search; works with `is:`, `label:` and `author:` too |
 | `sprint:@current`, `@next`, `@previous` | the sprint of today, the next or the previous one, from `[[sprints.list]]` |
 | `assignee:@me` | you: your git-bug identity's GitHub or GitLab login |
 | `is:open`, `is:closed` | open or closed issues |

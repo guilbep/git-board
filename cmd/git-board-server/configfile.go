@@ -177,3 +177,41 @@ var configDocs = sync.OnceValue(func() []docSection {
 func (s *apiServer) handleConfigDocs(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, configDocs())
 }
+
+// handleSaveView writes one view's table into .git-board.toml, the board's
+// "Save view" (or "Save as new view"): filter, group, sort and layout, the
+// rest of the file untouched, served at once.
+func (s *apiServer) handleSaveView(w http.ResponseWriter, r *http.Request) {
+	var v config.View
+	if !decode(w, r, &v) {
+		return
+	}
+	done, ok := s.beginWrite(w)
+	if !ok {
+		return
+	}
+	defer done()
+	text, _, _, err := s.readConfigFile()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	updated, err := config.SetViewText(text, r.PathValue("name"), v)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	cfg, res := checkConfig(updated)
+	if !res.OK {
+		writeJSON(w, http.StatusBadRequest, res)
+		return
+	}
+	if err := config.Save(s.configPath(), []byte(updated)); err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	s.cfgMu.Lock()
+	s.cfg = cfg
+	s.cfgMu.Unlock()
+	writeJSON(w, http.StatusOK, cfg.Views)
+}

@@ -385,3 +385,9 @@ export interface DocSection {
 export function getConfigDocs(): Promise<DocSection[]> {
   return request('/api/config/docs');
 }
+
+// saveView writes [views.<name>] into .git-board.toml (the board's "Save
+// view"); the answer is every view, as GET /api/views.
+export function saveView(name: string, v: ViewConfig): Promise<Record<string, ViewConfig>> {
+  return request(`/api/views/${encodeURIComponent(name)}`, json('PUT', v));
+}

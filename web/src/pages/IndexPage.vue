@@ -67,6 +67,29 @@
         </div>
       </div>
 
+      <!-- What differs from the saved view, as GitHub Projects shows it:
+           saved into .git-board.toml for everyone, or dropped. -->
+      <div v-if="viewDirty" class="viewbar" role="region" aria-label="Unsaved changes to the view">
+        <span class="viewbar-what">
+          <b>{{ activeView ? `Unsaved changes to ${activeView}` : 'Not a saved view' }}</b>
+          <code class="viewbar-filter">{{ draft.filter }}</code>
+          <span v-if="draft.group" class="viewbar-meta">grouped by {{ draft.group }}</span>
+          <span v-if="draft.sort" class="viewbar-meta">sorted by {{ draft.sort }}</span>
+        </span>
+        <form v-if="naming" class="viewbar-name" @submit.prevent="saveAs">
+          <input id="viewname" aria-label="New view name" ref="nameInput" v-model="newName" class="epfl-input" placeholder="new-view-name" pattern="[A-Za-z0-9_\-]+" title="Letters, digits, - and _" required @keydown.esc.stop="naming = false" />
+          <button type="submit" class="epfl-btn epfl-btn-primary epfl-btn-sm" :disabled="savingView">Save</button>
+          <button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" @click="naming = false">Cancel</button>
+        </form>
+        <template v-else>
+          <button v-if="activeView" type="button" class="epfl-btn epfl-btn-primary epfl-btn-sm" :disabled="savingView" @click="save(activeView)">Save view</button>
+          <button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" @click="startNaming">Save as new view…</button>
+          <button type="button" class="viewbar-discard" @click="resetAll">Discard</button>
+        </template>
+        <p v-if="draftSkipped.length" class="viewbar-note">Not saved: {{ draftSkipped.join(', ') }} (“(none)” together with values has no single filter).</p>
+        <p v-if="viewError" class="viewbar-note viewbar-error" role="alert">Not saved: {{ viewError }}</p>
+      </div>
+
       <div v-if="buckets" class="status" role="status">
         <span><b>{{ count }}</b> of {{ total }} {{ total === 1 ? 'issue' : 'issues' }}</span>
         <template v-if="chips.length">
@@ -156,13 +179,14 @@ import { panelMode } from '@/panelsize';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import {
-  changeLabels, getFields, getIssues, getViews,
+  changeLabels, getFields, getIssues, getViews, saveView,
   type Bucket, type FieldConfig, type Issue, type ViewConfig,
 } from '@/api/board';
 import {
   facetLabel, facets, matches, namespaces, parseSelection, parseSort, sortIssues, valueLabel,
 } from '@/facets';
 import { loadColors } from '@/colors';
+import { composeFilter } from '@/viewfilter';
 import { displayName, orderBuckets } from '@/fields';
 import AppHeader from '@/components/AppHeader.vue';
 import FilterSidebar from '@/components/FilterSidebar.vue';
@@ -317,6 +341,52 @@ function message(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 
+// The view as the page shows it now, and whether that differs from the
+// saved one: the bar offers to save it into .git-board.toml.
+const composed = computed(() => composeFilter(filterText.value, sel.value, q.value));
+const draftSkipped = computed(() => composed.value.skipped);
+const draft = computed<ViewConfig>(() => ({
+  layout: layout.value,
+  filter: composed.value.filter,
+  group: groupField.value,
+  sort: sortValue.value || (view.value?.sort ?? ''),
+}));
+const viewDirty = computed(() => {
+  const v = view.value;
+  const d = draft.value;
+  if (!v) return d.filter !== 'is:open' || d.group !== '' || d.sort !== '';
+  return d.filter !== v.filter || d.group !== (v.group ?? '') || d.sort !== (v.sort ?? '');
+});
+const naming = ref(false);
+const newName = ref('');
+const nameInput = ref<HTMLInputElement | null>(null);
+const savingView = ref(false);
+const viewError = ref('');
+
+function startNaming() {
+  newName.value = activeView.value ? `${activeView.value}-copy` : '';
+  naming.value = true;
+  void Promise.resolve().then(() => nameInput.value?.select());
+}
+
+async function save(name: string) {
+  savingView.value = true;
+  viewError.value = '';
+  try {
+    views.value = await saveView(name, draft.value);
+    naming.value = false;
+    // the saved view, without the URL's search, facets and sort it now holds
+    await router.replace({ query: { view: name } });
+    resetView();
+  } catch (e) {
+    viewError.value = message(e);
+  } finally {
+    savingView.value = false;
+  }
+}
+
+const saveAs = () => save(newName.value.trim());
+
 async function loadConfig() {
   configError.value = '';
   try {
@@ -444,6 +514,15 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
 </script>
 
 <style scoped>
+.viewbar { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem .75rem; margin: 0 0 1rem; padding: .625rem .875rem; border: 1px solid var(--warning-border); border-left: 4px solid var(--warning); background: var(--warning-bg); }
+.viewbar-what { display: flex; flex-wrap: wrap; align-items: baseline; gap: .25rem .625rem; flex: 1 1 22rem; min-width: 0; }
+.viewbar-filter { padding: .05em .4em; background: var(--bg); border: 1px solid var(--border-subtle); font-size: .8125rem; overflow-wrap: anywhere; }
+.viewbar-meta { font-size: .875rem; color: var(--fg-muted); }
+.viewbar-name { display: flex; align-items: center; gap: .5rem; }
+.viewbar-name .epfl-input { width: 14rem; min-height: 2rem; padding: .25rem .5rem; }
+.viewbar-discard { padding: 0; border: 0; background: none; color: var(--fg); text-decoration: underline; cursor: pointer; font: inherit; }
+.viewbar-note { flex-basis: 100%; margin: 0; font-size: .8125rem; color: var(--fg-muted); }
+.viewbar-error { color: var(--danger-fg); }
 /* The masonry-walls database layout: a 17rem filter sidebar, a fluid main
    column; the sidebar goes on top on narrower screens. */
 .page {
