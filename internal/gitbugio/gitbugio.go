@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/git-bug/git-bug/cache"
 	bugent "github.com/git-bug/git-bug/entities/bug"
@@ -39,6 +40,8 @@ type Issue struct {
 	Labels    []string `json:"labels"`
 	GithubURL string   `json:"github_url,omitempty"` // "" if not bridged in from GitHub
 	Forges    []Forge  `json:"forges,omitempty"`     // where it is on forges
+	// UpdatedAt is its last change, for "changed since your last visit".
+	UpdatedAt time.Time `json:"updated_at"`
 	// AuthorLogins are who opened it, for author:: name, login, forge
 	// logins.
 	AuthorLogins []string `json:"-"`
@@ -164,7 +167,8 @@ func excerptToIssue(id string, e *cache.BugExcerpt) Issue {
 		status = "closed"
 	}
 	forges, _ := forgesOf(e.CreateMetadata)
-	return Issue{ID: id, Title: e.Title, Status: status, Labels: labels, GithubURL: e.CreateMetadata[githubURLMetaKey], Forges: forges}
+	return Issue{ID: id, Title: e.Title, Status: status, Labels: labels, GithubURL: e.CreateMetadata[githubURLMetaKey], Forges: forges,
+		UpdatedAt: time.Unix(e.EditUnixTime, 0)}
 }
 
 // GetIssue resolves a bug by id prefix.

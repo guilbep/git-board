@@ -53,7 +53,7 @@
               </td>
               <template v-for="key in cols" :key="key">
                 <td v-if="key === 'id'" class="cell-id">{{ issue.id.slice(0, 8) }}</td>
-                <td v-else-if="key === 'title'" class="cell-title"><button type="button" class="title-button">{{ issue.title }}</button></td>
+                <td v-else-if="key === 'title'" class="cell-title"><span v-if="changed?.has(issue.id)" class="gb-changed-dot" title="Changed since your last visit" /><button type="button" class="title-button">{{ issue.title }}</button></td>
                 <td v-else-if="key === 'is'">{{ issue.status }}</td>
                 <td v-else-if="key === 'links'" class="cell-links" @click.stop>
                   <a v-for="f in issue.forges ?? []" :key="f.url" :href="f.url" target="_blank" rel="noopener noreferrer" class="forge-link" :title="`Open on ${f.name}`">
@@ -115,6 +115,7 @@ import GbIcon from '@/components/GbIcon.vue';
 import ValueMark from '@/components/ValueMark.vue';
 
 const props = defineProps<{
+  changed?: Set<string>; // since your last visit: a dot
   buckets: Bucket[];
   names: string[];
   fields: Fields;

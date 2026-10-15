@@ -49,6 +49,10 @@
         </p>
       </div>
 
+      <!-- toolbar, unsaved-view bar and count stick under the header
+           (wide screens); their height feeds --gb-tools-h, which the
+           table's column titles and the board's height use -->
+      <div ref="tools" class="tools">
       <div class="toolbar">
         <div class="toolbar-field toolbar-search">
           <label class="epfl-label" for="search">Search <span class="search-hint">titles, descriptions, comments</span></label>
@@ -108,6 +112,13 @@
 
       <div v-if="buckets" class="status" role="status">
         <span><b>{{ count }}</b> of {{ total }} {{ total === 1 ? 'issue' : 'issues' }}</span>
+        <template v-if="changed.size || onlyChanged">
+          <span class="status-sep" aria-hidden="true">|</span>
+          <button type="button" class="changed-toggle" :aria-pressed="onlyChanged" @click="onlyChanged = !onlyChanged">
+            <span class="gb-changed-dot" aria-hidden="true" />Changed since your last visit ({{ changed.size }})
+          </button>
+          <button v-if="changed.size" type="button" class="changed-seen" @click="markAllSeen">Mark all seen</button>
+        </template>
         <template v-if="chips.length">
           <span class="status-sep" aria-hidden="true">|</span>
           <span v-for="c in chips" :key="c.label" class="chip">
@@ -115,6 +126,7 @@
             <button type="button" :aria-label="`Remove filter ${c.label}`" @click="setQuery(c.patch)">×</button>
           </span>
         </template>
+      </div>
       </div>
 
       <div :aria-busy="loading">
@@ -134,6 +146,7 @@
           <p v-if="moveError" class="epfl-alert epfl-alert-danger notice" role="alert"><b>Not moved.</b> {{ moveError }}</p>
           <IssueBoard
             :buckets="boardBuckets"
+            :changed="changed"
             :names="names"
             :fields="fields"
             :group="groupField"
@@ -151,6 +164,7 @@
         <IssueTable
           v-else
           :buckets="shown.filter((b) => b.issues.length)"
+          :changed="changed"
           :names="names"
           :fields="fields"
           :group="groupField"
@@ -202,6 +216,8 @@
 
 <script setup lang="ts">
 import { panelMode } from '@/panelsize';
+import { filtersHidden, newIssueRequested, recordRecent } from '@/commands';
+import { changedSince, loadVisit, saveVisit, visit } from '@/lastvisit';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import {
@@ -267,24 +283,8 @@ const sortValue = computed(() => (typeof route.query.sort === 'string' ? route.q
 
 const queryChanged = computed(() => filterText.value !== (view.value?.filter ?? 'is:open'));
 
-// the filters panel hidden to a rail, kept in this browser
-const filtersHidden = ref(readFlag('gb-filters-hidden'));
-watch(filtersHidden, (v) => writeFlag('gb-filters-hidden', v));
+// the filters panel hidden to a rail (commands.ts: the palette toggles it too)
 const activeFilters = computed(() => Object.values(sel.value).flat().length + Number(queryChanged.value));
-function readFlag(key: string): boolean {
-  try {
-    return localStorage.getItem(key) === '1';
-  } catch {
-    return false;
-  }
-}
-function writeFlag(key: string, v: boolean) {
-  try {
-    localStorage.setItem(key, v ? '1' : '0');
-  } catch {
-    // private window: lasts until reload
-  }
-}
 const modified = computed(
   () =>
     queryChanged.value ||
@@ -293,13 +293,48 @@ const modified = computed(
 );
 
 const all = computed(() => (buckets.value ?? []).flatMap((b) => b.issues));
+
+// Since your last visit (lastvisit.ts): each view remembers the visit
+// before this one; the issues changed since get a dot, and can be shown
+// alone.
+const visitPrev = ref<number | null>(null);
+const onlyChanged = ref(false);
+const changed = computed(() => changedSince(all.value, visitPrev.value));
+watch(
+  activeView,
+  (v) => {
+    const rec = visit(loadVisit(v), Date.now());
+    saveVisit(v, rec);
+    visitPrev.value = rec.prev;
+    onlyChanged.value = false;
+  },
+  { immediate: true },
+);
+function markAllSeen() {
+  const now = Date.now();
+  saveVisit(activeView.value, { prev: now, current: now });
+  visitPrev.value = now;
+  onlyChanged.value = false;
+}
+
+// the sticky tools' height, for what sticks under them
+const tools = ref<HTMLElement | null>(null);
+let toolsObserver: ResizeObserver | undefined;
+onMounted(() => {
+  toolsObserver = new ResizeObserver(([e]) => document.documentElement.style.setProperty('--gb-tools-h', `${Math.ceil(e!.borderBoxSize[0]?.blockSize ?? e!.contentRect.height)}px`));
+  if (tools.value) toolsObserver.observe(tools.value);
+});
+onBeforeUnmount(() => {
+  toolsObserver?.disconnect();
+  document.documentElement.style.removeProperty('--gb-tools-h');
+});
 const names = computed(() => namespaces(all.value, fields.value));
 const facetList = computed(() => facets(all.value, sel.value, '', fields.value));
 const shown = computed(() =>
   orderBuckets(buckets.value ?? [], groupField.value, fields.value).map((b) => ({
     group: b.group,
     issues: sortIssues(
-      b.issues.filter((i) => matches(i, sel.value, '')),
+      b.issues.filter((i) => matches(i, sel.value, '') && (!onlyChanged.value || changed.value.has(i.id))),
       sort.value,
       fields.value,
     ),
@@ -533,6 +568,8 @@ watch(
     if (typeof id === 'string' && id) {
       detailId.value = id;
       detailOpen.value = true;
+      const i = all.value.find((x) => x.id === id);
+      if (i) recordRecent({ id, title: i.title, number: i.forges?.[0]?.number });
     } else detailOpen.value = false;
   },
   { immediate: true },
@@ -545,8 +582,17 @@ function findRef(n: string): string | undefined {
   return all.value.find((i) => i.forges?.some((f) => f.url === base + n))?.id;
 }
 
-// New issue: the button, or c
+// New issue: the button, c, or the palette
 const newOpen = ref(false);
+watch(
+  newIssueRequested,
+  (v) => {
+    if (!v) return;
+    newIssueRequested.value = false;
+    newOpen.value = true;
+  },
+  { immediate: true },
+);
 function onCreated(id: string, another: boolean) {
   void load();
   if (!another) {
@@ -565,6 +611,16 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
 </script>
 
 <style scoped>
+/* the tools stick under the header on wider screens */
+@media (min-width: 48rem) {
+  .tools { position: sticky; top: var(--header-h); z-index: 20; margin: 0 calc(-1 * var(--space-2)); padding: var(--space-3) var(--space-2) 0; background: var(--bg); box-shadow: 0 1px 0 var(--border-subtle); }
+}
+@media (min-width: 64rem) {
+  .page > .filters { position: sticky; top: var(--header-h); align-self: start; max-height: calc(100vh - var(--header-h)); overflow-y: auto; }
+}
+.changed-toggle { display: inline-flex; align-items: center; gap: .375rem; padding: .125rem .5rem; border: 1px solid var(--border); background: var(--bg); color: var(--fg); font: inherit; font-size: var(--fs-sm); cursor: pointer; }
+.changed-toggle[aria-pressed="true"] { border-color: var(--fg); background: var(--fg); color: var(--bg); }
+.changed-seen { padding: 0; border: 0; background: none; color: var(--fg-muted); font: inherit; font-size: var(--fs-sm); text-decoration: underline; cursor: pointer; }
 .viewbar { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem .75rem; margin: 0 0 1rem; padding: .625rem .875rem; border: 1px solid var(--warning-border); border-left: 4px solid var(--warning); background: var(--warning-bg); }
 .viewbar-what { display: flex; flex-wrap: wrap; align-items: baseline; gap: .25rem .625rem; flex: 1 1 22rem; min-width: 0; }
 .viewbar-filter { padding: .05em .4em; background: var(--bg); border: 1px solid var(--border-subtle); font-size: .8125rem; overflow-wrap: anywhere; }
@@ -584,7 +640,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
 }
 .main { min-width: 0; padding: var(--space-4) 0 var(--space-5); }
 .page-filters-hidden { grid-template-columns: 2.75rem minmax(0, 1fr); }
-.filters-rail { position: sticky; top: 0; align-self: start; display: flex; flex-direction: column; align-items: center; gap: var(--space-2); width: 2.75rem; min-height: 12rem; margin-top: var(--space-4); padding: var(--space-3) 0; border: var(--border-w) solid var(--border); background: var(--bg-subtle); color: var(--fg); cursor: pointer; font: inherit; }
+.filters-rail { position: sticky; top: var(--header-h); align-self: start; display: flex; flex-direction: column; align-items: center; gap: var(--space-2); width: 2.75rem; min-height: 12rem; margin-top: var(--space-4); padding: var(--space-3) 0; border: var(--border-w) solid var(--border); background: var(--bg-subtle); color: var(--fg); cursor: pointer; font: inherit; }
 .filters-rail:hover, .filters-rail:focus-visible { border-color: var(--fg); }
 .filters-rail-label { writing-mode: vertical-rl; transform: rotate(180deg); font-weight: var(--w-bold); font-size: var(--fs-sm); letter-spacing: .04em; }
 .filters-rail-badge { min-width: 1.25rem; padding: 0 .25rem; background: var(--primary); color: var(--on-primary); font-size: .75rem; font-weight: var(--w-bold); text-align: center; border-radius: var(--radius); }
