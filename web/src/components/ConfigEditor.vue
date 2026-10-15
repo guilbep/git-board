@@ -89,7 +89,7 @@
           <div v-if="doc.id === 'colors'" class="cfg-swatches" aria-label="The colors">
             <span v-for="c in palette" :key="c" class="gb-val" :class="`gb-c-${c}`">{{ c }}</span>
           </div>
-          <div class="gb-md" v-html="doc.html" />
+          <div ref="docBody" class="gb-md" v-html="doc.html" />
         </div>
       </aside>
     </div>
@@ -127,6 +127,35 @@ const docId = ref('overview');
 let cursorDoc = 'overview';
 const doc = computed(() => docs.value.find((d) => d.id === docId.value) ?? docs.value[0]);
 const palette = ['grey', 'blue', 'purple', 'amber', 'orange', 'green', 'red', 'teal', 'pink'];
+
+// the section as the editor shows TOML: its examples colored, and each
+// table cell labelled with its column, for the narrow layout (cards)
+const docBody = ref<HTMLElement | null>(null);
+watch(doc, () => void nextTick(enhanceDoc), { flush: 'post' });
+function enhanceDoc() {
+  const el = docBody.value;
+  if (!el) return;
+  for (const code of el.querySelectorAll('pre > code.language-toml')) {
+    const lines = (code.textContent ?? '').replace(/\n$/, '').split('\n');
+    code.replaceChildren(
+      ...lines.flatMap((line, i) => [
+        ...tomlTokens(line).map((t) => {
+          const span = document.createElement('span');
+          if (t.cls) span.className = `tk-${t.cls}`;
+          span.textContent = t.text;
+          return span;
+        }),
+        ...(i < lines.length - 1 ? [document.createTextNode('\n')] : []),
+      ]),
+    );
+  }
+  for (const table of el.querySelectorAll('table')) {
+    const heads = [...table.querySelectorAll('thead th')].map((th) => th.textContent ?? '');
+    for (const row of table.querySelectorAll('tbody tr')) {
+      [...row.children].forEach((td, i) => ((td as HTMLElement).dataset.label = heads[i] ?? ''));
+    }
+  }
+}
 
 function followCursor() {
   const a = area.value;
@@ -278,11 +307,11 @@ onMounted(() => {
 
 /* the editor: gutter + code; the textarea's text is transparent over the
    colored copy, both with the same font, line height and padding */
-.cfg-body { display: grid; grid-template-columns: minmax(0, 1fr) 24rem; gap: 1rem; align-items: start; }
+.cfg-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1rem; align-items: start; }
 .cfg-main { display: grid; gap: .5rem; min-width: 0; }
-@media (max-width: 68rem) { .cfg-body { grid-template-columns: minmax(0, 1fr); } }
-.cfg-doc { display: grid; gap: .5rem; max-height: min(32rem, 60vh); min-height: 0; padding: .75rem 1rem; border: 1px solid var(--border); background: var(--bg-subtle); overflow: auto; }
-@media (max-width: 68rem) { .cfg-doc { max-height: none; } }
+@media (max-width: 80rem) { .cfg-body { grid-template-columns: minmax(0, 1fr); } }
+.cfg-doc { container-type: inline-size; display: grid; align-content: start; gap: .5rem; height: max(24rem, calc(100vh - 13rem)); min-height: 0; padding: 1rem 1.25rem; border: 1px solid var(--border); background: var(--bg-subtle); overflow: auto; }
+@media (max-width: 80rem) { .cfg-doc { height: auto; } }
 .cfg-doc-head { display: flex; align-items: baseline; gap: .5rem; }
 .cfg-doc-title { margin: 0; font-size: .8125rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--primary); }
 .cfg-doc-nav { display: flex; flex-wrap: wrap; gap: .25rem; }
@@ -290,13 +319,26 @@ onMounted(() => {
 .cfg-doc-tab:hover { border-color: var(--fg); }
 .cfg-doc-tab[aria-current] { border-color: var(--fg); background: var(--fg); color: var(--bg); font-weight: 700; }
 .cfg-doc-section { margin: .5rem 0 0; font-size: 1.0625rem; font-weight: 700; }
-.cfg-doc-body .gb-md { font-size: .875rem; }
-.cfg-doc-body :deep(table) { width: 100%; border-collapse: collapse; font-size: .8125rem; }
-.cfg-doc-body :deep(th), .cfg-doc-body :deep(td) { padding: .25rem .375rem; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
-.cfg-doc-body :deep(pre) { padding: .5rem .75rem; background: var(--bg); border: 1px solid var(--border); overflow-x: auto; font-size: .8125rem; }
-.cfg-doc-body :deep(code) { font-size: .8125rem; }
+.cfg-doc-body .gb-md { font-size: .9375rem; }
+.cfg-doc-body :deep(table) { width: 100%; border-collapse: collapse; font-size: .875rem; }
+.cfg-doc-body :deep(th), .cfg-doc-body :deep(td) { padding: .375rem .5rem; border: 0; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; overflow-wrap: normal; }
+.cfg-doc-body :deep(th) { background: none; font-size: .8125rem; color: var(--fg-muted); }
+.cfg-doc-body :deep(td:first-child code) { white-space: nowrap; }
+.cfg-doc-body :deep(pre) { padding: .625rem .875rem; background: var(--bg); border: 1px solid var(--border); white-space: pre-wrap; overflow-wrap: anywhere; font-size: .8125rem; color: var(--fg); }
+.cfg-doc-body :deep(pre code) { color: inherit; }
+/* a narrow reference: each table row a card, its cells labelled */
+@container (max-width: 36rem) {
+  .cfg-doc-body :deep(thead) { display: none; }
+  .cfg-doc-body :deep(table), .cfg-doc-body :deep(tbody), .cfg-doc-body :deep(tr), .cfg-doc-body :deep(td) { display: block; }
+  .cfg-doc-body :deep(tr) { padding: .625rem .75rem; margin-top: .5rem; border: 1px solid var(--border); background: var(--bg); }
+  .cfg-doc-body :deep(td) { padding: 0; border: 0; }
+  .cfg-doc-body :deep(td:first-child) { font-weight: 700; }
+  .cfg-doc-body :deep(td + td:not(:last-child)) { display: inline-block; margin: .25rem .5rem 0 0; font-size: .8125rem; color: var(--fg-muted); }
+  .cfg-doc-body :deep(td + td:not(:last-child)::before) { content: attr(data-label) ": "; }
+  .cfg-doc-body :deep(td:last-child) { margin-top: .375rem; }
+}
 .cfg-swatches { display: flex; flex-wrap: wrap; gap: .25rem; }
-.cfg-editor { display: flex; height: min(32rem, 60vh); border: 1px solid var(--border-strong); background: var(--bg); overflow: hidden; }
+.cfg-editor { display: flex; height: max(24rem, calc(100vh - 13rem)); border: 1px solid var(--border-strong); background: var(--bg); overflow: hidden; }
 .cfg-editor:focus-within { border-color: var(--fg); }
 .cfg-editor-err { border-color: var(--danger-border); }
 .cfg-gutter, .cfg-hl, .cfg-area { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; line-height: 20px; tab-size: 2; }
@@ -308,12 +350,6 @@ onMounted(() => {
 .cfg-hl .cfg-err { background: var(--danger-bg); box-shadow: inset 3px 0 0 var(--danger); margin: 0 -12px; padding: 0 12px; }
 .cfg-area { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; padding: 12px; border: 0; outline: none; resize: none; white-space: pre; overflow: auto; overflow-wrap: normal; color: transparent; background: transparent; caret-color: var(--fg); }
 .cfg-area::selection { background: color-mix(in srgb, var(--info) 30%, transparent); }
-.tk-comment { color: var(--fg-subtle); font-style: italic; }
-.tk-table { color: var(--primary); font-weight: 700; }
-.tk-key { color: var(--fg); font-weight: 600; }
-.tk-string { color: var(--success-fg); }
-.tk-value { color: var(--info-fg); }
-.tk-punct { color: var(--fg-muted); }
 
 .cfg-msg { font-size: .875rem; padding: .5rem .75rem; border-left: 3px solid; }
 .cfg-msg-err { color: var(--danger-fg); background: var(--danger-bg); border-color: var(--danger); }

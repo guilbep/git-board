@@ -346,3 +346,5 @@
 .gb-dialog-wide .q-dialog__inner>div{max-width:none!important;max-height:none!important}
 @media (max-width:47.99rem){.gb-panel-wide{width:100vw;height:100vh;border-radius:0}.gb-dialog-wide .q-dialog__inner--minimized{padding:0}}
 .gb-panel:focus{outline:none}
+/* TOML colors (web/src/toml.ts): the settings page's editor and its reference */
+.tk-comment{color:var(--fg-subtle);font-style:italic}.tk-table{color:var(--primary);font-weight:700}.tk-key{color:var(--fg);font-weight:600}.tk-string{color:var(--success-fg)}.tk-value{color:var(--info-fg)}.tk-punct{color:var(--fg-muted)}
