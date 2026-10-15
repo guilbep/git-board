@@ -4,6 +4,9 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"regexp"
+	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -32,6 +35,7 @@ type forgeStatus struct {
 type forgeJob struct {
 	DryRun  bool                    `json:"dry_run"`
 	Push    bool                    `json:"push"`
+	Names   []string                `json:"names"` // the bridges of the run
 	State   string                  `json:"state"` // running, done, failed
 	Started time.Time               `json:"started"`
 	Ended   *time.Time              `json:"ended,omitempty"`
@@ -41,20 +45,38 @@ type forgeJob struct {
 	Pushed  string                  `json:"pushed,omitempty"` // pushing git-bug data to origin, after a real run
 }
 
-// bridgeTally counts what a run did, or would do, on one bridge.
+// bridgeTally counts what a run did, or would do (a dry run), on one
+// bridge, both ways.
 type bridgeTally struct {
-	Imported    int      `json:"imported"` // new issues pulled
-	Pulled      int      `json:"pulled"`   // other changes pulled
-	Created     int      `json:"created"`  // issues created on the forge
-	Pushed      int      `json:"pushed"`   // other changes pushed
-	WouldImport int      `json:"would_import"`
-	WouldPull   int      `json:"would_pull"`
-	WouldCreate int      `json:"would_create"`
-	WouldPush   int      `json:"would_push"`
-	Warnings    int      `json:"warnings"`
-	Errors      int      `json:"errors"`
-	Lines       []string `json:"lines"`
+	To   direction `json:"to"`   // git-board → forge
+	From direction `json:"from"` // forge → git-board
+	// Linked are issues a dry run found on the forge by their git-bug
+	// marker: created by a run whose links weren't kept, synced, not
+	// created again.
+	Linked int `json:"linked"`
+	// StaysLocal are texts no token can post: their authors have no token
+	// on this forge.
+	StaysLocal int      `json:"stays_local"`
+	Warnings   int      `json:"warnings"`
+	Errors     int      `json:"errors"`
+	Lines      []string `json:"lines"`
 }
+
+// direction is one way of a sync. A dry run of a pull only knows "up to N
+// changes" per issue: those go in Changes.
+type direction struct {
+	Issues   int `json:"issues"`  // created on the forge, or imported from it
+	Changed  int `json:"changed"` // issues already linked with changes
+	Comments int `json:"comments"`
+	Edits    int `json:"edits"`
+	Changes  int `json:"changes"` // title, state, labels
+}
+
+var (
+	createRe = regexp.MustCompile(`^would create issue: .*, with (\d+) comments$`)
+	pullRe   = regexp.MustCompile(`^would pull up to (\d+) changes`)
+	countRe  = regexp.MustCompile(`^(\d+) (comments|edits)$`)
+)
 
 func (t *bridgeTally) add(r core.SyncResult, dryRun bool) {
 	var nothing bool
@@ -63,45 +85,77 @@ func (t *bridgeTally) add(r core.SyncResult, dryRun bool) {
 		nothing, reason = r.Import.Event == core.ImportEventNothing, r.Import.Reason
 		switch r.Import.Event {
 		case core.ImportEventNothing:
-			switch {
-			case strings.HasPrefix(reason, "would import"):
-				t.WouldImport++
-			case strings.HasPrefix(reason, "would "):
-				t.WouldPull++
+			if strings.HasPrefix(reason, "would import") {
+				t.From.Issues++
+			} else if m := pullRe.FindStringSubmatch(reason); m != nil {
+				t.From.Changed++
+				t.From.Changes += atoi(m[1])
 			}
 		case core.ImportEventBug:
-			t.Imported++
+			t.From.Issues++
+		case core.ImportEventComment:
+			t.From.Comments++
+		case core.ImportEventCommentEdition:
+			t.From.Edits++
 		case core.ImportEventWarning, core.ImportEventRateLimiting:
 			t.Warnings++
 		case core.ImportEventError:
 			t.Errors++
 		default:
-			t.Pulled++
+			t.From.Changes++
 		}
 	} else if r.Export != nil {
 		nothing, reason = r.Export.Event == core.ExportEventNothing, r.Export.Reason
 		switch r.Export.Event {
 		case core.ExportEventNothing:
-			switch {
-			case strings.HasPrefix(reason, "would create"):
-				t.WouldCreate++
-			case strings.HasPrefix(reason, "would "):
-				t.WouldPush++
-			}
+			t.planned(reason)
 		case core.ExportEventBug:
-			t.Created++
+			t.To.Issues++
+		case core.ExportEventComment:
+			t.To.Comments++
+		case core.ExportEventCommentEdition:
+			t.To.Edits++
 		case core.ExportEventWarning, core.ExportEventRateLimiting:
 			t.Warnings++
 		case core.ExportEventError:
 			t.Errors++
 		default:
-			t.Pushed++
+			t.To.Changes++
 		}
 	}
 	// what git bug bridge sync prints
 	if (!nothing || (dryRun && strings.HasPrefix(reason, "would "))) && len(t.Lines) < maxLines {
 		t.Lines = append(t.Lines, r.String())
 	}
+}
+
+// planned counts a dry run's push plan (bridge/core planPush).
+func (t *bridgeTally) planned(reason string) {
+	switch {
+	case reason == "missing author token":
+		t.StaysLocal++
+	case strings.HasPrefix(reason, "would sync with"):
+		t.Linked++
+	case createRe.MatchString(reason):
+		t.To.Issues++
+		t.To.Comments += atoi(createRe.FindStringSubmatch(reason)[1])
+	case strings.HasPrefix(reason, "would send: "):
+		t.To.Changed++
+		for _, part := range strings.Split(strings.TrimPrefix(reason, "would send: "), ", ") {
+			if m := countRe.FindStringSubmatch(part); m != nil && m[2] == "comments" {
+				t.To.Comments += atoi(m[1])
+			} else if m != nil {
+				t.To.Edits += atoi(m[1])
+			} else {
+				t.To.Changes++ // title, status, labels
+			}
+		}
+	}
+}
+
+func atoi(s string) int {
+	n, _ := strconv.Atoi(s)
+	return n
 }
 
 func (s *apiServer) forgeSnapshot() forgeStatus {
@@ -124,8 +178,9 @@ func (s *apiServer) handleForges(w http.ResponseWriter, r *http.Request) {
 // other clones to know the links it made.
 func (s *apiServer) handleForgeSync(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		DryRun bool `json:"dry_run"`
-		Push   bool `json:"push"`
+		DryRun  bool     `json:"dry_run"`
+		Push    bool     `json:"push"`
+		Bridges []string `json:"bridges"` // a real run: some of the dry run's; empty: all
 	}
 	if !decode(w, r, &req) {
 		return
@@ -142,6 +197,14 @@ func (s *apiServer) handleForgeSync(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusConflict, errDryRunFirst)
 			return
 		}
+		for _, name := range req.Bridges {
+			if _, inDryRun := last.Bridges[name]; !inDryRun && !slices.Contains(last.Names, name) {
+				writeError(w, http.StatusBadRequest, errors.New("bridge "+name+" wasn't in the dry run"))
+				return
+			}
+		}
+	} else {
+		req.Bridges = nil // a dry run looks at every forge
 	}
 	run := s.runSync
 	if run == nil {
@@ -149,13 +212,19 @@ func (s *apiServer) handleForgeSync(w http.ResponseWriter, r *http.Request) {
 	}
 	// edits wait from here: a write already under way finishes first
 	s.syncing.Store(true)
-	job := &forgeJob{DryRun: req.DryRun, Push: req.Push && !req.DryRun, State: "running", Started: time.Now(), Bridges: map[string]*bridgeTally{}}
+	names := req.Bridges
+	if len(names) == 0 {
+		for _, b := range s.forgeSnapshot().Bridges {
+			names = append(names, b.Name)
+		}
+	}
+	job := &forgeJob{DryRun: req.DryRun, Push: req.Push && !req.DryRun, State: "running", Started: time.Now(), Names: names, Bridges: map[string]*bridgeTally{}}
 	s.job = job
-	go s.runForgeSync(job, run)
+	go s.runForgeSync(job, run, req.Bridges)
 	writeJSON(w, http.StatusAccepted, s.forgeSnapshot())
 }
 
-func (s *apiServer) runForgeSync(job *forgeJob, run func(context.Context, bool) (<-chan core.SyncResult, error)) {
+func (s *apiServer) runForgeSync(job *forgeJob, run func(context.Context, bool, []string) (<-chan core.SyncResult, error), names []string) {
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()
 	defer s.syncing.Store(false)
@@ -166,7 +235,7 @@ func (s *apiServer) runForgeSync(job *forgeJob, run func(context.Context, bool) 
 		now := time.Now()
 		job.State, job.Error, job.Ended = state, errText, &now
 	}
-	results, err := run(context.Background(), job.DryRun)
+	results, err := run(context.Background(), job.DryRun, names)
 	if err != nil {
 		finish("failed", err.Error())
 		return

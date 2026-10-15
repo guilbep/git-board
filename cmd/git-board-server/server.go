@@ -46,7 +46,7 @@ type apiServer struct {
 	syncing atomic.Bool
 	forgeMu sync.Mutex // guards job
 	job     *forgeJob
-	runSync func(context.Context, bool) (<-chan core.SyncResult, error) // nil: git-bug's
+	runSync func(context.Context, bool, []string) (<-chan core.SyncResult, error) // nil: git-bug's
 
 	lazyOnce
 }

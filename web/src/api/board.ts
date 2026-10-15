@@ -221,15 +221,20 @@ export function createIdentity(name: string, email: string): Promise<MeResponse>
 }
 
 // The sync with GitHub/GitLab (cmd/git-board-server/forges.go).
+// One way of a sync; a dry run of a pull only knows "up to N changes".
+export interface SyncDirection {
+  issues: number; // created on the forge / imported from it
+  changed: number; // linked issues with changes
+  comments: number;
+  edits: number;
+  changes: number; // title, state, labels
+}
+
 export interface BridgeTally {
-  imported: number;
-  pulled: number;
-  created: number;
-  pushed: number;
-  would_import: number;
-  would_pull: number;
-  would_create: number;
-  would_push: number;
+  to: SyncDirection;
+  from: SyncDirection;
+  linked: number; // found on the forge by their git-bug marker
+  stays_local: number; // texts no token can post
   warnings: number;
   errors: number;
   lines: string[];
@@ -241,6 +246,7 @@ export interface ForgeJob {
   state: 'running' | 'done' | 'failed';
   started: string;
   ended?: string;
+  names: string[];
   bridges: Record<string, BridgeTally>;
   errors: number;
   error?: string;
@@ -256,8 +262,9 @@ export function getForges(): Promise<ForgeStatus> {
   return request('/api/forges');
 }
 
-export function startForgeSync(dryRun: boolean, push: boolean): Promise<ForgeStatus> {
-  return request('/api/forges/sync', json('POST', { dry_run: dryRun, push }));
+// A dry run looks at every forge; a real run at bridges (empty: all).
+export function startForgeSync(dryRun: boolean, push: boolean, bridges: string[] = []): Promise<ForgeStatus> {
+  return request('/api/forges/sync', json('POST', { dry_run: dryRun, push, bridges }));
 }
 
 // Where the page loads a server path from (the API's origin in dev).

@@ -134,8 +134,8 @@ func TestMeAndIdentities(t *testing.T) {
 
 // fakeSync answers a forge sync with given results, holding the run until
 // release is closed.
-func fakeSync(results []core.SyncResult, release chan struct{}) func(context.Context, bool) (<-chan core.SyncResult, error) {
-	return func(_ context.Context, dryRun bool) (<-chan core.SyncResult, error) {
+func fakeSync(results []core.SyncResult, release chan struct{}) func(context.Context, bool, []string) (<-chan core.SyncResult, error) {
+	return func(_ context.Context, dryRun bool, _ []string) (<-chan core.SyncResult, error) {
 		out := make(chan core.SyncResult)
 		go func() {
 			defer close(out)
@@ -166,8 +166,12 @@ func TestForgeSyncRunsADryRunFirst(t *testing.T) {
 	ts, s := newIssueServer(t)
 	release := make(chan struct{})
 	s.runSync = fakeSync([]core.SyncResult{
-		{Bridge: "gh", Export: &core.ExportResult{Event: core.ExportEventNothing, Reason: "would create issue: Export CSV, with 0 comments"}},
+		{Bridge: "gh", Export: &core.ExportResult{Event: core.ExportEventNothing, Reason: "would create issue: Export CSV, with 2 comments"}},
+		{Bridge: "gh", Export: &core.ExportResult{Event: core.ExportEventNothing, Reason: "would send: 3 comments, 1 edits, labels, status"}},
+		{Bridge: "gh", Export: &core.ExportResult{Event: core.ExportEventNothing, Reason: "missing author token"}},
+		{Bridge: "gh", Export: &core.ExportResult{Event: core.ExportEventNothing, Reason: "would sync with https://github.com/o/r/issues/9, found by its git-bug marker"}},
 		{Bridge: "gl", Import: &core.ImportResult{Event: core.ImportEventNothing, Reason: "would import issue https://gitlab.example.com/g/r/-/work_items/3"}},
+		{Bridge: "gl", Import: &core.ImportResult{Event: core.ImportEventNothing, Reason: "would pull up to 4 changes from https://gitlab.example.com/g/r/-/work_items/5"}},
 		{Bridge: "gl", Import: &core.ImportResult{Event: core.ImportEventWarning, Err: context.Canceled}},
 	}, release)
 
@@ -184,8 +188,15 @@ func TestForgeSyncRunsADryRunFirst(t *testing.T) {
 	}
 	close(release)
 	st := waitJob(t, ts)
-	if st.Job.State != "done" || !st.Job.DryRun || st.Job.Bridges["gh"].WouldCreate != 1 || st.Job.Bridges["gl"].WouldImport != 1 || st.Job.Bridges["gl"].Warnings != 1 {
-		t.Fatalf("dry run job %+v %+v", st.Job, st.Job.Bridges)
+	gh, gl := st.Job.Bridges["gh"], st.Job.Bridges["gl"]
+	if st.Job.State != "done" || !st.Job.DryRun || gh == nil || gl == nil {
+		t.Fatalf("dry run job %+v", st.Job)
+	}
+	if want := (direction{Issues: 1, Changed: 1, Comments: 5, Edits: 1, Changes: 2}); gh.To != want || gh.StaysLocal != 1 || gh.Linked != 1 {
+		t.Errorf("gh %+v, want to %+v, 1 local, 1 linked", gh, want)
+	}
+	if want := (direction{Issues: 1, Changed: 1, Changes: 4}); gl.From != want || gl.Warnings != 1 {
+		t.Errorf("gl %+v, want from %+v and a warning", gl, want)
 	}
 
 	release = make(chan struct{})
@@ -194,7 +205,7 @@ func TestForgeSyncRunsADryRunFirst(t *testing.T) {
 	if code := call(t, "POST", ts.URL+"/api/forges/sync", map[string]any{"dry_run": false}, nil); code != http.StatusAccepted {
 		t.Fatalf("real run after a dry run: %d", code)
 	}
-	if st = waitJob(t, ts); st.Job.DryRun || st.Job.Bridges["gh"].Created != 1 {
+	if st = waitJob(t, ts); st.Job.DryRun || st.Job.Bridges["gh"].To.Issues != 1 {
 		t.Errorf("real run job %+v", st.Job)
 	}
 	if code := call(t, "POST", ts.URL+"/api/forges/sync", map[string]any{"dry_run": false}, nil); code != http.StatusConflict {
