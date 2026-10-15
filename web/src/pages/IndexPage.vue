@@ -123,6 +123,7 @@
     :class="`gb-dialog-${panelMode}`"
     :backdrop-filter="panelMode === 'wide' ? 'blur(6px)' : undefined"
     no-route-dismiss
+    no-focus
     @hide="closePanel"
   >
     <IssuePanel

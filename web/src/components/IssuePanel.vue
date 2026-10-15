@@ -8,6 +8,9 @@
     :class="page ? 'gb-panel-page' : panelMode === 'wide' ? 'gb-panel-wide' : 'gb-panel-xl'"
     :style="!page && panelMode === 'side' && panelWidth ? { width: `${panelWidth}px` } : undefined"
     :aria-labelledby="`title-${uid}`"
+    :tabindex="page ? undefined : -1"
+    ref="root"
+    @keydown.esc="leaveField"
   >
     <div
       v-if="!page && panelMode === 'side'"
@@ -239,7 +242,26 @@ function nudge(px: number) {
   const now = panelWidth.value || (document.querySelector('.gb-panel-xl') as HTMLElement | null)?.offsetWidth || 1024;
   panelWidth.value = clampWidth(now + px, window.innerWidth);
 }
-onMounted(() => window.addEventListener('keydown', onKey));
+// The panel opens with the keyboard on itself, not in a field (the dialog
+// has no-focus): j / k / f / Esc work at once, Tab goes to the fields. Esc
+// in a field leaves the field, stopped here before the dialog's own Esc
+// (a window listener) closes the panel; a second Esc closes it.
+const root = ref<{ $el?: HTMLElement } | HTMLElement | null>(null);
+function rootEl(): HTMLElement | null {
+  const r = root.value;
+  return r instanceof HTMLElement ? r : (r?.$el ?? null);
+}
+function leaveField(e: KeyboardEvent) {
+  const t = e.target;
+  if (!(t instanceof HTMLElement) || !t.closest('input, textarea, select, [contenteditable]')) return;
+  e.stopPropagation();
+  t.blur();
+  rootEl()?.focus({ preventScroll: true });
+}
+onMounted(() => {
+  window.addEventListener('keydown', onKey);
+  if (!props.page) void nextTick(() => rootEl()?.focus({ preventScroll: true }));
+});
 onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
 </script>
 

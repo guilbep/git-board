@@ -345,3 +345,4 @@
 .gb-panel-wide .gb-cols{grid-template-columns:minmax(0,1fr) 20rem;gap:3rem;padding:2rem 3rem 3rem}
 .gb-dialog-wide .q-dialog__inner>div{max-width:none!important;max-height:none!important}
 @media (max-width:47.99rem){.gb-panel-wide{width:100vw;height:100vh;border-radius:0}.gb-dialog-wide .q-dialog__inner--minimized{padding:0}}
+.gb-panel:focus{outline:none}
