@@ -32,7 +32,7 @@
                keyboard entry point (its click bubbles up to the row). -->
           <tr v-for="issue in bucket.issues" :key="issue.id" @click="emit('open', issue)">
             <td class="cell-id">{{ issue.id.slice(0, 8) }}</td>
-            <td class="cell-title"><button type="button" class="title-button">{{ issue.title }}</button></td>
+            <td class="cell-title"><span v-if="changed?.has(issue.id)" class="gb-changed-dot" title="Changed since your last visit" /><button type="button" class="title-button">{{ issue.title }}</button></td>
             <td>{{ issue.status }}</td>
             <td v-for="name in names" :key="name">
               <span class="cell-tags">
@@ -56,6 +56,7 @@ import { colorClass } from '@/colors';
 import { displayName, fieldValues, formatValue, otherLabels, type Fields } from '@/fields';
 
 const props = defineProps<{
+  changed?: Set<string>; // since your last visit: a dot
   buckets: Bucket[];
   names: string[];
   fields: Fields;

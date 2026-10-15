@@ -358,3 +358,9 @@
 :root{--control-h:2.5rem}
 .epfl-input,.epfl-select{min-height:var(--control-h);line-height:1.5}
 .epfl-select{appearance:none;-webkit-appearance:none;padding-right:2.25rem;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23212121' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right .75rem center;background-size:1rem}
+/* changed since your last visit (lastvisit.ts) */
+.gb-changed-dot{display:inline-block;flex:none;width:.5rem;height:.5rem;margin-right:.375rem;border-radius:50%;background:var(--primary);vertical-align:.1em}
+/* a table scrolls in its own box, at most as tall as the window under the
+   sticky tools, so its column titles stick inside it and a wide table
+   still scrolls sideways */
+@media (min-width:48rem){.page .main .table-scroll{overflow:auto;max-height:calc(100vh - var(--header-h) - var(--gb-tools-h,0px) - var(--space-3))}.page .main .issue-table thead th{position:sticky;top:0;z-index:10;box-shadow:0 1px 0 var(--border)}}

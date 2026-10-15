@@ -10,7 +10,7 @@
     "dev": "quasar dev",
     "build": "quasar build",
     "typecheck": "vue-tsc --noEmit",
-    "test": "node --test src/facets.test.ts src/richtext.test.ts src/history.test.ts src/linediff.test.ts src/toml.test.ts src/configsnippets.test.ts src/panelsize.test.ts src/viewfilter.test.ts src/valueicons.test.ts src/replay.test.ts src/roadmap.test.ts src/initials.test.ts",
+    "test": "node --test src/facets.test.ts src/richtext.test.ts src/history.test.ts src/linediff.test.ts src/toml.test.ts src/configsnippets.test.ts src/panelsize.test.ts src/viewfilter.test.ts src/valueicons.test.ts src/replay.test.ts src/roadmap.test.ts src/initials.test.ts src/lastvisit.test.ts src/palette.test.ts",
     "postinstall": "quasar prepare --silent"
   },
   "dependencies": {

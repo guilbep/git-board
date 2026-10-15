@@ -29,6 +29,9 @@
       >Conflicts<span v-if="conflicts" class="nav-count" :aria-label="`, ${conflicts} held`">{{ conflicts }}</span></router-link>
     </nav>
     <div class="app-right">
+      <button type="button" class="gb-jump" title="Jump to an issue or a command (⌘K)" aria-keyshortcuts="Meta+K Control+K" @click="paletteOpen = true">
+        <GbIcon name="search" small /><span class="gb-jump-label">Jump to…</span><kbd>{{ mod }}K</kbd>
+      </button>
       <!-- shown once a bridge has sync enabled; live while a run goes on -->
       <router-link v-if="forgeStatus?.bridges.length" to="/sync" class="gb-synclink" :class="{ 'gb-synclink-run': running }" :title="syncTitle">
         <GbIcon name="sync" small />
@@ -46,12 +49,15 @@
     </div>
   </header>
   <KeyboardHelp />
+  <CommandPalette :views="views" />
 </template>
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted } from 'vue';
 import { helpOpen } from '@/shortcuts';
 import KeyboardHelp from '@/components/KeyboardHelp.vue';
+import CommandPalette from '@/components/CommandPalette.vue';
+import { paletteOpen } from '@/commands';
 import { forgeStatus, loadForges } from '@/forges';
 import { initials, loadMe, me, when } from '@/me';
 import { loadSyncStatus, syncStatus } from '@/sync';
@@ -72,8 +78,16 @@ const lastRun = computed(() => {
   return `${j.dry_run ? 'dry run' : 'last run'} ${when(j.ended ?? j.started)}`;
 });
 
-// ? opens the shortcuts, unless typing
+const mod = /Mac/.test(navigator.platform) ? '⌘' : 'Ctrl+';
+
+// ⌘K (Ctrl+K) opens the palette, even from a field; ? the shortcuts,
+// unless typing
 function onKey(e: KeyboardEvent) {
+  if (e.key.toLowerCase() === 'k' && (e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey) {
+    e.preventDefault();
+    paletteOpen.value = !paletteOpen.value;
+    return;
+  }
   if (e.key !== '?' || e.ctrlKey || e.metaKey || e.altKey) return;
   if (e.target instanceof Element && e.target.closest('input, textarea, select, [contenteditable]')) return;
   e.preventDefault();
@@ -98,7 +112,12 @@ onMounted(() => {
   mask: url('/epfl-logo.svg') center / contain no-repeat;
 }
 
+/* the header stays on top while the page scrolls */
+.app-header { position: sticky; top: 0; z-index: 30; }
 .app-right { display: flex; align-items: center; gap: 1rem; margin-left: auto; }
+.gb-jump { display: inline-flex; align-items: center; gap: .5rem; min-height: 2.75rem; padding: 0 .75rem; border: 1px solid var(--border-strong); background: var(--bg); color: var(--fg-muted); font: inherit; font-size: .875rem; cursor: pointer; }
+.gb-jump:hover, .gb-jump:focus-visible { border-color: var(--fg); color: var(--fg); }
+.gb-jump kbd { padding: 0 .3rem; border: 1px solid var(--border); font-family: var(--font-mono); font-size: .75rem; }
 .gb-synclink { display: inline-flex; align-items: center; gap: .5rem; min-height: 2.75rem; padding: 0 1rem; border: 1px solid var(--border-strong); color: var(--fg); font-weight: 700; font-size: .875rem; text-decoration: none; white-space: nowrap; }
 .gb-synclink:hover { border-color: var(--fg); }
 .gb-synclink-run { border-color: var(--fg); }
@@ -143,6 +162,6 @@ onMounted(() => {
   }
   .app-header .epfl-nav a { white-space: nowrap; }
   .app-right { order: 2; }
-  .gb-synclink .gb-hint, .gb-me-name { display: none; }
+  .gb-synclink .gb-hint, .gb-me-name, .gb-jump-label, .gb-jump kbd { display: none; }
 }
 </style>

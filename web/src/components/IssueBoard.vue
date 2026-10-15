@@ -30,7 +30,7 @@
             @dragend="onEnd"
             @click="emit('open', issue)"
           >
-            <span class="card-id">{{ issue.id.slice(0, 8) }}</span>
+            <span class="card-id"><span v-if="changed?.has(issue.id)" class="gb-changed-dot" title="Changed since your last visit" />{{ issue.id.slice(0, 8) }}</span>
             <span class="card-title">{{ issue.title }}</span>
             <span v-if="meta(issue).length" class="card-meta">
               <span v-for="m in meta(issue)" :key="m.name" class="meta-item">
@@ -55,7 +55,7 @@ import type { Bucket, Issue } from '@/api/board';
 import { colorClass } from '@/colors';
 import { displayName, fieldValues, formatValue, otherLabels, type Fields } from '@/fields';
 
-const props = defineProps<{ buckets: Bucket[]; names: string[]; fields: Fields; group: string }>();
+const props = defineProps<{ buckets: Bucket[]; names: string[]; fields: Fields; group: string; changed?: Set<string> }>();
 const emit = defineEmits<{ open: [issue: Issue]; move: [issue: Issue, from: string, to: string] }>();
 
 const dragging = ref(''); // the card's issue id
@@ -118,6 +118,12 @@ function meta(issue: Issue) {
   padding-bottom: var(--space-3);
 }
 
+@media (min-width: 48rem) {
+  /* each column scrolls on its own under its title, the board as tall as
+     the window under the sticky tools */
+  .board-column { display: flex; flex-direction: column; max-height: calc(100vh - var(--header-h) - var(--gb-tools-h, 0px) - var(--space-4)); }
+  .board-column .cards { min-height: 2.5rem; overflow-y: auto; }
+}
 .board-column {
   background: var(--bg-subtle);
   border: var(--border-w) solid var(--border-subtle);
