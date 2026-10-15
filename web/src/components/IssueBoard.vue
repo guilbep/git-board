@@ -138,7 +138,8 @@ function meta(issue: Issue) {
 .column-count { color: var(--fg-muted); font-weight: var(--w-normal); }
 .column-name { display: inline-flex; align-items: center; gap: var(--space-2); }
 .board-column[class*="gb-c-"] { border-top: 3px solid var(--c-dot); }
-.meta-item { display: inline-flex; align-items: center; gap: var(--space-1); }
+/* values wrap inside the card: three assignees must not widen it */
+.meta-item { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--space-1); min-width: 0; }
 
 .cards {
   list-style: none;
@@ -171,7 +172,7 @@ function meta(issue: Issue) {
 
 .card-id { font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--fg-muted); }
 .card-title { font-size: 0.9375rem; font-weight: var(--w-bold); line-height: var(--lh-normal); overflow-wrap: anywhere; }
-.card-meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-3); font-size: var(--fs-sm); }
+.card-meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-3); min-width: 0; font-size: var(--fs-sm); }
 .meta-name { color: var(--fg-muted); }
 .card-other { font-size: var(--fs-xs); color: var(--fg-muted); }
 </style>
