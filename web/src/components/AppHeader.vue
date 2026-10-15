@@ -11,7 +11,7 @@
       <span class="logo-mark" role="img" aria-label="EPFL" />
     </router-link>
     <span class="app-name">git-board</span>
-    <nav v-if="views.length || syncStatus?.project" class="epfl-nav" aria-label="Saved views">
+    <nav class="epfl-nav" aria-label="Saved views">
       <router-link
         v-for="name in views"
         :key="name"
@@ -19,6 +19,7 @@
         :class="{ active: name === active }"
         :aria-current="name === active ? 'page' : undefined"
       >{{ name }}</router-link>
+      <router-link to="/insights" active-class="active">Insights</router-link>
       <!-- The count is the last check's: the header never reads the Project. -->
       <router-link
         v-if="syncStatus?.project"

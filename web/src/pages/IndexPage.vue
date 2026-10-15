@@ -43,7 +43,7 @@
         <div class="epfl-eyebrow">{{ activeView ? 'Saved view' : 'Issues' }}</div>
         <h1 class="h3 page-title">{{ activeView || 'All open issues' }}</h1>
         <p class="page-meta">
-          {{ layout === 'board' ? 'Board' : 'Table' }}
+          {{ layout === 'board' ? 'Board' : layout === 'roadmap' ? 'Roadmap' : 'Table' }}
           <template v-if="groupField"> · grouped by {{ groupField }}</template>
           <template v-if="loading && buckets"> · updating…</template>
         </p>
@@ -140,6 +140,13 @@
             @move="onMove"
           />
         </div>
+        <RoadmapView
+          v-else-if="layout === 'roadmap'"
+          :buckets="shown.filter((b) => b.issues.length)"
+          :group="groupField"
+          :fields="fields"
+          @open="openIssue"
+        />
         <IssueTable
           v-else
           :buckets="shown.filter((b) => b.issues.length)"
@@ -207,6 +214,7 @@ import AppHeader from '@/components/AppHeader.vue';
 import FilterSidebar from '@/components/FilterSidebar.vue';
 import IssueBoard from '@/components/IssueBoard.vue';
 import IssueTable from '@/components/IssueTable.vue';
+import RoadmapView from '@/components/RoadmapView.vue';
 import GbIcon from '@/components/GbIcon.vue';
 import IssuePanel from '@/components/IssuePanel.vue';
 import NewIssueDialog from '@/components/NewIssueDialog.vue';

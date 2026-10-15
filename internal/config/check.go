@@ -51,8 +51,8 @@ func Check(data []byte) (*Config, []string, error) {
 	}
 	sort.Strings(names)
 	for _, name := range names {
-		if l := cfg.Views[name].Layout; l != "" && l != "board" && l != "table" {
-			warnings = append(warnings, fmt.Sprintf("views.%s: layout %q isn't board or table (shown as a table)", name, l))
+		if l := cfg.Views[name].Layout; l != "" && l != "board" && l != "table" && l != "roadmap" {
+			warnings = append(warnings, fmt.Sprintf("views.%s: layout %q isn't board, table or roadmap (shown as a table)", name, l))
 		}
 	}
 	seen := map[string]bool{}
