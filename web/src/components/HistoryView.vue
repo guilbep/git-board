@@ -4,6 +4,7 @@
      (replay.ts): git-bug keeps every operation, so nothing is lost. -->
 <template>
   <section class="hv" aria-label="History">
+    <IssueTimeline :steps="all" :current="pos" :fields="fields" @select="select" />
     <div class="hv-scrub">
       <button type="button" class="gb-icon-btn" aria-label="Previous change" :disabled="pos <= 0" @click="pos--"><GbIcon name="back" small /></button>
       <input v-model.number="pos" class="hv-range" type="range" min="0" :max="all.length - 1" aria-label="As of" />
@@ -37,11 +38,12 @@
       </details>
     </article>
 
-    <ol class="hv-steps">
+    <ol ref="list" class="hv-steps">
       <li
         v-for="(s, i) in all"
         :key="s.key"
         class="hv-step"
+        :data-step="i"
         :class="{ 'hv-current': i === pos, 'hv-future': i > pos }"
         :aria-current="i === pos ? 'step' : undefined"
       >
@@ -80,7 +82,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
 import type { Thread } from '@/api/board';
 import { colorClass } from '@/colors';
 import { displayName, formatValue, type Fields } from '@/fields';
@@ -88,6 +90,7 @@ import { describeLabels } from '@/history';
 import { on, when } from '@/me';
 import { stateAfter, steps, textDiff, wordDiff, type Step, type WordOp } from '@/replay';
 import GbIcon, { type IconName } from '@/components/GbIcon.vue';
+import IssueTimeline from '@/components/IssueTimeline.vue';
 
 const props = defineProps<{ thread: Thread; fields: Fields }>();
 
@@ -96,6 +99,14 @@ const pos = ref(0);
 // the latest change when the history opens or grows
 watch(() => all.value.length, (n) => (pos.value = n - 1), { immediate: true });
 const step = computed(() => all.value[Math.min(pos.value, all.value.length - 1)]!);
+
+// a marker of the timeline: that change, and its place in the list
+const list = ref<HTMLElement | null>(null);
+async function select(i: number) {
+  pos.value = i;
+  await nextTick();
+  list.value?.querySelector(`[data-step="${i}"]`)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+}
 const state = computed(() => stateAfter(all.value, pos.value, props.thread.title));
 // the text the current change wrote, as it was then
 const touched = computed(() => (['created', 'comment', 'edit'].includes(step.value.kind) ? state.value.comments.find((c) => c.id === step.value.event.id) : undefined));
