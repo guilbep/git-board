@@ -75,6 +75,10 @@
             <option v-for="name in groupChoices" :key="name" :value="name">{{ displayName(name) }}</option>
           </select>
         </div>
+        <div v-if="layout === 'board' && groupField" class="toolbar-field">
+          <span class="epfl-label">Lanes <span class="search-hint">a board per role</span></span>
+          <LaneChooser v-model:lanes="lanes" v-model:limits="limits" :values="laneValues" :field="groupField" />
+        </div>
         <!-- A table sorts from its column headers; a board has none. -->
         <div v-if="layout === 'board'" class="toolbar-field">
           <label class="epfl-label" for="sort">Sort cards by</label>
@@ -97,6 +101,7 @@
           <span v-if="draft.group" class="viewbar-meta">grouped by {{ draft.group }}</span>
           <span v-if="draft.sort" class="viewbar-meta">sorted by {{ draft.sort }}</span>
           <span v-if="!sameColumns(draft.columns, view?.columns)" class="viewbar-meta">{{ draft.columns ? 'columns of its own' : 'default columns' }}</span>
+          <span v-if="lanesChanged" class="viewbar-meta">{{ draft.lanes ? `lanes: ${draft.lanes.join(', ')}` : 'every lane' }}{{ draft.limits ? ' · limits' : '' }}</span>
         </span>
         <form v-if="naming" class="viewbar-name" @submit.prevent="saveAs">
           <input id="viewname" aria-label="New view name" ref="nameInput" v-model="newName" class="epfl-input" placeholder="new-view-name" pattern="[A-Za-z0-9_\-]+" title="Letters, digits, - and _" required @keydown.esc.stop="naming = false" />
@@ -146,14 +151,22 @@
         </div>
         <div v-else-if="layout === 'board'">
           <p v-if="moveError" class="epfl-alert epfl-alert-danger notice" role="alert"><b>Not moved.</b> {{ moveError }}</p>
+          <p v-if="laneView.hidden || (showAllLanes && lanes)" class="lanes-note">
+            <template v-if="showAllLanes">Every {{ groupField }} shown, beyond this board's lanes.
+              <button type="button" class="lanes-note-btn" @click="showAllLanes = false">Back to its lanes</button></template>
+            <template v-else>{{ laneView.hidden }} issue{{ laneView.hidden === 1 ? '' : 's' }} in other {{ groupField }} values {{ laneView.hidden === 1 ? 'is' : 'are' }} not on this board.
+              <button type="button" class="lanes-note-btn" @click="showAllLanes = true">Show every lane</button></template>
+          </p>
           <IssueBoard
-            :buckets="boardBuckets"
+            :buckets="laneView.shown"
+            :limits="limits"
             :changed="changed"
             :names="names"
             :fields="fields"
             :group="groupField"
             @open="openIssue"
             @move="onMove"
+            @move-many="onMoveMany"
           />
         </div>
         <RoadmapView
@@ -237,6 +250,8 @@ import { displayName, orderBuckets } from '@/fields';
 import AppHeader from '@/components/AppHeader.vue';
 import FilterSidebar from '@/components/FilterSidebar.vue';
 import IssueBoard from '@/components/IssueBoard.vue';
+import LaneChooser from '@/components/LaneChooser.vue';
+import { boardLanes } from '@/lanes';
 import IssueTable from '@/components/IssueTable.vue';
 import RoadmapView from '@/components/RoadmapView.vue';
 import GbIcon from '@/components/GbIcon.vue';
@@ -255,6 +270,9 @@ const configError = ref('');
 const filterText = ref('is:open');
 const groupField = ref('');
 const columns = ref<string[] | undefined>(); // the table's, the view's until changed (tablecols.ts)
+const lanes = ref<string[] | undefined>(); // the board's, the view's until changed (lanes.ts)
+const limits = ref<Record<string, number> | undefined>();
+const showAllLanes = ref(false);
 
 const buckets = ref<Bucket[] | null>(null); // null until a load lands
 const loading = ref(false);
@@ -353,6 +371,33 @@ const boardBuckets = computed(() => {
   return orderBuckets([...shown.value, ...empty], groupField.value, fields.value);
 });
 
+// the board's lanes (a board per role), the other values' issues counted
+const laneView = computed(() => (showAllLanes.value ? { shown: boardBuckets.value, hidden: 0 } : boardLanes(boardBuckets.value, lanes.value)));
+const laneValues = computed(() => {
+  const vs = boardBuckets.value.map((b) => b.group);
+  return vs.includes('(none)') ? vs : [...vs, '(none)'];
+});
+
+// Picked cards dropped in another lane, or a lane's "Move all to…": one
+// label change each, in turn; the first refusal stops and says which.
+async function onMoveMany(moves: { issue: Issue; from: string }[], to: string) {
+  const field = groupField.value;
+  moveError.value = '';
+  for (const b of buckets.value ?? []) b.issues = b.issues.filter((i) => !moves.some((m) => m.issue.id === i.id));
+  const target = (buckets.value ?? []).find((b) => b.group === to);
+  if (target) target.issues.push(...moves.map((m) => m.issue));
+  else buckets.value?.push({ group: to, issues: moves.map((m) => m.issue) });
+  for (const [n, { issue, from }] of moves.entries()) {
+    try {
+      await changeLabels(issue.id, to === '(none)' ? [] : [`${field}:${to}`], from === '(none)' ? [] : [`${field}:${from}`]);
+    } catch (e: unknown) {
+      moveError.value = `${n} of ${moves.length} moved; stopped at “${issue.title}”: ${message(e)}`;
+      break;
+    }
+  }
+  void load();
+}
+
 // A card dropped in another column takes its value: moved at once, saved
 // in one label change (the old value out, the new in), the board reloaded.
 const moveError = ref('');
@@ -437,14 +482,19 @@ const draft = computed<ViewConfig>(() => ({
   group: groupField.value,
   sort: sortValue.value || (view.value?.sort ?? ''),
   columns: columns.value,
+  lanes: lanes.value,
+  limits: limits.value,
 }));
 const sameColumns = (a?: string[], b?: string[]) => (a ?? []).join(',') === (b ?? []).join(',');
+const sameLimits = (a?: Record<string, number>, b?: Record<string, number>) =>
+  JSON.stringify(Object.entries(a ?? {}).sort()) === JSON.stringify(Object.entries(b ?? {}).sort());
+const lanesChanged = computed(() => !sameColumns(lanes.value, view.value?.lanes) || !sameLimits(limits.value, view.value?.limits));
 const viewDirty = computed(() => {
   const v = view.value;
   const d = draft.value;
   if (draftSkipped.value.length) return true; // the page differs, even what can't be saved
-  if (!v) return d.filter !== 'is:open' || d.group !== '' || d.sort !== '' || !!d.columns;
-  return d.filter !== v.filter || d.group !== (v.group ?? '') || d.sort !== (v.sort ?? '') || !sameColumns(d.columns, v.columns);
+  if (!v) return d.filter !== 'is:open' || d.group !== '' || d.sort !== '' || !!d.columns || !!d.lanes || !!d.limits;
+  return d.filter !== v.filter || d.group !== (v.group ?? '') || d.sort !== (v.sort ?? '') || !sameColumns(d.columns, v.columns) || lanesChanged.value;
 });
 const naming = ref(false);
 const newName = ref('');
@@ -491,6 +541,9 @@ function resetView() {
   filterText.value = view.value ? view.value.filter : 'is:open';
   groupField.value = view.value?.group ?? '';
   columns.value = view.value?.columns;
+  lanes.value = view.value?.lanes;
+  limits.value = view.value?.limits;
+  showAllLanes.value = false;
   void load();
 }
 
@@ -643,6 +696,8 @@ onBeforeUnmount(offLive);
 .viewbar-name { display: flex; align-items: center; gap: .5rem; }
 .viewbar-name .epfl-input { width: 14rem; min-height: 2rem; padding: .25rem .5rem; }
 .viewbar-discard { padding: 0; border: 0; background: none; color: var(--fg); text-decoration: underline; cursor: pointer; font: inherit; }
+.lanes-note { margin: 0 0 var(--space-3); color: var(--fg-muted); font-size: var(--fs-sm); }
+.lanes-note-btn { padding: 0; border: 0; background: none; color: var(--fg); font: inherit; text-decoration: underline; cursor: pointer; }
 .viewbar-note { flex-basis: 100%; margin: 0; font-size: .8125rem; color: var(--fg-muted); }
 .viewbar-error { color: var(--danger-fg); }
 /* The masonry-walls database layout: a 17rem filter sidebar, a fluid main

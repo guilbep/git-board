@@ -73,3 +73,41 @@ func TestSetViewTextWritesColumns(t *testing.T) {
 		t.Errorf("default columns kept a line\n%s", none)
 	}
 }
+
+// A board per role: the lanes it shows, in order, and their limits.
+func TestSetViewTextWritesLanesAndLimits(t *testing.T) {
+	src := "[views.dev]\nlayout = \"board\" # devs\ngroup = \"status\"\n"
+	v := View{Layout: "board", Group: "status", Filter: "is:open",
+		Lanes:  []string{"ready", "in-progress", "in-review", "ready-for-validation"},
+		Limits: map[string]int{"in-progress": 5, "in review": 3}}
+	got, err := SetViewText(src, "dev", v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		`layout = "board" # devs`,
+		`lanes = ["ready", "in-progress", "in-review", "ready-for-validation"]`,
+		`limits = { "in review" = 3, in-progress = 5 }`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("missing %s in\n%s", want, got)
+		}
+	}
+	cfg, _, err := Check([]byte(got))
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := cfg.Views["dev"]
+	if strings.Join(d.Lanes, ",") != "ready,in-progress,in-review,ready-for-validation" || d.Limits["in-progress"] != 5 || d.Limits["in review"] != 3 {
+		t.Errorf("reparsed %+v", d)
+	}
+	// limits rewritten in place, then gone with the lanes
+	again, _ := SetViewText(got, "dev", View{Layout: "board", Group: "status", Filter: "is:open", Lanes: []string{"ready"}, Limits: map[string]int{"ready": 2}})
+	if strings.Count(again, "limits =") != 1 || !strings.Contains(again, "limits = { ready = 2 }") {
+		t.Errorf("rewrite\n%s", again)
+	}
+	none, _ := SetViewText(again, "dev", View{Layout: "board", Group: "status", Filter: "is:open"})
+	if strings.Contains(none, "lanes") || strings.Contains(none, "limits") {
+		t.Errorf("no lanes kept a line\n%s", none)
+	}
+}

@@ -4,6 +4,15 @@
      column's value (the browser's drag and drop; the panel's field is the
      keyboard way). -->
 <template>
+  <p v-if="picked.length" class="board-picked" role="status">
+    <b>{{ picked.length }} card{{ picked.length === 1 ? '' : 's' }} picked</b>
+    <span class="board-picked-hint">drag one of them to a lane to move them all, or</span>
+    <select class="epfl-select board-picked-move" aria-label="Move the picked cards to" @change="movePicked($event)">
+      <option value="" selected disabled>Move to…</option>
+      <option v-for="b in buckets" :key="b.group" :value="b.group">{{ groupLabel(b.group) }}</option>
+    </select>
+    <button type="button" class="board-picked-clear" @click="picked = []">Clear (Esc)</button>
+  </p>
   <div class="board">
     <section
       v-for="bucket in buckets"
@@ -17,18 +26,37 @@
     >
       <h2 class="column-title">
         <span class="column-name"><ValueMark v-if="group" :field="group" :value="bucket.group" />{{ groupLabel(bucket.group) }}</span>
-        <span class="column-count">{{ bucket.issues.length }}</span>
+        <span class="column-count" :class="`is-${limitState(bucket.issues.length, limits?.[bucket.group]) || 'ok'}`" :title="limits?.[bucket.group] ? `At most ${limits[bucket.group]} cards here` : undefined">{{ bucket.issues.length }}<template v-if="limits?.[bucket.group]"> / {{ limits[bucket.group] }}</template></span>
+        <select
+          v-if="group && bucket.issues.length && buckets.length > 1"
+          class="column-move"
+          :aria-label="`Move every card of ${groupLabel(bucket.group)} to another lane`"
+          title="Move all to…"
+          @change="moveAll(bucket, $event)"
+        >
+          <option value="" selected disabled>⋯</option>
+          <option v-for="b in buckets.filter((x) => x.group !== bucket.group)" :key="b.group" :value="b.group">Move all to {{ groupLabel(b.group) }}</option>
+        </select>
       </h2>
       <ul class="cards">
         <li v-for="issue in bucket.issues" :key="issue.id">
+          <input
+            v-if="group"
+            type="checkbox"
+            class="card-pick"
+            :class="{ 'is-on': picked.length }"
+            :checked="picked.includes(issue.id)"
+            :aria-label="`Pick ${issue.title}`"
+            @click="onPickBox(issue, bucket, $event)"
+          />
           <button
             type="button"
             class="issue-card"
-            :class="{ 'is-dragging': dragging === issue.id }"
+            :class="{ 'is-dragging': dragging === issue.id || (dragging && picked.includes(dragging) && picked.includes(issue.id)), 'is-picked': picked.includes(issue.id) }"
             :draggable="!!group"
             @dragstart="onStart(issue, bucket.group, $event)"
             @dragend="onEnd"
-            @click="emit('open', issue)"
+            @click="onCard(issue, bucket, $event)"
           >
             <span class="card-id"><span v-if="changed?.has(issue.id)" class="gb-changed-dot" title="Changed since your last visit" />{{ issue.id.slice(0, 8) }}</span>
             <span class="card-title">{{ issue.title }}</span>
@@ -50,13 +78,58 @@
 
 <script setup lang="ts">
 import ValueMark from '@/components/ValueMark.vue';
-import { ref } from 'vue';
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { limitState, pickCards } from '@/lanes';
 import type { Bucket, Issue } from '@/api/board';
 import { colorClass } from '@/colors';
 import { displayName, fieldValues, formatValue, otherLabels, type Fields } from '@/fields';
 
-const props = defineProps<{ buckets: Bucket[]; names: string[]; fields: Fields; group: string; changed?: Set<string> }>();
-const emit = defineEmits<{ open: [issue: Issue]; move: [issue: Issue, from: string, to: string] }>();
+const props = defineProps<{ buckets: Bucket[]; names: string[]; fields: Fields; group: string; changed?: Set<string>; limits?: Record<string, number> | undefined }>();
+const emit = defineEmits<{ open: [issue: Issue]; move: [issue: Issue, from: string, to: string]; moveMany: [moves: { issue: Issue; from: string }[], to: string] }>();
+
+// Several cards picked (Cmd/Ctrl-click toggles one, Shift-click a range in
+// its lane, the box on a card's corner too) move together: dragged, or
+// sent to a lane from the bar. Esc lets go.
+const picked = ref<string[]>([]);
+let anchor = '';
+watch(() => props.group, () => (picked.value = []));
+function pick(issue: Issue, bucket: Bucket, range: boolean) {
+  const order = bucket.issues.map((i) => i.id);
+  picked.value = pickCards(picked.value, issue.id, order, { toggle: !range, range, anchor });
+  if (!range) anchor = issue.id;
+}
+function onCard(issue: Issue, bucket: Bucket, e: MouseEvent) {
+  if (props.group && (e.metaKey || e.ctrlKey || e.shiftKey)) pick(issue, bucket, e.shiftKey && !!anchor);
+  else emit('open', issue);
+}
+function onPickBox(issue: Issue, bucket: Bucket, e: MouseEvent) {
+  e.preventDefault(); // the box shows the picked list, set below
+  pick(issue, bucket, e.shiftKey && !!anchor);
+}
+function pickedMoves(): { issue: Issue; from: string }[] {
+  return props.buckets.flatMap((b) => b.issues.filter((i) => picked.value.includes(i.id)).map((issue) => ({ issue, from: b.group })));
+}
+function movePicked(e: Event) {
+  const el = e.target as HTMLSelectElement;
+  const to = el.value;
+  el.value = '';
+  const moves = pickedMoves().filter((m) => m.from !== to);
+  if (moves.length) emit('moveMany', moves, to);
+  picked.value = [];
+}
+function moveAll(bucket: Bucket, e: Event) {
+  const el = e.target as HTMLSelectElement;
+  const to = el.value;
+  el.value = '';
+  const n = bucket.issues.length;
+  if (!window.confirm(`Move all ${n} card${n === 1 ? '' : 's'} of ${groupLabel(bucket.group)} to ${groupLabel(to)}?`)) return;
+  emit('moveMany', bucket.issues.map((issue) => ({ issue, from: bucket.group })), to);
+}
+function onKey(e: KeyboardEvent) {
+  if (e.key === 'Escape' && picked.value.length && !document.querySelector('.q-dialog')) picked.value = [];
+}
+onMounted(() => window.addEventListener('keydown', onKey));
+onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
 
 const dragging = ref(''); // the card's issue id
 const dragFrom = ref('');
@@ -82,7 +155,11 @@ function onLeave(group: string, e: DragEvent) {
 }
 function onDrop(group: string, e: DragEvent) {
   e.preventDefault();
-  if (dragged && group !== dragFrom.value) emit('move', dragged, dragFrom.value, group);
+  if (dragged && picked.value.includes(dragged.id) && picked.value.length > 1) {
+    const moves = pickedMoves().filter((m) => m.from !== group);
+    if (moves.length) emit('moveMany', moves, group);
+    picked.value = [];
+  } else if (dragged && group !== dragFrom.value) emit('move', dragged, dragFrom.value, group);
   onEnd();
 }
 function onEnd() {
@@ -133,7 +210,7 @@ function meta(issue: Issue) {
 .column-title {
   display: flex;
   align-items: baseline;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: var(--space-2);
   margin: 0 0 var(--space-3);
   font-size: var(--fs-sm);
@@ -142,7 +219,19 @@ function meta(issue: Issue) {
   text-transform: uppercase;
   letter-spacing: .04em;
 }
-.column-count { color: var(--fg-muted); font-weight: var(--w-normal); }
+.column-count { margin-left: auto; color: var(--fg-muted); font-weight: var(--w-normal); font-variant-numeric: tabular-nums; }
+.column-count.is-at { padding: 0 .375rem; color: var(--warning-fg); background: var(--warning-bg); font-weight: var(--w-bold); }
+.column-count.is-over { padding: 0 .375rem; color: var(--danger-fg); background: var(--danger-bg); font-weight: var(--w-bold); }
+.column-move { width: 1.75rem; height: 1.5rem; padding: 0; border: 1px solid transparent; background: none; color: var(--fg-muted); font: inherit; font-weight: var(--w-bold); text-align: center; cursor: pointer; appearance: none; -webkit-appearance: none; }
+.column-move:hover, .column-move:focus-visible { border-color: var(--border-strong); color: var(--fg); }
+.cards li { position: relative; }
+.card-pick { position: absolute; top: .5rem; right: .5rem; z-index: 1; width: 1rem; height: 1rem; margin: 0; opacity: 0; accent-color: var(--primary-hover); cursor: pointer; }
+.cards li:hover .card-pick, .card-pick:focus-visible, .card-pick.is-on, .card-pick:checked { opacity: 1; }
+.issue-card.is-picked { outline: 2px solid var(--primary-hover); outline-offset: -2px; }
+.board-picked { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem .75rem; margin: 0 0 var(--space-3); padding: .5rem .75rem; border: 1px solid var(--border-strong); border-left: 4px solid var(--primary-hover); background: var(--bg); }
+.board-picked-hint { color: var(--fg-muted); font-size: var(--fs-sm); }
+.board-picked-move { width: auto; min-width: 10rem; }
+.board-picked-clear { padding: 0; border: 0; background: none; color: var(--fg); font: inherit; text-decoration: underline; cursor: pointer; }
 .column-name { display: inline-flex; align-items: center; gap: var(--space-2); }
 .board-column[class*="gb-c-"] { border-top: 3px solid var(--c-dot); }
 /* values wrap inside the card: three assignees must not widen it */

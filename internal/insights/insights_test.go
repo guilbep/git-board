@@ -96,3 +96,15 @@ func TestCycleFallsBackToLeadTime(t *testing.T) {
 		t.Errorf("headline %q", r.Headlines["cycle"])
 	}
 }
+
+// The sprint's issues by status at the end of the burn-up: the donut.
+func TestBurnupSaysWhereTheSprintStands(t *testing.T) {
+	r := Compute(sample(), Options{
+		Field: "status", Workflow: []string{"backlog", "in-progress", "done"},
+		From: at(0, 0), To: at(6, 0),
+		Sprint: &Sprint{Field: "sprint", Slug: "s1", Title: "Sprint 1", Start: at(0, -9), End: at(14, -9)},
+	})
+	if got := r.Burnup.Status; !reflect.DeepEqual(got, map[string]int{"backlog": 1, "done": 1}) {
+		t.Errorf("status %v", got)
+	}
+}
