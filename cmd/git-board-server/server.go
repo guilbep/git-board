@@ -1,12 +1,16 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
 	"sort"
 	"sync"
+	"sync/atomic"
 	"time"
+
+	"github.com/git-bug/git-bug/bridge/core"
 
 	"github.com/guilbep/git-board/internal/board"
 	"github.com/guilbep/git-board/internal/config"
@@ -34,6 +38,17 @@ type apiServer struct {
 	project ghbridge.Project
 	syncMu  sync.Mutex
 	last    *syncReport
+
+	// Every change to the repository holds writeMu (issues.go,
+	// beginWrite); the sync with GitHub/GitLab (forges.go) holds it for
+	// its whole run, and syncing tells writes to answer 409 meanwhile.
+	writeMu sync.Mutex
+	syncing atomic.Bool
+	forgeMu sync.Mutex // guards job
+	job     *forgeJob
+	runSync func(context.Context, bool) (<-chan core.SyncResult, error) // nil: git-bug's
+
+	lazyOnce
 }
 
 // newMux wires the API routes plus a static handler (the built frontend) at
@@ -46,6 +61,18 @@ func newMux(s *apiServer, static http.Handler) http.Handler {
 	mux.HandleFunc("GET /api/issues", s.handleListIssues)
 	mux.HandleFunc("GET /api/issues/{id}", s.handleGetIssue)
 	mux.HandleFunc("PATCH /api/issues/{id}", s.handlePatchIssue)
+	mux.HandleFunc("POST /api/issues", s.handleNewIssue)
+	mux.HandleFunc("GET /api/issues/{id}/thread", s.handleThread)
+	mux.HandleFunc("POST /api/issues/{id}/comments", s.handleComment)
+	mux.HandleFunc("PUT /api/issues/{id}/comments/{comment}", s.handleEditComment)
+	mux.HandleFunc("PUT /api/issues/{id}/title", s.handleTitle)
+	mux.HandleFunc("PUT /api/issues/{id}/status", s.handleStatus)
+	mux.HandleFunc("POST /api/issues/{id}/labels", s.handleLabels)
+	mux.HandleFunc("GET /api/me", s.handleMe)
+	mux.HandleFunc("POST /api/me", s.handleSetMe)
+	mux.HandleFunc("GET /api/media", s.handleMedia)
+	mux.HandleFunc("GET /api/forges", s.handleForges)
+	mux.HandleFunc("POST /api/forges/sync", s.handleForgeSync)
 	mux.HandleFunc("GET /api/sync", s.handleSyncStatus)
 	mux.HandleFunc("POST /api/sync/check", s.handleSyncCheck)
 	mux.HandleFunc("POST /api/sync/apply", s.handleSyncApply)
@@ -109,6 +136,12 @@ func (s *apiServer) handlePatchIssue(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
+
+	done, ok := s.beginWrite(w)
+	if !ok {
+		return
+	}
+	defer done()
 
 	names := make([]string, 0, len(assignments))
 	for name := range assignments {

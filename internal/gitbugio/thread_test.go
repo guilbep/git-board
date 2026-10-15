@@ -5,6 +5,8 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/git-bug/git-bug/bridge/core/auth"
+
 	"github.com/guilbep/git-board/internal/gitbugio"
 	"github.com/guilbep/git-board/internal/gitbugio/gitbugiotest"
 )
@@ -126,5 +128,43 @@ func TestMe(t *testing.T) {
 	me, ok, err := b.Me()
 	if err != nil || !ok || me.Name == "" || me.ID == "" {
 		t.Errorf("Me = %+v, %v, %v", me, ok, err)
+	}
+}
+
+func TestForgeToken(t *testing.T) {
+	b := gitbugiotest.New(t)
+	gh := auth.NewToken("github", "gh-secret")
+	gl := auth.NewToken("gitlab", "gl-secret")
+	gl.SetMetadata(auth.MetaKeyBaseURL, "https://gitlab.example.com/")
+	for _, c := range []auth.Credential{gh, gl} {
+		if err := auth.Store(b.TestCache(), c); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for host, want := range map[string]string{"github.com": "gh-secret", "gitlab.example.com": "gl-secret", "elsewhere.example": ""} {
+		if got := b.ForgeToken(host); got != want {
+			t.Errorf("ForgeToken(%s) = %q, want %q", host, got, want)
+		}
+	}
+	if got := b.ForgeHosts(); !slices.Contains(got, "gitlab.example.com") {
+		t.Errorf("ForgeHosts = %v, want the GitLab instance", got)
+	}
+}
+
+func TestIdentities(t *testing.T) {
+	b := gitbugiotest.New(t)
+	other, err := b.NewIdentity("Bob", "bob@example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	all, err := b.Identities()
+	if err != nil || len(all) != 2 {
+		t.Fatalf("Identities = %v, %v", all, err)
+	}
+	if err := b.Adopt(other.ID); err != nil {
+		t.Fatal(err)
+	}
+	if me, _, _ := b.Me(); me.ID != other.ID {
+		t.Errorf("Me = %+v, want Bob", me)
 	}
 }

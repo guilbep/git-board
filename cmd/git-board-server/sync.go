@@ -69,6 +69,11 @@ func (s *apiServer) check() error {
 }
 
 func (s *apiServer) handleSyncCheck(w http.ResponseWriter, r *http.Request) {
+	done, ok := s.beginWrite(w)
+	if !ok {
+		return
+	}
+	defer done()
 	s.syncMu.Lock()
 	defer s.syncMu.Unlock()
 	if err := s.check(); err != nil {
@@ -81,6 +86,11 @@ func (s *apiServer) handleSyncCheck(w http.ResponseWriter, r *http.Request) {
 // handleSyncApply is `git-board bridge sync --apply`: conflicts stay held,
 // and the Project is only written to with write = true.
 func (s *apiServer) handleSyncApply(w http.ResponseWriter, r *http.Request) {
+	done, ok := s.beginWrite(w)
+	if !ok {
+		return
+	}
+	defer done()
 	s.syncMu.Lock()
 	defer s.syncMu.Unlock()
 	state, err := ghbridge.LoadState(s.b, s.project, s.cfg, ghbridge.DefaultItemLimit)
@@ -114,6 +124,11 @@ func (s *apiServer) handleSyncResolve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	done, ok := s.beginWrite(w)
+	if !ok {
+		return
+	}
+	defer done()
 	s.syncMu.Lock()
 	defer s.syncMu.Unlock()
 	state, err := ghbridge.LoadState(s.b, s.project, s.cfg, ghbridge.DefaultItemLimit)
