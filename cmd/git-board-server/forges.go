@@ -242,9 +242,16 @@ func (s *apiServer) runForgeSync(job *forgeJob, run func(context.Context, bool, 
 
 	finish := func(state, errText string) {
 		s.forgeMu.Lock()
-		defer s.forgeMu.Unlock()
 		now := time.Now()
 		job.State, job.Error, job.Ended = state, errText, &now
+		s.forgeMu.Unlock()
+		// the pages update: the header's sync link, and the issues a real
+		// run may have changed
+		s.seeRefs()
+		s.events.publish(event{Kind: "sync"})
+		if !job.DryRun {
+			s.events.publish(event{Kind: "issues"})
+		}
 	}
 	results, err := run(context.Background(), job.DryRun, names)
 	if err != nil {

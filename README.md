@@ -516,6 +516,19 @@ most.
 Light or Dark; `web/src/css/dark.css` re-values the design system's
 decision tokens.
 
+**Sprint report** (Insights, or a view filtering `sprint:@current`): the
+sprint as Markdown to paste in Slack, an email or an issue — its dates,
+how much is done and how long is left, the Insights findings, the issues
+by where they stand (linked to their forge, with their assignees), and
+what was added after the sprint started. Copy or download it
+(`GET /api/report?sprint=@current&format=md`).
+
+**Live updates.** Every open page follows the server's changes
+(`GET /api/events`): a write from another page, the end of a sync, a
+saved view or configuration, or the issues' refs changing outside the
+API. The board reloads (keeping its scroll), an open issue too — unless
+you are writing in it, then it offers the reload and keeps your text.
+
 **Settings** (`#/settings`, the gear in the header): who you write
 as, the bridges (add one from the forge, the project's address and a
 stored credential or a pasted token, which the forge checks before

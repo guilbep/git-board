@@ -46,7 +46,9 @@
           {{ layout === 'board' ? 'Board' : layout === 'roadmap' ? 'Roadmap' : 'Table' }}
           <template v-if="groupField"> · grouped by {{ groupField }}</template>
           <template v-if="loading && buckets"> · updating…</template>
+          <template v-if="filterText.includes('@current')"> · <button type="button" class="page-report" @click="reportOpen = true">Sprint report</button></template>
         </p>
+        <SprintReportDialog v-if="filterText.includes('@current')" v-model="reportOpen" />
       </div>
 
       <!-- toolbar, unsaved-view bar and count stick under the header
@@ -215,6 +217,8 @@
 </template>
 
 <script setup lang="ts">
+import SprintReportDialog from '@/components/SprintReportDialog.vue';
+import { debounced, onLive } from '@/live';
 import { panelMode } from '@/panelsize';
 import { filtersHidden, newIssueRequested, recordRecent } from '@/commands';
 import { changedSince, loadVisit, saveVisit, visit } from '@/lastvisit';
@@ -608,6 +612,17 @@ function onKey(e: KeyboardEvent) {
 }
 onMounted(() => window.addEventListener('keydown', onKey));
 onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
+
+// live updates (live.ts): another page or a sync changed the issues or the
+// configuration; reload once a burst is over (the board keeps its scroll)
+const reportOpen = ref(false);
+const reloadLive = debounced(() => void load());
+const reloadConfig = debounced(async () => {
+  await loadConfig();
+  void load();
+});
+const offLive = onLive((e) => (e.kind === 'config' ? reloadConfig() : e.kind !== 'settings' && reloadLive()));
+onBeforeUnmount(offLive);
 </script>
 
 <style scoped>
@@ -650,6 +665,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
 .page-head { margin-bottom: var(--space-4); }
 .page-title { margin: 0 0 var(--space-1); overflow-wrap: anywhere; }
 .page-meta { margin: 0; font-size: var(--fs-sm); color: var(--fg-muted); }
+.page-report { padding: 0; border: 0; background: none; color: var(--fg); font: inherit; text-decoration: underline; cursor: pointer; }
 
 .toolbar {
   display: flex;

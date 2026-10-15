@@ -1,6 +1,8 @@
 package gitbugio
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"sort"
 
@@ -52,4 +54,25 @@ func historyOf(bug *cache.BugCache) insights.Issue {
 	// the operations come in git-bug's logical order; the replay wants time
 	sort.SliceStable(is.Changes, func(i, j int) bool { return is.Changes[i].At.Before(is.Changes[j].At) })
 	return is
+}
+
+// RefsFingerprint changes whenever an issue or a person changes in git:
+// their refs and the commits they point to, hashed. Cheap: the refs only.
+func (b *Backend) RefsFingerprint() string {
+	h := sha256.New()
+	for _, ns := range []string{"bugs", "identities"} {
+		refs, err := b.repo.ListRefs(ns)
+		if err != nil {
+			continue
+		}
+		keys := make([]string, 0, len(refs))
+		for k := range refs {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			fmt.Fprintf(h, "%s %s\n", k, refs[k])
+		}
+	}
+	return hex.EncodeToString(h.Sum(nil))
 }

@@ -50,9 +50,11 @@
   </header>
   <KeyboardHelp />
   <CommandPalette :views="views" />
+  <LiveNotice />
 </template>
 
 <script setup lang="ts">
+import LiveNotice from '@/components/LiveNotice.vue';
 import { computed, onBeforeUnmount, onMounted } from 'vue';
 import { helpOpen } from '@/shortcuts';
 import '@/theme'; // keeps <html data-theme> in step with the choice

@@ -4,7 +4,11 @@
 // Same origin in production (frontend is embedded in the Go binary); the
 // backend's default dev port otherwise (see cmd/git-board-server --addr and
 // web/README.md for how to point elsewhere).
-const API_BASE = import.meta.env.DEV ? 'http://localhost:8080' : '';
+export const API_BASE = import.meta.env.DEV ? 'http://localhost:8080' : '';
+
+// clientId names this page in the writes it makes, so the live updates it
+// gets back (live.ts) can tell its own changes from someone else's.
+export const clientId = Math.random().toString(36).slice(2) + Date.now().toString(36);
 
 export interface Issue {
   id: string;
@@ -48,7 +52,7 @@ export class ApiError extends Error {
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   // The server only takes JSON writes (withGuard in cmd/git-board-server).
   if (init?.method && init.method !== 'GET') {
-    init = { ...init, headers: { 'Content-Type': 'application/json', ...init.headers }, body: init.body ?? '{}' };
+    init = { ...init, headers: { 'Content-Type': 'application/json', 'X-Git-Board-Client': clientId, ...init.headers }, body: init.body ?? '{}' };
   }
   const res = await fetch(API_BASE + path, init).catch(() => {
     throw new Error('The git-board server is not reachable.');
@@ -463,4 +467,16 @@ export interface SprintWindow {
 
 export function getSprints(): Promise<SprintWindow[]> {
   return request('/api/sprints');
+}
+
+// A sprint's report as Markdown (report.go): the current sprint unless one
+// is named.
+export interface SprintReport {
+  sprint: string;
+  title: string;
+  markdown: string;
+}
+
+export function getReport(sprint = '@current'): Promise<SprintReport> {
+  return request(`/api/report?sprint=${encodeURIComponent(sprint)}`);
 }
