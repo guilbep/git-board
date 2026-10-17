@@ -587,6 +587,66 @@ export function getBranches(id: string): Promise<IssueBranches> {
   return request(`${issuePath(id)}/branches`);
 }
 
+// The PR gate (cmd/git-board-server/pulls.go, internal/ghpr): each branch
+// on origin and its GitHub pull request, found by the branch's name. Open
+// and Merge act on GitHub as `login`, with that person's token.
+export interface GateCheck {
+  name: string;
+  state: 'success' | 'failure' | 'pending' | 'expected'; // expected: required, never reported
+  required: boolean;
+  url?: string;
+}
+export interface GateReview {
+  login: string;
+  state: string; // APPROVED, CHANGES_REQUESTED, COMMENTED
+  commit: string;
+}
+export interface GatePR {
+  number: number;
+  url: string;
+  state: 'OPEN' | 'MERGED' | 'CLOSED';
+  draft: boolean;
+  title: string;
+  base: string;
+  head: string; // its head commit
+  author: string;
+  decision: string; // APPROVED, REVIEW_REQUIRED, CHANGES_REQUESTED, '' (no review rule)
+  mergeable: string;
+  merge_state: string;
+  checks: GateCheck[];
+  reviews: GateReview[];
+  requested: string[];
+  can_merge: boolean;
+  checking: boolean; // GitHub is still computing mergeability
+  waits: string[];
+}
+export interface IssuePulls {
+  repo: string; // '' when origin isn't on GitHub
+  base: string;
+  login: string;
+  pulls: { branch: string; pr: GatePR | null }[];
+}
+
+export function getPulls(id: string): Promise<IssuePulls> {
+  return request(`${issuePath(id)}/pulls`);
+}
+
+export function openPull(id: string, branch: string): Promise<GatePR> {
+  return request(`${issuePath(id)}/pulls`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ branch }),
+  });
+}
+
+export function mergePull(id: string, number: number, sha: string): Promise<void> {
+  return request(`${issuePath(id)}/pulls/${number}/merge`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sha }),
+  });
+}
+
 // Bridges set up from the settings page (settings.go). A credential is
 // listed without its token; a pasted token goes to git-bug's store.
 export interface Credential {

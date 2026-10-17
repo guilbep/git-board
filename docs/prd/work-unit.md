@@ -168,6 +168,44 @@ The Development section, per branch:
 Done when: on guilbep/git-board-test, with a ruleset like co2's, a PR is
 opened, its checks and approval show, and it merges from the issue.
 
+*Built 2026-10-17* (`docs/prd/work-unit-m3-plan.md`), decided on the way:
+
+- **GitHub access**: git-bug's keyring token whose login is the identity's
+  GitHub login (`github-login`, else the GitHub bridge's link, else its own
+  login), over plain HTTP (`internal/ghpr`); not the `gh` CLI, which can be
+  logged in as another account than the one the bridge posts as. No match:
+  "no GitHub token for <login>", never another token.
+- **Required checks** come from the base's rulesets
+  (`GET /repos/{repo}/rules/branches/{base}`), so a required check that
+  never reported still shows; GraphQL's `isRequired` needs the PR number
+  first.
+- **Layout B**: every check listed, required first (mocked against A,
+  folded to one line).
+- `Closes #N` closes the issue only when the PR merges into the default
+  branch: co2's is `dev`.
+- Approval live is left to M4 (one GitHub account on the scratch forges).
+- Requested reviewers are people only: a team's fields need `read:org`,
+  which git-bug's tokens don't have, and they failed the whole query (found
+  live). A CODEOWNERS team asked to review reads "an approval".
+
+*Live test, 2026-10-17, guilbep/git-board-test, without a ruleset (the
+user's call: the repository is private on a free plan):* issue #25 made in
+git-board and sent by the per-issue sync; branch `25-m3-gate-live-test`
+pushed; **Open PR** from Development opened #26 as guilbep, body
+`6a1dd80` / `Closes #25`; its `Tests` check showed running, then passed,
+the page re-reading by itself; **Merge into main** merged it with a merge
+commit (eab6ac9, two parents); GitHub closed #25 and the issue's sync
+brought the close back; after a fetch, Development read "merged into
+main" and "#26 Merged". Left on git-board-test: `.github/workflows/tests.yml`
+and `m3-gate.txt` on `main`, issue #25 (closed), PR #26 (merged); the
+branch is deleted. The issue's git-bug entity lives only in a scratch
+clone, so the next import elsewhere brings #25 in as a new issue. Not yet
+tested live: required checks and the code-owner approval (a ruleset needs
+the repository public or a paid plan; approval needs a second account).
+Read-only, with the same keyring token, co2's PR #3082 reads as the gate
+would show it: the six required checks from `dev`'s rules, "Waits for:
+Frontent Lint/Type Check, Frontend Tests, an approval".
+
 ### M4: review in git-board
 
 The issue page gets a **Changes** tab beside Conversation and History
@@ -241,6 +279,14 @@ the issue.
   days.
 - A virtualized diff viewer, if a file someone must read exceeds the
   5,000-line view.
+- A branch squashed into the base and then deleted on origin still gets
+  "push it to open a PR": `in_base` misses most squashes. A PR keeps its
+  head's name after the branch is gone, so looking up local-only branches
+  on GitHub too would show their PR instead.
+- co2's `dev` rules include a `branch_name_pattern`,
+  `^(feat|fix|chore|docs|refactor)/.+`. If it constrains new branches, the
+  default `{number}-{slug}` and a `perf/` kind are refused on push, and
+  such a branch never gets a PR.
 
 Left by the M1 and M2 reviews (2026-10-17), each small:
 

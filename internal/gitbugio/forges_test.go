@@ -2,9 +2,14 @@ package gitbugio_test
 
 import (
 	"context"
+	"errors"
+	"strings"
 	"testing"
 
 	"github.com/git-bug/git-bug/bridge/core"
+	"github.com/git-bug/git-bug/bridge/core/auth"
+	"github.com/git-bug/git-bug/cache"
+	"github.com/git-bug/gitconfig"
 
 	"github.com/guilbep/git-board/internal/gitbugio/gitbugiotest"
 )
@@ -50,5 +55,59 @@ func TestGetAndSendAreOneWay(t *testing.T) {
 
 	if _, err := b.GetForges(context.Background(), []string{"nope"}); err == nil {
 		t.Error("Get on an unknown bridge: no error")
+	}
+}
+
+// The token git-board acts on GitHub with is the one of whoever writes
+// from it: its identity's GitHub login, as the bridge maps an author to an
+// account, never another person's token.
+func TestGitHubToken(t *testing.T) {
+	b := gitbugiotest.New(t)
+	for login, target := range map[string]string{"alice": "github", "bob": "github", "carol": "gitlab"} {
+		tok := auth.NewToken(target, "tok-"+login)
+		tok.SetMetadata(auth.MetaKeyLogin, login)
+		if target == "gitlab" {
+			tok.SetMetadata(auth.MetaKeyBaseURL, "https://gitlab.example.com/")
+		}
+		if err := auth.Store(b.TestCache(), tok); err != nil {
+			t.Fatal(err)
+		}
+	}
+	as := func(login string, meta map[string]string) *cache.IdentityCache {
+		t.Helper()
+		i, err := b.TestCache().Identities().NewRaw("Someone", "", login, "", nil, meta)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := b.TestCache().SetUserIdentity(i); err != nil {
+			t.Fatal(err)
+		}
+		return i
+	}
+
+	if _, _, err := b.GitHubToken(); err == nil || !strings.Contains(err.Error(), "no GitHub login") {
+		t.Errorf("no login anywhere: err %v, want no GitHub login", err)
+	}
+	as("gl-user", map[string]string{"github-login": "Bob"})
+	if login, tok, err := b.GitHubToken(); err != nil || login != "Bob" || tok != "tok-bob" {
+		t.Errorf("github-login Bob: %q %q %v, want Bob's token", login, tok, err)
+	}
+	as("carol", nil)
+	if _, tok, err := b.GitHubToken(); err == nil || err.Error() != "no GitHub token for carol" || tok != "" {
+		t.Errorf("carol, a GitLab token only: %q %v, want no GitHub token for carol", tok, err)
+	}
+	me := as("gl-user", nil)
+	if err := b.TestCache().Config().Update(func(f *gitconfig.File) error {
+		return errors.Join(
+			f.Set("git-bug.bridge.gl.target", "gitlab"),
+			f.Set("git-bug.bridge.gl.login-"+me.Id().String(), "gl-user"),
+			f.Set("git-bug.bridge.gh.target", "github"),
+			f.Set("git-bug.bridge.gh.login-"+me.Id().String(), "alice"),
+		)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if login, tok, err := b.GitHubToken(); err != nil || login != "alice" || tok != "tok-alice" {
+		t.Errorf("the GitHub bridge's link alice: %q %q %v, want alice's token", login, tok, err)
 	}
 }
