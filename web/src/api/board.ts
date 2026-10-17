@@ -46,6 +46,7 @@ export interface FieldConfig {
   current?: string; // an iteration field: today's sprint
   type?: string; // select, iteration, person, number, date, issue, text (config.TypeOf)
   unit?: string; // a number's: h
+  inherits?: string; // a role's project value ([roles]), shown when the issue sets none
 }
 
 // ApiError carries the server's status and code: syncing (a sync with
