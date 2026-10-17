@@ -76,6 +76,10 @@ type apiServer struct {
 	refsMu sync.Mutex
 	refs   string
 
+	// githubAPI is GitHub's API for the PR gate (pulls.go): "" is
+	// https://api.github.com; tests, a fake
+	githubAPI string
+
 	lazyOnce
 }
 
@@ -101,6 +105,9 @@ func newMux(s *apiServer, static http.Handler) http.Handler {
 	mux.HandleFunc("POST /api/issues/{id}/take", s.handleIssueTake)
 	mux.HandleFunc("GET /api/issues/{id}/refs", s.handleRefs)
 	mux.HandleFunc("GET /api/issues/{id}/branches", s.handleBranches)
+	mux.HandleFunc("GET /api/issues/{id}/pulls", s.handlePulls)
+	mux.HandleFunc("POST /api/issues/{id}/pulls", s.handleOpenPull)
+	mux.HandleFunc("POST /api/issues/{id}/pulls/{number}/merge", s.handleMergePull)
 	mux.HandleFunc("POST /api/issues/{id}/comments", s.handleComment)
 	mux.HandleFunc("PUT /api/issues/{id}/comments/{comment}", s.handleEditComment)
 	mux.HandleFunc("PUT /api/issues/{id}/title", s.handleTitle)
