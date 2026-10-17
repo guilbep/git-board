@@ -168,6 +168,25 @@ The Development section, per branch:
 Done when: on guilbep/git-board-test, with a ruleset like co2's, a PR is
 opened, its checks and approval show, and it merges from the issue.
 
+*Built 2026-10-17* (`docs/prd/work-unit-m3-plan.md`), decided on the way:
+
+- **GitHub access**: git-bug's keyring token whose login is the identity's
+  GitHub login (`github-login`, else the GitHub bridge's link, else its own
+  login), over plain HTTP (`internal/ghpr`); not the `gh` CLI, which can be
+  logged in as another account than the one the bridge posts as. No match:
+  "no GitHub token for <login>", never another token.
+- **Required checks** come from the base's rulesets
+  (`GET /repos/{repo}/rules/branches/{base}`), so a required check that
+  never reported still shows; GraphQL's `isRequired` needs the PR number
+  first.
+- **Layout B**: every check listed, required first (mocked against A,
+  folded to one line).
+- `Closes #N` closes the issue only when the PR merges into the default
+  branch: co2's is `dev`.
+- Approval live is left to M4 (one GitHub account on the scratch forges):
+  M3's live test shows "review required" and merges with the review rule
+  off.
+
 ### M4: review in git-board
 
 The issue page gets a **Changes** tab beside Conversation and History
@@ -241,6 +260,10 @@ the issue.
   days.
 - A virtualized diff viewer, if a file someone must read exceeds the
   5,000-line view.
+- co2's `dev` rules include a `branch_name_pattern`,
+  `^(feat|fix|chore|docs|refactor)/.+`. If it constrains new branches, the
+  default `{number}-{slug}` and a `perf/` kind are refused on push, and
+  such a branch never gets a PR.
 
 Left by the M1 and M2 reviews (2026-10-17), each small:
 
