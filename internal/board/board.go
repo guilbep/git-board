@@ -74,6 +74,23 @@ func prepare(b any, filterStr, me string) ([]filter.Condition, string, error) {
 			}
 		}
 	}
+	if m, ok := b.(interface {
+		Mentioning(string) (map[string]bool, error)
+	}); ok {
+		for i, c := range conditions {
+			if c.Kind != filter.KindInvolves && c.Kind != filter.KindFollows {
+				continue
+			}
+			login := c.Value
+			if c.Kind == filter.KindFollows || login == "@me" {
+				login = me
+			}
+			var err error
+			if conditions[i].Mentions, err = m.Mentioning(login); err != nil {
+				return nil, "", err
+			}
+		}
+	}
 	return conditions, me, nil
 }
 

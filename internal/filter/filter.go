@@ -1,9 +1,10 @@
 // Package filter implements the git-board filter grammar, GitHub's search
 // syntax where they meet: field:value, -field:value,
 // field:@current|@next|@previous|@me, is:open|closed, title:*glob*,
-// author:login, label:name, no:field (no:label: no plain label), #2528 (an
-// issue's number on a forge), CO2-2528 (its project number), free text and
-// "quoted phrases". Conditions
+// author:login, involves:login|@me (the author, a person field, a comment, a
+// mention), follows:@me (what your inbox follows), label:name, no:field
+// (no:label: no plain label), #2528 (an issue's number on a forge), CO2-2528
+// (its project number), free text and "quoted phrases". Conditions
 // are AND'd; a,b is either value (status:ready,qa), as in GitHub's search.
 // Pure logic, and the only parser of the grammar: the CLI, the TUI, the
 // web API and so the web page all go through it.
@@ -11,6 +12,7 @@ package filter
 
 import (
 	"path"
+	"slices"
 	"strings"
 	"time"
 
@@ -22,14 +24,16 @@ import (
 type Kind string
 
 const (
-	KindField  Kind = "field"
-	KindIs     Kind = "is"
-	KindTitle  Kind = "title"
-	KindText   Kind = "text"
-	KindAuthor Kind = "author"
-	KindLabel  Kind = "label"
-	KindNo     Kind = "no"
-	KindNumber Kind = "number" // #2528
+	KindField    Kind = "field"
+	KindIs       Kind = "is"
+	KindTitle    Kind = "title"
+	KindText     Kind = "text"
+	KindAuthor   Kind = "author"
+	KindLabel    Kind = "label"
+	KindNo       Kind = "no"
+	KindNumber   Kind = "number" // #2528
+	KindInvolves Kind = "involves"
+	KindFollows  Kind = "follows"
 )
 
 // Condition is one AND'd term of a parsed filter expression.
@@ -41,6 +45,9 @@ type Condition struct {
 	// Hits are, for free text, the issues the full-text index (title,
 	// description, comments) matches, by id; nil: the title only.
 	Hits map[string]bool
+	// Mentions are, for involves: and follows:, the issues whose text
+	// mentions the login, by id (board fills it); nil: none.
+	Mentions map[string]bool
 }
 
 // Parse splits a filter string into whitespace-separated AND'd conditions.
@@ -67,6 +74,8 @@ func Parse(text string) []Condition {
 			conditions = append(conditions, Condition{Kind: KindAuthor, Value: value, Negated: negated})
 		case fieldName == "label":
 			conditions = append(conditions, Condition{Kind: KindLabel, Value: value, Negated: negated})
+		case fieldName == "involves":
+			conditions = append(conditions, Condition{Kind: KindInvolves, Value: value, Negated: negated})
 		case fieldName == "no":
 			conditions = append(conditions, Condition{Kind: KindNo, Value: value, Negated: negated})
 		default:
@@ -166,7 +175,7 @@ func Resolve(value string, cfg *config.Config, me string, today time.Time) strin
 // can require --me/GIT_BOARD_ME before evaluating the filter.
 func RequiresMe(conditions []Condition) bool {
 	for _, c := range conditions {
-		if c.Kind == KindField || c.Kind == KindAuthor {
+		if c.Kind == KindField || c.Kind == KindAuthor || c.Kind == KindInvolves {
 			for _, v := range strings.Split(c.Value, ",") {
 				if v == "@me" {
 					return true
@@ -188,7 +197,7 @@ func Matches(issue gitbugio.Issue, conditions []Condition, cfg *config.Config, m
 		ok := false
 		// a,b: either value matches (no:, #n and free text take no list)
 		values := []string{c.Value}
-		if c.Kind != KindText && c.Kind != KindNo && c.Kind != KindTitle && c.Kind != KindNumber {
+		if c.Kind != KindText && c.Kind != KindNo && c.Kind != KindTitle && c.Kind != KindNumber && c.Kind != KindInvolves {
 			values = strings.Split(c.Value, ",")
 		}
 		for _, v := range values {
@@ -244,8 +253,58 @@ func matchOne(issue gitbugio.Issue, labels map[string]bool, c Condition, value s
 				ok = false
 			}
 		}
+	case KindInvolves:
+		in := Involved{AuthorLogins: issue.AuthorLogins, Labels: issue.Labels, CommenterLogins: issue.CommenterLogins, Mentioned: c.Mentions[issue.ID]}
+		ok = len(Involvement(in, Resolve(value, cfg, me, today), cfg)) > 0
 	case KindField:
 		ok = labels[c.Field+":"+Resolve(value, cfg, me, today)]
 	}
 	return ok
+}
+
+// Involved is what Involvement reads of an issue: from the list (an
+// Issue) or from its thread (internal/inbox), so the two can't disagree.
+type Involved struct {
+	AuthorLogins    []string
+	Labels          []string
+	CommenterLogins []string
+	Mentioned       bool // its description or a comment mentions the login
+}
+
+// Involvement is how login is in an issue, as reasons: author, a person
+// field's name (assignee, reviewer…), commented, mentioned. None: it isn't.
+func Involvement(in Involved, login string, cfg *config.Config) []string {
+	if login == "" {
+		return nil
+	}
+	is := func(l string) bool { return strings.EqualFold(l, login) }
+	var res []string
+	if slices.ContainsFunc(in.AuthorLogins, is) {
+		res = append(res, "author")
+	}
+	for _, l := range in.Labels {
+		if f, ok := PersonField(l, login, cfg); ok && !slices.Contains(res, f) {
+			res = append(res, f)
+		}
+	}
+	if slices.ContainsFunc(in.CommenterLogins, is) {
+		res = append(res, "commented")
+	}
+	if in.Mentioned {
+		res = append(res, "mentioned")
+	}
+	return res
+}
+
+// PersonField is the field a label names login in (assignee for
+// assignee:guilbep), when that field holds people.
+func PersonField(label, login string, cfg *config.Config) (string, bool) {
+	if cfg == nil {
+		cfg = &config.Config{}
+	}
+	f, v, ok := strings.Cut(label, ":")
+	if !ok || login == "" || !strings.EqualFold(v, login) || cfg.TypeOf(f, nil) != config.TypePerson {
+		return "", false
+	}
+	return f, true
 }
