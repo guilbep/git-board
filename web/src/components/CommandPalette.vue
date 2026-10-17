@@ -163,7 +163,7 @@ const commands = computed<Entry[]>(() => [
 
 function issueEntry(i: Issue, group: string): Entry {
   const number = i.forges?.[0]?.number;
-  return { key: `${group}-${i.id}`, label: i.title, group, icon: i.status === 'closed' ? 'closed' : 'open', hint: number ? `#${number}` : i.id.slice(0, 7), act: () => openIssue(i.id, i.title, number) };
+  return { key: `${group}-${i.id}`, label: i.shown_title, group, icon: i.status === 'closed' ? 'closed' : 'open', hint: number ? `#${number}` : i.id.slice(0, 7), act: () => openIssue(i.id, i.shown_title, number) };
 }
 
 // An exact #number or id first, at once (Enter opens it); else the filter
@@ -174,7 +174,7 @@ const results = computed<Entry[]>(() => {
     const recent = recentIssues().map((r): Entry => ({ key: `r-${r.id}`, label: r.title, group: 'Opened lately', icon: 'clock', hint: r.number ? `#${r.number}` : r.id.slice(0, 7), act: () => openIssue(r.id, r.title, r.number) }));
     return [...recent, ...commands.value];
   }
-  const items = all.value.map((i) => ({ key: i.id, label: i.title, id: i.id, numbers: i.forges?.flatMap((x) => (x.number ? [x.number] : [])), issue: i }));
+  const items = all.value.map((i) => ({ key: i.id, label: i.shown_title, id: i.id, numbers: i.forges?.flatMap((x) => (x.number ? [x.number] : [])), issue: i }));
   const jumped = jumps(f, items).map((j) => j.issue);
   const n = found.value?.length ?? 0;
   const filterRow: Entry = { key: 'filter', label: `Filter the board by «${f}»`, group: 'Filter', icon: 'filter', hint: searching.value || !found.value ? '…' : `${n} ${n === 1 ? 'issue' : 'issues'}`, act: () => filterBoard(f) };

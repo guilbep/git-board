@@ -67,7 +67,7 @@
     <template v-else>
       <div class="gb-ihead">
         <div class="gb-ititle">
-          <h2 v-if="!renaming" :id="`title-${uid}`">{{ thread.title }}</h2>
+          <h2 v-if="!renaming" :id="`title-${uid}`">{{ thread.shown_title }}</h2>
           <form v-else class="gb-rename" @submit.prevent="saveTitle">
             <input autocomplete="off" data-1p-ignore data-lpignore="true" data-form-type="other" ref="titleInput" v-model="newTitle" class="epfl-input" aria-label="Title" :disabled="saving" @keydown.esc.stop="renaming = false" />
             <button type="submit" class="epfl-btn epfl-btn-primary epfl-btn-sm" :disabled="saving || !newTitle.trim()">Save</button>

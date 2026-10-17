@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import type { Bucket, Issue } from './api/board';
 import { boardLanes, laneChoices, limitState, pickCards, toggleLane } from './lanes.ts';
 
-const issue = (id: string): Issue => ({ id, title: id, status: 'open', labels: [] });
+const issue = (id: string): Issue => ({ id, title: id, shown_title: id, status: 'open', labels: [] });
 const b = (group: string, ...ids: string[]): Bucket => ({ group, issues: ids.map(issue) });
 
 test('boardLanes shows the lanes in order and counts the rest', () => {

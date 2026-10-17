@@ -405,7 +405,7 @@ async function onMoveMany(moves: { issue: Issue; from: string }[], to: string) {
       await changeLabels(issue.id, to === '(none)' ? [] : [`${field}:${to}`], from === '(none)' ? [] : [`${field}:${from}`]);
     } catch (e: unknown) {
       // after the alert's "Not moved."
-      moveError.value = `“${issue.title}”: ${message(e)}. ${n} of ${moves.length} moved before it, the rest not tried.`;
+      moveError.value = `“${issue.shown_title}”: ${message(e)}. ${n} of ${moves.length} moved before it, the rest not tried.`;
       break;
     }
   }
@@ -642,7 +642,7 @@ watch(
       detailId.value = id;
       detailOpen.value = true;
       const i = all.value.find((x) => x.id === id);
-      if (i) recordRecent({ id, title: i.title, number: i.forges?.[0]?.number });
+      if (i) recordRecent({ id, title: i.shown_title, number: i.forges?.[0]?.number });
     } else detailOpen.value = false;
   },
   { immediate: true },

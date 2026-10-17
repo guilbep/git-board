@@ -151,3 +151,36 @@ func TestProjectBasesRoundTrip(t *testing.T) {
 		t.Errorf("bases = %v, want %v", got, want)
 	}
 }
+
+func TestShownTitle(t *testing.T) {
+	gh := []gitbugio.Forge{{Name: "GitHub", Number: "2518"}}
+	tests := []struct {
+		title  string
+		forges []gitbugio.Forge
+		want   string
+	}{
+		{"[BUG](Equipment) Wrong example (#2518)", gh, "[BUG](Equipment) Wrong example"},
+		{"Wrong example (#2518)  ", gh, "Wrong example"},
+		{"Wrong example (#45)", gh, "Wrong example (#45)"},      // another issue's number
+		{"Fix (#2518) first", gh, "Fix (#2518) first"},          // only a trailing one
+		{"Wrong example (#2518)", nil, "Wrong example (#2518)"}, // no forge number to tell
+	}
+	for _, tt := range tests {
+		is := gitbugio.Issue{Title: tt.title, Forges: tt.forges}
+		if got := is.ShownTitle(); got != tt.want {
+			t.Errorf("ShownTitle(%q) = %q, want %q", tt.title, got, tt.want)
+		}
+	}
+}
+
+func TestListIssuesShowsTitlesWithoutTheirNumber(t *testing.T) {
+	b := gitbugiotest.New(t)
+	gitbugiotest.NewImportedIssue(t, b, "Wrong example (#42)", "https://github.com/o/r/issues/42")
+	issues, err := b.ListIssues()
+	if err != nil {
+		t.Fatalf("ListIssues: %v", err)
+	}
+	if is := issues[0]; is.Shown != "Wrong example" || is.Title != "Wrong example (#42)" {
+		t.Errorf("Shown, Title = %q, %q; want the title without (#42), and the title as stored", is.Shown, is.Title)
+	}
+}

@@ -80,11 +80,11 @@
                  entry point (its click bubbles up to the row). -->
             <tr v-for="issue in bucket.issues" :key="issue.id" :class="{ 'is-picked': selected.has(issue.id) }" @click="emit('open', issue)">
               <td class="cell-pick" @click.stop>
-                <input type="checkbox" :aria-label="`Select ${issue.title}`" :checked="selected.has(issue.id)" @click="toggleRow(issue.id, $event)" />
+                <input type="checkbox" :aria-label="`Select ${issue.shown_title}`" :checked="selected.has(issue.id)" @click="toggleRow(issue.id, $event)" />
               </td>
               <template v-for="key in cols" :key="key">
                 <td v-if="key === 'id'" class="cell-id">{{ issue.id.slice(0, 8) }}</td>
-                <td v-else-if="key === 'title'" class="cell-title"><span v-if="changed?.has(issue.id)" class="gb-changed-dot" title="Changed since your last visit" /><button type="button" class="title-button">{{ issue.title }}</button></td>
+                <td v-else-if="key === 'title'" class="cell-title"><span v-if="changed?.has(issue.id)" class="gb-changed-dot" title="Changed since your last visit" /><button type="button" class="title-button">{{ issue.shown_title }}</button></td>
                 <td v-else-if="key === 'is'">{{ issue.status }}</td>
                 <td v-else-if="key === 'links'" class="cell-links" @click.stop>
                   <a v-for="f in issue.forges ?? []" :key="f.url" :href="f.url" target="_blank" rel="noopener noreferrer" class="forge-link" :title="`Open on ${f.name}${f.number ? ` #${f.number}` : ''}`">
@@ -182,7 +182,7 @@ async function runBulk(what: string, change: (issue: Issue) => Promise<unknown>)
       await change(issue);
       done++;
     } catch (e) {
-      bulkError.value = `Stopped at ${issue.id.slice(0, 7)} “${issue.title}”: ${message(e)} (${done} of ${issues.length} done).`;
+      bulkError.value = `Stopped at ${issue.id.slice(0, 7)} “${issue.shown_title}”: ${message(e)} (${done} of ${issues.length} done).`;
       break;
     }
   }

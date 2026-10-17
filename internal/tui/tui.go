@@ -39,7 +39,7 @@ type item struct {
 	issue gitbugio.Issue
 }
 
-func (i item) Title() string { return i.issue.Title }
+func (i item) Title() string { return i.issue.ShownTitle() }
 
 func (i item) Description() string {
 	return fmt.Sprintf("%s  %s  %s", shortID(i.issue.ID), i.issue.Status, strings.Join(i.issue.Labels, ", "))

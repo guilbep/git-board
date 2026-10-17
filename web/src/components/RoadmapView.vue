@@ -18,8 +18,8 @@
         {{ groupLabel(b.group) }} <span class="rm-count">{{ b.items.length }}</span>
       </h2>
       <div v-for="it in b.items" :key="it.issue.id" class="rm-row" @click="emit('open', it.issue)">
-        <button type="button" class="rm-title" :title="it.issue.title">
-          <span class="rm-id">{{ it.issue.id.slice(0, 7) }}</span> {{ it.issue.title }}
+        <button type="button" class="rm-title" :title="it.issue.shown_title">
+          <span class="rm-id">{{ it.issue.id.slice(0, 7) }}</span> {{ it.issue.shown_title }}
         </button>
         <div class="rm-track" :class="colorOf(it.issue)">
           <span v-for="t in tickList" :key="t.at" class="rm-grid" :style="{ left: pct(t.at) }" aria-hidden="true" />
@@ -37,7 +37,7 @@
       <p class="gb-hint">No sprint with dates and no date field yet.</p>
       <ul>
         <li v-for="i in unscheduled" :key="i.id">
-          <button type="button" class="rm-title" @click="emit('open', i)"><span class="rm-id">{{ i.id.slice(0, 7) }}</span> {{ i.title }}</button>
+          <button type="button" class="rm-title" @click="emit('open', i)"><span class="rm-id">{{ i.id.slice(0, 7) }}</span> {{ i.shown_title }}</button>
         </li>
       </ul>
     </section>

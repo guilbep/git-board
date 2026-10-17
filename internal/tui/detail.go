@@ -71,7 +71,7 @@ func DisplayFieldName(name string) string {
 // confirmation or error) when one is set.
 func renderDetail(issue gitbugio.Issue, cfg *config.Config, status string) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "%s\n\n%s  (%s)\n\n", issue.Title, shortID(issue.ID), issue.Status)
+	fmt.Fprintf(&b, "%s\n\n%s  (%s)\n\n", issue.ShownTitle(), shortID(issue.ID), issue.Status)
 
 	known, other := ParseLabels(issue.Labels)
 	for _, f := range known {

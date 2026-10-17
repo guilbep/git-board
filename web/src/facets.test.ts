@@ -5,7 +5,7 @@ import type { Issue } from './api/board';
 import type { Fields } from './fields.ts';
 import { NONE, parseSelection, parseSort, pick, sortIssues, sortOptions } from './facets.ts';
 
-const issue = (id: string, title: string, labels: string[], status = 'open'): Issue => ({ id, title, status, labels });
+const issue = (id: string, title: string, labels: string[], status = 'open'): Issue => ({ id, title, shown_title: title, status, labels });
 
 const fields: Fields = {
   status: { single: true, options: ['backlog', 'ready', 'in-progress'], numeric: false },
