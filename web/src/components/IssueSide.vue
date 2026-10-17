@@ -142,6 +142,16 @@
         </li>
       </ul>
     </section>
+
+    <section v-if="follow" class="gb-side-sec" aria-labelledby="side-inbox">
+      <h3 id="side-inbox" class="gb-section-title">Inbox</h3>
+      <p class="gb-follow-state"><strong>{{ follow.following ? 'Following' : 'Not following' }}</strong> <span class="gb-hint">{{ followBecause }}</span></p>
+      <div class="gb-follow-actions">
+        <button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" :disabled="followBusy" @click="setFollowTo(!follow.following)">{{ follow.following ? 'Unfollow' : 'Follow' }}</button>
+        <button v-if="follow.set !== null" type="button" class="gb-linkbtn" :disabled="followBusy" @click="setFollowTo(null)">Back to automatic</button>
+      </div>
+    </section>
+    <p v-else-if="followError" class="gb-hint">{{ followError }}</p>
   </div>
 </template>
 
@@ -152,7 +162,7 @@ import { forgeStatus } from '@/forges';
 import ValueMark from '@/components/ValueMark.vue';
 import { colorClass } from '@/colors';
 import { computed, nextTick, reactive, ref, watch } from 'vue';
-import { getRefs, linkIssue, patchIssue, takeIssue, unlinkIssue, type Forge, type IssueEvent, type IssueRefs, type Person } from '@/api/board';
+import { ApiError, getFollow, getRefs, linkIssue, patchIssue, setFollow, takeIssue, unlinkIssue, type FollowState, type Forge, type IssueEvent, type IssueRefs, type Person } from '@/api/board';
 import { forgeLabel, linkable, tallyWords } from '@/issuesync';
 import { displayName, fieldValues, formatValue, typeOf, type Fields } from '@/fields';
 import { message } from '@/issue';
@@ -349,9 +359,45 @@ function addLabel() {
   emit('labels', [l], []);
   newLabel.value = '';
 }
+
+// Inbox: whether you follow this issue, and why (cmd/git-board-server/inbox.go)
+const follow = ref<FollowState | null>(null);
+const followError = ref('');
+const followBusy = ref(false);
+async function loadFollow() {
+  try {
+    follow.value = await getFollow(props.id);
+    followError.value = '';
+  } catch (e) {
+    follow.value = null;
+    // no identity, no login: the inbox page says why; anything else, here
+    const quiet = e instanceof ApiError && (e.code === 'no-identity' || e.code === 'no-login');
+    followError.value = quiet ? '' : e instanceof Error ? e.message : String(e);
+  }
+}
+watch(() => [props.id, props.labels.join(','), props.events.length], loadFollow, { immediate: true });
+async function setFollowTo(v: boolean | null) {
+  followBusy.value = true;
+  try {
+    follow.value = await setFollow(props.id, v);
+  } catch (e) {
+    followError.value = e instanceof Error ? e.message : String(e);
+  } finally {
+    followBusy.value = false;
+  }
+}
+const followBecause = computed(() => {
+  const f = follow.value;
+  if (!f) return '';
+  if (f.set === true) return 'You follow it.';
+  if (f.set === false) return 'You unfollowed it.';
+  return f.reasons.length ? `Because: ${f.reasons.join(' · ')}` : "You're not in it.";
+});
 </script>
 
 <style scoped>
+.gb-follow-state { margin: 0 0 var(--space-2); }
+.gb-follow-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
 .gb-chip-x { padding: 0 .25rem; border: 0; background: none; color: var(--fg-muted); cursor: pointer; font: inherit; }
 .gb-chip-x:hover { color: var(--fg); }
 .gb-addrow { display: flex; gap: .5rem; margin-top: .5rem; }

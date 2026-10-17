@@ -1003,3 +1003,16 @@ nothing is stored.
   about pull requests.
 - `config.Slug` is `ghbridge`'s old `slugify`, moved: one slug rule.
 
+
+## Status update (2026-10-17): the inbox, on `prd/notify`
+
+- The email-notifications PRD was grilled and replaced by an inbox you
+  check (`docs/prd/inbox.md`): the forge mirror already emails followers,
+  sending needs a server that doesn't exist, Outlook mangles replies.
+- `involves:` and `follows:@me` are filter terms, shared by the inbox, the
+  board and ⌘K (`internal/filter`'s `Involvement`).
+- `internal/inbox`: one file per identity in git-bug's local storage,
+  seen as event ids (a comment pushed a day late still shows), a 14-day
+  window; `Rows` holds every rule.
+- The page checks the git remotes on opening and offers Pull; it never
+  pulls by itself.

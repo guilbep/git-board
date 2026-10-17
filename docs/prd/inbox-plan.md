@@ -2578,8 +2578,8 @@ Expected: the `issuelink` work is in `main` (a commit about Link/Unlink). If it 
       <h3 id="side-inbox" class="gb-section-title">Inbox</h3>
       <p class="gb-follow-state"><strong>{{ follow.following ? 'Following' : 'Not following' }}</strong> <span class="gb-hint">{{ followBecause }}</span></p>
       <div class="gb-follow-actions">
-        <button type="button" class="epfl-button epfl-button--secondary" :disabled="followBusy" @click="setFollowTo(!follow.following)">{{ follow.following ? 'Unfollow' : 'Follow' }}</button>
-        <button v-if="follow.set !== null" type="button" class="gb-follow-auto" :disabled="followBusy" @click="setFollowTo(null)">Back to automatic</button>
+        <button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" :disabled="followBusy" @click="setFollowTo(!follow.following)">{{ follow.following ? 'Unfollow' : 'Follow' }}</button>
+        <button v-if="follow.set !== null" type="button" class="gb-linkbtn" :disabled="followBusy" @click="setFollowTo(null)">Back to automatic</button>
       </div>
     </section>
     <p v-else-if="followError" class="gb-hint">{{ followError }}</p>
