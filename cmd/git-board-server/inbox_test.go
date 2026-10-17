@@ -179,3 +179,20 @@ func TestInboxTakesPrefixes(t *testing.T) {
 		t.Errorf("an unknown issue changed the file: %+v", after)
 	}
 }
+
+// The project's roles reach the inbox as they reach the board: the
+// project's pm follows an issue that doesn't name its own.
+func TestInboxFollowsInheritedRoles(t *testing.T) {
+	ts, s := newIssueServer(t)
+	s.cfg = &config.Config{Roles: map[string]string{"pm": "guilbep"}, Fields: map[string]config.Field{"pm": {Type: config.TypePerson}}}
+	ann := gitbugiotest.NewPerson(t, s.b, "Ann", "ann")
+	hers, _, err := s.b.TestCache().Bugs().NewRaw(ann, time.Now().Unix(), "Hers", "", nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gitbugiotest.CommentAs(t, s.b, hers.Id().String(), ann, time.Now().Unix(), "a question for the pm")
+	res := getInbox(t, ts)
+	if len(res.Rows) != 1 || !slices.Equal(res.Rows[0].Reasons, []string{"pm"}) {
+		t.Fatalf("inbox: %+v, want the issue, as its pm", res.Rows)
+	}
+}

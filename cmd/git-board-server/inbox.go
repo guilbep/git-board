@@ -117,6 +117,7 @@ func (s *apiServer) inbox(me inbox.Me, now time.Time) (inboxResponse, error) {
 		if err != nil {
 			return inboxResponse{}, err
 		}
+		th.Inherited = cfg.RolesFor(th.Labels) // the project's roles, as on the board
 		threads = append(threads, th)
 	}
 	inViews, missing, err := board.FollowedViews(s.b, cfg, st.Views, me.Login, window, now)
@@ -192,6 +193,7 @@ func (s *apiServer) follow(me inbox.Me, th gitbugio.Thread) (followResponse, err
 		return followResponse{}, err
 	}
 	cfg := s.config()
+	th.Inherited = cfg.RolesFor(th.Labels) // the project's roles, as on the board
 	inViews, _, err := board.FollowedViews(s.b, cfg, st.Views, me.Login, []gitbugio.Issue{th.Issue}, time.Now())
 	if err != nil {
 		return followResponse{}, err

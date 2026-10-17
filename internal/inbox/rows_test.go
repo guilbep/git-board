@@ -18,8 +18,14 @@ var (
 	meP   = gitbugio.Person{ID: "me1", Name: "Guilbert Pierre", Login: "guilbep"}
 	me2   = gitbugio.Person{ID: "me2", Name: "Guilbert (GitHub)", Login: "GuilBep"} // a second identity of yours
 	ann   = gitbugio.Person{ID: "ann", Name: "Ann", Login: "ann"}
-	cfg   = &config.Config{}
+	cfg   = &config.Config{Fields: map[string]config.Field{"pm": {Type: config.TypePerson}}}
 )
+
+// inherit gives th the roles it takes from the project (board's withRoles).
+func inherit(th gitbugio.Thread, roles ...string) gitbugio.Thread {
+	th.Inherited = roles
+	return th
+}
 
 func ev(kind, id string, who gitbugio.Person, at time.Time) gitbugio.Event {
 	return gitbugio.Event{Kind: kind, ID: id, Author: who, At: at}
@@ -107,6 +113,9 @@ func TestRows(t *testing.T) {
 			news:  []string{"closed"}, reasons: []string{"view: backend"}},
 		{name: "outside the window is ignored",
 			th: thread("n", ann, []string{"assignee:guilbep"}, comment("n1", ann, since.Add(-time.Hour), "x"))},
+		{name: "a role the issue inherits from the project follows it",
+			th:   inherit(thread("p", ann, nil, comment("p1", ann, now.Add(-time.Hour), "x")), "pm:guilbep"),
+			news: []string{"1 comment"}, reasons: []string{"pm"}},
 		{name: "a second identity carrying your login is you",
 			th: thread("o", ann, []string{"assignee:guilbep"}, comment("o1", me2, now.Add(-time.Hour), "from GitHub"))},
 	} {

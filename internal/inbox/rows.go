@@ -65,7 +65,7 @@ func involved(me Me, th gitbugio.Thread) filter.Involved {
 		}
 		return p.Login
 	}
-	in := filter.Involved{AuthorLogins: []string{login(th.Author)}, AuthorID: th.Author.ID, Labels: th.Labels}
+	in := filter.Involved{AuthorLogins: []string{login(th.Author)}, AuthorID: th.Author.ID, Labels: th.AllLabels()}
 	for _, e := range th.Events {
 		if e.Kind == "comment" && e.Author.ID != th.Author.ID {
 			in.CommenterLogins = append(in.CommenterLogins, login(e.Author))
@@ -94,7 +94,7 @@ func Rows(me Me, st State, threads []gitbugio.Thread, inViews map[string][]strin
 
 func rowOf(me Me, st State, th gitbugio.Thread, views []string, cfg *config.Config, since time.Time) (Row, bool) {
 	following, reasons, _ := Follows(me, st, th, views, cfg)
-	inField := slices.ContainsFunc(th.Labels, func(l string) bool {
+	inField := slices.ContainsFunc(th.AllLabels(), func(l string) bool {
 		_, ok := filter.PersonField(l, me.Login, cfg)
 		return ok
 	})

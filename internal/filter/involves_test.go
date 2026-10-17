@@ -93,3 +93,13 @@ func TestFollowsTerm(t *testing.T) {
 		t.Error("follows:@me needs to know who you are")
 	}
 }
+
+// A role the issue takes from the project (internal/config's roles) is a
+// person field like its own: the project's pm is in every issue.
+func TestInvolvesInheritedRole(t *testing.T) {
+	cfg := &config.Config{Fields: map[string]config.Field{"pm": {Type: config.TypePerson}}}
+	inherited := gitbugio.Issue{ID: "a1", Inherited: []string{"pm:guilbep"}}
+	if !filter.Matches(inherited, filter.Parse("involves:@me"), cfg, "guilbep", time.Now()) {
+		t.Error("involves:@me misses an issue whose pm you are by the project's roles")
+	}
+}

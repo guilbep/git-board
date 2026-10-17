@@ -292,7 +292,7 @@ type Involved struct {
 }
 
 func involvedOf(issue gitbugio.Issue, c Condition) Involved {
-	return Involved{AuthorLogins: issue.AuthorLogins, AuthorID: issue.AuthorID, Labels: issue.Labels,
+	return Involved{AuthorLogins: issue.AuthorLogins, AuthorID: issue.AuthorID, Labels: issue.AllLabels(),
 		CommenterLogins: issue.CommenterLogins, CommenterIDs: issue.CommenterIDs, Mentioned: c.Mentions[issue.ID]}
 }
 
