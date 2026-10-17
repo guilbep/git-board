@@ -85,6 +85,7 @@
 import { computed, onUnmounted, ref, watch } from 'vue';
 import { getBranches, getPulls, mergePull, openPull, type GateCheck, type GatePR, type IssueBranches, type IssuePulls } from '@/api/board';
 import { message } from '@/issue';
+import { actThenRead } from '@/gate';
 import { when } from '@/me';
 import GbIcon from '@/components/GbIcon.vue';
 
@@ -161,14 +162,10 @@ function decision(pr: GatePR): string {
 async function act(what: string, run: () => Promise<unknown>) {
   busy.value = what;
   try {
-    await run();
-    gateError.value = '';
-  } catch (e) {
-    gateError.value = message(e);
+    gateError.value = await actThenRead(run, async () => (await loadPulls(), gateError.value));
   } finally {
     busy.value = '';
   }
-  await loadPulls();
 }
 
 const open = (branch: string) => act(branch, () => openPull(props.id, branch));
