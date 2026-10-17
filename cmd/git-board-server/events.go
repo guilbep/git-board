@@ -131,6 +131,8 @@ func eventFor(r *http.Request) event {
 		e.Kind = "issues"
 	case strings.HasPrefix(p, "/api/remotes/") && strings.HasSuffix(p, "/pull"): // merged in
 		e.Kind = "issues"
+	case strings.HasPrefix(p, "/api/numbers/"): // the issues' numbers
+		e.Kind = "issues"
 	case strings.HasPrefix(p, "/api/sync") || strings.HasPrefix(p, "/api/forges") || strings.HasPrefix(p, "/api/remotes/"):
 		e.Kind = "sync"
 	case strings.HasPrefix(p, "/api/inbox"): // read, followed: your inbox's count, in every tab

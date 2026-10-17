@@ -580,6 +580,8 @@ as you type (the line where it breaks, keys git-board doesn't know),
 "+ View", "+ Sprint" (follows the last one) and "+ Field" to start from,
 a diff to review, and saved without a restart, beside its reference (a
 save is refused when the file changed on disk since the page read it);
+**Numbers**, the project's own (`CO2-3075`), started and run from there
+beside their guidelines (docs/configuration.md, Numbers);
 **Attachments**, and **You**, who you write as and the appearance.
 **Forges** lists the bridges: sync on or off, remove one (its issues
 stay), and **+ Add a forge**, in four steps: the forge, the project, a

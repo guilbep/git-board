@@ -359,6 +359,38 @@ export function remoteAction(name: string, action: 'fetch' | 'pull' | 'push'): P
   return request(`/api/remotes/${encodeURIComponent(name)}/${action}`, { method: 'POST' });
 }
 
+// The project's own numbers (cmd/git-board-server/numbers.go): CO2-3075,
+// a counter on origin. Only init and run push: refs/board/seq, to origin.
+export interface Numbers {
+  on: boolean;
+  prefix?: string;
+  start?: number;
+  next?: number;
+  numbered: number; // with a number: their line, or their GitHub one below start
+  waiting: number; // on origin without one: run numbers them
+  unpushed: number; // only here: their push numbers them
+  highest: number; // the highest forge number of an issue here
+  github_numbers?: number[]; // before the switch: each issue on origin by its GitHub number, 0 for none
+  origin: Remote | null; // where the counter goes
+  name: string; // the repository's, for a prefix
+  github?: { issues: string; highest: number; error?: string } | undefined; // asked with github: GitHub's answer
+  done: number; // a write: how many issues it numbered
+  error?: string; // started, but the issues not numbered yet
+}
+
+// github asks GitHub's highest issue or pull request number too, before the switch
+export function getNumbers(github = false): Promise<Numbers> {
+  return request(`/api/numbers${github ? '?github=1' : ''}`);
+}
+
+export function startNumbers(prefix: string, start: number): Promise<Numbers> {
+  return request('/api/numbers/init', json('POST', { prefix, start }));
+}
+
+export function numberIssues(): Promise<Numbers> {
+  return request('/api/numbers/run', json('POST', {}));
+}
+
 // The inbox (cmd/git-board-server/inbox.go): what happened that concerns
 // you on the issues of the last 14 days, newest first.
 export interface InboxRow {

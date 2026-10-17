@@ -61,6 +61,9 @@ type apiServer struct {
 	// checked is when each git remote was last fetched, pulled or pushed
 	// (remotes.go)
 	checked map[string]time.Time
+	// githubHighest is GitHub's highest issue or pull request number of a
+	// repository (numbers.go): nil, through gh
+	githubHighest func(ctx context.Context, repo string) (int, error)
 	// inboxMu guards the inbox files (inbox.go): one read-change-write at
 	// a time
 	inboxMu sync.Mutex
@@ -134,6 +137,9 @@ func newMux(s *apiServer, static http.Handler) http.Handler {
 	mux.HandleFunc("POST /api/forges/sync", s.handleForgeSync)
 	mux.HandleFunc("GET /api/remotes", s.handleRemotes)
 	mux.HandleFunc("POST /api/remotes/{name}/{action}", s.handleRemote)
+	mux.HandleFunc("GET /api/numbers", s.handleNumbers)
+	mux.HandleFunc("POST /api/numbers/init", s.handleNumbersInit)
+	mux.HandleFunc("POST /api/numbers/run", s.handleNumbersRun)
 	mux.HandleFunc("GET /api/sync", s.handleSyncStatus)
 	mux.HandleFunc("POST /api/sync/check", s.handleSyncCheck)
 	mux.HandleFunc("POST /api/sync/apply", s.handleSyncApply)

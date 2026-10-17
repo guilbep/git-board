@@ -6,6 +6,7 @@ test('settingsTab takes the address, the Overview without one or for an unknown 
   assert.equal(settingsTab('forges'), 'forges');
   assert.equal(settingsTab('project-file'), 'project-file');
   assert.equal(settingsTab('github-project'), 'github-project');
+  assert.equal(settingsTab('numbers'), 'numbers');
   assert.equal(settingsTab(''), 'overview');
   assert.equal(settingsTab(undefined), 'overview');
   assert.equal(settingsTab('bridges'), 'overview');
@@ -15,7 +16,7 @@ test('settingsTab takes the address, the Overview without one or for an unknown 
 });
 
 test('the tabs, in the menu order: the Overview, the three channels numbered, then this board', () => {
-  assert.deepEqual(settingsTabs.map((t) => t.id), ['overview', 'remotes', 'forges', 'github-project', 'project-file', 'attachments', 'you']);
+  assert.deepEqual(settingsTabs.map((t) => t.id), ['overview', 'remotes', 'forges', 'github-project', 'project-file', 'numbers', 'attachments', 'you']);
   assert.deepEqual(channels.map((c) => `${c.label} (${c.via})`), ['Remotes (git)', 'Forges (API)', 'GitHub Project (fields)']);
 });
 

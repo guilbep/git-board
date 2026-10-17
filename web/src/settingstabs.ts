@@ -18,6 +18,7 @@ export const settingsTabs = [
   { id: 'overview', label: 'Overview' },
   ...channels,
   { id: 'project-file', label: 'Project file' },
+  { id: 'numbers', label: 'Numbers' },
   { id: 'attachments', label: 'Attachments' },
   { id: 'you', label: 'You' },
 ] as const;
