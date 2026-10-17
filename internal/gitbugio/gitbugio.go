@@ -203,13 +203,17 @@ func (b *Backend) ListIssues() ([]Issue, error) {
 	if err != nil {
 		return nil, fmt.Errorf("listing bugs: %w", err)
 	}
+	c, err := b.counter()
+	if err != nil {
+		return nil, err
+	}
 	issues := make([]Issue, len(ids))
 	for i, id := range ids {
 		excerpt, err := b.c.Bugs().ResolveExcerpt(id)
 		if err != nil {
 			return nil, fmt.Errorf("resolving %s: %w", id, err)
 		}
-		issues[i] = b.issueFrom(id.String(), excerpt)
+		issues[i] = b.issueFrom(id.String(), excerpt, c)
 	}
 	return issues, nil
 }
@@ -223,9 +227,16 @@ func (b *Backend) Labels() []string {
 	return res
 }
 
-// issueFrom is excerptToIssue with who opened it, for author:.
-func (b *Backend) issueFrom(id string, e *cache.BugExcerpt) Issue {
+// issueFrom is excerptToIssue with who opened it, for author:, and its
+// project number when c, the counter, numbers the project's issues.
+func (b *Backend) issueFrom(id string, e *cache.BugExcerpt, c *Counter) Issue {
 	issue := excerptToIssue(id, e)
+	if c != nil {
+		issue.Counted = true
+		if n := c.NumberOf(id, issue.Forges); n > 0 {
+			issue.Number = c.Format(n)
+		}
+	}
 	if a, err := b.c.Identities().ResolveExcerpt(e.AuthorId); err == nil {
 		for _, l := range []string{a.Name, a.Login, a.ImmutableMetadata["github-login"], a.ImmutableMetadata["gitlab-login"], a.ImmutableMetadata["gitea-login"]} {
 			if l != "" {
@@ -258,7 +269,11 @@ func (b *Backend) GetIssue(idPrefix string) (Issue, error) {
 	if err != nil {
 		return Issue{}, fmt.Errorf("resolving %s: %w", idPrefix, err)
 	}
-	return b.issueFrom(excerpt.Id().String(), excerpt), nil
+	c, err := b.counter()
+	if err != nil {
+		return Issue{}, err
+	}
+	return b.issueFrom(excerpt.Id().String(), excerpt, c), nil
 }
 
 // GetLabels returns the current labels for a bug, by id prefix.
