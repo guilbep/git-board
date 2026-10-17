@@ -25,6 +25,22 @@ export function withFacet(f: Facet, values: string[]): string {
   return [f.rest, term(f.key, values, f.options.map(([v]) => v)) ?? ''].filter(Boolean).join(' ');
 }
 
+// suggest is the filter completed: its last word's value as each value
+// of that field begins it (status:r → status:ready; a,b: the last value),
+// is: open or closed, no: a field. values: the facets', field → values.
+export function suggest(text: string, values: Record<string, string[]>): string[] {
+  const m = /^(.*\s)?(-?)([\w-]+):([^\s"]*)$/s.exec(text);
+  if (!m) return [];
+  const [, before = '', neg, key, typed = ''] = m;
+  const done = typed.slice(0, typed.lastIndexOf(',') + 1);
+  const part = typed.slice(done.length).toLowerCase();
+  const pool = key === 'no' ? Object.keys(values).filter((k) => k !== STATE) : key === STATE ? ['open', 'closed'] : (values[key!] ?? []);
+  return pool
+    .filter((v) => v !== NONE && v.toLowerCase().startsWith(part) && v.toLowerCase() !== part && !done.split(',').includes(v))
+    .slice(0, 8)
+    .map((v) => `${before}${neg}${key}:${done}${quote(v)}`);
+}
+
 // composeFilter is an older link's filter (?q=…&f.status=ready): the view's
 // filter, each ticked facet as one condition, then its search words.
 export function composeFilter(

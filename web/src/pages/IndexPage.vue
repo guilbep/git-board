@@ -62,9 +62,11 @@
             spellcheck="false"
             placeholder="Words, #2528, status:ready, assignee:@me, is:closed…"
             autocomplete="off"
+            list="filter-suggest"
             :value="filter"
             @input="setFilter(($event.target as HTMLInputElement).value)"
           />
+          <datalist id="filter-suggest"><option v-for="s in suggestions" :key="s" :value="s" /></datalist>
         </div>
         <div class="toolbar-field">
           <label class="epfl-label" for="group">Group by</label>
@@ -95,7 +97,8 @@
       <div v-if="viewDirty" class="viewbar" role="region" aria-label="Unsaved changes to the view">
         <span class="viewbar-what">
           <b>{{ activeView ? `Unsaved changes to ${activeView}` : 'Not a saved view' }}</b>
-          <code class="viewbar-filter">{{ draft.filter }}</code>
+          <code v-if="draft.filter" class="viewbar-filter">{{ draft.filter }}</code>
+          <span v-else class="viewbar-meta">every issue</span>
           <span v-if="draft.group" class="viewbar-meta">grouped by {{ draft.group }}</span>
           <span v-if="draft.sort" class="viewbar-meta">sorted by {{ draft.sort }}</span>
           <span v-if="!sameColumns(draft.columns, view?.columns)" class="viewbar-meta">{{ draft.columns ? 'columns of its own' : 'default columns' }}</span>
@@ -225,14 +228,14 @@ import { changedSince, loadVisit, saveVisit, visit } from '@/lastvisit';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import {
-  changeLabels, getFacets, getFields, getIssues, getViews, saveView,
+  changeLabels, filterValues, getFacets, getFields, getIssues, getViews, saveView,
   type Bucket, type FieldConfig, type Issue, type ViewConfig,
 } from '@/api/board';
 import {
   NONE, PLAIN, STATE, namespaces, parseSelection, parseSort, sortIssues, type Facet,
 } from '@/facets';
 import { loadColors } from '@/colors';
-import { composeFilter, withFacet } from '@/viewfilter';
+import { composeFilter, suggest, withFacet } from '@/viewfilter';
 import { displayName, orderBuckets } from '@/fields';
 import AppHeader from '@/components/AppHeader.vue';
 import FilterSidebar from '@/components/FilterSidebar.vue';
@@ -292,6 +295,11 @@ const sort = computed(() =>
   parseSort(typeof route.query.sort === 'string' ? route.query.sort : (view.value?.sort ?? '')),
 );
 const sortValue = computed(() => (typeof route.query.sort === 'string' ? route.query.sort : ''));
+
+// status: → status:ready, …
+const values = ref<Record<string, string[]>>({});
+void filterValues().then((v) => (values.value = v));
+const suggestions = computed(() => suggest(filter.value, values.value));
 
 // the facets, the server's for the filter: the ticks are the values it
 // lets through, a tick writes a new filter

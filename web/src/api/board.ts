@@ -113,6 +113,20 @@ export async function getFacets(filter: string): Promise<Facet[]> {
   return facets.map((f) => ({ ...f, options: f.options.map((o): [string, number] => [o.value, o.count]) }));
 }
 
+// Every field's values on every issue, what the filter boxes suggest
+// (viewfilter.suggest).
+// ponytail: asked once per page load; a new value shows after a reload.
+let values: Promise<Record<string, string[]>> | undefined;
+export function filterValues(): Promise<Record<string, string[]>> {
+  values ??= getFacets('')
+    .then((fs) => Object.fromEntries(fs.map((f) => [f.key, f.options.map(([v]) => v)])))
+    .catch(() => {
+      values = undefined;
+      return {};
+    });
+  return values;
+}
+
 export function patchIssue(id: string, changes: Record<string, string>): Promise<Issue> {
   return request(`/api/issues/${encodeURIComponent(id)}`, {
     method: 'PATCH',

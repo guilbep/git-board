@@ -22,6 +22,7 @@
           @keydown.down.prevent="move(1)"
           @keydown.up.prevent="move(-1)"
           @keydown.enter.prevent="run(results[active])"
+          @keydown.tab="complete"
         />
         <kbd class="cp-esc">Esc</kbd>
       </div>
@@ -54,10 +55,11 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { getIssues, type Issue } from '@/api/board';
+import { filterValues, getIssues, type Issue } from '@/api/board';
 import { filtersHidden, newIssueRequested, paletteOpen, recentIssues, recordRecent } from '@/commands';
 import { message } from '@/issue';
 import { jumps, openFirst, rank } from '@/palette';
+import { suggest } from '@/viewfilter';
 import { helpOpen } from '@/shortcuts';
 import GbIcon, { type IconName } from '@/components/GbIcon.vue';
 
@@ -65,7 +67,7 @@ const props = defineProps<{ views: string[] }>();
 const route = useRoute();
 const router = useRouter();
 
-type Entry = { key: string; label: string; group: string; icon: IconName; hint?: string | undefined; act: () => void };
+type Entry = { key: string; label: string; group: string; icon: IconName; hint?: string | undefined; keep?: boolean; act: () => void };
 
 const query = ref('');
 const active = ref(0);
@@ -74,6 +76,17 @@ const all = ref<Issue[]>([]); // every issue, for the jumps by number or id
 const found = ref<Issue[] | null>(null); // the filter's answer; null: not yet
 const searching = ref(false);
 const error = ref('');
+const values = ref<Record<string, string[]>>({});
+void filterValues().then((v) => (values.value = v));
+
+// status: → status:ready, …: Tab takes the first, as the board's box offers them
+const suggestions = computed(() => suggest(query.value, values.value).slice(0, 4));
+function complete(e: KeyboardEvent) {
+  const s = suggestions.value[0];
+  if (!s) return;
+  e.preventDefault();
+  query.value = s;
+}
 
 async function onShow() {
   query.value = '';
@@ -165,7 +178,11 @@ const results = computed<Entry[]>(() => {
   const n = found.value?.length ?? 0;
   const filterRow: Entry = { key: 'filter', label: `Filter the board by «${f}»`, group: 'Filter', icon: 'filter', hint: searching.value || !found.value ? '…' : `${n} ${n === 1 ? 'issue' : 'issues'}`, act: () => filterBoard(f) };
   const issues = openFirst(found.value ?? []).filter((i) => !jumped.some((j) => j.id === i.id)).slice(0, 10);
-  return [...jumped.map((i) => issueEntry(i, 'Jump to')), filterRow, ...rank(f, commands.value).slice(0, 4), ...issues.map((i) => issueEntry(i, 'Issues'))];
+  const completions = suggestions.value.map((s, i): Entry => ({ key: `s-${s}`, label: s, group: 'Complete', icon: 'filter', hint: i ? undefined : 'Tab', keep: true, act: () => {
+    query.value = s;
+    input.value?.focus();
+  } }));
+  return [...jumped.map((i) => issueEntry(i, 'Jump to')), filterRow, ...completions, ...rank(f, commands.value).slice(0, 4), ...issues.map((i) => issueEntry(i, 'Issues'))];
 });
 
 function move(d: number) {
@@ -176,7 +193,7 @@ function move(d: number) {
 
 function run(item: Entry | undefined) {
   if (!item) return;
-  paletteOpen.value = false;
+  if (!item.keep) paletteOpen.value = false;
   item.act();
 }
 </script>
