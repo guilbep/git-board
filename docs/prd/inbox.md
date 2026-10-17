@@ -201,8 +201,10 @@ Mockup: the link at the top.
     new, reason chips, avatars, how long ago.
   - Opening a row opens `IssuePanel` in a dialog at `?issue=<id>`, as
     `IndexPage` does (links, j/k), scrolled to the oldest unseen event (an
-    optional `at` on `IssueTimeline`), and posts `seen`. The row stays,
-    dimmed, until the next refresh: the list doesn't jump while you read.
+    optional `at` on `IssuePanel`); the panel posts `seen`, as it does for
+    an issue the inbox lists opened anywhere. The row stays, dimmed, until
+    the next refresh (the list doesn't jump while you read), unless
+    something new happens on it.
   - Empty: "Nothing new for you", and what you follow ("Following 14
     open issues · view backend": `follows:@me is:open`). No identity: "Choose who you write as". No
     login: "Tell git-board your forge login", pointing at `git bug bridge

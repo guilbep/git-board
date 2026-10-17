@@ -143,7 +143,7 @@ import { onLive } from '@/live';
 import { clampWidth, panelMode, panelWidth, togglePanelMode } from '@/panelsize';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, toRef, useId, watch } from 'vue';
 import { markSeen, type Thread } from '@/api/board';
-import { inbox, loadInbox } from '@/inbox';
+import { inbox, inboxError, loadInbox } from '@/inbox';
 import type { Fields } from '@/fields';
 import { useIssue } from '@/issue';
 import { me, on } from '@/me';
@@ -176,11 +176,15 @@ const { thread, error, saving, waiting, saveError, load, comment, edit, rename, 
 // the inbox opens an issue at its first new event
 watch(
   () => thread.value?.id,
-  (id) => {
+  async (id) => {
     if (id && props.at) void nextTick(() => reveal(props.at!));
     // an issue the inbox lists is read once opened, from the inbox, the
-    // board or a link; a failed write leaves it listed, which shows
-    if (id && inbox.value?.rows.some((r) => r.issue.id === id)) void markSeen([id]).then(loadInbox, () => {});
+    // board or a link; on a fresh link the thread can come before the
+    // inbox, so the inbox loads first. A failed write leaves it listed,
+    // which shows.
+    if (!id) return;
+    if (!inbox.value && !inboxError.value) await loadInbox();
+    if (inbox.value?.rows.some((r) => r.issue.id === id)) void markSeen([id]).then(loadInbox, () => {});
   },
 );
 const meId = computed(() => me.value?.me?.id ?? '');
