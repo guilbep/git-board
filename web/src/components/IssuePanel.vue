@@ -141,7 +141,7 @@
 <script setup lang="ts">
 import { onLive } from '@/live';
 import { clampWidth, panelMode, panelWidth, togglePanelMode } from '@/panelsize';
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, toRef, useId } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, toRef, useId, watch } from 'vue';
 import type { Thread } from '@/api/board';
 import type { Fields } from '@/fields';
 import { useIssue } from '@/issue';
@@ -165,12 +165,20 @@ const props = defineProps<{
   hasPrev?: boolean;
   hasNext?: boolean;
   findRef?: (n: string) => string | undefined; // #n → a local issue's id
+  at?: string | undefined; // an event to scroll to once loaded: the inbox's first new one
 }>();
 const emit = defineEmits<{ close: []; prev: []; next: []; changed: [thread: Thread]; open: [id: string] }>();
 
 const uid = useId();
 const { thread, error, saving, waiting, saveError, load, comment, edit, rename, setStatus, labels } =
   useIssue(toRef(props, 'id'), (t) => emit('changed', t));
+// the inbox opens an issue at its first new event
+watch(
+  () => thread.value?.id,
+  (id) => {
+    if (id && props.at) void nextTick(() => reveal(props.at!));
+  },
+);
 const meId = computed(() => me.value?.me?.id ?? '');
 const created = computed(() => thread.value?.events.find((e) => e.kind === 'created'));
 const rest = computed(() => thread.value?.events.filter((e) => e.kind !== 'created') ?? []);
