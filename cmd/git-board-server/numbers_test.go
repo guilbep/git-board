@@ -179,6 +179,9 @@ func TestNumbersWithoutOrigin(t *testing.T) {
 		if code, msg := callError(t, "POST", ts.URL+path, map[string]any{"prefix": "CO2", "start": 1}); code != http.StatusConflict || !strings.Contains(msg, "origin") {
 			t.Errorf("%s without origin: %d %q, want 409", path, code, msg)
 		}
+		if code := send(t, "POST", ts.URL+path, "https://evil.example"); code != http.StatusForbidden {
+			t.Errorf("%s asked by another site: %d, want 403", path, code)
+		}
 	}
 
 	// GET only: nothing reaches this address
