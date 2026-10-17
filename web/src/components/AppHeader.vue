@@ -27,6 +27,7 @@
         active-class="active"
         aria-current-value="page"
       >Conflicts<span v-if="conflicts" class="nav-count" :aria-label="`, ${conflicts} held`">{{ conflicts }}</span></router-link>
+      <router-link to="/inbox" active-class="active">Inbox<span v-if="inboxCount" class="nav-count" :aria-label="`, ${inboxCount} new`">{{ inboxCount }}</span></router-link>
     </nav>
     <div class="app-right">
       <button type="button" class="gb-jump" title="Filter the issues, jump to one, or run a command (⌘K)" aria-keyshortcuts="Meta+K Control+K" @click="paletteOpen = true">
@@ -55,7 +56,7 @@
 
 <script setup lang="ts">
 import LiveNotice from '@/components/LiveNotice.vue';
-import { computed, onBeforeUnmount, onMounted } from 'vue';
+import { computed, onBeforeUnmount, onMounted, watch } from 'vue';
 import { helpOpen } from '@/shortcuts';
 import '@/theme'; // keeps <html data-theme> in step with the choice
 import KeyboardHelp from '@/components/KeyboardHelp.vue';
@@ -65,6 +66,8 @@ import { forgeStatus, loadForges } from '@/forges';
 import { initials, loadMe, me, when } from '@/me';
 import { loadSyncStatus, syncStatus } from '@/sync';
 import GbIcon from '@/components/GbIcon.vue';
+import { inbox, loadInbox } from '@/inbox';
+import { debounced, onLive } from '@/live';
 
 defineProps<{ views: string[]; active: string }>();
 
@@ -77,6 +80,15 @@ const lastRun = computed(() => {
 });
 
 const mod = /Mac/.test(navigator.platform) ? '⌘' : 'Ctrl+';
+
+const inboxCount = computed(() => inbox.value?.rows.length ?? 0);
+// the tab says it too: "(3) git-board"
+const baseTitle = document.title.replace(/^\(\d+\) /, '');
+watch(inboxCount, (n) => (document.title = n ? `(${n}) ${baseTitle}` : baseTitle), { immediate: true });
+// ponytail: every issues event reloads the inbox, debounced; the server
+// recomputes it each time (inbox.go says when to keep it instead)
+const reloadInbox = debounced(() => void loadInbox());
+let stopLive = () => {};
 
 // ⌘K (Ctrl+K) opens the palette, even from a field; ? the shortcuts,
 // unless typing
@@ -91,13 +103,20 @@ function onKey(e: KeyboardEvent) {
   e.preventDefault();
   helpOpen.value = true;
 }
-onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onKey);
+  stopLive();
+});
 
 onMounted(() => {
   window.addEventListener('keydown', onKey);
   if (!syncStatus.value) void loadSyncStatus();
   if (!forgeStatus.value) void loadForges();
   if (!me.value) void loadMe();
+  if (!inbox.value) void loadInbox();
+  stopLive = onLive((e) => {
+    if (e.kind === 'issues' || e.kind === 'inbox') reloadInbox();
+  });
 });
 </script>
 

@@ -154,6 +154,7 @@ const commands = computed<Entry[]>(() => [
   { key: 'new', label: 'New issue', group: 'Commands', icon: 'plus', hint: 'c', act: () => { newIssueRequested.value = true; if (route.path !== '/') void router.push('/'); } },
   ...props.views.map((v): Entry => ({ key: `view-${v}`, label: `View: ${v}`, group: 'Commands', icon: 'tag', act: () => void router.push({ path: '/', query: { view: v } }) })),
   { key: 'insights', label: 'Insights', group: 'Commands', icon: 'chart', act: go('/insights') },
+  { key: 'inbox', label: 'Inbox', group: 'Commands', icon: 'inbox', act: go('/inbox') },
   { key: 'settings', label: 'Settings', group: 'Commands', icon: 'settings', act: go('/settings') },
   { key: 'sync', label: 'Sync: where your issues go', group: 'Commands', icon: 'sync', act: go('/sync') },
   { key: 'add-forge', label: 'Add a forge', group: 'Commands', icon: 'plus', act: go('/settings/forges?add=1') },
