@@ -242,6 +242,49 @@ the issue.
 - A virtualized diff viewer, if a file someone must read exceeds the
   5,000-line view.
 
+Left by the M1 and M2 reviews (2026-10-17), each small:
+
+- Numbers:
+  - Two `numbers init` at the same moment: the loser gets the push error,
+    not "already numbers its issues".
+  - Free text `3060` still finds a title ending `(#3060)` while co2's
+    `append-issue-number.yml` runs.
+  - The ref watcher (`RefsFingerprint`) ignores `refs/board`: a CLI
+    `git board numbers` doesn't refresh open pages.
+  - The local counter moves before its push: a read meanwhile can show a
+    number a refusal then takes back.
+  - A numbering failure after a successful push reports the push as failed
+    (web 502, CLI sync failed).
+  - `numberOnce` reads the ref twice; harmless while git-bug's PID lock and
+    the write lock hold.
+  - `NumberOf` takes any forge named GitHub, not the project's repository:
+    a project bridging two GitHub repositories would number twice below
+    `start`.
+  - Issue fields don't take `CO2-N` (`parent:CO2-3060`); `refs.go`
+    resolves `#N` and ids only.
+  - Sprint and insights reports, and the palette's "Opened lately", show
+    `#N`, not `CO2-N`.
+  - `git board sync` prints go-git's push progress (from before M1).
+- Roles:
+  - `[roles]` accepts a numeric field, a date or iteration name (`due`,
+    `sprint`) and the filter's keywords (`is`, `title`, `author`,
+    `label`, `no`) as roles.
+  - A role declared `single = true`: the server still takes several
+    values, and `lint` reports "no lead-dev value" on issues that inherit
+    one.
+  - The CLI (`ls`, `html`) and the TUI don't show inherited values; the
+    TUI's field picker lists a role once an issue sets it; a TUI edit
+    leaves `Inherited` stale until `f`.
+  - The sprint report lists an issue's own role people (`pm:dave`) as
+    assignees.
+  - On a board grouped by a role, a drop on the project's lane writes the
+    value as the issue's own.
+  - Board cards don't show inherited roles (the table, side panel and
+    filters do).
+  - Several values for one role on one issue: allowed, the first wins in
+    groups; the spec says nothing.
+  - The field label reads "Pm".
+
 ## Constraints
 
 - One branch and one PR for the git-bug fork: `bridge-sync`, which the main
