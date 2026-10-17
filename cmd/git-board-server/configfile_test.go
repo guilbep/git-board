@@ -94,6 +94,22 @@ func TestConfigDocsComeInSections(t *testing.T) {
 	}
 }
 
+func TestForgeDocsComeInSections(t *testing.T) {
+	ts, _ := newIssueServer(t)
+	var docs []struct {
+		ID, Title, HTML string
+	}
+	call(t, "GET", ts.URL+"/api/forges/docs", nil, &docs)
+	var ids []string
+	for _, d := range docs {
+		ids = append(ids, d.ID)
+	}
+	// the add-a-forge dialog shows three, sync, tokens and adding beside its steps
+	if strings.Join(ids, ",") != "three,tokens,adding,sync,removing,on" {
+		t.Errorf("sections %v", ids)
+	}
+}
+
 func TestSaveViewWritesItsTable(t *testing.T) {
 	ts, s := newIssueServer(t)
 	s.cfgPath = filepath.Join(t.TempDir(), ".git-board.toml")

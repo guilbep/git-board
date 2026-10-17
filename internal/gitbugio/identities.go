@@ -141,12 +141,12 @@ var shortName = map[string]string{"github": "gh", "gitlab": "gl", "gitea": "gite
 
 var bridgeName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]*$`)
 
-// AddBridge configures a bridge in this process, as `git bug bridge new
-// --sync` does: the forge checks the credential (a pasted token, then kept
-// in git-bug's credential store, or a stored one by id) and the project.
-// An empty name takes the forge's short one, gh, gl or gitea, made unique.
-// It answers the name.
-func (b *Backend) AddBridge(target, name, projectURL, credID, token string) (string, error) {
+// AddBridge configures a bridge in this process, as `git bug bridge new`
+// does, with --sync when sync: the forge checks the credential (a pasted
+// token, then kept in git-bug's credential store, or a stored one by id)
+// and the project. An empty name takes the forge's short one, gh, gl or
+// gitea, made unique. It answers the name.
+func (b *Backend) AddBridge(target, name, projectURL, credID, token string, sync bool) (string, error) {
 	switch {
 	case name == "":
 		name = shortName[target]
@@ -168,7 +168,7 @@ func (b *Backend) AddBridge(target, name, projectURL, credID, token string) (str
 	if err := br.Configure(core.BridgeParams{URL: projectURL, CredPrefix: credID, TokenRaw: token}, false); err != nil {
 		return "", err
 	}
-	return name, core.SetBridgeConfig(b.c, name, core.ConfigKeySync, "true")
+	return name, core.SetBridgeConfig(b.c, name, core.ConfigKeySync, strconv.FormatBool(sync))
 }
 
 // RemoveBridge removes a bridge's configuration. The issues it imported

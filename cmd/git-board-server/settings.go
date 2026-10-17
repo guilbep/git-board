@@ -72,9 +72,10 @@ func (s *apiServer) handleCredentials(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, creds)
 }
 
-// handleAddBridge configures a bridge with sync on, checking the token and
-// the project with the forge (gitbugio.AddBridge). The token, when pasted,
-// goes to git-bug's credential store and is never sent back.
+// handleAddBridge configures a bridge, sync on unless asked off, checking
+// the token and the project with the forge (gitbugio.AddBridge). The
+// token, when pasted, goes to git-bug's credential store and is never
+// sent back.
 func (s *apiServer) handleAddBridge(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Target     string `json:"target"`
@@ -82,6 +83,7 @@ func (s *apiServer) handleAddBridge(w http.ResponseWriter, r *http.Request) {
 		URL        string `json:"url"`
 		Credential string `json:"credential"`
 		Token      string `json:"token"`
+		Sync       *bool  `json:"sync"` // absent: on
 	}
 	if !decode(w, r, &req) {
 		return
@@ -91,7 +93,7 @@ func (s *apiServer) handleAddBridge(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer done()
-	name, err := s.b.AddBridge(req.Target, req.Name, strings.TrimSpace(req.URL), req.Credential, strings.TrimSpace(req.Token))
+	name, err := s.b.AddBridge(req.Target, req.Name, strings.TrimSpace(req.URL), req.Credential, strings.TrimSpace(req.Token), req.Sync == nil || *req.Sync)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, fmt.Errorf("the bridge isn't added: %w", plainBridgeError(err)))
 		return

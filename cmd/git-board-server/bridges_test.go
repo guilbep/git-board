@@ -84,9 +84,12 @@ func TestAddAndRemoveABridge(t *testing.T) {
 		t.Errorf("the pasted token isn't stored as a credential: %+v", creds)
 	}
 
-	// again, with the stored credential: a second name
-	if code := call(t, "POST", ts.URL+"/api/bridges", map[string]string{"target": "gitlab", "url": project, "credential": creds[0].ID}, &added); code != http.StatusOK || added.Name != "gl2" {
+	// again, with the stored credential and sync off: a second name
+	if code := call(t, "POST", ts.URL+"/api/bridges", map[string]any{"target": "gitlab", "url": project, "credential": creds[0].ID, "sync": false}, &added); code != http.StatusOK || added.Name != "gl2" {
 		t.Errorf("add with the stored credential: %d %q, want gl2", code, added.Name)
+	}
+	if bridges, _ := s.b.Bridges(); len(bridges) != 2 || bridges[1].Name != "gl2" || bridges[1].Sync {
+		t.Errorf("a bridge added with sync off: %+v", bridges)
 	}
 
 	if code := call(t, "DELETE", ts.URL+"/api/bridges/gl", nil, nil); code != http.StatusOK {
