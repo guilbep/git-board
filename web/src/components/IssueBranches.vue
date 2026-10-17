@@ -54,7 +54,7 @@
               </template>
             </template>
           </div>
-          <div v-else-if="!b.remote && pulls?.repo && !onOrigin(b.name)" class="gb-dev-gate">
+          <div v-else-if="needsPush(b, dev.branches, pulls?.repo ?? '')" class="gb-dev-gate">
             <span class="gb-dev-meta">Local only. Push it to open a PR:</span>
             <pre class="gb-dev-cmd"><code>git push -u origin {{ b.name }}</code></pre>
             <button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" @click="copyText(`git push -u origin ${b.name}`, b.name)">
@@ -85,7 +85,7 @@
 import { computed, onUnmounted, ref, watch } from 'vue';
 import { getBranches, getPulls, mergePull, openPull, type GateCheck, type GatePR, type IssueBranches, type IssuePulls } from '@/api/board';
 import { message } from '@/issue';
-import { actThenRead } from '@/gate';
+import { actThenRead, needsPush } from '@/gate';
 import { when } from '@/me';
 import GbIcon from '@/components/GbIcon.vue';
 
@@ -133,7 +133,6 @@ function waiting(pr: GatePR): boolean {
 }
 
 const gateOf = (branch: string) => pulls.value?.pulls.find((p) => p.branch === branch);
-const onOrigin = (branch: string) => dev.value?.branches.some((b) => b.remote === 'origin' && b.name === branch);
 
 function prState(pr: GatePR): string {
   if (pr.state === 'OPEN') return pr.draft ? 'Draft' : 'Open';
