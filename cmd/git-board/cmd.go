@@ -74,7 +74,7 @@ func newLsCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "ls [filter]",
-		Short: "List issues matching a filter expression",
+		Short: "List issues matching a filter",
 		Example: `  git-board ls                                          # is:open (default)
   git-board ls "assignee:guilbep -status:validated"
   git-board ls "sprint:delivery is:open" --group status --sort "prio asc"
