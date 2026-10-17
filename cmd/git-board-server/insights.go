@@ -2,18 +2,14 @@ package main
 
 import (
 	"net/http"
-	"regexp"
 	"strconv"
 	"time"
 
 	"github.com/guilbep/git-board/internal/board"
 	"github.com/guilbep/git-board/internal/config"
+	"github.com/guilbep/git-board/internal/filter"
 	"github.com/guilbep/git-board/internal/insights"
 )
-
-// isFilter drops is:open / is:closed from a view's filter: insights look
-// at the closed issues too (throughput, cycle time).
-var isFilter = regexp.MustCompile(`(^|\s)-?is:(open|closed)\b`)
 
 // handleInsights replays the issues' history (internal/insights) over the
 // last days (90 by default) for field (status by default), on the issues
@@ -32,7 +28,10 @@ func (s *apiServer) handleInsights(w http.ResponseWriter, r *http.Request) {
 	}
 	var ids map[string]bool
 	if v, ok := cfg.Views[q.Get("view")]; ok && q.Get("view") != "" {
-		issues, err := board.LoadMatching(s.b, cfg, isFilter.ReplaceAllString(v.Filter, " "), s.me)
+		// without its is: terms: insights look at the closed issues too
+		// (throughput, cycle time)
+		noIs := filter.Without(v.Filter, func(c filter.Condition) bool { return c.Kind == filter.KindIs })
+		issues, err := board.LoadMatching(s.b, cfg, noIs, s.me)
 		if err != nil {
 			writeError(w, http.StatusBadRequest, err)
 			return

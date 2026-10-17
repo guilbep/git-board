@@ -213,3 +213,59 @@ func TestMatchesCommaIsEither(t *testing.T) {
 		t.Error("@me inside a list isn't seen")
 	}
 }
+
+// An issue by its number (#2528) or the start of its id, as the command
+// palette jumps to it: #2528 is the number only; a bare number or 7 and
+// more hex characters also look in the text.
+func TestMatchesNumberAndIDPrefix(t *testing.T) {
+	cfg := mustLoad(t)
+	n2528 := gitbugio.Issue{ID: "b9de9e14aa", Title: "Fix CSV upload", Status: "open", Forges: []gitbugio.Forge{{Number: "2528"}}}
+	mentions := gitbugio.Issue{ID: "5a3b1c22bb", Title: "Follow-up of 2528", Status: "open", Forges: []gitbugio.Forge{{Number: "2115"}}}
+	if c := Parse("#2528"); len(c) != 1 || c[0].Kind != KindNumber || c[0].Value != "2528" {
+		t.Fatalf("Parse(#2528) = %+v", c)
+	}
+	for expr, want := range map[string][2]bool{ // [n2528, mentions]
+		"#2528":    {true, false},
+		"-#2528":   {false, true},
+		"2528":     {true, true}, // the number, or the text
+		"-2528":    {false, false},
+		"#25":      {false, false},
+		"b9de9e1":  {true, false},
+		"B9DE9E1":  {true, false},
+		"b9de9e":   {false, false}, // under 7: a word only
+		"5a3b1c22": {false, true},
+	} {
+		c := Parse(expr)
+		got := [2]bool{Matches(n2528, c, cfg, "", today), Matches(mentions, c, cfg, "", today)}
+		if got != want {
+			t.Errorf("%q: %v, want %v", expr, got, want)
+		}
+	}
+	// with the full-text index's hits: still the number
+	c := Parse("2528")
+	c[0].Hits = map[string]bool{mentions.ID: true}
+	if !Matches(n2528, c, cfg, "", today) || !Matches(mentions, c, cfg, "", today) {
+		t.Error("2528 with hits: the number or the hits")
+	}
+}
+
+// Without drops terms as typed, quotes kept: a facet rewrites its own
+// terms after the rest.
+func TestWithoutKeepsTheOtherTermsAsTyped(t *testing.T) {
+	isStatus := func(c Condition) bool {
+		return c.Kind == KindField && c.Field == "status" || c.Kind == KindNo && c.Value == "status"
+	}
+	for text, want := range map[string]string{
+		`is:open status:ready label:"nice to have" "car sharing"`: `is:open label:"nice to have" "car sharing"`,
+		`-status:validated   no:status prio:p1`:                   `prio:p1`,
+		`status:ready`:                                            ``,
+		``:                                                        ``,
+	} {
+		if got := Without(text, isStatus); got != want {
+			t.Errorf("Without(%q) = %q, want %q", text, got, want)
+		}
+	}
+	if got := Parse(`label:"nice to have"`); len(got) != 1 || got[0].Value != "nice to have" {
+		t.Errorf("quoted value: %+v", got)
+	}
+}

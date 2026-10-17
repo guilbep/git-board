@@ -29,8 +29,8 @@
       >Conflicts<span v-if="conflicts" class="nav-count" :aria-label="`, ${conflicts} held`">{{ conflicts }}</span></router-link>
     </nav>
     <div class="app-right">
-      <button type="button" class="gb-jump" title="Jump to an issue or a command (⌘K)" aria-keyshortcuts="Meta+K Control+K" @click="paletteOpen = true">
-        <GbIcon name="search" small /><span class="gb-jump-label">Jump to…</span><kbd>{{ mod }}K</kbd>
+      <button type="button" class="gb-jump" title="Filter the issues, jump to one, or run a command (⌘K)" aria-keyshortcuts="Meta+K Control+K" @click="paletteOpen = true">
+        <GbIcon name="search" small /><span class="gb-jump-label">Filter or jump to…</span><kbd>{{ mod }}K</kbd>
       </button>
       <!-- where your issues go: remotes, forges, the Project; live while a forge run goes on -->
       <router-link to="/sync" class="gb-synclink" :class="{ 'gb-synclink-run': running }" title="Where your issues go: remotes, forges, the GitHub Project">

@@ -74,12 +74,13 @@ func newLsCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "ls [filter]",
-		Short: "List issues matching a filter expression",
+		Short: "List issues matching a filter",
 		Example: `  git-board ls                                          # is:open (default)
   git-board ls "assignee:guilbep -status:validated"
   git-board ls "sprint:delivery is:open" --group status --sort "prio asc"
   git-board ls "assignee:@me is:open" --me guilbep
-  git-board ls "title:*login*" --json`,
+  git-board ls "title:*login*" --json
+  git-board ls "#2528"                                  # quoted: # starts a shell comment`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			filterStr := defaultFilter

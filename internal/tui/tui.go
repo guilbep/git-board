@@ -19,7 +19,6 @@ import (
 	"github.com/guilbep/git-board/internal/board"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/fields"
-	"github.com/guilbep/git-board/internal/filter"
 	"github.com/guilbep/git-board/internal/ghbridge"
 	"github.com/guilbep/git-board/internal/gitbugio"
 )
@@ -672,16 +671,17 @@ func diffLabels(current, added, removed []string) []string {
 }
 
 // applyStructuredFilter re-filters the full issue set (m.allIssues, not
-// whatever's currently visible) against expr, using the same
-// internal/filter grammar as ls/view/tui's launch argument — field:value,
-// negation, is:open/closed, title globs, free text, all AND'd. Distinct
-// from bubbles/list's own "/" fuzzy search. An empty expr clears back to
-// the full set, same as the category picker's "(all)".
+// whatever's currently visible) against expr through board.Match, the
+// same grammar and matcher as ls/view/the web page — field:value,
+// negation, is:open/closed, title globs, words in titles, descriptions and
+// comments, all AND'd. Distinct from bubbles/list's own "/" fuzzy search.
+// An empty expr clears back to the full set, same as the category
+// picker's "(all)".
 //
-// filter.Parse never fails syntactically (an unrecognized token just
-// becomes a free-text condition), so the only failure mode is @me used
-// with no current user configured — surfaced as a status line, not a
-// crash, same as every other write/parse error in this model.
+// The grammar never fails syntactically (an unrecognized token just
+// becomes a free-text condition), so the failures are @me used with no
+// current user configured, or the full-text index — surfaced as a status
+// line, not a crash, same as every other write/parse error in this model.
 func (m Model) applyStructuredFilter(expr string) Model {
 	if expr == "" {
 		m.baseIssues = m.allIssues
@@ -692,20 +692,10 @@ func (m Model) applyStructuredFilter(expr string) Model {
 		return m
 	}
 
-	conditions := filter.Parse(expr)
-	if filter.RequiresMe(conditions) && m.me == "" {
-		m.me = board.MyLogin(m.backend)
-	}
-	if filter.RequiresMe(conditions) && m.me == "" {
-		m.status = fmt.Sprintf("filter %q: %v", expr, board.ErrNoMe)
+	matched, err := board.Match(m.backend, m.cfg, expr, m.me, m.allIssues, m.today)
+	if err != nil {
+		m.status = fmt.Sprintf("filter %q: %v", expr, err)
 		return m
-	}
-
-	var matched []gitbugio.Issue
-	for _, issue := range m.allIssues {
-		if filter.Matches(issue, conditions, m.cfg, m.me, m.today) {
-			matched = append(matched, issue)
-		}
 	}
 	m.baseIssues = matched
 	m.list.SetItems(m.sortedItems(m.baseIssues))

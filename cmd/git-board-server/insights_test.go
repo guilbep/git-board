@@ -40,6 +40,14 @@ func TestInsightsReplayTheRepository(t *testing.T) {
 		t.Errorf("headlines %v", r.Headlines)
 	}
 
+	// a view's filter without its is: terms, a list of them too
+	s.cfg.Views = map[string]config.View{"both": {Filter: "is:open,closed sprint:s1 -status:done"}}
+	r.Open = nil
+	call(t, "GET", ts.URL+"/api/insights?field=status&days=7&view=both", nil, &r)
+	if len(r.Open["backlog"]) != 8 || r.Open["backlog"][7] != 1 {
+		t.Errorf("the view's report %+v", r)
+	}
+
 	var sprints []struct{ Slug, Start, End string }
 	call(t, "GET", ts.URL+"/api/sprints", nil, &sprints)
 	if len(sprints) != 1 || sprints[0].Slug != "s1" || sprints[0].End == "" {

@@ -1,6 +1,7 @@
-<!-- The filter sidebar: the view's filter expression (sent to the server),
-     then one collapsible checkbox list per facet, counted against the other
-     facets (see facets.ts). Design from the EPFL masonry-walls database. -->
+<!-- The filter sidebar: one collapsible checkbox list per facet, counted
+     on the server against the rest of the filter; a tick writes into the
+     board's Filter box (facets.ts). Design from the EPFL masonry-walls
+     database. -->
 <template>
   <aside ref="panel" class="filters" aria-label="Filters">
     <!-- Folded on narrow screens, where the sidebar sits above the issues;
@@ -19,28 +20,7 @@
         </span>
       </div>
 
-      <details class="filters-item" :open="openAtStart.has('query')">
-        <summary>
-          <span class="filters-chev" aria-hidden="true" />
-          <span class="filters-item-label">Filter expression</span>
-          <span v-if="queryChanged" class="filters-badge">1</span>
-        </summary>
-        <form class="filters-query" @submit.prevent="emit('apply')">
-          <input
-            v-model="query"
-            class="epfl-input"
-            type="text"
-            spellcheck="false"
-            autocomplete="off"
-            aria-label="Filter expression"
-            aria-describedby="query-hint"
-          />
-          <small id="query-hint">For example: is:open status:ready prio:p1 -title:*spec*</small>
-          <button type="submit" class="epfl-btn epfl-btn-secondary epfl-btn-sm">Apply</button>
-        </form>
-      </details>
-
-      <details v-for="f in facets" :key="f.key" class="filters-item" :open="openAtStart.has(f.key)">
+      <details v-for="f in facets" :key="f.key" class="filters-item" :open="openAtStart?.has(f.key)">
         <summary>
           <span class="filters-chev" aria-hidden="true" />
           <span class="filters-item-label">{{ facetLabel(f.key) }}</span>
@@ -102,9 +82,8 @@ import type { Fields } from '@/fields';
 
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue';
 
-const props = defineProps<{ facets: Facet[]; sel: Selection; fields: Fields; modified: boolean; queryChanged: boolean }>();
-const query = defineModel<string>('query', { required: true });
-const emit = defineEmits<{ set: [key: string, values: string[]]; reset: []; apply: []; hide: [] }>();
+const props = defineProps<{ facets: Facet[]; sel: Selection; fields: Fields; modified: boolean }>();
+const emit = defineEmits<{ set: [key: string, values: string[]]; reset: []; hide: [] }>();
 
 // Each section's order: workflow when the field has configured options,
 // else by count; a choice is kept in this browser.
@@ -174,11 +153,20 @@ function onPick(f: Facet, value: string, e: MouseEvent) {
   emit('set', f.key, next);
 }
 
-// Open state is set once: re-deriving it from the selection would fold a
-// group under the pointer as its last box is unticked.
+// Open state is set once, with the first facets: re-deriving it from the
+// selection would fold a group under the pointer as its last box is
+// unticked.
 const wide = window.matchMedia('(min-width: 64rem)').matches;
-const openAtStart = new Set([...Object.keys(props.sel), ...(props.queryChanged ? ['query'] : [])]);
-const active = computed(() => Object.values(props.sel).flat().length + Number(props.queryChanged));
+const openAtStart = ref<Set<string> | null>(null);
+watch(
+  () => props.facets,
+  (fs) => {
+    if (!openAtStart.value && fs.length) openAtStart.value = new Set(fs.filter((f) => f.selected.length).map((f) => f.key));
+  },
+  { immediate: true },
+);
+// the facets the filter narrows
+const active = computed(() => Object.values(props.sel).filter((v) => v.length).length);
 </script>
 
 <style scoped>
@@ -273,10 +261,6 @@ const active = computed(() => Object.values(props.sel).flat().length + Number(pr
 .filters-option:hover .filters-only, .filters-option:focus-within .filters-only { visibility: visible; }
 .filters-count { min-width: 1.75rem; text-align: right; color: var(--fg-muted); font-variant-numeric: tabular-nums; }
 .filters-none { margin: 0.25rem 0 0; font-size: var(--fs-sm); color: var(--fg-muted); }
-
-.filters-query { display: grid; gap: var(--space-2); padding: 0.375rem 0 0 1.25rem; }
-.filters-query .epfl-input { font-family: var(--font-mono); font-size: var(--fs-sm); }
-.filters-query .epfl-btn { justify-self: start; }
 
 @media (max-width: 63.99rem) {
   .filters { padding: var(--space-3) 0 0; border-right: 0; }

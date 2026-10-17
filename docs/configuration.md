@@ -93,7 +93,7 @@ The colors are grey, blue, purple, amber (or yellow), orange, green, red, teal a
 
 A view is a saved page: it appears in the header, in alphabetical order, and its address can be bookmarked.
 
-You rarely need to write one by hand. On the board, change the search, the filters, the grouping or the sort, and a bar offers **Save view** (into this view, for everyone) or **Save as new view…**; **Discard** goes back to the saved one. Only the view's table changes in the file, comments included.
+You rarely need to write one by hand. On the board, change the filter (its box, or a tick in the filters panel), the grouping or the sort, and a bar offers **Save view** (into this view, for everyone) or **Save as new view…**; **Discard** goes back to the saved one. Only the view's table changes in the file, comments included.
 
 ```toml
 [views.current-sprint]
@@ -151,7 +151,7 @@ them all; a lane's ⋯ menu moves every card it holds.
 
 ## Filters
 
-A view's `filter` and the page's search box take the same syntax. Conditions combine with AND, as in GitHub's search; a leading `-` negates any of them.
+One syntax everywhere: a view's `filter`, the board's **Filter** box, ⌘K, and the command line (`git-board ls`, `git-board tui` and its `f`). Conditions combine with AND, as in GitHub's search; a leading `-` negates any of them.
 
 | Syntax | Matches |
 | --- | --- |
@@ -165,7 +165,12 @@ A view's `filter` and the page's search box take the same syntax. Conditions com
 | `author:guilbep`, `author:@me` | who opened the issue |
 | `label:bug` | a plain label, or a full one: `label:status:ready` |
 | `no:assignee` | no value for that field; `no:label`: no plain label |
-| `travel`, `"car sharing"` | words in the title, the description or a comment |
+| `#2528` | the issue with that number on a forge |
+| `travel`, `"car sharing"` | words in the title, the description or a comment; a number (`2528`), or the first 7 characters or more of a git-bug id, also finds that issue |
+
+An empty filter is every issue, open or closed. A view without one shows the open issues (`is:open`), as `git-board ls` does without one.
+
+On the board, the Filter box holds the view's filter until you change it; the address then keeps it (`?view=backlog&filter=…`), so a link shows the same issues. The filters panel counts each field's values against the rest of the filter, and a tick writes into the box: ready and qa ticked is `status:ready,qa`, Not set `no:status`, Not set with values the values left out (`-status:validated`). ⌘K takes the same filter on every issue, the open ones first, and its first row, **Filter the board by**, puts it into the box; `#2528` or an id opens that issue at once. Typing `status:` in either offers the field's values. On the command line, quote a filter: `git-board ls "#2528"` (the shell takes an unquoted `#` for a comment).
 
 ## Sprints
 

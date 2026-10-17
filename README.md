@@ -309,7 +309,8 @@ project = { comite = "Comité Spécialisé", qa = "QA Validation" }
 
 ### Filter grammar
 
-Views, `--filter` and the web UI's search box share one syntax:
+Views, the `ls`/`tui` filter argument, the web UI's Filter box and ⌘K
+share one syntax:
 `status:ready -prio:p3 assignee:@me is:open "car sharing"`. Every
 qualifier: [Filters in docs/configuration.md](docs/configuration.md#filters).
 
@@ -418,7 +419,7 @@ git-board tui "is:open prio:p1"
 | `↑`/`↓`, `/` | list | native `bubbles/list` scroll and fuzzy text search (title + labels) |
 | `enter` | list | open the detail view for the selected issue |
 | `c` | list | quick-filter by the configured `cat` field's options (`(all)` clears it); coexists with `/` search. The shipped example config no longer defines `[fields.cat]` (category is a plain label now — see the bridge field mapping below), so `c` shows "no cat field configured" unless a project opts back into one. |
-| `f` | list | structured filter — the same `field:value`/`-field:value`/`is:open`/`title:*glob*` grammar as `ls`/`view`/the launch argument, not the fuzzy `/` search. Empty input + enter clears it. |
+| `f` | list | structured filter — the same `field:value`/`-field:value`/`is:open`/`title:*glob*` grammar and matcher as `ls`/`view`/the launch argument and the web UI (words look in descriptions and comments too), not the fuzzy `/` search. Empty input + enter clears it. |
 | `s` | list | sort by field, e.g. `prio` (ascending) or `prio desc` — same syntax as `ls --sort`. Persists across a later `f`/`c` filter change. Empty input + enter clears it back to natural order. |
 | `i` | list | preview the GitHub Project bridge (`git-board bridge pull`, dry-run) — matches git-bug's own termui, where `i` is "Pull". Requires `git-board bridge configure` to have been run first. Runs in the background; the TUI stays responsive while it fetches. |
 | `o` | list | apply the plan `i` just previewed (`bridge pull --apply`) — matches git-bug's termui `o`, "Push". Refuses to run before an `i` (no blind apply); the plan is cleared after applying so `o` can't silently re-apply stale data. |
@@ -460,12 +461,13 @@ no separate service. `cmd/git-board-server` reuses `internal/config`,
 `ls`/`view`/`set` and the API apply the exact same filter/group and
 field-write logic.
 
-The page asks the server for a view's filter expression, then narrows and
-sorts the answer itself: a sidebar of checkbox filters, one per field
-(OR within a field, AND across fields, each value counted against the
-other filters), a search box, and table headers that sort on click
-(option order, numbers as numbers, missing values last). Filters and sort
-live in the URL (`#/?view=backlog&f.status=ready&sort=-est`), so a link
+The page has one Filter box, the view's filter until changed; the server
+matches it and counts the sidebar's checkbox filters, one per field (each
+value counted against the rest of the filter), and a tick writes into the
+box (`status:ready,qa`). ⌘K takes the same filter, on every issue. The page
+only sorts the answer: table headers that sort on click (option order,
+numbers as numbers, missing values last). The filter and sort live in the
+URL (`#/?view=backlog&filter=is:open+status:ready&sort=-est`), so a link
 keeps them.
 
 **Issue management.** git-board is the one interface to the issues; it
