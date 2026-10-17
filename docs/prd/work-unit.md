@@ -83,7 +83,9 @@ the same one; `.git-board.toml` has no key for it.
 - **When**: the counter numbers an issue with no project number (made in
   git-board, or imported with a GitHub number at or above `start`) during
   a push to origin the user asks for: Push on the Sync page's Remotes,
-  `git board sync`, `git board numbers`. Until then the issue shows its
+  `git board sync`, `git board numbers`, and only once origin has the
+  issue (found in the live test: numbering an issue only one clone had
+  left gaps in everyone else's numbers). Until then the issue shows its
   short git-bug id. *Decided 2026-10-17, after review:* not on creation
   or after a forge sync, as first written: numbering pushes the counter,
   and nothing goes out without the user asking (the Sync page's rule;

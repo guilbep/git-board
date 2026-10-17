@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/git-bug/git-bug/cache"
+	bugent "github.com/git-bug/git-bug/entities/bug"
 	"github.com/git-bug/git-bug/repository"
 	"github.com/go-git/go-git/v5/plumbing/transport"
 )
@@ -236,8 +237,9 @@ func (b *Backend) InitNumbers(remote, prefix string, start int) error {
 	return err
 }
 
-// NumberIssues gives the issues without a number the next ones, oldest
-// first, and says how many it numbered. A project that doesn't number its
+// NumberIssues gives the issues origin has and that have no number the
+// next ones, oldest first, and says how many it numbered; one made here
+// waits for its push. A project that doesn't number its
 // issues, as this clone last fetched it, touches no remote.
 func (b *Backend) NumberIssues(remote string) (int, error) {
 	if _, ok, err := b.Counter(); !ok {
@@ -270,8 +272,17 @@ func (b *Backend) numberOnce(remote string) (n int, rejected bool, err error) {
 	if err != nil {
 		return 0, false, err
 	}
+	// only what origin has, as last pushed or fetched: a number other
+	// clones can't find an issue for is a gap
+	onOrigin, err := b.repo.ListTrackingRefs(remote, bugent.Namespace)
+	if err != nil {
+		return 0, false, err
+	}
 	var todo []*cache.BugExcerpt
 	for _, id := range b.c.Bugs().AllIds() {
+		if _, ok := onOrigin[id.String()]; !ok {
+			continue
+		}
 		e, err := b.c.Bugs().ResolveExcerpt(id)
 		if err != nil {
 			return 0, false, err

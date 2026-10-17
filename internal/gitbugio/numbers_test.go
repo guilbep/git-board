@@ -97,6 +97,7 @@ func TestNumbersGitHubBelowStart(t *testing.T) {
 	if err := mine.InitNumbers("origin", "CO2", 3052); err != nil {
 		t.Fatalf("InitNumbers: %v", err)
 	}
+	pushed(t, mine)
 	if n, err := mine.NumberIssues("origin"); n != 1 || err != nil {
 		t.Fatalf("NumberIssues = %d, %v; want 1, the late one", n, err)
 	}
@@ -124,6 +125,8 @@ func TestNumbersPushIsTheLock(t *testing.T) {
 	}
 	a := gitbugiotest.NewIssue(t, mine, "Mine")
 	b := gitbugiotest.NewIssue(t, theirs, "Theirs")
+	pushed(t, mine)
+	pushed(t, theirs)
 	if n, err := mine.NumberIssues("origin"); n != 1 || err != nil {
 		t.Fatalf("mine: %d, %v", n, err)
 	}
@@ -154,6 +157,7 @@ func TestNumbersNotYetFetched(t *testing.T) {
 		t.Fatal(err)
 	}
 	id := gitbugiotest.NewIssue(t, theirs, "Offline")
+	pushed(t, theirs)
 	if n, err := theirs.NumberIssues("origin"); n != 0 || err != nil {
 		t.Fatalf("before fetching: %d, %v", n, err)
 	}
@@ -203,6 +207,7 @@ func TestNumbersRealRace(t *testing.T) {
 		errs := make([]error, 2)
 		for i, clone := range []*gitbugio.Backend{mine, theirs} {
 			gitbugiotest.NewIssue(t, clone, fmt.Sprintf("round %d, clone %d", round, i))
+			pushed(t, clone)
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
@@ -257,6 +262,7 @@ func TestNumbersOriginWithAMirror(t *testing.T) {
 		t.Fatalf("InitNumbers: %v", err)
 	}
 	gitbugiotest.NewIssue(t, b, "Made here")
+	_, _ = b.Push("origin") // origin gets it; the mirror refuses, as for the counter
 	if n, err := b.NumberIssues("origin"); n != 1 || err != nil {
 		t.Fatalf("NumberIssues = %d, %v; want 1, nil", n, err)
 	}
@@ -276,5 +282,36 @@ func TestNumbersUnreadableCounter(t *testing.T) {
 	}
 	if _, err := b.NumberIssues("origin"); err == nil {
 		t.Error("numbered on top of a counter it can't read")
+	}
+}
+
+// The counter names only issues origin has: one made here waits for its
+// push, so other clones never see a number for an issue they can't get.
+func TestNumbersOnlyWhatOriginHas(t *testing.T) {
+	mine, _ := gitbugiotest.NewPair(t)
+	if err := mine.InitNumbers("origin", "CO2", 1); err != nil {
+		t.Fatal(err)
+	}
+	id := gitbugiotest.NewIssue(t, mine, "Only here")
+	if n, err := mine.NumberIssues("origin"); n != 0 || err != nil {
+		t.Fatalf("before its push: numbered %d, %v", n, err)
+	}
+	if _, err := mine.Push("origin"); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := mine.NumberIssues("origin"); n != 1 || err != nil {
+		t.Fatalf("after its push: numbered %d, %v", n, err)
+	}
+	if is, _ := mine.GetIssue(id); is.Number != "CO2-1" {
+		t.Errorf("number %q", is.Number)
+	}
+}
+
+// pushed sends b's issues to origin, as a sync or the Sync page's Push
+// does before numbering.
+func pushed(t *testing.T, b *gitbugio.Backend) {
+	t.Helper()
+	if _, err := b.Push("origin"); err != nil {
+		t.Fatal(err)
 	}
 }
