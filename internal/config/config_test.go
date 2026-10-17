@@ -333,3 +333,21 @@ func TestPathFindsTheRepositoryRoot(t *testing.T) {
 		t.Errorf("Load(Path()) = %+v, %v, want the root's config", cfg, err)
 	}
 }
+
+func TestBranchesKind(t *testing.T) {
+	b := Branches{Kinds: map[string]string{"bug": "fix", "feat": "feat"}}
+	tests := []struct {
+		labels []string
+		want   string
+	}{
+		{[]string{"prio:p1", "bug"}, "bug"},      // the label, not its branch's fix
+		{[]string{"bug", "kind:chore"}, "chore"}, // the kind field wins
+		{[]string{"FEAT"}, ""},                   // labels are exact: FEAT isn't feat
+		{[]string{"urgent"}, ""},
+	}
+	for _, tt := range tests {
+		if got := b.Kind(tt.labels); got != tt.want {
+			t.Errorf("Kind(%v) = %q, want %q", tt.labels, got, tt.want)
+		}
+	}
+}

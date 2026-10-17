@@ -255,7 +255,7 @@ kinds = { bug = "fix", feat = "feat", perf = "perf", task = "chore" }
 | --- | --- | --- |
 | `base` | the remote's default branch, else `main`, `master` or `trunk` | The branch a new branch starts from (`origin/<base>`, or `<base>` without a remote), and the one "in dev" and ahead/behind compare with. |
 | `name` | `"{number}-{slug}"` (GitHub's) | The branch's name. `{number}`: the issue's number on its first forge, else its git-bug id's first 7 characters. `{kind}`: its kind, through `kinds`; without one, `{kind}/` is dropped. `{slug}`: its title in lower-case words, without a leading `[BUG](Scope)` or a trailing `(#1234)`, cut at about 50 characters. |
-| `kinds` | none | An issue's kind (its `kind:` field, or a plain label listed here) to the `{kind}` of its branch. |
+| `kinds` | none | The project's kinds: an issue's kind (its `kind:` field, or a plain label listed here) to the `{kind}` of its branch. `bridge pull` and `sync` fill a missing kind from the Project's Category (`FEAT` → `feat`). |
 
 `[BUG](Equipment) Other equipment shows the wrong example (#2518)`, labeled `bug`, gives `fix/2518-other-equipment-shows-the-wrong-example`. What git doesn't take in a branch name becomes `-`.
 

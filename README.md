@@ -231,7 +231,7 @@ Field mapping:
 |---|---|---|
 | Status | `status:<value>` | single |
 | Priority | `prio:<value>` | single |
-| Category | `<value>` (bare label, verbatim — not slugified) | none — plain label, not a field:value pair |
+| Category | the issue's kind: the `[branches] kinds` key it names, without case (`FEAT` → `feat`) | single — only when the issue has no kind yet |
 | Module | `mod:<value>` | single — the two duplicate "Generic" options are merged into one `mod:generic` |
 | Est. hours | `est:<value>` | single |
 | Sprint | `sprint:<slug>` | single — the `[[sprints.list]]` slug of the iteration's title, else the title as a slug (`Hypercare` → `sprint:hypercare`); list the iterations for `@current` to find them |
@@ -240,12 +240,11 @@ Field mapping:
 `Milestone` and `Size` are **not** imported — the PRD calls them dead/unused
 fields.
 
-Category isn't a structured field like Status/Priority — it's added as a
-plain, unnamespaced label instead. Category and GitHub's own native issue
-labels do the same job; a `cat:<value>` field would just be a second,
-duplicate way to say the same thing. Being a plain label, it's additive
-only (no configured options, no removal on re-run) — same tradeoff every
-other plain label already has.
+Category says the same thing as the kind labels (`bug`, `feat`, `perf`…),
+and the labels win: Category only fills a kind the issue doesn't have,
+written as `[branches] kinds` spells it, so `FEAT` lands as `feat`. A
+Category that is none of the kinds (`FIX` when the kind is `bug`) warns
+and writes nothing. Nothing is ever removed: a kind is the team's to change.
 
 `bridge pull` reads values exactly as `bridge sync` does: a
 `[fields.<name>] project = { … }` alias first, then the slug of the

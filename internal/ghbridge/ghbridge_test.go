@@ -3,6 +3,7 @@ package ghbridge_test
 import (
 	"os"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/guilbep/git-board/internal/config"
@@ -112,10 +113,38 @@ func TestBuildPlanMapsFields(t *testing.T) {
 	if !got["mod:backoffice"] {
 		t.Errorf("mod:backoffice missing from Added = %v", change.Added)
 	}
-	// category is a bare label, not a field:value pair -- and not
-	// slugified, so it lands exactly as GitHub had it ("FEAT").
-	if !got["FEAT"] {
-		t.Errorf("FEAT missing from Added = %v", change.Added)
+	// Category FEAT is the kind feat, as [branches] kinds spells it
+	if !got["feat"] || got["FEAT"] {
+		t.Errorf("Added = %v, want feat and no FEAT", change.Added)
+	}
+}
+
+func TestBuildPlanCategoryLeavesAKindAlone(t *testing.T) {
+	plan := ghbridge.BuildPlan(mustParseFixture(t), []gitbugio.Issue{bug("bug2605", 2605, "bug")}, mustLoadConfig(t))
+	change := changeFor(t, plan, 2605)
+	for _, l := range change.Added {
+		if l == "feat" {
+			t.Errorf("Added = %v: Category overrode the label bug", change.Added)
+		}
+	}
+}
+
+func TestBuildPlanCategoryNotAKindWarns(t *testing.T) {
+	items := mustParseFixture(t)
+	for i := range items {
+		if items[i].Category != "" {
+			items[i].Category = "FIX"
+		}
+	}
+	plan := ghbridge.BuildPlan(items, []gitbugio.Issue{bug("bug2605", 2605)}, mustLoadConfig(t))
+	change := changeFor(t, plan, 2605)
+	for _, l := range change.Added {
+		if strings.EqualFold(l, "fix") {
+			t.Errorf("Added = %v, want no fix: it isn't one of the kinds", change.Added)
+		}
+	}
+	if len(change.Warnings) != 2 {
+		t.Errorf("Warnings = %v, want status's and category's", change.Warnings)
 	}
 }
 

@@ -97,6 +97,17 @@ func TestSyncFirstRunImports(t *testing.T) {
 	}
 }
 
+func TestSyncCategoryFillsAMissingKind(t *testing.T) {
+	it := item(1, "Ready")
+	it.Category = "FEAT"
+	cfg := syncConfig()
+	cfg.Branches.Kinds = map[string]string{"bug": "fix", "feat": "feat"}
+	p := ghbridge.BuildSyncPlan([]ghbridge.Item{it}, oneBug(), nil, syncMeta(), cfg)
+	if got := p.Changes[0].Added; !slices.Contains(got, "feat") || slices.Contains(got, "FEAT") {
+		t.Errorf("added = %v, want feat and no FEAT", got)
+	}
+}
+
 func TestSyncLocalChangeGoesToProject(t *testing.T) {
 	p := plan(item(1, "Ready"), oneBug("status:in-review"), map[string]string{"status": "ready"})
 	want := []ghbridge.ProjectEdit{{BugID: "bug1", ItemID: "item-Ready", Number: 1, Field: "status",

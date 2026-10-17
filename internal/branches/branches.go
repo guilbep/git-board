@@ -37,20 +37,11 @@ func Name(cfg config.Branches, is gitbugio.Issue) string {
 	return refSafe(strings.NewReplacer("{kind}", kind, "{number}", number(is), "{slug}", Slug(is.Title)).Replace(tmpl))
 }
 
-// kindOf is the issue's kind: its kind: field, else the first of its flat
-// labels that cfg.Kinds lists, through cfg.Kinds.
+// kindOf is the issue's kind (cfg.Kind) as its branch says it, through
+// cfg.Kinds.
 func kindOf(cfg config.Branches, labels []string) string {
-	for _, l := range labels {
-		if v, ok := strings.CutPrefix(l, "kind:"); ok {
-			return cmp.Or(cfg.Kinds[v], v)
-		}
-	}
-	for _, l := range slices.Sorted(slices.Values(labels)) {
-		if k, ok := cfg.Kinds[l]; ok {
-			return k
-		}
-	}
-	return ""
+	k := cfg.Kind(labels)
+	return cmp.Or(cfg.Kinds[k], k)
 }
 
 func number(is gitbugio.Issue) string {
