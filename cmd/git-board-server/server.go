@@ -112,6 +112,7 @@ func newMux(s *apiServer, static http.Handler) http.Handler {
 	mux.HandleFunc("POST /api/bridges", s.handleAddBridge)
 	mux.HandleFunc("DELETE /api/bridges/{name}", s.handleRemoveBridge)
 	mux.HandleFunc("GET /api/forges", s.handleForges)
+	mux.HandleFunc("GET /api/forges/docs", s.handleForgeDocs)
 	mux.HandleFunc("POST /api/forges/sync", s.handleForgeSync)
 	mux.HandleFunc("GET /api/sync", s.handleSyncStatus)
 	mux.HandleFunc("POST /api/sync/check", s.handleSyncCheck)

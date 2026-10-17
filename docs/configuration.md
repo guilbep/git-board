@@ -4,7 +4,7 @@
 
 The file is optional. Without it, every `ns:value` label is a field and git-board works on any git-bug repository. The file adds what labels can't say: the order of a field's values, single or multiple values, colors, sprint dates, saved views, the GitHub Project to sync with, and where attachments go.
 
-It lives at the root of the repository. Edit it in **Settings → Project configuration**: it is checked as you type and applies as soon as you save. Editing it by hand works too; restart `git-board-server` after.
+It lives at the root of the repository. Edit it in **Settings → Project file**: it is checked as you type and applies as soon as you save. Editing it by hand works too; restart `git-board-server` after.
 
 | Table | What it sets |
 | --- | --- |

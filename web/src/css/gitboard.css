@@ -235,6 +235,11 @@
 .gb-dialog-body{display:flex;flex-direction:column;gap:1.25rem;padding:1.5rem 2rem}
 .gb-dialog-foot{display:flex;flex-wrap:wrap;align-items:center;gap:.75rem;padding:1rem 2rem;border-top:1px solid var(--border-subtle);background:var(--bg-subtle)}
 .gb-dialog-foot .gb-grow{flex:1 1 14rem}
+/* a choice among a few, as boxes: the appearance, a forge */
+.gb-opts{display:flex;flex-wrap:wrap;gap:.5rem}
+.gb-opt{display:flex;align-items:flex-start;gap:.5rem;min-width:10rem;padding:.625rem .875rem;border:1px solid var(--border);cursor:pointer}
+.gb-opt.on{border-color:var(--fg)}
+.gb-opt input{margin-top:.3rem;accent-color:var(--primary-hover)}
 .gb-fieldgrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1rem 1.25rem}
 .gb-from-view{font-size:.75rem;color:var(--fg-muted)}
 /* forge sync */

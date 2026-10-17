@@ -399,6 +399,11 @@ export function getConfigDocs(): Promise<DocSection[]> {
   return request('/api/config/docs');
 }
 
+// docs/forges.md, in sections: how forges work
+export function getForgeDocs(): Promise<DocSection[]> {
+  return request('/api/forges/docs');
+}
+
 // saveView writes [views.<name>] into .git-board.toml (the board's "Save
 // view"); the answer is every view, as GET /api/views.
 export function saveView(name: string, v: ViewConfig): Promise<Record<string, ViewConfig>> {
@@ -435,7 +440,7 @@ export function getCredentials(): Promise<Credential[]> {
   return request('/api/credentials');
 }
 
-export function addBridge(b: { target: string; url: string; name?: string | undefined; credential?: string | undefined; token?: string | undefined }): Promise<{ name: string }> {
+export function addBridge(b: { target: string; url: string; name?: string | undefined; credential?: string | undefined; token?: string | undefined; sync: boolean }): Promise<{ name: string }> {
   return request('/api/bridges', json('POST', b));
 }
 

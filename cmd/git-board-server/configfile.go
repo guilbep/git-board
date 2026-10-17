@@ -143,15 +143,18 @@ func (s *apiServer) handleConfigSave(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, res)
 }
 
-// docSection is a part of docs/configuration.md, one ## heading each: the
-// settings page shows the one for the table under the cursor.
+// docSection is a part of a doc, one ## heading each: the settings page
+// shows the one for the table under the cursor (docs/configuration.md),
+// or the ones beside a step (docs/forges.md).
 type docSection struct {
 	ID    string `json:"id"`    // the heading's first word: fields, views…
 	Title string `json:"title"` // the heading
 	HTML  string `json:"html"`  // what follows it, rendered
 }
 
-var configDocs = sync.OnceValue(func() []docSection {
+// docSections cuts a doc at its ## headings; what comes before the first
+// one (the # title) is left out.
+func docSections(doc string) []docSection {
 	var res []docSection
 	var title string
 	var body []string
@@ -162,7 +165,7 @@ var configDocs = sync.OnceValue(func() []docSection {
 		id, _, _ := strings.Cut(strings.ToLower(title), " ")
 		res = append(res, docSection{ID: id, Title: title, HTML: markdown.Render(strings.Join(body, "\n"), func(u string) string { return u })})
 	}
-	for _, line := range strings.Split(docs.Configuration, "\n") {
+	for _, line := range strings.Split(doc, "\n") {
 		if t, ok := strings.CutPrefix(line, "## "); ok {
 			flush()
 			title, body = t, nil
@@ -172,10 +175,19 @@ var configDocs = sync.OnceValue(func() []docSection {
 	}
 	flush()
 	return res
-})
+}
+
+var (
+	configDocs = sync.OnceValue(func() []docSection { return docSections(docs.Configuration) })
+	forgeDocs  = sync.OnceValue(func() []docSection { return docSections(docs.Forges) })
+)
 
 func (s *apiServer) handleConfigDocs(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, configDocs())
+}
+
+func (s *apiServer) handleForgeDocs(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, forgeDocs())
 }
 
 // handleSaveView writes one view's table into .git-board.toml, the board's

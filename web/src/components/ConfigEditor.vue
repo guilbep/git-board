@@ -4,7 +4,7 @@
 <template>
   <section class="cfg" aria-labelledby="set-file">
     <div class="cfg-head">
-      <h2 id="set-file" class="h5">Project configuration</h2>
+      <h2 id="set-file" class="h4">Project file</h2>
       <code class="cfg-path">{{ file?.path }}</code>
     </div>
     <p class="gb-hint">The project's ontology (its fields and their types: what an issue can say about itself), its colors, views and sprints, the GitHub Project, attachments. The reference beside the editor follows your cursor; changes apply as soon as you save.</p>
@@ -294,7 +294,7 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.cfg { display: grid; gap: .5rem; margin-top: 2rem; }
+.cfg { container-type: inline-size; display: grid; gap: .5rem; }
 .cfg h2, .cfg p { margin: 0; }
 .cfg-head { display: flex; align-items: baseline; gap: 1rem; flex-wrap: wrap; }
 .cfg-path { font-size: .8125rem; color: var(--fg-muted); overflow-wrap: anywhere; }
@@ -309,9 +309,10 @@ onMounted(() => {
    colored copy, both with the same font, line height and padding */
 .cfg-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1rem; align-items: start; }
 .cfg-main { display: grid; gap: .5rem; min-width: 0; }
-@media (max-width: 80rem) { .cfg-body { grid-template-columns: minmax(0, 1fr); } }
+/* side by side while each half has room, else the reference under */
+@container (max-width: 52rem) { .cfg-body { grid-template-columns: minmax(0, 1fr); } }
 .cfg-doc { container-type: inline-size; display: grid; align-content: start; gap: .5rem; height: max(24rem, calc(100vh - 13rem)); min-height: 0; padding: 1rem 1.25rem; border: 1px solid var(--border); background: var(--bg-subtle); overflow: auto; }
-@media (max-width: 80rem) { .cfg-doc { height: auto; } }
+@container (max-width: 52rem) { .cfg-doc { height: auto; } }
 .cfg-doc-head { display: flex; align-items: baseline; gap: .5rem; }
 .cfg-doc-title { margin: 0; font-size: .8125rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--primary); }
 .cfg-doc-nav { display: flex; flex-wrap: wrap; gap: .25rem; }
