@@ -13,6 +13,8 @@
     <p v-if="error" class="epfl-alert epfl-alert-danger" role="alert">{{ error }}</p>
     <p v-if="result" class="epfl-alert epfl-alert-success" role="status">{{ result }}</p>
 
+    <p v-if="!n && !error" class="nb-muted">Loading…</p>
+
     <template v-if="n?.on">
       <div class="nb-tiles">
         <div class="gb-value gb-value-agreed"><span class="gb-value-label">Prefix</span><span class="gb-value-val">{{ n.prefix }}</span></div>
@@ -21,7 +23,7 @@
         <div class="gb-value gb-value-agreed"><span class="gb-value-label">Numbered</span><span class="gb-value-val">{{ issues(n.numbered) }}</span></div>
       </div>
       <section v-if="n.waiting" class="nb-wait" aria-labelledby="nb-wait">
-        <p id="nb-wait"><b>{{ issues(n.waiting) }} on origin without a number.</b> They take {{ span(n.prefix!, n.next!, n.waiting) }}.</p>
+        <p id="nb-wait"><b>{{ issues(n.waiting) }} on origin without a number.</b> {{ n.waiting === 1 ? 'It takes' : 'They take' }} {{ span(n.prefix!, n.next!, n.waiting) }}.</p>
         <div v-if="confirming" class="nb-confirm" role="alert">
           <p><b>This pushes refs/board/seq to origin ({{ where }}).</b> Nothing else goes anywhere.</p>
           <div class="nb-actions">
@@ -77,7 +79,7 @@
             <a :href="n.github.issues" target="_blank" rel="noopener noreferrer">See the repository's issues</a>
           </p>
         </div>
-        <p v-if="!prefixErr && !startErr" class="nb-preview" role="status">{{ preview }}</p>
+        <p v-if="n.origin && !prefixErr && !startErr" class="nb-preview" role="status">{{ preview }}</p>
         <div v-if="confirming" class="nb-confirm" role="alert">
           <p><b>This pushes refs/board/seq to origin ({{ where }}).</b> Then it numbers what origin has, with a second push of it. Nothing else goes anywhere: no issue, no forge.</p>
           <div class="nb-actions">
@@ -97,7 +99,7 @@
           <li><b>Numbers go out only with a push you ask for</b>: Start numbering, Number them now, Push on Sync › Remotes, <code>git board numbers</code>. Only issues origin has get one.</li>
           <li><b>Nothing pushes on its own</b>: not creating an issue, not a forge sync.</li>
         </ul>
-        <p>From a terminal: <code>git board numbers init --prefix CO2 --start 3052</code>.</p>
+        <p>From a terminal: <code>git board numbers init --prefix {{ prefixErr ? 'CO2' : prefix }} --start {{ startErr ? 3052 : start }}</code>.</p>
       </aside>
     </div>
   </div>
@@ -131,11 +133,12 @@ const ready = computed(() => !!n.value?.origin && !prefixErr.value && !startErr.
 const where = computed(() => n.value?.origin?.push_urls.join(', ') ?? '');
 const preview = computed(() => numbersPreview(prefix.value, start.value, n.value?.github_numbers ?? [], n.value?.unpushed ?? 0));
 const startHint = computed(() => {
-  const known = [n.value?.highest ? `#${n.value.highest}, the highest forge number your issues have` : ''];
+  const mine = n.value?.highest ?? 0;
   const gh = n.value?.github;
-  if (gh && !gh.error) known.push(gh.highest ? `#${gh.highest}, GitHub's newest issue or pull request` : 'GitHub has no issue yet');
-  const parts = known.filter(Boolean);
-  return parts.length ? `Suggested: one above ${parts.join('; ')}.` : 'No issue has a forge number yet.';
+  if (gh && !gh.error && gh.highest >= mine) {
+    return `Suggested: one above #${gh.highest}, GitHub's newest issue or pull request.${mine ? ` Your issues go up to #${mine}.` : ''}`;
+  }
+  return mine ? `Suggested: one above #${mine}, the highest forge number your issues have.` : 'No issue has a forge number yet.';
 });
 
 let filled = false;

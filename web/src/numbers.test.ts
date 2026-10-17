@@ -40,9 +40,9 @@ test('the preview: what the issues on origin become, GitHub numbers below start 
   assert.equal(numbersPreview('CO2', 3052, [0, 2518, 3060], 0), 'Your 2 issues on origin will become CO2-3052 … CO2-3053; #2518 stays CO2-2518.');
   assert.equal(
     numbersPreview('CO2', 3052, [2518, 12, 0], 2),
-    'Your 1 issue on origin will become CO2-3052; #2518 stays CO2-2518, as 1 more keeps its GitHub number. 2 more, only here, get theirs when pushed.',
+    'Your 1 issue on origin will become CO2-3052; #2518 stays CO2-2518, as 1 more keeps its GitHub number. 2 issues only here get their number when pushed.',
   );
-  assert.equal(numbersPreview('CO2', 3052, [], 1), 'No issue on origin yet. 1 more, only here, gets its number when pushed.');
+  assert.equal(numbersPreview('CO2', 3052, [], 1), 'No issue on origin yet. 1 issue only here gets its number when pushed.');
   assert.equal(numbersPreview('CO2', 3052, [5], 0), 'No issue on origin needs a number; #5 stays CO2-5.');
 });
 

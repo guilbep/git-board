@@ -30,7 +30,7 @@ export const suggestStart = (highest: number, github = 0) => Math.max(highest, g
 // below a number an issue has on a forge, a later import collides
 export function startProblem(start: number, highest: number): string {
   if (!Number.isInteger(start) || start < 1) return 'A whole number, 1 or more.';
-  return start > highest ? '' : `Start above ${highest}: an issue has that number on a forge.`;
+  return start > highest ? '' : `Start above ${highest}: that number is taken on a forge.`;
 }
 
 const issues = (n: number) => `${n} issue${n === 1 ? '' : 's'}`;
@@ -49,7 +49,7 @@ export function numbersPreview(prefix: string, start: number, github: number[], 
     if (kept.length > 1) s += `, as ${kept.length - 1} more ${kept.length === 2 ? 'keeps its' : 'keep their'} GitHub number`;
   }
   s += '.';
-  if (unpushed) s += ` ${unpushed} more, only here, ${unpushed === 1 ? 'gets its number' : 'get theirs'} when pushed.`;
+  if (unpushed) s += ` ${issues(unpushed)} only here ${unpushed === 1 ? 'gets its' : 'get their'} number when pushed.`;
   return s;
 }
 
