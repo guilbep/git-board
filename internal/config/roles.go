@@ -41,6 +41,8 @@ func checkRoles(roles map[string]string, fields map[string]Field) error {
 			return fmt.Errorf("roles.%s: a role is a field name: lower-case letters, digits and -", role)
 		case strings.TrimSpace(who) == "" || strings.ContainsAny(who, " ,:"):
 			return fmt.Errorf("roles.%s: one login, not %q", role, who)
+		case strings.HasPrefix(who, "@"):
+			return fmt.Errorf("roles.%s: a login without @: %q", role, strings.TrimPrefix(who, "@"))
 		case t != "" && t != TypePerson:
 			return fmt.Errorf("roles.%s: fields.%s is a %s; a role is a person", role, role, t)
 		}

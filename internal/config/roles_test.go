@@ -33,6 +33,7 @@ func TestRoles(t *testing.T) {
 	for text, want := range map[string]string{
 		"[roles]\nPM = \"x\"\n":                                 "roles.PM",
 		"[roles]\npm = \"\"\n":                                  "roles.pm",
+		"[roles]\npm = \"@claire\"\n":                           "without @",
 		"[roles]\npm = \"a, b\"\n":                              "roles.pm",
 		"[fields.pm]\ntype = \"select\"\n[roles]\npm = \"x\"\n": "a person",
 	} {
