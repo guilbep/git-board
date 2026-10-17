@@ -64,14 +64,13 @@ Each ships on its own, in this order.
 
 The PM's blocker, and what branch names hang on.
 
-```toml
-[numbers]
-prefix = "CO2"
-```
+The prefix is in the counter itself (`prefix CO2`), so every clone reads
+the same one; `.git-board.toml` has no key for it.
 
 - **The counter** is `refs/board/seq` on one remote, `origin` (never a
-  mirror such as co2's GitLab copy). It holds one file, `numbers`: a first
-  line `start 3052`, then one line `N <git-bug id>` per numbered issue. The
+  mirror such as co2's GitLab copy). It holds one file, `numbers`:
+  `prefix CO2`, `start 3052`, then one line `N <git-bug id>` per numbered
+  issue. The
   next number is the highest of `start` and the last N + 1. To number an
   issue, git-board fetches the ref, appends a line in a new commit, pushes;
   a non-fast-forward rejection means someone else took the number,
@@ -86,12 +85,13 @@ prefix = "CO2"
   creation or import, from the CLI, the web UI or the TUI. Offline or on a
   failed push, the issue shows its short git-bug id and is numbered at the
   next sync.
-- **The switch**, `git board numbers init`: one commit holding only
-  `start`, one more than GitHub's highest number, PRs included. Pushing it is
-  the switch; until then nothing changes. For co2 that is its owner's call.
-- **One lookup, which knows the counters**: `Issue.Numbers()` /
-  `HasNumber()` (`internal/gitbugio/gitbugio.go`) return each number with
-  where it comes from (project, GitHub, GitLab), not a flat list. After the
+- **The switch**, `git board numbers init --prefix CO2 --start 3052`: one
+  commit holding only the prefix and `start`, one more than GitHub's highest
+  number, PRs included. Pushing it is the switch; until then nothing
+  changes. For co2 that is its owner's call.
+- **One lookup, which knows the counters** (`internal/gitbugio/gitbugio.go`):
+  `HasNumber` and `BareNumber` for a bare number, `HasForgeNumber` for a
+  forge's `#N`, in place of a flat `Numbers()` list. After the
   switch, a bare `3060` and `CO2-3060` mean the project number and `#3060`
   means GitHub's, so `fix/3060-…` links to one issue, not to both the
   issue that is CO2-3060 and the one that is GitHub #3060. Before the switch,
@@ -100,8 +100,8 @@ prefix = "CO2"
 - **Shown** before the title, `CO2-3075`, on cards, rows and the issue page.
 - **Forges**: `CO2-3075` in a body is plain text on every forge, so no
   translation is expected in the fork's `#n` translation (`refIndex`,
-  `bridge/core/syncpush.go`); to confirm with the main session, which
-  expected it to need an entry. At the switch, co2's owner should retire
+  `bridge/core/syncpush.go`), which only rewrites `#n`, a forge's own
+  reference syntax (confirmed with the main session). At the switch, co2's owner should retire
   `append-issue-number.yml`, or new titles become `… (CO2-3075) (#3071)`.
 
 Done when: two clones number issues at the same time against
