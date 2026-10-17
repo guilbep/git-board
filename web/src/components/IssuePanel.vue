@@ -142,7 +142,8 @@
 import { onLive } from '@/live';
 import { clampWidth, panelMode, panelWidth, togglePanelMode } from '@/panelsize';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, toRef, useId, watch } from 'vue';
-import type { Thread } from '@/api/board';
+import { markSeen, type Thread } from '@/api/board';
+import { inbox, loadInbox } from '@/inbox';
 import type { Fields } from '@/fields';
 import { useIssue } from '@/issue';
 import { me, on } from '@/me';
@@ -177,6 +178,9 @@ watch(
   () => thread.value?.id,
   (id) => {
     if (id && props.at) void nextTick(() => reveal(props.at!));
+    // an issue the inbox lists is read once opened, from the inbox, the
+    // board or a link; a failed write leaves it listed, which shows
+    if (id && inbox.value?.rows.some((r) => r.issue.id === id)) void markSeen([id]).then(loadInbox, () => {});
   },
 );
 const meId = computed(() => me.value?.me?.id ?? '');

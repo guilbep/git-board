@@ -88,6 +88,13 @@ watch(inboxCount, (n) => (document.title = n ? `(${n}) ${baseTitle}` : baseTitle
 // ponytail: every issues event reloads the inbox, debounced; the server
 // recomputes it each time (inbox.go says when to keep it instead)
 const reloadInbox = debounced(() => void loadInbox());
+// another identity (here, or in another tab: LiveNotice reloads me): another inbox
+watch(
+  () => me.value?.me?.id,
+  (id, was) => {
+    if (was && id !== was) void loadInbox();
+  },
+);
 let stopLive = () => {};
 
 // ⌘K (Ctrl+K) opens the palette, even from a field; ? the shortcuts,

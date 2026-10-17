@@ -1,7 +1,7 @@
 // Which git remotes the inbox checks on opening (a fetch: nothing local
-// changes), which offer Pull, and what a refused check says. Pure: the
-// page calls the server.
-import type { Remote } from './api/board';
+// changes), which offer Pull, what a refused check says, and which rows
+// stay read across a reload. Pure: the page calls the server.
+import type { InboxRow, Remote } from './api/board';
 
 // FRESH: a remote checked this recently isn't checked again on opening
 // the inbox (a reload); Refresh checks regardless.
@@ -21,4 +21,14 @@ export function toPull(remotes: Remote[]): { name: string; issues: number }[] {
 export function checkFailure(name: string, code: string, message: string): string {
   if (code === 'syncing') return `${name}: a forge sync is running: check again when it ends`;
   return `${name}: couldn't check: ${message}`;
+}
+
+// mergeRows: the rows after a reload, and which stay read (by the latest
+// they had when read). A row you read stays, dimmed, until Refresh, so the
+// list doesn't jump; one with something newer since is unread again.
+export function mergeRows(fresh: InboxRow[], shown: InboxRow[], read: Map<string, string>): { rows: InboxRow[]; read: Map<string, string> } {
+  const stillRead = new Map(read);
+  for (const f of fresh) if (stillRead.has(f.issue.id) && stillRead.get(f.issue.id) !== f.latest) stillRead.delete(f.issue.id);
+  const kept = shown.filter((r) => stillRead.has(r.issue.id) && !fresh.some((f) => f.issue.id === r.issue.id));
+  return { rows: [...fresh, ...kept].sort((a, b) => Date.parse(b.latest) - Date.parse(a.latest)), read: stillRead };
 }

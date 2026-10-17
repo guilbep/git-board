@@ -61,6 +61,7 @@
     <ul v-if="rows.length" class="gb-inbox-rows">
       <li v-for="r in rows" :key="r.issue.id" :class="{ 'gb-inbox-read': read.has(r.issue.id) }">
         <button type="button" class="gb-inbox-row" @click="open(r)">
+          <span class="visually-hidden">{{ read.has(r.issue.id) ? 'Read' : 'Unread' }}, {{ r.issue.status }}:</span>
           <span class="gb-inbox-dot" aria-hidden="true" />
           <GbIcon :name="r.issue.status === 'closed' ? 'closed' : 'open'" small />
           <span class="gb-inbox-main">
@@ -77,7 +78,7 @@
         </button>
       </li>
     </ul>
-    <div v-else-if="data && !error" class="gb-inbox-empty">
+    <div v-else-if="loaded && data && !error" class="gb-inbox-empty">
       <h2 class="h4">Nothing new for you</h2>
       <p class="gb-hint">{{ followingLine }}</p>
     </div>
@@ -123,9 +124,9 @@ import { ApiError, getFields, getRemotes, getViews, markSeen, remoteAction, setI
 import { namespaces } from '@/facets';
 import type { Fields } from '@/fields';
 import { inbox, inboxError, loadInbox } from '@/inbox';
-import { checkFailure, toCheck, toPull } from '@/inboxcheck';
+import { checkFailure, mergeRows, toCheck, toPull } from '@/inboxcheck';
 import { debounced, onLive } from '@/live';
-import { initials, when } from '@/me';
+import { initials, me, when } from '@/me';
 import { panelMode } from '@/panelsize';
 
 const route = useRoute();
@@ -136,7 +137,9 @@ const fields = ref<Fields>({});
 const data = computed(() => inbox.value);
 const error = computed(() => inboxError.value);
 const rows = ref<InboxRow[]>([]);
-const read = ref(new Set<string>());
+// read: the rows opened here, by the latest they had then (mergeRows)
+const read = ref(new Map<string, string>());
+const loaded = ref(false); // the first rows are in: before, no "Nothing new"
 const unread = computed(() => rows.value.filter((r) => !read.value.has(r.issue.id)).map((r) => r.issue.id));
 const names = computed(() => namespaces(rows.value.map((r) => r.issue), fields.value));
 const menuOpen = ref(false);
@@ -170,17 +173,25 @@ const followingLine = computed(() => {
 async function reload(dropRead: boolean) {
   await loadInbox();
   const fresh = inbox.value?.rows ?? [];
+  loaded.value = true;
   if (dropRead) {
-    read.value = new Set();
+    read.value = new Map();
     rows.value = fresh;
     return;
   }
-  const kept = rows.value.filter((r) => read.value.has(r.issue.id) && !fresh.some((f) => f.issue.id === r.issue.id));
-  rows.value = [...fresh, ...kept].sort((a, b) => Date.parse(b.latest) - Date.parse(a.latest));
+  const m = mergeRows(fresh, rows.value, read.value);
+  rows.value = m.rows;
+  read.value = m.read;
 }
 
-// refresh: check the remotes (all of them when force: Refresh), then the rows.
+// refresh: the rows, and the remotes checked beside them (all of them when
+// force: Refresh). A check changes nothing local: the rows don't wait for
+// a remote that's slow to answer.
 async function refresh(force: boolean) {
+  await Promise.all([check(force), reload(force)]);
+}
+
+async function check(force: boolean) {
   busy.value = true;
   try {
     remotes.value = (await getRemotes()).remotes;
@@ -201,7 +212,6 @@ async function refresh(force: boolean) {
   } finally {
     busy.value = false;
   }
-  await reload(force);
 }
 
 async function pull(name: string) {
@@ -217,19 +227,20 @@ async function pull(name: string) {
   await reload(false);
 }
 
-async function open(r: InboxRow) {
+// open: read here; the panel marks it seen once it loads (IssuePanel), as
+// it does for an issue opened anywhere else
+function open(r: InboxRow) {
+  read.value = new Map(read.value).set(r.issue.id, r.latest);
   setIssue(r.issue.id);
-  if (read.value.has(r.issue.id)) return;
-  read.value = new Set([...read.value, r.issue.id]);
-  await markSeen([r.issue.id]);
-  await loadInbox(); // the header's count: this tab's own write comes back skipped (live.ts)
 }
 
 async function markAll() {
   const ids = unread.value;
-  read.value = new Set([...read.value, ...ids]);
+  const m = new Map(read.value);
+  for (const r of rows.value) if (ids.includes(r.issue.id)) m.set(r.issue.id, r.latest);
+  read.value = m;
   await markSeen(ids);
-  await loadInbox();
+  await loadInbox(); // the header's count: this tab's own write comes back skipped (live.ts)
 }
 
 async function saveSettings(views: string[], f: boolean) {
@@ -268,6 +279,13 @@ watch(
 );
 
 const reloadSoon = debounced(() => void reload(false));
+// another identity: another inbox
+watch(
+  () => me.value?.me?.id,
+  (id, was) => {
+    if (was && id !== was) void reload(true);
+  },
+);
 let stopLive = () => {};
 onMounted(async () => {
   stopLive = onLive((e) => {
@@ -286,6 +304,7 @@ onBeforeUnmount(() => stopLive());
 
 <style scoped>
 .gb-inbox { max-width: 60rem; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .gb-inbox-bar { position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); padding: var(--space-2) 0; border-top: var(--border-w) solid var(--border); border-bottom: var(--border-w) solid var(--border); }
 .gb-inbox-status { display: flex; flex-direction: column; gap: var(--space-1); flex: 1 1 20rem; font-size: .875rem; color: var(--fg-muted); }
 .gb-inbox-status strong { color: var(--fg); }

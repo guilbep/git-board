@@ -139,7 +139,9 @@ distinct authors); the newest event's time (rows sort by it, newest first);
 the oldest of those events' ID (the panel scrolls there).
 
 **Clearing**: opening an issue marks every event it has now as seen,
-counted or not; Mark all read does it for every row.
+counted or not, wherever it's opened (the inbox, the board, a link: the
+issue panel does it for an issue the inbox lists); Mark all read does it
+for every row.
 
 ## 3. API
 
