@@ -1,6 +1,8 @@
 package gitbugio
 
 import (
+	"errors"
+	"fmt"
 	"net/url"
 	"slices"
 	"strings"
@@ -29,6 +31,27 @@ func (b *Backend) ForgeToken(host string) string {
 		}
 	}
 	return ""
+}
+
+// GitHubToken is the GitHub login of the identity git-board writes as,
+// and that login's token in git-bug's keyring: who opens and merges pull
+// requests from git-board, as the bridge posts that person's comments.
+// Never another login's token.
+func (b *Backend) GitHubToken() (login, token string, err error) {
+	login = b.myGitHubLogin()
+	if login == "" {
+		return "", "", errors.New("no GitHub login: choose who you are in git-board first")
+	}
+	creds, err := auth.List(b.c, auth.WithTarget("github"), auth.WithKind(auth.KindToken))
+	if err != nil {
+		return login, "", err
+	}
+	for _, c := range creds {
+		if l, _ := c.GetMetadata(auth.MetaKeyLogin); strings.EqualFold(l, login) {
+			return login, c.(*auth.Token).Value, nil
+		}
+	}
+	return login, "", fmt.Errorf("no GitHub token for %s", login)
 }
 
 // ForgeHosts returns the hosts git-bug holds a token for.

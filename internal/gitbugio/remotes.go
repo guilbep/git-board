@@ -131,6 +131,23 @@ func (b *Backend) Fetch(remote string) error {
 	return err
 }
 
+// githubURL is a remote on github.com: https://github.com/o/r(.git),
+// git@github.com:o/r.git, ssh://git@github.com/o/r(.git).
+var githubURL = regexp.MustCompile(`^(?:https://|ssh://(?:git@)?|git@)github\.com[:/]([\w.-]+/[\w.-]+?)(?:\.git)?/?$`)
+
+// GitHubRepo is "owner/name" of the remote when it is on github.com, ""
+// otherwise.
+func (b *Backend) GitHubRepo(remote string) string {
+	urls, err := b.repo.GetRemotes()
+	if err != nil {
+		return ""
+	}
+	if m := githubURL.FindStringSubmatch(NoCredentials(urls[remote])); m != nil {
+		return m[1]
+	}
+	return ""
+}
+
 // credentials are a URL's user and password: https://oauth2:<token>@host
 var credentials = regexp.MustCompile(`://[^/\s@]+@`)
 

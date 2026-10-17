@@ -334,14 +334,52 @@ func (b *Backend) MyLogin() string {
 			return l
 		}
 	}
+	return b.linkedLogin(me.Id().String(), "")
+}
+
+// myGitHubLogin is the GitHub login of the identity git-board writes as,
+// found the way the bridge maps an author to an account: its
+// github-login, else a GitHub bridge's sync link, else its own login.
+func (b *Backend) myGitHubLogin() string {
+	set, err := b.c.IsUserIdentitySet()
+	if err != nil || !set {
+		return ""
+	}
+	me, err := b.c.GetUserIdentity()
+	if err != nil {
+		return ""
+	}
+	if l := me.ImmutableMetadata()["github-login"]; l != "" {
+		return l
+	}
+	if l := b.linkedLogin(me.Id().String(), "github"); l != "" {
+		return l
+	}
+	return me.Login()
+}
+
+// linkedLogin is the login a sync bridge links an identity to
+// (git-bug.bridge.<name>.login-<identity>), by a bridge of the target, or
+// of any target when "".
+func (b *Backend) linkedLogin(identity, target string) string {
 	cfg, err := b.c.Config().Read()
 	if err != nil {
 		return ""
 	}
-	suffix := ".login-" + me.Id().String()
+	suffix := ".login-" + identity
 	for e := range cfg.All() {
-		if k := e.Key.String(); strings.HasPrefix(k, "git-bug.bridge.") && strings.HasSuffix(k, suffix) && e.Value != "" {
+		k := e.Key.String()
+		name, ok := strings.CutPrefix(strings.TrimSuffix(k, suffix), "git-bug.bridge.")
+		if !ok || !strings.HasSuffix(k, suffix) || e.Value == "" {
+			continue
+		}
+		if target == "" {
 			return e.Value
+		}
+		for _, t := range cfg.GetAll("git-bug.bridge." + name + ".target") {
+			if t.Value == target {
+				return e.Value
+			}
 		}
 	}
 	return ""
