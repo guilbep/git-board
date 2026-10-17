@@ -5,31 +5,9 @@ import (
 	"testing"
 
 	"github.com/git-bug/git-bug/bridge/core"
-	"github.com/git-bug/git-bug/bridge/core/synctest"
-	"github.com/git-bug/git-bug/cache"
 
 	"github.com/guilbep/git-board/internal/gitbugio/gitbugiotest"
 )
-
-// fakeForge is a bridge to git-bug's fake forge, synctest.Fake.
-type fakeForge struct{}
-
-var theForge *synctest.Fake
-
-func (fakeForge) Target() string                          { return "fakeforge" }
-func (fakeForge) LoginMetaKey() string                    { return "fake-login" }
-func (fakeForge) NewImporter() core.Importer              { return nil }
-func (fakeForge) NewExporter() core.Exporter              { return nil }
-func (fakeForge) ValidParams() map[string]interface{}     { return nil }
-func (fakeForge) ValidateConfig(core.Configuration) error { return nil }
-func (fakeForge) Configure(*cache.RepoCache, core.BridgeParams, bool) (core.Configuration, error) {
-	return nil, nil
-}
-func (fakeForge) NewRemote(context.Context, *cache.RepoCache, core.Configuration) (core.Remote, error) {
-	return theForge, nil
-}
-
-func init() { core.Register(&fakeForge{}) }
 
 func drain(t *testing.T, results <-chan core.SyncResult, err error) {
 	t.Helper()
@@ -47,13 +25,7 @@ func drain(t *testing.T, results <-chan core.SyncResult, err error) {
 // nothing.
 func TestGetAndSendAreOneWay(t *testing.T) {
 	b := gitbugiotest.New(t)
-	bot := core.Account{User: core.User{ID: "1", Login: "bot", Name: "Bot"}}
-	theForge = synctest.NewFake("forge.test/1", "forge.test", synctest.Quirks{}, bot)
-	for k, v := range map[string]string{core.ConfigKeyTarget: "fakeforge", core.ConfigKeyDefaultLogin: "bot", core.ConfigKeySync: "true"} {
-		if err := core.SetBridgeConfig(b.TestCache(), "fk", k, v); err != nil {
-			t.Fatal(err)
-		}
-	}
+	theForge := gitbugiotest.NewForge(t, b, "fk")
 	theForge.UserAct("alice").CreateIssue("from the forge", "body")
 	gitbugiotest.NewIssue(t, b, "from git-board")
 

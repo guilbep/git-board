@@ -7,9 +7,13 @@
 package gitbugiotest
 
 import (
+	"context"
 	"testing"
 	"time"
 
+	"github.com/git-bug/git-bug/bridge/core"
+	"github.com/git-bug/git-bug/bridge/core/synctest"
+	"github.com/git-bug/git-bug/cache"
 	"github.com/git-bug/git-bug/repository/repotest"
 	"github.com/guilbep/git-board/internal/gitbugio"
 )
@@ -93,4 +97,40 @@ func CloseIssue(t testing.TB, b *gitbugio.Backend, idPrefix string) {
 	if err := bug.Commit(); err != nil {
 		t.Fatalf("Commit: %v", err)
 	}
+}
+
+// fakeForge is a bridge to git-bug's in-memory forge, synctest.Fake: the
+// one of forges named by the bridge's project.
+type fakeForge struct{}
+
+var forges = map[string]*synctest.Fake{}
+
+func (fakeForge) Target() string                          { return "fakeforge" }
+func (fakeForge) LoginMetaKey() string                    { return "fake-login" }
+func (fakeForge) NewImporter() core.Importer              { return nil }
+func (fakeForge) NewExporter() core.Exporter              { return nil }
+func (fakeForge) ValidParams() map[string]interface{}     { return nil }
+func (fakeForge) ValidateConfig(core.Configuration) error { return nil }
+func (fakeForge) Configure(*cache.RepoCache, core.BridgeParams, bool) (core.Configuration, error) {
+	return nil, nil
+}
+func (fakeForge) NewRemote(_ context.Context, _ *cache.RepoCache, conf core.Configuration) (core.Remote, error) {
+	return forges[conf["project"]], nil
+}
+
+func init() { core.Register(&fakeForge{}) }
+
+// NewForge adds a sync bridge named name to a fake forge of its own, which
+// it returns: its people act on it with UserAct, the bot posts for git-bug.
+func NewForge(t testing.TB, b *gitbugio.Backend, name string) *synctest.Fake {
+	t.Helper()
+	bot := core.Account{User: core.User{ID: "1", Login: "bot", Name: "Bot"}}
+	f := synctest.NewFake(name+".test/1", name+".test", synctest.Quirks{}, bot)
+	forges[name] = f
+	for k, v := range map[string]string{core.ConfigKeyTarget: "fakeforge", "project": name, core.ConfigKeyDefaultLogin: "bot", core.ConfigKeySync: "true"} {
+		if err := core.SetBridgeConfig(b.TestCache(), name, k, v); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return f
 }

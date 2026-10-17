@@ -281,6 +281,36 @@ func (b *Backend) SyncIssue(ctx context.Context, dryRun bool, id string) (<-chan
 	return core.SyncIssue(ctx, b.c, id, nil, dryRun)
 }
 
+// LinkIssue makes an issue one with an issue already on a bridge's forge,
+// by its number ("12", "#12") or URL (git bug bridge link). Nothing is
+// written to the forge: the next sync sends what differs, unless
+// TakeIssue keeps the forge's version.
+func (b *Backend) LinkIssue(ctx context.Context, id, bridge, issue string) (core.Ref, error) {
+	if !core.BridgeExist(b.c, bridge) {
+		return core.Ref{}, ErrNoBridge
+	}
+	return core.Link(ctx, b.c, id, bridge, issue)
+}
+
+// UnlinkIssue stops syncing an issue with a bridge's forge, for good (git
+// bug bridge unlink). The forge issue stays as it is.
+func (b *Backend) UnlinkIssue(ctx context.Context, id, bridge string) error {
+	if !core.BridgeExist(b.c, bridge) {
+		return ErrNoBridge
+	}
+	return core.Unlink(ctx, b.c, id, bridge)
+}
+
+// TakeIssue replaces what an issue hasn't sent to a bridge's forge yet
+// with the forge's version (git bug bridge take); comments the forge
+// doesn't have stay. The channel must be drained: it holds the bridge lock.
+func (b *Backend) TakeIssue(ctx context.Context, id, bridge string) (<-chan core.SyncResult, error) {
+	if !core.BridgeExist(b.c, bridge) {
+		return nil, ErrNoBridge
+	}
+	return core.Take(ctx, b.c, id, bridge)
+}
+
 // MyLogin is the forge login of the identity git-board writes as: what
 // @me means (assignee:@me), since assignee labels hold forge logins. Its own
 // login, else the one a bridge tagged it with (github-login, gitlab-login,

@@ -41,6 +41,25 @@ Off, the forge is kept but stays out of it, until you switch it on again in the 
 
 **Remove**, in the Forges table, drops the forge's settings. The issues it brought stay, still linked to it, and so does the stored token, for the next forge (`git bug bridge auth rm <id>` deletes it).
 
+## One issue
+
+In an issue's panel, On the forges lists each forge it is on:
+
+- **Send now** sends its waiting changes, **Refresh from forges** gets the forges' own. Both check first, and ask before writing to a forge.
+- **Take the forge's version**: your changes not yet sent to that forge are replaced by its version, the title, description, comments' texts, status and labels it has now. Comments it doesn't have are kept, for the next sync to send. Nothing is written to the forge.
+- **Unlink**: the issue stops syncing with that forge. It's final: it can't be linked to that forge again. The forge issue stays as it is, and can be linked to another issue.
+
+For a forge it isn't on, **Link to an existing issue…** takes the forge issue's number or URL: an issue already there, copied by hand for example, is linked instead of created again. Nothing is written to the forge then; the next sync sends the title, description and status from here where they differ, and adds each side's comments and labels to the other. Take the forge's version right after to keep the forge's. Link refuses a forge issue linked to another issue, an issue that is or was on that forge, and the address of another project.
+
+The same on the command line, while git-board-server isn't running, `<id>` being the issue's git-bug id:
+
+```sh
+git bug bridge link <id> gl 12          # or the forge issue's URL
+git bug bridge take <id> gl
+git bug bridge unlink <id> gl
+git bug bridge sync --issue <id> --dry-run   # what Send now and Refresh would do
+```
+
 ## On the command line
 
 The same, while git-board-server isn't running (it holds the repository):

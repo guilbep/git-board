@@ -86,28 +86,50 @@
 
     <IssueBranches :id="id" :labels="labels" :title="title" />
 
-    <section v-if="forges?.length" class="gb-side-sec" aria-labelledby="side-forges">
+    <section v-if="forges?.length || forgeStatus?.bridges.length" class="gb-side-sec" aria-labelledby="side-forges">
       <h3 id="side-forges" class="gb-section-title">On the forges</h3>
-      <ul class="gb-plain-list">
-        <li v-for="f in forges" :key="f.url" class="gb-forgerow">
-          <a :href="f.url" target="_blank" rel="noopener noreferrer">{{ f.name }}{{ f.number ? ` #${f.number}` : '' }} <GbIcon name="external" small /></a>
-          <span class="gb-hint">{{ waitingFor(f.name) ? `${waitingFor(f.name)} change${waitingFor(f.name) === 1 ? '' : 's'} waiting` : 'in sync' }}</span>
-        </li>
-      </ul>
-      <template v-if="waiting.length">
-        <button type="button" class="gb-waiting-toggle" :aria-expanded="showWaiting" @click="showWaiting = !showWaiting">
-          <GbIcon :name="showWaiting ? 'up' : 'down'" small />
-          {{ showWaiting ? 'Hide' : 'See' }} the {{ waiting.length }} waiting change{{ waiting.length === 1 ? '' : 's' }}
-        </button>
-        <WaitingChanges v-if="showWaiting" :changes="waiting" :forges="forges" @reveal="(id) => emit('reveal', id)" />
+      <template v-if="forges?.length">
+        <ul class="gb-plain-list">
+          <li v-for="f in forges" :key="f.url" class="gb-forgerow">
+            <a :href="f.url" target="_blank" rel="noopener noreferrer">{{ f.name }}{{ f.number ? ` #${f.number}` : '' }} <GbIcon name="external" small /></a>
+            <span class="gb-hint">{{ f.gone ? (f.gone === 'unlinked' ? 'unlinked' : 'deleted there') : waitingFor(f.name) ? `${waitingFor(f.name)} change${waitingFor(f.name) === 1 ? '' : 's'} waiting` : 'in sync' }}</span>
+            <span v-if="f.bridge && !f.gone" class="gb-forge-acts">
+              <button type="button" class="gb-forge-act" :aria-label="`Take the forge's version: ${forgeOf(f)}`" :disabled="!!forgeBusy" @click="take(f)">Take the forge's version</button>
+              <button type="button" class="gb-forge-act" :aria-label="`Unlink from ${forgeOf(f)}`" :disabled="!!forgeBusy" @click="unlink(f)">Unlink</button>
+            </span>
+          </li>
+        </ul>
+        <template v-if="waiting.length">
+          <button type="button" class="gb-waiting-toggle" :aria-expanded="showWaiting" @click="showWaiting = !showWaiting">
+            <GbIcon :name="showWaiting ? 'up' : 'down'" small />
+            {{ showWaiting ? 'Hide' : 'See' }} the {{ waiting.length }} waiting change{{ waiting.length === 1 ? '' : 's' }}
+          </button>
+          <WaitingChanges v-if="showWaiting" :changes="waiting" :forges="forges" @reveal="(id) => emit('reveal', id)" />
+        </template>
+        <p class="gb-hint">Waiting changes go out at the next <router-link to="/sync#forges">sync with the forges</router-link>, or now:</p>
+        <IssueSync :id="id" :waiting="waiting.length" on-forges @synced="emit('changed')" />
       </template>
-      <p class="gb-hint">Waiting changes go out at the next <router-link to="/sync#forges">sync with the forges</router-link>, or now:</p>
-      <IssueSync :id="id" :waiting="waiting.length" on-forges @synced="emit('changed')" />
-    </section>
-    <section v-else-if="forgeStatus?.bridges.length" class="gb-side-sec" aria-labelledby="side-forges">
-      <h3 id="side-forges" class="gb-section-title">On the forges</h3>
-      <p class="gb-hint">Not on the forges yet. The next <router-link to="/sync#forges">sync with the forges</router-link> puts it there, or now:</p>
-      <IssueSync :id="id" :waiting="waiting.length" :on-forges="false" @synced="emit('changed')" />
+      <template v-else>
+        <p class="gb-hint">Not on the forges yet. The next <router-link to="/sync#forges">sync with the forges</router-link> puts it there, or now:</p>
+        <IssueSync :id="id" :waiting="waiting.length" :on-forges="false" @synced="emit('changed')" />
+      </template>
+      <template v-if="linkTo.length">
+        <p class="gb-hint">Already on {{ linkTo.map(forgeLabel).join(' or ') }}? Link it instead of creating a copy.</p>
+        <button v-if="!linking" type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm gb-linkbtn" :disabled="!!forgeBusy" @click="startLink">Link to an existing issue…</button>
+        <form v-else class="gb-linkform" @submit.prevent="link">
+          <select v-if="linkTo.length > 1" v-model="linkBridge" class="epfl-select" aria-label="Forge">
+            <option v-for="b in linkTo" :key="b.name" :value="b.name">{{ forgeLabel(b) }}</option>
+          </select>
+          <div class="gb-addrow">
+            <input ref="linkInput" v-model="linkDraft" autocomplete="off" data-1p-ignore data-lpignore="true" data-form-type="other" class="epfl-input" aria-label="The forge's issue number or URL" placeholder="#12, or its URL" :disabled="!!forgeBusy" />
+            <button type="submit" class="epfl-btn epfl-btn-primary epfl-btn-sm" :disabled="!!forgeBusy || !linkDraft.trim()">Link</button>
+            <button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" :disabled="!!forgeBusy" @click="linking = false">Cancel</button>
+          </div>
+        </form>
+      </template>
+      <p v-if="forgeBusy" class="gb-hint" role="status">{{ forgeBusy }}</p>
+      <p v-else-if="forgeNote" class="gb-hint" role="status">{{ forgeNote }}</p>
+      <p v-if="forgeError" class="gb-hint" role="alert"><b>Not done.</b> {{ forgeError }}</p>
     </section>
 
     <section v-if="participants?.length" class="gb-side-sec" aria-labelledby="side-people">
@@ -128,8 +150,9 @@ import IssueSync from '@/components/IssueSync.vue';
 import { forgeStatus } from '@/forges';
 import ValueMark from '@/components/ValueMark.vue';
 import { colorClass } from '@/colors';
-import { computed, reactive, ref, watch } from 'vue';
-import { getRefs, patchIssue, type Forge, type IssueEvent, type IssueRefs, type Person } from '@/api/board';
+import { computed, nextTick, reactive, ref, watch } from 'vue';
+import { getRefs, linkIssue, patchIssue, takeIssue, unlinkIssue, type Forge, type IssueEvent, type IssueRefs, type Person } from '@/api/board';
+import { forgeLabel, linkable, tallyWords } from '@/issuesync';
 import { displayName, fieldValues, formatValue, typeOf, type Fields } from '@/fields';
 import { message } from '@/issue';
 import { initials, me } from '@/me';
@@ -182,6 +205,72 @@ function dueNote(iso: string): string {
 
 const showWaiting = ref(false);
 const waiting = computed(() => waitingChanges(props.events));
+
+// one forge at a time (issuesync.go), nothing written to it: Take its
+// version, Unlink for good, Link to an issue already there
+const forgeBusy = ref('');
+const forgeNote = ref('');
+const forgeError = ref('');
+const linkTo = computed(() => linkable(forgeStatus.value?.bridges ?? [], props.forges ?? []));
+const linking = ref(false);
+const linkBridge = ref('');
+const linkDraft = ref('');
+const linkInput = ref<HTMLInputElement | null>(null);
+watch(() => props.id, () => {
+  forgeNote.value = forgeError.value = linkDraft.value = '';
+  linking.value = false;
+});
+
+async function forgeAction(doing: string, act: () => Promise<string>) {
+  forgeBusy.value = doing;
+  forgeNote.value = forgeError.value = '';
+  try {
+    forgeNote.value = await act();
+  } catch (e) {
+    forgeError.value = message(e);
+  } finally {
+    forgeBusy.value = '';
+    emit('changed'); // a Take with errors may have taken part of it
+  }
+}
+
+const forgeOf = (f: Forge) => `${f.name}${f.number ? ` #${f.number}` : ''}`;
+
+function take(f: Forge) {
+  if (!window.confirm(`Your changes not yet sent to ${f.name} are replaced by its version. Comments it doesn't have are kept.`)) return;
+  void forgeAction(`Taking ${f.name}'s version…`, async () => {
+    const res = await takeIssue(props.id, f.bridge!);
+    const t = res.bridges[f.bridge!];
+    if (res.errors) throw new Error(t ? [tallyWords(t, false), ...t.lines].join('. ') : `${res.errors} errors`);
+    return `${f.name}'s version taken: ${t ? tallyWords(t, false) : 'up to date'}.`;
+  });
+}
+
+function unlink(f: Forge) {
+  if (!window.confirm(`Unlink from ${forgeOf(f)}? It's final: this issue never syncs with ${f.name} again. The issue on ${f.name} stays as it is.`)) return;
+  void forgeAction(`Unlinking from ${f.name}…`, async () => {
+    await unlinkIssue(props.id, f.bridge!);
+    return `Unlinked from ${f.name}.`;
+  });
+}
+
+function startLink() {
+  linking.value = true;
+  linkBridge.value = linkTo.value[0]?.name ?? '';
+  forgeNote.value = forgeError.value = '';
+  void nextTick(() => linkInput.value?.focus());
+}
+
+function link() {
+  const b = linkTo.value.find((b) => b.name === linkBridge.value) ?? linkTo.value[0];
+  if (!b || !linkDraft.value.trim()) return;
+  void forgeAction(`Linking to ${forgeLabel(b)}…`, async () => {
+    const ref = await linkIssue(props.id, b.name, linkDraft.value.trim());
+    linking.value = false;
+    linkDraft.value = '';
+    return `Linked to ${forgeLabel(b)} #${ref.number}. The next sync sends what differs from here; to keep the forge's version, take it.`;
+  });
+}
 
 const busy = ref(false);
 const saving = computed(() => busy.value || props.saving);
@@ -266,7 +355,13 @@ function addLabel() {
 .gb-chip-x:hover { color: var(--fg); }
 .gb-addrow { display: flex; gap: .5rem; margin-top: .5rem; }
 .gb-addrow .epfl-input { flex: 1; min-width: 0; }
-.gb-forgerow { display: flex; justify-content: space-between; gap: .5rem; padding: .25rem 0; }
+.gb-forgerow { display: flex; flex-wrap: wrap; justify-content: space-between; gap: .25rem .5rem; padding: .25rem 0; }
+.gb-forge-acts { display: flex; flex-wrap: wrap; gap: .75rem; flex-basis: 100%; }
+.gb-forge-act { padding: 0; border: 0; background: none; font: inherit; font-size: .8125rem; color: var(--fg-muted); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.gb-forge-act:hover:not(:disabled) { color: var(--fg); }
+.gb-forge-act:disabled { cursor: default; }
+.gb-linkbtn { margin-top: .5rem; }
+.gb-linkform { display: grid; gap: .5rem; margin-top: .5rem; }
 .gb-forgerow a { display: inline-flex; align-items: center; gap: .25rem; font-weight: 700; color: var(--fg); }
 .gb-person { display: flex; align-items: baseline; gap: .5rem; padding: .25rem 0; }
 .gb-person .gb-avatar { align-self: center; }

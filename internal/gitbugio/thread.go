@@ -38,6 +38,11 @@ type Forge struct {
 	Name   string `json:"name"` // GitHub, GitLab, or the host
 	URL    string `json:"url"`
 	Number string `json:"number,omitempty"`
+	// Bridge, in a Thread, is the sync bridge whose project it is: what
+	// link, unlink and take name. "" when no sync bridge is for it.
+	Bridge string `json:"bridge,omitempty"`
+	// Gone: "unlinked", or "deleted" on the forge. Not synced anymore.
+	Gone string `json:"gone,omitempty"`
 }
 
 // Version is one text of an edited comment, oldest first.
@@ -99,6 +104,7 @@ func (b *Backend) Thread(idPrefix string) (Thread, error) {
 	createMeta := snap.Operations[0].AllMetadata()
 	_, remotes := forgesOf(createMeta)
 	on := onForges(snap, remotes)
+	b.forgeBridges(issue.Forges, createMeta)
 	th := Thread{
 		Issue:     issue,
 		Author:    person(snap.Author),
@@ -262,9 +268,9 @@ func event(snap *bugent.Snapshot, item bugent.TimelineItem, on forgeState) Event
 
 // forgesOf reads where an issue is from its create operation's metadata:
 // the sync engine's sync:<remote>:url (and :number), then the older
-// bridges' <kind>-url. remotes maps each sync remote's key prefix
-// ("sync:github.com/o/r:") to its forge's name, for the comments to say
-// which forges they haven't reached.
+// bridges' <kind>-url (not gitlab-base-url). remotes maps each sync
+// remote's key prefix ("sync:github.com/o/r:") to its forge's name, for the
+// comments to say which forges they haven't reached; not an unlinked one.
 func forgesOf(meta map[string]string) (forges []Forge, remotes map[string]string) {
 	remotes = map[string]string{}
 	seen := map[string]bool{}
@@ -287,17 +293,83 @@ func forgesOf(meta map[string]string) (forges []Forge, remotes map[string]string
 	for _, k := range keys {
 		if prefix, ok := strings.CutSuffix(k, ":url"); ok && strings.HasPrefix(k, "sync:") {
 			name := add(meta[k], meta[prefix+":number"])
-			if _, onForge := meta[prefix+":id"]; onForge {
+			if g := gone(meta[prefix+":gone"]); g != "" {
+				forges[len(forges)-1].Gone = g
+			} else if _, onForge := meta[prefix+":id"]; onForge {
 				remotes[prefix+":"] = name
 			}
 		}
 	}
 	for _, k := range keys {
-		if strings.HasSuffix(k, "-url") && !strings.Contains(k, ":") {
+		if strings.HasSuffix(k, "-url") && !strings.HasSuffix(k, "-base-url") && !strings.Contains(k, ":") {
 			add(meta[k], "")
 		}
 	}
 	return forges, remotes
+}
+
+// gone reads the engine's sync:<remote>:gone mark: Unlink's, or a push's
+// that found the issue deleted.
+func gone(mark string) string {
+	switch mark {
+	case "":
+		return ""
+	case "unlinked":
+		return "unlinked"
+	}
+	return "deleted"
+}
+
+// forgeBridges names the sync bridge of each forge an issue is on, as the
+// engine finds a bug's issue: by the sync keys of the bridge's project, or
+// the metadata an older bridge left (an issue it pulled).
+//
+// ponytail: mirrors Key and Legacy of bridge/{github,gitlab,gitea}/remote.go,
+// which need the forge's API; git-bug exporting them would replace this.
+func (b *Backend) forgeBridges(forges []Forge, meta map[string]string) {
+	bridges, err := b.SyncBridges()
+	if err != nil || len(forges) == 0 {
+		return
+	}
+	cfg, err := b.c.Config().Read()
+	if err != nil {
+		return
+	}
+	for _, br := range bridges {
+		get := func(k string) string { return cfg.Value("git-bug.bridge."+br.Name+"."+k, "") }
+		host := ""
+		if u, err := url.Parse(get("base-url")); err == nil {
+			host = u.Host
+		}
+		var key, legacy string
+		switch project := strings.ToLower(get("owner") + "/" + get("project")); br.Target {
+		case "github":
+			key = "github.com/" + project
+			if _, ok := meta["github-id"]; ok && strings.HasPrefix(strings.ToLower(meta["github-url"]), "https://github.com/"+project+"/issues/") {
+				legacy = meta["github-url"]
+			}
+		case "gitlab":
+			key = host + "/" + get("project-id")
+			base := strings.TrimSuffix(meta["gitlab-base-url"], "/")
+			if _, ok := meta["gitlab-id"]; ok && meta["gitlab-project-id"] == get("project-id") && (base == "" || base == strings.TrimSuffix(get("base-url"), "/")) {
+				legacy = meta["gitlab-url"]
+			}
+		case "gitea":
+			key = host + "/" + project
+		}
+		u := meta["sync:"+key+":url"]
+		if u == "" {
+			u = legacy
+		}
+		for i := range forges {
+			if u != "" && forges[i].URL == u {
+				forges[i].Bridge = br.Name
+				if g := gone(meta["sync:"+key+":gone"]); g != "" {
+					forges[i].Gone = g
+				}
+			}
+		}
+	}
 }
 
 func forgeName(u string) string {
