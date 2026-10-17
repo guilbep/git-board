@@ -1,6 +1,7 @@
 <!-- Where your issues go: the three channels (settingstabs.ts), one line
-     each, what it moves and its verbs, the current one marked; each leads
-     to its tab, or where `to` says (the Sync page's parts). -->
+     each, what it moves and its verbs, the current one marked (none on
+     the Sync page); each leads to its tab, or where `to` says (the Sync
+     page's parts, #/sync#forges). -->
 <template>
   <ol class="cm" aria-label="Where your issues go">
     <li v-for="(c, i) in channels" :key="c.id" :class="[`cm-${c.id}`, { 'cm-here': c.id === current }]">
@@ -15,7 +16,7 @@
 <script setup lang="ts">
 import { channels, type Channel } from '@/settingstabs';
 
-withDefaults(defineProps<{ current: Channel; to?: (c: Channel) => string }>(), {
+withDefaults(defineProps<{ current?: Channel; to?: (c: Channel) => string }>(), {
   to: (c: Channel) => `/settings/${c}`,
 });
 </script>

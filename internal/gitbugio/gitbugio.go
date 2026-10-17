@@ -14,6 +14,7 @@ import (
 	"github.com/git-bug/git-bug/cache"
 	bugent "github.com/git-bug/git-bug/entities/bug"
 	"github.com/git-bug/git-bug/entities/common"
+	"github.com/git-bug/git-bug/entity"
 	"github.com/git-bug/git-bug/entity/dag"
 	"github.com/git-bug/git-bug/query"
 	"github.com/git-bug/git-bug/repository"
@@ -97,11 +98,23 @@ func (b *Backend) Close() error {
 
 // Pull fetches remote and merges its refs/bugs/* (and identities) into the
 // local cache — equivalent to `git bug pull <remote>`, but via the library
-// (cache.RepoCache.Pull, which is itself Fetch+MergeAll) rather than
-// shelling out, consistent with how git-board reads/writes labels
-// in-process everywhere else.
+// (Fetch, then MergeAll) rather than shelling out, consistent with how
+// git-board reads/writes labels in-process everywhere else.
 func (b *Backend) Pull(remote string) error {
-	return b.c.Pull(remote)
+	if _, err := b.c.Fetch(remote); err != nil {
+		return err
+	}
+	// to the end, as git bug pull does: cache.RepoCache.Pull stops at the
+	// first error, leaving the merging goroutine blocked
+	var err error
+	for m := range b.c.MergeAll(remote) {
+		if err == nil && m.Err != nil {
+			err = m.Err
+		} else if err == nil && m.Status == entity.MergeStatusInvalid {
+			err = fmt.Errorf("merge failure: %s", m.Reason)
+		}
+	}
+	return err
 }
 
 // Push pushes local refs/bugs/* (and identities) to remote — equivalent

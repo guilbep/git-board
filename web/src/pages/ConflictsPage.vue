@@ -88,6 +88,7 @@ import { computed, onMounted, ref } from 'vue';
 import { applySync, checkSync, getViews, resolveConflict, type Conflict, type SyncStatus } from '@/api/board';
 import { displayName } from '@/fields';
 import { loadSyncStatus, syncStatus as status } from '@/sync';
+import { pendingWords, plural } from '@/ways';
 import AppHeader from '@/components/AppHeader.vue';
 
 const viewNames = ref<string[]>([]);
@@ -101,17 +102,7 @@ const heading = computed(() => {
   return n ? `${plural(n, 'conflict')}, nothing overwritten` : 'No conflicts';
 });
 
-// "update the labels of 2 issues and write 1 Project field", leaving out what's zero.
-const pending = computed(() => {
-  const parts = [];
-  if (last.value?.label_changes) parts.push(`update the labels of ${plural(last.value.label_changes, 'issue')}`);
-  if (last.value?.project_writes) parts.push(`write ${plural(last.value.project_writes, 'Project field')}`);
-  return parts.join(' and ');
-});
-
-function plural(n: number, word: string): string {
-  return `${n} ${word}${n === 1 ? '' : 's'}`;
-}
+const pending = computed(() => (last.value ? pendingWords(last.value) : ''));
 
 function show(field: string, value: string): string {
   if (!value) return 'not set';

@@ -550,13 +550,27 @@ and the check the forge makes before anything is kept;
 `#/settings/forges?add=1` opens it) and the **GitHub Project**. "How
 forges work" shows [docs/forges.md](docs/forges.md).
 
-**Sync with forges** (`#/sync`, the header's Sync button) runs git-bug's forge sync — the
-fork's `git bug bridge sync` — in the server, which holds the repository
-(so the command can't run beside it): always a dry run first with its
-counts per forge both ways, then a run you confirm (an explicit "I
-understand" when it creates 50 issues or more on a forge), then
-optionally push the git-bug data to `origin` so other clones know the
-links. While it runs, edits wait and are saved after it.
+**Where your issues go** (`#/sync`, the header's Sync button) is three
+ways, side by side, each with its own buttons:
+
+1. **Remotes** (git): issues and people go with git, to any remote. Per
+   remote, how many issues and people a push would send and a pull would
+   receive, as of the last fetch; **Check** fetches and compares
+   (nothing local changes), **Pull** and **Push** are `git bug pull` and
+   `git bug push`. Code still goes with `git push`.
+2. **Forges** (their API): git-bug's forge sync — the fork's `git bug
+   bridge sync` — in the server, which holds the repository (so the
+   command can't run beside it). **Check** is a dry run with its counts
+   per forge both ways; then **Get** brings the forges' changes in only
+   (`git bug bridge pull`), **Send** sends yours only (`git bug bridge
+   push`), **Sync** does both. Each is confirmed with the check's counts
+   (an explicit "I understand" when it creates 50 issues or more on a
+   forge). Send waits when the check found issues on a forge by their
+   git-bug marker: only a pull links them, a send alone would create them
+   again. While a run goes on, edits wait and are saved after it.
+3. **GitHub Project** (fields): its write mode, the last check's
+   conflicts, **Check**, and **Pull fields** (**Sync fields** with
+   `write = true`), as on the Conflicts page below.
 
 One issue syncs on its own from its panel ("On the forges"): **Send now**
 when it has changes waiting, **Refresh from forges** otherwise — the

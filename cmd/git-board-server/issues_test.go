@@ -137,8 +137,8 @@ func TestMeAndIdentities(t *testing.T) {
 
 // fakeSync answers a forge sync with given results, holding the run until
 // release is closed.
-func fakeSync(results []core.SyncResult, release chan struct{}) func(context.Context, bool, []string) (<-chan core.SyncResult, error) {
-	return func(_ context.Context, dryRun bool, _ []string) (<-chan core.SyncResult, error) {
+func fakeSync(results []core.SyncResult, release chan struct{}) func(context.Context, string, bool, []string) (<-chan core.SyncResult, error) {
+	return func(context.Context, string, bool, []string) (<-chan core.SyncResult, error) {
 		out := make(chan core.SyncResult)
 		go func() {
 			defer close(out)
@@ -225,6 +225,56 @@ func TestForgeSyncRunsADryRunFirst(t *testing.T) {
 	}
 	if code := call(t, "POST", ts.URL+"/api/forges/sync", map[string]any{"dry_run": false}, nil); code != http.StatusConflict {
 		t.Errorf("a real run after a dry run with errors: %d, want 409", code)
+	}
+}
+
+// Get and Send are one way of a sync, each after a clean dry run. Send
+// alone would create again the issues the dry run found on a forge by
+// their git-bug marker: those wait for a Get or a Sync.
+func TestForgeGetAndSend(t *testing.T) {
+	ts, s := newIssueServer(t)
+	done := make(chan struct{})
+	close(done)
+	ran := make(chan string, 10) // the mode each run was given
+	runs := func(results ...core.SyncResult) {
+		s.runSync = func(ctx context.Context, mode string, dryRun bool, names []string) (<-chan core.SyncResult, error) {
+			ran <- mode
+			return fakeSync(results, done)(ctx, mode, dryRun, names)
+		}
+	}
+	start := func(body map[string]any) (int, string) {
+		t.Helper()
+		code := call(t, "POST", ts.URL+"/api/forges/sync", body, nil)
+		if code != http.StatusAccepted {
+			return code, ""
+		}
+		mode := <-ran
+		if st := waitJob(t, ts); st.Job.Mode != mode {
+			t.Errorf("job %+v, run as %s", st.Job, mode)
+		}
+		return code, mode
+	}
+
+	runs(core.SyncResult{Bridge: "gh", Export: &core.ExportResult{Event: core.ExportEventNothing, Reason: "would sync with https://github.com/o/r/issues/9, found by its git-bug marker"}})
+	if code, _ := start(map[string]any{"mode": "send"}); code != http.StatusConflict {
+		t.Errorf("a send before a dry run: %d, want 409", code)
+	}
+	if code, _ := start(map[string]any{"mode": "push"}); code != http.StatusBadRequest {
+		t.Errorf("an unknown mode: %d, want 400", code)
+	}
+	if _, mode := start(map[string]any{"dry_run": true, "mode": "get"}); mode != "sync" {
+		t.Errorf("a dry run ran as %q, want both ways", mode)
+	}
+	if code, _ := start(map[string]any{"mode": "send"}); code != http.StatusConflict {
+		t.Errorf("a send after a dry run found an issue by its marker: %d, want 409", code)
+	}
+	runs()
+	if code, mode := start(map[string]any{"mode": "get"}); code != http.StatusAccepted || mode != "get" {
+		t.Errorf("a get: %d %s", code, mode)
+	}
+	start(map[string]any{"dry_run": true})
+	if code, mode := start(map[string]any{"mode": "send"}); code != http.StatusAccepted || mode != "send" {
+		t.Errorf("a send after a clean dry run: %d %s", code, mode)
 	}
 }
 

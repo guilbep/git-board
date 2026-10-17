@@ -32,8 +32,8 @@
       <button type="button" class="gb-jump" title="Jump to an issue or a command (⌘K)" aria-keyshortcuts="Meta+K Control+K" @click="paletteOpen = true">
         <GbIcon name="search" small /><span class="gb-jump-label">Jump to…</span><kbd>{{ mod }}K</kbd>
       </button>
-      <!-- shown once a bridge has sync enabled; live while a run goes on -->
-      <router-link v-if="forgeStatus?.bridges.length" to="/sync" class="gb-synclink" :class="{ 'gb-synclink-run': running }" :title="syncTitle">
+      <!-- where your issues go: remotes, forges, the Project; live while a forge run goes on -->
+      <router-link to="/sync" class="gb-synclink" :class="{ 'gb-synclink-run': running }" title="Where your issues go: remotes, forges, the GitHub Project">
         <GbIcon name="sync" small />
         <span>{{ running ? 'Syncing…' : 'Sync' }}</span>
         <span v-if="lastRun" class="gb-hint">{{ lastRun }}</span>
@@ -70,15 +70,10 @@ defineProps<{ views: string[]; active: string }>();
 
 const conflicts = computed(() => syncStatus.value?.last?.conflicts.length ?? 0);
 const running = computed(() => forgeStatus.value?.job?.state === 'running');
-// the button says Sync; its tooltip, with what: "Sync with gh (GitHub), gl (GitLab)"
-const forgeNames: Record<string, string> = { github: 'GitHub', gitlab: 'GitLab', gitea: 'Gitea' };
-const syncTitle = computed(
-  () => `Sync with ${(forgeStatus.value?.bridges ?? []).map((b) => `${b.name} (${forgeNames[b.target] ?? b.target})`).join(', ')}`,
-);
 const lastRun = computed(() => {
   const j = forgeStatus.value?.job;
   if (!j || running.value) return '';
-  return `${j.dry_run ? 'dry run' : 'last run'} ${when(j.ended ?? j.started)}`;
+  return `${j.dry_run ? 'checked' : 'last run'} ${when(j.ended ?? j.started)}`;
 });
 
 const mod = /Mac/.test(navigator.platform) ? '⌘' : 'Ctrl+';
