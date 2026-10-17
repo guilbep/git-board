@@ -521,7 +521,7 @@ for up to a year.
 Images (not SVG), PDF, video, text, CSV, zip and office files, 25 MB at
 most.
 
-**Dark mode**: Settings → Appearance, System (as the computer is set),
+**Dark mode**: Settings → You → Appearance, System (as the computer is set),
 Light or Dark; `web/src/css/dark.css` re-values the design system's
 decision tokens.
 
@@ -539,18 +539,20 @@ API. The board reloads (keeping its scroll), an open issue too — unless
 you are writing in it, then it offers the reload and keeps your text.
 
 **Settings** (`#/settings`, the gear in the header), in tabs, each with
-its address (`#/settings/forges`…): **General**, who you write as and the
-appearance; **Project file**, `.git-board.toml` itself: colored, checked
+its address (`#/settings/forges`…): first the **Overview**, what git-board
+is and a card per part saying where it stands; then where your issues go,
+**Remotes**, **Forges** and the **GitHub Project** (below); then this
+board: **Project file**, `.git-board.toml` itself: colored, checked
 as you type (the line where it breaks, keys git-board doesn't know),
 "+ View", "+ Sprint" (follows the last one) and "+ Field" to start from,
 a diff to review, and saved without a restart, beside its reference (a
 save is refused when the file changed on disk since the page read it);
-**Attachments**; then where your issues go: **Remotes**, **Forges** (the
-bridges: sync on or off, remove one, its issues staying, and **+ Add a
-forge**, in four steps, the forge, the project, a stored or pasted token,
-and the check the forge makes before anything is kept;
-`#/settings/forges?add=1` opens it) and the **GitHub Project**. "How
-forges work" shows [docs/forges.md](docs/forges.md).
+**Attachments**, and **You**, who you write as and the appearance.
+**Forges** lists the bridges: sync on or off, remove one (its issues
+stay), and **+ Add a forge**, in four steps: the forge, the project, a
+stored or pasted token, and the check the forge makes before anything is
+kept (`#/settings/forges?add=1` opens it). "How forges work" shows
+[docs/forges.md](docs/forges.md).
 
 **Where your issues go** (`#/sync`, the header's Sync button) is three
 ways, side by side, each with its own buttons:

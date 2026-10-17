@@ -1,27 +1,51 @@
 <!-- Settings, in tabs with their address (#/settings/<tab>, settingstabs.ts):
-     General (who you write as, the appearance), the project file
-     (.git-board.toml), attachments, then where your issues go: remotes,
-     forges (git-bug bridges: add one, sync on or off, remove one) and the
-     GitHub Project. #/settings/forges?add=1 opens "Add a forge". -->
+     the Overview (what git-board is, and where each part stands), where
+     your issues go (remotes, forges: git-bug bridges, add one, sync on or
+     off, remove one; the GitHub Project), then this board: the project
+     file (.git-board.toml), attachments, and You (who you write as, the
+     appearance). #/settings/forges?add=1 opens "Add a forge". -->
 <template>
   <AppHeader :views="viewNames" active="" />
   <div class="gb-page set">
     <nav class="set-nav" aria-label="Settings">
       <h1 class="h3 set-title">Settings</h1>
-      <router-link v-for="t in settingsTabs.slice(0, 3)" :key="t.id" :to="`/settings/${t.id}`" class="set-tab" :aria-current="tab === t.id ? 'page' : undefined">{{ t.label }}</router-link>
+      <router-link to="/settings/overview" class="set-tab" :aria-current="tab === 'overview' ? 'page' : undefined">Overview</router-link>
       <div class="set-group">Where your issues go</div>
       <router-link v-for="(c, i) in channels" :key="c.id" :to="`/settings/${c.id}`" class="set-tab" :aria-current="tab === c.id ? 'page' : undefined">
         <span class="set-n">{{ i + 1 }}</span> {{ c.label }} <span class="set-via">{{ c.via }}</span>
       </router-link>
+      <div class="set-group">This board</div>
+      <router-link v-for="t in boardTabs" :key="t.id" :to="`/settings/${t.id}`" class="set-tab" :aria-current="tab === t.id ? 'page' : undefined">{{ t.label }}</router-link>
     </nav>
 
     <main class="set-main">
       <p v-if="error" class="epfl-alert epfl-alert-danger" role="alert">{{ error }}</p>
 
-      <div v-if="tab === 'general'" class="set-panel">
-        <h2 class="h4">General</h2>
+      <div v-if="tab === 'overview'" class="set-panel">
+        <div class="set-about">
+          <h2 class="h4">git-board</h2>
+          <p>
+            A board for this repository's issues, as a GitHub Project is: views, a kanban, sprints, insights.
+            The issues themselves are <a href="https://github.com/git-bug/git-bug" target="_blank" rel="noopener noreferrer">git-bug</a> data,
+            kept in the repository: they travel with git like your code, work offline, and need no database.
+          </p>
+          <p class="set-lead">GitHub, GitLab and the GitHub Project are mirrors, for the people who work there. Each part below says where it stands.</p>
+        </div>
+        <ul class="set-cards">
+          <li v-for="c in cards" :key="c.id" :class="`set-card-${c.id}`">
+            <router-link :to="`/settings/${c.id}`">
+              <span class="set-card-title">{{ c.title }}</span>
+              <span class="set-card-what">{{ c.what }}</span>
+              <b class="set-card-state">{{ c.state }}</b>
+            </router-link>
+          </li>
+        </ul>
+      </div>
+
+      <div v-if="tab === 'you'" class="set-panel">
+        <h2 class="h4">You</h2>
         <section aria-labelledby="set-me">
-          <h3 id="set-me" class="h5">You</h3>
+          <h3 id="set-me" class="h5">Who you write as</h3>
           <p v-if="me?.me && !choosing">
             You write as <b>{{ me.me.name }}</b><span v-if="me.me.login && !me.me.name.includes(me.me.login)" class="set-login"> ({{ me.me.login }})</span>.
             <button type="button" class="gb-linkbtn" @click="choosing = true">Change</button>
@@ -145,11 +169,11 @@ import { themePref } from '@/theme';
 import { onLive } from '@/live';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { getSettings, getViews, removeBridge, setBridgeSync, type Bridge, type Settings } from '@/api/board';
+import { getRemotes, getSettings, getViews, removeBridge, setBridgeSync, type Bridge, type Remote, type Settings } from '@/api/board';
 import { loadForges } from '@/forges';
 import { message } from '@/issue';
 import { loadMe, me } from '@/me';
-import { channels, settingsTab, settingsTabs } from '@/settingstabs';
+import { channels, forgeSummary, remoteSummary, settingsTab, settingsTabs } from '@/settingstabs';
 import AppHeader from '@/components/AppHeader.vue';
 import IdentityChooser from '@/components/IdentityChooser.vue';
 import ConfigEditor from '@/components/ConfigEditor.vue';
@@ -167,8 +191,33 @@ const adding = computed({
   set: (on) => void router.replace({ path: '/settings/forges', query: on ? { add: '1' } : {} }),
 });
 const guideOpen = ref(false);
+const boardTabs = settingsTabs.filter((t) => ['project-file', 'attachments', 'you'].includes(t.id));
 
 const settings = ref<Settings | null>(null);
+const remotes = ref<Remote[] | null>(null);
+
+// the Overview: a card per tab, what it's for and where it stands
+const cards = computed(() => {
+  const s = settings.value;
+  const gp = s?.github_project;
+  const state: Record<string, string> = {
+    remotes: remotes.value ? remoteSummary(remotes.value) : '…',
+    forges: s ? forgeSummary(s.bridges) : '…',
+    'github-project': !s ? '…' : gp?.number ? `${gp.owner} #${gp.number}, ${gp.write ? 'read and written' : 'read only'}.` : 'None.',
+    'project-file': `${viewNames.value.length} saved view${viewNames.value.length === 1 ? '' : 's'}.`,
+    attachments: !s ? '…' : s.uploads.enabled ? `On, served at ${s.uploads.public_url}.` : 'Off.',
+    you: me.value?.me ? `You write as ${me.value.me.name}.` : 'Not chosen yet: pick who you write as.',
+  };
+  const what: Record<string, string> = {
+    'project-file': 'Fields, views, sprints, colors, branch names: .git-board.toml.',
+    attachments: 'Files attached to comments, on S3 behind a CDN.',
+    you: 'Who you write as, and the appearance.',
+  };
+  return [
+    ...channels.map((c, i) => ({ id: c.id, title: `${i + 1} · ${c.label} · ${c.via}`, what: `${c.moves} ${c.verbs}`, state: state[c.id] ?? '' })),
+    ...boardTabs.map((t) => ({ id: t.id, title: t.label, what: what[t.id] ?? '', state: state[t.id] ?? '' })),
+  ];
+});
 const themeOptions = [
   { value: 'system', label: 'System', hint: 'as the computer is set' },
   { value: 'light', label: 'Light', hint: 'always' },
@@ -240,6 +289,7 @@ async function reload() {
 onMounted(() => {
   if (!me.value) void loadMe();
   void reload();
+  getRemotes().then((r) => (remotes.value = r.remotes)).catch(() => (remotes.value = []));
 });
 const offLive = onLive((e) => (e.kind === 'settings' || e.kind === 'config') && void reload());
 onBeforeUnmount(offLive);
@@ -265,6 +315,18 @@ onBeforeUnmount(offLive);
 .set-lead { max-width: 40rem; color: var(--fg-muted); }
 .set-head h2 { margin-bottom: .375rem; }
 .set-actions { display: flex; flex-wrap: wrap; gap: .75rem; }
+.set-about { display: grid; gap: .625rem; max-width: 46rem; }
+.set-about p { font-size: 1.0625rem; }
+.set-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(17rem, 100%), 1fr)); gap: .75rem; margin: 0; padding: 0; list-style: none; }
+.set-cards li { border: 1px solid var(--border); border-top: 4px solid var(--card-top, var(--border)); }
+.set-card-remotes { --card-top: var(--bg-dark); }
+.set-card-forges { --card-top: var(--primary); }
+.set-card-github-project { --card-top: var(--gb-purple-dot); }
+.set-cards a { display: grid; gap: .25rem; height: 100%; box-sizing: border-box; padding: .875rem 1rem; color: var(--fg); text-decoration: none; }
+.set-cards a:hover { background: var(--bg-subtle); }
+.set-card-title { font-weight: 700; }
+.set-card-what { font-size: .875rem; color: var(--fg-muted); }
+.set-card-state { margin-top: .25rem; font-size: .9375rem; overflow-wrap: anywhere; }
 .set-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap: .75rem; max-width: 45rem; }
 .gb-linkbtn { justify-self: start; padding: 0; border: 0; background: none; color: var(--fg); text-decoration: underline; cursor: pointer; font: inherit; }
 .set-login { color: var(--fg-muted); }
