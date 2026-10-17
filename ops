@@ -1,1 +1,1 @@
-{"author":{"id":"f943aa1c5ee078b881a8e97535a4e2ccb401d01ca00f4128126befa9cca58a32"},"ops":[{"type":8,"timestamp":1792268728,"nonce":"F/8Ioca9duSuysmhchk0skff8zc=","target":"e3937d00af91849a5adef38255ee9e80552947dfb9a04fb1d72b18daca646044","new_metadata":{"sync:github.com/guilbep/git-board:labels":"assignee:guilbep\nfeat\nstatus:draft","sync:github.com/guilbep/git-board:pushed":"1792268727"}}]}
+{"author":{"id":"f943aa1c5ee078b881a8e97535a4e2ccb401d01ca00f4128126befa9cca58a32"},"ops":[{"type":4,"timestamp":1792268749,"nonce":"ohc/y/Ii1FchwO9wG3094aX8Uog=","status":2}]}
