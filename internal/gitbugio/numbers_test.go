@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -186,9 +187,78 @@ func TestInitNumbersOnce(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, clone := range []*gitbugio.Backend{mine, theirs} {
-		if err := clone.InitNumbers("origin", "XY", 1); err == nil || !strings.Contains(err.Error(), "CO2, from 3052") {
+		if err := clone.InitNumbers("origin", "XY", 1); !errors.Is(err, gitbugio.ErrNumbered) || !strings.Contains(err.Error(), "CO2, from 3052") {
 			t.Errorf("second init: %v", err)
 		}
+	}
+}
+
+// Two clones start the numbers at the very same time: one does, the other
+// is told the project numbers its issues already, and takes that counter.
+func TestInitNumbersRace(t *testing.T) {
+	mine, theirs := gitbugiotest.NewPair(t)
+	var wg sync.WaitGroup
+	errs := make([]error, 2)
+	for i, clone := range []*gitbugio.Backend{mine, theirs} {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			errs[i] = clone.InitNumbers("origin", fmt.Sprintf("P%d", i), 1)
+		}()
+	}
+	wg.Wait()
+	won := 0
+	for _, err := range errs {
+		switch {
+		case err == nil:
+			won++
+		case !errors.Is(err, gitbugio.ErrNumbered):
+			t.Errorf("the loser: %v, want ErrNumbered", err)
+		}
+	}
+	if won != 1 {
+		t.Fatalf("%d started the numbers, want 1: %v", won, errs)
+	}
+	a, _, _ := mine.Counter()
+	b, _, _ := theirs.Counter()
+	if a.Prefix == "" || a.Prefix != b.Prefix {
+		t.Errorf("the clones disagree: %q and %q", a.Prefix, b.Prefix)
+	}
+}
+
+// Numbering says how the issues stand: before the switch, every issue on
+// origin by its GitHub number, for a preview; after, how many have a
+// number, how many origin has without one, how many wait for their push.
+func TestNumbering(t *testing.T) {
+	mine, _ := gitbugiotest.NewPair(t)
+	gitbugiotest.NewImportedIssue(t, mine, "Old", "https://github.com/o/r/issues/2518")
+	gitbugiotest.NewImportedIssue(t, mine, "Late", "https://github.com/o/r/issues/3060")
+	gitbugiotest.NewIssue(t, mine, "Made here, pushed")
+	pushed(t, mine)
+	gitbugiotest.NewIssue(t, mine, "Made here, only here")
+
+	before, err := mine.Numbering("origin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := fmt.Sprint(slices.Sorted(slices.Values(before.GitHub))); got != "[0 2518 3060]" {
+		t.Errorf("before: GitHub numbers on origin %s, want [0 2518 3060]", got)
+	}
+	if before.Numbered != 0 || before.Waiting != 3 || before.Unpushed != 1 || before.Highest != 3060 {
+		t.Errorf("before: %+v", before)
+	}
+
+	if err := mine.InitNumbers("origin", "CO2", 3052); err != nil {
+		t.Fatal(err)
+	}
+	if n, _ := mine.Numbering("origin"); n.Numbered != 1 || n.Waiting != 2 || n.Unpushed != 1 {
+		t.Errorf("started: %+v, want #2518 numbered, 2 waiting, 1 to push", n)
+	}
+	if _, err := mine.NumberIssues("origin"); err != nil {
+		t.Fatal(err)
+	}
+	if n, _ := mine.Numbering("origin"); n.Numbered != 3 || n.Waiting != 0 || n.Unpushed != 1 {
+		t.Errorf("numbered: %+v, want 3 numbered, 1 to push", n)
 	}
 }
 

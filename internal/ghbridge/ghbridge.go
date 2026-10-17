@@ -28,6 +28,7 @@ package ghbridge
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"maps"
@@ -94,6 +95,20 @@ func FetchItems(owner string, number, limit int) ([]Item, error) {
 		return nil, fmt.Errorf("gh project item-list --owner %s %d: %w: %s", owner, number, err, stderr.String())
 	}
 	return ParseItems(out)
+}
+
+// HighestNumber is GitHub's highest issue or pull request number in repo
+// (owner/name), 0 for none: the newest of either, as they share numbers.
+// Read-only, through gh, as the Project is read.
+func HighestNumber(ctx context.Context, repo string) (int, error) {
+	cmd := exec.CommandContext(ctx, "gh", "api", "repos/"+repo+"/issues?state=all&per_page=1", "--jq", ".[0].number // 0")
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	out, err := cmd.Output()
+	if err != nil {
+		return 0, fmt.Errorf("gh api repos/%s/issues: %w: %s", repo, err, strings.TrimSpace(stderr.String()))
+	}
+	return strconv.Atoi(strings.TrimSpace(string(out)))
 }
 
 // FieldResult is one field's planned label change for one issue.

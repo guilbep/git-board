@@ -215,25 +215,51 @@ func (b *Backend) setSeq(h repository.Hash) error {
 	return b.repo.UpdateRef(seqNamespace, seqKey, ours, h)
 }
 
-// InitNumbers makes the project number its issues, as prefix-N from start:
-// the counter's first commit, pushed to remote. Pushing it is the switch.
-func (b *Backend) InitNumbers(remote, prefix string, start int) error {
+// ErrNumbered: the project numbers its issues already. It starts once.
+var ErrNumbered = errors.New("the project already numbers its issues")
+
+// ErrNumbersMoved: other clones kept numbering first, try after try.
+var ErrNumbersMoved = errors.New("the numbers kept moving")
+
+// CheckNumbers says what's wrong with a prefix and a start, nil when
+// InitNumbers takes them.
+func CheckNumbers(prefix string, start int) error {
 	if !prefixRe.MatchString(prefix) {
 		return fmt.Errorf("a prefix is a letter, then letters or digits, like CO2; not %q", prefix)
 	}
 	if start < 1 {
 		return fmt.Errorf("numbers start from 1 at least, not %d", start)
 	}
+	return nil
+}
+
+// InitNumbers makes the project number its issues, as prefix-N from start:
+// the counter's first commit, pushed to remote. Pushing it is the switch.
+// When the remote has one already, or another clone pushed one first, it
+// says so (ErrNumbered) and this clone takes that one.
+func (b *Backend) InitNumbers(remote, prefix string, start int) error {
+	if err := CheckNumbers(prefix, start); err != nil {
+		return err
+	}
 	if err := b.FetchNumbers(remote); err != nil {
 		return err
 	}
-	if c, ok, err := b.Counter(); err != nil || ok {
-		if err == nil {
-			err = fmt.Errorf("the project already numbers its issues: %s, from %d", c.Prefix, c.Start)
+	numbered := func() error {
+		c, ok, err := b.Counter()
+		if err == nil && ok {
+			err = fmt.Errorf("%w: %s, from %d", ErrNumbered, c.Prefix, c.Start)
 		}
 		return err
 	}
-	_, err := b.pushCounter(remote, Counter{Prefix: prefix, Start: start, ByID: map[string]int{}}, "")
+	if err := numbered(); err != nil {
+		return err
+	}
+	rejected, err := b.pushCounter(remote, Counter{Prefix: prefix, Start: start, ByID: map[string]int{}}, "")
+	if rejected {
+		if e := numbered(); e != nil {
+			return e
+		}
+	}
 	return err
 }
 
@@ -258,7 +284,7 @@ func (b *Backend) NumberIssues(remote string) (int, error) {
 		}
 		last = err
 	}
-	return 0, fmt.Errorf("the numbers kept moving, sync again: %w", last)
+	return 0, fmt.Errorf("%w, sync again: %w", ErrNumbersMoved, last)
 }
 
 // numberOnce numbers the issues without one on the counter as fetched, and
@@ -272,34 +298,10 @@ func (b *Backend) numberOnce(remote string) (n int, rejected bool, err error) {
 	if err != nil {
 		return 0, false, err
 	}
-	// only what origin has, as last pushed or fetched: a number other
-	// clones can't find an issue for is a gap
-	onOrigin, err := b.repo.ListTrackingRefs(remote, bugent.Namespace)
-	if err != nil {
+	todo, _, err := b.survey(remote, c)
+	if err != nil || len(todo) == 0 {
 		return 0, false, err
 	}
-	var todo []*cache.BugExcerpt
-	for _, id := range b.c.Bugs().AllIds() {
-		if _, ok := onOrigin[id.String()]; !ok {
-			continue
-		}
-		e, err := b.c.Bugs().ResolveExcerpt(id)
-		if err != nil {
-			return 0, false, err
-		}
-		if forges, _ := forgesOf(e.CreateMetadata); c.NumberOf(id.String(), forges) == 0 {
-			todo = append(todo, e)
-		}
-	}
-	if len(todo) == 0 {
-		return 0, false, nil
-	}
-	sort.Slice(todo, func(i, j int) bool {
-		if todo[i].CreateUnixTime != todo[j].CreateUnixTime {
-			return todo[i].CreateUnixTime < todo[j].CreateUnixTime
-		}
-		return todo[i].Id() < todo[j].Id()
-	})
 	next := c.Next()
 	for i, e := range todo {
 		c.ByID[e.Id().String()] = next + i
@@ -308,6 +310,75 @@ func (b *Backend) numberOnce(remote string) (n int, rejected bool, err error) {
 		return 0, rejected, err
 	}
 	return len(todo), false, nil
+}
+
+// Numbering is how the issues here stand with the project's numbers, as
+// this clone last fetched the counter and the remote's issues.
+type Numbering struct {
+	Numbered int `json:"numbered"` // with a number: their line, or their GitHub one below start
+	Waiting  int `json:"waiting"`  // on the remote without one: NumberIssues numbers them
+	Unpushed int `json:"unpushed"` // without one, not on the remote yet: their push numbers them
+	Highest  int `json:"highest"`  // the highest forge number of an issue here, 0 for none
+	// GitHub is each issue on the remote by its GitHub number (its lowest,
+	// 0 for none): what a start would keep of them, before the switch
+	GitHub []int `json:"github_numbers,omitempty"`
+}
+
+// Numbering says how the issues here stand; before the switch, all those
+// on the remote wait.
+func (b *Backend) Numbering(remote string) (Numbering, error) {
+	c, _, err := b.Counter()
+	if err != nil {
+		return Numbering{}, err
+	}
+	_, n, err := b.survey(remote, c)
+	return n, err
+}
+
+// survey goes through the issues here with c. todo are those numbering
+// numbers now, oldest first: on the remote, as last pushed or fetched (a
+// number other clones can't find an issue for is a gap), without one.
+func (b *Backend) survey(remote string, c Counter) (todo []*cache.BugExcerpt, n Numbering, err error) {
+	onRemote, err := b.repo.ListTrackingRefs(remote, bugent.Namespace)
+	if err != nil {
+		return nil, n, err
+	}
+	n.GitHub = []int{}
+	for _, id := range b.c.Bugs().AllIds() {
+		e, err := b.c.Bugs().ResolveExcerpt(id)
+		if err != nil {
+			return nil, n, err
+		}
+		forges, _ := forgesOf(e.CreateMetadata)
+		github := 0
+		for _, f := range forges {
+			num, _ := strconv.Atoi(f.Number)
+			n.Highest = max(n.Highest, num)
+			if f.Name == "GitHub" && num > 0 && (github == 0 || num < github) {
+				github = num
+			}
+		}
+		_, there := onRemote[id.String()]
+		switch {
+		case c.NumberOf(id.String(), forges) > 0:
+			n.Numbered++
+		case there:
+			n.Waiting++
+			todo = append(todo, e)
+		default:
+			n.Unpushed++
+		}
+		if there {
+			n.GitHub = append(n.GitHub, github)
+		}
+	}
+	sort.Slice(todo, func(i, j int) bool {
+		if todo[i].CreateUnixTime != todo[j].CreateUnixTime {
+			return todo[i].CreateUnixTime < todo[j].CreateUnixTime
+		}
+		return todo[i].Id() < todo[j].Id()
+	})
+	return todo, n, nil
 }
 
 // pushCounter commits c on parent ("" for the first commit) and pushes it.
