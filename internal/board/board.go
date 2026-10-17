@@ -41,6 +41,7 @@ func Match(b any, cfg *config.Config, filterStr, me string, issues []gitbugio.Is
 	if err != nil {
 		return nil, err
 	}
+	withRoles(cfg, issues)
 	matched := make([]gitbugio.Issue, 0, len(issues))
 	for _, issue := range issues {
 		if filter.Matches(issue, conditions, cfg, me, today) {
@@ -76,6 +77,13 @@ func prepare(b any, filterStr, me string) ([]filter.Condition, string, error) {
 	return conditions, me, nil
 }
 
+// withRoles gives each issue the roles it takes from the project.
+func withRoles(cfg *config.Config, issues []gitbugio.Issue) {
+	for i := range issues {
+		issues[i].Inherited = cfg.RolesFor(issues[i].Labels)
+	}
+}
+
 // ErrNoMe is returned when @me means nobody: no --me, and no forge login on
 // the git-bug identity.
 var ErrNoMe = fmt.Errorf("@me needs your forge login: a bridge (git bug bridge new) tags your git-bug identity with it, or pass --me / set GIT_BOARD_ME")
@@ -93,7 +101,7 @@ func MyLogin(b any) string {
 // "prio:p1"), or "" if the issue has no such label.
 func FieldValue(issue gitbugio.Issue, fieldName string) string {
 	prefix := fieldName + ":"
-	for _, l := range issue.Labels {
+	for _, l := range issue.AllLabels() {
 		if strings.HasPrefix(l, prefix) {
 			return strings.TrimPrefix(l, prefix)
 		}

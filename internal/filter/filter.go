@@ -179,8 +179,8 @@ func RequiresMe(conditions []Condition) bool {
 
 // Matches reports whether issue satisfies every condition.
 func Matches(issue gitbugio.Issue, conditions []Condition, cfg *config.Config, me string, today time.Time) bool {
-	labels := make(map[string]bool, len(issue.Labels))
-	for _, l := range issue.Labels {
+	labels := map[string]bool{}
+	for _, l := range issue.AllLabels() {
 		labels[l] = true
 	}
 
@@ -233,12 +233,12 @@ func matchOne(issue gitbugio.Issue, labels map[string]bool, c Condition, value s
 			ok = ok || strings.EqualFold(l, want)
 		}
 	case KindLabel:
-		for _, l := range issue.Labels {
+		for l := range labels {
 			ok = ok || strings.EqualFold(l, value)
 		}
 	case KindNo:
 		ok = true
-		for _, l := range issue.Labels {
+		for l := range labels {
 			ns, _, hasNS := strings.Cut(l, ":")
 			if (value == "label" && !hasNS) || (hasNS && ns == value) {
 				ok = false

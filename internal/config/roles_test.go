@@ -31,9 +31,9 @@ func TestRoles(t *testing.T) {
 	}
 
 	for text, want := range map[string]string{
-		"[roles]\nPM = \"x\"\n":                                "roles.PM",
-		"[roles]\npm = \"\"\n":                                 "roles.pm",
-		"[roles]\npm = \"a, b\"\n":                             "roles.pm",
+		"[roles]\nPM = \"x\"\n":                                 "roles.PM",
+		"[roles]\npm = \"\"\n":                                  "roles.pm",
+		"[roles]\npm = \"a, b\"\n":                              "roles.pm",
 		"[fields.pm]\ntype = \"select\"\n[roles]\npm = \"x\"\n": "a person",
 	} {
 		if _, _, err := parse([]byte(text)); err == nil || !strings.Contains(err.Error(), want) {

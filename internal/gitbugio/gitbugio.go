@@ -37,10 +37,13 @@ const githubURLMetaKey = "github-url"
 
 // Issue is the subset of a git-bug bug that git-board fields/filters need.
 type Issue struct {
-	ID        string   `json:"id"`
-	Title     string   `json:"title"`
-	Status    string   `json:"status"` // "open" or "closed"
-	Labels    []string `json:"labels"`
+	ID     string   `json:"id"`
+	Title  string   `json:"title"`
+	Status string   `json:"status"` // "open" or "closed"
+	Labels []string `json:"labels"`
+	// Inherited are the labels it takes from its project ([roles]) for the
+	// roles it doesn't set itself; internal/board sets them.
+	Inherited []string `json:"inherited,omitempty"`
 	GithubURL string   `json:"github_url,omitempty"` // "" if not bridged in from GitHub
 	Forges    []Forge  `json:"forges,omitempty"`     // where it is on forges
 	// Shown is the title as the board shows it (ShownTitle).
@@ -90,6 +93,10 @@ func (is Issue) HasNumber(n string) bool {
 func (is Issue) HasForgeNumber(n string) bool {
 	return n != "" && slices.ContainsFunc(is.Forges, func(f Forge) bool { return f.Number == n && f.Gone == "" })
 }
+
+// AllLabels are its own labels and those it inherits: what filters,
+// groups and facets see. Edits change its own labels only.
+func (is Issue) AllLabels() []string { return append(slices.Clip(is.Labels), is.Inherited...) }
 
 // Headline is its shown title after its project number, as lists show it:
 // "CO2-3075 Restarting Postgres empties the bouncer pool"; its title
