@@ -20,6 +20,7 @@ export interface Issue {
   labels: string[];
   github_url?: string; // absent when the issue wasn't bridged in from GitHub
   forges?: Forge[]; // where it is on forges
+  number?: string; // its project number, CO2-3075; absent until it has one
   updated_at?: string;
 }
 
