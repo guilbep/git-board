@@ -1,7 +1,9 @@
 package gitbugio
 
 import (
+	"bytes"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -104,4 +106,25 @@ func (b *Backend) ReadCommit(hash string) (Commit, error) {
 	c := log[0]
 	subject, _, _ := strings.Cut(c.Message, "\n")
 	return Commit{SHA: c.Hash.String(), Subject: strings.TrimSpace(subject), Author: c.AuthorName, Date: c.Date}, nil
+}
+
+// ChangesIn tells whether branch's changes are all in base already: what
+// `git merge-tree` makes of the two is base's own tree. That's how a branch
+// squashed or rebased into base shows, which ancestry can't tell.
+// ponytail: runs git (2.38+), which leaves the merged tree's objects
+// unreferenced until git gc; false whenever git can't say
+func (b *Backend) ChangesIn(base, branch string) bool {
+	if b.dir == "" {
+		return false
+	}
+	merged, err := exec.Command("git", "--git-dir", b.dir, "merge-tree", "--write-tree", base, branch).Output()
+	if err != nil { // a conflict, or an older git
+		return false
+	}
+	tree, err := exec.Command("git", "--git-dir", b.dir, "rev-parse", base+"^{tree}").Output()
+	if err != nil {
+		return false
+	}
+	first, _, _ := bytes.Cut(merged, []byte("\n"))
+	return bytes.Equal(bytes.TrimSpace(first), bytes.TrimSpace(tree))
 }

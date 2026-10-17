@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -35,6 +36,7 @@ type branchesResponse struct {
 		Ahead      int    `json:"ahead"`
 		Behind     int    `json:"behind"`
 		Merged     bool   `json:"merged"`
+		InBase     bool   `json:"in_base"`
 		LastCommit struct {
 			SHA     string `json:"sha"`
 			Subject string `json:"subject"`
@@ -112,6 +114,68 @@ func TestBranchesOfAnIssue(t *testing.T) {
 	}
 	if merged.Ahead != 0 || merged.Behind != 2 || !merged.Merged || merged.LastCommit.Subject != "Fix the example" {
 		t.Errorf("merged %+v", merged)
+	}
+}
+
+// A branch squashed into dev isn't its ancestor, but its changes are in
+// dev: in_base says so, from what git merge-tree makes of the two.
+func TestBranchSquashedIntoTheBase(t *testing.T) {
+	dir := t.TempDir()
+	write := func(name string) {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(name+"\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		git(t, dir, "add", name)
+	}
+	git(t, dir, "init", "-q", "-b", "dev")
+	git(t, dir, "config", "user.name", "dev")
+	git(t, dir, "config", "user.email", "dev@example.com")
+	write("a.txt")
+	git(t, dir, "commit", "-q", "-m", "start")
+	git(t, dir, "switch", "-q", "-c", "2518-squashed")
+	write("b.txt")
+	git(t, dir, "commit", "-q", "-m", "Fix it")
+	git(t, dir, "switch", "-q", "-c", "2518-open", "dev")
+	write("c.txt")
+	git(t, dir, "commit", "-q", "-m", "Not landed")
+	git(t, dir, "switch", "-q", "dev")
+	git(t, dir, "merge", "-q", "--squash", "2518-squashed")
+	git(t, dir, "commit", "-q", "-m", "Fix it (#2518)")
+	git(t, dir, "update-ref", "refs/remotes/origin/dev", "dev")
+	git(t, dir, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/dev")
+
+	b, err := gitbugio.Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = b.Close() })
+	who, err := b.TestCache().Identities().NewFromGitUser()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := b.TestCache().SetUserIdentity(who); err != nil {
+		t.Fatal(err)
+	}
+	id := gitbugiotest.NewImportedIssue(t, b, "Crash on save (#2518)", "https://github.com/o/r/issues/2518")
+
+	ts := newTestServer(t, b, &config.Config{})
+	var res branchesResponse
+	if resp := getJSON(t, ts.URL+"/api/issues/"+id[:8]+"/branches", &res); resp.StatusCode != http.StatusOK {
+		t.Fatalf("status %d", resp.StatusCode)
+	}
+	by := map[string]int{}
+	for i, br := range res.Branches {
+		by[br.Name] = i
+	}
+	if len(res.Branches) != 2 {
+		t.Fatalf("branches %+v", res.Branches)
+	}
+	squashed, open := res.Branches[by["2518-squashed"]], res.Branches[by["2518-open"]]
+	if squashed.Merged || !squashed.InBase || squashed.Ahead != 1 {
+		t.Errorf("squashed %+v", squashed)
+	}
+	if open.Merged || open.InBase || open.Ahead != 1 {
+		t.Errorf("open %+v", open)
 	}
 }
 

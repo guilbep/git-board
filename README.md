@@ -485,7 +485,7 @@ it), the **Columns** button shows, hides and orders the columns (Links
 opens the issue on each forge), and the boxes pick rows for the bulk
 bar: set a field, add an assignee or close them all.
 The side column's **Development** lists the branches naming the issue
-(`fix/2518-…`), ahead and behind the base, merged or not, and **Create
+(`fix/2518-…`), ahead and behind the base, in it or not (merged, or squashed in), and **Create
 branch** gives the commands to copy (`[branches]`, docs/configuration.md).
 The panel opens at the side, resized by dragging its left edge
 (double-click: the default width), or wide over the blurred board with

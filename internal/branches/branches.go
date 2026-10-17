@@ -54,10 +54,8 @@ func kindOf(cfg config.Branches, labels []string) string {
 }
 
 func number(is gitbugio.Issue) string {
-	for _, f := range is.Forges {
-		if f.Number != "" {
-			return f.Number
-		}
+	if ns := is.Numbers(); len(ns) > 0 {
+		return ns[0]
 	}
 	return is.ID[:min(7, len(is.ID))]
 }
@@ -115,7 +113,7 @@ func Names(branch string, is gitbugio.Issue) bool {
 	for _, w := range strings.FieldsFunc(branch, func(r rune) bool { return !isAlnum(r) }) {
 		if first && strings.Trim(w, "0123456789") == "" {
 			first = false
-			if slices.ContainsFunc(is.Forges, func(f gitbugio.Forge) bool { return f.Number == w }) {
+			if is.HasNumber(w) {
 				return true
 			}
 		}
@@ -169,11 +167,13 @@ func Suggest(b *gitbugio.Backend, cfg config.Branches, is gitbugio.Issue) (Sugge
 
 // Branch is a branch naming the issue, against the base.
 type Branch struct {
-	Name       string          `json:"name"`
-	Remote     string          `json:"remote,omitempty"`
-	Ahead      int             `json:"ahead"`  // its commits the base hasn't
-	Behind     int             `json:"behind"` // the base's commits it hasn't
-	Merged     bool            `json:"merged"` // its head is in the base
+	Name   string `json:"name"`
+	Remote string `json:"remote,omitempty"`
+	Ahead  int    `json:"ahead"`  // its commits the base hasn't
+	Behind int    `json:"behind"` // the base's commits it hasn't
+	Merged bool   `json:"merged"` // its head is in the base
+	// InBase: its changes are in the base, merged or squashed or rebased in
+	InBase     bool            `json:"in_base"`
 	LastCommit gitbugio.Commit `json:"last_commit"`
 }
 
@@ -224,6 +224,7 @@ func Linked(b *gitbugio.Backend, is gitbugio.Issue, start string) ([]Branch, err
 			}
 			l.Behind = len(base) - (len(mine) - l.Ahead)
 		}
+		l.InBase = l.Merged || l.Ahead > 0 && startHash != "" && b.ChangesIn(startHash, br.Hash)
 		res = append(res, l)
 	}
 	return res, nil

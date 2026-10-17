@@ -484,6 +484,7 @@ export interface IssueBranch {
   ahead: number;
   behind: number;
   merged: boolean;
+  in_base: boolean; // its changes are in the base: merged, or squashed or rebased in
   last_commit: { sha: string; subject: string; author: string; date: string };
 }
 export interface IssueBranches {

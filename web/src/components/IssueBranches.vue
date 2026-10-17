@@ -11,8 +11,9 @@
           <span class="gb-mono gb-dev-name">{{ b.remote ? `${b.remote}/` : '' }}{{ b.name }}</span>
           <span class="gb-dev-meta">
             <b v-if="b.merged && b.behind" class="gb-state-ok">merged into {{ dev.base }}</b>
+            <b v-else-if="b.in_base && !b.merged" class="gb-state-ok" :title="`Its changes are in ${dev.base}: squashed or rebased in`">in {{ dev.base }}, squashed</b>
             <template v-else-if="b.merged">same as {{ dev.base }}</template>
-            <template v-else-if="b.ahead || b.behind">{{ b.ahead }} ahead, {{ b.behind }} behind {{ dev.base }}</template>
+            <template v-else>not in {{ dev.base }} · {{ b.ahead }} ahead, {{ b.behind }} behind</template>
           </span>
           <span class="gb-dev-meta">{{ b.last_commit.subject }} · <time :datetime="b.last_commit.date">{{ when(b.last_commit.date) }}</time></span>
         </li>

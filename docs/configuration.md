@@ -242,7 +242,7 @@ Files are public to anyone with the link, even for a private repository, and sta
 
 ## Branches
 
-An issue's **Development** section lists the branches whose name names it, and **Create branch** gives the command creating its branch (`git board branch <id>` prints the same). git-board creates and pushes nothing.
+An issue's **Development** section lists the branches whose name names it: *merged into dev* when the branch's last commit is in `dev`, *in dev, squashed* when its changes are there by a squash or a rebase (what `git merge-tree` makes of the two is `dev` as it is), else *not in dev*. Merging with merge commits (`--no-ff`) keeps the first one exact. **Create branch** gives the command creating its branch (`git board branch <id>` prints the same). git-board creates and pushes nothing.
 
 ```toml
 [branches]
@@ -253,7 +253,7 @@ kinds = { bug = "fix", feat = "feat", perf = "perf", task = "chore" }
 
 | Key | Default | What it does |
 | --- | --- | --- |
-| `base` | the remote's default branch, else `main`, `master` or `trunk` | The branch a new branch starts from (`origin/<base>`, or `<base>` without a remote), and the one "merged" and ahead/behind compare with. |
+| `base` | the remote's default branch, else `main`, `master` or `trunk` | The branch a new branch starts from (`origin/<base>`, or `<base>` without a remote), and the one "in dev" and ahead/behind compare with. |
 | `name` | `"{number}-{slug}"` (GitHub's) | The branch's name. `{number}`: the issue's number on its first forge, else its git-bug id's first 7 characters. `{kind}`: its kind, through `kinds`; without one, `{kind}/` is dropped. `{slug}`: its title in lower-case words, without a leading `[BUG](Scope)` or a trailing `(#1234)`, cut at about 50 characters. |
 | `kinds` | none | An issue's kind (its `kind:` field, or a plain label listed here) to the `{kind}` of its branch. |
 

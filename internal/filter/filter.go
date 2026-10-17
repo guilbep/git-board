@@ -125,19 +125,10 @@ func digits(s string) bool {
 // issue too.
 func itself(issue gitbugio.Issue, word string) bool {
 	if digits(word) {
-		return hasNumber(issue, word)
+		return issue.HasNumber(word)
 	}
 	word = strings.ToLower(word)
 	return len(word) >= 7 && strings.Trim(word, "0123456789abcdef") == "" && strings.HasPrefix(issue.ID, word)
-}
-
-func hasNumber(issue gitbugio.Issue, n string) bool {
-	for _, f := range issue.Forges {
-		if f.Number == n {
-			return true
-		}
-	}
-	return false
 }
 
 func cut(s, sep string) (before, after string, found bool) {
@@ -227,7 +218,7 @@ func matchOne(issue gitbugio.Issue, labels map[string]bool, c Condition, value s
 		}
 		ok = ok || itself(issue, value)
 	case KindNumber:
-		ok = hasNumber(issue, value)
+		ok = issue.HasNumber(value)
 	case KindAuthor:
 		want := value
 		if want == "@me" {

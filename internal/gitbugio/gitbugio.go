@@ -8,6 +8,7 @@ package gitbugio
 import (
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
@@ -48,10 +49,27 @@ type Issue struct {
 	AuthorLogins []string `json:"-"`
 }
 
+// Numbers are the numbers the issue answers to (#2518), first forge first:
+// the one place a number is told to name an issue, for search, branch names
+// and titles. A project's own sequence (CO2-2518) would be added here.
+func (is Issue) Numbers() []string {
+	var ns []string
+	for _, f := range is.Forges {
+		if f.Number != "" && !slices.Contains(ns, f.Number) {
+			ns = append(ns, f.Number)
+		}
+	}
+	return ns
+}
+
+// HasNumber tells whether the issue answers to number n.
+func (is Issue) HasNumber(n string) bool { return slices.Contains(is.Numbers(), n) }
+
 // Backend is an open connection to a git-bug repo cache.
 type Backend struct {
 	repo repository.Repo
 	c    *cache.RepoCache
+	dir  string // the git directory, for what only git does; "" from NewForRepo
 }
 
 // Open opens the git-bug repo cache rooted at path (or an ancestor of it,
@@ -69,7 +87,7 @@ func Open(path string) (*Backend, error) {
 	if err != nil {
 		return nil, fmt.Errorf("building git-bug cache: %w", err)
 	}
-	return &Backend{repo: repo, c: c}, nil
+	return &Backend{repo: repo, c: c, dir: gitDir}, nil
 }
 
 // OpenCwd is Open for the current working directory.
