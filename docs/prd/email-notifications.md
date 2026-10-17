@@ -1,5 +1,10 @@
 # Email notifications
 
+**Replaced by [inbox.md](inbox.md)** (2026-10-17): grilled, email lost to an
+inbox you check. The forge mirror already emails followers; sending needs a
+server that doesn't exist; Outlook mangles replies; per-event mail gets
+filtered away. Kept for the questions it asked.
+
 An investigation to turn into a plan. Start a session here with:
 
 ```sh
