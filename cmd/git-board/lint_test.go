@@ -161,3 +161,52 @@ func TestLintStrictFailsOnFindings(t *testing.T) {
 		t.Errorf("expected double-single in output:\n%s", out)
 	}
 }
+
+func TestLintCreateLabelsReportsTemplateLabelsTheRepoLacks(t *testing.T) {
+	newTestRepo(t)
+	if err := os.WriteFile(configPath, []byte(createLabelsTestConfig), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	templates := map[string]string{
+		"feature.yaml": "name: Feature\ntitle: \"[FEAT]() \"\nlabels: [\"enhancement\", \"needs-triage\"]\nbody: []\n",
+		"bug.yml":      "name: Bug\nlabels:\n  - bug\n",
+		"task.md":      "---\nname: Task\nlabels: Feat\n---\nWhat to do\n", // GitHub's names ignore case
+		"config.yml":   "blank_issues_enabled: false\n",                    // the chooser, not a template
+	}
+	if err := os.MkdirAll(".github/ISSUE_TEMPLATE", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for name, body := range templates {
+		if err := os.WriteFile(".github/ISSUE_TEMPLATE/"+name, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	origExisting, origCreate, origCurrent := existingGithubLabels, createGithubLabel, currentGithubRepo
+	t.Cleanup(func() {
+		existingGithubLabels, createGithubLabel, currentGithubRepo = origExisting, origCreate, origCurrent
+	})
+	existingGithubLabels = func(repo string) ([]string, error) {
+		return []string{"status:backlog", "status:ready", "prio:p0", "bug", "feat"}, nil
+	}
+	currentGithubRepo = func() (string, error) { return "EPFL-ENAC/co2-calculator", nil }
+	var created []string
+	createGithubLabel = func(repo, name string) error {
+		created = append(created, name)
+		return nil
+	}
+
+	out, err := execute(t, []string{"lint", "--create-labels", "--apply"})
+	if err != nil {
+		t.Fatalf("execute: %v\noutput:\n%s", err, out)
+	}
+	if !strings.Contains(out, "feature.yaml applies enhancement, needs-triage") {
+		t.Errorf("expected feature.yaml's missing labels reported, got:\n%s", out)
+	}
+	if strings.Contains(out, "bug.yml") || strings.Contains(out, "task.md") || strings.Contains(out, "config.yml") {
+		t.Errorf("only feature.yaml lacks labels, got:\n%s", out)
+	}
+	if len(created) != 0 {
+		t.Errorf("--apply created %v: a template's label is fixed in the template, not created", created)
+	}
+}

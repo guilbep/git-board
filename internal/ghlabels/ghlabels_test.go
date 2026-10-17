@@ -1,6 +1,8 @@
 package ghlabels
 
 import (
+	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 
@@ -55,5 +57,34 @@ func TestMissingFromNothingMissingReturnsEmpty(t *testing.T) {
 
 	if got := MissingFrom(desired, existing); len(got) != 0 {
 		t.Errorf("MissingFrom = %v, want empty", got)
+	}
+}
+
+func TestTemplatesReadsEveryLabelsShape(t *testing.T) {
+	dir := t.TempDir()
+	for name, body := range map[string]string{
+		"a.yaml":     "labels: [\"enhancement\", \"triage\"]\n",
+		"b.md":       "---\nname: B\nlabels: bug, needs-triage\n---\nBody\n",
+		"c.md":       "---\nlabels:\n  - feat\n---\n",
+		"d.md":       "no front matter, no labels\n",
+		"e.md":       "--- \nlabels:\n  - specs\n---\n", // co2's specs.md opens with "--- "
+		"config.yml": "blank_issues_enabled: false\n",
+	} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, err := Templates(dir)
+	if err != nil {
+		t.Fatalf("Templates: %v", err)
+	}
+	want := []Template{
+		{File: "a.yaml", Labels: []string{"enhancement", "triage"}},
+		{File: "b.md", Labels: []string{"bug", "needs-triage"}},
+		{File: "c.md", Labels: []string{"feat"}},
+		{File: "e.md", Labels: []string{"specs"}},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("Templates = %+v, want %+v", got, want)
 	}
 }

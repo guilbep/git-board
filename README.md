@@ -369,6 +369,19 @@ fixed value set, so nothing to create labels for; Category isn't a
 configured field at all anymore (see "Bridging GitHub Projects" above),
 so it's not part of this check either.
 
+It also reads the labels each issue template applies
+(`.github/ISSUE_TEMPLATE`, an issue form's `labels` or a Markdown
+template's front matter) and reports the ones this checkout's GitHub
+repository (`gh repo view`) doesn't have. GitHub drops those without a
+word, so the issue comes out without them:
+
+```
+issue templates: feature.yaml applies enhancement, triage, needs-triage, which EPFL-ENAC/co2-calculator doesn't have: GitHub drops them
+```
+
+`--apply` doesn't create them: the fix is a label the repository has, in
+the template.
+
 ## Sprints (`git-board sprint`)
 
 Thin presentation over the date-window math already in `internal/config`
