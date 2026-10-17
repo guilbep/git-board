@@ -275,9 +275,13 @@ export interface BridgeTally {
   lines: string[];
 }
 
+// A run goes both ways (sync), or one: get (git bug bridge pull), send
+// (git bug bridge push). A dry run, the Check, looks both ways.
+export type ForgeMode = 'sync' | 'get' | 'send';
+
 export interface ForgeJob {
   dry_run: boolean;
-  push: boolean;
+  mode: ForgeMode;
   state: 'running' | 'done' | 'failed';
   started: string;
   ended?: string;
@@ -285,13 +289,11 @@ export interface ForgeJob {
   bridges: Record<string, BridgeTally>;
   errors: number;
   error?: string;
-  pushed?: string;
 }
 
 export interface ForgeStatus {
   bridges: { name: string; target: string }[];
   job: ForgeJob | null;
-  origin: string[]; // where pushing the git-bug data after a run goes
 }
 
 export function getForges(): Promise<ForgeStatus> {
@@ -299,8 +301,33 @@ export function getForges(): Promise<ForgeStatus> {
 }
 
 // A dry run looks at every forge; a real run at bridges (empty: all).
-export function startForgeSync(dryRun: boolean, push: boolean, bridges: string[] = []): Promise<ForgeStatus> {
-  return request('/api/forges/sync', json('POST', { dry_run: dryRun, push, bridges }));
+export function startForgeSync(dryRun: boolean, mode: ForgeMode = 'sync', bridges: string[] = []): Promise<ForgeStatus> {
+  return request('/api/forges/sync', json('POST', { dry_run: dryRun, mode, bridges }));
+}
+
+// The git remotes (cmd/git-board-server/remotes.go): issues and people
+// go with git, as git bug pull and push move them.
+export interface Ahead {
+  send: number;
+  receive: number;
+}
+
+export interface Remote {
+  name: string;
+  url: string; // without credentials
+  tracked: boolean; // its refs are known: fetched or pushed once
+  issues: Ahead;
+  people: Ahead;
+  checked?: string; // this server's last fetch, pull or push of it
+}
+
+export function getRemotes(): Promise<{ remotes: Remote[] }> {
+  return request('/api/remotes');
+}
+
+// fetch is the Check: nothing local changes
+export function remoteAction(name: string, action: 'fetch' | 'pull' | 'push'): Promise<{ remotes: Remote[] }> {
+  return request(`/api/remotes/${encodeURIComponent(name)}/${action}`, { method: 'POST' });
 }
 
 // Where the page loads a server path from (the API's origin in dev).

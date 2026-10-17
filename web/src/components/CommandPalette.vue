@@ -94,7 +94,7 @@ const commands = computed<Entry[]>(() => [
   ...props.views.map((v): Entry => ({ key: `view-${v}`, label: `View: ${v}`, group: 'Commands', icon: 'tag', act: () => void router.push({ path: '/', query: { view: v } }) })),
   { key: 'insights', label: 'Insights', group: 'Commands', icon: 'chart', act: go('/insights') },
   { key: 'settings', label: 'Settings', group: 'Commands', icon: 'settings', act: go('/settings') },
-  { key: 'sync', label: 'Sync with forges', group: 'Commands', icon: 'sync', act: go('/sync') },
+  { key: 'sync', label: 'Sync: where your issues go', group: 'Commands', icon: 'sync', act: go('/sync') },
   { key: 'filters', label: filtersHidden.value ? 'Show the filters' : 'Hide the filters', group: 'Commands', icon: 'filter', act: () => { filtersHidden.value = !filtersHidden.value; if (route.path !== '/') void router.push('/'); } },
   { key: 'keys', label: 'Keyboard shortcuts', group: 'Commands', icon: 'title', hint: '?', act: () => (helpOpen.value = true) },
 ]);

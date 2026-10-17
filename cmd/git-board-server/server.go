@@ -49,13 +49,17 @@ type apiServer struct {
 	// its whole run, and syncing tells writes to answer 409 meanwhile.
 	writeMu sync.Mutex
 	syncing atomic.Bool
-	forgeMu sync.Mutex // guards job
+	forgeMu sync.Mutex // guards job, issueDry and checked
 	job     *forgeJob
-	runSync func(context.Context, bool, []string) (<-chan core.SyncResult, error) // nil: git-bug's
+	// the forge sync, or one way of it (mode get, send): nil, git-bug's
+	runSync func(ctx context.Context, mode string, dryRun bool, names []string) (<-chan core.SyncResult, error)
 	// one issue's sync (issuesync.go): nil, git-bug's; issueDry is when
 	// each issue's last clean dry run ended
 	runIssueSync func(ctx context.Context, dryRun bool, id string) (<-chan core.SyncResult, error)
 	issueDry     map[string]time.Time
+	// checked is when each git remote was last fetched, pulled or pushed
+	// (remotes.go)
+	checked map[string]time.Time
 
 	// exposed are names --addr exposes beyond the loopback ones (withGuard)
 	exposed []string
@@ -113,6 +117,8 @@ func newMux(s *apiServer, static http.Handler) http.Handler {
 	mux.HandleFunc("DELETE /api/bridges/{name}", s.handleRemoveBridge)
 	mux.HandleFunc("GET /api/forges", s.handleForges)
 	mux.HandleFunc("POST /api/forges/sync", s.handleForgeSync)
+	mux.HandleFunc("GET /api/remotes", s.handleRemotes)
+	mux.HandleFunc("POST /api/remotes/{name}/{action}", s.handleRemote)
 	mux.HandleFunc("GET /api/sync", s.handleSyncStatus)
 	mux.HandleFunc("POST /api/sync/check", s.handleSyncCheck)
 	mux.HandleFunc("POST /api/sync/apply", s.handleSyncApply)

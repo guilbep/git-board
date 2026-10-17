@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"regexp"
 	"slices"
@@ -21,31 +22,31 @@ const dryRunFresh = 15 * time.Minute
 // maxLines caps the lines kept per bridge.
 const maxLines = 1000
 
-var errDryRunFirst = errors.New("run a dry run first: a real sync writes to the forges, the dry run says what it would do")
+var errDryRunFirst = errors.New("check first: a run writes, the check (a dry run) says what it would do")
 
 // forgeStatus is the sync with the forges: which bridges take part, and
 // the last run.
 type forgeStatus struct {
 	Bridges []gitbugio.SyncBridge `json:"bridges"`
 	Job     *forgeJob             `json:"job"`
-	// Origin is where pushing the git-bug data after a run goes: the page
-	// shows it beside the (unchecked) box.
-	Origin []string `json:"origin"`
 }
+
+// the modes of a run: both ways, or one, git bug bridge pull (get) or push
+// (send). A dry run looks both ways.
+var forgeModes = []string{"sync", "get", "send"}
 
 // forgeJob is one run of git-bug's forge sync, in the background: a co2
 // dry run took over three minutes.
 type forgeJob struct {
 	DryRun  bool                    `json:"dry_run"`
-	Push    bool                    `json:"push"`
+	Mode    string                  `json:"mode"`  // sync, get, send
 	Names   []string                `json:"names"` // the bridges of the run
 	State   string                  `json:"state"` // running, done, failed
 	Started time.Time               `json:"started"`
 	Ended   *time.Time              `json:"ended,omitempty"`
 	Bridges map[string]*bridgeTally `json:"bridges"`
 	Errors  int                     `json:"errors"`
-	Error   string                  `json:"error,omitempty"`  // the run couldn't start or failed
-	Pushed  string                  `json:"pushed,omitempty"` // pushing git-bug data to origin, after a real run
+	Error   string                  `json:"error,omitempty"` // the run couldn't start or failed
 }
 
 // bridgeTally counts what a run did, or would do (a dry run), on one
@@ -166,11 +167,7 @@ func (s *apiServer) forgeSnapshot() forgeStatus {
 	if bridges == nil {
 		bridges = []gitbugio.SyncBridge{}
 	}
-	origin := s.b.PushURLs("origin")
-	if origin == nil {
-		origin = []string{}
-	}
-	return forgeStatus{Bridges: bridges, Job: s.job, Origin: origin}
+	return forgeStatus{Bridges: bridges, Job: s.job}
 }
 
 func (s *apiServer) handleForges(w http.ResponseWriter, r *http.Request) {
@@ -181,15 +178,21 @@ func (s *apiServer) handleForges(w http.ResponseWriter, r *http.Request) {
 
 // handleForgeSync starts a forge sync: a dry run, or a real run right
 // after one (within dryRunFresh), so a real run is always one the user saw
-// the plan of. A real run can then push the git-bug data to origin, for
-// other clones to know the links it made.
+// the plan of. A real run goes both ways, or one: get, send.
 func (s *apiServer) handleForgeSync(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		DryRun  bool     `json:"dry_run"`
-		Push    bool     `json:"push"`
+		Mode    string   `json:"mode"`    // sync (empty), get, send
 		Bridges []string `json:"bridges"` // a real run: some of the dry run's; empty: all
 	}
 	if !decode(w, r, &req) {
+		return
+	}
+	if req.Mode == "" {
+		req.Mode = "sync"
+	}
+	if !slices.Contains(forgeModes, req.Mode) {
+		writeError(w, http.StatusBadRequest, fmt.Errorf("mode %q: want sync, get or send", req.Mode))
 		return
 	}
 	s.forgeMu.Lock()
@@ -205,21 +208,25 @@ func (s *apiServer) handleForgeSync(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if last.Errors > 0 {
-			writeError(w, http.StatusConflict, errors.New("the dry run had errors: fix them and run it again"))
+			writeError(w, http.StatusConflict, errors.New("the check had errors: fix them and check again"))
 			return
 		}
 		for _, name := range req.Bridges {
 			if _, inDryRun := last.Bridges[name]; !inDryRun && !slices.Contains(last.Names, name) {
-				writeError(w, http.StatusBadRequest, errors.New("bridge "+name+" wasn't in the dry run"))
+				writeError(w, http.StatusBadRequest, errors.New("bridge "+name+" wasn't in the check"))
 				return
 			}
 		}
+		if err := sendsAgain(req.Mode, last, req.Bridges); err != nil {
+			writeError(w, http.StatusConflict, err)
+			return
+		}
 	} else {
-		req.Bridges = nil // a dry run looks at every forge
+		req.Bridges, req.Mode = nil, "sync" // a dry run looks at every forge, both ways
 	}
 	run := s.runSync
 	if run == nil {
-		run = s.b.SyncForges
+		run = s.forgeRun
 	}
 	// edits wait from here: a write already under way finishes first
 	s.syncing.Store(true)
@@ -229,13 +236,39 @@ func (s *apiServer) handleForgeSync(w http.ResponseWriter, r *http.Request) {
 			names = append(names, b.Name)
 		}
 	}
-	job := &forgeJob{DryRun: req.DryRun, Push: req.Push && !req.DryRun, State: "running", Started: time.Now(), Names: names, Bridges: map[string]*bridgeTally{}}
+	job := &forgeJob{DryRun: req.DryRun, Mode: req.Mode, State: "running", Started: time.Now(), Names: names, Bridges: map[string]*bridgeTally{}}
 	s.job = job
 	go s.runForgeSync(job, run, req.Bridges)
 	writeJSON(w, http.StatusAccepted, s.forgeSnapshot())
 }
 
-func (s *apiServer) runForgeSync(job *forgeJob, run func(context.Context, bool, []string) (<-chan core.SyncResult, error), names []string) {
+// sendsAgain refuses a send to a forge where the dry run found issues by
+// their git-bug marker: created there by a run whose links weren't kept,
+// only a pull links them. A send alone would create them again.
+func sendsAgain(mode string, dry *forgeJob, names []string) error {
+	if mode != "send" {
+		return nil
+	}
+	for name, t := range dry.Bridges {
+		if (len(names) == 0 || slices.Contains(names, name)) && t.Linked > 0 {
+			return fmt.Errorf("%s has %d issues of this repository already, found by their git-bug marker: a send alone would create them again. Get or sync first", name, t.Linked)
+		}
+	}
+	return nil
+}
+
+// forgeRun is git-bug's sync, or one way of it.
+func (s *apiServer) forgeRun(ctx context.Context, mode string, dryRun bool, names []string) (<-chan core.SyncResult, error) {
+	switch mode {
+	case "get":
+		return s.b.GetForges(ctx, names)
+	case "send":
+		return s.b.SendForges(ctx, names)
+	}
+	return s.b.SyncForges(ctx, dryRun, names)
+}
+
+func (s *apiServer) runForgeSync(job *forgeJob, run func(context.Context, string, bool, []string) (<-chan core.SyncResult, error), names []string) {
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()
 	defer s.syncing.Store(false)
@@ -253,7 +286,7 @@ func (s *apiServer) runForgeSync(job *forgeJob, run func(context.Context, bool, 
 			s.events.publish(event{Kind: "issues"})
 		}
 	}
-	results, err := run(context.Background(), job.DryRun, names)
+	results, err := run(context.Background(), job.Mode, job.DryRun, names)
 	if err != nil {
 		finish("failed", err.Error())
 		return
@@ -268,16 +301,6 @@ func (s *apiServer) runForgeSync(job *forgeJob, run func(context.Context, bool, 
 		t.add(r, job.DryRun)
 		if r.IsError() {
 			job.Errors++
-		}
-		s.forgeMu.Unlock()
-	}
-	if job.Push && job.Errors == 0 {
-		out, err := s.b.Push("origin")
-		s.forgeMu.Lock()
-		if err != nil {
-			job.Pushed = "not pushed to origin: " + err.Error()
-		} else {
-			job.Pushed = strings.TrimSpace(out)
 		}
 		s.forgeMu.Unlock()
 	}

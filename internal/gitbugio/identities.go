@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/git-bug/git-bug/bridge" // registers every forge, for the sync
 	"github.com/git-bug/git-bug/bridge/core"
@@ -186,29 +187,98 @@ func (b *Backend) SyncForges(ctx context.Context, dryRun bool, names []string) (
 	return core.SyncAll(ctx, b.c, names, dryRun)
 }
 
+// GetForges brings the forges' changes in and sends nothing: git bug
+// bridge pull on the named bridges, or every bridge with sync enabled,
+// from where the last sync's pull ended, which it moves on as a sync does.
+func (b *Backend) GetForges(ctx context.Context, names []string) (<-chan core.SyncResult, error) {
+	return b.oneWay(names, func(br *core.Bridge, out chan<- core.SyncResult) {
+		start := time.Now().Add(-5 * time.Second) // as the sync does
+		results, err := br.ImportAllSince(ctx, b.lastSync(br.Name))
+		ok := err == nil
+		if err != nil {
+			r := core.NewImportError(err, "")
+			out <- core.SyncResult{Bridge: br.Name, Import: &r}
+		}
+		for r := range results {
+			ok = ok && r.Event != core.ImportEventError
+			out <- core.SyncResult{Bridge: br.Name, Import: &r}
+		}
+		if ok {
+			_ = core.SetBridgeConfig(b.c, br.Name, lastSyncKey, strconv.FormatInt(start.Unix(), 10))
+		}
+	})
+}
+
+// SendForges sends the local changes to the forges and gets nothing: git
+// bug bridge push on the named bridges, or every bridge with sync enabled.
+func (b *Backend) SendForges(ctx context.Context, names []string) (<-chan core.SyncResult, error) {
+	return b.oneWay(names, func(br *core.Bridge, out chan<- core.SyncResult) {
+		results, err := br.ExportAll(ctx, time.Time{})
+		if err != nil {
+			r := core.NewExportError(err, "")
+			out <- core.SyncResult{Bridge: br.Name, Export: &r}
+		}
+		for r := range results {
+			out <- core.SyncResult{Bridge: br.Name, Export: &r}
+		}
+	})
+}
+
+// lastSyncKey is where git-bug keeps when a bridge's last sync pulled from
+// (bridge/core configKeyLastSyncTime, not exported).
+const lastSyncKey = "lastSyncTime"
+
+func (b *Backend) lastSync(name string) time.Time {
+	cfg, err := b.c.Config().Read()
+	if err != nil {
+		return time.Time{}
+	}
+	if t, err := cfg.Int("git-bug.bridge."+name+"."+lastSyncKey, 0); err == nil && t != 0 {
+		return time.Unix(t, 0)
+	}
+	return time.Time{}
+}
+
+// oneWay runs each of the named bridges in turn, or every one with sync
+// enabled, after checking they all have it.
+func (b *Backend) oneWay(names []string, run func(*core.Bridge, chan<- core.SyncResult)) (<-chan core.SyncResult, error) {
+	if len(names) == 0 {
+		all, err := b.SyncBridges()
+		if err != nil {
+			return nil, err
+		}
+		for _, br := range all {
+			names = append(names, br.Name)
+		}
+		if len(names) == 0 {
+			return nil, errors.New("no bridge has sync enabled")
+		}
+	}
+	var bridges []*core.Bridge
+	for _, name := range names {
+		br, err := core.LoadBridge(b.c, name)
+		if err != nil {
+			return nil, err
+		}
+		if !br.IsSync() {
+			return nil, fmt.Errorf("bridge %s doesn't have sync enabled", name)
+		}
+		bridges = append(bridges, br)
+	}
+	out := make(chan core.SyncResult)
+	go func() {
+		defer close(out)
+		for _, br := range bridges {
+			run(br, out)
+		}
+	}()
+	return out, nil
+}
+
 // SyncIssue syncs one issue (git bug bridge sync --issue) with every
 // bridge with sync enabled, in this process.
 func (b *Backend) SyncIssue(ctx context.Context, dryRun bool, id string) (<-chan core.SyncResult, error) {
 	return core.SyncIssue(ctx, b.c, id, nil, dryRun)
-}
-
-// PushURLs are where a push to remote goes, as git's does: its pushurls,
-// else its urls. Empty without such a remote.
-func (b *Backend) PushURLs(remote string) []string {
-	cfg, err := b.c.Config().Read()
-	if err != nil {
-		return nil
-	}
-	var res []string
-	for _, key := range []string{"remote." + remote + ".pushurl", "remote." + remote + ".url"} {
-		for _, e := range cfg.GetAll(key) {
-			res = append(res, e.Value)
-		}
-		if len(res) > 0 {
-			return res
-		}
-	}
-	return nil
 }
 
 // MyLogin is the forge login of the identity git-board writes as: what

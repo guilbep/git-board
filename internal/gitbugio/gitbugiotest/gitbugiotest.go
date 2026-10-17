@@ -18,8 +18,22 @@ import (
 // configured, ready to create/query bugs.
 func New(t testing.TB) *gitbugio.Backend {
 	t.Helper()
+	return backend(t, repotest.NewGoGitRepo(t, false))
+}
 
-	repo := repotest.NewGoGitRepo(t, false)
+// NewPair is New twice, two clones of one bare remote, origin: you and a
+// colleague sharing a server.
+func NewPair(t testing.TB) (mine, theirs *gitbugio.Backend) {
+	t.Helper()
+	remote := repotest.NewGoGitRepo(t, true)
+	a, b := repotest.NewGoGitRepo(t, false), repotest.NewGoGitRepo(t, false)
+	repotest.AddRemote(t, a, "origin", remote.GitDir)
+	repotest.AddRemote(t, b, "origin", remote.GitDir)
+	return backend(t, a), backend(t, b)
+}
+
+func backend(t testing.TB, repo *repotest.GoGitRepo) *gitbugio.Backend {
+	t.Helper()
 	b, err := gitbugio.NewForRepo(repo)
 	if err != nil {
 		t.Fatalf("NewForRepo: %v", err)

@@ -128,7 +128,9 @@ func eventFor(r *http.Request) event {
 		e.Kind = "config"
 	case p == "/api/sync/apply" || p == "/api/sync/resolve": // the Project's values written to labels
 		e.Kind = "issues"
-	case strings.HasPrefix(p, "/api/sync") || strings.HasPrefix(p, "/api/forges"):
+	case strings.HasPrefix(p, "/api/remotes/") && strings.HasSuffix(p, "/pull"): // merged in
+		e.Kind = "issues"
+	case strings.HasPrefix(p, "/api/sync") || strings.HasPrefix(p, "/api/forges") || strings.HasPrefix(p, "/api/remotes/"):
 		e.Kind = "sync"
 	default: // bridges, who you write as
 		e.Kind = "settings"
