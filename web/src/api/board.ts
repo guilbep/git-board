@@ -359,6 +359,54 @@ export function remoteAction(name: string, action: 'fetch' | 'pull' | 'push'): P
   return request(`/api/remotes/${encodeURIComponent(name)}/${action}`, { method: 'POST' });
 }
 
+// The inbox (cmd/git-board-server/inbox.go): what happened that concerns
+// you on the issues of the last 14 days, newest first.
+export interface InboxRow {
+  issue: Issue;
+  reasons: string[]; // why you follow it; none: addressed to you only
+  news: string[]; // "2 comments", "closed", "added you as reviewer"…
+  who: Person[];
+  latest: string;
+  first: string; // the oldest of those events: the panel scrolls there
+}
+
+export interface InboxResponse {
+  me: { id: string; login: string };
+  rows: InboxRow[];
+  fields: boolean; // also field changes on issues you're in
+  views: string[]; // views followed
+  views_missing: string[]; // followed, no longer in the config
+  following: number; // open issues your inbox follows
+}
+
+export interface FollowState {
+  following: boolean;
+  reasons: string[];
+  set: boolean | null; // what you clicked; null: automatic
+}
+
+export function getInbox(): Promise<InboxResponse> {
+  return request('/api/inbox');
+}
+
+export function markSeen(issues: string[]): Promise<object> {
+  return request('/api/inbox/seen', json('POST', { issues }));
+}
+
+const followPath = (id: string) => `/api/inbox/follow/${encodeURIComponent(id)}`;
+
+export function getFollow(id: string): Promise<FollowState> {
+  return request(followPath(id));
+}
+
+export function setFollow(id: string, follow: boolean | null): Promise<FollowState> {
+  return request(followPath(id), json('PUT', { follow }));
+}
+
+export function setInboxSettings(views: string[], fields: boolean): Promise<object> {
+  return request('/api/inbox/settings', json('PUT', { views, fields }));
+}
+
 // Where the page loads a server path from (the API's origin in dev).
 export const apiURL = (path: string) => API_BASE + path;
 
