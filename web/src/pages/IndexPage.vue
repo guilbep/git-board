@@ -232,7 +232,7 @@ import {
   type Bucket, type FieldConfig, type Issue, type ViewConfig,
 } from '@/api/board';
 import {
-  NONE, PLAIN, STATE, namespaces, parseSelection, parseSort, sortIssues, type Facet,
+  NONE, PLAIN, STATE, namespaces, parseSelection, parseSort, prefillFrom, sortIssues, type Facet,
 } from '@/facets';
 import { loadColors } from '@/colors';
 import { composeFilter, suggest, withFacet } from '@/viewfilter';
@@ -437,13 +437,7 @@ const count = computed(() => shown.value.reduce((n, b) => n + b.issues.length, 0
 const sprintView = computed(() => facetList.value.some((f) => f.selected.length === 1 && f.selected[0] === fields.value[f.key]?.current));
 
 // New issue starts with the fields the filter picks one value of
-const prefill = computed(() =>
-  Object.fromEntries(
-    facetList.value
-      .filter((f) => f.key !== STATE && f.key !== PLAIN && f.selected.length === 1 && f.selected[0] !== NONE)
-      .map((f) => [f.key, f.selected[0]!]),
-  ),
-);
+const prefill = computed(() => prefillFrom(facetList.value, fields.value));
 
 // A header click sorts ascending, a second one descending.
 function sortBy(key: string) {

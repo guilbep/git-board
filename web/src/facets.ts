@@ -25,10 +25,12 @@ export interface Sort {
   desc: boolean;
 }
 
+// a field's values: its own, else what it takes from the project (a role)
 function valuesOf(issue: Issue, key: string): string[] {
   if (key === STATE) return [issue.status];
+  const own = fieldValues(issue.labels, key);
   const values =
-    key === PLAIN ? issue.labels.filter((l) => !l.includes(':')) : fieldValues(issue.labels, key);
+    key === PLAIN ? issue.labels.filter((l) => !l.includes(':')) : own.length ? own : fieldValues(issue.inherited ?? [], key);
   return values.length ? values : [NONE];
 }
 
@@ -96,6 +98,17 @@ export function parseSort(spec: string): Sort | null {
   const [key = '', dir] = spec.trim().split(/\s+/);
   if (!key) return null;
   return key.startsWith('-') ? { key: key.slice(1), desc: true } : { key, desc: dir === 'desc' };
+}
+
+// prefillFrom: a new issue starts with the fields the filter picks one
+// value of, but not a role's value the project gives every issue anyway
+// (pm:@me on the PM's board): written, it would pin the issue to it.
+export function prefillFrom(facets: Facet[], fields: Fields): Record<string, string> {
+  return Object.fromEntries(
+    facets
+      .filter((f) => f.key !== STATE && f.key !== PLAIN && f.selected.length === 1 && f.selected[0] !== NONE && f.selected[0] !== fields[f.key]?.inherits)
+      .map((f) => [f.key, f.selected[0]!]),
+  );
 }
 
 /**

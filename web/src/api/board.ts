@@ -18,6 +18,7 @@ export interface Issue {
   shown_title: string; // the title without a trailing (#2518) of its own (gitbugio.Issue.ShownTitle)
   status: string;
   labels: string[];
+  inherited?: string[]; // what it takes from the project's [roles], for the roles it doesn't set
   github_url?: string; // absent when the issue wasn't bridged in from GitHub
   forges?: Forge[]; // where it is on forges
   number?: string; // its project number, CO2-3075; absent until it has one
