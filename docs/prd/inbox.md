@@ -41,7 +41,14 @@ would need anyway. Teams, a digest or email can deliver it later.
 **Me** is the identity git-board writes as (`Backend.Me()`). Authorship is
 matched by its identity ID; person fields and mentions by its login,
 found the way `@me` finds it (`MyLogin()`, `--me` first), ignoring case.
-No identity set: the inbox says so and links to Settings.
+**You are also every identity carrying that login**: old bridges and the
+sync can leave several for one person (the fork's `resolveAll`), and your
+own forge comments come back under one of them; your own events, `author`
+and `commented` match any of them. No identity set: the inbox says so
+(`no-identity`) and links to Settings. An identity without a login (no
+bridge tagged it, no `--me`): person fields and mentions can't match, so
+the inbox says so (`no-login`, as `fields.go`'s "@me needs your forge
+login") instead of looking thin.
 
 **One file per identity**, in git-bug's local storage
 (`Backend.Storage()`): `git-board/inbox/<identity-id>.json`. Shared by the
@@ -115,16 +122,18 @@ counted or not; Mark all read does it for every row.
 | `PUT /api/inbox/follow/{issue}` `{"follow": true\|false\|null}` | Follow, Unfollow, back to automatic |
 | `PUT /api/inbox/settings` `{"views": [...], "fields": bool}` | |
 
-- **No identity**: `409`, code `no-identity` (`writeCoded`). Unreadable
+- **No identity**: `409`, code `no-identity` (`writeCoded`); no login:
+  `409`, code `no-login`. Unreadable
   file: `500` naming it. A followed view gone from `.git-board.toml`:
   listed in `views_missing`, not an error.
 - **`internal/inbox`**: the file (load, save) and one pure function,
   `Rows(me, state, threads, inViews) []Row`, holding every rule of §2.
 - **The server** gathers its inputs: `ListIssues` within the window,
   `Thread` for each, `board.LoadMatching` for each followed view. One mutex
-  around each read-change-write of the file. The last result is kept until
-  `RefsFingerprint`, the file or the config changes, so the header's count
-  doesn't recompute on every event.
+  around each read-change-write of the file. The last result is kept, per
+  identity (switching who you write as changes git config, not refs),
+  until `RefsFingerprint`, the file or the config changes, so the header's
+  count doesn't recompute on every event.
 - **`eventFor`**: `/api/inbox` gets its own `inbox` kind, so marking an
   issue seen in one tab updates the count in the others.
 
@@ -157,7 +166,9 @@ Mockup: the link at the top.
     optional `at` on `IssueTimeline`), and posts `seen`. The row stays,
     dimmed, until the next refresh: the list doesn't jump while you read.
   - Empty: "Nothing new for you", and what you follow ("Following 14
-    issues · view backend"). No identity: "Choose who you write as".
+    issues · view backend"). No identity: "Choose who you write as". No
+    login: "Tell git-board your forge login", pointing at `git bug bridge
+    new` or `--me`.
 - **`IssueSide.vue`**: an Inbox block: "Following · because you're
   assignee · commented" with **Unfollow**, or "Not following" with
   **Follow**; once clicked, **Back to automatic**.
@@ -172,12 +183,15 @@ Mockup: the link at the top.
   hides a sprint change, on shows it; title and description edits never
   show; Unfollow hides activity, Follow brings an issue in; a closed issue
   still shows for an `is:open` view; a missing view lands in
-  `views_missing`; outside the window is ignored and pruned.
+  `views_missing`; outside the window is ignored and pruned; a comment by
+  a second identity carrying your login is yours (hidden, and counts as
+  `commented`).
 - **The file**: a round trip; an unreadable file is an error.
 - **The server, one `httptest` flow on a `gitbugiotest` repo**: another
   identity comments, `GET /api/inbox` has the row; `seen` clears it;
   `follow: false` keeps a later comment out, `null` brings it back; no
-  identity is `409 no-identity`.
+  identity is `409 no-identity`, an identity without a login `409
+  no-login`.
 - **Web, one vitest**: which remotes to pull (checked within 5 minutes:
   skip, unless Refresh).
 - Not tested: the header count, the tab title (display).
