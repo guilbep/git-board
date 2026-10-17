@@ -183,9 +183,25 @@ opened, its checks and approval show, and it merges from the issue.
   folded to one line).
 - `Closes #N` closes the issue only when the PR merges into the default
   branch: co2's is `dev`.
-- Approval live is left to M4 (one GitHub account on the scratch forges):
-  M3's live test shows "review required" and merges with the review rule
-  off.
+- Approval live is left to M4 (one GitHub account on the scratch forges).
+- Requested reviewers are people only: a team's fields need `read:org`,
+  which git-bug's tokens don't have, and they failed the whole query (found
+  live). A CODEOWNERS team asked to review reads "an approval".
+
+*Live test, 2026-10-17, guilbep/git-board-test, without a ruleset (the
+user's call: the repository is private on a free plan):* issue #25 made in
+git-board and sent by the per-issue sync; branch `25-m3-gate-live-test`
+pushed; **Open PR** from Development opened #26 as guilbep, body
+`6a1dd80` / `Closes #25`; its `Tests` check showed running, then passed,
+the page re-reading by itself; **Merge into main** merged it with a merge
+commit (eab6ac9, two parents); GitHub closed #25 and the issue's sync
+brought the close back; after a fetch, Development read "merged into
+main" and "#26 Merged". Left on git-board-test: `.github/workflows/tests.yml`
+and `m3-gate.txt` on `main`, issue #25 (closed), PR #26 (merged); the
+branch is deleted. The issue's git-bug entity lives only in a scratch
+clone, so the next import elsewhere brings #25 in as a new issue. Not yet
+tested live: required checks and the code-owner approval (a ruleset needs
+the repository public or a paid plan; approval needs a second account).
 
 ### M4: review in git-board
 
