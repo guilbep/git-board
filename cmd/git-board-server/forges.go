@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"regexp"
 	"slices"
@@ -278,6 +279,12 @@ func (s *apiServer) runForgeSync(job *forgeJob, run func(context.Context, string
 		now := time.Now()
 		job.State, job.Error, job.Ended = state, errText, &now
 		s.forgeMu.Unlock()
+		// issues a forge brought in get their numbers
+		if !job.DryRun {
+			if _, err := s.b.NumberIssues(gitbugio.NumbersRemote); err != nil {
+				log.Printf("numbering after the forge sync: %v", err)
+			}
+		}
 		// the pages update: the header's sync link, and the issues a real
 		// run may have changed
 		s.seeRefs()

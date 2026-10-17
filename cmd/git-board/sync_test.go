@@ -184,3 +184,24 @@ func TestSyncContinuesPastOneFailingPath(t *testing.T) {
 		t.Errorf("B after pulling = %v, want A's bug (proves A's sync wasn't skipped)", got)
 	}
 }
+
+// sync fetches the counter and numbers what this clone made since.
+func TestSyncNumbers(t *testing.T) {
+	pathA, pathB := twoReposWithRemote(t)
+	a, err := gitbugio.Open(pathA)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := a.InitNumbers("origin", "CO2", 3052); err != nil {
+		t.Fatal(err)
+	}
+	a.Close()
+	seedBug(t, pathB, "Made before B knew")
+	var out strings.Builder
+	if err := runSync(&out, []string{pathB}, "origin"); err != nil {
+		t.Fatalf("sync: %v\n%s", err, out.String())
+	}
+	if !strings.Contains(out.String(), "numbered 1 issue") {
+		t.Errorf("sync said:\n%s", out.String())
+	}
+}

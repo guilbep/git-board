@@ -78,6 +78,11 @@ func syncOne(out io.Writer, path, remote string) error {
 			return fmt.Errorf("pull: %w", err)
 		}
 	}
+	if remote == gitbugio.NumbersRemote {
+		if err := b.FetchNumbers(remote); err != nil {
+			return fmt.Errorf("numbers: %w", err)
+		}
+	}
 
 	pushOut, err := b.Push(remote)
 	if err != nil {
@@ -85,6 +90,15 @@ func syncOne(out io.Writer, path, remote string) error {
 	}
 	if pushOut != "" {
 		fmt.Fprintf(out, "%s: %s\n", path, pushOut)
+	}
+	if remote == gitbugio.NumbersRemote {
+		n, err := b.NumberIssues(remote)
+		if err != nil {
+			return fmt.Errorf("numbering: %w", err)
+		}
+		if n > 0 {
+			fmt.Fprintf(out, "%s: numbered %d issue(s)\n", path, n)
+		}
 	}
 	fmt.Fprintf(out, "%s: synced\n", path)
 	return nil

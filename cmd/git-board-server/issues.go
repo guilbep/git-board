@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 	"net/url"
 	"slices"
@@ -109,6 +110,11 @@ func (s *apiServer) handleNewIssue(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeIssueError(w, err)
 		return
+	}
+	// numbered at once when the project numbers its issues; offline, at
+	// the next sync
+	if _, err := s.b.NumberIssues(gitbugio.NumbersRemote); err != nil {
+		log.Printf("numbering %s: %v", id, err)
 	}
 	s.writeThread(w, http.StatusCreated, id)
 }
