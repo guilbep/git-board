@@ -166,7 +166,7 @@ func TestPulls(t *testing.T) {
 		t.Fatalf("pulls %+v", res)
 	}
 	p := res.Pulls[0]
-	want := []string{"Frontent Lint/Type Check", "Frontend Tests", "an approval from co2-calculator"}
+	want := []string{"Frontent Lint/Type Check", "Frontend Tests", "an approval"}
 	if p.Branch != "fix/2518-x" || p.PR == nil || p.PR.Number != 3082 || p.PR.CanMerge || strings.Join(p.PR.Waits, ", ") != strings.Join(want, ", ") {
 		t.Errorf("fix/2518-x %+v", p.PR)
 	}

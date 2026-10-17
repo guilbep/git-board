@@ -56,7 +56,7 @@ type PR struct {
 	MergeState string   `json:"merge_state"` // mergeStateStatus
 	Checks     []Check  `json:"checks"`
 	Reviews    []Review `json:"reviews"`   // latestReviews
-	Requested  []string `json:"requested"` // requested reviewers: logins, team slugs
+	Requested  []string `json:"requested"` // the people asked to review
 	// set by Gate
 	CanMerge bool     `json:"can_merge"`
 	Checking bool     `json:"checking"` // GitHub is still computing mergeability
@@ -64,7 +64,11 @@ type PR struct {
 }
 
 // findQuery is a branch's pull requests, newest first. Verified against
-// GitHub 2026-10-17, without preview headers.
+// GitHub 2026-10-17, without preview headers, with a token of the repo
+// scope alone (git-bug's): a team's fields need read:org and fail the
+// whole query, so requested reviewers are people only.
+// ponytail: a team asked to review (a CODEOWNERS team) reads "an
+// approval"; REST's requested_reviewers if its name matters
 const findQuery = `query($owner: String!, $name: String!, $head: String!) {
   repository(owner: $owner, name: $name) {
     pullRequests(headRefName: $head, first: 10, orderBy: {field: CREATED_AT, direction: DESC}) {
@@ -74,7 +78,7 @@ const findQuery = `query($owner: String!, $name: String!, $head: String!) {
         author { login }
         reviewDecision mergeable mergeStateStatus
         latestReviews(first: 20) { nodes { author { login } state commit { oid } } }
-        reviewRequests(first: 10) { nodes { requestedReviewer { ... on User { login } ... on Team { slug } } } }
+        reviewRequests(first: 10) { nodes { requestedReviewer { ... on User { login } } } }
         commits(last: 1) { nodes { commit { statusCheckRollup { contexts(first: 100) { nodes {
           __typename
           ... on CheckRun { name status conclusion detailsUrl }
@@ -109,7 +113,7 @@ type prNode struct {
 	}
 	ReviewRequests struct {
 		Nodes []struct {
-			RequestedReviewer struct{ Login, Slug string }
+			RequestedReviewer struct{ Login string }
 		}
 	}
 	Commits struct {
@@ -186,7 +190,7 @@ func (n *prNode) pr() *PR {
 		p.Reviews = append(p.Reviews, rv)
 	}
 	for _, r := range n.ReviewRequests.Nodes {
-		if who := cmp.Or(r.RequestedReviewer.Login, r.RequestedReviewer.Slug); who != "" {
+		if who := r.RequestedReviewer.Login; who != "" {
 			p.Requested = append(p.Requested, who)
 		}
 	}

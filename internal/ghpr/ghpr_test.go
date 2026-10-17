@@ -57,6 +57,12 @@ func co2PR(t *testing.T) *PR {
 		if v := req.Variables; v["owner"] != "o" || v["name"] != "r" || v["head"] != "fix/3075-x" {
 			t.Errorf("variables %v", v)
 		}
+		// GitHub, to a token with the repo scope alone (git-bug's): a
+		// team's fields need read:org, and the whole query fails
+		if strings.Contains(req.Query, "on Team") {
+			_, _ = io.WriteString(w, `{"errors":[{"type":"INSUFFICIENT_SCOPES","message":"Your token has not been granted the required scopes to execute this query. The 'slug' field requires one of the following scopes: ['read:org', 'read:discussion']"}]}`)
+			return
+		}
 		serveFile(t, "pr.json")(w, r)
 	})
 	p, err := c.Find(context.Background(), "o/r", "fix/3075-x")
@@ -74,7 +80,7 @@ func TestFind(t *testing.T) {
 	if p.Decision != "REVIEW_REQUIRED" || p.Mergeable != "MERGEABLE" || p.MergeState != "BLOCKED" {
 		t.Errorf("decision %q, mergeable %q, merge state %q", p.Decision, p.Mergeable, p.MergeState)
 	}
-	if len(p.Checks) != 13 || !slices.Equal(p.Requested, []string{"co2-calculator"}) {
+	if len(p.Checks) != 13 || len(p.Requested) != 0 {
 		t.Errorf("%d checks, requested %v", len(p.Checks), p.Requested)
 	}
 	i := slices.IndexFunc(p.Checks, func(c Check) bool { return c.Name == "Frontend Tests" })
@@ -158,7 +164,7 @@ func TestGate(t *testing.T) {
 			t.Errorf("check %d %+v", i, c)
 		}
 	}
-	if want := []string{"Frontent Lint/Type Check", "Frontend Tests", "an approval from co2-calculator"}; !slices.Equal(p.Waits, want) {
+	if want := []string{"Frontent Lint/Type Check", "Frontend Tests", "an approval"}; !slices.Equal(p.Waits, want) {
 		t.Errorf("Waits = %q, want %q", p.Waits, want)
 	}
 }
@@ -214,7 +220,7 @@ func TestGateWords(t *testing.T) {
 		{PR{Draft: true, MergeState: "DRAFT"}, "ready for review (a draft)"},
 		{PR{MergeState: "BLOCKED"}, "GitHub's rules"},
 		{PR{Decision: "REVIEW_REQUIRED", MergeState: "BLOCKED"}, "an approval"},
-		{PR{Decision: "REVIEW_REQUIRED", MergeState: "BLOCKED", Requested: []string{"alice", "co2-calculator"}}, "an approval from alice or co2-calculator"},
+		{PR{Decision: "REVIEW_REQUIRED", MergeState: "BLOCKED", Requested: []string{"alice", "bob"}}, "an approval from alice or bob"},
 	} {
 		p := tc.pr
 		p.State, p.Base = "OPEN", "dev"
