@@ -77,27 +77,39 @@ prefix = "CO2"
   a non-fast-forward rejection means someone else took the number,
   so it fetches and tries the next. `git bug push` doesn't carry `refs/board/*`:
   git-board fetches and pushes it itself.
-- **When**: on creation, from the CLI, the web UI or the TUI. Offline or on a
+- **An issue's project number** is, in this order: its line in `numbers`;
+  else its GitHub number, when that is below `start` (`#2518` is `CO2-2518`,
+  whenever the issue is imported: co2 has bridged only ~325 of its ~811
+  issues so far); else none yet, and the counter hands one out.
+- **When**: the counter numbers an issue with no project number (made in
+  git-board, or imported with a GitHub number at or above `start`) on
+  creation or import, from the CLI, the web UI or the TUI. Offline or on a
   failed push, the issue shows its short git-bug id and is numbered at the
-  next sync. An issue imported from a forge after the switch is numbered the
-  same way.
-- **The switch**, `git board numbers init`: one commit mapping every issue
-  that has a GitHub number to that number, and `start` set to one more than
-  GitHub's highest number, PRs included. Pushing it is the switch;
-  until then nothing changes. For co2 that is its owner's call.
-- **One lookup**: `Issue.Numbers()` / `HasNumber()` (`internal/gitbugio/gitbugio.go`)
-  gain the project number. The filter (`CO2-3075`, `3075`), the branch-link
-  rule and `{number}` in branch names already go through it. `#3060` keeps
-  meaning GitHub's 3060.
+  next sync.
+- **The switch**, `git board numbers init`: one commit holding only
+  `start`, one more than GitHub's highest number, PRs included. Pushing it is
+  the switch; until then nothing changes. For co2 that is its owner's call.
+- **One lookup, which knows the counters**: `Issue.Numbers()` /
+  `HasNumber()` (`internal/gitbugio/gitbugio.go`) return each number with
+  where it comes from (project, GitHub, GitLab), not a flat list. After the
+  switch, a bare `3060` and `CO2-3060` mean the project number and `#3060`
+  means GitHub's, so `fix/3060-…` links to one issue, not to both the
+  issue that is CO2-3060 and the one that is GitHub #3060. Before the switch,
+  bare numbers mean the forge's, as today. The filter, the branch-link rule
+  and `{number}` in branch names already go through this lookup.
 - **Shown** before the title, `CO2-3075`, on cards, rows and the issue page.
-- **Forges**: `CO2-3075` in a body is plain text on every forge and needs no
-  translation; the fork's `#n` translation (`refIndex`, `bridge/core/syncpush.go`)
-  is unchanged. At the switch, co2's owner should retire
+- **Forges**: `CO2-3075` in a body is plain text on every forge, so no
+  translation is expected in the fork's `#n` translation (`refIndex`,
+  `bridge/core/syncpush.go`); to confirm with the main session, which
+  expected it to need an entry. At the switch, co2's owner should retire
   `append-issue-number.yml`, or new titles become `… (CO2-3075) (#3071)`.
 
 Done when: two clones number issues at the same time against
 guilbep/git-board-test and get distinct numbers; an issue made offline gets
-its number on the next sync; a test races two clones on a local bare remote.
+its number on the next sync; a GitHub issue below `start` imported after
+the switch shows its GitHub number as its CO2 number; a bare number that is
+one issue's CO2 number and another's GitHub number finds only the first; a
+test races two clones on a local bare remote.
 
 ### M2: roles
 
