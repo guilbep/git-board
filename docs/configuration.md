@@ -169,7 +169,7 @@ One syntax everywhere: a view's `filter`, the board's **Filter** box, ⌘K, and 
 
 An empty filter is every issue, open or closed. A view without one shows the open issues (`is:open`), as `git-board ls` does without one.
 
-On the board, the Filter box holds the view's filter until you change it; the address then keeps it (`?view=backlog&filter=…`), so a link shows the same issues. The filters panel counts each field's values against the rest of the filter, and a tick writes into the box: ready and qa ticked is `status:ready,qa`, Not set `no:status`, Not set with values the values left out (`-status:validated`). ⌘K takes the same filter on every issue, the open ones first, and its first row, **Filter the board by**, puts it into the box; `#2528` or an id opens that issue at once.
+On the board, the Filter box holds the view's filter until you change it; the address then keeps it (`?view=backlog&filter=…`), so a link shows the same issues. The filters panel counts each field's values against the rest of the filter, and a tick writes into the box: ready and qa ticked is `status:ready,qa`, Not set `no:status`, Not set with values the values left out (`-status:validated`). ⌘K takes the same filter on every issue, the open ones first, and its first row, **Filter the board by**, puts it into the box; `#2528` or an id opens that issue at once. Typing `status:` in either offers the field's values. On the command line, quote a filter: `git-board ls "#2528"` (the shell takes an unquoted `#` for a comment).
 
 ## Sprints
 

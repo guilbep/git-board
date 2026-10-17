@@ -32,6 +32,7 @@ const groups = [
     title: 'Board',
     keys: [
       { keys: [mod, 'K'], what: 'Filter the issues, jump to one, or run a command' },
+      { keys: ['Tab'], what: `In ${mod}K, complete a field's value (status:r → status:ready)` },
       { keys: ['c'], what: 'New issue' },
       { keys: ['?'], what: 'This list' },
     ],
