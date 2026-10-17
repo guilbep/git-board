@@ -4,6 +4,7 @@
 package board
 
 import (
+	"errors"
 	"fmt"
 	"slices"
 	"sort"
@@ -11,9 +12,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/git-bug/git-bug/repository"
+
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/filter"
 	"github.com/guilbep/git-board/internal/gitbugio"
+	"github.com/guilbep/git-board/internal/inbox"
 )
 
 // DefaultFilter is used when no filter expression is given.
@@ -42,6 +46,10 @@ func Match(b any, cfg *config.Config, filterStr, me string, issues []gitbugio.Is
 		return nil, err
 	}
 	withRoles(cfg, issues)
+	// after the roles: a followed view can filter on an inherited one
+	if err := fillFollows(b, cfg, conditions, me, issues, today); err != nil {
+		return nil, err
+	}
 	matched := make([]gitbugio.Issue, 0, len(issues))
 	for _, issue := range issues {
 		if filter.Matches(issue, conditions, cfg, me, today) {
@@ -49,6 +57,79 @@ func Match(b any, cfg *config.Config, filterStr, me string, issues []gitbugio.Is
 		}
 	}
 	return matched, nil
+}
+
+// fillFollows gives follows:@me your inbox's file (internal/inbox): what
+// you followed and unfollowed, and the issues of the views you follow.
+func fillFollows(b any, cfg *config.Config, conditions []filter.Condition, me string, issues []gitbugio.Issue, today time.Time) error {
+	if !slices.ContainsFunc(conditions, func(c filter.Condition) bool { return c.Kind == filter.KindFollows }) {
+		return nil
+	}
+	repo, ok := b.(interface {
+		Me() (gitbugio.Person, bool, error)
+		Storage() repository.LocalStorage
+	})
+	if !ok {
+		return errors.New("follows:@me needs a repository")
+	}
+	p, set, err := repo.Me()
+	if err != nil {
+		return err
+	}
+	if !set {
+		return errors.New("follows:@me: choose who you write as first")
+	}
+	st, err := inbox.Load(repo.Storage(), p.ID)
+	if err != nil {
+		return err
+	}
+	inViews, _, err := FollowedViews(b, cfg, st.Views, me, issues, today)
+	if err != nil {
+		return err
+	}
+	f := &filter.Followed{Follow: setOf(st.Follow), Unfollow: setOf(st.Unfollow), InViews: map[string]bool{}}
+	for id := range inViews {
+		f.InViews[id] = true
+	}
+	for i := range conditions {
+		if conditions[i].Kind == filter.KindFollows {
+			conditions[i].Followed = f
+		}
+	}
+	return nil
+}
+
+// FollowedViews is, by issue id, the followed views among issues each is
+// in, and the followed views no longer in the config. A view matches
+// without its is: (a close still shows) and its follows: (it can't follow
+// itself).
+func FollowedViews(b any, cfg *config.Config, views []string, me string, issues []gitbugio.Issue, today time.Time) (map[string][]string, []string, error) {
+	inViews := map[string][]string{}
+	var missing []string
+	for _, name := range views {
+		v, ok := cfg.Views[name]
+		if !ok {
+			missing = append(missing, name)
+			continue
+		}
+		text := filter.Without(v.Filter, func(c filter.Condition) bool { return c.Kind == filter.KindIs || c.Kind == filter.KindFollows })
+		matched, err := Match(b, cfg, text, me, issues, today)
+		if err != nil {
+			return nil, nil, err
+		}
+		for _, m := range matched {
+			inViews[m.ID] = append(inViews[m.ID], name)
+		}
+	}
+	return inViews, missing, nil
+}
+
+func setOf(ids []string) map[string]bool {
+	res := make(map[string]bool, len(ids))
+	for _, id := range ids {
+		res[id] = true
+	}
+	return res
 }
 
 // prepare parses filterStr and finds who @me is. Free text looks in titles,

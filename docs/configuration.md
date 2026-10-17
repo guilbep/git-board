@@ -182,6 +182,7 @@ One syntax everywhere: a view's `filter`, the board's **Filter** box, ⌘K, and 
 | `title:*spec*` | a title matching the pattern |
 | `author:guilbep`, `author:@me` | who opened the issue |
 | `involves:guilbep`, `involves:@me` | issues someone is in: the author, a person field (assignee, reviewer…), a comment, an @mention |
+| `follows:@me` | what your inbox follows: `involves:@me`, the issues you followed and the views you follow, without those you unfollowed |
 | `label:bug` | a plain label, or a full one: `label:status:ready` |
 | `no:assignee` | no value for that field; `no:label`: no plain label |
 | `#2528` | the issue with that number on a forge |

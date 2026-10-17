@@ -64,3 +64,32 @@ func TestInvolvesTerm(t *testing.T) {
 		t.Error("involves:@me needs to know who you are")
 	}
 }
+func TestFollowsTerm(t *testing.T) {
+	cfg, now := &config.Config{}, time.Now()
+	assigned := gitbugio.Issue{ID: "a1", Labels: []string{"assignee:guilbep"}}
+	unfollowed := gitbugio.Issue{ID: "b2", Labels: []string{"assignee:guilbep"}}
+	followed := gitbugio.Issue{ID: "c3"}
+	inView := gitbugio.Issue{ID: "d4"}
+	nothing := gitbugio.Issue{ID: "e5"}
+
+	conds := filter.Parse("follows:@me")
+	conds[0].Followed = &filter.Followed{
+		Follow:   map[string]bool{"c3": true},
+		Unfollow: map[string]bool{"b2": true},
+		InViews:  map[string]bool{"d4": true},
+	}
+	for _, tc := range []struct {
+		issue gitbugio.Issue
+		want  bool
+	}{{assigned, true}, {unfollowed, false}, {followed, true}, {inView, true}, {nothing, false}} {
+		if got := filter.Matches(tc.issue, conds, cfg, "guilbep", now); got != tc.want {
+			t.Errorf("follows:@me on %s = %v, want %v", tc.issue.ID, got, tc.want)
+		}
+	}
+	if filter.Matches(assigned, filter.Parse("follows:ann"), cfg, "guilbep", now) {
+		t.Error("follows: is yours only: follows:ann matches nothing")
+	}
+	if !filter.RequiresMe(filter.Parse("follows:@me")) {
+		t.Error("follows:@me needs to know who you are")
+	}
+}

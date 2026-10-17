@@ -1,12 +1,14 @@
 package board_test
 
 import (
+	"slices"
 	"testing"
 	"time"
 
 	"github.com/guilbep/git-board/internal/board"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/gitbugio/gitbugiotest"
+	"github.com/guilbep/git-board/internal/inbox"
 )
 
 // Search as on GitHub: free text in titles, descriptions and comments;
@@ -82,5 +84,42 @@ func TestInvolvesOnARepository(t *testing.T) {
 	}
 	if !ids[assigned] || !ids[mentioned] || !ids[commented] || len(ids) != 3 {
 		t.Errorf("involves:@me = %v, want %s, %s, %s", ids, assigned, mentioned, commented)
+	}
+}
+
+// follows:@me reads your inbox file; a followed view counts without its
+// is: (a close still shows) and without its own follows: (no loop).
+func TestFollowsOnARepository(t *testing.T) {
+	b := gitbugiotest.New(t)
+	assigned, _ := b.NewIssue("Train legs", "", []string{"assignee:guilbep"})
+	unfollowed, _ := b.NewIssue("Buildings", "", []string{"assignee:guilbep"})
+	followed, _ := b.NewIssue("Food", "", nil)
+	closedInView, _ := b.NewIssue("Cache factors", "", []string{"area:backend"})
+	gitbugiotest.CloseIssue(t, b, closedInView)
+	if _, err := b.NewIssue("Unrelated", "", nil); err != nil {
+		t.Fatal(err)
+	}
+	me, _, _ := b.Me()
+	if err := inbox.Save(b.Storage(), me.ID, inbox.State{Follow: []string{followed}, Unfollow: []string{unfollowed}, Views: []string{"backend", "gone"}}); err != nil {
+		t.Fatal(err)
+	}
+	cfg := &config.Config{Views: map[string]config.View{"backend": {Filter: "is:open area:backend follows:@me"}}}
+
+	got, err := board.LoadMatching(b, cfg, "follows:@me", "guilbep")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ids := map[string]bool{}
+	for _, i := range got {
+		ids[i.ID] = true
+	}
+	if !ids[assigned] || !ids[followed] || !ids[closedInView] || ids[unfollowed] || len(ids) != 3 {
+		t.Errorf("follows:@me = %v, want %s, %s, %s", ids, assigned, followed, closedInView)
+	}
+
+	all, _ := b.ListIssues()
+	inViews, missing, err := board.FollowedViews(b, cfg, []string{"backend", "gone"}, "guilbep", all, time.Now())
+	if err != nil || !slices.Equal(inViews[closedInView], []string{"backend"}) || !slices.Equal(missing, []string{"gone"}) {
+		t.Errorf("FollowedViews = %v %v %v", inViews, missing, err)
 	}
 }
