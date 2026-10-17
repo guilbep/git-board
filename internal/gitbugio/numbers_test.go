@@ -1,7 +1,10 @@
 package gitbugio_test
 
 import (
+	"errors"
+	"fmt"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/guilbep/git-board/internal/gitbugio"
@@ -99,8 +102,8 @@ func TestNumbersGitHubBelowStart(t *testing.T) {
 }
 
 // Two clones number at once: the push is the lock. Theirs, on a counter
-// mine has moved, is refused and left as fetched; its next try takes the
-// next number.
+// mine has moved, is refused and keeps no number of its own; its next try
+// takes the next number.
 func TestNumbersPushIsTheLock(t *testing.T) {
 	mine, theirs := gitbugiotest.NewPair(t)
 	if err := mine.InitNumbers("origin", "CO2", 3052); err != nil {
@@ -117,8 +120,8 @@ func TestNumbersPushIsTheLock(t *testing.T) {
 	if _, rejected, err := gitbugio.NumberOnce(theirs, "origin"); !rejected || err == nil {
 		t.Fatalf("theirs on a stale counter: rejected %v, %v", rejected, err)
 	}
-	if c, _, _ := theirs.Counter(); len(c.ByID) != 0 {
-		t.Fatalf("a refused push left %v in their counter", c.ByID)
+	if c, _, _ := theirs.Counter(); c.ByID[b] != 0 {
+		t.Fatalf("a refused push left their issue numbered %d, a number nobody else has", c.ByID[b])
 	}
 	if n, err := theirs.NumberIssues("origin"); n != 1 || err != nil {
 		t.Fatalf("theirs: %d, %v", n, err)
@@ -172,5 +175,45 @@ func TestInitNumbersOnce(t *testing.T) {
 		if err := clone.InitNumbers("origin", "XY", 1); err == nil || !strings.Contains(err.Error(), "CO2, from 3052") {
 			t.Errorf("second init: %v", err)
 		}
+	}
+}
+
+// Two clones number at the very same time, round after round: whoever
+// loses the push takes the next number, whatever the server's refusal says.
+func TestNumbersRealRace(t *testing.T) {
+	mine, theirs := gitbugiotest.NewPair(t)
+	if err := mine.InitNumbers("origin", "CO2", 1); err != nil {
+		t.Fatal(err)
+	}
+	if err := theirs.FetchNumbers("origin"); err != nil {
+		t.Fatal(err)
+	}
+	for round := range 8 {
+		var wg sync.WaitGroup
+		errs := make([]error, 2)
+		for i, clone := range []*gitbugio.Backend{mine, theirs} {
+			gitbugiotest.NewIssue(t, clone, fmt.Sprintf("round %d, clone %d", round, i))
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				_, errs[i] = clone.NumberIssues("origin")
+			}()
+		}
+		wg.Wait()
+		if err := errors.Join(errs...); err != nil {
+			t.Fatalf("round %d: %v", round, err)
+		}
+	}
+	_ = mine.FetchNumbers("origin")
+	c, _, _ := mine.Counter()
+	seen := map[int]string{}
+	for id, n := range c.ByID {
+		if other, dup := seen[n]; dup {
+			t.Errorf("%d is both %s and %s", n, other[:7], id[:7])
+		}
+		seen[n] = id
+	}
+	if len(c.ByID) != 16 {
+		t.Errorf("%d issues numbered, want 16", len(c.ByID))
 	}
 }

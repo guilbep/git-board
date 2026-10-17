@@ -166,26 +166,40 @@ func (b *Backend) counter() (*Counter, error) {
 // clone never holds numbers the remote hasn't, as numbering pushes at once.
 // A remote without one is no error: the project doesn't number its issues.
 func (b *Backend) FetchNumbers(remote string) error {
+	theirs, err := b.remoteSeq(remote)
+	if err != nil || theirs == "" {
+		return err
+	}
+	return b.setSeq(theirs)
+}
+
+// remoteSeq fetches the remote's counter and says where it is: "" for none.
+func (b *Backend) remoteSeq(remote string) (repository.Hash, error) {
 	if _, err := b.repo.FetchRefs(remote, seqNamespace); err != nil && !errors.Is(err, transport.ErrEmptyRemoteRepository) {
-		return fmt.Errorf("fetching the numbers from %s: %w", remote, err)
+		return "", fmt.Errorf("fetching the numbers from %s: %w", remote, err)
 	}
 	theirs, err := b.repo.ResolveTrackingRef(remote, seqNamespace, seqKey)
 	if errors.Is(err, repository.ErrNotFound) {
-		return nil
+		return "", nil
 	}
-	if err != nil {
-		return err
-	}
+	return theirs, err
+}
+
+// setSeq points this clone's counter at h; "" removes it.
+func (b *Backend) setSeq(h repository.Hash) error {
 	ours, err := b.repo.ResolveRef(seqNamespace, seqKey)
 	if errors.Is(err, repository.ErrNotFound) {
 		ours = ""
 	} else if err != nil {
 		return err
 	}
-	if ours == theirs {
+	switch {
+	case ours == h:
 		return nil
+	case h == "":
+		return b.repo.RemoveRef(seqNamespace, seqKey)
 	}
-	return b.repo.UpdateRef(seqNamespace, seqKey, ours, theirs)
+	return b.repo.UpdateRef(seqNamespace, seqKey, ours, h)
 }
 
 // InitNumbers makes the project number its issues, as prefix-N from start:
@@ -219,6 +233,7 @@ func (b *Backend) NumberIssues(remote string) (int, error) {
 	}
 	// ponytail: five tries; more people numbering in the same second is
 	// beyond a team of ten
+	var last error
 	for range 5 {
 		if err := b.FetchNumbers(remote); err != nil {
 			return 0, err
@@ -227,8 +242,9 @@ func (b *Backend) NumberIssues(remote string) (int, error) {
 		if !rejected {
 			return n, err
 		}
+		last = err
 	}
-	return 0, errors.New("the numbers kept moving: sync again")
+	return 0, fmt.Errorf("the numbers kept moving, sync again: %w", last)
 }
 
 // numberOnce numbers the issues without one on the counter as fetched, and
@@ -272,8 +288,10 @@ func (b *Backend) numberOnce(remote string) (n int, rejected bool, err error) {
 }
 
 // pushCounter commits c on parent ("" for the first commit) and pushes it.
-// A failed push leaves the counter as it was; rejected says git refused it,
-// someone else having pushed first.
+// When the push fails, the remote's counter says what happened, since what
+// git says differs by server and by race: ours (it landed; a mirror among
+// the remote's push URLs refused it), someone else's (rejected: they took
+// the number), or still parent (a real failure, the counter as it was).
 func (b *Backend) pushCounter(remote string, c Counter, parent repository.Hash) (rejected bool, err error) {
 	data, err := b.repo.StoreData(c.Bytes())
 	if err != nil {
@@ -295,13 +313,17 @@ func (b *Backend) pushCounter(remote string, c Counter, parent repository.Hash) 
 		return false, err
 	}
 	if _, err := b.repo.PushRefs(remote, seqNamespace); err != nil {
-		var undo error
-		if parent == "" {
-			undo = b.repo.RemoveRef(seqNamespace, seqKey)
-		} else {
-			undo = b.repo.UpdateRef(seqNamespace, seqKey, commit, parent)
+		err = fmt.Errorf("pushing the numbers to %s: %w", remote, err)
+		theirs, ferr := b.remoteSeq(remote)
+		switch {
+		case ferr != nil:
+			return false, errors.Join(err, ferr, b.setSeq(parent))
+		case theirs == commit:
+			return false, nil
+		case theirs == parent:
+			return false, errors.Join(err, b.setSeq(parent))
 		}
-		return strings.Contains(err.Error(), "non-fast-forward"), errors.Join(fmt.Errorf("pushing the numbers to %s: %w", remote, err), undo)
+		return true, errors.Join(err, b.setSeq(theirs))
 	}
 	return false, nil
 }
