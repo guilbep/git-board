@@ -28,6 +28,7 @@
         <ul v-else-if="remotes" class="gb-way-list">
           <li v-for="r in remotes" :key="r.name" class="gb-way-box">
             <div class="gb-way-row"><b>{{ r.name }}</b><span class="gb-way-url">{{ r.url }}</span></div>
+            <div v-if="r.push_urls.join(' ') !== r.url" class="gb-way-url">Pushes to {{ r.push_urls.join(', ') }}</div>
             <template v-if="r.tracked || r.checked">
               <div>{{ aheadWords(r.issues, 'issue') }}</div>
               <div v-if="r.people.send || r.people.receive">{{ aheadWords(r.people, 'person', 'people') }}</div>
@@ -224,7 +225,7 @@ async function loadRemotes() {
 }
 
 async function remote(r: Remote, action: 'fetch' | 'pull' | 'push') {
-  if (action === 'push' && !window.confirm(`Push ${pushWhat(r)} to ${r.name} (${r.url})? Everyone who pulls from it gets them.`)) return;
+  if (action === 'push' && !window.confirm(`Push ${pushWhat(r)} to ${r.name} (${r.push_urls.join(', ')})? Everyone who pulls from it gets them.`)) return;
   remoteBusy.value = `${r.name} ${action}`;
   remoteDone.value = remoteError.value = '';
   try {

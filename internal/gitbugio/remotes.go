@@ -19,6 +19,9 @@ import (
 type Remote struct {
 	Name string `json:"name"`
 	URL  string `json:"url"` // without credentials (NoCredentials)
+	// PushURLs are where a push goes, every one: its pushurls, else its
+	// urls, as git's does
+	PushURLs []string `json:"push_urls"`
 	// Tracked: the remote's refs are known, fetched or pushed once
 	Tracked bool  `json:"tracked"`
 	Issues  Ahead `json:"issues"`
@@ -39,9 +42,21 @@ func (b *Backend) Remotes() ([]Remote, error) {
 	if err != nil {
 		return nil, err
 	}
+	cfg, err := b.c.Config().Read()
+	if err != nil {
+		return nil, err
+	}
 	res := []Remote{}
 	for name, u := range urls {
-		r := Remote{Name: name, URL: NoCredentials(u)}
+		r := Remote{Name: name, URL: NoCredentials(u), PushURLs: []string{}}
+		for _, key := range []string{"remote." + name + ".pushurl", "remote." + name + ".url"} {
+			for _, e := range cfg.GetAll(key) {
+				r.PushURLs = append(r.PushURLs, NoCredentials(e.Value))
+			}
+			if len(r.PushURLs) > 0 {
+				break
+			}
+		}
 		var issues, people bool
 		if r.Issues, issues, err = b.ahead(name, bugent.Namespace); err != nil {
 			return nil, err

@@ -315,6 +315,7 @@ export interface Ahead {
 export interface Remote {
   name: string;
   url: string; // without credentials
+  push_urls: string[]; // where a push goes, every one (pushurls, else urls)
   tracked: boolean; // its refs are known: fetched or pushed once
   issues: Ahead;
   people: Ahead;

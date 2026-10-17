@@ -1,10 +1,13 @@
 package main
 
 import (
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/git-bug/gitconfig"
 
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/gitbugio"
@@ -94,6 +97,49 @@ func TestRemoteURLsLoseTheirCredentials(t *testing.T) {
 			t.Errorf("NoCredentials(%q) = %q, want %q", in, got, want)
 		}
 	}
+}
+
+// A push goes to every pushurl of a remote, as git's does: the page names
+// them all, before pushing.
+func TestRemotePushURLs(t *testing.T) {
+	b := gitbugiotest.New(t)
+	if err := b.TestCache().Config().Update(func(f *gitconfig.File) error {
+		return errors.Join(
+			f.Set("remote.mirror.url", "https://github.com/o/r.git"),
+			f.Add("remote.mirror.pushurl", "https://github.com/o/r.git"),
+			f.Add("remote.mirror.pushurl", "https://oauth2:glpat-secret@gitlab.example.com/g/r.git"),
+			f.Set("remote.plain.url", "/srv/git/r.git"),
+		)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	rs, err := b.Remotes()
+	if err != nil || len(rs) != 2 {
+		t.Fatalf("Remotes: %v %+v", err, rs)
+	}
+	if got := strings.Join(rs[0].PushURLs, " "); got != "https://github.com/o/r.git https://gitlab.example.com/g/r.git" {
+		t.Errorf("mirror pushes to %s", got)
+	}
+	if got := strings.Join(rs[1].PushURLs, " "); got != "/srv/git/r.git" {
+		t.Errorf("plain pushes to %s, want its url", got)
+	}
+	if code := send(t, "POST", serverOf(t, b).URL+"/api/remotes/plain/push", "https://evil.example"); code != http.StatusForbidden {
+		t.Errorf("a push asked by another site: %d, want 403", code)
+	}
+}
+
+// send is a write with an Origin, as a browser sends.
+func send(t *testing.T, method, url, origin string) int {
+	t.Helper()
+	req, _ := http.NewRequest(method, url, strings.NewReader("{}"))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Origin", origin)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+	return resp.StatusCode
 }
 
 func TestRemoteEvents(t *testing.T) {

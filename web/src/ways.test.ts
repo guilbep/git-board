@@ -5,7 +5,7 @@ import { aheadWords, checkWords, pendingWords, pushWhat, runWords } from './ways
 const dir = (o: Partial<Record<'issues' | 'changed' | 'comments' | 'edits' | 'changes', number>> = {}) => ({ issues: 0, changed: 0, comments: 0, edits: 0, changes: 0, ...o });
 const tally = (to = dir(), from = dir()) => ({ to, from, linked: 0, stays_local: 0, warnings: 0, errors: 0, lines: [] });
 const remote = (send: number, receive: number, people = { send: 0, receive: 0 }, tracked = true) => ({
-  name: 'origin', url: '/srv/r.git', tracked, issues: { send, receive }, people,
+  name: 'origin', url: '/srv/r.git', push_urls: ['/srv/r.git'], tracked, issues: { send, receive }, people,
 });
 
 test('aheadWords says what a remote would move', () => {
