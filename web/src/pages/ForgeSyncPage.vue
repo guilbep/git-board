@@ -1,4 +1,5 @@
-<!-- Where your issues go: three ways, each with its own buttons. Remotes
+<!-- Where your issues go: three ways (settingstabs.ts's channels, the map
+     on top leading to each), each with its own buttons. Remotes
      carry everything with git (git bug pull, push); the forges and the
      GitHub Project are mirrors over their APIs. A forge run always starts
      from a Check (a dry run), and is confirmed with its counts, and with an
@@ -12,15 +13,16 @@
       <p class="gb-lead">Three ways, each with its own buttons. Remotes carry everything with git; forges and the Project are mirrors for the people who work there.</p>
     </div>
 
+    <ChannelMap :to="(c) => `/sync#${c}`" />
+
     <div class="gb-ways">
       <!-- 1: git remotes -->
-      <section class="gb-way" aria-labelledby="way-remotes">
-        <div class="epfl-eyebrow">1 · git</div>
+      <section id="remotes" class="gb-way" aria-labelledby="way-remotes">
+        <div class="epfl-eyebrow">1 · {{ channels[0].via }}</div>
         <div class="gb-way-head">
-          <h2 id="way-remotes" class="h4">Remotes</h2>
-          <a href="#/settings/remotes" class="gb-way-settings" aria-label="Remotes settings">Settings</a>
+          <h2 id="way-remotes" class="h4">{{ channels[0].label }}</h2>
+          <router-link to="/settings/remotes" class="gb-way-settings" aria-label="Remotes settings">Settings</router-link>
         </div>
-        <p>Code, branches, issues, people.</p>
         <div v-if="remoteError" class="epfl-alert epfl-alert-danger" role="alert"><b>Not done.</b> {{ remoteError }}</div>
         <p v-if="remotes && !remotes.length" class="gb-note">No git remote. Add one with <code>git remote add origin &lt;url&gt;</code>.</p>
         <ul v-else-if="remotes" class="gb-way-list">
@@ -44,15 +46,14 @@
       </section>
 
       <!-- 2: the forges' API -->
-      <section class="gb-way gb-way-forges" aria-labelledby="way-forges">
-        <div class="epfl-eyebrow">2 · their API</div>
+      <section id="forges" class="gb-way gb-way-forges" aria-labelledby="way-forges">
+        <div class="epfl-eyebrow">2 · {{ channels[1].via }}</div>
         <div class="gb-way-head">
-          <h2 id="way-forges" class="h4">Forges</h2>
-          <a href="#/settings/forges" class="gb-way-settings" aria-label="Forges settings">Settings</a>
+          <h2 id="way-forges" class="h4">{{ channels[1].label }}</h2>
+          <router-link to="/settings/forges" class="gb-way-settings" aria-label="Forges settings">Settings</router-link>
         </div>
-        <p>A mirror of issues and comments.</p>
         <div v-if="forgeError" class="epfl-alert epfl-alert-danger" role="alert"><b>Not started.</b> {{ forgeError }}</div>
-        <p v-if="status && !status.bridges.length" class="gb-note">No forge has sync on. Switch one on in <a href="#/settings/forges">Settings</a>, or add one.</p>
+        <p v-if="status && !status.bridges.length" class="gb-note">No forge has sync on. Switch one on in <router-link to="/settings/forges">Settings</router-link>, or <router-link to="/settings/forges?add=1">add one</router-link>.</p>
         <div v-else-if="status" class="gb-way-box">
           <div v-for="b in bridgeRows" :key="b.name" class="gb-way-row"><b>{{ b.name }}</b><span>{{ b.label }} · sync on</span></div>
           <div v-if="running">{{ job!.dry_run ? 'Checking…' : `${modeName(job!.mode)} running…` }}</div>
@@ -66,17 +67,16 @@
           <button type="button" class="epfl-btn epfl-btn-primary epfl-btn-sm" :disabled="!canRun" @click="confirm('sync')">Sync</button>
         </div>
         <p class="gb-note">Check says what would come in and go out, and writes nothing. Get only brings the forges’ changes in, Send only sends yours, Sync does both.</p>
-        <a href="#/settings/forges?add=1" class="gb-way-add"><GbIcon name="plus" small /> Add a forge</a>
+        <router-link to="/settings/forges?add=1" class="gb-way-add"><GbIcon name="plus" small /> Add a forge</router-link>
       </section>
 
       <!-- 3: the GitHub Project's fields -->
-      <section class="gb-way gb-way-project" aria-labelledby="way-project">
-        <div class="epfl-eyebrow">3 · fields</div>
+      <section id="github-project" class="gb-way gb-way-project" aria-labelledby="way-project">
+        <div class="epfl-eyebrow">3 · {{ channels[2].via }}</div>
         <div class="gb-way-head">
-          <h2 id="way-project" class="h4">GitHub Project</h2>
-          <a href="#/settings/github-project" class="gb-way-settings" aria-label="GitHub Project settings">Settings</a>
+          <h2 id="way-project" class="h4">{{ channels[2].label }}</h2>
+          <router-link to="/settings/github-project" class="gb-way-settings" aria-label="GitHub Project settings">Settings</router-link>
         </div>
-        <p>Status, priority, sprint, as labels.</p>
         <div v-if="projectError" class="epfl-alert epfl-alert-danger" role="alert"><b>Not done.</b> {{ projectError }}</div>
         <p v-if="project && !project.project" class="gb-note">No GitHub Project. Set one up with <code>git-board bridge configure</code>.</p>
         <template v-else-if="project">
@@ -198,8 +198,10 @@ import { message } from '@/issue';
 import { debounced, onLive } from '@/live';
 import { when } from '@/me';
 import { loadSyncStatus, syncStatus as project } from '@/sync';
+import { channels } from '@/settingstabs';
 import { aheadWords, checkWords, pendingWords, plural, pushWhat, runWords } from '@/ways';
 import AppHeader from '@/components/AppHeader.vue';
+import ChannelMap from '@/components/ChannelMap.vue';
 import GbIcon from '@/components/GbIcon.vue';
 
 // a run creating this many issues on a forge asks for an explicit "I understand"
@@ -336,11 +338,11 @@ onMounted(async () => {
 .gb-lead { margin: var(--space-2) 0 0; color: var(--fg-muted); }
 
 .gb-ways { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-4); align-items: stretch; }
-.gb-way { display: flex; flex-direction: column; gap: var(--space-3); min-width: 0; padding: var(--space-4); border: var(--border-w) solid var(--border); border-top: .25rem solid var(--fg); }
+.gb-way { display: flex; flex-direction: column; gap: var(--space-3); min-width: 0; padding: var(--space-4); border: var(--border-w) solid var(--border); border-top: .25rem solid var(--bg-dark); scroll-margin-top: calc(var(--header-h) + var(--space-3)); }
 .gb-way .epfl-eyebrow { color: var(--fg-muted); }
 .gb-way-forges { border-top-color: var(--primary); }
 .gb-way-forges .epfl-eyebrow { color: var(--primary-hover); }
-.gb-way-project { border-top-color: var(--gb-purple-fg); }
+.gb-way-project { border-top-color: var(--gb-purple-dot); }
 .gb-way-project .epfl-eyebrow { color: var(--gb-purple-fg); }
 .gb-way > p, .gb-way .epfl-alert { margin: 0; }
 .gb-way .epfl-alert { font-size: var(--fs-sm); overflow-wrap: anywhere; }
