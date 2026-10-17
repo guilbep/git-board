@@ -985,3 +985,21 @@ duplicated a label that usually already exists on the issue.
   (`TestLintCreateLabelsPreviewsMissingLabelsWithoutWriting`,
   `TestLintCreateLabelsApplyCreatesMissingLabels`,
   `TestLintApplyWithoutCreateLabelsErrors`) without a real `gh` binary.
+
+## Status update (2026-10-17): Create branch, and an issue's Development
+
+The first step of "the issue is the unit of work" (`docs/prd/work-unit.md`
+on the `work-unit` branch): code hangs off an issue by its branch's name,
+nothing is stored.
+
+- `[branches]` (`base`, `name`, `kinds`) in `internal/config`;
+  `internal/branches` names the branch (`Name`, `Slug`), finds the base
+  (`Suggest`) and the branches naming the issue (`Linked`, `Names`), for
+  both `git-board branch <id>` and `GET /api/issues/{id}/branches`.
+- Repository reads stay on git-bug's repository package (go-git), in
+  `internal/gitbugio/code.go`: branches, a remote's HEAD (its loose file,
+  the API skipping symbolic refs), ancestors, a commit. No `git` binary.
+- Read-only on purpose: no branch is created or pushed, no forge is asked
+  about pull requests.
+- `config.Slug` is `ghbridge`'s old `slugify`, moved: one slug rule.
+

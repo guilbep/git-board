@@ -1,6 +1,7 @@
 <!-- The panel's side column: fields (one PATCH each, as before), the
      "Held" marker of a field in conflict with the GitHub Project, plain
-     labels, the forges and what waits for them, participants. -->
+     labels, the branches (Development), the forges and what waits for
+     them, participants. -->
 <template>
   <div class="gb-side">
     <section class="gb-side-sec" aria-labelledby="side-fields">
@@ -83,6 +84,8 @@
       </form>
     </section>
 
+    <IssueBranches :id="id" :labels="labels" :title="title" />
+
     <section v-if="forges?.length" class="gb-side-sec" aria-labelledby="side-forges">
       <h3 id="side-forges" class="gb-section-title">On the forges</h3>
       <ul class="gb-plain-list">
@@ -120,6 +123,7 @@
 </template>
 
 <script setup lang="ts">
+import IssueBranches from '@/components/IssueBranches.vue';
 import IssueSync from '@/components/IssueSync.vue';
 import { forgeStatus } from '@/forges';
 import ValueMark from '@/components/ValueMark.vue';
@@ -136,6 +140,7 @@ import WaitingChanges from '@/components/WaitingChanges.vue';
 
 const props = defineProps<{
   id: string;
+  title: string;
   labels: string[];
   names: string[];
   fields: Fields;

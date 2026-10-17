@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/guilbep/git-board/internal/branches"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/gitbugio"
 )
@@ -76,4 +77,28 @@ func (s *apiServer) handleRefs(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"out": out, "in": in})
+}
+
+// handleBranches answers the branch to create for an issue and the
+// branches naming it (internal/branches). It creates nothing.
+func (s *apiServer) handleBranches(w http.ResponseWriter, r *http.Request) {
+	is, err := s.b.GetIssue(r.PathValue("id"))
+	if err != nil {
+		writeError(w, http.StatusNotFound, err)
+		return
+	}
+	sug, err := branches.Suggest(s.b, s.config().Branches, is)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	linked, err := branches.Linked(s.b, is, sug.Start)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, struct {
+		branches.Suggestion
+		Branches []branches.Branch `json:"branches"`
+	}{sug, linked})
 }

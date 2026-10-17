@@ -35,9 +35,6 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"unicode"
-
-	"golang.org/x/text/unicode/norm"
 
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/fields"
@@ -316,23 +313,6 @@ func normalizeModule(value string) string {
 		return "Generic"
 	}
 	return strings.TrimSpace(value)
-}
-
-var slugNonAlnum = regexp.MustCompile(`[^a-z0-9]+`)
-
-// slugify normalizes a GitHub Project field's display value (e.g. "QA
-// Validation", "Comité Spécialisé") into a label-safe slug ("qa-validation",
-// "comite-specialise"), matching the lowercase-hyphenated convention
-// .git-board.toml's [fields.*].options use. Accents are dropped from their
-// letter, not the letter with them.
-func slugify(value string) string {
-	var b strings.Builder
-	for _, r := range norm.NFD.String(strings.ToLower(strings.TrimSpace(value))) {
-		if !unicode.Is(unicode.Mn, r) {
-			b.WriteRune(r)
-		}
-	}
-	return strings.Trim(slugNonAlnum.ReplaceAllString(b.String(), "-"), "-")
 }
 
 // LabelWriter is the subset of gitbugio.Backend ApplyPlan needs.

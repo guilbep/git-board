@@ -422,6 +422,28 @@ export function getRefs(id: string): Promise<IssueRefs> {
   return request(`${issuePath(id)}/refs`);
 }
 
+// An issue's code (internal/branches): the branch to create, from start
+// (origin/<base>), and the branches whose name names the issue.
+export interface IssueBranch {
+  name: string;
+  remote?: string;
+  ahead: number;
+  behind: number;
+  merged: boolean;
+  last_commit: { sha: string; subject: string; author: string; date: string };
+}
+export interface IssueBranches {
+  suggested: string;
+  base: string;
+  start: string;
+  command: string;
+  branches: IssueBranch[];
+}
+
+export function getBranches(id: string): Promise<IssueBranches> {
+  return request(`${issuePath(id)}/branches`);
+}
+
 // Bridges set up from the settings page (settings.go). A credential is
 // listed without its token; a pasted token goes to git-bug's store.
 export interface Credential {

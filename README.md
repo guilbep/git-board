@@ -153,6 +153,10 @@ git-board move <issue-id> --next
 # it's called in your config) and close the issue
 git-board close <issue-id>
 
+# the branch to create for an issue, and the command creating it
+# ([branches] in .git-board.toml); it creates nothing
+git-board branch <issue-id>
+
 # report label/config drift, read-only (see "Linting" below)
 git-board lint
 
@@ -478,6 +482,9 @@ In a table, a field's cell is edited in place (click it, or Enter on
 it), the **Columns** button shows, hides and orders the columns (Links
 opens the issue on each forge), and the boxes pick rows for the bulk
 bar: set a field, add an assignee or close them all.
+The side column's **Development** lists the branches naming the issue
+(`fix/2518-…`), ahead and behind the base, merged or not, and **Create
+branch** gives the commands to copy (`[branches]`, docs/configuration.md).
 The panel opens at the side, resized by dragging its left edge
 (double-click: the default width), or wide over the blurred board with
 2.5rem around it: the expand button or `f` switches; this browser

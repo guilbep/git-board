@@ -14,6 +14,7 @@ It lives at the root of the repository. Edit it in **Settings → Project config
 | `[sprints]`, `[[sprints.list]]` | sprint length and dates, for `sprint:@current` |
 | `[github-project]` | the GitHub Project to sync fields with |
 | `[uploads]` | where attached files go |
+| `[branches]` | the branch an issue suggests: its base and its name |
 | `[repos]` | the GitHub repositories `git board lint --create-labels` writes to |
 
 ## Fields
@@ -233,6 +234,27 @@ prefix = "git-board/co2-calculator"
 | `region` | `us-east-1` | The S3 region. |
 
 Files are public to anyone with the link, even for a private repository, and stay cached on the CDN for up to a year after a delete.
+
+## Branches
+
+An issue's **Development** section lists the branches whose name names it, and **Create branch** gives the command creating its branch (`git board branch <id>` prints the same). git-board creates and pushes nothing.
+
+```toml
+[branches]
+base = "dev"
+name = "{kind}/{number}-{slug}"
+kinds = { bug = "fix", feat = "feat", perf = "perf", task = "chore" }
+```
+
+| Key | Default | What it does |
+| --- | --- | --- |
+| `base` | the remote's default branch, else `main`, `master` or `trunk` | The branch a new branch starts from (`origin/<base>`, or `<base>` without a remote), and the one "merged" and ahead/behind compare with. |
+| `name` | `"{number}-{slug}"` (GitHub's) | The branch's name. `{number}`: the issue's number on its first forge, else its git-bug id's first 7 characters. `{kind}`: its kind, through `kinds`; without one, `{kind}/` is dropped. `{slug}`: its title in lower-case words, without a leading `[BUG](Scope)` or a trailing `(#1234)`, cut at about 50 characters. |
+| `kinds` | none | An issue's kind (its `kind:` field, or a plain label listed here) to the `{kind}` of its branch. |
+
+`[BUG](Equipment) Other equipment shows the wrong example (#2518)`, labeled `bug`, gives `fix/2518-other-equipment-shows-the-wrong-example`. What git doesn't take in a branch name becomes `-`.
+
+A branch names an issue when its first number is the issue's number on a forge (`fix/2518-…`, `2518-…`), or when a word in it starts the issue's git-bug id (7 characters or more). Local branches and the remotes' (as last fetched) are listed.
 
 ## Repos
 
