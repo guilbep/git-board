@@ -252,7 +252,10 @@ Category says the same thing as the kind labels (`bug`, `feat`, `perf`…),
 and the labels win: Category only fills a kind the issue doesn't have,
 written as `[branches] kinds` spells it, so `FEAT` lands as `feat`. A
 Category that is none of the kinds (`FIX` when the kind is `bug`) warns
-and writes nothing. Nothing is ever removed: a kind is the team's to change.
+and writes nothing. A kind label is never removed: it's the team's to
+change. What goes is the bare label an earlier bridge wrote, Category as
+is (`FEAT`, `SPECS`): a sync would send it to GitHub, which applies `feat`
+(beside a `bug`, if there is one) or creates `SPECS`.
 
 `bridge pull` reads values exactly as `bridge sync` does: a
 `[fields.<name>] project = { … }` alias first, then the slug of the

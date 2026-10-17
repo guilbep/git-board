@@ -148,8 +148,32 @@ kinds = { bug = "fix", feat = "feat", perf = "perf", refactor = "refactor", docs
 Without it the bridge warns on every Category and fills nothing, and
 lint has no kinds to check.
 
-Risk: co2's local data keeps 253 bare Category labels (`FEAT`…) the
-bridge wrote before; GitHub never had them. The day co2 syncs they go
-out, and GitHub's label names ignore case (`FEAT` is `feat`). Try it on
-a scratch forge before co2 syncs; removing them locally makes label
-removals that go out too.
+Tested on the scratch forge (guilbep/git-bug-sync-test #8–#10, closed;
+the fork's `bridge sync`, which sends an issue's whole label set and finds
+labels by lower-cased name):
+
+- a bare `FEAT` goes out as the repository's `feat`, no new label; the
+  next pull brings `feat` back and the local `FEAT` is gone: it settles;
+- beside a `bug` label, the issue ends with `bug` and `feat` on GitHub:
+  two kinds, from Category's disagreement with the label;
+- a bare label with no lower-case twin (`SPECS`) is created on GitHub:
+  co2's deleted FIX, TASK, SPECS, DATA, DOC, DESIGN and TEXT would come
+  back;
+- removing a bare label locally before a sync sends nothing: a sync sends
+  the label set only when it differs from what the forge last saw.
+
+So the bridge now removes the bare label of the issue's Category on each
+run, unless GitHub has that label in any case (a kind label is never
+removed), and fills the kind only where neither git-bug nor GitHub has
+one. On co2, a `bridge pull` preview removes 247 (6 `FEAT` stay: GitHub
+has `feat` there, and a sync folds them into it) and fills `feat` on 155
+issues, which gain it on GitHub at the first sync. #341, `refactor` on
+GitHub but not in co2's git-bug copy, only loses its `FEAT`.
+
+Not tested: co2's 228 bugs from the old bridge, whose first sync merges
+labels as if none were in sync. Removing a label can only make that set
+smaller, but try one before co2's first sync.
+
+Left over too: `cat:feat` (7)
+and `cat:fix` (1), from an older bridge, that a sync would create on
+GitHub.

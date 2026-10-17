@@ -2,6 +2,7 @@ package ghbridge_test
 
 import (
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -113,9 +114,10 @@ func TestBuildPlanMapsFields(t *testing.T) {
 	if !got["mod:backoffice"] {
 		t.Errorf("mod:backoffice missing from Added = %v", change.Added)
 	}
-	// Category FEAT is the kind feat, as [branches] kinds spells it
-	if !got["feat"] || got["FEAT"] {
-		t.Errorf("Added = %v, want feat and no FEAT", change.Added)
+	// Category FEAT on an issue GitHub labels bug: the label wins, even
+	// one git-bug doesn't have yet
+	if got["feat"] || got["FEAT"] {
+		t.Errorf("Added = %v, want no feat: GitHub says bug", change.Added)
 	}
 }
 
@@ -134,6 +136,7 @@ func TestBuildPlanCategoryNotAKindWarns(t *testing.T) {
 	for i := range items {
 		if items[i].Category != "" {
 			items[i].Category = "FIX"
+			items[i].Labels = nil // GitHub has no kind
 		}
 	}
 	plan := ghbridge.BuildPlan(items, []gitbugio.Issue{bug("bug2605", 2605)}, mustLoadConfig(t))
@@ -263,5 +266,67 @@ func TestBuildPlanUsesTheSyncMapping(t *testing.T) {
 	}
 	if len(change.Warnings) != 0 {
 		t.Errorf("Warnings = %v, want none", change.Warnings)
+	}
+}
+
+// An earlier bridge wrote Category verbatim (FEAT): a sync would send it
+// as feat, beside a bug label, or create FEAT on the forge. It goes, and
+// the kind is filled only where there is none.
+func TestBuildPlanCategoryRemovesItsBareLabel(t *testing.T) {
+	cfg := mustLoadConfig(t)
+	for _, tt := range []struct {
+		labels         []string
+		added, removed []string
+	}{
+		{[]string{"FEAT"}, []string{"feat"}, []string{"FEAT"}},
+		{[]string{"FEAT", "bug"}, nil, []string{"FEAT"}},
+		{[]string{"feat"}, nil, nil},
+	} {
+		items := mustParseFixture(t)
+		for i := range items {
+			items[i].Labels = nil // GitHub has no kind
+		}
+		plan := ghbridge.BuildPlan(items, []gitbugio.Issue{bug("bug2605", 2605, tt.labels...)}, cfg)
+		var kind ghbridge.FieldResult
+		for _, f := range changeFor(t, plan, 2605).Fields {
+			if f.Field == "kind" {
+				kind = f
+			}
+		}
+		if !slices.Equal(kind.Added, tt.added) || !slices.Equal(kind.Removed, tt.removed) {
+			t.Errorf("labels %v: kind added %v removed %v, want %v and %v", tt.labels, kind.Added, kind.Removed, tt.added, tt.removed)
+		}
+	}
+}
+
+func TestBuildPlanCategoryNotAKindStillRemovesItsBareLabel(t *testing.T) {
+	items := mustParseFixture(t)
+	for i := range items {
+		if items[i].Category != "" {
+			items[i].Category = "SPECS"
+			items[i].Labels = nil // GitHub has no kind
+		}
+	}
+	change := changeFor(t, ghbridge.BuildPlan(items, []gitbugio.Issue{bug("bug2605", 2605, "SPECS")}, mustLoadConfig(t)), 2605)
+	if !slices.Contains(change.Removed, "SPECS") {
+		t.Errorf("Removed = %v, want SPECS", change.Removed)
+	}
+	if len(change.Warnings) != 2 {
+		t.Errorf("Warnings = %v, want status's and category's", change.Warnings)
+	}
+}
+
+// A label GitHub has stays, whatever its case: the forge resolves FEAT to
+// its feat, and a sync sends the whole set.
+func TestBuildPlanCategoryKeepsALabelGitHubHas(t *testing.T) {
+	items := mustParseFixture(t)
+	for i := range items {
+		if items[i].Category != "" {
+			items[i].Labels = []string{"feat"}
+		}
+	}
+	change := changeFor(t, ghbridge.BuildPlan(items, []gitbugio.Issue{bug("bug2605", 2605, "FEAT")}, mustLoadConfig(t)), 2605)
+	if slices.Contains(change.Removed, "FEAT") {
+		t.Errorf("Removed = %v: FEAT is GitHub's feat", change.Removed)
 	}
 }

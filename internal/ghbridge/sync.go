@@ -259,12 +259,14 @@ func syncIssue(plan *SyncPlan, item Item, bug gitbugio.Issue, bases map[string]s
 	}
 	record("assignee", a.base)
 
-	switch res, warning := planKind(cfg, bug.Labels, item.Category); {
-	case warning != "":
+	res, warning := planKind(cfg, bug.Labels, item.Labels, item.Category)
+	if warning != "" {
 		change.Warnings = append(change.Warnings, warning)
-	case res.Field != "":
+	}
+	if res.Field != "" {
 		change.Fields = append(change.Fields, res)
 		change.Added = append(change.Added, res.Added...)
+		change.Removed = append(change.Removed, res.Removed...)
 	}
 
 	plan.Changes = append(plan.Changes, change)

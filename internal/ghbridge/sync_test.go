@@ -454,3 +454,15 @@ func TestSyncAssigneesSkipWhoCantBeAssigned(t *testing.T) {
 		t.Errorf("base %q, want alice,bob", got)
 	}
 }
+
+func TestSyncCategoryRemovesItsBareLabel(t *testing.T) {
+	it := item(1, "Ready")
+	it.Category = "FEAT"
+	cfg := syncConfig()
+	cfg.Branches.Kinds = map[string]string{"bug": "fix", "feat": "feat"}
+	p := ghbridge.BuildSyncPlan([]ghbridge.Item{it}, oneBug("FEAT", "bug"), nil, syncMeta(), cfg)
+	c := p.Changes[0]
+	if !slices.Contains(c.Removed, "FEAT") || slices.Contains(c.Added, "feat") {
+		t.Errorf("added %v removed %v, want FEAT removed and no feat beside bug", c.Added, c.Removed)
+	}
+}

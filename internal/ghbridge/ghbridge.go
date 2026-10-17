@@ -51,6 +51,7 @@ type Item struct {
 	Status    string   `json:"status"`
 	Module    string   `json:"module"`
 	Category  string   `json:"category"`
+	Labels    []string `json:"labels"` // the issue's on GitHub
 	EstHours  *float64 `json:"est. hours"`
 	Sprint    *Sprint  `json:"sprint"`
 	Title     string   `json:"title"`
@@ -186,10 +187,10 @@ func planIssue(item Item, bug gitbugio.Issue, cfg *config.Config) IssueChange {
 	}
 
 	add := func(res FieldResult, warning string) {
-		switch {
-		case warning != "":
+		if warning != "" {
 			change.Warnings = append(change.Warnings, warning)
-		case res.Field != "":
+		}
+		if res.Field != "" {
 			change.Fields = append(change.Fields, res)
 			change.Added = append(change.Added, res.Added...)
 			change.Removed = append(change.Removed, res.Removed...)
@@ -201,7 +202,7 @@ func planIssue(item Item, bug gitbugio.Issue, cfg *config.Config) IssueChange {
 	for _, f := range synced {
 		add(planField(cfg, bug.Labels, f.name, f.value(item)))
 	}
-	add(planKind(cfg, bug.Labels, item.Category))
+	add(planKind(cfg, bug.Labels, item.Labels, item.Category))
 
 	assigneeRes := planAssignees(bug.Labels, item.Assignees)
 	if len(assigneeRes.Added) > 0 || len(assigneeRes.Removed) > 0 {
@@ -233,17 +234,36 @@ func planField(cfg *config.Config, current []string, name, raw string) (FieldRes
 // the same vocabulary as the kind labels: FEAT is feat, matched to
 // [branches] kinds without case and written as kinds spells it. A kind
 // already on the issue wins: labels are the truth, Category only fills a
-// gap. Additive only, as an empty value leaves every field untouched.
-func planKind(cfg *config.Config, current []string, category string) (FieldResult, string) {
-	if category == "" || cfg.Branches.Kind(current) != "" {
+// gap, and so does one GitHub has (forge) that git-bug hasn't pulled yet.
+// It removes the bare label an earlier bridge wrote, Category as is
+// (FEAT): a sync would send it to the forge as feat, beside a bug, or
+// create FEAT there. A label GitHub has stays, whatever its case: the
+// forge reads FEAT as its feat.
+func planKind(cfg *config.Config, current, forge []string, category string) (FieldResult, string) {
+	if category == "" {
 		return FieldResult{}, ""
 	}
-	for _, k := range slices.Sorted(maps.Keys(cfg.Branches.Kinds)) {
-		if strings.EqualFold(k, category) {
-			return FieldResult{Field: "kind", Value: k, Added: []string{k}}, ""
+	res := FieldResult{Field: "kind"}
+	onForge := slices.ContainsFunc(forge, func(l string) bool { return strings.EqualFold(l, category) })
+	// ponytail: only the current Category's bare label; one left by an
+	// earlier value stays (none on co2)
+	if _, isKind := cfg.Branches.Kinds[category]; !isKind && !onForge && slices.Contains(current, category) {
+		res.Removed = []string{category}
+	}
+	var warning string
+	if cfg.Branches.Kind(current) == "" && cfg.Branches.Kind(forge) == "" {
+		warning = fmt.Sprintf("category value %q is none of [branches] kinds, skipped", category)
+		for _, k := range slices.Sorted(maps.Keys(cfg.Branches.Kinds)) {
+			if strings.EqualFold(k, category) {
+				res.Value, res.Added, warning = k, []string{k}, ""
+				break
+			}
 		}
 	}
-	return FieldResult{}, fmt.Sprintf("category value %q is none of [branches] kinds, skipped", category)
+	if len(res.Added)+len(res.Removed) == 0 {
+		return FieldResult{}, warning
+	}
+	return res, warning
 }
 
 func sprintTitle(item Item) string {
