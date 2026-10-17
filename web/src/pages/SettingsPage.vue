@@ -65,7 +65,7 @@
         <h2 class="h4">Remotes</h2>
         <p class="set-lead">
           Your issues travel with git, like your code: <code>git bug push</code> sends them to a remote with their comments and people, <code>git bug pull</code> gets them.
-          Push and pull them from <router-link to="/sync">Sync › Remotes</router-link>.
+          Push and pull them from <router-link to="/sync#remotes">Sync › Remotes</router-link>.
         </p>
       </div>
 
@@ -114,7 +114,7 @@
         </div>
         <p v-else-if="settings" class="gb-hint">No forge yet: <button type="button" class="gb-linkbtn" @click="adding = true">add one</button>.</p>
         <p class="set-lead">
-          Running a check or a sync: <router-link to="/sync">Sync › Forges</router-link>.
+          Running a check or a sync: <router-link to="/sync#forges">Sync › Forges</router-link>.
           The Project's fields have their own tab: <router-link to="/settings/github-project">3 · GitHub Project</router-link>.
         </p>
       </div>
@@ -129,7 +129,7 @@
             <div class="gb-value gb-value-agreed"><span class="gb-value-label">Project</span><span class="gb-value-val">#{{ settings.github_project.number }}</span></div>
             <div class="gb-value gb-value-agreed"><span class="gb-value-label">Writing</span><span class="gb-value-val">{{ settings.github_project.write ? 'On · read and written' : 'Off · read only' }}</span></div>
           </div>
-          <p><router-link to="/conflicts">Sync with the Project</router-link></p>
+          <p>Checking or pulling its fields: <router-link to="/sync#github-project">Sync › GitHub Project</router-link>; its conflicts: <router-link to="/conflicts">Conflicts</router-link>.</p>
         </template>
         <p v-else-if="settings">None. Set <code>[github-project]</code> in the <router-link to="/settings/project-file">project file</router-link>, or run <code>git board bridge pull --owner … --project …</code>.</p>
       </div>

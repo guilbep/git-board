@@ -23,7 +23,7 @@
           Check the Project
         </button>
         <button type="button" class="epfl-btn epfl-btn-primary" :disabled="!!busy || !status?.project" @click="syncNow">
-          Sync now
+          {{ status?.write ? 'Sync fields' : 'Pull fields' }}
         </button>
         <span v-if="busy" class="busy" role="status">{{ busy }}</span>
       </div>
@@ -126,8 +126,8 @@ async function run(action: () => Promise<SyncStatus>, doing = 'Reading the Proje
 }
 
 function syncNow() {
-  const writes = status.value?.write ? ' and writes the Project' : '';
-  if (window.confirm(`Sync now updates the labels here${writes}. Conflicts stay held. Go on?`)) {
+  const what = status.value?.write ? 'Sync fields brings the Project’s values in as labels, and writes yours to the Project' : 'Pull fields brings the Project’s values in as labels; nothing is written to the Project';
+  if (window.confirm(`${what}. Conflicts stay held. Go on?`)) {
     void run(applySync, 'Syncing…');
   }
 }
