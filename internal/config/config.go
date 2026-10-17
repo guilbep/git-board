@@ -8,13 +8,16 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/BurntSushi/toml"
+	"golang.org/x/text/unicode/norm"
 )
 
 // Field describes one namespaced-label field (e.g. "status", "prio").
@@ -102,6 +105,7 @@ type raw struct {
 	Views         map[string]View  `toml:"views"`
 	GithubProject GithubProject    `toml:"github-project"`
 	Uploads       Uploads          `toml:"uploads"`
+	Branches      Branches         `toml:"branches"`
 }
 
 // Uploads is the [uploads] table: where files attached to issues go. The
@@ -114,6 +118,16 @@ type Uploads struct {
 	Region    string `toml:"region"`     // default us-east-1
 }
 
+// Branches is the [branches] table: the branch an issue suggests
+// (internal/branches).
+type Branches struct {
+	Base string `toml:"base"` // default: the remote's default branch, else main, master or trunk
+	Name string `toml:"name"` // {kind}, {number}, {slug}; default "{number}-{slug}"
+	// Kinds maps an issue's kind (its kind: field, or a flat label listed
+	// here) to the {kind} of its branch: bug = "fix".
+	Kinds map[string]string `toml:"kinds"`
+}
+
 // Config is the parsed .git-board.toml.
 type Config struct {
 	Repos         []string
@@ -122,6 +136,7 @@ type Config struct {
 	Views         map[string]View
 	GithubProject GithubProject
 	Uploads       Uploads
+	Branches      Branches
 }
 
 // FileName is the config's name, at the root of the repository.
@@ -189,6 +204,7 @@ func parse(data []byte) (*Config, toml.MetaData, error) {
 		Views:         r.Views,
 		GithubProject: r.GithubProject,
 		Uploads:       r.Uploads,
+		Branches:      r.Branches,
 	}, md, nil
 }
 
@@ -402,4 +418,20 @@ func appendAfterLastMatch(content, header, block string) string {
 		b.WriteString(after)
 	}
 	return b.String()
+}
+
+var slugNonAlnum = regexp.MustCompile(`[^a-z0-9]+`)
+
+// Slug lower-cases value to letters, digits and dashes: "QA Validation",
+// "Comité Spécialisé" are "qa-validation", "comite-specialise", as
+// [fields.*].options are written. Accents are dropped from their letter,
+// not the letter with them.
+func Slug(value string) string {
+	var b strings.Builder
+	for _, r := range norm.NFD.String(strings.ToLower(strings.TrimSpace(value))) {
+		if !unicode.Is(unicode.Mn, r) {
+			b.WriteRune(r)
+		}
+	}
+	return strings.Trim(slugNonAlnum.ReplaceAllString(b.String(), "-"), "-")
 }

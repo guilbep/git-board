@@ -120,6 +120,7 @@
         </div>
         <IssueSide
           :id="thread.id"
+          :title="thread.title"
           :labels="thread.labels"
           :names="sideNames"
           :fields="fields"

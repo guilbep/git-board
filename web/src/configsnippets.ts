@@ -57,5 +57,6 @@ export function docSectionAt(text: string, pos: number): string {
   if (header.startsWith('[github-project]')) return 'github';
   if (header.startsWith('[uploads]')) return 'attachments';
   if (header.startsWith('[repos]')) return 'repos';
+  if (header.startsWith('[branches]')) return 'branches';
   return 'overview';
 }

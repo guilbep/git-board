@@ -419,7 +419,7 @@ func toLabel(cfg *config.Config, field, raw string) (string, bool) {
 		}
 	}
 	// "-" slugs to nothing: not a value, and not "cleared" either
-	value := slugify(raw)
+	value := config.Slug(raw)
 	return value, value != "" && f.KnownValue(value)
 }
 
@@ -432,7 +432,7 @@ func sprintSlug(cfg *config.Config, title string) string {
 			return s.Slug
 		}
 	}
-	return slugify(title)
+	return config.Slug(title)
 }
 
 // toProject turns git-board's value of a field into a Project edit; false
@@ -461,7 +461,7 @@ func toProject(cfg *config.Config, pf ProjectField, field, value string) (kind, 
 	}
 	// sorted, so duplicate names pick the same option every run
 	for _, name := range slices.Sorted(maps.Keys(pf.Options)) {
-		if slugify(normalizeModule(name)) == value {
+		if config.Slug(normalizeModule(name)) == value {
 			return EditOption, pf.Options[name], true
 		}
 	}
