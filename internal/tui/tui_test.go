@@ -37,6 +37,17 @@ func TestToItemsPreservesOrderAndFields(t *testing.T) {
 	}
 }
 
+func TestItemShowsItsNumberBesideTheTitleWithoutIt(t *testing.T) {
+	it := ToItems([]gitbugio.Issue{{ID: "abcdef1234", Title: "Wrong example (#2518)", Status: "open",
+		Forges: []gitbugio.Forge{{Name: "GitHub", Number: "2518"}}}})[0].(item)
+	if got, want := it.Title(), "Wrong example"; got != want {
+		t.Errorf("Title() = %q, want %q", got, want)
+	}
+	if got, want := it.Description(), "#2518  abcdef12  open  "; got != want {
+		t.Errorf("Description() = %q, want %q", got, want)
+	}
+}
+
 func TestShortIDTruncatesLongIDs(t *testing.T) {
 	if got, want := shortID("abcdefghijklmnop"), "abcdefgh"; got != want {
 		t.Errorf("shortID() = %q, want %q", got, want)
