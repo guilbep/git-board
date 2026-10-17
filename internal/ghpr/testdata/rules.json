@@ -1,0 +1,106 @@
+[
+  {
+    "type": "pull_request",
+    "parameters": {
+      "required_approving_review_count": 1,
+      "dismiss_stale_reviews_on_push": false,
+      "required_reviewers": [],
+      "require_code_owner_review": true,
+      "dismissal_restriction": {
+        "enabled": false,
+        "allowed_actors": []
+      },
+      "require_last_push_approval": false,
+      "required_review_thread_resolution": false,
+      "require_extra_approval_for_unattributed_changes": true,
+      "allowed_merge_methods": [
+        "merge"
+      ]
+    },
+    "ruleset_source_type": "Repository",
+    "ruleset_source": "o/r",
+    "ruleset_id": 9052500
+  },
+  {
+    "type": "required_status_checks",
+    "parameters": {
+      "strict_required_status_checks_policy": false,
+      "do_not_enforce_on_create": false,
+      "required_status_checks": [
+        {
+          "context": "Backend Lint/Type Check"
+        },
+        {
+          "context": "Frontent Lint/Type Check"
+        },
+        {
+          "context": "Backend Tests"
+        },
+        {
+          "context": "Frontend Tests"
+        },
+        {
+          "context": "Backend Migration Smoke (db-create + db-migrate)"
+        },
+        {
+          "context": "Docs Build"
+        }
+      ]
+    },
+    "ruleset_source_type": "Repository",
+    "ruleset_source": "o/r",
+    "ruleset_id": 9052500
+  },
+  {
+    "type": "pull_request",
+    "parameters": {
+      "required_approving_review_count": 1,
+      "dismiss_stale_reviews_on_push": false,
+      "required_reviewers": [],
+      "require_code_owner_review": true,
+      "dismissal_restriction": {
+        "enabled": false,
+        "allowed_actors": []
+      },
+      "require_last_push_approval": false,
+      "required_review_thread_resolution": false,
+      "require_extra_approval_for_unattributed_changes": true,
+      "allowed_merge_methods": [
+        "merge"
+      ]
+    },
+    "ruleset_source_type": "Repository",
+    "ruleset_source": "o/r",
+    "ruleset_id": 9052155
+  },
+  {
+    "type": "required_status_checks",
+    "parameters": {
+      "strict_required_status_checks_policy": false,
+      "do_not_enforce_on_create": false,
+      "required_status_checks": [
+        {
+          "context": "Backend Lint/Type Check"
+        },
+        {
+          "context": "Frontent Lint/Type Check"
+        },
+        {
+          "context": "Backend Tests"
+        },
+        {
+          "context": "Frontend Tests"
+        },
+        {
+          "context": "Backend Migration Smoke (db-create + db-migrate)"
+        },
+        {
+          "context": "Docs Build"
+        }
+      ]
+    },
+    "ruleset_source_type": "Repository",
+    "ruleset_source": "o/r",
+    "ruleset_id": 9052155
+  }
+]
