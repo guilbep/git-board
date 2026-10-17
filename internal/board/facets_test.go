@@ -3,6 +3,7 @@ package board_test
 import (
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/guilbep/git-board/internal/board"
 	"github.com/guilbep/git-board/internal/config"
@@ -15,11 +16,14 @@ import (
 func TestFacetsCountAgainstTheRestOfTheFilter(t *testing.T) {
 	b := gitbugiotest.New(t)
 	b.NewIssue("a", "", []string{"status:ready", "assignee:guilbep", "nice to have"})
-	b.NewIssue("b", "", []string{"status:qa"})
+	b.NewIssue("b", "", []string{"status:qa", "sprint:s1"})
 	closed, _ := b.NewIssue("c", "", []string{"status:ready"})
 	gitbugiotest.CloseIssue(t, b, closed)
 	b.NewIssue("d", "", nil)
-	cfg := &config.Config{Fields: map[string]config.Field{"status": {Options: []string{"ready", "qa", "validated"}}}}
+	cfg := &config.Config{
+		Fields:  map[string]config.Field{"status": {Options: []string{"ready", "qa", "validated"}}},
+		Sprints: config.SprintsConfig{LengthDays: 14, List: []config.Sprint{{Slug: "s1", Start: time.Now().AddDate(0, 0, -20)}, {Slug: "s2", Start: time.Now().AddDate(0, 0, -6)}}},
+	}
 
 	facets := func(filter string) map[string]board.Facet {
 		t.Helper()
@@ -75,6 +79,11 @@ func TestFacetsCountAgainstTheRestOfTheFilter(t *testing.T) {
 	f = facets("no:status")
 	if !sameSet(f["status"].Selected, "(none)") {
 		t.Errorf("no:status selected %v", f["status"].Selected)
+	}
+	// an alias names its value: today's sprint, ticked even with no issue in it
+	f = facets("sprint:@current")
+	if !sameSet(f["sprint"].Selected, "s2") || counts(f["sprint"])["s2"] != 0 {
+		t.Errorf("sprint:@current: selected %v, counts %v", f["sprint"].Selected, counts(f["sprint"]))
 	}
 	f = facets("assignee:@me")
 	if !sameSet(f["assignee"].Selected, "guilbep") || f["assignee"].Rest != "" {

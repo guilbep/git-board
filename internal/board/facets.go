@@ -72,7 +72,8 @@ func Facets(b issueBackend, cfg *config.Config, filterStr, me string) ([]Facet, 
 				continue
 			}
 			for _, v := range strings.Split(c.Value, ",") {
-				if _, ok := counts[v]; !ok && !strings.HasPrefix(v, "@") {
+				v = filter.Resolve(v, cfg, me, today) // @current: today's sprint
+				if _, ok := counts[v]; !ok && v != "" && !strings.HasPrefix(v, "\x00") {
 					counts[v] = 0
 				}
 			}

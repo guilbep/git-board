@@ -1,4 +1,5 @@
 import { fieldTypes } from '@/fieldtypes';
+import type { Facet } from '@/facets';
 // Typed client for the git-board-server API. All HTTP for the board page
 // goes through here — never fetch() from a component directly.
 
@@ -18,6 +19,7 @@ export interface Issue {
   labels: string[];
   github_url?: string; // absent when the issue wasn't bridged in from GitHub
   forges?: Forge[]; // where it is on forges
+  updated_at?: string;
 }
 
 export interface Bucket {
@@ -95,15 +97,20 @@ export function getColors(): Promise<Record<string, Record<string, string>>> {
 }
 
 // Unsorted: the page sorts (facets.sortIssues), by option order where the
-// server would sort alphabetically.
-// q: the search box, GitHub's syntax (free text in titles, descriptions
-// and comments; assignee:x, label:x, author:x, no:x, is:closed…).
-export function getIssues(filter: string, group: string, q = ''): Promise<Bucket[]> {
-  const params = new URLSearchParams();
-  if (filter) params.set('filter', filter);
-  if (q.trim()) params.set('q', q);
+// server would sort alphabetically. filter: the board's, ⌘K's, a view's —
+// one syntax (docs/configuration.md, Filters); "" is every issue.
+export function getIssues(filter: string, group = ''): Promise<Bucket[]> {
+  const params = new URLSearchParams({ filter });
   if (group) params.set('group', group);
   return request(`/api/issues?${params}`);
+}
+
+// The filters panel for a filter, counted on the server (board.Facets).
+export async function getFacets(filter: string): Promise<Facet[]> {
+  const facets = await request<{ key: string; options: { value: string; count: number }[]; selected: string[]; rest: string }[]>(
+    `/api/facets?${new URLSearchParams({ filter })}`,
+  );
+  return facets.map((f) => ({ ...f, options: f.options.map((o): [string, number] => [o.value, o.count]) }));
 }
 
 export function patchIssue(id: string, changes: Record<string, string>): Promise<Issue> {

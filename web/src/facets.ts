@@ -1,7 +1,8 @@
-// The sidebar's filters and the table's sort, on the issues the server
-// returned for the view's filter expression. That grammar ANDs every term;
-// facets need OR within a facet (status ready OR qa), AND across facets.
-// Pure logic, no "@/" imports: node runs facets.test.ts on it directly.
+// The sidebar's filters and the table's sort. The facets are the server's
+// (GET /api/facets): counted against the rest of the filter, the values it
+// picks, the filter without them; a tick writes a new filter
+// (viewfilter.ts), the page matches no issue itself. Pure logic, no "@/"
+// imports: node runs facets.test.ts on it directly.
 import type { Issue } from './api/board';
 import { displayName, fieldNames, fieldValues, formatValue, type Fields } from './fields.ts';
 
@@ -16,6 +17,8 @@ export type Selection = Record<string, string[]>;
 export interface Facet {
   key: string;
   options: [value: string, count: number][];
+  selected: string[]; // the values the filter lets through; none: no term on it
+  rest: string; // the filter without the facet's own terms
 }
 export interface Sort {
   key: string; // "id", "title", STATE or a label namespace
@@ -29,14 +32,6 @@ function valuesOf(issue: Issue, key: string): string[] {
   return values.length ? values : [NONE];
 }
 
-export function matches(issue: Issue, sel: Selection, q: string, skip?: string): boolean {
-  const text = q.trim().toLowerCase();
-  if (text && !issue.title.toLowerCase().includes(text) && !issue.id.startsWith(text)) return false;
-  return Object.entries(sel).every(
-    ([key, want]) => key === skip || !want.length || valuesOf(issue, key).some((v) => want.includes(v)),
-  );
-}
-
 /**
  * The label namespaces shown as fields: the configured ones, then any other
  * found on the issues (sprint, mod…), so a new "ns:value" label needs no
@@ -48,34 +43,6 @@ export function namespaces(issues: Issue[], fields: Fields): string[] {
     issues.flatMap((i) => i.labels.filter((l) => l.includes(':')).map((l) => l.slice(0, l.indexOf(':')))),
   );
   return [...configured, ...[...found].filter((ns) => !configured.includes(ns)).sort()];
-}
-
-/**
- * The facets offered: State, the configured fields, the other label
- * namespaces found on the issues (sprint, mod…), then plain labels. Each
- * option is counted against the other facets; a facet with a single value
- * says nothing and is left out, unless something in it is selected.
- */
-export function facets(issues: Issue[], sel: Selection, q: string, fields: Fields): Facet[] {
-  return [STATE, ...namespaces(issues, fields), PLAIN]
-    .map((key) => {
-      const total = new Map<string, number>();
-      const live = new Map<string, number>();
-      for (const issue of issues) {
-        const ok = matches(issue, sel, q, key);
-        for (const v of valuesOf(issue, key)) {
-          total.set(v, (total.get(v) ?? 0) + 1);
-          if (ok) live.set(v, (live.get(v) ?? 0) + 1);
-        }
-      }
-      const options = fields[key]?.options ?? [];
-      const rank = (v: string) => (v === NONE ? options.length + 1 : options.includes(v) ? options.indexOf(v) : options.length);
-      const values = [...total.keys()].sort(
-        (a, b) => rank(a) - rank(b) || total.get(b)! - total.get(a)! || a.localeCompare(b),
-      );
-      return { key, options: values.map((v): [string, number] => [v, live.get(v) ?? 0]) };
-    })
-    .filter((f) => f.options.length > 1 || sel[f.key]?.length);
 }
 
 export type OptionSort = 'count' | 'alpha' | 'workflow';
@@ -162,7 +129,7 @@ export function sortIssues(issues: Issue[], sort: Sort | null, fields: Fields): 
   });
 }
 
-/** The selection from the route query: one f.<facet> key per facet, one entry per value. */
+/** An older link's ticks: one f.<facet> key per facet, one entry per value. */
 export function parseSelection(query: Record<string, unknown>): Selection {
   const sel: Selection = {};
   for (const [k, v] of Object.entries(query)) {

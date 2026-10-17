@@ -19,15 +19,12 @@
     <FilterSidebar
       v-show="!filtersHidden"
       @hide="filtersHidden = true"
-      v-model:query="filterText"
       :facets="facetList"
       :sel="sel"
       :fields="fields"
       :modified="modified"
-      :query-changed="queryChanged"
       @set="setFacet"
       @reset="resetAll"
-      @apply="load"
     />
 
     <main class="main">
@@ -46,9 +43,9 @@
           {{ layout === 'board' ? 'Board' : layout === 'roadmap' ? 'Roadmap' : 'Table' }}
           <template v-if="groupField"> · grouped by {{ groupField }}</template>
           <template v-if="loading && buckets"> · updating…</template>
-          <template v-if="filterText.includes('@current')"> · <button type="button" class="page-report" @click="reportOpen = true">Sprint report</button></template>
+          <template v-if="sprintView"> · <button type="button" class="page-report" @click="reportOpen = true">Sprint report</button></template>
         </p>
-        <SprintReportDialog v-if="filterText.includes('@current')" v-model="reportOpen" />
+        <SprintReportDialog v-if="sprintView" v-model="reportOpen" />
       </div>
 
       <!-- toolbar, unsaved-view bar and count stick under the header
@@ -57,15 +54,16 @@
       <div ref="tools" class="tools">
       <div class="toolbar">
         <div class="toolbar-field toolbar-search">
-          <label class="epfl-label" for="search">Search <span class="search-hint">titles, descriptions, comments</span></label>
+          <label class="epfl-label" for="filter">Filter <span class="search-hint">· words in titles, descriptions, comments; #number; field:value</span></label>
           <input
-            id="search"
+            id="filter"
             class="epfl-input"
             type="search"
-            placeholder="Text, assignee:guilbep, label:bug, no:assignee…"
+            spellcheck="false"
+            placeholder="Words, #2528, status:ready, assignee:@me, is:closed…"
             autocomplete="off"
-            :value="q"
-            @input="setQuery({ q: ($event.target as HTMLInputElement).value || undefined })"
+            :value="filter"
+            @input="setFilter(($event.target as HTMLInputElement).value)"
           />
         </div>
         <div class="toolbar-field">
@@ -113,25 +111,17 @@
           <button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" @click="startNaming">Save as new view…</button>
           <button type="button" class="viewbar-discard" @click="resetAll">Discard</button>
         </template>
-        <p v-if="draftSkipped.length" class="viewbar-note">Not saved: {{ draftSkipped.join(', ') }} (“(none)” together with values has no single filter).</p>
         <p v-if="viewError" class="viewbar-note viewbar-error" role="alert">Not saved: {{ viewError }}</p>
       </div>
 
       <div v-if="buckets" class="status" role="status">
-        <span><b>{{ count }}</b> of {{ total }} {{ total === 1 ? 'issue' : 'issues' }}</span>
+        <span><b>{{ count }}</b>{{ count === total ? '' : ` of ${total}` }} {{ total === 1 ? 'issue' : 'issues' }}</span>
         <template v-if="changed.size || onlyChanged">
           <span class="status-sep" aria-hidden="true">|</span>
           <button type="button" class="changed-toggle" :aria-pressed="onlyChanged" @click="onlyChanged = !onlyChanged">
             <span class="gb-changed-dot" aria-hidden="true" />Changed since your last visit ({{ changed.size }})
           </button>
           <button v-if="changed.size" type="button" class="changed-seen" @click="markAllSeen">Mark all seen</button>
-        </template>
-        <template v-if="chips.length">
-          <span class="status-sep" aria-hidden="true">|</span>
-          <span v-for="c in chips" :key="c.label" class="chip">
-            {{ c.label }}
-            <button type="button" :aria-label="`Remove filter ${c.label}`" @click="setQuery(c.patch)">×</button>
-          </span>
         </template>
       </div>
       </div>
@@ -142,12 +132,9 @@
         </div>
         <p v-else-if="!buckets" class="state">Loading issues…</p>
         <div v-else-if="total === 0" class="state state-empty">
-          <p class="state-title">No issues match this filter expression.</p>
-          <p>Try a broader one, for example <code>is:open</code>.</p>
-        </div>
-        <div v-else-if="count === 0 && layout !== 'board'" class="state state-empty">
-          <p class="state-title">No issues match these filters.</p>
-          <p><button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" @click="resetAll">Reset filters</button></p>
+          <p class="state-title">No issues match this filter.</p>
+          <p v-if="modified"><button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" @click="resetAll">Back to {{ activeView || 'the open issues' }}</button></p>
+          <p v-else>Try a broader one, for example <code>is:open</code>.</p>
         </div>
         <div v-else-if="layout === 'board'">
           <p v-if="moveError" class="epfl-alert epfl-alert-danger notice" role="alert"><b>Not moved.</b> {{ moveError }}</p>
@@ -225,7 +212,7 @@
   </q-dialog>
 
   <q-dialog v-model="newOpen">
-    <NewIssueDialog :names="names" :fields="fields" :view="activeView" :filter="filterText" @close="newOpen = false" @created="onCreated" />
+    <NewIssueDialog :names="names" :fields="fields" :view="activeView" :prefill="prefill" @close="newOpen = false" @created="onCreated" />
   </q-dialog>
 </template>
 
@@ -238,14 +225,14 @@ import { changedSince, loadVisit, saveVisit, visit } from '@/lastvisit';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import {
-  changeLabels, getFields, getIssues, getViews, saveView,
+  changeLabels, getFacets, getFields, getIssues, getViews, saveView,
   type Bucket, type FieldConfig, type Issue, type ViewConfig,
 } from '@/api/board';
 import {
-  facetLabel, facets, matches, namespaces, parseSelection, parseSort, sortIssues, valueLabel,
+  NONE, PLAIN, STATE, namespaces, parseSelection, parseSort, sortIssues, type Facet,
 } from '@/facets';
 import { loadColors } from '@/colors';
-import { composeFilter } from '@/viewfilter';
+import { composeFilter, withFacet } from '@/viewfilter';
 import { displayName, orderBuckets } from '@/fields';
 import AppHeader from '@/components/AppHeader.vue';
 import FilterSidebar from '@/components/FilterSidebar.vue';
@@ -265,9 +252,9 @@ const views = ref<Record<string, ViewConfig>>({});
 const fields = ref<Record<string, FieldConfig>>({});
 const configError = ref('');
 
-// The view's filter expression and grouping go to the server; the facets,
-// search and sort below refine its answer here, and live in the URL.
-const filterText = ref('is:open');
+// The filter (the Filter box, ?filter= in the URL once it differs from the
+// view's) and the grouping go to the server, which matches and counts the
+// facets; the sort below orders its answer here, and lives in the URL.
 const groupField = ref('');
 const columns = ref<string[] | undefined>(); // the table's, the view's until changed (tablecols.ts)
 const lanes = ref<string[] | undefined>(); // the board's, the view's until changed (lanes.ts)
@@ -296,20 +283,31 @@ type Patch = Record<string, string | string[] | undefined>;
 /** Merge keys into the URL query; undefined removes one. */
 const setQuery = (patch: Patch) => router.replace({ query: { ...route.query, ...patch } });
 
-const sel = computed(() => parseSelection(route.query));
-const q = computed(() => (typeof route.query.q === 'string' ? route.query.q : ''));
+const viewFilter = computed(() => view.value?.filter ?? 'is:open');
+const filter = computed(() => (typeof route.query.filter === 'string' ? route.query.filter : viewFilter.value));
+function setFilter(f: string) {
+  return setQuery({ filter: f === viewFilter.value ? undefined : f });
+}
 const sort = computed(() =>
   parseSort(typeof route.query.sort === 'string' ? route.query.sort : (view.value?.sort ?? '')),
 );
 const sortValue = computed(() => (typeof route.query.sort === 'string' ? route.query.sort : ''));
 
-const queryChanged = computed(() => filterText.value !== (view.value?.filter ?? 'is:open'));
+// the facets, the server's for the filter: the ticks are the values it
+// lets through, a tick writes a new filter
+const facetList = ref<Facet[]>([]);
+const sel = computed(() => Object.fromEntries(facetList.value.map((f) => [f.key, f.selected])));
+function setFacet(key: string, values: string[]) {
+  const f = facetList.value.find((x) => x.key === key);
+  if (f) void setFilter(withFacet(f, values)).then(load);
+}
 
-// the filters panel hidden to a rail (commands.ts: the palette toggles it too)
-const activeFilters = computed(() => Object.values(sel.value).flat().length + Number(queryChanged.value));
+// the filters panel hidden to a rail (commands.ts: the palette toggles it
+// too): its badge counts the facets the filter narrows
+const activeFilters = computed(() => facetList.value.filter((f) => f.selected.length).length);
 const modified = computed(
   () =>
-    queryChanged.value ||
+    filter.value !== viewFilter.value ||
     groupField.value !== (view.value?.group ?? '') ||
     Object.keys(route.query).some((k) => k !== 'view' && k !== 'issue'),
 );
@@ -351,12 +349,11 @@ onBeforeUnmount(() => {
   document.documentElement.style.removeProperty('--gb-tools-h');
 });
 const names = computed(() => namespaces(all.value, fields.value));
-const facetList = computed(() => facets(all.value, sel.value, '', fields.value));
 const shown = computed(() =>
   orderBuckets(buckets.value ?? [], groupField.value, fields.value).map((b) => ({
     group: b.group,
     issues: sortIssues(
-      b.issues.filter((i) => matches(i, sel.value, '') && (!onlyChanged.value || changed.value.has(i.id))),
+      b.issues.filter((i) => !onlyChanged.value || changed.value.has(i.id)),
       sort.value,
       fields.value,
     ),
@@ -428,25 +425,17 @@ async function onMove(issue: Issue, from: string, to: string) {
 const total = computed(() => all.value.length);
 const count = computed(() => shown.value.reduce((n, b) => n + b.issues.length, 0));
 
-/** One removable chip per search and selected value. */
-const chips = computed(() => {
-  const out: { label: string; patch: Patch }[] = [];
-  if (q.value) out.push({ label: `Search: ${q.value}`, patch: { q: undefined } });
-  for (const [key, values] of Object.entries(sel.value)) {
-    for (const v of values) {
-      const rest = values.filter((x) => x !== v);
-      out.push({
-        label: `${facetLabel(key)}: ${valueLabel(key, v, fields.value)}`,
-        patch: { [`f.${key}`]: rest.length ? rest : undefined },
-      });
-    }
-  }
-  return out;
-});
+// a sprint's board: its filter picks today's sprint
+const sprintView = computed(() => facetList.value.some((f) => f.selected.length === 1 && f.selected[0] === fields.value[f.key]?.current));
 
-function setFacet(key: string, values: string[]) {
-  void setQuery({ [`f.${key}`]: values.length ? values : undefined });
-}
+// New issue starts with the fields the filter picks one value of
+const prefill = computed(() =>
+  Object.fromEntries(
+    facetList.value
+      .filter((f) => f.key !== STATE && f.key !== PLAIN && f.selected.length === 1 && f.selected[0] !== NONE)
+      .map((f) => [f.key, f.selected[0]!]),
+  ),
+);
 
 // A header click sorts ascending, a second one descending.
 function sortBy(key: string) {
@@ -481,13 +470,9 @@ function message(e: unknown): string {
 
 // The view as the page shows it now, and whether that differs from the
 // saved one: the bar offers to save it into .git-board.toml.
-const composed = computed(() =>
-  composeFilter(filterText.value, sel.value, q.value, Object.fromEntries(facetList.value.map((f) => [f.key, f.options.map(([v]) => v)]))),
-);
-const draftSkipped = computed(() => composed.value.skipped);
 const draft = computed<ViewConfig>(() => ({
   layout: layout.value,
-  filter: composed.value.filter,
+  filter: filter.value,
   group: groupField.value,
   sort: sortValue.value || (view.value?.sort ?? ''),
   columns: columns.value,
@@ -501,7 +486,6 @@ const lanesChanged = computed(() => !sameColumns(lanes.value, view.value?.lanes)
 const viewDirty = computed(() => {
   const v = view.value;
   const d = draft.value;
-  if (draftSkipped.value.length) return true; // the page differs, even what can't be saved
   if (!v) return d.filter !== 'is:open' || d.group !== '' || d.sort !== '' || !!d.columns || !!d.lanes || !!d.limits;
   return d.filter !== v.filter || d.group !== (v.group ?? '') || d.sort !== (v.sort ?? '') || !sameColumns(d.columns, v.columns) || lanesChanged.value;
 });
@@ -523,7 +507,7 @@ async function save(name: string) {
   try {
     views.value = await saveView(name, draft.value);
     naming.value = false;
-    // the saved view, without the URL's search, facets and sort it now holds
+    // the saved view, without the URL's filter and sort it now holds
     await router.replace({ query: { view: name } });
     resetView();
   } catch (e) {
@@ -544,10 +528,9 @@ async function loadConfig() {
   }
 }
 
-// Back to the view's filter expression and grouping (the URL's facets stay:
-// a shared link keeps its filters).
+// Back to the view's grouping, columns and lanes (the URL's filter stays:
+// a shared link keeps it).
 function resetView() {
-  filterText.value = view.value ? view.value.filter : 'is:open';
   groupField.value = view.value?.group ?? '';
   columns.value = view.value?.columns;
   lanes.value = view.value?.lanes;
@@ -556,21 +539,26 @@ function resetView() {
   void load();
 }
 
-function resetAll() {
-  void router.replace({ query: requestedView.value ? { view: requestedView.value } : {} });
+async function resetAll() {
+  await router.replace({ query: requestedView.value ? { view: requestedView.value } : {} });
   resetView();
 }
 
 // Only the latest request may write: switching views quickly must not let a
 // slow earlier response overwrite a newer one.
 let latest = 0;
+let loaded = ''; // the filter last asked for
 async function load() {
   const mine = ++latest;
   loading.value = true;
   listError.value = '';
+  loaded = filter.value;
   try {
-    const [result] = await Promise.all([getIssues(filterText.value, groupField.value, q.value), loadColors()]);
-    if (mine === latest) buckets.value = result;
+    const [result, fs] = await Promise.all([getIssues(filter.value, groupField.value), getFacets(filter.value), loadColors()]);
+    if (mine === latest) {
+      buckets.value = result;
+      facetList.value = fs;
+    }
   } catch (e: unknown) {
     if (mine === latest) {
       listError.value = message(e);
@@ -583,16 +571,27 @@ async function load() {
 
 watch(activeView, resetView);
 
-// the search runs on the server (git-bug's full-text index): asked once
-// typing pauses
-let searchTimer: ReturnType<typeof setTimeout> | undefined;
-watch(q, () => {
-  clearTimeout(searchTimer);
-  searchTimer = setTimeout(() => void load(), 300);
+// the filter runs on the server (git-bug's full-text index for words):
+// asked once typing pauses, unless a tick or the view asked already
+let filterTimer: ReturnType<typeof setTimeout> | undefined;
+watch(filter, () => {
+  clearTimeout(filterTimer);
+  filterTimer = setTimeout(() => filter.value !== loaded && void load(), 300);
 });
+
+// An older link (?q=words&f.status=ready): its filter, in the box.
+function upgradeLink() {
+  const ticks = parseSelection(route.query);
+  const words = typeof route.query.q === 'string' ? route.query.q : '';
+  if (!words && !Object.keys(ticks).length) return;
+  const rest = Object.fromEntries(Object.entries(route.query).filter(([k]) => k !== 'q' && !k.startsWith('f.')));
+  return router.replace({ query: { ...rest, filter: composeFilter(filter.value, ticks, words).filter } });
+}
 
 onMounted(async () => {
   await loadConfig();
+  await upgradeLink();
+  watch(() => route.query, upgradeLink);
   // No saved view to switch to (none configured, or the config failed):
   // the watch above never fires, so load the default filter here.
   if (!activeView.value) resetView();
@@ -755,26 +754,6 @@ onBeforeUnmount(offLive);
   border-bottom: var(--border-w) solid var(--border-subtle);
 }
 .status-sep { color: var(--fg-disabled); }
-.chip {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  padding: 0.125rem 0.125rem 0.125rem var(--space-2);
-  border: var(--border-w) solid var(--border);
-  border-radius: var(--radius);
-}
-.chip button {
-  padding: 0 0.375rem;
-  font: inherit;
-  line-height: 1.2;
-  color: var(--fg-muted);
-  background: none;
-  border: 0;
-  cursor: pointer;
-}
-.chip button:hover { color: var(--primary-hover); }
-.chip button:focus-visible { outline: var(--focus-w) solid var(--primary-hover); }
-
 .state { margin: 0; padding: var(--space-5) var(--space-3); text-align: center; color: var(--fg-muted); }
 .state-empty { border: var(--border-w) solid var(--border); }
 .state-empty p { margin: 0; }

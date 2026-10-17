@@ -1,6 +1,6 @@
-<!-- New issue: title, description, fields prefilled from the view (its
-     filter's field:value terms, e.g. sprint:@current), "Create" or "Create
-     and open another". The issue is created, then its fields are set as the
+<!-- New issue: title, description, fields prefilled from the board's
+     filter (the fields it picks one value of, e.g. the sprint of
+     sprint:@current), "Create" or "Create and open another". The issue is created, then its fields are set as the
      panel sets them (aliases like @current and @me resolve there). -->
 <template>
   <section class="gb-dialog" role="dialog" aria-modal="true" aria-labelledby="new-issue-title">
@@ -60,7 +60,7 @@ import GbIcon from '@/components/GbIcon.vue';
 import IdentityChooser from '@/components/IdentityChooser.vue';
 import MarkdownEditor from '@/components/MarkdownEditor.vue';
 
-const props = defineProps<{ names: string[]; fields: Fields; view?: string; filter?: string; repo?: string }>();
+const props = defineProps<{ names: string[]; fields: Fields; view?: string; prefill?: Record<string, string>; repo?: string }>();
 const emit = defineEmits<{ close: []; created: [id: string, another: boolean] }>();
 
 const title = ref('');
@@ -70,12 +70,8 @@ const busy = ref(false);
 const error = ref('');
 const titleInput = ref<HTMLInputElement | null>(null);
 
-// field:value terms of the view's filter (not negated, not is:/title:)
-const from: Record<string, string> = {};
-for (const term of (props.filter ?? '').split(/\s+/)) {
-  const m = /^([\w-]+):(\S+)$/.exec(term);
-  if (m && m[1] !== 'is' && m[1] !== 'title' && !m[2]!.includes('*')) from[m[1]!] = m[2]!;
-}
+// the fields the board's filter picks one value of (the server's facets)
+const from = props.prefill ?? {};
 const values = reactive<Record<string, string>>({});
 for (const name of props.names) {
   // a configured single field with options starts at its first one (backlog)

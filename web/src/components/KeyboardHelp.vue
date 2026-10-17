@@ -31,7 +31,7 @@ const groups = [
   {
     title: 'Board',
     keys: [
-      { keys: [mod, 'K'], what: 'Jump to an issue or a command' },
+      { keys: [mod, 'K'], what: 'Filter the issues, jump to one, or run a command' },
       { keys: ['c'], what: 'New issue' },
       { keys: ['?'], what: 'This list' },
     ],

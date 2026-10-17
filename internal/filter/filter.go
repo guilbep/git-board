@@ -149,7 +149,10 @@ func cut(s, sep string) (before, after string, found bool) {
 
 var sprintAliases = map[string]bool{"@current": true, "@next": true, "@previous": true}
 
-func resolveValue(value string, cfg *config.Config, me string, today time.Time) string {
+// Resolve is what a value means: @me your login, @current/@next/@previous
+// a sprint's slug (one no label has, when there's no such sprint), else
+// itself.
+func Resolve(value string, cfg *config.Config, me string, today time.Time) string {
 	if value == "@me" {
 		return me
 	}
@@ -246,7 +249,7 @@ func matchOne(issue gitbugio.Issue, labels map[string]bool, c Condition, value s
 			}
 		}
 	case KindField:
-		ok = labels[c.Field+":"+resolveValue(value, cfg, me, today)]
+		ok = labels[c.Field+":"+Resolve(value, cfg, me, today)]
 	}
 	return ok
 }

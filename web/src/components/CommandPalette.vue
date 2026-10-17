@@ -1,9 +1,11 @@
-<!-- ⌘K: jump to an issue by #number, id or title, or run a command (a
-     view, New issue, Insights, Settings, Sync, the filters, shortcuts).
-     Nothing typed: the issues opened lately, then the commands. -->
+<!-- ⌘K: what's typed is the board's filter (one syntax, the server's), on
+     every issue, open first; its first row puts it into the board's Filter
+     box. An issue at once by its #number or id, and the commands (a view,
+     New issue, Insights, Settings, Sync, the filters, shortcuts). Nothing
+     typed: the issues opened lately, then the commands. -->
 <template>
   <q-dialog v-model="paletteOpen" position="top" @show="onShow">
-    <div class="cp" role="dialog" aria-label="Jump to an issue or a command">
+    <div class="cp" role="dialog" aria-label="Filter the issues, jump to one, or run a command">
       <div class="cp-search">
         <GbIcon name="search" small />
         <input
@@ -15,7 +17,7 @@
           aria-expanded="true"
           aria-controls="cp-list"
           :aria-activedescendant="results[active] ? `cp-${results[active]!.key}` : undefined"
-          placeholder="Search issues by #number, id or title, or type a command"
+          placeholder="Filter the issues, #2528, or a command"
           autocomplete="off" data-1p-ignore data-lpignore="true" data-form-type="other"
           @keydown.down.prevent="move(1)"
           @keydown.up.prevent="move(-1)"
@@ -26,13 +28,16 @@
       <ul id="cp-list" class="cp-list" role="listbox">
         <template v-for="(item, i) in results" :key="item.key">
           <li v-if="i === 0 || results[i - 1]!.group !== item.group" class="cp-group" role="presentation">{{ item.group }}</li>
+          <!-- picked by moving the mouse onto it, not by rows sliding under a
+               still pointer (a move without movement): Enter would open
+               that issue instead of the first row -->
           <li
             :id="`cp-${item.key}`"
             class="cp-item"
             :class="{ 'is-active': i === active }"
             role="option"
             :aria-selected="i === active"
-            @mousemove="active = i"
+            @mousemove="(e: MouseEvent) => (e.movementX || e.movementY) && (active = i)"
             @click="run(item)"
           >
             <GbIcon :name="item.icon" small />
@@ -40,7 +45,7 @@
             <span v-if="item.hint" class="cp-hint">{{ item.hint }}</span>
           </li>
         </template>
-        <li v-if="!results.length" class="cp-empty" role="presentation">{{ loading ? 'Loading the issues…' : 'Nothing matches.' }}</li>
+        <li v-if="error" class="cp-empty" role="status">{{ error }}</li>
       </ul>
     </div>
   </q-dialog>
@@ -51,7 +56,8 @@ import { computed, nextTick, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { getIssues, type Issue } from '@/api/board';
 import { filtersHidden, newIssueRequested, paletteOpen, recentIssues, recordRecent } from '@/commands';
-import { rank } from '@/palette';
+import { message } from '@/issue';
+import { jumps, openFirst, rank } from '@/palette';
 import { helpOpen } from '@/shortcuts';
 import GbIcon, { type IconName } from '@/components/GbIcon.vue';
 
@@ -59,28 +65,64 @@ const props = defineProps<{ views: string[] }>();
 const route = useRoute();
 const router = useRouter();
 
-type Entry = { key: string; label: string; group: string; icon: IconName; hint?: string | undefined; id?: string | undefined; number?: string | undefined; act: () => void };
+type Entry = { key: string; label: string; group: string; icon: IconName; hint?: string | undefined; act: () => void };
 
 const query = ref('');
 const active = ref(0);
 const input = ref<HTMLInputElement | null>(null);
-const issues = ref<Issue[]>([]);
-const loading = ref(false);
+const all = ref<Issue[]>([]); // every issue, for the jumps by number or id
+const found = ref<Issue[] | null>(null); // the filter's answer; null: not yet
+const searching = ref(false);
+const error = ref('');
 
 async function onShow() {
   query.value = '';
   active.value = 0;
   await nextTick();
   input.value?.focus();
-  loading.value = true;
   try {
-    issues.value = (await getIssues('is:open', '')).flatMap((b) => b.issues);
+    all.value = (await getIssues('is:open,closed')).flatMap((b) => b.issues);
   } catch {
-    issues.value = [];
-  } finally {
-    loading.value = false;
+    all.value = [];
   }
 }
+
+// The filter runs on the server once typing pauses, on every issue (no
+// is:open added: the board shows the same issues for it); only the latest
+// answer counts.
+let timer: ReturnType<typeof setTimeout> | undefined;
+let latest = 0;
+watch(query, (typed) => {
+  active.value = 0;
+  clearTimeout(timer);
+  const f = typed.trim();
+  error.value = '';
+  searching.value = !!f;
+  if (!f) {
+    found.value = null;
+    return;
+  }
+  const mine = ++latest;
+  timer = setTimeout(async () => {
+    try {
+      const res = (await getIssues(f)).flatMap((b) => b.issues);
+      if (mine === latest) found.value = res;
+    } catch (e) {
+      if (mine === latest) {
+        found.value = [];
+        error.value = message(e);
+      }
+    } finally {
+      if (mine === latest) searching.value = false;
+    }
+  }, 150);
+});
+watch(paletteOpen, (open) => {
+  if (!open) {
+    clearTimeout(timer);
+    latest++;
+  }
+});
 
 function openIssue(id: string, title: string, number?: string) {
   recordRecent({ id, title, number });
@@ -88,6 +130,12 @@ function openIssue(id: string, title: string, number?: string) {
   else void router.push(`/issues/${id}`);
 }
 const go = (path: string) => () => void router.push(path);
+
+// Into the board's Filter box: on the board, the same view; elsewhere, the
+// board's first one.
+function filterBoard(f: string) {
+  void router.push({ path: '/', query: route.path === '/' ? { ...route.query, issue: undefined, filter: f } : { filter: f } });
+}
 
 const commands = computed<Entry[]>(() => [
   { key: 'new', label: 'New issue', group: 'Commands', icon: 'plus', hint: 'c', act: () => { newIssueRequested.value = true; if (route.path !== '/') void router.push('/'); } },
@@ -99,21 +147,26 @@ const commands = computed<Entry[]>(() => [
   { key: 'keys', label: 'Keyboard shortcuts', group: 'Commands', icon: 'title', hint: '?', act: () => (helpOpen.value = true) },
 ]);
 
-const issueEntries = computed<Entry[]>(() =>
-  issues.value.map((i) => {
-    const number = i.forges?.[0]?.number;
-    return { key: `i-${i.id}`, label: i.title, group: 'Issues', icon: i.status === 'closed' ? 'closed' : 'open', hint: number ? `#${number}` : i.id.slice(0, 7), id: i.id, number, act: () => openIssue(i.id, i.title, number) };
-  }),
-);
+function issueEntry(i: Issue, group: string): Entry {
+  const number = i.forges?.[0]?.number;
+  return { key: `${group}-${i.id}`, label: i.title, group, icon: i.status === 'closed' ? 'closed' : 'open', hint: number ? `#${number}` : i.id.slice(0, 7), act: () => openIssue(i.id, i.title, number) };
+}
 
+// An exact #number or id first, at once (Enter opens it); else the filter
+// for the board; then the commands, and the issues the filter finds.
 const results = computed<Entry[]>(() => {
-  if (!query.value.trim()) {
+  const f = query.value.trim();
+  if (!f) {
     const recent = recentIssues().map((r): Entry => ({ key: `r-${r.id}`, label: r.title, group: 'Opened lately', icon: 'clock', hint: r.number ? `#${r.number}` : r.id.slice(0, 7), act: () => openIssue(r.id, r.title, r.number) }));
     return [...recent, ...commands.value];
   }
-  return rank(query.value, [...issueEntries.value, ...commands.value]).slice(0, 12);
+  const items = all.value.map((i) => ({ key: i.id, label: i.title, id: i.id, numbers: i.forges?.flatMap((x) => (x.number ? [x.number] : [])), issue: i }));
+  const jumped = jumps(f, items).map((j) => j.issue);
+  const n = found.value?.length ?? 0;
+  const filterRow: Entry = { key: 'filter', label: `Filter the board by «${f}»`, group: 'Filter', icon: 'filter', hint: searching.value || !found.value ? '…' : `${n} ${n === 1 ? 'issue' : 'issues'}`, act: () => filterBoard(f) };
+  const issues = openFirst(found.value ?? []).filter((i) => !jumped.some((j) => j.id === i.id)).slice(0, 10);
+  return [...jumped.map((i) => issueEntry(i, 'Jump to')), filterRow, ...rank(f, commands.value).slice(0, 4), ...issues.map((i) => issueEntry(i, 'Issues'))];
 });
-watch(query, () => (active.value = 0));
 
 function move(d: number) {
   const n = results.value.length;
