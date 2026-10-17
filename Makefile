@@ -1,4 +1,4 @@
-.PHONY: build test lint fmt vet ci install web-dev web-build clean
+.PHONY: build test lint fmt vet ci install web-dev web-build dist clean
 
 build:
 	go build ./...
@@ -27,6 +27,20 @@ web-dev:
 
 web-build:
 	cd web && npm run build
+
+# A release's archives, the web app inside, in dist/ with checksums.txt:
+# run on a clean checkout of the tag, after `cd web && npm ci`, so the
+# commands report that version.
+PLATFORMS := linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64
+dist: web-build
+	rm -rf dist && mkdir dist
+	@set -e; v=$$(git describe --tags --always --dirty); for p in $(PLATFORMS); do \
+		os=$${p%/*}; arch=$${p#*/}; d=git-board_$${v}_$${os}_$${arch}; \
+		CGO_ENABLED=0 GOOS=$$os GOARCH=$$arch go build -trimpath -ldflags "-s -w" -o dist/$$d/ ./cmd/git-board ./cmd/git-board-server; \
+		cp LICENSE README.md dist/$$d/; \
+		if [ $$os = windows ]; then (cd dist && zip -qr $$d.zip $$d); else tar -C dist -czf dist/$$d.tar.gz $$d; fi; \
+		rm -rf dist/$$d; echo "dist/$$d"; \
+	done; cd dist && shasum -a 256 * > checksums.txt
 
 clean:
 	rm -rf site/
