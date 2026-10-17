@@ -202,6 +202,9 @@ branch is deleted. The issue's git-bug entity lives only in a scratch
 clone, so the next import elsewhere brings #25 in as a new issue. Not yet
 tested live: required checks and the code-owner approval (a ruleset needs
 the repository public or a paid plan; approval needs a second account).
+Read-only, with the same keyring token, co2's PR #3082 reads as the gate
+would show it: the six required checks from `dev`'s rules, "Waits for:
+Frontent Lint/Type Check, Frontend Tests, an approval".
 
 ### M4: review in git-board
 
@@ -276,6 +279,10 @@ the issue.
   days.
 - A virtualized diff viewer, if a file someone must read exceeds the
   5,000-line view.
+- A branch squashed into the base and then deleted on origin still gets
+  "push it to open a PR": `in_base` misses most squashes. A PR keeps its
+  head's name after the branch is gone, so looking up local-only branches
+  on GitHub too would show their PR instead.
 - co2's `dev` rules include a `branch_name_pattern`,
   `^(feat|fix|chore|docs|refactor)/.+`. If it constrains new branches, the
   default `{number}-{slug}` and a `perf/` kind are refused on push, and
