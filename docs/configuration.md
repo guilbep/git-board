@@ -136,6 +136,7 @@ limits = { in-progress = 5 }
 
 [views.pm]
 layout = "board"
+filter = "is:open pm:@me"
 group = "status"
 lanes = ["(none)", "backlog", "comite", "ready", "qa"]
 
@@ -148,6 +149,23 @@ lanes = ["comite", "ready", "qa", "tests-metier", "validated"]
 On a board, Cmd- or Ctrl-click picks several cards (Shift-click a range
 in a lane, or the box on a card's corner), and dragging one of them moves
 them all; a lane's ⋯ menu moves every card it holds.
+
+## Roles
+
+A project's people by role, as the team's roles page names them: the lead developer, the project manager, the code reviewer. Every issue takes them, unless it sets its own.
+
+```toml
+[roles]
+lead-dev = "bob"
+pm = "claire"
+reviewer = "alice"
+```
+
+A role is a `person` field of the same name: `lead-dev:dan` on an issue overrides the project's `bob` for that issue, and removing it gives `bob` back. Filters, boards and the filters panel see the inherited value: `lead-dev:@me` finds the issues that take you as lead dev, the PM's board above (`pm:@me`) every issue while the project names them PM, and `no:lead-dev` finds none while the project names a lead dev. The side panel shows an inherited value greyed, "bob · project". `assignee` is the contributing developer, set per issue.
+
+| Key | What it is |
+| --- | --- |
+| a role (`lead-dev`, `pm`, `reviewer`, …) | One login. The name is a field's: lower-case letters, digits and `-`; declared in `[fields]`, it is a `person`. |
 
 ## Filters
 
