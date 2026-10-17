@@ -226,11 +226,11 @@ async function forgeAction(doing: string, act: () => Promise<string>) {
   forgeNote.value = forgeError.value = '';
   try {
     forgeNote.value = await act();
-    emit('changed');
   } catch (e) {
     forgeError.value = message(e);
   } finally {
     forgeBusy.value = '';
+    emit('changed'); // a Take with errors may have taken part of it
   }
 }
 
