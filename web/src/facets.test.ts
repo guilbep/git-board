@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { Issue } from './api/board';
 import type { Fields } from './fields.ts';
-import { NONE, parseSelection, parseSort, pick, sortIssues, sortOptions } from './facets.ts';
+import { NONE, parseSelection, parseSort, pick, prefillFrom, sortIssues, sortOptions } from './facets.ts';
 
 const issue = (id: string, title: string, labels: string[], status = 'open'): Issue => ({ id, title, shown_title: title, status, labels });
 
@@ -77,4 +77,21 @@ test('sortIssues sorts by forge number, issues without one last', () => {
   assert.deepEqual(sorted.map((i) => i.id), ['c', 'a', 'd', 'b']);
   const desc = sortIssues([withForge('a', '1436'), withForge('b'), withForge('c', '87')], { key: 'links', desc: true }, {});
   assert.deepEqual(desc.map((i) => i.id), ['a', 'c', 'b']);
+});
+
+test('sortIssues: a role an issue takes from the project sorts as its value', () => {
+  const people = [
+    { ...issue('c', 'c', ['lead-dev:carol']) },
+    { ...issue('b', 'b', []), inherited: ['lead-dev:bob'] },
+    { ...issue('a', 'a', ['lead-dev:alice']) },
+  ];
+  assert.equal(sortIssues(people, { key: 'lead-dev', desc: false }, {}).map((i) => i.id).join(' '), 'a b c');
+});
+
+test('prefillFrom: a new issue starts with the values the filter picks, not a role the project gives it', () => {
+  const roles: Fields = { ...fields, pm: { single: false, options: null, numeric: false, inherits: 'claire' } };
+  const facet = (key: string, selected: string[]) => ({ key, options: [], selected, rest: '' });
+  assert.deepEqual(prefillFrom([facet('status', ['ready']), facet('pm', ['claire'])], roles), { status: 'ready' });
+  assert.deepEqual(prefillFrom([facet('pm', ['dave'])], roles), { pm: 'dave' });
+  assert.deepEqual(prefillFrom([facet('status', ['ready', 'qa']), facet('is', ['open'])], roles), {});
 });

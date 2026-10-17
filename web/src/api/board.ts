@@ -18,8 +18,11 @@ export interface Issue {
   shown_title: string; // the title without a trailing (#2518) of its own (gitbugio.Issue.ShownTitle)
   status: string;
   labels: string[];
+  inherited?: string[]; // what it takes from the project's [roles], for the roles it doesn't set
   github_url?: string; // absent when the issue wasn't bridged in from GitHub
   forges?: Forge[]; // where it is on forges
+  number?: string; // its project number, CO2-3075; absent until it has one
+  counted?: boolean; // the project numbers its issues: a bare number is a project number
   updated_at?: string;
 }
 
@@ -45,6 +48,7 @@ export interface FieldConfig {
   current?: string; // an iteration field: today's sprint
   type?: string; // select, iteration, person, number, date, issue, text (config.TypeOf)
   unit?: string; // a number's: h
+  inherits?: string; // a role's project value ([roles]), shown when the issue sets none
 }
 
 // ApiError carries the server's status and code: syncing (a sync with

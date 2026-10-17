@@ -110,6 +110,7 @@ func (s *apiServer) handleNewIssue(w http.ResponseWriter, r *http.Request) {
 		writeIssueError(w, err)
 		return
 	}
+	// no number yet: it comes with the push to origin the user asks for
 	s.writeThread(w, http.StatusCreated, id)
 }
 

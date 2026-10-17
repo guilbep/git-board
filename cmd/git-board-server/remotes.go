@@ -64,9 +64,20 @@ func (s *apiServer) handleRemote(w http.ResponseWriter, r *http.Request) {
 	name, action := r.PathValue("name"), r.PathValue("action")
 	do := map[string]func(string) error{
 		"fetch": s.b.Fetch,
-		"pull":  s.b.Pull,
+		"pull": func(remote string) error {
+			err := s.b.Pull(remote)
+			if err == nil && remote == gitbugio.NumbersRemote {
+				err = s.b.FetchNumbers(remote)
+			}
+			return err
+		},
+		// numbers go out with a push to origin the user asks for, never on
+		// their own (docs/configuration.md, Numbers)
 		"push": func(remote string) error {
 			_, err := s.b.Push(remote)
+			if err == nil && remote == gitbugio.NumbersRemote {
+				_, err = s.b.NumberIssues(remote)
+			}
 			return err
 		},
 	}[action]

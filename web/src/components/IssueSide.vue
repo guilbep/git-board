@@ -46,6 +46,7 @@
                 <button type="button" class="gb-chip-x" :aria-label="`Remove ${v} from ${name}`" :disabled="saving" @click="save(name, `-${v}`)">×</button>
               </li>
             </ul>
+            <p v-if="!values(name).length && fields[name]?.inherits" class="gb-inherited">{{ fields[name]!.inherits }} <span>· project</span></p>
             <form class="gb-addrow" @submit.prevent="onAdd(name)">
               <input autocomplete="off" data-1p-ignore data-lpignore="true" data-form-type="other" :id="`f-${name}`" v-model="drafts[name]" class="epfl-input" :placeholder="typeOf(name, fields) === 'issue' ? 'Add #12, or a git-bug id' : typeOf(name, fields) === 'person' ? 'Add, or @me' : 'Add'" :disabled="saving" />
               <button type="submit" class="epfl-btn epfl-btn-secondary epfl-btn-sm" :disabled="saving"><GbIcon name="plus" small /> Add</button>
@@ -363,6 +364,7 @@ function addLabel() {
 .gb-linkbtn { margin-top: .5rem; }
 .gb-linkform { display: grid; gap: .5rem; margin-top: .5rem; }
 .gb-forgerow a { display: inline-flex; align-items: center; gap: .25rem; font-weight: 700; color: var(--fg); }
+.gb-inherited { margin: 0 0 .25rem; color: var(--fg-muted); font-style: italic; }
 .gb-person { display: flex; align-items: baseline; gap: .5rem; padding: .25rem 0; }
 .gb-person .gb-avatar { align-self: center; }
 .gb-held-tag { display: inline-flex; align-items: center; gap: .25rem; text-decoration: none; }

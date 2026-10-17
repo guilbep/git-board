@@ -125,6 +125,7 @@
 .gb-forgelinks{display:inline-flex;flex-wrap:wrap;align-items:center;gap:.25rem .5rem}
 .gb-forgelinks a{display:inline-flex;align-items:center;gap:.25rem;font-weight:700;color:var(--fg)}
 .gb-mono{font-family:var(--font-mono);font-size:.8125rem}
+.gb-num{font-family:var(--font-mono);font-weight:500;opacity:.6;margin-right:.4em}
 .gb-cols{display:grid;grid-template-columns:minmax(0,1fr) 17.5rem;gap:2.5rem;padding:1.75rem 2rem 2.5rem}
 .gb-maincol{display:flex;flex-direction:column;min-width:0}
 .gb-side{display:flex;flex-direction:column;min-width:0}

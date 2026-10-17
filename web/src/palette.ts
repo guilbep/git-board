@@ -1,16 +1,32 @@
 // The command palette's own matching, besides the filter (the server's):
-// an issue the query names by its number on a forge (#2528 or 2528) or the
-// start of its git-bug id, 7 characters at least, as the filter takes
-// them, at once, from the issues loaded when it opened; a command by its
-// label (every word, else its letters in order). Best first; nothing
-// typed: as given.
-export type Item = { key: string; label: string; id?: string | undefined; numbers?: string[] | undefined };
+// an issue the query names by its number (#2528 a forge's; 2528 and
+// CO2-2528 its project number once the project numbers its issues, else
+// a forge's) or the start of its git-bug id, 7 characters at least, as the
+// filter takes them, at once, from the issues loaded when it opened; a
+// command by its label (every word, else its letters in order). Best
+// first; nothing typed: as given.
+export type Item = {
+  key: string;
+  label: string;
+  id?: string | undefined;
+  numbers?: string[] | undefined; // its forge numbers
+  project?: string | undefined; // its project number, CO2-2528
+  counted?: boolean | undefined; // the project numbers its issues
+};
 
 export function jumps<T extends Item>(query: string, items: T[]): T[] {
   const q = query.trim().toLowerCase();
-  const num = /^#?(\d+)$/.exec(q)?.[1];
+  const forge = /^#(\d+)$/.exec(q)?.[1];
+  const bare = /^\d+$/.test(q) ? q : undefined;
   const id = /^[0-9a-f]{7,}$/.test(q) ? q : undefined;
-  return items.filter((i) => (num !== undefined && !!i.numbers?.includes(num)) || (id !== undefined && !!i.id?.startsWith(id)));
+  const own = (i: T) => (i.counted ? i.project?.slice(i.project.lastIndexOf('-') + 1) === bare : !!i.numbers?.includes(bare!));
+  return items.filter(
+    (i) =>
+      (forge !== undefined && !!i.numbers?.includes(forge)) ||
+      (bare !== undefined && own(i)) ||
+      i.project?.toLowerCase() === q ||
+      (id !== undefined && !!i.id?.startsWith(id)),
+  );
 }
 
 export function rank<T extends { label: string }>(query: string, items: T[]): T[] {

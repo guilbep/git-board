@@ -269,3 +269,26 @@ func TestWithoutKeepsTheOtherTermsAsTyped(t *testing.T) {
 		t.Errorf("quoted value: %+v", got)
 	}
 }
+
+// Once the project numbers its issues, a bare number and CO2-3060 are the
+// project's number, #3060 GitHub's: X is CO2-3060 (GitHub #3071), Y is
+// GitHub #3060 imported after the switch (CO2-3075).
+func TestMatchesProjectNumbers(t *testing.T) {
+	cfg := mustLoad(t)
+	x := gitbugio.Issue{ID: "aaaaaaaaaa", Title: "Bouncer pool", Status: "open", Number: "CO2-3060", Counted: true, Forges: []gitbugio.Forge{{Name: "GitHub", Number: "3071"}}}
+	y := gitbugio.Issue{ID: "bbbbbbbbbb", Title: "CSV export", Status: "open", Number: "CO2-3075", Counted: true, Forges: []gitbugio.Forge{{Name: "GitHub", Number: "3060"}}}
+	for expr, want := range map[string][2]bool{ // [x, y]
+		"3060":     {true, false},
+		"CO2-3060": {true, false},
+		"co2-3060": {true, false},
+		"#3060":    {false, true},
+		"#3071":    {true, false},
+		"3071":     {false, false}, // a bare number is the project's now
+		"CO2-30":   {false, false},
+	} {
+		c := Parse(expr)
+		if got := [2]bool{Matches(x, c, cfg, "", today), Matches(y, c, cfg, "", today)}; got != want {
+			t.Errorf("%q: %v, want %v", expr, got, want)
+		}
+	}
+}

@@ -20,6 +20,19 @@ test('jumps: an issue by its number or the start of its id, as the filter takes 
   assert.deepEqual(jumps('#2528 csv', issues), []);
 });
 
+test('jumps: once the project numbers its issues, a bare number and CO2-N are its own, #N a forge\'s', () => {
+  const counted = [
+    { key: 'x', label: 'Bouncer pool', id: 'aaaaaaaaaa', numbers: ['3071'], project: 'CO2-3060', counted: true },
+    { key: 'y', label: 'CSV export', id: 'bbbbbbbbbb', numbers: ['3060'], project: 'CO2-3075', counted: true },
+    { key: 'w', label: 'New one', id: 'cccccccccc', numbers: ['3080'], counted: true },
+  ];
+  assert.deepEqual(keys(jumps('3060', counted)), ['x']);
+  assert.deepEqual(keys(jumps('co2-3060', counted)), ['x']);
+  assert.deepEqual(keys(jumps('#3060', counted)), ['y']);
+  assert.deepEqual(keys(jumps('3080', counted)), []); // not numbered yet: a bare number is a project number
+  assert.deepEqual(keys(jumps('#3080', counted)), ['w']);
+});
+
 test('rank: a command by its label, every word, else its letters in order', () => {
   const commands = [{ key: 'v1', label: 'View: backlog' }, { key: 'a1', label: 'New issue' }, { key: 's', label: 'Settings' }];
   assert.equal(rank('backlog', commands)[0]!.key, 'v1');

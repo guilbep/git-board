@@ -172,6 +172,10 @@ git-board lint
 git-board sync
 git-board sync ../co2-calculator ../git-time
 
+# the project's own numbers, CO2-3075 (docs/configuration.md, Numbers)
+git-board numbers init --prefix CO2 --start 3052
+git-board numbers
+
 # sprints: list/resolve/create/report (see "Sprints" below)
 git-board sprint ls
 git-board sprint current

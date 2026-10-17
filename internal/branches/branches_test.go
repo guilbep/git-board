@@ -102,3 +102,33 @@ func TestNamesWhatNameSuggests(t *testing.T) {
 		}
 	}
 }
+
+// Once the project numbers its issues, a branch's number is the project's:
+// fix/3060-… is CO2-3060's, not GitHub #3060's; an issue the counter hasn't
+// numbered yet names its branch by its id.
+func TestNamesProjectNumbers(t *testing.T) {
+	x := gitbugio.Issue{ID: "aaaaaaaaaa", Title: "Bouncer pool", Number: "CO2-3060", Counted: true, Forges: []gitbugio.Forge{{Name: "GitHub", Number: "3071"}}}
+	y := gitbugio.Issue{ID: "bbbbbbbbbb", Title: "CSV export", Number: "CO2-3075", Counted: true, Forges: []gitbugio.Forge{{Name: "GitHub", Number: "3060"}}}
+	waiting := gitbugio.Issue{ID: "cccccccccc", Title: "New one", Counted: true, Forges: []gitbugio.Forge{{Name: "GitHub", Number: "3080"}}}
+	for _, tc := range []struct {
+		branch string
+		is     gitbugio.Issue
+		want   bool
+	}{
+		{"fix/3060-bouncer-pool", x, true},
+		{"fix/3060-bouncer-pool", y, false},
+		{"fix/3071-bouncer-pool", x, false},
+		{"fix/3080-new-one", waiting, false},
+		{"ccccccc-new-one", waiting, true},
+	} {
+		if got := Names(tc.branch, tc.is); got != tc.want {
+			t.Errorf("Names(%q, %s) = %v, want %v", tc.branch, tc.is.Title, got, tc.want)
+		}
+	}
+	if got := Name(config.Branches{}, x); got != "3060-bouncer-pool" {
+		t.Errorf("Name(x) = %q", got)
+	}
+	if got := Name(config.Branches{}, waiting); got != "ccccccc-new-one" {
+		t.Errorf("Name(waiting) = %q", got)
+	}
+}

@@ -84,7 +84,7 @@
               </td>
               <template v-for="key in cols" :key="key">
                 <td v-if="key === 'id'" class="cell-id">{{ issue.id.slice(0, 8) }}</td>
-                <td v-else-if="key === 'title'" class="cell-title"><span v-if="changed?.has(issue.id)" class="gb-changed-dot" title="Changed since your last visit" /><button type="button" class="title-button">{{ issue.shown_title }}</button></td>
+                <td v-else-if="key === 'title'" class="cell-title"><span v-if="changed?.has(issue.id)" class="gb-changed-dot" title="Changed since your last visit" /><button type="button" class="title-button"><span v-if="issue.number" class="gb-num">{{ issue.number }}</span>{{ issue.shown_title }}</button></td>
                 <td v-else-if="key === 'is'">{{ issue.status }}</td>
                 <td v-else-if="key === 'links'" class="cell-links" @click.stop>
                   <a v-for="f in issue.forges ?? []" :key="f.url" :href="f.url" target="_blank" rel="noopener noreferrer" class="forge-link" :title="`Open on ${f.name}${f.number ? ` #${f.number}` : ''}`">

@@ -2,7 +2,8 @@
 // syntax where they meet: field:value, -field:value,
 // field:@current|@next|@previous|@me, is:open|closed, title:*glob*,
 // author:login, label:name, no:field (no:label: no plain label), #2528 (an
-// issue's number on a forge), free text and "quoted phrases". Conditions
+// issue's number on a forge), CO2-2528 (its project number), free text and
+// "quoted phrases". Conditions
 // are AND'd; a,b is either value (status:ready,qa), as in GitHub's search.
 // Pure logic, and the only parser of the grammar: the CLI, the TUI, the
 // web API and so the web page all go through it.
@@ -120,12 +121,16 @@ func digits(s string) bool {
 	return s != "" && strings.Trim(s, "0123456789") == ""
 }
 
-// itself: a word that is an issue's number on a forge (2528), or the start
-// of its git-bug id, 7 characters at least as git-bug shows it, finds that
-// issue too.
+// itself: a word that is an issue's number (2528: its project number once
+// the project numbers its issues, else a forge's), its project number as
+// written (CO2-2528), or the start of its git-bug id, 7 characters at least
+// as git-bug shows it, finds that issue too.
 func itself(issue gitbugio.Issue, word string) bool {
 	if digits(word) {
 		return issue.HasNumber(word)
+	}
+	if issue.Number != "" && strings.EqualFold(word, issue.Number) {
+		return true
 	}
 	word = strings.ToLower(word)
 	return len(word) >= 7 && strings.Trim(word, "0123456789abcdef") == "" && strings.HasPrefix(issue.ID, word)
@@ -174,8 +179,8 @@ func RequiresMe(conditions []Condition) bool {
 
 // Matches reports whether issue satisfies every condition.
 func Matches(issue gitbugio.Issue, conditions []Condition, cfg *config.Config, me string, today time.Time) bool {
-	labels := make(map[string]bool, len(issue.Labels))
-	for _, l := range issue.Labels {
+	labels := map[string]bool{}
+	for _, l := range issue.AllLabels() {
 		labels[l] = true
 	}
 
@@ -218,7 +223,7 @@ func matchOne(issue gitbugio.Issue, labels map[string]bool, c Condition, value s
 		}
 		ok = ok || itself(issue, value)
 	case KindNumber:
-		ok = issue.HasNumber(value)
+		ok = issue.HasForgeNumber(value)
 	case KindAuthor:
 		want := value
 		if want == "@me" {
@@ -228,12 +233,12 @@ func matchOne(issue gitbugio.Issue, labels map[string]bool, c Condition, value s
 			ok = ok || strings.EqualFold(l, want)
 		}
 	case KindLabel:
-		for _, l := range issue.Labels {
+		for l := range labels {
 			ok = ok || strings.EqualFold(l, value)
 		}
 	case KindNo:
 		ok = true
-		for _, l := range issue.Labels {
+		for l := range labels {
 			ns, _, hasNS := strings.Cut(l, ":")
 			if (value == "label" && !hasNS) || (hasNS && ns == value) {
 				ok = false

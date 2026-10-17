@@ -14,7 +14,8 @@
   >
     <span v-if="!editing" class="cell-tags">
       <span v-for="v in values" :key="v" class="gb-val" :class="colorClass(name, v)"><ValueMark chip :field="name" :value="v" />{{ formatValue(name, v, fields) }}</span>
-      <span v-if="!values.length" class="cell-empty" aria-hidden="true">+</span>
+      <span v-if="!values.length && inherited" class="cell-inherited">{{ formatValue(name, inherited, fields) }}</span>
+      <span v-else-if="!values.length" class="cell-empty" aria-hidden="true">+</span>
     </span>
 
     <select
@@ -84,6 +85,8 @@ const draft = ref('');
 const control = ref<HTMLInputElement | HTMLSelectElement | null>(null);
 
 const values = computed(() => fieldValues(props.issue.labels, props.name));
+// a role the issue takes from the project, shown greyed while it sets none
+const inherited = computed(() => fieldValues(props.issue.inherited ?? [], props.name)[0]);
 // one value, as the server decides (fields.Single): configured, else not
 // a person and not already several
 const single = computed(() => props.fields[props.name]?.single ?? (typeOf(props.name, props.fields) !== 'person' && values.value.length < 2));
@@ -160,6 +163,7 @@ function onFocusOut(e: FocusEvent) {
 .cell-field:focus-visible { outline: var(--focus-w) solid var(--primary-hover); outline-offset: -0.125rem; }
 .cell-tags { display: inline-flex; flex-wrap: wrap; gap: var(--space-1); min-height: 1.25rem; }
 .cell-empty { color: var(--fg-subtle); opacity: 0; transition: opacity var(--t-fast); }
+.cell-inherited { color: var(--fg-muted); font-style: italic; }
 .cell-field:hover .cell-empty, .cell-field:focus-visible .cell-empty { opacity: 1; }
 .cell-control { min-height: 2rem; padding: .125rem .5rem; font-size: var(--fs-sm); min-width: 8rem; }
 select.cell-control { padding-right: 2rem; }

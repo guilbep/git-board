@@ -214,7 +214,7 @@ func TestThreadForgeBridges(t *testing.T) {
 		t.Errorf("a comment waits for %v, unlinked", last.Pending)
 	}
 	if th.HasNumber("7") || !th.HasNumber("3") {
-		t.Errorf("numbers %v, want 3 alone", th.Numbers())
+		t.Errorf("numbers of %+v, want 3 alone", th.Forges)
 	}
 }
 

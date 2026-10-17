@@ -147,7 +147,8 @@ func (s *apiServer) handleViews(w http.ResponseWriter, r *http.Request) {
 // and unit resolved (config.TypeOf), and for an iteration the current one.
 type fieldResponse struct {
 	config.Field
-	Current string `json:"current,omitempty"`
+	Current  string `json:"current,omitempty"`
+	Inherits string `json:"inherits,omitempty"` // a role's project value ([roles])
 }
 
 // labelValues is every field's values on the issues.
@@ -207,6 +208,12 @@ func (s *apiServer) handleFields(w http.ResponseWriter, r *http.Request) {
 			f.Current = current
 			res[name] = f
 		}
+	}
+	// a role is a person field with the project's value, even unused yet
+	for role, who := range cfg.Roles {
+		f := res[role]
+		f.Type, f.Single, f.Inherits = config.TypePerson, false, who
+		res[role] = f
 	}
 	writeJSON(w, http.StatusOK, res)
 }

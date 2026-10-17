@@ -88,7 +88,7 @@ func writeTable(out io.Writer, issues []gitbugio.Issue, cfg *config.Config, fiel
 
 	for _, issue := range issues {
 		cells, other := fieldColumns(issue, cfg, fieldNames)
-		row := append([]string{shortID(issue.ID), issue.Title, issue.Status}, cells...)
+		row := append([]string{shortID(issue.ID), issue.Headline(), issue.Status}, cells...)
 		row = append(row, other)
 		fmt.Fprintln(tw, strings.Join(row, "\t"))
 	}
@@ -106,7 +106,7 @@ func writeMarkdownTable(out io.Writer, issues []gitbugio.Issue, cfg *config.Conf
 
 	for _, issue := range issues {
 		cells, other := fieldColumns(issue, cfg, fieldNames)
-		row := append([]string{shortID(issue.ID), issue.Title, issue.Status}, cells...)
+		row := append([]string{shortID(issue.ID), issue.Headline(), issue.Status}, cells...)
 		row = append(row, other)
 		fmt.Fprintf(out, "| %s |\n", strings.Join(row, " | "))
 	}

@@ -36,7 +36,7 @@ var (
 )
 
 // TypeOf is a field's type: its own `type`; else `numeric = true` (a
-// number); else what its name says (sprint, assignee, due, parent…);
+// number); else a role ([roles]), a person; else what its name says (sprint, assignee, due, parent…);
 // else what all its values are (dates, issue references); else select.
 func (c *Config) TypeOf(name string, values []string) string {
 	f := c.Fields[name]
@@ -45,6 +45,8 @@ func (c *Config) TypeOf(name string, values []string) string {
 		return f.Type
 	case f.Numeric:
 		return TypeNumber
+	case c.Roles[name] != "":
+		return TypePerson
 	case byName[name] != "":
 		return byName[name]
 	case len(values) > 0 && all(values, dateValue):

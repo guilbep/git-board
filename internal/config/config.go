@@ -99,13 +99,14 @@ type GithubProject struct {
 
 // raw mirrors the on-disk TOML shape for decoding.
 type raw struct {
-	Repos         reposTable       `toml:"repos"`
-	Fields        map[string]Field `toml:"fields"`
-	Sprints       SprintsConfig    `toml:"sprints"`
-	Views         map[string]View  `toml:"views"`
-	GithubProject GithubProject    `toml:"github-project"`
-	Uploads       Uploads          `toml:"uploads"`
-	Branches      Branches         `toml:"branches"`
+	Repos         reposTable        `toml:"repos"`
+	Fields        map[string]Field  `toml:"fields"`
+	Sprints       SprintsConfig     `toml:"sprints"`
+	Views         map[string]View   `toml:"views"`
+	GithubProject GithubProject     `toml:"github-project"`
+	Uploads       Uploads           `toml:"uploads"`
+	Branches      Branches          `toml:"branches"`
+	Roles         map[string]string `toml:"roles"`
 }
 
 // Uploads is the [uploads] table: where files attached to issues go. The
@@ -153,6 +154,8 @@ type Config struct {
 	GithubProject GithubProject
 	Uploads       Uploads
 	Branches      Branches
+	// Roles is the [roles] table: the project's people by role (roles.go).
+	Roles map[string]string
 }
 
 // FileName is the config's name, at the root of the repository.
@@ -213,6 +216,9 @@ func parse(data []byte) (*Config, toml.MetaData, error) {
 	if err := checkTypes(r.Fields); err != nil {
 		return nil, md, err
 	}
+	if err := checkRoles(r.Roles, r.Fields); err != nil {
+		return nil, md, err
+	}
 	return &Config{
 		Repos:         r.Repos.List,
 		Fields:        r.Fields,
@@ -221,6 +227,7 @@ func parse(data []byte) (*Config, toml.MetaData, error) {
 		GithubProject: r.GithubProject,
 		Uploads:       r.Uploads,
 		Branches:      r.Branches,
+		Roles:         r.Roles,
 	}, md, nil
 }
 

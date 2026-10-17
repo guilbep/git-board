@@ -37,14 +37,23 @@ const githubURLMetaKey = "github-url"
 
 // Issue is the subset of a git-bug bug that git-board fields/filters need.
 type Issue struct {
-	ID        string   `json:"id"`
-	Title     string   `json:"title"`
-	Status    string   `json:"status"` // "open" or "closed"
-	Labels    []string `json:"labels"`
+	ID     string   `json:"id"`
+	Title  string   `json:"title"`
+	Status string   `json:"status"` // "open" or "closed"
+	Labels []string `json:"labels"`
+	// Inherited are the labels it takes from its project ([roles]) for the
+	// roles it doesn't set itself; internal/board sets them.
+	Inherited []string `json:"inherited,omitempty"`
 	GithubURL string   `json:"github_url,omitempty"` // "" if not bridged in from GitHub
 	Forges    []Forge  `json:"forges,omitempty"`     // where it is on forges
 	// Shown is the title as the board shows it (ShownTitle).
 	Shown string `json:"shown_title"`
+	// Number is its project number, CO2-3075: "" until the counter hands it
+	// one, and while the project doesn't number its issues (numbers.go).
+	Number string `json:"number,omitempty"`
+	// Counted tells the project numbers its issues: a bare number (3075,
+	// fix/3075-…) then means a project number; #3075 is still a forge's.
+	Counted bool `json:"counted,omitempty"`
 	// UpdatedAt is its last change, for "changed since your last visit".
 	UpdatedAt time.Time `json:"updated_at"`
 	// AuthorLogins are who opened it, for author:: name, login, forge
@@ -52,29 +61,60 @@ type Issue struct {
 	AuthorLogins []string `json:"-"`
 }
 
-// Numbers are the numbers the issue answers to (#2518), first forge first:
-// the one place a number is told to name an issue, for search, branch names
-// and titles. A project's own sequence (CO2-2518) would be added here.
-func (is Issue) Numbers() []string {
-	var ns []string
+// BareNumber is the number a bare mention names it by (3075, fix/3075-…):
+// its project number once the project numbers its issues, else its first
+// forge number; "" for none. With HasNumber and HasForgeNumber, the one
+// place a number is told to name an issue, for search, branch names and
+// titles.
+func (is Issue) BareNumber() string {
+	if is.Counted {
+		return is.Number[strings.LastIndexByte(is.Number, '-')+1:]
+	}
 	for _, f := range is.Forges {
-		if f.Number != "" && f.Gone == "" && !slices.Contains(ns, f.Number) {
-			ns = append(ns, f.Number)
+		if f.Number != "" && f.Gone == "" {
+			return f.Number
 		}
 	}
-	return ns
+	return ""
 }
 
-// HasNumber tells whether the issue answers to number n.
-func (is Issue) HasNumber(n string) bool { return slices.Contains(is.Numbers(), n) }
+// HasNumber tells whether a bare number names the issue: its project
+// number once the project numbers its issues, else any of its forge
+// numbers.
+func (is Issue) HasNumber(n string) bool {
+	if is.Counted {
+		return n != "" && is.BareNumber() == n
+	}
+	return is.HasForgeNumber(n)
+}
+
+// HasForgeNumber tells whether #n, a forge's own way to name an issue,
+// names it.
+func (is Issue) HasForgeNumber(n string) bool {
+	return n != "" && slices.ContainsFunc(is.Forges, func(f Forge) bool { return f.Number == n && f.Gone == "" })
+}
+
+// AllLabels are its own labels and those it inherits: what filters,
+// groups and facets see. Edits change its own labels only.
+func (is Issue) AllLabels() []string { return append(slices.Clip(is.Labels), is.Inherited...) }
+
+// Headline is its shown title after its project number, as lists show it:
+// "CO2-3075 Restarting Postgres empties the bouncer pool"; its title
+// before it has one.
+func (is Issue) Headline() string {
+	if is.Number == "" {
+		return is.Title
+	}
+	return is.Number + " " + is.ShownTitle()
+}
 
 var ownNumber = regexp.MustCompile(`\s*\(#(\d+)\)\s*$`) // (#2518)
 
 // ShownTitle is the title without a trailing (#2518) that is one of the
-// issue's own numbers: the forge links show it already. The title itself
-// keeps it, and editing starts from the title.
+// issue's own forge numbers: the forge links show it already. The title
+// itself keeps it, and editing starts from the title.
 func (is Issue) ShownTitle() string {
-	if m := ownNumber.FindStringSubmatchIndex(is.Title); m != nil && is.HasNumber(is.Title[m[2]:m[3]]) {
+	if m := ownNumber.FindStringSubmatchIndex(is.Title); m != nil && is.HasForgeNumber(is.Title[m[2]:m[3]]) {
 		return is.Title[:m[0]]
 	}
 	return is.Title
@@ -170,13 +210,14 @@ func (b *Backend) ListIssues() ([]Issue, error) {
 	if err != nil {
 		return nil, fmt.Errorf("listing bugs: %w", err)
 	}
+	c := b.counter()
 	issues := make([]Issue, len(ids))
 	for i, id := range ids {
 		excerpt, err := b.c.Bugs().ResolveExcerpt(id)
 		if err != nil {
 			return nil, fmt.Errorf("resolving %s: %w", id, err)
 		}
-		issues[i] = b.issueFrom(id.String(), excerpt)
+		issues[i] = b.issueFrom(id.String(), excerpt, c)
 	}
 	return issues, nil
 }
@@ -190,9 +231,16 @@ func (b *Backend) Labels() []string {
 	return res
 }
 
-// issueFrom is excerptToIssue with who opened it, for author:.
-func (b *Backend) issueFrom(id string, e *cache.BugExcerpt) Issue {
+// issueFrom is excerptToIssue with who opened it, for author:, and its
+// project number when c, the counter, numbers the project's issues.
+func (b *Backend) issueFrom(id string, e *cache.BugExcerpt, c *Counter) Issue {
 	issue := excerptToIssue(id, e)
+	if c != nil {
+		issue.Counted = true
+		if n := c.NumberOf(id, issue.Forges); n > 0 {
+			issue.Number = c.Format(n)
+		}
+	}
 	if a, err := b.c.Identities().ResolveExcerpt(e.AuthorId); err == nil {
 		for _, l := range []string{a.Name, a.Login, a.ImmutableMetadata["github-login"], a.ImmutableMetadata["gitlab-login"], a.ImmutableMetadata["gitea-login"]} {
 			if l != "" {
@@ -225,7 +273,8 @@ func (b *Backend) GetIssue(idPrefix string) (Issue, error) {
 	if err != nil {
 		return Issue{}, fmt.Errorf("resolving %s: %w", idPrefix, err)
 	}
-	return b.issueFrom(excerpt.Id().String(), excerpt), nil
+	c := b.counter()
+	return b.issueFrom(excerpt.Id().String(), excerpt, c), nil
 }
 
 // GetLabels returns the current labels for a bug, by id prefix.

@@ -40,9 +40,11 @@ export function untilSyncEnds(): Promise<void> {
   });
 }
 
-// idLabel names an issue on a card: its number on its first forge
-// (#2518), which its shown title leaves out, and its git-bug id.
+// idLabel names an issue on a card: its project number (CO2-3075), else
+// its number on its first forge (#2518), which its shown title leaves
+// out, and its git-bug id.
 export function idLabel(i: Issue, n = 7): string {
-  const number = i.forges?.[0]?.number;
-  return number ? `#${number} · ${i.id.slice(0, n)}` : i.id.slice(0, n);
+  const forge = i.forges?.[0]?.number;
+  const number = i.number ?? (forge ? `#${forge}` : '');
+  return number ? `${number} · ${i.id.slice(0, n)}` : i.id.slice(0, n);
 }

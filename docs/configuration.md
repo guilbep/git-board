@@ -136,6 +136,7 @@ limits = { in-progress = 5 }
 
 [views.pm]
 layout = "board"
+filter = "is:open pm:@me"
 group = "status"
 lanes = ["(none)", "backlog", "comite", "ready", "qa"]
 
@@ -148,6 +149,23 @@ lanes = ["comite", "ready", "qa", "tests-metier", "validated"]
 On a board, Cmd- or Ctrl-click picks several cards (Shift-click a range
 in a lane, or the box on a card's corner), and dragging one of them moves
 them all; a lane's ⋯ menu moves every card it holds.
+
+## Roles
+
+A project's people by role, as the team's roles page names them: the lead developer, the project manager, the code reviewer. Every issue takes them, unless it sets its own.
+
+```toml
+[roles]
+lead-dev = "bob"
+pm = "claire"
+reviewer = "alice"
+```
+
+A role is a `person` field of the same name: `lead-dev:dan` on an issue overrides the project's `bob` for that issue, and removing it gives `bob` back. Filters, boards and the filters panel see the inherited value: `lead-dev:@me` finds the issues that take you as lead dev, the PM's board above (`pm:@me`) every issue while the project names them PM, and `no:lead-dev` finds none while the project names a lead dev. The side panel shows an inherited value greyed, "bob · project". `assignee` is the contributing developer, set per issue.
+
+| Key | What it is |
+| --- | --- |
+| a role (`lead-dev`, `pm`, `reviewer`, …) | One login. The name is a field's: lower-case letters, digits and `-`; declared in `[fields]`, it is a `person`. |
 
 ## Filters
 
@@ -254,12 +272,24 @@ kinds = { bug = "fix", feat = "feat", perf = "perf", task = "chore" }
 | Key | Default | What it does |
 | --- | --- | --- |
 | `base` | the remote's default branch, else `main`, `master` or `trunk` | The branch a new branch starts from (`origin/<base>`, or `<base>` without a remote), and the one "in dev" and ahead/behind compare with. |
-| `name` | `"{number}-{slug}"` (GitHub's) | The branch's name. `{number}`: the issue's number on its first forge, else its git-bug id's first 7 characters. `{kind}`: its kind, through `kinds`; without one, `{kind}/` is dropped. `{slug}`: its title in lower-case words, without a leading `[BUG](Scope)` or a trailing `(#1234)`, cut at about 50 characters. |
+| `name` | `"{number}-{slug}"` (GitHub's) | The branch's name. `{number}`: the issue's project number once the project numbers its issues (see Numbers), else its number on its first forge, else its git-bug id's first 7 characters. `{kind}`: its kind, through `kinds`; without one, `{kind}/` is dropped. `{slug}`: its title in lower-case words, without a leading `[BUG](Scope)` or a trailing `(#1234)`, cut at about 50 characters. |
 | `kinds` | none | The project's kinds: an issue's kind (its `kind:` field, or a plain label listed here) to the `{kind}` of its branch. `bridge pull` and `sync` fill a missing kind from the Project's Category (`FEAT` → `feat`); `git board lint` reports an issue with two kinds, a title whose `[BUG]` names another kind than its label (the label wins), and how many have none. |
 
 `[BUG](Equipment) Other equipment shows the wrong example (#2518)`, labeled `bug`, gives `fix/2518-other-equipment-shows-the-wrong-example`. What git doesn't take in a branch name becomes `-`.
 
-A branch names an issue when its first number is the issue's number on a forge (`fix/2518-…`, `2518-…`), or when a word in it starts the issue's git-bug id (7 characters or more). Local branches and the remotes' (as last fetched) are listed.
+A branch names an issue when its first number is the issue's number (`fix/2518-…`, `2518-…`: its project number once the project numbers its issues, else a forge's), or when a word in it starts the issue's git-bug id (7 characters or more). Local branches and the remotes' (as last fetched) are listed.
+
+## Numbers
+
+A project can number its issues itself, `CO2-3075`, instead of leaning on a forge's numbers. The counter is in git, `refs/board/seq` on `origin` (never a mirror): no key here. Start it once, for everyone:
+
+```bash
+git board numbers init --prefix CO2 --start 3052
+```
+
+`start` is one more than GitHub's highest issue or pull request number (`gh api 'repos/OWNER/REPO/issues?state=all&per_page=1' -q '.[0].number'`). GitHub numbers below it stay the issues' own: `#2518` is `CO2-2518`, even for an issue imported later. Every other issue, made here or brought in from a forge, gets the next number with the next push to `origin` you ask for: **Push** on the Sync page's Remotes, `git board sync`, or `git board numbers`. Until then it shows its short git-bug id. Nothing pushes the counter on its own: not creating an issue, not a forge sync. Pushing the counter is the lock: when two clones number at once, git refuses the second push and that clone takes the next number.
+
+After the switch, a bare number (`3075`, `fix/3075-…`) and `CO2-3075` are the project's number; `#3075` is always a forge's. Cards, rows and the issue page show the number before the title.
 
 ## Repos
 

@@ -48,6 +48,7 @@ func Facets(b issueBackend, cfg *config.Config, filterStr, me string) ([]Facet, 
 	if err != nil {
 		return nil, err
 	}
+	withRoles(cfg, issues)
 	today := time.Now()
 	var out []Facet
 	for _, key := range facetKeys(cfg, issues) {
@@ -111,7 +112,7 @@ func facetKeys(cfg *config.Config, issues []gitbugio.Issue) []string {
 	sort.Strings(configured)
 	var found []string
 	for _, issue := range issues {
-		for _, l := range issue.Labels {
+		for _, l := range issue.AllLabels() {
 			if ns, _, ok := strings.Cut(l, ":"); ok && !slices.Contains(configured, ns) && !slices.Contains(found, ns) {
 				found = append(found, ns)
 			}
@@ -141,7 +142,7 @@ func valuesOf(issue gitbugio.Issue, key string) []string {
 		return []string{issue.Status}
 	}
 	var values []string
-	for _, l := range issue.Labels {
+	for _, l := range issue.AllLabels() {
 		ns, v, ok := strings.Cut(l, ":")
 		switch {
 		case key == "label" && !ok:
