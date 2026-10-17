@@ -58,7 +58,13 @@ func TestCounter(t *testing.T) {
 		t.Errorf("Format(2518) = %q", c.Format(2518))
 	}
 
-	for _, bad := range []string{"", "start 3052\n", "prefix CO2\n", "prefix 2CO\nstart 1\n", "prefix CO2\nstart x\n", "prefix CO2\nstart 1\nnot-a-line\n"} {
+	// a later version's counter: blank lines and keys this one doesn't know
+	later, err := gitbugio.ParseCounter([]byte("prefix CO2\nstart 1\n\nlease alice 10-20\n3 aaa\n"))
+	if err != nil || later.ByID["aaa"] != 3 {
+		t.Errorf("a later counter: %+v, %v", later, err)
+	}
+
+	for _, bad := range []string{"", "start 3052\n", "prefix CO2\n", "prefix 2CO\nstart 1\n", "prefix CO2\nstart x\n", "prefix CO2\nstart 1\n3\n", "prefix CO2\nstart 1\n3 aaa\n3 bbb\n"} {
 		if _, err := gitbugio.ParseCounter([]byte(bad)); err == nil {
 			t.Errorf("ParseCounter(%q): no error", bad)
 		}
@@ -253,5 +259,22 @@ func TestNumbersOriginWithAMirror(t *testing.T) {
 	gitbugiotest.NewIssue(t, b, "Made here")
 	if n, err := b.NumberIssues("origin"); n != 1 || err != nil {
 		t.Fatalf("NumberIssues = %d, %v; want 1, nil", n, err)
+	}
+}
+
+// A counter this git-board can't read shows the issues without numbers,
+// and numbering refuses to write on top of it.
+func TestNumbersUnreadableCounter(t *testing.T) {
+	b := gitbugiotest.New(t)
+	gitbugiotest.NewIssue(t, b, "Still listed")
+	if err := gitbugio.WriteCounter(b, []byte("not a counter")); err != nil {
+		t.Fatal(err)
+	}
+	issues, err := b.ListIssues()
+	if err != nil || len(issues) != 1 || issues[0].Counted {
+		t.Fatalf("ListIssues = %+v, %v", issues, err)
+	}
+	if _, err := b.NumberIssues("origin"); err == nil {
+		t.Error("numbered on top of a counter it can't read")
 	}
 }

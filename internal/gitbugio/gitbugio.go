@@ -210,10 +210,7 @@ func (b *Backend) ListIssues() ([]Issue, error) {
 	if err != nil {
 		return nil, fmt.Errorf("listing bugs: %w", err)
 	}
-	c, err := b.counter()
-	if err != nil {
-		return nil, err
-	}
+	c := b.counter()
 	issues := make([]Issue, len(ids))
 	for i, id := range ids {
 		excerpt, err := b.c.Bugs().ResolveExcerpt(id)
@@ -276,10 +273,7 @@ func (b *Backend) GetIssue(idPrefix string) (Issue, error) {
 	if err != nil {
 		return Issue{}, fmt.Errorf("resolving %s: %w", idPrefix, err)
 	}
-	c, err := b.counter()
-	if err != nil {
-		return Issue{}, err
-	}
+	c := b.counter()
 	return b.issueFrom(excerpt.Id().String(), excerpt, c), nil
 }
 

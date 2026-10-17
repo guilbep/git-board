@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"maps"
 	"regexp"
 	"slices"
@@ -51,25 +52,32 @@ type Counter struct {
 	ByID   map[string]int // the numbers it handed out, by git-bug id
 }
 
-// ParseCounter reads a numbers file.
+// ParseCounter reads a numbers file. Blank lines, and keys a later
+// git-board may write, are skipped; a number twice is refused.
 func ParseCounter(data []byte) (Counter, error) {
 	c := Counter{ByID: map[string]int{}}
-	for i, line := range strings.Split(strings.TrimSpace(string(data)), "\n") {
+	taken := map[int]string{}
+	for i, line := range strings.Split(string(data), "\n") {
 		key, value, _ := strings.Cut(strings.TrimSpace(line), " ")
-		switch key {
-		case "prefix":
+		n, notNumber := strconv.Atoi(key)
+		switch {
+		case key == "":
+		case key == "prefix":
 			c.Prefix = value
-		case "start":
-			n, err := strconv.Atoi(value)
+		case key == "start":
+			s, err := strconv.Atoi(value)
 			if err != nil {
 				return Counter{}, fmt.Errorf("numbers, line %d: start %q is not a number", i+1, value)
 			}
-			c.Start = n
+			c.Start = s
+		case notNumber != nil:
+			// a later git-board's
+		case value == "":
+			return Counter{}, fmt.Errorf("numbers, line %d: %d names no issue", i+1, n)
+		case taken[n] != "":
+			return Counter{}, fmt.Errorf("numbers, line %d: %d is both %s and %s", i+1, n, taken[n], value)
 		default:
-			n, err := strconv.Atoi(key)
-			if err != nil || value == "" {
-				return Counter{}, fmt.Errorf("numbers, line %d: %q is not a number and an issue", i+1, line)
-			}
+			taken[n] = value
 			c.ByID[value] = n
 		}
 	}
@@ -153,13 +161,17 @@ func (b *Backend) Counter() (c Counter, ok bool, err error) {
 }
 
 // counter is Counter for a listing: nil while the project doesn't number
-// its issues.
-func (b *Backend) counter() (*Counter, error) {
+// its issues, and when this git-board can't read its counter, which is
+// logged: the issues still list, without numbers; NumberIssues refuses.
+func (b *Backend) counter() *Counter {
 	c, ok, err := b.Counter()
-	if !ok {
-		return nil, err
+	if err != nil {
+		log.Printf("refs/board/seq: %v; the issues show without their numbers", err)
 	}
-	return &c, nil
+	if !ok {
+		return nil
+	}
+	return &c
 }
 
 // FetchNumbers brings the remote's counter and makes it this clone's: a
