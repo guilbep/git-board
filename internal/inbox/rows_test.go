@@ -18,8 +18,14 @@ var (
 	meP   = gitbugio.Person{ID: "me1", Name: "Guilbert Pierre", Login: "guilbep"}
 	me2   = gitbugio.Person{ID: "me2", Name: "Guilbert (GitHub)", Login: "GuilBep"} // a second identity of yours
 	ann   = gitbugio.Person{ID: "ann", Name: "Ann", Login: "ann"}
-	cfg   = &config.Config{Fields: map[string]config.Field{"pm": {Type: config.TypePerson}}}
+	cfg   = &config.Config{Fields: map[string]config.Field{"pm": {Type: config.TypePerson}, "lead-dev": {Type: config.TypePerson}}}
 )
+
+// fresh makes th's creation fall in the window: a new issue.
+func fresh(th gitbugio.Thread) gitbugio.Thread {
+	th.Events[0].At = now.Add(-2 * time.Hour)
+	return th
+}
 
 // inherit gives th the roles it takes from the project (board's withRoles).
 func inherit(th gitbugio.Thread, roles ...string) gitbugio.Thread {
@@ -113,9 +119,20 @@ func TestRows(t *testing.T) {
 			news:  []string{"closed"}, reasons: []string{"view: backend"}},
 		{name: "outside the window is ignored",
 			th: thread("n", ann, []string{"assignee:guilbep"}, comment("n1", ann, since.Add(-time.Hour), "x"))},
-		{name: "a role the issue inherits from the project follows it",
-			th:   inherit(thread("p", ann, nil, comment("p1", ann, now.Add(-time.Hour), "x")), "pm:guilbep"),
-			news: []string{"1 comment"}, reasons: []string{"pm"}},
+		{name: "a project role shows a new issue",
+			th:   inherit(fresh(thread("p", ann, nil)), "lead-dev:guilbep"),
+			news: []string{"new issue"}, reasons: []string{"lead-dev (project)"}},
+		{name: "a project role shows a close",
+			th:   inherit(thread("q", ann, nil, status("q1", ann, now.Add(-time.Hour), "closed")), "lead-dev:guilbep"),
+			news: []string{"closed"}, reasons: []string{"lead-dev (project)"}},
+		{name: "a project role doesn't show comments",
+			th: inherit(thread("r", ann, nil, comment("r1", ann, now.Add(-time.Hour), "x")), "lead-dev:guilbep")},
+		{name: "Unfollow mutes a project role",
+			th: inherit(fresh(thread("s", ann, nil)), "lead-dev:guilbep"),
+			st: inbox.State{Unfollow: []string{"s"}}},
+		{name: "a role set on the issue follows it fully",
+			th:   thread("u", ann, []string{"lead-dev:guilbep"}, comment("u1", ann, now.Add(-time.Hour), "x")),
+			news: []string{"1 comment"}, reasons: []string{"lead-dev"}},
 		{name: "a second identity carrying your login is you",
 			th: thread("o", ann, []string{"assignee:guilbep"}, comment("o1", me2, now.Add(-time.Hour), "from GitHub"))},
 	} {
@@ -159,5 +176,10 @@ func TestFollows(t *testing.T) {
 	following, _, set = inbox.Follows(me, inbox.State{Unfollow: []string{"o"}}, th, nil, cfg)
 	if following || set == nil || *set {
 		t.Errorf("unfollowed: %v %v", following, set)
+	}
+	// a project role: not followed, said why
+	following, reasons, _ = inbox.Follows(me, inbox.State{}, inherit(thread("p", ann, nil), "lead-dev:guilbep"), nil, cfg)
+	if following || !slices.Equal(reasons, []string{"lead-dev (project)"}) {
+		t.Errorf("project role: %v %v, want false [lead-dev (project)]", following, reasons)
 	}
 }

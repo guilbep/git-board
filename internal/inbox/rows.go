@@ -42,7 +42,9 @@ type Row struct {
 }
 
 // Follows is whether you follow th, why, and what you clicked (nil:
-// automatic). views are the followed views th is in.
+// automatic). views are the followed views th is in. Not followed but a
+// role you hold for the whole project (lead-dev, pm…): its reasons are
+// that role, "lead-dev (project)", and only its creation and closing show.
 func Follows(me Me, st State, th gitbugio.Thread, views []string, cfg *config.Config) (bool, []string, *bool) {
 	reasons := filter.Involvement(involved(me, th), me.Login, me.ID, cfg)
 	set := st.Set(th.ID)
@@ -53,8 +55,18 @@ func Follows(me Me, st State, th gitbugio.Thread, views []string, cfg *config.Co
 		reasons = append(reasons, "view: "+v)
 	}
 	following := len(reasons) > 0 && (set == nil || *set)
+	if !following && set == nil {
+		for _, l := range th.Inherited {
+			if f, ok := filter.PersonField(l, me.Login, cfg); ok {
+				reasons = append(reasons, f+projectRole)
+			}
+		}
+	}
 	return following, reasons, set
 }
+
+// projectRole marks a reason that's a role held for the whole project.
+const projectRole = " (project)"
 
 // involved reads th as filter.Involvement reads a listed issue; you, by
 // identity or by login, count as your login.
@@ -65,7 +77,7 @@ func involved(me Me, th gitbugio.Thread) filter.Involved {
 		}
 		return p.Login
 	}
-	in := filter.Involved{AuthorLogins: []string{login(th.Author)}, AuthorID: th.Author.ID, Labels: th.AllLabels()}
+	in := filter.Involved{AuthorLogins: []string{login(th.Author)}, AuthorID: th.Author.ID, Labels: th.Labels}
 	for _, e := range th.Events {
 		if e.Kind == "comment" && e.Author.ID != th.Author.ID {
 			in.CommenterLogins = append(in.CommenterLogins, login(e.Author))
@@ -94,7 +106,8 @@ func Rows(me Me, st State, threads []gitbugio.Thread, inViews map[string][]strin
 
 func rowOf(me Me, st State, th gitbugio.Thread, views []string, cfg *config.Config, since time.Time) (Row, bool) {
 	following, reasons, _ := Follows(me, st, th, views, cfg)
-	inField := slices.ContainsFunc(th.AllLabels(), func(l string) bool {
+	watching := !following && slices.ContainsFunc(reasons, func(r string) bool { return strings.HasSuffix(r, projectRole) })
+	inField := slices.ContainsFunc(th.Labels, func(l string) bool {
 		_, ok := filter.PersonField(l, me.Login, cfg)
 		return ok
 	})
@@ -134,6 +147,16 @@ func rowOf(me Me, st State, th gitbugio.Thread, views []string, cfg *config.Conf
 			addressed = true
 		}
 		counted := addressed
+		if watching { // a project role: its creation and closing only
+			switch e.Kind {
+			case "created":
+				note("new issue")
+				counted = true
+			case "status":
+				status = e.Status
+				counted = true
+			}
+		}
 		if following {
 			switch e.Kind {
 			case "comment":

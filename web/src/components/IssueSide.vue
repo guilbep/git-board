@@ -145,7 +145,7 @@
 
     <section v-if="follow" class="gb-side-sec" aria-labelledby="side-inbox">
       <h3 id="side-inbox" class="gb-section-title">Inbox</h3>
-      <p class="gb-follow-state"><strong>{{ follow.following ? 'Following' : 'Not following' }}</strong> <span class="gb-hint">{{ followBecause }}</span></p>
+      <p class="gb-follow-state"><strong>{{ followSaid.state }}</strong> <span class="gb-hint">{{ followSaid.because }}</span></p>
       <div class="gb-follow-actions">
         <button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" :disabled="followBusy" @click="setFollowTo(!follow.following)">{{ follow.following ? 'Unfollow' : 'Follow' }}</button>
         <button v-if="follow.set !== null" type="button" class="gb-linkbtn" :disabled="followBusy" @click="setFollowTo(null)">Back to automatic</button>
@@ -163,6 +163,7 @@ import ValueMark from '@/components/ValueMark.vue';
 import { colorClass } from '@/colors';
 import { computed, nextTick, reactive, ref, watch } from 'vue';
 import { ApiError, getFollow, getRefs, linkIssue, patchIssue, setFollow, takeIssue, unlinkIssue, type FollowState, type Forge, type IssueEvent, type IssueRefs, type Person } from '@/api/board';
+import { followLine } from '@/inboxcheck';
 import { forgeLabel, linkable, tallyWords } from '@/issuesync';
 import { displayName, fieldValues, formatValue, typeOf, type Fields } from '@/fields';
 import { message } from '@/issue';
@@ -386,13 +387,7 @@ async function setFollowTo(v: boolean | null) {
     followBusy.value = false;
   }
 }
-const followBecause = computed(() => {
-  const f = follow.value;
-  if (!f) return '';
-  if (f.set === true) return 'You follow it.';
-  if (f.set === false) return 'You unfollowed it.';
-  return f.reasons.length ? `Because: ${f.reasons.join(' · ')}` : "You're not in it.";
-});
+const followSaid = computed(() => (follow.value ? followLine(follow.value) : { state: '', because: '' }));
 </script>
 
 <style scoped>

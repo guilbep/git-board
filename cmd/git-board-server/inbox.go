@@ -2,10 +2,13 @@ package main
 
 import (
 	"errors"
+	"maps"
 	"net/http"
+	"slices"
 	"time"
 
 	"github.com/guilbep/git-board/internal/board"
+	"github.com/guilbep/git-board/internal/filter"
 	"github.com/guilbep/git-board/internal/gitbugio"
 	"github.com/guilbep/git-board/internal/inbox"
 )
@@ -21,6 +24,9 @@ type inboxResponse struct {
 	Views        []string    `json:"views"`
 	ViewsMissing []string    `json:"views_missing"`
 	Following    int         `json:"following"` // open issues follows:@me matches: the empty state's
+	// Roles are the roles you hold for the whole project ([roles]): their
+	// new and closed issues reach the inbox.
+	Roles []string `json:"roles"`
 }
 
 type followResponse struct {
@@ -132,6 +138,12 @@ func (s *apiServer) inbox(me inbox.Me, now time.Time) (inboxResponse, error) {
 		Views: st.Views, ViewsMissing: missing, Following: len(following)}
 	if res.Rows == nil {
 		res.Rows = []inbox.Row{}
+	}
+	res.Roles = []string{}
+	for _, role := range slices.Sorted(maps.Keys(cfg.Roles)) {
+		if _, ok := filter.PersonField(role+":"+cfg.Roles[role], me.Login, cfg); ok {
+			res.Roles = append(res.Roles, role)
+		}
 	}
 	if res.Views == nil {
 		res.Views = []string{}

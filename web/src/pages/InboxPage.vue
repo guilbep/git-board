@@ -80,7 +80,7 @@
     </ul>
     <div v-else-if="loaded && data && !error" class="gb-inbox-empty">
       <h2 class="h4">Nothing new for you</h2>
-      <p class="gb-hint">{{ followingLine }}</p>
+      <p class="gb-hint">{{ following }}</p>
     </div>
   </main>
 
@@ -124,7 +124,7 @@ import { ApiError, getFields, getRemotes, getViews, markSeen, remoteAction, setI
 import { namespaces } from '@/facets';
 import type { Fields } from '@/fields';
 import { inbox, inboxError, loadInbox } from '@/inbox';
-import { checkFailure, mergeRows, toCheck, toPull } from '@/inboxcheck';
+import { checkFailure, followingLine, mergeRows, toCheck, toPull } from '@/inboxcheck';
 import { debounced, onLive } from '@/live';
 import { initials, me, when } from '@/me';
 import { panelMode } from '@/panelsize';
@@ -160,13 +160,7 @@ const checks = computed(() => {
 // numberOf: the issue's number on a forge it's still on
 const numberOf = (r: InboxRow) => r.issue.forges?.find((f) => f.number && !f.gone)?.number ?? '';
 
-const followingLine = computed(() => {
-  const d = data.value;
-  if (!d) return '';
-  const parts = [`Following ${d.following} open ${d.following === 1 ? 'issue' : 'issues'}`];
-  if (d.views.length) parts.push(`${d.views.length === 1 ? 'view' : 'views'} ${d.views.join(', ')}`);
-  return parts.join(' · ');
-});
+const following = computed(() => (data.value ? followingLine(data.value.following, data.value.views, data.value.roles) : ''));
 
 // reload: the server's rows; dropRead (Refresh) forgets the rows read
 // since, else they stay, dimmed, where they were.

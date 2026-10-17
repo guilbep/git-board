@@ -124,6 +124,13 @@ longer follow (you were just removed as assignee).
 - On a followed issue: a comment; the issue's creation; closed or reopened.
 - With `fields` on: also any label change on an issue where you're
   currently in a person field.
+- **A role you hold for the whole project** (`[roles] lead-dev = "guilbep"`,
+  inherited by every issue that doesn't set its own): only the issue's
+  creation and its closing or reopening, with the chip "lead-dev
+  (project)", never its comments or field changes. Unfollow mutes it too.
+  A role set on the issue itself follows it fully. `involves:` and
+  `follows:@me` read the issue's own labels; `lead-dev:@me` still finds
+  the inherited ones.
 - **Addressed to you, followed or not, unfollowed included**: a label
   change adding you to or removing you from a person field; a comment or
   description mentioning you. Unfollow mutes the issue's activity, not

@@ -291,8 +291,11 @@ type Involved struct {
 	Mentioned       bool // its description or a comment mentions the login
 }
 
+// involvedOf reads the issue's own labels: a role it takes from the project
+// isn't involvement (the inbox shows the project's new and closed issues to
+// its holder, not their discussions); pm:@me still finds it, as a field.
 func involvedOf(issue gitbugio.Issue, c Condition) Involved {
-	return Involved{AuthorLogins: issue.AuthorLogins, AuthorID: issue.AuthorID, Labels: issue.AllLabels(),
+	return Involved{AuthorLogins: issue.AuthorLogins, AuthorID: issue.AuthorID, Labels: issue.Labels,
 		CommenterLogins: issue.CommenterLogins, CommenterIDs: issue.CommenterIDs, Mentioned: c.Mentions[issue.ID]}
 }
 

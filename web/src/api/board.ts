@@ -377,6 +377,7 @@ export interface InboxResponse {
   views: string[]; // views followed
   views_missing: string[]; // followed, no longer in the config
   following: number; // open issues your inbox follows
+  roles: string[]; // roles you hold for the whole project: its new and closed issues
 }
 
 export interface FollowState {

@@ -94,12 +94,20 @@ func TestFollowsTerm(t *testing.T) {
 	}
 }
 
-// A role the issue takes from the project (internal/config's roles) is a
-// person field like its own: the project's pm is in every issue.
-func TestInvolvesInheritedRole(t *testing.T) {
-	cfg := &config.Config{Fields: map[string]config.Field{"pm": {Type: config.TypePerson}}}
+// A role the issue takes from the project (internal/config's roles) isn't
+// involvement: the project's lead-dev isn't in every issue's discussion.
+// pm:@me still finds it, as a field.
+func TestInvolvesLeavesOutProjectRoles(t *testing.T) {
+	cfg, now := &config.Config{Fields: map[string]config.Field{"pm": {Type: config.TypePerson}}}, time.Now()
 	inherited := gitbugio.Issue{ID: "a1", Inherited: []string{"pm:guilbep"}}
-	if !filter.Matches(inherited, filter.Parse("involves:@me"), cfg, "guilbep", time.Now()) {
-		t.Error("involves:@me misses an issue whose pm you are by the project's roles")
+	if filter.Matches(inherited, filter.Parse("involves:@me"), cfg, "guilbep", now) {
+		t.Error("involves:@me took a project role for involvement")
+	}
+	if !filter.Matches(inherited, filter.Parse("pm:@me"), cfg, "guilbep", now) {
+		t.Error("pm:@me misses the project's pm")
+	}
+	own := gitbugio.Issue{ID: "b2", Labels: []string{"pm:guilbep"}}
+	if !filter.Matches(own, filter.Parse("involves:@me"), cfg, "guilbep", now) {
+		t.Error("involves:@me misses a pm set on the issue itself")
 	}
 }

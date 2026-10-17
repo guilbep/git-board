@@ -163,6 +163,8 @@ reviewer = "alice"
 
 A role is a `person` field of the same name: `lead-dev:dan` on an issue overrides the project's `bob` for that issue, and removing it gives `bob` back. Filters, boards and the filters panel see the inherited value: `lead-dev:@me` finds the issues that take you as lead dev, the PM's board above (`pm:@me`) every issue while the project names them PM, and `no:lead-dev` finds none while the project names a lead dev. The side panel shows an inherited value greyed, "bob · project". `assignee` is the contributing developer, set per issue.
 
+The inbox brings a role you hold for the project only the project's new issues and closes, not their discussions: the PM of a project isn't in every comment. A role set on the issue itself (`lead-dev:dan`) follows it like an assignee does. `involves:@me` and `follows:@me` count the issue's own roles, not the project's.
+
 | Key | What it is |
 | --- | --- |
 | a role (`lead-dev`, `pm`, `reviewer`, …) | One login. The name is a field's: lower-case letters, digits and `-`; declared in `[fields]`, it is a `person`. |
