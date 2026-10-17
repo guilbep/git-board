@@ -113,7 +113,13 @@ Done on `prd/titles`:
    a Category that is none of them. A kind label on the issue wins.
 3. Titles show without a trailing `(#N)` that is one of the issue's own
    numbers (`Issue.ShownTitle`, `shown_title` in the API); the title
-   itself is untouched.
+   itself is untouched. Board cards, roadmap rows and the TUI, which named
+   an issue by its id only, show `#2518` beside the id.
+4. `git board lint` with `[branches] kinds`: **two-kinds** (an issue with
+   two), **kind-title** (a `[BUG]` title on a `feat` issue: the label
+   wins), **no-kind** (how many, one line). On co2's 482 open issues, with
+   the team's kinds: 1, 9 and 331.
+5. Nothing to build for scope.
 
 For the team (the user brings it; no PR from here):
 
@@ -130,12 +136,17 @@ For the team (the user brings it; no PR from here):
 - open: do TASK, SPECS, DESIGN, TEXT and DATA become labels, or map onto
   existing ones? Until then the bridge warns on them.
 
-Next:
+To turn it on in co2 (the user's file), `.git-board.toml`:
 
-4. Kind lint, three reports apart: two kinds on one issue; a title prefix
-   that names a kind and disagrees with the label ("the label wins",
-   about 30 on co2); a missing kind, as one count.
-5. Nothing to build for scope.
+```toml
+[branches]
+base = "dev"
+name = "{kind}/{number}-{slug}"
+kinds = { bug = "fix", feat = "feat", perf = "perf", refactor = "refactor", docs = "docs", polish = "polish", style = "style", test = "test" }
+```
+
+Without it the bridge warns on every Category and fills nothing, and
+lint has no kinds to check.
 
 Risk: co2's local data keeps 253 bare Category labels (`FEAT`…) the
 bridge wrote before; GitHub never had them. The day co2 syncs they go

@@ -239,3 +239,43 @@ func TestDeadOptionSeesClosedIssues(t *testing.T) {
 		}
 	}
 }
+
+func TestKindChecks(t *testing.T) {
+	cfg := &config.Config{Branches: config.Branches{Kinds: map[string]string{"bug": "fix", "feat": "feat"}}}
+	open := func(id, title string, labels ...string) gitbugio.Issue {
+		return gitbugio.Issue{ID: id, Title: title, Status: "open", Labels: labels}
+	}
+	issues := []gitbugio.Issue{
+		open("a", "[BUG](Equipment) Wrong example", "bug"),  // agrees
+		open("b", "[Bug](Equipment) Wrong example", "feat"), // the title disagrees
+		open("c", "Export", "bug", "feat"),                  // two kinds
+		open("d", "[FEAT] Export"),                          // no kind
+		open("e", "[TASK] Clean up"),                        // no kind
+		open("f", "[FEAT/DATA] Import", "feat"),             // not a kind in the title
+		open("g", "[BUG] Crash", "kind:bug"),                // the kind field agrees
+		{ID: "h", Title: "[BUG] Closed", Status: "closed"},  // closed: not looked at
+	}
+	findings := lint.Run(issues, cfg)
+	got := countChecks(findings)
+	for check, n := range map[string]int{lint.CheckKindTitle: 1, lint.CheckTwoKinds: 1, lint.CheckNoKind: 1} {
+		if got[check] != n {
+			t.Errorf("%s: %d findings, want %d (all: %+v)", check, got[check], n, findings)
+		}
+	}
+	for _, f := range findings {
+		switch f.Check {
+		case lint.CheckKindTitle:
+			if f.IssueID != "b" || f.Message != "the title says [Bug], the label says feat: the label wins" {
+				t.Errorf("kind-title finding = %+v", f)
+			}
+		case lint.CheckNoKind:
+			if f.Message != "2 open issues have none of [branches] kinds (bug, feat)" {
+				t.Errorf("no-kind finding = %+v", f)
+			}
+		}
+	}
+
+	if got := countChecks(lint.Run(issues, &config.Config{})); got[lint.CheckNoKind]+got[lint.CheckKindTitle]+got[lint.CheckTwoKinds] != 0 {
+		t.Errorf("no [branches] kinds, yet kind findings: %v", got)
+	}
+}

@@ -36,7 +36,9 @@ issue (is:open) in the current git-bug repo: double singles (more than
 one label for a single-cardinality field), unknown option values,
 missing values on a configured single-cardinality field, orphan sprint
 labels (no matching [[sprints.list]] entry), and configured options no
-issue in the repo actually carries.
+issue in the repo actually carries. With [branches] kinds: an issue with
+two kinds, a title whose [PREFIX] names another kind than its label (the
+label wins), and how many have no kind.
 
 Exits 0 even with findings — this is a report, not a build gate — unless
 --strict is given.

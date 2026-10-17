@@ -337,6 +337,12 @@ git-bug repo against `.git-board.toml`:
   one check that isn't `is:open`-scoped: it's a config-inventory question,
   and an option only used on a closed issue (e.g. a terminal `validated`
   status) is still in use.
+- **kinds**, with `[branches] kinds` (its keys are the project's kinds, as
+  plain labels): **two-kinds**, an issue with two (`bug` and `feat`);
+  **kind-title**, a title whose `[BUG]` names another kind than its label
+  (the label wins); **no-kind**, how many open issues have none, as one
+  line, since a missing kind is usually an issue template's to fix (see
+  `--create-labels` below).
 
 Not checked: "unknown assignees" — the PRD lists it, but there's no
 configured roster of valid assignees in `.git-board.toml` to validate labels
