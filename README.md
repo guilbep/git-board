@@ -29,12 +29,20 @@ for a module with a `replace`, so install from a clone:
 ```bash
 git clone git@github.com:guilbep/git-board.git
 cd git-board
-go install ./cmd/git-board
+git checkout v0.5.0                 # or stay on main
+(cd web && npm ci)                  # the web app's dependencies, once
+make web-build install              # git-board and git-board-server, the web app inside
 git-board --help
 ```
 
-Requires Go 1.26+ (git-bug's module requirement); `go install` fetches the
-matching toolchain automatically if needed. Install the fork's `git-bug`
+`make install` alone builds the two commands without the web app (its
+pages are embedded at build time from `web/dist`): `git-board-server`
+then serves an empty page.
+
+Requires Go 1.26+ (git-bug's module requirement) and Node 22.12+ for the web
+app; `go install` fetches the matching Go toolchain automatically if
+needed. `git` must be on the path (branches' "in dev, squashed" asks
+`git merge-tree`). Install the fork's `git-bug`
 too (see its `INSTALLATION.md`, "The bridge-sync fork"), so that both read
 and write the repository the same way.
 
