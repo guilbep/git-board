@@ -261,6 +261,30 @@ func TestUpdateStructuredFilterRequiresMeDoesNotCrash(t *testing.T) {
 	}
 }
 
+// f's words look in descriptions and comments too, as ls and the web page
+// do: one grammar, one matcher.
+func TestUpdateStructuredFilterSearchesComments(t *testing.T) {
+	cfg := mustLoadConfig(t)
+	b := gitbugiotest.New(t)
+	id := gitbugiotest.NewIssue(t, b, "Train distances")
+	if _, err := b.AddComment(id, "the zebra table is wrong"); err != nil {
+		t.Fatal(err)
+	}
+	gitbugiotest.NewIssue(t, b, "Buildings")
+	issues, err := b.ListIssues()
+	if err != nil {
+		t.Fatalf("ListIssues: %v", err)
+	}
+
+	m := New(issues, "is:open", b, cfg, "", today, noopReopen(b))
+	m = send(m, key('f'))
+	m = send(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("zebra")})
+	m = send(m, tea.KeyMsg{Type: tea.KeyEnter})
+	if got := len(m.list.Items()); got != 1 {
+		t.Errorf("list items = %d, want the issue whose comment says zebra (status %q)", got, m.status)
+	}
+}
+
 // errBackend is a tui.Backend stub whose write always fails, for the
 // write-error-must-not-crash case. It's the one place a stub replaces
 // gitbugiotest: every other test drives a real repo.

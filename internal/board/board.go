@@ -27,35 +27,20 @@ type issueBackend interface {
 // LoadMatching lists issues in b matching filterStr, using cfg for @me/sprint
 // alias resolution.
 func LoadMatching(b issueBackend, cfg *config.Config, filterStr, me string) ([]gitbugio.Issue, error) {
-	var err error
-	conditions := filter.Parse(filterStr)
-	if filter.RequiresMe(conditions) && me == "" {
-		me = MyLogin(b)
-	}
-	if filter.RequiresMe(conditions) && me == "" {
-		return nil, ErrNoMe
-	}
-
-	// free text: title, description and comments, when b has a full-text
-	// index (gitbugio.Backend has git-bug's); else Matches looks at titles
-	if s, ok := b.(interface {
-		SearchText(string) (map[string]bool, error)
-	}); ok {
-		for i, c := range conditions {
-			if c.Kind == filter.KindText {
-				if conditions[i].Hits, err = s.SearchText(c.Value); err != nil {
-					return nil, err
-				}
-			}
-		}
-	}
-
 	issues, err := b.ListIssues()
 	if err != nil {
 		return nil, err
 	}
+	return Match(b, cfg, filterStr, me, issues, time.Now())
+}
 
-	today := time.Now()
+// Match narrows issues already loaded to filterStr, as LoadMatching does:
+// the TUI's f, on what it loaded.
+func Match(b any, cfg *config.Config, filterStr, me string, issues []gitbugio.Issue, today time.Time) ([]gitbugio.Issue, error) {
+	conditions, me, err := prepare(b, filterStr, me)
+	if err != nil {
+		return nil, err
+	}
 	matched := make([]gitbugio.Issue, 0, len(issues))
 	for _, issue := range issues {
 		if filter.Matches(issue, conditions, cfg, me, today) {
@@ -63,6 +48,32 @@ func LoadMatching(b issueBackend, cfg *config.Config, filterStr, me string) ([]g
 		}
 	}
 	return matched, nil
+}
+
+// prepare parses filterStr and finds who @me is. Free text looks in titles,
+// descriptions and comments when b has a full-text index (gitbugio.Backend
+// has git-bug's); else Matches looks at titles.
+func prepare(b any, filterStr, me string) ([]filter.Condition, string, error) {
+	conditions := filter.Parse(filterStr)
+	if filter.RequiresMe(conditions) && me == "" {
+		me = MyLogin(b)
+	}
+	if filter.RequiresMe(conditions) && me == "" {
+		return nil, "", ErrNoMe
+	}
+	if s, ok := b.(interface {
+		SearchText(string) (map[string]bool, error)
+	}); ok {
+		for i, c := range conditions {
+			if c.Kind == filter.KindText {
+				var err error
+				if conditions[i].Hits, err = s.SearchText(c.Value); err != nil {
+					return nil, "", err
+				}
+			}
+		}
+	}
+	return conditions, me, nil
 }
 
 // ErrNoMe is returned when @me means nobody: no --me, and no forge login on

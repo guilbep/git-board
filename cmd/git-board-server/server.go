@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/url"
 	"sort"
 	"strings"
 	"sync"
@@ -82,6 +83,7 @@ func newMux(s *apiServer, static http.Handler) http.Handler {
 	mux.HandleFunc("GET /api/config/fields", s.handleFields)
 	mux.HandleFunc("GET /api/colors", s.handleColors)
 	mux.HandleFunc("GET /api/issues", s.handleListIssues)
+	mux.HandleFunc("GET /api/facets", s.handleFacets)
 	mux.HandleFunc("GET /api/issues/{id}", s.handleGetIssue)
 	mux.HandleFunc("PATCH /api/issues/{id}", s.handlePatchIssue)
 	mux.HandleFunc("POST /api/issues", s.handleNewIssue)
@@ -249,23 +251,35 @@ func (s *apiServer) handleColors(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleListIssues applies filter, then sort, then group — same semantics as
-// `ls`/`view`. filter defaults to board.DefaultFilter, same as the CLI.
+// `ls`/`view`. No filter is board.DefaultFilter, as the CLI's; an empty
+// one, every issue, as typed.
 func (s *apiServer) handleListIssues(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	filterStr := q.Get("filter")
-	if filterStr == "" {
-		filterStr = board.DefaultFilter
-	}
-
-	// q is the page's search box, GitHub's syntax: free text (titles,
-	// descriptions, comments) and qualifiers, on top of the view's filter
-	issues, err := board.LoadMatching(s.b, s.config(), filterStr+" "+q.Get("q"), s.me)
+	issues, err := board.LoadMatching(s.b, s.config(), filterOf(q), s.me)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
 	board.SortByField(issues, q.Get("sort"), s.config())
 	writeJSON(w, http.StatusOK, board.BucketBy(issues, q.Get("group")))
+}
+
+// handleFacets is the filters panel for a filter (board.Facets): the page
+// counts and matches nothing itself.
+func (s *apiServer) handleFacets(w http.ResponseWriter, r *http.Request) {
+	facets, err := board.Facets(s.b, s.config(), filterOf(r.URL.Query()), s.me)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, facets)
+}
+
+func filterOf(q url.Values) string {
+	if !q.Has("filter") {
+		return board.DefaultFilter
+	}
+	return q.Get("filter")
 }
 
 func (s *apiServer) handleGetIssue(w http.ResponseWriter, r *http.Request) {

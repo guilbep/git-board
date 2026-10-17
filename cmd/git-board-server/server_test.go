@@ -78,6 +78,31 @@ func TestListIssuesFiltersAndBucketsFlat(t *testing.T) {
 	}
 }
 
+// No filter: the open issues, as the CLI's ls; an empty one: every issue,
+// as typed. Facets come with the same filter.
+func TestListIssuesEmptyFilterIsEveryIssue(t *testing.T) {
+	cfg := mustLoadConfig(t)
+	b := gitbugiotest.New(t)
+	gitbugiotest.NewIssue(t, b, "open one")
+	closed := gitbugiotest.NewIssue(t, b, "closed one")
+	gitbugiotest.CloseIssue(t, b, closed)
+	ts := newTestServer(t, b, cfg)
+
+	for url, want := range map[string]int{"/api/issues": 1, "/api/issues?filter=": 2, "/api/issues?filter=is:closed": 1} {
+		var buckets []board.Bucket
+		getJSON(t, ts.URL+url, &buckets)
+		if len(buckets) != 1 || len(buckets[0].Issues) != want {
+			t.Errorf("%s: %+v, want %d issues", url, buckets, want)
+		}
+	}
+
+	var facets []board.Facet
+	getJSON(t, ts.URL+"/api/facets?filter=is:open", &facets)
+	if len(facets) == 0 || facets[0].Key != "is" || len(facets[0].Selected) != 1 || facets[0].Selected[0] != "open" {
+		t.Errorf("facets %+v", facets)
+	}
+}
+
 func TestListIssuesGroupsByField(t *testing.T) {
 	cfg := mustLoadConfig(t)
 	b := gitbugiotest.New(t)

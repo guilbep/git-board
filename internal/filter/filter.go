@@ -1,9 +1,11 @@
 // Package filter implements the git-board filter grammar, GitHub's search
 // syntax where they meet: field:value, -field:value,
 // field:@current|@next|@previous|@me, is:open|closed, title:*glob*,
-// author:login, label:name, no:field (no:label: no plain label), free text
-// and "quoted phrases". Conditions are AND'd; a,b is either value
-// (status:ready,qa), as in GitHub's search. Pure logic.
+// author:login, label:name, no:field (no:label: no plain label), #2528 (an
+// issue's number on a forge), free text and "quoted phrases". Conditions
+// are AND'd; a,b is either value (status:ready,qa), as in GitHub's search.
+// Pure logic, and the only parser of the grammar: the CLI, the TUI, the
+// web API and so the web page all go through it.
 package filter
 
 import (
@@ -26,6 +28,7 @@ const (
 	KindAuthor Kind = "author"
 	KindLabel  Kind = "label"
 	KindNo     Kind = "no"
+	KindNumber Kind = "number" // #2528
 )
 
 // Condition is one AND'd term of a parsed filter expression.
@@ -42,7 +45,8 @@ type Condition struct {
 // Parse splits a filter string into whitespace-separated AND'd conditions.
 func Parse(text string) []Condition {
 	var conditions []Condition
-	for _, token := range tokens(text) {
+	for _, term := range terms(text) {
+		token := strings.ReplaceAll(term, `"`, "")
 		negated := strings.HasPrefix(token, "-")
 		body := token
 		if negated {
@@ -50,6 +54,8 @@ func Parse(text string) []Condition {
 		}
 		fieldName, value, hasSep := cut(body, ":")
 		switch {
+		case !hasSep && len(body) > 1 && body[0] == '#' && digits(body[1:]):
+			conditions = append(conditions, Condition{Kind: KindNumber, Value: body[1:], Negated: negated})
 		case !hasSep:
 			conditions = append(conditions, Condition{Kind: KindText, Value: body, Negated: negated})
 		case fieldName == "is":
@@ -69,9 +75,9 @@ func Parse(text string) []Condition {
 	return conditions
 }
 
-// tokens splits a filter at spaces, but not inside "quotes": a quoted
-// phrase, or a quoted value (label:"nice to have"), is one token, unquoted.
-func tokens(text string) []string {
+// terms splits a filter at spaces, but not inside "quotes": a quoted
+// phrase, or a quoted value (label:"nice to have"), is one term, as typed.
+func terms(text string) []string {
 	var res []string
 	var cur strings.Builder
 	quoted, any := false, false
@@ -79,6 +85,7 @@ func tokens(text string) []string {
 		switch {
 		case r == '"':
 			quoted, any = !quoted, true
+			cur.WriteRune(r)
 		case !quoted && (r == ' ' || r == '\t' || r == '\n'):
 			if any {
 				res = append(res, cur.String())
@@ -94,6 +101,43 @@ func tokens(text string) []string {
 		res = append(res, cur.String())
 	}
 	return res
+}
+
+// Without is text without the terms drop picks, the others as typed: the
+// filter a facet writes its own term after, a view's without its is:.
+func Without(text string, drop func(Condition) bool) string {
+	var keep []string
+	for _, term := range terms(text) {
+		if c := Parse(term); len(c) == 1 && drop(c[0]) {
+			continue
+		}
+		keep = append(keep, term)
+	}
+	return strings.Join(keep, " ")
+}
+
+func digits(s string) bool {
+	return s != "" && strings.Trim(s, "0123456789") == ""
+}
+
+// itself: a word that is an issue's number on a forge (2528), or the start
+// of its git-bug id, 7 characters at least as git-bug shows it, finds that
+// issue too.
+func itself(issue gitbugio.Issue, word string) bool {
+	if digits(word) {
+		return hasNumber(issue, word)
+	}
+	word = strings.ToLower(word)
+	return len(word) >= 7 && strings.Trim(word, "0123456789abcdef") == "" && strings.HasPrefix(issue.ID, word)
+}
+
+func hasNumber(issue gitbugio.Issue, n string) bool {
+	for _, f := range issue.Forges {
+		if f.Number == n {
+			return true
+		}
+	}
+	return false
 }
 
 func cut(s, sep string) (before, after string, found bool) {
@@ -143,9 +187,9 @@ func Matches(issue gitbugio.Issue, conditions []Condition, cfg *config.Config, m
 
 	for _, c := range conditions {
 		ok := false
-		// a,b: either value matches (no: and free text take no list)
+		// a,b: either value matches (no:, #n and free text take no list)
 		values := []string{c.Value}
-		if c.Kind != KindText && c.Kind != KindNo && c.Kind != KindTitle {
+		if c.Kind != KindText && c.Kind != KindNo && c.Kind != KindTitle && c.Kind != KindNumber {
 			values = strings.Split(c.Value, ",")
 		}
 		for _, v := range values {
@@ -178,6 +222,9 @@ func matchOne(issue gitbugio.Issue, labels map[string]bool, c Condition, value s
 		} else {
 			ok = strings.Contains(strings.ToLower(issue.Title), strings.ToLower(value))
 		}
+		ok = ok || itself(issue, value)
+	case KindNumber:
+		ok = hasNumber(issue, value)
 	case KindAuthor:
 		want := value
 		if want == "@me" {
