@@ -187,18 +187,25 @@ func Linked(b *gitbugio.Backend, is gitbugio.Issue, start string) ([]Branch, err
 		return nil, err
 	}
 	at := func(br gitbugio.Branch) string { return strings.TrimPrefix(br.Remote+"/"+br.Name, "/") }
-	base := map[string]bool{}
+	startHash := ""
 	for _, br := range all {
 		if at(br) == start {
-			if base, err = b.Ancestors(br.Hash); err != nil {
-				return nil, err
-			}
+			startHash = br.Hash
 		}
 	}
+	var base map[string]bool // read at the first branch naming the issue: most issues have none
 	res := []Branch{}
 	for _, br := range all {
 		if at(br) == start || !Names(br.Name, is) {
 			continue
+		}
+		if base == nil {
+			base = map[string]bool{}
+			if startHash != "" {
+				if base, err = b.Ancestors(startHash); err != nil {
+					return nil, err
+				}
+			}
 		}
 		last, err := b.ReadCommit(br.Hash)
 		if err != nil {
