@@ -61,6 +61,9 @@ type apiServer struct {
 	// checked is when each git remote was last fetched, pulled or pushed
 	// (remotes.go)
 	checked map[string]time.Time
+	// inboxMu guards the inbox files (inbox.go): one read-change-write at
+	// a time
+	inboxMu sync.Mutex
 
 	// exposed are names --addr exposes beyond the loopback ones (withGuard)
 	exposed []string
@@ -105,6 +108,11 @@ func newMux(s *apiServer, static http.Handler) http.Handler {
 	mux.HandleFunc("POST /api/issues/{id}/labels", s.handleLabels)
 	mux.HandleFunc("GET /api/me", s.handleMe)
 	mux.HandleFunc("POST /api/me", s.handleSetMe)
+	mux.HandleFunc("GET /api/inbox", s.handleInbox)
+	mux.HandleFunc("POST /api/inbox/seen", s.handleInboxSeen)
+	mux.HandleFunc("GET /api/inbox/follow/{id}", s.handleFollow)
+	mux.HandleFunc("PUT /api/inbox/follow/{id}", s.handleSetFollow)
+	mux.HandleFunc("PUT /api/inbox/settings", s.handleInboxSettings)
 	mux.HandleFunc("GET /api/media", s.handleMedia)
 	mux.HandleFunc("POST /api/markdown", s.handleMarkdown)
 	mux.HandleFunc("GET /api/uploads", s.handleUploadStatus)

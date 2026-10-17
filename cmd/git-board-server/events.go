@@ -15,8 +15,9 @@ import (
 // and a change of the issues' refs made outside the API (watchRefs).
 
 // event is what changed: issues (ID: which one, when the request named
-// it), config (.git-board.toml, a view), sync, settings. By is the page
-// that made the change (X-Git-Board-Client), which ignores it.
+// it), config (.git-board.toml, a view), sync, settings, inbox (yours:
+// what you read or follow). By is the page that made the change
+// (X-Git-Board-Client), which ignores it.
 type event struct {
 	Kind string `json:"kind"`
 	ID   string `json:"id,omitempty"`
@@ -132,6 +133,8 @@ func eventFor(r *http.Request) event {
 		e.Kind = "issues"
 	case strings.HasPrefix(p, "/api/sync") || strings.HasPrefix(p, "/api/forges") || strings.HasPrefix(p, "/api/remotes/"):
 		e.Kind = "sync"
+	case strings.HasPrefix(p, "/api/inbox"): // read, followed: your inbox's count, in every tab
+		e.Kind = "inbox"
 	default: // bridges, who you write as
 		e.Kind = "settings"
 	}
