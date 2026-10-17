@@ -3,9 +3,13 @@ package gitbugio_test
 import (
 	"errors"
 	"fmt"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/git-bug/git-bug/repository/repotest"
 
 	"github.com/guilbep/git-board/internal/gitbugio"
 	"github.com/guilbep/git-board/internal/gitbugio/gitbugiotest"
@@ -215,5 +219,39 @@ func TestNumbersRealRace(t *testing.T) {
 	}
 	if len(c.ByID) != 16 {
 		t.Errorf("%d issues numbered, want 16", len(c.ByID))
+	}
+}
+
+// An origin that also pushes to a mirror (co2's pushes to GitHub, then
+// GitLab): a number counts once it lands where origin fetches from,
+// whatever the mirror says.
+func TestNumbersOriginWithAMirror(t *testing.T) {
+	remote := repotest.NewGoGitRepo(t, true)
+	clone := repotest.NewGoGitRepo(t, false)
+	repotest.AddRemote(t, clone, "origin", remote.GitDir)
+	for _, u := range []string{remote.GitDir, filepath.Join(t.TempDir(), "mirror-gone.git")} {
+		if out, err := exec.Command("git", "-C", clone.GitDir, "config", "--add", "remote.origin.pushurl", u).CombinedOutput(); err != nil {
+			t.Fatalf("%v: %s", err, out)
+		}
+	}
+	b, err := gitbugio.NewForRepo(clone)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = b.Close() })
+	id, err := b.TestCache().Identities().NewFromGitUser()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := b.TestCache().SetUserIdentity(id); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := b.InitNumbers("origin", "CO2", 1); err != nil {
+		t.Fatalf("InitNumbers: %v", err)
+	}
+	gitbugiotest.NewIssue(t, b, "Made here")
+	if n, err := b.NumberIssues("origin"); n != 1 || err != nil {
+		t.Fatalf("NumberIssues = %d, %v; want 1, nil", n, err)
 	}
 }
