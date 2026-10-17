@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"errors"
-	"log"
 	"net/http"
 	"net/url"
 	"slices"
@@ -111,27 +110,8 @@ func (s *apiServer) handleNewIssue(w http.ResponseWriter, r *http.Request) {
 		writeIssueError(w, err)
 		return
 	}
+	// no number yet: it comes with the push to origin the user asks for
 	s.writeThread(w, http.StatusCreated, id)
-	go s.numberNew()
-}
-
-// numberNew numbers the issues that wait for a number, off the request
-// that made one and without the write lock, as the network may be slow or
-// gone; the pages refresh when a number lands. One at a time: an issue a
-// running one missed gets its number with the next one, or the next sync.
-// ponytail: no timeout; a hung origin keeps the numbers for a later sync
-func (s *apiServer) numberNew() {
-	if !s.numberMu.TryLock() {
-		return
-	}
-	defer s.numberMu.Unlock()
-	n, err := s.b.NumberIssues(gitbugio.NumbersRemote)
-	if err != nil {
-		log.Printf("numbering: %v", err)
-	}
-	if n > 0 {
-		s.events.publish(event{Kind: "issues"})
-	}
 }
 
 // handleComment comments, and optionally closes or reopens: "Close with

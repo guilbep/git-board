@@ -81,10 +81,15 @@ the same one; `.git-board.toml` has no key for it.
   whenever the issue is imported: co2 has bridged only ~325 of its ~811
   issues so far); else none yet, and the counter hands one out.
 - **When**: the counter numbers an issue with no project number (made in
-  git-board, or imported with a GitHub number at or above `start`) on
-  creation or import, from the CLI, the web UI or the TUI. Offline or on a
-  failed push, the issue shows its short git-bug id and is numbered at the
-  next sync.
+  git-board, or imported with a GitHub number at or above `start`) during
+  a push to origin the user asks for: Push on the Sync page's Remotes,
+  `git board sync`, `git board numbers`. Until then the issue shows its
+  short git-bug id. *Decided 2026-10-17, after review:* not on creation
+  or after a forge sync, as first written: numbering pushes the counter,
+  and nothing goes out without the user asking (the Sync page's rule;
+  co2-calculator must never be pushed to). It also keeps numbering under
+  the write lock, so it never fetches into the repository while a pull
+  does.
 - **The switch**, `git board numbers init --prefix CO2 --start 3052`: one
   commit holding only the prefix and `start`, one more than GitHub's highest
   number, PRs included. Pushing it is the switch; until then nothing

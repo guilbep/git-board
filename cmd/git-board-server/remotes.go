@@ -71,6 +71,8 @@ func (s *apiServer) handleRemote(w http.ResponseWriter, r *http.Request) {
 			}
 			return err
 		},
+		// numbers go out with a push to origin the user asks for, never on
+		// their own (docs/configuration.md, Numbers)
 		"push": func(remote string) error {
 			_, err := s.b.Push(remote)
 			if err == nil && remote == gitbugio.NumbersRemote {

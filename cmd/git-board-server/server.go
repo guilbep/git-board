@@ -49,11 +49,9 @@ type apiServer struct {
 	// beginWrite); the sync with the forges (forges.go) holds it for
 	// its whole run, and syncing tells writes to answer 409 meanwhile.
 	writeMu sync.Mutex
-	// numberMu: one numbering at a time, off the requests (numberNew)
-	numberMu sync.Mutex
-	syncing  atomic.Bool
-	forgeMu  sync.Mutex // guards job, issueDry and checked
-	job      *forgeJob
+	syncing atomic.Bool
+	forgeMu sync.Mutex // guards job, issueDry and checked
+	job     *forgeJob
 	// the forge sync, or one way of it (mode get, send): nil, git-bug's
 	runSync func(ctx context.Context, mode string, dryRun bool, names []string) (<-chan core.SyncResult, error)
 	// one issue's sync (issuesync.go): nil, git-bug's; issueDry is when

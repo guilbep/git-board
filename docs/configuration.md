@@ -287,7 +287,7 @@ A project can number its issues itself, `CO2-3075`, instead of leaning on a forg
 git board numbers init --prefix CO2 --start 3052
 ```
 
-`start` is one more than GitHub's highest issue or pull request number (`gh api 'repos/OWNER/REPO/issues?state=all&per_page=1' -q '.[0].number'`). GitHub numbers below it stay the issues' own: `#2518` is `CO2-2518`, even for an issue imported later. Every other issue, made here or brought in from a forge, gets the next number when it is made, or at the next `git board sync` (or `git board numbers`) when offline. Pushing the counter is the lock: when two clones number at once, git refuses the second push and that clone takes the next number.
+`start` is one more than GitHub's highest issue or pull request number (`gh api 'repos/OWNER/REPO/issues?state=all&per_page=1' -q '.[0].number'`). GitHub numbers below it stay the issues' own: `#2518` is `CO2-2518`, even for an issue imported later. Every other issue, made here or brought in from a forge, gets the next number with the next push to `origin` you ask for: **Push** on the Sync page's Remotes, `git board sync`, or `git board numbers`. Until then it shows its short git-bug id. Nothing pushes the counter on its own: not creating an issue, not a forge sync. Pushing the counter is the lock: when two clones number at once, git refuses the second push and that clone takes the next number.
 
 After the switch, a bare number (`3075`, `fix/3075-…`) and `CO2-3075` are the project's number; `#3075` is always a forge's. Cards, rows and the issue page show the number before the title.
 
