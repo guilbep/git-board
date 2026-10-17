@@ -44,7 +44,7 @@ type Row struct {
 // Follows is whether you follow th, why, and what you clicked (nil:
 // automatic). views are the followed views th is in.
 func Follows(me Me, st State, th gitbugio.Thread, views []string, cfg *config.Config) (bool, []string, *bool) {
-	reasons := filter.Involvement(involved(me, th), me.Login, cfg)
+	reasons := filter.Involvement(involved(me, th), me.Login, me.ID, cfg)
 	set := st.Set(th.ID)
 	if set != nil && *set {
 		reasons = append(reasons, "followed")
@@ -65,10 +65,11 @@ func involved(me Me, th gitbugio.Thread) filter.Involved {
 		}
 		return p.Login
 	}
-	in := filter.Involved{AuthorLogins: []string{login(th.Author)}, Labels: th.Labels}
+	in := filter.Involved{AuthorLogins: []string{login(th.Author)}, AuthorID: th.Author.ID, Labels: th.Labels}
 	for _, e := range th.Events {
 		if e.Kind == "comment" && e.Author.ID != th.Author.ID {
 			in.CommenterLogins = append(in.CommenterLogins, login(e.Author))
+			in.CommenterIDs = append(in.CommenterIDs, e.Author.ID)
 		}
 		if (e.Kind == "created" || e.Kind == "comment") && gitbugio.Mentions(e.Body, me.Login) {
 			in.Mentioned = true

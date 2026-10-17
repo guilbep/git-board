@@ -8,6 +8,7 @@ import (
 	"github.com/guilbep/git-board/internal/board"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/gitbugio/gitbugiotest"
+	"github.com/guilbep/git-board/internal/inbox"
 )
 
 // The filters panel: each field's values counted against the rest of the
@@ -105,4 +106,37 @@ func sameSet(got []string, want ...string) bool {
 		}
 	}
 	return true
+}
+
+// The filters panel counts follows:@me as the list does: an issue you
+// unfollowed is left out of the counts too.
+func TestFacetsHonourFollows(t *testing.T) {
+	b := gitbugiotest.New(t)
+	if _, err := b.NewIssue("Kept", "", []string{"assignee:guilbep", "status:ready"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := b.NewIssue("Also kept", "", []string{"assignee:guilbep", "status:qa"}); err != nil {
+		t.Fatal(err)
+	}
+	dropped, _ := b.NewIssue("Dropped", "", []string{"assignee:guilbep", "status:blocked"})
+	me, _, _ := b.Me()
+	if err := inbox.Save(b.Storage(), me.ID, inbox.State{Unfollow: []string{dropped}}); err != nil {
+		t.Fatal(err)
+	}
+	facets, err := board.Facets(b, &config.Config{}, "follows:@me", "guilbep")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range facets {
+		if f.Key != "status" {
+			continue
+		}
+		for _, o := range f.Options {
+			if o.Value == "blocked" {
+				t.Errorf("status:blocked counted %d, but you unfollowed its only issue", o.Count)
+			}
+		}
+		return
+	}
+	t.Fatalf("no status facet in %+v", facets)
 }

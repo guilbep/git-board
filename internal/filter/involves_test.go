@@ -19,21 +19,21 @@ func TestInvolvement(t *testing.T) {
 		Mentioned:       true,
 	}
 	// status isn't a person field: a value that happens to be a login
-	if got, want := filter.Involvement(in, "guilbep", cfg), []string{"assignee", "reviewer", "commented", "mentioned"}; !slices.Equal(got, want) {
+	if got, want := filter.Involvement(in, "guilbep", "", cfg), []string{"assignee", "reviewer", "commented", "mentioned"}; !slices.Equal(got, want) {
 		t.Errorf("guilbep: %v, want %v", got, want)
 	}
-	if got := filter.Involvement(filter.Involved{AuthorLogins: in.AuthorLogins}, "ANN", cfg); !slices.Equal(got, []string{"author"}) {
+	if got := filter.Involvement(filter.Involved{AuthorLogins: in.AuthorLogins}, "ANN", "", cfg); !slices.Equal(got, []string{"author"}) {
 		t.Errorf("ann: %v, want [author]", got)
 	}
 	nobody := in
 	nobody.Mentioned = false // Mentioned is the asked login's: nothing mentions nobody
-	if got := filter.Involvement(nobody, "nobody", cfg); got != nil {
+	if got := filter.Involvement(nobody, "nobody", "", cfg); got != nil {
 		t.Errorf("nobody: %v, want none", got)
 	}
-	if got := filter.Involvement(in, "", cfg); got != nil {
+	if got := filter.Involvement(in, "", "", cfg); got != nil {
 		t.Errorf("no login: %v, want none", got)
 	}
-	if got := filter.Involvement(in, "guilbep", nil); len(got) == 0 {
+	if got := filter.Involvement(in, "guilbep", "", nil); len(got) == 0 {
 		t.Error("a nil config still knows assignee by its name")
 	}
 }

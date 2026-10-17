@@ -155,6 +155,19 @@ func prepare(b any, filterStr, me string) ([]filter.Condition, string, error) {
 			}
 		}
 	}
+	if r, ok := b.(interface {
+		Me() (gitbugio.Person, bool, error)
+	}); ok {
+		for i, c := range conditions {
+			if c.Kind == filter.KindFollows || (c.Kind == filter.KindInvolves && c.Value == "@me") {
+				p, _, err := r.Me()
+				if err != nil {
+					return nil, "", err
+				}
+				conditions[i].MeID = p.ID
+			}
+		}
+	}
 	if m, ok := b.(interface {
 		Mentioning(string) (map[string]bool, error)
 	}); ok {

@@ -48,6 +48,9 @@ type Condition struct {
 	// Mentions are, for involves: and follows:, the issues whose text
 	// mentions the login, by id (board fills it); nil: none.
 	Mentions map[string]bool
+	// MeID is, for @me in involves: and follows:, your identity (board
+	// fills it): you are it as well as your login.
+	MeID string
 	// Followed is, for follows:@me, what your inbox follows besides what
 	// you're in (board fills it); nil: only what you're in.
 	Followed *Followed
@@ -259,16 +262,18 @@ func matchOne(issue gitbugio.Issue, labels map[string]bool, c Condition, value s
 			}
 		}
 	case KindInvolves:
-		in := Involved{AuthorLogins: issue.AuthorLogins, Labels: issue.Labels, CommenterLogins: issue.CommenterLogins, Mentioned: c.Mentions[issue.ID]}
-		ok = len(Involvement(in, Resolve(value, cfg, me, today), cfg)) > 0
+		id := ""
+		if value == "@me" {
+			id = c.MeID
+		}
+		ok = len(Involvement(involvedOf(issue, c), Resolve(value, cfg, me, today), id, cfg)) > 0
 	case KindFollows: // yours only: follows:someone matches nothing
 		f := c.Followed
 		if f == nil {
 			f = &Followed{}
 		}
-		in := Involved{AuthorLogins: issue.AuthorLogins, Labels: issue.Labels, CommenterLogins: issue.CommenterLogins, Mentioned: c.Mentions[issue.ID]}
 		ok = value == "@me" && !f.Unfollow[issue.ID] &&
-			(f.Follow[issue.ID] || f.InViews[issue.ID] || len(Involvement(in, me, cfg)) > 0)
+			(f.Follow[issue.ID] || f.InViews[issue.ID] || len(Involvement(involvedOf(issue, c), me, c.MeID, cfg)) > 0)
 	case KindField:
 		ok = labels[c.Field+":"+Resolve(value, cfg, me, today)]
 	}
@@ -279,9 +284,16 @@ func matchOne(issue gitbugio.Issue, labels map[string]bool, c Condition, value s
 // Issue) or from its thread (internal/inbox), so the two can't disagree.
 type Involved struct {
 	AuthorLogins    []string
+	AuthorID        string
 	Labels          []string
 	CommenterLogins []string
+	CommenterIDs    []string
 	Mentioned       bool // its description or a comment mentions the login
+}
+
+func involvedOf(issue gitbugio.Issue, c Condition) Involved {
+	return Involved{AuthorLogins: issue.AuthorLogins, AuthorID: issue.AuthorID, Labels: issue.Labels,
+		CommenterLogins: issue.CommenterLogins, CommenterIDs: issue.CommenterIDs, Mentioned: c.Mentions[issue.ID]}
 }
 
 // Followed is your inbox's file as follows:@me needs it: what you
@@ -290,15 +302,17 @@ type Followed struct {
 	Follow, Unfollow, InViews map[string]bool
 }
 
-// Involvement is how login is in an issue, as reasons: author, a person
-// field's name (assignee, reviewer…), commented, mentioned. None: it isn't.
-func Involvement(in Involved, login string, cfg *config.Config) []string {
-	if login == "" {
+// Involvement is how someone is in an issue, by login, or by identity id
+// when given (yours: you are your identity with or without a login), as
+// reasons: author, a person field's name (assignee, reviewer…),
+// commented, mentioned. None: they aren't.
+func Involvement(in Involved, login, id string, cfg *config.Config) []string {
+	if login == "" && id == "" {
 		return nil
 	}
-	is := func(l string) bool { return strings.EqualFold(l, login) }
+	is := func(l string) bool { return login != "" && strings.EqualFold(l, login) }
 	var res []string
-	if slices.ContainsFunc(in.AuthorLogins, is) {
+	if slices.ContainsFunc(in.AuthorLogins, is) || (id != "" && in.AuthorID == id) {
 		res = append(res, "author")
 	}
 	for _, l := range in.Labels {
@@ -306,7 +320,7 @@ func Involvement(in Involved, login string, cfg *config.Config) []string {
 			res = append(res, f)
 		}
 	}
-	if slices.ContainsFunc(in.CommenterLogins, is) {
+	if slices.ContainsFunc(in.CommenterLogins, is) || (id != "" && slices.Contains(in.CommenterIDs, id)) {
 		res = append(res, "commented")
 	}
 	if in.Mentioned {

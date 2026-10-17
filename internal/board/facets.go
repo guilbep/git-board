@@ -50,6 +50,9 @@ func Facets(b issueBackend, cfg *config.Config, filterStr, me string) ([]Facet, 
 	}
 	withRoles(cfg, issues)
 	today := time.Now()
+	if err := fillFollows(b, cfg, conditions, me, issues, today); err != nil {
+		return nil, err
+	}
 	var out []Facet
 	for _, key := range facetKeys(cfg, issues) {
 		var own, rest []filter.Condition

@@ -70,7 +70,9 @@ func TestInvolvesOnARepository(t *testing.T) {
 	commented, _ := b.NewIssue("Food", "", nil)
 	other := gitbugiotest.NewPerson(t, b, "Guilbert (GitHub)", "guilbep")
 	gitbugiotest.CommentAs(t, b, commented, other, time.Now().Unix(), "on it")
-	if _, err := b.NewIssue("Mail", "guilbep.pierre@epfl.ch", nil); err != nil {
+	// someone else's: an issue you opened involves you (author)
+	stranger := gitbugiotest.NewPerson(t, b, "Ann", "ann")
+	if _, _, err := b.TestCache().Bugs().NewRaw(stranger, time.Now().Unix(), "Mail", "guilbep.pierre@epfl.ch", nil, nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -96,7 +98,8 @@ func TestFollowsOnARepository(t *testing.T) {
 	followed, _ := b.NewIssue("Food", "", nil)
 	closedInView, _ := b.NewIssue("Cache factors", "", []string{"area:backend"})
 	gitbugiotest.CloseIssue(t, b, closedInView)
-	if _, err := b.NewIssue("Unrelated", "", nil); err != nil {
+	ann := gitbugiotest.NewPerson(t, b, "Ann", "ann") // someone else's: an issue you opened involves you
+	if _, _, err := b.TestCache().Bugs().NewRaw(ann, time.Now().Unix(), "Unrelated", "", nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	me, _, _ := b.Me()
@@ -121,5 +124,38 @@ func TestFollowsOnARepository(t *testing.T) {
 	inViews, missing, err := board.FollowedViews(b, cfg, []string{"backend", "gone"}, "guilbep", all, time.Now())
 	if err != nil || !slices.Equal(inViews[closedInView], []string{"backend"}) || !slices.Equal(missing, []string{"gone"}) {
 		t.Errorf("FollowedViews = %v %v %v", inViews, missing, err)
+	}
+}
+
+// You are your identity too, not only your login: an issue you opened or
+// commented on as an identity without a login (--me gives the login)
+// involves you, as the inbox says.
+func TestInvolvesYouByIdentity(t *testing.T) {
+	b := gitbugiotest.New(t) // writes as an identity without a login
+	opened, _ := b.NewIssue("Mine", "", nil)
+	ann := gitbugiotest.NewPerson(t, b, "Ann", "ann")
+	hers, _, err := b.TestCache().Bugs().NewRaw(ann, time.Now().Unix(), "Hers", "", nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	commented := hers.Id().String()
+	if _, err := b.AddComment(commented, "mine"); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := b.TestCache().Bugs().NewRaw(ann, time.Now().Unix(), "Not mine", "", nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	for _, expr := range []string{"involves:@me", "follows:@me"} {
+		got, err := board.LoadMatching(b, &config.Config{}, expr, "guilbep")
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids := map[string]bool{}
+		for _, i := range got {
+			ids[i.ID] = true
+		}
+		if !ids[opened] || !ids[commented] || len(ids) != 2 {
+			t.Errorf("%s = %v, want %s and %s", expr, ids, opened, commented)
+		}
 	}
 }
