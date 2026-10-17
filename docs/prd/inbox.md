@@ -33,7 +33,8 @@ would need anyway. Teams, a digest or email can deliver it later.
 | Where | web first; state in a file in the clone, so the CLI/TUI can join later |
 | What counts | conversation and what changes your relation to the issue; field changes optional (a personal setting) |
 | Follow | automatic, plus Follow/Unfollow per issue, plus following a whole view |
-| Freshness | opening the inbox pulls from the git remotes; no timer, forges stay manual |
+| One query language | following is filter terms, `involves:` and `follows:@me`, for the inbox, the board and ⌘K alike (agreed with the main session) |
+| Freshness | opening the inbox checks (fetches) the git remotes and offers "N new · Pull" as one click; no automatic pull, no timer, forges stay manual (agreed with the main session) |
 | Where computed | the server, on request (`internal/inbox`) |
 
 ## 1. Data
@@ -90,6 +91,34 @@ later has one file per person in the same shape.
 | `followed` | you clicked Follow |
 | `view: <name>` | the issue matches a followed view's filter without its `is:` terms (`filter.Without`, as `insights.go` does), so a close still shows |
 
+**The same rules are filter terms** (`internal/filter`), so the board and
+⌘K can ask them too:
+
+- `involves:<login>` or `involves:@me`: author, any person field holding
+  the login, a comment by it, a mention of it. Works for anyone
+  (`involves:alice`).
+- `follows:@me`: what your inbox follows: `involves:@me`, plus Follow, plus
+  followed views, minus Unfollow. Only `@me`: the follows are yours.
+- One function, `filter.Involvement(…, login) []string`, returns the
+  reasons (`author`, a field's name, `commented`, `mentioned`); the term is
+  "any", the inbox's chips are those plus `followed` and `view: <name>`.
+  It takes a small struct both an `Issue` and a `Thread` can fill, so the
+  list and the inbox can't disagree.
+- `Issue` gains `CommenterLogins` from the excerpt's `Participants`
+  (cheap, as `AuthorLogins`) and `MentionLogins`. Mentions need the text:
+  the git-bug cache's full-text index narrows to the issues containing the
+  login, the mention pattern confirms on their text. **Verify first** in
+  the plan how the index tokenizes `@login`; if it can't narrow, the term
+  loads the texts and we measure.
+- `follows:@me` needs your file: `Matches` gets it from its caller as plain
+  sets (Follow, Unfollow, the followed views' issues; no import of
+  `internal/inbox`). Followed views are matched without their `follows:`
+  terms, so a view can't follow itself.
+
+The inbox still loads every issue in the window (§3), not only
+`follows:@me`'s: an event addressed to you can sit on an issue you no
+longer follow (you were just removed as assignee).
+
 **What shows**, among unseen events in the window that aren't yours:
 
 - On a followed issue: a comment; the issue's creation; closed or reopened.
@@ -137,12 +166,17 @@ counted or not; Mark all read does it for every row.
 - **`eventFor`**: `/api/inbox` gets its own `inbox` kind, so marking an
   issue seen in one tab updates the count in the others.
 
-**Pulling** is the page's, not the server's. Opening the inbox: `GET
-/api/remotes`; `POST /api/remotes/{name}/pull` for each remote not checked
-in the last 5 minutes (its `checked`), all at once; then `GET /api/inbox`.
-Refresh pulls regardless. A failed pull shows in the status line and the
-page carries on. This bends `remotes.go`'s "only when asked": opening the
-inbox is the asking, and the page says what it pulled.
+**Checking and pulling** are the page's, not the server's. Opening the
+inbox: `GET /api/remotes`; `POST /api/remotes/{name}/fetch` for each remote
+not checked in the last 5 minutes (its `checked`), all at once: a fetch,
+nothing local changes; then `GET /api/inbox`. A remote with
+`issues.receive` > 0 shows "3 issues new on origin · **Pull**": one click,
+`POST /api/remotes/{name}/pull`, then the rows reload. Refresh checks
+again regardless of the 5 minutes. No automatic pull: a pull merges into
+the local issues, and the Sync page's rule is that a run which changes
+something is one you asked for. A remote that fails, or answers `409`
+while a forge run holds the write lock, shows why in the status line
+("a forge sync is running: Pull when it ends"), and the page carries on.
 
 ## 4. The page
 
@@ -153,9 +187,9 @@ Mockup: the link at the top.
   header reads `GET /api/inbox` on load and on SSE `issues` or `inbox`
   events, and never pulls.
 - **`/inbox`** (`InboxPage.vue`):
-  - A status line: "Pulled origin 4 s ago", or "upstream: couldn't pull:
-    …"; **Refresh** (pulls within the 5 minutes too, and drops read rows)
-    and **Mark all read**.
+  - A status line: "Checked origin 4 s ago · 3 issues new · **Pull**",
+    or "upstream: couldn't check: …"; **Refresh** (checks within the 5
+    minutes too, and drops read rows) and **Mark all read**.
   - A settings menu: "Also field changes on issues I'm in" (`fields`); the
     config's views as checkboxes; a view gone shows "(no longer exists)"
     with a remove ×.
@@ -192,15 +226,27 @@ Mockup: the link at the top.
   `follow: false` keeps a later comment out, `null` brings it back; no
   identity is `409 no-identity`, an identity without a login `409
   no-login`.
-- **Web, one vitest**: which remotes to pull (checked within 5 minutes:
-  skip, unless Refresh).
+- **`internal/filter`**: `involves:` cases (author, a person field, a
+  comment, a mention, someone else's login) and `follows:@me` (Follow adds,
+  Unfollow removes, a followed view adds, a view's own `follows:` term is
+  ignored).
+- **Web, one vitest**: which remotes to check (checked within 5 minutes:
+  skip, unless Refresh), and which offer Pull (`issues.receive` > 0).
 - Not tested: the header count, the tab title (display).
+
+## For the plan
+
+- `IssueSide.vue` and `issuesync.go` have work in flight on main (branch
+  `issuelink`: Link / Unlink / Take the forge's version): merge main into
+  this branch after it lands, before touching `IssueSide.vue`.
+- First task: the full-text index spike for mentions (§2).
 
 ## Not now
 
 - Email, Teams or Slack, a digest: deliveries of the same rows, when
   someone asks.
 - The CLI and TUI: `git-board inbox` on the same package.
-- Browser notifications; a timer pulling in the background (hosted, where a
-  machine is always on); forge Get on open (rate limits).
+- Browser notifications; automatic pulls, or a timer in the background
+  (hosted, where a machine is always on); forge Get on open (rate limits).
+- An inbox card on Settings' Overview tab.
 - Outsiders writing in (a helpdesk); replying by email.
