@@ -87,12 +87,14 @@ func TestRemotesPushAndPull(t *testing.T) {
 // A remote's URL may carry a token: the page never gets it, nor in
 // git's errors, which quote the URL.
 func TestRemoteURLsLoseTheirCredentials(t *testing.T) {
-	for in, want := range map[string]string{
-		"https://oauth2:glpat-secret@gitlab.example.com/g/r.git":         "https://gitlab.example.com/g/r.git",
-		"https://ghp_secret@github.com/o/r.git: non-fast-forward update": "https://github.com/o/r.git: non-fast-forward update",
-		"git@github.com:o/r.git": "git@github.com:o/r.git",
-		"/srv/git/r.git":         "/srv/git/r.git",
+	// pairs, not a map: gofmt 1.26 and 1.27 align a map's long keys differently
+	for _, c := range [][2]string{
+		{"https://oauth2:glpat-secret@gitlab.example.com/g/r.git", "https://gitlab.example.com/g/r.git"},
+		{"https://ghp_secret@github.com/o/r.git: non-fast-forward update", "https://github.com/o/r.git: non-fast-forward update"},
+		{"git@github.com:o/r.git", "git@github.com:o/r.git"},
+		{"/srv/git/r.git", "/srv/git/r.git"},
 	} {
+		in, want := c[0], c[1]
 		if got := gitbugio.NoCredentials(in); got != want {
 			t.Errorf("NoCredentials(%q) = %q, want %q", in, got, want)
 		}
