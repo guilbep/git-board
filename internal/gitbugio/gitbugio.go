@@ -53,7 +53,7 @@ type Issue struct {
 	Number string `json:"number,omitempty"`
 	// Counted tells the project numbers its issues: a bare number (3075,
 	// fix/3075-…) then means a project number; #3075 is still a forge's.
-	Counted bool `json:"-"`
+	Counted bool `json:"counted,omitempty"`
 	// UpdatedAt is its last change, for "changed since your last visit".
 	UpdatedAt time.Time `json:"updated_at"`
 	// AuthorLogins are who opened it, for author:: name, login, forge
