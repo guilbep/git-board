@@ -8,6 +8,7 @@ package gitbugio
 import (
 	"fmt"
 	"os"
+	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -42,6 +43,8 @@ type Issue struct {
 	Labels    []string `json:"labels"`
 	GithubURL string   `json:"github_url,omitempty"` // "" if not bridged in from GitHub
 	Forges    []Forge  `json:"forges,omitempty"`     // where it is on forges
+	// Shown is the title as the board shows it (ShownTitle).
+	Shown string `json:"shown_title"`
 	// UpdatedAt is its last change, for "changed since your last visit".
 	UpdatedAt time.Time `json:"updated_at"`
 	// AuthorLogins are who opened it, for author:: name, login, forge
@@ -64,6 +67,18 @@ func (is Issue) Numbers() []string {
 
 // HasNumber tells whether the issue answers to number n.
 func (is Issue) HasNumber(n string) bool { return slices.Contains(is.Numbers(), n) }
+
+var ownNumber = regexp.MustCompile(`\s*\(#(\d+)\)\s*$`) // (#2518)
+
+// ShownTitle is the title without a trailing (#2518) that is one of the
+// issue's own numbers: the forge links show it already. The title itself
+// keeps it, and editing starts from the title.
+func (is Issue) ShownTitle() string {
+	if m := ownNumber.FindStringSubmatchIndex(is.Title); m != nil && is.HasNumber(is.Title[m[2]:m[3]]) {
+		return is.Title[:m[0]]
+	}
+	return is.Title
+}
 
 // Backend is an open connection to a git-bug repo cache.
 type Backend struct {
@@ -198,8 +213,10 @@ func excerptToIssue(id string, e *cache.BugExcerpt) Issue {
 		status = "closed"
 	}
 	forges, _ := forgesOf(e.CreateMetadata)
-	return Issue{ID: id, Title: e.Title, Status: status, Labels: labels, GithubURL: e.CreateMetadata[githubURLMetaKey], Forges: forges,
+	is := Issue{ID: id, Title: e.Title, Status: status, Labels: labels, GithubURL: e.CreateMetadata[githubURLMetaKey], Forges: forges,
 		UpdatedAt: time.Unix(e.EditUnixTime, 0)}
+	is.Shown = is.ShownTitle()
+	return is
 }
 
 // GetIssue resolves a bug by id prefix.

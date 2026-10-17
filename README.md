@@ -231,7 +231,7 @@ Field mapping:
 |---|---|---|
 | Status | `status:<value>` | single |
 | Priority | `prio:<value>` | single |
-| Category | `<value>` (bare label, verbatim — not slugified) | none — plain label, not a field:value pair |
+| Category | the issue's kind: the `[branches] kinds` key it names, without case (`FEAT` → `feat`) | single — only when the issue has no kind yet |
 | Module | `mod:<value>` | single — the two duplicate "Generic" options are merged into one `mod:generic` |
 | Est. hours | `est:<value>` | single |
 | Sprint | `sprint:<slug>` | single — the `[[sprints.list]]` slug of the iteration's title, else the title as a slug (`Hypercare` → `sprint:hypercare`); list the iterations for `@current` to find them |
@@ -240,12 +240,11 @@ Field mapping:
 `Milestone` and `Size` are **not** imported — the PRD calls them dead/unused
 fields.
 
-Category isn't a structured field like Status/Priority — it's added as a
-plain, unnamespaced label instead. Category and GitHub's own native issue
-labels do the same job; a `cat:<value>` field would just be a second,
-duplicate way to say the same thing. Being a plain label, it's additive
-only (no configured options, no removal on re-run) — same tradeoff every
-other plain label already has.
+Category says the same thing as the kind labels (`bug`, `feat`, `perf`…),
+and the labels win: Category only fills a kind the issue doesn't have,
+written as `[branches] kinds` spells it, so `FEAT` lands as `feat`. A
+Category that is none of the kinds (`FIX` when the kind is `bug`) warns
+and writes nothing. Nothing is ever removed: a kind is the team's to change.
 
 `bridge pull` reads values exactly as `bridge sync` does: a
 `[fields.<name>] project = { … }` alias first, then the slug of the
@@ -338,6 +337,12 @@ git-bug repo against `.git-board.toml`:
   one check that isn't `is:open`-scoped: it's a config-inventory question,
   and an option only used on a closed issue (e.g. a terminal `validated`
   status) is still in use.
+- **kinds**, with `[branches] kinds` (its keys are the project's kinds, as
+  plain labels): **two-kinds**, an issue with two (`bug` and `feat`);
+  **kind-title**, a title whose `[BUG]` names another kind than its label
+  (the label wins); **no-kind**, how many open issues have none, as one
+  line, since a missing kind is usually an issue template's to fix (see
+  `--create-labels` below).
 
 Not checked: "unknown assignees" — the PRD lists it, but there's no
 configured roster of valid assignees in `.git-board.toml` to validate labels
@@ -369,6 +374,19 @@ Free-form fields (no `options` configured — `assignee`, `est`) have no
 fixed value set, so nothing to create labels for; Category isn't a
 configured field at all anymore (see "Bridging GitHub Projects" above),
 so it's not part of this check either.
+
+It also reads the labels each issue template applies
+(`.github/ISSUE_TEMPLATE`, an issue form's `labels` or a Markdown
+template's front matter) and reports the ones this checkout's GitHub
+repository (`gh repo view`) doesn't have. GitHub drops those without a
+word, so the issue comes out without them:
+
+```
+issue templates: feature.yaml applies enhancement, triage, needs-triage, which EPFL-ENAC/co2-calculator doesn't have: GitHub drops them
+```
+
+`--apply` doesn't create them: the fix is a label the repository has, in
+the template.
 
 ## Sprints (`git-board sprint`)
 
@@ -418,7 +436,7 @@ git-board tui "is:open prio:p1"
 |---|---|---|
 | `↑`/`↓`, `/` | list | native `bubbles/list` scroll and fuzzy text search (title + labels) |
 | `enter` | list | open the detail view for the selected issue |
-| `c` | list | quick-filter by the configured `cat` field's options (`(all)` clears it); coexists with `/` search. The shipped example config no longer defines `[fields.cat]` (category is a plain label now — see the bridge field mapping below), so `c` shows "no cat field configured" unless a project opts back into one. |
+| `c` | list | quick-filter by the configured `cat` field's options (`(all)` clears it); coexists with `/` search. The shipped example config doesn't define `[fields.cat]` (Category fills the kind label now — see the bridge field mapping below), so `c` shows "no cat field configured" unless a project opts into one. |
 | `f` | list | structured filter — the same `field:value`/`-field:value`/`is:open`/`title:*glob*` grammar and matcher as `ls`/`view`/the launch argument and the web UI (words look in descriptions and comments too), not the fuzzy `/` search. Empty input + enter clears it. |
 | `s` | list | sort by field, e.g. `prio` (ascending) or `prio desc` — same syntax as `ls --sort`. Persists across a later `f`/`c` filter change. Empty input + enter clears it back to natural order. |
 | `i` | list | preview the GitHub Project bridge (`git-board bridge pull`, dry-run) — matches git-bug's own termui, where `i` is "Pull". Requires `git-board bridge configure` to have been run first. Runs in the background; the TUI stays responsive while it fetches. |

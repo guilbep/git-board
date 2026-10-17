@@ -2,7 +2,7 @@
 // and the sync page. While a run goes on it's polled; edits refused
 // meanwhile wait for its end (issue.ts).
 import { ref } from 'vue';
-import { getForges, type ForgeStatus } from '@/api/board';
+import { getForges, type ForgeStatus, type Issue } from '@/api/board';
 
 export const forgeStatus = ref<ForgeStatus | null>(null);
 
@@ -38,4 +38,11 @@ export function untilSyncEnds(): Promise<void> {
     waiters.push(resolve);
     setTimeout(() => void loadForges(), pollMs);
   });
+}
+
+// idLabel names an issue on a card: its number on its first forge
+// (#2518), which its shown title leaves out, and its git-bug id.
+export function idLabel(i: Issue, n = 7): string {
+  const number = i.forges?.[0]?.number;
+  return number ? `#${number} · ${i.id.slice(0, n)}` : i.id.slice(0, n);
 }

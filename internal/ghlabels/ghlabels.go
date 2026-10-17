@@ -8,9 +8,17 @@ package ghlabels
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io/fs"
+	"os"
 	"os/exec"
+	"path/filepath"
+	"slices"
 	"sort"
+	"strings"
+
+	"go.yaml.in/yaml/v3"
 
 	"github.com/guilbep/git-board/internal/config"
 )
@@ -96,4 +104,88 @@ func Create(repo, name string) error {
 		return fmt.Errorf("gh label create %q --repo %s: %w: %s", name, repo, err, stderr.String())
 	}
 	return nil
+}
+
+// Current is the GitHub repository of the working directory's checkout,
+// as gh sees it: its remotes, or gh repo set-default. Read-only.
+func Current() (string, error) {
+	cmd := exec.Command("gh", "repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner")
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	out, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("gh repo view: %w: %s", err, stderr.String())
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+// Template is an issue template and the labels it applies.
+type Template struct {
+	File   string
+	Labels []string
+}
+
+// Templates reads the labels each issue template in dir applies
+// (.github/ISSUE_TEMPLATE): an issue form's labels, or a Markdown
+// template's front matter, as a list or as "a, b". GitHub applies only
+// the labels the repository has and drops the others without a word.
+// config.yml is the template chooser, not a template. No dir: none.
+func Templates(dir string) ([]Template, error) {
+	entries, err := os.ReadDir(dir)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var res []Template
+	for _, e := range entries {
+		name, ext := e.Name(), filepath.Ext(e.Name())
+		if e.IsDir() || !slices.Contains([]string{".md", ".yml", ".yaml"}, ext) || strings.TrimSuffix(name, ext) == "config" {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(dir, name))
+		if err != nil {
+			return nil, err
+		}
+		if ext == ".md" {
+			data = frontMatter(data)
+		}
+		var t struct {
+			Labels any `yaml:"labels"`
+		}
+		if err := yaml.Unmarshal(data, &t); err != nil {
+			return nil, fmt.Errorf("%s: %w", name, err)
+		}
+		var labels []string
+		switch v := t.Labels.(type) {
+		case string:
+			for _, l := range strings.Split(v, ",") {
+				if l = strings.TrimSpace(l); l != "" {
+					labels = append(labels, l)
+				}
+			}
+		case []any:
+			for _, l := range v {
+				if l, ok := l.(string); ok && l != "" {
+					labels = append(labels, l)
+				}
+			}
+		}
+		if len(labels) > 0 {
+			res = append(res, Template{File: name, Labels: labels})
+		}
+	}
+	return res, nil
+}
+
+// frontMatter is a Markdown file's leading YAML, between "---" lines
+// (trailing spaces allowed: co2's specs.md opens with "--- ").
+func frontMatter(md []byte) []byte {
+	first, rest, _ := bytes.Cut(bytes.ReplaceAll(md, []byte("\r\n"), []byte("\n")), []byte("\n"))
+	if string(bytes.TrimSpace(first)) != "---" {
+		return nil
+	}
+	fm, _, _ := bytes.Cut(rest, []byte("\n---"))
+	return fm
 }

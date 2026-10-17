@@ -30,6 +30,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os/exec"
 	"regexp"
 	"slices"
@@ -200,7 +201,7 @@ func planIssue(item Item, bug gitbugio.Issue, cfg *config.Config) IssueChange {
 	for _, f := range synced {
 		add(planField(cfg, bug.Labels, f.name, f.value(item)))
 	}
-	add(planPlainLabel(bug.Labels, "category", item.Category))
+	add(planKind(cfg, bug.Labels, item.Category))
 
 	assigneeRes := planAssignees(bug.Labels, item.Assignees)
 	if len(assigneeRes.Added) > 0 || len(assigneeRes.Removed) > 0 {
@@ -228,29 +229,21 @@ func planField(cfg *config.Config, current []string, name, raw string) (FieldRes
 	return FieldResult{Field: name, Value: value, Added: added, Removed: removed}, ""
 }
 
-// planPlainLabel adds value as a bare, unnamespaced label — not a
-// field:value pair — for classifications that are just plain git-bug/
-// GitHub labels, not a structured single-cardinality field (Category:
-// GitHub's own native issue labels already do this job, no need for a
-// second cat:value mechanism duplicating them). Additive only, matching
-// git-bug's own native-label import: a bare label carries no "this came
-// from field X" marker, so there's nothing to safely remove if the
-// source value changes on a later re-run — same tradeoff plain labels
-// have always had, not new here. Empty value is a no-op, matching every
-// other field's "leave untouched" convention. Not slugified — a plain
-// label should look like the other plain labels on the issue (whatever
-// casing GitHub used), not the hyphenated form the structured-field
-// option-matching convention needs.
-func planPlainLabel(current []string, reportAs, value string) (FieldResult, string) {
-	if value == "" {
+// planKind fills an issue's kind from the Project's Category, which is
+// the same vocabulary as the kind labels: FEAT is feat, matched to
+// [branches] kinds without case and written as kinds spells it. A kind
+// already on the issue wins: labels are the truth, Category only fills a
+// gap. Additive only, as an empty value leaves every field untouched.
+func planKind(cfg *config.Config, current []string, category string) (FieldResult, string) {
+	if category == "" || cfg.Branches.Kind(current) != "" {
 		return FieldResult{}, ""
 	}
-	for _, l := range current {
-		if l == value {
-			return FieldResult{}, "" // already present, no-op
+	for _, k := range slices.Sorted(maps.Keys(cfg.Branches.Kinds)) {
+		if strings.EqualFold(k, category) {
+			return FieldResult{Field: "kind", Value: k, Added: []string{k}}, ""
 		}
 	}
-	return FieldResult{Field: reportAs, Value: value, Added: []string{value}}, ""
+	return FieldResult{}, fmt.Sprintf("category value %q is none of [branches] kinds, skipped", category)
 }
 
 func sprintTitle(item Item) string {

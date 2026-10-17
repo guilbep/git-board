@@ -39,10 +39,19 @@ type item struct {
 	issue gitbugio.Issue
 }
 
-func (i item) Title() string { return i.issue.Title }
+func (i item) Title() string { return i.issue.ShownTitle() }
 
 func (i item) Description() string {
-	return fmt.Sprintf("%s  %s  %s", shortID(i.issue.ID), i.issue.Status, strings.Join(i.issue.Labels, ", "))
+	return fmt.Sprintf("%s  %s  %s", ref(i.issue), i.issue.Status, strings.Join(i.issue.Labels, ", "))
+}
+
+// ref is the issue's number (#2518), which its shown title leaves out,
+// and its short id.
+func ref(is gitbugio.Issue) string {
+	if ns := is.Numbers(); len(ns) > 0 {
+		return "#" + ns[0] + "  " + shortID(is.ID)
+	}
+	return shortID(is.ID)
 }
 
 // FilterValue feeds bubbles/list's built-in filter, so "/" search matches

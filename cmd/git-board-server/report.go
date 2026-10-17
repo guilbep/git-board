@@ -43,7 +43,7 @@ func (s *apiServer) handleReport(w http.ResponseWriter, r *http.Request) {
 	var issues []insights.ReportIssue
 	for _, is := range all {
 		in := false
-		ri := insights.ReportIssue{ID: is.ID, Title: is.Title, Open: is.Status == "open"}
+		ri := insights.ReportIssue{ID: is.ID, Title: is.ShownTitle(), Open: is.Status == "open"}
 		for _, l := range is.Labels {
 			f, v, _ := strings.Cut(l, ":")
 			switch {

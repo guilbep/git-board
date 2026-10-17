@@ -45,3 +45,6 @@ sort = "prio asc"
 [views.mine]
 layout = "table"
 filter = "assignee:@me is:open"
+
+[branches]
+kinds = { bug = "fix", feat = "feat" }

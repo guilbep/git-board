@@ -15,6 +15,7 @@ export const clientId = Math.random().toString(36).slice(2) + Date.now().toStrin
 export interface Issue {
   id: string;
   title: string;
+  shown_title: string; // the title without a trailing (#2518) of its own (gitbugio.Issue.ShownTitle)
   status: string;
   labels: string[];
   github_url?: string; // absent when the issue wasn't bridged in from GitHub

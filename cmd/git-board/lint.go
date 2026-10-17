@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"io"
+	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -19,6 +21,7 @@ import (
 var (
 	existingGithubLabels = ghlabels.Existing
 	createGithubLabel    = ghlabels.Create
+	currentGithubRepo    = ghlabels.Current
 )
 
 func newLintCmd() *cobra.Command {
@@ -33,7 +36,9 @@ issue (is:open) in the current git-bug repo: double singles (more than
 one label for a single-cardinality field), unknown option values,
 missing values on a configured single-cardinality field, orphan sprint
 labels (no matching [[sprints.list]] entry), and configured options no
-issue in the repo actually carries.
+issue in the repo actually carries. With [branches] kinds: an issue with
+two kinds, a title whose [PREFIX] names another kind than its label (the
+label wins), and how many have no kind.
 
 Exits 0 even with findings — this is a report, not a build gate — unless
 --strict is given.
@@ -43,7 +48,10 @@ git-board's config implies (one per [fields.<name>] option, plus one per
 [[sprints.list]] entry) exists as a real GitHub label on each configured
 [repos] entry, via "gh label list"/"gh label create" — so they're visible
 and colorable in the GitHub Issues UI, not just inside git-bug's own
-label store. Preview only by default; --apply actually creates them.`,
+label store. Preview only by default; --apply actually creates them. It
+also reports the labels an issue template (.github/ISSUE_TEMPLATE) applies
+that this checkout's GitHub repository doesn't have: GitHub drops them
+silently. --apply doesn't create those: the fix is in the template.`,
 		Example: `  git-board lint
   git-board lint --strict            # exit 1 if anything is found, e.g. in CI
   git-board lint --create-labels     # preview missing GitHub labels
@@ -124,6 +132,9 @@ func runCreateLabels(out io.Writer, cfg *config.Config, apply bool) error {
 			fmt.Fprintf(out, "%s: created %s\n", repo, name)
 		}
 	}
+	if !checkTemplates(out) {
+		failed = true
+	}
 	if !apply {
 		fmt.Fprintln(out, "\ndry run — nothing written. Re-run with --apply to create these labels.")
 	}
@@ -131,6 +142,37 @@ func runCreateLabels(out io.Writer, cfg *config.Config, apply bool) error {
 		return fmt.Errorf("one or more repos failed")
 	}
 	return nil
+}
+
+// checkTemplates reports each issue template's labels that the checkout's
+// GitHub repository doesn't have (names ignore case, as GitHub's do); false
+// when it couldn't tell.
+func checkTemplates(out io.Writer) bool {
+	templates, err := ghlabels.Templates(filepath.Join(filepath.Dir(config.Path()), ".github", "ISSUE_TEMPLATE"))
+	if err == nil && len(templates) == 0 {
+		return true
+	}
+	var repo string
+	var existing []string
+	if err == nil {
+		repo, err = currentGithubRepo()
+	}
+	if err == nil {
+		existing, err = existingGithubLabels(repo)
+	}
+	if err != nil {
+		fmt.Fprintf(out, "issue templates: %v\n", err)
+		return false
+	}
+	for _, t := range templates {
+		missing := slices.DeleteFunc(slices.Clone(t.Labels), func(l string) bool {
+			return slices.ContainsFunc(existing, func(e string) bool { return strings.EqualFold(e, l) })
+		})
+		if len(missing) > 0 {
+			fmt.Fprintf(out, "issue templates: %s applies %s, which %s doesn't have: GitHub drops them\n", t.File, strings.Join(missing, ", "), repo)
+		}
+	}
+	return true
 }
 
 // printLintFindings groups findings by check (in lint.CheckOrder, so the

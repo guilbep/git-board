@@ -118,7 +118,7 @@ group = "status"
 | `filter` | string | `is:open` | Which issues show; see Filters. |
 | `group` | field name | none | The board's columns, or the table's sections: `status`, `sprint`, any field. |
 | `sort` | `"<field> asc"` or `"<field> desc"` | none | Order within a column or section: by the field's `options` order, numerically for a numeric field, else alphabetically. |
-| `columns` | list of strings | the default ones | A table's columns, in order: `id`, `title`, `is` (open or closed), any field, `links` (the issue on each forge), `other` (labels without a namespace). Without it, the table shows id, forge links, title, state, every field and other, so a new field gets its column. Set from the table's **Columns** button and Save view. |
+| `columns` | list of strings | the default ones | A table's columns, in order: `id`, `title` (without a trailing `(#2518)` that is the issue's own number: `links` shows it), `is` (open or closed), any field, `links` (the issue on each forge), `other` (labels without a namespace). Without it, the table shows id, forge links, title, state, every field and other, so a new field gets its column. Set from the table's **Columns** button and Save view. |
 | `lanes` | list of values | every value | A board's columns: which values of `group` it shows, in this order; `"(none)"` for the issues without one. The other issues are left out, and the board says how many. Set from the board's **Lanes** button. |
 | `limits` | inline table | none | At most this many cards in a lane, work in progress: `limits = { in-progress = 5 }`. The lane shows "4 / 5", amber at the limit, red over it. |
 
@@ -255,7 +255,7 @@ kinds = { bug = "fix", feat = "feat", perf = "perf", task = "chore" }
 | --- | --- | --- |
 | `base` | the remote's default branch, else `main`, `master` or `trunk` | The branch a new branch starts from (`origin/<base>`, or `<base>` without a remote), and the one "in dev" and ahead/behind compare with. |
 | `name` | `"{number}-{slug}"` (GitHub's) | The branch's name. `{number}`: the issue's number on its first forge, else its git-bug id's first 7 characters. `{kind}`: its kind, through `kinds`; without one, `{kind}/` is dropped. `{slug}`: its title in lower-case words, without a leading `[BUG](Scope)` or a trailing `(#1234)`, cut at about 50 characters. |
-| `kinds` | none | An issue's kind (its `kind:` field, or a plain label listed here) to the `{kind}` of its branch. |
+| `kinds` | none | The project's kinds: an issue's kind (its `kind:` field, or a plain label listed here) to the `{kind}` of its branch. `bridge pull` and `sync` fill a missing kind from the Project's Category (`FEAT` → `feat`); `git board lint` reports an issue with two kinds, a title whose `[BUG]` names another kind than its label (the label wins), and how many have none. |
 
 `[BUG](Equipment) Other equipment shows the wrong example (#2518)`, labeled `bug`, gives `fix/2518-other-equipment-shows-the-wrong-example`. What git doesn't take in a branch name becomes `-`.
 

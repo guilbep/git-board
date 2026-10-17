@@ -128,6 +128,22 @@ type Branches struct {
 	Kinds map[string]string `toml:"kinds"`
 }
 
+// Kind is an issue's kind: its kind: field, else the first of its flat
+// labels that Kinds lists. The label, not its branch's: bug, not fix.
+func (b Branches) Kind(labels []string) string {
+	for _, l := range labels {
+		if v, ok := strings.CutPrefix(l, "kind:"); ok {
+			return v
+		}
+	}
+	for _, l := range slices.Sorted(slices.Values(labels)) {
+		if _, ok := b.Kinds[l]; ok {
+			return l
+		}
+	}
+	return ""
+}
+
 // Config is the parsed .git-board.toml.
 type Config struct {
 	Repos         []string

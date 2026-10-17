@@ -46,7 +46,7 @@
             class="card-pick"
             :class="{ 'is-on': picked.length }"
             :checked="picked.includes(issue.id)"
-            :aria-label="`Pick ${issue.title}`"
+            :aria-label="`Pick ${issue.shown_title}`"
             @click="onPickBox(issue, bucket, $event)"
           />
           <button
@@ -58,8 +58,8 @@
             @dragend="onEnd"
             @click="onCard(issue, bucket, $event)"
           >
-            <span class="card-id"><span v-if="changed?.has(issue.id)" class="gb-changed-dot" title="Changed since your last visit" />{{ issue.id.slice(0, 8) }}</span>
-            <span class="card-title">{{ issue.title }}</span>
+            <span class="card-id"><span v-if="changed?.has(issue.id)" class="gb-changed-dot" title="Changed since your last visit" />{{ idLabel(issue, 8) }}</span>
+            <span class="card-title">{{ issue.shown_title }}</span>
             <span v-if="meta(issue).length" class="card-meta">
               <span v-for="m in meta(issue)" :key="m.name" class="meta-item">
                 <span class="meta-name">{{ displayName(m.name) }}</span>
@@ -79,6 +79,7 @@
 <script setup lang="ts">
 import ValueMark from '@/components/ValueMark.vue';
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { idLabel } from '@/forges';
 import { limitState, pickCards } from '@/lanes';
 import type { Bucket, Issue } from '@/api/board';
 import { colorClass } from '@/colors';
