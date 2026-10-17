@@ -55,7 +55,7 @@ type Issue struct {
 func (is Issue) Numbers() []string {
 	var ns []string
 	for _, f := range is.Forges {
-		if f.Number != "" && !slices.Contains(ns, f.Number) {
+		if f.Number != "" && f.Gone == "" && !slices.Contains(ns, f.Number) {
 			ns = append(ns, f.Number)
 		}
 	}

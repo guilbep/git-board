@@ -5,6 +5,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/git-bug/git-bug/bridge/core"
 	"github.com/git-bug/git-bug/bridge/core/auth"
 	"github.com/git-bug/gitconfig"
 
@@ -151,6 +152,69 @@ func TestThreadForgeLinks(t *testing.T) {
 	// what came before the issue was on GitHub went with it
 	if th.Events[0].Pending != nil {
 		t.Errorf("description pending %v, want none", th.Events[0].Pending)
+	}
+}
+
+// Each forge an issue is on names its sync bridge, found as git-bug's engine
+// finds it: by its sync keys, or the metadata of an older bridge. Unlinked,
+// nothing waits for it and its number isn't the issue's anymore.
+func TestThreadForgeBridges(t *testing.T) {
+	b := gitbugiotest.New(t)
+	for name, conf := range map[string]map[string]string{
+		"gh": {"target": "github", "owner": "O", "project": "R", "default-login": "bot", "sync": "true"},
+		"gl": {"target": "gitlab", "project-id": "5", "base-url": "https://gitlab.example.com/", "default-login": "bot", "sync": "true"},
+	} {
+		for k, v := range conf {
+			if err := core.SetBridgeConfig(b.TestCache(), name, k, v); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	author, _ := b.TestCache().GetUserIdentity()
+	bug, _, err := b.TestCache().Bugs().NewRaw(author, 1, "on both", "", nil, map[string]string{
+		"sync:github.com/o/r:id":     "I_1",
+		"sync:github.com/o/r:url":    "https://github.com/o/r/issues/7",
+		"sync:github.com/o/r:number": "7",
+		// pulled by git-bug's GitLab bridge before sync
+		"gitlab-id":         "33",
+		"gitlab-url":        "https://gitlab.example.com/g/r/-/issues/3",
+		"gitlab-project-id": "5",
+		"gitlab-base-url":   "https://gitlab.example.com/",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := bug.Id().String()
+	th, err := b.Thread(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []gitbugio.Forge{
+		{Name: "GitHub", URL: "https://github.com/o/r/issues/7", Number: "7", Bridge: "gh"},
+		{Name: "GitLab", URL: "https://gitlab.example.com/g/r/-/issues/3", Number: "3", Bridge: "gl"},
+	}
+	if !slices.Equal(th.Forges, want) {
+		t.Errorf("forges %+v, want %+v", th.Forges, want)
+	}
+
+	if _, err := bug.SetMetadata(bug.Snapshot().Operations[0].Id(), map[string]string{"sync:github.com/o/r:gone": "unlinked"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := bug.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := b.AddComment(id, "after"); err != nil {
+		t.Fatal(err)
+	}
+	th, _ = b.Thread(id)
+	if f := th.Forges[0]; f.Gone != "unlinked" || f.Bridge != "gh" {
+		t.Errorf("unlinked forge %+v", f)
+	}
+	if last := th.Events[len(th.Events)-1]; len(last.Pending) != 0 {
+		t.Errorf("a comment waits for %v, unlinked", last.Pending)
+	}
+	if th.HasNumber("7") || !th.HasNumber("3") {
+		t.Errorf("numbers %v, want 3 alone", th.Numbers())
 	}
 }
 

@@ -44,7 +44,7 @@ import { ref } from 'vue';
 import { syncIssue, type BridgeTally, type IssueSyncResult } from '@/api/board';
 import { forgeStatus } from '@/forges';
 import { message } from '@/issue';
-import { tallyWords } from '@/issuesync';
+import { forgeLabel, tallyWords } from '@/issuesync';
 import GbIcon from '@/components/GbIcon.vue';
 
 const props = defineProps<{ id: string; waiting: number; onForges: boolean }>();
@@ -56,10 +56,9 @@ const done = ref<IssueSyncResult | null>(null);
 const error = ref('');
 
 const rows = (r: IssueSyncResult): [string, BridgeTally][] => Object.entries(r.bridges).sort(([a], [b]) => a.localeCompare(b));
-const names: Record<string, string> = { github: 'GitHub', gitlab: 'GitLab', gitea: 'Gitea' };
 function label(bridge: string): string {
-  const target = forgeStatus.value?.bridges.find((b) => b.name === bridge)?.target;
-  return target ? `${names[target] ?? target} (${bridge})` : bridge;
+  const b = forgeStatus.value?.bridges.find((b) => b.name === bridge);
+  return b ? forgeLabel(b) : bridge;
 }
 
 async function start() {

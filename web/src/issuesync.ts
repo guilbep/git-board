@@ -1,6 +1,6 @@
 // What one issue's sync did, or would do, on each forge, in words:
 // "sent 1 comment", "created the issue with 2 comments", "got 3 changes".
-import type { BridgeTally, SyncDirection } from './api/board';
+import type { BridgeTally, Forge, SyncDirection } from './api/board';
 
 const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? '' : 's'}`;
 
@@ -30,4 +30,15 @@ export function tallyWords(t: BridgeTally, dryRun: boolean): string {
   if (t.errors) words.push(plural(t.errors, 'error'));
   else if (t.warnings) words.push(plural(t.warnings, 'warning'));
   return words.join('; ') || 'up to date';
+}
+
+const forgeNames: Record<string, string> = { github: 'GitHub', gitlab: 'GitLab', gitea: 'Gitea' };
+
+// a bridge by its forge: "GitLab (gl)"
+export const forgeLabel = (b: { name: string; target: string }) => `${forgeNames[b.target] ?? b.target} (${b.name})`;
+
+// the sync bridges an issue isn't on, nor was (Link refuses those): where
+// it can be linked to an issue already there
+export function linkable<B extends { name: string }>(bridges: B[], forges: Forge[]): B[] {
+  return bridges.filter((b) => !forges.some((f) => f.bridge === b.name));
 }
