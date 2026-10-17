@@ -159,10 +159,12 @@ counted or not; Mark all read does it for every row.
   `Rows(me, state, threads, inViews) []Row`, holding every rule of §2.
 - **The server** gathers its inputs: `ListIssues` within the window,
   `Thread` for each, `board.LoadMatching` for each followed view. One mutex
-  around each read-change-write of the file. The last result is kept, per
-  identity (switching who you write as changes git config, not refs),
-  until `RefsFingerprint`, the file or the config changes, so the header's
-  count doesn't recompute on every event.
+  around each read-change-write of the file. ponytail: recomputed on
+  every request, the header's count included; keep the last result per
+  identity (switching who you write as changes git config, not refs)
+  until `RefsFingerprint`, the file or the config changes, if a big
+  repository makes it slow.
+- **Writes answer `{}`**, not `204`: the web client always parses a body.
 - **`eventFor`**: `/api/inbox` gets its own `inbox` kind, so marking an
   issue seen in one tab updates the count in the others.
 
@@ -200,7 +202,7 @@ Mockup: the link at the top.
     optional `at` on `IssueTimeline`), and posts `seen`. The row stays,
     dimmed, until the next refresh: the list doesn't jump while you read.
   - Empty: "Nothing new for you", and what you follow ("Following 14
-    issues · view backend"). No identity: "Choose who you write as". No
+    open issues · view backend": `follows:@me is:open`). No identity: "Choose who you write as". No
     login: "Tell git-board your forge login", pointing at `git bug bridge
     new` or `--me`.
 - **`IssueSide.vue`**: an Inbox block: "Following · because you're
@@ -230,7 +232,7 @@ Mockup: the link at the top.
   comment, a mention, someone else's login) and `follows:@me` (Follow adds,
   Unfollow removes, a followed view adds, a view's own `follows:` term is
   ignored).
-- **Web, one vitest**: which remotes to check (checked within 5 minutes:
+- **Web, one `node --test` file** (the web's runner): which remotes to check (checked within 5 minutes:
   skip, unless Refresh), and which offer Pull (`issues.receive` > 0).
 - Not tested: the header count, the tab title (display).
 
