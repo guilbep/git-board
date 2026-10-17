@@ -45,11 +45,16 @@ func (i item) Description() string {
 	return fmt.Sprintf("%s  %s  %s", ref(i.issue), i.issue.Status, strings.Join(i.issue.Labels, ", "))
 }
 
-// ref is the issue's number (#2518), which its shown title leaves out,
-// and its short id.
+// ref is the issue's number (CO2-3075, else #2518), which its shown title
+// leaves out, and its short id.
 func ref(is gitbugio.Issue) string {
-	if ns := is.Numbers(); len(ns) > 0 {
-		return "#" + ns[0] + "  " + shortID(is.ID)
+	if is.Number != "" {
+		return is.Number + "  " + shortID(is.ID)
+	}
+	for _, f := range is.Forges {
+		if f.Number != "" && f.Gone == "" {
+			return "#" + f.Number + "  " + shortID(is.ID)
+		}
 	}
 	return shortID(is.ID)
 }
