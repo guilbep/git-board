@@ -134,3 +134,32 @@ func NewForge(t testing.TB, b *gitbugio.Backend, name string) *synctest.Fake {
 	}
 	return f
 }
+
+// NewPerson creates another identity with a forge login: a colleague, or
+// a second identity of yours (old bridges left some).
+func NewPerson(t testing.TB, b *gitbugio.Backend, name, login string) *cache.IdentityCache {
+	t.Helper()
+	i, err := b.TestCache().Identities().NewRaw(name, "", login, "", nil, nil)
+	if err != nil {
+		t.Fatalf("Identities().NewRaw: %v", err)
+	}
+	return i
+}
+
+// CommentAs comments on the issue as who, at unix time, and returns the
+// comment's id as the timeline gives it (Event.ID).
+func CommentAs(t testing.TB, b *gitbugio.Backend, idPrefix string, who *cache.IdentityCache, unix int64, body string) string {
+	t.Helper()
+	bug, err := b.TestCache().Bugs().ResolvePrefix(idPrefix)
+	if err != nil {
+		t.Fatalf("ResolvePrefix: %v", err)
+	}
+	id, _, err := bug.AddCommentRaw(who, unix, body, nil, nil)
+	if err != nil {
+		t.Fatalf("AddCommentRaw: %v", err)
+	}
+	if err := bug.Commit(); err != nil {
+		t.Fatalf("Commit: %v", err)
+	}
+	return id.String()
+}

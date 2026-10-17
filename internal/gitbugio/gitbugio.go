@@ -59,6 +59,9 @@ type Issue struct {
 	// AuthorLogins are who opened it, for author:: name, login, forge
 	// logins.
 	AuthorLogins []string `json:"-"`
+	// CommenterLogins are the logins of who commented, the author
+	// excepted, for involves:.
+	CommenterLogins []string `json:"-"`
 }
 
 // BareNumber is the number a bare mention names it by (3075, fix/3075-…):
@@ -245,6 +248,18 @@ func (b *Backend) issueFrom(id string, e *cache.BugExcerpt, c *Counter) Issue {
 		for _, l := range []string{a.Name, a.Login, a.ImmutableMetadata["github-login"], a.ImmutableMetadata["gitlab-login"], a.ImmutableMetadata["gitea-login"]} {
 			if l != "" {
 				issue.AuthorLogins = append(issue.AuthorLogins, l)
+			}
+		}
+	}
+	for _, p := range e.Participants {
+		if p == e.AuthorId {
+			continue
+		}
+		if c, err := b.c.Identities().ResolveExcerpt(p); err == nil {
+			for _, l := range []string{c.Login, c.ImmutableMetadata["github-login"], c.ImmutableMetadata["gitlab-login"], c.ImmutableMetadata["gitea-login"]} {
+				if l != "" {
+					issue.CommenterLogins = append(issue.CommenterLogins, l)
+				}
 			}
 		}
 	}
