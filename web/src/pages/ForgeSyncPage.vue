@@ -85,6 +85,12 @@
             <div class="gb-way-row"><b>{{ project.project }}</b><span>{{ project.write ? 'read and written' : 'read only' }}</span></div>
             <div v-if="project.last">{{ plural(project.last.conflicts.length, 'conflict') }}, checked {{ when(project.last.checked_at, true) }}</div>
             <div v-else>Not checked yet</div>
+            <!-- the conflicts held, no longer in the header: resolved on the Conflicts page -->
+            <ul v-if="project.last?.conflicts.length" class="gb-way-conflicts">
+              <li v-for="c in project.last.conflicts" :key="`${c.bug_id}-${c.field}`">
+                <router-link to="/conflicts">{{ c.title }}</router-link> · <span class="gb-note">{{ c.field }}</span>
+              </li>
+            </ul>
             <div v-if="project.last && pendingWords(project.last)" class="gb-note">A pull would {{ pendingWords(project.last) }}.</div>
           </div>
           <div class="gb-way-actions">
@@ -199,6 +205,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { applySync, checkSync, getRemotes, getViews, remoteAction, startForgeSync, type ForgeMode, type Remote, type SyncStatus } from '@/api/board';
 import { forgeStatus as status, loadForges } from '@/forges';
 import { forgeLabel } from '@/issuesync';
+import { remotes } from '@/remotes';
 import { message } from '@/issue';
 import { debounced, onLive } from '@/live';
 import { when } from '@/me';
@@ -214,8 +221,7 @@ const bigRun = 50;
 
 const viewNames = ref<string[]>([]);
 
-// 1: remotes
-const remotes = ref<Remote[] | null>(null);
+// 1: remotes, shared with the header; this page says why a load failed
 const remoteBusy = ref(''); // "origin push"
 const remoteDone = ref('');
 const remoteError = ref('');
@@ -339,6 +345,7 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+.gb-way-conflicts { margin: 0; padding-left: 1.25rem; }
 .gb-syncpage { display: grid; gap: var(--space-4); max-width: 90rem; }
 .gb-syncpage h1 { margin: 0; }
 .gb-lead { margin: var(--space-2) 0 0; color: var(--fg-muted); }

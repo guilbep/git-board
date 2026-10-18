@@ -48,9 +48,10 @@ export function rank<T extends { label: string }>(query: string, items: T[]): T[
   return scored.sort((a, b) => b.score - a.score).map((s) => s.item);
 }
 
-/** The filter's answer as the palette lists it: open first, the latest changed first. */
-export function openFirst<T extends { status: string; updated_at?: string }>(issues: T[]): T[] {
-  return [...issues].sort((a, b) => Number(a.status !== 'open') - Number(b.status !== 'open') || (b.updated_at ?? '').localeCompare(a.updated_at ?? ''));
+/** The filter's answer as the palette lists it: the latest edited first,
+ * open or closed; the latest opened breaks a tie (a sync stamps many at once). */
+export function latest<T extends { updated_at?: string; created_at?: string }>(issues: T[]): T[] {
+  return [...issues].sort((a, b) => (b.updated_at ?? '').localeCompare(a.updated_at ?? '') || (b.created_at ?? '').localeCompare(a.created_at ?? ''));
 }
 
 function inOrder(needle: string, hay: string): boolean {
