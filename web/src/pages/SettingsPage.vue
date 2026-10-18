@@ -82,7 +82,7 @@
           served at <a :href="settings.uploads.public_url" target="_blank" rel="noopener noreferrer">{{ settings.uploads.public_url }}</a>.
         </p>
         <p v-else-if="settings">
-          Off. Set <code>ACCESS_KEY_ID</code>, <code>ACCESS_KEY_SECRET</code> and <code>BUCKET_NAME</code> where git-board-server runs,
+          Off. Set <code>ACCESS_KEY_ID</code>, <code>ACCESS_KEY_SECRET</code> and <code>BUCKET_NAME</code> where the git-board server runs,
           and optionally <code>[uploads]</code> in <code>.git-board.toml</code>.
         </p>
       </div>

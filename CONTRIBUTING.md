@@ -27,7 +27,7 @@ make test    # go test ./...
 make vet     # go vet ./...
 make fmt     # gofmt -l . (lists files needing formatting; run gofmt -w to fix)
 make ci      # everything above, the full pre-commit check
-make install # go install the git-board/git-board-server binaries
+make install # go install the git-board binary
 ```
 
 Run `make ci` before every commit — it's the same sequence used to vet

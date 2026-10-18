@@ -17,7 +17,7 @@ export function toPull(remotes: Remote[]): { name: string; issues: number }[] {
 }
 
 // checkFailure: a remote's check refused. syncing: a forge sync holds the
-// remotes until it ends (cmd/git-board-server beginWrite).
+// remotes until it ends (internal/server beginWrite).
 export function checkFailure(name: string, code: string, message: string): string {
   if (code === 'syncing') return `${name}: a forge sync is running: check again when it ends`;
   return `${name}: couldn't check: ${message}`;

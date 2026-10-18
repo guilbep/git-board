@@ -44,10 +44,10 @@ just -a) matters once a view gets renamed or removed — otherwise its old
 page lingers on the published copy with no link to it.
 
 No auth, no JS required to view (plain server-rendered HTML) — same
-trusted-network stance as "git-board-server", see README. A view whose
-filter uses "@me" resolves once at generation time against --me/
-GIT_BOARD_ME, the same way it does for cmd/git-board-server's single
-shared "current user" — not per-viewer, there's no login here.`,
+trusted-network stance as the web UI ("git-board serve"), see README. A
+view whose filter uses "@me" resolves once at generation time against
+--me/GIT_BOARD_ME, the same way it does for the server's single shared
+"current user" — not per-viewer, there's no login here.`,
 		Example: `  git-board html
   git-board html -o /var/www/board --me guilbep`,
 		Args: cobra.NoArgs,

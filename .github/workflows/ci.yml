@@ -1,5 +1,5 @@
 # Every push and pull request: the web UI's checks and build (embedded in
-# git-board-server), then `make ci` (build, vet, test, gofmt).
+# the git-board binary), then `make ci` (build, vet, test, gofmt).
 name: ci
 
 on:

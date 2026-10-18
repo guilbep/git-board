@@ -20,7 +20,7 @@ ci: build vet test
 	@test -z "$$(gofmt -l .)" || (echo "gofmt needs to be run on:"; gofmt -l .; exit 1)
 
 install:
-	go install ./cmd/git-board ./cmd/git-board-server
+	go install ./cmd/git-board
 
 web-dev:
 	cd web && npm run dev
@@ -36,7 +36,7 @@ dist: web-build
 	rm -rf dist && mkdir dist
 	@set -e; v=$$(git describe --tags --always --dirty); for p in $(PLATFORMS); do \
 		os=$${p%/*}; arch=$${p#*/}; d=git-board_$${v}_$${os}_$${arch}; \
-		CGO_ENABLED=0 GOOS=$$os GOARCH=$$arch go build -trimpath -ldflags "-s -w" -o dist/$$d/ ./cmd/git-board ./cmd/git-board-server; \
+		CGO_ENABLED=0 GOOS=$$os GOARCH=$$arch go build -trimpath -ldflags "-s -w" -o dist/$$d/ ./cmd/git-board; \
 		cp LICENSE README.md dist/$$d/; \
 		if [ $$os = windows ]; then (cd dist && zip -qr $$d.zip $$d); else tar -C dist -czf dist/$$d.tar.gz $$d; fi; \
 		rm -rf dist/$$d; echo "dist/$$d"; \

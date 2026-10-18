@@ -4,7 +4,7 @@
 
 The file is optional. Without it, every `ns:value` label is a field and git-board works on any git-bug repository. The file adds what labels can't say: the order of a field's values, single or multiple values, colors, sprint dates, saved views, the GitHub Project to sync with, and where attachments go.
 
-It lives at the root of the repository. Edit it in **Settings → Project file**: it is checked as you type and applies as soon as you save. Editing it by hand works too; restart `git-board-server` after.
+It lives at the root of the repository. Edit it in **Settings → Project file**: it is checked as you type and applies as soon as you save. Editing it by hand works too; restart `git board` (or `git board serve`) after.
 
 | Table | What it sets |
 | --- | --- |
@@ -246,7 +246,7 @@ The token needs the `project` scope: `gh auth refresh -s project`.
 
 ## Attachments
 
-Files attached to comments go to an S3 bucket that a CDN serves; the comment gets a link to them. The keys stay out of this file: set `ACCESS_KEY_ID`, `ACCESS_KEY_SECRET` and `BUCKET_NAME` where `git-board-server` runs. Without them, attaching is off.
+Files attached to comments go to an S3 bucket that a CDN serves; the comment gets a link to them. The keys stay out of this file: set `ACCESS_KEY_ID`, `ACCESS_KEY_SECRET` and `BUCKET_NAME` where the git-board server (`git board`, `git board serve`) runs. Without them, attaching is off.
 
 ```toml
 [uploads]

@@ -140,7 +140,8 @@ no longer exists after the Go rewrite.
   pulled out of `cmd/git-board`'s `package main` into an importable package
   — it had exactly one caller before, now it has three (CLI, TUI, web API).
   No behavior change for the CLI; `go test ./...` stayed green throughout.
-- `cmd/git-board-server` (new): stdlib `net/http` + Go 1.22 method-pattern
+- `cmd/git-board-server` (new; since moved to `internal/server`, run by
+  `git board`/`git board serve`): stdlib `net/http` + Go 1.22 method-pattern
   `ServeMux`, no router framework. `GET /api/views`, `GET
   /api/config/fields`, `GET /api/issues` (filter+sort+group — group is
   applied server-side via `board.BucketBy`, unlike the CLI's own `--json`
@@ -165,7 +166,7 @@ no longer exists after the Go rewrite.
   with the scaffold (no Vitest) — not added for this MVP; `vue-tsc`
   type-checks clean and `npm run build` produces a real `web/dist`.
 - Production is one binary: `web/embed.go` (`//go:embed all:dist`) embeds
-  `web/dist`, and `cmd/git-board-server` serves `dist/spa` (Quasar's
+  `web/dist`, and the server (now `internal/server`) serves `dist/spa` (Quasar's
   default nested output — a first attempt flattened `distDir` to match a
   simpler `fs.Sub` target, but `quasar build` recreates its dist dir from
   scratch every run and took the tracked `web/dist/.gitkeep` placeholder
@@ -425,14 +426,16 @@ this is meant to run repeatedly.
   `prio:p3` on a live issue) round-tripped correctly — verified via the
   PATCH response and independently via `git-board get` after stopping
   the server. No bugs found this time.
-- **Real operational constraint, not a bug**: `git-board-server` and any
+- **Real operational constraint, not a bug**: the server (`git-board-server`,
+  now `git board`/`git board serve`) and any
   `git-board` CLI/TUI invocation can't run concurrently against the same
   repo — git-bug's own cache holds a repo-level lock. Confirmed directly
   (`git-board get` failed with "already locked by process pid ..." while
   the server was still up, succeeded once it exited). Not a git-board
   defect to fix — it's git-bug's own concurrency-safety mechanism
   working as intended — but worth knowing before running the server
-  long-lived on a box where you also want to use the CLI/TUI.
+  long-lived on a box where you also want to use the CLI/TUI. (The error
+  now names this repository's running server and its address.)
 - **`g`: view an issue's body/comments via git-bug**, from the TUI's
   detail view. Shells out to `git bug bug show <id>` via
   `tea.ExecProcess` (suspends git-board's TUI, hands the terminal to
@@ -836,14 +839,14 @@ bound in its main list/table view — confirmed, not guessed.
   `board.LoadMatching` errors outright if `@me` is used with no `--me`
   resolved. `git-board html` accepts the same `--me`/`GIT_BOARD_ME` as
   every other command and resolves it **once, at generation time** — the
-  same single-shared-"current user" stance `cmd/git-board-server`'s
+  same single-shared-"current user" stance `internal/server`'s
   `apiServer.me` already documents for the live API. Called out explicitly
   in the command's `--help` text and the README's new "Static site" section
   rather than left as a surprise the first time someone points `@me` at a
   cron job with no owner.
 - **The CLI's `view` and the web API's `handleListIssues` already disagree
   on an empty `Filter`, so `html` had to pick one, not "not diverge" from a
-  single existing behavior** — `handleListIssues` (`cmd/git-board-server/
+  single existing behavior** — `handleListIssues` (`internal/server/
   server.go`) defaults an empty `filter` query param to `board.
   DefaultFilter` ("is:open"); `runView` (`cmd/git-board/cmd.go`) passes
   `view.Filter` straight through, so a view with no `filter =` key matches

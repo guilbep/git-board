@@ -1,10 +1,11 @@
 import { fieldTypes } from '@/fieldtypes';
 import type { Facet } from '@/facets';
-// Typed client for the git-board-server API. All HTTP for the board page
-// goes through here — never fetch() from a component directly.
+// Typed client for the git-board server's API (internal/server). All HTTP
+// for the board page goes through here — never fetch() from a component
+// directly.
 
 // Same origin in production (frontend is embedded in the Go binary); the
-// backend's default dev port otherwise (see cmd/git-board-server --addr and
+// backend's default dev port otherwise (see git-board serve --addr and
 // web/README.md for how to point elsewhere).
 export const API_BASE = import.meta.env.DEV ? 'http://localhost:8080' : '';
 
@@ -60,7 +61,7 @@ export class ApiError extends Error {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  // The server only takes JSON writes (withGuard in cmd/git-board-server).
+  // The server only takes JSON writes (withGuard in internal/server).
   if (init?.method && init.method !== 'GET') {
     init = { ...init, headers: { 'Content-Type': 'application/json', 'X-Git-Board-Client': clientId, ...init.headers }, body: init.body ?? '{}' };
   }
@@ -69,7 +70,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   });
   if (!res.ok) {
     // The server answers errors as {"error": "...", "code"?: "..."}
-    // (writeError, writeCoded in cmd/git-board-server); surface that
+    // (writeError, writeCoded in internal/server); surface that
     // message, e.g. "@me" with no --me set.
     const body = await res.text();
     let message = body;
@@ -140,7 +141,7 @@ export function patchIssue(id: string, changes: Record<string, string>): Promise
   });
 }
 
-// The GitHub Project sync (cmd/git-board-server/sync.go). Only check, apply
+// The GitHub Project sync (internal/server/sync.go). Only check, apply
 // and resolve read the Project; getSync returns the last check.
 export interface Conflict {
   bug_id: string;
@@ -189,7 +190,7 @@ export function resolveConflict(number: number, field: string, keep: 'git-board'
   });
 }
 
-// Issue management (cmd/git-board-server/issues.go): every write answers
+// Issue management (internal/server/issues.go): every write answers
 // with the issue's whole history, re-read from git-bug.
 export interface Person {
   id: string;
@@ -283,7 +284,7 @@ export function createIdentity(name: string, email: string): Promise<MeResponse>
   return request('/api/me', json('POST', { name, email }));
 }
 
-// The sync with the forges (cmd/git-board-server/forges.go).
+// The sync with the forges (internal/server/forges.go).
 // One way of a sync; a dry run of a pull only knows "up to N changes".
 export interface SyncDirection {
   issues: number; // created on the forge / imported from it
@@ -298,7 +299,7 @@ export interface BridgeTally {
   from: SyncDirection;
   linked: number; // found on the forge by their git-bug marker
   stays_local: number; // texts no token can post
-  conflicts: number; // linked issues changed on both sides: a send alone would replace the forge's
+  conflicts: number; // linked issues changed on both sides: a send alone would replace the forge's titles, states, comment texts
   warnings: number;
   errors: number;
   lines: string[];
@@ -334,7 +335,7 @@ export function startForgeSync(dryRun: boolean, mode: ForgeMode = 'sync', bridge
   return request('/api/forges/sync', json('POST', { dry_run: dryRun, mode, bridges }));
 }
 
-// The git remotes (cmd/git-board-server/remotes.go): issues and people
+// The git remotes (internal/server/remotes.go): issues and people
 // go with git, as git bug pull and push move them.
 export interface Ahead {
   send: number;
@@ -360,7 +361,7 @@ export function remoteAction(name: string, action: 'fetch' | 'pull' | 'push'): P
   return request(`/api/remotes/${encodeURIComponent(name)}/${action}`, { method: 'POST' });
 }
 
-// The project's own numbers (cmd/git-board-server/numbers.go): CO2-3075,
+// The project's own numbers (internal/server/numbers.go): CO2-3075,
 // a counter on origin. Only init and run push: refs/board/seq, to origin.
 export interface Numbers {
   on: boolean;
@@ -392,7 +393,7 @@ export function numberIssues(): Promise<Numbers> {
   return request('/api/numbers/run', json('POST', {}));
 }
 
-// The inbox (cmd/git-board-server/inbox.go): what happened that concerns
+// The inbox (internal/server/inbox.go): what happened that concerns
 // you on the issues of the last 14 days, newest first.
 export interface InboxRow {
   issue: Issue;
@@ -449,7 +450,7 @@ export function renderMarkdown(body: string): Promise<{ html: string }> {
   return request('/api/markdown', json('POST', { body }));
 }
 
-// Attachments (cmd/git-board-server/uploads.go): on S3, served by a CDN to
+// Attachments (internal/server/uploads.go): on S3, served by a CDN to
 // git-board and the forges alike.
 export interface UploadStatus {
   enabled: boolean;
@@ -474,7 +475,7 @@ export async function uploadFile(file: File): Promise<{ url: string; name: strin
   return data;
 }
 
-// Settings (cmd/git-board-server/settings.go).
+// Settings (internal/server/settings.go).
 export interface Bridge {
   name: string;
   target: string;
@@ -588,7 +589,7 @@ export function getBranches(id: string): Promise<IssueBranches> {
   return request(`${issuePath(id)}/branches`);
 }
 
-// The PR gate (cmd/git-board-server/pulls.go, internal/ghpr): each branch
+// The PR gate (internal/server/pulls.go, internal/ghpr): each branch
 // on origin and its GitHub pull request, found by the branch's name. Open
 // and Merge act on GitHub as `login`, with that person's token.
 export interface GateCheck {
@@ -669,7 +670,7 @@ export function removeBridge(name: string): Promise<Record<string, never>> {
   return request(`/api/bridges/${encodeURIComponent(name)}`, json('DELETE', {}));
 }
 
-// Insights (cmd/git-board-server/insights.go): the issues' history
+// Insights (internal/server/insights.go): the issues' history
 // replayed day by day.
 export interface InsightsReport {
   field: string;

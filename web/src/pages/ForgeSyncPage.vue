@@ -168,12 +168,12 @@
           <ul class="gb-plain-list">
             <li v-for="b in chosenRows" :key="b.name"><span><b>{{ b.label }}</b>: {{ b.tally ? runWords(mode, b.tally) : 'nothing to do' }}</span></li>
           </ul>
-          <p v-if="mode === 'send'" class="epfl-alert epfl-alert-info">Send doesn’t get the forges’ changes first: where an issue changed on both sides, yours replace theirs, its title, state and comment texts, and its labels, so a label added on the forge goes. Sync gets theirs first.</p>
+          <p v-if="mode === 'send'" class="epfl-alert epfl-alert-info">Send doesn’t get the forges’ changes first: where an issue changed on both sides, yours replace its title, state and comment texts there. Labels merge: only your changes go. Sync gets theirs first.</p>
           <p v-for="b in relinkRows" :key="`relink ${b.name}`" class="epfl-alert epfl-alert-danger">
             <b>{{ b.label }} has {{ plural(b.tally!.linked, 'issue') }} of this repository already,</b> found by their git-bug marker. Send alone would create them again: Get or Sync first, or leave {{ b.label }} out.
           </p>
           <p v-for="b in conflictRows" :key="`conflict ${b.name}`" class="epfl-alert epfl-alert-danger">
-            <b>{{ plural(b.tally!.conflicts, 'issue') }} changed both here and on {{ b.label }}</b> since they last met. Send would replace their labels there, removing the ones added on {{ b.label }}, and their titles, states and comment texts with yours: Get or Sync first, or leave {{ b.label }} out.
+            <b>{{ plural(b.tally!.conflicts, 'issue') }} changed both here and on {{ b.label }}</b> since they last met. Send would replace their titles, states and comment texts there with yours: Get or Sync first, or leave {{ b.label }} out.
           </p>
           <div v-for="b in bigRows" :key="b.name" class="epfl-alert epfl-alert-danger">
             <b>This creates {{ b.tally!.to.issues.toLocaleString() }} issues on {{ b.label }}, which may email everyone watching it.</b>
