@@ -53,7 +53,7 @@ func Facets(b issueBackend, cfg *config.Config, filterStr, me string) ([]Facet, 
 	if err := fillFollows(b, cfg, conditions, me, issues, today); err != nil {
 		return nil, err
 	}
-	var out []Facet
+	out := []Facet{} // the page maps over it: none is [], not null
 	for _, key := range facetKeys(cfg, issues) {
 		var own, rest []filter.Condition
 		for _, c := range conditions {
