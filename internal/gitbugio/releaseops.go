@@ -3,7 +3,6 @@ package gitbugio
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"time"
 
 	"github.com/git-bug/git-bug/entities/identity"
@@ -119,7 +118,8 @@ func unmarshalReleaseOp(raw json.RawMessage, _ entity.Resolvers) (dag.Operation,
 	case releaseYankOp:
 		op = &releaseYank{}
 	default:
-		return nil, fmt.Errorf("unknown release operation type %d", t.OperationType)
+		// a later git-board's: kept as written, skipped when compiling
+		return dag.NewUnknownOp[dag.Snapshot](raw)
 	}
 	if err := json.Unmarshal(raw, op); err != nil {
 		return nil, err

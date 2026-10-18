@@ -2,6 +2,10 @@ package gitbugio
 
 import "github.com/git-bug/git-bug/repository"
 
+// EditRelease is editRelease for the tests: an operation a later
+// git-board might add.
+var EditRelease = (*Backend).editRelease
+
 // NumberOnce is numberOnce for the tests: one try, on the counter as fetched.
 var NumberOnce = (*Backend).numberOnce
 

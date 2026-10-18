@@ -73,7 +73,9 @@ func asEntity(e *dag.Entity) *dag.Entity { return e }
 func compileRelease(e *dag.Entity) ReleaseRecord {
 	r := ReleaseRecord{ID: e.Id().String(), created: e.CreateLamportTime()}
 	for _, op := range e.Operations() {
-		op.(releaseOp).apply(&r)
+		if op, ok := op.(releaseOp); ok { // not a later git-board's
+			op.apply(&r)
+		}
 	}
 	return r
 }
@@ -174,9 +176,9 @@ func (b *Backend) editRelease(id string, op func(me identity.Interface) dag.Oper
 	return nil
 }
 
-// PushReleases pushes refs/releases to remote: git bug push carries
-// git-bug's own namespaces only. The identities go along, as a record
-// names its authors by identity.
+// PushReleases pushes refs/releases to remote, as Push does with the
+// issues. The identities go along, as a record names its authors by
+// identity.
 func (b *Backend) PushReleases(remote string) error {
 	if _, err := b.repo.PushRefs(remote, b.c.Identities().GetNamespace(), ReleasesNamespace); err != nil {
 		return fmt.Errorf("pushing the releases to %s: %w", remote, err)
@@ -185,7 +187,8 @@ func (b *Backend) PushReleases(remote string) error {
 }
 
 // PullReleases fetches remote's records, and the identities that wrote
-// them, and merges them into this clone's.
+// them, and merges them into this clone's. An empty remote is nothing to
+// pull.
 func (b *Backend) PullReleases(remote string) error {
 	_, err := b.repo.FetchRefs(remote, b.c.Identities().GetNamespace(), ReleasesNamespace)
 	if errors.Is(err, transport.ErrEmptyRemoteRepository) {
@@ -194,9 +197,12 @@ func (b *Backend) PullReleases(remote string) error {
 	if err != nil {
 		return fmt.Errorf("fetching the releases from %s: %w", remote, err)
 	}
-	if err := mergeErr(b.c.Identities().MergeAll(remote)); err != nil {
-		return err
-	}
+	return errors.Join(mergeErr(b.c.Identities().MergeAll(remote)), b.mergeReleases(remote))
+}
+
+// mergeReleases merges remote's fetched records into this clone's, once
+// the identities that wrote them are merged.
+func (b *Backend) mergeReleases(remote string) error {
 	// a merge commit, when both sides edited a record, needs an author;
 	// without one only that record fails
 	var me identity.Interface
@@ -204,17 +210,4 @@ func (b *Backend) PullReleases(remote string) error {
 		me = i
 	}
 	return mergeErr(dag.MergeAll(releaseDef, asEntity, b.repo, b.releaseResolvers(), remote, me))
-}
-
-// mergeErr reads a merge to the end, as Pull does, and is its first error.
-func mergeErr(merges <-chan entity.MergeResult) error {
-	var err error
-	for m := range merges {
-		if err == nil && m.Err != nil {
-			err = m.Err
-		} else if err == nil && m.Status == entity.MergeStatusInvalid {
-			err = fmt.Errorf("merge failure: %s", m.Reason)
-		}
-	}
-	return err
 }

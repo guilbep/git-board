@@ -3,6 +3,11 @@ package gitbugio_test
 import (
 	"fmt"
 	"testing"
+	"time"
+
+	"github.com/git-bug/git-bug/entities/identity"
+	"github.com/git-bug/git-bug/entity"
+	"github.com/git-bug/git-bug/entity/dag"
 
 	"github.com/guilbep/git-board/internal/gitbugio"
 	"github.com/guilbep/git-board/internal/gitbugio/gitbugiotest"
@@ -128,5 +133,70 @@ func TestYankedRecord(t *testing.T) {
 	}
 	if got, _, err := b.ReleaseFor(releaseCommit); err != nil || got.Yanked != "breaks the login" {
 		t.Errorf("ReleaseFor = %+v, %v; want yanked for its reason", got, err)
+	}
+}
+
+// futureOp is an operation a later git-board adds: unknown here.
+type futureOp struct {
+	dag.OpBase
+	Shiny string `json:"shiny"`
+}
+
+func (op *futureOp) Id() entity.Id   { return dag.IdOperation(op, &op.OpBase) }
+func (op *futureOp) Validate() error { return op.OpBase.Validate(op, 99) }
+
+// A record holding an operation this git-board doesn't know still lists,
+// edits and travels: the operation is kept and skipped.
+func TestUnknownReleaseOp(t *testing.T) {
+	mine, theirs := gitbugiotest.NewPair(t)
+	r, err := mine.CreateRelease(gitbugio.ReleaseRecord{Commit: releaseCommit, Previous: "v1.4.19"})
+	if err != nil {
+		t.Fatalf("CreateRelease: %v", err)
+	}
+	if err := gitbugio.EditRelease(mine, r.ID, func(me identity.Interface) dag.Operation {
+		return &futureOp{OpBase: dag.NewOpBase(99, me, time.Now().Unix()), Shiny: "yes"}
+	}); err != nil {
+		t.Fatalf("adding the unknown operation: %v", err)
+	}
+	if rs, err := mine.Releases(); err != nil || len(rs) != 1 || rs[0].ID != r.ID || rs[0].Previous != "v1.4.19" {
+		t.Fatalf("Releases = %+v, %v; want the record", rs, err)
+	}
+	if err := mine.SetReleaseNotes(r.ID, "Still editable."); err != nil {
+		t.Fatalf("SetReleaseNotes: %v", err)
+	}
+	if err := mine.PushReleases("origin"); err != nil {
+		t.Fatalf("PushReleases: %v", err)
+	}
+	if err := theirs.PullReleases("origin"); err != nil {
+		t.Fatalf("PullReleases: %v", err)
+	}
+	if got, ok, err := theirs.ReleaseFor(releaseCommit); err != nil || !ok || got.Notes != "Still editable." {
+		t.Errorf("their ReleaseFor = %+v, %v, %v", got, ok, err)
+	}
+}
+
+// git-board's own push and pull carry the records, and a remote without
+// any is no error.
+func TestPushPullCarryReleases(t *testing.T) {
+	mine, theirs := gitbugiotest.NewPair(t)
+	gitbugiotest.NewIssue(t, mine, "Crash")
+	if _, err := mine.Push("origin"); err != nil {
+		t.Fatalf("Push without releases: %v", err)
+	}
+	if err := theirs.Pull("origin"); err != nil {
+		t.Fatalf("Pull from a remote without releases: %v", err)
+	}
+	r, err := mine.CreateRelease(gitbugio.ReleaseRecord{Commit: releaseCommit})
+	if err != nil {
+		t.Fatalf("CreateRelease: %v", err)
+	}
+	if _, err := mine.Push("origin"); err != nil {
+		t.Fatalf("Push: %v", err)
+	}
+	if err := theirs.Pull("origin"); err != nil {
+		t.Fatalf("Pull: %v", err)
+	}
+	if got, ok, err := theirs.ReleaseFor(releaseCommit); err != nil || !ok || got.ID != r.ID {
+		t.Errorf("their ReleaseFor = %+v, %v, %v; want %s", got, ok, err, r.ID)
 	}
 }
