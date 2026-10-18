@@ -155,6 +155,36 @@ func TestThreadForgeLinks(t *testing.T) {
 	}
 }
 
+// A gone mark lands on the forge of its own URL, even when another sync key
+// listed that URL first: never on the forge listed last.
+func TestForgeGoneMarksItsOwnURL(t *testing.T) {
+	b := gitbugiotest.New(t)
+	author, _ := b.TestCache().GetUserIdentity()
+	bug, _, err := b.TestCache().Bugs().NewRaw(author, 1, "renamed", "", nil, map[string]string{
+		"sync:github.com/a/r:id":  "I_1",
+		"sync:github.com/a/r:url": "https://github.com/a/r/issues/1",
+		"sync:github.com/b/r:id":  "I_2",
+		"sync:github.com/b/r:url": "https://github.com/b/r/issues/2",
+		// the project moved: same issue, another key, unlinked there
+		"sync:github.com/c/r:url":  "https://github.com/a/r/issues/1",
+		"sync:github.com/c/r:gone": "unlinked",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	is, err := b.GetIssue(bug.Id().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []gitbugio.Forge{
+		{Name: "GitHub", URL: "https://github.com/a/r/issues/1", Number: "1", Gone: "unlinked"},
+		{Name: "GitHub", URL: "https://github.com/b/r/issues/2", Number: "2"},
+	}
+	if !slices.Equal(is.Forges, want) {
+		t.Errorf("forges %+v, want %+v", is.Forges, want)
+	}
+}
+
 // Each forge an issue is on names its sync bridge, found as git-bug's engine
 // finds it: by its sync keys, or the metadata of an older bridge. Unlinked,
 // nothing waits for it and its number isn't the issue's anymore.

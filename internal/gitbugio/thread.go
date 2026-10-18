@@ -273,30 +273,31 @@ func event(snap *bugent.Snapshot, item bugent.TimelineItem, on forgeState) Event
 // comments to say which forges they haven't reached; not an unlinked one.
 func forgesOf(meta map[string]string) (forges []Forge, remotes map[string]string) {
 	remotes = map[string]string{}
-	seen := map[string]bool{}
+	seen := map[string]int{} // URL → its forge's index
 	keys := make([]string, 0, len(meta))
 	for k := range meta {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
-	add := func(u, number string) string {
-		name := forgeName(u)
-		if !seen[u] {
-			seen[u] = true
-			if number == "" {
-				number = lastNumber(u)
-			}
-			forges = append(forges, Forge{Name: name, URL: u, Number: number})
+	// add lists the forge of a URL once, and says where it is
+	add := func(u, number string) int {
+		if i, ok := seen[u]; ok {
+			return i
 		}
-		return name
+		if number == "" {
+			number = lastNumber(u)
+		}
+		seen[u] = len(forges)
+		forges = append(forges, Forge{Name: forgeName(u), URL: u, Number: number})
+		return seen[u]
 	}
 	for _, k := range keys {
 		if prefix, ok := strings.CutSuffix(k, ":url"); ok && strings.HasPrefix(k, "sync:") {
-			name := add(meta[k], meta[prefix+":number"])
+			i := add(meta[k], meta[prefix+":number"])
 			if g := gone(meta[prefix+":gone"]); g != "" {
-				forges[len(forges)-1].Gone = g
+				forges[i].Gone = g
 			} else if _, onForge := meta[prefix+":id"]; onForge {
-				remotes[prefix+":"] = name
+				remotes[prefix+":"] = forges[i].Name
 			}
 		}
 	}
