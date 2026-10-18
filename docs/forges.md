@@ -51,7 +51,7 @@ In an issue's panel, On the forges lists each forge it is on:
 
 For a forge it isn't on, **Link to an existing issue…** takes the forge issue's number or URL: an issue already there, copied by hand for example, is linked instead of created again. Nothing is written to the forge then; the next sync sends the title, description and status from here where they differ, and adds each side's comments and labels to the other. Take the forge's version right after to keep the forge's. Link refuses a forge issue linked to another issue, an issue that is or was on that forge, and the address of another project.
 
-The same on the command line, while git-board-server isn't running, `<id>` being the issue's git-bug id:
+The same on the command line, while the git-board server isn't running, `<id>` being the issue's git-bug id:
 
 ```sh
 git bug bridge link <id> gl 12          # or the forge issue's URL
@@ -62,7 +62,7 @@ git bug bridge sync --issue <id> --dry-run   # what Send now and Refresh would d
 
 ## On the command line
 
-The same, while git-board-server isn't running (it holds the repository):
+The same, while the git-board server isn't running (it holds the repository):
 
 ```sh
 git bug bridge new --name gh --url https://github.com/owner/repo --sync

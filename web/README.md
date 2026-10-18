@@ -1,13 +1,13 @@
 # git-board web UI
 
-One board page talking to `cmd/git-board-server`'s JSON API: the saved
-views of `.git-board.toml` as the header navigation (`#/?view=<name>`), a
-filter/group/sort bar, each view in its `layout` (`board`: one column per
-group, in the group field's configured option order; `table`: the CLI's
-columns, one per configured field), and an issue side panel that edits
-fields (single: a select of the configured options; multi: chips). See the
-root [README.md](../README.md#web-ui) for the full picture and the no-auth
-caveat.
+One board page talking to the git-board server's JSON API
+(`internal/server`): the saved views of `.git-board.toml` as the header
+navigation (`#/?view=<name>`), a filter/group/sort bar, each view in its
+`layout` (`board`: one column per group, in the group field's configured
+option order; `table`: the CLI's columns, one per configured field), and
+an issue side panel that edits fields (single: a select of the configured
+options; multi: chips). See the root [README.md](../README.md#web-ui) for
+the full picture and the no-auth caveat.
 
 ## EPFL design system
 
@@ -47,8 +47,8 @@ npm install
 npm run dev       # Quasar dev server, http://localhost:9000
 ```
 
-The dev server needs `cmd/git-board-server` running separately on `:8080`
-(`go run ./cmd/git-board-server` from the repo root) — `src/api/board.ts`
+The dev server needs the git-board server running separately on `:8080`
+(`go run ./cmd/git-board serve` from the repo root) — `src/api/board.ts`
 points there via CORS when `import.meta.env.DEV` is true. Same-origin (no
 CORS, no separate process) once built and embedded for production.
 
@@ -58,7 +58,7 @@ CORS, no separate process) once built and embedded for production.
 npm run build      # writes web/dist/spa (Quasar's default SPA output dir)
 ```
 
-Then `go build ./cmd/git-board-server` from the repo root embeds `web/dist`
+Then `go build ./cmd/git-board` from the repo root embeds `web/dist`
 (`web/embed.go`) and serves `dist/spa` from it, into a single binary that
 serves both the API and the UI.
 
@@ -71,4 +71,4 @@ npm test            # node --test src/facets.test.ts
 
 The filters and sort (`src/facets.ts`) run in the page, so they're tested
 here, with Node's own test runner (Node strips the types; no Vitest). The
-API handlers are covered on the Go side (`cmd/git-board-server/server_test.go`).
+API handlers are covered on the Go side (`internal/server/server_test.go`).

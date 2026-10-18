@@ -1,5 +1,5 @@
 <!-- The inbox: what happened that concerns you on the issues of the last
-     14 days (cmd/git-board-server/inbox.go), newest first. Opening it
+     14 days (internal/server/inbox.go), newest first. Opening it
      checks the git remotes (a fetch: nothing local changes) and offers
      Pull; opening a row opens the issue and marks it read. Read rows stay,
      dimmed, until Refresh, so the list doesn't jump while you read. -->

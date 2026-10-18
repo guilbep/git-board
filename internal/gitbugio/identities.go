@@ -182,7 +182,7 @@ func (b *Backend) RemoveBridge(name string) error {
 
 // SyncForges runs git-bug's forge sync (git bug bridge sync) on the named
 // bridges, or every bridge with sync enabled, in this process: a running
-// git-board-server holds the repository, so the git-bug command can't.
+// git-board's server holds the repository, so the git-bug command can't.
 func (b *Backend) SyncForges(ctx context.Context, dryRun bool, names []string) (<-chan core.SyncResult, error) {
 	return core.SyncAll(ctx, b.c, names, dryRun)
 }

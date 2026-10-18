@@ -31,13 +31,13 @@ git clone git@github.com:guilbep/git-board.git
 cd git-board
 git checkout v0.5.0                 # or stay on main
 (cd web && npm ci)                  # the web app's dependencies, once
-make web-build install              # git-board and git-board-server, the web app inside
+make web-build install              # git-board, the web app inside
 git-board --help
 ```
 
-`make install` alone builds the two commands without the web app (its
-pages are embedded at build time from `web/dist`): `git-board-server`
-then serves an empty page.
+`make install` alone builds `git-board` without the web app (its pages
+are embedded at build time from `web/dist`): its web UI is then an empty
+page.
 
 Requires Go 1.26+ (git-bug's module requirement) and Node 22.12+ for the web
 app; `go install` fetches the matching Go toolchain automatically if
@@ -69,7 +69,7 @@ only field this project has ever needed it for.
 
 git-board tracks its own work with git-board: its `.git-board.toml` is at
 the root of this repository, and its issues are git-bug data here
-(`git bug pull origin` fetches them, then run `git-board-server`).
+(`git bug pull origin` fetches them, then run `git board`).
 
 Optional: without it, every `ns:value` label is a field and `git board`
 works on any git-bug repository. It adds what labels can't say: the order
@@ -138,8 +138,11 @@ Run from inside a git-bug-initialized repo (or a subdirectory of one), next
 to a `.git-board.toml`.
 
 ```bash
-# default view: open issues
-git-board
+# this repository's web UI, in the browser (see "Web UI" below)
+git board
+
+# open issues
+git-board ls
 
 # ad-hoc filter, grouped and sorted
 git-board ls "is:open -title:*spec*" --group status --sort "prio asc"
@@ -491,10 +494,29 @@ repo/network issue) is shown inline and the TUI stays open.
 ## Web UI
 
 A one-page board, backed by a Go HTTP API in the same module — no Python,
-no separate service. `cmd/git-board-server` reuses `internal/config`,
+no separate service. `internal/server` reuses `internal/config`,
 `internal/gitbugio`, `internal/fields` and `internal/board` directly, so
 `ls`/`view`/`set` and the API apply the exact same filter/group and
 field-write logic.
+
+**Opening it.** `git board`, with no command, opens this repository's
+board in the browser. When its server already runs it opens that one;
+otherwise it starts it in the foreground on `127.0.0.1`, port 8080 or
+the next free one, prints the address, and Ctrl-C stops it
+(`--no-open`: no browser). Each repository gets its own server and its
+own port: run `git board` in two repositories, get two boards. A running
+server says where it is in `.git/git-board/server.json` (address and
+pid), written when it starts and removed when it stops; `git board`
+trusts it only when that process is alive and its server answers that it
+serves this repository (`GET /api/repository`), so a stale file or a
+port now serving another repository never opens the wrong board.
+`git board serve` runs the server alone, without a browser, on `--addr`
+(`localhost:8080` by default): what a hosted deployment runs.
+
+While it runs, the server holds the repository (git-bug's lock): another
+`git board` or `git bug` command on it fails with "locked by the process
+pid …"; `git board` adds that this repository's server holds it, and its
+address. Use the web UI there, or stop the server first.
 
 The page has one Filter box, the view's filter until changed; the server
 matches it and counts the sidebar's checkbox filters, one per field (each
@@ -540,7 +562,7 @@ keeps them in `.git/git-bug/git-board-media`.
 S3 bucket a CDN serves — EPFL ENAC's `enacit4r-cdn.epfl.ch` (bucket on
 `s3.epfl.ch`) by default — and the comment gets their Markdown (an image
 shows, other files link), so they show in git-board, on GitHub and on
-GitLab alike. Set where `git-board-server` runs:
+GitLab alike. Set where the git-board server runs:
 `ACCESS_KEY_ID`, `ACCESS_KEY_SECRET`, `BUCKET_NAME`; optionally in
 `.git-board.toml`:
 
@@ -641,22 +663,23 @@ port can read and write every issue, and through the forge sync post to
 GitHub and GitLab with your tokens: only pass an `--addr` other machines
 can reach on a network you trust. Upgrade path when that stops being fine: a reverse proxy doing auth
 in front of it (simplest), or a token check in `withCORS`/a new middleware
-in `cmd/git-board-server` (more work, still small).
+in `internal/server` (more work, still small).
 
 ```bash
-# backend — run from inside the git-bug repo, next to .git-board.toml
-go run ./cmd/git-board-server              # listens on 127.0.0.1:8080
-go run ./cmd/git-board-server --addr 127.0.0.1:9090 --me guilbep
+# run from inside the git-bug repo, next to .git-board.toml
+git board                                  # this repository's board, in the browser
+git board serve                            # the server alone, on localhost:8080
+git board serve --addr 127.0.0.1:9090 --me guilbep
 
 # frontend, dev mode (separate terminal) — talks to the backend on :8080
-# via CORS (see cmd/git-board-server/cors.go); Quasar's dev server is :9000
+# via CORS (see internal/server/cors.go); Quasar's dev server is :9000
 cd web && npm install && npm run dev
 
 # production: build the frontend into web/dist, then build one binary that
 # embeds it (web/embed.go) — no separate frontend deploy/CDN needed
 cd web && npm install && npm run build
-cd .. && go build -o git-board-server ./cmd/git-board-server
-./git-board-server   # serves the API and the built UI on the same origin
+cd .. && go build -o git-board ./cmd/git-board
+./git-board serve   # serves the API and the built UI on the same origin
 ```
 
 ## Static site (`git-board html`)
@@ -695,7 +718,7 @@ to keep the *published* copy in sync; if `-o`'s own local directory needs to
 mirror the config exactly between runs, `rm -rf` it first.
 
 **No auth, no JS required to view** — plain server-rendered HTML, same
-trusted-network stance as `git-board-server` above (see its "No auth in v1"
+trusted-network stance as the web UI above (see its "No auth in v1"
 note): anyone who can reach the published files can read every issue in
 every configured view. A view whose filter uses `@me` resolves once at
 generation time against `--me`/`GIT_BOARD_ME`, the same single shared
@@ -712,8 +735,8 @@ internal/board/        load/sort/group issues — shared by the CLI, the TUI and
 internal/ghbridge/     `gh project item-list` parsing + field-mapping/diff logic for `bridge pull`.
 internal/lint/          read-only drift checks (labels vs. .git-board.toml) — internal/lint.Run.
 internal/ghlabels/      `gh label list`/`gh label create` — GitHub-side label creation for `lint --create-labels`.
+internal/server/        the web UI's HTTP API (net/http, no framework) + the embedded web/dist; `git-board serve`.
 cmd/git-board/          main.go + cobra commands, thin rendering (incl. html.go, the static-site generator).
-cmd/git-board-server/   HTTP API (net/http, no framework) + embeds web/dist for prod.
 web/                    Quasar/Vue frontend — one board page, api/board.ts is the only HTTP client.
 ```
 

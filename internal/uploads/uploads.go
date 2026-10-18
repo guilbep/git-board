@@ -225,4 +225,4 @@ func hmacSHA256(key []byte, data string) []byte {
 }
 
 // ErrDisabled is returned when no bucket is configured.
-var ErrDisabled = errors.New("uploads aren't set up: set ACCESS_KEY_ID, ACCESS_KEY_SECRET and BUCKET_NAME where git-board-server runs")
+var ErrDisabled = errors.New("uploads aren't set up: set ACCESS_KEY_ID, ACCESS_KEY_SECRET and BUCKET_NAME where the git-board server runs")

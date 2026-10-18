@@ -361,7 +361,7 @@ function addLabel() {
   newLabel.value = '';
 }
 
-// Inbox: whether you follow this issue, and why (cmd/git-board-server/inbox.go)
+// Inbox: whether you follow this issue, and why (internal/server/inbox.go)
 const follow = ref<FollowState | null>(null);
 const followError = ref('');
 const followBusy = ref(false);

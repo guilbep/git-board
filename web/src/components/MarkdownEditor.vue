@@ -74,7 +74,7 @@ onMounted(loadUploadStatus);
 async function attach(files: File[]) {
   if (!files.length) return;
   if (!uploadStatus.value?.enabled) {
-    uploadError.value = "Attaching files isn't set up here: git-board-server needs ACCESS_KEY_ID, ACCESS_KEY_SECRET and BUCKET_NAME.";
+    uploadError.value = "Attaching files isn't set up here: the git-board server needs ACCESS_KEY_ID, ACCESS_KEY_SECRET and BUCKET_NAME.";
     return;
   }
   uploadError.value = '';
