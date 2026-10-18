@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -194,5 +195,27 @@ func TestPushTagFailureLeavesNoLocalTag(t *testing.T) {
 	}
 	if got := releasetest.Git(t, work, "tag", "-l"); got != "" {
 		t.Errorf("local tag left: %q", got)
+	}
+}
+
+func TestMergesParsesBothSubjects(t *testing.T) {
+	_, _, fx := releasetest.NewRunner(t)
+	from := fx.Commit(t, "not a merge")
+	a := fx.Merge(t, "fix/1-a", "")
+	b := fx.Merge(t, "feat/2-b", "Merge pull request #9 from org/feat/2-b")
+	c := fx.Merge(t, "chore/3-c", "Release the hounds")
+	want := []release.Merge{
+		{Commit: a, Subject: "Merge branch 'fix/1-a' into dev", Branch: "fix/1-a"},
+		{Commit: b, Subject: "Merge pull request #9 from org/feat/2-b", Branch: "feat/2-b"},
+		{Commit: c, Subject: "Release the hounds"},
+	}
+	if ms, err := release.Merges(ctx, fx.App, from, "dev"); err != nil || !slices.Equal(ms, want) {
+		t.Errorf("Merges since %.7s = %+v, %v\nwant %+v", from, ms, err, want)
+	}
+	if ms, err := release.Merges(ctx, fx.App, "", "dev"); err != nil || !slices.Equal(ms, want) {
+		t.Errorf("all Merges = %+v, %v", ms, err)
+	}
+	if ms, err := release.Merges(ctx, fx.App, c, "dev"); err != nil || ms != nil {
+		t.Errorf("Merges since the head = %+v, %v", ms, err)
 	}
 }

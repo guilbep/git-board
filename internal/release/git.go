@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -253,4 +254,37 @@ func versionOfSubject(s string) string {
 	}
 	f := strings.Fields(head)
 	return f[len(f)-1]
+}
+
+// Merge is a first-parent merge on the trunk.
+type Merge struct {
+	Commit  string `json:"commit"`
+	Subject string `json:"subject"`
+	Branch  string `json:"branch"` // the branch its subject names, "" when none
+}
+
+var mergeSubject = regexp.MustCompile(`^Merge (?:branch '([^']+)'|pull request #\d+ from [^/\s]+/(\S+))`)
+
+// Merges lists the first-parent merges on to since from ("": all), oldest
+// first. The branch is read from "Merge branch '<b>'…" or "Merge pull
+// request #N from <owner>/<b>".
+func Merges(ctx context.Context, dir, from, to string) ([]Merge, error) {
+	revs := to
+	if from != "" {
+		revs = from + ".." + to
+	}
+	out, err := Git(ctx, dir, "log", "--first-parent", "--merges", "--reverse", "--format=%H%x09%s", revs, "--")
+	if err != nil || out == "" {
+		return nil, err
+	}
+	var ms []Merge
+	for _, l := range strings.Split(out, "\n") {
+		commit, subject, _ := strings.Cut(l, "\t")
+		m := Merge{Commit: commit, Subject: subject}
+		if g := mergeSubject.FindStringSubmatch(subject); g != nil {
+			m.Branch = g[1] + g[2]
+		}
+		ms = append(ms, m)
+	}
+	return ms, nil
 }
