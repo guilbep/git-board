@@ -22,3 +22,19 @@ func WriteCounter(b *Backend, data []byte) error {
 	}
 	return b.setSeq(commit)
 }
+
+// Compare is compare for the tests.
+var Compare = (*Backend).compare
+
+// StoreCommit stores a commit holding name on parents, for the tests.
+func StoreCommit(b *Backend, name string, parents ...repository.Hash) (repository.Hash, error) {
+	blob, err := b.repo.StoreData([]byte(name))
+	if err != nil {
+		return "", err
+	}
+	tree, err := b.repo.StoreTree([]repository.TreeEntry{{ObjectType: repository.Blob, Hash: blob, Name: name}})
+	if err != nil {
+		return "", err
+	}
+	return b.repo.StoreCommit(tree, parents...)
+}

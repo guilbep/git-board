@@ -3,7 +3,6 @@ package gitbugio
 import (
 	"errors"
 	"regexp"
-	"slices"
 	"sort"
 
 	"github.com/go-git/go-git/v5/plumbing/transport"
@@ -90,11 +89,7 @@ func (b *Backend) ahead(remote, namespace string) (a Ahead, tracked bool, err er
 		case their == mine:
 		default:
 			// one side's history holds the other's: only it moves
-			ahead, err := b.has(mine, their)
-			behind := false
-			if err == nil && !ahead {
-				behind, err = b.has(their, mine)
-			}
+			ahead, behind, err := b.compare(mine, their)
 			if err != nil {
 				return a, true, err
 			}
@@ -114,10 +109,39 @@ func (b *Backend) ahead(remote, namespace string) (a Ahead, tracked bool, err er
 	return a, len(theirs) > 0, nil
 }
 
-// has tells whether ancestor is in commit's history.
-func (b *Backend) has(commit, ancestor repository.Hash) (bool, error) {
-	hashes, err := b.repo.ListCommits(commit)
-	return slices.Contains(hashes, ancestor), err
+// compare tells whether mine's history holds theirs (ahead) or theirs'
+// holds mine (behind), walking both in step, every parent: it stops as soon
+// as one reaches the other's tip, and walks whole histories only for a
+// pair that diverged.
+func (b *Backend) compare(mine, theirs repository.Hash) (ahead, behind bool, err error) {
+	type walk struct {
+		todo []repository.Hash
+		seen map[repository.Hash]bool
+		goal repository.Hash
+	}
+	walks := []*walk{{todo: []repository.Hash{mine}, seen: map[repository.Hash]bool{}, goal: theirs}, {todo: []repository.Hash{theirs}, seen: map[repository.Hash]bool{}, goal: mine}}
+	for len(walks[0].todo)+len(walks[1].todo) > 0 {
+		for i, w := range walks {
+			if len(w.todo) == 0 {
+				continue
+			}
+			h := w.todo[0]
+			w.todo = w.todo[1:]
+			if h == w.goal {
+				return i == 0, i == 1, nil
+			}
+			if w.seen[h] {
+				continue
+			}
+			w.seen[h] = true
+			c, err := b.repo.ReadCommit(h)
+			if err != nil {
+				return false, false, err
+			}
+			w.todo = append(w.todo, c.Parents...)
+		}
+	}
+	return false, false, nil
 }
 
 // Fetch brings a remote's issues and people in as its tracking refs, as
