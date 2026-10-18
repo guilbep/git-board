@@ -15,9 +15,9 @@ Every branch has its own git worktree, tmux session and agent. The session is
   bug to work around.
 - There are no dev server panes. git-bug locks its cache in the main checkout's
   `.git/git-bug/lock`, even from a worktree, so only one process across all
-  checkouts can hold this repo's board: a `git-board` or `git-board-server` run
-  from a worktree fails with "already locked by the process pid N" while
-  another checkout's server or TUI is running. Tests are unaffected, they use
+  checkouts can hold this repo's board: a `git board` (or `git board serve`)
+  run from a worktree fails with "already locked by the process pid N" while
+  another checkout's server or TUI is running, and names that board's URL. Tests are unaffected, they use
   throwaway repos.
 - `refs/bugs` (this repo's issues) is shared by every checkout. `git bug push`
   and `git bug bridge` are denied in a worktree.
