@@ -97,9 +97,12 @@ func PushTag(ctx context.Context, dir, remote string, t Tag) (taken bool, err er
 	if err == nil {
 		return false, nil
 	}
+	// Whatever the failure, drop our local tag so a retry can create it again.
+	if _, derr := Git(ctx, dir, "tag", "-d", t.Name); derr != nil {
+		return false, errors.Join(err, derr)
+	}
 	if strings.Contains(err.Error(), "[rejected]") || strings.Contains(err.Error(), "already exists") {
-		_, derr := Git(ctx, dir, "tag", "-d", t.Name)
-		return true, derr
+		return true, nil
 	}
 	return false, err
 }
@@ -115,7 +118,7 @@ type Change struct {
 // ConfigRepo is a local clone of a GitOps repository.
 type ConfigRepo struct{ URL, Dir string }
 
-// OpenConfigRepo clones url into <cacheDir>/<first 12 hex of sha1(url)>, or reuses that clone.
+// OpenConfigRepo clones url into <cacheDir>/<first 12 hex of sha1(url)>, or just opens it when it is already there (no fetch: see Fetch).
 func OpenConfigRepo(ctx context.Context, cacheDir, url string) (*ConfigRepo, error) {
 	sum := sha1.Sum([]byte(url)) //nolint:gosec
 	dir := filepath.Join(cacheDir, hex.EncodeToString(sum[:])[:12])
@@ -130,33 +133,36 @@ func OpenConfigRepo(ctx context.Context, cacheDir, url string) (*ConfigRepo, err
 	return &ConfigRepo{URL: url, Dir: dir}, nil
 }
 
-// sync fetches and resets the clone to the remote default branch, which it returns.
-func (c *ConfigRepo) sync(ctx context.Context) (string, error) {
+// Fetch fetches origin and keeps origin/HEAD pointing at its default branch.
+func (c *ConfigRepo) Fetch(ctx context.Context) error {
 	if _, err := Git(ctx, c.Dir, "fetch", "origin"); err != nil {
-		return "", err
+		return err
 	}
-	if _, err := Git(ctx, c.Dir, "remote", "set-head", "origin", "-a"); err != nil {
-		return "", err
-	}
+	_, err := Git(ctx, c.Dir, "remote", "set-head", "origin", "-a")
+	return err
+}
+
+// defaultBranch is the remote default branch, from origin/HEAD.
+func (c *ConfigRepo) defaultBranch(ctx context.Context) (string, error) {
 	ref, err := Git(ctx, c.Dir, "symbolic-ref", "refs/remotes/origin/HEAD")
-	if err != nil {
-		return "", err
-	}
-	branch := strings.TrimPrefix(ref, "refs/remotes/origin/")
-	_, err = Git(ctx, c.Dir, "reset", "--hard", "origin/"+branch)
-	return branch, err
+	return strings.TrimPrefix(ref, "refs/remotes/origin/"), err
 }
 
 func overlayFile(path string) string {
 	return filepath.ToSlash(filepath.Join(path, "kustomization.yaml"))
 }
 
-// Read returns the overlay in directory path at the remote default branch.
+// Read returns the overlay in directory path as of the last Fetch; it does not fetch.
 func (c *ConfigRepo) Read(ctx context.Context, path string) (*Overlay, error) {
-	if _, err := c.sync(ctx); err != nil {
+	branch, err := c.defaultBranch(ctx)
+	if err != nil {
 		return nil, err
 	}
-	return c.load(path)
+	data, err := Git(ctx, c.Dir, "show", "origin/"+branch+":"+overlayFile(path))
+	if err != nil {
+		return nil, err
+	}
+	return ParseOverlay([]byte(data + "\n"))
 }
 
 func (c *ConfigRepo) load(path string) (*Overlay, error) {
@@ -172,8 +178,14 @@ func (c *ConfigRepo) load(path string) (*Overlay, error) {
 // write (Update returns ""). A refused push starts over, up to 3 tries.
 func (c *ConfigRepo) Update(ctx context.Context, path, message string, change func(*Overlay) (bool, error)) (commit string, err error) {
 	for range 3 {
-		branch, err := c.sync(ctx)
+		if err := c.Fetch(ctx); err != nil {
+			return "", err
+		}
+		branch, err := c.defaultBranch(ctx)
 		if err != nil {
+			return "", err
+		}
+		if _, err := Git(ctx, c.Dir, "reset", "--hard", "origin/"+branch); err != nil {
 			return "", err
 		}
 		o, err := c.load(path)
@@ -210,10 +222,11 @@ func (c *ConfigRepo) Update(ctx context.Context, path, message string, change fu
 
 // History lists the last n commits touching the overlay in directory path, newest first.
 func (c *ConfigRepo) History(ctx context.Context, path string, n int) ([]Change, error) {
-	if _, err := c.sync(ctx); err != nil {
+	branch, err := c.defaultBranch(ctx)
+	if err != nil {
 		return nil, err
 	}
-	out, err := Git(ctx, c.Dir, "log", fmt.Sprintf("-n%d", n), "--format=%H%x09%an%x09%aI%x09%s", "--", overlayFile(path))
+	out, err := Git(ctx, c.Dir, "log", "origin/"+branch, fmt.Sprintf("-n%d", n), "--format=%H%x09%an%x09%aI%x09%s", "--", overlayFile(path))
 	if err != nil || out == "" {
 		return nil, err
 	}

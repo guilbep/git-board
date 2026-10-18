@@ -157,3 +157,42 @@ func TestReleaseTagsSkipsOthers(t *testing.T) {
 		t.Errorf("TagsAt = %+v", at)
 	}
 }
+
+func TestReadSeesRemoteOnlyAfterFetch(t *testing.T) {
+	identity(t)
+	bare := releasetest.NewConfigRepo(t, map[string]string{"a/kustomization.yaml": devOverlay})
+	c1, _ := release.OpenConfigRepo(ctx, t.TempDir(), bare)
+	c2, _ := release.OpenConfigRepo(ctx, t.TempDir(), bare)
+	if _, err := c2.Update(ctx, "a", "msg", func(o *release.Overlay) (bool, error) {
+		return o.Set(release.Deployed{Commit: "abc", Version: "9.9.9"}, "", nil)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	o, err := c1.Read(ctx, "a")
+	if err != nil || o.Deployed("").Version != "" {
+		t.Fatalf("before Fetch: %+v err=%v", o, err)
+	}
+	if h, _ := c1.History(ctx, "a", 5); len(h) != 1 {
+		t.Errorf("history before Fetch = %+v", h)
+	}
+	if err := c1.Fetch(ctx); err != nil {
+		t.Fatal(err)
+	}
+	o, err = c1.Read(ctx, "a")
+	if err != nil || o.Deployed("").Version != "9.9.9" {
+		t.Fatalf("after Fetch: %+v err=%v", o, err)
+	}
+}
+
+func TestPushTagFailureLeavesNoLocalTag(t *testing.T) {
+	identity(t)
+	work, _ := releasetest.NewRemote(t)
+	c := releasetest.Git(t, work, "rev-parse", "HEAD")
+	taken, err := release.PushTag(ctx, work, filepath.Join(t.TempDir(), "nope.git"), release.Tag{Name: "v1.0.0", Commit: c, Message: "x"})
+	if err == nil || taken {
+		t.Fatalf("taken=%v err=%v", taken, err)
+	}
+	if got := releasetest.Git(t, work, "tag", "-l"); got != "" {
+		t.Errorf("local tag left: %q", got)
+	}
+}
