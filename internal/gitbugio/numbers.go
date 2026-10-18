@@ -108,13 +108,14 @@ func (c Counter) Next() int {
 }
 
 // NumberOf is an issue's number, 0 for none yet: its line, else its GitHub
-// number below Start.
+// number below Start, from a GitHub issue it is still on: an issue linked
+// to that one since has it, and an unlinked one waits for a line.
 func (c Counter) NumberOf(id string, forges []Forge) int {
 	if n, ok := c.ByID[id]; ok {
 		return n
 	}
 	for _, f := range forges {
-		if n, err := strconv.Atoi(f.Number); f.Name == "GitHub" && err == nil && n < c.Start {
+		if n, err := strconv.Atoi(f.Number); f.Name == "GitHub" && f.Gone == "" && err == nil && n < c.Start {
 			return n
 		}
 	}
@@ -353,8 +354,8 @@ func (b *Backend) survey(remote string, c Counter) (todo []*cache.BugExcerpt, n 
 		github := 0
 		for _, f := range forges {
 			num, _ := strconv.Atoi(f.Number)
-			n.Highest = max(n.Highest, num)
-			if f.Name == "GitHub" && num > 0 && (github == 0 || num < github) {
+			n.Highest = max(n.Highest, num) // a gone one's too: still taken there
+			if f.Name == "GitHub" && f.Gone == "" && num > 0 && (github == 0 || num < github) {
 				github = num
 			}
 		}
