@@ -41,13 +41,19 @@ func LoadMatching(b issueBackend, cfg *config.Config, filterStr, me string) ([]g
 // Match narrows issues already loaded to filterStr, as LoadMatching does:
 // the TUI's f, on what it loaded.
 func Match(b any, cfg *config.Config, filterStr, me string, issues []gitbugio.Issue, today time.Time) ([]gitbugio.Issue, error) {
+	return MatchFollowing(b, cfg, filterStr, me, issues, today, nil)
+}
+
+// MatchFollowing is Match with what follows:@me follows already known
+// (Following), as the inbox has it; nil reads it.
+func MatchFollowing(b any, cfg *config.Config, filterStr, me string, issues []gitbugio.Issue, today time.Time, followed *filter.Followed) ([]gitbugio.Issue, error) {
 	conditions, me, err := prepare(b, filterStr, me)
 	if err != nil {
 		return nil, err
 	}
 	withRoles(cfg, issues)
 	// after the roles: a followed view can filter on an inherited one
-	if err := fillFollows(b, cfg, conditions, me, issues, today); err != nil {
+	if err := fillFollows(b, cfg, conditions, me, issues, today, followed); err != nil {
 		return nil, err
 	}
 	matched := make([]gitbugio.Issue, 0, len(issues))
@@ -60,36 +66,17 @@ func Match(b any, cfg *config.Config, filterStr, me string, issues []gitbugio.Is
 }
 
 // fillFollows gives follows:@me your inbox's file (internal/inbox): what
-// you followed and unfollowed, and the issues of the views you follow.
-func fillFollows(b any, cfg *config.Config, conditions []filter.Condition, me string, issues []gitbugio.Issue, today time.Time) error {
+// you followed and unfollowed, and the issues of the views you follow; f
+// when known.
+func fillFollows(b any, cfg *config.Config, conditions []filter.Condition, me string, issues []gitbugio.Issue, today time.Time, f *filter.Followed) error {
 	if !slices.ContainsFunc(conditions, func(c filter.Condition) bool { return c.Kind == filter.KindFollows }) {
 		return nil
 	}
-	repo, ok := b.(interface {
-		Me() (gitbugio.Person, bool, error)
-		Storage() repository.LocalStorage
-	})
-	if !ok {
-		return errors.New("follows:@me needs a repository")
-	}
-	p, set, err := repo.Me()
-	if err != nil {
-		return err
-	}
-	if !set {
-		return errors.New("follows:@me: choose who you write as first")
-	}
-	st, err := inbox.Load(repo.Storage(), p.ID)
-	if err != nil {
-		return err
-	}
-	inViews, _, err := FollowedViews(b, cfg, st.Views, me, issues, today)
-	if err != nil {
-		return err
-	}
-	f := &filter.Followed{Follow: setOf(st.Follow), Unfollow: setOf(st.Unfollow), InViews: map[string]bool{}}
-	for id := range inViews {
-		f.InViews[id] = true
+	if f == nil {
+		var err error
+		if f, err = readFollowing(b, cfg, me, issues, today); err != nil {
+			return err
+		}
 	}
 	for i := range conditions {
 		if conditions[i].Kind == filter.KindFollows {
@@ -97,6 +84,44 @@ func fillFollows(b any, cfg *config.Config, conditions []filter.Condition, me st
 		}
 	}
 	return nil
+}
+
+// readFollowing is Following from your inbox's file.
+func readFollowing(b any, cfg *config.Config, me string, issues []gitbugio.Issue, today time.Time) (*filter.Followed, error) {
+	repo, ok := b.(interface {
+		Me() (gitbugio.Person, bool, error)
+		Storage() repository.LocalStorage
+	})
+	if !ok {
+		return nil, errors.New("follows:@me needs a repository")
+	}
+	p, set, err := repo.Me()
+	if err != nil {
+		return nil, err
+	}
+	if !set {
+		return nil, errors.New("follows:@me: choose who you write as first")
+	}
+	st, err := inbox.Load(repo.Storage(), p.ID)
+	if err != nil {
+		return nil, err
+	}
+	inViews, _, err := FollowedViews(b, cfg, st.Views, me, issues, today)
+	if err != nil {
+		return nil, err
+	}
+	return Following(st, inViews), nil
+}
+
+// Following is what follows:@me follows besides what you're in: what your
+// inbox's file st followed and unfollowed, and the issues of the views it
+// follows (FollowedViews' inViews).
+func Following(st inbox.State, inViews map[string][]string) *filter.Followed {
+	f := &filter.Followed{Follow: setOf(st.Follow), Unfollow: setOf(st.Unfollow), InViews: map[string]bool{}}
+	for id := range inViews {
+		f.InViews[id] = true
+	}
+	return f
 }
 
 // FollowedViews is, by issue id, the followed views among issues each is

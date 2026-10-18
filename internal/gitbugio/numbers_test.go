@@ -49,6 +49,7 @@ func TestCounter(t *testing.T) {
 		{"GitHub, below start", "ccc", github("2518"), 2518},
 		{"GitHub, at start: not yet", "ddd", github("3052"), 0},
 		{"GitLab's never counts", "eee", []gitbugio.Forge{{Name: "GitLab", Number: "34"}}, 0},
+		{"GitHub, unlinked: not its own", "ggg", []gitbugio.Forge{{Name: "GitHub", Number: "2518", Gone: "unlinked"}}, 0},
 		{"nowhere", "fff", nil, 0},
 	} {
 		if got := c.NumberOf(tc.id, tc.forges); got != tc.want {
@@ -259,6 +260,57 @@ func TestNumbering(t *testing.T) {
 	}
 	if n, _ := mine.Numbering("origin"); n.Numbered != 3 || n.Waiting != 0 || n.Unpushed != 1 {
 		t.Errorf("numbered: %+v, want 3 numbered, 1 to push", n)
+	}
+}
+
+// A GitHub number an issue was unlinked from isn't its own anymore: the
+// issue linked to it since has it, and the unlinked one gets the next
+// number, never the same as another's.
+func TestNumbersGoneGitHubNumber(t *testing.T) {
+	mine, _ := gitbugiotest.NewPair(t)
+	author, err := mine.TestCache().GetUserIdentity()
+	if err != nil {
+		t.Fatal(err)
+	}
+	newRaw := func(title string, meta map[string]string) string {
+		t.Helper()
+		bug, _, err := mine.TestCache().Bugs().NewRaw(author, 1, title, "", nil, meta)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return bug.Id().String()
+	}
+	// pulled by the old GitHub bridge, then unlinked
+	a := newRaw("Unlinked", map[string]string{
+		"github-id":                "I_1",
+		"github-url":               "https://github.com/o/r/issues/2518",
+		"sync:github.com/o/r:gone": "unlinked",
+	})
+	// linked to #2518 since
+	b := newRaw("Linked", map[string]string{
+		"sync:github.com/o/r:id":     "I_1",
+		"sync:github.com/o/r:url":    "https://github.com/o/r/issues/2518",
+		"sync:github.com/o/r:number": "2518",
+	})
+	pushed(t, mine)
+
+	before, err := mine.Numbering("origin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := fmt.Sprint(slices.Sorted(slices.Values(before.GitHub))); got != "[0 2518]" || before.Highest != 2518 {
+		t.Errorf("before: GitHub numbers %s, highest %d; want [0 2518], 2518 (still taken on GitHub)", got, before.Highest)
+	}
+	if err := mine.InitNumbers("origin", "CO2", 3052); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := mine.NumberIssues("origin"); n != 1 || err != nil {
+		t.Fatalf("NumberIssues = %d, %v; want 1, the unlinked one", n, err)
+	}
+	for id, want := range map[string]string{a: "CO2-3052", b: "CO2-2518"} {
+		if is, err := mine.GetIssue(id); err != nil || is.Number != want {
+			t.Errorf("GetIssue(%s) = %q, %v; want %s", id[:7], is.Number, err, want)
+		}
 	}
 }
 

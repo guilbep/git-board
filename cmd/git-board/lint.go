@@ -132,9 +132,7 @@ func runCreateLabels(out io.Writer, cfg *config.Config, apply bool) error {
 			fmt.Fprintf(out, "%s: created %s\n", repo, name)
 		}
 	}
-	if !checkTemplates(out) {
-		failed = true
-	}
+	checkTemplates(out)
 	if !apply {
 		fmt.Fprintln(out, "\ndry run — nothing written. Re-run with --apply to create these labels.")
 	}
@@ -145,12 +143,13 @@ func runCreateLabels(out io.Writer, cfg *config.Config, apply bool) error {
 }
 
 // checkTemplates reports each issue template's labels that the checkout's
-// GitHub repository doesn't have (names ignore case, as GitHub's do); false
-// when it couldn't tell.
-func checkTemplates(out io.Writer) bool {
+// GitHub repository doesn't have (names ignore case, as GitHub's do). It
+// warns, never fails: when it can't tell (gh doesn't know the repository, a
+// template doesn't parse), the labels may all exist, and CI must not fail.
+func checkTemplates(out io.Writer) {
 	templates, err := ghlabels.Templates(filepath.Join(filepath.Dir(config.Path()), ".github", "ISSUE_TEMPLATE"))
 	if err == nil && len(templates) == 0 {
-		return true
+		return
 	}
 	var repo string
 	var existing []string
@@ -161,8 +160,8 @@ func checkTemplates(out io.Writer) bool {
 		existing, err = existingGithubLabels(repo)
 	}
 	if err != nil {
-		fmt.Fprintf(out, "issue templates: %v\n", err)
-		return false
+		fmt.Fprintf(out, "issue templates: not checked: %v\n", err)
+		return
 	}
 	for _, t := range templates {
 		missing := slices.DeleteFunc(slices.Clone(t.Labels), func(l string) bool {
@@ -172,7 +171,6 @@ func checkTemplates(out io.Writer) bool {
 			fmt.Fprintf(out, "issue templates: %s applies %s, which %s doesn't have: GitHub drops them\n", t.File, strings.Join(missing, ", "), repo)
 		}
 	}
-	return true
 }
 
 // printLintFindings groups findings by check (in lint.CheckOrder, so the

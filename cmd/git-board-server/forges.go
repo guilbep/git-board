@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/git-bug/git-bug/bridge/core"
+	"github.com/git-bug/git-bug/entity"
 
 	"github.com/guilbep/git-board/internal/gitbugio"
 )
@@ -60,10 +61,39 @@ type bridgeTally struct {
 	Linked int `json:"linked"`
 	// StaysLocal are texts no token can post: their authors have no token
 	// on this forge.
-	StaysLocal int      `json:"stays_local"`
-	Warnings   int      `json:"warnings"`
-	Errors     int      `json:"errors"`
-	Lines      []string `json:"lines"`
+	StaysLocal int `json:"stays_local"`
+	// Conflicts are linked issues a dry run found changed both here and on
+	// the forge: a send alone would replace the forge's labels (sent whole:
+	// those added there go), title, state and comment texts with these.
+	Conflicts int      `json:"conflicts"`
+	Warnings  int      `json:"warnings"`
+	Errors    int      `json:"errors"`
+	Lines     []string `json:"lines"`
+
+	// ways are, in a dry run, the ways each linked issue has changes
+	ways map[entity.Id]int
+}
+
+// the ways an issue has changes, in bridgeTally.ways
+const (
+	toPull = 1 << iota
+	toSend
+)
+
+// changed records a way an issue has changes, and counts it a conflict
+// once it has both, in whichever order the dry run reports them.
+func (t *bridgeTally) changed(id entity.Id, way int) {
+	if id == "" {
+		return
+	}
+	if t.ways == nil {
+		t.ways = map[entity.Id]int{}
+	}
+	was := t.ways[id]
+	t.ways[id] |= way
+	if was != toPull|toSend && t.ways[id] == toPull|toSend {
+		t.Conflicts++
+	}
 }
 
 // direction is one way of a sync. A dry run of a pull only knows "up to N
@@ -94,6 +124,7 @@ func (t *bridgeTally) add(r core.SyncResult, dryRun bool) {
 			} else if m := pullRe.FindStringSubmatch(reason); m != nil {
 				t.From.Changed++
 				t.From.Changes += atoi(m[1])
+				t.changed(r.Import.EntityId, toPull)
 			}
 		case core.ImportEventBug:
 			t.From.Issues++
@@ -112,7 +143,7 @@ func (t *bridgeTally) add(r core.SyncResult, dryRun bool) {
 		nothing, reason = r.Export.Event == core.ExportEventNothing, r.Export.Reason
 		switch r.Export.Event {
 		case core.ExportEventNothing:
-			t.planned(reason)
+			t.planned(r.Export.EntityId, reason)
 		case core.ExportEventBug:
 			t.To.Issues++
 		case core.ExportEventComment:
@@ -133,8 +164,8 @@ func (t *bridgeTally) add(r core.SyncResult, dryRun bool) {
 	}
 }
 
-// planned counts a dry run's push plan (bridge/core planPush).
-func (t *bridgeTally) planned(reason string) {
+// planned counts a dry run's push plan (bridge/core planPush) for an issue.
+func (t *bridgeTally) planned(id entity.Id, reason string) {
 	switch {
 	case reason == "missing author token":
 		t.StaysLocal++
@@ -145,6 +176,7 @@ func (t *bridgeTally) planned(reason string) {
 		t.To.Comments += atoi(createRe.FindStringSubmatch(reason)[1])
 	case strings.HasPrefix(reason, "would send: "):
 		t.To.Changed++
+		t.changed(id, toSend)
 		for _, part := range strings.Split(strings.TrimPrefix(reason, "would send: "), ", ") {
 			if m := countRe.FindStringSubmatch(part); m != nil && m[2] == "comments" {
 				t.To.Comments += atoi(m[1])
@@ -244,14 +276,22 @@ func (s *apiServer) handleForgeSync(w http.ResponseWriter, r *http.Request) {
 
 // sendsAgain refuses a send to a forge where the dry run found issues by
 // their git-bug marker: created there by a run whose links weren't kept,
-// only a pull links them. A send alone would create them again.
+// only a pull links them. A send alone would create them again. Nor to a
+// forge where it found issues changed on both sides: a send alone would
+// replace the forge's changes with these, its labels and comment texts too.
 func sendsAgain(mode string, dry *forgeJob, names []string) error {
 	if mode != "send" {
 		return nil
 	}
 	for name, t := range dry.Bridges {
-		if (len(names) == 0 || slices.Contains(names, name)) && t.Linked > 0 {
+		if len(names) > 0 && !slices.Contains(names, name) {
+			continue
+		}
+		if t.Linked > 0 {
 			return fmt.Errorf("%s has %d issues of this repository already, found by their git-bug marker: a send alone would create them again. Get or sync first", name, t.Linked)
+		}
+		if t.Conflicts > 0 {
+			return fmt.Errorf("%d issues changed both here and on %s since they last met: a send alone would replace their labels there, the ones added there going, their titles, states and comment texts with these. Get or sync first", t.Conflicts, name)
 		}
 	}
 	return nil

@@ -401,7 +401,9 @@ issue templates: feature.yaml applies enhancement, triage, needs-triage, which E
 ```
 
 `--apply` doesn't create them: the fix is a label the repository has, in
-the template.
+the template. This check only warns (`issue templates: not checked: …`)
+when it can't run, `gh` not knowing the repository or a template that
+doesn't parse: the exit status is the labels'.
 
 ## Sprints (`git-board sprint`)
 
@@ -609,7 +611,10 @@ ways, side by side, each with its own buttons:
    (an explicit "I understand" when it creates 50 issues or more on a
    forge). Send waits when the check found issues on a forge by their
    git-bug marker: only a pull links them, a send alone would create them
-   again. While a run goes on, edits wait and are saved after it.
+   again. It waits too when the check found an issue changed both here
+   and on that forge: a send replaces the forge's labels whole (one added
+   there goes), its title, state and comment texts. Get or Sync first.
+   While a run goes on, edits wait and are saved after it.
 3. **GitHub Project** (fields): its write mode, the last check's
    conflicts, **Check**, and **Pull fields** (**Sync fields** with
    `write = true`), as on the Conflicts page below.

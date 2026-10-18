@@ -155,6 +155,36 @@ func TestThreadForgeLinks(t *testing.T) {
 	}
 }
 
+// A gone mark lands on the forge of its own URL, even when another sync key
+// listed that URL first: never on the forge listed last.
+func TestForgeGoneMarksItsOwnURL(t *testing.T) {
+	b := gitbugiotest.New(t)
+	author, _ := b.TestCache().GetUserIdentity()
+	bug, _, err := b.TestCache().Bugs().NewRaw(author, 1, "renamed", "", nil, map[string]string{
+		"sync:github.com/a/r:id":  "I_1",
+		"sync:github.com/a/r:url": "https://github.com/a/r/issues/1",
+		"sync:github.com/b/r:id":  "I_2",
+		"sync:github.com/b/r:url": "https://github.com/b/r/issues/2",
+		// the project moved: same issue, another key, unlinked there
+		"sync:github.com/c/r:url":  "https://github.com/a/r/issues/1",
+		"sync:github.com/c/r:gone": "unlinked",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	is, err := b.GetIssue(bug.Id().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []gitbugio.Forge{
+		{Name: "GitHub", URL: "https://github.com/a/r/issues/1", Number: "1", Gone: "unlinked"},
+		{Name: "GitHub", URL: "https://github.com/b/r/issues/2", Number: "2"},
+	}
+	if !slices.Equal(is.Forges, want) {
+		t.Errorf("forges %+v, want %+v", is.Forges, want)
+	}
+}
+
 // Each forge an issue is on names its sync bridge, found as git-bug's engine
 // finds it: by its sync keys, or the metadata of an older bridge. Unlinked,
 // nothing waits for it and its number isn't the issue's anymore.
@@ -215,6 +245,86 @@ func TestThreadForgeBridges(t *testing.T) {
 	}
 	if th.HasNumber("7") || !th.HasNumber("3") {
 		t.Errorf("numbers of %+v, want 3 alone", th.Forges)
+	}
+}
+
+// An issue an older bridge pulled has only its <kind>-url; Unlink, or a
+// push finding it deleted, marks it gone under the sync key of its project.
+// The board (ListIssues) and the panel (Thread) both see it gone.
+func TestLegacyForgeGone(t *testing.T) {
+	b := gitbugiotest.New(t)
+	for name, conf := range map[string]map[string]string{
+		"gh": {"target": "github", "owner": "O", "project": "R", "default-login": "bot", "sync": "true"},
+		"gl": {"target": "gitlab", "project-id": "5", "base-url": "https://gitlab.example.com/", "default-login": "bot", "sync": "true"},
+	} {
+		for k, v := range conf {
+			if err := core.SetBridgeConfig(b.TestCache(), name, k, v); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	author, _ := b.TestCache().GetUserIdentity()
+	legacy := func(title string, meta map[string]string, gone map[string]string) string {
+		t.Helper()
+		bug, _, err := b.TestCache().Bugs().NewRaw(author, 1, title, "", nil, meta)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := bug.SetMetadata(bug.Snapshot().Operations[0].Id(), gone); err != nil {
+			t.Fatal(err)
+		}
+		if err := bug.Commit(); err != nil {
+			t.Fatal(err)
+		}
+		return bug.Id().String()
+	}
+	both := legacy("both", map[string]string{
+		"github-id":         "I_9",
+		"github-url":        "https://github.com/O/R/issues/2518",
+		"gitlab-id":         "33",
+		"gitlab-url":        "https://gitlab.example.com/g/r/-/issues/77",
+		"gitlab-project-id": "5",
+		"gitlab-base-url":   "https://gitlab.example.com/",
+	}, map[string]string{"sync:github.com/o/r:gone": "unlinked", "sync:gitlab.example.com/5:gone": "1"})
+	// older GitLab exports left base-url empty
+	old := legacy("old", map[string]string{
+		"gitlab-id":         "34",
+		"gitlab-url":        "https://gitlab.example.com/g/r/-/issues/78",
+		"gitlab-project-id": "5",
+		"gitlab-base-url":   "",
+	}, map[string]string{"sync:gitlab.example.com/5:gone": "unlinked"})
+
+	issues, err := b.ListIssues()
+	if err != nil {
+		t.Fatal(err)
+	}
+	byID := map[string]gitbugio.Issue{}
+	for _, is := range issues {
+		byID[is.ID] = is
+	}
+	for id, want := range map[string][]gitbugio.Forge{
+		both: {
+			{Name: "GitHub", URL: "https://github.com/O/R/issues/2518", Number: "2518", Gone: "unlinked"},
+			{Name: "GitLab", URL: "https://gitlab.example.com/g/r/-/issues/77", Number: "77", Gone: "deleted"},
+		},
+		old: {{Name: "GitLab", URL: "https://gitlab.example.com/g/r/-/issues/78", Number: "78", Gone: "unlinked"}},
+	} {
+		if got := byID[id].Forges; !slices.Equal(got, want) {
+			t.Errorf("board: forges %+v, want %+v", got, want)
+		}
+		th, err := b.Thread(id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for i := range want {
+			want[i].Bridge = map[string]string{"GitHub": "gh", "GitLab": "gl"}[want[i].Name]
+		}
+		if !slices.Equal(th.Forges, want) {
+			t.Errorf("panel: forges %+v, want %+v", th.Forges, want)
+		}
+	}
+	if is := byID[both]; is.HasNumber("2518") || is.HasForgeNumber("77") || is.BareNumber() != "" {
+		t.Errorf("an unlinked forge's number still names %+v", is.Forges)
 	}
 }
 

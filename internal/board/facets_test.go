@@ -1,6 +1,7 @@
 package board_test
 
 import (
+	"encoding/json"
 	"reflect"
 	"testing"
 	"time"
@@ -139,4 +140,17 @@ func TestFacetsHonourFollows(t *testing.T) {
 		return
 	}
 	t.Fatalf("no status facet in %+v", facets)
+}
+
+// With nothing to show, the panel is an empty list, not null: the page
+// maps over it.
+func TestFacetsNoneIsAnEmptyList(t *testing.T) {
+	b := gitbugiotest.New(t)
+	fs, err := board.Facets(b, &config.Config{}, "", "guilbep")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if data, _ := json.Marshal(fs); string(data) != "[]" {
+		t.Errorf("facets %s, want []", data)
+	}
 }

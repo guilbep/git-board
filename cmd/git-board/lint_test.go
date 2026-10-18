@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"os"
 	"strings"
 	"testing"
@@ -208,5 +209,43 @@ func TestLintCreateLabelsReportsTemplateLabelsTheRepoLacks(t *testing.T) {
 	}
 	if len(created) != 0 {
 		t.Errorf("--apply created %v: a template's label is fixed in the template, not created", created)
+	}
+}
+
+// The issue templates' check is a warning: when gh can't say which
+// repository this checkout is, or a template doesn't parse, every label
+// can still exist, and CI must not fail for it.
+func TestLintCreateLabelsTemplateCheckOnlyWarns(t *testing.T) {
+	newTestRepo(t)
+	if err := os.WriteFile(configPath, []byte(createLabelsTestConfig), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	if err := os.MkdirAll(".github/ISSUE_TEMPLATE", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(".github/ISSUE_TEMPLATE/bug.yml", []byte("name: Bug\nlabels: [bug]\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	origExisting, origCurrent := existingGithubLabels, currentGithubRepo
+	t.Cleanup(func() { existingGithubLabels, currentGithubRepo = origExisting, origCurrent })
+	existingGithubLabels = func(repo string) ([]string, error) {
+		return []string{"status:backlog", "status:ready", "prio:p0", "bug"}, nil
+	}
+	currentGithubRepo = func() (string, error) { return "", errors.New("gh repo view: no default repository") }
+
+	out, err := execute(t, []string{"lint", "--create-labels"})
+	if err != nil {
+		t.Fatalf("every label exists, the template check couldn't run: %v\noutput:\n%s", err, out)
+	}
+	if !strings.Contains(out, "issue templates: not checked: gh repo view: no default repository") {
+		t.Errorf("expected the template check's warning, got:\n%s", out)
+	}
+
+	currentGithubRepo = func() (string, error) { return "o/r", nil }
+	if err := os.WriteFile(".github/ISSUE_TEMPLATE/broken.yml", []byte("labels: [bug\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := execute(t, []string{"lint", "--create-labels"}); err != nil || !strings.Contains(out, "issue templates: not checked: broken.yml") {
+		t.Errorf("a template that doesn't parse: %v\noutput:\n%s", err, out)
 	}
 }

@@ -148,7 +148,8 @@ func TestRemoteEvents(t *testing.T) {
 	for path, want := range map[string]string{
 		"/api/remotes/origin/pull":  "issues", // the boards reload
 		"/api/remotes/origin/fetch": "sync",
-		"/api/remotes/origin/push":  "sync",
+		"/api/remotes/origin/push":  "issues", // it numbers the issues
+		"/api/remotes/mirror/push":  "sync",
 	} {
 		if got := eventFor(httptest.NewRequest("POST", path, nil)).Kind; got != want {
 			t.Errorf("%s: %s, want %s", path, got, want)

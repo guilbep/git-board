@@ -124,6 +124,7 @@ import { ApiError, getFields, getRemotes, getViews, markSeen, remoteAction, setI
 import { namespaces } from '@/facets';
 import type { Fields } from '@/fields';
 import { inbox, inboxError, loadInbox } from '@/inbox';
+import { forgeNumbers } from '@/issuesync';
 import { checkFailure, followingLine, mergeRows, toCheck, toPull } from '@/inboxcheck';
 import { debounced, onLive } from '@/live';
 import { initials, me, when } from '@/me';
@@ -158,7 +159,7 @@ const checks = computed(() => {
 });
 
 // numberOf: the issue's number on a forge it's still on
-const numberOf = (r: InboxRow) => r.issue.forges?.find((f) => f.number && !f.gone)?.number ?? '';
+const numberOf = (r: InboxRow) => forgeNumbers(r.issue)[0] ?? '';
 
 const following = computed(() => (data.value ? followingLine(data.value.following, data.value.views, data.value.roles) : ''));
 
