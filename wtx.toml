@@ -1,0 +1,73 @@
+# wtx: every branch gets its own worktree, ports, tmux session and agent.
+# Reference for every key: https://github.com/EPFL-ENAC/wtx/blob/main/docs/schema.md
+schema_version = 1
+
+[repo]
+name = "git-board"
+base_branch = "main"
+# The single source for the push guard, the completion and the deny rules.
+protected_branches = ["main"]
+
+[deps]
+
+[[deps.step]]
+if_missing = "web/node_modules"
+cwd = "web"
+run = "npm ci"
+
+# The agent pane fills the left half, the rest stack on the right.
+[panes]
+
+[[panes.pane]]
+name = "agent"
+role = "agent"
+
+[[panes.pane]]
+name = "shell"
+role = "shell"
+
+[agent]
+tool = "claude"
+llm = "opus"
+subagent_model = "sonnet"
+auto_compact_window = 200000
+explore_agent_model = "haiku"
+
+# Plan on one model, implement on another. A brief starts on
+# plan_model in plan mode. With Claude, accepting the plan carries
+# the same conversation on to build_model, at the effort the plan
+# asked for. With opencode the agent switch does it, and the
+# effort routing does not apply.
+[agent.orchestration]
+enabled = true
+plan_model = "fable"
+build_model = "opus"
+build_effort = "xhigh"
+
+# Added to the baseline wtx ships. A repo can tighten, never loosen.
+[permissions]
+allow = ["Bash(make build)", "Bash(make test)", "Bash(make vet)", "Bash(make fmt)", "Bash(make lint)", "Bash(make ci)", "Bash(go build *)", "Bash(go test *)", "Bash(go vet *)", "Bash(gofmt *)", "Bash(npm run typecheck)", "Bash(npm test)", "Bash(npm run build)"]
+deny = ["Bash(git tag *)", "Bash(git push * --tags)", "Bash(git bug push *)", "Bash(git bug bridge *)"]
+
+# Run by `wtx land --local`.
+[checks]
+lint = ["cd web && npm run typecheck"]
+test = ["make ci", "cd web && npm test"]
+
+[[repos]]
+name = "git-bug"
+path = "../git-bug"
+access = "read"   # read free, never writable
+base_branch = "bridge-sync"
+
+[[repos]]
+name = "co2-calculator"
+path = "../co2-calculator"
+access = "read"   # read free, never writable
+base_branch = "main"
+
+[[repos]]
+name = "co2-calculator-back-office-doc"
+path = "../co2-calculator-back-office-doc"
+access = "read"   # read free, never writable
+base_branch = "main"
