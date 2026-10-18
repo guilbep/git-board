@@ -1,0 +1,158 @@
+package cycle
+
+import (
+	"slices"
+	"testing"
+	"time"
+
+	"github.com/guilbep/git-board/internal/config"
+	"github.com/guilbep/git-board/internal/ghpr"
+)
+
+var co2Options = []string{"backlog", "comite", "ready", "in-progress", "in-review", "ready-for-validation", "qa", "tests-metier", "validated"}
+
+var co2 = (&config.Config{Fields: map[string]config.Field{"status": {Options: co2Options}}}).Stages()
+
+var people = map[string]string{
+	"risk": "alice", "plan": "bob", "review": "carol",
+	"signoff:ready-for-validation": "bob", "signoff:qa": "alice", "signoff:tests-metier": "",
+}
+
+var two = []string{"Exports a CSV", "Keeps the filters"}
+
+// input is an issue at status with two criteria, author dan, assignee
+// erin, viewed by alice; mod changes the rest.
+func input(status string, mod func(*Input)) Input {
+	in := Input{Stages: co2, Status: status, Criteria: two, Author: "dan", Assignees: []string{"erin"}, People: people, Me: "alice"}
+	if mod != nil {
+		mod(&in)
+	}
+	return in
+}
+
+func risk(r string) func(*Input) { return func(in *Input) { in.Risk = r } }
+
+func approved(r string) func(*Input) {
+	return func(in *Input) { in.Risk = r; in.PlanApproval = &Approval{By: "bob", At: time.Unix(1, 0)} }
+}
+
+func TestWalk(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		in      Input
+		step    int
+		login   string
+		what    string
+		mine    bool
+		note    string
+		gate    string
+		actions []string
+		skipped []int
+		done    bool
+	}{
+		{name: "backlog", in: input("backlog", func(in *Input) { in.Criteria = nil }), step: 1, login: "dan", what: "add acceptance criteria", gate: "No issue, no agent"},
+		{name: "ready, no criteria", in: input("ready", func(in *Input) { in.Criteria = nil }), step: 1, login: "dan", what: "add acceptance criteria"},
+		{name: "ready, no risk", in: input("ready", nil), step: 2, login: "alice", what: "set the risk class", mine: true, gate: "Class written on the issue", actions: []string{"set-risk"}},
+		{name: "ready, normal", in: input("ready", risk("normal")), step: 3, login: "bob", what: "approve the plan", gate: "Plan approved by the plan role"},
+		{name: "ready, normal, approved", in: input("ready", approved("normal")), step: 3, login: "erin", what: "move the status to in-progress", note: "plan approved, waits for the status in-progress"},
+		{name: "ready, normal, plan accepted", in: input("ready", func(in *Input) { in.Risk = "normal"; in.Plan = &Plan{Path: "p.md", Status: "accepted"} }), step: 3, login: "erin", what: "move the status to in-progress", note: "plan approved, waits for the status in-progress"},
+		{name: "ready, low", in: input("ready", risk("low")), step: 3, login: "erin", what: "move the status to in-progress", note: "low risk, waits for the status in-progress", gate: "Skipped, low risk", skipped: []int{3}},
+		{name: "ready, structural, PR approved", in: input("ready", func(in *Input) { in.Risk = "structural"; in.PlanPR = &ghpr.PR{Decision: "APPROVED"} }), step: 3, login: "erin", what: "move the status to in-progress", note: "plan approved, waits for the status in-progress", gate: "Structural: plan PR approved first"},
+		{name: "ready, structural, PR waiting", in: input("ready", func(in *Input) {
+			in.Risk = "structural"
+			in.PlanPR = &ghpr.PR{Decision: "REVIEW_REQUIRED"}
+			in.Me = "bob"
+		}), step: 3, login: "bob", what: "approve the plan PR on GitHub", mine: true},
+		{name: "in-progress, no tests", in: input("in-progress", approved("normal")), step: 4, login: "erin", what: "write the failing test", gate: "Every bug fix ships its test"},
+		{name: "in-progress, tests", in: input("in-progress", func(in *Input) { approved("normal")(in); in.Tests = []TestFile{{Path: "a_test.go", Commit: "c1"}} }), step: 5, login: "erin", what: "commit and open the PR", gate: "A human commits and opens the PR"},
+		{name: "in-progress, the floor", in: input("in-progress", func(in *Input) { in.Criteria = nil }), step: 4, login: "erin", what: "write the failing test", note: "risk not set"},
+		{name: "in-progress, plan not approved", in: input("in-progress", risk("normal")), step: 4, login: "erin", what: "write the failing test", note: "plan not approved"},
+		{name: "in-progress, low", in: input("in-progress", risk("low")), step: 4, login: "erin", what: "write the failing test"},
+		{name: "in-progress, PR open", in: input("in-progress", func(in *Input) {
+			approved("normal")(in)
+			in.Tests = []TestFile{{Path: "a_test.go"}}
+			in.PR = &ghpr.PR{Number: 3082, State: "OPEN"}
+		}), step: 5, login: "erin", what: "commit and open the PR", note: "PR #3082 open, waits for the status in-review"},
+		{name: "in-review", in: input("in-review", approved("normal")), step: 6, login: "carol", what: "review the PR", gate: "A human who can explain the diff"},
+		{name: "in-review, structural", in: input("in-review", func(in *Input) { in.Risk = "structural"; in.Me = "carol" }), step: 6, login: "carol", what: "review the PR", mine: true, gate: "Structural: a second human", actions: []string{"review"}},
+		{name: "in-review, merged", in: input("in-review", func(in *Input) { approved("normal")(in); in.PR = &ghpr.PR{Number: 3082, State: "MERGED"} }), step: 6, login: "carol", what: "review the PR", note: "merged, waits for the status"},
+		{name: "qa", in: input("qa", risk("normal")), step: 7, login: "alice", what: "sign off qa", mine: true, note: "no plan file", gate: "Green codes are not proof", actions: []string{"verify", "check", "signoff"}},
+		{name: "qa, plan not delivered", in: input("qa", func(in *Input) { in.Risk = "normal"; in.Plan = &Plan{Path: "p.md", Status: "accepted"} }), step: 7, login: "alice", what: "sign off qa", mine: true, note: "plan not marked delivered", actions: []string{"verify", "check", "signoff"}},
+		{name: "tests-metier, anyone", in: input("tests-metier", risk("low")), step: 7, what: "sign off tests-metier", mine: true, actions: []string{"verify", "check", "signoff"}},
+		{name: "validated", in: input("validated", risk("low")), step: 7, done: true, gate: "Green codes are not proof"},
+		{name: "closed at qa", in: input("qa", func(in *Input) { in.Risk = "structural"; in.Closed = true }), step: 7, done: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := Compute(tc.in)
+			if c.Step != tc.step || c.Of != 7 || c.Waits.Login != tc.login || c.Waits.What != tc.what || c.Mine != tc.mine || c.Note != tc.note || c.Done != tc.done {
+				t.Errorf("got step %d of %d, waits %q to %q, mine %v, note %q, done %v\nwant step %d, waits %q to %q, mine %v, note %q, done %v",
+					c.Step, c.Of, c.Waits.Login, c.Waits.What, c.Mine, c.Note, c.Done, tc.step, tc.login, tc.what, tc.mine, tc.note, tc.done)
+			}
+			if tc.gate != "" && c.Gate != tc.gate {
+				t.Errorf("gate = %q, want %q", c.Gate, tc.gate)
+			}
+			if !slices.Equal(c.Actions, tc.actions) || !slices.Equal(c.Skipped, tc.skipped) {
+				t.Errorf("actions %v skipped %v, want %v %v", c.Actions, c.Skipped, tc.actions, tc.skipped)
+			}
+			if want := Steps[tc.step]; tc.done {
+				if c.Name != "Done" {
+					t.Errorf("name = %q, want Done", c.Name)
+				}
+			} else if c.Name != want {
+				t.Errorf("name = %q, want %q", c.Name, want)
+			}
+		})
+	}
+}
+
+func TestStatusAloneNeverTellsTwoFromThree(t *testing.T) {
+	a, b := Compute(input("ready", nil)), Compute(input("ready", risk("normal")))
+	if a.Step != 2 || b.Step != 3 {
+		t.Errorf("steps %d and %d, want 2 and 3", a.Step, b.Step)
+	}
+}
+
+func TestComputeNoStatus(t *testing.T) {
+	c := Compute(Input{})
+	if c.Step != 1 || c.Name != "Intent" || !c.Waits.Anyone || !c.Mine || c.Done {
+		t.Errorf("Compute(Input{}) = %+v", c)
+	}
+}
+
+func TestCriteriaCount(t *testing.T) {
+	for _, tc := range []struct {
+		name, desc string
+		want       []string
+	}{
+		{"checklist", "Intro\n\n## Acceptance criteria\n\n- [ ] one\n- [x] two\n- [ ] three\n", []string{"one", "two", "three"}},
+		{"bold, numbered", "**Acceptance criteria:**\n1. first\n2) second\n", []string{"first", "second"}},
+		{"heading, no list", "### Acceptance Criteria\n\nTo be written.\n- not this\n", nil},
+		{"no heading", "- one\n- two\n", nil},
+		{"cut by a paragraph", "# Acceptance criteria\n* a\n+ b\n\nNotes: later\n- c\n", []string{"a", "b"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := Criteria(tc.desc); !slices.Equal(got, tc.want) {
+				t.Errorf("Criteria = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestCardShowsToRoleOnly(t *testing.T) {
+	bob := Compute(input("qa", func(in *Input) { in.Risk = "low"; in.Me = "bob" }))
+	if bob.Mine || bob.Actions != nil {
+		t.Errorf("bob at qa: mine %v, actions %v", bob.Mine, bob.Actions)
+	}
+	if alice := Compute(input("qa", risk("low"))); !alice.Mine {
+		t.Error("alice signs off qa")
+	}
+	if c := Compute(input("qa", func(in *Input) { in.Risk = "low"; in.Me = "ALICE" })); !c.Mine {
+		t.Error("logins compare without case")
+	}
+	nobody := map[string]string{"signoff:qa": ""}
+	for _, me := range []string{"alice", "bob"} {
+		if c := Compute(input("qa", func(in *Input) { in.Risk = "low"; in.People = nobody; in.Me = me })); !c.Mine || !c.Waits.Anyone {
+			t.Errorf("%s with nobody at qa: mine %v, anyone %v", me, c.Mine, c.Waits.Anyone)
+		}
+	}
+}

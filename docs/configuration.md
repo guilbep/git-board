@@ -15,6 +15,7 @@ It lives at the root of the repository. Edit it in **Settings → Project file**
 | `[github-project]` | the GitHub Project to sync fields with |
 | `[uploads]` | where attached files go |
 | `[branches]` | the branch an issue suggests: its base and its name |
+| `[cycle]`, `[cycle.signoffs]` | the development cycle: which statuses are which stage, where plans live, which files are tests, who holds each gate |
 | `[repos]` | the GitHub repositories `git board lint --create-labels` writes to |
 
 ## Fields
@@ -286,6 +287,62 @@ kinds = { bug = "fix", feat = "feat", perf = "perf", task = "chore" }
 `[BUG](Equipment) Other equipment shows the wrong example (#2518)`, labeled `bug`, gives `fix/2518-other-equipment-shows-the-wrong-example`. What git doesn't take in a branch name becomes `-`.
 
 A branch names an issue when its first number is the issue's number (`fix/2518-…`, `2518-…`: its project number once the project numbers its issues, else a forge's), or when a word in it starts the issue's git-bug id (7 characters or more). Local branches and the remotes' (as last fetched) are listed.
+
+## Cycle
+
+An issue's page shows its **step** in the development cycle under the title, "Step 7 of 7 · Verify, waits for alice to sign off qa", and, to the person whose turn it is, the next-step card. The step is never stored: the server computes it on every read from the status and the evidence. The status is the floor (its stage gives the first step it can be at), and the evidence moves the step within that stage, never below it. Evidence that disagrees with the status shows after the line ("plan not approved"), it never makes another step.
+
+```toml
+[fields]
+risk = { options = ["low", "normal", "structural"], single = true }
+
+[cycle]
+ready = "ready"
+in-progress = ["in-progress"]
+in-review = ["in-review"]
+validation = ["ready-for-validation", "qa", "tests-metier"]
+plans = "docs/src/implementation-plans"
+risk = "pm"
+plan = "lead-dev"
+review = "reviewer"
+
+[cycle.signoffs]
+ready-for-validation = "lead-dev"
+qa = "pm"
+tests-metier = "metier"
+```
+
+Every key has a default, so a project writes only what the guess got wrong. The stages are guessed from the status options, in their order, on the words of each name (split at `-`, `_` and spaces). The last option is the closing status. A word among `validation`, `qa`, `uat`, `acceptance`, `test`, `tests`, `metier`, `verify` or `staging` makes a validation status; `review`, `reviewing` or `pr` makes in-review; `progress`, `doing`, `wip`, `dev`, `development`, `implementing` or `coding` makes in-progress; the first with `ready`, `todo`, `planned` or `selected` is ready. Every other status is before ready. With co2-calculator's nine statuses the guess is the table above. The roles are unset by default, and a gate whose role is unset, or names nobody, is anyone's turn.
+
+| Key | Default | What it does |
+| --- | --- | --- |
+| `ready` | guessed | The status an issue with acceptance criteria waits at: steps 1 to 3 (intent, risk class, plan). |
+| `in-progress` | guessed | Steps 4 and 5: the failing test, then the code and the PR. |
+| `in-review` | guessed | Step 6: the review. |
+| `validation` | guessed | Step 7, one sign-off per status, in the options' order. Signing off the last one moves the issue to the closing status and closes it. |
+| `plans` | `"docs/src/implementation-plans"` | Where plan files live: Markdown whose front matter's `issue:` names the issue (`2518`, `"#2518"`, `CO2-2518`, or its git-bug id's first 7 characters), and whose `status:` (`accepted`, `in-progress` or `delivered`) approves the plan. |
+| `tests` | `*_test.go`, `*.test.ts`, `*.spec.ts`, `test_*.py`, `tests/**` | Which changed files are tests, by path or base name; `dir/**` is everything under `dir`. |
+| `risk` | none | The role (`[roles]`) that sets the risk class. |
+| `plan` | none | The role that approves the plan. |
+| `review` | none | The role that reviews the PR. |
+| `signoffs` | none | Each validation status to the role that signs it off. |
+
+The step reads:
+- **The status** (the `status` field).
+- **The acceptance criteria:** the list under an "Acceptance criteria" heading, or a bold line, in the description. With none, the issue is at step 1.
+- **The risk class:** the `risk` field, `low`, `normal` or `structural`. Low skips step 3.
+- **The plan file**, read from the evidence branch, then the `plan/` branch, then the base.
+- **The tests:** the files the evidence branch changed (`git diff base...branch`) that match `tests`. The evidence branch is the newest branch naming the issue that isn't a `plan/` branch.
+- **The PR,** read from GitHub only when the issue is at in-review or later (or structural, for the plan branch's PR), at most every 5 minutes per branch. When GitHub can't be reached, the step still computes, with the last PR it read.
+- **The comments with metadata** that the card writes.
+
+The card writes:
+- **Set the risk:** a field edit.
+- **Approve the plan:** a `plan:approve` comment. A structural plan is approved on its PR on GitHub instead.
+- **Post the run, and tick a criterion:** `verify:run` and `verify:criterion` comments, with the commit they were made at.
+- **Sign off:** a `signoff:status` comment, then the next status. A sign-off needs a run at the branch's head, or a reason, written as `signoff:why`.
+
+A comment is the viewer's when git-board's identity wrote it, since the server writes as that identity. Anyone else's comment counts under its author's forge login. The server refuses a card action from anyone but the gate's person with `waits for the <role> role: <login>`.
 
 ## Numbers
 

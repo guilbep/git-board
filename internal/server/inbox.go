@@ -46,15 +46,20 @@ func (s *apiServer) inboxMe(w http.ResponseWriter) (inbox.Me, bool) {
 		writeCoded(w, http.StatusConflict, "no-identity", errors.New("the inbox is the identity you write as: choose one in Settings"))
 		return inbox.Me{}, false
 	}
-	login := s.me
-	if login == "" {
-		login = s.b.MyLogin()
-	}
+	login := s.viewer()
 	if login == "" {
 		writeCoded(w, http.StatusConflict, "no-login", errors.New("your identity has no forge login, so no field and no mention can name you: git bug bridge new tags it, or start the server with --me"))
 		return inbox.Me{}, false
 	}
 	return inbox.Me{ID: p.ID, Login: login}, true
+}
+
+// viewer is who uses git-board: --me, else the identity's forge login.
+func (s *apiServer) viewer() string {
+	if s.me != "" {
+		return s.me
+	}
+	return s.b.MyLogin()
 }
 
 func (s *apiServer) loadInbox(id string) (inbox.State, error) {

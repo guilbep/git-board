@@ -72,6 +72,9 @@ type Event struct {
 	// EditWas, with EditPending, is the text the forges have: the newest
 	// version that reached them, for a diff of what the sync will change.
 	EditWas string `json:"edit_was,omitempty"`
+	// Meta is a comment's operation metadata, without the sync engine's
+	// sync:* keys: what the cycle's sign-offs, approvals and runs are.
+	Meta map[string]string `json:"meta,omitempty"`
 
 	Added   []string `json:"added,omitempty"` // labels
 	Removed []string `json:"removed,omitempty"`
@@ -250,6 +253,16 @@ func event(snap *bugent.Snapshot, item bugent.TimelineItem, on forgeState) Event
 					who = edits[i-1].Author()
 				}
 				e.History = append(e.History, Version{Author: person(who), At: at(h.UnixTime), Body: h.Message})
+			}
+		}
+		if op, ok := on.ops[item.CombinedId()]; ok {
+			for k, v := range op.AllMetadata() {
+				if !strings.HasPrefix(k, "sync:") {
+					if e.Meta == nil {
+						e.Meta = map[string]string{}
+					}
+					e.Meta[k] = v
+				}
 			}
 		}
 		if err == nil {
@@ -527,6 +540,21 @@ func (b *Backend) AddComment(idPrefix, body string) (string, error) {
 	var id entity.CombinedId
 	err := b.write(idPrefix, func(bug *cache.BugCache) (err error) {
 		id, _, err = bug.AddComment(body)
+		return err
+	})
+	return string(id), err
+}
+
+// AddCommentMeta is AddComment with operation metadata, as the user
+// identity: what the cycle's sign-offs, approvals and runs are.
+func (b *Backend) AddCommentMeta(idPrefix, body string, meta map[string]string) (string, error) {
+	author, err := b.c.GetUserIdentity()
+	if err != nil {
+		return "", err
+	}
+	var id entity.CombinedId
+	err = b.write(idPrefix, func(bug *cache.BugCache) (err error) {
+		id, _, err = bug.AddCommentRaw(author, time.Now().Unix(), body, nil, meta)
 		return err
 	})
 	return string(id), err

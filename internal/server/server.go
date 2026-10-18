@@ -84,6 +84,8 @@ type apiServer struct {
 	// githubAPI is GitHub's API for the PR gate (pulls.go): "" is
 	// https://api.github.com; tests, a fake
 	githubAPI string
+	// pulls is each branch's PR as the cycle last read it (cycle.go)
+	pulls pullCache
 
 	lazyOnce
 }
@@ -114,6 +116,8 @@ func newMux(s *apiServer, static http.Handler) http.Handler {
 	mux.HandleFunc("GET /api/issues/{id}/pulls", s.handlePulls)
 	mux.HandleFunc("POST /api/issues/{id}/pulls", s.handleOpenPull)
 	mux.HandleFunc("POST /api/issues/{id}/pulls/{number}/merge", s.handleMergePull)
+	mux.HandleFunc("GET /api/issues/{id}/cycle", s.handleCycle)
+	mux.HandleFunc("POST /api/issues/{id}/cycle/{action}", s.handleCycleAction)
 	mux.HandleFunc("POST /api/issues/{id}/comments", s.handleComment)
 	mux.HandleFunc("PUT /api/issues/{id}/comments/{comment}", s.handleEditComment)
 	mux.HandleFunc("PUT /api/issues/{id}/title", s.handleTitle)
