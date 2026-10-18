@@ -635,8 +635,8 @@ ways, side by side, each with its own buttons:
    forge). Send waits when the check found issues on a forge by their
    git-bug marker: only a pull links them, a send alone would create them
    again. It waits too when the check found an issue changed both here
-   and on that forge: a send replaces the forge's labels whole (one added
-   there goes), its title, state and comment texts. Get or Sync first.
+   and on that forge: a send replaces its title, state and comment texts
+   there (labels merge: only your changes go). Get or Sync first.
    While a run goes on, edits wait and are saved after it.
 3. **GitHub Project** (fields): its write mode, the last check's
    conflicts, **Check**, and **Pull fields** (**Sync fields** with

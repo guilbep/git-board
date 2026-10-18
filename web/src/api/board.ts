@@ -299,7 +299,7 @@ export interface BridgeTally {
   from: SyncDirection;
   linked: number; // found on the forge by their git-bug marker
   stays_local: number; // texts no token can post
-  conflicts: number; // linked issues changed on both sides: a send alone would replace the forge's
+  conflicts: number; // linked issues changed on both sides: a send alone would replace the forge's titles, states, comment texts
   warnings: number;
   errors: number;
   lines: string[];

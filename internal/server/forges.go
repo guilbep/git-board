@@ -63,8 +63,8 @@ type bridgeTally struct {
 	// on this forge.
 	StaysLocal int `json:"stays_local"`
 	// Conflicts are linked issues a dry run found changed both here and on
-	// the forge: a send alone would replace the forge's labels (sent whole:
-	// those added there go), title, state and comment texts with these.
+	// the forge: a send alone would replace the forge's title, state and
+	// comment texts with these (labels merge: only git-bug's changes go).
 	Conflicts int      `json:"conflicts"`
 	Warnings  int      `json:"warnings"`
 	Errors    int      `json:"errors"`
@@ -278,7 +278,7 @@ func (s *apiServer) handleForgeSync(w http.ResponseWriter, r *http.Request) {
 // their git-bug marker: created there by a run whose links weren't kept,
 // only a pull links them. A send alone would create them again. Nor to a
 // forge where it found issues changed on both sides: a send alone would
-// replace the forge's changes with these, its labels and comment texts too.
+// replace the forge's titles, states and comment texts with these.
 func sendsAgain(mode string, dry *forgeJob, names []string) error {
 	if mode != "send" {
 		return nil
@@ -291,7 +291,7 @@ func sendsAgain(mode string, dry *forgeJob, names []string) error {
 			return fmt.Errorf("%s has %d issues of this repository already, found by their git-bug marker: a send alone would create them again. Get or sync first", name, t.Linked)
 		}
 		if t.Conflicts > 0 {
-			return fmt.Errorf("%d issues changed both here and on %s since they last met: a send alone would replace their labels there, the ones added there going, their titles, states and comment texts with these. Get or sync first", t.Conflicts, name)
+			return fmt.Errorf("%d issues changed both here and on %s since they last met: a send alone would replace their titles, states and comment texts there with these. Get or sync first", t.Conflicts, name)
 		}
 	}
 	return nil
