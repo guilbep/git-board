@@ -39,7 +39,7 @@ func both(t *testing.T, fx *releasetest.Fixture, env string, d release.Deployed)
 }
 
 func TestStatusAgreeingTargets(t *testing.T) {
-	r, _, fx := releasetest.NewRunner(t)
+	r, _, fx := releasetest.NewRunner(t, "preview", "dev", "stage", "prod")
 	c := fx.Commit(t, "feat")
 	both(t, fx, "stage", release.Deployed{Commit: c, Version: "v1.0.0-rc.1"})
 	st := status(t, r)
@@ -59,7 +59,7 @@ func TestStatusAgreeingTargets(t *testing.T) {
 	for _, e := range st.Envs {
 		roles = append(roles, e.Name+":"+e.Role)
 	}
-	if got := strings.Join(roles, " "); got != "dev:follow stage:candidate prod:last" {
+	if got := strings.Join(roles, " "); got != "preview: dev:follow stage:candidate prod:last" {
 		t.Errorf("roles = %s", got)
 	}
 	if st.Head != c {
@@ -167,9 +167,11 @@ func TestReconcileCreatesMissing(t *testing.T) {
 	c := fx.Commit(t, "fix")
 	fx.Tag(t, c, "v1.0.0-rc.1")
 	tools.Images["ghcr.test/app/frontend:v1.0.0-rc.1"] = releasetest.FakeImage{Digest: "sha256:fe", Revision: c}
-	// kept though built for another commit (legacy reuse_unchanged_images);
-	// backend, in no registry, is left out
+	// kept though built for another commit (legacy reuse_unchanged_images)
 	tools.Images["quay.test/app/frontend:v1.0.0-rc.1"] = releasetest.FakeImage{Digest: "sha256:qfe", Revision: first}
+	// not tagged yet: the image under the commit, when built for it
+	tools.Images["ghcr.test/app/backend:"+c] = releasetest.FakeImage{Digest: "sha256:be", Revision: c}
+	tools.Images["quay.test/app/backend:"+c] = releasetest.FakeImage{Digest: "sha256:qbe", Revision: first}
 	if err := r.Reconcile(ctx); err != nil {
 		t.Fatalf("Reconcile: %v", err)
 	}
@@ -180,6 +182,7 @@ func TestReconcileCreatesMissing(t *testing.T) {
 	want := []gitbugio.Artifact{
 		{Image: "frontend", Registry: "ghcr.test/app", Digest: "sha256:fe"},
 		{Image: "frontend", Registry: "quay.test/app", Digest: "sha256:qfe"},
+		{Image: "backend", Registry: "ghcr.test/app", Digest: "sha256:be"},
 	}
 	if err != nil || !ok || rec.Previous != "v0.9.0" || !slices.Equal(rec.Artifacts, want) {
 		t.Errorf("record = %+v, %v, %v", rec, ok, err)
@@ -199,5 +202,36 @@ func TestReconcileCreatesMissing(t *testing.T) {
 	}
 	if row := status(t, r).Releases[0]; row.Tag.Name != "v1.0.0" || row.Record == nil || row.Record.ID != rec.ID {
 		t.Errorf("row = %+v", row)
+	}
+}
+
+// Reconcile pushes the records an earlier push missed; offline it does
+// nothing.
+func TestReconcilePushesOnlineOnly(t *testing.T) {
+	r, _, fx := releasetest.NewRunner(t)
+	c := fx.Commit(t, "fix")
+	fx.Tag(t, c, "v1.0.0")
+	r.Offline = true
+	if err := r.Reconcile(ctx); err != nil {
+		t.Fatalf("offline Reconcile: %v", err)
+	}
+	if recs, _ := r.B.Releases(); len(recs) != 0 {
+		t.Errorf("offline Reconcile recorded %+v", recs)
+	}
+	if _, err := r.B.CreateRelease(gitbugio.ReleaseRecord{Commit: c}); err != nil { // its push failed
+		t.Fatal(err)
+	}
+	if err := r.Reconcile(ctx); err != nil {
+		t.Fatalf("offline Reconcile: %v", err)
+	}
+	if got := releasetest.Git(t, fx.AppBare, "for-each-ref", "refs/releases"); got != "" {
+		t.Errorf("offline Reconcile pushed %s", got)
+	}
+	r.Offline = false
+	if err := r.Reconcile(ctx); err != nil {
+		t.Fatalf("Reconcile: %v", err)
+	}
+	if got := releasetest.Git(t, fx.AppBare, "for-each-ref", "refs/releases"); got == "" {
+		t.Error("the record made before wasn't pushed")
 	}
 }

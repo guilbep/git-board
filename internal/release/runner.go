@@ -48,10 +48,15 @@ func (r *Runner) fetch(ctx context.Context) error {
 }
 
 // Reconcile records every release tag's commit that has no record yet, and
-// pushes the records it makes. A commit's artifacts are each image's digest
-// on each deploy registry under its newest tag; an image the registry lacks
-// is left out. Previous is the newest final before that tag.
+// pushes the records, so one an earlier push missed goes too. Offline it
+// does nothing: without the pull it would duplicate other clones' records.
+// A commit's artifacts are each image's digest on each deploy registry (see
+// artifact); one the registry lacks is left out. Previous is the newest
+// final before the commit's newest tag.
 func (r *Runner) Reconcile(ctx context.Context) error {
+	if r.Offline {
+		return nil
+	}
 	if err := r.fetch(ctx); err != nil {
 		return err
 	}
@@ -67,7 +72,6 @@ func (r *Runner) Reconcile(ctx context.Context) error {
 	for _, rec := range recs {
 		recorded[rec.Commit] = true
 	}
-	made := false
 	for i, t := range tags { // newest first
 		if recorded[t.Commit] {
 			continue
@@ -82,25 +86,35 @@ func (r *Runner) Reconcile(ctx context.Context) error {
 		}
 		for _, img := range r.Cfg.Images {
 			for _, d := range r.Cfg.Deploy {
-				// no revision check: reuse_unchanged_images re-tagged
-				// unchanged images, so a legacy tag can name an older build
-				digest, _, err := r.Tools.Revision(ctx, d.Registry+"/"+img.Name+":"+t.Name)
-				if errors.Is(err, ErrNoImage) {
-					continue
-				}
+				digest, ok, err := r.artifact(ctx, d.Registry+"/"+img.Name, t)
 				if err != nil {
 					return err
 				}
-				rec.Artifacts = append(rec.Artifacts, gitbugio.Artifact{Image: img.Name, Registry: d.Registry, Digest: digest})
+				if ok {
+					rec.Artifacts = append(rec.Artifacts, gitbugio.Artifact{Image: img.Name, Registry: d.Registry, Digest: digest})
+				}
 			}
 		}
 		if _, err := r.B.CreateRelease(rec); err != nil {
 			return err
 		}
-		made = true
-	}
-	if !made {
-		return nil
 	}
 	return r.B.PushReleases(r.Cfg.RemoteName())
+}
+
+// artifact is the digest of image (<registry>/<name>) for tag t: under the
+// tag, unchecked (reuse_unchanged_images re-tagged unchanged images, so a
+// legacy tag can name an older build), else under t's commit when its
+// revision label is that commit (a cut's tag is pushed before the images
+// are tagged). ok is false when neither has it.
+func (r *Runner) artifact(ctx context.Context, image string, t Tag) (digest string, ok bool, err error) {
+	digest, _, err = r.Tools.Revision(ctx, image+":"+t.Name)
+	if !errors.Is(err, ErrNoImage) {
+		return digest, err == nil, err
+	}
+	digest, rev, err := r.Tools.Revision(ctx, image+":"+t.Commit)
+	if errors.Is(err, ErrNoImage) {
+		return "", false, nil
+	}
+	return digest, err == nil && rev == t.Commit, err
 }

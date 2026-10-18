@@ -3,6 +3,7 @@ package release
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/guilbep/git-board/internal/gitbugio"
@@ -20,7 +21,7 @@ type TargetState struct {
 // EnvState is what runs in an environment, across its targets.
 type EnvState struct {
 	Name    string        `json:"name"`
-	Role    string        `json:"role"` // follow, candidate or last
+	Role    string        `json:"role"` // follow, candidate, last, or "" (before follow)
 	Targets []TargetState `json:"targets"`
 	Commit  string        `json:"commit"`  // the targets' when they agree
 	Version string        `json:"version"` // the targets' when they agree
@@ -108,12 +109,14 @@ func (r *Runner) Status(ctx context.Context) (Status, error) {
 }
 
 func (r *Runner) envState(ctx context.Context, env string, repos map[string]*ConfigRepo) (EnvState, error) {
-	e := EnvState{Name: env, Role: "candidate", Adopted: len(r.Cfg.Deploy) > 0}
-	switch env {
-	case r.Cfg.Followed():
+	e := EnvState{Name: env, Adopted: len(r.Cfg.Deploy) > 0}
+	switch {
+	case env == r.Cfg.Followed():
 		e.Role = "follow"
-	case r.Cfg.Last():
+	case env == r.Cfg.Last():
 		e.Role = "last"
+	case slices.Contains(r.Cfg.Candidates(), env):
+		e.Role = "candidate"
 	}
 	chart := ""
 	if r.Cfg.Chart != nil {
