@@ -92,6 +92,7 @@
           </span>
           <span class="gb-mono" title="git-bug id">git-bug {{ thread.id.slice(0, 7) }}</span>
         </div>
+        <IssueCycle :id="thread.id" :status="statusValue" :labels="thread.labels" @changed="load" />
         <p v-if="saveError && !renaming" class="gb-save-error" role="alert"><GbIcon name="error" small /> <b>Not saved.</b> {{ saveError }}</p>
         <p v-if="waiting" class="gb-wait" role="status"><GbIcon name="clock" small /> Syncing with the forges… your change is saved after it.</p>
       </div>
@@ -144,13 +145,14 @@ import { clampWidth, panelMode, panelWidth, togglePanelMode } from '@/panelsize'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, toRef, useId, watch } from 'vue';
 import { markSeen, type Thread } from '@/api/board';
 import { inbox, inboxError, loadInbox } from '@/inbox';
-import type { Fields } from '@/fields';
+import { fieldValues, type Fields } from '@/fields';
 import { useIssue } from '@/issue';
 import { me, on } from '@/me';
 import CommentCard from '@/components/CommentCard.vue';
 import HistoryView from '@/components/HistoryView.vue';
 import { steps } from '@/replay';
 import GbIcon from '@/components/GbIcon.vue';
+import IssueCycle from '@/components/IssueCycle.vue';
 import IssueComposer from '@/components/IssueComposer.vue';
 import IssueSide from '@/components/IssueSide.vue';
 import TimelineEvent from '@/components/TimelineEvent.vue';
@@ -195,6 +197,7 @@ const rest = computed(() => thread.value?.events.filter((e) => e.kind !== 'creat
 const mode = ref<'talk' | 'history'>('talk');
 const changeCount = computed(() => (thread.value ? steps(thread.value.events).length : 0));
 const comments = computed(() => rest.value.filter((e) => e.kind === 'comment').length);
+const statusValue = computed(() => fieldValues(thread.value?.labels ?? [], 'status')[0] ?? '');
 // the board's fields, and any namespace this issue has besides
 const sideNames = computed(() => {
   const own = (thread.value?.labels ?? []).filter((l) => l.includes(':')).map((l) => l.slice(0, l.indexOf(':')));

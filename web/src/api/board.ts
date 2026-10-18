@@ -630,6 +630,48 @@ export interface IssuePulls {
   pulls: { branch: string; pr: GatePR | null }[];
 }
 
+// The issue's step in the development cycle (internal/cycle,
+// internal/server/cycle.go), computed from the status and the evidence.
+export interface CycleWaits {
+  role?: string; // risk, plan, review, assignee, author, signoff
+  login?: string; // '' with anyone
+  what: string;
+  anyone: boolean;
+}
+export interface Cycle {
+  step: number; // 1 to 7
+  of: number;
+  name: string;
+  stage: string;
+  done: boolean;
+  gate: string;
+  risk?: string;
+  skipped?: number[];
+  note?: string; // evidence that disagrees with the status
+  waits: CycleWaits;
+  mine: boolean; // the viewer's turn, or anyone's
+  actions?: string[]; // set-risk, approve-plan, review, verify, check, signoff
+  evidence: {
+    criteria?: string[];
+    head?: string;
+    branch?: string;
+    pr?: GatePR | null;
+    runs?: { by: string; commit: string }[];
+    checks?: { index: number; by: string }[];
+  };
+  stages: { ready: string; in_progress: string[]; in_review: string[]; validation: string[]; closing: string; guessed: boolean };
+  pr_checked_at?: string;
+}
+
+export function getCycle(id: string): Promise<Cycle> {
+  return request(`${issuePath(id)}/cycle`);
+}
+
+// approve-plan, verify {output, commit}, check {index}, signoff {why}.
+export function cycleAction(id: string, action: string, body: Record<string, unknown> = {}): Promise<Cycle> {
+  return request(`${issuePath(id)}/cycle/${action}`, json('POST', body));
+}
+
 export function getPulls(id: string): Promise<IssuePulls> {
   return request(`${issuePath(id)}/pulls`);
 }
