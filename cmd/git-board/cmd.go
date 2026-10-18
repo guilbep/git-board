@@ -64,7 +64,7 @@ FILTER GRAMMAR (used by ls/view/tui):
 			return runLs(cmd.OutOrStdout(), defaultFilter, "", "", false, false, "")
 		},
 	}
-	root.AddCommand(newViewCmd(), newNumbersCmd(), newLsCmd(), newSetCmd(), newGetCmd(), newTuiCmd(), newBridgeCmd(), newLintCmd(), newMoveCmd(), newCloseCmd(), newSyncCmd(), newSprintCmd(), newHtmlCmd(), newBranchCmd())
+	root.AddCommand(newViewCmd(), newNumbersCmd(), newLsCmd(), newSetCmd(), newGetCmd(), newTuiCmd(), newBridgeCmd(), newLintCmd(), newMoveCmd(), newCloseCmd(), newSyncCmd(), newSprintCmd(), newHtmlCmd(), newBranchCmd(), newServeCmd())
 	return root
 }
 
