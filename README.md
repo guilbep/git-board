@@ -501,8 +501,9 @@ field-write logic.
 
 **Opening it.** `git board`, with no command, opens this repository's
 board in the browser. When its server already runs it opens that one;
-otherwise it starts it in the foreground on `127.0.0.1`, port 8080 or
-the next free one, prints the address, and Ctrl-C stops it
+otherwise it starts it in the foreground on `localhost` (both loopback
+addresses), port 8080 or the next one free on both, prints the address,
+and Ctrl-C stops it
 (`--no-open`: no browser). Each repository gets its own server and its
 own port: run `git board` in two repositories, get two boards. A running
 server says where it is in `.git/git-board/server.json` (address and

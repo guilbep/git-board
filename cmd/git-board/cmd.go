@@ -45,7 +45,7 @@ assignees, ...) live as namespaced git-bug labels; run "git-board bridge
 
 With no command, "git-board" opens this repository's web UI: in the
 browser where its server already runs, else it starts one here on
-127.0.0.1, port 8080 or the next free one, until Ctrl-C. Each repository
+localhost, port 8080 or the next free one, until Ctrl-C. Each repository
 gets its own. "git-board serve" runs the server alone.
 
 FILTER GRAMMAR (used by ls/view/tui):

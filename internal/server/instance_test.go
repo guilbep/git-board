@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"os/exec"
+	"slices"
 	"strings"
 	"testing"
 
@@ -65,24 +66,44 @@ func TestRunningFindsThisRepositorysServer(t *testing.T) {
 	}
 }
 
-// One board per repository: a port another server holds is skipped.
-func TestListenFreeTakesTheNextFreePort(t *testing.T) {
-	taken, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer taken.Close()
-	port := taken.Addr().(*net.TCPAddr).Port
-	defer func(p int) { firstPort = p }(firstPort)
-	firstPort = port
+// One board per repository: a port another server holds, on either
+// loopback address, is skipped; the board takes both on the next one, as
+// localhost.
+func TestListenFreeSkipsAPortTakenOnEitherLoopback(t *testing.T) {
+	for _, loopback := range []string{"127.0.0.1", "::1"} {
+		t.Run(loopback, func(t *testing.T) {
+			taken, err := net.Listen("tcp", net.JoinHostPort(loopback, "0"))
+			if err != nil {
+				t.Skipf("no %s here: %v", loopback, err)
+			}
+			defer taken.Close()
+			port := taken.Addr().(*net.TCPAddr).Port
+			defer func(p int) { firstPort = p }(firstPort)
+			firstPort = port
 
-	l, err := listenFree()
-	if err != nil {
-		t.Fatalf("listenFree: %v", err)
-	}
-	defer l.Close()
-	if got := l.Addr().(*net.TCPAddr); got.Port <= port || got.IP.String() != "127.0.0.1" {
-		t.Errorf("listening on %v, want 127.0.0.1 past the taken port %d", got, port)
+			ls, err := listenFree()
+			if err != nil {
+				t.Fatalf("listenFree: %v", err)
+			}
+			var got []string
+			for _, l := range ls {
+				defer l.Close()
+				a := l.Addr().(*net.TCPAddr)
+				if a.Port <= port || a.Port != ls[0].Addr().(*net.TCPAddr).Port {
+					t.Errorf("listening on %v, want one port past the taken %d", a, port)
+				}
+				got = append(got, a.IP.String())
+			}
+			want := []string{"127.0.0.1", "::1"}
+			if l, err := net.Listen("tcp", "[::1]:0"); err != nil {
+				want = want[:1] // no IPv6 here: 127.0.0.1 alone
+			} else {
+				_ = l.Close()
+			}
+			if !slices.Equal(got, want) {
+				t.Errorf("listening on %v, want %v", got, want)
+			}
+		})
 	}
 }
 
@@ -116,8 +137,8 @@ func TestServeTellsWhereItRunsUntilItStops(t *testing.T) {
 	case err := <-done:
 		t.Fatalf("Serve: %v", err)
 	}
-	if !strings.HasPrefix(url, "http://127.0.0.1:") {
-		t.Errorf("url %q, want this machine's 127.0.0.1", url)
+	if !strings.HasPrefix(url, "http://localhost:") {
+		t.Errorf("url %q, want this machine's localhost", url)
 	}
 	if got, ok := Running(gitDir); !ok || got.URL != url || got.PID != os.Getpid() {
 		t.Errorf("Running = %+v, %v; want %s, this process", got, ok, url)

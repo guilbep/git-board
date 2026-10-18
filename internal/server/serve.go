@@ -29,8 +29,8 @@ import (
 )
 
 // Serve serves the git-bug repository in the working directory until ctx
-// ends, or Ctrl-C (SIGTERM too). addr "" is "git board": 127.0.0.1 on
-// the first free port from 8080. me is the current user for @me
+// ends, or Ctrl-C (SIGTERM too). addr "" is "git board": localhost on
+// the first port from 8080 free on both loopback addresses. me is the current user for @me
 // (GIT_BOARD_ME when empty). ready gets the board's URL once it listens.
 func Serve(ctx context.Context, addr, me string, ready func(url string)) error {
 	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
@@ -62,13 +62,11 @@ func Serve(ctx context.Context, addr, me string, ready func(url string)) error {
 
 	var listeners []net.Listener
 	var exposed []string
-	host := "127.0.0.1"
+	host := "localhost"
 	if addr == "" {
-		l, err := listenFree()
-		if err != nil {
+		if listeners, err = listenFree(); err != nil {
 			return fmt.Errorf("no free port from %d: %w", firstPort, err)
 		}
-		listeners = []net.Listener{l}
 	} else {
 		if listeners, exposed, err = listen(addr); err != nil {
 			return fmt.Errorf("%w (another server on this port? pass --addr localhost:8090)", err)
@@ -138,23 +136,28 @@ func listen(addr string) ([]net.Listener, []string, error) {
 		}
 		return []net.Listener{l}, []string{host}, nil
 	}
-	var ls []net.Listener
-	var firstErr error
+	ls, failed := loopbacks(port)
+	for _, err := range failed {
+		log.Printf("not listening: %v", err)
+	}
+	if len(ls) == 0 {
+		return nil, nil, failed[0]
+	}
+	return ls, nil, nil
+}
+
+// loopbacks opens port on 127.0.0.1 and [::1], localhost; failed are the
+// errors of those it couldn't open.
+func loopbacks(port string) (ls []net.Listener, failed []error) {
 	for _, a := range []string{net.JoinHostPort("127.0.0.1", port), net.JoinHostPort("::1", port)} {
 		l, err := net.Listen("tcp", a)
 		if err != nil {
-			log.Printf("not listening on %s: %v", a, err)
-			if firstErr == nil {
-				firstErr = err
-			}
+			failed = append(failed, err)
 			continue
 		}
 		ls = append(ls, l)
 	}
-	if len(ls) == 0 {
-		return nil, nil, firstErr
-	}
-	return ls, nil, nil
+	return ls, failed
 }
 
 // resolveMe mirrors the CLI's --me/GIT_BOARD_ME resolution.

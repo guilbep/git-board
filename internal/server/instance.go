@@ -85,17 +85,29 @@ func (s *apiServer) handleRepository(w http.ResponseWriter, r *http.Request) {
 // tests.
 var firstPort = 8080
 
-// listenFree takes 127.0.0.1 on firstPort, else the next free port: one
-// board per repository, each on its own port. 127.0.0.1 only, not
-// localhost's [::1] too: [::1] alone free would leave http://localhost
-// to whatever holds 127.0.0.1, another repository's board maybe.
-func listenFree() (net.Listener, error) {
+// listenFree takes localhost on firstPort, else the next port free on both
+// loopback addresses: one board per repository, each on its own port.
+// Both, not either as "serve --addr localhost:N" makes do with: a port
+// another server holds on one would send http://localhost:N there,
+// another repository's board maybe. A machine without IPv6 has only
+// 127.0.0.1.
+func listenFree() ([]net.Listener, error) {
+	want := 2
+	if l, err := net.Listen("tcp", "[::1]:0"); err != nil {
+		want = 1
+	} else {
+		_ = l.Close()
+	}
 	var err error
 	for p := firstPort; p < firstPort+100; p++ {
-		var l net.Listener
-		if l, err = net.Listen("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(p))); err == nil {
-			return l, nil
+		ls, failed := loopbacks(strconv.Itoa(p))
+		if len(ls) >= want {
+			return ls, nil
 		}
+		for _, l := range ls {
+			_ = l.Close()
+		}
+		err = failed[0]
 	}
 	return nil, err
 }
