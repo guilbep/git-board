@@ -116,21 +116,23 @@ func (s *apiServer) inbox(me inbox.Me, now time.Time) (inboxResponse, error) {
 	if err != nil {
 		return inboxResponse{}, err
 	}
-	window := recent(all, since)
-	threads := make([]gitbugio.Thread, 0, len(window))
-	for _, i := range window {
-		th, err := s.b.Thread(i.ID)
-		if err != nil {
-			return inboxResponse{}, err
-		}
-		th.Inherited = cfg.RolesFor(th.Labels) // the project's roles, as on the board
-		threads = append(threads, th)
+	var window []string
+	for _, i := range recent(all, since) {
+		window = append(window, i.ID)
 	}
-	inViews, missing, err := board.FollowedViews(s.b, cfg, st.Views, me.Login, window, now)
+	threads, err := s.b.Threads(window)
 	if err != nil {
 		return inboxResponse{}, err
 	}
-	following, err := board.Match(s.b, cfg, "follows:@me is:open", me.Login, all, now)
+	for i := range threads {
+		threads[i].Inherited = cfg.RolesFor(threads[i].Labels) // the project's roles, as on the board
+	}
+	// once, on every issue: the window's rows and follows:@me's count
+	inViews, missing, err := board.FollowedViews(s.b, cfg, st.Views, me.Login, all, now)
+	if err != nil {
+		return inboxResponse{}, err
+	}
+	following, err := board.MatchFollowing(s.b, cfg, "follows:@me is:open", me.Login, all, now, board.Following(st, inViews))
 	if err != nil {
 		return inboxResponse{}, err
 	}
@@ -167,14 +169,10 @@ func (s *apiServer) handleInboxSeen(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &req) {
 		return
 	}
-	threads := make([]gitbugio.Thread, 0, len(req.Issues))
-	for _, id := range req.Issues {
-		th, err := s.b.Thread(id)
-		if err != nil {
-			writeError(w, http.StatusNotFound, err)
-			return
-		}
-		threads = append(threads, th)
+	threads, err := s.b.Threads(req.Issues)
+	if err != nil {
+		writeError(w, http.StatusNotFound, err)
+		return
 	}
 	all, err := s.b.ListIssues()
 	if err != nil {

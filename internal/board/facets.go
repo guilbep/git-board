@@ -50,7 +50,7 @@ func Facets(b issueBackend, cfg *config.Config, filterStr, me string) ([]Facet, 
 	}
 	withRoles(cfg, issues)
 	today := time.Now()
-	if err := fillFollows(b, cfg, conditions, me, issues, today); err != nil {
+	if err := fillFollows(b, cfg, conditions, me, issues, today, nil); err != nil {
 		return nil, err
 	}
 	out := []Facet{} // the page maps over it: none is [], not null

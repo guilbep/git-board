@@ -92,19 +92,43 @@ type Thread struct {
 
 // Thread returns an issue and its history, by id prefix.
 func (b *Backend) Thread(idPrefix string) (Thread, error) {
+	th, err := b.Threads([]string{idPrefix})
+	if err != nil {
+		return Thread{}, err
+	}
+	return th[0], nil
+}
+
+// Threads is Thread for each id prefix, reading once what they all need:
+// the counter, and the sync bridges' projects.
+func (b *Backend) Threads(idPrefixes []string) ([]Thread, error) {
+	c, projects := b.counter(), b.syncProjects()
+	res := make([]Thread, 0, len(idPrefixes))
+	for _, p := range idPrefixes {
+		th, err := b.thread(p, c, projects)
+		if err != nil {
+			return nil, err
+		}
+		res = append(res, th)
+	}
+	return res, nil
+}
+
+func (b *Backend) thread(idPrefix string, c *Counter, projects []syncProject) (Thread, error) {
 	bug, err := b.c.Bugs().ResolvePrefix(idPrefix)
 	if err != nil {
 		return Thread{}, fmt.Errorf("resolving %s: %w", idPrefix, err)
 	}
-	snap := bug.Snapshot()
-	issue, err := b.GetIssue(bug.Id().String())
+	excerpt, err := b.c.Bugs().ResolveExcerpt(bug.Id())
 	if err != nil {
-		return Thread{}, err
+		return Thread{}, fmt.Errorf("resolving %s: %w", idPrefix, err)
 	}
+	snap := bug.Snapshot()
+	issue := b.issueFrom(bug.Id().String(), excerpt, c)
 	createMeta := snap.Operations[0].AllMetadata()
 	_, remotes := forgesOf(createMeta)
 	on := onForges(snap, remotes)
-	b.forgeBridges(issue.Forges, createMeta)
+	forgeBridges(issue.Forges, createMeta, projects)
 	th := Thread{
 		Issue:     issue,
 		Author:    person(snap.Author),
@@ -352,50 +376,73 @@ func gone(mark string) string {
 	return "deleted"
 }
 
-// forgeBridges names the sync bridge of each forge an issue is on, as the
-// engine finds a bug's issue: by the sync keys of the bridge's project, or
-// the metadata an older bridge left (an issue it pulled).
+// syncProject is a sync bridge's project, as forgeBridges finds an issue's
+// forge in it.
+type syncProject struct {
+	bridge, target string
+	key            string // the engine's: sync:<key>:url
+	project        string // github, gitea: owner/project, lowercased
+	id, baseURL    string // gitlab
+}
+
+// syncProjects reads the sync bridges' projects from git-bug's config.
 //
 // ponytail: mirrors Key and Legacy of bridge/{github,gitlab,gitea}/remote.go,
 // which need the forge's API; git-bug exporting them would replace this.
-func (b *Backend) forgeBridges(forges []Forge, meta map[string]string) {
+func (b *Backend) syncProjects() []syncProject {
 	bridges, err := b.SyncBridges()
-	if err != nil || len(forges) == 0 {
-		return
+	if err != nil {
+		return nil
 	}
 	cfg, err := b.c.Config().Read()
 	if err != nil {
-		return
+		return nil
 	}
+	var res []syncProject
 	for _, br := range bridges {
 		get := func(k string) string { return cfg.Value("git-bug.bridge."+br.Name+"."+k, "") }
 		host := ""
 		if u, err := url.Parse(get("base-url")); err == nil {
 			host = u.Host
 		}
-		var key, legacy string
-		switch project := strings.ToLower(get("owner") + "/" + get("project")); br.Target {
+		p := syncProject{bridge: br.Name, target: br.Target, project: strings.ToLower(get("owner") + "/" + get("project")), id: get("project-id"), baseURL: get("base-url")}
+		switch br.Target {
 		case "github":
-			key = "github.com/" + project
-			if _, ok := meta["github-id"]; ok && strings.HasPrefix(strings.ToLower(meta["github-url"]), "https://github.com/"+project+"/issues/") {
+			p.key = "github.com/" + p.project
+		case "gitlab":
+			p.key = host + "/" + p.id
+		case "gitea":
+			p.key = host + "/" + p.project
+		}
+		res = append(res, p)
+	}
+	return res
+}
+
+// forgeBridges names the sync bridge of each forge an issue is on, as the
+// engine finds a bug's issue: by the sync keys of the bridge's project, or
+// the metadata an older bridge left (an issue it pulled).
+func forgeBridges(forges []Forge, meta map[string]string, projects []syncProject) {
+	for _, p := range projects {
+		var legacy string
+		switch p.target {
+		case "github":
+			if _, ok := meta["github-id"]; ok && strings.HasPrefix(strings.ToLower(meta["github-url"]), "https://github.com/"+p.project+"/issues/") {
 				legacy = meta["github-url"]
 			}
 		case "gitlab":
-			key = host + "/" + get("project-id")
 			base := strings.TrimSuffix(meta["gitlab-base-url"], "/")
-			if _, ok := meta["gitlab-id"]; ok && meta["gitlab-project-id"] == get("project-id") && (base == "" || base == strings.TrimSuffix(get("base-url"), "/")) {
+			if _, ok := meta["gitlab-id"]; ok && meta["gitlab-project-id"] == p.id && (base == "" || base == strings.TrimSuffix(p.baseURL, "/")) {
 				legacy = meta["gitlab-url"]
 			}
-		case "gitea":
-			key = host + "/" + project
 		}
-		u := meta["sync:"+key+":url"]
+		u := meta["sync:"+p.key+":url"]
 		if u == "" {
 			u = legacy
 		}
 		for i := range forges {
 			if u != "" && forges[i].URL == u {
-				forges[i].Bridge = br.Name
+				forges[i].Bridge = p.bridge
 			}
 		}
 	}
