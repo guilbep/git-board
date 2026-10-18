@@ -198,6 +198,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { applySync, checkSync, getRemotes, getViews, remoteAction, startForgeSync, type ForgeMode, type Remote, type SyncStatus } from '@/api/board';
 import { forgeStatus as status, loadForges } from '@/forges';
+import { forgeLabel } from '@/issuesync';
 import { message } from '@/issue';
 import { debounced, onLive } from '@/live';
 import { when } from '@/me';
@@ -255,9 +256,8 @@ const running = computed(() => job.value?.state === 'running');
 const canRun = computed(() => !starting.value && !!job.value?.dry_run && job.value.state === 'done' && !job.value.errors);
 const modeName = (m: ForgeMode) => ({ sync: 'Sync', get: 'Get', send: 'Send' })[m];
 
-const forgeLabel = (target: string) => ({ github: 'GitHub', gitlab: 'GitLab', gitea: 'Gitea' })[target] ?? target;
 const bridgeRows = computed(() =>
-  (status.value?.bridges ?? []).map((b) => ({ name: b.name, label: forgeLabel(b.target), tally: job.value?.bridges[b.name] })),
+  (status.value?.bridges ?? []).map((b) => ({ name: b.name, label: forgeLabel(b), tally: job.value?.bridges[b.name] })),
 );
 const chosenRows = computed(() => bridgeRows.value.filter((b) => chosen.value.includes(b.name)));
 const bigRows = computed(() => (mode.value === 'get' ? [] : chosenRows.value.filter((b) => (b.tally?.to.issues ?? 0) >= bigRun)));
