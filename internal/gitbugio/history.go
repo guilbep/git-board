@@ -56,11 +56,12 @@ func historyOf(bug *cache.BugCache) insights.Issue {
 	return is
 }
 
-// RefsFingerprint changes whenever an issue or a person changes in git:
-// their refs and the commits they point to, hashed. Cheap: the refs only.
+// RefsFingerprint changes whenever an issue, a person or a release record
+// changes in git: their refs and the commits they point to, hashed. Cheap:
+// the refs only.
 func (b *Backend) RefsFingerprint() string {
 	h := sha256.New()
-	for _, ns := range []string{"bugs", "identities"} {
+	for _, ns := range []string{"bugs", "identities", ReleasesNamespace} {
 		refs, err := b.repo.ListRefs(ns)
 		if err != nil {
 			continue
