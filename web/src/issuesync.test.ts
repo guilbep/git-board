@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { forgeLabel, linkable, tallyWords } from './issuesync.ts';
+import { forgeLabel, forgeNumbers, linkable, tallyWords } from './issuesync.ts';
 
 const dir = (o: Partial<Record<'issues' | 'changed' | 'comments' | 'edits' | 'changes', number>> = {}) => ({ issues: 0, changed: 0, comments: 0, edits: 0, changes: 0, ...o });
 const tally = (to = dir(), from = dir(), errors = 0) => ({ to, from, linked: 0, stays_local: 0, warnings: 0, errors, lines: [] });
@@ -27,4 +27,14 @@ test('linkable: the sync bridges an issue is not on, nor was', () => {
 test('forgeLabel names a bridge by its forge', () => {
   assert.equal(forgeLabel({ name: 'gl', target: 'gitlab' }), 'GitLab (gl)');
   assert.equal(forgeLabel({ name: 'x', target: 'jira' }), 'jira (x)');
+});
+
+test('forgeNumbers: an unlinked or deleted forge number is not the issue’s anymore', () => {
+  const forges = [
+    { name: 'GitHub', url: 'https://github.com/o/r/issues/2518', number: '2518', gone: 'unlinked' as const },
+    { name: 'GitLab', url: 'https://gitlab.example.com/g/r/-/issues/77', number: '77' },
+    { name: 'GitLab', url: 'https://gitlab.example.com/g/q/-/issues/5', number: '5', gone: 'deleted' as const },
+  ];
+  assert.deepEqual(forgeNumbers({ forges }), ['77']);
+  assert.deepEqual(forgeNumbers({}), []);
 });

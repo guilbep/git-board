@@ -242,6 +242,7 @@ import FilterSidebar from '@/components/FilterSidebar.vue';
 import IssueBoard from '@/components/IssueBoard.vue';
 import LaneChooser from '@/components/LaneChooser.vue';
 import { boardLanes } from '@/lanes';
+import { forgeNumbers } from '@/issuesync';
 import IssueTable from '@/components/IssueTable.vue';
 import RoadmapView from '@/components/RoadmapView.vue';
 import GbIcon from '@/components/GbIcon.vue';
@@ -636,7 +637,7 @@ watch(
       detailId.value = id;
       detailOpen.value = true;
       const i = all.value.find((x) => x.id === id);
-      if (i) recordRecent({ id, title: i.shown_title, number: i.forges?.[0]?.number });
+      if (i) recordRecent({ id, title: i.shown_title, number: forgeNumbers(i)[0] });
     } else detailOpen.value = false;
   },
   { immediate: true },
