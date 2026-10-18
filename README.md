@@ -401,7 +401,9 @@ issue templates: feature.yaml applies enhancement, triage, needs-triage, which E
 ```
 
 `--apply` doesn't create them: the fix is a label the repository has, in
-the template.
+the template. This check only warns (`issue templates: not checked: …`)
+when it can't run, `gh` not knowing the repository or a template that
+doesn't parse: the exit status is the labels'.
 
 ## Sprints (`git-board sprint`)
 
