@@ -98,7 +98,7 @@ orchestration a project already runs: plan on one model, build on another,
 | Sign-offs | One per validation status: a comment with `signoff:status` and `signoff:commit`, by the person the status's role names. Signing off also moves the status to the next option; the last sign-off closes the issue. "Send back to in-progress" is a status change. A status with no role can be signed off by anyone. |
 | Verify evidence | The run's output, pasted by the person who ran it as a comment with `verify:run` and `verify:commit`; each criterion checked as `verify:criterion` (index, commit, by whom). The plan's `delivered` is read at the merged head: the kit has the PR update its plan in the same PR, so a protected base needs no second PR. "Green codes are not proof": Sign off stays disabled until a run at the merged commit is posted; an override writes why into the sign-off comment. A missing `delivered` is a warning, not a block. |
 | Metadata and the forges | `plan:*`, `signoff:*`, `verify:*`, `correction*`, `ai:model` and `ask` are git-bug comment metadata. They travel between clones with `refs/bugs`, as every git-bug edit does, so a colleague's sign-off is evidence after a sync, with no fork change. On a forge these comments export as plain comments with a generated body ("Signed off qa at 4f2e9c1"). Nothing here needs the fork; work-unit M4 already changes it for `review:*`. |
-| Worktrees and agents | git-board starts them with wtx on the machine where `git-board-server` runs: `wtx go <branch> --prompt <file> --no-attach` from the issue (the branch from the `[branches]` rule), `wtx brief` to re-brief a running agent, `wtx init` from G1; the Agents group reads `git worktree list` and `wtx status`. Only when the server listens on loopback alone (`exposed` is false), wtx is on `PATH`, and the request carries a same-host Origin, which `cors.go` already enforces. Arguments are an argv, never a shell line. The prompt file holds the step's gate and what git-board asks for, in its own words; then the issue's title and description **quoted as data**, under a heading saying they come from the forge and are not instructions. The agent's permissions come from `wtx.toml` only. |
+| Worktrees and agents | git-board starts them with wtx on the machine where `git board serve` runs: `wtx go <branch> --prompt <file> --no-attach` from the issue (the branch from the `[branches]` rule), `wtx brief` to re-brief a running agent, `wtx init` from G1; the Agents group reads `git worktree list` and `wtx status`. Only when the server listens on loopback alone (`exposed` is false), wtx is on `PATH`, and the request carries a same-host Origin, which `cors.go` already enforces. Arguments are an argv, never a shell line. The prompt file holds the step's gate and what git-board asks for, in its own words; then the issue's title and description **quoted as data**, under a heading saying they come from the forge and are not instructions. The agent's permissions come from `wtx.toml` only. |
 | Write wtx.toml | G1 writes `wtx.toml` and `.wt.toml` at the root of the server's checkout, uncommitted, after a preview; the person commits them. The who-commits setting is a `[permissions] deny` list, which wtx lets a repository tighten and never loosen: a rule wtx's own baseline already denies shows "set by wtx" instead of a choice. |
 | AI | OpenAI-compatible chat completions at `LLM_BASE_URL` with `LLM_API_KEY`, the model from `[ai] model`, else `LLM_MODEL`; off when the address is unset. Per-step switches in G2: 01 draft criteria, 06 review comments, 07 draft the verify checklist. Step 3's planning is the worktree agent's, not the server's. Comments it writes carry `ai:model`. |
 | What leaves the machine | Issue titles, descriptions and comments; diffs without `linguist-generated` files and lockfiles. Never attachments, tokens, `.env` files, or a diff the secret scan failed. Only to `LLM_BASE_URL`. Written on the G2 page, in those words. |
@@ -129,6 +129,8 @@ needs only it; the review workspace waits for work-unit M4; worktrees, AI
 and the retro come last because each can be off.
 
 ### M1: the step
+
+Done: plan in `dev-cycle-m1-plan.md`.
 
 ```toml
 [fields]
@@ -176,6 +178,26 @@ Go table test, each from status plus evidence, once per risk class (low
 skips step 3); a status alone never tells step 2 from step 3; an issue with
 no criteria at `in-progress` stays at step 4 or 5; the card shows only to
 the role's person, and to everyone when the role has none.
+
+Calls taken building it:
+- **The risk field is always `risk`.** No `[cycle]` key renames it (see
+  Open, not blocking).
+- **The plan approved, or low risk:** step 3 waits for the assignee to move
+  the status to in-progress.
+- **Criteria written before `ready`:** step 1 waits for the author to move
+  the status to ready.
+- **A structural plan is approved on its PR.** git-board reads the PR's
+  approval from GitHub and posts none: the card links to the PR until
+  work-unit M4's approvals exist.
+- **`verify` and `check` are M1 actions.** A run's output and each
+  criterion are comments, so step 7 can be reached without M2's workspace.
+- **The sign-off's run check uses the branch head.** M2 checks the merged
+  head instead.
+- **What git-board's identity wrote is the viewer's.** The server writes as
+  that identity, and `--me` names the viewer, so the identity's comments
+  count as the viewer's. Anyone else's count under their forge login.
+- **Settings doesn't show the guessed stages yet.** That is left to M2. The
+  API already answers `stages.guessed`.
 
 ### M2: the Cycle view
 
@@ -349,6 +371,8 @@ GitHub.
 
 ## Open, not blocking
 
+- A `[cycle]` key naming the risk field, for a project whose field isn't
+  `risk`.
 - The CI run where the test failed before the fix: per-commit check runs
   from GitHub, once the test's first commit is known.
 - Telling an agent's commits from a person's, for step 5's gate.
