@@ -2,6 +2,7 @@ package gitbugio
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -117,14 +118,66 @@ func (b *Backend) ChangesIn(base, branch string) bool {
 	if b.dir == "" {
 		return false
 	}
-	merged, err := exec.Command("git", "--git-dir", b.dir, "merge-tree", "--write-tree", base, branch).Output()
+	merged, err := b.git("merge-tree", "--write-tree", base, branch)
 	if err != nil { // a conflict, or an older git
 		return false
 	}
-	tree, err := exec.Command("git", "--git-dir", b.dir, "rev-parse", base+"^{tree}").Output()
+	tree, err := b.git("rev-parse", base+"^{tree}")
 	if err != nil {
 		return false
 	}
 	first, _, _ := bytes.Cut(merged, []byte("\n"))
 	return bytes.Equal(bytes.TrimSpace(first), bytes.TrimSpace(tree))
+}
+
+// git runs git on the repository; nil, nil without a git directory (a
+// NewForRepo backend), so every reader below answers empty there.
+func (b *Backend) git(args ...string) ([]byte, error) {
+	if b.dir == "" {
+		return nil, nil
+	}
+	return exec.Command("git", append([]string{"--git-dir", b.dir}, args...)...).Output()
+}
+
+func lines(out []byte) []string {
+	if s := strings.TrimRight(string(out), "\n"); s != "" {
+		return strings.Split(s, "\n")
+	}
+	return nil
+}
+
+// ChangedFiles is `git diff --name-only base...branch`: the files branch
+// changed since it left base.
+func (b *Backend) ChangedFiles(base, branch string) ([]string, error) {
+	out, err := b.git("diff", "--name-only", base+"..."+branch)
+	return lines(out), err
+}
+
+// FirstCommitAdding is the first commit of base..branch that added path,
+// "" when none did.
+func (b *Backend) FirstCommitAdding(base, branch, path string) string {
+	out, _ := b.git("log", "--reverse", "--format=%H", "--diff-filter=A", base+".."+branch, "--", path)
+	if l := lines(out); len(l) > 0 {
+		return l[0]
+	}
+	return ""
+}
+
+// GrepFiles lists the files under dir at ref whose content matches the
+// extended regexp, paths from the root: `git grep -l -E`.
+func (b *Backend) GrepFiles(ref, dir, regexp string) ([]string, error) {
+	out, err := b.git("grep", "-l", "-E", "-e", regexp, ref, "--", dir)
+	if ee := (*exec.ExitError)(nil); errors.As(err, &ee) && ee.ExitCode() == 1 {
+		return nil, nil // no match
+	}
+	var res []string
+	for _, l := range lines(out) {
+		res = append(res, strings.TrimPrefix(l, ref+":"))
+	}
+	return res, err
+}
+
+// ReadFile is `git show ref:path`.
+func (b *Backend) ReadFile(ref, path string) ([]byte, error) {
+	return b.git("show", ref+":"+path)
 }

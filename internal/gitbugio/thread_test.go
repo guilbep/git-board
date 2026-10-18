@@ -2,7 +2,9 @@ package gitbugio_test
 
 import (
 	"errors"
+	"maps"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/git-bug/git-bug/bridge/core"
@@ -456,6 +458,44 @@ func TestThreadEditWasIsWhatTheForgesHave(t *testing.T) {
 	for i, v := range c.History {
 		if v.Author.Name == "" || v.Author.Name != c.Author.Name {
 			t.Errorf("version %d by %q, want %q", i, v.Author.Name, c.Author.Name)
+		}
+	}
+}
+
+func TestCommentMeta(t *testing.T) {
+	b := gitbugiotest.New(t)
+	id, err := b.NewIssue("Export CSV", "", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := b.AddComment(id, "plain"); err != nil {
+		t.Fatal(err)
+	}
+	meta := map[string]string{"signoff:status": "qa", "signoff:commit": "4f2e9c1"}
+	if _, err := b.AddCommentMeta(id, "Signed off qa at 4f2e9c1", map[string]string{"signoff:status": "qa", "signoff:commit": "4f2e9c1", "sync:github.com/o/r:id": "7"}); err != nil {
+		t.Fatal(err)
+	}
+	th, err := b.Thread(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := kinds(th); !slices.Equal(got, []string{"created", "comment", "comment"}) {
+		t.Fatalf("kinds = %v", got)
+	}
+	if th.Events[1].Meta != nil {
+		t.Errorf("a plain comment's Meta = %v", th.Events[1].Meta)
+	}
+	if got := th.Events[2].Meta; !maps.Equal(got, meta) {
+		t.Errorf("Meta = %v, want %v (no sync: key)", got, meta)
+	}
+	imported := gitbugiotest.NewImportedIssue(t, b, "Imported", "https://github.com/o/r/issues/1")
+	th, err = b.Thread(imported)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for k := range th.Events[0].Meta {
+		if strings.HasPrefix(k, "sync:") {
+			t.Errorf("created event carries %s", k)
 		}
 	}
 }
