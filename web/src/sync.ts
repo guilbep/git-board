@@ -1,5 +1,6 @@
-// The sync status, shared by the header (its Conflicts count) and the
-// conflicts page, which updates it after every check, sync or resolve.
+// The sync status, shared by the header (the conflicts its Sync counts),
+// the sync page and the conflicts page, which update it after every check,
+// sync or resolve.
 import { ref } from 'vue';
 import { getSync, type SyncStatus } from '@/api/board';
 
@@ -9,6 +10,6 @@ export async function loadSyncStatus(): Promise<void> {
   try {
     syncStatus.value = await getSync();
   } catch {
-    syncStatus.value = null; // the header just shows no Conflicts link
+    syncStatus.value = null; // the header just counts no conflicts
   }
 }

@@ -56,6 +56,9 @@ type Issue struct {
 	Counted bool `json:"counted,omitempty"`
 	// UpdatedAt is its last change, for "changed since your last visit".
 	UpdatedAt time.Time `json:"updated_at"`
+	// CreatedAt is when it was opened: it breaks a tie between issues one
+	// sync stamped at once.
+	CreatedAt time.Time `json:"created_at"`
 	// AuthorLogins are who opened it, for author:: name, login, forge
 	// logins.
 	AuthorLogins []string `json:"-"`
@@ -283,7 +286,7 @@ func excerptToIssue(id string, e *cache.BugExcerpt) Issue {
 	}
 	forges, _ := forgesOf(e.CreateMetadata)
 	is := Issue{ID: id, Title: e.Title, Status: status, Labels: labels, GithubURL: e.CreateMetadata[githubURLMetaKey], Forges: forges,
-		UpdatedAt: time.Unix(e.EditUnixTime, 0)}
+		UpdatedAt: time.Unix(e.EditUnixTime, 0), CreatedAt: time.Unix(e.CreateUnixTime, 0)}
 	is.Shown = is.ShownTitle()
 	return is
 }

@@ -84,7 +84,6 @@ type Event struct {
 type Thread struct {
 	Issue
 	Author       Person    `json:"author"`
-	CreatedAt    time.Time `json:"created_at"`
 	EditedAt     time.Time `json:"edited_at"`
 	Participants []Person  `json:"participants"`
 	Events       []Event   `json:"events"`
@@ -130,10 +129,9 @@ func (b *Backend) thread(idPrefix string, c *Counter, projects []syncProject) (T
 	on := onForges(snap, remotes)
 	forgeBridges(issue.Forges, createMeta, projects)
 	th := Thread{
-		Issue:     issue,
-		Author:    person(snap.Author),
-		CreatedAt: snap.CreateTime,
-		EditedAt:  snap.EditTime(),
+		Issue:    issue,
+		Author:   person(snap.Author),
+		EditedAt: snap.EditTime(),
 	}
 	for _, p := range snap.Participants {
 		th.Participants = append(th.Participants, person(p))

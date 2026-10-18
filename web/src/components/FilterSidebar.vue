@@ -11,6 +11,10 @@
         <span class="filters-chev" aria-hidden="true" />
         Filters<span v-if="active" class="filters-badge">{{ active }}</span>
       </summary>
+      <!-- the palette, where the board starts: filter, or jump to an issue -->
+      <button type="button" class="filters-jump" aria-keyshortcuts="Meta+K Control+K" @click="paletteOpen = true">
+        <GbIcon name="search" small /><span>Filter or jump</span><kbd>{{ mod }}K</kbd>
+      </button>
       <div class="filters-head">
         <h2 class="filters-title">Filters</h2>
         <span class="filters-head-r">
@@ -76,6 +80,7 @@
 import ValueMark from '@/components/ValueMark.vue';
 import GbIcon from '@/components/GbIcon.vue';
 import { helpOpen } from '@/shortcuts';
+import { paletteOpen } from '@/commands';
 import { colorClass } from '@/colors';
 import { facetLabel, pick, sortOptions, valueLabel, type Facet, type OptionSort, type Selection } from '@/facets';
 import type { Fields } from '@/fields';
@@ -157,6 +162,7 @@ function onPick(f: Facet, value: string, e: MouseEvent) {
 // selection would fold a group under the pointer as its last box is
 // unticked.
 const wide = window.matchMedia('(min-width: 64rem)').matches;
+const mod = /Mac/.test(navigator.platform) ? '⌘' : 'Ctrl+';
 const openAtStart = ref<Set<string> | null>(null);
 watch(
   () => props.facets,
@@ -176,6 +182,13 @@ const active = computed(() => Object.values(props.sel).filter((v) => v.length).l
   border-right: var(--border-w) solid var(--border-subtle);
 }
 .filters-toggle { display: none; }
+
+/* looks like a field: it opens the palette */
+.filters-jump { display: flex; align-items: center; gap: .5rem; width: 100%; min-height: 2.75rem; margin-bottom: var(--space-3); padding: 0 .625rem; border: 1px solid var(--border-strong); background: var(--bg); color: var(--fg-muted); font: inherit; font-size: .875rem; text-align: left; cursor: pointer; }
+.filters-jump span { flex: 1; }
+.filters-jump:hover, .filters-jump:focus-visible { border-color: var(--fg); color: var(--fg); }
+.filters-jump:focus-visible { outline: var(--focus-w) solid var(--primary-hover); outline-offset: 0.125rem; }
+.filters-jump kbd { padding: 0 .3rem; border: 1px solid var(--border); font-family: var(--font-mono); font-size: .75rem; }
 
 .filters-head {
   display: flex;

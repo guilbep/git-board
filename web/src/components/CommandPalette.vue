@@ -58,8 +58,9 @@ import { useRoute, useRouter } from 'vue-router';
 import { filterValues, getIssues, type Issue } from '@/api/board';
 import { filtersHidden, newIssueRequested, paletteOpen, recentIssues, recordRecent } from '@/commands';
 import { message } from '@/issue';
+import { when } from '@/me';
 import { forgeNumbers } from '@/issuesync';
-import { jumps, openFirst, rank } from '@/palette';
+import { jumps, latest, rank } from '@/palette';
 import { suggest } from '@/viewfilter';
 import { helpOpen } from '@/shortcuts';
 import GbIcon, { type IconName } from '@/components/GbIcon.vue';
@@ -105,7 +106,7 @@ async function onShow() {
 // is:open added: the board shows the same issues for it); only the latest
 // answer counts.
 let timer: ReturnType<typeof setTimeout> | undefined;
-let latest = 0;
+let asked = 0;
 watch(query, (typed) => {
   active.value = 0;
   clearTimeout(timer);
@@ -116,25 +117,25 @@ watch(query, (typed) => {
     found.value = null;
     return;
   }
-  const mine = ++latest;
+  const mine = ++asked;
   timer = setTimeout(async () => {
     try {
       const res = (await getIssues(f)).flatMap((b) => b.issues);
-      if (mine === latest) found.value = res;
+      if (mine === asked) found.value = res;
     } catch (e) {
-      if (mine === latest) {
+      if (mine === asked) {
         found.value = [];
         error.value = message(e);
       }
     } finally {
-      if (mine === latest) searching.value = false;
+      if (mine === asked) searching.value = false;
     }
   }, 150);
 });
 watch(paletteOpen, (open) => {
   if (!open) {
     clearTimeout(timer);
-    latest++;
+    asked++;
   }
 });
 
@@ -163,9 +164,15 @@ const commands = computed<Entry[]>(() => [
   { key: 'keys', label: 'Keyboard shortcuts', group: 'Commands', icon: 'title', hint: '?', act: () => (helpOpen.value = true) },
 ]);
 
+// "CO2-3075 · 2 Oct": its number, else its id, and its last change
+function hint(i: Issue, number: string | undefined): string {
+  const name = i.number ?? (number ? `#${number}` : i.id.slice(0, 7));
+  return i.updated_at ? `${name} · ${when(i.updated_at)}` : name;
+}
+
 function issueEntry(i: Issue, group: string): Entry {
   const number = forgeNumbers(i)[0];
-  return { key: `${group}-${i.id}`, label: i.shown_title, group, icon: i.status === 'closed' ? 'closed' : 'open', hint: i.number ?? (number ? `#${number}` : i.id.slice(0, 7)), act: () => openIssue(i.id, i.shown_title, number) };
+  return { key: `${group}-${i.id}`, label: i.shown_title, group, icon: i.status === 'closed' ? 'closed' : 'open', hint: hint(i, number), act: () => openIssue(i.id, i.shown_title, number) };
 }
 
 // An exact #number or id first, at once (Enter opens it); else the filter
@@ -180,7 +187,7 @@ const results = computed<Entry[]>(() => {
   const jumped = jumps(f, items).map((j) => j.issue);
   const n = found.value?.length ?? 0;
   const filterRow: Entry = { key: 'filter', label: `Filter the board by «${f}»`, group: 'Filter', icon: 'filter', hint: searching.value || !found.value ? '…' : `${n} ${n === 1 ? 'issue' : 'issues'}`, act: () => filterBoard(f) };
-  const issues = openFirst(found.value ?? []).filter((i) => !jumped.some((j) => j.id === i.id)).slice(0, 10);
+  const issues = latest(found.value ?? []).filter((i) => !jumped.some((j) => j.id === i.id)).slice(0, 10);
   const completions = suggestions.value.map((s, i): Entry => ({ key: `s-${s}`, label: s, group: 'Complete', icon: 'filter', hint: i ? undefined : 'Tab', keep: true, act: () => {
     query.value = s;
     input.value?.focus();

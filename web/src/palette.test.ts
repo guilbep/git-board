@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { jumps, openFirst, rank } from './palette.ts';
+import { jumps, latest, rank } from './palette.ts';
 
 const issues = [
   { key: 'i1', label: 'Fix CSV upload on S3', id: 'b9de9e14aa', numbers: ['2528'] },
@@ -41,11 +41,12 @@ test('rank: a command by its label, every word, else its letters in order', () =
   assert.equal(rank('', commands).length, 3); // nothing typed: all, in order
 });
 
-test('openFirst: open issues before closed ones, the latest changed first', () => {
+test('latest: the latest edited first, the latest created breaking a tie, open or closed', () => {
+  const synced = '2026-10-15T10:00:00Z'; // one sync stamped both
   const list = [
-    { id: 'c', status: 'closed', updated_at: '2026-10-16T10:00:00Z' },
-    { id: 'o1', status: 'open', updated_at: '2026-10-01T10:00:00Z' },
-    { id: 'o2', status: 'open', updated_at: '2026-10-15T10:00:00Z' },
+    { id: 'old', status: 'open', updated_at: synced, created_at: '2026-01-01T10:00:00Z' },
+    { id: 'new', status: 'open', updated_at: synced, created_at: '2026-09-01T10:00:00Z' },
+    { id: 'closed', status: 'closed', updated_at: '2026-10-16T10:00:00Z', created_at: '2025-01-01T10:00:00Z' },
   ];
-  assert.deepEqual(openFirst(list).map((i) => i.id), ['o2', 'o1', 'c']);
+  assert.deepEqual(latest(list).map((i) => i.id), ['closed', 'new', 'old']);
 });

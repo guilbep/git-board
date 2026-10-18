@@ -25,6 +25,7 @@ export interface Issue {
   number?: string; // its project number, CO2-3075; absent until it has one
   counted?: boolean; // the project numbers its issues: a bare number is a project number
   updated_at?: string;
+  created_at?: string;
 }
 
 export interface Bucket {

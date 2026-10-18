@@ -1,7 +1,10 @@
 <!-- EPFL header (css/organisms/header.css classes, used directly: the Vue
      kit's EpflHeader hardcodes a "Search EPFL" box, an EN/FR/DE switch and
      href="#" links, none of which fit this app). The saved views are the
-     main navigation; the active one carries the signature red dot.
+     main navigation; the active one carries the signature red dot. They
+     never wrap: as many as fit, the rest under "N more" (navfit.ts).
+     The right side: Sync saying what waits, the search, one menu for you
+     (the canvas's H1 artboard).
      The logo is drawn as a mask over var(--primary): the vendored
      epfl-logo.svg carries no fill (it renders black as an <img>), while the
      brand logo is red on white. Same file, same shape, only the color. -->
@@ -11,41 +14,50 @@
       <span class="logo-mark" role="img" aria-label="EPFL" />
     </router-link>
     <span class="app-name">git-board</span>
-    <nav class="epfl-nav" aria-label="Saved views">
+    <nav ref="nav" class="epfl-nav" aria-label="Saved views">
+      <!-- every view stays rendered, the hidden ones out of the flow, so
+           their widths can be measured -->
       <router-link
-        v-for="name in views"
+        v-for="(name, i) in views"
         :key="name"
+        data-view
         :to="{ path: '/', query: { view: name } }"
-        :class="{ active: name === active }"
+        :class="{ active: name === active, 'nav-hidden': hidden.includes(i) }"
         :aria-current="name === active ? 'page' : undefined"
+        :aria-hidden="hidden.includes(i) ? 'true' : undefined"
+        :tabindex="hidden.includes(i) ? -1 : undefined"
       >{{ name }}</router-link>
-      <router-link to="/insights" active-class="active">Insights</router-link>
-      <!-- The count is the last check's: the header never reads the Project. -->
-      <router-link
-        v-if="syncStatus?.project"
-        to="/conflicts"
-        active-class="active"
-        aria-current-value="page"
-      >Conflicts<span v-if="conflicts" class="nav-count" :aria-label="`, ${conflicts} held`">{{ conflicts }}</span></router-link>
-      <router-link to="/inbox" active-class="active">Inbox<span v-if="inboxCount" class="nav-count" :aria-label="`, ${inboxCount} new`">{{ inboxCount }}</span></router-link>
+      <details v-if="hidden.length" ref="more" class="nav-more" @keydown.esc="close(more)">
+        <summary>{{ hidden.length }} more<span class="nav-chev" aria-hidden="true">▾</span></summary>
+        <div class="nav-more-panel" @click="close(more)">
+          <router-link v-for="name in hiddenViews" :key="name" :to="{ path: '/', query: { view: name } }">{{ name }}</router-link>
+        </div>
+      </details>
+      <span ref="sep" class="nav-sep" aria-hidden="true" />
+      <router-link ref="insights" to="/insights" active-class="active">Insights</router-link>
+      <router-link ref="inboxLink" to="/inbox" active-class="active">Inbox<span v-if="inboxCount" class="nav-count" :aria-label="`, ${inboxCount} new`">{{ inboxCount }}</span></router-link>
     </nav>
     <div class="app-right">
-      <button type="button" class="gb-jump" title="Filter the issues, jump to one, or run a command (⌘K)" aria-keyshortcuts="Meta+K Control+K" @click="paletteOpen = true">
-        <GbIcon name="search" small /><span class="gb-jump-label">Filter or jump to…</span><kbd>{{ mod }}K</kbd>
+      <!-- what waits to go to or come from the remotes and forges -->
+      <router-link to="/sync" class="gb-sync" :class="{ 'gb-sync-waiting': label !== 'Sync' }" :title="w.checked ? `Checked ${when(w.checked, true)}` : 'Not checked yet'">{{ label }}</router-link>
+      <button type="button" class="gb-iconbtn" aria-label="Filter or jump to" title="Filter or jump to (⌘K)" aria-keyshortcuts="Meta+K Control+K" @click="paletteOpen = true">
+        <GbIcon name="search" />
       </button>
-      <!-- where your issues go: remotes, forges, the Project; live while a forge run goes on -->
-      <router-link to="/sync" class="gb-synclink" :class="{ 'gb-synclink-run': running }" title="Where your issues go: remotes, forges, the GitHub Project">
-        <GbIcon name="sync" small />
-        <span>{{ running ? 'Syncing…' : 'Sync' }}</span>
-        <span v-if="lastRun" class="gb-hint">{{ lastRun }}</span>
-      </router-link>
-      <router-link v-if="me?.me" to="/settings" class="gb-me" :title="`You write as ${me.me.name}. Settings`">
-        <span class="gb-avatar gb-avatar-sm gb-avatar-dark" aria-hidden="true">{{ initials(me.me.name) }}</span>
-        <span class="gb-me-name">{{ me.me.name }}</span>
-      </router-link>
-      <button type="button" class="gb-settingslink" aria-label="Keyboard shortcuts (?)" title="Keyboard shortcuts (?)" @click="helpOpen = true">?</button>
-      <router-link to="/settings" class="gb-settingslink" active-class="active" aria-label="Settings" title="Settings">
-        <GbIcon name="settings" small />
+      <details v-if="me?.me" ref="menu" class="gb-menu" @keydown.esc="close(menu)">
+        <summary class="gb-iconbtn" :aria-label="`${me.me.name}: you, settings, shortcuts`">
+          <span class="gb-avatar gb-avatar-dark" aria-hidden="true">{{ initials(me.me.name) }}</span>
+        </summary>
+        <div class="gb-menu-panel" @click="close(menu)">
+          <p class="gb-menu-who"><b>{{ me.me.name }}</b><code v-if="me.me.login">{{ me.me.login }}</code></p>
+          <router-link to="/settings/you">You</router-link>
+          <router-link to="/settings">Settings</router-link>
+          <router-link to="/sync">Sync</router-link>
+          <button type="button" @click="helpOpen = true">Keyboard shortcuts <kbd>?</kbd></button>
+          <p class="gb-menu-foot">{{ w.checked ? `Forges checked ${when(w.checked, true)}` : 'Not checked yet' }}</p>
+        </div>
+      </details>
+      <router-link v-else to="/settings" class="gb-iconbtn" active-class="active" aria-label="Settings" title="Settings">
+        <GbIcon name="settings" />
       </router-link>
     </div>
   </header>
@@ -56,7 +68,7 @@
 
 <script setup lang="ts">
 import LiveNotice from '@/components/LiveNotice.vue';
-import { computed, onBeforeUnmount, onMounted, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type ComponentPublicInstance } from 'vue';
 import { helpOpen } from '@/shortcuts';
 import '@/theme'; // keeps <html data-theme> in step with the choice
 import KeyboardHelp from '@/components/KeyboardHelp.vue';
@@ -65,21 +77,20 @@ import { paletteOpen } from '@/commands';
 import { forgeStatus, loadForges } from '@/forges';
 import { initials, loadMe, me, when } from '@/me';
 import { loadSyncStatus, syncStatus } from '@/sync';
+import { loadRemotes, remotes } from '@/remotes';
+import { faviconDot, syncLabel, waiting } from '@/ways';
+import { setFavicon } from '@/favicon';
+import { fit } from '@/navfit';
 import GbIcon from '@/components/GbIcon.vue';
 import { inbox, loadInbox } from '@/inbox';
 import { debounced, onLive } from '@/live';
 
-defineProps<{ views: string[]; active: string }>();
+const props = defineProps<{ views: string[]; active: string }>();
 
-const conflicts = computed(() => syncStatus.value?.last?.conflicts.length ?? 0);
-const running = computed(() => forgeStatus.value?.job?.state === 'running');
-const lastRun = computed(() => {
-  const j = forgeStatus.value?.job;
-  if (!j || running.value) return '';
-  return `${j.dry_run ? 'checked' : 'last run'} ${when(j.ended ?? j.started)}`;
-});
-
-const mod = /Mac/.test(navigator.platform) ? '⌘' : 'Ctrl+';
+const w = computed(() => waiting(remotes.value, forgeStatus.value, syncStatus.value));
+const label = computed(() => syncLabel(w.value));
+// the tab's dot: red to send, teal to get
+watch(() => faviconDot(w.value), setFavicon, { immediate: true });
 
 const inboxCount = computed(() => inbox.value?.rows.length ?? 0);
 // the tab says it too: "(3) git-board"
@@ -88,6 +99,12 @@ watch(inboxCount, (n) => (document.title = n ? `(${n}) ${baseTitle}` : baseTitle
 // ponytail: every issues event reloads the inbox, debounced; the server
 // recomputes it each time (inbox.go says when to keep it instead)
 const reloadInbox = debounced(() => void loadInbox());
+// a sync elsewhere, or an edit: what waits changes
+const reloadWaiting = debounced(() => {
+  void loadRemotes();
+  void loadForges();
+  void loadSyncStatus();
+});
 // another identity (here, or in another tab: LiveNotice reloads me): another inbox
 watch(
   () => me.value?.me?.id,
@@ -95,6 +112,47 @@ watch(
     if (was && id !== was) void loadInbox();
   },
 );
+
+// "N more": which views fit, measured in px.
+// ponytail: measured on a resize, on fonts loading and when the views or
+// the active one change; a view renamed in place re-measures through the
+// views watch only.
+const nav = ref<HTMLElement | null>(null);
+const more = ref<HTMLDetailsElement | null>(null);
+const menu = ref<HTMLDetailsElement | null>(null);
+const sep = ref<HTMLElement | null>(null);
+const insights = ref<ComponentPublicInstance | null>(null);
+const inboxLink = ref<ComponentPublicInstance | null>(null);
+const hidden = ref<number[]>([]);
+const hiddenViews = computed(() => hidden.value.map((i) => props.views[i]!));
+const moreGuess = 80; // px, until the menu is there to measure
+
+function measure(again = 1) {
+  const el = nav.value;
+  if (!el) return;
+  const widths = [...el.querySelectorAll<HTMLElement>('[data-view]')].map((a) => a.offsetWidth);
+  const fixed = [sep.value, insights.value?.$el as HTMLElement | undefined, inboxLink.value?.$el as HTMLElement | undefined].reduce((a, e) => a + (e?.offsetWidth ?? 0), 0);
+  const pad = getComputedStyle(el);
+  const room = el.clientWidth - parseFloat(pad.paddingLeft) - parseFloat(pad.paddingRight) - fixed;
+  const moreW = more.value?.offsetWidth || moreGuess;
+  const next = fit(widths, room, props.views.indexOf(props.active), moreW).hidden;
+  if (next.join() !== hidden.value.join()) hidden.value = next;
+  // the menu's real width, once it shows "N more": measure once more
+  if (again) void nextTick(() => (more.value?.offsetWidth || moreGuess) !== moreW && measure(again - 1));
+}
+watch(() => [props.views, props.active], () => void nextTick(() => measure()));
+const observer = new ResizeObserver(() => measure());
+
+// a menu folds on a click elsewhere, on a choice in it, and on Escape
+function close(d: HTMLDetailsElement | null) {
+  if (!d?.open) return;
+  d.open = false;
+  d.querySelector('summary')?.focus();
+}
+const fold = (e: MouseEvent) => {
+  for (const d of [more.value, menu.value]) if (d?.open && !d.contains(e.target as Node)) d.open = false;
+};
+
 let stopLive = () => {};
 
 // ⌘K (Ctrl+K) opens the palette, even from a field; ? the shortcuts,
@@ -112,17 +170,24 @@ function onKey(e: KeyboardEvent) {
 }
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKey);
+  document.removeEventListener('click', fold);
+  observer.disconnect();
   stopLive();
 });
 
 onMounted(() => {
   window.addEventListener('keydown', onKey);
+  document.addEventListener('click', fold);
+  if (nav.value) observer.observe(nav.value);
+  void document.fonts.ready.then(() => measure());
   if (!syncStatus.value) void loadSyncStatus();
   if (!forgeStatus.value) void loadForges();
+  if (!remotes.value) void loadRemotes();
   if (!me.value) void loadMe();
   if (!inbox.value) void loadInbox();
   stopLive = onLive((e) => {
     if (e.kind === 'issues' || e.kind === 'inbox') reloadInbox();
+    if (e.kind === 'issues' || e.kind === 'sync') reloadWaiting();
   });
 });
 </script>
@@ -138,16 +203,48 @@ onMounted(() => {
 
 /* the header stays on top while the page scrolls */
 .app-header { position: sticky; top: 0; z-index: 30; }
-.app-right { display: flex; align-items: center; gap: 1rem; margin-left: auto; }
-.gb-jump { display: inline-flex; align-items: center; gap: .5rem; min-height: 2.75rem; padding: 0 .75rem; border: 1px solid var(--border-strong); background: var(--bg); color: var(--fg-muted); font: inherit; font-size: .875rem; cursor: pointer; }
-.gb-jump:hover, .gb-jump:focus-visible { border-color: var(--fg); color: var(--fg); }
-.gb-jump kbd { padding: 0 .3rem; border: 1px solid var(--border); font-family: var(--font-mono); font-size: .75rem; }
-.gb-synclink { display: inline-flex; align-items: center; gap: .5rem; min-height: 2.75rem; padding: 0 1rem; border: 1px solid var(--border-strong); color: var(--fg); font-weight: 700; font-size: .875rem; text-decoration: none; white-space: nowrap; }
-.gb-synclink:hover { border-color: var(--fg); }
-.gb-synclink-run { border-color: var(--fg); }
-.gb-me { display: inline-flex; align-items: center; gap: .5rem; font-weight: 700; font-size: .875rem; white-space: nowrap; color: var(--fg); text-decoration: none; }
-.gb-settingslink { font: inherit; font-weight: 700; background: none; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; width: 2.75rem; height: 2.75rem; border: 1px solid var(--border-strong); color: var(--fg); }
-.gb-settingslink:hover, .gb-settingslink.active { border-color: var(--fg); }
+/* the nav takes what's left, its views never wrap: fit() hides the rest */
+.app-header .epfl-nav { min-width: 0; align-items: center; }
+.app-header .epfl-nav > a, .nav-more summary { flex: none; white-space: nowrap; }
+.app-header .epfl-nav > a.nav-hidden { position: absolute; top: 0; left: 0; visibility: hidden; pointer-events: none; }
+.nav-sep { flex: none; width: 1px; height: 1.25rem; margin: 0 .8rem; background: var(--border-strong); }
+
+/* "N more" looks like a nav link (the kit's .epfl-nav a) */
+.nav-more { position: relative; flex: none; }
+.nav-more summary { display: block; list-style: none; padding: 1.4rem 0.8rem; font-weight: var(--w-bold); font-size: 0.9375rem; color: var(--fg); cursor: pointer; }
+.nav-more summary::-webkit-details-marker { display: none; }
+.nav-more summary:hover, .nav-more[open] summary { color: var(--primary); }
+.nav-more summary:focus-visible { outline: var(--focus-w) solid var(--primary-hover); outline-offset: 0.125rem; }
+.nav-chev { margin-left: .25rem; font-size: .75rem; }
+
+/* both menus' panels, as the column chooser's */
+.nav-more-panel, .gb-menu-panel { position: absolute; z-index: 15; width: 16rem; margin-top: -.5rem; padding: .25rem 0; background: var(--bg); border: var(--border-w) solid var(--border-strong); box-shadow: var(--shadow); }
+.nav-more-panel { left: 0; }
+/* the kit styles every link in the nav: these are a list's */
+.epfl-nav .nav-more-panel a { display: block; padding: .5rem .875rem; font-size: var(--fs-sm); }
+.epfl-nav .nav-more-panel a::after { display: none; }
+
+.app-right { display: flex; align-items: center; gap: .75rem; margin-left: auto; }
+.gb-iconbtn { font: inherit; background: none; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; width: 2.75rem; height: 2.75rem; padding: 0; border: 1px solid var(--border-strong); color: var(--fg); }
+.gb-iconbtn:hover, .gb-iconbtn.active, .gb-menu[open] .gb-iconbtn { border-color: var(--fg); }
+.gb-iconbtn:focus-visible { outline: var(--focus-w) solid var(--primary-hover); outline-offset: 0.125rem; }
+
+/* Sync: a quiet link when nothing waits, a small button when something does */
+.gb-sync { display: inline-flex; align-items: center; min-height: 2.75rem; padding: 0 .5rem; color: var(--fg-muted); font-size: .875rem; text-decoration: none; white-space: nowrap; }
+.gb-sync:hover { color: var(--fg); }
+.gb-sync-waiting { min-height: 2.25rem; padding: .25rem .6rem; border: 1px solid var(--border-strong); color: var(--fg); font-weight: 700; }
+.gb-sync-waiting:hover { border-color: var(--fg); }
+
+.gb-menu { position: relative; }
+.gb-menu summary { list-style: none; }
+.gb-menu summary::-webkit-details-marker { display: none; }
+.gb-menu-panel { right: 0; margin-top: .375rem; font-size: var(--fs-sm); }
+.gb-menu-panel > a, .gb-menu-panel > button { display: flex; justify-content: space-between; align-items: center; box-sizing: border-box; width: 100%; padding: .5rem .875rem; border: 0; background: none; color: var(--fg); font: inherit; text-align: left; text-decoration: none; cursor: pointer; }
+.gb-menu-panel > a:hover, .gb-menu-panel > button:hover { color: var(--primary); }
+.gb-menu-panel kbd { padding: 0 .3rem; border: 1px solid var(--border); font-family: var(--font-mono); font-size: .75rem; }
+.gb-menu-who { display: flex; flex-direction: column; gap: .125rem; margin: 0; padding: .5rem .875rem .625rem; border-bottom: 1px solid var(--border-subtle); }
+.gb-menu-who code { color: var(--fg-muted); font-size: .75rem; }
+.gb-menu-foot { margin: 0; padding: .5rem .875rem; border-top: 1px solid var(--border-subtle); color: var(--fg-muted); font-size: .8125rem; }
 
 .nav-count {
   margin-left: var(--space-1);
@@ -170,8 +267,7 @@ onMounted(() => {
 }
 
 @media (max-width: 47.99rem) {
-  /* The nav moves to its own row and scrolls sideways instead of
-     overflowing the page. */
+  /* The nav moves to its own row; fit() still keeps it to one line. */
   .app-header {
     flex-wrap: wrap;
     height: auto;
@@ -182,10 +278,7 @@ onMounted(() => {
     margin-left: calc(-1 * var(--space-3));
     margin-right: calc(-1 * var(--space-3));
     padding: 0 var(--space-2);
-    overflow-x: auto;
   }
-  .app-header .epfl-nav a { white-space: nowrap; }
   .app-right { order: 2; }
-  .gb-synclink .gb-hint, .gb-me-name, .gb-jump-label, .gb-jump kbd { display: none; }
 }
 </style>
