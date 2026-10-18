@@ -58,21 +58,9 @@ func (r *Runner) Status(ctx context.Context) (Status, error) {
 		return Status{}, err
 	}
 	st := Status{Head: head}
-	repos := map[string]*ConfigRepo{}
-	for _, t := range r.Cfg.Deploy {
-		if repos[t.Repo] != nil {
-			continue
-		}
-		c, err := OpenConfigRepo(ctx, r.CacheDir, t.Repo)
-		if err != nil {
-			return Status{}, err
-		}
-		if !r.Offline {
-			if err := c.Fetch(ctx); err != nil {
-				return Status{}, err
-			}
-		}
-		repos[t.Repo] = c
+	repos, err := r.configRepos(ctx)
+	if err != nil {
+		return Status{}, err
 	}
 	for _, env := range r.Cfg.Environments {
 		e, err := r.envState(ctx, env, repos)
@@ -106,6 +94,28 @@ func (r *Runner) Status(ctx context.Context) (Status, error) {
 		st.Releases = append(st.Releases, row)
 	}
 	return st, nil
+}
+
+// configRepos opens each deploy target's config repo once, keyed by its URL,
+// and fetches it unless Offline.
+func (r *Runner) configRepos(ctx context.Context) (map[string]*ConfigRepo, error) {
+	repos := map[string]*ConfigRepo{}
+	for _, t := range r.Cfg.Deploy {
+		if repos[t.Repo] != nil {
+			continue
+		}
+		c, err := OpenConfigRepo(ctx, r.CacheDir, t.Repo)
+		if err != nil {
+			return nil, err
+		}
+		if !r.Offline {
+			if err := c.Fetch(ctx); err != nil {
+				return nil, err
+			}
+		}
+		repos[t.Repo] = c
+	}
+	return repos, nil
 }
 
 func (r *Runner) envState(ctx context.Context, env string, repos map[string]*ConfigRepo) (EnvState, error) {

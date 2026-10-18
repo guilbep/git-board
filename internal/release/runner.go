@@ -112,9 +112,15 @@ func (r *Runner) artifact(ctx context.Context, image string, t Tag) (digest stri
 	if !errors.Is(err, ErrNoImage) {
 		return digest, err == nil, err
 	}
-	digest, rev, err := r.Tools.Revision(ctx, image+":"+t.Commit)
+	return r.builtFor(ctx, image+":"+t.Commit, t.Commit)
+}
+
+// builtFor returns ref's digest and whether ref was built from commit (its
+// revision label is commit); ok is false when the registry lacks ref.
+func (r *Runner) builtFor(ctx context.Context, ref, commit string) (digest string, ok bool, err error) {
+	digest, rev, err := r.Tools.Revision(ctx, ref)
 	if errors.Is(err, ErrNoImage) {
 		return "", false, nil
 	}
-	return digest, err == nil && rev == t.Commit, err
+	return digest, err == nil && rev == commit, err
 }
