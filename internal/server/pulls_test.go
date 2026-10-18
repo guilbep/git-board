@@ -27,6 +27,7 @@ type fakeGitHub struct {
 	requests []string          // "METHOD path"
 	bodies   map[string]string // by "METHOD path"
 	refuse   bool              // the merge: GitHub's 409
+	down     bool              // every request: GitHub's 500
 }
 
 func newFakeGitHub(t *testing.T) *fakeGitHub {
@@ -40,8 +41,12 @@ func newFakeGitHub(t *testing.T) *fakeGitHub {
 		data, _ := io.ReadAll(r.Body)
 		f.mu.Lock()
 		f.requests, f.bodies[key] = append(f.requests, key), string(data)
-		refuse := f.refuse
+		refuse, down := f.refuse, f.down
 		f.mu.Unlock()
+		if down {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
 		switch key {
 		case "POST /graphql":
 			serveFixture(t, w, "pr.json")
@@ -131,7 +136,7 @@ func gateRepo(t *testing.T, url string, withToken bool) (*apiServer, *fakeGitHub
 	}
 	id := gitbugiotest.NewImportedIssue(t, b, "[BUG](Equipment) Crash on save (#2518)", "https://github.com/o/r/issues/2518")
 	gh := newFakeGitHub(t)
-	return &apiServer{cfg: &config.Config{}, b: b, me: "guilbep", githubAPI: gh.URL}, gh, id
+	return &apiServer{cfg: &config.Config{}, b: b, me: "guilbep", githubAPI: gh.URL, gitDir: filepath.Join(dir, ".git")}, gh, id
 }
 
 func serve(t *testing.T, s *apiServer) *httptest.Server {
