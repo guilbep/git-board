@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/git-bug/git-bug/bridge/core"
+	"github.com/git-bug/git-bug/entity"
 
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/gitbugio"
@@ -275,6 +276,59 @@ func TestForgeGetAndSend(t *testing.T) {
 	start(map[string]any{"dry_run": true})
 	if code, mode := start(map[string]any{"mode": "send"}); code != http.StatusAccepted || mode != "send" {
 		t.Errorf("a send after a clean dry run: %d %s", code, mode)
+	}
+}
+
+// Send doesn't get the forges' changes first, and sends an issue's labels
+// whole: an issue the check found changed on both sides would lose the
+// labels added on the forge, and the comment texts edited there. Send
+// waits for a Get or a Sync on that forge; one issue changed on each side
+// loses nothing.
+func TestForgeSendRefusesIssuesChangedBothWays(t *testing.T) {
+	ts, s := newIssueServer(t)
+	done := make(chan struct{})
+	close(done)
+	check := func(results ...core.SyncResult) *bridgeTally {
+		t.Helper()
+		s.runSync = fakeSync(results, done)
+		if code := call(t, "POST", ts.URL+"/api/forges/sync", map[string]any{"dry_run": true}, nil); code != http.StatusAccepted {
+			t.Fatalf("check: %d", code)
+		}
+		return waitJob(t, ts).Job.Bridges["gh"]
+	}
+	send := func(bridges ...string) int {
+		t.Helper()
+		s.runSync = fakeSync(nil, done)
+		code := call(t, "POST", ts.URL+"/api/forges/sync", map[string]any{"mode": "send", "bridges": bridges}, nil)
+		if code == http.StatusAccepted {
+			waitJob(t, ts)
+		}
+		return code
+	}
+	pulls := func(bridge, id string) core.SyncResult {
+		return core.SyncResult{Bridge: bridge, Import: &core.ImportResult{Event: core.ImportEventNothing, EntityId: entity.Id(id), Reason: "would pull up to 2 changes from https://github.com/o/r/issues/1"}}
+	}
+	sends := func(bridge, id string) core.SyncResult {
+		return core.SyncResult{Bridge: bridge, Export: &core.ExportResult{Event: core.ExportEventNothing, EntityId: entity.Id(id), Reason: "would send: labels"}}
+	}
+	imports := core.SyncResult{Bridge: "gh", Import: &core.ImportResult{Event: core.ImportEventNothing, Reason: "would import issue https://github.com/o/r/issues/3"}}
+
+	if gh := check(pulls("gh", "x"), sends("gh", "y"), imports, pulls("gl", "z")); gh.Conflicts != 0 {
+		t.Errorf("conflicts %d, want none: x changed on GitHub, y here", gh.Conflicts)
+	}
+	if code := send(); code != http.StatusAccepted {
+		t.Errorf("a send where no issue changed both ways: %d", code)
+	}
+
+	// the order the check reports them in doesn't matter
+	if gh := check(sends("gh", "x"), pulls("gh", "x"), pulls("gl", "z")); gh.Conflicts != 1 {
+		t.Errorf("conflicts %d, want x", gh.Conflicts)
+	}
+	if code := send(); code != http.StatusConflict {
+		t.Errorf("a send to a forge with an issue changed both ways: %d, want 409", code)
+	}
+	if code := send("gl"); code != http.StatusAccepted {
+		t.Errorf("a send to the other forge alone: %d", code)
 	}
 }
 
