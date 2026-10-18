@@ -34,6 +34,7 @@ func resolveMe(flag string) string {
 }
 
 func newRootCmd() *cobra.Command {
+	var noOpen bool
 	root := &cobra.Command{
 		Use:   "git-board",
 		Short: "Fields, sprints and views over git-bug issues",
@@ -41,6 +42,11 @@ func newRootCmd() *cobra.Command {
 replacement for GitHub Projects. Field values (status, priority, sprint,
 assignees, ...) live as namespaced git-bug labels; run "git-board bridge
 --help" to pull them from an actual GitHub Project.
+
+With no command, "git-board" opens this repository's web UI: in the
+browser where its server already runs, else it starts one here on
+127.0.0.1, port 8080 or the next free one, until Ctrl-C. Each repository
+gets its own. "git-board serve" runs the server alone.
 
 FILTER GRAMMAR (used by ls/view/tui):
   field:value             issue has the label field:value
@@ -51,7 +57,8 @@ FILTER GRAMMAR (used by ls/view/tui):
   title:*glob*            glob match on title
   free text               substring match on title
   Conditions are AND'd together — combine as many as you like.`,
-		Example: `  git-board                                    # default: open issues
+		Example: `  git-board                                    # this repository's web UI
+  git-board ls                                 # open issues
   git-board ls "assignee:guilbep -status:validated"
   git-board ls "sprint:@current is:open" --group status
   git-board view backlog --md
@@ -60,10 +67,12 @@ FILTER GRAMMAR (used by ls/view/tui):
 		Version:       buildVersion(),
 		SilenceUsage:  true,
 		SilenceErrors: true,
+		Args:          cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runLs(cmd.OutOrStdout(), defaultFilter, "", "", false, false, "")
+			return runBoard(cmd.Context(), cmd.OutOrStdout(), !noOpen)
 		},
 	}
+	root.Flags().BoolVar(&noOpen, "no-open", false, "don't open the browser")
 	root.AddCommand(newViewCmd(), newNumbersCmd(), newLsCmd(), newSetCmd(), newGetCmd(), newTuiCmd(), newBridgeCmd(), newLintCmd(), newMoveCmd(), newCloseCmd(), newSyncCmd(), newSprintCmd(), newHtmlCmd(), newBranchCmd(), newServeCmd())
 	return root
 }
@@ -249,7 +258,7 @@ func runTui(filterStr, me string) error {
 // loadMatchingIssues opens the git-bug repo cache in cwd and returns issues
 // matching filterStr — the shared core behind ls/view's table render and the
 // tui's interactive list. The actual matching logic lives in internal/board
-// so cmd/git-board-server can reuse it too.
+// so the server (internal/server) can reuse it too.
 func loadMatchingIssues(cfg *config.Config, filterStr, me string) ([]gitbugio.Issue, error) {
 	b, err := gitbugio.OpenCwd()
 	if err != nil {

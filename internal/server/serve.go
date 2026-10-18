@@ -8,13 +8,19 @@
 package server
 
 import (
+	"context"
 	"fmt"
 	"io/fs"
 	"log"
 	"net"
 	"net/http"
 	"os"
+	"os/signal"
+	"strconv"
+	"syscall"
 	"time"
+
+	"github.com/git-bug/git-bug/repository"
 
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/ghbridge"
@@ -22,9 +28,14 @@ import (
 	boardweb "github.com/guilbep/git-board/web"
 )
 
-// Serve serves the git-bug repository in the working directory on addr,
-// me the current user for @me (GIT_BOARD_ME when empty).
-func Serve(addr, me string) error {
+// Serve serves the git-bug repository in the working directory until ctx
+// ends, or Ctrl-C (SIGTERM too). addr "" is "git board": 127.0.0.1 on
+// the first free port from 8080. me is the current user for @me
+// (GIT_BOARD_ME when empty). ready gets the board's URL once it listens.
+func Serve(ctx context.Context, addr, me string, ready func(url string)) error {
+	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
 	cfgPath := config.Path()
 	cfg, err := config.Load(cfgPath)
 	if err != nil {
@@ -36,6 +47,10 @@ func Serve(addr, me string) error {
 		return fmt.Errorf("opening git-bug repo: %w", err)
 	}
 	defer b.Close()
+	gitDir, err := repository.FindGitDir(".")
+	if err != nil {
+		return err
+	}
 
 	// Quasar's default build output is nested under dist/spa (the mode
 	// name) — web/dist/.gitkeep lives in the parent dist/, which Quasar's
@@ -45,21 +60,60 @@ func Serve(addr, me string) error {
 		return fmt.Errorf("web/dist embed: %w", err)
 	}
 
-	listeners, exposed, err := listen(addr)
-	if err != nil {
-		return fmt.Errorf("%w (another server on this port? pass --addr localhost:8090)", err)
+	var listeners []net.Listener
+	var exposed []string
+	host := "127.0.0.1"
+	if addr == "" {
+		l, err := listenFree()
+		if err != nil {
+			return fmt.Errorf("no free port from %d: %w", firstPort, err)
+		}
+		listeners = []net.Listener{l}
+	} else {
+		if listeners, exposed, err = listen(addr); err != nil {
+			return fmt.Errorf("%w (another server on this port? pass --addr localhost:8090)", err)
+		}
+		host, _, _ = net.SplitHostPort(addr)
 	}
-	s := &apiServer{cfg: cfg, cfgPath: cfgPath, b: b, me: resolveMe(me), project: ghbridge.Gh, exposed: exposed}
-	handler := withCORS(newMux(s, http.FileServerFS(dist)))
-	go s.watchRefs(3*time.Second, nil) // changes made outside the API reach the pages
+	s := &apiServer{cfg: cfg, cfgPath: cfgPath, b: b, me: resolveMe(me), project: ghbridge.Gh, exposed: exposed, gitDir: gitDir}
+	// the pages' event streams end with ctx
+	srv := &http.Server{Handler: withCORS(newMux(s, http.FileServerFS(dist))), BaseContext: func(net.Listener) context.Context { return ctx }}
+	go s.watchRefs(3*time.Second, ctx.Done()) // changes made outside the API reach the pages
 
-	_, port, _ := net.SplitHostPort(addr)
-	fmt.Printf("git-board listening on http://localhost:%s\n", port)
 	errs := make(chan error, len(listeners))
 	for _, l := range listeners {
-		go func() { errs <- http.Serve(l, handler) }()
+		go func() { errs <- srv.Serve(l) }()
 	}
-	return <-errs
+	inst := Instance{URL: boardURL(host, listeners[0]), PID: os.Getpid()}
+	if err = writeInstance(gitDir, inst); err == nil {
+		defer os.Remove(instancePath(gitDir))
+		ready(inst.URL)
+		select {
+		case err = <-errs:
+		case <-ctx.Done():
+		}
+	}
+	stop() // a second Ctrl-C quits at once
+	wait, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	// the requests running end first, and a forge sync, before the
+	// repository closes
+	_ = srv.Shutdown(wait)
+	if !s.writeMu.TryLock() {
+		log.Print("stopping once the write running ends; Ctrl-C again stops now")
+		s.writeMu.Lock()
+	}
+	return err
+}
+
+// boardURL is where this machine reaches the board: an address on every
+// interface as localhost.
+func boardURL(host string, l net.Listener) string {
+	switch host {
+	case "", "0.0.0.0", "::":
+		host = "localhost"
+	}
+	return "http://" + net.JoinHostPort(host, strconv.Itoa(l.Addr().(*net.TCPAddr).Port))
 }
 
 // listen opens addr. localhost is both loopback addresses, either enough:
