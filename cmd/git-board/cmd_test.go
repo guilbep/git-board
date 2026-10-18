@@ -209,3 +209,18 @@ func TestBareTakesNoArguments(t *testing.T) {
 		t.Errorf("git board is:open ran:\n%s", out)
 	}
 }
+
+// The board holds the repository: a command that can't open it says where
+// the board is.
+func TestLockedRepositoryNamesTheRunningBoard(t *testing.T) {
+	newTestRepo(t)
+	url := startBoard(t)
+
+	_, err := execute(t, []string{"ls"})
+	if err == nil {
+		t.Fatal("ls ran while the board holds the repository")
+	}
+	if msg := explainLock(err).Error(); !strings.Contains(msg, "git-board server is running for this repository") || !strings.Contains(msg, url) {
+		t.Errorf("error doesn't name the board at %s:\n%s", url, msg)
+	}
+}
