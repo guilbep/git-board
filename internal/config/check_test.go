@@ -67,3 +67,37 @@ kinds = { bug = "fix", feat = "feat" }
 		t.Errorf("branches %+v", b)
 	}
 }
+
+func TestCheckTakesRelease(t *testing.T) {
+	src := `[release]
+remote = "origin"
+environments = ["dev", "stage", "prod"]
+follow = "dev"
+checks = "make ci"
+images = [
+  { name = "frontend", context = "./frontend" },
+  { name = "backend",  context = "./backend" },
+]
+chart = { path = "./helm", registry = "oci://ghcr.io/epfl-enac/co2-calculator/helm" }
+version_values = ["backend.env.APP_VERSION"]
+builder = ""
+
+[[release.deploy]]
+repo = "git@github.com:EPFL-ENAC/enack8s-app-config.git"
+path = "epfl/co2-calculator/overlays/{env}"
+registry = "ghcr.io/epfl-enac/epfl/co2-calculator"
+
+[[release.deploy]]
+repo = "git@github.com:EPFL-ENAC/openshift-app-config.git"
+path = "epfl/co2-calculator/overlays/{env}"
+registry = "quay-its.epfl.ch/svc1751/co2-calculator"
+`
+	cfg, warnings, err := Check([]byte(src))
+	if err != nil || len(warnings) != 0 {
+		t.Fatalf("%v %v", err, warnings)
+	}
+	r := cfg.Release
+	if len(r.Images) != 2 || r.Chart == nil || r.Chart.Path != "./helm" || len(r.Deploy) != 2 || r.Deploy[1].Registry != "quay-its.epfl.ch/svc1751/co2-calculator" || r.VersionValues[0] != "backend.env.APP_VERSION" {
+		t.Errorf("release %+v", r)
+	}
+}

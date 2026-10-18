@@ -107,6 +107,7 @@ type raw struct {
 	Uploads       Uploads           `toml:"uploads"`
 	Branches      Branches          `toml:"branches"`
 	Roles         map[string]string `toml:"roles"`
+	Release       Release           `toml:"release"`
 }
 
 // Uploads is the [uploads] table: where files attached to issues go. The
@@ -156,6 +157,8 @@ type Config struct {
 	Branches      Branches
 	// Roles is the [roles] table: the project's people by role (roles.go).
 	Roles map[string]string
+	// Release is the [release] table (release.go).
+	Release Release
 }
 
 // FileName is the config's name, at the root of the repository.
@@ -219,6 +222,9 @@ func parse(data []byte) (*Config, toml.MetaData, error) {
 	if err := checkRoles(r.Roles, r.Fields); err != nil {
 		return nil, md, err
 	}
+	if err := checkRelease(r.Release); err != nil {
+		return nil, md, err
+	}
 	return &Config{
 		Repos:         r.Repos.List,
 		Fields:        r.Fields,
@@ -228,6 +234,7 @@ func parse(data []byte) (*Config, toml.MetaData, error) {
 		Uploads:       r.Uploads,
 		Branches:      r.Branches,
 		Roles:         r.Roles,
+		Release:       r.Release,
 	}, md, nil
 }
 

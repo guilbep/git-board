@@ -405,6 +405,7 @@ appears as one line in the issue's Development section: "in dev · in stage
 [release]
 remote = "origin"                         # the authority
 environments = ["dev", "stage", "prod"]   # ordered; any subset
+follow = "dev"                            # optional: dev follows the trunk
 checks = "make ci"
 images = [
   { name = "frontend", context = "./frontend" },
@@ -412,6 +413,7 @@ images = [
   { name = "docs",     context = "./docs" },
 ]
 chart = { path = "./helm", registry = "oci://ghcr.io/epfl-enac/co2-calculator/helm" }
+version_values = ["backend.env.APP_VERSION"]  # under the chart's valuesInline
 builder = ""   # optional: a remote buildx builder instead of the local one
 
 [[release.deploy]]
@@ -422,7 +424,7 @@ registry = "ghcr.io/epfl-enac/epfl/co2-calculator"
 [[release.deploy]]
 repo = "git@github.com:EPFL-ENAC/openshift-app-config.git"
 path = "epfl/co2-calculator/overlays/{env}"
-registry = "quay-its.epfl.ch/svc1751/co2-calculator"
+registry = "quay-its.epfl.ch/svc1751"
 ```
 
 Exact key names are the builder's. The shape is: the authority remote,

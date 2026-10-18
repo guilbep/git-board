@@ -299,6 +299,49 @@ Choose the prefix once: issues carry it, in branches, commits and messages. `sta
 
 After the switch, a bare number (`3075`, `fix/3075-…`) and `CO2-3075` are the project's number; `#3075` is always a forge's. Cards, rows and the issue page show the number before the title.
 
+## Release
+
+`[release]` is how the project's code reaches its environments: the ordered `environments`, the `checks` a merge must pass, what to build (`images`, `chart`) and the config repos holding each environment's overlay (`[[release.deploy]]`). Without `environments`, the project has no releases. See [the release design](prd/release.md).
+
+The environments have roles, from their order. The one that **follows** the trunk takes its head (`dev` when listed, else none). The **last** takes final releases. Those **between** take candidates. One environment that is the followed one has no releases.
+
+```toml
+[release]
+remote = "origin"
+environments = ["dev", "stage", "prod"]
+checks = "make ci"
+images = [
+  { name = "frontend", context = "./frontend" },
+  { name = "backend", context = "./backend" },
+]
+chart = { path = "./helm", registry = "oci://ghcr.io/epfl-enac/co2-calculator/helm" }
+version_values = ["backend.env.APP_VERSION"]
+
+[[release.deploy]]
+repo = "git@github.com:EPFL-ENAC/enack8s-app-config.git"
+path = "epfl/co2-calculator/overlays/{env}"
+registry = "ghcr.io/epfl-enac/epfl/co2-calculator"
+
+[[release.deploy]]
+repo = "git@github.com:EPFL-ENAC/openshift-app-config.git"
+path = "epfl/co2-calculator/overlays/{env}"
+registry = "quay-its.epfl.ch/svc1751"
+```
+
+| Key | Default | What it does |
+| --- | --- | --- |
+| `remote` | `origin` | The authority: tags and release records are pushed there, and a refused push is the lock. Other remotes are mirrors. |
+| `environments` | none | The environments in order, each once. The last takes finals, the ones between `follow` and the last take candidates. |
+| `follow` | `"dev"` when listed | The environment that follows the trunk's head. It must be one of `environments`; `follow = ""` means none does. |
+| `checks` | none | The command run on a merge's exact tree before it reaches the trunk (`make ci`). |
+| `images` | none | The images to build, each a `name` and a docker build `context`. |
+| `chart` | none | The helm chart: its `path` and the OCI `registry` it is pushed to. |
+| `version_values` | none | Dotted paths under the chart entry's `valuesInline` that get the version as a string (`backend.env.APP_VERSION`). |
+| `builder` | the local buildx builder | A remote buildx builder to build on. |
+| `deploy` | none | One `[[release.deploy]]` per config repo: its `repo`, the overlay `path` (with `{env}`, replaced by the environment) and the `registry` of its images. |
+
+A deploy edits the overlay's `kustomization.yaml` and nothing else (comments, key order and other entries stay): the `images[]` entry named `<registry>/<image>` gets `newTag` and `digest`; the `helmCharts[]` entry whose `repo` is the chart's `registry` gets `version`, and each `version_values` path under its `valuesInline` gets the version; `commonAnnotations` `git-board/commit` and `git-board/version` record what runs.
+
 ## Repos
 
 ```toml
