@@ -10,7 +10,7 @@
       <a v-if="pr" :href="pr.url" target="_blank" rel="noopener noreferrer">plan PR #{{ pr.number }}<span class="gb-sr">(opens in a new tab)</span></a>
     </p>
     <!-- ponytail: the whole file, clamped, rather than its summary, options and why parsed out -->
-    <MarkdownBody v-if="plan.html" :html="plan.html" :class="['gb-clamp', { 'is-open': open }]" />
+    <MarkdownBody v-if="html" :html="html" :class="['gb-clamp', { 'is-open': open }]" />
     <p class="gb-cycle-actions">
       <button type="button" class="gb-linkbtn" @click="open = !open">{{ open ? 'Fold the plan' : 'Read the whole plan' }}</button>
     </p>
@@ -26,7 +26,7 @@
 
   <div class="gb-cycle-actions">
     <button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" :aria-expanded="revising" :disabled="busy" @click="revising = !revising">Ask the agent to revise</button>
-    <button v-if="mine && plan" type="button" class="epfl-btn epfl-btn-primary epfl-btn-sm" :disabled="busy" @click="emit('approve')">Approve the plan</button>
+    <button v-if="can" type="button" class="epfl-btn epfl-btn-primary epfl-btn-sm" :disabled="busy" @click="emit('approve')">Approve the plan</button>
   </div>
   <form v-if="revising" class="gb-revise" @submit.prevent="send">
     <textarea v-model="ask" class="epfl-input" rows="3" aria-label="What to revise" placeholder="What the plan should change" :disabled="busy" />
@@ -43,13 +43,16 @@ import { computed, ref } from 'vue';
 import type { Cycle } from '@/api/board';
 import MarkdownBody from '@/components/MarkdownBody.vue';
 
-const props = defineProps<{ cycle: Cycle; busy: boolean; mine: boolean }>();
+const props = defineProps<{ cycle: Cycle; busy: boolean; can: boolean }>(); // can: the viewer may approve (the server's actions)
 const emit = defineEmits<{ approve: []; revise: [body: string] }>();
 
 const plan = computed(() => props.cycle.evidence.plan);
 const pr = computed(() => props.cycle.evidence.plan_pr);
 // the file's first heading is the plan's title; the file name otherwise
-const title = computed(() => plan.value?.html?.match(/<h1[^>]*>(.*?)<\/h1>/)?.[1]?.replace(/<[^>]+>/g, '') || plan.value?.path.replace(/^.*\//, '') || 'Plan');
+const h1 = /^\s*<h1[^>]*>(.*?)<\/h1>\s*/;
+const title = computed(() => plan.value?.html?.match(h1)?.[1]?.replace(/<[^>]+>/g, '') || plan.value?.path.replace(/^.*\//, '') || 'Plan');
+// the file's first heading is the title above: shown once
+const html = computed(() => plan.value?.html?.replace(h1, '') ?? '');
 const drafted = computed(() => {
   const p = plan.value;
   if (!p?.by) return '';

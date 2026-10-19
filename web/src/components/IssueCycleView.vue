@@ -22,14 +22,14 @@
 
         <section class="gb-ws" :aria-label="`Step ${cycle.step}: ${cycle.name}`">
           <p class="gb-eyebrow">Step {{ cycle.step }} · {{ cycle.name }}<template v-if="cycle.risk"> · {{ cycle.risk }}</template></p>
-          <CyclePlan v-if="cycle.step === 3 && !cycle.done" :cycle="cycle" :busy="busy" :mine="mine" @approve="act('approve-plan')" @revise="(body) => emit('comment', body)" />
+          <CyclePlan v-if="cycle.step === 3 && !cycle.done" :cycle="cycle" :busy="busy" :can="has('approve-plan')" @approve="act('approve-plan')" @revise="(body) => emit('comment', body)" />
           <CycleVerify
             v-else-if="cycle.step === 7 && !cycle.done"
             :cycle="cycle"
             :status="status"
             :events="events"
             :busy="busy"
-            :mine="mine"
+            :can="has('signoff')"
             :needs-why="needsWhy"
             @check="(i) => act('check', { index: i })"
             @signoff="(why) => act('signoff', why ? { why } : {})"
@@ -74,7 +74,7 @@ import GbIcon from '@/components/GbIcon.vue';
 const props = defineProps<{ id: string; status: string; labels: string[]; events: IssueEvent[]; forges?: Forge[] | undefined; page?: boolean }>();
 const emit = defineEmits<{ changed: []; comment: [body: string] }>();
 
-const { cycle, error, busy, needsWhy, mine, act, patch, press } = useCycle(props, () => emit('changed'));
+const { cycle, error, busy, needsWhy, has, act, patch, press } = useCycle(props, () => emit('changed'));
 const card = computed(() => (cycle.value ? cardFor(cycle.value, props.status) : null));
 
 // who set the risk: the last label change adding one, from the thread

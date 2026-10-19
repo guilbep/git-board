@@ -9,8 +9,8 @@
     <h4 id="v-run" class="gb-vsec-title">The full run</h4>
     <template v-if="run">
       <p class="gb-note">{{ run.by }}<template v-if="run.commit"> at <span class="gb-mono">{{ run.commit.slice(0, 7) }}</span></template>, {{ when(run.at, true) }}</p>
-      <MarkdownBody v-if="runEvent?.html" :html="runEvent.html" :class="['gb-clamp', { 'is-open': open }]" />
-      <p v-if="runEvent?.html" class="gb-cycle-actions">
+      <MarkdownBody v-if="runHtml" :html="runHtml" :class="['gb-clamp', { 'is-open': open }]" />
+      <p v-if="runHtml" class="gb-cycle-actions">
         <button type="button" class="gb-linkbtn" @click="open = !open">{{ open ? 'Fold the output' : 'Read the whole output' }}</button>
       </p>
     </template>
@@ -58,7 +58,7 @@
   <p class="gb-gate">{{ cycle.gate }}</p>
   <p v-if="cycle.note" class="gb-note">{{ cycle.note }}</p>
   <div class="gb-cycle-actions">
-    <button v-if="mine" type="button" class="epfl-btn epfl-btn-primary epfl-btn-sm" :disabled="busy" @click="emit('signoff')">Sign off {{ status }}</button>
+    <button v-if="can" type="button" class="epfl-btn epfl-btn-primary epfl-btn-sm" :disabled="busy" @click="emit('signoff')">Sign off {{ status }}</button>
     <button v-if="cycle.stages.in_progress.length" type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" :disabled="busy" @click="emit('back')">Send back to {{ cycle.stages.in_progress[0] }}</button>
   </div>
   <form v-if="needsWhy" class="gb-cycle-actions" @submit.prevent="emit('signoff', why)">
@@ -74,12 +74,14 @@ import { tiles } from '@/cycle';
 import { when } from '@/when';
 import MarkdownBody from '@/components/MarkdownBody.vue';
 
-const props = defineProps<{ cycle: Cycle; status: string; events: IssueEvent[]; busy: boolean; mine: boolean; needsWhy: boolean }>();
+const props = defineProps<{ cycle: Cycle; status: string; events: IssueEvent[]; busy: boolean; can: boolean; needsWhy: boolean }>(); // can: the viewer may sign off (the server's actions)
 const emit = defineEmits<{ check: [index: number]; signoff: [why?: string]; run: [output: string, commit: string]; back: [] }>();
 
 // the newest run, and its comment in the thread (the output is its body)
 const run = computed(() => props.cycle.evidence.runs?.at(-1));
 const runEvent = computed(() => props.events.findLast((e) => e.meta?.['verify:run']));
+// the comment opens with "Run at <sha>", said above already
+const runHtml = computed(() => runEvent.value?.html?.replace(/^\s*<p>Run at [^<]*<\/p>\s*/, '') ?? '');
 const checkedBy = (i: number) => props.cycle.evidence.checks?.find((c) => c.index === i)?.by;
 const delivered = computed(() => props.cycle.evidence.plan?.status === 'delivered');
 const so = computed(() => tiles(props.cycle, props.status));

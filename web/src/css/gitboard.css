@@ -289,7 +289,7 @@
 /* The Cycle view (IssueCycleView.vue; the canvas's E1, E3, E4): the
    progress ticks, the spine, the workspace, the status bar. Done is canard. */
 .gb-seg-sm button { height: 2rem; padding: 0 .625rem; font-size: .8125rem; }
-.gb-prog { display: inline-flex; align-items: center; gap: 4px; }
+.gb-prog { display: inline-flex; align-items: center; gap: 4px; margin-right: .5rem; }
 .gb-tick { display: block; width: 22px; height: 4px; background: var(--border); }
 .gb-tick.is-done { background: var(--gb-done); }
 .gb-tick.is-current { background: var(--fg); }
