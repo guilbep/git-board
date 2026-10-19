@@ -32,10 +32,11 @@ type Cut struct {
 // makes the release: the tag pushed first, then the images ensured and
 // tagged with it, the chart at it and the record with its notes; then,
 // with c.Deploy, it deploys to the first candidate environment, or the
-// last for a final. A commit with a record keeps it, and its notes but for
+// last for a final, unless that one follows the trunk: it runs the commit
+// already. A commit with a record keeps it, and its notes but for
 // c.Notes; its chart at the tag is left to the deploy, which packages it.
 //
-// Before writing anything it refuses: offline; a dev-only app; a commit
+// Before writing anything it refuses: offline; a commit
 // that doesn't contain what the last environment runs, and a final when no
 // candidate on the commit ran in the environment before last (both unless
 // c.Hotfix); a yanked commit; with c.Deploy, an environment that isn't
@@ -45,7 +46,7 @@ type Cut struct {
 // returned, even with a later error: a Deploy finishes the images, the
 // chart and the environment, and a Reconcile past its grace the record.
 func (r *Runner) Cut(ctx context.Context, c Cut) (Tag, error) {
-	if err := cmp.Or(r.online("a cut"), r.devOnly()); err != nil {
+	if err := r.online("a cut"); err != nil {
 		return Tag{}, err
 	}
 	if err := r.Reconcile(ctx); err != nil {
@@ -56,9 +57,13 @@ func (r *Runner) Cut(ctx context.Context, c Cut) (Tag, error) {
 
 // Promote cuts the final of candidate rcTag on its commit and deploys it to
 // the last environment. It ships what ran: an image no registry has for
-// the commit is refused before the tag, never built.
+// the commit is refused before the tag, never built. An app whose last
+// environment follows the trunk has nothing to promote.
 func (r *Runner) Promote(ctx context.Context, rcTag string) (Tag, error) {
-	if err := cmp.Or(r.online("a promote"), r.devOnly()); err != nil {
+	if r.followsLast() {
+		return Tag{}, fmt.Errorf("%s follows %s and is the last environment: nothing to promote; release cut tags what it runs", r.Cfg.Last(), r.base())
+	}
+	if err := r.online("a promote"); err != nil {
 		return Tag{}, err
 	}
 	if err := r.Reconcile(ctx); err != nil {
@@ -200,7 +205,8 @@ func (r *Runner) cut(ctx context.Context, c Cut, promote bool) (Tag, error) {
 			return Tag{}, err
 		}
 	}
-	if c.Deploy {
+	deploy := c.Deploy && !r.followsLast()
+	if deploy {
 		if err := r.takes(ctx, envNamed(st, r.deployTo(final)), commit, c.Hotfix); err != nil {
 			return Tag{}, err
 		}
@@ -253,7 +259,7 @@ func (r *Runner) cut(ctx context.Context, c Cut, promote bool) (Tag, error) {
 	if err != nil {
 		return t, err
 	}
-	if c.Deploy {
+	if deploy {
 		return t, r.deploy(ctx, r.deployTo(final), Target{Commit: commit, Version: t.Name, Hotfix: c.Hotfix})
 	}
 	return t, nil

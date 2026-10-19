@@ -306,7 +306,8 @@ Rules:
   last.
 - **Apps with only two environments, or one, skip the rc.** dev + prod
   releases straight to `v1.0.1`. Prod-only releases from `dev`'s head.
-  Dev-only apps never tag.
+  An app whose one environment follows the trunk tags what it runs, a
+  final, and deploys nowhere; it has nothing to promote.
 - **Dev's version is derived, never stored.** It is the next patch, plus the
   number of commits since the last tag, plus the SHA, in the style of Go
   pseudo-versions. SemVer ranks it below every rc: `1.0.1-dev.12.gabc1234

@@ -365,21 +365,66 @@ func TestOfflineRefusesWrites(t *testing.T) {
 	}
 }
 
-func TestDevOnlyNeverTags(t *testing.T) {
-	r, _, fx := releasetest.NewRunner(t, "dev")
+// singleEnv is a fonts-like app: prod alone, following the trunk, running
+// a commit it returns.
+func singleEnv(t *testing.T) (*release.Runner, *releasetest.Fixture, string) {
+	t.Helper()
+	r, _, fx := releasetest.NewRunner(t, "prod")
+	prod := "prod"
+	r.Cfg.Follow = &prod
 	c := fx.Commit(t, "fix")
-	both(t, fx, "dev", release.Deployed{Commit: c, Version: "0.0.1-dev.2.g" + c[:7]})
-	want := "dev is the only environment: dev-only apps don't release"
-	_, draftErr := r.Draft(ctx, false)
-	_, cutErr := r.Cut(ctx, release.Cut{})
-	_, promoteErr := r.Promote(ctx, "v0.0.1-rc.1")
-	for name, err := range map[string]error{"draft": draftErr, "cut": cutErr, "promote": promoteErr} {
-		if err == nil || err.Error() != want {
-			t.Errorf("%s: err = %v, want %q", name, err, want)
-		}
+	both(t, fx, "prod", release.Deployed{Commit: c, Version: "0.0.1-dev.2.g" + c[:7]})
+	return r, fx, c
+}
+
+// A single-environment app tags what it runs, a final, and deploys
+// nowhere: prod already runs the commit.
+func TestSingleEnvironmentCutsWhatRuns(t *testing.T) {
+	r, fx, c := singleEnv(t)
+	if d := draft(t, r, false); d.From != c || strings.Contains(d.Tag, "-rc.") {
+		t.Errorf("draft from %.7s tag %s, want %.7s and a final", d.From, d.Tag, c)
+	}
+	before := heads(t, fx)
+	tg := cut(t, r, release.Cut{Deploy: true})
+	if tg.Commit != c || tg.Version.RC != 0 {
+		t.Errorf("cut %s on %.7s, want a final on %.7s", tg.Name, tg.Commit, c)
+	}
+	if got := releasetest.Git(t, fx.AppBare, "tag", "-l"); got != tg.Name {
+		t.Errorf("tags %q, want %s", got, tg.Name)
+	}
+	if _, recorded, err := r.B.ReleaseFor(c); err != nil || !recorded {
+		t.Errorf("recorded %v, %v", recorded, err)
+	}
+	if !slices.Equal(heads(t, fx), before) {
+		t.Error("the cut moved an overlay")
+	}
+}
+
+func TestSingleEnvironmentPromoteRefused(t *testing.T) {
+	r, fx, _ := singleEnv(t)
+	_, err := r.Promote(ctx, "v0.0.1-rc.1")
+	want := "prod follows dev and is the last environment: nothing to promote; release cut tags what it runs"
+	if err == nil || err.Error() != want {
+		t.Errorf("err = %v, want %q", err, want)
 	}
 	if got := releasetest.Git(t, fx.AppBare, "tag", "-l"); got != "" {
 		t.Errorf("tags %q", got)
+	}
+}
+
+// A rollback goes back to a single-environment app's tag.
+func TestSingleEnvironmentRollback(t *testing.T) {
+	r, fx, c := singleEnv(t)
+	tg := cut(t, r, release.Cut{})
+	n := fx.Commit(t, "newer")
+	if err := r.Deploy(ctx, "prod", release.Target{Commit: n}); err != nil {
+		t.Fatalf("Deploy: %v", err)
+	}
+	if err := r.Rollback(ctx, "prod", tg.Name, "test"); err != nil {
+		t.Fatalf("Rollback: %v", err)
+	}
+	if e := envOf(t, status(t, r), "prod"); e.Commit != c || e.Version != tg.Name {
+		t.Errorf("prod runs %.7s as %s, want %.7s as %s", e.Commit, e.Version, c, tg.Name)
 	}
 }
 
