@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"slices"
 	"time"
 
 	"github.com/guilbep/git-board/internal/config"
@@ -144,7 +145,12 @@ func (r *Runner) reconcile(ctx context.Context) (pushed []Tag, pendErr, err erro
 			}
 		}
 		for _, img := range r.Cfg.Images {
+			var seen []string // targets may share a registry
 			for _, d := range r.Cfg.Deploy {
+				if slices.Contains(seen, d.Registry) {
+					continue
+				}
+				seen = append(seen, d.Registry)
 				digest, ok, err := r.artifact(ctx, d.Registry+"/"+img.Name, t)
 				if err != nil {
 					return pushed, pendErr, err

@@ -207,6 +207,22 @@ func TestReconcileCreatesMissing(t *testing.T) {
 	}
 }
 
+// Deploy targets sharing a registry record each image there once.
+func TestReconcileRecordsOncePerRegistry(t *testing.T) {
+	r, tools, fx := releasetest.NewRunner(t)
+	r.Cfg.Deploy[1].Registry = r.Cfg.Deploy[0].Registry
+	c := releasetest.Git(t, fx.App, "rev-parse", "HEAD")
+	oldTag(t, fx, c, "v1.0.0")
+	tools.Images["ghcr.test/app/frontend:v1.0.0"] = releasetest.FakeImage{Digest: "sha256:fe", Revision: c}
+	if err := r.Reconcile(ctx); err != nil {
+		t.Fatalf("Reconcile: %v", err)
+	}
+	rec, _, err := r.B.ReleaseFor(c)
+	if want := []gitbugio.Artifact{{Image: "frontend", Registry: "ghcr.test/app", Digest: "sha256:fe"}}; err != nil || !slices.Equal(rec.Artifacts, want) {
+		t.Errorf("artifacts %+v, %v, want %+v", rec.Artifacts, err, want)
+	}
+}
+
 // oldTag is fx.Tag two hours ago, past Reconcile's grace for a cut in
 // flight.
 func oldTag(t *testing.T, fx *releasetest.Fixture, commit string, names ...string) {
