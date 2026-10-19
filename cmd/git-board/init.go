@@ -18,8 +18,9 @@ func newInitCmd() *cobra.Command {
 		Short: "Write the default .git-board.toml at the repository's root",
 		Long: `Writes the default .git-board.toml at the repository's root: the
 statuses, priorities, kinds and estimates as fields, branch names, and
-three views, each explained in a comment. Settings › Project file offers
-the same when the repository has none. It never overwrites one.`,
+four views (all, backlog, board, mine), each explained in a comment.
+Settings › Project file offers the same when the repository has none. It
+never overwrites one.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runInit(cmd.OutOrStdout())

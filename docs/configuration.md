@@ -6,7 +6,7 @@ The file is optional. Without it, every `ns:value` label is a field and git-boar
 
 It lives at the root of the repository. Edit it in **Settings → Project file**: it is checked as you type and applies as soon as you save. Editing it by hand works too; restart `git board` (or `git board serve`) after.
 
-A repository without one starts from the default: **Start from the default** in Settings → Project file, or `git board init` in a terminal (it never overwrites a file). The default declares a status workflow (`backlog`, `ready`, `in-progress`, `in-review`, `ready-for-validation`, `validated`), priorities `p0` to `p3`, kinds (`kind:feat`, `kind:bug`…) that name branches (`fix/12-login-fails`), estimates in hours, sprints of 14 days, and three views (board, backlog, mine), each explained in a comment.
+A repository without one starts from the default: **Start from the default** in Settings → Project file, or `git board init` in a terminal (it never overwrites a file). The default declares a status workflow (`backlog`, `ready`, `in-progress`, `in-review`, `ready-for-validation`, `validated`), priorities `p0` to `p3`, kinds (`kind:feat`, `kind:bug`…) that name branches (`fix/12-login-fails`), estimates in hours, sprints of 14 days, and four views (all, backlog, board, mine), each explained in a comment.
 
 | Table | What it sets |
 | --- | --- |

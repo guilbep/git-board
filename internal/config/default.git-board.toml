@@ -5,10 +5,23 @@
 #
 # Conventions
 # - Labels are fields: `status:ready`, `prio:p1`, `kind:bug`, `est:2`.
-# - Titles: "area: what goes wrong" for a bug, "area: what to do" otherwise,
-#   e.g. "billing: totals round twice", "billing: export invoices as CSV".
-#   The area is optional. No [BUG] (the kind says it), no (#123) (the
-#   number shows before the title), no final period.
+# - Titles: "area: what goes wrong" for a bug, "area: what to do" otherwise.
+#   The area is the part of the project the issue is about, one short word
+#   the team agrees on: a domain (billing, auth, search), a layer (api, web,
+#   db), or the tooling (ci, docs, deps, release). Leave it out when the
+#   issue is about the whole project.
+#     billing: totals round twice on discounted lines     (bug)
+#     auth: session expires after 5 minutes on Safari     (bug)
+#     api: GET /invoices returns 500 without a date       (bug)
+#     search: find invoices by customer name              (feat)
+#     web: show unpaid invoices first                     (feat)
+#     db: index invoices by customer                      (perf)
+#     ci: run the frontend tests on pull requests         (chore)
+#     docs: explain how to deploy                         (docs)
+#     deps: update vue to 3.5                             (chore)
+#     ship the first release to the pilot users           (no area)
+#   No [BUG] (the kind says it), no (#123) (the number shows before the
+#   title), no final period.
 # - Project numbers (ABC-12) are started once in Settings › Numbers.
 
 # The workflow, in order: the board's columns, `git board move --next`, and
@@ -53,6 +66,13 @@ start_weekday = "monday"
 [branches]
 name = "{kind}/{number}-{slug}"
 kinds = { feat = "feat", bug = "fix", perf = "perf", refactor = "refactor", docs = "docs", chore = "chore" }
+
+# Views are sorted by name: `all`, every open issue in a table, as a
+# forge's issues page, is the one git-board opens on.
+[views.all]
+layout = "table"
+filter = "is:open"
+sort = "prio asc"
 
 [views.board]
 layout = "board"

@@ -25,7 +25,7 @@
     </div>
 
     <div v-if="file && !file.exists && !text && file.default" class="cfg-start">
-      <p class="gb-hint">No project file yet: every <code>ns:value</code> label is a field, in no order. The default declares the statuses, priorities, kinds and estimates, branch names and three views, each explained in a comment.</p>
+      <p class="gb-hint">No project file yet: every <code>ns:value</code> label is a field, in no order. The default declares the statuses, priorities, kinds and estimates, branch names and four views (all, backlog, board, mine), each explained in a comment.</p>
       <p class="cfg-start-do">
         <button type="button" class="epfl-btn epfl-btn-primary epfl-btn-sm" @click="startFromDefault">Start from the default</button>
         <span class="gb-hint">or, in a terminal, <code>git board init</code></span>

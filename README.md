@@ -74,10 +74,11 @@ the root of this repository, and its issues are git-bug data here
 Optional: without it, every `ns:value` label is a field and `git board`
 works on any git-bug repository. `git board init` writes the default one
 (Settings › Project file offers the same): statuses, priorities, kinds,
-estimates, branch names and three views, each explained in a comment. It adds what labels can't say: the order
-of a field's values (`options`: status follows the workflow when sorted
-and on a board), single or multiple values, sprint dates (`@current`),
-saved views, and the GitHub Project to sync with.
+estimates, branch names and four views, the conventions for labels and
+titles in comments. The file adds what labels can't say: the order of a
+field's values (`options`: status follows the workflow when sorted and on
+a board), single or multiple values, sprint dates (`@current`), saved
+views, and the GitHub Project to sync with.
 
 An issue's page shows its step in the development cycle ("Step 7 of 7 ·
 Verify, waits for alice to sign off qa"), computed from its status and the
