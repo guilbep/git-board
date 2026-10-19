@@ -265,8 +265,9 @@ the issue.
 
 ## Out of scope
 
-- Releases and pre-releases (`dev` → `stage` → `main`): their own discussion,
-  `docs/prd/release.md` on `prd/release`. Release PRs stay GitHub's.
+- Releases and pre-releases (`dev` → `stage` → `main`): their own PRD,
+  `docs/prd/release.md`. Release PRs go away there: one commit is promoted
+  by tags, and Ship replaces the PR gate on repos that opt in.
 - Gates enforced by a hosted git-board (server hooks).
 - GitLab merge requests as gates; GitHub first, co2 is on GitHub.
 - Email notifications: `git-board-notify`.

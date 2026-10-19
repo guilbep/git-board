@@ -6,6 +6,7 @@
 package gitbugio
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"regexp"
@@ -189,15 +190,22 @@ func (b *Backend) Close() error {
 // Pull fetches remote and merges its refs/bugs/* (and identities) into the
 // local cache — equivalent to `git bug pull <remote>`, but via the library
 // (Fetch, then MergeAll) rather than shelling out, consistent with how
-// git-board reads/writes labels in-process everywhere else.
+// git-board reads/writes labels in-process everywhere else — and its
+// release records, which git bug pull leaves (releases.go).
 func (b *Backend) Pull(remote string) error {
-	if _, err := b.c.Fetch(remote); err != nil {
+	if _, err := b.repo.FetchRefs(remote, b.c.Bugs().GetNamespace(), b.c.Identities().GetNamespace(), ReleasesNamespace); err != nil {
 		return err
 	}
-	// to the end, as git bug pull does: cache.RepoCache.Pull stops at the
-	// first error, leaving the merging goroutine blocked
+	// the records after the identities that wrote them
+	return errors.Join(mergeErr(b.c.MergeAll(remote)), b.mergeReleases(remote))
+}
+
+// mergeErr reads a merge to the end, as git bug pull does, and is its
+// first error: cache.RepoCache.Pull stops at the first, leaving the
+// merging goroutine blocked.
+func mergeErr(merges <-chan entity.MergeResult) error {
 	var err error
-	for m := range b.c.MergeAll(remote) {
+	for m := range merges {
 		if err == nil && m.Err != nil {
 			err = m.Err
 		} else if err == nil && m.Status == entity.MergeStatusInvalid {
@@ -208,9 +216,10 @@ func (b *Backend) Pull(remote string) error {
 }
 
 // Push pushes local refs/bugs/* (and identities) to remote — equivalent
-// to `git bug push <remote>`. Returns the underlying git push's output.
+// to `git bug push <remote>` — and the release records, which git bug
+// push leaves. Returns the underlying git push's output.
 func (b *Backend) Push(remote string) (string, error) {
-	return b.c.Push(remote)
+	return b.repo.PushRefs(remote, b.c.Bugs().GetNamespace(), b.c.Identities().GetNamespace(), ReleasesNamespace)
 }
 
 // TestCache exposes the underlying *cache.RepoCache for test fixture setup

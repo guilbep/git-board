@@ -108,6 +108,7 @@ type raw struct {
 	Branches      Branches          `toml:"branches"`
 	Roles         map[string]string `toml:"roles"`
 	Cycle         Cycle             `toml:"cycle"`
+	Release       Release           `toml:"release"`
 }
 
 // Uploads is the [uploads] table: where files attached to issues go. The
@@ -160,6 +161,8 @@ type Config struct {
 	// Cycle is the [cycle] table: the development cycle's stages and
 	// gates (cycle.go).
 	Cycle Cycle
+	// Release is the [release] table (release.go).
+	Release Release
 }
 
 // FileName is the config's name, at the root of the repository.
@@ -226,6 +229,9 @@ func parse(data []byte) (*Config, toml.MetaData, error) {
 	if err := checkCycle(r.Cycle); err != nil {
 		return nil, md, err
 	}
+	if err := checkRelease(r.Release); err != nil {
+		return nil, md, err
+	}
 	return &Config{
 		Repos:         r.Repos.List,
 		Fields:        r.Fields,
@@ -236,6 +242,7 @@ func parse(data []byte) (*Config, toml.MetaData, error) {
 		Branches:      r.Branches,
 		Roles:         r.Roles,
 		Cycle:         r.Cycle,
+		Release:       r.Release,
 	}, md, nil
 }
 
