@@ -508,6 +508,7 @@ export interface ConfigFile {
   text: string;
   exists: boolean;
   hash: string;
+  default?: string; // the default file, when there is none
 }
 
 export interface ConfigCheck {

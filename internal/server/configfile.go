@@ -52,7 +52,11 @@ func (s *apiServer) handleConfigFile(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"path": s.configPath(), "text": text, "exists": exists, "hash": hash})
+	res := map[string]any{"path": s.configPath(), "text": text, "exists": exists, "hash": hash}
+	if !exists {
+		res["default"] = config.Default // what the page offers to start from
+	}
+	writeJSON(w, http.StatusOK, res)
 }
 
 type configCheckResponse struct {

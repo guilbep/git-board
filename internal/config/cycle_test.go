@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"reflect"
 	"strings"
 	"testing"
@@ -101,6 +102,13 @@ func TestStagesGuessed(t *testing.T) {
 	}
 	if (&Config{}).Stages().Closing != "" {
 		t.Error("no options, no closing status")
+	}
+	// no file, or no validation status: lists, never null (the settings
+	// page joins them)
+	for _, c := range []*Config{{}, {Fields: map[string]Field{"status": {Options: []string{"todo", "done"}}}}} {
+		if b, _ := json.Marshal(c.Stages()); strings.Contains(string(b), "null") {
+			t.Errorf("Stages() = %s", b)
+		}
 	}
 }
 

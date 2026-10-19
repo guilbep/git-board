@@ -1,0 +1,91 @@
+# git-board's project file. Every key is in docs/configuration.md, and
+# beside the editor in Settings → Project file. Without this file every
+# `ns:value` label is still a field; this adds their order, single or
+# multiple values, sprint dates and saved views.
+#
+# Conventions
+# - Labels are fields: `status:ready`, `prio:p1`, `kind:bug`, `est:2`.
+# - Titles: "area: what goes wrong" for a bug, "area: what to do" otherwise.
+#   The area is the part of the project the issue is about, one short word
+#   the team agrees on: a domain (billing, auth, search), a layer (api, web,
+#   db), or the tooling (ci, docs, deps, release). Leave it out when the
+#   issue is about the whole project.
+#     billing: totals round twice on discounted lines     (bug)
+#     auth: session expires after 5 minutes on Safari     (bug)
+#     api: GET /invoices returns 500 without a date       (bug)
+#     search: find invoices by customer name              (feat)
+#     web: show unpaid invoices first                     (feat)
+#     db: index invoices by customer                      (perf)
+#     ci: run the frontend tests on pull requests         (chore)
+#     docs: explain how to deploy                         (docs)
+#     deps: update vue to 3.5                             (chore)
+#     ship the first release to the pilot users           (no area)
+#   No [BUG] (the kind says it), no (#123) (the number shows before the
+#   title), no final period.
+# - Project numbers (ABC-12) are started once in Settings › Numbers.
+
+# The workflow, in order: the board's columns, `git board move --next`, and
+# the development cycle's stages (guessed from these names). The last one
+# closes the issue.
+[fields.status]
+single = true
+options = ["backlog", "ready", "in-progress", "in-review", "ready-for-validation", "validated"]
+
+[fields.prio]
+single = true
+options = ["p0", "p1", "p2", "p3"]
+
+# What the issue is; it also names its branch (see [branches]). Rather plain
+# labels, GitHub's way (`bug`, `feat`)? Delete this table: [branches] kinds
+# reads those too.
+[fields.kind]
+single = true
+options = ["feat", "bug", "perf", "refactor", "docs", "chore"]
+
+# The estimate, in hours.
+[fields.est]
+single = true
+numeric = true
+options = ["0.5", "1", "2", "4", "8", "16"]
+
+[fields.assignee]
+single = false
+
+# The project's people by role: who sets the risk, approves the plan,
+# reviews, signs off (docs/configuration.md, Roles and Cycle).
+# [roles]
+# lead-dev = "your-login"
+
+# Sprints are `sprint:` labels; give them dates with "+ Sprint" for
+# sprint:@current to find them.
+[sprints]
+length_days = 14
+start_weekday = "monday"
+
+# An issue's branch: its kind, number and title, e.g. fix/12-login-fails.
+[branches]
+name = "{kind}/{number}-{slug}"
+kinds = { feat = "feat", bug = "fix", perf = "perf", refactor = "refactor", docs = "docs", chore = "chore" }
+
+# Views are sorted by name: `all`, every open issue in a table, as a
+# forge's issues page, is the one git-board opens on.
+[views.all]
+layout = "table"
+filter = "is:open"
+sort = "prio asc"
+
+[views.board]
+layout = "board"
+filter = "is:open"
+group = "status"
+sort = "prio asc"
+
+[views.backlog]
+layout = "table"
+filter = "is:open status:backlog,ready"
+sort = "prio asc"
+
+[views.mine]
+layout = "table"
+filter = "assignee:@me is:open"
+group = "status"
