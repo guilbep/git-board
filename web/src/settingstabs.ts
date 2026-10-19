@@ -20,6 +20,7 @@ export const settingsTabs = [
   { id: 'project-file', label: 'Project file' },
   { id: 'numbers', label: 'Numbers' },
   { id: 'attachments', label: 'Attachments' },
+  { id: 'worktrees', label: 'Worktrees' },
   { id: 'you', label: 'You' },
 ] as const;
 
