@@ -1,1 +1,1 @@
-{"author":{"id":"f943aa1c5ee078b881a8e97535a4e2ccb401d01ca00f4128126befa9cca58a32"},"ops":[{"type":3,"timestamp":1792408208,"nonce":"YjvGPDWRvwC6htpinxqUkug10M4=","message":"Fixed on prd/dev-cycle in a73e419 (fix(wtx): a backtick in the branch or plan path keeps its code span), with a test that failed first. Closes when the branch lands.","files":null}]}
+{"author":{"id":"f943aa1c5ee078b881a8e97535a4e2ccb401d01ca00f4128126befa9cca58a32"},"ops":[{"type":5,"timestamp":1792408208,"nonce":"maSfkfbRBuqD2uJXEQl4u2NQSno=","added":null,"removed":["status:backlog"]}]}
