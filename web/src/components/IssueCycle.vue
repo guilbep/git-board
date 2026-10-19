@@ -4,6 +4,7 @@
 <template>
   <div v-if="cycle" class="gb-cycle">
     <p class="gb-cycle-line" role="status">
+      <span class="gb-prog" aria-hidden="true"><span v-for="i in cycle.of" :key="i" :class="['gb-tick', cycle.done || i < cycle.step ? 'is-done' : i === cycle.step ? 'is-current' : '']" /></span>
       {{ progressLine(cycle) }}<span v-if="cycle.note" class="gb-cycle-note"> · {{ cycle.note }}</span>
     </p>
 
@@ -48,77 +49,16 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
-import { ApiError, cycleAction, getCycle, patchIssue, type Cycle } from '@/api/board';
-import { cardFor, progressLine, type CardButton } from '@/cycle';
-import { message } from '@/issue';
+import { computed } from 'vue';
+import { cardFor, progressLine } from '@/cycle';
+import { useCycle } from '@/usecycle';
 import GbIcon from '@/components/GbIcon.vue';
 
 const props = defineProps<{ id: string; status: string; labels: string[] }>();
 const emit = defineEmits<{ changed: [] }>();
 
-const cycle = ref<Cycle | null>(null);
-const error = ref('');
-const busy = ref(false);
-const output = ref('');
-const commit = ref('');
-const why = ref('');
-const needsWhy = ref(false);
-
+const { cycle, error, busy, output, commit, why, needsWhy, has, checkedBy, act, press, postRun } = useCycle(props, () => emit('changed'));
 const card = computed(() => (cycle.value ? cardFor(cycle.value, props.status) : null));
-const has = (a: string) => !!cycle.value?.actions?.includes(a);
-const checkedBy = (i: number) => cycle.value?.evidence.checks?.find((c) => c.index === i)?.by;
-
-// the panel re-reads the thread after every write: labels moving re-reads the step
-watch(
-  () => [props.id, props.labels.join('\n')],
-  async () => {
-    try {
-      cycle.value = await getCycle(props.id);
-      error.value = '';
-    } catch (e) {
-      error.value = `The step: ${message(e)}`;
-    }
-  },
-  { immediate: true },
-);
-
-async function act(action: string, body: Record<string, unknown> = {}) {
-  busy.value = true;
-  error.value = '';
-  try {
-    cycle.value = await cycleAction(props.id, action, body);
-    needsWhy.value = false;
-    why.value = '';
-    emit('changed');
-    return true;
-  } catch (e) {
-    // a sign-off without a run at the head takes a reason instead
-    if (action === 'signoff' && e instanceof ApiError && e.status === 400 && e.message.startsWith('no run')) needsWhy.value = true;
-    error.value = message(e);
-    return false;
-  } finally {
-    busy.value = false;
-  }
-}
-
-async function press(b: CardButton) {
-  if (b.action !== 'set-risk') return void act(b.action, b.body);
-  busy.value = true;
-  error.value = '';
-  try {
-    await patchIssue(props.id, b.body as Record<string, string>);
-    emit('changed');
-  } catch (e) {
-    error.value = message(e);
-  } finally {
-    busy.value = false;
-  }
-}
-
-async function postRun() {
-  if (await act('verify', { output: output.value, commit: commit.value.trim() })) output.value = commit.value = '';
-}
 
 function toDevelopment() {
   document.getElementById('side-dev')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -127,7 +67,7 @@ function toDevelopment() {
 
 <style scoped>
 .gb-cycle { display: grid; gap: .5rem; margin-top: .75rem; }
-.gb-cycle-line { margin: 0; font-size: .875rem; font-weight: 700; }
+.gb-cycle-line { display: flex; flex-wrap: wrap; align-items: center; gap: .25rem .75rem; margin: 0; font-size: .875rem; font-weight: 700; }
 .gb-cycle-note { font-weight: 400; color: var(--fg-muted); }
 .gb-cycle-card { display: grid; gap: .5rem; padding: .625rem .75rem; border: 1px solid var(--border); border-left: 3px solid var(--fg); background: var(--bg-subtle); font-size: .875rem; }
 .gb-cycle-title { margin: 0; font-weight: 700; }

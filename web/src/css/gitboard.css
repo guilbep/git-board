@@ -284,6 +284,50 @@
 .gb-panel { position: relative; top: auto; right: auto; bottom: auto; height: 100%; width: min(64rem, 100vw); max-width: 100vw; }
 .gb-panel-page { width: auto; max-width: 80rem; height: auto; margin: 0 auto; box-shadow: none; overflow: visible; }
 .gb-panel-page .gb-cols { grid-template-columns: minmax(0, 1fr) 20rem; }
+.gb-panel-page.gb-panel-cycle { max-width: none; } /* the Cycle view takes the window's width */
+
+/* The Cycle view (IssueCycleView.vue; the canvas's E1, E3, E4): the
+   progress ticks, the spine, the workspace, the status bar. Done is canard. */
+.gb-seg-sm button { height: 2rem; padding: 0 .625rem; font-size: .8125rem; }
+.gb-prog { display: inline-flex; align-items: center; gap: 4px; }
+.gb-tick { display: block; width: 22px; height: 4px; background: var(--border); }
+.gb-tick.is-done { background: var(--gb-done); }
+.gb-tick.is-current { background: var(--fg); }
+.gb-cycle-view { display: flex; flex-direction: column; gap: 1.5rem; padding: 1.75rem 2rem 0; }
+.gb-cycle-view > .gb-cycle-fold { display: none; }
+.gb-cycle-body { display: grid; grid-template-columns: 20rem minmax(0, 1fr); gap: 2.5rem; align-items: start; }
+.gb-spine { list-style: none; margin: 0; padding: 0; }
+.gb-spine li { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; column-gap: .5rem; padding: .625rem 0; border-top: 1px solid var(--border-subtle); font-size: .875rem; }
+.gb-spine li:first-child { border-top: 0; }
+.gb-spine-n { font-family: var(--font-mono); font-size: .75rem; color: var(--fg-muted); }
+.gb-spine-name { font-weight: 700; }
+.gb-spine-line { grid-column: 2 / -1; color: var(--fg-muted); }
+.gb-spine .is-done .gb-spine-n { color: var(--gb-done); font-weight: 700; }
+.gb-spine [aria-current="step"] { border-left: 3px solid var(--fg); margin-left: -.75rem; padding-left: calc(.75rem - 3px); }
+.gb-spine [aria-current="step"] .gb-spine-line { color: var(--fg); }
+.gb-spine .is-todo .gb-spine-name { color: var(--fg-muted); font-weight: 400; }
+.gb-ws { display: flex; flex-direction: column; gap: .75rem; min-width: 0; }
+.gb-ws-title { margin: 0; font-size: 1.25rem; line-height: 1.3; }
+.gb-eyebrow { margin: 0; font-size: .75rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--fg-muted); }
+.gb-gate { margin: 0; padding: .5rem .75rem; border-left: 3px solid var(--gb-done); background: var(--bg-subtle); font-size: .875rem; font-weight: 700; color: var(--gb-done); }
+.gb-clamp { max-height: 18rem; overflow: hidden; -webkit-mask-image: linear-gradient(#000 70%, transparent); mask-image: linear-gradient(#000 70%, transparent); }
+.gb-clamp.is-open { max-height: none; -webkit-mask-image: none; mask-image: none; }
+.gb-so { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap: .75rem; list-style: none; margin: 0; padding: 0; }
+.gb-so li { display: flex; flex-direction: column; gap: .125rem; padding: .625rem 0 0; border-top: 3px solid var(--border); font-size: .875rem; }
+.gb-so li.is-done { border-top-color: var(--gb-done); }
+.gb-so li.is-current { border-top-color: var(--fg); }
+.gb-so-status { font-weight: 700; }
+.gb-so-when { color: var(--fg-muted); }
+.gb-cycle-bar { display: flex; flex-wrap: wrap; gap: .5rem 1.5rem; margin: 0 -2rem; padding: .75rem 2rem; border-top: 1px solid var(--border-subtle); background: var(--bg-subtle); font-size: .8125rem; color: var(--fg-muted); }
+.gb-cycle-bar span:first-child { font-family: var(--font-mono); color: var(--fg); }
+/* under 900px the spine folds to the progress line */
+@media (max-width: 56.25rem) {
+  .gb-cycle-view { padding: 1.25rem 1rem 0; }
+  .gb-cycle-view > .gb-cycle-fold { display: flex; }
+  .gb-cycle-body { grid-template-columns: minmax(0, 1fr); }
+  .gb-spine { display: none; }
+  .gb-cycle-bar { margin: 0 -1rem; padding: .75rem 1rem; }
+}
 .gb-dialog { position: relative; left: auto; top: auto; transform: none; }
 
 /* the server's Markdown (internal/markdown): task lists, tables, images */
@@ -325,6 +369,7 @@
   --gb-green-bg:#ECFAE0;--gb-green-fg:#33531A;--gb-green-dot:#4F9A1A;
   --gb-red-bg:#FFE5E5;--gb-red-fg:#80000C;--gb-red-dot:#E00000;
   --gb-teal-bg:#DFF5F3;--gb-teal-fg:#00524F;--gb-teal-dot:#00897F;
+  --gb-done:#007480; /* the cycle's done: canard */
   --gb-pink-bg:#FCE4F1;--gb-pink-fg:#8A1453;--gb-pink-dot:#D63A8E
 }
 .gb-c-grey{--c-bg:var(--gb-grey-bg);--c-fg:var(--gb-grey-fg);--c-dot:var(--gb-grey-dot)}
