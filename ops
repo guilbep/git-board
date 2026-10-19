@@ -1,1 +1,1 @@
-{"author":{"id":"f943aa1c5ee078b881a8e97535a4e2ccb401d01ca00f4128126befa9cca58a32"},"ops":[{"type":3,"timestamp":1792408207,"nonce":"zCAXzSv9aX/TZJKkFdFKM9QUlEY=","message":"Fixed on prd/dev-cycle in 570cbcd (fix(worktrees): Preview the files publishes no event), with a test that failed first. Closes when the branch lands.","files":null}]}
+{"author":{"id":"f943aa1c5ee078b881a8e97535a4e2ccb401d01ca00f4128126befa9cca58a32"},"ops":[{"type":5,"timestamp":1792408207,"nonce":"YbtmfTKthA5a3uGVGG1x0fYREpE=","added":null,"removed":["status:backlog"]}]}
