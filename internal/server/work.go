@@ -13,6 +13,7 @@ import (
 	"github.com/guilbep/git-board/internal/gitbugio"
 	"github.com/guilbep/git-board/internal/inbox"
 	"github.com/guilbep/git-board/internal/work"
+	"github.com/guilbep/git-board/internal/wtx"
 )
 
 // The Work page (internal/work): every open issue's cycle, grouped.
@@ -25,19 +26,23 @@ type workResponse struct {
 	ToSend  []sendLine   `json:"to_send"` // newest first, at most 20
 	Pending int          `json:"pending"` // every change the forges wait for
 	Retro   retroSummary `json:"retro"`
+	// CanStart tells wtx may start agents from this server; Reason, why
+	// not (worktrees.go)
+	CanStart bool   `json:"can_start"`
+	Reason   string `json:"reason,omitempty"`
 }
 
-// workAgent is a linked worktree and the issue its branch names.
-// ponytail: the worktree and its last commit; wtx's session state and
-// the agent's name come with M5.
+// workAgent is a linked worktree, the issue its branch names, and wtx's
+// session in it.
 type workAgent struct {
-	Path   string          `json:"path"`
-	Branch string          `json:"branch"` // the head's short sha when detached
-	Issue  *gitbugio.Issue `json:"issue,omitempty"`
-	Step   int             `json:"step,omitempty"`
-	Name   string          `json:"name,omitempty"`
-	State  string          `json:"state"` // "Waits for you", "Waits for bob to review the PR", "No issue"
-	At     time.Time       `json:"at"`    // the last commit
+	Path    string          `json:"path"`
+	Branch  string          `json:"branch"` // the head's short sha when detached
+	Issue   *gitbugio.Issue `json:"issue,omitempty"`
+	Step    int             `json:"step,omitempty"`
+	Name    string          `json:"name,omitempty"`
+	State   string          `json:"state"` // "Waits for you", "Waits for bob to review the PR", "No issue"
+	At      time.Time       `json:"at"`    // the last commit
+	Session *wtx.Session    `json:"session,omitempty"`
 }
 
 // sendLine is a change the forges wait for (Event.Pending).
@@ -65,6 +70,7 @@ func (s *apiServer) handleWork(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
+	s.withSessions(r, &res)
 	writeJSON(w, http.StatusOK, res)
 }
 
@@ -226,4 +232,30 @@ func retroOf(cfg *config.Config, threads []gitbugio.Thread, now time.Time) retro
 		}
 	}
 	return r
+}
+
+// withSessions reads wtx status once for the page: each agent row takes
+// the session on its branch. When wtx can't run from here, or its status
+// fails (no wtx.toml yet), the rows stay as they are and Reason says why.
+func (s *apiServer) withSessions(r *http.Request, res *workResponse) {
+	if _, res.Reason = s.wtxAllowed(r, false); res.Reason != "" {
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), time.Minute)
+	defer cancel()
+	out, err := wtx.Run(ctx, s.root, "status", "--json")
+	var rows []wtx.Session
+	if err == nil {
+		rows, err = wtx.ParseStatus(out)
+	}
+	if err != nil {
+		res.Reason = err.Error()
+		return
+	}
+	res.CanStart = true
+	for i, a := range res.Agents {
+		if j := slices.IndexFunc(rows, func(row wtx.Session) bool { return row.Branch == a.Branch }); j >= 0 {
+			res.Agents[i].Session = &rows[j]
+		}
+	}
 }

@@ -5,9 +5,12 @@ import (
 	"encoding/json"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/guilbep/git-board/internal/config"
 )
 
 // fakeWtx puts a fake wtx first on PATH, as wtx's own tests fake its
@@ -414,4 +417,79 @@ func TestAgentRefused(t *testing.T) {
 	if code, c, _ := sendFrom(t, "POST", url, ts.URL, map[string]string{}); code != http.StatusConflict || c != "no-wtx" {
 		t.Fatalf("no wtx: %d %q", code, c)
 	}
+}
+
+// workRepo is TestWorkAgents' repository: the issue at in-progress, and
+// fix/2518-x checked out in a linked worktree.
+func workRepo(t *testing.T) *apiServer {
+	t.Helper()
+	s, _, id := gateRepo(t, "https://github.com/o/r.git", false)
+	s.cfg = cycleConfig(nil, config.Cycle{})
+	if _, err := s.b.ApplyLabelChange(id, []string{"status:in-progress", "risk:low"}, nil); err != nil {
+		t.Fatal(err)
+	}
+	addWorktree(t, s)
+	return s
+}
+
+func TestWorkAgentsSession(t *testing.T) {
+	fake := fakeWtx(t)
+	s := workRepo(t)
+	res := getWork(t, serve(t, s), "me")
+	if len(res.Agents) != 1 || res.Agents[0].Session == nil || res.Agents[0].Session.State != "idle" || !res.CanStart || res.Reason != "" {
+		t.Fatalf("agents: %+v, can_start %v, reason %q", res.Agents, res.CanStart, res.Reason)
+	}
+	if res.Agents[0].State != "Waits for anyone to write the failing test" {
+		t.Errorf("the gate's words changed: %q", res.Agents[0].State)
+	}
+	if calls := wtxCalls(t, fake); len(calls) != 1 || calls[0][1] != "status --json" {
+		t.Fatalf("calls = %v", calls)
+	}
+}
+
+func TestWorkWithoutWtx(t *testing.T) {
+	s := workRepo(t)
+	ts := serve(t, s)
+	onlyGit(t)
+	res := getWork(t, ts, "me")
+	if len(res.Agents) != 1 || res.Agents[0].Session != nil || res.Agents[0].State == "" || res.CanStart || res.Reason != wtxRefusals["no-wtx"].reason {
+		t.Fatalf("no wtx: %+v, can_start %v, reason %q", res.Agents, res.CanStart, res.Reason)
+	}
+}
+
+func TestWorkExposed(t *testing.T) {
+	fake := fakeWtx(t)
+	s := workRepo(t)
+	s.exposed = []string{"*"}
+	res := getWork(t, serve(t, s), "me")
+	if len(res.Agents) != 1 || res.Agents[0].Session != nil || res.CanStart || res.Reason != wtxRefusals["exposed"].reason {
+		t.Fatalf("exposed: %+v, can_start %v, reason %q", res.Agents, res.CanStart, res.Reason)
+	}
+	if calls := wtxCalls(t, fake); calls != nil {
+		t.Fatalf("calls = %v", calls)
+	}
+}
+
+func TestWorkStatusFails(t *testing.T) {
+	fake := fakeWtx(t)
+	s := workRepo(t)
+	_ = os.WriteFile(filepath.Join(fake, "fail"), []byte("wtx: no wtx.toml in r\n"), 0o644)
+	res := getWork(t, serve(t, s), "me")
+	if len(res.Agents) != 1 || res.CanStart || !strings.Contains(res.Reason, "no wtx.toml") {
+		t.Fatalf("status failing: can_start %v, reason %q", res.CanStart, res.Reason)
+	}
+}
+
+// onlyGit sets PATH to a directory holding git alone: no wtx.
+func onlyGit(t *testing.T) {
+	t.Helper()
+	git, err := exec.LookPath("git")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	if err := os.Symlink(git, filepath.Join(dir, "git")); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir)
 }
