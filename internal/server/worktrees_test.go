@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/guilbep/git-board/internal/config"
 )
@@ -221,6 +222,8 @@ func TestWtxPreviewThenWrite(t *testing.T) {
 	s, _, _ := gateRepo(t, "https://github.com/o/r.git", false)
 	root := filepath.Dir(s.gitDir)
 	ts := serve(t, s)
+	live, cancel := s.events.subscribe()
+	defer cancel()
 
 	code, _, body := sendFrom(t, "POST", ts.URL+"/api/worktrees/preview", ts.URL, someAnswers)
 	var preview filesAnswer
@@ -238,6 +241,18 @@ func TestWtxPreviewThenWrite(t *testing.T) {
 	var written filesAnswer
 	if code != http.StatusOK || json.Unmarshal(body, &written) != nil {
 		t.Fatalf("init: %d %s", code, body)
+	}
+	// the preview writes nothing: Write's is the one event
+	for n := 0; ; n++ {
+		select {
+		case <-live:
+			if n == 1 {
+				t.Error("two events for a preview and a write: the preview published one")
+			}
+			continue
+		case <-time.After(300 * time.Millisecond):
+		}
+		break
 	}
 	for i, f := range written.Files {
 		disk, err := os.ReadFile(filepath.Join(root, f.Path))
