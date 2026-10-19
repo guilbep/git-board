@@ -5,6 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
+	"os/signal"
+	"slices"
+	"syscall"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -31,6 +35,9 @@ behind, until interrupted.`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			env := args[0]
+			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
+			defer stop()
+			cmd.SetContext(ctx)
 			return withRunner(cmd, func(ctx context.Context, r *release.Runner, out io.Writer) error {
 				followed := env == r.Cfg.Followed()
 				switch {
@@ -48,16 +55,8 @@ behind, until interrupted.`,
 						return nil
 					case <-time.After(watchInterval):
 					}
-					st, err := r.Status(ctx)
-					if err != nil {
-						return err
-					}
-					for _, e := range st.Envs {
-						if e.Name == env && len(e.Behind) > 0 {
-							if err := deployOnce(ctx, r, out, env, ""); err != nil {
-								return err
-							}
-						}
+					if err := redeployIfBehind(ctx, r, out, env); err != nil && ctx.Err() == nil {
+						fmt.Fprintln(out, "watch:", err) // the next tick tries again
 					}
 				}
 				return nil
@@ -67,6 +66,20 @@ behind, until interrupted.`,
 	cmd.Flags().StringVar(&tag, "release", "", "the release tag to deploy")
 	cmd.Flags().BoolVar(&watch, "watch", false, "keep the followed environment on the trunk's head")
 	return cmd
+}
+
+// redeployIfBehind deploys the trunk's head to env when it runs less.
+func redeployIfBehind(ctx context.Context, r *release.Runner, out io.Writer, env string) error {
+	st, err := r.Status(ctx)
+	if err != nil {
+		return err
+	}
+	for _, e := range st.Envs {
+		if e.Name == env && len(e.Behind) > 0 {
+			return deployOnce(ctx, r, out, env, "")
+		}
+	}
+	return nil
 }
 
 // deployOnce deploys tag (else the trunk's head) to env and prints what it runs.
@@ -80,17 +93,12 @@ func deployOnce(ctx context.Context, r *release.Runner, out io.Writer, env, tag 
 		if err != nil {
 			return err
 		}
-		found := false
-		for _, t := range tags {
-			if t.Name == tag {
-				found = true
-				if err := r.Deploy(ctx, env, release.Target{Commit: t.Commit, Version: t.Name}); err != nil {
-					return err
-				}
-			}
-		}
-		if !found {
+		i := slices.IndexFunc(tags, func(t release.Tag) bool { return t.Name == tag })
+		if i < 0 {
 			return fmt.Errorf("no release tag %q", tag)
+		}
+		if err := r.Deploy(ctx, env, release.Target{Commit: tags[i].Commit, Version: tags[i].Name}); err != nil {
+			return err
 		}
 	}
 	st, err := r.Status(ctx)

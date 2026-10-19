@@ -13,3 +13,15 @@ func TestAppOf(t *testing.T) {
 		}
 	}
 }
+
+func TestTargetName(t *testing.T) {
+	for url, want := range map[string]string{
+		"git@gitlab.test:org/enack8s-app-config.git": "enack8s",
+		"https://host/org/co2-app-config":            "co2",
+		"/tmp/x/config.git":                          "config",
+	} {
+		if got := targetName(url); got != want {
+			t.Errorf("targetName(%q) = %q, want %q", url, got, want)
+		}
+	}
+}

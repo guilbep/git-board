@@ -76,7 +76,7 @@ func TestReleaseStatusPrints(t *testing.T) {
 	for _, want := range []string{
 		"dev 1.0.0-dev.0.g" + c[:7] + " " + c[:7] + " 2 merges behind dev",
 		"stage v1.0.0-rc.2 " + c[:7],
-		"prod v1.0.0 " + c[:7] + " split: " + "quay.test" + " on v0.9.0",
+		"prod v1.0.0 " + c[:7] + " split: " + "config (quay.test)" + " on v0.9.0",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("status lacks %q:\n%s", want, got)
@@ -163,5 +163,25 @@ func TestAdoptNeedsYes(t *testing.T) {
 	}
 	if !strings.Contains(squash(run(t, "release")), "prod v1.0.0 "+c[:7]) {
 		t.Error("prod not adopted")
+	}
+}
+
+func TestReleaseNotesAll(t *testing.T) {
+	_, fx := releaseRepo(t)
+	c := first(t, fx)
+	fx.Tag(t, c, "v1.0.0")
+	both(t, fx, "stage", release.Deployed{Commit: c, Version: "v1.0.0"})
+	both(t, fx, "prod", release.Deployed{Commit: c, Version: "v1.0.0"})
+	m := fx.Merge(t, "fix/12-a", "")
+	both(t, fx, "dev", release.Deployed{Commit: m, Version: "1.0.1-dev.1.g" + m[:7]})
+	run(t, "release", "cut", "--no-deploy")
+	if out := run(t, "release", "notes"); strings.Contains(out, "rc.1") {
+		t.Errorf("notes without --all lists a candidate:\n%s", out)
+	}
+	if out := run(t, "release", "notes", "--all"); !strings.Contains(out, "## v1.0.1-rc.1 (") {
+		t.Errorf("notes --all:\n%s", out)
+	}
+	if _, err := execute(t, []string{"release", "cut", "--version", "1.0.1-rc.2"}); err == nil || !strings.Contains(err.Error(), "final version") {
+		t.Errorf("cut --version rc: %v", err)
 	}
 }

@@ -12,6 +12,7 @@ import (
 // TargetState is what one deploy target's overlay says runs in an
 // environment.
 type TargetState struct {
+	Name     string   `json:"name"` // its config repo's, e.g. enack8s; with the registry's host when two targets share one
 	Repo     string   `json:"repo"`
 	Path     string   `json:"path"` // the overlay's directory, {env} filled in
 	Deployed Deployed `json:"deployed"`
@@ -164,6 +165,19 @@ func (r *Runner) envState(ctx context.Context, env string, repos map[string]*Con
 	if len(e.Targets) == 0 {
 		return e, nil
 	}
+	for i := range e.Targets {
+		e.Targets[i].Name = targetName(e.Targets[i].Repo)
+	}
+	names := make([]TargetState, len(e.Targets)) // the plain names, before any is suffixed
+	for i, t := range e.Targets {
+		names[i].Name = t.Name
+	}
+	for i := range e.Targets {
+		if n := e.Targets[i].Name; shared(names, i, n) {
+			host, _, _ := strings.Cut(r.Cfg.Deploy[i].Registry, "/")
+			e.Targets[i].Name = n + " (" + host + ")"
+		}
+	}
 	if !e.Split {
 		e.Commit = e.Targets[0].Deployed.Commit
 	}
@@ -180,4 +194,22 @@ func (r *Runner) envState(ctx context.Context, env string, repos map[string]*Con
 		}
 	}
 	return e, nil
+}
+
+// targetName is a config repo's base name without .git and -app-config:
+// enack8s for git@host:org/enack8s-app-config.git.
+func targetName(repo string) string {
+	n := strings.TrimSuffix(strings.TrimRight(repo, "/"), ".git")
+	n = n[strings.LastIndexAny(n, "/:")+1:]
+	return strings.TrimSuffix(n, "-app-config")
+}
+
+// shared reports whether a target other than i is called name.
+func shared(ts []TargetState, i int, name string) bool {
+	for j, o := range ts {
+		if j != i && o.Name == name {
+			return true
+		}
+	}
+	return false
 }

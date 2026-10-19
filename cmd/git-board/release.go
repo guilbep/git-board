@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -60,7 +61,7 @@ func withRunner(cmd *cobra.Command, f func(ctx context.Context, r *release.Runne
 	out := cmd.OutOrStdout()
 	r.Step = func(s release.Step) {
 		if s.State == "done" {
-			fmt.Fprintf(out, "  %s  %s\n", s.Name, s.Detail)
+			fmt.Fprintln(out, strings.TrimRight("  "+s.Name+"  "+s.Detail, " "))
 		}
 	}
 	return f(cmd.Context(), r, out)
@@ -95,7 +96,7 @@ func runStatus(cmd *cobra.Command) error {
 		}
 		tw := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
 		for _, e := range st.Envs {
-			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", e.Name, dash(envVersion(e)), dash(short(envCommit(e))), strings.TrimSpace(envNote(e, r.Cfg.Deploy, r.Base)))
+			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", e.Name, cmp.Or(envVersion(e), "-"), cmp.Or(short(envCommit(e)), "-"), strings.TrimSpace(envNote(e, r.Base)))
 		}
 		return tw.Flush()
 	})
@@ -109,8 +110,6 @@ func envCommit(e release.EnvState) string {
 	return e.Targets[0].Deployed.Commit
 }
 
-func dash(s string) string { return cmpOr(s, "-") }
-
 func envVersion(e release.EnvState) string {
 	if e.Version != "" || len(e.Targets) == 0 {
 		return e.Version
@@ -121,7 +120,7 @@ func envVersion(e release.EnvState) string {
 func short(c string) string { return c[:min(7, len(c))] }
 
 // envNote is what is notable about e: unadopted, split, or behind the trunk.
-func envNote(e release.EnvState, deploy []config.Target, base string) string {
+func envNote(e release.EnvState, base string) string {
 	switch {
 	case len(e.Targets) == 0:
 		return ""
@@ -129,9 +128,9 @@ func envNote(e release.EnvState, deploy []config.Target, base string) string {
 		return "not adopted"
 	case e.Split:
 		var parts []string
-		for i, t := range e.Targets[1:] {
+		for _, t := range e.Targets[1:] {
 			if t.Deployed.Commit != e.Targets[0].Deployed.Commit {
-				parts = append(parts, fmt.Sprintf("%s on %s", registryHost(deploy[i+1].Registry), cmpOr(t.Deployed.Version, "?")))
+				parts = append(parts, fmt.Sprintf("%s on %s", t.Name, cmp.Or(t.Deployed.Version, "?")))
 			}
 		}
 		return "split: " + strings.Join(parts, ", ")
@@ -143,17 +142,7 @@ func envNote(e release.EnvState, deploy []config.Target, base string) string {
 	return ""
 }
 
-// registryHost names a target: the host of its registry, quay.io for quay.io/app.
-func registryHost(registry string) string { host, _, _ := strings.Cut(registry, "/"); return host }
-
-func cmpOr(a, b string) string {
-	if a == "" {
-		return b
-	}
-	return a
-}
-
-func trunkName(base string) string { return cmpOr(base, "dev") }
+func trunkName(base string) string { return cmp.Or(base, "dev") }
 
 func newCutCmd() *cobra.Command {
 	var version, commit, notesFile string
@@ -169,8 +158,11 @@ func newCutCmd() *cobra.Command {
 			c := release.Cut{Final: final, Hotfix: hotfix, Deploy: !noDeploy, Commit: commit}
 			if version != "" {
 				v, ok := release.ParseTag("v" + strings.TrimPrefix(version, "v"))
-				if !ok {
+				switch {
+				case !ok:
 					return fmt.Errorf("--version %q: want 1.4.20", version)
+				case v.RC != 0:
+					return errors.New("--version takes a final version like 1.4.20; the rc number is chosen for you")
 				}
 				c.Version = v
 			}
@@ -259,8 +251,8 @@ n being the target's place in [release] deploy, from 1.`,
 				}
 				var known []release.Proposal
 				for _, p := range ps {
-					n := slices.IndexFunc(r.Cfg.Deploy, func(d config.Target) bool { return d.Repo == p.Repo }) + 1
-					fmt.Fprintf(out, "%s/%d  runs %s  %s (%s)\n", p.Env, n, p.Runs, cmpOr(short(p.Commit), "-"), cmpOr(p.From, "unknown"))
+					n := targetNo(r, p)
+					fmt.Fprintf(out, "%s/%d  runs %s  %s (%s)\n", p.Env, n, p.Runs, cmp.Or(short(p.Commit), "-"), cmp.Or(p.From, "unknown"))
 					if p.Commit != "" {
 						known = append(known, p)
 					}
@@ -271,7 +263,12 @@ n being the target's place in [release] deploy, from 1.`,
 				case !yes:
 					fmt.Fprintln(out, "nothing written; --yes adopts the ones with a commit, --set <env>/<n>=<sha> fills an unknown one")
 				default:
-					return r.Adopt(ctx, known)
+					if err := r.Adopt(ctx, known); err != nil {
+						return err
+					}
+					if n := len(ps) - len(known); n > 0 {
+						fmt.Fprintf(out, "%d not adopted: no commit known — use --set <env>/<n>=<sha>\n", n)
+					}
 				}
 				return nil
 			})
@@ -280,6 +277,13 @@ n being the target's place in [release] deploy, from 1.`,
 	cmd.Flags().BoolVar(&yes, "yes", false, "write the proposals")
 	cmd.Flags().StringArrayVar(&sets, "set", nil, "<env>/<n>=<sha>: the commit target n of env runs")
 	return cmd
+}
+
+// targetNo is p's place in [release] deploy, from 1.
+func targetNo(r *release.Runner, p release.Proposal) int {
+	return 1 + slices.IndexFunc(r.Cfg.Deploy, func(d config.Target) bool {
+		return d.Repo == p.Repo && strings.ReplaceAll(d.Path, "{env}", p.Env) == p.Path
+	})
 }
 
 // applySet fills in ps the proposal "<env>/<n>=<sha>" names.
@@ -291,7 +295,7 @@ func applySet(r *release.Runner, ps []release.Proposal, s string) error {
 		return fmt.Errorf("--set %q: want <env>/<n>=<sha>, n from 1 to %d", s, len(r.Cfg.Deploy))
 	}
 	for j := range ps {
-		if ps[j].Env == env && ps[j].Repo == r.Cfg.Deploy[i-1].Repo {
+		if d := r.Cfg.Deploy[i-1]; ps[j].Env == env && ps[j].Repo == d.Repo && ps[j].Path == strings.ReplaceAll(d.Path, "{env}", env) {
 			ps[j].Commit, ps[j].From = sha, "set"
 			return nil
 		}
@@ -307,26 +311,9 @@ func newNotesCmd() *cobra.Command {
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return withRunner(cmd, func(ctx context.Context, r *release.Runner, out io.Writer) error {
-				tags, err := release.ReleaseTags(ctx, r.Dir)
-				if err != nil {
-					return err
-				}
-				recs, err := r.B.Releases()
-				if err != nil {
-					return err
-				}
-				notes := map[string]string{}
-				for _, rec := range recs {
-					notes[rec.Commit] = rec.Notes
-				}
-				for _, t := range tags {
-					n, ok := notes[t.Commit]
-					if !ok || (t.Version.RC != 0 && !all) {
-						continue
-					}
-					fmt.Fprintf(out, "## %s (%s)\n\n%s\n\n", t.Name, t.Date.Format("2006-01-02"), strings.TrimSpace(n))
-				}
-				return nil
+				md, err := r.Notes(ctx, all)
+				fmt.Fprint(out, md)
+				return err
 			})
 		},
 	}
@@ -345,27 +332,7 @@ func newYankCmd() *cobra.Command {
 				return errors.New("--reason is required")
 			}
 			return withRunner(cmd, func(ctx context.Context, r *release.Runner, out io.Writer) error {
-				tags, err := release.ReleaseTags(ctx, r.Dir)
-				if err != nil {
-					return err
-				}
-				for _, t := range tags {
-					if t.Name != args[0] {
-						continue
-					}
-					rec, ok, err := r.B.ReleaseFor(t.Commit)
-					switch {
-					case err != nil:
-						return err
-					case !ok:
-						return fmt.Errorf("%s has no release record yet", t.Name)
-					}
-					if err := r.B.YankRelease(rec.ID, reason); err != nil {
-						return err
-					}
-					return r.B.PushReleases(r.Cfg.RemoteName())
-				}
-				return fmt.Errorf("no release tag %q", args[0])
+				return r.Yank(ctx, args[0], reason)
 			})
 		},
 	}

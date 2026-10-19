@@ -268,3 +268,14 @@ func TestReconcilePushesOnlineOnly(t *testing.T) {
 		t.Error("the record made before wasn't pushed")
 	}
 }
+
+func TestStatusNamesSharedTargets(t *testing.T) {
+	r, _, fx := releasetest.NewRunner(t)
+	c := fx.Commit(t, "feat")
+	both(t, fx, "stage", release.Deployed{Commit: c, Version: "v1.0.0-rc.1"})
+	e := envOf(t, status(t, r), "stage")
+	// both config repos are called config.git: the registry tells them apart
+	if e.Targets[0].Name != "config (ghcr.test)" || e.Targets[1].Name != "config (quay.test)" {
+		t.Errorf("names = %q, %q", e.Targets[0].Name, e.Targets[1].Name)
+	}
+}
