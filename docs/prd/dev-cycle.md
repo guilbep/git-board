@@ -249,6 +249,8 @@ Calls taken building it:
 
 ### M3: the Work page
 
+Done: plan in `dev-cycle-m3-plan.md`.
+
 `/work` (F1), the header's Work item: "Human time is the bottleneck. Agents
 wait here, not in a terminal." Mine and Team.
 
@@ -273,6 +275,27 @@ its source.
 Done when: the fixture board shows F1's rows in F1's order; an issue
 appears in exactly one of Needs you and Waiting on others; the page is
 empty and says so when nothing waits.
+
+Calls taken building it:
+- **Any other person's question counts,** not only an agent's: a comment
+  with `ask` metadata, or one whose text ends in a question mark, by
+  someone else than the viewer, until the viewer comments after it. There
+  is no agent identity before M5.
+- **Since is the last state change** (status, label, title, card
+  comment), not the gate's start: the step is computed, not stored, so
+  nothing records when it changed.
+- **Agents is the worktrees** (`git worktree list`) with their last
+  commit and the issue whose evidence branch they hold; the agent's own
+  state (running, waiting, done) is M5's.
+- **To send is the forge-pending events** (what Sync sends), newest
+  first; the git remotes stay on Sync.
+- **Open the retro waits for M7;** the aside counts the `correction`
+  comments on open issues since the current sprint's start.
+- **A project role naming the viewer makes every issue theirs,** as in
+  the Inbox: an issue's own `pm:` field overrides it.
+- **Normal, Low and Structural act in place;** the plan, review and
+  sign-off actions open the issue's Cycle view (`?view=cycle`), Answer
+  opens the panel at the question.
 
 ### M4: the Review workspace
 
