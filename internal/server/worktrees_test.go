@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/guilbep/git-board/internal/config"
+	"github.com/guilbep/git-board/internal/gitbugio/gitbugiotest"
 )
 
 // fakeWtx puts a fake wtx first on PATH, as wtx's own tests fake its
@@ -415,6 +416,21 @@ func TestWtxBusy(t *testing.T) {
 		if code, c, body := sendFrom(t, "POST", ts.URL+path, ts.URL, req); code != http.StatusConflict || c != "busy" {
 			t.Errorf("%s while wtx runs: %d %q %s", path, code, c, body)
 		}
+	}
+	if calls := wtxCalls(t, fake); calls != nil {
+		t.Fatalf("calls = %v", calls)
+	}
+}
+
+// wtx reads the branch all as every worktree: an issue whose branch
+// comes out as all is refused before wtx runs.
+func TestAgentGoAll(t *testing.T) {
+	s, fake, _ := agentRepo(t)
+	s.cfg.Branches.Name = "{slug}"
+	id := gitbugiotest.NewIssue(t, s.b, "All")
+	ts := serve(t, s)
+	if code, c, body := sendFrom(t, "POST", ts.URL+"/api/issues/"+id[:8]+"/agent/go", ts.URL, map[string]string{}); code != http.StatusConflict || c != "branch-all" {
+		t.Fatalf("go on the branch all: %d %q %s", code, c, body)
 	}
 	if calls := wtxCalls(t, fake); calls != nil {
 		t.Fatalf("calls = %v", calls)

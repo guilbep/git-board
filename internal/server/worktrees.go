@@ -307,6 +307,9 @@ func (s *apiServer) handleIssueAgentAction(w http.ResponseWriter, r *http.Reques
 	case action == "go" && a.Worktree != nil:
 		writeCoded(w, http.StatusConflict, "has-worktree", errors.New("This issue has a worktree: brief the agent instead."))
 		return
+	case action == "go" && a.Branch == "all":
+		writeCoded(w, http.StatusConflict, "branch-all", errors.New("wtx reads the branch all as every worktree: give the issue another branch."))
+		return
 	case action == "brief" && a.Worktree == nil:
 		writeCoded(w, http.StatusConflict, "no-worktree", errors.New("No worktree yet: start an agent first."))
 		return
