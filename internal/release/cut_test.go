@@ -579,6 +579,32 @@ func TestSingleEnvironmentCutsWhatRuns(t *testing.T) {
 	}
 }
 
+// Offline, a single-environment app cuts its final as it would online,
+// deploy asked or not: it deploys nowhere either way.
+func TestSingleEnvironmentCutsOffline(t *testing.T) {
+	r, fx, c := singleEnv(t)
+	status(t, r)
+	before := heads(t, fx)
+	plug := unplug(t, fx)
+	r.Offline = true
+	pending := cut(t, r, release.Cut{Deploy: true})
+	r.Offline = false
+	plug()
+	tg := cut(t, r, release.Cut{Deploy: true})
+	if tg.Name != pending.Name || tg.Commit != c || tg.Version.RC != 0 {
+		t.Errorf("cut %s on %.7s, want the pending final %s on %.7s", tg.Name, tg.Commit, pending.Name, c)
+	}
+	if got := releasetest.Git(t, fx.AppBare, "tag", "-l"); got != tg.Name {
+		t.Errorf("tags %q, want %s", got, tg.Name)
+	}
+	if _, recorded, err := r.B.ReleaseFor(c); err != nil || !recorded {
+		t.Errorf("recorded %v, %v", recorded, err)
+	}
+	if !slices.Equal(heads(t, fx), before) {
+		t.Error("the cut moved an overlay")
+	}
+}
+
 func TestSingleEnvironmentPromoteRefused(t *testing.T) {
 	r, fx, _ := singleEnv(t)
 	_, err := r.Promote(ctx, "v0.0.1-rc.1")

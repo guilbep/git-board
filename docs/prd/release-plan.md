@@ -1195,7 +1195,8 @@ Settled on 54d0f401 (GB-17): `git-board release cut --offline
 
 **Behaviour:**
 - `--offline` sets `Runner.Offline`. Offline, Cut refuses a deploy (it
-  needs `--no-deploy`), notes (drafted once the cut is pushed, editable on
+  needs `--no-deploy`, but where the one environment follows the trunk
+  and a cut deploys nowhere), notes (drafted once the cut is pushed, editable on
   the record after) and `--hotfix` (the pending ref doesn't carry it, so
   the online check would refuse it). A failed fetch's message names
   `--offline`; nothing guesses offline from a failed fetch (auth fails the
@@ -1223,7 +1224,8 @@ Settled on 54d0f401 (GB-17): `git-board release cut --offline
   `TestOnlineFinishesOfflineCut` (tag dated at the push, images, record),
   `TestOfflineCutTakenDropsIt` (another clone pushed the name: no tag,
   no record, the fetch succeeds), `TestOfflineCutCheckedAgainOnline`
-  (prod took a hotfix meanwhile), the refusals in
+  (prod took a hotfix meanwhile), `TestSingleEnvironmentCutsOffline`,
+  the refusals in
   `TestOfflineRefusesWrites`, and the CLI's `TestCutOffline`.
 - [x] **Step 2: Run** — FAIL. **Step 3: Implement.** **Step 4: Run** — PASS.
 - [x] **Step 5: Commit** `feat(release): cut offline, finished by the next online command`

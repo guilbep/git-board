@@ -72,7 +72,7 @@ func (r *Runner) Cut(ctx context.Context, c Cut) (Tag, error) {
 // offline before the first is pushed.
 func (r *Runner) offlineCut(ctx context.Context, c Cut) error {
 	switch {
-	case c.Deploy:
+	case c.Deploy && !r.followsLast():
 		return errors.New("offline, a cut deploys nowhere: --no-deploy")
 	case c.Hotfix: // ponytail: the pending ref doesn't say hotfix, so the online check would refuse it
 		return errors.New("offline: cut a hotfix online")
