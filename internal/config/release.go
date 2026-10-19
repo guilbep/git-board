@@ -83,6 +83,9 @@ func (r Release) Last() string {
 // deploys somewhere the same for all of them.
 func checkRelease(r Release) error {
 	for i, e := range r.Environments {
+		if strings.TrimSpace(e) == "" {
+			return fmt.Errorf("release: an environment needs a name")
+		}
 		if slices.Contains(r.Environments[:i], e) {
 			return fmt.Errorf("release: environment %q listed twice", e)
 		}
@@ -91,8 +94,13 @@ func checkRelease(r Release) error {
 		return fmt.Errorf("release: follow %q isn't in environments", f)
 	}
 	for _, t := range r.Deploy {
-		if !strings.Contains(t.Path, "{env}") {
+		switch {
+		case strings.TrimSpace(t.Repo) == "":
+			return fmt.Errorf("release: deploy needs a repo")
+		case !strings.Contains(t.Path, "{env}"):
 			return fmt.Errorf("release: deploy %s: path needs {env}", t.Repo)
+		case len(r.Images) > 0 && strings.TrimSpace(t.Registry) == "": // a tag-only app has no image to push
+			return fmt.Errorf("release: deploy %s: registry needs a value, for the images", t.Repo)
 		}
 	}
 	for _, i := range r.Images {

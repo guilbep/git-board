@@ -60,10 +60,17 @@ func TestCheckReleaseRefuses(t *testing.T) {
 		{"environments = [\"dev\"]\n[[release.deploy]]\nrepo = \"x\"\npath = \"overlays/dev\"", "path needs {env}"},
 		{`environments = ["dev"]
 images = [{ name = "", context = "." }]`, "image needs a name"},
+		{`environments = ["dev", " "]`, "environment needs a name"},
+		{"environments = [\"dev\"]\n[[release.deploy]]\npath = \"overlays/{env}\"", "deploy needs a repo"},
+		{"environments = [\"dev\"]\nimages = [{ name = \"app\", context = \".\" }]\n[[release.deploy]]\nrepo = \"x\"\npath = \"overlays/{env}\"", "registry needs a value"},
 	} {
 		_, _, err := parse([]byte("[release]\n" + bad.src))
 		if err == nil || !strings.Contains(err.Error(), bad.want) {
 			t.Errorf("%q: err %v, want %q", bad.src, err, bad.want)
 		}
+	}
+	tagOnly := "[release]\nenvironments = [\"dev\"]\n[[release.deploy]]\nrepo = \"x\"\npath = \"overlays/{env}\""
+	if _, _, err := parse([]byte(tagOnly)); err != nil {
+		t.Errorf("a deploy without a registry, and no images: %v", err)
 	}
 }
