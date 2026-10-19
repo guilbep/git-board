@@ -272,6 +272,26 @@ decided on the way:
 - A push is seen when the tab is opened again, on a write or on a sync: the
   server watches no code refs (Development doesn't either).
 
+*Live test, 2026-10-19, guilbep/git-board-test, public, with CODEOWNERS
+`* @guilbep-gbtest` and a ruleset on `main` (code-owner review, `Tests`
+required; setup in CONTRIBUTING.md § Live tests), git-bug sync.6:* issue
+#27 made in git-board and sent by the per-issue sync; branch
+`749bca5-m4-review-live-test` (01b3cf8) pushed; **Open PR** opened #28. A
+line comment on `m4-review.txt:3`, made in git-board, went out at the next
+per-issue sync as guilbep's review comment on #28's line 3 (RIGHT, at
+01b3cf8). guilbep-gbtest's line comment on GitHub, on line 4, came in at the
+next sync on the issue's line 4, credited to the bot's git-bug identity.
+Switched to that identity in git-board, **Approve** went out as
+guilbep-gbtest's APPROVED review, with its own token; GitHub's merge state
+read CLEAN with the ruleset enforced, `Tests` required and passed, and
+**Merge** from the issue merged #28 (67fe677) and closed #27. Found:
+
+- The gate lists each person's `latestReviews`, where a line comment made
+  after an approval is a COMMENTED review: the approval stops showing,
+  though GitHub still counts it.
+- A full sync from the scratch clone would have sent 7 issues and labels on
+  24 others from earlier tests: the per-issue sync only, there.
+
 ## The six questions
 
 1. *What is a change?* An issue with branches, linked by name.

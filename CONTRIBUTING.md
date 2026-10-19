@@ -36,6 +36,37 @@ every change in this repo's history.
 The `web/` frontend (Quasar/Vue) has its own toolchain: `make web-dev` /
 `make web-build`, or `cd web && npm run dev`/`build`/`typecheck` directly.
 
+## Live tests
+
+Only on the scratch forges: guilbep/git-board-test, guilbep/git-bug-sync-test,
+gitlab.epfl.ch project 42400, GitHub Project #1. Run the server on a scratch
+clone (`git board serve --addr localhost:<port>`), never on a real board.
+
+guilbep/git-board-test is set up for the PR gate and review (M3, M4):
+
+- **Public**: rulesets need a public repository or a paid plan.
+- **`.github/workflows/tests.yml`** on `main`, a job named `Tests`.
+- **`.github/CODEOWNERS`**: `* @guilbep-gbtest`.
+- **guilbep-gbtest**, a second account, collaborator with write access
+  (GitHub counts a code owner only if they can write).
+- **A ruleset on `main`**, enforcement *Active* (not Evaluate), target the
+  default branch: require a pull request, with *Require review from Code
+  Owners*; require status checks to pass, with `Tests`. Check it took with
+  `curl https://api.github.com/repos/guilbep/git-board-test/rules/branches/main`:
+  `[]` means nothing is enforced.
+- **Each account's token on its own git-bug identity** in the scratch
+  clone, typed at the prompt, never on the command line:
+  `git bug bridge auth add-token -t github -l <login> -u <identity id>`, run
+  while no server holds the repository (git-bug locks it). git-board
+  picks the token whose login matches the current identity's
+  `github-login`, so switching identity in git-board switches accounts.
+- Tokens are classic, `repo` scope only: a GraphQL field that needs
+  `read:org` fails the whole query.
+
+Write a full sync from a scratch clone with care: git-board-test holds
+issues and labels from earlier tests, and a dry run shows what it would
+send. The per-issue sync touches only that issue.
+
 ## Conventions
 
 - Real fixtures over mocks: tests spin up a real on-disk git-bug repo
