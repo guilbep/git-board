@@ -122,8 +122,12 @@ func TestGatherFromRepo(t *testing.T) {
 	if !slices.Equal(in.Tests, []TestFile{{Path: "api/a_test.go", Commit: first}}) {
 		t.Errorf("Tests = %+v", in.Tests)
 	}
-	if in.Plan == nil || *in.Plan != (Plan{Path: plan, Ref: "fix/2518-x", Status: "accepted"}) {
+	if in.Plan == nil || in.Plan.Path != plan || in.Plan.Ref != "fix/2518-x" || in.Plan.Status != "accepted" {
 		t.Errorf("Plan = %+v", in.Plan)
+	}
+	// rendered below its front matter; added on dev, so nobody drafted it on the branch
+	if in.Plan.HTML != "<h1>Plan</h1>\n" || in.Plan.By != "" {
+		t.Errorf("Plan HTML %q, by %q", in.Plan.HTML, in.Plan.By)
 	}
 	if in.People["plan"] != "bob" || in.People["risk"] != "" {
 		t.Errorf("People = %v", in.People)
@@ -184,6 +188,23 @@ func TestMatchTest(t *testing.T) {
 		if matched != want {
 			t.Errorf("%s: matched %v, want %v", path, matched, want)
 		}
+	}
+}
+
+// A plan drafted on its plan branch says who first committed it there.
+func TestGatherPlanDraftedBy(t *testing.T) {
+	dir, b := repo(t)
+	git(t, dir, "switch", "-q", "-c", "plan/2518-x", "dev")
+	commitFile(t, dir, "docs/src/implementation-plans/2518-x.md", strings.Replace(planDoc, "%s", "draft", 1))
+	git(t, dir, "switch", "-q", "dev")
+	id := gitbugiotest.NewImportedIssue(t, b, "Crash on save (#2518)", "https://github.com/o/r/issues/2518")
+	th, err := b.Thread(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	in, err := Gather(b, co2Config(), th, "", nil)
+	if err != nil || in.Plan == nil || in.Plan.Ref != "plan/2518-x" || in.Plan.By != "dev" || in.Plan.Status != "draft" {
+		t.Errorf("Plan = %+v, %v", in.Plan, err)
 	}
 }
 

@@ -23,6 +23,8 @@ type Plan struct {
 	Path   string `json:"path,omitempty"`
 	Ref    string `json:"ref,omitempty"`    // the branch it was read from
 	Status string `json:"status,omitempty"` // its front matter status
+	HTML   string `json:"html,omitempty"`   // rendered, below its front matter
+	By     string `json:"by,omitempty"`     // who first committed it on the branch, "" when it came with the base
 }
 
 // Approval is a plan:approve comment.

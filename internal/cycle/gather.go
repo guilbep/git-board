@@ -13,6 +13,7 @@ import (
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/ghpr"
 	"github.com/guilbep/git-board/internal/gitbugio"
+	"github.com/guilbep/git-board/internal/markdown"
 )
 
 // Pulls is the server's PR cache, read-only here.
@@ -153,10 +154,30 @@ func gatherCode(b *gitbugio.Backend, cfg *config.Config, is gitbugio.Issue, stag
 			continue
 		}
 		data, _ := b.ReadFile(r, files[0])
-		in.Plan = &Plan{Path: files[0], Ref: r, Status: frontMatter(string(data), "status")}
+		// ponytail: links as the file writes them, plan files carry no uploads
+		in.Plan = &Plan{Path: files[0], Ref: r, Status: frontMatter(string(data), "status"), HTML: markdown.Render(body(string(data)), func(u string) string { return u })}
+		if sha := b.FirstCommitAdding(in.Base, r, files[0]); sha != "" {
+			if c, err := b.ReadCommit(sha); err == nil {
+				in.Plan.By = c.Author
+			}
+		}
 		break
 	}
 	return nil
+}
+
+// body is the document below its front matter.
+func body(doc string) string {
+	lines := strings.Split(doc, "\n")
+	if len(lines) == 0 || strings.TrimSpace(lines[0]) != "---" {
+		return doc
+	}
+	for i, l := range lines[1:] {
+		if strings.TrimSpace(l) == "---" {
+			return strings.TrimLeft(strings.Join(lines[i+2:], "\n"), "\n")
+		}
+	}
+	return doc
 }
 
 // frontMatter is a key's value in a Markdown file's front matter: the
