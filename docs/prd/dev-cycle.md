@@ -320,6 +320,8 @@ approval without a line is refused; a flagged comment shows in F1's count.
 
 ### M5: Worktrees
 
+Done: plan in `dev-cycle-m5-plan.md`.
+
 Settings › Worktrees (G1), and the agent actions.
 
 - **The page**: whether wtx, wt and tmux are on this machine; what wtx read
@@ -341,6 +343,31 @@ the worktree and the tmux session, and the prompt file holds the gate and
 the quoted issue; the same request against `--addr 0.0.0.0:8080` is
 refused; Write wtx.toml produces the preview byte for byte and leaves the
 tree uncommitted.
+
+Calls taken building it:
+- **The form is wtx's own JSON** (`wtx init --edit --no-notes`) and the
+  preview is `wtx init --from-json` run in a scratch git repository, so
+  git-board renders no TOML and the preview is the file. Write always
+  passes `--force`: the preview is what replaces the file.
+- **The Origin rule is the writes'.** A same-origin browser GET carries
+  no Origin, so the reads (the page, an issue's agent, the Work page's
+  sessions) need loopback and `PATH` only; Preview, Write, Start and
+  Brief need this board's Origin too.
+- **The base branch is wtx's** `[repo] base_branch`; git-board passes
+  none. The branch is `wtx go`'s argument: the evidence branch, else the
+  `[branches]` name for the issue.
+- **"Set by wtx" shows nowhere:** no who-commits rule is in wtx's
+  baseline today; the baseline is one muted line under Never allowed.
+- **The Agents row keeps M3's gate text,** the session's state beside
+  it, and only where wtx may run: a refused server shows the M3 page.
+  The Work page answers `can_start` and the reason, no code.
+- **The request waits for `wtx go`,** its setup (`npm ci`) included,
+  for up to ten minutes. `wtx status` is read once per Work page and
+  once per Cycle view load.
+- **Not in M5:** a job with progress for a long `wtx go`; a signed
+  token if the server is ever exposed; the agent's `ask` and
+  `verify:run` through the CLI; editing ports and panes in the form
+  (shown as read).
 
 ### M6: AI
 
