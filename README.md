@@ -87,8 +87,11 @@ next-step card for whoever's turn it is. The Cycle view beside it is the
 seven steps with their evidence, the step's workspace (the plan to
 approve, the run and the sign-offs) and a status bar. The Work page is
 what needs a person across every open issue: Needs you, Agents, Waiting on
-others, To send, Since the last retro. `[cycle]` in
-[docs/configuration.md](docs/configuration.md#cycle).
+others, To send, Since the last retro. From both, Start an agent runs
+[wtx](https://github.com/EPFL-ENAC/wtx) on the issue: a worktree, a tmux
+session and a prompt with its step and gate; Settings › Worktrees writes
+`wtx.toml`. `[cycle]` in [docs/configuration.md](docs/configuration.md#cycle),
+agents in [Worktrees](docs/configuration.md#worktrees).
 
 ```toml
 [repos]

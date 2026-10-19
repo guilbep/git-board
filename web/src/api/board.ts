@@ -753,6 +753,7 @@ export interface WorkAgent {
   name?: string;
   state: string; // "Waits for you", "Waits for bob to review the PR", "No issue"
   at: string; // the last commit
+  session?: WtxSession; // wtx status on its branch
 }
 
 export interface SendLine {
@@ -769,6 +770,8 @@ export interface WorkResponse {
   to_send: SendLine[]; // newest first, at most 20
   pending: number; // every change the forges wait for
   retro: { sprint?: string; since?: string; corrections: number };
+  can_start: boolean; // wtx may start agents from this server
+  reason?: string; // why not
 }
 
 export function getWork(who: 'me' | 'team'): Promise<WorkResponse> {
@@ -1183,4 +1186,42 @@ export function yankRelease(tag: string, reason: string): Promise<object> {
 
 export async function getIssueEnvironments(id: string): Promise<IssueEnvironment[]> {
   return (await request<IssueEnvironment[] | null>(`${issuePath(id)}/environments`)) ?? [];
+}
+
+// Worktrees (internal/server/worktrees.go): wtx, on the machine where
+// git board serve runs.
+export interface WtxSession { branch: string; path: string; main: boolean; session: string; live: boolean; state: string; agent: string; llm: string }
+export interface WtxCheck { name: string; ok: boolean; detail: string; fix: string; hard: boolean }
+// WtxAnswers is wtx init --edit's JSON: what wtx read, and wtx.toml's values.
+export interface WtxAnswers {
+  repo: { name: string; base_branch: string; protected_branches: string[] };
+  ports?: { family?: { name: string; main: number }[] };
+  panes?: { pane?: { name: string; role?: string; cmd?: string }[] };
+  agent: { tool: string; llm?: string; orchestration?: { enabled: boolean; plan_model: string; build_model: string } };
+  permissions: { allow?: string[]; deny: string[] };
+  _changes?: unknown[];
+  [k: string]: unknown;
+}
+export interface Worktrees { local: boolean; wtx: boolean; reason?: string; code?: string; doctor?: { ok: boolean; checks: WtxCheck[] }; config: boolean; answers?: WtxAnswers }
+export interface WtxFiles { files: { path: string; text: string }[] }
+export interface IssueAgent { reason?: string; code?: string; branch: string; worktree?: { path: string; head: string; branch?: string }; session?: WtxSession; output?: string }
+
+export function getWorktrees(): Promise<Worktrees> {
+  return request('/api/worktrees');
+}
+
+export function previewWtx(answers: WtxAnswers): Promise<WtxFiles> {
+  return request('/api/worktrees/preview', json('POST', { answers }));
+}
+
+export function writeWtx(answers: WtxAnswers): Promise<WtxFiles> {
+  return request('/api/worktrees/init', json('POST', { answers }));
+}
+
+export function getIssueAgent(id: string): Promise<IssueAgent> {
+  return request(`${issuePath(id)}/agent`);
+}
+
+export function agentAction(id: string, action: 'go' | 'brief', brief: string): Promise<IssueAgent> {
+  return request(`${issuePath(id)}/agent/${action}`, json('POST', { brief }));
 }

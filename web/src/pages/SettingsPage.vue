@@ -79,6 +79,7 @@
       </div>
 
       <NumbersSettings v-if="tab === 'numbers'" @changed="numbers = $event" />
+      <WorktreesSettings v-if="tab === 'worktrees'" @changed="worktrees = $event" />
 
       <div v-if="tab === 'attachments'" class="set-panel">
         <h2 class="h4">Attachments</h2>
@@ -177,7 +178,7 @@ import { themePref } from '@/theme';
 import { debounced, onLive } from '@/live';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { getNumbers, getRemotes, getSettings, getViews, removeBridge, setBridgeSync, type Bridge, type Numbers, type Remote, type Settings } from '@/api/board';
+import { getNumbers, getRemotes, getSettings, getViews, getWorktrees, removeBridge, setBridgeSync, type Bridge, type Numbers, type Remote, type Settings, type Worktrees } from '@/api/board';
 import { loadForges } from '@/forges';
 import { message } from '@/issue';
 import { loadMe, me } from '@/me';
@@ -190,6 +191,7 @@ import ChannelMap from '@/components/ChannelMap.vue';
 import AddForgeDialog from '@/components/AddForgeDialog.vue';
 import ForgesGuide from '@/components/ForgesGuide.vue';
 import NumbersSettings from '@/components/NumbersSettings.vue';
+import WorktreesSettings from '@/components/WorktreesSettings.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -201,9 +203,10 @@ const adding = computed({
   set: (on) => void router.replace({ path: '/settings/forges', query: on ? { add: '1' } : {} }),
 });
 const guideOpen = ref(false);
-const boardTabs = settingsTabs.filter((t) => ['project-file', 'numbers', 'attachments', 'you'].includes(t.id));
+const boardTabs = settingsTabs.filter((t) => ['project-file', 'numbers', 'attachments', 'worktrees', 'you'].includes(t.id));
 
 const settings = ref<Settings | null>(null);
+const worktrees = ref<Worktrees | null>(null);
 const remotes = ref<Remote[] | null>(null);
 const numbers = ref<Numbers | null>(null);
 
@@ -218,12 +221,14 @@ const cards = computed(() => {
     'project-file': `${viewNames.value.length} saved view${viewNames.value.length === 1 ? '' : 's'}.`,
     numbers: numbers.value ? numbersSummary(numbers.value) : '…',
     attachments: !s ? '…' : s.uploads.enabled ? `On, served at ${s.uploads.public_url}.` : 'Off.',
+    worktrees: !worktrees.value ? '…' : worktrees.value.config ? 'wtx.toml written.' : worktrees.value.code === 'no-config' ? 'No wtx.toml yet.' : (worktrees.value.reason ?? ''),
     you: me.value?.me ? `You write as ${me.value.me.name}.` : 'Not chosen yet: pick who you write as.',
   };
   const what: Record<string, string> = {
     'project-file': 'Fields, views, sprints, colors, branch names: .git-board.toml.',
     numbers: 'One number per issue, the same on every forge: CO2-3075.',
     attachments: 'Files attached to comments, on S3 behind a CDN.',
+    worktrees: 'One agent, one worktree, one branch, one PR: wtx, started from here.',
     you: 'Who you write as, and the appearance.',
   };
   return [
@@ -304,6 +309,7 @@ onMounted(() => {
   void reload();
   getRemotes().then((r) => (remotes.value = r.remotes)).catch(() => (remotes.value = []));
   loadNumbers();
+  getWorktrees().then((w) => (worktrees.value = w), () => {});
 });
 // the Overview's numbers line: started, or an issue numbered, from anywhere
 const loadNumbers = () => void getNumbers().then((n) => (numbers.value = n), () => {});

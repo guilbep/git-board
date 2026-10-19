@@ -121,7 +121,7 @@ export function tiles(c: Cycle, status: string): Tile[] {
 
 // statusBar reads what the side already knows: the branch, the PR and its
 // checks, what waits for the forges (null: no forge). Nothing new is fetched.
-// ponytail: no worktree, no agent: nothing on the server knows them yet.
+// The Cycle view adds the worktree and the agent (getIssueAgent).
 export function statusBar(c: Cycle, waiting: number | null): string[] {
   const e = c.evidence ?? {};
   const out = [e.branch ? e.branch + (e.head ? ` at ${short(e.head)}` : '') : 'no branch yet'];
