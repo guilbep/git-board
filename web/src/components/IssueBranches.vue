@@ -89,7 +89,7 @@
 
 <script setup lang="ts">
 import { computed, onUnmounted, ref, watch } from 'vue';
-import { getBranches, getIssueEnvironments, getPulls, getReleases, mergePull, openPull, type GateCheck, type GatePR, type IssueBranches, type IssueEnvironment, type IssuePulls } from '@/api/board';
+import { getBranches, getIssueEnvironments, getPulls, mergePull, openPull, type GateCheck, type GatePR, type IssueBranches, type IssueEnvironment, type IssuePulls } from '@/api/board';
 import { message } from '@/issue';
 import { actThenRead, needsPush } from '@/gate';
 import { when } from '@/me';
@@ -114,9 +114,9 @@ async function load() {
 }
 watch(() => [props.id, props.labels.join(' '), props.title], load, { immediate: true });
 
-// Environments: where this issue's branch has got to, when the project has
-// releases at all and the issue has a branch. Read only then; a project
-// without [release], or an issue whose branch isn't there, shows nothing.
+// Environments: where this issue's branch has got to, read only when the
+// issue has a branch. The read is offline, so it never fetches (unlike
+// /api/releases); without [release] it answers 404 and the line hides.
 const issueEnvs = ref<IssueEnvironment[]>([]);
 const envLines = computed(() => envLine(issueEnvs.value));
 const envLinks = computed(() => issueEnvs.value.map((e) => (e.in && tagPattern.test(e.version) ? releasePath(e.version) : '')));
@@ -124,7 +124,7 @@ async function loadEnvs() {
   issueEnvs.value = [];
   if (!dev.value?.branches.length) return;
   try {
-    if ((await getReleases()).enabled) issueEnvs.value = await getIssueEnvironments(props.id);
+    issueEnvs.value = await getIssueEnvironments(props.id);
   } catch {
     issueEnvs.value = [];
   }
