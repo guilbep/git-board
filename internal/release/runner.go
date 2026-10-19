@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"errors"
+	"path/filepath"
 	"time"
 
 	"github.com/guilbep/git-board/internal/config"
@@ -29,6 +30,33 @@ type Runner struct {
 	Who      string     // login for commit messages
 	Step     func(Step) // may be nil
 	Offline  bool       // no fetch of the app remote or config repos
+}
+
+// New is the Runner of the app repo at dir: cfg's [release] table and
+// branches, the real Tools, the config repos cloned under the git common
+// dir, and the git-bug user (else git's user.name) as Who.
+func New(cfg *config.Config, dir string, b *gitbugio.Backend) (*Runner, error) {
+	ctx := context.Background()
+	common, err := Git(ctx, dir, "rev-parse", "--git-common-dir")
+	if err != nil {
+		return nil, err
+	}
+	if !filepath.IsAbs(common) {
+		common = filepath.Join(dir, common)
+	}
+	who := ""
+	if me, ok, err := b.Me(); err != nil {
+		return nil, err
+	} else if ok {
+		who = me.Login
+	}
+	if who == "" {
+		who, _ = Git(ctx, dir, "config", "user.name") // ponytail: unset is fine, commits just say no one
+	}
+	return &Runner{
+		Cfg: cfg.Release, Branches: cfg.Branches, Dir: dir, B: b, Tools: Exec(),
+		CacheDir: filepath.Join(common, "git-board", "release"), Who: who,
+	}, nil
 }
 
 // base is the trunk branch, e.g. dev.

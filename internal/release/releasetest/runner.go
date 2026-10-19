@@ -1,12 +1,14 @@
 package releasetest
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
 	"strings"
 	"testing"
 
+	"github.com/BurntSushi/toml"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/gitbugio"
 	"github.com/guilbep/git-board/internal/release"
@@ -164,4 +166,15 @@ func (fx *Fixture) Tag(t *testing.T, commit string, names ...string) {
 		Git(t, fx.App, "tag", "-a", n, "-m", n, commit)
 		Git(t, fx.App, "push", "-q", "origin", "refs/tags/"+n)
 	}
+}
+
+// Config is the fixture's [release] table as a .git-board.toml, for a CLI
+// run in App.
+func (fx *Fixture) Config(t *testing.T) string {
+	t.Helper()
+	var b bytes.Buffer
+	if err := toml.NewEncoder(&b).Encode(map[string]any{"release": fx.cfg}); err != nil {
+		t.Fatal(err)
+	}
+	return b.String()
 }
