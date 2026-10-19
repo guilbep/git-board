@@ -5,7 +5,7 @@
   <component
     :is="page ? 'div' : 'aside'"
     class="gb-panel"
-    :class="page ? 'gb-panel-page' : panelMode === 'wide' ? 'gb-panel-wide' : 'gb-panel-xl'"
+    :class="[page ? 'gb-panel-page' : panelMode === 'wide' ? 'gb-panel-wide' : 'gb-panel-xl', { 'gb-panel-cycle': page && view === 'cycle' }]"
     :style="!page && panelMode === 'side' && panelWidth ? { width: `${panelWidth}px` } : undefined"
     :aria-labelledby="`title-${uid}`"
     :tabindex="page ? undefined : 0"
@@ -78,6 +78,10 @@
             <GbIcon :name="thread.status === 'open' ? 'closed' : 'open'" small />
             {{ thread.status === 'open' ? 'Close issue' : 'Reopen issue' }}
           </button>
+          <div v-if="!renaming" class="gb-seg gb-seg-sm" role="group" aria-label="View">
+            <button type="button" :aria-pressed="view === 'issue'" @click="view = 'issue'">Issue</button>
+            <button type="button" :aria-pressed="view === 'cycle'" @click="view = 'cycle'">Cycle</button>
+          </div>
         </div>
         <div class="gb-imeta">
           <span :class="['epfl-badge', thread.status === 'open' ? 'epfl-badge-tertiary' : 'epfl-badge-dark']">
@@ -92,12 +96,23 @@
           </span>
           <span class="gb-mono" title="git-bug id">git-bug {{ thread.id.slice(0, 7) }}</span>
         </div>
-        <IssueCycle :id="thread.id" :status="statusValue" :labels="thread.labels" @changed="load" />
+        <IssueCycle v-if="view === 'issue'" :id="thread.id" :status="statusValue" :labels="thread.labels" @changed="load" />
         <p v-if="saveError && !renaming" class="gb-save-error" role="alert"><GbIcon name="error" small /> <b>Not saved.</b> {{ saveError }}</p>
         <p v-if="waiting" class="gb-wait" role="status"><GbIcon name="clock" small /> Syncing with the forges… your change is saved after it.</p>
       </div>
 
-      <div class="gb-cols">
+      <IssueCycleView
+        v-if="view === 'cycle'"
+        :id="thread.id"
+        :status="statusValue"
+        :labels="thread.labels"
+        :events="thread.events"
+        :forges="thread.forges"
+        :page="page"
+        @changed="load"
+        @comment="comment"
+      />
+      <div v-else class="gb-cols">
         <div class="gb-maincol">
           <div class="gb-tabs gb-modes" role="tablist" aria-label="Show">
             <button type="button" class="gb-tab" role="tab" :aria-selected="mode === 'talk'" @click="mode = 'talk'">Conversation</button>
@@ -153,6 +168,7 @@ import HistoryView from '@/components/HistoryView.vue';
 import { steps } from '@/replay';
 import GbIcon from '@/components/GbIcon.vue';
 import IssueCycle from '@/components/IssueCycle.vue';
+import IssueCycleView from '@/components/IssueCycleView.vue';
 import IssueComposer from '@/components/IssueComposer.vue';
 import IssueSide from '@/components/IssueSide.vue';
 import TimelineEvent from '@/components/TimelineEvent.vue';
@@ -193,6 +209,8 @@ const meId = computed(() => me.value?.me?.id ?? '');
 const created = computed(() => thread.value?.events.find((e) => e.kind === 'created'));
 const rest = computed(() => thread.value?.events.filter((e) => e.kind !== 'created') ?? []);
 
+// the issue (today's page) or its cycle (the spine and the step's workspace)
+const view = ref<'issue' | 'cycle'>('issue');
 // the conversation, or every change in order with the issue as it was
 const mode = ref<'talk' | 'history'>('talk');
 const changeCount = computed(() => (thread.value ? steps(thread.value.events).length : 0));

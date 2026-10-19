@@ -2,6 +2,7 @@ package server
 
 import (
 	"net/http"
+	"reflect"
 	"testing"
 
 	"github.com/git-bug/git-bug/bridge/core"
@@ -26,12 +27,14 @@ type settingsBody struct {
 	} `json:"uploads"`
 	GithubProject config.GithubProject `json:"github_project"`
 	ConfigPath    string               `json:"config_path"`
+	Cycle         config.Stages        `json:"cycle"`
 }
 
 func TestSettingsListAndToggleBridgeSync(t *testing.T) {
 	t.Setenv("ACCESS_KEY_ID", "")
 	ts, s := newIssueServer(t)
 	s.cfg.GithubProject = config.GithubProject{Owner: "guilbep", Number: 1}
+	s.cfg.Fields = map[string]config.Field{"status": {Options: []string{"backlog", "ready", "in-progress", "qa", "done"}}}
 	addBridge(t, s, "gh", map[string]string{"target": "github", "owner": "guilbep", "project": "git-bug-sync-test", "default-login": "guilbep", "sync": "true"})
 	addBridge(t, s, "gl", map[string]string{"target": "gitlab", "project-id": "42400", "base-url": "https://gitlab.epfl.ch/", "default-login": "guilbert"})
 
@@ -48,6 +51,10 @@ func TestSettingsListAndToggleBridgeSync(t *testing.T) {
 	}
 	if got.Uploads.Enabled || got.GithubProject.Number != 1 || got.ConfigPath == "" {
 		t.Errorf("settings %+v", got)
+	}
+	// the stages, guessed from the status names, so the page can say so
+	if !got.Cycle.Guessed || got.Cycle.Ready != "ready" || !reflect.DeepEqual(got.Cycle.Validation, []string{"qa"}) || got.Cycle.Closing != "done" {
+		t.Errorf("cycle %+v", got.Cycle)
 	}
 
 	if code := call(t, "PUT", ts.URL+"/api/bridges/gl/sync", map[string]bool{"sync": true}, nil); code != http.StatusOK {

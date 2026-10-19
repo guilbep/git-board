@@ -196,10 +196,12 @@ Calls taken building it:
 - **What git-board's identity wrote is the viewer's.** The server writes as
   that identity, and `--me` names the viewer, so the identity's comments
   count as the viewer's. Anyone else's count under their forge login.
-- **Settings doesn't show the guessed stages yet.** That is left to M2. The
-  API already answers `stages.guessed`.
+- **Settings doesn't show the guessed stages yet.** Left to M2, which shows
+  them in the Project file tab. The API already answers `stages.guessed`.
 
 ### M2: the Cycle view
+
+Done: plan in `dev-cycle-m2-plan.md`.
 
 The issue page gets an **Issue / Cycle** switch (E1, E3, E4 on the canvas).
 
@@ -227,6 +229,23 @@ Done when: E1, E3 and E4 are reproduced against a fixture board in the
 browser at 1440px and 900px; a sign-off moves the status and shows in
 History; the Issue view is today's page plus the progress line and the
 card.
+
+Calls taken building it:
+- **The status bar has no worktree and no agent.** Nothing on the server
+  knows them before M5; it says the branch and its head, the PR and its
+  checks, and what waits for the forges.
+- **The plan is rendered whole,** clamped, with Read the whole plan. Its
+  front matter, options table and why are not parsed out: the file is
+  shown as the agent wrote it, and the gate line under it says who drafted
+  it, in which branch, and how many reviews the plan PR has.
+- **Ask the agent to revise is a plain comment** on the issue, from the
+  Cycle view's textarea. M5 sends it to the agent.
+- **Who set the risk comes from the thread,** the last label change adding
+  a `risk:` label, since the evidence has the class but not its author.
+- **A sign-off counts a run at the merged head too** (the PR's merge
+  commit), not only at the branch head.
+- **Settings shows the guessed stages** in the Project file tab, one line
+  naming each stage, when any came from the status names.
 
 ### M3: the Work page
 

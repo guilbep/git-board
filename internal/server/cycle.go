@@ -237,9 +237,15 @@ func (s *apiServer) handleCycleAction(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, errNotAtVerify)
 			return
 		}
-		// ponytail: the run is checked at the branch's head, not the commit
-		// merged on the base; M2 reads the merged head from the PR cache.
-		ran := slices.ContainsFunc(ev.Runs, func(run cycle.Run) bool { return ev.Head == "" || run.Commit == ev.Head })
+		// the run is checked at the branch's head, or at the commit merged
+		// on the base once the PR is merged (the PR cache knows it)
+		merged := ""
+		if ev.PR != nil && ev.PR.State == "MERGED" {
+			merged = ev.PR.MergeCommit
+		}
+		ran := slices.ContainsFunc(ev.Runs, func(run cycle.Run) bool {
+			return ev.Head == "" || run.Commit == ev.Head || (merged != "" && run.Commit == merged)
+		})
 		if !ran && strings.TrimSpace(req.Why) == "" {
 			writeError(w, http.StatusBadRequest, fmt.Errorf("no run%s; sign off with a reason to override", at(ev.Head)))
 			return

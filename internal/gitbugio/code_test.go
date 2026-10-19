@@ -82,3 +82,38 @@ func TestGitReaders(t *testing.T) {
 		t.Errorf("no git dir: %v %v %v %v %v %v", files, grep, data, err1, err2, err3)
 	}
 }
+
+// An SSH-signed commit (gpg.format ssh) carries a gpgsig header git-bug's
+// ReadCommit decodes as OpenPGP armor, which fails with EOF: the branch's
+// ancestry, and the Development section and the cycle with it, failed on a
+// repository whose commits are signed with SSH.
+func TestAncestorsOfAnSSHSignedCommit(t *testing.T) {
+	dir := t.TempDir()
+	git(t, dir, "init", "-b", "dev")
+	parent := commitFile(t, dir, "a.go", "package a\n")
+	tree := git(t, dir, "rev-parse", "HEAD^{tree}")
+	obj := "tree " + tree + "\nparent " + parent + "\n" +
+		"author dev <dev@example.com> 1700000000 +0000\n" +
+		"committer dev <dev@example.com> 1700000000 +0000\n" +
+		"gpgsig -----BEGIN SSH SIGNATURE-----\n U1NIU0lHAAAAAQ==\n -----END SSH SIGNATURE-----\n" +
+		"\nsigned with ssh\n"
+	cmd := exec.Command("git", "-C", dir, "hash-object", "-t", "commit", "-w", "--stdin")
+	cmd.Stdin = strings.NewReader(obj)
+	out, err := cmd.Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	signed := strings.TrimSpace(string(out))
+	git(t, dir, "update-ref", "refs/heads/dev", signed)
+
+	b, err := gitbugio.Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = b.Close() })
+
+	got, err := b.Ancestors(signed)
+	if err != nil || !got[signed] || !got[parent] || len(got) != 2 {
+		t.Errorf("Ancestors = %v, %v; want the signed commit and its parent", got, err)
+	}
+}

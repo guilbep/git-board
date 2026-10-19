@@ -10,8 +10,9 @@ import (
 	"github.com/guilbep/git-board/internal/gitbugio"
 )
 
-// settingsResponse is the settings page: the bridges, and how attachments
-// and the GitHub Project are set up. The identity is GET /api/me.
+// settingsResponse is the settings page: the bridges, how attachments and
+// the GitHub Project are set up, and the cycle's stages (guessed, or the
+// file's). The identity is GET /api/me.
 type settingsResponse struct {
 	Bridges []gitbugio.Bridge `json:"bridges"`
 	Uploads struct {
@@ -22,6 +23,7 @@ type settingsResponse struct {
 	} `json:"uploads"`
 	GithubProject config.GithubProject `json:"github_project"`
 	ConfigPath    string               `json:"config_path"`
+	Cycle         config.Stages        `json:"cycle"`
 }
 
 func (s *apiServer) handleSettings(w http.ResponseWriter, r *http.Request) {
@@ -30,7 +32,8 @@ func (s *apiServer) handleSettings(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
-	res := settingsResponse{Bridges: bridges, GithubProject: s.config().GithubProject, ConfigPath: s.configPath()}
+	cfg := s.config()
+	res := settingsResponse{Bridges: bridges, GithubProject: cfg.GithubProject, ConfigPath: s.configPath(), Cycle: cfg.Stages()}
 	if st := s.uploadStore(); st != nil {
 		res.Uploads.Enabled, res.Uploads.Endpoint, res.Uploads.PublicURL, res.Uploads.Prefix = true, st.Endpoint, st.PublicURL, st.Prefix
 	}

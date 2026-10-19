@@ -80,7 +80,9 @@ saved views, and the GitHub Project to sync with.
 An issue's page shows its step in the development cycle ("Step 7 of 7 ·
 Verify, waits for alice to sign off qa"), computed from its status and the
 evidence (risk, plan file, tests in the branch, PR, sign-offs), with the
-next-step card for whoever's turn it is: `[cycle]` in
+next-step card for whoever's turn it is. The Cycle view beside it is the
+seven steps with their evidence, the step's workspace (the plan to
+approve, the run and the sign-offs) and a status bar: `[cycle]` in
 [docs/configuration.md](docs/configuration.md#cycle).
 
 ```toml

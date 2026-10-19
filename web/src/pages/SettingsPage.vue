@@ -70,6 +70,11 @@
 
       <!-- v-show: switching tabs keeps an unsaved draft -->
       <div v-show="tab === 'project-file'" class="set-panel set-panel-wide">
+        <p v-if="settings?.cycle.guessed" class="gb-hint">
+          The cycle's stages are guessed from the status names: ready <code>{{ settings.cycle.ready || '—' }}</code>, in progress <code>{{ settings.cycle.in_progress.join(', ') || '—' }}</code>,
+          in review <code>{{ settings.cycle.in_review.join(', ') || '—' }}</code>, validation <code>{{ settings.cycle.validation.join(', ') || '—' }}</code>, closing <code>{{ settings.cycle.closing || '—' }}</code>.
+          Write <code>[cycle]</code> below to fix one the guess got wrong.
+        </p>
         <ConfigEditor @saved="reload" />
       </div>
 
