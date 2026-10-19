@@ -119,19 +119,21 @@
             <button type="button" class="gb-tab" role="tab" :aria-selected="mode === 'history'" @click="mode = 'history'">
               History <span class="gb-modes-count">{{ changeCount }}</span>
             </button>
+            <button v-if="page" type="button" class="gb-tab" role="tab" :aria-selected="mode === 'changes'" @click="mode = 'changes'">Changes</button>
           </div>
           <template v-if="mode === 'talk'">
             <CommentCard v-if="created" :data-event="created.id" :event="created" :forges="thread.forges" :mine="created.author.id === meId" :save="edit" @ref="onRef" />
             <ol class="gb-tl" aria-label="History">
               <template v-for="e in rest" :key="e.id">
                 <li v-if="e.kind === 'comment'" :data-event="e.id">
-                  <CommentCard :event="e" :forges="thread.forges" :mine="e.author.id === meId" :save="edit" @ref="onRef" />
+                  <CommentCard :event="e" :forges="thread.forges" :mine="e.author.id === meId" :save="edit" @ref="onRef" @line="showLine" />
                 </li>
                 <TimelineEvent v-else :data-event="e.id" :event="e" :fields="fields" />
               </template>
             </ol>
             <IssueComposer :status="thread.status" :forges="thread.forges" :busy="saving" :waiting="waiting" :error="saveError" :comment="comment" />
           </template>
+          <ChangesView v-else-if="mode === 'changes'" :id="thread.id" :thread="thread" :me-id="meId" :busy="saving" :focus="focus" :review="review" :resolve="resolve" />
           <HistoryView v-else :thread="thread" :fields="fields" />
         </div>
         <IssueSide
@@ -164,6 +166,7 @@ import { inbox, inboxError, loadInbox } from '@/inbox';
 import { fieldValues, type Fields } from '@/fields';
 import { useIssue } from '@/issue';
 import { me, on } from '@/me';
+import ChangesView from '@/components/ChangesView.vue';
 import CommentCard from '@/components/CommentCard.vue';
 import HistoryView from '@/components/HistoryView.vue';
 import { steps } from '@/replay';
@@ -190,7 +193,7 @@ const props = defineProps<{
 const emit = defineEmits<{ close: []; prev: []; next: []; changed: [thread: Thread]; open: [id: string] }>();
 
 const uid = useId();
-const { thread, error, saving, waiting, saveError, load, comment, edit, rename, setStatus, labels } =
+const { thread, error, saving, waiting, saveError, load, comment, edit, rename, setStatus, labels, review, resolve } =
   useIssue(toRef(props, 'id'), (t) => emit('changed', t));
 // the inbox opens an issue at its first new event
 watch(
@@ -212,8 +215,15 @@ const rest = computed(() => thread.value?.events.filter((e) => e.kind !== 'creat
 
 // the issue (today's page) or its cycle (the spine and the step's workspace)
 const view = ref<'issue' | 'cycle'>(props.page && useRoute().query.view === 'cycle' ? 'cycle' : 'issue');
-// the conversation, or every change in order with the issue as it was
-const mode = ref<'talk' | 'history'>('talk');
+// the conversation, every change in order with the issue as it was, or
+// the branch's code under review (the full page only)
+const mode = ref<'talk' | 'history' | 'changes'>('talk');
+const focus = ref<string>(); // the file a comment's path:line opens in Changes
+function showLine(path: string) {
+  if (!props.page) return;
+  focus.value = path;
+  mode.value = 'changes';
+}
 const changeCount = computed(() => (thread.value ? steps(thread.value.events).length : 0));
 const comments = computed(() => rest.value.filter((e) => e.kind === 'comment').length);
 const statusValue = computed(() => fieldValues(thread.value?.labels ?? [], 'status')[0] ?? '');

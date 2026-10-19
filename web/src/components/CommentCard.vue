@@ -7,7 +7,8 @@
       <img v-if="event.author.avatar_url" class="gb-avatar gb-avatar-sm" :src="event.author.avatar_url" alt="" />
       <span v-else class="gb-avatar gb-avatar-sm" :class="{ 'gb-avatar-dark': mine }" aria-hidden="true">{{ initials(event.author.name) }}</span>
       <b>{{ event.author.name }}</b>
-      <span class="gb-time">{{ event.kind === 'created' ? 'opened' : 'commented' }} {{ on(event.at, true) }}</span>
+      <span class="gb-time">{{ verb }} {{ on(event.at, true) }}</span>
+      <span v-if="review?.state" class="gb-mono gb-time">at {{ review.commit?.slice(0, 7) }}</span>
       <span v-if="event.kind === 'created'" class="gb-tag">Description</span>
       <details v-if="event.edited && event.history" class="gb-hist">
         <summary>edited<GbIcon name="down" small /></summary>
@@ -43,11 +44,17 @@
       </div>
     </div>
     <template v-else>
+      <div v-if="review?.path" class="gb-comment-anchor">
+        <button type="button" class="gb-comment-line gb-mono" @click="emit('line', review.path)">{{ review.path }}:{{ review.line }}</button>
+        <span v-if="review.outdated" class="gb-tag">outdated</span>
+        <span v-if="review.resolved" class="gb-tag">resolved</span>
+        <pre v-if="review.text" class="gb-mono gb-comment-quote">{{ review.text }}</pre>
+      </div>
       <MarkdownBody v-if="event.html" class="gb-comment-body" :html="event.html" :forges="forges" @ref="(n, e) => emit('ref', n, e)" />
-      <p v-else class="gb-comment-body gb-hint">No description.</p>
+      <p v-else-if="!review" class="gb-comment-body gb-hint">No description.</p>
     </template>
 
-    <footer v-if="forges?.length" class="gb-comment-foot">
+    <footer v-if="forges?.length && !review" class="gb-comment-foot">
       <span v-for="f in forges" :key="f.url" class="gb-fstate" :class="{ 'gb-fstate-local': event.pending?.includes(f.name) || event.edit_pending?.includes(f.name) }">
         <template v-if="event.pending?.includes(f.name)"><GbIcon name="clock" small /> Not on {{ f.name }} yet, next sync</template>
         <template v-else-if="event.edit_pending?.includes(f.name)"><GbIcon name="clock" small /> Latest edit not on {{ f.name }} yet, next sync</template>
@@ -72,7 +79,7 @@ const props = defineProps<{
   // saves an edit; base is the text it started from (409 "changed" if not current)
   save: (id: string, body: string, base: string) => Promise<unknown>;
 }>();
-const emit = defineEmits<{ ref: [n: string, event: MouseEvent] }>();
+const emit = defineEmits<{ ref: [n: string, event: MouseEvent]; line: [path: string] }>();
 
 const uid = useId();
 const editing = ref(false);
@@ -82,6 +89,17 @@ const busy = ref(false);
 const error = ref('');
 const changed = ref(false);
 const shown = ref(0);
+
+// a line comment, a reply to one, or a review: on the pull request, not
+// the issue, so no per-forge footer
+const review = computed(() => props.event.review);
+const verbs = { APPROVE: 'approved', REQUEST_CHANGES: 'requested changes', COMMENT: 'reviewed' } as const;
+const verb = computed(() => {
+  if (props.event.kind === 'created') return 'opened';
+  const r = review.value;
+  if (r?.state) return verbs[r.state];
+  return r?.reply_to ? 'replied' : r?.path ? 'commented on a line' : 'commented';
+});
 
 // newest first, as the menu lists them
 const versions = computed(() => [...(props.event.history ?? [])].reverse());
@@ -113,4 +131,7 @@ async function saveEdit(anyway = false) {
 <style scoped>
 .gb-save-error { display: flex; gap: .375rem; align-items: center; margin: 0; padding: .5rem 1rem; color: var(--danger-fg); background: var(--danger-bg); font-size: .875rem; }
 .gb-alert-row { margin: 0; border-radius: 0; }
+.gb-comment-anchor { display: flex; flex-wrap: wrap; align-items: center; gap: .375rem; padding: .5rem 1rem 0; }
+.gb-comment-line { padding: 0; border: 0; background: none; color: var(--primary); font-weight: 700; text-decoration: underline; cursor: pointer; }
+.gb-comment-quote { flex-basis: 100%; margin: 0; padding: .25rem .5rem; background: var(--bg-subtle); white-space: pre-wrap; overflow-wrap: anywhere; }
 </style>
