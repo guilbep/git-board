@@ -299,13 +299,15 @@ func sendsAgain(mode string, dry *forgeJob, names []string) error {
 
 // forgeRun is git-bug's sync, or one way of it.
 func (s *apiServer) forgeRun(ctx context.Context, mode string, dryRun bool, names []string) (<-chan core.SyncResult, error) {
-	switch mode {
-	case "get":
-		return s.b.GetForges(ctx, names)
-	case "send":
+	issues, _ := s.b.ListIssues()
+	pulls := core.WithPullsOf(s.pullsOf(ctx, issues)) // stamps review:pr, where a send sends
+	if mode == "send" {
 		return s.b.SendForges(ctx, names)
 	}
-	return s.b.SyncForges(ctx, dryRun, names)
+	if mode == "get" {
+		return s.b.GetForges(ctx, names, pulls)
+	}
+	return s.b.SyncForges(ctx, dryRun, names, pulls)
 }
 
 func (s *apiServer) runForgeSync(job *forgeJob, run func(context.Context, string, bool, []string) (<-chan core.SyncResult, error), names []string) {

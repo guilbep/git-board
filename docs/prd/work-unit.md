@@ -250,6 +250,55 @@ the PR's line; a comment made on the PR shows on the issue's line; an
 approval made in git-board satisfies the code-owner rule; the PR merges from
 the issue.
 
+*Built 2026-10-19* (`docs/prd/work-unit-m4-plan.md`, its amendments),
+decided on the way:
+
+- **The diff is origin's branch** when origin has it (the PR's head, what
+  other reviewers have), merge base against `origin/<base>`.
+  `review:commit` is always a full SHA.
+- **Lines follow the head**: a comment keeps the line where it was
+  written; the server translates it to the head through `git diff -U0`
+  and marks it outdated when a hunk covers it. The tab puts it on its line
+  when the view ends at the head (or at its own commit), else in a box
+  above the file. Each comment is read on the issue's branch whose head
+  has its commit, and the tab shows a branch's own comments and reviews
+  (and those on no branch any more). `side=old` lines are never outdated
+  (the merge base moves only on a rebase or when the base is merged in),
+  are only commentable in a view from the base, and quote nothing once the
+  branch is merged.
+- **Viewed** is path → the file's blob, so a push un-views only what it
+  touched; kept in the browser, per issue and branch.
+- **The tab is on the full page only**; the board's side panel keeps
+  Conversation and History.
+- **`review:pr`** is written only when the branch has an open PR; it is
+  never "" (git-bug metadata is first-wins). Open PR stamps the branch's
+  comments waiting for one, and so does every sync (dry runs and sends
+  included) for each open PR it finds: comments written after a PR opened
+  elsewhere go to it too. The resolve state is the last
+  `review:resolved`, computed by git-board, not git-bug.
+- A push is seen when the tab is opened again, on a write or on a sync: the
+  server watches no code refs (Development doesn't either).
+
+*Live test, 2026-10-19, guilbep/git-board-test, public, with CODEOWNERS
+`* @guilbep-gbtest` and a ruleset on `main` (code-owner review, `Tests`
+required; setup in CONTRIBUTING.md § Live tests), git-bug sync.6:* issue
+#27 made in git-board and sent by the per-issue sync; branch
+`749bca5-m4-review-live-test` (01b3cf8) pushed; **Open PR** opened #28. A
+line comment on `m4-review.txt:3`, made in git-board, went out at the next
+per-issue sync as guilbep's review comment on #28's line 3 (RIGHT, at
+01b3cf8). guilbep-gbtest's line comment on GitHub, on line 4, came in at the
+next sync on the issue's line 4, credited to the bot's git-bug identity.
+Switched to that identity in git-board, **Approve** went out as
+guilbep-gbtest's APPROVED review, with its own token; GitHub's merge state
+read CLEAN with the ruleset enforced, `Tests` required and passed, and
+**Merge** from the issue merged #28 (67fe677) and closed #27. Found:
+
+- The gate lists each person's `latestReviews`, where a line comment made
+  after an approval is a COMMENTED review: the approval stops showing,
+  though GitHub still counts it.
+- A full sync from the scratch clone would have sent 7 issues and labels on
+  24 others from earlier tests: the per-issue sync only, there.
+
 ## The six questions
 
 1. *What is a change?* An issue with branches, linked by name.

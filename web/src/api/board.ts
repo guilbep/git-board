@@ -226,6 +226,25 @@ export interface IssueEvent {
   title?: string;
   was?: string;
   meta?: Record<string, string>; // plan:approve, verify:run, verify:criterion, signoff:status…
+  review?: Review; // comment: a line comment, a reply or a review
+}
+
+// A comment's review:* metadata (internal/gitbugio/review.go), mirrored to
+// the pull request by the sync.
+export interface Review {
+  path?: string;
+  line?: number; // at commit
+  side?: 'old' | 'new';
+  commit?: string;
+  pr?: string; // github.com/o/r#26
+  reply_to?: string;
+  state?: 'APPROVE' | 'REQUEST_CHANGES' | 'COMMENT';
+  resolved?: boolean;
+  // by the server: the issue's branch whose head has commit, and from it
+  branch?: string;
+  outdated?: boolean;
+  head_line?: number;
+  text?: string; // the line at commit
 }
 
 export interface Thread extends Issue {
@@ -604,7 +623,7 @@ export interface GateCheck {
 }
 export interface GateReview {
   login: string;
-  state: string; // APPROVED, CHANGES_REQUESTED, COMMENTED
+  state: string; // APPROVED, CHANGES_REQUESTED, DISMISSED
   commit: string;
 }
 export interface GatePR {
@@ -783,6 +802,70 @@ export function mergePull(id: string, number: number, sha: string): Promise<void
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ sha }),
   });
+}
+
+// The Changes tab (internal/server/review.go): an issue's branch, from
+// where it left the base (base) to its head on origin.
+export interface FileStat {
+  path: string;
+  from?: string; // renamed from
+  added: number;
+  deleted: number;
+  binary?: boolean;
+  generated?: boolean; // linguist-generated
+  blob: string; // the file at to: what "viewed" remembers
+}
+export interface Changes {
+  branch: string;
+  base_name: string;
+  base: string;
+  head: string;
+  from: string;
+  to: string;
+  commits: { sha: string; subject: string; author: string; date: string }[]; // base..head, newest first
+  files: FileStat[]; // from..to
+}
+export interface ChangeRange {
+  branch?: string;
+  from?: string;
+  to?: string;
+}
+export interface FileDiff {
+  path: string;
+  diff: string;
+  truncated: boolean;
+}
+
+const query = (q: Record<string, string | number | undefined>) =>
+  new URLSearchParams(Object.entries(q).filter((e): e is [string, string | number] => !!e[1]).map(([k, v]) => [k, String(v)])).toString();
+
+export function getChanges(id: string, r: ChangeRange): Promise<Changes> {
+  return request(`${issuePath(id)}/changes?${query({ ...r })}`);
+}
+
+export function getFileDiff(id: string, r: ChangeRange, path: string, fromPath?: string, limit?: number): Promise<FileDiff> {
+  return request(`${issuePath(id)}/changes/file?${query({ ...r, path, from_path: fromPath, limit })}`);
+}
+
+// A line comment (path, line, side, commit), a reply (reply_to), or a
+// review (state, commit); pr once the branch has a pull request.
+export interface ReviewRequest {
+  body: string;
+  path?: string;
+  line?: number;
+  side?: 'old' | 'new';
+  commit?: string;
+  pr?: string;
+  reply_to?: string;
+  state?: Review['state'];
+}
+
+export function postReview(id: string, req: ReviewRequest): Promise<Thread> {
+  return request(`${issuePath(id)}/review`, json('POST', req));
+}
+
+export function resolveReview(id: string, commentId: string, resolved: boolean): Promise<Thread> {
+  return request(`${issuePath(id)}/review/${encodeURIComponent(commentId)}/resolve`, json('POST', { resolved }));
 }
 
 // Bridges set up from the settings page (settings.go). A credential is

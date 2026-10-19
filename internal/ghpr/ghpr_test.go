@@ -104,6 +104,20 @@ func TestFindMerged(t *testing.T) {
 	}
 }
 
+// A line comment after an approval is a COMMENTED review: GitHub still
+// counts the approval, and so does the list (found live, git-board-test #28).
+func TestFindKeepsTheApproval(t *testing.T) {
+	c := fake(t, pulls(`{"number":28,"state":"OPEN","headRepository":{"nameWithOwner":"o/r"},
+		"latestOpinionatedReviews":{"nodes":[{"author":{"login":"gbtest"},"state":"APPROVED","commit":{"oid":"01b3cf8"}}]}}`))
+	p, err := c.Find(context.Background(), "o/r", "28-x")
+	if err != nil || p == nil {
+		t.Fatalf("Find: %v, %v", p, err)
+	}
+	if want := []Review{{Login: "gbtest", State: "APPROVED", Commit: "01b3cf8"}}; !slices.Equal(p.Reviews, want) {
+		t.Errorf("reviews %+v, want %+v", p.Reviews, want)
+	}
+}
+
 // pulls answers the query with these PRs, newest first.
 func pulls(nodes ...string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {

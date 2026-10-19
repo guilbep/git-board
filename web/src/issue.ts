@@ -3,7 +3,8 @@
 // the page never patches it by hand.
 import { ref, watch, type Ref } from 'vue';
 import {
-  addComment, ApiError, changeLabels, editComment, getThread, setStatus, setTitle, type Thread,
+  addComment, ApiError, changeLabels, editComment, getThread, postReview, resolveReview, setStatus, setTitle,
+  type ReviewRequest, type Thread,
 } from '@/api/board';
 import { untilSyncEnds } from '@/forges';
 
@@ -82,5 +83,7 @@ export function useIssue(id: Ref<string>, onChange: (t: Thread) => void = () => 
     rename: (title: string) => write(() => setTitle(id.value, title)),
     setStatus: (status: 'open' | 'closed') => write(() => setStatus(id.value, status)),
     labels: (add: string[], remove: string[]) => write(() => changeLabels(id.value, add, remove)),
+    review: (req: ReviewRequest) => write(() => postReview(id.value, req)),
+    resolve: (commentId: string, resolved: boolean) => write(() => resolveReview(id.value, commentId, resolved)),
   };
 }

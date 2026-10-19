@@ -81,6 +81,8 @@ type Event struct {
 	Status  string   `json:"status,omitempty"` // status: open or closed
 	Title   string   `json:"title,omitempty"`  // title: the new one
 	Was     string   `json:"was,omitempty"`    // title: the old one
+
+	Review *Review `json:"review,omitempty"` // comment: a line comment, a reply or a review
 }
 
 // Thread is an issue with its whole history.
@@ -151,6 +153,7 @@ type forgeState struct {
 	ops      map[entity.CombinedId]dag.Operation // by the timeline's ids
 	lastEdit map[entity.Id]entity.Id             // comment's op → its latest edit
 	edits    map[entity.Id][]dag.Operation       // comment's op → its edits, oldest first
+	meta     map[entity.Id]map[string]string     // op → its metadata, a later SetMetadata winning
 }
 
 // onForges works out where each operation is, as the sync engine records it
@@ -191,10 +194,17 @@ func onForges(snap *bugent.Snapshot, remotes map[string]string) forgeState {
 			st.edits[o.Target] = append(st.edits[o.Target], op)
 		}
 	}
+	st.meta = meta
 	st.pending = func(opID entity.Id) []string {
 		var res []string
+		review := isReview(meta[opID])
 		for prefix, name := range remotes {
 			if index[opID] <= since[prefix] {
+				continue
+			}
+			// a review comment goes to GitHub's pull request, nowhere else
+			// (the fork's PullRemote). ponytail: github.com only, not GHE
+			if review && !strings.HasPrefix(prefix, "sync:github.com/") {
 				continue
 			}
 			there := false
@@ -266,6 +276,7 @@ func event(snap *bugent.Snapshot, item bugent.TimelineItem, on forgeState) Event
 			}
 		}
 		if err == nil {
+			e.Review = reviewOf(on.meta[found.TargetId()])
 			e.Pending = on.pending(found.TargetId())
 			if edit, ok := on.lastEdit[found.TargetId()]; ok && len(e.Pending) == 0 {
 				e.EditPending = on.pending(edit)
