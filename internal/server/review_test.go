@@ -208,6 +208,8 @@ func TestReviewWrites(t *testing.T) {
 		"no such commit":            {"body": "x", "path": "a.txt", "line": 3, "side": "new", "commit": "nope"},
 		"pr not a pull request":     {"body": "x", "path": "a.txt", "line": 3, "side": "new", "commit": r.c1, "pr": "o/r#1"},
 		"nothing":                   {"body": "x"},
+		"review with a path":        {"state": "COMMENT", "body": "x", "commit": r.c1, "path": "a.txt", "line": 3, "side": "new"},
+		"review as a reply":         {"state": "COMMENT", "body": "x", "reply_to": line.ID},
 	} {
 		if code := call(t, "POST", r.url("/review", nil), req, nil); code != http.StatusBadRequest {
 			t.Errorf("%s: %d, want 400", name, code)
@@ -223,6 +225,16 @@ func TestReviewWrites(t *testing.T) {
 	}
 	if code := call(t, "POST", r.url("/review/"+reply.ID+"/resolve", nil), map[string]any{"resolved": true}, nil); code != http.StatusBadRequest {
 		t.Errorf("resolve a reply: %d, want 400", code)
+	}
+
+	// a reply to a pull request's comment on a commit never fetched here
+	gone := strings.Repeat("e", 40)
+	pulled, err := r.s.b.CommentWith(r.id, "from the PR", map[string]string{"review:path": "a.txt", "review:line": "1", "review:side": "new", "review:commit": gone, "review:pr": "github.com/o/r#26"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if code := call(t, "POST", r.url("/review", nil), map[string]any{"body": "seen", "reply_to": pulled}, &th); code != http.StatusCreated || last(th).Review.Commit != gone {
+		t.Fatalf("reply on a commit not here: %d %+v", code, last(th).Review)
 	}
 
 	r.s.syncing.Store(true)
@@ -278,5 +290,57 @@ func TestAnnotateSkipsInMemory(t *testing.T) {
 	}
 	if rv := eventOf(t, th, cid).Review; rv == nil || rv.Outdated || rv.Text != "" || rv.HeadLine != 0 {
 		t.Fatalf("review = %+v", rv)
+	}
+}
+
+// Each comment is read on the branch it was written on, which it names;
+// its quote stays once the branch is gone; after the merge, an old side
+// comment has no base left to quote.
+func TestAnnotateOwnBranch(t *testing.T) {
+	r := newReviewRepo(t)
+	git(t, r.dir, "switch", "-q", "-c", "2518-other", r.base)
+	if err := os.WriteFile(filepath.Join(r.dir, "a.txt"), []byte("1\n2\n3\n4\nfive\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	git(t, r.dir, "commit", "-q", "-am", "o1")
+	o1 := git(t, r.dir, "rev-parse", "HEAD")
+	git(t, r.dir, "switch", "-q", "dev")
+
+	var th gitbugio.Thread
+	call(t, "POST", r.url("/review", nil), map[string]any{"body": "on five", "path": "a.txt", "line": 5, "side": "new", "commit": o1}, &th)
+	other := last(th).ID
+	call(t, "POST", r.url("/review", nil), map[string]any{"body": "on three", "path": "a.txt", "line": 3, "side": "new", "commit": r.c1}, &th)
+	on3 := last(th).ID
+	call(t, "POST", r.url("/review", nil), map[string]any{"body": "old 3", "path": "a.txt", "line": 3, "side": "old", "commit": r.c1}, &th)
+	old3 := last(th).ID
+	call(t, "POST", r.url("/review", nil), map[string]any{"state": "APPROVE", "commit": o1}, &th)
+	approve := last(th).ID
+
+	if code := call(t, "GET", r.url("/thread", nil), nil, &th); code != http.StatusOK {
+		t.Fatal(code)
+	}
+	if rv := eventOf(t, th, other).Review; rv.Branch != "2518-other" || rv.Outdated || rv.HeadLine != 5 || rv.Text != "five" {
+		t.Errorf("on 2518-other = %+v, want its own branch's line", rv)
+	}
+	if rv := eventOf(t, th, on3).Review; rv.Branch != "fix/2518-x" {
+		t.Errorf("on fix/2518-x = %+v", rv)
+	}
+	if rv := eventOf(t, th, approve).Review; rv.Branch != "2518-other" {
+		t.Errorf("the approval = %+v, want its branch", rv)
+	}
+
+	// merged (origin's dev has c1), then the branch deleted
+	git(t, r.dir, "update-ref", "refs/remotes/origin/dev", r.c1)
+	git(t, r.dir, "update-ref", "-d", "refs/remotes/origin/fix/2518-x")
+	git(t, r.dir, "branch", "-q", "-D", "fix/2518-x")
+	th = gitbugio.Thread{} // fields left out would keep the decoded ones
+	if code := call(t, "GET", r.url("/thread", nil), nil, &th); code != http.StatusOK {
+		t.Fatal(code)
+	}
+	if rv := eventOf(t, th, on3).Review; rv.Text != "three" || rv.Outdated {
+		t.Errorf("on 3, branch gone = %+v, want its quote", rv)
+	}
+	if rv := eventOf(t, th, old3).Review; rv.Text != "" {
+		t.Errorf("old 3, merged = %+v, want no quote (the new side's line isn't the old one)", rv)
 	}
 }

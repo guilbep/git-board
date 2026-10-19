@@ -161,15 +161,22 @@ func (s *apiServer) handleOpenPull(w http.ResponseWriter, r *http.Request) {
 	// pull request, go to it at the next sync. ponytail: waits for a
 	// running sync to end, rather than leave them waiting
 	s.writeMu.Lock()
-	_, err = s.b.StampPR(is.ID, fmt.Sprintf("github.com/%s#%d", repo, pr.Number), func(commit string) bool {
-		base, err := s.b.MergeBase(commit, "origin/"+in.Branch)
+	s.stampPR(is.ID, repo, in.Branch, pr.Number)
+	s.writeMu.Unlock()
+	writeJSON(w, http.StatusCreated, pr)
+}
+
+// stampPR gives the issue's review comments on the branch's commits that
+// have no pull request this one, logging a failure: the sync sends a
+// review comment where its review:pr says. The caller holds writeMu.
+func (s *apiServer) stampPR(issue, repo, branch string, number int) {
+	_, err := s.b.StampPR(issue, fmt.Sprintf("github.com/%s#%d", repo, number), func(commit string) bool {
+		base, err := s.b.MergeBase(commit, "origin/"+branch)
 		return err == nil && base == commit
 	})
-	s.writeMu.Unlock()
 	if err != nil {
-		log.Printf("review comments for pull request #%d: %v", pr.Number, err)
+		log.Printf("review comments for pull request #%d: %v", number, err)
 	}
-	writeJSON(w, http.StatusCreated, pr)
 }
 
 // prTitle is the issue as lists show it: CO2-3075 and its shown title.
@@ -229,7 +236,11 @@ func (s *apiServer) handleMergePull(w http.ResponseWriter, r *http.Request) {
 // issue's branches on origin, as bare numbers, for a pull to bring in their
 // comments and reviews: nil when origin isn't GitHub or there is no token.
 // All found before the sync starts: the engine asks once per issue, under
-// its lock. A failing lookup leaves that branch out, logged.
+// its lock. A failing lookup leaves that branch out, logged. It stamps the
+// review comments on those branches that wait for a pull request (written
+// since it opened elsewhere, or from a tab opened before), dry runs
+// included, for them to show what the real run sends. The caller holds
+// writeMu.
 // ponytail: one GraphQL request per branch on origin naming an issue, at
 // each sync; list the open pull requests at once if that grows
 func (s *apiServer) pullsOf(ctx context.Context, issues []gitbugio.Issue) func(entity.Id) []string {
@@ -271,6 +282,7 @@ func (s *apiServer) pullsOf(ctx context.Context, issues []gitbugio.Issue) func(e
 		}
 		for _, is := range named {
 			numbers[entity.Id(is.ID)] = append(numbers[entity.Id(is.ID)], strconv.Itoa(pr.Number))
+			s.stampPR(is.ID, repo, br.Name, pr.Number)
 		}
 	}
 	return func(id entity.Id) []string { return numbers[id] }

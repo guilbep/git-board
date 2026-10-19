@@ -193,3 +193,38 @@ func TestDiffNoRepo(t *testing.T) {
 		t.Fatal("HasCommit on an in-memory backend")
 	}
 }
+
+// A path is a file's name, never a pattern (app/[id] matches app/i as a
+// glob), and a textconv filter of the repository's never rewrites it.
+func TestDiffPathsAsWritten(t *testing.T) {
+	dir := t.TempDir()
+	git(t, dir, "init", "-q", "-b", "dev")
+	git(t, dir, "config", "diff.upper.textconv", "sed s/l/L/g")
+	write(t, dir, ".gitattributes", "*.txt diff=upper\n")
+	write(t, dir, "app/[id]/page.tsx", "1\n2\n")
+	write(t, dir, "app/i/page.tsx", "1\n2\n")
+	write(t, dir, "t.txt", "low\n")
+	git(t, dir, "add", ".")
+	git(t, dir, "commit", "-q", "-m", "start")
+	from := git(t, dir, "rev-parse", "HEAD")
+	write(t, dir, "app/i/page.tsx", "one\n2\n")
+	write(t, dir, "t.txt", "lower\n")
+	git(t, dir, "commit", "-q", "-am", "c1")
+	to := git(t, dir, "rev-parse", "HEAD")
+	b, err := gitbugio.Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = b.Close() })
+
+	if d, _, err := b.DiffFile(from, to, 0, "app/[id]/page.tsx"); err != nil || d != "" {
+		t.Errorf("DiffFile(app/[id]/page.tsx) = %q, %v; want nothing, it didn't change", d, err)
+	}
+	if _, ok, err := b.LineAt(from, to, "app/[id]/page.tsx", 1); err != nil || !ok {
+		t.Errorf("LineAt(app/[id]/page.tsx:1) outdated by app/i's change (%v)", err)
+	}
+	t.Chdir(dir) // where git reads .gitattributes from, as the server runs
+	if d, _, err := b.DiffFile(from, to, 0, "t.txt"); err != nil || !strings.Contains(d, "+lower") {
+		t.Errorf("DiffFile(t.txt) = %q, %v; want the file's own text", d, err)
+	}
+}

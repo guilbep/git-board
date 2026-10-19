@@ -58,9 +58,14 @@ export function parseUnified(diff: string): Row[] {
 
 export type ReviewThread = { root: IssueEvent; replies: IssueEvent[]; resolved: boolean };
 
+// onBranch: a review event of this branch, or of none the server found
+// (its commit on no branch of the issue any more); every one without a branch.
+const onBranch = (e: IssueEvent, branch?: string) => !branch || !e.review?.branch || e.review.branch === branch;
+
 // threadsOf groups the line comments, in the order their first comment
 // was written; a reply whose first comment isn't here stands alone.
-export function threadsOf(events: IssueEvent[]): ReviewThread[] {
+export function threadsOf(events: IssueEvent[], branch?: string): ReviewThread[] {
+  events = events.filter((e) => onBranch(e, branch));
   const roots = new Set(events.filter((e) => e.review?.path && !e.review.reply_to).map((e) => e.id));
   const threads = new Map<string, ReviewThread>();
   for (const e of events) {
@@ -73,14 +78,39 @@ export function threadsOf(events: IssueEvent[]): ReviewThread[] {
   return [...threads.values()];
 }
 
-export function reviewsOf(events: IssueEvent[]): IssueEvent[] {
-  return events.filter((e) => e.review?.state);
+export function reviewsOf(events: IssueEvent[], branch?: string): IssueEvent[] {
+  return events.filter((e) => e.review?.state && onBranch(e, branch));
 }
 
-export function lastReviewBy(events: IssueEvent[], who: string): IssueEvent | undefined {
-  return reviewsOf(events)
+export function lastReviewBy(events: IssueEvent[], who: string, branch?: string): IssueEvent | undefined {
+  return reviewsOf(events, branch)
     .filter((e) => e.author.id === who)
     .at(-1);
+}
+
+// editable: a plain comment. A review comment is the pull request's: the
+// sync sends it once and never its edits.
+export const editable = (e: IssueEvent) => !e.review;
+
+const verbs = { APPROVE: 'approved', REQUEST_CHANGES: 'requested changes', COMMENT: 'reviewed' } as const;
+
+// verbOf: what a comment did, as its header says it.
+export function verbOf(e: IssueEvent): string {
+  if (e.kind === 'created') return 'opened';
+  const r = e.review;
+  if (r?.state) return verbs[r.state];
+  if (r?.reply_to) return 'replied';
+  if (r?.path) return 'commented on a line';
+  return r?.pr ? `commented on pull request #${r.pr.split('#')[1]}` : 'commented';
+}
+
+// shownRange: the commits a view compares: base…head, my last review…head
+// (base…head without one), or one commit against its first parent (the
+// newest-first list isn't a chain: a merge brings the other side's commits).
+export function shownRange(c: { base: string; head: string; commits: { sha: string }[] }, view: string, mine?: string) {
+  if (view === 'mine' && mine) return { from: mine, to: c.head };
+  if (!c.commits.some((x) => x.sha === view)) return { from: c.base, to: c.head };
+  return { from: `${view}^`, to: view };
 }
 
 // lineIn is the line a comment sits on in a view ending at `to`: where the

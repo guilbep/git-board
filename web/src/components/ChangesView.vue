@@ -77,7 +77,7 @@ import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { ApiError, getBranches, getChanges, getPulls, type Changes, type FileStat, type ReviewRequest, type Thread } from '@/api/board';
 import { message } from '@/issue';
 import { onLive } from '@/live';
-import { commitsAgo, groupOf, lastReviewBy, loadViewed, reviewsOf, saveViewed, threadsOf, viewedCount, type Group, type Viewed } from '@/review';
+import { commitsAgo, groupOf, lastReviewBy, loadViewed, reviewsOf, saveViewed, shownRange, threadsOf, viewedCount, type Group, type Viewed } from '@/review';
 import DiffFile from '@/components/DiffFile.vue';
 import MarkdownEditor from '@/components/MarkdownEditor.vue';
 
@@ -99,20 +99,14 @@ const view = ref('all'); // all, mine (since my last review), or a commit
 const branchNames = ref<string[]>([]);
 const pulls = ref<Record<string, string>>({}); // branch → its open PR, as review:pr writes it
 
-const mine = computed(() => lastReviewBy(props.thread.events, props.meId)?.review?.commit);
+const mine = computed(() => lastReviewBy(props.thread.events, props.meId, changes.value?.branch)?.review?.commit);
 const sinceMine = computed(() => {
   const n = mine.value && changes.value ? commitsAgo(mine.value, changes.value.commits) : null;
   return n || 0; // 0: not in this branch, or at its head
 });
 
 // the commits compared: base…head, my last review…head, or one commit
-const range = computed(() => {
-  const c = changes.value!;
-  if (view.value === 'mine' && mine.value) return { branch: c.branch, from: mine.value, to: c.head };
-  const i = c.commits.findIndex((x) => x.sha === view.value);
-  if (i < 0) return { branch: c.branch, from: c.base, to: c.head };
-  return { branch: c.branch, from: c.commits[i + 1]?.sha ?? c.base, to: c.commits[i]!.sha };
-});
+const range = computed(() => ({ branch: changes.value!.branch, ...shownRange(changes.value!, view.value, mine.value) }));
 
 const files = computed(() => part.value ?? changes.value?.files ?? []);
 
@@ -158,12 +152,12 @@ const groups = computed(() =>
     .filter((g) => g.files.length),
 );
 
-const threads = computed(() => threadsOf(props.thread.events));
+const threads = computed(() => threadsOf(props.thread.events, changes.value?.branch));
 
 // each person's last verdict, with how far behind the head it is
 const verdicts = computed(() => {
   const last = new Map<string, { id: string; who: string; state: string; commit: string; ago: number | null }>();
-  for (const e of reviewsOf(props.thread.events)) {
+  for (const e of reviewsOf(props.thread.events, changes.value?.branch)) {
     const r = e.review!;
     if (r.state === 'COMMENT') continue;
     last.set(e.author.id, { id: e.id, who: e.author.name, state: r.state!, commit: r.commit ?? '', ago: commitsAgo(r.commit ?? '', changes.value?.commits ?? []) });

@@ -4,12 +4,15 @@ import {
   autoOpens,
   commitsAgo,
   diffCommand,
+  editable,
   groupOf,
   lastReviewBy,
   lineIn,
   parseUnified,
   reviewsOf,
+  shownRange,
   threadsOf,
+  verbOf,
   viewedCount,
 } from './review.ts';
 import type { FileStat, IssueEvent, Review } from './api/board.ts';
@@ -123,4 +126,40 @@ test('viewedCount: a mark counts while the file is the blob it was viewed at; ge
   const files = [file('a', 1), file('b', 1), file('g', 1, 0, { generated: true })];
   assert.deepEqual(viewedCount(files, {}), [0, 2]);
   assert.deepEqual(viewedCount(files, { a: 'b-a', b: 'old-blob', g: 'b-g' }), [1, 2]);
+});
+
+test('threadsOf, reviewsOf and lastReviewBy keep a branch’s own, and what names none', () => {
+  const anchor = { path: 'a.txt', line: 3, side: 'new' as const, commit: 'c1' };
+  const events = [
+    ev('here', 'ann', { ...anchor, branch: 'fix/1-x' }),
+    ev('there', 'ann', { ...anchor, branch: '1-other' }),
+    ev('nowhere', 'ann', anchor),
+    ev('ok-here', 'bob', { state: 'APPROVE', commit: 'c1', branch: 'fix/1-x' }),
+    ev('ok-there', 'bob', { state: 'APPROVE', commit: 'o1', branch: '1-other' }),
+  ];
+  assert.deepEqual(threadsOf(events, 'fix/1-x').map((t) => t.root.id), ['here', 'nowhere']);
+  assert.deepEqual(reviewsOf(events, 'fix/1-x').map((e) => e.id), ['ok-here']);
+  assert.equal(lastReviewBy(events, 'bob', 'fix/1-x')?.id, 'ok-here');
+  assert.equal(threadsOf(events).length, 3);
+});
+
+test('editable: a review comment goes to the pull request, its edits never do', () => {
+  assert.equal(editable(ev('plain', 'ann')), true);
+  assert.equal(editable(ev('line', 'ann', { path: 'a', line: 1, side: 'new', commit: 'c1' })), false);
+  assert.equal(editable(ev('pr', 'ann', { pr: 'github.com/o/r#26' })), false);
+});
+
+test('verbOf names a pull request’s own comment', () => {
+  assert.equal(verbOf(ev('plain', 'ann')), 'commented');
+  assert.equal(verbOf(ev('pr', 'ann', { pr: 'github.com/o/r#26' })), 'commented on pull request #26');
+  assert.equal(verbOf(ev('ok', 'ann', { state: 'APPROVE', commit: 'c1', pr: 'github.com/o/r#26' })), 'approved');
+  assert.equal(verbOf({ ...ev('d', 'ann'), kind: 'created' }), 'opened');
+});
+
+test('shownRange: one commit against its parent, the list holding a merge’s other side too', () => {
+  const c = { base: 'b', head: 'm', commits: [{ sha: 'm' }, { sha: 'd' }, { sha: 'c1' }] };
+  assert.deepEqual(shownRange(c, 'all'), { from: 'b', to: 'm' });
+  assert.deepEqual(shownRange(c, 'mine', 'c1'), { from: 'c1', to: 'm' });
+  assert.deepEqual(shownRange(c, 'mine'), { from: 'b', to: 'm' });
+  assert.deepEqual(shownRange(c, 'm'), { from: 'm^', to: 'm' });
 });

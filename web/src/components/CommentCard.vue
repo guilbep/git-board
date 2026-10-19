@@ -24,7 +24,7 @@
         </div>
       </details>
       <span class="gb-grow" />
-      <button v-if="!editing" type="button" class="gb-icon-btn" :aria-label="`Edit ${mine ? 'your' : event.author.name + '’s'} ${event.kind === 'created' ? 'description' : 'comment'}`" @click="startEdit">
+      <button v-if="!editing && editable(event)" type="button" class="gb-icon-btn" :aria-label="`Edit ${mine ? 'your' : event.author.name + '’s'} ${event.kind === 'created' ? 'description' : 'comment'}`" @click="startEdit">
         <GbIcon name="edit" />
       </button>
     </header>
@@ -71,6 +71,7 @@ import { initials, on, when } from '@/me';
 import GbIcon from '@/components/GbIcon.vue';
 import MarkdownBody from '@/components/MarkdownBody.vue';
 import MarkdownEditor from '@/components/MarkdownEditor.vue';
+import { editable, verbOf } from '@/review';
 
 const props = defineProps<{
   event: IssueEvent;
@@ -93,13 +94,7 @@ const shown = ref(0);
 // a line comment, a reply to one, or a review: on the pull request, not
 // the issue, so no per-forge footer
 const review = computed(() => props.event.review);
-const verbs = { APPROVE: 'approved', REQUEST_CHANGES: 'requested changes', COMMENT: 'reviewed' } as const;
-const verb = computed(() => {
-  if (props.event.kind === 'created') return 'opened';
-  const r = review.value;
-  if (r?.state) return verbs[r.state];
-  return r?.reply_to ? 'replied' : r?.path ? 'commented on a line' : 'commented';
-});
+const verb = computed(() => verbOf(props.event));
 
 // newest first, as the menu lists them
 const versions = computed(() => [...(props.event.history ?? [])].reverse());

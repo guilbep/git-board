@@ -181,3 +181,17 @@ func TestStampPR(t *testing.T) {
 		t.Errorf("a plain comment got %+v", r)
 	}
 }
+
+// A pull request's conversation comment, brought in by the sync, says
+// which pull request it is on.
+func TestReviewPROnly(t *testing.T) {
+	b := gitbugiotest.New(t)
+	id := gitbugiotest.NewIssue(t, b, "review")
+	cid, err := b.CommentWith(id, "on the PR", map[string]string{"review:pr": "github.com/o/r#26"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rv := eventByID(t, b, id, cid).Review; rv == nil || rv.PR != "github.com/o/r#26" {
+		t.Fatalf("review = %+v, want its pull request", rv)
+	}
+}

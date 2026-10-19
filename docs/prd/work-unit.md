@@ -260,14 +260,21 @@ decided on the way:
   written; the server translates it to the head through `git diff -U0`
   and marks it outdated when a hunk covers it. The tab puts it on its line
   when the view ends at the head (or at its own commit), else in a box
-  above the file. `side=old` lines are never outdated (the merge base only
-  moves on a rebase), and are only commentable in a view from the base.
+  above the file. Each comment is read on the issue's branch whose head
+  has its commit, and the tab shows a branch's own comments and reviews
+  (and those on no branch any more). `side=old` lines are never outdated
+  (the merge base moves only on a rebase or when the base is merged in),
+  are only commentable in a view from the base, and quote nothing once the
+  branch is merged.
 - **Viewed** is path → the file's blob, so a push un-views only what it
   touched; kept in the browser, per issue and branch.
 - **The tab is on the full page only**; the board's side panel keeps
   Conversation and History.
 - **`review:pr`** is written only when the branch has an open PR; it is
-  never "" (git-bug metadata is first-wins). The resolve state is the last
+  never "" (git-bug metadata is first-wins). Open PR stamps the branch's
+  comments waiting for one, and so does every sync (dry runs and sends
+  included) for each open PR it finds: comments written after a PR opened
+  elsewhere go to it too. The resolve state is the last
   `review:resolved`, computed by git-board, not git-bug.
 - A push is seen when the tab is opened again, on a write or on a sync: the
   server watches no code refs (Development doesn't either).

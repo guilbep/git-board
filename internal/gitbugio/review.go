@@ -14,7 +14,8 @@ import (
 // Review is a comment's review metadata, the review:* keys the fork's sync
 // mirrors to the pull request (docs/prd/work-unit.md, M4): a line comment
 // (path, line, side, commit), a reply to one (reply-to and its anchor), a
-// review (state). nil for a plain comment.
+// review (state), a pull request's comment the sync brought in (pr alone).
+// nil for a plain comment.
 type Review struct {
 	Path     string `json:"path,omitempty"`
 	Line     int    `json:"line,omitempty"`
@@ -24,8 +25,10 @@ type Review struct {
 	ReplyTo  string `json:"reply_to,omitempty"`
 	State    string `json:"state,omitempty"`    // APPROVE | REQUEST_CHANGES | COMMENT
 	Resolved bool   `json:"resolved,omitempty"` // the last review:resolved set on it
-	// filled by the server, from the branch's head: whether a change since
-	// covers the line, where the line is at head, and its text at Commit
+	// filled by the server: the issue's branch whose head has Commit, and,
+	// from that head, whether a change since covers the line, where the
+	// line is at head, and its text at Commit
+	Branch   string `json:"branch,omitempty"`
 	Outdated bool   `json:"outdated,omitempty"`
 	HeadLine int    `json:"head_line,omitempty"`
 	Text     string `json:"text,omitempty"`
@@ -44,7 +47,7 @@ func reviewOf(meta map[string]string) *Review {
 		Resolved: meta["review:resolved"] == "true",
 	}
 	r.Line, _ = strconv.Atoi(meta["review:line"])
-	if r.Path == "" && r.State == "" && r.ReplyTo == "" && r.Commit == "" {
+	if r == (Review{}) {
 		return nil
 	}
 	return &r

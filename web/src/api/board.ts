@@ -240,7 +240,8 @@ export interface Review {
   reply_to?: string;
   state?: 'APPROVE' | 'REQUEST_CHANGES' | 'COMMENT';
   resolved?: boolean;
-  // from the branch's head, by the server
+  // by the server: the issue's branch whose head has commit, and from it
+  branch?: string;
   outdated?: boolean;
   head_line?: number;
   text?: string; // the line at commit

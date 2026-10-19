@@ -31,18 +31,18 @@ type changeRange struct {
 	start    string // Suggestion.Start: origin/<base>, or <base>
 }
 
-// reviewHead picks the issue's branch to review, want or else the first
-// origin has, and its head: origin's copy, what the pull request shows and
-// what others can review, else the local one. want must name the issue.
-func reviewHead(b *gitbugio.Backend, is gitbugio.Issue, want string) (name, ref string, err error) {
+// issueRefs are the issue's branches, in order, and each one's ref:
+// origin's copy, what the pull request shows and what others can review,
+// else the local one.
+func issueRefs(b *gitbugio.Backend, is gitbugio.Issue) ([]string, map[string]string, error) {
 	all, err := b.Branches()
 	if err != nil {
-		return "", "", err
+		return nil, nil, err
 	}
 	var names []string
-	refs := map[string]string{} // branch → origin's copy, else the first other
+	refs := map[string]string{}
 	for _, br := range all {
-		if !branches.Names(br.Name, is) || want != "" && br.Name != want {
+		if !branches.Names(br.Name, is) {
 			continue
 		}
 		if _, seen := refs[br.Name]; !seen {
@@ -52,10 +52,23 @@ func reviewHead(b *gitbugio.Backend, is gitbugio.Issue, want string) (name, ref 
 			refs[br.Name] = strings.TrimPrefix(br.Remote+"/"+br.Name, "/")
 		}
 	}
-	if len(names) == 0 {
-		if want != "" {
+	return names, refs, nil
+}
+
+// reviewHead picks the issue's branch to review, want or else the first
+// origin has, and its head ref. want must name the issue.
+func reviewHead(b *gitbugio.Backend, is gitbugio.Issue, want string) (name, ref string, err error) {
+	names, refs, err := issueRefs(b, is)
+	if err != nil {
+		return "", "", err
+	}
+	if want != "" {
+		if refs[want] == "" {
 			return "", "", fmt.Errorf("%q isn't a branch of this issue", want)
 		}
+		return want, refs[want], nil
+	}
+	if len(names) == 0 {
 		return "", "", errNoBranch
 	}
 	for _, n := range names {
@@ -177,7 +190,9 @@ var reviewStates = map[string]bool{"APPROVE": true, "REQUEST_CHANGES": true, "CO
 
 // handleReview writes a line comment (path, line, side, commit), a reply
 // (reply_to: it takes its thread's anchor), or a review (state, commit).
-// The commit is resolved to its full SHA; pr is left out until there is one.
+// The commit is resolved to its full SHA, a reply keeps its thread's as
+// stored (a pulled comment's commit may never have been fetched here); pr
+// is left out until there is one.
 func (s *apiServer) handleReview(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Body    string `json:"body"`
@@ -195,6 +210,10 @@ func (s *apiServer) handleReview(w http.ResponseWriter, r *http.Request) {
 	bad := func(msg string) { writeError(w, http.StatusBadRequest, errors.New(msg)) }
 	if req.PR != "" && !pullKey.MatchString(req.PR) {
 		bad("pr: want github.com/<owner>/<repo>#<number>")
+		return
+	}
+	if req.State != "" && (req.Path != "" || req.Line != 0 || req.Side != "" || req.ReplyTo != "") {
+		bad("a review is on the whole change: no path, line, side or reply_to")
 		return
 	}
 	done, ok := s.beginWrite(w)
@@ -256,10 +275,13 @@ func (s *apiServer) handleReview(w http.ResponseWriter, r *http.Request) {
 		bad("which commit? (commit)")
 		return
 	}
-	sha, err := s.b.RevParse(req.Commit)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, err)
-		return
+	sha := req.Commit
+	if req.ReplyTo == "" {
+		var err error
+		if sha, err = s.b.RevParse(req.Commit); err != nil {
+			writeError(w, http.StatusBadRequest, err)
+			return
+		}
 	}
 	meta["review:commit"] = sha
 	if req.Path != "" {
@@ -305,43 +327,69 @@ func (s *apiServer) handleResolve(w http.ResponseWriter, r *http.Request) {
 	s.writeThread(w, http.StatusOK, id)
 }
 
-// annotate fills the line comments of a thread from the issue's branch
-// head: the line's text at the comment's commit, where the line is at
-// head, and whether a change since covers it. A comment on the old side
-// quotes the base, where the branch left it, and is never outdated: the
-// merge base moves only on a rebase. Nothing without a repository, a
-// branch, or the comment's commit (an imported one never fetched).
-// ponytail: one git diff per comment and one git show per (commit, path);
-// group LineAt per (commit, path) if threads with many comments are slow.
+// annotate fills the review comments of a thread from the issue's branch
+// whose head has the comment's commit, the first: its name, and for a line
+// comment where the line is at that head and whether a change since covers
+// it (none when no branch has the commit any more), and the line's text at
+// the commit. A comment on the old side quotes the base, where the branch
+// left it, and is never outdated; once the branch is merged its base is
+// the commit itself, and it quotes nothing. Nothing without a repository,
+// or the comment's commit (an imported one never fetched).
+// ponytail: the old side follows the base only as git merge-base finds it
+// now: merging the base into the branch moves it, and the quote with it.
+// One merge-base per (commit, branch), one git diff per comment, one git
+// show per (commit, path); group them if threads with many comments are slow.
 func (s *apiServer) annotate(th *gitbugio.Thread) {
-	var rg *changeRange
+	var (
+		loaded bool
+		names  []string
+		refs   map[string]string
+		start  string
+	)
+	branchOf := map[string]string{} // commit → branch
 	lines := map[string][]string{}
 	for _, e := range th.Events {
 		rv := e.Review
-		if rv == nil || rv.Path == "" || rv.Line < 1 || !s.b.HasCommit(rv.Commit) {
+		if rv == nil || !s.b.HasCommit(rv.Commit) {
 			continue
 		}
-		if rg == nil {
+		if !loaded {
+			loaded = true
 			is, err := s.b.GetIssue(th.Issue.ID)
 			if err != nil {
 				return
 			}
-			got, err := s.rangeOf(is, "")
-			if err != nil {
-				return
+			names, refs, _ = issueRefs(s.b, is)
+			if sug, err := branches.Suggest(s.b, s.config().Branches, is); err == nil {
+				start = sug.Start
 			}
-			rg = &got
+		}
+		br, seen := branchOf[rv.Commit]
+		for _, n := range names {
+			if seen {
+				break
+			}
+			if base, err := s.b.MergeBase(rv.Commit, refs[n]); err == nil && base == rv.Commit {
+				br = n
+				break
+			}
+		}
+		branchOf[rv.Commit], rv.Branch = br, br
+		if rv.Path == "" || rv.Line < 1 {
+			continue
 		}
 		at := rv.Commit
 		if rv.Side == "old" {
-			base, err := s.b.MergeBase(rg.start, rv.Commit)
-			if err != nil {
+			base, err := s.b.MergeBase(start, rv.Commit)
+			if err != nil || base == rv.Commit {
 				continue
 			}
 			at = base
 			rv.HeadLine = rv.Line
-		} else if line, ok, err := s.b.LineAt(rv.Commit, rg.Head, rv.Path, rv.Line); err == nil {
-			rv.HeadLine, rv.Outdated = line, !ok
+		} else if br != "" {
+			if line, ok, err := s.b.LineAt(rv.Commit, refs[br], rv.Path, rv.Line); err == nil {
+				rv.HeadLine, rv.Outdated = line, !ok
+			}
 		}
 		key := at + ":" + rv.Path
 		if _, ok := lines[key]; !ok {

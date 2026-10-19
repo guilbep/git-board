@@ -17,12 +17,13 @@ import (
 // ErrNoRepo: the backend has no git directory (an in-memory one).
 var ErrNoRepo = errors.New("no git repository")
 
-// run runs git on the repository; revs are checked by the callers (rev).
+// run runs git on the repository; revs are checked by the callers (rev),
+// paths are names as written, never patterns.
 func (b *Backend) run(stdin []byte, args ...string) ([]byte, error) {
 	if b.dir == "" {
 		return nil, ErrNoRepo
 	}
-	cmd := exec.Command("git", append([]string{"--git-dir", b.dir}, args...)...)
+	cmd := exec.Command("git", append([]string{"--git-dir", b.dir, "--literal-pathspecs"}, args...)...)
 	if stdin != nil {
 		cmd.Stdin = bytes.NewReader(stdin)
 	}
@@ -90,7 +91,7 @@ func (b *Backend) DiffStat(from, to string) ([]FileStat, error) {
 	if err := rev(from, to); err != nil {
 		return nil, err
 	}
-	out, err := b.run(nil, "diff", "--no-color", "--no-ext-diff", "-M", "--raw", "--no-abbrev", "--numstat", "-z", from, to, "--")
+	out, err := b.run(nil, "diff", "--no-color", "--no-ext-diff", "--no-textconv", "-M", "--raw", "--no-abbrev", "--numstat", "-z", from, to, "--")
 	if err != nil {
 		return nil, err
 	}
@@ -165,7 +166,7 @@ func (b *Backend) DiffFile(from, to string, limit int, paths ...string) (string,
 	if err := rev(from, to); err != nil {
 		return "", false, err
 	}
-	out, err := b.run(nil, append([]string{"diff", "--no-color", "--no-ext-diff", "-M", from, to, "--"}, paths...)...)
+	out, err := b.run(nil, append([]string{"diff", "--no-color", "--no-ext-diff", "--no-textconv", "-M", from, to, "--"}, paths...)...)
 	if err != nil {
 		return "", false, err
 	}
@@ -223,7 +224,7 @@ func (b *Backend) LineAt(from, to, path string, line int) (int, bool, error) {
 	if err := rev(from, to); err != nil {
 		return 0, false, err
 	}
-	out, err := b.run(nil, "diff", "--no-color", "--no-ext-diff", "--no-renames", "-U0", from, to, "--", path)
+	out, err := b.run(nil, "diff", "--no-color", "--no-ext-diff", "--no-textconv", "--no-renames", "-U0", from, to, "--", path)
 	if err != nil {
 		return 0, false, err
 	}

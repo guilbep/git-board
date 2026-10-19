@@ -294,7 +294,20 @@ func TestPullsOf(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	head, err := s.b.RevParse("origin/fix/2518-x")
+	if err != nil {
+		t.Fatal(err)
+	}
+	early, err := s.b.CommentWith(id, "early", map[string]string{"review:path": "a.txt", "review:line": "1", "review:side": "new", "review:commit": head})
+	if err != nil {
+		t.Fatal(err)
+	}
 	f := s.pullsOf(context.Background(), issues)
+	// a comment written on the branch since its pull request opened, from
+	// a tab opened before, goes to it
+	if r := commentReview(t, s, id, early); r == nil || r.PR != "github.com/o/r#3082" {
+		t.Errorf("the comment's review %+v, want the open pull request", r)
+	}
 	if f == nil || !slices.Equal(f(entity.Id(id)), []string{"3082"}) || f(entity.Id(other)) != nil {
 		t.Errorf("pulls of #2518 %v, of the other %v; want [3082], none", f(entity.Id(id)), f(entity.Id(other)))
 	}
@@ -303,6 +316,27 @@ func TestPullsOf(t *testing.T) {
 	issues, _ = s.b.ListIssues()
 	if s.pullsOf(context.Background(), issues) != nil || len(gh.sent()) != 0 {
 		t.Errorf("a GitLab origin has pull requests, or asked GitHub %v", gh.sent())
+	}
+}
+
+// A send alone stamps the comments waiting for a pull request too: it
+// sends each where its review:pr says.
+func TestSendStamps(t *testing.T) {
+	s, _, id := gateRepo(t, "https://github.com/o/r.git", true)
+	head, err := s.b.RevParse("origin/fix/2518-x")
+	if err != nil {
+		t.Fatal(err)
+	}
+	early, err := s.b.CommentWith(id, "early", map[string]string{"review:path": "a.txt", "review:line": "1", "review:side": "new", "review:commit": head})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if results, err := s.forgeRun(context.Background(), "send", true, nil); err == nil {
+		for range results {
+		}
+	}
+	if r := commentReview(t, s, id, early); r == nil || r.PR != "github.com/o/r#3082" {
+		t.Errorf("the comment's review %+v, want the open pull request", r)
 	}
 }
 
