@@ -146,8 +146,48 @@ structure stays. Each wins over the text below where they differ.
 6. **Contract questions sent to git-bug-95** (2026-10-18): how PullsOf is
    passed through `SyncAll`/`SyncIssue`; `review:reply-to` = the parent's
    CombinedId; `review:commit` a full SHA; what export does with an empty
-   `review:pr`. Task 7 waits on the answers; if they change Task 7's
-   shape, stop and say so.
+   `review:pr`. Answered the same day:
+   - Options are variadic: `core.SyncAll(…, opts ...Option)`,
+     `core.SyncIssue(…, opts ...Option)`, `core.WithPullsOf(f)`, and
+     `(*Bridge).Use(opts ...Option)` after `LoadBridge` for Get/Send.
+     Names may still change before sync.6 is tagged.
+   - reply-to = CombinedId and commit = full SHA: confirmed.
+   - **No PR yet: omit `review:pr`** (never write ""; first value wins).
+     Export trusts `review:pr` (SetMetadata included) and never
+     recomputes it; an op without it waits. git-board may later stamp
+     `review:pr` on that branch's earlier review ops with SetMetadata:
+     Task 7 does it on Open PR.
+   - Imported PR comments carry the same `review:*` keys, `review:pr`,
+     and origin `sync:github.com/o/r:pr-comment`.
+7. **sync.6 tagged** (git-bug-95, 2026-10-18; bridge-sync 3b0a745c, names
+   as agreed; decisions in the fork's
+   `doc/design/bridges/sync-decisions.md` § "Pull requests: git-board's
+   review"). For Task 7:
+   - Sync: `core.SyncAll(ctx, repo, names, dryRun, core.WithPullsOf(f))`;
+     Send now: `core.SyncIssue(ctx, repo, id, nil, dryRun,
+     core.WithPullsOf(f))`; Get: `br.Use(core.WithPullsOf(f))` after
+     `LoadBridge`, before `ImportAllSince`. Send (`ExportAll`) needs none.
+     Without a pull that had PullsOf, a crash-posted comment isn't matched
+     back. One WithPullsOf serves every GitHub bridge of a run.
+   - f returns bare numbers ("26"), OPEN pull requests only (three REST
+     listings per pull each), cheap, ideally cached. It runs on the engine
+     goroutine under the bridge lock, once per bug per pull, and must not
+     call core sync functions.
+   - Imported comments: `review:commit` = GitHub's original_commit_id,
+     `review:line` = original_line (where it was written, kept when
+     outdated), full SHAs. `review:pr` key lowercased
+     (`github.com/owner/repo#7`): compare case-insensitively. An approval
+     without text imports as an empty comment with `review:state=APPROVE`.
+   - Records: sent = SetMetadata `sync:<key>:id`/`:url`/`:as`; pulled =
+     the op's own `sync:<key>:pr-comment` (node id), `:url`, `:text`;
+     resolution GitHub last saw = SetMetadata `sync:<key>:resolved`, last
+     wins. Resolutions made on GitHub are not imported.
+   - Review comments never get issue-comment records: don't show them as
+     "not on GitHub yet" in the pending logic.
+   - Approvals and change requests go only under the author's own token,
+     else "missing author token: approval|change request by X not sent to
+     pull request #N". COMMENT reviews and line comments may go via the
+     default account, attributed.
 
 ## Review focus (risks → tests)
 
