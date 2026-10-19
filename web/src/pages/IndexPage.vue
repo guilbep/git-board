@@ -685,7 +685,7 @@ const reloadConfig = debounced(async () => {
   await loadConfig();
   void load();
 });
-const offLive = onLive((e) => (e.kind === 'config' ? reloadConfig() : e.kind !== 'settings' && reloadLive()));
+const offLive = onLive((e) => (e.kind === 'config' ? reloadConfig() : e.kind !== 'settings' && e.kind !== 'releases' && reloadLive()));
 onBeforeUnmount(offLive);
 </script>
 

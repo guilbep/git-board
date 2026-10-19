@@ -36,6 +36,8 @@
       <span ref="sep" class="nav-sep" aria-hidden="true" />
       <router-link ref="work" to="/work" active-class="active">Work</router-link>
       <router-link ref="insights" to="/insights" active-class="active">Insights</router-link>
+      <!-- a release's page (/releases/:tag) is under Releases too -->
+      <router-link ref="releasesLink" to="/releases" active-class="active" :class="{ active: releasesHere }" :aria-current="releasesHere ? 'page' : undefined">Releases</router-link>
       <router-link ref="inboxLink" to="/inbox" active-class="active">Inbox<span v-if="inboxCount" class="nav-count" :aria-label="`, ${inboxCount} new`">{{ inboxCount }}</span></router-link>
     </nav>
     <div class="app-right">
@@ -70,6 +72,7 @@
 <script setup lang="ts">
 import LiveNotice from '@/components/LiveNotice.vue';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type ComponentPublicInstance } from 'vue';
+import { useRoute } from 'vue-router';
 import { helpOpen } from '@/shortcuts';
 import '@/theme'; // keeps <html data-theme> in step with the choice
 import KeyboardHelp from '@/components/KeyboardHelp.vue';
@@ -87,6 +90,9 @@ import { inbox, loadInbox } from '@/inbox';
 import { debounced, onLive } from '@/live';
 
 const props = defineProps<{ views: string[]; active: string }>();
+const route = useRoute();
+// Releases, or one release's page
+const releasesHere = computed(() => route.path === '/releases' || route.path.startsWith('/releases/'));
 
 const w = computed(() => waiting(remotes.value, forgeStatus.value, syncStatus.value));
 const label = computed(() => syncLabel(w.value));
@@ -124,6 +130,7 @@ const menu = ref<HTMLDetailsElement | null>(null);
 const sep = ref<HTMLElement | null>(null);
 const work = ref<ComponentPublicInstance | null>(null);
 const insights = ref<ComponentPublicInstance | null>(null);
+const releasesLink = ref<ComponentPublicInstance | null>(null);
 const inboxLink = ref<ComponentPublicInstance | null>(null);
 const hidden = ref<number[]>([]);
 const hiddenViews = computed(() => hidden.value.map((i) => props.views[i]!));
@@ -133,7 +140,7 @@ function measure(again = 1) {
   const el = nav.value;
   if (!el) return;
   const widths = [...el.querySelectorAll<HTMLElement>('[data-view]')].map((a) => a.offsetWidth);
-  const fixed = [sep.value, work.value?.$el as HTMLElement | undefined, insights.value?.$el as HTMLElement | undefined, inboxLink.value?.$el as HTMLElement | undefined].reduce((a, e) => a + (e?.offsetWidth ?? 0), 0);
+  const fixed = [sep.value, work.value?.$el as HTMLElement | undefined, insights.value?.$el as HTMLElement | undefined, releasesLink.value?.$el as HTMLElement | undefined, inboxLink.value?.$el as HTMLElement | undefined].reduce((a, e) => a + (e?.offsetWidth ?? 0), 0);
   const pad = getComputedStyle(el);
   const room = el.clientWidth - parseFloat(pad.paddingLeft) - parseFloat(pad.paddingRight) - fixed;
   const moreW = more.value?.offsetWidth || moreGuess;

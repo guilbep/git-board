@@ -10,12 +10,18 @@ import (
 	"github.com/guilbep/git-board/internal/config"
 )
 
+// ErrBadProposal means a proposal given to Adopt names no deploy target, or
+// no commit of the app repo.
+var ErrBadProposal = errors.New("adopt")
+
 // Proposal is the commit an overlay is thought to run, for Adopt.
 type Proposal struct {
-	Env, Repo, Path string
-	Runs            string // newTag, plus the first image's digest prefix when newTag isn't a release tag
-	Commit          string // "" when unknown
-	From            string // "tag", "label", ""
+	Env    string `json:"env"`
+	Repo   string `json:"repo"`
+	Path   string `json:"path"`
+	Runs   string `json:"runs"`   // newTag, plus the first image's digest prefix when newTag isn't a release tag
+	Commit string `json:"commit"` // "" when unknown
+	From   string `json:"from"`   // "tag", "label", ""
 }
 
 // firstImage is the overlay's first images[] entry: its name, newTag, digest.
@@ -98,11 +104,11 @@ func (r *Runner) Adopt(ctx context.Context, ps []Proposal) error {
 		if !slices.ContainsFunc(r.Cfg.Deploy, func(d config.Target) bool {
 			return d.Repo == p.Repo && strings.ReplaceAll(d.Path, "{env}", p.Env) == p.Path
 		}) || !slices.Contains(r.Cfg.Environments, p.Env) {
-			return fmt.Errorf("%s on %s: adopt: %s is not a deploy target", p.Env, p.Repo, p.Path)
+			return fmt.Errorf("%s on %s: %w: %s is not a deploy target", p.Env, p.Repo, ErrBadProposal, p.Path)
 		}
 		full, err := Git(ctx, r.Dir, "rev-parse", "--verify", p.Commit+"^{commit}")
 		if err != nil || p.Commit == "" {
-			return fmt.Errorf("%s on %s: adopt: no commit %q in the app repo", p.Env, p.Repo, p.Commit)
+			return fmt.Errorf("%s on %s: %w: no commit %q in the app repo", p.Env, p.Repo, ErrBadProposal, p.Commit)
 		}
 		fulls[i] = full
 	}

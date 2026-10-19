@@ -34,11 +34,15 @@ type EnvState struct {
 // ReleaseRow is a release tag, its commit's record and where that commit
 // runs.
 type ReleaseRow struct {
-	Tag    Tag                     `json:"tag"`
-	Names  []string                `json:"names"`  // every release tag on its commit, newest first
-	Record *gitbugio.ReleaseRecord `json:"record"` // nil until Reconcile makes it
-	RunsIn []string                `json:"runsIn"` // environments whose commit is its commit
+	Tag            Tag                     `json:"tag"`
+	Names          []string                `json:"names"`          // every release tag on its commit, newest first
+	Record         *gitbugio.ReleaseRecord `json:"record"`         // nil until Reconcile makes it
+	RunsIn         []string                `json:"runsIn"`         // environments whose commit is its commit
+	BeforeGitBoard bool                    `json:"beforeGitBoard"` // its tag wasn't cut by git-board: its subject lacks gitBoardMark
 }
+
+// gitBoardMark ends the subject of a tag a cut pushes: v1.4.20 (git-board).
+const gitBoardMark = " (git-board)"
 
 // Status is what runs where, and the releases.
 type Status struct {
@@ -90,7 +94,7 @@ func (r *Runner) status(ctx context.Context) (Status, map[string]*ConfigRepo, er
 		records[recs[i].Commit] = &recs[i]
 	}
 	for _, t := range tags {
-		row := ReleaseRow{Tag: t, Record: records[t.Commit]}
+		row := ReleaseRow{Tag: t, Record: records[t.Commit], BeforeGitBoard: !strings.HasSuffix(t.Message, gitBoardMark)}
 		for _, at := range TagsAt(tags, t.Commit) {
 			row.Names = append(row.Names, at.Name)
 		}

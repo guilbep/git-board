@@ -87,12 +87,7 @@ func (s *apiServer) handleBranches(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, err)
 		return
 	}
-	sug, err := branches.Suggest(s.b, s.config().Branches, is)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err)
-		return
-	}
-	linked, err := branches.Linked(s.b, is, sug.Start)
+	sug, linked, err := s.branchesOf(is)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
@@ -101,4 +96,15 @@ func (s *apiServer) handleBranches(w http.ResponseWriter, r *http.Request) {
 		branches.Suggestion
 		Branches []branches.Branch `json:"branches"`
 	}{sug, linked})
+}
+
+// branchesOf is the branch to create for an issue and the branches naming
+// it, against the base.
+func (s *apiServer) branchesOf(is gitbugio.Issue) (branches.Suggestion, []branches.Branch, error) {
+	sug, err := branches.Suggest(s.b, s.config().Branches, is)
+	if err != nil {
+		return sug, nil, err
+	}
+	linked, err := branches.Linked(s.b, is, sug.Start)
+	return sug, linked, err
 }

@@ -157,7 +157,7 @@
 .gb-event b,.gb-event a{color:var(--fg)}
 .gb-event-icon{display:inline-flex;align-items:center;justify-content:center;flex:none;width:1.75rem;height:1.75rem;box-sizing:border-box;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg);color:var(--fg)}
 .gb-event-closed .gb-event-icon{background:var(--bg-dark);border-color:var(--fg);color:var(--fg-inverse)}
-.gb-event-open .gb-event-icon{background:var(--tertiary);border-color:var(--tertiary);color:var(--fg-inverse)}
+.gb-event-open .gb-event-icon{background:var(--tertiary);border-color:var(--tertiary);color:var(--on-tertiary)}
 .gb-event-text{flex:1;min-width:0}
 .gb-strike{text-decoration:line-through}
 .gb-hist{position:relative}
@@ -278,6 +278,72 @@
 .gb-keys{display:inline-flex;align-items:center;gap:.25rem;font-size:.8125rem;color:var(--fg-muted)}
 .gb-grow{flex:1}
 .gb-note{font-size:.8125rem;line-height:1.45;color:var(--fg-muted)}
+
+/* ---- releases ---- */
+/* environments: one column per environment, in order, joined by arrows */
+.gb-envs{display:flex;flex-wrap:wrap;align-items:stretch;border:1px solid var(--border);border-radius:var(--radius)}
+.gb-env{flex:1 1 18rem;display:flex;flex-direction:column;gap:.875rem;min-width:0;padding:1.25rem 1.5rem;border-right:1px solid var(--border)}
+.gb-env:last-child{border-right:0}
+.gb-env-head{display:flex;align-items:center;gap:.5rem}
+.gb-env-head .gb-grow{flex:1}
+.gb-env-ver{display:block;font-size:1.375rem;font-weight:700;line-height:1.25;overflow-wrap:anywhere}
+.gb-env-sub{display:flex;flex-wrap:wrap;align-items:center;gap:.25rem .75rem;font-size:.875rem;color:var(--fg-muted)}
+.gb-env-sub b{color:var(--fg)}
+.gb-env-foot{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin-top:auto}
+.gb-env-drift{display:flex;align-items:flex-start;gap:.5rem;padding:.5rem .75rem;background:var(--warning-bg);border:1px solid var(--warning-border);font-size:.875rem;line-height:1.4;color:var(--warning-fg)}
+.gb-env-drift .gb-icon{margin-top:.15rem}
+.gb-env-drift a{color:var(--warning-fg);font-weight:700}
+/* environment marks: prod black, stage canard, dev outlined; an absent one muted */
+.gb-envmark{display:inline-flex;align-items:center;gap:.25rem;padding:0 .4375rem;border:1px solid var(--border-strong);border-radius:var(--radius);font-size:.75rem;font-weight:700;line-height:1.25rem;letter-spacing:.02em;white-space:nowrap;color:var(--fg);background:var(--bg)}
+.gb-envmark-prod{background:var(--bg-dark);border-color:var(--bg-dark);color:var(--fg-inverse)}
+.gb-envmark-stage{background:var(--tertiary);border-color:var(--tertiary);color:var(--on-tertiary)}
+.gb-envmark-off{border-color:var(--border);color:var(--fg-muted);font-weight:400;background:var(--bg)}
+.gb-envline{display:flex;flex-wrap:wrap;align-items:center;gap:.375rem}
+/* config repos under an environment */
+.gb-targets{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:.375rem;font-size:.875rem}
+.gb-targets li{display:flex;align-items:center;gap:.5rem;min-width:0}
+.gb-targets .gb-mono{color:var(--fg-muted)}
+/* release list: candidates sit under their version */
+.gb-rel-group td{background:var(--bg-subtle);font-weight:700}
+.gb-rel-cand td:first-child{padding-left:2rem}
+.gb-rel-yanked td{color:var(--fg-muted)}
+.gb-rel-yanked td a{color:var(--fg-muted)}
+.gb-rel-name{display:inline-flex;align-items:center;gap:.5rem;font-weight:700}
+/* checks before an action */
+.gb-checks{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:.625rem;font-size:.9375rem}
+.gb-checks li{display:flex;align-items:flex-start;gap:.625rem;line-height:1.45}
+.gb-checks .gb-icon{margin-top:.2rem}
+.gb-checks small{display:block;font-size:.8125rem;color:var(--fg-muted)}
+/* what an action will do, in order */
+.gb-plan{list-style:none;counter-reset:gb-plan;margin:0;padding:0;display:flex;flex-direction:column;border:1px solid var(--border);border-radius:var(--radius)}
+.gb-plan li{counter-increment:gb-plan;display:flex;align-items:flex-start;gap:.75rem;padding:.75rem 1rem;border-bottom:1px solid var(--border-subtle);font-size:.9375rem;line-height:1.45}
+.gb-plan li:last-child{border-bottom:0}
+.gb-plan li::before{content:counter(gb-plan);display:inline-flex;align-items:center;justify-content:center;flex:none;width:1.5rem;height:1.5rem;box-sizing:border-box;border:1px solid var(--border-strong);border-radius:var(--radius);font-size:.75rem;font-weight:700}
+.gb-plan li.gb-plan-done::before{content:"";background:var(--bg-muted);border-color:var(--bg-muted)}
+.gb-plan li.gb-plan-now{background:var(--bg-subtle);font-weight:700}
+.gb-plan li.gb-plan-now::before{background:var(--bg-dark);border-color:var(--bg-dark);color:var(--fg-inverse)}
+.gb-plan li small{display:block;font-size:.8125rem;font-weight:400;color:var(--fg-muted)}
+.gb-plan-body{flex:1;min-width:0}
+/* artifacts */
+.gb-artifacts{display:flex;flex-direction:column;gap:.75rem;font-size:.875rem}
+.gb-artifact{display:flex;flex-direction:column;gap:.125rem;min-width:0}
+.gb-artifact b{font-size:.9375rem}
+.gb-artifact .gb-mono{overflow-wrap:anywhere;color:var(--fg-muted)}
+/* Development section on the issue */
+.gb-dev{display:flex;flex-direction:column;gap:1rem}
+.gb-dev-branch{display:flex;flex-direction:column;gap:.25rem;font-size:.875rem}
+.gb-dev-row{display:flex;flex-wrap:wrap;align-items:center;gap:.25rem .5rem;font-size:.875rem;line-height:1.45}
+.gb-dev-row .gb-mono{color:var(--fg-muted)}
+.gb-ship{display:flex;flex-direction:column;gap:.5rem;padding:1rem;background:var(--bg-subtle);border:1px solid var(--border-subtle);border-radius:var(--radius)}
+/* the canvas's, outside its releases block: the heading, a target behind;
+   and a step that failed, which the canvas has none of */
+.gb-h2{font-size:1.25rem;line-height:1.35;font-weight:700}
+.gb-state-warn{color:var(--warning-fg)}
+.gb-plan li.gb-plan-failed{color:var(--danger-fg);font-weight:700}
+.gb-plan li.gb-plan-failed::before{content:"!";background:var(--danger-bg);border-color:var(--danger-border);color:var(--danger-fg)}
+/* the release pages': text at full strength inside a muted line; a write refused */
+.gb-fg{color:var(--fg)}
+.gb-save-error{display:flex;gap:.375rem;align-items:center;margin:0;padding:.5rem 1rem;font-size:.875rem;color:var(--danger-fg);background:var(--danger-bg)}
 
 /* ---- The app (the canvas places artboards absolutely) ---- */
 /* the panel lives in a right-hand q-dialog, which places it */

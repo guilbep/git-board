@@ -15,6 +15,9 @@ import (
 // cut it first.
 var ErrTaken = errors.New("tag taken")
 
+// ErrNoTag means no release tag has the name asked for.
+var ErrNoTag = errors.New("no release tag")
+
 // Cut is what to cut.
 type Cut struct {
 	Version Version // final form; zero: the draft's proposal
@@ -145,7 +148,7 @@ func (r *Runner) tagNamed(ctx context.Context, name string) (Tag, error) {
 	if i := slices.IndexFunc(tags, func(t Tag) bool { return t.Name == name }); i >= 0 {
 		return tags[i], nil
 	}
-	return Tag{}, fmt.Errorf("no release tag %s", name)
+	return Tag{}, fmt.Errorf("%w %s", ErrNoTag, name)
 }
 
 // cut is Cut after Reconcile; a promote never builds.
@@ -171,7 +174,10 @@ func (r *Runner) cut(ctx context.Context, c Cut, promote bool) (Tag, error) {
 	}
 	commit, tags := d.From, tagsOf(st)
 	v := tagFor(cmp.Or(c.Version, d.Proposed).Final(), final, tags)
-	t := Tag{Name: v.Tag(), Commit: commit, Message: v.Tag(), Version: v}
+	t := Tag{Name: v.Tag(), Commit: commit, Message: v.Tag() + gitBoardMark, Version: v}
+	if r.OnTag != nil {
+		r.OnTag(t.Name)
+	}
 	if slices.ContainsFunc(tags, func(o Tag) bool { return o.Name == t.Name }) {
 		return Tag{}, fmt.Errorf("%s: %w", t.Name, ErrTaken)
 	}

@@ -2,9 +2,13 @@ package release
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 )
+
+// ErrNoRecord means a release tag's commit has no release record yet.
+var ErrNoRecord = errors.New("has no release record")
 
 // Notes is the release notes in CHANGELOG form, newest first: finals, and
 // candidates too when all. Each release is "## <tag> (<date>)" and its
@@ -32,7 +36,23 @@ func (r *Runner) Notes(ctx context.Context, all bool) (string, error) {
 // Yank marks tag's release as not to be used, with the reason, and pushes
 // the record. It fetches the records first; offline it refuses.
 func (r *Runner) Yank(ctx context.Context, tag, reason string) error {
-	if err := r.online("a yank"); err != nil {
+	return r.editRecord(ctx, "a yank", tag, func(id string) error { return r.B.YankRelease(id, reason) })
+}
+
+// SetNotes replaces tag's release notes, as Yank does.
+func (r *Runner) SetNotes(ctx context.Context, tag, notes string) error {
+	return r.editRecord(ctx, "a notes edit", tag, func(id string) error { return r.B.SetReleaseNotes(id, notes) })
+}
+
+// Comment adds message to tag's release conversation, as Yank does.
+func (r *Runner) Comment(ctx context.Context, tag, message string) error {
+	return r.editRecord(ctx, "a comment", tag, func(id string) error { return r.B.CommentRelease(id, message) })
+}
+
+// editRecord fetches the authority remote, applies edit to the record of
+// tag's commit and pushes the records; offline it refuses what.
+func (r *Runner) editRecord(ctx context.Context, what, tag string, edit func(id string) error) error {
+	if err := r.online(what); err != nil {
 		return err
 	}
 	if err := r.fetch(ctx); err != nil {
@@ -47,9 +67,9 @@ func (r *Runner) Yank(ctx context.Context, tag, reason string) error {
 	case err != nil:
 		return err
 	case !ok:
-		return fmt.Errorf("%s has no release record", tag)
+		return fmt.Errorf("%s %w", tag, ErrNoRecord)
 	}
-	if err := r.B.YankRelease(rec.ID, reason); err != nil {
+	if err := edit(rec.ID); err != nil {
 		return err
 	}
 	return r.B.PushReleases(r.Cfg.RemoteName())

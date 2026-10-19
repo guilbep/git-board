@@ -408,3 +408,22 @@ func TestCutPrechecksDeploy(t *testing.T) {
 		t.Errorf("a hotfix candidate didn't go to stage")
 	}
 }
+
+// A tag a cut pushes says git-board made it; a tag made by hand doesn't.
+func TestCutTagSaysGitBoard(t *testing.T) {
+	r, _, fx := releasetest.NewRunner(t)
+	shipped(t, r, fx)
+	rc := cut(t, r, release.Cut{})
+	for _, row := range status(t, r).Releases {
+		switch row.Tag.Name {
+		case rc.Name:
+			if row.BeforeGitBoard || row.Tag.Message != rc.Name+" (git-board)" {
+				t.Errorf("cut %s: BeforeGitBoard %v, message %q", rc.Name, row.BeforeGitBoard, row.Tag.Message)
+			}
+		case "v1.0.0":
+			if !row.BeforeGitBoard {
+				t.Errorf("hand-made v1.0.0 isn't BeforeGitBoard")
+			}
+		}
+	}
+}

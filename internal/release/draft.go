@@ -104,6 +104,32 @@ func (r *Runner) draft(ctx context.Context, st Status, d Draft, final bool) (Dra
 	return d, nil
 }
 
+// Issues are the issues release tag t carries: those merged since the
+// newest final of a lower version that t's commit contains, so a final
+// carries its candidates'. It reads the local tags; it doesn't fetch.
+func (r *Runner) Issues(ctx context.Context, t Tag) ([]DraftIssue, error) {
+	tags, err := ReleaseTags(ctx, r.Dir)
+	if err != nil {
+		return nil, err
+	}
+	since := ""
+	for _, p := range tags { // newest first
+		if p.Version.RC != 0 || !p.Version.Less(t.Version.Final()) {
+			continue
+		}
+		ok, err := IsAncestor(ctx, r.Dir, p.Commit, t.Commit)
+		if err != nil {
+			return nil, err
+		}
+		if ok {
+			since = p.Commit
+			break
+		}
+	}
+	issues, _, _, err := r.issues(ctx, since, t.Commit)
+	return issues, err
+}
+
 // issues are the issues named by the branches merged first-parent on to
 // since from ("": all), hotfix/ branches aside, oldest first; kinds are
 // their kinds, as labels and

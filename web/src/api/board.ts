@@ -959,3 +959,228 @@ export function unlinkIssue(id: string, bridge: string): Promise<Record<string, 
 export function takeIssue(id: string, bridge: string): Promise<IssueSyncResult> {
   return request(`${issuePath(id)}/take`, json('POST', { bridge }));
 }
+
+// Releases (internal/server/releases.go, internal/release): what runs where,
+// the releases, and the jobs that move them, one at a time in the
+// background. Go sends a nil list as null, and {enabled: false} alone
+// without [release]: normalized here, so components never see a null list.
+// Writes answer 409 releasing while a job runs.
+export interface ReleaseVersion {
+  major: number;
+  minor: number;
+  patch: number;
+  rc: number; // 0: a final
+}
+
+export interface ReleaseTag {
+  name: string; // v1.4.20, v1.4.20-rc.2
+  commit: string;
+  message: string;
+  version: ReleaseVersion;
+  date: string;
+}
+
+// a commit that touched an overlay
+export interface OverlayChange {
+  commit: string;
+  author: string;
+  version: string;
+  date: string;
+}
+
+export interface TargetState {
+  name: string; // enack8s; with the registry's host when two targets share one
+  repo: string;
+  path: string; // the overlay's directory
+  deployed: { commit: string; version: string; images: Record<string, { tag: string; digest: string }>; chart: string }; // commit "": not adopted
+  since: OverlayChange | null; // the overlay's newest commit
+}
+
+export interface EnvState {
+  name: string;
+  role: 'follow' | 'candidate' | 'last' | ''; // "": before the followed one
+  targets: TargetState[];
+  commit: string; // the targets' when they agree
+  version: string; // the targets' when they agree
+  split: boolean; // targets run different commits
+  adopted: boolean; // every target has git-board/commit
+  behind: string[]; // follow only: subjects of the trunk's merges it doesn't run
+}
+
+export interface ReleaseRecord {
+  id: string;
+  commit: string;
+  previous: string; // the previous final's tag
+  artifacts: { image: string; registry: string; digest: string }[];
+  chart: { version: string; digest: string };
+  notes: string; // markdown
+  comments: { author: string; message: string; date: string }[];
+  yanked: string; // the reason, "" when not
+  author: string;
+  created: string;
+}
+
+export interface ReleaseRow {
+  tag: ReleaseTag;
+  names: string[]; // every release tag on its commit, newest first
+  record: ReleaseRecord | null; // null until reconciled
+  runsIn: string[]; // environments running its commit
+  beforeGitBoard: boolean; // its tag wasn't cut by git-board (no " (git-board)" in its subject)
+}
+
+export interface ReleaseStep {
+  name: string;
+  detail: string;
+  state: 'running' | 'done' | 'failed';
+}
+
+export interface ReleaseJob {
+  kind: 'deploy' | 'cut' | 'promote' | 'rollback';
+  subject: string; // dev, v1.0.1-rc.1 to stage, prod to v1.0.0, the rc promoted, a cut's tag
+  state: 'running' | 'done' | 'failed';
+  error: string;
+  code: '' | 'taken' | 'older' | 'not-adopted'; // a failed job's
+  tag: string; // the tag a cut or promote pushed or tried, once known; ""
+  steps: ReleaseStep[]; // each once, as last reported
+  started: string;
+  ended: string | null;
+}
+
+export interface Releases {
+  enabled: boolean;
+  remote: string; // the authority remote, [release] remote (origin)
+  trunk: string; // the trunk branch (dev)
+  environments: EnvState[];
+  releases: ReleaseRow[]; // newest first
+  job: ReleaseJob | null; // running, or the last one
+}
+
+export interface DraftIssue {
+  number: string; // CO2-3075, #2518
+  title: string;
+  kind: string;
+  merge: string;
+}
+
+export interface Draft {
+  from: string; // the followed environment's commit, else the trunk's head
+  fromVersion: string;
+  undeployed: string[]; // trunk merges after from
+  previous: ReleaseTag | null;
+  proposed: ReleaseVersion;
+  tag: string; // what a cut would push
+  issues: DraftIssue[];
+  notes: string;
+  checks: { ok: boolean; text: string; detail: string }[];
+}
+
+export interface ReleaseDetail {
+  row: ReleaseRow;
+  issues: DraftIssue[];
+  candidates: ReleaseRow[]; // the rc rows of its final, but itself
+  history: Record<string, (OverlayChange & { target: string })[]>; // environment → its overlays' changes naming this version
+}
+
+// the commit an overlay is thought to run, for adopt
+export interface Proposal {
+  env: string;
+  repo: string;
+  path: string;
+  runs: string;
+  commit: string; // "": unknown, to type in
+  from: 'tag' | 'label' | '';
+}
+
+export interface IssueEnvironment {
+  name: string;
+  version: string;
+  in: boolean;
+}
+
+const tagPath = (tag: string) => `/api/releases/${encodeURIComponent(tag)}`;
+const envPath = (env: string) => `/api/environments/${encodeURIComponent(env)}`;
+
+const releaseRow = (r: ReleaseRow): ReleaseRow => ({
+  ...r,
+  names: r.names ?? [],
+  runsIn: r.runsIn ?? [],
+  record: r.record && { ...r.record, artifacts: r.record.artifacts ?? [], comments: r.record.comments ?? [] },
+});
+const envState = (e: EnvState): EnvState => ({
+  ...e,
+  behind: e.behind ?? [],
+  targets: (e.targets ?? []).map((t) => ({ ...t, deployed: { ...t.deployed, images: t.deployed.images ?? {} } })),
+});
+const releaseJob = (j: ReleaseJob | null): ReleaseJob | null => j && { ...j, steps: j.steps ?? [] };
+
+export async function getReleases(): Promise<Releases> {
+  const r = await request<Partial<Releases>>('/api/releases');
+  return { enabled: !!r.enabled, remote: r.remote ?? '', trunk: r.trunk ?? '', environments: (r.environments ?? []).map(envState), releases: (r.releases ?? []).map(releaseRow), job: releaseJob(r.job ?? null) };
+}
+
+export async function getDraft(final = false): Promise<Draft> {
+  const d = await request<Draft>(`/api/releases/draft${final ? '?final=1' : ''}`);
+  return { ...d, undeployed: d.undeployed ?? [], issues: d.issues ?? [], checks: d.checks ?? [] };
+}
+
+export async function getReleaseJob(): Promise<ReleaseJob | null> {
+  return releaseJob(await request<ReleaseJob | null>('/api/releases/job'));
+}
+
+export async function getRelease(tag: string): Promise<ReleaseDetail> {
+  const d = await request<ReleaseDetail>(tagPath(tag));
+  const history = Object.fromEntries(Object.entries(d.history ?? {}).map(([env, h]) => [env, h ?? []]));
+  return { row: releaseRow(d.row), issues: d.issues ?? [], candidates: (d.candidates ?? []).map(releaseRow), history };
+}
+
+// version: the final form (1.4.20), "" the draft's; the rc number is the
+// server's. commit, notes: "" the draft's
+export interface CutRequest {
+  version?: string;
+  final?: boolean;
+  hotfix?: boolean;
+  commit?: string;
+  notes?: string;
+  deploy?: boolean;
+}
+
+export async function cutRelease(c: CutRequest): Promise<ReleaseJob> {
+  return releaseJob(await request<ReleaseJob>('/api/releases', json('POST', c)))!;
+}
+
+export async function promoteRelease(tag: string): Promise<ReleaseJob> {
+  return releaseJob(await request<ReleaseJob>(`${tagPath(tag)}/promote`, { method: 'POST' }))!;
+}
+
+// tag "": the trunk's head, to the followed environment only
+export async function deployEnvironment(env: string, tag = ''): Promise<ReleaseJob> {
+  return releaseJob(await request<ReleaseJob>(`${envPath(env)}/deploy`, json('POST', tag ? { tag } : {})))!;
+}
+
+export async function rollbackEnvironment(env: string, tag: string, reason: string): Promise<ReleaseJob> {
+  return releaseJob(await request<ReleaseJob>(`${envPath(env)}/rollback`, json('POST', { tag, reason })))!;
+}
+
+export async function getProposals(): Promise<Proposal[]> {
+  return (await request<Proposal[] | null>('/api/releases/adopt')) ?? [];
+}
+
+export function adoptOverlays(proposals: Proposal[]): Promise<object> {
+  return request('/api/releases/adopt', json('POST', { proposals }));
+}
+
+export function setReleaseNotes(tag: string, notes: string): Promise<object> {
+  return request(`${tagPath(tag)}/notes`, json('PUT', { notes }));
+}
+
+export function commentRelease(tag: string, message: string): Promise<object> {
+  return request(`${tagPath(tag)}/comments`, json('POST', { message }));
+}
+
+export function yankRelease(tag: string, reason: string): Promise<object> {
+  return request(`${tagPath(tag)}/yank`, json('POST', { reason }));
+}
+
+export async function getIssueEnvironments(id: string): Promise<IssueEnvironment[]> {
+  return (await request<IssueEnvironment[] | null>(`${issuePath(id)}/environments`)) ?? [];
+}
