@@ -45,14 +45,45 @@ type Cut struct {
 // is ErrTaken, and nothing else is done. Once the tag is pushed it is
 // returned, even with a later error: a Deploy finishes the images, the
 // chart and the environment, and a Reconcile past its grace the record.
+//
+// Offline it runs the checks the local state allows and keeps the tag
+// pending (see Pending), one at a time; it can't deploy, cut a hotfix or
+// take notes, drafted once it is pushed. The next online Reconcile pushes
+// and finishes it, and an online Cut that does stops there: it was that
+// cut.
 func (r *Runner) Cut(ctx context.Context, c Cut) (Tag, error) {
-	if err := r.online("a cut"); err != nil {
-		return Tag{}, err
+	if r.Offline {
+		if err := r.offlineCut(ctx, c); err != nil {
+			return Tag{}, err
+		}
+		return r.cut(ctx, c, false)
 	}
-	if err := r.Reconcile(ctx); err != nil {
+	pushed, err := r.reconcile(ctx)
+	if len(pushed) > 0 {
+		return pushed[0], err
+	}
+	if err != nil {
 		return Tag{}, err
 	}
 	return r.cut(ctx, c, false)
+}
+
+// offlineCut refuses what a cut can't do offline, and a second cut made
+// offline before the first is pushed.
+func (r *Runner) offlineCut(ctx context.Context, c Cut) error {
+	switch {
+	case c.Deploy:
+		return errors.New("offline, a cut deploys nowhere: --no-deploy")
+	case c.Hotfix: // ponytail: the pending ref doesn't say hotfix, so the online check would refuse it
+		return errors.New("offline: cut a hotfix online")
+	case c.Notes != "":
+		return errors.New("offline: notes are drafted once the cut is pushed; edit them on the release's page after")
+	}
+	pending, err := Pending(ctx, r.Dir)
+	if err != nil || len(pending) == 0 {
+		return err
+	}
+	return fmt.Errorf("offline: %s, cut offline, isn't pushed yet: one at a time", pending[0].Name)
 }
 
 // Promote cuts the final of candidate rcTag on its commit and deploys it to
@@ -156,7 +187,8 @@ func (r *Runner) tagNamed(ctx context.Context, name string) (Tag, error) {
 	return Tag{}, fmt.Errorf("%w %s", ErrNoTag, name)
 }
 
-// cut is Cut after Reconcile; a promote never builds.
+// cut is Cut after Reconcile; a promote never builds. Offline, it keeps
+// the tag pending.
 func (r *Runner) cut(ctx context.Context, c Cut, promote bool) (Tag, error) {
 	st, repos, err := r.status(ctx)
 	if err != nil {
@@ -177,72 +209,114 @@ func (r *Runner) cut(ctx context.Context, c Cut, promote bool) (Tag, error) {
 	if d, err = r.draft(ctx, st, d, final); err != nil {
 		return Tag{}, err
 	}
-	commit, tags := d.From, tagsOf(st)
-	v := tagFor(cmp.Or(c.Version, d.Proposed).Final(), final, tags)
+	commit := d.From
+	v := tagFor(cmp.Or(c.Version, d.Proposed).Final(), final, tagsOf(st))
 	t := Tag{Name: v.Tag(), Commit: commit, Message: v.Tag() + gitBoardMark, Version: v}
 	if r.OnTag != nil {
 		r.OnTag(t.Name)
 	}
-	if slices.ContainsFunc(tags, func(o Tag) bool { return o.Name == t.Name }) {
-		return Tag{}, fmt.Errorf("%s: %w", t.Name, ErrTaken)
-	}
-	if err := r.refuse(ctx, st, repos, c, t, tags); err != nil {
-		return Tag{}, err
-	}
-	rec, recorded, err := r.B.ReleaseFor(commit)
+	where, err := r.check(ctx, st, repos, c, t, promote)
 	if err != nil {
 		return Tag{}, err
 	}
+	if r.Offline {
+		err := r.do("tag", func() (string, error) {
+			_, err := Git(ctx, r.Dir, "update-ref", pendingRefs+t.Name, commit, "")
+			return "kept " + t.Name + ": the next online cut, promote, rollback or deploy pushes it", err
+		})
+		if err != nil {
+			return Tag{}, err
+		}
+		return t, nil
+	}
+	if err := r.push(ctx, t, ""); err != nil {
+		return Tag{}, err
+	}
+	if err := r.finish(ctx, t, d, where, c.Notes); err != nil {
+		return t, err
+	}
+	if c.Deploy && !r.followsLast() {
+		return t, r.deploy(ctx, r.deployTo(final), Target{Commit: commit, Version: t.Name, Hotfix: c.Hotfix})
+	}
+	return t, nil
+}
+
+// check is why a cut can't make t, before anything is written: its name
+// taken (ErrTaken), refuse's reasons, a yanked commit, an image a promote
+// would have to build, and with c.Deploy an environment that wouldn't
+// take it (see takes). It returns where the images go.
+func (r *Runner) check(ctx context.Context, st Status, repos map[string]*ConfigRepo, c Cut, t Tag, promote bool) (map[string][]string, error) {
+	tags := tagsOf(st)
+	if slices.ContainsFunc(tags, func(o Tag) bool { return o.Name == t.Name }) {
+		return nil, fmt.Errorf("%s: %w", t.Name, ErrTaken)
+	}
+	if err := r.refuse(ctx, st, repos, c, t, tags); err != nil {
+		return nil, err
+	}
+	rec, _, err := r.B.ReleaseFor(t.Commit)
+	if err != nil {
+		return nil, err
+	}
 	if rec.Yanked != "" {
-		return Tag{}, fmt.Errorf("%.7s is yanked: %s", commit, rec.Yanked)
+		return nil, fmt.Errorf("%.7s is yanked: %s", t.Commit, rec.Yanked)
 	}
 	where, err := r.where("any environment", deployedOf(st.Envs...)...)
 	if err != nil {
-		return Tag{}, err
+		return nil, err
 	}
 	if promote {
-		if err := r.built(ctx, commit, rec.Artifacts, where, "promote"); err != nil {
-			return Tag{}, err
+		if err := r.built(ctx, t.Commit, rec.Artifacts, where, "promote"); err != nil {
+			return nil, err
 		}
 	}
-	deploy := c.Deploy && !r.followsLast()
-	if deploy {
-		if err := r.takes(ctx, envNamed(st, r.deployTo(final)), commit, c.Hotfix); err != nil {
-			return Tag{}, err
+	if c.Deploy && !r.followsLast() {
+		if err := r.takes(ctx, envNamed(st, r.deployTo(t.Version.RC == 0)), t.Commit, c.Hotfix); err != nil {
+			return nil, err
 		}
 	}
+	return where, nil
+}
 
-	err = r.do("tag", func() (string, error) {
+// push pushes t's tag to the authority remote, saying so with how: ErrTaken
+// when another clone has the name.
+func (r *Runner) push(ctx context.Context, t Tag, how string) error {
+	return r.do("tag", func() (string, error) {
 		taken, err := PushTag(ctx, r.Dir, r.Cfg.RemoteName(), t)
 		if taken {
 			return "", fmt.Errorf("%s: %w", t.Name, ErrTaken)
 		}
-		return "pushed " + t.Name, err
+		return "pushed " + t.Name + how, err
 	})
+}
+
+// finish makes the release of t once its tag is pushed: the images
+// ensured and tagged t, the chart at t, and the record, made with d's
+// previous final and notes, or kept; notes, unless "", are the record's.
+func (r *Runner) finish(ctx context.Context, t Tag, d Draft, where map[string][]string, notes string) error {
+	rec, recorded, err := r.B.ReleaseFor(t.Commit)
 	if err != nil {
-		return Tag{}, err
+		return err
 	}
-	arts, err := r.ensureImages(ctx, Target{Commit: commit, Version: t.Name}, rec.Artifacts, where)
+	arts, err := r.ensureImages(ctx, Target{Commit: t.Commit, Version: t.Name}, rec.Artifacts, where)
 	if err != nil {
-		return t, err
+		return err
 	}
 	var chart gitbugio.ChartArtifact
 	if r.Cfg.Chart != nil && !recorded { // R19: a recorded commit's chart is the deploy's to package
-		digest, err := r.ensureChart(ctx, commit, t.Name)
+		digest, err := r.ensureChart(ctx, t.Commit, t.Name)
 		if err != nil {
-			return t, err
+			return err
 		}
 		chart = gitbugio.ChartArtifact{Version: t.Name, Digest: digest}
 	}
-	err = r.do("record", func() (string, error) {
+	return r.do("record", func() (string, error) {
 		detail := "kept " + rec.ID[:min(7, len(rec.ID))]
-		notes := c.Notes
 		if !recorded {
 			prev := ""
 			if d.Previous != nil {
 				prev = d.Previous.Name
 			}
-			created, err := r.B.CreateRelease(gitbugio.ReleaseRecord{Commit: commit, Previous: prev, Artifacts: arts, Chart: chart})
+			created, err := r.B.CreateRelease(gitbugio.ReleaseRecord{Commit: t.Commit, Previous: prev, Artifacts: arts, Chart: chart})
 			if err != nil {
 				return "", err
 			}
@@ -256,13 +330,6 @@ func (r *Runner) cut(ctx context.Context, c Cut, promote bool) (Tag, error) {
 		}
 		return detail + ", pushed", r.B.PushReleases(r.Cfg.RemoteName())
 	})
-	if err != nil {
-		return t, err
-	}
-	if deploy {
-		return t, r.deploy(ctx, r.deployTo(final), Target{Commit: commit, Version: t.Name, Hotfix: c.Hotfix})
-	}
-	return t, nil
 }
 
 // refuse is why t can't be cut, unless c.Hotfix: its commit doesn't

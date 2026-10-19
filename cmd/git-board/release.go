@@ -98,7 +98,14 @@ func runStatus(cmd *cobra.Command) error {
 		for _, e := range st.Envs {
 			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", e.Name, cmp.Or(envVersion(e), "-"), cmp.Or(short(envCommit(e)), "-"), strings.TrimSpace(envNote(e, r.Base)))
 		}
-		return tw.Flush()
+		if err := tw.Flush(); err != nil {
+			return err
+		}
+		pending, err := release.Pending(ctx, r.Dir)
+		for _, p := range pending {
+			fmt.Fprintf(out, "pending %s on %s: cut offline; the next cut, promote, rollback or deploy pushes it\n", p.Name, short(p.Commit))
+		}
+		return err
 	})
 }
 
@@ -146,13 +153,14 @@ func trunkName(base string) string { return cmp.Or(base, "dev") }
 
 func newCutCmd() *cobra.Command {
 	var version, commit, notesFile string
-	var final, hotfix, noDeploy bool
+	var final, hotfix, noDeploy, offline bool
 	cmd := &cobra.Command{
 		Use:   "cut",
 		Short: "Tag the next candidate (or the final), build it and deploy it",
 		Example: `  git-board release cut
   git-board release cut --final
-  git-board release cut --version 1.4.20 --no-deploy`,
+  git-board release cut --version 1.4.20 --no-deploy
+  git-board release cut --offline --no-deploy`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			c := release.Cut{Final: final, Hotfix: hotfix, Deploy: !noDeploy, Commit: commit}
@@ -174,9 +182,13 @@ func newCutCmd() *cobra.Command {
 				c.Notes = string(b)
 			}
 			return withRunner(cmd, func(ctx context.Context, r *release.Runner, out io.Writer) error {
+				r.Offline = offline
 				t, err := r.Cut(ctx, c)
 				if t.Name != "" { // pushed, even when a later step failed
 					fmt.Fprintf(out, "cut %s\n", t.Name)
+				}
+				if errors.Is(err, release.ErrFetch) {
+					err = fmt.Errorf("%w\nno network? git-board release cut --offline --no-deploy tags locally; the next online cut or deploy pushes it", err)
 				}
 				return err
 			})
@@ -189,6 +201,7 @@ func newCutCmd() *cobra.Command {
 	f.StringVar(&commit, "commit", "", "the commit to cut (default: what the followed environment runs)")
 	f.BoolVar(&noDeploy, "no-deploy", false, "tag and build, but deploy nowhere")
 	f.StringVar(&notesFile, "notes-file", "", "release notes from this file (default: drafted from the issues)")
+	f.BoolVar(&offline, "offline", false, "no network: tag locally, pushed and built by the next online cut, promote, rollback or deploy")
 	return cmd
 }
 

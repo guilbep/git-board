@@ -206,6 +206,7 @@ git-board sprint report delivery
 git-board release
 git-board release cut
 git-board release cut --final --version 1.4.20
+git-board release cut --offline --no-deploy  # tags locally; the next online cut pushes it
 git-board release promote v1.4.20-rc.2
 git-board release rollback prod v1.4.19 --reason "bad chart"
 git-board release adopt --yes

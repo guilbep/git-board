@@ -1194,31 +1194,39 @@ Settled on 54d0f401 (GB-17): `git-board release cut --offline
 - Test: `internal/release/cut_test.go`, `cmd/git-board/release_test.go`
 
 **Behaviour:**
-- `--offline` sets `Runner.Offline`. It needs `--no-deploy`, and refuses
-  `--notes-file` (notes are drafted when the cut finishes, and editable
-  on the record after). A fetch failure's message names `--offline`;
-  nothing guesses offline from a failed fetch (auth fails the same way).
-- Offline, Cut runs the checks the local state allows (the config
-  repos' caches, local tags and records), then writes a pending cut:
-  the ref `refs/git-board/cuts/<tag>` on the commit. Nothing else. One
-  pending cut at a time: a second offline cut is refused, naming it.
+- `--offline` sets `Runner.Offline`. Offline, Cut refuses a deploy (it
+  needs `--no-deploy`), notes (drafted once the cut is pushed, editable on
+  the record after) and `--hotfix` (the pending ref doesn't carry it, so
+  the online check would refuse it). A failed fetch's message names
+  `--offline`; nothing guesses offline from a failed fetch (auth fails the
+  same way).
+- Offline, Cut runs the checks the local state allows (the config repos'
+  caches, local tags and records), then writes a pending cut: the ref
+  `refs/git-board/cuts/<tag>` on the commit. Nothing else. One pending cut
+  at a time: a second offline cut is refused, naming it. `release status`
+  lists it.
 - A pending cut is not under `refs/tags`, so `git fetch --tags` never
   clashes with it, and Status and Reconcile never record it.
-- Online, Reconcile first pushes each pending cut, before its fetch.
-  `PushTag` makes the annotated tag then, so its date (Reconcile's grace
-  clock) starts at the push. Taken: the pending ref is dropped, and the
-  output says `v… was taken by another clone: cut again`, with nothing
-  else written. Another failure keeps the ref and returns the error.
+- Online, Reconcile fetches, then checks each pending cut again on what
+  it fetched (the same checks a cut runs), then pushes it. `PushTag`
+  makes the annotated tag then, so its date (Reconcile's grace clock)
+  starts at the push. Taken, or no longer allowed: the ref is dropped and
+  the step says `dropped v…, cut offline: <why>; cut again`, with nothing
+  else written. Another push failure keeps the ref and returns the error.
   Pushed: the ref is dropped, and the second half of a cut runs: images,
-  chart, record with the drafted notes. That half is factored out of
-  `cut()`, not copied.
+  chart, record with the notes drafted then. That half is factored out
+  of `cut()`, not copied.
+- An online cut that pushed a pending cut stops there: it was that cut,
+  deployed nowhere. Promote, rollback and deploy push it on their way.
 
-- [ ] **Step 1: Write the failing tests** `TestOfflineCutWritesOnlyPending`,
+- [x] **Step 1: Write the failing tests** `TestOfflineCutWritesOnlyPending`,
   `TestOnlineFinishesOfflineCut` (tag dated at the push, images, record),
   `TestOfflineCutTakenDropsIt` (another clone pushed the name: no tag,
-  no record, the fetch succeeds), `TestOfflineCutNeedsNoDeploy`.
-- [ ] **Step 2: Run** — FAIL. **Step 3: Implement.** **Step 4: Run** — PASS.
-- [ ] **Step 5: Commit** `feat(release): cut offline, finished by the next online command`
+  no record, the fetch succeeds), `TestOfflineCutCheckedAgainOnline`
+  (prod took a hotfix meanwhile), the refusals in
+  `TestOfflineRefusesWrites`, and the CLI's `TestCutOffline`.
+- [x] **Step 2: Run** — FAIL. **Step 3: Implement.** **Step 4: Run** — PASS.
+- [x] **Step 5: Commit** `feat(release): cut offline, finished by the next online command`
 
 ---
 

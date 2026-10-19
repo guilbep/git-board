@@ -108,6 +108,28 @@ func PushTag(ctx context.Context, dir, remote string, t Tag) (taken bool, err er
 	return false, err
 }
 
+// pendingRefs hold the cuts made offline, by tag name, on their commit,
+// until an online command pushes them: outside refs/tags, so a fetch never
+// clashes with one, and nothing reads one as a release.
+const pendingRefs = "refs/git-board/cuts/"
+
+// Pending lists the cuts made offline that no online command has pushed
+// yet, as the tags they push.
+func Pending(ctx context.Context, dir string) ([]Tag, error) {
+	out, err := Git(ctx, dir, "for-each-ref", "--format=%(refname:lstrip=3) %(objectname)", pendingRefs)
+	if err != nil || out == "" {
+		return nil, err
+	}
+	var tags []Tag
+	for _, line := range strings.Split(out, "\n") {
+		name, commit, _ := strings.Cut(line, " ")
+		if v, ok := ParseTag(name); ok {
+			tags = append(tags, Tag{Name: name, Commit: commit, Message: name + gitBoardMark, Version: v})
+		}
+	}
+	return tags, nil
+}
+
 // Change is one commit that touched an overlay.
 type Change struct {
 	Commit  string    `json:"commit"`

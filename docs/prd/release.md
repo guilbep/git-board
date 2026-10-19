@@ -316,6 +316,9 @@ Rules:
 - **The tag is pushed first**, to the authority remote, before anything else
   is written. It acts as the compare-and-swap on the version name: of two
   clones cutting `rc.2`, one push is refused and that clone takes `rc.3`.
+  Offline (`release cut --offline --no-deploy`), the tag waits as a ref
+  outside `refs/tags`; the next online cut, promote, rollback or deploy
+  checks it again, pushes it and builds it, or drops it and says why.
 - **Hotfixes skip the candidate step.** co2's release policy already says a
   hotfix may "skip staging (emergency only)" (`release-management.md`).
   - A hotfix descends from the commit running in prod, so prod takes it
