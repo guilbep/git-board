@@ -159,6 +159,46 @@ func (b *Backend) ChangesIn(base, branch string) bool {
 	return bytes.Equal(bytes.TrimSpace(first), bytes.TrimSpace(tree))
 }
 
+// Worktree is a linked worktree of the repository (git worktree list).
+type Worktree struct {
+	Path   string `json:"path"`
+	Head   string `json:"head"`
+	Branch string `json:"branch,omitempty"` // "" when detached
+}
+
+// Worktrees lists the linked worktrees, the main one left out.
+func (b *Backend) Worktrees() ([]Worktree, error) {
+	out, err := b.git("worktree", "list", "--porcelain")
+	if err != nil {
+		return nil, err
+	}
+	var res []Worktree
+	var cur Worktree
+	first, bare := true, false
+	flush := func() {
+		if cur.Path != "" && !first && !bare {
+			res = append(res, cur)
+		}
+		cur, first, bare = Worktree{}, false, false
+	}
+	for _, l := range lines(out) {
+		switch k, v, _ := strings.Cut(l, " "); k {
+		case "worktree":
+			cur.Path = v
+		case "HEAD":
+			cur.Head = v
+		case "branch":
+			cur.Branch = strings.TrimPrefix(v, "refs/heads/")
+		case "bare":
+			bare = true
+		case "":
+			flush()
+		}
+	}
+	flush()
+	return res, nil
+}
+
 // git runs git on the repository; nil, nil without a git directory (a
 // NewForRepo backend), so every reader below answers empty there.
 func (b *Backend) git(args ...string) ([]byte, error) {

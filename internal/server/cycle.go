@@ -104,14 +104,13 @@ type cycleResponse struct {
 	PRCheckedAt time.Time     `json:"pr_checked_at,omitzero"`
 }
 
-// cycleOf is the issue's step for the viewer. GitHub is asked for the PR
-// only where the step reads it: from review on, and a structural plan's PR.
-func (s *apiServer) cycleOf(ctx context.Context, th gitbugio.Thread) (cycleResponse, error) {
-	cfg := s.config()
-	stages := cfg.Stages()
+// pullNames are the branches on origin whose PR the step needs: the
+// issue's from in-review on, its plan branches when structural, none
+// before (the Work page asks for every issue's at once).
+func (s *apiServer) pullNames(th gitbugio.Thread, stages config.Stages) ([]string, error) {
 	names, err := onOrigin(s.b, th.Issue)
 	if err != nil {
-		return cycleResponse{}, err
+		return nil, err
 	}
 	switch stage := stages.StageOf(board.FieldValue(th.Issue, "status")); {
 	case slices.Contains([]string{"in-review", "validation", "done"}, stage):
@@ -119,6 +118,18 @@ func (s *apiServer) cycleOf(ctx context.Context, th gitbugio.Thread) (cycleRespo
 		names = slices.DeleteFunc(names, func(n string) bool { return !strings.HasPrefix(n, "plan/") })
 	default:
 		names = nil
+	}
+	return names, nil
+}
+
+// cycleOf is the issue's step for the viewer. GitHub is asked for the PR
+// only where the step reads it: from review on, and a structural plan's PR.
+func (s *apiServer) cycleOf(ctx context.Context, th gitbugio.Thread) (cycleResponse, error) {
+	cfg := s.config()
+	stages := cfg.Stages()
+	names, err := s.pullNames(th, stages)
+	if err != nil {
+		return cycleResponse{}, err
 	}
 	s.refreshPulls(ctx, names)
 	in, err := cycle.Gather(s.b, cfg, th, s.viewer(), &s.pulls)
