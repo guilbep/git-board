@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"errors"
+	"time"
 
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/gitbugio"
@@ -48,14 +49,20 @@ func (r *Runner) fetch(ctx context.Context) error {
 	return r.B.PullReleases(r.Cfg.RemoteName())
 }
 
+// reconcileGrace is how long Reconcile leaves a record-less tag to the cut
+// that pushed it.
+// ponytail: a heuristic for a cut in flight; the upgrade is a lease the cut
+// writes, which Reconcile honours
+const reconcileGrace = time.Hour
+
 // Reconcile records every release tag's commit that has no record yet, and
 // pushes the records, so one an earlier push missed goes too. Offline it
 // does nothing: without the pull it would duplicate other clones' records.
-// A commit's artifacts are each image's digest on each deploy registry (see
-// artifact); one the registry lacks is left out, and a tag none of whose
-// images is found yet (a cut still building) is left for its cut or a later
-// Reconcile, not recorded empty. Previous is the newest final before the
-// tag recorded.
+// A tag younger than reconcileGrace is left to its cut, which may still be
+// building: the cut's own record has the chart and the notes. A commit's
+// artifacts are each image's digest on each deploy registry (see artifact);
+// one the registry lacks is left out, even all of them. Previous is the
+// newest final before the tag recorded.
 func (r *Runner) Reconcile(ctx context.Context) error {
 	if r.Offline {
 		return nil
@@ -76,9 +83,10 @@ func (r *Runner) Reconcile(ctx context.Context) error {
 		recorded[rec.Commit] = true
 	}
 	for i, t := range tags { // newest first
-		if recorded[t.Commit] {
+		if recorded[t.Commit] || time.Since(t.Date) < reconcileGrace {
 			continue
 		}
+		recorded[t.Commit] = true
 		rec := gitbugio.ReleaseRecord{Commit: t.Commit}
 		for _, p := range tags[i+1:] {
 			if p.Version.RC == 0 {
@@ -97,10 +105,6 @@ func (r *Runner) Reconcile(ctx context.Context) error {
 				}
 			}
 		}
-		if len(rec.Artifacts) == 0 {
-			continue // another tag on the commit may find them
-		}
-		recorded[t.Commit] = true
 		if _, err := r.B.CreateRelease(rec); err != nil {
 			return err
 		}

@@ -27,26 +27,37 @@ type Cut struct {
 
 // Cut tags c.Commit with c.Version's next candidate, or its final, and
 // makes the release: the tag pushed first, then the images ensured and
-// tagged with it, the chart at it, the record and its notes; then, with
-// c.Deploy, it deploys to the first candidate environment, or the last for
-// a final. A commit with a record keeps it, and its notes but for c.Notes.
+// tagged with it, the chart at it and the record with its notes; then,
+// with c.Deploy, it deploys to the first candidate environment, or the
+// last for a final. A commit with a record keeps it, and its notes but for
+// c.Notes; its chart at the tag is left to the deploy, which packages it.
 //
-// Before writing anything it refuses a commit that doesn't contain what
-// the last environment runs, and a final when no candidate on the commit
-// ran in the environment before last (unless c.Hotfix, both), and a yanked
-// commit. A tag another clone has is ErrTaken, and nothing else is done.
-// Once the tag is pushed it is returned, even with a later error: anyone's
-// Reconcile, Deploy or Promote finishes the release.
+// Before writing anything it refuses: offline; a dev-only app; a commit
+// that doesn't contain what the last environment runs, and a final when no
+// candidate on the commit ran in the environment before last (both unless
+// c.Hotfix); a yanked commit; with c.Deploy, an environment that isn't
+// adopted (ErrNotAdopted) or wouldn't move forward (ErrOlder; a hotfix may
+// leave the line of an environment but the last). A tag another clone has
+// is ErrTaken, and nothing else is done. Once the tag is pushed it is
+// returned, even with a later error: a Deploy finishes the images, the
+// chart and the environment, and a Reconcile past its grace the record.
 func (r *Runner) Cut(ctx context.Context, c Cut) (Tag, error) {
+	if err := cmp.Or(r.online("a cut"), r.devOnly()); err != nil {
+		return Tag{}, err
+	}
 	if err := r.Reconcile(ctx); err != nil {
 		return Tag{}, err
 	}
-	return r.cut(ctx, c)
+	return r.cut(ctx, c, false)
 }
 
-// Promote cuts the final of candidate rcTag on its commit, with the same
-// digests, and deploys it to the last environment.
+// Promote cuts the final of candidate rcTag on its commit and deploys it to
+// the last environment. It ships what ran: an image no registry has for
+// the commit is refused before the tag, never built.
 func (r *Runner) Promote(ctx context.Context, rcTag string) (Tag, error) {
+	if err := cmp.Or(r.online("a promote"), r.devOnly()); err != nil {
+		return Tag{}, err
+	}
 	if err := r.Reconcile(ctx); err != nil {
 		return Tag{}, err
 	}
@@ -57,13 +68,17 @@ func (r *Runner) Promote(ctx context.Context, rcTag string) (Tag, error) {
 	if rc.Version.RC == 0 {
 		return Tag{}, fmt.Errorf("%s isn't a candidate", rcTag)
 	}
-	return r.cut(ctx, Cut{Final: true, Commit: rc.Commit, Version: rc.Version.Final(), Deploy: true})
+	return r.cut(ctx, Cut{Final: true, Commit: rc.Commit, Version: rc.Version.Final(), Deploy: true}, true)
 }
 
 // Rollback makes env run release tag again, back from what it runs, and
 // comments on the record of what it ran: "Rolled back from <env> to <tag>:
-// <reason>".
+// <reason>". It ships what ran: an image no registry has for the tag's
+// commit is refused, never built. Offline it refuses.
 func (r *Runner) Rollback(ctx context.Context, env, tag, reason string) error {
+	if err := r.online("a rollback"); err != nil {
+		return err
+	}
 	if err := r.Reconcile(ctx); err != nil {
 		return err
 	}
@@ -77,6 +92,17 @@ func (r *Runner) Rollback(ctx context.Context, env, tag, reason string) error {
 	}
 	e, err := r.envState(ctx, env, repos)
 	if err != nil {
+		return err
+	}
+	where, err := r.where(env, deployedOf(e)...)
+	if err != nil {
+		return err
+	}
+	rec, _, err := r.B.ReleaseFor(t.Commit)
+	if err != nil {
+		return err
+	}
+	if err := r.built(ctx, t.Commit, rec.Artifacts, where, "rollback"); err != nil {
 		return err
 	}
 	if err := r.deploy(ctx, env, Target{Commit: t.Commit, Version: t.Name, Rollback: true}); err != nil {
@@ -103,6 +129,14 @@ func (r *Runner) Rollback(ctx context.Context, env, tag, reason string) error {
 	return r.B.PushReleases(r.Cfg.RemoteName())
 }
 
+// online refuses what writes to the remotes while Offline.
+func (r *Runner) online(what string) error {
+	if r.Offline {
+		return fmt.Errorf("offline: %s writes to the remotes", what)
+	}
+	return nil
+}
+
 func (r *Runner) tagNamed(ctx context.Context, name string) (Tag, error) {
 	tags, err := ReleaseTags(ctx, r.Dir)
 	if err != nil {
@@ -114,9 +148,9 @@ func (r *Runner) tagNamed(ctx context.Context, name string) (Tag, error) {
 	return Tag{}, fmt.Errorf("no release tag %s", name)
 }
 
-// cut is Cut after Reconcile.
-func (r *Runner) cut(ctx context.Context, c Cut) (Tag, error) {
-	st, err := r.status(ctx)
+// cut is Cut after Reconcile; a promote never builds.
+func (r *Runner) cut(ctx context.Context, c Cut, promote bool) (Tag, error) {
+	st, repos, err := r.status(ctx)
 	if err != nil {
 		return Tag{}, err
 	}
@@ -141,7 +175,7 @@ func (r *Runner) cut(ctx context.Context, c Cut) (Tag, error) {
 	if slices.ContainsFunc(tags, func(o Tag) bool { return o.Name == t.Name }) {
 		return Tag{}, fmt.Errorf("%s: %w", t.Name, ErrTaken)
 	}
-	if err := r.refuse(ctx, st, c, t, tags); err != nil {
+	if err := r.refuse(ctx, st, repos, c, t, tags); err != nil {
 		return Tag{}, err
 	}
 	rec, recorded, err := r.B.ReleaseFor(commit)
@@ -151,10 +185,18 @@ func (r *Runner) cut(ctx context.Context, c Cut) (Tag, error) {
 	if rec.Yanked != "" {
 		return Tag{}, fmt.Errorf("%.7s is yanked: %s", commit, rec.Yanked)
 	}
-	where := r.where(st)
-	for _, img := range r.Cfg.Images {
-		if len(where[img.Name]) == 0 {
-			return Tag{}, fmt.Errorf("image %s is in no overlay", img.Name)
+	where, err := r.where("any environment", deployedOf(st.Envs...)...)
+	if err != nil {
+		return Tag{}, err
+	}
+	if promote {
+		if err := r.built(ctx, commit, rec.Artifacts, where, "promote"); err != nil {
+			return Tag{}, err
+		}
+	}
+	if c.Deploy {
+		if err := r.takes(ctx, envNamed(st, r.deployTo(final)), commit, c.Hotfix); err != nil {
+			return Tag{}, err
 		}
 	}
 
@@ -173,7 +215,7 @@ func (r *Runner) cut(ctx context.Context, c Cut) (Tag, error) {
 		return t, err
 	}
 	var chart gitbugio.ChartArtifact
-	if r.Cfg.Chart != nil {
+	if r.Cfg.Chart != nil && !recorded { // R19: a recorded commit's chart is the deploy's to package
 		digest, err := r.ensureChart(ctx, commit, t.Name)
 		if err != nil {
 			return t, err
@@ -213,8 +255,9 @@ func (r *Runner) cut(ctx context.Context, c Cut) (Tag, error) {
 
 // refuse is why t can't be cut, unless c.Hotfix: its commit doesn't
 // contain what the last environment runs, or it is a final and no
-// candidate on its commit ran in the environment before last.
-func (r *Runner) refuse(ctx context.Context, st Status, c Cut, t Tag, tags []Tag) error {
+// candidate on its commit ran in the environment before last, by the
+// history of its overlays in repos.
+func (r *Runner) refuse(ctx context.Context, st Status, repos map[string]*ConfigRepo, c Cut, t Tag, tags []Tag) error {
 	if c.Hotfix {
 		return nil
 	}
@@ -237,12 +280,8 @@ func (r *Runner) refuse(ctx context.Context, st Status, c Cut, t Tag, tags []Tag
 		if len(names) == 0 {
 			break
 		}
-		repo, err := OpenConfigRepo(ctx, r.CacheDir, d.Repo) // status fetched it
-		if err != nil {
-			return err
-		}
 		// ponytail: the overlay's last 1000 changes; a candidate that ran before them is cut again
-		h, err := repo.History(ctx, strings.ReplaceAll(d.Path, "{env}", env), 1000)
+		h, err := repos[d.Repo].History(ctx, strings.ReplaceAll(d.Path, "{env}", env), 1000)
 		if err != nil {
 			return fmt.Errorf("%s on %s: %w", env, d.Repo, err)
 		}
@@ -251,4 +290,43 @@ func (r *Runner) refuse(ctx context.Context, st Status, c Cut, t Tag, tags []Tag
 		}
 	}
 	return fmt.Errorf("no candidate of %.7s ran in %s: cut one and deploy it there first", t.Commit, env)
+}
+
+// takes refuses, before anything is written, a deploy of commit to e that
+// deploy would refuse: e not adopted, or not moving forward (what Draft
+// checks); a hotfix may leave the line of an environment but the last.
+func (r *Runner) takes(ctx context.Context, e EnvState, commit string, hotfix bool) error {
+	if !e.Adopted {
+		return fmt.Errorf("%s: %w", e.Name, ErrNotAdopted)
+	}
+	if hotfix && e.Name != r.Cfg.Last() {
+		return nil
+	}
+	why, err := r.contains(ctx, e, commit)
+	if err != nil || why == "" {
+		return err
+	}
+	return fmt.Errorf("%s: %w", why, ErrOlder)
+}
+
+// built refuses an image of commit that none of the registries where lists
+// for it has, by the record or as built from commit: verb ships what ran,
+// it doesn't build. A registry lacking an image another has gets a copy.
+func (r *Runner) built(ctx context.Context, commit string, recorded []gitbugio.Artifact, where map[string][]string, verb string) error {
+	for _, img := range r.Cfg.Images {
+		found := false
+		for _, reg := range where[img.Name] {
+			d, err := r.existing(ctx, recorded, img.Name, reg, commit)
+			if err != nil {
+				return fmt.Errorf("%s: %w", img.Name, err)
+			}
+			if found = d != ""; found {
+				break
+			}
+		}
+		if !found {
+			return fmt.Errorf("%s for %.7s is in no registry: %s ships what ran, it doesn't build", img.Name, commit, verb)
+		}
+	}
+	return nil
 }

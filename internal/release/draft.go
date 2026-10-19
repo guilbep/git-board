@@ -43,8 +43,12 @@ type Draft struct {
 // trunk's head: the next version from the issues merged since the previous
 // final, the tag, the notes and the checks. final drafts the final rather
 // than the next candidate; an app without candidate environments only cuts
-// finals. It fetches unless Offline, and writes nothing.
+// finals, and a dev-only one none. It fetches unless Offline, and writes
+// nothing.
 func (r *Runner) Draft(ctx context.Context, final bool) (Draft, error) {
+	if err := r.devOnly(); err != nil {
+		return Draft{}, err
+	}
 	st, err := r.Status(ctx)
 	if err != nil {
 		return Draft{}, err
@@ -94,7 +98,7 @@ func (r *Runner) draft(ctx context.Context, st Status, d Draft, final bool) (Dra
 	if err != nil {
 		return d, err
 	}
-	d.Issues, d.Notes = issues, notes(issues)
+	d.Issues, d.Notes = issues, notes(issues, r.Branches.Kinds)
 	d.Proposed = Bump(last, kinds, breaking)
 	d.Tag = tagFor(d.Proposed, final, tags).Tag()
 	return d, nil
@@ -145,14 +149,15 @@ func number(is gitbugio.Issue) string {
 	return is.ID[:min(7, len(is.ID))]
 }
 
-// notes are the issues as markdown, grouped by kind: features, fixes, the
-// other kinds by name, then those without one.
-func notes(issues []DraftIssue) string {
+// notes are the issues as markdown, grouped by kind: features, then fixes,
+// each read through kinds as a branch says it (bug as fix), then the other
+// kinds by name, then the issues without one.
+func notes(issues []DraftIssue, kinds map[string]string) string {
 	rank := func(kind string) int {
-		switch kind {
+		switch cmp.Or(kinds[kind], kind) {
 		case "feat":
 			return 0
-		case "fix", "bug":
+		case "fix":
 			return 1
 		case "":
 			return 3
@@ -211,7 +216,7 @@ func (r *Runner) imagesCheck(ctx context.Context, st Status, from string) (Check
 	if err != nil {
 		return Check{}, err
 	}
-	where := r.where(st)
+	where, _ := r.where("any environment", deployedOf(st.Envs...)...) // an image in none is reported missing
 	var regs, names, missing []string
 	for _, img := range r.Cfg.Images {
 		names = append(names, img.Name)
@@ -267,20 +272,13 @@ func (r *Runner) contains(ctx context.Context, e EnvState, from string) (string,
 	return "", nil
 }
 
-// where is, per image, the registries whose overlays list it in any
-// environment, in [release] deploy order.
-func (r *Runner) where(st Status) map[string][]string {
-	w := map[string][]string{}
-	for i, d := range r.Cfg.Deploy {
-		for _, e := range st.Envs {
-			for _, img := range r.Cfg.Images {
-				if _, ok := e.Targets[i].Deployed.Images[d.Registry+"/"+img.Name]; ok && !slices.Contains(w[img.Name], d.Registry) {
-					w[img.Name] = append(w[img.Name], d.Registry)
-				}
-			}
-		}
+// devOnly refuses a release of an app whose last environment follows the
+// trunk: dev-only apps never tag.
+func (r *Runner) devOnly() error {
+	if f := r.Cfg.Followed(); f != "" && f == r.Cfg.Last() {
+		return fmt.Errorf("%s is the only environment: dev-only apps don't release", f)
 	}
-	return w
+	return nil
 }
 
 // final tells whether a cut is a final: asked for, or the app has no

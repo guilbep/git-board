@@ -99,13 +99,16 @@ func TestDraftProposesPatchAndRC(t *testing.T) {
 func TestDraftFeatIsMinor(t *testing.T) {
 	r, tools, fx := releasetest.NewRunner(t)
 	released(t, fx)
+	r.Branches.Kinds = map[string]string{"enhancement": "feat"} // a flat label, as the branch says it
 	issue(t, r, 12, "a", "kind:fix")
-	issue(t, r, 14, "c", "kind:feat")
+	issue(t, r, 14, "c", "enhancement")
 	fx.Merge(t, "fix/12-a", "")
 	m := fx.Merge(t, "feat/14-c", "")
 	onDev(t, fx, m)
 	if d := draft(t, r, false); d.Proposed != (release.Version{Major: 1, Minor: 1}) || d.Tag != "v1.1.0-rc.1" {
 		t.Errorf("proposed %v, tag %s; want 1.1.0, v1.1.0-rc.1", d.Proposed, d.Tag)
+	} else if !strings.HasPrefix(d.Notes, "### enhancement\n\n- #14 c") {
+		t.Errorf("notes = %q, want the feature first", d.Notes)
 	}
 	fx.Tag(t, m, "v1.1.0-rc.1")
 	for _, reg := range []string{"ghcr.test/app", "quay.test/app"} {

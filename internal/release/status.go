@@ -53,35 +53,36 @@ func (r *Runner) Status(ctx context.Context) (Status, error) {
 	if err := r.fetch(ctx); err != nil {
 		return Status{}, err
 	}
-	return r.status(ctx)
+	st, _, err := r.status(ctx)
+	return st, err
 }
 
-// status is Status without the fetch of the app remote; the config repos
-// are still fetched unless Offline.
-func (r *Runner) status(ctx context.Context) (Status, error) {
+// status is Status without the fetch of the app remote, and the config
+// repos it read, fetched unless Offline.
+func (r *Runner) status(ctx context.Context) (Status, map[string]*ConfigRepo, error) {
 	head, err := Git(ctx, r.Dir, "rev-parse", r.trunk())
 	if err != nil {
-		return Status{}, err
+		return Status{}, nil, err
 	}
 	st := Status{Head: head}
 	repos, err := r.configRepos(ctx)
 	if err != nil {
-		return Status{}, err
+		return Status{}, nil, err
 	}
 	for _, env := range r.Cfg.Environments {
 		e, err := r.envState(ctx, env, repos)
 		if err != nil {
-			return Status{}, err
+			return Status{}, nil, err
 		}
 		st.Envs = append(st.Envs, e)
 	}
 	tags, err := ReleaseTags(ctx, r.Dir)
 	if err != nil {
-		return Status{}, err
+		return Status{}, nil, err
 	}
 	recs, err := r.B.Releases()
 	if err != nil {
-		return Status{}, err
+		return Status{}, nil, err
 	}
 	records := map[string]*gitbugio.ReleaseRecord{}
 	for i := range recs {
@@ -99,7 +100,7 @@ func (r *Runner) status(ctx context.Context) (Status, error) {
 		}
 		st.Releases = append(st.Releases, row)
 	}
-	return st, nil
+	return st, repos, nil
 }
 
 // configRepos opens each deploy target's config repo once, keyed by its URL,

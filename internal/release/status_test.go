@@ -1,9 +1,11 @@
 package release_test
 
 import (
+	"os"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/guilbep/git-board/internal/gitbugio"
 	"github.com/guilbep/git-board/internal/release"
@@ -163,10 +165,9 @@ func TestReleaseRowsRunsIn(t *testing.T) {
 func TestReconcileCreatesMissing(t *testing.T) {
 	r, tools, fx := releasetest.NewRunner(t)
 	first := releasetest.Git(t, fx.App, "rev-parse", "HEAD")
-	fx.Tag(t, first, "v0.9.0")
-	tools.Images["ghcr.test/app/backend:v0.9.0"] = releasetest.FakeImage{Digest: "sha256:old", Revision: first}
+	oldTag(t, fx, first, "v0.9.0") // no image found: recorded all the same
 	c := fx.Commit(t, "fix")
-	fx.Tag(t, c, "v1.0.0-rc.1")
+	oldTag(t, fx, c, "v1.0.0-rc.1")
 	tools.Images["ghcr.test/app/frontend:v1.0.0-rc.1"] = releasetest.FakeImage{Digest: "sha256:fe", Revision: c}
 	// kept though built for another commit (legacy reuse_unchanged_images)
 	tools.Images["quay.test/app/frontend:v1.0.0-rc.1"] = releasetest.FakeImage{Digest: "sha256:qfe", Revision: first}
@@ -206,26 +207,34 @@ func TestReconcileCreatesMissing(t *testing.T) {
 	}
 }
 
-// R18: a tag none of whose images is on a registry yet (a cut still
-// building) gets no record: its cut, or a later Reconcile, makes it. Another
-// tag on the commit may find them.
-func TestReconcileSkipsTagsWithoutArtifacts(t *testing.T) {
-	r, tools, fx := releasetest.NewRunner(t)
+// oldTag is fx.Tag two hours ago, past Reconcile's grace for a cut in
+// flight.
+func oldTag(t *testing.T, fx *releasetest.Fixture, commit string, names ...string) {
+	t.Helper()
+	t.Setenv("GIT_COMMITTER_DATE", time.Now().Add(-2*time.Hour).Format(time.RFC3339))
+	fx.Tag(t, commit, names...)
+	if err := os.Unsetenv("GIT_COMMITTER_DATE"); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// R20: a tag younger than an hour may be a cut in flight, which makes its
+// own record: Reconcile leaves it. An older one is recorded with what is
+// found, even nothing.
+func TestReconcileWaitsForYoungTags(t *testing.T) {
+	r, _, fx := releasetest.NewRunner(t)
+	legacy := fx.Commit(t, "legacy")
+	oldTag(t, fx, legacy, "v0.9.0")
 	c := fx.Commit(t, "fix")
-	fx.Tag(t, c, "v1.0.0-rc.1", "v1.0.0")
+	fx.Tag(t, c, "v1.0.0-rc.1")
 	if err := r.Reconcile(ctx); err != nil {
 		t.Fatalf("Reconcile: %v", err)
 	}
 	if rec, ok, _ := r.B.ReleaseFor(c); ok {
-		t.Fatalf("recorded without artifacts: %+v", rec)
+		t.Errorf("a young tag was recorded: %+v", rec)
 	}
-	tools.Images["ghcr.test/app/frontend:v1.0.0-rc.1"] = releasetest.FakeImage{Digest: "sha256:fe", Revision: c}
-	if err := r.Reconcile(ctx); err != nil {
-		t.Fatalf("Reconcile: %v", err)
-	}
-	rec, ok, _ := r.B.ReleaseFor(c)
-	if want := []gitbugio.Artifact{{Image: "frontend", Registry: "ghcr.test/app", Digest: "sha256:fe"}}; !ok || !slices.Equal(rec.Artifacts, want) {
-		t.Errorf("record = %+v, %v; want the rc's image", rec, ok)
+	if rec, ok, _ := r.B.ReleaseFor(legacy); !ok || len(rec.Artifacts) != 0 {
+		t.Errorf("old tag's record = %+v, %v; want one without artifacts", rec, ok)
 	}
 }
 

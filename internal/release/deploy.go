@@ -113,7 +113,7 @@ func (r *Runner) deploy(ctx context.Context, env string, t Target) error {
 		return err
 	}
 	path := func(pattern string) string { return strings.ReplaceAll(pattern, "{env}", env) }
-	moving, where := 0, map[string][]string{}
+	moving, deps := 0, []Deployed{}
 	for _, d := range r.Cfg.Deploy {
 		o, err := repos[d.Repo].Read(ctx, path(d.Path))
 		if err != nil {
@@ -127,16 +127,11 @@ func (r *Runner) deploy(ctx context.Context, env string, t Target) error {
 		if move {
 			moving++
 		}
-		for _, img := range r.Cfg.Images {
-			if _, ok := dep.Images[d.Registry+"/"+img.Name]; ok && !slices.Contains(where[img.Name], d.Registry) {
-				where[img.Name] = append(where[img.Name], d.Registry)
-			}
-		}
+		deps = append(deps, dep)
 	}
-	for _, img := range r.Cfg.Images {
-		if len(where[img.Name]) == 0 {
-			return fmt.Errorf("image %s is in no overlay of %s", img.Name, env)
-		}
+	where, err := r.where(env, deps)
+	if err != nil {
+		return err
 	}
 	if moving == 0 {
 		return nil
@@ -220,6 +215,41 @@ func (r *Runner) moves(ctx context.Context, env, repo string, dep Deployed, t Ta
 		return false, fmt.Errorf("%s on %s: %w", env, repo, err)
 	}
 	return true, nil
+}
+
+// where is, per image, the registries whose overlays list it, in [release]
+// deploy order. Each of overlays is an environment's, one Deployed per
+// deploy target. An image none lists is an error naming in.
+func (r *Runner) where(in string, overlays ...[]Deployed) (map[string][]string, error) {
+	w := map[string][]string{}
+	for i, d := range r.Cfg.Deploy {
+		for _, deps := range overlays {
+			for _, img := range r.Cfg.Images {
+				if _, ok := deps[i].Images[d.Registry+"/"+img.Name]; ok && !slices.Contains(w[img.Name], d.Registry) {
+					w[img.Name] = append(w[img.Name], d.Registry)
+				}
+			}
+		}
+	}
+	for _, img := range r.Cfg.Images {
+		if len(w[img.Name]) == 0 {
+			return w, fmt.Errorf("image %s is in no overlay of %s", img.Name, in)
+		}
+	}
+	return w, nil
+}
+
+// deployedOf is each environment's overlays, for where.
+func deployedOf(envs ...EnvState) [][]Deployed {
+	var all [][]Deployed
+	for _, e := range envs {
+		deps := make([]Deployed, len(e.Targets))
+		for i, t := range e.Targets {
+			deps[i] = t.Deployed
+		}
+		all = append(all, deps)
+	}
+	return all
 }
 
 // ensureImages makes each image of t.Commit exist on the registries where
