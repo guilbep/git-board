@@ -64,6 +64,12 @@
         </li>
       </ul>
       <p v-else class="gb-hint">No branch yet.</p>
+      <div v-if="envLines.length" class="gb-envline gb-dev-envs" aria-label="Environments">
+        <template v-for="(p, i) in envLines" :key="p.text">
+          <router-link v-if="envLinks[i]" :to="envLinks[i]!" :class="markClass(p.mark)">{{ p.text }}</router-link>
+          <span v-else :class="markClass(p.mark)">{{ p.text }}</span>
+        </template>
+      </div>
       <p v-if="gateError" class="gb-hint" role="alert"><b>Couldn’t reach GitHub.</b> {{ gateError }}</p>
       <details class="gb-dev-new">
         <summary class="epfl-btn epfl-btn-secondary epfl-btn-sm"><GbIcon name="plus" small /> Create branch</summary>
@@ -83,10 +89,11 @@
 
 <script setup lang="ts">
 import { computed, onUnmounted, ref, watch } from 'vue';
-import { getBranches, getPulls, mergePull, openPull, type GateCheck, type GatePR, type IssueBranches, type IssuePulls } from '@/api/board';
+import { getBranches, getIssueEnvironments, getPulls, getReleases, mergePull, openPull, type GateCheck, type GatePR, type IssueBranches, type IssueEnvironment, type IssuePulls } from '@/api/board';
 import { message } from '@/issue';
 import { actThenRead, needsPush } from '@/gate';
 import { when } from '@/me';
+import { envLine, markClass, releasePath, tagPattern } from '@/releases';
 import GbIcon from '@/components/GbIcon.vue';
 
 const props = defineProps<{ id: string; labels: string[]; title: string }>();
@@ -100,11 +107,28 @@ async function load() {
     dev.value = await getBranches(props.id);
     name.value = dev.value.suggested;
     error.value = '';
+    void loadEnvs();
   } catch (e) {
     error.value = message(e);
   }
 }
 watch(() => [props.id, props.labels.join(' '), props.title], load, { immediate: true });
+
+// Environments: where this issue's branch has got to, when the project has
+// releases at all and the issue has a branch. Read only then; a project
+// without [release], or an issue whose branch isn't there, shows nothing.
+const issueEnvs = ref<IssueEnvironment[]>([]);
+const envLines = computed(() => envLine(issueEnvs.value));
+const envLinks = computed(() => issueEnvs.value.map((e) => (e.in && tagPattern.test(e.version) ? releasePath(e.version) : '')));
+async function loadEnvs() {
+  issueEnvs.value = [];
+  if (!dev.value?.branches.length) return;
+  try {
+    if ((await getReleases()).enabled) issueEnvs.value = await getIssueEnvironments(props.id);
+  } catch {
+    issueEnvs.value = [];
+  }
+}
 
 // The gate asks GitHub: read for the issue, after Open or Merge, and
 // every 15 s while GitHub is still checking, and only when the page shows.
@@ -199,6 +223,7 @@ async function copyText(text: string, which: string) {
 .gb-dev-check { display: flex; align-items: baseline; gap: .375rem; }
 .gb-dev-req { padding: 0 .25rem; border: 1px solid var(--border-strong); font-size: .6875rem; color: var(--fg-muted); }
 .gb-dev-act { margin-top: .25rem; }
+.gb-dev-envs { margin-top: .5rem; }
 .gb-state-bad { color: var(--danger-fg); }
 .gb-state-wait { color: var(--warning-fg); }
 .gb-dev-new { margin-top: .75rem; }
