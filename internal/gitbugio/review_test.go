@@ -1,6 +1,7 @@
 package gitbugio_test
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/guilbep/git-board/internal/gitbugio"
@@ -102,5 +103,81 @@ func TestResolveTwice(t *testing.T) {
 	}
 	if err := b.SetCommentMetadata(issue, "nope", map[string]string{"review:resolved": "true"}); err == nil {
 		t.Fatal("SetCommentMetadata on no comment")
+	}
+}
+
+// A review comment goes to GitHub's pull request only: it never waits for
+// another forge, and one pulled from the pull request waits for none.
+func TestReviewCommentsPending(t *testing.T) {
+	b := gitbugiotest.New(t)
+	author, err := b.TestCache().Identities().New("Alice", "alice@example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	bug, _, err := b.TestCache().Bugs().NewRaw(author, 1, "synced", "", nil, map[string]string{
+		"sync:github.com/o/r:id":          "I_1",
+		"sync:github.com/o/r:url":         "https://github.com/o/r/issues/7",
+		"sync:gitlab.example.com/g/r:id":  "gid://gitlab/WorkItem/3",
+		"sync:gitlab.example.com/g/r:url": "https://gitlab.example.com/g/r/-/work_items/3",
+		"sync:gitlab.example.com/g/r:iid": "3",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	issue := bug.Id().String()
+	plain, _ := b.AddComment(issue, "plain")
+	line, err := b.CommentWith(issue, "why?", map[string]string{
+		"review:path": "a.txt", "review:line": "3", "review:side": "new", "review:commit": "0123456789abcdef0123456789abcdef01234567",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	pulled, err := b.CommentWith(issue, "from GitHub", map[string]string{
+		"review:path": "a.txt", "review:line": "4", "review:side": "new", "review:commit": "0123456789abcdef0123456789abcdef01234567",
+		"sync:github.com/o/r:pr-comment": "PRRC_1",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct {
+		id   string
+		want string
+	}{{plain, "[GitHub GitLab]"}, {line, "[GitHub]"}, {pulled, "[]"}} {
+		if got := fmt.Sprint(eventByID(t, b, issue, c.id).Pending); got != c.want {
+			t.Errorf("%s pending %s, want %s", c.id, got, c.want)
+		}
+	}
+}
+
+// StampPR gives the review comments written before their pull request its
+// review:pr: those on the branch's commits, without one yet.
+func TestStampPR(t *testing.T) {
+	b := gitbugiotest.New(t)
+	issue := gitbugiotest.NewIssue(t, b, "review")
+	mine, other := "1111111111111111111111111111111111111111", "2222222222222222222222222222222222222222"
+	anchor := func(commit string, more ...string) map[string]string {
+		m := map[string]string{"review:path": "a.txt", "review:line": "3", "review:side": "new", "review:commit": commit}
+		for i := 0; i+1 < len(more); i += 2 {
+			m[more[i]] = more[i+1]
+		}
+		return m
+	}
+	early, _ := b.CommentWith(issue, "early", anchor(mine))
+	review, _ := b.CommentWith(issue, "", map[string]string{"review:state": "APPROVE", "review:commit": mine})
+	elsewhere, _ := b.CommentWith(issue, "on another branch", anchor(other))
+	sent, _ := b.CommentWith(issue, "has one", anchor(mine, "review:pr", "github.com/o/r#1"))
+	plain, _ := b.AddComment(issue, "plain")
+
+	n, err := b.StampPR(issue, "github.com/o/r#9", func(c string) bool { return c == mine })
+	if err != nil || n != 2 {
+		t.Fatalf("stamped %d, %v; want 2", n, err)
+	}
+	for id, want := range map[string]string{early: "github.com/o/r#9", review: "github.com/o/r#9", elsewhere: "", sent: "github.com/o/r#1"} {
+		if r := eventByID(t, b, issue, id).Review; r == nil || r.PR != want {
+			t.Errorf("%s review %+v, want pr %q", id, r, want)
+		}
+	}
+	if r := eventByID(t, b, issue, plain).Review; r != nil {
+		t.Errorf("a plain comment got %+v", r)
 	}
 }

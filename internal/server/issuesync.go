@@ -1,10 +1,13 @@
 package server
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/git-bug/git-bug/bridge/core"
 
 	"github.com/guilbep/git-board/internal/gitbugio"
 )
@@ -52,7 +55,9 @@ func (s *apiServer) handleIssueSync(w http.ResponseWriter, r *http.Request) {
 
 	run := s.runIssueSync
 	if run == nil {
-		run = s.b.SyncIssue
+		run = func(ctx context.Context, dryRun bool, id string) (<-chan core.SyncResult, error) {
+			return s.b.SyncIssue(ctx, dryRun, id, core.WithPullsOf(s.pullsOf(ctx, []gitbugio.Issue{issue})))
+		}
 	}
 	results, err := run(r.Context(), req.DryRun, issue.ID)
 	if err != nil {

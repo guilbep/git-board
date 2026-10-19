@@ -197,8 +197,14 @@ func onForges(snap *bugent.Snapshot, remotes map[string]string) forgeState {
 	st.meta = meta
 	st.pending = func(opID entity.Id) []string {
 		var res []string
+		review := isReview(meta[opID])
 		for prefix, name := range remotes {
 			if index[opID] <= since[prefix] {
+				continue
+			}
+			// a review comment goes to GitHub's pull request, nowhere else
+			// (the fork's PullRemote). ponytail: github.com only, not GHE
+			if review && !strings.HasPrefix(prefix, "sync:github.com/") {
 				continue
 			}
 			there := false

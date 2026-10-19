@@ -183,15 +183,17 @@ func (b *Backend) RemoveBridge(name string) error {
 // SyncForges runs git-bug's forge sync (git bug bridge sync) on the named
 // bridges, or every bridge with sync enabled, in this process: a running
 // git-board's server holds the repository, so the git-bug command can't.
-func (b *Backend) SyncForges(ctx context.Context, dryRun bool, names []string) (<-chan core.SyncResult, error) {
-	return core.SyncAll(ctx, b.c, names, dryRun)
+func (b *Backend) SyncForges(ctx context.Context, dryRun bool, names []string, opts ...core.Option) (<-chan core.SyncResult, error) {
+	return core.SyncAll(ctx, b.c, names, dryRun, opts...)
 }
 
 // GetForges brings the forges' changes in and sends nothing: git bug
 // bridge pull on the named bridges, or every bridge with sync enabled,
 // from where the last sync's pull ended, which it moves on as a sync does.
-func (b *Backend) GetForges(ctx context.Context, names []string) (<-chan core.SyncResult, error) {
+// opts are the sync's (PullsOf).
+func (b *Backend) GetForges(ctx context.Context, names []string, opts ...core.Option) (<-chan core.SyncResult, error) {
 	return b.oneWay(names, func(br *core.Bridge, out chan<- core.SyncResult) {
+		br.Use(opts...)
 		start := time.Now().Add(-5 * time.Second) // as the sync does
 		results, err := br.ImportAllSince(ctx, b.lastSync(br.Name))
 		ok := err == nil
@@ -277,8 +279,8 @@ func (b *Backend) oneWay(names []string, run func(*core.Bridge, chan<- core.Sync
 
 // SyncIssue syncs one issue (git bug bridge sync --issue) with every
 // bridge with sync enabled, in this process.
-func (b *Backend) SyncIssue(ctx context.Context, dryRun bool, id string) (<-chan core.SyncResult, error) {
-	return core.SyncIssue(ctx, b.c, id, nil, dryRun)
+func (b *Backend) SyncIssue(ctx context.Context, dryRun bool, id string, opts ...core.Option) (<-chan core.SyncResult, error) {
+	return core.SyncIssue(ctx, b.c, id, nil, dryRun, opts...)
 }
 
 // LinkIssue makes an issue one with an issue already on a bridge's forge,

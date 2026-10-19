@@ -2,17 +2,20 @@ package server
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
 
 	"github.com/git-bug/git-bug/bridge/core/auth"
+	"github.com/git-bug/git-bug/entity"
 
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/gitbugio"
@@ -218,8 +221,20 @@ func TestOpenPull(t *testing.T) {
 		Number int    `json:"number"`
 		URL    string `json:"url"`
 	}
+	// a comment on the branch, written before its pull request
+	head, err := s.b.RevParse("origin/fix/2518-x")
+	if err != nil {
+		t.Fatal(err)
+	}
+	early, err := s.b.CommentWith(id, "early", map[string]string{"review:path": "a.txt", "review:line": "1", "review:side": "new", "review:commit": head})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if code := call(t, "POST", ts.URL+"/api/issues/"+id[:8]+"/pulls", map[string]string{"branch": "fix/2518-x"}, &pr); code != http.StatusCreated || pr.Number != 9 {
 		t.Fatalf("open: %d %+v", code, pr)
+	}
+	if r := commentReview(t, s, id, early); r == nil || r.PR != "github.com/o/r#9" {
+		t.Errorf("the earlier comment's review %+v, want its pull request", r)
 	}
 	var sent map[string]string
 	if err := json.Unmarshal([]byte(gh.body("POST /repos/o/r/pulls")), &sent); err != nil {
@@ -267,4 +282,35 @@ func TestMergePull(t *testing.T) {
 	if resp.StatusCode != http.StatusBadGateway || !strings.Contains(string(body), "Head branch was modified") {
 		t.Errorf("a refused merge: %d %s", resp.StatusCode, body)
 	}
+}
+
+// The sync's PullsOf: the open pull request of each issue's branches on
+// origin, a bare number; none for an issue without one, nor when origin
+// isn't GitHub.
+func TestPullsOf(t *testing.T) {
+	s, _, id := gateRepo(t, "https://github.com/o/r.git", true)
+	other := gitbugiotest.NewIssue(t, s.b, "No branch yet")
+	issues, err := s.b.ListIssues()
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := s.pullsOf(context.Background(), issues)
+	if f == nil || !slices.Equal(f(entity.Id(id)), []string{"3082"}) || f(entity.Id(other)) != nil {
+		t.Errorf("pulls of #2518 %v, of the other %v; want [3082], none", f(entity.Id(id)), f(entity.Id(other)))
+	}
+
+	s, gh, _ := gateRepo(t, "https://gitlab.com/o/r.git", true)
+	issues, _ = s.b.ListIssues()
+	if s.pullsOf(context.Background(), issues) != nil || len(gh.sent()) != 0 {
+		t.Errorf("a GitLab origin has pull requests, or asked GitHub %v", gh.sent())
+	}
+}
+
+func commentReview(t *testing.T, s *apiServer, issue, id string) *gitbugio.Review {
+	t.Helper()
+	r, err := s.b.CommentReview(issue, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return r
 }
