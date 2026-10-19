@@ -1,1 +1,1 @@
-{"author":{"id":"f943aa1c5ee078b881a8e97535a4e2ccb401d01ca00f4128126befa9cca58a32"},"ops":[{"type":3,"timestamp":1792408209,"nonce":"pR1fxPAPdenOl0NVRXQmQJ4oavs=","message":"Fixed on prd/dev-cycle in 4e9a150 (fix(worktrees): the Agent select shows any tool, and a stale preview hides), with a test that failed first. Closes when the branch lands.","files":null}]}
+{"author":{"id":"f943aa1c5ee078b881a8e97535a4e2ccb401d01ca00f4128126befa9cca58a32"},"ops":[{"type":5,"timestamp":1792408209,"nonce":"vFzphIMAZS3hpNOPDdma+90tge4=","added":null,"removed":["status:backlog"]}]}
