@@ -404,6 +404,23 @@ func TestAgentGoTwice(t *testing.T) {
 	}
 }
 
+// A second wtx write while one runs is refused at once, not queued
+// silently behind a wtx go that can take ten minutes.
+func TestWtxBusy(t *testing.T) {
+	s, fake, id := agentRepo(t)
+	ts := serve(t, s)
+	s.wtxMu.Lock()
+	defer s.wtxMu.Unlock()
+	for path, req := range map[string]any{"/api/issues/" + id[:8] + "/agent/go": map[string]string{}, "/api/worktrees/init": someAnswers} {
+		if code, c, body := sendFrom(t, "POST", ts.URL+path, ts.URL, req); code != http.StatusConflict || c != "busy" {
+			t.Errorf("%s while wtx runs: %d %q %s", path, code, c, body)
+		}
+	}
+	if calls := wtxCalls(t, fake); calls != nil {
+		t.Fatalf("calls = %v", calls)
+	}
+}
+
 func TestAgentBrief(t *testing.T) {
 	s, fake, id := agentRepo(t)
 	wt := addWorktree(t, s)

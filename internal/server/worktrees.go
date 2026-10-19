@@ -142,7 +142,9 @@ func (s *apiServer) wtxInit(w http.ResponseWriter, r *http.Request, write bool) 
 		// ponytail: --force always; the preview is what replaces the
 		// file, and wtx's --edit carried its values.
 		args = append(args, "--force")
-		s.wtxMu.Lock()
+		if !s.lockWtx(w) {
+			return
+		}
 		defer s.wtxMu.Unlock()
 	} else {
 		if dir, err = os.MkdirTemp("", "git-board-wtx-preview-"); err != nil {
@@ -252,6 +254,16 @@ func (s *apiServer) handleIssueAgent(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, a)
 }
 
+// lockWtx takes the one wtx write, or answers 409 busy: queued, a second
+// Start would wait in silence behind a wtx go of up to ten minutes.
+func (s *apiServer) lockWtx(w http.ResponseWriter) bool {
+	if s.wtxMu.TryLock() {
+		return true
+	}
+	writeCoded(w, http.StatusConflict, "busy", errors.New("wtx is busy starting an agent or writing wtx.toml: try again when it's done."))
+	return false
+}
+
 // POST /api/issues/{id}/agent/{action}, action go or brief, body
 // {"brief": "..."}: wtx go or wtx brief on the issue's branch, with a
 // prompt file of git-board's words and the issue quoted as data. The
@@ -272,7 +284,9 @@ func (s *apiServer) handleIssueAgentAction(w http.ResponseWriter, r *http.Reques
 	if !decode(w, r, &req) {
 		return
 	}
-	s.wtxMu.Lock()
+	if !s.lockWtx(w) {
+		return
+	}
 	defer s.wtxMu.Unlock()
 	th, err := s.b.Thread(r.PathValue("id"))
 	if err != nil {
