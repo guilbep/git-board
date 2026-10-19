@@ -73,7 +73,8 @@ func Serve(ctx context.Context, addr, me string, ready func(url string)) error {
 		}
 		host, _, _ = net.SplitHostPort(addr)
 	}
-	s := &apiServer{cfg: cfg, cfgPath: cfgPath, b: b, me: resolveMe(me), project: ghbridge.Gh, exposed: exposed, gitDir: gitDir}
+	root, _ := os.Getwd()
+	s := &apiServer{cfg: cfg, cfgPath: cfgPath, b: b, me: resolveMe(me), project: ghbridge.Gh, exposed: exposed, gitDir: gitDir, root: root}
 	// the pages' event streams end with ctx
 	srv := &http.Server{Handler: withCORS(newMux(s, http.FileServerFS(dist))), BaseContext: func(net.Listener) context.Context { return ctx }}
 	go s.watchRefs(3*time.Second, ctx.Done()) // changes made outside the API reach the pages

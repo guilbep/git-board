@@ -100,6 +100,11 @@ type apiServer struct {
 	releaseRun   *releaseJob
 	runnerMu     sync.Mutex
 
+	// root is the checkout the server runs in: wtx runs there
+	// (worktrees.go); wtxMu, one wtx write at a time
+	root  string
+	wtxMu sync.Mutex
+
 	lazyOnce
 }
 
@@ -173,6 +178,9 @@ func newMux(s *apiServer, static http.Handler) http.Handler {
 	mux.HandleFunc("GET /api/numbers", s.handleNumbers)
 	mux.HandleFunc("POST /api/numbers/init", s.handleNumbersInit)
 	mux.HandleFunc("POST /api/numbers/run", s.handleNumbersRun)
+	mux.HandleFunc("GET /api/worktrees", s.handleWorktrees)
+	mux.HandleFunc("POST /api/worktrees/preview", s.handleWtxPreview)
+	mux.HandleFunc("POST /api/worktrees/init", s.handleWtxInit)
 	mux.HandleFunc("GET /api/sync", s.handleSyncStatus)
 	mux.HandleFunc("POST /api/sync/check", s.handleSyncCheck)
 	mux.HandleFunc("POST /api/sync/apply", s.handleSyncApply)

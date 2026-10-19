@@ -139,7 +139,7 @@ func gateRepo(t *testing.T, url string, withToken bool) (*apiServer, *fakeGitHub
 	}
 	id := gitbugiotest.NewImportedIssue(t, b, "[BUG](Equipment) Crash on save (#2518)", "https://github.com/o/r/issues/2518")
 	gh := newFakeGitHub(t)
-	return &apiServer{cfg: &config.Config{}, b: b, me: "guilbep", githubAPI: gh.URL, gitDir: filepath.Join(dir, ".git")}, gh, id
+	return &apiServer{cfg: &config.Config{}, b: b, me: "guilbep", githubAPI: gh.URL, gitDir: filepath.Join(dir, ".git"), root: dir}, gh, id
 }
 
 func serve(t *testing.T, s *apiServer) *httptest.Server {
