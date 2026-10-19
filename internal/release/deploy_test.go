@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/guilbep/git-board/internal/gitbugio"
 	"github.com/guilbep/git-board/internal/release"
 	"github.com/guilbep/git-board/internal/release/releasetest"
 )
@@ -72,18 +73,20 @@ func TestDeployBuildsOnceAndCopies(t *testing.T) {
 		t.Fatalf("built %+v, want frontend and backend once each", tools.Built)
 	}
 	b := tools.Built[0]
-	if b.Ref != "ghcr.test/app/frontend:"+c || b.Revision != c || filepath.Base(b.Context) != "frontend" || strings.HasPrefix(b.Context, fx.App) {
-		t.Errorf("build = %+v, want ghcr.test/app/frontend:<sha> from a checkout of the commit", b)
+	if b.Ref != "ghcr.test/app/frontend:scan-"+c || b.Revision != c || filepath.Base(b.Context) != "frontend" || strings.HasPrefix(b.Context, fx.App) {
+		t.Errorf("build = %+v, want ghcr.test/app/frontend:scan-<sha> from a checkout of the commit", b)
 	}
 	if got := releasetest.Git(t, fx.App, "worktree", "list"); strings.Count(got, "\n") != 0 {
 		t.Errorf("the build checkout is left behind: %s", got)
 	}
-	wantCopied := []string{"ghcr.test/app/frontend:" + c + " → quay.test/app/frontend:" + c, "ghcr.test/app/backend:" + c + " → quay.test/app/backend:" + c}
+	fe, be := tools.Images["ghcr.test/app/frontend:"+c].Digest, tools.Images["ghcr.test/app/backend:"+c].Digest
+	wantCopied := []string{"ghcr.test/app/frontend@" + fe + " → quay.test/app/frontend:" + c, "ghcr.test/app/backend@" + be + " → quay.test/app/backend:" + c}
 	if !slices.Equal(tools.Copied, wantCopied) {
 		t.Errorf("copied %q, want %q", tools.Copied, wantCopied)
 	}
-	if len(tools.Tagged) != 4 || !slices.Contains(tools.Tagged, "quay.test/app/backend:"+c+" → "+dev) {
-		t.Errorf("tagged %q, want each image on each registry tagged %s", tools.Tagged, dev)
+	if len(tools.Tagged) != 6 || !slices.Contains(tools.Tagged, "ghcr.test/app/frontend:scan-"+c+" → "+c) ||
+		!slices.Contains(tools.Tagged, "quay.test/app/backend@"+be+" → "+dev) {
+		t.Errorf("tagged %q, want each scanned build tagged <sha>, each image on each registry tagged %s", tools.Tagged, dev)
 	}
 	if tools.Charts["oci://ghcr.test/app/helm "+dev] == "" {
 		t.Errorf("charts %v, want the chart pushed at %s", tools.Charts, dev)
@@ -123,12 +126,15 @@ func TestDeployBuildsOnceAndCopies(t *testing.T) {
 		t.Errorf("APP_VERSION not written:\n%s", raw)
 	}
 
-	deploy(t, r, "stage", release.Target{Commit: c, Version: "v1.0.1-rc.1"})
+	deploy(t, r, "stage", release.Target{Commit: c[:7], Version: "v1.0.1-rc.1"}) // a short sha is resolved
 	if len(tools.Built) != 2 || len(tools.Copied) != 2 {
 		t.Errorf("stage built %d, copied %d; want the dev images reused", len(tools.Built), len(tools.Copied))
 	}
 	st := status(t, r)
 	devImgs, stage := envOf(t, st, "dev"), envOf(t, st, "stage")
+	if stage.Commit != c {
+		t.Errorf("stage commit %q, want the full sha %s", stage.Commit, c)
+	}
 	for i := range stage.Targets {
 		for name, img := range stage.Targets[i].Deployed.Images {
 			if img.Digest != devImgs.Targets[i].Deployed.Images[name].Digest || img.Tag != "v1.0.1-rc.1" {
@@ -151,9 +157,10 @@ func TestEnsureImageRebuildsOnWrongRevision(t *testing.T) {
 	// a :<sha> tag left on an older build (reuse_unchanged_images)
 	tools.Images["ghcr.test/app/frontend:"+c] = releasetest.FakeImage{Digest: "sha256:old", Revision: "another"}
 	// built for c, but its copy to quay never happened
-	tools.Images["ghcr.test/app/backend:"+c] = releasetest.FakeImage{Digest: "sha256:be", Revision: c}
+	be := releasetest.FakeImage{Digest: "sha256:be", Revision: c}
+	tools.Images["ghcr.test/app/backend:"+c], tools.Images["ghcr.test/app/backend@sha256:be"] = be, be
 	deploy(t, r, "dev", release.Target{Commit: c, Version: "1.0.1-dev.1.g" + c[:7]})
-	if len(tools.Built) != 1 || tools.Built[0].Ref != "ghcr.test/app/frontend:"+c {
+	if len(tools.Built) != 1 || tools.Built[0].Ref != "ghcr.test/app/frontend:scan-"+c {
 		t.Errorf("built %+v, want frontend only", tools.Built)
 	}
 	if len(tools.Copied) != 2 {
@@ -251,25 +258,40 @@ func TestScanStopsDeploy(t *testing.T) {
 	r, tools, fx := releasetest.NewRunner(t)
 	first := adopt(t, fx, "dev")
 	c := fx.Commit(t, "feat")
-	tools.FailScan["ghcr.test/app/backend:"+c] = true
+	tools.FailScan["ghcr.test/app/backend:scan-"+c] = true
 	before := heads(t, fx)
-	err := r.Deploy(ctx, "dev", release.Target{Commit: c, Version: "1.0.1-dev.1.g" + c[:7]})
-	if err == nil || !strings.Contains(err.Error(), "backend") {
+	tg := release.Target{Commit: c, Version: "1.0.1-dev.1.g" + c[:7]}
+	err := r.Deploy(ctx, "dev", tg)
+	if err == nil || !strings.HasPrefix(err.Error(), "backend: ") {
 		t.Fatalf("err = %v, want the scan failure naming backend", err)
 	}
-	if len(tools.Tagged) != 0 || !slices.Equal(heads(t, fx), before) {
-		t.Errorf("after a failed scan: tagged %q, overlays written %v", tools.Tagged, !slices.Equal(heads(t, fx), before))
+	// the image that failed never counts as built: a retry scans again
+	if err := r.Deploy(ctx, "dev", tg); err == nil || !strings.HasPrefix(err.Error(), "backend: ") {
+		t.Fatalf("retry: err = %v, want the scan failure again", err)
+	}
+	if _, ok := tools.Images["ghcr.test/app/backend:"+c]; ok {
+		t.Error("the image that failed its scan got :<sha>")
+	}
+	for _, tag := range tools.Tagged {
+		if strings.Contains(tag, "backend") {
+			t.Errorf("after a failed scan backend was tagged: %s", tag)
+		}
+	}
+	if !slices.Equal(heads(t, fx), before) {
+		t.Error("an overlay was written after a failed scan")
 	}
 	if e := envOf(t, status(t, r), "dev"); e.Commit != first {
 		t.Errorf("dev = %+v", e)
 	}
 }
 
-// R3: a target is written only the images its overlay lists; an image no
-// target of the environment lists is an error.
+// R3: a target is written only the images its overlay lists, and an image
+// goes only to the registries whose overlays list it (built on the first);
+// an image no target of the environment lists is an error.
 func TestDeployOnlyImagesInTheOverlay(t *testing.T) {
 	r, tools, fx := releasetest.NewRunner(t)
 	dropImage(t, fx, 1, "dev", "quay.test/app/frontend")
+	dropImage(t, fx, 0, "dev", "ghcr.test/app/backend")
 	dropImage(t, fx, 0, "stage", "ghcr.test/app/frontend")
 	dropImage(t, fx, 1, "stage", "quay.test/app/frontend")
 	adopt(t, fx, "dev")
@@ -277,20 +299,86 @@ func TestDeployOnlyImagesInTheOverlay(t *testing.T) {
 	c := fx.Commit(t, "feat")
 	dev := "1.0.1-dev.1.g" + c[:7]
 	deploy(t, r, "dev", release.Target{Commit: c, Version: dev})
+	var built []string
+	for _, b := range tools.Built {
+		built = append(built, b.Ref)
+	}
+	if want := []string{"ghcr.test/app/frontend:scan-" + c, "quay.test/app/backend:scan-" + c}; !slices.Equal(built, want) || len(tools.Copied) != 0 {
+		t.Errorf("built %q, copied %q; want %q and no copy", built, tools.Copied, want)
+	}
 	e := envOf(t, status(t, r), "dev")
+	if imgs := e.Targets[0].Deployed.Images; len(imgs) != 1 || imgs["ghcr.test/app/frontend"].Tag != dev {
+		t.Errorf("dev on ghcr = %+v, want frontend only", imgs)
+	}
 	if imgs := e.Targets[1].Deployed.Images; len(imgs) != 1 || imgs["quay.test/app/backend"].Tag != dev {
 		t.Errorf("dev on quay = %+v, want backend only", imgs)
 	}
-	if imgs := e.Targets[0].Deployed.Images; imgs["ghcr.test/app/frontend"].Tag != dev || imgs["ghcr.test/app/backend"].Tag != dev {
-		t.Errorf("dev on ghcr = %+v", imgs)
-	}
-	built := len(tools.Built)
+	n := len(tools.Built)
 	err := r.Deploy(ctx, "stage", release.Target{Commit: c, Version: "v1.0.1-rc.1"})
 	if err == nil || err.Error() != "image frontend is in no overlay of stage" {
 		t.Errorf("err = %v", err)
 	}
-	if len(tools.Built) != built {
+	if len(tools.Built) != n {
 		t.Errorf("built before refusing")
+	}
+}
+
+// record makes c's release record, with a digest per image and registry
+// that the fake registry holds, and returns the digests by <registry>/<image>.
+func record(t *testing.T, r *release.Runner, tools *releasetest.Tools, c string, chart gitbugio.ChartArtifact) map[string]string {
+	t.Helper()
+	rec, digests := gitbugio.ReleaseRecord{Commit: c, Chart: chart}, map[string]string{}
+	for _, img := range []string{"frontend", "backend"} {
+		for _, reg := range []string{"ghcr.test/app", "quay.test/app"} {
+			d := "sha256:" + c[:6] + reg[:4] + img
+			digests[reg+"/"+img] = d
+			rec.Artifacts = append(rec.Artifacts, gitbugio.Artifact{Image: img, Registry: reg, Digest: d})
+			tools.Images[reg+"/"+img+"@"+d] = releasetest.FakeImage{Digest: d, Revision: "built by the old action"}
+		}
+	}
+	if _, err := r.B.CreateRelease(rec); err != nil {
+		t.Fatal(err)
+	}
+	return digests
+}
+
+// R15: a commit's release record has its digests; a record without a chart
+// (a release from before git-board) leaves the chart as it is.
+func TestDeployUsesRecordedDigests(t *testing.T) {
+	r, tools, fx := releasetest.NewRunner(t)
+	adopt(t, fx, "stage")
+	adopt(t, fx, "prod")
+	legacy := fx.Commit(t, "legacy")
+	// reuse_unchanged_images left :<sha> on another commit's build
+	tools.Images["ghcr.test/app/frontend:"+legacy] = releasetest.FakeImage{Digest: "sha256:wrong", Revision: "another"}
+	digests := record(t, r, tools, legacy, gitbugio.ChartArtifact{})
+	deploy(t, r, "prod", release.Target{Commit: legacy, Version: "v1.4.19"})
+	if len(tools.Built) != 0 || len(tools.Copied) != 0 || len(tools.Charts) != 0 {
+		t.Errorf("built %+v, copied %q, charts %v; want the record's digests only", tools.Built, tools.Copied, tools.Charts)
+	}
+	e := envOf(t, status(t, r), "prod")
+	for _, tg := range e.Targets {
+		for name, img := range tg.Deployed.Images {
+			if img.Digest != digests[name] || img.Tag != "v1.4.19" {
+				t.Errorf("prod %s = %+v, want %s", name, img, digests[name])
+			}
+		}
+		if tg.Deployed.Chart != "v0.1.0" {
+			t.Errorf("prod chart %q, want it left at v0.1.0", tg.Deployed.Chart)
+		}
+	}
+	if e.Commit != legacy || e.Version != "v1.4.19" {
+		t.Errorf("prod = %+v", e)
+	}
+
+	cut := fx.Commit(t, "cut")
+	record(t, r, tools, cut, gitbugio.ChartArtifact{Version: "v1.5.0-rc.1", Digest: "sha256:chart"})
+	deploy(t, r, "stage", release.Target{Commit: cut, Version: "v1.5.0-rc.1"})
+	if len(tools.Built) != 0 || len(tools.Charts) != 0 {
+		t.Errorf("built %+v, charts %v; want the recorded chart not pushed again", tools.Built, tools.Charts)
+	}
+	if got := envOf(t, status(t, r), "stage").Targets[1].Deployed.Chart; got != "v1.5.0-rc.1" {
+		t.Errorf("stage chart %q, want the recorded v1.5.0-rc.1", got)
 	}
 }
 
