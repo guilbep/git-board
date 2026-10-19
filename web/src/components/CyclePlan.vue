@@ -32,7 +32,7 @@
     <textarea v-model="ask" class="epfl-input" rows="3" aria-label="What to revise" placeholder="What the plan should change" :disabled="busy" />
     <div class="gb-cycle-actions">
       <button type="submit" class="epfl-btn epfl-btn-primary epfl-btn-sm" :disabled="busy || !ask.trim()">Post the request</button>
-      <span class="gb-note">A comment on the issue: the agent reads it and revises the plan.</span>
+      <span class="gb-note">{{ sends ? 'Posted on the issue and sent to the agent.' : 'Posted on the issue.' }}</span>
     </div>
   </form>
   <p class="gb-note">Once it’s approved, step 4 starts: the agent writes the failing test first.</p>
@@ -43,7 +43,8 @@ import { computed, ref } from 'vue';
 import type { Cycle } from '@/api/board';
 import MarkdownBody from '@/components/MarkdownBody.vue';
 
-const props = defineProps<{ cycle: Cycle; busy: boolean; can: boolean }>(); // can: the viewer may approve (the server's actions)
+// can: the viewer may approve (the server's actions); sends: the request also briefs the agent
+const props = defineProps<{ cycle: Cycle; busy: boolean; can: boolean; sends?: boolean }>();
 const emit = defineEmits<{ approve: []; revise: [body: string] }>();
 
 const plan = computed(() => props.cycle.evidence.plan);

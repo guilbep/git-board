@@ -25,6 +25,7 @@
         Tell git-board your forge login: without it, no role and no field can name you. Run <code>git bug bridge new</code>, or start the server with <code>--me your-login</code>.
       </p>
       <p v-else-if="error" class="gb-error">{{ error.message }}</p>
+      <p v-if="agentNote" class="gb-hint" role="status">{{ agentNote }}</p>
 
       <template v-if="data">
         <section class="gb-work-group" aria-labelledby="needs-h">
@@ -34,7 +35,10 @@
               <thead><tr><th>Issue</th><th>Step</th><th>Waits for</th><th>Since</th><th><span class="visually-hidden">Action</span></th></tr></thead>
               <tbody>
                 <tr v-for="r in data.needs" :key="r.issue.id">
-                  <td><router-link :to="`/issues/${r.issue.id}`"><span v-if="numberOf(r.issue)" class="gb-work-num">#{{ numberOf(r.issue) }}</span> {{ r.issue.shown_title }}</router-link></td>
+                  <td>
+                    <router-link :to="`/issues/${r.issue.id}`"><span v-if="numberOf(r.issue)" class="gb-work-num">#{{ numberOf(r.issue) }}</span> {{ r.issue.shown_title }}</router-link>
+                    <button v-if="canStart(r)" type="button" class="gb-linkbtn gb-work-start" :disabled="busy" @click="start(r.issue.id)">{{ starting === r.issue.id ? 'Starting…' : 'Start an agent' }}</button>
+                  </td>
                   <td class="gb-work-step">{{ stepLabel(r.step, r.name) }}</td>
                   <td>{{ waitsFor(r) }}</td>
                   <td class="gb-work-since">{{ ago(r.since) }}</td>
@@ -56,13 +60,19 @@
         </section>
 
         <section v-if="data.agents.length" class="gb-work-group" aria-labelledby="agents-h">
-          <h2 id="agents-h" class="h5">Agents <span class="gb-work-n">{{ data.agents.length }} {{ data.agents.length === 1 ? 'worktree' : 'worktrees' }}</span></h2>
+          <h2 id="agents-h" class="h5">Agents <span class="gb-work-n">{{ data.agents.length }} {{ data.agents.length === 1 ? 'worktree' : 'worktrees' }}</span><span v-if="data.reason" class="gb-work-n">· {{ data.reason }}</span></h2>
           <ul class="gb-work-agents">
             <li v-for="a in data.agents" :key="a.path">
               <code class="gb-work-branch" :title="a.path">{{ a.branch }}</code>
               <span v-if="a.issue" class="gb-work-step">{{ stepLabel(a.step ?? 0, a.name ?? '') }}</span>
               <span>{{ a.state }}<template v-if="a.issue"> · <router-link :to="`/issues/${a.issue.id}`">{{ a.issue.shown_title }}</router-link></template></span>
+              <span v-if="data.can_start" class="gb-work-session">{{ agentWords(a.session, true) }}</span>
               <span class="gb-work-since">Last commit {{ ago(a.at) }}</span>
+              <button v-if="a.issue && data.can_start" type="button" class="gb-linkbtn" :aria-expanded="briefing === a.path" @click="briefing = briefing === a.path ? '' : a.path">Brief</button>
+              <form v-if="a.issue && briefing === a.path" class="gb-work-brief" @submit.prevent="brief(a.issue.id)">
+                <textarea v-model="briefText" class="epfl-input" rows="3" :aria-label="`Brief the agent on ${a.branch}`" :disabled="busy" />
+                <button type="submit" class="epfl-btn epfl-btn-primary epfl-btn-sm" :disabled="busy || !briefText.trim()">Send</button>
+              </form>
             </li>
           </ul>
         </section>
@@ -74,7 +84,10 @@
               <thead><tr><th>Issue</th><th>Step</th><th>Waits for</th><th>Since</th></tr></thead>
               <tbody>
                 <tr v-for="r in data.waiting" :key="r.issue.id">
-                  <td><router-link :to="`/issues/${r.issue.id}`"><span v-if="numberOf(r.issue)" class="gb-work-num">#{{ numberOf(r.issue) }}</span> {{ r.issue.shown_title }}</router-link></td>
+                  <td>
+                    <router-link :to="`/issues/${r.issue.id}`"><span v-if="numberOf(r.issue)" class="gb-work-num">#{{ numberOf(r.issue) }}</span> {{ r.issue.shown_title }}</router-link>
+                    <button v-if="canStart(r)" type="button" class="gb-linkbtn gb-work-start" :disabled="busy" @click="start(r.issue.id)">{{ starting === r.issue.id ? 'Starting…' : 'Start an agent' }}</button>
+                  </td>
                   <td class="gb-work-step">{{ stepLabel(r.step, r.name) }}</td>
                   <td>{{ waitsFor(r) }}</td>
                   <td class="gb-work-since">{{ ago(r.since) }}</td>
@@ -139,7 +152,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import AppHeader from '@/components/AppHeader.vue';
 import IssuePanel from '@/components/IssuePanel.vue';
-import { ApiError, getFields, getViews, getWork, patchIssue, startForgeSync, type Issue, type WorkResponse, type WorkRow } from '@/api/board';
+import { agentAction, ApiError, getFields, getViews, getWork, patchIssue, startForgeSync, type Issue, type WorkResponse, type WorkRow } from '@/api/board';
 import { namespaces } from '@/facets';
 import type { Fields } from '@/fields';
 import { forgeNumbers } from '@/issuesync';
@@ -147,6 +160,7 @@ import { debounced, onLive } from '@/live';
 import { me } from '@/me';
 import { panelMode } from '@/panelsize';
 import { actionFor, ago, retroWords, sendWords, stepLabel, waitsFor } from '@/work';
+import { agentWords } from '@/worktrees';
 
 const route = useRoute();
 const router = useRouter();
@@ -211,6 +225,35 @@ async function send(dry: boolean) {
   } finally {
     busy.value = false;
   }
+}
+
+// the agents, through wtx (internal/server/worktrees.go): Brief on an
+// Agents row, Start an agent on an issue that has none
+const briefing = ref('');
+const briefText = ref('');
+const starting = ref('');
+const agentNote = ref('');
+const withAgent = computed(() => new Set(data.value?.agents.map((a) => a.issue?.id)));
+const canStart = (r: WorkRow) => !!data.value?.can_start && !withAgent.value.has(r.issue.id);
+async function agent(id: string, action: 'go' | 'brief', text: string) {
+  busy.value = true;
+  agentNote.value = '';
+  try {
+    const r = await agentAction(id, action, text);
+    agentNote.value = action === 'go' ? `Session ${r.session?.session ?? r.branch} started.` : 'Sent to the agent.';
+    briefing.value = briefText.value = '';
+    await reload();
+  } catch (e) {
+    agentNote.value = e instanceof Error ? e.message : String(e);
+  } finally {
+    busy.value = false;
+    starting.value = '';
+  }
+}
+const brief = (id: string) => agent(id, 'brief', briefText.value.trim());
+function start(id: string) {
+  starting.value = id;
+  void agent(id, 'go', '');
 }
 
 // Answer: the panel, scrolled to the question
@@ -279,6 +322,10 @@ onBeforeUnmount(() => stopLive());
 .gb-work-agents, .gb-work-lines { list-style: none; margin: 0; padding: 0; }
 .gb-work-agents li { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-1) var(--space-3); padding: var(--space-2) 0; border-bottom: var(--border-w) solid var(--border-subtle); }
 .gb-work-branch { font-size: .875rem; }
+.gb-work-session { font-size: .875rem; }
+.gb-work-brief { display: grid; flex-basis: 100%; gap: var(--space-2); justify-items: start; }
+.gb-work-brief textarea { width: 100%; }
+.gb-work-start { display: block; font-size: .8125rem; color: var(--fg-muted); }
 .gb-work-lines li { padding: .125rem 0; font-size: .9375rem; }
 .gb-work-send { display: flex; gap: var(--space-2); margin: var(--space-3) 0; }
 .gb-work-aside p { margin: 0 0 var(--space-2); }

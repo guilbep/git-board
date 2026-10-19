@@ -22,7 +22,7 @@
 
         <section class="gb-ws" :aria-label="`Step ${cycle.step}: ${cycle.name}`">
           <p class="gb-eyebrow">Step {{ cycle.step }} · {{ cycle.name }}<template v-if="cycle.risk"> · {{ cycle.risk }}</template></p>
-          <CyclePlan v-if="cycle.step === 3 && !cycle.done" :cycle="cycle" :busy="busy" :can="has('approve-plan')" @approve="act('approve-plan')" @revise="(body) => emit('comment', body)" />
+          <CyclePlan v-if="cycle.step === 3 && !cycle.done" :cycle="cycle" :busy="busy || !!agentBusy" :can="has('approve-plan')" :sends="button === 'brief'" @approve="act('approve-plan')" @revise="revise" />
           <CycleVerify
             v-else-if="cycle.step === 7 && !cycle.done"
             :cycle="cycle"
@@ -58,14 +58,28 @@
       <footer class="gb-cycle-bar" aria-label="Status">
         <span v-for="s in bar" :key="s">{{ s }}</span>
       </footer>
+      <div v-if="agent" class="gb-agent">
+        <span v-if="agent.reason" class="gb-note">{{ agent.reason }}</span>
+        <button v-else-if="button === 'start'" type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" :disabled="!!agentBusy" @click="run('go', '')">
+          {{ agentBusy === 'go' ? 'Starting…' : 'Start an agent' }}
+        </button>
+        <button v-else type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" :aria-expanded="briefing" :disabled="!!agentBusy" @click="briefing = !briefing">Brief the agent</button>
+        <span v-if="agentNote" class="gb-note" role="status">{{ agentNote }}</span>
+        <form v-if="briefing && button === 'brief'" class="gb-agent-brief" @submit.prevent="run('brief', briefText.trim())">
+          <textarea v-model="briefText" class="epfl-input" rows="3" aria-label="What the agent should do" :disabled="!!agentBusy" />
+          <button type="submit" class="epfl-btn epfl-btn-primary epfl-btn-sm" :disabled="!!agentBusy || !briefText.trim()">{{ agentBusy === 'brief' ? 'Sending…' : 'Send' }}</button>
+        </form>
+      </div>
     </template>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
-import type { Forge, IssueEvent } from '@/api/board';
+import { computed, ref, watch } from 'vue';
+import { agentAction, getIssueAgent, type Forge, type IssueAgent, type IssueEvent } from '@/api/board';
 import { cardFor, progressLine, spine, statusBar } from '@/cycle';
+import { message } from '@/issue';
+import { agentButton, agentWords } from '@/worktrees';
 import { useCycle } from '@/usecycle';
 import CyclePlan from '@/components/CyclePlan.vue';
 import CycleVerify from '@/components/CycleVerify.vue';
@@ -82,5 +96,43 @@ const riskBy = computed(() => props.events.findLast((e) => e.kind === 'labels' &
 const rows = computed(() => (cycle.value ? spine(cycle.value, riskBy.value) : []));
 // what waits for the forges, as the side counts it; null without a forge
 const waiting = computed(() => (props.forges?.length ? props.events.filter((e) => e.pending?.length || e.edit_pending?.length).length : null));
-const bar = computed(() => (cycle.value ? statusBar(cycle.value, waiting.value) : []));
+const bar = computed(() => {
+  if (!cycle.value) return [];
+  const out = statusBar(cycle.value, waiting.value);
+  const a = agent.value;
+  if (a?.worktree) out.push(a.worktree.path.replace(/^.*\//, ''));
+  if (a && !a.reason) out.push(agentWords(a.session, !!a.worktree));
+  return out;
+});
+
+// the agent on this issue (wtx, internal/server/worktrees.go): read with
+// every cycle load; Start an agent without a worktree, Brief it with one
+const agent = ref<IssueAgent | null>(null);
+const agentBusy = ref<'' | 'go' | 'brief'>('');
+const agentNote = ref('');
+const briefing = ref(false);
+const briefText = ref('');
+const button = computed(() => (agent.value ? agentButton(agent.value) : null));
+watch(cycle, () => void getIssueAgent(props.id).then((a) => (agent.value = a), () => (agent.value = null)));
+
+async function run(action: 'go' | 'brief', brief: string) {
+  agentBusy.value = action;
+  agentNote.value = '';
+  try {
+    agent.value = await agentAction(props.id, action, brief);
+    agentNote.value = action === 'go' ? `Session ${agent.value.session?.session ?? agent.value.branch} started.` : 'Sent to the agent.';
+    briefing.value = false;
+    briefText.value = '';
+  } catch (e) {
+    agentNote.value = message(e);
+  } finally {
+    agentBusy.value = '';
+  }
+}
+
+// Ask the agent to revise: the comment (M2), and a brief when it has a worktree
+function revise(body: string) {
+  emit('comment', body);
+  if (button.value === 'brief') void run('brief', body);
+}
 </script>
