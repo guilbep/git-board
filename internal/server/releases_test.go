@@ -2,8 +2,10 @@ package server
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -26,7 +28,9 @@ func releaseServer(t *testing.T) (*apiServer, *httptest.Server, *releasetest.Fix
 	t.Helper()
 	r, tools, fx := releasetest.NewRunner(t)
 	t.Chdir(fx.App)
-	s := &apiServer{cfg: &config.Config{Release: r.Cfg}, b: r.B, me: "dev", releaseTools: tools, releaseCache: t.TempDir()}
+	// the trunk named: the fixture's clone of an empty remote has no origin/HEAD
+	cfg := &config.Config{Release: r.Cfg, Branches: config.Branches{Base: "dev"}}
+	s := &apiServer{cfg: cfg, b: r.B, me: "dev", releaseTools: tools, releaseCache: t.TempDir()}
 	ts := httptest.NewServer(withCORS(newMux(s, http.NotFoundHandler())))
 	t.Cleanup(ts.Close)
 	return s, ts, fx
@@ -153,21 +157,28 @@ func TestDeployJobRunsAndPublishes(t *testing.T) {
 	head := fx.Commit(t, "feat")
 	events, cancel := s.events.subscribe()
 	defer cancel()
-	published := make(chan int)
+	published := make(chan struct{}, 100)
 	go func() {
-		n := 0
 		for data := range events {
 			var e event
 			if json.Unmarshal(data, &e) == nil && e.Kind == "releases" {
-				n++
+				published <- struct{}{}
 			}
 		}
-		published <- n
 	}()
 
+	// {tag?}: an empty body is the trunk's head
+	req, _ := http.NewRequest("POST", ts.URL+"/api/environments/dev/deploy", nil)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
 	var job releaseJob
-	if status := call(t, "POST", ts.URL+"/api/environments/dev/deploy", map[string]string{}, &job); status != http.StatusAccepted || job.Kind != "deploy" || job.State != "running" {
-		t.Fatalf("POST deploy = %d %+v", status, job)
+	_ = json.NewDecoder(resp.Body).Decode(&job)
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusAccepted || job.Kind != "deploy" || job.State != "running" {
+		t.Fatalf("POST deploy = %d %+v", resp.StatusCode, job)
 	}
 	job = waitRelease(t, ts)
 	if job.State != "done" || len(job.Steps) == 0 || job.Ended == nil || job.Error != "" {
@@ -178,10 +189,15 @@ func TestDeployJobRunsAndPublishes(t *testing.T) {
 			t.Errorf("step %+v, want each step once, done", st)
 		}
 	}
-	cancel()
-	// the POST's own, then each step's running and done, and the end
-	if n := <-published; n < len(job.Steps)+2 {
-		t.Errorf("%d releases events for %d steps", n, len(job.Steps))
+	// the POST's own, each step's running and done, and one after the
+	// final state, which may come after the state was seen
+	want := 2*len(job.Steps) + 2
+	for n := 0; n < want; n++ {
+		select {
+		case <-published:
+		case <-time.After(5 * time.Second):
+			t.Fatalf("%d releases events, want %d: the POST's, two per step and the end's", n, want)
+		}
 	}
 	var got releasesResponse
 	getJSON(t, ts.URL+"/api/releases", &got)
@@ -191,7 +207,8 @@ func TestDeployJobRunsAndPublishes(t *testing.T) {
 }
 
 func TestSecondJobConflicts(t *testing.T) {
-	s, ts, _ := releaseServer(t)
+	s, ts, fx := releaseServer(t)
+	fx.Tag(t, firstCommit(t, fx), "v1.0.0")
 	s.releaseRun = &releaseJob{Kind: "deploy", Subject: "dev", State: "running", Steps: []release.Step{}, Started: time.Now()}
 	for _, w := range []struct {
 		method, path string
@@ -203,6 +220,8 @@ func TestSecondJobConflicts(t *testing.T) {
 		{"POST", "/api/environments/prod/rollback", map[string]string{"tag": "v1.0.0", "reason": "bad"}},
 		{"POST", "/api/releases/v1.0.0/yank", map[string]string{"reason": "bad"}},
 		{"PUT", "/api/releases/v1.0.0/notes", map[string]string{"notes": "x"}},
+		{"POST", "/api/releases/v1.0.0/comments", map[string]string{"message": "x"}},
+		{"POST", "/api/releases/adopt", map[string]any{"proposals": []any{}}},
 	} {
 		if status, code, _ := coded(t, w.method, ts.URL+w.path, w.body); status != http.StatusConflict || code != "releasing" {
 			t.Errorf("%s %s = %d %q, want 409 releasing", w.method, w.path, status, code)
@@ -309,5 +328,135 @@ func TestReleasesNotesAndComments(t *testing.T) {
 	}
 	if status, _, msg := coded(t, "GET", ts.URL+"/api/releases/v9.9.9", nil); status != http.StatusNotFound || msg != "no release tag v9.9.9" {
 		t.Errorf("unknown tag: %d %q", status, msg)
+	}
+}
+
+// panicky is the fake tools, but a registry lookup panics.
+type panicky struct{ release.Tools }
+
+func (panicky) Revision(context.Context, string) (string, string, error) { panic("registry exploded") }
+
+// A read or a quick write that panics leaves the runner free: the next job
+// or write isn't wedged behind it.
+func TestReleasesRunnerFreedAfterAPanic(t *testing.T) {
+	s, _, _ := releaseServer(t)
+	s.releaseTools = panicky{s.releaseTools}
+	ts := httptest.NewUnstartedServer(newMux(s, http.NotFoundHandler()))
+	ts.Config.ErrorLog = log.New(io.Discard, "", 0) // net/http recovers the panic and logs its stack
+	ts.Start()
+	defer ts.Close()
+
+	if resp, err := http.Get(ts.URL + "/api/releases/draft"); err == nil { // the draft's image check panics
+		_ = resp.Body.Close()
+	}
+	if !s.runnerMu.TryLock() {
+		t.Fatal("a read that panicked left the runner held")
+	}
+	s.runnerMu.Unlock()
+
+	func() {
+		defer func() { _ = recover() }()
+		s.quickWrite(httptest.NewRecorder(), func(context.Context) error { panic("engine exploded") })
+	}()
+	if !s.runnerMu.TryLock() {
+		t.Fatal("a quick write that panicked left the runner held")
+	}
+	s.runnerMu.Unlock()
+}
+
+// R25: an issue's environments are read as the last fetch left them; the
+// Releases page's read is the one that fetches.
+func TestIssueEnvironmentsReadOffline(t *testing.T) {
+	s, ts, fx := releaseServer(t)
+	c := firstCommit(t, fx)
+	runs(t, fx, "dev", c, "1.0.0-dev.0.g"+c[:7])
+	id := gitbugiotest.NewImportedIssue(t, s.b, "a", "https://github.com/org/app/issues/12")
+	m := fx.Merge(t, "fix/12-a", "")
+	getJSON(t, ts.URL+"/api/releases", nil) // fetched: dev runs c
+
+	runs(t, fx, "dev", m, "1.0.1-dev.1.g"+m[:7]) // pushed to the config repos
+	var got []issueEnvironment
+	getJSON(t, ts.URL+"/api/issues/"+id+"/environments", &got)
+	if len(got) != 3 || got[0].In || got[0].Version != "1.0.0-dev.0.g"+c[:7] {
+		t.Errorf("before a fetch: %+v, want dev as last fetched, without it", got)
+	}
+	getJSON(t, ts.URL+"/api/releases", nil)
+	getJSON(t, ts.URL+"/api/issues/"+id+"/environments", &got)
+	if len(got) != 3 || !got[0].In {
+		t.Errorf("after a fetch: %+v, want dev with it", got)
+	}
+}
+
+// R26: a record written outside the server (a CLI cut, a pull) reaches the
+// Releases page.
+func TestReleasesFromOutsideArePublished(t *testing.T) {
+	_, s := newIssueServer(t)
+	events, cancel := s.events.subscribe()
+	defer cancel()
+	stop := make(chan struct{})
+	defer close(stop)
+	go s.watchRefs(10*time.Millisecond, stop)
+	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(5 * time.Millisecond) { // the watcher has seen the refs
+		s.refsMu.Lock()
+		seen := s.refs != ""
+		s.refsMu.Unlock()
+		if seen {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the watcher didn't start")
+		}
+	}
+
+	if _, err := s.b.CreateRelease(gitbugio.ReleaseRecord{Commit: "0123456789abcdef0123456789abcdef01234567"}); err != nil {
+		t.Fatal(err)
+	}
+	for timeout := time.After(5 * time.Second); ; {
+		select {
+		case data := <-events:
+			var e event
+			if json.Unmarshal(data, &e) == nil && e.Kind == "releases" {
+				return
+			}
+		case <-timeout:
+			t.Fatal("no releases event for a record written outside the server")
+		}
+	}
+}
+
+// What a request gets wrong is refused before anything runs: 400 for its
+// body, 404 for a tag or record that isn't there.
+func TestReleasesRequestChecks(t *testing.T) {
+	s, ts, fx := releaseServer(t)
+	c := firstCommit(t, fx)
+	fx.Tag(t, c, "v1.0.0", "v1.0.1")
+	runs(t, fx, "prod", c, "v1.0.1")
+	if _, err := s.b.CreateRelease(gitbugio.ReleaseRecord{Commit: c}); err != nil { // v1.0.0's and v1.0.1's
+		t.Fatal(err)
+	}
+	fx.Tag(t, fx.Commit(t, "later"), "v1.0.2") // no record
+	for _, w := range []struct {
+		method, path string
+		body         any
+		status       int
+		msg          string
+	}{
+		{"POST", "/api/releases/v1.0.0/comments", map[string]string{"message": ""}, 400, "message is required"},
+		{"POST", "/api/environments/prod/rollback", map[string]string{"tag": "latest", "reason": "bad"}, 400, `"latest" isn't a release tag`},
+		{"POST", "/api/environments/prod/rollback", map[string]string{"tag": "v1.0.0"}, 400, "a rollback takes a tag and a reason"},
+		{"POST", "/api/environments/prod/rollback", map[string]string{"tag": "v9.9.9", "reason": "bad"}, 404, `no release tag "v9.9.9"`},
+		{"POST", "/api/environments/stage/deploy", map[string]string{"tag": "v9.9.9"}, 404, `no release tag "v9.9.9"`},
+		{"POST", "/api/releases/v9.9.9/yank", map[string]string{"reason": "bad"}, 404, "no release tag v9.9.9"},
+		{"POST", "/api/releases/v1.0.2/yank", map[string]string{"reason": "bad"}, 404, "v1.0.2 has no release record"},
+	} {
+		if status, _, msg := coded(t, w.method, ts.URL+w.path, w.body); status != w.status || msg != w.msg {
+			t.Errorf("%s %s %v = %d %q, want %d %q", w.method, w.path, w.body, status, msg, w.status, w.msg)
+		}
+	}
+	if job := s.jobSnapshot(); job != nil {
+		t.Errorf("a refused request started %+v", job)
+	}
+	if status := call(t, "PUT", ts.URL+"/api/releases/v1.0.0/notes", map[string]string{"notes": ""}, nil); status != http.StatusOK {
+		t.Errorf("clearing the notes = %d", status)
 	}
 }

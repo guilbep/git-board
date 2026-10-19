@@ -2,9 +2,13 @@ package release
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 )
+
+// ErrNoRecord means a release tag's commit has no release record yet.
+var ErrNoRecord = errors.New("has no release record")
 
 // Notes is the release notes in CHANGELOG form, newest first: finals, and
 // candidates too when all. Each release is "## <tag> (<date>)" and its
@@ -63,7 +67,7 @@ func (r *Runner) editRecord(ctx context.Context, what, tag string, edit func(id 
 	case err != nil:
 		return err
 	case !ok:
-		return fmt.Errorf("%s has no release record", tag)
+		return fmt.Errorf("%s %w", tag, ErrNoRecord)
 	}
 	if err := edit(rec.ID); err != nil {
 		return err

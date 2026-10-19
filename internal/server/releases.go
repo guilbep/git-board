@@ -2,12 +2,15 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/guilbep/git-board/internal/release"
@@ -20,7 +23,9 @@ import (
 //
 // runnerMu serializes the Runner's fetches and writes: a job holds it for
 // its whole run, a quick write for its own, and a read takes it when free
-// (it fetches) or reads offline, what was last fetched, beside a job.
+// (it fetches) or reads offline, what was last fetched, beside a job. An
+// issue's environments are always read offline: an issue page fetches
+// nothing; the Releases page does.
 
 var (
 	errNoRelease = errors.New("no [release] in .git-board.toml")
@@ -93,8 +98,9 @@ func writeRunnerError(w http.ResponseWriter, err error) {
 	writeError(w, status, err)
 }
 
-// reader is a Runner for a read and the func that ends it: online when the
-// runner is free, else Offline, beside the job or write holding it.
+// reader is a Runner for a read and the func that ends it, which the
+// caller defers and may call earlier: online when the runner is free, else
+// Offline, beside the job or write holding it.
 func (s *apiServer) reader(w http.ResponseWriter) (*release.Runner, func(), bool) {
 	r, err := s.runner()
 	if err != nil {
@@ -105,7 +111,7 @@ func (s *apiServer) reader(w http.ResponseWriter) (*release.Runner, func(), bool
 		r.Offline = true
 		return r, func() {}, true
 	}
-	return r, s.runnerMu.Unlock, true
+	return r, sync.OnceFunc(s.runnerMu.Unlock), true
 }
 
 func (s *apiServer) releasing() bool {
@@ -123,14 +129,21 @@ func (s *apiServer) quickWrite(w http.ResponseWriter, write func(ctx context.Con
 		writeCoded(w, http.StatusConflict, "releasing", errReleasing)
 		return
 	}
-	s.runnerMu.Lock()
-	err := write(context.Background())
-	s.runnerMu.Unlock()
-	if err != nil {
+	err := func() error {
+		s.runnerMu.Lock()
+		defer s.runnerMu.Unlock()
+		return write(context.Background())
+	}()
+	switch {
+	case errors.Is(err, release.ErrNoTag) || errors.Is(err, release.ErrNoRecord):
+		writeError(w, http.StatusNotFound, err)
+	case errors.Is(err, release.ErrBadProposal):
 		writeError(w, http.StatusBadRequest, err)
-		return
+	case err != nil: // a fetch or a push
+		writeError(w, http.StatusInternalServerError, err)
+	default:
+		writeJSON(w, http.StatusOK, struct{}{})
 	}
-	writeJSON(w, http.StatusOK, struct{}{})
 }
 
 // startJob runs f in the background as the job, answering 202 and the job,
@@ -220,6 +233,7 @@ func (s *apiServer) handleReleases(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	defer done()
 	st, err := run.Status(r.Context())
 	done()
 	if err != nil {
@@ -234,8 +248,8 @@ func (s *apiServer) handleDraft(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	defer done()
 	d, err := run.Draft(r.Context(), r.URL.Query().Get("final") == "1")
-	done()
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
@@ -252,8 +266,8 @@ func (s *apiServer) handleProposals(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	defer done()
 	ps, err := run.Proposals(r.Context())
-	done()
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
@@ -266,8 +280,14 @@ func (s *apiServer) handleRelease(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	d, found, err := detail(r.Context(), run, r.PathValue("tag"))
-	done()
+	defer done()
+	st, err := run.Status(r.Context())
+	done() // the rest reads what Status fetched
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	d, found, err := detail(r.Context(), run, st, r.PathValue("tag"))
 	switch {
 	case err != nil:
 		writeError(w, http.StatusInternalServerError, err)
@@ -278,13 +298,11 @@ func (s *apiServer) handleRelease(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// detail is the page of release tag name; found is false when no release
-// tag has the name.
-func detail(ctx context.Context, run *release.Runner, name string) (d releaseDetail, found bool, err error) {
-	st, err := run.Status(ctx)
-	if err != nil {
-		return d, false, err
-	}
+// detail is the page of release tag name in st, read without fetching;
+// found is false when no release tag has the name.
+// ponytail: reopens the config repos Status opened (a stat each); Status
+// returning them is the upgrade if it ever shows
+func detail(ctx context.Context, run *release.Runner, st release.Status, name string) (d releaseDetail, found bool, err error) {
 	i := slices.IndexFunc(st.Releases, func(row release.ReleaseRow) bool { return row.Tag.Name == name })
 	if i < 0 {
 		return d, false, nil
@@ -326,19 +344,20 @@ func detail(ctx context.Context, run *release.Runner, name string) (d releaseDet
 // handleIssueEnvironments answers, for each environment, whether it runs
 // a branch of the issue merged into the base: its head is an ancestor of
 // the environment's commit. Split or not adopted, an environment has none.
+// It reads offline (R25), so it never waits for the runner.
 func (s *apiServer) handleIssueEnvironments(w http.ResponseWriter, r *http.Request) {
-	run, done, ok := s.reader(w)
-	if !ok {
+	run, err := s.runner()
+	if err != nil {
+		writeRunnerError(w, err)
 		return
 	}
+	run.Offline = true
 	is, err := s.b.GetIssue(r.PathValue("id"))
 	if err != nil {
-		done()
 		writeError(w, http.StatusNotFound, err)
 		return
 	}
 	st, err := run.Status(r.Context())
-	done()
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
@@ -366,7 +385,8 @@ func (s *apiServer) handleIssueEnvironments(w http.ResponseWriter, r *http.Reque
 }
 
 // The writes: each answers 404 without [release], then 400 for what the
-// request got wrong, then 409 releasing while a job runs.
+// request got wrong, 404 for a tag or environment that isn't there, then
+// 409 releasing while a job runs.
 
 func (s *apiServer) handleReleaseNotes(w http.ResponseWriter, r *http.Request) {
 	run, err := s.runner()
@@ -393,6 +413,10 @@ func (s *apiServer) handleReleaseComment(w http.ResponseWriter, r *http.Request)
 		Message string `json:"message"`
 	}
 	if !decode(w, r, &req) {
+		return
+	}
+	if req.Message == "" {
+		writeError(w, http.StatusBadRequest, errors.New("message is required"))
 		return
 	}
 	s.quickWrite(w, func(ctx context.Context) error { return run.Comment(ctx, r.PathValue("tag"), req.Message) })
@@ -489,6 +513,26 @@ func environment(w http.ResponseWriter, r *http.Request, run *release.Runner) (s
 	return env, true
 }
 
+// releaseTag is the release tag a request names, false when it names none:
+// answered 400 when the name isn't a release tag's, 404 when no such tag
+// has been fetched.
+func releaseTag(w http.ResponseWriter, r *http.Request, run *release.Runner, name string) (release.Tag, bool) {
+	if _, ok := release.ParseTag(name); !ok {
+		writeError(w, http.StatusBadRequest, fmt.Errorf("%q isn't a release tag", name))
+		return release.Tag{}, false
+	}
+	tags, err := release.ReleaseTags(r.Context(), run.Dir)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return release.Tag{}, false
+	}
+	if i := slices.IndexFunc(tags, func(t release.Tag) bool { return t.Name == name }); i >= 0 {
+		return tags[i], true
+	}
+	writeError(w, http.StatusNotFound, fmt.Errorf("no release tag %q", name))
+	return release.Tag{}, false
+}
+
 func (s *apiServer) handleDeploy(w http.ResponseWriter, r *http.Request) {
 	run, err := s.runner()
 	if err != nil {
@@ -498,7 +542,8 @@ func (s *apiServer) handleDeploy(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Tag string `json:"tag"` // "": the trunk's head, to the followed environment
 	}
-	if !decode(w, r, &req) {
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil && !errors.Is(err, io.EOF) { // {tag?}: a body is optional
+		writeError(w, http.StatusBadRequest, err)
 		return
 	}
 	env, ok := environment(w, r, run)
@@ -515,12 +560,12 @@ func (s *apiServer) handleDeploy(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	if _, ok := release.ParseTag(req.Tag); !ok {
-		writeError(w, http.StatusBadRequest, fmt.Errorf("%q isn't a release tag", req.Tag))
+	t, ok := releaseTag(w, r, run, req.Tag)
+	if !ok {
 		return
 	}
-	s.startJob(w, run, "deploy", req.Tag+" to "+env, func(ctx context.Context, run *release.Runner) (string, error) {
-		return "", run.Deploy(ctx, env, release.Target{Commit: "refs/tags/" + req.Tag, Version: req.Tag})
+	s.startJob(w, run, "deploy", t.Name+" to "+env, func(ctx context.Context, run *release.Runner) (string, error) {
+		return "", run.Deploy(ctx, env, release.Target{Commit: t.Commit, Version: t.Name})
 	})
 }
 
@@ -543,6 +588,9 @@ func (s *apiServer) handleRollback(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.Tag == "" || req.Reason == "" {
 		writeError(w, http.StatusBadRequest, errors.New("a rollback takes a tag and a reason"))
+		return
+	}
+	if _, ok := releaseTag(w, r, run, req.Tag); !ok {
 		return
 	}
 	s.startJob(w, run, "rollback", env+" to "+req.Tag, func(ctx context.Context, run *release.Runner) (string, error) {

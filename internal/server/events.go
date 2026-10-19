@@ -160,9 +160,10 @@ func (r *statusRecorder) WriteHeader(code int) {
 	r.ResponseWriter.WriteHeader(code)
 }
 
-// watchRefs publishes an issues event when the issues' or people's refs
-// change without going through the API (a sync job, a git fetch into the
-// repository), checking every interval.
+// watchRefs publishes an issues and a releases event when the issues',
+// people's or release records' refs change without going through the API
+// (a sync job, a git fetch into the repository, a CLI cut), checking every
+// interval.
 func (s *apiServer) watchRefs(interval time.Duration, stop <-chan struct{}) {
 	s.seeRefs()
 	t := time.NewTicker(interval)
@@ -177,8 +178,9 @@ func (s *apiServer) watchRefs(interval time.Duration, stop <-chan struct{}) {
 			changed := fp != s.refs
 			s.refs = fp
 			s.refsMu.Unlock()
-			if changed {
+			if changed { // the fingerprint covers refs/releases too
 				s.events.publish(event{Kind: "issues"})
+				s.events.publish(event{Kind: "releases"})
 			}
 		}
 	}
