@@ -190,7 +190,14 @@ func (s *apiServer) runJob(job *releaseJob, r *release.Runner, f func(ctx contex
 		job.Tag = tag
 		s.releaseMu.Unlock()
 	}
-	tag, err := f(context.Background(), r)
+	tag, err := func() (tag string, err error) {
+		defer func() { // a job runs on its own goroutine: a panic would take the server down
+			if p := recover(); p != nil {
+				err = fmt.Errorf("panic: %v", p)
+			}
+		}()
+		return f(context.Background(), r)
+	}()
 	s.releaseMu.Lock()
 	now := time.Now()
 	job.State, job.Ended = "done", &now

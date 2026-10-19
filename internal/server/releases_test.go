@@ -389,6 +389,23 @@ func TestReleasesRunnerFreedAfterAPanic(t *testing.T) {
 	s.runnerMu.Unlock()
 }
 
+func TestReleaseJobPanicFailsIt(t *testing.T) {
+	s, _, _ := releaseServer(t)
+	run, err := s.runner()
+	if err != nil {
+		t.Fatal(err)
+	}
+	job := &releaseJob{Kind: "cut", State: "running", Steps: []release.Step{}, Started: time.Now()}
+	s.runJob(job, run, func(context.Context, *release.Runner) (string, error) { panic("engine exploded") })
+	if job.State != "failed" || job.Error != "panic: engine exploded" {
+		t.Errorf("job %s %q, want it failed with the panic", job.State, job.Error)
+	}
+	if !s.runnerMu.TryLock() {
+		t.Fatal("a job that panicked left the runner held")
+	}
+	s.runnerMu.Unlock()
+}
+
 // R25: an issue's environments are read as the last fetch left them; the
 // Releases page's read is the one that fetches.
 func TestIssueEnvironmentsReadOffline(t *testing.T) {
