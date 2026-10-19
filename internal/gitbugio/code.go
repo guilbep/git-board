@@ -12,6 +12,9 @@ import (
 
 	"github.com/git-bug/git-bug/entity"
 	"github.com/git-bug/git-bug/repository"
+	git "github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/go-git/go-git/v5/plumbing/object"
 )
 
 // The repository's code, beside its issues: branches and commits, through
@@ -74,17 +77,43 @@ func (b *Backend) RemoteHead(remote string) string {
 	return name
 }
 
-// Ancestors is a commit and every commit before it.
+// Ancestors is a commit and every commit before it. Read with go-git, not
+// git-bug's ListCommits: that walks through ReadCommit, which decodes every
+// signature as OpenPGP armor and fails with EOF on an SSH-signed commit
+// (gpg.format ssh), as a repository's own commits may be.
 func (b *Backend) Ancestors(hash string) (map[string]bool, error) {
-	list, err := b.repo.ListCommits(repository.Hash(hash))
+	if b.dir == "" { // NewForRepo: no git directory to open, git-bug's own commits only
+		list, err := b.repo.ListCommits(repository.Hash(hash))
+		if err != nil {
+			return nil, err
+		}
+		res := make(map[string]bool, len(list))
+		for _, h := range list {
+			res[h.String()] = true
+		}
+		return res, nil
+	}
+	r, err := b.codeRepo()
 	if err != nil {
 		return nil, err
 	}
-	res := make(map[string]bool, len(list))
-	for _, h := range list {
-		res[h.String()] = true
+	head, err := r.CommitObject(plumbing.NewHash(hash))
+	if err != nil {
+		return nil, err
 	}
-	return res, nil
+	res := map[string]bool{}
+	err = object.NewCommitPreorderIter(head, nil, nil).ForEach(func(c *object.Commit) error {
+		res[c.Hash.String()] = true
+		return nil
+	})
+	return res, err
+}
+
+// codeRepo is the repository opened with go-git, once: opening it again
+// for each branch would read its pack indexes again each time.
+func (b *Backend) codeRepo() (*git.Repository, error) {
+	b.codeOnce.Do(func() { b.code, b.codeErr = git.PlainOpen(b.dir) })
+	return b.code, b.codeErr
 }
 
 // Commit is a commit as a branch shows its last one.

@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/git-bug/git-bug/cache"
@@ -20,6 +21,7 @@ import (
 	"github.com/git-bug/git-bug/entity/dag"
 	"github.com/git-bug/git-bug/query"
 	"github.com/git-bug/git-bug/repository"
+	git "github.com/go-git/go-git/v5"
 )
 
 // gitBugNamespace matches git-bug's own CLI (commands/execenv/env.go).
@@ -135,6 +137,11 @@ type Backend struct {
 	repo repository.Repo
 	c    *cache.RepoCache
 	dir  string // the git directory, for what only git does; "" from NewForRepo
+
+	// the code's commits, read with go-git itself (codeRepo, code.go)
+	codeOnce sync.Once
+	code     *git.Repository
+	codeErr  error
 }
 
 // Open opens the git-bug repo cache rooted at path (or an ancestor of it,
