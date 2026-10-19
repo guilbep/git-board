@@ -117,3 +117,35 @@ func TestAncestorsOfAnSSHSignedCommit(t *testing.T) {
 		t.Errorf("Ancestors = %v, %v; want the signed commit and its parent", got, err)
 	}
 }
+
+func TestWorktrees(t *testing.T) {
+	dir := t.TempDir()
+	git(t, dir, "init", "-b", "dev")
+	commitFile(t, dir, "a.txt", "a\n")
+	b, err := gitbugio.Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = b.Close() })
+	if got, err := b.Worktrees(); err != nil || len(got) != 0 {
+		t.Fatalf("no linked worktree: %v, %v", got, err)
+	}
+	wt, d := filepath.Join(t.TempDir(), "wt"), filepath.Join(t.TempDir(), "d")
+	git(t, dir, "worktree", "add", "-b", "fix/1-x", wt)
+	git(t, dir, "worktree", "add", "--detach", d)
+	head := git(t, dir, "rev-parse", "HEAD")
+	got, err := b.Worktrees()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []gitbugio.Worktree{{Path: wt, Head: head, Branch: "fix/1-x"}, {Path: d, Head: head}}
+	for i := range got {
+		got[i].Path, _ = filepath.EvalSymlinks(got[i].Path)
+	}
+	for i := range want {
+		want[i].Path, _ = filepath.EvalSymlinks(want[i].Path)
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("Worktrees = %+v, want %+v", got, want)
+	}
+}
