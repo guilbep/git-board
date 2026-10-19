@@ -160,3 +160,14 @@ func TestPromptPlan(t *testing.T) {
 		t.Fatal("a person's section without a brief")
 	}
 }
+
+// git allows a backtick in a branch, and a path can hold one: the span
+// is fenced with more backticks than the text holds (CommonMark).
+func TestPromptBackticks(t *testing.T) {
+	p := wtx.Prompt(wtx.PromptInput{Issue: "#1", Title: "x", Step: 3, Of: 7, Name: "Plan", Branch: "fix/a`b", Plan: "`odd``.md"})
+	for _, want := range []string{"Branch: ``fix/a`b``.\n", "Plan: ``` `odd``.md ```.\n"} {
+		if !strings.Contains(p, want) {
+			t.Errorf("prompt lacks %q\n---\n%s", want, p)
+		}
+	}
+}

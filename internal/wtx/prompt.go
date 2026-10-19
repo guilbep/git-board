@@ -36,10 +36,10 @@ func Prompt(in PromptInput) string {
 	}
 	b.WriteString("\n\n")
 	if in.Branch != "" {
-		fmt.Fprintf(&b, "Branch: `%s`.\n", in.Branch)
+		fmt.Fprintf(&b, "Branch: %s.\n", code(in.Branch))
 	}
 	if in.Plan != "" {
-		fmt.Fprintf(&b, "Plan: `%s`.\n", in.Plan)
+		fmt.Fprintf(&b, "Plan: %s.\n", code(in.Plan))
 	}
 	if brief := strings.TrimSpace(normalize(in.Brief)); brief != "" {
 		fmt.Fprintf(&b, "\n## From the person\n\n%s\n", brief)
@@ -62,4 +62,23 @@ func Prompt(in PromptInput) string {
 
 func normalize(s string) string {
 	return strings.ReplaceAll(strings.ReplaceAll(s, "\r\n", "\n"), "\r", "\n")
+}
+
+// code is s as a Markdown code span: fenced with one backtick more than
+// its longest run, padded when it starts or ends with one (CommonMark).
+func code(s string) string {
+	longest, run := 0, 0
+	for _, r := range s {
+		if r == '`' {
+			run++
+			longest = max(longest, run)
+		} else {
+			run = 0
+		}
+	}
+	fence := strings.Repeat("`", longest+1)
+	if strings.HasPrefix(s, "`") || strings.HasSuffix(s, "`") {
+		s = " " + s + " "
+	}
+	return fence + s + fence
 }
