@@ -41,10 +41,16 @@ type releasesResponse struct {
 
 // releaseDetail is a release's page.
 type releaseDetail struct {
-	Row        release.ReleaseRow          `json:"row"`
-	Issues     []release.DraftIssue        `json:"issues"`
-	Candidates []release.ReleaseRow        `json:"candidates"` // the rc rows of its final, but itself
-	History    map[string][]release.Change `json:"history"`    // env → its overlays' changes naming this version
+	Row        release.ReleaseRow        `json:"row"`
+	Issues     []release.DraftIssue      `json:"issues"`
+	Candidates []release.ReleaseRow      `json:"candidates"` // the rc rows of its final, but itself
+	History    map[string][]historyEntry `json:"history"`    // env → its overlays' changes naming this version
+}
+
+// historyEntry is an overlay change and the deploy target it is of.
+type historyEntry struct {
+	release.Change
+	Target string `json:"target"` // release.TargetState.Name
 }
 
 // releaseJob is the job running, or the last one.
@@ -319,21 +325,21 @@ func detail(ctx context.Context, run *release.Runner, st release.Status, name st
 		return d, true, err
 	}
 	d.Issues = orEmpty(d.Issues)
-	d.History = map[string][]release.Change{}
-	for _, t := range run.Cfg.Deploy {
-		c, err := release.OpenConfigRepo(ctx, run.CacheDir, t.Repo)
-		if err != nil {
-			return d, true, err
-		}
-		for _, env := range run.Cfg.Environments {
+	d.History = map[string][]historyEntry{}
+	for _, e := range st.Envs {
+		for _, t := range e.Targets {
+			c, err := release.OpenConfigRepo(ctx, run.CacheDir, t.Repo)
+			if err != nil {
+				return d, true, err
+			}
 			// ponytail: the overlay's last 1000 changes, as the cut's candidate check reads
-			h, err := c.History(ctx, strings.ReplaceAll(t.Path, "{env}", env), 1000)
+			h, err := c.History(ctx, t.Path, 1000)
 			if err != nil {
 				return d, true, err
 			}
 			for _, ch := range h {
 				if ch.Version == name {
-					d.History[env] = append(d.History[env], ch)
+					d.History[e.Name] = append(d.History[e.Name], historyEntry{Change: ch, Target: t.Name})
 				}
 			}
 		}

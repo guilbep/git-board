@@ -325,6 +325,8 @@ func TestReleasesNotesAndComments(t *testing.T) {
 	}
 	if h := d.History["prod"]; len(h) != 2 || h[0].Version != "v1.0.0" || d.Issues == nil || d.Candidates == nil {
 		t.Errorf("detail %+v", d)
+	} else if h[0].Target != "config (ghcr.test)" || h[1].Target != "config (quay.test)" {
+		t.Errorf("history's targets %q, %q; want each target's name", h[0].Target, h[1].Target)
 	}
 	if status, _, msg := coded(t, "GET", ts.URL+"/api/releases/v9.9.9", nil); status != http.StatusNotFound || msg != "no release tag v9.9.9" {
 		t.Errorf("unknown tag: %d %q", status, msg)
@@ -388,7 +390,7 @@ func TestIssueEnvironmentsReadOffline(t *testing.T) {
 }
 
 // R26: a record written outside the server (a CLI cut, a pull) reaches the
-// Releases page.
+// Releases page; an issue edited outside it, only the issues' pages.
 func TestReleasesFromOutsideArePublished(t *testing.T) {
 	_, s := newIssueServer(t)
 	events, cancel := s.events.subscribe()
@@ -406,6 +408,26 @@ func TestReleasesFromOutsideArePublished(t *testing.T) {
 		if time.Now().After(deadline) {
 			t.Fatal("the watcher didn't start")
 		}
+	}
+
+	// next is the kind of the next event, "" when none comes within wait.
+	next := func(wait time.Duration) string {
+		select {
+		case data := <-events:
+			var e event
+			_ = json.Unmarshal(data, &e)
+			return e.Kind
+		case <-time.After(wait):
+			return ""
+		}
+	}
+
+	gitbugiotest.NewIssue(t, s.b, "edited elsewhere")
+	if kind := next(5 * time.Second); kind != "issues" {
+		t.Fatalf("an issue edit: %q, want issues", kind)
+	}
+	if kind := next(200 * time.Millisecond); kind != "" { // a tick publishes all its events at once
+		t.Errorf("an issue edit also published %q", kind)
 	}
 
 	if _, err := s.b.CreateRelease(gitbugio.ReleaseRecord{Commit: "0123456789abcdef0123456789abcdef01234567"}); err != nil {

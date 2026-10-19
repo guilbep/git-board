@@ -77,10 +77,12 @@ type apiServer struct {
 	// environment, at the first upload
 	store *uploads.Store
 
-	// live updates (events.go): the pages listening, and the refs last seen
-	events broker
-	refsMu sync.Mutex
-	refs   string
+	// live updates (events.go): the pages listening, and the refs last
+	// seen: all of them, and the releases' alone
+	events      broker
+	refsMu      sync.Mutex
+	refs        string
+	releaseRefs string
 
 	// githubAPI is GitHub's API for the PR gate (pulls.go): "" is
 	// https://api.github.com; tests, a fake

@@ -60,8 +60,20 @@ func historyOf(bug *cache.BugCache) insights.Issue {
 // changes in git: their refs and the commits they point to, hashed. Cheap:
 // the refs only.
 func (b *Backend) RefsFingerprint() string {
+	return b.fingerprint("bugs", "identities", ReleasesNamespace)
+}
+
+// ReleasesFingerprint is RefsFingerprint for the releases alone: their
+// records and the tags.
+// ponytail: every tag, not only release tags; another tag moving costs
+// the Releases page a reload
+func (b *Backend) ReleasesFingerprint() string {
+	return b.fingerprint(ReleasesNamespace, "tags")
+}
+
+func (b *Backend) fingerprint(namespaces ...string) string {
 	h := sha256.New()
-	for _, ns := range []string{"bugs", "identities", ReleasesNamespace} {
+	for _, ns := range namespaces {
 		refs, err := b.repo.ListRefs(ns)
 		if err != nil {
 			continue
