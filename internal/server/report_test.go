@@ -12,6 +12,7 @@ import (
 )
 
 func TestSprintReportOfTheCurrentSprint(t *testing.T) {
+	t.Parallel()
 	ts, s := newIssueServer(t)
 	today := time.Now().UTC().Truncate(24 * time.Hour)
 	s.cfg.Sprints = config.SprintsConfig{LengthDays: 14, List: []config.Sprint{

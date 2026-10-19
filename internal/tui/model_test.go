@@ -25,6 +25,7 @@ func send(m Model, msg tea.Msg) Model {
 func key(r rune) tea.KeyMsg { return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}} }
 
 func TestUpdateEditFieldWritesThroughAndRerendersList(t *testing.T) {
+	t.Parallel()
 	cfg := mustLoadConfig(t)
 	b := gitbugiotest.New(t)
 	id := gitbugiotest.NewIssue(t, b, "widget")
@@ -107,6 +108,7 @@ func TestUpdateEditFieldWritesThroughAndRerendersList(t *testing.T) {
 }
 
 func TestUpdateCategoryFilterNarrowsList(t *testing.T) {
+	t.Parallel()
 	cfg := mustLoadConfig(t)
 	b := gitbugiotest.New(t)
 	bugID := gitbugiotest.NewIssue(t, b, "a bug")
@@ -157,6 +159,7 @@ func TestUpdateCategoryFilterNarrowsList(t *testing.T) {
 }
 
 func TestUpdateStructuredFilterNarrowsList(t *testing.T) {
+	t.Parallel()
 	cfg := mustLoadConfig(t)
 	b := gitbugiotest.New(t)
 	mine := gitbugiotest.NewIssue(t, b, "mine, not validated")
@@ -212,6 +215,7 @@ func TestUpdateStructuredFilterNarrowsList(t *testing.T) {
 }
 
 func TestUpdateStructuredFilterEscCancelsWithoutApplying(t *testing.T) {
+	t.Parallel()
 	cfg := mustLoadConfig(t)
 	b := gitbugiotest.New(t)
 	gitbugiotest.NewIssue(t, b, "widget")
@@ -237,6 +241,7 @@ func TestUpdateStructuredFilterEscCancelsWithoutApplying(t *testing.T) {
 // check (filter.RequiresMe): @me with no --me/GIT_BOARD_ME configured must
 // surface as a status line, not panic or silently match nothing.
 func TestUpdateStructuredFilterRequiresMeDoesNotCrash(t *testing.T) {
+	t.Parallel()
 	cfg := mustLoadConfig(t)
 	b := gitbugiotest.New(t)
 	gitbugiotest.NewIssue(t, b, "widget")
@@ -264,6 +269,7 @@ func TestUpdateStructuredFilterRequiresMeDoesNotCrash(t *testing.T) {
 // f's words look in descriptions and comments too, as ls and the web page
 // do: one grammar, one matcher.
 func TestUpdateStructuredFilterSearchesComments(t *testing.T) {
+	t.Parallel()
 	cfg := mustLoadConfig(t)
 	b := gitbugiotest.New(t)
 	id := gitbugiotest.NewIssue(t, b, "Train distances")
@@ -305,6 +311,7 @@ func noopReopen(b Backend) func() (Backend, error) {
 }
 
 func TestUpdateEditWriteErrorShowsStatusAndDoesNotCrash(t *testing.T) {
+	t.Parallel()
 	cfg := mustLoadConfig(t)
 	issues := []gitbugio.Issue{
 		{ID: "deadbeef", Title: "x", Status: "open", Labels: []string{"status:backlog"}},
@@ -348,6 +355,7 @@ func containsLabel(labels []string, label string) bool {
 // "c" key) — SetSize on a zero-value list.Model panics (nil delegate),
 // so every `git-board tui` launch crashed before this was fixed.
 func TestWindowSizeMsgOnFreshModelDoesNotPanic(t *testing.T) {
+	t.Parallel()
 	cfg := mustLoadConfig(t)
 	b := gitbugiotest.New(t)
 	gitbugiotest.NewIssue(t, b, "widget")
@@ -379,6 +387,7 @@ func titles(items []list.Item) []string {
 }
 
 func TestUpdateSortOrdersList(t *testing.T) {
+	t.Parallel()
 	cfg := mustLoadConfig(t)
 	b := gitbugiotest.New(t)
 	p2 := gitbugiotest.NewIssue(t, b, "p2 issue")
@@ -422,6 +431,7 @@ func TestUpdateSortOrdersList(t *testing.T) {
 }
 
 func TestUpdateSortPersistsAcrossFilter(t *testing.T) {
+	t.Parallel()
 	cfg := mustLoadConfig(t)
 	b := gitbugiotest.New(t)
 	p2 := gitbugiotest.NewIssue(t, b, "p2 issue")
@@ -454,6 +464,7 @@ func TestUpdateSortPersistsAcrossFilter(t *testing.T) {
 }
 
 func TestUpdateSortClearRestoresNaturalOrder(t *testing.T) {
+	t.Parallel()
 	cfg := mustLoadConfig(t)
 	b := gitbugiotest.New(t)
 	p2 := gitbugiotest.NewIssue(t, b, "p2 issue")
@@ -503,6 +514,7 @@ func TestUpdateSortClearRestoresNaturalOrder(t *testing.T) {
 // release actually happens, using a real repo (no mock): after "g", the
 // *original* backend reference must be genuinely closed.
 func TestGKeyClosesBackendBeforeShellingOut(t *testing.T) {
+	t.Parallel()
 	cfg := mustLoadConfig(t)
 	b := gitbugiotest.New(t)
 	id := gitbugiotest.NewIssue(t, b, "widget")
@@ -540,6 +552,7 @@ func TestGKeyClosesBackendBeforeShellingOut(t *testing.T) {
 // must succeed so further edits keep working), and reopen itself
 // failing.
 func TestGitBugShowFinishedReopensBackend(t *testing.T) {
+	t.Parallel()
 	cfg := mustLoadConfig(t)
 
 	t.Run("subprocess ok", func(t *testing.T) {
@@ -595,6 +608,7 @@ func TestGitBugShowFinishedReopensBackend(t *testing.T) {
 }
 
 func TestIKeyRequiresGithubProjectConfigured(t *testing.T) {
+	t.Parallel()
 	cfg := mustLoadConfig(t) // no [github-project] in the shared fixture
 	b := gitbugiotest.New(t)
 	m := New(nil, "is:open", b, cfg, "", today, noopReopen(b))
@@ -610,6 +624,7 @@ func TestIKeyRequiresGithubProjectConfigured(t *testing.T) {
 }
 
 func TestIKeyStartsPullWhenConfigured(t *testing.T) {
+	t.Parallel()
 	cfg := mustLoadConfig(t)
 	cfg.GithubProject = config.GithubProject{Owner: "acme", Number: 40}
 	b := gitbugiotest.New(t)
@@ -637,6 +652,7 @@ func TestIKeyStartsPullWhenConfigured(t *testing.T) {
 }
 
 func TestBridgePullFinishedStoresPlanForO(t *testing.T) {
+	t.Parallel()
 	cfg := mustLoadConfig(t)
 	b := gitbugiotest.New(t)
 	m := New(nil, "is:open", b, cfg, "", today, noopReopen(b))
@@ -673,6 +689,7 @@ func TestBridgePullFinishedStoresPlanForO(t *testing.T) {
 }
 
 func TestOKeyRequiresAPreviewFirst(t *testing.T) {
+	t.Parallel()
 	cfg := mustLoadConfig(t)
 	b := gitbugiotest.New(t)
 	m := New(nil, "is:open", b, cfg, "", today, noopReopen(b))
@@ -691,6 +708,7 @@ func TestOKeyRequiresAPreviewFirst(t *testing.T) {
 // must reflect it without a re-list, and the plan must be cleared so o
 // can't be pressed twice on stale data.
 func TestOKeyAppliesThePreviewedPlan(t *testing.T) {
+	t.Parallel()
 	cfg := mustLoadConfig(t)
 	b := gitbugiotest.New(t)
 	id := gitbugiotest.NewIssue(t, b, "widget")

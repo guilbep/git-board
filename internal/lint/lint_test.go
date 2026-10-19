@@ -45,6 +45,7 @@ func labelIssue(t *testing.T, b *gitbugio.Backend, id string, labels ...string) 
 // exercise, so this test uses its own minimal one-option-per-field config
 // instead — the only way to construct a repo with truly zero drift.
 func TestCleanRepoReportsNothing(t *testing.T) {
+	t.Parallel()
 	cfg := &config.Config{
 		Fields: map[string]config.Field{
 			"status": {Single: true, Options: []string{"ready"}},
@@ -68,6 +69,7 @@ func TestCleanRepoReportsNothing(t *testing.T) {
 }
 
 func TestDoubleSingleDetected(t *testing.T) {
+	t.Parallel()
 	cfg := mustLoadConfig(t)
 	b := gitbugiotest.New(t)
 	tripping := gitbugiotest.NewIssue(t, b, "double status")
@@ -92,6 +94,7 @@ func TestDoubleSingleDetected(t *testing.T) {
 }
 
 func TestUnknownOptionValueDetected(t *testing.T) {
+	t.Parallel()
 	cfg := mustLoadConfig(t)
 	b := gitbugiotest.New(t)
 	tripping := gitbugiotest.NewIssue(t, b, "bad prio")
@@ -116,6 +119,7 @@ func TestUnknownOptionValueDetected(t *testing.T) {
 }
 
 func TestMissingRequiredValueDetected(t *testing.T) {
+	t.Parallel()
 	cfg := mustLoadConfig(t)
 	b := gitbugiotest.New(t)
 	tripping := gitbugiotest.NewIssue(t, b, "no prio")
@@ -146,6 +150,7 @@ func TestMissingRequiredValueDetected(t *testing.T) {
 }
 
 func TestClosedIssueSkipsOpenOnlyChecks(t *testing.T) {
+	t.Parallel()
 	cfg := mustLoadConfig(t)
 	b := gitbugiotest.New(t)
 	id := gitbugiotest.NewIssue(t, b, "closed, no prio")
@@ -164,6 +169,7 @@ func TestClosedIssueSkipsOpenOnlyChecks(t *testing.T) {
 }
 
 func TestOrphanSprintDetected(t *testing.T) {
+	t.Parallel()
 	cfg := mustLoadConfig(t)
 	b := gitbugiotest.New(t)
 	tripping := gitbugiotest.NewIssue(t, b, "orphan sprint")
@@ -188,6 +194,7 @@ func TestOrphanSprintDetected(t *testing.T) {
 }
 
 func TestDeadOptionDetected(t *testing.T) {
+	t.Parallel()
 	cfg := mustLoadConfig(t)
 	b := gitbugiotest.New(t)
 	// cat has options bug/feature/chore; only "bug" gets used, so
@@ -222,6 +229,7 @@ func TestDeadOptionDetected(t *testing.T) {
 // status) is still in use — checkDeadOptions must not report it, even
 // though the open-only checks never see the issue that carries it.
 func TestDeadOptionSeesClosedIssues(t *testing.T) {
+	t.Parallel()
 	cfg := mustLoadConfig(t)
 	b := gitbugiotest.New(t)
 	id := gitbugiotest.NewIssue(t, b, "validated and closed")
@@ -241,6 +249,7 @@ func TestDeadOptionSeesClosedIssues(t *testing.T) {
 }
 
 func TestKindChecks(t *testing.T) {
+	t.Parallel()
 	cfg := &config.Config{Branches: config.Branches{Kinds: map[string]string{"bug": "fix", "feat": "feat"}}}
 	open := func(id, title string, labels ...string) gitbugio.Issue {
 		return gitbugio.Issue{ID: id, Title: title, Status: "open", Labels: labels}

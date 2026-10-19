@@ -48,6 +48,7 @@ type branchesResponse struct {
 // A repository with code: dev (origin's default branch), a branch merged
 // into it, one ahead of it, and branches naming other issues.
 func TestBranchesOfAnIssue(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	git(t, dir, "init", "-q", "-b", "dev")
 	git(t, dir, "config", "user.name", "dev")
@@ -120,6 +121,7 @@ func TestBranchesOfAnIssue(t *testing.T) {
 // A branch squashed into dev isn't its ancestor, but its changes are in
 // dev: in_base says so, from what git merge-tree makes of the two.
 func TestBranchSquashedIntoTheBase(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	write := func(name string) {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(name+"\n"), 0o644); err != nil {
@@ -181,6 +183,7 @@ func TestBranchSquashedIntoTheBase(t *testing.T) {
 
 // No code yet, no remote: still a name, and the command from main.
 func TestBranchesWithoutCode(t *testing.T) {
+	t.Parallel()
 	b := gitbugiotest.New(t)
 	id := gitbugiotest.NewIssue(t, b, "Write specs")
 	ts := newTestServer(t, b, &config.Config{Branches: config.Branches{Name: "{kind}/{number}-{slug}"}})
@@ -197,6 +200,7 @@ func TestBranchesWithoutCode(t *testing.T) {
 }
 
 func TestBranchesOfNoSuchIssue(t *testing.T) {
+	t.Parallel()
 	ts := newTestServer(t, gitbugiotest.New(t), &config.Config{})
 	if resp := getJSON(t, ts.URL+"/api/issues/deadbeef/branches", nil); resp.StatusCode != http.StatusNotFound {
 		t.Errorf("status %d, want 404", resp.StatusCode)

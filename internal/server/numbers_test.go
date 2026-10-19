@@ -24,6 +24,7 @@ import (
 // nothing and pushes nothing, even in a project that numbers its issues;
 // the push the user asks for numbers it.
 func TestNumbersOnlyOnAPushTheUserAsks(t *testing.T) {
+	t.Parallel()
 	remote := repotest.NewGoGitRepo(t, true)
 	clone := repotest.NewGoGitRepo(t, false)
 	repotest.AddRemote(t, clone, "origin", remote.GitDir)
@@ -107,6 +108,7 @@ func githubForge(t *testing.T, b *gitbugio.Backend) {
 // starting them, and numbering what origin has. GitHub is asked only when
 // the form asks, before the switch.
 func TestNumbersFromSettings(t *testing.T) {
+	t.Parallel()
 	mine, theirs := gitbugiotest.NewPair(t)
 	githubForge(t, mine)
 	asked := 0
@@ -167,6 +169,7 @@ func TestNumbersFromSettings(t *testing.T) {
 // Without origin, nothing starts; GitHub unreachable is said, not an
 // error; origin's address goes to the page without its credentials.
 func TestNumbersWithoutOrigin(t *testing.T) {
+	t.Parallel()
 	b := gitbugiotest.New(t)
 	githubForge(t, b)
 	asked := 0
@@ -197,6 +200,7 @@ func TestNumbersWithoutOrigin(t *testing.T) {
 }
 
 func TestNumbersEvents(t *testing.T) {
+	t.Parallel()
 	for _, path := range []string{"/api/numbers/init", "/api/numbers/run"} {
 		if got := eventFor(httptest.NewRequest("POST", path, nil)).Kind; got != "issues" {
 			t.Errorf("%s: %s, want issues: the boards show the numbers", path, got)

@@ -29,6 +29,7 @@ func drain(t *testing.T, results <-chan core.SyncResult, err error) {
 // Get brings the forge's issues in and sends nothing; Send sends and gets
 // nothing.
 func TestGetAndSendAreOneWay(t *testing.T) {
+	t.Parallel()
 	b := gitbugiotest.New(t)
 	theForge := gitbugiotest.NewForge(t, b, "fk")
 	theForge.UserAct("alice").CreateIssue("from the forge", "body")
@@ -62,6 +63,7 @@ func TestGetAndSendAreOneWay(t *testing.T) {
 // from it: its identity's GitHub login, as the bridge maps an author to an
 // account, never another person's token.
 func TestGitHubToken(t *testing.T) {
+	t.Parallel()
 	b := gitbugiotest.New(t)
 	for login, target := range map[string]string{"alice": "github", "bob": "github", "carol": "gitlab"} {
 		tok := auth.NewToken(target, "tok-"+login)

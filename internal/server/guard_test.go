@@ -11,6 +11,7 @@ import (
 // A page on another site can't write through the server: browsers send its
 // Origin, and a no-preflight form post can't send JSON.
 func TestWritesFromAnotherSiteAreRefused(t *testing.T) {
+	t.Parallel()
 	cfg := mustLoadConfig(t)
 	b := gitbugiotest.New(t)
 	id := gitbugiotest.NewIssue(t, b, "x")
@@ -58,6 +59,7 @@ func TestWritesFromAnotherSiteAreRefused(t *testing.T) {
 // machine; the browser then sends Host and Origin evil.example, which agree.
 // Only this machine's names are served.
 func TestRequestsForAnotherHostAreRefused(t *testing.T) {
+	t.Parallel()
 	cfg := mustLoadConfig(t)
 	b := gitbugiotest.New(t)
 	id := gitbugiotest.NewIssue(t, b, "x")

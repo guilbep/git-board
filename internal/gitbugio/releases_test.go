@@ -16,6 +16,7 @@ import (
 const releaseCommit = "5e09a71c3d2b8f1e4a6b9c0d7e2f3a4b5c6d7e8f"
 
 func TestReleaseRoundTrip(t *testing.T) {
+	t.Parallel()
 	mine, theirs := gitbugiotest.NewPair(t)
 	r, err := mine.CreateRelease(gitbugio.ReleaseRecord{Commit: releaseCommit, Previous: "v1.4.19",
 		Artifacts: []gitbugio.Artifact{{Image: "frontend", Registry: "ghcr.io/x", Digest: "sha256:aa"}},
@@ -58,6 +59,7 @@ func TestReleaseRoundTrip(t *testing.T) {
 // Two clones create a record for one commit: the earlier create Lamport
 // time counts, then the smaller id; both sides show the same one.
 func TestOneRecordPerCommit(t *testing.T) {
+	t.Parallel()
 	mine, theirs := gitbugiotest.NewPair(t)
 	create := func(b *gitbugio.Backend, commit string) string {
 		t.Helper()
@@ -102,6 +104,7 @@ func TestOneRecordPerCommit(t *testing.T) {
 }
 
 func TestCreateReturnsExisting(t *testing.T) {
+	t.Parallel()
 	b := gitbugiotest.New(t)
 	first, err := b.CreateRelease(gitbugio.ReleaseRecord{Commit: releaseCommit, Previous: "v1.4.19"})
 	if err != nil {
@@ -120,6 +123,7 @@ func TestCreateReturnsExisting(t *testing.T) {
 }
 
 func TestYankedRecord(t *testing.T) {
+	t.Parallel()
 	b := gitbugiotest.New(t)
 	r, err := b.CreateRelease(gitbugio.ReleaseRecord{Commit: releaseCommit})
 	if err != nil {
@@ -148,6 +152,7 @@ func (op *futureOp) Validate() error { return op.OpBase.Validate(op, 99) }
 // A record holding an operation this git-board doesn't know still lists,
 // edits and travels: the operation is kept and skipped.
 func TestUnknownReleaseOp(t *testing.T) {
+	t.Parallel()
 	mine, theirs := gitbugiotest.NewPair(t)
 	r, err := mine.CreateRelease(gitbugio.ReleaseRecord{Commit: releaseCommit, Previous: "v1.4.19"})
 	if err != nil {
@@ -178,6 +183,7 @@ func TestUnknownReleaseOp(t *testing.T) {
 // git-board's own push and pull carry the records, and a remote without
 // any is no error.
 func TestPushPullCarryReleases(t *testing.T) {
+	t.Parallel()
 	mine, theirs := gitbugiotest.NewPair(t)
 	gitbugiotest.NewIssue(t, mine, "Crash")
 	if _, err := mine.Push("origin"); err != nil {

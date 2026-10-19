@@ -38,6 +38,7 @@ func commitFile(t *testing.T, dir, path, content string) string {
 }
 
 func TestGitReaders(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	git(t, dir, "init", "-b", "dev")
 	commitFile(t, dir, "docs/plans/42-x.md", "---\nissue: 42\nstatus: draft\n---\n# Plan\n")
@@ -88,6 +89,7 @@ func TestGitReaders(t *testing.T) {
 // ancestry, and the Development section and the cycle with it, failed on a
 // repository whose commits are signed with SSH.
 func TestAncestorsOfAnSSHSignedCommit(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	git(t, dir, "init", "-b", "dev")
 	parent := commitFile(t, dir, "a.go", "package a\n")
@@ -119,6 +121,7 @@ func TestAncestorsOfAnSSHSignedCommit(t *testing.T) {
 }
 
 func TestWorktrees(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	git(t, dir, "init", "-b", "dev")
 	commitFile(t, dir, "a.txt", "a\n")

@@ -9,6 +9,7 @@ import (
 )
 
 func TestInsightsReplayTheRepository(t *testing.T) {
+	t.Parallel()
 	ts, s := newIssueServer(t)
 	s.cfg.Fields = map[string]config.Field{"status": {Single: true, Options: []string{"backlog", "in-progress", "done"}}}
 	start := time.Now().AddDate(0, 0, -3)

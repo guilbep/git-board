@@ -69,6 +69,7 @@ func newDiffRepo(t *testing.T) diffRepo {
 }
 
 func TestMergeBaseAndRevParse(t *testing.T) {
+	t.Parallel()
 	r := newDiffRepo(t)
 	if got, err := r.b.MergeBase("dev", "fix/1-x"); err != nil || got != r.base {
 		t.Fatalf("MergeBase = %q, %v; want %q", got, err, r.base)
@@ -88,6 +89,7 @@ func TestMergeBaseAndRevParse(t *testing.T) {
 }
 
 func TestDiffStat(t *testing.T) {
+	t.Parallel()
 	r := newDiffRepo(t)
 	files, err := r.b.DiffStat(r.base, r.head)
 	if err != nil {
@@ -118,6 +120,7 @@ func TestDiffStat(t *testing.T) {
 }
 
 func TestDiffFile(t *testing.T) {
+	t.Parallel()
 	r := newDiffRepo(t)
 	full, truncated, err := r.b.DiffFile(r.base, r.head, 0, "a.txt")
 	if err != nil || truncated || !strings.Contains(full, "+three") || !strings.Contains(full, "-3") {
@@ -134,6 +137,7 @@ func TestDiffFile(t *testing.T) {
 }
 
 func TestLog(t *testing.T) {
+	t.Parallel()
 	r := newDiffRepo(t)
 	log, err := r.b.Log(r.base, r.head)
 	if err != nil {
@@ -149,6 +153,7 @@ func TestLog(t *testing.T) {
 }
 
 func TestFileLinesAndHasCommit(t *testing.T) {
+	t.Parallel()
 	r := newDiffRepo(t)
 	lines, err := r.b.FileLines(r.head, "a.txt")
 	if err != nil || !slices.Equal(lines, []string{"zero", "1", "2", "three", "4", "5", "6"}) {
@@ -163,6 +168,7 @@ func TestFileLinesAndHasCommit(t *testing.T) {
 }
 
 func TestLineAt(t *testing.T) {
+	t.Parallel()
 	r := newDiffRepo(t)
 	for _, c := range []struct {
 		from, path string
@@ -185,6 +191,7 @@ func TestLineAt(t *testing.T) {
 }
 
 func TestDiffNoRepo(t *testing.T) {
+	t.Parallel()
 	b := gitbugiotest.New(t)
 	if _, err := b.DiffStat("a", "b"); !errors.Is(err, gitbugio.ErrNoRepo) {
 		t.Fatalf("DiffStat on an in-memory backend: %v, want ErrNoRepo", err)

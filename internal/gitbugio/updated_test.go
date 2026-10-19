@@ -11,6 +11,7 @@ import (
 // An issue says when it last changed: the page marks what changed since
 // your last visit.
 func TestIssueKnowsWhenItLastChanged(t *testing.T) {
+	t.Parallel()
 	b := gitbugiotest.New(t)
 	before := time.Now().Add(-time.Second)
 	id := gitbugiotest.NewIssue(t, b, "a")
@@ -30,6 +31,7 @@ func TestIssueKnowsWhenItLastChanged(t *testing.T) {
 // An issue says when it was opened, besides its last change: the palette
 // breaks a tie between issues a sync stamped at once by it.
 func TestIssueKnowsWhenItWasOpened(t *testing.T) {
+	t.Parallel()
 	b := gitbugiotest.New(t)
 	before := time.Now().Add(-time.Second)
 	id := gitbugiotest.NewIssue(t, b, "a")

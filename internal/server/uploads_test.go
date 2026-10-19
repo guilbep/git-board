@@ -60,6 +60,7 @@ func upload(t *testing.T, ts *httptest.Server, name string, data []byte, withHea
 }
 
 func TestUploadPutsAPublicFileOnTheCDN(t *testing.T) {
+	t.Parallel()
 	s3, got := newFakeS3(t)
 	ts, s := newIssueServer(t)
 	s.store = &uploads.Store{Endpoint: s3.URL, Bucket: "cdn", Region: "us-east-1", AccessKey: "k", SecretKey: "s",

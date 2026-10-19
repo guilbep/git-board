@@ -13,6 +13,7 @@ import (
 )
 
 func TestMediaAllowsForgeImagesOnly(t *testing.T) {
+	t.Parallel()
 	gitlab := []string{"gitlab.example.com"}
 	for raw, want := range map[string]bool{
 		"https://github.com/user-attachments/assets/abc":                         true,
@@ -54,6 +55,7 @@ func fakeForge(t *testing.T) (*httptest.Server, *atomic.Int32, *atomic.Value) {
 }
 
 func TestMediaProxiesAndCaches(t *testing.T) {
+	t.Parallel()
 	forge, hits, auth := fakeForge(t)
 	b := gitbugiotest.New(t)
 	m := &mediaProxy{storage: b.Storage(), client: forge.Client(), token: func(string) string { return "secret" },

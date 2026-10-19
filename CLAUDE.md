@@ -3,6 +3,15 @@
 Setup, workflow and conventions are in CONTRIBUTING.md. Run `make ci` and, in
 `web/`, `npm run typecheck && npm test` before every commit (what CI runs).
 
+## Tests
+
+- While developing, run the package's own tests:
+  `go test ./internal/server/ -run TestName`. Run the full `make ci` once,
+  before committing.
+- A new test calls `t.Parallel()` first, unless it chdirs, sets an
+  environment variable, or swaps a package-level variable: then it stays
+  serial.
+
 ## Worktrees
 
 Every branch has its own git worktree, tmux session and agent. The session is

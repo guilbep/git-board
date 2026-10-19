@@ -9,6 +9,7 @@ import (
 )
 
 func TestListIssuesAndGetLabels(t *testing.T) {
+	t.Parallel()
 	b := gitbugiotest.New(t)
 	id1 := gitbugiotest.NewIssue(t, b, "Fix invoice bug")
 	id2 := gitbugiotest.NewIssue(t, b, "Write specs")
@@ -54,6 +55,7 @@ func TestListIssuesAndGetLabels(t *testing.T) {
 }
 
 func TestApplyLabelChangeAddAndRemove(t *testing.T) {
+	t.Parallel()
 	b := gitbugiotest.New(t)
 	id := gitbugiotest.NewIssue(t, b, "x")
 
@@ -81,6 +83,7 @@ func TestApplyLabelChangeAddAndRemove(t *testing.T) {
 }
 
 func TestApplyLabelChangeNoOpDoesNotError(t *testing.T) {
+	t.Parallel()
 	b := gitbugiotest.New(t)
 	id := gitbugiotest.NewIssue(t, b, "x")
 
@@ -90,6 +93,7 @@ func TestApplyLabelChangeNoOpDoesNotError(t *testing.T) {
 }
 
 func TestListIssuesExposesGithubURL(t *testing.T) {
+	t.Parallel()
 	b := gitbugiotest.New(t)
 	gitbugiotest.NewIssue(t, b, "local only")
 	gitbugiotest.NewImportedIssue(t, b, "from github", "https://github.com/o/r/issues/42")
@@ -111,6 +115,7 @@ func TestListIssuesExposesGithubURL(t *testing.T) {
 }
 
 func TestGetIssueResolvesByIDPrefix(t *testing.T) {
+	t.Parallel()
 	b := gitbugiotest.New(t)
 	id := gitbugiotest.NewIssue(t, b, "prefix test")
 
@@ -126,6 +131,7 @@ func TestGetIssueResolvesByIDPrefix(t *testing.T) {
 // What a GitHub Project and git-board last agreed on is kept per Project,
 // the last record of a field winning, and an empty value is a value.
 func TestProjectBasesRoundTrip(t *testing.T) {
+	t.Parallel()
 	b := gitbugiotest.New(t)
 	id := gitbugiotest.NewIssue(t, b, "title")
 
@@ -153,6 +159,7 @@ func TestProjectBasesRoundTrip(t *testing.T) {
 }
 
 func TestShownTitle(t *testing.T) {
+	t.Parallel()
 	gh := []gitbugio.Forge{{Name: "GitHub", Number: "2518"}}
 	tests := []struct {
 		title  string
@@ -174,6 +181,7 @@ func TestShownTitle(t *testing.T) {
 }
 
 func TestListIssuesShowsTitlesWithoutTheirNumber(t *testing.T) {
+	t.Parallel()
 	b := gitbugiotest.New(t)
 	gitbugiotest.NewImportedIssue(t, b, "Wrong example (#42)", "https://github.com/o/r/issues/42")
 	issues, err := b.ListIssues()

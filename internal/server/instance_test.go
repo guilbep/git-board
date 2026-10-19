@@ -35,6 +35,7 @@ func deadPID(t *testing.T) int {
 }
 
 func TestRunningIgnoresADeadServer(t *testing.T) {
+	t.Parallel()
 	gitDir := t.TempDir()
 	if err := writeInstance(gitDir, Instance{URL: answering(t, gitDir), PID: deadPID(t)}); err != nil {
 		t.Fatal(err)
@@ -46,6 +47,7 @@ func TestRunningIgnoresADeadServer(t *testing.T) {
 
 // Its port now serves another repository's board.
 func TestRunningIgnoresAnotherRepositorysServer(t *testing.T) {
+	t.Parallel()
 	gitDir := t.TempDir()
 	if err := writeInstance(gitDir, Instance{URL: answering(t, t.TempDir()), PID: os.Getpid()}); err != nil {
 		t.Fatal(err)
@@ -56,6 +58,7 @@ func TestRunningIgnoresAnotherRepositorysServer(t *testing.T) {
 }
 
 func TestRunningFindsThisRepositorysServer(t *testing.T) {
+	t.Parallel()
 	gitDir := t.TempDir()
 	want := Instance{URL: answering(t, gitDir), PID: os.Getpid()}
 	if err := writeInstance(gitDir, want); err != nil {

@@ -58,6 +58,7 @@ func getJSON(t *testing.T, url string, out any) *http.Response {
 }
 
 func TestListIssuesFiltersAndBucketsFlat(t *testing.T) {
+	t.Parallel()
 	cfg := mustLoadConfig(t)
 	b := gitbugiotest.New(t)
 	open := gitbugiotest.NewIssue(t, b, "open one")
@@ -81,6 +82,7 @@ func TestListIssuesFiltersAndBucketsFlat(t *testing.T) {
 // No filter: the open issues, as the CLI's ls; an empty one: every issue,
 // as typed. Facets come with the same filter.
 func TestListIssuesEmptyFilterIsEveryIssue(t *testing.T) {
+	t.Parallel()
 	cfg := mustLoadConfig(t)
 	b := gitbugiotest.New(t)
 	gitbugiotest.NewIssue(t, b, "open one")
@@ -104,6 +106,7 @@ func TestListIssuesEmptyFilterIsEveryIssue(t *testing.T) {
 }
 
 func TestListIssuesGroupsByField(t *testing.T) {
+	t.Parallel()
 	cfg := mustLoadConfig(t)
 	b := gitbugiotest.New(t)
 	a := gitbugiotest.NewIssue(t, b, "a")
@@ -124,6 +127,7 @@ func TestListIssuesGroupsByField(t *testing.T) {
 }
 
 func TestPatchIssueSwapsSingleCardinalityField(t *testing.T) {
+	t.Parallel()
 	cfg := mustLoadConfig(t)
 	b := gitbugiotest.New(t)
 	id := gitbugiotest.NewIssue(t, b, "x")
@@ -156,6 +160,7 @@ func TestPatchIssueSwapsSingleCardinalityField(t *testing.T) {
 }
 
 func TestConfigFieldsReturnsConfiguredOptions(t *testing.T) {
+	t.Parallel()
 	cfg := mustLoadConfig(t)
 	b := gitbugiotest.New(t)
 	ts := newTestServer(t, b, cfg)
@@ -172,6 +177,7 @@ func TestConfigFieldsReturnsConfiguredOptions(t *testing.T) {
 }
 
 func TestCORSPreflightAnsweredBeforeMux(t *testing.T) {
+	t.Parallel()
 	cfg := mustLoadConfig(t)
 	b := gitbugiotest.New(t)
 	ts := newTestServer(t, b, cfg)
@@ -202,6 +208,7 @@ func contains(ss []string, s string) bool {
 
 // Without a .git-board.toml the page still gets objects, not null.
 func TestNoConfigServesEmptyObjects(t *testing.T) {
+	t.Parallel()
 	ts := newTestServer(t, gitbugiotest.New(t), &config.Config{})
 	for _, path := range []string{"/api/views", "/api/config/fields"} {
 		resp, err := http.Get(ts.URL + path)

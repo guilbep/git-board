@@ -16,6 +16,7 @@ import (
 // filter, the values the filter picks, and the filter without the field's
 // own terms, which a tick writes a new term after.
 func TestFacetsCountAgainstTheRestOfTheFilter(t *testing.T) {
+	t.Parallel()
 	b := gitbugiotest.New(t)
 	b.NewIssue("a", "", []string{"status:ready", "assignee:guilbep", "nice to have"})
 	b.NewIssue("b", "", []string{"status:qa", "sprint:s1"})
@@ -112,6 +113,7 @@ func sameSet(got []string, want ...string) bool {
 // The filters panel counts follows:@me as the list does: an issue you
 // unfollowed is left out of the counts too.
 func TestFacetsHonourFollows(t *testing.T) {
+	t.Parallel()
 	b := gitbugiotest.New(t)
 	if _, err := b.NewIssue("Kept", "", []string{"assignee:guilbep", "status:ready"}); err != nil {
 		t.Fatal(err)
@@ -145,6 +147,7 @@ func TestFacetsHonourFollows(t *testing.T) {
 // With nothing to show, the panel is an empty list, not null: the page
 // maps over it.
 func TestFacetsNoneIsAnEmptyList(t *testing.T) {
+	t.Parallel()
 	b := gitbugiotest.New(t)
 	fs, err := board.Facets(b, &config.Config{}, "", "guilbep")
 	if err != nil {

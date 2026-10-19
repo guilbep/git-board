@@ -25,6 +25,7 @@ func mustLoadConfig(t *testing.T) *config.Config {
 // Every "ns:value" label is a field, configured or not; only labels without
 // a namespace are "other".
 func TestParseLabelsSeparatesKnownFromOtherLabels(t *testing.T) {
+	t.Parallel()
 	labels := []string{
 		"status:ready",
 		"prio:p1",
@@ -74,6 +75,7 @@ func TestParseLabelsSeparatesKnownFromOtherLabels(t *testing.T) {
 }
 
 func TestParseLabelsNoLabelsYieldsNothingKnown(t *testing.T) {
+	t.Parallel()
 	known, other := ParseLabels(nil)
 	if len(known) != 0 || len(other) != 0 {
 		t.Errorf("known = %v, other = %v, want both empty", known, other)
@@ -81,6 +83,7 @@ func TestParseLabelsNoLabelsYieldsNothingKnown(t *testing.T) {
 }
 
 func TestRenderDetailShowsKnownFieldsAndOtherLabels(t *testing.T) {
+	t.Parallel()
 	cfg := mustLoadConfig(t)
 	iss := gitbugio.Issue{
 		ID: "abcdef1234", Title: "widget", Status: "open",
@@ -106,6 +109,7 @@ func TestRenderDetailShowsKnownFieldsAndOtherLabels(t *testing.T) {
 }
 
 func TestFieldNamesAreConfiguredPlusFoundSorted(t *testing.T) {
+	t.Parallel()
 	cfg := mustLoadConfig(t)
 	issues := []gitbugio.Issue{{Labels: []string{"sprint:s1", "status:ready", "plain"}}, {Labels: []string{"mod:travel"}}}
 	got := FieldNames(cfg, issues)
@@ -116,6 +120,7 @@ func TestFieldNamesAreConfiguredPlusFoundSorted(t *testing.T) {
 }
 
 func TestValuePickerItemsUsesConfiguredOptions(t *testing.T) {
+	t.Parallel()
 	cfg := mustLoadConfig(t)
 	items := valuePickerItems(cfg, "prio")
 	if len(items) != 4 {
@@ -127,6 +132,7 @@ func TestValuePickerItemsUsesConfiguredOptions(t *testing.T) {
 }
 
 func TestValuePickerItemsEmptyForFieldWithoutOptions(t *testing.T) {
+	t.Parallel()
 	cfg := mustLoadConfig(t)
 	items := valuePickerItems(cfg, "assignee")
 	if len(items) != 0 {
@@ -135,6 +141,7 @@ func TestValuePickerItemsEmptyForFieldWithoutOptions(t *testing.T) {
 }
 
 func TestCatFieldFoundWhenConfigured(t *testing.T) {
+	t.Parallel()
 	cfg := mustLoadConfig(t)
 	f, ok := catField(cfg)
 	if !ok {
@@ -146,6 +153,7 @@ func TestCatFieldFoundWhenConfigured(t *testing.T) {
 }
 
 func TestCatFieldMissingWhenNotConfigured(t *testing.T) {
+	t.Parallel()
 	cfg := &config.Config{Fields: map[string]config.Field{"status": {Single: true}}}
 	if _, ok := catField(cfg); ok {
 		t.Error("catField() ok = true, want false when cat isn't configured")
@@ -153,6 +161,7 @@ func TestCatFieldMissingWhenNotConfigured(t *testing.T) {
 }
 
 func TestFilterByFieldNarrowsToMatchingIssues(t *testing.T) {
+	t.Parallel()
 	b := gitbugiotest.New(t)
 	bugID := gitbugiotest.NewIssue(t, b, "a bug")
 	featureID := gitbugiotest.NewIssue(t, b, "a feature")
@@ -176,6 +185,7 @@ func TestFilterByFieldNarrowsToMatchingIssues(t *testing.T) {
 }
 
 func TestApplyFieldSingleCardinalityWritesThroughAndRefreshesLabels(t *testing.T) {
+	t.Parallel()
 	cfg := mustLoadConfig(t)
 	b := gitbugiotest.New(t)
 	id := gitbugiotest.NewIssue(t, b, "x")
@@ -209,6 +219,7 @@ func TestApplyFieldSingleCardinalityWritesThroughAndRefreshesLabels(t *testing.T
 }
 
 func TestApplyFieldMultiCardinalityAddsWithoutRemoving(t *testing.T) {
+	t.Parallel()
 	cfg := mustLoadConfig(t)
 	b := gitbugiotest.New(t)
 	id := gitbugiotest.NewIssue(t, b, "x")
@@ -236,6 +247,7 @@ func TestApplyFieldMultiCardinalityAddsWithoutRemoving(t *testing.T) {
 }
 
 func TestApplyFieldErrorsWithoutWritingOnUnknownSprintAlias(t *testing.T) {
+	t.Parallel()
 	cfg := mustLoadConfig(t)
 	b := gitbugiotest.New(t)
 	id := gitbugiotest.NewIssue(t, b, "x")

@@ -33,6 +33,7 @@ type configCheck struct {
 }
 
 func TestConfigFileEditedFromThePage(t *testing.T) {
+	t.Parallel()
 	ts, s := newIssueServer(t)
 	s.cfgPath = filepath.Join(t.TempDir(), ".git-board.toml")
 	old := "# our board\n[views.backlog]\nfilter = \"status:backlog\"\n"
@@ -82,6 +83,7 @@ func TestConfigFileEditedFromThePage(t *testing.T) {
 // A repository without the file starts from the default: offered, saved
 // like any edit.
 func TestConfigFileStartsFromTheDefault(t *testing.T) {
+	t.Parallel()
 	ts, s := newIssueServer(t)
 	s.cfgPath = filepath.Join(t.TempDir(), ".git-board.toml")
 
@@ -101,6 +103,7 @@ func TestConfigFileStartsFromTheDefault(t *testing.T) {
 }
 
 func TestConfigDocsComeInSections(t *testing.T) {
+	t.Parallel()
 	ts, _ := newIssueServer(t)
 	var docs []struct {
 		ID, Title, HTML string
@@ -119,6 +122,7 @@ func TestConfigDocsComeInSections(t *testing.T) {
 }
 
 func TestForgeDocsComeInSections(t *testing.T) {
+	t.Parallel()
 	ts, _ := newIssueServer(t)
 	var docs []struct {
 		ID, Title, HTML string
@@ -135,6 +139,7 @@ func TestForgeDocsComeInSections(t *testing.T) {
 }
 
 func TestSaveViewWritesItsTable(t *testing.T) {
+	t.Parallel()
 	ts, s := newIssueServer(t)
 	s.cfgPath = filepath.Join(t.TempDir(), ".git-board.toml")
 	if err := os.WriteFile(s.cfgPath, []byte("# team board\n[views.backlog]\nfilter = \"is:open\"\n"), 0o644); err != nil {

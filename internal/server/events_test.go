@@ -13,6 +13,7 @@ import (
 )
 
 func TestBrokerDropsASlowClient(t *testing.T) {
+	t.Parallel()
 	var b broker
 	fast, cancelFast := b.subscribe()
 	defer cancelFast()
@@ -61,6 +62,7 @@ func readEvent(t *testing.T, sc *bufio.Scanner) event {
 // A write through the API reaches every open page, naming the issue and
 // the page that made it (which then ignores its own change).
 func TestWritesAreStreamed(t *testing.T) {
+	t.Parallel()
 	ts, s := newIssueServer(t)
 	s.cfgPath = filepath.Join(t.TempDir(), ".git-board.toml") // the view save writes there
 	id := gitbugiotest.NewIssue(t, s.b, "Live")

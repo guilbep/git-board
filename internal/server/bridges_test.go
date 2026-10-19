@@ -35,6 +35,7 @@ func fakeGitLab(t *testing.T) *httptest.Server {
 }
 
 func TestCredentialsNeverShowTheirToken(t *testing.T) {
+	t.Parallel()
 	ts, s := newIssueServer(t)
 	tok := auth.NewToken("github", "very-secret-value")
 	tok.SetMetadata(auth.MetaKeyLogin, "guilbep")
@@ -58,6 +59,7 @@ func TestCredentialsNeverShowTheirToken(t *testing.T) {
 }
 
 func TestAddAndRemoveABridge(t *testing.T) {
+	t.Parallel()
 	ts, s := newIssueServer(t)
 	gl := fakeGitLab(t)
 	project := gl.URL + "/scratchpad/sync-trial"
@@ -127,6 +129,7 @@ func callError(t *testing.T, method, url string, body any) (int, string) {
 }
 
 func TestBridgeErrorsInPlainWords(t *testing.T) {
+	t.Parallel()
 	for raw, want := range map[string]string{
 		"GET https://gitlab.epfl.ch/api/v4/user: 401 {message: 401 Unauthorized}":             "refused the token",
 		"non-200 OK status code: 401 Unauthorized body: Bad credentials":                      "refused the token",

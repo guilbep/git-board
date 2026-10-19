@@ -98,6 +98,7 @@ func bugTitles(t *testing.T, path string) []string {
 }
 
 func TestSyncPushesThenPullsBetweenTwoRepos(t *testing.T) {
+	t.Parallel()
 	pathA, pathB := twoReposWithRemote(t)
 	seedBug(t, pathA, "seen only in A until sync")
 
@@ -123,6 +124,7 @@ func TestSyncPushesThenPullsBetweenTwoRepos(t *testing.T) {
 }
 
 func TestSyncMultiplePathsInOneCall(t *testing.T) {
+	t.Parallel()
 	pathA, pathB := twoReposWithRemote(t)
 	seedBug(t, pathA, "from A")
 	seedBug(t, pathB, "from B")
@@ -161,6 +163,7 @@ func TestSyncDefaultsToCwdWithNoPaths(t *testing.T) {
 }
 
 func TestSyncContinuesPastOneFailingPath(t *testing.T) {
+	t.Parallel()
 	pathA, pathB := twoReposWithRemote(t)
 	seedBug(t, pathA, "should still sync despite the bad path")
 
@@ -187,6 +190,7 @@ func TestSyncContinuesPastOneFailingPath(t *testing.T) {
 
 // sync fetches the counter and numbers what this clone made since.
 func TestSyncNumbers(t *testing.T) {
+	t.Parallel()
 	pathA, pathB := twoReposWithRemote(t)
 	a, err := gitbugio.Open(pathA)
 	if err != nil {

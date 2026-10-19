@@ -58,6 +58,7 @@ type cycleAnswer struct {
 }
 
 func TestCycleOfAnIssue(t *testing.T) {
+	t.Parallel()
 	b := gitbugiotest.New(t)
 	id, err := b.NewIssue("Export CSV", twoCriteria, []string{"status:ready"})
 	if err != nil {
@@ -196,6 +197,7 @@ func lastEvent(t *testing.T, b *gitbugio.Backend, id string) (gitbugio.Thread, g
 }
 
 func TestCycleApprovePlan(t *testing.T) {
+	t.Parallel()
 	b := gitbugiotest.New(t)
 	id := issueAt(t, b, "ready", "risk:normal")
 	cfg := cycleConfig(map[string]string{"lead-dev": "guilbep"}, config.Cycle{Plan: "lead-dev"})
@@ -229,6 +231,7 @@ func TestCycleApprovePlan(t *testing.T) {
 }
 
 func TestCycleSignoffRefused(t *testing.T) {
+	t.Parallel()
 	b := gitbugiotest.New(t)
 	id := issueAt(t, b, "qa", "risk:low")
 	cfg := cycleConfig(map[string]string{"pm": "alice"}, config.Cycle{Signoffs: map[string]string{"qa": "pm"}})
@@ -243,6 +246,7 @@ func TestCycleSignoffRefused(t *testing.T) {
 }
 
 func TestCycleSignoffNeedsARun(t *testing.T) {
+	t.Parallel()
 	b := gitbugiotest.New(t)
 	id := issueAt(t, b, "qa", "risk:low")
 	cfg := cycleConfig(map[string]string{"pm": "guilbep"}, config.Cycle{Signoffs: map[string]string{"qa": "pm"}})
@@ -278,6 +282,7 @@ func TestCycleSignoffAtTheMergedHead(t *testing.T) {
 }
 
 func TestCycleVerifyThenSignoff(t *testing.T) {
+	t.Parallel()
 	b := gitbugiotest.New(t)
 	id := issueAt(t, b, "qa", "risk:low")
 	url := newTestServer(t, b, cycleConfig(nil, config.Cycle{})).URL + "/api/issues/" + id[:8] + "/cycle/"
@@ -313,6 +318,7 @@ func TestCycleVerifyThenSignoff(t *testing.T) {
 }
 
 func TestCycleSignoffCloses(t *testing.T) {
+	t.Parallel()
 	b := gitbugiotest.New(t)
 	id := issueAt(t, b, "tests-metier", "risk:low")
 	url := newTestServer(t, b, cycleConfig(nil, config.Cycle{})).URL + "/api/issues/" + id[:8] + "/cycle/"
@@ -329,6 +335,7 @@ func TestCycleSignoffCloses(t *testing.T) {
 }
 
 func TestCycleBadAction(t *testing.T) {
+	t.Parallel()
 	b := gitbugiotest.New(t)
 	id := issueAt(t, b, "qa")
 	url := newTestServer(t, b, cycleConfig(nil, config.Cycle{})).URL + "/api/issues/" + id[:8] + "/cycle/"

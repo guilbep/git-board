@@ -71,6 +71,7 @@ func postJSON(t *testing.T, url string, body, out any) *http.Response {
 }
 
 func TestSyncStatusReadsNothingUntilAsked(t *testing.T) {
+	t.Parallel()
 	ts, _, _, _ := syncFixture(t, false)
 	var st syncStatus
 	getJSON(t, ts.URL+"/api/sync", &st)
@@ -80,6 +81,7 @@ func TestSyncStatusReadsNothingUntilAsked(t *testing.T) {
 }
 
 func TestSyncCheckListsConflicts(t *testing.T) {
+	t.Parallel()
 	ts, _, _, rec := syncFixture(t, true)
 	var st syncStatus
 	if resp := postJSON(t, ts.URL+"/api/sync/check", nil, &st); resp.StatusCode != http.StatusOK {
@@ -103,6 +105,7 @@ func TestSyncCheckListsConflicts(t *testing.T) {
 }
 
 func TestSyncResolveKeepsTheProjectsValue(t *testing.T) {
+	t.Parallel()
 	ts, b, id, rec := syncFixture(t, false)
 	var st syncStatus
 	resp := postJSON(t, ts.URL+"/api/sync/resolve", map[string]any{"number": 7, "field": "status", "keep": "project"}, &st)
@@ -122,6 +125,7 @@ func TestSyncResolveKeepsTheProjectsValue(t *testing.T) {
 }
 
 func TestSyncResolveKeepingGitBoardNeedsWrite(t *testing.T) {
+	t.Parallel()
 	ts, _, _, rec := syncFixture(t, false)
 	resp := postJSON(t, ts.URL+"/api/sync/resolve", map[string]any{"number": 7, "field": "status", "keep": "git-board"}, nil)
 	if resp.StatusCode != http.StatusBadRequest || len(rec.edits) != 0 {
@@ -138,6 +142,7 @@ func TestSyncResolveKeepingGitBoardNeedsWrite(t *testing.T) {
 }
 
 func TestSyncWithoutAProjectIsABadRequest(t *testing.T) {
+	t.Parallel()
 	b := gitbugiotest.New(t)
 	ts := newTestServer(t, b, &config.Config{})
 	var st syncStatus
