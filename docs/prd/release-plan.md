@@ -1128,7 +1128,7 @@ test('stepState', () => { /* done before the running step, now on it, todo after
   dev [--watch]`), `docs/prd/release.md` (a "Built" note with dates and
   what the live test showed)
 
-- [ ] **Step 1: Write the README lines** in the Usage list's style.
+- [x] **Step 1: Write the README lines** in the Usage list's style.
 - [ ] **Step 2: Live test, asking the user first** (it pushes images and
   tags): guilbep/git-board-test as the app (a two-image Dockerfile
   set), a scratch config repo with dev/stage/prod overlays as the
@@ -1234,11 +1234,11 @@ Settled on 54d0f401 (GB-17): `git-board release cut --offline
 
 ### Task 20: The whole-branch review
 
-- [ ] **Step 1:** One review on the most capable model over every
+- [x] **Step 1:** One review on the most capable model over every
   `(release)` commit (`git log --grep='(release)'`, from ba62d6c, the new
   ones too), pointed at the deferred minors T1–T14 in GB-17.
-- [ ] **Step 2:** One round of fixes, each with its test.
-- [ ] **Step 3:** One re-review of the fixes. What is left is adjudicated:
+- [x] **Step 2:** One round of fixes, each with its test.
+- [x] **Step 3:** One re-review of the fixes. What is left is adjudicated:
   each of T1–T14 is fixed, or stays deferred with its reason in
   `docs/prd/release.md`'s "Built" note.
-- [ ] **Step 4: Commit** each fix as `fix(release): …`.
+- [x] **Step 4: Commit** each fix as `fix(release): …`.
