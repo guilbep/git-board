@@ -109,7 +109,7 @@
         </div>
 
         <div v-if="confirming" class="wk-confirm" role="alert">
-          <p><b>Writes wtx.toml and .wt.toml in {{ a.repo.name || 'the repository' }}'s main checkout, uncommitted.</b></p>
+          <p><b>{{ writeConfirm(a.repo.name, !!d?.config) }}</b></p>
           <div class="wk-actions">
             <button type="button" class="epfl-btn epfl-btn-primary" :disabled="!!busy" @click="write">{{ busy === 'write' ? 'Writing…' : 'Write' }}</button>
             <button type="button" class="epfl-btn epfl-btn-secondary" :disabled="!!busy" @click="confirming = false">Cancel</button>
@@ -134,7 +134,7 @@
 import { computed, onMounted, ref } from 'vue';
 import { getWorktrees, previewWtx, writeWtx, type Worktrees, type WtxAnswers } from '@/api/board';
 import { message } from '@/issue';
-import { extraDeny, setWhoCommits, toolsLine, whoCommits, withGate, WTX_OWN } from '@/worktrees';
+import { extraDeny, setWhoCommits, toolsLine, whoCommits, withGate, writeConfirm, WTX_OWN } from '@/worktrees';
 
 // changed: what a load or a write left, for the Overview's line
 const emit = defineEmits<{ changed: [d: Worktrees] }>();

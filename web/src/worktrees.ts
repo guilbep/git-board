@@ -24,6 +24,11 @@ export function withGate(deny: string[]): string[] {
   return whoCommits(deny) ? deny : setWhoCommits(deny, 'person');
 }
 
+// writeConfirm: what Write does, every file wtx init --force touches.
+export function writeConfirm(repo: string, config: boolean): string {
+  return `${config ? 'Replaces' : 'Writes'} wtx.toml and .wt.toml, and adds wtx's lines to .gitignore, in ${repo || 'the repository'}'s main checkout, uncommitted.`;
+}
+
 // extraDeny is the Never allowed chips: the deny rules who commits doesn't own.
 export function extraDeny(deny: string[]): string[] {
   return deny.filter((r) => !WHO_RULES.has(r));

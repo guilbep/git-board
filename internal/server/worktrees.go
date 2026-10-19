@@ -319,7 +319,9 @@ func (s *apiServer) handleIssueAgentAction(w http.ResponseWriter, r *http.Reques
 	if action == "brief" {
 		args, timeout = []string{"brief", a.Branch, "--prompt", file}, time.Minute
 	}
-	ctx, cancel := context.WithTimeout(r.Context(), timeout)
+	// a closed tab doesn't kill wtx halfway: that leaves a worktree
+	// without a session, which Start then refuses
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), timeout)
 	defer cancel()
 	out, err := wtx.Run(ctx, s.root, args...)
 	if err != nil {

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { agentButton, agentWords, extraDeny, sessionName, setWhoCommits, toolsLine, whoCommits, withGate } from './worktrees.ts';
+import { agentButton, agentWords, extraDeny, sessionName, setWhoCommits, toolsLine, whoCommits, withGate, writeConfirm } from './worktrees.ts';
 import type { IssueAgent, Worktrees, WtxCheck, WtxSession } from './api/board.ts';
 
 const PERSON = ['Bash(git commit *)', 'Bash(git push *)', 'Bash(gh pr create *)'];
@@ -64,4 +64,9 @@ test('the button: none when refused, Brief with a worktree, Start without', () =
   assert.equal(agentButton(a), 'start');
   assert.equal(sessionName({ ...a, session: session(true, '') }), 'r/fix/1-x');
   assert.equal(sessionName(a), '');
+});
+
+test('the confirm names every file wtx touches, and says replaces when wtx.toml is there', () => {
+  assert.equal(writeConfirm('fx', false), "Writes wtx.toml and .wt.toml, and adds wtx's lines to .gitignore, in fx's main checkout, uncommitted.");
+  assert.equal(writeConfirm('', true), "Replaces wtx.toml and .wt.toml, and adds wtx's lines to .gitignore, in the repository's main checkout, uncommitted.");
 });

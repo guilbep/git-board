@@ -2,8 +2,10 @@ package server
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -353,6 +355,25 @@ func TestAgentGo(t *testing.T) {
 	}
 	if strings.Index(p, "## The issue, as the forge holds it") < strings.Index(p, "## From the person") {
 		t.Errorf("the issue comes before git-board's words:\n%s", p)
+	}
+}
+
+// A closed tab must not kill wtx go halfway through its setup: that
+// leaves a worktree without a session, and Start refuses it after.
+func TestAgentGoOutlivesTheRequest(t *testing.T) {
+	s, fake, id := agentRepo(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	r := httptest.NewRequestWithContext(ctx, "POST", "http://127.0.0.1:8080/api/issues/"+id[:8]+"/agent/go", strings.NewReader(`{}`))
+	r.Header.Set("Content-Type", "application/json")
+	r.Header.Set("Origin", "http://127.0.0.1:8080")
+	w := httptest.NewRecorder()
+	newMux(s, http.NotFoundHandler()).ServeHTTP(w, r)
+	if w.Code != http.StatusOK {
+		t.Fatalf("go with the client gone: %d %s", w.Code, w.Body)
+	}
+	if calls := wtxCalls(t, fake); len(calls) == 0 || !strings.HasPrefix(calls[0][1], "go ") {
+		t.Fatalf("calls = %v", calls)
 	}
 }
 
