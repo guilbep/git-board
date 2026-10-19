@@ -4,7 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
+
+	"github.com/guilbep/git-board/internal/config"
 )
 
 // Proposal is the commit an overlay is thought to run, for Adopt.
@@ -54,7 +57,7 @@ func (r *Runner) Proposals(ctx context.Context) ([]Proposal, error) {
 			p := Proposal{Env: env, Repo: d.Repo, Path: path, Runs: tag}
 			if _, isTag := ParseTag(tag); !isTag && digest != "" {
 				hex := strings.TrimPrefix(digest, "sha256:")
-				p.Runs += "@" + hex[:min(12, len(hex))]
+				p.Runs += " · sha256:" + hex[:min(6, len(hex))]
 			}
 			for _, t := range tags {
 				if t.Name == tag {
@@ -92,6 +95,11 @@ func (r *Runner) Adopt(ctx context.Context, ps []Proposal) error {
 	}
 	fulls := make([]string, len(ps))
 	for i, p := range ps {
+		if !slices.ContainsFunc(r.Cfg.Deploy, func(d config.Target) bool {
+			return d.Repo == p.Repo && strings.ReplaceAll(d.Path, "{env}", p.Env) == p.Path
+		}) || !slices.Contains(r.Cfg.Environments, p.Env) {
+			return fmt.Errorf("%s on %s: adopt: %s is not a deploy target", p.Env, p.Repo, p.Path)
+		}
 		full, err := Git(ctx, r.Dir, "rev-parse", "--verify", p.Commit+"^{commit}")
 		if err != nil || p.Commit == "" {
 			return fmt.Errorf("%s on %s: adopt: no commit %q in the app repo", p.Env, p.Repo, p.Commit)
@@ -104,9 +112,6 @@ func (r *Runner) Adopt(ctx context.Context, ps []Proposal) error {
 	}
 	for i, p := range ps {
 		c := repos[p.Repo]
-		if c == nil {
-			return fmt.Errorf("%s on %s: not a deploy target", p.Env, p.Repo)
-		}
 		msg := fmt.Sprintf("chore(manifest): adopt %s (%s) [by %s via git-board]", appOf(p.Path, p.Env), p.Env, r.Who)
 		err := r.do(p.Env+" on "+p.Repo, func() (string, error) {
 			commit, err := c.Update(ctx, p.Path, msg, func(o *Overlay) (bool, error) {

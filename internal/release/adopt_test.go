@@ -44,7 +44,7 @@ func TestProposalsFromTagAndLabel(t *testing.T) {
 		t.Errorf("prod = %+v", p)
 	}
 	p = got["dev app/overlays/dev "+fx.ConfigBare[0]]
-	if p.Commit != c || p.From != "label" || p.Runs != "dev@aaaaaaaaaaaa" {
+	if p.Commit != c || p.From != "label" || p.Runs != "dev · sha256:aaaaaa" {
 		t.Errorf("dev labelled = %+v", p)
 	}
 	p = got["dev app/overlays/dev "+fx.ConfigBare[1]]
@@ -106,5 +106,28 @@ func TestAdoptRefusesUnknownCommit(t *testing.T) {
 	}
 	if got := heads(t, fx); got[0] != before[0] || got[1] != before[1] {
 		t.Errorf("heads moved: %v -> %v", before, got)
+	}
+}
+
+func TestAdoptValidatesBeforeWriting(t *testing.T) {
+	r, _, fx := releasetest.NewRunner(t)
+	c := fx.Commit(t, "feat")
+	before := heads(t, fx)
+	good := release.Proposal{Env: "prod", Repo: fx.ConfigBare[0], Path: "app/overlays/prod", Commit: c}
+	for name, bad := range map[string]release.Proposal{
+		"unknown repo": {Env: "prod", Repo: "/nowhere", Path: "app/overlays/prod", Commit: c},
+		"unknown path": {Env: "prod", Repo: fx.ConfigBare[1], Path: "other/overlays/prod", Commit: c},
+		"empty commit": {Env: "prod", Repo: fx.ConfigBare[1], Path: "app/overlays/prod"},
+	} {
+		if err := r.Adopt(ctx, []release.Proposal{good, bad}); err == nil {
+			t.Errorf("%s: Adopt succeeded", name)
+		}
+		if got := heads(t, fx); got[0] != before[0] || got[1] != before[1] {
+			t.Errorf("%s: heads moved", name)
+		}
+	}
+	r.Offline = true
+	if err := r.Adopt(ctx, []release.Proposal{good}); err == nil || !strings.Contains(err.Error(), "offline") {
+		t.Errorf("offline Adopt = %v", err)
 	}
 }
