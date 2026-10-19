@@ -561,6 +561,10 @@ branch** gives the commands to copy (`[branches]`, docs/configuration.md).
 When origin is on GitHub, a branch there shows its pull request, its checks
 (required first) and approvals, and **Open PR** or **Merge into dev**, done on
 GitHub with your own token.
+The full issue page's **Changes** tab shows the branch's diff, file by file,
+with line comments, replies, resolve, and Comment / Approve / Request
+changes; the sync mirrors them to the open pull request and brings its
+comments back (docs/configuration.md, Branches).
 The panel opens at the side, resized by dragging its left edge
 (double-click: the default width), or wide over the blurred board with
 2.5rem around it: the expand button or `f` switches; this browser

@@ -250,6 +250,28 @@ the PR's line; a comment made on the PR shows on the issue's line; an
 approval made in git-board satisfies the code-owner rule; the PR merges from
 the issue.
 
+*Built 2026-10-19* (`docs/prd/work-unit-m4-plan.md`, its amendments),
+decided on the way:
+
+- **The diff is origin's branch** when origin has it (the PR's head, what
+  other reviewers have), merge base against `origin/<base>`.
+  `review:commit` is always a full SHA.
+- **Lines follow the head**: a comment keeps the line where it was
+  written; the server translates it to the head through `git diff -U0`
+  and marks it outdated when a hunk covers it. The tab puts it on its line
+  when the view ends at the head (or at its own commit), else in a box
+  above the file. `side=old` lines are never outdated (the merge base only
+  moves on a rebase), and are only commentable in a view from the base.
+- **Viewed** is path → the file's blob, so a push un-views only what it
+  touched; kept in the browser, per issue and branch.
+- **The tab is on the full page only**; the board's side panel keeps
+  Conversation and History.
+- **`review:pr`** is written only when the branch has an open PR; it is
+  never "" (git-bug metadata is first-wins). The resolve state is the last
+  `review:resolved`, computed by git-board, not git-bug.
+- A push is seen when the tab is opened again, on a write or on a sync: the
+  server watches no code refs (Development doesn't either).
+
 ## The six questions
 
 1. *What is a change?* An issue with branches, linked by name.
