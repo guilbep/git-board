@@ -8,7 +8,7 @@ import { ref } from 'vue';
 import { API_BASE, clientId } from '@/api/board';
 
 export interface LiveEvent {
-  kind: 'issues' | 'config' | 'sync' | 'settings' | 'inbox';
+  kind: 'issues' | 'config' | 'sync' | 'settings' | 'inbox' | 'releases';
   id?: string; // the issue, when the change named one
   by?: string;
 }

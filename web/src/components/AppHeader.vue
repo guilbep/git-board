@@ -36,6 +36,7 @@
       <span ref="sep" class="nav-sep" aria-hidden="true" />
       <router-link ref="work" to="/work" active-class="active">Work</router-link>
       <router-link ref="insights" to="/insights" active-class="active">Insights</router-link>
+      <router-link ref="releasesLink" to="/releases" active-class="active">Releases</router-link>
       <router-link ref="inboxLink" to="/inbox" active-class="active">Inbox<span v-if="inboxCount" class="nav-count" :aria-label="`, ${inboxCount} new`">{{ inboxCount }}</span></router-link>
     </nav>
     <div class="app-right">
@@ -124,6 +125,7 @@ const menu = ref<HTMLDetailsElement | null>(null);
 const sep = ref<HTMLElement | null>(null);
 const work = ref<ComponentPublicInstance | null>(null);
 const insights = ref<ComponentPublicInstance | null>(null);
+const releasesLink = ref<ComponentPublicInstance | null>(null);
 const inboxLink = ref<ComponentPublicInstance | null>(null);
 const hidden = ref<number[]>([]);
 const hiddenViews = computed(() => hidden.value.map((i) => props.views[i]!));
@@ -133,7 +135,7 @@ function measure(again = 1) {
   const el = nav.value;
   if (!el) return;
   const widths = [...el.querySelectorAll<HTMLElement>('[data-view]')].map((a) => a.offsetWidth);
-  const fixed = [sep.value, work.value?.$el as HTMLElement | undefined, insights.value?.$el as HTMLElement | undefined, inboxLink.value?.$el as HTMLElement | undefined].reduce((a, e) => a + (e?.offsetWidth ?? 0), 0);
+  const fixed = [sep.value, work.value?.$el as HTMLElement | undefined, insights.value?.$el as HTMLElement | undefined, releasesLink.value?.$el as HTMLElement | undefined, inboxLink.value?.$el as HTMLElement | undefined].reduce((a, e) => a + (e?.offsetWidth ?? 0), 0);
   const pad = getComputedStyle(el);
   const room = el.clientWidth - parseFloat(pad.paddingLeft) - parseFloat(pad.paddingRight) - fixed;
   const moreW = more.value?.offsetWidth || moreGuess;
