@@ -157,7 +157,7 @@
 .gb-event b,.gb-event a{color:var(--fg)}
 .gb-event-icon{display:inline-flex;align-items:center;justify-content:center;flex:none;width:1.75rem;height:1.75rem;box-sizing:border-box;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg);color:var(--fg)}
 .gb-event-closed .gb-event-icon{background:var(--bg-dark);border-color:var(--fg);color:var(--fg-inverse)}
-.gb-event-open .gb-event-icon{background:var(--tertiary);border-color:var(--tertiary);color:var(--fg-inverse)}
+.gb-event-open .gb-event-icon{background:var(--tertiary);border-color:var(--tertiary);color:var(--on-tertiary)}
 .gb-event-text{flex:1;min-width:0}
 .gb-strike{text-decoration:line-through}
 .gb-hist{position:relative}
@@ -296,7 +296,7 @@
 /* environment marks: prod black, stage canard, dev outlined; an absent one muted */
 .gb-envmark{display:inline-flex;align-items:center;gap:.25rem;padding:0 .4375rem;border:1px solid var(--border-strong);border-radius:var(--radius);font-size:.75rem;font-weight:700;line-height:1.25rem;letter-spacing:.02em;white-space:nowrap;color:var(--fg);background:var(--bg)}
 .gb-envmark-prod{background:var(--bg-dark);border-color:var(--bg-dark);color:var(--fg-inverse)}
-.gb-envmark-stage{background:var(--tertiary);border-color:var(--tertiary);color:var(--fg-inverse)}
+.gb-envmark-stage{background:var(--tertiary);border-color:var(--tertiary);color:var(--on-tertiary)}
 .gb-envmark-off{border-color:var(--border);color:var(--fg-muted);font-weight:400;background:var(--bg)}
 .gb-envline{display:flex;flex-wrap:wrap;align-items:center;gap:.375rem}
 /* config repos under an environment */

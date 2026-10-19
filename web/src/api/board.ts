@@ -1025,6 +1025,7 @@ export interface ReleaseRow {
   names: string[]; // every release tag on its commit, newest first
   record: ReleaseRecord | null; // null until reconciled
   runsIn: string[]; // environments running its commit
+  beforeGitBoard: boolean; // its tag wasn't cut by git-board (no " (git-board)" in its subject)
 }
 
 export interface ReleaseStep {

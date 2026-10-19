@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import type { EnvState, ReleaseJob, ReleaseRow, TargetState } from './api/board.ts';
-import { behindText, groupReleases, jobTitle, promotion, splitText, stepState } from './releases.ts';
+import type { EnvState, ReleaseJob, ReleaseRow, ReleaseStep, TargetState } from './api/board.ts';
+import { behindText, groupReleases, jobTitle, promotion, splitParts, splitText, stepLabel, stepState } from './releases.ts';
 
 function row(name: string): ReleaseRow {
   const [, major, minor, patch, rc] = /^v(\d+)\.(\d+)\.(\d+)(?:-rc\.(\d+))?$/.exec(name)!.map(Number);
@@ -10,6 +10,7 @@ function row(name: string): ReleaseRow {
     names: [name],
     record: null,
     runsIn: [],
+    beforeGitBoard: false,
   };
 }
 
@@ -38,10 +39,15 @@ test('behindText', () => {
 test('splitText names each target', () => {
   const split = env({ split: true, targets: [target('enack8s', 'v1.4.20'), target('openshift', 'v1.4.19')] });
   assert.equal(splitText(split), 'prod runs two releases. enack8s is on v1.4.20, openshift still on v1.4.19.');
-  // the target whose overlay changed last leads, whatever the config's order
+  // the highest version leads, whatever the config's order: deploys only
+  // move forward, so the lagging target is behind even when edited last
   const moved = (t: TargetState, date: string): TargetState => ({ ...t, since: { commit: 'x', author: 'a', version: t.deployed.version, date } });
-  const reversed = env({ split: true, targets: [moved(target('openshift', 'v1.4.19'), '2026-09-28T10:00:00Z'), moved(target('enack8s', 'v1.4.20'), '2026-10-17T16:02:00+02:00')] });
+  const reversed = env({ split: true, targets: [moved(target('openshift', 'v1.4.19'), '2026-10-17T16:02:00+02:00'), moved(target('enack8s', 'v1.4.20'), '2026-09-28T10:00:00Z')] });
   assert.equal(splitText(reversed), 'prod runs two releases. enack8s is on v1.4.20, openshift still on v1.4.19.');
+  assert.deepEqual(splitParts(reversed), ['prod runs two releases.', 'enack8s is on v1.4.20, openshift still on v1.4.19.']);
+  // a final is past its candidates
+  const final = env({ split: true, targets: [target('enack8s', 'v1.4.20-rc.2'), target('openshift', 'v1.4.20')] });
+  assert.equal(splitText(final), 'prod runs two releases. openshift is on v1.4.20, enack8s still on v1.4.20-rc.2.');
   // an overlay not adopted has no version: its commit, else none
   const unadopted = env({ split: true, targets: [target('enack8s', 'v1.4.20'), target('openshift', '', '')] });
   assert.equal(splitText(unadopted), 'prod runs two releases. enack8s is on v1.4.20, openshift still on no known commit.');
@@ -77,4 +83,19 @@ test('jobTitle', () => {
   assert.equal(jobTitle(job), 'Rolling back prod to v1.4.19');
   assert.equal(jobTitle({ ...job, state: 'done' }), 'Rolled back prod to v1.4.19');
   assert.equal(jobTitle({ ...job, kind: 'cut', subject: '', state: 'failed' }), 'The cut of a release stopped');
+});
+
+test('stepLabel says what each step did', () => {
+  const s = (name: string, detail = '', state: ReleaseStep['state'] = 'done'): ReleaseStep => ({ name, detail, state });
+  const names = { 'git@github.com:EPFL-ENAC/enack8s-app-config.git': 'enack8s' };
+  assert.equal(stepLabel(s('frontend', 'built sha256:aa'), names), 'Image frontend built and pushed');
+  assert.equal(stepLabel(s('backend', 'reused sha256:bb'), names), 'Image backend ready');
+  assert.equal(stepLabel(s('backend', '', 'running'), names), 'Image backend');
+  assert.equal(stepLabel(s('chart', 'pushed v1.4.20 sha256:cc'), names), 'Chart packaged');
+  assert.equal(stepLabel(s('chart', 'helm: no Chart.yaml', 'failed'), names), 'Chart');
+  assert.equal(stepLabel(s('tag', 'pushed v1.4.20-rc.3'), names), 'Tag v1.4.20-rc.3 pushed');
+  assert.equal(stepLabel(s('record', 'created abc1234'), names), 'Release record written');
+  assert.equal(stepLabel(s('dev on git@github.com:EPFL-ENAC/enack8s-app-config.git', 'pushed 1a2b3c4'), names), 'Pointing dev at it (enack8s)');
+  assert.equal(stepLabel(s('dev on /tmp/other.git', '', 'running'), names), 'Pointing dev at it (/tmp/other.git)');
+  assert.equal(stepLabel(s('a step this page doesn’t know'), names), 'a step this page doesn’t know');
 });
