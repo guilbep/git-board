@@ -11,6 +11,7 @@ import (
 // The page gets each field's type, guessed or configured, and dates
 // colored against today.
 func TestFieldsSayTheirType(t *testing.T) {
+	t.Parallel()
 	ts, s := newIssueServer(t)
 	s.cfg.Fields = map[string]config.Field{"est": {Single: true, Numeric: true}, "status": {Options: []string{"todo", "done"}}}
 	day := func(d int) string { return time.Now().AddDate(0, 0, d).Format("2006-01-02") }
@@ -62,6 +63,7 @@ func TestFieldsSayTheirType(t *testing.T) {
 // An issue field links issues both ways: what an issue points to, and
 // what points to it (its sub-issues, what it blocks).
 func TestIssueRefsBothWays(t *testing.T) {
+	t.Parallel()
 	ts, s := newIssueServer(t)
 	epic := gitbugiotest.NewImportedIssue(t, s.b, "Hosted git-board", "https://github.com/guilbep/git-board/issues/12")
 	child := gitbugiotest.NewIssue(t, s.b, "OIDC login")

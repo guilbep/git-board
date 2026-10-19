@@ -34,6 +34,7 @@ func origin(t *testing.T, ts *httptest.Server, method, path string) remoteStatus
 // Two clones of one bare remote: issues and people go through it with
 // Push and Pull, and each says what is left to move, after a fetch.
 func TestRemotesPushAndPull(t *testing.T) {
+	t.Parallel()
 	mine, theirs := gitbugiotest.NewPair(t)
 	me, them := serverOf(t, mine), serverOf(t, theirs)
 
@@ -87,6 +88,7 @@ func TestRemotesPushAndPull(t *testing.T) {
 // A remote's URL may carry a token: the page never gets it, nor in
 // git's errors, which quote the URL.
 func TestRemoteURLsLoseTheirCredentials(t *testing.T) {
+	t.Parallel()
 	// pairs, not a map: gofmt 1.26 and 1.27 align a map's long keys differently
 	for _, c := range [][2]string{
 		{"https://oauth2:glpat-secret@gitlab.example.com/g/r.git", "https://gitlab.example.com/g/r.git"},
@@ -104,6 +106,7 @@ func TestRemoteURLsLoseTheirCredentials(t *testing.T) {
 // A push goes to every pushurl of a remote, as git's does: the page names
 // them all, before pushing.
 func TestRemotePushURLs(t *testing.T) {
+	t.Parallel()
 	b := gitbugiotest.New(t)
 	if err := b.TestCache().Config().Update(func(f *gitconfig.File) error {
 		return errors.Join(
@@ -145,6 +148,7 @@ func send(t *testing.T, method, url, origin string) int {
 }
 
 func TestRemoteEvents(t *testing.T) {
+	t.Parallel()
 	for path, want := range map[string]string{
 		"/api/remotes/origin/pull":  "issues", // the boards reload
 		"/api/remotes/origin/fetch": "sync",

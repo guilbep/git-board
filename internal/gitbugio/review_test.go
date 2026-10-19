@@ -25,6 +25,7 @@ func eventByID(t *testing.T, b *gitbugio.Backend, issue, id string) gitbugio.Eve
 }
 
 func TestReviewComments(t *testing.T) {
+	t.Parallel()
 	b := gitbugiotest.New(t)
 	issue := gitbugiotest.NewIssue(t, b, "review")
 	sha := "0123456789abcdef0123456789abcdef01234567"
@@ -87,6 +88,7 @@ func TestReviewComments(t *testing.T) {
 // Resolve is a SetMetadata on the thread's first comment: the last one wins,
 // though git-bug's own metadata keeps the first.
 func TestResolveTwice(t *testing.T) {
+	t.Parallel()
 	b := gitbugiotest.New(t)
 	issue := gitbugiotest.NewIssue(t, b, "review")
 	line, err := b.CommentWith(issue, "why?", map[string]string{"review:path": "a.txt", "review:line": "1", "review:side": "new", "review:commit": "abc"})
@@ -109,6 +111,7 @@ func TestResolveTwice(t *testing.T) {
 // A review comment goes to GitHub's pull request only: it never waits for
 // another forge, and one pulled from the pull request waits for none.
 func TestReviewCommentsPending(t *testing.T) {
+	t.Parallel()
 	b := gitbugiotest.New(t)
 	author, err := b.TestCache().Identities().New("Alice", "alice@example.com")
 	if err != nil {
@@ -152,6 +155,7 @@ func TestReviewCommentsPending(t *testing.T) {
 // StampPR gives the review comments written before their pull request its
 // review:pr: those on the branch's commits, without one yet.
 func TestStampPR(t *testing.T) {
+	t.Parallel()
 	b := gitbugiotest.New(t)
 	issue := gitbugiotest.NewIssue(t, b, "review")
 	mine, other := "1111111111111111111111111111111111111111", "2222222222222222222222222222222222222222"
@@ -185,6 +189,7 @@ func TestStampPR(t *testing.T) {
 // A pull request's conversation comment, brought in by the sync, says
 // which pull request it is on.
 func TestReviewPROnly(t *testing.T) {
+	t.Parallel()
 	b := gitbugiotest.New(t)
 	id := gitbugiotest.NewIssue(t, b, "review")
 	cid, err := b.CommentWith(id, "on the PR", map[string]string{"review:pr": "github.com/o/r#26"})

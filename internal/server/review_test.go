@@ -100,6 +100,7 @@ func (r reviewRepo) url(path string, q url.Values) string {
 // The changes are origin's branch, what the pull request shows, from where
 // it left the base.
 func TestChanges(t *testing.T) {
+	t.Parallel()
 	r := newReviewRepo(t)
 	var c changesAnswer
 	if code := call(t, "GET", r.url("/changes", nil), nil, &c); code != http.StatusOK {
@@ -146,6 +147,7 @@ func TestChanges(t *testing.T) {
 }
 
 func TestChangesWithoutBranch(t *testing.T) {
+	t.Parallel()
 	ts, s := newIssueServer(t)
 	id := gitbugiotest.NewIssue(t, s.b, "no code")
 	if code := call(t, "GET", ts.URL+"/api/issues/"+id[:8]+"/changes", nil, nil); code != http.StatusNotFound {
@@ -169,6 +171,7 @@ func eventOf(t *testing.T, th gitbugio.Thread, id string) gitbugio.Event {
 func last(th gitbugio.Thread) gitbugio.Event { return th.Events[len(th.Events)-1] }
 
 func TestReviewWrites(t *testing.T) {
+	t.Parallel()
 	r := newReviewRepo(t)
 	var th gitbugio.Thread
 	if code := call(t, "POST", r.url("/review", nil), map[string]any{"body": "why?", "path": "a.txt", "line": 3, "side": "new", "commit": r.c1[:7]}, &th); code != http.StatusCreated {
@@ -252,6 +255,7 @@ func TestReviewWrites(t *testing.T) {
 // A push to the branch moves the lines comments were written on, and
 // outdates the ones it changes.
 func TestAnnotateFollowsHead(t *testing.T) {
+	t.Parallel()
 	r := newReviewRepo(t)
 	var th gitbugio.Thread
 	call(t, "POST", r.url("/review", nil), map[string]any{"body": "on 3", "path": "a.txt", "line": 3, "side": "new", "commit": r.c1}, &th)
@@ -284,6 +288,7 @@ func TestAnnotateFollowsHead(t *testing.T) {
 
 // Without a repository the thread still answers, unannotated.
 func TestAnnotateSkipsInMemory(t *testing.T) {
+	t.Parallel()
 	ts, s := newIssueServer(t)
 	id := gitbugiotest.NewIssue(t, s.b, "review")
 	cid, err := s.b.CommentWith(id, "x", map[string]string{"review:path": "a.txt", "review:line": "1", "review:side": "new", "review:commit": "abc"})
@@ -303,6 +308,7 @@ func TestAnnotateSkipsInMemory(t *testing.T) {
 // its quote stays once the branch is gone; after the merge, an old side
 // comment has no base left to quote.
 func TestAnnotateOwnBranch(t *testing.T) {
+	t.Parallel()
 	r := newReviewRepo(t)
 	git(t, r.dir, "switch", "-q", "-c", "2518-other", r.base)
 	if err := os.WriteFile(filepath.Join(r.dir, "a.txt"), []byte("1\n2\n3\n4\nfive\n"), 0o644); err != nil {

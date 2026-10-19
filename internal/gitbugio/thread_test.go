@@ -24,6 +24,7 @@ func kinds(th gitbugio.Thread) []string {
 }
 
 func TestThreadTellsTheStory(t *testing.T) {
+	t.Parallel()
 	b := gitbugiotest.New(t)
 	id, err := b.NewIssue("Export CSV", "the **body**", []string{"status:ready"})
 	if err != nil {
@@ -77,6 +78,7 @@ func TestThreadTellsTheStory(t *testing.T) {
 }
 
 func TestEditingAnotherIssuesCommentIsRefused(t *testing.T) {
+	t.Parallel()
 	b := gitbugiotest.New(t)
 	one, _ := b.NewIssue("one", "", nil)
 	two, _ := b.NewIssue("two", "", nil)
@@ -90,6 +92,7 @@ func TestEditingAnotherIssuesCommentIsRefused(t *testing.T) {
 }
 
 func TestThreadForgeLinks(t *testing.T) {
+	t.Parallel()
 	b := gitbugiotest.New(t)
 	author, err := b.TestCache().GetUserIdentity()
 	if err != nil {
@@ -160,6 +163,7 @@ func TestThreadForgeLinks(t *testing.T) {
 // A gone mark lands on the forge of its own URL, even when another sync key
 // listed that URL first: never on the forge listed last.
 func TestForgeGoneMarksItsOwnURL(t *testing.T) {
+	t.Parallel()
 	b := gitbugiotest.New(t)
 	author, _ := b.TestCache().GetUserIdentity()
 	bug, _, err := b.TestCache().Bugs().NewRaw(author, 1, "renamed", "", nil, map[string]string{
@@ -191,6 +195,7 @@ func TestForgeGoneMarksItsOwnURL(t *testing.T) {
 // finds it: by its sync keys, or the metadata of an older bridge. Unlinked,
 // nothing waits for it and its number isn't the issue's anymore.
 func TestThreadForgeBridges(t *testing.T) {
+	t.Parallel()
 	b := gitbugiotest.New(t)
 	for name, conf := range map[string]map[string]string{
 		"gh": {"target": "github", "owner": "O", "project": "R", "default-login": "bot", "sync": "true"},
@@ -254,6 +259,7 @@ func TestThreadForgeBridges(t *testing.T) {
 // push finding it deleted, marks it gone under the sync key of its project.
 // The board (ListIssues) and the panel (Thread) both see it gone.
 func TestLegacyForgeGone(t *testing.T) {
+	t.Parallel()
 	b := gitbugiotest.New(t)
 	for name, conf := range map[string]map[string]string{
 		"gh": {"target": "github", "owner": "O", "project": "R", "default-login": "bot", "sync": "true"},
@@ -331,6 +337,7 @@ func TestLegacyForgeGone(t *testing.T) {
 }
 
 func TestMe(t *testing.T) {
+	t.Parallel()
 	b := gitbugiotest.New(t)
 	me, ok, err := b.Me()
 	if err != nil || !ok || me.Name == "" || me.ID == "" {
@@ -339,6 +346,7 @@ func TestMe(t *testing.T) {
 }
 
 func TestForgeToken(t *testing.T) {
+	t.Parallel()
 	b := gitbugiotest.New(t)
 	gh := auth.NewToken("github", "gh-secret")
 	gl := auth.NewToken("gitlab", "gl-secret")
@@ -359,6 +367,7 @@ func TestForgeToken(t *testing.T) {
 }
 
 func TestIdentities(t *testing.T) {
+	t.Parallel()
 	b := gitbugiotest.New(t)
 	other, err := b.NewIdentity("Bob", "bob@example.com")
 	if err != nil {
@@ -379,6 +388,7 @@ func TestIdentities(t *testing.T) {
 // An edit says which text it started from: if someone changed the comment
 // since, it's refused, not silently replacing theirs.
 func TestEditingAChangedCommentIsRefused(t *testing.T) {
+	t.Parallel()
 	b := gitbugiotest.New(t)
 	id, _ := b.NewIssue("x", "", nil)
 	comment, _ := b.AddComment(id, "v1")
@@ -393,6 +403,7 @@ func TestEditingAChangedCommentIsRefused(t *testing.T) {
 // @me is the forge login of the identity git-board writes as: a bridge
 // tags it (github-login…), or a sync link names it.
 func TestMyLogin(t *testing.T) {
+	t.Parallel()
 	b := gitbugiotest.New(t)
 	if got := b.MyLogin(); got != "" {
 		t.Errorf("MyLogin = %q before any tag, want empty", got)
@@ -421,6 +432,7 @@ func TestMyLogin(t *testing.T) {
 // An edit waiting for a forge says what the forge has now: the newest
 // version that reached it, under any number of edits still waiting.
 func TestThreadEditWasIsWhatTheForgesHave(t *testing.T) {
+	t.Parallel()
 	b := gitbugiotest.New(t)
 	author, _ := b.TestCache().GetUserIdentity()
 	bug, _, err := b.TestCache().Bugs().NewRaw(author, 1, "synced", "", nil, map[string]string{
@@ -463,6 +475,7 @@ func TestThreadEditWasIsWhatTheForgesHave(t *testing.T) {
 }
 
 func TestCommentMeta(t *testing.T) {
+	t.Parallel()
 	b := gitbugiotest.New(t)
 	id, err := b.NewIssue("Export CSV", "", nil)
 	if err != nil {

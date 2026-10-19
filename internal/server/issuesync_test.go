@@ -15,6 +15,7 @@ import (
 // One issue syncs on its own: a dry run says what would go where, a real
 // run needs that dry run first, and a full sync running refuses it.
 func TestIssueSync(t *testing.T) {
+	t.Parallel()
 	ts, s := newIssueServer(t)
 	id := gitbugiotest.NewIssue(t, s.b, "one issue")
 	addBridge(t, s, "gh", map[string]string{"target": "github", "owner": "o", "project": "p", "default-login": "bot", "sync": "true"})
@@ -69,6 +70,7 @@ func TestIssueSync(t *testing.T) {
 // Link, Take and Unlink, one issue on one forge: nothing is written to the
 // forge; the engine's refusals answer 409 with what it says.
 func TestIssueLinkTakeUnlink(t *testing.T) {
+	t.Parallel()
 	ts, s := newIssueServer(t)
 	f := gitbugiotest.NewForge(t, s.b, "fk")
 	ref := f.UserAct("alice").CreateIssue("forge title", "forge body")

@@ -57,6 +57,7 @@ func issueBy(t *testing.T, b *gitbugio.Backend, who *cache.IdentityCache, title 
 }
 
 func TestWorkGroups(t *testing.T) {
+	t.Parallel()
 	b := gitbugiotest.New(t)
 	cfg := cycleConfig(map[string]string{"pm": "guilbep", "lead-dev": "ann"}, config.Cycle{Risk: "pm", Plan: "lead-dev"})
 	ts := newTestServer(t, b, cfg)
@@ -85,6 +86,7 @@ func TestWorkGroups(t *testing.T) {
 }
 
 func TestWorkAnyonesGate(t *testing.T) {
+	t.Parallel()
 	b := gitbugiotest.New(t)
 	ts := newTestServer(t, b, cycleConfig(nil, config.Cycle{}))
 	id, _ := b.NewIssue("Unassigned", twoCriteria, []string{"status:in-progress", "risk:low"}) // step 4, no assignee: anyone
@@ -97,6 +99,7 @@ func TestWorkAnyonesGate(t *testing.T) {
 }
 
 func TestWorkQuestion(t *testing.T) {
+	t.Parallel()
 	b := gitbugiotest.New(t)
 	ts := newTestServer(t, b, cycleConfig(map[string]string{"lead-dev": "ann"}, config.Cycle{Plan: "lead-dev"}))
 	ann := gitbugiotest.NewPerson(t, b, "Ann", "ann")
@@ -115,6 +118,7 @@ func TestWorkQuestion(t *testing.T) {
 }
 
 func TestWorkNeedsWhoYouAre(t *testing.T) {
+	t.Parallel()
 	noLogin := &apiServer{cfg: &config.Config{}, b: gitbugiotest.New(t)}
 	ts := httptest.NewServer(withCORS(newMux(noLogin, http.NotFoundHandler())))
 	t.Cleanup(ts.Close)
@@ -162,6 +166,7 @@ func TestWorkAgents(t *testing.T) {
 }
 
 func TestWorkToSend(t *testing.T) {
+	t.Parallel()
 	b := gitbugiotest.New(t)
 	ts := newTestServer(t, b, cycleConfig(nil, config.Cycle{}))
 	author, err := b.TestCache().GetUserIdentity()
@@ -193,6 +198,7 @@ func TestWorkToSend(t *testing.T) {
 
 // Review Focus 5: no [sprints], no retro clock: the summary says so.
 func TestWorkWithoutSprints(t *testing.T) {
+	t.Parallel()
 	b := gitbugiotest.New(t)
 	cfg := cycleConfig(nil, config.Cycle{})
 	ts := newTestServer(t, b, cfg)

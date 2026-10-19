@@ -14,6 +14,7 @@ import (
 // Search as on GitHub: free text in titles, descriptions and comments;
 // qualifiers on top.
 func TestSearchLooksInCommentsAndBodies(t *testing.T) {
+	t.Parallel()
 	b := gitbugiotest.New(t)
 	inComment, _ := b.NewIssue("Train distances", "nothing here", []string{"assignee:guilbep"})
 	if _, err := b.AddComment(inComment, "the zebra table is wrong"); err != nil {
@@ -64,6 +65,7 @@ func TestSearchLooksInCommentsAndBodies(t *testing.T) {
 // involves:, on a real repository: a person field, a mention found
 // through the index, a comment by an identity carrying the login.
 func TestInvolvesOnARepository(t *testing.T) {
+	t.Parallel()
 	b := gitbugiotest.New(t)
 	assigned, _ := b.NewIssue("Train legs", "", []string{"assignee:guilbep"})
 	mentioned, _ := b.NewIssue("Buildings", "ping @guilbep", nil)
@@ -92,6 +94,7 @@ func TestInvolvesOnARepository(t *testing.T) {
 // follows:@me reads your inbox file; a followed view counts without its
 // is: (a close still shows) and without its own follows: (no loop).
 func TestFollowsOnARepository(t *testing.T) {
+	t.Parallel()
 	b := gitbugiotest.New(t)
 	assigned, _ := b.NewIssue("Train legs", "", []string{"assignee:guilbep"})
 	unfollowed, _ := b.NewIssue("Buildings", "", []string{"assignee:guilbep"})
@@ -131,6 +134,7 @@ func TestFollowsOnARepository(t *testing.T) {
 // commented on as an identity without a login (--me gives the login)
 // involves you, as the inbox says.
 func TestInvolvesYouByIdentity(t *testing.T) {
+	t.Parallel()
 	b := gitbugiotest.New(t) // writes as an identity without a login
 	opened, _ := b.NewIssue("Mine", "", nil)
 	ann := gitbugiotest.NewPerson(t, b, "Ann", "ann")

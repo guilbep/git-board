@@ -12,6 +12,7 @@ import (
 // gives the sprint field its [[sprints.list]] slugs by start date, and
 // says which one is current.
 func TestSprintFieldTakesItsDates(t *testing.T) {
+	t.Parallel()
 	ts, s := newIssueServer(t)
 	day := func(d int) time.Time { return time.Now().UTC().Truncate(24*time.Hour).AddDate(0, 0, d) }
 	s.cfg.Sprints = config.SprintsConfig{LengthDays: 14, List: []config.Sprint{

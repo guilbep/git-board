@@ -28,6 +28,7 @@ func getInbox(t *testing.T, ts *httptest.Server) inboxResponse {
 }
 
 func TestInboxFlow(t *testing.T) {
+	t.Parallel()
 	ts, s := newIssueServer(t) // writes as the test identity, me: guilbep
 	id, _ := s.b.NewIssue("Train legs", "", []string{"assignee:guilbep"})
 	ann := gitbugiotest.NewPerson(t, s.b, "Ann", "ann")
@@ -83,6 +84,7 @@ func codeOf(t *testing.T, url string) (int, string) {
 }
 
 func TestInboxNeedsWhoYouAre(t *testing.T) {
+	t.Parallel()
 	noLogin := &apiServer{cfg: &config.Config{}, b: gitbugiotest.New(t)} // its identity has no login, no --me
 	ts := httptest.NewServer(withCORS(newMux(noLogin, http.NotFoundHandler())))
 	t.Cleanup(ts.Close)
@@ -104,6 +106,7 @@ func TestInboxNeedsWhoYouAre(t *testing.T) {
 
 // Review Focus 1: switching who you write as switches inbox.
 func TestInboxIsPerIdentity(t *testing.T) {
+	t.Parallel()
 	ts, s := newIssueServer(t)
 	id, _ := s.b.NewIssue("Train legs", "", []string{"assignee:guilbep"})
 	first, _, _ := s.b.Me()
@@ -127,6 +130,7 @@ func TestInboxIsPerIdentity(t *testing.T) {
 
 // Review Focus 2: two tabs marking at once both stick.
 func TestInboxSeenFromTwoTabs(t *testing.T) {
+	t.Parallel()
 	ts, s := newIssueServer(t)
 	a, _ := s.b.NewIssue("A", "", []string{"assignee:guilbep"})
 	b, _ := s.b.NewIssue("B", "", []string{"assignee:guilbep"})
@@ -159,6 +163,7 @@ func TestInboxSeenFromTwoTabs(t *testing.T) {
 // Review Focus 3 and 4: prefixes are stored whole; an unknown issue
 // changes nothing.
 func TestInboxTakesPrefixes(t *testing.T) {
+	t.Parallel()
 	ts, s := newIssueServer(t)
 	id, _ := s.b.NewIssue("Train legs", "", nil)
 	if code := call(t, "PUT", ts.URL+"/api/inbox/follow/"+id[:7], map[string]any{"follow": true}, nil); code != http.StatusOK {
@@ -183,6 +188,7 @@ func TestInboxTakesPrefixes(t *testing.T) {
 // A project role (lead-dev of the whole project) brings its new and closed
 // issues, not their comments; the inbox says which roles you hold.
 func TestInboxProjectRole(t *testing.T) {
+	t.Parallel()
 	ts, s := newIssueServer(t)
 	s.cfg = &config.Config{Roles: map[string]string{"lead-dev": "guilbep"}, Fields: map[string]config.Field{"lead-dev": {Type: config.TypePerson}}}
 	ann := gitbugiotest.NewPerson(t, s.b, "Ann", "ann")

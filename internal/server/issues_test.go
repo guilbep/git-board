@@ -50,6 +50,7 @@ func call(t *testing.T, method, url string, body, out any) int {
 }
 
 func TestIssueLifecycle(t *testing.T) {
+	t.Parallel()
 	ts, _ := newIssueServer(t)
 	var th gitbugio.Thread
 	if code := call(t, "POST", ts.URL+"/api/issues", map[string]any{
@@ -94,6 +95,7 @@ func TestIssueLifecycle(t *testing.T) {
 }
 
 func TestIssueWritesAreChecked(t *testing.T) {
+	t.Parallel()
 	ts, _ := newIssueServer(t)
 	var one, two gitbugio.Thread
 	call(t, "POST", ts.URL+"/api/issues", map[string]any{"title": "one"}, &one)
@@ -119,6 +121,7 @@ func TestIssueWritesAreChecked(t *testing.T) {
 }
 
 func TestMeAndIdentities(t *testing.T) {
+	t.Parallel()
 	ts, _ := newIssueServer(t)
 	var me meResponse
 	if call(t, "GET", ts.URL+"/api/me", nil, &me); me.Me == nil || len(me.Identities) != 1 {
@@ -167,6 +170,7 @@ func waitJob(t *testing.T, ts *httptest.Server) forgeStatus {
 }
 
 func TestForgeSyncRunsADryRunFirst(t *testing.T) {
+	t.Parallel()
 	ts, s := newIssueServer(t)
 	release := make(chan struct{})
 	s.runSync = fakeSync([]core.SyncResult{
@@ -233,6 +237,7 @@ func TestForgeSyncRunsADryRunFirst(t *testing.T) {
 // alone would create again the issues the dry run found on a forge by
 // their git-bug marker: those wait for a Get or a Sync.
 func TestForgeGetAndSend(t *testing.T) {
+	t.Parallel()
 	ts, s := newIssueServer(t)
 	done := make(chan struct{})
 	close(done)
@@ -285,6 +290,7 @@ func TestForgeGetAndSend(t *testing.T) {
 // waits for a Get or a Sync on that forge; one issue changed on each side
 // loses nothing.
 func TestForgeSendRefusesIssuesChangedBothWays(t *testing.T) {
+	t.Parallel()
 	ts, s := newIssueServer(t)
 	done := make(chan struct{})
 	close(done)
@@ -333,6 +339,7 @@ func TestForgeSendRefusesIssuesChangedBothWays(t *testing.T) {
 }
 
 func TestMarkdownPreview(t *testing.T) {
+	t.Parallel()
 	ts, _ := newIssueServer(t)
 	var res struct {
 		HTML string `json:"html"`

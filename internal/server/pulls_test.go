@@ -97,7 +97,8 @@ func (f *fakeGitHub) sent() []string {
 // default branch), fix/2518-x on origin and 2518-local only here, the
 // identity dev (GitHub login dev), and the issue #2518 of o/r. withToken
 // stores dev's token, in a keyring of its own: git-bug's keyring is one
-// file for every repository, in the user's config directory.
+// file for every repository, in the user's config directory. Its HOME
+// keeps its tests serial.
 func gateRepo(t *testing.T, url string, withToken bool) (*apiServer, *fakeGitHub, string) {
 	t.Helper()
 	home := t.TempDir()

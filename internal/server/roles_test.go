@@ -9,6 +9,7 @@ import (
 // The page learns each role's project value with its field, even before
 // any issue sets the role.
 func TestFieldsCarryRoles(t *testing.T) {
+	t.Parallel()
 	ts, s := newIssueServer(t)
 	s.cfg = &config.Config{Roles: map[string]string{"lead-dev": "bob"}}
 	var fields map[string]struct {

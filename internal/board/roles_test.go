@@ -12,6 +12,7 @@ import (
 // Issues take the project's roles unless they set their own: filters,
 // groups and facets see the inherited value, the PM's board pm:@me too.
 func TestRolesInherit(t *testing.T) {
+	t.Parallel()
 	b := gitbugiotest.New(t)
 	b.NewIssue("inherits", "", nil)
 	b.NewIssue("overrides", "", []string{"lead-dev:dan"})

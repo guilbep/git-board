@@ -8,6 +8,7 @@ import (
 )
 
 func TestColorsCoverLabelsAndOptions(t *testing.T) {
+	t.Parallel()
 	ts, s := newIssueServer(t)
 	s.cfg.Fields = map[string]config.Field{"status": {Options: []string{"backlog", "in-review"}, Colors: map[string]string{"in-review": "pink"}}}
 	id := gitbugiotest.NewIssue(t, s.b, "one")

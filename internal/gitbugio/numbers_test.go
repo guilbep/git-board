@@ -19,6 +19,7 @@ import (
 // The numbers file: a prefix, where the counter starts, then one line per
 // numbered issue. GitHub numbers below start are the issues' own.
 func TestCounter(t *testing.T) {
+	t.Parallel()
 	c, err := gitbugio.ParseCounter([]byte("prefix CO2\nstart 3052\n3053 bbb\n3052 aaa\n"))
 	if err != nil {
 		t.Fatal(err)
@@ -76,6 +77,7 @@ func TestCounter(t *testing.T) {
 // Before the switch nothing changes: no counter, no number, and fetching
 // from a remote that has none is no error.
 func TestNumbersBeforeTheSwitch(t *testing.T) {
+	t.Parallel()
 	mine, _ := gitbugiotest.NewPair(t)
 	id := gitbugiotest.NewIssue(t, mine, "Crash")
 	if err := mine.FetchNumbers("origin"); err != nil {
@@ -93,6 +95,7 @@ func TestNumbersBeforeTheSwitch(t *testing.T) {
 // GitHub numbers below start are the issues' own, whenever they are
 // imported; an issue opened on GitHub after the switch gets the next one.
 func TestNumbersGitHubBelowStart(t *testing.T) {
+	t.Parallel()
 	mine, _ := gitbugiotest.NewPair(t)
 	old := gitbugiotest.NewImportedIssue(t, mine, "Old", "https://github.com/o/r/issues/2518")
 	late := gitbugiotest.NewImportedIssue(t, mine, "Late", "https://github.com/o/r/issues/3060")
@@ -118,6 +121,7 @@ func TestNumbersGitHubBelowStart(t *testing.T) {
 // mine has moved, is refused and keeps no number of its own; its next try
 // takes the next number.
 func TestNumbersPushIsTheLock(t *testing.T) {
+	t.Parallel()
 	mine, theirs := gitbugiotest.NewPair(t)
 	if err := mine.InitNumbers("origin", "CO2", 3052); err != nil {
 		t.Fatalf("InitNumbers: %v", err)
@@ -154,6 +158,7 @@ func TestNumbersPushIsTheLock(t *testing.T) {
 // A clone that hasn't fetched the counter yet keeps its issue unnumbered
 // and fails nothing; the next fetch and numbering give it its number.
 func TestNumbersNotYetFetched(t *testing.T) {
+	t.Parallel()
 	mine, theirs := gitbugiotest.NewPair(t)
 	if err := mine.InitNumbers("origin", "CO2", 3052); err != nil {
 		t.Fatal(err)
@@ -180,6 +185,7 @@ func TestNumbersNotYetFetched(t *testing.T) {
 // Init once: a second init, from either clone, names the counter there is;
 // a prefix is a letter then letters or digits.
 func TestInitNumbersOnce(t *testing.T) {
+	t.Parallel()
 	mine, theirs := gitbugiotest.NewPair(t)
 	if err := mine.InitNumbers("origin", "co-2", 3052); err == nil {
 		t.Fatal("prefix co-2 taken")
@@ -197,6 +203,7 @@ func TestInitNumbersOnce(t *testing.T) {
 // Two clones start the numbers at the very same time: one does, the other
 // is told the project numbers its issues already, and takes that counter.
 func TestInitNumbersRace(t *testing.T) {
+	t.Parallel()
 	mine, theirs := gitbugiotest.NewPair(t)
 	var wg sync.WaitGroup
 	errs := make([]error, 2)
@@ -231,6 +238,7 @@ func TestInitNumbersRace(t *testing.T) {
 // origin by its GitHub number, for a preview; after, how many have a
 // number, how many origin has without one, how many wait for their push.
 func TestNumbering(t *testing.T) {
+	t.Parallel()
 	mine, _ := gitbugiotest.NewPair(t)
 	gitbugiotest.NewImportedIssue(t, mine, "Old", "https://github.com/o/r/issues/2518")
 	gitbugiotest.NewImportedIssue(t, mine, "Late", "https://github.com/o/r/issues/3060")
@@ -267,6 +275,7 @@ func TestNumbering(t *testing.T) {
 // issue linked to it since has it, and the unlinked one gets the next
 // number, never the same as another's.
 func TestNumbersGoneGitHubNumber(t *testing.T) {
+	t.Parallel()
 	mine, _ := gitbugiotest.NewPair(t)
 	author, err := mine.TestCache().GetUserIdentity()
 	if err != nil {
@@ -317,6 +326,7 @@ func TestNumbersGoneGitHubNumber(t *testing.T) {
 // Two clones number at the very same time, round after round: whoever
 // loses the push takes the next number, whatever the server's refusal says.
 func TestNumbersRealRace(t *testing.T) {
+	t.Parallel()
 	mine, theirs := gitbugiotest.NewPair(t)
 	if err := mine.InitNumbers("origin", "CO2", 1); err != nil {
 		t.Fatal(err)
@@ -359,6 +369,7 @@ func TestNumbersRealRace(t *testing.T) {
 // GitLab): a number counts once it lands where origin fetches from,
 // whatever the mirror says.
 func TestNumbersOriginWithAMirror(t *testing.T) {
+	t.Parallel()
 	remote := repotest.NewGoGitRepo(t, true)
 	clone := repotest.NewGoGitRepo(t, false)
 	repotest.AddRemote(t, clone, "origin", remote.GitDir)
@@ -393,6 +404,7 @@ func TestNumbersOriginWithAMirror(t *testing.T) {
 // A counter this git-board can't read shows the issues without numbers,
 // and numbering refuses to write on top of it.
 func TestNumbersUnreadableCounter(t *testing.T) {
+	t.Parallel()
 	b := gitbugiotest.New(t)
 	gitbugiotest.NewIssue(t, b, "Still listed")
 	if err := gitbugio.WriteCounter(b, []byte("not a counter")); err != nil {
@@ -410,6 +422,7 @@ func TestNumbersUnreadableCounter(t *testing.T) {
 // The counter names only issues origin has: one made here waits for its
 // push, so other clones never see a number for an issue they can't get.
 func TestNumbersOnlyWhatOriginHas(t *testing.T) {
+	t.Parallel()
 	mine, _ := gitbugiotest.NewPair(t)
 	if err := mine.InitNumbers("origin", "CO2", 1); err != nil {
 		t.Fatal(err)

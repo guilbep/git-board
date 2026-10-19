@@ -8,6 +8,7 @@ import (
 )
 
 func TestRefsFingerprintFollowsWrites(t *testing.T) {
+	t.Parallel()
 	b := gitbugiotest.New(t)
 	before := b.RefsFingerprint()
 	id := gitbugiotest.NewIssue(t, b, "one")

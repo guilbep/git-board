@@ -73,6 +73,7 @@ func co2Config() *config.Config {
 const planDoc = "---\nissue: 2518\nstatus: %s\n---\n# Plan\n"
 
 func TestGatherFromRepo(t *testing.T) {
+	t.Parallel()
 	dir, b := repo(t)
 	plan := "docs/src/implementation-plans/2518-x.md"
 	commitFile(t, dir, plan, strings.Replace(planDoc, "%s", "accepted", 1))
@@ -177,6 +178,7 @@ func TestEvidenceBranch(t *testing.T) {
 }
 
 func TestMatchTest(t *testing.T) {
+	t.Parallel()
 	for path, want := range map[string]bool{
 		"internal/x/y_test.go": true, "web/src/a.test.ts": true, "tests/unit/t.py": true,
 		"test_x.py": true, "src/tests.ts": false, "web/src/a.ts": false,
@@ -193,6 +195,7 @@ func TestMatchTest(t *testing.T) {
 
 // A plan drafted on its plan branch says who first committed it there.
 func TestGatherPlanDraftedBy(t *testing.T) {
+	t.Parallel()
 	dir, b := repo(t)
 	git(t, dir, "switch", "-q", "-c", "plan/2518-x", "dev")
 	commitFile(t, dir, "docs/src/implementation-plans/2518-x.md", strings.Replace(planDoc, "%s", "draft", 1))
@@ -209,6 +212,7 @@ func TestGatherPlanDraftedBy(t *testing.T) {
 }
 
 func TestGatherNoBranch(t *testing.T) {
+	t.Parallel()
 	b := gitbugiotest.New(t)
 	id, err := b.NewIssue("Export CSV", "", []string{"status:ready"})
 	if err != nil {

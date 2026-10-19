@@ -10,6 +10,7 @@ import (
 )
 
 func TestMentions(t *testing.T) {
+	t.Parallel()
 	for text, want := range map[string]bool{
 		"thanks @guilbep":             true,
 		"thanks @GuilBep.":            true,
@@ -32,6 +33,7 @@ func TestMentions(t *testing.T) {
 // The index finds the login anywhere (an email, @guilbep-bot); the
 // pattern keeps the real mentions.
 func TestMentioningConfirmsWhatTheIndexFinds(t *testing.T) {
+	t.Parallel()
 	b := gitbugiotest.New(t)
 	inBody, _ := b.NewIssue("Train legs", "ping @guilbep", nil)
 	inComment, _ := b.NewIssue("Buildings", "nothing", nil)
@@ -50,6 +52,7 @@ func TestMentioningConfirmsWhatTheIndexFinds(t *testing.T) {
 }
 
 func TestCommenterLoginsLeaveOutTheAuthor(t *testing.T) {
+	t.Parallel()
 	b := gitbugiotest.New(t)
 	id, _ := b.NewIssue("Train legs", "", nil)
 	if _, err := b.AddComment(id, "mine"); err != nil {

@@ -37,6 +37,7 @@ func approved(r string) func(*Input) {
 }
 
 func TestWalk(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name    string
 		in      Input
@@ -106,6 +107,7 @@ func TestWalk(t *testing.T) {
 }
 
 func TestStatusAloneNeverTellsTwoFromThree(t *testing.T) {
+	t.Parallel()
 	a, b := Compute(input("ready", nil)), Compute(input("ready", risk("normal")))
 	if a.Step != 2 || b.Step != 3 {
 		t.Errorf("steps %d and %d, want 2 and 3", a.Step, b.Step)
@@ -113,6 +115,7 @@ func TestStatusAloneNeverTellsTwoFromThree(t *testing.T) {
 }
 
 func TestComputeNoStatus(t *testing.T) {
+	t.Parallel()
 	c := Compute(Input{})
 	if c.Step != 1 || c.Name != "Intent" || !c.Waits.Anyone || !c.Mine || c.Done {
 		t.Errorf("Compute(Input{}) = %+v", c)
@@ -120,6 +123,7 @@ func TestComputeNoStatus(t *testing.T) {
 }
 
 func TestCriteriaCount(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, desc string
 		want       []string
@@ -139,6 +143,7 @@ func TestCriteriaCount(t *testing.T) {
 }
 
 func TestCardShowsToRoleOnly(t *testing.T) {
+	t.Parallel()
 	bob := Compute(input("qa", func(in *Input) { in.Risk = "low"; in.Me = "bob" }))
 	if bob.Mine || bob.Actions != nil {
 		t.Errorf("bob at qa: mine %v, actions %v", bob.Mine, bob.Actions)

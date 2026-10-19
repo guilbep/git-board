@@ -7,6 +7,7 @@ import (
 )
 
 func TestListenExposesOnlyWhatAddrNames(t *testing.T) {
+	t.Parallel()
 	for addr, want := range map[string][]string{"127.0.0.1:0": nil, ":0": {"*"}} {
 		ls, exposed, err := listen(addr)
 		if err != nil {
@@ -23,6 +24,7 @@ func TestListenExposesOnlyWhatAddrNames(t *testing.T) {
 
 // Another server holding 127.0.0.1 (a Docker port) leaves [::1] to localhost.
 func TestListenLocalhostSurvivesATakenIPv4(t *testing.T) {
+	t.Parallel()
 	taken, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)

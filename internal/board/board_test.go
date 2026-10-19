@@ -17,6 +17,7 @@ func titles(issues []gitbugio.Issue) []string {
 }
 
 func TestSortByFieldLexicalByDefault(t *testing.T) {
+	t.Parallel()
 	issues := []gitbugio.Issue{
 		{Title: "p2", Labels: []string{"prio:p2"}},
 		{Title: "p0", Labels: []string{"prio:p0"}},
@@ -29,6 +30,7 @@ func TestSortByFieldLexicalByDefault(t *testing.T) {
 }
 
 func TestSortByFieldNumericOrdersByValueNotLexically(t *testing.T) {
+	t.Parallel()
 	// Lexical order of these est values would be "1", "16", "2" -- the
 	// whole reason a numeric field needs different handling.
 	issues := []gitbugio.Issue{
@@ -50,6 +52,7 @@ func TestSortByFieldNumericOrdersByValueNotLexically(t *testing.T) {
 }
 
 func TestSortByFieldNumericMissingValueSortsLastBothDirections(t *testing.T) {
+	t.Parallel()
 	issues := []gitbugio.Issue{
 		{Title: "unset"},
 		{Title: "two", Labels: []string{"est:2"}},
@@ -69,6 +72,7 @@ func TestSortByFieldNumericMissingValueSortsLastBothDirections(t *testing.T) {
 }
 
 func TestSortByFieldEmptySpecIsNoOp(t *testing.T) {
+	t.Parallel()
 	issues := []gitbugio.Issue{
 		{Title: "b", Labels: []string{"prio:p2"}},
 		{Title: "a", Labels: []string{"prio:p1"}},
@@ -80,6 +84,7 @@ func TestSortByFieldEmptySpecIsNoOp(t *testing.T) {
 }
 
 func TestSortByFieldNilConfigDoesNotPanic(t *testing.T) {
+	t.Parallel()
 	issues := []gitbugio.Issue{{Title: "x", Labels: []string{"est:2"}}}
 	defer func() {
 		if r := recover(); r != nil {
@@ -92,6 +97,7 @@ func TestSortByFieldNilConfigDoesNotPanic(t *testing.T) {
 // A field with options sorts in their order (status follows the workflow,
 // not the alphabet); values outside them after, missing values last.
 func TestSortByFieldFollowsOptionOrder(t *testing.T) {
+	t.Parallel()
 	cfg := &config.Config{Fields: map[string]config.Field{
 		"status": {Single: true, Options: []string{"backlog", "ready", "in-progress"}},
 	}}

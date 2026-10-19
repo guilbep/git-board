@@ -11,6 +11,7 @@ import (
 )
 
 func TestGitHubRepo(t *testing.T) {
+	t.Parallel()
 	for url, want := range map[string]string{
 		"https://github.com/o/r":          "o/r",
 		"https://github.com/o/r.git":      "o/r",
@@ -36,6 +37,7 @@ func TestGitHubRepo(t *testing.T) {
 // (a push sends it), theirs holds mine (a pull receives it), or neither,
 // through every parent of a merge.
 func TestCompare(t *testing.T) {
+	t.Parallel()
 	b := gitbugiotest.New(t)
 	commit := func(name string, parents ...repository.Hash) repository.Hash {
 		t.Helper()
