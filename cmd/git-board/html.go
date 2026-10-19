@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/base64"
 	"fmt"
 	"html/template"
@@ -16,6 +17,7 @@ import (
 	"github.com/guilbep/git-board/internal/board"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/gitbugio"
+	"github.com/guilbep/git-board/internal/release"
 	"github.com/guilbep/git-board/internal/tui"
 	boardweb "github.com/guilbep/git-board/web"
 )
@@ -90,7 +92,15 @@ func runHTML(out io.Writer, outputDir, me string) error {
 		fmt.Fprintf(out, "%s.html\n", name)
 	}
 
-	if err := writeIndexPage(outputDir, names, generated); err != nil {
+	releases := cfg.Release.Enabled()
+	if releases {
+		if err := writeReleasesPage(outputDir, names, b, cfg, generated); err != nil {
+			return fmt.Errorf("releases: %w", err)
+		}
+		fmt.Fprintln(out, "releases.html")
+	}
+
+	if err := writeIndexPage(outputDir, names, generated, releases); err != nil {
 		return fmt.Errorf("index: %w", err)
 	}
 	fmt.Fprintln(out, "index.html")
@@ -118,6 +128,7 @@ type pageData struct {
 	Views     []string // every view, for the header navigation
 	Layout    string
 	Buckets   []htmlBucket
+	Releases  bool // the project has [release]: the header links releases.html
 	Generated time.Time
 }
 
@@ -145,6 +156,7 @@ func writeViewPage(outputDir, name string, views []string, view config.View, b *
 		Views:     views,
 		Layout:    view.Layout,
 		Buckets:   toHTMLBuckets(board.BucketBy(issues, view.Group), cfg),
+		Releases:  cfg.Release.Enabled(),
 		Generated: generated,
 	}
 
@@ -175,7 +187,7 @@ func toHTMLBuckets(buckets []board.Bucket, cfg *config.Config) []htmlBucket {
 	return out
 }
 
-func writeIndexPage(outputDir string, viewNames []string, generated time.Time) error {
+func writeIndexPage(outputDir string, viewNames []string, generated time.Time, releases bool) error {
 	f, err := os.Create(filepath.Join(outputDir, "index.html"))
 	if err != nil {
 		return err
@@ -184,8 +196,85 @@ func writeIndexPage(outputDir string, viewNames []string, generated time.Time) e
 	return indexTmpl.Execute(f, struct {
 		ViewName  string // none: the index is no view (pageHeader marks none active)
 		Views     []string
+		Releases  bool
 		Generated time.Time
-	}{Views: viewNames, Generated: generated})
+	}{Views: viewNames, Releases: releases, Generated: generated})
+}
+
+// releasesHTMLData is the releases.html page: the environment strip and one
+// row per release, then the release notes (internal/release Runner.Notes).
+type releasesHTMLData struct {
+	ViewName  string // "Releases", so the header marks it active
+	Views     []string
+	Releases  bool
+	Envs      []releasesHTMLEnv
+	Rows      []releasesHTMLRow
+	Notes     string
+	Generated time.Time
+}
+
+type releasesHTMLEnv struct {
+	Name    string
+	Version string
+	Class   string // gb-envmark gb-envmark-<role>, the strip's chip
+}
+
+type releasesHTMLRow struct {
+	Tag    string
+	Date   string
+	RunsIn string // the environments running it, comma-separated
+}
+
+// writeReleasesPage writes releases.html: the environment strip and the
+// releases table, each release's notes inline, as static HTML with the
+// export's stylesheet. It reads the release state offline (no fetch), as
+// the export must: the runner's offline Status.
+func writeReleasesPage(outputDir string, views []string, b *gitbugio.Backend, cfg *config.Config, generated time.Time) error {
+	dir, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+	run, err := release.New(cfg, dir, b)
+	if err != nil {
+		return err
+	}
+	run.Offline = true
+	ctx := context.Background()
+	st, err := run.Status(ctx)
+	if err != nil {
+		return err
+	}
+	notes, err := run.Notes(ctx, true)
+	if err != nil {
+		return err
+	}
+	data := releasesHTMLData{ViewName: "Releases", Views: views, Releases: true, Notes: notes, Generated: generated}
+	for _, e := range st.Envs {
+		data.Envs = append(data.Envs, releasesHTMLEnv{Name: e.Name, Version: e.Version, Class: envMarkClass(e.Role)})
+	}
+	for _, r := range st.Releases {
+		data.Rows = append(data.Rows, releasesHTMLRow{Tag: r.Tag.Name, Date: r.Tag.Date.Format("2006-01-02"), RunsIn: strings.Join(r.RunsIn, ", ")})
+	}
+	f, err := os.Create(filepath.Join(outputDir, "releases.html"))
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	return releasesTmpl.Execute(f, data)
+}
+
+// envMarkClass is the strip chip's class for an environment's role, the
+// same marks the web UI uses (web/src/releases.ts envMark): the last is
+// prod, a candidate is stage, everything else dev.
+func envMarkClass(role string) string {
+	switch role {
+	case "last":
+		return "gb-envmark gb-envmark-prod"
+	case "candidate":
+		return "gb-envmark gb-envmark-stage"
+	default:
+		return "gb-envmark"
+	}
 }
 
 var tmplFuncs = template.FuncMap{
@@ -230,6 +319,13 @@ td:first-child { min-width: 18rem; }
 .views a:hover { color: var(--primary-hover); }
 a:focus-visible { outline: var(--focus-w) solid var(--primary-hover); outline-offset: 0.125rem; }
 footer { margin: 0 var(--gutter); padding: var(--space-3) 0 var(--space-4); border-top: var(--border-w) solid var(--border-subtle); color: var(--fg-muted); font-size: var(--fs-sm); }
+/* ---- releases: the environment strip and the notes (releases.html) ---- */
+.gb-envline { display: flex; flex-wrap: wrap; align-items: center; gap: .375rem; margin-bottom: var(--space-4); }
+.gb-envmark { display: inline-flex; align-items: center; gap: .25rem; padding: 0 .4375rem; border: 1px solid var(--border-strong); border-radius: var(--radius); font-size: .75rem; font-weight: 700; line-height: 1.25rem; letter-spacing: .02em; white-space: nowrap; color: var(--fg); background: var(--bg); }
+.gb-envmark-prod { background: var(--bg-dark); border-color: var(--bg-dark); color: var(--fg-inverse); }
+.gb-envmark-stage { background: var(--tertiary); border-color: var(--tertiary); color: var(--on-tertiary); }
+.gb-note { color: var(--fg-muted); font-size: var(--fs-sm); }
+.notes { margin: 0; padding: var(--space-3); background: var(--bg-subtle); border: var(--border-w) solid var(--border); font-family: var(--font-mono); font-size: var(--fs-sm); line-height: var(--lh-normal); white-space: pre-wrap; overflow-wrap: anywhere; }
 @media (max-width: 47.99rem) {
   .epfl-header { flex-wrap: wrap; height: auto; padding: var(--space-3) var(--space-3) 0; }
   .epfl-nav { flex-basis: 100%; margin-left: calc(-1 * var(--space-3)); margin-right: calc(-1 * var(--space-3)); padding: 0 var(--space-2); overflow-x: auto; }
@@ -252,7 +348,7 @@ var pageHead = `<meta name="viewport" content="width=device-width, initial-scale
 const pageHeader = `<header class="epfl-header" role="banner">
 <a class="epfl-logo" href="index.html"><span class="logo-mark" role="img" aria-label="EPFL"></span></a>
 <span class="app-name">git-board</span>
-<nav class="epfl-nav" aria-label="Views">{{range .Views}}<a href="{{.}}.html"{{if eq . $.ViewName}} class="active" aria-current="page"{{end}}>{{.}}</a>{{end}}</nav>
+<nav class="epfl-nav" aria-label="Views">{{range .Views}}<a href="{{.}}.html"{{if eq . $.ViewName}} class="active" aria-current="page"{{end}}>{{.}}</a>{{end}}{{if .Releases}}<a href="releases.html"{{if eq .ViewName "Releases"}} class="active" aria-current="page"{{end}}>Releases</a>{{end}}</nav>
 </header>`
 
 var pageTmplSrc = `<!doctype html>
@@ -331,7 +427,44 @@ var indexTmplSrc = `<!doctype html>
 </html>
 `
 
+var releasesTmplSrc = `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Releases — git-board</title>
+` + pageHead + `
+<body>
+` + pageHeader + `
+<nav class="epfl-breadcrumb" aria-label="Breadcrumb"><a href="index.html">All views</a><span class="sep">›</span><span>Releases</span></nav>
+<main>
+<h1>Releases</h1>
+<div class="gb-envline" aria-label="Environments">
+{{range .Envs}}<span class="{{.Class}}">{{.Name}}</span>{{if .Version}}<span class="gb-note">{{.Version}}</span>{{end}}{{end}}
+</div>
+<div class="table-scroll">
+<table>
+<thead><tr><th>Release</th><th>Date</th><th>Runs in</th></tr></thead>
+<tbody>
+{{range .Rows}}
+<tr>
+<td class="gb-mono">{{.Tag}}</td>
+<td>{{.Date}}</td>
+<td>{{if .RunsIn}}{{.RunsIn}}{{else}}nowhere{{end}}</td>
+</tr>
+{{end}}
+</tbody>
+</table>
+</div>
+{{if .Notes}}<h2>Release notes</h2>
+<pre class="notes">{{.Notes}}</pre>{{end}}
+</main>
+<footer>Generated {{.Generated.Format "2006-01-02 15:04:05 MST"}} by git-board html — read-only, no auth.</footer>
+</body>
+</html>
+`
+
 var (
-	pageTmpl  = template.Must(template.New("page").Funcs(tmplFuncs).Parse(pageTmplSrc))
-	indexTmpl = template.Must(template.New("index").Funcs(tmplFuncs).Parse(indexTmplSrc))
+	pageTmpl     = template.Must(template.New("page").Funcs(tmplFuncs).Parse(pageTmplSrc))
+	indexTmpl    = template.Must(template.New("index").Funcs(tmplFuncs).Parse(indexTmplSrc))
+	releasesTmpl = template.Must(template.New("releases").Funcs(tmplFuncs).Parse(releasesTmplSrc))
 )
