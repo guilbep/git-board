@@ -36,7 +36,8 @@
       <span ref="sep" class="nav-sep" aria-hidden="true" />
       <router-link ref="work" to="/work" active-class="active">Work</router-link>
       <router-link ref="insights" to="/insights" active-class="active">Insights</router-link>
-      <router-link ref="releasesLink" to="/releases" active-class="active">Releases</router-link>
+      <!-- a release's page (/releases/:tag) is under Releases too -->
+      <router-link ref="releasesLink" to="/releases" active-class="active" :class="{ active: releasesHere }" :aria-current="releasesHere ? 'page' : undefined">Releases</router-link>
       <router-link ref="inboxLink" to="/inbox" active-class="active">Inbox<span v-if="inboxCount" class="nav-count" :aria-label="`, ${inboxCount} new`">{{ inboxCount }}</span></router-link>
     </nav>
     <div class="app-right">
@@ -71,6 +72,7 @@
 <script setup lang="ts">
 import LiveNotice from '@/components/LiveNotice.vue';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type ComponentPublicInstance } from 'vue';
+import { useRoute } from 'vue-router';
 import { helpOpen } from '@/shortcuts';
 import '@/theme'; // keeps <html data-theme> in step with the choice
 import KeyboardHelp from '@/components/KeyboardHelp.vue';
@@ -88,6 +90,9 @@ import { inbox, loadInbox } from '@/inbox';
 import { debounced, onLive } from '@/live';
 
 const props = defineProps<{ views: string[]; active: string }>();
+const route = useRoute();
+// Releases, or one release's page
+const releasesHere = computed(() => route.path === '/releases' || route.path.startsWith('/releases/'));
 
 const w = computed(() => waiting(remotes.value, forgeStatus.value, syncStatus.value));
 const label = computed(() => syncLabel(w.value));

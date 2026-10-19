@@ -14,15 +14,18 @@
     </ol>
     <p v-else-if="job.state === 'running'" class="gb-note" role="status">Starting…</p>
     <template v-if="job.state === 'failed'">
-      <!-- older, taken: someone else got there first, nothing is wrong (States w2, w3) -->
-      <div v-if="job.code === 'older' || job.code === 'taken'" class="epfl-alert epfl-alert-info gb-alert-row" role="status">
-        <GbIcon :name="job.code === 'taken' ? 'tag' : 'info'" />
-        <span><b>{{ job.error }}</b></span>
-      </div>
-      <div v-else class="epfl-alert epfl-alert-danger gb-alert-row" role="alert">
-        <GbIcon name="error" />
-        <span><b>{{ job.error }}</b></span>
-      </div>
+      <!-- the page's own words and actions, when it knows more (a taken cut) -->
+      <slot>
+        <!-- older, taken: someone else got there first, nothing is wrong (States w2, w3) -->
+        <div v-if="job.code === 'older' || job.code === 'taken'" class="epfl-alert epfl-alert-info gb-alert-row" role="status">
+          <GbIcon :name="job.code === 'taken' ? 'tag' : 'info'" />
+          <span><b>{{ job.error }}</b></span>
+        </div>
+        <div v-else class="epfl-alert epfl-alert-danger gb-alert-row" role="alert">
+          <GbIcon name="error" />
+          <span><b>{{ job.error }}</b></span>
+        </div>
+      </slot>
       <p v-if="codeNote[job.code]" class="gb-note">{{ codeNote[job.code] }}</p>
     </template>
   </section>

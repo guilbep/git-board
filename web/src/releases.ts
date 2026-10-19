@@ -1,8 +1,10 @@
 // The words of the Releases page (pages/ReleasesPage.vue,
 // components/ReleaseJob.vue, api/board.ts Releases): environment marks,
-// releases grouped by version, the alerts' sentences, a job's steps.
+// releases grouped by version, the alerts' sentences, a job's steps; and
+// of a release's page and its dialogs (ReleasePage.vue, CutReleaseDialog,
+// RollbackDialog): the cut's tag and label, the checks, rollback targets.
 // Pure, no "@/" imports: node runs releases.test.ts on it.
-import type { EnvState, ReleaseJob, ReleaseRow, ReleaseStep, TargetState } from './api/board.ts';
+import type { Draft, EnvState, ReleaseJob, ReleaseRow, ReleaseStep, ReleaseVersion, TargetState } from './api/board.ts';
 
 // a release tag: v1.4.20, v1.4.20-rc.2 (release.ParseTag)
 export const tagPattern = /^v(\d+)\.(\d+)\.(\d+)(?:-rc\.(\d+))?$/;
@@ -136,3 +138,60 @@ export function jobTitle(j: ReleaseJob): string {
   if (j.state === 'done') return `${did[j.kind]} ${s}`;
   return `The ${what[j.kind]} of ${s} stopped`;
 }
+
+// cutLabel: the cut dialog's button, "Cut v1.4.20-rc.3 and deploy to stage"
+export function cutLabel(d: Draft, deploy: boolean, env: string): string {
+  return `Cut ${d.tag}${deploy ? ` and deploy to ${env}` : ''}`;
+}
+
+// checkIcon: a check's mark: held, failed, or undefined: left to the
+// action itself, which checks it then
+export function checkIcon(ok: boolean | undefined): { name: 'check' | 'error' | 'info'; cls: string } {
+  if (ok === undefined) return { name: 'info', cls: '' };
+  return ok ? { name: 'check', cls: 'gb-state-ok' } : { name: 'error', cls: 'gb-state-warn' };
+}
+
+// nextTag: what a cut of version (1.4.20) pushes, as the engine's tagFor:
+// the final, or one candidate past the highest taken; "" for a version
+// that isn't M.m.p
+export function nextTag(version: string, final: boolean, rows: ReleaseRow[]): string {
+  const m = /^v?(\d+\.\d+\.\d+)$/.exec(version.trim());
+  if (!m) return '';
+  if (final) return `v${m[1]}`;
+  const rc = rows.reduce((n, r) => (finalOf(r.tag.version) === m[1] ? Math.max(n, r.tag.version.rc) : n), 0);
+  return `v${m[1]}-rc.${rc + 1}`;
+}
+
+// finalOf: a version's final, as said: 1.4.20
+export const finalOf = (v: ReleaseVersion): string => `${v.major}.${v.minor}.${v.patch}`;
+
+// takenTag: the tag a cut found taken, from the engine's "<tag>: tag taken"
+export const takenTag = (j: ReleaseJob): string => /^(v\S+): tag taken$/.exec(j.error)?.[1] ?? '';
+
+// older: v before w, as SemVer has it (a final after its candidates)
+const rank = (v: ReleaseVersion) => [v.major, v.minor, v.patch, v.rc || Infinity];
+const older = (v: ReleaseVersion, w: ReleaseVersion) => rank(v).reduce((d, x, i) => d || x - rank(w)[i]!, 0) < 0;
+
+// olderFinals: what env can roll back to: the finals before what it runs
+// (the target ahead, in a split), yanked ones aside, newest first. Running
+// what isn't a release tag, every final.
+export function olderFinals(env: EnvState, rows: ReleaseRow[]): ReleaseRow[] {
+  const now = rows.find((r) => r.tag.name === byVersion(env.targets)[0]?.deployed.version)?.tag.version;
+  return rows.filter((r) => !r.tag.version.rc && !r.record?.yanked && (!now || older(r.tag.version, now)));
+}
+
+// bump: what v is to the final before it: a major, minor or patch release;
+// "" without one
+export function bump(prev: ReleaseVersion | null | undefined, v: ReleaseVersion): 'major' | 'minor' | 'patch' | '' {
+  if (!prev) return '';
+  return v.major !== prev.major ? 'major' : v.minor !== prev.minor ? 'minor' : 'patch';
+}
+
+// registryName: a registry as said: ghcr.io/epfl-enac/co2-calculator →
+// ghcr. ponytail: its host without the top-level domain; a host without a
+// dot (localhost:5000) stays whole
+export const registryName = (r: string): string => (r.split('/')[0] ?? r).replace(/\.[^.:]+$/, '');
+
+// repoName: a repository's URL's last part, without .git:
+// git@github.com:EPFL-ENAC/enack8s-app-config.git → enack8s-app-config
+export const repoName = (url: string): string => url.replace(/(\.git)?\/*$/, '').split(/[/:]/).at(-1) ?? '';

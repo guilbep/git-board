@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import type { EnvState, ReleaseJob, ReleaseRow, ReleaseStep, TargetState } from './api/board.ts';
-import { behindText, groupReleases, jobTitle, promotion, splitParts, splitText, stepLabel, stepState } from './releases.ts';
+import type { Draft, EnvState, ReleaseJob, ReleaseRow, ReleaseStep, TargetState } from './api/board.ts';
+import { behindText, bump, checkIcon, cutLabel, groupReleases, jobTitle, nextTag, olderFinals, promotion, registryName, repoName, splitParts, splitText, stepLabel, stepState, takenTag } from './releases.ts';
 
 function row(name: string): ReleaseRow {
   const [, major, minor, patch, rc] = /^v(\d+)\.(\d+)\.(\d+)(?:-rc\.(\d+))?$/.exec(name)!.map(Number);
@@ -98,4 +98,60 @@ test('stepLabel says what each step did', () => {
   assert.equal(stepLabel(s('dev on git@github.com:EPFL-ENAC/enack8s-app-config.git', 'pushed 1a2b3c4'), names), 'Pointing dev at it (enack8s)');
   assert.equal(stepLabel(s('dev on /tmp/other.git', '', 'running'), names), 'Pointing dev at it (/tmp/other.git)');
   assert.equal(stepLabel(s('a step this page doesn’t know'), names), 'a step this page doesn’t know');
+});
+
+test('cutLabel says the tag, and where it goes when it deploys', () => {
+  const d = { tag: 'v1.4.20-rc.3' } as Draft;
+  assert.equal(cutLabel(d, true, 'stage'), 'Cut v1.4.20-rc.3 and deploy to stage');
+  assert.equal(cutLabel(d, false, 'stage'), 'Cut v1.4.20-rc.3');
+});
+
+test('checkIcon: held, failed, or left to the action', () => {
+  assert.deepEqual(checkIcon(true), { name: 'check', cls: 'gb-state-ok' });
+  assert.deepEqual(checkIcon(false), { name: 'error', cls: 'gb-state-warn' });
+  assert.deepEqual(checkIcon(undefined), { name: 'info', cls: '' });
+});
+
+test('nextTag: the final, or the next candidate past the taken ones', () => {
+  const rows = [row('v1.4.20-rc.2'), row('v1.4.20-rc.1'), row('v1.4.19'), row('v1.4.19-rc.4')];
+  assert.equal(nextTag('1.4.20', false, rows), 'v1.4.20-rc.3');
+  assert.equal(nextTag('v1.4.20', true, rows), 'v1.4.20');
+  assert.equal(nextTag('1.5.0', false, rows), 'v1.5.0-rc.1');
+  assert.equal(nextTag('1.4', false, rows), '');
+  assert.equal(nextTag('1.4.20-rc.1', false, rows), '');
+});
+
+test('takenTag reads the tag a taken cut wanted', () => {
+  const job: ReleaseJob = { kind: 'cut', subject: 'v1.4.20', state: 'failed', error: 'v1.4.20-rc.3: tag taken', code: 'taken', steps: [], started: '', ended: null };
+  assert.equal(takenTag(job), 'v1.4.20-rc.3');
+  assert.equal(takenTag({ ...job, error: 'push refused' }), '');
+});
+
+test('olderFinals: the finals before what the environment runs, not yanked', () => {
+  const yanked = { ...row('v1.4.18'), record: { yanked: 'broken' } as ReleaseRow['record'] };
+  const rows = [row('v1.4.21-rc.1'), row('v1.4.20'), row('v1.4.20-rc.2'), row('v1.4.19'), yanked, row('v1.4.17')];
+  const prod = env({ version: 'v1.4.20', targets: [target('enack8s', 'v1.4.20')] });
+  assert.deepEqual(olderFinals(prod, rows).map((r) => r.tag.name), ['v1.4.19', 'v1.4.17']);
+  // split: older than the target ahead
+  const split = env({ split: true, version: '', targets: [target('enack8s', 'v1.4.19'), target('openshift', 'v1.4.20')] });
+  assert.deepEqual(olderFinals(split, rows).map((r) => r.tag.name), ['v1.4.19', 'v1.4.17']);
+  // not a release tag: every final but none
+  const dev = env({ version: '1.4.21-dev.3.gabc1234', targets: [target('enack8s', '1.4.21-dev.3.gabc1234')] });
+  assert.deepEqual(olderFinals(dev, rows).map((r) => r.tag.name), ['v1.4.20', 'v1.4.19', 'v1.4.17']);
+});
+
+test('bump: what a version is to the final before it', () => {
+  const v = (s: string) => row(s).tag.version;
+  assert.equal(bump(v('v1.4.19'), v('v1.4.20-rc.2')), 'patch');
+  assert.equal(bump(v('v1.4.19'), v('v1.5.0')), 'minor');
+  assert.equal(bump(v('v1.4.19'), v('v2.0.0')), 'major');
+  assert.equal(bump(undefined, v('v0.1.0')), '');
+});
+
+test('registryName and repoName say them short', () => {
+  assert.equal(registryName('ghcr.io/epfl-enac/co2-calculator'), 'ghcr');
+  assert.equal(registryName('quay.test/app'), 'quay');
+  assert.equal(registryName('localhost:5000/app'), 'localhost:5000');
+  assert.equal(repoName('git@github.com:EPFL-ENAC/enack8s-app-config.git'), 'enack8s-app-config');
+  assert.equal(repoName('https://github.com/EPFL-ENAC/co2-calculator/'), 'co2-calculator');
 });

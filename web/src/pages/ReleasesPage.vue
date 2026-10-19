@@ -26,7 +26,22 @@
     </section>
 
     <template v-else-if="data">
-      <ReleaseJob v-if="data.job && (data.job.state !== 'done' || watched)" :job="data.job" :names="repoNames" />
+      <ReleaseJob v-if="data.job && (data.job.state !== 'done' || watched)" :job="data.job" :names="repoNames">
+        <!-- a cut found its tag taken: who took it, and the next candidate (States w3) -->
+        <template v-if="taken" #default>
+          <div class="epfl-alert epfl-alert-info gb-alert-row" role="status">
+            <GbIcon name="tag" />
+            <span v-if="taken.row"><b>{{ (!taken.row.beforeGitBoard && taken.row.record?.author) || 'Someone' }} cut {{ taken.tag }} {{ on(taken.row.tag.date, true) }}</b>, on <span class="gb-mono">{{ sha7(taken.row.tag.commit) }}</span>{{ taken.row.tag.commit === lastCut?.commit ? ', the same commit' : '' }}.</span>
+            <span v-else><b>Someone cut {{ taken.tag }} first.</b></span>
+          </div>
+          <div class="gb-actions">
+            <router-link class="epfl-btn epfl-btn-primary epfl-btn-sm" :to="releasePath(taken.tag)">Open {{ taken.tag }}</router-link>
+            <button v-if="taken.next" type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" :disabled="busy" @click="recut">Cut as {{ taken.next }}</button>
+          </div>
+        </template>
+      </ReleaseJob>
+
+      <AdoptPanel v-if="envs.some((e) => !e.adopted && e.targets.length)" :envs="envs" :busy="busy" :adopt="adopt" />
 
       <section aria-labelledby="where">
         <h2 id="where" class="gb-sr">What runs where</h2>
@@ -105,20 +120,28 @@
         </div>
       </section>
     </template>
+
+    <q-dialog :model-value="!!dialog" @update:model-value="(open: boolean) => open || (dialog = null)">
+      <CutReleaseDialog v-if="dialog?.kind === 'cut'" :envs="envs" :releases="data?.releases ?? []" :busy="busy" @close="dialog = null" @started="onCut" />
+      <RollbackDialog v-else-if="dialog?.kind === 'rollback'" :env="dialog.env" :envs="envs" :releases="data?.releases ?? []" :busy="busy" @close="dialog = null" @started="onStarted" />
+    </q-dialog>
   </main>
 </template>
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import AdoptPanel from '@/components/AdoptPanel.vue';
 import AppHeader from '@/components/AppHeader.vue';
+import CutReleaseDialog from '@/components/CutReleaseDialog.vue';
 import GbIcon from '@/components/GbIcon.vue';
 import ReleaseJob from '@/components/ReleaseJob.vue';
-import { deployEnvironment, getConfigDocs, getReleases, getViews, promoteRelease, type ReleaseJob as Job, type ReleaseRow, type Releases } from '@/api/board';
+import RollbackDialog from '@/components/RollbackDialog.vue';
+import { adoptOverlays, cutRelease, deployEnvironment, getConfigDocs, getDraft, getReleases, getViews, promoteRelease, type CutRequest, type ReleaseJob as Job, type Proposal, type ReleaseRow, type Releases } from '@/api/board';
 import { message } from '@/issue';
 import { debounced, onLive } from '@/live';
-import { behindText, byVersion, envMark, groupReleases, newest, promotion, runs, splitParts, tagPattern, type EnvMark } from '@/releases';
+import { behindText, byVersion, envMark, groupReleases, newest, promotion, repoName, runs, splitParts, takenTag, tagPattern, type EnvMark } from '@/releases';
 import { remotes } from '@/remotes';
-import { when } from '@/when';
+import { on, when } from '@/when';
 
 const viewNames = ref<string[]>([]);
 const data = ref<Releases | null>(null);
@@ -131,6 +154,8 @@ const showAll = ref(false);
 const watched = ref(false);
 // the dialog asked for: a cut, or rolling an environment back
 const dialog = ref<{ kind: 'cut' } | { kind: 'rollback'; env: string } | null>(null);
+// the cut this page last asked for, to ask again when its tag was taken
+const lastCut = ref<CutRequest | null>(null);
 
 const running = computed(() => data.value?.job?.state === 'running');
 const busy = computed(() => running.value || pending.value);
@@ -146,7 +171,7 @@ const meta = computed(() => {
 // the repository, as origin names it
 const repo = computed(() => {
   const r = remotes.value?.find((x) => x.name === 'origin') ?? remotes.value?.[0];
-  return r ? (r.url.replace(/(\.git)?\/*$/, '').split(/[/:]/).at(-1) ?? '') : '';
+  return r ? repoName(r.url) : '';
 });
 
 // each environment's column, worked out once: in a split, the targets lead
@@ -165,6 +190,16 @@ const views = computed(() =>
     };
   }),
 );
+
+// a cut that found its tag taken: the tag, its row once fetched, and the
+// candidate after it when this page can cut again
+const taken = computed(() => {
+  const j = data.value?.job;
+  const tag = j?.state === 'failed' && j.code === 'taken' && j.kind === 'cut' ? takenTag(j) : '';
+  if (!tag) return null;
+  const rc = tagPattern.exec(tag)?.[4];
+  return { tag, row: data.value?.releases.find((r) => r.tag.name === tag), next: rc && lastCut.value ? `rc.${+rc + 1}` : '' };
+});
 
 const repoNames = computed(() => Object.fromEntries(envs.value.flatMap((e) => e.targets.map((t) => [t.repo, t.name]))));
 const groups = computed(() => groupReleases(data.value?.releases ?? []));
@@ -212,6 +247,37 @@ async function start(f: () => Promise<Job>) {
   } finally {
     pending.value = false;
   }
+}
+
+// a dialog's job started: the page shows it
+function onStarted(job: Job) {
+  actionError.value = '';
+  watched.value = true;
+  if (data.value) data.value.job = job;
+  dialog.value = null;
+}
+
+function onCut(job: Job, req: CutRequest) {
+  lastCut.value = req;
+  onStarted(job);
+}
+
+// the same cut again: the draft first, which fetches origin's tags as the
+// dialog's did; the engine numbers the candidate past the one taken
+function recut() {
+  const req = lastCut.value;
+  if (req) void start(() => getDraft(req.final).then(() => cutRelease(req)));
+}
+
+// adopt: a quick write, busy until it answers; the panel says a refusal
+async function adopt(ps: Proposal[]) {
+  pending.value = true;
+  try {
+    await adoptOverlays(ps);
+  } finally {
+    pending.value = false;
+  }
+  await reload();
 }
 
 // a job's steps; while one runs, "issues" too: live.ts says it after a

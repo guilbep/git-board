@@ -9,7 +9,7 @@
 <script setup lang="ts">
 export type IconName =
   | 'close' | 'up' | 'down' | 'link' | 'expand' | 'edit' | 'check' | 'clock' | 'local' | 'tag'
-  | 'user' | 'title' | 'open' | 'closed' | 'sync' | 'plus' | 'warn' | 'external' | 'error' | 'back' | 'settings' | 'filter' | 'collapse' | 'search' | 'chart' | 'inbox' | 'undo' | 'info';
+  | 'user' | 'title' | 'open' | 'closed' | 'sync' | 'plus' | 'warn' | 'external' | 'error' | 'back' | 'settings' | 'filter' | 'collapse' | 'search' | 'chart' | 'inbox' | 'undo' | 'info' | 'forward';
 
 defineProps<{ name: IconName; small?: boolean }>();
 
@@ -34,6 +34,7 @@ const paths: Record<IconName, string[]> = {
   external: ['M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6', 'M15 3h6v6', 'M10 14 21 3'],
   error: ['M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20Z', 'M12 8v4', 'M12 16h.01'],
   back: ['M19 12H5', 'M12 19l-7-7 7-7'],
+  forward: ['M5 12h14', 'M12 5l7 7-7 7'],
   filter: ['M22 3H2l8 9.46V19l4 2v-8.54L22 3Z'],
   collapse: ['M11 17l-5-5 5-5', 'M18 17l-5-5 5-5'],
   search: ['M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16Z', 'M21 21l-4.35-4.35'],

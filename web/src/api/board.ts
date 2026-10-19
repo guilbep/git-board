@@ -1130,8 +1130,18 @@ export async function getRelease(tag: string): Promise<ReleaseDetail> {
   return { row: releaseRow(d.row), issues: d.issues ?? [], candidates: (d.candidates ?? []).map(releaseRow), history };
 }
 
-// version: the final form (1.4.20), "" the draft's; the rc number is the server's
-export async function cutRelease(c: { version?: string; final?: boolean; hotfix?: boolean; commit?: string; notes?: string; deploy?: boolean }): Promise<ReleaseJob> {
+// version: the final form (1.4.20), "" the draft's; the rc number is the
+// server's. commit, notes: "" the draft's
+export interface CutRequest {
+  version?: string;
+  final?: boolean;
+  hotfix?: boolean;
+  commit?: string;
+  notes?: string;
+  deploy?: boolean;
+}
+
+export async function cutRelease(c: CutRequest): Promise<ReleaseJob> {
   return releaseJob(await request<ReleaseJob>('/api/releases', json('POST', c)))!;
 }
 
