@@ -60,6 +60,7 @@ func (s *apiServer) writeThread(w http.ResponseWriter, status int, id string) {
 			th.Events[i].HTML = markdown.Render(e.Body, s.mediaURL)
 		}
 	}
+	s.annotate(&th)
 	writeJSON(w, status, th)
 }
 
