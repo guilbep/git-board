@@ -225,6 +225,7 @@ export interface IssueEvent {
   status?: 'open' | 'closed';
   title?: string;
   was?: string;
+  meta?: Record<string, string>; // plan:approve, verify:run, verify:criterion, signoff:status…
 }
 
 export interface Thread extends Issue {
@@ -612,6 +613,7 @@ export interface GatePR {
   title: string;
   base: string;
   head: string; // its head commit
+  merge_commit?: string; // when merged
   author: string;
   decision: string; // APPROVED, REVIEW_REQUIRED, CHANGES_REQUESTED, '' (no review rule)
   mergeable: string;
@@ -638,6 +640,42 @@ export interface CycleWaits {
   what: string;
   anyone: boolean;
 }
+export interface CyclePlan {
+  path: string;
+  ref: string;
+  status?: string; // the front matter's: draft, accepted, in-progress, delivered
+  html?: string; // the file rendered, below its front matter
+  by?: string; // who first committed it on the plan branch
+}
+export interface CycleSignoff {
+  status: string;
+  by: string;
+  commit?: string;
+  why?: string;
+  at: string;
+}
+// What the server gathered (internal/cycle Input): the thread's fields and
+// comments, the branches, the PRs.
+export interface CycleEvidence {
+  criteria?: string[];
+  risk?: string;
+  author?: string;
+  assignees?: string[];
+  people?: Record<string, string>; // the login holding each gate: risk, plan, review, signoff:<status>
+  branch?: string;
+  head?: string;
+  base?: string;
+  plan_branch?: string;
+  plan_head?: string;
+  plan?: CyclePlan;
+  plan_approval?: { by: string; commit?: string; at: string };
+  plan_pr?: GatePR | null;
+  tests?: { path: string; commit?: string }[];
+  pr?: GatePR | null;
+  signoffs?: CycleSignoff[];
+  runs?: { by: string; commit?: string; at: string }[];
+  checks?: { index: number; by: string; commit?: string; at: string }[];
+}
 export interface Cycle {
   step: number; // 1 to 7
   of: number;
@@ -651,14 +689,7 @@ export interface Cycle {
   waits: CycleWaits;
   mine: boolean; // the viewer's turn, or anyone's
   actions?: string[]; // set-risk, approve-plan, review, verify, check, signoff
-  evidence: {
-    criteria?: string[];
-    head?: string;
-    branch?: string;
-    pr?: GatePR | null;
-    runs?: { by: string; commit: string }[];
-    checks?: { index: number; by: string }[];
-  };
+  evidence: CycleEvidence;
   stages: { ready: string; in_progress: string[]; in_review: string[]; validation: string[]; closing: string; guessed: boolean };
   pr_checked_at?: string;
 }
