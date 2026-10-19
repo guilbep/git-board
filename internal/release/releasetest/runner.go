@@ -108,7 +108,8 @@ helmCharts:
 // SetOverlay writes d into target's overlay of env, straight into its bare
 // repo through a clone of its own, as a deploy would: d.Images keys are
 // <registry>/<image>; the chart and version values are written only when
-// d.Version is set; the commit's subject names d.Version, for History.
+// d.Version is set, the chart's version being d.Chart, else d.Version; the
+// commit's subject names d.Version, for History.
 func (fx *Fixture) SetOverlay(t *testing.T, target int, env string, d release.Deployed) {
 	t.Helper()
 	ctx := context.Background()
@@ -119,6 +120,9 @@ func (fx *Fixture) SetOverlay(t *testing.T, target int, env string, d release.De
 	chart := ""
 	if d.Version != "" {
 		chart = fx.cfg.Chart.Registry
+		if d.Chart == "" {
+			d.Chart = d.Version
+		}
 	}
 	path := strings.ReplaceAll(fx.cfg.Deploy[target].Path, "{env}", env)
 	msg := fmt.Sprintf("chore(manifest): update app (%s) %s [by fixture via releasetest]", env, d.Version)

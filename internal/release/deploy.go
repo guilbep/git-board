@@ -149,17 +149,18 @@ func (r *Runner) deploy(ctx context.Context, env string, t Target) error {
 	if err != nil {
 		return err
 	}
-	chart := "" // the chart entry the overlays get t.Version in; "" leaves it as it is
+	chart, chartVersion := "", "" // the chart entry, and its version: "" leaves it as it is
 	if r.Cfg.Chart != nil {
+		chart = r.Cfg.Chart.Registry
 		switch {
 		case recorded && rec.Chart.Version == "": // a release from before git-board: its chart is unknown
 		case recorded && rec.Chart.Version == t.Version:
-			chart = r.Cfg.Chart.Registry
+			chartVersion = t.Version
 		default:
 			if err := r.ensureChart(ctx, t.Commit, t.Version); err != nil {
 				return err
 			}
-			chart = r.Cfg.Chart.Registry
+			chartVersion = t.Version
 		}
 	}
 	for _, d := range r.Cfg.Deploy {
@@ -172,7 +173,7 @@ func (r *Runner) deploy(ctx context.Context, env string, t Target) error {
 				if move, err := r.moves(ctx, env, d.Repo, dep, t); err != nil || !move {
 					return false, err
 				}
-				want := Deployed{Commit: t.Commit, Version: t.Version, Images: map[string]Image{}}
+				want := Deployed{Commit: t.Commit, Version: t.Version, Chart: chartVersion, Images: map[string]Image{}}
 				for _, a := range arts {
 					name := a.Registry + "/" + a.Image
 					if _, ok := dep.Images[name]; ok && a.Registry == d.Registry {

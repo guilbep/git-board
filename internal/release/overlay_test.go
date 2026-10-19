@@ -83,7 +83,7 @@ func TestSetKeepsEverythingElse(t *testing.T) {
 	o := mustParse(t, "testdata/co2-prod.yaml")
 	commit := "5e09a71" + strings.Repeat("0", 33)
 	changed, err := o.Set(Deployed{
-		Commit: commit, Version: "v1.4.20",
+		Commit: commit, Version: "v1.4.20", Chart: "v1.4.20",
 		Images: map[string]Image{
 			"ghcr.io/epfl-enac/epfl/co2-calculator/frontend": {Tag: "v1.4.20", Digest: "sha256:aaaa"},
 			"ghcr.io/epfl-enac/epfl/co2-calculator/backend":  {Tag: "v1.4.20", Digest: "sha256:bbbb"},
@@ -105,6 +105,22 @@ func TestSetKeepsEverythingElse(t *testing.T) {
 		"+  git-board/commit: " + commit,
 		"+  git-board/version: v1.4.20",
 	}
+	sort.Strings(got)
+	sort.Strings(want)
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("changed lines differ\n got: %q\nwant: %q", got, want)
+	}
+}
+
+// R17: without a chart version, the version values still follow d.Version.
+func TestSetWithoutChartVersion(t *testing.T) {
+	before := read(t, "testdata/co2-prod.yaml")
+	o := mustParse(t, "testdata/co2-prod.yaml")
+	if changed, err := o.Set(Deployed{Version: "v1.4.20"}, co2Chart, []string{"backend.env.APP_VERSION"}); err != nil || !changed {
+		t.Fatalf("changed=%v err=%v", changed, err)
+	}
+	got := lineDiff(strings.Split(before, "\n"), strings.Split(render(t, o), "\n"))
+	want := []string{`-          APP_VERSION: "sprint-1-prod-2025-11-28"`, `+          APP_VERSION: "v1.4.20"`}
 	sort.Strings(got)
 	sort.Strings(want)
 	if strings.Join(got, "\n") != strings.Join(want, "\n") {

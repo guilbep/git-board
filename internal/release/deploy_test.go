@@ -367,6 +367,11 @@ func TestDeployUsesRecordedDigests(t *testing.T) {
 			t.Errorf("prod chart %q, want it left at v0.1.0", tg.Deployed.Chart)
 		}
 	}
+	for _, b := range fx.ConfigBare { // R17: the version values follow every deploy
+		if raw := releasetest.Git(t, b, "show", "main:app/overlays/prod/kustomization.yaml"); !strings.Contains(raw, `APP_VERSION: "v1.4.19"`) {
+			t.Errorf("APP_VERSION not moved to v1.4.19:\n%s", raw)
+		}
+	}
 	if e.Commit != legacy || e.Version != "v1.4.19" {
 		t.Errorf("prod = %+v", e)
 	}

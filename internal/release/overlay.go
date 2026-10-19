@@ -14,7 +14,7 @@ type Deployed struct {
 	Commit  string           `json:"commit"`  // git-board/commit, "" when not adopted
 	Version string           `json:"version"` // git-board/version
 	Images  map[string]Image `json:"images"`  // key: the images[] entry's name
-	Chart   string           `json:"chart"`   // the chart entry's version, "" when none
+	Chart   string           `json:"chart"`   // the chart entry's version, "" when none (Set: leave it)
 }
 
 // Image is one images[] entry's tag and digest.
@@ -137,7 +137,9 @@ func (o *Overlay) Deployed(chartRepo string) Deployed {
 	return d
 }
 
-// Set writes d into the overlay and reports whether anything changed.
+// Set writes d into the overlay and reports whether anything changed. The
+// chart entry chartRepo ("": none) gets d.Chart as its version, unless it
+// is "", and d.Version in each versionValues path.
 func (o *Overlay) Set(d Deployed, chartRepo string, versionValues []string) (bool, error) {
 	changed := false
 	imgs := items(get(o.root(), "images"))
@@ -159,7 +161,9 @@ func (o *Overlay) Set(d Deployed, chartRepo string, versionValues []string) (boo
 		if c == nil {
 			return false, fmt.Errorf("overlay has no chart %s", chartRepo)
 		}
-		changed = setStr(c, "version", d.Version, 0) || changed
+		if d.Chart != "" {
+			changed = setStr(c, "version", d.Chart, 0) || changed
+		}
 		for _, path := range versionValues {
 			m := ensure(c, "valuesInline", yaml.MappingNode)
 			parts := strings.Split(path, ".")
