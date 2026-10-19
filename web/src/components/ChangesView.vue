@@ -41,10 +41,10 @@
         <summary>{{ g.title }} <span class="gb-tag">{{ g.files.length }}</span></summary>
         <DiffFile
           v-for="f in g.files"
-          :key="`${range.to}:${f.path}`"
+          :key="`${fileRange.to}:${f.path}`"
           :id="id"
           :file="f"
-          :range="range"
+          :range="fileRange"
           :base="changes.base"
           :head="changes.head"
           :threads="threads.filter((t) => t.root.review!.path === f.path)"
@@ -107,6 +107,10 @@ const sinceMine = computed(() => {
 
 // the commits compared: base…head, my last review…head, or one commit
 const range = computed(() => ({ branch: changes.value!.branch, ...shownRange(changes.value!, view.value, mine.value) }));
+// as the server resolved it: a commit's parent is the base when the commit
+// is the branch's first, and the old side is commentable from the base
+const partFrom = ref('');
+const fileRange = computed(() => ({ ...range.value, from: partFrom.value || range.value.from }));
 
 const files = computed(() => part.value ?? changes.value?.files ?? []);
 
@@ -117,8 +121,8 @@ async function load() {
     const c = await getChanges(props.id, { branch: branch.value });
     if (n !== latest) return;
     [changes.value, branch.value, error.value] = [c, c.branch, ''];
-    const p = view.value === 'all' ? null : (await getChanges(props.id, range.value)).files;
-    if (n === latest) part.value = p;
+    const p = view.value === 'all' ? null : await getChanges(props.id, range.value);
+    if (n === latest) [part.value, partFrom.value] = [p?.files ?? null, p?.from ?? ''];
   } catch (e) {
     if (n === latest) error.value = e instanceof ApiError && e.code === 'no-branch' ? 'no-branch' : message(e);
   }

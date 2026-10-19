@@ -119,6 +119,12 @@ func TestChanges(t *testing.T) {
 	if code := call(t, "GET", r.url("/changes", url.Values{"branch": {"fix/9-y"}}), nil, nil); code != http.StatusBadRequest {
 		t.Errorf("a branch naming another issue: %d, want 400", code)
 	}
+	// one commit's view, against its parent: the branch's first commit's is
+	// the base, as the server answers it (the old side commentable there)
+	c = changesAnswer{}
+	if code := call(t, "GET", r.url("/changes", url.Values{"from": {r.c1 + "^"}, "to": {r.c1}}), nil, &c); code != http.StatusOK || c.From != r.base || c.To != r.c1 {
+		t.Errorf("a commit against its parent: %d, from %q, to %q", code, c.From, c.To)
+	}
 	if code := call(t, "GET", r.url("/changes", url.Values{"from": {"--output=x"}}), nil, nil); code != http.StatusBadRequest {
 		t.Errorf("an option for from: %d, want 400", code)
 	}
