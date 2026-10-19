@@ -4,12 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"time"
 
+	"github.com/guilbep/git-board/internal/branches"
+	"github.com/guilbep/git-board/internal/gitbugio"
 	"github.com/guilbep/git-board/internal/wtx"
 )
 
@@ -184,4 +188,162 @@ func tempFile(pattern string, data []byte) (string, error) {
 		return "", err
 	}
 	return f.Name(), nil
+}
+
+// issueAgent is an issue's agent: its branch, the worktree on it, and
+// wtx's session there.
+type issueAgent struct {
+	Reason   string             `json:"reason,omitempty"` // why Start is refused here; "" when it can start
+	Code     string             `json:"code,omitempty"`
+	Branch   string             `json:"branch"`             // the evidence branch, else the [branches] name for the issue
+	Worktree *gitbugio.Worktree `json:"worktree,omitempty"` // the linked worktree on that branch
+	Session  *wtx.Session       `json:"session,omitempty"`  // wtx status for it, when wtx answers
+	Output   string             `json:"output,omitempty"`   // a write: wtx's last lines
+}
+
+// agentOf reads the issue's agent: the branch and worktree from git, and
+// with session the session from wtx when it may run.
+func (s *apiServer) agentOf(ctx context.Context, r *http.Request, th gitbugio.Thread, cyc cycleResponse, session bool) (issueAgent, error) {
+	a := issueAgent{Branch: cyc.Evidence.Branch}
+	a.Code, a.Reason = s.wtxAllowed(r, false)
+	if a.Branch == "" {
+		sug, err := branches.Suggest(s.b, s.config().Branches, th.Issue)
+		if err != nil {
+			return a, err
+		}
+		a.Branch = sug.Suggested
+	}
+	wts, err := s.b.Worktrees()
+	if err != nil {
+		return a, err
+	}
+	if i := slices.IndexFunc(wts, func(wt gitbugio.Worktree) bool { return wt.Branch == a.Branch }); i >= 0 {
+		a.Worktree = &wts[i]
+	}
+	if session && a.Code == "" {
+		// ponytail: a failing wtx status (no wtx.toml yet) reads as no
+		// session; the Worktrees tab says why
+		if out, err := wtx.Run(ctx, s.root, "status", a.Branch, "--json"); err == nil {
+			if rows, err := wtx.ParseStatus(out); err == nil && len(rows) > 0 {
+				a.Session = &rows[0]
+			}
+		}
+	}
+	return a, nil
+}
+
+// GET /api/issues/{id}/agent
+func (s *apiServer) handleIssueAgent(w http.ResponseWriter, r *http.Request) {
+	th, err := s.b.Thread(r.PathValue("id"))
+	if err != nil {
+		writeIssueError(w, err)
+		return
+	}
+	cyc, err := s.cycleOf(r.Context(), th)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	a, err := s.agentOf(r.Context(), r, th, cyc, true)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, a)
+}
+
+// POST /api/issues/{id}/agent/{action}, action go or brief, body
+// {"brief": "..."}: wtx go or wtx brief on the issue's branch, with a
+// prompt file of git-board's words and the issue quoted as data. The
+// agent's permissions are wtx.toml's: no --agent, --llm or permission
+// flag is passed.
+func (s *apiServer) handleIssueAgentAction(w http.ResponseWriter, r *http.Request) {
+	action := r.PathValue("action")
+	if action != "go" && action != "brief" {
+		writeError(w, http.StatusNotFound, fmt.Errorf("no agent action %q", action))
+		return
+	}
+	if s.refuseWtx(w, r) {
+		return
+	}
+	var req struct {
+		Brief string `json:"brief"`
+	}
+	if !decode(w, r, &req) {
+		return
+	}
+	s.wtxMu.Lock()
+	defer s.wtxMu.Unlock()
+	th, err := s.b.Thread(r.PathValue("id"))
+	if err != nil {
+		writeIssueError(w, err)
+		return
+	}
+	cyc, err := s.cycleOf(r.Context(), th)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	a, err := s.agentOf(r.Context(), r, th, cyc, false)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	switch {
+	case action == "go" && a.Worktree != nil:
+		writeCoded(w, http.StatusConflict, "has-worktree", errors.New("This issue has a worktree: brief the agent instead."))
+		return
+	case action == "brief" && a.Worktree == nil:
+		writeCoded(w, http.StatusConflict, "no-worktree", errors.New("No worktree yet: start an agent first."))
+		return
+	}
+	in := wtx.PromptInput{Issue: issueName(th.Issue), Title: th.Title, Step: cyc.Step, Of: cyc.Of, Name: cyc.Name,
+		Gate: cyc.Gate, What: cyc.Waits.What, Branch: a.Branch, Brief: req.Brief}
+	if i := slices.IndexFunc(th.Events, func(e gitbugio.Event) bool { return e.Kind == "created" }); i >= 0 {
+		in.Description = th.Events[i].Body
+	}
+	if cyc.Evidence.Plan != nil {
+		in.Plan = cyc.Evidence.Plan.Path
+	}
+	file, err := tempFile("git-board-brief-*.md", []byte(wtx.Prompt(in)))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	defer os.Remove(file) // wtx copied it into the worktree
+
+	// ponytail: the request waits for wtx go (npm ci included); a job
+	// with a progress stream when a repo's setup takes longer than a
+	// browser waits.
+	args, timeout := []string{"go", a.Branch, "--prompt", file, "--no-attach"}, 10*time.Minute
+	if action == "brief" {
+		args, timeout = []string{"brief", a.Branch, "--prompt", file}, time.Minute
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), timeout)
+	defer cancel()
+	out, err := wtx.Run(ctx, s.root, args...)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	if a, err = s.agentOf(r.Context(), r, th, cyc, true); err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	a.Output = wtx.Tail(string(out), 8)
+	writeJSON(w, http.StatusOK, a)
+}
+
+// issueName names the issue as the Work page does: its project number,
+// else its first forge number, else its short id.
+func issueName(is gitbugio.Issue) string {
+	if is.Number != "" {
+		return is.Number
+	}
+	for _, f := range is.Forges {
+		if f.Number != "" {
+			return "#" + f.Number
+		}
+	}
+	return is.ID[:min(7, len(is.ID))]
 }

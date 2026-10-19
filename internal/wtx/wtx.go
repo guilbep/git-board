@@ -26,13 +26,13 @@ func Run(ctx context.Context, dir string, args ...string) ([]byte, error) {
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	if err := cmd.Run(); err != nil {
-		return stdout.Bytes(), fmt.Errorf("wtx %s: %w: %s", args[0], err, tail(stderr.String()+stdout.String(), 8))
+		return stdout.Bytes(), fmt.Errorf("wtx %s: %w: %s", args[0], err, Tail(stderr.String()+stdout.String(), 8))
 	}
 	return stdout.Bytes(), nil
 }
 
-// tail is the last n non-empty lines of s.
-func tail(s string, n int) string {
+// Tail is the last n non-empty lines of s.
+func Tail(s string, n int) string {
 	lines := strings.Split(strings.TrimSpace(s), "\n")
 	if len(lines) > n {
 		lines = lines[len(lines)-n:]
