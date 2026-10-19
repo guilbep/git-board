@@ -107,7 +107,13 @@ func (c *Config) Stages() Stages {
 	if k.Validation != nil {
 		s.Validation = k.Validation
 	}
-	s.Before = nil
+	// never null in JSON: the settings page lists them, even with no status
+	for _, l := range []*[]string{&s.InProgress, &s.InReview, &s.Validation} {
+		if *l == nil {
+			*l = []string{}
+		}
+	}
+	s.Before = []string{}
 	for _, o := range options {
 		if o != s.Closing && o != s.Ready && !slices.Contains(s.InProgress, o) && !slices.Contains(s.InReview, o) && !slices.Contains(s.Validation, o) {
 			s.Before = append(s.Before, o)
