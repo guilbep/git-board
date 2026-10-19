@@ -43,20 +43,21 @@ type Review struct {
 
 // PR is a pull request as the gate shows it.
 type PR struct {
-	Number     int      `json:"number"`
-	URL        string   `json:"url"`
-	State      string   `json:"state"` // OPEN, MERGED, CLOSED
-	Draft      bool     `json:"draft"`
-	Title      string   `json:"title"`
-	Base       string   `json:"base"`
-	Head       string   `json:"head"` // its head commit
-	Author     string   `json:"author"`
-	Decision   string   `json:"decision"`    // reviewDecision: APPROVED, REVIEW_REQUIRED, CHANGES_REQUESTED, "" (no review rule)
-	Mergeable  string   `json:"mergeable"`   // MERGEABLE, CONFLICTING, UNKNOWN
-	MergeState string   `json:"merge_state"` // mergeStateStatus
-	Checks     []Check  `json:"checks"`
-	Reviews    []Review `json:"reviews"`   // latestReviews
-	Requested  []string `json:"requested"` // the people asked to review
+	Number      int      `json:"number"`
+	URL         string   `json:"url"`
+	State       string   `json:"state"` // OPEN, MERGED, CLOSED
+	Draft       bool     `json:"draft"`
+	Title       string   `json:"title"`
+	Base        string   `json:"base"`
+	Head        string   `json:"head"`                   // its head commit
+	MergeCommit string   `json:"merge_commit,omitempty"` // on the base, once merged
+	Author      string   `json:"author"`
+	Decision    string   `json:"decision"`    // reviewDecision: APPROVED, REVIEW_REQUIRED, CHANGES_REQUESTED, "" (no review rule)
+	Mergeable   string   `json:"mergeable"`   // MERGEABLE, CONFLICTING, UNKNOWN
+	MergeState  string   `json:"merge_state"` // mergeStateStatus
+	Checks      []Check  `json:"checks"`
+	Reviews     []Review `json:"reviews"`   // latestReviews
+	Requested   []string `json:"requested"` // the people asked to review
 	// set by Gate
 	CanMerge bool     `json:"can_merge"`
 	Checking bool     `json:"checking"` // GitHub is still computing mergeability
@@ -74,6 +75,7 @@ const findQuery = `query($owner: String!, $name: String!, $head: String!) {
     pullRequests(headRefName: $head, first: 10, orderBy: {field: CREATED_AT, direction: DESC}) {
       nodes {
         number url state isDraft title baseRefName headRefOid
+        mergeCommit { oid }
         headRepository { nameWithOwner }
         author { login }
         reviewDecision mergeable mergeStateStatus
@@ -99,6 +101,7 @@ type prNode struct {
 	Title            string
 	BaseRefName      string
 	HeadRefOid       string
+	MergeCommit      *struct{ Oid string }
 	HeadRepository   *struct{ NameWithOwner string }
 	Author           *login
 	ReviewDecision   string
@@ -178,6 +181,9 @@ func (n *prNode) pr() *PR {
 		Checks: []Check{}, Reviews: []Review{}, Requested: []string{}}
 	if n.Author != nil {
 		p.Author = n.Author.Login
+	}
+	if n.MergeCommit != nil {
+		p.MergeCommit = n.MergeCommit.Oid
 	}
 	for _, r := range n.LatestReviews.Nodes {
 		rv := Review{State: r.State}

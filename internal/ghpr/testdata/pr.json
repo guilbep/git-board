@@ -11,6 +11,7 @@
                         "title": "build(deps): bump fastapi[standard] from 0.142.4 to 0.143.0 in /backend",
                         "baseRefName": "dev",
                         "headRefOid": "c1ee2d98598eb5a0dadeb8a67a2fee1e3593eae3",
+                        "mergeCommit": null,
                         "headRepository": {
                             "nameWithOwner": "o/r"
                         },

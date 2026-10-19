@@ -89,6 +89,21 @@ func TestFind(t *testing.T) {
 	}
 }
 
+// A merged PR knows its merge commit: the commit on the base a sign-off's
+// run is checked at.
+func TestFindMerged(t *testing.T) {
+	p, err := fake(t, pulls(`{"number":5,"state":"MERGED","headRefOid":"c1ee2d9","mergeCommit":{"oid":"deadbee0"},"headRepository":{"nameWithOwner":"o/r"}}`)).Find(context.Background(), "o/r", "fix/1-x")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p == nil || p.MergeCommit != "deadbee0" || p.Head != "c1ee2d9" {
+		t.Errorf("PR %+v", p)
+	}
+	if open := co2PR(t); open.MergeCommit != "" {
+		t.Errorf("an open PR's merge commit %q", open.MergeCommit)
+	}
+}
+
 // pulls answers the query with these PRs, newest first.
 func pulls(nodes ...string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {

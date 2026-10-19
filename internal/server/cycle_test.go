@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/guilbep/git-board/internal/config"
+	"github.com/guilbep/git-board/internal/ghpr"
 	"github.com/guilbep/git-board/internal/gitbugio"
 	"github.com/guilbep/git-board/internal/gitbugio/gitbugiotest"
 )
@@ -256,6 +257,23 @@ func TestCycleSignoffNeedsARun(t *testing.T) {
 	signed := th.Events[len(th.Events)-2] // then the status moved
 	if signed.Meta["signoff:why"] != "ran it by hand" || signed.Meta["signoff:status"] != "qa" || !slices.Contains(th.Labels, "status:tests-metier") {
 		t.Errorf("sign-off %+v, then %+v, labels %v", signed, e, th.Labels)
+	}
+}
+
+// Once the PR is merged the run happens at the merge commit, not at the
+// branch's head: the sign-off's check accepts that commit too.
+func TestCycleSignoffAtTheMergedHead(t *testing.T) {
+	s, _, id := prRepo(t, "qa")
+	s.pulls.put("fix/2518-x", &ghpr.PR{Number: 3082, State: "MERGED", Head: "0000000", MergeCommit: "deadbee0"}, nil)
+	url := serve(t, s).URL + "/api/issues/" + id[:8] + "/cycle/"
+	if code, body := post(t, url+"verify", map[string]string{"output": "ok", "commit": "deadbee0"}); code != http.StatusOK {
+		t.Fatalf("verify: %d %s", code, body)
+	}
+	if code, body := post(t, url+"signoff", struct{}{}); code != http.StatusOK {
+		t.Errorf("sign off after a run at the merged head: %d %s", code, body)
+	}
+	if th, _ := lastEvent(t, s.b, id); !slices.Contains(th.Labels, "status:tests-metier") {
+		t.Errorf("labels %v", th.Labels)
 	}
 }
 
