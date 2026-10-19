@@ -7,6 +7,7 @@ const routes: RouteRecordRaw[] = [
   { path: '/issues/:id', component: () => import('@/pages/IssuePage.vue') },
   { path: '/sync', component: () => import('@/pages/ForgeSyncPage.vue') },
   { path: '/insights', component: () => import('@/pages/InsightsPage.vue') },
+  { path: '/work', component: () => import('@/pages/WorkPage.vue') },
   { path: '/inbox', component: () => import('@/pages/InboxPage.vue') },
   // a tab per address, #/settings/forges…; none: General (settingstabs.ts)
   { path: '/settings/:tab?', component: () => import('@/pages/SettingsPage.vue') },

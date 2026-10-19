@@ -158,6 +158,7 @@
 import { onLive } from '@/live';
 import { clampWidth, panelMode, panelWidth, togglePanelMode } from '@/panelsize';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, toRef, useId, watch } from 'vue';
+import { useRoute } from 'vue-router';
 import { markSeen, type Thread } from '@/api/board';
 import { inbox, inboxError, loadInbox } from '@/inbox';
 import { fieldValues, type Fields } from '@/fields';
@@ -210,7 +211,7 @@ const created = computed(() => thread.value?.events.find((e) => e.kind === 'crea
 const rest = computed(() => thread.value?.events.filter((e) => e.kind !== 'created') ?? []);
 
 // the issue (today's page) or its cycle (the spine and the step's workspace)
-const view = ref<'issue' | 'cycle'>('issue');
+const view = ref<'issue' | 'cycle'>(props.page && useRoute().query.view === 'cycle' ? 'cycle' : 'issue');
 // the conversation, or every change in order with the issue as it was
 const mode = ref<'talk' | 'history'>('talk');
 const changeCount = computed(() => (thread.value ? steps(thread.value.events).length : 0));
