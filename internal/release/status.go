@@ -53,6 +53,12 @@ func (r *Runner) Status(ctx context.Context) (Status, error) {
 	if err := r.fetch(ctx); err != nil {
 		return Status{}, err
 	}
+	return r.status(ctx)
+}
+
+// status is Status without the fetch of the app remote; the config repos
+// are still fetched unless Offline.
+func (r *Runner) status(ctx context.Context) (Status, error) {
 	head, err := Git(ctx, r.Dir, "rev-parse", r.trunk())
 	if err != nil {
 		return Status{}, err

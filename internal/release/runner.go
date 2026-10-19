@@ -30,10 +30,11 @@ type Runner struct {
 	Offline  bool       // no fetch of the app remote or config repos
 }
 
+// base is the trunk branch, e.g. dev.
+func (r *Runner) base() string { return cmp.Or(r.Base, r.Branches.Base, "dev") }
+
 // trunk is the trunk on the authority remote, e.g. origin/dev.
-func (r *Runner) trunk() string {
-	return r.Cfg.RemoteName() + "/" + cmp.Or(r.Base, r.Branches.Base, "dev")
-}
+func (r *Runner) trunk() string { return r.Cfg.RemoteName() + "/" + r.base() }
 
 // fetch brings the authority remote's branches, tags and release records,
 // unless Offline.
@@ -51,8 +52,10 @@ func (r *Runner) fetch(ctx context.Context) error {
 // pushes the records, so one an earlier push missed goes too. Offline it
 // does nothing: without the pull it would duplicate other clones' records.
 // A commit's artifacts are each image's digest on each deploy registry (see
-// artifact); one the registry lacks is left out. Previous is the newest
-// final before the commit's newest tag.
+// artifact); one the registry lacks is left out, and a tag none of whose
+// images is found yet (a cut still building) is left for its cut or a later
+// Reconcile, not recorded empty. Previous is the newest final before the
+// tag recorded.
 func (r *Runner) Reconcile(ctx context.Context) error {
 	if r.Offline {
 		return nil
@@ -76,7 +79,6 @@ func (r *Runner) Reconcile(ctx context.Context) error {
 		if recorded[t.Commit] {
 			continue
 		}
-		recorded[t.Commit] = true
 		rec := gitbugio.ReleaseRecord{Commit: t.Commit}
 		for _, p := range tags[i+1:] {
 			if p.Version.RC == 0 {
@@ -95,6 +97,10 @@ func (r *Runner) Reconcile(ctx context.Context) error {
 				}
 			}
 		}
+		if len(rec.Artifacts) == 0 {
+			continue // another tag on the commit may find them
+		}
+		recorded[t.Commit] = true
 		if _, err := r.B.CreateRelease(rec); err != nil {
 			return err
 		}

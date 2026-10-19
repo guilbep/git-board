@@ -164,6 +164,7 @@ func TestReconcileCreatesMissing(t *testing.T) {
 	r, tools, fx := releasetest.NewRunner(t)
 	first := releasetest.Git(t, fx.App, "rev-parse", "HEAD")
 	fx.Tag(t, first, "v0.9.0")
+	tools.Images["ghcr.test/app/backend:v0.9.0"] = releasetest.FakeImage{Digest: "sha256:old", Revision: first}
 	c := fx.Commit(t, "fix")
 	fx.Tag(t, c, "v1.0.0-rc.1")
 	tools.Images["ghcr.test/app/frontend:v1.0.0-rc.1"] = releasetest.FakeImage{Digest: "sha256:fe", Revision: c}
@@ -202,6 +203,29 @@ func TestReconcileCreatesMissing(t *testing.T) {
 	}
 	if row := status(t, r).Releases[0]; row.Tag.Name != "v1.0.0" || row.Record == nil || row.Record.ID != rec.ID {
 		t.Errorf("row = %+v", row)
+	}
+}
+
+// R18: a tag none of whose images is on a registry yet (a cut still
+// building) gets no record: its cut, or a later Reconcile, makes it. Another
+// tag on the commit may find them.
+func TestReconcileSkipsTagsWithoutArtifacts(t *testing.T) {
+	r, tools, fx := releasetest.NewRunner(t)
+	c := fx.Commit(t, "fix")
+	fx.Tag(t, c, "v1.0.0-rc.1", "v1.0.0")
+	if err := r.Reconcile(ctx); err != nil {
+		t.Fatalf("Reconcile: %v", err)
+	}
+	if rec, ok, _ := r.B.ReleaseFor(c); ok {
+		t.Fatalf("recorded without artifacts: %+v", rec)
+	}
+	tools.Images["ghcr.test/app/frontend:v1.0.0-rc.1"] = releasetest.FakeImage{Digest: "sha256:fe", Revision: c}
+	if err := r.Reconcile(ctx); err != nil {
+		t.Fatalf("Reconcile: %v", err)
+	}
+	rec, ok, _ := r.B.ReleaseFor(c)
+	if want := []gitbugio.Artifact{{Image: "frontend", Registry: "ghcr.test/app", Digest: "sha256:fe"}}; !ok || !slices.Equal(rec.Artifacts, want) {
+		t.Errorf("record = %+v, %v; want the rc's image", rec, ok)
 	}
 }
 

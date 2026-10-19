@@ -157,7 +157,7 @@ func (r *Runner) deploy(ctx context.Context, env string, t Target) error {
 		case recorded && rec.Chart.Version == t.Version:
 			chartVersion = t.Version
 		default:
-			if err := r.ensureChart(ctx, t.Commit, t.Version); err != nil {
+			if _, err := r.ensureChart(ctx, t.Commit, t.Version); err != nil {
 				return err
 			}
 			chartVersion = t.Version
@@ -316,9 +316,10 @@ func (r *Runner) build(ctx context.Context, img config.Image, reg, commit, tree 
 	return digest, r.Tools.Tag(ctx, scratch, commit)
 }
 
-// ensureChart packages the chart of commit at version and pushes it.
-func (r *Runner) ensureChart(ctx context.Context, commit, version string) error {
-	return r.do("chart", func() (string, error) {
+// ensureChart packages the chart of commit at version, pushes it and
+// returns its digest.
+func (r *Runner) ensureChart(ctx context.Context, commit, version string) (digest string, err error) {
+	err = r.do("chart", func() (string, error) {
 		tree, err := r.checkout(ctx, commit)
 		if err != nil {
 			return "", err
@@ -328,9 +329,10 @@ func (r *Runner) ensureChart(ctx context.Context, commit, version string) error 
 		if err != nil {
 			return "", err
 		}
-		digest, err := r.Tools.PushChart(ctx, file, r.Cfg.Chart.Registry)
+		digest, err = r.Tools.PushChart(ctx, file, r.Cfg.Chart.Registry)
 		return "pushed " + version + " " + digest, err
 	})
+	return digest, err
 }
 
 // checkout puts commit in a scratch worktree of Dir, so what is built is the
