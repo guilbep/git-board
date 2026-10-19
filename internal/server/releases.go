@@ -497,6 +497,16 @@ func (s *apiServer) handleCut(w http.ResponseWriter, r *http.Request) {
 		}
 		c.Version, subject = v, v.Tag()
 	}
+	// a cut would push the one made offline instead, without these notes
+	// or the deploy
+	if p, err := release.Pending(r.Context(), run.Dir); err != nil || len(p) > 0 {
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err)
+			return
+		}
+		writeCoded(w, http.StatusConflict, "pending", fmt.Errorf("%s, cut offline, isn't pushed yet: a deploy, or git-board release cut, pushes it first", p[0].Name))
+		return
+	}
 	s.startJob(w, run, "cut", subject, func(ctx context.Context, run *release.Runner) (string, error) {
 		t, err := run.Cut(ctx, c)
 		return t.Name, err // pushed, even when a later step failed

@@ -3,6 +3,7 @@ package release_test
 import (
 	"errors"
 	"os"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -473,6 +474,81 @@ func TestOnlineFinishesOfflineCut(t *testing.T) {
 	}
 	if !slices.Equal(heads(t, fx), before) {
 		t.Error("finishing a cut made without a deploy deployed")
+	}
+}
+
+// A cut made offline that is pushed but doesn't finish is said, not
+// returned: a rollback, a promotion or a deploy never waits on it.
+func TestOfflineCutUnfinishedNeverBlocks(t *testing.T) {
+	r, tools, fx := releasetest.NewRunner(t)
+	m := shipped(t, r, fx)
+	tg := cutOffline(t, r, fx)
+	tools.FailScan["ghcr.test/app/backend:scan-"+m] = true
+	said := saidBy(r)
+	if err := r.Reconcile(ctx); err != nil {
+		t.Fatalf("Reconcile: %v, want the unfinished cut said, not returned", err)
+	}
+	if !slices.ContainsFunc(*said, func(s string) bool {
+		return strings.HasPrefix(s, "pushed "+tg.Name+", cut offline, but didn't finish: ")
+	}) {
+		t.Errorf("said %q", *said)
+	}
+	if got := releasetest.Git(t, fx.AppBare, "tag", "-l"); got != "v1.0.0\nv1.0.1-rc.1" {
+		t.Errorf("tags %q", got)
+	}
+	if p, err := release.Pending(ctx, fx.App); err != nil || len(p) != 0 {
+		t.Errorf("pending %+v, %v once pushed", p, err)
+	}
+}
+
+// An online cut that pushed the cut made offline returns its failure to
+// finish: it was that cut.
+func TestOnlineCutReturnsOfflineCutUnfinished(t *testing.T) {
+	r, tools, fx := releasetest.NewRunner(t)
+	m := shipped(t, r, fx)
+	pending := cutOffline(t, r, fx)
+	tools.FailScan["ghcr.test/app/backend:scan-"+m] = true
+	tg, err := r.Cut(ctx, release.Cut{})
+	if tg.Name != pending.Name || err == nil || !strings.Contains(err.Error(), "vulnerabilities") {
+		t.Errorf("Cut = %s, %v, want %s and its scan's failure", tg.Name, err, pending.Name)
+	}
+}
+
+// A cut made offline whose push fails, its name not taken, is kept for
+// the next online command, and said; a cut stops on it, as it would take
+// its name.
+func TestOfflineCutKeptOnAFailedPush(t *testing.T) {
+	r, _, fx := releasetest.NewRunner(t)
+	shipped(t, r, fx)
+	tg := cutOffline(t, r, fx)
+	hook := filepath.Join(fx.AppBare, "hooks", "pre-receive")
+	if err := os.WriteFile(hook, []byte("#!/bin/sh\nif grep -q ' refs/tags/'; then echo no tags today >&2; exit 1; fi\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	said := saidBy(r)
+	if err := r.Reconcile(ctx); err != nil {
+		t.Fatalf("Reconcile: %v, want the failed push said, not returned", err)
+	}
+	if !slices.ContainsFunc(*said, func(s string) bool { return strings.HasPrefix(s, "kept "+tg.Name+", cut offline: ") }) {
+		t.Errorf("said %q", *said)
+	}
+	if _, err := r.Cut(ctx, release.Cut{}); err == nil || !strings.Contains(err.Error(), tg.Name) {
+		t.Errorf("Cut: %v, want it stopped on the kept %s", err, tg.Name)
+	}
+	if got := releasetest.Git(t, fx.AppBare, "tag", "-l"); got != "v1.0.0" {
+		t.Errorf("tags %q while pushes fail", got)
+	}
+	if err := os.Remove(hook); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.Reconcile(ctx); err != nil {
+		t.Fatalf("Reconcile: %v", err)
+	}
+	if got := releasetest.Git(t, fx.AppBare, "tag", "-l"); got != "v1.0.0\nv1.0.1-rc.1" {
+		t.Errorf("tags %q once pushes pass", got)
+	}
+	if p, err := release.Pending(ctx, fx.App); err != nil || len(p) != 0 {
+		t.Errorf("pending %+v, %v once pushed", p, err)
 	}
 }
 

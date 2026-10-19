@@ -58,11 +58,13 @@ func (r *Runner) Cut(ctx context.Context, c Cut) (Tag, error) {
 		}
 		return r.cut(ctx, c, false)
 	}
-	pushed, err := r.reconcile(ctx)
-	if len(pushed) > 0 {
-		return pushed[0], err
-	}
-	if err != nil {
+	pushed, pendErr, err := r.reconcile(ctx)
+	switch {
+	case len(pushed) > 0:
+		return pushed[0], cmp.Or(pendErr, err)
+	case pendErr != nil:
+		return Tag{}, pendErr
+	case err != nil:
 		return Tag{}, err
 	}
 	return r.cut(ctx, c, false)
@@ -258,7 +260,7 @@ func (r *Runner) check(ctx context.Context, st Status, repos map[string]*ConfigR
 		return nil, err
 	}
 	if rec.Yanked != "" {
-		return nil, fmt.Errorf("%.7s is yanked: %s", t.Commit, rec.Yanked)
+		return nil, refused{fmt.Errorf("%.7s is yanked: %s", t.Commit, rec.Yanked)}
 	}
 	where, err := r.where("any environment", deployedOf(st.Envs...)...)
 	if err != nil {
@@ -342,7 +344,10 @@ func (r *Runner) refuse(ctx context.Context, st Status, repos map[string]*Config
 	}
 	why, err := r.contains(ctx, envNamed(st, r.Cfg.Last()), t.Commit)
 	if err != nil || why != "" {
-		return cmp.Or(err, errors.New(why))
+		if err != nil {
+			return err
+		}
+		return refused{errors.New(why)}
 	}
 	cands := r.Cfg.Candidates()
 	if t.Version.RC > 0 || len(cands) == 0 {
@@ -368,8 +373,15 @@ func (r *Runner) refuse(ctx context.Context, st Status, repos map[string]*Config
 			return nil
 		}
 	}
-	return fmt.Errorf("no candidate of %.7s ran in %s: cut one and deploy it there first", t.Commit, env)
+	return refused{fmt.Errorf("no candidate of %.7s ran in %s: cut one and deploy it there first", t.Commit, env)}
 }
+
+// refused is a reason check gives that t can't be cut, as against a
+// failure to tell: a cut made offline that is refused is dropped, one that
+// fails to be checked is kept.
+type refused struct{ error }
+
+func (e refused) Unwrap() error { return e.error }
 
 // takes refuses, before anything is written, a deploy of commit to e that
 // deploy would refuse: e not adopted, or not moving forward (what Draft

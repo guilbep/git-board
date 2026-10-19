@@ -105,30 +105,27 @@ const reconcileGrace = time.Hour
 // one the registry lacks is left out, even all of them. Previous is the
 // newest final before the tag recorded.
 func (r *Runner) Reconcile(ctx context.Context) error {
-	_, err := r.reconcile(ctx)
+	_, _, err := r.reconcile(ctx)
 	return err
 }
 
-// reconcile is Reconcile, returning the cut made offline it pushed, even
-// with a later error.
-func (r *Runner) reconcile(ctx context.Context) ([]Tag, error) {
+// reconcile is Reconcile, returning apart the cut made offline it pushed
+// and that cut's failure (see pushPending), which Reconcile only says.
+func (r *Runner) reconcile(ctx context.Context) (pushed []Tag, pendErr, err error) {
 	if r.Offline {
-		return nil, nil
+		return nil, nil, nil
 	}
 	if err := r.fetch(ctx); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	pushed, err := r.pushPending(ctx)
-	if err != nil {
-		return pushed, err
-	}
+	pushed, pendErr = r.pushPending(ctx)
 	tags, err := ReleaseTags(ctx, r.Dir)
 	if err != nil {
-		return pushed, err
+		return pushed, pendErr, err
 	}
 	recs, err := r.B.Releases()
 	if err != nil {
-		return pushed, err
+		return pushed, pendErr, err
 	}
 	recorded := map[string]bool{}
 	for _, rec := range recs {
@@ -150,7 +147,7 @@ func (r *Runner) reconcile(ctx context.Context) ([]Tag, error) {
 			for _, d := range r.Cfg.Deploy {
 				digest, ok, err := r.artifact(ctx, d.Registry+"/"+img.Name, t)
 				if err != nil {
-					return pushed, err
+					return pushed, pendErr, err
 				}
 				if ok {
 					rec.Artifacts = append(rec.Artifacts, gitbugio.Artifact{Image: img.Name, Registry: d.Registry, Digest: digest})
@@ -158,19 +155,20 @@ func (r *Runner) reconcile(ctx context.Context) ([]Tag, error) {
 			}
 		}
 		if _, err := r.B.CreateRelease(rec); err != nil {
-			return pushed, err
+			return pushed, pendErr, err
 		}
 	}
-	return pushed, r.B.PushReleases(r.Cfg.RemoteName())
+	return pushed, pendErr, r.B.PushReleases(r.Cfg.RemoteName())
 }
 
 // pushPending pushes the cut made offline, if any, and finishes it as a
 // cut would, with the notes drafted now. It checks it again first, on what
-// was just fetched: one that no longer holds, its name taken included, is
-// dropped, and the step says why. A failed push keeps it for the next
-// online command. Once its tag is pushed, a failure to finish leaves it
-// to a Reconcile past the grace, as for a cut: a record without the chart
-// or the notes.
+// was just fetched: one refused, its name taken included, is dropped; one
+// that fails to be checked or pushed is kept for the next online command.
+// Once its tag is pushed, a failure to finish is left to a deploy of it or
+// a Reconcile past the grace, as for a cut. Each is said in a step, and
+// the first failure is returned for an online Cut, which was that cut:
+// nothing else stops on it.
 func (r *Runner) pushPending(ctx context.Context) ([]Tag, error) {
 	pending, err := Pending(ctx, r.Dir)
 	if err != nil || len(pending) == 0 {
@@ -181,22 +179,28 @@ func (r *Runner) pushPending(ctx context.Context) ([]Tag, error) {
 		return nil, err
 	}
 	var pushed []Tag
+	var failed error
+	say := func(f string, a ...any) { _ = r.do("tag", func() (string, error) { return fmt.Sprintf(f, a...), nil }) }
 	for _, t := range pending {
 		where, err := r.check(ctx, st, repos, Cut{}, t, false)
 		if err == nil {
-			if err = r.push(ctx, t, ", cut offline"); err != nil && !errors.Is(err, ErrTaken) {
-				return pushed, fmt.Errorf("%s, cut offline: %w", t.Name, err)
-			}
+			err = r.push(ctx, t, ", cut offline")
+		}
+		var no refused
+		if err != nil && !errors.Is(err, ErrTaken) && !errors.As(err, &no) {
+			say("kept %s, cut offline: %s; the next online command tries again", t.Name, err)
+			failed = cmp.Or(failed, fmt.Errorf("%s, cut offline: %w", t.Name, err))
+			continue
 		}
 		if _, derr := Git(ctx, r.Dir, "update-ref", "-d", pendingRefs+t.Name); derr != nil {
-			return pushed, derr
+			return pushed, cmp.Or(failed, derr)
 		}
 		if err != nil {
 			why := err.Error()
 			if errors.Is(err, ErrTaken) {
 				why = "another clone took it"
 			}
-			_ = r.do("tag", func() (string, error) { return fmt.Sprintf("dropped %s, cut offline: %s; cut again", t.Name, why), nil })
+			say("dropped %s, cut offline: %s; cut again", t.Name, why)
 			continue
 		}
 		pushed = append(pushed, t)
@@ -205,10 +209,11 @@ func (r *Runner) pushPending(ctx context.Context) ([]Tag, error) {
 			err = r.finish(ctx, t, d, where, "")
 		}
 		if err != nil {
-			return pushed, err
+			say("pushed %s, cut offline, but didn't finish: %s; a deploy of it finishes it", t.Name, err)
+			failed = cmp.Or(failed, err)
 		}
 	}
-	return pushed, nil
+	return pushed, failed
 }
 
 // artifact is the digest of image (<registry>/<name>) for tag t: under the

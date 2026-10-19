@@ -233,6 +233,16 @@ func TestSecondJobConflicts(t *testing.T) {
 	}
 }
 
+// A cut from the page while a cut made offline waits is refused: the cut
+// would push that one instead, without the page's notes or deploy.
+func TestCutRefusedWhileOneWaits(t *testing.T) {
+	_, ts, fx := releaseServer(t)
+	releasetest.Git(t, fx.App, "update-ref", "refs/git-board/cuts/v1.0.0", firstCommit(t, fx))
+	if status, code, msg := coded(t, "POST", ts.URL+"/api/releases", map[string]any{"deploy": true}); status != http.StatusConflict || code != "pending" || !strings.Contains(msg, "v1.0.0") {
+		t.Errorf("POST cut = %d %q %q, want 409 pending naming v1.0.0", status, code, msg)
+	}
+}
+
 func TestCutTakenIsCoded(t *testing.T) {
 	_, ts, fx := releaseServer(t)
 	c := firstCommit(t, fx)
