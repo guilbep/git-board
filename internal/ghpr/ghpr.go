@@ -34,10 +34,11 @@ type Check struct {
 	URL      string `json:"url,omitempty"`
 }
 
-// Review is a person's latest review of a PR.
+// Review is a person's latest approval or request for changes, or a
+// review GitHub dismissed.
 type Review struct {
 	Login  string `json:"login"`
-	State  string `json:"state"`  // APPROVED, CHANGES_REQUESTED, COMMENTED
+	State  string `json:"state"`  // APPROVED, CHANGES_REQUESTED, DISMISSED
 	Commit string `json:"commit"` // the commit it was made at
 }
 
@@ -56,7 +57,7 @@ type PR struct {
 	Mergeable   string   `json:"mergeable"`   // MERGEABLE, CONFLICTING, UNKNOWN
 	MergeState  string   `json:"merge_state"` // mergeStateStatus
 	Checks      []Check  `json:"checks"`
-	Reviews     []Review `json:"reviews"`   // latestReviews
+	Reviews     []Review `json:"reviews"`   // latestOpinionatedReviews: a COMMENTED review hides no approval
 	Requested   []string `json:"requested"` // the people asked to review
 	// set by Gate
 	CanMerge bool     `json:"can_merge"`
@@ -79,7 +80,7 @@ const findQuery = `query($owner: String!, $name: String!, $head: String!) {
         headRepository { nameWithOwner }
         author { login }
         reviewDecision mergeable mergeStateStatus
-        latestReviews(first: 20) { nodes { author { login } state commit { oid } } }
+        latestOpinionatedReviews(first: 20) { nodes { author { login } state commit { oid } } }
         reviewRequests(first: 10) { nodes { requestedReviewer { ... on User { login } } } }
         commits(last: 1) { nodes { commit { statusCheckRollup { contexts(first: 100) { nodes {
           __typename
@@ -94,20 +95,20 @@ const findQuery = `query($owner: String!, $name: String!, $head: String!) {
 type login struct{ Login string }
 
 type prNode struct {
-	Number           int
-	URL              string
-	State            string
-	IsDraft          bool
-	Title            string
-	BaseRefName      string
-	HeadRefOid       string
-	MergeCommit      *struct{ Oid string }
-	HeadRepository   *struct{ NameWithOwner string }
-	Author           *login
-	ReviewDecision   string
-	Mergeable        string
-	MergeStateStatus string
-	LatestReviews    struct {
+	Number                   int
+	URL                      string
+	State                    string
+	IsDraft                  bool
+	Title                    string
+	BaseRefName              string
+	HeadRefOid               string
+	MergeCommit              *struct{ Oid string }
+	HeadRepository           *struct{ NameWithOwner string }
+	Author                   *login
+	ReviewDecision           string
+	Mergeable                string
+	MergeStateStatus         string
+	LatestOpinionatedReviews struct {
 		Nodes []struct {
 			Author *login
 			State  string
@@ -185,7 +186,7 @@ func (n *prNode) pr() *PR {
 	if n.MergeCommit != nil {
 		p.MergeCommit = n.MergeCommit.Oid
 	}
-	for _, r := range n.LatestReviews.Nodes {
+	for _, r := range n.LatestOpinionatedReviews.Nodes {
 		rv := Review{State: r.State}
 		if r.Author != nil {
 			rv.Login = r.Author.Login

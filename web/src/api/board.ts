@@ -622,7 +622,7 @@ export interface GateCheck {
 }
 export interface GateReview {
   login: string;
-  state: string; // APPROVED, CHANGES_REQUESTED, COMMENTED
+  state: string; // APPROVED, CHANGES_REQUESTED, DISMISSED
   commit: string;
 }
 export interface GatePR {

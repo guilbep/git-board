@@ -21,7 +21,7 @@
                         "reviewDecision": "REVIEW_REQUIRED",
                         "mergeable": "MERGEABLE",
                         "mergeStateStatus": "BLOCKED",
-                        "latestReviews": {
+                        "latestOpinionatedReviews": {
                             "nodes": []
                         },
                         "reviewRequests": {
