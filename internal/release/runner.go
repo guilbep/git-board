@@ -32,7 +32,7 @@ type Runner struct {
 	Who      string       // login for commit messages
 	Step     func(Step)   // may be nil
 	OnTag    func(string) // may be nil: told the tag a cut or promote pushes, or tries to, once it knows it
-	Offline  bool         // no fetch of the app remote or config repos
+	Offline  bool         // no fetch of the app remote or config repos; a config repo not cloned yet is cloned
 }
 
 // New is the Runner of the app repo at dir: cfg's [release] table and
@@ -171,10 +171,10 @@ func (r *Runner) reconcile(ctx context.Context) (pushed []Tag, pendErr, err erro
 // cut would, with the notes drafted now. It checks it again first, on what
 // was just fetched: one refused, its name taken included, is dropped; one
 // that fails to be checked or pushed is kept for the next online command.
-// Once its tag is pushed, a failure to finish is left to a deploy of it or
-// a Reconcile past the grace, as for a cut. Each is said in a step, and
-// the first failure is returned for an online Cut, which was that cut:
-// nothing else stops on it.
+// Once its tag is pushed, a failure to finish is left to a deploy of it,
+// which builds, and a Reconcile past the grace, which records, as for a
+// cut. Each is said in a step, and the first failure is returned for an
+// online Cut, which was that cut: nothing else stops on it.
 func (r *Runner) pushPending(ctx context.Context) ([]Tag, error) {
 	pending, err := Pending(ctx, r.Dir)
 	if err != nil || len(pending) == 0 {
@@ -215,7 +215,7 @@ func (r *Runner) pushPending(ctx context.Context) ([]Tag, error) {
 			err = r.finish(ctx, t, d, where, "")
 		}
 		if err != nil {
-			say("pushed %s, cut offline, but didn't finish: %s; a deploy of it finishes it", t.Name, err)
+			say("pushed %s, cut offline, but didn't finish: %s; a deploy of it builds what is missing, and a Reconcile after an hour records it", t.Name, err)
 			failed = cmp.Or(failed, err)
 		}
 	}
