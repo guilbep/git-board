@@ -707,6 +707,54 @@ export interface CycleStages {
   guessed: boolean;
 }
 
+// The Work page (internal/work, internal/server/work.go): every open
+// issue's cycle, grouped into what needs the viewer and what waits on others.
+export interface WorkRow {
+  issue: Issue;
+  step: number;
+  of: number;
+  name: string;
+  risk?: string;
+  done: boolean;
+  waits: CycleWaits;
+  mine: boolean;
+  actions?: string[];
+  since: string; // when the gate started waiting
+  involved: boolean;
+  question?: { id: string; body: string; by: Person; at: string };
+  branch?: string;
+}
+
+export interface WorkAgent {
+  path: string;
+  branch: string;
+  issue?: Issue;
+  step?: number;
+  name?: string;
+  state: string; // "Waits for you", "Waits for bob to review the PR", "No issue"
+  at: string; // the last commit
+}
+
+export interface SendLine {
+  issue: Issue;
+  what: string; // "a comment", "the status", "the risk", "the title", "closed", "reopened", "a new issue"
+  at: string;
+}
+
+export interface WorkResponse {
+  me: { id: string; login: string };
+  needs: WorkRow[];
+  waiting: WorkRow[];
+  agents: WorkAgent[];
+  to_send: SendLine[]; // newest first, at most 20
+  pending: number; // every change the forges wait for
+  retro: { sprint?: string; since?: string; corrections: number };
+}
+
+export function getWork(who: 'me' | 'team'): Promise<WorkResponse> {
+  return request(`/api/work?who=${who}`);
+}
+
 export function getCycle(id: string): Promise<Cycle> {
   return request(`${issuePath(id)}/cycle`);
 }
