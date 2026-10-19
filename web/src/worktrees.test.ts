@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { agentButton, agentWords, extraDeny, sessionName, setWhoCommits, toolsLine, whoCommits, withGate, writeConfirm } from './worktrees.ts';
+import { agentButton, agentWords, extraDeny, sessionName, setWhoCommits, toolsLine, whoCommits, withGate, writeConfirm, agentTools, previewOf, previewStale } from './worktrees.ts';
 import type { IssueAgent, Worktrees, WtxCheck, WtxSession } from './api/board.ts';
 
 const PERSON = ['Bash(git commit *)', 'Bash(git push *)', 'Bash(gh pr create *)'];
@@ -69,4 +69,19 @@ test('the button: none when refused, Brief with a worktree, Start without', () =
 test('the confirm names every file wtx touches, and says replaces when wtx.toml is there', () => {
   assert.equal(writeConfirm('fx', false), "Writes wtx.toml and .wt.toml, and adds wtx's lines to .gitignore, in fx's main checkout, uncommitted.");
   assert.equal(writeConfirm('', true), "Replaces wtx.toml and .wt.toml, and adds wtx's lines to .gitignore, in the repository's main checkout, uncommitted.");
+});
+
+test("the Agent select lists the tool wtx.toml names, even one it doesn't know", () => {
+  const known = [{ value: 'claude', label: 'Claude Code' }, { value: 'opencode', label: 'opencode' }];
+  assert.deepEqual(agentTools('claude'), known);
+  assert.deepEqual(agentTools('aider'), [...known, { value: 'aider', label: 'aider (from wtx.toml)' }]);
+});
+
+test('a preview goes stale once the answers change, a written file never does', () => {
+  const answers = { repo: { base_branch: 'dev' } };
+  const shown = previewOf(answers);
+  assert.equal(previewStale(shown, answers), false);
+  answers.repo.base_branch = 'main';
+  assert.equal(previewStale(shown, answers), true);
+  assert.equal(previewStale('', answers), false);
 });

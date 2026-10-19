@@ -57,8 +57,7 @@
           <label class="wk-label" for="wk-agent">Agent<span class="gb-hint">Plan on the strongest model, build on the next.</span></label>
           <div class="wk-agent">
             <select id="wk-agent" v-model="a.agent.tool" class="epfl-input wk-short">
-              <option value="claude">Claude Code</option>
-              <option value="opencode">opencode</option>
+              <option v-for="t in agentTools(a.agent.tool)" :key="t.value" :value="t.value">{{ t.label }}</option>
             </select>
             <label v-if="a.agent.orchestration" class="wk-orch">
               <input v-model="a.agent.orchestration.enabled" type="checkbox" />
@@ -121,7 +120,8 @@
         </div>
         <p class="gb-hint">Writes wtx.toml and .wt.toml. You commit them.</p>
 
-        <section v-for="f in files" :key="f.path" class="wk-file">
+        <p v-if="stale" class="gb-hint">The form changed since the preview: preview again to see the files.</p>
+        <section v-for="f in stale ? [] : files" :key="f.path" class="wk-file">
           <h4 class="wk-path wk-mono">{{ f.path }}</h4>
           <pre class="gb-md">{{ f.text }}</pre>
         </section>
@@ -134,13 +134,15 @@
 import { computed, onMounted, ref } from 'vue';
 import { getWorktrees, previewWtx, writeWtx, type Worktrees, type WtxAnswers } from '@/api/board';
 import { message } from '@/issue';
-import { extraDeny, setWhoCommits, toolsLine, whoCommits, withGate, writeConfirm, WTX_OWN } from '@/worktrees';
+import { agentTools, extraDeny, previewOf, previewStale, setWhoCommits, toolsLine, whoCommits, withGate, writeConfirm, WTX_OWN } from '@/worktrees';
 
 // changed: what a load or a write left, for the Overview's line
 const emit = defineEmits<{ changed: [d: Worktrees] }>();
 const d = ref<Worktrees | null>(null);
 const a = ref<WtxAnswers | null>(null);
 const files = ref<{ path: string; text: string }[]>([]);
+const shownFor = ref(''); // the answers the preview on screen was made from; '' for written files
+const stale = computed(() => previewStale(shownFor.value, a.value));
 const error = ref('');
 const result = ref('');
 const busy = ref<'' | 'preview' | 'write'>('');
@@ -197,7 +199,9 @@ async function act(kind: 'preview' | 'write') {
   busy.value = kind;
   error.value = result.value = '';
   try {
+    const sent = kind === 'preview' ? previewOf(a.value) : '';
     files.value = (await (kind === 'write' ? writeWtx : previewWtx)(a.value)).files;
+    shownFor.value = sent;
     if (kind === 'write') {
       result.value = 'Wrote wtx.toml and .wt.toml. You commit them.';
       void load();

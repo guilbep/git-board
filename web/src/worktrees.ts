@@ -29,6 +29,18 @@ export function writeConfirm(repo: string, config: boolean): string {
   return `${config ? 'Replaces' : 'Writes'} wtx.toml and .wt.toml, and adds wtx's lines to .gitignore, in ${repo || 'the repository'}'s main checkout, uncommitted.`;
 }
 
+// agentTools are the Agent select's options: a tool wtx.toml names that
+// the list doesn't is listed too, so the select shows what Write sends.
+export function agentTools(tool: string): { value: string; label: string }[] {
+  const known = [{ value: 'claude', label: 'Claude Code' }, { value: 'opencode', label: 'opencode' }];
+  return !tool || known.some((t) => t.value === tool) ? known : [...known, { value: tool, label: `${tool} (from wtx.toml)` }];
+}
+
+// previewOf is the answers a preview was made from; the preview is stale
+// once they change. A written file ('', not a preview) never is.
+export const previewOf = (answers: unknown): string => JSON.stringify(answers);
+export const previewStale = (shown: string, answers: unknown): boolean => shown !== '' && shown !== previewOf(answers);
+
 // extraDeny is the Never allowed chips: the deny rules who commits doesn't own.
 export function extraDeny(deny: string[]): string[] {
   return deny.filter((r) => !WHO_RULES.has(r));
