@@ -141,3 +141,25 @@ func TestDraftWithoutCandidatesIsFinal(t *testing.T) {
 		t.Errorf("tag %s, checks %+v; want the final, for prod", d.Tag, d.Checks)
 	}
 }
+
+// A release carries the issues merged since the final before its version:
+// a final on its candidate's commit carries the candidate's, not none.
+func TestIssuesOfARelease(t *testing.T) {
+	r, _, fx := releasetest.NewRunner(t)
+	m := shipped(t, r, fx)
+	rc := cut(t, r, release.Cut{Deploy: true})
+	final, err := r.Promote(ctx, rc.Name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []release.DraftIssue{{Number: "#12", Title: "a", Kind: "fix", Merge: m}}
+	for _, tag := range []release.Tag{rc, final} {
+		if got, err := r.Issues(ctx, tag); err != nil || !slices.Equal(got, want) {
+			t.Errorf("%s: %+v, %v; want %+v", tag.Name, got, err, want)
+		}
+	}
+	first := releasetest.Git(t, fx.App, "rev-list", "--max-parents=0", "HEAD")
+	if got, err := r.Issues(ctx, release.Tag{Name: "v1.0.0", Commit: first, Version: release.Version{Major: 1}}); err != nil || len(got) != 0 {
+		t.Errorf("v1.0.0: %+v, %v; want none", got, err)
+	}
+}

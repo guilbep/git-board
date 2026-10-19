@@ -12,10 +12,12 @@ import (
 
 // Proposal is the commit an overlay is thought to run, for Adopt.
 type Proposal struct {
-	Env, Repo, Path string
-	Runs            string // newTag, plus the first image's digest prefix when newTag isn't a release tag
-	Commit          string // "" when unknown
-	From            string // "tag", "label", ""
+	Env    string `json:"env"`
+	Repo   string `json:"repo"`
+	Path   string `json:"path"`
+	Runs   string `json:"runs"`   // newTag, plus the first image's digest prefix when newTag isn't a release tag
+	Commit string `json:"commit"` // "" when unknown
+	From   string `json:"from"`   // "tag", "label", ""
 }
 
 // firstImage is the overlay's first images[] entry: its name, newTag, digest.

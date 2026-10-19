@@ -19,6 +19,7 @@ import (
 	"github.com/guilbep/git-board/internal/fields"
 	"github.com/guilbep/git-board/internal/ghbridge"
 	"github.com/guilbep/git-board/internal/gitbugio"
+	"github.com/guilbep/git-board/internal/release"
 	"github.com/guilbep/git-board/internal/uploads"
 )
 
@@ -87,6 +88,16 @@ type apiServer struct {
 	// pulls is each branch's PR as the cycle last read it (cycle.go)
 	pulls pullCache
 
+	// releases (releases.go): releaseMu guards releaseRun, the current or
+	// last job; runnerMu serializes the Runner's fetches and writes, a job
+	// holding it for its whole run. releaseTools: nil, release.Exec();
+	// releaseCache: "", the Runner's own (tests: a temp dir)
+	releaseTools release.Tools
+	releaseCache string
+	releaseMu    sync.Mutex
+	releaseRun   *releaseJob
+	runnerMu     sync.Mutex
+
 	lazyOnce
 }
 
@@ -113,6 +124,7 @@ func newMux(s *apiServer, static http.Handler) http.Handler {
 	mux.HandleFunc("POST /api/issues/{id}/take", s.handleIssueTake)
 	mux.HandleFunc("GET /api/issues/{id}/refs", s.handleRefs)
 	mux.HandleFunc("GET /api/issues/{id}/branches", s.handleBranches)
+	mux.HandleFunc("GET /api/issues/{id}/environments", s.handleIssueEnvironments)
 	mux.HandleFunc("GET /api/issues/{id}/pulls", s.handlePulls)
 	mux.HandleFunc("POST /api/issues/{id}/pulls", s.handleOpenPull)
 	mux.HandleFunc("POST /api/issues/{id}/pulls/{number}/merge", s.handleMergePull)
@@ -163,6 +175,19 @@ func newMux(s *apiServer, static http.Handler) http.Handler {
 	mux.HandleFunc("POST /api/sync/check", s.handleSyncCheck)
 	mux.HandleFunc("POST /api/sync/apply", s.handleSyncApply)
 	mux.HandleFunc("POST /api/sync/resolve", s.handleSyncResolve)
+	mux.HandleFunc("GET /api/releases", s.handleReleases)
+	mux.HandleFunc("GET /api/releases/draft", s.handleDraft)
+	mux.HandleFunc("POST /api/releases", s.handleCut)
+	mux.HandleFunc("GET /api/releases/job", s.handleReleaseJob)
+	mux.HandleFunc("GET /api/releases/adopt", s.handleProposals)
+	mux.HandleFunc("POST /api/releases/adopt", s.handleAdopt)
+	mux.HandleFunc("GET /api/releases/{tag}", s.handleRelease)
+	mux.HandleFunc("POST /api/releases/{tag}/promote", s.handlePromote)
+	mux.HandleFunc("PUT /api/releases/{tag}/notes", s.handleReleaseNotes)
+	mux.HandleFunc("POST /api/releases/{tag}/comments", s.handleReleaseComment)
+	mux.HandleFunc("POST /api/releases/{tag}/yank", s.handleYank)
+	mux.HandleFunc("POST /api/environments/{env}/deploy", s.handleDeploy)
+	mux.HandleFunc("POST /api/environments/{env}/rollback", s.handleRollback)
 	mux.Handle("/", static)
 	return withGuard(s.withEvents(mux), s.exposed)
 }

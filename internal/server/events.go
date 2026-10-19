@@ -18,8 +18,9 @@ import (
 
 // event is what changed: issues (ID: which one, when the request named
 // it), config (.git-board.toml, a view), sync, settings, inbox (yours:
-// what you read or follow). By is the page that made the change
-// (X-Git-Board-Client), which ignores it.
+// what you read or follow), releases (a job's step, a record, an
+// overlay). By is the page that made the change (X-Git-Board-Client),
+// which ignores it.
 type event struct {
 	Kind string `json:"kind"`
 	ID   string `json:"id,omitempty"`
@@ -141,6 +142,8 @@ func eventFor(r *http.Request) event {
 		e.Kind = "sync"
 	case strings.HasPrefix(p, "/api/inbox"): // read, followed: your inbox's count, in every tab
 		e.Kind = "inbox"
+	case strings.HasPrefix(p, "/api/releases") || strings.HasPrefix(p, "/api/environments/"):
+		e.Kind = "releases"
 	default: // bridges, who you write as
 		e.Kind = "settings"
 	}

@@ -51,3 +51,43 @@ func TestYankPushes(t *testing.T) {
 		t.Error("yank of an unknown tag succeeded")
 	}
 }
+
+func TestSetNotesPushes(t *testing.T) {
+	r, _, fx := releasetest.NewRunner(t)
+	shipped(t, r, fx)
+	rc := cut(t, r, release.Cut{Deploy: true})
+	before := records(t, fx.AppBare)
+	if err := r.SetNotes(ctx, rc.Name, "### fix\n\n- #12 better"); err != nil {
+		t.Fatal(err)
+	}
+	if rec, _, err := r.B.ReleaseFor(rc.Commit); err != nil || rec.Notes != "### fix\n\n- #12 better" {
+		t.Errorf("record = %+v, %v", rec, err)
+	}
+	if slices.Equal(records(t, fx.AppBare), before) {
+		t.Error("the remote's records didn't move")
+	}
+	if err := r.SetNotes(ctx, "v1.0.0", "x"); err == nil || err.Error() != "v1.0.0 has no release record" {
+		t.Errorf("notes of a tag without a record: %v", err)
+	}
+}
+
+func TestCommentPushes(t *testing.T) {
+	r, _, fx := releasetest.NewRunner(t)
+	shipped(t, r, fx)
+	rc := cut(t, r, release.Cut{Deploy: true})
+	before := records(t, fx.AppBare)
+	if err := r.Comment(ctx, rc.Name, "looks good in stage"); err != nil {
+		t.Fatal(err)
+	}
+	rec, _, err := r.B.ReleaseFor(rc.Commit)
+	if err != nil || len(rec.Comments) != 1 || rec.Comments[0].Message != "looks good in stage" {
+		t.Errorf("record = %+v, %v", rec, err)
+	}
+	if slices.Equal(records(t, fx.AppBare), before) {
+		t.Error("the remote's records didn't move")
+	}
+	r.Offline = true
+	if err := r.Comment(ctx, rc.Name, "x"); err == nil || !strings.HasPrefix(err.Error(), "offline") {
+		t.Errorf("offline comment: %v", err)
+	}
+}
