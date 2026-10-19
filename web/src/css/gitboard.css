@@ -306,6 +306,9 @@
 .gb-spine [aria-current="step"] { border-left: 3px solid var(--fg); margin-left: -.75rem; padding-left: calc(.75rem - 3px); }
 .gb-spine [aria-current="step"] .gb-spine-line { color: var(--fg); }
 .gb-spine .is-todo .gb-spine-name { color: var(--fg-muted); font-weight: 400; }
+.gb-cycle-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
+.gb-cycle-actions .epfl-input { flex: 1 1 10rem; min-width: 0; }
+.gb-linkbtn { padding: 0; border: 0; background: none; color: var(--fg); font: inherit; font-size: .875rem; font-weight: 700; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
 .gb-ws { display: flex; flex-direction: column; gap: .75rem; min-width: 0; }
 .gb-ws-title { margin: 0; font-size: 1.25rem; line-height: 1.3; }
 .gb-eyebrow { margin: 0; font-size: .75rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--fg-muted); }

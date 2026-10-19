@@ -75,6 +75,4 @@ function toDevelopment() {
 .gb-cycle-run { display: grid; gap: .5rem; }
 .gb-cycle-criteria { display: grid; gap: .25rem; margin: 0; padding: 0; list-style: none; }
 .gb-cycle-by { color: var(--fg-muted); }
-.gb-cycle-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
-.gb-cycle-actions .epfl-input { flex: 1 1 10rem; min-width: 0; }
 </style>
