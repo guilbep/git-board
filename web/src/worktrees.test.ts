@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { agentButton, agentWords, extraDeny, sessionName, setWhoCommits, toolsLine, whoCommits } from './worktrees.ts';
+import { agentButton, agentWords, extraDeny, sessionName, setWhoCommits, toolsLine, whoCommits, withGate } from './worktrees.ts';
 import type { IssueAgent, Worktrees, WtxCheck, WtxSession } from './api/board.ts';
 
 const PERSON = ['Bash(git commit *)', 'Bash(git push *)', 'Bash(gh pr create *)'];
@@ -19,6 +19,12 @@ test('setting who commits swaps its rules and keeps the others in order', () => 
   assert.deepEqual(setWhoCommits(deny, 'agent'), ['Bash(git tag *)', 'Bash(git bug push *)', 'Bash(git push *)']);
   assert.deepEqual(setWhoCommits(setWhoCommits(deny, 'agent'), 'person'), ['Bash(git tag *)', 'Bash(git bug push *)', ...PERSON]);
   assert.deepEqual(setWhoCommits(GIT_BOARD, 'person'), [...GIT_BOARD, ...PERSON]);
+});
+
+test('a deny that says nothing of who commits gets the gate: a person commits', () => {
+  assert.deepEqual(withGate(['Bash(git tag *)']), ['Bash(git tag *)', ...PERSON]);
+  assert.deepEqual(withGate([]), PERSON);
+  assert.deepEqual(withGate(['Bash(git push *)']), ['Bash(git push *)']);
 });
 
 test('Never allowed is the deny list without the who-commits rules', () => {

@@ -40,7 +40,7 @@
         <div class="wk-row">
           <span class="wk-label">Ports<span class="gb-hint">Each worktree gets its own. The main checkout keeps these.</span></span>
           <ul v-if="ports.length" class="gb-chips" aria-label="Ports">
-            <li v-for="p in ports" :key="p.name" class="gb-chip wk-mono">{{ p.name }} {{ p.main }}</li>
+            <li v-for="p in ports" :key="p.name" class="gb-chip wk-mono wk-ro">{{ p.name }} {{ p.main }}</li>
           </ul>
           <span v-else class="wk-muted">None</span>
         </div>
@@ -48,7 +48,7 @@
         <div class="wk-row">
           <span class="wk-label">Panes<span class="gb-hint">What runs beside the agent.</span></span>
           <ul v-if="panes.length" class="gb-chips" aria-label="Panes">
-            <li v-for="p in panes" :key="p.name" class="gb-chip wk-mono">{{ p.name }}{{ p.cmd ? ` ${p.cmd}` : '' }}</li>
+            <li v-for="p in panes" :key="p.name" class="gb-chip wk-mono wk-ro">{{ p.name }}{{ p.cmd ? ` ${p.cmd}` : '' }}</li>
           </ul>
           <span v-else class="wk-muted">None</span>
         </div>
@@ -134,7 +134,7 @@
 import { computed, onMounted, ref } from 'vue';
 import { getWorktrees, previewWtx, writeWtx, type Worktrees, type WtxAnswers } from '@/api/board';
 import { message } from '@/issue';
-import { extraDeny, setWhoCommits, toolsLine, whoCommits, WTX_OWN } from '@/worktrees';
+import { extraDeny, setWhoCommits, toolsLine, whoCommits, withGate, WTX_OWN } from '@/worktrees';
 
 // changed: what a load or a write left, for the Overview's line
 const emit = defineEmits<{ changed: [d: Worktrees] }>();
@@ -152,8 +152,8 @@ const tools = computed(() => (d.value ? toolsLine(d.value) : { ok: true, text: '
 const ports = computed(() => a.value?.ports?.family ?? []);
 const panes = computed(() => a.value?.panes?.pane ?? []);
 const extra = computed(() => extraDeny(a.value?.permissions.deny ?? []));
-const unset = computed(() => whoCommits(a.value?.permissions.deny ?? []) === '');
-// '' preselects a person: the deck's gate
+// wtx.toml said nothing of who commits: load gave it the gate (withGate)
+const unset = ref(false);
 const who = computed({
   get: () => whoCommits(a.value?.permissions.deny ?? []) || 'person',
   set: (w) => a.value && (a.value.permissions.deny = setWhoCommits(a.value.permissions.deny, w)),
@@ -182,6 +182,8 @@ async function load() {
     if (a.value) {
       a.value.permissions ??= { deny: [] };
       a.value.permissions.deny ??= [];
+      unset.value = whoCommits(a.value.permissions.deny) === '';
+      a.value.permissions.deny = withGate(a.value.permissions.deny);
       a.value.repo.protected_branches ??= [];
     }
     emit('changed', fresh);
@@ -224,6 +226,7 @@ onMounted(() => void load());
 .wk-label { display: flex; flex-direction: column; gap: .25rem; font-weight: 700; }
 .wk-label .gb-hint { font-weight: 400; }
 .wk-mono { font-family: var(--font-mono, ui-monospace, monospace); font-size: .8125rem; }
+.wk-ro { padding-right: .625rem; } /* no × to pad the right side */
 .wk-short { max-width: 14rem; }
 .wk-model { max-width: 9rem; }
 .wk-chips { display: grid; gap: .5rem; min-width: 0; }

@@ -18,6 +18,12 @@ export function setWhoCommits(deny: string[], who: 'person' | 'agent'): string[]
   return [...deny.filter((r) => !WHO_RULES.has(r)), ...(who === 'person' ? PERSON_RULES : AGENT_RULES)];
 }
 
+// withGate: a deny that says nothing of who commits gets the gate, a
+// person commits, so the form writes what its radio shows.
+export function withGate(deny: string[]): string[] {
+  return whoCommits(deny) ? deny : setWhoCommits(deny, 'person');
+}
+
 // extraDeny is the Never allowed chips: the deny rules who commits doesn't own.
 export function extraDeny(deny: string[]): string[] {
   return deny.filter((r) => !WHO_RULES.has(r));
