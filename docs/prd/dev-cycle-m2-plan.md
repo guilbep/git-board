@@ -124,7 +124,7 @@ verbatim:
 | n | done / current | todo |
 |---|---|---|
 | 1 | `${criteria.length} acceptance criteria` (`no acceptance criteria` when none) | gate |
-| 2 | `${Risk}` + `, set by ${people.risk}` when known; `Skipped, low risk` when `skipped` has 2 | gate |
+| 2 | `${Risk}` + `, set by ${riskBy}` when known (the thread's last label change adding `risk:`, its author); `Skipped, low risk` when `skipped` has 2 | gate |
 | 3 | `Approved by ${plan_approval.by}`; else `Plan PR #${plan_pr.number}, waits for approval`; else `${plan.path}` when there is a plan file; `Skipped, low risk` when skipped | gate |
 | 4 | `${tests[0].path} at ${commit.slice(0,7)}`, `Failed on …` is not known: `Added at ${commit}` when the path is long is wrong, keep the path | gate |
 | 5 | `Committed by ${pr.author}` when a PR; else `${branch}` at `${head.slice(0,7)}` | gate |

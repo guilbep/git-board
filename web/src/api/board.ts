@@ -491,6 +491,7 @@ export interface Settings {
   uploads: { enabled: boolean; endpoint?: string; public_url?: string; prefix?: string };
   github_project: { owner: string; number: number; write?: boolean };
   config_path: string;
+  cycle: CycleStages;
 }
 
 export function getSettings(): Promise<Settings> {
@@ -690,8 +691,20 @@ export interface Cycle {
   mine: boolean; // the viewer's turn, or anyone's
   actions?: string[]; // set-risk, approve-plan, review, verify, check, signoff
   evidence: CycleEvidence;
-  stages: { ready: string; in_progress: string[]; in_review: string[]; validation: string[]; closing: string; guessed: boolean };
+  stages: CycleStages;
   pr_checked_at?: string;
+}
+
+// the cycle's stages: the project file's [cycle], the rest guessed from the status names
+export interface CycleStages {
+  before?: string[];
+  ready: string;
+  in_progress: string[];
+  in_review: string[];
+  validation: string[];
+  closing: string;
+  plans?: string;
+  guessed: boolean;
 }
 
 export function getCycle(id: string): Promise<Cycle> {
