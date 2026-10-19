@@ -13,10 +13,10 @@
         <thead><tr><th scope="col">Environment</th><th scope="col">Config repo</th><th scope="col">Runs</th><th scope="col">Commit</th><th scope="col">From</th></tr></thead>
         <tbody>
           <tr v-for="r in rows" :key="r.p.repo + r.p.path">
-            <td><span :class="markClass(r.p.env)">{{ r.p.env }}</span></td>
+            <td><span :class="envClass(r.p.env)">{{ r.p.env }}</span></td>
             <td>{{ r.target }}</td>
             <td class="gb-mono">{{ r.p.runs }}</td>
-            <td v-if="r.known" class="gb-mono">{{ r.p.commit.slice(0, 7) }}</td>
+            <td v-if="r.known" class="gb-mono">{{ sha7(r.p.commit) }}</td>
             <td v-else><input v-model="r.p.commit" class="epfl-input gb-adopt-input" :aria-label="`Commit ${r.p.env} runs on ${r.target}`" placeholder="No label: type the commit" autocomplete="off" data-1p-ignore /></td>
             <td>{{ from[r.p.from] }}</td>
           </tr>
@@ -35,7 +35,7 @@
 import { onMounted, ref } from 'vue';
 import { getProposals, type EnvState, type Proposal } from '@/api/board';
 import { message } from '@/issue';
-import { envMark, repoName } from '@/releases';
+import { envMark, markClass, repoName, sha7 } from '@/releases';
 
 // adopt: the page's write, busy while it runs; busy: a job runs, or the
 // page waits for an answer
@@ -45,10 +45,7 @@ const rows = ref<{ p: Proposal; known: boolean; target: string }[] | null>(null)
 const error = ref('');
 const from = { tag: 'its tag', label: "the image's revision label", '': 'not found' };
 
-const markClass = (env: string) => {
-  const m = envMark(props.envs.find((e) => e.name === env)?.role ?? '', true);
-  return ['gb-envmark', m === 'dev' ? '' : `gb-envmark-${m}`];
-};
+const envClass = (env: string) => markClass(envMark(props.envs.find((e) => e.name === env)?.role ?? '', true));
 // the deploy target's name, as the environment strip says it (enack8s)
 const targetName = (p: Proposal) => props.envs.find((e) => e.name === p.env)?.targets.find((t) => t.repo === p.repo && t.path === p.path)?.name ?? repoName(p.repo);
 

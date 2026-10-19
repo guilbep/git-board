@@ -16,13 +16,14 @@
       <h1 class="gb-h1">{{ tag }}</h1>
       <span v-if="badge" :class="['epfl-badge', badge.cls]">{{ badge.text }}</span>
       <div v-if="row" class="gb-titlerow-actions">
-        <button v-if="record && !record.yanked" type="button" class="epfl-btn epfl-btn-secondary" :disabled="busy" @click="yanking = true">Yank…</button>
+        <button v-if="record && !record.yanked" type="button" class="epfl-btn epfl-btn-secondary" :disabled="busy" @click="openYank">Yank…</button>
         <button v-if="promote" type="button" class="epfl-btn epfl-btn-primary" :disabled="busy" @click="startPromote"><GbIcon name="forward" />Promote to {{ promote.to }} as {{ promote.final }}</button>
       </div>
     </div>
 
-    <p v-if="!detail && !error" class="gb-hint" role="status">Fetching the release and the overlays' history…</p>
-    <p v-if="error" class="epfl-alert epfl-alert-danger" role="alert">{{ error }}</p>
+    <p v-if="!detail && !detailError" class="gb-hint" role="status">Fetching the release and the overlays' history…</p>
+    <p v-if="detailError" class="epfl-alert epfl-alert-danger" role="alert">{{ detailError }}</p>
+    <p v-if="listError" class="epfl-alert epfl-alert-danger" role="alert">{{ listError }}</p>
     <p v-if="errors.top" class="epfl-alert epfl-alert-danger" role="alert"><b>Not started.</b> {{ errors.top }}</p>
 
     <template v-if="detail && row">
@@ -35,7 +36,7 @@
         <span v-if="promote">Promoting adds the tag <span class="gb-mono gb-fg">{{ promote.final }}</span> to this same commit: no new build.</span>
       </p>
 
-      <ReleaseJob v-if="data?.job && (data.job.state === 'running' || watched)" :job="data.job" :names="repoNames" class="gb-rel-job" />
+      <ReleaseJob v-if="data?.job && (data.job.state === 'running' || watched)" :job="data.job" :names="repoNames(envs)" class="gb-rel-job" />
 
       <div class="gb-cols gb-rel-cols">
         <div class="gb-maincol">
@@ -48,7 +49,7 @@
               <div class="gb-composer">
                 <MarkdownEditor ref="editor" v-model="notesText" label="Release notes" :disabled="busy" @submit="saveNotes" />
               </div>
-              <p v-if="errors.notes" class="gb-save-error" role="alert"><GbIcon name="error" small /> <b>Not saved.</b> {{ errors.notes }} Your text is still here.</p>
+              <p v-if="errors.notes" class="gb-save-error gb-rel-after" role="alert"><GbIcon name="error" small /> <b>Not saved.</b> {{ errors.notes }} Your text is still here.</p>
               <div class="gb-actions gb-rel-edit">
                 <button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" @click="editing = false">Cancel</button>
                 <button type="button" class="epfl-btn epfl-btn-primary epfl-btn-sm" :disabled="busy" @click="saveNotes">Save notes</button>
@@ -59,7 +60,7 @@
             </article>
             <p v-else-if="record" class="gb-hint">No notes yet.</p>
             <p v-else class="gb-hint">No release record yet: a cut, promotion or rollback writes one once its tag is an hour old. Its notes and conversation live there.</p>
-            <p v-if="record && !row.beforeGitBoard" class="gb-note gb-rel-after">
+            <p v-if="record?.notes && !editing && !row.beforeGitBoard" class="gb-note gb-rel-after">
               Drafted by git-board from the issues merged since {{ record.previous || 'the start' }}.<template v-if="!finalCut && row.tag.version.rc"> They become {{ finalTag }}'s notes when it is promoted.</template>
             </p>
           </section>
@@ -67,7 +68,7 @@
           <section aria-labelledby="issues">
             <div class="gb-side-head">
               <h2 id="issues" class="gb-h2">Issues it carries</h2>
-              <span class="gb-note">Merged {{ record?.previous ? `between ${record.previous} and` : 'up to' }} {{ sha7(row.tag.commit) }}</span>
+              <span class="gb-note">Merged {{ record?.previous ? `between ${previousCommit ? sha7(previousCommit) : record.previous} and` : 'up to' }} {{ sha7(row.tag.commit) }}</span>
             </div>
             <p v-if="!detail.issues.length" class="gb-hint">No merged branch names an issue.</p>
             <div v-else class="gb-table-wrap">
@@ -177,11 +178,11 @@
     </template>
   </main>
 
-  <q-dialog v-model="yanking">
+  <q-dialog v-model="yanking" :persistent="pending">
     <section class="gb-dialog gb-rel-yank" role="dialog" aria-modal="true" aria-labelledby="yank-title">
       <header class="gb-dialog-head">
         <h2 id="yank-title" class="h5">Yank {{ tag }}</h2>
-        <button type="button" class="gb-icon-btn" aria-label="Cancel" @click="yanking = false"><GbIcon name="close" /></button>
+        <button type="button" class="gb-icon-btn" aria-label="Close" :disabled="pending" @click="yanking = false"><GbIcon name="close" /></button>
       </header>
       <form class="gb-dialog-body" @submit.prevent="yank">
         <p class="gb-rel-yank-lead">Its tag stays, and so does this page, marked yanked. git-board won't cut or promote its commit again.</p>
@@ -189,7 +190,7 @@
         <p v-if="errors.yank" class="epfl-alert epfl-alert-danger" role="alert"><b>Not yanked.</b> {{ errors.yank }}</p>
       </form>
       <footer class="gb-dialog-foot">
-        <button type="button" class="epfl-btn epfl-btn-secondary" @click="yanking = false">Cancel</button>
+        <button type="button" class="epfl-btn epfl-btn-secondary" :disabled="pending" @click="yanking = false">Cancel</button>
         <button type="button" class="epfl-btn epfl-btn-primary" :disabled="busy || !yankReason.trim()" @click="yank">Yank {{ tag }}</button>
       </footer>
     </section>
@@ -208,7 +209,7 @@ import { commentRelease, getRelease, getReleases, getViews, promoteRelease, rend
 import { message } from '@/issue';
 import { debounced, onLive } from '@/live';
 import { initials } from '@/me';
-import { bump, envMark, finalOf, newest, promotion, registryName, runs, tagPattern, type EnvMark } from '@/releases';
+import { bump, envMark, finalOf, markClass, newest, plural, promotion, registryName, releaseBadge, releasePath, repoNames, runs, sha7, tagPattern } from '@/releases';
 import { on, when } from '@/when';
 
 const route = useRoute();
@@ -217,7 +218,8 @@ const tag = computed(() => String(route.params.tag));
 const viewNames = ref<string[]>([]);
 const detail = ref<ReleaseDetail | null>(null);
 const data = ref<Releases | null>(null); // the environments and the job
-const error = ref('');
+const detailError = ref(''); // the release's load failed
+const listError = ref(''); // the environments' and the job's
 const errors = reactive({ top: '', notes: '', comment: '', yank: '' }); // a write refused, by where it was asked
 const pending = ref(false); // a write sent, its answer not back yet
 const watched = ref(false); // a job this page saw running stays shown once ended; another's, only while it runs
@@ -244,24 +246,18 @@ const finalTag = computed(() => (row.value ? `v${finalOf(row.value.tag.version)}
 const finalCut = computed(() => data.value?.releases.some((r) => r.tag.name === finalTag.value) ?? false);
 const list = new Intl.ListFormat('en', { type: 'conjunction' });
 
-// "Candidate · in stage", "Release · in prod", "Yanked"
-const badge = computed(() => {
-  const r = row.value;
-  if (!r) return null;
-  if (r.record?.yanked) return { text: 'Yanked', cls: 'gb-rel-badge-yanked' };
-  const where = r.runsIn.length ? ` · in ${list.format(r.runsIn)}` : '';
-  return r.tag.version.rc ? { text: `Candidate${where}`, cls: 'epfl-badge-tertiary' } : { text: `Release${where}`, cls: 'epfl-badge-dark' };
-});
+const badge = computed(() => (row.value ? releaseBadge(row.value) : null));
 
 // a candidate the environment before last runs, not yanked (the engine
 // refuses a yanked commit)
 const promote = computed(() => {
   const r = row.value;
   if (!r || r.record?.yanked) return null;
-  const i = envs.value.findIndex((e) => e.version === r.tag.name);
-  const p = i < 0 ? null : promotion(envs.value, i);
-  return p?.tag === r.tag.name ? p : null;
+  return envs.value.map((_, i) => promotion(envs.value, i)).find((p) => p?.tag === r.tag.name) ?? null;
 });
+
+// the previous final's commit, as the releases list has it
+const previousCommit = computed(() => data.value?.releases.find((r) => r.tag.name === record.value?.previous)?.tag.commit ?? '');
 
 // what the release is to the final before it
 const kind = computed(() => {
@@ -303,13 +299,7 @@ const images = computed(() => {
   return [...m];
 });
 
-const repoNames = computed(() => Object.fromEntries(envs.value.flatMap((e) => e.targets.map((t) => [t.repo, t.name]))));
-
-const sha7 = (c: string) => c.slice(0, 7);
 const short = (digest: string) => `sha256:${digest.replace(/^sha256:/, '').slice(0, 12)}`;
-const releasePath = (t: string) => `/releases/${encodeURIComponent(t)}`;
-const markClass = (m: EnvMark) => ['gb-envmark', m === 'dev' ? '' : `gb-envmark-${m}`];
-const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? '' : 's'}`;
 const elsewhere = (e: EnvState) => (!e.adopted ? "isn't adopted yet" : e.split ? 'runs different releases' : `runs ${e.version || sha7(e.commit)}`);
 
 // a candidate's story: yanked, promoted, running, or none of these
@@ -337,9 +327,9 @@ async function loadDetail() {
     detail.value = d;
     notesHtml.value = notes ?? '';
     commentsHtml.value = comments;
-    error.value = '';
+    detailError.value = '';
   } catch (e) {
-    if (t === tag.value) error.value = message(e);
+    if (t === tag.value) detailError.value = message(e);
   }
 }
 
@@ -351,9 +341,10 @@ async function loadReleases() {
     const r = await getReleases();
     if (r.job?.state === 'running') watched.value = true;
     data.value = r;
+    listError.value = '';
     if (was && r.job?.state !== 'running') void loadDetail();
   } catch (e) {
-    error.value = message(e);
+    listError.value = message(e);
   }
 }
 
@@ -405,6 +396,11 @@ async function sendComment() {
   }
 }
 
+function openYank() {
+  errors.yank = '';
+  yanking.value = true;
+}
+
 async function yank() {
   if (busy.value || !yankReason.value.trim()) return;
   if (await act('yank', () => yankRelease(tag.value, yankReason.value.trim()))) {
@@ -451,7 +447,6 @@ onMounted(() => {
 /* the danger palette: the badge colours but dark's and canard's fall under 4.5:1 in dark mode */
 .gb-rel-badge-yanked { background: var(--danger-bg); color: var(--danger-fg); box-shadow: inset 0 0 0 1px var(--danger-border); }
 .gb-rel-meta { margin-top: -.75rem; }
-.gb-fg { color: var(--fg); }
 .gb-rel-job { margin: 1.5rem 0 0; }
 /* the release board's columns: no panel padding, a rule above */
 .gb-rel-cols { grid-template-columns: minmax(0, 1fr) 20rem; gap: 3rem; margin-top: 2rem; padding: 2rem 0 0; border-top: 1px solid var(--border-subtle); }
@@ -463,7 +458,6 @@ onMounted(() => {
 .gb-rel-composer { margin-top: 1rem; }
 .gb-rel-runs { display: flex; flex-direction: column; gap: 1rem; }
 .gb-rel-targets { margin-top: .5rem; }
-.gb-save-error { display: flex; gap: .375rem; align-items: center; margin: .5rem 0 0; padding: .5rem 1rem; font-size: .875rem; color: var(--danger-fg); background: var(--danger-bg); }
 .gb-rel-yank { width: min(36rem, calc(100vw - 2rem)); }
 .gb-rel-yank .gb-dialog-foot { justify-content: flex-end; }
 .gb-rel-yank-lead { font-size: .9375rem; }

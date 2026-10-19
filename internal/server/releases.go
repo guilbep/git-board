@@ -34,6 +34,8 @@ var (
 
 type releasesResponse struct {
 	Enabled      bool                 `json:"enabled"`
+	Remote       string               `json:"remote"` // the authority, [release] remote
+	Trunk        string               `json:"trunk"`  // the trunk branch, e.g. dev
 	Environments []release.EnvState   `json:"environments"`
 	Releases     []release.ReleaseRow `json:"releases"`
 	Job          *releaseJob          `json:"job,omitempty"`
@@ -60,6 +62,7 @@ type releaseJob struct {
 	State   string         `json:"state"`   // running, done, failed
 	Error   string         `json:"error"`
 	Code    string         `json:"code"`  // a failed job's: taken, older, not-adopted; "" otherwise
+	Tag     string         `json:"tag"`   // the tag a cut or promote pushed or tried, once known
 	Steps   []release.Step `json:"steps"` // each step once, as last reported
 	Started time.Time      `json:"started"`
 	Ended   *time.Time     `json:"ended"`
@@ -182,6 +185,11 @@ func (s *apiServer) runJob(job *releaseJob, r *release.Runner, f func(ctx contex
 		s.releaseMu.Unlock()
 		s.events.publish(event{Kind: "releases"})
 	}
+	r.OnTag = func(tag string) {
+		s.releaseMu.Lock()
+		job.Tag = tag
+		s.releaseMu.Unlock()
+	}
 	tag, err := f(context.Background(), r)
 	s.releaseMu.Lock()
 	now := time.Now()
@@ -246,7 +254,7 @@ func (s *apiServer) handleReleases(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, releasesResponse{Enabled: true, Environments: orEmpty(st.Envs), Releases: orEmpty(st.Releases), Job: s.jobSnapshot()})
+	writeJSON(w, http.StatusOK, releasesResponse{Enabled: true, Remote: run.Cfg.RemoteName(), Trunk: run.BaseBranch(), Environments: orEmpty(st.Envs), Releases: orEmpty(st.Releases), Job: s.jobSnapshot()})
 }
 
 func (s *apiServer) handleDraft(w http.ResponseWriter, r *http.Request) {

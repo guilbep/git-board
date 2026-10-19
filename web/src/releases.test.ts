@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { Draft, EnvState, ReleaseJob, ReleaseRow, ReleaseStep, TargetState } from './api/board.ts';
-import { behindText, bump, checkIcon, cutLabel, groupReleases, jobTitle, nextTag, olderFinals, promotion, registryName, repoName, splitParts, splitText, stepLabel, stepState, takenTag } from './releases.ts';
+import { behindText, bump, checkIcon, cutHint, cutLabel, groupReleases, jobTitle, markClass, nextTag, older, olderFinals, plural, promotion, registryName, releaseBadge, releasePath, repoName, repoNames, sha7, splitParts, splitText, stepLabel, stepState, takenOf } from './releases.ts';
 
 function row(name: string): ReleaseRow {
   const [, major, minor, patch, rc] = /^v(\d+)\.(\d+)\.(\d+)(?:-rc\.(\d+))?$/.exec(name)!.map(Number);
@@ -34,6 +34,8 @@ test('groupReleases puts candidates under their version', () => {
 test('behindText', () => {
   assert.equal(behindText(env({ name: 'dev', behind: ['a', 'b'] })), 'Runs 2 merges behind the dev branch');
   assert.equal(behindText(env({ name: 'dev', behind: ['a'] })), 'Runs 1 merge behind the dev branch');
+  // the trunk as the server names it, when it isn't the environment's name
+  assert.equal(behindText(env({ name: 'dev', behind: ['a'] }), 'main'), 'Runs 1 merge behind the main branch');
 });
 
 test('splitText names each target', () => {
@@ -55,7 +57,7 @@ test('splitText names each target', () => {
 
 test('stepState', () => {
   const step = (name: string, state: 'running' | 'done' | 'failed') => ({ name, detail: '', state });
-  const running: ReleaseJob = { kind: 'deploy', subject: 'dev', state: 'running', error: '', code: '', steps: [step('frontend', 'done'), step('backend', 'running')], started: '', ended: null };
+  const running: ReleaseJob = { kind: 'deploy', subject: 'dev', state: 'running', error: '', code: '', tag: '', steps: [step('frontend', 'done'), step('backend', 'running')], started: '', ended: null };
   assert.equal(stepState(running, 0), 'done');
   assert.equal(stepState(running, 1), 'now');
   assert.equal(stepState(running, 2), 'todo');
@@ -79,7 +81,7 @@ test('promotion: a candidate in the environment before last', () => {
 });
 
 test('jobTitle', () => {
-  const job: ReleaseJob = { kind: 'rollback', subject: 'prod to v1.4.19', state: 'running', error: '', code: '', steps: [], started: '', ended: null };
+  const job: ReleaseJob = { kind: 'rollback', subject: 'prod to v1.4.19', state: 'running', error: '', code: '', tag: '', steps: [], started: '', ended: null };
   assert.equal(jobTitle(job), 'Rolling back prod to v1.4.19');
   assert.equal(jobTitle({ ...job, state: 'done' }), 'Rolled back prod to v1.4.19');
   assert.equal(jobTitle({ ...job, kind: 'cut', subject: '', state: 'failed' }), 'The cut of a release stopped');
@@ -121,10 +123,47 @@ test('nextTag: the final, or the next candidate past the taken ones', () => {
   assert.equal(nextTag('1.4.20-rc.1', false, rows), '');
 });
 
-test('takenTag reads the tag a taken cut wanted', () => {
-  const job: ReleaseJob = { kind: 'cut', subject: 'v1.4.20', state: 'failed', error: 'v1.4.20-rc.3: tag taken', code: 'taken', steps: [], started: '', ended: null };
-  assert.equal(takenTag(job), 'v1.4.20-rc.3');
-  assert.equal(takenTag({ ...job, error: 'push refused' }), '');
+test('takenOf: what of a version is cut already', () => {
+  const rows = [row('v1.4.20-rc.2'), row('v1.4.20-rc.1'), row('v1.4.19'), row('v1.4.19-rc.1')];
+  assert.deepEqual(takenOf('1.4.20', false, rows), ['rc.1', 'rc.2']);
+  assert.deepEqual(takenOf('1.4.21', false, rows), []);
+  // a final taken is the final itself
+  assert.deepEqual(takenOf('1.4.19', true, rows), ['v1.4.19']);
+  assert.deepEqual(takenOf('v1.4.20', true, rows), []);
+});
+
+test('cutHint: the proposal, then the tag and what is taken', () => {
+  const v = (s: string) => row(s).tag;
+  const issue = (kind: string) => ({ number: '#1', title: 't', kind, merge: 'm' });
+  const d = { previous: v('v1.4.19'), proposed: { major: 1, minor: 4, patch: 20, rc: 0 }, issues: [1, 2, 3, 4, 5].map(() => issue('fix')) } as Draft;
+  assert.deepEqual(cutHint(d, 'v1.4.20-rc.3', ['rc.1', 'rc.2'], false), ['Proposed: a patch, because none of the 5 issues is a feat. The tag will be', 'v1.4.20-rc.3', ': rc.1 and rc.2 are taken.']);
+  assert.deepEqual(cutHint({ ...d, issues: [issue('fix')] }, 'v1.4.20-rc.1', [], false), ['Proposed: a patch, because its one issue isn’t a feat. The tag will be', 'v1.4.20-rc.1', '.']);
+  assert.equal(cutHint({ ...d, issues: [] }, 'v1.4.20', [], true)[0], 'Proposed: a patch, since no merged branch names an issue. The tag will be');
+  assert.equal(cutHint({ ...d, proposed: { major: 1, minor: 5, patch: 0, rc: 0 } }, 'v1.5.0-rc.1', [], false)[0], 'Proposed: a minor, because one of the issues is a feat. The tag will be');
+  assert.equal(cutHint({ ...d, proposed: { major: 2, minor: 0, patch: 0, rc: 0 } }, 'v2.0.0-rc.1', ['rc.1'], false)[2], ': rc.1 is taken.');
+  assert.equal(cutHint({ ...d, proposed: { major: 2, minor: 0, patch: 0, rc: 0 } }, 'v2.0.0-rc.1', [], false)[0], 'Proposed: a major, because an issue is labelled breaking. The tag will be');
+  assert.equal(cutHint({ ...d, previous: null, proposed: { major: 0, minor: 1, patch: 0, rc: 0 } }, 'v0.1.0', [], true)[0], 'Proposed: 0.1.0, the first release. The tag will be');
+  // a final cut already, a version that isn't one
+  assert.deepEqual(cutHint(d, 'v1.4.19', ['v1.4.19'], true), ['Proposed: a patch, because none of the 5 issues is a feat. The tag', 'v1.4.19', ' is cut already: choose another version.']);
+  assert.deepEqual(cutHint(d, '', [], false), ['Proposed: a patch, because none of the 5 issues is a feat. A version is three numbers, like 1.4.20.', '', '']);
+});
+
+test('releaseBadge says what it is and where it runs', () => {
+  const r = (name: string, runsIn: string[], yanked = '') => ({ ...row(name), runsIn, record: yanked ? ({ yanked } as ReleaseRow['record']) : null });
+  assert.deepEqual(releaseBadge(r('v1.4.20-rc.2', ['stage'])), { text: 'Candidate · in stage', cls: 'epfl-badge-tertiary' });
+  assert.deepEqual(releaseBadge(r('v1.4.20', ['stage', 'prod'])), { text: 'Release · in stage and prod', cls: 'epfl-badge-dark' });
+  assert.deepEqual(releaseBadge(r('v1.4.20-rc.1', [])), { text: 'Candidate', cls: 'epfl-badge-tertiary' });
+  assert.deepEqual(releaseBadge(r('v1.4.20-rc.1', ['stage'], 'broken')), { text: 'Yanked', cls: 'gb-rel-badge-yanked' });
+});
+
+test('the small helpers', () => {
+  assert.equal(sha7('8c41d2e0a1b2'), '8c41d2e');
+  assert.equal(plural(1, 'issue'), '1 issue');
+  assert.equal(plural(4, 'issue'), '4 issues');
+  assert.equal(releasePath('v1.4.20-rc.2'), '/releases/v1.4.20-rc.2');
+  assert.deepEqual(markClass('dev'), ['gb-envmark', '']);
+  assert.deepEqual(markClass('prod'), ['gb-envmark', 'gb-envmark-prod']);
+  assert.deepEqual(repoNames([env({ targets: [target('enack8s', 'v1'), target('openshift', 'v1')] })]), { enack8s: 'enack8s', openshift: 'openshift' });
 });
 
 test('olderFinals: the finals before what the environment runs, not yanked', () => {
@@ -138,6 +177,16 @@ test('olderFinals: the finals before what the environment runs, not yanked', () 
   // not a release tag: every final but none
   const dev = env({ version: '1.4.21-dev.3.gabc1234', targets: [target('enack8s', '1.4.21-dev.3.gabc1234')] });
   assert.deepEqual(olderFinals(dev, rows).map((r) => r.tag.name), ['v1.4.20', 'v1.4.19', 'v1.4.17']);
+});
+
+test('older: SemVer order, a final after its candidates, equal not older', () => {
+  const v = (s: string) => row(s).tag.version;
+  assert.equal(older(v('v1.4.19'), v('v1.4.20')), true);
+  assert.equal(older(v('v1.4.20-rc.2'), v('v1.4.20')), true);
+  assert.equal(older(v('v1.4.20-rc.1'), v('v1.4.20-rc.2')), true);
+  assert.equal(older(v('v1.4.20'), v('v1.4.20-rc.2')), false);
+  assert.equal(older(v('v1.4.20'), v('v1.4.20')), false);
+  assert.equal(older(v('v1.4.20-rc.2'), v('v1.4.20-rc.2')), false);
 });
 
 test('bump: what a version is to the final before it', () => {

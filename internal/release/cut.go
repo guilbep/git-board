@@ -175,6 +175,9 @@ func (r *Runner) cut(ctx context.Context, c Cut, promote bool) (Tag, error) {
 	commit, tags := d.From, tagsOf(st)
 	v := tagFor(cmp.Or(c.Version, d.Proposed).Final(), final, tags)
 	t := Tag{Name: v.Tag(), Commit: commit, Message: v.Tag() + gitBoardMark, Version: v}
+	if r.OnTag != nil {
+		r.OnTag(t.Name)
+	}
 	if slices.ContainsFunc(tags, func(o Tag) bool { return o.Name == t.Name }) {
 		return Tag{}, fmt.Errorf("%s: %w", t.Name, ErrTaken)
 	}

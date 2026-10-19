@@ -147,6 +147,10 @@ func TestReleasesStatus(t *testing.T) {
 	if !strings.Contains(string(body), `"runsIn":["stage"]`) {
 		t.Errorf("fields aren't lower camel case: %s", body)
 	}
+	// the authority remote and the trunk, for the page's sentences
+	if got.Remote != "origin" || got.Trunk != "dev" || !strings.Contains(string(body), `"remote":"origin","trunk":"dev"`) {
+		t.Errorf("remote %q, trunk %q: %s", got.Remote, got.Trunk, body)
+	}
 }
 
 func TestDeployJobRunsAndPublishes(t *testing.T) {
@@ -244,8 +248,17 @@ func TestCutTakenIsCoded(t *testing.T) {
 		t.Fatalf("POST cut = %d %+v", status, job)
 	}
 	job = waitRelease(t, ts)
-	if job.State != "failed" || job.Code != "taken" || !strings.Contains(job.Error, "v1.0.1") {
-		t.Errorf("job %+v, want failed, taken", job)
+	if job.State != "failed" || job.Code != "taken" || job.Tag != "v1.0.1" {
+		t.Errorf("job %+v, want failed, taken, its tag v1.0.1", job)
+	}
+	resp, err := http.Get(ts.URL + "/api/releases/job")
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	if !strings.Contains(string(body), `"tag":"v1.0.1"`) {
+		t.Errorf("the job's tag isn't in its JSON: %s", body)
 	}
 }
 

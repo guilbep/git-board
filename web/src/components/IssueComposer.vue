@@ -53,7 +53,5 @@ async function send(status?: 'open' | 'closed') {
 </script>
 
 <style scoped>
-.gb-wait, .gb-save-error { display: flex; gap: .375rem; align-items: center; margin: 0; padding: .5rem 1rem; font-size: .875rem; }
-.gb-wait { color: var(--fg); background: var(--bg-subtle); }
-.gb-save-error { color: var(--danger-fg); background: var(--danger-bg); }
+.gb-wait { display: flex; gap: .375rem; align-items: center; margin: 0; padding: .5rem 1rem; font-size: .875rem; color: var(--fg); background: var(--bg-subtle); }
 </style>

@@ -341,6 +341,9 @@
 .gb-state-warn{color:var(--warning-fg)}
 .gb-plan li.gb-plan-failed{color:var(--danger-fg);font-weight:700}
 .gb-plan li.gb-plan-failed::before{content:"!";background:var(--danger-bg);border-color:var(--danger-border);color:var(--danger-fg)}
+/* the release pages': text at full strength inside a muted line; a write refused */
+.gb-fg{color:var(--fg)}
+.gb-save-error{display:flex;gap:.375rem;align-items:center;margin:0;padding:.5rem 1rem;font-size:.875rem;color:var(--danger-fg);background:var(--danger-bg)}
 
 /* ---- The app (the canvas places artboards absolutely) ---- */
 /* the panel lives in a right-hand q-dialog, which places it */

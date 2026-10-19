@@ -26,10 +26,11 @@ type Runner struct {
 	Dir      string            // the app repo's work tree
 	B        *gitbugio.Backend // the app repo's, for the release records
 	Tools    Tools
-	CacheDir string     // where the config repos are cloned
-	Who      string     // login for commit messages
-	Step     func(Step) // may be nil
-	Offline  bool       // no fetch of the app remote or config repos
+	CacheDir string       // where the config repos are cloned
+	Who      string       // login for commit messages
+	Step     func(Step)   // may be nil
+	OnTag    func(string) // may be nil: told the tag a cut or promote pushes, or tries to, once it knows it
+	Offline  bool         // no fetch of the app remote or config repos
 }
 
 // New is the Runner of the app repo at dir: cfg's [release] table and
@@ -61,6 +62,9 @@ func New(cfg *config.Config, dir string, b *gitbugio.Backend) (*Runner, error) {
 
 // base is the trunk branch, e.g. dev.
 func (r *Runner) base() string { return cmp.Or(r.Base, r.Branches.Base, "dev") }
+
+// BaseBranch is the trunk branch, e.g. dev.
+func (r *Runner) BaseBranch() string { return r.base() }
 
 // trunk is the trunk on the authority remote, e.g. origin/dev.
 func (r *Runner) trunk() string { return r.Cfg.RemoteName() + "/" + r.base() }

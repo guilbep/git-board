@@ -6,7 +6,7 @@
   <section class="gb-dialog gb-rb" role="dialog" aria-modal="true" aria-labelledby="rb-title">
     <header class="gb-dialog-head">
       <h2 id="rb-title">Roll back {{ env }}</h2>
-      <button type="button" class="gb-icon-btn" aria-label="Close" @click="emit('close')"><GbIcon name="close" /></button>
+      <button type="button" class="gb-icon-btn" aria-label="Close" :disabled="sending" @click="emit('close')"><GbIcon name="close" /></button>
     </header>
 
     <form class="gb-dialog-body" @submit.prevent="rollback">
@@ -35,31 +35,37 @@
     </form>
 
     <footer class="gb-dialog-foot">
-      <button type="button" class="epfl-btn epfl-btn-secondary" @click="emit('close')">Cancel</button>
+      <button type="button" class="epfl-btn epfl-btn-secondary" :disabled="sending" @click="emit('close')">Cancel</button>
       <button type="button" class="epfl-btn epfl-btn-primary" :disabled="!ready" @click="rollback"><GbIcon name="undo" small />Roll {{ env }} back{{ chosen ? ` to ${chosen}` : '' }}</button>
     </footer>
   </section>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { rollbackEnvironment, type EnvState, type ReleaseJob, type ReleaseRow } from '@/api/board';
 import { message } from '@/issue';
 import { byVersion, checkIcon, olderFinals, registryName, tagPattern } from '@/releases';
 import { when } from '@/when';
 import GbIcon from '@/components/GbIcon.vue';
 
-// busy: a job runs, or the page waits for an answer
+// busy: a job runs, or the page waits for an answer; sending: the
+// rollback's POST is out
 const props = defineProps<{ env: string; envs: EnvState[]; releases: ReleaseRow[]; busy: boolean }>();
 const emit = defineEmits<{ close: []; started: [job: ReleaseJob] }>();
+const sending = defineModel<boolean>('sending', { default: false });
 
 const state = computed(() => props.envs.find((e) => e.name === props.env));
 const targets = computed(() => (state.value ? olderFinals(state.value, props.releases) : []));
 const chosen = ref(targets.value[0]?.tag.name ?? ''); // the newest older final
 const reason = ref('');
-const sending = ref(false);
 const error = ref('');
 const reasonInput = ref<HTMLInputElement | null>(null);
+// the releases reloaded under the dialog: a choice no longer offered falls
+// back to the newest older final
+watch(targets, (t) => {
+  if (!t.some((r) => r.tag.name === chosen.value)) chosen.value = t[0]?.tag.name ?? '';
+});
 const list = new Intl.ListFormat('en', { type: 'conjunction' });
 
 // what it runs now (the target ahead, in a split)

@@ -11,7 +11,7 @@
       <h1 class="gb-h1">Releases</h1>
       <span v-if="meta" class="gb-meta">{{ meta }}</span>
       <div v-if="canCut" class="gb-titlerow-actions">
-        <button type="button" class="epfl-btn epfl-btn-primary" :disabled="busy" @click="dialog = { kind: 'cut' }"><GbIcon name="tag" />Cut a release</button>
+        <button type="button" class="epfl-btn epfl-btn-primary" :disabled="busy" @click="openDialog({ kind: 'cut' })"><GbIcon name="tag" />Cut a release</button>
       </div>
     </div>
 
@@ -26,7 +26,7 @@
     </section>
 
     <template v-else-if="data">
-      <ReleaseJob v-if="data.job && (data.job.state !== 'done' || watched)" :job="data.job" :names="repoNames">
+      <ReleaseJob v-if="data.job && (data.job.state !== 'done' || watched)" :job="data.job" :names="repoNames(envs)">
         <!-- a cut found its tag taken: who took it, and the next candidate (States w3) -->
         <template v-if="taken" #default>
           <div class="epfl-alert epfl-alert-info gb-alert-row" role="status">
@@ -71,13 +71,13 @@
             <p v-if="!v.env.adopted && v.targets.length" class="gb-env-sub">The overlays don't say which commit they run yet.</p>
             <div v-if="v.env.behind.length" class="gb-env-drift" role="status">
               <GbIcon name="warn" small />
-              <span><b>{{ behindText(v.env) }}:</b> {{ merges(v.env.behind) }} {{ v.env.behind.length === 1 ? "isn't" : "aren't" }} deployed yet.</span>
+              <span><b>{{ behindText(v.env, data.trunk || v.env.name) }}:</b> {{ merges(v.env.behind) }} {{ v.env.behind.length === 1 ? "isn't" : "aren't" }} deployed yet.</span>
             </div>
             <div class="gb-env-foot">
               <button v-if="v.env.role === 'follow'" type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" :disabled="busy" @click="start(() => deployEnvironment(v.env.name))">Deploy {{ v.env.name }}</button>
               <button v-else-if="v.finish" type="button" class="epfl-btn epfl-btn-primary epfl-btn-sm" :disabled="busy" @click="start(() => deployEnvironment(v.env.name, v.finish))">Finish deploying {{ v.env.name }}</button>
               <button v-else-if="v.promotion" type="button" class="epfl-btn epfl-btn-primary epfl-btn-sm" :disabled="busy" @click="start(() => promoteRelease(v.promotion!.tag))">Promote to {{ v.promotion.to }} as {{ v.promotion.final }}</button>
-              <button v-else-if="v.env.role === 'last' && v.env.version" type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" :disabled="busy" @click="dialog = { kind: 'rollback', env: v.env.name }"><GbIcon name="undo" small />Roll back…</button>
+              <button v-else-if="v.env.role === 'last' && v.env.version" type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" :disabled="busy" @click="openDialog({ kind: 'rollback', env: v.env.name })"><GbIcon name="undo" small />Roll back…</button>
             </div>
           </div>
         </div>
@@ -121,9 +121,11 @@
       </section>
     </template>
 
-    <q-dialog :model-value="!!dialog" @update:model-value="(open: boolean) => open || (dialog = null)">
-      <CutReleaseDialog v-if="dialog?.kind === 'cut'" :envs="envs" :releases="data?.releases ?? []" :busy="busy" @close="dialog = null" @started="onCut" />
-      <RollbackDialog v-else-if="dialog?.kind === 'rollback'" :env="dialog.env" :envs="envs" :releases="data?.releases ?? []" :busy="busy" @close="dialog = null" @started="onStarted" />
+    <!-- persistent while its POST is out, so a refusal lands in it; the
+         content stays through the hide animation, cleared on hide -->
+    <q-dialog v-model="dialogOpen" :persistent="pending" @hide="dialogOpen || (dialog = null)">
+      <CutReleaseDialog v-if="dialog?.kind === 'cut'" v-model:sending="pending" :envs="envs" :releases="data?.releases ?? []" :remote="data?.remote || 'origin'" :trunk="data?.trunk ?? ''" :busy="busy" @close="dialogOpen = false" @started="onCut" />
+      <RollbackDialog v-else-if="dialog?.kind === 'rollback'" v-model:sending="pending" :env="dialog.env" :envs="envs" :releases="data?.releases ?? []" :busy="busy" @close="dialogOpen = false" @started="onStarted" />
     </q-dialog>
   </main>
 </template>
@@ -139,7 +141,7 @@ import RollbackDialog from '@/components/RollbackDialog.vue';
 import { adoptOverlays, cutRelease, deployEnvironment, getConfigDocs, getDraft, getReleases, getViews, promoteRelease, type CutRequest, type ReleaseJob as Job, type Proposal, type ReleaseRow, type Releases } from '@/api/board';
 import { message } from '@/issue';
 import { debounced, onLive } from '@/live';
-import { behindText, byVersion, envMark, groupReleases, newest, promotion, repoName, runs, splitParts, takenTag, tagPattern, type EnvMark } from '@/releases';
+import { behindText, byVersion, envMark, groupReleases, markClass, newest, promotion, releasePath, repoName, repoNames, runs, sha7, splitParts, tagPattern } from '@/releases';
 import { remotes } from '@/remotes';
 import { on, when } from '@/when';
 
@@ -152,8 +154,10 @@ const doc = ref(''); // docs/configuration.md's ## Release, without [release]
 const showAll = ref(false);
 // a job this page saw running stays shown once done; a failed one always
 const watched = ref(false);
-// the dialog asked for: a cut, or rolling an environment back
+// the dialog asked for: a cut, or rolling an environment back; kept until
+// the dialog has hidden
 const dialog = ref<{ kind: 'cut' } | { kind: 'rollback'; env: string } | null>(null);
+const dialogOpen = ref(false);
 // the cut this page last asked for, to ask again when its tag was taken
 const lastCut = ref<CutRequest | null>(null);
 
@@ -195,22 +199,18 @@ const views = computed(() =>
 // candidate after it when this page can cut again
 const taken = computed(() => {
   const j = data.value?.job;
-  const tag = j?.state === 'failed' && j.code === 'taken' && j.kind === 'cut' ? takenTag(j) : '';
+  const tag = j?.state === 'failed' && j.code === 'taken' && j.kind === 'cut' ? j.tag : '';
   if (!tag) return null;
   const rc = tagPattern.exec(tag)?.[4];
   return { tag, row: data.value?.releases.find((r) => r.tag.name === tag), next: rc && lastCut.value ? `rc.${+rc + 1}` : '' };
 });
 
-const repoNames = computed(() => Object.fromEntries(envs.value.flatMap((e) => e.targets.map((t) => [t.repo, t.name]))));
 const groups = computed(() => groupReleases(data.value?.releases ?? []));
 const shownGroups = computed(() => (showAll.value ? groups.value : groups.value.slice(0, 10)));
 const legacy = computed(() => data.value?.releases.some((r) => r.beforeGitBoard) ?? false);
 
-const sha7 = (c: string) => c.slice(0, 7);
-const releasePath = (tag: string) => `/releases/${encodeURIComponent(tag)}`;
 // cut in the last two weeks: "17 Oct, 14:02"; before: "28 Sep"
 const recent = (iso: string) => Date.now() - Date.parse(iso) < 14 * 864e5;
-const markClass = (m: EnvMark) => ['gb-envmark', m === 'dev' ? '' : `gb-envmark-${m}`];
 const roleOf = (env: string) => envs.value.find((e) => e.name === env)?.role ?? '';
 // the merges dev doesn't run, three at most
 const merges = (b: string[]) => list.format([...b.slice(0, 3).map((s) => `“${s}”`), ...(b.length > 3 ? [`${b.length - 3} more`] : [])]);
@@ -254,7 +254,12 @@ function onStarted(job: Job) {
   actionError.value = '';
   watched.value = true;
   if (data.value) data.value.job = job;
-  dialog.value = null;
+  dialogOpen.value = false;
+}
+
+function openDialog(d: NonNullable<typeof dialog.value>) {
+  dialog.value = d;
+  dialogOpen.value = true;
 }
 
 function onCut(job: Job, req: CutRequest) {

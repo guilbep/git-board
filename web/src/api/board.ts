@@ -1040,6 +1040,7 @@ export interface ReleaseJob {
   state: 'running' | 'done' | 'failed';
   error: string;
   code: '' | 'taken' | 'older' | 'not-adopted'; // a failed job's
+  tag: string; // the tag a cut or promote pushed or tried, once known; ""
   steps: ReleaseStep[]; // each once, as last reported
   started: string;
   ended: string | null;
@@ -1047,6 +1048,8 @@ export interface ReleaseJob {
 
 export interface Releases {
   enabled: boolean;
+  remote: string; // the authority remote, [release] remote (origin)
+  trunk: string; // the trunk branch (dev)
   environments: EnvState[];
   releases: ReleaseRow[]; // newest first
   job: ReleaseJob | null; // running, or the last one
@@ -1112,7 +1115,7 @@ const releaseJob = (j: ReleaseJob | null): ReleaseJob | null => j && { ...j, ste
 
 export async function getReleases(): Promise<Releases> {
   const r = await request<Partial<Releases>>('/api/releases');
-  return { enabled: !!r.enabled, environments: (r.environments ?? []).map(envState), releases: (r.releases ?? []).map(releaseRow), job: releaseJob(r.job ?? null) };
+  return { enabled: !!r.enabled, remote: r.remote ?? '', trunk: r.trunk ?? '', environments: (r.environments ?? []).map(envState), releases: (r.releases ?? []).map(releaseRow), job: releaseJob(r.job ?? null) };
 }
 
 export async function getDraft(final = false): Promise<Draft> {

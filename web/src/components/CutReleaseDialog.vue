@@ -7,7 +7,7 @@
   <section class="gb-dialog gb-cut" role="dialog" aria-modal="true" aria-labelledby="cut-title">
     <header class="gb-dialog-head">
       <h2 id="cut-title">Cut a release</h2>
-      <button type="button" class="gb-icon-btn" aria-label="Close" @click="emit('close')"><GbIcon name="close" /></button>
+      <button type="button" class="gb-icon-btn" aria-label="Close" :disabled="sending" @click="emit('close')"><GbIcon name="close" /></button>
     </header>
 
     <div v-if="!draft" class="gb-dialog-body">
@@ -25,14 +25,14 @@
             <span class="gb-note">A release is made from what {{ fromEnv.name }} has tested.</span>
           </span>
           <span v-else>
-            <b>The trunk's head:</b> <span class="gb-mono">{{ sha7(draft.from) }}</span> · {{ draft.fromVersion }}<br />
+            <b>The {{ trunkName }} branch's head:</b> <span class="gb-mono">{{ sha7(draft.from) }}</span> · {{ draft.fromVersion }}<br />
             <span class="gb-note">{{ followed ? `${followed.name}'s overlays don't say one commit they run` : 'No environment follows the trunk' }}, so a release is made from its head.</span>
           </span>
         </label>
         <label v-if="fromEnv && draft.undeployed.length" class="epfl-check gb-cut-opt gb-cut-off">
           <input type="radio" name="cut-from" disabled />
           <span>
-            The {{ fromEnv.name }} branch's head: {{ merges(draft.undeployed) }} not deployed yet<br />
+            The {{ trunkName }} branch's head: {{ merges(draft.undeployed) }} not deployed yet<br />
             <span class="gb-note">Deploy {{ fromEnv.name }} first to release them.</span>
           </span>
         </label>
@@ -41,7 +41,7 @@
       <div class="gb-cut-version">
         <div class="gb-field">
           <label class="epfl-label" for="cut-version">Version</label>
-          <input id="cut-version" ref="versionInput" v-model="version" class="epfl-input" autocomplete="off" data-1p-ignore :aria-invalid="!tag" aria-describedby="cut-hint" />
+          <input id="cut-version" ref="versionInput" v-model="version" class="epfl-input" autocomplete="off" data-1p-ignore :aria-invalid="!tag || finalTaken" aria-describedby="cut-hint" />
         </div>
         <div class="gb-field">
           <span id="cut-kind" class="epfl-label">Goes to</span>
@@ -51,11 +51,7 @@
           </div>
         </div>
       </div>
-      <p id="cut-hint" class="gb-hint gb-cut-hint">
-        {{ proposal }}
-        <template v-if="tag">The tag will be <b class="gb-fg">{{ tag }}</b>{{ taken.length ? `: ${list.format(taken)} ${taken.length === 1 ? 'is' : 'are'} taken` : '' }}.</template>
-        <template v-else>A version is three numbers, like {{ finalOf(draft.proposed) }}.</template>
-      </p>
+      <p id="cut-hint" class="gb-hint gb-cut-hint">{{ hint[0] }} <b v-if="hint[1]" class="gb-fg">{{ hint[1] }}</b>{{ hint[2] }}</p>
 
       <section aria-labelledby="cut-checks">
         <div class="gb-side-head gb-cut-head">
@@ -86,7 +82,7 @@
         <h3 id="cut-what" class="gb-section-title gb-cut-head">What happens</h3>
         <ol class="gb-plan">
           <li>
-            <span class="gb-plan-body">Push the tag <span class="gb-mono">{{ tag || '…' }}</span> on <span class="gb-mono">{{ sha7(draft.from) }}</span> to origin<small v-if="next">If someone took that name meanwhile, git-board offers {{ next }}.</small></span>
+            <span class="gb-plan-body">Push the tag <span class="gb-mono">{{ tag || '…' }}</span> on <span class="gb-mono">{{ sha7(draft.from) }}</span> to {{ remote }}<small v-if="next">If someone took that name meanwhile, git-board offers {{ next }}.</small></span>
           </li>
           <li>
             <span class="gb-plan-body">Name the images {{ tag || '…' }}<template v-if="registries.length"> in {{ list.format(registries) }}</template><template v-if="chart">, and package the chart as {{ tag.slice(1) || '…' }}</template></span>
@@ -103,7 +99,7 @@
 
     <footer class="gb-dialog-foot">
       <span class="gb-note gb-grow">If your laptop closes halfway, the next git-board to open, yours or anyone's, finishes it.</span>
-      <button type="button" class="epfl-btn epfl-btn-secondary" @click="emit('close')">Cancel</button>
+      <button type="button" class="epfl-btn epfl-btn-secondary" :disabled="sending" @click="emit('close')">Cancel</button>
       <button type="button" class="epfl-btn epfl-btn-primary" :disabled="!ready" @click="cut">{{ draft && tag ? cutLabel({ ...draft, tag }, deploy, toEnv?.name ?? '') : 'Cut' }}</button>
     </footer>
   </section>
@@ -113,13 +109,15 @@
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { cutRelease, getDraft, type CutRequest, type Draft, type EnvState, type ReleaseJob, type ReleaseRow } from '@/api/board';
 import { message } from '@/issue';
-import { checkIcon, cutLabel, finalOf, newest, nextTag, registryName, repoName, tagPattern } from '@/releases';
+import { checkIcon, cutHint, cutLabel, finalOf, newest, nextTag, plural, registryName, repoName, sha7, tagPattern, takenOf } from '@/releases';
 import { when } from '@/when';
 import GbIcon from '@/components/GbIcon.vue';
 
-// busy: a job runs, or the page waits for an answer
-const props = defineProps<{ envs: EnvState[]; releases: ReleaseRow[]; busy: boolean }>();
+// busy: a job runs, or the page waits for an answer; remote, trunk: as
+// the server names them (Releases); sending: the cut's POST is out
+const props = defineProps<{ envs: EnvState[]; releases: ReleaseRow[]; remote: string; trunk: string; busy: boolean }>();
 const emit = defineEmits<{ close: []; started: [job: ReleaseJob, cut: CutRequest] }>();
+const sending = defineModel<boolean>('sending', { default: false });
 
 const followed = computed(() => props.envs.find((e) => e.role === 'follow'));
 const candidateEnv = computed(() => props.envs.find((e) => e.role === 'candidate'));
@@ -129,7 +127,6 @@ const final = ref(!candidateEnv.value); // without a candidate environment, ever
 const draft = ref<Draft | null>(null);
 const loading = ref(false);
 const error = ref(''); // the draft failed
-const sending = ref(false);
 const sendError = ref('');
 const version = ref('');
 const notes = ref('');
@@ -174,34 +171,21 @@ const tag = computed(() => {
   if (!d) return '';
   return typed.value === finalOf(d.proposed) && !loading.value ? d.tag : nextTag(typed.value, final.value, props.releases);
 });
-// the candidates of that version already cut: rc.1, rc.2
-const taken = computed(() =>
-  final.value ? [] : props.releases.filter((r) => r.tag.version.rc && finalOf(r.tag.version) === typed.value).map((r) => `rc.${r.tag.version.rc}`).reverse(),
-);
+// what of that version is cut already: rc.1, rc.2; a final, itself
+const taken = computed(() => takenOf(typed.value, final.value, props.releases));
+const finalTaken = computed(() => final.value && taken.value.length > 0);
+const hint = computed(() => (draft.value ? cutHint(draft.value, tag.value, taken.value, final.value) : ['', '', '']));
+// the trunk, as the server names it; else the followed environment's name
+const trunkName = computed(() => props.trunk || followed.value?.name || 'trunk');
 // the candidate after this one, offered when the tag is taken
 const next = computed(() => {
   const rc = tagPattern.exec(tag.value)?.[4];
   return rc ? `rc.${+rc + 1}` : '';
 });
-// "Proposed: a patch, because none of the 5 issues is a feat."
-const proposal = computed(() => {
-  const d = draft.value;
-  if (!d) return '';
-  const n = d.issues.length;
-  const p = d.previous?.version;
-  if (!p) return `Proposed: ${finalOf(d.proposed)}, the first release.`;
-  if (d.proposed.major !== p.major) return 'Proposed: a major, because an issue is labelled breaking.';
-  if (d.proposed.minor !== p.minor) return `Proposed: a minor, because ${n === 1 ? 'its issue' : 'one of the issues'} is a feat.`;
-  if (!n) return 'Proposed: a patch, since no merged branch names an issue.';
-  return `Proposed: a patch, because ${n === 1 ? 'its one issue isn’t' : `none of the ${n} issues is`} a feat.`;
-});
 // where images go, as the releases' records say: ghcr, quay
 const registries = computed(() => [...new Set(props.releases.flatMap((r) => r.record?.artifacts.map((a) => registryName(a.registry)) ?? []))]);
 const chart = computed(() => props.envs.some((e) => e.targets.some((t) => t.deployed.chart)));
-const ready = computed(() => !!draft.value && !!tag.value && !loading.value && !sending.value && !props.busy);
-
-const sha7 = (c: string) => c.slice(0, 7);
-const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? '' : 's'}`;
+const ready = computed(() => !!draft.value && !!tag.value && !finalTaken.value && !loading.value && !sending.value && !props.busy);
 // the merges not deployed, three at most
 const merges = (b: string[]) => `${plural(b.length, 'merge')} (${[...b.slice(0, 3).map((s) => `“${s}”`), ...(b.length > 3 ? [`${b.length - 3} more`] : [])].join(', ')})`;
 
@@ -232,7 +216,6 @@ async function cut() {
 .gb-cut-off { color: var(--fg-muted); }
 .gb-cut-version { display: grid; grid-template-columns: 12rem minmax(0, 1fr); gap: 1rem 1.25rem; align-items: end; }
 .gb-cut-hint { display: block; margin-top: -.75rem; }
-.gb-fg { color: var(--fg); }
 .gb-cut-head { margin-bottom: .75rem; }
 .gb-cut-stale { opacity: .5; }
 .gb-cut-notes { min-height: 13rem; font-family: var(--font-mono); font-size: .8125rem; }

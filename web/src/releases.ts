@@ -39,11 +39,11 @@ export function groupReleases(rows: ReleaseRow[]): VersionGroup[] {
 }
 
 // behindText: "Runs 2 merges behind the dev branch", for the followed
-// environment. ponytail: names the environment; the trunk's own name isn't
-// in EnvState, and the followed environment is named after it (dev)
-export function behindText(env: EnvState): string {
+// environment; trunk: the trunk's name (Releases.trunk), else the
+// environment's, which is named after it (dev)
+export function behindText(env: EnvState, trunk = env.name): string {
   const n = env.behind.length;
-  return `Runs ${n} merge${n === 1 ? '' : 's'} behind the ${env.name} branch`;
+  return `Runs ${n} merge${n === 1 ? '' : 's'} behind the ${trunk} branch`;
 }
 
 // byVersion: the targets, the highest version first: in a split, the one a
@@ -165,12 +165,47 @@ export function nextTag(version: string, final: boolean, rows: ReleaseRow[]): st
 // finalOf: a version's final, as said: 1.4.20
 export const finalOf = (v: ReleaseVersion): string => `${v.major}.${v.minor}.${v.patch}`;
 
-// takenTag: the tag a cut found taken, from the engine's "<tag>: tag taken"
-export const takenTag = (j: ReleaseJob): string => /^(v\S+): tag taken$/.exec(j.error)?.[1] ?? '';
+// takenOf: what of version is cut already: its candidates (rc.1, rc.2),
+// which a candidate's number goes past; for a final, the final itself,
+// which can't be cut again
+export function takenOf(version: string, final: boolean, rows: ReleaseRow[]): string[] {
+  const v = version.trim().replace(/^v/, '');
+  const of = rows.filter((r) => finalOf(r.tag.version) === v);
+  if (final) return of.filter((r) => !r.tag.version.rc).map((r) => r.tag.name);
+  return of.filter((r) => r.tag.version.rc).map((r) => `rc.${r.tag.version.rc}`).reverse();
+}
 
-// older: v before w, as SemVer has it (a final after its candidates)
-const rank = (v: ReleaseVersion) => [v.major, v.minor, v.patch, v.rc || Infinity];
-const older = (v: ReleaseVersion, w: ReleaseVersion) => rank(v).reduce((d, x, i) => d || x - rank(w)[i]!, 0) < 0;
+const list = new Intl.ListFormat('en', { type: 'conjunction' });
+
+// proposal: why the draft proposes its version
+function proposal(d: Draft): string {
+  const n = d.issues.length;
+  const p = d.previous?.version;
+  if (!p) return `Proposed: ${finalOf(d.proposed)}, the first release.`;
+  if (d.proposed.major !== p.major) return 'Proposed: a major, because an issue is labelled breaking.';
+  if (d.proposed.minor !== p.minor) return `Proposed: a minor, because ${n === 1 ? 'its issue' : 'one of the issues'} is a feat.`;
+  if (!n) return 'Proposed: a patch, since no merged branch names an issue.';
+  return `Proposed: a patch, because ${n === 1 ? 'its one issue isn’t' : `none of the ${n} issues is`} a feat.`;
+}
+
+// cutHint: the cut dialog's hint, around its bold tag: "Proposed: a patch,
+// because none of the 5 issues is a feat. The tag will be", "v1.4.20-rc.3",
+// ": rc.1 and rc.2 are taken."; tag "": the version typed isn't M.m.p
+export function cutHint(d: Draft, tag: string, taken: string[], final: boolean): [string, string, string] {
+  if (!tag) return [`${proposal(d)} A version is three numbers, like ${finalOf(d.proposed)}.`, '', ''];
+  if (final && taken.length) return [`${proposal(d)} The tag`, tag, ' is cut already: choose another version.'];
+  return [`${proposal(d)} The tag will be`, tag, taken.length ? `: ${list.format(taken)} ${taken.length === 1 ? 'is' : 'are'} taken.` : '.'];
+}
+
+// older: v before w, as SemVer has it: a final after its candidates, equal
+// versions not older
+export function older(v: ReleaseVersion, w: ReleaseVersion): boolean {
+  const rank = (x: ReleaseVersion) => [x.major, x.minor, x.patch, x.rc ? 0 : 1, x.rc];
+  const a = rank(v);
+  const b = rank(w);
+  const i = a.findIndex((x, j) => x !== b[j]);
+  return i >= 0 && a[i]! < b[i]!;
+}
 
 // olderFinals: what env can roll back to: the finals before what it runs
 // (the target ahead, in a split), yanked ones aside, newest first. Running
@@ -195,3 +230,20 @@ export const registryName = (r: string): string => (r.split('/')[0] ?? r).replac
 // repoName: a repository's URL's last part, without .git:
 // git@github.com:EPFL-ENAC/enack8s-app-config.git → enack8s-app-config
 export const repoName = (url: string): string => url.replace(/(\.git)?\/*$/, '').split(/[/:]/).at(-1) ?? '';
+
+// releaseBadge: "Candidate · in stage", "Release · in prod", "Yanked"
+export function releaseBadge(r: ReleaseRow): { text: string; cls: string } {
+  if (r.record?.yanked) return { text: 'Yanked', cls: 'gb-rel-badge-yanked' };
+  const where = r.runsIn.length ? ` · in ${list.format(r.runsIn)}` : '';
+  return r.tag.version.rc ? { text: `Candidate${where}`, cls: 'epfl-badge-tertiary' } : { text: `Release${where}`, cls: 'epfl-badge-dark' };
+}
+
+// the release pages' small words
+export const sha7 = (c: string): string => c.slice(0, 7);
+export const plural = (n: number, w: string): string => `${n} ${w}${n === 1 ? '' : 's'}`;
+export const releasePath = (tag: string): string => `/releases/${encodeURIComponent(tag)}`;
+// an environment mark's classes; dev is the plain outlined one
+export const markClass = (m: EnvMark): string[] => ['gb-envmark', m === 'dev' ? '' : `gb-envmark-${m}`];
+// repoNames: each config repo's target name (enack8s), for the job steps
+// that name the repo
+export const repoNames = (envs: EnvState[]): Record<string, string> => Object.fromEntries(envs.flatMap((e) => e.targets.map((t) => [t.repo, t.name])));
