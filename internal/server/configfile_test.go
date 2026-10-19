@@ -6,13 +6,16 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/guilbep/git-board/internal/config"
 )
 
 type configFile struct {
-	Path   string `json:"path"`
-	Text   string `json:"text"`
-	Exists bool   `json:"exists"`
-	Hash   string `json:"hash"`
+	Path    string `json:"path"`
+	Text    string `json:"text"`
+	Exists  bool   `json:"exists"`
+	Hash    string `json:"hash"`
+	Default string `json:"default"`
 }
 
 type configCheck struct {
@@ -73,6 +76,27 @@ func TestConfigFileEditedFromThePage(t *testing.T) {
 	// someone edited the file since the page read it
 	if code := call(t, "PUT", ts.URL+"/api/config", map[string]string{"text": old, "base": f.Hash}, nil); code != http.StatusConflict {
 		t.Errorf("a stale base: %d, want 409", code)
+	}
+}
+
+// A repository without the file starts from the default: offered, saved
+// like any edit.
+func TestConfigFileStartsFromTheDefault(t *testing.T) {
+	ts, s := newIssueServer(t)
+	s.cfgPath = filepath.Join(t.TempDir(), ".git-board.toml")
+
+	var f configFile
+	call(t, "GET", ts.URL+"/api/config", nil, &f)
+	if f.Exists || f.Default != config.Default {
+		t.Fatalf("GET without a file: exists %v, default %d bytes", f.Exists, len(f.Default))
+	}
+	if code := call(t, "PUT", ts.URL+"/api/config", map[string]string{"text": f.Default, "base": f.Hash}, nil); code != http.StatusOK {
+		t.Fatalf("save: %d", code)
+	}
+	var after configFile
+	call(t, "GET", ts.URL+"/api/config", nil, &after)
+	if !after.Exists || after.Default != "" {
+		t.Errorf("GET with the file: exists %v, default %d bytes", after.Exists, len(after.Default))
 	}
 }
 

@@ -73,7 +73,7 @@ FILTER GRAMMAR (used by ls/view/tui):
 		},
 	}
 	root.Flags().BoolVar(&noOpen, "no-open", false, "don't open the browser")
-	root.AddCommand(newViewCmd(), newNumbersCmd(), newLsCmd(), newSetCmd(), newGetCmd(), newTuiCmd(), newBridgeCmd(), newLintCmd(), newMoveCmd(), newCloseCmd(), newSyncCmd(), newSprintCmd(), newHtmlCmd(), newBranchCmd(), newServeCmd(), newReleaseCmd(), newDeployCmd())
+	root.AddCommand(newInitCmd(), newViewCmd(), newNumbersCmd(), newLsCmd(), newSetCmd(), newGetCmd(), newTuiCmd(), newBridgeCmd(), newLintCmd(), newMoveCmd(), newCloseCmd(), newSyncCmd(), newSprintCmd(), newHtmlCmd(), newBranchCmd(), newServeCmd(), newReleaseCmd(), newDeployCmd())
 	return root
 }
 
