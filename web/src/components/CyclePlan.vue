@@ -20,34 +20,39 @@
     <p class="gb-note">A branch named plan/&lt;issue&gt;-…, with a plan whose front matter says issue: &lt;number&gt;, in the plans directory.</p>
   </template>
 
-  <p class="gb-gate">{{ cycle.gate }}</p>
-  <p v-if="drafted" class="gb-note">{{ drafted }}</p>
-  <p v-if="cycle.note" class="gb-note">{{ cycle.note }}</p>
+  <p class="gb-gate">{{ gate }}</p>
+  <p v-if="drafted || approval" class="gb-note">{{ drafted }}<template v-if="approval"> Approved by {{ approval.by }}, {{ on(approval.at) }}.</template></p>
+  <template v-if="current">
+    <p v-if="cycle.note" class="gb-note">{{ cycle.note }}</p>
 
-  <div class="gb-cycle-actions">
-    <button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" :aria-expanded="revising" :disabled="busy" @click="revising = !revising">Ask the agent to revise</button>
-    <button v-if="can" type="button" class="epfl-btn epfl-btn-primary epfl-btn-sm" :disabled="busy" @click="emit('approve')">Approve the plan</button>
-  </div>
-  <form v-if="revising" class="gb-revise" @submit.prevent="send">
-    <textarea v-model="ask" class="epfl-input" rows="3" aria-label="What to revise" placeholder="What the plan should change" :disabled="busy" />
     <div class="gb-cycle-actions">
-      <button type="submit" class="epfl-btn epfl-btn-primary epfl-btn-sm" :disabled="busy || !ask.trim()">Post the request</button>
-      <span class="gb-note">{{ sends ? 'Posted on the issue and sent to the agent.' : 'Posted on the issue.' }}</span>
+      <button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" :aria-expanded="revising" :disabled="busy" @click="revising = !revising">Ask the agent to revise</button>
+      <button v-if="can" type="button" class="epfl-btn epfl-btn-primary epfl-btn-sm" :disabled="busy" @click="emit('approve')">Approve the plan</button>
     </div>
-  </form>
-  <p class="gb-note">Once it’s approved, step 4 starts: the agent writes the failing test first.</p>
+    <form v-if="revising" class="gb-revise" @submit.prevent="send">
+      <textarea v-model="ask" class="epfl-input" rows="3" aria-label="What to revise" placeholder="What the plan should change" :disabled="busy" />
+      <div class="gb-cycle-actions">
+        <button type="submit" class="epfl-btn epfl-btn-primary epfl-btn-sm" :disabled="busy || !ask.trim()">Post the request</button>
+        <span class="gb-note">{{ sends ? 'Posted on the issue and sent to the agent.' : 'Posted on the issue.' }}</span>
+      </div>
+    </form>
+    <p class="gb-note">Once it’s approved, step 4 starts: the agent writes the failing test first.</p>
+  </template>
 </template>
 
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import type { Cycle } from '@/api/board';
+import { on } from '@/when';
 import MarkdownBody from '@/components/MarkdownBody.vue';
 
-// can: the viewer may approve (the server's actions); sends: the request also briefs the agent
-const props = defineProps<{ cycle: Cycle; busy: boolean; can: boolean; sends?: boolean }>();
+// can: the viewer may approve (the server's actions); sends: the request also briefs the agent;
+// current: step 3 is the issue's step, else it is looked at from the spine and only read
+const props = defineProps<{ cycle: Cycle; gate: string; current: boolean; busy: boolean; can: boolean; sends?: boolean }>();
 const emit = defineEmits<{ approve: []; revise: [body: string] }>();
 
 const plan = computed(() => props.cycle.evidence.plan);
+const approval = computed(() => props.cycle.evidence.plan_approval);
 const pr = computed(() => props.cycle.evidence.plan_pr);
 // the file's first heading is the plan's title; the file name otherwise
 const h1 = /^\s*<h1[^>]*>(.*?)<\/h1>\s*/;

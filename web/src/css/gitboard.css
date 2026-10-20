@@ -363,8 +363,13 @@
 .gb-cycle-view > .gb-cycle-fold { display: none; }
 .gb-cycle-body { display: grid; grid-template-columns: 20rem minmax(0, 1fr); gap: 2.5rem; align-items: start; }
 .gb-spine { list-style: none; margin: 0; padding: 0; }
-.gb-spine li { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; column-gap: .5rem; padding: .625rem 0; border-top: 1px solid var(--border-subtle); font-size: .875rem; }
+.gb-spine li { border-top: 1px solid var(--border-subtle); }
 .gb-spine li:first-child { border-top: 0; }
+/* every row opens its step in the workspace */
+.gb-spine button { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; column-gap: .5rem; width: 100%; padding: .625rem .5rem; border: 0; background: none; color: inherit; font: inherit; font-size: .875rem; text-align: left; cursor: pointer; }
+.gb-spine button:hover .gb-spine-name { text-decoration: underline; text-underline-offset: 2px; }
+.gb-spine button:focus-visible { outline: var(--focus-w) solid var(--primary-hover); outline-offset: -0.125rem; }
+.gb-spine .is-shown button { background: var(--bg-subtle); }
 .gb-spine-n { font-family: var(--font-mono); font-size: .75rem; color: var(--fg-muted); }
 .gb-spine-name { font-weight: 700; }
 .gb-spine-line { grid-column: 2 / -1; color: var(--fg-muted); }
@@ -377,6 +382,7 @@
 .gb-linkbtn { padding: 0; border: 0; background: none; color: var(--fg); font: inherit; font-size: .875rem; font-weight: 700; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
 .gb-ws { display: flex; flex-direction: column; gap: .75rem; min-width: 0; }
 .gb-ws-title { margin: 0; font-size: 1.25rem; line-height: 1.3; }
+.gb-ws-list { display: grid; gap: .25rem; margin: 0; padding-left: 1.25rem; font-size: .875rem; }
 .gb-eyebrow { margin: 0; font-size: .75rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--fg-muted); }
 .gb-gate { margin: 0; padding: .5rem .75rem; border-left: 3px solid var(--gb-done); background: var(--bg-subtle); font-size: .875rem; font-weight: 700; color: var(--gb-done); }
 .gb-clamp { max-height: 18rem; overflow: hidden; -webkit-mask-image: linear-gradient(#000 70%, transparent); mask-image: linear-gradient(#000 70%, transparent); }

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { Cycle, GatePR } from './api/board.ts';
-import { cardFor, progressLine, spine, statusBar, tiles } from './cycle.ts';
+import { cardFor, progressLine, spine, statusBar, tiles, withCriteria } from './cycle.ts';
 import { on } from './when.ts';
 
 const at = (c: Partial<Cycle>): Cycle => ({
@@ -58,6 +58,11 @@ test('the spine, one line of evidence per step', () => {
     [6, 'Review', 'todo', 'Structural: a second human'],
     [7, 'Verify', 'todo', 'Green codes are not proof'],
   ]);
+  // each row's own gate, for its workspace when it is opened
+  assert.deepEqual(rows.map((r) => r.gate), [
+    'No issue, no agent', 'Class written on the issue', 'Structural: plan PR approved first', 'Every bug fix ships its test',
+    'A human commits and opens the PR', 'Structural: a second human', 'Green codes are not proof',
+  ]);
 });
 
 test('the spine with no evidence', () => {
@@ -71,7 +76,21 @@ test('the spine with no evidence', () => {
     ['todo', 'A human who can explain the diff'],
     ['todo', 'Green codes are not proof'],
   ]);
-  assert.equal(spine(at({ step: 3, skipped: [3], evidence: {} }))[2]?.line, 'Skipped, low risk');
+  assert.equal(rows[0]?.gate, 'No issue, no agent');
+  const low = spine(at({ step: 4, risk: 'low', skipped: [3], evidence: { plan_approval: { by: 'erin', at: '2026-10-01T00:00:00Z' } } }))[2];
+  assert.deepEqual([low?.line, low?.gate], ['Skipped, low risk', 'Skipped, low risk']);
+});
+
+test('the criteria, written into the description', () => {
+  assert.equal(withCriteria('', ['a', 'b']), '## Acceptance criteria\n\n- a\n- b');
+  assert.equal(withCriteria('The import fails.\n', ['a']), 'The import fails.\n\n## Acceptance criteria\n\n- a');
+  // under the heading already there: the server reads the first one
+  assert.equal(
+    withCriteria('Intro\n\n**Acceptance criteria:**\n\nTo be written.\n\n## Notes', ['a']),
+    'Intro\n\n**Acceptance criteria:**\n\n- a\n\nTo be written.\n\n## Notes',
+  );
+  assert.equal(withCriteria('### Acceptance criteria', ['a']), '### Acceptance criteria\n\n- a');
+  assert.equal(withCriteria('', ['- a', '', ' 2) b ', '[ ] c', '* [x] d']), '## Acceptance criteria\n\n- a\n- b\n- c\n- d');
 });
 
 test('the spine at verify', () => {
