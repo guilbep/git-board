@@ -31,7 +31,8 @@
             <option v-if="values[name] && !fields[name]?.options?.includes(values[name]!)" :value="values[name]">{{ values[name] }}</option>
             <option v-for="o in fields[name]?.options ?? []" :key="o" :value="o">{{ formatValue(name, o, fields) }}</option>
           </select>
-          <input autocomplete="off" data-1p-ignore data-lpignore="true" data-form-type="other" v-else :id="`new-${name}`" v-model="values[name]" class="epfl-input" :placeholder="isMulti(name) ? 'comma-separated, or @me' : ''" />
+          <input autocomplete="off" data-1p-ignore data-lpignore="true" data-form-type="other" v-else :id="`new-${name}`" v-model="values[name]" class="epfl-input" :placeholder="isMulti(name) ? 'comma-separated, or @me' : ''" :list="fields[name]?.people?.length ? `new-people-${name}` : undefined" />
+          <datalist v-if="fields[name]?.people?.length" :id="`new-people-${name}`"><option v-for="p in fields[name]!.people" :key="p" :value="p" /></datalist>
           <small v-if="from[name]" class="gb-from-view">from the view: {{ name }}:{{ from[name] }}</small>
         </div>
         <div class="gb-field">

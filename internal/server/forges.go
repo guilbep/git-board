@@ -152,10 +152,13 @@ type bridgeTally struct {
 	// Conflicts are linked issues a dry run found changed both here and on
 	// the forge: a send alone would replace the forge's title, state and
 	// comment texts with these (labels merge: only git-bug's changes go).
-	Conflicts int      `json:"conflicts"`
-	Warnings  int      `json:"warnings"`
-	Errors    int      `json:"errors"`
-	Lines     []string `json:"lines"`
+	Conflicts int `json:"conflicts"`
+	// Assignable is how many people the forge says can be assigned,
+	// asked after the run (assignable.go)
+	Assignable int      `json:"assignable"`
+	Warnings   int      `json:"warnings"`
+	Errors     int      `json:"errors"`
+	Lines      []string `json:"lines"`
 
 	// ways are, in a dry run, the ways each linked issue has changes
 	ways map[entity.Id]int
@@ -446,5 +449,6 @@ func (s *apiServer) runForgeSync(job *forgeJob, run func(context.Context, string
 			s.events.publish(event{Kind: "progress", Step: &step})
 		}
 	}
+	s.fetchAssignable(job)
 	finish("done", "")
 }

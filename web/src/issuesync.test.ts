@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { forgeLabel, forgeNumbers, linkable, tallyWords } from './issuesync.ts';
 
 const dir = (o: Partial<Record<'issues' | 'changed' | 'comments' | 'edits' | 'changes', number>> = {}) => ({ issues: 0, changed: 0, comments: 0, edits: 0, changes: 0, ...o });
-const tally = (to = dir(), from = dir(), errors = 0) => ({ to, from, linked: 0, stays_local: 0, conflicts: 0, warnings: 0, errors, lines: [] });
+const tally = (to = dir(), from = dir(), errors = 0) => ({ to, from, linked: 0, stays_local: 0, conflicts: 0, assignable: 0, warnings: 0, errors, lines: [] });
 
 test('tallyWords says what one issue sync did on a forge', () => {
   assert.equal(tallyWords(tally(dir({ comments: 1 })), true), 'would send 1 comment');

@@ -144,6 +144,7 @@
               </dl>
             </div>
             <p v-if="b.tally?.linked" class="gb-hint"><GbIcon name="link" small /> {{ plural(b.tally.linked, 'issue') }} found on {{ b.label }} by their git-bug marker: linked by a Get or a Sync, not created again.</p>
+            <p v-if="b.tally?.assignable" class="gb-hint"><GbIcon name="user" small /> {{ b.tally.assignable }} {{ b.tally.assignable === 1 ? 'person' : 'people' }} can be assigned on {{ b.label }}: the assignee boxes offer them.</p>
             <p v-if="b.tally?.stays_local" class="gb-note"><GbIcon name="local" small /> {{ plural(b.tally.stays_local, 'text') }} stay local: no {{ b.label }} token for their authors.</p>
             <details v-if="b.tally?.lines.length" class="gb-lines">
               <summary>Details ({{ b.tally.lines.length }})</summary>

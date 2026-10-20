@@ -59,8 +59,10 @@
         autocomplete="off" data-1p-ignore data-lpignore="true" data-form-type="other"
         :aria-label="`Add to ${displayName(name)}`"
         :placeholder="typeOf(name, fields) === 'person' ? 'Add, or @me' : 'Add'"
+        :list="people.length ? `cell-people-${name}` : undefined"
         @keydown.enter.prevent="addValue"
       />
+      <datalist v-if="people.length" :id="`cell-people-${name}`"><option v-for="p in people" :key="p" :value="p" /></datalist>
     </div>
 
     <p v-if="error" class="cell-error" role="alert">{{ error }}</p>
@@ -90,6 +92,9 @@ const inherited = computed(() => fieldValues(props.issue.inherited ?? [], props.
 // one value, as the server decides (fields.Single): configured, else not
 // a person and not already several
 const single = computed(() => props.fields[props.name]?.single ?? (typeOf(props.name, props.fields) !== 'person' && values.value.length < 2));
+// a person field's picker: a datalist, never the options (those make
+// board columns)
+const people = computed(() => props.fields[props.name]?.people ?? []);
 const options = computed(() => {
   const opts = props.fields[props.name]?.options ?? [];
   const cur = values.value[0];

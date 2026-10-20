@@ -51,6 +51,7 @@ export interface FieldConfig {
   type?: string; // select, iteration, person, number, date, issue, text (config.TypeOf)
   unit?: string; // a number's: h
   inherits?: string; // a role's project value ([roles]), shown when the issue sets none
+  people?: string[]; // a person field: who to offer, the identities and who the forges can assign (never options)
 }
 
 // ApiError carries the server's status and code: syncing (a sync with
@@ -321,6 +322,7 @@ export interface BridgeTally {
   linked: number; // found on the forge by their git-bug marker
   stays_local: number; // texts no token can post
   conflicts: number; // linked issues changed on both sides: a send alone would replace the forge's titles, states, comment texts
+  assignable: number; // who the forge says can be assigned, asked after the run
   warnings: number;
   errors: number;
   lines: string[];

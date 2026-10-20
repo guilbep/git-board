@@ -226,6 +226,9 @@ type fieldResponse struct {
 	config.Field
 	Current  string `json:"current,omitempty"`
 	Inherits string `json:"inherits,omitempty"` // a role's project value ([roles])
+	// People are who a person field offers to pick (assignable.go), apart
+	// from options: those make board columns, charts and filter order
+	People []string `json:"people,omitempty"`
 }
 
 // labelValues is every field's values on the issues.
@@ -291,6 +294,14 @@ func (s *apiServer) handleFields(w http.ResponseWriter, r *http.Request) {
 		f := res[role]
 		f.Type, f.Single, f.Inherits = config.TypePerson, false, who
 		res[role] = f
+	}
+	if people := s.people(); len(people) > 0 {
+		for name, f := range res {
+			if f.Type == config.TypePerson {
+				f.People = people
+				res[name] = f
+			}
+		}
 	}
 	writeJSON(w, http.StatusOK, res)
 }

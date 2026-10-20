@@ -32,8 +32,10 @@
           autocomplete="off" data-1p-ignore data-lpignore="true" data-form-type="other"
           :aria-label="`Add to ${displayName(f)} on the selected issues`"
           :placeholder="`${displayName(f)}: add, or @me`"
+          :list="fields[f]?.people?.length ? `bulk-people-${f}` : undefined"
           :disabled="bulkBusy"
         />
+        <datalist v-if="fields[f]?.people?.length" :id="`bulk-people-${f}`"><option v-for="p in fields[f]!.people" :key="p" :value="p" /></datalist>
       </form>
       <button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" :disabled="bulkBusy" @click="bulkClose">Close</button>
       <button type="button" class="bulk-clear" :disabled="bulkBusy" @click="selected = new Set()">Clear</button>
