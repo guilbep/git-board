@@ -313,12 +313,12 @@ func (s *apiServer) forgeRun(ctx context.Context, mode string, dryRun bool, name
 func (s *apiServer) runForgeSync(job *forgeJob, run func(context.Context, string, bool, []string) (<-chan core.SyncResult, error), names []string) {
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()
-	defer s.syncing.Store(false)
 
 	finish := func(state, errText string) {
 		s.forgeMu.Lock()
 		now := time.Now()
 		job.State, job.Error, job.Ended = state, errText, &now
+		s.syncing.Store(false) // with the state: who sees it ended may start the next at once
 		s.forgeMu.Unlock()
 		// the pages update: the header's sync link, and the issues a real
 		// run may have changed
