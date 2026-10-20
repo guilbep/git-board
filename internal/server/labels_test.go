@@ -56,8 +56,10 @@ func TestLabelsTab(t *testing.T) {
 		case "label list":
 			return json.Marshal([]ghlabels.Label{{Name: "bug", Color: "d73a4a", Description: "Something isn't working"},
 				{Name: "feat", Color: "a2eeef", Description: "New feature"}, {Name: "wontfix", Color: "ffffff"}})
-		case "api search/issues?per_page=1&q=repo%3Ao%2Fr+label%3A%22wontfix%22":
-			return []byte("2\n"), nil
+		case "api graphql":
+			if slices.Contains(args, "label=wontfix") && slices.Contains(args, "owner=o") {
+				return []byte("2\n"), nil
+			}
 		}
 		return nil, nil
 	}

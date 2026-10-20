@@ -123,7 +123,7 @@ func TestGhCommands(t *testing.T) {
 	want := []string{
 		"label create status:ready --repo o/r --color 00897f",
 		"label create feat --repo o/r --color 0e8a16 --description New feature --force",
-		"api search/issues?per_page=1&q=repo%3Ao%2Fr+label%3A%22good+first+issue%22 --jq .total_count",
+		"api graphql -f query=" + countQuery + " -f owner=o -f name=r -f label=good first issue --jq .data.repository.label | .issues.totalCount + .pullRequests.totalCount",
 	}
 	if !slices.Equal(calls, want) {
 		t.Errorf("gh calls =\n%s\nwant\n%s", strings.Join(calls, "\n"), strings.Join(want, "\n"))

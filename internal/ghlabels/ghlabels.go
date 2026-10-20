@@ -13,7 +13,6 @@ import (
 	"fmt"
 	"io/fs"
 	"maps"
-	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -199,11 +198,18 @@ func Stray(cfg *config.Config, desired, existing []Label) []Label {
 	return res
 }
 
-// Count is how many of repo's issues and pull requests carry name, as
-// GitHub's search counts them.
+// countQuery asks GitHub how many issues and pull requests carry a label.
+const countQuery = `query($owner: String!, $name: String!, $label: String!) {
+  repository(owner: $owner, name: $name) {
+    label(name: $label) { issues { totalCount } pullRequests { totalCount } }
+  }
+}`
+
+// Count is how many of repo's issues and pull requests carry name.
 func Count(repo, name string) (int, error) {
-	q := url.QueryEscape(fmt.Sprintf("repo:%s label:%q", repo, name))
-	out, err := Gh("api", "search/issues?per_page=1&q="+q, "--jq", ".total_count")
+	owner, repoName, _ := strings.Cut(repo, "/")
+	out, err := Gh("api", "graphql", "-f", "query="+countQuery, "-f", "owner="+owner, "-f", "name="+repoName, "-f", "label="+name,
+		"--jq", ".data.repository.label | .issues.totalCount + .pullRequests.totalCount")
 	if err != nil {
 		return 0, err
 	}
