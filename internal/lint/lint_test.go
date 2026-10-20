@@ -263,10 +263,11 @@ func TestKindChecks(t *testing.T) {
 		open("f", "[FEAT/DATA] Import", "feat"),             // not a kind in the title
 		open("g", "[BUG] Crash", "kind:bug"),                // the kind field agrees
 		{ID: "h", Title: "[BUG] Closed", Status: "closed"},  // closed: not looked at
+		open("i", "Export", "kind:bug", "kind:feat"),        // two kinds, as fields
 	}
 	findings := lint.Run(issues, cfg)
 	got := countChecks(findings)
-	for check, n := range map[string]int{lint.CheckKindTitle: 1, lint.CheckTwoKinds: 1, lint.CheckNoKind: 1} {
+	for check, n := range map[string]int{lint.CheckKindTitle: 1, lint.CheckTwoKinds: 2, lint.CheckNoKind: 1} {
 		if got[check] != n {
 			t.Errorf("%s: %d findings, want %d (all: %+v)", check, got[check], n, findings)
 		}
@@ -286,5 +287,13 @@ func TestKindChecks(t *testing.T) {
 
 	if got := countChecks(lint.Run(issues, &config.Config{})); got[lint.CheckNoKind]+got[lint.CheckKindTitle]+got[lint.CheckTwoKinds] != 0 {
 		t.Errorf("no [branches] kinds, yet kind findings: %v", got)
+	}
+
+	// the kind a declared single field: told once, by the kind checks; no
+	// hold is not a missing value
+	cfg.Fields = map[string]config.Field{"kind": {Single: true, Options: []string{"bug", "feat"}}, "hold": {Single: true, Options: []string{"blocked", "paused"}}}
+	got = countChecks(lint.Run(issues, cfg))
+	if got[lint.CheckTwoKinds] != 2 || got[lint.CheckDoubleSingle]+got[lint.CheckMissingRequired] != 0 {
+		t.Errorf("kind field: %v, want 2 two-kinds and no double-single or missing-value", got)
 	}
 }

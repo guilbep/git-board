@@ -31,18 +31,18 @@ func (b *Backend) History(ids map[string]bool) ([]insights.Issue, error) {
 		if err != nil {
 			return nil, fmt.Errorf("resolving %s: %w", id, err)
 		}
-		res = append(res, historyOf(bug))
+		res = append(res, b.historyOf(bug))
 	}
 	return res, nil
 }
 
-func historyOf(bug *cache.BugCache) insights.Issue {
+func (b *Backend) historyOf(bug *cache.BugCache) insights.Issue {
 	snap := bug.Snapshot()
 	is := insights.Issue{ID: bug.Id().String(), Created: snap.CreateTime}
 	for _, op := range snap.Operations {
 		switch o := op.(type) {
 		case *bugent.LabelChangeOperation:
-			is.Changes = append(is.Changes, insights.Change{At: o.Time(), Added: labelStrings(o.Added), Removed: labelStrings(o.Removed)})
+			is.Changes = append(is.Changes, insights.Change{At: o.Time(), Added: b.shown(labelStrings(o.Added)), Removed: b.shown(labelStrings(o.Removed))})
 		case *bugent.SetStatusOperation:
 			status := "open"
 			if o.Status == common.ClosedStatus {

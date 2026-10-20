@@ -142,7 +142,9 @@ func (b *Backend) thread(idPrefix string, c *Counter, projects []syncProject) (T
 		th.Participants = append(th.Participants, person(p))
 	}
 	for _, item := range snap.Timeline {
-		th.Events = append(th.Events, event(snap, item, on))
+		e := event(snap, item, on)
+		e.Added, e.Removed = b.shown(e.Added), b.shown(e.Removed)
+		th.Events = append(th.Events, e)
 	}
 	return th, nil
 }
@@ -534,7 +536,7 @@ func (b *Backend) NewIssue(title, body string, labels []string) (string, error) 
 	if err != nil {
 		return "", fmt.Errorf("creating the issue: %w", err)
 	}
-	if len(labels) > 0 {
+	if labels, _ = b.stored(labels, nil, nil); len(labels) > 0 {
 		if _, _, err := bug.ChangeLabels(labels, nil); err != nil {
 			return "", fmt.Errorf("labelling the issue: %w", err)
 		}

@@ -43,10 +43,10 @@ var CheckOrder = []string{CheckDoubleSingle, CheckUnknownValue, CheckMissingRequ
 // which is a config-inventory question ("does any issue use this option"),
 // not a per-issue one.
 type Finding struct {
-	Check   string
-	IssueID string
-	Title   string
-	Message string
+	Check   string `json:"check"`
+	IssueID string `json:"issue_id"`
+	Title   string `json:"title"`
+	Message string `json:"message"`
 }
 
 // Run checks issues against cfg. Checks 1-4 (double singles, unknown
@@ -91,9 +91,12 @@ func sortedSingleFields(cfg *config.Config) []string {
 // still produce it), and none at all (the PRD calls out "prio"
 // specifically; every configured single field generalizes for free here,
 // and the PRD's own drift numbers show empty status alongside empty
-// priority, not just one field).
+// priority, not just one field). With [branches] kinds the kind is
+// checkKinds', in either form; no hold is the usual, not on hold.
 func checkSingleCardinality(issues []gitbugio.Issue, cfg *config.Config) []Finding {
-	fieldNames := sortedSingleFields(cfg)
+	fieldNames := slices.DeleteFunc(sortedSingleFields(cfg), func(name string) bool {
+		return name == "kind" && len(cfg.Branches.Kinds) > 0
+	})
 	var findings []Finding
 	for _, issue := range issues {
 		for _, name := range fieldNames {
@@ -105,7 +108,7 @@ func checkSingleCardinality(issues []gitbugio.Issue, cfg *config.Config) []Findi
 				}
 			}
 			switch {
-			case len(matches) == 0:
+			case len(matches) == 0 && name != "hold":
 				findings = append(findings, Finding{
 					Check: CheckMissingRequired, IssueID: issue.ID, Title: issue.Title,
 					Message: fmt.Sprintf("no %s value", name),
@@ -203,11 +206,11 @@ func checkDeadOptions(issues []gitbugio.Issue, cfg *config.Config) []Finding {
 
 var titleKind = regexp.MustCompile(`^\s*\[([^\]]+)\]`) // [BUG](Equipment)
 
-// checkKinds reads the kinds [branches] kinds declares as flat labels (a
-// kind: field is a field, which the checks above already see): two kinds
-// on one issue; a title prefix naming another kind than the label, which
-// wins; and the issues with no kind, as one count, a missing kind being
-// the issue template's to fix rather than each issue's.
+// checkKinds reads the kinds with [branches] kinds, either form (kind:bug,
+// or bug, which the backend reads as kind:bug): two kinds on one issue; a
+// title prefix naming another kind than the label, which wins; and the
+// issues with no kind, as one count, a missing kind being the issue
+// template's to fix rather than each issue's.
 func checkKinds(issues []gitbugio.Issue, cfg *config.Config) []Finding {
 	kinds := cfg.Branches.Kinds
 	if len(kinds) == 0 {
@@ -216,16 +219,16 @@ func checkKinds(issues []gitbugio.Issue, cfg *config.Config) []Finding {
 	var findings []Finding
 	missing := 0
 	for _, issue := range issues {
-		var flat []string
+		var has []string
 		for _, l := range issue.Labels {
-			if _, ok := kinds[l]; ok {
-				flat = append(flat, l)
+			k, field := strings.CutPrefix(l, "kind:")
+			if _, flat := kinds[l]; field || flat {
+				has = append(has, k)
 			}
 		}
-		if len(flat) > 1 {
-			sort.Strings(flat)
+		if has = slices.Compact(slices.Sorted(slices.Values(has))); len(has) > 1 {
 			findings = append(findings, Finding{Check: CheckTwoKinds, IssueID: issue.ID, Title: issue.Title,
-				Message: fmt.Sprintf("kinds %s: keep one", strings.Join(flat, ", "))})
+				Message: fmt.Sprintf("kinds %s: keep one", strings.Join(has, ", "))})
 		}
 		kind := cfg.Branches.Kind(issue.Labels)
 		if kind == "" {

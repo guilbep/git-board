@@ -6,19 +6,20 @@ The file is optional. Without it, every `ns:value` label is a field and git-boar
 
 It lives at the root of the repository. Edit it in **Settings → Project file**: it is checked as you type and applies as soon as you save. Editing it by hand works too; restart `git board` (or `git board serve`) after.
 
-A repository without one starts from the default: **Start from the default** in Settings → Project file, or `git board init` in a terminal (it never overwrites a file). The default declares a status workflow (`backlog`, `ready`, `in-progress`, `in-review`, `ready-for-validation`, `validated`), priorities `p0` to `p3`, kinds (`kind:feat`, `kind:bug`…) that name branches (`fix/12-login-fails`), estimates in hours, sprints of 14 days, and four views (all, backlog, board, mine), each explained in a comment.
+A repository without one starts from the default: **Start from the default** in Settings → Project file, or `git board init` in a terminal (it never overwrites a file). The default declares a status workflow (`backlog`, `ready`, `in-progress`, `in-review`, `ready-for-validation`, `validated`), priorities `p0` to `p3`, an on-hold field beside the status (`hold:blocked`, `hold:paused`), kinds that are GitHub's plain labels (`bug`, `feat`…) and name branches (`fix/12-login-fails`), estimates in hours, sprints of 14 days, and four views (all, backlog, board, mine), each explained in a comment.
 
 | Table | What it sets |
 | --- | --- |
 | `[fields.<name>]` | a field's type, values, order, single or multiple: together, the project's ontology |
 | `[fields.<name>.colors]` | the color of each value |
+| `[fields.<name>.descriptions]` | what each value means, as its GitHub label says it |
 | `[views.<name>]` | a saved view: layout, filter, grouping, sort |
 | `[sprints]`, `[[sprints.list]]` | sprint length and dates, for `sprint:@current` |
 | `[github-project]` | the GitHub Project to sync fields with |
 | `[uploads]` | where attached files go |
 | `[branches]` | the branch an issue suggests: its base and its name |
 | `[cycle]`, `[cycle.signoffs]` | the development cycle: which statuses are which stage, where plans live, which files are tests, who holds each gate |
-| `[repos]` | the GitHub repositories `git board lint --create-labels` writes to |
+| `[repos]` | the GitHub repositories whose labels Settings › Labels and `git board lint --create-labels` keep |
 
 ## Fields
 
@@ -77,6 +78,8 @@ type = "issue"
 
 An issue field names the other issue by its forge number, `#12`, or by its git-bug id, at least its first 7 characters.
 
+On hold is a field beside the status, never a status: the default's `hold` (`blocked`, `paused`) leaves a blocked issue at its place in the workflow. An issue without one isn't missing a value.
+
 ## Colors
 
 Every field value already has a color, picked from words in it: done, validated or closed are green; review or qa purple; validation pink; in-progress, doing or wip blue; ready or feat teal; waiting, comite or p2 amber; test, p1 or high orange; blocked, bug, fix or p0 red; backlog, todo, p3 or low grey. Other values take blue, purple, teal and pink in turn. Numbers and assignees stay plain.
@@ -90,7 +93,16 @@ Pick a color yourself for any value:
 validated = "green"
 ```
 
-The colors are grey, blue, purple, amber (or yellow), orange, green, red, teal and pink. Another name stops the file from loading, and the editor says which line. Quote a value that has spaces or other punctuation than `-` and `_`.
+The colors are grey, blue, purple, amber (or yellow), orange, green, red, teal and pink, or a hex `"#d73a4a"`, as a GitHub label has it. A hex color paints the value's dot; its text stays the page's. Another name stops the file from loading, and the editor says which line. Quote a value that has spaces or other punctuation than `-` and `_`.
+
+A value's description is what its label says on GitHub, 100 characters at most (GitHub's limit):
+
+```toml
+[fields.kind.descriptions]
+bug = "Something isn't working"
+```
+
+Settings › Labels shows each label's color and description beside GitHub's, and writes GitHub's into these tables (see Repos).
 
 ## Views
 
@@ -188,8 +200,8 @@ One syntax everywhere: a view's `filter`, the board's **Filter** box, ⌘K, and 
 | `author:guilbep`, `author:@me` | who opened the issue |
 | `involves:guilbep`, `involves:@me` | issues someone is in: the author, a person field (assignee, reviewer…), a comment, an @mention |
 | `follows:@me` | what your inbox follows: `involves:@me`, the issues you followed and the views you follow, without those you unfollowed |
-| `label:bug` | a plain label, or a full one: `label:status:ready` |
-| `no:assignee` | no value for that field; `no:label`: no plain label |
+| `label:bug` | a plain label, or a full one: `label:status:ready`; `label:bug` also finds the kind `bug` when the kinds are plain labels (see Branches) |
+| `no:assignee` | no value for that field; `no:label`: no plain label (a plain kind is the kind field, not one) |
 | `#2528` | the issue with that number on a forge |
 | `travel`, `"car sharing"` | words in the title, the description or a comment; a number (`2528`), or the first 7 characters or more of a git-bug id, also finds that issue |
 
@@ -286,7 +298,7 @@ kinds = { bug = "fix", feat = "feat", perf = "perf", task = "chore" }
 | --- | --- | --- |
 | `base` | the remote's default branch, else `main`, `master` or `trunk` | The branch a new branch starts from (`origin/<base>`, or `<base>` without a remote), and the one "in dev" and ahead/behind compare with. |
 | `name` | `"{number}-{slug}"` (GitHub's) | The branch's name. `{number}`: the issue's project number with its prefix, in lower case (`vm-62`), once the project numbers its issues (see Numbers), else its number on its first forge, else its git-bug id's first 7 characters. `{kind}`: its kind, through `kinds`; without one, `{kind}/` is dropped. `{slug}`: its title in lower-case words, without a leading `[BUG](Scope)` or a trailing `(#1234)`, cut at about 50 characters. |
-| `kinds` | none | The project's kinds: an issue's kind (its `kind:` field, or a plain label listed here) to the `{kind}` of its branch. `bridge pull` and `sync` fill a missing kind from the Project's Category (`FEAT` → `feat`); `git board lint` reports an issue with two kinds, a title whose `[BUG]` names another kind than its label (the label wins), and how many have none. |
+| `kinds` | none | The project's kinds, each to the `{kind}` of its branch. They are the `kind` field (a column, a group, a filter, one per issue) in either of two forms. Without `options` in `[fields.kind]`, the default, a kind is GitHub's plain label (`bug`), shown and filtered as `kind:bug`, in `kinds` order; `[fields.kind.colors]` and `descriptions` still apply. With `options` in `[fields.kind]`, the kinds are `kind:bug` labels like any field's. `bridge pull` and `sync` fill a missing kind from the Project's Category (`FEAT` → `feat`); `git board lint` reports an issue with two kinds, a title whose `[BUG]` names another kind than its label (the label wins), and how many have none. |
 
 `[BUG](Equipment) Other equipment shows the wrong example (#2518)`, labeled `bug`, gives `fix/2518-other-equipment-shows-the-wrong-example`. What git doesn't take in a branch name becomes `-`.
 
@@ -434,4 +446,12 @@ A deploy edits the overlay's `kustomization.yaml` and nothing else (comments, ke
 list = ["EPFL-ENAC/co2-calculator"]
 ```
 
-The GitHub repositories where `git board lint --create-labels` creates the labels the fields imply. Nothing else reads it.
+The GitHub repositories whose labels the project keeps; without `[repos]`, origin's when it is on GitHub. They are reached through the `gh` CLI, logged in as you.
+
+**Settings › Labels** lists each label the project defines (every field's `options`, the sprints, the kinds) with its color, description and open issues, and its state on each repository: *same*, *color differs*, *description differs* or *missing*.
+
+- **Adopt** writes GitHub's color and description of a label into `[fields.<name>.colors]` and `[fields.<name>.descriptions]`, and opens the Project file tab to review and save. An organization's labels keep their colors this way.
+- **Send to GitHub** first lists, per repository, each label it creates and each change, then creates the missing labels and updates those whose color or description the file sets (`gh label create … --force`). A label outside the project's is never touched, and one the file gives no color or description of its own keeps GitHub's.
+- **Lint** shows `git board lint`'s findings, then the GitHub labels outside the project's (a `bug` beside `kind:bug`, GitHub's old defaults) with their issues. **Delete** removes one from its repository, after a confirmation that says how many issues lose it.
+
+`git board lint --create-labels` prints the same plan, and `--apply` carries it out.

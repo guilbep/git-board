@@ -2,7 +2,9 @@ package config
 
 import (
 	"fmt"
+	"maps"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 )
@@ -148,4 +150,71 @@ func unquote(v string) string {
 		return strings.NewReplacer(`\\`, `\`, `\"`, `"`, `\n`, "\n", `\t`, "\t").Replace(v[1 : len(v)-1])
 	}
 	return v
+}
+
+// SetFieldTable is text with the [fields.<field>.<sub>] table holding
+// values, one `value = "x"` line each, sorted: the table rewritten in place,
+// else added after [fields.<field>], else at the end; none when values is
+// empty. An inline `sub = {…}` in [fields.<field>] goes, values holding
+// what it held. Every other line of the file is kept, comments too.
+func SetFieldTable(text, field, sub string, values map[string]string) string {
+	lines := strings.Split(text, "\n")
+	if start, end := tableSpan(lines, "[fields."+field+"]"); start >= 0 {
+		for i := end - 1; i > start; i-- {
+			if m := keyLine.FindStringSubmatch(lines[i]); m != nil && m[2] == sub {
+				lines = append(lines[:i], lines[i+1:]...)
+			}
+		}
+	}
+	var block []string
+	if len(values) > 0 {
+		block = append(block, "[fields."+field+"."+sub+"]")
+		for _, k := range slices.Sorted(maps.Keys(values)) {
+			key := k
+			if !viewName.MatchString(k) { // a bare key is letters, digits, - and _
+				key = tomlString(k)
+			}
+			block = append(block, key+" = "+tomlString(values[k]))
+		}
+	}
+	if start, end := tableSpan(lines, "[fields."+field+"."+sub+"]"); start >= 0 {
+		if len(block) == 0 && start > 0 && strings.TrimSpace(lines[start-1]) == "" {
+			start-- // its blank line goes with it
+		}
+		return strings.Join(slices.Concat(lines[:start], block, lines[end:]), "\n")
+	}
+	if len(block) == 0 {
+		return strings.Join(lines, "\n")
+	}
+	if _, end := tableSpan(lines, "[fields."+field+"]"); end >= 0 {
+		return strings.Join(slices.Concat(lines[:end], []string{""}, block, lines[end:]), "\n")
+	}
+	if base := strings.TrimRight(strings.Join(lines, "\n"), "\n"); base != "" {
+		return base + "\n\n" + strings.Join(block, "\n") + "\n"
+	}
+	return strings.Join(block, "\n") + "\n"
+}
+
+// tableSpan is where the table under header is in lines: its header, and
+// the line after its last key (the blank lines and comments before the next
+// table are the next table's); -1, -1 when there is none.
+func tableSpan(lines []string, header string) (start, end int) {
+	start = slices.IndexFunc(lines, func(l string) bool { return strings.TrimSpace(l) == header })
+	if start < 0 {
+		return -1, -1
+	}
+	end = len(lines)
+	for i := start + 1; i < len(lines); i++ {
+		if strings.HasPrefix(strings.TrimSpace(lines[i]), "[") {
+			end = i
+			break
+		}
+	}
+	for end > start+1 {
+		if l := strings.TrimSpace(lines[end-1]); l != "" && !strings.HasPrefix(l, "#") {
+			break
+		}
+		end--
+	}
+	return start, end
 }

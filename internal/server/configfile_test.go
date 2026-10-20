@@ -102,6 +102,38 @@ func TestConfigFileStartsFromTheDefault(t *testing.T) {
 	}
 }
 
+// A save switches the kind form without a restart: flat kinds store bug,
+// [fields.kind] options store kind:bug.
+func TestSaveSwitchesTheKindForm(t *testing.T) {
+	t.Parallel()
+	ts, s := newIssueServer(t)
+	s.cfgPath = filepath.Join(t.TempDir(), ".git-board.toml")
+	storedAfter := func(text string) string {
+		t.Helper()
+		var f configFile
+		call(t, "GET", ts.URL+"/api/config", nil, &f)
+		if code := call(t, "PUT", ts.URL+"/api/config", map[string]string{"text": text, "base": f.Hash}, nil); code != http.StatusOK {
+			t.Fatalf("save: %d", code)
+		}
+		id, err := s.b.NewIssue("x", "", []string{"kind:bug"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		bug, err := s.b.TestCache().Bugs().ResolvePrefix(id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return bug.Snapshot().Labels[0].String()
+	}
+	flat := "[branches]\nkinds = { bug = \"fix\" }\n"
+	if got := storedAfter(flat); got != "bug" {
+		t.Errorf("flat form stored %q, want bug", got)
+	}
+	if got := storedAfter("[fields.kind]\noptions = [\"bug\"]\n\n" + flat); got != "kind:bug" {
+		t.Errorf("kind:* form stored %q, want kind:bug", got)
+	}
+}
+
 func TestConfigDocsComeInSections(t *testing.T) {
 	t.Parallel()
 	ts, _ := newIssueServer(t)

@@ -143,6 +143,7 @@ func (s *apiServer) handleConfigSave(w http.ResponseWriter, r *http.Request) {
 	}
 	s.cfgMu.Lock()
 	s.cfg = cfg
+	s.b.SetFlatKinds(cfg) // the kind form may have changed
 	s.cfgMu.Unlock()
 	writeJSON(w, http.StatusOK, res)
 }
@@ -228,6 +229,7 @@ func (s *apiServer) handleSaveView(w http.ResponseWriter, r *http.Request) {
 	}
 	s.cfgMu.Lock()
 	s.cfg = cfg
+	s.b.SetFlatKinds(cfg) // the kind form may have changed
 	s.cfgMu.Unlock()
 	writeJSON(w, http.StatusOK, cfg.Views)
 }

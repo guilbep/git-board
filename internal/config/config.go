@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -15,6 +16,7 @@ import (
 	"strings"
 	"time"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/BurntSushi/toml"
 	"golang.org/x/text/unicode/norm"
@@ -29,13 +31,19 @@ type Field struct {
 	// slug of the Project's name isn't the value: comite = "Comité
 	// Spécialisé".
 	Project map[string]string `toml:"project" json:"project,omitempty"`
-	// Colors picks a value's color from Palette: "in review" = "purple".
-	// Values without one get a default (Config.Color).
+	// Colors picks a value's color from Palette, or a #rrggbb: "in review"
+	// = "purple". Values without one get a default (Config.Color).
 	Colors map[string]string `toml:"colors" json:"colors,omitempty"`
+	// Descriptions say what a value means, as its GitHub label's
+	// description: 100 characters at most, GitHub's limit.
+	Descriptions map[string]string `toml:"descriptions" json:"descriptions,omitempty"`
 	// Type is what the values are (types.go); empty: guessed (TypeOf).
 	Type string `toml:"type" json:"type,omitempty"`
 	// Unit follows a number field's values: "h" for hours.
 	Unit string `toml:"unit" json:"unit,omitempty"`
+	// Flat: the kind field of plain labels, [branches] kinds (bug, not
+	// kind:bug); parse sets it.
+	Flat bool `toml:"-" json:"-"`
 }
 
 // KnownValue reports whether value is one of Options — or true if Options is
@@ -177,6 +185,11 @@ func Path() string {
 	if err != nil {
 		return FileName
 	}
+	return PathIn(dir)
+}
+
+// PathIn is Path from dir rather than the current directory.
+func PathIn(dir string) string {
 	for {
 		p := filepath.Join(dir, FileName)
 		if _, err := os.Stat(p); err == nil {
@@ -232,6 +245,18 @@ func parse(data []byte) (*Config, toml.MetaData, error) {
 	if err := checkRelease(r.Release); err != nil {
 		return nil, md, err
 	}
+	if err := checkDescriptions(r.Fields); err != nil {
+		return nil, md, err
+	}
+	// the kinds are plain labels unless [fields.kind] has options of its own
+	if kinds := kindsInOrder(md, r.Branches.Kinds); len(kinds) > 0 && len(r.Fields["kind"].Options) == 0 {
+		if r.Fields == nil {
+			r.Fields = map[string]Field{}
+		}
+		f := r.Fields["kind"]
+		f.Single, f.Options, f.Flat = true, kinds, true
+		r.Fields["kind"] = f
+	}
 	return &Config{
 		Repos:         r.Repos.List,
 		Fields:        r.Fields,
@@ -244,6 +269,50 @@ func parse(data []byte) (*Config, toml.MetaData, error) {
 		Cycle:         r.Cycle,
 		Release:       r.Release,
 	}, md, nil
+}
+
+// kindsInOrder are the [branches] kinds as the file lists them.
+func kindsInOrder(md toml.MetaData, kinds map[string]string) []string {
+	var res []string
+	for _, k := range md.Keys() {
+		if len(k) == 3 && k[0] == "branches" && k[1] == "kinds" {
+			res = append(res, k[2])
+		}
+	}
+	if len(res) != len(kinds) { // ponytail: never seen; the sorted kinds then
+		res = slices.Sorted(maps.Keys(kinds))
+	}
+	return res
+}
+
+// checkDescriptions keeps each value's description to GitHub's 100
+// characters, or says which is longer.
+func checkDescriptions(fields map[string]Field) error {
+	for name, f := range fields {
+		for v, d := range f.Descriptions {
+			if n := utf8.RuneCountInString(d); n > 100 {
+				return fmt.Errorf("fields.%s.descriptions: %q's is %d characters, GitHub takes 100 at most", name, v, n)
+			}
+		}
+	}
+	return nil
+}
+
+// FlatKinds tells the kinds are plain labels, [branches] kinds without
+// [fields.kind] options: bug, not kind:bug. They are the kind field all the
+// same.
+func (c *Config) FlatKinds() bool {
+	f, ok := c.Fields["kind"]
+	return f.Flat || (!ok && len(c.Branches.Kinds) > 0)
+}
+
+// Label is the label a field's value is stored as: bug for a flat kind,
+// else field:value.
+func (c *Config) Label(field, value string) string {
+	if _, ok := c.Branches.Kinds[value]; ok && field == "kind" && c.FlatKinds() {
+		return value
+	}
+	return field + ":" + value
 }
 
 // SetGithubProject upserts the [github-project] table in the

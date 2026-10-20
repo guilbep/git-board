@@ -102,8 +102,10 @@ func (s *apiServer) handleEvents(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// notWrites are the POSTs that change nothing.
-var notWrites = map[string]bool{"/api/markdown": true, "/api/config/check": true, "/api/uploads": true, "/api/worktrees/preview": true}
+// notWrites are the POSTs that change nothing here (the labels' change
+// GitHub's labels, not the board).
+var notWrites = map[string]bool{"/api/markdown": true, "/api/config/check": true, "/api/uploads": true, "/api/worktrees/preview": true,
+	"/api/labels/send": true, "/api/labels/adopt": true, "/api/labels/delete": true}
 
 // withEvents publishes an event for every write that succeeds.
 func (s *apiServer) withEvents(next http.Handler) http.Handler {

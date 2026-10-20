@@ -13,6 +13,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/git-bug/git-bug/cache"
@@ -23,6 +24,8 @@ import (
 	"github.com/git-bug/git-bug/query"
 	"github.com/git-bug/git-bug/repository"
 	git "github.com/go-git/go-git/v5"
+
+	"github.com/guilbep/git-board/internal/config"
 )
 
 // gitBugNamespace matches git-bug's own CLI (commands/execenv/env.go).
@@ -138,6 +141,8 @@ type Backend struct {
 	repo repository.Repo
 	c    *cache.RepoCache
 	dir  string // the git directory, for what only git does; "" from NewForRepo
+	// flat are the kinds stored as plain labels, by label (SetFlatKinds)
+	flat atomic.Pointer[map[string]bool]
 
 	// the code's commits, read with go-git itself (codeRepo, code.go)
 	codeOnce sync.Once
@@ -160,7 +165,12 @@ func Open(path string) (*Backend, error) {
 	if err != nil {
 		return nil, fmt.Errorf("building git-bug cache: %w", err)
 	}
-	return &Backend{repo: repo, c: c, dir: gitDir}, nil
+	b := &Backend{repo: repo, c: c, dir: gitDir}
+	// the kind form; a config that doesn't parse is the command's to report
+	if cfg, err := config.Load(config.PathIn(path)); err == nil {
+		b.SetFlatKinds(cfg)
+	}
+	return b, nil
 }
 
 // OpenCwd is Open for the current working directory.
@@ -254,13 +264,14 @@ func (b *Backend) Labels() []string {
 	for _, l := range b.c.Bugs().ValidLabels() {
 		res = append(res, l.String())
 	}
-	return res
+	return b.shown(res)
 }
 
 // issueFrom is excerptToIssue with who opened it, for author:, and its
 // project number when c, the counter, numbers the project's issues.
 func (b *Backend) issueFrom(id string, e *cache.BugExcerpt, c *Counter) Issue {
 	issue := excerptToIssue(id, e)
+	issue.Labels = b.shown(issue.Labels)
 	if c != nil {
 		issue.Counted = true
 		if n := c.NumberOf(id, issue.Forges); n > 0 {
@@ -331,13 +342,15 @@ func (b *Backend) GetLabels(idPrefix string) ([]string, error) {
 // commands make (bug.ChangeLabels then Commit). Returns the resulting label
 // set. Callers must pre-filter added/removed against the current labels —
 // git-bug returns an error if a call would add an already-set label or
-// remove a label that isn't set.
+// remove a label that isn't set. A flat kind is written as git-bug keeps it
+// (stored), and read back as kind:bug.
 func (b *Backend) ApplyLabelChange(idPrefix string, added, removed []string) ([]string, error) {
 	bug, err := b.c.Bugs().ResolvePrefix(idPrefix)
 	if err != nil {
 		return nil, fmt.Errorf("resolving %s: %w", idPrefix, err)
 	}
 
+	added, removed = b.stored(added, removed, labelStrings(bug.Snapshot().Labels))
 	if len(added) > 0 || len(removed) > 0 {
 		if _, _, err := bug.ChangeLabels(added, removed); err != nil {
 			return nil, fmt.Errorf("changing labels on %s: %w", idPrefix, err)
@@ -347,11 +360,7 @@ func (b *Backend) ApplyLabelChange(idPrefix string, added, removed []string) ([]
 		}
 	}
 
-	labels := make([]string, len(bug.Snapshot().Labels))
-	for i, l := range bug.Snapshot().Labels {
-		labels[i] = l.String()
-	}
-	return labels, nil
+	return b.shown(labelStrings(bug.Snapshot().Labels)), nil
 }
 
 // ProjectBases returns what a GitHub Project and git-board last agreed on for

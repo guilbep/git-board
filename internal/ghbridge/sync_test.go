@@ -106,6 +106,12 @@ func TestSyncCategoryFillsAMissingKind(t *testing.T) {
 	if got := p.Changes[0].Added; !slices.Contains(got, "feat") || slices.Contains(got, "FEAT") {
 		t.Errorf("added = %v, want feat and no FEAT", got)
 	}
+	// with [fields.kind] options the kinds are kind:* labels
+	cfg.Fields["kind"] = config.Field{Single: true, Options: []string{"bug", "feat"}}
+	p = ghbridge.BuildSyncPlan([]ghbridge.Item{it}, oneBug(), nil, syncMeta(), cfg)
+	if got := p.Changes[0].Added; !slices.Contains(got, "kind:feat") || slices.Contains(got, "feat") {
+		t.Errorf("kind:* form: added = %v, want kind:feat", got)
+	}
 }
 
 func TestSyncLocalChangeGoesToProject(t *testing.T) {
