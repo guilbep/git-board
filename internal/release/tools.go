@@ -132,11 +132,12 @@ func (execTools) PackageChart(ctx context.Context, path, version, dir string) (s
 }
 
 func (execTools) PushChart(ctx context.Context, file, registry string) (string, error) {
-	out, err := run(ctx, "helm", "push", file, registry)
+	// helm push says what it pushed on stderr
+	out, err := exec.CommandContext(ctx, "helm", "push", file, registry).CombinedOutput()
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("helm push %s %s: %w: %s", file, registry, err, strings.TrimSpace(string(out)))
 	}
-	for _, l := range strings.Split(out, "\n") {
+	for _, l := range strings.Split(string(out), "\n") {
 		if d, ok := strings.CutPrefix(strings.TrimSpace(l), "Digest:"); ok {
 			return strings.TrimSpace(d), nil
 		}

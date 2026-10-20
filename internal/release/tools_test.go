@@ -47,7 +47,7 @@ func TestExecBuildReadsMetadata(t *testing.T) {
 }
 
 func TestExecPushChartDigest(t *testing.T) {
-	fakeBin(t, "helm", `printf 'Pushed: reg/chart:1.0.0\nDigest: sha256:def\n'`)
+	fakeBin(t, "helm", `printf 'Pushed: reg/chart:1.0.0\nDigest: sha256:def\n' >&2`) // as helm 4 does
 	d, err := release.Exec().PushChart(context.Background(), "chart-1.0.0.tgz", "oci://reg")
 	if err != nil || d != "sha256:def" {
 		t.Fatalf("got %q %v", d, err)
