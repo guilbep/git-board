@@ -84,7 +84,10 @@
           <li>
             <span class="gb-plan-body">Push the tag <span class="gb-mono">{{ tag || '…' }}</span> on <span class="gb-mono">{{ sha7(draft.from) }}</span> to {{ remote }}<small v-if="next">If someone took that name meanwhile, git-board offers {{ next }}.</small></span>
           </li>
-          <li>
+          <li v-if="binaries.length">
+            <span class="gb-plan-body">Build the archives in a clean checkout of the tag and publish them as a GitHub release<small>{{ binaries.join(', ') }}</small></span>
+          </li>
+          <li v-if="!binaries.length">
             <span class="gb-plan-body">Name the images {{ tag || '…' }}<template v-if="registries.length"> in {{ list.format(registries) }}</template><template v-if="chart">, and package the chart as {{ tag.slice(1) || '…' }}</template></span>
           </li>
           <li v-if="deploy && toEnv">
@@ -115,7 +118,7 @@ import GbIcon from '@/components/GbIcon.vue';
 
 // busy: a job runs, or the page waits for an answer; remote, trunk: as
 // the server names them (Releases); sending: the cut's POST is out
-const props = defineProps<{ envs: EnvState[]; releases: ReleaseRow[]; remote: string; trunk: string; busy: boolean }>();
+const props = defineProps<{ envs: EnvState[]; binaries: string[]; releases: ReleaseRow[]; remote: string; trunk: string; busy: boolean }>();
 const emit = defineEmits<{ close: []; started: [job: ReleaseJob, cut: CutRequest] }>();
 const sending = defineModel<boolean>('sending', { default: false });
 

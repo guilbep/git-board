@@ -135,6 +135,10 @@ export function stepLabel(s: ReleaseStep, names: Record<string, string> = {}): s
       return done ? 'Chart packaged' : 'Chart';
     case 'record':
       return done ? 'Release record written' : 'Release record';
+    case 'build':
+      return done ? `Archives built (${s.detail})` : 'Archives';
+    case 'publish':
+      return done ? 'Published on GitHub' : 'GitHub release';
   }
   if (/\s/.test(s.name)) return s.name; // no image name has a space: a step this page doesn't know
   if (!done) return `Image ${s.name}`;
@@ -262,3 +266,23 @@ export const markClass = (m: EnvMark): string[] => ['gb-envmark', m === 'dev' ? 
 // repoNames: each config repo's target name (enack8s), for the job steps
 // that name the repo
 export const repoNames = (envs: EnvState[]): Record<string, string> => Object.fromEntries(envs.flatMap((e) => e.targets.map((t) => [t.repo, t.name])));
+
+// Setup is what Enable binary release proposes (ReleaseSetup).
+type Setup = { binaries: string[]; platforms: string[]; build: string; repo: string };
+
+// setupLines: the Enable panel's sentences, what a cut will do.
+export function setupLines(s: Setup): string[] {
+  const list = new Intl.ListFormat('en', { type: 'conjunction' });
+  return [
+    `Build ${s.binaries.join(', ')} for ${list.format(s.platforms)}`,
+    s.build ? `Run “${s.build}” in a clean checkout of the tag; its dist/ is what ships` : 'Go builds, CGO off, stripped; a .tar.gz per platform, .zip for windows, with checksums.txt',
+    `Publish them as a GitHub release on ${s.repo}, with the notes drafted from the issues`,
+    "Record what shipped in git, on the release's record",
+  ];
+}
+
+// setupToml: the [release] table Enable writes, as config.WithRelease does.
+export function setupToml(s: Setup): string {
+  const arr = (xs: string[]) => `[${xs.map((x) => JSON.stringify(x)).join(', ')}]`;
+  return `[release]\nbinaries = ${arr(s.binaries)}\nplatforms = ${arr(s.platforms)}\n` + (s.build ? `build = ${JSON.stringify(s.build)}\n` : '');
+}
