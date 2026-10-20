@@ -4,7 +4,7 @@
 # multiple values, sprint dates and saved views.
 #
 # Conventions
-# - Labels are fields: `status:ready`, `prio:p1`, `kind:bug`, `est:2`.
+# - Labels are fields: `status:ready`, `prio:p1`, `bug`, `est:2`.
 # - Titles: "area: what goes wrong" for a bug, "area: what to do" otherwise.
 #   The area is the part of the project the issue is about, one short word
 #   the team agrees on: a domain (billing, auth, search), a layer (api, web,
@@ -16,9 +16,9 @@
 #     search: find invoices by customer name              (feat)
 #     web: show unpaid invoices first                     (feat)
 #     db: index invoices by customer                      (perf)
-#     ci: run the frontend tests on pull requests         (chore)
+#     ci: run the frontend tests on pull requests         (test)
 #     docs: explain how to deploy                         (docs)
-#     deps: update vue to 3.5                             (chore)
+#     web: align the totals on the invoice page           (polish)
 #     ship the first release to the pilot users           (no area)
 #   No [BUG] (the kind says it), no (#123) (the number shows before the
 #   title), no final period.
@@ -31,16 +31,14 @@
 single = true
 options = ["backlog", "ready", "in-progress", "in-review", "ready-for-validation", "validated"]
 
+# On hold, beside the status, never a status: blocked, or paused.
+[fields.hold]
+single = true
+options = ["blocked", "paused"]
+
 [fields.prio]
 single = true
 options = ["p0", "p1", "p2", "p3"]
-
-# What the issue is; it also names its branch (see [branches]). Rather plain
-# labels, GitHub's way (`bug`, `feat`)? Delete this table: [branches] kinds
-# reads those too.
-[fields.kind]
-single = true
-options = ["feat", "bug", "perf", "refactor", "docs", "chore"]
 
 # The estimate, in hours.
 [fields.est]
@@ -63,9 +61,12 @@ length_days = 14
 start_weekday = "monday"
 
 # An issue's branch: its kind, number and title, e.g. fix/12-login-fails.
+# The kinds are plain labels, GitHub's way (`bug`, `feat`), and the kind
+# field all the same: a column, a group, a filter, one per issue. Rather
+# `kind:bug` labels? Add a [fields.kind] table with these kinds as options.
 [branches]
 name = "{kind}/{number}-{slug}"
-kinds = { feat = "feat", bug = "fix", perf = "perf", refactor = "refactor", docs = "docs", chore = "chore" }
+kinds = { bug = "fix", feat = "feat", docs = "docs", refactor = "refactor", perf = "perf", polish = "polish", style = "style", test = "test" }
 
 # Views are sorted by name: `all`, every open issue in a table, as a
 # forge's issues page, is the one git-board opens on.

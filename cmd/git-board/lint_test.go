@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/guilbep/git-board/internal/ghlabels"
 	"github.com/guilbep/git-board/internal/gitbugio"
 )
 
@@ -86,13 +87,13 @@ func TestLintCreateLabelsPreviewsMissingLabelsWithoutWriting(t *testing.T) {
 		t.Fatalf("write config: %v", err)
 	}
 
-	origExisting, origCreate := existingGithubLabels, createGithubLabel
-	t.Cleanup(func() { existingGithubLabels, createGithubLabel = origExisting, origCreate })
-	existingGithubLabels = func(repo string) ([]string, error) {
-		return []string{"status:backlog"}, nil // status:ready and prio:p0 are missing
+	origExisting, origApply := existingGithubLabels, applyGithubLabel
+	t.Cleanup(func() { existingGithubLabels, applyGithubLabel = origExisting, origApply })
+	existingGithubLabels = func(repo string) ([]ghlabels.Label, error) {
+		return ghLabels("status:backlog"), nil // status:ready and prio:p0 are missing
 	}
 	created := 0
-	createGithubLabel = func(repo, name string) error {
+	applyGithubLabel = func(ghlabels.Change) error {
 		created++
 		return nil
 	}
@@ -118,14 +119,14 @@ func TestLintCreateLabelsApplyCreatesMissingLabels(t *testing.T) {
 		t.Fatalf("write config: %v", err)
 	}
 
-	origExisting, origCreate := existingGithubLabels, createGithubLabel
-	t.Cleanup(func() { existingGithubLabels, createGithubLabel = origExisting, origCreate })
-	existingGithubLabels = func(repo string) ([]string, error) {
-		return []string{"status:backlog"}, nil
+	origExisting, origApply := existingGithubLabels, applyGithubLabel
+	t.Cleanup(func() { existingGithubLabels, applyGithubLabel = origExisting, origApply })
+	existingGithubLabels = func(repo string) ([]ghlabels.Label, error) {
+		return ghLabels("status:backlog"), nil
 	}
 	var createdNames []string
-	createGithubLabel = func(repo, name string) error {
-		createdNames = append(createdNames, name)
+	applyGithubLabel = func(c ghlabels.Change) error {
+		createdNames = append(createdNames, c.Name)
 		return nil
 	}
 
@@ -138,6 +139,29 @@ func TestLintCreateLabelsApplyCreatesMissingLabels(t *testing.T) {
 	}
 	if !strings.Contains(out, "created prio:p0") || !strings.Contains(out, "created status:ready") {
 		t.Errorf("expected both created labels reported, got:\n%s", out)
+	}
+}
+
+// ghLabels is GitHub's labels by name, uncolored.
+func ghLabels(names ...string) []ghlabels.Label {
+	res := make([]ghlabels.Label, len(names))
+	for i, n := range names {
+		res[i] = ghlabels.Label{Name: n}
+	}
+	return res
+}
+
+func TestDescribeChange(t *testing.T) {
+	t.Parallel()
+	was := ghlabels.Label{Name: "bug", Color: "d73a4a", Description: "Broken"}
+	for c, want := range map[ghlabels.Change]string{
+		{Name: "feat", Color: "0e8a16", Description: "A new feature"}:       `missing feat #0e8a16 "A new feature"`,
+		{Name: "bug", Color: "b60205", Description: "Broken", Was: &was}:    "update bug: color d73a4a → b60205",
+		{Name: "bug", Color: "d73a4a", Description: "It breaks", Was: &was}: `update bug: description "Broken" → "It breaks"`,
+	} {
+		if got := describeChange(c); got != want {
+			t.Errorf("describeChange = %s, want %s", got, want)
+		}
 	}
 }
 
@@ -183,17 +207,17 @@ func TestLintCreateLabelsReportsTemplateLabelsTheRepoLacks(t *testing.T) {
 		}
 	}
 
-	origExisting, origCreate, origCurrent := existingGithubLabels, createGithubLabel, currentGithubRepo
+	origExisting, origApply, origCurrent := existingGithubLabels, applyGithubLabel, currentGithubRepo
 	t.Cleanup(func() {
-		existingGithubLabels, createGithubLabel, currentGithubRepo = origExisting, origCreate, origCurrent
+		existingGithubLabels, applyGithubLabel, currentGithubRepo = origExisting, origApply, origCurrent
 	})
-	existingGithubLabels = func(repo string) ([]string, error) {
-		return []string{"status:backlog", "status:ready", "prio:p0", "bug", "feat"}, nil
+	existingGithubLabels = func(repo string) ([]ghlabels.Label, error) {
+		return ghLabels("status:backlog", "status:ready", "prio:p0", "bug", "feat"), nil
 	}
 	currentGithubRepo = func() (string, error) { return "EPFL-ENAC/co2-calculator", nil }
 	var created []string
-	createGithubLabel = func(repo, name string) error {
-		created = append(created, name)
+	applyGithubLabel = func(c ghlabels.Change) error {
+		created = append(created, c.Name)
 		return nil
 	}
 
@@ -228,8 +252,8 @@ func TestLintCreateLabelsTemplateCheckOnlyWarns(t *testing.T) {
 	}
 	origExisting, origCurrent := existingGithubLabels, currentGithubRepo
 	t.Cleanup(func() { existingGithubLabels, currentGithubRepo = origExisting, origCurrent })
-	existingGithubLabels = func(repo string) ([]string, error) {
-		return []string{"status:backlog", "status:ready", "prio:p0", "bug"}, nil
+	existingGithubLabels = func(repo string) ([]ghlabels.Label, error) {
+		return ghLabels("status:backlog", "status:ready", "prio:p0", "bug"), nil
 	}
 	currentGithubRepo = func() (string, error) { return "", errors.New("gh repo view: no default repository") }
 

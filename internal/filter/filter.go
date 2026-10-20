@@ -250,8 +250,17 @@ func matchOne(issue gitbugio.Issue, labels map[string]bool, c Condition, value s
 			ok = ok || strings.EqualFold(l, want)
 		}
 	case KindLabel:
+		// a flat kind is stored bug and read kind:bug: label:bug finds it
+		kind := "\x00"
+		if cfg != nil && cfg.FlatKinds() {
+			for k := range cfg.Branches.Kinds {
+				if strings.EqualFold(k, value) {
+					kind = "kind:" + k
+				}
+			}
+		}
 		for l := range labels {
-			ok = ok || strings.EqualFold(l, value)
+			ok = ok || strings.EqualFold(l, value) || l == kind
 		}
 	case KindNo:
 		ok = true

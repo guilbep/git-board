@@ -20,4 +20,9 @@ func TestDefaultChecksClean(t *testing.T) {
 		!slices.Equal(s.Validation, []string{"ready-for-validation"}) || s.Closing != "validated" {
 		t.Errorf("stages = %+v", s)
 	}
+	// the org's flat kinds are the kind field, in the file's order
+	kinds := []string{"bug", "feat", "docs", "refactor", "perf", "polish", "style", "test"}
+	if k := cfg.Fields["kind"]; !cfg.FlatKinds() || !k.Single || !slices.Equal(k.Options, kinds) {
+		t.Errorf("kind = %+v, flat %v; want single, flat, %q", k, cfg.FlatKinds(), kinds)
+	}
 }

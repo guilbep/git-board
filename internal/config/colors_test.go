@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -52,5 +53,47 @@ func TestLoadRefusesAnUnknownColor(t *testing.T) {
 	cfg, err := Load(p)
 	if err != nil || cfg.Colors("status", []string{"validated"})["validated"] != "green" {
 		t.Fatalf("Load: %v, %v", err, cfg)
+	}
+}
+
+// A GitHub label's #rrggbb is a color too, kept as is; GitHub gets a
+// Palette name as its dot's hex.
+func TestHexColors(t *testing.T) {
+	t.Parallel()
+	cfg, _, err := parse([]byte("[fields.kind.colors]\nbug = \"#EBCF04\"\nfeat = \"teal\"\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := cfg.Colors("kind", []string{"bug"})["bug"]; got != "#ebcf04" {
+		t.Errorf("bug = %q, want #ebcf04", got)
+	}
+	if Hex("#ebcf04") != "ebcf04" || Hex("teal") != "00897f" || Hex("") != "" {
+		t.Errorf("Hex: %q %q %q", Hex("#ebcf04"), Hex("teal"), Hex(""))
+	}
+	for _, bad := range []string{"#zz0000", "ebcf04", "#ebcf0"} {
+		if _, _, err := parse([]byte("[fields.kind.colors]\nbug = \"" + bad + "\"\n")); err == nil {
+			t.Errorf("%s: no error", bad)
+		}
+	}
+}
+
+// PaletteHex is the web's dots, not a third set of colors.
+func TestPaletteHexMatchesCSS(t *testing.T) {
+	t.Parallel()
+	css, err := os.ReadFile("../../web/src/css/gitboard.css")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dots := map[string]string{}
+	for _, m := range regexp.MustCompile(`--gb-([a-z]+)-dot:\s*#([0-9A-Fa-f]{6})`).FindAllStringSubmatch(string(css), -1) {
+		dots[m[1]] = strings.ToLower(m[2])
+	}
+	for _, c := range Palette {
+		if PaletteHex[c] == "" || PaletteHex[c] != dots[c] {
+			t.Errorf("%s: PaletteHex %q, gitboard.css --gb-%s-dot %q", c, PaletteHex[c], c, dots[c])
+		}
+	}
+	if len(PaletteHex) != len(Palette) {
+		t.Errorf("PaletteHex has %d colors, Palette %d", len(PaletteHex), len(Palette))
 	}
 }

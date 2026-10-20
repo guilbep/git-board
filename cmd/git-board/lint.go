@@ -15,12 +15,12 @@ import (
 	"github.com/guilbep/git-board/internal/lint"
 )
 
-// existingGithubLabels/createGithubLabel are seams over ghlabels.Existing/
-// ghlabels.Create so tests can swap in a fixture instead of shelling out to
+// existingGithubLabels/applyGithubLabel are seams over ghlabels.Existing/
+// ghlabels.Apply so tests can swap in a fixture instead of shelling out to
 // the real `gh` binary — same pattern as bridge.go's fetchGithubItems.
 var (
 	existingGithubLabels = ghlabels.Existing
-	createGithubLabel    = ghlabels.Create
+	applyGithubLabel     = ghlabels.Apply
 	currentGithubRepo    = ghlabels.Current
 )
 
@@ -47,15 +47,17 @@ Exits 0 even with findings — this is a report, not a build gate — unless
 git-board's config implies (one per [fields.<name>] option, plus one per
 [[sprints.list]] entry) exists as a real GitHub label on each configured
 [repos] entry, via "gh label list"/"gh label create" — so they're visible
-and colorable in the GitHub Issues UI, not just inside git-bug's own
-label store. Preview only by default; --apply actually creates them. It
+and colored in the GitHub Issues UI, not just inside git-bug's own
+label store. A missing label is created with its color and description;
+an existing one is updated (--force) only where .git-board.toml sets its
+color or description. Preview only by default; --apply carries it out. It
 also reports the labels an issue template (.github/ISSUE_TEMPLATE) applies
 that this checkout's GitHub repository doesn't have: GitHub drops them
 silently. --apply doesn't create those: the fix is in the template.`,
 		Example: `  git-board lint
   git-board lint --strict            # exit 1 if anything is found, e.g. in CI
-  git-board lint --create-labels     # preview missing GitHub labels
-  git-board lint --create-labels --apply   # actually create them`,
+  git-board lint --create-labels     # preview missing and differing GitHub labels
+  git-board lint --create-labels --apply   # create and update them`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if apply && !createLabels {
@@ -73,7 +75,7 @@ silently. --apply doesn't create those: the fix is in the template.`,
 	}
 	cmd.Flags().BoolVar(&strict, "strict", false, "exit 1 if any finding is reported")
 	cmd.Flags().BoolVar(&createLabels, "create-labels", false, "check .git-board.toml's implied labels against each configured repo's real GitHub labels")
-	cmd.Flags().BoolVar(&apply, "apply", false, "with --create-labels, actually create the missing labels (default is preview only)")
+	cmd.Flags().BoolVar(&apply, "apply", false, "with --create-labels, create and update the labels (default is preview only)")
 	return cmd
 }
 
@@ -99,8 +101,8 @@ func runLint(out io.Writer, cfg *config.Config, strict bool) error {
 }
 
 // runCreateLabels checks each [repos] entry's real GitHub labels against
-// .git-board.toml's implied set (internal/ghlabels.Desired) and, with
-// apply, creates whatever's missing via "gh label create".
+// .git-board.toml's (internal/ghlabels.Plan) and, with apply, creates the
+// missing ones and updates those the file colors or describes otherwise.
 func runCreateLabels(out io.Writer, cfg *config.Config, apply bool) error {
 	if len(cfg.Repos) == 0 {
 		return fmt.Errorf("no [repos] configured in .git-board.toml")
@@ -114,32 +116,56 @@ func runCreateLabels(out io.Writer, cfg *config.Config, apply bool) error {
 			failed = true
 			continue
 		}
-		missing := ghlabels.MissingFrom(desired, existing)
-		if len(missing) == 0 {
+		changes := ghlabels.Plan(repo, desired, existing)
+		if len(changes) == 0 {
 			fmt.Fprintf(out, "%s: all labels present\n", repo)
 			continue
 		}
-		for _, name := range missing {
+		for _, c := range changes {
 			if !apply {
-				fmt.Fprintf(out, "%s: missing %s\n", repo, name)
+				fmt.Fprintf(out, "%s: %s\n", repo, describeChange(c))
 				continue
 			}
-			if err := createGithubLabel(repo, name); err != nil {
-				fmt.Fprintf(out, "%s: create %s: %v\n", repo, name, err)
+			if err := applyGithubLabel(c); err != nil {
+				fmt.Fprintf(out, "%s: %s: %v\n", repo, describeChange(c), err)
 				failed = true
 				continue
 			}
-			fmt.Fprintf(out, "%s: created %s\n", repo, name)
+			verb, rest, _ := strings.Cut(describeChange(c), " ")
+			fmt.Fprintf(out, "%s: %s %s\n", repo, map[string]string{"missing": "created", "update": "updated"}[verb], rest)
 		}
 	}
 	checkTemplates(out)
 	if !apply {
-		fmt.Fprintln(out, "\ndry run — nothing written. Re-run with --apply to create these labels.")
+		fmt.Fprintln(out, "\ndry run — nothing written. Re-run with --apply to create and update these labels.")
 	}
 	if failed {
 		return fmt.Errorf("one or more repos failed")
 	}
 	return nil
+}
+
+// describeChange is c in a line: missing feat #0e8a16 "A new feature", or
+// update bug: color d73a4a → b60205.
+func describeChange(c ghlabels.Change) string {
+	if c.Was == nil {
+		s := "missing " + c.Name
+		if c.Color != "" {
+			s += " #" + c.Color
+		}
+		if c.Description != "" {
+			s += fmt.Sprintf(" %q", c.Description)
+		}
+		return s
+	}
+	var what []string
+	if c.Color != c.Was.Color {
+		what = append(what, fmt.Sprintf("color %s → %s", c.Was.Color, c.Color))
+	}
+	if c.Description != c.Was.Description {
+		what = append(what, fmt.Sprintf("description %q → %q", c.Was.Description, c.Description))
+	}
+	return fmt.Sprintf("update %s: %s", c.Name, strings.Join(what, ", "))
 }
 
 // checkTemplates reports each issue template's labels that the checkout's
@@ -152,7 +178,7 @@ func checkTemplates(out io.Writer) {
 		return
 	}
 	var repo string
-	var existing []string
+	var existing []ghlabels.Label
 	if err == nil {
 		repo, err = currentGithubRepo()
 	}
@@ -165,7 +191,7 @@ func checkTemplates(out io.Writer) {
 	}
 	for _, t := range templates {
 		missing := slices.DeleteFunc(slices.Clone(t.Labels), func(l string) bool {
-			return slices.ContainsFunc(existing, func(e string) bool { return strings.EqualFold(e, l) })
+			return slices.ContainsFunc(existing, func(e ghlabels.Label) bool { return strings.EqualFold(e.Name, l) })
 		})
 		if len(missing) > 0 {
 			fmt.Fprintf(out, "issue templates: %s applies %s, which %s doesn't have: GitHub drops them\n", t.File, strings.Join(missing, ", "), repo)

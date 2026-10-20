@@ -247,7 +247,8 @@ func planField(cfg *config.Config, current []string, name, raw string) (FieldRes
 
 // planKind fills an issue's kind from the Project's Category, which is
 // the same vocabulary as the kind labels: FEAT is feat, matched to
-// [branches] kinds without case and written as kinds spells it. A kind
+// [branches] kinds without case and written as kinds spells it, as the
+// kind field stores it (cfg.Label: feat, or kind:feat). A kind
 // already on the issue wins: labels are the truth, Category only fills a
 // gap, and so does one GitHub has (forge) that git-bug hasn't pulled yet.
 // It removes the bare label an earlier bridge wrote, Category as is
@@ -270,7 +271,7 @@ func planKind(cfg *config.Config, current, forge []string, category string) (Fie
 		warning = fmt.Sprintf("category value %q is none of [branches] kinds, skipped", category)
 		for _, k := range slices.Sorted(maps.Keys(cfg.Branches.Kinds)) {
 			if strings.EqualFold(k, category) {
-				res.Value, res.Added, warning = k, []string{k}, ""
+				res.Value, res.Added, warning = k, []string{cfg.Label("kind", k)}, ""
 				break
 			}
 		}

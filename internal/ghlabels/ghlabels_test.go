@@ -4,21 +4,32 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
+	"strings"
 	"testing"
 
 	"github.com/guilbep/git-board/internal/config"
 )
 
+func names(labels []Label) []string {
+	var res []string
+	for _, l := range labels {
+		res = append(res, l.Name)
+	}
+	return res
+}
+
 func TestDesiredCoversFieldOptionsAndSprints(t *testing.T) {
 	cfg := &config.Config{
 		Fields: map[string]config.Field{
-			"status":   {Single: true, Options: []string{"backlog", "ready"}},
-			"prio":     {Single: true, Options: []string{"p0"}},
+			"status":   {Single: true, Options: []string{"ready", "backlog"}, Colors: map[string]string{"ready": "#0E8A16"}},
+			"prio":     {Single: true, Options: []string{"p0"}, Descriptions: map[string]string{"p0": "Now"}},
 			"assignee": {Single: false}, // no Options -- free-form, no label to create
 		},
 		Sprints: config.SprintsConfig{
 			List: []config.Sprint{{Slug: "delivery"}, {Slug: "post-delivery"}},
 		},
+		Branches: config.Branches{Kinds: map[string]string{"bug": "fix"}},
 	}
 
 	got := Desired(cfg)
@@ -26,11 +37,23 @@ func TestDesiredCoversFieldOptionsAndSprints(t *testing.T) {
 		"prio:p0",
 		"sprint:delivery",
 		"sprint:post-delivery",
+		"status:ready", // a field's values in their order
 		"status:backlog",
-		"status:ready",
 	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("Desired = %v, want %v", got, want)
+	if !reflect.DeepEqual(names(got), want) {
+		t.Errorf("Desired = %v, want %v", names(got), want)
+	}
+	if p0 := got[0]; p0.Color != "e00000" || p0.OwnColor || p0.Description != "Now" || !p0.OwnDescription {
+		t.Errorf("p0 = %+v, want the board's red, not its own, and its description", p0)
+	}
+	if ready := got[3]; ready.Color != "0e8a16" || !ready.OwnColor {
+		t.Errorf("ready = %+v, want its own hex", ready)
+	}
+
+	// flat kinds are the kind field, stored as the plain label
+	cfg.Fields["kind"] = config.Field{Single: true, Options: []string{"bug"}, Flat: true}
+	if got := names(Desired(cfg)); !slices.Contains(got, "bug") || slices.Contains(got, "kind:bug") {
+		t.Errorf("flat kinds: Desired = %v, want bug", got)
 	}
 }
 
@@ -40,23 +63,70 @@ func TestDesiredEmptyConfigIsEmpty(t *testing.T) {
 	}
 }
 
-func TestMissingFromReturnsOnlyAbsentLabels(t *testing.T) {
-	desired := []string{"prio:p0", "prio:p1", "status:ready"}
-	existing := []string{"status:ready", "bug", "feature"}
-
-	got := MissingFrom(desired, existing)
-	want := []string{"prio:p0", "prio:p1"}
+// The org's labels keep their colors: a label is changed only where the
+// file sets its color or description, never for git-board's own colors.
+func TestPlanChangesOnlyWhatTheFileSets(t *testing.T) {
+	t.Parallel()
+	desired := []Label{
+		{Name: "bug", Color: "e00000"},                                                   // the board's color: GitHub's stays
+		{Name: "feat", Color: "0e8a16", OwnColor: true},                                  // the file's color
+		{Name: "docs", Color: "0075CA", Description: "Docs", OwnDescription: true},       // the file's description
+		{Name: "perf", Color: "a2eeef", OwnColor: true},                                  // already so
+		{Name: "status:ready", Color: "00897f", Description: "Go", OwnDescription: true}, // missing
+	}
+	existing := []Label{
+		{Name: "Bug", Color: "d73a4a", Description: "Something isn't working"},
+		{Name: "feat", Color: "A2EEEF", Description: "New feature"},
+		{Name: "docs", Color: "0075ca"},
+		{Name: "perf", Color: "A2EEEF"},
+		{Name: "wontfix", Color: "ffffff"},
+	}
+	got := Plan("o/r", desired, existing)
+	want := []Change{
+		{Repo: "o/r", Name: "feat", Color: "0e8a16", Description: "New feature", Update: true, Was: &existing[1]},
+		{Repo: "o/r", Name: "docs", Color: "0075ca", Description: "Docs", Update: true, Was: &existing[2]},
+		{Repo: "o/r", Name: "status:ready", Color: "00897f", Description: "Go"},
+	}
 	if !reflect.DeepEqual(got, want) {
-		t.Errorf("MissingFrom = %v, want %v", got, want)
+		t.Errorf("Plan =\n%+v\nwant\n%+v", got, want)
+	}
+	for i, want := range []string{"color", "color", "description", "same", "missing"} {
+		if got := State(desired[i], existing); got != want {
+			t.Errorf("State(%s) = %s, want %s", desired[i].Name, got, want)
+		}
+	}
+	cfg := &config.Config{Fields: map[string]config.Field{"assignee": {}}}
+	existing = append(existing, Label{Name: "assignee:alice"}, Label{Name: "kind:bug"})
+	if got := names(Stray(cfg, desired, existing)); !slices.Equal(got, []string{"wontfix", "kind:bug"}) {
+		t.Errorf("Stray = %v, want wontfix, kind:bug", got)
 	}
 }
 
-func TestMissingFromNothingMissingReturnsEmpty(t *testing.T) {
-	desired := []string{"prio:p0"}
-	existing := []string{"prio:p0", "extra"}
-
-	if got := MissingFrom(desired, existing); len(got) != 0 {
-		t.Errorf("MissingFrom = %v, want empty", got)
+// What reaches gh: the flags of a create and an update, a count's search.
+func TestGhCommands(t *testing.T) {
+	var calls []string
+	orig := Gh
+	t.Cleanup(func() { Gh = orig })
+	Gh = func(args ...string) ([]byte, error) {
+		calls = append(calls, strings.Join(args, " "))
+		return []byte("3\n"), nil
+	}
+	if err := Apply(Change{Repo: "o/r", Name: "status:ready", Color: "00897f"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := Apply(Change{Repo: "o/r", Name: "feat", Color: "0e8a16", Description: "New feature", Update: true}); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := Count("o/r", "good first issue"); err != nil || n != 3 {
+		t.Fatalf("Count = %d, %v", n, err)
+	}
+	want := []string{
+		"label create status:ready --repo o/r --color 00897f",
+		"label create feat --repo o/r --color 0e8a16 --description New feature --force",
+		"api search/issues?per_page=1&q=repo%3Ao%2Fr+label%3A%22good+first+issue%22 --jq .total_count",
+	}
+	if !slices.Equal(calls, want) {
+		t.Errorf("gh calls =\n%s\nwant\n%s", strings.Join(calls, "\n"), strings.Join(want, "\n"))
 	}
 }
 

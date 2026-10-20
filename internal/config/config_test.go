@@ -3,6 +3,8 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 )
@@ -348,6 +350,70 @@ func TestBranchesKind(t *testing.T) {
 	for _, tt := range tests {
 		if got := b.Kind(tt.labels); got != tt.want {
 			t.Errorf("Kind(%v) = %q, want %q", tt.labels, got, tt.want)
+		}
+	}
+}
+
+// [branches] kinds are the kind field, in the file's order, unless
+// [fields.kind] has options: then kind:* labels are.
+func TestFlatKinds(t *testing.T) {
+	t.Parallel()
+	cfg, _, err := parse([]byte(`[fields.kind.colors]
+bug = "red"
+
+[branches]
+kinds = { test = "test", bug = "fix", feat = "feat" }
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	k := cfg.Fields["kind"]
+	if !cfg.FlatKinds() || !k.Flat || !k.Single || !slices.Equal(k.Options, []string{"test", "bug", "feat"}) || k.Colors["bug"] != "red" {
+		t.Errorf("kind = %+v, flat %v", k, cfg.FlatKinds())
+	}
+	if cfg.Label("kind", "bug") != "bug" || cfg.Label("kind", "chore") != "kind:chore" || cfg.Label("status", "ready") != "status:ready" {
+		t.Errorf("Label: %q %q %q", cfg.Label("kind", "bug"), cfg.Label("kind", "chore"), cfg.Label("status", "ready"))
+	}
+
+	cfg, _, err = parse([]byte("[fields.kind]\noptions = [\"bug\", \"chore\"]\n\n[branches]\nkinds = { bug = \"fix\" }\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.FlatKinds() || cfg.Fields["kind"].Flat || cfg.Label("kind", "bug") != "kind:bug" {
+		t.Errorf("kind:* form: flat %v, Label %q", cfg.FlatKinds(), cfg.Label("kind", "bug"))
+	}
+	// a Config built by hand, as tests do
+	if !(&Config{Branches: Branches{Kinds: map[string]string{"bug": "fix"}}}).FlatKinds() {
+		t.Error("kinds without a kind field: not flat")
+	}
+}
+
+func TestDescriptionsAreGitHubsLength(t *testing.T) {
+	t.Parallel()
+	ok := strings.Repeat("é", 100)
+	if _, _, err := parse([]byte("[fields.kind.descriptions]\nbug = \"" + ok + "\"\n")); err != nil {
+		t.Errorf("100 characters: %v", err)
+	}
+	if _, _, err := parse([]byte("[fields.kind.descriptions]\nbug = \"" + ok + "e\"\n")); err == nil || !strings.Contains(err.Error(), "101") {
+		t.Errorf("101 characters: %v", err)
+	}
+}
+
+func TestSetFieldTable(t *testing.T) {
+	t.Parallel()
+	colors := map[string]string{"bug": "#d73a4a", "nice to have": "teal"}
+	for _, tt := range []struct{ name, in, want string }{
+		{"inline", "[fields.kind]\nsingle = true\ncolors = { bug = \"red\" }  # org\n\n# Estimate\n[fields.est]\n",
+			"[fields.kind]\nsingle = true\n\n[fields.kind.colors]\nbug = \"#d73a4a\"\n\"nice to have\" = \"teal\"\n\n# Estimate\n[fields.est]\n"},
+		{"table", "[fields.kind]\nsingle = true\n\n[fields.kind.colors]\nbug = \"red\"  # org\n\n# Estimate\n[fields.est]\n",
+			"[fields.kind]\nsingle = true\n\n[fields.kind.colors]\nbug = \"#d73a4a\"\n\"nice to have\" = \"teal\"\n\n# Estimate\n[fields.est]\n"},
+		{"no field table", "[branches]\nkinds = { bug = \"fix\" }\n",
+			"[branches]\nkinds = { bug = \"fix\" }\n\n[fields.kind.colors]\nbug = \"#d73a4a\"\n\"nice to have\" = \"teal\"\n"},
+	} {
+		if got := SetFieldTable(tt.in, "kind", "colors", colors); got != tt.want {
+			t.Errorf("%s:\n%s\nwant\n%s", tt.name, got, tt.want)
+		} else if _, _, err := parse([]byte(got)); err != nil {
+			t.Errorf("%s: %v", tt.name, err)
 		}
 	}
 }

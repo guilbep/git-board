@@ -1257,3 +1257,46 @@ export function getIssueAgent(id: string): Promise<IssueAgent> {
 export function agentAction(id: string, action: 'go' | 'brief', brief: string): Promise<IssueAgent> {
   return request(`${issuePath(id)}/agent/${action}`, json('POST', { brief }));
 }
+
+// Settings › Labels (internal/server/labels.go): the project's labels, and
+// each GitHub repository's, through gh on the machine where git board serve
+// runs. A color is hex without #, as GitHub has it.
+export interface GithubLabel { name: string; color: string; description: string }
+export interface RepoError { repo: string; message: string }
+export interface LabelRow extends GithubLabel {
+  field: string;
+  value: string;
+  own_color: boolean; // the project file sets it, else the board's own
+  own_description: boolean;
+  count: number; // open issues
+  github: { repo: string; state: 'same' | 'color' | 'description' | 'missing'; color: string; description: string }[];
+}
+export interface Labels { repos: string[]; rows: LabelRow[]; errors: RepoError[] }
+export interface LabelChange extends GithubLabel { repo: string; update: boolean; was?: GithubLabel; error?: string }
+export interface LintFinding { check: string; issue_id: string; title: string; message: string }
+export interface StrayLabel extends GithubLabel { repo: string; count: number }
+export interface Lint { findings: LintFinding[]; stray: StrayLabel[]; errors: RepoError[] }
+
+export function getLabels(): Promise<Labels> {
+  return request('/api/labels');
+}
+
+export function sendLabels(dryRun: boolean): Promise<{ changes: LabelChange[]; errors: RepoError[] }> {
+  return request('/api/labels/send', json('POST', { dry_run: dryRun }));
+}
+
+// adoptLabel is text, the project file, with GitHub's color and description
+// of field:value written in; nothing is saved.
+export function adoptLabel(text: string, row: LabelRow, github: { color: string; description: string }): Promise<{ text: string }> {
+  return request('/api/labels/adopt', json('POST', { text, field: row.field, value: row.value, ...github }));
+}
+
+export function getLint(): Promise<Lint> {
+  return request('/api/lint');
+}
+
+// deleteLabel deletes a GitHub label outside the project's; dryRun answers
+// how many issues and pull requests carry it there.
+export function deleteLabel(repo: string, name: string, dryRun: boolean): Promise<{ count?: number }> {
+  return request('/api/labels/delete', json('POST', { repo, name, dry_run: dryRun }));
+}

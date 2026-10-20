@@ -106,6 +106,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { ApiError, checkConfig, getConfigDocs, getConfigFile, saveConfig, type ConfigCheck, type ConfigFile, type DocSection } from '@/api/board';
+import { configText } from '@/configdraft';
 import { addField, addSprint, addView, docSectionAt, type Snippet } from '@/configsnippets';
 import { message } from '@/issue';
 import { lineDiff } from '@/linediff';
@@ -114,7 +115,7 @@ import { tomlTokens } from '@/toml';
 const emit = defineEmits<{ saved: [] }>();
 
 const file = ref<ConfigFile | null>(null);
-const text = ref('');
+const text = configText; // Settings › Labels writes in it too
 const check = ref<ConfigCheck | null>(null);
 const reviewing = ref(false);
 const saving = ref(false);
