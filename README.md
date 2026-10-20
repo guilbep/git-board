@@ -46,6 +46,38 @@ needed. `git` must be on the path (branches' "in dev, squashed" asks
 too (see its `INSTALLATION.md`, "The bridge-sync fork"), so that both read
 and write the repository the same way.
 
+### What else to install
+
+git-board runs on `git` alone, git-bug built in. The rest is per feature,
+and only for that feature:
+
+| For | Install (macOS) |
+|---|---|
+| `lint --create-labels`, `bridge` (GitHub Projects) | `brew install gh`, then `gh auth login` |
+| Start an agent (Cycle, Work) | [wtx](https://github.com/EPFL-ENAC/wtx) |
+| `release` and `deploy`, with `[release] images` | Docker Desktop (buildx), `brew install crane trivy` |
+| `release` and `deploy`, with `[release] chart` | `brew install helm` (3.8+) |
+
+A release command missing one names it and says how to get it.
+
+**Docker** builds with an SBOM and provenance, which Docker Desktop's
+default builder keeps only with the containerd image store (Settings ›
+General › "Use containerd for pulling and storing images"). Otherwise,
+make a builder that does, once: `docker buildx create --name git-board
+--driver docker-container --use`.
+
+**Pushing to ghcr.io** needs a token with `write:packages`. `gh` has one
+once asked:
+
+```bash
+gh auth refresh -h github.com -s write:packages
+gh auth token | docker login ghcr.io -u <github-login> --password-stdin
+gh auth token | helm registry login ghcr.io -u <github-login> --password-stdin
+```
+
+crane uses docker's login. Another registry: its own `docker login` and
+`helm registry login`.
+
 ## Display convention: every `ns:value` label is a field
 
 Every surface that shows an issue's fields — `ls`/`view`'s table (and

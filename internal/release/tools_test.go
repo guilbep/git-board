@@ -70,6 +70,14 @@ func TestExecScanFails(t *testing.T) {
 	}
 }
 
+func TestExecSaysHowToInstall(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+	err := release.Exec().Scan(context.Background(), "reg/img:abc")
+	if err == nil || !strings.Contains(err.Error(), "trivy isn't installed") || !strings.Contains(err.Error(), "brew install trivy") {
+		t.Fatalf("err = %v, want it to say how to install trivy", err)
+	}
+}
+
 func TestFakeToolsDigestRefsAndTags(t *testing.T) {
 	ctx := context.Background()
 	f := releasetest.NewTools()

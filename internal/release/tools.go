@@ -38,11 +38,23 @@ func Exec() Tools { return execTools{} }
 
 type execTools struct{}
 
+// install says how to get each tool, for a machine without it.
+var install = map[string]string{
+	"docker": "Docker Desktop, https://docs.docker.com/get-docker/",
+	"crane":  "brew install crane",
+	"trivy":  "brew install trivy",
+	"helm":   "brew install helm",
+}
+
 func run(ctx context.Context, name string, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, name, args...)
 	var out, errb bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &errb
-	if err := cmd.Run(); err != nil {
+	err := cmd.Run()
+	if errors.Is(err, exec.ErrNotFound) {
+		return "", fmt.Errorf("%s isn't installed: %s (README.md, Install)", name, install[name])
+	}
+	if err != nil {
 		msg := strings.TrimSpace(errb.String())
 		if msg == "" {
 			msg = strings.TrimSpace(out.String())
