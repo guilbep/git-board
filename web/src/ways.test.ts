@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { aheadWords, checkWords, faviconDot, pendingWords, pushWhat, runWords, syncLabel, waiting } from './ways.ts';
+import { aheadWords, checkWords, doneWords, faviconDot, pendingWords, pushWhat, runWords, stepWords, syncLabel, waiting } from './ways.ts';
 
 const dir = (o: Partial<Record<'issues' | 'changed' | 'comments' | 'edits' | 'changes', number>> = {}) => ({ issues: 0, changed: 0, comments: 0, edits: 0, changes: 0, ...o });
 const tally = (to = dir(), from = dir()) => ({ to, from, linked: 0, stays_local: 0, conflicts: 0, warnings: 0, errors: 0, lines: [] });
@@ -81,4 +81,19 @@ test('waiting: the Project’s held conflicts count, and its check’s time', ()
 
 test('waiting: a run going on says so, whatever waits', () => {
   assert.equal(syncLabel(waiting([remote(3, 0)], forge({ state: 'running' }), null)), 'Syncing…');
+});
+
+test('stepWords says where a run is, with a total when the way has one', () => {
+  const bridges = [{ name: 'gh', target: 'github' }];
+  assert.equal(stepWords({ bridge: 'gh', way: 'push', done: 12, total: 40, issue: '#43 import: users lose their work' }, bridges), 'GitHub (gh) · pushing 12 of 40 · #43 import: users lose their work');
+  assert.equal(stepWords({ bridge: 'gh', way: 'pull', done: 3, issue: 'CO2-7 a title' }, bridges), 'GitHub (gh) · pulling 3 · CO2-7 a title');
+  assert.equal(stepWords({ bridge: 'gl', way: 'pull', done: 1 }, bridges), 'gl · pulling 1');
+});
+
+test('doneWords is a real run’s one line, in its mode', () => {
+  const bridges = { gh: tally(dir({ issues: 1 }), dir({ issues: 1, changed: 1 })), gl: tally(dir({ changed: 2 }), dir()) };
+  const job = (mode: 'sync' | 'get' | 'send', errors = 0) => ({ dry_run: false, mode, state: 'done' as const, started: '', names: [], bridges, errors });
+  assert.equal(doneWords(job('sync')), 'pulled 2 issues, pushed 3');
+  assert.equal(doneWords(job('get')), 'pulled 2 issues');
+  assert.equal(doneWords(job('send', 1)), 'pushed 3 issues, 1 error');
 });

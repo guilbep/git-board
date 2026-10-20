@@ -1,5 +1,6 @@
 // The sync page's words: what each way would move, in counts.
-import type { Ahead, BridgeTally, ForgeMode, ForgeStatus, Remote, SyncReport, SyncStatus } from './api/board';
+import type { Ahead, BridgeTally, ForgeJob, ForgeMode, ForgeStatus, Remote, SyncReport, SyncStatus, SyncStep } from './api/board';
+import { forgeLabel } from './issuesync.ts';
 
 const n = (v: number) => v.toLocaleString();
 export const plural = (v: number, one: string, many = `${one}s`) => `${n(v)} ${v === 1 ? one : many}`;
@@ -42,6 +43,30 @@ export function runWords(mode: ForgeMode, t: BridgeTally): string {
     );
   }
   if (mode !== 'send') parts.push(`pull ${plural(t.from.issues + t.from.changed, 'issue')}`);
+  return parts.join(', ');
+}
+
+// where a run is: "GitHub (gh) · pulling 12 of 40 · #43 import: users
+// lose their work"; a pull counts up with no total
+export function stepWords(s: SyncStep, bridges: { name: string; target: string }[]): string {
+  const b = bridges.find((b) => b.name === s.bridge);
+  const count = s.total ? `${n(s.done)} of ${n(s.total)}` : n(s.done);
+  return [b ? forgeLabel(b) : s.bridge, `${s.way === 'pull' ? 'pulling' : 'pushing'} ${count}`, s.issue].filter(Boolean).join(' · ');
+}
+
+// a real run's one line: "pulled 2 issues, pushed 0", the half of its
+// mode for get and send, and its errors
+export function doneWords(job: ForgeJob): string {
+  let get = 0;
+  let send = 0;
+  for (const t of Object.values(job.bridges)) {
+    get += t.from.issues + t.from.changed;
+    send += t.to.issues + t.to.changed;
+  }
+  const parts = [];
+  if (job.mode !== 'send') parts.push(`pulled ${plural(get, 'issue')}`);
+  if (job.mode !== 'get') parts.push(parts.length ? `pushed ${n(send)}` : `pushed ${plural(send, 'issue')}`);
+  if (job.errors) parts.push(plural(job.errors, 'error'));
   return parts.join(', ');
 }
 

@@ -72,6 +72,7 @@ func (s *apiServer) handleIssueSync(w http.ResponseWriter, r *http.Request) {
 			res.Bridges[b.Name] = &bridgeTally{Lines: []string{}}
 		}
 	}
+	st := stepper{name: s.issueName, pushTotal: 1}
 	for sr := range results {
 		t := res.Bridges[sr.Bridge]
 		if t == nil {
@@ -81,6 +82,9 @@ func (s *apiServer) handleIssueSync(w http.ResponseWriter, r *http.Request) {
 		t.add(sr, req.DryRun)
 		if sr.IsError() {
 			res.Errors++
+		}
+		if step, moved := st.see(sr); moved {
+			s.events.publish(event{Kind: "progress", ID: issue.ID, Step: &step})
 		}
 	}
 	for _, t := range res.Bridges {
@@ -198,10 +202,14 @@ func (s *apiServer) handleIssueTake(w http.ResponseWriter, r *http.Request) {
 	}
 	t := &bridgeTally{Lines: []string{}}
 	res := issueSyncResult{Bridges: map[string]*bridgeTally{req.Bridge: t}}
+	st := stepper{name: s.issueName, pushTotal: 1}
 	for sr := range results {
 		t.add(sr, false)
 		if sr.IsError() {
 			res.Errors++
+		}
+		if step, moved := st.see(sr); moved {
+			s.events.publish(event{Kind: "progress", ID: id, Step: &step})
 		}
 	}
 	writeJSON(w, http.StatusOK, res)

@@ -4,8 +4,17 @@
 import { ref } from 'vue';
 import { getForges, type ForgeStatus, type Issue } from '@/api/board';
 import { forgeNumbers } from '@/issuesync';
+import type { LiveEvent } from '@/live';
 
 export const forgeStatus = ref<ForgeStatus | null>(null);
+
+// onStep keeps the running job's step from a progress event, as it comes:
+// the poll would show it up to 1.5 s later. One issue's own sync (e.id)
+// is its drawer's, not the job's.
+export function onStep(e: LiveEvent): void {
+  const job = forgeStatus.value?.job;
+  if (e.kind === 'progress' && !e.id && e.step && job?.state === 'running') job.step = e.step;
+}
 
 const pollMs = 1500;
 let polling: ReturnType<typeof setTimeout> | undefined;

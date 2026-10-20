@@ -340,6 +340,17 @@ export interface ForgeJob {
   bridges: Record<string, BridgeTally>;
   errors: number;
   error?: string;
+  step?: SyncStep; // where it is, while it runs
+}
+
+// Where a run is: the issue a way of a bridge is on, and how many it has
+// come to. A pull has no total: the forge doesn't say how many it holds.
+export interface SyncStep {
+  bridge: string;
+  way: 'pull' | 'push';
+  done: number;
+  total?: number;
+  issue?: string; // "#43 import: users lose their work"
 }
 
 export interface ForgeStatus {
