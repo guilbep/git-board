@@ -550,6 +550,25 @@ export function saveConfig(text: string, base: string): Promise<ConfigCheck> {
   return request('/api/config', json('PUT', { text, base }));
 }
 
+// ReleaseSetup is what Enable binary release proposes from the repository.
+export interface ReleaseSetup {
+  binaries: string[]; // main packages, ./cmd/git-board
+  platforms: string[]; // os/arch
+  build: string; // a command that fills dist/ instead of the Go builds, "make dist"; ""
+  remote: string; // the authority remote
+  forge: string; // github; "" when the remote isn't one git-board publishes to
+  repo: string; // owner/name on the forge
+  note: string; // why it can't enable; "" when it can
+}
+
+export function getReleaseSetup(): Promise<ReleaseSetup> {
+  return request('/api/releases/setup');
+}
+
+export function enableRelease(s: Pick<ReleaseSetup, 'binaries' | 'platforms' | 'build' | 'remote'>): Promise<void> {
+  return request('/api/releases/setup', json('POST', s));
+}
+
 // docs/configuration.md, a section per ## heading, rendered.
 export interface DocSection {
   id: string;
@@ -1016,6 +1035,7 @@ export interface ReleaseRecord {
   previous: string; // the previous final's tag
   artifacts: { image: string; registry: string; digest: string }[];
   chart: { version: string; digest: string };
+  assets: { name: string; sha256: string }[] | null; // the archives published with the tag, binaries only
   notes: string; // markdown
   comments: { author: string; message: string; date: string }[];
   yanked: string; // the reason, "" when not
@@ -1054,6 +1074,7 @@ export interface Releases {
   remote: string; // the authority remote, [release] remote (origin)
   trunk: string; // the trunk branch (dev)
   environments: EnvState[];
+  binaries: string[]; // [release] binaries: a cut builds and publishes their archives
   releases: ReleaseRow[]; // newest first
   job: ReleaseJob | null; // running, or the last one
 }
@@ -1118,7 +1139,7 @@ const releaseJob = (j: ReleaseJob | null): ReleaseJob | null => j && { ...j, ste
 
 export async function getReleases(): Promise<Releases> {
   const r = await request<Partial<Releases>>('/api/releases');
-  return { enabled: !!r.enabled, remote: r.remote ?? '', trunk: r.trunk ?? '', environments: (r.environments ?? []).map(envState), releases: (r.releases ?? []).map(releaseRow), job: releaseJob(r.job ?? null) };
+  return { enabled: !!r.enabled, remote: r.remote ?? '', trunk: r.trunk ?? '', environments: (r.environments ?? []).map(envState), binaries: r.binaries ?? [], releases: (r.releases ?? []).map(releaseRow), job: releaseJob(r.job ?? null) };
 }
 
 export async function getDraft(final = false): Promise<Draft> {
