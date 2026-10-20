@@ -49,6 +49,7 @@ func TestName(t *testing.T) {
 			"3-show-the-emission-factors-of-every-equipment"},
 		{"one long word cut hard", config.Branches{}, issue(strings.Repeat("a", 60), "3"), "3-" + strings.Repeat("a", 50)},
 		{"invalid ref characters from the config", config.Branches{Name: "~{kind}^/..{number}:{slug}.lock", Kinds: map[string]string{"bug": "bug fix.."}}, issue("Crash", "3", "bug"), "bug-fix/3-crash"},
+		{"a project number with its prefix", co2, gitbugio.Issue{ID: id, Title: "SPA routes", Number: "VM-62", Counted: true, Labels: []string{"bug"}}, "fix/vm-62-spa-routes"},
 		{"a kind part left empty", config.Branches{Name: "team/{kind}-{number}"}, issue("Crash", "3"), "team/3"},
 	}
 	for _, tt := range tests {
@@ -96,7 +97,8 @@ func TestNames(t *testing.T) {
 }
 
 func TestNamesWhatNameSuggests(t *testing.T) {
-	for _, is := range []gitbugio.Issue{issue("Local only", ""), issue("On GitHub", "2518", "bug")} {
+	for _, is := range []gitbugio.Issue{issue("Local only", ""), issue("On GitHub", "2518", "bug"),
+		{ID: id, Title: "SPA routes", Number: "VM-62", Counted: true, Labels: []string{"bug"}, Forges: []gitbugio.Forge{{Name: "GitHub", Number: "66"}}}} {
 		if name := Name(co2, is); !Names(name, is) {
 			t.Errorf("Names(%q) = false for the name it suggests", name)
 		}
@@ -116,6 +118,8 @@ func TestNamesProjectNumbers(t *testing.T) {
 		want   bool
 	}{
 		{"fix/3060-bouncer-pool", x, true},
+		{"fix/co2-3060-bouncer-pool", x, true},
+		{"fix/co2-3060-bouncer-pool", y, false},
 		{"fix/3060-bouncer-pool", y, false},
 		{"fix/3071-bouncer-pool", x, false},
 		{"fix/3080-new-one", waiting, false},
@@ -125,7 +129,7 @@ func TestNamesProjectNumbers(t *testing.T) {
 			t.Errorf("Names(%q, %s) = %v, want %v", tc.branch, tc.is.Title, got, tc.want)
 		}
 	}
-	if got := Name(config.Branches{}, x); got != "3060-bouncer-pool" {
+	if got := Name(config.Branches{}, x); got != "co2-3060-bouncer-pool" {
 		t.Errorf("Name(x) = %q", got)
 	}
 	if got := Name(config.Branches{}, waiting); got != "ccccccc-new-one" {

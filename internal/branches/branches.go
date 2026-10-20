@@ -26,8 +26,9 @@ const slugMax = 50
 
 // Name is the branch an issue suggests: cfg.Name with {kind} (the issue's
 // kind through cfg.Kinds; without one, "{kind}/" is dropped), {number}
-// (its project number, else its first forge number before the project
-// numbers its issues, else its git-bug id's first 7 characters) and
+// (its project number with its prefix in lower case, vm-62: a bare 62 is
+// a forge's number to a forge; else its first forge number before the
+// project numbers its issues, else its git-bug id's first 7 characters) and
 // {slug} (its title), made a branch name git takes.
 func Name(cfg config.Branches, is gitbugio.Issue) string {
 	tmpl := cmp.Or(cfg.Name, defaultName)
@@ -46,7 +47,7 @@ func kindOf(cfg config.Branches, labels []string) string {
 }
 
 func number(is gitbugio.Issue) string {
-	return cmp.Or(is.BareNumber(), is.ID[:min(7, len(is.ID))])
+	return cmp.Or(strings.ToLower(is.Number), is.BareNumber(), is.ID[:min(7, len(is.ID))])
 }
 
 var (
@@ -92,7 +93,8 @@ func refSafe(name string) string {
 }
 
 // Names reports whether a branch's name names the issue: its number
-// (BareNumber) as the name's first number (fix/2518-…, 2518-…), or its git-bug id's
+// (BareNumber) as the name's first number, with or without the project's
+// prefix (fix/vm-62-…, fix/62-…, 2518-…), or its git-bug id's
 // first 7 characters or more as a word (abc1234-…).
 // ponytail: the first number only, so a number in a slug (#12's
 // fix/12-upgrade-node-24) names no other issue; a template putting a
