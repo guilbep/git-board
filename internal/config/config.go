@@ -3,6 +3,7 @@
 package config
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -91,7 +92,8 @@ type View struct {
 
 // reposTable mirrors the [repos] table shape (`list = [...]`).
 type reposTable struct {
-	List []string `toml:"list"`
+	List      []string `toml:"list"`
+	Assignees string   `toml:"assignees"`
 }
 
 // GithubProject is the [github-project] table: which GitHub Projects (v2)
@@ -157,7 +159,11 @@ func (b Branches) Kind(labels []string) string {
 
 // Config is the parsed .git-board.toml.
 type Config struct {
-	Repos         []string
+	Repos []string
+	// Assignees is how the forges hold assignees: "native" (their
+	// assignees, the default) or "labels" (assignee:<login> labels). Every
+	// clone must agree, so it lives here, not in a clone's git config.
+	Assignees     string
 	Fields        map[string]Field
 	Sprints       SprintsConfig
 	Views         map[string]View
@@ -239,6 +245,9 @@ func parse(data []byte) (*Config, toml.MetaData, error) {
 	if err := checkRoles(r.Roles, r.Fields); err != nil {
 		return nil, md, err
 	}
+	if a := r.Repos.Assignees; a != "" && a != "native" && a != "labels" {
+		return nil, md, fmt.Errorf("[repos] assignees: native or labels, not %q", a)
+	}
 	if err := checkCycle(r.Cycle); err != nil {
 		return nil, md, err
 	}
@@ -259,6 +268,7 @@ func parse(data []byte) (*Config, toml.MetaData, error) {
 	}
 	return &Config{
 		Repos:         r.Repos.List,
+		Assignees:     cmp.Or(r.Repos.Assignees, "native"),
 		Fields:        r.Fields,
 		Sprints:       r.Sprints,
 		Views:         r.Views,

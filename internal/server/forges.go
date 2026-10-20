@@ -1,6 +1,7 @@
 package server
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -422,6 +423,16 @@ func (s *apiServer) runForgeSync(job *forgeJob, run func(context.Context, string
 	if job.Mode != "get" {
 		if issues, err := s.b.ListIssues(); err == nil {
 			st.pushTotal = len(issues)
+		}
+	}
+	// the toml's [repos] assignees, where git-bug reads it: a forge holding
+	// assignees one way here and another in a clone undoes the other's
+	if c := s.config(); c != nil {
+		for _, name := range job.Names {
+			if _, err := s.b.SetAssignees(name, cmp.Or(c.Assignees, "native")); err != nil {
+				finish("failed", "assignees of "+name+": "+err.Error())
+				return
+			}
 		}
 	}
 	results, err := run(context.Background(), job.Mode, job.DryRun, names)

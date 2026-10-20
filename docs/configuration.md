@@ -19,7 +19,7 @@ A repository without one starts from the default: **Start from the default** in 
 | `[uploads]` | where attached files go |
 | `[branches]` | the branch an issue suggests: its base and its name |
 | `[cycle]`, `[cycle.signoffs]` | the development cycle: which statuses are which stage, where plans live, which files are tests, who holds each gate |
-| `[repos]` | the GitHub repositories whose labels Settings › Labels and `git board lint --create-labels` keep |
+| `[repos]` | the GitHub repositories whose labels Settings › Labels and `git board lint --create-labels` keep, and how the forges hold assignees |
 
 ## Fields
 
@@ -444,9 +444,10 @@ A deploy edits the overlay's `kustomization.yaml` and nothing else (comments, ke
 ```toml
 [repos]
 list = ["EPFL-ENAC/co2-calculator"]
+assignees = "native"
 ```
 
-The GitHub repositories whose labels the project keeps; without `[repos]`, origin's when it is on GitHub. They are reached through the `gh` CLI, logged in as you.
+`list` is the GitHub repositories whose labels the project keeps; without `[repos]`, origin's when it is on GitHub. They are reached through the `gh` CLI, logged in as you.
 
 **Settings › Labels** lists each label the project defines (every field's `options`, the sprints, the kinds) with its color, description and open issues, and its state on each repository: *same*, *color differs*, *description differs* or *missing*.
 
@@ -455,3 +456,5 @@ The GitHub repositories whose labels the project keeps; without `[repos]`, origi
 - **Lint** shows `git board lint`'s findings, then the GitHub labels outside the project's (a `bug` beside `kind:bug`, GitHub's old defaults) with their issues. **Delete** removes one from its repository, after a confirmation that says how many issues lose it.
 
 `git board lint --create-labels` prints the same plan, and `--apply` carries it out.
+
+`assignees` is how the forges hold an issue's `assignee:<login>` values: `native` (the default), as the forge's own assignees, or `labels`, as `assignee:<login>` labels. Before each forge sync, git-board writes it into this clone's git config, `git-bug.bridge.<name>.assignees` for each bridge, so a plain `git bug bridge sync` here agrees. When it changes, that sync pulls every issue again, so the assignees already there move to the new way. Every clone must use the same mode, or their syncs undo each other on every run: CI, or another clone running `git bug bridge sync` without git-board, must set the same key.

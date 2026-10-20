@@ -94,3 +94,29 @@ func TestForgeSyncWarnsWhenTheForgeWontSay(t *testing.T) {
 		t.Fatalf("job %+v, gh %+v: want done, one warning, no error", st.Job, tally)
 	}
 }
+
+// A forge sync writes the toml's assignees mode where git-bug reads it.
+func TestForgeSyncSetsTheAssigneesMode(t *testing.T) {
+	t.Parallel()
+	ts, s := newIssueServer(t)
+	s.cfg = &config.Config{Assignees: "labels"}
+	gl := fakeGitLab(t)
+	if code := call(t, "POST", ts.URL+"/api/bridges", map[string]string{"target": "gitlab", "url": gl.URL + "/scratchpad/sync-trial", "token": "good-token"}, nil); code != http.StatusOK {
+		t.Fatalf("add a bridge: %d", code)
+	}
+	done := make(chan struct{})
+	close(done)
+	s.runSync = fakeSync(nil, done)
+
+	call(t, "POST", ts.URL+"/api/forges/sync", map[string]any{"dry_run": true}, nil)
+	if st := waitJob(t, ts); st.Job.State != "done" {
+		t.Fatalf("job %+v", st.Job)
+	}
+	cfg, err := s.b.TestCache().Config().Read()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := cfg.Value("git-bug.bridge.gl.assignees", ""); got != "labels" {
+		t.Errorf("gl assignees %q, want labels", got)
+	}
+}

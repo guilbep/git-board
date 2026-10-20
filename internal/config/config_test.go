@@ -435,3 +435,28 @@ func TestWithRelease(t *testing.T) {
 		t.Errorf("empty file: %q", got)
 	}
 }
+
+// [repos] assignees is native unless the file says labels, and nothing else.
+func TestAssigneesMode(t *testing.T) {
+	t.Parallel()
+	if got := mustLoad(t).Assignees; got != "native" {
+		t.Errorf("default %q, want native", got)
+	}
+	dir := t.TempDir()
+	for value, want := range map[string]string{"labels": "labels", "lables": ""} {
+		path := filepath.Join(dir, value+".toml")
+		if err := os.WriteFile(path, []byte("[repos]\nassignees = \""+value+"\"\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		cfg, err := Load(path)
+		if want == "" {
+			if err == nil {
+				t.Errorf("%q: loaded, want an error", value)
+			}
+			continue
+		}
+		if err != nil || cfg.Assignees != want {
+			t.Errorf("%q: %v, %v; want %q", value, cfg, err, want)
+		}
+	}
+}
