@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 
@@ -162,6 +163,33 @@ func TestDescribeChange(t *testing.T) {
 		if got := describeChange(c); got != want {
 			t.Errorf("describeChange = %s, want %s", got, want)
 		}
+	}
+}
+
+// Without [repos], --create-labels plans for origin's GitHub repository,
+// the one the Labels tab shows.
+func TestLintCreateLabelsFallsBackToOrigin(t *testing.T) {
+	newTestRepo(t)
+	if err := os.WriteFile(configPath, []byte("[fields.prio]\nsingle = true\noptions = [\"p0\"]\n"), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	origExisting, origOrigin := existingGithubLabels, originGithubRepo
+	t.Cleanup(func() { existingGithubLabels, originGithubRepo = origExisting, origOrigin })
+	var asked []string
+	existingGithubLabels = func(repo string) ([]ghlabels.Label, error) {
+		asked = append(asked, repo)
+		return nil, nil
+	}
+
+	originGithubRepo = func() string { return "o/r" }
+	out, err := execute(t, []string{"lint", "--create-labels"})
+	if err != nil || !slices.Equal(asked, []string{"o/r"}) || !strings.Contains(out, "o/r: missing prio:p0") {
+		t.Errorf("asked %v, err %v, output:\n%s", asked, err, out)
+	}
+
+	originGithubRepo = func() string { return "" }
+	if out, err := execute(t, []string{"lint", "--create-labels"}); err == nil || !strings.Contains(err.Error(), "no GitHub repository") {
+		t.Errorf("no repository at all: %v\noutput:\n%s", err, out)
 	}
 }
 

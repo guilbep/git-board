@@ -454,4 +454,4 @@ The GitHub repositories whose labels the project keeps; without `[repos]`, origi
 - **Send to GitHub** first lists, per repository, each label it creates and each change, then creates the missing labels and updates those whose color or description the file sets (`gh label create … --force`). A label outside the project's is never touched, and one the file gives no color or description of its own keeps GitHub's.
 - **Lint** shows `git board lint`'s findings, then the GitHub labels outside the project's (a `bug` beside `kind:bug`, GitHub's old defaults) with their issues. **Delete** removes one from its repository, after a confirmation that says how many issues lose it.
 
-`git board lint --create-labels` prints the same plan for the repositories of `[repos]` (it needs them), and `--apply` carries it out.
+`git board lint --create-labels` prints the same plan, and `--apply` carries it out.

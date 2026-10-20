@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"io"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -22,6 +23,12 @@ var (
 	existingGithubLabels = ghlabels.Existing
 	applyGithubLabel     = ghlabels.Apply
 	currentGithubRepo    = ghlabels.Current
+	// originGithubRepo is origin's GitHub repository, as the Labels tab
+	// reads it, without opening git-bug: a running git board serve holds it.
+	originGithubRepo = func() string {
+		out, _ := exec.Command("git", "config", "--get", "remote.origin.url").Output()
+		return gitbugio.GitHubRepoOf(strings.TrimSpace(string(out)))
+	}
 )
 
 func newLintCmd() *cobra.Command {
@@ -46,7 +53,7 @@ Exits 0 even with findings — this is a report, not a build gate — unless
 --create-labels checks a different thing: whether every ns:value label
 git-board's config implies (one per [fields.<name>] option, plus one per
 [[sprints.list]] entry) exists as a real GitHub label on each configured
-[repos] entry, via "gh label list"/"gh label create" — so they're visible
+[repos] entry (else origin's, when it is on GitHub), via "gh label list"/"gh label create" — so they're visible
 and colored in the GitHub Issues UI, not just inside git-bug's own
 label store. A missing label is created with its color and description;
 an existing one is updated (--force) only where .git-board.toml sets its
@@ -100,16 +107,23 @@ func runLint(out io.Writer, cfg *config.Config, strict bool) error {
 	return nil
 }
 
-// runCreateLabels checks each [repos] entry's real GitHub labels against
-// .git-board.toml's (internal/ghlabels.Plan) and, with apply, creates the
-// missing ones and updates those the file colors or describes otherwise.
+// runCreateLabels checks each [repos] entry's real GitHub labels (else
+// origin's) against .git-board.toml's (internal/ghlabels.Plan) and, with
+// apply, creates the missing ones and updates those the file colors or
+// describes otherwise.
 func runCreateLabels(out io.Writer, cfg *config.Config, apply bool) error {
-	if len(cfg.Repos) == 0 {
-		return fmt.Errorf("no [repos] configured in .git-board.toml")
+	repos := cfg.Repos
+	if len(repos) == 0 {
+		if r := originGithubRepo(); r != "" {
+			repos = []string{r}
+		}
+	}
+	if len(repos) == 0 {
+		return fmt.Errorf("no GitHub repository: set [repos] in .git-board.toml, or an origin on GitHub")
 	}
 	desired := ghlabels.Desired(cfg)
 	var failed bool
-	for _, repo := range cfg.Repos {
+	for _, repo := range repos {
 		existing, err := existingGithubLabels(repo)
 		if err != nil {
 			fmt.Fprintf(out, "%s: %v\n", repo, err)
