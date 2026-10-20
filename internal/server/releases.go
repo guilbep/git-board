@@ -693,9 +693,7 @@ func (s *apiServer) handleEnable(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
-	s.cfgMu.Lock()
-	s.cfg = cfg
-	s.cfgMu.Unlock()
+	s.setConfig(cfg)
 	s.events.publish(event{Kind: "config"})
 	writeJSON(w, http.StatusOK, map[string]any{})
 }
