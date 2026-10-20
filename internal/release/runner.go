@@ -4,7 +4,9 @@ import (
 	"cmp"
 	"context"
 	"errors"
+	"fmt"
 	"path/filepath"
+	"slices"
 	"time"
 
 	"github.com/guilbep/git-board/internal/config"
@@ -30,7 +32,7 @@ type Runner struct {
 	Who      string       // login for commit messages
 	Step     func(Step)   // may be nil
 	OnTag    func(string) // may be nil: told the tag a cut or promote pushes, or tries to, once it knows it
-	Offline  bool         // no fetch of the app remote or config repos
+	Offline  bool         // no fetch of the app remote or config repos; a config repo not cloned yet is cloned
 }
 
 // New is the Runner of the app repo at dir: cfg's [release] table and
@@ -76,10 +78,16 @@ func (r *Runner) fetch(ctx context.Context) error {
 		return nil
 	}
 	if _, err := Git(ctx, r.Dir, "fetch", "--tags", r.Cfg.RemoteName()); err != nil {
-		return err
+		return fmt.Errorf("%w: %w", ErrFetch, err)
 	}
-	return r.B.PullReleases(r.Cfg.RemoteName())
+	if err := r.B.PullReleases(r.Cfg.RemoteName()); err != nil {
+		return fmt.Errorf("%w: %w", ErrFetch, err)
+	}
+	return nil
 }
+
+// ErrFetch is a failed fetch of the authority remote: no network, often.
+var ErrFetch = errors.New("fetching the remote")
 
 // reconcileGrace is how long Reconcile leaves a record-less tag to the cut
 // that pushed it.
@@ -87,28 +95,38 @@ func (r *Runner) fetch(ctx context.Context) error {
 // writes, which Reconcile honours
 const reconcileGrace = time.Hour
 
-// Reconcile records every release tag's commit that has no record yet, and
-// pushes the records, so one an earlier push missed goes too. Offline it
-// does nothing: without the pull it would duplicate other clones' records.
+// Reconcile pushes and finishes the cut made offline, if any (see
+// pushPending), records every release tag's commit that has no record yet,
+// and pushes the records, so one an earlier push missed goes too. Offline
+// it does nothing: without the pull it would duplicate other clones'
+// records.
 // A tag younger than reconcileGrace is left to its cut, which may still be
 // building: the cut's own record has the chart and the notes. A commit's
 // artifacts are each image's digest on each deploy registry (see artifact);
 // one the registry lacks is left out, even all of them. Previous is the
 // newest final before the tag recorded.
 func (r *Runner) Reconcile(ctx context.Context) error {
+	_, _, err := r.reconcile(ctx)
+	return err
+}
+
+// reconcile is Reconcile, returning apart the cut made offline it pushed
+// and that cut's failure (see pushPending), which Reconcile only says.
+func (r *Runner) reconcile(ctx context.Context) (pushed []Tag, pendErr, err error) {
 	if r.Offline {
-		return nil
+		return nil, nil, nil
 	}
 	if err := r.fetch(ctx); err != nil {
-		return err
+		return nil, nil, err
 	}
+	pushed, pendErr = r.pushPending(ctx)
 	tags, err := ReleaseTags(ctx, r.Dir)
 	if err != nil {
-		return err
+		return pushed, pendErr, err
 	}
 	recs, err := r.B.Releases()
 	if err != nil {
-		return err
+		return pushed, pendErr, err
 	}
 	recorded := map[string]bool{}
 	for _, rec := range recs {
@@ -127,10 +145,15 @@ func (r *Runner) Reconcile(ctx context.Context) error {
 			}
 		}
 		for _, img := range r.Cfg.Images {
+			var seen []string // targets may share a registry
 			for _, d := range r.Cfg.Deploy {
+				if slices.Contains(seen, d.Registry) {
+					continue
+				}
+				seen = append(seen, d.Registry)
 				digest, ok, err := r.artifact(ctx, d.Registry+"/"+img.Name, t)
 				if err != nil {
-					return err
+					return pushed, pendErr, err
 				}
 				if ok {
 					rec.Artifacts = append(rec.Artifacts, gitbugio.Artifact{Image: img.Name, Registry: d.Registry, Digest: digest})
@@ -138,10 +161,65 @@ func (r *Runner) Reconcile(ctx context.Context) error {
 			}
 		}
 		if _, err := r.B.CreateRelease(rec); err != nil {
-			return err
+			return pushed, pendErr, err
 		}
 	}
-	return r.B.PushReleases(r.Cfg.RemoteName())
+	return pushed, pendErr, r.B.PushReleases(r.Cfg.RemoteName())
+}
+
+// pushPending pushes the cut made offline, if any, and finishes it as a
+// cut would, with the notes drafted now. It checks it again first, on what
+// was just fetched: one refused, its name taken included, is dropped; one
+// that fails to be checked or pushed is kept for the next online command.
+// Once its tag is pushed, a failure to finish is left to a deploy of it,
+// which builds, and a Reconcile past the grace, which records, as for a
+// cut. Each is said in a step, and the first failure is returned for an
+// online Cut, which was that cut: nothing else stops on it.
+func (r *Runner) pushPending(ctx context.Context) ([]Tag, error) {
+	pending, err := Pending(ctx, r.Dir)
+	if err != nil || len(pending) == 0 {
+		return nil, err
+	}
+	st, repos, err := r.status(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var pushed []Tag
+	var failed error
+	say := func(f string, a ...any) { _ = r.do("tag", func() (string, error) { return fmt.Sprintf(f, a...), nil }) }
+	for _, t := range pending {
+		where, err := r.check(ctx, st, repos, Cut{}, t, false)
+		if err == nil {
+			err = r.push(ctx, t, ", cut offline")
+		}
+		var no refused
+		if err != nil && !errors.Is(err, ErrTaken) && !errors.As(err, &no) {
+			say("kept %s, cut offline: %s; the next online command tries again", t.Name, err)
+			failed = cmp.Or(failed, fmt.Errorf("%s, cut offline: %w", t.Name, err))
+			continue
+		}
+		if _, derr := Git(ctx, r.Dir, "update-ref", "-d", pendingRefs+t.Name); derr != nil {
+			return pushed, cmp.Or(failed, derr)
+		}
+		if err != nil {
+			why := err.Error()
+			if errors.Is(err, ErrTaken) {
+				why = "another clone took it"
+			}
+			say("dropped %s, cut offline: %s; cut again", t.Name, why)
+			continue
+		}
+		pushed = append(pushed, t)
+		d, err := r.draft(ctx, st, Draft{From: t.Commit}, t.Version.RC == 0)
+		if err == nil {
+			err = r.finish(ctx, t, d, where, "")
+		}
+		if err != nil {
+			say("pushed %s, cut offline, but didn't finish: %s; a deploy of it builds what is missing, and a Reconcile after an hour records it", t.Name, err)
+			failed = cmp.Or(failed, err)
+		}
+	}
+	return pushed, failed
 }
 
 // artifact is the digest of image (<registry>/<name>) for tag t: under the

@@ -2,9 +2,13 @@ package release_test
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/guilbep/git-board/internal/gitbugio"
 	"github.com/guilbep/git-board/internal/release"
@@ -352,10 +356,12 @@ func TestOfflineRefusesWrites(t *testing.T) {
 	if d := draft(t, r, false); d.From != m {
 		t.Errorf("offline draft from %.7s, want dev's", d.From)
 	}
-	_, cutErr := r.Cut(ctx, release.Cut{})
+	_, deployErr := r.Cut(ctx, release.Cut{Deploy: true})
+	_, notesErr := r.Cut(ctx, release.Cut{Notes: "x"})
+	_, hotfixErr := r.Cut(ctx, release.Cut{Hotfix: true})
 	_, promoteErr := r.Promote(ctx, "v1.0.1-rc.1")
 	rollbackErr := r.Rollback(ctx, "prod", "v1.0.0", "x")
-	for name, err := range map[string]error{"cut": cutErr, "promote": promoteErr, "rollback": rollbackErr} {
+	for name, err := range map[string]error{"cut and deploy": deployErr, "cut with notes": notesErr, "hotfix": hotfixErr, "promote": promoteErr, "rollback": rollbackErr} {
 		if err == nil || !strings.Contains(err.Error(), "offline") {
 			t.Errorf("offline %s: err = %v", name, err)
 		}
@@ -363,23 +369,343 @@ func TestOfflineRefusesWrites(t *testing.T) {
 	if got := releasetest.Git(t, fx.AppBare, "tag", "-l"); got != "v1.0.0\nv1.0.1-rc.1" || len(tools.Tagged) != 0 {
 		t.Errorf("tags %q, tagged %q offline", got, tools.Tagged)
 	}
+	if p, err := release.Pending(ctx, fx.App); err != nil || len(p) != 0 {
+		t.Errorf("pending %+v, %v after refusals", p, err)
+	}
 }
 
-func TestDevOnlyNeverTags(t *testing.T) {
-	r, _, fx := releasetest.NewRunner(t, "dev")
-	c := fx.Commit(t, "fix")
-	both(t, fx, "dev", release.Deployed{Commit: c, Version: "0.0.1-dev.2.g" + c[:7]})
-	want := "dev is the only environment: dev-only apps don't release"
-	_, draftErr := r.Draft(ctx, false)
-	_, cutErr := r.Cut(ctx, release.Cut{})
-	_, promoteErr := r.Promote(ctx, "v0.0.1-rc.1")
-	for name, err := range map[string]error{"draft": draftErr, "cut": cutErr, "promote": promoteErr} {
-		if err == nil || err.Error() != want {
-			t.Errorf("%s: err = %v, want %q", name, err, want)
+// unplug moves the app's remote and the config repos away, as a lost
+// network would, until the returned func puts them back.
+func unplug(t *testing.T, fx *releasetest.Fixture) func() {
+	t.Helper()
+	dirs := append([]string{fx.AppBare}, fx.ConfigBare...)
+	for _, d := range dirs {
+		if err := os.Rename(d, d+".away"); err != nil {
+			t.Fatal(err)
 		}
+	}
+	return func() {
+		t.Helper()
+		for _, d := range dirs {
+			if err := os.Rename(d+".away", d); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+}
+
+// cutOffline cuts as release cut --offline --no-deploy, unplugged, once an
+// online status has left the config repos' caches.
+func cutOffline(t *testing.T, r *release.Runner, fx *releasetest.Fixture) release.Tag {
+	t.Helper()
+	status(t, r)
+	plug := unplug(t, fx)
+	defer plug()
+	r.Offline = true
+	defer func() { r.Offline = false }()
+	return cut(t, r, release.Cut{})
+}
+
+func TestOfflineCutWritesOnlyPending(t *testing.T) {
+	r, tools, fx := releasetest.NewRunner(t)
+	m := shipped(t, r, fx)
+	before := heads(t, fx)
+	tg := cutOffline(t, r, fx)
+	if tg.Name != "v1.0.1-rc.1" || tg.Commit != m {
+		t.Errorf("cut %s on %.7s, want v1.0.1-rc.1 on %.7s", tg.Name, tg.Commit, m)
+	}
+	if p, err := release.Pending(ctx, fx.App); err != nil || len(p) != 1 || p[0].Name != tg.Name || p[0].Commit != m {
+		t.Errorf("pending %+v, %v", p, err)
+	}
+	for _, repo := range []string{fx.App, fx.AppBare} {
+		if got := releasetest.Git(t, repo, "tag", "-l"); got != "v1.0.0" {
+			t.Errorf("%s has tags %q", repo, got)
+		}
+	}
+	if len(tools.Built) != 0 || len(tools.Tagged) != 0 || len(tools.Charts) != 0 {
+		t.Errorf("built %+v, tagged %q, charts %v offline", tools.Built, tools.Tagged, tools.Charts)
+	}
+	if recs, err := r.B.Releases(); err != nil || len(recs) != 0 {
+		t.Errorf("records %+v, %v offline", recs, err)
+	}
+	if !slices.Equal(heads(t, fx), before) {
+		t.Error("an overlay moved offline")
+	}
+	plug := unplug(t, fx)
+	r.Offline = true
+	_, err := r.Cut(ctx, release.Cut{Final: true})
+	r.Offline = false
+	plug()
+	if err == nil || !strings.Contains(err.Error(), tg.Name) {
+		t.Errorf("second offline cut: err = %v, want it to name %s", err, tg.Name)
+	}
+}
+
+// Online, a cut pushes the cut made offline and stops there: it was that
+// cut. The tag is made at the push, then the images, the chart and the
+// record with the notes drafted then; it deploys nowhere, as it was cut.
+func TestOnlineFinishesOfflineCut(t *testing.T) {
+	r, tools, fx := releasetest.NewRunner(t)
+	m := shipped(t, r, fx)
+	pending := cutOffline(t, r, fx)
+	before, online := heads(t, fx), time.Now().Unix()
+	tg := cut(t, r, release.Cut{Deploy: true})
+	if tg.Name != pending.Name || tg.Commit != m {
+		t.Errorf("cut %s on %.7s, want the pending %s on %.7s", tg.Name, tg.Commit, pending.Name, m)
+	}
+	if got := releasetest.Git(t, fx.AppBare, "tag", "-l"); got != "v1.0.0\nv1.0.1-rc.1" {
+		t.Errorf("tags %q", got)
+	}
+	got := releasetest.Git(t, fx.AppBare, "for-each-ref", "--format=%(creatordate:unix) %(contents:subject)", "refs/tags/"+tg.Name)
+	date, subject, _ := strings.Cut(got, " ")
+	if n, _ := strconv.ParseInt(date, 10, 64); n < online || subject != tg.Name+" (git-board)" {
+		t.Errorf("tag %q, want made at the push (%d) by git-board", got, online)
+	}
+	if p, err := release.Pending(ctx, fx.App); err != nil || len(p) != 0 {
+		t.Errorf("pending %+v, %v once pushed", p, err)
+	}
+	rec, ok, err := r.B.ReleaseFor(m)
+	if err != nil || !ok || len(rec.Artifacts) != 4 || rec.Previous != "v1.0.0" || !strings.Contains(rec.Notes, "#12") ||
+		rec.Chart.Version != tg.Name || rec.Chart.Digest != tools.Charts["oci://ghcr.test/app/helm "+tg.Name] {
+		t.Errorf("record = %+v, %v, %v", rec, ok, err)
+	}
+	if got := records(t, fx.AppBare); len(got) != 2 { // one ref, its object
+		t.Errorf("pushed records %q", got)
+	}
+	if !slices.Equal(heads(t, fx), before) {
+		t.Error("finishing a cut made without a deploy deployed")
+	}
+}
+
+// A cut made offline that is pushed but doesn't finish is said, not
+// returned: a rollback, a promotion or a deploy never waits on it.
+func TestOfflineCutUnfinishedNeverBlocks(t *testing.T) {
+	r, tools, fx := releasetest.NewRunner(t)
+	m := shipped(t, r, fx)
+	tg := cutOffline(t, r, fx)
+	tools.FailScan["ghcr.test/app/backend:scan-"+m] = true
+	said := saidBy(r)
+	if err := r.Reconcile(ctx); err != nil {
+		t.Fatalf("Reconcile: %v, want the unfinished cut said, not returned", err)
+	}
+	if !slices.ContainsFunc(*said, func(s string) bool {
+		return strings.HasPrefix(s, "pushed "+tg.Name+", cut offline, but didn't finish: ")
+	}) {
+		t.Errorf("said %q", *said)
+	}
+	if got := releasetest.Git(t, fx.AppBare, "tag", "-l"); got != "v1.0.0\nv1.0.1-rc.1" {
+		t.Errorf("tags %q", got)
+	}
+	if p, err := release.Pending(ctx, fx.App); err != nil || len(p) != 0 {
+		t.Errorf("pending %+v, %v once pushed", p, err)
+	}
+}
+
+// An online cut that pushed the cut made offline returns its failure to
+// finish: it was that cut.
+func TestOnlineCutReturnsOfflineCutUnfinished(t *testing.T) {
+	r, tools, fx := releasetest.NewRunner(t)
+	m := shipped(t, r, fx)
+	pending := cutOffline(t, r, fx)
+	tools.FailScan["ghcr.test/app/backend:scan-"+m] = true
+	tg, err := r.Cut(ctx, release.Cut{})
+	if tg.Name != pending.Name || err == nil || !strings.Contains(err.Error(), "vulnerabilities") {
+		t.Errorf("Cut = %s, %v, want %s and its scan's failure", tg.Name, err, pending.Name)
+	}
+}
+
+// A cut made offline whose push fails, its name not taken, is kept for
+// the next online command, and said; a cut stops on it, as it would take
+// its name.
+func TestOfflineCutKeptOnAFailedPush(t *testing.T) {
+	r, _, fx := releasetest.NewRunner(t)
+	shipped(t, r, fx)
+	tg := cutOffline(t, r, fx)
+	hook := filepath.Join(fx.AppBare, "hooks", "pre-receive")
+	if err := os.WriteFile(hook, []byte("#!/bin/sh\nif grep -q ' refs/tags/'; then echo no tags today >&2; exit 1; fi\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	said := saidBy(r)
+	if err := r.Reconcile(ctx); err != nil {
+		t.Fatalf("Reconcile: %v, want the failed push said, not returned", err)
+	}
+	if !slices.ContainsFunc(*said, func(s string) bool { return strings.HasPrefix(s, "kept "+tg.Name+", cut offline: ") }) {
+		t.Errorf("said %q", *said)
+	}
+	if _, err := r.Cut(ctx, release.Cut{}); err == nil || !strings.Contains(err.Error(), tg.Name) {
+		t.Errorf("Cut: %v, want it stopped on the kept %s", err, tg.Name)
+	}
+	if got := releasetest.Git(t, fx.AppBare, "tag", "-l"); got != "v1.0.0" {
+		t.Errorf("tags %q while pushes fail", got)
+	}
+	if err := os.Remove(hook); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.Reconcile(ctx); err != nil {
+		t.Fatalf("Reconcile: %v", err)
+	}
+	if got := releasetest.Git(t, fx.AppBare, "tag", "-l"); got != "v1.0.0\nv1.0.1-rc.1" {
+		t.Errorf("tags %q once pushes pass", got)
+	}
+	if p, err := release.Pending(ctx, fx.App); err != nil || len(p) != 0 {
+		t.Errorf("pending %+v, %v once pushed", p, err)
+	}
+}
+
+// saidBy collects the details r's done steps say.
+func saidBy(r *release.Runner) *[]string {
+	said := &[]string{}
+	r.Step = func(s release.Step) {
+		if s.State == "done" {
+			*said = append(*said, s.Detail)
+		}
+	}
+	return said
+}
+
+func TestOfflineCutTakenDropsIt(t *testing.T) {
+	r, tools, fx := releasetest.NewRunner(t)
+	m := shipped(t, r, fx)
+	tg := cutOffline(t, r, fx)
+	other := cloneOf(t, fx.AppBare)
+	releasetest.Git(t, other, "tag", "-a", tg.Name, "-m", "theirs", m)
+	releasetest.Git(t, other, "push", "-q", "origin", "refs/tags/"+tg.Name)
+	said := saidBy(r)
+	if err := r.Reconcile(ctx); err != nil {
+		t.Fatalf("Reconcile: %v", err)
+	}
+	if want := "dropped v1.0.1-rc.1, cut offline: another clone took it; cut again"; !slices.Contains(*said, want) {
+		t.Errorf("said %q, want %q", *said, want)
+	}
+	if p, err := release.Pending(ctx, fx.App); err != nil || len(p) != 0 {
+		t.Errorf("pending %+v, %v once taken", p, err)
+	}
+	if got := releasetest.Git(t, fx.App, "tag", "-l", tg.Name, "--format=%(contents:subject)"); got != "theirs" {
+		t.Errorf("local %s says %q, want theirs", tg.Name, got)
+	}
+	if len(tools.Built) != 0 || len(tools.Tagged) != 0 || len(tools.Charts) != 0 {
+		t.Errorf("built %+v, tagged %q, charts %v after a taken name", tools.Built, tools.Tagged, tools.Charts)
+	}
+	if recs, err := r.B.Releases(); err != nil || len(recs) != 0 {
+		t.Errorf("records %+v, %v after a taken name", recs, err)
+	}
+}
+
+// Online, the cut made offline is checked again on what is fetched: one
+// that no longer holds is dropped, and nothing is pushed.
+func TestOfflineCutCheckedAgainOnline(t *testing.T) {
+	r, _, fx := releasetest.NewRunner(t)
+	shipped(t, r, fx)
+	first := releasetest.Git(t, fx.App, "rev-list", "--max-parents=0", "HEAD")
+	tg := cutOffline(t, r, fx)
+	other := cloneOf(t, fx.AppBare) // meanwhile prod took a hotfix the cut lacks
+	releasetest.Git(t, other, "checkout", "-q", "-b", "hotfix/1.0.1", first)
+	h := releasetest.Commit(t, other, "hotfix")
+	releasetest.Git(t, other, "push", "-q", "origin", "hotfix/1.0.1")
+	both(t, fx, "prod", release.Deployed{Commit: h, Version: "v1.0.1"})
+	said := saidBy(r)
+	if err := r.Reconcile(ctx); err != nil {
+		t.Fatalf("Reconcile: %v", err)
+	}
+	if !slices.ContainsFunc(*said, func(s string) bool {
+		return strings.HasPrefix(s, "dropped "+tg.Name+", cut offline: it doesn't contain what runs in prod")
+	}) {
+		t.Errorf("said %q, want %s dropped for prod's hotfix", *said, tg.Name)
+	}
+	if got := releasetest.Git(t, fx.AppBare, "tag", "-l"); got != "v1.0.0" {
+		t.Errorf("tags %q", got)
+	}
+	if p, err := release.Pending(ctx, fx.App); err != nil || len(p) != 0 {
+		t.Errorf("pending %+v, %v once dropped", p, err)
+	}
+}
+
+// singleEnv is a fonts-like app: prod alone, following the trunk, running
+// a commit it returns.
+func singleEnv(t *testing.T) (*release.Runner, *releasetest.Fixture, string) {
+	t.Helper()
+	r, _, fx := releasetest.NewRunner(t, "prod")
+	prod := "prod"
+	r.Cfg.Follow = &prod
+	c := fx.Commit(t, "fix")
+	both(t, fx, "prod", release.Deployed{Commit: c, Version: "0.0.1-dev.2.g" + c[:7]})
+	return r, fx, c
+}
+
+// A single-environment app tags what it runs, a final, and deploys
+// nowhere: prod already runs the commit.
+func TestSingleEnvironmentCutsWhatRuns(t *testing.T) {
+	r, fx, c := singleEnv(t)
+	if d := draft(t, r, false); d.From != c || strings.Contains(d.Tag, "-rc.") {
+		t.Errorf("draft from %.7s tag %s, want %.7s and a final", d.From, d.Tag, c)
+	}
+	before := heads(t, fx)
+	tg := cut(t, r, release.Cut{Deploy: true})
+	if tg.Commit != c || tg.Version.RC != 0 {
+		t.Errorf("cut %s on %.7s, want a final on %.7s", tg.Name, tg.Commit, c)
+	}
+	if got := releasetest.Git(t, fx.AppBare, "tag", "-l"); got != tg.Name {
+		t.Errorf("tags %q, want %s", got, tg.Name)
+	}
+	if _, recorded, err := r.B.ReleaseFor(c); err != nil || !recorded {
+		t.Errorf("recorded %v, %v", recorded, err)
+	}
+	if !slices.Equal(heads(t, fx), before) {
+		t.Error("the cut moved an overlay")
+	}
+}
+
+// Offline, a single-environment app cuts its final as it would online,
+// deploy asked or not: it deploys nowhere either way.
+func TestSingleEnvironmentCutsOffline(t *testing.T) {
+	r, fx, c := singleEnv(t)
+	status(t, r)
+	before := heads(t, fx)
+	plug := unplug(t, fx)
+	r.Offline = true
+	pending := cut(t, r, release.Cut{Deploy: true})
+	r.Offline = false
+	plug()
+	tg := cut(t, r, release.Cut{Deploy: true})
+	if tg.Name != pending.Name || tg.Commit != c || tg.Version.RC != 0 {
+		t.Errorf("cut %s on %.7s, want the pending final %s on %.7s", tg.Name, tg.Commit, pending.Name, c)
+	}
+	if got := releasetest.Git(t, fx.AppBare, "tag", "-l"); got != tg.Name {
+		t.Errorf("tags %q, want %s", got, tg.Name)
+	}
+	if _, recorded, err := r.B.ReleaseFor(c); err != nil || !recorded {
+		t.Errorf("recorded %v, %v", recorded, err)
+	}
+	if !slices.Equal(heads(t, fx), before) {
+		t.Error("the cut moved an overlay")
+	}
+}
+
+func TestSingleEnvironmentPromoteRefused(t *testing.T) {
+	r, fx, _ := singleEnv(t)
+	_, err := r.Promote(ctx, "v0.0.1-rc.1")
+	want := "prod follows dev and is the last environment: nothing to promote; release cut tags what it runs"
+	if err == nil || err.Error() != want {
+		t.Errorf("err = %v, want %q", err, want)
 	}
 	if got := releasetest.Git(t, fx.AppBare, "tag", "-l"); got != "" {
 		t.Errorf("tags %q", got)
+	}
+}
+
+// A rollback goes back to a single-environment app's tag.
+func TestSingleEnvironmentRollback(t *testing.T) {
+	r, fx, c := singleEnv(t)
+	tg := cut(t, r, release.Cut{})
+	n := fx.Commit(t, "newer")
+	if err := r.Deploy(ctx, "prod", release.Target{Commit: n}); err != nil {
+		t.Fatalf("Deploy: %v", err)
+	}
+	if err := r.Rollback(ctx, "prod", tg.Name, "test"); err != nil {
+		t.Fatalf("Rollback: %v", err)
+	}
+	if e := envOf(t, status(t, r), "prod"); e.Commit != c || e.Version != tg.Name {
+		t.Errorf("prod runs %.7s as %s, want %.7s as %s", e.Commit, e.Version, c, tg.Name)
 	}
 }
 

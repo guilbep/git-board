@@ -1128,7 +1128,7 @@ test('stepState', () => { /* done before the running step, now on it, todo after
   dev [--watch]`), `docs/prd/release.md` (a "Built" note with dates and
   what the live test showed)
 
-- [ ] **Step 1: Write the README lines** in the Usage list's style.
+- [x] **Step 1: Write the README lines** in the Usage list's style.
 - [ ] **Step 2: Live test, asking the user first** (it pushes images and
   tags): guilbep/git-board-test as the app (a two-image Dockerfile
   set), a scratch config repo with dev/stage/prod overlays as the
@@ -1150,3 +1150,95 @@ test('stepState', () => { /* done before the running step, now on it, todo after
      the right moments.
 - [ ] **Step 3: Run** `make ci` and the web checks — PASS.
 - [ ] **Step 4: Commit** `docs(release): usage, and what the live test showed`
+
+---
+
+### Task 18: Single-environment apps tag what runs
+
+Settled on 54d0f401 (GB-17): an app whose followed environment is its
+last (fonts: `environments = ["prod"]`, `follow = "prod"`) may cut.
+
+**Files:**
+- Modify: `internal/release/draft.go` (`devOnly` leaves Draft),
+  `internal/release/cut.go` (Cut no longer refuses; Promote does)
+- Test: `internal/release/cut_test.go` (replaces `TestDevOnlyNeverTags`)
+
+**Behaviour:**
+- Draft and Cut take what the followed environment runs, as a final
+  (no candidate environments), and deploy nowhere: that environment
+  already runs the commit, and a deploy would only roll its pods.
+- Promote still refuses, worded for any position of `follow` (T9):
+  `prod follows main and is the last environment: nothing to promote;
+  release cut tags what it runs`.
+- Rollback can target such a tag. The next `deploy prod` (or `--watch`)
+  moves the environment forward again, as follow means.
+
+- [ ] **Step 1: Write the failing tests** `TestSingleEnvironmentCutsWhatRuns`
+  (tag on the running commit, a record, no overlay change),
+  `TestSingleEnvironmentPromoteRefused` (the message),
+  `TestSingleEnvironmentRollback`.
+- [ ] **Step 2: Run** — FAIL. **Step 3: Implement.** **Step 4: Run** — PASS.
+- [ ] **Step 5: Commit** `feat(release): a single-environment app tags what it runs`
+
+---
+
+### Task 19: An offline cut, finished online
+
+Settled on 54d0f401 (GB-17): `git-board release cut --offline
+--no-deploy` works without a network; the next online command finishes it.
+
+**Files:**
+- Modify: `internal/release/cut.go`, `internal/release/runner.go`
+  (Reconcile), `internal/release/git.go`, `cmd/git-board/release.go`
+  (`--offline`)
+- Test: `internal/release/cut_test.go`, `cmd/git-board/release_test.go`
+
+**Behaviour:**
+- `--offline` sets `Runner.Offline`. Offline, Cut refuses a deploy (it
+  needs `--no-deploy`, but where the one environment follows the trunk
+  and a cut deploys nowhere), notes (drafted once the cut is pushed, editable on
+  the record after) and `--hotfix` (the pending ref doesn't carry it, so
+  the online check would refuse it). A failed fetch's message names
+  `--offline`; nothing guesses offline from a failed fetch (auth fails the
+  same way).
+- Offline, Cut runs the checks the local state allows (the config repos'
+  caches, local tags and records), then writes a pending cut: the ref
+  `refs/git-board/cuts/<tag>` on the commit. Nothing else. One pending cut
+  at a time: a second offline cut is refused, naming it. `release status`
+  lists it.
+- A pending cut is not under `refs/tags`, so `git fetch --tags` never
+  clashes with it, and Status and Reconcile never record it.
+- Online, Reconcile fetches, then checks each pending cut again on what
+  it fetched (the same checks a cut runs), then pushes it. `PushTag`
+  makes the annotated tag then, so its date (Reconcile's grace clock)
+  starts at the push. Taken, or no longer allowed: the ref is dropped and
+  the step says `dropped v…, cut offline: <why>; cut again`, with nothing
+  else written. Another push failure keeps the ref and returns the error.
+  Pushed: the ref is dropped, and the second half of a cut runs: images,
+  chart, record with the notes drafted then. That half is factored out
+  of `cut()`, not copied.
+- An online cut that pushed a pending cut stops there: it was that cut,
+  deployed nowhere. Promote, rollback and deploy push it on their way.
+
+- [x] **Step 1: Write the failing tests** `TestOfflineCutWritesOnlyPending`,
+  `TestOnlineFinishesOfflineCut` (tag dated at the push, images, record),
+  `TestOfflineCutTakenDropsIt` (another clone pushed the name: no tag,
+  no record, the fetch succeeds), `TestOfflineCutCheckedAgainOnline`
+  (prod took a hotfix meanwhile), `TestSingleEnvironmentCutsOffline`,
+  the refusals in
+  `TestOfflineRefusesWrites`, and the CLI's `TestCutOffline`.
+- [x] **Step 2: Run** — FAIL. **Step 3: Implement.** **Step 4: Run** — PASS.
+- [x] **Step 5: Commit** `feat(release): cut offline, finished by the next online command`
+
+---
+
+### Task 20: The whole-branch review
+
+- [x] **Step 1:** One review on the most capable model over every
+  `(release)` commit (`git log --grep='(release)'`, from ba62d6c, the new
+  ones too), pointed at the deferred minors T1–T14 in GB-17.
+- [x] **Step 2:** One round of fixes, each with its test.
+- [x] **Step 3:** One re-review of the fixes. What is left is adjudicated:
+  each of T1–T14 is fixed, or stays deferred with its reason in
+  `docs/prd/release.md`'s "Built" note.
+- [x] **Step 4: Commit** each fix as `fix(release): …`.

@@ -10,6 +10,10 @@ import (
 	"github.com/git-bug/git-bug/cache"
 	"github.com/git-bug/git-bug/repository"
 	"github.com/git-bug/gitconfig"
+
+	"github.com/guilbep/git-board/internal/gitbugio"
+	"github.com/guilbep/git-board/internal/release"
+	"github.com/guilbep/git-board/internal/release/releasetest"
 )
 
 const htmlTestConfig = `
@@ -323,5 +327,56 @@ func TestHTMLInlinesEPFLDesignSystem(t *testing.T) {
 	}
 	if page := readGenerated(t, site, "current-sprint.html"); !strings.Contains(page, `class="active" aria-current="page">current-sprint<`) {
 		t.Errorf("current-sprint.html: expected its own nav entry marked active")
+	}
+}
+
+// TestHTMLWritesReleases: with [release], the export has releases.html — the
+// environment strip, the releases table and each release's notes inline —
+// and without it, no such file is written.
+func TestHTMLWritesReleases(t *testing.T) {
+	r, _, fx := releasetest.NewRunner(t)
+	t.Chdir(fx.App)
+
+	c := releasetest.Git(t, fx.App, "rev-list", "--max-parents=0", "HEAD")
+	fx.Tag(t, c, "v1.0.1-rc.1")
+	rec, err := r.B.CreateRelease(gitbugio.ReleaseRecord{Commit: c})
+	if err != nil {
+		t.Fatalf("CreateRelease: %v", err)
+	}
+	if err := r.B.SetReleaseNotes(rec.ID, "Notes first line.\n\nAnd more."); err != nil {
+		t.Fatalf("SetReleaseNotes: %v", err)
+	}
+	for i := range fx.ConfigBare {
+		fx.SetOverlay(t, i, "stage", release.Deployed{Commit: c, Version: "v1.0.1-rc.1"})
+	}
+	if err := os.WriteFile(filepath.Join(fx.App, configPath), []byte(fx.Config(t)), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	// one git-bug cache per repo: release the fixture's before the command
+	// opens its own
+	if err := r.B.Close(); err != nil {
+		t.Fatalf("close backend: %v", err)
+	}
+
+	site := filepath.Join(t.TempDir(), "site")
+	out, err := execute(t, []string{"html", "-o", site})
+	if err != nil {
+		t.Fatalf("execute: %v\noutput:\n%s", err, out)
+	}
+	page := readGenerated(t, site, "releases.html")
+	for _, want := range []string{"v1.0.1-rc.1", "stage", "Notes first line."} {
+		if !strings.Contains(page, want) {
+			t.Errorf("expected %q in releases.html:\n%s", want, page)
+		}
+	}
+
+	// without [release], the export writes no releases.html
+	newHTMLTestRepo(t)
+	plain := filepath.Join(t.TempDir(), "site")
+	if _, err := execute(t, []string{"html", "-o", plain}); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(plain, "releases.html")); err == nil {
+		t.Errorf("releases.html written without [release]")
 	}
 }

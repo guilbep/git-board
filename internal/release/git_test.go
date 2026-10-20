@@ -67,6 +67,29 @@ func TestPushTagTaken(t *testing.T) {
 	}
 }
 
+// A clone is renamed in whole: two opening the same repo at once both
+// read it.
+func TestOpenConfigRepoClonesWhole(t *testing.T) {
+	identity(t)
+	bare := releasetest.NewConfigRepo(t, map[string]string{"epfl/app/overlays/dev/kustomization.yaml": devOverlay})
+	cache := t.TempDir()
+	errs := make(chan error, 2)
+	for range 2 {
+		go func() {
+			c, err := release.OpenConfigRepo(ctx, cache, bare)
+			if err == nil {
+				_, err = c.Read(ctx, "epfl/app/overlays/dev")
+			}
+			errs <- err
+		}()
+	}
+	for range 2 {
+		if err := <-errs; err != nil {
+			t.Error(err)
+		}
+	}
+}
+
 func TestUpdateReplaysOnRejectedPush(t *testing.T) {
 	identity(t)
 	bare := releasetest.NewConfigRepo(t, map[string]string{

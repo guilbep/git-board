@@ -4,7 +4,7 @@
 // of a release's page and its dialogs (ReleasePage.vue, CutReleaseDialog,
 // RollbackDialog): the cut's tag and label, the checks, rollback targets.
 // Pure, no "@/" imports: node runs releases.test.ts on it.
-import type { Draft, EnvState, ReleaseJob, ReleaseRow, ReleaseStep, ReleaseVersion, TargetState } from './api/board.ts';
+import type { Draft, EnvState, IssueEnvironment, ReleaseJob, ReleaseRow, ReleaseStep, ReleaseVersion, TargetState } from './api/board.ts';
 
 // a release tag: v1.4.20, v1.4.20-rc.2 (release.ParseTag)
 export const tagPattern = /^v(\d+)\.(\d+)\.(\d+)(?:-rc\.(\d+))?$/;
@@ -15,6 +15,21 @@ export type EnvMark = 'prod' | 'stage' | 'dev' | 'off';
 export function envMark(role: EnvState['role'], here: boolean): EnvMark {
   if (!here) return 'off';
   return role === 'last' ? 'prod' : role === 'candidate' ? 'stage' : 'dev';
+}
+
+// envLine: an issue's Development line, one piece per environment, in the
+// environments' order: "in dev", "in stage · v1.4.20-rc.2", "not in prod".
+// A version shows only when it is a release tag (the followed environment's
+// bare dev version doesn't). The marks follow the roles by position, as the
+// config has them: the first environment is followed (dev), the last is
+// prod, the ones between are candidates (stage).
+export function envLine(envs: IssueEnvironment[]): { text: string; mark: EnvMark }[] {
+  const n = envs.length;
+  return envs.map((e, i) => {
+    const role: EnvState['role'] = i === n - 1 ? 'last' : i === 0 ? 'follow' : 'candidate';
+    const version = e.in && tagPattern.test(e.version) ? ` · ${e.version}` : '';
+    return { text: `${e.in ? 'in' : 'not in'} ${e.name}${version}`, mark: envMark(role, e.in) };
+  });
 }
 
 export interface VersionGroup {

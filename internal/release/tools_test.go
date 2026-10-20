@@ -47,7 +47,7 @@ func TestExecBuildReadsMetadata(t *testing.T) {
 }
 
 func TestExecPushChartDigest(t *testing.T) {
-	fakeBin(t, "helm", `printf 'Pushed: reg/chart:1.0.0\nDigest: sha256:def\n'`)
+	fakeBin(t, "helm", `printf 'Pushed: reg/chart:1.0.0\nDigest: sha256:def\n' >&2`) // as helm 4 does
 	d, err := release.Exec().PushChart(context.Background(), "chart-1.0.0.tgz", "oci://reg")
 	if err != nil || d != "sha256:def" {
 		t.Fatalf("got %q %v", d, err)
@@ -67,6 +67,14 @@ func TestExecScanFails(t *testing.T) {
 	err := release.Exec().Scan(context.Background(), "reg/img:abc")
 	if err == nil || !strings.Contains(err.Error(), "reg/img:abc") {
 		t.Fatalf("err = %v, want it to name the ref", err)
+	}
+}
+
+func TestExecSaysHowToInstall(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+	err := release.Exec().Scan(context.Background(), "reg/img:abc")
+	if err == nil || !strings.Contains(err.Error(), "trivy isn't installed") || !strings.Contains(err.Error(), "brew install trivy") {
+		t.Fatalf("err = %v, want it to say how to install trivy", err)
 	}
 }
 

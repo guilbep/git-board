@@ -129,6 +129,52 @@ func TestCutNoDeploy(t *testing.T) {
 	}
 }
 
+// Offline, a cut keeps its tag pending, status says so, and the next
+// online cut pushes and finishes it.
+func TestCutOffline(t *testing.T) {
+	_, fx := releaseRepo(t)
+	c := first(t, fx)
+	fx.Tag(t, c, "v1.0.0")
+	both(t, fx, "stage", release.Deployed{Commit: c, Version: "v1.0.0"})
+	both(t, fx, "prod", release.Deployed{Commit: c, Version: "v1.0.0"})
+	m := fx.Merge(t, "fix/12-a", "")
+	both(t, fx, "dev", release.Deployed{Commit: m, Version: "1.0.1-dev.1.g" + m[:7]})
+	run(t, "release", "status") // the config repos' caches
+	away := append([]string{fx.AppBare}, fx.ConfigBare...)
+	for _, d := range away {
+		if err := os.Rename(d, d+".away"); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if _, err := execute(t, []string{"release", "cut", "--offline"}); err == nil || !strings.Contains(err.Error(), "--no-deploy") {
+		t.Errorf("--offline without --no-deploy: err = %v", err)
+	}
+	if _, err := execute(t, []string{"release", "cut", "--no-deploy"}); err == nil || !strings.Contains(err.Error(), "--offline --no-deploy") {
+		t.Errorf("unplugged cut: err = %v, want the --offline hint", err)
+	}
+	if out := run(t, "release", "cut", "--offline", "--no-deploy"); !strings.Contains(out, "kept v1.0.1-rc.1") {
+		t.Errorf("offline cut said:\n%s", out)
+	}
+	for _, d := range away {
+		if err := os.Rename(d+".away", d); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if out := run(t, "release", "status"); !strings.Contains(out, "pending v1.0.1-rc.1 on "+m[:7]) {
+		t.Errorf("status said:\n%s", out)
+	}
+	if out := run(t, "release", "cut", "--no-deploy"); !strings.Contains(out, "pushed v1.0.1-rc.1, cut offline") || !strings.Contains(out, "cut v1.0.1-rc.1") {
+		t.Errorf("online cut said:\n%s", out)
+	}
+	if got := releasetest.Git(t, fx.AppBare, "tag", "-l"); got != "v1.0.0\nv1.0.1-rc.1" {
+		t.Errorf("tags %q", got)
+	}
+	if out := run(t, "release", "status"); strings.Contains(out, "pending") {
+		t.Errorf("status once pushed said:\n%s", out)
+	}
+}
+
 func TestRollbackNeedsReason(t *testing.T) {
 	releaseRepo(t)
 	_, err := execute(t, []string{"release", "rollback", "prod", "v1.0.0"})

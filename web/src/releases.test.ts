@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import type { Draft, EnvState, ReleaseJob, ReleaseRow, ReleaseStep, TargetState } from './api/board.ts';
-import { behindText, bump, checkIcon, cutHint, cutLabel, groupReleases, jobTitle, markClass, nextTag, older, olderFinals, plural, promotion, registryName, releaseBadge, releasePath, repoName, repoNames, sha7, splitParts, splitText, stepLabel, stepState, takenOf } from './releases.ts';
+import type { Draft, EnvState, IssueEnvironment, ReleaseJob, ReleaseRow, ReleaseStep, TargetState } from './api/board.ts';
+import { behindText, bump, checkIcon, cutHint, cutLabel, envLine, groupReleases, jobTitle, markClass, nextTag, older, olderFinals, plural, promotion, registryName, releaseBadge, releasePath, repoName, repoNames, sha7, splitParts, splitText, stepLabel, stepState, takenOf } from './releases.ts';
 
 function row(name: string): ReleaseRow {
   const [, major, minor, patch, rc] = /^v(\d+)\.(\d+)\.(\d+)(?:-rc\.(\d+))?$/.exec(name)!.map(Number);
@@ -164,6 +164,21 @@ test('the small helpers', () => {
   assert.deepEqual(markClass('dev'), ['gb-envmark', '']);
   assert.deepEqual(markClass('prod'), ['gb-envmark', 'gb-envmark-prod']);
   assert.deepEqual(repoNames([env({ targets: [target('enack8s', 'v1'), target('openshift', 'v1')] })]), { enack8s: 'enack8s', openshift: 'openshift' });
+});
+
+test('envLine: in, in with a version, not in', () => {
+  const envs: IssueEnvironment[] = [
+    { name: 'dev', version: '1.4.21-dev.7.g8c41d2e', in: true },
+    { name: 'stage', version: 'v1.4.20-rc.2', in: true },
+    { name: 'prod', version: '', in: false },
+  ];
+  assert.deepEqual(envLine(envs), [
+    { text: 'in dev', mark: 'dev' },
+    { text: 'in stage · v1.4.20-rc.2', mark: 'stage' },
+    { text: 'not in prod', mark: 'off' },
+  ]);
+  // a final in the last environment: its mark, and its version
+  assert.deepEqual(envLine([{ name: 'prod', version: 'v1.4.20', in: true }]), [{ text: 'in prod · v1.4.20', mark: 'prod' }]);
 });
 
 test('olderFinals: the finals before what the environment runs, not yanked', () => {

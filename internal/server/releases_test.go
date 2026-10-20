@@ -233,6 +233,16 @@ func TestSecondJobConflicts(t *testing.T) {
 	}
 }
 
+// A cut from the page while a cut made offline waits is refused: the cut
+// would push that one instead, without the page's notes or deploy.
+func TestCutRefusedWhileOneWaits(t *testing.T) {
+	_, ts, fx := releaseServer(t)
+	releasetest.Git(t, fx.App, "update-ref", "refs/git-board/cuts/v1.0.0", firstCommit(t, fx))
+	if status, code, msg := coded(t, "POST", ts.URL+"/api/releases", map[string]any{"deploy": true}); status != http.StatusConflict || code != "pending" || !strings.Contains(msg, "v1.0.0") {
+		t.Errorf("POST cut = %d %q %q, want 409 pending naming v1.0.0", status, code, msg)
+	}
+}
+
 func TestCutTakenIsCoded(t *testing.T) {
 	_, ts, fx := releaseServer(t)
 	c := firstCommit(t, fx)
@@ -375,6 +385,23 @@ func TestReleasesRunnerFreedAfterAPanic(t *testing.T) {
 	}()
 	if !s.runnerMu.TryLock() {
 		t.Fatal("a quick write that panicked left the runner held")
+	}
+	s.runnerMu.Unlock()
+}
+
+func TestReleaseJobPanicFailsIt(t *testing.T) {
+	s, _, _ := releaseServer(t)
+	run, err := s.runner()
+	if err != nil {
+		t.Fatal(err)
+	}
+	job := &releaseJob{Kind: "cut", State: "running", Steps: []release.Step{}, Started: time.Now()}
+	s.runJob(job, run, func(context.Context, *release.Runner) (string, error) { panic("engine exploded") })
+	if job.State != "failed" || job.Error != "panic: engine exploded" {
+		t.Errorf("job %s %q, want it failed with the panic", job.State, job.Error)
+	}
+	if !s.runnerMu.TryLock() {
+		t.Fatal("a job that panicked left the runner held")
 	}
 	s.runnerMu.Unlock()
 }

@@ -46,6 +46,38 @@ needed. `git` must be on the path (branches' "in dev, squashed" asks
 too (see its `INSTALLATION.md`, "The bridge-sync fork"), so that both read
 and write the repository the same way.
 
+### What else to install
+
+git-board runs on `git` alone, git-bug built in. The rest is per feature,
+and only for that feature:
+
+| For | Install (macOS) |
+|---|---|
+| `lint --create-labels`, `bridge` (GitHub Projects) | `brew install gh`, then `gh auth login` |
+| Start an agent (Cycle, Work) | [wtx](https://github.com/EPFL-ENAC/wtx) |
+| `release` and `deploy`, with `[release] images` | Docker Desktop (buildx), `brew install crane trivy` |
+| `release` and `deploy`, with `[release] chart` | `brew install helm` (3.8+) |
+
+A release command missing one names it and says how to get it.
+
+**Docker** builds with an SBOM and provenance, which Docker Desktop's
+default builder keeps only with the containerd image store (Settings ›
+General › "Use containerd for pulling and storing images"). Otherwise,
+make a builder that does, once: `docker buildx create --name git-board
+--driver docker-container --use`.
+
+**Pushing to ghcr.io** needs a token with `write:packages`. `gh` has one
+once asked:
+
+```bash
+gh auth refresh -h github.com -s write:packages
+gh auth token | docker login ghcr.io -u <github-login> --password-stdin
+gh auth token | helm registry login ghcr.io -u <github-login> --password-stdin
+```
+
+crane uses docker's login. Another registry: its own `docker login` and
+`helm registry login`.
+
 ## Display convention: every `ns:value` label is a field
 
 Every surface that shows an issue's fields — `ls`/`view`'s table (and
@@ -200,6 +232,23 @@ git-board sprint ls
 git-board sprint current
 git-board sprint new q1-hardening --title "Q1 Hardening" --start 2026-10-05
 git-board sprint report delivery
+
+# what runs in each environment, and cut/promote/roll back/adopt/yank a
+# release ([release] in .git-board.toml)
+git-board release
+git-board release cut
+git-board release cut --final --version 1.4.20
+git-board release cut --offline --no-deploy  # tags locally; the next online command pushes it
+git-board release promote v1.4.20-rc.2
+git-board release rollback prod v1.4.19 --reason "bad chart"
+git-board release adopt --yes
+git-board release notes --all
+git-board release yank v1.4.19 --reason "corrupts uploads"
+
+# deploy the trunk's head to the environment that follows it; --watch keeps
+# it there, fetching every minute and deploying when behind, until interrupted
+git-board deploy dev
+git-board deploy dev --watch
 ```
 
 `@me` (in filters, e.g. the `mine` view, or as a field value) resolves from
@@ -714,6 +763,11 @@ filter/sort/group semantics as `ls`/`view`/the web API — and the TUI's
 display name (`Status: ready`) instead of raw `status:ready` label text.
 **Read-only** — writes nothing to git-bug, unlike everything else in this
 CLI except `ls`/`view`/`get`/`lint`.
+
+When the project has a `[release]` table, the export also writes
+`releases.html`: the environment strip, the releases table and each
+release's notes inline, read offline (the runner doesn't fetch) with the
+export's own stylesheet. Without `[release]`, no such page.
 
 `layout = "table"` vs `"board"` in a view's config picks the page shape: a
 `"board"` view renders one column per bucket (kanban-style, cards); anything

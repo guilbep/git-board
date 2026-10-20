@@ -190,7 +190,14 @@ func (s *apiServer) runJob(job *releaseJob, r *release.Runner, f func(ctx contex
 		job.Tag = tag
 		s.releaseMu.Unlock()
 	}
-	tag, err := f(context.Background(), r)
+	tag, err := func() (tag string, err error) {
+		defer func() { // a job runs on its own goroutine: a panic would take the server down
+			if p := recover(); p != nil {
+				err = fmt.Errorf("panic: %v", p)
+			}
+		}()
+		return f(context.Background(), r)
+	}()
 	s.releaseMu.Lock()
 	now := time.Now()
 	job.State, job.Ended = "done", &now
@@ -496,6 +503,16 @@ func (s *apiServer) handleCut(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		c.Version, subject = v, v.Tag()
+	}
+	// a cut would push the one made offline instead, without these notes
+	// or the deploy
+	if p, err := release.Pending(r.Context(), run.Dir); err != nil || len(p) > 0 {
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err)
+			return
+		}
+		writeCoded(w, http.StatusConflict, "pending", fmt.Errorf("%s, cut offline, isn't pushed yet: a deploy, or git-board release cut, pushes it first", p[0].Name))
+		return
 	}
 	s.startJob(w, run, "cut", subject, func(ctx context.Context, run *release.Runner) (string, error) {
 		t, err := run.Cut(ctx, c)

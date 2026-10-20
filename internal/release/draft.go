@@ -43,12 +43,8 @@ type Draft struct {
 // trunk's head: the next version from the issues merged since the previous
 // final, the tag, the notes and the checks. final drafts the final rather
 // than the next candidate; an app without candidate environments only cuts
-// finals, and a dev-only one none. It fetches unless Offline, and writes
-// nothing.
+// finals. It fetches unless Offline, and writes nothing.
 func (r *Runner) Draft(ctx context.Context, final bool) (Draft, error) {
-	if err := r.devOnly(); err != nil {
-		return Draft{}, err
-	}
 	st, err := r.Status(ctx)
 	if err != nil {
 		return Draft{}, err
@@ -298,13 +294,11 @@ func (r *Runner) contains(ctx context.Context, e EnvState, from string) (string,
 	return "", nil
 }
 
-// devOnly refuses a release of an app whose last environment follows the
-// trunk: dev-only apps never tag.
-func (r *Runner) devOnly() error {
-	if f := r.Cfg.Followed(); f != "" && f == r.Cfg.Last() {
-		return fmt.Errorf("%s is the only environment: dev-only apps don't release", f)
-	}
-	return nil
+// followsLast tells whether the last environment follows the trunk: a
+// single-environment app, whose cut tags what it runs and deploys nowhere.
+func (r *Runner) followsLast() bool {
+	f := r.Cfg.Followed()
+	return f != "" && f == r.Cfg.Last()
 }
 
 // final tells whether a cut is a final: asked for, or the app has no

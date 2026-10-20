@@ -306,7 +306,8 @@ Rules:
   last.
 - **Apps with only two environments, or one, skip the rc.** dev + prod
   releases straight to `v1.0.1`. Prod-only releases from `dev`'s head.
-  Dev-only apps never tag.
+  An app whose one environment follows the trunk tags what it runs, a
+  final, and deploys nowhere; it has nothing to promote.
 - **Dev's version is derived, never stored.** It is the next patch, plus the
   number of commits since the last tag, plus the SHA, in the style of Go
   pseudo-versions. SemVer ranks it below every rc: `1.0.1-dev.12.gabc1234
@@ -315,6 +316,11 @@ Rules:
 - **The tag is pushed first**, to the authority remote, before anything else
   is written. It acts as the compare-and-swap on the version name: of two
   clones cutting `rc.2`, one push is refused and that clone takes `rc.3`.
+  Offline (`release cut --offline --no-deploy`), the tag waits as a ref
+  outside `refs/tags`; the next online cut, promote, rollback or deploy
+  checks it again, pushes it and builds it, or drops it and says why. It
+  is dropped only when refused (the name is taken, its commit is yanked or
+  can't be cut); a check or push that fails keeps it for the next try.
 - **Hotfixes skip the candidate step.** co2's release policy already says a
   hotfix may "skip staging (emergency only)" (`release-management.md`).
   - A hotfix descends from the commit running in prod, so prod takes it
@@ -565,6 +571,87 @@ config repo with a dev/stage/prod overlay:
    author.
 8. An issue's Development line reads "in dev · in stage · not in prod" at
    the right moments.
+
+## Built
+
+*Built 2026-10-18 to 2026-10-19* (`docs/prd/release-plan.md`), decided on
+the way (GB-17):
+
+- **The chart follows the app version**: a chart is packaged and pushed
+  as the release's version, and `version_values` stay under the chart's
+  `valuesInline`.
+- **Reconcile's grace stays one hour**: a tag younger than that is left to
+  the clone cutting it.
+- **A cut can be made offline**: `release cut --offline --no-deploy`
+  writes `refs/git-board/cuts/<tag>`, and the next online command pushes,
+  builds and records it (see Tags). The Releases page refuses a cut while
+  one waits (409 "pending"), since it would push the waiting one instead.
+- **A single-environment app tags what it runs**, a final, and deploys
+  nowhere.
+- **Tags keep the ` (git-board)` suffix** in their message.
+
+### Review, 2026-10-19
+
+One review of every `(release)` commit from ba62d6c, one round of fixes,
+one re-review. T2 and T11 weren't on GB-17's list.
+
+Fixed:
+
+- **T1**: an environment without a name, a deploy without a repo, and
+  images without a registry are refused in the config (5b84d86).
+- **T4**: a config repo is cloned aside and renamed in, so a clone cut
+  short, or two processes cloning at once, never leave half a clone
+  (4ce5be3).
+- **T7**: a reconciled record lists an image once per registry (10aa737).
+- **T12**: a release job that panics fails, and the server stays up
+  (e99d7f9).
+- **An offline cut is kept unless refused**: a check that fails to read,
+  or a push the remote rejects, keeps the ref and says so; only a taken
+  name, a yanked commit, or a commit that can't be cut drops it
+  (cc04627).
+- **An offline cut that fails to finish never blocks**: once its tag is
+  pushed, a failed build is said as a step, and rollback, promote and
+  deploy go on; only the online cut it stood in for returns the error
+  (cc04627, c382201).
+
+Deferred:
+
+- **T3**: a malformed overlay errors in the config repo, and nothing is
+  written before the change succeeds.
+- **T4's rest**: `IsAncestor` drops git's stderr; a cache dir left by an
+  older half clone, or a clone killed midway (`.clone-*`), stays until
+  removed by hand.
+- **T5**: only `Revision`'s error is branched on; crane's other errors are
+  reported as they are.
+- **T6**: `Runner.fetch` uses `PullReleases`; two clones editing one
+  record merge through git-bug's dag, tested there.
+- **T7's rest**: two fetches per Reconcile, and `ReleaseFor` reading every
+  record, are latency at about a hundred releases.
+- **T8**: a chart is pushed again when its version has no record, and a
+  single-environment app redeploys the same commit under its new dev
+  version, once per cut. Bounded.
+- **T9**: the cut and deploy share `takes`, so the deploy's hotfix test
+  covers the cut; the wording is fixed.
+- **T10**: adoption is interactive, and a dead registry should be loud
+  there.
+- **T12's rest**: the releases fingerprint reads every tag (its ponytail
+  comment says so).
+- **T13**: issue counts on the Releases page need a design call;
+  `stepLabel` only mislabels a step name the Runner doesn't emit.
+- **T14**: one markdown request per comment, the duplicated save-error
+  style, and `OnTag` firing before the push (by design: a taken name is
+  named) are minor.
+- **Offline still clones a cold cache**: nothing can be read without the
+  clone, and the HTML export from a fresh checkout needs it.
+- **A pushed offline cut whose build failed** gets its images and chart
+  from `deploy <tag>`, and its record from a Reconcile past the grace,
+  without the chart's version or the notes, as an online cut whose finish
+  fails.
+- **A hotfix's Previous in a reconciled record** can name the newer trunk
+  final; the notes don't read it.
+
+Not a defect: a tag the Releases page lists is local before a deploy of it,
+since `/api/releases` fetches tags when the runner is free.
 
 ## Prior art
 

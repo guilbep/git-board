@@ -43,7 +43,7 @@
           <label class="epfl-label" for="cut-version">Version</label>
           <input id="cut-version" ref="versionInput" v-model="version" class="epfl-input" autocomplete="off" data-1p-ignore :aria-invalid="!tag || finalTaken" aria-describedby="cut-hint" />
         </div>
-        <div class="gb-field">
+        <div v-if="candidateEnv || lastEnv" class="gb-field">
           <span id="cut-kind" class="epfl-label">Goes to</span>
           <div class="gb-seg" role="group" aria-labelledby="cut-kind">
             <button v-if="candidateEnv" type="button" :aria-pressed="!final" @click="final = false">A candidate for {{ candidateEnv.name }}</button>

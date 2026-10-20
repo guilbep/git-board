@@ -108,6 +108,28 @@ func PushTag(ctx context.Context, dir, remote string, t Tag) (taken bool, err er
 	return false, err
 }
 
+// pendingRefs hold the cuts made offline, by tag name, on their commit,
+// until an online command pushes them: outside refs/tags, so a fetch never
+// clashes with one, and nothing reads one as a release.
+const pendingRefs = "refs/git-board/cuts/"
+
+// Pending lists the cuts made offline that no online command has pushed
+// yet, as the tags they push.
+func Pending(ctx context.Context, dir string) ([]Tag, error) {
+	out, err := Git(ctx, dir, "for-each-ref", "--format=%(refname:lstrip=3) %(objectname)", pendingRefs)
+	if err != nil || out == "" {
+		return nil, err
+	}
+	var tags []Tag
+	for _, line := range strings.Split(out, "\n") {
+		name, commit, _ := strings.Cut(line, " ")
+		if v, ok := ParseTag(name); ok {
+			tags = append(tags, Tag{Name: name, Commit: commit, Message: name + gitBoardMark, Version: v})
+		}
+	}
+	return tags, nil
+}
+
 // Change is one commit that touched an overlay.
 type Change struct {
 	Commit  string    `json:"commit"`
@@ -120,18 +142,33 @@ type Change struct {
 type ConfigRepo struct{ URL, Dir string }
 
 // OpenConfigRepo clones url into <cacheDir>/<first 12 hex of sha1(url)>, or just opens it when it is already there (no fetch: see Fetch).
+// The clone is made aside and renamed in, so a clone cut short, or two
+// processes cloning at once, never leave half a clone there.
 func OpenConfigRepo(ctx context.Context, cacheDir, url string) (*ConfigRepo, error) {
 	sum := sha1.Sum([]byte(url)) //nolint:gosec
 	dir := filepath.Join(cacheDir, hex.EncodeToString(sum[:])[:12])
-	if _, err := os.Stat(filepath.Join(dir, ".git")); err != nil {
-		if err := os.MkdirAll(cacheDir, 0o755); err != nil {
-			return nil, err
-		}
-		if _, err := Git(ctx, cacheDir, "clone", url, dir); err != nil {
-			return nil, err
-		}
+	c := &ConfigRepo{URL: url, Dir: dir}
+	if _, err := os.Stat(filepath.Join(dir, ".git")); err == nil {
+		return c, nil
 	}
-	return &ConfigRepo{URL: url, Dir: dir}, nil
+	if err := os.MkdirAll(cacheDir, 0o755); err != nil {
+		return nil, err
+	}
+	// ponytail: a process killed mid-clone leaves its .clone-* behind, unread
+	tmp, err := os.MkdirTemp(cacheDir, ".clone-")
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = os.RemoveAll(tmp) }()
+	if _, err := Git(ctx, cacheDir, "clone", url, tmp); err != nil {
+		return nil, err
+	}
+	if err := os.Rename(tmp, dir); err != nil {
+		if _, serr := os.Stat(filepath.Join(dir, ".git")); serr != nil {
+			return nil, err
+		}
+	} // else another process renamed its clone in first
+	return c, nil
 }
 
 // Fetch fetches origin and keeps origin/HEAD pointing at its default branch.

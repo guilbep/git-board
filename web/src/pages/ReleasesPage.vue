@@ -164,7 +164,8 @@ const lastCut = ref<CutRequest | null>(null);
 const running = computed(() => data.value?.job?.state === 'running');
 const busy = computed(() => running.value || pending.value);
 const envs = computed(() => data.value?.environments ?? []);
-const canCut = computed(() => envs.value.some((e) => e.role === 'candidate' || e.role === 'last'));
+// every app cuts: one whose only environment follows the trunk tags what it runs
+const canCut = computed(() => envs.value.length > 0);
 const list = new Intl.ListFormat('en', { type: 'conjunction' });
 // "dev, stage, prod · deployed to enack8s and openshift"
 const meta = computed(() => {
