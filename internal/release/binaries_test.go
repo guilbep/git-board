@@ -156,7 +156,8 @@ func TestInfer(t *testing.T) {
 		}
 	}
 	s, err := release.Infer(context.Background(), fx.App)
-	if err != nil || !slices.Equal(s.Binaries, []string{"./cmd/app", "./cmd/zed"}) || s.Build != "make dist" ||
+	// cmd/app is the program (the repo is acme/app): cmd/zed is one of its tools
+	if err != nil || !slices.Equal(s.Binaries, []string{"./cmd/app"}) || s.Build != "make dist" ||
 		!slices.Equal(s.Platforms, config.DefaultPlatforms) || s.Remote != "origin" || s.Forge != "github" || s.Repo != "acme/app" || s.Note != "" {
 		t.Errorf("%+v, %v", s, err)
 	}
