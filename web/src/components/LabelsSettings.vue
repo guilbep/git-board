@@ -13,9 +13,9 @@
       The labels the <router-link to="/settings/project-file">project file</router-link> defines, and how GitHub has them.
       Colors and descriptions are set in the file; a hex color like <code>"#d73a4a"</code> paints the dot.
     </p>
-    <p v-if="error" class="epfl-alert epfl-alert-danger" role="alert">{{ error }}</p>
+    <p v-if="error" ref="errorEl" class="epfl-alert epfl-alert-danger" role="alert">{{ error }}</p>
     <p v-for="e in errors" :key="e.repo" class="epfl-alert epfl-alert-warning" role="alert">{{ e.repo }}: {{ e.message }}</p>
-    <p v-if="result" class="epfl-alert epfl-alert-success" role="status">{{ result }}</p>
+    <p v-if="result" ref="resultEl" class="epfl-alert epfl-alert-success" role="status">{{ result }}</p>
     <p v-if="!d && !error" class="lb-muted">Loading…</p>
 
     <template v-if="d">
@@ -120,7 +120,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, nextTick, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { adoptLabel, deleteLabel, getLabels, getLint, sendLabels, type LabelChange, type LabelRow, type Labels, type Lint, type StrayLabel } from '@/api/board';
 import { configText } from '@/configdraft';
@@ -138,6 +138,8 @@ const asked = ref<StrayLabel | null>(null);
 const error = ref('');
 const result = ref('');
 const busy = ref<'' | 'adopt' | 'preview' | 'send' | 'count' | 'delete'>('');
+const errorEl = ref<HTMLElement | null>(null);
+const resultEl = ref<HTMLElement | null>(null);
 // a repository gh couldn't read, once even when both loads say it
 const errors = computed(() => [...new Map([...(d.value?.errors ?? []), ...(lint.value?.errors ?? [])].map((e) => [e.repo, e])).values()]);
 
@@ -157,6 +159,9 @@ async function run(kind: typeof busy.value, fn: () => Promise<void>) {
   } finally {
     busy.value = '';
   }
+  // the outcome shows above the table, the buttons are below it
+  await nextTick();
+  (errorEl.value ?? resultEl.value)?.scrollIntoView({ block: 'nearest' });
 }
 
 function load() {
@@ -187,9 +192,11 @@ const send = () =>
   run('send', async () => {
     const done = (await sendLabels(false)).changes;
     const failed = done.filter((c) => c.error);
+    const first = failed[0];
     plan.value = null;
-    result.value = `Sent ${changes(done.length - failed.length)} to GitHub.`;
-    if (failed.length) error.value = failed.map((c) => `${c.repo} ${c.name}: ${c.error}`).join('; ');
+    if (done.length > failed.length) result.value = `Sent ${changes(done.length - failed.length)} to GitHub.`;
+    // ponytail: the first failure only, they mostly share one cause (a token without write access)
+    if (first) error.value = `${failed.length} of ${changes(done.length)} failed, the first: ${first.repo} ${first.name}: ${first.error}`;
     load();
   });
 
