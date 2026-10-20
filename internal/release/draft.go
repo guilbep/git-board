@@ -204,6 +204,9 @@ func notes(issues []DraftIssue, kinds map[string]string) string {
 // the last environment runs, its images exist, and the environment it goes
 // to moves forward.
 func (r *Runner) checks(ctx context.Context, st Status, from string, final bool) ([]Check, error) {
+	if len(r.Cfg.Environments) == 0 {
+		return nil, nil // binaries only: nothing runs anywhere, no images
+	}
 	last, to := envNamed(st, r.Cfg.Last()), envNamed(st, r.deployTo(final))
 	runs := "It contains what runs in " + last.Name
 	if last.Adopted {

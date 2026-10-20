@@ -188,3 +188,29 @@ func TestInferGitBoard(t *testing.T) {
 		t.Errorf("%+v, %v", s, err)
 	}
 }
+
+// With no [branches] base, the trunk is the remote's default branch, the
+// way branches.Suggest reads it: a program on main releases from main.
+func TestBaseIsTheRemoteDefaultBranch(t *testing.T) {
+	r, _, fx := releasetest.NewRunner(t)
+	r.Base, r.Branches.Base = "", ""
+	if got := r.BaseBranch(); got != "dev" {
+		t.Errorf("no remote HEAD: %q, want dev", got)
+	}
+	head := filepath.Join(fx.App, ".git", "refs", "remotes", "origin", "HEAD")
+	if err := os.WriteFile(head, []byte("ref: refs/remotes/origin/main\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := r.BaseBranch(); got != "main" {
+		t.Errorf("remote HEAD on main: %q", got)
+	}
+}
+
+// A binaries-only draft has no environment checks: nothing runs anywhere.
+func TestBinariesDraftHasNoChecks(t *testing.T) {
+	r, _, _, _ := binariesApp(t)
+	d, err := r.Draft(context.Background(), true)
+	if err != nil || len(d.Checks) != 0 {
+		t.Errorf("checks %+v, %v", d.Checks, err)
+	}
+}
