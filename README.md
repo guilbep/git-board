@@ -57,6 +57,7 @@ and only for that feature:
 | Start an agent (Cycle, Work) | [wtx](https://github.com/EPFL-ENAC/wtx) |
 | `release` and `deploy`, with `[release] images` | Docker Desktop (buildx), `brew install crane trivy` |
 | `release` and `deploy`, with `[release] chart` | `brew install helm` (3.8+) |
+| `release`, with `[release] binaries` (publishes the GitHub release) | `brew install gh`, then `gh auth login` |
 
 A release command missing one names it and says how to get it.
 
@@ -244,6 +245,10 @@ git-board release rollback prod v1.4.19 --reason "bad chart"
 git-board release adopt --yes
 git-board release notes --all
 git-board release yank v1.4.19 --reason "corrupts uploads"
+
+# a Go program with no deploy targets: Enable binary release on the Releases
+# page writes [release] binaries and build for you; a cut then builds the
+# archives in a clean checkout of the tag and publishes them on GitHub
 
 # deploy the trunk's head to the environment that follows it; --watch keeps
 # it there, fetching every minute and deploying when behind, until interrupted
