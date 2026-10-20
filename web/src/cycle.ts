@@ -48,6 +48,7 @@ export interface SpineRow {
   name: string;
   state: 'done' | 'current' | 'todo';
   line: string;
+  gate: string;
 }
 
 const short = (sha?: string) => (sha ? sha.slice(0, 7) : '');
@@ -97,10 +98,32 @@ export function spine(c: Cycle, riskBy?: string): SpineRow[] {
     const n = i + 1;
     const state = c.done || n < c.step ? 'done' : n === c.step ? 'current' : 'todo';
     const skipped = c.skipped?.includes(n);
-    let line = skipped ? 'Skipped, low risk' : (state !== 'todo' && evidence(n)) || (n === c.step ? c.gate : gate(n, risk));
+    const g = skipped ? 'Skipped, low risk' : n === c.step ? c.gate : gate(n, risk);
+    let line = (!skipped && state !== 'todo' && evidence(n)) || g;
     if (state === 'current' && c.note) line += ` · ${c.note}`;
-    return { n, name, state, line };
+    return { n, name, state, line, gate: g };
   });
+}
+
+// The heading and items internal/cycle/cycle.go's Criteria reads.
+const criteriaHeading = /^\s*(#{1,6}\s*|\*\*)acceptance criteria:?(\*\*)?:?\s*$/i;
+const typedItem = /^([-*+]|\d+[.)])\s+|^\[[ xX]\]\s*/;
+
+// withCriteria is the description with the criteria written as a list:
+// under its "Acceptance criteria" heading if it has one (the server reads
+// the first), under a new one at the end otherwise.
+export function withCriteria(description: string, lines: string[]): string {
+  const list = lines
+    .map((l) => l.trim().replace(typedItem, '').replace(typedItem, '').trim())
+    .filter(Boolean)
+    .map((l) => `- ${l}`);
+  const ls = description.split('\n');
+  const h = ls.findIndex((l) => criteriaHeading.test(l));
+  if (h < 0) return `${description.trimEnd()}${description.trim() ? '\n\n' : ''}## Acceptance criteria\n\n${list.join('\n')}`;
+  let at = h + 1;
+  while (at < ls.length && !ls[at]?.trim()) at++;
+  const rest = ls.slice(at);
+  return [...ls.slice(0, h + 1), '', ...list, ...(rest.length ? ['', ...rest] : [])].join('\n');
 }
 
 export interface Tile {
