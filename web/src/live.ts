@@ -5,12 +5,13 @@
 // already shows it. The browser reconnects by itself; after a break,
 // listeners hear an "issues" event, since some may have been missed.
 import { ref } from 'vue';
-import { API_BASE, clientId } from '@/api/board';
+import { API_BASE, clientId, type SyncStep } from '@/api/board';
 
 export interface LiveEvent {
-  kind: 'issues' | 'config' | 'sync' | 'settings' | 'inbox' | 'releases';
+  kind: 'issues' | 'config' | 'sync' | 'settings' | 'inbox' | 'releases' | 'progress';
   id?: string; // the issue, when the change named one
   by?: string;
+  step?: SyncStep; // progress: where a forge run is
 }
 
 type Listener = (e: LiveEvent) => void;

@@ -40,11 +40,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { onBeforeUnmount, ref } from 'vue';
 import { syncIssue, type BridgeTally, type IssueSyncResult } from '@/api/board';
 import { forgeStatus } from '@/forges';
 import { message } from '@/issue';
 import { forgeLabel, tallyWords } from '@/issuesync';
+import { onLive } from '@/live';
+import { stepWords } from '@/ways';
 import GbIcon from '@/components/GbIcon.vue';
 
 const props = defineProps<{ id: string; waiting: number; onForges: boolean }>();
@@ -54,6 +56,12 @@ const busy = ref('');
 const plan = ref<IssueSyncResult | null>(null);
 const done = ref<IssueSyncResult | null>(null);
 const error = ref('');
+
+// the run's steps, as the server streams them (events.go progress)
+const offLive = onLive((e) => {
+  if (e.kind === 'progress' && e.id === props.id && e.step && busy.value) busy.value = stepWords(e.step, forgeStatus.value?.bridges ?? []);
+});
+onBeforeUnmount(offLive);
 
 const rows = (r: IssueSyncResult): [string, BridgeTally][] => Object.entries(r.bridges).sort(([a], [b]) => a.localeCompare(b));
 function label(bridge: string): string {

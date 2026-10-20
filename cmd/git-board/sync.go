@@ -84,6 +84,7 @@ func syncOne(out io.Writer, path, remote string) error {
 		}
 	}
 
+	fmt.Fprintf(out, "%s: pushing to %s...\n", path, remote)
 	pushOut, err := b.Push(remote)
 	if err != nil {
 		return fmt.Errorf("push: %w", err)

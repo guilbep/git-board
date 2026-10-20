@@ -57,8 +57,9 @@
         <p v-if="status && !status.bridges.length" class="gb-note">No forge has sync on. Switch one on in <router-link to="/settings/forges">Settings</router-link>, or <router-link to="/settings/forges?add=1">add one</router-link>.</p>
         <div v-else-if="status" class="gb-way-box">
           <div v-for="b in bridgeRows" :key="b.name" class="gb-way-row"><b>{{ b.name }}</b><span>{{ b.label }} · sync on</span></div>
-          <div v-if="running">{{ job!.dry_run ? 'Checking…' : `${modeName(job!.mode)} running…` }}</div>
+          <SyncProgress v-if="running" :job="job!" :bridges="status.bridges" :starting="job!.dry_run ? 'Checking…' : `${modeName(job!.mode)} running…`" />
           <div v-else-if="job?.dry_run && job.state === 'done'">Last check {{ when(job.ended ?? job.started, true) }}: {{ checkWords(job.bridges) }}</div>
+          <div v-else-if="job?.state === 'done'">{{ modeName(job.mode) }} finished {{ when(job.ended ?? job.started, true) }}: {{ doneWords(job) }}</div>
           <div v-else class="gb-note">Not checked yet</div>
         </div>
         <div class="gb-way-grid">
@@ -203,7 +204,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { applySync, checkSync, getRemotes, getViews, remoteAction, startForgeSync, type ForgeMode, type Remote, type SyncStatus } from '@/api/board';
-import { forgeStatus as status, loadForges } from '@/forges';
+import { forgeStatus as status, loadForges, onStep } from '@/forges';
 import { forgeLabel } from '@/issuesync';
 import { remotes } from '@/remotes';
 import { message } from '@/issue';
@@ -211,10 +212,11 @@ import { debounced, onLive } from '@/live';
 import { when } from '@/me';
 import { loadSyncStatus, syncStatus as project } from '@/sync';
 import { channels } from '@/settingstabs';
-import { aheadWords, checkWords, pendingWords, plural, pushWhat, runWords } from '@/ways';
+import { aheadWords, checkWords, doneWords, pendingWords, plural, pushWhat, runWords } from '@/ways';
 import AppHeader from '@/components/AppHeader.vue';
 import ChannelMap from '@/components/ChannelMap.vue';
 import GbIcon from '@/components/GbIcon.vue';
+import SyncProgress from '@/components/SyncProgress.vue';
 
 // a run creating this many issues on a forge asks for an explicit "I understand"
 const bigRun = 50;
@@ -240,7 +242,7 @@ async function remote(r: Remote, action: 'fetch' | 'pull' | 'push') {
   remoteDone.value = remoteError.value = '';
   try {
     remotes.value = (await remoteAction(r.name, action)).remotes;
-    remoteDone.value = { fetch: `Checked ${r.name}.`, pull: `Pulled from ${r.name}.`, push: `Pushed to ${r.name}.` }[action];
+    remoteDone.value = { fetch: `Checked ${r.name}.`, pull: `Pulled from ${r.name}.`, push: `Pushed ${pushWhat(r)} to ${r.name}.` }[action];
   } catch (e) {
     remoteError.value = message(e);
   } finally {
@@ -327,7 +329,10 @@ function pullFields() {
 
 // what to send changes with every edit, and with a pull elsewhere
 const reload = debounced(() => void loadRemotes());
-const offLive = onLive((e) => (e.kind === 'issues' || e.kind === 'sync') && reload());
+const offLive = onLive((e) => {
+  onStep(e);
+  if (e.kind === 'issues' || e.kind === 'sync') reload();
+});
 onBeforeUnmount(offLive);
 // a run's end: the links it made are to push
 watch(running, (now, was) => was && !now && reload());

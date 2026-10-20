@@ -112,7 +112,8 @@
           <button type="button" class="epfl-btn epfl-btn-primary epfl-btn-sm" :disabled="busy" @click="send(false)">Send all</button>
           <button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" :disabled="busy" @click="send(true)">Check first</button>
         </div>
-        <p v-if="sent" class="gb-hint">{{ sent }}</p>
+        <SyncProgress v-if="forgeStatus?.job?.state === 'running'" :job="forgeStatus.job" :bridges="forgeStatus.bridges" :starting="sent || 'Running…'" />
+        <p v-else-if="sent" class="gb-hint">{{ sent }}</p>
         <p class="gb-hint"><router-link to="/sync">Sync</router-link> has the git remotes.</p>
       </section>
       <section aria-labelledby="retro-h">
@@ -152,11 +153,14 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import AppHeader from '@/components/AppHeader.vue';
 import IssuePanel from '@/components/IssuePanel.vue';
+import SyncProgress from '@/components/SyncProgress.vue';
 import { agentAction, ApiError, getFields, getViews, getWork, patchIssue, startForgeSync, type Issue, type WorkResponse, type WorkRow } from '@/api/board';
 import { namespaces } from '@/facets';
 import type { Fields } from '@/fields';
+import { forgeStatus, loadForges, onStep } from '@/forges';
 import { forgeNumbers } from '@/issuesync';
 import { debounced, onLive } from '@/live';
+import { checkWords, doneWords } from '@/ways';
 import { me } from '@/me';
 import { panelMode } from '@/panelsize';
 import { actionFor, ago, retroWords, sendWords, stepLabel, waitsFor } from '@/work';
@@ -213,13 +217,22 @@ async function setRisk(r: WorkRow, risk: string) {
   }
 }
 
+// a run's end, started here or not: its one line
+watch(() => forgeStatus.value?.job?.state, (now, was) => {
+  const job = forgeStatus.value?.job;
+  if (was !== 'running' || !job || now === 'running') return;
+  if (job.state === 'failed') sent.value = `Stopped: ${job.error ?? ''}`;
+  else sent.value = job.dry_run ? `Checked: ${checkWords(job.bridges)}.` : `Sent: ${doneWords(job)}.`;
+});
+
 // send: everything the forges wait for; dry: a check, nothing moves
 async function send(dry: boolean) {
   busy.value = true;
   sent.value = '';
   try {
-    await startForgeSync(dry, dry ? 'sync' : 'send');
-    sent.value = dry ? 'Checking: Sync shows what would move.' : 'Sending: Sync shows the progress.';
+    forgeStatus.value = await startForgeSync(dry, dry ? 'sync' : 'send');
+    sent.value = dry ? 'Checking…' : 'Sending…';
+    void loadForges(); // polls while it runs
   } catch (e) {
     sent.value = e instanceof Error ? e.message : String(e);
   } finally {
@@ -287,8 +300,10 @@ watch(
 let stopLive = () => {};
 onMounted(async () => {
   stopLive = onLive((e) => {
+    onStep(e);
     if (e.kind === 'issues' || e.kind === 'sync') reloadSoon();
   });
+  void loadForges(); // a run going on shows here too
   try {
     viewNames.value = Object.keys(await getViews()).sort();
     fields.value = await getFields();

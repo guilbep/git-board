@@ -48,6 +48,93 @@ type forgeJob struct {
 	Bridges map[string]*bridgeTally `json:"bridges"`
 	Errors  int                     `json:"errors"`
 	Error   string                  `json:"error,omitempty"` // the run couldn't start or failed
+	Step    *syncStep               `json:"step,omitempty"`  // where it is, for a page loading mid-run
+}
+
+// syncStep is where a run is: the bridge, the way, how many issues that
+// way has come to so far, of how many (0 for a pull: the forge doesn't
+// say how many it holds), and the issue it is on.
+type syncStep struct {
+	Bridge string `json:"bridge"`
+	Way    string `json:"way"` // pull, push
+	Done   int    `json:"done"`
+	Total  int    `json:"total,omitempty"`
+	Issue  string `json:"issue,omitempty"` // "#43 import: users lose their work"
+}
+
+// stepper turns a run's results into its steps: one each time a way of a
+// bridge comes to another issue. name labels an issue; pushTotal is how
+// many a push walks (git-bug's Push goes through every local issue).
+// ponytail: a step per issue, not per operation; throttle by time if a
+// forge ever streams faster than the pages read.
+type stepper struct {
+	name      func(entity.Id) string
+	pushTotal int
+	counts    map[string]int // issues come to, per bridge and way
+	last      string         // bridge, way and issue of the last step
+}
+
+func (st *stepper) see(r core.SyncResult) (syncStep, bool) {
+	var way, reason string
+	var id entity.Id
+	switch {
+	case r.Import != nil:
+		way, id, reason = "pull", r.Import.EntityId, r.Import.Reason
+	case r.Export != nil:
+		way, id, reason = "push", r.Export.EntityId, r.Export.Reason
+	default:
+		return syncStep{}, false
+	}
+	tag := string(id)
+	if tag == "" {
+		// a dry run's "would import issue URL" names no issue yet; an
+		// error or a rate limit names none at all: the step stays
+		if !strings.HasPrefix(reason, "would import") {
+			return syncStep{}, false
+		}
+		tag = reason
+	}
+	key := r.Bridge + " " + way
+	if st.last == key+" "+tag {
+		return syncStep{}, false
+	}
+	st.last = key + " " + tag
+	if st.counts == nil {
+		st.counts = map[string]int{}
+	}
+	st.counts[key]++
+	s := syncStep{Bridge: r.Bridge, Way: way, Done: st.counts[key], Issue: strings.TrimPrefix(reason, "would import ")}
+	if id != "" {
+		s.Issue = st.name(id)
+	}
+	if way == "push" {
+		// ponytail: done may end a few short of total (issues gone on the
+		// forge emit nothing); the finish event closes the bar
+		s.Total = st.pushTotal
+	}
+	return s, true
+}
+
+// issueName labels an issue in a step: its project number, else its forge
+// number, else its short id, and its title.
+func (s *apiServer) issueName(id entity.Id) string {
+	i, err := s.b.GetIssue(string(id))
+	if err != nil {
+		return id.Human()
+	}
+	n := i.Number
+	if n == "" {
+		if f := i.BareNumber(); f != "" {
+			n = "#" + f
+		} else {
+			n = id.Human()
+		}
+	}
+	title := i.Shown
+	if title == "" {
+		title = i.Title
+	}
+	return n + " " + title
 }
 
 // bridgeTally counts what a run did, or would do (a dry run), on one
@@ -328,6 +415,12 @@ func (s *apiServer) runForgeSync(job *forgeJob, run func(context.Context, string
 			s.events.publish(event{Kind: "issues"})
 		}
 	}
+	st := stepper{name: s.issueName}
+	if job.Mode != "get" {
+		if issues, err := s.b.ListIssues(); err == nil {
+			st.pushTotal = len(issues)
+		}
+	}
 	results, err := run(context.Background(), job.Mode, job.DryRun, names)
 	if err != nil {
 		finish("failed", err.Error())
@@ -344,7 +437,14 @@ func (s *apiServer) runForgeSync(job *forgeJob, run func(context.Context, string
 		if r.IsError() {
 			job.Errors++
 		}
+		step, moved := st.see(r)
+		if moved {
+			job.Step = &step
+		}
 		s.forgeMu.Unlock()
+		if moved {
+			s.events.publish(event{Kind: "progress", Step: &step})
+		}
 	}
 	finish("done", "")
 }

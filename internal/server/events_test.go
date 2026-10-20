@@ -2,12 +2,17 @@ package server
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/git-bug/git-bug/bridge/core"
+	"github.com/git-bug/git-bug/entity"
 
 	"github.com/guilbep/git-board/internal/gitbugio/gitbugiotest"
 )
@@ -92,5 +97,67 @@ func TestWritesAreStreamed(t *testing.T) {
 	call(t, "PUT", ts.URL+"/api/views/live", map[string]string{"layout": "board", "filter": "is:open"}, nil)
 	if e := readEvent(t, sc); e.Kind != "config" {
 		t.Errorf("after a refused write, a preview and a view save: %+v, want the view save", e)
+	}
+}
+
+// A forge run says where it is: a step each time a way of a bridge comes
+// to another issue, streamed as it goes and kept on the job for a page
+// loading mid-run. One issue's own sync names the issue, for its drawer.
+func TestForgeSyncStreamsItsSteps(t *testing.T) {
+	t.Parallel()
+	ts, s := newIssueServer(t)
+	a := gitbugiotest.NewIssue(t, s.b, "Alpha")
+	b := gitbugiotest.NewIssue(t, s.b, "Beta")
+	bugA, commentA := core.NewImportBug(entity.Id(a)), core.NewImportComment(entity.Id(a), "")
+	bugB, oops := core.NewExportBug(entity.Id(b)), core.NewImportError(errors.New("oops"), "")
+	release := make(chan struct{})
+	s.runSync = fakeSync([]core.SyncResult{
+		{Bridge: "gh", Import: &bugA},
+		{Bridge: "gh", Import: &commentA}, // the same issue: no new step
+		{Bridge: "gh", Export: &bugB},
+		{Bridge: "gl", Import: &oops}, // names no issue: no step
+	}, release)
+	s.runIssueSync = func(_ context.Context, _ bool, id string) (<-chan core.SyncResult, error) {
+		out := make(chan core.SyncResult, 1)
+		r := core.NewImportComment(entity.Id(id), "")
+		out <- core.SyncResult{Bridge: "gh", Import: &r}
+		close(out)
+		return out, nil
+	}
+	resp, err := http.Get(ts.URL + "/api/events")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	sc := bufio.NewScanner(resp.Body)
+
+	if code := call(t, "POST", ts.URL+"/api/forges/sync", map[string]any{"dry_run": true}, nil); code != http.StatusAccepted {
+		t.Fatalf("start: %d", code)
+	}
+	if e := readEvent(t, sc); e.Kind != "sync" {
+		t.Fatalf("the start: %+v", e)
+	}
+	close(release)
+	want := []syncStep{
+		{Bridge: "gh", Way: "pull", Done: 1, Issue: entity.Id(a).Human() + " Alpha"},
+		{Bridge: "gh", Way: "push", Done: 1, Total: 2, Issue: entity.Id(b).Human() + " Beta"},
+	}
+	for _, w := range want {
+		if e := readEvent(t, sc); e.Kind != "progress" || e.Step == nil || *e.Step != w {
+			t.Errorf("step %+v, want %+v", e, w)
+		}
+	}
+	if e := readEvent(t, sc); e.Kind != "sync" {
+		t.Errorf("the end: %+v", e)
+	}
+	if st := waitJob(t, ts); st.Job.Step == nil || *st.Job.Step != want[1] {
+		t.Errorf("the job keeps its last step: %+v", st.Job.Step)
+	}
+
+	if code := call(t, "POST", ts.URL+"/api/issues/"+a+"/sync", map[string]bool{"dry_run": true}, nil); code != http.StatusOK {
+		t.Fatalf("one issue's sync: %d", code)
+	}
+	if e := readEvent(t, sc); e.Kind != "progress" || e.ID != a || e.Step == nil || e.Step.Issue != want[0].Issue {
+		t.Errorf("one issue's step names it: %+v", e)
 	}
 }
