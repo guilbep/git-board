@@ -296,9 +296,10 @@ func (r *Runner) contains(ctx context.Context, e EnvState, from string) (string,
 
 // followsLast tells whether the last environment follows the trunk: a
 // single-environment app, whose cut tags what it runs and deploys nowhere.
+// An app with no environment (binaries only) deploys nowhere too.
 func (r *Runner) followsLast() bool {
 	f := r.Cfg.Followed()
-	return f != "" && f == r.Cfg.Last()
+	return r.Cfg.Last() == "" || f != "" && f == r.Cfg.Last()
 }
 
 // final tells whether a cut is a final: asked for, or the app has no

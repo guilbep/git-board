@@ -30,6 +30,7 @@ type Runner struct {
 	Tools    Tools
 	CacheDir string       // where the config repos are cloned
 	Who      string       // login for commit messages
+	Repo     string       // owner/name on github.com of the authority remote; "" elsewhere: binaries can't publish
 	Step     func(Step)   // may be nil
 	OnTag    func(string) // may be nil: told the tag a cut or promote pushes, or tries to, once it knows it
 	Offline  bool         // no fetch of the app remote or config repos; a config repo not cloned yet is cloned
@@ -58,7 +59,7 @@ func New(cfg *config.Config, dir string, b *gitbugio.Backend) (*Runner, error) {
 	}
 	return &Runner{
 		Cfg: cfg.Release, Branches: cfg.Branches, Dir: dir, B: b, Tools: Exec(),
-		CacheDir: filepath.Join(common, "git-board", "release"), Who: who,
+		CacheDir: filepath.Join(common, "git-board", "release"), Who: who, Repo: b.GitHubRepo(cfg.Release.RemoteName()),
 	}, nil
 }
 

@@ -311,6 +311,10 @@ func (r *Runner) finish(ctx context.Context, t Tag, d Draft, where map[string][]
 		}
 		chart = gitbugio.ChartArtifact{Version: t.Name, Digest: digest}
 	}
+	assets, err := r.binaries(ctx, t, cmp.Or(notes, d.Notes))
+	if err != nil {
+		return err
+	}
 	return r.do("record", func() (string, error) {
 		detail := "kept " + rec.ID[:min(7, len(rec.ID))]
 		if !recorded {
@@ -318,7 +322,7 @@ func (r *Runner) finish(ctx context.Context, t Tag, d Draft, where map[string][]
 			if d.Previous != nil {
 				prev = d.Previous.Name
 			}
-			created, err := r.B.CreateRelease(gitbugio.ReleaseRecord{Commit: t.Commit, Previous: prev, Artifacts: arts, Chart: chart})
+			created, err := r.B.CreateRelease(gitbugio.ReleaseRecord{Commit: t.Commit, Previous: prev, Artifacts: arts, Chart: chart, Assets: assets})
 			if err != nil {
 				return "", err
 			}

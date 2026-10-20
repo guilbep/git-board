@@ -31,7 +31,7 @@ func newRunner() (*release.Runner, func(), error) {
 		return nil, nil, err
 	}
 	if !cfg.Release.Enabled() {
-		return nil, nil, errors.New("no [release] table with environments in .git-board.toml")
+		return nil, nil, errors.New("no [release] table with environments or binaries in .git-board.toml")
 	}
 	b, err := gitbugio.OpenCwd()
 	if err != nil {
