@@ -45,6 +45,9 @@ func TestForgeSyncFetchesWhoCanBeAssigned(t *testing.T) {
 	if !slices.Contains(a.People, "alice") || !slices.Contains(a.People, "bob") || len(a.Options) != 0 {
 		t.Errorf("assignee %+v: want alice and bob as people, no options", a)
 	}
+	if !slices.Contains(a.People, "guilbert") { // the identity the bridge's token tagged
+		t.Errorf("people %q: want the git-bug identities too", a.People)
+	}
 	if !slices.IsSortedFunc(a.People, func(x, y string) int { return strings.Compare(strings.ToLower(x), strings.ToLower(y)) }) {
 		t.Errorf("people %q: want sorted", a.People)
 	}
