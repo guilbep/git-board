@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/release"
 )
 
@@ -37,6 +38,7 @@ type releasesResponse struct {
 	Remote       string               `json:"remote"` // the authority, [release] remote
 	Trunk        string               `json:"trunk"`  // the trunk branch, e.g. dev
 	Environments []release.EnvState   `json:"environments"`
+	Binaries     []string             `json:"binaries"` // [release] binaries: a cut builds and publishes their archives
 	Releases     []release.ReleaseRow `json:"releases"`
 	Job          *releaseJob          `json:"job,omitempty"`
 }
@@ -261,7 +263,7 @@ func (s *apiServer) handleReleases(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, releasesResponse{Enabled: true, Remote: run.Cfg.RemoteName(), Trunk: run.BaseBranch(), Environments: orEmpty(st.Envs), Releases: orEmpty(st.Releases), Job: s.jobSnapshot()})
+	writeJSON(w, http.StatusOK, releasesResponse{Enabled: true, Remote: run.Cfg.RemoteName(), Trunk: run.BaseBranch(), Environments: orEmpty(st.Envs), Binaries: orEmpty(run.Cfg.Binaries), Releases: orEmpty(st.Releases), Job: s.jobSnapshot()})
 }
 
 func (s *apiServer) handleDraft(w http.ResponseWriter, r *http.Request) {
@@ -627,4 +629,73 @@ func (s *apiServer) handleRollback(w http.ResponseWriter, r *http.Request) {
 	s.startJob(w, run, "rollback", env+" to "+req.Tag, func(ctx context.Context, run *release.Runner) (string, error) {
 		return "", run.Rollback(ctx, env, req.Tag, req.Reason)
 	})
+}
+
+// handleSetup proposes the binary release setup of the repository served.
+func (s *apiServer) handleSetup(w http.ResponseWriter, r *http.Request) {
+	dir, err := os.Getwd()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	setup, err := release.Infer(r.Context(), dir)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, setup)
+}
+
+// handleEnable writes the [release] table of a binary release into
+// .git-board.toml and runs it: Enable binary release.
+func (s *apiServer) handleEnable(w http.ResponseWriter, r *http.Request) {
+	var req release.Setup
+	if !decode(w, r, &req) {
+		return
+	}
+	if s.config().Release.Enabled() {
+		writeCoded(w, http.StatusConflict, "enabled", errors.New("releases are enabled already: reload"))
+		return
+	}
+	dir, err := os.Getwd()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	if setup, err := release.Infer(r.Context(), dir); err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	} else if setup.Note != "" {
+		writeCoded(w, http.StatusBadRequest, "forge", errors.New(setup.Note))
+		return
+	}
+	done, ok := s.beginWrite(w)
+	if !ok {
+		return
+	}
+	defer done()
+	text, _, _, err := s.readConfigFile()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	text = config.WithRelease(text, config.Release{Binaries: req.Binaries, Platforms: req.Platforms, Build: req.Build, Remote: req.Remote})
+	cfg, res := checkConfig(text)
+	if !res.OK {
+		msg := res.Message
+		if res.Error != nil {
+			msg = res.Error.Error()
+		}
+		writeCoded(w, http.StatusBadRequest, "check", errors.New(msg))
+		return
+	}
+	if err := config.Save(s.configPath(), []byte(text)); err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	s.cfgMu.Lock()
+	s.cfg = cfg
+	s.cfgMu.Unlock()
+	s.events.publish(event{Kind: "config"})
+	writeJSON(w, http.StatusOK, map[string]any{})
 }

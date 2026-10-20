@@ -20,7 +20,8 @@ func TestReleaseRoundTrip(t *testing.T) {
 	mine, theirs := gitbugiotest.NewPair(t)
 	r, err := mine.CreateRelease(gitbugio.ReleaseRecord{Commit: releaseCommit, Previous: "v1.4.19",
 		Artifacts: []gitbugio.Artifact{{Image: "frontend", Registry: "ghcr.io/x", Digest: "sha256:aa"}},
-		Chart:     gitbugio.ChartArtifact{Version: "v1.4.20", Digest: "sha256:cc"}})
+		Chart:     gitbugio.ChartArtifact{Version: "v1.4.20", Digest: "sha256:cc"},
+		Assets:    []gitbugio.Asset{{Name: "git-board_v1.4.20_linux_amd64.tar.gz", SHA256: "ab"}}})
 	if err != nil {
 		t.Fatalf("CreateRelease: %v", err)
 	}
@@ -45,7 +46,7 @@ func TestReleaseRoundTrip(t *testing.T) {
 	}
 	if got.ID != r.ID || got.Commit != releaseCommit || got.Previous != "v1.4.19" || got.Notes != "A fix release." ||
 		len(got.Artifacts) != 1 || got.Artifacts[0] != (gitbugio.Artifact{Image: "frontend", Registry: "ghcr.io/x", Digest: "sha256:aa"}) ||
-		got.Chart.Digest != "sha256:cc" || got.Author == "" || got.Created.IsZero() || got.Yanked != "" {
+		got.Chart.Digest != "sha256:cc" || len(got.Assets) != 1 || got.Assets[0].Name != "git-board_v1.4.20_linux_amd64.tar.gz" || got.Author == "" || got.Created.IsZero() || got.Yanked != "" {
 		t.Errorf("their record = %+v, made %+v", got, r)
 	}
 	if len(got.Comments) != 1 || got.Comments[0].Message != "Looks good on stage." || got.Comments[0].Author != got.Author {

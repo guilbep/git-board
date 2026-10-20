@@ -94,3 +94,27 @@ func TestFakeToolsDigestRefsAndTags(t *testing.T) {
 		t.Fatalf("err = %v", err)
 	}
 }
+
+func TestExecPublish(t *testing.T) {
+	out := filepath.Join(t.TempDir(), "out")
+	t.Setenv("FAKE_OUT", out)
+	fakeBin(t, "gh", `echo "$@" > "$FAKE_OUT"; cat "${10}" >> "$FAKE_OUT"`)
+	err := release.Exec().Publish(context.Background(), "acme/app", "v1.0.0", "notes\n", []string{"a.tar.gz", "checksums.txt"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := os.ReadFile(out)
+	got := string(raw)
+	if !strings.HasPrefix(got, "release create v1.0.0 --repo acme/app --verify-tag --title v1.0.0 --notes-file ") ||
+		!strings.Contains(got, " a.tar.gz checksums.txt\nnotes\n") {
+		t.Errorf("gh got %q", got)
+	}
+}
+
+func TestExecPublishMissingGh(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+	err := release.Exec().Publish(context.Background(), "acme/app", "v1.0.0", "", nil)
+	if err == nil || !strings.Contains(err.Error(), "gh isn't installed: brew install gh, then gh auth login (README.md, Install)") {
+		t.Errorf("err %v", err)
+	}
+}

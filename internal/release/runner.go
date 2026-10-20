@@ -24,12 +24,13 @@ type Step struct {
 type Runner struct {
 	Cfg      config.Release
 	Branches config.Branches
-	Base     string            // the trunk branch; "": Branches.Base, else dev
+	Base     string            // the trunk branch; "": Branches.Base, else the remote's default branch, else dev
 	Dir      string            // the app repo's work tree
 	B        *gitbugio.Backend // the app repo's, for the release records
 	Tools    Tools
 	CacheDir string       // where the config repos are cloned
 	Who      string       // login for commit messages
+	Repo     string       // owner/name on github.com of the authority remote; "" elsewhere: binaries can't publish
 	Step     func(Step)   // may be nil
 	OnTag    func(string) // may be nil: told the tag a cut or promote pushes, or tries to, once it knows it
 	Offline  bool         // no fetch of the app remote or config repos; a config repo not cloned yet is cloned
@@ -58,12 +59,16 @@ func New(cfg *config.Config, dir string, b *gitbugio.Backend) (*Runner, error) {
 	}
 	return &Runner{
 		Cfg: cfg.Release, Branches: cfg.Branches, Dir: dir, B: b, Tools: Exec(),
-		CacheDir: filepath.Join(common, "git-board", "release"), Who: who,
+		CacheDir: filepath.Join(common, "git-board", "release"), Who: who, Repo: b.GitHubRepo(cfg.Release.RemoteName()),
 	}, nil
 }
 
 // base is the trunk branch, e.g. dev.
-func (r *Runner) base() string { return cmp.Or(r.Base, r.Branches.Base, "dev") }
+// base is the trunk: r.Base, else [branches] base, else the remote's
+// default branch (a binaries-only program releases from main), else dev.
+func (r *Runner) base() string {
+	return cmp.Or(r.Base, r.Branches.Base, r.B.RemoteHead(r.Cfg.RemoteName()), "dev")
+}
 
 // BaseBranch is the trunk branch, e.g. dev.
 func (r *Runner) BaseBranch() string { return r.base() }

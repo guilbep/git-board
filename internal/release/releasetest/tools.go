@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -18,14 +19,22 @@ type FakeImage struct{ Digest, Revision string }
 // registered image also answers under <repo>@<digest>. Copied and Scanned
 // hold "src → dst" / ref; Tagged holds "ref → tag".
 type Tools struct {
-	mu       sync.Mutex
-	Images   map[string]FakeImage
-	Built    []release.Build
-	Scanned  []string
-	Copied   []string
-	Tagged   []string
-	FailScan map[string]bool
-	Charts   map[string]string // registry + " " + version → digest
+	mu            sync.Mutex
+	Images        map[string]FakeImage
+	Built         []release.Build
+	Scanned       []string
+	Copied        []string
+	Tagged        []string
+	FailScan      map[string]bool
+	Charts        map[string]string // registry + " " + version → digest
+	Published     []Published       // the forge releases made
+	CopyPublished string            // a directory Publish copies its files into, for tests to open: the checkout is gone once the cut returns
+}
+
+// Published is a forge release Publish made.
+type Published struct {
+	Repo, Tag, Notes string
+	Files            []string
 }
 
 func NewTools() *Tools {
@@ -115,4 +124,23 @@ func (f *Tools) PushChart(_ context.Context, file, registry string) (string, err
 	d := fmt.Sprintf("sha256:%x", sha256.Sum256([]byte(registry+" "+version)))[:7+12]
 	f.Charts[registry+" "+version] = d
 	return d, nil
+}
+
+func (f *Tools) Publish(_ context.Context, repo, tag, notes string, files []string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.Published = append(f.Published, Published{Repo: repo, Tag: tag, Notes: notes, Files: files})
+	if f.CopyPublished == "" {
+		return nil
+	}
+	for _, file := range files {
+		raw, err := os.ReadFile(file)
+		if err != nil {
+			return err
+		}
+		if err := os.WriteFile(filepath.Join(f.CopyPublished, filepath.Base(file)), raw, 0o644); err != nil {
+			return err
+		}
+	}
+	return nil
 }

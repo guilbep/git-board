@@ -150,7 +150,7 @@
 
           <section class="gb-side-sec" aria-labelledby="imgs">
             <div class="gb-side-head"><h2 id="imgs" class="gb-section-title">Images</h2></div>
-            <p v-if="!images.length && !record?.chart.version" class="gb-hint">None recorded.</p>
+            <p v-if="!images.length && !record?.chart.version && !record?.assets?.length" class="gb-hint">None recorded.</p>
             <div v-else class="gb-artifacts">
               <div v-for="[name, img] in images" :key="name" class="gb-artifact"><b>{{ name }}</b><span class="gb-mono">{{ [...img.registries, short(img.digest)].join(' · ') }}</span></div>
               <div v-if="record?.chart.version" class="gb-artifact"><b>chart</b><span class="gb-mono">{{ [record.chart.version, ...(record.chart.digest ? [short(record.chart.digest)] : [])].join(' · ') }}</span></div>
@@ -159,6 +159,14 @@
               <template v-if="row.beforeGitBoard">Read from the registries by its tag, when it was recorded.</template>
               <template v-else><template v-if="!finalCut && row.tag.version.rc && last">The same digests go to {{ last.name }}. </template>Built once, for commit {{ sha7(row.tag.commit) }}.</template>
             </p>
+          </section>
+
+          <section v-if="record?.assets?.length" class="gb-side-sec" aria-labelledby="dl">
+            <div class="gb-side-head"><h2 id="dl" class="gb-section-title">Archives</h2></div>
+            <div class="gb-artifacts">
+              <div v-for="a in record.assets" :key="a.name" class="gb-artifact"><b>{{ a.name }}</b><span class="gb-mono">{{ short(a.sha256) }}</span></div>
+            </div>
+            <p class="gb-note gb-rel-after">Published on GitHub with the tag; sha256 as in checksums.txt.</p>
           </section>
 
           <section class="gb-side-sec" aria-labelledby="rec">

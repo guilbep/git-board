@@ -166,7 +166,12 @@ func (b *Backend) GitHubRepo(remote string) string {
 	if err != nil {
 		return ""
 	}
-	if m := githubURL.FindStringSubmatch(NoCredentials(urls[remote])); m != nil {
+	return GitHubRepoOf(urls[remote])
+}
+
+// GitHubRepoOf is "owner/name" of a remote URL on github.com, "" otherwise.
+func GitHubRepoOf(url string) string {
+	if m := githubURL.FindStringSubmatch(NoCredentials(url)); m != nil {
 		return m[1]
 	}
 	return ""

@@ -191,6 +191,8 @@ func newMux(s *apiServer, static http.Handler) http.Handler {
 	mux.HandleFunc("GET /api/releases/draft", s.handleDraft)
 	mux.HandleFunc("POST /api/releases", s.handleCut)
 	mux.HandleFunc("GET /api/releases/job", s.handleReleaseJob)
+	mux.HandleFunc("GET /api/releases/setup", s.handleSetup)
+	mux.HandleFunc("POST /api/releases/setup", s.handleEnable)
 	mux.HandleFunc("GET /api/releases/adopt", s.handleProposals)
 	mux.HandleFunc("POST /api/releases/adopt", s.handleAdopt)
 	mux.HandleFunc("GET /api/releases/{tag}", s.handleRelease)

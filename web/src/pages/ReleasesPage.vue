@@ -21,8 +21,26 @@
 
     <section v-if="data && !data.enabled" aria-labelledby="setup">
       <h2 id="setup" class="gb-h2 gb-rel-setup">No releases here yet</h2>
-      <div v-if="doc" class="gb-md" v-html="doc" />
-      <p><router-link to="/settings/project-file">Edit .git-board.toml in Settings</router-link></p>
+      <template v-if="setup && setup.binaries.length && !setup.note">
+        <p>git-board can cut binary releases of this repository from here. It found:</p>
+        <ul class="gb-plain-list">
+          <li v-for="l in setupLines(setup)" :key="l">{{ l }}</li>
+        </ul>
+        <details class="gb-rel-toml">
+          <summary>What it writes to .git-board.toml</summary>
+          <pre class="gb-mono">{{ setupToml(setup) }}</pre>
+        </details>
+        <p class="gb-hint">Publishing needs the gh CLI, signed in: <span class="gb-mono">gh auth login</span>.</p>
+        <div class="gb-actions">
+          <button type="button" class="epfl-btn epfl-btn-primary" :disabled="pending" @click="enable">Enable binary release</button>
+          <router-link class="epfl-btn epfl-btn-secondary" to="/settings/project-file">Edit .git-board.toml instead</router-link>
+        </div>
+      </template>
+      <template v-else>
+        <p v-if="setup?.note" class="epfl-alert epfl-alert-info" role="status">{{ setup.note }}</p>
+        <div v-if="doc" class="gb-md" v-html="doc" />
+        <p><router-link to="/settings/project-file">Edit .git-board.toml in Settings</router-link></p>
+      </template>
     </section>
 
     <template v-else-if="data">
@@ -124,7 +142,7 @@
     <!-- persistent while its POST is out, so a refusal lands in it; the
          content stays through the hide animation, cleared on hide -->
     <q-dialog v-model="dialogOpen" :persistent="pending" @hide="dialogOpen || (dialog = null)">
-      <CutReleaseDialog v-if="dialog?.kind === 'cut'" v-model:sending="pending" :envs="envs" :releases="data?.releases ?? []" :remote="data?.remote || 'origin'" :trunk="data?.trunk ?? ''" :busy="busy" @close="dialogOpen = false" @started="onCut" />
+      <CutReleaseDialog v-if="dialog?.kind === 'cut'" v-model:sending="pending" :envs="envs" :binaries="data?.binaries ?? []" :releases="data?.releases ?? []" :remote="data?.remote || 'origin'" :trunk="data?.trunk ?? ''" :busy="busy" @close="dialogOpen = false" @started="onCut" />
       <RollbackDialog v-else-if="dialog?.kind === 'rollback'" v-model:sending="pending" :env="dialog.env" :envs="envs" :releases="data?.releases ?? []" :busy="busy" @close="dialogOpen = false" @started="onStarted" />
     </q-dialog>
   </main>
@@ -138,10 +156,10 @@ import CutReleaseDialog from '@/components/CutReleaseDialog.vue';
 import GbIcon from '@/components/GbIcon.vue';
 import ReleaseJob from '@/components/ReleaseJob.vue';
 import RollbackDialog from '@/components/RollbackDialog.vue';
-import { adoptOverlays, cutRelease, deployEnvironment, getConfigDocs, getDraft, getReleases, getViews, promoteRelease, type CutRequest, type ReleaseJob as Job, type Proposal, type ReleaseRow, type Releases } from '@/api/board';
+import { adoptOverlays, cutRelease, deployEnvironment, enableRelease, getConfigDocs, getDraft, getReleaseSetup, getReleases, getViews, promoteRelease, type CutRequest, type ReleaseJob as Job, type Proposal, type ReleaseRow, type ReleaseSetup, type Releases } from '@/api/board';
 import { message } from '@/issue';
 import { debounced, onLive } from '@/live';
-import { behindText, byVersion, envMark, groupReleases, markClass, newest, promotion, releasePath, repoName, repoNames, runs, sha7, splitParts, tagPattern } from '@/releases';
+import { behindText, byVersion, envMark, groupReleases, markClass, newest, promotion, releasePath, repoName, repoNames, runs, setupLines, setupToml, sha7, splitParts, tagPattern } from '@/releases';
 import { remotes } from '@/remotes';
 import { on, when } from '@/when';
 
@@ -151,6 +169,7 @@ const error = ref('');
 const actionError = ref('');
 const pending = ref(false); // an action sent, its answer not back yet
 const doc = ref(''); // docs/configuration.md's ## Release, without [release]
+const setup = ref<ReleaseSetup | null>(null); // what Enable binary release proposes, without [release]
 const showAll = ref(false);
 // a job this page saw running stays shown once done; a failed one always
 const watched = ref(false);
@@ -164,12 +183,12 @@ const lastCut = ref<CutRequest | null>(null);
 const running = computed(() => data.value?.job?.state === 'running');
 const busy = computed(() => running.value || pending.value);
 const envs = computed(() => data.value?.environments ?? []);
-// every app cuts: one whose only environment follows the trunk tags what it runs
-const canCut = computed(() => envs.value.length > 0);
+// every app cuts: one whose only environment follows the trunk tags what it runs; binaries only, it publishes
+const canCut = computed(() => !!data.value?.enabled);
 const list = new Intl.ListFormat('en', { type: 'conjunction' });
 // "dev, stage, prod · deployed to enack8s and openshift"
 const meta = computed(() => {
-  if (!envs.value.length) return '';
+  if (!envs.value.length) return data.value?.binaries.length ? `${list.format(data.value.binaries)} · published on GitHub` : '';
   const targets = [...new Set(envs.value.flatMap((e) => e.targets.map((t) => t.name)))];
   return envs.value.map((e) => e.name).join(', ') + (targets.length ? ` · deployed to ${list.format(targets)}` : '');
 });
@@ -228,7 +247,10 @@ async function reload() {
     else actionError.value = ''; // a refusal while a job ran is stale once none runs
     data.value = r;
     error.value = '';
-    if (!r.enabled && !doc.value) doc.value = (await getConfigDocs()).find((d) => d.id === 'release')?.html ?? '';
+    if (!r.enabled) {
+      setup.value = await getReleaseSetup();
+      if ((setup.value.note || !setup.value.binaries.length) && !doc.value) doc.value = (await getConfigDocs()).find((d) => d.id === 'release')?.html ?? '';
+    }
   } catch (e) {
     error.value = message(e);
   }
@@ -243,6 +265,22 @@ async function start(f: () => Promise<Job>) {
     const job = await f();
     watched.value = true;
     if (data.value) data.value.job = job;
+  } catch (e) {
+    actionError.value = message(e);
+  } finally {
+    pending.value = false;
+  }
+}
+
+// Enable binary release: the server writes [release] and runs it
+async function enable() {
+  const s = setup.value;
+  if (!s) return;
+  actionError.value = '';
+  pending.value = true;
+  try {
+    await enableRelease(s);
+    await reload();
   } catch (e) {
     actionError.value = message(e);
   } finally {
@@ -302,6 +340,9 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+.gb-rel-toml { margin: 0.75rem 0; }
+.gb-rel-toml summary { cursor: pointer; }
+.gb-rel-toml pre { margin: 0.5rem 0 0; padding: 0.75rem; background: var(--gb-surface-2, #f5f5f5); border-radius: 4px; }
 .gb-rel-setup { margin: .75rem 0 1.5rem; }
 .gb-env-link { text-decoration: none; }
 .gb-rel-all { margin-top: 2.5rem; }

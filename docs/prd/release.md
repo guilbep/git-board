@@ -144,8 +144,9 @@ Facts the design builds on, checked in the repositories:
 
 ## Non-goals
 
-- Mirroring releases to GitHub Releases or GitLab Releases. A bridge can
-  come later, like the issue bridges.
+- Mirroring web app releases to GitHub Releases or GitLab Releases. A
+  binary release *is* a GitHub release (GB-19, 2026-10-20); GitLab and
+  Gitea come later.
 - Merge queues and speculative CI (bors, GitHub merge queue, Uber
   SubmitQueue): the compare-and-swap retry below is enough for a team this
   size.
@@ -589,6 +590,20 @@ the way (GB-17):
 - **A single-environment app tags what it runs**, a final, and deploys
   nowhere.
 - **Tags keep the ` (git-board)` suffix** in their message.
+
+*Built 2026-10-20* (GB-19): binary releases.
+
+- **`[release] binaries`, `platforms`, `build`**: a table with no
+  environments is enabled, finals only, deployed nowhere. The Releases
+  page's **Enable binary release** infers them from the repo and writes
+  the table.
+- **Built in a clean checkout of the tag**: Go cross-compiles per
+  platform (CGO off, stripped) into `<bin>_<tag>_<os>_<arch>.tar.gz`
+  (`.zip` for windows) with `checksums.txt`, or `build` fills `dist/`.
+- **Published with `gh release create` after the tag**, the draft's notes
+  as the body, every file of `dist/` attached.
+- **`assets` on the record**: the archives' names and sha256, so the
+  release's page shows what shipped, offline too.
 
 ### Review, 2026-10-19
 

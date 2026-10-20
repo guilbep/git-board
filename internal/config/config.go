@@ -266,6 +266,33 @@ func SetGithubProject(path, owner string, number int) error {
 	return nil
 }
 
+// WithRelease is content with its [release] table replaced, or appended,
+// by one of binaries, platforms, build (when set) and remote (when not
+// origin): what Enable binary release writes. The file's other tables and
+// comments stay. Pure: the server checks the result before saving it.
+func WithRelease(content string, r Release) string {
+	quoted := func(ss []string) string {
+		q := make([]string, len(ss))
+		for i, s := range ss {
+			q[i] = fmt.Sprintf("%q", s)
+		}
+		return strings.Join(q, ", ")
+	}
+	var b strings.Builder
+	b.WriteString("[release]\n")
+	fmt.Fprintf(&b, "binaries = [%s]\n", quoted(r.Binaries))
+	if len(r.Platforms) > 0 {
+		fmt.Fprintf(&b, "platforms = [%s]\n", quoted(r.Platforms))
+	}
+	if r.Build != "" {
+		fmt.Fprintf(&b, "build = %q\n", r.Build)
+	}
+	if r.Remote != "" && r.Remote != "origin" {
+		fmt.Fprintf(&b, "remote = %q\n", r.Remote)
+	}
+	return upsertTable(content, "[release]", b.String())
+}
+
 // upsertTable replaces the named top-level table (header through the line
 // before the next "[" header, or EOF) if present, else appends it — a
 // blank line ahead of it if the file is non-empty.

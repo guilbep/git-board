@@ -31,9 +31,12 @@ type Tools interface {
 	Tag(ctx context.Context, ref, tag string) error
 	PackageChart(ctx context.Context, path, version, dir string) (file string, err error)
 	PushChart(ctx context.Context, file, registry string) (digest string, err error)
+	// Publish makes the forge's release of tag on repo (owner/name) with
+	// notes as its body and files attached: the tag is pushed already.
+	Publish(ctx context.Context, repo, tag, notes string, files []string) error
 }
 
-// Exec runs the real docker, crane, trivy and helm found on PATH.
+// Exec runs the real docker, crane, trivy, helm and gh found on PATH.
 func Exec() Tools { return execTools{} }
 
 type execTools struct{}
@@ -44,6 +47,8 @@ var install = map[string]string{
 	"crane":  "brew install crane",
 	"trivy":  "brew install trivy",
 	"helm":   "brew install helm",
+	"gh":     "brew install gh, then gh auth login",
+	"go":     "https://go.dev/dl/",
 }
 
 func run(ctx context.Context, name string, args ...string) (string, error) {
@@ -155,4 +160,19 @@ func (execTools) PushChart(ctx context.Context, file, registry string) (string, 
 		}
 	}
 	return "", fmt.Errorf("helm push %s: no Digest line in %q", file, out)
+}
+
+func (execTools) Publish(ctx context.Context, repo, tag, notes string, files []string) error {
+	f, err := os.CreateTemp("", "release-notes")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(f.Name())
+	if _, err := f.WriteString(notes); err != nil {
+		return err
+	}
+	f.Close()
+	args := append([]string{"release", "create", tag, "--repo", repo, "--verify-tag", "--title", tag, "--notes-file", f.Name()}, files...)
+	_, err = run(ctx, "gh", args...)
+	return err
 }

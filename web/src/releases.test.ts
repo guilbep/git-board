@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { Draft, EnvState, IssueEnvironment, ReleaseJob, ReleaseRow, ReleaseStep, TargetState } from './api/board.ts';
-import { behindText, bump, checkIcon, cutHint, cutLabel, envLine, groupReleases, jobTitle, markClass, nextTag, older, olderFinals, plural, promotion, registryName, releaseBadge, releasePath, repoName, repoNames, sha7, splitParts, splitText, stepLabel, stepState, takenOf } from './releases.ts';
+import { behindText, bump, checkIcon, cutHint, cutLabel, envLine, groupReleases, jobTitle, markClass, nextTag, older, olderFinals, plural, promotion, registryName, releaseBadge, releasePath, repoName, repoNames, setupLines, setupToml, sha7, splitParts, splitText, stepLabel, stepState, takenOf } from './releases.ts';
 
 function row(name: string): ReleaseRow {
   const [, major, minor, patch, rc] = /^v(\d+)\.(\d+)\.(\d+)(?:-rc\.(\d+))?$/.exec(name)!.map(Number);
@@ -218,4 +218,24 @@ test('registryName and repoName say them short', () => {
   assert.equal(registryName('localhost:5000/app'), 'localhost:5000');
   assert.equal(repoName('git@github.com:EPFL-ENAC/enack8s-app-config.git'), 'enack8s-app-config');
   assert.equal(repoName('https://github.com/EPFL-ENAC/co2-calculator/'), 'co2-calculator');
+});
+
+test('setupLines says what a binary cut does', () => {
+  const s = { binaries: ['./cmd/git-board'], platforms: ['linux/amd64', 'darwin/arm64'], build: 'make dist', repo: 'acme/app' };
+  assert.deepEqual(setupLines(s), [
+    'Build ./cmd/git-board for linux/amd64 and darwin/arm64',
+    'Run “make dist” in a clean checkout of the tag; its dist/ is what ships',
+    'Publish them as a GitHub release on acme/app, with the notes drafted from the issues',
+    "Record what shipped in git, on the release's record",
+  ]);
+  assert.equal(setupLines({ ...s, build: '' })[1], 'Go builds, CGO off, stripped; a .tar.gz per platform, .zip for windows, with checksums.txt');
+  assert.equal(setupToml(s), '[release]\nbinaries = ["./cmd/git-board"]\nplatforms = ["linux/amd64", "darwin/arm64"]\nbuild = "make dist"\n');
+  assert.equal(setupToml({ ...s, build: '' }), '[release]\nbinaries = ["./cmd/git-board"]\nplatforms = ["linux/amd64", "darwin/arm64"]\n');
+});
+
+test('stepLabel names the build and publish steps', () => {
+  assert.equal(stepLabel({ name: 'build', detail: '5 archives for linux/amd64', state: 'done' }), 'Archives built (5 archives for linux/amd64)');
+  assert.equal(stepLabel({ name: 'build', detail: '', state: 'running' }), 'Archives');
+  assert.equal(stepLabel({ name: 'publish', detail: '', state: 'running' }), 'GitHub release');
+  assert.equal(stepLabel({ name: 'publish', detail: 'v1.0.0 on GitHub, 6 files', state: 'done' }), 'Published on GitHub');
 });

@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -520,5 +521,72 @@ func TestReleasesRequestChecks(t *testing.T) {
 	}
 	if status := call(t, "PUT", ts.URL+"/api/releases/v1.0.0/notes", map[string]string{"notes": ""}, nil); status != http.StatusOK {
 		t.Errorf("clearing the notes = %d", status)
+	}
+}
+
+// setupServer is a server on a repository with no [release] table: a Go
+// main package at cmd/app, the authority on github.com as acme/app.
+func setupServer(t *testing.T, remote string) (*apiServer, *httptest.Server) {
+	t.Helper()
+	s, ts, fx := releaseServer(t)
+	s.cfg = &config.Config{Branches: config.Branches{Base: "dev"}}
+	s.cfgPath = filepath.Join(t.TempDir(), ".git-board.toml")
+	if err := os.WriteFile(s.cfgPath, []byte("# the board\n[board]\nname = \"x\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	fx.GoMain(t, "cmd/app")
+	releasetest.Git(t, fx.App, "remote", "set-url", "origin", remote) // after the push: Infer only reads it
+	return s, ts
+}
+
+func TestReleasesNamesBinaries(t *testing.T) {
+	s, ts, _ := releaseServer(t)
+	s.cfg.Release = config.Release{Binaries: []string{"./cmd/app"}}
+	var res struct {
+		Enabled      bool
+		Binaries     []string
+		Environments []any
+	}
+	if code := getJSON(t, ts.URL+"/api/releases", &res).StatusCode; code != 200 || !res.Enabled || !slices.Equal(res.Binaries, []string{"./cmd/app"}) || len(res.Environments) != 0 {
+		t.Errorf("%d %+v", code, res)
+	}
+}
+
+func TestSetupInfersAndEnables(t *testing.T) {
+	s, ts := setupServer(t, "git@github.com:acme/app.git")
+	var setup release.Setup
+	if code := getJSON(t, ts.URL+"/api/releases/setup", &setup).StatusCode; code != 200 || !slices.Equal(setup.Binaries, []string{"./cmd/app"}) || setup.Forge != "github" || setup.Repo != "acme/app" || setup.Note != "" {
+		t.Fatalf("%d %+v", code, setup)
+	}
+	if code, body := post(t, ts.URL+"/api/releases/setup", setup); code != 200 {
+		t.Fatalf("%d %s", code, body)
+	}
+	raw, _ := os.ReadFile(s.cfgPath)
+	if got := string(raw); !strings.HasPrefix(got, "# the board\n[board]\n") || !strings.Contains(got, "\n[release]\nbinaries = [\"./cmd/app\"]\nplatforms = [\"linux/amd64\", ") {
+		t.Errorf("file:\n%s", got)
+	}
+	if r := s.config().Release; !r.Enabled() || !slices.Equal(r.Binaries, []string{"./cmd/app"}) {
+		t.Errorf("config %+v", r)
+	}
+	if code, body := post(t, ts.URL+"/api/releases/setup", setup); code != 409 || !strings.Contains(body, `"enabled"`) {
+		t.Errorf("enabled twice: %d %s", code, body)
+	}
+}
+
+func TestEnableRefusesWithoutForge(t *testing.T) {
+	s, ts := setupServer(t, "https://gitlab.com/acme/app.git")
+	code, body := post(t, ts.URL+"/api/releases/setup", release.Setup{Binaries: []string{"./cmd/app"}})
+	raw, _ := os.ReadFile(s.cfgPath)
+	if code != 400 || !strings.Contains(body, `"forge"`) || !strings.Contains(body, "isn't on github.com") || strings.Contains(string(raw), "[release]") {
+		t.Errorf("%d %s\n%s", code, body, raw)
+	}
+}
+
+func TestEnableRefusesBadConfig(t *testing.T) {
+	s, ts := setupServer(t, "git@github.com:acme/app.git")
+	code, body := post(t, ts.URL+"/api/releases/setup", release.Setup{Binaries: []string{"./cmd/app"}, Platforms: []string{"linux"}})
+	raw, _ := os.ReadFile(s.cfgPath)
+	if code != 400 || !strings.Contains(body, `"check"`) || !strings.Contains(body, `platform \"linux\" isn't os/arch`) || strings.Contains(string(raw), "[release]") || s.config().Release.Enabled() {
+		t.Errorf("%d %s\n%s", code, body, raw)
 	}
 }

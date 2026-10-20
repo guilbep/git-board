@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -177,4 +178,25 @@ func (fx *Fixture) Config(t *testing.T) string {
 		t.Fatal(err)
 	}
 	return b.String()
+}
+
+// GoMain writes a Go module with a main package at pkg (cmd/app) and a
+// LICENSE, commits and pushes them, and returns the commit.
+func (fx *Fixture) GoMain(t *testing.T, pkg string) string {
+	t.Helper()
+	for p, c := range map[string]string{
+		"go.mod":         "module app\n\ngo 1.22\n",
+		pkg + "/main.go": "package main\n\nimport \"fmt\"\n\nfunc main() { fmt.Println(\"hi\") }\n",
+		"LICENSE":        "MIT\n",
+	} {
+		full := filepath.Join(fx.App, p)
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(full, []byte(c), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	Git(t, fx.App, "add", ".")
+	return fx.Commit(t, "a main package")
 }

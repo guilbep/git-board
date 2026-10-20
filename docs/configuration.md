@@ -378,7 +378,15 @@ After the switch, a bare number (`3075`, `fix/3075-…`) and `CO2-3075` are the 
 
 ## Release
 
-`[release]` is how the project's code reaches its environments: the ordered `environments`, the `checks` a merge must pass, what to build (`images`, `chart`) and the config repos holding each environment's overlay (`[[release.deploy]]`). Without `environments`, the project has no releases. See [the release design](prd/release.md).
+`[release]` is how the project's code reaches its environments: the ordered `environments`, the `checks` a merge must pass, what to build (`images`, `chart`) and the config repos holding each environment's overlay (`[[release.deploy]]`). Without `environments` or `binaries`, the project has no releases. See [the release design](prd/release.md).
+
+A Go program with no deploy targets lists `binaries` instead: the main packages to build per platform and publish as archives on the forge's release. The Releases page writes these for you: **Enable binary release** infers them from the repo.
+
+| key | meaning |
+|---|---|
+| `binaries` | main packages, `["./cmd/git-board"]`. A table with binaries and no environments is enabled: every cut is a final, deployed nowhere. |
+| `platforms` | `os/arch` to build for; default `linux/amd64`, `linux/arm64`, `darwin/amd64`, `darwin/arm64`, `windows/amd64`. |
+| `build` | a command run with `sh -c` in a clean checkout of the tag instead of the Go builds, `"make dist"`; it leaves the archives in `dist/`. |
 
 The environments have roles, from their order. The one that **follows** the trunk takes its head (`dev` when listed, else none). The **last** takes final releases. Those **between** take candidates. One environment that is the followed one has no releases.
 

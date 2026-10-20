@@ -204,6 +204,9 @@ func notes(issues []DraftIssue, kinds map[string]string) string {
 // the last environment runs, its images exist, and the environment it goes
 // to moves forward.
 func (r *Runner) checks(ctx context.Context, st Status, from string, final bool) ([]Check, error) {
+	if len(r.Cfg.Environments) == 0 {
+		return nil, nil // binaries only: nothing runs anywhere, no images
+	}
 	last, to := envNamed(st, r.Cfg.Last()), envNamed(st, r.deployTo(final))
 	runs := "It contains what runs in " + last.Name
 	if last.Adopted {
@@ -296,9 +299,10 @@ func (r *Runner) contains(ctx context.Context, e EnvState, from string) (string,
 
 // followsLast tells whether the last environment follows the trunk: a
 // single-environment app, whose cut tags what it runs and deploys nowhere.
+// An app with no environment (binaries only) deploys nowhere too.
 func (r *Runner) followsLast() bool {
 	f := r.Cfg.Followed()
-	return f != "" && f == r.Cfg.Last()
+	return r.Cfg.Last() == "" || f != "" && f == r.Cfg.Last()
 }
 
 // final tells whether a cut is a final: asked for, or the app has no
