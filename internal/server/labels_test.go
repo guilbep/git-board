@@ -131,3 +131,43 @@ func TestLabelsTab(t *testing.T) {
 		t.Errorf("last gh call = %q", last)
 	}
 }
+
+// Serial: it answers for gh (ghlabels.Gh). A direct call deletes only what
+// the lint lists as stray: not a free-form field's value, not the project's.
+func TestLabelDeleteOnlyStray(t *testing.T) {
+	path := filepath.Join(t.TempDir(), config.FileName)
+	if err := os.WriteFile(path, []byte(labelsTestConfig+"\n[fields.assignee]\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ts := newTestServer(t, gitbugiotest.New(t), cfg)
+
+	var gh []string
+	orig := ghlabels.Gh
+	t.Cleanup(func() { ghlabels.Gh = orig })
+	ghlabels.Gh = func(args ...string) ([]byte, error) {
+		gh = append(gh, strings.Join(args, " "))
+		if args[0]+" "+args[1] == "label list" {
+			return json.Marshal([]ghlabels.Label{{Name: "bug"}, {Name: "wontfix"}, {Name: "assignee:alice"}})
+		}
+		return nil, nil
+	}
+
+	for _, name := range []string{"assignee:alice", "bug"} {
+		if resp := postJSON(t, ts.URL+"/api/labels/delete", map[string]any{"repo": "o/r", "name": name}, nil); resp.StatusCode != http.StatusBadRequest {
+			t.Errorf("deleting %s: %d, want 400", name, resp.StatusCode)
+		}
+	}
+	if slices.ContainsFunc(gh, func(c string) bool { return strings.HasPrefix(c, "label delete") }) {
+		t.Errorf("a refused delete ran gh: %q", gh)
+	}
+	if resp := postJSON(t, ts.URL+"/api/labels/delete", map[string]any{"repo": "o/r", "name": "wontfix"}, nil); resp.StatusCode != http.StatusOK {
+		t.Errorf("deleting wontfix: %d", resp.StatusCode)
+	}
+	if last := gh[len(gh)-1]; last != "label delete wontfix --repo o/r --yes" {
+		t.Errorf("last gh call = %q", last)
+	}
+}
