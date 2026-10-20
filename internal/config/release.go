@@ -22,6 +22,26 @@ type Release struct {
 	VersionValues []string `toml:"version_values"` // dotted paths, under the chart's valuesInline, that carry the version
 	Builder       string   `toml:"builder"`        // a remote buildx builder, instead of the local one
 	Deploy        []Target `toml:"deploy"`         // the config repos holding the overlays
+	// Binaries are main packages built per platform and published as
+	// archives on the forge's release: "./cmd/git-board". A table with
+	// binaries and no environments is enabled: finals only, deployed nowhere.
+	Binaries  []string `toml:"binaries"`
+	Platforms []string `toml:"platforms"` // os/arch; empty: DefaultPlatforms
+	// Build is a command run with sh -c in a clean checkout of the tag
+	// instead of the Go builds; it leaves the archives in dist/.
+	Build string `toml:"build"`
+}
+
+// DefaultPlatforms are the platforms binaries are built for when
+// platforms says none.
+var DefaultPlatforms = []string{"linux/amd64", "linux/arm64", "darwin/amd64", "darwin/arm64", "windows/amd64"}
+
+// BuildPlatforms are the platforms to build the binaries for.
+func (r Release) BuildPlatforms() []string {
+	if len(r.Platforms) > 0 {
+		return r.Platforms
+	}
+	return DefaultPlatforms
 }
 
 // Image is an image to build: its name and docker build context.
@@ -44,8 +64,9 @@ type Target struct {
 	Registry string `toml:"registry"`
 }
 
-// Enabled is whether the project has releases.
-func (r Release) Enabled() bool { return len(r.Environments) > 0 }
+// Enabled is whether the project has releases: environments to deploy
+// to, or binaries to publish.
+func (r Release) Enabled() bool { return len(r.Environments) > 0 || len(r.Binaries) > 0 }
 
 // RemoteName is the authority remote.
 func (r Release) RemoteName() string { return cmp.Or(r.Remote, "origin") }
@@ -73,7 +94,7 @@ func (r Release) Candidates() []string {
 
 // Last is the environment that takes finals, "" when there are none.
 func (r Release) Last() string {
-	if !r.Enabled() {
+	if len(r.Environments) == 0 {
 		return ""
 	}
 	return r.Environments[len(r.Environments)-1]
@@ -106,6 +127,24 @@ func checkRelease(r Release) error {
 	for _, i := range r.Images {
 		if strings.TrimSpace(i.Name) == "" {
 			return fmt.Errorf("release: image needs a name")
+		}
+	}
+	for _, b := range r.Binaries {
+		if strings.TrimSpace(b) == "" {
+			return fmt.Errorf("release: a binary needs a package path")
+		}
+	}
+	if len(r.Binaries) == 0 {
+		if r.Build != "" {
+			return fmt.Errorf("release: build needs binaries")
+		}
+		if len(r.Platforms) > 0 {
+			return fmt.Errorf("release: platforms needs binaries")
+		}
+	}
+	for _, p := range r.Platforms {
+		if os, arch, ok := strings.Cut(p, "/"); !ok || os == "" || arch == "" || strings.Contains(arch, "/") {
+			return fmt.Errorf("release: platform %q isn't os/arch", p)
 		}
 	}
 	return nil

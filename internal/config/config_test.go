@@ -351,3 +351,21 @@ func TestBranchesKind(t *testing.T) {
 		}
 	}
 }
+
+func TestWithRelease(t *testing.T) {
+	t.Parallel()
+	in := "# the board\n[board]\nname = \"x\"\n\n[release]\nenvironments = []\n\n[branches]\nbase = \"main\"\n"
+	r := Release{Binaries: []string{"./cmd/git-board"}, Platforms: []string{"linux/amd64", "darwin/arm64"}, Build: "make dist", Remote: "origin"}
+	got := WithRelease(in, r)
+	want := "# the board\n[board]\nname = \"x\"\n\n[release]\nbinaries = [\"./cmd/git-board\"]\nplatforms = [\"linux/amd64\", \"darwin/arm64\"]\nbuild = \"make dist\"\n\n[branches]\nbase = \"main\"\n"
+	if got != want {
+		t.Errorf("got\n%s\nwant\n%s", got, want)
+	}
+	cfg, _, err := Check([]byte(got))
+	if err != nil || !cfg.Release.Enabled() || cfg.Release.Build != "make dist" {
+		t.Errorf("check: %v, %+v", err, cfg.Release)
+	}
+	if got := WithRelease("", Release{Binaries: []string{"."}, Remote: "upstream"}); got != "[release]\nbinaries = [\".\"]\nremote = \"upstream\"\n" {
+		t.Errorf("empty file: %q", got)
+	}
+}
