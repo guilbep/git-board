@@ -32,6 +32,7 @@ type releaseCreate struct {
 	Previous  string        `json:"previous"`
 	Artifacts []Artifact    `json:"artifacts"`
 	Chart     ChartArtifact `json:"chart"`
+	Assets    []Asset       `json:"assets,omitempty"` // omitted: the ops of records made before keep their bytes, so their IDs
 }
 
 func (op *releaseCreate) Id() entity.Id { return dag.IdOperation(op, &op.OpBase) }
@@ -44,7 +45,7 @@ func (op *releaseCreate) Validate() error {
 }
 
 func (op *releaseCreate) apply(r *ReleaseRecord) {
-	r.Commit, r.Previous, r.Artifacts, r.Chart = op.Commit, op.Previous, op.Artifacts, op.Chart
+	r.Commit, r.Previous, r.Artifacts, r.Chart, r.Assets = op.Commit, op.Previous, op.Artifacts, op.Chart, op.Assets
 	r.Author, r.Created = op.Author().Name(), op.Time()
 }
 

@@ -51,6 +51,13 @@ type ReleaseComment struct {
 	Date    time.Time `json:"date"`
 }
 
+// Asset is an archive published with a release: its name and sha256, as
+// checksums.txt has them.
+type Asset struct {
+	Name   string `json:"name"`
+	SHA256 string `json:"sha256"`
+}
+
 // ReleaseRecord is a release's page: what it shipped and what was said
 // about it.
 type ReleaseRecord struct {
@@ -59,6 +66,7 @@ type ReleaseRecord struct {
 	Previous  string           `json:"previous"` // the previous final's tag
 	Artifacts []Artifact       `json:"artifacts"`
 	Chart     ChartArtifact    `json:"chart"`
+	Assets    []Asset          `json:"assets"` // the archives published with its tag
 	Notes     string           `json:"notes"`
 	Comments  []ReleaseComment `json:"comments"`
 	Yanked    string           `json:"yanked"`  // the reason, "" when not
@@ -131,7 +139,7 @@ func (b *Backend) CreateRelease(r ReleaseRecord) (ReleaseRecord, error) {
 		return ReleaseRecord{}, err
 	}
 	e := dag.New(releaseDef)
-	e.Append(&releaseCreate{OpBase: opBase(releaseCreateOp, me), Commit: r.Commit, Previous: r.Previous, Artifacts: r.Artifacts, Chart: r.Chart})
+	e.Append(&releaseCreate{OpBase: opBase(releaseCreateOp, me), Commit: r.Commit, Previous: r.Previous, Artifacts: r.Artifacts, Chart: r.Chart, Assets: r.Assets})
 	if err := e.Commit(b.repo); err != nil {
 		return ReleaseRecord{}, fmt.Errorf("recording the release of %s: %w", r.Commit, err)
 	}
