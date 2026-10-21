@@ -39,6 +39,7 @@
       autocomplete="off" data-1p-ignore data-lpignore="true" data-form-type="other"
       :type="kind === 'number' ? 'number' : kind === 'date' ? 'date' : 'text'"
       :step="kind === 'number' ? 'any' : undefined"
+      :list="kind === 'text' && people.length ? `cell-people-${name}` : undefined"
       :aria-label="displayName(name)"
       :value="values[0] ?? ''"
       @keydown.enter.prevent="setSingle(($event.target as HTMLInputElement).value.trim())"
@@ -62,8 +63,8 @@
         :list="people.length ? `cell-people-${name}` : undefined"
         @keydown.enter.prevent="addValue"
       />
-      <datalist v-if="people.length" :id="`cell-people-${name}`"><option v-for="p in people" :key="p" :value="p" /></datalist>
     </div>
+    <datalist v-if="editing && people.length" :id="`cell-people-${name}`"><option v-for="p in people" :key="p" :value="p" /></datalist>
 
     <p v-if="error" class="cell-error" role="alert">{{ error }}</p>
   </td>
