@@ -47,9 +47,11 @@ layout = "table"
 filter = "assignee:@me is:open -status:done"
 
 # git-board's own binary release (docs/configuration.md, Release): a cut
-# runs make dist in a clean checkout of the tag and publishes the archives
-# as the GitHub release. What Enable binary release writes.
+# runs the build in a clean checkout of the tag and publishes the archives
+# as the GitHub release. Enable binary release wrote build = "make dist";
+# a clean checkout has no web/node_modules, so the build installs them.
 [release]
 binaries = ["./cmd/git-board"]
 platforms = ["linux/amd64", "linux/arm64", "darwin/amd64", "darwin/arm64", "windows/amd64"]
-build = "make dist"
+build = "(cd web && npm ci) && make dist"
+
