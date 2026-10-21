@@ -68,6 +68,9 @@ type apiServer struct {
 	// inboxMu guards the inbox files (inbox.go): one read-change-write at
 	// a time
 	inboxMu sync.Mutex
+	// assignMu guards assignable.json: a run's fetch of who can be
+	// assigned may outlast it, into the next run's
+	assignMu sync.Mutex
 
 	// exposed are names --addr exposes beyond the loopback ones (withGuard)
 	exposed []string

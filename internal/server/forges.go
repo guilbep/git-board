@@ -460,6 +460,6 @@ func (s *apiServer) runForgeSync(job *forgeJob, run func(context.Context, string
 			s.events.publish(event{Kind: "progress", Step: &step})
 		}
 	}
-	s.fetchAssignable(job)
 	finish("done", "")
+	go s.fetchAssignable(job) // a forge that hangs keeps neither the run nor the edits
 }

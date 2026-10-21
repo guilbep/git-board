@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/git-bug/git-bug/repository"
@@ -25,7 +26,7 @@ import (
 // assigned at the last forge sync: the person boxes offer them.
 var assignablePath = filepath.Join("git-board", "assignable.json")
 
-var assignableHTTP = &http.Client{Timeout: 30 * time.Second}
+var assignableHTTP = &http.Client{Timeout: 10 * time.Second}
 
 // assignable asks a bridge's forge who can be assigned on its project,
 // with the token git-bug holds for that forge.
@@ -88,41 +89,58 @@ func (s *apiServer) assignable(ctx context.Context, br gitbugio.Bridge) ([]strin
 }
 
 // fetchAssignable asks each bridge of a forge sync who can be assigned,
-// keeps the answers, and counts them in the bridge's tally. A forge that
-// doesn't answer is a warning: the run went well, the boxes keep the
-// last list.
+// all at once, once the run is done; keeps the answers, then counts them
+// in the bridge's tally and tells the pages. A forge that doesn't answer
+// is a warning: the run went well, the boxes keep the last list.
 func (s *apiServer) fetchAssignable(job *forgeJob) {
 	bridges, _ := s.b.Bridges()
+	bridges = slices.DeleteFunc(bridges, func(br gitbugio.Bridge) bool { return !slices.Contains(job.Names, br.Name) })
+	if len(bridges) == 0 {
+		return
+	}
+	logins := make([][]string, len(bridges))
+	errs := make([]error, len(bridges))
+	var wg sync.WaitGroup
+	for i, br := range bridges {
+		wg.Go(func() { logins[i], errs[i] = s.assignable(context.Background(), br) })
+	}
+	wg.Wait()
+
+	s.assignMu.Lock()
 	saved, err := loadAssignable(s.b.Storage())
 	if err != nil {
 		saved = map[string][]string{}
 	}
-	for _, br := range bridges {
-		if !slices.Contains(job.Names, br.Name) {
-			continue
+	kept := false
+	for i, br := range bridges {
+		if errs[i] == nil {
+			saved[br.Name], kept = logins[i], true
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		logins, err := s.assignable(ctx, br)
-		cancel()
-		s.forgeMu.Lock()
+	}
+	if kept {
+		if err := saveAssignable(s.b.Storage(), saved); err != nil {
+			log.Printf("keeping who can be assigned: %v", err)
+		}
+	}
+	s.assignMu.Unlock()
+
+	s.forgeMu.Lock()
+	for i, br := range bridges {
 		t := job.Bridges[br.Name]
 		if t == nil {
 			t = &bridgeTally{Lines: []string{}}
 			job.Bridges[br.Name] = t
 		}
-		if err != nil {
+		if errs[i] != nil {
 			t.Warnings++
-			t.Lines = append(t.Lines, "who can be assigned: "+err.Error())
+			t.Lines = append(t.Lines, "who can be assigned: "+errs[i].Error())
 		} else {
-			t.Assignable = len(logins)
-			t.Lines = append(t.Lines, fmt.Sprintf("%d assignable people on %s", len(logins), br.Where))
-			saved[br.Name] = logins
+			t.Assignable = len(logins[i])
+			t.Lines = append(t.Lines, fmt.Sprintf("%d assignable people on %s", len(logins[i]), br.Where))
 		}
-		s.forgeMu.Unlock()
 	}
-	if err := saveAssignable(s.b.Storage(), saved); err != nil {
-		log.Printf("keeping who can be assigned: %v", err)
-	}
+	s.forgeMu.Unlock()
+	s.events.publish(event{Kind: "sync"})
 }
 
 // people are who a person field offers: the git-bug identities and who
