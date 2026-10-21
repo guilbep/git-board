@@ -115,7 +115,8 @@ func TestForgeSyncWarnsWhenTheForgeWontSay(t *testing.T) {
 	}
 }
 
-// A forge sync writes the toml's assignees mode where git-bug reads it.
+// A forge sync writes the toml's assignees mode where git-bug reads it,
+// and says so: the check that it will, the real run that it does.
 func TestForgeSyncSetsTheAssigneesMode(t *testing.T) {
 	t.Parallel()
 	ts, s := newIssueServer(t)
@@ -127,17 +128,32 @@ func TestForgeSyncSetsTheAssigneesMode(t *testing.T) {
 	done := make(chan struct{})
 	close(done)
 	s.runSync = fakeSync(nil, done)
+	key := func() string {
+		cfg, err := s.b.TestCache().Config().Read()
+		if err != nil {
+			t.Fatal(err)
+		}
+		return cfg.Value("git-bug.bridge.gl.assignees", "")
+	}
 
 	call(t, "POST", ts.URL+"/api/forges/sync", map[string]any{"dry_run": true}, nil)
-	if st := waitAssignable(t, ts, "gl"); st.Job.State != "done" {
-		t.Fatalf("job %+v", st.Job)
+	st := waitAssignable(t, ts, "gl")
+	if want := "assignees: gl switches to labels; the next sync pulls every issue again"; st.Job.State != "done" || !slices.Contains(st.Job.Bridges["gl"].Lines, want) {
+		t.Fatalf("check %+v, lines %q: want %q", st.Job, st.Job.Bridges["gl"].Lines, want)
 	}
-	cfg, err := s.b.TestCache().Config().Read()
-	if err != nil {
-		t.Fatal(err)
+	if key() != "" {
+		t.Errorf("the check wrote gl assignees %q", key())
 	}
-	if got := cfg.Value("git-bug.bridge.gl.assignees", ""); got != "labels" {
-		t.Errorf("gl assignees %q, want labels", got)
+
+	if code := call(t, "POST", ts.URL+"/api/forges/sync", map[string]any{"dry_run": false}, nil); code != http.StatusAccepted {
+		t.Fatalf("real run: %d", code)
+	}
+	st = waitAssignable(t, ts, "gl")
+	if want := "assignees: gl switches to labels, pulling every issue again"; st.Job.State != "done" || !slices.Contains(st.Job.Bridges["gl"].Lines, want) {
+		t.Fatalf("run %+v, lines %q: want %q", st.Job, st.Job.Bridges["gl"].Lines, want)
+	}
+	if key() != "labels" {
+		t.Errorf("gl assignees %q, want labels", key())
 	}
 }
 

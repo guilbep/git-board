@@ -126,11 +126,7 @@ func (s *apiServer) fetchAssignable(job *forgeJob) {
 
 	s.forgeMu.Lock()
 	for i, br := range bridges {
-		t := job.Bridges[br.Name]
-		if t == nil {
-			t = &bridgeTally{Lines: []string{}}
-			job.Bridges[br.Name] = t
-		}
+		t := job.tally(br.Name)
 		if errs[i] != nil {
 			t.Warnings++
 			t.Lines = append(t.Lines, "who can be assigned: "+errs[i].Error())

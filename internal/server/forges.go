@@ -52,6 +52,16 @@ type forgeJob struct {
 	Step    *syncStep               `json:"step,omitempty"`  // where it is, for a page loading mid-run
 }
 
+// tally is a bridge's, made on first use; forgeMu held.
+func (j *forgeJob) tally(name string) *bridgeTally {
+	t := j.Bridges[name]
+	if t == nil {
+		t = &bridgeTally{Lines: []string{}}
+		j.Bridges[name] = t
+	}
+	return t
+}
+
 // syncStep is where a run is: the bridge, the way, how many issues that
 // way has come to so far, of how many (0 for a pull: the forge doesn't
 // say how many it holds), and the issue it is on.
@@ -388,6 +398,14 @@ func sendsAgain(mode string, dry *forgeJob, names []string) error {
 	return nil
 }
 
+// assigneesMode is how the toml says the forges hold assignees.
+func (s *apiServer) assigneesMode() string {
+	if c := s.config(); c != nil {
+		return cmp.Or(c.Assignees, core.AssigneesNative)
+	}
+	return core.AssigneesNative
+}
+
 // forgeRun is git-bug's sync, or one way of it.
 func (s *apiServer) forgeRun(ctx context.Context, mode string, dryRun bool, names []string) (<-chan core.SyncResult, error) {
 	issues, _ := s.b.ListIssues()
@@ -426,13 +444,24 @@ func (s *apiServer) runForgeSync(job *forgeJob, run func(context.Context, string
 		}
 	}
 	// the toml's [repos] assignees, where git-bug reads it: a forge holding
-	// assignees one way here and another in a clone undoes the other's
-	if c := s.config(); c != nil {
-		for _, name := range job.Names {
-			if _, err := s.b.SetAssignees(name, cmp.Or(c.Assignees, "native")); err != nil {
-				finish("failed", "assignees of "+name+": "+err.Error())
-				return
+	// assignees one way here and another in a clone undoes the other's. A
+	// check only says so: the real run writes it, and pulls everything.
+	mode := s.assigneesMode()
+	for _, name := range job.Names {
+		changed, err := s.b.SetAssignees(name, mode, job.DryRun)
+		if err != nil {
+			finish("failed", "assignees of "+name+": "+err.Error())
+			return
+		}
+		if changed {
+			line := "assignees: " + name + " switches to " + mode + ", pulling every issue again"
+			if job.DryRun {
+				line = "assignees: " + name + " switches to " + mode + "; the next sync pulls every issue again"
 			}
+			s.forgeMu.Lock()
+			t := job.tally(name)
+			t.Lines = append(t.Lines, line)
+			s.forgeMu.Unlock()
 		}
 	}
 	results, err := run(context.Background(), job.Mode, job.DryRun, names)
@@ -442,12 +471,7 @@ func (s *apiServer) runForgeSync(job *forgeJob, run func(context.Context, string
 	}
 	for r := range results {
 		s.forgeMu.Lock()
-		t := job.Bridges[r.Bridge]
-		if t == nil {
-			t = &bridgeTally{Lines: []string{}}
-			job.Bridges[r.Bridge] = t
-		}
-		t.add(r, job.DryRun)
+		job.tally(r.Bridge).add(r, job.DryRun)
 		if r.IsError() {
 			job.Errors++
 		}

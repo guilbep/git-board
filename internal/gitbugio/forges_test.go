@@ -131,16 +131,19 @@ func TestSetAssignees(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if changed, err := b.SetAssignees("fk", "native"); err != nil || changed || get("assignees") != "" || get("lastSyncTime") != "123" {
+	if changed, err := b.SetAssignees("fk", "native", false); err != nil || changed || get("assignees") != "" || get("lastSyncTime") != "123" {
 		t.Fatalf("native over none: changed %v, %v, key %q, last sync %q; want nothing written", changed, err, get("assignees"), get("lastSyncTime"))
 	}
-	if changed, err := b.SetAssignees("fk", "labels"); err != nil || !changed || get("assignees") != "labels" || get("lastSyncTime") != "0" {
+	if changed, err := b.SetAssignees("fk", "labels", true); err != nil || !changed || get("assignees") != "" || get("lastSyncTime") != "123" {
+		t.Fatalf("labels, dry run: changed %v, %v, key %q, last sync %q; want the change said, nothing written", changed, err, get("assignees"), get("lastSyncTime"))
+	}
+	if changed, err := b.SetAssignees("fk", "labels", false); err != nil || !changed || get("assignees") != "labels" || get("lastSyncTime") != "0" {
 		t.Fatalf("labels: changed %v, %v, key %q, last sync %q; want labels and a full pull", changed, err, get("assignees"), get("lastSyncTime"))
 	}
 	if err := core.SetBridgeConfig(b.TestCache(), "fk", "lastSyncTime", "456"); err != nil {
 		t.Fatal(err)
 	}
-	if changed, err := b.SetAssignees("fk", "labels"); err != nil || changed || get("lastSyncTime") != "456" {
+	if changed, err := b.SetAssignees("fk", "labels", false); err != nil || changed || get("lastSyncTime") != "456" {
 		t.Fatalf("labels again: changed %v, %v, last sync %q; want nothing written", changed, err, get("lastSyncTime"))
 	}
 }
