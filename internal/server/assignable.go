@@ -26,7 +26,12 @@ import (
 // assigned at the last forge sync: the person boxes offer them.
 var assignablePath = filepath.Join("git-board", "assignable.json")
 
-var assignableHTTP = &http.Client{Timeout: 10 * time.Second}
+// assignableHTTP follows no redirect: Go drops Authorization on the way
+// to another host, not GitLab's PRIVATE-TOKEN.
+var assignableHTTP = &http.Client{
+	Timeout:       10 * time.Second,
+	CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+}
 
 // assignable asks a bridge's forge who can be assigned on its project,
 // with the token git-bug holds for that forge.

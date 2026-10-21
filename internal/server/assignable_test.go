@@ -197,3 +197,25 @@ func TestForgeSyncDoesntWaitForWhoCanBeAssigned(t *testing.T) {
 		t.Errorf("gh %+v: want carol, once the forge answers", tally)
 	}
 }
+
+// Asking who can be assigned follows no redirect: GitLab's PRIVATE-TOKEN,
+// unlike Authorization, would go along to wherever it points.
+func TestAssignableFollowsNoRedirect(t *testing.T) {
+	t.Parallel()
+	elsewhere := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("the redirect was followed, with token %q", r.Header.Get("PRIVATE-TOKEN"))
+	}))
+	t.Cleanup(elsewhere.Close)
+	forge := httptest.NewServer(http.RedirectHandler(elsewhere.URL+"/users", http.StatusFound))
+	t.Cleanup(forge.Close)
+	req, _ := http.NewRequest(http.MethodGet, forge.URL+"/api/v4/projects/1/users", nil)
+	req.Header.Set("PRIVATE-TOKEN", "a-token")
+	resp, err := assignableHTTP.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusFound {
+		t.Errorf("answered %s, want the redirect itself", resp.Status)
+	}
+}
