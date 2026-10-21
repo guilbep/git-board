@@ -1,7 +1,6 @@
 package server
 
 import (
-	"context"
 	"errors"
 	"net/http"
 	"strings"
@@ -55,11 +54,12 @@ func (s *apiServer) handleIssueSync(w http.ResponseWriter, r *http.Request) {
 
 	run := s.runIssueSync
 	if run == nil {
-		run = func(ctx context.Context, dryRun bool, id string) (<-chan core.SyncResult, error) {
-			return s.b.SyncIssue(ctx, dryRun, id, core.WithPullsOf(s.pullsOf(ctx, []gitbugio.Issue{issue})))
-		}
+		run = s.b.SyncIssue
 	}
-	results, err := run(r.Context(), req.DryRun, issue.ID)
+	// the toml's assignees mode, not this clone's git config: the forge
+	// sync writes it there, and pulls everything again when it changes
+	results, err := run(r.Context(), req.DryRun, issue.ID,
+		core.WithPullsOf(s.pullsOf(r.Context(), []gitbugio.Issue{issue})), core.WithAssignees(s.assigneesMode()))
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return

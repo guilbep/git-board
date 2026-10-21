@@ -1,17 +1,38 @@
 package server
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/git-bug/git-bug/bridge/core"
 	"github.com/git-bug/git-bug/bridge/core/auth"
 
 	"github.com/guilbep/git-board/internal/config"
+	"github.com/guilbep/git-board/internal/gitbugio/gitbugiotest"
 )
+
+// waitAssignable waits for the run to end and its fetch of who can be
+// assigned to answer for bridge, in the bridge's lines.
+func waitAssignable(t *testing.T, ts *httptest.Server, bridge string) forgeStatus {
+	t.Helper()
+	for range 300 {
+		st := waitJob(t, ts)
+		if tally := st.Job.Bridges[bridge]; tally != nil && slices.ContainsFunc(tally.Lines, func(l string) bool {
+			return strings.Contains(l, "assignable people on ") || strings.HasPrefix(l, "who can be assigned: ")
+		}) {
+			return st
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("%s never said who can be assigned", bridge)
+	return forgeStatus{}
+}
 
 // A forge sync asks each forge who can be assigned, says how many, and
 // the person fields offer them apart from their options.
@@ -30,7 +51,7 @@ func TestForgeSyncFetchesWhoCanBeAssigned(t *testing.T) {
 	if code := call(t, "POST", ts.URL+"/api/forges/sync", map[string]any{"dry_run": true}, nil); code != http.StatusAccepted {
 		t.Fatalf("dry run: %d", code)
 	}
-	st := waitJob(t, ts)
+	st := waitAssignable(t, ts, "gl")
 	tally := st.Job.Bridges["gl"]
 	if st.Job.State != "done" || tally == nil || tally.Assignable != 2 || tally.Warnings != 0 {
 		t.Fatalf("job %+v, gl %+v: want done, 2 assignable", st.Job, tally)
@@ -88,14 +109,15 @@ func TestForgeSyncWarnsWhenTheForgeWontSay(t *testing.T) {
 	s.runSync = fakeSync(nil, done)
 
 	call(t, "POST", ts.URL+"/api/forges/sync", map[string]any{"dry_run": true}, nil)
-	st := waitJob(t, ts)
+	st := waitAssignable(t, ts, "gh")
 	tally := st.Job.Bridges["gh"]
 	if st.Job.State != "done" || st.Job.Errors != 0 || tally == nil || tally.Warnings != 1 || tally.Assignable != 0 {
 		t.Fatalf("job %+v, gh %+v: want done, one warning, no error", st.Job, tally)
 	}
 }
 
-// A forge sync writes the toml's assignees mode where git-bug reads it.
+// A forge sync writes the toml's assignees mode where git-bug reads it,
+// and says so: the check that it will, the real run that it does.
 func TestForgeSyncSetsTheAssigneesMode(t *testing.T) {
 	t.Parallel()
 	ts, s := newIssueServer(t)
@@ -104,19 +126,109 @@ func TestForgeSyncSetsTheAssigneesMode(t *testing.T) {
 	if code := call(t, "POST", ts.URL+"/api/bridges", map[string]string{"target": "gitlab", "url": gl.URL + "/scratchpad/sync-trial", "token": "good-token"}, nil); code != http.StatusOK {
 		t.Fatalf("add a bridge: %d", code)
 	}
+	key := func() string {
+		cfg, err := s.b.TestCache().Config().Read()
+		if err != nil {
+			t.Fatal(err)
+		}
+		return cfg.Value("git-bug.bridge.gl.assignees", "")
+	}
+
+	var previewed core.SyncOptions
+	s.runSync = func(_ context.Context, _ string, dryRun bool, _ []string, opts ...core.Option) (<-chan core.SyncResult, error) {
+		if dryRun {
+			for _, o := range opts {
+				o(&previewed)
+			}
+		}
+		out := make(chan core.SyncResult)
+		close(out)
+		return out, nil
+	}
+
+	call(t, "POST", ts.URL+"/api/forges/sync", map[string]any{"dry_run": true}, nil)
+	st := waitAssignable(t, ts, "gl")
+	if previewed.Assignees != "labels" {
+		t.Errorf("the check synced with assignees %q, want labels: it previews the new mode", previewed.Assignees)
+	}
+	if want := "assignees: gl switches to labels; the next sync pulls every issue again"; st.Job.State != "done" || !slices.Contains(st.Job.Bridges["gl"].Lines, want) {
+		t.Fatalf("check %+v, lines %q: want %q", st.Job, st.Job.Bridges["gl"].Lines, want)
+	}
+	if key() != "" {
+		t.Errorf("the check wrote gl assignees %q", key())
+	}
+
+	if code := call(t, "POST", ts.URL+"/api/forges/sync", map[string]any{"dry_run": false}, nil); code != http.StatusAccepted {
+		t.Fatalf("real run: %d", code)
+	}
+	st = waitAssignable(t, ts, "gl")
+	if want := "assignees: gl switches to labels, pulling every issue again"; st.Job.State != "done" || !slices.Contains(st.Job.Bridges["gl"].Lines, want) {
+		t.Fatalf("run %+v, lines %q: want %q", st.Job, st.Job.Bridges["gl"].Lines, want)
+	}
+	if key() != "labels" {
+		t.Errorf("gl assignees %q, want labels", key())
+	}
+}
+
+// Who can be assigned is asked once the run is done: a forge that hangs
+// keeps neither the run running nor the edits waiting.
+func TestForgeSyncDoesntWaitForWhoCanBeAssigned(t *testing.T) {
+	t.Parallel()
+	ts, s := newIssueServer(t)
+	id := gitbugiotest.NewIssue(t, s.b, "Edit me")
+	githubForge(t, s.b)
+	for k, v := range map[string]string{core.ConfigKeySync: "true", "default-login": "guilbep"} {
+		if err := core.SetBridgeConfig(s.b.TestCache(), "gh", k, v); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := auth.Store(s.b.TestCache(), auth.NewToken("github", "a-token")); err != nil {
+		t.Fatal(err)
+	}
+	release := make(chan struct{})
+	gh := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		<-release
+		_, _ = w.Write([]byte(`[{"login":"carol"}]`))
+	}))
+	free := sync.OnceFunc(func() { close(release) })
+	t.Cleanup(gh.Close)
+	t.Cleanup(free) // before the close, which waits for the handler
+	s.githubAPI = gh.URL
 	done := make(chan struct{})
 	close(done)
 	s.runSync = fakeSync(nil, done)
 
 	call(t, "POST", ts.URL+"/api/forges/sync", map[string]any{"dry_run": true}, nil)
 	if st := waitJob(t, ts); st.Job.State != "done" {
-		t.Fatalf("job %+v", st.Job)
+		t.Fatalf("job %+v: want done while the forge hangs", st.Job)
 	}
-	cfg, err := s.b.TestCache().Config().Read()
+	if code := call(t, "POST", ts.URL+"/api/issues/"+id+"/labels", map[string]any{"add": []string{"status:ready"}}, nil); code != http.StatusOK {
+		t.Errorf("an edit while the forge hangs: %d, want 200", code)
+	}
+	free()
+	if tally := waitAssignable(t, ts, "gh").Job.Bridges["gh"]; tally.Assignable != 1 {
+		t.Errorf("gh %+v: want carol, once the forge answers", tally)
+	}
+}
+
+// Asking who can be assigned follows no redirect: GitLab's PRIVATE-TOKEN,
+// unlike Authorization, would go along to wherever it points.
+func TestAssignableFollowsNoRedirect(t *testing.T) {
+	t.Parallel()
+	elsewhere := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("the redirect was followed, with token %q", r.Header.Get("PRIVATE-TOKEN"))
+	}))
+	t.Cleanup(elsewhere.Close)
+	forge := httptest.NewServer(http.RedirectHandler(elsewhere.URL+"/users", http.StatusFound))
+	t.Cleanup(forge.Close)
+	req, _ := http.NewRequest(http.MethodGet, forge.URL+"/api/v4/projects/1/users", nil)
+	req.Header.Set("PRIVATE-TOKEN", "a-token")
+	resp, err := assignableHTTP.Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := cfg.Value("git-bug.bridge.gl.assignees", ""); got != "labels" {
-		t.Errorf("gl assignees %q, want labels", got)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusFound {
+		t.Errorf("answered %s, want the redirect itself", resp.Status)
 	}
 }

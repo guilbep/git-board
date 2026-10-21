@@ -54,10 +54,10 @@ type apiServer struct {
 	forgeMu sync.Mutex // guards job, issueDry and checked
 	job     *forgeJob
 	// the forge sync, or one way of it (mode get, send): nil, git-bug's
-	runSync func(ctx context.Context, mode string, dryRun bool, names []string) (<-chan core.SyncResult, error)
+	runSync func(ctx context.Context, mode string, dryRun bool, names []string, opts ...core.Option) (<-chan core.SyncResult, error)
 	// one issue's sync (issuesync.go): nil, git-bug's; issueDry is when
 	// each issue's last clean dry run ended
-	runIssueSync func(ctx context.Context, dryRun bool, id string) (<-chan core.SyncResult, error)
+	runIssueSync func(ctx context.Context, dryRun bool, id string, opts ...core.Option) (<-chan core.SyncResult, error)
 	issueDry     map[string]time.Time
 	// checked is when each git remote was last fetched, pulled or pushed
 	// (remotes.go)
@@ -68,6 +68,9 @@ type apiServer struct {
 	// inboxMu guards the inbox files (inbox.go): one read-change-write at
 	// a time
 	inboxMu sync.Mutex
+	// assignMu guards assignable.json: a run's fetch of who can be
+	// assigned may outlast it, into the next run's
+	assignMu sync.Mutex
 
 	// exposed are names --addr exposes beyond the loopback ones (withGuard)
 	exposed []string

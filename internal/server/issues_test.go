@@ -141,8 +141,8 @@ func TestMeAndIdentities(t *testing.T) {
 
 // fakeSync answers a forge sync with given results, holding the run until
 // release is closed.
-func fakeSync(results []core.SyncResult, release chan struct{}) func(context.Context, string, bool, []string) (<-chan core.SyncResult, error) {
-	return func(context.Context, string, bool, []string) (<-chan core.SyncResult, error) {
+func fakeSync(results []core.SyncResult, release chan struct{}) func(context.Context, string, bool, []string, ...core.Option) (<-chan core.SyncResult, error) {
+	return func(context.Context, string, bool, []string, ...core.Option) (<-chan core.SyncResult, error) {
 		out := make(chan core.SyncResult)
 		go func() {
 			defer close(out)
@@ -243,7 +243,7 @@ func TestForgeGetAndSend(t *testing.T) {
 	close(done)
 	ran := make(chan string, 10) // the mode each run was given
 	runs := func(results ...core.SyncResult) {
-		s.runSync = func(ctx context.Context, mode string, dryRun bool, names []string) (<-chan core.SyncResult, error) {
+		s.runSync = func(ctx context.Context, mode string, dryRun bool, names []string, _ ...core.Option) (<-chan core.SyncResult, error) {
 			ran <- mode
 			return fakeSync(results, done)(ctx, mode, dryRun, names)
 		}

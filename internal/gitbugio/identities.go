@@ -239,7 +239,8 @@ func (b *Backend) SendForges(ctx context.Context, names []string) (<-chan core.S
 // git config, where a plain `git bug bridge sync` reads it too. It writes
 // only a change, and a change makes the next pull start over (as `bridge
 // pull --no-resume`), so the assignees already there move to the new way.
-func (b *Backend) SetAssignees(name, mode string) (changed bool, err error) {
+// A dry run writes nothing, and says whether it would.
+func (b *Backend) SetAssignees(name, mode string, dryRun bool) (changed bool, err error) {
 	cfg, err := b.c.Config().Read()
 	if err != nil {
 		return false, err
@@ -247,10 +248,15 @@ func (b *Backend) SetAssignees(name, mode string) (changed bool, err error) {
 	if cmp.Or(cfg.Value("git-bug.bridge."+name+"."+core.ConfigKeyAssignees, ""), core.AssigneesNative) == mode {
 		return false, nil
 	}
-	if err := core.SetBridgeConfig(b.c, name, core.ConfigKeyAssignees, mode); err != nil {
+	if dryRun {
+		return true, nil
+	}
+	// the full pull first: the mode written without it would match from
+	// then on, and the pull never start over
+	if err := core.SetBridgeConfig(b.c, name, lastSyncKey, "0"); err != nil {
 		return false, err
 	}
-	return true, core.SetBridgeConfig(b.c, name, lastSyncKey, "0")
+	return true, core.SetBridgeConfig(b.c, name, core.ConfigKeyAssignees, mode)
 }
 
 // lastSyncKey is where git-bug keeps when a bridge's last sync pulled from
