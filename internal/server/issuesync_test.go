@@ -9,6 +9,7 @@ import (
 
 	"github.com/git-bug/git-bug/bridge/core"
 
+	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/gitbugio/gitbugiotest"
 )
 
@@ -21,7 +22,7 @@ func TestIssueSync(t *testing.T) {
 	addBridge(t, s, "gh", map[string]string{"target": "github", "owner": "o", "project": "p", "default-login": "bot", "sync": "true"})
 	addBridge(t, s, "gl", map[string]string{"target": "gitlab", "project-id": "1", "base-url": "https://gitlab.example.com/", "default-login": "bot", "sync": "true"})
 	var got []string
-	s.runIssueSync = func(_ context.Context, dryRun bool, bug string) (<-chan core.SyncResult, error) {
+	s.runIssueSync = func(_ context.Context, dryRun bool, bug string, _ ...core.Option) (<-chan core.SyncResult, error) {
 		got = append(got, bug)
 		out := make(chan core.SyncResult, 2)
 		if dryRun {
@@ -64,6 +65,38 @@ func TestIssueSync(t *testing.T) {
 	s.syncing.Store(true)
 	if code := call(t, "POST", ts.URL+"/api/issues/"+id+"/sync", map[string]bool{"dry_run": true}, nil); code != http.StatusConflict {
 		t.Errorf("during a full sync: %d, want 409", code)
+	}
+}
+
+// One issue syncs with the toml's assignees mode, before any forge sync
+// wrote it, and leaves writing it to the next forge sync.
+func TestIssueSyncTakesTheAssigneesMode(t *testing.T) {
+	t.Parallel()
+	ts, s := newIssueServer(t)
+	s.cfg = &config.Config{Assignees: "labels"}
+	id := gitbugiotest.NewIssue(t, s.b, "one issue")
+	addBridge(t, s, "gh", map[string]string{"target": "github", "owner": "o", "project": "p", "default-login": "bot", "sync": "true"})
+	var got core.SyncOptions
+	s.runIssueSync = func(_ context.Context, _ bool, _ string, opts ...core.Option) (<-chan core.SyncResult, error) {
+		for _, o := range opts {
+			o(&got)
+		}
+		out := make(chan core.SyncResult)
+		close(out)
+		return out, nil
+	}
+	if code := call(t, "POST", ts.URL+"/api/issues/"+id+"/sync", map[string]bool{"dry_run": true}, nil); code != http.StatusOK {
+		t.Fatalf("dry run: %d", code)
+	}
+	if got.Assignees != "labels" {
+		t.Errorf("synced with assignees %q, want labels", got.Assignees)
+	}
+	cfg, err := s.b.TestCache().Config().Read()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v := cfg.Value("git-bug.bridge.gh.assignees", ""); v != "" {
+		t.Errorf("one issue's sync wrote gh assignees %q", v)
 	}
 }
 

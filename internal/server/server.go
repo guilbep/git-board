@@ -57,7 +57,7 @@ type apiServer struct {
 	runSync func(ctx context.Context, mode string, dryRun bool, names []string) (<-chan core.SyncResult, error)
 	// one issue's sync (issuesync.go): nil, git-bug's; issueDry is when
 	// each issue's last clean dry run ended
-	runIssueSync func(ctx context.Context, dryRun bool, id string) (<-chan core.SyncResult, error)
+	runIssueSync func(ctx context.Context, dryRun bool, id string, opts ...core.Option) (<-chan core.SyncResult, error)
 	issueDry     map[string]time.Time
 	// checked is when each git remote was last fetched, pulled or pushed
 	// (remotes.go)

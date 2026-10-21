@@ -117,7 +117,7 @@ func TestForgeSyncStreamsItsSteps(t *testing.T) {
 		{Bridge: "gh", Export: &bugB},
 		{Bridge: "gl", Import: &oops}, // names no issue: no step
 	}, release)
-	s.runIssueSync = func(_ context.Context, _ bool, id string) (<-chan core.SyncResult, error) {
+	s.runIssueSync = func(_ context.Context, _ bool, id string, _ ...core.Option) (<-chan core.SyncResult, error) {
 		out := make(chan core.SyncResult, 1)
 		r := core.NewImportComment(entity.Id(id), "")
 		out <- core.SyncResult{Bridge: "gh", Import: &r}
