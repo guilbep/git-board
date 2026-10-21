@@ -54,11 +54,12 @@
       <div ref="tools" class="tools">
       <div class="toolbar">
         <div class="toolbar-field toolbar-search">
-          <label class="epfl-label" for="filter">Filter <span class="search-hint">· words in titles, descriptions, comments; #number; field:value</span></label>
+          <label class="epfl-label" for="filter">Filter</label>
           <input
             id="filter"
             class="epfl-input"
             type="search"
+            title="Words in titles, descriptions, comments; #number; field:value"
             spellcheck="false"
             placeholder="Words, #2528, status:ready, assignee:@me, is:closed…"
             autocomplete="off"
@@ -75,8 +76,8 @@
             <option v-for="name in groupChoices" :key="name" :value="name">{{ displayName(name) }}</option>
           </select>
         </div>
-        <div v-if="layout === 'board' && groupField" class="toolbar-field">
-          <span class="epfl-label">Lanes <span class="search-hint">· which columns this board shows</span></span>
+        <div v-if="layout === 'board' && groupField" class="toolbar-field toolbar-lanes" title="Which columns this board shows">
+          <span class="epfl-label">Lanes</span>
           <LaneChooser v-model:lanes="lanes" v-model:limits="limits" :values="laneValues" :field="groupField" />
         </div>
         <!-- A table sorts from its column headers; a board has none. -->
@@ -692,7 +693,7 @@ onBeforeUnmount(offLive);
 <style scoped>
 /* the tools stick under the header on wider screens */
 @media (min-width: 48rem) {
-  .tools { position: sticky; top: var(--header-h); z-index: 20; margin: 0 calc(-1 * var(--space-2)); padding: var(--space-3) var(--space-2) 0; background: var(--bg); box-shadow: 0 1px 0 var(--border-subtle); }
+  .tools { position: sticky; top: var(--header-h); z-index: 20; margin: 0 calc(-1 * var(--space-2)); padding: var(--space-2) var(--space-2) 0; background: var(--bg); box-shadow: 0 1px 0 var(--border-subtle); }
 }
 @media (min-width: 64rem) {
   .page > .filters { position: sticky; top: var(--header-h); align-self: start; max-height: calc(100vh - var(--header-h)); overflow-y: auto; }
@@ -728,7 +729,7 @@ onBeforeUnmount(offLive);
 
 .notice { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-bottom: var(--space-3); }
 
-.page-head { margin-bottom: var(--space-4); }
+.page-head { margin-bottom: var(--space-3); }
 .page-title { margin: 0 0 var(--space-1); overflow-wrap: anywhere; }
 .page-meta { margin: 0; font-size: var(--fs-sm); color: var(--fg-muted); }
 .page-report { padding: 0; border: 0; background: none; color: var(--fg); font: inherit; text-decoration: underline; cursor: pointer; }
@@ -736,15 +737,16 @@ onBeforeUnmount(offLive);
 .toolbar {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-start;
+  align-items: flex-end;
   gap: var(--space-3);
-  margin-bottom: var(--space-3);
+  margin-bottom: var(--space-2);
 }
 .toolbar-field { flex: 0 1 13rem; min-width: 0; }
 .toolbar-search { flex: 1 1 20rem; max-width: 32rem; }
-.search-hint { font-weight: var(--w-normal); color: var(--fg-muted); }
-.toolbar-new { display: flex; align-items: center; gap: .5rem; margin-left: auto; align-self: flex-end; }
-.toolbar-new .epfl-btn { display: inline-flex; align-items: center; gap: .375rem; }
+.toolbar-lanes { flex: 0 0 auto; }
+.toolbar-new { display: flex; align-items: center; gap: .5rem; margin-left: auto; }
+/* as high as the fields beside it */
+.toolbar-new .epfl-btn { display: inline-flex; align-items: center; gap: .375rem; min-height: var(--control-h); padding-block: 0; }
 
 .status {
   display: flex;
@@ -752,7 +754,7 @@ onBeforeUnmount(offLive);
   align-items: center;
   gap: var(--space-2) 0.75rem;
   margin-bottom: var(--space-3);
-  padding-bottom: var(--space-3);
+  padding-bottom: var(--space-2);
   font-size: var(--fs-sm);
   border-bottom: var(--border-w) solid var(--border-subtle);
 }
