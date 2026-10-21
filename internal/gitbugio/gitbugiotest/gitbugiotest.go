@@ -8,6 +8,7 @@ package gitbugiotest
 
 import (
 	"context"
+	"sync"
 	"testing"
 	"time"
 
@@ -103,7 +104,12 @@ func CloseIssue(t testing.TB, b *gitbugio.Backend, idPrefix string) {
 // one of forges named by the bridge's project.
 type fakeForge struct{}
 
-var forges = map[string]*synctest.Fake{}
+// forges are the live tests' fake forges, by bridge name: a name is one
+// test's at a time.
+var (
+	forgesMu sync.Mutex
+	forges   = map[string]*synctest.Fake{}
+)
 
 func (fakeForge) Target() string                          { return "fakeforge" }
 func (fakeForge) LoginMetaKey() string                    { return "fake-login" }
@@ -115,6 +121,8 @@ func (fakeForge) Configure(*cache.RepoCache, core.BridgeParams, bool) (core.Conf
 	return nil, nil
 }
 func (fakeForge) NewRemote(_ context.Context, _ *cache.RepoCache, conf core.Configuration) (core.Remote, error) {
+	forgesMu.Lock()
+	defer forgesMu.Unlock()
 	return forges[conf["project"]], nil
 }
 
@@ -126,7 +134,20 @@ func NewForge(t testing.TB, b *gitbugio.Backend, name string) *synctest.Fake {
 	t.Helper()
 	bot := core.Account{User: core.User{ID: "1", Login: "bot", Name: "Bot"}}
 	f := synctest.NewFake(name+".test/1", name+".test", synctest.Quirks{}, bot)
-	forges[name] = f
+	forgesMu.Lock()
+	_, taken := forges[name]
+	if !taken {
+		forges[name] = f
+	}
+	forgesMu.Unlock()
+	if taken {
+		t.Fatalf("forge %q is another running test's: give each test its own", name)
+	}
+	t.Cleanup(func() {
+		forgesMu.Lock()
+		delete(forges, name)
+		forgesMu.Unlock()
+	})
 	for k, v := range map[string]string{core.ConfigKeyTarget: "fakeforge", "project": name, core.ConfigKeyDefaultLogin: "bot", core.ConfigKeySync: "true"} {
 		if err := core.SetBridgeConfig(b.TestCache(), name, k, v); err != nil {
 			t.Fatal(err)
