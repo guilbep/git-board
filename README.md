@@ -39,6 +39,10 @@ git-board --help
 are embedded at build time from `web/dist`): its web UI is then an empty
 page.
 
+From a clone, `make install-latest` installs the latest release's binary
+instead, built with the web app. It downloads the archive for this machine
+with `gh` and checks it against `checksums.txt`.
+
 Requires Go 1.26+ (git-bug's module requirement) and Node 22.12+ for the web
 app; `go install` fetches the matching Go toolchain automatically if
 needed. `git` must be on the path (branches' "in dev, squashed" asks

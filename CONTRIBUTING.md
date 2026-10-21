@@ -28,6 +28,7 @@ make vet     # go vet ./...
 make fmt     # gofmt -l . (lists files needing formatting; run gofmt -w to fix)
 make ci      # everything above, the full check
 make install # go install the git-board binary
+make install-latest # the latest release's binary instead, web app inside
 ```
 
 Run `make ci` once a change is done, before it's pushed or landed: it's the
