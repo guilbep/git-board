@@ -235,10 +235,6 @@ func (b *Backend) SendForges(ctx context.Context, names []string) (<-chan core.S
 	})
 }
 
-// assigneesKey is the bridge's git config key for how its forge holds
-// assignees (bridge/core ConfigKeyAssignees): native, the default, or labels.
-const assigneesKey = "assignees"
-
 // SetAssignees makes the bridge hold assignees as mode, in this clone's
 // git config, where a plain `git bug bridge sync` reads it too. It writes
 // only a change, and a change makes the next pull start over (as `bridge
@@ -248,10 +244,10 @@ func (b *Backend) SetAssignees(name, mode string) (changed bool, err error) {
 	if err != nil {
 		return false, err
 	}
-	if cmp.Or(cfg.Value("git-bug.bridge."+name+"."+assigneesKey, ""), "native") == mode {
+	if cmp.Or(cfg.Value("git-bug.bridge."+name+"."+core.ConfigKeyAssignees, ""), core.AssigneesNative) == mode {
 		return false, nil
 	}
-	if err := core.SetBridgeConfig(b.c, name, assigneesKey, mode); err != nil {
+	if err := core.SetBridgeConfig(b.c, name, core.ConfigKeyAssignees, mode); err != nil {
 		return false, err
 	}
 	return true, core.SetBridgeConfig(b.c, name, lastSyncKey, "0")
