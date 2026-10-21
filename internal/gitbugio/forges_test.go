@@ -113,3 +113,34 @@ func TestGitHubToken(t *testing.T) {
 		t.Errorf("the GitHub bridge's link alice: %q %q %v, want alice's token", login, tok, err)
 	}
 }
+
+// SetAssignees writes the mode only when it changes, and a change makes
+// the next pull start over.
+func TestSetAssignees(t *testing.T) {
+	t.Parallel()
+	b := gitbugiotest.New(t)
+	gitbugiotest.NewForge(t, b, "fk")
+	get := func(key string) string {
+		cfg, err := b.TestCache().Config().Read()
+		if err != nil {
+			t.Fatal(err)
+		}
+		return cfg.Value("git-bug.bridge.fk."+key, "")
+	}
+	if err := core.SetBridgeConfig(b.TestCache(), "fk", "lastSyncTime", "123"); err != nil {
+		t.Fatal(err)
+	}
+
+	if changed, err := b.SetAssignees("fk", "native"); err != nil || changed || get("assignees") != "" || get("lastSyncTime") != "123" {
+		t.Fatalf("native over none: changed %v, %v, key %q, last sync %q; want nothing written", changed, err, get("assignees"), get("lastSyncTime"))
+	}
+	if changed, err := b.SetAssignees("fk", "labels"); err != nil || !changed || get("assignees") != "labels" || get("lastSyncTime") != "0" {
+		t.Fatalf("labels: changed %v, %v, key %q, last sync %q; want labels and a full pull", changed, err, get("assignees"), get("lastSyncTime"))
+	}
+	if err := core.SetBridgeConfig(b.TestCache(), "fk", "lastSyncTime", "456"); err != nil {
+		t.Fatal(err)
+	}
+	if changed, err := b.SetAssignees("fk", "labels"); err != nil || changed || get("lastSyncTime") != "456" {
+		t.Fatalf("labels again: changed %v, %v, last sync %q; want nothing written", changed, err, get("lastSyncTime"))
+	}
+}

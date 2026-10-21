@@ -24,6 +24,8 @@ func fakeGitLab(t *testing.T) *httptest.Server {
 		switch {
 		case r.URL.Path == "/api/v4/user":
 			_, _ = io.WriteString(w, `{"id":1,"username":"guilbert"}`)
+		case strings.HasSuffix(r.URL.Path, "/users") && strings.HasPrefix(r.URL.Path, "/api/v4/projects/"):
+			_, _ = io.WriteString(w, `[{"username":"bob"},{"username":"alice"}]`)
 		case strings.HasPrefix(r.URL.Path, "/api/v4/projects/"):
 			_, _ = io.WriteString(w, `{"id":42400,"path_with_namespace":"scratchpad/sync-trial"}`)
 		default:

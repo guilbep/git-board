@@ -48,7 +48,8 @@
             </ul>
             <p v-if="!values(name).length && fields[name]?.inherits" class="gb-inherited">{{ fields[name]!.inherits }} <span>· project</span></p>
             <form class="gb-addrow" @submit.prevent="onAdd(name)">
-              <input autocomplete="off" data-1p-ignore data-lpignore="true" data-form-type="other" :id="`f-${name}`" v-model="drafts[name]" class="epfl-input" :placeholder="typeOf(name, fields) === 'issue' ? 'Add #12, or a git-bug id' : typeOf(name, fields) === 'person' ? 'Add, or @me' : 'Add'" :disabled="saving" />
+              <input autocomplete="off" data-1p-ignore data-lpignore="true" data-form-type="other" :id="`f-${name}`" v-model="drafts[name]" class="epfl-input" :placeholder="typeOf(name, fields) === 'issue' ? 'Add #12, or a git-bug id' : typeOf(name, fields) === 'person' ? 'Add, or @me' : 'Add'" :list="fields[name]?.people?.length ? `side-people-${name}` : undefined" :disabled="saving" />
+              <datalist v-if="fields[name]?.people?.length" :id="`side-people-${name}`"><option v-for="p in fields[name]!.people" :key="p" :value="p" /></datalist>
               <button type="submit" class="epfl-btn epfl-btn-secondary epfl-btn-sm" :disabled="saving"><GbIcon name="plus" small /> Add</button>
             </form>
           </template>

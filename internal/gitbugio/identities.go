@@ -1,6 +1,7 @@
 package gitbugio
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/git-bug/git-bug/bridge" // registers every forge, for the sync
 	"github.com/git-bug/git-bug/bridge/core"
+	"github.com/git-bug/git-bug/cache"
 )
 
 var _ = bridge.Targets
@@ -85,6 +87,12 @@ type Bridge struct {
 	Where   string `json:"where"`  // the project it syncs with
 	Sync    bool   `json:"sync"`
 	CanSync bool   `json:"can_sync"` // the target supports sync (not jira, launchpad)
+
+	// where the forge's API finds the project: owner and project (GitHub,
+	// Gitea; GitLab's project-id), and an instance's base URL
+	Owner   string `json:"-"`
+	Project string `json:"-"`
+	BaseURL string `json:"-"`
 }
 
 // ErrNoBridge: no bridge has that name.
@@ -103,7 +111,7 @@ func (b *Backend) Bridges() ([]Bridge, error) {
 	res := []Bridge{}
 	for _, name := range names {
 		get := func(k string) string { return cfg.Value("git-bug.bridge."+name+"."+k, "") }
-		br := Bridge{Name: name, Target: get("target")}
+		br := Bridge{Name: name, Target: get("target"), Owner: get("owner"), Project: get("project"), BaseURL: get("base-url")}
 		br.Sync, _ = strconv.ParseBool(get("sync"))
 		if nb, err := core.NewBridge(b.c, br.Target, name); err == nil {
 			br.CanSync = nb.SupportsSync()
@@ -113,6 +121,7 @@ func (b *Backend) Bridges() ([]Bridge, error) {
 			br.Where = "https://github.com/" + get("owner") + "/" + get("project")
 		case "gitlab":
 			br.Where = get("base-url") + " project " + get("project-id")
+			br.Project = get("project-id")
 		case "gitea":
 			br.Where = strings.TrimSuffix(get("base-url"), "/") + "/" + get("owner") + "/" + get("project")
 		}
@@ -226,6 +235,24 @@ func (b *Backend) SendForges(ctx context.Context, names []string) (<-chan core.S
 	})
 }
 
+// SetAssignees makes the bridge hold assignees as mode, in this clone's
+// git config, where a plain `git bug bridge sync` reads it too. It writes
+// only a change, and a change makes the next pull start over (as `bridge
+// pull --no-resume`), so the assignees already there move to the new way.
+func (b *Backend) SetAssignees(name, mode string) (changed bool, err error) {
+	cfg, err := b.c.Config().Read()
+	if err != nil {
+		return false, err
+	}
+	if cmp.Or(cfg.Value("git-bug.bridge."+name+"."+core.ConfigKeyAssignees, ""), core.AssigneesNative) == mode {
+		return false, nil
+	}
+	if err := core.SetBridgeConfig(b.c, name, core.ConfigKeyAssignees, mode); err != nil {
+		return false, err
+	}
+	return true, core.SetBridgeConfig(b.c, name, lastSyncKey, "0")
+}
+
 // lastSyncKey is where git-bug keeps when a bridge's last sync pulled from
 // (bridge/core configKeyLastSyncTime, not exported).
 const lastSyncKey = "lastSyncTime"
@@ -327,16 +354,35 @@ func (b *Backend) MyLogin() string {
 	if err != nil {
 		return ""
 	}
-	if l := me.Login(); l != "" {
+	return b.loginOf(me)
+}
+
+// loginOf is an identity's forge login, found as MyLogin says.
+func (b *Backend) loginOf(i *cache.IdentityCache) string {
+	if l := i.Login(); l != "" {
 		return l
 	}
-	meta := me.ImmutableMetadata()
+	meta := i.ImmutableMetadata()
 	for _, key := range []string{"github-login", "gitlab-login", "gitea-login"} {
 		if l := meta[key]; l != "" {
 			return l
 		}
 	}
-	return b.linkedLogin(me.Id().String(), "")
+	return b.linkedLogin(i.Id().String(), "")
+}
+
+// Logins are what each identity is assigned as: its forge login
+// (loginOf), else its name.
+func (b *Backend) Logins() ([]string, error) {
+	var res []string
+	for _, id := range b.c.Identities().AllIds() {
+		i, err := b.c.Identities().Resolve(id)
+		if err != nil {
+			return nil, err
+		}
+		res = append(res, cmp.Or(b.loginOf(i), i.DisplayName()))
+	}
+	return res, nil
 }
 
 // myGitHubLogin is the GitHub login of the identity git-board writes as,

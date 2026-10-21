@@ -35,6 +35,8 @@ Adding syncs nothing: the first sync is yours to start, from the Sync page, afte
 
 With sync on, the forge takes part in the Sync page's sync: each forge is read first, then every change is sent to each, so an issue, comment or change made on one forge reaches the others in one run.
 
+Each run, the check too, also asks each forge who can be assigned on its project, and says how many it found. The assignee boxes (every person field) then offer them, with the people git-bug knows. A forge that doesn't answer is a warning: the boxes keep its last list.
+
 Off, the forge is kept but stays out of it, until you switch it on again in the Forges table. `git bug bridge pull <name>` still gets its issues, on the command line.
 
 ## Removing a forge
