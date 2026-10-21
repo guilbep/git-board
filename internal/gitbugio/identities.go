@@ -251,10 +251,12 @@ func (b *Backend) SetAssignees(name, mode string, dryRun bool) (changed bool, er
 	if dryRun {
 		return true, nil
 	}
-	if err := core.SetBridgeConfig(b.c, name, core.ConfigKeyAssignees, mode); err != nil {
+	// the full pull first: the mode written without it would match from
+	// then on, and the pull never start over
+	if err := core.SetBridgeConfig(b.c, name, lastSyncKey, "0"); err != nil {
 		return false, err
 	}
-	return true, core.SetBridgeConfig(b.c, name, lastSyncKey, "0")
+	return true, core.SetBridgeConfig(b.c, name, core.ConfigKeyAssignees, mode)
 }
 
 // lastSyncKey is where git-bug keeps when a bridge's last sync pulled from

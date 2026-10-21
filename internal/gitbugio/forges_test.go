@@ -134,6 +134,12 @@ func TestSetAssignees(t *testing.T) {
 	if changed, err := b.SetAssignees("fk", "native", false); err != nil || changed || get("assignees") != "" || get("lastSyncTime") != "123" {
 		t.Fatalf("native over none: changed %v, %v, key %q, last sync %q; want nothing written", changed, err, get("assignees"), get("lastSyncTime"))
 	}
+	if _, err := b.SetAssignees("fk", "la\x00bels", false); err == nil || get("assignees") != "" || get("lastSyncTime") != "0" {
+		t.Fatalf("a mode git can't store: %v, key %q, last sync %q; want an error, and the full pull already asked", err, get("assignees"), get("lastSyncTime"))
+	}
+	if err := core.SetBridgeConfig(b.TestCache(), "fk", "lastSyncTime", "123"); err != nil {
+		t.Fatal(err)
+	}
 	if changed, err := b.SetAssignees("fk", "labels", true); err != nil || !changed || get("assignees") != "" || get("lastSyncTime") != "123" {
 		t.Fatalf("labels, dry run: changed %v, %v, key %q, last sync %q; want the change said, nothing written", changed, err, get("assignees"), get("lastSyncTime"))
 	}
