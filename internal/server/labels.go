@@ -238,7 +238,8 @@ func (s *apiServer) handleLint(w http.ResponseWriter, r *http.Request) {
 
 // handleLabelDelete deletes a GitHub label outside the project's from one
 // of its repositories; dry_run answers how many issues and pull requests
-// carry it there. A label the project defines is refused.
+// carry it there. Only a label ghlabels.Stray lists for the repository:
+// the project's own and a free-form field's values are refused.
 func (s *apiServer) handleLabelDelete(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Repo   string `json:"repo"`
@@ -253,8 +254,13 @@ func (s *apiServer) handleLabelDelete(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, errors.New("not one of the project's repositories: "+req.Repo))
 		return
 	}
-	if slices.ContainsFunc(ghlabels.Desired(cfg), func(l ghlabels.Label) bool { return strings.EqualFold(l.Name, req.Name) }) {
-		writeError(w, http.StatusBadRequest, errors.New(req.Name+" is one of the project's labels"))
+	existing, err := ghlabels.Existing(req.Repo)
+	if err != nil {
+		writeError(w, http.StatusBadGateway, err)
+		return
+	}
+	if !slices.ContainsFunc(ghlabels.Stray(cfg, ghlabels.Desired(cfg), existing), func(l ghlabels.Label) bool { return strings.EqualFold(l.Name, req.Name) }) {
+		writeError(w, http.StatusBadRequest, errors.New(req.Name+" isn't a stray label of "+req.Repo))
 		return
 	}
 	if req.DryRun {

@@ -26,6 +26,15 @@ func (s *apiServer) config() *config.Config {
 	return s.cfg
 }
 
+// setConfig takes cfg for every request from now on; the kind form may
+// have changed.
+func (s *apiServer) setConfig(cfg *config.Config) {
+	s.cfgMu.Lock()
+	defer s.cfgMu.Unlock()
+	s.cfg = cfg
+	s.b.SetFlatKinds(cfg)
+}
+
 func (s *apiServer) configPath() string {
 	if s.cfgPath != "" {
 		return s.cfgPath
@@ -141,10 +150,7 @@ func (s *apiServer) handleConfigSave(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
-	s.cfgMu.Lock()
-	s.cfg = cfg
-	s.b.SetFlatKinds(cfg) // the kind form may have changed
-	s.cfgMu.Unlock()
+	s.setConfig(cfg)
 	writeJSON(w, http.StatusOK, res)
 }
 
@@ -227,9 +233,6 @@ func (s *apiServer) handleSaveView(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
-	s.cfgMu.Lock()
-	s.cfg = cfg
-	s.b.SetFlatKinds(cfg) // the kind form may have changed
-	s.cfgMu.Unlock()
+	s.setConfig(cfg)
 	writeJSON(w, http.StatusOK, cfg.Views)
 }
