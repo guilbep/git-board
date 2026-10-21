@@ -145,8 +145,8 @@ github.com/graph-gophers/graphql-go v1.9.0 h1:yu0ucKHLc5qGpRwLYKIWtr9bOoxovkWasu
 github.com/graph-gophers/graphql-go v1.9.0/go.mod h1:23olKZ7duEvHlF/2ELEoSZaY1aNPfShjP782SOoNTyM=
 github.com/gsterjov/go-libsecret v0.0.0-20161001094733-a6f4afe4910c h1:6rhixN/i8ZofjG1Y75iExal34USq5p+wiN1tpie8IrU=
 github.com/gsterjov/go-libsecret v0.0.0-20161001094733-a6f4afe4910c/go.mod h1:NMPJylDgVpX0MLRlPy15sqSwOFv/U1GZ2m21JhFfek0=
-github.com/guilbep/git-bug v0.11.1-sync.8 h1:p2HpGMoRv0kKvPG0lurc7yMaD182MDWkjI2jF1KPUmk=
-github.com/guilbep/git-bug v0.11.1-sync.8/go.mod h1:5z/9qNffirrclpSE5S6m2wvUPhRE5nxCOBofG7xa3PM=
+github.com/guilbep/git-bug v0.11.1-sync.9 h1:mvyUACKBLhRMZZnP54W+FP/AtAg3/mHiuEqmcJrjOds=
+github.com/guilbep/git-bug v0.11.1-sync.9/go.mod h1:5z/9qNffirrclpSE5S6m2wvUPhRE5nxCOBofG7xa3PM=
 github.com/hashicorp/go-cleanhttp v0.5.2 h1:035FKYIWjmULyFRBKPs8TBQoi0x6d9G4xc9neXJWAZQ=
 github.com/hashicorp/go-cleanhttp v0.5.2/go.mod h1:kO/YDlP8L1346E6Sodw+PrpBSV4/SoxCXGY6BqNFT48=
 github.com/hashicorp/go-hclog v1.6.3 h1:Qr2kF+eVWjTiYmU7Y31tYlP1h0q/X3Nl3tPGdaB11/k=
