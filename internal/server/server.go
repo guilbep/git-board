@@ -54,7 +54,7 @@ type apiServer struct {
 	forgeMu sync.Mutex // guards job, issueDry and checked
 	job     *forgeJob
 	// the forge sync, or one way of it (mode get, send): nil, git-bug's
-	runSync func(ctx context.Context, mode string, dryRun bool, names []string) (<-chan core.SyncResult, error)
+	runSync func(ctx context.Context, mode string, dryRun bool, names []string, opts ...core.Option) (<-chan core.SyncResult, error)
 	// one issue's sync (issuesync.go): nil, git-bug's; issueDry is when
 	// each issue's last clean dry run ended
 	runIssueSync func(ctx context.Context, dryRun bool, id string, opts ...core.Option) (<-chan core.SyncResult, error)

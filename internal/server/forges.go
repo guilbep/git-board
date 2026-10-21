@@ -407,19 +407,19 @@ func (s *apiServer) assigneesMode() string {
 }
 
 // forgeRun is git-bug's sync, or one way of it.
-func (s *apiServer) forgeRun(ctx context.Context, mode string, dryRun bool, names []string) (<-chan core.SyncResult, error) {
+func (s *apiServer) forgeRun(ctx context.Context, mode string, dryRun bool, names []string, opts ...core.Option) (<-chan core.SyncResult, error) {
 	issues, _ := s.b.ListIssues()
-	pulls := core.WithPullsOf(s.pullsOf(ctx, issues)) // stamps review:pr, where a send sends
+	opts = append(opts, core.WithPullsOf(s.pullsOf(ctx, issues))) // stamps review:pr, where a send sends
 	if mode == "send" {
 		return s.b.SendForges(ctx, names)
 	}
 	if mode == "get" {
-		return s.b.GetForges(ctx, names, pulls)
+		return s.b.GetForges(ctx, names, opts...)
 	}
-	return s.b.SyncForges(ctx, dryRun, names, pulls)
+	return s.b.SyncForges(ctx, dryRun, names, opts...)
 }
 
-func (s *apiServer) runForgeSync(job *forgeJob, run func(context.Context, string, bool, []string) (<-chan core.SyncResult, error), names []string) {
+func (s *apiServer) runForgeSync(job *forgeJob, run func(context.Context, string, bool, []string, ...core.Option) (<-chan core.SyncResult, error), names []string) {
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()
 
@@ -464,7 +464,8 @@ func (s *apiServer) runForgeSync(job *forgeJob, run func(context.Context, string
 			s.forgeMu.Unlock()
 		}
 	}
-	results, err := run(context.Background(), job.Mode, job.DryRun, names)
+	// the mode as an option too: a check, which writes nothing, previews it
+	results, err := run(context.Background(), job.Mode, job.DryRun, names, core.WithAssignees(mode))
 	if err != nil {
 		finish("failed", err.Error())
 		return
