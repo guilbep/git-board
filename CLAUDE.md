@@ -1,13 +1,14 @@
 # git-board
 
 Setup, workflow and conventions are in CONTRIBUTING.md. Run `make ci` and, in
-`web/`, `npm run typecheck && npm test` before every commit (what CI runs).
+`web/`, `npm run typecheck && npm test` (what CI runs) once, when the work is
+done and verified, before saying it's ready: not before every commit.
 
 ## Tests
 
-- While developing, run the package's own tests:
-  `go test ./internal/server/ -run TestName`. Run the full `make ci` once,
-  before committing.
+- While developing, and for each commit on the way, run the package's own
+  tests: `go test ./internal/server/ -run TestName`. The full `make ci` takes
+  minutes: run it once, at the end.
 - A new test calls `t.Parallel()` first, unless it chdirs, sets an
   environment variable, or swaps a package-level variable: then it stays
   serial.

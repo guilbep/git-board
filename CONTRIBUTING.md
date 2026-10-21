@@ -26,12 +26,13 @@ make build   # go build ./...
 make test    # go test ./...
 make vet     # go vet ./...
 make fmt     # gofmt -l . (lists files needing formatting; run gofmt -w to fix)
-make ci      # everything above, the full pre-commit check
+make ci      # everything above, the full check
 make install # go install the git-board binary
 ```
 
-Run `make ci` before every commit — it's the same sequence used to vet
-every change in this repo's history.
+Run `make ci` once a change is done, before it's pushed or landed: it's the
+sequence CI runs. While working, the package's own tests are enough
+(`go test ./internal/server/ -run TestName`).
 
 The `web/` frontend (Quasar/Vue) has its own toolchain: `make web-dev` /
 `make web-build`, or `cd web && npm run dev`/`build`/`typecheck` directly.
