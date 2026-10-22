@@ -52,7 +52,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
-import { getChanges, type Changes, type Cycle, type IssueAgent } from '@/api/board';
+import { getChanges, getStepTests, type Changes, type Cycle, type IssueAgent, type StepTests } from '@/api/board';
 import { message } from '@/issue';
 import { when } from '@/when';
 import { agentWords } from '@/worktrees';
@@ -86,6 +86,15 @@ watch(
   },
   { immediate: true },
 );
+// the checks the base declares, at the head: Mark ready for review's gate (step 4)
+const gate = ref<StepTests['gate'] | null>(null);
+watch(
+  () => [props.id, props.cycle.evidence.head],
+  async () => {
+    gate.value = props.cycle.evidence.head ? await getStepTests(props.id).then((t) => t.gate).catch(() => null) : null;
+  },
+  { immediate: true },
+);
 const sum = (k: 'added' | 'deleted') => changes.value?.files.reduce((n, f) => n + f[k], 0) ?? 0;
 const tests = computed(() => new Set((props.cycle.evidence.tests ?? []).map((t) => t.commit)));
 
@@ -97,6 +106,9 @@ const tiles = computed(() => {
     what: t.path,
     line: t.commit ? `at ${t.commit.slice(0, 7)}${t.commit === e.head ? ', the head' : ''}` : 'not committed yet',
   }));
+  for (const c of gate.value?.checks ?? []) {
+    out.push({ pill: c.proven ? 'Pass' : c.verdict === 'FAILED' ? 'Failed' : 'Not run', what: c.name, line: c.proven ? `at ${e.head?.slice(0, 7)}, the head · signed by ${c.signer}` : `not proven at ${e.head?.slice(0, 7)}, the head` });
+  }
   const checks = pr.value?.checks ?? [];
   if (checks.length) {
     const green = checks.filter((c) => c.state === 'success').length;

@@ -400,9 +400,8 @@
 .gb-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: .75rem; margin: 0; padding: 0; list-style: none; }
 .gb-tiles li { display: grid; gap: .375rem; padding: .875rem 1rem; border: 1px solid var(--border); font-size: .875rem; }
 .gb-tiles button { justify-self: start; }
-.gb-pill { display: inline-block; padding: .125rem .5rem; font-size: .75rem; font-weight: 700; background: var(--bg-subtle); color: var(--fg-muted); }
-.gb-pill.is-pass { background: var(--success-bg); color: var(--success-fg); }
-.gb-pill.is-failed { background: var(--danger-bg); color: var(--danger-fg); }
+.gb-pill.is-pass { --c-bg: var(--gb-green-bg); --c-fg: var(--gb-green-fg); }
+.gb-pill.is-failed { --c-bg: var(--gb-red-bg); --c-fg: var(--gb-red-fg); }
 .gb-step-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .75rem 1.5rem; padding-top: 1rem; border-top: 1px solid var(--border); }
 .gb-step-foot p { margin: 0; }
 .gb-step-by { font-size: 1.0625rem; font-weight: 700; color: var(--gb-done); }
