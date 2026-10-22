@@ -7,6 +7,16 @@
 single = true
 options = ["draft", "backlog", "ready", "in-progress", "in-review", "done"]
 
+[fields.moscow]
+single = true
+options = ["musthave", "shouldhave", "couldhave", "wonthave"]
+
+[fields.moscow.colors]
+"musthave" = "#D73A4A"
+"shouldhave" = "#A2EEEF"
+"couldhave"= "#7057FF"
+"wonthave" = "#E6E6E6"
+
 [fields.prio]
 single = true
 options = ["p0", "p1", "p2", "p3"]
@@ -37,6 +47,7 @@ layout = "board"
 filter = "is:open"
 group = "status"
 sort = "prio asc"
+lanes = ["backlog", "ready", "in-progress", "in-review"]
 
 [views.drafts]
 layout = "table"
