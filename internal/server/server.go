@@ -108,6 +108,11 @@ type apiServer struct {
 	root  string
 	wtxMu sync.Mutex
 
+	// step 4's runs (checks.go): proofMu guards proofJob, the run in
+	// progress or the last one
+	proofMu  sync.Mutex
+	proofJob *proofJob
+
 	lazyOnce
 }
 
@@ -140,6 +145,9 @@ func newMux(s *apiServer, static http.Handler) http.Handler {
 	mux.HandleFunc("POST /api/issues/{id}/pulls/{number}/merge", s.handleMergePull)
 	mux.HandleFunc("GET /api/issues/{id}/cycle", s.handleCycle)
 	mux.HandleFunc("POST /api/issues/{id}/cycle/{action}", s.handleCycleAction)
+	mux.HandleFunc("GET /api/issues/{id}/tests", s.handleStepTests)
+	mux.HandleFunc("POST /api/issues/{id}/tests/run", s.handleRunTests)
+	mux.HandleFunc("GET /api/issues/{id}/tests/log/{hash}", s.handleRunLog)
 	mux.HandleFunc("GET /api/issues/{id}/changes", s.handleChanges)
 	mux.HandleFunc("GET /api/issues/{id}/changes/file", s.handleChangesFile)
 	mux.HandleFunc("POST /api/issues/{id}/review", s.handleReview)
