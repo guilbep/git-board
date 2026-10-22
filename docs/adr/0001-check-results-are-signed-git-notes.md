@@ -1,6 +1,6 @@
 # ADR 0001: Check results are signed lines in git notes, keyed by content
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-22
 - Decided with the user. The research behind it is summed up under
   Evidence.
@@ -315,6 +315,8 @@ Unchanged: GitHub Actions keeps running, and git-board keeps reading its
 results.
 
 ## Left open
+
+The cycle protocol's M4 brief carries these, and its plan settles them.
 
 - The toml's shape, including:
   - the signers file's path;
