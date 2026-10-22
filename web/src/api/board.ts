@@ -1261,7 +1261,7 @@ export function getIssueAgent(id: string): Promise<IssueAgent> {
   return request(`${issuePath(id)}/agent`);
 }
 
-export function agentAction(id: string, action: 'go' | 'brief', brief: string): Promise<IssueAgent> {
+export function agentAction(id: string, action: 'go' | 'brief' | 'approve', brief: string): Promise<IssueAgent> {
   return request(`${issuePath(id)}/agent/${action}`, json('POST', { brief }));
 }
 

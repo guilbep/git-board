@@ -77,6 +77,8 @@ export function steps(c: Cycle, riskBy?: string): StepRow[] {
   const e = c.evidence ?? {};
   const risk = c.risk ?? e.risk;
   const rule = c.stages.kinds?.[e.kind ?? ''] ?? 'per-criterion';
+  // the draft PR holding the plan, read on step 3's line (C3)
+  const draft = e.pr?.state === 'OPEN' && e.pr.draft ? ` · draft PR #${e.pr.number}` : '';
   const evidence = (n: number): string | undefined => {
     switch (n) {
       case 1: {
@@ -88,7 +90,7 @@ export function steps(c: Cycle, riskBy?: string): StepRow[] {
       case 3:
         if (e.plan_approval) return `Approved by ${e.plan_approval.by}`;
         if (e.plan_pr) return e.plan_pr.decision === 'APPROVED' || e.plan_pr.state === 'MERGED' ? `Plan PR #${e.plan_pr.number} approved` : `Plan PR #${e.plan_pr.number}, waits for approval`;
-        return e.plan?.path;
+        return e.plan?.path && e.plan.path + draft;
       case 4:
         return e.tests?.[0] ? e.tests[0].path + (e.tests[0].commit ? ` at ${short(e.tests[0].commit)}` : '') : undefined;
       case 5:
@@ -112,7 +114,7 @@ export function steps(c: Cycle, riskBy?: string): StepRow[] {
   return STEPS.slice(1).map((name, i) => {
     const n = i + 1;
     const g = n === c.step ? c.gate : gate(n, risk, rule);
-    if (n === c.step && !c.done) return { n, name, state: 'current', line: c.note || turn(c), gate: g };
+    if (n === c.step && !c.done) return { n, name, state: 'current', line: (c.note || turn(c)) + (n === 3 ? draft : ''), gate: g };
     if (c.skipped?.includes(n)) return { n, name, state: 'skipped', line: `skipped, ${n === 3 ? 'low risk' : (e.kind ?? 'no tests')}`, gate: g };
     if (c.done || n < c.step) return { n, name, state: 'done', line: evidence(n) || g, gate: g };
     return { n, name, state: 'locked', line: LOCKS[n] ?? '', gate: g };
@@ -172,6 +174,7 @@ export function statusBar(c: Cycle, waiting: number | null): string[] {
   const out = [e.branch ? e.branch + (e.head ? ` at ${short(e.head)}` : '') : 'no branch yet'];
   if (!e.pr) out.push('no PR');
   else if (e.pr.state === 'MERGED') out.push(`PR #${e.pr.number} merged`);
+  else if (e.pr.draft) out.push(`draft PR #${e.pr.number}`);
   else if (e.pr.checks?.length) out.push(`PR #${e.pr.number} · ${e.pr.checks.filter((k) => k.state === 'success').length} of ${e.pr.checks.length} checks green`);
   else out.push(`PR #${e.pr.number} open`);
   if (waiting === null) return out;
