@@ -236,6 +236,11 @@ func parse(data []byte) (*Config, toml.MetaData, error) {
 	if err != nil {
 		return nil, md, err
 	}
+	// M1's test-file globs were [cycle] tests; the name is the suites' now,
+	// and the decoder would drop a list there without a word
+	if md.Type("cycle", "tests") == "Array" {
+		return nil, md, errors.New("[cycle] tests: the test-file globs are test-files now; [cycle.tests.<name>] tables are the suites step 4 runs")
+	}
 	if err := checkColors(r.Fields); err != nil {
 		return nil, md, err
 	}

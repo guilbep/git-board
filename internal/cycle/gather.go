@@ -135,7 +135,7 @@ func gatherCode(b *gitbugio.Backend, cfg *config.Config, is gitbugio.Issue, stag
 			return err
 		}
 		for _, f := range files {
-			if slices.ContainsFunc(stages.Tests, func(p string) bool { return matchTest(p, f) }) {
+			if slices.ContainsFunc(stages.TestFiles, func(p string) bool { return matchTest(p, f) }) {
 				in.Tests = append(in.Tests, TestFile{Path: f, Commit: b.FirstCommitAdding(in.Base, evidence, f)})
 			}
 		}
