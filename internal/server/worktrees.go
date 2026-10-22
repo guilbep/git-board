@@ -269,11 +269,6 @@ func (s *apiServer) lockWtx(w http.ResponseWriter) bool {
 	return false
 }
 
-// buildBrief: wtx brief --build briefs the agent in its build phase,
-// where today's wtx always restarts the pane in plan mode.
-// ponytail: off until EPFL-ENAC/wtx has the flag (argparse refuses it)
-const buildBrief = false
-
 // POST /api/issues/{id}/agent/{action}, action go, brief or approve, body
 // {"brief": "...", "comment": "..."}: wtx go or wtx brief on the issue's
 // branch, with a prompt file of git-board's words and the issue quoted as
@@ -392,7 +387,9 @@ func (s *apiServer) handleIssueAgentAction(w http.ResponseWriter, r *http.Reques
 	args, timeout := []string{"go", a.Branch, "--prompt", file, "--no-attach"}, 10*time.Minute
 	if action != "go" {
 		args, timeout = []string{"brief", a.Branch, "--prompt", file}, time.Minute
-		if buildBrief {
+		// past the plan, the agent carries on its conversation in its build
+		// phase; Revise at step 3 restarts the planner in plan mode
+		if action == "approve" || cyc.Step > 3 {
 			args = append(args, "--build")
 		}
 	}

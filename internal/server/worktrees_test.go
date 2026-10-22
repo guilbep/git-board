@@ -448,7 +448,8 @@ func TestAgentBrief(t *testing.T) {
 	if code != http.StatusOK || json.Unmarshal(body, &a) != nil || a.Worktree == nil || a.Worktree.Path != wt {
 		t.Fatalf("brief: %d %s", code, body)
 	}
-	if calls := wtxCalls(t, fake); len(calls) != 2 || !strings.HasPrefix(calls[0][1], "brief fix/2518-x --prompt ") || len(strings.Fields(calls[0][1])) != 4 {
+	// in-progress, past the plan: the agent carries on in its build phase
+	if calls := wtxCalls(t, fake); len(calls) != 2 || !strings.HasPrefix(calls[0][1], "brief fix/2518-x --prompt ") || !strings.HasSuffix(calls[0][1], " --build") {
 		t.Fatalf("calls = %v", calls)
 	}
 	prompt, _ := os.ReadFile(filepath.Join(fake, "prompt"))
@@ -505,6 +506,20 @@ func TestAgentBriefThread(t *testing.T) {
 	}
 	if code, _, _ := sendFrom(t, "POST", url+"go", ts.URL, map[string]string{"comment": root}); code != http.StatusBadRequest {
 		t.Errorf("go with a thread: %d, want 400", code)
+	}
+}
+
+// Revise at ready restarts the planner in plan mode: no --build.
+func TestAgentBriefPlanStep(t *testing.T) {
+	fake := fakeWtx(t)
+	s, _, id := prRepo(t, "ready")
+	addWorktree(t, s)
+	ts := serve(t, s)
+	if code, _, body := sendFrom(t, "POST", ts.URL+"/api/issues/"+id[:8]+"/agent/brief", ts.URL, map[string]string{"brief": "smaller"}); code != http.StatusOK {
+		t.Fatalf("brief: %d %s", code, body)
+	}
+	if calls := wtxCalls(t, fake); len(calls) != 2 || !strings.HasPrefix(calls[0][1], "brief fix/2518-x --prompt ") || len(strings.Fields(calls[0][1])) != 4 {
+		t.Fatalf("calls = %v", calls)
 	}
 }
 
@@ -670,7 +685,7 @@ func TestAgentApprove(t *testing.T) {
 	if code, _, body := sendFrom(t, "POST", url, ts.URL, map[string]string{"brief": "ignored"}); code != http.StatusOK {
 		t.Fatalf("approve: %d %s", code, body)
 	}
-	if calls := wtxCalls(t, fake); len(calls) != 2 || !strings.HasPrefix(calls[0][1], "brief fix/2518-x --prompt ") || len(strings.Fields(calls[0][1])) != 4 {
+	if calls := wtxCalls(t, fake); len(calls) != 2 || !strings.HasPrefix(calls[0][1], "brief fix/2518-x --prompt ") || !strings.HasSuffix(calls[0][1], " --build") {
 		t.Fatalf("calls = %v", calls)
 	}
 	p := lastPrompt(t, fake)
