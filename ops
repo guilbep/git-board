@@ -1,1 +1,1 @@
-{"author":{"id":"f943aa1c5ee078b881a8e97535a4e2ccb401d01ca00f4128126befa9cca58a32"},"ops":[{"type":4,"timestamp":1792670666,"nonce":"1N5GS8quTMc47HPShOlnXtZ4chY=","status":2}]}
+{"author":{"id":"f943aa1c5ee078b881a8e97535a4e2ccb401d01ca00f4128126befa9cca58a32"},"ops":[{"type":5,"timestamp":1792670672,"nonce":"PYsIFcwnKjoJ9IRkycHijxouTQ0=","added":["status:done"],"removed":["status:ready"]}]}
