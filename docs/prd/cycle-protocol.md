@@ -193,6 +193,18 @@ review, and the bug and feature rules are told apart.
 The Changes view as C6's review screen: threads sent to the agent, Approve
 and Request changes. Done when the page matches C6.
 
+Built (2026-10-22), on `b768fbb-m5-review-screen`: `CycleReview.vue`
+(was `ChangesView.vue`) with the sub-bar (PR, commits, files, checks,
+approvals), a files list beside the diff, the gate footer, and Review ·
+N threads in the right column. Send to Claude Code briefs the issue's
+agent through `POST /agent/brief` with `comment`: the server writes the
+thread out and `wtx`'s prompt quotes it as data, before the issue. Approve
+and Request changes each need their line (the server refuses an empty
+one) and write a review at the head; neither moves the status, no rule
+here says they should. A structural change needs two approvals ("a second
+human approval", `docs/prd/dev-cycle.md`). C6's "Against plan" waits for
+plan-vs-diff data.
+
 ### M6: steps 2, 5 and 7
 
 C2's three options with the AI's suggestion; C5's commits and the PR's

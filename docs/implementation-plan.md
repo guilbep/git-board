@@ -1019,3 +1019,13 @@ nothing is stored.
   window; `Rows` holds every rule.
 - The page checks the git remotes on opening and offers Pull; it never
   pulls by itself.
+
+
+## Status update (2026-10-22): step 6, review (cycle protocol M5)
+
+- Step 6 on the page is C6's review screen (`web/src/components/CycleReview.vue`):
+  files list and diff, approvals of what the risk needs, Request changes
+  and Approve with a line each, Start verification once merged.
+- A review thread goes to the issue's agent quoted as data
+  (`internal/wtx/prompt.go`'s `Thread`, `internal/server/worktrees.go`'s
+  `reviewThread`); the agent answers, a person resolves and decides.
