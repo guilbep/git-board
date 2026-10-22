@@ -18,9 +18,15 @@ type Cycle struct {
 	Validation []string `toml:"validation"`
 	Plans      string   `toml:"plans"` // default "docs/src/implementation-plans"
 	Tests      []string `toml:"tests"` // default defaultTests
-	Risk       string   `toml:"risk"`  // the role that sets the risk class
-	Plan       string   `toml:"plan"`  // the role that approves the plan
-	Review     string   `toml:"review"`
+	// Criteria are the headings a description's acceptance criteria are
+	// listed under; default defaultCriteria.
+	Criteria []string `toml:"criteria"`
+	// Kinds maps an issue's kind to step 4's rule (KindRules), over
+	// defaultKinds.
+	Kinds  map[string]string `toml:"kinds"`
+	Risk   string            `toml:"risk"` // the role that sets the risk class
+	Plan   string            `toml:"plan"` // the role that approves the plan
+	Review string            `toml:"review"`
 	// Signoffs maps a validation status to the role that signs it off.
 	Signoffs map[string]string `toml:"signoffs"`
 }
@@ -28,19 +34,36 @@ type Cycle struct {
 // Stages is the [cycle] table with every default filled: what the server
 // computes the step with, and what it shows as guessed.
 type Stages struct {
-	Before     []string `json:"before"` // statuses in no other stage
-	Ready      string   `json:"ready"`
-	InProgress []string `json:"in_progress"`
-	InReview   []string `json:"in_review"`
-	Validation []string `json:"validation"`
-	Closing    string   `json:"closing"` // the last status option, "" without options
-	Plans      string   `json:"plans"`
-	Tests      []string `json:"tests"`
+	Before     []string          `json:"before"` // statuses in no other stage
+	Ready      string            `json:"ready"`
+	InProgress []string          `json:"in_progress"`
+	InReview   []string          `json:"in_review"`
+	Validation []string          `json:"validation"`
+	Closing    string            `json:"closing"` // the last status option, "" without options
+	Plans      string            `json:"plans"`
+	Tests      []string          `json:"tests"`
+	Criteria   []string          `json:"criteria"`
+	Kinds      map[string]string `json:"kinds"`
 	// Guessed: a stage came from the status names, not the file.
 	Guessed bool `json:"guessed"`
 }
 
 var defaultTests = []string{"*_test.go", "*.test.ts", "*.spec.ts", "test_*.py", "tests/**"}
+
+var defaultCriteria = []string{"Acceptance criteria", "Done when", "Expected"}
+
+// Step 4's rules, by an issue's kind: a test that fails before the fix,
+// the touched suites green with a test per criterion, or no tests.
+const (
+	FailingTest  = "failing-test"
+	PerCriterion = "per-criterion"
+	NoTests      = "none"
+)
+
+// KindRules are the values [cycle.kinds] takes.
+var KindRules = []string{FailingTest, PerCriterion, NoTests}
+
+var defaultKinds = map[string]string{"bug": FailingTest, "feat": PerCriterion, "doc": NoTests, "chore": NoTests}
 
 // The words of a status name that guess its stage, checked in this order:
 // "ready-for-validation" is a validation status, not a ready one.
@@ -127,7 +150,23 @@ func (c *Config) Stages() Stages {
 	if s.Tests == nil {
 		s.Tests = defaultTests
 	}
+	s.Criteria = k.Criteria
+	if s.Criteria == nil {
+		s.Criteria = defaultCriteria
+	}
+	// the file's kinds over the defaults: a project names only what differs
+	s.Kinds = maps.Clone(defaultKinds)
+	maps.Copy(s.Kinds, k.Kinds)
 	return s
+}
+
+// KindRule is step 4's rule for an issue of this kind: per-criterion for
+// no kind, or one the table doesn't list (the rule before [cycle.kinds]).
+func (s Stages) KindRule(kind string) string {
+	if r, ok := s.Kinds[kind]; ok {
+		return r
+	}
+	return PerCriterion
 }
 
 // StageOf is a status's stage: "before", "ready", "in-progress",
@@ -158,6 +197,16 @@ func checkCycle(c Cycle) error {
 	for _, g := range []struct{ key, role string }{{"risk", c.Risk}, {"plan", c.Plan}, {"review", c.Review}} {
 		if g.role != "" && !roleName.MatchString(g.role) {
 			return fmt.Errorf("[cycle] %s: a role name, not %q", g.key, g.role)
+		}
+	}
+	for _, h := range c.Criteria {
+		if strings.TrimSpace(h) == "" {
+			return fmt.Errorf("[cycle] criteria: a heading, not %q", h)
+		}
+	}
+	for _, kind := range slices.Sorted(maps.Keys(c.Kinds)) {
+		if r := c.Kinds[kind]; !slices.Contains(KindRules, r) {
+			return fmt.Errorf("[cycle.kinds] %s: %s, not %q", kind, strings.Join(KindRules, ", "), r)
 		}
 	}
 	for _, status := range slices.Sorted(maps.Keys(c.Signoffs)) {

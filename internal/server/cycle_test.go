@@ -216,12 +216,14 @@ func TestCycleApprovePlan(t *testing.T) {
 		t.Errorf("a refused approval wrote %d events", len(th.Events)-len(before.Events))
 	}
 
+	// the approval is step 3's comment, then the status moves to in-progress
 	var c cycleAnswer
-	if code := call(t, "POST", url+"approve-plan", struct{}{}, &c); code != http.StatusOK || c.Step != 3 || c.Note != "plan approved, waits for the status in-progress" {
+	if code := call(t, "POST", url+"approve-plan", struct{}{}, &c); code != http.StatusOK || c.Step != 4 {
 		t.Errorf("approve: %d %+v", code, c)
 	}
-	if _, e := lastEvent(t, b, id); e.Meta["plan:approve"] != "1" {
-		t.Errorf("last event %+v", e)
+	th, _ := lastEvent(t, b, id)
+	if e := th.Events[len(th.Events)-2]; e.Meta["plan:approve"] != "1" || e.Meta["cycle:step"] != "3" || !slices.Contains(th.Labels, "status:in-progress") {
+		t.Errorf("approval %+v, labels %v", e, th.Labels)
 	}
 
 	structural := issueAt(t, b, "ready", "risk:structural")
@@ -292,7 +294,7 @@ func TestCycleVerifyThenSignoff(t *testing.T) {
 	if code, body := post(t, url+"verify", map[string]string{"output": "ok", "commit": ""}); code != http.StatusOK {
 		t.Fatalf("verify: %d %s", code, body)
 	}
-	if _, e := lastEvent(t, b, id); e.Meta["verify:run"] != "1" || e.Body != "Run\n\n```\nok\n```" {
+	if _, e := lastEvent(t, b, id); e.Meta["verify:run"] != "1" || e.Meta["cycle:step"] != "7" || e.Body != "Run\n\n```\nok\n```" {
 		t.Errorf("the run %+v", e)
 	}
 	if code, body := post(t, url+"check", map[string]int{"index": 0}); code != http.StatusOK {
@@ -372,5 +374,27 @@ func TestCycleSignoffAtTheHead(t *testing.T) {
 	th, _ := lastEvent(t, s.b, id)
 	if e := th.Events[len(th.Events)-2]; e.Meta["signoff:commit"] != head || e.Body != "Signed off qa at "+head[:7] {
 		t.Errorf("the sign-off %+v", e)
+	}
+}
+
+// With no validation status, Verify happens in in-review once the PR is
+// merged, and the sign-off closes the issue.
+func TestCycleSignoffClosesFromReview(t *testing.T) {
+	s, _, id := prRepo(t, "in-review")
+	s.cfg = &config.Config{Fields: map[string]config.Field{
+		"status": {Single: true, Options: []string{"backlog", "ready", "in-progress", "in-review", "done"}},
+		"risk":   {Single: true, Options: []string{"low", "normal", "structural"}},
+	}}
+	s.pulls.put("fix/2518-x", &ghpr.PR{Number: 3082, State: "MERGED", MergeCommit: "deadbee0"}, nil)
+	url := serve(t, s).URL + "/api/issues/" + id[:8] + "/cycle"
+	var c cycleAnswer
+	if getJSON(t, url, &c); c.Step != 7 || !slices.Contains(c.Actions, "signoff") {
+		t.Fatalf("merged in in-review: %+v", c)
+	}
+	if code, body := post(t, url+"/signoff", map[string]string{"why": "checked by hand"}); code != http.StatusOK {
+		t.Fatalf("signoff: %d %s", code, body)
+	}
+	if th, _ := lastEvent(t, s.b, id); th.Status != "closed" || !slices.Contains(th.Labels, "status:done") {
+		t.Errorf("status %s, labels %v", th.Status, th.Labels)
 	}
 }

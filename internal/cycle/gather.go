@@ -33,6 +33,7 @@ func Gather(b *gitbugio.Backend, cfg *config.Config, th gitbugio.Thread, me stri
 		Status: board.FieldValue(th.Issue, "status"),
 		Closed: th.Status == "closed",
 		Risk:   board.FieldValue(th.Issue, "risk"),
+		Kind:   cfg.Branches.Kind(th.AllLabels()),
 		Me:     me,
 		People: map[string]string{},
 	}
@@ -55,7 +56,7 @@ func Gather(b *gitbugio.Backend, cfg *config.Config, th gitbugio.Thread, me stri
 	}
 	in.Author = login(th.Author)
 	if len(th.Events) > 0 && th.Events[0].Kind == "created" {
-		in.Criteria = Criteria(th.Events[0].Body)
+		in.Criteria = Criteria(th.Events[0].Body, stages.Criteria)
 	}
 	holder := func(role string) string {
 		if role == "" {

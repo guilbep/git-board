@@ -351,3 +351,27 @@ func TestMarkdownPreview(t *testing.T) {
 		t.Errorf("html %q", res.HTML)
 	}
 }
+
+// A comment posted on a step carries it; one without stays step 1's.
+func TestCommentOnAStep(t *testing.T) {
+	t.Parallel()
+	ts, s := newIssueServer(t)
+	id, err := s.b.NewIssue("Export CSV", "", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	base := ts.URL + "/api/issues/" + id[:8] + "/comments"
+	var th gitbugio.Thread
+	if code := call(t, "POST", base, map[string]any{"body": "plan looks fine", "step": 3}, &th); code != http.StatusOK {
+		t.Fatalf("comment on step 3: %d", code)
+	}
+	if e := th.Events[len(th.Events)-1]; e.Meta["cycle:step"] != "3" || e.Body != "plan looks fine" {
+		t.Errorf("step 3's comment %+v", e)
+	}
+	if code := call(t, "POST", base, map[string]any{"body": "plain"}, &th); code != http.StatusOK || th.Events[len(th.Events)-1].Meta["cycle:step"] != "" {
+		t.Errorf("a plain comment: %d %+v", code, th.Events[len(th.Events)-1])
+	}
+	if code := call(t, "POST", base, map[string]any{"body": "x", "step": 8}, nil); code != http.StatusBadRequest {
+		t.Errorf("step 8: %d", code)
+	}
+}
