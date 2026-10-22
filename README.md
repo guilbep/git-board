@@ -30,7 +30,6 @@ for a module with a `replace`, so install from a clone:
 git clone git@github.com:guilbep/git-board.git
 cd git-board
 git checkout v0.5.0                 # or stay on main
-(cd web && npm ci)                  # the web app's dependencies, once
 make web-build install              # git-board, the web app inside
 git-board --help
 ```
@@ -836,7 +835,7 @@ See [`CONTRIBUTING.md`](CONTRIBUTING.md) for setup (including the
 ```bash
 git clone git@github.com:guilbep/git-board.git
 cd git-board
-make ci    # build + vet + test + gofmt check, in one shot
+make ci    # what CI runs: web checks and build, then go build + vet + test + gofmt
 ```
 
 Run one package or one test by name:

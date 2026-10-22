@@ -2,7 +2,7 @@
 
 ## Setup
 
-- Go 1.26+ (`GOTOOLCHAIN=auto` will fetch a newer one automatically if
+- Go 1.26.6+ (`GOTOOLCHAIN=auto` will fetch a newer one automatically if
   `go.mod` needs it).
 - git-bug comes from its `bridge-sync` fork, through the `replace` in
   `go.mod`: bump it with
@@ -26,17 +26,33 @@ make build   # go build ./...
 make test    # go test ./...
 make vet     # go vet ./...
 make fmt     # gofmt -l . (lists files needing formatting; run gofmt -w to fix)
-make ci      # everything above, the full check
+make web-check # the web app's typecheck and tests
+make ci      # the web checks and build, then everything above: what CI runs
 make install # go install the git-board binary
 make install-latest # the latest release's binary instead, web app inside
 ```
 
-Run `make ci` once a change is done, before it's pushed or landed: it's the
-sequence CI runs. While working, the package's own tests are enough
+Run `make ci` once a change is done, before it's pushed or landed: CI runs
+`make ci` and nothing else. It installs the web app's dependencies
+(`npm ci`) only when `web/package-lock.json` is newer than `web/node_modules`.
+While working, the package's own tests are enough
 (`go test ./internal/server/ -run TestName`).
 
 The `web/` frontend (Quasar/Vue) has its own toolchain: `make web-dev` /
 `make web-build`, or `cd web && npm run dev`/`build`/`typecheck` directly.
+
+## Commit hooks
+
+Install the hooks once per clone (worktrees share them):
+
+```bash
+go tool lefthook install
+```
+
+lefthook is pinned by the `tool` line in `go.mod`. Its pre-commit
+(`lefthook.yml`) runs gofmt on the staged `.go` files, `go vet ./...`, and the
+web typecheck when `.ts` or `.vue` files under `web/` are staged. There is no
+pre-push hook: wtx's push guard is `.git/hooks/pre-push`.
 
 ## Live tests
 

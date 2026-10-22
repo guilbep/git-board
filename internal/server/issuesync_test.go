@@ -88,8 +88,8 @@ func TestIssueSyncTakesTheAssigneesMode(t *testing.T) {
 	if code := call(t, "POST", ts.URL+"/api/issues/"+id+"/sync", map[string]bool{"dry_run": true}, nil); code != http.StatusOK {
 		t.Fatalf("dry run: %d", code)
 	}
-	if got.Assignees != "labels" {
-		t.Errorf("synced with assignees %q, want labels", got.Assignees)
+	if got.Config[core.ConfigKeyAssignees] != "labels" {
+		t.Errorf("synced with assignees %q, want labels", got.Config[core.ConfigKeyAssignees])
 	}
 	cfg, err := s.b.TestCache().Config().Read()
 	if err != nil {

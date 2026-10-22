@@ -1,5 +1,6 @@
-# Every push and pull request: the web UI's checks and build (embedded in
-# the git-board binary), then `make ci` (build, vet, test, gofmt).
+# Every push and pull request: set up Go and Node, then `make ci`, the same
+# run as on a developer's machine (web checks and build, then Go build, vet,
+# test, gofmt).
 name: ci
 
 on:
@@ -24,14 +25,6 @@ jobs:
           node-version: 24 # runs web/src/facets.test.ts as is (type stripping)
           cache: npm
           cache-dependency-path: web/package-lock.json
-
-      - name: Web UI
-        working-directory: web
-        run: |
-          npm ci
-          npm run typecheck
-          npm test
-          npm run build
 
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:

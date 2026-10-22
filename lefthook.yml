@@ -1,0 +1,15 @@
+# The fast checks, on each commit: install once with `go tool lefthook install`.
+# Each is a plain `run:` line, so git-board's cycle protocol can propose them
+# as [cycle.checks]. No pre-push hook: wtx's push guard owns .git/hooks/pre-push.
+pre-commit:
+  commands:
+    gofmt:
+      glob: "*.go"
+      run: "! gofmt -l {staged_files} | grep ."
+    vet:
+      glob: "*.go"
+      run: go vet ./...
+    typecheck:
+      root: web/
+      glob: "*.{ts,vue}"
+      run: npm run typecheck

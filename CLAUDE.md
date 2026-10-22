@@ -1,8 +1,9 @@
 # git-board
 
-Setup, workflow and conventions are in CONTRIBUTING.md. Run `make ci` and, in
-`web/`, `npm run typecheck && npm test` (what CI runs) once, when the work is
-done and verified, before saying it's ready: not before every commit.
+Setup, workflow and conventions are in CONTRIBUTING.md. Run `make ci` (what CI
+runs) once, when the work is done and verified, before saying it's ready: not
+before every commit. Each commit runs lefthook's pre-commit (gofmt, go vet, the
+web typecheck); a failing hook is a fix to make, not one to skip.
 
 ## Tests
 

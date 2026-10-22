@@ -1,4 +1,4 @@
-.PHONY: build test lint fmt vet ci install install-latest web-dev web-build dist clean
+.PHONY: build test lint fmt vet ci install install-latest web-dev web-check web-build dist clean
 
 build:
 	go build ./...
@@ -14,9 +14,10 @@ fmt:
 
 lint: vet fmt
 
-# Everything CI/a pre-push hook should run — the same sequence used to vet
-# every change in this repo before it's committed.
-ci: build vet test
+# Everything CI runs: .github/workflows/ci.yml only sets up Go and Node, then
+# runs this. The web checks and build come first, in prerequisite order,
+# because the binary embeds web/dist.
+ci: web-check web-build build vet test
 	@test -z "$$(gofmt -l .)" || (echo "gofmt needs to be run on:"; gofmt -l .; exit 1)
 
 install:
@@ -34,12 +35,20 @@ install-latest:
 web-dev:
 	cd web && npm run dev
 
-web-build:
+# The web app's dependencies, installed only when the lockfile is newer than
+# web/node_modules: a local run stays fast, and CI goes through the same path.
+web/node_modules: web/package-lock.json
+	cd web && npm ci
+	@touch web/node_modules
+
+web-check: web/node_modules
+	cd web && npm run typecheck && npm test
+
+web-build: web/node_modules
 	cd web && npm run build
 
 # A release's archives, the web app inside, in dist/ with checksums.txt:
-# run on a clean checkout of the tag, after `cd web && npm ci`, so the
-# commands report that version.
+# run on a clean checkout of the tag, so the commands report that version.
 PLATFORMS := linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64
 dist: web-build
 	rm -rf dist && mkdir dist
