@@ -111,15 +111,15 @@
           </div>
           <HistoryView v-if="talk === 'history'" :thread="thread" :fields="fields" />
           <template v-else>
-            <ol class="gb-tl" :aria-label="talk === 'step' ? `Step ${n}'s discussion` : 'The whole conversation'">
-              <template v-for="e in talk === 'step' ? forStep(rest, n) : rest" :key="e.id">
+            <ol v-if="said(n).length" class="gb-tl" :aria-label="talk === 'step' ? `Step ${n}'s discussion` : 'The whole conversation'">
+              <template v-for="e in said(n)" :key="e.id">
                 <li v-if="e.kind === 'comment'" :data-event="e.id">
                   <CommentCard :event="e" :forges="thread.forges" :mine="e.author.id === meId" :save="edit" @ref="onRef" @line="showLine" />
                 </li>
                 <TimelineEvent v-else :data-event="e.id" :event="e" :fields="fields" />
               </template>
             </ol>
-            <p v-if="talk === 'step' && !forStep(rest, n).length" class="gb-note">Nothing said on this step yet.</p>
+            <p v-else class="gb-note">Nothing said{{ talk === 'step' ? ' on this step' : '' }} yet.</p>
             <IssueComposer
               :status="thread.status"
               :forges="thread.forges"
@@ -209,6 +209,7 @@ const rest = computed(() => thread.value?.events.filter((e) => e.kind !== 'creat
 // the discussion: the shown step's comments, the whole conversation with
 // its events, or every change in order with the issue as it was
 const talk = ref<'step' | 'all' | 'history'>('step');
+const said = (n: number) => (talk.value === 'step' ? forStep(rest.value, n) : rest.value);
 const step = ref<InstanceType<typeof IssueStep> | null>(null);
 const focus = ref<string>(); // the file a comment's path:line opens in Changes, step 6 on the page
 function showLine(path: string) {

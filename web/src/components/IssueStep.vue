@@ -7,19 +7,19 @@
 <template>
   <p v-if="error" class="gb-save-error" role="alert"><GbIcon name="error" small /> {{ error }}</p>
   <nav v-if="cycle" class="gb-stepbar" aria-label="The development cycle">
-    <ol class="gb-steps">
+    <ol class="gb-bar-steps">
       <li v-for="r in rows" :key="r.n" :class="[`is-${r.state}`, { 'is-shown': r.n === n }]" :aria-current="r.state === 'current' ? 'step' : undefined">
         <button type="button" :disabled="r.state === 'locked'" :aria-pressed="r.n === n" @click="show(r.n)">
-          <span class="gb-step-n"><GbIcon v-if="r.state === 'locked'" name="lock" small /><template v-else>{{ r.n }}</template></span>
-          <span class="gb-step-name">{{ r.name }}</span>
-          <span class="gb-step-line">{{ r.line }}</span>
+          <span class="gb-bar-n"><GbIcon v-if="r.state === 'locked'" name="lock" small /><template v-else>{{ r.n }}</template></span>
+          <span class="gb-bar-name">{{ r.name }}</span>
+          <span class="gb-bar-line">{{ r.line }}</span>
         </button>
       </li>
     </ol>
   </nav>
 
   <div class="gb-cols">
-    <section class="gb-step" :aria-label="`Step ${n}: ${row?.name ?? 'Intent'}`">
+    <section class="gb-shown" :aria-label="`Step ${n}: ${row?.name ?? 'Intent'}`">
       <p class="gb-eyebrow">Step {{ n }} · {{ row?.name ?? 'Intent' }}<template v-if="risk"> · {{ risk }}</template></p>
       <slot v-if="n === 1" name="intent" />
 

@@ -353,21 +353,21 @@
    under the title, the step shown, its discussion beside it. Done is canard. */
 .gb-seg-sm button { height: 2rem; padding: 0 .625rem; font-size: .8125rem; }
 .gb-stepbar { padding: 0 2rem; }
-.gb-steps { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; list-style: none; margin: 0; padding: 0; }
-.gb-steps button { display: flex; flex-direction: column; gap: .125rem; width: 100%; height: 100%; padding: .5rem .5rem .625rem; border: 0; border-top: 4px solid var(--border); background: none; color: inherit; font: inherit; font-size: .8125rem; text-align: left; cursor: pointer; }
-.gb-steps button:hover:not(:disabled) .gb-step-name { text-decoration: underline; text-underline-offset: 2px; }
-.gb-steps button:focus-visible { outline: var(--focus-w) solid var(--primary-hover); outline-offset: -0.125rem; }
-.gb-steps button:disabled { cursor: default; }
-.gb-steps .is-done button { border-top-color: var(--gb-done); }
-.gb-steps .is-current button { border-top-color: var(--fg); }
-.gb-steps .is-shown button { background: var(--bg-subtle); }
-.gb-step-n { display: inline-flex; align-items: center; font-family: var(--font-mono); font-size: .75rem; color: var(--fg-muted); }
-.gb-steps .is-done .gb-step-n { color: var(--gb-done); font-weight: 700; }
-.gb-step-name { font-weight: 700; }
-.gb-step-line { color: var(--fg-muted); }
-.gb-steps .is-current .gb-step-line { color: var(--fg); }
-.gb-steps .is-locked .gb-step-name, .gb-steps .is-skipped .gb-step-name { color: var(--fg-muted); font-weight: 400; }
-.gb-step { display: flex; flex-direction: column; gap: .75rem; min-width: 0; }
+.gb-bar-steps { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; list-style: none; margin: 0; padding: 0; }
+.gb-bar-steps button { display: flex; flex-direction: column; gap: .125rem; width: 100%; height: 100%; padding: .5rem .5rem .625rem; border: 0; border-top: 4px solid var(--border); background: none; color: inherit; font: inherit; font-size: .8125rem; text-align: left; cursor: pointer; }
+.gb-bar-steps button:hover:not(:disabled) .gb-bar-name { text-decoration: underline; text-underline-offset: 2px; }
+.gb-bar-steps button:focus-visible { outline: var(--focus-w) solid var(--primary-hover); outline-offset: -0.125rem; }
+.gb-bar-steps button:disabled { cursor: default; }
+.gb-bar-steps .is-done button { border-top-color: var(--gb-done); }
+.gb-bar-steps .is-current button { border-top-color: var(--fg); }
+.gb-bar-steps .is-shown button { background: var(--bg-subtle); }
+.gb-bar-n { display: inline-flex; align-items: center; font-family: var(--font-mono); font-size: .75rem; color: var(--fg-muted); }
+.gb-bar-steps .is-done .gb-bar-n { color: var(--gb-done); font-weight: 700; }
+.gb-bar-name { font-weight: 700; }
+.gb-bar-line { color: var(--fg-muted); }
+.gb-bar-steps .is-current .gb-bar-line { color: var(--fg); }
+.gb-bar-steps .is-locked .gb-bar-name, .gb-bar-steps .is-skipped .gb-bar-name { color: var(--fg-muted); font-weight: 400; }
+.gb-shown { display: flex; flex-direction: column; gap: .75rem; min-width: 0; }
 .gb-talk { display: flex; flex-direction: column; gap: 1rem; min-width: 0; }
 .gb-cycle-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
 .gb-cycle-actions .epfl-input { flex: 1 1 10rem; min-width: 0; }
@@ -384,7 +384,7 @@
 .gb-so li.is-current { border-top-color: var(--fg); }
 .gb-so-status { font-weight: 700; }
 .gb-so-when { color: var(--fg-muted); }
-.gb-cycle-bar { display: flex; flex-wrap: wrap; gap: .5rem 1.5rem; margin: 0 -2rem; padding: .75rem 2rem; border-top: 1px solid var(--border-subtle); background: var(--bg-subtle); font-size: .8125rem; color: var(--fg-muted); }
+.gb-cycle-bar { display: flex; flex-wrap: wrap; gap: .5rem 1.5rem; padding: .5rem .75rem; border: 1px solid var(--border-subtle); background: var(--bg-subtle); font-size: .8125rem; color: var(--fg-muted); }
 .gb-cycle-bar span:first-child { font-family: var(--font-mono); color: var(--fg); }
 .gb-agent { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem 1rem; padding: .75rem 0 0; }
 .gb-agent-brief { display: grid; flex-basis: 100%; gap: .5rem; justify-items: start; }
@@ -392,10 +392,9 @@
 /* under 900px the bar keeps the numbers, and the shown step's name */
 @media (max-width: 56.25rem) {
   .gb-stepbar { padding: 0 1rem; }
-  .gb-step-line, .gb-steps li:not(.is-shown) .gb-step-name { display: none; }
-  .gb-steps .is-shown { grid-column: span 2; }
-  .gb-steps { grid-template-columns: repeat(8, minmax(0, 1fr)); }
-  .gb-cycle-bar { margin: 0 -1rem; padding: .75rem 1rem; }
+  .gb-bar-line, .gb-bar-steps li:not(.is-shown) .gb-bar-name { display: none; }
+  .gb-bar-steps .is-shown { grid-column: span 2; }
+  .gb-bar-steps { grid-template-columns: repeat(8, minmax(0, 1fr)); }
 }
 .gb-dialog { position: relative; left: auto; top: auto; transform: none; }
 
