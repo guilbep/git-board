@@ -182,7 +182,8 @@ async function run(action: 'go' | 'brief' | 'approve', brief: string) {
 // ponytail: wtx brief restarts the pane in plan mode, hence the pane's
 // accept; worktrees.go's buildBrief ends that once wtx has --build
 async function approve() {
-  if ((await act('approve-plan')) && button.value === 'brief') void run('approve', '');
+  const plan = !!cycle.value?.evidence.plan; // no file: nothing to accept, the server refuses
+  if ((await act('approve-plan')) && plan && button.value === 'brief') void run('approve', '');
 }
 
 // Start work with wtx and no worktree yet: wtx go, which moves the status

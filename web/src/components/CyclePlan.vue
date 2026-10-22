@@ -22,7 +22,7 @@
   </template>
   <template v-else>
     <h3 class="gb-ws-title">No plan file yet</h3>
-    <p class="gb-note">Start an agent: it drafts the plan in plan mode, and once you accept it in its pane, commits it to the plans directory with issue: &lt;number&gt; in its front matter. A branch named plan/&lt;issue&gt;-… works too.</p>
+    <p class="gb-note">{{ agent?.worktree ? 'The agent' : 'Start an agent: it' }} drafts the plan in plan mode, and once you accept it in its pane, commits it to the plans directory with issue: &lt;number&gt; in its front matter. A branch named plan/&lt;issue&gt;-… works too.</p>
   </template>
 
   <p class="gb-gate">{{ gate }}</p>
