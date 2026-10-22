@@ -76,8 +76,7 @@
         name="review"
         :cycle="cycle"
         :current="current"
-        :can="has('review')"
-        :merged="has('to-validation')"
+        :can="has('review') || has('to-validation')"
         :sends="button === 'brief'"
         :verify="() => patch({ status: cycle!.stages.validation[0] ?? '' })"
       />

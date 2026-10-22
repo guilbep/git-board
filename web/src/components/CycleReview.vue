@@ -81,9 +81,11 @@
         <p class="gb-gate">{{ gate[0] }}</p>
         <p class="gb-hint">{{ gate[1] }} {{ gate[2] }}</p>
         <template v-if="current && merged">
-          <div class="gb-cycle-actions">
+          <p v-if="cycle.note" class="gb-note">{{ cap(cycle.note) }}.</p>
+          <div v-if="can" class="gb-cycle-actions">
             <button type="button" class="epfl-btn epfl-btn-primary epfl-btn-sm" :disabled="busy" @click="verify">Start verification</button>
           </div>
+          <p v-else class="gb-note">{{ cap(turn(cycle)) }}.</p>
         </template>
         <template v-else-if="current">
           <p v-if="!can" class="gb-note">{{ cap(turn(cycle)) }}.</p>
@@ -120,12 +122,13 @@ const props = defineProps<{
   resolve: (root: string, resolved: boolean) => Promise<boolean>;
   cycle: Cycle;
   current: boolean; // step 6 is the issue's step
-  can: boolean; // the server's review action: this person's turn
-  merged: boolean; // the to-validation action: Start verification
+  can: boolean; // the step's action (review, or to-validation once merged) is this person's
   sends: boolean; // the issue has an agent to brief
   verify: () => void;
 }>();
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+// merged: the review is over, Start verification moves the status
+const merged = computed(() => props.cycle.evidence.pr?.state === 'MERGED');
 
 const changes = ref<Changes | null>(null); // the whole branch
 const part = ref<FileStat[] | null>(null); // the files of a view other than the whole branch
