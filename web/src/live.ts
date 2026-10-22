@@ -8,7 +8,7 @@ import { ref } from 'vue';
 import { API_BASE, clientId, type SyncStep } from '@/api/board';
 
 export interface LiveEvent {
-  kind: 'issues' | 'config' | 'sync' | 'settings' | 'inbox' | 'releases' | 'progress';
+  kind: 'issues' | 'config' | 'sync' | 'settings' | 'inbox' | 'releases' | 'progress' | 'cycle'; // cycle: a step 4 run ended
   id?: string; // the issue, when the change named one
   by?: string;
   step?: SyncStep; // progress: where a forge run is

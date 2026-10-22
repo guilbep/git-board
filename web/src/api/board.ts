@@ -825,6 +825,87 @@ export function cycleAction(id: string, action: string, body: Record<string, unk
   return request(`${issuePath(id)}/cycle/${action}`, json('POST', body));
 }
 
+// Step 4's suites and checks (internal/server/checks.go): the base
+// branch's [cycle.tests.*] and [cycle.checks.*], each result a signed
+// line in git notes (internal/proof, docs/adr/0001).
+export interface Suite {
+  run: string[];
+  files?: string[];
+  where?: string; // "worktree" (default) or "ci": the forge's, never run here
+  dir?: string;
+  env?: Record<string, string>;
+}
+
+export interface CheckResult {
+  check: string;
+  verdict: 'PASSED' | 'FAILED';
+  commit: string;
+  at: string;
+  dur: number; // nanoseconds
+  log: string; // sha256:<hex>, kept by the clone that ran it
+}
+
+export interface CheckStatus {
+  name: string;
+  key: string;
+  verdict?: 'PASSED' | 'FAILED'; // none: no line verifies at this key
+  proven: boolean;
+  by?: string; // the writer, a clone
+  signer?: string;
+  result?: CheckResult;
+  unverified?: number;
+}
+
+export interface SuiteRow extends Suite {
+  name: string;
+  touched: string[] | null;
+  head?: CheckStatus;
+  at_test?: CheckStatus;
+}
+
+export interface StepTests {
+  rule: string; // failing-test, per-criterion, none
+  base: string;
+  head?: string;
+  test_commit?: string;
+  suites: SuiteRow[];
+  checks: SuiteRow[];
+  gate: { proven: boolean; reason?: string; checks: CheckStatus[] };
+  running: string[];
+  error?: string; // the last run's: a check that couldn't start
+}
+
+export function getStepTests(id: string): Promise<StepTests> {
+  return request(`${issuePath(id)}/tests`);
+}
+
+// names pick entries of the base's toml: nothing else reaches a command line
+export function runSuites(id: string, names: string[], target: 'head' | 'test'): Promise<{ running: string[]; commit: string }> {
+  return request(`${issuePath(id)}/tests/run`, json('POST', { names, target }));
+}
+
+export async function getRunLog(id: string, log: string): Promise<string> {
+  const res = await fetch(`${API_BASE}${issuePath(id)}/tests/log/${encodeURIComponent(log.replace(/^sha256:/, ''))}`);
+  if (!res.ok) throw new Error(res.status === 404 ? 'This clone has no log of that run: another clone ran it.' : `The log: HTTP ${res.status}`);
+  return res.text();
+}
+
+export interface ChecksSetup {
+  source: string; // lefthook.yml, Makefile, a package.json; "" for none
+  checks: Record<string, Suite>;
+  skipped: { name: string; run: string; why: string }[];
+  toml: string;
+  declared: boolean;
+}
+
+export function getChecksSetup(): Promise<ChecksSetup> {
+  return request('/api/checks/setup');
+}
+
+export function writeChecks(): Promise<ChecksSetup> {
+  return request('/api/checks/setup', json('POST', {}));
+}
+
 export function getPulls(id: string): Promise<IssuePulls> {
   return request(`${issuePath(id)}/pulls`);
 }

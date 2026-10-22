@@ -38,7 +38,8 @@ test('the step buttons move the status to their stage', () => {
   const press = (action: string) => cardFor(at({ stages, actions: [action] }), '')?.buttons.map((b) => [b.label, b.action, b.body]);
   assert.deepEqual(press('move-ready'), [['Move to ready', 'move-ready', { status: 'ready' }]]);
   assert.deepEqual(press('start'), [['Start work', 'start', { status: 'doing' }]]);
-  assert.deepEqual(press('ready-for-review'), [['Mark ready for review', 'ready-for-review', { status: 'review' }]]);
+  // a POST with no body: the server moves it once the checks are proven
+  assert.deepEqual(press('ready-for-review'), [['Mark ready for review', 'ready-for-review', undefined]]);
   assert.deepEqual(press('to-validation'), [['Start verification', 'to-validation', { status: 'qa' }]]);
 });
 

@@ -5,7 +5,7 @@
      (the description), review (the Changes view, step 6 on the page), talk
      (the discussion of the step shown). -->
 <template>
-  <p v-if="error" class="gb-save-error" role="alert"><GbIcon name="error" small /> {{ error }}</p>
+  <p v-if="error && !(current && card)" class="gb-save-error" role="alert"><GbIcon name="error" small /> {{ error }}</p>
   <nav v-if="cycle" class="gb-stepbar" aria-label="The development cycle">
     <ol class="gb-bar-steps">
       <li v-for="r in rows" :key="r.n" :class="[`is-${r.state}`, { 'is-shown': r.n === n }]" :aria-current="r.state === 'current' ? 'step' : undefined">
@@ -50,9 +50,7 @@
       />
       <template v-else-if="cycle && row">
         <CycleIntent v-if="n === 1" :cycle="cycle" :current="current" :busy="busy" @save="saveCriteria" />
-        <ul v-if="n === 4 && cycle.evidence.tests?.length" class="gb-ws-list">
-          <li v-for="t in cycle.evidence.tests" :key="t.path"><span class="gb-mono">{{ t.path }}</span><template v-if="t.commit"> at <span class="gb-mono">{{ t.commit.slice(0, 7) }}</span></template></li>
-        </ul>
+        <CycleTests v-if="n === 4 && !cycle.skipped?.includes(4)" :id="id" :cycle="cycle" />
         <p v-else-if="n !== 1 && row.state === 'done' && row.line !== row.gate" class="gb-note">{{ row.line }}</p>
         <p class="gb-gate">{{ row.gate }}</p>
         <template v-if="current">
@@ -68,6 +66,8 @@
               </button>
             </template>
           </div>
+          <!-- a refusal of the card's move: Mark ready for review names the red check -->
+          <p v-if="error && card" class="gb-save-error" role="alert"><GbIcon name="error" small /> {{ error }}</p>
         </template>
       </template>
       <slot v-if="n === 6" name="review" />
@@ -106,6 +106,7 @@ import { agentButton, agentWords } from '@/worktrees';
 import { useCycle } from '@/usecycle';
 import CycleIntent from '@/components/CycleIntent.vue';
 import CyclePlan from '@/components/CyclePlan.vue';
+import CycleTests from '@/components/CycleTests.vue';
 import CycleVerify from '@/components/CycleVerify.vue';
 import GbIcon from '@/components/GbIcon.vue';
 
