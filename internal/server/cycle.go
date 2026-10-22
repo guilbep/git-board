@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/guilbep/git-board/internal/ai"
 	"github.com/guilbep/git-board/internal/board"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/cycle"
@@ -102,6 +103,8 @@ type cycleResponse struct {
 	cycle.Cycle
 	Stages      config.Stages `json:"stages"`
 	PRCheckedAt time.Time     `json:"pr_checked_at,omitzero"`
+	// AI is on: step 2 can ask it for a class (suggest-risk)
+	AI bool `json:"ai,omitempty"`
 }
 
 // pullNames are the branches on origin whose PR the step needs: the
@@ -138,7 +141,7 @@ func (s *apiServer) cycleOf(ctx context.Context, th gitbugio.Thread) (cycleRespo
 	if err != nil {
 		return cycleResponse{}, err
 	}
-	return cycleResponse{Cycle: cycle.Compute(in), Stages: stages, PRCheckedAt: in.PRAt}, nil
+	return cycleResponse{Cycle: cycle.Compute(in), Stages: stages, PRCheckedAt: in.PRAt, AI: ai.FromEnv() != nil}, nil
 }
 
 func (s *apiServer) handleCycle(w http.ResponseWriter, r *http.Request) {
@@ -162,12 +165,17 @@ var errNotAtVerify = errors.New("not at Verify")
 // ready issue to in-progress), verify (a run's output), check (one
 // criterion), signoff (which then moves the status on, closing the issue
 // after the last validation status), ready-for-review (the status move
-// step 4's checks gate, checks.go). The risk and the other status moves
+// step 4's checks gate, checks.go), suggest-risk (the AI's class, a
+// comment: the risk stays a person's). The risk and the other status moves
 // are fields: PATCH the issue.
 func (s *apiServer) handleCycleAction(w http.ResponseWriter, r *http.Request) {
 	action := r.PathValue("action")
 	if action == "ready-for-review" {
 		s.readyForReview(w, r)
+		return
+	}
+	if action == "suggest-risk" {
+		s.suggestRisk(w, r)
 		return
 	}
 	if !slices.Contains([]string{"approve-plan", "verify", "check", "signoff"}, action) {
@@ -305,6 +313,87 @@ func (s *apiServer) handleCycleAction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, cur)
+}
+
+// riskPrompt is step 2's three classes, as the page words them (C2).
+const riskPrompt = `You classify a change to software by how much it can break. The classes:
+low: a copy, a style, a config value.
+normal: behaviour changes in one area.
+structural: data, a schema, a public interface.
+Answer with one word on the first line: low, normal or structural. Then one sentence why.`
+
+// suggestRisk asks the AI for step 2's class, with the issue's title and
+// description only (what leaves the machine, dev-cycle.md), and writes its
+// answer as a comment in step 2's discussion. The model is asked before
+// the write lock is taken: it takes seconds.
+func (s *apiServer) suggestRisk(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	th, err := s.b.Thread(id)
+	if err != nil {
+		writeIssueError(w, err)
+		return
+	}
+	cur, err := s.cycleOf(r.Context(), th)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	if cur.Step != 2 || cur.Done {
+		writeError(w, http.StatusBadRequest, errors.New("not at Risk"))
+		return
+	}
+	c := ai.FromEnv()
+	if c == nil {
+		writeError(w, http.StatusBadRequest, errors.New("AI is off: set LLM_BASE_URL"))
+		return
+	}
+	desc := ""
+	if len(th.Events) > 0 && th.Events[0].Kind == "created" {
+		desc = th.Events[0].Body
+	}
+	answer, err := c.Chat(r.Context(), riskPrompt, "# "+th.Title+"\n\n"+desc)
+	if err != nil {
+		writeError(w, http.StatusBadGateway, err)
+		return
+	}
+	class, why := riskOf(answer)
+	if class == "" {
+		writeError(w, http.StatusBadGateway, fmt.Errorf("%s answered no class: %q", c.Model, answer[:min(len(answer), 200)]))
+		return
+	}
+	done, ok := s.beginWrite(w)
+	if !ok {
+		return
+	}
+	defer done()
+	meta := map[string]string{"cycle:step": "2", "ai:model": c.Model, "ai:risk": class}
+	if _, err := s.b.AddCommentMeta(id, strings.TrimSpace("Suggested: **"+class+"**\n\n"+why), meta); err != nil {
+		writeIssueError(w, err)
+		return
+	}
+	if th, err = s.b.Thread(id); err == nil {
+		cur, err = s.cycleOf(r.Context(), th)
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, cur)
+}
+
+// riskOf is the class an answer opens with, and the rest: its reason.
+// "" when the first word is no class.
+func riskOf(answer string) (class, why string) {
+	answer = strings.TrimSpace(answer)
+	end := strings.IndexFunc(answer, func(r rune) bool { return r == ' ' || r == '\n' || r == '.' || r == ':' || r == ',' })
+	if end < 0 {
+		end = len(answer)
+	}
+	word := strings.ToLower(strings.Trim(answer[:end], "*_`#\"' "))
+	if !slices.Contains([]string{"low", "normal", "structural"}, word) {
+		return "", ""
+	}
+	return word, strings.TrimSpace(strings.TrimLeft(answer[end:], ".:,"))
 }
 
 // signedOff moves the status to the next validation status, or after the
