@@ -10,6 +10,7 @@
     <h3 class="gb-ws-title">{{ title }}</h3>
     <p class="gb-plan-meta">
       <span class="gb-mono">{{ plan.path }}</span>
+      <span v-if="plan.issue">issue: {{ plan.issue }}</span>
       <span v-if="plan.status">status: {{ plan.status }}</span>
       <a v-if="pr" :href="pr.url" target="_blank" rel="noopener noreferrer">plan PR #{{ pr.number }}<span class="gb-sr">(opens in a new tab)</span></a>
     </p>
@@ -40,7 +41,7 @@
         <span class="gb-note">{{ sends ? 'Posted on the issue and sent to the agent.' : 'Posted on the issue.' }}</span>
       </div>
     </form>
-    <p class="gb-note">{{ approver }} approves: step 4 starts<template v-if="sends">, and the agent is briefed to write the failing test, in the same branch: accept that in its pane</template>.</p>
+    <p class="gb-note">{{ approver }}: step 4 starts<template v-if="sends">, and the agent is briefed to write the failing test, in the same branch: accept that in its pane</template>.</p>
   </template>
 </template>
 
@@ -84,8 +85,8 @@ const strip = computed(() => {
 });
 const approver = computed(() => {
   const w = props.cycle.waits;
-  if (w.role !== 'plan' || props.can) return 'You';
-  return w.login || 'The plan role';
+  if (w.role !== 'plan' || props.can) return 'You approve';
+  return `${w.login || 'The plan role'} approves`;
 });
 
 const open = ref(false);

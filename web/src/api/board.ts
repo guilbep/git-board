@@ -698,6 +698,7 @@ export interface CyclePlan {
   path: string;
   ref: string;
   status?: string; // the front matter's: draft, accepted, in-progress, delivered
+  issue?: string; // the front matter's issue: line, what found the file
   html?: string; // the file rendered, below its front matter
   by?: string; // who first committed it on the plan branch
 }

@@ -123,7 +123,7 @@ func TestGatherFromRepo(t *testing.T) {
 	if !slices.Equal(in.Tests, []TestFile{{Path: "api/a_test.go", Commit: first}}) {
 		t.Errorf("Tests = %+v", in.Tests)
 	}
-	if in.Plan == nil || in.Plan.Path != plan || in.Plan.Ref != "fix/2518-x" || in.Plan.Status != "accepted" {
+	if in.Plan == nil || in.Plan.Path != plan || in.Plan.Ref != "fix/2518-x" || in.Plan.Status != "accepted" || in.Plan.Issue != "2518" {
 		t.Errorf("Plan = %+v", in.Plan)
 	}
 	// rendered below its front matter; added on dev, so nobody drafted it on the branch

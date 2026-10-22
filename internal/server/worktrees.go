@@ -350,7 +350,11 @@ func (s *apiServer) handleIssueAgentAction(w http.ResponseWriter, r *http.Reques
 	switch {
 	case action == "approve":
 		in.Brief = ""
-		in.Then = fmt.Sprintf("The plan is approved by %s on the board. Set `status: accepted` in the plan file's front matter, commit and push it, then go on with step %d.", s.viewer(), cyc.Step)
+		by := "" // who approved, when the board knows their login
+		if l := cyc.Evidence.PlanApproval.By; l != "" {
+			by = " by " + l
+		}
+		in.Then = fmt.Sprintf("The plan is approved%s on the board. Set `status: accepted` in the plan file's front matter, commit and push it, then go on with step %d.", by, cyc.Step)
 	case action == "go" && cyc.Step == 3 && cyc.Stage == "ready":
 		in.What, in.Then = "write the plan, in plan mode", planThen(cyc.Stages, th.Issue, a.Branch)
 	}
