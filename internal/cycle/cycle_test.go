@@ -81,6 +81,21 @@ func TestWalk(t *testing.T) {
 			in.Tests = []TestFile{{Path: "a_test.go"}}
 			in.PR = &ghpr.PR{Number: 3082, State: "OPEN"}
 		}), step: 5, login: "erin", what: "commit and open the PR", note: "PR #3082 open, waits for the status in-review"},
+		{name: "in-progress, draft PR", in: input("in-progress", func(in *Input) {
+			approved("normal")(in)
+			in.Tests = []TestFile{{Path: "a_test.go"}}
+			in.PR = &ghpr.PR{Number: 41, State: "OPEN", Draft: true}
+			in.Me = "erin"
+		}), step: 5, login: "erin", what: "commit and open the PR", mine: true, note: "draft PR #41, waits for it to be marked ready for review"},
+		{name: "in-progress, draft PR, no test yet", in: input("in-progress", func(in *Input) {
+			approved("normal")(in)
+			in.PR = &ghpr.PR{Number: 41, State: "OPEN", Draft: true}
+		}), step: 4, login: "erin", what: "write the failing test"},
+		{name: "in-review, draft PR", in: input("in-review", func(in *Input) {
+			approved("normal")(in)
+			in.PR = &ghpr.PR{Number: 41, State: "OPEN", Draft: true}
+			in.Me = "carol"
+		}), step: 6, login: "carol", what: "review the PR", mine: true, note: "PR #41 is still a draft on GitHub"},
 		{name: "in-progress, tests, the assignee", in: input("in-progress", func(in *Input) { approved("normal")(in); in.Tests = []TestFile{{Path: "a_test.go"}}; in.Me = "erin" }), step: 5, login: "erin", what: "commit and open the PR", mine: true, actions: []string{"ready-for-review"}},
 		{name: "in-review", in: input("in-review", approved("normal")), step: 6, login: "carol", what: "review the PR", gate: "A human who can explain the diff"},
 		{name: "in-review, structural", in: input("in-review", func(in *Input) { in.Risk = "structural"; in.Me = "carol" }), step: 6, login: "carol", what: "review the PR", mine: true, gate: "Structural: a second human", actions: []string{"review"}},

@@ -8,11 +8,16 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/guilbep/git-board/internal/branches"
+	"github.com/guilbep/git-board/internal/config"
+	"github.com/guilbep/git-board/internal/cycle"
+	"github.com/guilbep/git-board/internal/fields"
 	"github.com/guilbep/git-board/internal/gitbugio"
 	"github.com/guilbep/git-board/internal/wtx"
 )
@@ -264,14 +269,24 @@ func (s *apiServer) lockWtx(w http.ResponseWriter) bool {
 	return false
 }
 
-// POST /api/issues/{id}/agent/{action}, action go or brief, body
+// buildBrief: wtx brief --build briefs the agent in its build phase,
+// where today's wtx always restarts the pane in plan mode.
+// ponytail: off until EPFL-ENAC/wtx has the flag (argparse refuses it)
+const buildBrief = false
+
+// POST /api/issues/{id}/agent/{action}, action go, brief or approve, body
 // {"brief": "..."}: wtx go or wtx brief on the issue's branch, with a
 // prompt file of git-board's words and the issue quoted as data. The
 // agent's permissions are wtx.toml's: no --agent, --llm or permission
 // flag is passed.
+//
+// go at step 3 starts the agent on the plan, or, at low risk or with the
+// plan approved, on step 4 and moves the status to in-progress. approve
+// is a brief in the server's words, after approve-plan: the plan is
+// approved, on to step 4.
 func (s *apiServer) handleIssueAgentAction(w http.ResponseWriter, r *http.Request) {
 	action := r.PathValue("action")
-	if action != "go" && action != "brief" {
+	if !slices.Contains([]string{"go", "brief", "approve"}, action) {
 		writeError(w, http.StatusNotFound, fmt.Errorf("no agent action %q", action))
 		return
 	}
@@ -310,12 +325,39 @@ func (s *apiServer) handleIssueAgentAction(w http.ResponseWriter, r *http.Reques
 	case action == "go" && a.Branch == "all":
 		writeCoded(w, http.StatusConflict, "branch-all", errors.New("wtx reads the branch all as every worktree: give the issue another branch."))
 		return
-	case action == "brief" && a.Worktree == nil:
+	case action != "go" && a.Worktree == nil:
 		writeCoded(w, http.StatusConflict, "no-worktree", errors.New("No worktree yet: start an agent first."))
 		return
+	case action == "approve" && cyc.Evidence.Plan == nil:
+		writeCoded(w, http.StatusConflict, "no-plan", errors.New("No plan file on the branch: nothing to approve to the agent."))
+		return
+	case action == "approve" && cyc.Evidence.PlanApproval == nil:
+		writeCoded(w, http.StatusConflict, "not-approved", errors.New("The plan isn't approved on the board yet: approve it first."))
+		return
+	}
+	// at ready, low risk or the plan approved: the branch starts at step
+	// 4, the status moved once wtx go has worked
+	start := action == "go" && cyc.Stage == "ready" && len(cyc.Stages.InProgress) > 0 &&
+		(cyc.Risk == "low" || cycle.ApprovedPlan(cyc.Evidence))
+	if start {
+		if cyc, err = s.cycleOf(r.Context(), withStatus(th, cyc.Stages.InProgress[0])); err != nil {
+			writeError(w, http.StatusInternalServerError, err)
+			return
+		}
 	}
 	in := wtx.PromptInput{Issue: issueName(th.Issue), Title: th.Title, Step: cyc.Step, Of: cyc.Of, Name: cyc.Name,
 		Gate: cyc.Gate, What: cyc.Waits.What, Branch: a.Branch, Brief: req.Brief}
+	switch {
+	case action == "approve":
+		in.Brief = ""
+		by := "" // who approved, when the board knows their login
+		if l := cyc.Evidence.PlanApproval.By; l != "" {
+			by = " by " + l
+		}
+		in.Then = fmt.Sprintf("The plan is approved%s on the board. Set `status: accepted` in the plan file's front matter, commit and push it, then go on with step %d.", by, cyc.Step)
+	case action == "go" && cyc.Step == 3 && cyc.Stage == "ready":
+		in.What, in.Then = "write the plan, in plan mode", planThen(cyc.Stages, th.Issue, a.Branch)
+	}
 	if i := slices.IndexFunc(th.Events, func(e gitbugio.Event) bool { return e.Kind == "created" }); i >= 0 {
 		in.Description = th.Events[i].Body
 	}
@@ -333,8 +375,11 @@ func (s *apiServer) handleIssueAgentAction(w http.ResponseWriter, r *http.Reques
 	// with a progress stream when a repo's setup takes longer than a
 	// browser waits.
 	args, timeout := []string{"go", a.Branch, "--prompt", file, "--no-attach"}, 10*time.Minute
-	if action == "brief" {
+	if action != "go" {
 		args, timeout = []string{"brief", a.Branch, "--prompt", file}, time.Minute
+		if buildBrief {
+			args = append(args, "--build")
+		}
 	}
 	// a closed tab doesn't kill wtx halfway: that leaves a worktree
 	// without a session, which Start then refuses
@@ -345,12 +390,40 @@ func (s *apiServer) handleIssueAgentAction(w http.ResponseWriter, r *http.Reques
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
+	if start {
+		if _, err := fields.Apply(s.b, s.config(), th.ID, "status", cyc.Stages.InProgress[0], s.me, time.Now()); err != nil {
+			writeError(w, http.StatusInternalServerError, err)
+			return
+		}
+	}
 	if a, err = s.agentOf(r.Context(), r, th, cyc, true); err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
 	a.Output = wtx.Tail(string(out), 8)
 	writeJSON(w, http.StatusOK, a)
+}
+
+// withStatus is th with its status label set to status: the step the
+// issue will be at once it moves.
+func withStatus(th gitbugio.Thread, status string) gitbugio.Thread {
+	labels := slices.DeleteFunc(slices.Clone(th.Issue.Labels), func(l string) bool { return strings.HasPrefix(l, "status:") })
+	th.Issue.Labels = append(labels, "status:"+status)
+	return th
+}
+
+// planThen is what the agent does with its plan once the person accepts
+// it in the pane, where plan mode ends: commit it where gather finds it,
+// push, and open the draft PR that holds it, unless plans-in-pr = false.
+// The plan is approved on the board, not by the agent.
+func planThen(stages config.Stages, is gitbugio.Issue, branch string) string {
+	key := cycle.PlanIssue(is)
+	file := path.Join(stages.Plans, path.Base(branch)+".md")
+	pr := "open a draft PR that holds only the plan (`gh pr create --draft`)"
+	if !stages.PlansInPR {
+		pr = "open no PR at this step: the PR comes at step 5"
+	}
+	return fmt.Sprintf("Once the person accepts the plan in this pane, commit it as `%s`, its front matter `issue: %s` and `status: draft` (git-board finds the plan by that `issue:` line), push the branch, %s, and stop. The plan is approved on the board, and you are briefed then: write no code before.", file, key, pr)
 }
 
 // issueName names the issue as the Work page does: its project number,

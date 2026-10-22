@@ -161,6 +161,17 @@ func TestPromptPlan(t *testing.T) {
 	}
 }
 
+// Then is git-board's own paragraph: after what is asked, before the
+// person's words and the issue.
+func TestPromptThen(t *testing.T) {
+	t.Parallel()
+	p := wtx.Prompt(wtx.PromptInput{Issue: "#9", Title: "x", Step: 3, Of: 7, Name: "Plan", What: "approve the plan", Then: "Commit the plan.", Brief: "short"})
+	i, j := strings.Index(p, "Commit the plan."), strings.Index(p, "## From the person")
+	if i < 0 || i > j || strings.Count(p, "Commit the plan.") != 1 || i < strings.Index(p, "What is asked now") {
+		t.Fatalf("Then misplaced:\n%s", p)
+	}
+}
+
 // git allows a backtick in a branch, and a path can hold one: the span
 // is fenced with more backticks than the text holds (CommonMark).
 func TestPromptBackticks(t *testing.T) {

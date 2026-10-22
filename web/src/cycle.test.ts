@@ -156,4 +156,16 @@ test('the status bar', () => {
   assert.deepEqual(statusBar(at({ evidence: { branch: 'fix/1-x', head: '4f2e9c1a00', pr: pr({ number: 7, checks }) } }), 2), ['fix/1-x at 4f2e9c1', 'PR #7 · 1 of 2 checks green', 'waits for 2 changes on the forges']);
   assert.deepEqual(statusBar(at({ evidence: { branch: 'fix/1-x', pr: pr({ number: 7, state: 'MERGED' }) } }), 0), ['fix/1-x', 'PR #7 merged', 'in sync']);
   assert.deepEqual(statusBar(at({ evidence: { pr: pr({ number: 7 }) } }), 1)[1], 'PR #7 open');
+  assert.deepEqual(statusBar(at({ evidence: { pr: pr({ number: 41, draft: true }) } }), 1)[1], 'draft PR #41');
+});
+
+test('the draft PR that holds the plan, on step 3\'s line', () => {
+  const plan = { path: 'docs/plans/41-x.md', status: 'draft' } as NonNullable<Cycle['evidence']['plan']>;
+  const draft = pr({ number: 41, draft: true });
+  const current = steps(at({ step: 3, name: 'Plan', risk: 'normal', note: '', waits: { role: 'plan', login: 'bob', what: 'approve the plan', anyone: false }, evidence: { plan, pr: draft } }));
+  assert.equal(current[2]?.line, 'waits for bob to approve the plan · draft PR #41');
+  const done = steps(at({ step: 4, name: 'Tests', evidence: { plan, pr: draft } }));
+  assert.equal(done[2]?.line, 'docs/plans/41-x.md · draft PR #41');
+  // ready for review: no longer a draft
+  assert.equal(steps(at({ step: 4, name: 'Tests', evidence: { plan, pr: pr({ number: 41 }) } }))[2]?.line, 'docs/plans/41-x.md');
 });

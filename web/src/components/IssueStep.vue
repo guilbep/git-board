@@ -31,7 +31,8 @@
         :busy="busy || !!agentBusy"
         :can="has('approve-plan')"
         :sends="button === 'brief'"
-        @approve="act('approve-plan')"
+        :agent="agent"
+        @approve="approve"
         @revise="revise"
       />
       <CycleVerify
@@ -62,7 +63,7 @@
               <a v-if="b.action === 'review' && cycle.evidence.pr?.url" :href="cycle.evidence.pr.url" target="_blank" rel="noopener noreferrer" class="epfl-btn epfl-btn-primary epfl-btn-sm">
                 {{ b.label }} #{{ cycle.evidence.pr.number }}<span class="gb-sr">(opens in a new tab)</span>
               </a>
-              <button v-else-if="b.action !== 'review'" type="button" :class="['epfl-btn', 'epfl-btn-sm', b.action === 'set-risk' ? 'epfl-btn-secondary' : 'epfl-btn-primary']" :disabled="busy" @click="press(b)">
+              <button v-else-if="b.action !== 'review'" type="button" :class="['epfl-btn', 'epfl-btn-sm', b.action === 'set-risk' ? 'epfl-btn-secondary' : 'epfl-btn-primary']" :disabled="busy" @click="pressed(b)">
                 {{ b.label }}
               </button>
             </template>
@@ -99,7 +100,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
 import { agentAction, getIssueAgent, type Forge, type IssueAgent, type IssueEvent } from '@/api/board';
-import { cardFor, steps, statusBar, turn, withCriteria } from '@/cycle';
+import { cardFor, steps, statusBar, turn, withCriteria, type CardButton } from '@/cycle';
 import { message } from '@/issue';
 import { agentButton, agentWords } from '@/worktrees';
 import { useCycle } from '@/usecycle';
@@ -153,19 +154,21 @@ const bar = computed(() => {
 // the agent on this issue (wtx, internal/server/worktrees.go): read with
 // every cycle load; Start an agent without a worktree, Brief it with one
 const agent = ref<IssueAgent | null>(null);
-const agentBusy = ref<'' | 'go' | 'brief'>('');
+const agentBusy = ref<'' | 'go' | 'brief' | 'approve'>('');
 const agentNote = ref('');
 const briefing = ref(false);
 const briefText = ref('');
 const button = computed(() => (agent.value ? agentButton(agent.value) : null));
 watch(cycle, () => void getIssueAgent(props.id).then((a) => (agent.value = a), () => (agent.value = null)));
 
-async function run(action: 'go' | 'brief', brief: string) {
+async function run(action: 'go' | 'brief' | 'approve', brief: string) {
   agentBusy.value = action;
   agentNote.value = '';
   try {
     agent.value = await agentAction(props.id, action, brief);
-    agentNote.value = action === 'go' ? `Session ${agent.value.session?.session ?? agent.value.branch} started.` : 'Sent to the agent.';
+    agentNote.value = { go: `Session ${agent.value.session?.session ?? agent.value.branch} started.`, brief: 'Sent to the agent.', approve: 'Sent to the agent: the plan is approved. Accept its step 4 in its pane.' }[action];
+    // go at low risk, or with the plan approved, moved the status
+    if (action === 'go') emit('changed');
     briefing.value = false;
     briefText.value = '';
   } catch (e) {
@@ -174,6 +177,18 @@ async function run(action: 'go' | 'brief', brief: string) {
     agentBusy.value = '';
   }
 }
+
+// Approve the plan on the board, then brief the agent on to step 4.
+// ponytail: wtx brief restarts the pane in plan mode, hence the pane's
+// accept; worktrees.go's buildBrief ends that once wtx has --build
+async function approve() {
+  const plan = !!cycle.value?.evidence.plan; // no file: nothing to accept, the server refuses
+  if ((await act('approve-plan')) && plan && button.value === 'brief') void run('approve', '');
+}
+
+// Start work with wtx and no worktree yet: wtx go, which moves the status
+// once the agent is started; without wtx, the status alone
+const pressed = (b: CardButton) => (b.action === 'start' && button.value === 'start' ? run('go', '') : press(b));
 
 // Ask the agent to revise: a comment in the plan's discussion, and a
 // brief when it has a worktree

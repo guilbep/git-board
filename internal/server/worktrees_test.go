@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -13,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/guilbep/git-board/internal/board"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/gitbugio/gitbugiotest"
 )
@@ -485,6 +487,149 @@ func TestAgentRefused(t *testing.T) {
 	t.Setenv("PATH", t.TempDir())
 	if code, c, _ := sendFrom(t, "POST", url, ts.URL, map[string]string{}); code != http.StatusConflict || c != "no-wtx" {
 		t.Fatalf("no wtx: %d %q", code, c)
+	}
+}
+
+// planRepo is agentRepo at ready with two criteria and risk risk: step
+// 3 at normal risk, skipped at low.
+func planRepo(t *testing.T, risk string) (*apiServer, string, string) {
+	t.Helper()
+	s, fake, id := agentRepo(t)
+	th, err := s.b.Thread(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.b.EditComment(id, th.Events[0].ID, twoCriteria, ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.b.ApplyLabelChange(id, []string{"status:ready"}, []string{"status:in-progress"}); err != nil {
+		t.Fatal(err)
+	}
+	if risk == "normal" {
+		return s, fake, id
+	}
+	if _, err := s.b.ApplyLabelChange(id, []string{"risk:" + risk}, []string{"risk:normal"}); err != nil {
+		t.Fatal(err)
+	}
+	return s, fake, id
+}
+
+func statusOf(t *testing.T, s *apiServer, id string) string {
+	t.Helper()
+	th, err := s.b.Thread(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return board.FieldValue(th.Issue, "status")
+}
+
+func lastPrompt(t *testing.T, fake string) string {
+	t.Helper()
+	prompt, err := os.ReadFile(filepath.Join(fake, "prompt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(prompt)
+}
+
+// Start at normal risk: the agent plans, and is told where to commit the
+// plan for gather to find it, and to open the draft PR; the status stays.
+func TestAgentGoPlan(t *testing.T) {
+	// subtests: prRepo's commit dates stay in their own repository
+	for _, inPR := range []bool{true, false} {
+		t.Run(fmt.Sprint(inPR), func(t *testing.T) { goPlan(t, inPR) })
+	}
+}
+
+func goPlan(t *testing.T, inPR bool) {
+	s, fake, id := planRepo(t, "normal")
+	s.cfg.Cycle.PlansInPR = &inPR
+	ts := serve(t, s)
+	if code, _, body := sendFrom(t, "POST", ts.URL+"/api/issues/"+id[:8]+"/agent/go", ts.URL, map[string]string{}); code != http.StatusOK {
+		t.Fatalf("go: %d %s", code, body)
+	}
+	p := lastPrompt(t, fake)
+	for _, want := range []string{"step 3 of 7: Plan", "What is asked now: write the plan, in plan mode.",
+		"commit it as `docs/src/implementation-plans/2518-x.md`, its front matter `issue: 2518` and `status: draft`"} {
+		if !strings.Contains(p, want) {
+			t.Errorf("plans in PRs %v: prompt lacks %q\n---\n%s", inPR, want, p)
+		}
+	}
+	if pr := strings.Contains(p, "gh pr create --draft"); pr != inPR || strings.Contains(p, "open no PR at this step") == inPR {
+		t.Errorf("plans in PRs %v: the draft PR in the prompt: %v\n%s", inPR, pr, p)
+	}
+	if st := statusOf(t, s, id); st != "ready" {
+		t.Errorf("status = %q, want ready", st)
+	}
+}
+
+// Start at low risk: step 4's prompt, the status in-progress once wtx
+// go has worked, and unmoved when it fails.
+func TestAgentGoLowRisk(t *testing.T) {
+	s, fake, id := planRepo(t, "low")
+	ts := serve(t, s)
+	url := ts.URL + "/api/issues/" + id[:8] + "/agent/go"
+	if err := os.WriteFile(filepath.Join(fake, "fail"), []byte("wtx: no\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if code, _, _ := sendFrom(t, "POST", url, ts.URL, map[string]string{}); code != http.StatusBadRequest || statusOf(t, s, id) != "ready" {
+		t.Fatalf("wtx failing: %d, status %q", code, statusOf(t, s, id))
+	}
+	if err := os.Remove(filepath.Join(fake, "fail")); err != nil {
+		t.Fatal(err)
+	}
+	if code, _, body := sendFrom(t, "POST", url, ts.URL, map[string]string{}); code != http.StatusOK {
+		t.Fatalf("go: %d %s", code, body)
+	}
+	if p := lastPrompt(t, fake); !strings.Contains(p, "step 4 of 7: Tests") || strings.Contains(p, "plan mode") {
+		t.Errorf("prompt:\n%s", p)
+	}
+	if st := statusOf(t, s, id); st != "in-progress" {
+		t.Errorf("status = %q, want in-progress", st)
+	}
+}
+
+// Approve briefs the agent in the server's words once the plan role has
+// approved the plan on the board; refused before.
+func TestAgentApprove(t *testing.T) {
+	s, fake, id := agentRepo(t)
+	wt := addWorktree(t, s)
+	ts := serve(t, s)
+	url := ts.URL + "/api/issues/" + id[:8] + "/agent/approve"
+	if code, c, _ := sendFrom(t, "POST", url, ts.URL, map[string]string{}); code != http.StatusConflict || c != "no-plan" {
+		t.Fatalf("no plan: %d %q", code, c)
+	}
+	if err := os.MkdirAll(filepath.Join(wt, "docs/src/implementation-plans"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(wt, "docs/src/implementation-plans/2518-x.md"), []byte("---\nissue: 2518\nstatus: draft\n---\n# Plan\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	git(t, wt, "add", ".")
+	git(t, wt, "commit", "-q", "-m", "plan")
+	if code, c, _ := sendFrom(t, "POST", url, ts.URL, map[string]string{}); code != http.StatusConflict || c != "not-approved" {
+		t.Fatalf("not approved: %d %q", code, c)
+	}
+	if calls := wtxCalls(t, fake); calls != nil {
+		t.Fatalf("refusals called wtx: %v", calls)
+	}
+	if code, body := post(t, ts.URL+"/api/issues/"+id[:8]+"/cycle/approve-plan", struct{}{}); code != http.StatusOK {
+		t.Fatalf("approve-plan: %d %s", code, body)
+	}
+	if code, _, body := sendFrom(t, "POST", url, ts.URL, map[string]string{"brief": "ignored"}); code != http.StatusOK {
+		t.Fatalf("approve: %d %s", code, body)
+	}
+	if calls := wtxCalls(t, fake); len(calls) != 2 || !strings.HasPrefix(calls[0][1], "brief fix/2518-x --prompt ") || len(strings.Fields(calls[0][1])) != 4 {
+		t.Fatalf("calls = %v", calls)
+	}
+	p := lastPrompt(t, fake)
+	for _, want := range []string{"step 4 of 7: Tests", "The plan is approved by " + s.viewer() + " on the board. Set `status: accepted`"} {
+		if !strings.Contains(p, want) {
+			t.Errorf("prompt lacks %q\n---\n%s", want, p)
+		}
+	}
+	if strings.Contains(p, "ignored") {
+		t.Errorf("the person's brief reached approve's prompt:\n%s", p)
 	}
 }
 

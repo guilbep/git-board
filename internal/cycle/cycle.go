@@ -23,6 +23,7 @@ type Plan struct {
 	Path   string `json:"path,omitempty"`
 	Ref    string `json:"ref,omitempty"`    // the branch it was read from
 	Status string `json:"status,omitempty"` // its front matter status
+	Issue  string `json:"issue,omitempty"`  // its front matter issue
 	HTML   string `json:"html,omitempty"`   // rendered, below its front matter
 	By     string `json:"by,omitempty"`     // who first committed it on the branch, "" when it came with the base
 }
@@ -145,9 +146,9 @@ func gate(step int, risk, rule string) string {
 		"", "A human commits and opens the PR", "A human who can explain the diff", "Green codes are not proof"}[step]
 }
 
-// approvedPlan: the plan file is accepted or past it, the plan role
+// ApprovedPlan: the plan file is accepted or past it, the plan role
 // approved it in a comment (not structural), or its PR is approved.
-func approvedPlan(in Input) bool {
+func ApprovedPlan(in Input) bool {
 	switch {
 	case in.Plan != nil && slices.Contains([]string{"accepted", "in-progress", "delivered"}, in.Plan.Status):
 		return true
@@ -183,9 +184,10 @@ func Compute(in Input) Cycle {
 	if len(in.Assignees) > 0 {
 		assignee = in.Assignees[0]
 	}
-	approved := approvedPlan(in)
+	approved := ApprovedPlan(in)
 	inProgress := first(in.Stages.InProgress, "in-progress")
 	merged := in.PR != nil && in.PR.State == "MERGED"
+	draft := in.PR != nil && in.PR.State == "OPEN" && in.PR.Draft
 	stage := c.Stage
 	if stage == "in-review" && merged && len(in.Stages.Validation) == 0 {
 		stage = "validation" // no validation status: Verify happens in in-review once merged
@@ -222,11 +224,19 @@ func Compute(in Input) Cycle {
 			c.Note = "risk not set"
 		case in.Risk != "low" && !approved:
 			c.Note = "plan not approved"
+		case draft && c.Step == 4:
+			// the draft PR holding the plan: step 4's own state (C4)
+		case draft:
+			// Review opens when the draft PR is marked ready, not before
+			c.Note, act = fmt.Sprintf("draft PR #%d, waits for it to be marked ready for review", in.PR.Number), ""
 		case in.PR != nil && in.PR.State == "OPEN":
 			c.Note = fmt.Sprintf("PR #%d open, waits for the status %s", in.PR.Number, first(in.Stages.InReview, "in-review"))
 		}
 	case "in-review":
 		c.Step, w, act = 6, Waits{Role: "review", Login: in.People["review"], What: "review the PR"}, "review"
+		if draft {
+			c.Note, act = fmt.Sprintf("PR #%d is still a draft on GitHub", in.PR.Number), ""
+		}
 		if merged { // with a validation status: the stage above is false otherwise
 			next := in.Stages.Validation[0]
 			w, act = Waits{Role: "assignee", Login: assignee, What: "move the status to " + next}, "to-validation"

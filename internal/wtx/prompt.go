@@ -15,6 +15,7 @@ type PromptInput struct {
 	Name        string // "Tests"
 	Gate        string // the gate's text from the loop
 	What        string // what is asked now, "write the failing test"
+	Then        string // git-board's paragraph after what is asked, "" for none
 	Branch      string
 	Plan        string // the plan file's path, "" for none
 	Brief       string // what the person typed, "" for none
@@ -35,6 +36,9 @@ func Prompt(in PromptInput) string {
 		fmt.Fprintf(&b, " What is asked now: %s.", strings.TrimSuffix(in.What, "."))
 	}
 	b.WriteString("\n\n")
+	if then := strings.TrimSpace(in.Then); then != "" {
+		b.WriteString(then + "\n\n")
+	}
 	if in.Branch != "" {
 		fmt.Fprintf(&b, "Branch: %s.\n", code(in.Branch))
 	}

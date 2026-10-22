@@ -698,6 +698,7 @@ export interface CyclePlan {
   path: string;
   ref: string;
   status?: string; // the front matter's: draft, accepted, in-progress, delivered
+  issue?: string; // the front matter's issue: line, what found the file
   html?: string; // the file rendered, below its front matter
   by?: string; // who first committed it on the plan branch
 }
@@ -1261,7 +1262,7 @@ export function getIssueAgent(id: string): Promise<IssueAgent> {
   return request(`${issuePath(id)}/agent`);
 }
 
-export function agentAction(id: string, action: 'go' | 'brief', brief: string): Promise<IssueAgent> {
+export function agentAction(id: string, action: 'go' | 'brief' | 'approve', brief: string): Promise<IssueAgent> {
   return request(`${issuePath(id)}/agent/${action}`, json('POST', { brief }));
 }
 

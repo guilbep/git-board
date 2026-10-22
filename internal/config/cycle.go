@@ -17,7 +17,10 @@ type Cycle struct {
 	InReview   []string `toml:"in-review"`
 	Validation []string `toml:"validation"`
 	Plans      string   `toml:"plans"` // default "docs/src/implementation-plans"
-	Tests      []string `toml:"tests"` // default defaultTests
+	// PlansInPR: the draft PR opened at step 3 holds the plan; false
+	// keeps plans out of PRs, the PR opens at step 5. Default true.
+	PlansInPR *bool    `toml:"plans-in-pr"`
+	Tests     []string `toml:"tests"` // default defaultTests
 	// Criteria are the headings a description's acceptance criteria are
 	// listed under; default defaultCriteria.
 	Criteria []string `toml:"criteria"`
@@ -41,6 +44,7 @@ type Stages struct {
 	Validation []string          `json:"validation"`
 	Closing    string            `json:"closing"` // the last status option, "" without options
 	Plans      string            `json:"plans"`
+	PlansInPR  bool              `json:"plans_in_pr"`
 	Tests      []string          `json:"tests"`
 	Criteria   []string          `json:"criteria"`
 	Kinds      map[string]string `json:"kinds"`
@@ -146,6 +150,7 @@ func (c *Config) Stages() Stages {
 	if s.Plans == "" {
 		s.Plans = "docs/src/implementation-plans"
 	}
+	s.PlansInPR = k.PlansInPR == nil || *k.PlansInPR
 	s.Tests = k.Tests
 	if s.Tests == nil {
 		s.Tests = defaultTests

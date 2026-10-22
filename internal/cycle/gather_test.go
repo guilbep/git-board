@@ -123,7 +123,7 @@ func TestGatherFromRepo(t *testing.T) {
 	if !slices.Equal(in.Tests, []TestFile{{Path: "api/a_test.go", Commit: first}}) {
 		t.Errorf("Tests = %+v", in.Tests)
 	}
-	if in.Plan == nil || in.Plan.Path != plan || in.Plan.Ref != "fix/2518-x" || in.Plan.Status != "accepted" {
+	if in.Plan == nil || in.Plan.Path != plan || in.Plan.Ref != "fix/2518-x" || in.Plan.Status != "accepted" || in.Plan.Issue != "2518" {
 		t.Errorf("Plan = %+v", in.Plan)
 	}
 	// rendered below its front matter; added on dev, so nobody drafted it on the branch
@@ -208,6 +208,35 @@ func TestGatherPlanDraftedBy(t *testing.T) {
 	in, err := Gather(b, co2Config(), th, "", nil)
 	if err != nil || in.Plan == nil || in.Plan.Ref != "plan/2518-x" || in.Plan.By != "dev" || in.Plan.Status != "draft" {
 		t.Errorf("Plan = %+v, %v", in.Plan, err)
+	}
+}
+
+// A plan file whose issue: is PlanIssue, as the agent's prompt asks, is
+// found: with a forge number, and with none (the git-bug id).
+func TestGatherPlanIssue(t *testing.T) {
+	t.Parallel()
+	dir, b := repo(t)
+	numbered := gitbugiotest.NewImportedIssue(t, b, "Crash on save (#2518)", "https://github.com/o/r/issues/2518")
+	bare, err := b.NewIssue("Export CSV", "", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{numbered, bare} {
+		th, err := b.Thread(id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		key := PlanIssue(th.Issue)
+		git(t, dir, "switch", "-q", "-c", "plan/"+key+"-x", "dev")
+		commitFile(t, dir, "docs/src/implementation-plans/"+key+"-x.md", "---\nissue: "+key+"\nstatus: draft\n---\n# Plan\n")
+		git(t, dir, "switch", "-q", "dev")
+		in, err := Gather(b, co2Config(), th, "", nil)
+		if err != nil || in.Plan == nil || in.Plan.Status != "draft" {
+			t.Errorf("issue: %s: Plan = %+v, %v", key, in.Plan, err)
+		}
+	}
+	if th, _ := b.Thread(numbered); PlanIssue(th.Issue) != "2518" {
+		t.Errorf("PlanIssue = %q, want 2518", PlanIssue(th.Issue))
 	}
 }
 

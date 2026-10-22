@@ -143,7 +143,7 @@ func gatherCode(b *gitbugio.Backend, cfg *config.Config, is gitbugio.Issue, stag
 
 	re := `^issue: *["']?([A-Za-z0-9]+-|#)?` + regexp.QuoteMeta(is.BareNumber()) + `["']? *$`
 	if is.BareNumber() == "" {
-		re = `^issue: *["']?` + is.ID[:7]
+		re = `^issue: *["']?` + PlanIssue(is)
 	}
 	for _, r := range []string{evidence, plan, in.Base} {
 		if r == "" {
@@ -156,7 +156,7 @@ func gatherCode(b *gitbugio.Backend, cfg *config.Config, is gitbugio.Issue, stag
 		}
 		data, _ := b.ReadFile(r, files[0])
 		// ponytail: links as the file writes them, plan files carry no uploads
-		in.Plan = &Plan{Path: files[0], Ref: r, Status: frontMatter(string(data), "status"), HTML: markdown.Render(body(string(data)), func(u string) string { return u })}
+		in.Plan = &Plan{Path: files[0], Ref: r, Status: frontMatter(string(data), "status"), Issue: frontMatter(string(data), "issue"), HTML: markdown.Render(body(string(data)), func(u string) string { return u })}
 		if sha := b.FirstCommitAdding(in.Base, r, files[0]); sha != "" {
 			if c, err := b.ReadCommit(sha); err == nil {
 				in.Plan.By = c.Author
@@ -165,6 +165,16 @@ func gatherCode(b *gitbugio.Backend, cfg *config.Config, is gitbugio.Issue, stag
 		break
 	}
 	return nil
+}
+
+// PlanIssue is what a plan file's front matter writes as issue: for
+// gatherCode to find it: the issue's bare number, else its git-bug id's
+// first 7 characters. The agent's prompt names it.
+func PlanIssue(is gitbugio.Issue) string {
+	if n := is.BareNumber(); n != "" {
+		return n
+	}
+	return is.ID[:7]
 }
 
 // body is the document below its front matter.

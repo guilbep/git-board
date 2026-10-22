@@ -121,10 +121,18 @@ func TestCycleReadsThePR(t *testing.T) {
 		t.Errorf("a second read asked GitHub again: %v", gh.sent())
 	}
 
+	// at ready, the draft PR holds the plan: asked, unless plans-in-pr = false
 	s, gh, id = prRepo(t, "ready")
 	getJSON(t, serve(t, s).URL+"/api/issues/"+id[:8]+"/cycle", &cycleAnswer{})
+	if !slices.Contains(gh.sent(), "POST /graphql") {
+		t.Errorf("at ready, plans in PRs: GitHub was asked %v", gh.sent())
+	}
+	s, gh, id = prRepo(t, "ready")
+	off := false
+	s.cfg.Cycle.PlansInPR = &off
+	getJSON(t, serve(t, s).URL+"/api/issues/"+id[:8]+"/cycle", &cycleAnswer{})
 	if len(gh.sent()) != 0 {
-		t.Errorf("at ready, GitHub was asked %v", gh.sent())
+		t.Errorf("at ready, plans-in-pr = false: GitHub was asked %v", gh.sent())
 	}
 }
 
