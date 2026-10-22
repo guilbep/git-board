@@ -1,6 +1,7 @@
 // The words for an issue's step (api/board.ts Cycle): the step bar, the
 // step's buttons, the criteria written into the description.
 import type { Cycle, CycleStages, IssueEvent } from './api/board.ts';
+import { approvers, reviewLine } from './review.ts';
 import { on } from './when.ts';
 
 // turn is whose move it is: "waits for erin to set the risk class"
@@ -72,9 +73,9 @@ const names = (list: string[]) => (list.length < 2 ? list.join('') : `${list.sli
 
 // steps is the seven cells. The current step is the issue's, even when
 // skipped (low risk waits at step 3 for Start work); a skipped one is
-// skipped wherever it stands. riskBy is who set the risk label (the thread
-// knows, the evidence doesn't).
-export function steps(c: Cycle, riskBy?: string): StepRow[] {
+// skipped wherever it stands. riskBy is who set the risk label, events the
+// review's approvals and threads (the thread knows, the evidence doesn't).
+export function steps(c: Cycle, riskBy?: string, events: IssueEvent[] = []): StepRow[] {
   const e = c.evidence ?? {};
   const risk = c.risk ?? e.risk;
   const rule = c.stages.kinds?.[e.kind ?? ''] ?? 'per-criterion';
@@ -99,7 +100,7 @@ export function steps(c: Cycle, riskBy?: string): StepRow[] {
         return e.branch ? e.branch + (e.head ? ` at ${short(e.head)}` : '') : undefined;
       case 6: {
         if (!e.pr) return undefined;
-        const by = (e.pr.reviews ?? []).filter((r) => r.state === 'APPROVED').map((r) => r.login);
+        const by = approvers(e.pr, events);
         if (by.length) return `${names(by)} approved`;
         return e.pr.state === 'MERGED' ? `PR #${e.pr.number} merged` : `PR #${e.pr.number} open`;
       }
@@ -115,7 +116,8 @@ export function steps(c: Cycle, riskBy?: string): StepRow[] {
   return STEPS.slice(1).map((name, i) => {
     const n = i + 1;
     const g = n === c.step ? c.gate : gate(n, risk, rule);
-    if (n === c.step && !c.done) return { n, name, state: 'current', line: (c.note || turn(c)) + (n === 3 ? draft : ''), gate: g };
+    // step 6 under review counts approvals and open threads; merged, its note
+    if (n === c.step && !c.done) return { n, name, state: 'current', line: (c.note || (n === 6 ? reviewLine(c, events) : turn(c))) + (n === 3 ? draft : ''), gate: g };
     if (c.skipped?.includes(n)) return { n, name, state: 'skipped', line: `skipped, ${n === 3 ? 'low risk' : (e.kind ?? 'no tests')}`, gate: g };
     if (c.done || n < c.step) return { n, name, state: 'done', line: evidence(n) || g, gate: g };
     return { n, name, state: 'locked', line: LOCKS[n] ?? '', gate: g };
@@ -123,9 +125,10 @@ export function steps(c: Cycle, riskBy?: string): StepRow[] {
 }
 
 // forStep is a step's discussion: the comments carrying its cycle:step.
-// Step 1's also has those carrying none, every one written before steps.
+// Without one, a review comment (a line comment, a reply, a review, the
+// PR's) is step 6's, and every other comment step 1's.
 export function forStep(events: IssueEvent[], n: number): IssueEvent[] {
-  return events.filter((e) => e.kind === 'comment' && (e.meta?.['cycle:step'] ?? '1') === String(n));
+  return events.filter((e) => e.kind === 'comment' && (e.meta?.['cycle:step'] ?? (e.review ? '6' : '1')) === String(n));
 }
 
 // The headings and items internal/cycle/cycle.go's Criteria reads.

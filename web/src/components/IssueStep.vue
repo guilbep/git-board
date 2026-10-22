@@ -48,7 +48,8 @@
         @run="(output, commit) => act('verify', { output, commit })"
         @back="patch({ status: cycle.stages.in_progress[0] ?? '' })"
       />
-      <template v-else-if="cycle && row">
+      <!-- step 6 on the page is the review's own (CycleReview) -->
+      <template v-else-if="cycle && row && !(n === 6 && $slots.review)">
         <CycleIntent v-if="n === 1" :cycle="cycle" :current="current" :busy="busy" @save="saveCriteria" />
         <CycleTests v-if="n === 4 && !cycle.skipped?.includes(4)" :id="id" :cycle="cycle" />
         <p v-else-if="n !== 1 && row.state === 'done' && row.line !== row.gate" class="gb-note">{{ row.line }}</p>
@@ -70,7 +71,16 @@
           <p v-if="error && card" class="gb-save-error" role="alert"><GbIcon name="error" small /> {{ error }}</p>
         </template>
       </template>
-      <slot v-if="n === 6" name="review" />
+      <slot
+        v-if="cycle && n === 6"
+        name="review"
+        :cycle="cycle"
+        :current="current"
+        :can="has('review')"
+        :merged="has('to-validation')"
+        :sends="button === 'brief'"
+        :verify="() => patch({ status: cycle!.stages.validation[0] ?? '' })"
+      />
 
       <p v-if="cycle && n !== cycle.step" class="gb-cycle-actions">
         <button type="button" class="gb-linkbtn" @click="shown = null">Back to step {{ cycle.step }} · {{ cycle.name }}</button>
@@ -123,7 +133,7 @@ const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 // who set the risk: the last label change adding one, from the thread
 const riskBy = computed(() => props.events.findLast((e) => e.kind === 'labels' && e.added?.some((l) => l.startsWith('risk:')))?.author.name);
-const rows = computed(() => (cycle.value ? steps(cycle.value, riskBy.value) : []));
+const rows = computed(() => (cycle.value ? steps(cycle.value, riskBy.value, props.events) : []));
 const risk = computed(() => cycle.value?.risk ?? cycle.value?.evidence.risk);
 
 // the step shown, picked on the bar; null is the issue's step, and the

@@ -17,7 +17,7 @@
     </header>
 
     <div v-if="open" class="gb-df-body">
-      <ReviewThreadView v-for="t in loose" :key="t.root.id" :thread="t" :busy="busy" :reply="reply" :resolve="resolve" loose />
+      <ReviewThreadView v-for="t in loose" :key="t.root.id" :thread="t" :busy="busy" :reply="reply" :resolve="resolve" :brief="brief" loose />
       <p v-if="file.binary" class="gb-hint gb-df-note">Binary file.</p>
       <p v-else-if="error" class="gb-hint gb-df-note" role="alert"><b>Couldn’t read the diff.</b> {{ error }}</p>
       <p v-else-if="!loaded" class="gb-hint gb-df-note" role="status">Loading…</p>
@@ -36,7 +36,7 @@
               <td class="gb-df-text"><span class="gb-df-op" aria-hidden="true">{{ r.op }}</span>{{ r.text }}</td>
             </tr>
             <tr v-for="t in placed.get(i) ?? []" :key="t.root.id" class="gb-df-thread">
-              <td colspan="3"><ReviewThreadView :thread="t" :busy="busy" :reply="reply" :resolve="resolve" /></td>
+              <td colspan="3"><ReviewThreadView :thread="t" :busy="busy" :reply="reply" :resolve="resolve" :brief="brief" /></td>
             </tr>
             <tr v-if="draftAt?.row === i" class="gb-df-thread">
               <td colspan="3">
@@ -85,6 +85,7 @@ const props = defineProps<{
   comment: (req: ReviewRequest) => Promise<boolean>;
   reply: (to: string, body: string) => Promise<boolean>;
   resolve: (root: string, resolved: boolean) => Promise<boolean>;
+  brief?: ((root: string) => Promise<string>) | null; // Send to Claude Code: the agent's answer, or why not
 }>();
 const emit = defineEmits<{ viewed: [on: boolean] }>();
 

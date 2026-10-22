@@ -100,8 +100,8 @@
         <template #intent>
           <CommentCard v-if="created" :data-event="created.id" :event="created" :forges="thread.forges" :mine="created.author.id === meId" :save="edit" @ref="onRef" />
         </template>
-        <template v-if="page" #review>
-          <ChangesView :id="thread.id" :thread="thread" :me-id="meId" :busy="saving" :focus="focus" :review="review" :resolve="resolve" />
+        <template v-if="page" #review="r">
+          <CycleReview :id="thread.id" :thread="thread" :me-id="meId" :busy="saving" :focus="focus" :review="review" :resolve="resolve" v-bind="r" />
         </template>
         <template #talk="{ step: n }">
           <div class="gb-seg gb-seg-sm" role="group" aria-label="Discussion">
@@ -159,7 +159,7 @@ import { inbox, inboxError, loadInbox } from '@/inbox';
 import { fieldValues, type Fields } from '@/fields';
 import { useIssue } from '@/issue';
 import { me, on } from '@/me';
-import ChangesView from '@/components/ChangesView.vue';
+import CycleReview from '@/components/CycleReview.vue';
 import CommentCard from '@/components/CommentCard.vue';
 import HistoryView from '@/components/HistoryView.vue';
 import { forStep } from '@/cycle';

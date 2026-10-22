@@ -137,6 +137,22 @@ test('each step has its own discussion', () => {
   assert.deepEqual(forStep(events, 1).map((e) => e.id), ['1', '4']);
   assert.deepEqual(forStep(events, 3).map((e) => e.id), ['2']);
   assert.deepEqual(forStep(events, 6), []);
+  // a review comment without a step is the review's
+  const line = { ...ev('5', 'comment'), review: { path: 'a.go', line: 1, side: 'new', commit: 'c' } } as IssueEvent;
+  assert.deepEqual(forStep([...events, line], 6).map((e) => e.id), ['5']);
+});
+
+test('step 6 counts its approvals and open threads', () => {
+  const review = (id: string, r: object) => ({ id, kind: 'comment', author: { id, name: id, login: id }, at: '', review: r }) as IssueEvent;
+  const events = [review('b', { path: 'a.go', line: 1, side: 'new', commit: 'c' }), review('x', { path: 'a.go', line: 9, side: 'new', commit: 'c', resolved: true })];
+  const c = at({ step: 6, name: 'Review', stage: 'in-review', risk: 'normal', note: '', evidence: { pr: pr({ number: 41 }) } });
+  assert.equal(steps(c, undefined, events)[5]!.line, '0 of 1 approval · 1 thread open');
+  const approved = [...events, review('erin', { state: 'APPROVE', commit: 'c' })];
+  assert.equal(steps({ ...c, risk: 'structural' }, undefined, approved)[5]!.line, '1 of 2 approvals · 1 thread open');
+  // merged, the server's note says what waits
+  assert.equal(steps({ ...c, note: 'merged, waits for the status qa' }, undefined, events)[5]!.line, 'merged, waits for the status qa');
+  // done, the issue's approval counts before the sync takes it to the PR
+  assert.equal(steps({ ...c, step: 7, name: 'Verify' }, undefined, approved)[5]!.line, 'erin approved');
 });
 
 test('the sign-off tiles', () => {

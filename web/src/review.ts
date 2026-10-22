@@ -1,7 +1,7 @@
 // The Changes tab's logic (docs/prd/work-unit.md, M4), kept out of the
 // components so node --test reaches it: which files open, the unified diff
 // as rows, line comments as threads, viewed marks.
-import type { FileStat, IssueEvent, Review } from './api/board.ts';
+import type { Cycle, FileStat, GatePR, IssueEvent, Review } from './api/board.ts';
 
 export type Group = 'review' | 'large' | 'generated';
 
@@ -86,6 +86,48 @@ export function lastReviewBy(events: IssueEvent[], who: string, branch?: string)
   return reviewsOf(events, branch)
     .filter((e) => e.author.id === who)
     .at(-1);
+}
+
+// approvers is who approved, each person's last verdict: the pull
+// request's reviews, then the issue's own (the step's Approve, and the PR's
+// as the sync brought them in), by login. ponytail: the forge's reviews
+// carry no time, so the issue's win; a time on GateReview if that misleads
+export function approvers(pr: GatePR | null | undefined, events: IssueEvent[] = []): string[] {
+  const last = new Map<string, boolean>();
+  for (const r of pr?.reviews ?? []) if (r.state !== 'COMMENTED' && r.state !== 'PENDING') last.set(r.login, r.state === 'APPROVED');
+  for (const e of reviewsOf(events)) if (e.review!.state !== 'COMMENT') last.set(e.author.login || e.author.name, e.review!.state === 'APPROVE');
+  return [...last].filter(([, ok]) => ok).map(([who]) => who);
+}
+
+// approvalsNeeded: one, a second human's when the risk is structural
+// (docs/prd/dev-cycle.md, per risk class).
+export const approvalsNeeded = (risk?: string) => (risk === 'structural' ? 2 : 1);
+
+const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? '' : 's'}`;
+
+// reviewLine is step 6's cell while it is current: "0 of 1 approval · 1
+// thread open".
+export function reviewLine(c: Cycle, events: IssueEvent[]): string {
+  const need = approvalsNeeded(c.risk ?? c.evidence?.risk);
+  const k = approvers(c.evidence?.pr, events).length;
+  const open = threadsOf(events).filter((t) => !t.resolved).length;
+  return `${k} of ${need} approval${need === 1 ? '' : 's'} · ${plural(open, 'thread')} open`;
+}
+
+// checksLine: "3 of 3 checks pass", '' without checks.
+export function checksLine(pr: GatePR | null | undefined): string {
+  const n = pr?.checks?.length ?? 0;
+  return n ? `${pr!.checks.filter((k) => k.state === 'success').length} of ${n} checks pass` : '';
+}
+
+// reviewGate is the review's rule as the footer says it, three sentences.
+export function reviewGate(c: Cycle): string[] {
+  const risk = c.risk ?? c.evidence?.risk ?? 'normal';
+  return [
+    `${risk.charAt(0).toUpperCase()}${risk.slice(1)}: ${approvalsNeeded(risk) === 2 ? 'a second human approval' : 'one approval'}`,
+    `The reviewer role: ${c.evidence?.people?.review || 'anyone'}.`,
+    'Merging the PR opens step 7.',
+  ];
 }
 
 // editable: a plain comment. A review comment is the pull request's: the
