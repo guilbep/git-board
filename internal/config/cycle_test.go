@@ -77,7 +77,7 @@ func TestCycleFromFile(t *testing.T) {
 		Before: []string{"backlog", "comite"}, Ready: "ready",
 		InProgress: []string{"in-progress"}, InReview: []string{"in-review"},
 		Validation: []string{"ready-for-validation", "qa", "tests-metier"}, Closing: "validated",
-		Plans: "docs/src/implementation-plans",
+		Plans:    "docs/src/implementation-plans",
 		Tests:    []string{"*_test.go", "*.test.ts", "*.spec.ts", "test_*.py", "tests/**"},
 		Criteria: []string{"Acceptance criteria", "Done when", "Expected"},
 		Kinds:    map[string]string{"bug": "failing-test", "feat": "per-criterion", "doc": "none", "chore": "none"},
