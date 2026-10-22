@@ -306,7 +306,7 @@ A branch names an issue when its first number is the issue's number, with or wit
 
 ## Cycle
 
-An issue's page shows its **step** in the development cycle under the title, "Step 7 of 7 · Verify, waits for alice to sign off qa", and, to the person whose turn it is, the next-step card. The **Cycle** view, next to Close issue, is the whole cycle: the seven steps down the left with one line of evidence each ("Plan PR #3089, waits for approval", "Sign-off 2 of 3"), the current step's workspace (at Plan: the plan file as it is written, who drafted it, Approve the plan or Ask the agent to revise, which comments on the issue; at Verify: the full run, the criteria to tick, the sign-off tiles, Sign off or Send back to in-progress), and a status bar along the bottom (the branch and its head, the PR and its checks, what waits for the forges). Under 900px the steps fold to the progress line. Opened as a page, the Cycle view takes the window's width. The step is never stored: the server computes it on every read from the status and the evidence. The status is the floor (its stage gives the first step it can be at), and the evidence moves the step within that stage, never below it. Evidence that disagrees with the status shows after the line ("plan not approved"), it never makes another step.
+An issue's page is its **step** in the development cycle (docs/prd/cycle-protocol.md). Under the title, the step bar runs through the seven steps, Intent, Risk, Plan, Tests, Code, Review and Verify: a done step reopens when clicked, a later one is locked and says why ("opens when the PR is ready for review"), and a skipped one says so. The current step is the page's main section: at Intent the description, its criteria and Move to ready; at Risk the three classes; at Plan the plan file, who drafted it, Approve the plan or Ask the agent to revise; at Code Mark ready for review; at Review the PR and its changes; at Verify the full run, the criteria to tick, the sign-off tiles, Sign off or Send back to in-progress. A status bar under it gives the branch and its head, the PR and its checks, and what waits for the forges. The right column is the discussion: **This step** (the comments posted on that step), **All** (every comment and event in order) and **History**, with the fields under it. Each step's button moves the status, as the next table says. Under 900px the step bar shows numbers only, with the current step's name, and the discussion goes under the step. The step is never stored: the server computes it on every read from the status and the evidence. The status is the floor (its stage gives the first step it can be at), and the evidence moves the step within that stage, never below it. Evidence that disagrees with the status shows after the line ("plan not approved"), it never makes another step.
 
 ```toml
 [fields]
@@ -317,10 +317,17 @@ ready = "ready"
 in-progress = ["in-progress"]
 in-review = ["in-review"]
 validation = ["ready-for-validation", "qa", "tests-metier"]
+criteria = ["Acceptance criteria", "Done when", "Expected"]
 plans = "docs/src/implementation-plans"
 risk = "pm"
 plan = "lead-dev"
 review = "reviewer"
+
+[cycle.kinds]
+bug = "failing-test"
+feat = "per-criterion"
+doc = "none"
+chore = "none"
 
 [cycle.signoffs]
 ready-for-validation = "lead-dev"
@@ -335,22 +342,40 @@ Every key has a default, so a project writes only what the guess got wrong, and 
 | `ready` | guessed | The status an issue with acceptance criteria waits at: steps 1 to 3 (intent, risk class, plan). |
 | `in-progress` | guessed | Steps 4 and 5: the failing test, then the code and the PR. |
 | `in-review` | guessed | Step 6: the review. |
-| `validation` | guessed | Step 7, one sign-off per status, in the options' order. Signing off the last one moves the issue to the closing status and closes it. |
+| `validation` | guessed | Step 7, one sign-off per status, in the options' order. Signing off the last one moves the issue to the closing status and closes it. With none, Verify happens in in-review once the PR is merged, and its sign-off closes the issue. |
+| `criteria` | `"Acceptance criteria"`, `"Done when"`, `"Expected"` | The headings a description's acceptance criteria are listed under, any heading level or a bold line, in any case, with or without a colon. The first one the description has counts. |
 | `plans` | `"docs/src/implementation-plans"` | Where plan files live: Markdown whose front matter's `issue:` names the issue (`2518`, `"#2518"`, `CO2-2518`, or its git-bug id's first 7 characters), and whose `status:` (`accepted`, `in-progress` or `delivered`) approves the plan. |
 | `tests` | `*_test.go`, `*.test.ts`, `*.spec.ts`, `test_*.py`, `tests/**` | Which changed files are tests, by path or base name; `dir/**` is everything under `dir`. |
 | `risk` | none | The role (`[roles]`) that sets the risk class. |
 | `plan` | none | The role that approves the plan. |
 | `review` | none | The role that reviews the PR. |
 | `signoffs` | none | Each validation status to the role that signs it off. |
+| `kinds` | `bug = "failing-test"`, `feat = "per-criterion"`, `doc = "none"`, `chore = "none"` | Step 4's rule by the issue's kind (the `kind:` field, or a flat label in `[branches] kinds`): a test that fails before the fix; the suites the diff touches green and each criterion naming its test; or no tests, which skips step 4. A file's entries go over the defaults. No kind, or one the table doesn't list, is `per-criterion`. |
+
+Coming on later branches, and a warning in Settings until then: `plans-in-pr`, the draft PR that holds the plan (M3), and `[cycle.tests.<suite>]` and `[cycle.checks.<check>]`, the suites step 4 runs and the checks that gate Mark ready for review (M4).
+
+Each step's button moves the status, through the same edit as the status field:
+
+| Button | Who | Moves the status to |
+| --- | --- | --- |
+| Move to ready | the author, once the description lists a criterion | `ready` |
+| Approve the plan | the `plan` role | the first `in-progress` |
+| Start work | the assignee, at low risk or once the plan is approved | the first `in-progress` |
+| Mark ready for review | the assignee, with a test, or at once when step 4 is skipped | the first `in-review` |
+| Start verification | the assignee, once the PR is merged | the first `validation` |
+| Sign off | the status's role | the next `validation`, then the closing status |
+
+A card dragged on the board still moves the status: the step follows it, with a note when the evidence disagrees.
 
 The step reads:
 - **The status** (the `status` field).
-- **The acceptance criteria:** the list under an "Acceptance criteria" heading, or a bold line, in the description. With none, the issue is at step 1.
+- **The acceptance criteria:** the list under the first of the `criteria` headings the description has. With none, the issue is at step 1.
 - **The risk class:** the `risk` field, `low`, `normal` or `structural`. Low skips step 3.
 - **The plan file**, read from the evidence branch, then the `plan/` branch, then the base.
 - **The tests:** the files the evidence branch changed (`git diff base...branch`) that match `tests`. The evidence branch is the newest branch naming the issue that isn't a `plan/` branch.
 - **The PR,** read from GitHub only when the issue is at in-review or later (or structural, for the plan branch's PR), at most every 5 minutes per branch. When GitHub can't be reached, the step still computes, with the last PR it read.
-- **The comments with metadata** that the card writes.
+- **The kind**, for step 4's rule.
+- **The comments with metadata** that the step writes. Each carries its step as `cycle:step` (`1` to `7`), as does a comment posted on a step's discussion; a comment without it is step 1's.
 
 The card writes:
 - **Set the risk:** a field edit.
