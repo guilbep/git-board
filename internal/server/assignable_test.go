@@ -148,8 +148,8 @@ func TestForgeSyncSetsTheAssigneesMode(t *testing.T) {
 
 	call(t, "POST", ts.URL+"/api/forges/sync", map[string]any{"dry_run": true}, nil)
 	st := waitAssignable(t, ts, "gl")
-	if previewed.Assignees != "labels" {
-		t.Errorf("the check synced with assignees %q, want labels: it previews the new mode", previewed.Assignees)
+	if previewed.Config[core.ConfigKeyAssignees] != "labels" {
+		t.Errorf("the check synced with assignees %q, want labels: it previews the new mode", previewed.Config[core.ConfigKeyAssignees])
 	}
 	if want := "assignees: gl switches to labels; the next sync pulls every issue again"; st.Job.State != "done" || !slices.Contains(st.Job.Bridges["gl"].Lines, want) {
 		t.Fatalf("check %+v, lines %q: want %q", st.Job, st.Job.Bridges["gl"].Lines, want)
