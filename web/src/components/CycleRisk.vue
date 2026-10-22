@@ -67,4 +67,5 @@ const role = computed(() => props.cycle.stages.roles?.risk?.replace(/-/g, ' '));
 .gb-risk-opt b { font-size: 1.125rem; }
 .gb-risk-ai { display: grid; gap: .25rem; padding: .875rem 1rem; background: var(--bg-subtle); font-size: .875rem; }
 .gb-risk-ai p { margin: 0; }
+.gb-risk-ai button { justify-self: start; }
 </style>

@@ -11,7 +11,7 @@
       <input :id="`crit-${i}`" type="checkbox" :checked="!!checks[i]" :disabled="!current || !!checks[i] || busy" @change="emit('check', i)" />
       <label :for="`crit-${i}`">
         <b>{{ c }}</b>
-        <span v-if="checks[i]" class="gb-note">{{ checks[i]!.by }} · {{ when(checks[i]!.at, true) }}<template v-if="checks[i]!.commit"> · at <span class="gb-mono">{{ checks[i]!.commit!.slice(0, 7) }}</span>{{ checks[i]!.commit === merge ? ', the merge' : '' }}</template></span>
+        <span v-if="checks[i]" class="gb-note">{{ [checks[i]!.by, when(checks[i]!.at, true)].filter(Boolean).join(' · ') }}<template v-if="checks[i]!.commit"> · at <span class="gb-mono">{{ checks[i]!.commit!.slice(0, 7) }}</span>{{ checks[i]!.commit === merge ? ', the merge' : '' }}</template></span>
         <span v-else class="gb-note">Not checked yet</span>
       </label>
     </li>
@@ -22,7 +22,7 @@
     <li>
       <template v-if="run">
         <span>Run at <span class="gb-mono">{{ run.commit?.slice(0, 7) || 'no commit' }}</span>{{ run.merge ? ', the merged head' : '' }}</span>
-        <span class="gb-note">{{ run.by }}, {{ when(run.at, true) }}<template v-if="merge && !run.merge"> · none at the merge <span class="gb-mono">{{ merge.slice(0, 7) }}</span> yet</template></span>
+        <span class="gb-note">{{ [run.by, when(run.at, true)].filter(Boolean).join(', ') }}<template v-if="merge && !run.merge"> · none at the merge <span class="gb-mono">{{ merge.slice(0, 7) }}</span> yet</template></span>
         <button v-if="runHtml" type="button" class="gb-linkbtn" @click="open = !open">{{ open ? 'Fold the output' : 'Read the output' }}</button>
       </template>
       <template v-else>
