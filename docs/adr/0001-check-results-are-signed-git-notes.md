@@ -316,24 +316,35 @@ results.
 
 ## Left open
 
-The cycle protocol's M4 brief carries these, and its plan settles them.
+The cycle protocol's M4 brief carried these. M4 settled the ones marked
+so; docs/configuration.md › Tests and checks has the details. The decision
+above is unchanged.
 
-- The toml's shape, including:
-  - the signers file's path;
-  - a check's version commands and variables;
-  - required checks beyond the default;
-  - the platforms and tools a reviewer accepts;
-  - which checks only a runner can prove;
-  - the land's sample rate.
-- How a clone's writer is named.
+- The toml's shape:
+  - the signers file's path: settled by M4, `[cycle] signers`, default
+    `.allowed_signers`, read at the base branch;
+  - a check's version commands and variables: settled by M4, a suite's
+    `tools` (their output's hash is `tools=`) and `env` (part of the key);
+  - required checks beyond the default, the platforms and tools a reviewer
+    accepts, and which checks only a runner can prove: settled by M4 as
+    none. Every `[cycle.checks.*]` is required, any platform counts, and
+    `where = "ci"` marks the forge's suites, which never gate. A key comes
+    with a second platform or a runner;
+  - the land's sample rate: open, with the land's re-run (wtx).
+- How a clone's writer is named: settled by M4, `git config
+  git-board.writer`, set on the first run to `<user.name>-<host>-<4 hex>`.
 - Per-test results in the line (in-toto `failedTests`), so the bug rule
-  shows which test failed.
-- The verify script, and git-board's verify command.
-- The UI: step 4's runs, step 7's run at the merged head, and "not proven"
-  with its reason.
-- Mirroring a proof to the forge as a commit status, if anyone needs one.
+  shows which test failed: open.
+- The verify script, and git-board's verify command: settled by M4,
+  `git board verify [commit]`, the server's gate in any clone.
+- The UI: step 4's runs and "not proven" with its reason are settled by
+  M4. Step 7's run at the merged head is open (M6).
+- Mirroring a proof to the forge as a commit status, if anyone needs one:
+  open.
 - The merge queue: `wtx land` moves main only to proven commits (Graydon
-  Hoare's "not rocket science" rule).
+  Hoare's "not rocket science" rule): open (wtx).
+- Pushing and fetching `refs/notes/ci/*` with git-board's sync: open. The
+  reader already takes `refs/notes/remotes/*/ci/*`.
 
 ## Evidence
 

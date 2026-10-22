@@ -58,6 +58,7 @@ and only for that feature:
 |---|---|
 | `lint --create-labels`, `bridge` (GitHub Projects) | `brew install gh`, then `gh auth login` |
 | Start an agent (Cycle, Work) | [wtx](https://github.com/EPFL-ENAC/wtx) |
+| Run step 4's tests and checks, `verify` | `ssh-keygen` (macOS has it), `git config user.signingkey` naming your SSH key |
 | `release` and `deploy`, with `[release] images` | Docker Desktop (buildx), `brew install crane trivy` |
 | `release` and `deploy`, with `[release] chart` | `brew install helm` (3.8+) |
 | `release`, with `[release] binaries` (publishes the GitHub release) | `brew install gh`, then `gh auth login` |
@@ -223,6 +224,12 @@ git-board branch <issue-id>
 
 # report label/config drift, read-only (see "Linting" below)
 git-board lint
+
+# whether a commit's checks are proven: the signed results in
+# refs/notes/ci/*, against the base branch's [cycle.checks] (exit 1 if not;
+# docs/configuration.md, Tests and checks)
+git-board verify
+git-board verify fix/2518-retry --base origin/main
 
 # git bug pull/push on one or more git-bug repos (defaults to cwd)
 git-board sync

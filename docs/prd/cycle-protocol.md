@@ -62,6 +62,8 @@ in-review = ["in-review"]
 validation = []                  # none: Verify happens in in-review once merged
 criteria = ["Acceptance criteria", "Done when", "Expected"]  # M1: headings, any level or bold, any case
 plans = "docs/src/implementation-plans"
+test-files = ["*_test.go", "*.test.ts"]  # M1's test-file patterns, named `tests` until M4
+signers = ".allowed_signers"     # M4: the SSH keys whose results count, read from the base branch
 plans-in-pr = true               # M3: the draft PR holds the plan
 risk = "lead-dev"                # the role holding each gate; left out: anyone
 plan = "lead-dev"
@@ -77,8 +79,8 @@ chore = "none"
 qa = "qa"
 
 [cycle.tests.go]                 # M4: a suite and the files it covers
-run = ["go", "test", "./..."]    # an argv, from this file only, never from the page
-files = ["**/*.go"]
+run = ["go", "test", "./..."]    # an argv, from the base branch's file only, never from the page
+files = ["**/*.go", "go.mod", "go.sum"]  # everything it reads: the result's content key
 where = "worktree"               # or "ci": e2e, Lighthouse, performance
 
 [cycle.checks.lint]              # M4: always local, gates Mark ready for review
