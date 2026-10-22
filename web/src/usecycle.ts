@@ -35,8 +35,8 @@ export function useCycle(props: { id: string; labels: string[]; description: str
       changed();
       return true;
     } catch (e) {
-      // a sign-off without a run at the head takes a reason instead
-      if (action === 'signoff' && e instanceof ApiError && e.status === 400 && e.message.startsWith('no run')) needsWhy.value = true;
+      // a sign-off without a run, or the checks' proof at the merge, takes a reason instead
+      if (action === 'signoff' && e instanceof ApiError && e.status === 400 && /^(no run|not proven)/.test(e.message)) needsWhy.value = true;
       error.value = message(e);
       return false;
     } finally {
@@ -71,10 +71,16 @@ export function useCycle(props: { id: string; labels: string[]; description: str
     return ok;
   }
 
+  // a PR written on GitHub (opened, edited): the step is read again, the
+  // thread's labels don't move
+  async function pull(fn: () => Promise<unknown>) {
+    if (await write(fn)) await load();
+  }
+
   async function press(b: CardButton) {
     if (patches.includes(b.action)) return patch(b.body as Record<string, string>);
     return act(b.action, b.body);
   }
 
-  return { cycle, error, busy, needsWhy, has, act, patch, edit, press };
+  return { cycle, error, busy, needsWhy, has, act, patch, edit, press, pull };
 }

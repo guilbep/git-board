@@ -665,6 +665,7 @@ export interface GatePR {
   state: 'OPEN' | 'MERGED' | 'CLOSED';
   draft: boolean;
   title: string;
+  body?: string; // the description, Markdown
   base: string;
   head: string; // its head commit
   merge_commit?: string; // when merged
@@ -749,6 +750,7 @@ export interface Cycle {
   evidence: CycleEvidence;
   stages: CycleStages;
   pr_checked_at?: string;
+  ai?: boolean; // an AI address is set: step 2 can ask it for the class
 }
 
 // the cycle's stages: the project file's [cycle], the rest guessed from the status names
@@ -760,9 +762,11 @@ export interface CycleStages {
   validation: string[];
   closing: string;
   plans?: string;
+  plans_in_pr?: boolean; // the draft PR opened at step 3 holds the plan
   criteria: string[]; // the headings the criteria are read under
   kinds: Record<string, string>; // step 4's rule by kind: failing-test, per-criterion, none
   guessed: boolean;
+  roles?: Record<string, string>; // the role holding each gate: risk, plan, review, signoff:<status>
 }
 
 // The Work page (internal/work, internal/server/work.go): every open
@@ -871,6 +875,7 @@ export interface StepTests {
   suites: SuiteRow[];
   checks: SuiteRow[];
   gate: { proven: boolean; reason?: string; checks: CheckStatus[] };
+  merged?: { proven: boolean; reason?: string; checks: CheckStatus[] }; // the gate at the merge commit, once merged
   running: string[];
   error?: string; // the last run's: a check that couldn't start
 }
@@ -915,6 +920,15 @@ export function openPull(id: string, branch: string): Promise<GatePR> {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ branch }),
+  });
+}
+
+// editPull sets the title and description of one of the issue's PRs
+export function editPull(id: string, number: number, title: string, body: string): Promise<GatePR> {
+  return request(`${issuePath(id)}/pulls/${number}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title, body }),
   });
 }
 

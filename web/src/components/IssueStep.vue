@@ -35,11 +35,39 @@
         @approve="approve"
         @revise="revise"
       />
+      <CycleRisk
+        v-else-if="cycle && n === 2 && (current || risk)"
+        :cycle="cycle"
+        :gate="row?.gate ?? ''"
+        :current="current"
+        :busy="busy"
+        :can="has('set-risk')"
+        :events="events"
+        :risk-by="riskBy"
+        @set="(r) => patch({ risk: r })"
+        @suggest="act('suggest-risk')"
+      />
+      <CycleCode
+        v-else-if="cycle && n === 5 && (current || cycle.evidence.branch)"
+        :id="id"
+        :cycle="cycle"
+        :gate="row?.gate ?? ''"
+        :current="current"
+        :busy="busy"
+        :can="has('ready-for-review')"
+        :agent="agent"
+        @ready="card && pressed(card.buttons[0]!)"
+        @open="(branch) => pull(() => openPull(id, branch))"
+        @edit="(num, title, body) => pull(() => editPull(id, num, title, body))"
+      />
       <CycleVerify
-        v-else-if="cycle && n === 7 && current"
+        v-else-if="cycle && n === 7 && (current || cycle.done)"
+        :id="id"
         :cycle="cycle"
         :status="status"
         :events="events"
+        :current="current"
+        :forge="forge"
         :busy="busy"
         :can="has('signoff')"
         :needs-why="needsWhy"
@@ -108,13 +136,15 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
-import { agentAction, getIssueAgent, type Forge, type IssueAgent, type IssueEvent } from '@/api/board';
+import { agentAction, editPull, getIssueAgent, openPull, type Forge, type IssueAgent, type IssueEvent } from '@/api/board';
 import { cardFor, steps, statusBar, turn, withCriteria, type CardButton } from '@/cycle';
 import { message } from '@/issue';
 import { agentButton, agentWords } from '@/worktrees';
 import { useCycle } from '@/usecycle';
+import CycleCode from '@/components/CycleCode.vue';
 import CycleIntent from '@/components/CycleIntent.vue';
 import CyclePlan from '@/components/CyclePlan.vue';
+import CycleRisk from '@/components/CycleRisk.vue';
 import CycleTests from '@/components/CycleTests.vue';
 import CycleVerify from '@/components/CycleVerify.vue';
 import GbIcon from '@/components/GbIcon.vue';
@@ -123,12 +153,13 @@ const props = defineProps<{ id: string; status: string; labels: string[]; events
 const emit = defineEmits<{ changed: []; comment: [body: string, step: number] }>();
 
 const description = computed(() => props.events.find((e) => e.kind === 'created'));
-const { cycle, error, busy, needsWhy, has, act, patch, edit, press } = useCycle(
+const { cycle, error, busy, needsWhy, has, act, patch, edit, press, pull } = useCycle(
   { get id() { return props.id; }, get labels() { return props.labels; }, get description() { return description.value?.body ?? ''; } },
   () => emit('changed'),
 );
 const card = computed(() => (cycle.value ? cardFor(cycle.value, props.status) : null));
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+const forge = computed(() => props.forges?.filter((f) => !f.gone && f.number).map((f) => `${f.name} #${f.number}`)[0]);
 
 // who set the risk: the last label change adding one, from the thread
 const riskBy = computed(() => props.events.findLast((e) => e.kind === 'labels' && e.added?.some((l) => l.startsWith('risk:')))?.author.name);

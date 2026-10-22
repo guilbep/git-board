@@ -102,5 +102,4 @@ function send() {
 <style scoped>
 .gb-plan-meta { display: flex; flex-wrap: wrap; gap: .25rem 1rem; margin: 0; font-size: .8125rem; color: var(--fg-muted); }
 .gb-revise { display: grid; gap: .5rem; }
-.gb-plan-agent { margin: 0; padding: .375rem .75rem; border-radius: 4px; background: var(--bg-subtle); font-size: .8125rem; color: var(--fg-muted); }
 </style>

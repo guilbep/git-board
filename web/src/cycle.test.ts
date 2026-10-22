@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { Cycle, GatePR, IssueEvent } from './api/board.ts';
-import { cardFor, forStep, steps, statusBar, tiles, turn, withCriteria } from './cycle.ts';
+import { cardFor, criteriaLeft, forStep, mergedRun, riskWords, signoffLine, steps, statusBar, suggestion, tiles, turn, withCriteria } from './cycle.ts';
 import { on } from './when.ts';
 
 const at = (c: Partial<Cycle>): Cycle => ({
@@ -131,6 +131,23 @@ test('the step bar at verify', () => {
   assert.deepEqual(steps(at({ done: true, name: 'Done', evidence: {} })).map((r) => r.state), Array(7).fill('done'));
 });
 
+test('verify: the run at the merge, the criteria left, what the sign-off does', () => {
+  const runs = [{ by: 'dan', commit: 'aaa', at: '2026-10-18T10:00:00Z' }, { by: 'erin', commit: 'bbb', at: '2026-10-18T11:00:00Z' }];
+  assert.equal(mergedRun(at({})), null);
+  assert.deepEqual(mergedRun(at({ evidence: { runs } })), { ...runs[1], merge: false });
+  assert.deepEqual(mergedRun(at({ evidence: { runs, pr: pr({ number: 7, state: 'MERGED', merge_commit: 'aaa' }) } })), { ...runs[0], merge: true });
+  assert.deepEqual(mergedRun(at({ evidence: { runs, pr: pr({ number: 7, state: 'OPEN', merge_commit: 'aaa' }) } })), { ...runs[1], merge: false });
+
+  assert.equal(criteriaLeft(at({ evidence: { criteria: ['a', 'b', 'c'], checks: [{ index: 1, by: 'erin', at: '' }] } })), 2);
+  assert.equal(criteriaLeft(at({})), 0);
+
+  const v = (validation: string[], closing = 'validated') => at({ stages: { ...at({}).stages, validation, closing } });
+  assert.equal(signoffLine(v(['ready-for-validation', 'qa']), 'ready-for-validation'), 'The sign-off moves the issue to qa.');
+  assert.equal(signoffLine(v(['qa']), 'qa', 'GitHub #37'), 'The sign-off closes the issue as validated, and GitHub #37 with it.');
+  assert.equal(signoffLine(v([], 'done'), 'in-review'), 'The sign-off closes the issue as done.');
+  assert.equal(signoffLine(v([], ''), 'in-review'), 'The sign-off is written on the issue; its status stays.');
+});
+
 test('each step has its own discussion', () => {
   const ev = (id: string, kind: IssueEvent['kind'], step?: string) => ({ id, kind, meta: step ? { 'cycle:step': step } : undefined }) as unknown as IssueEvent;
   const events = [ev('c', 'created'), ev('1', 'comment'), ev('2', 'comment', '3'), ev('3', 'labels'), ev('4', 'comment', '1')];
@@ -185,4 +202,15 @@ test('the draft PR that holds the plan, on step 3\'s line', () => {
   assert.equal(done[2]?.line, 'docs/plans/41-x.md · draft PR #41');
   // ready for review: no longer a draft
   assert.equal(steps(at({ step: 4, name: 'Tests', evidence: { plan, pr: pr({ number: 41 }) } }))[2]?.line, 'docs/plans/41-x.md');
+});
+
+test('the AI\'s newest suggestion, and what a class opens', () => {
+  const ev = (id: string, meta: Record<string, string>, body = ''): IssueEvent => ({ kind: 'comment', id, author: { id: 'bot', name: 'bot' }, at: '', body, meta });
+  assert.equal(suggestion([ev('a', { 'cycle:step': '2' })]), null);
+  assert.deepEqual(suggestion([
+    ev('a', { 'cycle:step': '2', 'ai:risk': 'low' }, 'Suggested: **low**\n\nA copy.'),
+    ev('b', { 'cycle:step': '2', 'ai:risk': 'structural' }, 'Suggested: **structural**\n\nThe export changes a schema.'),
+  ]), { risk: 'structural', why: 'The export changes a schema.' });
+  assert.equal(riskWords('low'), 'low skips step 3, Start work opens step 4');
+  assert.equal(riskWords('normal'), 'normal opens step 3');
 });

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -404,5 +405,100 @@ func TestCycleSignoffClosesFromReview(t *testing.T) {
 	}
 	if th, _ := lastEvent(t, s.b, id); th.Status != "closed" || !slices.Contains(th.Labels, "status:done") {
 		t.Errorf("status %s, labels %v", th.Status, th.Labels)
+	}
+}
+
+// fakeLLM is an OpenAI-compatible chat API that answers answer, set as
+// the env's (AI on). Serial: it sets the environment.
+func fakeLLM(t *testing.T, answer string) *[]string {
+	t.Helper()
+	var asked []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var in struct {
+			Messages []struct{ Content string } `json:"messages"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&in)
+		asked = append(asked, in.Messages[len(in.Messages)-1].Content)
+		_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": map[string]string{"content": answer}}}})
+	}))
+	t.Cleanup(srv.Close)
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("LLM_BASE_URL", srv.URL)
+	t.Setenv("LLM_MODEL", "test-model")
+	t.Setenv("LLM_API_KEY", "")
+	return &asked
+}
+
+func TestCycleSuggestRisk(t *testing.T) {
+	asked := fakeLLM(t, "Structural\nThe export changes a schema.")
+	b := gitbugiotest.New(t)
+	id, err := b.NewIssue("Export CSV", twoCriteria, []string{"status:ready"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	url := newTestServer(t, b, cycleConfig(nil, config.Cycle{})).URL + "/api/issues/" + id[:8]
+	var c struct {
+		cycleAnswer
+		AI bool `json:"ai"`
+	}
+	getJSON(t, url+"/cycle", &c)
+	if c.Step != 2 || !c.AI {
+		t.Fatalf("at ready, AI on: %+v", c)
+	}
+	if code, out := post(t, url+"/cycle/suggest-risk", map[string]any{}); code != http.StatusOK {
+		t.Fatalf("suggest-risk: %d %s", code, out)
+	}
+	if len(*asked) != 1 || !strings.Contains((*asked)[0], "Export CSV") || !strings.Contains((*asked)[0], "Keeps the filters") {
+		t.Errorf("the model was sent %q, want the title and the description", *asked)
+	}
+	th, e := lastEvent(t, b, id)
+	if e.Body != "Suggested: **structural**\n\nThe export changes a schema." || e.Meta["ai:risk"] != "structural" || e.Meta["ai:model"] != "test-model" || e.Meta["cycle:step"] != "2" {
+		t.Errorf("the comment: %q %v", e.Body, e.Meta)
+	}
+	if slices.ContainsFunc(th.Labels, func(l string) bool { return strings.HasPrefix(l, "risk:") }) {
+		t.Errorf("the AI set the risk: %v", th.Labels)
+	}
+	if code := call(t, "PATCH", url, map[string]string{"risk": "low"}, nil); code != http.StatusOK {
+		t.Fatalf("PATCH risk: %d", code)
+	}
+	if code, out := post(t, url+"/cycle/suggest-risk", map[string]any{}); code != http.StatusBadRequest || !strings.Contains(out, "not at Risk") {
+		t.Errorf("past step 2: %d %s", code, out)
+	}
+}
+
+func TestCycleSuggestRiskRefused(t *testing.T) {
+	fakeLLM(t, "I would say it depends.")
+	b := gitbugiotest.New(t)
+	id, err := b.NewIssue("Export CSV", twoCriteria, []string{"status:ready"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	url := newTestServer(t, b, cycleConfig(nil, config.Cycle{})).URL + "/api/issues/" + id[:8] + "/cycle/suggest-risk"
+	before, _ := lastEvent(t, b, id)
+	if code, out := post(t, url, map[string]any{}); code != http.StatusBadGateway || !strings.Contains(out, "no class") {
+		t.Errorf("an answer without a class: %d %s", code, out)
+	}
+	t.Setenv("LLM_BASE_URL", "")
+	if code, out := post(t, url, map[string]any{}); code != http.StatusBadRequest || !strings.Contains(out, "AI is off") {
+		t.Errorf("AI off: %d %s", code, out)
+	}
+	if th, _ := lastEvent(t, b, id); len(th.Events) != len(before.Events) {
+		t.Errorf("a refused suggestion wrote %d events", len(th.Events)-len(before.Events))
+	}
+}
+
+func TestRiskOf(t *testing.T) {
+	t.Parallel()
+	for answer, want := range map[string][2]string{
+		"normal\nOne area.":       {"normal", "One area."},
+		"**Low**. A copy change.": {"low", "A copy change."},
+		"Structural: a schema.":   {"structural", "a schema."},
+		"  low":                   {"low", ""},
+		"Lowish, it seems.":       {"", ""},
+		"It is normal, I think.":  {"", ""},
+	} {
+		if c, why := riskOf(answer); c != want[0] || why != want[1] {
+			t.Errorf("riskOf(%q) = %q, %q; want %q", answer, c, why, want)
+		}
 	}
 }

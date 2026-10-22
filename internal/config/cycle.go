@@ -83,6 +83,9 @@ type Stages struct {
 	Kinds      map[string]string `json:"kinds"`
 	// Guessed: a stage came from the status names, not the file.
 	Guessed bool `json:"guessed"`
+	// Roles is the role holding each gate, keyed as the evidence's people
+	// are: risk, plan, review, signoff:<status>. The page names it.
+	Roles map[string]string `json:"roles,omitempty"`
 }
 
 var defaultTests = []string{"*_test.go", "*.test.ts", "*.spec.ts", "test_*.py", "tests/**"}
@@ -195,6 +198,14 @@ func (c *Config) Stages() Stages {
 	// the file's kinds over the defaults: a project names only what differs
 	s.Kinds = maps.Clone(defaultKinds)
 	maps.Copy(s.Kinds, k.Kinds)
+	roles := map[string]string{"risk": k.Risk, "plan": k.Plan, "review": k.Review}
+	for status, role := range k.Signoffs {
+		roles["signoff:"+status] = role
+	}
+	maps.DeleteFunc(roles, func(_, role string) bool { return role == "" })
+	if len(roles) > 0 {
+		s.Roles = roles
+	}
 	return s
 }
 

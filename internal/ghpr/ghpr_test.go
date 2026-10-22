@@ -74,7 +74,7 @@ func co2PR(t *testing.T) *PR {
 
 func TestFind(t *testing.T) {
 	p := co2PR(t)
-	if p.Number != 3082 || p.State != "OPEN" || p.Base != "dev" || p.Head != "c1ee2d98598eb5a0dadeb8a67a2fee1e3593eae3" || p.Author != "dependabot" {
+	if p.Number != 3082 || p.State != "OPEN" || p.Body != "Bumps fastapi[standard] from 0.142.4 to 0.143.0." || p.Base != "dev" || p.Head != "c1ee2d98598eb5a0dadeb8a67a2fee1e3593eae3" || p.Author != "dependabot" {
 		t.Errorf("PR %+v", p)
 	}
 	if p.Decision != "REVIEW_REQUIRED" || p.Mergeable != "MERGEABLE" || p.MergeState != "BLOCKED" {
@@ -305,6 +305,20 @@ func TestMerge(t *testing.T) {
 	refuse = true
 	if err := c.Merge(context.Background(), "o/r", 9, "abc"); err == nil || !strings.Contains(err.Error(), "Head branch was modified. Review and try the merge again.") {
 		t.Errorf("a refused merge: %v", err)
+	}
+}
+
+func TestEdit(t *testing.T) {
+	t.Parallel()
+	c := fake(t, func(w http.ResponseWriter, r *http.Request) {
+		data, _ := io.ReadAll(r.Body)
+		if r.Method != http.MethodPatch || r.URL.Path != "/repos/o/r/pulls/9" || string(data) != `{"title":"New title","body":"Closes #3"}` {
+			t.Errorf("%s %s %s", r.Method, r.URL.Path, data)
+		}
+		_, _ = io.WriteString(w, `{"number":9}`)
+	})
+	if err := c.Edit(context.Background(), "o/r", 9, "New title", "Closes #3"); err != nil {
+		t.Fatal(err)
 	}
 }
 

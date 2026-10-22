@@ -43,15 +43,16 @@ type suiteRow struct {
 }
 
 type stepTests struct {
-	Rule       string           `json:"rule"` // [cycle.kinds]: failing-test, per-criterion, none
-	Base       string           `json:"base"`
-	Head       string           `json:"head,omitempty"`
-	TestCommit string           `json:"test_commit,omitempty"` // the bug rule's: the commit adding the test
-	Suites     []suiteRow       `json:"suites"`
-	Checks     []suiteRow       `json:"checks"`
-	Gate       proof.GateResult `json:"gate"`
-	Running    []string         `json:"running"`
-	Error      string           `json:"error,omitempty"`
+	Rule       string            `json:"rule"` // [cycle.kinds]: failing-test, per-criterion, none
+	Base       string            `json:"base"`
+	Head       string            `json:"head,omitempty"`
+	TestCommit string            `json:"test_commit,omitempty"` // the bug rule's: the commit adding the test
+	Suites     []suiteRow        `json:"suites"`
+	Checks     []suiteRow        `json:"checks"`
+	Gate       proof.GateResult  `json:"gate"`
+	Merged     *proof.GateResult `json:"merged,omitempty"` // the gate at the merge commit, once the PR is merged (step 7)
+	Running    []string          `json:"running"`
+	Error      string            `json:"error,omitempty"`
 }
 
 // GET /api/issues/{id}/tests: step 4's suites and checks at the branch's
@@ -112,6 +113,21 @@ func (s *apiServer) handleStepTests(w http.ResponseWriter, r *http.Request) {
 	}
 	if err == nil && ev.Head != "" {
 		res.Gate, err = proof.Gate(r.Context(), s.root, ev.Base, ev.Head)
+	}
+	if err == nil && ev.PR != nil && ev.PR.State == "MERGED" && ev.PR.MergeCommit != "" {
+		// the merge commit not fetched yet: the declared checks not proven,
+		// the reason says why (Gate errs only with checks declared; the
+		// sign-off reads it the same way)
+		g, gerr := proof.Gate(r.Context(), s.root, ev.Base, ev.PR.MergeCommit)
+		if gerr != nil {
+			g = proof.GateResult{Checks: []proof.CheckStatus{}, Reason: gerr.Error()}
+			for _, c := range res.Checks {
+				if c.Where != "ci" {
+					g.Checks = append(g.Checks, proof.CheckStatus{Name: c.Name})
+				}
+			}
+		}
+		res.Merged = &g
 	}
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)

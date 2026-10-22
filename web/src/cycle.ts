@@ -131,6 +131,17 @@ export function forStep(events: IssueEvent[], n: number): IssueEvent[] {
   return events.filter((e) => e.kind === 'comment' && (e.meta?.['cycle:step'] ?? (e.review ? '6' : '1')) === String(n));
 }
 
+// suggestion is the AI's newest class for step 2 (internal/server/cycle.go
+// suggestRisk): the class, and the sentence under "Suggested: **class**".
+export function suggestion(events: IssueEvent[]): { risk: string; why: string } | null {
+  const e = events.findLast((e) => e.kind === 'comment' && e.meta?.['ai:risk']);
+  if (!e?.meta) return null;
+  return { risk: e.meta['ai:risk'] ?? '', why: (e.body ?? '').replace(/^Suggested:.*\n*/, '').trim() };
+}
+
+// riskWords is what a class does next, for step 2's gate (C2)
+export const riskWords = (risk: string) => (risk === 'low' ? 'low skips step 3, Start work opens step 4' : `${risk} opens step 3`);
+
 // The headings and items internal/cycle/cycle.go's Criteria reads.
 const typedItem = /^([-*+]|\d+[.)])\s+|^\[[ xX]\]\s*/;
 const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -173,6 +184,30 @@ export function tiles(c: Cycle, status: string): Tile[] {
 // statusBar reads what the side already knows: the branch, the PR and its
 // checks, what waits for the forges (null: no forge). Nothing new is fetched.
 // The step adds the worktree and the agent (getIssueAgent).
+// the run step 7 reads: the newest at the merge commit once the PR is merged,
+// else the newest; merge says it is at the merge commit
+export function mergedRun(c: Cycle) {
+  const runs = c.evidence?.runs ?? [];
+  const pr = c.evidence?.pr;
+  const merge = pr?.state === 'MERGED' ? pr.merge_commit : undefined;
+  const run = (merge && runs.findLast((r) => r.commit === merge)) || runs.at(-1);
+  return run ? { ...run, merge: !!merge && run.commit === merge } : null;
+}
+
+// the acceptance criteria nobody has checked yet
+export const criteriaLeft = (c: Cycle) => (c.evidence?.criteria ?? []).filter((_, i) => !c.evidence?.checks?.some((k) => k.index === i)).length;
+
+// what signing off does, as the server's signedOff: the next validation
+// status, or the closing one, which closes the issue (and its forge copy)
+export function signoffLine(c: Cycle, status: string, forge?: string): string {
+  const v = c.stages?.validation ?? [];
+  const i = v.indexOf(status);
+  const next = i + 1 < v.length ? v[i + 1] : c.stages?.closing;
+  if (!next) return 'The sign-off is written on the issue; its status stays.';
+  if (next !== c.stages.closing) return `The sign-off moves the issue to ${next}.`;
+  return `The sign-off closes the issue as ${next}${forge ? `, and ${forge} with it` : ''}.`;
+}
+
 export function statusBar(c: Cycle, waiting: number | null): string[] {
   const e = c.evidence ?? {};
   const out = [e.branch ? e.branch + (e.head ? ` at ${short(e.head)}` : '') : 'no branch yet'];

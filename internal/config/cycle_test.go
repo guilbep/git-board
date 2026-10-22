@@ -81,6 +81,8 @@ func TestCycleFromFile(t *testing.T) {
 		TestFiles: []string{"*_test.go", "*.test.ts", "*.spec.ts", "test_*.py", "tests/**"},
 		Criteria:  []string{"Acceptance criteria", "Done when", "Expected"},
 		Kinds:     map[string]string{"bug": "failing-test", "feat": "per-criterion", "doc": "none", "chore": "none"},
+		Roles: map[string]string{"risk": "pm", "plan": "lead-dev", "review": "reviewer",
+			"signoff:ready-for-validation": "lead-dev", "signoff:qa": "pm", "signoff:tests-metier": "metier"},
 	}
 	if !reflect.DeepEqual(s, want) {
 		t.Errorf("Stages()\n got %+v\nwant %+v", s, want)

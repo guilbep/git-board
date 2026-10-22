@@ -58,6 +58,8 @@ func newFakeGitHub(t *testing.T) *fakeGitHub {
 		case "POST /repos/o/r/pulls":
 			w.WriteHeader(http.StatusCreated)
 			_, _ = io.WriteString(w, `{"number": 9, "html_url": "https://github.com/o/r/pull/9"}`)
+		case "PATCH /repos/o/r/pulls/3082":
+			_, _ = io.WriteString(w, `{"number":3082}`)
 		case "PUT /repos/o/r/pulls/3082/merge":
 			if refuse {
 				w.WriteHeader(http.StatusConflict)
@@ -348,4 +350,34 @@ func commentReview(t *testing.T, s *apiServer, issue, id string) *gitbugio.Revie
 		t.Fatal(err)
 	}
 	return r
+}
+
+// An edit writes the title and description of the issue's own PR, and no
+// other: the number is found again on GitHub first.
+func TestEditPull(t *testing.T) {
+	s, gh, id := gateRepo(t, "https://github.com/o/r.git", true)
+	ts := serve(t, s)
+	var pr struct {
+		Title string `json:"title"`
+		Body  string `json:"body"`
+	}
+	edit := map[string]string{"title": "Fix the crash on save", "body": "Closes #2518"}
+	if code := call(t, "PATCH", ts.URL+"/api/issues/"+id[:8]+"/pulls/3082", edit, &pr); code != http.StatusOK || pr.Title != edit["title"] || pr.Body != edit["body"] {
+		t.Fatalf("edit: %d %+v", code, pr)
+	}
+	if got := gh.body("PATCH /repos/o/r/pulls/3082"); got != `{"title":"Fix the crash on save","body":"Closes #2518"}` {
+		t.Errorf("GitHub was sent %s", got)
+	}
+	if cached, _ := s.pulls.PR("fix/2518-x"); cached == nil || cached.Title != edit["title"] {
+		t.Errorf("the cycle's copy: %+v", cached)
+	}
+	if code := call(t, "PATCH", ts.URL+"/api/issues/"+id[:8]+"/pulls/77", edit, nil); code != http.StatusBadRequest {
+		t.Errorf("another PR: %d, want 400", code)
+	}
+	if code := call(t, "PATCH", ts.URL+"/api/issues/"+id[:8]+"/pulls/3082", map[string]string{"title": " "}, nil); code != http.StatusBadRequest {
+		t.Errorf("no title: %d, want 400", code)
+	}
+	if slices.Contains(gh.sent(), "PATCH /repos/o/r/pulls/77") {
+		t.Error("a PR of no branch of the issue was written")
+	}
 }
