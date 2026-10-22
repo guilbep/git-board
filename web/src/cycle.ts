@@ -18,7 +18,6 @@ export interface CardButton {
 const moves: Record<string, [string, (s: CycleStages) => string | undefined]> = {
   'move-ready': ['Move to ready', (s) => s.ready],
   start: ['Start work', (s) => s.in_progress[0]],
-  'ready-for-review': ['Mark ready for review', (s) => s.in_review[0]],
   'to-validation': ['Start verification', (s) => s.validation[0]],
 };
 export const patches = ['set-risk', ...Object.keys(moves)];
@@ -34,6 +33,8 @@ export function cardFor(c: Cycle, status: string): { title: string; gate: string
   if (has('approve-plan')) return card('Approve the plan', [{ label: 'Approve the plan', action: 'approve-plan' }]);
   if (has('review')) return card('Review', [{ label: 'Review the PR', action: 'review' }]);
   if (has('signoff')) return card(`Sign off ${status}`, [{ label: `Sign off ${status}`, action: 'signoff' }]);
+  // a POST: the server moves the status once the checks are proven
+  if (has('ready-for-review')) return card('Mark ready for review', [{ label: 'Mark ready for review', action: 'ready-for-review' }]);
   for (const [action, [label, to]] of Object.entries(moves)) {
     if (has(action)) return card(label, [{ label, action, body: { status: to(c.stages) ?? '' } }]);
   }

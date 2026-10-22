@@ -184,7 +184,7 @@ func TestMatchTest(t *testing.T) {
 		"test_x.py": true, "src/tests.ts": false, "web/src/a.ts": false,
 	} {
 		matched := false
-		for _, pat := range (&config.Config{}).Stages().Tests {
+		for _, pat := range (&config.Config{}).Stages().TestFiles {
 			matched = matched || matchTest(pat, path)
 		}
 		if matched != want {

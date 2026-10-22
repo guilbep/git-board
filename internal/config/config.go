@@ -236,6 +236,11 @@ func parse(data []byte) (*Config, toml.MetaData, error) {
 	if err != nil {
 		return nil, md, err
 	}
+	// M1's test-file globs were [cycle] tests; the name is the suites' now,
+	// and the decoder would drop a list there without a word
+	if md.Type("cycle", "tests") == "Array" {
+		return nil, md, errors.New("[cycle] tests: the test-file globs are test-files now; [cycle.tests.<name>] tables are the suites step 4 runs")
+	}
 	if err := checkColors(r.Fields); err != nil {
 		return nil, md, err
 	}
@@ -370,6 +375,31 @@ func WithRelease(content string, r Release) string {
 		fmt.Fprintf(&b, "remote = %q\n", r.Remote)
 	}
 	return upsertTable(content, "[release]", b.String())
+}
+
+// WithChecks is content with a [cycle.checks.<name>] table per check,
+// replaced or appended: what Propose checks writes. Pure, as WithRelease.
+func WithChecks(content string, checks map[string]Suite) string {
+	list := func(ss []string) string {
+		q := make([]string, len(ss))
+		for i, s := range ss {
+			q[i] = fmt.Sprintf("%q", s)
+		}
+		return "[" + strings.Join(q, ", ") + "]"
+	}
+	for _, name := range slices.Sorted(maps.Keys(checks)) {
+		c := checks[name]
+		var b strings.Builder
+		fmt.Fprintf(&b, "[cycle.checks.%s]\nrun = %s\n", name, list(c.Run))
+		if c.Dir != "" {
+			fmt.Fprintf(&b, "dir = %q\n", c.Dir)
+		}
+		if len(c.Files) > 0 {
+			fmt.Fprintf(&b, "files = %s\n", list(c.Files))
+		}
+		content = upsertTable(content, "[cycle.checks."+name+"]", b.String())
+	}
+	return content
 }
 
 // upsertTable replaces the named top-level table (header through the line

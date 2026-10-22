@@ -1,8 +1,11 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"maps"
+	"path"
+	"regexp"
 	"slices"
 	"strings"
 )
@@ -20,7 +23,7 @@ type Cycle struct {
 	// PlansInPR: the draft PR opened at step 3 holds the plan; false
 	// keeps plans out of PRs, the PR opens at step 5. Default true.
 	PlansInPR *bool    `toml:"plans-in-pr"`
-	Tests     []string `toml:"tests"` // default defaultTests
+	TestFiles []string `toml:"test-files"` // default defaultTests
 	// Criteria are the headings a description's acceptance criteria are
 	// listed under; default defaultCriteria.
 	Criteria []string `toml:"criteria"`
@@ -32,6 +35,36 @@ type Cycle struct {
 	Review string            `toml:"review"`
 	// Signoffs maps a validation status to the role that signs it off.
 	Signoffs map[string]string `toml:"signoffs"`
+	// Tests are the suites step 4 runs, Checks the checks that gate Mark
+	// ready for review (docs/adr/0001-check-results-are-signed-git-notes.md).
+	Tests  map[string]Suite `toml:"tests"`
+	Checks map[string]Suite `toml:"checks"`
+	// Signers is the OpenSSH allowed_signers file a result's signature is
+	// verified against, read from the base branch; default ".allowed_signers".
+	Signers string `toml:"signers"`
+}
+
+// Suite is a [cycle.tests.<name>] or [cycle.checks.<name>] table: what runs,
+// and what it reads.
+type Suite struct {
+	Run []string `toml:"run" json:"run"` // an argv, never a shell line
+	// Files are the git glob pathspecs of everything it reads (its content
+	// key); none is the whole tree.
+	Files []string `toml:"files" json:"files,omitempty"`
+	Where string   `toml:"where" json:"where,omitempty"` // "worktree" (default) or "ci"
+	Dir   string   `toml:"dir" json:"dir,omitempty"`     // where it runs, from the checkout's root
+	// Env is every variable it runs with beside PATH, HOME and the tool caches.
+	Env map[string]string `toml:"env" json:"env,omitempty"`
+	// Tools are version commands: their output names the toolchain.
+	Tools [][]string `toml:"tools" json:"tools,omitempty"`
+}
+
+// SignersFile is the signers file's path, its default filled.
+func (c Cycle) SignersFile() string {
+	if c.Signers == "" {
+		return ".allowed_signers"
+	}
+	return c.Signers
 }
 
 // Stages is the [cycle] table with every default filled: what the server
@@ -45,7 +78,7 @@ type Stages struct {
 	Closing    string            `json:"closing"` // the last status option, "" without options
 	Plans      string            `json:"plans"`
 	PlansInPR  bool              `json:"plans_in_pr"`
-	Tests      []string          `json:"tests"`
+	TestFiles  []string          `json:"test_files"`
 	Criteria   []string          `json:"criteria"`
 	Kinds      map[string]string `json:"kinds"`
 	// Guessed: a stage came from the status names, not the file.
@@ -151,9 +184,9 @@ func (c *Config) Stages() Stages {
 		s.Plans = "docs/src/implementation-plans"
 	}
 	s.PlansInPR = k.PlansInPR == nil || *k.PlansInPR
-	s.Tests = k.Tests
-	if s.Tests == nil {
-		s.Tests = defaultTests
+	s.TestFiles = k.TestFiles
+	if s.TestFiles == nil {
+		s.TestFiles = defaultTests
 	}
 	s.Criteria = k.Criteria
 	if s.Criteria == nil {
@@ -219,5 +252,63 @@ func checkCycle(c Cycle) error {
 			return fmt.Errorf("[cycle.signoffs] %s: a role name, not %q", status, role)
 		}
 	}
+	for _, t := range []struct {
+		table  string
+		suites map[string]Suite
+	}{{"tests", c.Tests}, {"checks", c.Checks}} {
+		for _, name := range slices.Sorted(maps.Keys(t.suites)) {
+			if err := checkSuite(t.suites[name]); err != nil {
+				return fmt.Errorf("[cycle.%s.%s] %w", t.table, name, err)
+			}
+			if !suiteName.MatchString(name) {
+				return fmt.Errorf("[cycle.%s.%s]: a name of letters, digits, '.', '_' and '-'", t.table, name)
+			}
+		}
+	}
+	if c.Signers != "" && !relative(c.Signers) {
+		return fmt.Errorf("[cycle] signers: a path in the repository, not %q", c.Signers)
+	}
 	return nil
+}
+
+// A suite's name goes into a result line, which holds no space.
+var suiteName = regexp.MustCompile(`^[A-Za-z0-9_.-]+$`)
+
+var envName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+
+// checkSuite refuses a suite that couldn't run as the toml says.
+func checkSuite(s Suite) error {
+	if len(s.Run) == 0 || s.Run[0] == "" {
+		return errors.New("run: a command, as a list of words")
+	}
+	if s.Where != "" && s.Where != "worktree" && s.Where != "ci" {
+		return fmt.Errorf("where: worktree or ci, not %q", s.Where)
+	}
+	if s.Dir != "" && !relative(s.Dir) {
+		return fmt.Errorf("dir: a directory of the repository, not %q", s.Dir)
+	}
+	for _, k := range slices.Sorted(maps.Keys(s.Env)) {
+		if !envName.MatchString(k) {
+			return fmt.Errorf("env: a variable name, not %q", k)
+		}
+		if strings.ContainsAny(s.Env[k], "\n") {
+			return fmt.Errorf("env: %s holds a newline", k)
+		}
+	}
+	for _, t := range s.Tools {
+		if len(t) == 0 || t[0] == "" {
+			return errors.New("tools: each a command, as a list of words")
+		}
+	}
+	for _, f := range s.Files {
+		if strings.TrimSpace(f) == "" || strings.HasPrefix(f, ":") {
+			return fmt.Errorf("files: a glob, not %q", f)
+		}
+	}
+	return nil
+}
+
+// relative is a path inside the repository: not absolute, no "..".
+func relative(p string) bool {
+	return !path.IsAbs(p) && !slices.Contains(strings.Split(path.Clean(p), "/"), "..")
 }

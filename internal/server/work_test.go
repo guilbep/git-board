@@ -157,7 +157,7 @@ func TestWorkAgents(t *testing.T) {
 	if len(res.Agents) != 2 {
 		t.Fatalf("agents: %+v", res.Agents)
 	}
-	if a := res.Agents[0]; a.Branch != "fix/2518-x" || a.Issue == nil || a.Issue.ID != id || a.Step != 4 || a.State != "Waits for anyone to write the failing test" || a.At.IsZero() {
+	if a := res.Agents[0]; a.Branch != "fix/2518-x" || a.Issue == nil || a.Issue.ID != id || a.Step != 4 || a.State != "Waits for anyone to write the tests" || a.At.IsZero() {
 		t.Errorf("on the branch: %+v", a)
 	}
 	if a := res.Agents[1]; len(a.Branch) != 7 || a.Issue != nil || a.State != "No issue" {

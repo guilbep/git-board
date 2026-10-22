@@ -347,14 +347,13 @@ Every key has a default, so a project writes only what the guess got wrong, and 
 | `criteria` | `"Acceptance criteria"`, `"Done when"`, `"Expected"` | The headings a description's acceptance criteria are listed under, any heading level or a bold line, in any case, with or without a colon. The first one the description has counts. |
 | `plans` | `"docs/src/implementation-plans"` | Where plan files live: Markdown whose front matter's `issue:` names the issue (`2518`, `"#2518"`, `CO2-2518`, or its git-bug id's first 7 characters), and whose `status:` (`accepted`, `in-progress` or `delivered`) approves the plan. |
 | `plans-in-pr` | `true` | The agent started at step 3 commits its plan and opens a draft PR holding it; Review opens once that PR is marked ready. `false` keeps plans out of PRs: the plan is committed on the branch and the PR opens at step 5. |
-| `tests` | `*_test.go`, `*.test.ts`, `*.spec.ts`, `test_*.py`, `tests/**` | Which changed files are tests, by path or base name; `dir/**` is everything under `dir`. |
+| `test-files` | `*_test.go`, `*.test.ts`, `*.spec.ts`, `test_*.py`, `tests/**` | Which changed files are tests, by path or base name; `dir/**` is everything under `dir`. Before M4 this key was `tests`, which now names the suites (Tests and checks, below): a list there is refused. |
 | `risk` | none | The role (`[roles]`) that sets the risk class. |
 | `plan` | none | The role that approves the plan. |
 | `review` | none | The role that reviews the PR. |
 | `signoffs` | none | Each validation status to the role that signs it off. |
+| `signers` | `".allowed_signers"` | The file, at the base branch, of the SSH keys whose signed results count (Tests and checks, below). |
 | `kinds` | `bug = "failing-test"`, `feat = "per-criterion"`, `doc = "none"`, `chore = "none"` | Step 4's rule by the issue's kind (the `kind:` field, or a flat label in `[branches] kinds`): a test that fails before the fix; the suites the diff touches green and each criterion naming its test; or no tests, which skips step 4. A file's entries go over the defaults. No kind, or one the table doesn't list, is `per-criterion`. |
-
-Coming on later branches, and a warning in Settings until then: `[cycle.tests.<suite>]` and `[cycle.checks.<check>]`, the suites step 4 runs and the checks that gate Mark ready for review (M4).
 
 Each step's button moves the status, through the same edit as the status field:
 
@@ -363,7 +362,7 @@ Each step's button moves the status, through the same edit as the status field:
 | Move to ready | the author, once the description lists a criterion | `ready` |
 | Approve the plan | the `plan` role | the first `in-progress` |
 | Start work | the assignee, at low risk or once the plan is approved | the first `in-progress` |
-| Mark ready for review | the assignee, with a test, or at once when step 4 is skipped | the first `in-review` |
+| Mark ready for review | the assignee, with a test, or at once when step 4 is skipped, once every check is proven at the branch's head (Tests and checks, below) | the first `in-review` |
 | Start verification | the assignee, once the PR is merged | the first `validation` |
 | Sign off | the status's role | the next `validation`, then the closing status |
 
@@ -374,7 +373,7 @@ The step reads:
 - **The acceptance criteria:** the list under the first of the `criteria` headings the description has (the format is below). With none, the issue is at step 1.
 - **The risk class:** the `risk` field, `low`, `normal` or `structural`. Low skips step 3.
 - **The plan file**, read from the evidence branch, then the `plan/` branch, then the base.
-- **The tests:** the files the evidence branch changed (`git diff base...branch`) that match `tests`. The evidence branch is the newest branch naming the issue that isn't a `plan/` branch.
+- **The tests:** the files the evidence branch changed (`git diff base...branch`) that match `test-files`. The evidence branch is the newest branch naming the issue that isn't a `plan/` branch.
 - **The PR,** read from GitHub only when the issue is at in-review or later (or structural, for the plan branch's PR), at most every 5 minutes per branch. When GitHub can't be reached, the step still computes, with the last PR it read.
 - **The kind**, for step 4's rule.
 - **The comments with metadata** that the step writes. Each carries its step as `cycle:step` (`1` to `7`), as does a comment posted on a step's discussion; a comment without it is step 1's.
@@ -404,6 +403,129 @@ The card writes:
 - **Sign off:** a `signoff:status` comment, then the next status. A sign-off needs a run at the branch's head, or a reason, written as `signoff:why`.
 
 A comment is the viewer's when git-board's identity wrote it, since the server writes as that identity. Anyone else's comment counts under its author's forge login. The server refuses a card action from anyone but the gate's person with `waits for the <role> role: <login>`.
+
+### Tests and checks
+
+Step 4 runs the project's own commands, and keeps each result as proof in git: a signed line in a git note, which any clone can read and check without git-board's server or the forge (docs/adr/0001-check-results-are-signed-git-notes.md). Two tables, with the same keys:
+
+- **`[cycle.tests.<suite>]`** is a test suite. Step 4 lists the suites, ticks the ones the diff touches, and runs the ones you pick. Tests never gate a move.
+- **`[cycle.checks.<check>]`** is a fast check: lint, vet, a type-check. Mark ready for review waits until every check is proven at the branch's last commit.
+
+```toml
+[cycle]
+signers = ".allowed_signers"              # the default
+
+[cycle.tests.go]
+run = ["go", "test", "./..."]
+files = ["**/*.go", "go.mod", "go.sum"]   # everything it reads
+tools = [["go", "version"]]
+
+[cycle.tests.web]
+run = ["npm", "test"]
+dir = "web"
+files = ["web/**"]
+
+[cycle.tests.e2e]
+run = ["npx", "playwright", "test"]
+where = "ci"                              # the forge's: listed, never run here
+
+[cycle.checks.vet]
+run = ["go", "vet", "./..."]
+files = ["**/*.go", "go.mod", "go.sum"]
+env = { CGO_ENABLED = "0" }
+```
+
+| Key | Default | What it does |
+| --- | --- | --- |
+| `run` | required | The command, as an argv. It is never a shell line, and nothing from the page reaches it: the page only picks a suite by name. |
+| `files` | the whole tree | Git glob pathspecs (`**/*.go`, `web/**`) of every file the command reads. They make the result's key, and they decide which suites the diff touches. List the lock files and generated inputs too. If the list is too narrow, a change the command reads keeps an old proof. |
+| `dir` | the checkout's root | Where the command runs, relative to the root. It can't contain `..`. |
+| `where` | `"worktree"` | `"ci"` marks a suite that the forge's CI runs (e2e, Lighthouse, performance). It is listed but never run here, and a check with it doesn't gate. |
+| `env` | none | Variables the command runs with. Names are in capitals, and they are part of the key. The only others passed through are `PATH`, `HOME`, `TMPDIR`, `GOCACHE`, `GOMODCACHE`, `GOPATH`, `GOFLAGS` and `npm_config_cache`. |
+| `tools` | none | Version commands, such as `[["go", "version"]]`. They run in the checkout before the command, and the hash of their output goes into the line as `tools=`, so a reader can see two runs used the same toolchain. |
+
+A suite's name is letters, digits, `_`, `.` and `-`. The table `[cycle.tests.<suite>]` used to be the key `tests` under `[cycle]`, the test-file patterns, which is now `test-files`. A list under `tests` is refused.
+
+**The base branch's file rules.** Step 4 and the gate read `.git-board.toml` and the signers file from the base branch. The base is `origin/main`, or whatever Branches works out, never the issue's branch. This means a branch can't add a command that then runs on its reviewer's machine, and it can't add its own signer. A change to these tables counts once it is committed on the base. Settings › Project file still shows the working tree's file.
+
+**A run.** Run the selected answers at once, and the run goes on in the background. A server runs one run at a time; a second one gets `busy`. Each picked name runs like this:
+
+1. `git worktree add --detach` checks out the commit into a temporary directory, so nothing uncommitted leaks in.
+2. The `tools` run, then `run` runs from `dir`, with the environment cleared, for 20 minutes at most.
+3. Exit 0 is PASSED. Any other exit, or the timeout, is FAILED. A command that can't start at all, such as a missing binary, records nothing and says why: neither the agent nor a missing tool decides a verdict.
+4. When the run ends, a `cycle` live event reloads the page.
+
+Run the selected runs at the head. For a bug, a second button, Run at <sha>, before the fix, runs at the commit that added the first test file.
+
+**The line.** A result is one line, appended to a note:
+
+```
+v1 vet PASSED key=5f3a… platform=darwin/arm64 tools=sha256:9c1e… commit=4c1e2a0… at=2026-10-22T09:14:03Z dur=12s log=sha256:e3b0… sig=U1NIU0lH…
+```
+
+The note isn't attached to the commit but to a **content key**: the hash (`git hash-object`) of a text that names the check, its `run`, `dir` and `env`, and the blob of every file `files` selects at the commit. So a commit that changes nothing the check reads keeps its proof, and so does a rebase. `commit=` is there for reading only.
+
+**Signing.** git's `user.signingkey` names the SSH key file, the same one `gpg.format = ssh` signs commits with. A `.pub` path works too: ssh-keygen then finds the private key beside it, or in ssh-agent. A key written into the config itself (`key::…`) is refused, because git-board signs with a key file. The line is signed with `ssh-keygen -Y sign -n git-board-ci`. If `user.signingkey` is unset, Run says so before anything runs.
+
+**The signers file.** The file is `[cycle] signers`, `.allowed_signers` by default, in OpenSSH's `allowed_signers` format, with one line per person:
+
+```
+alice namespaces="git-board-ci" ssh-ed25519 AAAAC3Nza… alice@laptop
+```
+
+`ssh-keygen -y -f ~/.ssh/id_ed25519` prints the key part. A line counts only when its signature verifies against this file, as read at the base branch. A signature made with another namespace (git's own commit signatures use `git`), a changed line, or a key the file doesn't list is dropped. Without the file nothing verifies, so nothing is proven.
+
+**The writer.** Each clone writes to its own ref, `refs/notes/ci/<writer>`. The writer name is `git config git-board.writer`, set on the first run to `<user.name>-<host>-<4 hex>`, so two clones of one person never share a ref; worktrees of one clone share it. A write is a compare-and-swap (`git update-ref <ref> <new> <old>`, retried), because `git notes append` alone loses lines when two worktrees write at once. A reader takes the union of `refs/notes/ci/*` and, for fetched results, `refs/notes/remotes/*/ci/*`. git-board doesn't push or fetch the notes yet. By hand:
+
+```sh
+git push origin "refs/notes/ci/$(git config git-board.writer)"
+git fetch origin 'refs/notes/ci/*:refs/notes/remotes/origin/ci/*'
+```
+
+Never run `git notes prune` on these refs: no object stands behind a content key, so prune would delete every result. And don't set `notes.rewriteRef` for them: a rebase must not copy a proof onto content it didn't prove (the key already carries a proof across a rebase that leaves the files alone).
+
+**The verdict.** For each writer, its last line that names the check and the key, and that verifies, is that writer's verdict. A check is proven when one writer's verdict is PASSED and none is FAILED, so a red run stays red until that writer runs the check green again.
+
+**The gate.** Mark ready for review is a `POST /api/issues/{id}/cycle/ready-for-review`. It moves the status only when every `[cycle.checks.*]` that doesn't have `where = "ci"` is proven at the branch's head. Otherwise it answers `409 unproven` with the reason, which shows under the card. The reasons are:
+
+- `vet FAILED, signed by alice on 2026-10-22 11:14:03`;
+- `vet not run at 4c1e2a0`;
+- `no signers file .allowed_signers on origin/main: no result can verify`.
+
+With no checks declared, the gate is open, and so it is for an issue with no branch. Tests never gate. The gate belongs to the card: dragging the card on the board, or editing the status field, still moves the status.
+
+**The rules.** For a bug (`failing-test`), step 4 shows two runs of the touched suites:
+
+- **Before the fix,** at the commit that added the first test file. It should be red: Red first: done. A suite that passes there "doesn't show the bug".
+- **At the head,** which should be green, after the fix in step 5.
+
+For a feature (`per-criterion`), the rule is the touched suites green at the head, with each criterion naming its test. The page shows both rules, and only the checks gate.
+
+**The log.** A run's output is kept in the clone that ran it, at `<git common dir>/git-board/ci/<sha256>`; the line carries its hash. Click a result to read it. A run from another clone has no log here, and the page says so.
+
+**Proposing checks.** With no `[cycle.checks]` on the base, step 4 offers Propose from the project. It reads the first source it finds:
+
+1. **lefthook's `pre-commit` commands,** from `lefthook.yml`, `.lefthook.yml` or `lefthook.yaml`. A command's `root:` becomes `dir`, with `files = ["<root>/**"]`. Other hooks are left out, since the gate does their job.
+2. **The Makefile's targets** `lint`, `vet`, `typecheck` or `type-check`, as `make <target>`.
+3. **The scripts** `lint`, `vet`, `typecheck` or `type-check` in `package.json`, or in a `*/package.json` one directory down, as `npm run <script>` from that directory.
+
+Only a command that runs the same in a clean checkout is proposed. Each of these is skipped, with the reason:
+
+- a lefthook command that works on `{staged_files}` or another placeholder;
+- a shell line (`$`, `|`, `&&`, quotes, a glob);
+- a `sh`, `bash` or `zsh` script.
+
+Write to .git-board.toml adds the `[cycle.checks.<name>]` tables to the working tree's file, through `GET` and `POST /api/checks/setup`. Trim `files` there, then commit the file on the base for the checks to gate.
+
+**Verifying without the server.** `git board verify [commit]` applies the same gate in any clone, with no server. The commit defaults to `HEAD`. It prints each check's verdict at the commit, and exits 1 when the commit isn't proven. The base defaults as on the server: `[branches] base`, else origin's default branch, else `main`, and `origin/<name>` when that exists. `--base` names another.
+
+```console
+$ git board verify fix/2518-retry
+4c1e2a0 against the checks on origin/main
+  typecheck    not run
+  vet          PASSED, signed by alice on 2026-10-22 11:14:03
+error: not proven: typecheck not run at 4c1e2a0
+```
 
 ### The Work page
 

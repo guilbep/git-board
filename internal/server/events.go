@@ -20,7 +20,8 @@ import (
 // it), config (.git-board.toml, a view), sync, settings, inbox (yours:
 // what you read or follow), releases (a job's step, a record, an
 // overlay), progress (a forge run's step, Step; ID: the issue, when the
-// run is one issue's own). By is the page that made the change
+// run is one issue's own), cycle (a step 4 run recorded a result; ID: the
+// issue). By is the page that made the change
 // (X-Git-Board-Client), which ignores it.
 type event struct {
 	Kind string    `json:"kind"`

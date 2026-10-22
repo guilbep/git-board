@@ -161,10 +161,15 @@ var errNotAtVerify = errors.New("not at Verify")
 // in its step's discussion (cycle:step): approve-plan (which then moves a
 // ready issue to in-progress), verify (a run's output), check (one
 // criterion), signoff (which then moves the status on, closing the issue
-// after the last validation status). The risk and the other status moves
+// after the last validation status), ready-for-review (the status move
+// step 4's checks gate, checks.go). The risk and the other status moves
 // are fields: PATCH the issue.
 func (s *apiServer) handleCycleAction(w http.ResponseWriter, r *http.Request) {
 	action := r.PathValue("action")
+	if action == "ready-for-review" {
+		s.readyForReview(w, r)
+		return
+	}
 	if !slices.Contains([]string{"approve-plan", "verify", "check", "signoff"}, action) {
 		writeError(w, http.StatusNotFound, fmt.Errorf("no cycle action %q", action))
 		return

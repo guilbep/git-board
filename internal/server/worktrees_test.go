@@ -653,7 +653,7 @@ func TestWorkAgentsSession(t *testing.T) {
 	if len(res.Agents) != 1 || res.Agents[0].Session == nil || res.Agents[0].Session.State != "idle" || !res.CanStart || res.Reason != "" {
 		t.Fatalf("agents: %+v, can_start %v, reason %q", res.Agents, res.CanStart, res.Reason)
 	}
-	if res.Agents[0].State != "Waits for anyone to write the failing test" {
+	if res.Agents[0].State != "Waits for anyone to write the tests" {
 		t.Errorf("the gate's words changed: %q", res.Agents[0].State)
 	}
 	if calls := wtxCalls(t, fake); len(calls) != 1 || calls[0][1] != "status --json" {

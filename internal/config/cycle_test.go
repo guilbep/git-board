@@ -78,9 +78,9 @@ func TestCycleFromFile(t *testing.T) {
 		InProgress: []string{"in-progress"}, InReview: []string{"in-review"},
 		Validation: []string{"ready-for-validation", "qa", "tests-metier"}, Closing: "validated",
 		Plans: "docs/src/implementation-plans", PlansInPR: true,
-		Tests:    []string{"*_test.go", "*.test.ts", "*.spec.ts", "test_*.py", "tests/**"},
-		Criteria: []string{"Acceptance criteria", "Done when", "Expected"},
-		Kinds:    map[string]string{"bug": "failing-test", "feat": "per-criterion", "doc": "none", "chore": "none"},
+		TestFiles: []string{"*_test.go", "*.test.ts", "*.spec.ts", "test_*.py", "tests/**"},
+		Criteria:  []string{"Acceptance criteria", "Done when", "Expected"},
+		Kinds:     map[string]string{"bug": "failing-test", "feat": "per-criterion", "doc": "none", "chore": "none"},
 	}
 	if !reflect.DeepEqual(s, want) {
 		t.Errorf("Stages()\n got %+v\nwant %+v", s, want)
@@ -93,7 +93,7 @@ func TestCycleFromFile(t *testing.T) {
 func TestStagesGuessed(t *testing.T) {
 	cfg := &Config{Fields: map[string]Field{"status": {Options: co2Statuses}}}
 	s := cfg.Stages()
-	if !s.Guessed || s.Ready != "ready" || s.Plans != "docs/src/implementation-plans" || len(s.Tests) != 5 {
+	if !s.Guessed || s.Ready != "ready" || s.Plans != "docs/src/implementation-plans" || len(s.TestFiles) != 5 {
 		t.Errorf("Stages() = %+v", s)
 	}
 	// one key set: it replaces that part of the guess, the rest is guessed
@@ -189,5 +189,68 @@ func TestPlansInPR(t *testing.T) {
 	}
 	if cfg.Stages().PlansInPR {
 		t.Error("plans-in-pr = false: want false")
+	}
+}
+
+func TestCycleSuites(t *testing.T) {
+	t.Parallel()
+	cfg, md, err := parse([]byte(`[cycle]
+test-files = ["*_test.go"]
+signers = "ci/signers"
+
+[cycle.tests.go]
+run = ["go", "test", "./..."]
+files = ["**/*.go", "go.mod"]
+where = "worktree"
+tools = [["go", "version"]]
+env = { CGO_ENABLED = "0" }
+
+[cycle.tests.e2e]
+run = ["npm", "run", "e2e"]
+dir = "web"
+where = "ci"
+
+[cycle.checks.vet]
+run = ["go", "vet", "./..."]
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if u := md.Undecoded(); len(u) > 0 {
+		t.Errorf("undecoded keys: %v", u)
+	}
+	c := cfg.Cycle
+	want := Suite{Run: []string{"go", "test", "./..."}, Files: []string{"**/*.go", "go.mod"}, Where: "worktree", Tools: [][]string{{"go", "version"}}, Env: map[string]string{"CGO_ENABLED": "0"}}
+	if !reflect.DeepEqual(c.Tests["go"], want) || c.Tests["e2e"].Dir != "web" || c.Checks["vet"].Run[1] != "vet" {
+		t.Errorf("Cycle = %+v", c)
+	}
+	if c.SignersFile() != "ci/signers" || (Cycle{}).SignersFile() != ".allowed_signers" {
+		t.Errorf("SignersFile = %q", c.SignersFile())
+	}
+	if s := cfg.Stages(); !reflect.DeepEqual(s.TestFiles, []string{"*_test.go"}) {
+		t.Errorf("TestFiles = %v", s.TestFiles)
+	}
+	// M1's globs under tests: refused, naming the new key
+	if _, _, err := parse([]byte("[cycle]\ntests = [\"*.go\"]\n")); err == nil || !strings.Contains(err.Error(), "test-files") {
+		t.Error("tests as a list of globs: want an error")
+	}
+}
+
+func TestCycleSuitesChecked(t *testing.T) {
+	t.Parallel()
+	for toml, want := range map[string]string{
+		"[cycle.checks.vet]\nrun = []\n":                                "[cycle.checks.vet] run: a command",
+		"[cycle.tests.go]\nrun = [\"go\"]\nwhere = \"cloud\"\n":         `[cycle.tests.go] where: worktree or ci, not "cloud"`,
+		"[cycle.tests.go]\nrun = [\"go\"]\ndir = \"../x\"\n":            `[cycle.tests.go] dir: a directory of the repository, not "../x"`,
+		"[cycle.tests.go]\nrun = [\"go\"]\ndir = \"/abs\"\n":            `dir: a directory of the repository`,
+		"[cycle.tests.go]\nrun = [\"go\"]\nenv = { \"A B\" = \"1\" }\n": `env: a variable name, not "A B"`,
+		"[cycle.tests.go]\nrun = [\"go\"]\ntools = [[]]\n":              "tools: each a command",
+		"[cycle.tests.go]\nrun = [\"go\"]\nfiles = [\":(exclude)x\"]\n": "files: a glob",
+		"[cycle.tests.\"a b\"]\nrun = [\"go\"]\n":                       "[cycle.tests.a b]: a name of letters",
+		"[cycle]\nsigners = \"../keys\"\n":                              "[cycle] signers: a path in the repository",
+	} {
+		if _, _, err := parse([]byte(toml)); err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("%s: err = %v, want %q", toml, err, want)
+		}
 	}
 }

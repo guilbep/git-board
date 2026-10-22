@@ -69,13 +69,13 @@ func TestWalk(t *testing.T) {
 			in.PlanPR = &ghpr.PR{Decision: "REVIEW_REQUIRED"}
 			in.Me = "bob"
 		}), step: 3, login: "bob", what: "approve the plan PR on GitHub", mine: true},
-		{name: "in-progress, no tests", in: input("in-progress", approved("normal")), step: 4, login: "erin", what: "write the failing test", gate: "The touched suites green, each criterion names its test"},
+		{name: "in-progress, no tests", in: input("in-progress", approved("normal")), step: 4, login: "erin", what: "write the tests", gate: "The touched suites green, each criterion names its test"},
 		{name: "in-progress, a bug", in: input("in-progress", func(in *Input) { approved("normal")(in); in.Kind = "bug" }), step: 4, login: "erin", what: "write the failing test", gate: "A test that fails before the fix"},
 		{name: "in-progress, a doc", in: input("in-progress", func(in *Input) { approved("normal")(in); in.Kind = "doc"; in.Me = "erin" }), step: 5, login: "erin", what: "commit and open the PR", mine: true, gate: "A human commits and opens the PR", skipped: []int{4}, actions: []string{"ready-for-review"}},
 		{name: "in-progress, tests", in: input("in-progress", func(in *Input) { approved("normal")(in); in.Tests = []TestFile{{Path: "a_test.go", Commit: "c1"}} }), step: 5, login: "erin", what: "commit and open the PR", gate: "A human commits and opens the PR"},
-		{name: "in-progress, the floor", in: input("in-progress", func(in *Input) { in.Criteria = nil }), step: 4, login: "erin", what: "write the failing test", note: "risk not set"},
-		{name: "in-progress, plan not approved", in: input("in-progress", risk("normal")), step: 4, login: "erin", what: "write the failing test", note: "plan not approved"},
-		{name: "in-progress, low", in: input("in-progress", risk("low")), step: 4, login: "erin", what: "write the failing test", skipped: []int{3}},
+		{name: "in-progress, the floor", in: input("in-progress", func(in *Input) { in.Criteria = nil }), step: 4, login: "erin", what: "write the tests", note: "risk not set"},
+		{name: "in-progress, plan not approved", in: input("in-progress", risk("normal")), step: 4, login: "erin", what: "write the tests", note: "plan not approved"},
+		{name: "in-progress, low", in: input("in-progress", risk("low")), step: 4, login: "erin", what: "write the tests", skipped: []int{3}},
 		{name: "in-progress, PR open", in: input("in-progress", func(in *Input) {
 			approved("normal")(in)
 			in.Tests = []TestFile{{Path: "a_test.go"}}
@@ -90,7 +90,7 @@ func TestWalk(t *testing.T) {
 		{name: "in-progress, draft PR, no test yet", in: input("in-progress", func(in *Input) {
 			approved("normal")(in)
 			in.PR = &ghpr.PR{Number: 41, State: "OPEN", Draft: true}
-		}), step: 4, login: "erin", what: "write the failing test"},
+		}), step: 4, login: "erin", what: "write the tests"},
 		{name: "in-review, draft PR", in: input("in-review", func(in *Input) {
 			approved("normal")(in)
 			in.PR = &ghpr.PR{Number: 41, State: "OPEN", Draft: true}

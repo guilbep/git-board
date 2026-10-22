@@ -31,6 +31,7 @@ export function waitsFor(r: Pick<WorkRow, 'waits' | 'mine' | 'risk' | 'question'
       'approve the plan PR on GitHub': 'Your approval of the plan PR',
       'add acceptance criteria': 'Acceptance criteria',
       'write the failing test': 'The failing test',
+      'write the tests': 'The tests',
       'commit and open the PR': 'The PR',
     }[w.what] ?? w.what
   );

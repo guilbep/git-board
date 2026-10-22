@@ -215,7 +215,10 @@ func Compute(in Input) Cycle {
 			}
 		}
 	case "in-progress":
-		c.Step, w = 4, Waits{Role: "assignee", Login: assignee, What: "write the failing test"}
+		c.Step, w = 4, Waits{Role: "assignee", Login: assignee, What: "write the tests"}
+		if rule == config.FailingTest {
+			w.What = "write the failing test"
+		}
 		if len(in.Tests) > 0 || rule == config.NoTests {
 			c.Step, w.What, act = 5, "commit and open the PR", "ready-for-review"
 		}
