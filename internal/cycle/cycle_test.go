@@ -90,7 +90,7 @@ func TestWalk(t *testing.T) {
 		{name: "in-progress, draft PR, no test yet", in: input("in-progress", func(in *Input) {
 			approved("normal")(in)
 			in.PR = &ghpr.PR{Number: 41, State: "OPEN", Draft: true}
-		}), step: 4, login: "erin", what: "write the failing test"},
+		}), step: 4, login: "erin", what: "write the tests"},
 		{name: "in-review, draft PR", in: input("in-review", func(in *Input) {
 			approved("normal")(in)
 			in.PR = &ghpr.PR{Number: 41, State: "OPEN", Draft: true}
