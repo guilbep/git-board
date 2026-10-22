@@ -665,6 +665,7 @@ export interface GatePR {
   state: 'OPEN' | 'MERGED' | 'CLOSED';
   draft: boolean;
   title: string;
+  body?: string; // the description, Markdown
   base: string;
   head: string; // its head commit
   merge_commit?: string; // when merged
@@ -917,6 +918,15 @@ export function openPull(id: string, branch: string): Promise<GatePR> {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ branch }),
+  });
+}
+
+// editPull sets the title and description of one of the issue's PRs
+export function editPull(id: string, number: number, title: string, body: string): Promise<GatePR> {
+  return request(`${issuePath(id)}/pulls/${number}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title, body }),
   });
 }
 

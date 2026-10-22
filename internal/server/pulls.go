@@ -232,6 +232,67 @@ func (s *apiServer) handleMergePull(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, struct{}{})
 }
 
+// handleEditPull sets the title and description of one of the issue's
+// pull requests (C5's form), found again on GitHub so no other PR is
+// written; the cycle's copy takes the new words at once.
+func (s *apiServer) handleEditPull(w http.ResponseWriter, r *http.Request) {
+	is, err := s.b.GetIssue(r.PathValue("id"))
+	if err != nil {
+		writeError(w, http.StatusNotFound, err)
+		return
+	}
+	number, err := strconv.Atoi(r.PathValue("number"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	var in struct {
+		Title string `json:"title"`
+		Body  string `json:"body"`
+	}
+	if !decode(w, r, &in) {
+		return
+	}
+	repo := s.b.GitHubRepo("origin")
+	if strings.TrimSpace(in.Title) == "" || repo == "" {
+		writeError(w, http.StatusBadRequest, errors.New("an edit needs a title, and origin on GitHub"))
+		return
+	}
+	names, err := onOrigin(s.b, is)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	c, _, err := s.github()
+	if err != nil {
+		writeError(w, http.StatusBadGateway, err)
+		return
+	}
+	for _, name := range names {
+		pr, err := c.Find(r.Context(), repo, name)
+		if err != nil {
+			writeError(w, http.StatusBadGateway, err)
+			return
+		}
+		if pr == nil || pr.Number != number {
+			continue
+		}
+		if err := c.Edit(r.Context(), repo, number, in.Title, in.Body); err != nil {
+			writeError(w, http.StatusBadGateway, err)
+			return
+		}
+		// the cached one keeps its gate; the one just found has none
+		if old, _ := s.pulls.PR(name); old != nil && old.Number == number {
+			pr = new(*old)
+		}
+		pr.Title, pr.Body = in.Title, in.Body
+		s.pulls.put(name, pr, nil)
+		writeJSON(w, http.StatusOK, pr)
+		return
+	}
+	writeError(w, http.StatusBadRequest, fmt.Errorf("#%d isn't the pull request of a branch of this issue", number))
+}
+
 // pullsOf gives the sync (git-bug's PullsOf) the open pull request of each
 // issue's branches on origin, as bare numbers, for a pull to bring in their
 // comments and reviews: nil when origin isn't GitHub or there is no token.

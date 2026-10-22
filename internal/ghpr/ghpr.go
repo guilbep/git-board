@@ -49,6 +49,7 @@ type PR struct {
 	State       string   `json:"state"` // OPEN, MERGED, CLOSED
 	Draft       bool     `json:"draft"`
 	Title       string   `json:"title"`
+	Body        string   `json:"body"` // the description, Markdown
 	Base        string   `json:"base"`
 	Head        string   `json:"head"`                   // its head commit
 	MergeCommit string   `json:"merge_commit,omitempty"` // on the base, once merged
@@ -75,7 +76,7 @@ const findQuery = `query($owner: String!, $name: String!, $head: String!) {
   repository(owner: $owner, name: $name) {
     pullRequests(headRefName: $head, first: 10, orderBy: {field: CREATED_AT, direction: DESC}) {
       nodes {
-        number url state isDraft title baseRefName headRefOid
+        number url state isDraft title body baseRefName headRefOid
         mergeCommit { oid }
         headRepository { nameWithOwner }
         author { login }
@@ -100,6 +101,7 @@ type prNode struct {
 	State                    string
 	IsDraft                  bool
 	Title                    string
+	Body                     string
 	BaseRefName              string
 	HeadRefOid               string
 	MergeCommit              *struct{ Oid string }
@@ -177,7 +179,7 @@ func (c *Client) Find(ctx context.Context, repo, branch string) (*PR, error) {
 }
 
 func (n *prNode) pr() *PR {
-	p := &PR{Number: n.Number, URL: n.URL, State: n.State, Draft: n.IsDraft, Title: n.Title, Base: n.BaseRefName,
+	p := &PR{Number: n.Number, URL: n.URL, State: n.State, Draft: n.IsDraft, Title: n.Title, Body: n.Body, Base: n.BaseRefName,
 		Head: n.HeadRefOid, Decision: n.ReviewDecision, Mergeable: n.Mergeable, MergeState: n.MergeStateStatus,
 		Checks: []Check{}, Reviews: []Review{}, Requested: []string{}}
 	if n.Author != nil {
@@ -274,6 +276,15 @@ func (c *Client) Open(ctx context.Context, repo, head, base, title, body string)
 		return nil, err
 	}
 	return &PR{Number: res.Number, URL: res.HTMLURL, State: "OPEN", Title: title, Base: base}, nil
+}
+
+// Edit sets a pull request's title and description.
+func (c *Client) Edit(ctx context.Context, repo string, number int, title, body string) error {
+	in := struct {
+		Title string `json:"title"`
+		Body  string `json:"body"`
+	}{title, body}
+	return c.do(ctx, http.MethodPatch, fmt.Sprintf("/repos/%s/pulls/%d", repo, number), in, nil)
 }
 
 // Merge merges a pull request with a merge commit, if its head is still

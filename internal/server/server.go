@@ -143,6 +143,7 @@ func newMux(s *apiServer, static http.Handler) http.Handler {
 	mux.HandleFunc("GET /api/issues/{id}/pulls", s.handlePulls)
 	mux.HandleFunc("POST /api/issues/{id}/pulls", s.handleOpenPull)
 	mux.HandleFunc("POST /api/issues/{id}/pulls/{number}/merge", s.handleMergePull)
+	mux.HandleFunc("PATCH /api/issues/{id}/pulls/{number}", s.handleEditPull)
 	mux.HandleFunc("GET /api/issues/{id}/cycle", s.handleCycle)
 	mux.HandleFunc("POST /api/issues/{id}/cycle/{action}", s.handleCycleAction)
 	mux.HandleFunc("GET /api/issues/{id}/tests", s.handleStepTests)
