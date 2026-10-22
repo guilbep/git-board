@@ -265,6 +265,9 @@ func TestCycleSignoffNotProvenAtMerge(t *testing.T) {
 		Merged *struct {
 			Proven bool   `json:"proven"`
 			Reason string `json:"reason"`
+			Checks []struct {
+				Name string `json:"name"`
+			} `json:"checks"`
 		} `json:"merged"`
 	}
 	if getJSON(t, url+"/tests", &a); a.Merged == nil || a.Merged.Proven || !strings.Contains(a.Merged.Reason, "vet not run") {
@@ -272,6 +275,15 @@ func TestCycleSignoffNotProvenAtMerge(t *testing.T) {
 	}
 	if code, body := post(t, url+"/cycle/signoff", struct{}{}); code != http.StatusBadRequest || !strings.Contains(body, "not proven at ") || !strings.Contains(body, "vet not run") {
 		t.Fatalf("signoff, vet not run at the merge: %d %s", code, body)
+	}
+
+	// the merge commit not fetched yet: vet listed, not proven, the same refusal
+	s.pulls.put("fix/2518-x", &ghpr.PR{Number: 3082, State: "MERGED", MergeCommit: "deadbee0deadbee0deadbee0deadbee0deadbee0"}, nil)
+	if getJSON(t, url+"/tests", &a); a.Merged == nil || a.Merged.Proven || len(a.Merged.Checks) != 1 || a.Merged.Checks[0].Name != "vet" {
+		t.Fatalf("the gate at an unfetched merge: %+v", a.Merged)
+	}
+	if code, body := post(t, url+"/cycle/signoff", struct{}{}); code != http.StatusBadRequest || !strings.Contains(body, "not proven at ") {
+		t.Fatalf("signoff, unfetched merge: %d %s", code, body)
 	}
 
 	// vetted, merged again, vet green there

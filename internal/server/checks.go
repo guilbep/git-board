@@ -115,10 +115,17 @@ func (s *apiServer) handleStepTests(w http.ResponseWriter, r *http.Request) {
 		res.Gate, err = proof.Gate(r.Context(), s.root, ev.Base, ev.Head)
 	}
 	if err == nil && ev.PR != nil && ev.PR.State == "MERGED" && ev.PR.MergeCommit != "" {
-		// the merge commit not fetched yet: not proven, the reason says why
+		// the merge commit not fetched yet: the declared checks not proven,
+		// the reason says why (Gate errs only with checks declared; the
+		// sign-off reads it the same way)
 		g, gerr := proof.Gate(r.Context(), s.root, ev.Base, ev.PR.MergeCommit)
 		if gerr != nil {
 			g = proof.GateResult{Checks: []proof.CheckStatus{}, Reason: gerr.Error()}
+			for _, c := range res.Checks {
+				if c.Where != "ci" {
+					g.Checks = append(g.Checks, proof.CheckStatus{Name: c.Name})
+				}
+			}
 		}
 		res.Merged = &g
 	}

@@ -76,7 +76,7 @@
       </div>
     </footer>
     <form v-if="needsWhy" class="gb-cycle-actions" @submit.prevent="emit('signoff', why)">
-      <input v-model="why" class="epfl-input" aria-label="Why sign off without a run" placeholder="Why sign off without a run" :disabled="busy" />
+      <input v-model="why" class="epfl-input" aria-label="Why sign off without a proven run" placeholder="Why sign off without a proven run" :disabled="busy" />
       <button type="submit" class="epfl-btn epfl-btn-primary epfl-btn-sm" :disabled="busy || !why.trim()">Sign off anyway</button>
     </form>
   </template>
