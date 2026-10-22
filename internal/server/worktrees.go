@@ -275,8 +275,10 @@ func (s *apiServer) lockWtx(w http.ResponseWriter) bool {
 const buildBrief = false
 
 // POST /api/issues/{id}/agent/{action}, action go, brief or approve, body
-// {"brief": "..."}: wtx go or wtx brief on the issue's branch, with a
-// prompt file of git-board's words and the issue quoted as data. The
+// {"brief": "...", "comment": "..."}: wtx go or wtx brief on the issue's
+// branch, with a prompt file of git-board's words and the issue quoted as
+// data. comment, brief only, is a line comment's id: its thread is quoted
+// too, and the agent is asked to answer it, never to approve. The
 // agent's permissions are wtx.toml's: no --agent, --llm or permission
 // flag is passed.
 //
@@ -294,9 +296,14 @@ func (s *apiServer) handleIssueAgentAction(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	var req struct {
-		Brief string `json:"brief"`
+		Brief   string `json:"brief"`
+		Comment string `json:"comment"`
 	}
 	if !decode(w, r, &req) {
+		return
+	}
+	if req.Comment != "" && action != "brief" {
+		writeError(w, http.StatusBadRequest, errors.New("a review thread goes with brief only"))
 		return
 	}
 	if !s.lockWtx(w) {
@@ -364,6 +371,14 @@ func (s *apiServer) handleIssueAgentAction(w http.ResponseWriter, r *http.Reques
 	if cyc.Evidence.Plan != nil {
 		in.Plan = cyc.Evidence.Plan.Path
 	}
+	if req.Comment != "" {
+		what, quoted, ok := s.reviewThread(&th, req.Comment)
+		if !ok {
+			writeError(w, http.StatusBadRequest, errors.New("send a line comment's thread"))
+			return
+		}
+		in.What, in.Thread = what, quoted
+	}
 	file, err := tempFile("git-board-brief-*.md", []byte(wtx.Prompt(in)))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
@@ -424,6 +439,49 @@ func planThen(stages config.Stages, is gitbugio.Issue, branch string) string {
 		pr = "open no PR at this step: the PR comes at step 5"
 	}
 	return fmt.Sprintf("Once the person accepts the plan in this pane, commit it as `%s`, its front matter `issue: %s` and `status: draft` (git-board finds the plan by that `issue:` line), push the branch, %s, and stop. The plan is approved on the board, and you are briefed then: write no code before.", file, key, pr)
+}
+
+// reviewThread is the line comment comment, or the thread it replies to,
+// as the agent reads it: what is asked (git-board's words) and the thread
+// written out to be quoted (the commenters' words). false: no such line
+// comment on the issue.
+func (s *apiServer) reviewThread(th *gitbugio.Thread, comment string) (what, quoted string, ok bool) {
+	s.annotate(th)
+	root := comment
+	if i := slices.IndexFunc(th.Events, func(e gitbugio.Event) bool { return e.ID == comment }); i < 0 || th.Events[i].Review == nil || th.Events[i].Review.Path == "" {
+		return "", "", false
+	} else if to := th.Events[i].Review.ReplyTo; to != "" {
+		root = to
+	}
+	var b strings.Builder
+	var rv *gitbugio.Review
+	for _, e := range th.Events {
+		if e.Review == nil || e.ID != root && e.Review.ReplyTo != root {
+			continue
+		}
+		if rv == nil {
+			if e.ID != root {
+				return "", "", false // the reply's thread starts elsewhere
+			}
+			rv = e.Review
+			fmt.Fprintf(&b, "%s line %d (%s side), at %.7s", rv.Path, rv.Line, rv.Side, rv.Commit)
+			switch {
+			case rv.Outdated:
+				b.WriteString(", outdated: the line changed since")
+			case rv.HeadLine > 0 && rv.HeadLine != rv.Line:
+				fmt.Fprintf(&b, ", now line %d at the branch's head", rv.HeadLine)
+			}
+			if rv.Text != "" {
+				fmt.Fprintf(&b, "\n%s", rv.Text)
+			}
+		}
+		fmt.Fprintf(&b, "\n\n%s, %s:\n%s", e.Author.Name, e.At.UTC().Format(time.RFC3339), strings.TrimSpace(e.Body))
+	}
+	if rv == nil {
+		return "", "", false
+	}
+	what = fmt.Sprintf("answer the review thread on %s line %d: change the code in the worktree as it asks, or say why not. Don't resolve the thread, approve or request changes: a person does", rv.Path, rv.Line)
+	return what, b.String(), true
 }
 
 // issueName names the issue as the Work page does: its project number,
