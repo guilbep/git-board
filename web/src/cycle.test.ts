@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { Cycle, GatePR, IssueEvent } from './api/board.ts';
-import { cardFor, forStep, steps, statusBar, tiles, turn, withCriteria } from './cycle.ts';
+import { cardFor, forStep, riskWords, steps, statusBar, suggestion, tiles, turn, withCriteria } from './cycle.ts';
 import { on } from './when.ts';
 
 const at = (c: Partial<Cycle>): Cycle => ({
@@ -185,4 +185,15 @@ test('the draft PR that holds the plan, on step 3\'s line', () => {
   assert.equal(done[2]?.line, 'docs/plans/41-x.md · draft PR #41');
   // ready for review: no longer a draft
   assert.equal(steps(at({ step: 4, name: 'Tests', evidence: { plan, pr: pr({ number: 41 }) } }))[2]?.line, 'docs/plans/41-x.md');
+});
+
+test('the AI\'s newest suggestion, and what a class opens', () => {
+  const ev = (id: string, meta: Record<string, string>, body = ''): IssueEvent => ({ kind: 'comment', id, author: { id: 'bot', name: 'bot' }, at: '', body, meta });
+  assert.equal(suggestion([ev('a', { 'cycle:step': '2' })]), null);
+  assert.deepEqual(suggestion([
+    ev('a', { 'cycle:step': '2', 'ai:risk': 'low' }, 'Suggested: **low**\n\nA copy.'),
+    ev('b', { 'cycle:step': '2', 'ai:risk': 'structural' }, 'Suggested: **structural**\n\nThe export changes a schema.'),
+  ]), { risk: 'structural', why: 'The export changes a schema.' });
+  assert.equal(riskWords('low'), 'low skips step 3, Start work opens step 4');
+  assert.equal(riskWords('normal'), 'normal opens step 3');
 });

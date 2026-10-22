@@ -35,6 +35,18 @@
         @approve="approve"
         @revise="revise"
       />
+      <CycleRisk
+        v-else-if="cycle && n === 2 && (current || risk)"
+        :cycle="cycle"
+        :gate="row?.gate ?? ''"
+        :current="current"
+        :busy="busy"
+        :can="has('set-risk')"
+        :events="events"
+        :risk-by="riskBy"
+        @set="(r) => patch({ risk: r })"
+        @suggest="act('suggest-risk')"
+      />
       <CycleVerify
         v-else-if="cycle && n === 7 && current"
         :cycle="cycle"
@@ -115,6 +127,7 @@ import { agentButton, agentWords } from '@/worktrees';
 import { useCycle } from '@/usecycle';
 import CycleIntent from '@/components/CycleIntent.vue';
 import CyclePlan from '@/components/CyclePlan.vue';
+import CycleRisk from '@/components/CycleRisk.vue';
 import CycleTests from '@/components/CycleTests.vue';
 import CycleVerify from '@/components/CycleVerify.vue';
 import GbIcon from '@/components/GbIcon.vue';

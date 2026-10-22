@@ -131,6 +131,17 @@ export function forStep(events: IssueEvent[], n: number): IssueEvent[] {
   return events.filter((e) => e.kind === 'comment' && (e.meta?.['cycle:step'] ?? (e.review ? '6' : '1')) === String(n));
 }
 
+// suggestion is the AI's newest class for step 2 (internal/server/cycle.go
+// suggestRisk): the class, and the sentence under "Suggested: **class**".
+export function suggestion(events: IssueEvent[]): { risk: string; why: string } | null {
+  const e = events.findLast((e) => e.kind === 'comment' && e.meta?.['ai:risk']);
+  if (!e?.meta) return null;
+  return { risk: e.meta['ai:risk'] ?? '', why: (e.body ?? '').replace(/^Suggested:.*\n*/, '').trim() };
+}
+
+// riskWords is what a class does next, for step 2's gate (C2)
+export const riskWords = (risk: string) => (risk === 'low' ? 'low skips step 3, Start work opens step 4' : `${risk} opens step 3`);
+
 // The headings and items internal/cycle/cycle.go's Criteria reads.
 const typedItem = /^([-*+]|\d+[.)])\s+|^\[[ xX]\]\s*/;
 const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

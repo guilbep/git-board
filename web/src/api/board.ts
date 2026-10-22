@@ -749,6 +749,7 @@ export interface Cycle {
   evidence: CycleEvidence;
   stages: CycleStages;
   pr_checked_at?: string;
+  ai?: boolean; // an AI address is set: step 2 can ask it for the class
 }
 
 // the cycle's stages: the project file's [cycle], the rest guessed from the status names
@@ -763,6 +764,7 @@ export interface CycleStages {
   criteria: string[]; // the headings the criteria are read under
   kinds: Record<string, string>; // step 4's rule by kind: failing-test, per-criterion, none
   guessed: boolean;
+  roles?: Record<string, string>; // the role holding each gate: risk, plan, review, signoff:<status>
 }
 
 // The Work page (internal/work, internal/server/work.go): every open
