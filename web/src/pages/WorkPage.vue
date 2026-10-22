@@ -47,7 +47,7 @@
                       <button v-for="k in ['low', 'normal', 'structural']" :key="k" type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" :disabled="busy" @click="setRisk(r, k)">{{ cap(k) }}</button>
                     </template>
                     <button v-else-if="actionFor(r).kind === 'answer'" type="button" class="epfl-btn epfl-btn-primary epfl-btn-sm" @click="answer(r)">Answer</button>
-                    <router-link v-else :to="linkTo(r)" class="epfl-btn epfl-btn-secondary epfl-btn-sm">{{ label(r) }}</router-link>
+                    <router-link v-else :to="`/issues/${r.issue.id}`" class="epfl-btn epfl-btn-secondary epfl-btn-sm">{{ label(r) }}</router-link>
                   </td>
                 </tr>
               </tbody>
@@ -184,10 +184,6 @@ const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 const label = (r: WorkRow) => {
   const a = actionFor(r);
   return a.kind === 'open' ? a.label : '';
-};
-const linkTo = (r: WorkRow) => {
-  const a = actionFor(r);
-  return a.kind === 'open' && a.cycle ? { path: `/issues/${r.issue.id}`, query: { view: 'cycle' } } : `/issues/${r.issue.id}`;
 };
 
 async function reload() {

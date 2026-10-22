@@ -43,11 +43,11 @@ test('waitsFor names who else, and the question', () => {
 
 test('actionFor', () => {
   assert.deepEqual(actionFor(row('set the risk class', { actions: ['set-risk'] })), { kind: 'risk' });
-  assert.deepEqual(actionFor(row('approve the plan', { actions: ['approve-plan'] })), { kind: 'open', label: 'Read the plan', cycle: true });
-  assert.deepEqual(actionFor(row('review the PR', { actions: ['review'] })), { kind: 'open', label: 'Review', cycle: true });
-  assert.deepEqual(actionFor(row('sign off qa', { actions: ['verify', 'check', 'signoff'] })), { kind: 'open', label: 'Sign off qa', cycle: true });
-  assert.deepEqual(actionFor(row('write the failing test')), { kind: 'open', label: 'Open', cycle: false });
-  assert.deepEqual(actionFor(row('review the PR', { mine: false, actions: ['review'] })), { kind: 'open', label: 'Open', cycle: false });
+  assert.deepEqual(actionFor(row('approve the plan', { actions: ['approve-plan'] })), { kind: 'open', label: 'Read the plan' });
+  assert.deepEqual(actionFor(row('review the PR', { actions: ['review'] })), { kind: 'open', label: 'Review' });
+  assert.deepEqual(actionFor(row('sign off qa', { actions: ['verify', 'check', 'signoff'] })), { kind: 'open', label: 'Sign off qa' });
+  assert.deepEqual(actionFor(row('write the failing test')), { kind: 'open', label: 'Open' });
+  assert.deepEqual(actionFor(row('review the PR', { mine: false, actions: ['review'] })), { kind: 'open', label: 'Open' });
   const q = { id: 'c1', body: 'Which?', by: { id: 'b', name: 'Bob' }, at: before(60) };
   assert.deepEqual(actionFor(row('set the risk class', { actions: ['set-risk'], question: q })), { kind: 'answer' });
 });

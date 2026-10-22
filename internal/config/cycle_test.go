@@ -77,8 +77,10 @@ func TestCycleFromFile(t *testing.T) {
 		Before: []string{"backlog", "comite"}, Ready: "ready",
 		InProgress: []string{"in-progress"}, InReview: []string{"in-review"},
 		Validation: []string{"ready-for-validation", "qa", "tests-metier"}, Closing: "validated",
-		Plans: "docs/src/implementation-plans",
-		Tests: []string{"*_test.go", "*.test.ts", "*.spec.ts", "test_*.py", "tests/**"},
+		Plans:    "docs/src/implementation-plans",
+		Tests:    []string{"*_test.go", "*.test.ts", "*.spec.ts", "test_*.py", "tests/**"},
+		Criteria: []string{"Acceptance criteria", "Done when", "Expected"},
+		Kinds:    map[string]string{"bug": "failing-test", "feat": "per-criterion", "doc": "none", "chore": "none"},
 	}
 	if !reflect.DeepEqual(s, want) {
 		t.Errorf("Stages()\n got %+v\nwant %+v", s, want)
@@ -137,6 +139,39 @@ func TestCycleRolesChecked(t *testing.T) {
 	}
 	_, _, err = parse([]byte("[cycle.signoffs]\nqa = \"Pm\"\n"))
 	if err == nil || !strings.Contains(err.Error(), `[cycle.signoffs] qa: a role name, not "Pm"`) {
+		t.Errorf("err = %v", err)
+	}
+}
+
+func TestCycleProtocol(t *testing.T) {
+	t.Parallel()
+	cfg, md, err := parse([]byte("[cycle]\ncriteria = [\"Definition of done\"]\n\n[cycle.kinds]\ndoc = \"per-criterion\"\nspike = \"none\"\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if u := md.Undecoded(); len(u) > 0 {
+		t.Errorf("undecoded keys: %v", u)
+	}
+	s := cfg.Stages()
+	if !reflect.DeepEqual(s.Criteria, []string{"Definition of done"}) {
+		t.Errorf("criteria = %q", s.Criteria)
+	}
+	// the file's kinds over the defaults
+	for kind, want := range map[string]string{"doc": "per-criterion", "spike": "none", "chore": "none", "bug": "failing-test", "": "per-criterion", "epic": "per-criterion"} {
+		if got := s.KindRule(kind); got != want {
+			t.Errorf("KindRule(%q) = %q, want %q", kind, got, want)
+		}
+	}
+	// the defaults stay the defaults: a file's kinds never write into them
+	if r := (&Config{}).Stages().KindRule("doc"); r != "none" {
+		t.Errorf("default doc rule = %q after a file changed it", r)
+	}
+	_, _, err = parse([]byte("[cycle.kinds]\nbug = \"fails-first\"\n"))
+	if err == nil || !strings.Contains(err.Error(), `[cycle.kinds] bug: failing-test, per-criterion, none, not "fails-first"`) {
+		t.Errorf("err = %v", err)
+	}
+	_, _, err = parse([]byte("[cycle]\ncriteria = [\" \"]\n"))
+	if err == nil || !strings.Contains(err.Error(), "[cycle] criteria: a heading") {
 		t.Errorf("err = %v", err)
 	}
 }

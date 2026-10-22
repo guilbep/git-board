@@ -155,10 +155,12 @@ func (s *apiServer) handleCycle(w http.ResponseWriter, r *http.Request) {
 
 var errNotAtVerify = errors.New("not at Verify")
 
-// handleCycleAction writes what a gate needs as a comment with metadata:
-// approve-plan, verify (a run's output), check (one criterion), signoff
-// (which then moves the status on, closing the issue after the last
-// validation status). The risk is a field: PATCH the issue.
+// handleCycleAction writes what a gate needs as a comment with metadata,
+// in its step's discussion (cycle:step): approve-plan (which then moves a
+// ready issue to in-progress), verify (a run's output), check (one
+// criterion), signoff (which then moves the status on, closing the issue
+// after the last validation status). The risk and the other status moves
+// are fields: PATCH the issue.
 func (s *apiServer) handleCycleAction(w http.ResponseWriter, r *http.Request) {
 	action := r.PathValue("action")
 	if !slices.Contains([]string{"approve-plan", "verify", "check", "signoff"}, action) {
@@ -201,7 +203,7 @@ func (s *apiServer) handleCycleAction(w http.ResponseWriter, r *http.Request) {
 	}
 	atVerify := cur.Step == 7 && !cur.Done
 	commit := cmp.Or(req.Commit, ev.Head)
-	meta := map[string]string{}
+	meta := map[string]string{"cycle:step": "7"}
 	var body string
 	switch action {
 	case "approve-plan":
@@ -212,7 +214,7 @@ func (s *apiServer) handleCycleAction(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, errors.New("the plan PR is approved on GitHub"))
 			return
 		}
-		body, meta["plan:approve"] = "Plan approved", "1"
+		body, meta["plan:approve"], meta["cycle:step"] = "Plan approved", "1", "3"
 		if c := cmp.Or(ev.Head, ev.PlanHead); c != "" {
 			meta["plan:commit"] = c
 		}
@@ -275,6 +277,12 @@ func (s *apiServer) handleCycleAction(w http.ResponseWriter, r *http.Request) {
 	if _, err := s.b.AddCommentMeta(id, body, meta); err != nil {
 		writeIssueError(w, err)
 		return
+	}
+	if action == "approve-plan" && cur.Stage == "ready" && len(cur.Stages.InProgress) > 0 {
+		if _, err := fields.Apply(s.b, cfg, id, "status", cur.Stages.InProgress[0], s.me, time.Now()); err != nil {
+			writeError(w, http.StatusInternalServerError, err)
+			return
+		}
 	}
 	if action == "signoff" {
 		if err := s.signedOff(id, cur.Stages, ev.Status); err != nil {

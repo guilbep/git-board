@@ -1,24 +1,19 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import type { Cycle, GatePR } from './api/board.ts';
-import { cardFor, progressLine, spine, statusBar, tiles, withCriteria } from './cycle.ts';
+import type { Cycle, GatePR, IssueEvent } from './api/board.ts';
+import { cardFor, forStep, steps, statusBar, tiles, turn, withCriteria } from './cycle.ts';
 import { on } from './when.ts';
 
 const at = (c: Partial<Cycle>): Cycle => ({
   step: 7, of: 7, name: 'Verify', stage: 'validation', done: false, gate: 'Green codes are not proof', mine: true,
   waits: { role: 'signoff', login: 'alice', what: 'sign off qa', anyone: false }, actions: ['verify', 'check', 'signoff'],
-  evidence: {}, stages: { ready: 'ready', in_progress: [], in_review: [], validation: ['qa'], closing: 'validated', guessed: true },
+  evidence: {}, stages: { ready: 'ready', in_progress: [], in_review: [], validation: ['qa'], closing: 'validated', guessed: true, criteria: ['Acceptance criteria', 'Done when', 'Expected'], kinds: { bug: 'failing-test', feat: 'per-criterion', doc: 'none', chore: 'none' } },
   ...c,
 });
 
-test('the progress line says the step and whose turn it is', () => {
-  assert.equal(progressLine(at({})), 'Step 7 of 7 · Verify, waits for alice to sign off qa');
-  assert.equal(
-    progressLine(at({ step: 3, name: 'Plan', skipped: [3], waits: { role: 'assignee', login: 'erin', what: 'move the status to in-progress', anyone: false } })),
-    'Step 3 of 7 · Plan, skipped (low risk), waits for erin to move the status to in-progress',
-  );
-  assert.equal(progressLine(at({ done: true, name: 'Done' })), 'Done');
-  assert.equal(progressLine(at({ step: 2, name: 'Risk class', waits: { what: 'set the risk class', anyone: true } })), 'Step 2 of 7 · Risk class, anyone’s turn to set the risk class');
+test('whose turn it is', () => {
+  assert.equal(turn(at({})), 'waits for alice to sign off qa');
+  assert.equal(turn(at({ waits: { what: 'set the risk class', anyone: true } })), 'anyone’s turn to set the risk class');
 });
 
 test('the card is for the person whose turn it is', () => {
@@ -38,11 +33,20 @@ test('the card is for the person whose turn it is', () => {
   assert.equal(cardFor(at({ step: 3, actions: ['approve-plan'] }), 'ready')?.title, 'Approve the plan');
 });
 
+test('the step buttons move the status to their stage', () => {
+  const stages = { ready: 'ready', in_progress: ['doing'], in_review: ['review'], validation: ['qa'], closing: 'done', guessed: false, criteria: [], kinds: {} };
+  const press = (action: string) => cardFor(at({ stages, actions: [action] }), '')?.buttons.map((b) => [b.label, b.action, b.body]);
+  assert.deepEqual(press('move-ready'), [['Move to ready', 'move-ready', { status: 'ready' }]]);
+  assert.deepEqual(press('start'), [['Start work', 'start', { status: 'doing' }]]);
+  assert.deepEqual(press('ready-for-review'), [['Mark ready for review', 'ready-for-review', { status: 'review' }]]);
+  assert.deepEqual(press('to-validation'), [['Start verification', 'to-validation', { status: 'qa' }]]);
+});
+
 const pr = (p: Partial<GatePR>): GatePR =>
   ({ number: 1, url: 'https://github.com/o/r/pull/1', state: 'OPEN', draft: false, title: '', base: 'dev', head: '', author: 'dan', decision: '', mergeable: '', merge_state: '', checks: [], reviews: [], requested: [], can_merge: false, checking: false, waits: [], ...p });
 
-test('the spine, one line of evidence per step', () => {
-  const rows = spine(
+test('the step bar: done, current, locked with its reason', () => {
+  const rows = steps(
     at({
       step: 3, name: 'Plan', risk: 'structural', gate: 'Structural: plan PR approved first', note: 'plan not approved',
       evidence: { criteria: ['a', 'b', 'c', 'd'], risk: 'structural', plan_pr: pr({ number: 3089 }) },
@@ -50,35 +54,49 @@ test('the spine, one line of evidence per step', () => {
     'erin',
   );
   assert.deepEqual(rows.map((r) => [r.n, r.name, r.state, r.line]), [
-    [1, 'Intent', 'done', '4 acceptance criteria'],
-    [2, 'Risk class', 'done', 'Structural, set by erin'],
-    [3, 'Plan', 'current', 'Plan PR #3089, waits for approval · plan not approved'],
-    [4, 'Tests first', 'todo', 'Every bug fix ships its test'],
-    [5, 'Code', 'todo', 'A human commits and opens the PR'],
-    [6, 'Review', 'todo', 'Structural: a second human'],
-    [7, 'Verify', 'todo', 'Green codes are not proof'],
+    [1, 'Intent', 'done', '4 criteria'],
+    [2, 'Risk', 'done', 'Structural, set by erin'],
+    [3, 'Plan', 'current', 'plan not approved'],
+    [4, 'Tests', 'locked', 'opens when work starts'],
+    [5, 'Code', 'locked', 'opens with the test'],
+    [6, 'Review', 'locked', 'opens when the PR is ready for review'],
+    [7, 'Verify', 'locked', 'opens when the PR is merged'],
   ]);
-  // each row's own gate, for its workspace when it is opened
+  // each step's own gate, for the main section when it is shown
   assert.deepEqual(rows.map((r) => r.gate), [
-    'No issue, no agent', 'Class written on the issue', 'Structural: plan PR approved first', 'Every bug fix ships its test',
+    'No issue, no agent', 'Class written on the issue', 'Structural: plan PR approved first', 'The touched suites green, each criterion names its test',
     'A human commits and opens the PR', 'Structural: a second human', 'Green codes are not proof',
   ]);
 });
 
-test('the spine with no evidence', () => {
-  const rows = spine(at({ step: 1, name: 'Intent', gate: 'No issue, no agent', evidence: {} }));
-  assert.deepEqual(rows.map((r) => [r.state, r.line]), [
-    ['current', 'no acceptance criteria'],
-    ['todo', 'Class written on the issue'],
-    ['todo', 'Plan approved by the plan role'],
-    ['todo', 'Every bug fix ships its test'],
-    ['todo', 'A human commits and opens the PR'],
-    ['todo', 'A human who can explain the diff'],
-    ['todo', 'Green codes are not proof'],
+test('the step bar at step 1, and with steps skipped', () => {
+  const first = steps(at({ step: 1, name: 'Intent', gate: 'No issue, no agent', evidence: {}, waits: { role: 'author', login: 'dan', what: 'add acceptance criteria', anyone: false } }));
+  assert.deepEqual(first.map((r) => [r.state, r.line]), [
+    ['current', 'waits for dan to add acceptance criteria'],
+    ['locked', 'opens at ready'],
+    ['locked', 'opens once the risk is set'],
+    ['locked', 'opens when work starts'],
+    ['locked', 'opens with the test'],
+    ['locked', 'opens when the PR is ready for review'],
+    ['locked', 'opens when the PR is merged'],
   ]);
-  assert.equal(rows[0]?.gate, 'No issue, no agent');
-  const low = spine(at({ step: 4, risk: 'low', skipped: [3], evidence: { plan_approval: { by: 'erin', at: '2026-10-01T00:00:00Z' } } }))[2];
-  assert.deepEqual([low?.line, low?.gate], ['Skipped, low risk', 'Skipped, low risk']);
+  // low risk waits at step 3 for Start work: current, its gate says skipped
+  const low = steps(at({ step: 3, risk: 'low', skipped: [3], gate: 'Skipped, low risk', note: 'low risk, waits for the status in-progress', evidence: { criteria: ['a'] } }));
+  assert.deepEqual([low[2]?.state, low[2]?.gate], ['current', 'Skipped, low risk']);
+  const past = steps(at({ step: 5, risk: 'low', skipped: [3, 4], evidence: { kind: 'doc' } }));
+  assert.deepEqual(past.slice(2, 5).map((r) => [r.state, r.line, r.gate]), [
+    ['skipped', 'skipped, low risk', 'Skipped, low risk'],
+    ['skipped', 'skipped, doc', 'Skipped: no tests for this kind'],
+    ['current', 'waits for alice to sign off qa', 'Green codes are not proof'],
+  ]);
+});
+
+test('the criteria, written under the description\'s own heading', () => {
+  const hs = ['Acceptance criteria', 'Done when', 'Expected'];
+  // under Expected, the heading the description has, not a new Acceptance criteria
+  assert.equal(withCriteria('It fails.\n\n## Expected\n\nTo be written.', ['a', 'b'], hs), 'It fails.\n\n## Expected\n\n- a\n- b\n\nTo be written.');
+  assert.equal(withCriteria('It fails.', ['a'], hs), 'It fails.\n\n## Acceptance criteria\n\n- a');
+  assert.equal(withCriteria('**done when**', ['a'], ['Done when']), '**done when**\n\n- a');
 });
 
 test('the criteria, written into the description', () => {
@@ -93,8 +111,8 @@ test('the criteria, written into the description', () => {
   assert.equal(withCriteria('', ['- a', '', ' 2) b ', '[ ] c', '* [x] d']), '## Acceptance criteria\n\n- a\n- b\n- c\n- d');
 });
 
-test('the spine at verify', () => {
-  const rows = spine(
+test('the step bar at verify', () => {
+  const rows = steps(
     at({
       evidence: {
         criteria: ['a'], risk: 'normal', plan_approval: { by: 'erin', at: '2026-10-01T00:00:00Z' },
@@ -102,20 +120,28 @@ test('the spine at verify', () => {
         pr: pr({ number: 7, author: 'dan', reviews: [{ login: 'erin', state: 'APPROVED', commit: '' }, { login: 'alice', state: 'APPROVED', commit: '' }, { login: 'bob', state: 'COMMENTED', commit: '' }] }),
         signoffs: [{ status: 'ready-for-validation', by: 'alice', at: '2026-10-18T10:00:00Z' }],
       },
-      stages: { ready: 'ready', in_progress: [], in_review: [], validation: ['ready-for-validation', 'qa', 'tests-metier'], closing: 'validated', guessed: false },
+      stages: { ready: 'ready', in_progress: [], in_review: [], validation: ['ready-for-validation', 'qa', 'tests-metier'], closing: 'validated', guessed: false, criteria: ['Acceptance criteria'], kinds: {} },
     }),
   );
-  assert.deepEqual(rows.map((r) => r.line), ['1 acceptance criterion', 'Normal', 'Approved by erin', 'api/a_test.go at 2c8e4a1', 'Committed by dan', 'erin and alice approved', 'Sign-off 2 of 3']);
+  assert.deepEqual(rows.map((r) => r.line), ['1 criterion', 'Normal', 'Approved by erin', 'api/a_test.go at 2c8e4a1', 'Committed by dan', 'erin and alice approved', 'waits for alice to sign off qa']);
   assert.deepEqual(rows.map((r) => r.state), ['done', 'done', 'done', 'done', 'done', 'done', 'current']);
-  assert.equal(spine(at({ evidence: { branch: 'fix/1-x', head: '4f2e9c1a00', pr: pr({ number: 7, state: 'MERGED' }) } }))[5]?.line, 'PR #7 merged');
-  assert.equal(spine(at({ evidence: { branch: 'fix/1-x', head: '4f2e9c1a00' } }))[4]?.line, 'fix/1-x at 4f2e9c1');
-  assert.deepEqual(spine(at({ done: true, name: 'Done', evidence: {} })).map((r) => r.state), Array(7).fill('done'));
+  assert.equal(steps(at({ evidence: { branch: 'fix/1-x', head: '4f2e9c1a00', pr: pr({ number: 7, state: 'MERGED' }) } }))[5]?.line, 'PR #7 merged');
+  assert.equal(steps(at({ evidence: { branch: 'fix/1-x', head: '4f2e9c1a00' } }))[4]?.line, 'fix/1-x at 4f2e9c1');
+  assert.deepEqual(steps(at({ done: true, name: 'Done', evidence: {} })).map((r) => r.state), Array(7).fill('done'));
+});
+
+test('each step has its own discussion', () => {
+  const ev = (id: string, kind: IssueEvent['kind'], step?: string) => ({ id, kind, meta: step ? { 'cycle:step': step } : undefined }) as unknown as IssueEvent;
+  const events = [ev('c', 'created'), ev('1', 'comment'), ev('2', 'comment', '3'), ev('3', 'labels'), ev('4', 'comment', '1')];
+  assert.deepEqual(forStep(events, 1).map((e) => e.id), ['1', '4']);
+  assert.deepEqual(forStep(events, 3).map((e) => e.id), ['2']);
+  assert.deepEqual(forStep(events, 6), []);
 });
 
 test('the sign-off tiles', () => {
   const c = at({
     evidence: { signoffs: [{ status: 'ready-for-validation', by: 'alice', at: '2026-10-18T10:00:00Z' }] },
-    stages: { ready: 'ready', in_progress: [], in_review: [], validation: ['ready-for-validation', 'qa', 'tests-metier'], closing: 'validated', guessed: false },
+    stages: { ready: 'ready', in_progress: [], in_review: [], validation: ['ready-for-validation', 'qa', 'tests-metier'], closing: 'validated', guessed: false, criteria: ['Acceptance criteria'], kinds: {} },
   });
   assert.deepEqual(tiles(c, 'qa'), [
     { status: 'ready-for-validation', state: 'done', by: 'alice', when: `Signed off ${on('2026-10-18T10:00:00Z')}` },

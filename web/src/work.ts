@@ -37,17 +37,17 @@ export function waitsFor(r: Pick<WorkRow, 'waits' | 'mine' | 'risk' | 'question'
 }
 
 // Action is the row's one control: the risk buttons, Answer (the panel at
-// the question), or a link to the issue (cycle: its Cycle view).
-export type Action = { kind: 'risk' } | { kind: 'answer' } | { kind: 'open'; label: string; cycle: boolean };
+// the question), or a link to the issue's page, at its step.
+export type Action = { kind: 'risk' } | { kind: 'answer' } | { kind: 'open'; label: string };
 
 export function actionFor(r: Pick<WorkRow, 'waits' | 'mine' | 'question' | 'actions'>): Action {
   if (r.question) return { kind: 'answer' };
   const has = (a: string) => !!r.mine && !!r.actions?.includes(a);
   if (has('set-risk')) return { kind: 'risk' };
-  if (has('approve-plan')) return { kind: 'open', label: 'Read the plan', cycle: true };
-  if (has('review')) return { kind: 'open', label: 'Review', cycle: true };
-  if (has('signoff')) return { kind: 'open', label: `Sign off ${r.waits.what.slice('sign off '.length)}`, cycle: true };
-  return { kind: 'open', label: 'Open', cycle: false };
+  if (has('approve-plan')) return { kind: 'open', label: 'Read the plan' };
+  if (has('review')) return { kind: 'open', label: 'Review' };
+  if (has('signoff')) return { kind: 'open', label: `Sign off ${r.waits.what.slice('sign off '.length)}` };
+  return { kind: 'open', label: 'Open' };
 }
 
 // stepLabel: "06 Review"

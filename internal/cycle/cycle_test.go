@@ -18,6 +18,9 @@ var people = map[string]string{
 	"signoff:ready-for-validation": "bob", "signoff:qa": "alice", "signoff:tests-metier": "",
 }
 
+// noValidation is git-board's own board: Verify happens in in-review.
+var noValidation = (&config.Config{Fields: map[string]config.Field{"status": {Options: []string{"draft", "backlog", "ready", "in-progress", "in-review", "done"}}}}).Stages()
+
 var two = []string{"Exports a CSV", "Keeps the filters"}
 
 // input is an issue at status with two criteria, author dan, assignee
@@ -52,11 +55,13 @@ func TestWalk(t *testing.T) {
 		done    bool
 	}{
 		{name: "backlog", in: input("backlog", func(in *Input) { in.Criteria = nil }), step: 1, login: "dan", what: "add acceptance criteria", gate: "No issue, no agent"},
+		{name: "backlog, criteria", in: input("backlog", func(in *Input) { in.Me = "dan" }), step: 1, login: "dan", what: "move the status to ready", mine: true, actions: []string{"move-ready"}},
 		{name: "ready, no criteria", in: input("ready", func(in *Input) { in.Criteria = nil }), step: 1, login: "dan", what: "add acceptance criteria"},
 		{name: "ready, no risk", in: input("ready", nil), step: 2, login: "alice", what: "set the risk class", mine: true, gate: "Class written on the issue", actions: []string{"set-risk"}},
 		{name: "ready, normal", in: input("ready", risk("normal")), step: 3, login: "bob", what: "approve the plan", gate: "Plan approved by the plan role"},
 		{name: "ready, normal, approved", in: input("ready", approved("normal")), step: 3, login: "erin", what: "move the status to in-progress", note: "plan approved, waits for the status in-progress"},
 		{name: "ready, normal, plan accepted", in: input("ready", func(in *Input) { in.Risk = "normal"; in.Plan = &Plan{Path: "p.md", Status: "accepted"} }), step: 3, login: "erin", what: "move the status to in-progress", note: "plan approved, waits for the status in-progress"},
+		{name: "ready, low, the assignee", in: input("ready", func(in *Input) { in.Risk = "low"; in.Me = "erin" }), step: 3, login: "erin", what: "move the status to in-progress", mine: true, note: "low risk, waits for the status in-progress", skipped: []int{3}, actions: []string{"start"}},
 		{name: "ready, low", in: input("ready", risk("low")), step: 3, login: "erin", what: "move the status to in-progress", note: "low risk, waits for the status in-progress", gate: "Skipped, low risk", skipped: []int{3}},
 		{name: "ready, structural, PR approved", in: input("ready", func(in *Input) { in.Risk = "structural"; in.PlanPR = &ghpr.PR{Decision: "APPROVED"} }), step: 3, login: "erin", what: "move the status to in-progress", note: "plan approved, waits for the status in-progress", gate: "Structural: plan PR approved first"},
 		{name: "ready, structural, PR waiting", in: input("ready", func(in *Input) {
@@ -64,23 +69,40 @@ func TestWalk(t *testing.T) {
 			in.PlanPR = &ghpr.PR{Decision: "REVIEW_REQUIRED"}
 			in.Me = "bob"
 		}), step: 3, login: "bob", what: "approve the plan PR on GitHub", mine: true},
-		{name: "in-progress, no tests", in: input("in-progress", approved("normal")), step: 4, login: "erin", what: "write the failing test", gate: "Every bug fix ships its test"},
+		{name: "in-progress, no tests", in: input("in-progress", approved("normal")), step: 4, login: "erin", what: "write the failing test", gate: "The touched suites green, each criterion names its test"},
+		{name: "in-progress, a bug", in: input("in-progress", func(in *Input) { approved("normal")(in); in.Kind = "bug" }), step: 4, login: "erin", what: "write the failing test", gate: "A test that fails before the fix"},
+		{name: "in-progress, a doc", in: input("in-progress", func(in *Input) { approved("normal")(in); in.Kind = "doc"; in.Me = "erin" }), step: 5, login: "erin", what: "commit and open the PR", mine: true, gate: "A human commits and opens the PR", skipped: []int{4}, actions: []string{"ready-for-review"}},
 		{name: "in-progress, tests", in: input("in-progress", func(in *Input) { approved("normal")(in); in.Tests = []TestFile{{Path: "a_test.go", Commit: "c1"}} }), step: 5, login: "erin", what: "commit and open the PR", gate: "A human commits and opens the PR"},
 		{name: "in-progress, the floor", in: input("in-progress", func(in *Input) { in.Criteria = nil }), step: 4, login: "erin", what: "write the failing test", note: "risk not set"},
 		{name: "in-progress, plan not approved", in: input("in-progress", risk("normal")), step: 4, login: "erin", what: "write the failing test", note: "plan not approved"},
-		{name: "in-progress, low", in: input("in-progress", risk("low")), step: 4, login: "erin", what: "write the failing test"},
+		{name: "in-progress, low", in: input("in-progress", risk("low")), step: 4, login: "erin", what: "write the failing test", skipped: []int{3}},
 		{name: "in-progress, PR open", in: input("in-progress", func(in *Input) {
 			approved("normal")(in)
 			in.Tests = []TestFile{{Path: "a_test.go"}}
 			in.PR = &ghpr.PR{Number: 3082, State: "OPEN"}
 		}), step: 5, login: "erin", what: "commit and open the PR", note: "PR #3082 open, waits for the status in-review"},
+		{name: "in-progress, tests, the assignee", in: input("in-progress", func(in *Input) { approved("normal")(in); in.Tests = []TestFile{{Path: "a_test.go"}}; in.Me = "erin" }), step: 5, login: "erin", what: "commit and open the PR", mine: true, actions: []string{"ready-for-review"}},
 		{name: "in-review", in: input("in-review", approved("normal")), step: 6, login: "carol", what: "review the PR", gate: "A human who can explain the diff"},
 		{name: "in-review, structural", in: input("in-review", func(in *Input) { in.Risk = "structural"; in.Me = "carol" }), step: 6, login: "carol", what: "review the PR", mine: true, gate: "Structural: a second human", actions: []string{"review"}},
-		{name: "in-review, merged", in: input("in-review", func(in *Input) { approved("normal")(in); in.PR = &ghpr.PR{Number: 3082, State: "MERGED"} }), step: 6, login: "carol", what: "review the PR", note: "merged, waits for the status"},
+		{name: "in-review, merged", in: input("in-review", func(in *Input) {
+			approved("normal")(in)
+			in.PR = &ghpr.PR{Number: 3082, State: "MERGED"}
+			in.Me = "erin"
+		}), step: 6, login: "erin", what: "move the status to ready-for-validation", mine: true, note: "merged, waits for the status ready-for-validation", actions: []string{"to-validation"}},
+		{name: "in-review, merged, no validation status", in: input("in-review", func(in *Input) {
+			approved("normal")(in)
+			in.Stages = noValidation
+			in.PR = &ghpr.PR{Number: 3082, State: "MERGED"}
+		}), step: 7, what: "sign off in-review", mine: true, note: "no plan file", gate: "Green codes are not proof", actions: []string{"verify", "check", "signoff"}},
+		{name: "in-review, open, no validation status", in: input("in-review", func(in *Input) {
+			approved("normal")(in)
+			in.Stages = noValidation
+			in.PR = &ghpr.PR{Number: 3082, State: "OPEN"}
+		}), step: 6, login: "carol", what: "review the PR"},
 		{name: "qa", in: input("qa", risk("normal")), step: 7, login: "alice", what: "sign off qa", mine: true, note: "no plan file", gate: "Green codes are not proof", actions: []string{"verify", "check", "signoff"}},
 		{name: "qa, plan not delivered", in: input("qa", func(in *Input) { in.Risk = "normal"; in.Plan = &Plan{Path: "p.md", Status: "accepted"} }), step: 7, login: "alice", what: "sign off qa", mine: true, note: "plan not marked delivered", actions: []string{"verify", "check", "signoff"}},
-		{name: "tests-metier, anyone", in: input("tests-metier", risk("low")), step: 7, what: "sign off tests-metier", mine: true, actions: []string{"verify", "check", "signoff"}},
-		{name: "validated", in: input("validated", risk("low")), step: 7, done: true, gate: "Green codes are not proof"},
+		{name: "tests-metier, anyone", in: input("tests-metier", risk("low")), step: 7, what: "sign off tests-metier", mine: true, actions: []string{"verify", "check", "signoff"}, skipped: []int{3}},
+		{name: "validated", in: input("validated", risk("low")), step: 7, done: true, gate: "Green codes are not proof", skipped: []int{3}},
 		{name: "closed at qa", in: input("qa", func(in *Input) { in.Risk = "structural"; in.Closed = true }), step: 7, done: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -133,10 +155,38 @@ func TestCriteriaCount(t *testing.T) {
 		{"heading, no list", "### Acceptance Criteria\n\nTo be written.\n- not this\n", nil},
 		{"no heading", "- one\n- two\n", nil},
 		{"cut by a paragraph", "# Acceptance criteria\n* a\n+ b\n\nNotes: later\n- c\n", []string{"a", "b"}},
+		// GB-31: its four criteria were under "Expected"
+		{"expected", "## Steps\n\n1. open it\n\n## Expected\n\n- one\n- two\n- three\n- four\n", []string{"one", "two", "three", "four"}},
+		{"done when, bold", "**Done when:**\n- shipped\n", []string{"shipped"}},
+		{"the first heading found", "## Expected\n- e\n\n## Acceptance criteria\n- a\n", []string{"e"}},
+		{"a heading's prefix", "## Expected results\n- no\n", nil},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := Criteria(tc.desc); !slices.Equal(got, tc.want) {
+			if got, _ := Criteria(tc.desc, co2.Criteria); !slices.Equal(got, tc.want) {
 				t.Errorf("Criteria = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestCriteriaProblems(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name, desc string
+		want       []string
+	}{
+		{"clean", "Intro\n\n## Expected\n\n- one\n- two\n\n## Notes\n\nlater\n- an aside\n", nil},
+		{"no heading", "- one\n", nil},
+		{"no list", "## Expected\n\nTo be written.\n", []string{"line 1: no list right under “Expected”"}},
+		{"bold, no list", "**Done when:**\n", []string{"line 1: no list right under “Done when”"}},
+		{"a second heading", "## Expected\n- e\n\n**Done when**\n- d\n", []string{"line 4: a second criteria heading, ignored: only the first list counts"}},
+		{"cut by a paragraph", "## Expected\n- a\nAlso:\n- b\n", []string{"line 3 is not a list item: the list stops there, and the items after it don't count"}},
+		{"a sub-item", "## Expected\n- a\n  - a.1\n- b\n", []string{"line 3: a sub-item, counted as a criterion of its own"}},
+		{"indented, all alike", "## Expected\n  - a\n  - b\n", nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, got := Criteria(tc.desc, co2.Criteria); !slices.Equal(got, tc.want) {
+				t.Errorf("problems = %q, want %q", got, tc.want)
 			}
 		})
 	}
@@ -159,5 +209,16 @@ func TestCardShowsToRoleOnly(t *testing.T) {
 		if c := Compute(input("qa", func(in *Input) { in.Risk = "low"; in.People = nobody; in.Me = me })); !c.Mine || !c.Waits.Anyone {
 			t.Errorf("%s with nobody at qa: mine %v, anyone %v", me, c.Mine, c.Waits.Anyone)
 		}
+	}
+}
+
+func TestCriteriaOwnHeading(t *testing.T) {
+	t.Parallel()
+	d := "## Acceptance criteria\n- not this\n\n### Definition of Done (v2)\n- this\n"
+	if got, _ := Criteria(d, []string{"Definition of done (v2)"}); !slices.Equal(got, []string{"this"}) {
+		t.Errorf("Criteria = %q", got)
+	}
+	if got, _ := Criteria(d, nil); got != nil {
+		t.Errorf("no headings: %q", got)
 	}
 }

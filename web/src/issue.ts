@@ -77,7 +77,7 @@ export function useIssue(id: Ref<string>, onChange: (t: Thread) => void = () => 
     saveError,
     saveCode,
     load,
-    comment: (body: string, status?: 'open' | 'closed') => write(() => addComment(id.value, body, status)),
+    comment: (body: string, status?: 'open' | 'closed', step = 0) => write(() => addComment(id.value, body, status, step)),
     // throws: the comment card shows why (ApiError code "changed")
     edit: (commentId: string, body: string, base: string) => write(() => editComment(id.value, commentId, body, base), true),
     rename: (title: string) => write(() => setTitle(id.value, title)),

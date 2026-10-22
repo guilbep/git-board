@@ -117,14 +117,15 @@ field's values (`options`: status follows the workflow when sorted and on
 a board), single or multiple values, sprint dates (`@current`), saved
 views, and the GitHub Project to sync with.
 
-An issue's page shows its step in the development cycle ("Step 7 of 7 ·
-Verify, waits for alice to sign off qa"), computed from its status and the
-evidence (risk, plan file, tests in the branch, PR, sign-offs), with the
-next-step card for whoever's turn it is. The Cycle view beside it is the
-seven steps with their evidence, the step's workspace (the plan to
-approve, the run and the sign-offs) and a status bar. The Work page is
-what needs a person across every open issue: Needs you, Agents, Waiting on
-others, To send, Since the last retro. From both, Start an agent runs
+An issue's page is its step in the development cycle, computed from its
+status and the evidence (criteria, risk, plan file, tests in the branch,
+PR, sign-offs). A bar of the seven steps runs under the title: a done step
+reopens, a later one is locked and says why. The step shown is the main
+screen (the description at Intent, the plan to approve, the diff at
+Review, the run and the sign-offs at Verify), with its button that moves
+the status, and its own discussion beside it. The Work page is what needs
+a person across every open issue: Needs you, Agents, Waiting on others, To
+send, Since the last retro. From both, Start an agent runs
 [wtx](https://github.com/EPFL-ENAC/wtx) on the issue: a worktree, a tmux
 session and a prompt with its step and gate; Settings › Worktrees writes
 `wtx.toml`. `[cycle]` in [docs/configuration.md](docs/configuration.md#cycle),

@@ -3,9 +3,11 @@ package server
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -116,17 +118,22 @@ func (s *apiServer) handleNewIssue(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleComment comments, and optionally closes or reopens: "Close with
-// comment".
+// comment". A step (1 to 7) puts the comment in that step's discussion.
 func (s *apiServer) handleComment(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Body   string `json:"body"`
 		Status string `json:"status"`
+		Step   int    `json:"step"`
 	}
 	if !decode(w, r, &req) {
 		return
 	}
 	if strings.TrimSpace(req.Body) == "" && req.Status == "" {
 		writeError(w, http.StatusBadRequest, errors.New("an empty comment"))
+		return
+	}
+	if req.Step < 0 || req.Step > 7 {
+		writeError(w, http.StatusBadRequest, fmt.Errorf("step: 1 to 7, not %d", req.Step))
 		return
 	}
 	done, ok := s.beginWrite(w)
@@ -136,7 +143,13 @@ func (s *apiServer) handleComment(w http.ResponseWriter, r *http.Request) {
 	defer done()
 	id := r.PathValue("id")
 	if strings.TrimSpace(req.Body) != "" {
-		if _, err := s.b.AddComment(id, req.Body); err != nil {
+		var err error
+		if req.Step > 0 {
+			_, err = s.b.AddCommentMeta(id, req.Body, map[string]string{"cycle:step": strconv.Itoa(req.Step)})
+		} else {
+			_, err = s.b.AddComment(id, req.Body)
+		}
+		if err != nil {
 			writeIssueError(w, err)
 			return
 		}

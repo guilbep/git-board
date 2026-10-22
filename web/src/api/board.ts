@@ -226,7 +226,7 @@ export interface IssueEvent {
   status?: 'open' | 'closed';
   title?: string;
   was?: string;
-  meta?: Record<string, string>; // plan:approve, verify:run, verify:criterion, signoff:status…
+  meta?: Record<string, string>; // cycle:step, plan:approve, verify:run, verify:criterion, signoff:status…
   review?: Review; // comment: a line comment, a reply or a review
 }
 
@@ -268,8 +268,9 @@ export function createIssue(title: string, body: string, labels: string[]): Prom
 }
 
 // A comment, and/or a status: "Close with comment".
-export function addComment(id: string, body: string, status?: 'open' | 'closed'): Promise<Thread> {
-  return request(`${issuePath(id)}/comments`, json('POST', { body, status: status ?? '' }));
+// step: the cycle step whose discussion the comment is in (0: none, step 1's)
+export function addComment(id: string, body: string, status?: 'open' | 'closed', step = 0): Promise<Thread> {
+  return request(`${issuePath(id)}/comments`, json('POST', { body, status: status ?? '', step }));
 }
 
 // base is the text the edit started from: 409 if the comment changed since.
@@ -710,7 +711,9 @@ export interface CycleSignoff {
 // What the server gathered (internal/cycle Input): the thread's fields and
 // comments, the branches, the PRs.
 export interface CycleEvidence {
+  kind?: string; // [branches]' kind, for step 4's rule
   criteria?: string[];
+  criteria_problems?: string[]; // where the description reads differently from how it looks
   risk?: string;
   author?: string;
   assignees?: string[];
@@ -741,7 +744,7 @@ export interface Cycle {
   note?: string; // evidence that disagrees with the status
   waits: CycleWaits;
   mine: boolean; // the viewer's turn, or anyone's
-  actions?: string[]; // set-risk, approve-plan, review, verify, check, signoff
+  actions?: string[]; // set-risk, approve-plan, review, verify, check, signoff, move-ready, start, ready-for-review, to-validation
   evidence: CycleEvidence;
   stages: CycleStages;
   pr_checked_at?: string;
@@ -756,6 +759,8 @@ export interface CycleStages {
   validation: string[];
   closing: string;
   plans?: string;
+  criteria: string[]; // the headings the criteria are read under
+  kinds: Record<string, string>; // step 4's rule by kind: failing-test, per-criterion, none
   guessed: boolean;
 }
 
