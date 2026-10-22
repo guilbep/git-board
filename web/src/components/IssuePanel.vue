@@ -111,6 +111,7 @@
           </div>
           <HistoryView v-if="talk === 'history'" :thread="thread" :fields="fields" />
           <template v-else>
+            <ReviewAside v-if="page && n === 6 && talk === 'step'" :events="rest" @line="showLine" />
             <ol v-if="said(n).length" class="gb-tl" :aria-label="talk === 'step' ? `Step ${n}'s discussion` : 'The whole conversation'">
               <template v-for="e in said(n)" :key="e.id">
                 <li v-if="e.kind === 'comment'" :data-event="e.id">
@@ -160,6 +161,7 @@ import { fieldValues, type Fields } from '@/fields';
 import { useIssue } from '@/issue';
 import { me, on } from '@/me';
 import CycleReview from '@/components/CycleReview.vue';
+import ReviewAside from '@/components/ReviewAside.vue';
 import CommentCard from '@/components/CommentCard.vue';
 import HistoryView from '@/components/HistoryView.vue';
 import { forStep } from '@/cycle';
@@ -209,7 +211,9 @@ const rest = computed(() => thread.value?.events.filter((e) => e.kind !== 'creat
 // the discussion: the shown step's comments, the whole conversation with
 // its events, or every change in order with the issue as it was
 const talk = ref<'step' | 'all' | 'history'>('step');
-const said = (n: number) => (talk.value === 'step' ? forStep(rest.value, n) : rest.value);
+// on the page, step 6's line comments are the review's threads, above
+const said = (n: number) =>
+  talk.value !== 'step' ? rest.value : forStep(rest.value, n).filter((e) => !(props.page && n === 6 && e.review?.path));
 const step = ref<InstanceType<typeof IssueStep> | null>(null);
 const focus = ref<string>(); // the file a comment's path:line opens in Changes, step 6 on the page
 function showLine(path: string) {
