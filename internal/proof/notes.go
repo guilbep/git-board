@@ -56,12 +56,12 @@ func Append(ctx context.Context, dir, writer, addr, line string) error {
 		_, _ = rand.Read(b)
 		tmp := "refs/notes/ci-tmp/" + writer + "-" + hex.EncodeToString(b)
 		if old != "" {
-			if _, err := git(ctx, dir, nil, "update-ref", tmp, old); err != nil {
+			if _, err := git(ctx, dir, nil, append(private, "update-ref", tmp, old)...); err != nil {
 				return err
 			}
 		}
-		if _, err := git(ctx, dir, nil, "notes", "--ref="+tmp, "append", "--no-separator", "-m", line, addr); err != nil {
-			_, _ = git(context.Background(), dir, nil, "update-ref", "-d", tmp)
+		if _, err := git(ctx, dir, nil, append(private, "notes", "--ref="+tmp, "append", "--no-separator", "-m", line, addr)...); err != nil {
+			drop(dir, tmp)
 			return err
 		}
 		out, err := git(ctx, dir, nil, "rev-parse", tmp)
@@ -69,11 +69,22 @@ func Append(ctx context.Context, dir, writer, addr, line string) error {
 			// old "" is "must not exist yet"
 			_, err = git(ctx, dir, nil, "update-ref", ref, strings.TrimSpace(string(out)), old)
 		}
-		_, _ = git(context.Background(), dir, nil, "update-ref", "-d", tmp)
+		drop(dir, tmp)
 		if err == nil {
 			return nil
 		}
 	}
+}
+
+// private are the options of a command on Append's private ref. No
+// reflog: parallel writers' deletes prune the logs/refs/notes/ci-tmp/
+// directory as another writer's log is created there. A delete locks
+// packed-refs, which the other deletes hold in turn: git's 1s wait for it
+// runs out under load.
+var private = []string{"-c", "core.logAllRefUpdates=false", "-c", "core.packedRefsTimeout=30000"}
+
+func drop(dir, tmp string) {
+	_, _ = git(context.Background(), dir, nil, append(private, "update-ref", "-d", tmp)...)
 }
 
 // Lines are the lines of the note at addr, by writer, from every writer's
