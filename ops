@@ -1,1 +1,1 @@
-{"author":{"id":"f943aa1c5ee078b881a8e97535a4e2ccb401d01ca00f4128126befa9cca58a32"},"ops":[{"type":3,"timestamp":1792670666,"nonce":"vk+fT5Kd7Zn2SxPF6xDsg86MD7Q=","message":"M1 (the protocol) and M2 (one page) landed in #39 (merge 9ebd259). M3 to M6 go on under b768fbb. ADR 0001, section 9, amends the PRD's step 4: a run that counts happens in a clean checkout.","files":null}]}
+{"author":{"id":"f943aa1c5ee078b881a8e97535a4e2ccb401d01ca00f4128126befa9cca58a32"},"ops":[{"type":4,"timestamp":1792670666,"nonce":"4QH7fuzkX98EoVqRgzK/uHVfmJE=","status":2}]}
