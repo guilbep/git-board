@@ -223,6 +223,8 @@ func Compute(in Input) Cycle {
 			c.Note = "risk not set"
 		case in.Risk != "low" && !approved:
 			c.Note = "plan not approved"
+		case draft && c.Step == 4:
+			// the draft PR holding the plan: step 4's own state (C4)
 		case draft:
 			// Review opens when the draft PR is marked ready, not before
 			c.Note, act = fmt.Sprintf("draft PR #%d, waits for it to be marked ready for review", in.PR.Number), ""

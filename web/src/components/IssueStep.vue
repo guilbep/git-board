@@ -166,7 +166,7 @@ async function run(action: 'go' | 'brief' | 'approve', brief: string) {
   agentNote.value = '';
   try {
     agent.value = await agentAction(props.id, action, brief);
-    agentNote.value = { go: `Session ${agent.value.session?.session ?? agent.value.branch} started.`, brief: 'Sent to the agent.', approve: 'Sent to the agent: the plan is approved.' }[action];
+    agentNote.value = { go: `Session ${agent.value.session?.session ?? agent.value.branch} started.`, brief: 'Sent to the agent.', approve: 'Sent to the agent: the plan is approved. Accept its step 4 in its pane.' }[action];
     // go at low risk, or with the plan approved, moved the status
     if (action === 'go') emit('changed');
     briefing.value = false;
@@ -178,7 +178,9 @@ async function run(action: 'go' | 'brief' | 'approve', brief: string) {
   }
 }
 
-// Approve the plan on the board, then brief the agent on to step 4
+// Approve the plan on the board, then brief the agent on to step 4.
+// ponytail: wtx brief restarts the pane in plan mode, hence the pane's
+// accept; worktrees.go's buildBrief ends that once wtx has --build
 async function approve() {
   if ((await act('approve-plan')) && button.value === 'brief') void run('approve', '');
 }
