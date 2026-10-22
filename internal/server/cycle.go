@@ -105,7 +105,8 @@ type cycleResponse struct {
 }
 
 // pullNames are the branches on origin whose PR the step needs: the
-// issue's from in-review on, its plan branches when structural, none
+// issue's from in-review on, and from ready on when plans-in-pr (the
+// draft PR holding the plan), its plan branches when structural, none
 // before (the Work page asks for every issue's at once).
 func (s *apiServer) pullNames(th gitbugio.Thread, stages config.Stages) ([]string, error) {
 	names, err := onOrigin(s.b, th.Issue)
@@ -114,6 +115,7 @@ func (s *apiServer) pullNames(th gitbugio.Thread, stages config.Stages) ([]strin
 	}
 	switch stage := stages.StageOf(board.FieldValue(th.Issue, "status")); {
 	case slices.Contains([]string{"in-review", "validation", "done"}, stage):
+	case stages.PlansInPR && (stage == "ready" || stage == "in-progress"):
 	case board.FieldValue(th.Issue, "risk") == "structural":
 		names = slices.DeleteFunc(names, func(n string) bool { return !strings.HasPrefix(n, "plan/") })
 	default:
