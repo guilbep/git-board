@@ -2,6 +2,10 @@
      who drafted it, the gate, Approve the plan or Ask the agent to revise
      (a comment on the issue). -->
 <template>
+  <p v-if="strip" class="gb-plan-agent">
+    <template v-for="(w, i) in strip.words" :key="w"><template v-if="i"> · </template>{{ w }}</template>
+    <template v-if="strip.draft"> · <a :href="strip.draft.url" target="_blank" rel="noopener noreferrer">Draft PR #{{ strip.draft.number }}, the plan only<span class="gb-sr">(opens in a new tab)</span></a></template>
+  </p>
   <template v-if="plan">
     <h3 class="gb-ws-title">{{ title }}</h3>
     <p class="gb-plan-meta">
@@ -17,7 +21,7 @@
   </template>
   <template v-else>
     <h3 class="gb-ws-title">No plan file yet</h3>
-    <p class="gb-note">A branch named plan/&lt;issue&gt;-…, with a plan whose front matter says issue: &lt;number&gt;, in the plans directory.</p>
+    <p class="gb-note">Start an agent: it drafts the plan in plan mode, and once you accept it in its pane, commits it to the plans directory with issue: &lt;number&gt; in its front matter. A branch named plan/&lt;issue&gt;-… works too.</p>
   </template>
 
   <p class="gb-gate">{{ gate }}</p>
@@ -36,19 +40,21 @@
         <span class="gb-note">{{ sends ? 'Posted on the issue and sent to the agent.' : 'Posted on the issue.' }}</span>
       </div>
     </form>
-    <p class="gb-note">Once it’s approved, step 4 starts: the agent writes the failing test first.</p>
+    <p class="gb-note">{{ approver }} approves: step 4 starts<template v-if="sends">, and the agent is briefed to write the failing test, in the same branch</template>.</p>
   </template>
 </template>
 
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import type { Cycle } from '@/api/board';
+import type { Cycle, IssueAgent } from '@/api/board';
 import { on } from '@/when';
+import { agentWords } from '@/worktrees';
 import MarkdownBody from '@/components/MarkdownBody.vue';
 
 // can: the viewer may approve (the server's actions); sends: the request also briefs the agent;
 // current: step 3 is the issue's step, else it is looked at from the step bar and only read
-const props = defineProps<{ cycle: Cycle; gate: string; current: boolean; busy: boolean; can: boolean; sends?: boolean }>();
+// agent: the issue's wtx agent, for the strip above the plan (C3)
+const props = defineProps<{ cycle: Cycle; gate: string; current: boolean; busy: boolean; can: boolean; sends?: boolean; agent?: IssueAgent | null }>();
 const emit = defineEmits<{ approve: []; revise: [body: string] }>();
 
 const plan = computed(() => props.cycle.evidence.plan);
@@ -67,6 +73,21 @@ const drafted = computed(() => {
   return `Drafted by ${p.by}${where}${reviews ? `, ${reviews} review${reviews === 1 ? '' : 's'} so far` : ''}.`;
 });
 
+// the worktree, the agent's state, and the draft PR that holds the plan
+const strip = computed(() => {
+  const a = props.agent;
+  const d = props.cycle.evidence.pr;
+  const draft = d?.state === 'OPEN' && d.draft ? d : null;
+  if (!a?.worktree && !draft) return null;
+  const words = a?.worktree ? [`Worktree ${a.worktree.path.replace(/^.*\//, '')}`, agentWords(a.session, true)] : [];
+  return { words, draft };
+});
+const approver = computed(() => {
+  const w = props.cycle.waits;
+  if (w.role !== 'plan' || props.can) return 'You';
+  return w.login || 'The plan role';
+});
+
 const open = ref(false);
 const revising = ref(false);
 const ask = ref('');
@@ -80,4 +101,5 @@ function send() {
 <style scoped>
 .gb-plan-meta { display: flex; flex-wrap: wrap; gap: .25rem 1rem; margin: 0; font-size: .8125rem; color: var(--fg-muted); }
 .gb-revise { display: grid; gap: .5rem; }
+.gb-plan-agent { margin: 0; padding: .375rem .75rem; border-radius: 4px; background: var(--bg-subtle); font-size: .8125rem; color: var(--fg-muted); }
 </style>
