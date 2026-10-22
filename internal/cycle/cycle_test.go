@@ -162,8 +162,31 @@ func TestCriteriaCount(t *testing.T) {
 		{"a heading's prefix", "## Expected results\n- no\n", nil},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := Criteria(tc.desc, co2.Criteria); !slices.Equal(got, tc.want) {
+			if got, _ := Criteria(tc.desc, co2.Criteria); !slices.Equal(got, tc.want) {
 				t.Errorf("Criteria = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestCriteriaProblems(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name, desc string
+		want       []string
+	}{
+		{"clean", "Intro\n\n## Expected\n\n- one\n- two\n\n## Notes\n\nlater\n- an aside\n", nil},
+		{"no heading", "- one\n", nil},
+		{"no list", "## Expected\n\nTo be written.\n", []string{"line 1: no list right under “Expected”"}},
+		{"bold, no list", "**Done when:**\n", []string{"line 1: no list right under “Done when”"}},
+		{"a second heading", "## Expected\n- e\n\n**Done when**\n- d\n", []string{"line 4: a second criteria heading, ignored: only the first list counts"}},
+		{"cut by a paragraph", "## Expected\n- a\nAlso:\n- b\n", []string{"line 3 is not a list item: the list stops there, and the items after it don't count"}},
+		{"a sub-item", "## Expected\n- a\n  - a.1\n- b\n", []string{"line 3: a sub-item, counted as a criterion of its own"}},
+		{"indented, all alike", "## Expected\n  - a\n  - b\n", nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, got := Criteria(tc.desc, co2.Criteria); !slices.Equal(got, tc.want) {
+				t.Errorf("problems = %q, want %q", got, tc.want)
 			}
 		})
 	}
@@ -192,10 +215,10 @@ func TestCardShowsToRoleOnly(t *testing.T) {
 func TestCriteriaOwnHeading(t *testing.T) {
 	t.Parallel()
 	d := "## Acceptance criteria\n- not this\n\n### Definition of Done (v2)\n- this\n"
-	if got := Criteria(d, []string{"Definition of done (v2)"}); !slices.Equal(got, []string{"this"}) {
+	if got, _ := Criteria(d, []string{"Definition of done (v2)"}); !slices.Equal(got, []string{"this"}) {
 		t.Errorf("Criteria = %q", got)
 	}
-	if got := Criteria(d, nil); got != nil {
+	if got, _ := Criteria(d, nil); got != nil {
 		t.Errorf("no headings: %q", got)
 	}
 }

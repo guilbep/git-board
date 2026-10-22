@@ -56,7 +56,7 @@ func Gather(b *gitbugio.Backend, cfg *config.Config, th gitbugio.Thread, me stri
 	}
 	in.Author = login(th.Author)
 	if len(th.Events) > 0 && th.Events[0].Kind == "created" {
-		in.Criteria = Criteria(th.Events[0].Body, stages.Criteria)
+		in.Criteria, in.CriteriaProblems = Criteria(th.Events[0].Body, stages.Criteria)
 	}
 	holder := func(role string) string {
 		if role == "" {

@@ -1,9 +1,13 @@
 <!-- Intent, under the description: how many criteria the server read
-     there, or, when there are none and it is the viewer's turn, a box to
+     there, the warnings where it reads them differently from how they
+     look (cycle.Criteria), or, when there are none and it is the viewer's turn, a box to
      write them (saved under the description's own criteria heading, or a
      new one: cycle.ts withCriteria). -->
 <template>
   <p class="gb-note">{{ found }}</p>
+  <ul v-if="cycle.evidence.criteria_problems?.length" class="gb-env-drift gb-intent-warn" aria-label="Criteria warnings">
+    <li v-for="p in cycle.evidence.criteria_problems" :key="p">{{ p }}</li>
+  </ul>
   <form v-if="!count && current && cycle.mine" class="gb-intent-form" @submit.prevent="emit('save', text.split('\n'))">
     <textarea v-model="text" class="epfl-input" rows="4" aria-label="Acceptance criteria, one per line" placeholder="One criterion per line" :disabled="busy" />
     <p class="gb-note">Written under “{{ headings[0] }}” in the description.</p>
@@ -33,4 +37,5 @@ const text = ref('');
 <style scoped>
 .gb-intent-form { display: grid; gap: .5rem; }
 .gb-intent-form .gb-note { margin: 0; }
+.gb-intent-warn { display: grid; gap: .25rem; margin: 0; padding-left: 1.75rem; }
 </style>

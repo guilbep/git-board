@@ -66,14 +66,16 @@ type Check struct {
 
 // Input is everything Compute needs, gathered once per issue.
 type Input struct {
-	Stages    config.Stages `json:"stages"`
-	Status    string        `json:"status"` // the status field's value
-	Closed    bool          `json:"closed"` // git-bug's closed
-	Criteria  []string      `json:"criteria,omitempty"`
-	Risk      string        `json:"risk,omitempty"`
-	Kind      string        `json:"kind,omitempty"` // [branches]' kind: step 4's rule (Stages.KindRule)
-	Author    string        `json:"author,omitempty"`
-	Assignees []string      `json:"assignees,omitempty"`
+	Stages   config.Stages `json:"stages"`
+	Status   string        `json:"status"` // the status field's value
+	Closed   bool          `json:"closed"` // git-bug's closed
+	Criteria []string      `json:"criteria,omitempty"`
+	// CriteriaProblems are the description's warnings (Criteria)
+	CriteriaProblems []string `json:"criteria_problems,omitempty"`
+	Risk             string   `json:"risk,omitempty"`
+	Kind             string   `json:"kind,omitempty"` // [branches]' kind: step 4's rule (Stages.KindRule)
+	Author           string   `json:"author,omitempty"`
+	Assignees        []string `json:"assignees,omitempty"`
 	// People is the login holding each gate for this issue, "" for
 	// nobody: "risk", "plan", "review", and "signoff:<status>".
 	People map[string]string `json:"people,omitempty"`
@@ -258,32 +260,67 @@ func Compute(in Input) Cycle {
 	return c
 }
 
-var criteriaItem = regexp.MustCompile(`^\s*([-*+]|\d+[.)])\s+(\[[ xX]\]\s*)?(.+)$`)
+var (
+	criteriaItem = regexp.MustCompile(`^(\s*)([-*+]|\d+[.)])\s+(\[[ xX]\]\s*)?(.+)$`)
+	anyHeading   = regexp.MustCompile(`^\s*(#{1,6}\s|\*\*.+\*\*:?\s*$)`)
+)
 
 // Criteria lists the items of the list under the first of the headings
 // ([cycle] criteria) a Markdown description has: a heading of any level,
-// or a bold line, in any case, with or without a colon.
-func Criteria(description string, headings []string) []string {
+// or a bold line, in any case, with or without a colon. The list runs to
+// its first line that is neither blank nor an item. Problems are the
+// warnings Intent shows, each naming its line: where the description
+// reads differently from how it looks.
+func Criteria(description string, headings []string) (items, problems []string) {
 	if len(headings) == 0 {
-		return nil
+		return nil, nil
 	}
 	q := make([]string, len(headings))
 	for i, h := range headings {
 		q[i] = regexp.QuoteMeta(strings.TrimSpace(h))
 	}
 	heading := regexp.MustCompile(`(?i)^\s*(#{1,6}\s*|\*\*)(` + strings.Join(q, "|") + `):?(\*\*)?:?\s*$`)
-	var res []string
-	in := false
-	for _, l := range strings.Split(description, "\n") {
-		switch {
-		case !in:
-			in = heading.MatchString(l)
-		case strings.TrimSpace(l) == "":
-		case criteriaItem.MatchString(l):
-			res = append(res, strings.TrimSpace(criteriaItem.FindStringSubmatch(l)[3]))
+	lines := strings.Split(description, "\n")
+	at, ended, indent := -1, false, -1
+	for i, l := range lines {
+		switch m := criteriaItem.FindStringSubmatch(l); {
+		case heading.MatchString(l):
+			if at < 0 {
+				at = i
+			} else {
+				problems = append(problems, fmt.Sprintf("line %d: a second criteria heading, ignored: only the first list counts", i+1))
+				ended = true
+			}
+		case at < 0 || ended || strings.TrimSpace(l) == "":
+		case m != nil:
+			if indent < 0 {
+				indent = len(m[1])
+			} else if len(m[1]) > indent {
+				problems = append(problems, fmt.Sprintf("line %d: a sub-item, counted as a criterion of its own", i+1))
+			}
+			items = append(items, strings.TrimSpace(m[4]))
 		default:
-			return res
+			ended = true
+			if len(items) > 0 && !anyHeading.MatchString(l) && itemBeforeHeading(lines[i+1:]) {
+				problems = append(problems, fmt.Sprintf("line %d is not a list item: the list stops there, and the items after it don't count", i+1))
+			}
 		}
 	}
-	return res
+	if at >= 0 && len(items) == 0 {
+		problems = append(problems, fmt.Sprintf("line %d: no list right under “%s”", at+1, strings.Trim(strings.TrimSpace(lines[at]), "#* :")))
+	}
+	return items, problems
+}
+
+// itemBeforeHeading: a list item comes before the next heading.
+func itemBeforeHeading(lines []string) bool {
+	for _, l := range lines {
+		if anyHeading.MatchString(l) {
+			return false
+		}
+		if criteriaItem.MatchString(l) {
+			return true
+		}
+	}
+	return false
 }

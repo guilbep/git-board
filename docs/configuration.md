@@ -369,13 +369,31 @@ A card dragged on the board still moves the status: the step follows it, with a 
 
 The step reads:
 - **The status** (the `status` field).
-- **The acceptance criteria:** the list under the first of the `criteria` headings the description has. With none, the issue is at step 1.
+- **The acceptance criteria:** the list under the first of the `criteria` headings the description has (the format is below). With none, the issue is at step 1.
 - **The risk class:** the `risk` field, `low`, `normal` or `structural`. Low skips step 3.
 - **The plan file**, read from the evidence branch, then the `plan/` branch, then the base.
 - **The tests:** the files the evidence branch changed (`git diff base...branch`) that match `tests`. The evidence branch is the newest branch naming the issue that isn't a `plan/` branch.
 - **The PR,** read from GitHub only when the issue is at in-review or later (or structural, for the plan branch's PR), at most every 5 minutes per branch. When GitHub can't be reached, the step still computes, with the last PR it read.
 - **The kind**, for step 4's rule.
 - **The comments with metadata** that the step writes. Each carries its step as `cycle:step` (`1` to `7`), as does a comment posted on a step's discussion; a comment without it is step 1's.
+
+The criteria in a description:
+- **The heading** is one of `criteria`, as a Markdown heading of any level (`## Expected`) or a line in bold (`**Done when:**`), in any case, with or without a colon. The whole line is the name: `## Expected results` isn't `Expected`. The first one in the description counts.
+- **The list** starts at the first line under it that isn't blank. Each item is a line starting with `-`, `*`, `+`, `1.` or `1)`; a checkbox (`- [ ]`, `- [x]`) is dropped from its text. Blank lines between items are fine.
+- **The list ends** at its first line that is neither blank nor an item: a paragraph, or the next heading.
+
+```markdown
+## Expected
+
+- every row of the file is imported
+- [ ] an empty file says so
+```
+
+Intent warns, naming the line, where the description reads differently from how it looks. The warnings never block a step:
+- a second criteria heading: it and its list are ignored;
+- a line that stops the list while items follow before the next heading: those items don't count;
+- a sub-item: counted as a criterion of its own;
+- a criteria heading with no list right under it.
 
 The card writes:
 - **Set the risk:** a field edit.

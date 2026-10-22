@@ -713,6 +713,7 @@ export interface CycleSignoff {
 export interface CycleEvidence {
   kind?: string; // [branches]' kind, for step 4's rule
   criteria?: string[];
+  criteria_problems?: string[]; // where the description reads differently from how it looks
   risk?: string;
   author?: string;
   assignees?: string[];
