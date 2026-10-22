@@ -145,9 +145,9 @@ func gate(step int, risk, rule string) string {
 		"", "A human commits and opens the PR", "A human who can explain the diff", "Green codes are not proof"}[step]
 }
 
-// approvedPlan: the plan file is accepted or past it, the plan role
+// ApprovedPlan: the plan file is accepted or past it, the plan role
 // approved it in a comment (not structural), or its PR is approved.
-func approvedPlan(in Input) bool {
+func ApprovedPlan(in Input) bool {
 	switch {
 	case in.Plan != nil && slices.Contains([]string{"accepted", "in-progress", "delivered"}, in.Plan.Status):
 		return true
@@ -183,7 +183,7 @@ func Compute(in Input) Cycle {
 	if len(in.Assignees) > 0 {
 		assignee = in.Assignees[0]
 	}
-	approved := approvedPlan(in)
+	approved := ApprovedPlan(in)
 	inProgress := first(in.Stages.InProgress, "in-progress")
 	merged := in.PR != nil && in.PR.State == "MERGED"
 	draft := in.PR != nil && in.PR.State == "OPEN" && in.PR.Draft
