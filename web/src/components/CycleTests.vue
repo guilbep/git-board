@@ -47,7 +47,7 @@
       </div>
       <p v-if="g.key === 'checks'" class="gb-note">{{ t.gate.proven ? 'Mark ready for review: open.' : `Mark ready for review waits: ${t.gate.reason}.` }}</p>
     </section>
-    <pre v-if="log" class="gb-log" :aria-label="`The log of ${log.name}`">{{ log.text }}</pre>
+    <pre v-if="log" class="gb-log" :aria-label="`The log of ${log.name}`">{{ log.text || '(no output)' }}</pre>
 
     <div v-if="t.suites.length || t.checks.length" class="gb-cycle-actions">
       <button type="button" class="epfl-btn epfl-btn-primary epfl-btn-sm" :disabled="busy || running || !picked.length || !t.head" @click="run('head')">

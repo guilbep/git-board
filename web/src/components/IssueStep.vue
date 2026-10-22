@@ -134,6 +134,8 @@ const n = computed(() => shown.value ?? cycle.value?.step ?? 1);
 const row = computed(() => rows.value[n.value - 1]);
 const current = computed(() => !!cycle.value && n.value === cycle.value.step && !cycle.value.done);
 const show = (step: number) => (shown.value = step === cycle.value?.step ? null : step);
+// a refusal belongs to the step pressed: another step shown drops it
+watch(n, () => (error.value = ''));
 defineExpose({ show });
 
 // Intent's criteria go in the description, under its own heading

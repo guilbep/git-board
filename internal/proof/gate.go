@@ -93,7 +93,7 @@ func Gate(ctx context.Context, dir, base, commit string) (GateResult, error) {
 		switch {
 		case st.Proven:
 		case st.Verdict == Failed:
-			why = append(why, fmt.Sprintf("%s FAILED, signed by %s on %s", name, st.Signer, st.Result.At.Format(time.DateTime)))
+			why = append(why, fmt.Sprintf("%s FAILED, signed by %s on %s", name, st.Signer, st.Result.At.Local().Format(time.DateTime)))
 		default:
 			why = append(why, fmt.Sprintf("%s not run at %s", name, short(commit)))
 		}
