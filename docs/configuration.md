@@ -383,7 +383,7 @@ The criteria in a description:
 - **The list ends** at its first line that is neither blank nor an item: a paragraph, or the next heading.
 
 ```markdown
-## Expected
+### Expected
 
 - every row of the file is imported
 - [ ] an empty file says so
