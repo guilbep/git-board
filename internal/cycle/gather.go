@@ -143,7 +143,7 @@ func gatherCode(b *gitbugio.Backend, cfg *config.Config, is gitbugio.Issue, stag
 
 	re := `^issue: *["']?([A-Za-z0-9]+-|#)?` + regexp.QuoteMeta(is.BareNumber()) + `["']? *$`
 	if is.BareNumber() == "" {
-		re = `^issue: *["']?` + is.ID[:7]
+		re = `^issue: *["']?` + PlanIssue(is)
 	}
 	for _, r := range []string{evidence, plan, in.Base} {
 		if r == "" {
@@ -165,6 +165,16 @@ func gatherCode(b *gitbugio.Backend, cfg *config.Config, is gitbugio.Issue, stag
 		break
 	}
 	return nil
+}
+
+// PlanIssue is what a plan file's front matter writes as issue: for
+// gatherCode to find it: the issue's bare number, else its git-bug id's
+// first 7 characters. The agent's prompt names it.
+func PlanIssue(is gitbugio.Issue) string {
+	if n := is.BareNumber(); n != "" {
+		return n
+	}
+	return is.ID[:7]
 }
 
 // body is the document below its front matter.

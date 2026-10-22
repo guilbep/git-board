@@ -186,6 +186,7 @@ func Compute(in Input) Cycle {
 	approved := approvedPlan(in)
 	inProgress := first(in.Stages.InProgress, "in-progress")
 	merged := in.PR != nil && in.PR.State == "MERGED"
+	draft := in.PR != nil && in.PR.State == "OPEN" && in.PR.Draft
 	stage := c.Stage
 	if stage == "in-review" && merged && len(in.Stages.Validation) == 0 {
 		stage = "validation" // no validation status: Verify happens in in-review once merged
@@ -222,11 +223,17 @@ func Compute(in Input) Cycle {
 			c.Note = "risk not set"
 		case in.Risk != "low" && !approved:
 			c.Note = "plan not approved"
+		case draft:
+			// Review opens when the draft PR is marked ready, not before
+			c.Note, act = fmt.Sprintf("draft PR #%d, waits for it to be marked ready for review", in.PR.Number), ""
 		case in.PR != nil && in.PR.State == "OPEN":
 			c.Note = fmt.Sprintf("PR #%d open, waits for the status %s", in.PR.Number, first(in.Stages.InReview, "in-review"))
 		}
 	case "in-review":
 		c.Step, w, act = 6, Waits{Role: "review", Login: in.People["review"], What: "review the PR"}, "review"
+		if draft {
+			c.Note, act = fmt.Sprintf("PR #%d is still a draft on GitHub", in.PR.Number), ""
+		}
 		if merged { // with a validation status: the stage above is false otherwise
 			next := in.Stages.Validation[0]
 			w, act = Waits{Role: "assignee", Login: assignee, What: "move the status to " + next}, "to-validation"
