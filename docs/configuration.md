@@ -319,6 +319,7 @@ in-review = ["in-review"]
 validation = ["ready-for-validation", "qa", "tests-metier"]
 criteria = ["Acceptance criteria", "Done when", "Expected"]
 plans = "docs/src/implementation-plans"
+plans-in-pr = true
 risk = "pm"
 plan = "lead-dev"
 review = "reviewer"
@@ -345,6 +346,7 @@ Every key has a default, so a project writes only what the guess got wrong, and 
 | `validation` | guessed | Step 7, one sign-off per status, in the options' order. Signing off the last one moves the issue to the closing status and closes it. With none, Verify happens in in-review once the PR is merged, and its sign-off closes the issue. |
 | `criteria` | `"Acceptance criteria"`, `"Done when"`, `"Expected"` | The headings a description's acceptance criteria are listed under, any heading level or a bold line, in any case, with or without a colon. The first one the description has counts. |
 | `plans` | `"docs/src/implementation-plans"` | Where plan files live: Markdown whose front matter's `issue:` names the issue (`2518`, `"#2518"`, `CO2-2518`, or its git-bug id's first 7 characters), and whose `status:` (`accepted`, `in-progress` or `delivered`) approves the plan. |
+| `plans-in-pr` | `true` | The agent started at step 3 commits its plan and opens a draft PR holding it; Review opens once that PR is marked ready. `false` keeps plans out of PRs: the plan is committed on the branch and the PR opens at step 5. |
 | `tests` | `*_test.go`, `*.test.ts`, `*.spec.ts`, `test_*.py`, `tests/**` | Which changed files are tests, by path or base name; `dir/**` is everything under `dir`. |
 | `risk` | none | The role (`[roles]`) that sets the risk class. |
 | `plan` | none | The role that approves the plan. |
@@ -352,7 +354,7 @@ Every key has a default, so a project writes only what the guess got wrong, and 
 | `signoffs` | none | Each validation status to the role that signs it off. |
 | `kinds` | `bug = "failing-test"`, `feat = "per-criterion"`, `doc = "none"`, `chore = "none"` | Step 4's rule by the issue's kind (the `kind:` field, or a flat label in `[branches] kinds`): a test that fails before the fix; the suites the diff touches green and each criterion naming its test; or no tests, which skips step 4. A file's entries go over the defaults. No kind, or one the table doesn't list, is `per-criterion`. |
 
-Coming on later branches, and a warning in Settings until then: `plans-in-pr`, the draft PR that holds the plan (M3), and `[cycle.tests.<suite>]` and `[cycle.checks.<check>]`, the suites step 4 runs and the checks that gate Mark ready for review (M4).
+Coming on later branches, and a warning in Settings until then: `[cycle.tests.<suite>]` and `[cycle.checks.<check>]`, the suites step 4 runs and the checks that gate Mark ready for review (M4).
 
 Each step's button moves the status, through the same edit as the status field:
 

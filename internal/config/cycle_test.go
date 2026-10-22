@@ -77,7 +77,7 @@ func TestCycleFromFile(t *testing.T) {
 		Before: []string{"backlog", "comite"}, Ready: "ready",
 		InProgress: []string{"in-progress"}, InReview: []string{"in-review"},
 		Validation: []string{"ready-for-validation", "qa", "tests-metier"}, Closing: "validated",
-		Plans:    "docs/src/implementation-plans",
+		Plans: "docs/src/implementation-plans", PlansInPR: true,
 		Tests:    []string{"*_test.go", "*.test.ts", "*.spec.ts", "test_*.py", "tests/**"},
 		Criteria: []string{"Acceptance criteria", "Done when", "Expected"},
 		Kinds:    map[string]string{"bug": "failing-test", "feat": "per-criterion", "doc": "none", "chore": "none"},
@@ -173,5 +173,21 @@ func TestCycleProtocol(t *testing.T) {
 	_, _, err = parse([]byte("[cycle]\ncriteria = [\" \"]\n"))
 	if err == nil || !strings.Contains(err.Error(), "[cycle] criteria: a heading") {
 		t.Errorf("err = %v", err)
+	}
+}
+
+// plans-in-pr is true unless the file says false, and Settings doesn't
+// warn about it as an unknown key.
+func TestPlansInPR(t *testing.T) {
+	t.Parallel()
+	if !(&Config{}).Stages().PlansInPR {
+		t.Error("plans-in-pr unset: want true")
+	}
+	cfg, warnings, err := Check([]byte("[cycle]\nplans-in-pr = false\n"))
+	if err != nil || len(warnings) != 0 {
+		t.Fatalf("Check: %v %q", err, warnings)
+	}
+	if cfg.Stages().PlansInPR {
+		t.Error("plans-in-pr = false: want false")
 	}
 }
