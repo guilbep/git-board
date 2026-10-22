@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { Cycle, GatePR, IssueEvent } from './api/board.ts';
-import { cardFor, forStep, riskWords, steps, statusBar, suggestion, tiles, turn, withCriteria } from './cycle.ts';
+import { cardFor, criteriaLeft, forStep, mergedRun, riskWords, signoffLine, steps, statusBar, suggestion, tiles, turn, withCriteria } from './cycle.ts';
 import { on } from './when.ts';
 
 const at = (c: Partial<Cycle>): Cycle => ({
@@ -129,6 +129,23 @@ test('the step bar at verify', () => {
   assert.equal(steps(at({ evidence: { branch: 'fix/1-x', head: '4f2e9c1a00', pr: pr({ number: 7, state: 'MERGED' }) } }))[5]?.line, 'PR #7 merged');
   assert.equal(steps(at({ evidence: { branch: 'fix/1-x', head: '4f2e9c1a00' } }))[4]?.line, 'fix/1-x at 4f2e9c1');
   assert.deepEqual(steps(at({ done: true, name: 'Done', evidence: {} })).map((r) => r.state), Array(7).fill('done'));
+});
+
+test('verify: the run at the merge, the criteria left, what the sign-off does', () => {
+  const runs = [{ by: 'dan', commit: 'aaa', at: '2026-10-18T10:00:00Z' }, { by: 'erin', commit: 'bbb', at: '2026-10-18T11:00:00Z' }];
+  assert.equal(mergedRun(at({})), null);
+  assert.deepEqual(mergedRun(at({ evidence: { runs } })), { ...runs[1], merge: false });
+  assert.deepEqual(mergedRun(at({ evidence: { runs, pr: pr({ number: 7, state: 'MERGED', merge_commit: 'aaa' }) } })), { ...runs[0], merge: true });
+  assert.deepEqual(mergedRun(at({ evidence: { runs, pr: pr({ number: 7, state: 'OPEN', merge_commit: 'aaa' }) } })), { ...runs[1], merge: false });
+
+  assert.equal(criteriaLeft(at({ evidence: { criteria: ['a', 'b', 'c'], checks: [{ index: 1, by: 'erin', at: '' }] } })), 2);
+  assert.equal(criteriaLeft(at({})), 0);
+
+  const v = (validation: string[], closing = 'validated') => at({ stages: { ...at({}).stages, validation, closing } });
+  assert.equal(signoffLine(v(['ready-for-validation', 'qa']), 'ready-for-validation'), 'The sign-off moves the issue to qa.');
+  assert.equal(signoffLine(v(['qa']), 'qa', 'GitHub #37'), 'The sign-off closes the issue as validated, and GitHub #37 with it.');
+  assert.equal(signoffLine(v([], 'done'), 'in-review'), 'The sign-off closes the issue as done.');
+  assert.equal(signoffLine(v([], ''), 'in-review'), 'The sign-off is written on the issue; its status stays.');
 });
 
 test('each step has its own discussion', () => {

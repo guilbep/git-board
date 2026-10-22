@@ -61,10 +61,12 @@
         @edit="(num, title, body) => pull(() => editPull(id, num, title, body))"
       />
       <CycleVerify
-        v-else-if="cycle && n === 7 && current"
+        v-else-if="cycle && n === 7 && (current || cycle.done)"
         :cycle="cycle"
         :status="status"
         :events="events"
+        :current="current"
+        :forge="forge"
         :busy="busy"
         :can="has('signoff')"
         :needs-why="needsWhy"
@@ -156,6 +158,7 @@ const { cycle, error, busy, needsWhy, has, act, patch, edit, press, pull } = use
 );
 const card = computed(() => (cycle.value ? cardFor(cycle.value, props.status) : null));
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+const forge = computed(() => props.forges?.filter((f) => !f.gone && f.number).map((f) => `${f.name} #${f.number}`)[0]);
 
 // who set the risk: the last label change adding one, from the thread
 const riskBy = computed(() => props.events.findLast((e) => e.kind === 'labels' && e.added?.some((l) => l.startsWith('risk:')))?.author.name);
