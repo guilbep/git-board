@@ -12,7 +12,7 @@ type PromptInput struct {
 	Title       string
 	Description string
 	Step, Of    int
-	Name        string // "Tests first"
+	Name        string // "Tests"
 	Gate        string // the gate's text from the loop
 	What        string // what is asked now, "write the failing test"
 	Branch      string
