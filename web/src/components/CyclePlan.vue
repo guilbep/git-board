@@ -41,7 +41,7 @@
         <span class="gb-note">{{ sends ? 'Posted on the issue and sent to the agent.' : 'Posted on the issue.' }}</span>
       </div>
     </form>
-    <p class="gb-note">{{ approver }}: step 4 starts<template v-if="sends">, and the agent is briefed to write the failing test, in the same branch: accept that in its pane</template>.</p>
+    <p class="gb-note">{{ approver }}: step 4 starts<template v-if="sends">, and the agent carries on with it, in the same branch</template>.</p>
   </template>
 </template>
 
