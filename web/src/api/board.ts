@@ -762,6 +762,7 @@ export interface CycleStages {
   validation: string[];
   closing: string;
   plans?: string;
+  plans_in_pr?: boolean; // the draft PR opened at step 3 holds the plan
   criteria: string[]; // the headings the criteria are read under
   kinds: Record<string, string>; // step 4's rule by kind: failing-test, per-criterion, none
   guessed: boolean;

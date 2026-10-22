@@ -19,9 +19,9 @@
     <button v-else type="button" class="gb-linkbtn" :disabled="busy" @click="emit('suggest')">{{ busy ? 'Asking…' : 'Ask the AI' }}</button>
   </div>
 
-  <footer v-if="current" class="gb-risk-foot">
+  <footer v-if="current" class="gb-step-foot">
     <div>
-      <p class="gb-risk-by">Set by {{ role ? `the ${role}` : 'anyone' }}</p>
+      <p class="gb-step-by">Set by {{ role ? `the ${role}` : 'anyone' }}</p>
       <p class="gb-note">{{ cycle.waits.anyone ? 'Anyone' : cycle.waits.login }} sets it. It becomes the issue's risk field; {{ riskWords(picked) }}.</p>
     </div>
     <button v-if="can" type="button" class="epfl-btn epfl-btn-primary" :disabled="busy" @click="emit('set', picked)">Set {{ picked }}</button>
@@ -67,7 +67,4 @@ const role = computed(() => props.cycle.stages.roles?.risk?.replace(/-/g, ' '));
 .gb-risk-opt b { font-size: 1.125rem; }
 .gb-risk-ai { display: grid; gap: .25rem; padding: .875rem 1rem; background: var(--bg-subtle); font-size: .875rem; }
 .gb-risk-ai p { margin: 0; }
-.gb-risk-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .75rem 1.5rem; padding-top: 1rem; border-top: 1px solid var(--border); }
-.gb-risk-foot p { margin: 0; }
-.gb-risk-by { font-size: 1.0625rem; font-weight: 700; color: var(--gb-done); }
 </style>

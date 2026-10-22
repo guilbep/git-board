@@ -395,6 +395,16 @@
 .gb-so li.is-current { border-top-color: var(--fg); }
 .gb-so-status { font-weight: 700; }
 .gb-so-when { color: var(--fg-muted); }
+/* a step's workspace (CycleRisk, CycleCode, CycleVerify): the agent's strip, tiles, the gate's footer */
+.gb-plan-agent { margin: 0; padding: .375rem .75rem; border-radius: 4px; background: var(--bg-subtle); font-size: .8125rem; color: var(--fg-muted); }
+.gb-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: .75rem; margin: 0; padding: 0; list-style: none; }
+.gb-tiles li { display: grid; gap: .375rem; padding: .875rem 1rem; border: 1px solid var(--border); font-size: .875rem; }
+.gb-pill { display: inline-block; padding: .125rem .5rem; font-size: .75rem; font-weight: 700; background: var(--bg-subtle); color: var(--fg-muted); }
+.gb-pill.is-pass { background: var(--success-bg); color: var(--success-fg); }
+.gb-pill.is-failed { background: var(--danger-bg); color: var(--danger-fg); }
+.gb-step-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .75rem 1.5rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+.gb-step-foot p { margin: 0; }
+.gb-step-by { font-size: 1.0625rem; font-weight: 700; color: var(--gb-done); }
 .gb-cycle-bar { display: flex; flex-wrap: wrap; gap: .5rem 1.5rem; padding: .5rem .75rem; border: 1px solid var(--border-subtle); background: var(--bg-subtle); font-size: .8125rem; color: var(--fg-muted); }
 .gb-cycle-bar span:first-child { font-family: var(--font-mono); color: var(--fg); }
 .gb-agent { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem 1rem; padding: .75rem 0 0; }

@@ -71,10 +71,16 @@ export function useCycle(props: { id: string; labels: string[]; description: str
     return ok;
   }
 
+  // a PR written on GitHub (opened, edited): the step is read again, the
+  // thread's labels don't move
+  async function pull(fn: () => Promise<unknown>) {
+    if (await write(fn)) await load();
+  }
+
   async function press(b: CardButton) {
     if (patches.includes(b.action)) return patch(b.body as Record<string, string>);
     return act(b.action, b.body);
   }
 
-  return { cycle, error, busy, needsWhy, has, act, patch, edit, press };
+  return { cycle, error, busy, needsWhy, has, act, patch, edit, press, pull };
 }
