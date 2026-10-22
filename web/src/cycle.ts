@@ -1,24 +1,31 @@
-// The words for an issue's step (api/board.ts Cycle): the progress line
-// under the title, and the card for whoever's turn it is.
-import type { Cycle } from './api/board.ts';
+// The words for an issue's step (api/board.ts Cycle): the step bar, the
+// step's buttons, the criteria written into the description.
+import type { Cycle, CycleStages, IssueEvent } from './api/board.ts';
 import { on } from './when.ts';
 
-export function progressLine(c: Pick<Cycle, 'step' | 'of' | 'name' | 'done' | 'waits' | 'skipped'>): string {
-  if (c.done) return 'Done';
-  const skipped = c.skipped?.includes(c.step) ? ', skipped (low risk)' : '';
-  const turn = c.waits.anyone ? `, anyone’s turn to ${c.waits.what}` : `, waits for ${c.waits.login} to ${c.waits.what}`;
-  return `Step ${c.step} of ${c.of} · ${c.name}${skipped}${turn}`;
+// turn is whose move it is: "waits for erin to set the risk class"
+export function turn(c: Pick<Cycle, 'waits'>): string {
+  return c.waits.anyone ? `anyone’s turn to ${c.waits.what}` : `waits for ${c.waits.login} to ${c.waits.what}`;
 }
 
 export interface CardButton {
   label: string;
-  action: string; // set-risk is a PATCH of the risk field; the rest POST …/cycle/{action}
+  action: string; // a PATCH of a field when in patches; else POST …/cycle/{action}
   body?: Record<string, unknown>;
 }
 
-// cardFor is the card's title and buttons, or null when it isn't the
-// viewer's turn or the step has nothing to press (1, 4, 5: edits and code).
-// verify and check are the card's run box, not buttons.
+// The step buttons that move the status: a PATCH to the stage they name.
+const moves: Record<string, [string, (s: CycleStages) => string | undefined]> = {
+  'move-ready': ['Move to ready', (s) => s.ready],
+  start: ['Start work', (s) => s.in_progress[0]],
+  'ready-for-review': ['Mark ready for review', (s) => s.in_review[0]],
+  'to-validation': ['Start verification', (s) => s.validation[0]],
+};
+export const patches = ['set-risk', ...Object.keys(moves)];
+
+// cardFor is the step's title and buttons, or null when it isn't the
+// viewer's turn or the step has nothing to press (tests, code).
+// verify and check are CycleVerify's run box, not buttons.
 export function cardFor(c: Cycle, status: string): { title: string; gate: string; buttons: CardButton[] } | null {
   const has = (a: string) => !!c.actions?.includes(a);
   if (!c.mine || !c.actions?.length) return null;
@@ -27,26 +34,33 @@ export function cardFor(c: Cycle, status: string): { title: string; gate: string
   if (has('approve-plan')) return card('Approve the plan', [{ label: 'Approve the plan', action: 'approve-plan' }]);
   if (has('review')) return card('Review', [{ label: 'Review the PR', action: 'review' }]);
   if (has('signoff')) return card(`Sign off ${status}`, [{ label: `Sign off ${status}`, action: 'signoff' }]);
+  for (const [action, [label, to]] of Object.entries(moves)) {
+    if (has(action)) return card(label, [{ label, action, body: { status: to(c.stages) ?? '' } }]);
+  }
   return null;
 }
 
-// The Cycle view (components/IssueCycleView.vue): the spine's one line
-// of evidence per step, the sign-off tiles, the status bar's segments.
-export const STEPS = ['', 'Intent', 'Risk class', 'Plan', 'Tests first', 'Code', 'Review', 'Verify'];
+// The step bar (components/IssueStep.vue): one cell per step, with its
+// evidence when done, whose turn when current, why when locked.
+export const STEPS = ['', 'Intent', 'Risk', 'Plan', 'Tests', 'Code', 'Review', 'Verify'];
+const LOCKS = ['', '', 'opens at ready', 'opens once the risk is set', 'opens when work starts', 'opens with the test', 'opens when the PR is ready for review', 'opens when the PR is merged'];
 
 // gate is the step's rule, as internal/cycle/cycle.go words it: the server
-// only sends the current step's, the todo rows show theirs.
-export function gate(step: number, risk?: string): string {
+// only sends the current step's. rule is step 4's, by kind ([cycle.kinds]).
+export function gate(step: number, risk?: string, rule?: string): string {
   if (step === 3 && risk === 'structural') return 'Structural: plan PR approved first';
   if (step === 3 && risk === 'low') return 'Skipped, low risk';
+  if (step === 4 && rule === 'none') return 'Skipped: no tests for this kind';
+  if (step === 4 && rule === 'failing-test') return 'A test that fails before the fix';
+  if (step === 4) return 'The touched suites green, each criterion names its test';
   if (step === 6 && risk === 'structural') return 'Structural: a second human';
-  return ['', 'No issue, no agent', 'Class written on the issue', 'Plan approved by the plan role', 'Every bug fix ships its test', 'A human commits and opens the PR', 'A human who can explain the diff', 'Green codes are not proof'][step] ?? '';
+  return ['', 'No issue, no agent', 'Class written on the issue', 'Plan approved by the plan role', '', 'A human commits and opens the PR', 'A human who can explain the diff', 'Green codes are not proof'][step] ?? '';
 }
 
-export interface SpineRow {
+export interface StepRow {
   n: number;
   name: string;
-  state: 'done' | 'current' | 'todo';
+  state: 'done' | 'current' | 'locked' | 'skipped';
   line: string;
   gate: string;
 }
@@ -55,18 +69,19 @@ const short = (sha?: string) => (sha ? sha.slice(0, 7) : '');
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 const names = (list: string[]) => (list.length < 2 ? list.join('') : `${list.slice(0, -1).join(', ')} and ${list[list.length - 1]}`);
 
-// spine is the seven rows: done under the step, current at it, todo above.
-// A row says its evidence, or its gate when there is none yet; the
-// current row adds the note. riskBy is who set the risk label (the thread
+// steps is the seven cells. The current step is the issue's, even when
+// skipped (low risk waits at step 3 for Start work); a skipped one is
+// skipped wherever it stands. riskBy is who set the risk label (the thread
 // knows, the evidence doesn't).
-export function spine(c: Cycle, riskBy?: string): SpineRow[] {
+export function steps(c: Cycle, riskBy?: string): StepRow[] {
   const e = c.evidence ?? {};
   const risk = c.risk ?? e.risk;
+  const rule = c.stages.kinds?.[e.kind ?? ''] ?? 'per-criterion';
   const evidence = (n: number): string | undefined => {
     switch (n) {
       case 1: {
         const k = e.criteria?.length ?? 0;
-        return k === 0 ? 'no acceptance criteria' : `${k} acceptance ${k === 1 ? 'criterion' : 'criteria'}`;
+        return k === 0 ? 'no criteria' : `${k} ${k === 1 ? 'criterion' : 'criteria'}`;
       }
       case 2:
         return risk ? cap(risk) + (riskBy ? `, set by ${riskBy}` : '') : undefined;
@@ -96,30 +111,37 @@ export function spine(c: Cycle, riskBy?: string): SpineRow[] {
   };
   return STEPS.slice(1).map((name, i) => {
     const n = i + 1;
-    const state = c.done || n < c.step ? 'done' : n === c.step ? 'current' : 'todo';
-    const skipped = c.skipped?.includes(n);
-    const g = skipped ? 'Skipped, low risk' : n === c.step ? c.gate : gate(n, risk);
-    let line = (!skipped && state !== 'todo' && evidence(n)) || g;
-    if (state === 'current' && c.note) line += ` · ${c.note}`;
-    return { n, name, state, line, gate: g };
+    const g = n === c.step ? c.gate : gate(n, risk, rule);
+    if (n === c.step && !c.done) return { n, name, state: 'current', line: c.note || turn(c), gate: g };
+    if (c.skipped?.includes(n)) return { n, name, state: 'skipped', line: `skipped, ${n === 3 ? 'low risk' : (e.kind ?? 'no tests')}`, gate: g };
+    if (c.done || n < c.step) return { n, name, state: 'done', line: evidence(n) || g, gate: g };
+    return { n, name, state: 'locked', line: LOCKS[n] ?? '', gate: g };
   });
 }
 
-// The heading and items internal/cycle/cycle.go's Criteria reads.
-const criteriaHeading = /^\s*(#{1,6}\s*|\*\*)acceptance criteria:?(\*\*)?:?\s*$/i;
+// forStep is a step's discussion: the comments carrying its cycle:step.
+// Step 1's also has those carrying none, every one written before steps.
+export function forStep(events: IssueEvent[], n: number): IssueEvent[] {
+  return events.filter((e) => e.kind === 'comment' && (e.meta?.['cycle:step'] ?? '1') === String(n));
+}
+
+// The headings and items internal/cycle/cycle.go's Criteria reads.
 const typedItem = /^([-*+]|\d+[.)])\s+|^\[[ xX]\]\s*/;
+const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const headingOf = (hs: string[]) => new RegExp(`^\\s*(#{1,6}\\s*|\\*\\*)(${hs.map(esc).join('|')}):?(\\*\\*)?:?\\s*$`, 'i');
 
 // withCriteria is the description with the criteria written as a list:
-// under its "Acceptance criteria" heading if it has one (the server reads
-// the first), under a new one at the end otherwise.
-export function withCriteria(description: string, lines: string[]): string {
+// under the first criteria heading it has (the one the server reads),
+// under a new one, the first of headings, at the end otherwise.
+export function withCriteria(description: string, lines: string[], headings: string[] = ['Acceptance criteria']): string {
   const list = lines
     .map((l) => l.trim().replace(typedItem, '').replace(typedItem, '').trim())
     .filter(Boolean)
     .map((l) => `- ${l}`);
   const ls = description.split('\n');
-  const h = ls.findIndex((l) => criteriaHeading.test(l));
-  if (h < 0) return `${description.trimEnd()}${description.trim() ? '\n\n' : ''}## Acceptance criteria\n\n${list.join('\n')}`;
+  const re = headingOf(headings.length ? headings : ['Acceptance criteria']);
+  const h = ls.findIndex((l) => re.test(l));
+  if (h < 0) return `${description.trimEnd()}${description.trim() ? '\n\n' : ''}## ${headings[0] ?? 'Acceptance criteria'}\n\n${list.join('\n')}`;
   let at = h + 1;
   while (at < ls.length && !ls[at]?.trim()) at++;
   const rest = ls.slice(at);
@@ -144,7 +166,7 @@ export function tiles(c: Cycle, status: string): Tile[] {
 
 // statusBar reads what the side already knows: the branch, the PR and its
 // checks, what waits for the forges (null: no forge). Nothing new is fetched.
-// The Cycle view adds the worktree and the agent (getIssueAgent).
+// The step adds the worktree and the agent (getIssueAgent).
 export function statusBar(c: Cycle, waiting: number | null): string[] {
   const e = c.evidence ?? {};
   const out = [e.branch ? e.branch + (e.head ? ` at ${short(e.head)}` : '') : 'no branch yet'];

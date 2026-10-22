@@ -1,23 +1,18 @@
-// The issue's step, read and written (api/board.ts getCycle, cycleAction):
-// shared by the Issue view's card (IssueCycle.vue) and the Cycle view
-// (IssueCycleView.vue). One of the two is on the page at a time.
-import { computed, ref, watch } from 'vue';
+// The issue's step, read and written (api/board.ts getCycle, cycleAction),
+// for the issue's frame (components/IssueStep.vue).
+import { ref, watch } from 'vue';
 import { ApiError, cycleAction, editComment, getCycle, patchIssue, type Cycle } from '@/api/board';
 import { message } from '@/issue';
-import type { CardButton } from '@/cycle';
+import { patches, type CardButton } from '@/cycle';
 
-export function useCycle(props: { id: string; status: string; labels: string[] }, changed: () => void) {
+// description: the issue's, its criteria; with the labels, what the step is read from here
+export function useCycle(props: { id: string; labels: string[]; description: string }, changed: () => void) {
   const cycle = ref<Cycle | null>(null);
   const error = ref('');
   const busy = ref(false);
-  const output = ref('');
-  const commit = ref('');
-  const why = ref('');
   const needsWhy = ref(false);
 
   const has = (a: string) => !!cycle.value?.actions?.includes(a);
-  const checkedBy = (i: number) => cycle.value?.evidence.checks?.find((c) => c.index === i)?.by;
-  const mine = computed(() => !!cycle.value?.mine);
 
   async function load() {
     try {
@@ -27,8 +22,9 @@ export function useCycle(props: { id: string; status: string; labels: string[] }
       error.value = `The step: ${message(e)}`;
     }
   }
-  // the panel re-reads the thread after every write: labels moving re-reads the step
-  watch(() => [props.id, props.labels.join('\n')], load, { immediate: true });
+  // the panel re-reads the thread after every write: labels moving or the
+  // description edited re-reads the step
+  watch(() => [props.id, props.labels.join('\n'), props.description], load, { immediate: true });
 
   async function act(action: string, body: Record<string, unknown> = {}) {
     busy.value = true;
@@ -36,7 +32,6 @@ export function useCycle(props: { id: string; status: string; labels: string[] }
     try {
       cycle.value = await cycleAction(props.id, action, body);
       needsWhy.value = false;
-      why.value = '';
       changed();
       return true;
     } catch (e) {
@@ -64,27 +59,22 @@ export function useCycle(props: { id: string; status: string; labels: string[] }
     }
   }
 
-  // set-risk and the status are fields: a PATCH, the thread re-read
+  // the risk and the status are fields: a PATCH, the thread re-read
   const patch = (body: Record<string, string>) => write(() => patchIssue(props.id, body));
 
-  // the description (the criteria): no label moves, so the step is re-read here;
+  // the description (the criteria): the thread re-read re-reads the step;
   // a failure re-reads the thread too, so a retry after a 409 has the new base.
-  // ponytail: a 409 is shown, no "save anyway" here; the Issue view's pencil has it
+  // ponytail: a 409 is shown, no "save anyway" here; the description's pencil has it
   async function edit(commentId: string, body: string, base: string) {
     const ok = await write(() => editComment(props.id, commentId, body, base));
-    if (ok) await load();
-    else changed();
+    if (!ok) changed();
     return ok;
   }
 
   async function press(b: CardButton) {
-    if (b.action === 'set-risk') return patch(b.body as Record<string, string>);
+    if (patches.includes(b.action)) return patch(b.body as Record<string, string>);
     return act(b.action, b.body);
   }
 
-  async function postRun() {
-    if (await act('verify', { output: output.value, commit: commit.value.trim() })) output.value = commit.value = '';
-  }
-
-  return { cycle, error, busy, output, commit, why, needsWhy, has, checkedBy, mine, act, patch, edit, press, postRun };
+  return { cycle, error, busy, needsWhy, has, act, patch, edit, press };
 }

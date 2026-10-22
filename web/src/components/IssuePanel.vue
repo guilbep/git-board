@@ -5,7 +5,7 @@
   <component
     :is="page ? 'div' : 'aside'"
     class="gb-panel"
-    :class="[page ? 'gb-panel-page' : panelMode === 'wide' ? 'gb-panel-wide' : 'gb-panel-xl', { 'gb-panel-cycle': page && view === 'cycle' }]"
+    :class="page ? 'gb-panel-page' : panelMode === 'wide' ? 'gb-panel-wide' : 'gb-panel-xl'"
     :style="!page && panelMode === 'side' && panelWidth ? { width: `${panelWidth}px` } : undefined"
     :aria-labelledby="`title-${uid}`"
     :tabindex="page ? undefined : 0"
@@ -78,10 +78,6 @@
             <GbIcon :name="thread.status === 'open' ? 'closed' : 'open'" small />
             {{ thread.status === 'open' ? 'Close issue' : 'Reopen issue' }}
           </button>
-          <div v-if="!renaming" class="gb-seg gb-seg-sm" role="group" aria-label="View">
-            <button type="button" :aria-pressed="view === 'issue'" @click="view = 'issue'">Issue</button>
-            <button type="button" :aria-pressed="view === 'cycle'" @click="view = 'cycle'">Cycle</button>
-          </div>
         </div>
         <div class="gb-imeta">
           <span :class="['epfl-badge', thread.status === 'open' ? 'epfl-badge-tertiary' : 'epfl-badge-dark']">
@@ -96,62 +92,60 @@
           </span>
           <span class="gb-mono" title="git-bug id">git-bug {{ thread.id.slice(0, 7) }}</span>
         </div>
-        <IssueCycle v-if="view === 'issue'" :id="thread.id" :status="statusValue" :labels="thread.labels" @changed="load" />
         <p v-if="saveError && !renaming" class="gb-save-error" role="alert"><GbIcon name="error" small /> <b>Not saved.</b> {{ saveError }}</p>
         <p v-if="waiting" class="gb-wait" role="status"><GbIcon name="clock" small /> Syncing with the forges… your change is saved after it.</p>
       </div>
 
-      <IssueCycleView
-        v-if="view === 'cycle'"
-        :id="thread.id"
-        :status="statusValue"
-        :labels="thread.labels"
-        :events="thread.events"
-        :forges="thread.forges"
-        :page="page"
-        @changed="load"
-        @comment="comment"
-      />
-      <div v-else class="gb-cols">
-        <div class="gb-maincol">
-          <div class="gb-tabs gb-modes" role="tablist" aria-label="Show">
-            <button type="button" class="gb-tab" role="tab" :aria-selected="mode === 'talk'" @click="mode = 'talk'">Conversation</button>
-            <button type="button" class="gb-tab" role="tab" :aria-selected="mode === 'history'" @click="mode = 'history'">
-              History <span class="gb-modes-count">{{ changeCount }}</span>
-            </button>
-            <button v-if="page" type="button" class="gb-tab" role="tab" :aria-selected="mode === 'changes'" @click="mode = 'changes'">Changes</button>
+      <IssueStep ref="step" :id="thread.id" :status="statusValue" :labels="thread.labels" :events="thread.events" :forges="thread.forges" @changed="load" @comment="(b, n) => comment(b, undefined, n)">
+        <template #intent>
+          <CommentCard v-if="created" :data-event="created.id" :event="created" :forges="thread.forges" :mine="created.author.id === meId" :save="edit" @ref="onRef" />
+        </template>
+        <template v-if="page" #review>
+          <ChangesView :id="thread.id" :thread="thread" :me-id="meId" :busy="saving" :focus="focus" :review="review" :resolve="resolve" />
+        </template>
+        <template #talk="{ step: n }">
+          <div class="gb-seg gb-seg-sm" role="group" aria-label="Discussion">
+            <button type="button" :aria-pressed="talk === 'step'" @click="talk = 'step'">This step</button>
+            <button type="button" :aria-pressed="talk === 'all'" @click="talk = 'all'">All</button>
+            <button type="button" :aria-pressed="talk === 'history'" @click="talk = 'history'">History <span class="gb-modes-count">{{ changeCount }}</span></button>
           </div>
-          <template v-if="mode === 'talk'">
-            <CommentCard v-if="created" :data-event="created.id" :event="created" :forges="thread.forges" :mine="created.author.id === meId" :save="edit" @ref="onRef" />
-            <ol class="gb-tl" aria-label="History">
-              <template v-for="e in rest" :key="e.id">
+          <HistoryView v-if="talk === 'history'" :thread="thread" :fields="fields" />
+          <template v-else>
+            <ol class="gb-tl" :aria-label="talk === 'step' ? `Step ${n}'s discussion` : 'The whole conversation'">
+              <template v-for="e in talk === 'step' ? forStep(rest, n) : rest" :key="e.id">
                 <li v-if="e.kind === 'comment'" :data-event="e.id">
                   <CommentCard :event="e" :forges="thread.forges" :mine="e.author.id === meId" :save="edit" @ref="onRef" @line="showLine" />
                 </li>
                 <TimelineEvent v-else :data-event="e.id" :event="e" :fields="fields" />
               </template>
             </ol>
-            <IssueComposer :status="thread.status" :forges="thread.forges" :busy="saving" :waiting="waiting" :error="saveError" :comment="comment" />
+            <p v-if="talk === 'step' && !forStep(rest, n).length" class="gb-note">Nothing said on this step yet.</p>
+            <IssueComposer
+              :status="thread.status"
+              :forges="thread.forges"
+              :busy="saving"
+              :waiting="waiting"
+              :error="saveError"
+              :comment="(b: string, st?: 'open' | 'closed') => comment(b, st, talk === 'step' ? n : 0)"
+            />
           </template>
-          <ChangesView v-else-if="mode === 'changes'" :id="thread.id" :thread="thread" :me-id="meId" :busy="saving" :focus="focus" :review="review" :resolve="resolve" />
-          <HistoryView v-else :thread="thread" :fields="fields" />
-        </div>
-        <IssueSide
-          :id="thread.id"
-          :title="thread.title"
-          :labels="thread.labels"
-          :names="sideNames"
-          :fields="fields"
-          :forges="thread.forges"
-          :participants="thread.participants"
-          :events="thread.events"
-          :saving="saving"
-          @changed="fieldsChanged"
-          @labels="labels"
-          @reveal="reveal"
-          @open="(other: string) => emit('open', other)"
-        />
-      </div>
+          <IssueSide
+            :id="thread.id"
+            :title="thread.title"
+            :labels="thread.labels"
+            :names="sideNames"
+            :fields="fields"
+            :forges="thread.forges"
+            :participants="thread.participants"
+            :events="thread.events"
+            :saving="saving"
+            @changed="fieldsChanged"
+            @labels="labels"
+            @reveal="reveal"
+            @open="(other: string) => emit('open', other)"
+          />
+        </template>
+      </IssueStep>
     </template>
   </component>
 </template>
@@ -160,7 +154,6 @@
 import { onLive } from '@/live';
 import { clampWidth, panelMode, panelWidth, togglePanelMode } from '@/panelsize';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, toRef, useId, watch } from 'vue';
-import { useRoute } from 'vue-router';
 import { markSeen, type Thread } from '@/api/board';
 import { inbox, inboxError, loadInbox } from '@/inbox';
 import { fieldValues, type Fields } from '@/fields';
@@ -169,12 +162,12 @@ import { me, on } from '@/me';
 import ChangesView from '@/components/ChangesView.vue';
 import CommentCard from '@/components/CommentCard.vue';
 import HistoryView from '@/components/HistoryView.vue';
+import { forStep } from '@/cycle';
 import { steps } from '@/replay';
 import GbIcon from '@/components/GbIcon.vue';
-import IssueCycle from '@/components/IssueCycle.vue';
-import IssueCycleView from '@/components/IssueCycleView.vue';
 import IssueComposer from '@/components/IssueComposer.vue';
 import IssueSide from '@/components/IssueSide.vue';
+import IssueStep from '@/components/IssueStep.vue';
 import TimelineEvent from '@/components/TimelineEvent.vue';
 
 const props = defineProps<{
@@ -213,16 +206,15 @@ const meId = computed(() => me.value?.me?.id ?? '');
 const created = computed(() => thread.value?.events.find((e) => e.kind === 'created'));
 const rest = computed(() => thread.value?.events.filter((e) => e.kind !== 'created') ?? []);
 
-// the issue (today's page) or its cycle (the spine and the step's workspace)
-const view = ref<'issue' | 'cycle'>(props.page && useRoute().query.view === 'cycle' ? 'cycle' : 'issue');
-// the conversation, every change in order with the issue as it was, or
-// the branch's code under review (the full page only)
-const mode = ref<'talk' | 'history' | 'changes'>('talk');
-const focus = ref<string>(); // the file a comment's path:line opens in Changes
+// the discussion: the shown step's comments, the whole conversation with
+// its events, or every change in order with the issue as it was
+const talk = ref<'step' | 'all' | 'history'>('step');
+const step = ref<InstanceType<typeof IssueStep> | null>(null);
+const focus = ref<string>(); // the file a comment's path:line opens in Changes, step 6 on the page
 function showLine(path: string) {
   if (!props.page) return;
   focus.value = path;
-  mode.value = 'changes';
+  step.value?.show(6);
 }
 const changeCount = computed(() => (thread.value ? steps(thread.value.events).length : 0));
 const comments = computed(() => rest.value.filter((e) => e.kind === 'comment').length);
@@ -365,7 +357,6 @@ async function reloadStale() {
 <style scoped>
 .gb-stale { display: flex; align-items: center; gap: .5rem; margin: 0; padding: .5rem 1rem; background: var(--info-bg); color: var(--info-fg); border-bottom: 1px solid var(--info-border); font-size: .875rem; }
 .gb-stale-btn { padding: 0; border: 0; background: none; color: inherit; font: inherit; font-weight: 700; text-decoration: underline; cursor: pointer; }
-.gb-modes { margin-bottom: 1rem; }
 .gb-modes-count { margin-left: .25rem; padding: 0 .375rem; border-radius: var(--radius); background: var(--bg-subtle); color: var(--fg-muted); font-size: .75rem; font-weight: 700; }
 .gb-rename { flex: 1; display: flex; gap: .5rem; }
 .gb-rename .epfl-input { flex: 1; font-size: 1.25rem; font-weight: 700; }

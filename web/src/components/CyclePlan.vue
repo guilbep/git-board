@@ -47,7 +47,7 @@ import { on } from '@/when';
 import MarkdownBody from '@/components/MarkdownBody.vue';
 
 // can: the viewer may approve (the server's actions); sends: the request also briefs the agent;
-// current: step 3 is the issue's step, else it is looked at from the spine and only read
+// current: step 3 is the issue's step, else it is looked at from the step bar and only read
 const props = defineProps<{ cycle: Cycle; gate: string; current: boolean; busy: boolean; can: boolean; sends?: boolean }>();
 const emit = defineEmits<{ approve: []; revise: [body: string] }>();
 

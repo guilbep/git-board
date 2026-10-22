@@ -9,7 +9,7 @@
 <script setup lang="ts">
 export type IconName =
   | 'close' | 'up' | 'down' | 'link' | 'expand' | 'edit' | 'check' | 'clock' | 'local' | 'tag'
-  | 'user' | 'title' | 'open' | 'closed' | 'sync' | 'plus' | 'warn' | 'external' | 'error' | 'back' | 'settings' | 'filter' | 'collapse' | 'search' | 'chart' | 'inbox' | 'undo' | 'info' | 'forward';
+  | 'user' | 'title' | 'open' | 'closed' | 'sync' | 'plus' | 'warn' | 'external' | 'error' | 'back' | 'settings' | 'filter' | 'collapse' | 'search' | 'chart' | 'inbox' | 'undo' | 'info' | 'forward' | 'lock';
 
 defineProps<{ name: IconName; small?: boolean }>();
 
@@ -21,6 +21,7 @@ const paths: Record<IconName, string[]> = {
   expand: ['M15 3h6v6', 'M9 21H3v-6', 'M21 3l-7 7', 'M3 21l7-7'],
   edit: ['M12 20h9', 'M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z'],
   check: ['M20 6 9 17l-5-5'],
+  lock: ['M5 11h14v10H5Z', 'M8 11V7a4 4 0 0 1 8 0v4'],
   clock: ['M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20Z', 'M12 6v6l4 2'],
   local: ['M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94', 'M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19', 'M1 1l22 22'],
   tag: ['M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82Z', 'M7 7h.01'],
