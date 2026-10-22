@@ -377,6 +377,31 @@ func WithRelease(content string, r Release) string {
 	return upsertTable(content, "[release]", b.String())
 }
 
+// WithChecks is content with a [cycle.checks.<name>] table per check,
+// replaced or appended: what Propose checks writes. Pure, as WithRelease.
+func WithChecks(content string, checks map[string]Suite) string {
+	list := func(ss []string) string {
+		q := make([]string, len(ss))
+		for i, s := range ss {
+			q[i] = fmt.Sprintf("%q", s)
+		}
+		return "[" + strings.Join(q, ", ") + "]"
+	}
+	for _, name := range slices.Sorted(maps.Keys(checks)) {
+		c := checks[name]
+		var b strings.Builder
+		fmt.Fprintf(&b, "[cycle.checks.%s]\nrun = %s\n", name, list(c.Run))
+		if c.Dir != "" {
+			fmt.Fprintf(&b, "dir = %q\n", c.Dir)
+		}
+		if len(c.Files) > 0 {
+			fmt.Fprintf(&b, "files = %s\n", list(c.Files))
+		}
+		content = upsertTable(content, "[cycle.checks."+name+"]", b.String())
+	}
+	return content
+}
+
 // upsertTable replaces the named top-level table (header through the line
 // before the next "[" header, or EOF) if present, else appends it — a
 // blank line ahead of it if the file is non-empty.

@@ -10,6 +10,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/guilbep/git-board/internal/config"
+	"github.com/guilbep/git-board/internal/gitbugio/gitbugiotest"
 )
 
 type stepTestsAnswer struct {
@@ -201,5 +204,38 @@ func TestRunTestsRefuses(t *testing.T) {
 	git(t, s.root, "config", "--unset", "user.signingkey")
 	if code, body := post(t, url+"/tests/run", map[string]any{"names": []string{"unit"}}); code != http.StatusBadRequest || !strings.Contains(body, "no-signing-key") {
 		t.Errorf("no signing key: %d %s", code, body)
+	}
+}
+
+func TestChecksSetup(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "lefthook.yml"), []byte("pre-commit:\n  commands:\n    vet:\n      run: go vet ./...\n    fmt:\n      run: gofmt -l {staged_files}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	s := &apiServer{cfg: &config.Config{}, b: gitbugiotest.New(t), root: dir, cfgPath: filepath.Join(dir, ".git-board.toml")}
+	if err := os.WriteFile(s.cfgPath, []byte("# the board\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	url := serve(t, s).URL + "/api/checks/setup"
+	var got struct {
+		Source  string
+		Checks  map[string]config.Suite
+		Skipped []struct{ Name, Why string }
+		TOML    string
+	}
+	getJSON(t, url, &got)
+	if got.Source != "lefthook.yml" || len(got.Checks) != 1 || len(got.Skipped) != 1 || got.Skipped[0].Name != "fmt" || !strings.Contains(got.TOML, "[cycle.checks.vet]\nrun = [\"go\", \"vet\", \"./...\"]") {
+		t.Fatalf("%+v", got)
+	}
+	if code, body := post(t, url, nil); code != http.StatusOK {
+		t.Fatalf("%d %s", code, body)
+	}
+	raw, _ := os.ReadFile(s.cfgPath)
+	if !strings.HasPrefix(string(raw), "# the board\n") || !slices.Equal(s.config().Cycle.Checks["vet"].Run, []string{"go", "vet", "./..."}) {
+		t.Errorf("file:\n%s\nconfig %+v", raw, s.config().Cycle.Checks)
+	}
+	if code, body := post(t, url, nil); code != http.StatusConflict || !strings.Contains(body, "declared") {
+		t.Errorf("twice: %d %s", code, body)
 	}
 }

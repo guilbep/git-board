@@ -308,3 +308,72 @@ func (s *apiServer) readyForReview(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, cur)
 }
+
+// checksSetup is what Propose checks shows: the proposal, and the
+// .git-board.toml it would write.
+type checksSetup struct {
+	proof.Proposal
+	TOML     string `json:"toml"`
+	Declared bool   `json:"declared"` // [cycle.checks] has entries already: nothing is written
+}
+
+func (s *apiServer) proposeChecks() (checksSetup, error) {
+	p, err := proof.Propose(s.root)
+	if err != nil {
+		return checksSetup{}, err
+	}
+	text, _, _, err := s.readConfigFile()
+	if err != nil {
+		return checksSetup{}, err
+	}
+	return checksSetup{Proposal: p, TOML: config.WithChecks(text, p.Checks), Declared: len(s.config().Cycle.Checks) > 0}, nil
+}
+
+// GET /api/checks/setup: the checks this checkout's lefthook.yml,
+// Makefile or package.json suggest, and the toml with them.
+func (s *apiServer) handleChecksSetup(w http.ResponseWriter, r *http.Request) {
+	res, err := s.proposeChecks()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, res)
+}
+
+// POST /api/checks/setup: writes the proposed checks into the working
+// tree's .git-board.toml. They gate once committed on the base branch:
+// the gate reads the base's toml, never this file.
+func (s *apiServer) handleWriteChecks(w http.ResponseWriter, r *http.Request) {
+	done, ok := s.beginWrite(w)
+	if !ok {
+		return
+	}
+	defer done()
+	res, err := s.proposeChecks()
+	switch {
+	case err != nil:
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	case res.Declared:
+		writeCoded(w, http.StatusConflict, "declared", errors.New("[cycle.checks] has entries already: edit them in .git-board.toml"))
+		return
+	case len(res.Checks) == 0:
+		writeError(w, http.StatusBadRequest, errors.New("nothing to propose: no lefthook.yml pre-commit command, Makefile target or package.json script runs as a check"))
+		return
+	}
+	cfg, check := checkConfig(res.TOML)
+	if !check.OK {
+		msg := check.Message
+		if check.Error != nil {
+			msg = check.Error.Error()
+		}
+		writeCoded(w, http.StatusBadRequest, "check", errors.New(msg))
+		return
+	}
+	if err := config.Save(s.configPath(), []byte(res.TOML)); err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	s.setConfig(cfg)
+	writeJSON(w, http.StatusOK, res)
+}
