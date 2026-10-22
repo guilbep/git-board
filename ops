@@ -1,1 +1,1 @@
-{"author":{"id":"f943aa1c5ee078b881a8e97535a4e2ccb401d01ca00f4128126befa9cca58a32"},"ops":[{"type":5,"timestamp":1792615742,"nonce":"3gXAtDGiOhI0PDgpsIiexD2xfhQ=","added":["kind:feat","prio:p1","status:ready","assignee:guilbep"],"removed":null}]}
+{"author":{"id":"f943aa1c5ee078b881a8e97535a4e2ccb401d01ca00f4128126befa9cca58a32"},"ops":[{"type":5,"timestamp":1792658976,"nonce":"Q2U8Y5FP91sEni2d5x9UXLRmIXA=","added":["risk:structural"],"removed":null}]}
