@@ -875,6 +875,7 @@ export interface StepTests {
   suites: SuiteRow[];
   checks: SuiteRow[];
   gate: { proven: boolean; reason?: string; checks: CheckStatus[] };
+  merged?: { proven: boolean; reason?: string; checks: CheckStatus[] }; // the gate at the merge commit, once merged
   running: string[];
   error?: string; // the last run's: a check that couldn't start
 }

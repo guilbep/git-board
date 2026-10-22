@@ -20,7 +20,11 @@
 
   <ul class="gb-tiles">
     <li>
-      <template v-if="run">
+      <template v-if="proof && merge">
+        <span><span :class="['gb-pill', proof.proven ? 'is-pass' : proof.checks.some((c) => c.verdict === 'FAILED') ? 'is-failed' : '']">{{ proof.proven ? 'Pass' : proof.checks.some((c) => c.verdict === 'FAILED') ? 'Failed' : 'Not run' }}</span> {{ proof.checks.map((c) => c.name).join(', ') }} at <span class="gb-mono">{{ merge.slice(0, 7) }}</span>, the merged head</span>
+        <span class="gb-note">{{ proof.proven ? proof.checks.map((c) => `signed by ${c.signer}, ${when(c.result?.at ?? '', true)}`).join(' · ') : proof.reason }}</span>
+      </template>
+      <template v-else-if="run">
         <span>Run at <span class="gb-mono">{{ run.commit?.slice(0, 7) || 'no commit' }}</span>{{ run.merge ? ', the merged head' : '' }}</span>
         <span class="gb-note">{{ [run.by, when(run.at, true)].filter(Boolean).join(', ') }}<template v-if="merge && !run.merge"> · none at the merge <span class="gb-mono">{{ merge.slice(0, 7) }}</span> yet</template></span>
         <button v-if="runHtml" type="button" class="gb-linkbtn" @click="open = !open">{{ open ? 'Fold the output' : 'Read the output' }}</button>
@@ -39,7 +43,7 @@
     </li>
   </ul>
   <MarkdownBody v-if="open && runHtml" :html="runHtml" />
-  <template v-if="current && (!run || (merge && !run.merge))">
+  <template v-if="current && !proof && (!run || (merge && !run.merge))">
     <textarea v-model="output" class="epfl-input" rows="3" aria-label="The run's output" placeholder="Paste what you ran and what it printed" :disabled="busy" />
     <div class="gb-cycle-actions">
       <input v-model="commit" class="epfl-input gb-mono" aria-label="At commit" :placeholder="(merge || cycle.evidence.head)?.slice(0, 7) || 'commit'" :disabled="busy" />
@@ -80,8 +84,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue';
-import type { Cycle, IssueEvent } from '@/api/board';
+import { computed, ref, watch } from 'vue';
+import { getStepTests, type Cycle, type IssueEvent, type StepTests } from '@/api/board';
 import { criteriaLeft, mergedRun, signoffLine, tiles } from '@/cycle';
 import { when } from '@/when';
 import MarkdownBody from '@/components/MarkdownBody.vue';
@@ -89,11 +93,21 @@ import MarkdownBody from '@/components/MarkdownBody.vue';
 // can: the viewer may sign off (the server's actions); current: step 7 is the
 // issue's step, else it is looked at once done and only read; forge: the
 // issue's copy the closing sign-off closes too ("GitHub #37")
-const props = defineProps<{ cycle: Cycle; status: string; events: IssueEvent[]; current: boolean; busy: boolean; can: boolean; needsWhy: boolean; forge?: string | undefined }>();
+const props = defineProps<{ id: string; cycle: Cycle; status: string; events: IssueEvent[]; current: boolean; busy: boolean; can: boolean; needsWhy: boolean; forge?: string | undefined }>();
 const emit = defineEmits<{ check: [index: number]; signoff: [why?: string]; run: [output: string, commit: string]; back: [] }>();
 
 const merge = computed(() => (props.cycle.evidence.pr?.state === 'MERGED' ? props.cycle.evidence.pr.merge_commit : undefined));
 const run = computed(() => mergedRun(props.cycle));
+// the checks the base declares, proven at the merge commit (git board
+// verify): then they are the run, and a pasted one no longer counts
+const proof = ref<StepTests['merged'] | null>(null);
+watch(
+  () => props.cycle,
+  async () => {
+    proof.value = merge.value ? await getStepTests(props.id).then((t) => (t.merged?.checks.length ? t.merged : null)).catch(() => null) : null;
+  },
+  { immediate: true },
+);
 // the run's comment in the thread (the output is its body), less its "Run at <sha>" line
 const runHtml = computed(() => {
   const e = props.events.findLast((e) => e.meta?.['verify:run'] && (!run.value?.commit || e.meta['verify:commit'] === run.value.commit));

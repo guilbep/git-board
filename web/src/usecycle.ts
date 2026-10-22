@@ -35,8 +35,8 @@ export function useCycle(props: { id: string; labels: string[]; description: str
       changed();
       return true;
     } catch (e) {
-      // a sign-off without a run at the head takes a reason instead
-      if (action === 'signoff' && e instanceof ApiError && e.status === 400 && e.message.startsWith('no run')) needsWhy.value = true;
+      // a sign-off without a run, or the checks' proof at the merge, takes a reason instead
+      if (action === 'signoff' && e instanceof ApiError && e.status === 400 && /^(no run|not proven)/.test(e.message)) needsWhy.value = true;
       error.value = message(e);
       return false;
     } finally {

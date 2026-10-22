@@ -62,6 +62,7 @@
       />
       <CycleVerify
         v-else-if="cycle && n === 7 && (current || cycle.done)"
+        :id="id"
         :cycle="cycle"
         :status="status"
         :events="events"

@@ -19,6 +19,7 @@ import (
 	"github.com/guilbep/git-board/internal/fields"
 	"github.com/guilbep/git-board/internal/ghpr"
 	"github.com/guilbep/git-board/internal/gitbugio"
+	"github.com/guilbep/git-board/internal/proof"
 )
 
 // The development cycle (docs/prd/dev-cycle.md, M1): an issue's step,
@@ -274,6 +275,22 @@ func (s *apiServer) handleCycleAction(w http.ResponseWriter, r *http.Request) {
 		ran := slices.ContainsFunc(ev.Runs, func(run cycle.Run) bool {
 			return ev.Head == "" || run.Commit == ev.Head || (merged != "" && run.Commit == merged)
 		})
+		// the base declares checks: their proof at the merged head is the
+		// run (ADR 0001 §9), a pasted one no longer counts. The merge
+		// commit not fetched yet is not proven either.
+		if merged != "" {
+			g, err := proof.Gate(r.Context(), s.root, ev.Base, merged)
+			if err != nil {
+				g = proof.GateResult{Checks: []proof.CheckStatus{{}}, Reason: err.Error()}
+			}
+			if len(g.Checks) > 0 {
+				if !g.Proven && strings.TrimSpace(req.Why) == "" {
+					writeError(w, http.StatusBadRequest, fmt.Errorf("not proven%s: %s; sign off with a reason to override", at(merged), g.Reason))
+					return
+				}
+				ran = true
+			}
+		}
 		if !ran && strings.TrimSpace(req.Why) == "" {
 			writeError(w, http.StatusBadRequest, fmt.Errorf("no run%s; sign off with a reason to override", at(ev.Head)))
 			return
