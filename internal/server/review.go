@@ -253,8 +253,8 @@ func (s *apiServer) handleReview(w http.ResponseWriter, r *http.Request) {
 			bad("state: want APPROVE, REQUEST_CHANGES or COMMENT")
 			return
 		}
-		if empty && req.State != "APPROVE" {
-			bad("say what to change, or comment something")
+		if empty { // the gate is a human who can explain the diff (docs/prd/dev-cycle.md, M4)
+			bad("explain the change in one line to approve it, or say what to change")
 			return
 		}
 		meta["review:state"] = req.State

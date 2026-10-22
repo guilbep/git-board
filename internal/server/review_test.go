@@ -194,7 +194,7 @@ func TestReviewWrites(t *testing.T) {
 		t.Fatalf("reply to a reply: %d %+v", code, last(th).Review)
 	}
 
-	if code := call(t, "POST", r.url("/review", nil), map[string]any{"state": "APPROVE", "commit": r.c1, "pr": "github.com/o/r#26"}, &th); code != http.StatusCreated {
+	if code := call(t, "POST", r.url("/review", nil), map[string]any{"state": "APPROVE", "body": "Reads the remote from the config", "commit": r.c1, "pr": "github.com/o/r#26"}, &th); code != http.StatusCreated {
 		t.Fatalf("approve: %d", code)
 	}
 	if rv := last(th).Review; rv == nil || rv.State != "APPROVE" || rv.PR != "github.com/o/r#26" || rv.Commit != r.c1 {
@@ -212,6 +212,7 @@ func TestReviewWrites(t *testing.T) {
 		"unknown state":             {"state": "LGTM", "commit": r.c1},
 		"review without commit":     {"state": "APPROVE"},
 		"change request, no text":   {"state": "REQUEST_CHANGES", "commit": r.c1},
+		"approval, no line":         {"state": "APPROVE", "body": " ", "commit": r.c1},
 		"line comment without side": {"body": "x", "path": "a.txt", "line": 3, "commit": r.c1},
 		"line 0":                    {"body": "x", "path": "a.txt", "line": 0, "side": "new", "commit": r.c1},
 		"no such commit":            {"body": "x", "path": "a.txt", "line": 3, "side": "new", "commit": "nope"},
@@ -325,7 +326,7 @@ func TestAnnotateOwnBranch(t *testing.T) {
 	on3 := last(th).ID
 	call(t, "POST", r.url("/review", nil), map[string]any{"body": "old 3", "path": "a.txt", "line": 3, "side": "old", "commit": r.c1}, &th)
 	old3 := last(th).ID
-	call(t, "POST", r.url("/review", nil), map[string]any{"state": "APPROVE", "commit": o1}, &th)
+	call(t, "POST", r.url("/review", nil), map[string]any{"state": "APPROVE", "body": "ok", "commit": o1}, &th)
 	approve := last(th).ID
 
 	if code := call(t, "GET", r.url("/thread", nil), nil, &th); code != http.StatusOK {

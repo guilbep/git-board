@@ -1,5 +1,6 @@
-<!-- A line comment and its replies, under its line in the Changes tab:
-     Reply, Resolve; a resolved thread folds. loose: its line isn't in the
+<!-- A line comment and its replies, under its line in the review (step 6):
+     Reply, Send to Claude Code (the agent of the issue's worktree answers
+     it), Resolve; a resolved thread folds. loose: its line isn't in the
      view (outdated, or written at another commit), so it quotes it. -->
 <template>
   <div class="gb-rt">
@@ -24,9 +25,14 @@
       </div>
       <div v-else class="gb-rt-acts">
         <button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" @click="replying = true">Reply</button>
+        <!-- ponytail: Claude Code by name, as the canvas; read wtx.toml's agent when a repo runs opencode -->
+        <button v-if="brief" type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" :disabled="sending" @click="toAgent">
+          {{ sending ? 'Sending…' : 'Send to Claude Code' }}
+        </button>
         <button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" :disabled="busy" @click="resolve(thread.root.id, !thread.resolved)">
           {{ thread.resolved ? 'Unresolve' : 'Resolve' }}
         </button>
+        <span v-if="sent" class="gb-hint" role="status">{{ sent }}</span>
       </div>
     </template>
   </div>
@@ -45,12 +51,20 @@ const props = defineProps<{
   reply: (to: string, body: string) => Promise<boolean>;
   resolve: (root: string, resolved: boolean) => Promise<boolean>;
   loose?: boolean;
+  brief?: ((root: string) => Promise<string>) | null | undefined; // Send to Claude Code: what came of it
 }>();
 
 const r = computed(() => props.thread.root.review!);
 const shown = ref(false); // a resolved thread, unfolded
 const replying = ref(false);
 const draft = ref('');
+const sending = ref(false);
+const sent = ref('');
+async function toAgent() {
+  sending.value = true;
+  sent.value = await props.brief!(props.thread.root.id);
+  sending.value = false;
+}
 async function send() {
   if (draft.value.trim() && (await props.reply(props.thread.root.id, draft.value))) {
     draft.value = '';
@@ -65,6 +79,6 @@ async function send() {
 .gb-rt-show { padding: 0; border: 0; background: none; color: var(--primary); font: inherit; text-decoration: underline; cursor: pointer; }
 .gb-rt-c + .gb-rt-c { margin-top: .5rem; padding-top: .5rem; border-top: 1px solid var(--border); }
 .gb-rt-who { margin: 0 0 .25rem; }
-.gb-rt-acts { display: flex; gap: .5rem; margin-top: .5rem; }
+.gb-rt-acts { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin-top: .5rem; }
 .gb-rt-reply { margin-top: .5rem; }
 </style>

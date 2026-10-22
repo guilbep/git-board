@@ -1,7 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  approvers,
   autoOpens,
+  checksLine,
+  reviewGate,
   commitsAgo,
   diffCommand,
   editable,
@@ -15,7 +18,7 @@ import {
   verbOf,
   viewedCount,
 } from './review.ts';
-import type { FileStat, IssueEvent, Review } from './api/board.ts';
+import type { Cycle, FileStat, GatePR, IssueEvent, Review } from './api/board.ts';
 
 const file = (path: string, added: number, deleted = 0, extra: Partial<FileStat> = {}): FileStat => ({
   path,
@@ -162,4 +165,23 @@ test('shownRange: one commit against its parent, the list holding a merge’s ot
   assert.deepEqual(shownRange(c, 'mine', 'c1'), { from: 'c1', to: 'm' });
   assert.deepEqual(shownRange(c, 'mine'), { from: 'b', to: 'm' });
   assert.deepEqual(shownRange(c, 'm'), { from: 'm^', to: 'm' });
+});
+
+test('approvers: each person’s last verdict, the PR’s and the issue’s', () => {
+  const gh = { reviews: [{ login: 'erin', state: 'APPROVED', commit: '' }, { login: 'bob', state: 'APPROVED', commit: '' }, { login: 'dan', state: 'COMMENTED', commit: '' }] } as unknown as GatePR;
+  const mine = (who: string, state: Review['state']): IssueEvent => ({ ...ev(who + state, who, { state, commit: 'c' } as Review), author: { id: who, name: who, login: who } });
+  assert.deepEqual(approvers(gh), ['erin', 'bob']);
+  assert.deepEqual(approvers(gh, [mine('bob', 'REQUEST_CHANGES'), mine('ann', 'APPROVE'), mine('ann', 'COMMENT')]), ['erin', 'ann']);
+  assert.deepEqual(approvers(null), []);
+});
+
+test('the review footer and its checks', () => {
+  const c = (risk: string, people?: Record<string, string>) => ({ risk, evidence: { people } }) as unknown as Cycle;
+  assert.deepEqual(reviewGate(c('normal', { review: 'lead-dev' })), ['Normal: one approval', 'The reviewer role: lead-dev.', 'Merging the PR opens step 7.']);
+  assert.equal(reviewGate(c('structural'))[0], 'Structural: a second human approval');
+  assert.equal(reviewGate(c('structural'))[1], 'The reviewer role: anyone.');
+  const checks = (...states: string[]) => ({ checks: states.map((state) => ({ name: state, state })) }) as unknown as GatePR;
+  assert.equal(checksLine(checks('success', 'success', 'failure')), '2 of 3 checks pass');
+  assert.equal(checksLine(checks()), '');
+  assert.equal(checksLine(undefined), '');
 });
