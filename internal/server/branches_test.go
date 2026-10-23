@@ -77,7 +77,7 @@ func TestBranchesOfAnIssue(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := b.TestCache().SetUserIdentity(who); err != nil {
+	if err := b.TestCache().SetUserIdentity(t.Context(), who); err != nil {
 		t.Fatal(err)
 	}
 	id := gitbugiotest.NewImportedIssue(t, b, "[BUG](Equipment) Crash on save (#2518)", "https://github.com/o/r/issues/2518")
@@ -155,7 +155,7 @@ func TestBranchSquashedIntoTheBase(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := b.TestCache().SetUserIdentity(who); err != nil {
+	if err := b.TestCache().SetUserIdentity(t.Context(), who); err != nil {
 		t.Fatal(err)
 	}
 	id := gitbugiotest.NewImportedIssue(t, b, "Crash on save (#2518)", "https://github.com/o/r/issues/2518")

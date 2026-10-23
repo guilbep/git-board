@@ -130,7 +130,7 @@ func gateRepo(t *testing.T, url string, withToken bool) (*apiServer, *fakeGitHub
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := b.TestCache().SetUserIdentity(who); err != nil {
+	if err := b.TestCache().SetUserIdentity(t.Context(), who); err != nil {
 		t.Fatal(err)
 	}
 	if withToken {

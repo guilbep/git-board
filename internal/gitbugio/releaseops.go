@@ -1,6 +1,7 @@
 package gitbugio
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"time"
@@ -101,7 +102,7 @@ func opBase(t dag.OperationType, author identity.Interface) dag.OpBase {
 
 // unmarshalReleaseOp reads an operation back from git; dag sets its id and
 // author after.
-func unmarshalReleaseOp(raw json.RawMessage, _ entity.Resolvers) (dag.Operation, error) {
+func unmarshalReleaseOp(_ context.Context, raw json.RawMessage, _ entity.Resolvers) (dag.Operation, error) {
 	var t struct {
 		OperationType dag.OperationType `json:"type"`
 	}

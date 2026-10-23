@@ -94,7 +94,7 @@ func TestEditingAnotherIssuesCommentIsRefused(t *testing.T) {
 func TestThreadForgeLinks(t *testing.T) {
 	t.Parallel()
 	b := gitbugiotest.New(t)
-	author, err := b.TestCache().GetUserIdentity()
+	author, err := b.TestCache().GetUserIdentity(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -106,6 +106,9 @@ func TestThreadForgeLinks(t *testing.T) {
 		"gitlab-url":                 "https://gitlab.example.com/g/r/-/work_items/3",
 	})
 	if err != nil {
+		t.Fatal(err)
+	}
+	if err := bug.Commit(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 	th, err := b.Thread(bug.Id().String())
@@ -132,12 +135,12 @@ func TestThreadForgeLinks(t *testing.T) {
 	}
 
 	// once pushed it's there; its edit, and a status change, wait again
-	cached, _ := b.TestCache().Bugs().ResolvePrefix(id)
+	cached, _ := b.TestCache().Bugs().ResolvePrefix(t.Context(), id)
 	op := cached.Snapshot().Operations[len(cached.Snapshot().Operations)-1]
-	if _, err := cached.SetMetadata(op.Id(), map[string]string{"sync:github.com/o/r:pushed": "1"}); err != nil {
+	if _, err := cached.SetMetadata(t.Context(), op.Id(), map[string]string{"sync:github.com/o/r:pushed": "1"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := cached.Commit(); err != nil {
+	if err := cached.Commit(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 	if err := b.EditComment(id, comment, "edited", ""); err != nil {
@@ -165,7 +168,7 @@ func TestThreadForgeLinks(t *testing.T) {
 func TestForgeGoneMarksItsOwnURL(t *testing.T) {
 	t.Parallel()
 	b := gitbugiotest.New(t)
-	author, _ := b.TestCache().GetUserIdentity()
+	author, _ := b.TestCache().GetUserIdentity(t.Context())
 	bug, _, err := b.TestCache().Bugs().NewRaw(author, 1, "renamed", "", nil, map[string]string{
 		"sync:github.com/a/r:id":  "I_1",
 		"sync:github.com/a/r:url": "https://github.com/a/r/issues/1",
@@ -176,6 +179,9 @@ func TestForgeGoneMarksItsOwnURL(t *testing.T) {
 		"sync:github.com/c/r:gone": "unlinked",
 	})
 	if err != nil {
+		t.Fatal(err)
+	}
+	if err := bug.Commit(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 	is, err := b.GetIssue(bug.Id().String())
@@ -207,7 +213,7 @@ func TestThreadForgeBridges(t *testing.T) {
 			}
 		}
 	}
-	author, _ := b.TestCache().GetUserIdentity()
+	author, _ := b.TestCache().GetUserIdentity(t.Context())
 	bug, _, err := b.TestCache().Bugs().NewRaw(author, 1, "on both", "", nil, map[string]string{
 		"sync:github.com/o/r:id":     "I_1",
 		"sync:github.com/o/r:url":    "https://github.com/o/r/issues/7",
@@ -219,6 +225,9 @@ func TestThreadForgeBridges(t *testing.T) {
 		"gitlab-base-url":   "https://gitlab.example.com/",
 	})
 	if err != nil {
+		t.Fatal(err)
+	}
+	if err := bug.Commit(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 	id := bug.Id().String()
@@ -234,10 +243,10 @@ func TestThreadForgeBridges(t *testing.T) {
 		t.Errorf("forges %+v, want %+v", th.Forges, want)
 	}
 
-	if _, err := bug.SetMetadata(bug.Snapshot().Operations[0].Id(), map[string]string{"sync:github.com/o/r:gone": "unlinked"}); err != nil {
+	if _, err := bug.SetMetadata(t.Context(), bug.Snapshot().Operations[0].Id(), map[string]string{"sync:github.com/o/r:gone": "unlinked"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := bug.Commit(); err != nil {
+	if err := bug.Commit(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := b.AddComment(id, "after"); err != nil {
@@ -271,17 +280,17 @@ func TestLegacyForgeGone(t *testing.T) {
 			}
 		}
 	}
-	author, _ := b.TestCache().GetUserIdentity()
+	author, _ := b.TestCache().GetUserIdentity(t.Context())
 	legacy := func(title string, meta map[string]string, gone map[string]string) string {
 		t.Helper()
 		bug, _, err := b.TestCache().Bugs().NewRaw(author, 1, title, "", nil, meta)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, err := bug.SetMetadata(bug.Snapshot().Operations[0].Id(), gone); err != nil {
+		if _, err := bug.SetMetadata(t.Context(), bug.Snapshot().Operations[0].Id(), gone); err != nil {
 			t.Fatal(err)
 		}
-		if err := bug.Commit(); err != nil {
+		if err := bug.Commit(t.Context()); err != nil {
 			t.Fatal(err)
 		}
 		return bug.Id().String()
@@ -408,7 +417,7 @@ func TestMyLogin(t *testing.T) {
 	if got := b.MyLogin(); got != "" {
 		t.Errorf("MyLogin = %q before any tag, want empty", got)
 	}
-	me, err := b.TestCache().GetUserIdentity()
+	me, err := b.TestCache().GetUserIdentity(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -434,7 +443,7 @@ func TestMyLogin(t *testing.T) {
 func TestThreadEditWasIsWhatTheForgesHave(t *testing.T) {
 	t.Parallel()
 	b := gitbugiotest.New(t)
-	author, _ := b.TestCache().GetUserIdentity()
+	author, _ := b.TestCache().GetUserIdentity(t.Context())
 	bug, _, err := b.TestCache().Bugs().NewRaw(author, 1, "synced", "", nil, map[string]string{
 		"sync:github.com/o/r:id":  "I_1",
 		"sync:github.com/o/r:url": "https://github.com/o/r/issues/7",
@@ -442,15 +451,18 @@ func TestThreadEditWasIsWhatTheForgesHave(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err := bug.Commit(t.Context()); err != nil {
+		t.Fatal(err)
+	}
 	id := bug.Id().String()
 	pushLast := func() {
 		t.Helper()
-		cached, _ := b.TestCache().Bugs().ResolvePrefix(id)
+		cached, _ := b.TestCache().Bugs().ResolvePrefix(t.Context(), id)
 		ops := cached.Snapshot().Operations
-		if _, err := cached.SetMetadata(ops[len(ops)-1].Id(), map[string]string{"sync:github.com/o/r:pushed": "1"}); err != nil {
+		if _, err := cached.SetMetadata(t.Context(), ops[len(ops)-1].Id(), map[string]string{"sync:github.com/o/r:pushed": "1"}); err != nil {
 			t.Fatal(err)
 		}
-		if err := cached.Commit(); err != nil {
+		if err := cached.Commit(t.Context()); err != nil {
 			t.Fatal(err)
 		}
 	}

@@ -586,7 +586,7 @@ func TestEnableSwitchesTheKindForm(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	bug, err := s.b.TestCache().Bugs().ResolvePrefix(id)
+	bug, err := s.b.TestCache().Bugs().ResolvePrefix(t.Context(), id)
 	if err != nil {
 		t.Fatal(err)
 	}

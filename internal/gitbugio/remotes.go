@@ -1,6 +1,7 @@
 package gitbugio
 
 import (
+	"context"
 	"errors"
 	"regexp"
 	"sort"
@@ -148,7 +149,7 @@ func (b *Backend) compare(mine, theirs repository.Hash) (ahead, behind bool, err
 // git bug pull does first: nothing local changes. An empty remote is
 // nothing to fetch.
 func (b *Backend) Fetch(remote string) error {
-	_, err := b.c.Fetch(remote)
+	_, err := b.c.Fetch(context.Background(), remote)
 	if errors.Is(err, transport.ErrEmptyRemoteRepository) {
 		return nil
 	}

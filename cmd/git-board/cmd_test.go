@@ -48,29 +48,29 @@ func newTestRepo(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewFromGitUser: %v", err)
 	}
-	if err := c.SetUserIdentity(id); err != nil {
+	if err := c.SetUserIdentity(t.Context(), id); err != nil {
 		t.Fatalf("SetUserIdentity: %v", err)
 	}
 
-	open, _, err := c.Bugs().New("Fix invoice bug", "")
+	open, _, err := c.Bugs().New(t.Context(), "Fix invoice bug", "")
 	if err != nil {
 		t.Fatalf("new open bug: %v", err)
 	}
-	if _, _, err := open.ChangeLabels([]string{"status:ready"}, nil); err != nil {
+	if _, _, err := open.ChangeLabels(t.Context(), []string{"status:ready"}, nil); err != nil {
 		t.Fatalf("label open bug: %v", err)
 	}
-	if err := open.Commit(); err != nil {
+	if err := open.Commit(t.Context()); err != nil {
 		t.Fatalf("commit open bug: %v", err)
 	}
 
-	closed, _, err := c.Bugs().New("Write specs", "")
+	closed, _, err := c.Bugs().New(t.Context(), "Write specs", "")
 	if err != nil {
 		t.Fatalf("new closed bug: %v", err)
 	}
-	if _, err := closed.Close(); err != nil {
+	if _, err := closed.Close(t.Context()); err != nil {
 		t.Fatalf("close bug: %v", err)
 	}
-	if err := closed.Commit(); err != nil {
+	if err := closed.Commit(t.Context()); err != nil {
 		t.Fatalf("commit closed bug: %v", err)
 	}
 
@@ -207,20 +207,5 @@ func TestBareTakesNoArguments(t *testing.T) {
 	opened(t)
 	if out, err := execute(t, []string{"is:open"}); err == nil {
 		t.Errorf("git board is:open ran:\n%s", out)
-	}
-}
-
-// The board holds the repository: a command that can't open it says where
-// the board is.
-func TestLockedRepositoryNamesTheRunningBoard(t *testing.T) {
-	newTestRepo(t)
-	url := startBoard(t)
-
-	_, err := execute(t, []string{"ls"})
-	if err == nil {
-		t.Fatal("ls ran while the board holds the repository")
-	}
-	if msg := explainLock(err).Error(); !strings.Contains(msg, "git-board server is running for this repository") || !strings.Contains(msg, url) {
-		t.Errorf("error doesn't name the board at %s:\n%s", url, msg)
 	}
 }

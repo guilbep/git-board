@@ -6,6 +6,7 @@
 package gitbugio
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -203,11 +204,11 @@ func (b *Backend) Close() error {
 // git-board reads/writes labels in-process everywhere else — and its
 // release records, which git bug pull leaves (releases.go).
 func (b *Backend) Pull(remote string) error {
-	if _, err := b.repo.FetchRefs(remote, b.c.Bugs().GetNamespace(), b.c.Identities().GetNamespace(), ReleasesNamespace); err != nil {
+	if _, err := b.repo.FetchRefs(context.Background(), remote, b.c.Bugs().GetNamespace(), b.c.Identities().GetNamespace(), ReleasesNamespace); err != nil {
 		return err
 	}
 	// the records after the identities that wrote them
-	return errors.Join(mergeErr(b.c.MergeAll(remote)), b.mergeReleases(remote))
+	return errors.Join(mergeErr(b.c.MergeAll(context.Background(), remote)), b.mergeReleases(remote))
 }
 
 // mergeErr reads a merge to the end, as git bug pull does, and is its
@@ -229,7 +230,7 @@ func mergeErr(merges <-chan entity.MergeResult) error {
 // to `git bug push <remote>` — and the release records, which git bug
 // push leaves. Returns the underlying git push's output.
 func (b *Backend) Push(remote string) (string, error) {
-	return b.repo.PushRefs(remote, b.c.Bugs().GetNamespace(), b.c.Identities().GetNamespace(), ReleasesNamespace)
+	return b.repo.PushRefs(context.Background(), remote, b.c.Bugs().GetNamespace(), b.c.Identities().GetNamespace(), ReleasesNamespace)
 }
 
 // TestCache exposes the underlying *cache.RepoCache for test fixture setup
@@ -242,7 +243,7 @@ func (b *Backend) TestCache() *cache.RepoCache {
 // ListIssues returns every bug in the repo. Filtering is done client-side
 // via internal/filter, so no query is needed here.
 func (b *Backend) ListIssues() ([]Issue, error) {
-	ids, err := b.c.Bugs().Query(query.NewQuery())
+	ids, err := b.c.Bugs().Query(context.Background(), query.NewQuery())
 	if err != nil {
 		return nil, fmt.Errorf("listing bugs: %w", err)
 	}
@@ -345,17 +346,17 @@ func (b *Backend) GetLabels(idPrefix string) ([]string, error) {
 // remove a label that isn't set. A flat kind is written as git-bug keeps it
 // (stored), and read back as kind:bug.
 func (b *Backend) ApplyLabelChange(idPrefix string, added, removed []string) ([]string, error) {
-	bug, err := b.c.Bugs().ResolvePrefix(idPrefix)
+	bug, err := b.c.Bugs().ResolvePrefix(context.Background(), idPrefix)
 	if err != nil {
 		return nil, fmt.Errorf("resolving %s: %w", idPrefix, err)
 	}
 
 	added, removed = b.stored(added, removed, labelStrings(bug.Snapshot().Labels))
 	if len(added) > 0 || len(removed) > 0 {
-		if _, _, err := bug.ChangeLabels(added, removed); err != nil {
+		if _, _, err := bug.ChangeLabels(context.Background(), added, removed); err != nil {
 			return nil, fmt.Errorf("changing labels on %s: %w", idPrefix, err)
 		}
-		if err := bug.Commit(); err != nil {
+		if err := bug.Commit(context.Background()); err != nil {
 			return nil, fmt.Errorf("committing label change on %s: %w", idPrefix, err)
 		}
 	}
@@ -367,7 +368,7 @@ func (b *Backend) ApplyLabelChange(idPrefix string, added, removed []string) ([]
 // a bug, by field: the records under prefix (one per Project), the last
 // record of a field winning.
 func (b *Backend) ProjectBases(idPrefix, prefix string) (map[string]string, error) {
-	bug, err := b.c.Bugs().ResolvePrefix(idPrefix)
+	bug, err := b.c.Bugs().ResolvePrefix(context.Background(), idPrefix)
 	if err != nil {
 		return nil, fmt.Errorf("resolving %s: %w", idPrefix, err)
 	}
@@ -389,7 +390,7 @@ func (b *Backend) ProjectBases(idPrefix, prefix string) (map[string]string, erro
 // SetProjectBases records what a GitHub Project and git-board now agree on,
 // in the bug's history, so it travels with the bug.
 func (b *Backend) SetProjectBases(idPrefix, prefix string, values map[string]string) error {
-	bug, err := b.c.Bugs().ResolvePrefix(idPrefix)
+	bug, err := b.c.Bugs().ResolvePrefix(context.Background(), idPrefix)
 	if err != nil {
 		return fmt.Errorf("resolving %s: %w", idPrefix, err)
 	}
@@ -397,10 +398,10 @@ func (b *Backend) SetProjectBases(idPrefix, prefix string, values map[string]str
 	for field, v := range values {
 		meta[prefix+field] = v
 	}
-	if _, err := bug.SetMetadata(bug.Snapshot().Operations[0].Id(), meta); err != nil {
+	if _, err := bug.SetMetadata(context.Background(), bug.Snapshot().Operations[0].Id(), meta); err != nil {
 		return fmt.Errorf("recording Project values on %s: %w", idPrefix, err)
 	}
-	return bug.Commit()
+	return bug.Commit(context.Background())
 }
 
 // CloseBug marks a bug closed and commits it — the underlying operation
@@ -409,14 +410,14 @@ func (b *Backend) SetProjectBases(idPrefix, prefix string, values map[string]str
 // git-bug's own bug.Close() is a no-op status-wise if already closed, so
 // this is safe to call more than once.
 func (b *Backend) CloseBug(idPrefix string) error {
-	bug, err := b.c.Bugs().ResolvePrefix(idPrefix)
+	bug, err := b.c.Bugs().ResolvePrefix(context.Background(), idPrefix)
 	if err != nil {
 		return fmt.Errorf("resolving %s: %w", idPrefix, err)
 	}
-	if _, err := bug.Close(); err != nil {
+	if _, err := bug.Close(context.Background()); err != nil {
 		return fmt.Errorf("closing %s: %w", idPrefix, err)
 	}
-	return bug.Commit()
+	return bug.Commit(context.Background())
 }
 
 // SearchText returns the issues whose title, description or a comment hold
@@ -424,7 +425,7 @@ func (b *Backend) CloseBug(idPrefix string) error {
 func (b *Backend) SearchText(text string) (map[string]bool, error) {
 	q := query.NewQuery()
 	q.Search = query.Search{text}
-	ids, err := b.c.Bugs().Query(q)
+	ids, err := b.c.Bugs().Query(context.Background(), q)
 	if err != nil {
 		return nil, err
 	}

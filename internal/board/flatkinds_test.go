@@ -27,14 +27,14 @@ func TestLabelViewFindsAFlatKind(t *testing.T) {
 	b := gitbugiotest.New(t)
 	b.SetFlatKinds(cfg)
 	for title, label := range map[string]string{"crash": "bug", "export": "feat"} {
-		bug, _, err := b.TestCache().Bugs().New(title, "")
+		bug, _, err := b.TestCache().Bugs().New(t.Context(), title, "")
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, _, err := bug.ChangeLabels([]string{label}, nil); err != nil { // as GitHub has it
+		if _, _, err := bug.ChangeLabels(t.Context(), []string{label}, nil); err != nil { // as GitHub has it
 			t.Fatal(err)
 		}
-		if err := bug.Commit(); err != nil {
+		if err := bug.Commit(t.Context()); err != nil {
 			t.Fatal(err)
 		}
 	}

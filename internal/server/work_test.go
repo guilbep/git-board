@@ -49,6 +49,9 @@ func issueBy(t *testing.T, b *gitbugio.Backend, who *cache.IdentityCache, title 
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err := bug.Commit(t.Context()); err != nil {
+		t.Fatal(err)
+	}
 	id := bug.Id().String()
 	if _, err := b.ApplyLabelChange(id, labels, nil); err != nil {
 		t.Fatal(err)
@@ -169,7 +172,7 @@ func TestWorkToSend(t *testing.T) {
 	t.Parallel()
 	b := gitbugiotest.New(t)
 	ts := newTestServer(t, b, cycleConfig(nil, config.Cycle{}))
-	author, err := b.TestCache().GetUserIdentity()
+	author, err := b.TestCache().GetUserIdentity(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -177,6 +180,9 @@ func TestWorkToSend(t *testing.T) {
 		"sync:github.com/o/r:id": "I_1", "sync:github.com/o/r:url": "https://github.com/o/r/issues/7", "sync:github.com/o/r:number": "7",
 	})
 	if err != nil {
+		t.Fatal(err)
+	}
+	if err := bug.Commit(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 	id := bug.Id().String()
