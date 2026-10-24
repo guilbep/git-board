@@ -93,11 +93,29 @@ query for the times REST doesn't give.
 
 ## GitLab
 
+`core/forge/gitlab` is the adapter, over GitLab's REST API v4.
+
+- **A project** is named by its numeric id or its path, on a base URL like
+  `https://gitlab.epfl.ch`. Its key is the host and the project as named:
+  `gitlab.epfl.ch/42400`. A numeric id outlives a rename or a move. A path
+  doesn't, and a new key is a new sync entity.
+- **Tokens.** The posting account's is `GITLAB_TOKEN` when it is set, else
+  the credential helper's for the host, with the posting account's login
+  as `username`. Another account's comes from the credential helper only,
+  and counts once GitLab's `/user` says it is theirs. A helper's token for
+  someone else, or one GitLab turns away, is no token. Asking the helper
+  never prompts.
+- **An issue's id is GitLab's `id`, its number the `iid`.** The API reads
+  an issue by its iid only. So the adapter keeps the iid of every issue it
+  lists, reads or creates, and looks for an id it hasn't seen in the whole
+  listing, once.
 - **Text edits leave no event.** A title or description edited on GitLab
-  shows only in the issue itself. Sync finds the edit by comparing it with
-  last seen. For [the later change](sync.md#the-four-cases), a description
-  edit takes its time from GitLab's system note "changed the description",
-  else from the issue's last update.
+  shows in the issue itself, and in a system note: `changed title from …`,
+  `changed the description`. Sync finds the edit by comparing it with last
+  seen. For [the later change](sync.md#the-four-cases), a title or a
+  description takes its time from the latest such note, and the status from
+  the latest state event. A field without one takes the issue's last
+  update.
 - **`updated_at` moves late,** so sync lists the issues updated from 2
   minutes before the last sync. Measured on gitlab.epfl.ch: after a label
   or assignee change, `updated_at` updates about once a minute at most. It
@@ -105,17 +123,42 @@ query for the times REST doesn't give.
   always moves it. Without the margin, an issue edited right after a sync
   could carry a time earlier than that sync, and no later sync would pick
   it up. The margin costs a handful of issues re-read per sync.
+- **Listings are read page by page,** 100 at a time, oldest first, up to
+  the last `X-Next-Page`. An issue or a note listed twice, as a page read
+  after a change can repeat one, counts once.
+- **Comments are the notes people wrote.** System notes are GitLab's own,
+  and give only the change times above. Internal notes are for the
+  project's members, so sync never reads them.
+- **Line endings.** A web edit can send `\r\n`. Texts come back with `\n`,
+  so that the blank lines around a header and a marker stay what sync
+  wrote.
 - **The free edition has one assignee per issue.** The others stay in
   git-board, with one warning. GitLab takes assignees only as the whole set,
   `assignee_ids`. So sync reads them, writes the set only when it changes,
   and reads back what GitLab kept. GitLab records an assignment only as a
   system note, so sync reads the assignees off the issue.
+- **Labels go by name,** in `add_labels` and `remove_labels`. GitLab
+  splits them at commas, and its labels hold none, so a label with a comma
+  is refused.
 - **Base URLs compare without their trailing slash.** `https://gitlab.epfl.ch`
   and `https://gitlab.epfl.ch/` are the same server, for projects and for
   tokens.
-- **Confidential issues are skipped.** GitLab's listing omits them, and
-  reading one on its own is an error (see
-  [Nothing private published](sync.md#nothing-private-published)).
+- **Only `public` is public.** An `internal` project is seen by every user
+  of the instance, not by anyone.
+- **Confidential issues are skipped.** GitLab lists them to the project's
+  members, flagged `confidential`, and the adapter leaves them out. Reading
+  one on its own is an error (see
+  [Nothing private published](sync.md#nothing-private-published)). GitLab
+  takes writes to one, so each write reads its issue first: an issue that
+  turned confidential gets no more.
+- **Writes go 250 ms apart,** under GitLab's default limit of 300 issues
+  or notes created a minute. A 429 is tried again after its `Retry-After`,
+  else at the limit's `RateLimit-Reset`, three times at most. A read that
+  gets a 5xx is tried again after 1, 2, then 4 seconds. A write never is,
+  as GitLab may have made it (see [Echoes](sync.md#echoes)). Once
+  `RateLimit-Remaining` is 0, the next request waits for `RateLimit-Reset`.
+- **Errors.** A 404 or a 410 is not found. A 400, 403, 409 or 422 is
+  refused for good.
 
 [609]: https://github.com/git-bug/git-bug/issues/609
 [1638]: https://github.com/git-bug/git-bug/issues/1638
