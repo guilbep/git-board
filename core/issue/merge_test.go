@@ -48,10 +48,14 @@ func TestMergeConverges(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	// exchange has both clones fetch, then both merge, so each merges the
+	// other's head from before the other merged.
 	exchange := func() {
 		t.Helper()
 		for _, s := range []*gitstore.Store{a, b} {
 			check(s.Fetch(ctx, "peer"))
+		}
+		for _, s := range []*gitstore.Store{a, b} {
 			_, err := oplog.MergeFetched(s, "peer")
 			check(err)
 		}
@@ -75,6 +79,21 @@ func TestMergeConverges(t *testing.T) {
 	}
 
 	exchange()
+	// Each side wrote its own merge commit.
+	var merges []gitstore.Hash
+	for _, s := range []*gitstore.Store{a, b} {
+		l, err := oplog.Load(s, "issue", c.ID)
+		check(err)
+		mc, err := s.ReadCommit(l.Head)
+		check(err)
+		if len(mc.Parents) != 2 {
+			t.Fatalf("head %v has %d parents, want 2", l.Head, len(mc.Parents))
+		}
+		merges = append(merges, l.Head)
+	}
+	if merges[0] == merges[1] {
+		t.Fatalf("both sides have the same merge commit %v", merges[0])
+	}
 	exchange()
 
 	ia, err := Load(a, c.ID)
