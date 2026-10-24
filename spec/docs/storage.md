@@ -212,22 +212,31 @@ the same thing twice.
 ## Fetch and push
 
 Fetch and push run the `git` binary, so every remote, push URL and
-credential helper git knows works.
+credential helper git knows works. Both name the three entity kinds, one
+refspec each, in one call. `refs/board/seq` and any other ref under
+`refs/board/` belong to git-board, not to the core, and the core never
+fetches nor pushes them.
 
 Fetch:
 
 ```sh
-git fetch <remote> +refs/board/*:refs/remotes/<remote>/board/*
+git fetch <remote> \
+  +refs/board/issue/*:refs/remotes/<remote>/board/issue/* \
+  +refs/board/person/*:refs/remotes/<remote>/board/person/* \
+  +refs/board/sync/*:refs/remotes/<remote>/board/sync/*
 ```
 
-Then each `refs/remotes/<remote>/board/<kind>/<id>`, for the three kinds, is
+Then each `refs/remotes/<remote>/board/<kind>/<id>` is
 [merged](#merging-two-heads) into `refs/board/<kind>/<id>`, which is created
-when absent. Other refs under `refs/board/` aren't merged.
+when absent.
 
 Push:
 
 ```sh
-git push <remote> refs/board/*:refs/board/*
+git push <remote> \
+  refs/board/issue/*:refs/board/issue/* \
+  refs/board/person/*:refs/board/person/* \
+  refs/board/sync/*:refs/board/sync/*
 ```
 
 The push isn't forced. When a ref moved on the remote, git refuses it:
