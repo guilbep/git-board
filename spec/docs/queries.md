@@ -132,8 +132,9 @@ changed.
 - **Each later poll** runs one interval after the last, and reports what
   changed since. An interval of 0 or less means 1 second.
 - **A poll whose listing of the refs fails is skipped:** it reports nothing,
-  and the next interval tries again. A skipped baseline leaves the next
-  poll as the baseline.
+  and the next interval tries again. A poll is skipped as a whole when
+  listing any kind fails. The next poll compares with the last poll that
+  succeeded, and a skipped baseline leaves the next poll as the baseline.
 - **A poll's changes come together:** each entity that appeared, moved, or
   was removed, with its kind, id and new head. A removed one has the zero
   hash as its head. They are sorted by kind, then

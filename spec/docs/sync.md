@@ -379,8 +379,10 @@ waits for M3's push.
 The forge gives an issue's or a comment's author as a numeric id and a
 login. With the forge's server, like `github.com`, they name an account:
 its `id` is the numeric id, as a string (see [People](data-model.md#people)).
-The pull loads every person once. A person that fails to load is skipped,
-as in the [index](queries.md#freshness). Then, for each author:
+The pull loads every person once. A person that fails to load stops the
+pull with an error, before it writes anything for the issue at hand:
+ownership can't be decided without every person. Issues already pulled
+stay pulled, as with any failed write. Then, for each author:
 
 - **A person holds the account:** the author is that person, or, when two
   hold it, its [owner](data-model.md#account-owner).
