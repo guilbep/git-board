@@ -202,6 +202,12 @@ merge commit. Neither pack holds an operation, so the two heads differ until
 the next merge joins them, but their operations, and so their states, are
 the same.
 
+Known point, for M2: two clones that exchange directly and merge at the same
+time can keep doing so, each writing a merge commit for the other's, so
+their refs keep diverging while their states agree. Through one origin, with
+unforced pushes, they converge: the second push is refused, and its writer
+fetches and merges onto the first's head.
+
 ## Updating a ref
 
 A write moves a ref only if the ref still points where the write read it:

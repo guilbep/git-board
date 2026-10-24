@@ -149,6 +149,10 @@ Each milestone gets its own plan, `core-mN-plan.md`, written when the one
 before it is done and its part of the spec is approved.
 [core-m1-plan.md](core-m1-plan.md) is the first.
 
+M1 result, 2026-10-24: `gitstore`, `oplog` and `issue` are 851 lines of code
+(target under 1,500); the pull is 208 (330 with its state; target under 300).
+See the spec's Trial results. Awaiting guilbep's decision on M2.
+
 ## Success
 
 - The core, the sync and the two adapters, tests aside, come to well under

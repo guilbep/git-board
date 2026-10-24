@@ -69,6 +69,55 @@ the [PRD][prd] where it was decided.
 
 ## Trial results
 
+Measured on 2026-10-24, lines with `wc -l`, tests apart from code.
+
+| Package | Code | Tests |
+|---|---|---|
+| `gitstore` | 284 | 286 |
+| `oplog` | 351 | 486 |
+| `issue` | 216 | 267 |
+| `forge`, `forge/fake` | 92 | 0 |
+| `syncer` (`pull.go` 208, `state.go` 122) | 330 | 344 |
+| `core` (doc, import guard) | 4 | 45 |
+| **Total** | **1,277** | **1,428** |
+
+Against the targets:
+
+- `gitstore`, `oplog` and `issue` together: 851 lines of code, target under
+  1,500. git-bug's operation logs, issues and cache are about 9,200 lines
+  and its git layer about 7,100, so 16,300 against 851.
+- The pull: `pull.go` is 208 lines, target under 300; with the sync state
+  it keeps (`state.go`) it is 330. git-bug's fork has 910 in `syncpull.go`.
+
+Concepts a reader must hold: entity, operation, pack, clock, order, merge,
+ref update, link and seen. Two crept in:
+
+- the **nonce**, in an entity's first pack, so that two entities created
+  with the same content have different ids;
+- the **forge**, an interface of 35 lines that the pull reads through, so
+  that the fake and the real adapters look the same.
+
+`seen` also changed meaning: it is now the **base**, the value both sides
+last agreed on. It is still one concept, but a reader must hold the new
+meaning.
+
+What was harder than planned: git, not the model. Fetch and push had to
+name the three entity kinds, because `refs/board/*` also matched
+git-board's own `refs/board/seq`. go-git caches its list of pack files, so
+packs written by `git fetch` (over 100 objects) or `git gc` were invisible;
+gitstore now re-reads the index after a fetch and once on a missing object.
+Its index isn't safe across goroutines either, so one lock serializes
+access. git's refusals are matched by their English text, so gitstore runs
+git with `LC_ALL=C`. An issue must validate before it writes: a rejected
+operation once stayed in the log and made the issue unloadable on every
+clone. The base kept a conflict visible, where `seen` hid it, and labels
+merge one by one so they can't conflict. Two clones that exchange directly
+and merge at the same time each write a merge commit, so their refs keep
+diverging while their states agree; through one origin they converge (a
+known point for M2). The spec got wrong: the refspecs (`refs/board/*`), what
+a reader rejects, the sync state's edge cases (first link wins), and the
+merge-commit divergence. All were fixed in the spec as the tasks found them.
+
 [prd]: https://github.com/guilbep/git-board/blob/main/docs/prd/core.md
 [decision]: https://github.com/guilbep/git-board/blob/main/docs/prd/core.md#the-decision
 [rules]: https://github.com/guilbep/git-board/blob/main/docs/prd/core.md#rules
