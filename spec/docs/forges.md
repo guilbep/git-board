@@ -4,6 +4,12 @@ An adapter speaks to one forge's API for sync (M4). This page says what
 GitHub and GitLab need, as checked live for the git-bug fork that came
 before the core. [Sync](sync.md) gives the rules they serve.
 
+An adapter implements the core's `forge.Forge` and passes its conformance
+suite, `core/forge/conformance`, over a fake forge served as that forge's
+API. The adapter, not the engine, applies its listing margin, paces its
+writes and retries a rate limit. It maps the forge's answers to the core's
+errors: refused for good, not found, confidential, and no token.
+
 ## Accounts and tokens
 
 Sync acts on a forge through accounts: the posting account, from

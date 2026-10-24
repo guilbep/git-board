@@ -219,6 +219,80 @@ a prefix lookup, which the index can answer.
 | `Branches`, `Branch`, `Ancestors`, `ChangedFiles`, `ChangesIn`, `DiffFile`, `DiffStat`, `FileStat`, `FileLines`, `FirstCommitAdding`, `GrepFiles`, `HasCommit`, `LineAt`, `Log`, `Commit`, `MergeBase`, `ReadCommit`, `ReadFile`, `RevParse`, `RemoteHead`, `Remotes`, `Remote`, `Worktrees`, `Worktree`, `Ahead`, `GitHubRepo`, `GitHubRepoOf` | none: reading the code's own git history isn't the core's job, and stays in git-board |
 | `SetFlatKinds`, `Storage`, `TestCache` | none: git-bug's cache and storage go with it |
 
+## M3 results
+
+Measured on 2026-10-24, at the end of M3, lines with `wc -l`, tests apart
+from code. The fake and the suite are code other packages import, for their
+tests.
+
+| Package | Code | Tests | M2 code | M2 tests |
+|---|---|---|---|---|
+| `gitstore` | 413 | 512 | 413 | 512 |
+| `oplog` | 454 | 770 | 454 | 770 |
+| `issue` | 265 | 470 | 246 | 444 |
+| `people` | 248 | 267 | 248 | 267 |
+| `index` | 468 | 399 | 468 | 399 |
+| `watch` | 108 | 164 | 108 | 164 |
+| `forge` | 86 | | 38 | |
+| `forge/fake` | 449 | 102 | 67 | 59 |
+| `forge/conformance` (the suite) | | 693 | | |
+| `syncer` (`sync.go` 572, `plan.go` 532, `state.go` 253, `pull.go` 218, `text.go` 109) | 1,684 | 848 | 420 | 599 |
+| `core` (doc, import guard) | 4 | 59 | 4 | 59 |
+| **Total** | **4,179** | **4,284** | **2,466** | **3,273** |
+
+The sync engine is 1,684 lines, against the fork's 910 for its pull alone.
+Its interface to a forge is one 86-line package of 15 methods, which the
+GitHub and GitLab adapters implement in M4. The suite runs 16 scenarios:
+the PRD's M3 list, plus a refusal warned once and assignees.
+
+Concepts M3 added:
+
+- the **push**, and its order: new issues first, then each linked issue's
+  title, body, comments, status, labels and assignees;
+- **the forge's form** of a text: translated, with a header for the posting
+  account, and a marker, both kept from last seen;
+- **what git-board took from a forge**: a field whose last change came from
+  that forge counts as last seen there. It is the echo rule, settles two
+  pulls of one comment, and makes an unlinked pulled issue safe to link;
+- **the later change**, by time, the forge's at the same second, against
+  **the order**, between clones;
+- the **records**: `posted`, `refused` and `run`;
+- **sync's accounts**, whose markers count;
+- the **duplicate**, an issue whose origin is linked to another one, which
+  sync leaves alone;
+- the **run's lock**, a file in git's common directory.
+
+What was harder than planned:
+
+- **Stability.** A run after a run must write nothing. The header and the
+  marker had to come from last seen, not be built again, and a run records
+  itself only when it wrote, or every sync would grow the sync entity.
+- **Forward references.** A text naming an issue the run hadn't created
+  yet would have needed a second run. The push now creates every issue
+  first, then writes the rest.
+- **Pushing alone.** Last seen for labels after a push alone is last seen
+  plus the diff sent, not the forge's set, or a label the forge gained would
+  be removed by the next push.
+- **The carried disagreement** between the first copy of a comment and the
+  last `seen` needed a rule, not a fix: what git-board took from a forge is
+  last seen there. The same rule then gave the echo and the crash recovery
+  by origin.
+- **Assignees** need the set's diff applied to the forge's set, the whole
+  of it sent, and what the forge kept read back, so that GitHub's dropped
+  assignee and GitLab's single one are the same refusal.
+
+Left out, and carried in the PRD: rate limits and their pacing (the
+adapters'), a stale lock after a kill, a snapshot of the sync entity, and
+pulled operations' times, which are the pull's.
+
+The M2 table above, for M3's rows:
+
+| `gitbugio` | After M3 |
+|---|---|
+| `Logins`, `MyLogin` | an assignee label names a person by their login on the forge's server, else by their name |
+| `AddBridge` ... `SetAssignees` | `forge.Forge`, with `As` for each token owner, and `syncer.Options`; settings and tokens come from git-board (M4, M5) |
+| `GetForges`, `SendForges`, `SyncForges`, `SyncIssue` | `syncer.Pull`, `Push`, `Sync`, and `Options.Issue` for one issue alone |
+
 [prd]: https://github.com/guilbep/git-board/blob/main/docs/prd/core.md
 [decision]: https://github.com/guilbep/git-board/blob/main/docs/prd/core.md#the-decision
 [rules]: https://github.com/guilbep/git-board/blob/main/docs/prd/core.md#rules

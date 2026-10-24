@@ -164,6 +164,14 @@ People, the sqlite index and search, and change events add 824 of them;
 operations (`TestUnknownOpIsAnError`, `TestPersonUnknownOp`) and the import
 guard pass. See the spec's M2 results.
 
+M3 result, 2026-10-24: the sync engine is 1,684 lines of code (`syncer`),
+on a forge interface of 86 (`forge`) and a fake of 449; the core is now
+4,179 lines of code and 4,284 of tests. The conformance suite,
+`core/forge/conformance`, runs the 14 scenarios of the M3 row, plus a
+refusal warned once and assignees, and the fake passes all 16. "Refs never
+mirrored" is read as references: no `#n` reaches another project as it is.
+See the spec's M3 results.
+
 ## Carried to later milestones
 
 What M1's tasks and reviews left for later. The execution ledger isn't kept
@@ -171,20 +179,35 @@ in git, so they are listed here.
 
 - **Not planned yet:** the merge storm when clones exchange directly
   (storage.md's known point).
-- **M3:** the lock-file branch of the sync entity's first write has no
-  test.
-- **M3:** a record of which git-board comment each posted comment is, a
+- ~~**M3:** the lock-file branch of the sync entity's first write has no
+  test.~~ Done: `TestStateFirstWriteLocked`.
+- ~~**M3:** a record of which git-board comment each posted comment is, a
   refusal record, the marker's format, and a last-run time; an issue pulled
   but not linked (a crash between the two writes) found by its origin and
   linked; tests of first link wins before M3 relies on it; the two conflict
   rules users will meet, stated in the spec: between clones by the order,
-  between git-board and a forge by time.
-- **M3:** after two clones pull the same forge comment, the issue keeps the
+  between git-board and a forge by time.~~ Done: sync.md's Records, Markers,
+  Conflicts and Crash recovery; `TestPullFindsUnlinkedByOrigin`,
+  `TestStateFirstWins`.
+- ~~**M3:** after two clones pull the same forge comment, the issue keeps the
   first copy's text (issue order), while `seen` takes the last value in the
   sync entity's order. They can disagree and hide a forge edit. Settle it
-  with M3's conflict rules.
-- **M3:** the sync entity is one log that grows forever, reloaded whole on
-  every pull. Plan a snapshot, or the index, before M6's mass first pull.
+  with M3's conflict rules.~~ Done: what git-board took from a forge counts
+  as last seen there (`TestTwoPullsOfOneComment`).
+- **M6:** the sync entity is one log that grows forever, reloaded whole on
+  every run. Plan a snapshot, or the index, before M6's mass first pull
+  (a `ponytail:` note in `syncer/state.go`). M3 records a run only when it
+  wrote, so a quiet repository's entity doesn't grow.
+- **M4:** the adapters apply their own listing margin (GitLab's 2 minutes),
+  pace their writes and retry rate limits; the engine has none of that.
+- **M4:** a forge that rewrites line endings (`\r\n` from a web edit) breaks
+  the blank line before the marker and after the header, so a posted text
+  would be pulled back with them. Normalize in the adapter.
+- **M4:** pulled operations carry the pull's time, not the forge's change
+  time, so the later change between two forges is approximate. Use the
+  forge's times when the adapters read them.
+- **M5:** a run killed before its end leaves `board/sync.lock`, which must
+  be removed by hand, like git's own locks.
 - **M4:** a forge listing one comment id twice in one issue (paging).
 - **M5:** check git-board's own handling of `assignee:` in any case;
   validate kinds, ids and remote names before the HTTP API reaches them.

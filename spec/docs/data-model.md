@@ -315,11 +315,21 @@ labels changed, is:
       "edited": 0,
       "body": "It finds them with is:closed."
     }
-  ]
+  ],
+  "changes": {
+    "title": {"author": "b7e41c09d2a85f36e1c4a0d7b9f2e5c83a6d1f40", "time": 1792836500},
+    "body": {"author": "b7e41c09d2a85f36e1c4a0d7b9f2e5c83a6d1f40", "time": 1792836400},
+    "status": {"author": "b7e41c09d2a85f36e1c4a0d7b9f2e5c83a6d1f40", "time": 1792836600},
+    "label:assignee:guilbep": {"author": "b7e41c09d2a85f36e1c4a0d7b9f2e5c83a6d1f40", "time": 1792836700},
+    "label:bug": {"author": "b7e41c09d2a85f36e1c4a0d7b9f2e5c83a6d1f40", "time": 1792836700},
+    "label:triage": {"author": "b7e41c09d2a85f36e1c4a0d7b9f2e5c83a6d1f40", "time": 1792836700},
+    "comment:8c04e5b1d97f2a63c18e0b4d5f6a7928e3b1c0d4:0": {"author": "b7e41c09d2a85f36e1c4a0d7b9f2e5c83a6d1f40", "time": 1792836300}
+  }
 }
 ```
 
-It was made in git-board, so it shows no `origin`. A pulled issue's state
+It was made in git-board, so it shows no `origin`, in the issue or in its
+changes. A pulled issue's state
 does (see [Origins](#origins)).
 
 ## People

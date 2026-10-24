@@ -370,9 +370,13 @@ sent back to its own project.
   the forge shows it, without its header and marker. Sync never pulls back
   what it sent (see [Echoes](#echoes)), so nothing is translated back.
 
-A mention is `@` and a login, of letters, digits, `-`, `_` and `.`, not
-after a letter, a digit or `` ` ``. A reference is `#` and digits, not after
-a letter, a digit, `&` or `/`. Neither counts inside a code span.
+A mention is `@` and a login, of letters, digits, `-`, `_` and `.`, less
+any `.` it ends with, not after a letter, a digit or `_`. After a lone
+backtick, its code span is sent after a space, so that the two don't make
+one run of backticks. A reference is `#` and digits, not after a letter, a
+digit, `_`, `&` or `/`, nor followed by a letter, a digit or `_`. Neither
+counts inside a code span: a run of backticks and what follows it, up to
+the next run as long. A run that no run as long follows is a lone one.
 
 ## Refusals
 
