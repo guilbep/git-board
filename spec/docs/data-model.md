@@ -311,7 +311,8 @@ page says how each field's value is written, and how sync uses it.
 
 A `seen` is the base sync compares both sides with. When git-board and the
 forge both changed a field, its `seen` stays as it was, so the conflict
-stays visible to a later rule.
+stays visible to a later rule. Labels are the exception: they merge per
+label, and so can't conflict.
 
 ```json
 {

@@ -271,8 +271,10 @@ comments. A comment has an id, an author, a time and a text.
 1. Load the forge project's sync entity, whose id is the SHA-1 of the
    forge's key. If there is none, its state is empty.
 2. Take the forge's issues in the order the forge gives them. For each one:
-    - not linked, as no link has its id as `forge_id`:
-      [a new issue](#a-new-issue);
+    - not linked, as no effective link has its id as `forge_id`, after the
+      first-link-wins and ignore rules: [a new issue](#a-new-issue). An
+      ignored link doesn't count. The first link for a `forge_id` always
+      stays effective, so a pulled issue stays linked;
     - linked to an issue present locally: [a linked issue](#a-linked-issue);
     - linked to an issue not present locally: skip it.
 3. Return the counts: `Created`, the new issues; `Updated`, the linked
@@ -334,7 +336,8 @@ Fields are compared in this order, and their operations written in it:
 
 A field the issue changed and the forge didn't (G ≠ S, F = S) is left for
 M3 to push. A field both changed to different values is left as it is,
-last seen included, for M3's later-change rule to settle.
+last seen included, for M3's later-change rule to settle. Labels are the
+exception: they merge per label, and so can't conflict.
 
 The title, last seen as `Search ignores closed issues`:
 
