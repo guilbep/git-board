@@ -29,6 +29,17 @@ func NewComment(author, body string) oplog.Op {
 	return newOp("comment", author, m{"body": body})
 }
 
+// NewCommentMeta is a comment with git-board's metadata.
+func NewCommentMeta(author, body string, meta map[string]string) oplog.Op {
+	return newOp("comment", author, m{"body": body, "meta": meta})
+}
+
+// SetMeta sets metadata on the body (target the create operation) or a
+// comment.
+func SetMeta(author, target string, meta map[string]string) oplog.Op {
+	return newOp("set-meta", author, m{"target": target, "meta": meta})
+}
+
 func EditText(author, target, body string) oplog.Op {
 	return newOp("edit-text", author, m{"target": target, "body": body})
 }

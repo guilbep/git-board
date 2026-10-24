@@ -1,8 +1,10 @@
 package index
 
 import (
+	"errors"
 	"reflect"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/guilbep/git-board/core/issue"
@@ -139,5 +141,51 @@ func TestIndexAccountOwner(t *testing.T) {
 	}
 	if id, ok, err := ix.ForAccount(t.Context(), "github.com", "42"); err != nil || !ok || id != pids[1] {
 		t.Fatalf("owner after removal = %q, %v, %v; want %q", id, ok, err, pids[1])
+	}
+}
+
+// Labels lists each label in use once; Resolve finds an id by its prefix.
+func TestLabelsAndResolve(t *testing.T) {
+	t.Parallel()
+	_, s := newRepo(t)
+	ix := openIndex(t, s)
+	a := mkIssue(t, s, issue.NewCreate("p", "A", ""), issue.ChangeLabels("p", []string{"bug", "ui"}, nil))
+	b := mkIssue(t, s, issue.NewCreate("p", "B", ""), issue.ChangeLabels("p", []string{"bug", "gone"}, nil), issue.ChangeLabels("p", nil, []string{"gone"}))
+	got, err := ix.Labels(t.Context())
+	if err != nil || !slices.Equal(got, []string{"bug", "ui"}) {
+		t.Fatalf("labels = %v, %v", got, err)
+	}
+	for _, id := range []string{a.ID, b.ID} {
+		if got, err := ix.Resolve(t.Context(), "issue", id[:12]); err != nil || got != id {
+			t.Fatalf("resolve %s = %q, %v", id[:12], got, err)
+		}
+		if got, err := ix.Resolve(t.Context(), "issue", id); err != nil || got != id {
+			t.Fatalf("resolve whole %s = %q, %v", id, got, err)
+		}
+	}
+	common := 0
+	for common < 40 && a.ID[common] == b.ID[common] {
+		common++
+	}
+	if _, err := ix.Resolve(t.Context(), "issue", a.ID[:common]); common > 0 && !errors.Is(err, ErrAmbiguous) {
+		t.Fatalf("shared prefix %q: err = %v", a.ID[:common], err)
+	}
+	if _, err := ix.Resolve(t.Context(), "issue", ""); err == nil {
+		t.Fatal("empty prefix: want an error")
+	}
+	for _, bad := range []string{"%", "a_", "A1", strings.Repeat("a", 41)} {
+		if _, err := ix.Resolve(t.Context(), "issue", bad); err == nil || errors.Is(err, ErrNoMatch) {
+			t.Fatalf("prefix %q: err = %v, want a bad prefix", bad, err)
+		}
+	}
+	missing := "0000000000"
+	if a.ID[:10] == missing || b.ID[:10] == missing {
+		missing = "ffffffffff"
+	}
+	if _, err := ix.Resolve(t.Context(), "issue", missing); !errors.Is(err, ErrNoMatch) {
+		t.Fatalf("missing: err = %v", err)
+	}
+	if _, err := ix.Resolve(t.Context(), "sync", "ab"); err == nil {
+		t.Fatal("kind sync: want an error")
 	}
 }

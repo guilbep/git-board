@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 
@@ -24,6 +25,7 @@ type Comment struct {
 	ID, Author, Body string
 	Time, Edited     int64 // Edited: the time of the last edit-text, 0 if none
 	Origin           *oplog.Origin
+	Meta             map[string]string // git-board's; nil if none
 }
 
 // Issue is the state its operations add up to. BodyOp is the create
@@ -35,6 +37,7 @@ type Issue struct {
 	Labels                          []string // sorted, unique
 	Comments                        []Comment
 	Origin                          *oplog.Origin
+	Meta                            map[string]string // the create operation's, as set-meta left it; nil if none
 	// Changes holds, for each field, the operation that last changed it:
 	// title, body, status, label:<label> and comment:<comment id>.
 	Changes map[string]Change
@@ -52,16 +55,17 @@ var (
 	ErrBadTarget = errors.New("issue: edit of an unknown text")
 )
 
-var kinds = []string{"create", "comment", "edit-text", "set-title", "set-status", "change-labels"}
+var kinds = []string{"create", "comment", "edit-text", "set-title", "set-status", "change-labels", "set-meta"}
 
 // data is the union of the fields of every operation's data.
 type data struct {
-	Title  string   `json:"title"`
-	Body   string   `json:"body"`
-	Target string   `json:"target"`
-	Status Status   `json:"status"`
-	Add    []string `json:"add"`
-	Remove []string `json:"remove"`
+	Title  string            `json:"title"`
+	Body   string            `json:"body"`
+	Target string            `json:"target"`
+	Status Status            `json:"status"`
+	Add    []string          `json:"add"`
+	Remove []string          `json:"remove"`
+	Meta   map[string]string `json:"meta"`
 }
 
 // Apply folds the log's operations, in order, into an issue.
@@ -107,7 +111,7 @@ func Apply(l *oplog.Log) (*Issue, error) {
 				}
 			}
 			if !dup {
-				is.Comments = append(is.Comments, Comment{ID: e.ID, Author: e.Author, Body: d.Body, Time: e.Time, Origin: e.Origin})
+				is.Comments = append(is.Comments, Comment{ID: e.ID, Author: e.Author, Body: d.Body, Time: e.Time, Origin: e.Origin, Meta: d.Meta})
 				is.Changes["comment:"+e.ID] = ch
 			}
 			comments[e.ID] = i
@@ -127,6 +131,22 @@ func Apply(l *oplog.Log) (*Issue, error) {
 			} else {
 				return nil, fmt.Errorf("%w: %q, operation %s", ErrBadTarget, d.Target, e.ID)
 			}
+		case "set-meta":
+			if strings.HasPrefix(d.Target, "pending:") {
+				return nil, fmt.Errorf("%w: %q, operation %s", ErrBadTarget, d.Target, e.ID)
+			}
+			meta := &is.Meta
+			if d.Target != is.BodyOp {
+				i, ok := comments[d.Target]
+				if !ok {
+					return nil, fmt.Errorf("%w: %q, operation %s", ErrBadTarget, d.Target, e.ID)
+				}
+				meta = &is.Comments[i].Meta
+			}
+			if *meta == nil {
+				*meta = map[string]string{}
+			}
+			maps.Copy(*meta, d.Meta)
 		case "set-title":
 			is.Title = d.Title
 			is.Changes["title"] = ch

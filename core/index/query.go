@@ -3,7 +3,9 @@ package index
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 	"unicode"
 
@@ -121,4 +123,74 @@ func (ix *Index) ForAccount(ctx context.Context, server, id string) (string, boo
 		return "", false, fmt.Errorf("index: account: %w", err)
 	}
 	return p.String, p.Valid, nil
+}
+
+// Labels answers every label in use, sorted, each once. It refreshes first.
+func (ix *Index) Labels(ctx context.Context) ([]string, error) {
+	if err := ix.Refresh(ctx); err != nil {
+		return nil, err
+	}
+	rows, err := ix.db.QueryContext(ctx, "SELECT DISTINCT label FROM labels ORDER BY label")
+	if err != nil {
+		return nil, fmt.Errorf("index: labels: %w", err)
+	}
+	defer rows.Close()
+	out := []string{}
+	for rows.Next() {
+		var l string
+		if err := rows.Scan(&l); err != nil {
+			return nil, err
+		}
+		out = append(out, l)
+	}
+	return out, rows.Err()
+}
+
+var (
+	// ErrNoMatch: no issue or person has an id with that prefix.
+	ErrNoMatch = errors.New("index: no such id")
+	// ErrAmbiguous: several have.
+	ErrAmbiguous = errors.New("index: ambiguous id prefix")
+)
+
+var prefixPattern = regexp.MustCompile(`^[0-9a-f]{1,40}$`)
+
+// Resolve answers the id of the issue or person ("issue" or "person")
+// whose id starts with prefix: ErrNoMatch for none, ErrAmbiguous for
+// several. A prefix is 1 to 40 lowercase hex digits. It refreshes first.
+func (ix *Index) Resolve(ctx context.Context, kind, prefix string) (string, error) {
+	table := map[string]string{"issue": "issues", "person": "persons"}[kind]
+	if table == "" {
+		return "", fmt.Errorf("index: unknown kind %q", kind)
+	}
+	if !prefixPattern.MatchString(prefix) {
+		return "", fmt.Errorf("index: bad id prefix %q", prefix)
+	}
+	if err := ix.Refresh(ctx); err != nil {
+		return "", err
+	}
+	// the prefix is hex only, so the bounds compare as plain text
+	rows, err := ix.db.QueryContext(ctx, "SELECT id FROM "+table+" WHERE id >= ? AND id < ? ORDER BY id LIMIT 2", prefix, prefix+"g")
+	if err != nil {
+		return "", fmt.Errorf("index: resolve: %w", err)
+	}
+	defer rows.Close()
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return "", err
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return "", err
+	}
+	switch {
+	case len(ids) == 0:
+		return "", fmt.Errorf("%w: %s %s", ErrNoMatch, kind, prefix)
+	case len(ids) > 1:
+		return "", fmt.Errorf("%w: %s %s", ErrAmbiguous, kind, prefix)
+	}
+	return ids[0], nil
 }

@@ -359,3 +359,33 @@ func TestChanges(t *testing.T) {
 		t.Fatal("the edit has no origin")
 	}
 }
+
+// A comment carries its metadata; set-meta adds keys to the body's or a
+// comment's, and refuses a target it can't find.
+func TestMeta(t *testing.T) {
+	t.Parallel()
+	s := newStore(t)
+	c, err := Create(t.Context(), s, NewCreate("a", "T", ""), NewCommentMeta("a", "x", map[string]string{"review:path": "a.go"}), NewComment("a", "plain"))
+	c = must(t, c, err)
+	cid := c.Comments[0].ID
+	c, err = Do(t.Context(), s, c.ID, SetMeta("b", cid, map[string]string{"review:resolved": "true"}), SetMeta("b", c.BodyOp, map[string]string{"p:status": "Todo"}),
+		SetMeta("b", c.BodyOp, map[string]string{"p:status": "Done", "p:prio": "1"}))
+	c = must(t, c, err)
+	if want := map[string]string{"review:path": "a.go", "review:resolved": "true"}; !reflect.DeepEqual(c.Comments[0].Meta, want) {
+		t.Fatalf("comment meta = %v, want %v", c.Comments[0].Meta, want)
+	}
+	if want := map[string]string{"p:status": "Done", "p:prio": "1"}; !reflect.DeepEqual(c.Meta, want) {
+		t.Fatalf("issue meta = %v, want %v", c.Meta, want)
+	}
+	if c.Comments[1].Meta != nil {
+		t.Fatalf("plain comment meta = %v", c.Comments[1].Meta)
+	}
+	for _, target := range []string{"nope:0", "pending:0"} {
+		if _, err := Do(t.Context(), s, c.ID, SetMeta("a", target, map[string]string{"k": "v"})); !errors.Is(err, ErrBadTarget) {
+			t.Fatalf("target %q: err = %v", target, err)
+		}
+	}
+	if got, err := Load(s, c.ID); err != nil || !reflect.DeepEqual(got, c) {
+		t.Fatalf("load = %+v, %v; want %+v", got, err, c)
+	}
+}

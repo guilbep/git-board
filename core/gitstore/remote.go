@@ -6,9 +6,9 @@ import (
 	"strings"
 )
 
-// Kinds are the entity kinds, listed once. refs/board/seq is git-board's own
-// and is not one of them.
-var Kinds = []string{"issue", "person", "sync"}
+// Kinds are the entity kinds, listed once. git-board reads release's
+// operations. refs/board/seq is git-board's own and is not one of them.
+var Kinds = []string{"issue", "person", "sync", "release"}
 
 // checkRemote refuses a remote name git would take for an option, or none.
 func checkRemote(remote string) error {
