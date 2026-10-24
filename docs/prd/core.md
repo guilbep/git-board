@@ -149,9 +149,35 @@ Each milestone gets its own plan, `core-mN-plan.md`, written when the one
 before it is done and its part of the spec is approved.
 [core-m1-plan.md](core-m1-plan.md) is the first.
 
-M1 result, 2026-10-24: `gitstore`, `oplog` and `issue` are 851 lines of code
-(target under 1,500); the pull is 208 (330 with its state; target under 300).
+M1 result, 2026-10-24: `gitstore`, `oplog` and `issue` are 895 lines of code
+(target under 1,500); the pull is 208 (346 with its state; target under 300).
 See the spec's Trial results. Awaiting guilbep's decision on M2.
+
+## Carried to later milestones
+
+What M1's tasks and reviews left for later. The execution ledger isn't kept
+in git, so they are listed here.
+
+- **M2:** one exported list of entity kinds (today in both `gitstore` and
+  `oplog`); kind and id validation in `oplog`; a spec line that JSON keys
+  are case-sensitive and unique; tests for `MergeFetched` going on past a
+  failing entity, for `Merge`'s retry, and for the 5-attempt cap.
+- **M2:** a write can land and still return an error, as `Append`, `Create`
+  and `Merge` reload after the ref moved. Return a distinct error, or don't
+  fail on the reload.
+- **M2:** the merge storm when clones exchange directly (already in
+  storage.md).
+- **M3:** a record of which git-board comment each posted comment is, a
+  refusal record, the marker's format, and a last-run time; an issue pulled
+  but not linked (a crash between the two writes) found by its origin and
+  linked; tests of first link wins before M3 relies on it; the two conflict
+  rules users will meet, stated in the spec: between clones by the order,
+  between git-board and a forge by time.
+- **M3:** the sync entity is one log that grows forever, reloaded whole on
+  every pull. Plan a snapshot, or the index, before M6's mass first pull.
+- **M4:** a forge listing one comment id twice in one issue (paging).
+- **M5:** check git-board's own handling of `assignee:` in any case;
+  validate kinds, ids and remote names before the HTTP API reaches them.
 
 ## Success
 
