@@ -9,8 +9,8 @@ the [PRD][prd] where it was decided.
   it, and git-bug goes. ([PRD][decision])
 - Go, for its build times, one static binary per platform, and git-board's
   code and tests, which stay. ([PRD][decision])
-- Sync first: links to forges, and what each forge last showed, are part of
-  the data model. ([PRD][decision])
+- Sync first: links to forges, and the value git-board and the forge last
+  agreed on, are part of the data model. ([PRD][decision])
 - Not compatible with git-bug: the data lives under refs of its own, which
   git-bug never sees. ([PRD][decision])
 - One binary, `git board`, for people and for CI. ([PRD][decision])
@@ -69,33 +69,49 @@ the [PRD][prd] where it was decided.
 
 ## Trial results
 
-Measured on 2026-10-24, lines with `wc -l`, tests apart from code.
+Measured on 2026-10-24, after the final review's fixes, lines with
+`wc -l`, tests apart from code.
 
 | Package | Code | Tests |
 |---|---|---|
-| `gitstore` | 284 | 286 |
-| `oplog` | 351 | 486 |
-| `issue` | 216 | 267 |
-| `forge`, `forge/fake` | 92 | 0 |
-| `syncer` (`pull.go` 208, `state.go` 122) | 330 | 344 |
-| `core` (doc, import guard) | 4 | 45 |
-| **Total** | **1,277** | **1,428** |
+| `gitstore` | 301 | 305 |
+| `oplog` | 354 | 499 |
+| `issue` | 240 | 370 |
+| `forge`, `forge/fake` | 92 | exercised through `syncer` |
+| `syncer` (`pull.go` 208, `state.go` 138) | 346 | 377 |
+| `core` (doc, import guard) | 4 | 59 |
+| **Total** | **1,337** | **1,610** |
 
 Against the targets:
 
-- `gitstore`, `oplog` and `issue` together: 851 lines of code, target under
+- `gitstore`, `oplog` and `issue` together: 895 lines of code, target under
   1,500. git-bug's operation logs, issues and cache are about 9,200 lines
-  and its git layer about 7,100, so 16,300 against 851.
+  and its git layer about 7,100, so 16,300 against 895. The 895 lines are
+  the trial's part only: issues, their order, merging, and what a pull of
+  current state writes. git-bug's are its whole layers, a cache included.
+  The trial has no people, index, search, change events or push yet, and
+  reads no forge events.
 - The pull: `pull.go` is 208 lines, target under 300; with the sync state
-  it keeps (`state.go`) it is 330. git-bug's fork has 910 in `syncpull.go`.
+  it keeps (`state.go`) it is 346. git-bug's fork has 910 in `syncpull.go`,
+  which also reads events, compares conflict times and finds markers: the
+  208 leave those out.
 
 Concepts a reader must hold: entity, operation, pack, clock, order, merge,
-ref update, link and seen. Two crept in:
+ref update, link and seen. Six crept in:
 
 - the **nonce**, in an entity's first pack, so that two entities created
   with the same content have different ids;
-- the **forge**, an interface of 35 lines that the pull reads through, so
-  that the fake and the real adapters look the same.
+- the **forge**, a 35-line package that the pull reads through, so that
+  the fake and the real adapters look the same; the interface has two
+  methods;
+- the **effective link**: of two links for one issue, or for one forge
+  issue, the first in the order wins and the other is ignored;
+- **identical packs**: two commits whose packs are the same blob count as
+  one pack;
+- **assignee labels**, `assignee:` in any case, which are labels in
+  git-board but a field of their own to sync;
+- **duplicate-origin comments**: a comment with an earlier comment's origin
+  is that comment, as when two clones pull one forge comment.
 
 `seen` also changed meaning: it is now the **base**, the value both sides
 last agreed on. It is still one concept, but a reader must hold the new
@@ -117,6 +133,11 @@ diverging while their states agree; through one origin they converge (a
 known point for M2). The spec got wrong: the refspecs (`refs/board/*`), what
 a reader rejects, the sync state's edge cases (first link wins), and the
 merge-commit divergence. All were fixed in the spec as the tasks found them.
+The final review found more, fixed the same way: go-git ignored a linked
+worktree's common directory, so a worktree saw no issue; fetched heads sat
+in `refs/remotes/`, where branch lists and `git fetch --prune` reach them;
+a forge comment pulled on two clones became two comments; and labels had no
+check.
 
 [prd]: https://github.com/guilbep/git-board/blob/main/docs/prd/core.md
 [decision]: https://github.com/guilbep/git-board/blob/main/docs/prd/core.md#the-decision
