@@ -36,7 +36,9 @@ Issues and persons. Sync entities aren't indexed.
 
 A refresh brings the index up to the refs:
 
-1. It lists `refs/board/issue/*` and `refs/board/person/*`.
+1. It lists `refs/board/issue/*` and `refs/board/person/*`. A ref whose
+   name isn't a valid id isn't an entity, and is ignored (see
+   [Refs](storage.md#refs)).
 2. An entity that is new, or whose head differs from the stored one, is
    loaded again, and its rows replaced.
 3. An entity whose ref is gone is dropped.
@@ -124,7 +126,7 @@ changed.
 
 - **It polls.** Every interval the caller gives, it lists
   `refs/board/<kind>/*` for each kind, and compares each head with the one
-  it saw last.
+  it saw last. It ignores a ref whose name isn't a valid id.
 - **The first poll is the baseline.** It reports nothing.
 - **Each later poll reports its changes together:** each entity that
   appeared, moved, or was removed, with its kind, id and new head. A

@@ -22,6 +22,10 @@ refs/board/sync/56f7a8e819f90e968812bac54ae4b06142d8e735
 
 - Entities live only there. Listing a kind's entities reads the refs under
   `refs/board/<kind>/`, and gives their ids sorted.
+- A ref there whose name isn't a valid id, like `refs/board/issue/notes`
+  or `refs/board/issue/a/b`, isn't an entity. Listing, the index, change
+  events and the merge after a fetch ignore it, and it is never an error.
+  Only writing one is refused, as a bad name.
 - The kinds, `issue`, `person` and `sync`, are one list in the core. The
   name check, fetch and push all read it.
 - `refs/board/seq` is git-board's own counter of project numbers. It isn't
@@ -266,9 +270,9 @@ git fetch <remote> \
   +refs/board/sync/*:refs/board-remotes/<remote>/sync/*
 ```
 
-Then each `refs/board-remotes/<remote>/<kind>/<id>` is
-[merged](#merging-two-heads) into `refs/board/<kind>/<id>`, which is created
-when absent.
+Then each `refs/board-remotes/<remote>/<kind>/<id>` whose id is valid (see
+[Refs](#refs)) is [merged](#merging-two-heads) into `refs/board/<kind>/<id>`,
+which is created when absent.
 
 Fetch never propagates a deletion. An entity whose ref was deleted on the
 remote keeps its ref here, and its fetched head in `refs/board-remotes/`:
