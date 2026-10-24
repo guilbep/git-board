@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 
 	"github.com/guilbep/git-board/core/oplog"
 )
@@ -57,7 +58,8 @@ type data struct {
 func Apply(l *oplog.Log) (*Issue, error) {
 	var is *Issue
 	labels := map[string]bool{}
-	comments := map[string]int{} // comment id -> index in is.Comments
+	comments := map[string]int{}      // comment id -> index in is.Comments
+	origins := map[oplog.Origin]int{} // a comment's origin -> its index
 	for _, e := range l.Entries {
 		if !slices.Contains(kinds, e.Kind) {
 			return nil, fmt.Errorf("%w: %q, operation %s", ErrUnknownOp, e.Kind, e.ID)
@@ -79,9 +81,26 @@ func Apply(l *oplog.Log) (*Issue, error) {
 			is = &Issue{ID: l.ID, Author: e.Author, Title: d.Title, Body: d.Body, BodyOp: e.ID,
 				Created: e.Time, Status: Open, Origin: e.Origin}
 		case "comment":
-			comments[e.ID] = len(is.Comments)
-			is.Comments = append(is.Comments, Comment{ID: e.ID, Author: e.Author, Body: d.Body, Time: e.Time, Origin: e.Origin})
+			// A comment with an earlier comment's origin is that comment,
+			// pulled again: its id names the earlier one.
+			i, dup := len(is.Comments), false
+			if e.Origin != nil {
+				if j, ok := origins[*e.Origin]; ok {
+					i, dup = j, true
+				} else {
+					origins[*e.Origin] = i
+				}
+			}
+			if !dup {
+				is.Comments = append(is.Comments, Comment{ID: e.ID, Author: e.Author, Body: d.Body, Time: e.Time, Origin: e.Origin})
+			}
+			comments[e.ID] = i
 		case "edit-text":
+			if strings.HasPrefix(d.Target, "pending:") {
+				// The id of an operation not written yet, which Create and Do
+				// check with: stored, it would name nothing.
+				return nil, fmt.Errorf("%w: %q, operation %s", ErrBadTarget, d.Target, e.ID)
+			}
 			if d.Target == is.BodyOp {
 				is.Body = d.Body
 			} else if i, ok := comments[d.Target]; ok {
@@ -97,6 +116,11 @@ func Apply(l *oplog.Log) (*Issue, error) {
 			}
 			is.Status = d.Status
 		case "change-labels":
+			for _, label := range slices.Concat(d.Add, d.Remove) {
+				if label == "" || strings.Contains(label, "\n") {
+					return nil, fmt.Errorf("issue: operation %s: bad label %q", e.ID, label)
+				}
+			}
 			for _, a := range d.Add {
 				labels[a] = true
 			}

@@ -149,6 +149,85 @@ func TestUnknownOpIsAnError(t *testing.T) {
 	}
 }
 
+func withOrigin(op oplog.Op, forge, event string) oplog.Op {
+	op.Origin = &oplog.Origin{Forge: forge, Event: event}
+	return op
+}
+
+func bodies(is *Issue) []string {
+	var out []string
+	for _, c := range is.Comments {
+		out = append(out, c.Body)
+	}
+	return out
+}
+
+// Two comments with the same origin, as when two clones pull one forge
+// comment, are one comment: the first. An edit of either id edits it.
+func TestDuplicateOriginCommentIsOne(t *testing.T) {
+	t.Parallel()
+	s := newStore(t)
+	c, err := Create(s, NewCreate("a", "T", ""),
+		withOrigin(NewComment("bob", "one"), "f", "comment:1"),
+		withOrigin(NewComment("bob", "two"), "f", "comment:1"),
+		NewComment("ann", "plain"), NewComment("ann", "plain"), // no origin: never one
+		withOrigin(NewComment("bob", "x"), "f", "comment:2"), // another event
+		withOrigin(NewComment("bob", "y"), "g", "comment:2"), // another forge
+	)
+	c = must(t, c, err)
+	first, second := c.ID+":1", c.ID+":2"
+	if want := []string{"one", "plain", "plain", "x", "y"}; !reflect.DeepEqual(bodies(c), want) || c.Comments[0].ID != first {
+		t.Fatalf("comments = %+v, want bodies %v", c.Comments, want)
+	}
+	c, err = Do(s, c.ID, EditText("bob", second, "edited"))
+	if c = must(t, c, err); c.Comments[0].Body != "edited" || len(c.Comments) != 5 {
+		t.Fatalf("after an edit of the second id: %+v", c.Comments)
+	}
+	c, err = Do(s, c.ID, EditText("bob", first, "again"))
+	if c = must(t, c, err); c.Comments[0].Body != "again" || len(c.Comments) != 5 {
+		t.Fatalf("after an edit of the first id: %+v", c.Comments)
+	}
+}
+
+// A target naming an operation not written yet is refused, before anything
+// is written: once stored, it would name nothing.
+func TestPendingTargetRefused(t *testing.T) {
+	t.Parallel()
+	s := newStore(t)
+	if _, err := Create(s, NewCreate("a", "T", ""), EditText("a", "pending:0", "x")); !errors.Is(err, ErrBadTarget) {
+		t.Fatalf("create: err = %v", err)
+	}
+	if ids, err := List(s); err != nil || len(ids) != 0 {
+		t.Fatalf("rejected Create left %v, %v", ids, err)
+	}
+	c, err := Create(s, NewCreate("a", "T", ""))
+	c = must(t, c, err)
+	if _, err := Do(s, c.ID, NewComment("a", "x"), EditText("a", "pending:0", "y")); !errors.Is(err, ErrBadTarget) {
+		t.Fatalf("do: err = %v", err)
+	}
+	if got, err := Load(s, c.ID); err != nil || !reflect.DeepEqual(got, c) {
+		t.Fatalf("after rejected Do: %+v, %v", got, err)
+	}
+}
+
+// A label is a non-empty string with no line feed, in add and in remove.
+func TestBadLabelRefused(t *testing.T) {
+	t.Parallel()
+	for _, l := range []string{"", "a\nb"} {
+		s := newStore(t)
+		if _, err := Create(s, NewCreate("a", "T", ""), ChangeLabels("a", []string{l}, nil)); err == nil {
+			t.Fatalf("create with label %q: want an error", l)
+		}
+		if ids, err := List(s); err != nil || len(ids) != 0 {
+			t.Fatalf("rejected Create left %v, %v", ids, err)
+		}
+		c, err := Create(s, NewCreate("a", "T", ""))
+		c = must(t, c, err)
+		rejected(t, s, c, ChangeLabels("a", []string{l}, nil))
+		rejected(t, s, c, ChangeLabels("a", nil, []string{l}))
+	}
+}
+
 // A linked worktree shares its main repository's refs and objects.
 func TestOpenLinkedWorktree(t *testing.T) {
 	t.Parallel()

@@ -179,7 +179,8 @@ the first operation of an issue's first pack, the body's target is always
 
 ### `change-labels`
 
-Either list can be empty or absent.
+Either list can be empty or absent. A label is a string that isn't empty
+and holds no line feed (`\n`), as sync writes a set of labels one per line.
 
 ```json
 {
@@ -218,17 +219,28 @@ An issue's state follows from its operations, applied in order:
    issue's author, creation time and origin are the `create` operation's.
 3. `comment` adds a comment after the others. The comment's id is the
    operation's id, and its author, time and origin are the operation's.
+   A `comment` whose `origin` equals an earlier comment's, in both `forge`
+   and `event`, is that same comment: it adds none, and its id becomes
+   another id of the earlier comment. A `comment` without an `origin` is
+   never the same as another.
 4. `edit-text` replaces the text of its target. A target that isn't the
-   `create` operation, nor a `comment` met earlier in the order, is an
-   error.
+   `create` operation, nor the id of a `comment` met earlier in the order,
+   is an error.
 5. `set-title` replaces the title.
 6. `set-status` sets the status. A status other than `open` or `closed` is
    an error.
 7. `change-labels` adds the labels in `add`, then removes the labels in
    `remove`. Labels are a set: adding a label already there, or removing one
    that isn't, changes nothing. Operations apply in order, so the later one
-   wins.
+   wins. An empty label, or one holding a line feed, in either list, is an
+   error.
 8. Any other `kind` is an error, which names the kind.
+
+Two clones that pull the same forge comment before fetching each other each
+write a `comment` for it, with the same `origin`. Once they merge, the first
+in the order is the comment, and an `edit-text` of either id edits it. The
+first wins because it follows the order every clone shares, so every clone
+keeps the same one, as with a sync entity's [links](#sync).
 
 The state's labels are sorted and unique. The state isn't stored; shown as
 JSON, the issue above, closed and with its labels changed, is:
