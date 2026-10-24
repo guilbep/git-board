@@ -66,9 +66,9 @@ query for the times REST doesn't give.
   load is an error, never half an issue.
 - **`\r\n` is read as `\n`.** A web edit leaves `\r\n`, which would break
   the blank lines around sync's header and marker.
-- **80 writes per minute and 500 per hour.** The adapter writes a second
-  apart at most, as GitHub asks, which keeps under 80 a minute, and makes
-  at most 500 in any hour. When GitHub still turns a request away for a
+- **80 writes per minute and 500 per hour.** The adapter leaves at least a
+  second between two writes, as GitHub asks, which keeps under 80 a minute,
+  and makes at most 500 in any hour. When GitHub still turns a request away for a
   rate limit, a 403 or a 429, the adapter waits and tries again, three
   times at most. It waits for `Retry-After` when given, else until
   `x-ratelimit-reset` when none is left, else a minute: the secondary rate
@@ -78,7 +78,8 @@ query for the times REST doesn't give.
   is.** GitHub may have made it (see [Echoes](sync.md#echoes)).
 - **Errors.** A 404, a 410 and a redirect, as for an issue moved to
   another repository, are not found. A 403 and a 422 are refused, rate
-  limits aside. A token GitHub rejects, a 401, stops the run.
+  limits aside. A token GitHub rejects, a 401, stops the run when it is
+  the posting account's; a person's is no token.
 - **Labels are made as needed,** in GitHub's grey, before they are added.
   One write adds the labels; each removal is a write of its own. An added
   label GitHub leaves out, as it does without push access, is refused.
