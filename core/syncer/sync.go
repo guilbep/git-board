@@ -66,7 +66,6 @@ type run struct {
 	projects   []*project
 	states     map[string]*state // by forge key, the run's projects' and others read for a header or a reference
 	issues     map[string]*issue.Issue
-	order      []string // issue ids, oldest first
 	pull, push bool
 	report     Report
 }
@@ -160,7 +159,7 @@ func lock(s *gitstore.Store) (func(), error) {
 	return func() { os.Remove(path) }, nil
 }
 
-// loadIssues reads every issue, and orders them oldest first.
+// loadIssues reads every issue.
 // ponytail: every run loads every issue; the index when repositories get big.
 func (r *run) loadIssues() error {
 	ids, err := issue.List(r.s)
@@ -168,32 +167,23 @@ func (r *run) loadIssues() error {
 		return err
 	}
 	r.issues = map[string]*issue.Issue{}
-	r.order = nil
 	for _, id := range ids {
 		is, err := issue.Load(r.s, id)
 		if err != nil {
 			return fmt.Errorf("syncer: issue %s: %w", id, err)
 		}
 		r.issues[id] = is
-		r.order = append(r.order, id)
 	}
-	slices.SortFunc(r.order, func(a, b string) int {
-		return cmp.Or(cmp.Compare(r.issues[a].Created, r.issues[b].Created), strings.Compare(a, b))
-	})
 	return nil
 }
 
-// reload reads an issue again after a write.
-func (r *run) reload(id string) (*issue.Issue, error) {
-	is, err := issue.Load(r.s, id)
-	if err != nil {
-		return nil, err
-	}
-	if _, ok := r.issues[id]; !ok {
-		r.order = append(r.order, id)
-	}
-	r.issues[id] = is
-	return is, nil
+// oldestFirst is the issues' ids, by creation time, then id.
+func (r *run) oldestFirst() []string {
+	ids := slices.Collect(maps.Keys(r.issues))
+	slices.SortFunc(ids, func(a, b string) int {
+		return cmp.Or(cmp.Compare(r.issues[a].Created, r.issues[b].Created), strings.Compare(a, b))
+	})
+	return ids
 }
 
 func (r *run) warn(msg string) {
@@ -455,7 +445,7 @@ func createdSeen(author string, now int64, id, title, body string) []oplog.Op {
 // pushTo sends git-board's changes to p: it creates the issues p hasn't,
 // oldest first, then writes to each linked one git-board changed.
 func (r *run) pushTo(p *project) error {
-	ids := slices.Clone(r.order)
+	ids := r.oldestFirst()
 	if r.opt.Issue != "" {
 		ids = []string{r.opt.Issue}
 	}

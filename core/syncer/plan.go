@@ -351,7 +351,8 @@ func (r *run) planLabels(pl *plan, p *project, is *issue.Issue, fi forge.Issue, 
 func (r *run) assignee(p *project, name string) (forge.Account, bool) {
 	server := p.f.Server()
 	for _, byName := range []bool{false, true} {
-		for _, pe := range r.au.persons {
+		for _, id := range slices.Sorted(maps.Keys(r.au.persons)) {
+			pe := r.au.persons[id]
 			for _, a := range pe.Accounts {
 				if a.Server == server && (!byName && strings.EqualFold(a.Login, name) || byName && pe.Name == name) {
 					return forge.Account{ID: a.ID, Login: a.Login}, true

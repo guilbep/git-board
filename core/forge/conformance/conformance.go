@@ -500,7 +500,21 @@ func refsNeverMirrored(e *env) {
 	if want := "Follows #" + first + ", not `#9`, see #" + third + ". cc `@ann`"; text(second.Body) != want {
 		e.t.Fatalf("b's body = %q, want %q", text(second.Body), want)
 	}
-	if !strings.HasPrefix(second.Body, "*From ann, ") || !strings.Contains(second.Body, "on [example.com/a#2](https://example.com/a/issues/2)") {
+	// links are to the original, as the adapter names it
+	orig := func(title string) string {
+		list, err := a.Issues(e.ctx, 0)
+		if err != nil {
+			e.t.Fatal(err)
+		}
+		for _, is := range list {
+			if is.Title == title {
+				return "[" + a.Key() + "#" + is.Number + "](" + is.URL + ")"
+			}
+		}
+		e.t.Fatalf("no %q on a", title)
+		return ""
+	}
+	if !strings.HasPrefix(second.Body, "*From ann, ") || !strings.Contains(second.Body, "on "+orig("Second (#1)")) {
 		e.t.Fatalf("b's header = %q", second.Body)
 	}
 	if e.byTitle("Second (#1)").Body != "Follows #1, not #9, see #3. cc @ann" {
@@ -513,7 +527,7 @@ func refsNeverMirrored(e *env) {
 	fc, c := e.forge("example.com/c")
 	e.sync(syncer.Options{Issue: e.byTitle("Second (#1)").ID}, c)
 	got := onForge(e.t, fc, "Second (`#1`)")
-	if want := "Follows [example.com/a#1](https://example.com/a/issues/1), not `#9`, see [example.com/a#3](https://example.com/a/issues/3). cc `@ann`"; text(got.Body) != want {
+	if want := "Follows " + orig("First") + ", not `#9`, see " + orig("Third") + ". cc `@ann`"; text(got.Body) != want {
 		e.t.Fatalf("c's body = %q, want %q", text(got.Body), want)
 	}
 }

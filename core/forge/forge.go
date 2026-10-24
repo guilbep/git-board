@@ -45,7 +45,10 @@ type Issue struct {
 	Changed          map[string]int64
 }
 
-// Forge is one forge project, through one account's token.
+// Forge is one forge project, through one account's token. An adapter
+// maps the forge's answers to the errors above, and paces its own writes.
+// ponytail: rate limits, their pacing and their retries are the adapters'
+// (M4); the engine has none.
 type Forge interface {
 	// Key names the project, like github.com/guilbep/git-board-test.
 	Key() string
@@ -61,7 +64,9 @@ type Forge interface {
 	As(ctx context.Context, a Account) (Forge, error)
 
 	// Issues lists the issues updated at or after since, in the forge's
-	// order, without the confidential ones. since 0 lists them all.
+	// order, without the confidential ones. since 0 lists them all. since is
+	// the last run's start, as recorded: an adapter whose forge moves its
+	// update times late, as GitLab does, lists from its own margin earlier.
 	Issues(ctx context.Context, since int64) ([]Issue, error)
 	// Issue reads one issue: ErrNotFound, or ErrConfidential.
 	Issue(ctx context.Context, id string) (Issue, error)

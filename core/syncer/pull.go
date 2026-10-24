@@ -153,7 +153,6 @@ func (r *run) pullNew(p *project, fi forge.Issue) error {
 		return err
 	}
 	r.issues[is.ID] = is
-	r.order = append(r.order, is.ID)
 	sops := []oplog.Op{
 		linkOp(a, now, is.ID, fi.ID, fi.Number, fi.URL),
 		seenOp(a, now, is.ID, "title", fi.Title),
