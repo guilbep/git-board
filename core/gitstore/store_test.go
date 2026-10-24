@@ -293,3 +293,24 @@ func TestConfig(t *testing.T) {
 		t.Fatalf("emptied = %q, %v", v, err)
 	}
 }
+
+func TestRefused(t *testing.T) {
+	t.Parallel()
+	h := commitOf(t, newStore(t))
+	for _, c := range []struct {
+		msg  string
+		prev Hash
+		want bool
+	}{
+		{"cannot lock ref 'r': is at 1 but expected 2", ZeroHash, true},
+		{"cannot lock ref 'r': reference already exists", ZeroHash, true},
+		{"fatal: Unable to create '/x/refs/board/issue/a.lock': File exists.", ZeroHash, true},
+		{"fatal: Unable to create '/x/refs/board/issue/a': File exists.", ZeroHash, false},
+		{"cannot lock ref 'r': unable to resolve reference 'r'", h, true},
+		{"cannot lock ref 'r': unable to resolve reference 'r'", ZeroHash, false},
+	} {
+		if got := refused(c.msg, c.prev); got != c.want {
+			t.Errorf("refused(%q, %v) = %v", c.msg, c.prev, got)
+		}
+	}
+}

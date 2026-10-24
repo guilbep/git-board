@@ -77,9 +77,11 @@ func Open(path string) (*Store, error) {
 	s := &Store{repo: repo, fs: fs, gitDir: fs.Filesystem().Root()}
 	cmd := s.command(context.Background(), "rev-parse", "--git-common-dir")
 	cmd.Dir = s.gitDir // a relative answer is relative to this
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
 	out, err := cmd.Output()
 	if err != nil {
-		return nil, fmt.Errorf("gitstore: open %s: common dir: %w", path, err)
+		return nil, fmt.Errorf("gitstore: open %s: common dir: %w: %s", path, err, strings.TrimSpace(stderr.String()))
 	}
 	s.commonDir = strings.TrimSpace(string(out))
 	if !filepath.IsAbs(s.commonDir) {
@@ -236,13 +238,21 @@ func (s *Store) UpdateRef(ctx context.Context, name string, next, prev Hash) err
 	if err == nil {
 		return nil
 	}
-	msg := err.Error()
-	for _, m := range []string{"but expected", "reference already exists", "unable to resolve reference", ".lock': File exists"} {
-		if strings.Contains(msg, m) {
-			return fmt.Errorf("%w: %s", ErrRefMoved, msg)
-		}
+	if refused(err.Error(), prev) {
+		return fmt.Errorf("%w: %s", ErrRefMoved, err)
 	}
 	return err
+}
+
+// refused reports whether git's message says the ref moved, exists, is gone
+// (only a non-zero prev expects it) or is locked by another process.
+func refused(msg string, prev Hash) bool {
+	for _, m := range []string{"but expected", "reference already exists", ".lock': File exists"} {
+		if strings.Contains(msg, m) {
+			return true
+		}
+	}
+	return prev != ZeroHash && strings.Contains(msg, "unable to resolve reference")
 }
 
 // CommonDir is the absolute git common dir, shared by every worktree.

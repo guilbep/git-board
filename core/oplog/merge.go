@@ -11,10 +11,6 @@ import (
 	"github.com/guilbep/git-board/core/gitstore"
 )
 
-// kinds are the entity kinds. Other refs under refs/board/, like
-// git-board's refs/board/seq, are not entities.
-var kinds = []string{"issue", "person", "sync"}
-
 // Merge joins the entity's local head with other, a head from elsewhere,
 // and returns the entity as it then is. other is read and checked before
 // the ref moves.
@@ -66,7 +62,7 @@ func Merge(s *gitstore.Store, kind, id string, other gitstore.Hash) (*Log, error
 func MergeFetched(s *gitstore.Store, remote string) (int, error) {
 	moved := 0
 	var errs []error
-	for _, kind := range kinds {
+	for _, kind := range gitstore.Kinds {
 		prefix := "refs/board-remotes/" + remote + "/" + kind + "/"
 		refs, err := s.Refs(prefix)
 		if err != nil {
