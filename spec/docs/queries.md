@@ -124,17 +124,23 @@ no person holds the account, it answers none.
 `Watch` tells a program, like git-board's server or its TUI, that entities
 changed.
 
-- **It polls.** Every interval the caller gives, it lists
-  `refs/board/<kind>/*` for each kind, and compares each head with the one
-  it saw last. It ignores a ref whose name isn't a valid id.
-- **The first poll is the baseline.** It reports nothing.
-- **Each later poll reports its changes together:** each entity that
-  appeared, moved, or was removed, with its kind, id and new head. A
-  removed one has the zero hash as its head. They are sorted by kind, then
+- **It polls.** Each poll lists `refs/board/<kind>/*` for each kind, and
+  compares each head with the one it saw last. It ignores a ref whose name
+  isn't a valid id.
+- **The first poll is the baseline.** It runs at once, when `Watch`
+  starts, and reports nothing.
+- **Each later poll** runs one interval after the last, and reports what
+  changed since. An interval of 0 or less means 1 second.
+- **A poll whose listing of the refs fails is skipped:** it reports nothing,
+  and the next interval tries again. A skipped baseline leaves the next
+  poll as the baseline.
+- **A poll's changes come together:** each entity that appeared, moved, or
+  was removed, with its kind, id and new head. A removed one has the zero
+  hash as its head. They are sorted by kind, then
   id. A poll with no change reports nothing.
 - **It reports heads, not writes.** An entity written several times between
   two polls is reported once, with its head at that poll. One created and
   removed between two polls isn't reported.
 - **It sees every change,** whoever made it: this process, another one, or
   a fetch.
-- **It stops** when the caller stops it.
+- **It stops** only when its context ends, never on its own.

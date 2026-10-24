@@ -447,7 +447,8 @@ A person's state follows from its operations, applied in order:
 7. An empty `name`, `server`, `id` or `login`, in any operation that holds
    it, is an error. The email may be empty.
 8. An operation whose `author` is empty is an error, except in the person's
-   first pack.
+   first pack. An operation is in that pack when the pack hash in its id,
+   `<pack hash>:<index>`, equals the person's id.
 9. Any other `kind` is an error, which names the kind.
 
 A person's state holds its `id`, `name`, `email` and `accounts`. The
@@ -502,7 +503,10 @@ git config --local board.me b7e41c09d2a85f36e1c4a0d7b9f2e5c83a6d1f40
 ```
 
 git never fetches nor pushes config, so it is never shared: each clone says
-who it is. Unset, it names no one, as in CI.
+who it is. Unset, it names no one, as in CI: `Me` gives the empty string,
+and no error. `SetMe` doesn't check the id it is given. Only the
+repository's local config is read and written (`git config --local`),
+never the global one.
 
 ## Sync
 

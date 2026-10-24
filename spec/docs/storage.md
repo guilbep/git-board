@@ -295,3 +295,7 @@ git push <remote> \
 
 The push isn't forced. When a ref moved on the remote, git refuses it:
 fetch, merge, then push again.
+
+Push sends whatever matches its refspecs, so a ref under
+`refs/board/<kind>/` whose name isn't a valid id goes too. Every reader
+ignores it (see [Refs](#refs)).
