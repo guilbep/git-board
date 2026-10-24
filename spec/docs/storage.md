@@ -244,14 +244,19 @@ Fetch:
 
 ```sh
 git fetch <remote> \
-  +refs/board/issue/*:refs/remotes/<remote>/board/issue/* \
-  +refs/board/person/*:refs/remotes/<remote>/board/person/* \
-  +refs/board/sync/*:refs/remotes/<remote>/board/sync/*
+  +refs/board/issue/*:refs/board-remotes/<remote>/issue/* \
+  +refs/board/person/*:refs/board-remotes/<remote>/person/* \
+  +refs/board/sync/*:refs/board-remotes/<remote>/sync/*
 ```
 
-Then each `refs/remotes/<remote>/board/<kind>/<id>` is
+Then each `refs/board-remotes/<remote>/<kind>/<id>` is
 [merged](#merging-two-heads) into `refs/board/<kind>/<id>`, which is created
 when absent.
+
+The fetched heads stay out of `refs/remotes/`, so they don't show as remote
+branches in `git branch -r` or in an editor's branch list, `git fetch
+--prune` doesn't delete them, and a remote branch named `board` can't
+collide with them.
 
 Push:
 

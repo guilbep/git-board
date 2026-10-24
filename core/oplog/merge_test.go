@@ -124,8 +124,8 @@ func TestMergeFetched(t *testing.T) {
 	}
 	// git-board's own refs under refs/board/ are not entities.
 	setRef(t, b, "refs/board/seq", sb.Head, gitstore.ZeroHash)
-	setRef(t, b, "refs/remotes/origin/board/seq", iss.Head, gitstore.ZeroHash)
-	setRef(t, b, "refs/remotes/origin/board/other/x", iss.Head, gitstore.ZeroHash)
+	setRef(t, b, "refs/board-remotes/origin/seq", iss.Head, gitstore.ZeroHash)
+	setRef(t, b, "refs/board-remotes/origin/other/x", iss.Head, gitstore.ZeroHash)
 
 	n, err := MergeFetched(b, "origin")
 	if err != nil || n != 2 {

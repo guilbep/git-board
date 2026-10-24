@@ -47,11 +47,14 @@ func TestFetchPush(t *testing.T) {
 	if err := b.Fetch(ctx, "origin"); err != nil {
 		t.Fatal(err)
 	}
-	if h, _ := b.Ref("refs/remotes/origin/board/issue/x"); h != c {
+	if h, _ := b.Ref("refs/board-remotes/origin/issue/x"); h != c {
 		t.Fatalf("fetched = %v, want %v", h, c)
 	}
-	if h, _ := b.Ref("refs/remotes/origin/board/seq"); h != ZeroHash {
+	if h, _ := b.Ref("refs/board-remotes/origin/seq"); h != ZeroHash {
 		t.Fatalf("seq fetched: %v", h)
+	}
+	if r, _ := b.Refs("refs/remotes/"); len(r) != 0 {
+		t.Fatalf("fetched into refs/remotes/: %v", r)
 	}
 	o, err := Open(origin)
 	if err != nil {

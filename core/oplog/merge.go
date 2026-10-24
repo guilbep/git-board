@@ -59,14 +59,14 @@ func Merge(s *gitstore.Store, kind, id string, other gitstore.Hash) (*Log, error
 	}
 }
 
-// MergeFetched merges every refs/remotes/<remote>/board/<kind>/<id> into
+// MergeFetched merges every refs/board-remotes/<remote>/<kind>/<id> into
 // its local ref, which is created when absent. It returns how many refs
 // moved. An entity that fails to merge doesn't stop the others.
 func MergeFetched(s *gitstore.Store, remote string) (int, error) {
 	moved := 0
 	var errs []error
 	for _, kind := range kinds {
-		prefix := "refs/remotes/" + remote + "/board/" + kind + "/"
+		prefix := "refs/board-remotes/" + remote + "/" + kind + "/"
 		refs, err := s.Refs(prefix)
 		if err != nil {
 			return moved, err

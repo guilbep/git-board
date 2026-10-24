@@ -18,14 +18,15 @@ func checkRemote(remote string) error {
 	return nil
 }
 
-// Fetch brings the remote's entity refs to refs/remotes/<remote>/board/<kind>/.
+// Fetch brings the remote's entity refs to refs/board-remotes/<remote>/<kind>/:
+// out of refs/remotes/, so branch lists and git fetch --prune leave them.
 func (s *Store) Fetch(ctx context.Context, remote string) error {
 	if err := checkRemote(remote); err != nil {
 		return err
 	}
 	args := []string{"fetch", remote}
 	for _, k := range kinds {
-		args = append(args, fmt.Sprintf("+refs/board/%s/*:refs/remotes/%s/board/%s/*", k, remote, k))
+		args = append(args, fmt.Sprintf("+refs/board/%s/*:refs/board-remotes/%s/%s/*", k, remote, k))
 	}
 	if err := s.git(ctx, args...); err != nil {
 		return err
