@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -211,23 +212,73 @@ func (s *Store) Ref(name string) (Hash, error) {
 	return r.Hash(), nil
 }
 
-// Refs returns the refs whose names start with prefix.
+// Refs returns the refs whose names start with prefix, loose or packed. The
+// prefix starts with refs/. A lock file isn't a ref, and an empty ref file is
+// one being written: both are left out, where go-git's own listing fails.
 func (s *Store) Refs(prefix string) (map[string]Hash, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	it, err := s.repo.References()
-	if err != nil {
+	dir := path.Dir(prefix + "x")
+	if dir != "refs" && !strings.HasPrefix(dir, "refs/") {
+		return nil, fmt.Errorf("gitstore: refs prefix %q is not under refs/", prefix)
+	}
+	// The filesystem sends refs/ and packed-refs to the common dir, as git does.
+	fs := s.fs.Filesystem()
+	out := map[string]Hash{}
+	read := func(name string) ([]byte, error) {
+		f, err := fs.Open(name)
+		if err != nil {
+			return nil, err
+		}
+		defer f.Close()
+		return io.ReadAll(f)
+	}
+	packed, err := read("packed-refs")
+	if err != nil && !os.IsNotExist(err) {
 		return nil, err
 	}
-	defer it.Close()
-	out := map[string]Hash{}
-	err = it.ForEach(func(r *plumbing.Reference) error {
-		if r.Type() == plumbing.HashReference && strings.HasPrefix(r.Name().String(), prefix) {
-			out[r.Name().String()] = r.Hash()
+	for _, line := range strings.Split(string(packed), "\n") {
+		// Header and peeled lines ("# ...", "^<hash>") don't parse.
+		if h, name, _ := strings.Cut(line, " "); plumbing.IsHash(h) && strings.HasPrefix(name, prefix) {
+			out[name] = plumbing.NewHash(h)
+		}
+	}
+	var walk func(dir string) error
+	walk = func(dir string) error {
+		entries, err := fs.ReadDir(dir)
+		if os.IsNotExist(err) { // never made, or just removed
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		for _, e := range entries {
+			name := dir + "/" + e.Name()
+			if e.IsDir() {
+				if err := walk(name); err != nil {
+					return err
+				}
+				continue
+			}
+			if strings.HasSuffix(name, ".lock") || !strings.HasPrefix(name, prefix) {
+				continue
+			}
+			b, err := read(name)
+			if os.IsNotExist(err) {
+				continue
+			}
+			if err != nil {
+				return err
+			}
+			// A symbolic ref ("ref: ...") or an empty file isn't listed.
+			if h := strings.TrimSpace(string(b)); plumbing.IsHash(h) {
+				out[name] = plumbing.NewHash(h) // a loose ref wins over its packed copy
+			}
 		}
 		return nil
-	})
-	return out, err
+	}
+	if err := walk(dir); err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 // UpdateRef moves a ref to next if it still points at prev. A prev of
@@ -279,6 +330,11 @@ func (s *Store) SetConfig(ctx context.Context, key, value string) error {
 func (s *Store) command(ctx context.Context, args ...string) *exec.Cmd {
 	cmd := exec.CommandContext(ctx, "git", append([]string{"--git-dir", s.gitDir}, args...)...)
 	cmd.Env = append(os.Environ(), "LC_ALL=C")
+	// On cancel git gets SIGINT, on which it removes its lock files; the
+	// default SIGKILL would leave <ref>.lock behind. Still running 5 s later,
+	// it is killed.
+	cmd.Cancel = func() error { return cmd.Process.Signal(os.Interrupt) }
+	cmd.WaitDelay = 5 * time.Second
 	return cmd
 }
 

@@ -1,12 +1,15 @@
 package gitstore
 
 import (
+	"bufio"
 	"context"
 	"errors"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"slices"
+	"strings"
 	"sync"
 	"testing"
 )
@@ -104,6 +107,74 @@ func TestUpdateRefCreatesAndMoves(t *testing.T) {
 	refs, _ := s.Refs("refs/board/issue/")
 	if len(refs) != 1 || refs[name] != c2 {
 		t.Fatalf("refs = %v", refs)
+	}
+}
+
+// Refs lists packed and loose refs past another writer's lock file and a ref
+// file still empty. go-git's own listing fails on both.
+func TestRefsPastLocks(t *testing.T) {
+	t.Parallel()
+	s := newStore(t)
+	c1 := commitOf(t, s)
+	c2 := commitOf(t, s, c1)
+	a := "refs/board/issue/" + strings.Repeat("a", 40)
+	b := "refs/board/issue/" + strings.Repeat("b", 40)
+	for _, name := range []string{a, b, "refs/board/person/x"} {
+		if err := s.UpdateRef(ctx, name, c1, ZeroHash); err != nil {
+			t.Fatal(err)
+		}
+	}
+	gitRun(t, s.gitDir, "pack-refs", "--all")
+	if err := s.UpdateRef(ctx, b, c2, c1); err != nil { // loose, over its packed copy
+		t.Fatal(err)
+	}
+	for _, name := range []string{a + ".lock", "refs/board/issue/" + strings.Repeat("c", 40)} {
+		if err := os.WriteFile(filepath.Join(s.gitDir, name), nil, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	refs, err := s.Refs("refs/board/issue/")
+	if want := map[string]Hash{a: c1, b: c2}; err != nil || !maps.Equal(refs, want) {
+		t.Fatalf("refs = %v, %v; want %v", refs, err, want)
+	}
+	if _, err := s.Refs("board/"); err == nil {
+		t.Fatal("a prefix outside refs/ is listed")
+	}
+}
+
+// A cancelled git gets SIGINT, not SIGKILL, so it removes its lock file.
+func TestCancelledGitLeavesNoLock(t *testing.T) {
+	t.Parallel()
+	s := newStore(t)
+	c1 := commitOf(t, s)
+	const name = "refs/board/issue/x"
+	cctx, cancel := context.WithCancel(ctx)
+	cmd := s.command(cctx, "update-ref", "--stdin")
+	in, err := cmd.StdinPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := cmd.StdoutPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := in.Write([]byte("start\ncreate " + name + " " + c1.String() + "\nprepare\n")); err != nil {
+		t.Fatal(err)
+	}
+	lines := bufio.NewScanner(out)
+	for lines.Scan() && lines.Text() != "prepare: ok" {
+	}
+	lock := filepath.Join(s.gitDir, name+".lock")
+	if _, err := os.Stat(lock); err != nil {
+		t.Fatalf("the prepared transaction holds no lock: %v", err)
+	}
+	cancel()
+	_ = cmd.Wait()
+	if _, err := os.Stat(lock); !os.IsNotExist(err) {
+		t.Fatalf("lock left behind: %v", err)
 	}
 }
 

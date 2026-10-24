@@ -13,9 +13,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-	"time"
 
-	"github.com/go-git/go-git/v5/storage/filesystem/dotgit"
 	"modernc.org/sqlite"
 	sqlite3 "modernc.org/sqlite/lib"
 
@@ -157,7 +155,7 @@ func (ix *Index) Refresh(ctx context.Context) error {
 	refs := map[key]string{}
 	for _, kind := range kinds {
 		prefix := oplog.RefName(kind, "")
-		m, err := listRefs(ix.s, prefix)
+		m, err := ix.s.Refs(prefix)
 		if err != nil {
 			return fmt.Errorf("index: refs: %w", err)
 		}
@@ -203,19 +201,6 @@ func (ix *Index) Refresh(ctx context.Context) error {
 		return fmt.Errorf("index: refresh: %w", err)
 	}
 	return nil
-}
-
-// listRefs is s.Refs(prefix), tried again while go-git fails on a ref's
-// lock file that git has just created, still empty.
-// ponytail: works around gitstore.Refs reading lock files; drop it once Refs skips them.
-func listRefs(s *gitstore.Store, prefix string) (map[string]gitstore.Hash, error) {
-	for try := 1; ; try++ {
-		m, err := s.Refs(prefix)
-		if !errors.Is(err, dotgit.ErrEmptyRefFile) || try == 10 {
-			return m, err
-		}
-		time.Sleep(time.Millisecond)
-	}
 }
 
 // heads are the stored heads, broken entities' included.
