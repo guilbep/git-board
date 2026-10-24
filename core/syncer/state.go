@@ -1,4 +1,4 @@
-// Package syncer moves issues between git-board and a forge.
+// Package syncer moves issues between git-board and forges.
 package syncer
 
 import (
@@ -22,11 +22,21 @@ func StateID(forgeKey string) string {
 }
 
 // state is what a sync entity's operations add up to.
+// ponytail: the sync entity is one log that grows forever, loaded whole at
+// every run. M6's mass first pull needs a snapshot of this state, or the
+// index to hold it, before it pulls thousands of issues.
 type state struct {
-	log    *oplog.Log                   // nil when the entity doesn't exist
-	links  map[string]string            // forge id -> issue id, the effective links
-	linked map[string]bool              // issue ids with an effective link
-	seen   map[string]map[string]string // issue id -> field -> last seen value
+	log      *oplog.Log                   // nil when the entity doesn't exist
+	links    map[string]string            // forge id -> issue id, the effective links
+	link     map[string]linkData          // issue id -> its effective link
+	numbers  map[string]string            // forge number -> issue id, the effective links
+	anyLink  map[string]bool              // issue ids with any link, effective or not
+	seen     map[string]map[string]string // issue id -> field -> last seen value
+	posted   map[string]string            // git-board comment id -> forge comment id
+	postedBy map[string]string            // forge comment id -> git-board comment id
+	refused  map[[3]string]bool           // (issue, field, value)
+	lastRun  int64
+	wrote    bool // a write since it loaded
 }
 
 type linkData struct {
@@ -42,8 +52,31 @@ type seenData struct {
 	Value string `json:"value"`
 }
 
+type postedData struct {
+	Issue   string `json:"issue"`
+	Comment string `json:"comment"`
+	ForgeID string `json:"forge_id"`
+}
+
+type refusedData struct {
+	Issue  string `json:"issue"`
+	Field  string `json:"field"`
+	Value  string `json:"value"`
+	Reason string `json:"reason"`
+}
+
+type runData struct {
+	Started int64 `json:"started"`
+}
+
+func emptyState() *state {
+	return &state{links: map[string]string{}, link: map[string]linkData{}, numbers: map[string]string{},
+		anyLink: map[string]bool{}, seen: map[string]map[string]string{}, posted: map[string]string{},
+		postedBy: map[string]string{}, refused: map[[3]string]bool{}}
+}
+
 func loadState(s *gitstore.Store, key string) (*state, error) {
-	st := &state{links: map[string]string{}, linked: map[string]bool{}, seen: map[string]map[string]string{}}
+	st := emptyState()
 	l, err := oplog.Load(s, "sync", StateID(key))
 	if errors.Is(err, oplog.ErrNotFound) {
 		return st, nil
@@ -53,36 +86,77 @@ func loadState(s *gitstore.Store, key string) (*state, error) {
 	}
 	st.log = l
 	for _, e := range l.Entries {
-		if e.Author == "" {
-			return nil, fmt.Errorf("syncer: operation %s has no author", e.ID)
-		}
-		switch e.Kind {
-		case "link":
-			var d linkData
-			if err := json.Unmarshal(e.Data, &d); err != nil {
-				return nil, fmt.Errorf("syncer: operation %s: %w", e.ID, err)
-			}
-			if _, taken := st.links[d.ForgeID]; !taken && !st.linked[d.Issue] {
-				st.links[d.ForgeID] = d.Issue
-				st.linked[d.Issue] = true
-			}
-		case "seen":
-			var d seenData
-			if err := json.Unmarshal(e.Data, &d); err != nil {
-				return nil, fmt.Errorf("syncer: operation %s: %w", e.ID, err)
-			}
-			if !st.linked[d.Issue] || !knownField(d.Field) {
-				continue
-			}
-			if st.seen[d.Issue] == nil {
-				st.seen[d.Issue] = map[string]string{}
-			}
-			st.seen[d.Issue][d.Field] = d.Value
-		default:
-			return nil, fmt.Errorf("syncer: unknown operation %q, operation %s", e.Kind, e.ID)
+		if err := st.apply(e); err != nil {
+			return nil, err
 		}
 	}
 	return st, nil
+}
+
+// apply folds one operation into the state, as data-model.md's state rules
+// say.
+func (st *state) apply(e oplog.Entry) error {
+	if e.Author == "" {
+		return fmt.Errorf("syncer: operation %s has no author", e.ID)
+	}
+	decode := func(v any) error {
+		if err := json.Unmarshal(e.Data, v); err != nil {
+			return fmt.Errorf("syncer: operation %s: %w", e.ID, err)
+		}
+		return nil
+	}
+	switch e.Kind {
+	case "link":
+		var d linkData
+		if err := decode(&d); err != nil {
+			return err
+		}
+		st.anyLink[d.Issue] = true
+		if _, taken := st.links[d.ForgeID]; !taken && st.link[d.Issue] == (linkData{}) {
+			st.links[d.ForgeID] = d.Issue
+			st.link[d.Issue] = d
+			st.numbers[d.Number] = d.Issue
+		}
+	case "seen":
+		var d seenData
+		if err := decode(&d); err != nil {
+			return err
+		}
+		if _, ok := st.link[d.Issue]; !ok || !knownField(d.Field) {
+			return nil
+		}
+		if st.seen[d.Issue] == nil {
+			st.seen[d.Issue] = map[string]string{}
+		}
+		st.seen[d.Issue][d.Field] = d.Value
+	case "posted":
+		var d postedData
+		if err := decode(&d); err != nil {
+			return err
+		}
+		_, linked := st.link[d.Issue]
+		_, posted := st.posted[d.Comment]
+		_, recorded := st.postedBy[d.ForgeID]
+		if linked && !posted && !recorded {
+			st.posted[d.Comment] = d.ForgeID
+			st.postedBy[d.ForgeID] = d.Comment
+		}
+	case "refused":
+		var d refusedData
+		if err := decode(&d); err != nil {
+			return err
+		}
+		st.refused[[3]string{d.Issue, d.Field, d.Value}] = true
+	case "run":
+		var d runData
+		if err := decode(&d); err != nil {
+			return err
+		}
+		st.lastRun = max(st.lastRun, d.Started)
+	default:
+		return fmt.Errorf("syncer: unknown operation %q, operation %s", e.Kind, e.ID)
+	}
+	return nil
 }
 
 func knownField(f string) bool {
@@ -93,21 +167,34 @@ func knownField(f string) bool {
 	return strings.HasPrefix(f, "comment:")
 }
 
+func syncOp(kind, author string, now int64, d any) oplog.Op {
+	raw, _ := json.Marshal(d)
+	return oplog.Op{Kind: kind, Author: author, Time: now, Data: raw}
+}
+
 func linkOp(author string, now int64, issue, forgeID, number, url string) oplog.Op {
-	raw, _ := json.Marshal(linkData{issue, forgeID, number, url})
-	return oplog.Op{Kind: "link", Author: author, Time: now, Data: raw}
+	return syncOp("link", author, now, linkData{issue, forgeID, number, url})
 }
 
 func seenOp(author string, now int64, issue, field, value string) oplog.Op {
-	raw, _ := json.Marshal(seenData{issue, field, value})
-	return oplog.Op{Kind: "seen", Author: author, Time: now, Data: raw}
+	return syncOp("seen", author, now, seenData{issue, field, value})
 }
 
-// write appends ops to the entity, creating it if needed, and reloads st.
-// It refuses an op with no author, which would break the entity.
-// ponytail: it reloads the whole sync entity after each write, so a first
-// pull of n issues is O(n²) reads; update links and seen in place when it
-// matters (M6's mass first pull will).
+func postedOp(author string, now int64, issue, comment, forgeID string) oplog.Op {
+	return syncOp("posted", author, now, postedData{issue, comment, forgeID})
+}
+
+func refusedOp(author string, now int64, issue, field, value, reason string) oplog.Op {
+	return syncOp("refused", author, now, refusedData{issue, field, value, reason})
+}
+
+func runOp(author string, now, started int64) oplog.Op {
+	return syncOp("run", author, now, runData{started})
+}
+
+// write appends ops to the entity, creating it if needed, and folds them
+// into st. It refuses an op with no author, which would break the entity.
+// When another write landed in between, it reloads st whole.
 func (st *state) write(ctx context.Context, s *gitstore.Store, key string, ops []oplog.Op) error {
 	if len(ops) == 0 {
 		return nil
@@ -117,14 +204,29 @@ func (st *state) write(ctx context.Context, s *gitstore.Store, key string, ops [
 			return fmt.Errorf("syncer: operation %d has no author", i)
 		}
 	}
-	if err := writeOps(ctx, s, StateID(key), st.log, ops); err != nil {
-		return err
+	n := 0
+	if st.log != nil {
+		n = len(st.log.Entries)
 	}
-	fresh, err := loadState(s, key)
+	l, err := writeOps(ctx, s, StateID(key), st.log, ops)
 	if err != nil {
 		return err
 	}
-	*st = *fresh
+	if len(l.Entries) != n+len(ops) {
+		fresh, err := loadState(s, key)
+		if err != nil {
+			return err
+		}
+		*st = *fresh
+	} else {
+		st.log = l
+		for _, e := range l.Entries[n:] {
+			if err := st.apply(e); err != nil {
+				return err
+			}
+		}
+	}
+	st.wrote = true
 	return nil
 }
 
@@ -132,17 +234,20 @@ func (st *state) write(ctx context.Context, s *gitstore.Store, key string, ops [
 // is nil. A create that finds the entity made by another write since then
 // appends to it instead; not there yet, the other write still holds the
 // ref's lock, so it creates again. It tries 5 times, as oplog's writes do.
-func writeOps(ctx context.Context, s *gitstore.Store, id string, l *oplog.Log, ops []oplog.Op) error {
+func writeOps(ctx context.Context, s *gitstore.Store, id string, l *oplog.Log, ops []oplog.Op) (*oplog.Log, error) {
 	for try := 1; ; try++ {
 		if l != nil {
-			return l.Append(ctx, s, ops)
+			return l, l.Append(ctx, s, ops)
 		}
-		_, err := oplog.Create(ctx, s, "sync", id, ops)
+		created, err := oplog.Create(ctx, s, "sync", id, ops)
+		if err == nil {
+			return created, nil
+		}
 		if !errors.Is(err, gitstore.ErrRefMoved) || try == 5 {
-			return err
+			return nil, err
 		}
 		if l, err = oplog.Load(s, "sync", id); err != nil && !errors.Is(err, oplog.ErrNotFound) {
-			return err
+			return nil, err
 		}
 	}
 }

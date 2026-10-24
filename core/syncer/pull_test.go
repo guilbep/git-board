@@ -83,7 +83,7 @@ func sample() forge.Issue {
 
 func pull(t *testing.T, s *gitstore.Store, f forge.Forge) Report {
 	t.Helper()
-	r, err := Pull(context.Background(), s, f)
+	r, err := Pull(context.Background(), s, Options{}, f)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -266,7 +266,7 @@ func TestPullStopsOnBrokenPerson(t *testing.T) {
 	}
 	f.Add(sample())
 	before := refs(t, s)
-	if _, err := Pull(t.Context(), s, f); err == nil {
+	if _, err := Pull(t.Context(), s, Options{}, f); err == nil {
 		t.Fatal("want an error")
 	}
 	if !reflect.DeepEqual(before, refs(t, s)) {
@@ -363,13 +363,19 @@ func TestPullKeepsLocalChange(t *testing.T) {
 	if only(t, s).Title != "mine" || !reflect.DeepEqual(before, refs(t, s)) {
 		t.Fatal("local change not kept, or something written")
 	}
-	// both changed: still nothing written.
-	f.Edit("1", func(i *forge.Issue) { i.Title = "theirs" })
+	// both changed, the forge earlier: git-board's is the later, left for
+	// the push.
+	f.Edit("1", func(i *forge.Issue) { i.Title = "theirs"; i.Changed["title"] = 1 })
 	if r := pull(t, s, f); r != (Report{Unchanged: 1}) {
 		t.Fatalf("conflict report = %+v", r)
 	}
 	if only(t, s).Title != "mine" || !reflect.DeepEqual(before, refs(t, s)) {
 		t.Fatal("conflict wrote something")
+	}
+	// the forge later: it wins.
+	f.Edit("1", func(i *forge.Issue) { i.Title = "later"; i.Changed["title"] = time.Now().Unix() + 100 })
+	if r := pull(t, s, f); r != (Report{Updated: 1}) || only(t, s).Title != "later" {
+		t.Fatalf("report = %+v, title %q", r, only(t, s).Title)
 	}
 }
 
@@ -426,7 +432,7 @@ func TestPullBadStatus(t *testing.T) {
 	bad := sample()
 	bad.Status = "merged"
 	f.Add(bad)
-	if _, err := Pull(context.Background(), s, f); err == nil {
+	if _, err := Pull(context.Background(), s, Options{}, f); err == nil {
 		t.Fatal("want an error")
 	}
 	if len(refs(t, s)) != 0 {
@@ -589,7 +595,7 @@ func TestPullSkipsLinkWithBadIssueID(t *testing.T) {
 	}
 	f.Add(sample())
 	before := refs(t, s)
-	r, err := Pull(t.Context(), s, f)
+	r, err := Pull(t.Context(), s, Options{}, f)
 	if err != nil || r != (Report{Unchanged: 1}) {
 		t.Fatalf("report = %+v, %v; want one unchanged", r, err)
 	}
