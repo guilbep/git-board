@@ -18,7 +18,9 @@ func (s *Store) Fetch(ctx context.Context, remote string) error {
 	if err := s.git(ctx, args...); err != nil {
 		return err
 	}
+	s.mu.Lock()
 	s.fs.Reindex() // the fetch may have written a pack
+	s.mu.Unlock()
 	return nil
 }
 

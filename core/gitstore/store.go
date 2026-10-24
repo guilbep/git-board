@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-git/go-git/v5"
@@ -31,6 +32,8 @@ var ErrRefMoved = errors.New("gitstore: ref moved since it was read")
 
 // Store is a git repository.
 type Store struct {
+	// ponytail: one lock serializes go-git access per Store; per-object locking if it ever shows in a profile
+	mu     sync.Mutex
 	repo   *git.Repository
 	fs     *filesystem.Storage
 	gitDir string
@@ -72,6 +75,8 @@ func (s *Store) put(o plumbing.EncodedObject) (Hash, error) {
 
 // WriteBlob stores data as a blob.
 func (s *Store) WriteBlob(data []byte) (Hash, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	o := s.repo.Storer.NewEncodedObject()
 	o.SetType(plumbing.BlobObject)
 	w, err := o.Writer()
@@ -89,6 +94,8 @@ func (s *Store) WriteBlob(data []byte) (Hash, error) {
 
 // ReadBlob returns a blob's bytes.
 func (s *Store) ReadBlob(h Hash) ([]byte, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	b, err := retry(s, func() (*object.Blob, error) { return s.repo.BlobObject(h) })
 	if err != nil {
 		return nil, fmt.Errorf("gitstore: blob %s: %w", h, err)
@@ -103,6 +110,8 @@ func (s *Store) ReadBlob(h Hash) ([]byte, error) {
 
 // WriteTree stores a tree of blobs. Git wants the entries sorted by name.
 func (s *Store) WriteTree(entries []TreeEntry) (Hash, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	t := object.Tree{}
 	for _, e := range entries {
 		t.Entries = append(t.Entries, object.TreeEntry{Name: e.Name, Mode: filemode.Regular, Hash: e.Blob})
@@ -118,6 +127,8 @@ func (s *Store) WriteTree(entries []TreeEntry) (Hash, error) {
 
 // ReadTree returns a tree's entries.
 func (s *Store) ReadTree(h Hash) ([]TreeEntry, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	t, err := retry(s, func() (*object.Tree, error) { return s.repo.TreeObject(h) })
 	if err != nil {
 		return nil, fmt.Errorf("gitstore: tree %s: %w", h, err)
@@ -131,6 +142,8 @@ func (s *Store) ReadTree(h Hash) ([]TreeEntry, error) {
 
 // WriteCommit stores an entity commit.
 func (s *Store) WriteCommit(c Commit) (Hash, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	sig := object.Signature{Name: "git-board", Email: "git-board@localhost", When: time.Now()}
 	obj := object.Commit{Author: sig, Committer: sig, Message: "git-board", TreeHash: c.Tree, ParentHashes: c.Parents}
 	o := s.repo.Storer.NewEncodedObject()
@@ -142,6 +155,8 @@ func (s *Store) WriteCommit(c Commit) (Hash, error) {
 
 // ReadCommit returns a commit's tree and parents.
 func (s *Store) ReadCommit(h Hash) (Commit, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	c, err := retry(s, func() (*object.Commit, error) { return s.repo.CommitObject(h) })
 	if err != nil {
 		return Commit{}, fmt.Errorf("gitstore: commit %s: %w", h, err)
@@ -149,7 +164,7 @@ func (s *Store) ReadCommit(h Hash) (Commit, error) {
 	return Commit{Tree: c.TreeHash, Parents: c.ParentHashes}, nil
 }
 
-// retry reads again after re-reading the pack index when an object is not
+// retry reads again (s.mu held) after re-reading the pack index when an object is not
 // found: go-git reads the index once, so a pack written later by git (a
 // fetch, a gc) stays hidden until then.
 func retry[T any](s *Store, read func() (T, error)) (T, error) {
@@ -163,6 +178,8 @@ func retry[T any](s *Store, read func() (T, error)) (T, error) {
 
 // Ref returns where a ref points, or ZeroHash when it is absent.
 func (s *Store) Ref(name string) (Hash, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	r, err := s.repo.Reference(plumbing.ReferenceName(name), false)
 	if errors.Is(err, plumbing.ErrReferenceNotFound) {
 		return ZeroHash, nil
@@ -175,6 +192,8 @@ func (s *Store) Ref(name string) (Hash, error) {
 
 // Refs returns the refs whose names start with prefix.
 func (s *Store) Refs(prefix string) (map[string]Hash, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	it, err := s.repo.References()
 	if err != nil {
 		return nil, err

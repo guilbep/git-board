@@ -3,6 +3,7 @@ package gitstore
 import (
 	"errors"
 	"os/exec"
+	"sync"
 	"testing"
 )
 
@@ -150,4 +151,30 @@ func TestReadAfterExternalRepack(t *testing.T) {
 	if _, err := s.ReadCommit(c); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func TestStoreConcurrentReadsAndReindex(t *testing.T) {
+	t.Parallel()
+	s := newStore(t)
+	b, _ := s.WriteBlob([]byte("shared"))
+	var wg sync.WaitGroup
+	for range 4 {
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			for range 50 {
+				if got, err := s.ReadBlob(b); err != nil || string(got) != "shared" {
+					t.Errorf("blob = %q, %v", got, err)
+					return
+				}
+			}
+		}()
+		go func() { // a miss reindexes
+			defer wg.Done()
+			for range 50 {
+				_, _ = s.ReadCommit(ZeroHash)
+			}
+		}()
+	}
+	wg.Wait()
 }
