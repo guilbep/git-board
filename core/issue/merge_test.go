@@ -6,49 +6,76 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/guilbep/git-board/core/gitstore"
 	"github.com/guilbep/git-board/core/oplog"
 )
+
+// packHash is the hash of the pack blob in the issue's head commit.
+func packHash(t *testing.T, s *gitstore.Store, id string) string {
+	t.Helper()
+	l, err := oplog.Load(s, "issue", id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, err := s.ReadCommit(l.Head)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tree, err := s.ReadTree(c.Tree)
+	if err != nil || len(tree) != 1 {
+		t.Fatalf("tree = %v, %v", tree, err)
+	}
+	return tree[0].Blob.String()
+}
 
 func TestMergeConverges(t *testing.T) {
 	t.Parallel()
 	root := t.TempDir()
 	origin := filepath.Join(root, "origin.git")
 	gitRun(t, root, "init", "-q", "--bare", origin)
-	var dirs []string
-	for _, n := range []string{"a", "b"} {
-		dir := filepath.Join(root, n)
+	dirA, dirB := filepath.Join(root, "a"), filepath.Join(root, "b")
+	for _, dir := range []string{dirA, dirB} {
 		gitRun(t, root, "clone", "-q", origin, dir)
-		dirs = append(dirs, dir)
 	}
-	a, b := open(t, dirs[0]), open(t, dirs[1])
+	// Each clone also knows the other, so each merges on its own.
+	gitRun(t, dirA, "remote", "add", "peer", dirB)
+	gitRun(t, dirB, "remote", "add", "peer", dirA)
+	a, b := open(t, dirA), open(t, dirB)
 	ctx := context.Background()
-	must2 := func(err error) {
+	check := func(err error) {
 		t.Helper()
 		if err != nil {
 			t.Fatal(err)
 		}
 	}
+	exchange := func() {
+		t.Helper()
+		for _, s := range []*gitstore.Store{a, b} {
+			check(s.Fetch(ctx, "peer"))
+			_, err := oplog.MergeFetched(s, "peer")
+			check(err)
+		}
+	}
 
 	c, err := Create(a, NewCreate("ann", "T", "B"))
 	c = must(t, c, err)
-	must2(a.Push(ctx, "origin"))
-	must2(b.Fetch(ctx, "origin"))
+	check(a.Push(ctx, "origin"))
+	check(b.Fetch(ctx, "origin"))
 	_, err = oplog.MergeFetched(b, "origin")
-	must2(err)
+	check(err)
 
 	_, err = Do(a, c.ID, SetTitle("ann", "from A"), ChangeLabels("ann", []string{"a"}, nil))
-	must2(err)
+	check(err)
 	_, err = Do(b, c.ID, NewComment("bob", "hi"), SetTitle("bob", "from B"))
-	must2(err)
+	check(err)
+	// Both packs have clock 2, so the greater hash sorts last.
+	want := "from B"
+	if packHash(t, a, c.ID) > packHash(t, b, c.ID) {
+		want = "from A"
+	}
 
-	must2(a.Push(ctx, "origin"))
-	must2(b.Fetch(ctx, "origin"))
-	_, err = oplog.MergeFetched(b, "origin")
-	must2(err)
-	must2(b.Push(ctx, "origin"))
-	must2(a.Fetch(ctx, "origin"))
-	_, err = oplog.MergeFetched(a, "origin")
-	must2(err)
+	exchange()
+	exchange()
 
 	ia, err := Load(a, c.ID)
 	ia = must(t, ia, err)
@@ -57,16 +84,7 @@ func TestMergeConverges(t *testing.T) {
 	if !reflect.DeepEqual(ia, ib) {
 		t.Fatalf("A = %+v\nB = %+v", ia, ib)
 	}
-	// The title is that of the last set-title in the shared order.
-	l, err := oplog.Load(a, "issue", c.ID)
-	must2(err)
-	var last string
-	for _, e := range l.Entries {
-		if e.Kind == "set-title" {
-			last = map[bool]string{true: "from A", false: "from B"}[e.Author == "ann"]
-		}
-	}
-	if ia.Title != last || len(ia.Comments) != 1 || !reflect.DeepEqual(ia.Labels, []string{"a"}) {
-		t.Fatalf("issue = %+v, want title %q", ia, last)
+	if ia.Title != want || len(ia.Comments) != 1 || !reflect.DeepEqual(ia.Labels, []string{"a"}) {
+		t.Fatalf("issue = %+v, want title %q", ia, want)
 	}
 }

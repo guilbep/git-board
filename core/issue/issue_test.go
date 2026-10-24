@@ -108,22 +108,43 @@ func TestSecondCreateAndBadStatus(t *testing.T) {
 	if _, err := Do(s, c.ID, NewCreate("a", "U", "")); err == nil {
 		t.Fatal("second create: want an error")
 	}
+	rejected(t, s, c, NewCreate("a", "U", ""))
+	rejected(t, s, c, SetStatus("a", "wip"))
+	rejected(t, s, c, EditText("a", "nope:0", "x"))
+
 	s = newStore(t)
 	if _, err := Create(s, NewCreate("a", "T", ""), SetStatus("a", "wip")); err == nil {
 		t.Fatal("bad status: want an error")
+	}
+	if ids, err := List(s); err != nil || len(ids) != 0 {
+		t.Fatalf("rejected Create left %v, %v", ids, err)
+	}
+}
+
+// rejected checks that Do refuses op and leaves the issue as it was.
+func rejected(t *testing.T, s *gitstore.Store, want *Issue, op oplog.Op) {
+	t.Helper()
+	if _, err := Do(s, want.ID, op); err == nil {
+		t.Fatalf("%s: want an error", op.Kind)
+	}
+	got, err := Load(s, want.ID)
+	if err != nil || !reflect.DeepEqual(got, want) {
+		t.Fatalf("after rejected %s: %+v, %v", op.Kind, got, err)
 	}
 }
 
 func TestUnknownOpIsAnError(t *testing.T) {
 	t.Parallel()
-	s := newStore(t)
-	l, err := oplog.Create(s, "issue", "", []oplog.Op{NewCreate("a", "T", ""), {Kind: "set-priority"}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = Apply(l)
-	if !errors.Is(err, ErrUnknownOp) || !strings.Contains(err.Error(), "set-priority") {
-		t.Fatalf("err = %v", err)
+	for _, data := range []string{"", `{"title":5}`} {
+		s := newStore(t)
+		l, err := oplog.Create(s, "issue", "", []oplog.Op{NewCreate("a", "T", ""), {Kind: "set-priority", Data: []byte(data)}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = Apply(l)
+		if !errors.Is(err, ErrUnknownOp) || !strings.Contains(err.Error(), "set-priority") {
+			t.Fatalf("data %q: err = %v", data, err)
+		}
 	}
 }
 

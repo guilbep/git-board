@@ -41,6 +41,8 @@ var (
 	ErrBadTarget = errors.New("issue: edit of an unknown text")
 )
 
+var kinds = []string{"create", "comment", "edit-text", "set-title", "set-status", "change-labels"}
+
 // data is the union of the fields of every operation's data.
 type data struct {
 	Title  string   `json:"title"`
@@ -57,6 +59,9 @@ func Apply(l *oplog.Log) (*Issue, error) {
 	labels := map[string]bool{}
 	comments := map[string]int{} // comment id -> index in is.Comments
 	for _, e := range l.Entries {
+		if !slices.Contains(kinds, e.Kind) {
+			return nil, fmt.Errorf("%w: %q, operation %s", ErrUnknownOp, e.Kind, e.ID)
+		}
 		var d data
 		if len(e.Data) > 0 {
 			if err := json.Unmarshal(e.Data, &d); err != nil {

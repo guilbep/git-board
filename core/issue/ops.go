@@ -3,6 +3,8 @@ package issue
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
+	"slices"
 	"time"
 
 	"github.com/guilbep/git-board/core/gitstore"
@@ -47,6 +49,9 @@ func Create(s *gitstore.Store, ops ...oplog.Op) (*Issue, error) {
 	if len(ops) == 0 || ops[0].Kind != "create" {
 		return nil, errors.New("issue: the first operation must be a create")
 	}
+	if _, err := Apply(&oplog.Log{Entries: pending(nil, ops)}); err != nil {
+		return nil, err
+	}
 	l, err := oplog.Create(s, "issue", "", ops)
 	if err != nil {
 		return nil, err
@@ -72,8 +77,21 @@ func Do(s *gitstore.Store, id string, ops ...oplog.Op) (*Issue, error) {
 	if err != nil {
 		return nil, err
 	}
+	if _, err := Apply(&oplog.Log{ID: l.ID, Entries: pending(l.Entries, ops)}); err != nil {
+		return nil, err
+	}
 	if err := l.Append(s, ops); err != nil {
 		return nil, err
 	}
 	return Apply(l)
+}
+
+// pending is entries followed by ops, which have no id yet. Applying it
+// checks ops before they are written.
+func pending(entries []oplog.Entry, ops []oplog.Op) []oplog.Entry {
+	out := slices.Clone(entries)
+	for i, op := range ops {
+		out = append(out, oplog.Entry{Op: op, ID: fmt.Sprintf("pending:%d", i)})
+	}
+	return out
 }
