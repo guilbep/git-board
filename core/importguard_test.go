@@ -1,7 +1,9 @@
 package core
 
 import (
+	"errors"
 	"os/exec"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -11,10 +13,12 @@ var forbiddenPrefixes = []string{
 	"github.com/guilbep/git-board/internal",
 }
 
-// forbidden returns the packages that core must not import.
-func forbidden(pkgs []string) []string {
+// forbidden returns the packages in go list's output that core must not
+// import. With -test, a line can be "pkg [x.test]": pkg, built for x's
+// tests.
+func forbidden(out string) []string {
 	var bad []string
-	for _, p := range pkgs {
+	for _, p := range strings.Fields(out) {
 		for _, prefix := range forbiddenPrefixes {
 			if strings.HasPrefix(p, prefix) {
 				bad = append(bad, p)
@@ -27,19 +31,29 @@ func forbidden(pkgs []string) []string {
 
 func TestCoreImportsNoGitBugNorInternal(t *testing.T) {
 	t.Parallel()
-	out, err := exec.Command("go", "list", "-deps", "./...").Output()
+	out, err := exec.Command("go", "list", "-deps", "-test", "./...").Output()
 	if err != nil {
+		var ee *exec.ExitError
+		if errors.As(err, &ee) {
+			t.Fatalf("go list: %v\n%s", err, ee.Stderr)
+		}
 		t.Fatalf("go list: %v", err)
 	}
-	if bad := forbidden(strings.Fields(string(out))); len(bad) > 0 {
+	if bad := forbidden(string(out)); len(bad) > 0 {
 		t.Fatalf("core imports forbidden packages:\n%s", strings.Join(bad, "\n"))
 	}
 }
 
 func TestGuardSeesForbiddenImports(t *testing.T) {
 	t.Parallel()
-	in := []string{"fmt", "github.com/git-bug/git-bug/cache", "github.com/guilbep/git-board/internal/x", "github.com/guilbep/git-board/core"}
-	if bad := forbidden(in); len(bad) != 2 {
-		t.Fatalf("forbidden(%v) = %v, want the git-bug and internal packages", in, bad)
+	out := `fmt
+github.com/git-bug/git-bug/cache
+github.com/guilbep/git-board/internal/x [github.com/guilbep/git-board/core/issue.test]
+github.com/guilbep/git-board/core/issue [github.com/guilbep/git-board/core/issue.test]
+github.com/guilbep/git-board/core/issue.test
+`
+	want := []string{"github.com/git-bug/git-bug/cache", "github.com/guilbep/git-board/internal/x"}
+	if bad := forbidden(out); !slices.Equal(bad, want) {
+		t.Fatalf("forbidden = %v, want %v", bad, want)
 	}
 }
