@@ -9,7 +9,8 @@ func TestAccountOwnerIsFirstID(t *testing.T) {
 	t.Parallel()
 	s := newStore(t)
 	var ids []string
-	for range 6 { // random ids: the lowest is not always the first made
+	// Random ids: go on until the lowest is neither the first nor the last made.
+	for len(ids) < 3 || slices.Min(ids) == ids[0] || slices.Min(ids) == ids[len(ids)-1] {
 		p := mk(t, s, NewCreate("", "ann", ""), AddAccount("", Account{"github.com", "4", "ann"}))
 		ids = append(ids, p.ID)
 	}

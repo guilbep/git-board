@@ -2,6 +2,7 @@
 package people
 
 import (
+	"cmp"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -101,7 +102,7 @@ func Apply(l *oplog.Log) (*Person, error) {
 		return nil, errors.New("people: no operation")
 	}
 	slices.SortFunc(p.Accounts, func(a, b Account) int {
-		return strings.Compare(a.Server+"\x00"+a.ID, b.Server+"\x00"+b.ID)
+		return cmp.Or(strings.Compare(a.Server, b.Server), strings.Compare(a.ID, b.ID))
 	})
 	return p, nil
 }

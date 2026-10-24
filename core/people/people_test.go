@@ -57,6 +57,10 @@ func TestPersonEveryOp(t *testing.T) {
 	if p.Name != "Ann" || p.Email != "a@x" {
 		t.Fatalf("set-name = %+v", p)
 	}
+	p = do(t, s, id, SetEmail(id, "b@x"))
+	if p.Name != "Ann" || p.Email != "b@x" {
+		t.Fatalf("set-email = %+v", p)
+	}
 	p = do(t, s, id, SetEmail(id, ""))
 	if p.Name != "Ann" || p.Email != "" {
 		t.Fatalf("set-email = %+v", p)
@@ -124,7 +128,10 @@ func TestPersonBadValues(t *testing.T) {
 			t.Fatalf("%s err = %v", op.Kind, err)
 		}
 	}
-	l, _ := oplog.Load(s, "person", p.ID)
+	l, err := oplog.Load(s, "person", p.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(l.Entries) != 1 {
 		t.Fatalf("written: %d ops", len(l.Entries))
 	}
@@ -152,6 +159,9 @@ func TestPersonAuthors(t *testing.T) {
 	if _, err := Do(t.Context(), s, p.ID, SetName("", "Ann")); err == nil {
 		t.Fatal("authorless later op accepted")
 	}
+	if l, err := oplog.Load(s, "person", p.ID); err != nil || len(l.Entries) != 2 {
+		t.Fatalf("log = %v, %v", l, err)
+	}
 	p = do(t, s, p.ID, AddAccount(p.ID, Account{"github.com", "4", "renamed"}))
 	if p.Accounts[0].Login != "renamed" {
 		t.Fatalf("person = %+v", p)
@@ -177,5 +187,27 @@ func TestMe(t *testing.T) {
 	}
 	if me, err := Me(t.Context(), s); err != nil || me != "nobody" {
 		t.Fatalf("me = %q, %v", me, err)
+	}
+}
+
+func TestSecondCreateAndBrokenPerson(t *testing.T) {
+	t.Parallel()
+	s := newStore(t)
+	p := mk(t, s, NewCreate("", "ann", ""))
+	if _, err := Do(t.Context(), s, p.ID, NewCreate(p.ID, "x", "")); err == nil {
+		t.Fatal("second create accepted")
+	}
+	if _, err := Do(t.Context(), s, p.ID, SetName(p.ID, "ok")); err != nil {
+		t.Fatal(err)
+	}
+	l, err := oplog.Create(t.Context(), s, "person", "", []oplog.Op{{Kind: "frobnicate", Time: 1}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Load(s, l.ID); !errors.Is(err, ErrUnknownOp) {
+		t.Fatalf("load err = %v", err)
+	}
+	if _, err := LoadDirectory(s); !errors.Is(err, ErrUnknownOp) {
+		t.Fatalf("directory err = %v", err)
 	}
 }
