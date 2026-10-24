@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"sort"
 	"strings"
@@ -195,6 +196,8 @@ func (s *Store) UpdateRef(name string, next, prev Hash) error {
 // git runs git on this repository and wraps its stderr in the error.
 func (s *Store) git(ctx context.Context, args ...string) error {
 	cmd := exec.CommandContext(ctx, "git", append([]string{"--git-dir", s.gitDir}, args...)...)
+	// UpdateRef matches git's refusals by their English text.
+	cmd.Env = append(os.Environ(), "LC_ALL=C")
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
