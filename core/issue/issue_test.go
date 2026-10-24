@@ -3,6 +3,7 @@ package issue
 import (
 	"errors"
 	"os/exec"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -145,6 +146,29 @@ func TestUnknownOpIsAnError(t *testing.T) {
 		if !errors.Is(err, ErrUnknownOp) || !strings.Contains(err.Error(), "set-priority") {
 			t.Fatalf("data %q: err = %v", data, err)
 		}
+	}
+}
+
+// A linked worktree shares its main repository's refs and objects.
+func TestOpenLinkedWorktree(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	main, wt := filepath.Join(root, "main"), filepath.Join(root, "wt")
+	gitRun(t, root, "init", "-q", main)
+	gitRun(t, main, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "--no-gpg-sign", "-m", "x")
+	first, err := Create(open(t, main), NewCreate("a", "T", ""))
+	first = must(t, first, err)
+	gitRun(t, main, "worktree", "add", "-q", wt)
+
+	w := open(t, wt)
+	if ids, err := List(w); err != nil || len(ids) != 1 || ids[0] != first.ID {
+		t.Fatalf("list from the worktree = %v, %v", ids, err)
+	}
+	second, err := Create(w, NewCreate("b", "U", ""))
+	second = must(t, second, err)
+	got, err := Load(open(t, main), second.ID)
+	if got = must(t, got, err); !reflect.DeepEqual(got, second) {
+		t.Fatalf("from main = %+v, want %+v", got, second)
 	}
 }
 

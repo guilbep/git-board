@@ -3,6 +3,7 @@ package gitstore
 import (
 	"context"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -58,6 +59,21 @@ func TestFetchPush(t *testing.T) {
 	}
 	if h, _ := o.Ref("refs/board/seq"); h != ZeroHash {
 		t.Fatalf("seq pushed: %v", h)
+	}
+}
+
+// A remote name that is empty or would read as an option is refused, before
+// git runs.
+func TestRemoteNameChecked(t *testing.T) {
+	t.Parallel()
+	s := newStore(t)
+	ctx := context.Background()
+	for _, r := range []string{"", "-v", "--upload-pack=touch x"} {
+		for name, run := range map[string]func(context.Context, string) error{"fetch": s.Fetch, "push": s.Push} {
+			if err := run(ctx, r); err == nil || !strings.Contains(err.Error(), "bad remote name") {
+				t.Errorf("%s %q: err = %v", name, r, err)
+			}
+		}
 	}
 }
 

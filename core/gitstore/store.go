@@ -53,9 +53,10 @@ type Commit struct {
 }
 
 // Open opens the repository at path: a worktree, found upward from path, or
-// a bare repository.
+// a bare repository. A linked worktree reads and writes its main
+// repository's refs and objects, as git does.
 func Open(path string) (*Store, error) {
-	repo, err := git.PlainOpenWithOptions(path, &git.PlainOpenOptions{DetectDotGit: true})
+	repo, err := git.PlainOpenWithOptions(path, &git.PlainOpenOptions{DetectDotGit: true, EnableDotGitCommonDir: true})
 	if errors.Is(err, git.ErrRepositoryNotExists) {
 		repo, err = git.PlainOpen(path) // a bare repository
 	}
