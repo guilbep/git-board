@@ -130,7 +130,8 @@ clone. The base kept a conflict visible, where `seen` hid it, and labels
 merge one by one so they can't conflict. Two clones that exchange directly
 and merge at the same time each write a merge commit, so their refs keep
 diverging while their states agree; through one origin they converge (a
-known point for M2). The spec got wrong: the refspecs (`refs/board/*`), what
+known point, not settled yet: see [Merging two
+heads](storage.md#merging-two-heads)). The spec got wrong: the refspecs (`refs/board/*`), what
 a reader rejects, the sync state's edge cases (first link wins), and the
 merge-commit divergence. All were fixed in the spec as the tasks found them.
 The final review found more, fixed the same way: go-git ignored a linked
@@ -138,6 +139,85 @@ worktree's common directory, so a worktree saw no issue; fetched heads sat
 in `refs/remotes/`, where branch lists and `git fetch --prune` reach them;
 a forge comment pulled on two clones became two comments; and labels had no
 check.
+
+## M2 results
+
+Measured on 2026-10-24, at the end of M2, lines with `wc -l`, tests apart
+from code. M1's are the trial's, above.
+
+| Package | Code | Tests | M1 code | M1 tests |
+|---|---|---|---|---|
+| `gitstore` | 413 | 512 | 301 | 305 |
+| `oplog` | 454 | 770 | 354 | 499 |
+| `issue` | 246 | 444 | 240 | 370 |
+| `people` | 248 | 267 | | |
+| `index` | 468 | 399 | | |
+| `watch` | 108 | 164 | | |
+| `forge`, `forge/fake` | 105 | 59 | 92 | |
+| `syncer` (`pull.go` 272, `state.go` 148) | 420 | 599 | 346 | 377 |
+| `core` (doc, import guard) | 4 | 59 | 4 | 59 |
+| **Total** | **2,466** | **3,273** | **1,337** | **1,610** |
+
+`gitstore`, `oplog` and `issue` together are 1,113 lines of code, still
+under M1's target of 1,500. People, the index and change events add 824.
+
+Concepts M2 added:
+
+- the **person**, who authors every operation, with its **accounts**: a
+  user on a forge server, named by (server, id), whose login can change;
+- the **first pack**, the pack whose hash is a person's id: only its
+  operations may have an empty author, since none can name the person;
+- the **account owner**: of two persons holding one account, the one whose
+  id sorts first;
+- **me**, the local `board.me`, never shared;
+- the **index**, a sqlite file every worktree shares, never the source of
+  truth;
+- the **refresh**, which brings the index up to the refs before every
+  query, and the **broken entity** it keeps out and lists;
+- the **change event**: a poll's batch of the entities that appeared,
+  moved or went, after a baseline that reports nothing.
+
+What was harder than planned: again git and its neighbours, not the model.
+go-git lists a `<ref>.lock` as a ref, so an empty one from another process's
+`git update-ref` failed every listing, and so every query; gitstore now
+reads loose and packed refs itself. A cancelled git was killed and left its
+lock behind, so it now gets SIGINT first. Two processes on one sqlite file
+needed WAL, a busy timeout and transactions that take the write lock at
+once, and a path with `#` or `?` opened another file until it was escaped.
+A person's id comes from its first pack, so nothing in that pack can name
+it: the author rule had to allow empty authors there, and a pulled person
+became one write instead of two. One broken entity failed every query until
+the index kept it out and listed it. A person that won't load first got
+skipped by the pull, which made duplicates, so the pull now stops on it.
+The old id pattern let in names git refuses, like `a..b` and `x.lock`, so
+ids are now 40 lowercase hex digits.
+
+What the core still lacks for M5, against git-board's `internal/gitbugio`.
+Its issue methods take an id prefix; the core takes whole ids, so M5 needs
+a prefix lookup, which the index can answer.
+
+| `gitbugio` | The core |
+|---|---|
+| `Open`, `OpenCwd`, `NewForRepo`, `Close`, `ErrNoRepo` | `gitstore.Open`, `index.Open`, `Close`; `NewForRepo` goes with git-bug |
+| `NewIssue`, `GetIssue`, `ListIssues`, `SetTitle`, `SetStatus`, `CloseBug`, `ApplyLabelChange`, `GetLabels`, `AddComment`, `Issue` | `issue.Create`, `Load`, `Do` and its operations; `index.Issues` |
+| `EditComment`, `ErrNoSuchComment` | `issue.EditText`. Not its `base` check, `ErrChangedMeanwhile` |
+| `SearchText` | `index.Issues` with a text |
+| `Identities`, `NewIdentity`, `Me`, `Adopt`, `Person` | `people.List`, `Load`, `Create`, `Me`, `SetMe` |
+| `Logins`, `MyLogin` | partly: a person's accounts. Which login a person is assigned as waits for M3's assignees |
+| `RefsFingerprint` | `watch.Watch`, for issues and persons. Not releases |
+| `Fetch`, `Push`, `Pull` | `gitstore.Fetch`, `Push`, `oplog.MergeFetched` |
+| `Thread`, `Threads`, `Event`, `Version`, `History` | partly: the issue's state, and its log through `oplog.Load`. No events, edit history or participants as such |
+| `Labels`, `Mentioning`, `Mentions` | none: every label in use, and issues mentioning a login |
+| `AddCommentMeta`, `CommentWith`, `SetCommentMetadata` | none: operations hold an origin, no other metadata |
+| `CommentReview`, `Review`, `StampPR` | none: review comments |
+| `ProjectBases`, `SetProjectBases` | none: a GitHub Project's last agreed values |
+| `Counter`, `ParseCounter`, `CheckNumbers`, `InitNumbers`, `NumberIssues`, `Numbering`, `FetchNumbers`, `NumbersRemote`, `ErrNumbered`, `ErrNumbersMoved` | none: issue numbers, `refs/board/seq`, stay git-board's |
+| `CreateRelease`, `Releases`, `ReleaseFor`, `CommentRelease`, `SetReleaseNotes`, `YankRelease`, `PullReleases`, `PushReleases`, `ReleasesFingerprint`, `ReleasesNamespace`, `ReleaseRecord`, `ReleaseComment`, `Artifact`, `Asset`, `ChartArtifact` | none: release records |
+| `AddBridge`, `Bridges`, `RemoveBridge`, `SetBridgeSync`, `SyncBridges`, `Bridge`, `SyncBridge`, `ErrNoBridge`, `Credentials`, `Credential`, `ForgeHosts`, `ForgeToken`, `GitHubToken`, `NoCredentials`, `Forge`, `SetAssignees` | M3 and M4: forge settings and tokens |
+| `GetForges`, `SendForges`, `SyncForges`, `SyncIssue` | M3: only the trial's pull, `syncer.Pull`, exists |
+| `LinkIssue`, `UnlinkIssue`, `TakeIssue` | none: out of version 1 |
+| `Branches`, `Branch`, `Ancestors`, `ChangedFiles`, `ChangesIn`, `DiffFile`, `DiffStat`, `FileStat`, `FileLines`, `FirstCommitAdding`, `GrepFiles`, `HasCommit`, `LineAt`, `Log`, `Commit`, `MergeBase`, `ReadCommit`, `ReadFile`, `RevParse`, `RemoteHead`, `Remotes`, `Remote`, `Worktrees`, `Worktree`, `Ahead`, `GitHubRepo`, `GitHubRepoOf` | none: reading the code's own git history isn't the core's job, and stays in git-board |
+| `SetFlatKinds`, `Storage`, `TestCache` | none: git-bug's cache and storage go with it |
 
 [prd]: https://github.com/guilbep/git-board/blob/main/docs/prd/core.md
 [decision]: https://github.com/guilbep/git-board/blob/main/docs/prd/core.md#the-decision

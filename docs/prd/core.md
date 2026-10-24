@@ -157,40 +157,22 @@ See the spec's Trial results. Awaiting guilbep's decision on M2.
 M1 gate reached, 2026-10-24: the trial and its review are done, waiting for
 guilbep's go or no-go on M2.
 
+M2 result, 2026-10-24: the core is 2,466 lines of code and 3,273 of tests.
+People, the sqlite index and search, and change events add 824 of them;
+`gitstore`, `oplog` and `issue` are 1,113. The proof holds: two processes
+(`TestIndexTwoProcesses`), two clones (`TestMergeConverges`), unknown
+operations (`TestUnknownOpIsAnError`, `TestPersonUnknownOp`) and the import
+guard pass. See the spec's M2 results.
+
 ## Carried to later milestones
 
 What M1's tasks and reviews left for later. The execution ledger isn't kept
 in git, so they are listed here.
 
-- **M2:** one exported list of entity kinds (today in both `gitstore` and
-  `oplog`); kind and id validation in `oplog`; a spec line that JSON keys
-  are case-sensitive and unique; tests for `MergeFetched` going on past a
-  failing entity, for `Merge`'s retry, and for the 5-attempt cap.
-- **M2:** a write can land and still return an error, as `Append`, `Create`
-  and `Merge` reload after the ref moved. Return a distinct error, or don't
-  fail on the reload.
-- **M2:** the merge storm when clones exchange directly (already in
-  storage.md).
-- **M2, spec polish:** say "at most 5 attempts in total"; the nonce is at
-  least 16 random bytes; SHA-1 repositories only, go-git v5's limit; the
-  issue state's JSON names `created` vs `time`, and shows `origin`; a missing
-  top-level `kind`, `author` or `time` is an error; fetch doesn't propagate
-  deletions; `make clean` also removes `spec/site/`; sync.md restates
-  data-model.md's state rules, so link to them instead; say why `link` and
-  `seen` take the issue's author.
-- **M2, gitstore:** match `.lock': File exists` only, not any "File exists";
-  a non-zero `prev` on a deleted ref should also be `ErrRefMoved`;
-  `UpdateRef` has no context; add a regression test for `LC_ALL=C` and a test
-  of a lock-file race; `DetectDotGit` may open an enclosing repository for a
-  nested bare one; the lock-file branch of the sync entity's first write has
-  no test.
-- **M2, tests:** adding and removing one label in one op; a body edit after a
-  comment edit; the fields the pull's tests don't check (a link's number and
-  URL, the comment time, the author, time and origin of set-status,
-  change-labels, link and seen, the issue's `Origin.Forge`, the order of
-  `seen` ops); the fake forge's `Edit` changes every issue with that number
-  and is silent on an unknown one; `forge` and `forge/fake` have no tests of
-  their own.
+- **Not planned yet:** the merge storm when clones exchange directly
+  (storage.md's known point).
+- **M3:** the lock-file branch of the sync entity's first write has no
+  test.
 - **M3:** a record of which git-board comment each posted comment is, a
   refusal record, the marker's format, and a last-run time; an issue pulled
   but not linked (a crash between the two writes) found by its origin and
