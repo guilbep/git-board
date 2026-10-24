@@ -129,21 +129,23 @@ func (r *run) plan(p *project, is *issue.Issue, fi forge.Issue, who map[string]s
 	posted := is.Origin == nil || is.Origin.Forge != key
 	ch := is.Changes
 	text(&pl.text, "title", r.form(p, is.Title, origin(ch["title"]), true), fi.Title, false, ch["title"], changedAt(fi, "title"), nil,
-		func(v string) oplog.Op { return from(issue.SetTitle(a, v), key, ev, now) },
+		func(v string) oplog.Op { return from(issue.SetTitle(a, v), key, ev, changedAt(fi, "title")) },
 		func(fw forge.Forge, v string) error { return fw.SetTitle(r.ctx, fi.ID, v) })
 	text(&pl.text, "body", wrapLike(seen["body"], r.form(p, is.Body, origin(ch["body"]), false), posted), fi.Body, posted,
 		ch["body"], changedAt(fi, "body"), nil,
-		func(v string) oplog.Op { return from(issue.EditText(a, is.BodyOp, v), key, ev, now) },
+		func(v string) oplog.Op { return from(issue.EditText(a, is.BodyOp, v), key, ev, changedAt(fi, "body")) },
 		func(fw forge.Forge, v string) error { return fw.SetBody(r.ctx, fi.ID, v) })
 	text(&pl.rest, "status", string(is.Status), fi.Status, false, ch["status"], changedAt(fi, "status"), nil,
-		func(v string) oplog.Op { return from(issue.SetStatus(a, issue.Status(v)), key, ev, now) },
+		func(v string) oplog.Op {
+			return from(issue.SetStatus(a, issue.Status(v)), key, ev, changedAt(fi, "status"))
+		},
 		func(fw forge.Forge, v string) error { return fw.SetStatus(r.ctx, fi.ID, v) })
 
 	pullAdd, pullRemove := r.planLabels(pl, p, is, fi, pull, push)
 	aAdd, aRemove := r.planAssignees(pl, p, is, fi, pull, push)
 	pullAdd, pullRemove = append(pullAdd, aAdd...), append(pullRemove, aRemove...)
 	if len(pullAdd) > 0 || len(pullRemove) > 0 {
-		pl.ops = append(pl.ops, from(issue.ChangeLabels(a, pullAdd, pullRemove), key, ev, now))
+		pl.ops = append(pl.ops, from(issue.ChangeLabels(a, pullAdd, pullRemove), key, ev, changedAt(fi, "labels")))
 	}
 
 	// Comments: each forge comment is a git-board comment it was pulled
@@ -194,7 +196,7 @@ func (r *run) plan(p *project, is *issue.Issue, fi forge.Issue, who map[string]s
 		cid, fcID, ca := c.ID, fc.ID, who[fc.Author.ID]
 		text(&pl.comments, field, wrapLike(seen[field], r.form(p, c.Body, origin(cch), false), sent), fc.Body, sent, cch, ft,
 			[]*oplog.Origin{c.Origin},
-			func(v string) oplog.Op { return from(issue.EditText(ca, cid, v), key, field, now) },
+			func(v string) oplog.Op { return from(issue.EditText(ca, cid, v), key, field, ft) },
 			func(fw forge.Forge, v string) error { return fw.EditComment(r.ctx, fi.ID, fcID, v) })
 	}
 	if push {

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/guilbep/git-board/core/forge"
 	"github.com/guilbep/git-board/core/gitstore"
@@ -107,10 +108,15 @@ func split(v string) []string {
 	return strings.Split(v, "\n")
 }
 
-// from stamps an operation with the forge's origin.
-func from(op oplog.Op, key, event string, time int64) oplog.Op {
+// from stamps an operation with the forge's origin and the forge's time of
+// the change, so the later change wins by when it was made, not pulled. A
+// forge that gives no time gets the run's.
+func from(op oplog.Op, key, event string, at int64) oplog.Op {
 	op.Origin = &oplog.Origin{Forge: key, Event: event}
-	op.Time = time
+	op.Time = at
+	if at == 0 {
+		op.Time = time.Now().Unix()
+	}
 	return op
 }
 
@@ -140,10 +146,10 @@ func (r *run) pullNew(p *project, fi forge.Issue) error {
 	}
 	ops := []oplog.Op{from(issue.NewCreate(a, fi.Title, fi.Body), key, ev, fi.Created)}
 	if fi.Status == "closed" {
-		ops = append(ops, from(issue.SetStatus(a, issue.Closed), key, ev, now))
+		ops = append(ops, from(issue.SetStatus(a, issue.Closed), key, ev, changedAt(fi, "status")))
 	}
 	if len(add) > 0 {
-		ops = append(ops, from(issue.ChangeLabels(a, add, nil), key, ev, now))
+		ops = append(ops, from(issue.ChangeLabels(a, add, nil), key, ev, changedAt(fi, "labels")))
 	}
 	for _, c := range fi.Comments {
 		ops = append(ops, from(issue.NewComment(who[c.Author.ID], c.Body), key, "comment:"+c.ID, c.Time))

@@ -136,7 +136,9 @@ func TestPullCreatesIssue(t *testing.T) {
 	for _, e := range mustLog(t, s, is.ID) {
 		kinds = append(kinds, e.Kind)
 		if e.Kind == "set-status" || e.Kind == "change-labels" {
-			stamp(t, e, a, issueOrigin, t0, t1)
+			// The forge's time of the change (the fake's Updated is
+			// its Created), not the pull's.
+			stamp(t, e, a, issueOrigin, 1000, 1000)
 		}
 	}
 	if want := []string{"create", "set-status", "change-labels", "comment"}; !reflect.DeepEqual(kinds, want) {
