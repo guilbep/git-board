@@ -131,7 +131,7 @@ func pullLinked(ctx context.Context, s *gitstore.Store, key string, st *state, i
 	is, err := issue.Load(s, id)
 	if err != nil {
 		if isMissing(err) {
-			return false, nil // the issue may arrive with a fetch
+			return false, nil // the issue may arrive with a fetch, or isn't one
 		}
 		return false, err
 	}
@@ -205,4 +205,7 @@ func pullLinked(ctx context.Context, s *gitstore.Store, key string, st *state, i
 	return len(ops)+len(sops) > 0, nil
 }
 
-func isMissing(err error) bool { return errors.Is(err, oplog.ErrNotFound) }
+// isMissing says a link names no issue here: none yet, or an id that names none.
+func isMissing(err error) bool {
+	return errors.Is(err, oplog.ErrNotFound) || errors.Is(err, oplog.ErrBadName)
+}

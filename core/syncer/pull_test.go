@@ -375,3 +375,26 @@ func mustLog(t *testing.T, s *gitstore.Store, id string) []oplog.Entry {
 	l, _ := loadIssueLog(t, s, id)
 	return l
 }
+
+// A link whose issue isn't an id is skipped, like a link to an issue not
+// here yet: the pull goes on and writes nothing for it.
+func TestPullSkipsLinkWithBadIssueID(t *testing.T) {
+	t.Parallel()
+	s, f := newStore(t), fake.New(key)
+	st, err := loadState(s, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.write(t.Context(), s, key, []oplog.Op{linkOp("a", 1, "notanid", "100", "1", "")}); err != nil {
+		t.Fatal(err)
+	}
+	f.Add(sample())
+	before := refs(t, s)
+	r, err := Pull(t.Context(), s, f)
+	if err != nil || r != (Report{Unchanged: 1}) {
+		t.Fatalf("report = %+v, %v; want one unchanged", r, err)
+	}
+	if !reflect.DeepEqual(before, refs(t, s)) {
+		t.Fatal("refs moved")
+	}
+}
