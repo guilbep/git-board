@@ -271,6 +271,13 @@ An issue's state holds:
 | `title`, `body`, `status` | as the operations left them |
 | `labels` | the labels, sorted and unique |
 | `comments` | the comments, in the order they were added |
+| `changes` | for each field, the operation that last changed it: its `author`, `time` and `origin` |
+
+The fields of `changes` are `title`, `body` and `status`, set first by
+`create`; `label:<label>` for each label an operation added or removed,
+present or not; and `comment:<comment id>` for each comment, set by its
+`comment` and by each `edit-text` of it. Sync reads them (see
+[Sync](sync.md#what-git-board-took-from-a-forge)).
 
 A comment holds:
 
@@ -524,12 +531,15 @@ sync entity is:
 
 The adapters (M4) fix each forge's form of key.
 
-A sync entity has two operations:
+A sync entity has five operations:
 
 | `kind` | `data` | What it records |
 |---|---|---|
 | `link` | `issue`, `forge_id`, `number`, `url` | an issue and the forge issue it mirrors |
 | `seen` | `issue`, `field`, `value` | the value of one field of a linked issue that git-board and the forge last agreed on |
+| `posted` | `issue`, `comment`, `forge_id` | a comment sync posted, and the forge comment it became |
+| `refused` | `issue`, `field`, `value`, `reason` | a value the forge refused, not to send again |
+| `run` | `started` | a run that wrote something, and when it started |
 
 ### `link`
 
@@ -575,6 +585,60 @@ label, and so can't conflict.
 }
 ```
 
+### `posted`
+
+`comment` is the git-board comment's id, and `forge_id` the forge's own id
+for the comment sync posted. All three are strings.
+
+```json
+{
+  "kind": "posted",
+  "author": "b7e41c09d2a85f36e1c4a0d7b9f2e5c83a6d1f40",
+  "time": 1792836900,
+  "data": {
+    "issue": "3f7a9c2e41b6d08a5e1f93c7b2d4a6e8f0c1b3d5",
+    "comment": "8c04e5b1d97f2a63c18e0b4d5f6a7928e3b1c0d4:0",
+    "forge_id": "3318822104"
+  }
+}
+```
+
+### `refused`
+
+`field` names what was refused, as the Sync page's
+[Refusals](sync.md#refusals) says, `value` the value sent, and `reason` the
+forge's answer. All four are strings.
+
+```json
+{
+  "kind": "refused",
+  "author": "b7e41c09d2a85f36e1c4a0d7b9f2e5c83a6d1f40",
+  "time": 1792837000,
+  "data": {
+    "issue": "3f7a9c2e41b6d08a5e1f93c7b2d4a6e8f0c1b3d5",
+    "field": "assignees",
+    "value": "+bob",
+    "reason": "no account on github.com"
+  }
+}
+```
+
+### `run`
+
+`started` is when the run started, in Unix seconds. Its author is the
+posting account's person, as a run belongs to no issue.
+
+```json
+{
+  "kind": "run",
+  "author": "4a9d2e7f1b0c6e38d5a2f9b4c7e1d0a36b8f2c95",
+  "time": 1792837100,
+  "data": {
+    "started": 1792837050
+  }
+}
+```
+
 ### State {#sync-state}
 
 A sync entity's state follows from its operations, applied in order:
@@ -587,6 +651,13 @@ A sync entity's state follows from its operations, applied in order:
 - For each linked issue and field, the value of the last `seen`. A `seen`
   for an issue without a link at that point in the order, or with a field
   not listed above, is ignored.
+- Its posted comments. As with links, the first `posted` in the order wins:
+  for a git-board comment posted twice, and for one forge comment recorded
+  for two, the later is ignored. So is a `posted` for an issue without a
+  link at that point in the order.
+- Its refusals, each an issue, a field and a value.
+- The time of the last run: the highest `started` of its `run` operations,
+  0 when there is none.
 - An operation whose `author` is empty is an error.
 - Any other `kind` is an error, which names the kind.
 
@@ -595,8 +666,10 @@ every clone keeps the same one.
 
 Two clones that pull the same new forge issue before fetching each other
 each create an issue for it, and link it. Once they merge, the first link
-holds and the other issue is left unlinked. Joining such duplicates is
-settled in M3.
+holds and the other issue is left unlinked. That issue is a **duplicate**:
+its `create` has as `origin` a forge issue linked to another issue. Sync
+leaves a duplicate alone, on every project, so it is never mirrored
+anywhere. It stays in git-board. Joining duplicates is out of version 1.
 
 ## Origins
 
@@ -606,9 +679,8 @@ from:
 - `forge` is the forge key of its project;
 - `event` names what on the forge it came from.
 
-Until sync reads the forges' events (M3), `event` is `issue:<forge issue
-id>` for an issue's own operations, and `comment:<forge comment id>` for a
-comment.
+Sync reads no forge events: `event` is `issue:<forge issue id>` for an
+issue's own operations, and `comment:<forge comment id>` for a comment.
 
 ```json
 {

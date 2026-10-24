@@ -250,8 +250,8 @@ There are no lock files. Two processes appending to the same entity at once
 both land, the second after a retry. A retry writes a new pack, so the
 retried operations get new ids.
 
-Planned for M3: a sync run takes a lock, so that one machine doesn't post
-the same thing twice.
+A sync run takes a lock, so that one machine doesn't post the same thing
+twice (see [A run](sync.md#a-run)).
 
 ## Fetch and push
 
