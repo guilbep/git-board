@@ -9,9 +9,9 @@ and `publish-private`. They live in git-board's `.git-board.toml`, and
 git-board gives them to the core as options. The core doesn't read that
 file.
 
-M1 builds one part of pull, in [Pull, the trial's part](#pull-the-trials-part).
-The rest of this page is planned for M3 (the sync engine) and M4 (the
-GitHub and GitLab adapters).
+M1 builds one part of pull, in [Pull, the trial's part](#pull-the-trials-part),
+and M2 makes its authors people. The rest of this page is planned for M3
+(the sync engine) and M4 (the GitHub and GitLab adapters).
 
 ## Links
 
@@ -20,9 +20,8 @@ A link joins one issue to one forge issue. It is a `link` operation in the
 project's entity holds every link to that project.
 
 - An issue has at most one link per project, and a forge issue at most one
-  issue. The first link in the order wins; a later one is ignored.
-- A link to an issue not present locally is kept, as the issue may arrive
-  with the next fetch. Sync skips it until then.
+  issue. Which link holds, and what happens to a link to an issue not
+  present locally, are the sync entity's [state rules](data-model.md#sync-state).
 - A pull writes a link when it makes an issue from a forge issue. A push
   writes one when it creates the issue on the forge (M3).
 - Sync mirrors: an issue goes to every project sync runs with, except where
@@ -51,15 +50,15 @@ operation; for a field, the latest in the order counts.
   empty string.
 - **Compared as strings,** byte for byte.
 - **A field with no `seen`** has the empty string as its last seen value.
-- **Ignored:** a `seen` for an issue without a link at that point in the
-  order, or for a field not in the table.
+- **Which `seen` counts,** and which is ignored, are the sync entity's
+  [state rules](data-model.md#sync-state).
 
 Labels `bug` and `ui`, as last seen:
 
 ```json
 {
   "kind": "seen",
-  "author": "forge:octocat",
+  "author": "4a9d2e7f1b0c6e38d5a2f9b4c7e1d0a36b8f2c95",
   "time": 1792836800,
   "data": {
     "issue": "3f7a9c2e41b6d08a5e1f93c7b2d4a6e8f0c1b3d5",
@@ -87,8 +86,8 @@ the issue's assignees, a user of that forge. Sync never sends an
   plain label. The name is kept as it is written.
 - **Two fields.** git-board's `labels` value leaves its assignee labels
   out. Its `assignees` value is the forge user ids of the people its
-  assignee labels name, found through their accounts on that forge
-  (people, M2).
+  assignee labels name, found through their accounts on that forge (see
+  [People](data-model.md#people)). M3 fixes how a label names a person.
 - **A forge's own label that looks like an assignee label,** as an older
   sync left on some issues, is in neither field. Sync leaves it as it is.
 - **A name that matches no account on the forge** is refused there (see
@@ -271,9 +270,9 @@ comments. A comment has an id, an author, a time and a text.
 1. Load the forge project's sync entity, whose id is the SHA-1 of the
    forge's key. If there is none, its state is empty.
 2. Take the forge's issues in the order the forge gives them. For each one:
-    - not linked, as no effective link has its id as `forge_id`, after the
-      first-link-wins and ignore rules: [a new issue](#a-new-issue). An
-      ignored link doesn't count. The first link for a `forge_id` always
+    - not linked, as no effective link has its id as `forge_id`, by the
+      [state rules](data-model.md#sync-state): [a new issue](#a-new-issue).
+      An ignored link doesn't count. The first link for a `forge_id` always
       stays effective, so a pulled issue stays linked;
     - linked to an issue present locally: [a linked issue](#a-linked-issue);
     - linked to an issue not present locally: skip it.
@@ -281,9 +280,10 @@ comments. A comment has an id, an author, a time and a text.
    issues for which the pull wrote anything; `Unchanged`, every other one,
    skipped ones included.
 
-For each forge issue, the pull writes the issue's operations first, in one
-pack, then the sync entity's, in one pack. It writes no empty pack. So with
-nothing to write, it creates no sync entity.
+For each forge issue, the pull writes the persons it needs first (see
+[Authors](#authors)), then the issue's operations, in one pack, then the
+sync entity's, in one pack. It writes no empty pack. So with nothing to
+write, it creates no sync entity.
 
 ### A new issue
 
@@ -363,12 +363,33 @@ waits for M3's push.
 | `edit-text` of a comment | the comment's author | the pull's | `comment:<forge comment id>` |
 | `link` and `seen` | the issue's author | the pull's | none |
 
-- An author is `forge:<login>`, from the forge's login, until people exist
-  (M2).
+- An author is a person's id: the person holding the forge account, as
+  [Authors](#authors) says.
 - An `origin`'s `forge` is the forge's key.
 - The trial reads no events, so it can't tell who changed a field on the
   forge, or when. So its operations carry the pull's time, and the issue's
   author.
+- **Why `link` and `seen` take the issue's author.** They record what the
+  pull found, so only their time matters, and it is the pull's. They still
+  need an author. The pull doesn't read `board.me`, which CI doesn't have,
+  so they take the pulled issue's person.
+
+### Authors
+
+The forge gives an issue's or a comment's author as a numeric id and a
+login. With the forge's server, like `github.com`, they name an account:
+its `id` is the numeric id, as a string (see [People](data-model.md#people)).
+The pull loads every person once, then, for each author:
+
+- **A person holds the account:** the author is that person, or, when two
+  hold it, its [owner](data-model.md#account-owner).
+- **Its login changed on the forge:** the pull appends an `add-account`
+  with the new login to that person, authored by the person itself. The
+  person stays the same.
+- **No person holds it:** the pull creates one, in two writes. First a
+  `create` with the login as the name, an empty email and an empty author.
+  Then an `add-account` of the account, authored by the new person, as only
+  its first pack gives its id. Later authors in the same pull find it.
 
 ### What follows
 
@@ -376,8 +397,12 @@ waits for M3's push.
   F = S, or both changed and the pull writes nothing.
 - **A change made in git-board is kept.** Where G ≠ S, the pull writes
   nothing to the issue.
-- **A pull that stops between its two writes** leaves a linked issue's
-  field at G = F ≠ S. The next pull then records the `seen`. For a new
-  issue, it leaves the issue without its link, and the next pull creates
-  the issue again. M3 finds such an issue by its `create` operation's
-  `origin`, and links it instead.
+- **A login renamed on the forge** keeps its person, whose login changes.
+- **A pull that stops between a new person's two writes** leaves a person
+  with no account. The next pull creates another one, and the first stays
+  unused.
+- **A pull that stops between an issue's write and its sync entity's**
+  leaves a linked issue's field at G = F ≠ S. The next pull then records
+  the `seen`. For a new issue, it leaves the issue without its link, and
+  the next pull creates the issue again. M3 finds such an issue by its
+  `create` operation's `origin`, and links it instead.

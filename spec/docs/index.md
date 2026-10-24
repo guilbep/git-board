@@ -28,12 +28,14 @@ The pages state the format. The code implements them.
   operations of each kind.
 - [Storage](storage.md): how an entity lives in git. Refs, commits, packs,
   the clock, the order, merging, updating a ref, fetch and push.
+- [Queries and search](queries.md): the local index that lists and search
+  read, and the change events that tell a program what moved.
 - [Sync](sync.md) and [Forges](forges.md): how the core syncs with GitHub
   and GitLab, and what each forge needs.
 - [Decisions](decisions.md): the choices the spec starts from, each linked
   to the PRD.
 
-Each page states what M1 builds. What comes later is marked with its
+Each page states what M1 and M2 build. What comes later is marked with its
 milestone, as planned, and isn't defined yet.
 
 In the examples, pack hashes and the ids made from them are made up. Times

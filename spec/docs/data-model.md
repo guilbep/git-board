@@ -14,10 +14,15 @@ Nothing else is kept in git: no snapshot of the state, no cache.
 An entity has a kind and an id:
 
 - the kind is `issue`, `person` or `sync`;
-- the id is lowercase hex, and unique within its kind (see [Ids](#ids)).
+- the id is unique within its kind, and matches `^[0-9A-Za-z._-]+$`. The
+  ids the core makes are lowercase hex (see [Ids](#ids)).
 
 An entity's ref names both: `refs/board/issue/3f7a9c2e41b6d08a5e1f93c7b2d4a6e8f0c1b3d5`
 is the issue `3f7a9c2e41b6d08a5e1f93c7b2d4a6e8f0c1b3d5`.
+
+Any read or write with another kind, or with an id that doesn't match, is
+an error. git's own rules for ref names apply on top: `a..b` matches, but
+git refuses the ref `refs/board/issue/a..b`, so writing it fails.
 
 ## Operations
 
@@ -26,7 +31,7 @@ An operation is one change to an entity, as a JSON object:
 | Field | Type | What it holds |
 |---|---|---|
 | `kind` | string | what the operation does, from its entity's list below |
-| `author` | string | who made it |
+| `author` | string | the id of the person who made it (see [People](#people)) |
 | `time` | integer | when it was made, in Unix seconds |
 | `origin` | object | where it came from, on an operation pulled from a forge; absent otherwise (see [Origins](#origins)) |
 | `data` | object | the operation's own fields, which depend on its `kind` |
@@ -34,7 +39,7 @@ An operation is one change to an entity, as a JSON object:
 ```json
 {
   "kind": "comment",
-  "author": "guilbep",
+  "author": "b7e41c09d2a85f36e1c4a0d7b9f2e5c83a6d1f40",
   "time": 1792836300,
   "data": {
     "body": "It finds them with is:closed."
@@ -42,10 +47,13 @@ An operation is one change to an entity, as a JSON object:
 }
 ```
 
-- `kind` is read in the context of the entity: `create` is an issue's
-  operation, `link` is a sync entity's.
-- `author`, in M1, is a name the caller gives, or `forge:<login>` for an
-  operation pulled from a forge. From M2, it is a person's id.
+- `kind` is read in the context of the entity: `create` opens an issue in
+  an issue, and makes a person in a person. `link` is a sync entity's.
+- `author` is a person's id. Each kind's rules reject an empty one, except
+  in a person's `create` (see [People](#people)). They check nothing else:
+  not its form, nor that the person exists, as it may arrive with the next
+  fetch. The trial's `forge:<login>` authors are gone: a pull authors its
+  operations as persons (see [Authors](sync.md#authors)).
 - `time` is for people to read. It never orders operations: the
   [clock](storage.md#clock) does.
 - An operation holds no id. Its id comes from where it is stored (see
@@ -56,9 +64,16 @@ Reading an operation:
 - a field the reader doesn't know, in the operation or in its `data`, is
   ignored;
 - a field missing from `data` is its empty value: an empty string, or an
-  empty list;
+  empty list. So is an absent `author`;
+- an operation whose `kind` is empty or absent, or whose `time` is 0 or
+  absent, makes the reader reject its commit (see
+  [What a reader rejects](storage.md#what-a-reader-rejects));
 - a `kind` the reader doesn't know is an error, which names the kind. The
-  reader never drops an operation it can't apply.
+  reader never drops an operation it can't apply;
+- keys are case-sensitive, and an object holds each key once: `Kind` isn't
+  `kind`. This holds for packs too. The core's reader checks neither: Go's
+  decoder takes a key in any case, and keeps the last of two equal keys.
+  It is a known ceiling, marked in `oplog`.
 
 ## Ids
 
@@ -66,9 +81,10 @@ An entity's operations are stored in packs, one per git commit (see
 [Packs](storage.md#packs)). A pack's hash is the git object id of its
 blob, in lowercase hex.
 
-- **An entity's id.** An entity created without an id gets its first
-  pack's hash. An entity created with an id keeps it: a sync entity's id is
-  derived from its forge project (see [Sync](#sync)).
+- **An entity's id.** An entity created without an id, an issue or a
+  person, gets its first pack's hash. An entity created with an id keeps
+  it: a sync entity's id is derived from its forge project (see
+  [Sync](#sync)).
 - **An operation's id** is `<pack hash>:<index>`, where the index is the
   operation's position in its pack, from 0.
 
@@ -110,7 +126,7 @@ operations:
 ```json
 {
   "kind": "create",
-  "author": "guilbep",
+  "author": "b7e41c09d2a85f36e1c4a0d7b9f2e5c83a6d1f40",
   "time": 1792834200,
   "data": {
     "title": "Search ignores closed issues",
@@ -124,7 +140,7 @@ operations:
 ```json
 {
   "kind": "comment",
-  "author": "guilbep",
+  "author": "b7e41c09d2a85f36e1c4a0d7b9f2e5c83a6d1f40",
   "time": 1792836300,
   "data": {
     "body": "It finds them with is:closed."
@@ -142,7 +158,7 @@ the first operation of an issue's first pack, the body's target is always
 ```json
 {
   "kind": "edit-text",
-  "author": "guilbep",
+  "author": "b7e41c09d2a85f36e1c4a0d7b9f2e5c83a6d1f40",
   "time": 1792836400,
   "data": {
     "target": "3f7a9c2e41b6d08a5e1f93c7b2d4a6e8f0c1b3d5:0",
@@ -156,7 +172,7 @@ the first operation of an issue's first pack, the body's target is always
 ```json
 {
   "kind": "set-title",
-  "author": "guilbep",
+  "author": "b7e41c09d2a85f36e1c4a0d7b9f2e5c83a6d1f40",
   "time": 1792836500,
   "data": {
     "title": "Search hides closed issues by default"
@@ -169,7 +185,7 @@ the first operation of an issue's first pack, the body's target is always
 ```json
 {
   "kind": "set-status",
-  "author": "guilbep",
+  "author": "b7e41c09d2a85f36e1c4a0d7b9f2e5c83a6d1f40",
   "time": 1792836600,
   "data": {
     "status": "closed"
@@ -185,7 +201,7 @@ and holds no line feed (`\n`), as sync writes a set of labels one per line.
 ```json
 {
   "kind": "change-labels",
-  "author": "guilbep",
+  "author": "b7e41c09d2a85f36e1c4a0d7b9f2e5c83a6d1f40",
   "time": 1792836700,
   "data": {
     "add": ["bug", "assignee:guilbep"],
@@ -209,7 +225,7 @@ The core keeps labels as strings and gives no namespace a meaning: git-board
 reads them. Assignees are the one field a forge holds as its own: sync makes
 `assignee:` labels the forge's assignees, and says how on the Sync page.
 
-### State
+### State {#issue-state}
 
 An issue's state follows from its operations, applied in order:
 
@@ -234,7 +250,8 @@ An issue's state follows from its operations, applied in order:
    that isn't, changes nothing. Operations apply in order, so the later one
    wins. An empty label, or one holding a line feed, in either list, is an
    error.
-8. Any other `kind` is an error, which names the kind.
+8. An operation whose `author` is empty is an error.
+9. Any other `kind` is an error, which names the kind.
 
 Two clones that pull the same forge comment before fetching each other each
 write a `comment` for it, with the same `origin`. Once they merge, the first
@@ -242,14 +259,43 @@ in the order is the comment, and an `edit-text` of either id edits it. The
 first wins because it follows the order every clone shares, so every clone
 keeps the same one, as with a sync entity's [links](#sync).
 
-The state's labels are sorted and unique. The state isn't stored; shown as
-JSON, the issue above, closed and with its labels changed, is:
+An issue's state holds:
+
+| Field | What it holds |
+|---|---|
+| `id` | the issue's id |
+| `author` | the `create` operation's author |
+| `created` | the `create` operation's time |
+| `updated` | the time of the issue's last operation in the order, whatever it does |
+| `origin` | the `create` operation's origin; absent if it has none |
+| `title`, `body`, `status` | as the operations left them |
+| `labels` | the labels, sorted and unique |
+| `comments` | the comments, in the order they were added |
+
+A comment holds:
+
+| Field | What it holds |
+|---|---|
+| `id` | the `comment` operation's id |
+| `author` | the `comment` operation's author |
+| `time` | the `comment` operation's time |
+| `edited` | the time of the last `edit-text` of the comment in the order, by any of its ids; 0 if it was never edited |
+| `origin` | the `comment` operation's origin; absent if it has none |
+| `body` | its text, as the last `edit-text` left it |
+
+Like every `time`, `updated` and `edited` are for people to read. They are
+the last operation's time, not the highest: when wall clocks disagree, an
+operation can carry an earlier time than one before it.
+
+The state isn't stored. Shown as JSON, the issue above, closed and with its
+labels changed, is:
 
 ```json
 {
   "id": "3f7a9c2e41b6d08a5e1f93c7b2d4a6e8f0c1b3d5",
-  "author": "guilbep",
+  "author": "b7e41c09d2a85f36e1c4a0d7b9f2e5c83a6d1f40",
   "created": 1792834200,
+  "updated": 1792836700,
   "title": "Search hides closed issues by default",
   "body": "Searching for a closed issue finds nothing, unless the query says is:closed.",
   "status": "closed",
@@ -257,20 +303,199 @@ JSON, the issue above, closed and with its labels changed, is:
   "comments": [
     {
       "id": "8c04e5b1d97f2a63c18e0b4d5f6a7928e3b1c0d4:0",
-      "author": "guilbep",
+      "author": "b7e41c09d2a85f36e1c4a0d7b9f2e5c83a6d1f40",
       "time": 1792836300,
+      "edited": 0,
       "body": "It finds them with is:closed."
     }
   ]
 }
 ```
 
+It was made in git-board, so it shows no `origin`. A pulled issue's state
+does (see [Origins](#origins)).
+
 ## People
 
-Planned for M2. A person will have a name, and an account per forge server,
-with the forge's numeric id and login. Its operations aren't defined yet,
-and M1 writes no `person` entity. Until then, an operation's `author` is a
-plain string.
+A person is someone who makes operations: a name, an email, and the
+accounts they have on forges. Every operation's `author` is a person's id.
+A person is created without an id, so its id is its first pack's hash (see
+[Ids](#ids)).
+
+An account is one user on one forge server:
+
+- `server` is the forge's host, like `github.com` or `gitlab.epfl.ch`;
+- `id` is the forge's own id for that user, numeric or opaque, as a string.
+  It stays when the user renames their login (see [GitHub](forges.md#github));
+- `login` is the user's login there.
+
+An account is named by its `server` and `id`, compared byte for byte.
+
+A person has five operations:
+
+| `kind` | `data` | What it does |
+|---|---|---|
+| `create` | `name`, `email` | makes the person |
+| `set-name` | `name` | replaces the name |
+| `set-email` | `email` | replaces the email |
+| `add-account` | `server`, `id`, `login` | adds an account, or changes its login |
+| `remove-account` | `server`, `id` | removes an account |
+
+### `create` {#person-create}
+
+A person's `create` is the one operation whose `author` may be empty. Its
+pack makes the person's id, so it can't name the person itself. A person
+created by a pull, or the first person of a repository, has no one else to
+name. Otherwise it names the person who created it.
+
+The first person of a repository:
+
+```json
+{
+  "kind": "create",
+  "author": "",
+  "time": 1792830000,
+  "data": {
+    "name": "guilbep",
+    "email": "guilbep@example.com"
+  }
+}
+```
+
+Its first pack's hash, `b7e41c09d2a85f36e1c4a0d7b9f2e5c83a6d1f40`, is its
+id, and the author of its later operations.
+
+### `set-name`
+
+```json
+{
+  "kind": "set-name",
+  "author": "b7e41c09d2a85f36e1c4a0d7b9f2e5c83a6d1f40",
+  "time": 1792830100,
+  "data": {
+    "name": "Pierre"
+  }
+}
+```
+
+### `set-email`
+
+An empty `email` clears it.
+
+```json
+{
+  "kind": "set-email",
+  "author": "b7e41c09d2a85f36e1c4a0d7b9f2e5c83a6d1f40",
+  "time": 1792830200,
+  "data": {
+    "email": "pierre@example.com"
+  }
+}
+```
+
+### `add-account`
+
+An account the person already has, with the same `server` and `id`, takes
+the new `login`. That is how a renamed login is followed.
+
+```json
+{
+  "kind": "add-account",
+  "author": "b7e41c09d2a85f36e1c4a0d7b9f2e5c83a6d1f40",
+  "time": 1792830300,
+  "data": {
+    "server": "github.com",
+    "id": "4815162",
+    "login": "guilbep"
+  }
+}
+```
+
+### `remove-account`
+
+```json
+{
+  "kind": "remove-account",
+  "author": "b7e41c09d2a85f36e1c4a0d7b9f2e5c83a6d1f40",
+  "time": 1792830400,
+  "data": {
+    "server": "gitlab.com",
+    "id": "9910331"
+  }
+}
+```
+
+### State {#person-state}
+
+A person's state follows from its operations, applied in order:
+
+1. The first operation must be `create`. A log that starts with anything
+   else is an error, and so is a second `create`.
+2. `create` sets the name and the email.
+3. `set-name` replaces the name.
+4. `set-email` replaces the email. An empty one clears it.
+5. `add-account` adds the account. If the person already has one with the
+   same `server` and `id`, it replaces that one's login instead.
+6. `remove-account` removes the account with that `server` and `id`.
+   Removing one the person doesn't have changes nothing.
+7. An empty `name`, `server`, `id` or `login`, in any operation that holds
+   it, is an error. The email may be empty.
+8. An operation whose `author` is empty is an error, except `create`.
+9. Any other `kind` is an error, which names the kind.
+
+A person's state holds its `id`, `name`, `email` and `accounts`. The
+accounts are sorted by (`server`, `id`), in byte order, and unique by both.
+The state isn't stored. Shown as JSON, the person above, with accounts on
+GitHub and gitlab.epfl.ch, is:
+
+```json
+{
+  "id": "b7e41c09d2a85f36e1c4a0d7b9f2e5c83a6d1f40",
+  "name": "Pierre",
+  "email": "pierre@example.com",
+  "accounts": [
+    {
+      "server": "github.com",
+      "id": "4815162",
+      "login": "guilbep"
+    },
+    {
+      "server": "gitlab.epfl.ch",
+      "id": "2342",
+      "login": "guilbep"
+    }
+  ]
+}
+```
+
+### Who owns an account {#account-owner}
+
+Two persons can hold the same account. Two clones that pull the same forge
+user before fetching each other each create a person for it. The account
+then belongs to the person whose id sorts first, in byte order. A lookup by
+account answers that person.
+
+- **Every clone agrees** once it holds both persons, as the rule reads only
+  their ids.
+- **The other person keeps the account** in its state. Only lookups pass it
+  over.
+- **Operations keep their author.** Those written with the other person's
+  id still name it.
+
+The GitHub account `583231`, held by the persons
+`4a9d2e7f1b0c6e38d5a2f9b4c7e1d0a36b8f2c95` and
+`d03f6a1c8e5b2f7940a3c6e9d1b4f8a27c5e0b63`, belongs to the first.
+
+### Me
+
+Who "I" am is the local git config key `board.me`, holding a person id:
+
+```sh
+git config --local board.me b7e41c09d2a85f36e1c4a0d7b9f2e5c83a6d1f40
+```
+
+git never fetches nor pushes config, so it is never shared: each clone says
+who it is. Unset, it names no one, as in CI.
 
 ## Sync
 
@@ -304,7 +529,7 @@ strings.
 ```json
 {
   "kind": "link",
-  "author": "guilbep",
+  "author": "b7e41c09d2a85f36e1c4a0d7b9f2e5c83a6d1f40",
   "time": 1792836800,
   "data": {
     "issue": "3f7a9c2e41b6d08a5e1f93c7b2d4a6e8f0c1b3d5",
@@ -329,7 +554,7 @@ label, and so can't conflict.
 ```json
 {
   "kind": "seen",
-  "author": "guilbep",
+  "author": "b7e41c09d2a85f36e1c4a0d7b9f2e5c83a6d1f40",
   "time": 1792836800,
   "data": {
     "issue": "3f7a9c2e41b6d08a5e1f93c7b2d4a6e8f0c1b3d5",
@@ -339,7 +564,7 @@ label, and so can't conflict.
 }
 ```
 
-### State
+### State {#sync-state}
 
 A sync entity's state follows from its operations, applied in order:
 
@@ -351,6 +576,7 @@ A sync entity's state follows from its operations, applied in order:
 - For each linked issue and field, the value of the last `seen`. A `seen`
   for an issue without a link at that point in the order, or with a field
   not listed above, is ignored.
+- An operation whose `author` is empty is an error.
 - Any other `kind` is an error, which names the kind.
 
 The first link wins because it follows the order every clone shares, so
@@ -376,7 +602,7 @@ comment.
 ```json
 {
   "kind": "create",
-  "author": "forge:octocat",
+  "author": "4a9d2e7f1b0c6e38d5a2f9b4c7e1d0a36b8f2c95",
   "time": 1792834200,
   "origin": {
     "forge": "github.com/guilbep/git-board-test",
@@ -390,3 +616,23 @@ comment.
 ```
 
 An operation made in git-board has no `origin`.
+
+The state of the issue that `create` opens shows its origin:
+
+```json
+{
+  "id": "6e2b9f4a1d7c03e85b6a2f9c4d1e7b0a3c8f5d29",
+  "author": "4a9d2e7f1b0c6e38d5a2f9b4c7e1d0a36b8f2c95",
+  "created": 1792834200,
+  "updated": 1792834200,
+  "origin": {
+    "forge": "github.com/guilbep/git-board-test",
+    "event": "issue:2791543210"
+  },
+  "title": "Search ignores closed issues",
+  "body": "Searching for a closed issue finds nothing.",
+  "status": "open",
+  "labels": [],
+  "comments": []
+}
+```

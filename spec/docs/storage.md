@@ -5,10 +5,15 @@ holds one pack of operations and a clock. This page gives the exact format,
 the order of the operations, and how heads merge, refs move, and clones
 fetch and push.
 
+The core works only in SHA-1 repositories, as go-git v5, which it reads git
+with, has no other object format. Every hash here is 40 lowercase hex
+digits.
+
 ## Refs
 
-An entity's ref is `refs/board/<kind>/<id>`, for the kinds `issue`, `person`
-and `sync`. It points at the entity's head commit.
+An entity's ref is `refs/board/<kind>/<id>`, for a kind and an id as
+[Entities](data-model.md#entities) gives them. It points at the entity's
+head commit.
 
 ```text
 refs/board/issue/3f7a9c2e41b6d08a5e1f93c7b2d4a6e8f0c1b3d5
@@ -17,6 +22,8 @@ refs/board/sync/56f7a8e819f90e968812bac54ae4b06142d8e735
 
 - Entities live only there. Listing a kind's entities reads the refs under
   `refs/board/<kind>/`, and gives their ids sorted.
+- The kinds, `issue`, `person` and `sync`, are one list in the core. The
+  name check, fetch and push all read it.
 - `refs/board/seq` is git-board's own counter of project numbers. It isn't
   an entity, and the core leaves it as it is.
 
@@ -56,9 +63,9 @@ A pack is a JSON blob:
 ```
 
 - **`clock`:** the commit's clock, an integer from 1 (see [Clock](#clock)).
-- **`nonce`:** random, in hex. It is present only in an entity's first
-  pack. Two entities created with the same operations at the same second
-  still get different ids.
+- **`nonce`:** at least 16 random bytes, in hex. It is present only in an
+  entity's first pack. Two entities created with the same operations at
+  the same second still get different ids.
 - **`ops`:** the operations, in the order they were written (see [Data
   model](data-model.md#operations)). An entity's first pack holds at least
   one. A merge commit's pack holds none: `"ops": []`.
@@ -72,7 +79,7 @@ An issue's first pack:
   "ops": [
     {
       "kind": "create",
-      "author": "guilbep",
+      "author": "b7e41c09d2a85f36e1c4a0d7b9f2e5c83a6d1f40",
       "time": 1792834200,
       "data": {
         "title": "Search ignores closed issues",
@@ -91,7 +98,7 @@ An append, on that first commit:
   "ops": [
     {
       "kind": "comment",
-      "author": "guilbep",
+      "author": "b7e41c09d2a85f36e1c4a0d7b9f2e5c83a6d1f40",
       "time": 1792836300,
       "data": {
         "body": "It finds them with is:closed."
@@ -129,7 +136,12 @@ A reader rejects, with an error naming the commit:
 - a clock other than 1 + the highest of the parents' clocks, or 1 for a
   commit without parents;
 - an `ops` that is empty or absent, in a commit with fewer than two
-  parents.
+  parents;
+- an operation whose `kind` is empty or absent, or whose `time` is 0 or
+  absent.
+
+An empty `author` is for each kind's rules to judge, as a person's `create`
+may have one (see [Data model](data-model.md#operations)).
 
 It ignores other entries in the tree, pack fields it doesn't know, and the
 `nonce`, which only names an entity when it is created.
@@ -202,11 +214,11 @@ merge commit. Neither pack holds an operation, so the two heads differ until
 the next merge joins them, but their operations, and so their states, are
 the same.
 
-Known point, for M2: two clones that exchange directly and merge at the same
-time can keep doing so, each writing a merge commit for the other's, so
-their refs keep diverging while their states agree. Through one origin, with
-unforced pushes, they converge: the second push is refused, and its writer
-fetches and merges onto the first's head.
+Known point, not settled yet: two clones that exchange directly and merge
+at the same time can keep doing so, each writing a merge commit for the
+other's, so their refs keep diverging while their states agree. Through one
+origin, with unforced pushes, they converge: the second push is refused, and
+its writer fetches and merges onto the first's head.
 
 ## Updating a ref
 
@@ -222,8 +234,13 @@ git update-ref <ref> <new> <old>
   another process holds its lock file at that moment. Each one means the
   ref moved.
 - When the ref moved, the writer loads the entity again and writes its pack
-  again on the new head, with the new head's clock + 1. It tries at most 5
-  times, then fails.
+  again on the new head, with the new head's clock + 1. A merge merges
+  again, with the new local head. It makes at most 5 attempts in total,
+  then fails.
+- A write that lands doesn't read the entity again. Its commit's clock is
+  one more than the head's, which is the highest of every reachable commit.
+  So its pack sorts last, and its operations come after every one the
+  writer read, with the ids `<pack hash>:<index>`.
 
 There are no lock files. Two processes appending to the same entity at once
 both land, the second after a retry. A retry writes a new pack, so the
@@ -252,6 +269,11 @@ git fetch <remote> \
 Then each `refs/board-remotes/<remote>/<kind>/<id>` is
 [merged](#merging-two-heads) into `refs/board/<kind>/<id>`, which is created
 when absent.
+
+Fetch never propagates a deletion. An entity whose ref was deleted on the
+remote keeps its ref here, and its fetched head in `refs/board-remotes/`:
+the core never runs `git fetch --prune`. Push deletes nothing on the remote
+either.
 
 The fetched heads stay out of `refs/remotes/`, so they don't show as remote
 branches in `git branch -r` or in an editor's branch list, `git fetch

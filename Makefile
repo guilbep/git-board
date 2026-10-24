@@ -66,4 +66,4 @@ spec:
 	uvx --from zensical==0.0.72 zensical build --strict -f spec/zensical.toml
 
 clean:
-	rm -rf site/
+	rm -rf site/ spec/site/
