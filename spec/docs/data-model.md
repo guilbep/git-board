@@ -263,8 +263,8 @@ plain string.
 ## Sync
 
 A sync entity records what the core knows of one forge project: which issue
-is which forge issue, and what the forge last showed of each field. There is
-one per forge project.
+is which forge issue, and the value of each field that git-board and the
+forge last agreed on. There is one per forge project.
 
 Its id is the SHA-1 of the project's forge key, in hex. A forge key names one
 project on one forge server, like `github.com/guilbep/git-board-test`, whose
@@ -281,7 +281,7 @@ A sync entity has two operations:
 | `kind` | `data` | What it records |
 |---|---|---|
 | `link` | `issue`, `forge_id`, `number`, `url` | an issue and the forge issue it mirrors |
-| `seen` | `issue`, `field`, `value` | what the forge last showed of one field of a linked issue |
+| `seen` | `issue`, `field`, `value` | the value of one field of a linked issue that git-board and the forge last agreed on |
 
 ### `link`
 
@@ -308,6 +308,10 @@ strings.
 `field` is one of `title`, `body`, `status`, `labels`, `assignees`, or
 `comment:<forge comment id>` for a comment. `value` is a string. The Sync
 page says how each field's value is written, and how sync uses it.
+
+A `seen` is the base sync compares both sides with. When git-board and the
+forge both changed a field, its `seen` stays as it was, so the conflict
+stays visible to a later rule.
 
 ```json
 {
