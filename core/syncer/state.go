@@ -53,6 +53,9 @@ func loadState(s *gitstore.Store, key string) (*state, error) {
 	}
 	st.log = l
 	for _, e := range l.Entries {
+		if e.Author == "" {
+			return nil, fmt.Errorf("syncer: operation %s has no author", e.ID)
+		}
 		switch e.Kind {
 		case "link":
 			var d linkData
@@ -101,12 +104,18 @@ func seenOp(author string, now int64, issue, field, value string) oplog.Op {
 }
 
 // write appends ops to the entity, creating it if needed, and reloads st.
+// It refuses an op with no author, which would break the entity.
 // ponytail: it reloads the whole sync entity after each write, so a first
 // pull of n issues is O(n²) reads; update links and seen in place when it
 // matters (M6's mass first pull will).
 func (st *state) write(ctx context.Context, s *gitstore.Store, key string, ops []oplog.Op) error {
 	if len(ops) == 0 {
 		return nil
+	}
+	for i, op := range ops {
+		if op.Author == "" {
+			return fmt.Errorf("syncer: operation %d has no author", i)
+		}
 	}
 	if err := writeOps(ctx, s, StateID(key), st.log, ops); err != nil {
 		return err

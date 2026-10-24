@@ -12,6 +12,7 @@ import (
 	"github.com/guilbep/git-board/core/gitstore"
 	"github.com/guilbep/git-board/core/issue"
 	"github.com/guilbep/git-board/core/oplog"
+	"github.com/guilbep/git-board/core/people"
 )
 
 // Report counts what a pull did, by forge issue.
@@ -23,13 +24,20 @@ type Report struct{ Created, Updated, Unchanged int }
 
 // Pull copies a forge's issues into git-board, as sync.md's "Pull, the
 // trial's part" says. If a write fails it returns the error; the issues
-// already pulled stay pulled.
+// already pulled stay pulled. A person that fails to load stops it before it
+// writes anything.
 func Pull(ctx context.Context, s *gitstore.Store, f forge.Forge) (Report, error) {
 	var r Report
 	st, err := loadState(s, f.Key())
 	if err != nil {
 		return r, err
 	}
+	// ponytail: the directory loads every person once per pull; the index's ForAccount when people get many
+	dir, err := people.LoadDirectory(s)
+	if err != nil {
+		return r, fmt.Errorf("syncer: people: %w", err)
+	}
+	au := &authors{s: s, server: f.Server(), dir: dir}
 	issues, err := f.Issues(ctx)
 	if err != nil {
 		return r, err
@@ -44,10 +52,10 @@ func Pull(ctx context.Context, s *gitstore.Store, f forge.Forge) (Report, error)
 		}
 		var wrote, created bool
 		if id, ok := st.links[fi.ID]; ok {
-			wrote, err = pullLinked(ctx, s, f.Key(), st, id, fi, now)
+			wrote, err = pullLinked(ctx, s, au, f.Key(), st, id, fi, now)
 		} else {
 			created = true
-			err = pullNew(ctx, s, f.Key(), st, fi, now)
+			err = pullNew(ctx, s, au, f.Key(), st, fi, now)
 		}
 		if err != nil {
 			return r, err
@@ -62,6 +70,51 @@ func Pull(ctx context.Context, s *gitstore.Store, f forge.Forge) (Report, error)
 		}
 	}
 	return r, nil
+}
+
+// authors finds the person of each forge account, writing it first when
+// there is none or its login changed.
+type authors struct {
+	s      *gitstore.Store
+	server string
+	dir    *people.Directory
+}
+
+// of gives the person id of each author of fi, the issue's and its
+// comments', by forge account id.
+func (au *authors) of(ctx context.Context, fi forge.Issue) (map[string]string, error) {
+	accounts := []forge.Account{fi.Author}
+	for _, c := range fi.Comments {
+		accounts = append(accounts, c.Author)
+	}
+	who := map[string]string{}
+	for _, a := range accounts {
+		p, err := au.person(ctx, a)
+		if err != nil {
+			return nil, fmt.Errorf("syncer: forge user %s (%s): %w", a.ID, a.Login, err)
+		}
+		who[a.ID] = p.ID
+	}
+	return who, nil
+}
+
+func (au *authors) person(ctx context.Context, a forge.Account) (*people.Person, error) {
+	acc := people.Account{Server: au.server, ID: a.ID, Login: a.Login}
+	p, ok := au.dir.ForAccount(au.server, a.ID)
+	var err error
+	switch {
+	case !ok:
+		p, err = people.Create(ctx, au.s, people.NewCreate("", a.Login, ""), people.AddAccount("", acc))
+	case !slices.Contains(p.Accounts, acc): // its login changed
+		p, err = people.Do(ctx, au.s, p.ID, people.AddAccount(p.ID, acc))
+	default:
+		return p, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	au.dir.Put(p)
+	return p, nil
 }
 
 // isAssignee says whether a label is an assignee label: the prefix
@@ -96,8 +149,12 @@ func from(op oplog.Op, key, event string, time int64) oplog.Op {
 	return op
 }
 
-func pullNew(ctx context.Context, s *gitstore.Store, key string, st *state, fi forge.Issue, now int64) error {
-	a := "forge:" + fi.Author.Login
+func pullNew(ctx context.Context, s *gitstore.Store, au *authors, key string, st *state, fi forge.Issue, now int64) error {
+	who, err := au.of(ctx, fi)
+	if err != nil {
+		return err
+	}
+	a := who[fi.Author.ID]
 	ev := "issue:" + fi.ID
 	labels := strings.Join(labelSet(fi.Labels), "\n")
 	ops := []oplog.Op{from(issue.NewCreate(a, fi.Title, fi.Body), key, ev, fi.Created)}
@@ -108,7 +165,7 @@ func pullNew(ctx context.Context, s *gitstore.Store, key string, st *state, fi f
 		ops = append(ops, from(issue.ChangeLabels(a, split(labels), nil), key, ev, now))
 	}
 	for _, c := range fi.Comments {
-		ops = append(ops, from(issue.NewComment("forge:"+c.Author.Login, c.Body), key, "comment:"+c.ID, c.Time))
+		ops = append(ops, from(issue.NewComment(who[c.Author.ID], c.Body), key, "comment:"+c.ID, c.Time))
 	}
 	is, err := issue.Create(ctx, s, ops...)
 	if err != nil {
@@ -127,7 +184,7 @@ func pullNew(ctx context.Context, s *gitstore.Store, key string, st *state, fi f
 	return st.write(ctx, s, key, sops)
 }
 
-func pullLinked(ctx context.Context, s *gitstore.Store, key string, st *state, id string, fi forge.Issue, now int64) (bool, error) {
+func pullLinked(ctx context.Context, s *gitstore.Store, au *authors, key string, st *state, id string, fi forge.Issue, now int64) (bool, error) {
 	is, err := issue.Load(s, id)
 	if err != nil {
 		if isMissing(err) {
@@ -135,7 +192,11 @@ func pullLinked(ctx context.Context, s *gitstore.Store, key string, st *state, i
 		}
 		return false, err
 	}
-	a := "forge:" + fi.Author.Login
+	who, err := au.of(ctx, fi)
+	if err != nil {
+		return false, err
+	}
+	a := who[fi.Author.ID]
 	ev := "issue:" + fi.ID
 	seen := st.seen[id]
 	var ops, sops []oplog.Op
@@ -180,7 +241,7 @@ func pullLinked(ctx context.Context, s *gitstore.Store, key string, st *state, i
 
 	for _, c := range fi.Comments {
 		field, ev := "comment:"+c.ID, "comment:"+c.ID
-		ca := "forge:" + c.Author.Login
+		ca := who[c.Author.ID]
 		i := slices.IndexFunc(is.Comments, func(ic issue.Comment) bool {
 			return ic.Origin != nil && ic.Origin.Forge == key && ic.Origin.Event == ev
 		})

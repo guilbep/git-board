@@ -2,19 +2,56 @@ package syncer
 
 import (
 	"context"
+	"encoding/json"
 	"maps"
 	"os/exec"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/guilbep/git-board/core/forge"
 	"github.com/guilbep/git-board/core/forge/fake"
 	"github.com/guilbep/git-board/core/gitstore"
 	"github.com/guilbep/git-board/core/issue"
 	"github.com/guilbep/git-board/core/oplog"
+	"github.com/guilbep/git-board/core/people"
 )
 
 const key = "example.com/p"
+
+// personOf is the person owning the forge user's account, on the fake's
+// server.
+func personOf(t *testing.T, s *gitstore.Store, userID string) *people.Person {
+	t.Helper()
+	d, err := people.LoadDirectory(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, ok := d.ForAccount("example.com", userID)
+	if !ok {
+		t.Fatalf("no person for user %s", userID)
+	}
+	return p
+}
+
+func persons(t *testing.T, s *gitstore.Store) []string {
+	t.Helper()
+	ids, err := people.List(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return ids
+}
+
+// stamp checks an op's author and origin, and that its time is the pull's,
+// between t0 and t1.
+func stamp(t *testing.T, e oplog.Entry, author string, origin *oplog.Origin, t0, t1 int64) {
+	t.Helper()
+	if e.Author != author || !reflect.DeepEqual(e.Origin, origin) || e.Time < t0 || e.Time > t1 {
+		t.Errorf("%s = author %s, origin %+v, time %d; want %s, %+v, in [%d, %d]",
+			e.Kind, e.Author, e.Origin, e.Time, author, origin, t0, t1)
+	}
+}
 
 func newRepo(t *testing.T) string {
 	t.Helper()
@@ -79,17 +116,31 @@ func TestPullCreatesIssue(t *testing.T) {
 	t.Parallel()
 	s, f := newStore(t), fake.New(key)
 	f.Add(sample())
+	t0 := time.Now().Unix()
 	if r := pull(t, s, f); r != (Report{Created: 1}) {
 		t.Fatalf("report = %+v", r)
 	}
+	t1 := time.Now().Unix()
+	a, b := personOf(t, s, "7").ID, personOf(t, s, "8").ID
 	is := only(t, s)
+	issueOrigin := &oplog.Origin{Forge: key, Event: "issue:100"}
 	if is.Title != "T" || is.Body != "B" || is.Status != issue.Closed || !reflect.DeepEqual(is.Labels, []string{"bug"}) ||
-		is.Author != "forge:ann" || is.Created != 1000 || is.Origin == nil || is.Origin.Event != "issue:100" {
+		is.Author != a || is.Created != 1000 || !reflect.DeepEqual(is.Origin, issueOrigin) {
 		t.Fatalf("issue = %+v", is)
 	}
-	if len(is.Comments) != 1 || is.Comments[0].Body != "hi" || is.Comments[0].Author != "forge:bob" ||
-		is.Comments[0].Origin == nil || is.Comments[0].Origin.Forge != key || is.Comments[0].Origin.Event != "comment:c1" {
+	if len(is.Comments) != 1 || is.Comments[0].Body != "hi" || is.Comments[0].Author != b || is.Comments[0].Time != 1100 ||
+		!reflect.DeepEqual(is.Comments[0].Origin, &oplog.Origin{Forge: key, Event: "comment:c1"}) {
 		t.Fatalf("comments = %+v", is.Comments)
+	}
+	var kinds []string
+	for _, e := range mustLog(t, s, is.ID) {
+		kinds = append(kinds, e.Kind)
+		if e.Kind == "set-status" || e.Kind == "change-labels" {
+			stamp(t, e, a, issueOrigin, t0, t1)
+		}
+	}
+	if want := []string{"create", "set-status", "change-labels", "comment"}; !reflect.DeepEqual(kinds, want) {
+		t.Fatalf("issue ops = %v, want %v", kinds, want)
 	}
 	st, err := loadState(s, key)
 	if err != nil {
@@ -101,6 +152,145 @@ func TestPullCreatesIssue(t *testing.T) {
 	want := map[string]string{"title": "T", "body": "B", "status": "closed", "labels": "bug", "comment:c1": "hi"}
 	if !reflect.DeepEqual(st.seen[is.ID], want) {
 		t.Fatalf("seen = %v", st.seen[is.ID])
+	}
+	// The sync entity: the link, then each seen, in sync.md's order.
+	var got []string
+	for _, e := range st.log.Entries {
+		stamp(t, e, a, nil, t0, t1)
+		if e.Kind == "link" {
+			var d linkData
+			if err := json.Unmarshal(e.Data, &d); err != nil || d != (linkData{is.ID, "100", "1", "https://example.com/p/1"}) {
+				t.Fatalf("link = %+v, %v", d, err)
+			}
+			got = append(got, "link")
+			continue
+		}
+		var d seenData
+		if err := json.Unmarshal(e.Data, &d); err != nil || d.Issue != is.ID {
+			t.Fatalf("seen = %+v, %v", d, err)
+		}
+		got = append(got, d.Field)
+	}
+	if want := []string{"link", "title", "body", "status", "labels", "comment:c1"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("sync ops = %v, want %v", got, want)
+	}
+}
+
+// A pulled issue's authors are persons, made with the forge account and the
+// login as name, in one pack with empty authors.
+func TestPullCreatesPeople(t *testing.T) {
+	t.Parallel()
+	s, f := newStore(t), fake.New(key)
+	f.Add(sample())
+	pull(t, s, f)
+	for user, login := range map[string]string{"7": "ann", "8": "bob"} {
+		p := personOf(t, s, user)
+		if want := []people.Account{{Server: "example.com", ID: user, Login: login}}; p.Name != login || p.Email != "" || !reflect.DeepEqual(p.Accounts, want) {
+			t.Fatalf("person = %+v", p)
+		}
+		l, err := oplog.Load(s, "person", p.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, e := range l.Entries {
+			if e.Author != "" || e.ID[:40] != p.ID {
+				t.Fatalf("op %s by %q, want the first pack's, with no author", e.ID, e.Author)
+			}
+		}
+	}
+	if n := len(persons(t, s)); n != 2 {
+		t.Fatalf("persons = %d, want 2", n)
+	}
+}
+
+// Two issues by one account, and its comments on both, give one person: later
+// authors in the same pull find the person made for the first.
+func TestPullReusesPerson(t *testing.T) {
+	t.Parallel()
+	s, f := newStore(t), fake.New(key)
+	f.Add(sample())
+	two := sample()
+	two.ID, two.Number = "200", "2"
+	f.Add(two)
+	if r := pull(t, s, f); r != (Report{Created: 2}) {
+		t.Fatalf("report = %+v", r)
+	}
+	if n := len(persons(t, s)); n != 2 {
+		t.Fatalf("persons = %d, want 2", n)
+	}
+	ids, _ := issue.List(s)
+	a := personOf(t, s, "7").ID
+	for _, id := range ids {
+		if is, err := issue.Load(s, id); err != nil || is.Author != a {
+			t.Fatalf("issue = %+v, %v; want author %s", is, err, a)
+		}
+	}
+}
+
+// A login renamed on the forge keeps its person, whose account takes the new
+// login, written by the person itself.
+func TestPullLoginRename(t *testing.T) {
+	t.Parallel()
+	s, f := newStore(t), fake.New(key)
+	f.Add(sample())
+	pull(t, s, f)
+	before := personOf(t, s, "7")
+	f.Edit("1", func(i *forge.Issue) { i.Author.Login = "ann2" })
+	pull(t, s, f)
+	p := personOf(t, s, "7")
+	if want := []people.Account{{Server: "example.com", ID: "7", Login: "ann2"}}; p.ID != before.ID || p.Name != "ann" || !reflect.DeepEqual(p.Accounts, want) {
+		t.Fatalf("person = %+v, was %+v", p, before)
+	}
+	if n := len(persons(t, s)); n != 2 {
+		t.Fatalf("persons = %d, want 2", n)
+	}
+	l, _ := oplog.Load(s, "person", p.ID)
+	if last := l.Entries[len(l.Entries)-1]; last.Kind != "add-account" || last.Author != p.ID {
+		t.Fatalf("last op = %s by %q", last.Kind, last.Author)
+	}
+	if is := only(t, s); is.Author != p.ID {
+		t.Fatalf("author = %s", is.Author)
+	}
+	refsBefore := refs(t, s)
+	if r := pull(t, s, f); r != (Report{Unchanged: 1}) || !reflect.DeepEqual(refsBefore, refs(t, s)) {
+		t.Fatalf("the pull after the rename wrote: %+v", r)
+	}
+}
+
+// A person that fails to load stops the pull before it writes anything.
+func TestPullStopsOnBrokenPerson(t *testing.T) {
+	t.Parallel()
+	s, f := newStore(t), fake.New(key)
+	if _, err := oplog.Create(t.Context(), s, "person", "", []oplog.Op{{Kind: "bogus", Time: 1}}); err != nil {
+		t.Fatal(err)
+	}
+	f.Add(sample())
+	before := refs(t, s)
+	if _, err := Pull(t.Context(), s, f); err == nil {
+		t.Fatal("want an error")
+	}
+	if !reflect.DeepEqual(before, refs(t, s)) {
+		t.Fatal("wrote")
+	}
+}
+
+// The sync entity's ops need an author: a write without one is refused, and
+// one already stored breaks the entity.
+func TestStateEmptyAuthor(t *testing.T) {
+	t.Parallel()
+	s := newStore(t)
+	st, _ := loadState(s, key)
+	if err := st.write(t.Context(), s, key, []oplog.Op{linkOp("", 1, "i", "100", "1", "")}); err == nil {
+		t.Fatal("a write with no author landed")
+	}
+	if len(refs(t, s)) != 0 {
+		t.Fatal("wrote")
+	}
+	if _, err := oplog.Create(t.Context(), s, "sync", StateID(key), []oplog.Op{seenOp("", 1, "i", "title", "T")}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := loadState(s, key); err == nil {
+		t.Fatal("an op with no author loaded")
 	}
 }
 
@@ -124,6 +314,7 @@ func TestPullForgeChange(t *testing.T) {
 	f.Add(sample())
 	pull(t, s, f)
 	f.Edit("1", func(i *forge.Issue) { i.Title = "T2"; i.Labels = append(i.Labels, "ui"); i.Comments[0].Body = "hi!" })
+	t0 := time.Now().Unix()
 	if r := pull(t, s, f); r != (Report{Updated: 1}) {
 		t.Fatalf("report = %+v", r)
 	}
@@ -135,18 +326,24 @@ func TestPullForgeChange(t *testing.T) {
 	if st.seen[is.ID]["title"] != "T2" || st.seen[is.ID]["labels"] != "bug\nui" {
 		t.Fatalf("seen = %v", st.seen[is.ID])
 	}
-	l, _ := loadIssueLog(t, s, is.ID)
-	var found bool
-	for _, e := range l {
-		if e.Kind == "set-title" {
-			found = true
-			if e.Author != "forge:ann" || e.Origin == nil || e.Origin.Forge != key || e.Origin.Event != "issue:100" {
-				t.Fatalf("set-title = %+v", e)
-			}
+	t1 := time.Now().Unix()
+	a, b := personOf(t, s, "7").ID, personOf(t, s, "8").ID
+	var kinds []string
+	for _, e := range mustLog(t, s, is.ID)[4:] { // after the first pull's
+		kinds = append(kinds, e.Kind)
+		switch e.Kind {
+		case "set-title", "change-labels":
+			stamp(t, e, a, &oplog.Origin{Forge: key, Event: "issue:100"}, t0, t1)
+		case "edit-text":
+			stamp(t, e, b, &oplog.Origin{Forge: key, Event: "comment:c1"}, t0, t1)
 		}
 	}
-	if !found {
-		t.Fatal("no set-title")
+	if want := []string{"set-title", "change-labels", "edit-text"}; !reflect.DeepEqual(kinds, want) {
+		t.Fatalf("ops = %v, want %v", kinds, want)
+	}
+	before := refs(t, s)
+	if r := pull(t, s, f); r != (Report{Unchanged: 1}) || !reflect.DeepEqual(before, refs(t, s)) {
+		t.Fatalf("second pull: %+v, or refs moved", r)
 	}
 }
 
@@ -168,7 +365,9 @@ func TestPullKeepsLocalChange(t *testing.T) {
 	}
 	// both changed: still nothing written.
 	f.Edit("1", func(i *forge.Issue) { i.Title = "theirs" })
-	pull(t, s, f)
+	if r := pull(t, s, f); r != (Report{Unchanged: 1}) {
+		t.Fatalf("conflict report = %+v", r)
+	}
 	if only(t, s).Title != "mine" || !reflect.DeepEqual(before, refs(t, s)) {
 		t.Fatal("conflict wrote something")
 	}

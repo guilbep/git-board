@@ -4,6 +4,7 @@ package fake
 import (
 	"context"
 	"slices"
+	"strings"
 	"sync"
 
 	"github.com/guilbep/git-board/core/forge"
@@ -21,6 +22,12 @@ func New(key string) *Forge { return &Forge{key: key} }
 
 func (f *Forge) Key() string { return f.key }
 
+// Server is the key up to its first /.
+func (f *Forge) Server() string {
+	host, _, _ := strings.Cut(f.key, "/")
+	return host
+}
+
 // Add appends an issue.
 func (f *Forge) Add(is forge.Issue) {
 	f.mu.Lock()
@@ -28,15 +35,18 @@ func (f *Forge) Add(is forge.Issue) {
 	f.issues = append(f.issues, clone(is))
 }
 
-// Edit changes the issue with this number. It does nothing if there is none.
-func (f *Forge) Edit(number string, change func(*forge.Issue)) {
+// Edit changes the first issue with this number. It is false when there is
+// none.
+func (f *Forge) Edit(number string, change func(*forge.Issue)) bool {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	for i := range f.issues {
-		if f.issues[i].Number == number {
-			change(&f.issues[i])
-		}
+	i := slices.IndexFunc(f.issues, func(is forge.Issue) bool { return is.Number == number })
+	if i < 0 {
+		return false
 	}
+	change(&f.issues[i])
+	f.issues[i] = clone(f.issues[i]) // the change may have put the caller's slices in
+	return true
 }
 
 // Issues returns copies of the issues.

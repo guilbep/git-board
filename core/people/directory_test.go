@@ -26,3 +26,29 @@ func TestAccountOwnerIsFirstID(t *testing.T) {
 		t.Fatal("unknown account found")
 	}
 }
+
+func TestDirectoryPut(t *testing.T) {
+	t.Parallel()
+	d, err := LoadDirectory(newStore(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	owner := func() *Person { p, _ := d.ForAccount("github.com", "4"); return p }
+	acc := Account{"github.com", "4", "ann"}
+	b := &Person{ID: "b", Accounts: []Account{acc}}
+	d.Put(b)
+	d.Put(&Person{ID: "c", Accounts: []Account{acc}}) // a higher id doesn't own it
+	if owner() != b {
+		t.Fatalf("owner = %+v, want b", owner())
+	}
+	renamed := &Person{ID: "b", Accounts: []Account{{"github.com", "4", "ann2"}}}
+	d.Put(renamed)
+	if owner() != renamed {
+		t.Fatalf("owner = %+v, want b renamed", owner())
+	}
+	a := &Person{ID: "a", Accounts: []Account{acc}}
+	d.Put(a)
+	if owner() != a {
+		t.Fatalf("owner = %+v, want a", owner())
+	}
+}

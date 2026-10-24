@@ -30,6 +30,9 @@ type Issue struct {
 type Forge interface {
 	// Key names the project, like github.com/guilbep/git-board-test.
 	Key() string
+	// Server is the forge's host, like github.com. With a user's id, it
+	// names the user's account.
+	Server() string
 	// Issues lists the project's issues, in the forge's order.
 	Issues(ctx context.Context) ([]Issue, error)
 }
