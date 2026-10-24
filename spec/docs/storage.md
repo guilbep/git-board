@@ -120,6 +120,23 @@ commit with no parent. It is stored in the commit's pack.
 So a commit's clock is higher than the clock of every commit it descends
 from.
 
+## What a reader rejects
+
+A reader rejects, with an error naming the commit:
+
+- a commit whose tree has no `pack` entry;
+- a pack that isn't JSON;
+- a clock other than 1 + the highest of the parents' clocks, or 1 for a
+  commit without parents;
+- an `ops` that is empty or absent, in a commit with fewer than two
+  parents.
+
+It ignores other entries in the tree, pack fields it doesn't know, and the
+`nonce`, which only names an entity when it is created.
+
+The reader is strict where corrupt data would reorder the history, and
+lenient where a newer version may add things.
+
 ## Order
 
 An entity's operations are every reachable commit's pack, sorted by (clock

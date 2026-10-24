@@ -326,13 +326,23 @@ page says how each field's value is written, and how sync uses it.
 
 A sync entity's state follows from its operations, applied in order:
 
-- its links, each joining an issue to a forge issue;
-- for each issue and field, the value of the last `seen`;
-- any other `kind` is an error, which names the kind.
+- Its links, each joining an issue to a forge issue. The first link in the
+  order wins. For an issue linked twice, and for one forge issue (one
+  `forge_id`) linked from two issues, the later link is ignored.
+- A link to an issue not present locally is kept, as the issue may arrive
+  with the next fetch. It is skipped until then.
+- For each linked issue and field, the value of the last `seen`. A `seen`
+  for an issue without a link at that point in the order, or with a field
+  not listed above, is ignored.
+- Any other `kind` is an error, which names the kind.
+
+The first link wins because it follows the order every clone shares, so
+every clone keeps the same one.
 
 Two clones that pull the same new forge issue before fetching each other
-each create an issue for it, and link it. Joining the two isn't settled in
-M1.
+each create an issue for it, and link it. Once they merge, the first link
+holds and the other issue is left unlinked. Joining such duplicates is
+settled in M3.
 
 ## Origins
 
