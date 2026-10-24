@@ -5,6 +5,8 @@ nav = [
   { "Overview" = "index.md" },
   { "Data model" = "data-model.md" },
   { "Storage" = "storage.md" },
+  { "Sync" = "sync.md" },
+  { "Forges" = "forges.md" },
   { "Decisions" = "decisions.md" },
 ]
 

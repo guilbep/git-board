@@ -28,8 +28,8 @@ The pages state the format. The code implements them.
   operations of each kind.
 - [Storage](storage.md): how an entity lives in git. Refs, commits, packs,
   the clock, the order, merging, updating a ref, fetch and push.
-- Sync and Forges: how the core syncs with GitHub and GitLab, and what each
-  forge needs.
+- [Sync](sync.md) and [Forges](forges.md): how the core syncs with GitHub
+  and GitLab, and what each forge needs.
 - [Decisions](decisions.md): the choices the spec starts from, each linked
   to the PRD.
 
