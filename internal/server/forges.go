@@ -1,7 +1,6 @@
 package server
 
 import (
-	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -398,18 +397,8 @@ func sendsAgain(mode string, dry *forgeJob, names []string) error {
 	return nil
 }
 
-// assigneesMode is how the toml says the forges hold assignees.
-func (s *apiServer) assigneesMode() string {
-	if c := s.config(); c != nil {
-		return cmp.Or(c.Assignees, core.AssigneesNative)
-	}
-	return core.AssigneesNative
-}
-
 // forgeRun is git-bug's sync, or one way of it.
 func (s *apiServer) forgeRun(ctx context.Context, mode string, dryRun bool, names []string, opts ...core.Option) (<-chan core.SyncResult, error) {
-	issues, _ := s.b.ListIssues()
-	opts = append(opts, core.WithPullsOf(s.pullsOf(ctx, issues))) // stamps review:pr, where a send sends
 	if mode == "send" {
 		return s.b.SendForges(ctx, names)
 	}
@@ -443,29 +432,7 @@ func (s *apiServer) runForgeSync(job *forgeJob, run func(context.Context, string
 			st.pushTotal = len(issues)
 		}
 	}
-	// the toml's [repos] assignees, where git-bug reads it: a forge holding
-	// assignees one way here and another in a clone undoes the other's. A
-	// check only says so: the real run writes it, and pulls everything.
-	mode := s.assigneesMode()
-	for _, name := range job.Names {
-		changed, err := s.b.SetAssignees(name, mode, job.DryRun)
-		if err != nil {
-			finish("failed", "assignees of "+name+": "+err.Error())
-			return
-		}
-		if changed {
-			line := "assignees: " + name + " switches to " + mode + ", pulling every issue again"
-			if job.DryRun {
-				line = "assignees: " + name + " switches to " + mode + "; the next sync pulls every issue again"
-			}
-			s.forgeMu.Lock()
-			t := job.tally(name)
-			t.Lines = append(t.Lines, line)
-			s.forgeMu.Unlock()
-		}
-	}
-	// the mode as an option too: a check, which writes nothing, previews it
-	results, err := run(context.Background(), job.Mode, job.DryRun, names, core.WithAssignees(mode))
+	results, err := run(context.Background(), job.Mode, job.DryRun, names)
 	if err != nil {
 		finish("failed", err.Error())
 		return

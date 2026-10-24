@@ -235,30 +235,6 @@ func (b *Backend) SendForges(ctx context.Context, names []string) (<-chan core.S
 	})
 }
 
-// SetAssignees makes the bridge hold assignees as mode, in this clone's
-// git config, where a plain `git bug bridge sync` reads it too. It writes
-// only a change, and a change makes the next pull start over (as `bridge
-// pull --no-resume`), so the assignees already there move to the new way.
-// A dry run writes nothing, and says whether it would.
-func (b *Backend) SetAssignees(name, mode string, dryRun bool) (changed bool, err error) {
-	cfg, err := b.c.Config().Read()
-	if err != nil {
-		return false, err
-	}
-	if cmp.Or(cfg.Value("git-bug.bridge."+name+"."+core.ConfigKeyAssignees, ""), core.AssigneesNative) == mode {
-		return false, nil
-	}
-	if dryRun {
-		return true, nil
-	}
-	// the full pull first: the mode written without it would match from
-	// then on, and the pull never start over
-	if err := core.SetBridgeConfig(b.c, name, lastSyncKey, "0"); err != nil {
-		return false, err
-	}
-	return true, core.SetBridgeConfig(b.c, name, core.ConfigKeyAssignees, mode)
-}
-
 // lastSyncKey is where git-bug keeps when a bridge's last sync pulled from
 // (bridge/core configKeyLastSyncTime, not exported).
 const lastSyncKey = "lastSyncTime"
@@ -314,36 +290,6 @@ func (b *Backend) oneWay(names []string, run func(*core.Bridge, chan<- core.Sync
 // bridge with sync enabled, in this process.
 func (b *Backend) SyncIssue(ctx context.Context, dryRun bool, id string, opts ...core.Option) (<-chan core.SyncResult, error) {
 	return core.SyncIssue(ctx, b.c, id, nil, dryRun, opts...)
-}
-
-// LinkIssue makes an issue one with an issue already on a bridge's forge,
-// by its number ("12", "#12") or URL (git bug bridge link). Nothing is
-// written to the forge: the next sync sends what differs, unless
-// TakeIssue keeps the forge's version.
-func (b *Backend) LinkIssue(ctx context.Context, id, bridge, issue string) (core.Ref, error) {
-	if !core.BridgeExist(b.c, bridge) {
-		return core.Ref{}, ErrNoBridge
-	}
-	return core.Link(ctx, b.c, id, bridge, issue)
-}
-
-// UnlinkIssue stops syncing an issue with a bridge's forge, for good (git
-// bug bridge unlink). The forge issue stays as it is.
-func (b *Backend) UnlinkIssue(ctx context.Context, id, bridge string) error {
-	if !core.BridgeExist(b.c, bridge) {
-		return ErrNoBridge
-	}
-	return core.Unlink(ctx, b.c, id, bridge)
-}
-
-// TakeIssue replaces what an issue hasn't sent to a bridge's forge yet
-// with the forge's version (git bug bridge take); comments the forge
-// doesn't have stay. The channel must be drained: it holds the bridge lock.
-func (b *Backend) TakeIssue(ctx context.Context, id, bridge string) (<-chan core.SyncResult, error) {
-	if !core.BridgeExist(b.c, bridge) {
-		return nil, ErrNoBridge
-	}
-	return core.Take(ctx, b.c, id, bridge)
 }
 
 // MyLogin is the forge login of the identity git-board writes as: what

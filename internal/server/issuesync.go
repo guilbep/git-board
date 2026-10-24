@@ -3,12 +3,7 @@ package server
 import (
 	"errors"
 	"net/http"
-	"strings"
 	"time"
-
-	"github.com/git-bug/git-bug/bridge/core"
-
-	"github.com/guilbep/git-board/internal/gitbugio"
 )
 
 var errIssueDryRunFirst = errors.New("run a dry run of this issue first: it says what the sync would write to the forges")
@@ -56,10 +51,7 @@ func (s *apiServer) handleIssueSync(w http.ResponseWriter, r *http.Request) {
 	if run == nil {
 		run = s.b.SyncIssue
 	}
-	// the toml's assignees mode, not this clone's git config: the forge
-	// sync writes it there, and pulls everything again when it changes
-	results, err := run(r.Context(), req.DryRun, issue.ID,
-		core.WithPullsOf(s.pullsOf(r.Context(), []gitbugio.Issue{issue})), core.WithAssignees(s.assigneesMode()))
+	results, err := run(r.Context(), req.DryRun, issue.ID)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
@@ -103,114 +95,6 @@ func (s *apiServer) handleIssueSync(w http.ResponseWriter, r *http.Request) {
 	s.forgeMu.Unlock()
 	if !req.DryRun {
 		s.events.publish(event{Kind: "issues"})
-	}
-	writeJSON(w, http.StatusOK, res)
-}
-
-// One issue on one forge (git-bug's Link, Unlink, Take): each names a
-// bridge and writes nothing to the forge. The engine's refusals answer 409
-// with its words; an unknown issue or bridge, 404.
-
-// forgeEdit resolves the issue and holds the write lock, as any edit. A
-// dry run of this issue is stale after it: what a sync sends changes.
-func (s *apiServer) forgeEdit(w http.ResponseWriter, r *http.Request) (string, func(), bool) {
-	issue, err := s.b.GetIssue(r.PathValue("id"))
-	if err != nil {
-		writeError(w, http.StatusNotFound, err)
-		return "", nil, false
-	}
-	done, ok := s.beginWrite(w)
-	if !ok {
-		return "", nil, false
-	}
-	s.forgeMu.Lock()
-	delete(s.issueDry, issue.ID)
-	s.forgeMu.Unlock()
-	return issue.ID, done, true
-}
-
-func writeForgeError(w http.ResponseWriter, err error) {
-	if errors.Is(err, gitbugio.ErrNoBridge) {
-		writeError(w, http.StatusNotFound, err)
-		return
-	}
-	writeError(w, http.StatusConflict, err)
-}
-
-// handleIssueLink: the issue is one already on the bridge's forge, by its
-// number or URL. It answers the forge issue.
-func (s *apiServer) handleIssueLink(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Bridge string `json:"bridge"`
-		Issue  string `json:"issue"`
-	}
-	if !decode(w, r, &req) {
-		return
-	}
-	id, done, ok := s.forgeEdit(w, r)
-	if !ok {
-		return
-	}
-	defer done()
-	ref, err := s.b.LinkIssue(r.Context(), id, req.Bridge, strings.TrimSpace(req.Issue))
-	if err != nil {
-		writeForgeError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]string{"id": ref.ID, "url": ref.URL, "number": ref.Number})
-}
-
-// handleIssueUnlink: the issue never syncs with the bridge's forge again.
-func (s *apiServer) handleIssueUnlink(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Bridge string `json:"bridge"`
-	}
-	if !decode(w, r, &req) {
-		return
-	}
-	id, done, ok := s.forgeEdit(w, r)
-	if !ok {
-		return
-	}
-	defer done()
-	if err := s.b.UnlinkIssue(r.Context(), id, req.Bridge); err != nil {
-		writeForgeError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]string{})
-}
-
-// handleIssueTake: what the issue hasn't sent to the bridge's forge is
-// replaced by the forge's version, pulled now. It answers what came in, as
-// one issue's sync counts it.
-func (s *apiServer) handleIssueTake(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Bridge string `json:"bridge"`
-	}
-	if !decode(w, r, &req) {
-		return
-	}
-	id, done, ok := s.forgeEdit(w, r)
-	if !ok {
-		return
-	}
-	defer done()
-	results, err := s.b.TakeIssue(r.Context(), id, req.Bridge)
-	if err != nil {
-		writeForgeError(w, err)
-		return
-	}
-	t := &bridgeTally{Lines: []string{}}
-	res := issueSyncResult{Bridges: map[string]*bridgeTally{req.Bridge: t}}
-	st := stepper{name: s.issueName, pushTotal: 1}
-	for sr := range results {
-		t.add(sr, false)
-		if sr.IsError() {
-			res.Errors++
-		}
-		if step, moved := st.see(sr); moved {
-			s.events.publish(event{Kind: "progress", ID: id, Step: &step})
-		}
 	}
 	writeJSON(w, http.StatusOK, res)
 }

@@ -1,7 +1,6 @@
 package server
 
 import (
-	"context"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -113,60 +112,6 @@ func TestForgeSyncWarnsWhenTheForgeWontSay(t *testing.T) {
 	tally := st.Job.Bridges["gh"]
 	if st.Job.State != "done" || st.Job.Errors != 0 || tally == nil || tally.Warnings != 1 || tally.Assignable != 0 {
 		t.Fatalf("job %+v, gh %+v: want done, one warning, no error", st.Job, tally)
-	}
-}
-
-// A forge sync writes the toml's assignees mode where git-bug reads it,
-// and says so: the check that it will, the real run that it does.
-func TestForgeSyncSetsTheAssigneesMode(t *testing.T) {
-	t.Parallel()
-	ts, s := newIssueServer(t)
-	s.cfg = &config.Config{Assignees: "labels"}
-	gl := fakeGitLab(t)
-	if code := call(t, "POST", ts.URL+"/api/bridges", map[string]string{"target": "gitlab", "url": gl.URL + "/scratchpad/sync-trial", "token": "good-token"}, nil); code != http.StatusOK {
-		t.Fatalf("add a bridge: %d", code)
-	}
-	key := func() string {
-		cfg, err := s.b.TestCache().Config().Read()
-		if err != nil {
-			t.Fatal(err)
-		}
-		return cfg.Value("git-bug.bridge.gl.assignees", "")
-	}
-
-	var previewed core.SyncOptions
-	s.runSync = func(_ context.Context, _ string, dryRun bool, _ []string, opts ...core.Option) (<-chan core.SyncResult, error) {
-		if dryRun {
-			for _, o := range opts {
-				o(&previewed)
-			}
-		}
-		out := make(chan core.SyncResult)
-		close(out)
-		return out, nil
-	}
-
-	call(t, "POST", ts.URL+"/api/forges/sync", map[string]any{"dry_run": true}, nil)
-	st := waitAssignable(t, ts, "gl")
-	if previewed.Config[core.ConfigKeyAssignees] != "labels" {
-		t.Errorf("the check synced with assignees %q, want labels: it previews the new mode", previewed.Config[core.ConfigKeyAssignees])
-	}
-	if want := "assignees: gl switches to labels; the next sync pulls every issue again"; st.Job.State != "done" || !slices.Contains(st.Job.Bridges["gl"].Lines, want) {
-		t.Fatalf("check %+v, lines %q: want %q", st.Job, st.Job.Bridges["gl"].Lines, want)
-	}
-	if key() != "" {
-		t.Errorf("the check wrote gl assignees %q", key())
-	}
-
-	if code := call(t, "POST", ts.URL+"/api/forges/sync", map[string]any{"dry_run": false}, nil); code != http.StatusAccepted {
-		t.Fatalf("real run: %d", code)
-	}
-	st = waitAssignable(t, ts, "gl")
-	if want := "assignees: gl switches to labels, pulling every issue again"; st.Job.State != "done" || !slices.Contains(st.Job.Bridges["gl"].Lines, want) {
-		t.Fatalf("run %+v, lines %q: want %q", st.Job, st.Job.Bridges["gl"].Lines, want)
-	}
-	if key() != "labels" {
-		t.Errorf("gl assignees %q, want labels", key())
 	}
 }
 

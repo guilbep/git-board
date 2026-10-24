@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/git-bug/git-bug/cache"
-	bugent "github.com/git-bug/git-bug/entities/bug"
 	"github.com/git-bug/git-bug/entity"
 )
 
@@ -95,30 +94,6 @@ func (b *Backend) CommentReview(idPrefix, commentID string) (*Review, error) {
 		return nil, ErrNoSuchComment
 	}
 	return reviewOf(onForges(snap, nil).meta[c.TargetId()]), nil
-}
-
-// StampPR sets review:pr on the issue's review comments that have none, of
-// those whose commit mine tells: written before the branch had a pull
-// request, they wait for it, as the sync sends a review comment where its
-// review:pr says. It returns how many it stamped.
-func (b *Backend) StampPR(idPrefix, pr string, mine func(commit string) bool) (int, error) {
-	n := 0
-	err := b.write(idPrefix, func(bug *cache.BugCache) error {
-		snap := bug.Snapshot()
-		meta := onForges(snap, nil).meta
-		for _, op := range snap.Operations {
-			m := meta[op.Id()]
-			if _, ok := op.(*bugent.AddCommentOperation); !ok || m["review:commit"] == "" || m["review:pr"] != "" || !mine(m["review:commit"]) {
-				continue
-			}
-			if _, err := bug.SetMetadata(context.Background(), op.Id(), map[string]string{"review:pr": pr}); err != nil {
-				return err
-			}
-			n++
-		}
-		return nil
-	})
-	return n, err
 }
 
 // isReview tells a comment the sync never posts on an issue: one with a

@@ -155,40 +155,6 @@ func TestReviewCommentsPending(t *testing.T) {
 	}
 }
 
-// StampPR gives the review comments written before their pull request its
-// review:pr: those on the branch's commits, without one yet.
-func TestStampPR(t *testing.T) {
-	t.Parallel()
-	b := gitbugiotest.New(t)
-	issue := gitbugiotest.NewIssue(t, b, "review")
-	mine, other := "1111111111111111111111111111111111111111", "2222222222222222222222222222222222222222"
-	anchor := func(commit string, more ...string) map[string]string {
-		m := map[string]string{"review:path": "a.txt", "review:line": "3", "review:side": "new", "review:commit": commit}
-		for i := 0; i+1 < len(more); i += 2 {
-			m[more[i]] = more[i+1]
-		}
-		return m
-	}
-	early, _ := b.CommentWith(issue, "early", anchor(mine))
-	review, _ := b.CommentWith(issue, "", map[string]string{"review:state": "APPROVE", "review:commit": mine})
-	elsewhere, _ := b.CommentWith(issue, "on another branch", anchor(other))
-	sent, _ := b.CommentWith(issue, "has one", anchor(mine, "review:pr", "github.com/o/r#1"))
-	plain, _ := b.AddComment(issue, "plain")
-
-	n, err := b.StampPR(issue, "github.com/o/r#9", func(c string) bool { return c == mine })
-	if err != nil || n != 2 {
-		t.Fatalf("stamped %d, %v; want 2", n, err)
-	}
-	for id, want := range map[string]string{early: "github.com/o/r#9", review: "github.com/o/r#9", elsewhere: "", sent: "github.com/o/r#1"} {
-		if r := eventByID(t, b, issue, id).Review; r == nil || r.PR != want {
-			t.Errorf("%s review %+v, want pr %q", id, r, want)
-		}
-	}
-	if r := eventByID(t, b, issue, plain).Review; r != nil {
-		t.Errorf("a plain comment got %+v", r)
-	}
-}
-
 // A pull request's conversation comment, brought in by the sync, says
 // which pull request it is on.
 func TestReviewPROnly(t *testing.T) {
