@@ -140,8 +140,8 @@ A reader rejects, with an error naming the commit:
 - an operation whose `kind` is empty or absent, or whose `time` is 0 or
   absent.
 
-An empty `author` is for each kind's rules to judge, as a person's `create`
-may have one (see [Data model](data-model.md#operations)).
+An empty `author` is for each kind's rules to judge, as a person's first
+pack may have one (see [Data model](data-model.md#operations)).
 
 It ignores other entries in the tree, pack fields it doesn't know, and the
 `nonce`, which only names an entity when it is created.

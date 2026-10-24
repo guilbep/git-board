@@ -14,15 +14,15 @@ Nothing else is kept in git: no snapshot of the state, no cache.
 An entity has a kind and an id:
 
 - the kind is `issue`, `person` or `sync`;
-- the id is unique within its kind, and matches `^[0-9A-Za-z._-]+$`. The
-  ids the core makes are lowercase hex (see [Ids](#ids)).
+- the id is 40 lowercase hex characters, `^[0-9a-f]{40}$`, and unique
+  within its kind. An issue's or a person's id is a pack hash, and a sync
+  entity's is the SHA-1 of its forge key (see [Ids](#ids)).
 
 An entity's ref names both: `refs/board/issue/3f7a9c2e41b6d08a5e1f93c7b2d4a6e8f0c1b3d5`
 is the issue `3f7a9c2e41b6d08a5e1f93c7b2d4a6e8f0c1b3d5`.
 
 Any read or write with another kind, or with an id that doesn't match, is
-an error. git's own rules for ref names apply on top: `a..b` matches, but
-git refuses the ref `refs/board/issue/a..b`, so writing it fails.
+an error. So no id is a name git refuses for a ref.
 
 ## Operations
 
@@ -50,7 +50,7 @@ An operation is one change to an entity, as a JSON object:
 - `kind` is read in the context of the entity: `create` opens an issue in
   an issue, and makes a person in a person. `link` is a sync entity's.
 - `author` is a person's id. Each kind's rules reject an empty one, except
-  in a person's `create` (see [People](#people)). They check nothing else:
+  in a person's first pack (see [People](#people)). They check nothing else:
   not its form, nor that the person exists, as it may arrive with the next
   fetch. The trial's `forge:<login>` authors are gone: a pull authors its
   operations as persons (see [Authors](sync.md#authors)).
@@ -322,6 +322,12 @@ accounts they have on forges. Every operation's `author` is a person's id.
 A person is created without an id, so its id is its first pack's hash (see
 [Ids](#ids)).
 
+That pack makes the person's id, so no operation in it can name the person
+itself. The operations of a person's first pack, the pack whose hash is
+its id, may have an empty author: a person created by a pull, or the first
+person of a repository, has no one else to name. Every later operation's
+author is a person's id.
+
 An account is one user on one forge server:
 
 - `server` is the forge's host, like `github.com` or `gitlab.epfl.ch`;
@@ -343,10 +349,10 @@ A person has five operations:
 
 ### `create` {#person-create}
 
-A person's `create` is the one operation whose `author` may be empty. Its
-pack makes the person's id, so it can't name the person itself. A person
-created by a pull, or the first person of a repository, has no one else to
-name. Otherwise it names the person who created it.
+`create` is the first operation of a person's first pack, so its author
+may be empty. A pull writes a person's `create` and its `add-account` in
+that one pack (see [Authors](sync.md#authors)). A person created in
+git-board names the person who created it.
 
 The first person of a repository:
 
@@ -440,7 +446,8 @@ A person's state follows from its operations, applied in order:
    Removing one the person doesn't have changes nothing.
 7. An empty `name`, `server`, `id` or `login`, in any operation that holds
    it, is an error. The email may be empty.
-8. An operation whose `author` is empty is an error, except `create`.
+8. An operation whose `author` is empty is an error, except in the person's
+   first pack.
 9. Any other `kind` is an error, which names the kind.
 
 A person's state holds its `id`, `name`, `email` and `accounts`. The

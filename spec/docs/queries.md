@@ -29,6 +29,8 @@ Issues and persons. Sync entities aren't indexed.
 - **For each person:** its id, name and accounts (`server`, `id`,
   `login`), from its [state](data-model.md#person-state).
 - **For each entity:** its head, the commit its ref points at.
+- **For each broken entity:** its head and its error (see
+  [Freshness](#freshness)).
 
 ## Freshness
 
@@ -42,9 +44,17 @@ A refresh brings the index up to the refs:
 Every query refreshes first. So it answers from the refs as they are,
 whoever moved them: this process, another one, or a fetch.
 
-An entity that fails to load fails the refresh, with an error naming it.
-The refresh then keeps none of its changes, and the query answers that
-error, never stale rows.
+An entity that fails to load is broken. The refresh drops its rows, so no
+query or lookup answers it, and still keeps the rest of its changes.
+
+- **The index records it,** with its head and its error. `Broken()` lists
+  the broken entities, each with its kind, id and error, after a refresh
+  like every query.
+- **It is loaded again** when its head moves, or at a rebuild. An entity
+  whose ref is gone is dropped, broken or not.
+- **A query never fails because of one broken entity.** It answers without
+  it. A refresh that can't list the refs, or can't write the index, still
+  fails the query.
 
 ## Rebuild
 

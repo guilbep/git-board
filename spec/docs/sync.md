@@ -386,10 +386,10 @@ The pull loads every person once, then, for each author:
 - **Its login changed on the forge:** the pull appends an `add-account`
   with the new login to that person, authored by the person itself. The
   person stays the same.
-- **No person holds it:** the pull creates one, in two writes. First a
-  `create` with the login as the name, an empty email and an empty author.
-  Then an `add-account` of the account, authored by the new person, as only
-  its first pack gives its id. Later authors in the same pull find it.
+- **No person holds it:** the pull creates one, in one write. Its first
+  pack holds a `create`, with the login as the name and an empty email,
+  then an `add-account` of the account. Both have an empty author, as the
+  person's id comes from that pack. Later authors in the same pull find it.
 
 ### What follows
 
@@ -398,9 +398,6 @@ The pull loads every person once, then, for each author:
 - **A change made in git-board is kept.** Where G ≠ S, the pull writes
   nothing to the issue.
 - **A login renamed on the forge** keeps its person, whose login changes.
-- **A pull that stops between a new person's two writes** leaves a person
-  with no account. The next pull creates another one, and the first stays
-  unused.
 - **A pull that stops between an issue's write and its sync entity's**
   leaves a linked issue's field at G = F ≠ S. The next pull then records
   the `seen`. For a new issue, it leaves the issue without its link, and
