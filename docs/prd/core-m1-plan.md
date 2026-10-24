@@ -175,7 +175,9 @@ milestone writes the spec itself, in `spec/`.
   - **Links.** One per issue and forge project, in that project's `sync`
     entity.
   - **Last seen.** Per field: title, body, status, labels (sorted, one per
-    line), each comment.
+    line), assignees, each comment.
+  - **Assignees** are the one field a forge holds as its own: `assignee:`
+    labels in git-board, the forge's assignees there.
   - **The four cases.** Compare git-board and the forge with last seen:
     nothing to do; pull; push; both changed, and the later change wins
     while the other stays in the history.
@@ -210,6 +212,7 @@ milestone writes the spec itself, in `spec/`.
   - **GitLab:**
     - text edits leave no event;
     - `updated_at` moves late, so list from 2 minutes before the last sync;
+    - the free edition has one assignee per issue;
     - base URLs compare without their trailing slash;
     - confidential issues are skipped.
 - [ ] **Step 3: Add both to the nav and run `make spec`.** Expected: exit 0,

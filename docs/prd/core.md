@@ -85,13 +85,21 @@ The spec (M1) holds the details; these are the choices it starts from.
   never their own fields (guilbep, 2026-10-24): nobody uses GitHub's issue
   types or priority, and the PMs' fields live in GitHub Projects, which
   git-board's Project sync handles.
+- **One exception: assignees.** `assignee:<name>` labels become the forge's
+  own assignees, always, with no switch: everyone uses them, and a forge
+  notifies only its own assignees. GitLab's free edition takes one per
+  issue; the others stay in git-board, with one warning.
 - **Acceptance criteria stay text:** a task list under a heading in the
   description, which git-board reads today, and which every forge renders
   with its checkboxes. The core doesn't model them; git-board does.
 - **Settings shared by the project live in `.git-board.toml`**, which
   git-board already has and edits in Settings: the forges, the posting
-  account, `publish-private`. Tokens stay on each machine. Who "I" am is
-  local too.
+  account, `publish-private`. Who "I" am is local.
+- **Tokens stay on each machine:** an environment variable when set (CI),
+  else git's own credential helper for the forge's host, which already
+  holds tokens on most machines (`git credential fill`, with the account as
+  `username`). Settings stores a new one with `git credential approve`. No
+  keyring library.
 - **Writes check the ref they move.** No lock files: two processes writing
   at once both land, the second after a retry. Only a sync run takes a
   lock, so that one machine doesn't post the same thing twice.
@@ -107,6 +115,7 @@ The spec (M1) holds the details; these are the choices it starts from.
 - sync with GitHub and GitLab, both ways:
   - posting for people without a token there, under a header naming them;
   - mentions defused, and `#n` becoming the mirrored issue's number;
+  - assignees as the forge's own;
   - a forge's refusal kept in git-board, with one warning;
 - what sync.10 added: confidential GitLab issues never synced, nothing
   pulled from a project that isn't public sent to one that is (unless
@@ -118,8 +127,8 @@ The spec (M1) holds the details; these are the choices it starts from.
 - Gitea;
 - mirroring git-board's review comments to GitHub pull requests (they stay
   in git-board);
-- the forges' own fields: assignees, GitHub's issue types and priority,
-  GitLab's milestones, and the mode switches. Every field is a label on
+- the forges' own fields besides assignees: GitHub's issue types and
+  priority, GitLab's milestones, and the mode switches. They stay labels on
   every forge;
 - `link`, `unlink` and `take`;
 - Jira and Launchpad;
@@ -166,10 +175,10 @@ before it is done and its part of the spec is approved.
   Before switching a repository, its last sync.10 run must report nothing
   left to send.
 
-## Open, for guilbep
+## Answered by guilbep, 2026-10-24
 
-- Tokens: the OS keyring, or environment variables (CI) only, at first?
-
-Answered 2026-10-24:
-- no forge fields, labels everywhere;
-- no converter: the switch pulls from the forges (M6).
+- No forge fields, labels everywhere, except assignees, which are the
+  forge's own.
+- No converter: the switch pulls from the forges (M6). One sync panel in
+  git-board, no separate git-bug sync.
+- Tokens: environment variables, else git's credential helper.
