@@ -22,7 +22,7 @@ const (
 // Comment is one comment of an issue. ID is its operation's id.
 type Comment struct {
 	ID, Author, Body string
-	Time             int64
+	Time, Edited     int64 // Edited: the time of the last edit-text, 0 if none
 	Origin           *oplog.Origin
 }
 
@@ -30,7 +30,7 @@ type Comment struct {
 // operation's id, the target of an edit of the body.
 type Issue struct {
 	ID, Author, Title, Body, BodyOp string
-	Created                         int64
+	Created, Updated                int64 // Updated: the time of the last operation in the order
 	Status                          Status
 	Labels                          []string // sorted, unique
 	Comments                        []Comment
@@ -61,6 +61,9 @@ func Apply(l *oplog.Log) (*Issue, error) {
 	comments := map[string]int{}      // comment id -> index in is.Comments
 	origins := map[oplog.Origin]int{} // a comment's origin -> its index
 	for _, e := range l.Entries {
+		if e.Author == "" {
+			return nil, fmt.Errorf("issue: operation %s has no author", e.ID)
+		}
 		if !slices.Contains(kinds, e.Kind) {
 			return nil, fmt.Errorf("%w: %q, operation %s", ErrUnknownOp, e.Kind, e.ID)
 		}
@@ -105,6 +108,7 @@ func Apply(l *oplog.Log) (*Issue, error) {
 				is.Body = d.Body
 			} else if i, ok := comments[d.Target]; ok {
 				is.Comments[i].Body = d.Body
+				is.Comments[i].Edited = e.Time
 			} else {
 				return nil, fmt.Errorf("%w: %q, operation %s", ErrBadTarget, d.Target, e.ID)
 			}
@@ -130,6 +134,7 @@ func Apply(l *oplog.Log) (*Issue, error) {
 		default:
 			return nil, fmt.Errorf("%w: %q, operation %s", ErrUnknownOp, e.Kind, e.ID)
 		}
+		is.Updated = e.Time
 	}
 	if is == nil {
 		return nil, errors.New("issue: no operation")

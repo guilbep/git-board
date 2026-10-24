@@ -138,7 +138,7 @@ func TestUnknownOpIsAnError(t *testing.T) {
 	t.Parallel()
 	for _, data := range []string{"", `{"title":5}`} {
 		s := newStore(t)
-		l, err := oplog.Create(t.Context(), s, "issue", "", []oplog.Op{NewCreate("a", "T", ""), {Kind: "set-priority", Time: 1, Data: []byte(data)}})
+		l, err := oplog.Create(t.Context(), s, "issue", "", []oplog.Op{NewCreate("a", "T", ""), {Kind: "set-priority", Author: "a", Time: 1, Data: []byte(data)}})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -257,5 +257,79 @@ func TestEditUnknownTarget(t *testing.T) {
 	_, err := Create(t.Context(), s, NewCreate("a", "T", ""), EditText("a", "nope:0", "x"))
 	if !errors.Is(err, ErrBadTarget) {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+func at(op oplog.Op, t int64) oplog.Op {
+	op.Time = t
+	return op
+}
+
+// Updated is the last operation's time in the order, not the largest time;
+// Edited is the last edit's, by any id of the comment.
+func TestUpdatedAndEdited(t *testing.T) {
+	t.Parallel()
+	s := newStore(t)
+	c, err := Create(t.Context(), s,
+		at(NewCreate("a", "T", ""), 100),
+		at(withOrigin(NewComment("bob", "one"), "f", "comment:1"), 500),
+		at(withOrigin(NewComment("bob", "dup"), "f", "comment:1"), 110), // same comment, alias id
+		at(NewComment("bob", "other"), 120),
+	)
+	c = must(t, c, err)
+	if c.Updated != 120 || c.Comments[0].Edited != 0 || c.Comments[1].Edited != 0 {
+		t.Fatalf("updated = %d, comments = %+v", c.Updated, c.Comments)
+	}
+	alias := c.ID + ":2"
+	c, err = Do(t.Context(), s, c.ID,
+		at(EditText("bob", c.Comments[0].ID, "e1"), 900),
+		at(EditText("bob", alias, "e2"), 300), // later in the order, earlier in time
+	)
+	c = must(t, c, err)
+	if c.Comments[0].Edited != 300 || c.Comments[1].Edited != 0 || c.Updated != 300 {
+		t.Fatalf("updated = %d, comments = %+v", c.Updated, c.Comments)
+	}
+	c, err = Do(t.Context(), s, c.ID, at(SetTitle("a", "U"), 50))
+	if c = must(t, c, err); c.Updated != 50 || c.Comments[0].Edited != 300 {
+		t.Fatalf("updated = %d, comments = %+v", c.Updated, c.Comments)
+	}
+}
+
+func TestAddRemoveSameLabelInOneOp(t *testing.T) {
+	t.Parallel()
+	s := newStore(t)
+	c, err := Create(t.Context(), s, NewCreate("a", "T", ""), ChangeLabels("a", []string{"x", "y"}, []string{"x"}))
+	if c = must(t, c, err); !reflect.DeepEqual(c.Labels, []string{"y"}) {
+		t.Fatalf("labels = %v", c.Labels)
+	}
+}
+
+func TestBodyEditAfterCommentEdit(t *testing.T) {
+	t.Parallel()
+	s := newStore(t)
+	c, err := Create(t.Context(), s, NewCreate("a", "T", "B"), NewComment("b", "c"))
+	c = must(t, c, err)
+	c, err = Do(t.Context(), s, c.ID, EditText("b", c.Comments[0].ID, "c2"), EditText("a", c.BodyOp, "B2"))
+	if c = must(t, c, err); c.Body != "B2" || c.Comments[0].Body != "c2" {
+		t.Fatalf("issue = %+v", c)
+	}
+}
+
+// Rule 8: an operation with no author is an error, on a write and on a load.
+func TestEmptyAuthorIsRejected(t *testing.T) {
+	t.Parallel()
+	s := newStore(t)
+	if _, err := Create(t.Context(), s, NewCreate("", "T", "")); err == nil {
+		t.Fatal("create: want an error")
+	}
+	c, err := Create(t.Context(), s, NewCreate("a", "T", ""))
+	c = must(t, c, err)
+	rejected(t, s, c, NewComment("", "x"))
+	l, err := oplog.Create(t.Context(), newStore(t), "issue", "", []oplog.Op{NewCreate("a", "T", ""), NewComment("", "x")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Apply(l); err == nil {
+		t.Fatal("apply: want an error")
 	}
 }
