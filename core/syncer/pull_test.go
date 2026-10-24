@@ -16,18 +16,25 @@ import (
 
 const key = "example.com/p"
 
-func newStore(t *testing.T) *gitstore.Store {
+func newRepo(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
 	if out, err := exec.Command("git", "-C", dir, "init", "-q").CombinedOutput(); err != nil {
 		t.Fatalf("git init: %v\n%s", err, out)
 	}
+	return dir
+}
+
+func open(t *testing.T, dir string) *gitstore.Store {
+	t.Helper()
 	s, err := gitstore.Open(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
 	return s
 }
+
+func newStore(t *testing.T) *gitstore.Store { return open(t, newRepo(t)) }
 
 func ann() forge.Account { return forge.Account{ID: "7", Login: "ann"} }
 
@@ -185,6 +192,32 @@ func TestPullNewComment(t *testing.T) {
 	pull(t, s, f)
 	if !reflect.DeepEqual(before, refs(t, s)) || len(only(t, s).Comments) != 2 {
 		t.Fatal("second pull wrote")
+	}
+}
+
+// Two first writes of a project's sync entity, by two Stores on one
+// repository that both found none, both land: the second appends.
+func TestStateFirstWritesBothLand(t *testing.T) {
+	t.Parallel()
+	dir := newRepo(t)
+	var stores [2]*gitstore.Store
+	var states [2]*state
+	for i := range stores {
+		stores[i] = open(t, dir)
+		st, err := loadState(stores[i], key)
+		if err != nil || st.log != nil {
+			t.Fatalf("state = %+v, %v", st, err)
+		}
+		states[i] = st
+	}
+	for i, fid := range []string{"100", "200"} {
+		if err := states[i].write(stores[i], key, []oplog.Op{linkOp("a", 1, "issue"+fid, fid, fid, "")}); err != nil {
+			t.Fatalf("write %d: %v", i, err)
+		}
+	}
+	st, err := loadState(open(t, dir), key)
+	if want := map[string]string{"100": "issue100", "200": "issue200"}; err != nil || !reflect.DeepEqual(st.links, want) {
+		t.Fatalf("links = %v, %v; want %v", st.links, err, want)
 	}
 }
 
