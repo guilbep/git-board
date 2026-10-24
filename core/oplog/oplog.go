@@ -76,8 +76,10 @@ type node struct {
 // RefName is an entity's ref.
 func RefName(kind, id string) string { return "refs/board/" + kind + "/" + id }
 
-// isID says whether id is an entity id: 40 lowercase hex digits.
-var isID = regexp.MustCompile(`^[0-9a-f]{40}$`).MatchString
+// IsID says whether id is an entity id: 40 lowercase hex digits.
+func IsID(id string) bool { return idPattern.MatchString(id) }
+
+var idPattern = regexp.MustCompile(`^[0-9a-f]{40}$`)
 
 // checkKind refuses a kind that isn't one of gitstore.Kinds.
 func checkKind(kind string) error {
@@ -89,7 +91,7 @@ func checkKind(kind string) error {
 
 // checkName refuses a kind or an id that names no entity.
 func checkName(kind, id string) error {
-	if !isID(id) {
+	if !IsID(id) {
 		return fmt.Errorf("%w: id %q", ErrBadName, id)
 	}
 	return checkKind(kind)
@@ -213,7 +215,7 @@ func List(s *gitstore.Store, kind string) ([]string, error) {
 	}
 	ids := make([]string, 0, len(refs))
 	for name := range refs {
-		if id := strings.TrimPrefix(name, prefix); isID(id) {
+		if id := strings.TrimPrefix(name, prefix); IsID(id) {
 			ids = append(ids, id)
 		}
 	}

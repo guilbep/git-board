@@ -83,7 +83,7 @@ func MergeFetched(ctx context.Context, s *gitstore.Store, remote string) (int, e
 				return moved, errors.Join(append(errs, err)...)
 			}
 			id := strings.TrimPrefix(name, prefix)
-			if !isID(id) {
+			if !IsID(id) {
 				continue
 			}
 			local := RefName(kind, id)

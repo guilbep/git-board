@@ -11,7 +11,6 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 
 	"modernc.org/sqlite"
@@ -45,9 +44,6 @@ CREATE VIRTUAL TABLE texts USING fts5 (title, body, comments, tokenize = 'unicod
 
 // kinds are the indexed kinds. Sync entities aren't.
 var kinds = []string{"issue", "person"}
-
-// isID says whether a ref's name is an entity id.
-var isID = regexp.MustCompile(`^[0-9a-f]{40}$`).MatchString
 
 // errRebuild says the file must be built again.
 var errRebuild = errors.New("index: not an index of this version")
@@ -160,7 +156,7 @@ func (ix *Index) Refresh(ctx context.Context) error {
 			return fmt.Errorf("index: refs: %w", err)
 		}
 		for name, h := range m {
-			if id := strings.TrimPrefix(name, prefix); isID(id) {
+			if id := strings.TrimPrefix(name, prefix); oplog.IsID(id) {
 				refs[key{kind, id}] = h.String()
 			}
 		}
