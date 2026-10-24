@@ -80,6 +80,9 @@ func MergeFetched(s *gitstore.Store, remote string) (int, error) {
 			if err != nil {
 				return moved, err
 			}
+			if refs[name] == before {
+				continue // nothing new
+			}
 			l, err := Merge(s, kind, id, refs[name])
 			if err != nil {
 				errs = append(errs, fmt.Errorf("oplog: merge %s: %w", name, err))

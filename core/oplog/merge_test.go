@@ -96,6 +96,19 @@ func TestMergeRejectsBadHead(t *testing.T) {
 	}
 }
 
+// A fetched head that is already the local head isn't read again: a bad
+// commit there, which a read would reject, shows it.
+func TestMergeFetchedSkipsUnchanged(t *testing.T) {
+	t.Parallel()
+	s := newStore(t)
+	bad := commitOf(t, s, map[string]string{"pack": `{"clock":5,"ops":[{"kind":"create"}]}`})
+	setRef(t, s, RefName("issue", "x"), bad, gitstore.ZeroHash)
+	setRef(t, s, "refs/board-remotes/origin/issue/x", bad, gitstore.ZeroHash)
+	if n, err := MergeFetched(s, "origin"); err != nil || n != 0 {
+		t.Fatalf("moved = %d, %v; want 0", n, err)
+	}
+}
+
 func TestMergeFetched(t *testing.T) {
 	t.Parallel()
 	root := t.TempDir()
