@@ -129,9 +129,17 @@ func TestPullForgeChange(t *testing.T) {
 		t.Fatalf("seen = %v", st.seen[is.ID])
 	}
 	l, _ := loadIssueLog(t, s, is.ID)
-	last := l[len(l)-1]
-	if last.Origin == nil || last.Origin.Forge != key {
-		t.Fatalf("last op = %+v", last)
+	var found bool
+	for _, e := range l {
+		if e.Kind == "set-title" {
+			found = true
+			if e.Author != "forge:ann" || e.Origin == nil || e.Origin.Forge != key || e.Origin.Event != "issue:100" {
+				t.Fatalf("set-title = %+v", e)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("no set-title")
 	}
 }
 
@@ -201,4 +209,136 @@ func loadIssueLog(t *testing.T, s *gitstore.Store, id string) ([]oplog.Entry, er
 		t.Fatal(err)
 	}
 	return l.Entries, nil
+}
+
+func labels(t *testing.T, s *gitstore.Store) []string {
+	t.Helper()
+	return only(t, s).Labels
+}
+
+func TestPullLabelsMerge(t *testing.T) {
+	t.Parallel()
+	s, f := newStore(t), fake.New(key)
+	one := sample()
+	one.Labels = []string{"bug"}
+	f.Add(one)
+	pull(t, s, f)
+	is := only(t, s)
+	// ui added in git-board, docs on the forge.
+	if _, err := issue.Do(s, is.ID, issue.ChangeLabels("me", []string{"ui"}, nil)); err != nil {
+		t.Fatal(err)
+	}
+	f.Edit("1", func(i *forge.Issue) { i.Labels = []string{"bug", "docs"} })
+	if r := pull(t, s, f); r != (Report{Updated: 1}) {
+		t.Fatalf("report = %+v", r)
+	}
+	if got := labels(t, s); !reflect.DeepEqual(got, []string{"bug", "docs", "ui"}) {
+		t.Fatalf("labels = %v", got)
+	}
+	st, _ := loadState(s, key)
+	if st.seen[is.ID]["labels"] != "bug\ndocs" {
+		t.Fatalf("seen = %q", st.seen[is.ID]["labels"])
+	}
+	// the forge drops bug (git-board has it): removed. It drops docs after
+	// git-board dropped it too: nothing to remove.
+	if _, err := issue.Do(s, is.ID, issue.ChangeLabels("me", nil, []string{"docs"})); err != nil {
+		t.Fatal(err)
+	}
+	f.Edit("1", func(i *forge.Issue) { i.Labels = nil })
+	pull(t, s, f)
+	if got := labels(t, s); !reflect.DeepEqual(got, []string{"ui"}) {
+		t.Fatalf("labels = %v", got)
+	}
+	st, _ = loadState(s, key)
+	if st.seen[is.ID]["labels"] != "" {
+		t.Fatalf("seen = %q", st.seen[is.ID]["labels"])
+	}
+}
+
+// Labels both sides already agree on write no operation, only a seen.
+func TestPullLabelsAgreedWriteNoOp(t *testing.T) {
+	t.Parallel()
+	s, f := newStore(t), fake.New(key)
+	one := sample()
+	one.Labels = []string{"bug", "ui"}
+	f.Add(one)
+	pull(t, s, f)
+	is := only(t, s)
+	// git-board drops ui and adds docs; the forge drops ui and adds docs.
+	if _, err := issue.Do(s, is.ID, issue.ChangeLabels("me", []string{"docs"}, []string{"ui"})); err != nil {
+		t.Fatal(err)
+	}
+	f.Edit("1", func(i *forge.Issue) { i.Labels = []string{"bug", "docs"} })
+	n := len(mustLog(t, s, is.ID))
+	if r := pull(t, s, f); r != (Report{Updated: 1}) {
+		t.Fatalf("report = %+v", r)
+	}
+	if got := len(mustLog(t, s, is.ID)); got != n {
+		t.Fatalf("ops = %d, want %d", got, n)
+	}
+	if got := labels(t, s); !reflect.DeepEqual(got, []string{"bug", "docs"}) {
+		t.Fatalf("labels = %v", got)
+	}
+	st, _ := loadState(s, key)
+	if st.seen[is.ID]["labels"] != "bug\ndocs" {
+		t.Fatalf("seen = %q", st.seen[is.ID]["labels"])
+	}
+}
+
+func TestPullLocalAssigneeIsNotALabel(t *testing.T) {
+	t.Parallel()
+	s, f := newStore(t), fake.New(key)
+	one := sample()
+	one.Labels = []string{"bug"}
+	f.Add(one)
+	pull(t, s, f)
+	is := only(t, s)
+	if _, err := issue.Do(s, is.ID, issue.ChangeLabels("me", []string{"assignee:x", "Assignee:y"}, nil)); err != nil {
+		t.Fatal(err)
+	}
+	// The forge drops bug and adds docs. The assignee labels stay and
+	// seen has none of them.
+	f.Edit("1", func(i *forge.Issue) { i.Labels = []string{"docs"} })
+	pull(t, s, f)
+	if got := labels(t, s); !reflect.DeepEqual(got, []string{"Assignee:y", "assignee:x", "docs"}) {
+		t.Fatalf("labels = %v", got)
+	}
+	st, _ := loadState(s, key)
+	if st.seen[is.ID]["labels"] != "docs" {
+		t.Fatalf("seen = %q", st.seen[is.ID]["labels"])
+	}
+	// Nothing changed since: no write.
+	before := refs(t, s)
+	if r := pull(t, s, f); r != (Report{Unchanged: 1}) || !reflect.DeepEqual(before, refs(t, s)) {
+		t.Fatalf("report = %+v", r)
+	}
+}
+
+func TestPullBothChangedToTheSame(t *testing.T) {
+	t.Parallel()
+	s, f := newStore(t), fake.New(key)
+	f.Add(sample())
+	pull(t, s, f)
+	is := only(t, s)
+	if _, err := issue.Do(s, is.ID, issue.SetTitle("me", "same")); err != nil {
+		t.Fatal(err)
+	}
+	f.Edit("1", func(i *forge.Issue) { i.Title = "same" })
+	n := len(mustLog(t, s, is.ID))
+	if r := pull(t, s, f); r != (Report{Updated: 1}) {
+		t.Fatalf("report = %+v", r)
+	}
+	st, _ := loadState(s, key)
+	if st.seen[is.ID]["title"] != "same" {
+		t.Fatalf("seen = %v", st.seen[is.ID])
+	}
+	if len(mustLog(t, s, is.ID)) != n {
+		t.Fatal("an issue op was written")
+	}
+}
+
+func mustLog(t *testing.T, s *gitstore.Store, id string) []oplog.Entry {
+	t.Helper()
+	l, _ := loadIssueLog(t, s, id)
+	return l
 }
