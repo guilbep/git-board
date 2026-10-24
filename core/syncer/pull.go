@@ -44,10 +44,10 @@ func Pull(ctx context.Context, s *gitstore.Store, f forge.Forge) (Report, error)
 		}
 		var wrote, created bool
 		if id, ok := st.links[fi.ID]; ok {
-			wrote, err = pullLinked(s, f.Key(), st, id, fi, now)
+			wrote, err = pullLinked(ctx, s, f.Key(), st, id, fi, now)
 		} else {
 			created = true
-			err = pullNew(s, f.Key(), st, fi, now)
+			err = pullNew(ctx, s, f.Key(), st, fi, now)
 		}
 		if err != nil {
 			return r, err
@@ -96,7 +96,7 @@ func from(op oplog.Op, key, event string, time int64) oplog.Op {
 	return op
 }
 
-func pullNew(s *gitstore.Store, key string, st *state, fi forge.Issue, now int64) error {
+func pullNew(ctx context.Context, s *gitstore.Store, key string, st *state, fi forge.Issue, now int64) error {
 	a := "forge:" + fi.Author.Login
 	ev := "issue:" + fi.ID
 	labels := strings.Join(labelSet(fi.Labels), "\n")
@@ -110,7 +110,7 @@ func pullNew(s *gitstore.Store, key string, st *state, fi forge.Issue, now int64
 	for _, c := range fi.Comments {
 		ops = append(ops, from(issue.NewComment("forge:"+c.Author.Login, c.Body), key, "comment:"+c.ID, c.Time))
 	}
-	is, err := issue.Create(s, ops...)
+	is, err := issue.Create(ctx, s, ops...)
 	if err != nil {
 		return err
 	}
@@ -124,10 +124,10 @@ func pullNew(s *gitstore.Store, key string, st *state, fi forge.Issue, now int64
 	for _, c := range fi.Comments {
 		sops = append(sops, seenOp(a, now, is.ID, "comment:"+c.ID, c.Body))
 	}
-	return st.write(s, key, sops)
+	return st.write(ctx, s, key, sops)
 }
 
-func pullLinked(s *gitstore.Store, key string, st *state, id string, fi forge.Issue, now int64) (bool, error) {
+func pullLinked(ctx context.Context, s *gitstore.Store, key string, st *state, id string, fi forge.Issue, now int64) (bool, error) {
 	is, err := issue.Load(s, id)
 	if err != nil {
 		if isMissing(err) {
@@ -195,11 +195,11 @@ func pullLinked(s *gitstore.Store, key string, st *state, id string, fi forge.Is
 	}
 
 	if len(ops) > 0 {
-		if _, err := issue.Do(s, id, ops...); err != nil {
+		if _, err := issue.Do(ctx, s, id, ops...); err != nil {
 			return false, err
 		}
 	}
-	if err := st.write(s, key, sops); err != nil {
+	if err := st.write(ctx, s, key, sops); err != nil {
 		return false, err
 	}
 	return len(ops)+len(sops) > 0, nil

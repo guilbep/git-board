@@ -2,8 +2,11 @@ package oplog
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
+	"reflect"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/guilbep/git-board/core/gitstore"
@@ -13,8 +16,8 @@ func TestMergeFastForward(t *testing.T) {
 	t.Parallel()
 	s := newStore(t)
 	l := create(t, s, "issue", "", op("create"))
-	next := commitOf(t, s, map[string]string{"pack": `{"clock":2,"ops":[{"kind":"comment"}]}`}, l.Head)
-	got, err := Merge(s, "issue", l.ID, next)
+	next := commitOf(t, s, map[string]string{"pack": `{"clock":2,"ops":[{"kind":"comment","time":1}]}`}, l.Head)
+	got, err := Merge(t.Context(), s, "issue", l.ID, next)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -33,7 +36,7 @@ func TestMergeContained(t *testing.T) {
 	first := l.Head
 	appendOps(t, s, l, op("comment"))
 	for _, other := range []gitstore.Hash{first, l.Head} {
-		got, err := Merge(s, "issue", l.ID, other)
+		got, err := Merge(t.Context(), s, "issue", l.ID, other)
 		if err != nil || got.Head != l.Head {
 			t.Fatalf("merge of %v: head %v, %v; want %v", other, got.Head, err, l.Head)
 		}
@@ -50,9 +53,9 @@ func TestMergeDiverged(t *testing.T) {
 	ours1 := l.Head
 	appendOps(t, s, l, op("ours2"))
 	ours := l.Head
-	theirs := commitOf(t, s, map[string]string{"pack": `{"clock":2,"ops":[{"kind":"theirs"}]}`}, first)
+	theirs := commitOf(t, s, map[string]string{"pack": `{"clock":2,"ops":[{"kind":"theirs","time":1}]}`}, first)
 
-	got, err := Merge(s, "issue", l.ID, theirs)
+	got, err := Merge(t.Context(), s, "issue", l.ID, theirs)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,7 +80,10 @@ func TestMergeDiverged(t *testing.T) {
 
 	// An append on the merge gets the merge's clock + 1.
 	appendOps(t, s, got, op("after"))
-	after := load(t, s, "issue", l.ID).Entries
+	if loaded := load(t, s, "issue", l.ID); !reflect.DeepEqual(got, loaded) {
+		t.Fatalf("appended %+v\nloaded %+v", got, loaded)
+	}
+	after := got.Entries
 	if last := after[len(after)-1]; last.Kind != "after" || last.Clock != 5 {
 		t.Fatalf("last = %+v", last)
 	}
@@ -87,8 +93,8 @@ func TestMergeRejectsBadHead(t *testing.T) {
 	t.Parallel()
 	s := newStore(t)
 	l := create(t, s, "issue", "", op("create"))
-	bad := commitOf(t, s, map[string]string{"pack": `{"clock":5,"ops":[{"kind":"comment"}]}`}, l.Head)
-	if _, err := Merge(s, "issue", l.ID, bad); err == nil {
+	bad := commitOf(t, s, map[string]string{"pack": `{"clock":5,"ops":[{"kind":"comment","time":1}]}`}, l.Head)
+	if _, err := Merge(t.Context(), s, "issue", l.ID, bad); err == nil {
 		t.Fatal("merge of a bad head: no error")
 	}
 	if h, _ := s.Ref(RefName("issue", l.ID)); h != l.Head {
@@ -101,10 +107,11 @@ func TestMergeRejectsBadHead(t *testing.T) {
 func TestMergeFetchedSkipsUnchanged(t *testing.T) {
 	t.Parallel()
 	s := newStore(t)
-	bad := commitOf(t, s, map[string]string{"pack": `{"clock":5,"ops":[{"kind":"create"}]}`})
-	setRef(t, s, RefName("issue", "x"), bad, gitstore.ZeroHash)
-	setRef(t, s, "refs/board-remotes/origin/issue/x", bad, gitstore.ZeroHash)
-	if n, err := MergeFetched(s, "origin"); err != nil || n != 0 {
+	bad := commitOf(t, s, map[string]string{"pack": `{"clock":5,"ops":[{"kind":"create","time":1}]}`})
+	const id = "3f7a9c2e41b6d08a5e1f93c7b2d4a6e8f0c1b3d5"
+	setRef(t, s, RefName("issue", id), bad, gitstore.ZeroHash)
+	setRef(t, s, "refs/board-remotes/origin/issue/"+id, bad, gitstore.ZeroHash)
+	if n, err := MergeFetched(t.Context(), s, "origin"); err != nil || n != 0 {
 		t.Fatalf("moved = %d, %v; want 0", n, err)
 	}
 }
@@ -139,8 +146,13 @@ func TestMergeFetched(t *testing.T) {
 	setRef(t, b, "refs/board/seq", sb.Head, gitstore.ZeroHash)
 	setRef(t, b, "refs/board-remotes/origin/seq", iss.Head, gitstore.ZeroHash)
 	setRef(t, b, "refs/board-remotes/origin/other/x", iss.Head, gitstore.ZeroHash)
+	// Nor are refs whose names aren't ids, even at a head that won't load.
+	corrupt := commitOf(t, b, map[string]string{"notes": "x"})
+	for _, name := range badRefs {
+		setRef(t, b, "refs/board-remotes/origin/issue/"+name, corrupt, gitstore.ZeroHash)
+	}
 
-	n, err := MergeFetched(b, "origin")
+	n, err := MergeFetched(t.Context(), b, "origin")
 	if err != nil || n != 2 {
 		t.Fatalf("moved = %d, %v; want 2", n, err)
 	}
@@ -160,7 +172,7 @@ func TestMergeFetched(t *testing.T) {
 		t.Fatalf("kinds %v, clocks %v; want %v", opKinds(got), clocks(got), want)
 	}
 
-	if n, err := MergeFetched(b, "origin"); err != nil || n != 0 {
+	if n, err := MergeFetched(t.Context(), b, "origin"); err != nil || n != 0 {
 		t.Fatalf("second merge moved %d, %v", n, err)
 	}
 	if h, _ := b.Ref("refs/board/seq"); h != sb.Head {
@@ -168,5 +180,83 @@ func TestMergeFetched(t *testing.T) {
 	}
 	if h, _ := b.Ref("refs/board/other/x"); h != gitstore.ZeroHash {
 		t.Fatalf("refs/board/other/x = %v", h)
+	}
+	for _, name := range badRefs {
+		if h, _ := b.Ref("refs/board/issue/" + name); h != gitstore.ZeroHash {
+			t.Fatalf("refs/board/issue/%s = %v", name, h)
+		}
+	}
+}
+
+// A fetched head that fails to merge is reported, and the others still
+// merge. The bad id sorts first.
+func TestMergeFetchedGoesOnPastFailure(t *testing.T) {
+	t.Parallel()
+	s := newStore(t)
+	badID, goodID := fmt.Sprintf("%040x", 1), strings.Repeat("f", 40)
+	bad := commitOf(t, s, map[string]string{"pack": `{"clock":5,"ops":[{"kind":"create","time":1}]}`})
+	good := commitOf(t, s, map[string]string{"pack": `{"clock":1,"ops":[{"kind":"create","time":1}]}`})
+	setRef(t, s, "refs/board-remotes/origin/issue/"+badID, bad, gitstore.ZeroHash)
+	setRef(t, s, "refs/board-remotes/origin/issue/"+goodID, good, gitstore.ZeroHash)
+	n, err := MergeFetched(t.Context(), s, "origin")
+	if n != 1 || err == nil || !strings.Contains(err.Error(), bad.String()) {
+		t.Fatalf("moved = %d, %v; want 1 and an error naming %s", n, err, bad)
+	}
+	if h, _ := s.Ref(RefName("issue", goodID)); h != good {
+		t.Fatalf("good ref = %v, want %v", h, good)
+	}
+	if h, _ := s.Ref(RefName("issue", badID)); h != gitstore.ZeroHash {
+		t.Fatalf("bad ref = %v", h)
+	}
+}
+
+// A merge whose ref moves under it merges again, with the new local head.
+func TestMergeRetries(t *testing.T) {
+	s := newStore(t)
+	l := create(t, s, "issue", "", op("create"))
+	first := l.Head
+	appendOps(t, s, l, op("ours"))
+	theirs := commitOf(t, s, map[string]string{"pack": `{"clock":2,"ops":[{"kind":"theirs","time":1}]}`}, first)
+	// Another writer appends between Merge's read and its write.
+	moved := commitOf(t, s, map[string]string{"pack": `{"clock":3,"ops":[{"kind":"other","time":1}]}`}, l.Head)
+	calls := 0
+	swapUpdateRef(t, func(s *gitstore.Store, ctx context.Context, name string, next, prev gitstore.Hash) error {
+		calls++
+		if calls == 1 {
+			setRef(t, s, name, moved, prev)
+		}
+		return s.UpdateRef(ctx, name, next, prev)
+	})
+	got, err := Merge(t.Context(), s, "issue", l.ID, theirs)
+	if err != nil || calls != 2 {
+		t.Fatalf("merge: %v, %d calls; want 2", err, calls)
+	}
+	c, err := s.ReadCommit(got.Head)
+	if err != nil || !slices.Equal(c.Parents, []gitstore.Hash{moved, theirs}) {
+		t.Fatalf("merge parents = %v, %v; want %v", c.Parents, err, []gitstore.Hash{moved, theirs})
+	}
+	if p := readPack(t, s, got.Head); p != `{"clock":4,"ops":[]}` {
+		t.Fatalf("merge pack = %s", p)
+	}
+	if want := load(t, s, "issue", l.ID); !reflect.DeepEqual(got, want) {
+		t.Fatalf("merged %+v\nloaded %+v", got, want)
+	}
+}
+
+// A merge that fails after its local ref moved still counts the move: here
+// the ref moves to a head that won't load, so the merge's retry fails.
+func TestMergeFetchedCountsMoveOfFailedMerge(t *testing.T) {
+	s := newStore(t)
+	l := create(t, s, "issue", "", op("create"))
+	theirs := commitOf(t, s, map[string]string{"pack": `{"clock":2,"ops":[{"kind":"theirs","time":1}]}`}, l.Head)
+	setRef(t, s, "refs/board-remotes/origin/issue/"+l.ID, theirs, gitstore.ZeroHash)
+	corrupt := commitOf(t, s, map[string]string{"notes": "x"})
+	swapUpdateRef(t, func(s *gitstore.Store, ctx context.Context, name string, next, prev gitstore.Hash) error {
+		setRef(t, s, name, corrupt, prev)
+		return s.UpdateRef(ctx, name, next, prev)
+	})
+	n, err := MergeFetched(t.Context(), s, "origin")
+	if n != 1 || err == nil || !strings.Contains(err.Error(), corrupt.String()) {
+		t.Fatalf("moved = %d, %v; want 1 and an error naming %s", n, err, corrupt)
 	}
 }

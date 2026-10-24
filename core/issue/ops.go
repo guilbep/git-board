@@ -1,6 +1,7 @@
 package issue
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -45,14 +46,14 @@ func ChangeLabels(author string, add, remove []string) oplog.Op {
 }
 
 // Create writes a new issue. The first operation must be a create.
-func Create(s *gitstore.Store, ops ...oplog.Op) (*Issue, error) {
+func Create(ctx context.Context, s *gitstore.Store, ops ...oplog.Op) (*Issue, error) {
 	if len(ops) == 0 || ops[0].Kind != "create" {
 		return nil, errors.New("issue: the first operation must be a create")
 	}
 	if _, err := Apply(&oplog.Log{Entries: pending(nil, ops)}); err != nil {
 		return nil, err
 	}
-	l, err := oplog.Create(s, "issue", "", ops)
+	l, err := oplog.Create(ctx, s, "issue", "", ops)
 	if err != nil {
 		return nil, err
 	}
@@ -72,7 +73,7 @@ func Load(s *gitstore.Store, id string) (*Issue, error) {
 func List(s *gitstore.Store) ([]string, error) { return oplog.List(s, "issue") }
 
 // Do appends ops to an issue and returns its new state.
-func Do(s *gitstore.Store, id string, ops ...oplog.Op) (*Issue, error) {
+func Do(ctx context.Context, s *gitstore.Store, id string, ops ...oplog.Op) (*Issue, error) {
 	l, err := oplog.Load(s, "issue", id)
 	if err != nil {
 		return nil, err
@@ -80,7 +81,7 @@ func Do(s *gitstore.Store, id string, ops ...oplog.Op) (*Issue, error) {
 	if _, err := Apply(&oplog.Log{ID: l.ID, Entries: pending(l.Entries, ops)}); err != nil {
 		return nil, err
 	}
-	if err := l.Append(s, ops); err != nil {
+	if err := l.Append(ctx, s, ops); err != nil {
 		return nil, err
 	}
 	return Apply(l)

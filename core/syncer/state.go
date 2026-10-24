@@ -2,6 +2,7 @@
 package syncer
 
 import (
+	"context"
 	"crypto/sha1"
 	"encoding/hex"
 	"encoding/json"
@@ -103,11 +104,11 @@ func seenOp(author string, now int64, issue, field, value string) oplog.Op {
 // ponytail: it reloads the whole sync entity after each write, so a first
 // pull of n issues is O(n²) reads; update links and seen in place when it
 // matters (M6's mass first pull will).
-func (st *state) write(s *gitstore.Store, key string, ops []oplog.Op) error {
+func (st *state) write(ctx context.Context, s *gitstore.Store, key string, ops []oplog.Op) error {
 	if len(ops) == 0 {
 		return nil
 	}
-	if err := writeOps(s, StateID(key), st.log, ops); err != nil {
+	if err := writeOps(ctx, s, StateID(key), st.log, ops); err != nil {
 		return err
 	}
 	fresh, err := loadState(s, key)
@@ -122,12 +123,12 @@ func (st *state) write(s *gitstore.Store, key string, ops []oplog.Op) error {
 // is nil. A create that finds the entity made by another write since then
 // appends to it instead; not there yet, the other write still holds the
 // ref's lock, so it creates again. It tries 5 times, as oplog's writes do.
-func writeOps(s *gitstore.Store, id string, l *oplog.Log, ops []oplog.Op) error {
+func writeOps(ctx context.Context, s *gitstore.Store, id string, l *oplog.Log, ops []oplog.Op) error {
 	for try := 1; ; try++ {
 		if l != nil {
-			return l.Append(s, ops)
+			return l.Append(ctx, s, ops)
 		}
-		_, err := oplog.Create(s, "sync", id, ops)
+		_, err := oplog.Create(ctx, s, "sync", id, ops)
 		if !errors.Is(err, gitstore.ErrRefMoved) || try == 5 {
 			return err
 		}

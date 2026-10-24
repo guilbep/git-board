@@ -56,21 +56,21 @@ func TestMergeConverges(t *testing.T) {
 			check(s.Fetch(ctx, "peer"))
 		}
 		for _, s := range []*gitstore.Store{a, b} {
-			_, err := oplog.MergeFetched(s, "peer")
+			_, err := oplog.MergeFetched(t.Context(), s, "peer")
 			check(err)
 		}
 	}
 
-	c, err := Create(a, NewCreate("ann", "T", "B"))
+	c, err := Create(t.Context(), a, NewCreate("ann", "T", "B"))
 	c = must(t, c, err)
 	check(a.Push(ctx, "origin"))
 	check(b.Fetch(ctx, "origin"))
-	_, err = oplog.MergeFetched(b, "origin")
+	_, err = oplog.MergeFetched(t.Context(), b, "origin")
 	check(err)
 
-	_, err = Do(a, c.ID, SetTitle("ann", "from A"), ChangeLabels("ann", []string{"a"}, nil))
+	_, err = Do(t.Context(), a, c.ID, SetTitle("ann", "from A"), ChangeLabels("ann", []string{"a"}, nil))
 	check(err)
-	_, err = Do(b, c.ID, NewComment("bob", "hi"), SetTitle("bob", "from B"))
+	_, err = Do(t.Context(), b, c.ID, NewComment("bob", "hi"), SetTitle("bob", "from B"))
 	check(err)
 	// Both packs have clock 2, so the greater hash sorts last.
 	want := "from B"

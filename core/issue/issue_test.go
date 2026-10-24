@@ -47,7 +47,7 @@ func must(t *testing.T, is *Issue, err error) *Issue {
 func TestCreateAndLoad(t *testing.T) {
 	t.Parallel()
 	s := newStore(t)
-	c, err := Create(s, NewCreate("ann", "T", "B"))
+	c, err := Create(t.Context(), s, NewCreate("ann", "T", "B"))
 	c = must(t, c, err)
 	l, err := oplog.Load(s, "issue", c.ID)
 	if err != nil {
@@ -69,12 +69,12 @@ func TestCreateAndLoad(t *testing.T) {
 func TestEveryOp(t *testing.T) {
 	t.Parallel()
 	s := newStore(t)
-	c, err := Create(s, NewCreate("ann", "T", "B"))
+	c, err := Create(t.Context(), s, NewCreate("ann", "T", "B"))
 	c = must(t, c, err)
-	c, err = Do(s, c.ID, NewComment("bob", "first"))
+	c, err = Do(t.Context(), s, c.ID, NewComment("bob", "first"))
 	c = must(t, c, err)
 	cid := c.Comments[0].ID
-	c, err = Do(s, c.ID,
+	c, err = Do(t.Context(), s, c.ID,
 		EditText("ann", c.BodyOp, "B2"),
 		EditText("bob", cid, "first2"),
 		SetTitle("ann", "T2"),
@@ -96,7 +96,7 @@ func TestEveryOp(t *testing.T) {
 
 func TestFirstOpMustBeCreate(t *testing.T) {
 	t.Parallel()
-	if _, err := Create(newStore(t), NewComment("a", "x")); err == nil {
+	if _, err := Create(t.Context(), newStore(t), NewComment("a", "x")); err == nil {
 		t.Fatal("want an error")
 	}
 }
@@ -104,9 +104,9 @@ func TestFirstOpMustBeCreate(t *testing.T) {
 func TestSecondCreateAndBadStatus(t *testing.T) {
 	t.Parallel()
 	s := newStore(t)
-	c, err := Create(s, NewCreate("a", "T", ""))
+	c, err := Create(t.Context(), s, NewCreate("a", "T", ""))
 	c = must(t, c, err)
-	if _, err := Do(s, c.ID, NewCreate("a", "U", "")); err == nil {
+	if _, err := Do(t.Context(), s, c.ID, NewCreate("a", "U", "")); err == nil {
 		t.Fatal("second create: want an error")
 	}
 	rejected(t, s, c, NewCreate("a", "U", ""))
@@ -114,7 +114,7 @@ func TestSecondCreateAndBadStatus(t *testing.T) {
 	rejected(t, s, c, EditText("a", "nope:0", "x"))
 
 	s = newStore(t)
-	if _, err := Create(s, NewCreate("a", "T", ""), SetStatus("a", "wip")); err == nil {
+	if _, err := Create(t.Context(), s, NewCreate("a", "T", ""), SetStatus("a", "wip")); err == nil {
 		t.Fatal("bad status: want an error")
 	}
 	if ids, err := List(s); err != nil || len(ids) != 0 {
@@ -125,7 +125,7 @@ func TestSecondCreateAndBadStatus(t *testing.T) {
 // rejected checks that Do refuses op and leaves the issue as it was.
 func rejected(t *testing.T, s *gitstore.Store, want *Issue, op oplog.Op) {
 	t.Helper()
-	if _, err := Do(s, want.ID, op); err == nil {
+	if _, err := Do(t.Context(), s, want.ID, op); err == nil {
 		t.Fatalf("%s: want an error", op.Kind)
 	}
 	got, err := Load(s, want.ID)
@@ -138,7 +138,7 @@ func TestUnknownOpIsAnError(t *testing.T) {
 	t.Parallel()
 	for _, data := range []string{"", `{"title":5}`} {
 		s := newStore(t)
-		l, err := oplog.Create(s, "issue", "", []oplog.Op{NewCreate("a", "T", ""), {Kind: "set-priority", Data: []byte(data)}})
+		l, err := oplog.Create(t.Context(), s, "issue", "", []oplog.Op{NewCreate("a", "T", ""), {Kind: "set-priority", Time: 1, Data: []byte(data)}})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -167,7 +167,7 @@ func bodies(is *Issue) []string {
 func TestDuplicateOriginCommentIsOne(t *testing.T) {
 	t.Parallel()
 	s := newStore(t)
-	c, err := Create(s, NewCreate("a", "T", ""),
+	c, err := Create(t.Context(), s, NewCreate("a", "T", ""),
 		withOrigin(NewComment("bob", "one"), "f", "comment:1"),
 		withOrigin(NewComment("bob", "two"), "f", "comment:1"),
 		NewComment("ann", "plain"), NewComment("ann", "plain"), // no origin: never one
@@ -179,11 +179,11 @@ func TestDuplicateOriginCommentIsOne(t *testing.T) {
 	if want := []string{"one", "plain", "plain", "x", "y"}; !reflect.DeepEqual(bodies(c), want) || c.Comments[0].ID != first {
 		t.Fatalf("comments = %+v, want bodies %v", c.Comments, want)
 	}
-	c, err = Do(s, c.ID, EditText("bob", second, "edited"))
+	c, err = Do(t.Context(), s, c.ID, EditText("bob", second, "edited"))
 	if c = must(t, c, err); c.Comments[0].Body != "edited" || len(c.Comments) != 5 {
 		t.Fatalf("after an edit of the second id: %+v", c.Comments)
 	}
-	c, err = Do(s, c.ID, EditText("bob", first, "again"))
+	c, err = Do(t.Context(), s, c.ID, EditText("bob", first, "again"))
 	if c = must(t, c, err); c.Comments[0].Body != "again" || len(c.Comments) != 5 {
 		t.Fatalf("after an edit of the first id: %+v", c.Comments)
 	}
@@ -194,15 +194,15 @@ func TestDuplicateOriginCommentIsOne(t *testing.T) {
 func TestPendingTargetRefused(t *testing.T) {
 	t.Parallel()
 	s := newStore(t)
-	if _, err := Create(s, NewCreate("a", "T", ""), EditText("a", "pending:0", "x")); !errors.Is(err, ErrBadTarget) {
+	if _, err := Create(t.Context(), s, NewCreate("a", "T", ""), EditText("a", "pending:0", "x")); !errors.Is(err, ErrBadTarget) {
 		t.Fatalf("create: err = %v", err)
 	}
 	if ids, err := List(s); err != nil || len(ids) != 0 {
 		t.Fatalf("rejected Create left %v, %v", ids, err)
 	}
-	c, err := Create(s, NewCreate("a", "T", ""))
+	c, err := Create(t.Context(), s, NewCreate("a", "T", ""))
 	c = must(t, c, err)
-	if _, err := Do(s, c.ID, NewComment("a", "x"), EditText("a", "pending:0", "y")); !errors.Is(err, ErrBadTarget) {
+	if _, err := Do(t.Context(), s, c.ID, NewComment("a", "x"), EditText("a", "pending:0", "y")); !errors.Is(err, ErrBadTarget) {
 		t.Fatalf("do: err = %v", err)
 	}
 	if got, err := Load(s, c.ID); err != nil || !reflect.DeepEqual(got, c) {
@@ -215,13 +215,13 @@ func TestBadLabelRefused(t *testing.T) {
 	t.Parallel()
 	for _, l := range []string{"", "a\nb"} {
 		s := newStore(t)
-		if _, err := Create(s, NewCreate("a", "T", ""), ChangeLabels("a", []string{l}, nil)); err == nil {
+		if _, err := Create(t.Context(), s, NewCreate("a", "T", ""), ChangeLabels("a", []string{l}, nil)); err == nil {
 			t.Fatalf("create with label %q: want an error", l)
 		}
 		if ids, err := List(s); err != nil || len(ids) != 0 {
 			t.Fatalf("rejected Create left %v, %v", ids, err)
 		}
-		c, err := Create(s, NewCreate("a", "T", ""))
+		c, err := Create(t.Context(), s, NewCreate("a", "T", ""))
 		c = must(t, c, err)
 		rejected(t, s, c, ChangeLabels("a", []string{l}, nil))
 		rejected(t, s, c, ChangeLabels("a", nil, []string{l}))
@@ -235,7 +235,7 @@ func TestOpenLinkedWorktree(t *testing.T) {
 	main, wt := filepath.Join(root, "main"), filepath.Join(root, "wt")
 	gitRun(t, root, "init", "-q", main)
 	gitRun(t, main, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "--no-gpg-sign", "-m", "x")
-	first, err := Create(open(t, main), NewCreate("a", "T", ""))
+	first, err := Create(t.Context(), open(t, main), NewCreate("a", "T", ""))
 	first = must(t, first, err)
 	gitRun(t, main, "worktree", "add", "-q", wt)
 
@@ -243,7 +243,7 @@ func TestOpenLinkedWorktree(t *testing.T) {
 	if ids, err := List(w); err != nil || len(ids) != 1 || ids[0] != first.ID {
 		t.Fatalf("list from the worktree = %v, %v", ids, err)
 	}
-	second, err := Create(w, NewCreate("b", "U", ""))
+	second, err := Create(t.Context(), w, NewCreate("b", "U", ""))
 	second = must(t, second, err)
 	got, err := Load(open(t, main), second.ID)
 	if got = must(t, got, err); !reflect.DeepEqual(got, second) {
@@ -254,7 +254,7 @@ func TestOpenLinkedWorktree(t *testing.T) {
 func TestEditUnknownTarget(t *testing.T) {
 	t.Parallel()
 	s := newStore(t)
-	_, err := Create(s, NewCreate("a", "T", ""), EditText("a", "nope:0", "x"))
+	_, err := Create(t.Context(), s, NewCreate("a", "T", ""), EditText("a", "nope:0", "x"))
 	if !errors.Is(err, ErrBadTarget) {
 		t.Fatalf("err = %v", err)
 	}

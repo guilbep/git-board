@@ -156,7 +156,7 @@ func TestPullKeepsLocalChange(t *testing.T) {
 	f.Add(sample())
 	pull(t, s, f)
 	is := only(t, s)
-	if _, err := issue.Do(s, is.ID, issue.SetTitle("me", "mine")); err != nil {
+	if _, err := issue.Do(t.Context(), s, is.ID, issue.SetTitle("me", "mine")); err != nil {
 		t.Fatal(err)
 	}
 	before := refs(t, s)
@@ -211,7 +211,7 @@ func TestStateFirstWritesBothLand(t *testing.T) {
 		states[i] = st
 	}
 	for i, fid := range []string{"100", "200"} {
-		if err := states[i].write(stores[i], key, []oplog.Op{linkOp("a", 1, "issue"+fid, fid, fid, "")}); err != nil {
+		if err := states[i].write(t.Context(), stores[i], key, []oplog.Op{linkOp("a", 1, "issue"+fid, fid, fid, "")}); err != nil {
 			t.Fatalf("write %d: %v", i, err)
 		}
 	}
@@ -258,7 +258,7 @@ func TestPullLabelsMerge(t *testing.T) {
 	pull(t, s, f)
 	is := only(t, s)
 	// ui added in git-board, docs on the forge.
-	if _, err := issue.Do(s, is.ID, issue.ChangeLabels("me", []string{"ui"}, nil)); err != nil {
+	if _, err := issue.Do(t.Context(), s, is.ID, issue.ChangeLabels("me", []string{"ui"}, nil)); err != nil {
 		t.Fatal(err)
 	}
 	f.Edit("1", func(i *forge.Issue) { i.Labels = []string{"bug", "docs"} })
@@ -274,7 +274,7 @@ func TestPullLabelsMerge(t *testing.T) {
 	}
 	// the forge drops bug (git-board has it): removed. It drops docs after
 	// git-board dropped it too: nothing to remove.
-	if _, err := issue.Do(s, is.ID, issue.ChangeLabels("me", nil, []string{"docs"})); err != nil {
+	if _, err := issue.Do(t.Context(), s, is.ID, issue.ChangeLabels("me", nil, []string{"docs"})); err != nil {
 		t.Fatal(err)
 	}
 	f.Edit("1", func(i *forge.Issue) { i.Labels = nil })
@@ -298,7 +298,7 @@ func TestPullLabelsAgreedWriteNoOp(t *testing.T) {
 	pull(t, s, f)
 	is := only(t, s)
 	// git-board drops ui and adds docs; the forge drops ui and adds docs.
-	if _, err := issue.Do(s, is.ID, issue.ChangeLabels("me", []string{"docs"}, []string{"ui"})); err != nil {
+	if _, err := issue.Do(t.Context(), s, is.ID, issue.ChangeLabels("me", []string{"docs"}, []string{"ui"})); err != nil {
 		t.Fatal(err)
 	}
 	f.Edit("1", func(i *forge.Issue) { i.Labels = []string{"bug", "docs"} })
@@ -326,7 +326,7 @@ func TestPullLocalAssigneeIsNotALabel(t *testing.T) {
 	f.Add(one)
 	pull(t, s, f)
 	is := only(t, s)
-	if _, err := issue.Do(s, is.ID, issue.ChangeLabels("me", []string{"assignee:x", "Assignee:y"}, nil)); err != nil {
+	if _, err := issue.Do(t.Context(), s, is.ID, issue.ChangeLabels("me", []string{"assignee:x", "Assignee:y"}, nil)); err != nil {
 		t.Fatal(err)
 	}
 	// The forge drops bug and adds docs. The assignee labels stay and
@@ -353,7 +353,7 @@ func TestPullBothChangedToTheSame(t *testing.T) {
 	f.Add(sample())
 	pull(t, s, f)
 	is := only(t, s)
-	if _, err := issue.Do(s, is.ID, issue.SetTitle("me", "same")); err != nil {
+	if _, err := issue.Do(t.Context(), s, is.ID, issue.SetTitle("me", "same")); err != nil {
 		t.Fatal(err)
 	}
 	f.Edit("1", func(i *forge.Issue) { i.Title = "same" })
