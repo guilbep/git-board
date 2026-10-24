@@ -127,6 +127,9 @@ func TestReviewCommentsPending(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err := bug.Commit(t.Context()); err != nil {
+		t.Fatal(err)
+	}
 	issue := bug.Id().String()
 	plain, _ := b.AddComment(issue, "plain")
 	line, err := b.CommentWith(issue, "why?", map[string]string{

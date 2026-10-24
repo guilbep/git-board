@@ -51,7 +51,7 @@ func setIdentity(t *testing.T, path string) {
 	if err != nil {
 		t.Fatalf("identity for %s: %v", path, err)
 	}
-	if err := c.SetUserIdentity(id); err != nil {
+	if err := c.SetUserIdentity(t.Context(), id); err != nil {
 		t.Fatalf("set identity for %s: %v", path, err)
 	}
 }
@@ -71,11 +71,14 @@ func seedBug(t *testing.T, path, title string) {
 		t.Fatalf("cache for %s: %v", path, err)
 	}
 	defer c.Close()
-	// Bugs().New already commits the create operation to the repo
-	// itself (see its doc comment) -- no separate Commit() call needed
-	// or wanted here, unlike a New() followed by e.g. ChangeLabels().
-	if _, _, err := c.Bugs().New(title, ""); err != nil {
+	// Bugs().New stages the create operation, as any other: Commit
+	// writes it to the repo.
+	bug, _, err := c.Bugs().New(t.Context(), title, "")
+	if err != nil {
 		t.Fatalf("new bug in %s: %v", path, err)
+	}
+	if err := bug.Commit(t.Context()); err != nil {
+		t.Fatalf("commit bug in %s: %v", path, err)
 	}
 }
 

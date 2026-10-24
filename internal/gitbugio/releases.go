@@ -2,6 +2,7 @@ package gitbugio
 
 import (
 	"cmp"
+	"context"
 	"errors"
 	"fmt"
 	"maps"
@@ -103,7 +104,7 @@ func (b *Backend) releaseResolvers() entity.Resolvers {
 // for a commit, made on another clone before the two met, never shows.
 func (b *Backend) Releases() ([]ReleaseRecord, error) {
 	byCommit := map[string]ReleaseRecord{}
-	for s := range dag.ReadAll(releaseDef, asEntity, b.repo, b.releaseResolvers()) {
+	for s := range dag.ReadAll(context.Background(), releaseDef, asEntity, b.repo, b.releaseResolvers()) {
 		if s.Err != nil {
 			return nil, fmt.Errorf("reading the releases: %w", s.Err)
 		}
@@ -134,7 +135,7 @@ func (b *Backend) CreateRelease(r ReleaseRecord) (ReleaseRecord, error) {
 	if got, ok, err := b.ReleaseFor(r.Commit); ok || err != nil {
 		return got, err
 	}
-	me, err := b.c.GetUserIdentity()
+	me, err := b.c.GetUserIdentity(context.Background())
 	if err != nil {
 		return ReleaseRecord{}, err
 	}
@@ -169,11 +170,11 @@ func (b *Backend) YankRelease(id, reason string) error {
 
 // editRelease adds an operation by you to the record with this id.
 func (b *Backend) editRelease(id string, op func(me identity.Interface) dag.Operation) error {
-	e, err := dag.Read(releaseDef, asEntity, b.repo, b.releaseResolvers(), entity.Id(id))
+	e, err := dag.Read(context.Background(), releaseDef, asEntity, b.repo, b.releaseResolvers(), entity.Id(id))
 	if err != nil {
 		return fmt.Errorf("reading release %s: %w", id, err)
 	}
-	me, err := b.c.GetUserIdentity()
+	me, err := b.c.GetUserIdentity(context.Background())
 	if err != nil {
 		return err
 	}
@@ -188,7 +189,7 @@ func (b *Backend) editRelease(id string, op func(me identity.Interface) dag.Oper
 // issues. The identities go along, as a record names its authors by
 // identity.
 func (b *Backend) PushReleases(remote string) error {
-	if _, err := b.repo.PushRefs(remote, b.c.Identities().GetNamespace(), ReleasesNamespace); err != nil {
+	if _, err := b.repo.PushRefs(context.Background(), remote, b.c.Identities().GetNamespace(), ReleasesNamespace); err != nil {
 		return fmt.Errorf("pushing the releases to %s: %w", remote, err)
 	}
 	return nil
@@ -198,14 +199,14 @@ func (b *Backend) PushReleases(remote string) error {
 // them, and merges them into this clone's. An empty remote is nothing to
 // pull.
 func (b *Backend) PullReleases(remote string) error {
-	_, err := b.repo.FetchRefs(remote, b.c.Identities().GetNamespace(), ReleasesNamespace)
+	_, err := b.repo.FetchRefs(context.Background(), remote, b.c.Identities().GetNamespace(), ReleasesNamespace)
 	if errors.Is(err, transport.ErrEmptyRemoteRepository) {
 		return nil
 	}
 	if err != nil {
 		return fmt.Errorf("fetching the releases from %s: %w", remote, err)
 	}
-	return errors.Join(mergeErr(b.c.Identities().MergeAll(remote)), b.mergeReleases(remote))
+	return errors.Join(mergeErr(b.c.Identities().MergeAll(context.Background(), remote)), b.mergeReleases(remote))
 }
 
 // mergeReleases merges remote's fetched records into this clone's, once
@@ -214,8 +215,8 @@ func (b *Backend) mergeReleases(remote string) error {
 	// a merge commit, when both sides edited a record, needs an author;
 	// without one only that record fails
 	var me identity.Interface
-	if i, err := b.c.GetUserIdentity(); err == nil {
+	if i, err := b.c.GetUserIdentity(context.Background()); err == nil {
 		me = i
 	}
-	return mergeErr(dag.MergeAll(releaseDef, asEntity, b.repo, b.releaseResolvers(), remote, me))
+	return mergeErr(dag.MergeAll(context.Background(), releaseDef, asEntity, b.repo, b.releaseResolvers(), remote, me))
 }

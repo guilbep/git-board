@@ -81,7 +81,7 @@ func TestGitHubToken(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := b.TestCache().SetUserIdentity(i); err != nil {
+		if err := b.TestCache().SetUserIdentity(t.Context(), i); err != nil {
 			t.Fatal(err)
 		}
 		return i

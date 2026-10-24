@@ -16,7 +16,7 @@ func TestFlatKindsAreTheKindField(t *testing.T) {
 	b.SetFlatKinds(&config.Config{Branches: config.Branches{Kinds: map[string]string{"bug": "fix", "feat": "feat"}}})
 	raw := func(id string) []string {
 		t.Helper()
-		bug, err := b.TestCache().Bugs().ResolvePrefix(id)
+		bug, err := b.TestCache().Bugs().ResolvePrefix(t.Context(), id)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -53,11 +53,11 @@ func TestFlatKindsAreTheKindField(t *testing.T) {
 	}
 
 	// a kind:bug written before, beside bug: read once, removed with it
-	bug, _ := b.TestCache().Bugs().ResolvePrefix(id)
-	if _, _, err := bug.ChangeLabels([]string{"kind:bug"}, nil); err != nil {
+	bug, _ := b.TestCache().Bugs().ResolvePrefix(t.Context(), id)
+	if _, _, err := bug.ChangeLabels(t.Context(), []string{"kind:bug"}, nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := bug.Commit(); err != nil {
+	if err := bug.Commit(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 	if got := sorted(b.GetLabels(id)); !slices.Equal(got, []string{"kind:bug", "status:ready"}) {

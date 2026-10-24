@@ -1,6 +1,7 @@
 package gitbugio
 
 import (
+	"context"
 	"regexp"
 	"strings"
 )
@@ -37,7 +38,7 @@ func (b *Backend) Mentioning(login string) (map[string]bool, error) {
 		return nil, err
 	}
 	for id := range hits {
-		bug, err := b.c.Bugs().ResolvePrefix(id)
+		bug, err := b.c.Bugs().ResolvePrefix(context.Background(), id)
 		if err != nil {
 			return nil, err
 		}

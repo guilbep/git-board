@@ -39,13 +39,17 @@ func newBridgeTestRepo(t *testing.T) string {
 	if err != nil {
 		t.Fatalf("NewFromGitUser: %v", err)
 	}
-	if err := c.SetUserIdentity(id); err != nil {
+	if err := c.SetUserIdentity(t.Context(), id); err != nil {
 		t.Fatalf("SetUserIdentity: %v", err)
 	}
 
-	if _, _, err := c.Bugs().NewRaw(id, 1735689600, "cannot change equipment_class", "", nil,
-		map[string]string{"github-url": "https://github.com/EPFL-ENAC/co2-calculator/issues/2605"}); err != nil {
+	bug, _, err := c.Bugs().NewRaw(id, 1735689600, "cannot change equipment_class", "", nil,
+		map[string]string{"github-url": "https://github.com/EPFL-ENAC/co2-calculator/issues/2605"})
+	if err != nil {
 		t.Fatalf("NewRaw: %v", err)
+	}
+	if err := bug.Commit(t.Context()); err != nil {
+		t.Fatalf("Commit: %v", err)
 	}
 	if err := c.Close(); err != nil {
 		t.Fatalf("close cache: %v", err)

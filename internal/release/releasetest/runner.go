@@ -78,7 +78,7 @@ func NewRunner(t *testing.T, environments ...string) (*release.Runner, *Tools, *
 	if err != nil {
 		t.Fatalf("NewFromGitUser: %v", err)
 	}
-	if err := b.TestCache().SetUserIdentity(id); err != nil {
+	if err := b.TestCache().SetUserIdentity(t.Context(), id); err != nil {
 		t.Fatalf("SetUserIdentity: %v", err)
 	}
 	tools := NewTools()

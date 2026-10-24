@@ -196,6 +196,9 @@ func TestInboxProjectRole(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err := hers.Commit(t.Context()); err != nil {
+		t.Fatal(err)
+	}
 	id := hers.Id().String()
 	res := getInbox(t, ts)
 	if len(res.Rows) != 1 || !slices.Equal(res.Rows[0].News, []string{"new issue"}) || !slices.Equal(res.Rows[0].Reasons, []string{"lead-dev (project)"}) || !slices.Equal(res.Roles, []string{"lead-dev"}) {
@@ -209,7 +212,7 @@ func TestInboxProjectRole(t *testing.T) {
 	if _, err := hers.CloseRaw(ann, time.Now().Unix(), nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := hers.Commit(); err != nil {
+	if err := hers.Commit(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 	if res := getInbox(t, ts); len(res.Rows) != 1 || !slices.Equal(res.Rows[0].News, []string{"closed"}) {

@@ -57,7 +57,7 @@ func repo(t *testing.T) (string, *gitbugio.Backend) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := b.TestCache().SetUserIdentity(who); err != nil {
+	if err := b.TestCache().SetUserIdentity(t.Context(), who); err != nil {
 		t.Fatal(err)
 	}
 	return dir, b

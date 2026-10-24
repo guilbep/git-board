@@ -2,6 +2,7 @@ package gitbugio
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"os"
 	"os/exec"
@@ -83,7 +84,7 @@ func (b *Backend) RemoteHead(remote string) string {
 // (gpg.format ssh), as a repository's own commits may be.
 func (b *Backend) Ancestors(hash string) (map[string]bool, error) {
 	if b.dir == "" { // NewForRepo: no git directory to open, git-bug's own commits only
-		list, err := b.repo.ListCommits(repository.Hash(hash))
+		list, err := b.repo.ListCommits(context.Background(), repository.Hash(hash))
 		if err != nil {
 			return nil, err
 		}
@@ -126,7 +127,7 @@ type Commit struct {
 
 // ReadCommit reads one commit, by hash.
 func (b *Backend) ReadCommit(hash string) (Commit, error) {
-	log, err := b.repo.CommitLog(hash, "", 1, "", nil, nil)
+	log, err := b.repo.CommitLog(context.Background(), hash, "", 1, "", nil, nil)
 	if err != nil {
 		return Commit{}, err
 	}

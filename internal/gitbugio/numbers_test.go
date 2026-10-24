@@ -277,7 +277,7 @@ func TestNumbering(t *testing.T) {
 func TestNumbersGoneGitHubNumber(t *testing.T) {
 	t.Parallel()
 	mine, _ := gitbugiotest.NewPair(t)
-	author, err := mine.TestCache().GetUserIdentity()
+	author, err := mine.TestCache().GetUserIdentity(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -285,6 +285,9 @@ func TestNumbersGoneGitHubNumber(t *testing.T) {
 		t.Helper()
 		bug, _, err := mine.TestCache().Bugs().NewRaw(author, 1, title, "", nil, meta)
 		if err != nil {
+			t.Fatal(err)
+		}
+		if err := bug.Commit(t.Context()); err != nil {
 			t.Fatal(err)
 		}
 		return bug.Id().String()
@@ -387,7 +390,7 @@ func TestNumbersOriginWithAMirror(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := b.TestCache().SetUserIdentity(id); err != nil {
+	if err := b.TestCache().SetUserIdentity(t.Context(), id); err != nil {
 		t.Fatal(err)
 	}
 

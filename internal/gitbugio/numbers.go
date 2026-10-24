@@ -2,6 +2,7 @@ package gitbugio
 
 import (
 	"cmp"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -189,7 +190,7 @@ func (b *Backend) FetchNumbers(remote string) error {
 
 // remoteSeq fetches the remote's counter and says where it is: "" for none.
 func (b *Backend) remoteSeq(remote string) (repository.Hash, error) {
-	if _, err := b.repo.FetchRefs(remote, seqNamespace); err != nil && !errors.Is(err, transport.ErrEmptyRemoteRepository) {
+	if _, err := b.repo.FetchRefs(context.Background(), remote, seqNamespace); err != nil && !errors.Is(err, transport.ErrEmptyRemoteRepository) {
 		return "", fmt.Errorf("fetching the numbers from %s: %w", remote, err)
 	}
 	theirs, err := b.repo.ResolveTrackingRef(remote, seqNamespace, seqKey)
@@ -407,7 +408,7 @@ func (b *Backend) pushCounter(remote string, c Counter, parent repository.Hash) 
 	if err := b.repo.UpdateRef(seqNamespace, seqKey, parent, commit); err != nil {
 		return false, err
 	}
-	if _, err := b.repo.PushRefs(remote, seqNamespace); err != nil {
+	if _, err := b.repo.PushRefs(context.Background(), remote, seqNamespace); err != nil {
 		err = fmt.Errorf("pushing the numbers to %s: %w", remote, err)
 		theirs, ferr := b.remoteSeq(remote)
 		switch {

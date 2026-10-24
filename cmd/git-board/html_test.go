@@ -75,19 +75,19 @@ func newHTMLTestRepo(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewFromGitUser: %v", err)
 	}
-	if err := c.SetUserIdentity(id); err != nil {
+	if err := c.SetUserIdentity(t.Context(), id); err != nil {
 		t.Fatalf("SetUserIdentity: %v", err)
 	}
 
 	newLabeled := func(title string, labels ...string) {
-		bug, _, err := c.Bugs().New(title, "")
+		bug, _, err := c.Bugs().New(t.Context(), title, "")
 		if err != nil {
 			t.Fatalf("new bug %q: %v", title, err)
 		}
-		if _, _, err := bug.ChangeLabels(labels, nil); err != nil {
+		if _, _, err := bug.ChangeLabels(t.Context(), labels, nil); err != nil {
 			t.Fatalf("label bug %q: %v", title, err)
 		}
-		if err := bug.Commit(); err != nil {
+		if err := bug.Commit(t.Context()); err != nil {
 			t.Fatalf("commit bug %q: %v", title, err)
 		}
 	}
@@ -95,17 +95,17 @@ func newHTMLTestRepo(t *testing.T) {
 	newLabeled("Fix invoice bug", "status:ready", "prio:p1", "assignee:guilbep", "needs-triage")
 	newLabeled("Groom backlog item", "status:backlog", "prio:p0")
 
-	closed, _, err := c.Bugs().New("Write specs", "")
+	closed, _, err := c.Bugs().New(t.Context(), "Write specs", "")
 	if err != nil {
 		t.Fatalf("new closed bug: %v", err)
 	}
-	if _, _, err := closed.ChangeLabels([]string{"status:done"}, nil); err != nil {
+	if _, _, err := closed.ChangeLabels(t.Context(), []string{"status:done"}, nil); err != nil {
 		t.Fatalf("label closed bug: %v", err)
 	}
-	if _, err := closed.Close(); err != nil {
+	if _, err := closed.Close(t.Context()); err != nil {
 		t.Fatalf("close bug: %v", err)
 	}
-	if err := closed.Commit(); err != nil {
+	if err := closed.Commit(t.Context()); err != nil {
 		t.Fatalf("commit closed bug: %v", err)
 	}
 

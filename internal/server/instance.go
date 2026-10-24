@@ -2,14 +2,14 @@ package server
 
 import (
 	"encoding/json"
+	"errors"
 	"net"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
+	"syscall"
 	"time"
-
-	"github.com/git-bug/git-bug/util/process"
 )
 
 // Instance is a running server, as its file in the repository says
@@ -49,7 +49,7 @@ func ReadInstance(gitDir string) (Instance, bool) {
 // repository, is ignored.
 func Running(gitDir string) (Instance, bool) {
 	inst, ok := ReadInstance(gitDir)
-	if !ok || !process.IsRunning(inst.PID) {
+	if !ok || !isRunning(inst.PID) {
 		return inst, false
 	}
 	c := http.Client{Timeout: time.Second}
@@ -63,6 +63,18 @@ func Running(gitDir string) (Instance, bool) {
 		return inst, false
 	}
 	return inst, sameDir(repo.GitDir, gitDir)
+}
+
+// isRunning is git-bug's util/process.IsRunning, gone with its cache
+// lock: signal 0 tests the process without touching it, and EPERM is one
+// running as another user.
+func isRunning(pid int) bool {
+	p, err := os.FindProcess(pid)
+	if err != nil {
+		return false
+	}
+	err = p.Signal(syscall.Signal(0))
+	return err == nil || errors.Is(err, syscall.EPERM)
 }
 
 func sameDir(a, b string) bool {

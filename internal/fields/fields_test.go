@@ -205,7 +205,7 @@ func TestApplyMeFallsBackToTheIdentitysLogin(t *testing.T) {
 	cfg := mustLoadConfig(t)
 	b := gitbugiotest.New(t)
 	id := gitbugiotest.NewIssue(t, b, "x")
-	me, err := b.TestCache().GetUserIdentity()
+	me, err := b.TestCache().GetUserIdentity(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}

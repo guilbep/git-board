@@ -74,7 +74,11 @@ func TestInvolvesOnARepository(t *testing.T) {
 	gitbugiotest.CommentAs(t, b, commented, other, time.Now().Unix(), "on it")
 	// someone else's: an issue you opened involves you (author)
 	stranger := gitbugiotest.NewPerson(t, b, "Ann", "ann")
-	if _, _, err := b.TestCache().Bugs().NewRaw(stranger, time.Now().Unix(), "Mail", "guilbep.pierre@epfl.ch", nil, nil); err != nil {
+	theirs, _, err := b.TestCache().Bugs().NewRaw(stranger, time.Now().Unix(), "Mail", "guilbep.pierre@epfl.ch", nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := theirs.Commit(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -102,7 +106,11 @@ func TestFollowsOnARepository(t *testing.T) {
 	closedInView, _ := b.NewIssue("Cache factors", "", []string{"area:backend"})
 	gitbugiotest.CloseIssue(t, b, closedInView)
 	ann := gitbugiotest.NewPerson(t, b, "Ann", "ann") // someone else's: an issue you opened involves you
-	if _, _, err := b.TestCache().Bugs().NewRaw(ann, time.Now().Unix(), "Unrelated", "", nil, nil); err != nil {
+	theirs, _, err := b.TestCache().Bugs().NewRaw(ann, time.Now().Unix(), "Unrelated", "", nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := theirs.Commit(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 	me, _, _ := b.Me()
@@ -142,11 +150,18 @@ func TestInvolvesYouByIdentity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err := hers.Commit(t.Context()); err != nil {
+		t.Fatal(err)
+	}
 	commented := hers.Id().String()
 	if _, err := b.AddComment(commented, "mine"); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := b.TestCache().Bugs().NewRaw(ann, time.Now().Unix(), "Not mine", "", nil, nil); err != nil {
+	theirs, _, err := b.TestCache().Bugs().NewRaw(ann, time.Now().Unix(), "Not mine", "", nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := theirs.Commit(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 	for _, expr := range []string{"involves:@me", "follows:@me"} {

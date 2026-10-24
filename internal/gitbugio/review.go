@@ -1,6 +1,7 @@
 package gitbugio
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"strings"
@@ -56,7 +57,7 @@ func reviewOf(meta map[string]string) *Review {
 // CommentWith comments on an issue as the user identity, with metadata
 // (review:* keys), and returns the comment's id.
 func (b *Backend) CommentWith(idPrefix, body string, metadata map[string]string) (string, error) {
-	me, err := b.c.GetUserIdentity()
+	me, err := b.c.GetUserIdentity(context.Background())
 	if err != nil {
 		return "", err
 	}
@@ -76,7 +77,7 @@ func (b *Backend) SetCommentMetadata(idPrefix, commentID string, metadata map[st
 		if err != nil {
 			return ErrNoSuchComment
 		}
-		_, err = bug.SetMetadata(c.TargetId(), metadata)
+		_, err = bug.SetMetadata(context.Background(), c.TargetId(), metadata)
 		return err
 	})
 }
@@ -84,7 +85,7 @@ func (b *Backend) SetCommentMetadata(idPrefix, commentID string, metadata map[st
 // CommentReview is the review metadata of one of an issue's comments, nil
 // for a plain comment: the anchor a reply copies.
 func (b *Backend) CommentReview(idPrefix, commentID string) (*Review, error) {
-	bug, err := b.c.Bugs().ResolvePrefix(idPrefix)
+	bug, err := b.c.Bugs().ResolvePrefix(context.Background(), idPrefix)
 	if err != nil {
 		return nil, fmt.Errorf("resolving %s: %w", idPrefix, err)
 	}
@@ -110,7 +111,7 @@ func (b *Backend) StampPR(idPrefix, pr string, mine func(commit string) bool) (i
 			if _, ok := op.(*bugent.AddCommentOperation); !ok || m["review:commit"] == "" || m["review:pr"] != "" || !mine(m["review:commit"]) {
 				continue
 			}
-			if _, err := bug.SetMetadata(op.Id(), map[string]string{"review:pr": pr}); err != nil {
+			if _, err := bug.SetMetadata(context.Background(), op.Id(), map[string]string{"review:pr": pr}); err != nil {
 				return err
 			}
 			n++

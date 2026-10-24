@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 
@@ -21,7 +22,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, "identity:", err)
 		os.Exit(1)
 	}
-	if err := c.SetUserIdentity(id); err != nil {
+	if err := c.SetUserIdentity(context.Background(), id); err != nil {
 		fmt.Fprintln(os.Stderr, "setuser:", err)
 		os.Exit(1)
 	}
@@ -41,25 +42,25 @@ func main() {
 		"Closed issue example",
 	}
 	for i, title := range titles {
-		bug, _, err := c.Bugs().New(title, "")
+		bug, _, err := c.Bugs().New(context.Background(), title, "")
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "new bug:", err)
 			os.Exit(1)
 		}
-		if _, _, err := bug.ChangeLabels([]string{"prio:p1", "status:ready"}, nil); err != nil {
+		if _, _, err := bug.ChangeLabels(context.Background(), []string{"prio:p1", "status:ready"}, nil); err != nil {
 			fmt.Fprintln(os.Stderr, "labels:", err)
 			os.Exit(1)
 		}
-		if err := bug.Commit(); err != nil {
+		if err := bug.Commit(context.Background()); err != nil {
 			fmt.Fprintln(os.Stderr, "commit:", err)
 			os.Exit(1)
 		}
 		if i == len(titles)-1 {
-			if _, err := bug.Close(); err != nil {
+			if _, err := bug.Close(context.Background()); err != nil {
 				fmt.Fprintln(os.Stderr, "close:", err)
 				os.Exit(1)
 			}
-			if err := bug.Commit(); err != nil {
+			if err := bug.Commit(context.Background()); err != nil {
 				fmt.Fprintln(os.Stderr, "commit close:", err)
 				os.Exit(1)
 			}

@@ -1,6 +1,7 @@
 package gitbugio
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/url"
@@ -119,7 +120,7 @@ func (b *Backend) Threads(idPrefixes []string) ([]Thread, error) {
 }
 
 func (b *Backend) thread(idPrefix string, c *Counter, projects []syncProject) (Thread, error) {
-	bug, err := b.c.Bugs().ResolvePrefix(idPrefix)
+	bug, err := b.c.Bugs().ResolvePrefix(context.Background(), idPrefix)
 	if err != nil {
 		return Thread{}, fmt.Errorf("resolving %s: %w", idPrefix, err)
 	}
@@ -522,7 +523,7 @@ func (b *Backend) Me() (Person, bool, error) {
 	if err != nil || !set {
 		return Person{}, false, err
 	}
-	i, err := b.c.GetUserIdentity()
+	i, err := b.c.GetUserIdentity(context.Background())
 	if err != nil {
 		return Person{}, false, err
 	}
@@ -532,17 +533,18 @@ func (b *Backend) Me() (Person, bool, error) {
 // NewIssue creates an issue as the user identity, with labels, and returns
 // its id.
 func (b *Backend) NewIssue(title, body string, labels []string) (string, error) {
-	bug, _, err := b.c.Bugs().New(title, body)
+	bug, _, err := b.c.Bugs().New(context.Background(), title, body)
 	if err != nil {
 		return "", fmt.Errorf("creating the issue: %w", err)
 	}
 	if labels, _ = b.stored(labels, nil, nil); len(labels) > 0 {
-		if _, _, err := bug.ChangeLabels(labels, nil); err != nil {
+		if _, _, err := bug.ChangeLabels(context.Background(), labels, nil); err != nil {
 			return "", fmt.Errorf("labelling the issue: %w", err)
 		}
-		if err := bug.Commit(); err != nil {
-			return "", err
-		}
+	}
+	// the creation is staged with the labels: one commit writes both
+	if err := bug.Commit(context.Background()); err != nil {
+		return "", err
 	}
 	return bug.Id().String(), nil
 }
@@ -552,7 +554,7 @@ func (b *Backend) NewIssue(title, body string, labels []string) (string, error) 
 func (b *Backend) AddComment(idPrefix, body string) (string, error) {
 	var id entity.CombinedId
 	err := b.write(idPrefix, func(bug *cache.BugCache) (err error) {
-		id, _, err = bug.AddComment(body)
+		id, _, err = bug.AddComment(context.Background(), body)
 		return err
 	})
 	return string(id), err
@@ -561,7 +563,7 @@ func (b *Backend) AddComment(idPrefix, body string) (string, error) {
 // AddCommentMeta is AddComment with operation metadata, as the user
 // identity: what the cycle's sign-offs, approvals and runs are.
 func (b *Backend) AddCommentMeta(idPrefix, body string, meta map[string]string) (string, error) {
-	author, err := b.c.GetUserIdentity()
+	author, err := b.c.GetUserIdentity(context.Background())
 	if err != nil {
 		return "", err
 	}
@@ -586,7 +588,7 @@ func (b *Backend) EditComment(idPrefix, commentID, body, base string) error {
 		if base != "" && c.Message != base {
 			return ErrChangedMeanwhile
 		}
-		_, err = bug.EditComment(c.CombinedId(), body)
+		_, err = bug.EditComment(context.Background(), c.CombinedId(), body)
 		return err
 	})
 }
@@ -597,7 +599,7 @@ func (b *Backend) SetTitle(idPrefix, title string) error {
 		if bug.Snapshot().Title == title {
 			return nil
 		}
-		_, err := bug.SetTitle(title)
+		_, err := bug.SetTitle(context.Background(), title)
 		return err
 	})
 }
@@ -608,9 +610,9 @@ func (b *Backend) SetStatus(idPrefix, status string) error {
 		var err error
 		switch {
 		case status == "open" && bug.Snapshot().Status != common.OpenStatus:
-			_, err = bug.Open()
+			_, err = bug.Open(context.Background())
 		case status == "closed" && bug.Snapshot().Status != common.ClosedStatus:
-			_, err = bug.Close()
+			_, err = bug.Close(context.Background())
 		case status != "open" && status != "closed":
 			err = fmt.Errorf("status %q: want open or closed", status)
 		}
@@ -620,12 +622,12 @@ func (b *Backend) SetStatus(idPrefix, status string) error {
 
 // write runs change on an issue and commits what it did.
 func (b *Backend) write(idPrefix string, change func(*cache.BugCache) error) error {
-	bug, err := b.c.Bugs().ResolvePrefix(idPrefix)
+	bug, err := b.c.Bugs().ResolvePrefix(context.Background(), idPrefix)
 	if err != nil {
 		return fmt.Errorf("resolving %s: %w", idPrefix, err)
 	}
 	if err := change(bug); err != nil {
 		return err
 	}
-	return bug.CommitAsNeeded()
+	return bug.CommitAsNeeded(context.Background())
 }

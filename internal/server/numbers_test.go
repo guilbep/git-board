@@ -37,7 +37,7 @@ func TestNumbersOnlyOnAPushTheUserAsks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := b.TestCache().SetUserIdentity(id); err != nil {
+	if err := b.TestCache().SetUserIdentity(t.Context(), id); err != nil {
 		t.Fatal(err)
 	}
 	if err := b.InitNumbers("origin", "CO2", 1); err != nil {

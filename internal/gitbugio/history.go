@@ -1,6 +1,7 @@
 package gitbugio
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -18,7 +19,7 @@ import (
 // (every issue when nil), with their times, as git-bug keeps them: what
 // the Insights page replays.
 func (b *Backend) History(ids map[string]bool) ([]insights.Issue, error) {
-	all, err := b.c.Bugs().Query(query.NewQuery())
+	all, err := b.c.Bugs().Query(context.Background(), query.NewQuery())
 	if err != nil {
 		return nil, fmt.Errorf("listing bugs: %w", err)
 	}
@@ -27,7 +28,7 @@ func (b *Backend) History(ids map[string]bool) ([]insights.Issue, error) {
 		if ids != nil && !ids[id.String()] {
 			continue
 		}
-		bug, err := b.c.Bugs().Resolve(id)
+		bug, err := b.c.Bugs().Resolve(context.Background(), id)
 		if err != nil {
 			return nil, fmt.Errorf("resolving %s: %w", id, err)
 		}

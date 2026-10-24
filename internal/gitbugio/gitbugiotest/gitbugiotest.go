@@ -49,7 +49,7 @@ func backend(t testing.TB, repo *repotest.GoGitRepo) *gitbugio.Backend {
 	if err != nil {
 		t.Fatalf("NewFromGitUser: %v", err)
 	}
-	if err := b.TestCache().SetUserIdentity(id); err != nil {
+	if err := b.TestCache().SetUserIdentity(t.Context(), id); err != nil {
 		t.Fatalf("SetUserIdentity: %v", err)
 	}
 
@@ -59,9 +59,12 @@ func backend(t testing.TB, repo *repotest.GoGitRepo) *gitbugio.Backend {
 // NewIssue creates a bug with the given title and returns its id.
 func NewIssue(t testing.TB, b *gitbugio.Backend, title string) string {
 	t.Helper()
-	bug, _, err := b.TestCache().Bugs().New(title, "")
+	bug, _, err := b.TestCache().Bugs().New(t.Context(), title, "")
 	if err != nil {
 		t.Fatalf("Bugs().New: %v", err)
+	}
+	if err := bug.Commit(t.Context()); err != nil {
+		t.Fatalf("Commit: %v", err)
 	}
 	return bug.Id().String()
 }
@@ -72,7 +75,7 @@ func NewIssue(t testing.TB, b *gitbugio.Backend, title string) string {
 // issue-matching-by-URL has something real to match against.
 func NewImportedIssue(t testing.TB, b *gitbugio.Backend, title, githubURL string) string {
 	t.Helper()
-	author, err := b.TestCache().GetUserIdentity()
+	author, err := b.TestCache().GetUserIdentity(t.Context())
 	if err != nil {
 		t.Fatalf("GetUserIdentity: %v", err)
 	}
@@ -81,6 +84,9 @@ func NewImportedIssue(t testing.TB, b *gitbugio.Backend, title, githubURL string
 	if err != nil {
 		t.Fatalf("Bugs().NewRaw: %v", err)
 	}
+	if err := bug.Commit(t.Context()); err != nil {
+		t.Fatalf("Commit: %v", err)
+	}
 	return bug.Id().String()
 }
 
@@ -88,14 +94,14 @@ func NewImportedIssue(t testing.TB, b *gitbugio.Backend, title, githubURL string
 // status:closed filtering.
 func CloseIssue(t testing.TB, b *gitbugio.Backend, idPrefix string) {
 	t.Helper()
-	bug, err := b.TestCache().Bugs().ResolvePrefix(idPrefix)
+	bug, err := b.TestCache().Bugs().ResolvePrefix(t.Context(), idPrefix)
 	if err != nil {
 		t.Fatalf("ResolvePrefix: %v", err)
 	}
-	if _, err := bug.Close(); err != nil {
+	if _, err := bug.Close(t.Context()); err != nil {
 		t.Fatalf("Close: %v", err)
 	}
-	if err := bug.Commit(); err != nil {
+	if err := bug.Commit(t.Context()); err != nil {
 		t.Fatalf("Commit: %v", err)
 	}
 }
@@ -117,7 +123,7 @@ func (fakeForge) NewImporter() core.Importer              { return nil }
 func (fakeForge) NewExporter() core.Exporter              { return nil }
 func (fakeForge) ValidParams() map[string]interface{}     { return nil }
 func (fakeForge) ValidateConfig(core.Configuration) error { return nil }
-func (fakeForge) Configure(*cache.RepoCache, core.BridgeParams, bool) (core.Configuration, error) {
+func (fakeForge) Configure(context.Context, *cache.RepoCache, core.BridgeParams, bool) (core.Configuration, error) {
 	return nil, nil
 }
 func (fakeForge) NewRemote(_ context.Context, _ *cache.RepoCache, conf core.Configuration) (core.Remote, error) {
@@ -171,7 +177,7 @@ func NewPerson(t testing.TB, b *gitbugio.Backend, name, login string) *cache.Ide
 // comment's id as the timeline gives it (Event.ID).
 func CommentAs(t testing.TB, b *gitbugio.Backend, idPrefix string, who *cache.IdentityCache, unix int64, body string) string {
 	t.Helper()
-	bug, err := b.TestCache().Bugs().ResolvePrefix(idPrefix)
+	bug, err := b.TestCache().Bugs().ResolvePrefix(t.Context(), idPrefix)
 	if err != nil {
 		t.Fatalf("ResolvePrefix: %v", err)
 	}
@@ -179,7 +185,7 @@ func CommentAs(t testing.TB, b *gitbugio.Backend, idPrefix string, who *cache.Id
 	if err != nil {
 		t.Fatalf("AddCommentRaw: %v", err)
 	}
-	if err := bug.Commit(); err != nil {
+	if err := bug.Commit(t.Context()); err != nil {
 		t.Fatalf("Commit: %v", err)
 	}
 	return id.String()

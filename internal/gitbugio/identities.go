@@ -22,7 +22,7 @@ var _ = bridge.Targets
 func (b *Backend) Identities() ([]Person, error) {
 	var res []Person
 	for _, id := range b.c.Identities().AllIds() {
-		i, err := b.c.Identities().Resolve(id)
+		i, err := b.c.Identities().Resolve(context.Background(), id)
 		if err != nil {
 			return nil, err
 		}
@@ -34,11 +34,11 @@ func (b *Backend) Identities() ([]Person, error) {
 
 // Adopt makes an identity the one git-board writes as.
 func (b *Backend) Adopt(idPrefix string) error {
-	i, err := b.c.Identities().ResolvePrefix(idPrefix)
+	i, err := b.c.Identities().ResolvePrefix(context.Background(), idPrefix)
 	if err != nil {
 		return fmt.Errorf("resolving identity %s: %w", idPrefix, err)
 	}
-	return b.c.SetUserIdentity(i)
+	return b.c.SetUserIdentity(context.Background(), i)
 }
 
 // NewIdentity creates an identity and adopts it.
@@ -47,7 +47,7 @@ func (b *Backend) NewIdentity(name, email string) (Person, error) {
 	if err != nil {
 		return Person{}, err
 	}
-	if err := b.c.SetUserIdentity(i); err != nil {
+	if err := b.c.SetUserIdentity(context.Background(), i); err != nil {
 		return Person{}, err
 	}
 	return person(i), nil
@@ -174,7 +174,7 @@ func (b *Backend) AddBridge(target, name, projectURL, credID, token string, sync
 	if credID == "" && token == "" {
 		return "", errors.New("pick a stored credential or paste a token")
 	}
-	if err := br.Configure(core.BridgeParams{URL: projectURL, CredPrefix: credID, TokenRaw: token}, false); err != nil {
+	if err := br.Configure(context.Background(), core.BridgeParams{URL: projectURL, CredPrefix: credID, TokenRaw: token}, false); err != nil {
 		return "", err
 	}
 	return name, core.SetBridgeConfig(b.c, name, core.ConfigKeySync, strconv.FormatBool(sync))
@@ -356,7 +356,7 @@ func (b *Backend) MyLogin() string {
 	if err != nil || !set {
 		return ""
 	}
-	me, err := b.c.GetUserIdentity()
+	me, err := b.c.GetUserIdentity(context.Background())
 	if err != nil {
 		return ""
 	}
@@ -382,7 +382,7 @@ func (b *Backend) loginOf(i *cache.IdentityCache) string {
 func (b *Backend) Logins() ([]string, error) {
 	var res []string
 	for _, id := range b.c.Identities().AllIds() {
-		i, err := b.c.Identities().Resolve(id)
+		i, err := b.c.Identities().Resolve(context.Background(), id)
 		if err != nil {
 			return nil, err
 		}
@@ -399,7 +399,7 @@ func (b *Backend) myGitHubLogin() string {
 	if err != nil || !set {
 		return ""
 	}
-	me, err := b.c.GetUserIdentity()
+	me, err := b.c.GetUserIdentity(context.Background())
 	if err != nil {
 		return ""
 	}
