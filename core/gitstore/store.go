@@ -32,6 +32,7 @@ var ErrRefMoved = errors.New("gitstore: ref moved since it was read")
 // Store is a git repository.
 type Store struct {
 	repo   *git.Repository
+	fs     *filesystem.Storage
 	gitDir string
 }
 
@@ -62,7 +63,7 @@ func Open(path string) (*Store, error) {
 	if !ok {
 		return nil, fmt.Errorf("gitstore: open %s: not a filesystem repository", path)
 	}
-	return &Store{repo: repo, gitDir: fs.Filesystem().Root()}, nil
+	return &Store{repo: repo, fs: fs, gitDir: fs.Filesystem().Root()}, nil
 }
 
 func (s *Store) put(o plumbing.EncodedObject) (Hash, error) {
@@ -88,7 +89,7 @@ func (s *Store) WriteBlob(data []byte) (Hash, error) {
 
 // ReadBlob returns a blob's bytes.
 func (s *Store) ReadBlob(h Hash) ([]byte, error) {
-	b, err := s.repo.BlobObject(h)
+	b, err := retry(s, func() (*object.Blob, error) { return s.repo.BlobObject(h) })
 	if err != nil {
 		return nil, fmt.Errorf("gitstore: blob %s: %w", h, err)
 	}
@@ -117,7 +118,7 @@ func (s *Store) WriteTree(entries []TreeEntry) (Hash, error) {
 
 // ReadTree returns a tree's entries.
 func (s *Store) ReadTree(h Hash) ([]TreeEntry, error) {
-	t, err := s.repo.TreeObject(h)
+	t, err := retry(s, func() (*object.Tree, error) { return s.repo.TreeObject(h) })
 	if err != nil {
 		return nil, fmt.Errorf("gitstore: tree %s: %w", h, err)
 	}
@@ -141,11 +142,23 @@ func (s *Store) WriteCommit(c Commit) (Hash, error) {
 
 // ReadCommit returns a commit's tree and parents.
 func (s *Store) ReadCommit(h Hash) (Commit, error) {
-	c, err := s.repo.CommitObject(h)
+	c, err := retry(s, func() (*object.Commit, error) { return s.repo.CommitObject(h) })
 	if err != nil {
 		return Commit{}, fmt.Errorf("gitstore: commit %s: %w", h, err)
 	}
 	return Commit{Tree: c.TreeHash, Parents: c.ParentHashes}, nil
+}
+
+// retry reads again after re-reading the pack index when an object is not
+// found: go-git reads the index once, so a pack written later by git (a
+// fetch, a gc) stays hidden until then.
+func retry[T any](s *Store, read func() (T, error)) (T, error) {
+	v, err := read()
+	if errors.Is(err, plumbing.ErrObjectNotFound) {
+		s.fs.Reindex()
+		return read()
+	}
+	return v, err
 }
 
 // Ref returns where a ref points, or ZeroHash when it is absent.

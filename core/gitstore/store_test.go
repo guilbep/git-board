@@ -130,3 +130,24 @@ func TestUpdateRefRefusesExisting(t *testing.T) {
 		t.Fatalf("err = %v", err)
 	}
 }
+
+func TestReadAfterExternalRepack(t *testing.T) {
+	t.Parallel()
+	s := newStore(t)
+	b, _ := s.WriteBlob([]byte("packed"))
+	tr, _ := s.WriteTree([]TreeEntry{{Name: "pack", Blob: b}})
+	c, _ := s.WriteCommit(Commit{Tree: tr})
+	_, _ = s.ReadBlob(b) // the store has read its pack index
+	gitRun(t, s.gitDir, "update-ref", "refs/board/issue/x", c.String())
+	gitRun(t, s.gitDir, "repack", "-adq")
+	gitRun(t, s.gitDir, "prune-packed")
+	if got, err := s.ReadBlob(b); err != nil || string(got) != "packed" {
+		t.Fatalf("blob = %q, %v", got, err)
+	}
+	if _, err := s.ReadTree(tr); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.ReadCommit(c); err != nil {
+		t.Fatal(err)
+	}
+}

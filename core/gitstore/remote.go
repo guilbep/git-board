@@ -15,7 +15,11 @@ func (s *Store) Fetch(ctx context.Context, remote string) error {
 	for _, k := range kinds {
 		args = append(args, fmt.Sprintf("+refs/board/%s/*:refs/remotes/%s/board/%s/*", k, remote, k))
 	}
-	return s.git(ctx, args...)
+	if err := s.git(ctx, args...); err != nil {
+		return err
+	}
+	s.fs.Reindex() // the fetch may have written a pack
+	return nil
 }
 
 // Push sends the entity refs to the remote. It is not forced.
