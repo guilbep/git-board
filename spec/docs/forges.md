@@ -29,18 +29,64 @@ git-board's settings, and the people who have a token of their own there
 
 ## GitHub
 
-- **Status and labels come from the issue,** not only from its timeline.
-  The pull reads the issue's `state` and `labels` with it, its labels paged
-  past 100. Some issues GitHub closes leave no closed event in the
-  timeline ([git-bug#609][609]). And a timeline read page by page can miss
-  items ([git-bug#1638][1638]). The timeline gives the history and its
-  times; the issue gives the values. An issue whose timeline fails to load is an
-  error, never half an issue.
-- **80 writes per minute and 500 per hour.** Sync paces its writes under
-  both. When GitHub still answers with its secondary rate limit, which gives
-  no reset time, sync waits a minute and tries again, three times at most.
-  When a limit stops a run, the next one resumes from there, as sync
-  records every write as it makes it.
+The adapter is `core/forge/github`: a project `owner/repo` on github.com
+or a GitHub Enterprise host. It speaks GitHub's REST API,
+`https://api.github.com` or `https://<host>/api/v3`, plus one GraphQL
+query for the times REST doesn't give.
+
+- **The token** is `GITHUB_TOKEN` when it is set, or
+  `GITHUB_ENTERPRISE_TOKEN` for an Enterprise host. Otherwise it comes from
+  git's credential helper for the host, with the account's login as
+  `username`, and never from a prompt. A github.com token never goes to
+  another host. A person's token counts only when GitHub says it is theirs:
+  `/user` must give their account's numeric id.
+- **A forge issue's id is GitHub's numeric `id`.** REST names an issue by
+  its number, so the adapter remembers each id's number from its listings.
+  It looks for an id it hasn't seen, one recorded by an earlier run, once,
+  in the listing of every issue.
+- **The listing** is every issue updated since the last run, oldest first,
+  a hundred a page. It starts a minute early: the last run's start is the
+  local clock's, and `updated_at` is GitHub's. An issue or a comment that
+  two pages both list counts once.
+- **Pull requests are never synced.** GitHub's listing of issues holds them;
+  the adapter leaves them out. GitHub has no confidential issues, so reading
+  a pull request alone is the core's confidential error: sync never reads
+  it.
+- **Status and labels come from the issue,** not from its timeline. Some
+  issues GitHub closes leave no closed event in the timeline
+  ([git-bug#609][609]). And a timeline read page by page can miss items
+  ([git-bug#1638][1638]). The status is `state`, whatever its
+  `state_reason`: an issue closed as not planned is closed.
+- **When a field last changed,** for [the later change](sync.md#the-four-cases),
+  comes from one GraphQL query per page of issues: the body's
+  `lastEditedAt`, the last rename and the last reopening. A closed issue's
+  status changed at its `closed_at`. A field GitHub shows no change of
+  changed at the issue's creation. A comment's edit is its `updated_at`,
+  when that is after its creation. An issue whose comments or times fail to
+  load is an error, never half an issue.
+- **`\r\n` is read as `\n`.** A web edit leaves `\r\n`, which would break
+  the blank lines around sync's header and marker.
+- **80 writes per minute and 500 per hour.** The adapter writes a second
+  apart at most, as GitHub asks, which keeps under 80 a minute, and makes
+  at most 500 in any hour. When GitHub still turns a request away for a
+  rate limit, a 403 or a 429, the adapter waits and tries again, three
+  times at most. It waits for `Retry-After` when given, else until
+  `x-ratelimit-reset` when none is left, else a minute: the secondary rate
+  limit gives no reset time. When a limit stops a run, the next one resumes
+  from there, as sync records every write as it makes it.
+- **A read is tried again after a 5xx or a broken connection, a write never
+  is.** GitHub may have made it (see [Echoes](sync.md#echoes)).
+- **Errors.** A 404, a 410 and a redirect, as for an issue moved to
+  another repository, are not found. A 403 and a 422 are refused, rate
+  limits aside. A token GitHub rejects, a 401, stops the run.
+- **Labels are made as needed,** in GitHub's grey, before they are added.
+  One write adds the labels; each removal is a write of its own. An added
+  label GitHub leaves out, as it does without push access, is refused.
+  Removing a label the issue no longer has is no error.
+- **Assignees go as logins,** the whole set in one write. The adapter
+  reads back what GitHub kept: GitHub leaves out a user without access to
+  the repository.
+- **Public** is the repository's `private` flag, negated.
 - **A login can be renamed,** so people are matched by the forge's numeric
   user id, never by login.
 
