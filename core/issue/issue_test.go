@@ -333,3 +333,29 @@ func TestEmptyAuthorIsRejected(t *testing.T) {
 		t.Fatal("apply: want an error")
 	}
 }
+
+// Changes names each field's last operation: create first, then whatever
+// set it, a comment by its own id whichever id an edit used.
+func TestChanges(t *testing.T) {
+	t.Parallel()
+	s := newStore(t)
+	o := &oplog.Origin{Forge: "f", Event: "comment:1"}
+	c := NewComment("b", "hi")
+	c.Origin = o
+	is, err := Create(t.Context(), s, NewCreate("a", "T", "B"), c, SetTitle("b", "T2"), ChangeLabels("c", []string{"x"}, []string{"y"}))
+	is = must(t, is, err)
+	cid := is.Comments[0].ID
+	is, err = Do(t.Context(), s, is.ID, EditText("d", cid, "hey"))
+	is = must(t, is, err)
+	who := map[string]string{}
+	for k, ch := range is.Changes {
+		who[k] = ch.Author
+	}
+	want := map[string]string{"title": "b", "body": "a", "status": "a", "label:x": "c", "label:y": "c", "comment:" + cid: "d"}
+	if !reflect.DeepEqual(who, want) {
+		t.Fatalf("changes = %v, want %v", who, want)
+	}
+	if is.Changes["comment:"+cid].Origin != nil {
+		t.Fatal("the edit has no origin")
+	}
+}

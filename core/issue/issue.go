@@ -35,6 +35,16 @@ type Issue struct {
 	Labels                          []string // sorted, unique
 	Comments                        []Comment
 	Origin                          *oplog.Origin
+	// Changes holds, for each field, the operation that last changed it:
+	// title, body, status, label:<label> and comment:<comment id>.
+	Changes map[string]Change
+}
+
+// Change is who last changed a field, when, and from where.
+type Change struct {
+	Author string
+	Time   int64
+	Origin *oplog.Origin
 }
 
 var (
@@ -76,13 +86,15 @@ func Apply(l *oplog.Log) (*Issue, error) {
 		if is == nil && e.Kind != "create" {
 			return nil, fmt.Errorf("issue: the first operation is %q, want create", e.Kind)
 		}
+		ch := Change{e.Author, e.Time, e.Origin}
 		switch e.Kind {
 		case "create":
 			if is != nil {
 				return nil, fmt.Errorf("issue: second create, operation %s", e.ID)
 			}
 			is = &Issue{ID: l.ID, Author: e.Author, Title: d.Title, Body: d.Body, BodyOp: e.ID,
-				Created: e.Time, Status: Open, Origin: e.Origin}
+				Created: e.Time, Status: Open, Origin: e.Origin,
+				Changes: map[string]Change{"title": ch, "body": ch, "status": ch}}
 		case "comment":
 			// A comment with an earlier comment's origin is that comment,
 			// pulled again: its id names the earlier one.
@@ -96,6 +108,7 @@ func Apply(l *oplog.Log) (*Issue, error) {
 			}
 			if !dup {
 				is.Comments = append(is.Comments, Comment{ID: e.ID, Author: e.Author, Body: d.Body, Time: e.Time, Origin: e.Origin})
+				is.Changes["comment:"+e.ID] = ch
 			}
 			comments[e.ID] = i
 		case "edit-text":
@@ -106,19 +119,23 @@ func Apply(l *oplog.Log) (*Issue, error) {
 			}
 			if d.Target == is.BodyOp {
 				is.Body = d.Body
+				is.Changes["body"] = ch
 			} else if i, ok := comments[d.Target]; ok {
 				is.Comments[i].Body = d.Body
 				is.Comments[i].Edited = e.Time
+				is.Changes["comment:"+is.Comments[i].ID] = ch
 			} else {
 				return nil, fmt.Errorf("%w: %q, operation %s", ErrBadTarget, d.Target, e.ID)
 			}
 		case "set-title":
 			is.Title = d.Title
+			is.Changes["title"] = ch
 		case "set-status":
 			if d.Status != Open && d.Status != Closed {
 				return nil, fmt.Errorf("issue: operation %s: bad status %q", e.ID, d.Status)
 			}
 			is.Status = d.Status
+			is.Changes["status"] = ch
 		case "change-labels":
 			for _, label := range slices.Concat(d.Add, d.Remove) {
 				if label == "" || strings.Contains(label, "\n") {
@@ -127,9 +144,11 @@ func Apply(l *oplog.Log) (*Issue, error) {
 			}
 			for _, a := range d.Add {
 				labels[a] = true
+				is.Changes["label:"+a] = ch
 			}
 			for _, r := range d.Remove {
 				delete(labels, r)
+				is.Changes["label:"+r] = ch
 			}
 		default:
 			return nil, fmt.Errorf("%w: %q, operation %s", ErrUnknownOp, e.Kind, e.ID)
