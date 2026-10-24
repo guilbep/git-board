@@ -4,6 +4,7 @@ package oplog
 
 import (
 	"cmp"
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -83,7 +84,7 @@ func Create(s *gitstore.Store, kind, id string, ops []Op) (*Log, error) {
 	if id == "" {
 		id = blob.String()
 	}
-	if err := s.UpdateRef(RefName(kind, id), c, gitstore.ZeroHash); err != nil {
+	if err := s.UpdateRef(context.Background(), RefName(kind, id), c, gitstore.ZeroHash); err != nil {
 		return nil, fmt.Errorf("oplog: create %s: %w", RefName(kind, id), err)
 	}
 	return Load(s, kind, id)
@@ -122,7 +123,7 @@ func (l *Log) Append(s *gitstore.Store, ops []Op) error {
 		if err != nil {
 			return err
 		}
-		err = s.UpdateRef(RefName(l.Kind, l.ID), c, l.Head)
+		err = s.UpdateRef(context.Background(), RefName(l.Kind, l.ID), c, l.Head)
 		if err != nil && (!errors.Is(err, gitstore.ErrRefMoved) || try == tries) {
 			return err
 		}

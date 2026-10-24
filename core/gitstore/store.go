@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -37,6 +38,8 @@ type Store struct {
 	repo   *git.Repository
 	fs     *filesystem.Storage
 	gitDir string
+	// commonDir is the absolute git common dir.
+	commonDir string
 }
 
 // TreeEntry is a blob in a tree, with mode 100644.
@@ -52,13 +55,17 @@ type Commit struct {
 	Parents []Hash
 }
 
-// Open opens the repository at path: a worktree, found upward from path, or
-// a bare repository. A linked worktree reads and writes its main
-// repository's refs and objects, as git does.
+// Open opens the repository at path. The path is tried as a repository root
+// first, a bare one included, so a bare repository inside another's worktree
+// opens as itself; only then is a worktree found upward from it. A linked
+// worktree reads and writes its main repository's refs and objects, as git
+// does.
 func Open(path string) (*Store, error) {
-	repo, err := git.PlainOpenWithOptions(path, &git.PlainOpenOptions{DetectDotGit: true, EnableDotGitCommonDir: true})
+	opts := git.PlainOpenOptions{EnableDotGitCommonDir: true}
+	repo, err := git.PlainOpenWithOptions(path, &opts)
 	if errors.Is(err, git.ErrRepositoryNotExists) {
-		repo, err = git.PlainOpen(path) // a bare repository
+		opts.DetectDotGit = true
+		repo, err = git.PlainOpenWithOptions(path, &opts)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("gitstore: open %s: %w", path, err)
@@ -67,7 +74,18 @@ func Open(path string) (*Store, error) {
 	if !ok {
 		return nil, fmt.Errorf("gitstore: open %s: not a filesystem repository", path)
 	}
-	return &Store{repo: repo, fs: fs, gitDir: fs.Filesystem().Root()}, nil
+	s := &Store{repo: repo, fs: fs, gitDir: fs.Filesystem().Root()}
+	cmd := s.command(context.Background(), "rev-parse", "--git-common-dir")
+	cmd.Dir = s.gitDir // a relative answer is relative to this
+	out, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("gitstore: open %s: common dir: %w", path, err)
+	}
+	s.commonDir = strings.TrimSpace(string(out))
+	if !filepath.IsAbs(s.commonDir) {
+		s.commonDir = filepath.Join(s.gitDir, s.commonDir)
+	}
+	return s, nil
 }
 
 func (s *Store) put(o plumbing.EncodedObject) (Hash, error) {
@@ -211,14 +229,15 @@ func (s *Store) Refs(prefix string) (map[string]Hash, error) {
 }
 
 // UpdateRef moves a ref to next if it still points at prev. A prev of
-// ZeroHash means the ref must not exist.
-func (s *Store) UpdateRef(name string, next, prev Hash) error {
-	err := s.git(context.Background(), "update-ref", name, next.String(), prev.String())
+// ZeroHash means the ref must not exist. It is ErrRefMoved when the ref moved,
+// exists, no longer exists, or another process holds its lock file.
+func (s *Store) UpdateRef(ctx context.Context, name string, next, prev Hash) error {
+	_, err := s.git(ctx, "update-ref", name, next.String(), prev.String())
 	if err == nil {
 		return nil
 	}
 	msg := err.Error()
-	for _, m := range []string{"but expected", "reference already exists", "File exists"} {
+	for _, m := range []string{"but expected", "reference already exists", "unable to resolve reference", ".lock': File exists"} {
 		if strings.Contains(msg, m) {
 			return fmt.Errorf("%w: %s", ErrRefMoved, msg)
 		}
@@ -226,15 +245,41 @@ func (s *Store) UpdateRef(name string, next, prev Hash) error {
 	return err
 }
 
-// git runs git on this repository and wraps its stderr in the error.
-func (s *Store) git(ctx context.Context, args ...string) error {
-	cmd := exec.CommandContext(ctx, "git", append([]string{"--git-dir", s.gitDir}, args...)...)
-	// UpdateRef matches git's refusals by their English text.
-	cmd.Env = append(os.Environ(), "LC_ALL=C")
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("gitstore: git %s: %w: %s", args[0], err, strings.TrimSpace(stderr.String()))
+// CommonDir is the absolute git common dir, shared by every worktree.
+func (s *Store) CommonDir() string { return s.commonDir }
+
+// Config returns a local git config value, or "" when it is unset.
+func (s *Store) Config(ctx context.Context, key string) (string, error) {
+	out, err := s.git(ctx, "config", "--local", "--get", key)
+	var ee *exec.ExitError
+	if errors.As(err, &ee) && ee.ExitCode() == 1 { // 1 is git's "unset"
+		return "", nil
 	}
-	return nil
+	return strings.TrimSuffix(out, "\n"), err
+}
+
+// SetConfig sets a local git config value.
+func (s *Store) SetConfig(ctx context.Context, key, value string) error {
+	_, err := s.git(ctx, "config", "--local", key, value)
+	return err
+}
+
+// command builds a git command on this repository. It runs in the C locale:
+// UpdateRef matches git's refusals by their English text.
+func (s *Store) command(ctx context.Context, args ...string) *exec.Cmd {
+	cmd := exec.CommandContext(ctx, "git", append([]string{"--git-dir", s.gitDir}, args...)...)
+	cmd.Env = append(os.Environ(), "LC_ALL=C")
+	return cmd
+}
+
+// git runs git on this repository and returns its stdout. An error wraps
+// git's stderr.
+func (s *Store) git(ctx context.Context, args ...string) (string, error) {
+	cmd := s.command(ctx, args...)
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &stdout, &stderr
+	if err := cmd.Run(); err != nil {
+		return "", fmt.Errorf("gitstore: git %s: %w: %s", args[0], err, strings.TrimSpace(stderr.String()))
+	}
+	return stdout.String(), nil
 }

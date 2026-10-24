@@ -6,9 +6,9 @@ import (
 	"strings"
 )
 
-// kinds are the entity kinds. refs/board/seq is git-board's own and is not
-// one of them.
-var kinds = []string{"issue", "person", "sync"}
+// Kinds are the entity kinds, listed once. refs/board/seq is git-board's own
+// and is not one of them.
+var Kinds = []string{"issue", "person", "sync"}
 
 // checkRemote refuses a remote name git would take for an option, or none.
 func checkRemote(remote string) error {
@@ -25,10 +25,10 @@ func (s *Store) Fetch(ctx context.Context, remote string) error {
 		return err
 	}
 	args := []string{"fetch", remote}
-	for _, k := range kinds {
+	for _, k := range Kinds {
 		args = append(args, fmt.Sprintf("+refs/board/%s/*:refs/board-remotes/%s/%s/*", k, remote, k))
 	}
-	if err := s.git(ctx, args...); err != nil {
+	if _, err := s.git(ctx, args...); err != nil {
 		return err
 	}
 	s.mu.Lock()
@@ -45,7 +45,7 @@ func (s *Store) Push(ctx context.Context, remote string) error {
 		return err
 	}
 	args := []string{"push", remote}
-	for _, k := range kinds {
+	for _, k := range Kinds {
 		refs, err := s.Refs("refs/board/" + k + "/")
 		if err != nil {
 			return err
@@ -57,5 +57,6 @@ func (s *Store) Push(ctx context.Context, remote string) error {
 	if len(args) == 2 {
 		return nil
 	}
-	return s.git(ctx, args...)
+	_, err := s.git(ctx, args...)
+	return err
 }

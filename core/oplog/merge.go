@@ -1,6 +1,7 @@
 package oplog
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"maps"
@@ -47,7 +48,7 @@ func Merge(s *gitstore.Store, kind, id string, other gitstore.Hash) (*Log, error
 			}
 		}
 		if next != head {
-			err = s.UpdateRef(name, next, head)
+			err = s.UpdateRef(context.Background(), name, next, head)
 			if errors.Is(err, gitstore.ErrRefMoved) && try < tries {
 				continue
 			}

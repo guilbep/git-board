@@ -1,6 +1,7 @@
 package oplog
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -108,7 +109,7 @@ func commitOf(t *testing.T, s *gitstore.Store, files map[string]string, parents 
 
 func setRef(t *testing.T, s *gitstore.Store, name string, next, prev gitstore.Hash) {
 	t.Helper()
-	if err := s.UpdateRef(name, next, prev); err != nil {
+	if err := s.UpdateRef(context.Background(), name, next, prev); err != nil {
 		t.Fatal(err)
 	}
 }

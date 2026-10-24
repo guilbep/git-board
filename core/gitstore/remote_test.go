@@ -35,10 +35,10 @@ func TestFetchPush(t *testing.T) {
 	}
 
 	c := commitOf(t, a)
-	if err := a.UpdateRef("refs/board/issue/x", c, ZeroHash); err != nil {
+	if err := a.UpdateRef(ctx, "refs/board/issue/x", c, ZeroHash); err != nil {
 		t.Fatal(err)
 	}
-	if err := a.UpdateRef("refs/board/seq", c, ZeroHash); err != nil {
+	if err := a.UpdateRef(ctx, "refs/board/seq", c, ZeroHash); err != nil {
 		t.Fatal(err)
 	}
 	if err := a.Push(ctx, "origin"); err != nil {
@@ -108,7 +108,7 @@ func TestFetchManyObjects(t *testing.T) {
 	for range 5 {
 		h = commitOf(t, a, h)
 	}
-	if err := a.UpdateRef("refs/board/issue/x", h, ZeroHash); err != nil {
+	if err := a.UpdateRef(ctx, "refs/board/issue/x", h, ZeroHash); err != nil {
 		t.Fatal(err)
 	}
 	if err := a.Push(ctx, "origin"); err != nil {

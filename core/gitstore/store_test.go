@@ -1,11 +1,17 @@
 package gitstore
 
 import (
+	"context"
 	"errors"
+	"os"
 	"os/exec"
+	"path/filepath"
+	"slices"
 	"sync"
 	"testing"
 )
+
+var ctx = context.Background()
 
 func gitRun(t *testing.T, dir string, args ...string) {
 	t.Helper()
@@ -86,10 +92,10 @@ func TestUpdateRefCreatesAndMoves(t *testing.T) {
 	c1 := commitOf(t, s)
 	c2 := commitOf(t, s, c1)
 	const name = "refs/board/issue/x"
-	if err := s.UpdateRef(name, c1, ZeroHash); err != nil {
+	if err := s.UpdateRef(ctx, name, c1, ZeroHash); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.UpdateRef(name, c2, c1); err != nil {
+	if err := s.UpdateRef(ctx, name, c2, c1); err != nil {
 		t.Fatal(err)
 	}
 	if h, _ := s.Ref(name); h != c2 {
@@ -108,10 +114,10 @@ func TestUpdateRefRefusesMoved(t *testing.T) {
 	c2 := commitOf(t, s, c1)
 	c3 := commitOf(t, s, c2)
 	const name = "refs/board/issue/x"
-	if err := s.UpdateRef(name, c2, ZeroHash); err != nil {
+	if err := s.UpdateRef(ctx, name, c2, ZeroHash); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.UpdateRef(name, c3, c1); !errors.Is(err, ErrRefMoved) {
+	if err := s.UpdateRef(ctx, name, c3, c1); !errors.Is(err, ErrRefMoved) {
 		t.Fatalf("err = %v", err)
 	}
 	if h, _ := s.Ref(name); h != c2 {
@@ -124,10 +130,10 @@ func TestUpdateRefRefusesExisting(t *testing.T) {
 	s := newStore(t)
 	c1 := commitOf(t, s)
 	const name = "refs/board/issue/x"
-	if err := s.UpdateRef(name, c1, ZeroHash); err != nil {
+	if err := s.UpdateRef(ctx, name, c1, ZeroHash); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.UpdateRef(name, c1, ZeroHash); !errors.Is(err, ErrRefMoved) {
+	if err := s.UpdateRef(ctx, name, c1, ZeroHash); !errors.Is(err, ErrRefMoved) {
 		t.Fatalf("err = %v", err)
 	}
 }
@@ -177,4 +183,113 @@ func TestStoreConcurrentReadsAndReindex(t *testing.T) {
 		}()
 	}
 	wg.Wait()
+}
+
+func TestUpdateRefLockFileIsMoved(t *testing.T) {
+	t.Parallel()
+	s := newStore(t)
+	c1 := commitOf(t, s)
+	const name = "refs/board/issue/x"
+	lock := filepath.Join(s.gitDir, name+".lock")
+	if err := os.MkdirAll(filepath.Dir(lock), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(lock, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.UpdateRef(ctx, name, c1, ZeroHash); !errors.Is(err, ErrRefMoved) {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestUpdateRefDeletedRefIsMoved(t *testing.T) {
+	t.Parallel()
+	s := newStore(t)
+	c1 := commitOf(t, s)
+	c2 := commitOf(t, s, c1)
+	if err := s.UpdateRef(ctx, "refs/board/issue/x", c2, c1); !errors.Is(err, ErrRefMoved) {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestUpdateRefOtherFileExistsIsNot(t *testing.T) {
+	t.Parallel()
+	s := newStore(t)
+	c1 := commitOf(t, s)
+	// A directory, not empty, where the ref file goes.
+	c2 := commitOf(t, s, c1)
+	if err := s.UpdateRef(ctx, "refs/board/issue/x/y", c2, ZeroHash); err != nil {
+		t.Fatal(err)
+	}
+	err := s.UpdateRef(ctx, "refs/board/issue/x", c1, ZeroHash)
+	if err == nil || errors.Is(err, ErrRefMoved) {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestGitRunsInCLocale(t *testing.T) {
+	t.Parallel()
+	s := newStore(t)
+	if !slices.Contains(s.command(ctx, "status").Env, "LC_ALL=C") {
+		t.Fatal("LC_ALL=C missing")
+	}
+}
+
+func TestOpenNestedBare(t *testing.T) {
+	t.Parallel()
+	outer := t.TempDir()
+	gitRun(t, outer, "init", "-q")
+	inner := filepath.Join(outer, "inner.git")
+	gitRun(t, outer, "init", "-q", "--bare", inner)
+	s, err := Open(inner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, _ := filepath.EvalSymlinks(inner)
+	got, _ := filepath.EvalSymlinks(s.gitDir)
+	if got != want {
+		t.Fatalf("gitDir = %s, want %s", got, want)
+	}
+	gotc, _ := filepath.EvalSymlinks(s.CommonDir())
+	if gotc != want {
+		t.Fatalf("CommonDir = %s, want %s", gotc, want)
+	}
+}
+
+func TestCommonDirInWorktree(t *testing.T) {
+	t.Parallel()
+	main := t.TempDir()
+	gitRun(t, main, "init", "-q")
+	gitRun(t, main, "commit", "-q", "--allow-empty", "-m", "x")
+	wt := filepath.Join(t.TempDir(), "wt")
+	gitRun(t, main, "worktree", "add", "-q", wt)
+	s, err := Open(wt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, _ := filepath.EvalSymlinks(filepath.Join(main, ".git"))
+	got, _ := filepath.EvalSymlinks(s.CommonDir())
+	if !filepath.IsAbs(s.CommonDir()) || got != want {
+		t.Fatalf("CommonDir = %s, want %s", got, want)
+	}
+}
+
+func TestConfig(t *testing.T) {
+	t.Parallel()
+	s := newStore(t)
+	if v, err := s.Config(ctx, "board.me"); err != nil || v != "" {
+		t.Fatalf("unset = %q, %v", v, err)
+	}
+	if err := s.SetConfig(ctx, "board.me", "abc"); err != nil {
+		t.Fatal(err)
+	}
+	if v, err := s.Config(ctx, "board.me"); err != nil || v != "abc" {
+		t.Fatalf("set = %q, %v", v, err)
+	}
+	if err := s.SetConfig(ctx, "board.me", ""); err != nil {
+		t.Fatal(err)
+	}
+	if v, err := s.Config(ctx, "board.me"); err != nil || v != "" {
+		t.Fatalf("emptied = %q, %v", v, err)
+	}
 }
