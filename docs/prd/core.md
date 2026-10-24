@@ -13,8 +13,8 @@ git-board stands on a fork of git-bug, and the fork has become the problem:
   the data model (~17,000) and the bridges (~13,000). It also carries
   git-bug's command line, GraphQL API, terminal UI, web UI, Jira and
   Launchpad, none of which it uses.
-- **Its format was bent to sync.** What each forge last showed lives in
-  `sync:<remote>:*` metadata strings, read in a way git-bug's spec doesn't
+- **Its format was bent to sync.** The value git-board and the forge last
+  agreed on lives in `sync:<remote>:*` metadata strings, read in a way git-bug's spec doesn't
   define, and git-bug's own bridges misread it. An original git-bug running
   `bridge pull` or `bridge push` on a synced repository duplicates issues,
   on GitHub too.
@@ -37,8 +37,8 @@ git-bug.**
   tests stay. Rust came second, C and C++ far behind: the scored table is in
   the artifact. Plans for those languages, for later, are in
   [core-other-languages.md](core-other-languages.md).
-- **Sync first.** Links to forges and "what each forge last showed" are part
-  of the data model, not metadata strings.
+- **Sync first.** Links to forges and "the value git-board and the forge last agreed
+  on" are part of the data model, not metadata strings.
 - **Not compatible with git-bug**, on purpose. The data lives under refs of
   its own, so git-bug never sees it and can't duplicate it.
 - **One binary:** `git board`, for people and for CI.
@@ -76,8 +76,9 @@ The spec (M1) holds the details; these are the choices it starts from.
   - `issue`: created, commented, text edited, title, status, labels;
   - `person`: a name, and an account per forge server (numeric id and
     login);
-  - `sync`, one per forge project: which issue is which forge issue, what
-    the forge last showed of each field, and what was sent.
+  - `sync`, one per forge project: which issue is which forge issue, the
+    value git-board and the forge last agreed on for each field, and what was
+    sent.
 - **An operation pulled from a forge says where it came from** (forge
   project and event id), as a field.
 - **Every field is a label** (`ns:value`), assignees included
@@ -153,6 +154,9 @@ M1 result, 2026-10-24: `gitstore`, `oplog` and `issue` are 895 lines of code
 (target under 1,500); the pull is 208 (346 with its state; target under 300).
 See the spec's Trial results. Awaiting guilbep's decision on M2.
 
+M1 gate reached, 2026-10-24: the trial and its review are done, waiting for
+guilbep's go or no-go on M2.
+
 ## Carried to later milestones
 
 What M1's tasks and reviews left for later. The execution ledger isn't kept
@@ -167,12 +171,36 @@ in git, so they are listed here.
   fail on the reload.
 - **M2:** the merge storm when clones exchange directly (already in
   storage.md).
+- **M2, spec polish:** say "at most 5 attempts in total"; the nonce is at
+  least 16 random bytes; SHA-1 repositories only, go-git v5's limit; the
+  issue state's JSON names `created` vs `time`, and shows `origin`; a missing
+  top-level `kind`, `author` or `time` is an error; fetch doesn't propagate
+  deletions; `make clean` also removes `spec/site/`; sync.md restates
+  data-model.md's state rules, so link to them instead; say why `link` and
+  `seen` take the issue's author.
+- **M2, gitstore:** match `.lock': File exists` only, not any "File exists";
+  a non-zero `prev` on a deleted ref should also be `ErrRefMoved`;
+  `UpdateRef` has no context; add a regression test for `LC_ALL=C` and a test
+  of a lock-file race; `DetectDotGit` may open an enclosing repository for a
+  nested bare one; the lock-file branch of the sync entity's first write has
+  no test.
+- **M2, tests:** adding and removing one label in one op; a body edit after a
+  comment edit; the fields the pull's tests don't check (a link's number and
+  URL, the comment time, the author, time and origin of set-status,
+  change-labels, link and seen, the issue's `Origin.Forge`, the order of
+  `seen` ops); the fake forge's `Edit` changes every issue with that number
+  and is silent on an unknown one; `forge` and `forge/fake` have no tests of
+  their own.
 - **M3:** a record of which git-board comment each posted comment is, a
   refusal record, the marker's format, and a last-run time; an issue pulled
   but not linked (a crash between the two writes) found by its origin and
   linked; tests of first link wins before M3 relies on it; the two conflict
   rules users will meet, stated in the spec: between clones by the order,
   between git-board and a forge by time.
+- **M3:** after two clones pull the same forge comment, the issue keeps the
+  first copy's text (issue order), while `seen` takes the last value in the
+  sync entity's order. They can disagree and hide a forge edit. Settle it
+  with M3's conflict rules.
 - **M3:** the sync entity is one log that grows forever, reloaded whole on
   every pull. Plan a snapshot, or the index, before M6's mass first pull.
 - **M4:** a forge listing one comment id twice in one issue (paging).
