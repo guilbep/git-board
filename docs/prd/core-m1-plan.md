@@ -134,10 +134,12 @@ milestone writes the spec itself, in `spec/`.
     - `create {title, body}`, `comment {body}`, `edit-text {target, body}`
       (target: the create op's id for the body, or a comment's id);
     - `set-title {title}`, `set-status {status: "open"|"closed"}`;
-    - `change-labels {add, remove}`, `change-assignees {add, remove}`;
+    - `change-labels {add, remove}`;
+  - every field is a label (`ns:value`), assignees included
+    (`assignee:<name>`);
   - how an issue's state follows from its operations: the first must be
-    `create`; labels and assignees are sets, applied in order; an unknown
-    kind is an error;
+    `create`; labels are a set, changed in order; an unknown kind is an
+    error;
   - `person`: its operations are listed as planned for M2, not defined yet;
   - `sync`: `link {issue, forge_id, number, url}` and
     `seen {issue, field, value}`;
@@ -173,7 +175,7 @@ milestone writes the spec itself, in `spec/`.
   - **Links.** One per issue and forge project, in that project's `sync`
     entity.
   - **Last seen.** Per field: title, body, status, labels (sorted, one per
-    line), each comment, assignees.
+    line), each comment.
   - **The four cases.** Compare git-board and the forge with last seen:
     nothing to do; pull; push; both changed, and the later change wins
     while the other stays in the history.
@@ -208,7 +210,6 @@ milestone writes the spec itself, in `spec/`.
   - **GitLab:**
     - text edits leave no event;
     - `updated_at` moves late, so list from 2 minutes before the last sync;
-    - the free edition has one assignee per issue;
     - base URLs compare without their trailing slash;
     - confidential issues are skipped.
 - [ ] **Step 3: Add both to the nav and run `make spec`.** Expected: exit 0,
@@ -342,8 +343,8 @@ milestone writes the spec itself, in `spec/`.
   - `type Status string`; `const Open Status = "open"`,
     `Closed Status = "closed"`
   - `type Comment struct{ ID, Author, Body string; Time int64; Origin *oplog.Origin }`
-  - `type Issue struct{ ID, Author, Title, Body, BodyOp string; Created int64; Status Status; Labels, Assignees []string; Comments []Comment; Origin *oplog.Origin }`.
-    Labels and Assignees are sorted and unique; BodyOp is the create op's id.
+  - `type Issue struct{ ID, Author, Title, Body, BodyOp string; Created int64; Status Status; Labels []string; Comments []Comment; Origin *oplog.Origin }`.
+    Labels are sorted and unique; BodyOp is the create op's id.
   - `var ErrUnknownOp = errors.New("issue: unknown operation")`,
     `var ErrBadTarget = errors.New("issue: edit of an unknown text")`
   - `func Apply(l *oplog.Log) (*Issue, error)`
@@ -351,8 +352,7 @@ milestone writes the spec itself, in `spec/`.
     `NewCreate(author, title, body string)`, `NewComment(author, body)`,
     `EditText(author, target, body)`, `SetTitle(author, title)`,
     `SetStatus(author string, s Status)`,
-    `ChangeLabels(author string, add, remove []string)`,
-    `ChangeAssignees(author string, add, remove []string)`
+    `ChangeLabels(author string, add, remove []string)`
   - `func Create(s *gitstore.Store, ops ...oplog.Op) (*Issue, error)`: the
     first op must be a create
   - `func Load(s *gitstore.Store, id string) (*Issue, error)`;
@@ -364,8 +364,8 @@ milestone writes the spec itself, in `spec/`.
   - `TestCreateAndLoad`: title, body, open status, author, and `ID` equal to
     the log's id.
   - `TestEveryOp`: comment, edit the body, edit the comment, title, close,
-    labels `+bug +ui` then `-ui`, assignees `+p1`. The state is checked field
-    by field.
+    labels `+bug +ui +assignee:p1` then `-ui`. The state is checked field by
+    field.
   - `TestFirstOpMustBeCreate`: `Create(s, NewComment(...))` errors.
   - `TestUnknownOpIsAnError`: a log holding `{"kind":"set-priority"}`.
     `Apply` gives `errors.Is(err, ErrUnknownOp)` and the message contains

@@ -73,16 +73,21 @@ The spec (M1) holds the details; these are the choices it starts from.
   operations are ordered by (clock, pack hash): the same order on every
   clone, whatever the wall clocks say.
 - **Three kinds:**
-  - `issue`: created, commented, text edited, title, status, labels,
-    assignees;
+  - `issue`: created, commented, text edited, title, status, labels;
   - `person`: a name, and an account per forge server (numeric id and
     login);
   - `sync`, one per forge project: which issue is which forge issue, what
     the forge last showed of each field, and what was sent.
 - **An operation pulled from a forge says where it came from** (forge
   project and event id), as a field.
-- **Labels stay the fields' model** (`ns:value`), as git-board has them
-  today. Assignees are people.
+- **Every field is a label** (`ns:value`), assignees included
+  (`assignee:<name>`), as git-board has them today. The forges get labels,
+  never their own fields (guilbep, 2026-10-24): nobody uses GitHub's issue
+  types or priority, and the PMs' fields live in GitHub Projects, which
+  git-board's Project sync handles.
+- **Acceptance criteria stay text:** a task list under a heading in the
+  description, which git-board reads today, and which every forge renders
+  with its checkboxes. The core doesn't model them; git-board does.
 - **Settings shared by the project live in `.git-board.toml`**, which
   git-board already has and edits in Settings: the forges, the posting
   account, `publish-private`. Tokens stay on each machine. Who "I" am is
@@ -98,25 +103,24 @@ The spec (M1) holds the details; these are the choices it starts from.
 ## Version 1
 
 **In:**
-- issues (create, comment, edit a text, title, status, labels, assignees)
-  and people;
+- issues (create, comment, edit a text, title, status, labels) and people;
 - sync with GitHub and GitLab, both ways:
   - posting for people without a token there, under a header naming them;
   - mentions defused, and `#n` becoming the mirrored issue's number;
-  - assignees as the forge's own;
   - a forge's refusal kept in git-board, with one warning;
 - what sync.10 added: confidential GitLab issues never synced, nothing
   pulled from a project that isn't public sent to one that is (unless
   `publish-private`), and GitHub's state read from the issue itself;
 - git-board on the core: server, web app, TUI, command line;
-- the converter, and the switch, repository by repository.
+- the switch, repository by repository, from the forges (no converter).
 
 **Out, until asked:**
 - Gitea;
 - mirroring git-board's review comments to GitHub pull requests (they stay
   in git-board);
-- kinds as GitHub issue types, sprints as GitLab milestones, and the mode
-  switches (they stay labels on the forges);
+- the forges' own fields: assignees, GitHub's issue types and priority,
+  GitLab's milestones, and the mode switches. Every field is a label on
+  every forge;
 - `link`, `unlink` and `take`;
 - Jira and Launchpad;
 - any API besides git-board's own HTTP API.
@@ -130,7 +134,7 @@ The spec (M1) holds the details; these are the choices it starts from.
 | **M3** | the sync engine, on a fake forge, with the conformance suite every adapter runs | the suite: mirror then stable, an issue opened on each side, a local edit survives, a forge edit is pulled, a conflict keeps the later edit, a crash after a write, labels merge, pushing alone keeps labels, a token owner acts directly, refs never mirrored, deletions not propagated, one issue synced alone, plus the guard and confidential issues | 15–30 |
 | **M4** | the GitHub and GitLab adapters | the suite on fakes; one live two-way run on guilbep/git-board-test and gitlab.epfl.ch 42400 | 15–30 |
 | **M5** | git-board on the core: `internal/gitbugio`'s Backend over the core, the server's forge sync over `core/sync`, the command line and the TUI; git-bug leaves go.mod; features carried over by use, not by inventory | `make ci`; git-board's tests as the checklist of behaviours to keep or drop | 15–30 |
-| **M6** | the converter, a one-off GPL program outside git-board, from git-bug's data (issues, identities, the fork's sync records) to `refs/board/*`; the switch; MIT | a dry run on copies of the wiki, co2 and git-board's own board, then the real ones with no duplicate on any forge; a licence scan of git-board's dependencies | 5–10 |
+| **M6** | the switch, without a converter: a last sync with sync.10 so that everything is on a forge, then the core pulls each repository from its forges. An issue posted by the fork is recognized as a mirror by its header's link to the original, so a mirrored pair becomes one issue. Project numbers are keyed again. Then MIT | a dry run on copies of the wiki and git-board's own board; then the real ones, with no duplicate on any forge and every issue kept; a licence scan of git-board's dependencies | 5–10 |
 
 Each milestone gets its own plan, `core-mN-plan.md`, written when the one
 before it is done and its part of the spec is approved.
@@ -154,10 +158,18 @@ before it is done and its part of the spec is approved.
   each one over from the fork's sync-decisions.md, which guilbep wrote.
 - **Two systems for a while.** Until M6, the fork's sync.10 and today's
   git-board stay in use; the new core touches only scratch repositories.
+- **What lives only in git-bug is lost at the switch:**
+  - issues never sent to a forge;
+  - local labels never pushed, like co2's from git-board;
+  - comments the fork couldn't post.
+
+  Before switching a repository, its last sync.10 run must report nothing
+  left to send.
 
 ## Open, for guilbep
 
-- Assignees native on both forges in version 1, with no switch, as proposed?
 - Tokens: the OS keyring, or environment variables (CI) only, at first?
-- The converter's home: its own small repository (GPL, using the frozen
-  fork), as proposed?
+
+Answered 2026-10-24:
+- no forge fields, labels everywhere;
+- no converter: the switch pulls from the forges (M6).

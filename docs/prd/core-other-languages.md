@@ -71,7 +71,7 @@ Expect a clean build in minutes, and seconds to tens of seconds after an
 edit. Measure it in M1, before deciding anything else.
 
 **Agent hours:** 160–320 for everything (the core, the sync, both adapters,
-git-board's server and TUI, the converter).
+git-board's server and TUI, the switch).
 
 **Risks:**
 - async code (tokio) spreads through the engine;
