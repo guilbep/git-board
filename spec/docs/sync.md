@@ -29,6 +29,10 @@ project's entity holds every link to that project.
   [nothing private published](#nothing-private-published) forbids it. Each
   of those projects' entities then holds a link to it.
 - A link is never removed. `unlink` is out of version 1.
+- `Links` lists every sync entity's links, by issue, as its state rules
+  hold them: git-board shows where an issue is with them. A link's forge
+  key isn't in it, as an entity's id is a hash of the key; its `url` names
+  the forge.
 
 ## Last seen
 

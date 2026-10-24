@@ -72,13 +72,15 @@ The spec (M1) holds the details; these are the choices it starts from.
   operations and a clock one higher than its parents'. All of an entity's
   operations are ordered by (clock, pack hash): the same order on every
   clone, whatever the wall clocks say.
-- **Three kinds:**
+- **Four kinds** (the fourth from M5's inventory):
   - `issue`: created, commented, text edited, title, status, labels;
   - `person`: a name, and an account per forge server (numeric id and
     login);
   - `sync`, one per forge project: which issue is which forge issue, the
     value git-board and the forge last agreed on for each field, and what was
-    sent.
+    sent;
+  - `release`, one per released commit: what it shipped, its notes,
+    comments and yank. The core stores and moves it; git-board reads it.
 - **An operation pulled from a forge says where it came from** (forge
   project and event id), as a field.
 - **Every field is a label** (`ns:value`), assignees included

@@ -26,8 +26,9 @@ refs/board/sync/56f7a8e819f90e968812bac54ae4b06142d8e735
   or `refs/board/issue/a/b`, isn't an entity. Listing, the index, change
   events and the merge after a fetch ignore it, and it is never an error.
   Only writing one is refused, as a bad name.
-- The kinds, `issue`, `person` and `sync`, are one list in the core. The
-  name check, fetch and push all read it.
+- The kinds, `issue`, `person`, `sync` and `release`, are one list in the
+  core. The name check, fetch, push, the merge after a fetch and change
+  events all read it.
 - `refs/board/seq` is git-board's own counter of project numbers. It isn't
   an entity, and the core leaves it as it is.
 
@@ -256,7 +257,7 @@ twice (see [A run](sync.md#a-run)).
 ## Fetch and push
 
 Fetch and push run the `git` binary, so every remote, push URL and
-credential helper git knows works. Both name the three entity kinds, one
+credential helper git knows works. Both name the four entity kinds, one
 refspec each, in one call. `refs/board/seq` and any other ref under
 `refs/board/` belong to git-board, not to the core, and the core never
 fetches nor pushes them.
@@ -267,7 +268,8 @@ Fetch:
 git fetch <remote> \
   +refs/board/issue/*:refs/board-remotes/<remote>/issue/* \
   +refs/board/person/*:refs/board-remotes/<remote>/person/* \
-  +refs/board/sync/*:refs/board-remotes/<remote>/sync/*
+  +refs/board/sync/*:refs/board-remotes/<remote>/sync/* \
+  +refs/board/release/*:refs/board-remotes/<remote>/release/*
 ```
 
 Then each `refs/board-remotes/<remote>/<kind>/<id>` whose id is valid (see
@@ -290,7 +292,8 @@ Push:
 git push <remote> \
   refs/board/issue/*:refs/board/issue/* \
   refs/board/person/*:refs/board/person/* \
-  refs/board/sync/*:refs/board/sync/*
+  refs/board/sync/*:refs/board/sync/* \
+  refs/board/release/*:refs/board/release/*
 ```
 
 The push isn't forced. When a ref moved on the remote, git refuses it:

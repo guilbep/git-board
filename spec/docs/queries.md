@@ -113,6 +113,25 @@ last edits left them.
 - **FTS5's own syntax is never read.** Each word is quoted, so `"`, `*`,
   `-`, `:`, `AND`, `OR`, `NOT` and parentheses are plain text.
 
+## Labels
+
+`Labels` answers every label in use: each label at least one issue has,
+sorted byte for byte, each once. A label no issue has anymore isn't one.
+
+## Prefixes
+
+A prefix of an issue's or a person's id, as people type them, names the
+entity whose id starts with it.
+
+- **It is 1 to 40 lowercase hex digits.** Anything else is an error, so no
+  character acts as a pattern.
+- **One entity matches:** it answers that id.
+- **None matches:** it is an error that says none does.
+- **Several match:** it is an error that says the prefix is ambiguous. A
+  whole id never is.
+- It reads the index, after a refresh like every query, so a broken entity
+  matches nothing.
+
 ## Accounts
 
 A lookup by account, a `server` and an `id`, answers the person who owns

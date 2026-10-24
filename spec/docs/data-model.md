@@ -13,10 +13,11 @@ Nothing else is kept in git: no snapshot of the state, no cache.
 
 An entity has a kind and an id:
 
-- the kind is `issue`, `person` or `sync`;
+- the kind is `issue`, `person`, `sync` or `release`;
 - the id is 40 lowercase hex characters, `^[0-9a-f]{40}$`, and unique
   within its kind. An issue's or a person's id is a pack hash, and a sync
-  entity's is the SHA-1 of its forge key (see [Ids](#ids)).
+  entity's is the SHA-1 of its forge key (see [Ids](#ids)). A release's is
+  a pack hash too.
 
 An entity's ref names both: `refs/board/issue/3f7a9c2e41b6d08a5e1f93c7b2d4a6e8f0c1b3d5`
 is the issue `3f7a9c2e41b6d08a5e1f93c7b2d4a6e8f0c1b3d5`.
@@ -109,17 +110,18 @@ new head writes a new pack, so its operations get new ids (see
 
 ## Issues
 
-An issue has a title, a body, a status, labels and comments. It has six
+An issue has a title, a body, a status, labels and comments. It has seven
 operations:
 
 | `kind` | `data` | What it does |
 |---|---|---|
 | `create` | `title`, `body` | opens the issue |
-| `comment` | `body` | adds a comment |
+| `comment` | `body`, `meta` | adds a comment |
 | `edit-text` | `target`, `body` | replaces the body, or a comment's body |
 | `set-title` | `title` | replaces the title |
 | `set-status` | `status`: `"open"` or `"closed"` | opens or closes the issue |
 | `change-labels` | `add`, `remove`: lists of labels | adds and removes labels |
+| `set-meta` | `target`, `meta` | sets metadata on the body or a comment |
 
 ### `create`
 
@@ -147,6 +149,10 @@ operations:
   }
 }
 ```
+
+`meta` is optional: an object of string keys and string values, which
+git-board reads, like a review comment's `review:path` or a cycle sign-off's
+`cycle:step`. The core gives no key a meaning.
 
 ### `edit-text`
 
@@ -210,6 +216,26 @@ and holds no line feed (`\n`), as sync writes a set of labels one per line.
 }
 ```
 
+### `set-meta`
+
+`target` is an operation's id, as for `edit-text`: the `create` operation's
+for the issue's own metadata, or a `comment` operation's. Each key of `meta`
+takes its value; the other keys stay. git-board resolves a review thread
+this way, and keeps what a GitHub Project and git-board last agreed on in
+the issue's own metadata.
+
+```json
+{
+  "kind": "set-meta",
+  "author": "b7e41c09d2a85f36e1c4a0d7b9f2e5c83a6d1f40",
+  "time": 1792836750,
+  "data": {
+    "target": "8c04e5b1d97f2a63c18e0b4d5f6a7928e3b1c0d4:0",
+    "meta": {"review:resolved": "true"}
+  }
+}
+```
+
 ### Labels
 
 Every field of an issue besides its title, body, status and comments is a
@@ -250,8 +276,12 @@ An issue's state follows from its operations, applied in order:
    that isn't, changes nothing. Operations apply in order, so the later one
    wins. An empty label, or one holding a line feed, in either list, is an
    error.
-8. An operation whose `author` is empty is an error.
-9. Any other `kind` is an error, which names the kind.
+8. `set-meta` sets each key of `meta` on its target, which is found as
+   `edit-text` finds it. A `comment`'s own `meta` is its first. A target
+   that isn't the `create` operation, nor a `comment` met earlier, is an
+   error.
+9. An operation whose `author` is empty is an error.
+10. Any other `kind` is an error, which names the kind.
 
 Two clones that pull the same forge comment before fetching each other each
 write a `comment` for it, with the same `origin`. Once they merge, the first
@@ -271,6 +301,7 @@ An issue's state holds:
 | `title`, `body`, `status` | as the operations left them |
 | `labels` | the labels, sorted and unique |
 | `comments` | the comments, in the order they were added |
+| `meta` | the `create` operation's metadata, as `set-meta` left it |
 | `changes` | for each field, the operation that last changed it: its `author`, `time` and `origin` |
 
 The fields of `changes` are `title`, `body` and `status`, set first by
@@ -289,6 +320,7 @@ A comment holds:
 | `edited` | the time of the last `edit-text` of the comment in the order, by any of its ids; 0 if it was never edited |
 | `origin` | the `comment` operation's origin; absent if it has none |
 | `body` | its text, as the last `edit-text` left it |
+| `meta` | its metadata, as its `comment` and each `set-meta` of it left it |
 
 Like every `time`, `updated` and `edited` are for people to read. They are
 the last operation's time, not the highest: when wall clocks disagree, an
@@ -680,6 +712,29 @@ holds and the other issue is left unlinked. That issue is a **duplicate**:
 its `create` has as `origin` a forge issue linked to another issue. Sync
 leaves a duplicate alone, on every project, so it is never mirrored
 anywhere. It stays in git-board. Joining duplicates is out of version 1.
+
+## Releases
+
+A release is the record of one released commit: what it shipped, and what
+was said about it. git-board writes and reads it; the core stores, fetches,
+pushes, merges and watches it like the other kinds, and gives its
+operations no meaning. A release is created without an id, so its id is its
+first pack's hash. Its four operations, which git-board reads:
+
+| `kind` | `data` | What it does |
+|---|---|---|
+| `create` | `commit`, `previous`, `artifacts`, `chart`, `assets` | records the commit, the previous final's tag, the images, the Helm chart and the archives it shipped |
+| `set-notes` | `notes` | replaces the notes |
+| `comment` | `message` | adds a comment |
+| `yank` | `reason` | marks the release yanked |
+
+- The first operation must be `create`, with a `commit`; a second `create`
+  is an error. An empty `message` or `reason` is an error, and so is any
+  other `kind`.
+- **One record per commit.** Two clones that record one commit before
+  fetching each other make two releases. The one whose id sorts first is
+  the commit's record; git-board never shows the other.
+- Its names are the tags on its commit, read from git, never stored.
 
 ## Origins
 

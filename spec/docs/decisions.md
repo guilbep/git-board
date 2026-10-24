@@ -36,7 +36,8 @@ the [PRD][prd] where it was decided.
 - One kind of record, the entity: a log of operations in a chain of commits
   under `refs/board/<kind>/<id>`, ordered by (clock, pack hash).
   ([PRD][model])
-- Three kinds: `issue`, `person` and `sync`. ([PRD][model])
+- Four kinds: `issue`, `person` and `sync`, and `release`, whose
+  operations git-board reads (M5). ([PRD][model])
 - An operation pulled from a forge says where it came from, as a field.
   ([PRD][model])
 - Every field is a label, `ns:value`, assignees included. The forges get
