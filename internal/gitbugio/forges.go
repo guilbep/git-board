@@ -2,6 +2,7 @@ package gitbugio
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -101,6 +102,9 @@ func (b *Backend) SyncIssue(ctx context.Context, run ForgeRun, idPrefix string) 
 type syncWay func(context.Context, *gitstore.Store, syncer.Options, ...forge.Forge) (syncer.Report, error)
 
 func (b *Backend) forgeSync(ctx context.Context, run ForgeRun, way syncWay, issueID string) (syncer.Report, error) {
+	if err := b.switched(); err != nil {
+		return syncer.Report{}, err
+	}
 	see := run.See
 	if see == nil {
 		see = func(SyncEvent) {}
@@ -145,6 +149,24 @@ func (b *Backend) forgeSync(ctx context.Context, run ForgeRun, way syncWay, issu
 	return way(ctx, s, opt, fs...)
 }
 
+// ErrNotSwitched: the repository's issues are still the git-bug fork's.
+var ErrNotSwitched = errors.New("this repository's issues are still git-bug's, in refs/bugs: run git-board switch first")
+
+// switched refuses a forge sync on a repository whose issues are in
+// refs/bugs and that the core never pulled: it would pull the fork's
+// mirrors without the fork's links, as issues of their own, and push them
+// back as duplicates.
+func (b *Backend) switched() error {
+	bugs, err := b.s.Refs("refs/bugs/")
+	if err != nil || len(bugs) == 0 {
+		return err
+	}
+	if synced, err := b.s.Refs("refs/board/sync/"); err != nil || len(synced) > 0 {
+		return err
+	}
+	return ErrNotSwitched
+}
+
 // isLocal says a comment stays in git-board: a line comment, a reply or a
 // review (review:* metadata) never goes to a forge.
 func isLocal(meta map[string]string) bool {
@@ -162,7 +184,12 @@ func isLocal(meta map[string]string) bool {
 // through objects/info/alternates is quicker, but go-git doesn't read
 // those.)
 func (b *Backend) scratch(ctx context.Context) (*gitstore.Store, func(), error) {
-	parent := filepath.Join(b.s.CommonDir(), "board")
+	return scratchOf(ctx, b.s.CommonDir(), b.s.CommonDir())
+}
+
+// scratchOf is a mirror of the repository at from, in home's board folder.
+func scratchOf(ctx context.Context, from, home string) (*gitstore.Store, func(), error) {
+	parent := filepath.Join(home, "board")
 	if err := os.MkdirAll(parent, 0o755); err != nil {
 		return nil, nil, err
 	}
@@ -171,7 +198,7 @@ func (b *Backend) scratch(ctx context.Context) (*gitstore.Store, func(), error) 
 		return nil, nil, err
 	}
 	done := func() { _ = os.RemoveAll(dir) }
-	cmd := exec.CommandContext(ctx, "git", "clone", "--mirror", "--quiet", b.s.CommonDir(), dir)
+	cmd := exec.CommandContext(ctx, "git", "clone", "--mirror", "--quiet", from, dir)
 	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
 	if out, err := cmd.CombinedOutput(); err != nil {
 		done()

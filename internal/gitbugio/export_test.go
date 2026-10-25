@@ -1,6 +1,10 @@
 package gitbugio
 
-import "github.com/guilbep/git-board/core/gitstore"
+import (
+	"fmt"
+
+	"github.com/guilbep/git-board/core/gitstore"
+)
 
 // EditRelease is editRelease for the tests: an operation a later
 // git-board might add.
@@ -41,4 +45,31 @@ func StoreCommit(b *Backend, name string, parents ...gitstore.Hash) (gitstore.Ha
 		return gitstore.ZeroHash, err
 	}
 	return b.s.WriteCommit(gitstore.Commit{Tree: tree, Parents: parents})
+}
+
+// WriteForkRelease writes a release record as the git-bug fork kept it:
+// a chain of commits under refs/releases/<name>, one per ops file, with
+// their edit clocks.
+func WriteForkRelease(b *Backend, name string, ops ...string) error {
+	var parents []gitstore.Hash
+	for i, o := range ops {
+		blob, err := b.s.WriteBlob([]byte(o))
+		if err != nil {
+			return err
+		}
+		empty, err := b.s.WriteBlob(nil)
+		if err != nil {
+			return err
+		}
+		tree, err := b.s.WriteTree([]gitstore.TreeEntry{{Name: fmt.Sprintf("edit-clock-%d", i+1), Blob: empty}, {Name: "ops", Blob: blob}, {Name: "version-1", Blob: empty}})
+		if err != nil {
+			return err
+		}
+		head, err := b.s.WriteCommit(gitstore.Commit{Tree: tree, Parents: parents})
+		if err != nil {
+			return err
+		}
+		parents = []gitstore.Hash{head}
+	}
+	return b.s.UpdateRef(ctx, "refs/releases/"+name, parents[0], gitstore.ZeroHash)
 }

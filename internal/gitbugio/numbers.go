@@ -125,16 +125,18 @@ func (c Counter) Format(n int) string { return fmt.Sprintf("%s-%d", c.Prefix, n)
 
 // Counter is the project's numbers as this clone last fetched them; ok is
 // false while the project doesn't number its issues.
-func (b *Backend) Counter() (c Counter, ok bool, err error) {
-	h, err := b.s.Ref(seqRef)
+func (b *Backend) Counter() (c Counter, ok bool, err error) { return readCounter(b.s) }
+
+func readCounter(s *gitstore.Store) (c Counter, ok bool, err error) {
+	h, err := s.Ref(seqRef)
 	if err != nil || h == gitstore.ZeroHash {
 		return Counter{}, false, err
 	}
-	commit, err := b.s.ReadCommit(h)
+	commit, err := s.ReadCommit(h)
 	if err != nil {
 		return Counter{}, false, fmt.Errorf("reading %s: %w", seqRef, err)
 	}
-	entries, err := b.s.ReadTree(commit.Tree)
+	entries, err := s.ReadTree(commit.Tree)
 	if err != nil {
 		return Counter{}, false, fmt.Errorf("reading %s: %w", seqRef, err)
 	}
@@ -142,7 +144,7 @@ func (b *Backend) Counter() (c Counter, ok bool, err error) {
 		if e.Name != seqFile {
 			continue
 		}
-		data, err := b.s.ReadBlob(e.Blob)
+		data, err := s.ReadBlob(e.Blob)
 		if err != nil {
 			return Counter{}, false, fmt.Errorf("reading %s: %w", seqRef, err)
 		}
@@ -383,23 +385,8 @@ func (b *Backend) survey(remote string, c Counter) (todo []*issue.Issue, n Numbe
 // (rejected: they took the number), or still parent (a real failure, the
 // counter as it was).
 func (b *Backend) pushCounter(remote string, c Counter, parent gitstore.Hash) (rejected bool, err error) {
-	data, err := b.s.WriteBlob(c.Bytes())
+	commit, err := commitCounter(b.s, c, parent)
 	if err != nil {
-		return false, err
-	}
-	tree, err := b.s.WriteTree([]gitstore.TreeEntry{{Name: seqFile, Blob: data}})
-	if err != nil {
-		return false, err
-	}
-	var parents []gitstore.Hash
-	if parent != gitstore.ZeroHash {
-		parents = append(parents, parent)
-	}
-	commit, err := b.s.WriteCommit(gitstore.Commit{Tree: tree, Parents: parents})
-	if err != nil {
-		return false, err
-	}
-	if err := b.s.UpdateRef(ctx, seqRef, commit, parent); err != nil {
 		return false, err
 	}
 	if _, err := b.run(nil, "push", remote, seqRef+":"+seqRef); err != nil {
@@ -416,4 +403,26 @@ func (b *Backend) pushCounter(remote string, c Counter, parent gitstore.Hash) (r
 		return true, errors.Join(err, b.setSeq(theirs))
 	}
 	return false, nil
+}
+
+// commitCounter commits c on parent (ZeroHash for the first commit) as
+// refs/board/seq, and answers the commit.
+func commitCounter(s *gitstore.Store, c Counter, parent gitstore.Hash) (gitstore.Hash, error) {
+	data, err := s.WriteBlob(c.Bytes())
+	if err != nil {
+		return gitstore.ZeroHash, err
+	}
+	tree, err := s.WriteTree([]gitstore.TreeEntry{{Name: seqFile, Blob: data}})
+	if err != nil {
+		return gitstore.ZeroHash, err
+	}
+	var parents []gitstore.Hash
+	if parent != gitstore.ZeroHash {
+		parents = append(parents, parent)
+	}
+	commit, err := s.WriteCommit(gitstore.Commit{Tree: tree, Parents: parents})
+	if err != nil {
+		return gitstore.ZeroHash, err
+	}
+	return commit, s.UpdateRef(ctx, seqRef, commit, parent)
 }

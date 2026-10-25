@@ -97,8 +97,10 @@ var (
 	spaces    = regexp.MustCompile(`\s+`)
 )
 
-// same says two texts are one, as a mirror shows it: without the fork's
+// SameText says two texts are one, as a mirror shows it: without the fork's
 // start, and with mentions and references as either side translated them.
+func SameText(a, b string) bool { return same(a, b) }
+
 func same(a, b string) bool {
 	norm := func(s string) string {
 		s = codeTicks.ReplaceAllString(unwrap(s).body, "")
