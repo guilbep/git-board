@@ -43,8 +43,8 @@ func Links(s *gitstore.Store) (map[string][]Link, error) {
 }
 
 // Records is Links with each link's record.
-// ponytail: folds every sync entity whole, as a run does, and scans its
-// posted comments per link; M6's snapshot serves this too.
+// ponytail: folds every sync entity whole, as a run does; M6's snapshot
+// serves this too.
 func Records(s *gitstore.Store) (map[string][]Record, error) {
 	ids, err := oplog.List(s, "sync")
 	if err != nil {
@@ -62,6 +62,13 @@ func Records(s *gitstore.Store) (map[string][]Record, error) {
 				return nil, err
 			}
 		}
+		posted := map[string]map[string]string{} // issue -> its posted comments
+		for k, f := range st.posted {
+			if posted[k[0]] == nil {
+				posted[k[0]] = map[string]string{}
+			}
+			posted[k[0]][k[1]] = f
+		}
 		for issue, d := range st.link {
 			seen := maps.Clone(st.seen[issue])
 			for f, v := range seen {
@@ -69,13 +76,7 @@ func Records(s *gitstore.Store) (map[string][]Record, error) {
 					seen[f] = unwrap(v).body
 				}
 			}
-			posted := map[string]string{}
-			for k, f := range st.posted {
-				if k[0] == issue {
-					posted[k[1]] = f
-				}
-			}
-			out[issue] = append(out[issue], Record{Link: Link(d), Forge: id, Seen: seen, Posted: posted})
+			out[issue] = append(out[issue], Record{Link: Link(d), Forge: id, Seen: seen, Posted: posted[issue]})
 		}
 	}
 	for _, rs := range out {
