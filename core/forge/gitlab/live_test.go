@@ -3,6 +3,7 @@ package gitlab
 import (
 	"os"
 	"os/exec"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -20,7 +21,8 @@ var live = map[string]bool{"gitlab.epfl.ch/42400": true}
 // TestLive is a short two-way sync with gitlab.epfl.ch project 42400, run
 // only with BOARD_LIVE=1. Its token is GITLAB_TOKEN, else the credential
 // helper's for gitlab.epfl.ch, with BOARD_GITLAB_LOGIN as the username when
-// set. It creates one issue, and closes it.
+// set. It creates one issue, labelled live-board and assigned to the
+// posting account, and closes it.
 func TestLive(t *testing.T) {
 	t.Parallel()
 	if os.Getenv("BOARD_LIVE") != "1" {
@@ -48,7 +50,7 @@ func TestLive(t *testing.T) {
 	}
 	title := "git-board core live test " + time.Now().UTC().Format(time.RFC3339)
 	is, err := issue.Create(ctx, s, issue.NewCreate(me.ID, title, "Made by the GitLab adapter's live test."),
-		issue.NewComment(me.ID, "a git-board comment"))
+		issue.NewComment(me.ID, "a git-board comment"), issue.ChangeLabels(me.ID, []string{"live-test"}, nil))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,8 +83,29 @@ func TestLive(t *testing.T) {
 		t.Fatalf("posted %d issues, want 1", r.Posted)
 	}
 	fi := find(title)
-	if len(fi.Comments) != 1 || !strings.Contains(fi.Comments[0].Body, "a git-board comment") {
+	if len(fi.Comments) != 1 || !strings.Contains(fi.Comments[0].Body, "a git-board comment") || !slices.Contains(fi.Labels, "live-test") {
 		t.Fatalf("on GitLab: %+v", fi)
+	}
+	// Labels, each way: one added and one removed on GitLab, then in
+	// git-board, with an assignee, the posting account, read back.
+	if err := a.ChangeLabels(ctx, fi.ID, []string{"live-forge"}, []string{"live-test"}); err != nil {
+		t.Fatal(err)
+	}
+	sync()
+	if got, err := issue.Load(s, is.ID); err != nil || !slices.Contains(got.Labels, "live-forge") || slices.Contains(got.Labels, "live-test") {
+		t.Fatalf("in git-board: labels %v, %v", got.Labels, err)
+	}
+	acc, err := a.Me(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := issue.Do(ctx, s, is.ID, issue.ChangeLabels(me.ID, []string{"live-board", "assignee:" + acc.Login}, []string{"live-forge"})); err != nil {
+		t.Fatal(err)
+	}
+	sync()
+	if on, err := a.Issue(ctx, fi.ID); err != nil || !slices.Contains(on.Labels, "live-board") || slices.Contains(on.Labels, "live-forge") ||
+		!slices.ContainsFunc(on.Assignees, func(x forge.Account) bool { return x.ID == acc.ID }) {
+		t.Fatalf("on GitLab: labels %v, assignees %v, %v", on.Labels, on.Assignees, err)
 	}
 	// A GitLab comment comes back; a rename and a close go.
 	if _, err := a.CreateComment(ctx, fi.ID, "a GitLab comment"); err != nil {

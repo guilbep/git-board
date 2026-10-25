@@ -22,7 +22,8 @@ var liveProjects = []string{"guilbep/git-board-test"}
 // TestLive runs a short two-way sync with GitHub, with the token from
 // GITHUB_TOKEN or git's credential helper. It runs only with BOARD_LIVE=1,
 // on guilbep/git-board-test, or on BOARD_LIVE_PROJECT when liveProjects
-// has it. It leaves one closed issue there, labelled live-test.
+// has it. It leaves one closed issue there, labelled live-board and
+// assigned to the posting account.
 func TestLive(t *testing.T) {
 	if os.Getenv("BOARD_LIVE") != "1" {
 		t.Skip("BOARD_LIVE=1 runs it against GitHub")
@@ -107,6 +108,29 @@ func TestLive(t *testing.T) {
 	}
 	if got.Title != title+" (renamed on GitHub)" || len(got.Comments) != 2 || got.Comments[1].Body != "a comment from GitHub\non two lines" {
 		t.Fatalf("in git-board: %q, %d comments", got.Title, len(got.Comments))
+	}
+
+	// Labels, each way: one added and one removed on GitHub, then in
+	// git-board, with an assignee, the posting account, read back.
+	if err := a.ChangeLabels(ctx, gi.ID, []string{"live-forge"}, []string{"live-test"}); err != nil {
+		t.Fatal(err)
+	}
+	run()
+	if got, err = issue.Load(s, is.ID); err != nil || !slices.Contains(got.Labels, "live-forge") || slices.Contains(got.Labels, "live-test") {
+		t.Fatalf("in git-board: labels %v, %v", got.Labels, err)
+	}
+	acc, err := a.Me(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := issue.Do(ctx, s, is.ID, issue.ChangeLabels(me, []string{"live-board", "assignee:" + acc.Login}, []string{"live-forge"})); err != nil {
+		t.Fatal(err)
+	}
+	run()
+	fi, err := a.Issue(ctx, gi.ID)
+	if err != nil || !slices.Contains(fi.Labels, "live-board") || slices.Contains(fi.Labels, "live-forge") ||
+		!slices.ContainsFunc(fi.Assignees, func(x forge.Account) bool { return x.ID == acc.ID }) {
+		t.Fatalf("on GitHub: labels %v, assignees %v, %v", fi.Labels, fi.Assignees, err)
 	}
 
 	// git-board closes it; the run after writes nothing.
