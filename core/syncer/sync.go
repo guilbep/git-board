@@ -104,12 +104,14 @@ type project struct {
 	acc    map[string]forge.Account // person id -> their account on this server
 }
 
-func start(ctx context.Context, s *gitstore.Store, opt Options, forges []forge.Forge, pull, push bool) (Report, error) {
+func start(ctx context.Context, s *gitstore.Store, opt Options, forges []forge.Forge, pull, push bool) (_ Report, err error) {
 	unlock, err := lock(s)
 	if err != nil {
 		return Report{}, err
 	}
 	defer unlock()
+	var unread error // the projects whose visibility can't be read: left out of the run
+	defer func() { err = errors.Join(unread, err) }()
 	r := &run{ctx: ctx, s: s, opt: opt, now: time.Now().Unix(), states: map[string]*state{}, pull: pull, push: push,
 		mirrors: map[string][]string{}, forkIDs: map[string]string{}}
 	for _, g := range opt.Mirrors {
@@ -126,10 +128,12 @@ func start(ctx context.Context, s *gitstore.Store, opt Options, forges []forge.F
 		return r.report, err
 	}
 	for _, f := range forges {
-		p := &project{f: f, key: f.Key(), listed: map[string]forge.Issue{}, tokens: map[string]forge.Forge{}, acc: map[string]forge.Account{}}
-		if p.vis, err = f.Visibility(ctx); err != nil {
-			return r.report, fmt.Errorf("syncer: %s: visibility: %w", p.key, err)
+		vis, verr := f.Visibility(ctx)
+		if verr != nil {
+			unread = errors.Join(unread, fmt.Errorf("syncer: %s: visibility: %w", f.Key(), verr))
+			continue // as not public, it would take what is private
 		}
+		p := &project{f: f, key: f.Key(), vis: vis, listed: map[string]forge.Issue{}, tokens: map[string]forge.Forge{}, acc: map[string]forge.Account{}}
 		if p.me, err = f.Me(ctx); err != nil {
 			return r.report, fmt.Errorf("syncer: %s: posting account: %w", p.key, err)
 		}

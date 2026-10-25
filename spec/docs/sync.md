@@ -439,9 +439,10 @@ Deletions are never propagated, either way.
   from before that change. For a field, the operation is the one that last
   changed it; for a comment, its `comment` and its last edit.
 - **Each run reads the visibility** of every project it syncs with. One
-  it can't read stops the run, with an error naming it, as a destination
-  read as not public would take what is private. A project the run
-  doesn't sync with counts as not public.
+  it can't read is left out of the run, as a destination read as not
+  public would take what is private: the others sync, and the run returns
+  an error naming it. A project the run doesn't sync with counts as not
+  public.
 - **An internal project** (GitLab's, or a GitHub Enterprise's), which
   every user of its forge may read, counts as public as a destination and
   as not public as a source. That fails closed both ways: nothing private
@@ -481,8 +482,9 @@ A run syncs git-board with every project it is given:
    created only if it doesn't exist. Another run holding it is an error
    naming the file. The run removes it at the end. A run killed before then
    leaves it behind, to remove by hand, like git's own lock files.
-2. It reads each project's visibility, and its posting account. Either
-   failing stops it.
+2. It reads each project's visibility, and its posting account. A project
+   whose visibility it can't read is left out, and the run returns that
+   error at its end; a posting account it can't read stops it.
 3. It pulls from each project: the issues listed as updated since that
    project's last `run`, or every issue when there is none.
 4. It pushes to each project. As every project is pulled first, an issue

@@ -353,16 +353,21 @@ func (unreadable) Visibility(context.Context) (forge.Visibility, error) {
 	return "", errors.New("503")
 }
 
-// A project whose visibility can't be read stops the run: as not public,
-// it would take what is private. The lock goes with the run.
-func TestUnreadableVisibilityStops(t *testing.T) {
+// A project whose visibility can't be read stops its own sync, as not
+// public it would take what is private; the others sync, and the run
+// returns its error. The lock goes with the run.
+func TestUnreadableVisibilitySkipsTheProject(t *testing.T) {
 	t.Parallel()
 	s := newStore(t)
 	q, p := fake.New("gitlab.example/q"), fake.New("github.com/p")
 	p.SetVisibility(forge.Public)
 	q.Add(forge.Issue{Author: ann(), Title: "secret", Body: "private"})
-	if _, err := Sync(t.Context(), s, Options{}, q, unreadable{p}); err == nil || !strings.Contains(err.Error(), "github.com/p") {
+	r, err := Sync(t.Context(), s, Options{}, q, unreadable{p})
+	if err == nil || !strings.Contains(err.Error(), "github.com/p") {
 		t.Fatalf("err = %v, want github.com/p's", err)
+	}
+	if r.Created != 1 {
+		t.Errorf("q not synced: %+v", r)
 	}
 	if len(p.All()) != 0 {
 		t.Error("private issue published")
