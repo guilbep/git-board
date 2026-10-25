@@ -432,7 +432,9 @@ Deletions are never propagated, either way.
   `publish-private` is set. An operation whose `origin` names a project
   that isn't public is never sent to a public one. An issue whose `create`
   came from such a project isn't created on a public one, so nothing else
-  of it goes either. For a field, the operation is the one that last
+  of it goes either. Nor is one whose title or body such a project last
+  changed: the create sends them, and nothing creates it with the values
+  from before that change. For a field, the operation is the one that last
   changed it; for a comment, its `comment` and its last edit.
 - **Each run reads the visibility** of every project it syncs with. A
   project whose visibility it can't read, and a project it doesn't sync

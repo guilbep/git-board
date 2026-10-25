@@ -638,7 +638,8 @@ func (r *run) virtual(p *project, id string) forge.Issue {
 }
 
 // mayCreate says whether an issue not linked to p goes there, as sync.md's
-// "A new forge issue" says.
+// "A new forge issue" says. Its title and body go with it, so their
+// origins count as its create's.
 func (r *run) mayCreate(p *project, is *issue.Issue) bool {
 	if p.st.anyLink[is.ID] || p.st.refused[[3]string{is.ID, "issue", ""}] {
 		return false
@@ -653,7 +654,7 @@ func (r *run) mayCreate(p *project, is *issue.Issue) bool {
 			}
 		}
 	}
-	return !r.blocked(p, is.Origin)
+	return !r.blocked(p, is.Origin, is.Changes["title"].Origin, is.Changes["body"].Origin)
 }
 
 // create makes the issue on p with its title and body, and links it.

@@ -321,3 +321,27 @@ func TestSameCommentInTwoIssues(t *testing.T) {
 		t.Errorf("posted %d comments, want both", n)
 	}
 }
+
+// A title or body last changed by a pull from a private project keeps the
+// issue off a public one: creating it there would publish them.
+func TestPrivateTextNotCreatedOnPublic(t *testing.T) {
+	t.Parallel()
+	s := newStore(t)
+	q, p := fake.New("gitlab.example/q"), fake.New("github.com/p")
+	p.SetPublic(true)
+	if _, err := issue.Create(t.Context(), s, issue.NewCreate("a", "T", "public body")); err != nil {
+		t.Fatal(err)
+	}
+	syncAll(t, s, q)
+	q.Edit("1", func(i *forge.Issue) {
+		i.Body = strings.Replace(i.Body, "public body", "SECRET", 1)
+		i.Title = "SECRET TITLE"
+	})
+	syncAll(t, s, q)
+	syncAll(t, s, q, p)
+	for _, fi := range p.All() {
+		if strings.Contains(fi.Body, "SECRET") || strings.Contains(fi.Title, "SECRET") {
+			t.Errorf("private text published: %q / %q", fi.Title, fi.Body)
+		}
+	}
+}
