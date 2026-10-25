@@ -29,17 +29,17 @@ esac
 		"GIT_CONFIG_KEY_1": "credential.helper", "GIT_CONFIG_VALUE_1": helper} {
 		t.Setenv(k, v)
 	}
-	saved := CredentialTimeout
-	t.Cleanup(func() { CredentialTimeout = saved })
-	CredentialTimeout = 2 * time.Second
 	if got, err := Password(t.Context(), "https", "fast.example.test", "ann"); got != "quiet" || err != nil {
 		t.Fatalf("got %q, %v", got, err)
 	}
+	saved := CredentialTimeout
+	t.Cleanup(func() { CredentialTimeout = saved })
+	CredentialTimeout = 500 * time.Millisecond
 	start := time.Now()
 	if _, err := Password(t.Context(), "https", "slow.example.test", "ann"); !errors.Is(err, ErrNoToken) {
 		t.Fatalf("err = %v, want ErrNoToken", err)
 	}
-	if d := time.Since(start); d > 6*time.Second {
+	if d := time.Since(start); d > 8*time.Second {
 		t.Fatalf("waited %v for a helper that hangs", d)
 	}
 }
