@@ -259,6 +259,39 @@ write = true
 
 The token needs the `project` scope: `gh auth refresh -s project`.
 
+## Forges
+
+The forge projects the issues sync with, GitHub or GitLab, one table each, named as you like: Settings › Forges adds, switches and removes them. [Forges](forges.md) says how a sync goes.
+
+```toml
+[forges]
+publish-private = false
+
+[forges.gh]
+kind = "github"
+project = "guilbep/git-board"
+login = "guilbep"
+sync = true
+
+[forges.epfl]
+kind = "gitlab"
+host = "gitlab.epfl.ch"
+project = "42400"
+login = "guilbep"
+sync = true
+```
+
+| Key | Type | Default | What it does |
+| --- | --- | --- | --- |
+| `publish-private` | true / false | false | Lets what came from a project that isn't public go to one that is. |
+| `kind` | `github` or `gitlab` | none | The forge. |
+| `project` | string | none | GitHub: `owner/repo`. GitLab: the project's numeric id, on its page under its name, which a renamed group doesn't change. |
+| `host` | string | `github.com`, `gitlab.com` | The forge's host, for GitHub Enterprise or a GitLab instance. |
+| `login` | string | none | The posting account: who sync writes as, for the people without a token there. |
+| `sync` | true / false | false | Takes part in the sync. Off, the forge is kept but left out. |
+
+No token goes in this file, which is committed. A token comes from `GITHUB_TOKEN` (github.com only), `GITHUB_ENTERPRISE_TOKEN` (the host `GITHUB_ENTERPRISE_HOST` names) or `GITLAB_TOKEN` (the host `GITLAB_HOST` names, `gitlab.com` by default), else from git's credential helper for the host and login: `git credential fill`.
+
 ## Attachments
 
 Files attached to comments go to an S3 bucket that a CDN serves; the comment gets a link to them. The keys stay out of this file: set `ACCESS_KEY_ID`, `ACCESS_KEY_SECRET` and `BUCKET_NAME` where the git-board server (`git board`, `git board serve`) runs. Without them, attaching is off.
@@ -283,9 +316,9 @@ An issue's **Development** section lists the branches whose name names it: *merg
 
 When `origin` is on GitHub, each of these branches that origin has carries its **gate**: the pull request whose head it is, found on GitHub by the branch's name (never stored), its checks (the base's required ones first, from its rulesets, a required check that hasn't reported yet included), who approved and at which commit, and GitHub's review decision. **Merge into dev** is enabled when GitHub says the pull request can merge, and otherwise says what it waits for ("Frontend Tests, an approval from alice"); it merges with a merge commit, and only if the head is still the commit the page showed. **Open PR** opens one into the base, titled `CO2-3075 <title>`, its body naming the issue and, when the issue is one of origin's GitHub issues, `Closes #<its number>` (GitHub closes it when the pull request merges into the default branch). A branch only here shows the `git push -u origin <name>` to copy. The page asks GitHub again every 15 seconds while a check runs.
 
-Open PR and Merge act on GitHub as you: with the token in git-bug's keyring whose login is your identity's GitHub login (its `github-login`, else the GitHub bridge's link, else its own login; add one with **Add a forge** in Settings › Forges). Without one, the gate says `no GitHub token for <login>` and uses no one else's. It is the account the bridge posts your comments under, not the `gh` CLI's, which can be logged in as someone else: GitHub refuses an approval from a pull request's author, so who opens and who approves must be told apart.
+Open PR and Merge act on GitHub as you: with your GitHub login (your person's github.com account) and its token, `GITHUB_TOKEN` when set, else git's credential helper's for github.com and that login. Without one, the gate says `no GitHub token for <login>` and uses no one else's. It is the account sync posts your comments under, not the `gh` CLI's, which can be logged in as someone else: GitHub refuses an approval from a pull request's author, so who opens and who approves must be told apart.
 
-The full issue page has a **Changes** tab: the branch from where it left the base (the merge base with `origin/<base>`) to its head, origin's copy when origin has the branch, since that is what the pull request and its reviewers see. A picker shows all of it, what changed since your last review, or one commit. Files come in three groups: *To review* (those under 1,000 changed lines open by themselves), *Large* (over 3,000 changed lines, folded, the first 5,000 lines when opened, and the `git diff` to copy), and *Generated* (`linguist-generated` in `.gitattributes`, as on GitHub: folded and left out of the viewed count). **Viewed** marks are kept in this browser, per file version: a push un-views only the files it changed. Click a line number to comment on that line; a comment shows under its line, quoted in the conversation with its `path:line`, and *outdated* once a later commit changed that line (it then stays above the file's diff). Replies and **Resolve** work on the thread; **Comment**, **Approve** and **Request changes** submit a review at the head, and each person's last verdict shows with how many commits ago it was. All of these are issue comments carrying `review:*` metadata (path, line, side, commit, the pull request, the comment answered, the verdict, resolved), so they are in git-bug at once. When the branch has an open pull request on origin, the sync sends them to it: line comments as review comments on their line, reviews as GitHub reviews; approvals and change requests go only under their author's own token, so they count for a code-owner rule. Comments made on the pull request come back to the issue on their line. Resolving on GitHub doesn't come back.
+The full issue page has a **Changes** tab: the branch from where it left the base (the merge base with `origin/<base>`) to its head, origin's copy when origin has the branch, since that is what the pull request and its reviewers see. A picker shows all of it, what changed since your last review, or one commit. Files come in three groups: *To review* (those under 1,000 changed lines open by themselves), *Large* (over 3,000 changed lines, folded, the first 5,000 lines when opened, and the `git diff` to copy), and *Generated* (`linguist-generated` in `.gitattributes`, as on GitHub: folded and left out of the viewed count). **Viewed** marks are kept in this browser, per file version: a push un-views only the files it changed. Click a line number to comment on that line; a comment shows under its line, quoted in the conversation with its `path:line`, and *outdated* once a later commit changed that line (it then stays above the file's diff). Replies and **Resolve** work on the thread; **Comment**, **Approve** and **Request changes** submit a review at the head, and each person's last verdict shows with how many commits ago it was. All of these are issue comments carrying `review:*` metadata (path, line, side, commit, the pull request, the comment answered, the verdict, resolved), so they are in the repository at once. They stay in git-board: the forge sync never posts a comment with `review:*` metadata, to an issue or to a pull request.
 
 ```toml
 [branches]
