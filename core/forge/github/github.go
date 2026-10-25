@@ -130,6 +130,9 @@ func New(ctx context.Context, o Options) (*Forge, error) {
 	return &Forge{s: s, token: token}, nil
 }
 
+// String is the key, so that printing a Forge never shows its token.
+func (f *Forge) String() string { return f.Key() }
+
 // Key is the host and owner/repo, like github.com/guilbep/git-board-test.
 func (f *Forge) Key() string { return f.s.host + "/" + f.s.project }
 

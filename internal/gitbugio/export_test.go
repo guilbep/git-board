@@ -89,3 +89,6 @@ func CommitCounter(b *Backend, c Counter) error {
 func Places(bug ForkBug, forges []NamedForge, paths map[string]string) ([]string, bool, string) {
 	return bug.places(forges, paths)
 }
+
+// Scratch is scratch for the tests.
+var Scratch = (*Backend).scratch

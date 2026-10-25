@@ -246,10 +246,18 @@ func (b *Backend) scratch(ctx context.Context) (*gitstore.Store, func(), error) 
 }
 
 // scratchOf is a mirror of the repository at from, in home's board folder.
+// It first removes the copies a day old: a run killed mid-way leaves its
+// own.
 func scratchOf(ctx context.Context, from, home string) (*gitstore.Store, func(), error) {
 	parent := filepath.Join(home, "board")
 	if err := os.MkdirAll(parent, 0o755); err != nil {
 		return nil, nil, err
+	}
+	left, _ := filepath.Glob(filepath.Join(parent, "check-*"))
+	for _, d := range left {
+		if fi, err := os.Stat(d); err == nil && time.Since(fi.ModTime()) > 24*time.Hour {
+			_ = os.RemoveAll(d)
+		}
 	}
 	dir, err := os.MkdirTemp(parent, "check-")
 	if err != nil {

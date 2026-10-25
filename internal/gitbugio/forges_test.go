@@ -2,8 +2,11 @@ package gitbugio_test
 
 import (
 	"maps"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/guilbep/git-board/core/forge"
 	"github.com/guilbep/git-board/core/forge/fake"
@@ -174,5 +177,34 @@ func TestForgeToken(t *testing.T) {
 	}
 	if got := b.Credentials(forges); len(got) != 1 || got[0] != (gitbugio.Credential{ID: "gl", Target: "gitlab", Host: "gitlab.example.com", Login: "bob"}) {
 		t.Errorf("Credentials = %+v", got)
+	}
+}
+
+// A check's copy left a day ago, by a run killed mid-way, goes with the
+// next check; a newer one, maybe another run's, stays.
+func TestScratchRemovesOldCopies(t *testing.T) {
+	t.Parallel()
+	b := gitbugiotest.New(t)
+	board := filepath.Join(b.Store().CommonDir(), "board")
+	old, recent := filepath.Join(board, "check-old"), filepath.Join(board, "check-recent")
+	for _, d := range []string{old, recent} {
+		if err := os.MkdirAll(d, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	day := time.Now().Add(-25 * time.Hour)
+	if err := os.Chtimes(old, day, day); err != nil {
+		t.Fatal(err)
+	}
+	_, done, err := gitbugio.Scratch(b, t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	done()
+	if _, err := os.Stat(old); !os.IsNotExist(err) {
+		t.Errorf("the old copy stays: %v", err)
+	}
+	if _, err := os.Stat(recent); err != nil {
+		t.Errorf("the recent copy went: %v", err)
 	}
 }

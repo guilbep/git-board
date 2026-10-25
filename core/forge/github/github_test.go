@@ -3,11 +3,13 @@ package github
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
 	"slices"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -301,5 +303,17 @@ func TestNewRefusesClearText(t *testing.T) {
 		if err == nil || errors.Is(err, forge.ErrNoToken) {
 			t.Errorf("New with API %s: %v", api, err)
 		}
+	}
+}
+
+// Printing a Forge shows its key, never its token.
+func TestStringHidesTheToken(t *testing.T) {
+	t.Parallel()
+	a, err := New(t.Context(), Options{Project: "o/r", Token: func(context.Context, forge.Account) (string, error) { return "SECRET-TOKEN", nil }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := fmt.Sprintf("%v %+v", a, a); strings.Contains(got, "SECRET") {
+		t.Errorf("printed %q", got)
 	}
 }
