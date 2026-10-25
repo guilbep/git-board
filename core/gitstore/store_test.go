@@ -2,8 +2,11 @@ package gitstore
 
 import (
 	"bufio"
+	"bytes"
 	"context"
+	"crypto/sha1"
 	"errors"
+	"fmt"
 	"maps"
 	"os"
 	"os/exec"
@@ -254,6 +257,52 @@ func TestStoreConcurrentReadsAndReindex(t *testing.T) {
 		}()
 	}
 	wg.Wait()
+}
+
+// A written blob is read back at the id it was written under, with git
+// running alongside. sha1cd v0.6.0's arm64 assembly bounded its loop by R16,
+// a register it never set: under -race, with git subprocesses about, R16 was
+// sometimes within a block of 2^64, a block went unhashed, and WriteBlob
+// returned an id no object had.
+func TestWriteBlobIDUnderLoad(t *testing.T) {
+	t.Parallel()
+	done := make(chan struct{})
+	var git sync.WaitGroup
+	for range 4 {
+		s := newStore(t)
+		git.Go(func() {
+			for {
+				select {
+				case <-done:
+					return
+				default:
+					_, _ = s.Config(ctx, "core.bare")
+				}
+			}
+		})
+	}
+	var writers sync.WaitGroup
+	for g := range 8 {
+		s := newStore(t)
+		writers.Go(func() {
+			for i := range 500 {
+				data := bytes.Repeat([]byte{byte(g)}, i*7%2000) // most span blocks
+				want := sha1.Sum(fmt.Appendf(nil, "blob %d\x00%s", len(data), data))
+				h, err := s.WriteBlob(data)
+				if err != nil || h != Hash(want) {
+					t.Errorf("blob of %d bytes: id %s, want %x: %v", len(data), h, want, err)
+					return
+				}
+				if got, err := s.ReadBlob(h); err != nil || !bytes.Equal(got, data) {
+					t.Errorf("blob %s: %v", h, err)
+					return
+				}
+			}
+		})
+	}
+	writers.Wait()
+	close(done)
+	git.Wait()
 }
 
 func TestUpdateRefLockFileIsMoved(t *testing.T) {
