@@ -420,3 +420,58 @@ func TestFailedLookupReleasesTheLock(t *testing.T) {
 	}
 	unlock()
 }
+
+// A push alone after a crash between creating a forge issue and linking it
+// links it by its marker, and doesn't create it again.
+func TestPushAloneLinksByMarker(t *testing.T) {
+	t.Parallel()
+	s, f := newStore(t), fake.New("github.com/p")
+	if _, err := issue.Create(t.Context(), s, issue.NewCreate("a", "T", "B")); err != nil {
+		t.Fatal(err)
+	}
+	f.After(func(w fake.Write) error {
+		if w.Op == "create-issue" {
+			f.After(nil)
+			return fake.ErrCrash
+		}
+		return nil
+	})
+	if _, err := Push(t.Context(), s, Options{}, f); err == nil {
+		t.Fatal("no crash")
+	}
+	if _, err := Push(t.Context(), s, Options{}, f); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.All()) != 1 {
+		t.Errorf("made %d times", len(f.All()))
+	}
+}
+
+// A forge issue linked by its marker is last seen as the push sent it: a
+// forge edit made since is the forge's change, pulled, not overwritten.
+func TestMarkerLinkSeesWhatWasSent(t *testing.T) {
+	t.Parallel()
+	s, f := newStore(t), fake.New("github.com/p")
+	is, err := issue.Create(t.Context(), s, issue.NewCreate("a", "T", "B"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.After(func(w fake.Write) error {
+		if w.Op == "create-issue" {
+			f.After(nil)
+			return fake.ErrCrash
+		}
+		return nil
+	})
+	if _, err := Push(t.Context(), s, Options{}, f); err == nil {
+		t.Fatal("no crash")
+	}
+	f.Edit(f.All()[0].Number, func(i *forge.Issue) { i.Title = "Edited there" })
+	syncAll(t, s, f)
+	if got, _ := issue.Load(s, is.ID); got.Title != "Edited there" {
+		t.Errorf("title %q, want the forge's edit", got.Title)
+	}
+	if got := f.All()[0].Title; got != "Edited there" {
+		t.Errorf("forge title %q", got)
+	}
+}

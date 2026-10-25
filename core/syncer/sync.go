@@ -156,6 +156,11 @@ func start(ctx context.Context, s *gitstore.Store, opt Options, forges []forge.F
 	}
 	if push {
 		for _, p := range r.projects {
+			if !pull {
+				if err := r.relink(p); err != nil {
+					return r.report, err
+				}
+			}
 			if err := r.pushTo(p); err != nil {
 				return r.report, err
 			}
@@ -370,15 +375,18 @@ func origin(c issue.Change) string {
 	return c.Origin.Forge
 }
 
+// listing is p's issues a run reads: those updated since its last run, or
+// those of the issue synced alone.
+func (r *run) listing(p *project) ([]forge.Issue, error) {
+	if r.opt.Issue != "" {
+		return r.alone(p)
+	}
+	return p.f.Issues(r.ctx, p.st.lastRun)
+}
+
 // pullFrom reads p's issues and pulls each, as sync.md's pull says.
 func (r *run) pullFrom(p *project) error {
-	var list []forge.Issue
-	var err error
-	if r.opt.Issue != "" {
-		list, err = r.alone(p)
-	} else {
-		list, err = p.f.Issues(r.ctx, p.st.lastRun)
-	}
+	list, err := r.listing(p)
 	if err != nil {
 		return err
 	}
@@ -476,15 +484,8 @@ func (r *run) match(p *project, fi forge.Issue, final bool) (string, error) {
 		}
 		return id, nil
 	}
-	if w := unwrap(fi.Body); w.kind == "issue" && r.isSync(p, fi.Author) {
-		is, here := r.issues[w.id]
-		if !here || p.st.anyLink[w.id] {
-			return "", nil
-		}
-		ops := []oplog.Op{linkOp(is.Author, r.now, is.ID, fi.ID, fi.Number, fi.URL)}
-		ops = append(ops, createdSeen(is.Author, r.now, is.ID, fi.Title, fi.Body)...)
-		r.did(p.key, "linked", is.ID, 0)
-		return is.ID, p.st.write(r.ctx, r.s, p.key, ops)
+	if id, ok, err := r.byMarker(p, fi); ok || err != nil {
+		return id, err
 	}
 	from := oplog.Origin{Forge: p.key, Event: "issue:" + fi.ID}
 	for _, id := range slices.Sorted(maps.Keys(r.issues)) { // ponytail: a scan per unlinked forge issue
@@ -495,6 +496,45 @@ func (r *run) match(p *project, fi forge.Issue, final bool) (string, error) {
 		}
 	}
 	return r.mirror(p, fi, final)
+}
+
+// byMarker links an unlinked forge issue whose marker, from sync's
+// accounts, names an issue: a push stopped before its link. Last seen is
+// what the push sent. ok says it has such a marker; id is "" when its
+// issue isn't here, or is linked already.
+func (r *run) byMarker(p *project, fi forge.Issue) (id string, ok bool, err error) {
+	w := unwrap(fi.Body)
+	if w.kind != "issue" || !r.isSync(p, fi.Author) {
+		return "", false, nil
+	}
+	is, here := r.issues[w.id]
+	if !here || p.st.anyLink[w.id] {
+		return "", true, nil
+	}
+	_, direct := r.writer(p, is.Author)
+	title, body := r.sent(p, is, direct)
+	ops := append([]oplog.Op{linkOp(is.Author, r.now, is.ID, fi.ID, fi.Number, fi.URL)}, createdSeen(is.Author, r.now, is.ID, title, body)...)
+	r.did(p.key, "linked", is.ID, 0)
+	return is.ID, true, p.st.write(r.ctx, r.s, p.key, ops)
+}
+
+// relink is a push alone's first step: it links, by their marker, the
+// forge issues a push created and stopped before linking, so that it
+// never creates one twice. It takes nothing else from the forge.
+func (r *run) relink(p *project) error {
+	list, err := r.listing(p)
+	if err != nil {
+		return err
+	}
+	for _, fi := range list {
+		if _, linked := p.st.links[fi.ID]; linked {
+			continue
+		}
+		if _, _, err := r.byMarker(p, fi); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // mirror finds the issue a forge issue mirrors, as sync.md's "Switching
@@ -661,14 +701,21 @@ func (r *run) mayCreate(p *project, is *issue.Issue) bool {
 	return !r.blocked(p, is.Origin, is.Changes["title"].Origin, is.Changes["body"].Origin)
 }
 
-// create makes the issue on p with its title and body, and links it.
-func (r *run) create(p *project, is *issue.Issue) error {
-	fw, direct := r.writer(p, is.Author)
+// sent is what creating the issue on p sends: its title and body in p's
+// form, the body with its marker, and with a header unless its author
+// posts it with their own token (direct).
+func (r *run) sent(p *project, is *issue.Issue, direct bool) (title, body string) {
 	w := wrapped{body: r.form(p, is.Body, origin(is.Changes["body"]), false), marker: marker("issue", is.ID)}
 	if !direct {
 		w.header = r.header(is.Author, is.Created, is.Origin, is.ID)
 	}
-	title, body := r.form(p, is.Title, origin(is.Changes["title"]), true), w.String()
+	return r.form(p, is.Title, origin(is.Changes["title"]), true), w.String()
+}
+
+// create makes the issue on p with its title and body, and links it.
+func (r *run) create(p *project, is *issue.Issue) error {
+	fw, direct := r.writer(p, is.Author)
+	title, body := r.sent(p, is, direct)
 	fi, err := fw.CreateIssue(r.ctx, title, body)
 	if errors.Is(err, forge.ErrRefused) {
 		return r.refuse(p, is, "issue", "", err)

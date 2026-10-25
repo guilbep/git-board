@@ -297,10 +297,6 @@ func (s *apiServer) handleForgeSync(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-		if err := sendsAgain(req.Mode, last, req.Bridges); err != nil {
-			writeError(w, http.StatusConflict, err)
-			return
-		}
 	} else {
 		req.Bridges, req.Mode = nil, "sync" // a dry run looks at every forge, both ways
 	}
@@ -318,29 +314,6 @@ func (s *apiServer) handleForgeSync(w http.ResponseWriter, r *http.Request) {
 	s.job = job
 	go s.runForgeSync(job, forges)
 	writeJSON(w, http.StatusAccepted, s.forgeSnapshot())
-}
-
-// sendsAgain refuses a send to a forge where the dry run found issues by
-// their marker: created there by a run that stopped before their links,
-// only a pull links them, and a send alone would create them again.
-//
-// A send never replaces a later change on the forge: it takes nothing
-// from the forge, but writes a field only where git-board's change is the
-// later (spec/docs/sync.md, The four cases). So an issue changed on both
-// sides doesn't hold it, as it did with git-bug.
-func sendsAgain(mode string, dry *forgeJob, names []string) error {
-	if mode != "send" {
-		return nil
-	}
-	for name, t := range dry.Bridges {
-		if len(names) > 0 && !slices.Contains(names, name) {
-			continue
-		}
-		if t.Linked > 0 {
-			return fmt.Errorf("%s has %d issues of this repository already, found by their marker: a send alone would create them again. Get or sync first", name, t.Linked)
-		}
-	}
-	return nil
 }
 
 // forgeRun is the core's sync, or one way of it, with forges opened for

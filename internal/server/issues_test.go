@@ -233,9 +233,9 @@ func TestForgeSyncRunsADryRunFirst(t *testing.T) {
 	}
 }
 
-// Get and Send are one way of a sync, each after a clean dry run. Send
-// alone would create again the issues the dry run found on a forge by
-// their marker: those wait for a Get or a Sync.
+// Get and Send are one way of a sync, each after a clean dry run. A send
+// after a dry run that found issues on a forge by their marker runs: the
+// core links them before it creates anything.
 func TestForgeGetAndSend(t *testing.T) {
 	t.Parallel()
 	ts, s := forgeServer(t, ghForge)
@@ -271,10 +271,11 @@ func TestForgeGetAndSend(t *testing.T) {
 	if _, mode := start(map[string]any{"dry_run": true, "mode": "get"}); mode != "sync" {
 		t.Errorf("a dry run ran as %q, want both ways", mode)
 	}
-	if code, _ := start(map[string]any{"mode": "send"}); code != http.StatusConflict {
-		t.Errorf("a send after a dry run found an issue by its marker: %d, want 409", code)
+	if code, mode := start(map[string]any{"mode": "send"}); code != http.StatusAccepted || mode != "send" {
+		t.Errorf("a send after a dry run found an issue by its marker: %d %s", code, mode)
 	}
 	runs()
+	start(map[string]any{"dry_run": true})
 	if code, mode := start(map[string]any{"mode": "get"}); code != http.StatusAccepted || mode != "get" {
 		t.Errorf("a get: %d %s", code, mode)
 	}

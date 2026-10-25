@@ -460,9 +460,11 @@ forge, and never makes a thing twice.
   that one, the first by id, instead of creating another. Its fields are
   then [what git-board took from the forge](#what-git-board-took-from-a-forge).
 - **An issue posted but not linked.** The push created the forge issue,
-  then stopped before its link. The next pull finds the forge issue with a
-  marker from sync's accounts, and links the issue the marker names, with
-  the `seen` a new forge issue gets. The push then sends the rest.
+  then stopped before its link. The next pull, or push alone, finds the
+  forge issue with a marker from sync's accounts, and links the issue the
+  marker names, with the `seen` a new forge issue gets: the title and body
+  as the create sent them, header and marker included, so that a forge
+  edit made since is the forge's change. The push then sends the rest.
 - **A comment posted but not recorded.** The next pull finds the forge
   comment's marker, and records it with a `posted` and a `seen`. It isn't
   posted again.
@@ -497,7 +499,10 @@ counts them per forge, and shows a run's progress.
   `run`, as it didn't read every change.
 - **Pull alone and push alone.** Each is its step of a run, with the same
   rules. Neither records a `run`. A push alone still reads each forge issue
-  it writes to, and never takes a value from it.
+  it writes to, and never takes a value from it. Before it creates
+  anything, it lists each project's issues as a pull would, and links
+  those found by their marker (see [Crash recovery](#crash-recovery)), so
+  that it never creates an issue twice.
 
 ## Switching from the fork
 
