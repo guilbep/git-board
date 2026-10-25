@@ -1,59 +1,24 @@
 package main
 
 import (
-	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
-	"github.com/git-bug/git-bug/cache"
-	"github.com/git-bug/git-bug/repository"
-	"github.com/git-bug/gitconfig"
-
 	"github.com/guilbep/git-board/internal/ghbridge"
+	"github.com/guilbep/git-board/internal/gitbugio/gitbugiotest"
 )
 
-// newBridgeTestRepo mirrors newTestRepo but seeds a bug that was
-// bridged in from GitHub (github-url metadata set), matching the fixture
-// item at internal/ghbridge/testdata/project-items.json.
+// newBridgeTestRepo mirrors newTestRepo but seeds an issue linked to
+// GitHub's, matching the fixture item at
+// internal/ghbridge/testdata/project-items.json.
 func newBridgeTestRepo(t *testing.T) string {
 	t.Helper()
-	dir := t.TempDir()
-
-	repo, err := repository.InitDefault(dir, "git-bug")
-	if err != nil {
-		t.Fatalf("InitGoGitRepo: %v", err)
-	}
-	if err := repo.Config().Update(func(f *gitconfig.File) error {
-		return errors.Join(f.Set("user.name", "guilbep"), f.Set("user.email", "guilbep@example.com"))
-	}); err != nil {
-		t.Fatalf("set user: %v", err)
-	}
-
-	c, err := cache.NewRepoCacheNoEvents(repo, nil)
-	if err != nil {
-		t.Fatalf("NewRepoCacheNoEvents: %v", err)
-	}
-	id, err := c.Identities().NewFromGitUser()
-	if err != nil {
-		t.Fatalf("NewFromGitUser: %v", err)
-	}
-	if err := c.SetUserIdentity(t.Context(), id); err != nil {
-		t.Fatalf("SetUserIdentity: %v", err)
-	}
-
-	bug, _, err := c.Bugs().NewRaw(id, 1735689600, "cannot change equipment_class", "", nil,
-		map[string]string{"github-url": "https://github.com/EPFL-ENAC/co2-calculator/issues/2605"})
-	if err != nil {
-		t.Fatalf("NewRaw: %v", err)
-	}
-	if err := bug.Commit(t.Context()); err != nil {
-		t.Fatalf("Commit: %v", err)
-	}
-	if err := c.Close(); err != nil {
-		t.Fatalf("close cache: %v", err)
-	}
+	dir, b := seedRepo(t)
+	me, _, _ := b.Me()
+	id := gitbugiotest.IssueAs(t, b, me, 1735689600, "cannot change equipment_class", "")
+	gitbugiotest.Link(t, b, id, "https://github.com/EPFL-ENAC/co2-calculator/issues/2605")
 
 	if err := os.WriteFile(filepath.Join(dir, configPath), []byte(testConfig), 0o644); err != nil {
 		t.Fatalf("write config: %v", err)

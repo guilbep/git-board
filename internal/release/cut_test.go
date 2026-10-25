@@ -45,7 +45,7 @@ func pushed(tools *releasetest.Tools, repo, commit, digest string) {
 // records is the refs of the release records in repo: one per record made.
 func records(t *testing.T, repo string) []string {
 	t.Helper()
-	return strings.Fields(releasetest.Git(t, repo, "for-each-ref", "--format=%(refname) %(objectname)", "refs/releases"))
+	return strings.Fields(releasetest.Git(t, repo, "for-each-ref", "--format=%(refname) %(objectname)", "refs/board/release"))
 }
 
 func TestCutTagTakenWritesNothing(t *testing.T) {

@@ -1,10 +1,10 @@
 package gitbugio
 
-import "github.com/git-bug/git-bug/repository"
+import "github.com/guilbep/git-board/core/gitstore"
 
 // EditRelease is editRelease for the tests: an operation a later
 // git-board might add.
-var EditRelease = (*Backend).editRelease
+func EditRelease(b *Backend, id, kind string) error { return b.editRelease(id, kind, releaseData{}) }
 
 // NumberOnce is numberOnce for the tests: one try, on the counter as fetched.
 var NumberOnce = (*Backend).numberOnce
@@ -12,15 +12,15 @@ var NumberOnce = (*Backend).numberOnce
 // WriteCounter makes refs/board/seq hold data, as a later or a broken
 // git-board might have written it.
 func WriteCounter(b *Backend, data []byte) error {
-	blob, err := b.repo.StoreData(data)
+	blob, err := b.s.WriteBlob(data)
 	if err != nil {
 		return err
 	}
-	tree, err := b.repo.StoreTree([]repository.TreeEntry{{ObjectType: repository.Blob, Hash: blob, Name: seqFile}})
+	tree, err := b.s.WriteTree([]gitstore.TreeEntry{{Name: seqFile, Blob: blob}})
 	if err != nil {
 		return err
 	}
-	commit, err := b.repo.StoreCommit(tree)
+	commit, err := b.s.WriteCommit(gitstore.Commit{Tree: tree})
 	if err != nil {
 		return err
 	}
@@ -31,14 +31,14 @@ func WriteCounter(b *Backend, data []byte) error {
 var Compare = (*Backend).compare
 
 // StoreCommit stores a commit holding name on parents, for the tests.
-func StoreCommit(b *Backend, name string, parents ...repository.Hash) (repository.Hash, error) {
-	blob, err := b.repo.StoreData([]byte(name))
+func StoreCommit(b *Backend, name string, parents ...gitstore.Hash) (gitstore.Hash, error) {
+	blob, err := b.s.WriteBlob([]byte(name))
 	if err != nil {
-		return "", err
+		return gitstore.ZeroHash, err
 	}
-	tree, err := b.repo.StoreTree([]repository.TreeEntry{{ObjectType: repository.Blob, Hash: blob, Name: name}})
+	tree, err := b.s.WriteTree([]gitstore.TreeEntry{{Name: name, Blob: blob}})
 	if err != nil {
-		return "", err
+		return gitstore.ZeroHash, err
 	}
-	return b.repo.StoreCommit(tree, parents...)
+	return b.s.WriteCommit(gitstore.Commit{Tree: tree, Parents: parents})
 }

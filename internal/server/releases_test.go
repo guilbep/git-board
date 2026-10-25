@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/guilbep/git-board/core/issue"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/gitbugio"
 	"github.com/guilbep/git-board/internal/gitbugio/gitbugiotest"
@@ -586,11 +587,11 @@ func TestEnableSwitchesTheKindForm(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	bug, err := s.b.TestCache().Bugs().ResolvePrefix(t.Context(), id)
+	is, err := issue.Load(s.b.Store(), id)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := bug.Snapshot().Labels[0].String(); got != "bug" {
+	if got := is.Labels[0]; got != "bug" {
 		t.Errorf("stored %q, want bug", got)
 	}
 }

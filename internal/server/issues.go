@@ -11,8 +11,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/git-bug/git-bug/entity"
-
 	"github.com/guilbep/git-board/internal/gitbugio"
 	"github.com/guilbep/git-board/internal/markdown"
 )
@@ -43,7 +41,7 @@ func decode(w http.ResponseWriter, r *http.Request, into any) bool {
 // writeIssueError answers 404 for an issue that doesn't exist, 400 for what
 // the request got wrong.
 func writeIssueError(w http.ResponseWriter, err error) {
-	if entity.IsErrNotFound(err) {
+	if errors.Is(err, gitbugio.ErrNotFound) {
 		writeError(w, http.StatusNotFound, err)
 		return
 	}

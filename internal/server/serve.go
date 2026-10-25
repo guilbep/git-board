@@ -20,8 +20,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/git-bug/git-bug/repository"
-
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/ghbridge"
 	"github.com/guilbep/git-board/internal/gitbugio"
@@ -44,10 +42,10 @@ func Serve(ctx context.Context, addr, me string, ready func(url string)) error {
 
 	b, err := gitbugio.OpenCwd()
 	if err != nil {
-		return fmt.Errorf("opening git-bug repo: %w", err)
+		return fmt.Errorf("opening the repository: %w", err)
 	}
 	defer b.Close()
-	gitDir, err := repository.FindGitDir(".")
+	gitDir, err := gitbugio.FindGitDir(".")
 	if err != nil {
 		return err
 	}

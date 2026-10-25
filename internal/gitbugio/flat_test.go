@@ -4,6 +4,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/guilbep/git-board/core/issue"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/gitbugio/gitbugiotest"
 )
@@ -16,16 +17,11 @@ func TestFlatKindsAreTheKindField(t *testing.T) {
 	b.SetFlatKinds(&config.Config{Branches: config.Branches{Kinds: map[string]string{"bug": "fix", "feat": "feat"}}})
 	raw := func(id string) []string {
 		t.Helper()
-		bug, err := b.TestCache().Bugs().ResolvePrefix(t.Context(), id)
+		is, err := issue.Load(b.Store(), id)
 		if err != nil {
 			t.Fatal(err)
 		}
-		var res []string
-		for _, l := range bug.Snapshot().Labels {
-			res = append(res, l.String())
-		}
-		slices.Sort(res)
-		return res
+		return is.Labels
 	}
 	sorted := func(l []string, err error) []string {
 		t.Helper()
@@ -53,11 +49,8 @@ func TestFlatKindsAreTheKindField(t *testing.T) {
 	}
 
 	// a kind:bug written before, beside bug: read once, removed with it
-	bug, _ := b.TestCache().Bugs().ResolvePrefix(t.Context(), id)
-	if _, _, err := bug.ChangeLabels(t.Context(), []string{"kind:bug"}, nil); err != nil {
-		t.Fatal(err)
-	}
-	if err := bug.Commit(t.Context()); err != nil {
+	me, _, _ := b.Me()
+	if _, err := issue.Do(t.Context(), b.Store(), id, issue.ChangeLabels(me.ID, []string{"kind:bug"}, nil)); err != nil {
 		t.Fatal(err)
 	}
 	if got := sorted(b.GetLabels(id)); !slices.Equal(got, []string{"kind:bug", "status:ready"}) {

@@ -10,10 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/git-bug/git-bug/repository/repotest"
-
+	"github.com/guilbep/git-board/core/issue"
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/gitbugio"
 	"github.com/guilbep/git-board/internal/gitbugio/gitbugiotest"
 	"github.com/guilbep/git-board/internal/inbox"
 )
@@ -92,11 +90,7 @@ func TestInboxNeedsWhoYouAre(t *testing.T) {
 		t.Errorf("no login: %d %q", code, c)
 	}
 
-	b, err := gitbugio.NewForRepo(repotest.NewGoGitRepo(t, false)) // no identity chosen
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = b.Close() })
+	b := gitbugiotest.NewEmpty(t) // no one chosen
 	ts2 := httptest.NewServer(withCORS(newMux(&apiServer{cfg: &config.Config{}, b: b, me: "guilbep"}, http.NotFoundHandler())))
 	t.Cleanup(ts2.Close)
 	if code, c := codeOf(t, ts2.URL+"/api/inbox"); code != http.StatusConflict || c != "no-identity" {
@@ -112,7 +106,7 @@ func TestInboxIsPerIdentity(t *testing.T) {
 	first, _, _ := s.b.Me()
 	ann := gitbugiotest.NewPerson(t, s.b, "Ann", "ann")
 
-	if code := call(t, "POST", ts.URL+"/api/me", map[string]any{"id": ann.Id().String()}, nil); code != http.StatusOK {
+	if code := call(t, "POST", ts.URL+"/api/me", map[string]any{"id": ann.ID}, nil); code != http.StatusOK {
 		t.Fatalf("adopt ann: %d", code)
 	}
 	if code := call(t, "PUT", ts.URL+"/api/inbox/follow/"+id, map[string]any{"follow": false}, nil); code != http.StatusOK {
@@ -192,14 +186,7 @@ func TestInboxProjectRole(t *testing.T) {
 	ts, s := newIssueServer(t)
 	s.cfg = &config.Config{Roles: map[string]string{"lead-dev": "guilbep"}, Fields: map[string]config.Field{"lead-dev": {Type: config.TypePerson}}}
 	ann := gitbugiotest.NewPerson(t, s.b, "Ann", "ann")
-	hers, _, err := s.b.TestCache().Bugs().NewRaw(ann, time.Now().Unix(), "Hers", "", nil, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := hers.Commit(t.Context()); err != nil {
-		t.Fatal(err)
-	}
-	id := hers.Id().String()
+	id := gitbugiotest.IssueAs(t, s.b, ann, time.Now().Unix(), "Hers", "")
 	res := getInbox(t, ts)
 	if len(res.Rows) != 1 || !slices.Equal(res.Rows[0].News, []string{"new issue"}) || !slices.Equal(res.Rows[0].Reasons, []string{"lead-dev (project)"}) || !slices.Equal(res.Roles, []string{"lead-dev"}) {
 		t.Fatalf("a new issue as lead-dev: %+v", res)
@@ -209,12 +196,7 @@ func TestInboxProjectRole(t *testing.T) {
 	if res := getInbox(t, ts); len(res.Rows) != 0 {
 		t.Fatalf("a comment reached the project's lead-dev: %+v", res.Rows)
 	}
-	if _, err := hers.CloseRaw(ann, time.Now().Unix(), nil); err != nil {
-		t.Fatal(err)
-	}
-	if err := hers.Commit(t.Context()); err != nil {
-		t.Fatal(err)
-	}
+	gitbugiotest.Do(t, s.b, id, issue.SetStatus(ann.ID, issue.Closed))
 	if res := getInbox(t, ts); len(res.Rows) != 1 || !slices.Equal(res.Rows[0].News, []string{"closed"}) {
 		t.Fatalf("a close as lead-dev: %+v", res.Rows)
 	}

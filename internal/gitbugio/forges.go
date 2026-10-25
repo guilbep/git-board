@@ -1,113 +1,100 @@
 package gitbugio
 
 import (
+	"context"
 	"errors"
-	"fmt"
-	"net/url"
-	"slices"
-	"strings"
 
-	"github.com/git-bug/git-bug/bridge/core/auth"
-	"github.com/git-bug/git-bug/repository"
+	"github.com/git-bug/git-bug/bridge/core"
 )
 
-// Storage is git-bug's folder in the repository (.git/git-bug), for
-// git-board's caches.
-func (b *Backend) Storage() repository.LocalStorage {
-	return b.c.LocalStorage()
+// Forge sync and its settings are M5's second phase: the core's syncer,
+// with the forges of .git-board.toml and tokens from the environment or
+// git's credential helper. Until then each answers ErrNotWired. These are
+// the only uses of git-bug left in gitbugio: the server's forge sync still
+// reads git-bug's result types, until it moves to the core too.
+
+// ErrNotWired: forge sync isn't wired to the core yet.
+var ErrNotWired = errors.New("forge sync is not wired yet (M5 phase 2)")
+
+// SyncBridge is a bridge taking part in the forge sync.
+type SyncBridge struct {
+	Name   string `json:"name"`
+	Target string `json:"target"` // github, gitlab
 }
 
-// ForgeToken returns a token stored in git-bug's keyring for a forge host
-// ("github.com", or a GitLab or Gitea instance by its base URL), "" when
-// there's none.
-func (b *Backend) ForgeToken(host string) string {
-	creds, err := auth.List(b.c, auth.WithKind(auth.KindToken))
-	if err != nil {
-		return ""
-	}
-	for _, c := range creds {
-		if credentialHost(c) == host {
-			return c.(*auth.Token).Value
-		}
-	}
-	return ""
+// SyncBridges lists the bridges with sync enabled.
+func (b *Backend) SyncBridges() ([]SyncBridge, error) { return nil, ErrNotWired }
+
+// Bridge is a configured bridge, as the settings page shows it.
+type Bridge struct {
+	Name    string `json:"name"`
+	Target  string `json:"target"` // github, gitlab
+	Where   string `json:"where"`  // the project it syncs with
+	Sync    bool   `json:"sync"`
+	CanSync bool   `json:"can_sync"`
+
+	// where the forge's API finds the project: owner and project (GitHub;
+	// GitLab's project-id), and an instance's base URL
+	Owner   string `json:"-"`
+	Project string `json:"-"`
+	BaseURL string `json:"-"`
 }
 
-// GitHubToken is the GitHub login of the identity git-board writes as,
-// and that login's token in git-bug's keyring: who opens and merges pull
-// requests from git-board, as the bridge posts that person's comments.
-// Never another login's token.
-func (b *Backend) GitHubToken() (login, token string, err error) {
-	login = b.myGitHubLogin()
-	if login == "" {
-		return "", "", errors.New("no GitHub login: choose who you are in git-board first")
-	}
-	creds, err := auth.List(b.c, auth.WithTarget("github"), auth.WithKind(auth.KindToken))
-	if err != nil {
-		return login, "", err
-	}
-	for _, c := range creds {
-		if l, _ := c.GetMetadata(auth.MetaKeyLogin); strings.EqualFold(l, login) {
-			return login, c.(*auth.Token).Value, nil
-		}
-	}
-	return login, "", fmt.Errorf("no GitHub token for %s", login)
+// ErrNoBridge: no bridge has that name.
+var ErrNoBridge = errors.New("no bridge has that name")
+
+// Bridges lists the configured bridges, sync on or off.
+func (b *Backend) Bridges() ([]Bridge, error) { return nil, ErrNotWired }
+
+// SetBridgeSync turns a bridge's sync on or off.
+func (b *Backend) SetBridgeSync(name string, on bool) error { return ErrNotWired }
+
+// AddBridge configures a bridge and answers its name.
+func (b *Backend) AddBridge(target, name, projectURL, credID, token string, sync bool) (string, error) {
+	return "", ErrNotWired
 }
 
-// ForgeHosts returns the hosts git-bug holds a token for.
-func (b *Backend) ForgeHosts() []string {
-	creds, err := auth.List(b.c, auth.WithKind(auth.KindToken))
-	if err != nil {
-		return nil
-	}
-	var hosts []string
-	for _, c := range creds {
-		if h := credentialHost(c); h != "" && !slices.Contains(hosts, h) {
-			hosts = append(hosts, h)
-		}
-	}
-	return hosts
+// RemoveBridge removes a bridge's configuration.
+func (b *Backend) RemoveBridge(name string) error { return ErrNotWired }
+
+// SyncForges syncs with the named bridges' forges, or every one's.
+func (b *Backend) SyncForges(ctx context.Context, dryRun bool, names []string, opts ...core.Option) (<-chan core.SyncResult, error) {
+	return nil, ErrNotWired
 }
 
-// credentialHost is the host a credential is for: github.com for GitHub,
-// its base URL's host for an instance.
-func credentialHost(c auth.Credential) string {
-	if c.Target() == "github" {
-		return "github.com"
-	}
-	base, ok := c.GetMetadata(auth.MetaKeyBaseURL)
-	if !ok {
-		return ""
-	}
-	u, err := url.Parse(base)
-	if err != nil {
-		return ""
-	}
-	return u.Hostname()
+// GetForges brings the forges' changes in and sends nothing.
+func (b *Backend) GetForges(ctx context.Context, names []string, opts ...core.Option) (<-chan core.SyncResult, error) {
+	return nil, ErrNotWired
 }
 
-// Credential is a token in git-bug's credential store, as the settings
-// page lists it: never its value.
+// SendForges sends the local changes to the forges and gets nothing.
+func (b *Backend) SendForges(ctx context.Context, names []string) (<-chan core.SyncResult, error) {
+	return nil, ErrNotWired
+}
+
+// SyncIssue syncs one issue with every forge.
+func (b *Backend) SyncIssue(ctx context.Context, dryRun bool, id string, opts ...core.Option) (<-chan core.SyncResult, error) {
+	return nil, ErrNotWired
+}
+
+// ForgeToken is the token for a forge host, "" when there's none.
+func (b *Backend) ForgeToken(host string) string { return "" }
+
+// GitHubToken is the GitHub login of the person git-board writes as, and
+// that login's token: who opens and merges pull requests from git-board.
+func (b *Backend) GitHubToken() (login, token string, err error) { return "", "", ErrNotWired }
+
+// ForgeHosts are the hosts a token is known for.
+func (b *Backend) ForgeHosts() []string { return nil }
+
+// Credential is a stored token, as the settings page lists it: never its
+// value.
 type Credential struct {
-	ID     string `json:"id"` // its first 7 characters, enough to pick it
+	ID     string `json:"id"`
 	Target string `json:"target"`
 	Host   string `json:"host"`
 	Login  string `json:"login"`
 }
 
-// Credentials lists git-bug's stored tokens, without their values.
-func (b *Backend) Credentials() ([]Credential, error) {
-	creds, err := auth.List(b.c, auth.WithKind(auth.KindToken))
-	if err != nil {
-		return nil, err
-	}
-	res := []Credential{}
-	for _, c := range creds {
-		login, _ := c.GetMetadata(auth.MetaKeyLogin)
-		res = append(res, Credential{ID: c.ID().Human(), Target: c.Target(), Host: credentialHost(c), Login: login})
-	}
-	slices.SortFunc(res, func(a, b Credential) int {
-		return strings.Compare(a.Target+a.Host+a.Login, b.Target+b.Host+b.Login)
-	})
-	return res, nil
-}
+// Credentials lists the stored tokens, without their values.
+func (b *Backend) Credentials() ([]Credential, error) { return nil, ErrNotWired }

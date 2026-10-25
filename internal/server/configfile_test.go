@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/guilbep/git-board/core/issue"
 	"github.com/guilbep/git-board/internal/config"
 )
 
@@ -119,11 +120,11 @@ func TestSaveSwitchesTheKindForm(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		bug, err := s.b.TestCache().Bugs().ResolvePrefix(t.Context(), id)
+		is, err := issue.Load(s.b.Store(), id)
 		if err != nil {
 			t.Fatal(err)
 		}
-		return bug.Snapshot().Labels[0].String()
+		return is.Labels[0]
 	}
 	flat := "[branches]\nkinds = { bug = \"fix\" }\n"
 	if got := storedAfter(flat); got != "bug" {

@@ -74,13 +74,7 @@ func TestInvolvesOnARepository(t *testing.T) {
 	gitbugiotest.CommentAs(t, b, commented, other, time.Now().Unix(), "on it")
 	// someone else's: an issue you opened involves you (author)
 	stranger := gitbugiotest.NewPerson(t, b, "Ann", "ann")
-	theirs, _, err := b.TestCache().Bugs().NewRaw(stranger, time.Now().Unix(), "Mail", "guilbep.pierre@epfl.ch", nil, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := theirs.Commit(t.Context()); err != nil {
-		t.Fatal(err)
-	}
+	gitbugiotest.IssueAs(t, b, stranger, time.Now().Unix(), "Mail", "guilbep.pierre@epfl.ch")
 
 	got, err := board.LoadMatching(b, &config.Config{}, "involves:@me", "guilbep")
 	if err != nil {
@@ -106,13 +100,7 @@ func TestFollowsOnARepository(t *testing.T) {
 	closedInView, _ := b.NewIssue("Cache factors", "", []string{"area:backend"})
 	gitbugiotest.CloseIssue(t, b, closedInView)
 	ann := gitbugiotest.NewPerson(t, b, "Ann", "ann") // someone else's: an issue you opened involves you
-	theirs, _, err := b.TestCache().Bugs().NewRaw(ann, time.Now().Unix(), "Unrelated", "", nil, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := theirs.Commit(t.Context()); err != nil {
-		t.Fatal(err)
-	}
+	gitbugiotest.IssueAs(t, b, ann, time.Now().Unix(), "Unrelated", "")
 	me, _, _ := b.Me()
 	if err := inbox.Save(b.Storage(), me.ID, inbox.State{Follow: []string{followed}, Unfollow: []string{unfollowed}, Views: []string{"backend", "gone"}}); err != nil {
 		t.Fatal(err)
@@ -146,24 +134,12 @@ func TestInvolvesYouByIdentity(t *testing.T) {
 	b := gitbugiotest.New(t) // writes as an identity without a login
 	opened, _ := b.NewIssue("Mine", "", nil)
 	ann := gitbugiotest.NewPerson(t, b, "Ann", "ann")
-	hers, _, err := b.TestCache().Bugs().NewRaw(ann, time.Now().Unix(), "Hers", "", nil, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := hers.Commit(t.Context()); err != nil {
-		t.Fatal(err)
-	}
-	commented := hers.Id().String()
+	hers := gitbugiotest.IssueAs(t, b, ann, time.Now().Unix(), "Hers", "")
+	commented := hers
 	if _, err := b.AddComment(commented, "mine"); err != nil {
 		t.Fatal(err)
 	}
-	theirs, _, err := b.TestCache().Bugs().NewRaw(ann, time.Now().Unix(), "Not mine", "", nil, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := theirs.Commit(t.Context()); err != nil {
-		t.Fatal(err)
-	}
+	gitbugiotest.IssueAs(t, b, ann, time.Now().Unix(), "Not mine", "")
 	for _, expr := range []string{"involves:@me", "follows:@me"} {
 		got, err := board.LoadMatching(b, &config.Config{}, expr, "guilbep")
 		if err != nil {

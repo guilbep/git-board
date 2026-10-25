@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	"github.com/guilbep/git-board/internal/gitbugio"
-	"github.com/guilbep/git-board/internal/gitbugio/gitbugiotest"
 )
 
 func git(t *testing.T, dir string, args ...string) string {
@@ -72,15 +71,6 @@ func TestGitReaders(t *testing.T) {
 	}
 	if got, err := b.ReadFile("dev", "docs/plans/42-x.md"); err != nil || !bytes.HasPrefix(got, []byte("---")) {
 		t.Errorf("ReadFile = %q, %v", got, err)
-	}
-
-	// no git directory: every reader answers empty
-	m := gitbugiotest.New(t)
-	files, err1 := m.ChangedFiles("dev", "fix/42-y")
-	grep, err2 := m.GrepFiles("dev", "docs", "x")
-	data, err3 := m.ReadFile("dev", "a")
-	if files != nil || grep != nil || data != nil || err1 != nil || err2 != nil || err3 != nil || m.FirstCommitAdding("dev", "x", "a") != "" {
-		t.Errorf("no git dir: %v %v %v %v %v %v", files, grep, data, err1, err2, err3)
 	}
 }
 

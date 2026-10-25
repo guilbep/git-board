@@ -64,13 +64,10 @@ func newReviewRepo(t *testing.T) reviewRepo {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = b.Close() })
-	who, err := b.TestCache().Identities().NewRaw("dev", "dev@example.com", "dev", "", nil, nil)
-	if err != nil {
+	if _, err := b.NewIdentity("dev", "dev@example.com"); err != nil {
 		t.Fatal(err)
 	}
-	if err := b.TestCache().SetUserIdentity(t.Context(), who); err != nil {
-		t.Fatal(err)
-	}
+	gitbugiotest.SetMyLogin(t, b, "dev")
 	id := gitbugiotest.NewImportedIssue(t, b, "Crash on save (#2518)", "https://github.com/o/r/issues/2518")
 	s := &apiServer{cfg: &config.Config{}, b: b, me: "guilbep"}
 	return reviewRepo{s: s, ts: serve(t, s), dir: dir, id: id, base: base, c1: c1, c2: c2}

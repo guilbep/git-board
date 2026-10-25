@@ -1,21 +1,17 @@
 package gitbugio
 
 import (
-	"context"
-	"fmt"
 	"strconv"
-	"strings"
-	"time"
 
-	"github.com/git-bug/git-bug/cache"
-	"github.com/git-bug/git-bug/entity"
+	"github.com/guilbep/git-board/core/issue"
+	"github.com/guilbep/git-board/core/oplog"
 )
 
-// Review is a comment's review metadata, the review:* keys the fork's sync
-// mirrors to the pull request (docs/prd/work-unit.md, M4): a line comment
-// (path, line, side, commit), a reply to one (reply-to and its anchor), a
-// review (state), a pull request's comment the sync brought in (pr alone).
-// nil for a plain comment.
+// Review is a comment's review metadata, its review:* keys
+// (docs/prd/work-unit.md, M4): a line comment (path, line, side, commit), a
+// reply to one (reply-to and its anchor), a review (state). They stay in
+// git-board: mirroring them to pull requests is out of version 1, and a
+// pr is only what the fork's sync left. nil for a plain comment.
 type Review struct {
 	Path     string `json:"path,omitempty"`
 	Line     int    `json:"line,omitempty"`
@@ -53,56 +49,35 @@ func reviewOf(meta map[string]string) *Review {
 	return &r
 }
 
-// CommentWith comments on an issue as the user identity, with metadata
-// (review:* keys), and returns the comment's id.
+// CommentWith comments on an issue as you, with metadata (review:* keys),
+// and returns the comment's id.
 func (b *Backend) CommentWith(idPrefix, body string, metadata map[string]string) (string, error) {
-	me, err := b.c.GetUserIdentity(context.Background())
-	if err != nil {
-		return "", err
-	}
-	var id entity.CombinedId
-	err = b.write(idPrefix, func(bug *cache.BugCache) (err error) {
-		id, _, err = bug.AddCommentRaw(me, time.Now().Unix(), body, nil, metadata)
-		return err
-	})
-	return string(id), err
+	return b.AddCommentMeta(idPrefix, body, metadata)
 }
 
 // SetCommentMetadata sets metadata on one of an issue's comments: resolves
-// a thread (review:resolved), stamps its pull request (review:pr).
+// a thread (review:resolved).
 func (b *Backend) SetCommentMetadata(idPrefix, commentID string, metadata map[string]string) error {
-	return b.write(idPrefix, func(bug *cache.BugCache) error {
-		c, err := bug.Snapshot().SearchComment(entity.CombinedId(commentID))
+	_, err := b.do(idPrefix, func(me string, is *issue.Issue, l *oplog.Log) ([]oplog.Op, error) {
+		target, _, _, err := text(is, l, commentID)
 		if err != nil {
-			return ErrNoSuchComment
+			return nil, err
 		}
-		_, err = bug.SetMetadata(context.Background(), c.TargetId(), metadata)
-		return err
+		return []oplog.Op{issue.SetMeta(me, target, metadata)}, nil
 	})
+	return err
 }
 
 // CommentReview is the review metadata of one of an issue's comments, nil
 // for a plain comment: the anchor a reply copies.
 func (b *Backend) CommentReview(idPrefix, commentID string) (*Review, error) {
-	bug, err := b.c.Bugs().ResolvePrefix(context.Background(), idPrefix)
+	is, l, err := b.issue(idPrefix)
 	if err != nil {
-		return nil, fmt.Errorf("resolving %s: %w", idPrefix, err)
+		return nil, err
 	}
-	snap := bug.Snapshot()
-	c, err := snap.SearchComment(entity.CombinedId(commentID))
+	_, _, meta, err := text(is, l, commentID)
 	if err != nil {
-		return nil, ErrNoSuchComment
+		return nil, err
 	}
-	return reviewOf(onForges(snap, nil).meta[c.TargetId()]), nil
-}
-
-// isReview tells a comment the sync never posts on an issue: one with a
-// review:* key, or pulled from a pull request (sync:<remote>:pr-comment).
-func isReview(meta map[string]string) bool {
-	for k := range meta {
-		if strings.HasPrefix(k, "review:") || strings.HasSuffix(k, ":pr-comment") {
-			return true
-		}
-	}
-	return false
+	return reviewOf(meta), nil
 }

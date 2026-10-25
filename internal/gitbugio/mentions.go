@@ -1,13 +1,11 @@
 package gitbugio
 
 import (
-	"context"
 	"regexp"
 	"strings"
 )
 
-// mentionRe is the fork's bridge/core/render.go mentionRe, which is
-// unexported (web/src/richtext.ts copies it too): an @login not inside an
+// mentionRe is an @login (web/src/richtext.ts has it too) not inside an
 // email, a path or code, ending on a letter, a digit or _. Its second
 // group is the mention, @ included.
 var mentionRe = regexp.MustCompile(`(^|[^\w.\-/@` + "`" + `])(@[A-Za-z0-9_](?:[A-Za-z0-9_.\-]*[A-Za-z0-9_])?)`)
@@ -38,15 +36,16 @@ func (b *Backend) Mentioning(login string) (map[string]bool, error) {
 		return nil, err
 	}
 	for id := range hits {
-		bug, err := b.c.Bugs().ResolvePrefix(context.Background(), id)
+		is, _, err := b.loadIssue(id)
 		if err != nil {
 			return nil, err
 		}
-		for _, c := range bug.Snapshot().Comments { // the description is the first
-			if Mentions(c.Message, login) {
-				res[id] = true
-				break
-			}
+		mentions := Mentions(is.Body, login)
+		for _, c := range is.Comments {
+			mentions = mentions || Mentions(c.Body, login)
+		}
+		if mentions {
+			res[id] = true
 		}
 	}
 	return res, nil

@@ -73,17 +73,13 @@ func TestBranchesOfAnIssue(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = b.Close() })
-	who, err := b.TestCache().Identities().NewFromGitUser()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := b.TestCache().SetUserIdentity(t.Context(), who); err != nil {
+	if _, err := b.NewIdentity("dev", "dev@example.com"); err != nil {
 		t.Fatal(err)
 	}
 	id := gitbugiotest.NewImportedIssue(t, b, "[BUG](Equipment) Crash on save (#2518)", "https://github.com/o/r/issues/2518")
 	git(t, dir, "branch", id[:7]+"-by-id")
-	// git-bug's own copy of the issue at origin names it too: not a branch
-	git(t, dir, "update-ref", "refs/remotes/origin/bugs/"+id, "refs/bugs/"+id)
+	// git-bug's own copy of an issue at origin, an older git-board's: not a branch
+	git(t, dir, "update-ref", "refs/remotes/origin/bugs/"+strings.Repeat("ab", 32), "dev")
 
 	ts := newTestServer(t, b, &config.Config{})
 	var res branchesResponse
@@ -151,11 +147,7 @@ func TestBranchSquashedIntoTheBase(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = b.Close() })
-	who, err := b.TestCache().Identities().NewFromGitUser()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := b.TestCache().SetUserIdentity(t.Context(), who); err != nil {
+	if _, err := b.NewIdentity("dev", "dev@example.com"); err != nil {
 		t.Fatal(err)
 	}
 	id := gitbugiotest.NewImportedIssue(t, b, "Crash on save (#2518)", "https://github.com/o/r/issues/2518")

@@ -2,24 +2,22 @@ package gitbugio
 
 import (
 	"bytes"
-	"context"
 	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
 
-	"github.com/git-bug/git-bug/entity"
-	"github.com/git-bug/git-bug/repository"
 	git "github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
 )
 
 // The repository's code, beside its issues: branches and commits, through
-// git-bug's repository (go-git), as the issues are read.
+// go-git and the git binary.
 
 // Branch is a local branch, or a remote's as last fetched.
 type Branch struct {
@@ -29,24 +27,25 @@ type Branch struct {
 }
 
 // Branches lists the local branches, then the remotes' (refs/remotes),
-// without git-bug's own copies of its issues and identities there.
+// without the copies of git-bug's issues and identities an older git-board
+// left there (refs/remotes/origin/bugs/<id>).
 func (b *Backend) Branches() ([]Branch, error) {
-	local, err := b.repo.ListRefs("heads")
+	local, err := b.s.Refs("refs/heads/")
 	if err != nil {
 		return nil, err
 	}
-	remote, err := b.repo.ListRefs("remotes")
+	remote, err := b.s.Refs("refs/remotes/")
 	if err != nil {
 		return nil, err
 	}
 	var res []Branch
 	for name, h := range local {
-		res = append(res, Branch{Name: name, Hash: h.String()})
+		res = append(res, Branch{Name: strings.TrimPrefix(name, "refs/heads/"), Hash: h.String()})
 	}
 	// a remote's HEAD is symbolic: never listed
 	for key, h := range remote {
-		r, name, ok := strings.Cut(key, "/")
-		if !ok || entity.Id(filepath.Base(name)).Validate() == nil { // refs/remotes/origin/bugs/<id>
+		r, name, ok := strings.Cut(strings.TrimPrefix(key, "refs/remotes/"), "/")
+		if !ok || gitBugID.MatchString(filepath.Base(name)) {
 			continue
 		}
 		res = append(res, Branch{Name: name, Remote: r, Hash: h.String()})
@@ -63,11 +62,9 @@ func (b *Backend) Branches() ([]Branch, error) {
 // RemoteHead is the branch a remote's HEAD names, its default branch as
 // the clone recorded it; "" when unknown.
 func (b *Backend) RemoteHead(remote string) string {
-	// ponytail: the repository's refs skip symbolic ones, and git never
-	// packs them, so the loose file is the ref; a linked worktree (refs in
-	// the common directory) reads "" and falls back to main/master/trunk
-	gitDir := filepath.Dir(b.c.LocalStorage().Root())
-	data, err := os.ReadFile(filepath.Join(gitDir, "refs", "remotes", remote, "HEAD"))
+	// ponytail: git never packs a symbolic ref, so the loose file is the
+	// ref, in the common directory every worktree shares
+	data, err := os.ReadFile(filepath.Join(b.s.CommonDir(), "refs", "remotes", remote, "HEAD"))
 	if err != nil {
 		return ""
 	}
@@ -78,22 +75,9 @@ func (b *Backend) RemoteHead(remote string) string {
 	return name
 }
 
-// Ancestors is a commit and every commit before it. Read with go-git, not
-// git-bug's ListCommits: that walks through ReadCommit, which decodes every
-// signature as OpenPGP armor and fails with EOF on an SSH-signed commit
-// (gpg.format ssh), as a repository's own commits may be.
+// Ancestors is a commit and every commit before it, SSH-signed ones
+// included, read with go-git.
 func (b *Backend) Ancestors(hash string) (map[string]bool, error) {
-	if b.dir == "" { // NewForRepo: no git directory to open, git-bug's own commits only
-		list, err := b.repo.ListCommits(context.Background(), repository.Hash(hash))
-		if err != nil {
-			return nil, err
-		}
-		res := make(map[string]bool, len(list))
-		for _, h := range list {
-			res[h.String()] = true
-		}
-		return res, nil
-	}
 	r, err := b.codeRepo()
 	if err != nil {
 		return nil, err
@@ -113,7 +97,8 @@ func (b *Backend) Ancestors(hash string) (map[string]bool, error) {
 // codeRepo is the repository opened with go-git, once: opening it again
 // for each branch would read its pack indexes again each time.
 func (b *Backend) codeRepo() (*git.Repository, error) {
-	b.codeOnce.Do(func() { b.code, b.codeErr = git.PlainOpen(b.dir) })
+	// the common directory holds every worktree's objects
+	b.codeOnce.Do(func() { b.code, b.codeErr = git.PlainOpen(b.s.CommonDir()) })
 	return b.code, b.codeErr
 }
 
@@ -127,17 +112,20 @@ type Commit struct {
 
 // ReadCommit reads one commit, by hash.
 func (b *Backend) ReadCommit(hash string) (Commit, error) {
-	log, err := b.repo.CommitLog(context.Background(), hash, "", 1, "", nil, nil)
+	r, err := b.codeRepo()
 	if err != nil {
 		return Commit{}, err
 	}
-	if len(log) == 0 {
-		return Commit{}, repository.ErrNotFound
+	c, err := r.CommitObject(plumbing.NewHash(hash))
+	if err != nil {
+		return Commit{}, err
 	}
-	c := log[0]
 	subject, _, _ := strings.Cut(c.Message, "\n")
-	return Commit{SHA: c.Hash.String(), Subject: strings.TrimSpace(subject), Author: c.AuthorName, Date: c.Date}, nil
+	return Commit{SHA: c.Hash.String(), Subject: strings.TrimSpace(subject), Author: c.Author.Name, Date: c.Author.When}, nil
 }
+
+// gitBugID is a git-bug entity id, 64 hex digits.
+var gitBugID = regexp.MustCompile(`^[0-9a-f]{64}$`)
 
 // ChangesIn tells whether branch's changes are all in base already: what
 // `git merge-tree` makes of the two is base's own tree. That's how a branch
@@ -145,9 +133,6 @@ func (b *Backend) ReadCommit(hash string) (Commit, error) {
 // ponytail: runs git (2.38+), which leaves the merged tree's objects
 // unreferenced until git gc; false whenever git can't say
 func (b *Backend) ChangesIn(base, branch string) bool {
-	if b.dir == "" {
-		return false
-	}
 	merged, err := b.git("merge-tree", "--write-tree", base, branch)
 	if err != nil { // a conflict, or an older git
 		return false
@@ -200,12 +185,8 @@ func (b *Backend) Worktrees() ([]Worktree, error) {
 	return res, nil
 }
 
-// git runs git on the repository; nil, nil without a git directory (a
-// NewForRepo backend), so every reader below answers empty there.
+// git runs git on the repository.
 func (b *Backend) git(args ...string) ([]byte, error) {
-	if b.dir == "" {
-		return nil, nil
-	}
 	return exec.Command("git", append([]string{"--git-dir", b.dir}, args...)...).Output()
 }
 

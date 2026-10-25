@@ -1,13 +1,10 @@
 package server
 
 import (
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
-
-	"github.com/git-bug/gitconfig"
 
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/gitbugio"
@@ -108,15 +105,13 @@ func TestRemoteURLsLoseTheirCredentials(t *testing.T) {
 func TestRemotePushURLs(t *testing.T) {
 	t.Parallel()
 	b := gitbugiotest.New(t)
-	if err := b.TestCache().Config().Update(func(f *gitconfig.File) error {
-		return errors.Join(
-			f.Set("remote.mirror.url", "https://github.com/o/r.git"),
-			f.Add("remote.mirror.pushurl", "https://github.com/o/r.git"),
-			f.Add("remote.mirror.pushurl", "https://oauth2:glpat-secret@gitlab.example.com/g/r.git"),
-			f.Set("remote.plain.url", "/srv/git/r.git"),
-		)
-	}); err != nil {
-		t.Fatal(err)
+	for _, kv := range [][2]string{
+		{"remote.mirror.url", "https://github.com/o/r.git"},
+		{"remote.mirror.pushurl", "https://github.com/o/r.git"},
+		{"remote.mirror.pushurl", "https://oauth2:glpat-secret@gitlab.example.com/g/r.git"},
+		{"remote.plain.url", "/srv/git/r.git"},
+	} {
+		gitbugiotest.Git(t, b.GitDir(), "config", "--add", kv[0], kv[1])
 	}
 	rs, err := b.Remotes()
 	if err != nil || len(rs) != 2 {

@@ -17,8 +17,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/git-bug/git-bug/repository"
-
 	"github.com/guilbep/git-board/internal/gitbugio"
 )
 
@@ -160,7 +158,7 @@ func (s *apiServer) people() []string {
 	return slices.CompactFunc(all, strings.EqualFold)
 }
 
-func loadAssignable(fs repository.LocalStorage) (map[string][]string, error) {
+func loadAssignable(fs gitbugio.Storage) (map[string][]string, error) {
 	f, err := fs.Open(assignablePath)
 	if errors.Is(err, os.ErrNotExist) {
 		return map[string][]string{}, nil
@@ -178,7 +176,7 @@ func loadAssignable(fs repository.LocalStorage) (map[string][]string, error) {
 
 // saveAssignable writes through a temporary file and a rename: a reader
 // gets the old list or the new one.
-func saveAssignable(fs repository.LocalStorage, m map[string][]string) error {
+func saveAssignable(fs gitbugio.Storage, m map[string][]string) error {
 	if err := fs.MkdirAll(filepath.Dir(assignablePath), 0o755); err != nil {
 		return err
 	}

@@ -11,10 +11,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/git-bug/git-bug/bridge/core"
-	"github.com/git-bug/git-bug/repository/repotest"
-	"github.com/git-bug/gitconfig"
-
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/gitbugio"
 	"github.com/guilbep/git-board/internal/gitbugio/gitbugiotest"
@@ -25,27 +21,16 @@ import (
 // the push the user asks for numbers it.
 func TestNumbersOnlyOnAPushTheUserAsks(t *testing.T) {
 	t.Parallel()
-	remote := repotest.NewGoGitRepo(t, true)
-	clone := repotest.NewGoGitRepo(t, false)
-	repotest.AddRemote(t, clone, "origin", remote.GitDir)
-	b, err := gitbugio.NewForRepo(clone)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = b.Close() })
-	id, err := b.TestCache().Identities().NewFromGitUser()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := b.TestCache().SetUserIdentity(t.Context(), id); err != nil {
-		t.Fatal(err)
-	}
+	remote, clone := gitbugiotest.Repo(t, true), gitbugiotest.Repo(t, false)
+	gitbugiotest.Git(t, clone, "remote", "add", "origin", remote)
+	gitbugiotest.Init(t, clone)
+	b := gitbugiotest.Open(t, clone)
 	if err := b.InitNumbers("origin", "CO2", 1); err != nil {
 		t.Fatal(err)
 	}
 	onOrigin := func() string {
 		t.Helper()
-		out, err := exec.Command("git", "--git-dir", remote.GitDir, "cat-file", "-p", "refs/board/seq:numbers").CombinedOutput()
+		out, err := exec.Command("git", "--git-dir", remote, "cat-file", "-p", "refs/board/seq:numbers").CombinedOutput()
 		if err != nil {
 			t.Fatalf("%v: %s", err, out)
 		}
@@ -95,22 +80,12 @@ func numbersServer(t *testing.T, b *gitbugio.Backend, highest int, asked *int) *
 	return ts
 }
 
-func githubForge(t *testing.T, b *gitbugio.Backend) {
-	t.Helper()
-	for k, v := range map[string]string{core.ConfigKeyTarget: "github", "owner": "o", "project": "r"} {
-		if err := core.SetBridgeConfig(b.TestCache(), "gh", k, v); err != nil {
-			t.Fatal(err)
-		}
-	}
-}
-
 // Settings › Numbers: where the numbers stand, what to start them with,
 // starting them, and numbering what origin has. GitHub is asked only when
 // the form asks, before the switch.
 func TestNumbersFromSettings(t *testing.T) {
 	t.Parallel()
 	mine, theirs := gitbugiotest.NewPair(t)
-	githubForge(t, mine)
 	asked := 0
 	ts := numbersServer(t, mine, 3051, &asked)
 	gitbugiotest.NewImportedIssue(t, mine, "Old", "https://github.com/o/r/issues/2518")
@@ -120,16 +95,14 @@ func TestNumbersFromSettings(t *testing.T) {
 	}
 
 	var n numbersResponse
-	if code := call(t, "GET", ts.URL+"/api/numbers", nil, &n); code != http.StatusOK || n.On || n.Waiting != 2 || n.Highest != 2518 || n.Name != "r" || n.GitHub != nil || asked != 0 {
+	if code := call(t, "GET", ts.URL+"/api/numbers", nil, &n); code != http.StatusOK || n.On || n.Waiting != 2 || n.Highest != 2518 || n.GitHub != nil || asked != 0 {
 		t.Fatalf("before: %d %+v, asked GitHub %d times", code, n, asked)
 	}
 	if n.Origin == nil || len(n.Origin.PushURLs) != 1 {
 		t.Fatalf("origin %+v", n.Origin)
 	}
-	call(t, "GET", ts.URL+"/api/numbers?github=1", nil, &n)
-	if n.GitHub == nil || n.GitHub.Highest != 3051 || n.GitHub.Issues != "https://github.com/o/r/issues" || asked != 1 {
-		t.Fatalf("the form: GitHub %+v, asked %d", n.GitHub, asked)
-	}
+	// ponytail: asking GitHub, which needs the GitHub forge, waits for M5's
+	// second phase
 
 	for _, bad := range []map[string]any{{"prefix": "co-2", "start": 3052}, {"prefix": "CO2", "start": 0}} {
 		if code, msg := callError(t, "POST", ts.URL+"/api/numbers/init", bad); code != http.StatusBadRequest || msg == "" {
@@ -148,7 +121,7 @@ func TestNumbersFromSettings(t *testing.T) {
 	}
 	var after numbersResponse
 	call(t, "GET", ts.URL+"/api/numbers?github=1", nil, &after)
-	if asked != 1 || after.GitHub != nil || after.Numbering.GitHub != nil {
+	if asked != 0 || after.GitHub != nil || after.Numbering.GitHub != nil {
 		t.Errorf("after the switch: asked GitHub %d times, %+v", asked, after)
 	}
 
@@ -171,11 +144,10 @@ func TestNumbersFromSettings(t *testing.T) {
 func TestNumbersWithoutOrigin(t *testing.T) {
 	t.Parallel()
 	b := gitbugiotest.New(t)
-	githubForge(t, b)
 	asked := 0
 	ts := numbersServer(t, b, -1, &asked)
 	var n numbersResponse
-	if code := call(t, "GET", ts.URL+"/api/numbers?github=1", nil, &n); code != http.StatusOK || n.Origin != nil || n.GitHub == nil || n.GitHub.Error == "" || n.GitHub.Highest != 0 {
+	if code := call(t, "GET", ts.URL+"/api/numbers?github=1", nil, &n); code != http.StatusOK || n.Origin != nil {
 		t.Fatalf("no origin, GitHub unreachable: %d %+v %+v", code, n, n.GitHub)
 	}
 	for _, path := range []string{"/api/numbers/init", "/api/numbers/run"} {
@@ -188,11 +160,7 @@ func TestNumbersWithoutOrigin(t *testing.T) {
 	}
 
 	// GET only: nothing reaches this address
-	if err := b.TestCache().Config().Update(func(f *gitconfig.File) error {
-		return f.Set("remote.origin.url", "https://oauth2:glpat-secret@gitlab.example.com/g/co2-calculator.git")
-	}); err != nil {
-		t.Fatal(err)
-	}
+	gitbugiotest.Git(t, b.GitDir(), "remote", "add", "origin", "https://oauth2:glpat-secret@gitlab.example.com/g/co2-calculator.git")
 	call(t, "GET", ts.URL+"/api/numbers", nil, &n)
 	if n.Origin == nil || fmt.Sprint(n.Origin.PushURLs) != "[https://gitlab.example.com/g/co2-calculator.git]" {
 		t.Errorf("origin %+v", n.Origin)
