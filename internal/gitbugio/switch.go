@@ -34,21 +34,15 @@ import (
 type Fork struct {
 	Bugs  []ForkBug
 	Users []ForkUser
-	// Comments are an issue's description and comments, read when needed.
-	Comments func(id string) ([]ForkComment, error)
-}
-
-// ForkComment is an issue's description or comment as the fork shows it.
-type ForkComment struct {
-	Message  string            `json:"message"`
-	Metadata map[string]string `json:"metadata"`
+	// Texts are an issue's description and comments, read when needed.
+	// git-bug's JSON gives a comment's text, never its metadata.
+	Texts func(id string) ([]string, error)
 }
 
 // ForkBug is an issue as the fork lists it.
 type ForkBug struct {
 	ID       string            `json:"id"`
 	Title    string            `json:"title"`
-	Comments int               `json:"comments"` // the description included
 	Metadata map[string]string `json:"metadata"`
 }
 
@@ -82,12 +76,18 @@ func ReadFork(ctx context.Context, gitBug, dir string) (Fork, error) {
 	if err := run(&f.Users, "user", "--format", "json"); err != nil {
 		return f, err
 	}
-	f.Comments = func(id string) ([]ForkComment, error) {
+	f.Texts = func(id string) ([]string, error) {
 		var d struct {
-			Comments []ForkComment `json:"comments"`
+			Comments []struct {
+				Message string `json:"message"`
+			} `json:"comments"`
 		}
 		err := run(&d, "bug", "show", "--format", "json", id)
-		return d.Comments, err
+		var out []string
+		for _, c := range d.Comments {
+			out = append(out, c.Message)
+		}
+		return out, err
 	}
 	return f, nil
 }
@@ -118,14 +118,9 @@ type SwitchReport struct {
 	Lost []string
 	// Split are the fork's issues the pull made two issues or more.
 	Split []string
-	// LostComments are the fork's comments no forge has; its review
-	// comments, which never went to one, counted per issue.
+	// LostComments are the fork's comments no forge has: its review
+	// comments, which never went to one, among them.
 	LostComments []string
-	// LostMeta counts the fork's comments by the prefixes of their
-	// metadata's keys (plan, signoff, verify, cycle, review...), which the
-	// switch drops: the pull rebuilds the comments from the forges, which
-	// hold none. The fork's own links, sync:*, aren't counted.
-	LostMeta     map[string]int
 	Releases     int      // the fork's release records
 	Carried      int      // of them, carried into the release kind
 	ReleaseNotes []string // what about them didn't carry over
@@ -175,7 +170,7 @@ func (b *Backend) Switch(ctx context.Context, run SwitchRun) (SwitchReport, erro
 		}
 	}
 
-	fork := Fork{Comments: func(string) ([]ForkComment, error) { return nil, nil }}
+	fork := Fork{Texts: func(string) ([]string, error) { return nil, nil }}
 	if bugs, err := b.s.Refs("refs/bugs/"); err != nil {
 		return rep, err
 	} else if run.Fork != nil {
@@ -438,24 +433,10 @@ func rekey(s *gitstore.Store, issueOf map[string]string, issues map[string][]syn
 }
 
 // lostComments lists the fork's comments the pulled issue has no copy of,
-// and counts the metadata of the fork's comments, which no forge holds.
-// ponytail: one git-bug bug show per fork issue, once per switch
+// each, though a comment only the forge has levels the counts.
+// ponytail: one git-bug bug show per issue pulled, once per switch
 func lostComments(s *gitstore.Store, fork Fork, issueOf map[string]string, rep *SwitchReport) error {
-	rep.LostMeta = map[string]int{}
 	for _, bug := range fork.Bugs {
-		comments, err := fork.Comments(bug.ID)
-		if err != nil {
-			return err
-		}
-		for _, c := range comments {
-			seen := map[string]bool{}
-			for k := range c.Metadata {
-				if p, _, _ := strings.Cut(k, ":"); p != "sync" && !seen[p] {
-					seen[p] = true
-					rep.LostMeta[p]++
-				}
-			}
-		}
 		id := issueOf[bug.ID]
 		if id == "" {
 			continue // lost whole, and listed so
@@ -464,22 +445,15 @@ func lostComments(s *gitstore.Store, fork Fork, issueOf map[string]string, rep *
 		if err != nil {
 			return err
 		}
-		reviews := 0
-		for _, c := range comments[min(1, len(comments)):] {
-			switch {
-			case isLocal(c.Metadata):
-				reviews++
-			case !slices.ContainsFunc(is.Comments, func(ic issue.Comment) bool { return syncer.SameText(c.Message, ic.Body) }):
-				line, _, _ := strings.Cut(strings.TrimSpace(c.Message), "\n")
+		texts, err := fork.Texts(bug.ID)
+		if err != nil {
+			return err
+		}
+		for _, t := range texts[min(1, len(texts)):] {
+			if !slices.ContainsFunc(is.Comments, func(c issue.Comment) bool { return syncer.SameText(t, c.Body) }) {
+				line, _, _ := strings.Cut(strings.TrimSpace(t), "\n")
 				rep.LostComments = append(rep.LostComments, short(bug.ID)+": "+line[:min(len(line), 60)])
 			}
-		}
-		if reviews > 0 {
-			what := "review comment"
-			if reviews > 1 {
-				what += "s"
-			}
-			rep.LostComments = append(rep.LostComments, fmt.Sprintf("%s: %d %s, which only git-bug holds", short(bug.ID), reviews, what))
 		}
 	}
 	return nil

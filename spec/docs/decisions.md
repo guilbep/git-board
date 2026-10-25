@@ -356,14 +356,13 @@ answered in the process, to show what it would create.
   entity, as the trials left, doesn't count. The mark goes to the remote
   with the entities, and a clone without one takes the remote's when it
   pulls.
-- **What only git-bug holds is counted, not carried.** The pull rebuilds
-  the comments from the forges, which hold no metadata: the report counts
-  the fork's comments by the prefixes of their metadata's keys (`plan`,
-  `signoff`, `verify`, `cycle`, `review`...; not the fork's own `sync:*`
-  links), from `git bug bug show --format json`, so in-flight issues'
-  approvals, sign-offs and verifications start over. Review comments,
-  which never went to a forge, are counted per issue. `refs/bugs` stays,
-  so a later pass could carry them.
+- **Comment metadata isn't carried.** The pull rebuilds the comments from
+  the forges, which hold none, and `git bug bug show --format json` gives a
+  comment's `author`, `human_id`, `id` and `message` only, so the switch
+  can't read it either: the report says so, once. Neither real repository
+  holds any. Every comment no forge has is listed, review comments among
+  them: the switch reads each pulled issue's comments, so a comment only
+  the forge has can't hide one. `refs/bugs` stays.
 - **The numbers are keyed again on origin's** `refs/board/seq`, which
   `--apply` makes this clone's, the re-key on top, unpushed. A fetch of
   the numbers (`git-board sync`, `numbers`, the web app's pull) takes

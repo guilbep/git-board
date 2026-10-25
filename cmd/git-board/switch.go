@@ -117,19 +117,11 @@ func printSwitch(out io.Writer, rep gitbugio.SwitchReport, apply bool) {
 	}
 	fmt.Fprintf(out, "Numbers: %d keyed again by the new issues.\n", rep.Numbers)
 	list("left without an issue, kept so that none is handed out again", rep.NoIssue)
-	if len(rep.Lost)+len(rep.Split)+len(rep.LostComments)+len(rep.LostMeta) == 0 {
-		fmt.Fprintln(out, "Lost at the switch: nothing.")
-	} else {
-		fmt.Fprintln(out, "Lost at the switch:")
-	}
+	fmt.Fprintln(out, "Lost at the switch:")
 	list("git-bug's issues not on the forges pulled", rep.Lost)
 	list("git-bug's issues pulled as two", rep.Split)
 	list("comments the fork never posted", rep.LostComments)
-	var meta []string
-	for _, k := range slices.Sorted(maps.Keys(rep.LostMeta)) {
-		meta = append(meta, fmt.Sprintf("%s: %d", k, rep.LostMeta[k]))
-	}
-	list("git-bug's comments with metadata, by key prefix: plan approvals, sign-offs, verifications and reviews start over", meta)
+	fmt.Fprintln(out, "  comment metadata (cycle, review): not readable from git-bug's JSON, none carried")
 	fmt.Fprintf(out, "Releases: %d records in refs/releases, %d carried into git-board's.\n", rep.Releases, rep.Carried)
 	list("not carried", rep.ReleaseNotes)
 	fmt.Fprintf(out, "The next sync: %d creations on the forges, %d other writes.\n", len(rep.WouldCreate), len(rep.Writes))

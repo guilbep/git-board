@@ -2,7 +2,6 @@ package gitbugio_test
 
 import (
 	"errors"
-	"maps"
 	"slices"
 	"strings"
 	"testing"
@@ -32,7 +31,7 @@ func switchSetup(t *testing.T) (*gitbugio.Backend, gitbugio.SwitchRun, []*fake.F
 		Comments: []forge.Comment{{Body: "<!-- git-bug:" + forkID('e') + " -->\nc1", Author: board}}})
 	fork := &gitbugio.Fork{
 		Bugs: []gitbugio.ForkBug{
-			{ID: forkID('a'), Title: "One", Comments: 2, Metadata: map[string]string{
+			{ID: forkID('a'), Title: "One", Metadata: map[string]string{
 				"github-url":                         "https://github.com/o/r/issues/1",
 				"sync:gitlab.example.com/7:number":   "1",
 				"sync:gitlab.example.com/7:url":      "https://gitlab.example.com/grp/r/-/work_items/1",
@@ -42,20 +41,14 @@ func switchSetup(t *testing.T) (*gitbugio.Backend, gitbugio.SwitchRun, []*fake.F
 				"origin":                             "github",
 				"sync:gitlab.example.com/7:assignee": "",
 			}},
-			{ID: forkID('b'), Title: "Two", Comments: 3, Metadata: map[string]string{"github-url": "https://github.com/o/r/issues/2",
+			{ID: forkID('b'), Title: "Two", Metadata: map[string]string{"github-url": "https://github.com/o/r/issues/2",
 				"sync:gitlab.example.com/7:number": "5"}}, // a GitLab issue the forge doesn't list
-			{ID: forkID('c'), Title: "Local", Comments: 1},
-			{ID: forkID('f'), Title: "Elsewhere", Comments: 1, Metadata: map[string]string{"github-url": "https://github.com/x/y/issues/9"}},
+			{ID: forkID('c'), Title: "Local"},
+			{ID: forkID('f'), Title: "Elsewhere", Metadata: map[string]string{"github-url": "https://github.com/x/y/issues/9"}},
 		},
 		Users: []gitbugio.ForkUser{{ID: forkID('9'), Name: "Alice Example", Login: "alice"}},
-		Comments: func(id string) ([]gitbugio.ForkComment, error) {
-			texts := map[string][]string{forkID('a'): {"one", "c1"}, forkID('b'): {"two", "c2", "never posted\nsecond line"},
-				forkID('c'): {"local"}, forkID('f'): {"elsewhere"}}[id]
-			var out []gitbugio.ForkComment
-			for _, t := range texts {
-				out = append(out, gitbugio.ForkComment{Message: t})
-			}
-			return out, nil
+		Texts: func(id string) ([]string, error) {
+			return map[string][]string{forkID('a'): {"one", "c1"}, forkID('b'): {"two", "c2", "never posted\nsecond line"}}[id], nil
 		},
 	}
 	for _, id := range []string{forkID('a'), forkID('b'), forkID('c'), forkID('f')} {
@@ -220,32 +213,25 @@ func TestSwitchKeysOriginsNumbers(t *testing.T) {
 	}
 }
 
-// The report counts what only git-bug holds: its comments' metadata, by
-// key prefix, and its review comments, per issue, though a comment only
-// the forge has brings the counts level.
-func TestSwitchCountsWhatOnlyGitBugHolds(t *testing.T) {
+// Every comment no forge has is listed, a review comment among them,
+// though a comment only the forge has brings the counts level.
+func TestSwitchFindsEveryLostComment(t *testing.T) {
 	t.Parallel()
 	b, run, fs := switchSetup(t)
 	fs[0].Edit("1", func(i *forge.Issue) {
 		i.Comments = append(i.Comments, forge.Comment{Body: "later, on GitHub", Author: forge.Account{ID: "8", Login: "bob"}})
 	})
-	run.Fork.Bugs[0].Comments = 3
-	run.Fork.Comments = func(id string) ([]gitbugio.ForkComment, error) {
+	run.Fork.Texts = func(id string) ([]string, error) {
 		if id != forkID('a') {
 			return nil, nil
 		}
-		return []gitbugio.ForkComment{{Message: "one"},
-			{Message: "c1", Metadata: map[string]string{"plan:approve": "abc", "plan:commit": "4f2e9c1", "sync:github.com/o/r:id": "9"}},
-			{Message: "a line note", Metadata: map[string]string{"review:path": "a.go", "review:line": "3"}}}, nil
+		return []string{"one", "c1", "a line note"}, nil
 	}
 	rep, err := b.Switch(t.Context(), run)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := map[string]int{"plan": 1, "review": 1}; !maps.Equal(rep.LostMeta, want) {
-		t.Errorf("lost metadata %v, want %v", rep.LostMeta, want)
-	}
-	if !slices.Equal(rep.LostComments, []string{"aaaaaaa: 1 review comment, which only git-bug holds"}) {
+	if !slices.Equal(rep.LostComments, []string{"aaaaaaa: a line note"}) {
 		t.Errorf("lost comments %q", rep.LostComments)
 	}
 }
@@ -299,7 +285,7 @@ func TestSwitchMarkTravels(t *testing.T) {
 		t.Fatalf("a trial's sync entity: %v, want ErrNotSwitched", err)
 	}
 	run := gitbugio.SwitchRun{Forges: []gitbugio.NamedForge{{Name: "gh", Forge: fake.New("github.com/o/r")}},
-		Fork: &gitbugio.Fork{Comments: func(string) ([]gitbugio.ForkComment, error) { return nil, nil }}, Apply: true, Force: true}
+		Fork: &gitbugio.Fork{Texts: func(string) ([]string, error) { return nil, nil }}, Apply: true, Force: true}
 	if rep, err := mine.Switch(t.Context(), run); err != nil || !rep.Applied {
 		t.Fatalf("%+v, %v", rep, err)
 	}
