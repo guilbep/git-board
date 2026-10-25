@@ -20,14 +20,19 @@ func header(name string, written int64, where string) string {
 }
 
 // wrapped is a text as sync posts it: a header, the text, a marker. Kind
-// and id are the marker's.
-type wrapped struct{ header, body, marker, kind, id string }
+// and id are the marker's. fork is the fork's own start of a text it
+// posted, kept as it is: its marker, forkID its id, and its header, which
+// links place, "<key>#<number>".
+type wrapped struct{ header, body, marker, kind, id, fork, forkID, place string }
 
-// unwrap splits a text sync posted. A text without a marker is all body.
+// unwrap splits a text sync posted, or the fork did. A text with neither
+// form is all body.
 func unwrap(text string) wrapped {
 	w := wrapped{body: text}
 	m := markerRE.FindStringSubmatchIndex(text)
 	if m == nil {
+		w.fork, w.forkID, w.place = forkStart(text)
+		w.body = text[len(w.fork):]
 		return w
 	}
 	w.kind, w.id = text[m[2]:m[3]], text[m[4]:m[5]]
@@ -38,7 +43,44 @@ func unwrap(text string) wrapped {
 	return w
 }
 
-// String joins the parts that aren't empty with a blank line.
+// The fork's form (sync.md's "Switching from the fork"): its marker alone on
+// the first line, and a header in italics; a header without the marker
+// counts when it links an issue.
+var (
+	forkMarkerRE = regexp.MustCompile(`^<!-- git-bug:([0-9a-f]{64}) -->(?:\n|$)`)
+	forkHeaderRE = regexp.MustCompile(`^\*From [^\n]*\*(?:\n\n|\n|$)`)
+	placeRE      = regexp.MustCompile(`\[([^\]\n#]+)#([0-9]+)\]\(`)
+)
+
+// forkStart is the fork's marker and header at the start of a text, the
+// marker's id, and the issue the header links.
+func forkStart(text string) (start, id, place string) {
+	rest := text
+	marked := false
+	for range 2 {
+		if m := forkMarkerRE.FindStringSubmatch(rest); m != nil && !marked {
+			marked, id, rest = true, m[1], rest[len(m[0]):]
+			continue
+		}
+		h := forkHeaderRE.FindString(rest)
+		if h == "" || place != "" {
+			break
+		}
+		if p := placeRE.FindStringSubmatch(h); p != nil {
+			place = p[1] + "#" + p[2]
+		} else if !marked {
+			break
+		}
+		rest = rest[len(h):]
+	}
+	return text[:len(text)-len(rest)], id, place
+}
+
+// forked says the text is in the fork's form.
+func (w wrapped) forked() bool { return w.fork != "" }
+
+// String joins the parts that aren't empty with a blank line, after the
+// fork's start.
 func (w wrapped) String() string {
 	var parts []string
 	for _, p := range []string{w.header, w.body, w.marker} {
@@ -46,7 +88,23 @@ func (w wrapped) String() string {
 			parts = append(parts, p)
 		}
 	}
-	return strings.Join(parts, "\n\n")
+	return w.fork + strings.Join(parts, "\n\n")
+}
+
+var (
+	codeTicks = regexp.MustCompile("`+")
+	refLink   = regexp.MustCompile(`\[[^\]\n]*#[0-9]+\]\([^)\s]*\)|#[0-9]+`)
+	spaces    = regexp.MustCompile(`\s+`)
+)
+
+// same says two texts are one, as a mirror shows it: without the fork's
+// start, and with mentions and references as either side translated them.
+func same(a, b string) bool {
+	norm := func(s string) string {
+		s = codeTicks.ReplaceAllString(unwrap(s).body, "")
+		return strings.TrimSpace(spaces.ReplaceAllString(refLink.ReplaceAllString(s, "#"), " "))
+	}
+	return norm(a) == norm(b)
 }
 
 var token = regexp.MustCompile("`+|@[A-Za-z0-9_][A-Za-z0-9_.-]*|#[0-9]+")

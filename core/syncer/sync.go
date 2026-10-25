@@ -33,8 +33,13 @@ type Options struct {
 	// Did hears each issue the run wrote for, as Report counts them, on the
 	// project named by its key: "created" and "updated" with the number of
 	// operations pulled, "linked" for a forge issue found by its marker or
-	// its origin, "posted" and "pushed". Nil hears nothing.
+	// its origin, "joined" for a mirror the fork posted, "posted" and
+	// "pushed". Nil hears nothing.
 	Did func(forge, what, issue string, ops int)
+	// Mirrors are forge issues the fork made one issue, from its own data,
+	// each group's places as "<key>#<number>", keys in any case (sync.md's
+	// "Switching from the fork"). Nil leaves the fork's texts to say.
+	Mirrors [][]string
 }
 
 // Report counts what a run did. Created, Updated and Unchanged count the
@@ -76,6 +81,15 @@ type run struct {
 	issues     map[string]*issue.Issue
 	pull, push bool
 	report     Report
+	mirrors    map[string][]string // a place, in lower case -> the others of its group
+	later      []listed            // the fork's mirrors, pulled once every original is
+	forkIDs    map[string]string   // the fork's marker id -> the issue it went to
+}
+
+// listed is a forge issue a project listed.
+type listed struct {
+	p  *project
+	fi forge.Issue
 }
 
 // project is one forge project in a run.
@@ -96,7 +110,17 @@ func start(ctx context.Context, s *gitstore.Store, opt Options, forges []forge.F
 		return Report{}, err
 	}
 	defer unlock()
-	r := &run{ctx: ctx, s: s, opt: opt, now: time.Now().Unix(), states: map[string]*state{}, pull: pull, push: push}
+	r := &run{ctx: ctx, s: s, opt: opt, now: time.Now().Unix(), states: map[string]*state{}, pull: pull, push: push,
+		mirrors: map[string][]string{}, forkIDs: map[string]string{}}
+	for _, g := range opt.Mirrors {
+		for _, place := range g {
+			for _, other := range g {
+				if other != place {
+					r.mirrors[strings.ToLower(place)] = append(r.mirrors[strings.ToLower(place)], other)
+				}
+			}
+		}
+	}
 	// ponytail: the directory loads every person once per run; the index's ForAccount when people get many
 	if r.au, err = loadAuthors(s); err != nil {
 		return r.report, err
@@ -119,6 +143,11 @@ func start(ctx context.Context, s *gitstore.Store, opt Options, forges []forge.F
 	if pull {
 		for _, p := range r.projects {
 			if err := r.pullFrom(p); err != nil {
+				return r.report, err
+			}
+		}
+		for _, x := range r.later {
+			if err := r.pullOne(x.p, x.fi, true); err != nil {
 				return r.report, err
 			}
 		}
@@ -357,37 +386,51 @@ func (r *run) pullFrom(p *project) error {
 			return fmt.Errorf("syncer: forge issue %s: bad status %q", fi.ID, fi.Status)
 		}
 		p.listed[fi.ID] = fi
-		id, err := r.match(p, fi)
+		if err := r.pullOne(p, fi, r.opt.Issue != ""); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// pullOne pulls a listed forge issue. A mirror the fork posted waits for
+// every original to be pulled, unless final.
+func (r *run) pullOne(p *project, fi forge.Issue, final bool) error {
+	id, err := r.match(p, fi, final)
+	if err != nil {
+		return err
+	}
+	if r.opt.Issue != "" && id != r.opt.Issue {
+		r.report.Unchanged++
+		return nil
+	}
+	switch id {
+	case "":
+		r.report.Unchanged++
+		return nil
+	case "later":
+		r.later = append(r.later, listed{p, fi})
+		return nil
+	case "new":
+		id, err := r.pullNew(p, fi)
 		if err != nil {
 			return err
 		}
-		if r.opt.Issue != "" && id != r.opt.Issue {
-			r.report.Unchanged++
-			continue
+		if w := unwrap(fi.Body); w.forkID != "" && r.isSync(p, fi.Author) {
+			r.forkIDs[w.forkID] = id
 		}
-		var wrote bool
-		var pulled int
-		switch {
-		case id == "":
-			r.report.Unchanged++
-			continue
-		case id == "new":
-			if err := r.pullNew(p, fi); err != nil {
-				return err
-			}
-			r.report.Created++
-			continue
-		default:
-			if wrote, _, pulled, err = r.reconcile(p, id, fi, true, false); err != nil {
-				return err
-			}
-		}
-		if wrote {
-			r.report.Updated++
-			r.did(p.key, "updated", id, pulled)
-		} else {
-			r.report.Unchanged++
-		}
+		r.report.Created++
+		return nil
+	}
+	wrote, _, pulled, err := r.reconcile(p, id, fi, true, false)
+	if err != nil {
+		return err
+	}
+	if wrote {
+		r.report.Updated++
+		r.did(p.key, "updated", id, pulled)
+	} else {
+		r.report.Unchanged++
 	}
 	return nil
 }
@@ -419,9 +462,10 @@ func (r *run) alone(p *project) ([]forge.Issue, error) {
 
 // match finds the issue a listed forge issue is: its link, else the issue
 // its marker names (a push that stopped before its link), else the issue
-// pulled from it (a pull that stopped before its link). It links the last
-// two. It returns "new" for none, and "" for one to skip.
-func (r *run) match(p *project, fi forge.Issue) (string, error) {
+// pulled from it (a pull that stopped before its link), else the issue a
+// mirror the fork posted mirrors. It links the last three. It returns "new"
+// for none, "" for one to skip, and "later" for a mirror that waits.
+func (r *run) match(p *project, fi forge.Issue, final bool) (string, error) {
 	if id, ok := p.st.links[fi.ID]; ok {
 		if _, here := r.issues[id]; !here {
 			return "", nil // the issue may arrive with a fetch, or isn't one
@@ -446,7 +490,57 @@ func (r *run) match(p *project, fi forge.Issue) (string, error) {
 			return id, p.st.write(r.ctx, r.s, p.key, []oplog.Op{linkOp(is.Author, r.now, id, fi.ID, fi.Number, fi.URL)})
 		}
 	}
+	return r.mirror(p, fi, final)
+}
+
+// mirror finds the issue a forge issue mirrors, as sync.md's "Switching
+// from the fork" says: a text in the fork's form from sync's accounts is a
+// mirror, and waits until final; the fork's data, Mirrors, names the
+// others of its group, mirror or original. It joins the first issue found
+// that isn't linked to p yet.
+func (r *run) mirror(p *project, fi forge.Issue, final bool) (string, error) {
+	w := unwrap(fi.Body)
+	copied := w.forked() && r.isSync(p, fi.Author)
+	places := slices.Clone(r.mirrors[strings.ToLower(p.key+"#"+fi.Number)])
+	switch {
+	case !copied && len(places) == 0:
+		return "new", nil
+	case copied && !final:
+		return "later", nil
+	}
+	var found []string
+	if copied {
+		found = append(found, r.forkIDs[w.forkID])
+		places = append(places, w.place)
+	}
+	for _, place := range places {
+		i := strings.LastIndex(place, "#")
+		for _, q := range r.projects {
+			if i > 0 && q != p && strings.EqualFold(q.key, place[:i]) {
+				found = append(found, q.st.numbers[place[i+1:]])
+			}
+		}
+	}
+	for _, id := range found {
+		if _, here := r.issues[id]; here && !p.st.anyLink[id] {
+			if copied && w.forkID != "" {
+				r.forkIDs[w.forkID] = id
+			}
+			return id, r.join(p, fi, id)
+		}
+	}
 	return "new", nil
+}
+
+// join links a mirror the fork posted to the issue it mirrors. Its title,
+// body and status are last seen as the forge has them, so that git-board's,
+// the original's, win. Labels and assignees aren't, so that both sides'
+// sets merge.
+func (r *run) join(p *project, fi forge.Issue, id string) error {
+	a := r.issues[id].Author
+	r.did(p.key, "joined", id, 0)
+	return p.st.write(r.ctx, r.s, p.key, []oplog.Op{linkOp(a, r.now, id, fi.ID, fi.Number, fi.URL),
+		seenOp(a, r.now, id, "title", fi.Title), seenOp(a, r.now, id, "body", fi.Body), seenOp(a, r.now, id, "status", fi.Status)})
 }
 
 // createdSeen are the seen values of a forge issue sync just created.

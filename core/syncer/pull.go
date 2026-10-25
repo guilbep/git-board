@@ -131,11 +131,11 @@ func ids(accounts []forge.Account) string {
 }
 
 // pullNew makes an issue from a forge issue, and links it.
-func (r *run) pullNew(p *project, fi forge.Issue) error {
+func (r *run) pullNew(p *project, fi forge.Issue) (string, error) {
 	key, now := p.key, r.now
 	who, err := r.au.of(r.ctx, p.f.Server(), fi)
 	if err != nil {
-		return err
+		return "", err
 	}
 	a := who[fi.Author.ID]
 	ev := "issue:" + fi.ID
@@ -144,7 +144,7 @@ func (r *run) pullNew(p *project, fi forge.Issue) error {
 	for _, as := range fi.Assignees {
 		add = append(add, "assignee:"+as.Login)
 	}
-	ops := []oplog.Op{from(issue.NewCreate(a, fi.Title, fi.Body), key, ev, fi.Created)}
+	ops := []oplog.Op{from(issue.NewCreate(a, fi.Title, plain(fi.Body)), key, ev, fi.Created)}
 	if fi.Status == "closed" {
 		ops = append(ops, from(issue.SetStatus(a, issue.Closed), key, ev, changedAt(fi, "status")))
 	}
@@ -152,11 +152,11 @@ func (r *run) pullNew(p *project, fi forge.Issue) error {
 		ops = append(ops, from(issue.ChangeLabels(a, add, nil), key, ev, changedAt(fi, "labels")))
 	}
 	for _, c := range fi.Comments {
-		ops = append(ops, from(issue.NewComment(who[c.Author.ID], c.Body), key, "comment:"+c.ID, c.Time))
+		ops = append(ops, from(issue.NewComment(who[c.Author.ID], plain(c.Body)), key, "comment:"+c.ID, c.Time))
 	}
 	is, err := issue.Create(r.ctx, r.s, ops...)
 	if err != nil {
-		return err
+		return "", err
 	}
 	r.issues[is.ID] = is
 	sops := []oplog.Op{
@@ -173,10 +173,10 @@ func (r *run) pullNew(p *project, fi forge.Issue) error {
 		sops = append(sops, seenOp(a, now, is.ID, "comment:"+c.ID, c.Body))
 	}
 	if err := p.st.write(r.ctx, r.s, key, sops); err != nil {
-		return err
+		return "", err
 	}
 	r.did(key, "created", is.ID, len(ops))
-	return nil
+	return is.ID, nil
 }
 
 // reconcile compares an issue with its forge issue, field by field, and

@@ -72,14 +72,22 @@ func changedAt(fi forge.Issue, field string) int64 {
 }
 
 // wrapLike gives a text the header and marker last seen had, if sync
-// posted it.
+// posted it, or the fork's start, if the fork did.
 func wrapLike(seen, body string, posted bool) string {
 	w := unwrap(seen)
-	if !posted || w.marker == "" {
+	if !w.forked() && (!posted || w.marker == "") {
 		return body
 	}
 	w.body = body
 	return w.String()
+}
+
+// plain is a text as git-board keeps it: without the fork's start.
+func plain(text string) string {
+	if w := unwrap(text); w.forked() {
+		return w.body
+	}
+	return text
 }
 
 // plan compares is with fi, as sync.md's four cases say. who gives the
@@ -107,7 +115,7 @@ func (r *run) plan(p *project, is *issue.Issue, fi forge.Issue, who map[string]s
 				return
 			}
 			v := f
-			if w := unwrap(f); posted && w.marker != "" {
+			if w := unwrap(f); posted && w.marker != "" || w.forked() {
 				v = w.body
 			}
 			pl.ops = append(pl.ops, pullOp(v))
@@ -179,10 +187,23 @@ func (r *run) plan(p *project, is *issue.Issue, fi forge.Issue, who map[string]s
 			sent = true
 			pl.sops = append(pl.sops, postedOp(is.Author, now, is.ID, c.ID, fc.ID), seenOp(is.Author, now, is.ID, field, fc.Body))
 			seen = withSeen(seen, field, fc.Body)
+		} else if who != nil {
+			// a mirror the fork posted: git-board's copy of the original is
+			// the forge's, recorded as posted. The original's text wins: last
+			// seen is the forge's when it is the fork's copy, else git-board's.
+			var copied bool
+			if c, copied = r.mirrored(p, is, fc, matched); c != nil {
+				v := fc.Body
+				if !copied {
+					v = r.form(p, c.Body, origin(ch["comment:"+c.ID]), false)
+				}
+				pl.sops = append(pl.sops, postedOp(is.Author, now, is.ID, c.ID, fc.ID), seenOp(is.Author, now, is.ID, field, v))
+				seen = withSeen(seen, field, v)
+			}
 		}
 		if c == nil {
 			if pull {
-				pl.ops = append(pl.ops, from(issue.NewComment(who[fc.Author.ID], fc.Body), key, field, fc.Time))
+				pl.ops = append(pl.ops, from(issue.NewComment(who[fc.Author.ID], plain(fc.Body)), key, field, fc.Time))
 				pl.sops = append(pl.sops, seenOp(is.Author, now, is.ID, field, fc.Body))
 			}
 			continue
@@ -227,6 +248,34 @@ func (r *run) plan(p *project, is *issue.Issue, fi forge.Issue, who map[string]s
 		}
 	}
 	return pl, nil
+}
+
+// mirrored is the comment of is that fc mirrors, or that mirrors fc, as the
+// fork posted them on two projects: one with fc's text, neither from p nor
+// sent there, where fc is in the fork's form from sync's accounts (copied),
+// or the comment's text was on the forge it came from.
+func (r *run) mirrored(p *project, is *issue.Issue, fc forge.Comment, matched map[string]bool) (c *issue.Comment, copied bool) {
+	copied = unwrap(fc.Body).forked() && r.isSync(p, fc.Author)
+	for i := range is.Comments {
+		c := &is.Comments[i]
+		if matched[c.ID] || p.st.posted[[2]string{is.ID, c.ID}] != "" || c.Origin != nil && c.Origin.Forge == p.key ||
+			r.opt.Local != nil && r.opt.Local(c.Meta) {
+			continue
+		}
+		if (copied || r.forkCopy(is.ID, c)) && same(fc.Body, c.Body) {
+			return c, copied
+		}
+	}
+	return nil, false
+}
+
+// forkCopy says a comment was pulled from a text in the fork's form.
+func (r *run) forkCopy(issueID string, c *issue.Comment) bool {
+	if c.Origin == nil {
+		return false
+	}
+	fid, ok := strings.CutPrefix(c.Origin.Event, "comment:")
+	return ok && unwrap(r.stateOf(c.Origin.Forge).seen[issueID]["comment:"+fid]).forked()
 }
 
 func withSeen(seen map[string]string, field, v string) map[string]string {
