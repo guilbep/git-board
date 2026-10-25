@@ -2,6 +2,7 @@ package gitbugio_test
 
 import (
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/guilbep/git-board/core/issue"
@@ -95,4 +96,32 @@ func TestFlatKindsAreTheKindField(t *testing.T) {
 	if got := sorted(b.GetLabels(id)); !slices.Equal(got, []string{"feat", "status:ready"}) {
 		t.Errorf("kind:* form read %q, want feat as is", got)
 	}
+}
+
+// An assignee label in any case, as a forge may send it, reads as
+// assignee:, once, and goes with any of its spellings.
+func TestAssigneeInAnyCase(t *testing.T) {
+	t.Parallel()
+	b := gitbugiotest.New(t)
+	id := gitbugiotest.NewIssue(t, b, "x")
+	gitbugiotest.RawLabels(t, b, id, "Assignee:bob", "ASSIGNEE:bob", "assignee:ann")
+	if got := sorted(b.GetLabels(id)); !slices.Equal(got, []string{"assignee:ann", "assignee:bob"}) {
+		t.Fatalf("labels = %q", got)
+	}
+	if got, err := b.ApplyLabelChange(id, []string{"assignee:bob"}, []string{"assignee:ann"}); err != nil || !slices.Equal(got, []string{"assignee:bob"}) {
+		t.Fatalf("after adding bob again, removing ann: %q, %v", got, err)
+	}
+	if got, err := b.ApplyLabelChange(id, nil, []string{"assignee:bob"}); err != nil || len(got) != 0 {
+		t.Fatalf("after removing bob: %q, %v", got, err)
+	}
+	if l := b.Labels(); slices.ContainsFunc(l, func(x string) bool { return strings.HasPrefix(x, "Assignee") || strings.HasPrefix(x, "ASSIGNEE") }) {
+		t.Errorf("Labels = %q", l)
+	}
+}
+
+func sorted(l []string, err error) []string {
+	if err != nil {
+		panic(err)
+	}
+	return slices.Sorted(slices.Values(l))
 }
