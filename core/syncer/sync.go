@@ -494,22 +494,23 @@ func (r *run) match(p *project, fi forge.Issue, final bool) (string, error) {
 }
 
 // mirror finds the issue a forge issue mirrors, as sync.md's "Switching
-// from the fork" says: a text in the fork's form from sync's accounts is a
-// mirror, and waits until final; the fork's data, Mirrors, names the
-// others of its group, mirror or original. It joins the first issue found
-// that isn't linked to p yet.
+// from the fork" says: a text in the fork's form waits until final, so
+// that the originals come first; its header and marker id join from sync's
+// accounts only (trusted); the fork's data, Mirrors, names the others of
+// its group, mirror or original. It joins the first issue found that isn't
+// linked to p yet.
 func (r *run) mirror(p *project, fi forge.Issue, final bool) (string, error) {
 	w := unwrap(fi.Body)
-	copied := w.forked() && r.isSync(p, fi.Author)
+	trusted := w.forked() && r.isSync(p, fi.Author)
 	places := slices.Clone(r.mirrors[strings.ToLower(p.key+"#"+fi.Number)])
 	switch {
-	case !copied && len(places) == 0:
+	case !trusted && len(places) == 0:
 		return "new", nil
-	case copied && !final:
+	case w.forked() && !final:
 		return "later", nil
 	}
 	var found []string
-	if copied {
+	if trusted {
 		found = append(found, r.forkIDs[w.forkID])
 		places = append(places, w.place)
 	}
@@ -523,7 +524,7 @@ func (r *run) mirror(p *project, fi forge.Issue, final bool) (string, error) {
 	}
 	for _, id := range found {
 		if _, here := r.issues[id]; here && !p.st.anyLink[id] {
-			if copied && w.forkID != "" {
+			if trusted && w.forkID != "" {
 				r.forkIDs[w.forkID] = id
 			}
 			return id, r.join(p, fi, id)

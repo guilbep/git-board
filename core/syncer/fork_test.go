@@ -201,3 +201,24 @@ func TestForkTextsLoseTheirStart(t *testing.T) {
 		t.Fatalf("edited body %q", got)
 	}
 }
+
+// A copy whose poster isn't one of sync's accounts still waits for its
+// original, and joins it by the fork's data: the original stays as its
+// author wrote it, and sync edits neither.
+func TestForkCopyOfAStrangerWaits(t *testing.T) {
+	t.Parallel()
+	s, a, b := newStore(t), fake.New("example.com/a"), fake.New("example.com/b")
+	b.Add(forge.Issue{Author: forge.Account{ID: "5", Login: "fork-bot"}, Title: "T", Body: forkMarker('1') + "\nB `@bob`"})
+	a.Add(forge.Issue{Author: ann(), Title: "T", Body: "B @bob"})
+	opt := Options{Mirrors: [][]string{{"example.com/a#1", "example.com/b#1"}}}
+	if _, err := Pull(t.Context(), s, opt, b, a); err != nil {
+		t.Fatal(err)
+	}
+	if is := only(t, s); is.Body != "B @bob" {
+		t.Fatalf("body %q, want the original's", is.Body)
+	}
+	syncAll(t, s, a, b)
+	if w := append(a.Writes(), b.Writes()...); len(w) != 0 {
+		t.Fatalf("writes %+v", w)
+	}
+}

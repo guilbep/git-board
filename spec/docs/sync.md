@@ -507,11 +507,12 @@ mirrored group, never a second.
   Last seen keeps the forge's text, and a text sent back to that project
   gets them again, as [the forge's form](#the-forges-form) keeps sync's
   own header.
-- **A mirror** is a forge issue whose body is in the fork's form, from
-  sync's accounts. It waits until every project's other issues are pulled,
-  then joins the issue its group already has: the one pulled from the
-  project and number its header links, or from a copy with the same marker
-  id. With none, it is a new issue.
+- **A mirror** is a forge issue whose body is in the fork's form. It
+  waits until every project's other issues are pulled, whoever posted it,
+  so that the originals come first. Then it joins the issue its group
+  already has: from sync's accounts only, the one pulled from the project
+  and number its header links, or from a copy with the same marker id.
+  With none, it is a new issue.
 - **The fork's data.** git-board gives the run the fork's links, the
   `Mirrors` option: groups of forge issues, by project key (in any case)
   and number, that the fork made one issue. A forge issue in a group joins
