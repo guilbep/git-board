@@ -283,7 +283,7 @@ sync = true
 
 | Key | Type | Default | What it does |
 | --- | --- | --- | --- |
-| `publish-private` | true / false | false | Lets what came from a project that isn't public go to one that is. |
+| `publish-private` | true / false | false | Lets what came from a project that isn't public go to one that is. An internal project (GitLab's, or a GitHub Enterprise's) counts as public when it receives, and as not public when it sends. |
 | `kind` | `github` or `gitlab` | none | The forge. |
 | `project` | string | none | GitHub: `owner/repo`. GitLab: the project's numeric id, on its page under its name, which a renamed group doesn't change. |
 | `host` | string | `github.com`, `gitlab.com` | The forge's host, for GitHub Enterprise or a GitLab instance. |
