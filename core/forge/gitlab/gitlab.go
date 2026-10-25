@@ -155,13 +155,30 @@ func (f *Forge) Me(ctx context.Context) (forge.Account, error) {
 	return a, nil
 }
 
+// projectInfo is what the adapter reads of the project itself.
+type projectInfo struct {
+	Visibility forge.Visibility `json:"visibility"`
+	Path       string           `json:"path_with_namespace"`
+}
+
+func (f *Forge) project(ctx context.Context) (projectInfo, error) {
+	var p projectInfo
+	_, err := f.call(ctx, http.MethodGet, f.p.api, nil, nil, &p)
+	return p, err
+}
+
+// Path is the project's path, with its namespace: what names a project
+// given by its numeric id in its URLs.
+func (f *Forge) Path(ctx context.Context) (string, error) {
+	p, err := f.project(ctx)
+	return p.Path, err
+}
+
 // Visibility is the project's: public, internal (every user of the
 // instance) or private. Another value is an error.
 func (f *Forge) Visibility(ctx context.Context) (forge.Visibility, error) {
-	var p struct {
-		Visibility forge.Visibility `json:"visibility"`
-	}
-	if _, err := f.call(ctx, http.MethodGet, f.p.api, nil, nil, &p); err != nil {
+	p, err := f.project(ctx)
+	if err != nil {
 		return "", err
 	}
 	switch p.Visibility {

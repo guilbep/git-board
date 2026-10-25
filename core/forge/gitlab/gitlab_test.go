@@ -406,3 +406,12 @@ func TestRedirectKeepsTheToken(t *testing.T) {
 	default:
 	}
 }
+
+// Path is the project's path, as GitLab names it.
+func TestPath(t *testing.T) {
+	t.Parallel()
+	_, a := serve(t, fake.New("example.com/p"), "grp/r")
+	if got, err := a.Path(t.Context()); got != "grp/r" || err != nil {
+		t.Fatalf("%q, %v", got, err)
+	}
+}

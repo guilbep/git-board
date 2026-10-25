@@ -249,3 +249,29 @@ func TestSwitchCountsWhatOnlyGitBugHolds(t *testing.T) {
 		t.Errorf("lost comments %q", rep.LostComments)
 	}
 }
+
+// A GitLab URL names its project by path, the settings by id: it goes to
+// the forge whose project's path it is, unless the fork links the issue
+// there by key; a forge whose path isn't known leaves it unplaced.
+func TestPlacesByPath(t *testing.T) {
+	t.Parallel()
+	gl := []gitbugio.NamedForge{{Name: "gitlab", Forge: fake.New("gitlab.example.com/7")}}
+	paths := map[string]string{"gitlab.example.com/7": "grp/r"}
+	for _, c := range []struct {
+		meta     map[string]string
+		paths    map[string]string
+		want     []string
+		unplaced bool
+	}{
+		{map[string]string{"gitlab-url": "https://gitlab.example.com/grp/r/-/issues/5"}, paths, []string{"gitlab.example.com/7#5"}, false},
+		{map[string]string{"gitlab-url": "https://gitlab.example.com/other/proj/-/issues/5"}, paths, nil, false},
+		{map[string]string{"gitlab-url": "https://gitlab.example.com/grp/r/-/issues/5", "sync:gitlab.example.com/7:number": "3"}, paths,
+			[]string{"gitlab.example.com/7#3"}, false},
+		{map[string]string{"gitlab-url": "https://gitlab.example.com/grp/r/-/issues/5"}, nil, nil, true},
+	} {
+		got, linked, unplaced := gitbugio.Places(gitbugio.ForkBug{Metadata: c.meta}, gl, c.paths)
+		if !slices.Equal(got, c.want) || !linked || (unplaced != "") != c.unplaced {
+			t.Errorf("%v: %v, %v, %q", c.meta, got, linked, unplaced)
+		}
+	}
+}

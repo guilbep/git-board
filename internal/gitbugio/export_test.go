@@ -84,3 +84,8 @@ func CommitCounter(b *Backend, c Counter) error {
 	_, err = commitCounter(b.s, c, head)
 	return err
 }
+
+// Places is ForkBug.places for the tests.
+func Places(bug ForkBug, forges []NamedForge, paths map[string]string) ([]string, bool, string) {
+	return bug.places(forges, paths)
+}

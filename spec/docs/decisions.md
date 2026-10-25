@@ -338,7 +338,11 @@ answered in the process, to show what it would create.
 - **The fork's links** are its issues' metadata, from `git bug bug
   --format json`: `sync:<key>:number` and `:url`, and the older
   `github-url` and `gitlab-url`. A GitLab URL names its project by path,
-  the settings by id: it goes to the one GitLab forge on its host.
+  the settings maybe by id: it goes to a forge of its host named by id
+  only when that project's `path_with_namespace`, read once per switch
+  through the adapter's project read, is the URL's, and the issue has no
+  `sync:<key>:` metadata for that forge. A forge whose path can't be read
+  leaves the issue unplaced, and the report says so.
 - **The release records carry over.** Each is a chain of commits under
   `refs/releases/<id>`, each tree an `ops` file of git-board's own four
   operations (types 1 to 4: create, set-notes, comment, yank) and an

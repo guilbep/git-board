@@ -189,10 +189,25 @@ func (b *Backend) Switch(ctx context.Context, run SwitchRun) (SwitchReport, erro
 		}
 	}
 
+	paths := map[string]string{} // forge key -> the path of its project, named by id
+	for _, f := range run.Forges {
+		g, ok := f.Forge.(interface {
+			Path(context.Context) (string, error)
+		})
+		if _, err := strconv.Atoi(strings.TrimPrefix(f.Key(), f.Server()+"/")); ok && err == nil {
+			if p, err := g.Path(ctx); err == nil && p != "" {
+				paths[f.Key()] = p
+			}
+		}
+	}
 	places := map[string][]string{} // fork id -> its places on the run's forges
 	var groups [][]string
 	for _, bug := range fork.Bugs {
-		ps, linked := bug.places(run.Forges)
+		ps, linked, unplaced := bug.places(run.Forges, paths)
+		if unplaced != "" {
+			rep.Lost = append(rep.Lost, short(bug.ID)+" "+bug.Title+": unplaced, as "+unplaced+" may be on a forge of [forges] named by id")
+			continue
+		}
 		places[bug.ID] = ps
 		switch {
 		case !linked:
@@ -307,12 +322,22 @@ func (b *Backend) Switch(ctx context.Context, run SwitchRun) (SwitchReport, erro
 func short(id string) string { return id[:min(len(id), 7)] }
 
 // places are where a fork issue is on the run's forges, as "<key>#<n>"
-// with their keys, from its sync metadata and its forge URLs. linked says
-// it has a link at all.
-func (bug ForkBug) places(forges []NamedForge) (out []string, linked bool) {
+// with their keys, from its sync metadata and its forge URLs; paths are
+// the projects' paths of the forges named by id. linked says it has a link
+// at all; unplaced is a URL that may be on such a forge, whose path isn't
+// known.
+func (bug ForkBug) places(forges []NamedForge, paths map[string]string) (out []string, linked bool, unplaced string) {
 	add := func(p string) {
 		if p != "" && !slices.Contains(out, p) {
 			out = append(out, p)
+		}
+	}
+	synced := map[string]bool{} // forge key, in lower case -> the bug has sync:<key>: metadata
+	for k := range bug.Metadata {
+		if key, ok := strings.CutPrefix(k, "sync:"); ok {
+			if i := strings.LastIndex(key, ":"); i > 0 {
+				synced[strings.ToLower(key[:i])] = true
+			}
 		}
 	}
 	for _, k := range slices.Sorted(maps.Keys(bug.Metadata)) {
@@ -328,38 +353,48 @@ func (bug ForkBug) places(forges []NamedForge) (out []string, linked bool) {
 		} else if strings.HasSuffix(k, "-url") || strings.HasPrefix(k, "sync:") && strings.HasSuffix(k, ":url") {
 			if v != "" && k != "gitlab-base-url" {
 				linked = true
-				add(placeOf(v, forges))
+				p, unknown := placeOf(v, forges, paths, synced)
+				add(p)
+				if unknown {
+					unplaced = v
+				}
 			}
 		}
 	}
-	return out, linked
+	return out, linked, unplaced
 }
 
 // placeOf is the place of a forge issue's URL on the run's forges: the
-// forge whose key the URL's project is, else, for a GitLab URL, whose
-// project is named by path and the settings' by id, the one GitLab forge
-// on that host.
-func placeOf(u string, forges []NamedForge) string {
+// forge whose key the URL's project is; else, for a GitLab URL, which
+// names its project by path, a forge of its host named by id whose path
+// it is, when the bug has no sync:<key>: metadata for it. unknown says
+// such a forge's path isn't known.
+func placeOf(u string, forges []NamedForge, paths map[string]string, synced map[string]bool) (place string, unknown bool) {
 	p, err := url.Parse(u)
 	n := lastNumber(u)
 	if err != nil || n == "" {
-		return ""
+		return "", false
 	}
 	project, _, gitlab := strings.Cut(strings.TrimPrefix(p.Path, "/"), "/-/")
 	project, _, _ = strings.Cut(project, "/issues/")
-	var host []NamedForge
 	for _, f := range forges {
 		if strings.EqualFold(f.Key(), p.Host+"/"+project) {
-			return f.Key() + "#" + n
-		}
-		if f.Server() == p.Host {
-			host = append(host, f)
+			return f.Key() + "#" + n, false
 		}
 	}
-	if gitlab && len(host) == 1 {
-		return host[0].Key() + "#" + n
+	for _, f := range forges {
+		_, err := strconv.Atoi(strings.TrimPrefix(f.Key(), f.Server()+"/"))
+		if !gitlab || f.Server() != p.Host || err != nil || synced[strings.ToLower(f.Key())] {
+			continue
+		}
+		path, ok := paths[f.Key()]
+		if !ok {
+			unknown = true
+		} else if strings.EqualFold(path, project) {
+			return f.Key() + "#" + n, false
+		}
 	}
-	return ""
+	return "", unknown
 }
 
 // rekey keys the project's numbers again by the core's issue ids, in a
