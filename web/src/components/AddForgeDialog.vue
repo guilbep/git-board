@@ -77,7 +77,7 @@
               autocomplete="new-password" data-1p-ignore data-lpignore="true" data-form-type="other"
               :placeholder="forge.token"
             />
-            <p class="gb-hint">{{ forge.name }} needs {{ forge.token }}. Kept in git-bug's credential store in this repository, never shown again.</p>
+            <p class="gb-hint">{{ forge.name }} needs {{ forge.token }}. Kept by git's credential helper, outside the repository, and never shown again.</p>
           </div>
         </fieldset>
 

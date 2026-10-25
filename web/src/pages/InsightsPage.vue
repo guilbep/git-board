@@ -8,7 +8,7 @@
   <main class="gb-page ins">
     <div class="epfl-eyebrow">Insights</div>
     <h1 class="h3">How the work flows</h1>
-    <p class="gb-lead">Replayed from every change git-bug keeps, day by day: nothing to set up, nothing to export.</p>
+    <p class="gb-lead">Replayed from every change git-board keeps, day by day: nothing to set up, nothing to export.</p>
 
     <div class="ins-controls" role="group" aria-label="What to look at">
       <label class="ins-control">

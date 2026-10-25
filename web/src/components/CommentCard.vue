@@ -37,7 +37,7 @@
       </div>
       <p v-else-if="error" class="gb-save-error" role="alert"><GbIcon name="error" small /> <b>Not saved.</b> {{ error }}</p>
       <div class="gb-composer-foot">
-        <span class="gb-hint">{{ busy ? 'Saving…' : 'Saved in git-bug, on the forges at the next sync.' }}</span>
+        <span class="gb-hint">{{ busy ? 'Saving…' : 'Saved in git-board, on the forges at the next sync.' }}</span>
         <button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" :disabled="busy" @click="editing = false">Cancel</button>
         <button v-if="changed" type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" :disabled="busy" @click="saveEdit(true)">Save mine anyway</button>
         <button v-else type="button" class="epfl-btn epfl-btn-primary epfl-btn-sm" :disabled="busy || draft === event.body" @click="saveEdit()">Save</button>

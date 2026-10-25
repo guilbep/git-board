@@ -22,7 +22,7 @@
         <router-link to="/settings/you">Choose who you write as</router-link>
       </p>
       <p v-else-if="error?.code === 'no-login'" class="gb-work-need">
-        Tell git-board your forge login: without it, no role and no field can name you. Run <code>git bug bridge new</code>, or start the server with <code>--me your-login</code>.
+        Tell git-board your forge login: without it, no role and no field can name you. Start the server with <code>--me your-login</code>, or set <code>GIT_BOARD_ME</code>.
       </p>
       <p v-else-if="error" class="gb-error">{{ error.message }}</p>
       <p v-if="agentNote" class="gb-hint" role="status">{{ agentNote }}</p>

@@ -43,7 +43,7 @@
           </li>
         </ul>
         <p v-if="remoteDone" class="gb-note" role="status"><GbIcon name="check" small /> {{ remoteDone }}</p>
-        <p class="gb-note">Pull and Push move issues and people, as <code>git bug pull</code> and <code>git bug push</code> do. Code goes with <code>git push</code>.</p>
+        <p class="gb-note">Pull and Push move issues and people, as <code>git-board sync</code> does. Code goes with <code>git push</code>.</p>
       </section>
 
       <!-- 2: the forges' API -->

@@ -47,7 +47,6 @@ func TestCounter(t *testing.T) {
 		{"GitHub, below start", "ccc", github("2518"), 2518},
 		{"GitHub, at start: not yet", "ddd", github("3052"), 0},
 		{"GitLab's never counts", "eee", []gitbugio.Forge{{Name: "GitLab", Number: "34"}}, 0},
-		{"GitHub, unlinked: not its own", "ggg", []gitbugio.Forge{{Name: "GitHub", Number: "2518", Gone: "unlinked"}}, 0},
 		{"nowhere", "fff", nil, 0},
 	} {
 		if got := c.NumberOf(tc.id, tc.forges); got != tc.want {

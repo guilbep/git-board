@@ -52,7 +52,7 @@ func ref(is gitbugio.Issue) string {
 		return is.Number + "  " + shortID(is.ID)
 	}
 	for _, f := range is.Forges {
-		if f.Number != "" && f.Gone == "" {
+		if f.Number != "" {
 			return "#" + f.Number + "  " + shortID(is.ID)
 		}
 	}

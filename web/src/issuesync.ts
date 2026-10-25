@@ -37,13 +37,6 @@ const forgeNames: Record<string, string> = { github: 'GitHub', gitlab: 'GitLab',
 // a bridge by its forge: "GitLab (gl)"
 export const forgeLabel = (b: { name: string; target: string }) => `${forgeNames[b.target] ?? b.target} (${b.name})`;
 
-// forgeNumbers are an issue's numbers on the forges it is still on: an
-// unlinked or deleted one's isn't its anymore, as the server's
+// forgeNumbers are an issue's numbers on the forges, as the server's
 // HasForgeNumber says
-export const forgeNumbers = (i: { forges?: Forge[] }): string[] => (i.forges ?? []).flatMap((f) => (f.number && !f.gone ? [f.number] : []));
-
-// the sync bridges an issue isn't on, nor was (Link refuses those): where
-// it can be linked to an issue already there
-export function linkable<B extends { name: string }>(bridges: B[], forges: Forge[]): B[] {
-  return bridges.filter((b) => !forges.some((f) => f.bridge === b.name));
-}
+export const forgeNumbers = (i: { forges?: Forge[] }): string[] => (i.forges ?? []).flatMap((f) => (f.number ? [f.number] : []));

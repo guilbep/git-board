@@ -79,7 +79,7 @@ func (is Issue) BareNumber() string {
 		return is.Number[strings.LastIndexByte(is.Number, '-')+1:]
 	}
 	for _, f := range is.Forges {
-		if f.Number != "" && f.Gone == "" {
+		if f.Number != "" {
 			return f.Number
 		}
 	}
@@ -99,7 +99,7 @@ func (is Issue) HasNumber(n string) bool {
 // HasForgeNumber tells whether #n, a forge's own way to name an issue,
 // names it.
 func (is Issue) HasForgeNumber(n string) bool {
-	return n != "" && slices.ContainsFunc(is.Forges, func(f Forge) bool { return f.Number == n && f.Gone == "" })
+	return n != "" && slices.ContainsFunc(is.Forges, func(f Forge) bool { return f.Number == n })
 }
 
 // AllLabels are its own labels and those it inherits: what filters,

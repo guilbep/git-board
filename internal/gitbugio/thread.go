@@ -38,8 +38,6 @@ type Forge struct {
 	Name   string `json:"name"` // GitHub, GitLab, or the host
 	URL    string `json:"url"`
 	Number string `json:"number,omitempty"`
-	// Gone is never set since unlink went (M5); the web app still reads it.
-	Gone string `json:"gone,omitempty"`
 }
 
 // Version is one text of an edited comment, oldest first.

@@ -171,7 +171,7 @@ func prTitle(is gitbugio.Issue) string {
 func prBody(is gitbugio.Issue, repo string) string {
 	body := cmp.Or(is.Number, is.ID[:min(7, len(is.ID))])
 	for _, f := range is.Forges {
-		if f.Gone == "" && f.Number != "" && strings.EqualFold(f.URL, "https://github.com/"+repo+"/issues/"+f.Number) {
+		if f.Number != "" && strings.EqualFold(f.URL, "https://github.com/"+repo+"/issues/"+f.Number) {
 			return body + "\n\nCloses #" + f.Number
 		}
 	}
