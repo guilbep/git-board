@@ -129,8 +129,8 @@ func (h *hub) user(w http.ResponseWriter, r *http.Request, ff forge.Forge) {
 }
 
 func (h *hub) repo(w http.ResponseWriter, r *http.Request, ff forge.Forge) {
-	pub, _ := ff.Public(r.Context())
-	write(w, http.StatusOK, map[string]any{"private": !pub})
+	vis, _ := ff.Visibility(r.Context())
+	write(w, http.StatusOK, map[string]any{"private": vis != forge.Public, "visibility": vis})
 }
 
 func (h *hub) list(w http.ResponseWriter, r *http.Request, _ forge.Forge) {
@@ -513,5 +513,17 @@ func TestRedirectKeepsTheToken(t *testing.T) {
 	case tok := <-got:
 		t.Errorf("redirect followed, Authorization %q", tok)
 	default:
+	}
+}
+
+// The repository's visibility; internal is an Enterprise's.
+func TestVisibility(t *testing.T) {
+	t.Parallel()
+	for _, v := range []forge.Visibility{forge.Public, forge.Internal, forge.Private} {
+		f := fake.New("github.com/r")
+		f.SetVisibility(v)
+		if got, err := newHub(t, f).adapter(t).Visibility(t.Context()); got != v || err != nil {
+			t.Errorf("%s: %s, %v", v, got, err)
+		}
 	}
 }

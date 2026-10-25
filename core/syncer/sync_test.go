@@ -1,6 +1,7 @@
 package syncer
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -328,7 +329,7 @@ func TestPrivateTextNotCreatedOnPublic(t *testing.T) {
 	t.Parallel()
 	s := newStore(t)
 	q, p := fake.New("gitlab.example/q"), fake.New("github.com/p")
-	p.SetPublic(true)
+	p.SetVisibility(forge.Public)
 	if _, err := issue.Create(t.Context(), s, issue.NewCreate("a", "T", "public body")); err != nil {
 		t.Fatal(err)
 	}
@@ -343,5 +344,57 @@ func TestPrivateTextNotCreatedOnPublic(t *testing.T) {
 		if strings.Contains(fi.Body, "SECRET") || strings.Contains(fi.Title, "SECRET") {
 			t.Errorf("private text published: %q / %q", fi.Title, fi.Body)
 		}
+	}
+}
+
+type unreadable struct{ *fake.Forge }
+
+func (unreadable) Visibility(context.Context) (forge.Visibility, error) {
+	return "", errors.New("503")
+}
+
+// A project whose visibility can't be read stops the run: as not public,
+// it would take what is private. The lock goes with the run.
+func TestUnreadableVisibilityStops(t *testing.T) {
+	t.Parallel()
+	s := newStore(t)
+	q, p := fake.New("gitlab.example/q"), fake.New("github.com/p")
+	p.SetVisibility(forge.Public)
+	q.Add(forge.Issue{Author: ann(), Title: "secret", Body: "private"})
+	if _, err := Sync(t.Context(), s, Options{}, q, unreadable{p}); err == nil || !strings.Contains(err.Error(), "github.com/p") {
+		t.Fatalf("err = %v, want github.com/p's", err)
+	}
+	if len(p.All()) != 0 {
+		t.Error("private issue published")
+	}
+	syncAll(t, s, q)
+}
+
+// An internal project, read by every user of its forge, counts as public
+// as a destination and as not public as a source: nothing private goes
+// to it, and nothing of it goes to a public one.
+func TestInternalFailsClosed(t *testing.T) {
+	t.Parallel()
+	s := newStore(t)
+	priv, in, pub := fake.New("gitlab.example/priv"), fake.New("gitlab.example/in"), fake.New("github.com/pub")
+	in.SetVisibility(forge.Internal)
+	pub.SetVisibility(forge.Public)
+	priv.Add(forge.Issue{Author: ann(), Title: "private", Body: "p"})
+	in.Add(forge.Issue{Author: ann(), Title: "inside", Body: "i"})
+	syncAll(t, s, priv, in, pub)
+	titles := func(f *fake.Forge) (out []string) {
+		for _, fi := range f.All() {
+			out = append(out, fi.Title)
+		}
+		return out
+	}
+	if got := titles(in); !reflect.DeepEqual(got, []string{"inside"}) {
+		t.Errorf("internal has %q", got)
+	}
+	if got := titles(pub); len(got) != 0 {
+		t.Errorf("public has %q", got)
+	}
+	if got := titles(priv); !reflect.DeepEqual(got, []string{"private", "inside"}) {
+		t.Errorf("private has %q", got)
 	}
 }

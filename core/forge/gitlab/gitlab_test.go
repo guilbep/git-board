@@ -175,12 +175,13 @@ func TestConfidential(t *testing.T) {
 	}
 }
 
-// Only a public project is public: internal is every user of the instance.
+// The project's visibility, as GitLab says it; another value is an error.
 func TestVisibility(t *testing.T) {
 	t.Parallel()
-	for vis, want := range map[string]bool{"public": true, "internal": false, "private": false} {
+	for _, vis := range []string{"public", "internal", "private", "secret"} {
 		_, a := serve(t, fake.New("example.com/p"), "p", func(s *server) { s.visibility = vis })
-		if got, err := a.Public(t.Context()); err != nil || got != want {
+		got, err := a.Visibility(t.Context())
+		if (vis == "secret") != (err != nil) || err == nil && string(got) != vis {
 			t.Errorf("%s: %v, %v", vis, got, err)
 		}
 	}
@@ -285,10 +286,10 @@ func TestRetries(t *testing.T) {
 	_, err := a.Me(ctx)
 	check("429 twice", err, true, 7*s, 7*s)
 	fail("GET /api/v4/projects/p", 503, 3)
-	_, err = a.Public(ctx)
+	_, err = a.Visibility(ctx)
 	check("503 three times", err, true, s, 2*s, 4*s)
 	fail("GET /api/v4/projects/p", 500, 4)
-	_, err = a.Public(ctx)
+	_, err = a.Visibility(ctx)
 	check("500 four times", err, false, s, 2*s, 4*s)
 	fail("POST /api/v4/projects/p/issues", 502, 1)
 	_, err = a.CreateIssue(ctx, "T", "")
@@ -301,14 +302,14 @@ func TestRetries(t *testing.T) {
 	mu.Lock()
 	spend = true
 	mu.Unlock()
-	_, err = a.Public(ctx) // answered as spent
+	_, err = a.Visibility(ctx) // answered as spent
 	check("spending it", err, true)
-	_, err = a.Public(ctx)
+	_, err = a.Visibility(ctx)
 	if err != nil || len(slept) != 1 || slept[0] < 59*time.Minute {
 		t.Fatalf("after it was spent: %v, slept %v", err, slept)
 	}
 	slept = nil
-	_, err = a.Public(ctx)
+	_, err = a.Visibility(ctx)
 	check("once waited", err, true)
 }
 

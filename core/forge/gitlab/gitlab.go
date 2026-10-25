@@ -181,16 +181,20 @@ func (f *Forge) Me(ctx context.Context) (forge.Account, error) {
 	return a, nil
 }
 
-// Public is true for a public project only: internal is seen by every
-// user of the instance, not by anyone.
-func (f *Forge) Public(ctx context.Context) (bool, error) {
+// Visibility is the project's: public, internal (every user of the
+// instance) or private. Another value is an error.
+func (f *Forge) Visibility(ctx context.Context) (forge.Visibility, error) {
 	var p struct {
-		Visibility string `json:"visibility"`
+		Visibility forge.Visibility `json:"visibility"`
 	}
 	if _, err := f.call(ctx, http.MethodGet, f.p.api, nil, nil, &p); err != nil {
-		return false, err
+		return "", err
 	}
-	return p.Visibility == "public", nil
+	switch p.Visibility {
+	case forge.Public, forge.Internal, forge.Private:
+		return p.Visibility, nil
+	}
+	return "", fmt.Errorf("gitlab: project %s: visibility %q", f.p.path, p.Visibility)
 }
 
 // As takes the account's token from git's credential helper, and checks

@@ -96,7 +96,7 @@ type listed struct {
 type project struct {
 	f      forge.Forge
 	key    string
-	public bool
+	vis    forge.Visibility
 	me     forge.Account
 	st     *state
 	listed map[string]forge.Issue   // forge id -> as read this run
@@ -127,7 +127,9 @@ func start(ctx context.Context, s *gitstore.Store, opt Options, forges []forge.F
 	}
 	for _, f := range forges {
 		p := &project{f: f, key: f.Key(), listed: map[string]forge.Issue{}, tokens: map[string]forge.Forge{}, acc: map[string]forge.Account{}}
-		p.public, _ = f.Public(ctx) // unknown counts as not public
+		if p.vis, err = f.Visibility(ctx); err != nil {
+			return r.report, fmt.Errorf("syncer: %s: visibility: %w", p.key, err)
+		}
 		if p.me, err = f.Me(ctx); err != nil {
 			return r.report, fmt.Errorf("syncer: %s: posting account: %w", p.key, err)
 		}
@@ -248,20 +250,22 @@ func (r *run) stateOf(key string) *state {
 	return st
 }
 
-// isPublic says whether a project of this run is public. Others aren't.
+// isPublic says whether a project of this run is public. Others aren't,
+// nor is an internal one: everyone may not read what came from it.
 func (r *run) isPublic(key string) bool {
 	for _, p := range r.projects {
 		if p.key == key {
-			return p.public
+			return p.vis == forge.Public
 		}
 	}
 	return false
 }
 
-// blocked says whether an operation from origin may not go to p: p is
-// public, and origin names a project that isn't.
+// blocked says whether an operation from origin may not go to p: p is read
+// beyond its members, as a public or an internal project is, and origin
+// names a project that isn't public.
 func (r *run) blocked(p *project, origins ...*oplog.Origin) bool {
-	if !p.public || r.opt.PublishPrivate {
+	if p.vis == forge.Private || r.opt.PublishPrivate {
 		return false
 	}
 	for _, o := range origins {

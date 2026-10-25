@@ -149,15 +149,23 @@ func (f *Forge) Me(ctx context.Context) (forge.Account, error) {
 	return *f.me, nil
 }
 
-// Public is the repository's private flag, negated.
-func (f *Forge) Public(ctx context.Context) (bool, error) {
+// Visibility is the repository's: internal, on an Enterprise, is private
+// with every member of the enterprise as a reader.
+func (f *Forge) Visibility(ctx context.Context) (forge.Visibility, error) {
 	var r struct {
-		Private bool `json:"private"`
+		Private    bool   `json:"private"`
+		Visibility string `json:"visibility"`
 	}
 	if err := f.call(ctx, http.MethodGet, f.s.repo, nil, &r); err != nil {
-		return false, err
+		return "", err
 	}
-	return !r.Private, nil
+	switch {
+	case r.Visibility == "internal":
+		return forge.Internal, nil
+	case r.Private:
+		return forge.Private, nil
+	}
+	return forge.Public, nil
 }
 
 // As looks up the account's token, and takes it only when GitHub says it is

@@ -19,6 +19,15 @@ var (
 	ErrNoToken = errors.New("forge: no token")
 )
 
+// Visibility is who may read a project.
+type Visibility string
+
+const (
+	Public   Visibility = "public"   // anyone
+	Internal Visibility = "internal" // every user signed in to the forge
+	Private  Visibility = "private"  // its members
+)
+
 // Account is a user of a forge.
 type Account struct{ ID, Login string }
 
@@ -57,8 +66,8 @@ type Forge interface {
 	Server() string
 	// Me is the token's owner.
 	Me(ctx context.Context) (Account, error)
-	// Public says whether anyone may read the project.
-	Public(ctx context.Context) (bool, error)
+	// Visibility says who may read the project.
+	Visibility(ctx context.Context) (Visibility, error)
 	// As is the same project through the account's own token, or
 	// ErrNoToken.
 	As(ctx context.Context, a Account) (Forge, error)

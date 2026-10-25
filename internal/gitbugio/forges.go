@@ -229,7 +229,9 @@ var _ forge.Forge = (*counted)(nil)
 func (c *counted) Key() string                                   { return c.f.Key() }
 func (c *counted) Server() string                                { return c.f.Server() }
 func (c *counted) Me(ctx context.Context) (forge.Account, error) { return c.f.Me(ctx) }
-func (c *counted) Public(ctx context.Context) (bool, error)      { return c.f.Public(ctx) }
+func (c *counted) Visibility(ctx context.Context) (forge.Visibility, error) {
+	return c.f.Visibility(ctx)
+}
 
 func (c *counted) As(ctx context.Context, a forge.Account) (forge.Forge, error) {
 	g, err := c.f.As(ctx, a)

@@ -39,7 +39,7 @@ type project struct {
 	mu            sync.Mutex
 	key           string
 	me            forge.Account
-	public        bool
+	vis           forge.Visibility
 	issues        []*entry
 	tokens        map[string]bool
 	next          int
@@ -59,7 +59,7 @@ type Forge struct {
 // account is {1, board}.
 func New(key string) *Forge {
 	me := forge.Account{ID: "1", Login: "board"}
-	return &Forge{p: &project{key: key, me: me, tokens: map[string]bool{}}, as: me}
+	return &Forge{p: &project{key: key, me: me, vis: forge.Private, tokens: map[string]bool{}}, as: me}
 }
 
 func now() int64 { return time.Now().Unix() }
@@ -74,10 +74,10 @@ func (f *Forge) Server() string {
 
 func (f *Forge) Me(context.Context) (forge.Account, error) { return f.as, nil }
 
-func (f *Forge) Public(context.Context) (bool, error) {
+func (f *Forge) Visibility(context.Context) (forge.Visibility, error) {
 	f.p.mu.Lock()
 	defer f.p.mu.Unlock()
-	return f.p.public, nil
+	return f.p.vis, nil
 }
 
 func (f *Forge) As(_ context.Context, a forge.Account) (forge.Forge, error) {
@@ -91,11 +91,11 @@ func (f *Forge) As(_ context.Context, a forge.Account) (forge.Forge, error) {
 
 // The forge's side.
 
-// SetPublic makes the project public, or private.
-func (f *Forge) SetPublic(on bool) {
+// SetVisibility says who may read the project.
+func (f *Forge) SetVisibility(v forge.Visibility) {
 	f.p.mu.Lock()
 	defer f.p.mu.Unlock()
-	f.p.public = on
+	f.p.vis = v
 }
 
 // Grant gives the account a token here.

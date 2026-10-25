@@ -197,10 +197,8 @@ func (s *server) page(w http.ResponseWriter, r *http.Request, items []any) {
 func (s *server) project(w http.ResponseWriter, r *http.Request, view forge.Forge) {
 	vis := s.visibility
 	if vis == "" {
-		vis = "private"
-		if public, _ := view.Public(r.Context()); public {
-			vis = "public"
-		}
+		v, _ := view.Visibility(r.Context())
+		vis = string(v)
 	}
 	reply(w, 200, map[string]any{"id": 1, "path_with_namespace": s.path, "visibility": vis})
 }

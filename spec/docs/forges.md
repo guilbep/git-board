@@ -104,7 +104,9 @@ query for the times REST doesn't give.
 - **Assignees go as logins,** the whole set in one write. The adapter
   reads back what GitHub kept: GitHub leaves out a user without access to
   the repository.
-- **Public** is the repository's `private` flag, negated.
+- **Visibility** is the repository's: `internal`, on an Enterprise, when
+  its `visibility` says so, else private by its `private` flag, else
+  public.
 - **A login can be renamed,** so people are matched by the forge's numeric
   user id, never by login.
 
@@ -161,8 +163,10 @@ query for the times REST doesn't give.
 - **Base URLs compare without their trailing slash.** `https://gitlab.epfl.ch`
   and `https://gitlab.epfl.ch/` are the same server, for projects and for
   tokens.
-- **Only `public` is public.** An `internal` project is seen by every user
-  of the instance, not by anyone.
+- **Visibility** is the project's `public`, `internal` or `private`;
+  another value is an error. An internal project is seen by every user of
+  the instance, not by anyone (see
+  [Nothing private published](sync.md#nothing-private-published)).
 - **Confidential issues are skipped.** GitLab lists them to the project's
   members, flagged `confidential`, and the adapter leaves them out. Reading
   one on its own is an error (see

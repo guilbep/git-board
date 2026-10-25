@@ -578,7 +578,7 @@ func oneIssueAlone(e *env) {
 func theGuard(e *env) {
 	fa, a := e.forge("example.com/private")
 	fb, b := e.forge("example.com/public")
-	fb.SetPublic(true)
+	fb.SetVisibility(forge.Public)
 	fa.Add(forge.Issue{Author: ann, Title: "secret", Comments: []forge.Comment{{Author: bob, Body: "hush"}}})
 	open := e.create("open", "")
 	e.sync(syncer.Options{}, a, b)
