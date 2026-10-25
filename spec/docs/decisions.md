@@ -345,6 +345,14 @@ answered in the process, to show what it would create.
   edit clock. The switch copies them in edit-clock order into the
   `release` kind, their authors the persons with their login, and skips a
   commit that has a record already.
+- **What only git-bug holds is counted, not carried.** The pull rebuilds
+  the comments from the forges, which hold no metadata: the report counts
+  the fork's comments by the prefixes of their metadata's keys (`plan`,
+  `signoff`, `verify`, `cycle`, `review`...; not the fork's own `sync:*`
+  links), from `git bug bug show --format json`, so in-flight issues'
+  approvals, sign-offs and verifications start over. Review comments,
+  which never went to a forge, are counted per issue. `refs/bugs` stays,
+  so a later pass could carry them.
 - **The numbers are keyed again on origin's** `refs/board/seq`, which
   `--apply` makes this clone's, the re-key on top, unpushed. A fetch of
   the numbers (`git-board sync`, `numbers`, the web app's pull) takes

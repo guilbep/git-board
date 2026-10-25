@@ -2,6 +2,7 @@ package gitbugio_test
 
 import (
 	"errors"
+	"maps"
 	"slices"
 	"strings"
 	"testing"
@@ -47,11 +48,14 @@ func switchSetup(t *testing.T) (*gitbugio.Backend, gitbugio.SwitchRun, []*fake.F
 			{ID: forkID('f'), Title: "Elsewhere", Comments: 1, Metadata: map[string]string{"github-url": "https://github.com/x/y/issues/9"}},
 		},
 		Users: []gitbugio.ForkUser{{ID: forkID('9'), Name: "Alice Example", Login: "alice"}},
-		Texts: func(id string) ([]string, error) {
-			if id == forkID('b') {
-				return []string{"two", "c2", "never posted\nsecond line"}, nil
+		Comments: func(id string) ([]gitbugio.ForkComment, error) {
+			texts := map[string][]string{forkID('a'): {"one", "c1"}, forkID('b'): {"two", "c2", "never posted\nsecond line"},
+				forkID('c'): {"local"}, forkID('f'): {"elsewhere"}}[id]
+			var out []gitbugio.ForkComment
+			for _, t := range texts {
+				out = append(out, gitbugio.ForkComment{Message: t})
 			}
-			return nil, errors.New("not asked")
+			return out, nil
 		},
 	}
 	for _, id := range []string{forkID('a'), forkID('b'), forkID('c'), forkID('f')} {
@@ -213,5 +217,35 @@ func TestSwitchKeysOriginsNumbers(t *testing.T) {
 	gitbugiotest.Git(t, dir, "push", "-q", "origin", "refs/board/seq")
 	if err := b.FetchNumbers("origin"); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// The report counts what only git-bug holds: its comments' metadata, by
+// key prefix, and its review comments, per issue, though a comment only
+// the forge has brings the counts level.
+func TestSwitchCountsWhatOnlyGitBugHolds(t *testing.T) {
+	t.Parallel()
+	b, run, fs := switchSetup(t)
+	fs[0].Edit("1", func(i *forge.Issue) {
+		i.Comments = append(i.Comments, forge.Comment{Body: "later, on GitHub", Author: forge.Account{ID: "8", Login: "bob"}})
+	})
+	run.Fork.Bugs[0].Comments = 3
+	run.Fork.Comments = func(id string) ([]gitbugio.ForkComment, error) {
+		if id != forkID('a') {
+			return nil, nil
+		}
+		return []gitbugio.ForkComment{{Message: "one"},
+			{Message: "c1", Metadata: map[string]string{"plan:approve": "abc", "plan:commit": "4f2e9c1", "sync:github.com/o/r:id": "9"}},
+			{Message: "a line note", Metadata: map[string]string{"review:path": "a.go", "review:line": "3"}}}, nil
+	}
+	rep, err := b.Switch(t.Context(), run)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := map[string]int{"plan": 1, "review": 1}; !maps.Equal(rep.LostMeta, want) {
+		t.Errorf("lost metadata %v, want %v", rep.LostMeta, want)
+	}
+	if !slices.Equal(rep.LostComments, []string{"aaaaaaa: 1 review comment, which only git-bug holds"}) {
+		t.Errorf("lost comments %q", rep.LostComments)
 	}
 }
