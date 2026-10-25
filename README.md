@@ -910,6 +910,4 @@ site) — the last planned M2 item, so M2 is now fully shipped. See
 
 ## License
 
-git-board is free software, under the GNU General Public License,
-version 3 or (at your option) any later version: GPL-3.0-or-later, the
-text in [LICENSE](LICENSE). It builds against git-bug, which is GPL-3.0.
+git-board is under the MIT License, the text in [LICENSE](LICENSE).
