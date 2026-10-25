@@ -186,6 +186,19 @@ forge comes from the sync records (`syncer.Records`). The core is about
 6,000 lines of code and 5,400 of tests, blank and comment lines aside.
 `make ci` runs once, at the end of the project.
 
+M6 result, 2026-10-25: the code is done, and the switch awaits guilbep.
+`git-board switch` is a dry run on a mirror of the repository, `--apply`
+to write it; it pulls the forges of `.git-board.toml` (pull only), joins
+the fork's mirrors to their originals by its marker, its header and its
+own links (sync.md's "Switching from the fork"), keys the numbers again,
+carries the release records over, and reports what is lost and what the
+next sync would create. A forge sync refuses a repository still on
+git-bug. The licence scan (`TestLicences`) finds no GPL in the 57
+modules built, and LICENSE is MIT. See the spec's M6 results. Left to
+guilbep: a last sync.10 run, then `git-board switch` on copies of the
+wiki and git-board's own board, then `--apply`, then `git push origin
+refs/board/seq` before anyone's `git-board sync`.
+
 ## Carried to later milestones
 
 What M1's tasks and reviews left for later. The execution ledger isn't kept
@@ -208,10 +221,12 @@ in git, so they are listed here.
   sync entity's order. They can disagree and hide a forge edit. Settle it
   with M3's conflict rules.~~ Done: what git-board took from a forge counts
   as last seen there (`TestTwoPullsOfOneComment`).
-- **M6:** the sync entity is one log that grows forever, reloaded whole on
+- ~~**M6:** the sync entity is one log that grows forever, reloaded whole on
   every run. Plan a snapshot, or the index, before M6's mass first pull
   (a `ponytail:` note in `syncer/state.go`). M3 records a run only when it
-  wrote, so a quiet repository's entity doesn't grow.
+  wrote, so a quiet repository's entity doesn't grow.~~ Measured instead:
+  3,000 issues make 21,000 operations, read in 0.25 s. No snapshot until
+  a repository is many times that.
 - **M4:** the adapters apply their own listing margin (GitLab's 2 minutes),
   pace their writes and retry rate limits; the engine has none of that.
 - **M4:** a forge that rewrites line endings (`\r\n` from a web edit) breaks
@@ -269,10 +284,10 @@ in git, so they are listed here.
   - issues never sent to a forge;
   - local labels never pushed, like co2's from git-board;
   - comments the fork couldn't post;
-  - release records (`refs/releases/`), which no forge holds, and
-    git-board's caches in `.git/git-bug/` (the inbox's follows, keyed by
-    git-bug identities). M6 copies the records or accepts their loss
-    (found in M5's first phase).
+  - ~~release records (`refs/releases/`), which no forge holds~~: the
+    switch copies them into the `release` kind (M6);
+  - git-board's caches in `.git/git-bug/` (the inbox's follows, keyed by
+    git-bug identities).
 
   Before switching a repository, its last sync.10 run must report nothing
   left to send.

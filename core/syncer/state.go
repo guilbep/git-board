@@ -23,8 +23,8 @@ func StateID(forgeKey string) string {
 
 // state is what a sync entity's operations add up to.
 // ponytail: the sync entity is one log that grows forever, loaded whole at
-// every run. M6's mass first pull needs a snapshot of this state, or the
-// index to hold it, before it pulls thousands of issues.
+// every run: 0.25 s for 3,000 issues (M6). A snapshot of this state, or
+// the index, when a repository is many times that.
 type state struct {
 	log      *oplog.Log                   // nil when the entity doesn't exist
 	links    map[string]string            // forge id -> issue id, the effective links

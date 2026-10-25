@@ -294,6 +294,58 @@ The M2 table above, for M3's rows:
 | `AddBridge` ... `SetAssignees` | `forge.Forge`, with `As` for each token owner, and `syncer.Options`; settings and tokens come from git-board (M4, M5) |
 | `GetForges`, `SendForges`, `SyncForges`, `SyncIssue` | `syncer.Pull`, `Push`, `Sync`, and `Options.Issue` for one issue alone |
 
+## M6 results
+
+2026-10-25, at the end of M6's code. The switch itself waits for guilbep.
+
+**The licence scan.** `TestLicences` (`make licences`, and `go test`)
+reads the licence of each module the binary and its tests build, `go list
+-deps -test ./...`, from the module cache, and fails on a GPL, LGPL or
+AGPL. A licence is named by its SPDX identifier, else by the title or
+grant at the start of its file: MPL-2.0 names the GPL further down, as a
+secondary licence. Modules only in the module graph (`go list -m all`) are
+never built, so not scanned. 57 modules, git-board's own included, and
+none GPL:
+
+| Licence | Modules |
+|---|---|
+| MIT | 29: git-board, `BurntSushi/toml`, `yuin/goldmark`, `go.yaml.in/yaml/v3`, the Charm TUI libraries (`bubbletea`, `bubbles`, `lipgloss`, `x/ansi`, `x/term`, `x/cellbuf`, `colorprofile`), `muesli/termenv`, `muesli/ansi`, `muesli/cancelreader`, `mattn/go-isatty`, `mattn/go-runewidth`, `rivo/uniseg`, `clipperhouse/uax29`, `clipperhouse/displaywidth`, `lucasb-eyer/go-colorful`, `xo/terminfo`, `aymanbagabas/go-osc52`, `sahilm/fuzzy`, `aymerick/douceur`, `dustin/go-humanize`, `ncruces/go-strftime`, `kevinburke/ssh_config`, `sergi/go-diff`, `jbenet/go-context` |
+| BSD | 20: `golang.org/x/{crypto,net,sys,text}`, `ProtonMail/go-crypto`, `cloudflare/circl`, `go-git/gcfg`, `gopkg.in/warnings.v0`, `dario.cat/mergo`, `emirpasic/gods`, `google/uuid`, `remyoudompheng/bigfft`, `gorilla/css`, `microcosm-cc/bluemonday`, `atotto/clipboard`, `spf13/pflag`, `modernc.org/{libc,mathutil,memory,sqlite}` |
+| Apache-2.0 | 7: `go-git/go-git`, `go-git/go-billy`, `pjbgf/sha1cd`, `golang/groupcache`, `skeema/knownhosts`, `xanzy/ssh-agent`, `spf13/cobra` |
+| BSD-3-Clause and MPL-2.0 | 1: `cyphar/filepath-securejoin` |
+
+`modernc.org/sqlite` also carries SQLite's public-domain dedication, an
+MIT file for `sqlite-vec`, and a third-party notice; `modernc.org/memory`
+a logo's link. LICENSE is now MIT, copyright guilbep, 2026, and the web
+package's `license` field with it. The web app's npm packages, built into
+`web/dist` and embedded, aren't in the scan.
+
+**The switch** (`git-board switch`): a dry run on a mirror of the
+repository by default, `--apply` to write `refs/board/*` here. It reads
+the fork's data with its binary, read-only, on the mirror; pulls only;
+joins the fork's mirrors to their originals ([Switching from the
+fork](sync.md#switching-from-the-fork)); keys the numbers again; carries
+the release records; and runs the next sync's push on a copy, its writes
+answered in the process, to show what it would create.
+
+- **The fork's form,** seen on guilbep/git-bug-sync-test: its marker,
+  `<!-- git-bug:<64 hex> -->`, alone on a text's first line. No text there
+  has the fork's header: every post was a token owner's. The header is
+  matched as the brief gives it, in italics with a `[key#n](url)` link.
+- **The fork's links** are its issues' metadata, from `git bug bug
+  --format json`: `sync:<key>:number` and `:url`, and the older
+  `github-url` and `gitlab-url`. A GitLab URL names its project by path,
+  the settings by id: it goes to the one GitLab forge on its host.
+- **The release records carry over.** Each is a chain of commits under
+  `refs/releases/<id>`, each tree an `ops` file of git-board's own four
+  operations (types 1 to 4: create, set-notes, comment, yank) and an
+  edit clock. The switch copies them in edit-clock order into the
+  `release` kind, their authors the persons with their login, and skips a
+  commit that has a record already.
+- **The sync entity needs no snapshot yet.** A pull of 3,000 fake issues,
+  two comments each, makes 21,000 operations: `loadState` reads them in
+  0.25 s, `Records` in 0.20 s, and a second pull takes 2.3 s (M4 Pro).
+
 [prd]: https://github.com/guilbep/git-board/blob/main/docs/prd/core.md
 [decision]: https://github.com/guilbep/git-board/blob/main/docs/prd/core.md#the-decision
 [rules]: https://github.com/guilbep/git-board/blob/main/docs/prd/core.md#rules

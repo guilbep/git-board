@@ -43,8 +43,8 @@ func Links(s *gitstore.Store) (map[string][]Link, error) {
 }
 
 // Records is Links with each link's record.
-// ponytail: folds every sync entity whole, as a run does; M6's snapshot
-// serves this too.
+// ponytail: folds every sync entity whole, as a run does; a snapshot of
+// the state would serve this too.
 func Records(s *gitstore.Store) (map[string][]Record, error) {
 	ids, err := oplog.List(s, "sync")
 	if err != nil {
