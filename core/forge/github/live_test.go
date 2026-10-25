@@ -72,11 +72,18 @@ func TestLive(t *testing.T) {
 	if r := run(); r.Posted != 1 {
 		t.Fatalf("posted %d issues, want 1", r.Posted)
 	}
-	list, err := a.Issues(ctx, start)
-	if err != nil {
-		t.Fatal(err)
+	// GitHub's since listing trails a new issue by a few seconds.
+	var list []forge.Issue
+	i := -1
+	for try := 0; i < 0 && try < 15; try++ {
+		if try > 0 {
+			time.Sleep(2 * time.Second)
+		}
+		if list, err = a.Issues(ctx, start); err != nil {
+			t.Fatal(err)
+		}
+		i = slices.IndexFunc(list, func(fi forge.Issue) bool { return fi.Title == title })
 	}
-	i := slices.IndexFunc(list, func(fi forge.Issue) bool { return fi.Title == title })
 	if i < 0 {
 		t.Fatalf("%q isn't on GitHub", title)
 	}
