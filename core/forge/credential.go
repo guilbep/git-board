@@ -2,6 +2,7 @@ package forge
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -25,29 +26,46 @@ func Credential(ctx context.Context, action, in string) (string, error) {
 	cmd.WaitDelay = time.Second // a helper git started may keep the output open
 	out, err := cmd.Output()
 	if err != nil {
+		if ctx.Err() != nil {
+			err = ctx.Err() // the timeout's
+		}
 		return "", fmt.Errorf("git credential %s: %w", action, err)
 	}
 	return string(out), nil
 }
 
-// Password is what git's credential helper holds for login on host, or
-// ErrNoToken.
+// Password is what git's credential helper holds for login on host, else
+// for the host alone, as a keychain's entry without a username is: a
+// token's owner is checked where it matters (As). A helper that timed out
+// isn't asked again. ErrNoToken for none.
 func Password(ctx context.Context, scheme, host, login string) (string, error) {
 	if strings.ContainsAny(scheme+host+login, "\r\n\x00") {
 		return "", ErrNoToken
 	}
+	t, err := fill(ctx, scheme, host, login)
+	if t == "" && login != "" && !errors.Is(err, context.DeadlineExceeded) {
+		t, _ = fill(ctx, scheme, host, "")
+	}
+	if t == "" {
+		return "", ErrNoToken
+	}
+	return t, nil
+}
+
+// fill is the password git credential fill answers, "" for none.
+func fill(ctx context.Context, scheme, host, login string) (string, error) {
 	in := "protocol=" + scheme + "\nhost=" + host + "\n"
 	if login != "" {
 		in += "username=" + login + "\n"
 	}
 	out, err := Credential(ctx, "fill", in+"\n")
 	if err != nil {
-		return "", ErrNoToken
+		return "", err
 	}
 	for line := range strings.Lines(out) {
 		if v, ok := strings.CutPrefix(strings.TrimRight(line, "\r\n"), "password="); ok && v != "" {
 			return v, nil
 		}
 	}
-	return "", ErrNoToken
+	return "", nil
 }

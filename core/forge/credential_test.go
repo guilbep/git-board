@@ -43,3 +43,31 @@ esac
 		t.Fatalf("waited %v for a helper that hangs", d)
 	}
 }
+
+// A login the helper holds no entry for gets the host's entry without a
+// username, as a keychain keeps one; a helper with neither gives none.
+// Serial: it sets the environment.
+func TestCredentialHostOnly(t *testing.T) {
+	helper := filepath.Join(t.TempDir(), "helper")
+	script := `#!/bin/sh
+[ "$1" = get ] || exit 0
+case "$(cat)" in
+*username=*) ;;
+*host=keychain*) printf 'username=token\npassword=host-only\n' ;;
+esac
+`
+	if err := os.WriteFile(helper, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for k, v := range map[string]string{"GIT_CONFIG_COUNT": "2",
+		"GIT_CONFIG_KEY_0": "credential.helper", "GIT_CONFIG_VALUE_0": "",
+		"GIT_CONFIG_KEY_1": "credential.helper", "GIT_CONFIG_VALUE_1": helper} {
+		t.Setenv(k, v)
+	}
+	if got, err := Password(t.Context(), "https", "keychain.example.test", "guilbep"); got != "host-only" || err != nil {
+		t.Fatalf("got %q, %v", got, err)
+	}
+	if _, err := Password(t.Context(), "https", "other.example.test", "guilbep"); !errors.Is(err, ErrNoToken) {
+		t.Fatalf("err = %v, want ErrNoToken", err)
+	}
+}

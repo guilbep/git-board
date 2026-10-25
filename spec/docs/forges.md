@@ -25,6 +25,11 @@ git-board's settings, and the people who have a token of their own there
     printf 'protocol=https\nhost=gitlab.epfl.ch\nusername=guilbep\n\n' | git credential fill
     ```
 
+    A helper with nothing for that username is asked once more without
+    it, as a keychain keeps a host's token without one, unless the first
+    call timed out. A person's token counts only when the forge says it
+    is theirs.
+
 - **The credential helper never prompts.** Each call to it, `fill` and
   `approve` alike, runs with `GIT_TERMINAL_PROMPT=0`, an empty
   `GIT_ASKPASS` and `GCM_INTERACTIVE=never` (Git Credential Manager's sign-in
