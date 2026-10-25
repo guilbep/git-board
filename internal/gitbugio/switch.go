@@ -145,11 +145,29 @@ func (b *Backend) Switch(ctx context.Context, run SwitchRun) (SwitchReport, erro
 	if _, err := os.Stat(filepath.Join(b.s.CommonDir(), "board", "sync.lock")); err == nil {
 		block("a forge sync runs, or left board/sync.lock in the git directory")
 	}
+	// the numbers are keyed again on origin's: this clone's may be behind,
+	// or hold an earlier --apply's that never reached origin
+	theirs := gitstore.ZeroHash
+	if b.checkRemote(NumbersRemote) == nil {
+		var err error
+		if theirs, err = b.remoteSeq(NumbersRemote); err != nil {
+			return rep, err
+		}
+	}
 	scratch, done, err := b.scratch(ctx)
 	if err != nil {
 		return rep, err
 	}
 	defer done()
+	if theirs != gitstore.ZeroHash {
+		ours, err := scratch.Ref(seqRef)
+		if err == nil && ours != theirs {
+			err = scratch.UpdateRef(ctx, seqRef, theirs, ours)
+		}
+		if err != nil {
+			return rep, err
+		}
+	}
 
 	fork := Fork{Texts: func(string) ([]string, error) { return nil, nil }}
 	if bugs, err := b.s.Refs("refs/bugs/"); err != nil {
@@ -267,6 +285,11 @@ func (b *Backend) Switch(ctx context.Context, run SwitchRun) (SwitchReport, erro
 	}
 	if !run.Apply || len(rep.Blockers) > 0 && !run.Force {
 		return rep, nil
+	}
+	if theirs != gitstore.ZeroHash {
+		if err := b.setSeq(theirs); err != nil { // the copy's numbers follow on from origin's
+			return rep, err
+		}
 	}
 	if _, err := b.run(nil, "fetch", "--no-write-fetch-head", "--quiet", scratch.CommonDir(), "refs/board/*:refs/board/*"); err != nil {
 		return rep, fmt.Errorf("applying the switch: %w", err)

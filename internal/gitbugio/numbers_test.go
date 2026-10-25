@@ -382,3 +382,39 @@ func pushed(t *testing.T, b *gitbugio.Backend) {
 		t.Fatal(err)
 	}
 }
+
+// A counter ahead of origin's, as switch --apply leaves it until its push,
+// isn't taken back by a fetch: that would drop the re-key, and the next
+// numbering would give the switched issues new numbers.
+func TestFetchKeepsNumbersOriginHasnt(t *testing.T) {
+	t.Parallel()
+	mine, _ := gitbugiotest.NewPair(t)
+	old := gitbugiotest.NewIssue(t, mine, "Old")
+	if err := mine.InitNumbers("origin", "CO2", 3052); err != nil {
+		t.Fatal(err)
+	}
+	pushed(t, mine)
+	if n, err := mine.NumberIssues("origin"); n != 1 || err != nil {
+		t.Fatal(n, err)
+	}
+	nu := gitbugiotest.NewIssue(t, mine, "New") // the switch's issue for old
+	c, _, _ := mine.Counter()
+	c.ByID[nu] = c.ByID[old]
+	delete(c.ByID, old)
+	if err := gitbugio.CommitCounter(mine, c); err != nil {
+		t.Fatal(err)
+	}
+	if err := mine.FetchNumbers("origin"); !errors.Is(err, gitbugio.ErrNumbersAhead) {
+		t.Fatalf("err = %v, want ErrNumbersAhead", err)
+	}
+	if _, err := mine.NumberIssues("origin"); !errors.Is(err, gitbugio.ErrNumbersAhead) {
+		t.Fatalf("numbering: err = %v, want ErrNumbersAhead", err)
+	}
+	if c2, _, _ := mine.Counter(); c2.ByID[nu] != 3052 {
+		t.Fatalf("the re-key is gone: %v", c2.ByID)
+	}
+	gitbugiotest.Git(t, mine.Store().CommonDir(), "push", "-q", "origin", "refs/board/seq")
+	if err := mine.FetchNumbers("origin"); err != nil {
+		t.Fatal(err)
+	}
+}

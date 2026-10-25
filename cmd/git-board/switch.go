@@ -29,15 +29,17 @@ By default it is a dry run, on a copy of the repository: it pulls (never
 pushes), joins the mirrors git-bug posted to their originals, keys the
 project's numbers again, carries the release records over, then counts
 what the next sync would write to the forges, every write answered
-without being made. It writes nothing here, nor on any forge.
+without being made. It writes nothing here but origin's numbers, fetched,
+and nothing on any forge.
 
 --apply does the same, then writes the copy's refs/board/* here. It
 never deletes refs/bugs and never pushes. It refuses when the report has
 a blocker, unless --force.
 
-The numbers are keyed again from this clone's refs/board/seq: run
-git-board numbers first, and push refs/board/seq right after --apply,
-before any git-board sync takes origin's numbers back.
+The numbers are keyed again on origin's refs/board/seq, which --apply
+makes this clone's. Push it right after: git push origin refs/board/seq.
+Until then, git-board sync and git-board numbers refuse, as this clone
+holds numbers origin hasn't.
 
 git-bug's binary reads its own data, on the copy: --git-bug names it.`,
 		Example: `  git-board switch                     # the dry run, and its report
@@ -106,7 +108,6 @@ func printSwitch(out io.Writer, rep gitbugio.SwitchReport, apply bool) {
 	}
 	if !apply {
 		fmt.Fprintln(out, "A dry run, on a copy: nothing is written here (--apply writes it), and nothing on a forge.")
-		fmt.Fprintln(out, "Before --apply: git-board numbers, so that the numbers here are origin's.")
 	}
 	p := rep.Pulled
 	fmt.Fprintf(out, "Pulled: %d issues made, %d mirrors joined to their original's; %d issues on two forges or more.\n",
@@ -137,9 +138,11 @@ func printSwitch(out io.Writer, rep gitbugio.SwitchReport, apply bool) {
 	}
 	if rep.Applied {
 		fmt.Fprintln(out, "Applied: refs/board/* written; refs/bugs/* kept; nothing pushed.")
-		r := gitbugio.NumbersRemote
-		fmt.Fprintf(out, "Next: git push %s refs/board/seq, before any git-board sync, which would take %s's numbers back.\n", r, r)
-		fmt.Fprintln(out, "  If git refuses that push, don't sync: run git-board numbers, then git-board switch --apply again.")
-		fmt.Fprintln(out, "  Then git-board sync, once every clone runs this git-board.")
+		if rep.Numbers > 0 {
+			r := gitbugio.NumbersRemote
+			fmt.Fprintf(out, "Next: git push %s refs/board/seq. Until then, git-board sync and numbers refuse: this clone has numbers %s hasn't.\n", r, r)
+			fmt.Fprintln(out, "  If git refuses that push, run git-board switch --apply again: it keys origin's numbers again.")
+		}
+		fmt.Fprintln(out, "Then git-board sync, once every clone runs this git-board.")
 	}
 }

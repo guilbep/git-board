@@ -73,3 +73,14 @@ func WriteForkRelease(b *Backend, name string, ops ...string) error {
 	}
 	return b.s.UpdateRef(ctx, "refs/releases/"+name, parents[0], gitstore.ZeroHash)
 }
+
+// CommitCounter commits c on refs/board/seq's head, unpushed, as switch
+// --apply's re-key does.
+func CommitCounter(b *Backend, c Counter) error {
+	head, err := b.s.Ref(seqRef)
+	if err != nil {
+		return err
+	}
+	_, err = commitCounter(b.s, c, head)
+	return err
+}

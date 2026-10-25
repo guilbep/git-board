@@ -44,7 +44,8 @@ func TestSwitchCommand(t *testing.T) {
 		t.Fatalf("the dry run wrote %v", got)
 	}
 	out, err = execute(t, []string{"switch", "--apply"})
-	if err != nil || !strings.Contains(out, "Applied") || !strings.Contains(out, "git push origin refs/board/seq") {
+	if err != nil || !strings.Contains(out, "Applied") || !strings.Contains(out, "Then git-board sync") ||
+		strings.Contains(out, "git push origin refs/board/seq") { // no numbers to push
 		t.Fatalf("apply: %v\n%s", err, out)
 	}
 	if got := bugTitles(t, dir); len(got) != 1 || got[0] != "From GitHub" {

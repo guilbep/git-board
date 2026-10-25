@@ -187,3 +187,31 @@ func TestSwitchWithoutForges(t *testing.T) {
 		t.Fatalf("%+v, %v", rep, err)
 	}
 }
+
+// --apply keys origin's numbers again, not this clone's: here, numbers an
+// earlier --apply left unpushed. Until the push, a fetch keeps them.
+func TestSwitchKeysOriginsNumbers(t *testing.T) {
+	t.Parallel()
+	b, run, _ := switchSetup(t)
+	dir := b.Store().CommonDir()
+	gitbugiotest.Git(t, dir, "remote", "add", "origin", gitbugiotest.Repo(t, true))
+	gitbugiotest.Git(t, dir, "push", "-q", "origin", "refs/board/seq")
+	if err := gitbugio.WriteCounter(b, []byte("prefix GB\nstart 5\n5 "+forkID('a')+"\n6 "+forkID('b')+"\n7 "+forkID('c')+"\n8 "+forkID('z')+"\n")); err != nil {
+		t.Fatal(err)
+	}
+	run.Apply, run.Force = true, true
+	if rep, err := b.Switch(t.Context(), run); err != nil || !rep.Applied || rep.Numbers != 2 {
+		t.Fatalf("%+v, %v", rep, err)
+	}
+	c, _, err := b.Counter()
+	if err != nil || len(c.ByID) != 3 || c.ByID[forkID('z')] != 0 || c.ByID[forkID('c')] != 7 {
+		t.Fatalf("counter %v, %v", c.ByID, err)
+	}
+	if err := b.FetchNumbers("origin"); !errors.Is(err, gitbugio.ErrNumbersAhead) {
+		t.Fatalf("err = %v, want ErrNumbersAhead", err)
+	}
+	gitbugiotest.Git(t, dir, "push", "-q", "origin", "refs/board/seq")
+	if err := b.FetchNumbers("origin"); err != nil {
+		t.Fatal(err)
+	}
+}

@@ -345,6 +345,13 @@ answered in the process, to show what it would create.
   edit clock. The switch copies them in edit-clock order into the
   `release` kind, their authors the persons with their login, and skips a
   commit that has a record already.
+- **The numbers are keyed again on origin's** `refs/board/seq`, which
+  `--apply` makes this clone's, the re-key on top, unpushed. A fetch of
+  the numbers (`git-board sync`, `numbers`, the web app's pull) takes
+  origin's only when this clone's is behind it or the same, and otherwise
+  refuses: taking it back would drop the re-key, and the next numbering
+  would give every switched issue a new number. So after `--apply`, `git
+  push origin refs/board/seq`; if git refuses it, `--apply` again.
 - **The sync entity needs no snapshot yet.** A pull of 3,000 fake issues,
   two comments each, makes 21,000 operations: `loadState` reads them in
   0.25 s, `Records` in 0.20 s, and a second pull takes 2.3 s (M4 Pro).

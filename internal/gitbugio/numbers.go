@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"maps"
+	"os/exec"
 	"regexp"
 	"slices"
 	"strconv"
@@ -168,15 +169,42 @@ func (b *Backend) counter() *Counter {
 	return &c
 }
 
-// FetchNumbers brings the remote's counter and makes it this clone's: a
-// clone never holds numbers the remote hasn't, as numbering pushes at once.
-// A remote without one is no error: the project doesn't number its issues.
+// ErrNumbersAhead: this clone's counter holds numbers the remote hasn't,
+// which taking the remote's would drop: switch --apply's, until
+// refs/board/seq is pushed, or a numbering killed before its push.
+var ErrNumbersAhead = errors.New("refs/board/seq has numbers the remote hasn't")
+
+// FetchNumbers brings the remote's counter and makes it this clone's, when
+// this clone's is behind it or the same: numbering pushes at once. It
+// refuses one ahead, or apart (ErrNumbersAhead). A remote without one is no
+// error: the project doesn't number its issues.
 func (b *Backend) FetchNumbers(remote string) error {
 	theirs, err := b.remoteSeq(remote)
 	if err != nil || theirs == gitstore.ZeroHash {
 		return err
 	}
+	ours, err := b.s.Ref(seqRef)
+	if err != nil {
+		return err
+	}
+	if ok, err := b.behind(ours, theirs); err != nil || !ok {
+		return cmp.Or(err, fmt.Errorf("%w: git push %s %s first; or, to drop them, git update-ref %s %s",
+			ErrNumbersAhead, remote, seqRef, seqRef, seqCopy(remote)))
+	}
 	return b.setSeq(theirs)
+}
+
+// behind says whether ours is theirs or one of its ancestors: taking
+// theirs then drops nothing.
+func (b *Backend) behind(ours, theirs gitstore.Hash) (bool, error) {
+	if ours == gitstore.ZeroHash || ours == theirs {
+		return true, nil
+	}
+	_, err := b.run(nil, "merge-base", "--is-ancestor", ours.String(), theirs.String())
+	if ee := (*exec.ExitError)(nil); errors.As(err, &ee) && ee.ExitCode() == 1 {
+		return false, nil
+	}
+	return err == nil, err
 }
 
 // remoteSeq fetches the remote's counter and says where it is: ZeroHash
