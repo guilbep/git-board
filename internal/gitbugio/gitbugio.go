@@ -323,6 +323,9 @@ type view struct {
 	persons map[string]*people.Person
 }
 
+// ponytail: folds every sync entity on each call, cheap while they are
+// small; cache by the sync refs' heads once M5's second phase pulls real
+// projects into them.
 func (b *Backend) view() (view, error) {
 	links, err := syncer.Links(b.s)
 	if err != nil {

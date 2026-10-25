@@ -245,7 +245,11 @@ in git, so they are listed here.
 - **What lives only in git-bug is lost at the switch:**
   - issues never sent to a forge;
   - local labels never pushed, like co2's from git-board;
-  - comments the fork couldn't post.
+  - comments the fork couldn't post;
+  - release records (`refs/releases/`), which no forge holds, and
+    git-board's caches in `.git/git-bug/` (the inbox's follows, keyed by
+    git-bug identities). M6 copies the records or accepts their loss
+    (found in M5's first phase).
 
   Before switching a repository, its last sync.10 run must report nothing
   left to send.
