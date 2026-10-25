@@ -35,11 +35,15 @@ type pullsResponse struct {
 
 // github is GitHub's API as the user: their login and token.
 func (s *apiServer) github() (*ghpr.Client, string, error) {
-	login, token, err := s.b.GitHubToken()
+	token := s.githubToken
+	if token == nil {
+		token = s.b.GitHubToken
+	}
+	login, tok, err := token()
 	if err != nil {
 		return nil, login, err
 	}
-	return &ghpr.Client{API: s.githubAPI, Token: token}, login, nil
+	return &ghpr.Client{API: s.githubAPI, Token: tok}, login, nil
 }
 
 // onOrigin are the issue's branches origin has, by name.

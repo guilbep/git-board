@@ -90,6 +90,9 @@ type apiServer struct {
 	// githubAPI is GitHub's API for the PR gate (pulls.go): "" is
 	// https://api.github.com; tests, a fake
 	githubAPI string
+	// githubToken is who opens and merges pull requests, and their token:
+	// nil, the backend's (Backend.GitHubToken)
+	githubToken func() (login, token string, err error)
 	// pulls is each branch's PR as the cycle last read it (cycle.go)
 	pulls pullCache
 

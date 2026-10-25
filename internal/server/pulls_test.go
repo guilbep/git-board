@@ -3,6 +3,7 @@ package server
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -126,12 +127,17 @@ func gateRepo(t *testing.T, url string, withToken bool) (*apiServer, *fakeGitHub
 		t.Fatal(err)
 	}
 	gitbugiotest.SetMyLogin(t, b, "dev")
-	if withToken {
-		t.Skip("M5 phase 2: tokens")
-	}
 	id := gitbugiotest.NewImportedIssue(t, b, "[BUG](Equipment) Crash on save (#2518)", "https://github.com/o/r/issues/2518")
 	gh := newFakeGitHub(t)
-	return &apiServer{cfg: &config.Config{}, b: b, me: "guilbep", githubAPI: gh.URL, gitDir: filepath.Join(dir, ".git"), root: dir}, gh, id
+	s := &apiServer{cfg: &config.Config{}, b: b, me: "guilbep", githubAPI: gh.URL, gitDir: filepath.Join(dir, ".git"), root: dir}
+	// ponytail: the token a credential helper gives, in M5's second phase
+	s.githubToken = func() (string, string, error) {
+		if !withToken {
+			return "dev", "", errors.New("no GitHub token for dev")
+		}
+		return "dev", "tok-dev", nil
+	}
+	return s, gh, id
 }
 
 func serve(t *testing.T, s *apiServer) *httptest.Server {
@@ -194,7 +200,16 @@ func TestPullsWithoutGitHub(t *testing.T) {
 }
 
 func TestPullsNoToken(t *testing.T) {
-	t.Skip("M5 phase 2: tokens")
+	s, _, id := gateRepo(t, "https://github.com/o/r.git", false)
+	resp, err := http.Get(serve(t, s).URL + "/api/issues/" + id[:8] + "/pulls")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusBadGateway || !strings.Contains(string(body), "no GitHub token for dev") {
+		t.Errorf("%d %s", resp.StatusCode, body)
+	}
 }
 
 func TestOpenPull(t *testing.T) {
