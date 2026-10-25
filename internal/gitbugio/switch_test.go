@@ -275,3 +275,45 @@ func TestPlacesByPath(t *testing.T) {
 		}
 	}
 }
+
+// The switch writes its mark, refs/board/switched, which a forge sync
+// waits for: a sync entity, as a trial left one, isn't it. The mark goes
+// out with the entities, and switches the other clones.
+func TestSwitchMarkTravels(t *testing.T) {
+	t.Parallel()
+	mine, theirs := gitbugiotest.NewPair(t)
+	for _, b := range []*gitbugio.Backend{mine, theirs} {
+		c, err := gitbugio.StoreCommit(b, "bug")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := b.Store().UpdateRef(t.Context(), "refs/bugs/"+forkID('a'), c, gitstore.ZeroHash); err != nil {
+			t.Fatal(err)
+		}
+	}
+	trial, _ := gitbugio.StoreCommit(mine, "trial")
+	if err := mine.Store().UpdateRef(t.Context(), "refs/board/sync/"+forkID('t'), trial, gitstore.ZeroHash); err != nil {
+		t.Fatal(err)
+	}
+	if err := mine.Switched(); !errors.Is(err, gitbugio.ErrNotSwitched) {
+		t.Fatalf("a trial's sync entity: %v, want ErrNotSwitched", err)
+	}
+	run := gitbugio.SwitchRun{Forges: []gitbugio.NamedForge{{Name: "gh", Forge: fake.New("github.com/o/r")}},
+		Fork: &gitbugio.Fork{Comments: func(string) ([]gitbugio.ForkComment, error) { return nil, nil }}, Apply: true, Force: true}
+	if rep, err := mine.Switch(t.Context(), run); err != nil || !rep.Applied {
+		t.Fatalf("%+v, %v", rep, err)
+	}
+	if err := mine.Switched(); err != nil {
+		t.Fatal(err)
+	}
+	pushed(t, mine)
+	if err := theirs.Switched(); !errors.Is(err, gitbugio.ErrNotSwitched) {
+		t.Fatalf("before a pull: %v", err)
+	}
+	if err := theirs.Pull("origin"); err != nil {
+		t.Fatal(err)
+	}
+	if err := theirs.Switched(); err != nil {
+		t.Fatalf("after a pull: %v", err)
+	}
+}

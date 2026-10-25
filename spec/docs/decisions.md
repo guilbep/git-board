@@ -349,6 +349,13 @@ answered in the process, to show what it would create.
   edit clock. The switch copies them in edit-clock order into the
   `release` kind, their authors the persons with their login, and skips a
   commit that has a record already.
+- **The switch's mark** is `refs/board/switched`, which `--apply` writes
+  last: a commit of nothing, at the switch's time. A repository with
+  `refs/bugs` and no mark is still git-bug's: a forge sync refuses it, and
+  so does `git-board sync`, which says to run `git-board switch`. A sync
+  entity, as the trials left, doesn't count. The mark goes to the remote
+  with the entities, and a clone without one takes the remote's when it
+  pulls.
 - **What only git-bug holds is counted, not carried.** The pull rebuilds
   the comments from the forges, which hold no metadata: the report counts
   the fork's comments by the prefixes of their metadata's keys (`plan`,

@@ -556,7 +556,7 @@ func (b *Backend) Push(remote string) (string, error) {
 		return "", err
 	}
 	// a push URL that refuses (a mirror) fails it, and the others took it
-	err := b.s.Push(ctx, remote)
+	err := errors.Join(b.s.Push(ctx, remote), b.pushMark(remote))
 	return "", errors.Join(err, b.s.Fetch(ctx, remote))
 }
 
@@ -566,7 +566,10 @@ func (b *Backend) Fetch(remote string) error {
 	if err := b.checkRemote(remote); err != nil {
 		return err
 	}
-	return b.s.Fetch(ctx, remote)
+	if err := b.s.Fetch(ctx, remote); err != nil {
+		return err
+	}
+	return b.fetchMark(remote)
 }
 
 var remoteName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._/-]*$`)

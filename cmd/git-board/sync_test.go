@@ -157,3 +157,15 @@ func TestSyncNumbers(t *testing.T) {
 		t.Errorf("sync said:\n%s", out.String())
 	}
 }
+
+// A repository whose issues are still git-bug's, in refs/bugs, and that no
+// switch marked, isn't synced: the sync says to run git-board switch.
+func TestSyncWaitsForTheSwitch(t *testing.T) {
+	t.Parallel()
+	path, _ := twoReposWithRemote(t)
+	gitbugiotest.Git(t, path, "update-ref", "refs/bugs/"+strings.Repeat("a", 64), strings.TrimSpace(gitbugiotest.Git(t, path, "hash-object", "-w", "--stdin")))
+	out, err := execute(t, []string{"sync", path})
+	if err == nil || !strings.Contains(out, "run git-board switch") {
+		t.Fatalf("err = %v\n%s", err, out)
+	}
+}

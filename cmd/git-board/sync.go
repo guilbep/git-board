@@ -78,6 +78,9 @@ func syncOne(out io.Writer, path, remote string) error {
 			return fmt.Errorf("pull: %w", err)
 		}
 	}
+	if err := b.Switched(); err != nil {
+		return err
+	}
 	if remote == gitbugio.NumbersRemote {
 		if err := b.FetchNumbers(remote); err != nil {
 			return fmt.Errorf("numbers: %w", err)

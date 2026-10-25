@@ -315,6 +315,9 @@ func (b *Backend) Switch(ctx context.Context, run SwitchRun) (SwitchReport, erro
 	if _, err := b.run(nil, "fetch", "--no-write-fetch-head", "--quiet", scratch.CommonDir(), "refs/board/*:refs/board/*"); err != nil {
 		return rep, fmt.Errorf("applying the switch: %w", err)
 	}
+	if err := b.markSwitched(); err != nil {
+		return rep, fmt.Errorf("applying the switch: %w", err)
+	}
 	rep.Applied = true
 	return rep, nil
 }

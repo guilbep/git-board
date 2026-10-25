@@ -102,7 +102,7 @@ func (b *Backend) SyncIssue(ctx context.Context, run ForgeRun, idPrefix string) 
 type syncWay func(context.Context, *gitstore.Store, syncer.Options, ...forge.Forge) (syncer.Report, error)
 
 func (b *Backend) forgeSync(ctx context.Context, run ForgeRun, way syncWay, issueID string) (syncer.Report, error) {
-	if err := b.switched(); err != nil {
+	if err := b.Switched(); err != nil {
 		return syncer.Report{}, err
 	}
 	see := run.See
@@ -152,19 +152,77 @@ func (b *Backend) forgeSync(ctx context.Context, run ForgeRun, way syncWay, issu
 // ErrNotSwitched: the repository's issues are still the git-bug fork's.
 var ErrNotSwitched = errors.New("this repository's issues are still git-bug's, in refs/bugs: run git-board switch first")
 
-// switched refuses a forge sync on a repository whose issues are in
-// refs/bugs and that the core never pulled: it would pull the fork's
-// mirrors without the fork's links, as issues of their own, and push them
-// back as duplicates.
-func (b *Backend) switched() error {
+// switchedRef is the switch's mark: written last by switch --apply, a
+// commit of nothing at the switch's time. It goes to the remotes with the
+// entities, and a clone without one takes a remote's.
+const switchedRef = "refs/board/switched"
+
+// Switched refuses a repository whose issues are in refs/bugs and that
+// wasn't switched: a forge sync would pull the fork's mirrors without the
+// fork's links, as issues of their own, and push them back as duplicates.
+func (b *Backend) Switched() error {
 	bugs, err := b.s.Refs("refs/bugs/")
 	if err != nil || len(bugs) == 0 {
 		return err
 	}
-	if synced, err := b.s.Refs("refs/board/sync/"); err != nil || len(synced) > 0 {
+	if h, err := b.s.Ref(switchedRef); err != nil || h != gitstore.ZeroHash {
 		return err
 	}
 	return ErrNotSwitched
+}
+
+// markSwitched writes the switch's mark, unless there.
+func (b *Backend) markSwitched() error {
+	if h, err := b.s.Ref(switchedRef); err != nil || h != gitstore.ZeroHash {
+		return err
+	}
+	tree, err := b.s.WriteTree(nil)
+	if err != nil {
+		return err
+	}
+	c, err := b.s.WriteCommit(gitstore.Commit{Tree: tree})
+	if err != nil {
+		return err
+	}
+	return b.s.UpdateRef(ctx, switchedRef, c, gitstore.ZeroHash)
+}
+
+// markCopy is where a remote's mark is fetched to.
+func markCopy(remote string) string { return "refs/board-remotes/" + remote + "/switched" }
+
+// fetchMark takes the remote's mark, for a clone of the fork's issues that
+// has none: a switch on another clone switched this one too.
+func (b *Backend) fetchMark(remote string) error {
+	if err := b.Switched(); !errors.Is(err, ErrNotSwitched) {
+		return err
+	}
+	if _, err := b.run(nil, "fetch", "--no-write-fetch-head", "--quiet", remote, "+"+switchedRef+":"+markCopy(remote)); err != nil {
+		if strings.Contains(err.Error(), "couldn't find remote ref") {
+			return nil
+		}
+		return fmt.Errorf("fetching the switch's mark from %s: %w", remote, err)
+	}
+	theirs, err := b.s.Ref(markCopy(remote))
+	if err != nil || theirs == gitstore.ZeroHash {
+		return err
+	}
+	return b.s.UpdateRef(ctx, switchedRef, theirs, gitstore.ZeroHash)
+}
+
+// pushMark sends the mark to a remote whose copy here isn't it.
+func (b *Backend) pushMark(remote string) error {
+	ours, err := b.s.Ref(switchedRef)
+	if err != nil || ours == gitstore.ZeroHash {
+		return err
+	}
+	theirs, err := b.s.Ref(markCopy(remote))
+	if err != nil || theirs == ours {
+		return err
+	}
+	if _, err := b.run(nil, "push", "--quiet", remote, switchedRef+":"+switchedRef); err != nil {
+		return fmt.Errorf("pushing the switch's mark to %s: %w", remote, err)
+	}
+	return b.s.UpdateRef(ctx, markCopy(remote), ours, theirs)
 }
 
 // isLocal says a comment stays in git-board: a line comment, a reply or a
