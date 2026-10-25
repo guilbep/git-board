@@ -33,9 +33,9 @@ type mediaProxy struct {
 	allowed func(*url.URL) bool
 }
 
-func newMediaProxy(storage gitbugio.Storage, token func(string) string, gitlabHosts []string) *mediaProxy {
+func newMediaProxy(storage gitbugio.Storage, token func(string) string, gitlabHosts func() []string) *mediaProxy {
 	m := &mediaProxy{storage: storage, token: token,
-		allowed: func(u *url.URL) bool { return forgeMedia(u, gitlabHosts) }}
+		allowed: func(u *url.URL) bool { return forgeMedia(u, gitlabHosts()) }}
 	m.client = &http.Client{
 		Timeout: 30 * time.Second,
 		// GitHub redirects to S3; each hop must be a forge image address too

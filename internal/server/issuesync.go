@@ -1,9 +1,13 @@
 package server
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"time"
+
+	"github.com/guilbep/git-board/internal/config"
+	"github.com/guilbep/git-board/internal/gitbugio"
 )
 
 var errIssueDryRunFirst = errors.New("run a dry run of this issue first: it says what the sync would write to the forges")
@@ -17,8 +21,8 @@ type issueSyncResult struct {
 	Bridges map[string]*bridgeTally `json:"bridges"`
 }
 
-// handleIssueSync syncs one issue with every sync bridge (git-bug's
-// SyncIssue): its changes pulled from each forge it is on, then pushed.
+// handleIssueSync syncs one issue with every sync bridge (SyncIssue): its
+// changes pulled from each forge it is on, then pushed.
 // It answers when done, a few calls per forge. A real run needs a clean
 // dry run of that issue in the last 15 minutes, as the full sync does; a
 // full sync running refuses it, and edits wait while it writes.
@@ -47,37 +51,29 @@ func (s *apiServer) handleIssueSync(w http.ResponseWriter, r *http.Request) {
 	}
 	defer done()
 
-	run := s.runIssueSync
-	if run == nil {
-		run = s.b.SyncIssue
-	}
-	results, err := run(r.Context(), req.DryRun, issue.ID)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, err)
-		return
-	}
 	// every sync bridge, those with nothing to say too: the page tells
 	// what a refresh pulling from one forge sends to the others
+	forges := s.syncForges()
 	res := issueSyncResult{DryRun: req.DryRun, Bridges: map[string]*bridgeTally{}}
-	if bridges, err := s.b.SyncBridges(); err == nil {
-		for _, b := range bridges {
-			res.Bridges[b.Name] = &bridgeTally{Lines: []string{}}
+	tally := func(name string) *bridgeTally {
+		if res.Bridges[name] == nil {
+			res.Bridges[name] = &bridgeTally{Lines: []string{}}
 		}
+		return res.Bridges[name]
 	}
-	st := stepper{name: s.issueName, pushTotal: 1}
-	for sr := range results {
-		t := res.Bridges[sr.Bridge]
-		if t == nil {
-			t = &bridgeTally{Lines: []string{}}
-			res.Bridges[sr.Bridge] = t
-		}
-		t.add(sr, req.DryRun)
-		if sr.IsError() {
-			res.Errors++
-		}
-		if step, moved := st.see(sr); moved {
-			s.events.publish(event{Kind: "progress", ID: issue.ID, Step: &step})
-		}
+	for _, f := range forges {
+		tally(f.Name)
+	}
+	run := s.runIssueSync
+	if run == nil {
+		run = s.issueRun
+	}
+	if err := run(r.Context(), forges, req.DryRun, issue.ID, s.tell(req.DryRun, issue.ID, tally, nil)); err != nil {
+		s.forgeMu.Lock()
+		delete(s.issueDry, issue.ID)
+		s.forgeMu.Unlock()
+		writeError(w, http.StatusBadGateway, err)
+		return
 	}
 	for _, t := range res.Bridges {
 		res.Writes += t.To.Issues + t.To.Comments + t.To.Edits + t.To.Changes
@@ -97,4 +93,14 @@ func (s *apiServer) handleIssueSync(w http.ResponseWriter, r *http.Request) {
 		s.events.publish(event{Kind: "issues"})
 	}
 	writeJSON(w, http.StatusOK, res)
+}
+
+// issueRun is the core's sync of one issue, with forges opened for it.
+func (s *apiServer) issueRun(ctx context.Context, forges []config.Forge, dryRun bool, id string, see func(gitbugio.SyncEvent)) error {
+	run, err := s.openRun(ctx, forges, dryRun, see)
+	if err != nil {
+		return err
+	}
+	_, err = s.b.SyncIssue(ctx, run, id)
+	return err
 }

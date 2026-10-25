@@ -129,6 +129,8 @@ func (b *Backend) thread(is *issue.Issue, l *oplog.Log, v view) Thread {
 	}
 	texts := map[string]int{}         // a text's operation id -> its event
 	origins := map[oplog.Origin]int{} // a comment's origin -> its event
+	from := map[int]*oplog.Origin{}   // an event -> where it was pulled from
+	changed := map[int][2][]string{}  // a labels event -> the labels it added and removed
 	labels := map[string]bool{}
 	title := ""
 	for _, e := range l.Entries {
@@ -148,6 +150,7 @@ func (b *Backend) thread(is *issue.Issue, l *oplog.Log, v view) Thread {
 					continue
 				}
 				origins[*e.Origin] = len(th.Events)
+				from[len(th.Events)] = e.Origin
 			}
 			ev.Kind, ev.Body, ev.Meta = "comment", d.Body, maps.Clone(d.Meta)
 			if e.Kind == "create" {
@@ -180,7 +183,8 @@ func (b *Backend) thread(is *issue.Issue, l *oplog.Log, v view) Thread {
 			if len(ev.Added) == 0 && len(ev.Removed) == 0 {
 				continue
 			}
-			ev.Kind, ev.Added, ev.Removed = "labels", b.shown(ev.Added), b.shown(ev.Removed)
+			changed[len(th.Events)] = [2][]string{ev.Added, ev.Removed}
+			ev.Kind, ev.Added, ev.Removed = "labels", b.shown(slices.Clone(ev.Added)), b.shown(slices.Clone(ev.Removed))
 		default:
 			continue
 		}
@@ -200,11 +204,86 @@ func (b *Backend) thread(is *issue.Issue, l *oplog.Log, v view) Thread {
 			e.Meta = nil
 		}
 	}
+	for _, r := range v.records[is.ID] {
+		pending(&th, is, r, from, changed)
+	}
 	return th
 }
 
+// pending marks what hasn't reached the forge of r yet, from its record:
+// a comment neither posted there nor pulled from it; a description or a
+// comment there whose text git-board changed since (EditWas, the forge's);
+// the latest title and status changes, and each label's, when git-board's
+// value isn't the one last seen. A line comment never goes (isLocal).
+// ponytail: compares git-board's texts with the forge's as they are; one
+// that came from another forge, whose #n and @ sync rewrites, shows as an
+// edit waiting.
+func pending(th *Thread, is *issue.Issue, r syncer.Record, from map[int]*oplog.Origin, changed map[int][2][]string) {
+	name := forgeName(r.URL)
+	mark := func(i int) {
+		if e := &th.Events[i]; !slices.Contains(e.Pending, name) {
+			e.Pending = append(e.Pending, name)
+		}
+	}
+	edit := func(e *Event, was string) {
+		e.EditPending = append(e.EditPending, name)
+		if e.EditWas == "" {
+			e.EditWas = was
+		}
+	}
+	title, status := -1, -1
+	last := map[string]int{} // a label -> its last change's event
+	for i := range th.Events {
+		e := &th.Events[i]
+		switch e.Kind {
+		case "created":
+			if was, ok := r.Seen["body"]; ok && was != is.Body {
+				edit(e, was)
+			}
+		case "comment":
+			if isLocal(e.Meta) {
+				continue
+			}
+			fc := r.Posted[e.ID]
+			if o := from[i]; fc == "" && o != nil && syncer.StateID(o.Forge) == r.Forge {
+				fc = strings.TrimPrefix(o.Event, "comment:")
+			}
+			if fc == "" {
+				mark(i)
+			} else if was, ok := r.Seen["comment:"+fc]; ok && was != e.Body {
+				edit(e, was)
+			}
+		case "title":
+			title = i
+		case "status":
+			status = i
+		case "labels":
+			for _, l := range slices.Concat(changed[i][0], changed[i][1]) {
+				last[l] = i
+			}
+		}
+	}
+	if title >= 0 && is.Title != r.Seen["title"] {
+		mark(title)
+	}
+	if status >= 0 && string(is.Status) != r.Seen["status"] {
+		mark(status)
+	}
+	seen := map[string]bool{}
+	for l := range strings.SplitSeq(r.Seen["labels"], "\n") {
+		seen[l] = l != ""
+	}
+	for l, i := range last {
+		if !isAssigneeLabel(l) && slices.Contains(is.Labels, l) != seen[l] {
+			mark(i)
+		}
+	}
+}
+
+func isAssigneeLabel(l string) bool { return strings.HasPrefix(strings.ToLower(l), "assignee:") }
+
 // forgesOf is where an issue is, from its links: each forge by its URL.
-func forgesOf(links []syncer.Link) []Forge {
+func forgesOf(links []syncer.Record) []Forge {
 	var res []Forge
 	for _, l := range links {
 		n := l.Number

@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/guilbep/git-board/core/forge/fake"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/gitbugio"
 	"github.com/guilbep/git-board/internal/gitbugio/gitbugiotest"
@@ -155,7 +156,28 @@ func TestWorkAgents(t *testing.T) {
 }
 
 func TestWorkToSend(t *testing.T) {
-	t.Skip("M5 phase 2: what waits for a forge")
+	t.Parallel()
+	b := gitbugiotest.New(t)
+	ts := newTestServer(t, b, cycleConfig(nil, config.Cycle{}))
+	id := gitbugiotest.NewIssue(t, b, "synced")
+	run := gitbugio.ForgeRun{Forges: []gitbugio.NamedForge{{Name: "gh", Forge: fake.New("github.com/o/r")}}}
+	if _, err := b.SyncForges(t.Context(), run); err != nil {
+		t.Fatal(err)
+	}
+	if res := getWork(t, ts, "me"); res.Pending != 0 || len(res.ToSend) != 0 {
+		t.Fatalf("nothing to send yet: %d %+v", res.Pending, res.ToSend)
+	}
+	if _, err := b.AddComment(id, "not posted"); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(time.Second) // operation times are whole seconds; newest first needs the order
+	if _, err := b.ApplyLabelChange(id, []string{"risk:normal"}, nil); err != nil {
+		t.Fatal(err)
+	}
+	res := getWork(t, ts, "me")
+	if res.Pending != 2 || len(res.ToSend) != 2 || res.ToSend[0].What != "the risk" || res.ToSend[1].What != "a comment" || res.ToSend[0].Issue.ID != id {
+		t.Errorf("to send: %d %+v", res.Pending, res.ToSend)
+	}
 }
 
 // Review Focus 5: no [sprints], no retro clock: the summary says so.

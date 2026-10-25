@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/git-bug/git-bug/bridge/core"
-
+	"github.com/guilbep/git-board/internal/config"
+	"github.com/guilbep/git-board/internal/gitbugio"
 	"github.com/guilbep/git-board/internal/gitbugio/gitbugiotest"
 )
 
@@ -14,31 +14,18 @@ import (
 // run needs that dry run first, and a full sync running refuses it.
 func TestIssueSync(t *testing.T) {
 	t.Parallel()
-	ts, s := newIssueServer(t)
+	ts, s := forgeServer(t, ghForge, glForge)
 	id := gitbugiotest.NewIssue(t, s.b, "one issue")
-	addBridge(t, s, "gh", map[string]string{"target": "github", "owner": "o", "project": "p", "default-login": "bot", "sync": "true"})
-	addBridge(t, s, "gl", map[string]string{"target": "gitlab", "project-id": "1", "base-url": "https://gitlab.example.com/", "default-login": "bot", "sync": "true"})
 	var got []string
-	s.runIssueSync = func(_ context.Context, dryRun bool, bug string, _ ...core.Option) (<-chan core.SyncResult, error) {
-		got = append(got, bug)
-		out := make(chan core.SyncResult, 2)
-		if dryRun {
-			r := core.NewExportNothing("", "would send: 1 comments")
-			out <- core.SyncResult{Bridge: "gh", Export: &r}
-		} else {
-			r := core.NewExportComment("")
-			out <- core.SyncResult{Bridge: "gh", Export: &r}
+	s.runIssueSync = func(_ context.Context, forges []config.Forge, dryRun bool, issue string, see func(gitbugio.SyncEvent)) error {
+		got = append(got, issue)
+		if len(forges) != 2 {
+			t.Errorf("forges %+v, want both", forges)
 		}
-		close(out)
-		return out, nil
+		see(gitbugio.SyncEvent{Forge: "gh", Way: "push", What: "comment", Issue: "1000"})
+		return nil
 	}
-	type result struct {
-		DryRun  bool                    `json:"dry_run"`
-		Writes  int                     `json:"writes"`
-		Errors  int                     `json:"errors"`
-		Bridges map[string]*bridgeTally `json:"bridges"`
-	}
-	var res result
+	var res issueSyncResult
 
 	if code := call(t, "POST", ts.URL+"/api/issues/"+id+"/sync", map[string]bool{"dry_run": false}, nil); code != http.StatusConflict {
 		t.Errorf("a real run before its dry run: %d, want 409", code)

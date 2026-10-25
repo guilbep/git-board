@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/guilbep/git-board/core/forge/fake"
 	"github.com/guilbep/git-board/internal/gitbugio"
 	"github.com/guilbep/git-board/internal/gitbugio/gitbugiotest"
 )
@@ -118,10 +119,6 @@ func TestMe(t *testing.T) {
 	}
 }
 
-func TestForgeToken(t *testing.T) {
-	t.Skip("M5 phase 2")
-}
-
 func TestIdentities(t *testing.T) {
 	t.Parallel()
 	b := gitbugiotest.New(t)
@@ -176,7 +173,55 @@ func TestMyLogin(t *testing.T) {
 // An edit waiting for a forge says what the forge has now: the newest
 // version that reached it, under any number of edits still waiting.
 func TestThreadEditWasIsWhatTheForgesHave(t *testing.T) {
-	t.Skip("M5 phase 2")
+	t.Parallel()
+	b := gitbugiotest.New(t)
+	f := fake.New("github.com/o/r")
+	sync := func() {
+		t.Helper()
+		if _, err := b.SyncForges(t.Context(), run(f)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	id := gitbugiotest.NewIssue(t, b, "synced")
+	comment, _ := b.AddComment(id, "v1")
+	sync()
+	_ = b.EditComment(id, comment, "v2", "")
+	sync()
+	_ = b.EditComment(id, comment, "v3", "")
+	_ = b.EditComment(id, comment, "v4", "")
+
+	th, _ := b.Thread(id)
+	c := th.Events[len(th.Events)-1]
+	if !slices.Equal(c.EditPending, []string{"GitHub"}) || c.EditWas != "v2" || c.Body != "v4" || len(c.Pending) != 0 {
+		t.Errorf("edit pending %v, was %q, body %q, pending %v; want GitHub, v2, v4, none", c.EditPending, c.EditWas, c.Body, c.Pending)
+	}
+	if created := th.Events[0]; len(created.Pending)+len(created.EditPending) != 0 {
+		t.Errorf("the issue, on GitHub already: %+v", created)
+	}
+	// every version says who wrote it
+	for i, v := range c.History {
+		if v.Author.Name == "" || v.Author.Name != c.Author.Name {
+			t.Errorf("version %d by %q, want %q", i, v.Author.Name, c.Author.Name)
+		}
+	}
+	// a rename and a label wait too, until the next sync
+	_ = b.SetTitle(id, "renamed")
+	if _, err := b.ApplyLabelChange(id, []string{"risk:low"}, nil); err != nil {
+		t.Fatal(err)
+	}
+	th, _ = b.Thread(id)
+	for _, e := range th.Events {
+		if (e.Kind == "title" || e.Kind == "labels") && !slices.Equal(e.Pending, []string{"GitHub"}) {
+			t.Errorf("%s pending %v, want GitHub", e.Kind, e.Pending)
+		}
+	}
+	sync()
+	th, _ = b.Thread(id)
+	for _, e := range th.Events {
+		if len(e.Pending)+len(e.EditPending) != 0 {
+			t.Errorf("after the sync, %s still waits: %v %v", e.Kind, e.Pending, e.EditPending)
+		}
+	}
 }
 
 func TestCommentMeta(t *testing.T) {

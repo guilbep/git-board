@@ -349,7 +349,7 @@ func (b *Backend) survey(remote string, c Counter) (todo []*issue.Issue, n Numbe
 	}
 	n.GitHub = []int{}
 	for _, id := range slices.Sorted(maps.Keys(issues)) {
-		forges := forgesOf(v.links[id])
+		forges := forgesOf(v.records[id])
 		github := 0
 		for _, f := range forges {
 			num, _ := strconv.Atoi(f.Number)

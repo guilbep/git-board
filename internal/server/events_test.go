@@ -4,16 +4,14 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
-	"errors"
 	"net/http"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/git-bug/git-bug/bridge/core"
-	"github.com/git-bug/git-bug/entity"
-
+	"github.com/guilbep/git-board/internal/config"
+	"github.com/guilbep/git-board/internal/gitbugio"
 	"github.com/guilbep/git-board/internal/gitbugio/gitbugiotest"
 )
 
@@ -105,24 +103,20 @@ func TestWritesAreStreamed(t *testing.T) {
 // loading mid-run. One issue's own sync names the issue, for its drawer.
 func TestForgeSyncStreamsItsSteps(t *testing.T) {
 	t.Parallel()
-	ts, s := newIssueServer(t)
+	ts, s := forgeServer(t) // no forge to ask who can be assigned, whose answer would be an event too
 	a := gitbugiotest.NewIssue(t, s.b, "Alpha")
 	b := gitbugiotest.NewIssue(t, s.b, "Beta")
-	bugA, commentA := core.NewImportBug(entity.Id(a)), core.NewImportComment(entity.Id(a), "")
-	bugB, oops := core.NewExportBug(entity.Id(b)), core.NewImportError(errors.New("oops"), "")
 	release := make(chan struct{})
-	s.runSync = fakeSync([]core.SyncResult{
-		{Bridge: "gh", Import: &bugA},
-		{Bridge: "gh", Import: &commentA}, // the same issue: no new step
-		{Bridge: "gh", Export: &bugB},
-		{Bridge: "gl", Import: &oops}, // names no issue: no step
+	s.runSync = fakeSync([]gitbugio.SyncEvent{
+		{Forge: "gh", Way: "pull", What: "updated", Issue: a, Ops: 2},
+		{Forge: "gh", Way: "pull", What: "linked", Issue: a}, // the same issue: no new step
+		{Forge: "gh", Way: "push", What: "posted", Issue: b},
+		{Forge: "gh", Way: "push", What: "comment", Issue: "1000"}, // a write: no step
+		{Forge: "gl", What: "warning", Line: "oops"},               // names no issue: no step
 	}, release)
-	s.runIssueSync = func(_ context.Context, _ bool, id string, _ ...core.Option) (<-chan core.SyncResult, error) {
-		out := make(chan core.SyncResult, 1)
-		r := core.NewImportComment(entity.Id(id), "")
-		out <- core.SyncResult{Bridge: "gh", Import: &r}
-		close(out)
-		return out, nil
+	s.runIssueSync = func(_ context.Context, _ []config.Forge, _ bool, id string, see func(gitbugio.SyncEvent)) error {
+		see(gitbugio.SyncEvent{Forge: "gh", Way: "pull", What: "updated", Issue: id, Ops: 1})
+		return nil
 	}
 	resp, err := http.Get(ts.URL + "/api/events")
 	if err != nil {
@@ -139,8 +133,8 @@ func TestForgeSyncStreamsItsSteps(t *testing.T) {
 	}
 	close(release)
 	want := []syncStep{
-		{Bridge: "gh", Way: "pull", Done: 1, Issue: entity.Id(a).Human() + " Alpha"},
-		{Bridge: "gh", Way: "push", Done: 1, Total: 2, Issue: entity.Id(b).Human() + " Beta"},
+		{Bridge: "gh", Way: "pull", Done: 1, Issue: a[:7] + " Alpha"},
+		{Bridge: "gh", Way: "push", Done: 1, Issue: b[:7] + " Beta"},
 	}
 	for _, w := range want {
 		if e := readEvent(t, sc); e.Kind != "progress" || e.Step == nil || *e.Step != w {

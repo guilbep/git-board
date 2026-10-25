@@ -5,12 +5,15 @@
 package gitbugiotest
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/url"
 	"os/exec"
 	"path"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -67,7 +70,8 @@ func gitOut(dir string, args ...string) string {
 	return string(out)
 }
 
-// Open opens the repository at dir, closed when the test ends.
+// Open opens the repository at dir, closed when the test ends. Its tokens
+// are kept in memory: no test asks the machine's credential helper.
 func Open(t testing.TB, dir string) *gitbugio.Backend {
 	t.Helper()
 	b, err := gitbugio.Open(dir)
@@ -75,7 +79,32 @@ func Open(t testing.TB, dir string) *gitbugio.Backend {
 		t.Fatalf("Open: %v", err)
 	}
 	t.Cleanup(func() { _ = b.Close() })
+	var mu sync.Mutex
+	tokens := map[string]string{} // base URL and login -> token
+	b.Tokens = func(_ context.Context, _, baseURL, login string) (string, error) {
+		mu.Lock()
+		defer mu.Unlock()
+		if t := tokens[baseURL+" "+login]; t != "" {
+			return t, nil
+		}
+		return "", fmt.Errorf("no token for %q on %s", login, baseURL)
+	}
+	b.Approve = func(_ context.Context, baseURL, login, token string) error {
+		mu.Lock()
+		defer mu.Unlock()
+		tokens[baseURL+" "+login] = token
+		return nil
+	}
 	return b
+}
+
+// Token keeps a token for login on the forge at baseURL, as git's
+// credential helper would.
+func Token(t testing.TB, b *gitbugio.Backend, baseURL, login, token string) {
+	t.Helper()
+	if err := b.Approve(t.Context(), baseURL, login, token); err != nil {
+		t.Fatal(err)
+	}
 }
 
 // New is a repository in a t.TempDir() with someone chosen to write as,

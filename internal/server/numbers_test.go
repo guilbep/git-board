@@ -65,7 +65,8 @@ func TestNumbersOnlyOnAPushTheUserAsks(t *testing.T) {
 // highest < 0) through asked.
 func numbersServer(t *testing.T, b *gitbugio.Backend, highest int, asked *int) *httptest.Server {
 	t.Helper()
-	s := &apiServer{cfg: &config.Config{}, b: b, githubHighest: func(_ context.Context, repo string) (int, error) {
+	cfg := &config.Config{Forges: []config.Forge{{Name: "gh", Kind: "github", Host: "github.com", Project: "o/r"}}}
+	s := &apiServer{cfg: cfg, b: b, githubHighest: func(_ context.Context, repo string) (int, error) {
 		*asked++
 		if repo != "o/r" {
 			t.Errorf("GitHub asked about %q, want o/r", repo)
@@ -95,14 +96,16 @@ func TestNumbersFromSettings(t *testing.T) {
 	}
 
 	var n numbersResponse
-	if code := call(t, "GET", ts.URL+"/api/numbers", nil, &n); code != http.StatusOK || n.On || n.Waiting != 2 || n.Highest != 2518 || n.GitHub != nil || asked != 0 {
+	if code := call(t, "GET", ts.URL+"/api/numbers", nil, &n); code != http.StatusOK || n.On || n.Waiting != 2 || n.Highest != 2518 || n.Name != "r" || n.GitHub != nil || asked != 0 {
 		t.Fatalf("before: %d %+v, asked GitHub %d times", code, n, asked)
 	}
 	if n.Origin == nil || len(n.Origin.PushURLs) != 1 {
 		t.Fatalf("origin %+v", n.Origin)
 	}
-	// ponytail: asking GitHub, which needs the GitHub forge, waits for M5's
-	// second phase
+	call(t, "GET", ts.URL+"/api/numbers?github=1", nil, &n)
+	if n.GitHub == nil || n.GitHub.Highest != 3051 || n.GitHub.Issues != "https://github.com/o/r/issues" || asked != 1 {
+		t.Fatalf("the form: GitHub %+v, asked %d", n.GitHub, asked)
+	}
 
 	for _, bad := range []map[string]any{{"prefix": "co-2", "start": 3052}, {"prefix": "CO2", "start": 0}} {
 		if code, msg := callError(t, "POST", ts.URL+"/api/numbers/init", bad); code != http.StatusBadRequest || msg == "" {
@@ -121,7 +124,7 @@ func TestNumbersFromSettings(t *testing.T) {
 	}
 	var after numbersResponse
 	call(t, "GET", ts.URL+"/api/numbers?github=1", nil, &after)
-	if asked != 0 || after.GitHub != nil || after.Numbering.GitHub != nil {
+	if asked != 1 || after.GitHub != nil || after.Numbering.GitHub != nil {
 		t.Errorf("after the switch: asked GitHub %d times, %+v", asked, after)
 	}
 

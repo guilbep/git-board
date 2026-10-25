@@ -6,13 +6,13 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/git-bug/git-bug/bridge/core"
-	"github.com/git-bug/git-bug/entity"
-
+	"github.com/guilbep/git-board/core/forge/fake"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/gitbugio"
 	"github.com/guilbep/git-board/internal/gitbugio/gitbugiotest"
@@ -21,7 +21,8 @@ import (
 func newIssueServer(t *testing.T) (*httptest.Server, *apiServer) {
 	t.Helper()
 	b := gitbugiotest.New(t)
-	s := &apiServer{cfg: &config.Config{}, b: b, me: "guilbep"}
+	// the settings file is the test's own: a save never reaches the checkout's
+	s := &apiServer{cfg: &config.Config{}, b: b, me: "guilbep", cfgPath: filepath.Join(t.TempDir(), config.FileName)}
 	ts := httptest.NewServer(withCORS(newMux(s, http.NotFoundHandler())))
 	t.Cleanup(ts.Close)
 	return ts, s
@@ -139,19 +140,15 @@ func TestMeAndIdentities(t *testing.T) {
 	}
 }
 
-// fakeSync answers a forge sync with given results, holding the run until
+// fakeSync answers a forge sync with given events, holding the run until
 // release is closed.
-func fakeSync(results []core.SyncResult, release chan struct{}) func(context.Context, string, bool, []string, ...core.Option) (<-chan core.SyncResult, error) {
-	return func(context.Context, string, bool, []string, ...core.Option) (<-chan core.SyncResult, error) {
-		out := make(chan core.SyncResult)
-		go func() {
-			defer close(out)
-			<-release
-			for _, r := range results {
-				out <- r
-			}
-		}()
-		return out, nil
+func fakeSync(events []gitbugio.SyncEvent, release chan struct{}) func(context.Context, string, []config.Forge, bool, func(gitbugio.SyncEvent)) error {
+	return func(_ context.Context, _ string, _ []config.Forge, _ bool, see func(gitbugio.SyncEvent)) error {
+		<-release
+		for _, e := range events {
+			see(e)
+		}
+		return nil
 	}
 }
 
@@ -171,17 +168,17 @@ func waitJob(t *testing.T, ts *httptest.Server) forgeStatus {
 
 func TestForgeSyncRunsADryRunFirst(t *testing.T) {
 	t.Parallel()
-	ts, s := newIssueServer(t)
+	ts, s := forgeServer(t, ghForge, glForge)
 	release := make(chan struct{})
-	s.runSync = fakeSync([]core.SyncResult{
-		{Bridge: "gh", Export: &core.ExportResult{Event: core.ExportEventNothing, Reason: "would create issue: Export CSV, with 2 comments"}},
-		{Bridge: "gh", Export: &core.ExportResult{Event: core.ExportEventNothing, Reason: "would send: 3 comments, 1 edits, labels, status"}},
-		{Bridge: "gh", Export: &core.ExportResult{Event: core.ExportEventNothing, Reason: "missing author token"}},
-		{Bridge: "gh", Export: &core.ExportResult{Event: core.ExportEventNothing, Reason: "would sync with https://github.com/o/r/issues/9, found by its git-bug marker"}},
-		{Bridge: "gl", Import: &core.ImportResult{Event: core.ImportEventNothing, Reason: "would import issue https://gitlab.example.com/g/r/-/work_items/3"}},
-		{Bridge: "gl", Import: &core.ImportResult{Event: core.ImportEventNothing, Reason: "would pull up to 4 changes from https://gitlab.example.com/g/r/-/work_items/5"}},
-		{Bridge: "gl", Import: &core.ImportResult{Event: core.ImportEventWarning, Err: context.Canceled}},
-	}, release)
+	ev := func(forge, what string, ops int) gitbugio.SyncEvent {
+		return gitbugio.SyncEvent{Forge: forge, What: what, Issue: "0123456789", Ops: ops}
+	}
+	events := []gitbugio.SyncEvent{ev("gh", "posted", 0), ev("gh", "pushed", 0), ev("gh", "linked", 0), ev("gh", "edit", 0), ev("gh", "change", 0), ev("gh", "change", 0),
+		ev("gl", "created", 3), ev("gl", "updated", 4), {Forge: "gl", What: "warning", Line: "gitlab.epfl.ch/42400 refused labels"}}
+	for range 5 {
+		events = append(events, ev("gh", "comment", 0))
+	}
+	s.runSync = fakeSync(events, release)
 
 	if code := call(t, "POST", ts.URL+"/api/forges/sync", map[string]any{"dry_run": false}, nil); code != http.StatusConflict {
 		t.Errorf("a real run before a dry run: %d, want 409", code)
@@ -200,16 +197,19 @@ func TestForgeSyncRunsADryRunFirst(t *testing.T) {
 	if st.Job.State != "done" || !st.Job.DryRun || gh == nil || gl == nil {
 		t.Fatalf("dry run job %+v", st.Job)
 	}
-	if want := (direction{Issues: 1, Changed: 1, Comments: 5, Edits: 1, Changes: 2}); gh.To != want || gh.StaysLocal != 1 || gh.Linked != 1 {
-		t.Errorf("gh %+v, want to %+v, 1 local, 1 linked", gh, want)
+	if want := (direction{Issues: 1, Changed: 1, Comments: 5, Edits: 1, Changes: 2}); gh.To != want || gh.Linked != 1 {
+		t.Errorf("gh %+v, want to %+v, 1 linked", gh, want)
 	}
-	if want := (direction{Issues: 1, Changed: 1, Changes: 4}); gl.From != want || gl.Warnings != 1 {
-		t.Errorf("gl %+v, want from %+v and a warning", gl, want)
+	if want := (direction{Issues: 1, Changed: 1, Changes: 7}); gl.From != want || gl.Warnings < 1 || !slices.Contains(gl.Lines, "gitlab.epfl.ch/42400 refused labels") {
+		t.Errorf("gl %+v, want from %+v and a warning", gl, want) // and maybe who can be assigned's, asked after the run
+	}
+	if !slices.Contains(gh.Lines, "would create 0123456") {
+		t.Errorf("gh lines %q", gh.Lines)
 	}
 
 	release = make(chan struct{})
 	close(release)
-	s.runSync = fakeSync([]core.SyncResult{{Bridge: "gh", Export: &core.ExportResult{Event: core.ExportEventBug}}}, release)
+	s.runSync = fakeSync([]gitbugio.SyncEvent{ev("gh", "posted", 0)}, release)
 	if code := call(t, "POST", ts.URL+"/api/forges/sync", map[string]any{"dry_run": false}, nil); code != http.StatusAccepted {
 		t.Fatalf("real run after a dry run: %d", code)
 	}
@@ -220,32 +220,32 @@ func TestForgeSyncRunsADryRunFirst(t *testing.T) {
 		t.Errorf("a second real run without a new dry run: %d, want 409", code)
 	}
 
-	// a dry run with errors doesn't open the way to a real run
-	release = make(chan struct{})
-	close(release)
-	s.runSync = fakeSync([]core.SyncResult{{Bridge: "gl", Import: &core.ImportResult{Event: core.ImportEventError, Err: context.Canceled}}}, release)
+	// a dry run that fails doesn't open the way to a real run
+	s.runSync = func(context.Context, string, []config.Forge, bool, func(gitbugio.SyncEvent)) error {
+		return context.Canceled
+	}
 	call(t, "POST", ts.URL+"/api/forges/sync", map[string]any{"dry_run": true}, nil)
-	if st = waitJob(t, ts); st.Job.Errors != 1 {
+	if st = waitJob(t, ts); st.Job.State != "failed" || st.Job.Errors != 1 {
 		t.Fatalf("dry run with an error: %+v", st.Job)
 	}
 	if code := call(t, "POST", ts.URL+"/api/forges/sync", map[string]any{"dry_run": false}, nil); code != http.StatusConflict {
-		t.Errorf("a real run after a dry run with errors: %d, want 409", code)
+		t.Errorf("a real run after a failed dry run: %d, want 409", code)
 	}
 }
 
 // Get and Send are one way of a sync, each after a clean dry run. Send
 // alone would create again the issues the dry run found on a forge by
-// their git-bug marker: those wait for a Get or a Sync.
+// their marker: those wait for a Get or a Sync.
 func TestForgeGetAndSend(t *testing.T) {
 	t.Parallel()
-	ts, s := newIssueServer(t)
+	ts, s := forgeServer(t, ghForge)
 	done := make(chan struct{})
 	close(done)
 	ran := make(chan string, 10) // the mode each run was given
-	runs := func(results ...core.SyncResult) {
-		s.runSync = func(ctx context.Context, mode string, dryRun bool, names []string, _ ...core.Option) (<-chan core.SyncResult, error) {
+	runs := func(events ...gitbugio.SyncEvent) {
+		s.runSync = func(ctx context.Context, mode string, forges []config.Forge, dryRun bool, see func(gitbugio.SyncEvent)) error {
 			ran <- mode
-			return fakeSync(results, done)(ctx, mode, dryRun, names)
+			return fakeSync(events, done)(ctx, mode, forges, dryRun, see)
 		}
 	}
 	start := func(body map[string]any) (int, string) {
@@ -261,7 +261,7 @@ func TestForgeGetAndSend(t *testing.T) {
 		return code, mode
 	}
 
-	runs(core.SyncResult{Bridge: "gh", Export: &core.ExportResult{Event: core.ExportEventNothing, Reason: "would sync with https://github.com/o/r/issues/9, found by its git-bug marker"}})
+	runs(gitbugio.SyncEvent{Forge: "gh", Way: "pull", What: "linked", Issue: "0123456789"})
 	if code, _ := start(map[string]any{"mode": "send"}); code != http.StatusConflict {
 		t.Errorf("a send before a dry run: %d, want 409", code)
 	}
@@ -279,62 +279,31 @@ func TestForgeGetAndSend(t *testing.T) {
 		t.Errorf("a get: %d %s", code, mode)
 	}
 	start(map[string]any{"dry_run": true})
-	if code, mode := start(map[string]any{"mode": "send"}); code != http.StatusAccepted || mode != "send" {
+	if code, mode := start(map[string]any{"mode": "send", "bridges": []string{"gh"}}); code != http.StatusAccepted || mode != "send" {
 		t.Errorf("a send after a clean dry run: %d %s", code, mode)
 	}
 }
 
-// Send doesn't get the forges' changes first, and sends an issue's labels
-// whole: an issue the check found changed on both sides would lose the
-// labels added on the forge, and the comment texts edited there. Send
-// waits for a Get or a Sync on that forge; one issue changed on each side
-// loses nothing.
-func TestForgeSendRefusesIssuesChangedBothWays(t *testing.T) {
+// The default run opens the settings' forges fresh, and a check through
+// it writes nothing: the run after it does what it said.
+func TestForgeSyncOverTheCore(t *testing.T) {
 	t.Parallel()
-	ts, s := newIssueServer(t)
-	done := make(chan struct{})
-	close(done)
-	check := func(results ...core.SyncResult) *bridgeTally {
-		t.Helper()
-		s.runSync = fakeSync(results, done)
-		if code := call(t, "POST", ts.URL+"/api/forges/sync", map[string]any{"dry_run": true}, nil); code != http.StatusAccepted {
-			t.Fatalf("check: %d", code)
+	ts, s := forgeServer(t, ghForge)
+	gh := fake.New("github.com/guilbep/git-bug-sync-test")
+	s.openForges = func(_ context.Context, forges []config.Forge) ([]gitbugio.NamedForge, error) {
+		if len(forges) != 1 || forges[0].Name != "gh" {
+			t.Errorf("opened %+v, want gh", forges)
 		}
-		return waitJob(t, ts).Job.Bridges["gh"]
+		return []gitbugio.NamedForge{{Name: "gh", Forge: gh}}, nil
 	}
-	send := func(bridges ...string) int {
-		t.Helper()
-		s.runSync = fakeSync(nil, done)
-		code := call(t, "POST", ts.URL+"/api/forges/sync", map[string]any{"mode": "send", "bridges": bridges}, nil)
-		if code == http.StatusAccepted {
-			waitJob(t, ts)
-		}
-		return code
+	gitbugiotest.NewIssue(t, s.b, "to GitHub")
+	call(t, "POST", ts.URL+"/api/forges/sync", map[string]any{"dry_run": true}, nil)
+	if st := waitJob(t, ts); st.Job.State != "done" || st.Job.Bridges["gh"].To.Issues != 1 || len(gh.Writes()) != 0 {
+		t.Fatalf("check %+v, writes %v", st.Job, gh.Writes())
 	}
-	pulls := func(bridge, id string) core.SyncResult {
-		return core.SyncResult{Bridge: bridge, Import: &core.ImportResult{Event: core.ImportEventNothing, EntityId: entity.Id(id), Reason: "would pull up to 2 changes from https://github.com/o/r/issues/1"}}
-	}
-	sends := func(bridge, id string) core.SyncResult {
-		return core.SyncResult{Bridge: bridge, Export: &core.ExportResult{Event: core.ExportEventNothing, EntityId: entity.Id(id), Reason: "would send: labels"}}
-	}
-	imports := core.SyncResult{Bridge: "gh", Import: &core.ImportResult{Event: core.ImportEventNothing, Reason: "would import issue https://github.com/o/r/issues/3"}}
-
-	if gh := check(pulls("gh", "x"), sends("gh", "y"), imports, pulls("gl", "z")); gh.Conflicts != 0 {
-		t.Errorf("conflicts %d, want none: x changed on GitHub, y here", gh.Conflicts)
-	}
-	if code := send(); code != http.StatusAccepted {
-		t.Errorf("a send where no issue changed both ways: %d", code)
-	}
-
-	// the order the check reports them in doesn't matter
-	if gh := check(sends("gh", "x"), pulls("gh", "x"), pulls("gl", "z")); gh.Conflicts != 1 {
-		t.Errorf("conflicts %d, want x", gh.Conflicts)
-	}
-	if code := send(); code != http.StatusConflict {
-		t.Errorf("a send to a forge with an issue changed both ways: %d, want 409", code)
-	}
-	if code := send("gl"); code != http.StatusAccepted {
-		t.Errorf("a send to the other forge alone: %d", code)
+	call(t, "POST", ts.URL+"/api/forges/sync", map[string]any{"dry_run": false}, nil)
+	if st := waitJob(t, ts); st.Job.State != "done" || st.Job.Bridges["gh"].To.Issues != 1 || len(gh.All()) != 1 {
+		t.Fatalf("run %+v, forge %v", st.Job, gh.All())
 	}
 }
 

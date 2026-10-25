@@ -153,6 +153,12 @@ type Backend struct {
 	persons map[string]*people.Person
 	heads   map[string]gitstore.Hash // ref -> head of what's loaded
 
+	// Tokens finds a forge account's token, Approve stores one: nil, the
+	// environment and git's credential helper (tokens.go). Tests set
+	// their own, so that none asks the machine's helper.
+	Tokens  func(ctx context.Context, kind, baseURL, login string) (string, error)
+	Approve func(ctx context.Context, baseURL, login, token string) error
+
 	// the code's commits, read with go-git itself (codeRepo, code.go)
 	codeOnce sync.Once
 	code     *git.Repository
@@ -319,15 +325,14 @@ func (b *Backend) allPersons() (map[string]*people.Person, error) {
 // the forges' links and the persons.
 type view struct {
 	c       *Counter
-	links   map[string][]syncer.Link
+	records map[string][]syncer.Record
 	persons map[string]*people.Person
 }
 
 // ponytail: folds every sync entity on each call, cheap while they are
-// small; cache by the sync refs' heads once M5's second phase pulls real
-// projects into them.
+// small; cache by the sync refs' heads once real projects fill them (M6).
 func (b *Backend) view() (view, error) {
-	links, err := syncer.Links(b.s)
+	records, err := syncer.Records(b.s)
 	if err != nil {
 		return view{}, err
 	}
@@ -335,14 +340,14 @@ func (b *Backend) view() (view, error) {
 	if err != nil {
 		return view{}, err
 	}
-	return view{c: b.counter(), links: links, persons: persons}, nil
+	return view{c: b.counter(), records: records, persons: persons}, nil
 }
 
 // issueFrom is a core issue as git-board reads it: its labels shown, its
 // forges, who opened it and who commented, and its project number when
 // the project numbers its issues.
 func (b *Backend) issueFrom(is *issue.Issue, v view) Issue {
-	forges := forgesOf(v.links[is.ID])
+	forges := forgesOf(v.records[is.ID])
 	out := Issue{ID: is.ID, Title: is.Title, Status: string(is.Status), Labels: b.shown(slices.Clone(is.Labels)), Forges: forges,
 		UpdatedAt: time.Unix(is.Updated, 0), CreatedAt: time.Unix(is.Created, 0), AuthorID: is.Author}
 	for _, f := range forges {

@@ -297,6 +297,18 @@ func (c *Client) Merge(ctx context.Context, repo string, number int, sha string)
 	return c.do(ctx, http.MethodPut, fmt.Sprintf("/repos/%s/pulls/%d/merge", repo, number), in, nil)
 }
 
+// Highest is repo's highest issue or pull request number, 0 for none.
+func (c *Client) Highest(ctx context.Context, repo string) (int, error) {
+	var last []struct{ Number int }
+	if err := c.do(ctx, http.MethodGet, "/repos/"+repo+"/issues?state=all&per_page=1", nil, &last); err != nil {
+		return 0, err
+	}
+	if len(last) == 0 {
+		return 0, nil
+	}
+	return last[0].Number, nil
+}
+
 // do sends in as JSON and decodes the answer into out; an answer of 300
 // or more is an error with GitHub's message.
 func (c *Client) do(ctx context.Context, method, path string, in, out any) error {

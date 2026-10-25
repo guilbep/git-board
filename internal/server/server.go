@@ -12,8 +12,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/git-bug/git-bug/bridge/core"
-
 	"github.com/guilbep/git-board/internal/board"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/fields"
@@ -53,12 +51,15 @@ type apiServer struct {
 	syncing atomic.Bool
 	forgeMu sync.Mutex // guards job, issueDry and checked
 	job     *forgeJob
-	// the forge sync, or one way of it (mode get, send): nil, git-bug's
-	runSync func(ctx context.Context, mode string, dryRun bool, names []string, opts ...core.Option) (<-chan core.SyncResult, error)
-	// one issue's sync (issuesync.go): nil, git-bug's; issueDry is when
+	// the forge sync of forges, or one way of it (mode get, send), its
+	// events told to see: nil, forgeRun
+	runSync func(ctx context.Context, mode string, forges []config.Forge, dryRun bool, see func(gitbugio.SyncEvent)) error
+	// one issue's sync (issuesync.go): nil, issueRun; issueDry is when
 	// each issue's last clean dry run ended
-	runIssueSync func(ctx context.Context, dryRun bool, id string, opts ...core.Option) (<-chan core.SyncResult, error)
+	runIssueSync func(ctx context.Context, forges []config.Forge, dryRun bool, id string, see func(gitbugio.SyncEvent)) error
 	issueDry     map[string]time.Time
+	// openForges opens the adapters of a run: nil, gitbugio.OpenForges
+	openForges func(ctx context.Context, forges []config.Forge) ([]gitbugio.NamedForge, error)
 	// checked is when each git remote was last fetched, pulled or pushed
 	// (remotes.go)
 	checked map[string]time.Time

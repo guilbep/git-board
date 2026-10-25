@@ -1,8 +1,11 @@
 package gitbugio_test
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 
+	"github.com/guilbep/git-board/core/forge/fake"
 	"github.com/guilbep/git-board/internal/gitbugio"
 	"github.com/guilbep/git-board/internal/gitbugio/gitbugiotest"
 )
@@ -107,10 +110,45 @@ func TestResolveTwice(t *testing.T) {
 	}
 }
 
-// A review comment goes to GitHub's pull request only: it never waits for
-// another forge, and one pulled from the pull request waits for none.
+// A review comment stays in git-board: it never waits for a forge, and the
+// sync never posts it; a plain one waits for each forge the issue is on.
 func TestReviewCommentsPending(t *testing.T) {
-	t.Skip("M5 phase 2: what waits for a forge, review comments never")
+	t.Parallel()
+	b := gitbugiotest.New(t)
+	gh, gl := fake.New("github.com/o/r"), fake.New("gitlab.example.com/g/r")
+	r := run(gh, gl)
+	issue := gitbugiotest.NewIssue(t, b, "synced")
+	if _, err := b.SyncForges(t.Context(), r); err != nil {
+		t.Fatal(err)
+	}
+	plain, _ := b.AddComment(issue, "plain")
+	line, err := b.CommentWith(issue, "why?", map[string]string{
+		"review:path": "a.txt", "review:line": "3", "review:side": "new", "review:commit": "0123456789abcdef0123456789abcdef01234567",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct {
+		id   string
+		want string
+	}{{plain, "[GitHub GitLab]"}, {line, "[]"}} {
+		if got := fmt.Sprint(eventByID(t, b, issue, c.id).Pending); got != c.want {
+			t.Errorf("%s pending %s, want %s", c.id, got, c.want)
+		}
+	}
+	if _, err := b.SyncForges(t.Context(), r); err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range []*fake.Forge{gh, gl} {
+		for _, w := range f.Writes() {
+			if w.Op == "create-comment" && strings.Contains(w.Args[0], "why?") {
+				t.Errorf("the line comment went to %s", f.Key())
+			}
+		}
+	}
+	if got := eventByID(t, b, issue, plain).Pending; len(got) != 0 {
+		t.Errorf("plain, synced: pending %v", got)
+	}
 }
 
 // A pull request's conversation comment, brought in by the sync, says
