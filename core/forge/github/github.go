@@ -51,7 +51,7 @@ type Options struct {
 	// /graphql, or at /api/graphql beside /api/v3.
 	API string
 	// Token gives an account's token. By default it is the environment's
-	// GITHUB_TOKEN, GITHUB_ENTERPRISE_TOKEN for an Enterprise host, when
+	// GITHUB_TOKEN, GITHUB_ENTERPRISE_TOKEN for GITHUB_ENTERPRISE_HOST, when
 	// set; else what git's credential helper holds for the host and the
 	// account's login.
 	Token func(ctx context.Context, a forge.Account) (string, error)
@@ -101,6 +101,9 @@ func New(ctx context.Context, o Options) (*Forge, error) {
 		}
 	}
 	api = strings.TrimSuffix(api, "/")
+	if err := checkURL(api, host, "api."+host); err != nil {
+		return nil, err
+	}
 	graphql := api + "/graphql"
 	if base, ok := strings.CutSuffix(api, "/v3"); ok {
 		graphql = base + "/graphql"

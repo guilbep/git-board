@@ -4,6 +4,7 @@ package gitlab
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -60,14 +61,17 @@ var _ forge.Forge = (*Forge)(nil)
 
 // New is the project on the GitLab at baseURL, like https://gitlab.epfl.ch,
 // named by its path, like guilbep/git-board-test, or its numeric id. Its
-// token is the posting account's: GITLAB_TOKEN when it is set, else git's
+// token is the posting account's: GITLAB_TOKEN when it is set and the host is GITLAB_HOST (gitlab.com by default), else git's
 // credential helper's for the host, with login as the username.
 func New(ctx context.Context, baseURL, project, login string) (*Forge, error) {
 	p, err := newProject(baseURL, project)
 	if err != nil {
 		return nil, err
 	}
-	token := os.Getenv(tokenEnv)
+	token := ""
+	if p.host == cmp.Or(os.Getenv("GITLAB_HOST"), "gitlab.com") { // no other host sees the variable
+		token = os.Getenv(tokenEnv)
+	}
 	if token == "" {
 		if token, err = p.cred(ctx, forge.Account{Login: login}); err != nil {
 			return nil, err
@@ -80,6 +84,9 @@ func newProject(baseURL, path string) (*project, error) {
 	u, err := url.Parse(strings.TrimRight(baseURL, "/"))
 	if err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" {
 		return nil, fmt.Errorf("gitlab: bad base URL %q", baseURL)
+	}
+	if h := u.Hostname(); u.Scheme == "http" && h != "localhost" && h != "127.0.0.1" && h != "::1" {
+		return nil, fmt.Errorf("gitlab: base URL %q isn't https", baseURL)
 	}
 	path = strings.Trim(path, "/")
 	if path == "" {

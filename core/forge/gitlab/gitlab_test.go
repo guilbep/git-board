@@ -7,6 +7,7 @@ import (
 	"maps"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
@@ -342,7 +343,16 @@ func TestTokenLookup(t *testing.T) {
 	defer srv.Close()
 	ctx := t.Context()
 
+	u, _ := url.Parse(srv.URL)
+	t.Setenv("GITLAB_HOST", "other.example.test")
 	t.Setenv(tokenEnv, "env")
+	if a, err := New(ctx, srv.URL, "p", "board"); err != nil || a.token != "helper-board" {
+		t.Fatalf("GITLAB_TOKEN for another host: %v", err) // falls through to the helper
+	}
+	if _, err := New(ctx, "http://gitlab.example.test", "p", "board"); err == nil || errors.Is(err, forge.ErrNoToken) {
+		t.Fatalf("http to a non-loopback host: %v", err)
+	}
+	t.Setenv("GITLAB_HOST", u.Host)
 	a, err := New(ctx, srv.URL, "p", "board")
 	if err != nil || a.token != "env" {
 		t.Fatalf("with GITLAB_TOKEN: %v", err)

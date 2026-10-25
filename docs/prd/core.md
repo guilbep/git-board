@@ -210,7 +210,6 @@ in git, so they are listed here.
   forge's times when the adapters read them.
 - **M5:** a run killed before its end leaves `board/sync.lock`, which must
   be removed by hand, like git's own locks.
-- **M4:** a forge listing one comment id twice in one issue (paging).
 - ~~**M5:** check git-board's own handling of `assignee:` in any case;
   validate kinds, ids and remote names before the HTTP API reaches them.~~
   Done in M5's first phase: `gitbugio` reads `Assignee:` as `assignee:`

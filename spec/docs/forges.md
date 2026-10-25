@@ -16,13 +16,28 @@ Sync acts on a forge through accounts: the posting account, from
 git-board's settings, and the people who have a token of their own there
 (see [Posting for people without a token](sync.md#posting-for-people-without-a-token)).
 
-- **A token** comes from an environment variable, when it is set, as in
-  CI. Otherwise it comes from git's credential helper for the forge's host,
-  with the account as `username`:
+- **A token** comes from an environment variable, when it is set and the
+  forge's host is the one the variable is for, as in CI. Otherwise it comes
+  from git's credential helper for the forge's host, with the account as
+  `username`:
 
     ```sh
     printf 'protocol=https\nhost=gitlab.epfl.ch\nusername=guilbep\n\n' | git credential fill
     ```
+
+- **An environment token goes to its own host only,** because the
+  settings live in the committed `.git-board.toml`, and a pull request
+  that edits them must not send a token elsewhere:
+    - `GITHUB_TOKEN` is for `github.com` and its API, `api.github.com`.
+    - `GITHUB_ENTERPRISE_TOKEN` is for the host named by
+      `GITHUB_ENTERPRISE_HOST`. If that is unset, it is never used.
+    - `GITLAB_TOKEN` is for the host named by `GITLAB_HOST`, which is
+      `gitlab.com` when unset.
+    - Any other host gets its token from git's credential helper only.
+    - `GH_TOKEN` is never read.
+    - A base URL must be `https://`. `http://` is accepted only for
+      `localhost`, `127.0.0.1` and `::1`; any other makes the adapter
+      refuse to start.
 
 - **The core keeps no token,** in git or anywhere else. git-board's
   Settings stores a new one with `git credential approve`.
@@ -34,11 +49,10 @@ or a GitHub Enterprise host. It speaks GitHub's REST API,
 `https://api.github.com` or `https://<host>/api/v3`, plus one GraphQL
 query for the times REST doesn't give.
 
-- **The token** is `GITHUB_TOKEN` when it is set, or
-  `GITHUB_ENTERPRISE_TOKEN` for an Enterprise host. Otherwise it comes from
+- **The token** follows [Accounts and tokens](#accounts-and-tokens):
+  `GITHUB_TOKEN` or `GITHUB_ENTERPRISE_TOKEN` for their own host, else
   git's credential helper for the host, with the account's login as
-  `username`, and never from a prompt. A github.com token never goes to
-  another host. A person's token counts only when GitHub says it is theirs:
+  `username`, and never from a prompt. A person's token counts only when GitHub says it is theirs:
   `/user` must give their account's numeric id.
 - **A forge issue's id is GitHub's numeric `id`.** REST names an issue by
   its number, so the adapter remembers each id's number from its listings.
@@ -99,7 +113,8 @@ query for the times REST doesn't give.
   `https://gitlab.epfl.ch`. Its key is the host and the project as named:
   `gitlab.epfl.ch/42400`. A numeric id outlives a rename or a move. A path
   doesn't, and a new key is a new sync entity.
-- **Tokens.** The posting account's is `GITLAB_TOKEN` when it is set, else
+- **Tokens** follow [Accounts and tokens](#accounts-and-tokens). The
+  posting account's is `GITLAB_TOKEN` for its own host, else
   the credential helper's for the host, with the posting account's login
   as `username`. Another account's comes from the credential helper only,
   and counts once GitLab's `/user` says it is theirs. A helper's token for

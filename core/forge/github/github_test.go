@@ -279,7 +279,27 @@ func TestTokenLookup(t *testing.T) {
 		}
 	}
 	t.Setenv("GITHUB_ENTERPRISE_TOKEN", "from-ghe-env")
+	t.Setenv("GH_TOKEN", "from-gh")
+	if got, _ := lookup(ctx, ghe, "ann"); got != "from-helper" { // no GITHUB_ENTERPRISE_HOST
+		t.Errorf("without GITHUB_ENTERPRISE_HOST: %q", got)
+	}
+	t.Setenv("GITHUB_ENTERPRISE_HOST", ghe)
 	if got, _ := lookup(ctx, ghe, "ann"); got != "from-ghe-env" {
 		t.Errorf("with GITHUB_ENTERPRISE_TOKEN: %q", got)
+	}
+	if got, _ := lookup(ctx, "other.example.test", "ann"); got != "from-helper" {
+		t.Errorf("another host: %q", got)
+	}
+}
+
+// TestNewRefusesClearText: http is for loopback only, and an API of
+// another host is refused.
+func TestNewRefusesClearText(t *testing.T) {
+	for _, api := range []string{"http://ghe.example.test/api/v3", "https://evil.example.test/api/v3"} {
+		_, err := New(t.Context(), Options{Host: "ghe.example.test", Project: "o/r", API: api,
+			Token: func(context.Context, forge.Account) (string, error) { return "t", nil }})
+		if err == nil || errors.Is(err, forge.ErrNoToken) {
+			t.Errorf("New with API %s: %v", api, err)
+		}
 	}
 }
