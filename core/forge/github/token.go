@@ -5,10 +5,8 @@ import (
 	"fmt"
 	"net/url"
 	"os"
-	"os/exec"
 	"slices"
 	"strings"
-	"time"
 
 	"github.com/guilbep/git-board/core/forge"
 )
@@ -53,28 +51,11 @@ func checkURL(raw string, ok ...string) error {
 	return nil
 }
 
-// credential asks git's credential helper, never the terminal. Its answer
-// holds the password, so it is never put in an error.
+// credential asks git's credential helper, never prompting.
 func credential(ctx context.Context, host, login string) (string, error) {
-	if strings.ContainsAny(host+login, "\r\n\x00") {
-		return "", fmt.Errorf("github: bad host or login: %w", forge.ErrNoToken)
+	t, err := forge.Password(ctx, "https", host, login)
+	if err != nil {
+		return "", fmt.Errorf("github: no token for %q on %s: %w", login, host, err)
 	}
-	in := "protocol=https\nhost=" + host + "\n"
-	if login != "" {
-		in += "username=" + login + "\n"
-	}
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, "git", "credential", "fill")
-	cmd.Stdin = strings.NewReader(in + "\n")
-	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0", "GIT_ASKPASS=")
-	out, err := cmd.Output()
-	if err == nil {
-		for line := range strings.Lines(string(out)) {
-			if v, ok := strings.CutPrefix(strings.TrimRight(line, "\r\n"), "password="); ok && v != "" {
-				return v, nil
-			}
-		}
-	}
-	return "", fmt.Errorf("github: no token for %q on %s: %w", login, host, forge.ErrNoToken)
+	return t, nil
 }

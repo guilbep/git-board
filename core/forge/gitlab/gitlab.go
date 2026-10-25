@@ -14,7 +14,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"os/exec"
 	"strconv"
 	"strings"
 	"sync"
@@ -113,34 +112,9 @@ func newProject(baseURL, path string) (*project, error) {
 			return http.ErrUseLastResponse // Go would send PRIVATE-TOKEN along, to any host
 		}}, pace: pace, sleep: sleep, iids: map[string]int64{}}
 	p.cred = func(ctx context.Context, a forge.Account) (string, error) {
-		return credential(ctx, p.scheme, p.host, a.Login)
+		return forge.Password(ctx, p.scheme, p.host, a.Login) // never prompting
 	}
 	return p, nil
-}
-
-// credential asks git's credential helper for the host's token, without
-// ever prompting.
-func credential(ctx context.Context, scheme, host, login string) (string, error) {
-	if strings.ContainsAny(login, "\n\x00") {
-		return "", forge.ErrNoToken
-	}
-	in := "protocol=" + scheme + "\nhost=" + host + "\n"
-	if login != "" {
-		in += "username=" + login + "\n"
-	}
-	cmd := exec.CommandContext(ctx, "git", "credential", "fill")
-	cmd.Stdin = strings.NewReader(in + "\n")
-	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0", "GIT_ASKPASS=", "GCM_INTERACTIVE=never")
-	out, err := cmd.Output()
-	if err != nil {
-		return "", forge.ErrNoToken
-	}
-	for line := range strings.SplitSeq(string(out), "\n") {
-		if v, ok := strings.CutPrefix(line, "password="); ok && v != "" {
-			return v, nil
-		}
-	}
-	return "", forge.ErrNoToken
 }
 
 func sleep(ctx context.Context, d time.Duration) error {

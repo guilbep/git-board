@@ -5,11 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
-	"os"
-	"os/exec"
 	"strings"
-	"time"
 
+	"github.com/guilbep/git-board/core/forge"
 	"github.com/guilbep/git-board/core/forge/github"
 	"github.com/guilbep/git-board/core/forge/gitlab"
 	"github.com/guilbep/git-board/core/people"
@@ -70,15 +68,8 @@ func approve(ctx context.Context, baseURL, login, token string) error {
 	if err != nil || strings.ContainsAny(u.Host+login+token, "\r\n\x00") {
 		return errors.New("bad host, login or token")
 	}
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, "git", "credential", "approve")
-	cmd.Stdin = strings.NewReader("protocol=" + u.Scheme + "\nhost=" + u.Host + "\nusername=" + login + "\npassword=" + token + "\n\n")
-	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0", "GIT_ASKPASS=")
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("git credential approve failed: %w", err)
-	}
-	return nil
+	_, err = forge.Credential(ctx, "approve", "protocol="+u.Scheme+"\nhost="+u.Host+"\nusername="+login+"\npassword="+token+"\n\n")
+	return err
 }
 
 // ForgeToken is the token for the first of forges on host, as its posting

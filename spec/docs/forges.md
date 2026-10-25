@@ -25,6 +25,12 @@ git-board's settings, and the people who have a token of their own there
     printf 'protocol=https\nhost=gitlab.epfl.ch\nusername=guilbep\n\n' | git credential fill
     ```
 
+- **The credential helper never prompts.** Each call to it, `fill` and
+  `approve` alike, runs with `GIT_TERMINAL_PROMPT=0`, an empty
+  `GIT_ASKPASS` and `GCM_INTERACTIVE=never` (Git Credential Manager's sign-in
+  window), and is given up after 10 seconds: a helper that hangs is no
+  token, and the run goes on, its lock released at its end.
+
 - **An environment token goes to its own host only,** because the
   settings live in the committed `.git-board.toml`, and a pull request
   that edits them must not send a token elsewhere:

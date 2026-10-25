@@ -398,3 +398,25 @@ func TestInternalFailsClosed(t *testing.T) {
 		t.Errorf("private has %q", got)
 	}
 }
+
+type failingTokens struct{ *fake.Forge }
+
+func (failingTokens) As(context.Context, forge.Account) (forge.Forge, error) {
+	return nil, context.DeadlineExceeded // a credential helper that timed out
+}
+
+// A token lookup that fails counts as no token: the run goes on, and lets
+// its lock go at the end.
+func TestFailedLookupReleasesTheLock(t *testing.T) {
+	t.Parallel()
+	s, f := newStore(t), fake.New(key)
+	f.Add(forge.Issue{Author: forge.Account{ID: "8", Login: "bob"}, Title: "T", Body: marker("issue", "x") + "\nb"})
+	if r := syncAll(t, s, failingTokens{f}); r.Created != 1 {
+		t.Fatalf("report %+v", r)
+	}
+	unlock, err := lock(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	unlock()
+}
