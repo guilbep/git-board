@@ -124,10 +124,10 @@ type SwitchReport struct {
 	Carried      int      // of them, carried into the release kind
 	ReleaseNotes []string // what about them didn't carry over
 	// WouldCreate is what the next sync would create on a forge: a mirror
-	// not joined, or what the fork never sent. Edits counts its other
-	// writes.
+	// not joined, or what the fork never sent. Writes are its other writes.
+	// Each names its forge issue by forge and number, and its title.
 	WouldCreate []string
-	Edits       int
+	Writes      []string
 	Blockers    []string
 	Applied     bool
 }
@@ -219,13 +219,20 @@ func (b *Backend) Switch(ctx context.Context, run SwitchRun) (SwitchReport, erro
 			rep.OnSeveral++
 		}
 	}
-	issueOf := map[string]string{} // fork id -> issue
+	issueOf := map[string]string{}     // fork id -> issue
+	unlisted := map[[2]string]string{} // issue, forge name -> the place git-bug links it to there, not listed
 	for _, bug := range fork.Bugs {
 		got := map[string]bool{}
 		for _, p := range places[bug.ID] {
 			if id := at[strings.ToLower(p)]; id != "" {
 				got[id] = true
 				issueOf[bug.ID] = cmp.Or(issueOf[bug.ID], id)
+			}
+		}
+		for _, p := range places[bug.ID] {
+			key, n, _ := strings.Cut(p, "#")
+			if id := issueOf[bug.ID]; id != "" && at[strings.ToLower(p)] == "" {
+				unlisted[[2]string{id, names[syncer.StateID(key)]}] = names[syncer.StateID(key)] + "#" + n
 			}
 		}
 		switch {
@@ -245,7 +252,7 @@ func (b *Backend) Switch(ctx context.Context, run SwitchRun) (SwitchReport, erro
 	if err := carryReleases(ctx, scratch, fork.Users, &rep); err != nil {
 		return rep, err
 	}
-	if err := wouldPush(ctx, scratch, run, opt, &rep); err != nil {
+	if err := wouldPush(ctx, scratch, run, opt, records, unlisted, &rep); err != nil {
 		return rep, err
 	}
 
@@ -394,30 +401,86 @@ func lostComments(s *gitstore.Store, fork Fork, issueOf map[string]string, rep *
 }
 
 // wouldPush runs the next sync's push on a copy of the switched copy, its
-// writes answered in the process, and counts them.
-func wouldPush(ctx context.Context, from *gitstore.Store, run SwitchRun, opt syncer.Options, rep *SwitchReport) error {
+// writes answered in the process, and lists them. records are the copy's;
+// unlisted, by issue and forge, a place git-bug links an issue to there
+// that the forge didn't list.
+func wouldPush(ctx context.Context, from *gitstore.Store, run SwitchRun, opt syncer.Options,
+	records map[string][]syncer.Record, unlisted map[[2]string]string, rep *SwitchReport) error {
 	s, done, err := scratchOf(ctx, from.CommonDir(), from.CommonDir())
 	if err != nil {
 		return err
 	}
 	defer done()
+	names := map[string]string{} // forge key, and sync entity id -> forge name
+	for _, f := range run.Forges {
+		names[f.Key()], names[syncer.StateID(f.Key())] = f.Name, f.Name
+	}
+	at := map[string]string{} // forge name and its issue's id -> issue
+	links := func(id, but string) []string {
+		var out []string
+		for _, r := range records[id] {
+			if names[r.Forge] != but {
+				out = append(out, names[r.Forge]+"#"+r.Number)
+			}
+		}
+		return out
+	}
+	for id, rs := range records {
+		for _, r := range rs {
+			at[names[r.Forge]+" "+r.ForgeID] = id
+		}
+	}
+	title := func(id string) string {
+		is, err := issue.Load(from, id)
+		if err != nil {
+			return ""
+		}
+		t := []rune(is.Title)
+		if len(t) > 40 {
+			return fmt.Sprintf(" %q", string(t[:40])+"…")
+		}
+		return fmt.Sprintf(" %q", is.Title)
+	}
+	// on names a forge issue by forge and number, else, for one the push
+	// creates, by where its issue already is
+	created := map[string]string{} // forge name and its made-up id -> issue
+	var made [2]string             // the forge name and made-up id of the last issue created
+	on := func(name, forgeID string) string {
+		if id := created[name+" "+forgeID]; id != "" {
+			return "the issue it creates for " + strings.Join(links(id, name), ", ") + title(id)
+		}
+		id := at[name+" "+forgeID]
+		for _, r := range records[id] {
+			if names[r.Forge] == name {
+				return name + "#" + r.Number + title(id)
+			}
+		}
+		return name + " issue " + forgeID
+	}
 	var fs []forge.Forge
 	ids := new(int)
-	names := map[string]string{}
 	for _, f := range run.Forges {
-		names[f.Key()] = f.Name
-		fs = append(fs, &counted{f: f.Forge, name: f.Name, dry: true, ids: ids, see: func(ev SyncEvent) {
-			if ev.What == "comment" {
-				rep.WouldCreate = append(rep.WouldCreate, ev.Forge+": a comment on "+ev.Issue)
-			} else {
-				rep.Edits++
+		name := f.Name
+		fs = append(fs, &counted{f: f.Forge, name: f.Name, dry: true, ids: ids, made: func(id string) { made = [2]string{name, id} }, see: func(ev SyncEvent) {
+			switch ev.What {
+			case "comment":
+				rep.WouldCreate = append(rep.WouldCreate, ev.Forge+": a comment on "+on(ev.Forge, ev.Issue))
+			default:
+				rep.Writes = append(rep.Writes, ev.Forge+": "+ev.Line+" on "+on(ev.Forge, ev.Issue))
 			}
 		}})
 	}
 	opt.Mirrors, opt.Did = nil, func(key, what, id string, _ int) {
-		if what == "posted" {
-			rep.WouldCreate = append(rep.WouldCreate, names[key]+": issue "+short(id))
+		if what != "posted" {
+			return
 		}
+		name := names[key]
+		created[made[0]+" "+made[1]] = id
+		line := name + ": issue for " + strings.Join(links(id, name), ", ") + title(id)
+		if why := unlisted[[2]string{id, name}]; why != "" {
+			line += ": git-bug links it to " + why + ", which the forge didn't list"
+		}
+		rep.WouldCreate = append(rep.WouldCreate, line)
 	}
 	_, err = syncer.Push(ctx, s, opt, fs...)
 	return err

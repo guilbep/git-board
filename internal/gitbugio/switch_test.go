@@ -41,7 +41,8 @@ func switchSetup(t *testing.T) (*gitbugio.Backend, gitbugio.SwitchRun, []*fake.F
 				"origin":                             "github",
 				"sync:gitlab.example.com/7:assignee": "",
 			}},
-			{ID: forkID('b'), Title: "Two", Comments: 3, Metadata: map[string]string{"github-url": "https://github.com/o/r/issues/2"}},
+			{ID: forkID('b'), Title: "Two", Comments: 3, Metadata: map[string]string{"github-url": "https://github.com/o/r/issues/2",
+				"sync:gitlab.example.com/7:number": "5"}}, // a GitLab issue the forge doesn't list
 			{ID: forkID('c'), Title: "Local", Comments: 1},
 			{ID: forkID('f'), Title: "Elsewhere", Comments: 1, Metadata: map[string]string{"github-url": "https://github.com/x/y/issues/9"}},
 		},
@@ -120,8 +121,10 @@ func TestSwitch(t *testing.T) {
 		t.Fatalf("releases %d, carried %d, %v", rep.Releases, rep.Carried, rep.ReleaseNotes)
 	}
 	// Two isn't on GitLab: the next sync would create it there, and its comment
-	if len(rep.WouldCreate) != 2 || !strings.HasPrefix(rep.WouldCreate[0], "gitlab: issue ") || len(rep.Blockers) != 2 {
-		t.Fatalf("would create %q, blockers %q", rep.WouldCreate, rep.Blockers)
+	want := []string{`gitlab: issue for github#2 "Two": git-bug links it to gitlab#5, which the forge didn't list`,
+		`gitlab: a comment on the issue it creates for github#2 "Two"`}
+	if !slices.Equal(rep.WouldCreate, want) || len(rep.Writes) != 0 || len(rep.Blockers) != 2 {
+		t.Fatalf("would create %q, writes %q, blockers %q", rep.WouldCreate, rep.Writes, rep.Blockers)
 	}
 
 	run.Apply = true

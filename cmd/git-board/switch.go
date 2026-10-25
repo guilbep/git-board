@@ -126,8 +126,9 @@ func printSwitch(out io.Writer, rep gitbugio.SwitchReport, apply bool) {
 	list("comments the fork never posted", rep.LostComments)
 	fmt.Fprintf(out, "Releases: %d records in refs/releases, %d carried into git-board's.\n", rep.Releases, rep.Carried)
 	list("not carried", rep.ReleaseNotes)
-	fmt.Fprintf(out, "The next sync: %d creations on the forges, %d other writes.\n", len(rep.WouldCreate), rep.Edits)
+	fmt.Fprintf(out, "The next sync: %d creations on the forges, %d other writes.\n", len(rep.WouldCreate), len(rep.Writes))
 	list("it would create", rep.WouldCreate)
+	list("its other writes", rep.Writes)
 	if len(rep.Blockers) > 0 {
 		fmt.Fprintln(out, "Blockers:")
 		for _, b := range rep.Blockers {

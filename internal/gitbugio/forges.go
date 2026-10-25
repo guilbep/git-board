@@ -221,6 +221,7 @@ type counted struct {
 	dry  bool
 	ids  *int // a dry run's made-up ids, shared by every account's view
 	see  func(SyncEvent)
+	made func(id string) // nil, or hears a dry run's made-up id for each issue it would create
 }
 
 var _ forge.Forge = (*counted)(nil)
@@ -251,14 +252,14 @@ func (c *counted) Issue(ctx context.Context, id string) (forge.Issue, error) {
 	return c.f.Issue(ctx, id)
 }
 
-// write makes a write, unless dry, then tells it.
-func (c *counted) write(what, issueID string, do func() error) error {
+// write makes a write, unless dry, then tells it, with op as its Line.
+func (c *counted) write(what, op, issueID string, do func() error) error {
 	if !c.dry {
 		if err := do(); err != nil {
 			return err
 		}
 	}
-	c.see(SyncEvent{Forge: c.name, Way: "push", What: what, Issue: issueID})
+	c.see(SyncEvent{Forge: c.name, Way: "push", What: what, Issue: issueID, Line: op})
 	return nil
 }
 
@@ -273,6 +274,9 @@ func (c *counted) CreateIssue(ctx context.Context, title, body string) (forge.Is
 	if c.dry {
 		me, err := c.f.Me(ctx)
 		id, now := c.madeUp(), time.Now().Unix()
+		if c.made != nil {
+			c.made(id)
+		}
 		return forge.Issue{ID: id, Number: id, URL: id, Author: me, Created: now, Updated: now, Title: title, Body: body, Status: "open"}, err
 	}
 	return c.f.CreateIssue(ctx, title, body)
@@ -280,7 +284,7 @@ func (c *counted) CreateIssue(ctx context.Context, title, body string) (forge.Is
 
 func (c *counted) CreateComment(ctx context.Context, issueID, body string) (forge.Comment, error) {
 	out := forge.Comment{Body: body}
-	err := c.write("comment", issueID, func() (err error) {
+	err := c.write("comment", "create-comment", issueID, func() (err error) {
 		out, err = c.f.CreateComment(ctx, issueID, body)
 		return err
 	})
@@ -292,28 +296,28 @@ func (c *counted) CreateComment(ctx context.Context, issueID, body string) (forg
 }
 
 func (c *counted) EditComment(ctx context.Context, issueID, commentID, body string) error {
-	return c.write("edit", issueID, func() error { return c.f.EditComment(ctx, issueID, commentID, body) })
+	return c.write("edit", "edit-comment", issueID, func() error { return c.f.EditComment(ctx, issueID, commentID, body) })
 }
 
 func (c *counted) SetTitle(ctx context.Context, issueID, title string) error {
-	return c.write("change", issueID, func() error { return c.f.SetTitle(ctx, issueID, title) })
+	return c.write("change", "set-title", issueID, func() error { return c.f.SetTitle(ctx, issueID, title) })
 }
 
 func (c *counted) SetBody(ctx context.Context, issueID, body string) error {
-	return c.write("edit", issueID, func() error { return c.f.SetBody(ctx, issueID, body) })
+	return c.write("edit", "set-body", issueID, func() error { return c.f.SetBody(ctx, issueID, body) })
 }
 
 func (c *counted) SetStatus(ctx context.Context, issueID, status string) error {
-	return c.write("change", issueID, func() error { return c.f.SetStatus(ctx, issueID, status) })
+	return c.write("change", "set-status", issueID, func() error { return c.f.SetStatus(ctx, issueID, status) })
 }
 
 func (c *counted) ChangeLabels(ctx context.Context, issueID string, add, remove []string) error {
-	return c.write("change", issueID, func() error { return c.f.ChangeLabels(ctx, issueID, add, remove) })
+	return c.write("change", "change-labels", issueID, func() error { return c.f.ChangeLabels(ctx, issueID, add, remove) })
 }
 
 func (c *counted) SetAssignees(ctx context.Context, issueID string, users []forge.Account) ([]forge.Account, error) {
 	kept := users // a dry run: the forge keeps them all
-	err := c.write("change", issueID, func() (err error) {
+	err := c.write("change", "set-assignees", issueID, func() (err error) {
 		kept, err = c.f.SetAssignees(ctx, issueID, users)
 		return err
 	})
