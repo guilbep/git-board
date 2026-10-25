@@ -657,4 +657,4 @@ assignees = "native"
 
 `git board lint --create-labels` prints the same plan, and `--apply` carries it out.
 
-`assignees` is how the forges hold an issue's `assignee:<login>` values: `native` (the default), as the forge's own assignees, or `labels`, as `assignee:<login>` labels. Before each real forge sync, git-board writes it into this clone's git config, `git-bug.bridge.<name>.assignees` for each bridge, so a plain `git bug bridge sync` here agrees. When it changes, the check says so, and the sync after it pulls every issue again, so the assignees already there move to the new way. Every clone must use the same mode, or their syncs undo each other on every run: CI, or another clone running `git bug bridge sync` without git-board, must set the same key.
+`assignees` is no longer read: an issue's `assignee:<login>` labels are always the forge's own assignees, on every forge (GitLab's free edition takes one; the others stay in git-board).

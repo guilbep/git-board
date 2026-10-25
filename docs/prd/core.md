@@ -174,6 +174,18 @@ refusal warned once and assignees, and the fake passes all 16. "Refs never
 mirrored" is read as references: no `#n` reaches another project as it is.
 See the spec's M3 results.
 
+M5 result, 2026-10-25: git-board runs on the core, and git-bug has left
+go.mod (`TestModuleImportsNoGitBug`). The forges a repository syncs with
+are `[forges.<name>]` tables of `.git-board.toml`, with `[forges]
+publish-private`; tokens come from the environment or git's credential
+helper only. The server's forge sync runs `syncer.Sync`, `Pull` and `Push`
+on adapters opened for each run; its check runs the same sync on a mirror
+of the repository, every forge write counted and answered without being
+made. Line comments stay local (`Options.Local`), and what waits for a
+forge comes from the sync records (`syncer.Records`). The core is about
+6,000 lines of code and 5,400 of tests, blank and comment lines aside.
+`make ci` runs once, at the end of the project.
+
 ## Carried to later milestones
 
 What M1's tasks and reviews left for later. The execution ledger isn't kept
@@ -216,12 +228,24 @@ in git, so they are listed here.
   (`TestAssigneeInAnyCase`), and checks id prefixes, comment ids and remote
   names before the core (`TestInputsAreChecked`). No HTTP input names a
   kind.
-- **M5, phase 2:** the push leaves out comments with `review:*` metadata;
+- ~~**M5, phase 2:** the push leaves out comments with `review:*` metadata;
   `Event.Pending`, `EditPending` and `EditWas` from the sync's records;
   the forges, tokens and the GitHub repository for numbers and pull
   requests from `.git-board.toml` and the credential helper, where the
   bridges' stubs answer "not wired yet". See
-  [core-m5-inventory.md](core-m5-inventory.md).
+  [core-m5-inventory.md](core-m5-inventory.md).~~ Done: `Options.Local`
+  (`TestLocalDidAndRecords`, `TestReviewCommentsPending`), `syncer.Records`
+  (`TestThreadEditWasIsWhatTheForgesHave`, `TestWorkToSend`), `[forges]`
+  (`TestForges`), the tokens (`TestGitHubToken`, `TestForgeToken`), the
+  numbers page (`TestNumbersFromSettings`), and the check
+  (`TestDryRunWritesNothing`). Found on the way and fixed: a `posted`
+  record was a comment's id alone, which two issues can share
+  (`TestSameCommentInTwoIssues`).
+- **M6:** git-board has no command-line forge sync: the Sync page runs
+  it. Add one if CI or a script needs it.
+- **M6:** what waits for a forge compares texts as git-board has them: a
+  text that came from another forge, whose `#n` and mentions sync
+  rewrites, shows as an edit waiting there.
 
 ## Success
 

@@ -54,3 +54,24 @@ barely changed. What phase 1 left:
   the TUI keep them, by head, in memory.
 - **The web app's link, unlink and take buttons** never show, as no forge
   names a bridge any more; their code waits for the end of the project.
+
+## Phase 2, done
+
+- **Forge sync runs on the core:** `SyncForges`, `GetForges`, `SendForges`
+  and `SyncIssue` run `syncer.Sync`, `Pull`, `Push` and `Options.Issue` on
+  the forges of `[forges.<name>]`, opened for each run. The check is the
+  same run on a mirror of the repository, its forge writes counted and
+  never made.
+- **Bridges are forges of `.git-board.toml`:** Settings lists, adds,
+  switches and removes them; a pasted token goes to `git credential
+  approve`. Credentials list the forges whose posting account has a token,
+  never the token.
+- **Tokens, the numbers page and pull requests** take the adapters' token
+  rule (`github.Token`, `gitlab.Token`), with the GitHub forge's
+  repository.
+- **Review comments never reach a forge** (`Options.Local`), and never
+  show as waiting for one.
+- **Gone with git-bug:** the check's "conflicts" guard on Send (a push
+  alone writes a field only where git-board's change is the later), its
+  "stays local" count (the posting account posts for everyone), and
+  `TestForgeSendRefusesIssuesChangedBothWays` with them.
