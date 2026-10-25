@@ -72,10 +72,14 @@ func changedAt(fi forge.Issue, field string) int64 {
 }
 
 // wrapLike gives a text the header and marker last seen had, if sync
-// posted it, or the fork's start, if the fork did.
+// posted it, or the fork's start, if the fork did: the fork's copies end
+// without spaces or blank lines, so a text in its form does too.
 func wrapLike(seen, body string, posted bool) string {
 	w := unwrap(seen)
-	if !w.forked() && (!posted || w.marker == "") {
+	switch {
+	case w.forked():
+		body = strings.TrimRight(body, " \t\r\n")
+	case !posted || w.marker == "":
 		return body
 	}
 	w.body = body
@@ -251,31 +255,52 @@ func (r *run) plan(p *project, is *issue.Issue, fi forge.Issue, who map[string]s
 }
 
 // mirrored is the comment of is that fc mirrors, or that mirrors fc, as the
-// fork posted them on two projects: one with fc's text, neither from p nor
-// sent there, where fc is in the fork's form from sync's accounts (copied),
-// or the comment's text was on the forge it came from.
+// fork posted them on two projects: neither from p nor sent there. fc is a
+// copy when in the fork's form from sync's accounts (copied); the comment
+// is one when its text was, on the forge it came from. A copy's header
+// names its original exactly; failing that, the two have the same text.
 func (r *run) mirrored(p *project, is *issue.Issue, fc forge.Comment, matched map[string]bool) (c *issue.Comment, copied bool) {
-	copied = unwrap(fc.Body).forked() && r.isSync(p, fc.Author)
+	w := unwrap(fc.Body)
+	copied = w.forked() && r.isSync(p, fc.Author)
+	host, orig := commentLinked(w.link)
+	var byText *issue.Comment
 	for i := range is.Comments {
 		c := &is.Comments[i]
 		if matched[c.ID] || p.st.posted[[2]string{is.ID, c.ID}] != "" || c.Origin != nil && c.Origin.Forge == p.key ||
 			r.opt.Local != nil && r.opt.Local(c.Meta) {
 			continue
 		}
-		if (copied || r.forkCopy(is.ID, c)) && same(fc.Body, c.Body) {
-			return c, copied
+		cw, from := r.pulledFrom(is.ID, c)
+		cHost, cOrig := commentLinked(cw.link)
+		switch {
+		case copied && orig != "" && from != nil && from.f.Server() == host && c.Origin.Event == "comment:"+orig:
+			return c, true // fc is c's copy
+		case !copied && cOrig != "" && cHost == p.f.Server() && cOrig == fc.ID:
+			return c, false // c is fc's copy
+		case byText == nil && (copied || cw.forked()) && same(fc.Body, c.Body):
+			byText = c
 		}
 	}
-	return nil, false
+	return byText, copied && byText != nil
 }
 
-// forkCopy says a comment was pulled from a text in the fork's form.
-func (r *run) forkCopy(issueID string, c *issue.Comment) bool {
+// pulledFrom is a comment's text as last seen on the run's project it was
+// pulled from, and that project; nil for a comment from none.
+func (r *run) pulledFrom(issueID string, c *issue.Comment) (wrapped, *project) {
 	if c.Origin == nil {
-		return false
+		return wrapped{}, nil
 	}
 	fid, ok := strings.CutPrefix(c.Origin.Event, "comment:")
-	return ok && unwrap(r.stateOf(c.Origin.Forge).seen[issueID]["comment:"+fid]).forked()
+	if !ok {
+		return wrapped{}, nil
+	}
+	w := unwrap(r.stateOf(c.Origin.Forge).seen[issueID]["comment:"+fid])
+	for _, q := range r.projects {
+		if q.key == c.Origin.Forge {
+			return w, q
+		}
+	}
+	return w, nil
 }
 
 func withSeen(seen map[string]string, field, v string) map[string]string {

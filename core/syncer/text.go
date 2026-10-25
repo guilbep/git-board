@@ -1,6 +1,7 @@
 package syncer
 
 import (
+	"net/url"
 	"regexp"
 	"strings"
 	"time"
@@ -21,9 +22,9 @@ func header(name string, written int64, where string) string {
 
 // wrapped is a text as sync posts it: a header, the text, a marker. Kind
 // and id are the marker's. fork is the fork's own start of a text it
-// posted, kept as it is: its marker, forkID its id, and its header, which
-// links place, "<key>#<number>".
-type wrapped struct{ header, body, marker, kind, id, fork, forkID, place string }
+// posted, kept as it is: its marker, forkID its id, and its header, whose
+// link is the original's URL.
+type wrapped struct{ header, body, marker, kind, id, fork, forkID, link string }
 
 // unwrap splits a text sync posted, or the fork did. A text with neither
 // form is all body.
@@ -31,7 +32,7 @@ func unwrap(text string) wrapped {
 	w := wrapped{body: text}
 	m := markerRE.FindStringSubmatchIndex(text)
 	if m == nil {
-		w.fork, w.forkID, w.place = forkStart(text)
+		w.fork, w.forkID, w.link = forkStart(text)
 		w.body = text[len(w.fork):]
 		return w
 	}
@@ -44,36 +45,42 @@ func unwrap(text string) wrapped {
 }
 
 // The fork's form (sync.md's "Switching from the fork"): its marker alone on
-// the first line, and a header in italics; a header without the marker
-// counts when it links an issue.
+// the first line, with a word after its id ("attributed") when it posted
+// someone else's text, which then starts with a header in italics linking
+// the original issue or comment.
 var (
-	forkMarkerRE = regexp.MustCompile(`^<!-- git-bug:([0-9a-f]{64}) -->(?:\n|$)`)
-	forkHeaderRE = regexp.MustCompile(`^\*From [^\n]*\*(?:\n\n|\n|$)`)
-	placeRE      = regexp.MustCompile(`\[([^\]\n#]+)#([0-9]+)\]\(`)
+	forkMarkerRE = regexp.MustCompile(`^<!-- git-bug:([0-9a-f]{64})(?: [a-z]+)? -->(?:\n|$)`)
+	forkHeaderRE = regexp.MustCompile(`^\*Originally posted by [^\n]*\[view on [^\]\n]*\]\(([^)\s]+)\)\*(?:\n\n|\n|$)`)
 )
 
 // forkStart is the fork's marker and header at the start of a text, the
-// marker's id, and the issue the header links.
-func forkStart(text string) (start, id, place string) {
-	rest := text
-	marked := false
-	for range 2 {
-		if m := forkMarkerRE.FindStringSubmatch(rest); m != nil && !marked {
-			marked, id, rest = true, m[1], rest[len(m[0]):]
-			continue
-		}
-		h := forkHeaderRE.FindString(rest)
-		if h == "" || place != "" {
-			break
-		}
-		if p := placeRE.FindStringSubmatch(h); p != nil {
-			place = p[1] + "#" + p[2]
-		} else if !marked {
-			break
-		}
-		rest = rest[len(h):]
+// marker's id, and the URL of the original the header links.
+func forkStart(text string) (start, id, link string) {
+	m := forkMarkerRE.FindStringSubmatch(text)
+	if m == nil {
+		return "", "", ""
 	}
-	return text[:len(text)-len(rest)], id, place
+	start, id = m[0], m[1]
+	if h := forkHeaderRE.FindStringSubmatch(text[len(start):]); h != nil {
+		start, link = start+h[0], h[1]
+	}
+	return start, id, link
+}
+
+// commentLinked is the original comment a fork header's link names: the
+// forge's host and the comment's id, from GitHub's #issuecomment-<id> or
+// GitLab's #note_<id>; "" for an issue's link.
+func commentLinked(link string) (host, id string) {
+	u, err := url.Parse(link)
+	if err != nil {
+		return "", ""
+	}
+	for _, prefix := range []string{"issuecomment-", "note_"} {
+		if n, ok := strings.CutPrefix(u.Fragment, prefix); ok && n != "" && strings.Trim(n, "0123456789") == "" {
+			return u.Host, n
+		}
+	}
+	return "", ""
 }
 
 // forked says the text is in the fork's form.

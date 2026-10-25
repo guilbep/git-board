@@ -328,10 +328,13 @@ fork](sync.md#switching-from-the-fork)); keys the numbers again; carries
 the release records; and runs the next sync's push on a copy, its writes
 answered in the process, to show what it would create.
 
-- **The fork's form,** seen on guilbep/git-bug-sync-test: its marker,
-  `<!-- git-bug:<64 hex> -->`, alone on a text's first line. No text there
-  has the fork's header: every post was a token owner's. The header is
-  matched as the brief gives it, in italics with a `[key#n](url)` link.
+- **The fork's form,** seen on guilbep/git-bug-sync-test and, in a dry
+  run of the switch on a copy of the wiki, on its GitLab: its marker,
+  `<!-- git-bug:<64 hex> -->`, alone on a text's first line; for a text it
+  posted for someone else, `<!-- git-bug:<id> attributed -->` and the
+  header `*Originally posted by <name> on <date>, [view on
+  GitHub](<url>)*`, whose URL names the original issue, or the original
+  comment by `#issuecomment-<id>`. The fork trimmed its copies' ends.
 - **The fork's links** are its issues' metadata, from `git bug bug
   --format json`: `sync:<key>:number` and `:url`, and the older
   `github-url` and `gitlab-url`. A GitLab URL names its project by path,

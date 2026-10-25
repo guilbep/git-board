@@ -495,10 +495,10 @@ func (r *run) match(p *project, fi forge.Issue, final bool) (string, error) {
 
 // mirror finds the issue a forge issue mirrors, as sync.md's "Switching
 // from the fork" says: a text in the fork's form waits until final, so
-// that the originals come first; its header and marker id join from sync's
-// accounts only (trusted); the fork's data, Mirrors, names the others of
-// its group, mirror or original. It joins the first issue found that isn't
-// linked to p yet.
+// that the originals come first; its header's link and its marker id join
+// from sync's accounts only (trusted); the fork's data, Mirrors, names the
+// others of its group, mirror or original. It joins the first issue found
+// that isn't linked to p yet.
 func (r *run) mirror(p *project, fi forge.Issue, final bool) (string, error) {
 	w := unwrap(fi.Body)
 	trusted := w.forked() && r.isSync(p, fi.Author)
@@ -511,8 +511,7 @@ func (r *run) mirror(p *project, fi forge.Issue, final bool) (string, error) {
 	}
 	var found []string
 	if trusted {
-		found = append(found, r.forkIDs[w.forkID])
-		places = append(places, w.place)
+		found = append(found, r.linkedAt(p, w.link), r.forkIDs[w.forkID])
 	}
 	for _, place := range places {
 		i := strings.LastIndex(place, "#")
@@ -531,6 +530,21 @@ func (r *run) mirror(p *project, fi forge.Issue, final bool) (string, error) {
 		}
 	}
 	return "new", nil
+}
+
+// linkedAt is the issue linked, on a project of the run other than p, to
+// the forge issue at u, a comment's fragment aside; "" for none.
+// ponytail: a scan of every link per mirror, for a switch's one pull
+func (r *run) linkedAt(p *project, u string) string {
+	u, _, _ = strings.Cut(u, "#")
+	for _, q := range r.projects {
+		for id, l := range q.st.link {
+			if q != p && u != "" && l.URL == u {
+				return id
+			}
+		}
+	}
+	return ""
 }
 
 // join links a mirror the fork posted to the issue it mirrors. Its title,

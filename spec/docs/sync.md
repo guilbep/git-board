@@ -496,23 +496,26 @@ each issue and comment to every project, so a forge holds originals and
 the fork's copies of the others'. The pull makes one issue of each
 mirrored group, never a second.
 
-- **The fork's form.** A text the fork posted starts with its marker alone
-  on the first line, `<!-- git-bug:<64 hex digits> -->`, then the text. A
-  text it posted for someone without a token also has a header in
-  italics, `*From …*`, linking the original issue as `[<key>#<n>](<url>)`.
-  A header without the marker counts when it holds that link. The scratch
-  forges show the marker; the header's form is the fork's design, not yet
-  seen on a forge.
+- **The fork's form,** as the wiki's GitLab and the scratch forges show
+  it. A text the fork posted starts with its marker alone on the first
+  line, `<!-- git-bug:<64 hex digits> -->`, then the text. A text it posted
+  for someone else has a word after the id,
+  `<!-- git-bug:<id> attributed -->`, then a header in italics and a blank
+  line: `*Originally posted by <name> on <YYYY-MM-DD>, [view on
+  <forge>](<url>)*`. The URL is the original issue's, or the original
+  comment's: the issue's with `#issuecomment-<id>` (GitHub) or
+  `#note_<id>` (GitLab). A header without the marker is text.
 - **Pulled,** a text loses the fork's marker and header, whoever wrote it.
   Last seen keeps the forge's text, and a text sent back to that project
   gets them again, as [the forge's form](#the-forges-form) keeps sync's
-  own header.
+  own header. The fork's copies end without spaces or blank lines, so a
+  text sent in its form ends so too.
 - **A mirror** is a forge issue whose body is in the fork's form. It
   waits until every project's other issues are pulled, whoever posted it,
   so that the originals come first. Then it joins the issue its group
-  already has: from sync's accounts only, the one pulled from the project
-  and number its header links, or from a copy with the same marker id.
-  With none, it is a new issue.
+  already has: from sync's accounts only, the one linked on another
+  project at its header's URL (a comment's fragment aside), or pulled from
+  a copy with the same marker id. With none, it is a new issue.
 - **The fork's data.** git-board gives the run the fork's links, the
   `Mirrors` option: groups of forge issues, by project key (in any case)
   and number, that the fork made one issue. A forge issue in a group joins
@@ -522,14 +525,17 @@ mirrored group, never a second.
   forge has the title, body and status: the issue's values, the
   original's, win. Labels and assignees get no last seen, so the two
   sides' sets merge. A joined issue is never created on that project again.
-- **A comment joins** the issue's first comment with the same text that
-  isn't from that project nor recorded there, when the forge's comment is
-  in the fork's form from sync's accounts, or the issue's comment was in
-  it on the forge it came from. The same text compares without the fork's
-  start, backticks, references (`#n`, or a link to one) and runs of
-  spaces, as either side may have translated them. A `posted` records the
-  join. Last seen is the forge's text when the forge has the copy, else
-  git-board's, so that the original's text is pulled.
+- **A comment joins** one of the issue's comments that isn't from that
+  project nor recorded there. The forge's comment is a copy when in the
+  fork's form from sync's accounts; the issue's is one when its text was
+  in it on the forge it came from. A copy's header names its original
+  exactly: the comment pulled from the forge comment its URL's fragment
+  names, on the host the URL names. Failing that, it joins the first with
+  the same text, which compares without the fork's start, backticks,
+  references (`#n`, or a link to one) and runs of spaces, as either side
+  may have translated them. A `posted` records the join. Last seen is the
+  forge's text when the forge has the copy, else git-board's, so that the
+  original's text is pulled.
 - **What a join leaves.** A text the fork translated otherwise than sync
   does shows as an edit waiting for that forge, never as a new issue or
   comment.

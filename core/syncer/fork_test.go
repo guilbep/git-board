@@ -13,27 +13,38 @@ import (
 
 func forkMarker(c byte) string { return "<!-- git-bug:" + strings.Repeat(string(c), 64) + " -->" }
 
+// attributed is a text the fork posted for someone else, as on the wiki's
+// GitLab: its marker with a word, and a header linking the original.
+func attributed(c byte, who, link, text string) string {
+	return "<!-- git-bug:" + strings.Repeat(string(c), 64) + " attributed -->\n*Originally posted by " + who +
+		" on 2026-09-30, [view on GitHub](" + link + ")*\n\n" + text
+}
+
 func TestForkStart(t *testing.T) {
 	t.Parallel()
-	head := "*From ann, 2026-01-01, on [example.com/a#1](https://example.com/a/issues/1).*"
-	for _, c := range []struct{ text, body, id, place string }{
+	gh := "https://github.com/EPFL-ENAC/wiki/issues/6#issuecomment-5907585575"
+	head := "*Originally posted by Nicolas Dubois on 2026-09-30, [view on GitHub](" + gh + ")*"
+	for _, c := range []struct{ text, body, id, link string }{
 		{forkMarker('a') + "\nhi", "hi", strings.Repeat("a", 64), ""},
 		{forkMarker('a'), "", strings.Repeat("a", 64), ""},
-		{forkMarker('a') + "\n" + head + "\n\nhi", "hi", strings.Repeat("a", 64), "example.com/a#1"},
-		{head + "\n\nhi", "hi", "", "example.com/a#1"},
-		{head + "\n\n" + forkMarker('b') + "\nhi", "hi", strings.Repeat("b", 64), "example.com/a#1"},
-		{"*From the team*\n\nhi", "*From the team*\n\nhi", "", ""}, // no link, no marker: text
+		{forkMarker('a') + "\n", "", strings.Repeat("a", 64), ""},
+		{attributed('a', "Nicolas Dubois", gh, "doc updated"), "doc updated", strings.Repeat("a", 64), gh},
+		{head + "\n\nhi", head + "\n\nhi", "", ""}, // a header without the marker: text
 		{"hi\n" + forkMarker('a'), "hi\n" + forkMarker('a'), "", ""},
 	} {
 		w := unwrap(c.text)
-		if w.body != c.body || w.forkID != c.id || w.place != c.place || w.String() != c.text {
+		if w.body != c.body || w.forkID != c.id || w.link != c.link || w.String() != c.text {
 			t.Errorf("unwrap(%q) = %+v", c.text, w)
 		}
 	}
-	// the core's own form is read as the core's, its header included
-	core := head + "\n\nhi\n\n" + marker("issue", strings.Repeat("c", 40))
-	if w := unwrap(core); w.forked() || w.body != "hi" || w.marker == "" {
-		t.Errorf("unwrap(core) = %+v", w)
+	for link, want := range map[string][2]string{
+		gh: {"github.com", "5907585575"},
+		"https://gitlab.epfl.ch/EPFL-ENAC/wiki/-/work_items/7#note_641057": {"gitlab.epfl.ch", "641057"},
+		"https://github.com/EPFL-ENAC/wiki/issues/22":                      {"", ""},
+	} {
+		if host, id := commentLinked(link); [2]string{host, id} != want {
+			t.Errorf("commentLinked(%s) = %s, %s", link, host, id)
+		}
 	}
 	if !same("`@bob` see [example.com/a#3](https://x/3)", "@bob see #5") || same("hi", "ho") {
 		t.Error("same")
@@ -54,7 +65,7 @@ func forkPair() (a, b *fake.Forge) {
 			{ID: "a2", Body: forkMarker('2') + "\nfrom b, see #1", Author: board, Time: 1300},
 		}})
 	b.Add(forge.Issue{ID: "200", Author: board, Created: 1001, Title: "T",
-		Body:   forkMarker('1') + "\n*From ann, 1970-01-01, on [example.com/a#1](https://example.com/a/issues/1).*\n\nB `@bob`",
+		Body:   attributed('1', "ann", "https://example.com/a/issues/1", "B `@bob`"),
 		Labels: []string{"ui"},
 		Comments: []forge.Comment{
 			{ID: "b1", Body: forkMarker('3') + "\nhi", Author: board, Time: 1200},
@@ -137,7 +148,7 @@ func TestForkMirrorsOption(t *testing.T) {
 		b.Add(forge.Issue{Author: board, Title: "One", Body: forkMarker('1') + "\none"})
 		b.Add(forge.Issue{Author: ann(), Title: "Two", Body: "two"})
 		b.Add(forge.Issue{Author: forge.Account{ID: "9", Login: "carl"}, Title: "Three",
-			Body: "*From x, on [example.com/a#1](u).*\n\nthree"})
+			Body: attributed('3', "x", "https://example.com/a/issues/1", "three")})
 		return a, b
 	}
 	s := newStore(t)
@@ -220,5 +231,59 @@ func TestForkCopyOfAStrangerWaits(t *testing.T) {
 	syncAll(t, s, a, b)
 	if w := append(a.Writes(), b.Writes()...); len(w) != 0 {
 		t.Fatalf("writes %+v", w)
+	}
+}
+
+// The wiki's texts, as the fork left them on its GitLab: an attributed
+// copy joins its original by its header's link, an issue and a comment,
+// even where the text differs. The original's text wins: sync's one write
+// edits the comment's copy to it, keeping the fork's marker and header,
+// and a second sync writes nothing.
+func TestForkAttributedJoins(t *testing.T) {
+	t.Parallel()
+	for _, glFirst := range []bool{false, true} {
+		s := newStore(t)
+		gh, gl := fake.New("github.com/EPFL-ENAC/wiki"), fake.New("gitlab.epfl.ch/41960")
+		board, nicdub := forge.Account{ID: "1", Login: "board"}, forge.Account{ID: "12", Login: "nicdub"}
+		pierre := forge.Account{ID: "13", Login: "pripoll"}
+		gh.Add(forge.Issue{Number: "6", Author: ann(), Title: "Shared web hosting", Body: "@nicdub, dans le wiki\n\n",
+			Comments: []forge.Comment{{ID: "5907585575", Author: nicdub, Body: "doc updated, le shared hosting A10"}}})
+		gh.Add(forge.Issue{Number: "7", Author: pierre, Title: "[SUGGESTION] Use vector embedding",
+			Body: "Use RCP to do semantic search"})
+		gl.Add(forge.Issue{Number: "7", Author: board, Title: "Shared web hosting", Body: forkMarker('d') + "\n`@nicdub`, dans le wiki",
+			Comments: []forge.Comment{{ID: "641057", Author: board,
+				Body: attributed('4', "Nicolas Dubois", "https://github.com/EPFL-ENAC/wiki/issues/6#issuecomment-5907585575",
+					"doc updated, le shared hosting A10, edited on GitLab")}}})
+		gl.Add(forge.Issue{Number: "8", Author: board, Title: "[SUGGESTION] Use vector embedding",
+			Body: attributed('c', "Pierre Ripoll", "https://github.com/EPFL-ENAC/wiki/issues/7", "Use RCP to do semantic search")})
+		fs := []forge.Forge{gh, gl}
+		if glFirst {
+			fs = []forge.Forge{gl, gh}
+		}
+		opt := Options{Mirrors: [][]string{{"github.com/epfl-enac/wiki#6", "gitlab.epfl.ch/41960#7"}}}
+		if _, err := Pull(t.Context(), s, opt, fs...); err != nil {
+			t.Fatal(err)
+		}
+		all := issues(t, s)
+		if len(all) != 2 {
+			t.Fatalf("gl first %v: %d issues", glFirst, len(all))
+		}
+		for _, is := range all {
+			if strings.Contains(is.Body, "git-bug") || strings.Contains(is.Body, "Originally") || len(is.Comments) > 1 {
+				t.Fatalf("gl first %v: %q, %+v", glFirst, is.Body, is.Comments)
+			}
+		}
+		for range 2 {
+			opt.Mirrors = nil
+			if _, err := Sync(t.Context(), s, opt, gh, gl); err != nil {
+				t.Fatal(err)
+			}
+		}
+		w := append(gh.Writes(), gl.Writes()...)
+		head := strings.SplitAfter(gl.All()[0].Comments[0].Body, "\n\n")[0]
+		if len(w) != 1 || w[0].Op != "edit-comment" || w[0].Args[1] != head+"doc updated, le shared hosting A10" ||
+			!strings.Contains(head, " attributed -->\n*Originally posted by Nicolas Dubois") {
+			t.Fatalf("gl first %v: writes %+v", glFirst, w)
+		}
 	}
 }
