@@ -421,7 +421,9 @@ Deletions are never propagated, either way.
   deletes.
 - **"Not found" is checked twice.** Sync takes a forge issue as deleted only
   when the posting account's token gets "not found" too. A forge gives
-  the same answer when a token lacks access to a private project.
+  the same answer when a token lacks access to a private project. When
+  that account reads the issue, the write is refused; when its read fails
+  otherwise, the run stops with that error, and records nothing.
 
 ## Nothing private published
 

@@ -475,3 +475,49 @@ func TestMarkerLinkSeesWhatWasSent(t *testing.T) {
 		t.Errorf("forge title %q", got)
 	}
 }
+
+type rereadFails struct {
+	*fake.Forge
+	fail *bool
+}
+
+func (f rereadFails) Issue(ctx context.Context, id string) (forge.Issue, error) {
+	if *f.fail {
+		return forge.Issue{}, errors.New("502")
+	}
+	return f.Forge.Issue(ctx, id)
+}
+
+// A write's "not found" is a refusal only once the posting account reads
+// the issue: a re-read that fails otherwise stops the run, and records
+// nothing.
+func TestNotFoundThenFailedReread(t *testing.T) {
+	t.Parallel()
+	s, f := newStore(t), fake.New(key)
+	is, err := issue.Create(t.Context(), s, issue.NewCreate("a", "T", "B"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	fail := false
+	ff := rereadFails{f, &fail}
+	syncAll(t, s, ff)
+	if _, err := issue.Do(t.Context(), s, is.ID, issue.SetTitle("a", "T2")); err != nil {
+		t.Fatal(err)
+	}
+	f.Before(func(w fake.Write) error {
+		if w.Op == "set-title" {
+			fail = true
+			return forge.ErrNotFound
+		}
+		return nil
+	})
+	if _, err := Sync(t.Context(), s, Options{}, ff); err == nil {
+		t.Fatal("no error")
+	}
+	fail = false
+	f.Before(nil)
+	syncAll(t, s, ff)
+	if got := f.All()[0].Title; got != "T2" {
+		t.Errorf("title %q: the failure was recorded as a refusal", got)
+	}
+}

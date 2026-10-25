@@ -576,7 +576,8 @@ func (r *run) planAssignees(pl *plan, p *project, is *issue.Issue, fi forge.Issu
 
 // send makes one write as person, then records it. A refusal is recorded
 // and warned once; an issue gone or confidential stops the issue's push.
-// "Not found" counts as gone only when the posting account gets it too.
+// "Not found" counts as gone only when the posting account gets it too,
+// and as refused only when that account reads the issue.
 func (r *run) send(x *pushing, person, field string, values []string, write func(forge.Forge) ([]oplog.Op, error)) error {
 	if x.gone {
 		return nil
@@ -591,9 +592,13 @@ func (r *run) send(x *pushing, person, field string, values []string, write func
 		x.gone = true
 		return nil
 	case errors.Is(err, forge.ErrNotFound):
-		if _, e := x.p.f.Issue(r.ctx, x.fi.ID); errors.Is(e, forge.ErrNotFound) || errors.Is(e, forge.ErrConfidential) {
+		_, e := x.p.f.Issue(r.ctx, x.fi.ID)
+		if errors.Is(e, forge.ErrNotFound) || errors.Is(e, forge.ErrConfidential) {
 			x.gone = true
 			return nil
+		}
+		if e != nil {
+			return e // the posting account's read failed: nothing is known yet
 		}
 		fallthrough
 	case errors.Is(err, forge.ErrRefused):
