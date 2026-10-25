@@ -195,9 +195,11 @@ carries the release records over, and reports what is lost and what the
 next sync would create. A forge sync refuses a repository still on
 git-bug. The licence scan (`TestLicences`) finds no GPL in the 57
 modules built, and LICENSE is MIT. See the spec's M6 results. Left to
-guilbep: a last sync.10 run, then `git-board switch` on copies of the
-wiki and git-board's own board, then `--apply`, then `git push origin
-refs/board/seq` before anyone's `git-board sync`.
+guilbep: a last sync.10 run and `git-board numbers`, then `git-board
+switch` on copies of the wiki and git-board's own board, then `--apply`,
+then `git push origin refs/board/seq` before anyone's `git-board sync`.
+Every clone takes this git-board first: one still on the fork's would
+number every issue again.
 
 ## Carried to later milestones
 
