@@ -94,6 +94,11 @@ func plain(text string) string {
 	return text
 }
 
+// forkText is what of a text in the fork's form compares: its body,
+// without the space at its end, which the fork trimmed and a forge's edit
+// may add.
+func forkText(text string) string { return strings.TrimRight(plain(text), " \t\r\n") }
+
 // plan compares is with fi, as sync.md's four cases say. who gives the
 // persons of fi's authors; it is nil for a virtual fi, which finds nothing.
 func (r *run) plan(p *project, is *issue.Issue, fi forge.Issue, who map[string]string, pull, push bool) (*plan, error) {
@@ -105,11 +110,16 @@ func (r *run) plan(p *project, is *issue.Issue, fi forge.Issue, who map[string]s
 	rec := func(field, value string) oplog.Op { return seenOp(is.Author, time.Now().Unix(), is.ID, field, value) }
 	refused := func(field, value string) bool { return p.st.refused[[3]string{is.ID, field, value}] }
 
-	// text compares one text field. pullOp is the issue's operation taking
-	// v, write the forge's.
-	text := func(bucket *[]func(*pushing) error, field, g, f string, posted bool, ch issue.Change, ft int64,
+	// text compares one text field: cur is git-board's value, g it in the
+	// forge's form. pullOp is the issue's operation taking v, write the
+	// forge's. A pull that would change nothing writes nothing.
+	text := func(bucket *[]func(*pushing) error, field, cur, g, f string, posted bool, ch issue.Change, ft int64,
 		guard []*oplog.Origin, pullOp func(v string) oplog.Op, write func(fw forge.Forge, v string) error) {
-		switch decide(g, f, seen[field], origin(ch) == key, ch.Time, ft) {
+		gv, fv, sv := g, f, seen[field]
+		if unwrap(sv).forked() {
+			gv, fv, sv = forkText(gv), forkText(fv), forkText(sv)
+		}
+		switch decide(gv, fv, sv, origin(ch) == key, ch.Time, ft) {
 		case agreed:
 			if seen[field] != f {
 				pl.sops = append(pl.sops, seenOp(is.Author, now, is.ID, field, f))
@@ -122,8 +132,12 @@ func (r *run) plan(p *project, is *issue.Issue, fi forge.Issue, who map[string]s
 			if w := unwrap(f); posted && w.marker != "" || w.forked() {
 				v = w.body
 			}
-			pl.ops = append(pl.ops, pullOp(v))
-			pl.sops = append(pl.sops, seenOp(is.Author, now, is.ID, field, f))
+			if v != cur || origin(ch) != key {
+				pl.ops = append(pl.ops, pullOp(v))
+			}
+			if seen[field] != f {
+				pl.sops = append(pl.sops, seenOp(is.Author, now, is.ID, field, f))
+			}
 		case pushIt:
 			if !push || r.blocked(p, append(guard, ch.Origin)...) || refused(field, g) {
 				return
@@ -140,14 +154,14 @@ func (r *run) plan(p *project, is *issue.Issue, fi forge.Issue, who map[string]s
 	// by sync, with its marker.
 	posted := is.Origin == nil || is.Origin.Forge != key
 	ch := is.Changes
-	text(&pl.text, "title", r.form(p, is.Title, origin(ch["title"]), true), fi.Title, false, ch["title"], changedAt(fi, "title"), nil,
+	text(&pl.text, "title", is.Title, r.form(p, is.Title, origin(ch["title"]), true), fi.Title, false, ch["title"], changedAt(fi, "title"), nil,
 		func(v string) oplog.Op { return from(issue.SetTitle(a, v), key, ev, changedAt(fi, "title")) },
 		func(fw forge.Forge, v string) error { return fw.SetTitle(r.ctx, fi.ID, v) })
-	text(&pl.text, "body", wrapLike(seen["body"], r.form(p, is.Body, origin(ch["body"]), false), posted), fi.Body, posted,
+	text(&pl.text, "body", is.Body, wrapLike(seen["body"], r.form(p, is.Body, origin(ch["body"]), false), posted), fi.Body, posted,
 		ch["body"], changedAt(fi, "body"), nil,
 		func(v string) oplog.Op { return from(issue.EditText(a, is.BodyOp, v), key, ev, changedAt(fi, "body")) },
 		func(fw forge.Forge, v string) error { return fw.SetBody(r.ctx, fi.ID, v) })
-	text(&pl.rest, "status", string(is.Status), fi.Status, false, ch["status"], changedAt(fi, "status"), nil,
+	text(&pl.rest, "status", string(is.Status), string(is.Status), fi.Status, false, ch["status"], changedAt(fi, "status"), nil,
 		func(v string) oplog.Op {
 			return from(issue.SetStatus(a, issue.Status(v)), key, ev, changedAt(fi, "status"))
 		},
@@ -219,7 +233,7 @@ func (r *run) plan(p *project, is *issue.Issue, fi forge.Issue, who map[string]s
 			ft = fc.Edited
 		}
 		cid, fcID, ca := c.ID, fc.ID, who[fc.Author.ID]
-		text(&pl.comments, field, wrapLike(seen[field], r.form(p, c.Body, origin(cch), false), sent), fc.Body, sent, cch, ft,
+		text(&pl.comments, field, c.Body, wrapLike(seen[field], r.form(p, c.Body, origin(cch), false), sent), fc.Body, sent, cch, ft,
 			[]*oplog.Origin{c.Origin},
 			func(v string) oplog.Op { return from(issue.EditText(ca, cid, v), key, field, ft) },
 			func(fw forge.Forge, v string) error { return fw.EditComment(r.ctx, fi.ID, fcID, v) })

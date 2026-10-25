@@ -529,7 +529,11 @@ mirrored group, never a second.
   Last seen keeps the forge's text, and a text sent back to that project
   gets them again, as [the forge's form](#the-forges-form) keeps sync's
   own header. The fork's copies end without spaces or blank lines, so a
-  text sent in its form ends so too.
+  text sent in its form ends so too, and a text whose last seen is in its
+  form compares without its start and without the space at its end: a
+  forge edit that leaves a line end there, as a browser does, is pulled
+  once, and the next pull writes nothing. No pull writes a value the
+  field already has from that forge.
 - **A mirror** is a forge issue whose body is in the fork's form. It
   waits until every project's other issues are pulled, whoever posted it,
   so that the originals come first. Then it joins the issue its group

@@ -234,6 +234,30 @@ func TestForkCopyOfAStrangerWaits(t *testing.T) {
 	}
 }
 
+// A text in the fork's form that the forge edited after creation, as a
+// browser leaves it with a line end after its text, is pulled once: the
+// next pulls write nothing, to the issue or to the sync entity.
+func TestForkEditedTextPullsOnce(t *testing.T) {
+	t.Parallel()
+	s, f := newStore(t), fake.New("github.com/o/r")
+	board := forge.Account{ID: "1", Login: "board"}
+	f.Add(forge.Issue{ID: "100", Author: board, Created: 1000, Updated: 3000, Title: "T",
+		Body: forkMarker('a') + "\nedited on GitHub\n", Changed: map[string]int64{"body": 3000},
+		Comments: []forge.Comment{{ID: "c1", Author: board, Time: 1100, Edited: 3000, Body: forkMarker('b') + "\na comment, edited\n"}}})
+	pull(t, s, f)
+	is := only(t, s)
+	if is.Body != "edited on GitHub\n" || len(is.Comments) != 1 || is.Comments[0].Body != "a comment, edited\n" {
+		t.Fatalf("pulled %q, %+v", is.Body, is.Comments)
+	}
+	for range 2 {
+		before := refs(t, s)
+		pull(t, s, f)
+		if !maps.Equal(before, refs(t, s)) {
+			t.Fatal("a pull with nothing new wrote")
+		}
+	}
+}
+
 // The wiki's texts, as the fork left them on its GitLab: an attributed
 // copy joins its original by its header's link, an issue and a comment,
 // even where the text differs. The original's text wins: sync's one write
