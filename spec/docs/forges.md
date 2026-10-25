@@ -41,6 +41,9 @@ git-board's settings, and the people who have a token of their own there
 
 - **The core keeps no token,** in git or anywhere else. git-board's
   Settings stores a new one with `git credential approve`.
+- **git-board's own calls to a forge** (its images, who can be assigned,
+  pull requests) take their token by the same rule, through each
+  adapter's `Token`.
 
 ## GitHub
 

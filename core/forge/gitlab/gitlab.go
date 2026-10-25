@@ -68,16 +68,31 @@ func New(ctx context.Context, baseURL, project, login string) (*Forge, error) {
 	if err != nil {
 		return nil, err
 	}
-	token := ""
-	if p.host == cmp.Or(os.Getenv("GITLAB_HOST"), "gitlab.com") { // no other host sees the variable
-		token = os.Getenv(tokenEnv)
-	}
-	if token == "" {
-		if token, err = p.cred(ctx, forge.Account{Login: login}); err != nil {
-			return nil, err
-		}
+	token, err := p.token(ctx, login)
+	if err != nil {
+		return nil, err
 	}
 	return &Forge{p: p, token: token}, nil
+}
+
+// Token is the posting account's token on the GitLab at baseURL, as New
+// finds it: for git-board's own calls to the host, which follow the same
+// rule.
+func Token(ctx context.Context, baseURL, login string) (string, error) {
+	p, err := newProject(baseURL, "-")
+	if err != nil {
+		return "", err
+	}
+	return p.token(ctx, login)
+}
+
+func (p *project) token(ctx context.Context, login string) (string, error) {
+	if p.host == cmp.Or(os.Getenv("GITLAB_HOST"), "gitlab.com") { // no other host sees the variable
+		if t := os.Getenv(tokenEnv); t != "" {
+			return t, nil
+		}
+	}
+	return p.cred(ctx, forge.Account{Login: login})
 }
 
 func newProject(baseURL, path string) (*project, error) {

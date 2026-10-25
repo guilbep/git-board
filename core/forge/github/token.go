@@ -13,6 +13,10 @@ import (
 	"github.com/guilbep/git-board/core/forge"
 )
 
+// Token is an account's token on host, as the adapter finds it: for
+// git-board's own calls to the host, which follow the same rule.
+func Token(ctx context.Context, host, login string) (string, error) { return lookup(ctx, host, login) }
+
 // lookup is an account's token on host: the environment variable for that
 // host, when set, else what git's credential helper holds for the host and
 // login. GITHUB_TOKEN is for github.com only, GITHUB_ENTERPRISE_TOKEN for

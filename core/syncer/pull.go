@@ -172,39 +172,43 @@ func (r *run) pullNew(p *project, fi forge.Issue) error {
 	for _, c := range fi.Comments {
 		sops = append(sops, seenOp(a, now, is.ID, "comment:"+c.ID, c.Body))
 	}
-	return p.st.write(r.ctx, r.s, key, sops)
+	if err := p.st.write(r.ctx, r.s, key, sops); err != nil {
+		return err
+	}
+	r.did(key, "created", is.ID, len(ops))
+	return nil
 }
 
 // reconcile compares an issue with its forge issue, field by field, and
 // writes what sync.md's four cases say: pulled operations in one pack,
 // then the sync entity's, then each push, recorded as it lands. pull and
 // push say which of the two it may do. It says whether it wrote anything,
-// and whether it wrote to the forge.
-func (r *run) reconcile(p *project, id string, fi forge.Issue, pull, push bool) (wrote, pushed bool, err error) {
+// whether it wrote to the forge, and how many operations it pulled.
+func (r *run) reconcile(p *project, id string, fi forge.Issue, pull, push bool) (wrote, pushed bool, pulled int, err error) {
 	is, err := issue.Load(r.s, id)
 	if err != nil {
 		if isMissing(err) {
-			return false, false, nil // the issue may arrive with a fetch, or isn't one
+			return false, false, 0, nil // the issue may arrive with a fetch, or isn't one
 		}
-		return false, false, err
+		return false, false, 0, err
 	}
 	r.issues[id] = is
 	who, err := r.au.of(r.ctx, p.f.Server(), fi)
 	if err != nil {
-		return false, false, err
+		return false, false, 0, err
 	}
 	pl, err := r.plan(p, is, fi, who, pull, push)
 	if err != nil {
-		return false, false, err
+		return false, false, 0, err
 	}
 	if len(pl.ops) > 0 {
 		if is, err = issue.Do(r.ctx, r.s, id, pl.ops...); err != nil {
-			return false, false, err
+			return false, false, 0, err
 		}
 		r.issues[id] = is
 	}
 	if err := p.st.write(r.ctx, r.s, p.key, pl.sops); err != nil {
-		return false, false, err
+		return false, false, len(pl.ops), err
 	}
 	x := &pushing{p: p, is: is, fi: fi}
 	for _, send := range pl.pushes() {
@@ -212,10 +216,10 @@ func (r *run) reconcile(p *project, id string, fi forge.Issue, pull, push bool) 
 			break
 		}
 		if err := send(x); err != nil {
-			return false, x.wrote, err
+			return false, x.wrote, len(pl.ops), err
 		}
 	}
-	return len(pl.ops)+len(pl.sops) > 0 || x.wrote, x.wrote, nil
+	return len(pl.ops)+len(pl.sops) > 0 || x.wrote, x.wrote, len(pl.ops), nil
 }
 
 // isMissing says a link names no issue here: none yet, or an id that names none.

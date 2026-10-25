@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/guilbep/git-board/core/forge"
@@ -239,5 +240,49 @@ func TestWrap(t *testing.T) {
 	}
 	if w := unwrap("x <!-- git-board issue " + id + " -->"); w.marker != "" {
 		t.Fatal("a marker not on its own last paragraph")
+	}
+}
+
+// A comment Local keeps never reaches a forge; Did hears what the run
+// wrote, issue by issue; Records holds what each forge last saw, texts
+// unwrapped.
+func TestLocalDidAndRecords(t *testing.T) {
+	t.Parallel()
+	s, f := newStore(t), fake.New(key)
+	f.Add(sample())
+	is, err := issue.Create(t.Context(), s, issue.NewCreate("a", "Mine", "body"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	review := map[string]string{"review:path": "a.go"}
+	if is, err = issue.Do(t.Context(), s, is.ID, issue.NewComment("a", "posted"), issue.NewCommentMeta("a", "on a line", review)); err != nil {
+		t.Fatal(err)
+	}
+	var heard []string
+	opt := Options{
+		Local: func(m map[string]string) bool { return m["review:path"] != "" },
+		Did:   func(forge, what, id string, ops int) { heard = append(heard, forge+" "+what) },
+	}
+	if _, err := Sync(t.Context(), s, opt, f); err != nil {
+		t.Fatal(err)
+	}
+	for _, w := range f.Writes() {
+		if w.Op == "create-comment" && strings.Contains(strings.Join(w.Args, " "), "on a line") {
+			t.Errorf("the local comment was posted: %+v", w)
+		}
+	}
+	if want := []string{key + " created", key + " posted", key + " pushed"}; !reflect.DeepEqual(heard, want) {
+		t.Errorf("heard %v, want %v", heard, want)
+	}
+	recs, err := Records(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := recs[is.ID]
+	if len(r) != 1 || r[0].Forge != StateID(key) || r[0].Seen["body"] != "body" || r[0].Posted[is.Comments[0].ID] == "" || r[0].Posted[is.Comments[1].ID] != "" {
+		t.Fatalf("records = %+v", r)
+	}
+	if fc := r[0].Posted[is.Comments[0].ID]; r[0].Seen["comment:"+fc] != "posted" {
+		t.Errorf("seen %q, want the posted text unwrapped", r[0].Seen["comment:"+fc])
 	}
 }

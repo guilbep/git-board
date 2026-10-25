@@ -27,6 +27,14 @@ type Options struct {
 	Issue string
 	// Warn hears each refusal once, when it is recorded. Nil drops them.
 	Warn func(string)
+	// Local keeps a comment in git-board: one whose metadata it says true
+	// for is never posted. Nil posts every comment.
+	Local func(meta map[string]string) bool
+	// Did hears each issue the run wrote for, as Report counts them, on the
+	// project named by its key: "created" and "updated" with the number of
+	// operations pulled, "linked" for a forge issue found by its marker or
+	// its origin, "posted" and "pushed". Nil hears nothing.
+	Did func(forge, what, issue string, ops int)
 }
 
 // Report counts what a run did. Created, Updated and Unchanged count the
@@ -184,6 +192,12 @@ func (r *run) oldestFirst() []string {
 		return cmp.Or(cmp.Compare(r.issues[a].Created, r.issues[b].Created), strings.Compare(a, b))
 	})
 	return ids
+}
+
+func (r *run) did(key, what, id string, ops int) {
+	if r.opt.Did != nil {
+		r.opt.Did(key, what, id, ops)
+	}
 }
 
 func (r *run) warn(msg string) {
@@ -352,6 +366,7 @@ func (r *run) pullFrom(p *project) error {
 			continue
 		}
 		var wrote bool
+		var pulled int
 		switch {
 		case id == "":
 			r.report.Unchanged++
@@ -363,12 +378,13 @@ func (r *run) pullFrom(p *project) error {
 			r.report.Created++
 			continue
 		default:
-			if wrote, _, err = r.reconcile(p, id, fi, true, false); err != nil {
+			if wrote, _, pulled, err = r.reconcile(p, id, fi, true, false); err != nil {
 				return err
 			}
 		}
 		if wrote {
 			r.report.Updated++
+			r.did(p.key, "updated", id, pulled)
 		} else {
 			r.report.Unchanged++
 		}
@@ -419,12 +435,14 @@ func (r *run) match(p *project, fi forge.Issue) (string, error) {
 		}
 		ops := []oplog.Op{linkOp(is.Author, r.now, is.ID, fi.ID, fi.Number, fi.URL)}
 		ops = append(ops, createdSeen(is.Author, r.now, is.ID, fi.Title, fi.Body)...)
+		r.did(p.key, "linked", is.ID, 0)
 		return is.ID, p.st.write(r.ctx, r.s, p.key, ops)
 	}
 	from := oplog.Origin{Forge: p.key, Event: "issue:" + fi.ID}
 	for _, id := range slices.Sorted(maps.Keys(r.issues)) { // ponytail: a scan per unlinked forge issue
 		is := r.issues[id]
 		if is.Origin != nil && *is.Origin == from && !p.st.anyLink[id] {
+			r.did(p.key, "linked", id, 0)
 			return id, p.st.write(r.ctx, r.s, p.key, []oplog.Op{linkOp(is.Author, r.now, id, fi.ID, fi.Number, fi.URL)})
 		}
 	}
@@ -481,9 +499,10 @@ func (r *run) pushTo(p *project) error {
 			fi = got
 			p.listed[fi.ID] = fi
 		}
-		_, pushed, err := r.reconcile(p, id, fi, r.pull, true)
+		_, pushed, _, err := r.reconcile(p, id, fi, r.pull, true)
 		if pushed {
 			r.report.Pushed++
+			r.did(p.key, "pushed", id, 0)
 		}
 		if err != nil {
 			return err
@@ -551,6 +570,7 @@ func (r *run) create(p *project, is *issue.Issue) error {
 	fi.Title, fi.Body, fi.Status, fi.Labels, fi.Assignees, fi.Comments = title, body, "open", nil, nil, nil
 	p.listed[fi.ID] = fi
 	r.report.Posted++
+	r.did(p.key, "posted", is.ID, 0)
 	return nil
 }
 

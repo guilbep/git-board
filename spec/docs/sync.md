@@ -30,9 +30,11 @@ project's entity holds every link to that project.
   of those projects' entities then holds a link to it.
 - A link is never removed. `unlink` is out of version 1.
 - `Links` lists every sync entity's links, by issue, as its state rules
-  hold them: git-board shows where an issue is with them. A link's forge
-  key isn't in it, as an entity's id is a hash of the key; its `url` names
-  the forge.
+  hold them: git-board shows where an issue is with them. `Records` adds
+  each link's last seen values, texts without header and marker, and the
+  entity's `posted` comments: git-board shows what waits for a forge with
+  them. A link's forge key isn't in it, as an entity's id is a hash of the
+  key; its `url` names the forge, and a record names its entity.
 
 ## Last seen
 
@@ -252,7 +254,9 @@ nothing. Then, in this order:
     - a comment the forge doesn't have, and that sync never posted there,
       is posted with its marker, then recorded with a `posted` and a
       `seen`. A comment whose `origin` names that project is the forge's,
-      and isn't posted back;
+      and isn't posted back. A comment git-board keeps local, its line
+      comments (`review:*` metadata), is never posted: the run's `Local`
+      option says which, from a comment's metadata;
     - a comment the forge has, whose text git-board changed, is edited;
 - **status:** set, when git-board changed it;
 - **labels:** one write adds the labels git-board added since last seen and
@@ -471,7 +475,10 @@ A run syncs git-board with every project it is given:
 5. It records a `run` in each project's sync entity it wrote to.
 
 It reports how many forge issues it created, updated or left unchanged in
-git-board, and how many issues it created or wrote to on the forges.
+git-board, and how many issues it created or wrote to on the forges. Its
+`Did` option hears each of them as it is counted, with its project, plus
+each forge issue found by its marker or its origin and linked: git-board
+counts them per forge, and shows a run's progress.
 
 - **One issue alone.** Given an issue, a run reads its forge issue on each
   project where it is linked, or looks in each listing for its marker or

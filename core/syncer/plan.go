@@ -201,7 +201,8 @@ func (r *run) plan(p *project, is *issue.Issue, fi forge.Issue, who map[string]s
 	}
 	if push {
 		for _, c := range is.Comments {
-			if matched[c.ID] || p.st.posted[c.ID] != "" || (c.Origin != nil && c.Origin.Forge == key) {
+			if matched[c.ID] || p.st.posted[c.ID] != "" || (c.Origin != nil && c.Origin.Forge == key) ||
+				(r.opt.Local != nil && r.opt.Local(c.Meta)) {
 				continue
 			}
 			cch := ch["comment:"+c.ID]
