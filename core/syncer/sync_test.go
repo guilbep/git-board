@@ -46,7 +46,7 @@ func TestStateFirstWins(t *testing.T) {
 		if !reflect.DeepEqual(st.links, map[string]string{"100": "i1"}) || !st.anyLink["i2"] {
 			t.Fatalf("links = %v, any %v", st.links, st.anyLink)
 		}
-		if !reflect.DeepEqual(st.posted, map[string]string{"c1": "f1"}) {
+		if !reflect.DeepEqual(st.posted, map[[2]string]string{{"i1", "c1"}: "f1"}) {
 			t.Fatalf("posted = %v", st.posted)
 		}
 	}
@@ -284,5 +284,40 @@ func TestLocalDidAndRecords(t *testing.T) {
 	}
 	if fc := r[0].Posted[is.Comments[0].ID]; r[0].Seen["comment:"+fc] != "posted" {
 		t.Errorf("seen %q, want the posted text unwrapped", r[0].Seen["comment:"+fc])
+	}
+}
+
+// Two issues can hold the same comment id: the same text by the same
+// person in the same second makes the same pack. Each is posted.
+func TestSameCommentInTwoIssues(t *testing.T) {
+	t.Parallel()
+	s, f := newStore(t), fake.New(key)
+	var ids []string
+	for _, title := range []string{"two", "three"} {
+		is, err := issue.Create(t.Context(), s, issue.NewCreate("a", title, ""))
+		if err != nil {
+			t.Fatal(err)
+		}
+		c := issue.NewComment("a", "done")
+		c.Time = 1
+		if is, err = issue.Do(t.Context(), s, is.ID, c); err != nil {
+			t.Fatal(err)
+		}
+		ids = append(ids, is.Comments[0].ID)
+	}
+	if ids[0] != ids[1] {
+		t.Skip("the two comments have their own ids: nothing to show")
+	}
+	if _, err := Push(t.Context(), s, Options{}, f); err != nil {
+		t.Fatal(err)
+	}
+	n := 0
+	for _, w := range f.Writes() {
+		if w.Op == "create-comment" {
+			n++
+		}
+	}
+	if n != 2 {
+		t.Errorf("posted %d comments, want both", n)
 	}
 }

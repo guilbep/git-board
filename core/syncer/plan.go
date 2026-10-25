@@ -173,7 +173,7 @@ func (r *run) plan(p *project, is *issue.Issue, fi forge.Issue, who map[string]s
 			c = &is.Comments[i]
 		} else if w := unwrap(fc.Body); who != nil && w.kind == "comment" && r.isSync(p, fc.Author) {
 			// posted, then stopped before its record
-			if c = comment(w.id); c == nil || matched[c.ID] || p.st.posted[c.ID] != "" {
+			if c = comment(w.id); c == nil || matched[c.ID] || p.st.posted[[2]string{is.ID, c.ID}] != "" {
 				continue
 			}
 			sent = true
@@ -201,7 +201,7 @@ func (r *run) plan(p *project, is *issue.Issue, fi forge.Issue, who map[string]s
 	}
 	if push {
 		for _, c := range is.Comments {
-			if matched[c.ID] || p.st.posted[c.ID] != "" || (c.Origin != nil && c.Origin.Forge == key) ||
+			if matched[c.ID] || p.st.posted[[2]string{is.ID, c.ID}] != "" || (c.Origin != nil && c.Origin.Forge == key) ||
 				(r.opt.Local != nil && r.opt.Local(c.Meta)) {
 				continue
 			}

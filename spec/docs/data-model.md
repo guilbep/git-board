@@ -694,8 +694,9 @@ A sync entity's state follows from its operations, applied in order:
   for an issue without a link at that point in the order, or with a field
   not listed above, is ignored.
 - Its posted comments. As with links, the first `posted` in the order wins:
-  for a git-board comment posted twice, and for one forge comment recorded
-  for two, the later is ignored. So is a `posted` for an issue without a
+  for an issue's comment posted twice, and for one forge comment recorded
+  for two, the later is ignored. A comment is its issue and its id: two
+  issues can hold the same id, the same pack written to each. So is a `posted` for an issue without a
   link at that point in the order.
 - Its refusals, each an issue, a field and a value.
 - The time of the last run: the highest `started` of its `run` operations,

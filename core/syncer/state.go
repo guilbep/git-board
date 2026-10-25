@@ -32,7 +32,7 @@ type state struct {
 	numbers  map[string]string            // forge number -> issue id, the effective links
 	anyLink  map[string]bool              // issue ids with any link, effective or not
 	seen     map[string]map[string]string // issue id -> field -> last seen value
-	posted   map[string]string            // git-board comment id -> forge comment id
+	posted   map[[2]string]string         // (issue id, comment id) -> forge comment id
 	postedBy map[string]string            // forge comment id -> git-board comment id
 	refused  map[[3]string]bool           // (issue, field, value)
 	lastRun  int64
@@ -71,7 +71,7 @@ type runData struct {
 
 func emptyState() *state {
 	return &state{links: map[string]string{}, link: map[string]linkData{}, numbers: map[string]string{},
-		anyLink: map[string]bool{}, seen: map[string]map[string]string{}, posted: map[string]string{},
+		anyLink: map[string]bool{}, seen: map[string]map[string]string{}, posted: map[[2]string]string{},
 		postedBy: map[string]string{}, refused: map[[3]string]bool{}}
 }
 
@@ -135,10 +135,12 @@ func (st *state) apply(e oplog.Entry) error {
 			return err
 		}
 		_, linked := st.link[d.Issue]
-		_, posted := st.posted[d.Comment]
+		// a comment's id is its pack's hash and index: two issues can hold
+		// the same one, the same text by the same person in the same second
+		_, posted := st.posted[[2]string{d.Issue, d.Comment}]
 		_, recorded := st.postedBy[d.ForgeID]
 		if linked && !posted && !recorded {
-			st.posted[d.Comment] = d.ForgeID
+			st.posted[[2]string{d.Issue, d.Comment}] = d.ForgeID
 			st.postedBy[d.ForgeID] = d.Comment
 		}
 	case "refused":
