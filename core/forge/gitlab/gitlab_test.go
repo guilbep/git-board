@@ -376,3 +376,32 @@ func TestTokenLookup(t *testing.T) {
 		}
 	}
 }
+
+// A redirect, to another host here, isn't followed: Go would send
+// PRIVATE-TOKEN along. It reads as not found.
+func TestRedirectKeepsTheToken(t *testing.T) {
+	t.Parallel()
+	got := make(chan string, 1)
+	away := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got <- r.Header.Get("PRIVATE-TOKEN")
+		w.Write([]byte(`{"id":1,"username":"x"}`))
+	}))
+	defer away.Close()
+	_, port, _ := strings.Cut(away.Listener.Addr().String(), ":")
+	home := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "http://localhost:"+port+"/steal", http.StatusFound) // localhost, not 127.0.0.1
+	}))
+	defer home.Close()
+	p, err := newProject(home.URL, "g/p")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := (&Forge{p: p, token: "SECRET-TOKEN"}).Me(t.Context()); !errors.Is(err, forge.ErrNotFound) {
+		t.Errorf("err = %v, want not found", err)
+	}
+	select {
+	case tok := <-got:
+		t.Errorf("redirect followed, token %q", tok)
+	default:
+	}
+}

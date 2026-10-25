@@ -485,3 +485,33 @@ func write(w http.ResponseWriter, code int, v any) {
 	w.WriteHeader(code)
 	_ = json.NewEncoder(w).Encode(v)
 }
+
+// A redirect, to another host here, isn't followed, so the token stays
+// home. It reads as not found.
+func TestRedirectKeepsTheToken(t *testing.T) {
+	t.Parallel()
+	got := make(chan string, 1)
+	away := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got <- r.Header.Get("Authorization")
+		w.Write([]byte(`{"id":1,"login":"x"}`))
+	}))
+	defer away.Close()
+	_, port, _ := strings.Cut(away.Listener.Addr().String(), ":")
+	home := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "http://localhost:"+port+"/steal", http.StatusFound) // localhost, not 127.0.0.1
+	}))
+	defer home.Close()
+	a, err := New(t.Context(), Options{Project: "o/r", API: home.URL,
+		Token: func(context.Context, forge.Account) (string, error) { return "SECRET-TOKEN", nil }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.Me(t.Context()); !errors.Is(err, forge.ErrNotFound) {
+		t.Errorf("err = %v, want not found", err)
+	}
+	select {
+	case tok := <-got:
+		t.Errorf("redirect followed, Authorization %q", tok)
+	default:
+	}
+}

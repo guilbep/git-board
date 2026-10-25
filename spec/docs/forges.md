@@ -175,8 +175,9 @@ query for the times REST doesn't give.
   gets a 5xx is tried again after 1, 2, then 4 seconds. A write never is,
   as GitLab may have made it (see [Echoes](sync.md#echoes)). Once
   `RateLimit-Remaining` is 0, the next request waits for `RateLimit-Reset`.
-- **Errors.** A 404 or a 410 is not found. A 400, 403, 409 or 422 is
-  refused for good.
+- **Errors.** A 404, a 410 and a redirect are not found: a redirect is
+  never followed, as Go would send `PRIVATE-TOKEN` along to any host. A
+  400, 403, 409 or 422 is refused for good.
 
 [609]: https://github.com/git-bug/git-bug/issues/609
 [1638]: https://github.com/git-bug/git-bug/issues/1638

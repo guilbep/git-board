@@ -109,7 +109,9 @@ func newProject(baseURL, path string) (*project, error) {
 	}
 	root := u.String() + "/api/v4"
 	p := &project{host: u.Host, path: path, scheme: u.Scheme, root: root, api: root + "/projects/" + url.PathEscape(path),
-		http: &http.Client{Timeout: time.Minute}, pace: pace, sleep: sleep, iids: map[string]int64{}}
+		http: &http.Client{Timeout: time.Minute, CheckRedirect: func(*http.Request, []*http.Request) error {
+			return http.ErrUseLastResponse // Go would send PRIVATE-TOKEN along, to any host
+		}}, pace: pace, sleep: sleep, iids: map[string]int64{}}
 	p.cred = func(ctx context.Context, a forge.Account) (string, error) {
 		return credential(ctx, p.scheme, p.host, a.Login)
 	}
@@ -677,10 +679,10 @@ func refusal(what string, code int, data []byte) error {
 		msg = msg[:200]
 	}
 	err := fmt.Errorf("gitlab: %s: %d %s", what, code, msg)
-	switch code {
-	case http.StatusNotFound, http.StatusGone:
+	switch {
+	case code == http.StatusNotFound || code == http.StatusGone || code/100 == 3:
 		return fmt.Errorf("%w: %w", err, forge.ErrNotFound)
-	case http.StatusBadRequest, http.StatusForbidden, http.StatusConflict, http.StatusUnprocessableEntity:
+	case code == http.StatusBadRequest || code == http.StatusForbidden || code == http.StatusConflict || code == http.StatusUnprocessableEntity:
 		return fmt.Errorf("%w: %w", err, forge.ErrRefused)
 	}
 	return err
