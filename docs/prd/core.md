@@ -211,8 +211,18 @@ in git, so they are listed here.
 - **M5:** a run killed before its end leaves `board/sync.lock`, which must
   be removed by hand, like git's own locks.
 - **M4:** a forge listing one comment id twice in one issue (paging).
-- **M5:** check git-board's own handling of `assignee:` in any case;
-  validate kinds, ids and remote names before the HTTP API reaches them.
+- ~~**M5:** check git-board's own handling of `assignee:` in any case;
+  validate kinds, ids and remote names before the HTTP API reaches them.~~
+  Done in M5's first phase: `gitbugio` reads `Assignee:` as `assignee:`
+  (`TestAssigneeInAnyCase`), and checks id prefixes, comment ids and remote
+  names before the core (`TestInputsAreChecked`). No HTTP input names a
+  kind.
+- **M5, phase 2:** the push leaves out comments with `review:*` metadata;
+  `Event.Pending`, `EditPending` and `EditWas` from the sync's records;
+  the forges, tokens and the GitHub repository for numbers and pull
+  requests from `.git-board.toml` and the credential helper, where the
+  bridges' stubs answer "not wired yet". See
+  [core-m5-inventory.md](core-m5-inventory.md).
 
 ## Success
 

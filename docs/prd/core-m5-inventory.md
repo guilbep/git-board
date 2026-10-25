@@ -34,3 +34,23 @@ move to `<common dir>/board/git-board/`).
 
 Carried to phase 2: the push must leave out comments with `review:*`
 metadata, so that line comments never reach a forge issue.
+
+## Phase 1, done
+
+`internal/gitbugio` keeps its exported API over the core, and its callers
+barely changed. What phase 1 left:
+
+- **Forge sync answers `ErrNotWired`:** `SyncForges`, `GetForges`,
+  `SendForges`, `SyncIssue`, the bridges and the credentials
+  (`gitbugio/forges.go`). Their tests skip with "M5 phase 2". These stubs,
+  and the server's forge sync (`server.go`, `forges.go`) with its tests,
+  are the only code still importing git-bug, for its sync result types.
+- **The numbers page and pull requests** find the GitHub repository and
+  the token through the bridges, so they wait for phase 2 too.
+- **Existing repositories show no issue** until M6 pulls them from their
+  forges: git-board reads `refs/board/`, and the fork's data stays in
+  `refs/bugs/`.
+- **A cold listing loads every issue** once per process; the server and
+  the TUI keep them, by head, in memory.
+- **The web app's link, unlink and take buttons** never show, as no forge
+  names a bridge any more; their code waits for the end of the project.
