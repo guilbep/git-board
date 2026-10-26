@@ -5,7 +5,7 @@
 Your issues travel with git, like your code. Forges and the GitHub Project are mirrors, for the people who work there.
 
 - **1 · Remotes** · git. Everything: code, branches, issues and people, to and from any git remote (GitHub or GitLab as git servers, a shared server, a colleague). Push and Pull: `git board sync`.
-- **2 · Forges** · their API. A mirror of the issues, comments, labels and assignees on GitHub or GitLab, with the forges of `.git-board.toml` (`[forges]`). Check (what would change, nothing written), Get, Send, Sync; and on one issue, in its panel, Send now and Refresh.
+- **2 · Forges** · their API. A mirror of the issues, comments, labels and assignees on GitHub or GitLab, with the forges of `.git-board.toml` (`[forges]`), or with none there, those its git remotes are on. Check (what would change, nothing written), Get, Send, Sync; and on one issue, in its panel, Send now and Refresh.
 - **3 · GitHub Project** · fields. The Project's fields (status, priority, sprint) as `ns:value` labels here, and back when writing is on. Its conflicts are on the Conflicts page.
 
 A forge doesn't replace a remote: the people who use git-board pull and push the issues with git; a forge is for the people who stay on GitHub or GitLab.
@@ -22,6 +22,14 @@ Someone else with a token of their own on the forge, in their own credential hel
 The GitHub Project isn't read with a forge's token but with the `gh` command, logged in on its own (`gh auth login`): the `read:project` scope to read it, `project` to write it.
 
 ## Adding a forge
+
+With no `[forges.<name>]` table, git-board needs none: it finds the forges in the repository's git remotes, every fetch and push URL of each (`git@host:path.git`, `ssh://[user@]host[:port]/path`, `https://host/path`, with or without `.git`). Each project counts once, whichever remote names it. Their sync is on, with no login: git's credential helper picks the account.
+
+- `github.com` is GitHub, its project `owner/repo`.
+- `gitlab.com`, or a host whose first label holds `gitlab`, is GitLab. The web host drops a first label `ssh`, or a first label's `-ssh`: `git@gitlab-ssh.epfl.ch:EPFL-ENAC/wiki.git` is `gitlab.epfl.ch`, project `EPFL-ENAC/wiki`. Each run reads the project's numeric id once, as its links are keyed on it; a project whose id can't be read is left out of that run, with why, and the others go on.
+- Any other host is skipped, and `git board switch` and `git board sync` say which URL.
+
+They are named by their kind, `github`, `gitlab`, then `github-2`… when a kind repeats. One table or more turns this off, and so does `discover = false` in `[forges]`.
 
 Settings › Forges › **+ Add a forge**, in four steps:
 
@@ -56,7 +64,9 @@ An issue is linked to a forge issue once, by the sync, and stays so: linking by 
 
 ## On the command line
 
-The forges are `.git-board.toml`'s, edited in Settings or by hand:
+`git board switch` and `git board sync` print the forges found in the remotes, one line each: name, host and project, a GitLab one's with its id. `git board sync` only lists them: it syncs with the git remotes.
+
+Otherwise the forges are `.git-board.toml`'s, edited in Settings or by hand:
 
 ```toml
 [forges.gh]

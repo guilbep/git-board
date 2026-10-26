@@ -345,3 +345,31 @@ func TestCommentOnAStep(t *testing.T) {
 		t.Errorf("step 8: %d", code)
 	}
 }
+
+// With no [forges.<name>] table, /api/forges lists the forges of the git
+// remotes as found there, and a run opens them.
+func TestForgeSyncFindsTheForges(t *testing.T) {
+	t.Parallel()
+	dir := gitbugiotest.Repo(t, false)
+	gitbugiotest.Git(t, dir, "remote", "add", "gh", "git@github.com:o/r.git")
+	gitbugiotest.Init(t, dir)
+	s := &apiServer{cfg: &config.Config{Discover: true}, b: gitbugiotest.Open(t, dir), me: "guilbep", cfgPath: filepath.Join(t.TempDir(), config.FileName)}
+	ts := httptest.NewServer(withCORS(newMux(s, http.NotFoundHandler())))
+	t.Cleanup(ts.Close)
+	var st forgeStatus
+	call(t, "GET", ts.URL+"/api/forges", nil, &st)
+	if want := []syncBridge{{Name: "github", Target: "github", Discovered: true}}; !slices.Equal(st.Bridges, want) {
+		t.Fatalf("bridges %+v", st.Bridges)
+	}
+	gh := fake.New("github.com/o/r")
+	s.openForges = func(_ context.Context, forges []config.Forge) ([]gitbugio.NamedForge, error) {
+		if len(forges) != 1 || forges[0].Project != "o/r" || !forges[0].Discovered {
+			t.Errorf("opened %+v", forges)
+		}
+		return []gitbugio.NamedForge{{Name: "github", Forge: gh}}, nil
+	}
+	call(t, "POST", ts.URL+"/api/forges/sync", map[string]any{"dry_run": true}, nil)
+	if st := waitJob(t, ts); st.Job.State != "done" || st.Job.Bridges["github"] == nil {
+		t.Fatalf("check %+v", st.Job)
+	}
+}

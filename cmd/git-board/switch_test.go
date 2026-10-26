@@ -11,6 +11,7 @@ import (
 	"github.com/guilbep/git-board/core/forge/fake"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/gitbugio"
+	"github.com/guilbep/git-board/internal/gitbugio/gitbugiotest"
 )
 
 // switch reports a dry run, pulls only the forges whose sync is on, and
@@ -53,5 +54,29 @@ func TestSwitchCommand(t *testing.T) {
 	}
 	if w := f.Writes(); len(w) != 0 {
 		t.Fatalf("forge writes %+v", w)
+	}
+}
+
+// With no [forges.<name>] table, switch pulls the forges of the git
+// remotes, each told in a line, and says which URL it skipped. Serial: it
+// chdirs and swaps the forges' opener.
+func TestSwitchFindsTheForges(t *testing.T) {
+	dir, _ := seedRepo(t)
+	gitbugiotest.Git(t, dir, "remote", "add", "gh", "git@github.com:o/r.git") // not origin, which the switch fetches
+	gitbugiotest.Git(t, dir, "remote", "add", "other", "git@bitbucket.org:o/r.git")
+	t.Chdir(dir)
+	f := fake.New("github.com/o/r")
+	saved := openSwitchForges
+	t.Cleanup(func() { openSwitchForges = saved })
+	openSwitchForges = func(_ context.Context, fs []config.Forge) ([]gitbugio.NamedForge, error) {
+		if len(fs) != 1 || fs[0].Name != "github" || fs[0].Project != "o/r" || !fs[0].Discovered {
+			t.Errorf("forges opened: %+v", fs)
+		}
+		return []gitbugio.NamedForge{{Name: "github", Forge: f}}, nil
+	}
+	out, err := execute(t, []string{"switch"})
+	if err != nil || !strings.Contains(out, "forge github, found in the remotes: github.com o/r\n") ||
+		!strings.Contains(out, "skipped git@bitbucket.org:o/r.git") {
+		t.Fatalf("%v\n%s", err, out)
 	}
 }

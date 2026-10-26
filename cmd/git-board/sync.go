@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -8,6 +9,7 @@ import (
 	"github.com/go-git/go-git/v5/plumbing/transport"
 	"github.com/spf13/cobra"
 
+	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/gitbugio"
 )
 
@@ -21,7 +23,8 @@ func newSyncCmd() *cobra.Command {
 
 Each path is a directory of a git repository (the current directory if
 none given). The forges sync from the Sync page, with the forges of
-.git-board.toml. This is deliberately explicit
+.git-board.toml, or with none there, those found in the git remotes: this
+command lists the ones it finds, and syncs none. This is deliberately explicit
 paths, not [repos] from .git-board.toml: that table holds "owner/repo"
 display names, not local clone locations, and there's no established
 convention yet for mapping one to the other — see docs/implementation-plan.md.`,
@@ -105,5 +108,14 @@ func syncOne(out io.Writer, path, remote string) error {
 		}
 	}
 	fmt.Fprintf(out, "%s: synced\n", path)
+	// the forges the Sync page would sync with: told, never synced here,
+	// and nothing about them fails the git sync
+	cfg, err := config.Load(config.PathIn(path))
+	if err == nil {
+		_, err = runForges(context.Background(), out, b, cfg)
+	}
+	if err != nil {
+		fmt.Fprintf(out, "%s: the forges: %v\n", path, err)
+	}
 	return nil
 }

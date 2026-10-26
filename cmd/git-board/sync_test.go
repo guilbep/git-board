@@ -50,9 +50,11 @@ func TestSyncPushesThenPullsBetweenTwoRepos(t *testing.T) {
 	pathA, pathB := twoReposWithRemote(t)
 	seedBug(t, pathA, "seen only in A until sync")
 
-	// A pushes it to the shared remote.
+	// A pushes it to the shared remote, and tells the forge its remotes
+	// name, a URL on GitHub beside origin's.
+	gitbugiotest.Git(t, pathA, "remote", "add", "gh", "https://github.com/o/r.git")
 	out, err := execute(t, []string{"sync", pathA})
-	if err != nil {
+	if err != nil || !strings.Contains(out, "forge github, found in the remotes: github.com o/r\n") {
 		t.Fatalf("sync A: %v\noutput:\n%s", err, out)
 	}
 

@@ -22,8 +22,9 @@ func newSwitchCmd() *cobra.Command {
 		Short: "Move this repository's issues from git-bug to git-board, pulled from its forges",
 		Long: `Move this repository's issues from git-bug (refs/bugs) to git-board's own
 core (refs/board), by pulling them from the forges of .git-board.toml
-whose sync is on. Nothing is converted: what only git-bug holds is lost,
-and the report lists it.
+whose sync is on, or with no [forges.<name>] table, from those the git
+remotes are on, each printed. Nothing is converted: what only git-bug
+holds is lost, and the report lists it.
 
 By default it is a dry run, on a copy of the repository: it pulls (never
 pushes), joins the mirrors git-bug posted to their originals, keys the
@@ -69,8 +70,12 @@ func runSwitch(ctx context.Context, out io.Writer, run gitbugio.SwitchRun) error
 		return err
 	}
 	defer b.Close()
+	forges, err := runForges(ctx, out, b, cfg)
+	if err != nil {
+		return err
+	}
 	var on []config.Forge
-	for _, f := range cfg.Forges {
+	for _, f := range forges {
 		if f.Sync {
 			on = append(on, f)
 		} else {
@@ -90,6 +95,31 @@ func runSwitch(ctx context.Context, out io.Writer, run gitbugio.SwitchRun) error
 		return errors.New("not applied: the report has blockers (--force applies anyway)")
 	}
 	return nil
+}
+
+// runForges are the forges of a run: the settings' tables, or those found
+// in the git remotes, each told in a line, GitLab's with its id read, and
+// each URL skipped or forge left out with why.
+func runForges(ctx context.Context, out io.Writer, b *gitbugio.Backend, cfg *config.Config) ([]config.Forge, error) {
+	say := func(s string) { fmt.Fprintln(out, s) }
+	forges, err := b.Forges(cfg, say)
+	if err != nil {
+		return nil, err
+	}
+	forges = gitbugio.ResolveForges(ctx, forges, func(f config.Forge, why error) {
+		fmt.Fprintf(out, "forge %s, found in the remotes, is left out: %s %s: %v\n", f.Name, f.Host, f.Path, why)
+	})
+	for _, f := range forges {
+		if !f.Discovered {
+			continue
+		}
+		project := f.Project
+		if f.Path != "" {
+			project = f.Path + " (id " + f.Project + ")"
+		}
+		fmt.Fprintf(out, "forge %s, found in the remotes: %s %s\n", f.Name, f.Host, project)
+	}
+	return forges, nil
 }
 
 func printSwitch(out io.Writer, rep gitbugio.SwitchReport, apply bool) {

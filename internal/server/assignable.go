@@ -9,6 +9,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
@@ -27,7 +28,7 @@ var assignablePath = filepath.Join("git-board", "assignable.json")
 // posting account's token.
 // ponytail: one page of 100, paginate when a project has more
 func (s *apiServer) assignable(ctx context.Context, f config.Forge) ([]string, error) {
-	api, header, prefix := f.BaseURL()+"/api/v4/projects/"+f.Project+"/users?per_page=100", "PRIVATE-TOKEN", ""
+	api, header, prefix := f.BaseURL()+"/api/v4/projects/"+url.PathEscape(f.Project)+"/users?per_page=100", "PRIVATE-TOKEN", "" // an id, or a found forge's path
 	if f.Kind == "github" {
 		base := f.BaseURL() + "/api/v3"
 		if f.Host == "github.com" {
@@ -74,7 +75,7 @@ func (s *apiServer) assignable(ctx context.Context, f config.Forge) ([]string, e
 // in the bridge's tally and tells the pages. A forge that doesn't answer
 // is a warning: the run went well, the boxes keep the last list.
 func (s *apiServer) fetchAssignable(job *forgeJob) {
-	bridges := slices.DeleteFunc(slices.Clone(s.config().Forges), func(f config.Forge) bool { return !slices.Contains(job.Names, f.Name) })
+	bridges := slices.DeleteFunc(slices.Clone(s.forges()), func(f config.Forge) bool { return !slices.Contains(job.Names, f.Name) })
 	if len(bridges) == 0 {
 		return
 	}
@@ -127,7 +128,7 @@ func (s *apiServer) people() []string {
 		all = logins
 	}
 	saved, _ := loadAssignable(s.b.Storage())
-	for _, f := range s.config().Forges {
+	for _, f := range s.forges() {
 		all = append(all, saved[f.Name]...)
 	}
 	slices.SortFunc(all, func(a, b string) int { return cmp.Compare(strings.ToLower(a), strings.ToLower(b)) })

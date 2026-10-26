@@ -157,6 +157,7 @@ func (f *Forge) Me(ctx context.Context) (forge.Account, error) {
 
 // projectInfo is what the adapter reads of the project itself.
 type projectInfo struct {
+	ID         int64            `json:"id"`
 	Visibility forge.Visibility `json:"visibility"`
 	Path       string           `json:"path_with_namespace"`
 }
@@ -172,6 +173,16 @@ func (f *Forge) project(ctx context.Context) (projectInfo, error) {
 func (f *Forge) Path(ctx context.Context) (string, error) {
 	p, err := f.project(ctx)
 	return p.Path, err
+}
+
+// ProjectID is the project's numeric id: what names a project given by its
+// path, as its links are keyed on the id.
+func (f *Forge) ProjectID(ctx context.Context) (string, error) {
+	p, err := f.project(ctx)
+	if err == nil && p.ID <= 0 {
+		err = fmt.Errorf("gitlab: project %s: no id", f.p.path)
+	}
+	return strconv.FormatInt(p.ID, 10), err
 }
 
 // Visibility is the project's: public, internal (every user of the

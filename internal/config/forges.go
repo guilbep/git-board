@@ -24,6 +24,10 @@ type Forge struct {
 	Host    string `toml:"host" json:"host"`   // default github.com, gitlab.com
 	Login   string `toml:"login" json:"login"` // the posting account
 	Sync    bool   `toml:"sync" json:"sync"`
+	// Discovered: found in the git remotes, with no table. A GitLab one's
+	// Project is its path until the run reads its id; Path keeps the path.
+	Discovered bool   `toml:"-" json:"discovered,omitempty"`
+	Path       string `toml:"-" json:"path,omitempty"`
 }
 
 // BaseURL is the forge's web address: https, or http for a loopback host,
@@ -41,16 +45,17 @@ func (f Forge) BaseURL() string {
 
 // Where is the project's web page.
 func (f Forge) Where() string {
-	if f.Kind == "gitlab" {
+	if f.Kind == "gitlab" && f.Path == "" {
 		return f.BaseURL() + "/projects/" + f.Project
 	}
-	return f.BaseURL() + "/" + f.Project
+	return f.BaseURL() + "/" + cmp.Or(f.Path, f.Project)
 }
 
 var (
 	forgeName  = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
 	ghProject  = regexp.MustCompile(`^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$`)
 	glProject  = regexp.MustCompile(`^[0-9]+$`)
+	glPath     = regexp.MustCompile(`^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)+$`)
 	forgeHost  = regexp.MustCompile(`^[A-Za-z0-9.-]+(:[0-9]+)?$`)
 	forgeLogin = regexp.MustCompile(`^[A-Za-z0-9_.-]*$`)
 )
@@ -82,29 +87,31 @@ func checkForge(f *Forge) error {
 	return nil
 }
 
-// parseForges reads the [forges] table: publish-private, and a table per
-// forge.
-func parseForges(md toml.MetaData, tables map[string]toml.Primitive) (forges []Forge, publishPrivate bool, err error) {
+// parseForges reads the [forges] table: publish-private, discover, and a
+// table per forge. Discovery is on with no table, unless discover = false.
+func parseForges(md toml.MetaData, tables map[string]toml.Primitive) (forges []Forge, publishPrivate, discover bool, err error) {
+	discover = true
 	for _, name := range slices.Sorted(maps.Keys(tables)) {
-		if name == "publish-private" {
-			if err := md.PrimitiveDecode(tables[name], &publishPrivate); err != nil {
-				return nil, false, fmt.Errorf("[forges] publish-private: %w", err)
+		if name == "publish-private" || name == "discover" {
+			v := map[string]*bool{"publish-private": &publishPrivate, "discover": &discover}[name]
+			if err := md.PrimitiveDecode(tables[name], v); err != nil {
+				return nil, false, false, fmt.Errorf("[forges] %s: %w", name, err)
 			}
 			continue
 		}
 		if !forgeName.MatchString(name) {
-			return nil, false, fmt.Errorf("[forges.%s]: a forge's name is letters, digits, - and _", name)
+			return nil, false, false, fmt.Errorf("[forges.%s]: a forge's name is letters, digits, - and _", name)
 		}
 		f := Forge{Name: name}
 		if err := md.PrimitiveDecode(tables[name], &f); err != nil {
-			return nil, false, fmt.Errorf("[forges.%s]: %w", name, err)
+			return nil, false, false, fmt.Errorf("[forges.%s]: %w", name, err)
 		}
 		if err := checkForge(&f); err != nil {
-			return nil, false, err
+			return nil, false, false, err
 		}
 		forges = append(forges, f)
 	}
-	return forges, publishPrivate, nil
+	return forges, publishPrivate, discover && len(forges) == 0, nil
 }
 
 // Forge is the forge of that name.

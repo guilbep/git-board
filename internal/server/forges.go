@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"slices"
 	"time"
@@ -24,8 +25,9 @@ var errDryRunFirst = errors.New("check first: a run writes, the check (a dry run
 
 // syncBridge is a forge taking part in the sync.
 type syncBridge struct {
-	Name   string `json:"name"`
-	Target string `json:"target"` // github, gitlab
+	Name       string `json:"name"`
+	Target     string `json:"target"`               // github, gitlab
+	Discovered bool   `json:"discovered,omitempty"` // found in the git remotes, with no table
 }
 
 // forgeStatus is the sync with the forges: which bridges take part, and
@@ -237,15 +239,26 @@ func (s *apiServer) tell(dry bool, id string, tally func(name string) *bridgeTal
 	}
 }
 
+// forges are the settings' forges, or with no table, those found in the
+// git remotes (Backend.Forges), their GitLab ids read by each run.
+// ponytail: a URL that names no forge isn't told; the CLI's runs tell it
+func (s *apiServer) forges() []config.Forge {
+	fs, err := s.b.Forges(s.config(), func(string) {})
+	if err != nil {
+		log.Printf("the forges of the git remotes: %v", err)
+	}
+	return fs
+}
+
 // syncForges are the forges taking part in the sync.
 func (s *apiServer) syncForges() []config.Forge {
-	return slices.DeleteFunc(slices.Clone(s.config().Forges), func(f config.Forge) bool { return !f.Sync })
+	return slices.DeleteFunc(slices.Clone(s.forges()), func(f config.Forge) bool { return !f.Sync })
 }
 
 func (s *apiServer) forgeSnapshot() forgeStatus {
 	bridges := []syncBridge{}
 	for _, f := range s.syncForges() {
-		bridges = append(bridges, syncBridge{Name: f.Name, Target: f.Kind})
+		bridges = append(bridges, syncBridge{Name: f.Name, Target: f.Kind, Discovered: f.Discovered})
 	}
 	return forgeStatus{Bridges: bridges, Job: s.job}
 }
@@ -335,12 +348,16 @@ func (s *apiServer) forgeRun(ctx context.Context, mode string, forges []config.F
 }
 
 // openRun opens the forges' adapters for one run, fresh: the settings and
-// the tokens may have changed since the last.
+// the tokens may have changed since the last. A forge found in the
+// remotes whose GitLab id can't be read is left out, with a warning.
 func (s *apiServer) openRun(ctx context.Context, forges []config.Forge, dryRun bool, see func(gitbugio.SyncEvent)) (gitbugio.ForgeRun, error) {
 	open := s.openForges
 	if open == nil {
 		open = gitbugio.OpenForges
 	}
+	forges = gitbugio.ResolveForges(ctx, forges, func(f config.Forge, why error) {
+		see(gitbugio.SyncEvent{Forge: f.Name, What: "warning", Line: fmt.Sprintf("left out of the run: %s %s: %v", f.Host, f.Path, why)})
+	})
 	fs, err := open(ctx, forges)
 	if err != nil {
 		return gitbugio.ForgeRun{}, err

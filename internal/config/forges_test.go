@@ -30,7 +30,7 @@ project = "42400"
 		{Name: "epfl", Kind: "gitlab", Project: "42400", Host: "gitlab.epfl.ch"},
 		{Name: "gh", Kind: "github", Project: "guilbep/git-board", Host: "github.com", Login: "guilbep", Sync: true},
 	}
-	if !cfg.PublishPrivate || !reflect.DeepEqual(cfg.Forges, want) {
+	if !cfg.PublishPrivate || cfg.Discover || !reflect.DeepEqual(cfg.Forges, want) {
 		t.Fatalf("forges %+v, publish-private %v", cfg.Forges, cfg.PublishPrivate)
 	}
 	if w := cfg.Forges[0].Where(); w != "https://gitlab.epfl.ch/projects/42400" {
@@ -38,6 +38,11 @@ project = "42400"
 	}
 	if u := (Forge{Host: "127.0.0.1:8080"}).BaseURL(); u != "http://127.0.0.1:8080" {
 		t.Errorf("loopback base URL %q", u)
+	}
+	for src, discover := range map[string]bool{"": true, "[forges]\npublish-private = true\n": true, "[forges]\ndiscover = false\n": false} {
+		if cfg, warnings, err := Check([]byte(src)); err != nil || len(warnings) > 0 || cfg.Discover != discover {
+			t.Errorf("%q: discover %v, %v %v", src, cfg.Discover, warnings, err)
+		}
 	}
 	for _, bad := range []string{
 		"[forges.x]\nkind = \"gitea\"\nproject = \"a/b\"",

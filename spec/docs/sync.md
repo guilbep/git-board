@@ -7,7 +7,9 @@ git-board. [Forges](forges.md) says what GitHub and GitLab need.
 Sync runs with git-board's settings: the forge projects, the posting account
 and `publish-private`. They live in git-board's `.git-board.toml`, and
 git-board gives them to the core as options. The core doesn't read that
-file.
+file. With no forge table there, git-board finds the projects in the git
+remotes; a GitLab one's numeric id is read before the run, so its key is
+the one a table naming that id gives.
 
 M1 built one part of pull, in [Pull, the trial's part](#pull-the-trials-part),
 and M2 made its authors people. M3 builds the rest on a fake forge: the

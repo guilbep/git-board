@@ -32,14 +32,15 @@ type Ahead struct {
 	Receive int `json:"receive"`
 }
 
-// Remotes lists the repository's git remotes, by name.
-func (b *Backend) Remotes() ([]Remote, error) {
+// remoteURLs are each remote's URLs and push URLs, by its name, in the
+// config's order and without credentials.
+func (b *Backend) remoteURLs() (urls, pushURLs map[string][]string, err error) {
 	out, err := b.git("config", "--get-regexp", `^remote\..*\.(url|pushurl)$`)
 	if err != nil && len(out) > 0 {
-		return nil, err
+		return nil, nil, err
 	}
 	// remote.<name>.url <url>: a name may hold dots, the key's last part never
-	urls, pushURLs := map[string][]string{}, map[string][]string{}
+	urls, pushURLs = map[string][]string{}, map[string][]string{}
 	for _, l := range lines(out) {
 		key, value, _ := strings.Cut(l, " ")
 		key = strings.TrimPrefix(key, "remote.")
@@ -52,6 +53,15 @@ func (b *Backend) Remotes() ([]Remote, error) {
 		} else {
 			pushURLs[name] = append(pushURLs[name], NoCredentials(value))
 		}
+	}
+	return urls, pushURLs, nil
+}
+
+// Remotes lists the repository's git remotes, by name.
+func (b *Backend) Remotes() ([]Remote, error) {
+	urls, pushURLs, err := b.remoteURLs()
+	if err != nil {
+		return nil, err
 	}
 	res := []Remote{}
 	for name, u := range urls {
