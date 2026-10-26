@@ -42,7 +42,10 @@ func TestRemotesPushAndPull(t *testing.T) {
 	if o := origin(t, me, "POST", "/api/remotes/origin/fetch"); o.Checked == nil || o.Issues != (store.Ahead{Send: 1}) || o.People != (store.Ahead{Send: 1}) {
 		t.Errorf("after a fetch of an empty remote: %+v, want 1 issue and 1 person to send", o)
 	}
-	if o := origin(t, me, "POST", "/api/remotes/origin/push"); o.Issues != (store.Ahead{}) || o.People != (store.Ahead{}) {
+	if _, err := mine.Push("origin"); err != nil {
+		t.Fatal(err)
+	}
+	if o := origin(t, me, "GET", "/api/remotes"); o.Issues != (store.Ahead{}) || o.People != (store.Ahead{}) {
 		t.Errorf("after the push: %+v, want nothing left", o)
 	}
 
@@ -60,15 +63,17 @@ func TestRemotesPushAndPull(t *testing.T) {
 	if _, err := theirs.ApplyLabelChange(id, []string{"prio:p1"}, nil); err != nil {
 		t.Fatal(err)
 	}
-	origin(t, them, "POST", "/api/remotes/origin/push")
+	if _, err := theirs.Push("origin"); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := mine.ApplyLabelChange(id, []string{"status:ready"}, nil); err != nil {
 		t.Fatal(err)
 	}
 	if o := origin(t, me, "POST", "/api/remotes/origin/fetch"); o.Issues != (store.Ahead{Send: 1, Receive: 1}) {
 		t.Errorf("both changed it: %+v, want 1 to send and 1 to receive", o)
 	}
-	if code := call(t, "POST", me.URL+"/api/remotes/origin/push", nil, nil); code != http.StatusConflict {
-		t.Errorf("a push before pulling their change: %d, want 409 (pull first)", code)
+	if code := call(t, "POST", me.URL+"/api/remotes/origin/push", nil, nil); code != http.StatusNotFound {
+		t.Errorf("a push, the whole sync's alone: %d, want 404", code)
 	}
 	if o := origin(t, me, "POST", "/api/remotes/origin/pull"); o.Issues != (store.Ahead{Send: 1}) {
 		t.Errorf("after merging: %+v, want the merge to send", o)
@@ -77,7 +82,7 @@ func TestRemotesPushAndPull(t *testing.T) {
 		t.Errorf("merged labels %v", labels)
 	}
 
-	if code := call(t, "POST", me.URL+"/api/remotes/nope/push", nil, nil); code != http.StatusNotFound {
+	if code := call(t, "POST", me.URL+"/api/remotes/nope/fetch", nil, nil); code != http.StatusNotFound {
 		t.Errorf("an unknown remote: %d, want 404", code)
 	}
 }
@@ -123,8 +128,8 @@ func TestRemotePushURLs(t *testing.T) {
 	if got := strings.Join(rs[1].PushURLs, " "); got != "/srv/git/r.git" {
 		t.Errorf("plain pushes to %s, want its url", got)
 	}
-	if code := send(t, "POST", serverOf(t, b).URL+"/api/remotes/plain/push", "https://evil.example"); code != http.StatusForbidden {
-		t.Errorf("a push asked by another site: %d, want 403", code)
+	if code := send(t, "POST", serverOf(t, b).URL+"/api/remotes/plain/pull", "https://evil.example"); code != http.StatusForbidden {
+		t.Errorf("a pull asked by another site: %d, want 403", code)
 	}
 }
 
@@ -147,8 +152,6 @@ func TestRemoteEvents(t *testing.T) {
 	for path, want := range map[string]string{
 		"/api/remotes/origin/pull":  "issues", // the boards reload
 		"/api/remotes/origin/fetch": "sync",
-		"/api/remotes/origin/push":  "issues", // it numbers the issues
-		"/api/remotes/mirror/push":  "sync",
 	} {
 		if got := eventFor(httptest.NewRequest("POST", path, nil)).Kind; got != want {
 			t.Errorf("%s: %s, want %s", path, got, want)

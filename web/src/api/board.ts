@@ -417,8 +417,8 @@ export function getRemotes(): Promise<{ remotes: Remote[] }> {
   return request('/api/remotes');
 }
 
-// fetch is the Check: nothing local changes
-export function remoteAction(name: string, action: 'fetch' | 'pull' | 'push'): Promise<{ remotes: Remote[] }> {
+// fetch is a check: nothing local changes (a push is the whole sync's)
+export function remoteAction(name: string, action: 'fetch' | 'pull'): Promise<{ remotes: Remote[] }> {
   return request(`/api/remotes/${encodeURIComponent(name)}/${action}`, { method: 'POST' });
 }
 

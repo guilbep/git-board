@@ -53,11 +53,16 @@ func TestNumbersOnlyOnAPushTheUserAsks(t *testing.T) {
 		t.Fatalf("creating pushed the counter:\n%s", got)
 	}
 
-	if code := call(t, "POST", ts.URL+"/api/remotes/origin/push", nil, nil); code != http.StatusOK {
-		t.Fatalf("push: %d", code)
+	for _, dry := range []bool{true, false} { // a sync, after its check
+		if code := call(t, "POST", ts.URL+"/api/sync/all", map[string]bool{"dry_run": dry}, nil); code != http.StatusAccepted {
+			t.Fatalf("sync (dry run %v): %d", dry, code)
+		}
+		if st := waitWhole(t, ts); st.Job.State != "done" {
+			t.Fatalf("sync: %+v", st.Job)
+		}
 	}
 	if got := onOrigin(); !strings.Contains(got, "1 "+made.ID) {
-		t.Errorf("the push numbered nothing:\n%s", got)
+		t.Errorf("the sync's push numbered nothing:\n%s", got)
 	}
 }
 
