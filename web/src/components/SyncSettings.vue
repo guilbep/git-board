@@ -105,7 +105,7 @@
       </ol>
       <SyncProgress v-if="running && forgeStep === 'running'" :job="job" :bridges="forgeStatus?.bridges ?? []" :starting="job.dry_run ? 'Checking the forges…' : 'Syncing the forges…'" />
       <p v-if="job.state === 'failed'" class="epfl-alert epfl-alert-danger" role="alert">
-        <b>{{ job.dry_run ? 'The check' : 'The sync' }} stopped{{ failedAt ? ` at ${failedAt}` : '' }}.</b> {{ failedAt ? '' : `${job.error}.` }} Nothing already written was undone.
+        <b>{{ job.dry_run ? 'The check' : 'The sync' }} stopped{{ failedAt ? ` at ${failedAt}` : '' }}.</b> {{ failedAt ? '' : `${job.error}.` }}{{ job.dry_run ? '' : ' Nothing already written was undone.' }}
       </p>
       <p v-else-if="job.dry_run && job.state === 'done' && job.errors" class="epfl-alert epfl-alert-danger" role="alert">
         <b>The check had {{ plural(job.errors, 'error') }}</b> (see the details below). Fix {{ job.errors === 1 ? 'it' : 'them' }} and check again: a sync needs a clean check.
@@ -118,7 +118,10 @@
             <span v-if="b.tally?.errors" class="gb-state gb-state-err"><GbIcon name="error" small /> {{ plural(b.tally.errors, 'error') }}</span>
             <span v-else-if="b.tally?.warnings" class="gb-hint">{{ plural(b.tally.warnings, 'warning') }}</span>
           </header>
-          <div class="gb-forge-body">
+          <div v-if="forgeStepOf?.state === 'skipped'" class="gb-forge-body">
+            <p class="gb-hint">Skipped: {{ forgeStepOf.note }}.</p>
+          </div>
+          <div v-else class="gb-forge-body">
             <p v-if="b.tally?.left" class="epfl-alert epfl-alert-warning"><b>Left out of the run:</b> {{ b.tally.left }}</p>
             <p v-if="(b.tally?.held ?? 0) > 0" class="epfl-alert epfl-alert-danger">
               <b>{{ job.dry_run ? 'Would create' : 'Didn’t create' }} {{ b.tally!.held.toLocaleString() }} issues on {{ b.label }} without your consent</b>
@@ -227,7 +230,9 @@ const understood = ref<string[]>([]);
 // the job: as polled while it runs (forges.ts), else as last loaded
 const job = computed(() => forgeStatus.value?.job ?? st.value?.job ?? null);
 const running = computed(() => job.value?.state === 'running');
-const forgeStep = computed(() => job.value?.steps?.find((s) => s.name === 'forges')?.state);
+const forgeStepOf = computed(() => job.value?.steps?.find((s) => s.name === 'forges'));
+const forgeStep = computed(() => forgeStepOf.value?.state);
+const pullStep = computed(() => job.value?.steps?.find((s) => s.name === 'pull'));
 // a sync needs a clean check of the whole sync (the server also wants it fresh, 15 minutes)
 const canRun = computed(() => !starting.value && job.value?.mode === 'all' && job.value.dry_run && job.value.state === 'done' && !job.value.errors);
 const reportTitle = computed(() => {
@@ -260,9 +265,14 @@ const rows = computed(() => {
   return forges;
 });
 
+// a step's note, short: its first clause
+const short = (note: string) => (note.split(/[:;]/)[0] ?? '').trim();
+
 const remoteLine = computed(() => {
   const r = st.value?.remote;
   if (!r) return '—';
+  const pull = pullStep.value;
+  if (pull?.state === 'failed') return `Failed ${when(job.value!.ended ?? job.value!.started, true)}: ${short(pull.note ?? '')}`;
   if (r.checked) return `${aheadWords(r.issues, 'issue')}, checked ${when(r.checked, true)}`;
   return r.tracked ? `${aheadWords(r.issues, 'issue')}, as of the last fetch or push` : 'Not checked yet';
 });
@@ -272,7 +282,9 @@ function forgeLine(f: Bridge): string {
   const j = job.value;
   const t = j?.bridges[f.name];
   if (!j || !t || j.state === 'running') return j?.state === 'running' && t ? 'Running…' : 'Not checked yet';
-  if (j.state === 'failed') return `Stopped ${when(j.ended ?? j.started, true)}`;
+  if (forgeStep.value === 'skipped') return `Skipped ${when(j.ended ?? j.started, true)}: ${forgeStepOf.value?.note ?? ''}`;
+  if (t.left) return `Left out ${when(j.ended ?? j.started, true)}: ${short(t.left)}`;
+  if (j.state === 'failed' && forgeStep.value === 'failed') return `Failed ${when(j.ended ?? j.started, true)}`;
   return j.dry_run ? `${checkWords({ [f.name]: t })}, checked ${when(j.ended ?? j.started, true)}` : `Synced ${when(j.ended ?? j.started, true)}`;
 }
 
