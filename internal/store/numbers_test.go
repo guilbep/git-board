@@ -111,6 +111,19 @@ func TestNumbersGitHubBelowStart(t *testing.T) {
 	if _, listed := c.ByID[old]; listed {
 		t.Error("the counter lists an issue its GitHub number already numbers")
 	}
+
+	// an issue's address takes its project number and a forge's, as the
+	// palette's jump does, before an id prefix
+	for name, want := range map[string]string{"CO2-3052": late, "co2-2518": old, "#3060": late, "#2518": old, late[:7]: late} {
+		if is, err := mine.GetIssue(name); err != nil || is.ID != want {
+			t.Errorf("GetIssue(%s) = %s, %v; want %s", name, is.ID, err, want[:7])
+		}
+	}
+	for _, name := range []string{"CO2-9999", "#1", "GB-3052"} {
+		if _, err := mine.GetIssue(name); !errors.Is(err, store.ErrNotFound) {
+			t.Errorf("GetIssue(%s): %v, want not found", name, err)
+		}
+	}
 }
 
 // Two clones number at once: the push is the lock. Theirs, on a counter

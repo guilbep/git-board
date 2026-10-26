@@ -224,9 +224,17 @@ func (b *Backend) Storage() Storage { return osfs.New(filepath.Join(b.s.CommonDi
 
 var ctx = context.Background()
 
+// numberName is an issue named by a number: its project number, CO2-3075,
+// or a forge's, #2518.
+var numberName = regexp.MustCompile(`^(#[0-9]+|[A-Za-z][A-Za-z0-9]*-[0-9]+)$`)
+
 // resolve is the whole id of an issue or a person ("issue", "person") by
-// a prefix of it.
+// a prefix of it; an issue by its project number or a forge's too, as the
+// palette's jump takes them.
 func (b *Backend) resolve(kind, prefix string) (string, error) {
+	if kind == "issue" && numberName.MatchString(prefix) {
+		return b.numbered(prefix)
+	}
 	id, err := b.ix.Resolve(ctx, kind, prefix)
 	switch {
 	case errors.Is(err, index.ErrNoMatch):
@@ -237,6 +245,30 @@ func (b *Backend) resolve(kind, prefix string) (string, error) {
 		return "", fmt.Errorf("%w: %v", ErrNotFound, err) // a bad prefix names nothing
 	}
 	return id, nil
+}
+
+// numbered is the issue a number names: #n a forge's (HasForgeNumber),
+// CO2-3075 its project number.
+// ponytail: reads every issue, as a list does; an index of the numbers
+// when an address by number costs
+func (b *Backend) numbered(name string) (string, error) {
+	issues, err := b.ListIssues()
+	if err != nil {
+		return "", err
+	}
+	var ids []string
+	for _, is := range issues {
+		if forge, ok := strings.CutPrefix(name, "#"); ok && is.HasForgeNumber(forge) || strings.EqualFold(is.Number, name) {
+			ids = append(ids, is.ID)
+		}
+	}
+	switch len(ids) {
+	case 0:
+		return "", fmt.Errorf("%w: issue %s", ErrNotFound, name)
+	case 1:
+		return ids[0], nil
+	}
+	return "", fmt.Errorf("%w: issue %s, on %d issues", ErrAmbiguous, name, len(ids))
 }
 
 // me is the person id git-board writes as.
