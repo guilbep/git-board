@@ -648,12 +648,12 @@ list = ["EPFL-ENAC/co2-calculator"]
 assignees = "native"
 ```
 
-`list` is the GitHub repositories whose labels the project keeps; without `[repos]`, origin's when it is on GitHub. They are reached through the `gh` CLI, logged in as you.
+`list` is the GitHub repositories whose labels the project keeps; without `[repos]`, origin's when it is on GitHub. They are reached through GitHub's API with the forge sync's token: `GITHUB_TOKEN` when set, else git's credential helper for github.com ([Forges](forges.md#tokens)). Not `gh`'s, which may be another token. When a repository can't be read, the tab says why and offers no Send to GitHub.
 
 **Settings › Labels** lists each label the project defines (every field's `options`, the sprints, the kinds) with its color, description and open issues, and its state on each repository: *same*, *color differs*, *description differs* or *missing*.
 
 - **Adopt** writes GitHub's color and description of a label into `[fields.<name>.colors]` and `[fields.<name>.descriptions]`, and opens the Project file tab to review and save. An organization's labels keep their colors this way.
-- **Send to GitHub** first lists, per repository, each label it creates and each change, then creates the missing labels and updates those whose color or description the file sets (`gh label create … --force`). A label outside the project's is never touched, and one the file gives no color or description of its own keeps GitHub's.
+- **Send to GitHub** first lists, per repository, each label it creates and each change, then creates the missing labels and updates those whose color or description the file sets. A label outside the project's is never touched, and one the file gives no color or description of its own keeps GitHub's.
 - **Lint** shows `git board lint`'s findings, then the GitHub labels outside the project's (a `bug` beside `kind:bug`, GitHub's old defaults) with their issues. **Delete** removes one from its repository, after a confirmation that says how many issues lose it.
 
 `git board lint --create-labels` prints the same plan, and `--apply` carries it out.

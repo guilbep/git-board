@@ -17,8 +17,8 @@ import (
 )
 
 // existingGithubLabels/applyGithubLabel are seams over ghlabels.Existing/
-// ghlabels.Apply so tests can swap in a fixture instead of shelling out to
-// the real `gh` binary — same pattern as bridge.go's fetchGithubItems.
+// ghlabels.Apply so tests can swap in a fixture instead of reaching
+// GitHub — same pattern as bridge.go's fetchGithubItems.
 var (
 	existingGithubLabels = ghlabels.Existing
 	applyGithubLabel     = ghlabels.Apply
@@ -53,7 +53,9 @@ Exits 0 even with findings — this is a report, not a build gate — unless
 --create-labels checks a different thing: whether every ns:value label
 git-board's config implies (one per [fields.<name>] option, plus one per
 [[sprints.list]] entry) exists as a real GitHub label on each configured
-[repos] entry (else origin's, when it is on GitHub), via "gh label list"/"gh label create" — so they're visible
+[repos] entry (else origin's, when it is on GitHub), through GitHub's API
+with the forge sync's token (GITHUB_TOKEN, else git's credential helper
+for github.com) — so they're visible
 and colored in the GitHub Issues UI, not just inside git-bug's own
 label store. A missing label is created with its color and description;
 an existing one is updated (--force) only where .git-board.toml sets its

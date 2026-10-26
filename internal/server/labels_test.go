@@ -1,13 +1,15 @@
 package server
 
 import (
-	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/guilbep/git-board/internal/config"
@@ -30,7 +32,33 @@ feat = "#0e8a16"
 kinds = { bug = "fix", feat = "feat" }
 `
 
-// Serial: it answers for gh (ghlabels.Gh).
+// fakeLabels serves GitHub's labels API for o/r, with these labels, the
+// count of wontfix's issues, and writes recorded in calls ("DELETE
+// /repos/o/r/labels/wontfix"). It sets the environment: serial.
+func fakeLabels(t *testing.T, labels string) *[]string {
+	t.Helper()
+	t.Setenv("GITHUB_TOKEN", "t")
+	var mu sync.Mutex
+	calls := &[]string{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		*calls = append(*calls, r.Method+" "+r.URL.Path)
+		mu.Unlock()
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/repos/o/r/labels":
+			_, _ = io.WriteString(w, labels)
+		case r.URL.Path == "/graphql":
+			_, _ = io.WriteString(w, `{"data":{"repository":{"label":{"issues":{"totalCount":2},"pullRequests":{"totalCount":0}}}}}`)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	saved := ghlabels.API
+	t.Cleanup(func() { ghlabels.API = saved })
+	ghlabels.API = srv.URL
+	return calls
+}
+
+// Serial: it answers for GitHub (ghlabels.API) and sets its token.
 func TestLabelsTab(t *testing.T) {
 	path := filepath.Join(t.TempDir(), config.FileName)
 	if err := os.WriteFile(path, []byte(labelsTestConfig), 0o644); err != nil {
@@ -47,22 +75,8 @@ func TestLabelsTab(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var gh []string
-	orig := ghlabels.Gh
-	t.Cleanup(func() { ghlabels.Gh = orig })
-	ghlabels.Gh = func(args ...string) ([]byte, error) {
-		gh = append(gh, strings.Join(args, " "))
-		switch args[0] + " " + args[1] {
-		case "label list":
-			return json.Marshal([]ghlabels.Label{{Name: "bug", Color: "d73a4a", Description: "Something isn't working"},
-				{Name: "feat", Color: "a2eeef", Description: "New feature"}, {Name: "wontfix", Color: "ffffff"}})
-		case "api graphql":
-			if slices.Contains(args, "label=wontfix") && slices.Contains(args, "owner=o") {
-				return []byte("2\n"), nil
-			}
-		}
-		return nil, nil
-	}
+	gh := fakeLabels(t, `[{"id":1,"name":"bug","color":"d73a4a","description":"Something isn't working"},
+		{"id":2,"name":"feat","color":"a2eeef","description":"New feature"},{"id":3,"name":"wontfix","color":"ffffff"}]`)
 
 	var list struct {
 		Repos []string   `json:"repos"`
@@ -91,8 +105,8 @@ func TestLabelsTab(t *testing.T) {
 	if want := []string{"feat 0e8a16", "status:ready 00897f", "status:done 4f9a1a"}; !slices.Equal(got, want) {
 		t.Errorf("send plan = %q, want %q", got, want)
 	}
-	if slices.ContainsFunc(gh, func(c string) bool { return strings.HasPrefix(c, "label create") }) {
-		t.Errorf("a dry run ran gh label create: %q", gh)
+	if slices.ContainsFunc(*gh, func(c string) bool { return !strings.HasPrefix(c, "GET ") }) {
+		t.Errorf("a dry run wrote to GitHub: %q", *gh)
 	}
 
 	var adopted struct {
@@ -127,13 +141,14 @@ func TestLabelsTab(t *testing.T) {
 		t.Errorf("deleting the project's bug: %d, want 400", resp.StatusCode)
 	}
 	postJSON(t, ts.URL+"/api/labels/delete", map[string]any{"repo": "o/r", "name": "wontfix"}, nil)
-	if last := gh[len(gh)-1]; last != "label delete wontfix --repo o/r --yes" {
-		t.Errorf("last gh call = %q", last)
+	if last := (*gh)[len(*gh)-1]; last != "DELETE /repos/o/r/labels/wontfix" {
+		t.Errorf("last call = %q", last)
 	}
 }
 
-// Serial: it answers for gh (ghlabels.Gh). A direct call deletes only what
-// the lint lists as stray: not a free-form field's value, not the project's.
+// Serial: it answers for GitHub (fakeLabels). A direct call deletes only
+// what the lint lists as stray: not a free-form field's value, not the
+// project's.
 func TestLabelDeleteOnlyStray(t *testing.T) {
 	path := filepath.Join(t.TempDir(), config.FileName)
 	if err := os.WriteFile(path, []byte(labelsTestConfig+"\n[fields.assignee]\n"), 0o644); err != nil {
@@ -145,29 +160,20 @@ func TestLabelDeleteOnlyStray(t *testing.T) {
 	}
 	ts := newTestServer(t, storetest.New(t), cfg)
 
-	var gh []string
-	orig := ghlabels.Gh
-	t.Cleanup(func() { ghlabels.Gh = orig })
-	ghlabels.Gh = func(args ...string) ([]byte, error) {
-		gh = append(gh, strings.Join(args, " "))
-		if args[0]+" "+args[1] == "label list" {
-			return json.Marshal([]ghlabels.Label{{Name: "bug"}, {Name: "wontfix"}, {Name: "assignee:alice"}})
-		}
-		return nil, nil
-	}
+	gh := fakeLabels(t, `[{"id":1,"name":"bug"},{"id":2,"name":"wontfix"},{"id":3,"name":"assignee:alice"}]`)
 
 	for _, name := range []string{"assignee:alice", "bug"} {
 		if resp := postJSON(t, ts.URL+"/api/labels/delete", map[string]any{"repo": "o/r", "name": name}, nil); resp.StatusCode != http.StatusBadRequest {
 			t.Errorf("deleting %s: %d, want 400", name, resp.StatusCode)
 		}
 	}
-	if slices.ContainsFunc(gh, func(c string) bool { return strings.HasPrefix(c, "label delete") }) {
-		t.Errorf("a refused delete ran gh: %q", gh)
+	if slices.ContainsFunc(*gh, func(c string) bool { return strings.HasPrefix(c, "DELETE") }) {
+		t.Errorf("a refused delete reached GitHub: %q", *gh)
 	}
 	if resp := postJSON(t, ts.URL+"/api/labels/delete", map[string]any{"repo": "o/r", "name": "wontfix"}, nil); resp.StatusCode != http.StatusOK {
 		t.Errorf("deleting wontfix: %d", resp.StatusCode)
 	}
-	if last := gh[len(gh)-1]; last != "label delete wontfix --repo o/r --yes" {
-		t.Errorf("last gh call = %q", last)
+	if last := (*gh)[len(*gh)-1]; last != "DELETE /repos/o/r/labels/wontfix" {
+		t.Errorf("last call = %q", last)
 	}
 }

@@ -361,6 +361,86 @@ func (f *Forge) label(ctx context.Context, name string) error {
 	return nil
 }
 
+// Label is one of the repository's labels, its color hex without #, as
+// GitHub has it.
+type Label struct {
+	Name        string `json:"name"`
+	Color       string `json:"color"`
+	Description string `json:"description"`
+}
+
+// Labels lists the repository's labels.
+func (f *Forge) Labels(ctx context.Context) ([]Label, error) {
+	type ghLabel struct {
+		ID int64 `json:"id"`
+		Label
+	}
+	all, err := pages(ctx, f, f.s.repo+"/labels", func(l ghLabel) int64 { return l.ID })
+	out := make([]Label, len(all))
+	for i, l := range all {
+		out[i] = l.Label
+	}
+	return out, err
+}
+
+// SetLabel creates the label, or with update edits the one of its name
+// (GitHub's names have no case): its color and description.
+func (f *Forge) SetLabel(ctx context.Context, l Label, update bool) error {
+	in := map[string]string{"name": l.Name, "description": l.Description}
+	if l.Color != "" {
+		in["color"] = l.Color
+	}
+	if update {
+		delete(in, "name")
+		return f.call(ctx, http.MethodPatch, f.s.repo+"/labels/"+url.PathEscape(l.Name), in, nil)
+	}
+	return f.call(ctx, http.MethodPost, f.s.repo+"/labels", in, nil)
+}
+
+// DeleteLabel removes the label from the repository, and so from its
+// issues.
+func (f *Forge) DeleteLabel(ctx context.Context, name string) error {
+	return f.call(ctx, http.MethodDelete, f.s.repo+"/labels/"+url.PathEscape(name), nil, nil)
+}
+
+const labelCountQuery = `query($owner: String!, $name: String!, $label: String!) {
+  repository(owner: $owner, name: $name) {
+    label(name: $label) { issues { totalCount } pullRequests { totalCount } }
+  }
+}`
+
+// LabelCount is how many of the repository's issues and pull requests
+// carry the label.
+func (f *Forge) LabelCount(ctx context.Context, name string) (int, error) {
+	owner, repo, _ := strings.Cut(f.s.project, "/")
+	var r struct {
+		Data struct {
+			Repository struct {
+				Label *struct {
+					Issues, PullRequests struct {
+						TotalCount int `json:"totalCount"`
+					}
+				} `json:"label"`
+			} `json:"repository"`
+		} `json:"data"`
+		Errors []struct {
+			Message string `json:"message"`
+		} `json:"errors"`
+	}
+	in := map[string]any{"query": labelCountQuery, "variables": map[string]string{"owner": owner, "name": repo, "label": name}}
+	if err := f.call(ctx, http.MethodPost, f.s.graphql, in, &r); err != nil {
+		return 0, err
+	}
+	if len(r.Errors) > 0 {
+		return 0, fmt.Errorf("github: graphql: %s", r.Errors[0].Message)
+	}
+	l := r.Data.Repository.Label
+	if l == nil {
+		return 0, fmt.Errorf("%w: label %s", forge.ErrNotFound, name)
+	}
+	return l.Issues.TotalCount + l.PullRequests.TotalCount, nil
+}
+
 // number is the issue's number, which REST names issues by.
 func number(issue forge.Ref) (string, error) {
 	if _, err := strconv.Atoi(issue.Number); err != nil {

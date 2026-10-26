@@ -2,14 +2,18 @@ package github
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -207,6 +211,66 @@ func TestLabelRefusedAlone(t *testing.T) {
 	}
 	if got, _ := f.Get(is.Number); !slices.Equal(got.Labels, []string{"ui"}) {
 		t.Fatalf("labels = %v, want ui", got.Labels)
+	}
+}
+
+// The repository's labels: listed past a page, created, edited by name,
+// deleted, and counted with GraphQL.
+func TestLabels(t *testing.T) {
+	t.Parallel()
+	ctx := t.Context()
+	var mu sync.Mutex
+	var calls []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		mu.Lock()
+		calls = append(calls, r.Method+" "+r.URL.Path+" "+strings.TrimSpace(string(body)))
+		mu.Unlock()
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/repos/o/r/labels":
+			var page []map[string]any
+			if r.URL.Query().Get("page") == "1" {
+				for i := range perPage {
+					page = append(page, map[string]any{"id": i, "name": fmt.Sprint("l", i), "color": "ededed"})
+				}
+			} else {
+				page = []map[string]any{{"id": 1000, "name": "bug", "color": "d73a4a", "description": "Something isn't working"}}
+			}
+			_ = json.NewEncoder(w).Encode(page)
+		case r.URL.Path == "/graphql":
+			_, _ = io.WriteString(w, `{"data":{"repository":{"label":{"issues":{"totalCount":2},"pullRequests":{"totalCount":1}}}}}`)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	a, err := New(ctx, Options{Project: "o/r", API: srv.URL, Token: func(context.Context, forge.Account) (string, error) { return "t", nil }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ls, err := a.Labels(ctx)
+	if err != nil || len(ls) != perPage+1 || ls[perPage] != (Label{Name: "bug", Color: "d73a4a", Description: "Something isn't working"}) {
+		t.Fatalf("labels %d, last %+v, %v", len(ls), ls[len(ls)-1], err)
+	}
+	if err := a.SetLabel(ctx, Label{Name: "status:ready", Color: "00897f"}, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.SetLabel(ctx, Label{Name: "kind:feat", Color: "0e8a16", Description: "New"}, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.DeleteLabel(ctx, "wontfix"); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := a.LabelCount(ctx, "wontfix"); n != 3 || err != nil {
+		t.Fatalf("count %d, %v", n, err)
+	}
+	want := []string{
+		`POST /repos/o/r/labels {"color":"00897f","description":"","name":"status:ready"}`,
+		`PATCH /repos/o/r/labels/kind:feat {"color":"0e8a16","description":"New"}`,
+		`DELETE /repos/o/r/labels/wontfix `,
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if got := calls[2:5]; !slices.Equal(got, want) {
+		t.Errorf("writes\n%q\nwant\n%q", got, want)
 	}
 }
 

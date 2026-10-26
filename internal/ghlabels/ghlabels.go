@@ -2,13 +2,14 @@
 // git-board writes into git-bug (status:*, prio:*, sprint:*, …), so they
 // exist and are visibly colored/filterable in the GitHub Issues UI before
 // the first bridge run, with the colors and descriptions of
-// .git-board.toml. Read/write against GitHub via the `gh` CLI only —
-// never touches the local git-bug repo (that's internal/store's job).
+// .git-board.toml. Read/write against GitHub through the GitHub forge
+// adapter, with its token rule — never touches the local repository
+// (that's internal/store's job).
 package ghlabels
 
 import (
 	"bytes"
-	"encoding/json"
+	"context"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -17,16 +18,27 @@ import (
 	"os/exec"
 	"path/filepath"
 	"slices"
-	"strconv"
 	"strings"
 
 	"go.yaml.in/yaml/v3"
 
+	"github.com/guilbep/git-board/core/forge/github"
 	"github.com/guilbep/git-board/internal/config"
 )
 
-// Gh runs `gh` with args and returns its output: the one door to GitHub,
-// a var so tests answer for it.
+// API is GitHub's REST API the labels go through: "" is api.github.com;
+// tests, a fake.
+var API = ""
+
+// open is repo through the GitHub forge adapter, its token as the forge
+// sync finds one: GITHUB_TOKEN, else git's credential helper for
+// github.com. Not gh's: gh may hold another token, or a narrower one.
+func open(ctx context.Context, repo string) (*github.Forge, error) {
+	return github.New(ctx, github.Options{Project: repo, API: API})
+}
+
+// Gh runs `gh` with args and returns its output, for Current alone: a var
+// so tests answer for it.
 var Gh = func(args ...string) ([]byte, error) {
 	cmd := exec.Command("gh", args...)
 	var stderr bytes.Buffer
@@ -89,13 +101,18 @@ func find(m map[string]string, key string) string {
 
 // Existing lists repo's labels, read-only.
 func Existing(repo string) ([]Label, error) {
-	out, err := Gh("label", "list", "--repo", repo, "--json", "name,color,description", "--limit", "1000")
+	ctx := context.Background()
+	g, err := open(ctx, repo)
 	if err != nil {
 		return nil, err
 	}
-	var labels []Label
-	if err := json.Unmarshal(out, &labels); err != nil {
-		return nil, fmt.Errorf("parsing gh label list JSON: %w", err)
+	got, err := g.Labels(ctx)
+	if err != nil {
+		return nil, err
+	}
+	labels := make([]Label, len(got))
+	for i, l := range got {
+		labels[i] = Label{Name: l.Name, Color: l.Color, Description: l.Description}
 	}
 	return labels, nil
 }
@@ -165,20 +182,14 @@ func Plan(repo string, desired, existing []Label) []Change {
 	return res
 }
 
-// Apply carries out c: `gh label create`, with --force for an update.
+// Apply carries out c: the label created, or updated.
 func Apply(c Change) error {
-	args := []string{"label", "create", c.Name, "--repo", c.Repo}
-	if c.Color != "" {
-		args = append(args, "--color", c.Color)
+	ctx := context.Background()
+	g, err := open(ctx, c.Repo)
+	if err != nil {
+		return err
 	}
-	if c.Description != "" {
-		args = append(args, "--description", c.Description)
-	}
-	if c.Update {
-		args = append(args, "--force")
-	}
-	_, err := Gh(args...)
-	return err
+	return g.SetLabel(ctx, github.Label{Name: c.Name, Color: c.Color, Description: c.Description}, c.Update)
 }
 
 // Stray is repo's labels outside the project's: not desired, and not a
@@ -198,28 +209,24 @@ func Stray(cfg *config.Config, desired, existing []Label) []Label {
 	return res
 }
 
-// countQuery asks GitHub how many issues and pull requests carry a label.
-const countQuery = `query($owner: String!, $name: String!, $label: String!) {
-  repository(owner: $owner, name: $name) {
-    label(name: $label) { issues { totalCount } pullRequests { totalCount } }
-  }
-}`
-
 // Count is how many of repo's issues and pull requests carry name.
 func Count(repo, name string) (int, error) {
-	owner, repoName, _ := strings.Cut(repo, "/")
-	out, err := Gh("api", "graphql", "-f", "query="+countQuery, "-f", "owner="+owner, "-f", "name="+repoName, "-f", "label="+name,
-		"--jq", ".data.repository.label | .issues.totalCount + .pullRequests.totalCount")
+	ctx := context.Background()
+	g, err := open(ctx, repo)
 	if err != nil {
 		return 0, err
 	}
-	return strconv.Atoi(strings.TrimSpace(string(out)))
+	return g.LabelCount(ctx, name)
 }
 
 // Delete removes name from repo, and so from its issues.
 func Delete(repo, name string) error {
-	_, err := Gh("label", "delete", name, "--repo", repo, "--yes")
-	return err
+	ctx := context.Background()
+	g, err := open(ctx, repo)
+	if err != nil {
+		return err
+	}
+	return g.DeleteLabel(ctx, name)
 }
 
 // Current is the GitHub repository of the working directory's checkout,

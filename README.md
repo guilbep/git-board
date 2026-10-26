@@ -462,10 +462,10 @@ The labels git-board writes (`status:ready`, `prio:p0`, `sprint:delivery`,
 exist as real, colorable GitHub labels until someone creates them.
 `--create-labels` closes that gap: it diffs every `ns:value` label
 `.git-board.toml`'s `[fields.*]` options and `[[sprints.list]]` entries
-imply against each configured `[repos]` entry's real GitHub labels (via
-`gh label list`), and reports what's missing. Preview only by default,
-same convention as `bridge pull`; `--apply` actually runs `gh label
-create` for each missing one.
+imply against each configured `[repos]` entry's real GitHub labels (read
+through GitHub's API with the forge sync's token), and reports what's
+missing. Preview only by default, same convention as `bridge pull`;
+`--apply` actually creates each missing one.
 
 ```bash
 git-board lint --create-labels           # preview what's missing, writes nothing
@@ -816,7 +816,7 @@ internal/filter/       grammar parser, Matches(issue, conditions, config, me).
 internal/board/        load/sort/group issues — shared by the CLI, the TUI and the web API.
 internal/ghbridge/     `gh project item-list` parsing + field-mapping/diff logic for `bridge pull`.
 internal/lint/          read-only drift checks (labels vs. .git-board.toml) — internal/lint.Run.
-internal/ghlabels/      `gh label list`/`gh label create` — GitHub-side label creation for `lint --create-labels`.
+internal/ghlabels/      GitHub-side labels, through the GitHub forge adapter — for `lint --create-labels` and Settings › Labels.
 internal/server/        the web UI's HTTP API (net/http, no framework) + the embedded web/dist; `git-board serve`.
 cmd/git-board/          main.go + cobra commands, thin rendering (incl. html.go, the static-site generator).
 web/                    Quasar/Vue frontend — one board page, api/board.ts is the only HTTP client.
