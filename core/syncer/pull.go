@@ -89,16 +89,22 @@ func isAssignee(l string) bool {
 	return len(l) > len("assignee:") && strings.EqualFold(l[:len("assignee:")], "assignee:")
 }
 
-// labelSet is the unique, sorted labels without assignee labels.
-func labelSet(labels []string) []string {
+// labelSet is the unique, sorted labels without assignee labels, and
+// without the labels p holds.
+func (r *run) labelSet(p *project, labels []string) []string {
 	var out []string
 	for _, l := range labels {
-		if !isAssignee(l) {
+		if !isAssignee(l) && !r.held(p, l) {
 			out = append(out, l)
 		}
 	}
 	slices.Sort(out)
 	return slices.Compact(out)
+}
+
+// held says whether p holds the label (Options.Held).
+func (r *run) held(p *project, l string) bool {
+	return r.opt.Held != nil && r.opt.Held(p.key, l)
 }
 
 func split(v string) []string {
@@ -139,7 +145,7 @@ func (r *run) pullNew(p *project, fi forge.Issue) (string, error) {
 	}
 	a := who[fi.Author.ID]
 	ev := "issue:" + fi.ID
-	labels := strings.Join(labelSet(fi.Labels), "\n")
+	labels := strings.Join(r.labelSet(p, fi.Labels), "\n")
 	add := split(labels)
 	for _, as := range fi.Assignees {
 		add = append(add, "assignee:"+as.Login)

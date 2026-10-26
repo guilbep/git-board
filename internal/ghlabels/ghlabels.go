@@ -155,15 +155,22 @@ type Change struct {
 	Was         *Label `json:"was,omitempty"`
 }
 
+// Key is repo's key, as the forges' sync names it.
+func Key(repo string) string { return "github.com/" + repo }
+
 // Plan is what repo needs to have desired: every missing label, created
 // with its color and description, and an existing one updated only where
 // the file sets its color or description and GitHub's differs. A label the
 // file says nothing about stays as GitHub has it: an organization's labels
-// keep their colors.
-func Plan(repo string, desired, existing []Label) []Change {
+// keep their colors. A label held off repo (config.Held) has
+// another home there, and is never created.
+func Plan(repo string, desired, existing []Label, held func(key, label string) bool) []Change {
 	var res []Change
 	for _, want := range desired {
 		got, ok := lookup(existing, want.Name)
+		if !ok && held(Key(repo), want.Name) {
+			continue
+		}
 		if !ok {
 			res = append(res, Change{Repo: repo, Name: want.Name, Color: want.Color, Description: want.Description})
 			continue

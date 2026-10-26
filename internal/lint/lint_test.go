@@ -267,15 +267,22 @@ func TestKindChecks(t *testing.T) {
 	}
 	findings := lint.Run(issues, cfg)
 	got := countChecks(findings)
-	for check, n := range map[string]int{lint.CheckKindTitle: 1, lint.CheckTwoKinds: 2, lint.CheckNoKind: 1} {
+	for check, n := range map[string]int{lint.CheckKindTitle: 4, lint.CheckTwoKinds: 2, lint.CheckNoKind: 1} {
 		if got[check] != n {
 			t.Errorf("%s: %d findings, want %d (all: %+v)", check, got[check], n, findings)
 		}
 	}
+	// a title never carries the kind: a bracket goes, agreeing or not
+	titles := map[string]string{
+		"a": "the title starts with [BUG]: the kind is its label, bug",
+		"b": "the title says [Bug], the label says feat: the label wins",
+		"f": "the title starts with [FEAT/DATA]: the kind is its label, feat",
+		"g": "the title starts with [BUG]: the kind is its label, bug",
+	}
 	for _, f := range findings {
 		switch f.Check {
 		case lint.CheckKindTitle:
-			if f.IssueID != "b" || f.Message != "the title says [Bug], the label says feat: the label wins" {
+			if f.Message != titles[f.IssueID] {
 				t.Errorf("kind-title finding = %+v", f)
 			}
 		case lint.CheckNoKind:

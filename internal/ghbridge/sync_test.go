@@ -472,3 +472,51 @@ func TestSyncCategoryRemovesItsBareLabel(t *testing.T) {
 		t.Errorf("added %v removed %v, want FEAT removed and no feat beside bug", c.Added, c.Removed)
 	}
 }
+
+// MoSCoW is kept in step as Priority is; Won't, which slugs to won-t, is
+// named in [fields.moscow] project.
+func TestSyncMoSCoW(t *testing.T) {
+	t.Parallel()
+	cfg := syncConfig()
+	cfg.Fields["moscow"] = config.Field{Single: true, Options: []string{"must", "should", "could", "wont"}, Project: map[string]string{"wont": "Won't"}}
+	meta := syncMeta()
+	meta.Fields["MoSCoW"] = ghbridge.ProjectField{ID: "F-moscow", Options: map[string]string{"Must": "o-must", "Should": "o-should", "Could": "o-could", "Won't": "o-wont"}}
+	it := item(1, "Ready")
+	it.MoSCoW = "Won't"
+	p := ghbridge.BuildSyncPlan([]ghbridge.Item{it}, oneBug(), nil, meta, cfg)
+	if got := p.Changes[0].Added; !slices.Contains(got, "moscow:wont") {
+		t.Errorf("added = %v, want moscow:wont", got)
+	}
+	it.MoSCoW = "Should"
+	p = ghbridge.BuildSyncPlan([]ghbridge.Item{it}, oneBug("moscow:must"), map[string]map[string]string{"bug1": {"moscow": "should"}}, meta, cfg)
+	if !slices.ContainsFunc(p.Edits, func(e ghbridge.ProjectEdit) bool { return e.Field == "moscow" && e.Value == "must" }) {
+		t.Errorf("edits = %+v, want moscow set to must on the Project", p.Edits)
+	}
+}
+
+// The milestone, a deliverable, comes from the Project and is never
+// written back: GitHub's issue holds it, which a Project edit can't set.
+func TestSyncMilestoneReadOnly(t *testing.T) {
+	t.Parallel()
+	meta := syncMeta()
+	meta.Fields["Milestone"] = ghbridge.ProjectField{ID: "F-milestone"}
+	it := item(1, "Ready")
+	it.Milestone = &ghbridge.Milestone{Title: "V3.1 – Pilot", DueOn: "2026-11-30T00:00:00Z"}
+	p := ghbridge.BuildSyncPlan([]ghbridge.Item{it}, oneBug(), nil, meta, syncConfig())
+	if got := p.Changes[0].Added; !slices.Contains(got, "milestone:v3-1-pilot") {
+		t.Errorf("added = %v, want milestone:v3-1-pilot", got)
+	}
+	// changed here only: the Project's comes back, nothing is written
+	p = ghbridge.BuildSyncPlan([]ghbridge.Item{it}, oneBug("milestone:v4"), map[string]map[string]string{"bug1": {"milestone": "v3-1-pilot"}}, meta, syncConfig())
+	if len(p.Edits) != 0 || len(p.Conflicts) != 0 || !slices.Contains(p.Changes[0].Added, "milestone:v3-1-pilot") {
+		t.Errorf("edits %+v, conflicts %+v, added %v; want the Project's milestone back", p.Edits, p.Conflicts, p.Changes[0].Added)
+	}
+}
+
+// The fields the forges' sync holds for the Project are the ones it syncs.
+func TestSyncedAreProjectFields(t *testing.T) {
+	t.Parallel()
+	if got := ghbridge.SyncedFields(); !slices.Equal(got, config.ProjectFields) {
+		t.Errorf("synced %v, config.ProjectFields %v", got, config.ProjectFields)
+	}
+}

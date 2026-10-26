@@ -172,17 +172,19 @@ func prTitle(is store.Issue) string {
 	return strings.TrimSpace(is.Number + " " + is.ShownTitle())
 }
 
-// prBody names the issue (its project number, else its git-bug id's first
-// 7 characters) and, when it is an issue of the same GitHub repository,
-// closes it there on merge (into the default branch, as GitHub does it).
+// prBody is the trailer naming what the pull request delivers: the issue
+// by its project number, else as #N when it is an issue of the same GitHub
+// repository, else by its git-bug id's first 7 characters. Never a closing
+// keyword: merging doesn't finish the issue, its criteria do (the IT4R
+// issue conventions). The developer adds the criteria's letters.
 func prBody(is store.Issue, repo string) string {
-	body := cmp.Or(is.Number, is.ID[:min(7, len(is.ID))])
+	ref := cmp.Or(is.Number, is.ID[:min(7, len(is.ID))])
 	for _, f := range is.Forges {
-		if f.Number != "" && strings.EqualFold(f.URL, "https://github.com/"+repo+"/issues/"+f.Number) {
-			return body + "\n\nCloses #" + f.Number
+		if is.Number == "" && f.Number != "" && strings.EqualFold(f.URL, "https://github.com/"+repo+"/issues/"+f.Number) {
+			ref = "#" + f.Number
 		}
 	}
-	return body
+	return "Refs: " + ref
 }
 
 // handleMergePull merges a pull request with a merge commit, if its head

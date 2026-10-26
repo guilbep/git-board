@@ -24,6 +24,31 @@ func (b *Backend) SetFlatKinds(cfg *config.Config) {
 	b.flat.Store(&flat)
 }
 
+// SetHeld tells the backend the labels the forges' sync keeps off each
+// forge (config.Held): its runs, a switch's included, hold them, and a
+// thread shows none waiting for that forge. Safe beside reads, as
+// SetFlatKinds.
+func (b *Backend) SetHeld(cfg *config.Config) {
+	b.cfg.Store(cfg)
+}
+
+// held is SetHeld's config's Held, nil when none was set.
+func (b *Backend) held() func(key, label string) bool {
+	if cfg := b.cfg.Load(); cfg != nil {
+		return cfg.Held
+	}
+	return nil
+}
+
+// heldOn says which labels the sync holds off the forge of an issue's URL.
+// ponytail: the forge's key as the URL's host and path, Held reading the
+// host alone
+func (b *Backend) heldOn(u string) func(string) bool {
+	held := b.held()
+	_, key, _ := strings.Cut(u, "://")
+	return func(l string) bool { return held != nil && held(key, l) }
+}
+
 // flatKind is the flat kind label l is, as kind:bug or as bug.
 func (b *Backend) flatKind(l string) (string, bool) {
 	flat := b.flat.Load()

@@ -143,6 +143,30 @@ var synced = []struct {
 	{"mod", "Module", func(i Item) string { return normalizeModule(i.Module) }},
 	{"est", "Est. hours", func(i Item) string { return formatEstHours(i.EstHours) }},
 	{"sprint", "Sprint", sprintTitle},
+	{"moscow", "MoSCoW", func(i Item) string { return i.MoSCoW }},
+	{"milestone", "Milestone", func(i Item) string {
+		if i.Milestone == nil {
+			return ""
+		}
+		return i.Milestone.Title
+	}},
+}
+
+// readOnly are the synced fields only GitHub writes: the Project shows the
+// issue's milestone, which a Project edit can't set. The Project's value
+// always wins.
+// ponytail: the title alone, as a slug; its due date and a write back
+// (the issue's milestone, by title) when a project needs them.
+var readOnly = map[string]bool{"milestone": true}
+
+// SyncedFields are the names of the fields kept in step with the Project,
+// in order: config.ProjectFields.
+func SyncedFields() []string {
+	var names []string
+	for _, f := range synced {
+		names = append(names, f.name)
+	}
+	return names
 }
 
 // BasePrefix is where a Project's bases are recorded on bugs.
@@ -211,7 +235,11 @@ func syncIssue(plan *SyncPlan, item Item, bug store.Issue, bases map[string]stri
 		}
 		base, hasBase := bases[f.name]
 
-		switch Decide(p, l, base, hasBase) {
+		d := Decide(p, l, base, hasBase)
+		if readOnly[f.name] && d != Agreed {
+			d = TakeProject
+		}
+		switch d {
 		case Agreed:
 			record(f.name, p)
 		case TakeProject:

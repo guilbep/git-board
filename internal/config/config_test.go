@@ -475,3 +475,35 @@ func TestAssigneesMode(t *testing.T) {
 		}
 	}
 }
+
+// The forges' sync holds what has another home: on GitHub, with a
+// Project, the fields the Project holds; everywhere, the fields naming
+// issues, and the milestone.
+func TestHeld(t *testing.T) {
+	t.Parallel()
+	c := &Config{GithubProject: GithubProject{Owner: "o", Number: 1}}
+	for _, tc := range []struct {
+		key, label string
+		want       bool
+	}{
+		{"github.com/o/r", "status:ready", true},
+		{"github.com/o/r", "Status:Ready", true},
+		{"github.com/o/r", "prio:p1", true},
+		{"github.com/o/r", "sprint:sprint-12", true},
+		{"github.com/o/r", "est:6", true},
+		{"github.com/o/r", "moscow:must", true},
+		{"github.com/o/r", "hold:blocked", false},
+		{"github.com/o/r", "bug", false},
+		{"github.com/o/r", "parent:vm-12", true},
+		{"gitlab.epfl.ch/42400", "status:ready", false},
+		{"gitlab.epfl.ch/42400", "blocked-by:vm-70", true},
+		{"gitlab.epfl.ch/42400", "milestone:v3-1", true},
+	} {
+		if got := c.Held(tc.key, tc.label); got != tc.want {
+			t.Errorf("Held(%s, %s) = %v, want %v", tc.key, tc.label, got, tc.want)
+		}
+	}
+	if (&Config{}).Held("github.com/o/r", "status:ready") {
+		t.Error("without a Project, status: held on GitHub")
+	}
+}

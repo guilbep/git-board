@@ -1,5 +1,6 @@
 import { fieldTypes } from '@/fieldtypes';
 import type { Facet } from '@/facets';
+import type { LabelState } from '@/labels';
 // Typed client for the git-board server's API (internal/server). All HTTP
 // for the board page goes through here — never fetch() from a component
 // directly.
@@ -1400,7 +1401,7 @@ export interface LabelRow extends GithubLabel {
   own_color: boolean; // the project file sets it, else the board's own
   own_description: boolean;
   count: number; // open issues
-  github: { repo: string; state: 'same' | 'color' | 'description' | 'missing'; color: string; description: string }[];
+  github: { repo: string; state: LabelState; color: string; description: string }[];
 }
 export interface Labels { repos: string[]; rows: LabelRow[]; errors: RepoError[] }
 export interface LabelChange extends GithubLabel { repo: string; update: boolean; was?: GithubLabel; error?: string }

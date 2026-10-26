@@ -85,7 +85,7 @@ func TestPlanChangesOnlyWhatTheFileSets(t *testing.T) {
 		{Name: "perf", Color: "A2EEEF"},
 		{Name: "wontfix", Color: "ffffff"},
 	}
-	got := Plan("o/r", desired, existing)
+	got := Plan("o/r", desired, existing, func(_, _ string) bool { return false })
 	want := []Change{
 		{Repo: "o/r", Name: "feat", Color: "0e8a16", Description: "New feature", Update: true, Was: &existing[1]},
 		{Repo: "o/r", Name: "docs", Color: "0075ca", Description: "Docs", Update: true, Was: &existing[2]},

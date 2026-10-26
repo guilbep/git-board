@@ -176,6 +176,11 @@ the forge's (F) with last seen (S):
   since. Last seen then takes S, plus the labels added and less the labels
   removed, not the forge's set: a label the forge gained is left for the
   next pull to bring in.
+- **A held label stays in git-board** on that project (`Options.Held`):
+  never sent there, and the project's own copy is neither pulled nor
+  removed. git-board holds, on GitHub with a Project, the fields the
+  Project holds, and on every forge the fields naming issues (`parent:`,
+  `blocked-by:`…) and `milestone:`: each fact has one home there.
 - **Comments.** Each comment's text is a field. A comment new on one side
   is added to the other. Adding never conflicts.
 - **An issue not on a project yet** is created there from its current

@@ -208,9 +208,10 @@ var titleKind = regexp.MustCompile(`^\s*\[([^\]]+)\]`) // [BUG](Equipment)
 
 // checkKinds reads the kinds with [branches] kinds, either form (kind:bug,
 // or bug, which the backend reads as kind:bug): two kinds on one issue; a
-// title prefix naming another kind than the label, which wins; and the
-// issues with no kind, as one count, a missing kind being the issue
-// template's to fix rather than each issue's.
+// title starting with a bracket ([BUG]), which a kind never needs, the
+// label winning when they disagree; and the issues with no kind, as one
+// count, a missing kind being the issue template's to fix rather than each
+// issue's.
 func checkKinds(issues []store.Issue, cfg *config.Config) []Finding {
 	kinds := cfg.Branches.Kinds
 	if len(kinds) == 0 {
@@ -240,12 +241,13 @@ func checkKinds(issues []store.Issue, cfg *config.Config) []Finding {
 			continue
 		}
 		named := strings.TrimSpace(m[1])
+		msg := fmt.Sprintf("the title starts with [%s]: the kind is its label, %s", named, kind)
 		for k := range kinds {
 			if strings.EqualFold(k, named) && k != kind {
-				findings = append(findings, Finding{Check: CheckKindTitle, IssueID: issue.ID, Title: issue.Title,
-					Message: fmt.Sprintf("the title says [%s], the label says %s: the label wins", named, kind)})
+				msg = fmt.Sprintf("the title says [%s], the label says %s: the label wins", named, kind)
 			}
 		}
+		findings = append(findings, Finding{Check: CheckKindTitle, IssueID: issue.ID, Title: issue.Title, Message: msg})
 	}
 	if missing > 0 {
 		have := "issues have"

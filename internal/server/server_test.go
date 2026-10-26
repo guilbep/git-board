@@ -38,6 +38,7 @@ func newTestServer(t *testing.T, b *store.Backend, cfg *config.Config) *httptest
 	s := &apiServer{cfg: cfg, b: b, me: "guilbep"}
 	if b != nil && cfg != nil {
 		b.SetFlatKinds(cfg) // as Open does from the file
+		b.SetHeld(cfg)
 	}
 	mux := newMux(s, http.NotFoundHandler())
 	ts := httptest.NewServer(withCORS(mux))

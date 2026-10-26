@@ -132,7 +132,7 @@ func runCreateLabels(out io.Writer, cfg *config.Config, apply bool) error {
 			failed = true
 			continue
 		}
-		changes := ghlabels.Plan(repo, desired, existing)
+		changes := ghlabels.Plan(repo, desired, existing, cfg.Held)
 		if len(changes) == 0 {
 			fmt.Fprintf(out, "%s: all labels present\n", repo)
 			continue

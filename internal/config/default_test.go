@@ -20,9 +20,15 @@ func TestDefaultChecksClean(t *testing.T) {
 		!slices.Equal(s.Validation, []string{"ready-for-validation"}) || s.Closing != "validated" {
 		t.Errorf("stages = %+v", s)
 	}
-	// the org's flat kinds are the kind field, in the file's order
-	kinds := []string{"bug", "feat", "docs", "refactor", "perf", "polish", "style", "test"}
+	// the IT4R kinds, flat, are the kind field, in the file's order; each
+	// its branch's prefix, and described
+	kinds := []string{"bug", "feat", "polish", "docs", "refactor", "perf", "test", "style", "chore", "design"}
 	if k := cfg.Fields["kind"]; !cfg.FlatKinds() || !k.Single || !slices.Equal(k.Options, kinds) {
 		t.Errorf("kind = %+v, flat %v; want single, flat, %q", k, cfg.FlatKinds(), kinds)
+	}
+	for _, k := range kinds {
+		if cfg.Branches.Kinds[k] != k || cfg.Fields["kind"].Descriptions[k] == "" {
+			t.Errorf("kind %s: branch %q, description %q", k, cfg.Branches.Kinds[k], cfg.Fields["kind"].Descriptions[k])
+		}
 	}
 }

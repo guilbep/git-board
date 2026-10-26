@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/guilbep/git-board/core/forge/fake"
+	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/store"
 	"github.com/guilbep/git-board/internal/store/storetest"
 )
@@ -260,5 +261,39 @@ func TestCommentMeta(t *testing.T) {
 		if strings.HasPrefix(k, "sync:") {
 			t.Errorf("created event carries %s", k)
 		}
+	}
+}
+
+// A label the sync holds off GitHub never waits for it: the Project holds
+// it there. Every other label still does, until the next sync.
+func TestThreadHeldLabelsDontWait(t *testing.T) {
+	t.Parallel()
+	b := storetest.New(t)
+	b.SetHeld(&config.Config{GithubProject: config.GithubProject{Owner: "o", Number: 1}})
+	f := fake.New("github.com/o/r")
+	id := storetest.NewIssue(t, b, "synced")
+	if _, err := b.SyncForges(t.Context(), run(f)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := b.ApplyLabelChange(id, []string{"status:ready"}, nil); err != nil {
+		t.Fatal(err)
+	}
+	for range 2 {
+		if _, err := b.SyncForges(t.Context(), run(f)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := b.ApplyLabelChange(id, []string{"risk:low"}, nil); err != nil {
+		t.Fatal(err)
+	}
+	th, _ := b.Thread(id)
+	var waits []string
+	for _, e := range th.Events {
+		if e.Kind == "labels" && len(e.Pending) > 0 {
+			waits = append(waits, strings.Join(e.Added, ","))
+		}
+	}
+	if !slices.Equal(waits, []string{"risk:low"}) {
+		t.Errorf("waiting for GitHub: %q, want only risk:low", waits)
 	}
 }

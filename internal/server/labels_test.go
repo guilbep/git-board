@@ -146,6 +146,40 @@ func TestLabelsTab(t *testing.T) {
 	}
 }
 
+// Serial: it answers for GitHub (fakeLabels). With a Project, the fields
+// it holds are in the Project, not labels on GitHub: none is sent.
+func TestLabelsHeldByTheProject(t *testing.T) {
+	path := filepath.Join(t.TempDir(), config.FileName)
+	if err := os.WriteFile(path, []byte(labelsTestConfig+"\n[github-project]\nowner = \"o\"\nnumber = 1\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ts := newTestServer(t, storetest.New(t), cfg)
+	fakeLabels(t, `[{"id":1,"name":"bug","color":"d73a4a"}]`)
+
+	var list struct {
+		Rows []labelRow `json:"rows"`
+	}
+	getJSON(t, ts.URL+"/api/labels", &list)
+	var got []string
+	for _, r := range list.Rows {
+		got = append(got, r.Name+" "+r.GitHub[0].State)
+	}
+	if want := []string{"bug color", "feat missing", "status:ready held", "status:done held"}; !slices.Equal(got, want) {
+		t.Errorf("rows = %q, want %q", got, want)
+	}
+	var sent struct {
+		Changes []labelChange `json:"changes"`
+	}
+	postJSON(t, ts.URL+"/api/labels/send", map[string]bool{"dry_run": true}, &sent)
+	if slices.ContainsFunc(sent.Changes, func(c labelChange) bool { return strings.HasPrefix(c.Name, "status:") }) {
+		t.Errorf("send plan %+v sends a status", sent.Changes)
+	}
+}
+
 // Serial: it answers for GitHub (fakeLabels). A direct call deletes only
 // what the lint lists as stray: not a free-form field's value, not the
 // project's.

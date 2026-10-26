@@ -145,6 +145,8 @@ type Backend struct {
 	dir string // the git directory, for what only git does
 	// flat are the kinds stored as plain labels, by label (SetFlatKinds)
 	flat atomic.Pointer[map[string]bool]
+	// cfg says which labels the forges' sync holds (SetHeld)
+	cfg atomic.Pointer[config.Config]
 
 	// ponytail: issues and persons loaded once per head, in memory; the
 	// index's summaries when a cold listing of thousands gets slow
@@ -190,9 +192,11 @@ func Open(path string) (*Backend, error) {
 		return nil, fmt.Errorf("opening the index: %w", err)
 	}
 	b := &Backend{s: s, ix: ix, dir: dir, issues: map[string]*issue.Issue{}, persons: map[string]*people.Person{}, heads: map[string]gitstore.Hash{}}
-	// the kind form; a config that doesn't parse is the command's to report
+	// the kind form and the held labels; a config that doesn't parse is the
+	// command's to report
 	if cfg, err := config.Load(config.PathIn(path)); err == nil {
 		b.SetFlatKinds(cfg)
+		b.SetHeld(cfg)
 	}
 	return b, nil
 }
