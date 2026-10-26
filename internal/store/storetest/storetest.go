@@ -9,6 +9,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"os/exec"
 	"path"
@@ -276,4 +278,25 @@ func Do(t testing.TB, b *store.Backend, id string, ops ...oplog.Op) {
 	if _, err := issue.Do(t.Context(), b.Store(), id, ops...); err != nil {
 		t.Fatalf("issue.Do: %v", err)
 	}
+}
+
+// GitHub answers for github.com's API (store.GitHubAPI) what a forge found
+// in the remotes reads: each repository's full_name, by its path as typed
+// ("o/r" → "O/R"); any other, not found. No test reaches GitHub. It sets
+// the environment and a package variable: its test stays serial.
+func GitHub(t testing.TB, names map[string]string) {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		name, ok := names[strings.TrimPrefix(r.URL.Path, "/repos/")]
+		if !ok {
+			http.NotFound(w, r)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]string{"full_name": name})
+	}))
+	t.Cleanup(srv.Close)
+	t.Setenv("GITHUB_TOKEN", "t")
+	saved := store.GitHubAPI
+	t.Cleanup(func() { store.GitHubAPI = saved })
+	store.GitHubAPI = srv.URL
 }

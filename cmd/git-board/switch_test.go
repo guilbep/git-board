@@ -65,6 +65,7 @@ func TestSwitchFindsTheForges(t *testing.T) {
 	storetest.Git(t, dir, "remote", "add", "gh", "git@github.com:o/r.git") // not origin, which the switch fetches
 	storetest.Git(t, dir, "remote", "add", "other", "git@bitbucket.org:o/r.git")
 	t.Chdir(dir)
+	storetest.GitHub(t, map[string]string{"o/r": "o/r"})
 	f := fake.New("github.com/o/r")
 	saved := openForges
 	t.Cleanup(func() { openForges = saved })

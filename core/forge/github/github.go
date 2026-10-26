@@ -150,6 +150,21 @@ func (f *Forge) Me(ctx context.Context) (forge.Account, error) {
 	return *f.me, nil
 }
 
+// FullName is the repository's owner/repo as GitHub spells it: a URL may
+// name it in another case.
+func (f *Forge) FullName(ctx context.Context) (string, error) {
+	var r struct {
+		FullName string `json:"full_name"`
+	}
+	if err := f.call(ctx, http.MethodGet, f.s.repo, nil, &r); err != nil {
+		return "", err
+	}
+	if r.FullName == "" {
+		return "", fmt.Errorf("github: %s has no full_name", f.s.project)
+	}
+	return r.FullName, nil
+}
+
 // Visibility is the repository's: internal, on an Enterprise, is private
 // with every member of the enterprise as a reader.
 func (f *Forge) Visibility(ctx context.Context) (forge.Visibility, error) {

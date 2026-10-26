@@ -30,6 +30,10 @@ type NamedForge struct {
 	forge.Forge
 }
 
+// GitHubAPI is GitHub's REST API for github.com: "" is api.github.com;
+// tests, a fake.
+var GitHubAPI = ""
+
 // OpenForges opens the adapters of forges, each with its posting
 // account's token.
 func OpenForges(ctx context.Context, forges []config.Forge) ([]NamedForge, error) {
@@ -39,7 +43,7 @@ func OpenForges(ctx context.Context, forges []config.Forge) ([]NamedForge, error
 		var err error
 		switch f.Kind {
 		case "github":
-			x, err = github.New(ctx, github.Options{Project: f.Project, Host: f.Host, Login: f.Login})
+			x, err = github.New(ctx, github.Options{Project: f.Project, Host: f.Host, Login: f.Login, API: githubAPI(f)})
 		case "gitlab":
 			x, err = gitlab.New(ctx, f.BaseURL(), f.Project, f.Login)
 		default:
@@ -51,6 +55,15 @@ func OpenForges(ctx context.Context, forges []config.Forge) ([]NamedForge, error
 		out = append(out, NamedForge{f.Name, x})
 	}
 	return out, nil
+}
+
+// githubAPI is GitHubAPI for a forge on github.com, "" (the host's own)
+// for an Enterprise one.
+func githubAPI(f config.Forge) string {
+	if f.Host == "github.com" {
+		return GitHubAPI
+	}
+	return ""
 }
 
 // ForgeRun is one forge sync: its forges, and how it goes.

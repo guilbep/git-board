@@ -30,7 +30,7 @@ The GitHub Project isn't read with a forge's token but with the `gh` command, lo
 
 With no `[forges.<name>]` table, git-board needs none: it finds the forges in the repository's git remotes, every fetch and push URL of each (`git@host:path.git`, `ssh://[user@]host[:port]/path`, `https://host/path`, with or without `.git`). Each project counts once, whichever remote names it. Their sync is on, with no login: git's credential helper picks the account.
 
-- `github.com` is GitHub, its project `owner/repo`.
+- `github.com` is GitHub, its project `owner/repo` as GitHub spells it: each run reads the repository's `full_name` once, as a URL's case is only your typing and the sync keys its links on the name (`git@github.com:epfl-enac/wiki.git` is `EPFL-ENAC/wiki`, as a table naming it). One GitHub doesn't answer for is left out of that run, with why.
 - `gitlab.com`, or a host whose first label holds `gitlab`, is GitLab. The web host drops a first label `ssh`, or a first label's `-ssh`: `git@gitlab-ssh.epfl.ch:EPFL-ENAC/wiki.git` is `gitlab.epfl.ch`, project `EPFL-ENAC/wiki`. Each run reads the project's numeric id once, as its links are keyed on it; a project whose id can't be read is left out of that run, with why, and the others go on.
 - Any other host is skipped, and Settings › Sync, `git board switch` and `git board sync` say which URL.
 

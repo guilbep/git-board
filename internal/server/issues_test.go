@@ -345,9 +345,10 @@ func TestCommentOnAStep(t *testing.T) {
 }
 
 // With no [forges.<name>] table, /api/forges lists the forges of the git
-// remotes as found there, and a run opens them.
+// remotes as found there, and a run opens them. Serial: it answers for
+// GitHub (storetest.GitHub).
 func TestForgeSyncFindsTheForges(t *testing.T) {
-	t.Parallel()
+	storetest.GitHub(t, map[string]string{"o/r": "o/r"}) // serial
 	dir := storetest.Repo(t, false)
 	storetest.Git(t, dir, "remote", "add", "gh", "git@github.com:o/r.git")
 	storetest.Init(t, dir)

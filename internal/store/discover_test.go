@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -90,19 +91,27 @@ func TestForgesFoundInTheRemotes(t *testing.T) {
 
 // A GitLab forge found in the remotes reads its id once, and then has the
 // Key() of the table naming that id; one whose path GitLab doesn't know is
-// left out, and the others go on. Serial: it sets GitLab's token.
+// left out, and the others go on. Serial: it sets the forges' tokens and
+// GitHub's API.
 func TestResolveForges(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.EscapedPath() != "/api/v4/projects/EPFL-ENAC%2Fwiki" {
+		switch r.URL.EscapedPath() {
+		case "/api/v4/projects/EPFL-ENAC%2Fwiki":
+			_, _ = w.Write([]byte(`{"id": 42400, "path_with_namespace": "EPFL-ENAC/wiki", "visibility": "public"}`))
+		case "/repos/o/r": // GitHub's, for the found GitHub forge
+			_, _ = w.Write([]byte(`{"full_name": "o/r"}`))
+		default:
 			http.NotFound(w, r)
-			return
 		}
-		_, _ = w.Write([]byte(`{"id": 42400, "path_with_namespace": "EPFL-ENAC/wiki", "visibility": "public"}`))
 	}))
 	defer srv.Close()
 	host := strings.TrimPrefix(srv.URL, "http://")
 	t.Setenv("GITLAB_HOST", host)
 	t.Setenv("GITLAB_TOKEN", "t")
+	t.Setenv("GITHUB_TOKEN", "t")
+	saved := store.GitHubAPI
+	t.Cleanup(func() { store.GitHubAPI = saved })
+	store.GitHubAPI = srv.URL
 
 	ctx := context.Background()
 	var left []string
@@ -120,6 +129,44 @@ func TestResolveForges(t *testing.T) {
 		t.Fatal(err)
 	}
 	if opened[0].Key() != table[0].Key() {
+		t.Fatalf("key %q, the table's %q", opened[0].Key(), table[0].Key())
+	}
+}
+
+// A GitHub forge found in the remotes takes GitHub's own spelling of
+// owner/repo, read once through the adapter: a remote naming epfl-enac/wiki
+// has the Key() of a table naming EPFL-ENAC/wiki, as the sync state's id
+// keeps case. Serial: it sets GitHub's token and API.
+func TestResolveGitHubSpelling(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/repos/epfl-enac/wiki" {
+			http.NotFound(w, r)
+			return
+		}
+		_, _ = w.Write([]byte(`{"full_name": "EPFL-ENAC/wiki"}`))
+	}))
+	defer srv.Close()
+	t.Setenv("GITHUB_TOKEN", "t")
+	saved := store.GitHubAPI
+	t.Cleanup(func() { store.GitHubAPI = saved })
+	store.GitHubAPI = srv.URL
+
+	forges, _ := found(t, "", []string{"origin", "git@github.com:epfl-enac/wiki.git"}, []string{"gone", "git@github.com:o/gone.git"})
+	ctx := context.Background()
+	var left []string
+	got := store.ResolveForges(ctx, forges, func(f config.Forge, why error) { left = append(left, f.Name) })
+	if len(got) != 1 || got[0].Project != "EPFL-ENAC/wiki" || !got[0].Discovered || !slices.Equal(left, []string{"github"}) { // o/gone: GitHub doesn't know it
+		t.Fatalf("resolved %+v, left out %v", got, left)
+	}
+	opened, err := store.OpenForges(ctx, got)
+	if err != nil {
+		t.Fatal(err)
+	}
+	table, err := store.OpenForges(ctx, []config.Forge{{Name: "gh", Kind: "github", Host: "github.com", Project: "EPFL-ENAC/wiki"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if opened[0].Key() != table[0].Key() || opened[0].Key() != "github.com/EPFL-ENAC/wiki" {
 		t.Fatalf("key %q, the table's %q", opened[0].Key(), table[0].Key())
 	}
 }

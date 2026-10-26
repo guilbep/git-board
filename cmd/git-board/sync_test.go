@@ -84,6 +84,7 @@ func TestSyncTheWhole(t *testing.T) {
 	f := fake.New("github.com/o/r")
 	f.Add(forge.Issue{Title: "From GitHub", Body: "b", Author: forge.Account{ID: "7", Login: "alice"}})
 	stubForges(t, f)
+	storetest.GitHub(t, map[string]string{"o/r": "o/r"})
 
 	out, err := execute(t, []string{"sync", "--check", pathA})
 	if err != nil || !strings.Contains(out, "forge github, found in the remotes: github.com o/r\n") ||
