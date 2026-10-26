@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { numbered, numbersPreview, numbersSummary, prefixProblem, startProblem, suggestPrefix, suggestStart } from './numbers.ts';
+import { numbered, numberExample, numbersPreview, numbersSummary, prefixProblem, startProblem, suggestPrefix, suggestStart } from './numbers.ts';
 
 test('a prefix from the repository name: its initials, a first word with a digit kept, one word its first three letters', () => {
   assert.equal(suggestPrefix('git-board'), 'GB');
@@ -52,4 +52,8 @@ test('what a numbering did, and the Overview line', () => {
   assert.equal(numbered('GB', 9, 0), 'No issue needed a number.');
   assert.equal(numbersSummary({ on: true, prefix: 'GB', next: 9 }), 'GB · next GB-9.');
   assert.equal(numbersSummary({ on: false }), 'Off: issues go by their forge numbers.');
+  // the example a page gives: the board's next number, else a neutral one
+  assert.equal(numberExample({ on: true, prefix: 'GB', next: 39 }), 'GB-39');
+  assert.equal(numberExample({ on: false }), 'ABC-123');
+  assert.equal(numberExample(null), 'ABC-123');
 });

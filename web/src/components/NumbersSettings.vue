@@ -1,4 +1,4 @@
-<!-- Settings › Numbers: the project's own numbers, CO2-3075
+<!-- Settings › Numbers: the project's own numbers, GB-39
      (docs/configuration.md, Numbers). Not on yet: what they are, then a
      form beside its guidelines: a prefix from the repository's name, a
      start above every number known (GitHub asked), what the issues
@@ -8,7 +8,7 @@
   <div class="set-panel nb">
     <h2 class="h4">Numbers</h2>
     <p class="nb-lead">
-      One number per issue, the same on every forge: <b>CO2-3075</b>. The counter is kept in git, on origin, where every clone reads it.
+      One number per issue, the same on every forge: <b>{{ numberExample(n) }}</b>. The counter is kept in git, on origin, where every clone reads it.
     </p>
     <p v-if="error" class="epfl-alert epfl-alert-danger" role="alert">{{ error }}</p>
     <p v-if="result" class="epfl-alert epfl-alert-success" role="status">{{ result }}</p>
@@ -42,7 +42,7 @@
     <div v-else-if="n" class="nb-setup">
       <form class="nb-form" @submit.prevent="confirming = true">
         <p>
-          Today your issues go by their forge numbers. GitHub's stay the issues' own below the start (#2518 is CO2-2518); every other issue, made here or
+          Today your issues go by their forge numbers. GitHub's stay the issues' own below the start (#41 is {{ prefixErr ? 'ABC' : prefix }}-41); every other issue, made here or
           imported later, takes the next number.
         </p>
         <p v-if="!n.origin" class="epfl-alert epfl-alert-warning" role="alert">
@@ -99,7 +99,7 @@
           <li><b>Numbers go out only with a push you ask for</b>: Start numbering, Number them now, a Sync, <code>git board numbers</code>. Only issues origin has get one.</li>
           <li><b>Nothing pushes on its own</b>: not creating an issue, not a forge sync.</li>
         </ul>
-        <p>From a terminal: <code>git board numbers init --prefix {{ prefixErr ? 'CO2' : prefix }} --start {{ startErr ? 3052 : start }}</code>.</p>
+        <p>From a terminal: <code>git board numbers init --prefix {{ prefixErr ? 'ABC' : prefix }} --start {{ startErr ? 100 : start }}</code>.</p>
       </aside>
     </div>
   </div>
@@ -110,7 +110,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { getNumbers, numberIssues, startNumbers, type Numbers } from '@/api/board';
 import { debounced, onLive } from '@/live';
 import { message } from '@/issue';
-import { numbered, numbersPreview, prefixProblem, startProblem, suggestPrefix, suggestStart } from '@/numbers';
+import { numbered, numberExample, numbersPreview, prefixProblem, startProblem, suggestPrefix, suggestStart } from '@/numbers';
 
 // changed: what a start or a numbering left, for the Overview's line
 const emit = defineEmits<{ changed: [n: Numbers] }>();

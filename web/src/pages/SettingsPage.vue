@@ -106,7 +106,7 @@ import { getNumbers, getSettings, getViews, getWhole, getWorktrees, type Labels,
 import { message } from '@/issue';
 import { loadMe, me } from '@/me';
 import { settingsTab, settingsTabs, syncSummary } from '@/settingstabs';
-import { numbersSummary } from '@/numbers';
+import { numberExample, numbersSummary } from '@/numbers';
 import AppHeader from '@/components/AppHeader.vue';
 import IdentityChooser from '@/components/IdentityChooser.vue';
 import ConfigEditor from '@/components/ConfigEditor.vue';
@@ -141,7 +141,7 @@ const cards = computed(() => {
     sync: 'Where your issues go: git, the forges, the GitHub Project. One Check, one Sync.',
     'project-file': 'Fields, views, sprints, colors, branch names: .git-board.toml.',
     labels: "The project's labels, their colors and descriptions, on GitHub; lint.",
-    numbers: 'One number per issue, the same on every forge: CO2-3075.',
+    numbers: `One number per issue, the same on every forge: ${numberExample(numbers.value)}.`,
     attachments: 'Files attached to comments, on S3 behind a CDN.',
     worktrees: 'One agent, one worktree, one branch, one PR: wtx, started from here.',
     you: 'Who you write as, and the appearance.',

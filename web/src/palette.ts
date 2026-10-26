@@ -29,6 +29,16 @@ export function jumps<T extends Item>(query: string, items: T[]): T[] {
   );
 }
 
+// example is a number the palette's box offers to type: the newest
+// issue's, its project number else a forge's; else a neutral one
+export function example(items: { project?: string | undefined; numbers?: string[] | undefined }[]): string {
+  for (const i of items) {
+    if (i.project) return i.project;
+    if (i.numbers?.[0]) return `#${i.numbers[0]}`;
+  }
+  return '#12';
+}
+
 export function rank<T extends { label: string }>(query: string, items: T[]): T[] {
   const q = query.trim().toLowerCase();
   if (!q) return items;

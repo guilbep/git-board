@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { jumps, latest, rank } from './palette.ts';
+import { example, jumps, latest, rank } from './palette.ts';
 
 const issues = [
   { key: 'i1', label: 'Fix CSV upload on S3', id: 'b9de9e14aa', numbers: ['2528'] },
@@ -49,4 +49,10 @@ test('latest: the latest edited first, the latest created breaking a tie, open o
     { id: 'closed', status: 'closed', updated_at: '2026-10-16T10:00:00Z', created_at: '2025-01-01T10:00:00Z' },
   ];
   assert.deepEqual(latest(list).map((i) => i.id), ['closed', 'new', 'old']);
+});
+
+test('example: the newest issue’s number, its project number before a forge’s, else a neutral one', () => {
+  assert.equal(example([{ project: 'GB-30', numbers: ['36'] }, { numbers: ['2'] }]), 'GB-30');
+  assert.equal(example([{ numbers: [] }, { numbers: ['36'] }]), '#36');
+  assert.equal(example([]), '#12');
 });

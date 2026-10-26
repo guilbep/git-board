@@ -61,7 +61,7 @@
             type="search"
             title="Words in titles, descriptions, comments; #number; field:value"
             spellcheck="false"
-            placeholder="Words, #2528, status:ready, assignee:@me, is:closed…"
+            placeholder="Words, #12, status:ready, assignee:@me, is:closed…"
             autocomplete="off"
             list="filter-suggest"
             :value="filter"
