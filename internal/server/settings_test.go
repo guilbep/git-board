@@ -98,9 +98,9 @@ func TestSettingsListAndToggleBridgeSync(t *testing.T) {
 	}
 }
 
-// Settings › Sync's Project line: Save writes the table, write = true and
-// the file's comments kept, and drops the last check, another Project's; a
-// bad owner or number changes nothing; Remove takes the table out.
+// Settings › Sync's Project line: Save writes the table, the file's comments
+// kept, write = true for the same Project alone, and drops the last check;
+// a bad owner or number changes nothing; Remove takes the table out.
 func TestSetGithubProject(t *testing.T) {
 	t.Parallel()
 	ts, s := newIssueServer(t)
@@ -134,14 +134,25 @@ func TestSetGithubProject(t *testing.T) {
 	if code := call(t, "PUT", ts.URL+"/api/github-project", map[string]any{"owner": "EPFL-ENAC", "number": 40}, &st); code != http.StatusOK {
 		t.Fatalf("PUT: %d", code)
 	}
-	if st.Project != "EPFL-ENAC/40" || !st.Write || st.Last != nil {
-		t.Errorf("status %+v, want EPFL-ENAC/40, still written to, no check yet", st)
+	if st.Project != "EPFL-ENAC/40" || st.Write || st.Last != nil {
+		t.Errorf("status %+v, want EPFL-ENAC/40, read only, no check yet", st)
 	}
-	if want := strings.Replace(strings.Replace(src, `"old"`, `"EPFL-ENAC"`, 1), "number = 1", "number = 40", 1); read() != want {
+	if want := strings.Replace(strings.Replace(src, `"old"`, `"EPFL-ENAC"`, 1), "number = 1\nwrite = true", "number = 40", 1); read() != want {
 		t.Errorf("the file:\n%s\nwant:\n%s", read(), want)
 	}
 	if gp := s.config().GithubProject; gp.Owner != "EPFL-ENAC" || gp.Number != 40 {
 		t.Errorf("served %+v", gp)
+	}
+	// the same Project again, write = true set by hand: it stays
+	if err := config.Save(s.cfgPath, []byte(strings.Replace(read(), "number = 40", "number = 40\nwrite = true", 1))); err != nil {
+		t.Fatal(err)
+	}
+	if cfg, err = config.Load(s.cfgPath); err != nil {
+		t.Fatal(err)
+	}
+	s.setConfig(cfg)
+	if code := call(t, "PUT", ts.URL+"/api/github-project", map[string]any{"owner": "epfl-enac", "number": 40}, &st); code != http.StatusOK || !st.Write {
+		t.Errorf("the same Project: %d, %+v, want still written to", code, st)
 	}
 
 	if code := call(t, "DELETE", ts.URL+"/api/github-project", nil, &st); code != http.StatusOK || st.Project != "" {

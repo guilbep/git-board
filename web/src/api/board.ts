@@ -186,7 +186,8 @@ export function applySync(): Promise<SyncStatus> {
 }
 
 // setGithubProject writes [github-project] (Settings › Sync's Project line),
-// write = true kept; the answer is the new status, not checked yet
+// write = true kept for the same Project alone; the answer is the new
+// status, not checked yet
 export function setGithubProject(owner: string, number: number): Promise<SyncStatus> {
   return request('/api/github-project', json('PUT', { owner, number }));
 }

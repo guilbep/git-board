@@ -316,8 +316,9 @@ func (s *apiServer) handleRemoveBridge(w http.ResponseWriter, r *http.Request) {
 var githubLogin = regexp.MustCompile(`^[A-Za-z0-9](-?[A-Za-z0-9])*$`)
 
 // handleGithubProject sets the GitHub Project, as `git board bridge
-// configure` does, write = true kept; DELETE removes it. The last check was
-// another Project's: it goes.
+// configure` does; DELETE removes it. write = true stays for the same
+// Project alone: another one is read until the file says otherwise. The
+// last check was another Project's: it goes.
 func (s *apiServer) handleGithubProject(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Owner  string `json:"owner"`
@@ -345,7 +346,9 @@ func (s *apiServer) handleGithubProject(w http.ResponseWriter, r *http.Request) 
 		if req.Owner == "" {
 			return config.WithoutGithubProject(text), nil
 		}
-		return config.WithGithubProject(text, config.GithubProject{Owner: req.Owner, Number: req.Number, Write: cfg.GithubProject.Write}), nil
+		gp := cfg.GithubProject
+		same := strings.EqualFold(gp.Owner, req.Owner) && gp.Number == req.Number
+		return config.WithGithubProject(text, config.GithubProject{Owner: req.Owner, Number: req.Number, Write: gp.Write && same}), nil
 	})
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err)

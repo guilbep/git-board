@@ -324,7 +324,7 @@ function forgeLine(f: Bridge): string {
 const projectLine = computed(() => {
   const p = st.value?.project;
   if (!p?.project) return '—';
-  if (!p.last) return projectBusy.value ? 'Checking…' : 'Not checked yet.';
+  if (!p.last) return projectBusy.value ? 'Checking…' : checkFailed.value ? `Failed ${when(checkFailed.value, true)}.` : 'Not checked yet.';
   const pending = pendingWords(p.last);
   return `${plural(p.last.conflicts.length, 'conflict')}, checked ${when(p.last.checked_at, true)}${pending ? `; a sync would ${pending}` : ''}.`;
 });
@@ -337,6 +337,7 @@ const editingProject = ref(false);
 const projectInput = ref('');
 const projectBusy = ref(false);
 const projectError = ref('');
+const checkFailed = ref(''); // when the check after a save failed
 const projectDocOpen = ref(false);
 const projectDoc = ref<DocSection | null>(null);
 const githubOwner = computed(() => st.value?.forges.find((f) => f.target === 'github')?.project.split('/')[0] ?? '');
@@ -357,13 +358,16 @@ async function saveProject() {
   const p = projectDraft.value;
   if (!p || !st.value) return;
   projectBusy.value = true;
-  projectError.value = '';
+  projectError.value = checkFailed.value = '';
   try {
     st.value.project = await setGithubProject(p.owner, p.number);
     editingProject.value = false;
     projectInput.value = '';
     // checked at once: the Project answers with its title, or why not
-    await checkSync().catch((e) => (projectError.value = `${projectName.value} didn’t answer: ${message(e)}`));
+    await checkSync().catch((e) => {
+      checkFailed.value = new Date().toISOString();
+      projectError.value = `${projectName.value} didn’t answer: ${message(e)}`;
+    });
     await reload();
   } catch (e) {
     projectError.value = `Not saved: ${message(e)}`;
