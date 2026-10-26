@@ -182,7 +182,8 @@ What was harder than planned: again git and its neighbours, not the model.
 go-git lists a `<ref>.lock` as a ref, so an empty one from another process's
 `git update-ref` failed every listing, and so every query; gitstore now
 reads loose and packed refs itself. A cancelled git was killed and left its
-lock behind, so it now gets SIGINT first. Two processes on one sqlite file
+lock behind, so it now gets SIGINT first (Windows has none: there it is
+still killed). Two processes on one sqlite file
 needed WAL, a busy timeout and transactions that take the write lock at
 once, and a path with `#` or `?` opened another file until it was escaped.
 A person's id comes from its first pack, so nothing in that pack can name

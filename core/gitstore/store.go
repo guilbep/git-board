@@ -332,8 +332,9 @@ func (s *Store) command(ctx context.Context, args ...string) *exec.Cmd {
 	cmd.Env = append(os.Environ(), "LC_ALL=C")
 	// On cancel git gets SIGINT, on which it removes its lock files; the
 	// default SIGKILL would leave <ref>.lock behind. Still running 5 s later,
-	// it is killed.
-	cmd.Cancel = func() error { return cmd.Process.Signal(os.Interrupt) }
+	// it is killed. Windows has no SIGINT to send: there it is killed at
+	// once (interrupt_windows.go).
+	cmd.Cancel = func() error { return interrupt(cmd.Process) }
 	cmd.WaitDelay = 5 * time.Second
 	return cmd
 }
