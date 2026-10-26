@@ -110,8 +110,14 @@ func TestReleasesDisabled(t *testing.T) {
 	}
 	body, _ := io.ReadAll(resp.Body)
 	_ = resp.Body.Close()
-	if got := strings.TrimSpace(string(body)); resp.StatusCode != http.StatusOK || got != `{"enabled":false}` {
+	if got := strings.TrimSpace(string(body)); resp.StatusCode != http.StatusOK || got != `{"enabled":false,"remote":"","trunk":"","environments":[],"binaries":[],"releases":[]}` {
 		t.Errorf("GET /api/releases = %d %s", resp.StatusCode, got)
+	}
+	// this package's directory has no main package: no binaries, [] not
+	// null (the page reads its length)
+	var setup map[string]any
+	if code := getJSON(t, ts.URL+"/api/releases/setup", &setup).StatusCode; code != 200 || setup["binaries"] == nil {
+		t.Errorf("GET /api/releases/setup = %d %v", code, setup)
 	}
 	for _, w := range [][2]string{
 		{"POST", "/api/releases"}, {"POST", "/api/releases/v1.0.0/promote"}, {"PUT", "/api/releases/v1.0.0/notes"},
