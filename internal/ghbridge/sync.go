@@ -144,12 +144,26 @@ var synced = []struct {
 	{"est", "Est. hours", func(i Item) string { return formatEstHours(i.EstHours) }},
 	{"sprint", "Sprint", sprintTitle},
 	{"moscow", "MoSCoW", func(i Item) string { return i.MoSCoW }},
+	{"milestone", "Milestone", func(i Item) string {
+		if i.Milestone == nil {
+			return ""
+		}
+		return i.Milestone.Title
+	}},
 }
+
+// readOnly are the synced fields only GitHub writes: the Project shows the
+// issue's milestone, which a Project edit can't set. The Project's value
+// always wins.
+// ponytail: the title alone, as a slug; its due date and a write back
+// (the issue's milestone, by title) when a project needs them.
+var readOnly = map[string]bool{"milestone": true}
 
 // HeldLabels is what the forges' sync keeps off a forge (syncer.Options
 // Held), each fact having one home: on GitHub, with a Project, the fields
 // the Project holds; on every forge, the fields naming issues (parent:,
-// blocked-by:…), as no forge holds them as labels.
+// blocked-by:…), as no forge holds them as labels, and the milestone, a
+// forge's own.
 // ponytail: every GitHub repository of the board, not the Project's alone:
 // one Project per board.
 func HeldLabels(cfg *config.Config) func(key, label string) bool {
@@ -158,7 +172,7 @@ func HeldLabels(cfg *config.Config) func(key, label string) bool {
 		if !ok {
 			return false
 		}
-		if cfg.TypeOf(field, nil) == config.TypeIssue {
+		if cfg.TypeOf(field, nil) == config.TypeIssue || readOnly[field] {
 			return true
 		}
 		if cfg.GithubProject.Number == 0 || !strings.HasPrefix(key, "github.com/") {
@@ -239,7 +253,11 @@ func syncIssue(plan *SyncPlan, item Item, bug store.Issue, bases map[string]stri
 		}
 		base, hasBase := bases[f.name]
 
-		switch Decide(p, l, base, hasBase) {
+		d := Decide(p, l, base, hasBase)
+		if readOnly[f.name] && d != Agreed {
+			d = TakeProject
+		}
+		switch d {
 		case Agreed:
 			record(f.name, p)
 		case TakeProject:

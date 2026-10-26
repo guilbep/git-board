@@ -522,3 +522,25 @@ func TestSyncMoSCoW(t *testing.T) {
 		t.Errorf("edits = %+v, want moscow set to must on the Project", p.Edits)
 	}
 }
+
+// The milestone, a deliverable, comes from the Project and is never
+// written back: GitHub's issue holds it, which a Project edit can't set.
+func TestSyncMilestoneReadOnly(t *testing.T) {
+	t.Parallel()
+	meta := syncMeta()
+	meta.Fields["Milestone"] = ghbridge.ProjectField{ID: "F-milestone"}
+	it := item(1, "Ready")
+	it.Milestone = &ghbridge.Milestone{Title: "V3.1 – Pilot", DueOn: "2026-11-30T00:00:00Z"}
+	p := ghbridge.BuildSyncPlan([]ghbridge.Item{it}, oneBug(), nil, meta, syncConfig())
+	if got := p.Changes[0].Added; !slices.Contains(got, "milestone:v3-1-pilot") {
+		t.Errorf("added = %v, want milestone:v3-1-pilot", got)
+	}
+	// changed here only: the Project's comes back, nothing is written
+	p = ghbridge.BuildSyncPlan([]ghbridge.Item{it}, oneBug("milestone:v4"), map[string]map[string]string{"bug1": {"milestone": "v3-1-pilot"}}, meta, syncConfig())
+	if len(p.Edits) != 0 || len(p.Conflicts) != 0 || !slices.Contains(p.Changes[0].Added, "milestone:v3-1-pilot") {
+		t.Errorf("edits %+v, conflicts %+v, added %v; want the Project's milestone back", p.Edits, p.Conflicts, p.Changes[0].Added)
+	}
+	if !ghbridge.HeldLabels(syncConfig())("gitlab.epfl.ch/42400", "milestone:v3-1-pilot") {
+		t.Error("a milestone: label would go to GitLab, which has milestones")
+	}
+}

@@ -16,9 +16,11 @@
 //	"title":"Delivery"},"status":"QA Validation","module":"BackOffice",
 //	"category":"FEAT","est. hours":2,"title":"..."}]}
 //
-// "milestone" and "size" were never observed with a value in a live pull
-// (PRD calls them dead/unused) — they're simply not decoded here, so any
-// value in either is silently ignored rather than mapped to a label.
+// "size" was never observed with a value in a live pull (PRD calls it
+// dead/unused) — it's simply not decoded here, so any value is silently
+// ignored rather than mapped to a label. "milestone", the issue's, reads
+// {"title":"V0.1 – Test deliverable","description":"…",
+// "dueOn":"2026-11-29T00:00:00Z"} (guilbep's Project 1, 2026-10-26).
 // content.type is "Issue" in every observed row; "PullRequest" and
 // "DraftIssue" are documented GitHub Project item content types (a PR
 // added straight to the project, not just linked from an issue) and are
@@ -44,18 +46,25 @@ import (
 
 // Item is one row of `gh project item-list --format json`'s "items" array.
 type Item struct {
-	ID        string   `json:"id"`
-	Assignees []string `json:"assignees"`
-	Content   Content  `json:"content"`
-	Priority  string   `json:"priority"`
-	Status    string   `json:"status"`
-	Module    string   `json:"module"`
-	Category  string   `json:"category"`
-	Labels    []string `json:"labels"` // the issue's on GitHub
-	EstHours  *float64 `json:"est. hours"`
-	MoSCoW    string   `json:"moscow"`
-	Sprint    *Sprint  `json:"sprint"`
-	Title     string   `json:"title"`
+	ID        string     `json:"id"`
+	Assignees []string   `json:"assignees"`
+	Content   Content    `json:"content"`
+	Priority  string     `json:"priority"`
+	Status    string     `json:"status"`
+	Module    string     `json:"module"`
+	Category  string     `json:"category"`
+	Labels    []string   `json:"labels"` // the issue's on GitHub
+	EstHours  *float64   `json:"est. hours"`
+	MoSCoW    string     `json:"moscow"`
+	Milestone *Milestone `json:"milestone"`
+	Sprint    *Sprint    `json:"sprint"`
+	Title     string     `json:"title"`
+}
+
+// Milestone is the issue's milestone, if it has one: a deliverable.
+type Milestone struct {
+	Title string `json:"title"`
+	DueOn string `json:"dueOn"`
 }
 
 // Content is a project item's linked issue/PR/draft.
