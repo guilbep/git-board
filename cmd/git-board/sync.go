@@ -98,7 +98,7 @@ func wholeOne(ctx context.Context, out io.Writer, path, remote string, check boo
 		return err
 	}
 	say := func(format string, a ...any) { fmt.Fprintf(out, path+": "+format+"\n", a...) }
-	forges, err := runForges(ctx, out, b, cfg)
+	forges, _, err := runForges(ctx, out, b, cfg)
 	if err != nil {
 		return err
 	}

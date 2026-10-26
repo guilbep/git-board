@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -79,5 +80,22 @@ func TestSwitchFindsTheForges(t *testing.T) {
 	if err != nil || !strings.Contains(out, "forge github, found in the remotes: github.com o/r\n") ||
 		!strings.Contains(out, "skipped git@bitbucket.org:o/r.git") {
 		t.Fatalf("%v\n%s", err, out)
+	}
+}
+
+// When the remotes name forges and each was left out, the switch says so
+// and points at the lines above, not "add a remote". Serial: it chdirs and
+// answers for GitHub.
+func TestSwitchForgesLeftOut(t *testing.T) {
+	dir, _ := seedRepo(t)
+	storetest.Git(t, dir, "remote", "add", "gh", "git@github.com:o/gone.git")
+	t.Chdir(dir)
+	storetest.GitHub(t, map[string]string{}) // GitHub knows no o/gone
+	out, err := execute(t, []string{"switch"})
+	if !errors.Is(err, store.ErrForgesLeftOut) || !strings.Contains(out, "forge github, found in the remotes, is left out: github.com o/gone") {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	if strings.Contains(err.Error(), "add a git remote") {
+		t.Errorf("err = %v, which tells to add a remote the repository has", err)
 	}
 }

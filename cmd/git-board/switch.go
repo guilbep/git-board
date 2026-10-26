@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -77,7 +78,7 @@ func runSwitch(ctx context.Context, out io.Writer, run store.SwitchRun) error {
 		return err
 	}
 	defer b.Close()
-	forges, err := runForges(ctx, out, b, cfg)
+	forges, left, err := runForges(ctx, out, b, cfg)
 	if err != nil {
 		return err
 	}
@@ -88,6 +89,9 @@ func runSwitch(ctx context.Context, out io.Writer, run store.SwitchRun) error {
 		} else {
 			fmt.Fprintf(out, "%s: its sync is off, so it isn't pulled\n", f.Name)
 		}
+	}
+	if len(on) == 0 && left > 0 {
+		return store.ErrForgesLeftOut // not "add a remote": the remotes have them
 	}
 	if run.Forges, err = openForges(ctx, on); err != nil {
 		return err
@@ -105,16 +109,17 @@ func runSwitch(ctx context.Context, out io.Writer, run store.SwitchRun) error {
 }
 
 // runForges are the forges of a run: the settings' tables, or those found
-// in the git remotes, each told in a line, GitLab's with its id read, and
-// each URL skipped or forge left out with why.
-func runForges(ctx context.Context, out io.Writer, b *store.Backend, cfg *config.Config) ([]config.Forge, error) {
+// in the git remotes, each told in a line, its project read (GitLab's id,
+// GitHub's spelling), and each URL skipped or forge left out with why;
+// left counts those left out.
+func runForges(ctx context.Context, out io.Writer, b *store.Backend, cfg *config.Config) (forges []config.Forge, left int, err error) {
 	say := func(s string) { fmt.Fprintln(out, s) }
-	forges, err := b.Forges(cfg, say)
-	if err != nil {
-		return nil, err
+	if forges, err = b.Forges(cfg, say); err != nil {
+		return nil, 0, err
 	}
 	forges = store.ResolveForges(ctx, forges, func(f config.Forge, why error) {
-		fmt.Fprintf(out, "forge %s, found in the remotes, is left out: %s %s: %v\n", f.Name, f.Host, f.Path, why)
+		left++
+		fmt.Fprintf(out, "forge %s, found in the remotes, is left out: %s %s: %v\n", f.Name, f.Host, cmp.Or(f.Path, f.Project), why)
 	})
 	for _, f := range forges {
 		if !f.Discovered {
@@ -126,7 +131,7 @@ func runForges(ctx context.Context, out io.Writer, b *store.Backend, cfg *config
 		}
 		fmt.Fprintf(out, "forge %s, found in the remotes: %s %s\n", f.Name, f.Host, project)
 	}
-	return forges, nil
+	return forges, left, nil
 }
 
 func printSwitch(out io.Writer, rep store.SwitchReport, apply bool) {

@@ -144,6 +144,10 @@ type SwitchReport struct {
 // ErrNoForge: a switch pulls the issues from the forges, and has none.
 var ErrNoForge = errors.New("no forge to pull from: add a git remote on GitHub or GitLab, or a [forges.<name>] table with sync = true to .git-board.toml")
 
+// ErrForgesLeftOut is ErrNoForge when the git remotes name forges, and
+// each was left out of the run: the lines told before it say why.
+var ErrForgesLeftOut = errors.New("no forge to pull from: the git remotes name forges, but each was left out of the run, as the lines above say")
+
 // Switch runs a switch on a copy of the repository, and applies it when
 // asked, by fetching the copy's refs/board/* here. No write reaches a
 // forge: every one is answered in the process.
