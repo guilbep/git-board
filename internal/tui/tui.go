@@ -8,7 +8,6 @@ package tui
 
 import (
 	"fmt"
-	"os/exec"
 	"strings"
 	"time"
 
@@ -23,12 +22,9 @@ import (
 	"github.com/guilbep/git-board/internal/store"
 )
 
-// Backend is what the TUI needs from a git-bug repo handle: everything
-// fields.Backend needs for writes, plus Close() — "g" must release
-// git-bug's repo-level lock before shelling out to git-bug (confirmed:
-// the subprocess collides with our own held lock otherwise), and the
-// program must release it again when it exits. *store.Backend already
-// satisfies this.
+// Backend is what the TUI needs from the repository: everything
+// fields.Backend needs for writes, plus Close(), which the program calls
+// when it exits. *store.Backend already satisfies this.
 type Backend interface {
 	fields.Backend
 	Close() error
@@ -104,10 +100,7 @@ type Model struct {
 	mode     mode
 	selected store.Issue
 
-	// backend/reopen: see the Backend type doc above — "g" closes it
-	// before shelling out to git-bug, reopen re-acquires it after.
 	backend Backend
-	reopen  func() (Backend, error)
 	cfg     *config.Config
 	me      string
 	today   time.Time
@@ -165,10 +158,8 @@ type Model struct {
 
 // New builds a Model over issues. title is shown as the list header (the
 // filter expression the caller ran, e.g. "is:open"). backend/cfg/me/today
-// are what field edits need to write through fields.Apply. reopen re-opens
-// the backend against the same repo after "g" closes it to shell out to
-// git-bug — typically store.OpenCwd.
-func New(issues []store.Issue, title string, backend Backend, cfg *config.Config, me string, today time.Time, reopen func() (Backend, error)) Model {
+// are what field edits need to write through fields.Apply.
+func New(issues []store.Issue, title string, backend Backend, cfg *config.Config, me string, today time.Time) Model {
 	l := list.New(ToItems(issues), list.NewDefaultDelegate(), 0, 0)
 	l.Title = title
 	l.SetFilteringEnabled(true)
@@ -199,7 +190,6 @@ func New(issues []store.Issue, title string, backend Backend, cfg *config.Config
 	return Model{
 		list:         l,
 		backend:      backend,
-		reopen:       reopen,
 		cfg:          cfg,
 		me:           me,
 		today:        today,
@@ -216,10 +206,6 @@ func New(issues []store.Issue, title string, backend Backend, cfg *config.Config
 }
 
 func (m Model) Init() tea.Cmd { return nil }
-
-// gitBugShowFinishedMsg is what tea.ExecProcess sends back once
-// `git bug bug show` exits and the terminal is handed back to us.
-type gitBugShowFinishedMsg struct{ err error }
 
 // bridgePullFinishedMsg is what bridgePullCmd sends back once the GitHub
 // Project fetch (and the resulting plan) is ready.
@@ -252,25 +238,6 @@ func bridgePullCmd(owner string, project int, issues []store.Issue, cfg *config.
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
-	case gitBugShowFinishedMsg:
-		// Reopen first regardless of msg.err (the subprocess itself
-		// failing, e.g. git-bug not installed, is orthogonal to whether
-		// we can get our own lock back) — every further edit in this
-		// session depends on m.backend being live again.
-		fresh, reopenErr := m.reopen()
-		if reopenErr != nil {
-			m.backend = nil
-			m.status = fmt.Sprintf("reopening the repo after git bug bug show failed: %v — edits won't work until you restart", reopenErr)
-			return m, nil
-		}
-		m.backend = fresh
-		if msg.err != nil {
-			m.status = fmt.Sprintf("git bug bug show failed: %v (is git-bug installed as a git subcommand?)", msg.err)
-		} else {
-			m.status = ""
-		}
-		return m, nil
-
 	case bridgePullFinishedMsg:
 		m.bridgeBusy = false
 		if msg.err != nil {
@@ -357,9 +324,7 @@ func (m Model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			// Mirrors git-bug's own termui: i=Pull, o=Push (bug_table.go).
 			// Here: preview the GitHub Project bridge (dry-run — same
 			// pattern "git-board bridge pull" defaults to), "o" applies
-			// it. No lock risk (confirmed for "g"'s fix): this never
-			// shells out to git/git-bug, only `gh` for the network
-			// fetch, entirely separate from git-bug's repo lock.
+			// it. It reads the Project with `gh`, never the repository.
 			if m.bridgeBusy {
 				return m, nil
 			}
@@ -402,28 +367,6 @@ func (m Model) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "e":
 		m.fieldPicker.SetItems(fieldPickerItems(m.cfg, m.allIssues))
 		m.mode = modeFieldPicker
-	case "g":
-		// Body/comments aren't git-board's data at all — they're
-		// git-bug's. Shell out to git-bug's own `bug show` rather than
-		// reimplementing a comment/body viewer: tea.ExecProcess suspends
-		// this program, hands the terminal to `git bug bug show <id>`,
-		// and resumes here (via gitBugShowFinishedMsg) when it exits.
-		//
-		// Close our own backend first: git-bug's cache holds a
-		// repo-level lock for as long as it's open, which is our whole
-		// TUI session — the subprocess would collide with our own lock
-		// otherwise (confirmed: this was a real bug, not hypothetical —
-		// `git bug bug show` failed with "already locked by process
-		// <our own pid>" while the TUI held it open). Reopened in the
-		// gitBugShowFinishedMsg handler once the subprocess exits.
-		id := m.selected.ID
-		if err := m.backend.Close(); err != nil {
-			m.status = fmt.Sprintf("could not release the repo lock before running git-bug: %v", err)
-			return m, nil
-		}
-		return m, tea.ExecProcess(exec.Command("git", "bug", "bug", "show", id), func(err error) tea.Msg {
-			return gitBugShowFinishedMsg{err: err}
-		})
 	}
 	return m, nil
 }
@@ -759,11 +702,10 @@ func (m Model) View() string {
 }
 
 // Run launches the interactive TUI over issues until the user quits. It
-// owns backend for the duration of the run — including across a "g"
-// close/reopen cycle — and closes whichever backend is live when it
+// owns backend for the duration of the run and closes it when it
 // returns; callers should not also close the one they passed in.
-func Run(issues []store.Issue, title string, backend Backend, cfg *config.Config, me string, today time.Time, reopen func() (Backend, error)) error {
-	final, err := tea.NewProgram(New(issues, title, backend, cfg, me, today, reopen), tea.WithAltScreen()).Run()
+func Run(issues []store.Issue, title string, backend Backend, cfg *config.Config, me string, today time.Time) error {
+	final, err := tea.NewProgram(New(issues, title, backend, cfg, me, today), tea.WithAltScreen()).Run()
 	if fm, ok := final.(Model); ok && fm.backend != nil {
 		_ = fm.backend.Close()
 	}

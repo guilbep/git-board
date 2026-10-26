@@ -546,7 +546,6 @@ git-board tui "is:open prio:p1"
 | `i` | list | preview the GitHub Project bridge (`git-board bridge pull`, dry-run) — matches git-bug's own termui, where `i` is "Pull". Requires `git-board bridge configure` to have been run first. Runs in the background; the TUI stays responsive while it fetches. |
 | `o` | list | apply the plan `i` just previewed (`bridge pull --apply`) — matches git-bug's termui `o`, "Push". Refuses to run before an `i` (no blind apply); the plan is cleared after applying so `o` can't silently re-apply stale data. |
 | `e` | detail | edit a field: pick the field, then a value from its configured options, or type free text if it has none (e.g. `assignee`, using the same `+value`/`-value` syntax as `git-board set`) |
-| `g` | detail | view the issue's body and comments — shells out to `git bug bug show <id>` (requires `git-bug` installed as a git subcommand; git-board itself never needs it), suspending the TUI and resuming when it exits |
 | `esc`/`q` | detail, pickers | back |
 | `q`/`ctrl+c` | list | quit |
 
@@ -562,11 +561,8 @@ on the CLI is still for. Note these are **not** git-bug's own `i`/`o`
 pull/push mnemonic, but bound to git-board's GitHub Project bridge
 instead, since that's the sync a git-board session actually needs.
 
-git-board's own data model is fields (labels) only — it doesn't store or
-render issue bodies/comments, and doesn't need `git-bug` on PATH for
-anything else (writes go through the library, not the CLI). `g` is the one
-place that changes: it's a deliberate, narrow exception to reuse git-bug's
-own mature viewer instead of building a second one.
+The TUI shows an issue's fields (labels), not its body and comments: the
+web UI (`git board`) shows those.
 
 The detail view renders each label under its configured field name (e.g.
 `Status: ready`, `Assignee: alice, bob`); anything not matching a configured

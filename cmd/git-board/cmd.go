@@ -155,9 +155,7 @@ func newTuiCmd() *cobra.Command {
 		Short: "Interactive scrollable, searchable issue browser",
 		Long: `Interactive scrollable, searchable issue browser.
 
-Keys: enter open detail, e edit a field (from detail), g view body/
-comments via "git bug bug show" (from detail; requires git-bug on PATH
-as a git subcommand, not needed for anything else here), c quick-filter
+Keys: enter open detail, e edit a field (from detail), c quick-filter
 by category, f structured filter (same grammar as "ls" — see below —
 empty input clears it), s sort by field e.g. "prio" or "prio desc"
 (same as --sort, persists across a later f/c filter, empty input
@@ -249,10 +247,8 @@ func runTui(filterStr, me string) error {
 		b.Close()
 		return err
 	}
-	// tui.Run owns b from here — including across a "g" close/reopen
-	// cycle — and closes whichever backend is live when it returns.
-	reopen := func() (tui.Backend, error) { return store.OpenCwd() }
-	return tui.Run(matched, filterStr, b, cfg, me, time.Now(), reopen)
+	// tui.Run owns b from here, and closes it when it returns.
+	return tui.Run(matched, filterStr, b, cfg, me, time.Now())
 }
 
 // loadMatchingIssues opens the git-bug repo cache in cwd and returns issues
