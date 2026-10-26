@@ -24,6 +24,7 @@ type syncStatus struct {
 // sync would change.
 type syncReport struct {
 	CheckedAt     time.Time           `json:"checked_at"`
+	Title         string              `json:"title"` // the Project's, as GitHub answered
 	Conflicts     []ghbridge.Conflict `json:"conflicts"`
 	LabelChanges  int                 `json:"label_changes"`  // issues whose labels a sync would change
 	ProjectWrites int                 `json:"project_writes"` // fields a sync would write to the Project
@@ -54,7 +55,7 @@ func (s *apiServer) check() error {
 		return err
 	}
 	plan := state.Plan(s.config())
-	report := &syncReport{CheckedAt: time.Now(), Conflicts: plan.Conflicts, ProjectWrites: len(plan.Edits), Unmatched: len(plan.Unmatched)}
+	report := &syncReport{CheckedAt: time.Now(), Title: state.Meta.Title, Conflicts: plan.Conflicts, ProjectWrites: len(plan.Edits), Unmatched: len(plan.Unmatched)}
 	if report.Conflicts == nil {
 		report.Conflicts = []ghbridge.Conflict{}
 	}
