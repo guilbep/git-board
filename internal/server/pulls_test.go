@@ -240,7 +240,7 @@ func TestOpenPull(t *testing.T) {
 	if err := json.Unmarshal([]byte(gh.body("POST /repos/o/r/pulls")), &sent); err != nil {
 		t.Fatal(err)
 	}
-	want := map[string]string{"head": "fix/2518-x", "base": "dev", "title": "[BUG](Equipment) Crash on save", "body": id[:7] + "\n\nCloses #2518"}
+	want := map[string]string{"head": "fix/2518-x", "base": "dev", "title": "[BUG](Equipment) Crash on save", "body": "Refs: #2518"}
 	for k, v := range want {
 		if sent[k] != v {
 			t.Errorf("%s = %q, want %q", k, sent[k], v)
