@@ -99,6 +99,20 @@ func plain(text string) string {
 // may add.
 func forkText(text string) string { return strings.TrimRight(plain(text), " \t\r\n") }
 
+// textField is one text field to compare: cur is git-board's value, g it
+// in the forge's form, f the forge's; ch git-board's last change, ft the
+// forge's; guard the origins that keep it from a push besides ch's. pullOp
+// is the issue's operation taking v, write the forge's.
+type textField struct {
+	name, cur, g, f string
+	posted          bool // sync posted it, with its marker
+	ch              issue.Change
+	ft              int64
+	guard           []*oplog.Origin
+	pullOp          func(v string) oplog.Op
+	write           func(fw forge.Forge, v string) error
+}
+
 // plan compares is with fi, as sync.md's four cases say. who gives the
 // persons of fi's authors; it is nil for a virtual fi, which finds nothing.
 func (r *run) plan(p *project, is *issue.Issue, fi forge.Issue, who map[string]string, pull, push bool) (*plan, error) {
@@ -110,41 +124,39 @@ func (r *run) plan(p *project, is *issue.Issue, fi forge.Issue, who map[string]s
 	rec := func(field, value string) oplog.Op { return seenOp(is.Author, time.Now().Unix(), is.ID, field, value) }
 	refused := func(field, value string) bool { return p.st.refused[[3]string{is.ID, field, value}] }
 
-	// text compares one text field: cur is git-board's value, g it in the
-	// forge's form. pullOp is the issue's operation taking v, write the
-	// forge's. A pull that would change nothing writes nothing.
-	text := func(bucket *[]func(*pushing) error, field, cur, g, f string, posted bool, ch issue.Change, ft int64,
-		guard []*oplog.Origin, pullOp func(v string) oplog.Op, write func(fw forge.Forge, v string) error) {
-		gv, fv, sv := g, f, seen[field]
+	// text compares one text field. A pull that would change nothing
+	// writes nothing.
+	text := func(bucket *[]func(*pushing) error, t textField) {
+		gv, fv, sv := t.g, t.f, seen[t.name]
 		if unwrap(sv).forked() {
 			gv, fv, sv = forkText(gv), forkText(fv), forkText(sv)
 		}
-		switch decide(gv, fv, sv, origin(ch) == key, ch.Time, ft) {
+		switch decide(gv, fv, sv, origin(t.ch) == key, t.ch.Time, t.ft) {
 		case agreed:
-			if seen[field] != f {
-				pl.sops = append(pl.sops, seenOp(is.Author, now, is.ID, field, f))
+			if seen[t.name] != t.f {
+				pl.sops = append(pl.sops, seenOp(is.Author, now, is.ID, t.name, t.f))
 			}
 		case pullIt:
 			if !pull {
 				return
 			}
-			v := f
-			if w := unwrap(f); posted && w.marker != "" || w.forked() {
+			v := t.f
+			if w := unwrap(t.f); t.posted && w.marker != "" || w.forked() {
 				v = w.body
 			}
-			if v != cur || origin(ch) != key {
-				pl.ops = append(pl.ops, pullOp(v))
+			if v != t.cur || origin(t.ch) != key {
+				pl.ops = append(pl.ops, t.pullOp(v))
 			}
-			if seen[field] != f {
-				pl.sops = append(pl.sops, seenOp(is.Author, now, is.ID, field, f))
+			if seen[t.name] != t.f {
+				pl.sops = append(pl.sops, seenOp(is.Author, now, is.ID, t.name, t.f))
 			}
 		case pushIt:
-			if !push || r.blocked(p, append(guard, ch.Origin)...) || refused(field, g) {
+			if !push || r.blocked(p, append(t.guard, t.ch.Origin)...) || refused(t.name, t.g) {
 				return
 			}
 			*bucket = append(*bucket, func(x *pushing) error {
-				return r.send(x, ch.Author, field, []string{g}, func(fw forge.Forge) ([]oplog.Op, error) {
-					return []oplog.Op{rec(field, g)}, write(fw, g)
+				return r.send(x, t.ch.Author, t.name, []string{t.g}, func(fw forge.Forge) ([]oplog.Op, error) {
+					return []oplog.Op{rec(t.name, t.g)}, t.write(fw, t.g)
 				})
 			})
 		}
@@ -154,18 +166,20 @@ func (r *run) plan(p *project, is *issue.Issue, fi forge.Issue, who map[string]s
 	// by sync, with its marker.
 	posted := is.Origin == nil || is.Origin.Forge != key
 	ch := is.Changes
-	text(&pl.text, "title", is.Title, r.form(p, is.Title, origin(ch["title"]), true), fi.Title, false, ch["title"], changedAt(fi, "title"), nil,
-		func(v string) oplog.Op { return from(issue.SetTitle(a, v), key, ev, changedAt(fi, "title")) },
-		func(fw forge.Forge, v string) error { return fw.SetTitle(r.ctx, fi.Ref(), v) })
-	text(&pl.text, "body", is.Body, wrapLike(seen["body"], r.form(p, is.Body, origin(ch["body"]), false), posted), fi.Body, posted,
-		ch["body"], changedAt(fi, "body"), nil,
-		func(v string) oplog.Op { return from(issue.EditText(a, is.BodyOp, v), key, ev, changedAt(fi, "body")) },
-		func(fw forge.Forge, v string) error { return fw.SetBody(r.ctx, fi.Ref(), v) })
-	text(&pl.rest, "status", string(is.Status), string(is.Status), fi.Status, false, ch["status"], changedAt(fi, "status"), nil,
-		func(v string) oplog.Op {
+	text(&pl.text, textField{name: "title", cur: is.Title, g: r.form(p, is.Title, origin(ch["title"]), true), f: fi.Title,
+		ch: ch["title"], ft: changedAt(fi, "title"),
+		pullOp: func(v string) oplog.Op { return from(issue.SetTitle(a, v), key, ev, changedAt(fi, "title")) },
+		write:  func(fw forge.Forge, v string) error { return fw.SetTitle(r.ctx, fi.Ref(), v) }})
+	text(&pl.text, textField{name: "body", cur: is.Body, g: wrapLike(seen["body"], r.form(p, is.Body, origin(ch["body"]), false), posted), f: fi.Body,
+		posted: posted, ch: ch["body"], ft: changedAt(fi, "body"),
+		pullOp: func(v string) oplog.Op { return from(issue.EditText(a, is.BodyOp, v), key, ev, changedAt(fi, "body")) },
+		write:  func(fw forge.Forge, v string) error { return fw.SetBody(r.ctx, fi.Ref(), v) }})
+	text(&pl.rest, textField{name: "status", cur: string(is.Status), g: string(is.Status), f: fi.Status,
+		ch: ch["status"], ft: changedAt(fi, "status"),
+		pullOp: func(v string) oplog.Op {
 			return from(issue.SetStatus(a, issue.Status(v)), key, ev, changedAt(fi, "status"))
 		},
-		func(fw forge.Forge, v string) error { return fw.SetStatus(r.ctx, fi.Ref(), v) })
+		write: func(fw forge.Forge, v string) error { return fw.SetStatus(r.ctx, fi.Ref(), v) }})
 
 	pullAdd, pullRemove := r.planLabels(pl, p, is, fi, pull, push)
 	aAdd, aRemove := r.planAssignees(pl, p, is, fi, pull, push)
@@ -233,10 +247,10 @@ func (r *run) plan(p *project, is *issue.Issue, fi forge.Issue, who map[string]s
 			ft = fc.Edited
 		}
 		cid, fcID, ca := c.ID, fc.ID, who[fc.Author.ID]
-		text(&pl.comments, field, c.Body, wrapLike(seen[field], r.form(p, c.Body, origin(cch), false), sent), fc.Body, sent, cch, ft,
-			[]*oplog.Origin{c.Origin},
-			func(v string) oplog.Op { return from(issue.EditText(ca, cid, v), key, field, ft) },
-			func(fw forge.Forge, v string) error { return fw.EditComment(r.ctx, fi.Ref(), fcID, v) })
+		text(&pl.comments, textField{name: field, cur: c.Body, g: wrapLike(seen[field], r.form(p, c.Body, origin(cch), false), sent), f: fc.Body,
+			posted: sent, ch: cch, ft: ft, guard: []*oplog.Origin{c.Origin},
+			pullOp: func(v string) oplog.Op { return from(issue.EditText(ca, cid, v), key, field, ft) },
+			write:  func(fw forge.Forge, v string) error { return fw.EditComment(r.ctx, fi.Ref(), fcID, v) }})
 	}
 	if push {
 		for _, c := range is.Comments {
@@ -476,9 +490,17 @@ func (r *run) planAssignees(pl *plan, p *project, is *issue.Issue, fi forge.Issu
 	accounts := map[string]forge.Account{}
 	names := map[string][]string{} // id -> the labels naming it
 	var unknown []string
+	named := map[string]issue.Change{} // id -> the label that last named it, present or not
+	for k, ch := range is.Changes {
+		if l, ok := strings.CutPrefix(k, "label:"); ok && isAssignee(l) {
+			if acc, ok := r.assignee(p, l[len("assignee:"):]); ok && ch.Time >= named[acc.ID].Time {
+				named[acc.ID] = ch
+			}
+		}
+	}
 	at := func(id string) *item {
 		if items[id] == nil {
-			items[id] = &item{}
+			items[id] = &item{ch: named[id], took: origin(named[id]) == p.key}
 		}
 		return items[id]
 	}
@@ -494,25 +516,12 @@ func (r *run) planAssignees(pl *plan, p *project, is *issue.Issue, fi forge.Issu
 		at(acc.ID).g = true
 		accounts[acc.ID], names[acc.ID] = acc, append(names[acc.ID], l)
 	}
-	for k, ch := range is.Changes { // the label that last named each id, present or not
-		if l, ok := strings.CutPrefix(k, "label:"); ok && isAssignee(l) {
-			if acc, ok := r.assignee(p, l[len("assignee:"):]); ok && ch.Time >= at(acc.ID).ch.Time {
-				at(acc.ID).ch = ch
-			}
-		}
-	}
 	for _, as := range fi.Assignees {
 		at(as.ID).f = true
 		accounts[as.ID] = as
 	}
 	for _, id := range split(seen["assignees"]) {
 		at(id).s = true
-	}
-	for id, it := range items {
-		if !it.g && !it.f && !it.s {
-			delete(items, id)
-		}
-		it.took = origin(it.ch) == p.key
 	}
 	pulled, pushed, base := sets(items, pull, push)
 	for _, id := range pulled {
