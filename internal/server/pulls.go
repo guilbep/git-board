@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/guilbep/git-board/internal/branches"
+	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/ghpr"
 	"github.com/guilbep/git-board/internal/store"
 )
@@ -88,6 +89,12 @@ func (s *apiServer) handlePulls(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	c, login, err := s.github()
+	if errors.Is(err, store.ErrNoMe) { // reading needs no one chosen: any github.com token
+		var tok string
+		if tok, err = s.b.Token(r.Context(), config.Forge{Kind: "github", Host: "github.com"}, ""); err == nil {
+			c = &ghpr.Client{API: s.githubAPI, Token: tok}
+		}
+	}
 	if err != nil {
 		writeError(w, http.StatusBadGateway, err)
 		return

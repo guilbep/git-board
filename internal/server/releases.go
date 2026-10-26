@@ -370,6 +370,10 @@ func detail(ctx context.Context, run *release.Runner, st release.Status, name st
 // It reads offline (R25), so it never waits for the runner.
 func (s *apiServer) handleIssueEnvironments(w http.ResponseWriter, r *http.Request) {
 	run, err := s.runner()
+	if errors.Is(err, errNoRelease) { // no environments: none to say, nothing wrong
+		writeJSON(w, http.StatusOK, []issueEnvironment{})
+		return
+	}
 	if err != nil {
 		writeRunnerError(w, err)
 		return

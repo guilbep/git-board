@@ -122,6 +122,13 @@ func TestReleasesDisabled(t *testing.T) {
 			t.Errorf("%s %s = %d %q", w[0], w[1], status, msg)
 		}
 	}
+	// an issue's environments, asked on every issue page: none, no error
+	var th store.Thread
+	call(t, "POST", ts.URL+"/api/issues", map[string]any{"title": "x"}, &th)
+	var envs []issueEnvironment
+	if code := call(t, "GET", ts.URL+"/api/issues/"+th.ID+"/environments", nil, &envs); code != http.StatusOK || envs == nil || len(envs) != 0 {
+		t.Errorf("environments without [release]: %d %v", code, envs)
+	}
 }
 
 func TestReleasesStatus(t *testing.T) {

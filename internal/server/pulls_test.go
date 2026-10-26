@@ -181,6 +181,20 @@ func TestPulls(t *testing.T) {
 	}
 }
 
+// With no one chosen, the gate still reads: any github.com token does.
+func TestPullsWithoutAnIdentity(t *testing.T) {
+	s, gh, id := gateRepo(t, "https://github.com/o/r.git", true)
+	s.githubToken = func() (string, string, error) { return "", "", store.ErrNoMe }
+	t.Setenv("GITHUB_TOKEN", "tok-dev")
+	var res gateAnswer
+	if resp := getJSON(t, serve(t, s).URL+"/api/issues/"+id[:8]+"/pulls", &res); resp.StatusCode != http.StatusOK || len(res.Pulls) != 1 || res.Pulls[0].PR == nil || res.Login != "" {
+		t.Fatalf("no identity: %d %+v", resp.StatusCode, res)
+	}
+	if len(gh.sent()) == 0 {
+		t.Error("GitHub wasn't asked")
+	}
+}
+
 // Without GitHub, or without a branch on origin, the gate asks GitHub
 // nothing: Development works offline.
 func TestPullsWithoutGitHub(t *testing.T) {
