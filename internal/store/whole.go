@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -36,9 +37,12 @@ const (
 
 var Steps = []string{StepPull, StepForges, StepProject, StepPush}
 
-// SyncWhole runs the whole sync's steps in order. A step that fails stops
-// the steps after it, and the error names it. Without the remote, the git
-// steps are skipped: the forges still sync.
+// SyncWhole runs the whole sync's steps in order. A failed pull stops the
+// steps after it. A failed forge or Project step is told, and the push
+// still runs: what the forge step wrote and linked here must reach the
+// remote, or another clone creates it again. The error names each failed
+// step. Without the remote, the git steps are skipped: the forges still
+// sync.
 func (b *Backend) SyncWhole(ctx context.Context, w Whole) error {
 	step := w.Step
 	if step == nil {
@@ -59,7 +63,7 @@ func (b *Backend) SyncWhole(ctx context.Context, w Whole) error {
 		{StepPush, "no git remote " + w.Remote, nil},
 	}
 	if has {
-		steps[0].do = func(context.Context) (string, error) { return "", b.pullStep(w.Remote, w.DryRun) }
+		steps[0].do = func(context.Context) (string, error) { return b.pullStep(w.Remote, w.DryRun) }
 		steps[3].do = func(context.Context) (string, error) { return b.pushStep(w.Remote) }
 		if w.DryRun {
 			steps[3].do, steps[3].skip = nil, "a check pushes nothing: the fetch compared"
@@ -71,6 +75,7 @@ func (b *Backend) SyncWhole(ctx context.Context, w Whole) error {
 	if w.Project != nil {
 		steps[2].do = func(ctx context.Context) (string, error) { return "", w.Project(ctx) }
 	}
+	var errs []error
 	for i, s := range steps {
 		if s.do == nil {
 			step(s.name, "skipped", s.skip)
@@ -78,36 +83,55 @@ func (b *Backend) SyncWhole(ctx context.Context, w Whole) error {
 		}
 		step(s.name, "running", "")
 		note, err := s.do(ctx)
-		if err != nil {
-			step(s.name, "failed", NoCredentials(err.Error()))
+		if err == nil {
+			step(s.name, "done", note)
+			continue
+		}
+		step(s.name, "failed", NoCredentials(err.Error()))
+		errs = append(errs, fmt.Errorf("%s: %w", s.name, err))
+		if s.name == StepPull || ctx.Err() != nil {
 			for _, rest := range steps[i+1:] {
 				step(rest.name, "skipped", s.name+" failed")
 			}
-			return fmt.Errorf("%s: %w", s.name, err)
+			break
 		}
-		step(s.name, "done", note)
 	}
-	return nil
+	return errors.Join(errs...)
 }
 
 // pullStep merges the remote's issues and people in, or with dry only
 // fetches their copies here to compare. Either refuses a repository the
-// switch didn't mark, and a counter holding numbers the remote hasn't.
-func (b *Backend) pullStep(remote string, dry bool) error {
+// switch didn't mark. A counter holding numbers the remote hasn't, the
+// remote's being one of its ancestors (a switch's, or a numbering
+// stopped before its push), is sent first, a fast-forward git refuses
+// otherwise; one apart from the remote's is refused.
+func (b *Backend) pullStep(remote string, dry bool) (string, error) {
 	do, numbers := b.Pull, b.FetchNumbers
 	if dry {
 		do, numbers = b.Fetch, b.numbersBehind
 	}
 	if err := do(remote); err != nil {
-		return err
+		return "", err
 	}
 	if err := b.Switched(); err != nil {
-		return err
+		return "", err
 	}
 	if remote != NumbersRemote {
-		return nil
+		return "", nil
 	}
-	return numbers(remote)
+	send, err := b.numbersToSend(remote)
+	switch {
+	case err != nil:
+		return "", err
+	case send && dry:
+		return "would send refs/board/seq: numbers " + remote + " hasn't", nil
+	case send:
+		if _, err := b.run(nil, "push", remote, seqRef+":"+seqRef); err != nil {
+			return "", fmt.Errorf("sending the numbers to %s: %w", remote, err)
+		}
+		return "sent refs/board/seq: numbers " + remote + " hadn't", numbers(remote)
+	}
+	return "", numbers(remote)
 }
 
 // pushStep pushes the issues and people, then numbers what the remote

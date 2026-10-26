@@ -56,9 +56,10 @@ func TestSyncWhole(t *testing.T) {
 	}
 }
 
-// A step that fails stops the steps after it: a forge sync that fails
-// leaves the Project alone and pushes nothing.
-func TestSyncWholeStopsAtAFailure(t *testing.T) {
+// A failed forge step doesn't stop the push: what it wrote and linked
+// here must reach origin, or another clone creates it again. The run
+// still fails, naming the step.
+func TestSyncWholePushesAfterAForgeFailure(t *testing.T) {
 	t.Parallel()
 	mine, theirs := storetest.NewPair(t)
 	storetest.NewIssue(t, mine, "Export CSV")
@@ -67,14 +68,14 @@ func TestSyncWholeStopsAtAFailure(t *testing.T) {
 	if !errors.Is(err, boom) || !strings.HasPrefix(err.Error(), "forges: ") {
 		t.Fatalf("err = %v, want the forges' failure", err)
 	}
-	if want := "pull running,pull done,forges running,forges ran,forges failed,project skipped,push skipped"; strings.Join(heard, ",") != want {
+	if want := "pull running,pull done,forges running,forges ran,forges failed,project running,project ran,project done,push running,push done"; strings.Join(heard, ",") != want {
 		t.Errorf("heard %s", strings.Join(heard, ","))
 	}
 	if err := theirs.Pull("origin"); err != nil {
 		t.Fatal(err)
 	}
-	if is, _ := theirs.ListIssues(); len(is) != 0 {
-		t.Fatalf("pushed %d issues after a failure", len(is))
+	if is, _ := theirs.ListIssues(); len(is) != 1 {
+		t.Fatalf("pushed %d issues after a forge failure, want 1", len(is))
 	}
 }
 
@@ -88,24 +89,65 @@ func TestSyncWholeWithoutTheRemote(t *testing.T) {
 	}
 }
 
-// A counter ahead of origin's fails the check at its git step, the
-// counter kept: git push origin refs/board/seq first.
-func TestSyncWholeChecksTheNumbers(t *testing.T) {
+// A counter strictly ahead of origin's (origin's is one of its
+// ancestors: a switch's, or a numbering stopped before its push) is sent
+// by the sync's git step, the numbers kept; its check says so and writes
+// nothing. One apart from origin's is refused.
+func TestSyncWholeSendsTheNumbers(t *testing.T) {
 	t.Parallel()
-	mine, _ := storetest.NewPair(t)
+	mine, theirs := storetest.NewPair(t)
 	if err := mine.InitNumbers("origin", "CO2", 3052); err != nil {
 		t.Fatal(err)
 	}
 	c, _, _ := mine.Counter()
-	c.ByID[storetest.NewIssue(t, mine, "Made here")] = 3052
+	made := storetest.NewIssue(t, mine, "Made here")
+	c.ByID[made] = 3052
 	if err := store.CommitCounter(mine, c); err != nil {
 		t.Fatal(err)
 	}
-	heard, err := steps(t, mine, store.Whole{Remote: "origin", DryRun: true}, nil)
-	if !errors.Is(err, store.ErrNumbersAhead) || !strings.Contains(err.Error(), "git push origin refs/board/seq") || heard[1] != "pull failed" {
-		t.Fatalf("err = %v, heard %v", err, heard)
+	var note string
+	w := store.Whole{Remote: "origin", DryRun: true, Step: func(name, state, n string) {
+		if name == store.StepPull && state == "done" {
+			note = n
+		}
+	}}
+	if err := mine.SyncWhole(t.Context(), w); err != nil || !strings.Contains(note, "would send refs/board/seq") {
+		t.Fatalf("check: %v, pull note %q", err, note)
 	}
-	if c2, _, _ := mine.Counter(); len(c2.ByID) != 1 {
-		t.Errorf("the check changed the counter: %v", c2.ByID)
+	if c2, _, _ := mine.Counter(); c2.ByID[made] != 3052 {
+		t.Fatalf("the check changed the counter: %v", c2.ByID)
+	}
+	if _, err := steps(t, mine, store.Whole{Remote: "origin"}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if c2, _, _ := mine.Counter(); c2.ByID[made] != 3052 {
+		t.Fatalf("the sync renumbered: %v", c2.ByID)
+	}
+	if err := theirs.Pull("origin"); err != nil {
+		t.Fatal(err)
+	}
+	if err := theirs.FetchNumbers("origin"); err != nil {
+		t.Fatal(err)
+	}
+	if c3, _, _ := theirs.Counter(); c3.ByID[made] != 3052 {
+		t.Fatalf("origin's counter: %v, want %s at 3052", c3.ByID, made)
+	}
+
+	// apart: origin moved on, and this clone numbered alone
+	other := storetest.NewIssue(t, theirs, "Made there")
+	if _, err := theirs.Push("origin"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := theirs.NumberIssues("origin"); err != nil {
+		t.Fatal(err)
+	}
+	c4, _, _ := mine.Counter()
+	c4.ByID[storetest.NewIssue(t, mine, "Made alone")] = 9999
+	if err := store.CommitCounter(mine, c4); err != nil {
+		t.Fatal(err)
+	}
+	heard, err := steps(t, mine, store.Whole{Remote: "origin", DryRun: true}, nil)
+	if !errors.Is(err, store.ErrNumbersAhead) || heard[1] != "pull failed" {
+		t.Fatalf("apart: err = %v, heard %v (origin numbered %s)", err, heard, other)
 	}
 }

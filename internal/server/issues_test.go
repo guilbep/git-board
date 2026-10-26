@@ -142,8 +142,8 @@ func TestMeAndIdentities(t *testing.T) {
 
 // fakeSync answers a forge sync with given events, holding the run until
 // release is closed.
-func fakeSync(events []store.SyncEvent, release chan struct{}) func(context.Context, string, []config.Forge, bool, func(store.SyncEvent)) error {
-	return func(_ context.Context, _ string, _ []config.Forge, _ bool, see func(store.SyncEvent)) error {
+func fakeSync(events []store.SyncEvent, release chan struct{}) func(context.Context, string, []config.Forge, runOpts, func(store.SyncEvent)) error {
+	return func(_ context.Context, _ string, _ []config.Forge, _ runOpts, see func(store.SyncEvent)) error {
 		<-release
 		for _, e := range events {
 			see(e)
@@ -221,7 +221,7 @@ func TestForgeSyncRunsADryRunFirst(t *testing.T) {
 	}
 
 	// a dry run that fails doesn't open the way to a real run
-	s.runSync = func(context.Context, string, []config.Forge, bool, func(store.SyncEvent)) error {
+	s.runSync = func(context.Context, string, []config.Forge, runOpts, func(store.SyncEvent)) error {
 		return context.Canceled
 	}
 	call(t, "POST", ts.URL+"/api/forges/sync", map[string]any{"dry_run": true}, nil)
@@ -243,9 +243,9 @@ func TestForgeSend(t *testing.T) {
 	close(done)
 	ran := make(chan string, 10) // the mode each run was given
 	runs := func(events ...store.SyncEvent) {
-		s.runSync = func(ctx context.Context, mode string, forges []config.Forge, dryRun bool, see func(store.SyncEvent)) error {
+		s.runSync = func(ctx context.Context, mode string, forges []config.Forge, o runOpts, see func(store.SyncEvent)) error {
 			ran <- mode
-			return fakeSync(events, done)(ctx, mode, forges, dryRun, see)
+			return fakeSync(events, done)(ctx, mode, forges, o, see)
 		}
 	}
 	start := func(body map[string]any) (int, string) {
@@ -297,10 +297,17 @@ func TestForgeSyncOverTheCore(t *testing.T) {
 	}
 	storetest.NewIssue(t, s.b, "to GitHub")
 	call(t, "POST", ts.URL+"/api/forges/sync", map[string]any{"dry_run": true}, nil)
-	if st := waitJob(t, ts); st.Job.State != "done" || st.Job.Bridges["gh"].To.Issues != 1 || len(gh.Writes()) != 0 {
+	if st := waitJob(t, ts); st.Job.State != "done" || st.Job.Bridges["gh"].To.Issues != 1 || st.Job.Bridges["gh"].Held != 1 || len(gh.Writes()) != 0 {
 		t.Fatalf("check %+v, writes %v", st.Job, gh.Writes())
 	}
+	// the first sync with a forge creates nothing without consent
 	call(t, "POST", ts.URL+"/api/forges/sync", map[string]any{"dry_run": false}, nil)
+	if st := waitJob(t, ts); st.Job.State != "done" || st.Job.Bridges["gh"].Held != 1 || len(gh.All()) != 0 {
+		t.Fatalf("run without consent %+v, forge %v", st.Job, gh.All())
+	}
+	call(t, "POST", ts.URL+"/api/forges/sync", map[string]any{"dry_run": true}, nil)
+	waitJob(t, ts)
+	call(t, "POST", ts.URL+"/api/forges/sync", map[string]any{"dry_run": false, "allow_create": true}, nil)
 	if st := waitJob(t, ts); st.Job.State != "done" || st.Job.Bridges["gh"].To.Issues != 1 || len(gh.All()) != 1 {
 		t.Fatalf("run %+v, forge %v", st.Job, gh.All())
 	}

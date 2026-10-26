@@ -54,8 +54,14 @@ type forgeJob struct {
 	Bridges map[string]*bridgeTally `json:"bridges"`
 	Errors  int                     `json:"errors"`
 	Error   string                  `json:"error,omitempty"` // the run couldn't start or failed
-	Step    *syncStep               `json:"step,omitempty"`  // where it is, for a page loading mid-run
-	Steps   []jobStep               `json:"steps,omitempty"` // the whole sync's, in order
+	// AllowCreate is the run's consent to the creations a check held
+	// (store.ForgeRun.AllowCreate): the page's "I understand".
+	AllowCreate bool `json:"allow_create"`
+	// Read are the forges a check read, its names without those left
+	// out: the only ones a real run after it syncs.
+	Read  []string  `json:"read,omitempty"`
+	Step  *syncStep `json:"step,omitempty"`  // where it is, for a page loading mid-run
+	Steps []jobStep `json:"steps,omitempty"` // the whole sync's, in order
 }
 
 // fresh says job is a clean check of the last dryRunFresh, which a real
@@ -156,10 +162,15 @@ type bridgeTally struct {
 	Linked int `json:"linked"`
 	// Assignable is how many people the forge says can be assigned,
 	// asked after the run (assignable.go)
-	Assignable int      `json:"assignable"`
-	Warnings   int      `json:"warnings"`
-	Errors     int      `json:"errors"`
-	Lines      []string `json:"lines"`
+	Assignable int `json:"assignable"`
+	Warnings   int `json:"warnings"`
+	Errors     int `json:"errors"`
+	// Held are the creations waiting for consent: on a forge never synced
+	// with, or MaxCreate or more in one run (store.ForgeRun.AllowCreate).
+	Held int `json:"held"`
+	// Left is why the forge was left out of the run: it couldn't be read.
+	Left  string   `json:"left,omitempty"`
+	Lines []string `json:"lines"`
 }
 
 // direction is one way of a sync.
@@ -195,6 +206,11 @@ func (t *bridgeTally) add(e store.SyncEvent, line string) {
 	case "change":
 		t.To.Changes++
 	case "warning":
+		t.Warnings++
+	case "held":
+		t.Held += e.Ops
+	case "left":
+		t.Left = e.Line
 		t.Warnings++
 	}
 	if line != "" && len(t.Lines) < maxLines {
@@ -263,9 +279,10 @@ func (s *apiServer) handleForges(w http.ResponseWriter, r *http.Request) {
 // the plan of. A real run goes both ways, or sends alone.
 func (s *apiServer) handleForgeSync(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		DryRun  bool     `json:"dry_run"`
-		Mode    string   `json:"mode"`    // sync (empty), send
-		Bridges []string `json:"bridges"` // a real run: some of the dry run's; empty: all
+		DryRun      bool     `json:"dry_run"`
+		Mode        string   `json:"mode"`         // sync (empty), send
+		Bridges     []string `json:"bridges"`      // a real run: some of the dry run's; empty: all
+		AllowCreate bool     `json:"allow_create"` // consent to the creations the check held
 	}
 	if !decode(w, r, &req) {
 		return
@@ -283,8 +300,8 @@ func (s *apiServer) handleForgeSync(w http.ResponseWriter, r *http.Request) {
 		writeCoded(w, http.StatusConflict, "syncing", errSyncing)
 		return
 	}
+	last := s.job
 	if !req.DryRun {
-		last := s.job
 		if err := last.fresh(false); err != nil {
 			writeError(w, http.StatusConflict, err)
 			return
@@ -296,16 +313,15 @@ func (s *apiServer) handleForgeSync(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	} else {
-		req.Bridges, req.Mode = nil, "sync" // a dry run looks at every forge, both ways
+		req.Bridges, req.Mode, req.AllowCreate = nil, "sync", false // a dry run looks at every forge, both ways
 	}
 	forges := s.syncForges()
 	if len(req.Bridges) > 0 {
 		forges = slices.DeleteFunc(forges, func(f config.Forge) bool { return !slices.Contains(req.Bridges, f.Name) })
 	}
-	job := &forgeJob{DryRun: req.DryRun, Mode: req.Mode, State: "running", Started: time.Now(), Names: []string{}, Bridges: map[string]*bridgeTally{}}
-	for _, f := range forges {
-		job.Names = append(job.Names, f.Name)
-		job.tally(f.Name) // every bridge of the run, those with nothing to say too
+	job := newJob(req.DryRun, req.Mode, req.AllowCreate, forges, last)
+	if !req.DryRun {
+		forges = slices.DeleteFunc(forges, func(f config.Forge) bool { return !slices.Contains(last.Read, f.Name) })
 	}
 	// edits wait from here: a write already under way finishes first
 	s.syncing.Store(true)
@@ -314,10 +330,33 @@ func (s *apiServer) handleForgeSync(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusAccepted, s.forgeSnapshot())
 }
 
+// newJob is a job of these forges, each tallied, those with nothing to
+// say too. A real run takes only the forges its check (last) read: one
+// that wasn't, left out or turned on since, is told and left out.
+func newJob(dry bool, mode string, allow bool, forges []config.Forge, last *forgeJob) *forgeJob {
+	job := &forgeJob{DryRun: dry, Mode: mode, AllowCreate: allow, State: "running", Started: time.Now(), Names: []string{}, Bridges: map[string]*bridgeTally{}}
+	for _, f := range forges {
+		job.Names = append(job.Names, f.Name)
+		t := job.tally(f.Name)
+		if !dry && !slices.Contains(last.Read, f.Name) {
+			t.add(store.SyncEvent{Forge: f.Name, What: "warning"}, "not in the check: run Check again to sync it")
+		}
+	}
+	return job
+}
+
+// runOpts are a forge run's settings: a dry run, the consent to create
+// (ForgeRun.AllowCreate), and the git remote a check merges first
+// (ForgeRun.Merge).
+type runOpts struct {
+	DryRun, AllowCreate bool
+	Merge               string
+}
+
 // forgeRun is the core's sync, or its push alone, with forges opened for
 // the run.
-func (s *apiServer) forgeRun(ctx context.Context, mode string, forges []config.Forge, dryRun bool, see func(store.SyncEvent)) error {
-	run, err := s.openRun(ctx, forges, dryRun, see)
+func (s *apiServer) forgeRun(ctx context.Context, mode string, forges []config.Forge, o runOpts, see func(store.SyncEvent)) error {
+	run, err := s.openRun(ctx, forges, o, see)
 	if err != nil {
 		return err
 	}
@@ -332,29 +371,29 @@ func (s *apiServer) forgeRun(ctx context.Context, mode string, forges []config.F
 // openRun opens the forges' adapters for one run, fresh: the settings and
 // the tokens may have changed since the last. A forge found in the
 // remotes whose GitLab id can't be read is left out, with a warning.
-func (s *apiServer) openRun(ctx context.Context, forges []config.Forge, dryRun bool, see func(store.SyncEvent)) (store.ForgeRun, error) {
+func (s *apiServer) openRun(ctx context.Context, forges []config.Forge, o runOpts, see func(store.SyncEvent)) (store.ForgeRun, error) {
 	open := s.openForges
 	if open == nil {
 		open = store.OpenForges
 	}
 	forges = store.ResolveForges(ctx, forges, func(f config.Forge, why error) {
-		see(store.SyncEvent{Forge: f.Name, What: "warning", Line: fmt.Sprintf("left out of the run: %s %s: %v", f.Host, f.Path, why)})
+		see(store.SyncEvent{Forge: f.Name, What: "left", Line: fmt.Sprintf("%s %s: %v", f.Host, f.Path, why)})
 	})
 	fs, err := open(ctx, forges)
 	if err != nil {
 		return store.ForgeRun{}, err
 	}
-	return store.ForgeRun{Forges: fs, PublishPrivate: s.config().PublishPrivate, DryRun: dryRun, See: see}, nil
+	return store.ForgeRun{Forges: fs, PublishPrivate: s.config().PublishPrivate, DryRun: o.DryRun, AllowCreate: o.AllowCreate, Merge: o.Merge, See: see}, nil
 }
 
 func (s *apiServer) runForgeSync(job *forgeJob, forges []config.Forge) {
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()
-	s.endJob(job, s.run()(context.Background(), job.Mode, forges, job.DryRun, s.see(job)))
+	s.endJob(job, s.run()(context.Background(), job.Mode, forges, runOpts{DryRun: job.DryRun, AllowCreate: job.AllowCreate}, s.see(job)))
 }
 
 // run is the forge run: runSync, else forgeRun.
-func (s *apiServer) run() func(ctx context.Context, mode string, forges []config.Forge, dryRun bool, see func(store.SyncEvent)) error {
+func (s *apiServer) run() func(ctx context.Context, mode string, forges []config.Forge, o runOpts, see func(store.SyncEvent)) error {
 	if s.runSync != nil {
 		return s.runSync
 	}
@@ -373,6 +412,13 @@ func (s *apiServer) endJob(job *forgeJob, err error) {
 	s.forgeMu.Lock()
 	now := time.Now()
 	job.State, job.Ended = "done", &now
+	if job.DryRun {
+		for _, name := range job.Names {
+			if job.tally(name).Left == "" {
+				job.Read = append(job.Read, name)
+			}
+		}
+	}
 	if err != nil {
 		job.State, job.Error = "failed", store.NoCredentials(err.Error()) // a git URL may carry a token
 		job.Errors++

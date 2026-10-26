@@ -324,6 +324,9 @@ export interface BridgeTally {
   assignable: number; // who the forge says can be assigned, asked after the run
   warnings: number;
   errors: number;
+  // creations waiting for consent: on a forge never synced with, or 50 or more in one run
+  held: number;
+  left?: string; // why the forge was left out of the run: it couldn't be read
   lines: string[];
 }
 
@@ -391,9 +394,10 @@ export function getWhole(): Promise<WholeStatus> {
   return request('/api/sync/all');
 }
 
-// a check (dryRun) writes nothing; a sync needs a clean one of the last 15 minutes
-export function startWhole(dryRun: boolean): Promise<ForgeStatus> {
-  return request('/api/sync/all', json('POST', { dry_run: dryRun }));
+// a check (dryRun) writes nothing; a sync needs a clean one of the last 15
+// minutes, and allowCreate for the creations the check held
+export function startWhole(dryRun: boolean, allowCreate = false): Promise<ForgeStatus> {
+  return request('/api/sync/all', json('POST', { dry_run: dryRun, allow_create: allowCreate }));
 }
 
 // The git remotes (internal/server/remotes.go): issues and people

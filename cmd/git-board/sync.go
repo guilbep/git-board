@@ -16,7 +16,7 @@ import (
 
 func newSyncCmd() *cobra.Command {
 	var remote string
-	var check, gitOnly bool
+	var check, gitOnly, allowCreate bool
 
 	cmd := &cobra.Command{
 		Use:   "sync [path...]",
@@ -36,6 +36,11 @@ table, those found in the git remotes, each told in a line.
 forges' dry run, the Project's check. --git syncs with git alone: a pull,
 then a push.
 
+A forge this repository never synced with, or 50 creations or more on
+one, gets no issue created without --allow-create: the sync says how
+many wait, and its other changes go. A forge may email its watchers once
+per issue.
+
 Each path is a directory of a git repository (the current directory if
 none given), synced in turn: a failure on one doesn't stop the others.
 This is deliberately explicit paths, not [repos] from .git-board.toml:
@@ -44,6 +49,7 @@ and there's no established convention yet for mapping one to the other —
 see docs/implementation-plan.md.`,
 		Example: `  git-board sync --check                  # what a sync would do, nothing written
   git-board sync
+  git-board sync --allow-create           # the creations --check counted, made
   git-board sync --git ../co2-calculator ../git-time
   git-board sync --remote upstream`,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -58,13 +64,14 @@ see docs/implementation-plan.md.`,
 				return runSync(cmd.OutOrStdout(), paths, remote)
 			}
 			return eachPath(cmd.OutOrStdout(), paths, func(path string) error {
-				return wholeOne(cmd.Context(), cmd.OutOrStdout(), path, remote, check)
+				return wholeOne(cmd.Context(), cmd.OutOrStdout(), path, remote, check, allowCreate)
 			})
 		},
 	}
 	cmd.Flags().StringVar(&remote, "remote", "origin", "git remote to pull from / push to")
 	cmd.Flags().BoolVar(&check, "check", false, "the dry run: say what a sync would do, write nothing")
 	cmd.Flags().BoolVar(&gitOnly, "git", false, "sync with git alone: pull, then push")
+	cmd.Flags().BoolVar(&allowCreate, "allow-create", false, "create issues on a forge never synced with, or 50 or more on one")
 	return cmd
 }
 
@@ -87,7 +94,7 @@ func eachPath(out io.Writer, paths []string, sync func(path string) error) error
 
 // wholeOne is the whole sync of one repository (store.SyncWhole), as the
 // server's Settings › Sync runs it, each step told.
-func wholeOne(ctx context.Context, out io.Writer, path, remote string, check bool) error {
+func wholeOne(ctx context.Context, out io.Writer, path, remote string, check, allowCreate bool) error {
 	b, err := store.Open(path)
 	if err != nil {
 		return fmt.Errorf("opening: %w", err)
@@ -131,11 +138,17 @@ func wholeOne(ctx context.Context, out io.Writer, path, remote string, check boo
 			if err != nil {
 				return err
 			}
-			_, err = b.SyncForges(ctx, store.ForgeRun{Forges: fs, PublishPrivate: cfg.PublishPrivate, DryRun: check, See: func(e store.SyncEvent) {
-				if line := e.Text(check, eventIssue(b, e.Issue)); line != "" {
+			run := store.ForgeRun{Forges: fs, PublishPrivate: cfg.PublishPrivate, DryRun: check, AllowCreate: allowCreate, Merge: remote}
+			run.See = func(e store.SyncEvent) {
+				line := e.Text(check, eventIssue(b, e.Issue))
+				if e.What == "held" {
+					line += " (--allow-create)"
+				}
+				if line != "" {
 					say("  %s: %s", e.Forge, line)
 				}
-			}})
+			}
+			_, err = b.SyncForges(ctx, run)
 			return err
 		}
 	}

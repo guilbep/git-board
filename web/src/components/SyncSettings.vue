@@ -4,7 +4,8 @@
      sync (internal/server/whole.go): git pull, the forges, the Project, git
      push. Sync waits for a clean Check of the last 15 minutes, and is
      confirmed with its counts, with an explicit "I understand" when it
-     creates many issues on a forge. Below, what a sync would do or did, per
+     creates issues on a forge never synced with, or 50 or more at once:
+     the server holds them without it. Below, what a sync would do or did, per
      forge. #/settings/sync?add=1 opens "Add a forge", for one no remote
      names. -->
 <template>
@@ -118,14 +119,15 @@
             <span v-else-if="b.tally?.warnings" class="gb-hint">{{ plural(b.tally.warnings, 'warning') }}</span>
           </header>
           <div class="gb-forge-body">
-            <p v-if="job.dry_run && (b.tally?.to.issues ?? 0) >= bigRun" class="epfl-alert epfl-alert-danger">
-              <b>Creates {{ b.tally!.to.issues.toLocaleString() }} issues on {{ b.label }}.</b>
-              {{ b.label }} may email everyone watching the project, once per issue. Ask watchers to mute it first, or switch its sync off.
+            <p v-if="b.tally?.left" class="epfl-alert epfl-alert-warning"><b>Left out of the run:</b> {{ b.tally.left }}</p>
+            <p v-if="(b.tally?.held ?? 0) > 0" class="epfl-alert epfl-alert-danger">
+              <b>{{ job.dry_run ? 'Would create' : 'Didn’t create' }} {{ b.tally!.held.toLocaleString() }} issues on {{ b.label }} without your consent</b>
+              (the first sync with it, or 50 or more at once). {{ b.label }} may email everyone watching the project, once per issue: ask watchers to mute it first, or switch its sync off.
             </p>
             <div class="gb-counts">
               <dl class="sy-countlist">
                 <dt class="gb-section-title"><GbIcon name="up" small /> To {{ b.label }}</dt>
-                <div><dt>Issues {{ job.dry_run ? 'to create' : 'created' }}</dt><dd :class="{ 'gb-num-alert': (b.tally?.to.issues ?? 0) >= bigRun }">{{ n(b.tally?.to.issues) }}</dd></div>
+                <div><dt>Issues {{ job.dry_run ? 'to create' : 'created' }}</dt><dd :class="{ 'gb-num-alert': (b.tally?.held ?? 0) > 0 }">{{ n(b.tally?.to.issues) }}</dd></div>
                 <div><dt>Linked issues with changes</dt><dd>{{ n(b.tally?.to.changed) }}</dd></div>
                 <div><dt>Comments {{ job.dry_run ? 'to post' : 'posted' }}</dt><dd>{{ n(b.tally?.to.comments) }}</dd></div>
                 <div><dt>Comment edits</dt><dd>{{ n(b.tally?.to.edits) }}</dd></div>
@@ -165,11 +167,11 @@
             <li v-if="st?.remote"><span><b>git push to {{ remote }}</b>: {{ plural(st.remote.issues.send, 'issue') }}, and what the steps before bring</span></li>
           </ul>
           <div v-for="b in bigRows" :key="b.name" class="epfl-alert epfl-alert-danger">
-            <b>This creates {{ b.tally!.to.issues.toLocaleString() }} issues on {{ b.label }}, which may email everyone watching it.</b>
-            Issues can’t be deleted in bulk afterwards.
-            <label class="sy-check"><input v-model="understood" type="checkbox" :value="b.name" /> I understand: create {{ b.tally!.to.issues.toLocaleString() }} issues on {{ b.label }}</label>
+            <b>This creates {{ b.tally!.held.toLocaleString() }} issues on {{ b.label }}, which may email everyone watching it.</b>
+            Issues can’t be deleted in bulk afterwards. Without your consent, the sync creates none there and does the rest.
+            <label class="sy-check"><input v-model="understood" type="checkbox" :value="b.name" /> I understand: create {{ b.tally!.held.toLocaleString() }} issues on {{ b.label }}</label>
           </div>
-          <p class="gb-hint">A step that fails stops the steps after it. While it runs, edits in git-board wait and are saved right after it. It goes on if you leave this page.</p>
+          <p class="gb-hint">A failed pull stops the sync; a forge or the Project that fails is told, and the push still runs. While it runs, edits in git-board wait and are saved right after it. It goes on if you leave this page.</p>
         </div>
         <footer class="gb-dialog-foot">
           <span class="gb-grow" />
@@ -202,8 +204,6 @@ import SyncProgress from '@/components/SyncProgress.vue';
 // changed: the sync as it stands, for the Overview's line
 const emit = defineEmits<{ changed: [st: WholeStatus] }>();
 
-// a sync creating this many issues on a forge asks for an explicit "I understand"
-const bigRun = 50;
 const remote = 'origin'; // the whole sync's, as git-board sync's default
 
 const route = useRoute();
@@ -247,7 +247,9 @@ const bridgeRows = computed(() => (job.value?.names ?? []).map((name) => {
   const f = st.value?.forges.find((x) => x.name === name);
   return { name, label: forgeLabel({ name, target: f?.target ?? '' }), tally: job.value?.bridges[name] };
 }));
-const bigRows = computed(() => bridgeRows.value.filter((b) => (b.tally?.to.issues ?? 0) >= bigRun));
+// the forges whose creations wait for consent (the server holds them: the
+// first sync with a forge, or 50 or more at once): an explicit "I understand"
+const bigRows = computed(() => bridgeRows.value.filter((b) => (b.tally?.held ?? 0) > 0));
 const n = (v: number | undefined) => (v ?? 0).toLocaleString();
 
 // the forges' rows, the Project's line under the first GitHub row, else last
@@ -292,11 +294,11 @@ async function reload() {
   }
 }
 
-async function start(dryRun: boolean) {
+async function start(dryRun: boolean, allowCreate = false) {
   starting.value = true;
   startError.value = '';
   try {
-    forgeStatus.value = await startWhole(dryRun);
+    forgeStatus.value = await startWhole(dryRun, allowCreate);
     void loadForges(); // polls while it runs
   } catch (e) {
     startError.value = message(e);
@@ -307,7 +309,7 @@ async function start(dryRun: boolean) {
 
 async function runReal() {
   confirming.value = false;
-  await start(false);
+  await start(false, bigRows.value.length > 0 && bigRows.value.every((b) => understood.value.includes(b.name)));
 }
 
 async function toggle(f: Bridge, on: boolean) {

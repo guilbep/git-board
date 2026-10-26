@@ -222,3 +222,24 @@ func TestSyncWaitsForTheSwitch(t *testing.T) {
 		t.Fatalf("err = %v\n%s", err, out)
 	}
 }
+
+// A plain sync creates nothing on a forge it never synced with: it says
+// how many wait, and --allow-create makes them.
+func TestSyncCreatesWithConsent(t *testing.T) {
+	pathA, _ := twoReposWithRemote(t)
+	for _, title := range []string{"internal: rotate the keys", "b", "c"} {
+		seedBug(t, pathA, title)
+	}
+	storetest.Git(t, pathA, "remote", "add", "gh", "https://github.com/o/r.git")
+	f := fake.New("github.com/o/r")
+	stubForges(t, f)
+	storetest.GitHub(t, map[string]string{"o/r": "o/r"})
+
+	out, err := execute(t, []string{"sync", pathA})
+	if err != nil || len(f.All()) != 0 || !strings.Contains(out, "3 issues not created: they need consent, the first sync with this forge (--allow-create)") {
+		t.Fatalf("plain sync: %v, the forge holds %d\n%s", err, len(f.All()), out)
+	}
+	if out, err := execute(t, []string{"sync", "--allow-create", pathA}); err != nil || len(f.All()) != 3 {
+		t.Fatalf("with consent: %v, the forge holds %d\n%s", err, len(f.All()), out)
+	}
+}

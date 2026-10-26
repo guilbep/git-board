@@ -160,7 +160,7 @@ func TestWorkToSend(t *testing.T) {
 	b := storetest.New(t)
 	ts := newTestServer(t, b, cycleConfig(nil, config.Cycle{}))
 	id := storetest.NewIssue(t, b, "synced")
-	run := store.ForgeRun{Forges: []store.NamedForge{{Name: "gh", Forge: fake.New("github.com/o/r")}}}
+	run := store.ForgeRun{Forges: []store.NamedForge{{Name: "gh", Forge: fake.New("github.com/o/r")}}, AllowCreate: true}
 	if _, err := b.SyncForges(t.Context(), run); err != nil {
 		t.Fatal(err)
 	}

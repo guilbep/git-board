@@ -6,7 +6,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"slices"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -20,7 +22,7 @@ import (
 // wholeServer serves mine, a clone of origin beside theirs, with the forge
 // gh, whose runs forges answers, and a GitHub Project that reads empty;
 // projectRead counts its reads.
-func wholeServer(t *testing.T, forges func(ctx context.Context, mode string, fs []config.Forge, dryRun bool, see func(store.SyncEvent)) error) (ts *httptest.Server, s *apiServer, theirs *store.Backend, projectRead *atomic.Int32) {
+func wholeServer(t *testing.T, forges func(ctx context.Context, mode string, fs []config.Forge, o runOpts, see func(store.SyncEvent)) error) (ts *httptest.Server, s *apiServer, theirs *store.Backend, projectRead *atomic.Int32) {
 	t.Helper()
 	mine, theirs := storetest.NewPair(t)
 	cfg := &config.Config{Forges: []config.Forge{ghForge}, GithubProject: config.GithubProject{Owner: "o", Number: 1}}
@@ -63,7 +65,7 @@ func stepWords(job *forgeJob) string {
 func TestWholeSync(t *testing.T) {
 	t.Parallel()
 	var runs atomic.Int32
-	ts, s, theirs, projectRead := wholeServer(t, func(_ context.Context, mode string, fs []config.Forge, dry bool, see func(store.SyncEvent)) error {
+	ts, s, theirs, projectRead := wholeServer(t, func(_ context.Context, mode string, fs []config.Forge, _ runOpts, see func(store.SyncEvent)) error {
 		if runs.Add(1); mode != "sync" {
 			t.Errorf("a forge run as %s, want both ways", mode)
 		}
@@ -117,12 +119,12 @@ func TestWholeSync(t *testing.T) {
 	}
 }
 
-// A step that fails stops the steps after it, and says which: a forge
-// sync that fails leaves the Project alone and pushes nothing.
-func TestWholeSyncStopsAtAFailure(t *testing.T) {
+// A failed forge step is said, tokens dropped, and doesn't stop the
+// Project nor the push: what it linked must reach origin.
+func TestWholeSyncPushesAfterAForgeFailure(t *testing.T) {
 	t.Parallel()
 	var fail atomic.Bool
-	ts, s, theirs, projectRead := wholeServer(t, func(context.Context, string, []config.Forge, bool, func(store.SyncEvent)) error {
+	ts, s, theirs, projectRead := wholeServer(t, func(context.Context, string, []config.Forge, runOpts, func(store.SyncEvent)) error {
 		if fail.Load() {
 			return errors.New("GitHub is down, and git said https://oauth2:secret@gitlab.example.com/g/r.git")
 		}
@@ -134,18 +136,18 @@ func TestWholeSyncStopsAtAFailure(t *testing.T) {
 	fail.Store(true)
 	call(t, "POST", ts.URL+"/api/sync/all", map[string]any{"dry_run": false}, nil)
 	st := waitWhole(t, ts)
-	if got := stepWords(st.Job); st.Job.State != "failed" || got != "pull done, forges failed, project skipped, push skipped" ||
+	if got := stepWords(st.Job); st.Job.State != "failed" || got != "pull done, forges failed, project done, push done" ||
 		st.Job.Error != "forges: GitHub is down, and git said https://gitlab.example.com/g/r.git" || strings.Contains(st.Job.Steps[1].Note, "secret") {
 		t.Fatalf("run %s: %s, %q", st.Job.State, got, st.Job.Error)
 	}
-	if projectRead.Load() != 1 {
-		t.Errorf("the Project was read %d times, want the check's alone", projectRead.Load())
+	if projectRead.Load() < 2 {
+		t.Errorf("the Project was read %d times, want the check's and the run's", projectRead.Load())
 	}
 	if err := theirs.Pull("origin"); err != nil {
 		t.Fatal(err)
 	}
-	if is, _ := theirs.ListIssues(); len(is) != 0 {
-		t.Errorf("origin got %d issues after the failure", len(is))
+	if is, _ := theirs.ListIssues(); len(is) != 1 {
+		t.Errorf("origin got %d issues after the forge failure, want 1", len(is))
 	}
 	// a check of the last 15 minutes, no older
 	s.forgeMu.Lock()
@@ -153,5 +155,44 @@ func TestWholeSyncStopsAtAFailure(t *testing.T) {
 	s.forgeMu.Unlock()
 	if code := call(t, "POST", ts.URL+"/api/sync/all", map[string]any{"dry_run": false}, nil); code != http.StatusConflict {
 		t.Errorf("a run after a stale check: %d, want 409", code)
+	}
+}
+
+// A real run syncs only the forges its check read: one switched on since,
+// or left out of the check, is told ("not in the check") and left alone.
+func TestWholeRunTakesOnlyTheCheckedForges(t *testing.T) {
+	t.Parallel()
+	gl := glForge
+	gl.Sync = false
+	ts, s := forgeServer(t, ghForge, gl)
+	nowhere := httptest.NewServer(http.NotFoundHandler())
+	t.Cleanup(nowhere.Close)
+	s.githubAPI = nowhere.URL
+	var mu sync.Mutex
+	var runs [][]string
+	s.runSync = func(_ context.Context, _ string, fs []config.Forge, _ runOpts, _ func(store.SyncEvent)) error {
+		var names []string
+		for _, f := range fs {
+			names = append(names, f.Name)
+		}
+		mu.Lock()
+		runs = append(runs, names)
+		mu.Unlock()
+		return nil
+	}
+	call(t, "POST", ts.URL+"/api/sync/all", map[string]any{"dry_run": true}, nil)
+	waitWhole(t, ts)
+	if code := call(t, "PUT", ts.URL+"/api/bridges/gl/sync", map[string]bool{"sync": true}, nil); code != http.StatusOK {
+		t.Fatalf("PUT: %d", code)
+	}
+	call(t, "POST", ts.URL+"/api/sync/all", map[string]any{"dry_run": false}, nil)
+	st := waitWhole(t, ts)
+	mu.Lock()
+	defer mu.Unlock()
+	if len(runs) != 2 || !slices.Equal(runs[1], []string{"gh"}) {
+		t.Fatalf("forge runs %v, want the real run on gh alone", runs)
+	}
+	if lines := st.Job.Bridges["gl"].Lines; len(lines) == 0 || !strings.Contains(lines[0], "not in the check") {
+		t.Errorf("gl's lines %v, want it told as not in the check", lines)
 	}
 }

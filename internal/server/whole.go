@@ -3,6 +3,7 @@ package server
 import (
 	"cmp"
 	"context"
+	"errors"
 	"log"
 	"net/http"
 	"slices"
@@ -77,7 +78,8 @@ func (s *apiServer) handleWhole(w http.ResponseWriter, r *http.Request) {
 // the forge sync does: one at a time, edits waiting.
 func (s *apiServer) handleWholeSync(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		DryRun bool `json:"dry_run"`
+		DryRun      bool `json:"dry_run"`
+		AllowCreate bool `json:"allow_create"` // consent to the creations the check held
 	}
 	if !decode(w, r, &req) {
 		return
@@ -88,17 +90,19 @@ func (s *apiServer) handleWholeSync(w http.ResponseWriter, r *http.Request) {
 		writeCoded(w, http.StatusConflict, "syncing", errSyncing)
 		return
 	}
+	last := s.job
 	if !req.DryRun {
-		if err := s.job.fresh(true); err != nil {
+		if err := last.fresh(true); err != nil {
 			writeError(w, http.StatusConflict, err)
 			return
 		}
+	} else {
+		req.AllowCreate = false
 	}
 	forges := s.syncForges()
-	job := &forgeJob{DryRun: req.DryRun, Mode: "all", State: "running", Started: time.Now(), Names: []string{}, Bridges: map[string]*bridgeTally{}}
-	for _, f := range forges {
-		job.Names = append(job.Names, f.Name)
-		job.tally(f.Name)
+	job := newJob(req.DryRun, "all", req.AllowCreate, forges, last)
+	if !req.DryRun {
+		forges = slices.DeleteFunc(forges, func(f config.Forge) bool { return !slices.Contains(last.Read, f.Name) })
 	}
 	for _, name := range store.Steps {
 		job.Steps = append(job.Steps, jobStep{Name: name, State: "waiting"})
@@ -126,17 +130,37 @@ func (s *apiServer) runWhole(job *forgeJob, forges []config.Forge) {
 		}
 	}}
 	if len(forges) > 0 {
-		run.Forges = func(ctx context.Context) error { return s.run()(ctx, "sync", forges, job.DryRun, s.see(job)) }
+		o := runOpts{DryRun: job.DryRun, AllowCreate: job.AllowCreate, Merge: wholeRemote}
+		run.Forges = func(ctx context.Context) error { return s.run()(ctx, "sync", forges, o, s.see(job)) }
 	}
+	var projectErr error
 	if gp := s.config().GithubProject; gp.Owner != "" && gp.Number != 0 {
 		run.Project = func(context.Context) error {
 			s.syncMu.Lock()
 			defer s.syncMu.Unlock()
 			if job.DryRun {
-				return s.check()
+				projectErr = s.check()
+			} else {
+				projectErr = s.apply() // the Project written to with write = true alone
 			}
-			return s.apply() // the Project written to with write = true alone
+			return projectErr
 		}
 	}
-	s.endJob(job, s.b.SyncWhole(context.Background(), run))
+	err := s.b.SyncWhole(context.Background(), run)
+	if projectErr != nil && errors.Is(err, projectErr) && onlyProjectFailed(job) {
+		// the Project's own failure, its step told: it doesn't make the
+		// check unclean, nor the run failed, for git and the forges
+		err = nil
+	}
+	s.endJob(job, err)
+}
+
+// onlyProjectFailed says the Project's is the job's one failed step.
+func onlyProjectFailed(job *forgeJob) bool {
+	for _, st := range job.Steps {
+		if st.State == "failed" && st.Name != store.StepProject {
+			return false
+		}
+	}
+	return true
 }

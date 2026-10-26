@@ -15,9 +15,10 @@ import (
 	"github.com/guilbep/git-board/internal/store/storetest"
 )
 
-// run is a run with these forges, each named by its host's first word.
+// run is a run with these forges, each named by its host's first word,
+// with consent to create (TestCreateNeedsConsent has the run without).
 func run(fs ...*fake.Forge) store.ForgeRun {
-	var r store.ForgeRun
+	r := store.ForgeRun{AllowCreate: true}
 	for _, f := range fs {
 		name, _, _ := strings.Cut(f.Key(), ".")
 		r.Forges = append(r.Forges, store.NamedForge{Name: name, Forge: f})
@@ -206,5 +207,45 @@ func TestScratchRemovesOldCopies(t *testing.T) {
 	}
 	if _, err := os.Stat(recent); err != nil {
 		t.Errorf("the recent copy went: %v", err)
+	}
+}
+
+// Creations on a forge the repository never synced with, or MaxCreate or
+// more on one, wait for consent: the run tells them (held) and creates
+// none there, its other writes made. A check counts them as made, held.
+func TestCreateNeedsConsent(t *testing.T) {
+	t.Parallel()
+	b := storetest.New(t)
+	storetest.NewIssue(t, b, "Export CSV")
+	storetest.NewIssue(t, b, "Import CSV")
+	f := fake.New("github.com/o/r")
+	r := run(f)
+	r.AllowCreate = false
+	var held []store.SyncEvent
+	r.See = func(e store.SyncEvent) {
+		if e.What == "held" {
+			held = append(held, e)
+		}
+	}
+	r.DryRun = true
+	if _, err := b.SyncForges(t.Context(), r); err != nil {
+		t.Fatal(err)
+	}
+	if len(held) != 1 || held[0].Ops != 2 || held[0].Forge != "github" || len(f.All()) != 0 {
+		t.Fatalf("check: held %+v, forge %d issues", held, len(f.All()))
+	}
+	held, r.DryRun = nil, false
+	if _, err := b.SyncForges(t.Context(), r); err != nil {
+		t.Fatal(err)
+	}
+	if len(held) != 1 || len(f.All()) != 0 {
+		t.Fatalf("run without consent: held %+v, forge %d issues", held, len(f.All()))
+	}
+	held, r.AllowCreate = nil, true
+	if _, err := b.SyncForges(t.Context(), r); err != nil {
+		t.Fatal(err)
+	}
+	if len(held) != 0 || len(f.All()) != 2 {
+		t.Fatalf("run with consent: held %+v, forge %d issues", held, len(f.All()))
 	}
 }

@@ -53,7 +53,7 @@ type apiServer struct {
 	job     *forgeJob
 	// the forge sync of forges, or one way of it (mode get, send), its
 	// events told to see: nil, forgeRun
-	runSync func(ctx context.Context, mode string, forges []config.Forge, dryRun bool, see func(store.SyncEvent)) error
+	runSync func(ctx context.Context, mode string, forges []config.Forge, o runOpts, see func(store.SyncEvent)) error
 	// one issue's sync (issuesync.go): nil, issueRun; issueDry is when
 	// each issue's last clean dry run ended
 	runIssueSync func(ctx context.Context, forges []config.Forge, dryRun bool, id string, see func(store.SyncEvent)) error

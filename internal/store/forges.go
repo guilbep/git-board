@@ -15,6 +15,7 @@ import (
 	"github.com/guilbep/git-board/core/forge/github"
 	"github.com/guilbep/git-board/core/forge/gitlab"
 	"github.com/guilbep/git-board/core/gitstore"
+	"github.com/guilbep/git-board/core/oplog"
 	"github.com/guilbep/git-board/core/syncer"
 	"github.com/guilbep/git-board/internal/config"
 )
@@ -74,14 +75,30 @@ type ForgeRun struct {
 	// write to a forge counted and answered without being made. Nothing
 	// changes, here or on a forge.
 	DryRun bool
-	See    func(SyncEvent) // nil hears nothing
+	// AllowCreate is the consent to create issues on a forge the
+	// repository never synced with (no sync entity yet), and to create
+	// MaxCreate or more on one in a run. Without it, the run creates none
+	// there, and tells it (held). Comments and changes to linked issues go
+	// either way. A dry run counts them as created, and tells it too.
+	AllowCreate bool
+	// Merge, in a dry run, is the git remote whose fetched copies
+	// (refs/board-remotes/<Merge>/) are merged into the check's copy
+	// first: the whole sync's check counts what its pull brings in.
+	Merge string
+	See   func(SyncEvent) // nil hears nothing
 }
+
+// MaxCreate is how many creations on one forge, in one run, need consent
+// (ForgeRun.AllowCreate): a forge may email its watchers once per issue.
+const MaxCreate = 50
 
 // SyncEvent is one thing a run did, or a dry run would do, on one forge.
 // Way is pull or push. What is, as syncer.Options.Did says, created,
 // updated, linked, posted or pushed, with Issue the issue's id; or a
 // write to the forge: comment, edit or change, Issue then the forge
-// issue's id; or warning, with Line.
+// issue's id; or warning, with Line; or held: the Ops creations on the
+// forge that wait for consent (ForgeRun.AllowCreate), Line saying why; or
+// left: the forge left out of the run, it couldn't be read, Line why.
 type SyncEvent struct {
 	Forge, Way, What, Issue string
 	Ops                     int // created, updated: the operations pulled
@@ -105,6 +122,13 @@ func (e SyncEvent) Text(dry bool, name string) string {
 		l = "send the changes of " + name
 	case "warning":
 		return e.Line
+	case "left":
+		return "left out of the run: " + e.Line
+	case "held":
+		if dry {
+			return fmt.Sprintf("%d issues to create need consent: %s", e.Ops, e.Line)
+		}
+		return fmt.Sprintf("%d issues not created: they need consent, %s", e.Ops, e.Line)
 	default:
 		return ""
 	}
@@ -156,6 +180,11 @@ func (b *Backend) forgeSync(ctx context.Context, run ForgeRun, way syncWay, issu
 		}
 		defer done()
 		s = scratch
+		if run.Merge != "" {
+			if _, err := oplog.MergeFetched(ctx, s, run.Merge); err != nil {
+				return syncer.Report{}, fmt.Errorf("the check's copy of what %s has: %w", run.Merge, err)
+			}
+		}
 	}
 	names := map[string]string{} // forge key -> name
 	ids := new(int)
@@ -183,6 +212,22 @@ func (b *Backend) forgeSync(ctx context.Context, run ForgeRun, way syncWay, issu
 				way = "push"
 			}
 			see(SyncEvent{Forge: names[key], Way: way, What: what, Issue: id, Ops: ops})
+		},
+		Left: func(key string, why error) {
+			see(SyncEvent{Forge: names[key], What: "left", Line: why.Error()})
+		},
+		Create: func(key string, n int, first bool) bool {
+			why := "the first sync with this forge"
+			switch {
+			case run.AllowCreate:
+				return true
+			case !first && n < MaxCreate:
+				return true
+			case !first:
+				why = fmt.Sprintf("%d or more in one run", MaxCreate)
+			}
+			see(SyncEvent{Forge: names[key], Way: "push", What: "held", Ops: n, Line: why})
+			return run.DryRun // counted as with consent, which the run asks for
 		},
 	}
 	return way(ctx, s, opt, fs...)

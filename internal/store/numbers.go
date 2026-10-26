@@ -493,3 +493,18 @@ func commitCounter(s *gitstore.Store, c Counter, parent gitstore.Hash) (gitstore
 	}
 	return commit, s.UpdateRef(ctx, seqRef, commit, parent)
 }
+
+// numbersToSend says whether this clone's counter is strictly ahead of
+// the remote's: the remote's is one of its ancestors, so sending ours
+// drops nothing there. A remote without a counter numbers nothing.
+func (b *Backend) numbersToSend(remote string) (bool, error) {
+	theirs, err := b.remoteSeq(remote)
+	if err != nil || theirs == gitstore.ZeroHash {
+		return false, err
+	}
+	ours, err := b.s.Ref(seqRef)
+	if err != nil || ours == gitstore.ZeroHash || ours == theirs {
+		return false, err
+	}
+	return b.behind(theirs, ours)
+}
