@@ -159,6 +159,7 @@ export interface Conflict {
 
 export interface SyncReport {
   checked_at: string;
+  title: string; // the Project's, as GitHub answered
   conflicts: Conflict[];
   label_changes: number;
   project_writes: number;
@@ -182,6 +183,16 @@ export function checkSync(): Promise<SyncStatus> {
 
 export function applySync(): Promise<SyncStatus> {
   return request('/api/sync/apply', { method: 'POST' });
+}
+
+// setGithubProject writes [github-project] (Settings › Sync's Project line),
+// write = true kept; the answer is the new status, not checked yet
+export function setGithubProject(owner: string, number: number): Promise<SyncStatus> {
+  return request('/api/github-project', json('PUT', { owner, number }));
+}
+
+export function removeGithubProject(): Promise<SyncStatus> {
+  return request('/api/github-project', json('DELETE', {}));
 }
 
 export function resolveConflict(number: number, field: string, keep: 'git-board' | 'project'): Promise<SyncStatus> {

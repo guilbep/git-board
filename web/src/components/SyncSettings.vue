@@ -7,7 +7,8 @@
      creates issues on a forge never synced with, or 50 or more at once:
      the server holds them without it. Below, what a sync would do or did, per
      forge. #/settings/sync?add=1 opens "Add a forge", for one no remote
-     names. -->
+     names. The Project's line sets it up, as git board bridge configure
+     does: a number or the Project's address, saved, then checked at once. -->
 <template>
   <div class="set-panel sy">
     <div class="sy-head">
@@ -40,16 +41,38 @@
             <td />
           </tr>
           <template v-for="row in rows" :key="row.f?.name ?? 'project'">
-            <tr v-if="!row.f" class="sy-sub">
-              <td><span class="sy-kind">GitHub Project</span></td>
-              <td class="sy-wrap">
-                <template v-if="st.project.project">{{ st.project.project }}</template>
-                <template v-else>None. <code>git board bridge configure --owner … --project …</code> sets one up.</template>
-              </td>
-              <td>{{ st.project.project ? (st.project.write ? 'Read and written' : 'Read only') : '—' }}</td>
-              <td>{{ projectLine }} <router-link v-if="st.project.project" to="/conflicts">Conflicts</router-link></td>
-              <td />
-            </tr>
+            <template v-if="!row.f">
+              <tr class="sy-sub">
+                <td><span class="sy-kind">GitHub Project</span></td>
+                <td class="sy-wrap">
+                  <template v-if="st.project.project && !editingProject">
+                    {{ projectName }}<button type="button" class="gb-linkbtn sy-small" :disabled="projectBusy || running" @click="changeProject">Change</button>
+                    <div v-if="st.project.last?.title" class="sy-note">{{ st.project.last.title }}</div>
+                  </template>
+                  <form v-else class="sy-project" @submit.prevent="saveProject">
+                    <label for="sy-project">Project number</label>
+                    <input id="sy-project" v-model="projectInput" class="epfl-input" placeholder="40" autocomplete="off" data-1p-ignore />
+                    <button type="submit" class="epfl-btn epfl-btn-primary epfl-btn-sm" :disabled="!projectDraft || projectBusy || running">Save</button>
+                    <button v-if="st.project.project" type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" @click="editingProject = false">Cancel</button>
+                    <p class="sy-note sy-project-help">
+                      {{ projectHint }} In a terminal: <code>git board bridge configure --owner {{ projectDraft?.owner || githubOwner || '…' }} --project {{ projectDraft?.number ?? '…' }}</code>.
+                      <button type="button" class="gb-linkbtn" @click="openProjectDoc">[github-project] in the configuration guide</button>
+                    </p>
+                  </form>
+                  <div v-if="projectError" class="sy-err" role="alert">{{ projectError }}</div>
+                </td>
+                <td>{{ st.project.project ? (st.project.write ? 'Read and written' : 'Read only') : '—' }}</td>
+                <td>{{ projectLine }} <router-link v-if="st.project.project" to="/conflicts">Conflicts</router-link></td>
+                <td><button v-if="st.project.project" type="button" class="gb-linkbtn" :disabled="projectBusy || running" @click="confirmingRemove = projectKey">Remove</button></td>
+              </tr>
+              <tr v-if="confirmingRemove === projectKey" class="sy-confirm-row">
+                <td colspan="5">
+                  <p role="alert"><b>Remove the GitHub Project {{ projectName }}?</b> The sync leaves it out from then on. The labels it set stay on the issues.</p>
+                  <button type="button" class="epfl-btn epfl-btn-primary epfl-btn-sm" :disabled="projectBusy" @click="removeProject">Remove the Project</button>
+                  <button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" @click="confirmingRemove = ''">Cancel</button>
+                </td>
+              </tr>
+            </template>
             <template v-else>
               <tr>
                 <td><b>{{ row.f.name }}</b> <span class="sy-kind">{{ kindName(row.f.target) }}</span></td>
@@ -184,6 +207,16 @@
       </section>
     </q-dialog>
 
+    <q-dialog v-model="projectDocOpen">
+      <section class="gb-dialog" role="dialog" aria-modal="true" aria-labelledby="sy-doc-title">
+        <header class="gb-dialog-head">
+          <h2 id="sy-doc-title" class="h5">{{ projectDoc?.title ?? 'GitHub Project' }}</h2>
+          <button type="button" class="gb-icon-btn" aria-label="Close" @click="projectDocOpen = false"><GbIcon name="close" /></button>
+        </header>
+        <div class="gb-dialog-body"><div v-if="projectDoc" class="gb-md sy-doc" v-html="projectDoc.html" /></div>
+      </section>
+    </q-dialog>
+
     <AddForgeDialog v-model="adding" @added="reload" @guide="guideOpen = true" />
     <ForgesGuide v-model="guideOpen" />
   </div>
@@ -192,13 +225,13 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { getWhole, removeBridge, setBridgeSync, startWhole, type Bridge, type WholeStatus } from '@/api/board';
+import { checkSync, getConfigDocs, getWhole, removeBridge, removeGithubProject, setBridgeSync, setGithubProject, startWhole, type Bridge, type DocSection, type WholeStatus } from '@/api/board';
 import { forgeStatus, loadForges, onStep } from '@/forges';
 import { forgeLabel, kindName } from '@/issuesync';
 import { message } from '@/issue';
 import { debounced, onLive } from '@/live';
 import { when } from '@/me';
-import { aheadWords, checkWords, pendingWords, plural, runWords, stepLine } from '@/ways';
+import { aheadWords, checkWords, pendingWords, plural, readProject, runWords, stepLine } from '@/ways';
 import AddForgeDialog from '@/components/AddForgeDialog.vue';
 import ForgesGuide from '@/components/ForgesGuide.vue';
 import GbIcon from '@/components/GbIcon.vue';
@@ -291,10 +324,76 @@ function forgeLine(f: Bridge): string {
 const projectLine = computed(() => {
   const p = st.value?.project;
   if (!p?.project) return '—';
-  if (!p.last) return 'Not checked yet.';
+  if (!p.last) return projectBusy.value ? 'Checking…' : 'Not checked yet.';
   const pending = pendingWords(p.last);
   return `${plural(p.last.conflicts.length, 'conflict')}, checked ${when(p.last.checked_at, true)}${pending ? `; a sync would ${pending}` : ''}.`;
 });
+
+// the Project's line: its field, open while none is set or on Change; a
+// bare number is a Project of the GitHub row's owner, EPFL-ENAC of
+// EPFL-ENAC/wiki
+const projectKey = '[github-project]'; // confirmingRemove's, no forge's name
+const editingProject = ref(false);
+const projectInput = ref('');
+const projectBusy = ref(false);
+const projectError = ref('');
+const projectDocOpen = ref(false);
+const projectDoc = ref<DocSection | null>(null);
+const githubOwner = computed(() => st.value?.forges.find((f) => f.target === 'github')?.project.split('/')[0] ?? '');
+const projectDraft = computed(() => readProject(projectInput.value, githubOwner.value));
+const projectName = computed(() => st.value?.project.project.replace('/', ' #') ?? '');
+const projectHint = computed(() => {
+  if (!githubOwner.value) return 'No GitHub forge to take the owner from: paste the Project’s address.';
+  return projectInput.value.trim() && !projectDraft.value ? 'A number, or the Project’s address on GitHub.' : '';
+});
+
+function changeProject() {
+  const [owner, number] = (st.value?.project.project ?? '').split('/');
+  projectInput.value = owner === githubOwner.value ? (number ?? '') : '';
+  editingProject.value = true;
+}
+
+async function saveProject() {
+  const p = projectDraft.value;
+  if (!p || !st.value) return;
+  projectBusy.value = true;
+  projectError.value = '';
+  try {
+    st.value.project = await setGithubProject(p.owner, p.number);
+    editingProject.value = false;
+    projectInput.value = '';
+    // checked at once: the Project answers with its title, or why not
+    await checkSync().catch((e) => (projectError.value = `${projectName.value} didn’t answer: ${message(e)}`));
+    await reload();
+  } catch (e) {
+    projectError.value = `Not saved: ${message(e)}`;
+  } finally {
+    projectBusy.value = false;
+  }
+}
+
+async function removeProject() {
+  projectBusy.value = true;
+  projectError.value = '';
+  try {
+    await removeGithubProject();
+    confirmingRemove.value = '';
+    await reload();
+  } catch (e) {
+    projectError.value = `Not removed: ${message(e)}`;
+  } finally {
+    projectBusy.value = false;
+  }
+}
+
+async function openProjectDoc() {
+  projectDocOpen.value = true;
+  try {
+    projectDoc.value ??= (await getConfigDocs()).find((d) => d.id === 'github') ?? null;
+  } catch (e) {
+    error.value = message(e);
+  }
+}
 
 async function reload() {
   try {
@@ -402,4 +501,11 @@ onMounted(() => {
 .sy-check { display: flex; gap: .5rem; align-items: center; margin-top: .5rem; }
 .sy-check input { accent-color: var(--primary-hover); }
 .gb-linkbtn { padding: 0; border: 0; background: none; color: var(--fg); text-decoration: underline; cursor: pointer; font: inherit; }
+.gb-linkbtn.sy-small { margin-left: .5rem; font-size: .8125rem; }
+.sy-project { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
+.sy-project .epfl-input { flex: 0 1 16rem; min-width: 0; }
+.sy-project-help { flex-basis: 100%; }
+.sy-project-help .gb-linkbtn { color: inherit; }
+.sy-doc :deep(th), .sy-doc :deep(td code) { white-space: nowrap; }
+.sy-err { margin-top: .25rem; font-size: .8125rem; color: var(--danger-fg); }
 </style>
