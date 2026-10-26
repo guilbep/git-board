@@ -66,6 +66,10 @@
       </router-link>
     </div>
   </header>
+  <p v-if="me?.unswitched" class="epfl-alert epfl-alert-warning app-unswitched" role="alert">
+    <b>This repository’s issues are still git-bug’s</b> (in <code>refs/bugs</code>), so the board shows none of them.
+    Move them once, in a terminal: <code>git board switch</code> says what it would do, <code>git board switch --apply</code> does it, then <code>git board sync</code>.
+  </p>
   <KeyboardHelp />
   <CommandPalette :views="views" />
   <LiveNotice />
@@ -213,6 +217,7 @@ onMounted(() => {
 
 /* the header stays on top while the page scrolls */
 .app-header { position: sticky; top: 0; z-index: 30; }
+.app-unswitched { margin: 0; border-radius: 0; }
 /* the nav takes what's left, its views never wrap: fit() hides the rest */
 .app-header .epfl-nav { min-width: 0; align-items: center; }
 .app-header .epfl-nav > a, .nav-more summary { flex: none; white-space: nowrap; }

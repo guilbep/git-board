@@ -379,3 +379,22 @@ func TestForgeSyncFindsTheForges(t *testing.T) {
 		t.Fatalf("check %+v", st.Job)
 	}
 }
+
+// A repository whose issues are still git-bug's, with no switch mark, says
+// so with who you are: the header tells to run the switch.
+func TestMeSaysUnswitched(t *testing.T) {
+	t.Parallel()
+	ts, s := newIssueServer(t)
+	dir := s.b.GitDir()
+	commit := strings.TrimSpace(storetest.Git(t, dir, "commit-tree", "4b825dc642cb6eb9a060e54bf8d69288fbee4904", "-m", "a git-bug bug"))
+	storetest.Git(t, dir, "update-ref", "refs/bugs/"+strings.Repeat("a", 64), commit)
+	var me meResponse
+	if call(t, "GET", ts.URL+"/api/me", nil, &me); !me.Unswitched {
+		t.Fatalf("refs/bugs, no mark: %+v", me)
+	}
+	storetest.Git(t, dir, "update-ref", "refs/board/switched", commit)
+	me = meResponse{}
+	if call(t, "GET", ts.URL+"/api/me", nil, &me); me.Unswitched {
+		t.Fatalf("switched: %+v", me)
+	}
+}

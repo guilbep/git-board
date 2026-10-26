@@ -291,6 +291,7 @@ export function changeLabels(id: string, add: string[], remove: string[]): Promi
 export interface MeResponse {
   me: Person | null;
   identities: Person[] | null;
+  unswitched?: boolean; // the issues are still git-bug's (refs/bugs): run git board switch
 }
 
 export function getMe(): Promise<MeResponse> {
