@@ -257,6 +257,11 @@ func (s *apiServer) handleReleases(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer done()
+	// ?local: what this clone has, at once; the page asks for it first, then
+	// for the fetched one, which takes the network's time
+	if r.URL.Query().Has("local") {
+		run.Offline = true
+	}
 	st, err := run.Status(r.Context())
 	done()
 	if err != nil {

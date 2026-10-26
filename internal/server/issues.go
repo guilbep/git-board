@@ -286,6 +286,9 @@ func (s *apiServer) handleMarkdown(w http.ResponseWriter, r *http.Request) {
 type meResponse struct {
 	Me         *store.Person  `json:"me"`
 	Identities []store.Person `json:"identities"`
+	// Unswitched: the issues are still git-bug's, in refs/bugs, and no
+	// switch marked the repository: the board shows none of them
+	Unswitched bool `json:"unswitched,omitempty"`
 }
 
 func (s *apiServer) writeMe(w http.ResponseWriter) {
@@ -301,6 +304,7 @@ func (s *apiServer) writeMe(w http.ResponseWriter) {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
+	res.Unswitched = errors.Is(s.b.Switched(), store.ErrNotSwitched)
 	writeJSON(w, http.StatusOK, res)
 }
 

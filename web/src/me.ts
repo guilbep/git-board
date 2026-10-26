@@ -1,5 +1,5 @@
-// Who writes from git-board: the repository's git-bug identity, shared by
-// the header, the composer and the new-issue dialog.
+// Who writes from git-board, shared by the header, the composer and the
+// new-issue dialog; and whether the repository still waits for its switch.
 import { ref } from 'vue';
 import { getMe, type MeResponse } from '@/api/board';
 

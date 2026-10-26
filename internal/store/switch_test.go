@@ -220,6 +220,34 @@ func TestSwitchWithoutForges(t *testing.T) {
 	}
 }
 
+// A switch tells its stages as they start, then each issue it comes to.
+func TestSwitchTellsItsProgress(t *testing.T) {
+	t.Parallel()
+	b, run, _ := switchSetup(t)
+	run.Apply, run.Force = true, true
+	var stages []string
+	ticks := 0
+	run.Progress = func(stage string, n int) {
+		if n == 0 {
+			stages = append(stages, stage)
+		} else {
+			ticks++
+		}
+	}
+	if _, err := b.Switch(t.Context(), run); err != nil {
+		t.Fatal(err)
+	}
+	got := strings.Join(stages, " | ")
+	for _, want := range []string{"copying the repository", "pulling the issues from the forges", "counting what the next sync would do", "applying"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("stages %q: want %q", got, want)
+		}
+	}
+	if ticks == 0 {
+		t.Errorf("no issue counted")
+	}
+}
+
 // A forge left out of the switch is a blocker only --force lifts: its
 // mirrors aren't joined, and its creations not counted.
 func TestSwitchWithAForgeLeftOut(t *testing.T) {

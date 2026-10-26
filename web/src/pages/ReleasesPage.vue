@@ -15,7 +15,8 @@
       </div>
     </div>
 
-    <p v-if="!data && !error" class="gb-hint" role="status">Fetching the releases and the overlays…</p>
+    <p v-if="!data && !error" class="gb-hint" role="status">Reading the releases…</p>
+    <p v-else-if="fetching" class="gb-hint" role="status">Checking origin and the overlays for newer releases…</p>
     <p v-if="error" class="epfl-alert epfl-alert-danger" role="alert">{{ error }}</p>
     <p v-if="actionError" class="epfl-alert epfl-alert-danger" role="alert"><b>Not started.</b> {{ actionError }}</p>
 
@@ -240,9 +241,13 @@ const lastTargets = (r: ReleaseRow) => {
   return last && r.runsIn.includes(last.name) && last.targets.length > 1 ? last.targets.map((t) => t.name).join(', ') : '';
 };
 
-async function reload() {
+// local: this clone's releases at once, which the fetched ones then replace;
+// fetching says the fetch runs
+const fetching = ref(false);
+async function reload(local = false) {
+  if (!local) fetching.value = true;
   try {
-    const r = await getReleases();
+    const r = await getReleases(local);
     if (r.job?.state === 'running') watched.value = true;
     else actionError.value = ''; // a refusal while a job ran is stale once none runs
     data.value = r;
@@ -252,7 +257,9 @@ async function reload() {
       if ((setup.value.note || !setup.value.binaries.length) && !doc.value) doc.value = (await getConfigDocs()).find((d) => d.id === 'release')?.html ?? '';
     }
   } catch (e) {
-    error.value = message(e);
+    if (!local) error.value = message(e); // the fetch says what's wrong, if it is
+  } finally {
+    if (!local) fetching.value = false;
   }
 }
 
@@ -335,7 +342,8 @@ onMounted(async () => {
     (v) => (viewNames.value = Object.keys(v).sort()),
     () => {},
   );
-  await reload();
+  await reload(true); // this clone's, at once
+  await reload(); // then origin's and the overlays'
 });
 </script>
 
