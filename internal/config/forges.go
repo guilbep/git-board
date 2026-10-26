@@ -14,7 +14,7 @@ import (
 
 // Forge is a [forges.<name>] table: a forge project the issues sync with.
 // Its token is never here: the environment or git's credential helper
-// holds it (spec/docs/forges.md).
+// holds it (docs/spec/guide/forges.md).
 type Forge struct {
 	Name string `toml:"-" json:"name"`
 	Kind string `toml:"kind" json:"kind"` // github, gitlab

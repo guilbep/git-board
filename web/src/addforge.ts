@@ -5,7 +5,7 @@
 import type { Credential } from './api/board';
 
 // the two forges the sync supports (the server refuses the others); GET
-// /api/forges lists forges, not their kinds (token: what docs/forges.md
+// /api/forges lists forges, not their kinds (token: what docs/guide/forges.md
 // says it needs, in short)
 export const forges = [
   { target: 'github', name: 'GitHub', short: 'gh', placeholder: 'https://github.com/owner/repo', token: 'a classic token with the repo scope' },

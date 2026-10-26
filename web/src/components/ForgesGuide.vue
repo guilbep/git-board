@@ -1,4 +1,4 @@
-<!-- How forges work: docs/forges.md whole (GET /api/forges/docs), the
+<!-- How forges work: docs/guide/forges.md whole (GET /api/forges/docs), the
      same text readers find on GitHub. -->
 <template>
   <q-dialog v-model="open" @show="load">

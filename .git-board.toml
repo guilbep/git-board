@@ -1,6 +1,6 @@
 # git-board's own board: its issues are git-bug data in this repository
 # (refs/bugs, pushed with `git bug push origin`), managed with git-board
-# itself. Every key is explained in docs/configuration.md, and beside the
+# itself. Every key is explained in docs/guide/configuration.md, and beside the
 # editor in Settings → Project configuration.
 
 [fields.status]
@@ -30,12 +30,12 @@ single = true
 numeric = true
 options = ["1", "2", "4", "8", "16"]
 
-# the project's people by role (docs/configuration.md, Roles): every issue
+# the project's people by role (docs/guide/configuration.md, Roles): every issue
 # takes them unless it sets its own, e.g. lead-dev:someone
 [roles]
 lead-dev = "guilbep"
 
-# the ontology's links and dates (docs/configuration.md, Types)
+# the ontology's links and dates (docs/guide/configuration.md, Types)
 [fields.due]
 type = "date"
 
@@ -57,7 +57,7 @@ filter = "is:open status:draft"
 layout = "table"
 filter = "assignee:@me is:open -status:done"
 
-# git-board's own binary release (docs/configuration.md, Release): a cut
+# git-board's own binary release (docs/guide/configuration.md, Release): a cut
 # runs the build in a clean checkout of the tag and publishes the archives
 # as the GitHub release. Enable binary release wrote build = "make dist";
 # a clean checkout has no web/node_modules, so the build installs them.

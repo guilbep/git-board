@@ -1,5 +1,5 @@
 <!-- Settings › Numbers: the project's own numbers, GB-39
-     (docs/configuration.md, Numbers). Not on yet: what they are, then a
+     (docs/guide/configuration.md, Numbers). Not on yet: what they are, then a
      form beside its guidelines: a prefix from the repository's name, a
      start above every number known (GitHub asked), what the issues
      become, and a confirm naming what is pushed where. On: where they

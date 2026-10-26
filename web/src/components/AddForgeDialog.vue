@@ -2,7 +2,7 @@
      GitLab, the project (its address, a short name, sync both ways or not), the
      token (stored or pasted), then the check: the server asks the forge
      whether the token sees the project before keeping anything. Beside
-     each step, the section of docs/forges.md it needs. -->
+     each step, the section of docs/guide/forges.md it needs. -->
 <template>
   <q-dialog v-model="open">
     <section class="af" aria-labelledby="af-title">
@@ -138,7 +138,7 @@ const docs = ref<DocSection[]>([]);
 
 const forge = computed(() => forges.find((f) => f.target === draft.target) ?? forges[0]!);
 const matching = computed(() => matchingCredentials(creds.value, draft.target, draft.url));
-// beside each step, its section of docs/forges.md: where your issues go,
+// beside each step, its section of docs/guide/forges.md: where your issues go,
 // sync on or off, the tokens, what adding does (ids pinned by
 // TestForgeDocsComeInSections)
 const helpIds = ['where', 'sync', 'tokens', 'adding'];

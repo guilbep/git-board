@@ -2,7 +2,7 @@
      runs. The tools line, then "Set up wtx": what wtx read in the
      repository (wtx init --edit), corrected here, previewed through wtx
      and written by it. git-board renders no TOML: wtx is the only writer
-     of wtx.toml and .wt.toml (docs/configuration.md, Worktrees). -->
+     of wtx.toml and .wt.toml (docs/guide/configuration.md, Worktrees). -->
 <template>
   <div class="set-panel wk">
     <h2 class="h4">Worktrees</h2>

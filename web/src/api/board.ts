@@ -106,7 +106,7 @@ export function getColors(): Promise<Record<string, Record<string, string>>> {
 
 // Unsorted: the page sorts (facets.sortIssues), by option order where the
 // server would sort alphabetically. filter: the board's, ⌘K's, a view's —
-// one syntax (docs/configuration.md, Filters); "" is every issue.
+// one syntax (docs/guide/configuration.md, Filters); "" is every issue.
 export function getIssues(filter: string, group = ''): Promise<Bucket[]> {
   const params = new URLSearchParams({ filter });
   if (group) params.set('group', group);
@@ -611,7 +611,7 @@ export function enableRelease(s: Pick<ReleaseSetup, 'binaries' | 'platforms' | '
   return request('/api/releases/setup', json('POST', s));
 }
 
-// docs/configuration.md, a section per ## heading, rendered.
+// docs/guide/configuration.md, a section per ## heading, rendered.
 export interface DocSection {
   id: string;
   title: string;
@@ -622,7 +622,7 @@ export function getConfigDocs(): Promise<DocSection[]> {
   return request('/api/config/docs');
 }
 
-// docs/forges.md, in sections: how forges work
+// docs/guide/forges.md, in sections: how forges work
 export function getForgeDocs(): Promise<DocSection[]> {
   return request('/api/forges/docs');
 }

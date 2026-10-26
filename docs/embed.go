@@ -5,8 +5,8 @@ package docs
 
 import _ "embed"
 
-//go:embed configuration.md
+//go:embed guide/configuration.md
 var Configuration string
 
-//go:embed forges.md
+//go:embed guide/forges.md
 var Forges string

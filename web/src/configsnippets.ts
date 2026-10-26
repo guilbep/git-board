@@ -42,7 +42,7 @@ export function addSprint(text: string, today = new Date()): Snippet {
   return { text: out, select: [at, at + slug.length] };
 }
 
-// docSectionAt names the reference section (docs/configuration.md, one per
+// docSectionAt names the reference section (docs/guide/configuration.md, one per
 // ## heading) for the table the cursor is in: a view's filter line is the
 // filter syntax, a colors table the colors.
 export function docSectionAt(text: string, pos: number): string {

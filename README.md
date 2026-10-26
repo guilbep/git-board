@@ -27,13 +27,12 @@ from a clone:
 git clone git@github.com:guilbep/git-board.git
 cd git-board
 git checkout v0.5.0                 # or stay on main
-make web-build install              # git-board, the web app inside
+make install                        # the web app built, then git-board with it inside
 git-board --help
 ```
 
-`make install` alone builds `git-board` without the web app (its pages
-are embedded at build time from `web/dist`): its web UI is then an empty
-page.
+`make install` builds the web app first: its pages are embedded at build
+time from `web/dist`. `make` alone lists every target.
 
 From a clone, `make install-latest` installs the latest release's binary
 instead, built with the web app. It downloads the archive for this machine
@@ -125,8 +124,8 @@ a person across every open issue: Needs you, Agents, Waiting on others, To
 send, Since the last retro. From both, Start an agent runs
 [wtx](https://github.com/EPFL-ENAC/wtx) on the issue: a worktree, a tmux
 session and a prompt with its step and gate; Settings › Worktrees writes
-`wtx.toml`. `[cycle]` in [docs/configuration.md](docs/configuration.md#cycle),
-agents in [Worktrees](docs/configuration.md#worktrees).
+`wtx.toml`. `[cycle]` in [docs/guide/configuration.md](docs/guide/configuration.md#cycle),
+agents in [Worktrees](docs/guide/configuration.md#worktrees).
 
 ```toml
 [repos]
@@ -179,7 +178,7 @@ filter = "assignee:@me is:open"
 ```
 
 Every key, with what it does and its default — fields, colors, views,
-filters, sprints, the GitHub Project, attachments: **[docs/configuration.md](docs/configuration.md)**.
+filters, sprints, the GitHub Project, attachments: **[docs/guide/configuration.md](docs/guide/configuration.md)**.
 The settings page shows the same reference next to its editor, at the
 section of the table under the cursor.
 
@@ -224,7 +223,7 @@ git-board lint
 
 # whether a commit's checks are proven: the signed results in
 # refs/notes/ci/*, against the base branch's [cycle.checks] (exit 1 if not;
-# docs/configuration.md, Tests and checks)
+# docs/guide/configuration.md, Tests and checks)
 git-board verify
 git-board verify fix/2518-retry --base origin/main
 
@@ -234,7 +233,7 @@ git-board sync --check
 git-board sync
 git-board sync --git ../co2-calculator ../git-time
 
-# the project's own numbers, CO2-3075 (docs/configuration.md, Numbers)
+# the project's own numbers, CO2-3075 (docs/guide/configuration.md, Numbers)
 git-board numbers init --prefix CO2 --start 3052
 git-board numbers
 
@@ -281,7 +280,7 @@ told, and the others go on. `--check` runs the same steps writing nothing;
 `--git` syncs with git alone, a pull then a push. Defaults to the current
 directory if no paths are given; keeps going past a path that fails so one
 broken repo doesn't block the rest, then reports every failure together at
-the end. [docs/forges.md](docs/forges.md) says how the forges sync.
+the end. [docs/guide/forges.md](docs/guide/forges.md) says how the forges sync.
 
 Takes explicit local paths, **not** `.git-board.toml`'s `[repos]` list —
 that table holds `"owner/repo"` display names, not filesystem locations,
@@ -413,7 +412,7 @@ project = { comite = "Comité Spécialisé", qa = "QA Validation" }
 Views, the `ls`/`tui` filter argument, the web UI's Filter box and ⌘K
 share one syntax:
 `status:ready -prio:p3 assignee:@me is:open "car sharing"`. Every
-qualifier: [Filters in docs/configuration.md](docs/configuration.md#filters).
+qualifier: [Filters in docs/guide/configuration.md](docs/guide/configuration.md#filters).
 
 ## Linting (`git-board lint`)
 
@@ -624,14 +623,14 @@ opens the issue on each forge), and the boxes pick rows for the bulk
 bar: set a field, add an assignee or close them all.
 The side column's **Development** lists the branches naming the issue
 (`fix/2518-…`), ahead and behind the base, in it or not (merged, or squashed in), and **Create
-branch** gives the commands to copy (`[branches]`, docs/configuration.md).
+branch** gives the commands to copy (`[branches]`, docs/guide/configuration.md).
 When origin is on GitHub, a branch there shows its pull request, its checks
 (required first) and approvals, and **Open PR** or **Merge into dev**, done on
 GitHub with your own token.
 The full issue page's **Changes** tab shows the branch's diff, file by file,
 with line comments, replies, resolve, and Comment / Approve / Request
 changes; the sync mirrors them to the open pull request and brings its
-comments back (docs/configuration.md, Branches).
+comments back (docs/guide/configuration.md, Branches).
 The panel opens at the side, resized by dragging its left edge
 (double-click: the default width), or wide over the blurred board with
 2.5rem around it: the expand button or `f` switches; this browser
@@ -692,7 +691,7 @@ as you type (the line where it breaks, keys git-board doesn't know),
 a diff to review, and saved without a restart, beside its reference (a
 save is refused when the file changed on disk since the page read it);
 **Numbers**, the project's own (`CO2-3075`), started and run from there
-beside their guidelines (docs/configuration.md, Numbers);
+beside their guidelines (docs/guide/configuration.md, Numbers);
 **Attachments**, and **You**, who you write as and the appearance.
 **Sync** (`#/settings/sync`, the header's Sync button, which counts what
 waits to go out) is where your issues go, one table with a row per place:
@@ -712,7 +711,7 @@ While it runs, edits wait and are saved after it. **+ Add a forge**, for
 one no remote names, goes in four steps: the forge, the project, a stored
 or pasted token, and the check the forge makes before anything is kept
 (`#/settings/sync?add=1` opens it). "How forges work" shows
-[docs/forges.md](docs/forges.md).
+[docs/guide/forges.md](docs/guide/forges.md).
 
 One issue syncs on its own from its panel ("On the forges"): **Send now**
 when it has changes waiting, **Refresh from forges** otherwise, a few

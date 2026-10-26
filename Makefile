@@ -1,4 +1,4 @@
-.PHONY: help build test lint fmt vet licences ci install install-latest web-dev web-check web-build dist spec spec-serve clean
+.PHONY: help build test lint fmt vet licences ci install install-latest web-dev web-check web-build dist docs docs-serve clean
 
 # The public targets, each with its ## line: a bare make prints them.
 help: ## List the make targets
@@ -72,13 +72,14 @@ dist: web-build ## Build the release archives and checksums.txt into dist/
 		rm -rf dist/$$d; echo "dist/$$d"; \
 	done; cd dist && shasum -a 256 * > checksums.txt
 
-# The core's spec, as a site in spec/site/. Strict: a broken link or a
-# missing page fails the build.
-spec: ## Build the spec site into spec/site/ (strict: a broken link fails)
-	uvx --from zensical==0.0.72 zensical build --strict -f spec/zensical.toml
+# The docs site (zensical.toml: docs/, the guide, the core's spec, the
+# decisions) in site/. Strict: a broken link or a missing page fails the
+# build.
+docs: ## Build the docs site (guide, spec, decisions) into site/ (strict)
+	uvx --from zensical==0.0.72 zensical build --strict
 
-spec-serve: ## Preview the spec site on localhost, rebuilt on save
-	uvx --from zensical==0.0.72 zensical serve -f spec/zensical.toml
+docs-serve: ## Preview the docs site on localhost, rebuilt on save
+	uvx --from zensical==0.0.72 zensical serve
 
-clean: ## Remove the built sites
-	rm -rf site/ spec/site/
+clean: ## Remove the built site
+	rm -rf site/

@@ -16,7 +16,7 @@ import (
 	"github.com/guilbep/git-board/internal/store"
 )
 
-// The project's own numbers from Settings › Numbers (docs/configuration.md,
+// The project's own numbers from Settings › Numbers (docs/guide/configuration.md,
 // Numbers): where they stand, starting them, numbering what origin has.
 // Only these writes, when asked, push: refs/board/seq, to origin.
 

@@ -1,14 +1,31 @@
-# The core's spec. Build it with `make spec`.
+# The docs site: the guide, the core's spec, the decisions. Build it with
+# `make docs`, preview it with `make docs-serve`. docs/prd/ and
+# docs/implementation-plan.md are the history, in the folder but not on
+# the site.
 [project]
-site_name = "git-board core"
+site_name = "git-board"
+docs_dir = "docs"
+site_dir = "site"
+# docs/embed.go embeds the guide in the binary: not a page, and a copy in
+# site/ would be a Go package of the module
+exclude_docs = "*.go"
 nav = [
   { "Overview" = "index.md" },
-  { "Data model" = "data-model.md" },
-  { "Storage" = "storage.md" },
-  { "Queries and search" = "queries.md" },
-  { "Sync" = "sync.md" },
-  { "Forges" = "forges.md" },
-  { "Decisions" = "decisions.md" },
+  { "Guide" = [
+    { "Configuration" = "guide/configuration.md" },
+    { "Forges" = "guide/forges.md" },
+  ] },
+  { "Spec" = [
+    { "Data model" = "spec/data-model.md" },
+    { "Storage" = "spec/storage.md" },
+    { "Queries and search" = "spec/queries.md" },
+    { "Sync" = "spec/sync.md" },
+    { "Forges" = "spec/forges.md" },
+  ] },
+  { "Decisions" = [
+    { "The spec's decisions" = "spec/decisions.md" },
+    { "ADR 0001: check results are signed git notes" = "adr/0001-check-results-are-signed-git-notes.md" },
+  ] },
 ]
 
 # The theme and the Markdown extensions are `zensical new`'s defaults.

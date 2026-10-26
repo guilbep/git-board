@@ -46,7 +46,7 @@ type File struct{ Mode, Blob, Path string }
 // Files are the tracked files of commit that the globs match (git's glob
 // pathspecs, `**/*.go`), sorted by path; no globs is every file. It is
 // `git --glob-pathspecs diff-tree -r` from the empty tree, which a
-// reviewer's script runs too (docs/configuration.md).
+// reviewer's script runs too (docs/guide/configuration.md).
 func Files(ctx context.Context, dir, commit string, globs []string) ([]File, error) {
 	if err := rev(commit); err != nil {
 		return nil, err
