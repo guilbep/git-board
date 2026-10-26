@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/guilbep/git-board/internal/config"
+	"github.com/guilbep/git-board/internal/ghbridge"
 	"github.com/guilbep/git-board/internal/ghlabels"
 	"github.com/guilbep/git-board/internal/lint"
 	"github.com/guilbep/git-board/internal/store"
@@ -132,7 +133,7 @@ func runCreateLabels(out io.Writer, cfg *config.Config, apply bool) error {
 			failed = true
 			continue
 		}
-		changes := ghlabels.Plan(repo, desired, existing)
+		changes := ghlabels.Plan(repo, desired, existing, ghbridge.HeldLabels(cfg))
 		if len(changes) == 0 {
 			fmt.Fprintf(out, "%s: all labels present\n", repo)
 			continue

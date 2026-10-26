@@ -1,10 +1,10 @@
 // Settings › Labels, the parts that are only logic. Pure, no "@/" imports:
 // node runs labels.test.ts on it.
 
-export type LabelState = 'same' | 'color' | 'description' | 'missing';
+export type LabelState = 'same' | 'color' | 'description' | 'missing' | 'held';
 
 // a label's state on a GitHub repository (ghlabels.State)
-export const stateText: Record<LabelState, string> = { same: 'Same', color: 'Color differs', description: 'Description differs', missing: 'Missing' };
+export const stateText: Record<LabelState, string> = { same: 'Same', color: 'Color differs', description: 'Description differs', missing: 'Missing', held: 'In the Project' };
 
 interface Label { name: string; color: string; description: string }
 

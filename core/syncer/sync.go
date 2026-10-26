@@ -30,6 +30,10 @@ type Options struct {
 	// Local keeps a comment in git-board: one whose metadata it says true
 	// for is never posted. Nil posts every comment.
 	Local func(meta map[string]string) bool
+	// Held keeps a label in git-board on the project named by key: never
+	// sent there, and the project's own copy of it neither pulled nor
+	// removed. Nil holds none.
+	Held func(key, label string) bool
 	// Did hears each issue the run wrote for, as Report counts them, on the
 	// project named by its key: "created" and "updated" with the number of
 	// operations pulled, "linked" for a forge issue found by its marker or

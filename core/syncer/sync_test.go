@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -286,6 +287,59 @@ func TestLocalDidAndRecords(t *testing.T) {
 	}
 	if fc := r[0].Posted[is.Comments[0].ID]; r[0].Seen["comment:"+fc] != "posted" {
 		t.Errorf("seen %q, want the posted text unwrapped", r[0].Seen["comment:"+fc])
+	}
+}
+
+// A held label stays in git-board: never sent to its project, and the
+// project's own copy, an older sync's, neither pulled nor removed.
+func TestHeldLabels(t *testing.T) {
+	t.Parallel()
+	s, f := newStore(t), fake.New(key)
+	one := sample()
+	one.Labels = []string{"bug", "status:ready"}
+	f.Add(one)
+	opt := Options{Held: func(k, l string) bool { return k == key && strings.HasPrefix(l, "status:") }}
+	if _, err := Sync(t.Context(), s, opt, f); err != nil {
+		t.Fatal(err)
+	}
+	is := only(t, s)
+	if !reflect.DeepEqual(is.Labels, []string{"bug"}) {
+		t.Fatalf("pulled %v, want the held label left out", is.Labels)
+	}
+	if _, err := issue.Do(t.Context(), s, is.ID, issue.ChangeLabels("a", []string{"status:in-review", "prio:p1"}, nil)); err != nil {
+		t.Fatal(err)
+	}
+	for range 2 { // the second run finds nothing to do
+		if _, err := Sync(t.Context(), s, opt, f); err != nil {
+			t.Fatal(err)
+		}
+	}
+	fi, _ := f.Get("1")
+	if got := slices.Sorted(slices.Values(fi.Labels)); !reflect.DeepEqual(got, []string{"bug", "prio:p1", "status:ready"}) {
+		t.Errorf("the forge has %v, want prio:p1 sent and status: left as it was", got)
+	}
+	if got := only(t, s).Labels; !slices.Contains(got, "status:in-review") || slices.Contains(got, "status:ready") {
+		t.Errorf("git-board has %v, want its own status kept", got)
+	}
+}
+
+// A label seen before it was held stays on both sides.
+func TestHeldAfterSeen(t *testing.T) {
+	t.Parallel()
+	s, f := newStore(t), fake.New(key)
+	one := sample()
+	one.Labels = []string{"bug", "status:ready"}
+	f.Add(one)
+	syncAll(t, s, f)
+	opt := Options{Held: func(_, l string) bool { return strings.HasPrefix(l, "status:") }}
+	if _, err := Sync(t.Context(), s, opt, f); err != nil {
+		t.Fatal(err)
+	}
+	if got := only(t, s).Labels; !slices.Contains(got, "status:ready") {
+		t.Errorf("git-board has %v, want status:ready kept", got)
+	}
+	if fi, _ := f.Get("1"); !slices.Contains(fi.Labels, "status:ready") {
+		t.Errorf("the forge has %v, want status:ready kept", fi.Labels)
 	}
 }
 

@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/guilbep/git-board/internal/config"
+	"github.com/guilbep/git-board/internal/ghbridge"
 	"github.com/guilbep/git-board/internal/ghlabels"
 	"github.com/guilbep/git-board/internal/lint"
 )
@@ -97,12 +98,16 @@ func (s *apiServer) handleLabelList(w http.ResponseWriter, r *http.Request) {
 	repos := s.labelRepos(cfg)
 	existing, errs := githubLabels(repos)
 	rows := []labelRow{}
+	held := ghbridge.HeldLabels(cfg)
 	for _, want := range ghlabels.Desired(cfg) {
 		row := labelRow{Label: want, Field: want.Field, Value: want.Value, OwnColor: want.OwnColor, OwnDescription: want.OwnDescription,
 			Count: counts[strings.ToLower(want.Field+":"+want.Value)], GitHub: []labelOnGitHub{}}
 		for _, repo := range repos {
 			if labels, ok := existing[repo]; ok {
 				got := labelOnGitHub{Repo: repo, State: ghlabels.State(want, labels)}
+				if got.State == "missing" && held(ghlabels.Key(repo), want.Name) {
+					got.State = "held" // in the Project
+				}
 				if i := slices.IndexFunc(labels, func(l ghlabels.Label) bool { return strings.EqualFold(l.Name, want.Name) }); i >= 0 {
 					got.Color, got.Description = labels[i].Color, labels[i].Description
 				}
@@ -139,7 +144,7 @@ func (s *apiServer) handleLabelSend(w http.ResponseWriter, r *http.Request) {
 		if !ok {
 			continue
 		}
-		for _, c := range ghlabels.Plan(repo, desired, labels) {
+		for _, c := range ghlabels.Plan(repo, desired, labels, ghbridge.HeldLabels(cfg)) {
 			done := labelChange{Change: c}
 			if !req.DryRun {
 				if err := ghlabels.Apply(c); err != nil {

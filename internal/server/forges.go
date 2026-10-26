@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/guilbep/git-board/internal/config"
+	"github.com/guilbep/git-board/internal/ghbridge"
 	"github.com/guilbep/git-board/internal/store"
 )
 
@@ -383,7 +384,9 @@ func (s *apiServer) openRun(ctx context.Context, forges []config.Forge, o runOpt
 	if err != nil {
 		return store.ForgeRun{}, err
 	}
-	return store.ForgeRun{Forges: fs, PublishPrivate: s.config().PublishPrivate, DryRun: o.DryRun, AllowCreate: o.AllowCreate, Merge: o.Merge, See: see}, nil
+	cfg := s.config()
+	return store.ForgeRun{Forges: fs, PublishPrivate: cfg.PublishPrivate, DryRun: o.DryRun, AllowCreate: o.AllowCreate, Merge: o.Merge,
+		Held: ghbridge.HeldLabels(cfg), See: see}, nil
 }
 
 func (s *apiServer) runForgeSync(job *forgeJob, forges []config.Forge) {

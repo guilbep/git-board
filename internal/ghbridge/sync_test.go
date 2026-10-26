@@ -472,3 +472,32 @@ func TestSyncCategoryRemovesItsBareLabel(t *testing.T) {
 		t.Errorf("added %v removed %v, want FEAT removed and no feat beside bug", c.Added, c.Removed)
 	}
 }
+
+// The forges' sync holds what has another home: on GitHub, with a
+// Project, the fields the Project holds; everywhere, the fields naming
+// issues.
+func TestHeldLabels(t *testing.T) {
+	t.Parallel()
+	held := ghbridge.HeldLabels(&config.Config{GithubProject: config.GithubProject{Owner: "o", Number: 1}})
+	for _, c := range []struct {
+		key, label string
+		want       bool
+	}{
+		{"github.com/o/r", "status:ready", true},
+		{"github.com/o/r", "prio:p1", true},
+		{"github.com/o/r", "sprint:sprint-12", true},
+		{"github.com/o/r", "est:6", true},
+		{"github.com/o/r", "hold:blocked", false},
+		{"github.com/o/r", "bug", false},
+		{"github.com/o/r", "parent:vm-12", true},
+		{"gitlab.epfl.ch/42400", "status:ready", false},
+		{"gitlab.epfl.ch/42400", "blocked-by:vm-70", true},
+	} {
+		if got := held(c.key, c.label); got != c.want {
+			t.Errorf("held(%s, %s) = %v, want %v", c.key, c.label, got, c.want)
+		}
+	}
+	if ghbridge.HeldLabels(&config.Config{})("github.com/o/r", "status:ready") {
+		t.Error("without a Project, status: held on GitHub")
+	}
+}

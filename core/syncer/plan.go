@@ -399,12 +399,14 @@ func (r *run) planLabels(pl *plan, p *project, is *issue.Issue, fi forge.Issue, 
 		}
 		return items[l]
 	}
-	for _, l := range labelSet(is.Labels) {
+	for _, l := range r.labelSet(p, is.Labels) {
 		at(l).g = true
 	}
-	for _, l := range labelSet(fi.Labels) {
+	for _, l := range r.labelSet(p, fi.Labels) {
 		at(l).f = true
 	}
+	// a label held since it was seen is gone from both sides: agreed, and
+	// left alone on each (TestHeldAfterSeen)
 	for _, l := range split(seen["labels"]) {
 		at(l).s = true
 	}
