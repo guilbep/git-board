@@ -143,6 +143,7 @@ var synced = []struct {
 	{"mod", "Module", func(i Item) string { return normalizeModule(i.Module) }},
 	{"est", "Est. hours", func(i Item) string { return formatEstHours(i.EstHours) }},
 	{"sprint", "Sprint", sprintTitle},
+	{"moscow", "MoSCoW", func(i Item) string { return i.MoSCoW }},
 }
 
 // HeldLabels is what the forges' sync keeps off a forge (syncer.Options

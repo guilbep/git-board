@@ -46,6 +46,13 @@ single = true
 numeric = true
 options = ["0.5", "1", "2", "4", "8", "16"]
 
+# MoSCoW: is it promised for its milestone? Not a priority, and no bug has
+# one. The GitHub Project's option for wont is "Won't".
+[fields.moscow]
+single = true
+options = ["must", "should", "could", "wont"]
+project = { wont = "Won't" }
+
 [fields.assignee]
 single = false
 

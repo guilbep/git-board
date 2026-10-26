@@ -242,7 +242,7 @@ The `sprint` field follows these dates: in the filters (sorted by **Dates**, tod
 
 ## GitHub Project
 
-The GitHub Project whose fields (status, priority, sprint…) `git board bridge pull` and `sync` turn into labels and back. The whole sync, Settings › Sync and `git board sync`, runs `bridge sync` as its third step: after the forges, before the git push.
+The GitHub Project whose fields `git board bridge pull` and `sync` turn into labels and back, by the Project's field names: `Status` (`status:`), `Priority` (`prio:`), `Sprint` (`sprint:`, an iteration field), `Est. hours` (`est:`, a number), `MoSCoW` (`moscow:`) and `Module` (`mod:`). An option whose name doesn't slug to the value is named in the field's `project` table, as the default file does for MoSCoW's "Won't". The whole sync, Settings › Sync and `git board sync`, runs `bridge sync` as its third step: after the forges, before the git push.
 
 Settings › Sync sets it up, on the Project's line: a number, a Project of the GitHub forge's owner, or the Project's address (`https://github.com/orgs/EPFL-ENAC/projects/40`), checked as soon as it is saved; another Project than the one written to is only read, until `write = true` is set again. `git board bridge configure --owner EPFL-ENAC --project 40` writes the same.
 

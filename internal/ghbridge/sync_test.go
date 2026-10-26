@@ -501,3 +501,24 @@ func TestHeldLabels(t *testing.T) {
 		t.Error("without a Project, status: held on GitHub")
 	}
 }
+
+// MoSCoW is kept in step as Priority is; Won't, which slugs to won-t, is
+// named in [fields.moscow] project.
+func TestSyncMoSCoW(t *testing.T) {
+	t.Parallel()
+	cfg := syncConfig()
+	cfg.Fields["moscow"] = config.Field{Single: true, Options: []string{"must", "should", "could", "wont"}, Project: map[string]string{"wont": "Won't"}}
+	meta := syncMeta()
+	meta.Fields["MoSCoW"] = ghbridge.ProjectField{ID: "F-moscow", Options: map[string]string{"Must": "o-must", "Should": "o-should", "Could": "o-could", "Won't": "o-wont"}}
+	it := item(1, "Ready")
+	it.MoSCoW = "Won't"
+	p := ghbridge.BuildSyncPlan([]ghbridge.Item{it}, oneBug(), nil, meta, cfg)
+	if got := p.Changes[0].Added; !slices.Contains(got, "moscow:wont") {
+		t.Errorf("added = %v, want moscow:wont", got)
+	}
+	it.MoSCoW = "Should"
+	p = ghbridge.BuildSyncPlan([]ghbridge.Item{it}, oneBug("moscow:must"), map[string]map[string]string{"bug1": {"moscow": "should"}}, meta, cfg)
+	if !slices.ContainsFunc(p.Edits, func(e ghbridge.ProjectEdit) bool { return e.Field == "moscow" && e.Value == "must" }) {
+		t.Errorf("edits = %+v, want moscow set to must on the Project", p.Edits)
+	}
+}

@@ -53,6 +53,7 @@ type Item struct {
 	Category  string   `json:"category"`
 	Labels    []string `json:"labels"` // the issue's on GitHub
 	EstHours  *float64 `json:"est. hours"`
+	MoSCoW    string   `json:"moscow"`
 	Sprint    *Sprint  `json:"sprint"`
 	Title     string   `json:"title"`
 }
