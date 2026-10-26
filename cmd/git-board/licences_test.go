@@ -1,10 +1,13 @@
 package main
 
 import (
+	"encoding/json"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -81,6 +84,52 @@ func TestLicences(t *testing.T) {
 			if strings.Contains(l, "GPL") {
 				t.Errorf("%s is %s", mod, l)
 			}
+		}
+	}
+}
+
+// permissive are the licences the Go scan finds and lets through, as SPDX
+// names it (BSD is any BSD-*), plus 0BSD: the web app's allow-list.
+var permissive = []string{"MIT", "Apache-2.0", "BSD", "MPL-2.0", "ISC", "Unlicense", "0BSD"}
+
+// allowed says every licence an SPDX expression names is permissive.
+// ponytail: an OR is read as an AND, so "MIT OR GPL-3.0" fails; read it as
+// a choice if one turns up
+func allowed(expr string) bool {
+	ids := strings.FieldsFunc(expr, func(r rune) bool { return r == '(' || r == ')' || r == ' ' })
+	ids = slices.DeleteFunc(ids, func(id string) bool { return id == "AND" || id == "OR" })
+	return len(ids) > 0 && !slices.ContainsFunc(ids, func(id string) bool {
+		return !slices.Contains(permissive, id) && !strings.HasPrefix(id, "BSD-")
+	})
+}
+
+// TestLicencesOfTheWebApp reads the licence of every runtime package of the
+// web app, which the binary embeds, from web/package-lock.json: those not
+// "dev". It fails on any outside permissive. -v lists them: make licences.
+func TestLicencesOfTheWebApp(t *testing.T) {
+	t.Parallel()
+	data, err := os.ReadFile("../../web/package-lock.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var lock struct {
+		Packages map[string]struct {
+			License string `json:"license"`
+			Dev     bool   `json:"dev"`
+		} `json:"packages"`
+	}
+	if err := json.Unmarshal(data, &lock); err != nil {
+		t.Fatalf("package-lock.json: %v", err)
+	}
+	for _, path := range slices.Sorted(maps.Keys(lock.Packages)) {
+		p := lock.Packages[path]
+		if path == "" || p.Dev { // the app itself, or a dev tool
+			continue
+		}
+		name := path[strings.LastIndex(path, "node_modules/")+len("node_modules/"):]
+		t.Logf("%-60s %s", name, p.License)
+		if !allowed(p.License) {
+			t.Errorf("%s is %q", name, p.License)
 		}
 	}
 }

@@ -15,7 +15,9 @@ fmt:
 lint: vet fmt
 
 # Every module the build and its tests use, with its licence from the
-# module cache; fails on any GPL, LGPL or AGPL (go test runs it too).
+# module cache; fails on any GPL, LGPL or AGPL. Then the web app's runtime
+# packages, from web/package-lock.json; fails on any licence outside the
+# permissive ones (go test runs both).
 licences:
 	go test -count=1 -run TestLicences -v ./cmd/git-board/
 

@@ -319,7 +319,10 @@ none GPL:
 MIT file for `sqlite-vec`, and a third-party notice; `modernc.org/memory`
 a logo's link. LICENSE is now MIT, copyright guilbep, 2026, and the web
 package's `license` field with it. The web app's npm packages, built into
-`web/dist` and embedded, aren't in the scan.
+`web/dist` and embedded, are scanned too, by `TestLicencesOfTheWebApp`:
+each entry of `web/package-lock.json` not marked `dev`, its `license`
+checked against an allow-list, the licences above plus ISC and 0BSD,
+with no network.
 
 **The switch** (`git-board switch`): a dry run on a mirror of the
 repository by default, `--apply` to write `refs/board/*` here. It reads
