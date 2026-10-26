@@ -142,6 +142,10 @@ var blankLines = regexp.MustCompile(`\n{3,}`)
 
 // WithoutForge is content without the named forge's table.
 func WithoutForge(content, name string) string {
-	out := blankLines.ReplaceAllString(upsertTable(content, "[forges."+name+"]", ""), "\n\n")
+	return withoutTable(content, "[forges."+name+"]")
+}
+
+func withoutTable(content, header string) string {
+	out := blankLines.ReplaceAllString(upsertTable(content, header, ""), "\n\n")
 	return strings.TrimRight(out, "\n") + "\n"
 }
