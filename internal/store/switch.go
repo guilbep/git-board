@@ -105,6 +105,10 @@ type SwitchRun struct {
 	// AllowCreate accepts what the next sync would create on the forges:
 	// that blocker alone.
 	AllowCreate bool
+	// Progress hears each stage as it starts (n 0), then each issue it
+	// comes to there (n 1, 2…): a switch on a big repository takes
+	// minutes. Nil hears nothing.
+	Progress func(stage string, n int)
 	// LeftOut are the forges left out of the run, each "name: why": their
 	// mirrors aren't joined and their creations not counted, so each is a
 	// blocker only Force lifts.
@@ -158,6 +162,19 @@ var ErrForgesLeftOut = errors.New("no forge to pull from: the git remotes name f
 func (b *Backend) Switch(ctx context.Context, run SwitchRun) (SwitchReport, error) {
 	rep := SwitchReport{Forges: map[string]int{}}
 	block := func(format string, a ...any) { rep.Blockers = append(rep.Blockers, fmt.Sprintf(format, a...)) }
+	stage, n := "", 0
+	step := func(s string) {
+		stage, n = s, 0
+		if run.Progress != nil {
+			run.Progress(s, 0)
+		}
+	}
+	tick := func() {
+		n++
+		if run.Progress != nil {
+			run.Progress(stage, n)
+		}
+	}
 	if len(run.Forges) == 0 { // a switch would carry no issue: not a blocker --force lifts
 		return rep, ErrNoForge
 	}
@@ -171,11 +188,13 @@ func (b *Backend) Switch(ctx context.Context, run SwitchRun) (SwitchReport, erro
 	// or hold an earlier --apply's that never reached origin
 	theirs := gitstore.ZeroHash
 	if b.checkRemote(NumbersRemote) == nil {
+		step("fetching origin's numbers")
 		var err error
 		if theirs, err = b.remoteSeq(NumbersRemote); err != nil {
 			return rep, err
 		}
 	}
+	step("copying the repository")
 	scratch, done, err := b.scratch(ctx)
 	if err != nil {
 		return rep, err
@@ -197,6 +216,7 @@ func (b *Backend) Switch(ctx context.Context, run SwitchRun) (SwitchReport, erro
 	} else if run.Fork != nil {
 		fork = *run.Fork
 	} else if len(bugs) > 0 {
+		step(fmt.Sprintf("reading git-bug's %d issues", len(bugs)))
 		f, err := ReadFork(ctx, cmp.Or(run.GitBug, "git-bug"), scratch.CommonDir())
 		if err != nil {
 			block("the fork's issues can't be read, so neither its links nor what is lost: %v", err)
@@ -245,7 +265,9 @@ func (b *Backend) Switch(ctx context.Context, run SwitchRun) (SwitchReport, erro
 			if what == "joined" {
 				rep.Joined++
 			}
+			tick()
 		}}
+	step("pulling the issues from the forges")
 	if rep.Pulled, err = syncer.Pull(ctx, scratch, opt, fs...); err != nil {
 		return rep, fmt.Errorf("pulling from the forges: %w", err)
 	}
@@ -298,6 +320,7 @@ func (b *Backend) Switch(ctx context.Context, run SwitchRun) (SwitchReport, erro
 		}
 	}
 
+	step("keying the numbers again, carrying the releases")
 	if err := rekey(scratch, issueOf, records, &rep); err != nil {
 		block("the numbers can't be keyed again: %v", err)
 	}
@@ -311,6 +334,7 @@ func (b *Backend) Switch(ctx context.Context, run SwitchRun) (SwitchReport, erro
 	if err := b.you(scratch, fork.Users, person, &rep); err != nil {
 		return rep, err
 	}
+	step("counting what the next sync would do")
 	if err := wouldPush(ctx, scratch, run, opt, records, unlisted, &rep); err != nil {
 		return rep, err
 	}
@@ -332,6 +356,7 @@ func (b *Backend) Switch(ctx context.Context, run SwitchRun) (SwitchReport, erro
 			return rep, err
 		}
 	}
+	step("applying: refs/board/* here")
 	if _, err := b.run(nil, "fetch", "--no-write-fetch-head", "--quiet", scratch.CommonDir(), "refs/board/*:refs/board/*"); err != nil {
 		return rep, fmt.Errorf("applying the switch: %w", err)
 	}

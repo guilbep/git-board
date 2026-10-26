@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"io"
 	"maps"
+	"os"
 	"slices"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -98,7 +100,10 @@ func runSwitch(ctx context.Context, out io.Writer, run store.SwitchRun) error {
 		return err
 	}
 	run.PublishPrivate = cfg.PublishPrivate
+	var end func()
+	run.Progress, end = switchProgress(os.Stderr)
 	rep, err := b.Switch(ctx, run)
+	end()
 	if err != nil {
 		return err
 	}
@@ -189,4 +194,34 @@ func printSwitch(out io.Writer, rep store.SwitchReport, apply bool) {
 			fmt.Fprintf(out, "  The sync sends the %d numbers keyed again first; if %s's numbers moved on meanwhile, it refuses: run git-board switch --apply again.\n", rep.Numbers, store.NumbersRemote)
 		}
 	}
+}
+
+// switchProgress tells a switch's stages on w as they go, each with how
+// many issues it came to: on a terminal one line, rewritten; elsewhere a
+// line per stage. end closes the last one.
+func switchProgress(w *os.File) (progress func(stage string, n int), end func()) {
+	fi, err := w.Stat()
+	tty := err == nil && fi.Mode()&os.ModeCharDevice != 0
+	start, open := time.Now(), false
+	progress = func(stage string, n int) {
+		switch {
+		case !tty && n == 0:
+			fmt.Fprintf(w, "%s...\n", stage)
+		case !tty:
+		case n == 0:
+			if open {
+				fmt.Fprintf(w, " (%s)\n", time.Since(start).Round(time.Second))
+			}
+			start, open = time.Now(), true
+			fmt.Fprintf(w, "%s...", stage)
+		default:
+			fmt.Fprintf(w, "\r\033[K%s... %d issues", stage, n)
+		}
+	}
+	end = func() {
+		if open {
+			fmt.Fprintf(w, " (%s)\n", time.Since(start).Round(time.Second))
+		}
+	}
+	return progress, end
 }
