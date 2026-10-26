@@ -162,6 +162,24 @@ func TestReleasesStatus(t *testing.T) {
 	}
 }
 
+// ?local answers from this clone alone, at once: no fetch of origin nor
+// of the overlays, so it answers even when origin can't be reached.
+func TestReleasesLocal(t *testing.T) {
+	_, ts, fx := releaseServer(t)
+	c := firstCommit(t, fx)
+	fx.Tag(t, c, "v1.0.0")
+	runs(t, fx, "stage", c, "v1.0.0")
+	call(t, "GET", ts.URL+"/api/releases", nil, nil) // the overlays cloned once, as a first visit does
+	storetest.Git(t, fx.App, "remote", "set-url", "origin", filepath.Join(t.TempDir(), "gone"))
+	var got releasesResponse
+	if code := call(t, "GET", ts.URL+"/api/releases?local=1", nil, &got); code != http.StatusOK || len(got.Releases) != 1 || got.Releases[0].Tag.Name != "v1.0.0" {
+		t.Fatalf("local: %d %+v", code, got.Releases)
+	}
+	if code := call(t, "GET", ts.URL+"/api/releases", nil, nil); code == http.StatusOK {
+		t.Errorf("the fetched one answered %d with origin gone: did it fetch?", code)
+	}
+}
+
 func TestDeployJobRunsAndPublishes(t *testing.T) {
 	s, ts, fx := releaseServer(t)
 	c := firstCommit(t, fx)

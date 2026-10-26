@@ -1269,8 +1269,9 @@ const envState = (e: EnvState): EnvState => ({
 });
 const releaseJob = (j: ReleaseJob | null): ReleaseJob | null => j && { ...j, steps: j.steps ?? [] };
 
-export async function getReleases(): Promise<Releases> {
-  const r = await request<Partial<Releases>>('/api/releases');
+// local: what this clone has, at once, without fetching origin and the overlays
+export async function getReleases(local = false): Promise<Releases> {
+  const r = await request<Partial<Releases>>(local ? '/api/releases?local=1' : '/api/releases');
   return { enabled: !!r.enabled, remote: r.remote ?? '', trunk: r.trunk ?? '', environments: (r.environments ?? []).map(envState), binaries: r.binaries ?? [], releases: (r.releases ?? []).map(releaseRow), job: releaseJob(r.job ?? null) };
 }
 
