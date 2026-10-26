@@ -178,19 +178,36 @@ var ErrNumbersAhead = errors.New("refs/board/seq has numbers the remote hasn't")
 // refuses one ahead, or apart (ErrNumbersAhead). A remote without one is no
 // error: the project doesn't number its issues.
 func (b *Backend) FetchNumbers(remote string) error {
-	theirs, err := b.remoteSeq(remote)
+	theirs, err := b.numbersOf(remote)
 	if err != nil || theirs == gitstore.ZeroHash {
 		return err
 	}
+	return b.setSeq(theirs)
+}
+
+// numbersBehind is FetchNumbers' refusal alone, for a check: the remote's
+// counter fetched to its copy here, this clone's left as it is.
+func (b *Backend) numbersBehind(remote string) error {
+	_, err := b.numbersOf(remote)
+	return err
+}
+
+// numbersOf fetches the remote's counter and answers it, ZeroHash for
+// none; ErrNumbersAhead when this clone's isn't it or behind it.
+func (b *Backend) numbersOf(remote string) (gitstore.Hash, error) {
+	theirs, err := b.remoteSeq(remote)
+	if err != nil || theirs == gitstore.ZeroHash {
+		return theirs, err
+	}
 	ours, err := b.s.Ref(seqRef)
 	if err != nil {
-		return err
+		return gitstore.ZeroHash, err
 	}
 	if ok, err := b.behind(ours, theirs); err != nil || !ok {
-		return cmp.Or(err, fmt.Errorf("%w: git push %s %s first; or, to drop them, git update-ref %s %s",
+		return gitstore.ZeroHash, cmp.Or(err, fmt.Errorf("%w: git push %s %s first; or, to drop them, git update-ref %s %s",
 			ErrNumbersAhead, remote, seqRef, seqRef, seqCopy(remote)))
 	}
-	return b.setSeq(theirs)
+	return theirs, nil
 }
 
 // behind says whether ours is theirs or one of its ancestors: taking

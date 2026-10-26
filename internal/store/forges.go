@@ -75,6 +75,32 @@ type SyncEvent struct {
 	Line                    string
 }
 
+// Text says the event in words, its issue by name ("would create CO2-3
+// Export CSV" in a dry run); "" for a write, which a run counts.
+func (e SyncEvent) Text(dry bool, name string) string {
+	var l string
+	switch e.What {
+	case "created":
+		l = fmt.Sprintf("pull a new issue, %s (%d changes)", name, e.Ops)
+	case "updated":
+		l = fmt.Sprintf("pull %d changes into %s", e.Ops, name)
+	case "linked":
+		l = "link " + name + ", found by its marker"
+	case "posted":
+		l = "create " + name
+	case "pushed":
+		l = "send the changes of " + name
+	case "warning":
+		return e.Line
+	default:
+		return ""
+	}
+	if dry {
+		return "would " + l
+	}
+	return l
+}
+
 // SyncForges pulls from every forge of the run, then pushes to each.
 func (b *Backend) SyncForges(ctx context.Context, run ForgeRun) (syncer.Report, error) {
 	return b.forgeSync(ctx, run, syncer.Sync, "")

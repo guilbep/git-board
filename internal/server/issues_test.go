@@ -233,10 +233,10 @@ func TestForgeSyncRunsADryRunFirst(t *testing.T) {
 	}
 }
 
-// Get and Send are one way of a sync, each after a clean dry run. A send
-// after a dry run that found issues on a forge by their marker runs: the
-// core links them before it creates anything.
-func TestForgeGetAndSend(t *testing.T) {
+// Send is the push alone (the Work page's Send all), after a clean dry
+// run. A send after a dry run that found issues on a forge by their marker
+// runs: the core links them before it creates anything.
+func TestForgeSend(t *testing.T) {
 	t.Parallel()
 	ts, s := forgeServer(t, ghForge)
 	done := make(chan struct{})
@@ -265,20 +265,18 @@ func TestForgeGetAndSend(t *testing.T) {
 	if code, _ := start(map[string]any{"mode": "send"}); code != http.StatusConflict {
 		t.Errorf("a send before a dry run: %d, want 409", code)
 	}
-	if code, _ := start(map[string]any{"mode": "push"}); code != http.StatusBadRequest {
-		t.Errorf("an unknown mode: %d, want 400", code)
+	for _, mode := range []string{"push", "get"} {
+		if code, _ := start(map[string]any{"mode": mode}); code != http.StatusBadRequest {
+			t.Errorf("mode %s: %d, want 400", mode, code)
+		}
 	}
-	if _, mode := start(map[string]any{"dry_run": true, "mode": "get"}); mode != "sync" {
+	if _, mode := start(map[string]any{"dry_run": true, "mode": "send"}); mode != "sync" {
 		t.Errorf("a dry run ran as %q, want both ways", mode)
 	}
 	if code, mode := start(map[string]any{"mode": "send"}); code != http.StatusAccepted || mode != "send" {
 		t.Errorf("a send after a dry run found an issue by its marker: %d %s", code, mode)
 	}
 	runs()
-	start(map[string]any{"dry_run": true})
-	if code, mode := start(map[string]any{"mode": "get"}); code != http.StatusAccepted || mode != "get" {
-		t.Errorf("a get: %d %s", code, mode)
-	}
 	start(map[string]any{"dry_run": true})
 	if code, mode := start(map[string]any{"mode": "send", "bridges": []string{"gh"}}); code != http.StatusAccepted || mode != "send" {
 		t.Errorf("a send after a clean dry run: %d %s", code, mode)

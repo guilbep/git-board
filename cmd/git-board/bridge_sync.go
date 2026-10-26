@@ -106,17 +106,33 @@ func openSync(limit int) (*config.Config, *store.Backend, ghbridge.State, error)
 }
 
 func runBridgeSync(out io.Writer, limit int, apply bool) error {
-	cfg, b, s, err := openSync(limit)
+	cfg, err := loadConfig()
+	if err != nil {
+		return err
+	}
+	b, err := store.OpenCwd()
 	if err != nil {
 		return err
 	}
 	defer b.Close()
+	if err := bridgeSync(out, cfg, b, limit, apply); err != nil || apply {
+		return err
+	}
+	fmt.Fprintln(out, "\ndry run — nothing written. Re-run with --apply to write these changes.")
+	return nil
+}
 
+// bridgeSync reads both sides and prints the plan; with apply, writes it,
+// to the Project with write = true alone. git-board sync's Project step.
+func bridgeSync(out io.Writer, cfg *config.Config, b *store.Backend, limit int, apply bool) error {
+	s, err := ghbridge.LoadState(b, project(), cfg, limit)
+	if err != nil {
+		return err
+	}
 	plan := s.Plan(cfg)
 	printSyncPlan(out, plan)
 
 	if !apply {
-		fmt.Fprintln(out, "\ndry run — nothing written. Re-run with --apply to write these changes.")
 		if len(plan.Edits) > 0 && !cfg.GithubProject.Write {
 			fmt.Fprintln(out, "Writing to the Project also needs write = true under [github-project] in .git-board.toml.")
 		}

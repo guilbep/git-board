@@ -585,15 +585,9 @@ func validRemote(remote string) error {
 
 // checkRemote refuses a remote this repository doesn't have.
 func (b *Backend) checkRemote(remote string) error {
-	if err := validRemote(remote); err != nil {
-		return err
+	has, err := b.hasRemote(remote)
+	if err == nil && !has {
+		err = fmt.Errorf("no remote %q", remote)
 	}
-	out, err := b.git("remote")
-	if err != nil {
-		return err
-	}
-	if !slices.Contains(lines(out), remote) {
-		return fmt.Errorf("no remote %q", remote)
-	}
-	return nil
+	return err
 }

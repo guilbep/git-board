@@ -27,9 +27,9 @@ func TestSwitchCommand(t *testing.T) {
 	t.Chdir(dir)
 	f := fake.New("github.com/o/r")
 	f.Add(forge.Issue{Title: "From GitHub", Body: "b", Author: forge.Account{ID: "7", Login: "alice"}})
-	saved := openSwitchForges
-	t.Cleanup(func() { openSwitchForges = saved })
-	openSwitchForges = func(_ context.Context, fs []config.Forge) ([]store.NamedForge, error) {
+	saved := openForges
+	t.Cleanup(func() { openForges = saved })
+	openForges = func(_ context.Context, fs []config.Forge) ([]store.NamedForge, error) {
 		if len(fs) != 1 || fs[0].Name != "github" {
 			t.Errorf("forges opened: %+v", fs)
 		}
@@ -66,9 +66,9 @@ func TestSwitchFindsTheForges(t *testing.T) {
 	storetest.Git(t, dir, "remote", "add", "other", "git@bitbucket.org:o/r.git")
 	t.Chdir(dir)
 	f := fake.New("github.com/o/r")
-	saved := openSwitchForges
-	t.Cleanup(func() { openSwitchForges = saved })
-	openSwitchForges = func(_ context.Context, fs []config.Forge) ([]store.NamedForge, error) {
+	saved := openForges
+	t.Cleanup(func() { openForges = saved })
+	openForges = func(_ context.Context, fs []config.Forge) ([]store.NamedForge, error) {
 		if len(fs) != 1 || fs[0].Name != "github" || fs[0].Project != "o/r" || !fs[0].Discovered {
 			t.Errorf("forges opened: %+v", fs)
 		}

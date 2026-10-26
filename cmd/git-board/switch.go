@@ -61,8 +61,9 @@ git-bug's binary reads its own data, on the copy: --git-bug names it.`,
 	return cmd
 }
 
-// openSwitchForges opens the forges a switch pulls from. Tests swap it.
-var openSwitchForges = store.OpenForges
+// openForges opens the forges a switch pulls from, and a sync syncs
+// with. Tests swap it.
+var openForges = store.OpenForges
 
 func runSwitch(ctx context.Context, out io.Writer, run store.SwitchRun) error {
 	cfg, err := loadConfig()
@@ -86,7 +87,7 @@ func runSwitch(ctx context.Context, out io.Writer, run store.SwitchRun) error {
 			fmt.Fprintf(out, "%s: its sync is off, so it isn't pulled\n", f.Name)
 		}
 	}
-	if run.Forges, err = openSwitchForges(ctx, on); err != nil {
+	if run.Forges, err = openForges(ctx, on); err != nil {
 		return err
 	}
 	run.PublishPrivate = cfg.PublishPrivate

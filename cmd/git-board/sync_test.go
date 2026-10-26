@@ -1,9 +1,13 @@
 package main
 
 import (
+	"context"
 	"strings"
 	"testing"
 
+	"github.com/guilbep/git-board/core/forge"
+	"github.com/guilbep/git-board/core/forge/fake"
+	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/store"
 	"github.com/guilbep/git-board/internal/store/storetest"
 )
@@ -50,11 +54,9 @@ func TestSyncPushesThenPullsBetweenTwoRepos(t *testing.T) {
 	pathA, pathB := twoReposWithRemote(t)
 	seedBug(t, pathA, "seen only in A until sync")
 
-	// A pushes it to the shared remote, and tells the forge its remotes
-	// name, a URL on GitHub beside origin's.
-	storetest.Git(t, pathA, "remote", "add", "gh", "https://github.com/o/r.git")
-	out, err := execute(t, []string{"sync", pathA})
-	if err != nil || !strings.Contains(out, "forge github, found in the remotes: github.com o/r\n") {
+	// A pushes it to the shared remote, with git alone.
+	out, err := execute(t, []string{"sync", "--git", pathA})
+	if err != nil || strings.Contains(out, "forge") {
 		t.Fatalf("sync A: %v\noutput:\n%s", err, out)
 	}
 
@@ -64,12 +66,59 @@ func TestSyncPushesThenPullsBetweenTwoRepos(t *testing.T) {
 	}
 
 	// B pulls it from the shared remote.
-	out, err = execute(t, []string{"sync", pathB})
+	out, err = execute(t, []string{"sync", "--git", pathB})
 	if err != nil {
 		t.Fatalf("sync B: %v\noutput:\n%s", err, out)
 	}
 	if got := bugTitles(t, pathB); !containsLabel(got, "seen only in A until sync") {
 		t.Errorf("B after sync = %v, want the bug pushed from A", got)
+	}
+}
+
+// The whole sync: git pull, the forges found in the remotes, git push;
+// its check writes nothing, here, on origin or on the forge. Serial: it
+// swaps the forges' opener and reader.
+func TestSyncTheWhole(t *testing.T) {
+	pathA, pathB := twoReposWithRemote(t)
+	storetest.Git(t, pathA, "remote", "add", "gh", "https://github.com/o/r.git")
+	f := fake.New("github.com/o/r")
+	f.Add(forge.Issue{Title: "From GitHub", Body: "b", Author: forge.Account{ID: "7", Login: "alice"}})
+	stubForges(t, f)
+
+	out, err := execute(t, []string{"sync", "--check", pathA})
+	if err != nil || !strings.Contains(out, "forge github, found in the remotes: github.com o/r\n") ||
+		!strings.Contains(out, "git fetch from origin...") || !strings.Contains(out, "github: would pull a new issue") ||
+		!strings.Contains(out, "git push to origin: skipped") || !strings.Contains(out, "checked: nothing written") {
+		t.Fatalf("check: %v\n%s", err, out)
+	}
+	if got := bugTitles(t, pathA); len(got) != 0 || len(f.Writes()) != 0 {
+		t.Fatalf("the check wrote %v here, %v on the forge", got, f.Writes())
+	}
+
+	out, err = execute(t, []string{"sync", pathA})
+	if err != nil || !strings.Contains(out, "git pull from origin...") || !strings.Contains(out, "github: pull a new issue") ||
+		!strings.Contains(out, "the GitHub Project: skipped, no [github-project]") || !strings.Contains(out, "git push to origin...") {
+		t.Fatalf("sync: %v\n%s", err, out)
+	}
+	if out, err := execute(t, []string{"sync", "--git", pathB}); err != nil {
+		t.Fatalf("sync B: %v\n%s", err, out)
+	}
+	if got := bugTitles(t, pathB); !containsLabel(got, "From GitHub") {
+		t.Errorf("origin after the sync: %v, want the forge's issue", got)
+	}
+}
+
+// stubForges opens f for every forge a run opens.
+func stubForges(t *testing.T, f *fake.Forge) {
+	t.Helper()
+	saved := openForges
+	t.Cleanup(func() { openForges = saved })
+	openForges = func(_ context.Context, fs []config.Forge) ([]store.NamedForge, error) {
+		var out []store.NamedForge
+		for _, c := range fs {
+			out = append(out, store.NamedForge{Name: c.Name, Forge: f})
+		}
+		return out, nil
 	}
 }
 
@@ -105,8 +154,9 @@ func TestSyncDefaultsToCwdWithNoPaths(t *testing.T) {
 
 	// No remote configured on this fixture -- pull/push against "origin"
 	// should fail cleanly (an error, not a panic), proving sync actually
-	// tried the current directory rather than silently doing nothing.
-	_, err := execute(t, []string{"sync"})
+	// tried the current directory rather than silently doing nothing. The
+	// whole sync skips the git steps instead.
+	_, err := execute(t, []string{"sync", "--git"})
 	if err == nil {
 		t.Fatal("expected an error (no origin remote configured), got nil")
 	}
