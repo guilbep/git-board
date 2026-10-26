@@ -52,6 +52,9 @@ func (b *Backend) SyncWhole(ctx context.Context, w Whole) error {
 	if err != nil {
 		return err
 	}
+	if !has && w.Forges == nil && w.Project == nil {
+		return fmt.Errorf("nothing to sync: no git remote %s, no forge with its sync on, no [github-project]", w.Remote)
+	}
 	type stage struct {
 		name, skip string // skip: why, when do is nil
 		do         func(context.Context) (string, error)

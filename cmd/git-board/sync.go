@@ -3,11 +3,9 @@ package main
 import (
 	"cmp"
 	"context"
-	"errors"
 	"fmt"
 	"io"
 
-	"github.com/go-git/go-git/v5/plumbing/transport"
 	"github.com/spf13/cobra"
 
 	"github.com/guilbep/git-board/internal/config"
@@ -58,14 +56,8 @@ see docs/implementation-plan.md.`,
 			if len(paths) == 0 {
 				paths = []string{"."}
 			}
-			if gitOnly {
-				if check {
-					return errors.New("--check checks the whole sync: leave --git out")
-				}
-				return runSync(cmd.OutOrStdout(), paths, remote)
-			}
 			return eachPath(cmd.OutOrStdout(), paths, func(path string) error {
-				return wholeOne(cmd.Context(), cmd.OutOrStdout(), path, remote, check, allowCreate)
+				return wholeOne(cmd.Context(), cmd.OutOrStdout(), path, remote, check, allowCreate, gitOnly)
 			})
 		},
 	}
@@ -94,8 +86,9 @@ func eachPath(out io.Writer, paths []string, sync func(path string) error) error
 }
 
 // wholeOne is the whole sync of one repository (store.SyncWhole), as the
-// server's Settings › Sync runs it, each step told.
-func wholeOne(ctx context.Context, out io.Writer, path, remote string, check, allowCreate bool) error {
+// server's Settings › Sync runs it, each step told; gitOnly, its git steps
+// alone.
+func wholeOne(ctx context.Context, out io.Writer, path, remote string, check, allowCreate, gitOnly bool) error {
 	b, err := store.Open(path)
 	if err != nil {
 		return fmt.Errorf("opening: %w", err)
@@ -106,9 +99,11 @@ func wholeOne(ctx context.Context, out io.Writer, path, remote string, check, al
 		return err
 	}
 	say := func(format string, a ...any) { fmt.Fprintf(out, path+": "+format+"\n", a...) }
-	forges, _, err := runForges(ctx, out, b, cfg)
-	if err != nil {
-		return err
+	var forges []config.Forge
+	if !gitOnly {
+		if forges, _, err = runForges(ctx, out, b, cfg); err != nil {
+			return err
+		}
 	}
 	labels := map[string]string{store.StepPull: "git pull from " + remote, store.StepForges: "the forges",
 		store.StepProject: "the GitHub Project", store.StepPush: "git push to " + remote}
@@ -121,6 +116,8 @@ func wholeOne(ctx context.Context, out io.Writer, path, remote string, check, al
 			say("%s...", labels[name])
 		case state == "failed":
 			say("%s failed: %s", labels[name], note)
+		case state == "skipped" && gitOnly && (name == store.StepForges || name == store.StepProject):
+			// --git: not steps of this sync
 		case state == "skipped":
 			say("%s: skipped, %s", labels[name], note)
 		case note != "":
@@ -153,7 +150,7 @@ func wholeOne(ctx context.Context, out io.Writer, path, remote string, check, al
 			return err
 		}
 	}
-	if gp := cfg.GithubProject; gp.Owner != "" && gp.Number != 0 {
+	if gp := cfg.GithubProject; !gitOnly && gp.Owner != "" && gp.Number != 0 {
 		run.Project = func(context.Context) error { return bridgeSync(out, cfg, b, defaultBridgePullLimit, !check) }
 	}
 	if err := b.SyncWhole(ctx, run); err != nil {
@@ -176,62 +173,4 @@ func eventIssue(b *store.Backend, id string) string {
 		return short
 	}
 	return cmp.Or(i.Number, short) + " " + i.Title
-}
-
-// runSync is the git sync alone (--git): it pulls then pushes each path in
-// turn, in-process (store's Pull and Push, over the core's git store).
-func runSync(out io.Writer, paths []string, remote string) error {
-	return eachPath(out, paths, func(path string) error {
-		fmt.Fprintf(out, "%s: pulling from %s...\n", path, remote)
-		return syncOne(out, path, remote)
-	})
-}
-
-func syncOne(out io.Writer, path, remote string) error {
-	b, err := store.Open(path)
-	if err != nil {
-		return fmt.Errorf("opening: %w", err)
-	}
-	defer b.Close()
-
-	if err := b.Pull(remote); err != nil {
-		// An empty remote (nothing pushed there yet — the normal state
-		// of a brand-new shared repo before anyone's first sync) is not
-		// a failure: there's nothing to pull, not an error pulling it.
-		// Confirmed this is a real case, not a hypothetical: found via
-		// a real two-repo test using a genuinely empty bare remote.
-		if errors.Is(err, transport.ErrEmptyRemoteRepository) {
-			fmt.Fprintf(out, "%s: remote has nothing to pull yet\n", path)
-		} else {
-			return fmt.Errorf("pull: %w", err)
-		}
-	}
-	if err := b.Switched(); err != nil {
-		return err
-	}
-	if remote == store.NumbersRemote {
-		if err := b.FetchNumbers(remote); err != nil {
-			return fmt.Errorf("numbers: %w", err)
-		}
-	}
-
-	fmt.Fprintf(out, "%s: pushing to %s...\n", path, remote)
-	pushOut, err := b.Push(remote)
-	if err != nil {
-		return fmt.Errorf("push: %w", err)
-	}
-	if pushOut != "" {
-		fmt.Fprintf(out, "%s: %s\n", path, pushOut)
-	}
-	if remote == store.NumbersRemote {
-		n, err := b.NumberIssues(remote)
-		if err != nil {
-			return fmt.Errorf("numbering: %w", err)
-		}
-		if n > 0 {
-			fmt.Fprintf(out, "%s: numbered %d issue(s)\n", path, n)
-		}
-	}
-	fmt.Fprintf(out, "%s: synced\n", path)
-	return nil
 }

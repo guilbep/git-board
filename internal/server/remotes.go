@@ -7,8 +7,6 @@ import (
 	"slices"
 	"time"
 
-	"github.com/go-git/go-git/v5/plumbing/transport"
-
 	"github.com/guilbep/git-board/internal/store"
 )
 
@@ -90,11 +88,7 @@ func (s *apiServer) handleRemote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer done()
-	err = do(name)
-	if errors.Is(err, transport.ErrEmptyRemoteRepository) {
-		err = nil // nothing pushed there yet: nothing to pull
-	}
-	if err != nil {
+	if err = do(name); err != nil {
 		writeError(w, http.StatusBadGateway, errors.New(store.NoCredentials(fmt.Sprintf("%s %s: %v", action, name, err))))
 		return
 	}

@@ -1278,10 +1278,6 @@ export async function getDraft(final = false): Promise<Draft> {
   return { ...d, undeployed: d.undeployed ?? [], issues: d.issues ?? [], checks: d.checks ?? [] };
 }
 
-export async function getReleaseJob(): Promise<ReleaseJob | null> {
-  return releaseJob(await request<ReleaseJob | null>('/api/releases/job'));
-}
-
 export async function getRelease(tag: string): Promise<ReleaseDetail> {
   const d = await request<ReleaseDetail>(tagPath(tag));
   const history = Object.fromEntries(Object.entries(d.history ?? {}).map(([env, h]) => [env, h ?? []]));

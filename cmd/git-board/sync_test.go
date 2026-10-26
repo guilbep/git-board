@@ -202,12 +202,12 @@ func TestSyncNumbers(t *testing.T) {
 	}
 	a.Close()
 	seedBug(t, pathB, "Made before B knew")
-	var out strings.Builder
-	if err := runSync(&out, []string{pathB}, "origin"); err != nil {
-		t.Fatalf("sync: %v\n%s", err, out.String())
+	out, err := execute(t, []string{"sync", "--git", pathB})
+	if err != nil {
+		t.Fatalf("sync: %v\n%s", err, out)
 	}
-	if !strings.Contains(out.String(), "numbered 1 issue") {
-		t.Errorf("sync said:\n%s", out.String())
+	if !strings.Contains(out, "numbered 1 issue") {
+		t.Errorf("sync said:\n%s", out)
 	}
 }
 
