@@ -300,3 +300,20 @@ func GitHub(t testing.TB, names map[string]string) {
 	t.Cleanup(func() { store.GitHubAPI = saved })
 	store.GitHubAPI = srv.URL
 }
+
+// ForgeOrigin makes origin name a forge, url, as discovery reads it, while
+// git still reaches origin's repository here: url is origin's URL as
+// written, and an insteadOf turns it back into the old one. Without an
+// origin, origin is url alone, for tests that never fetch.
+func ForgeOrigin(t testing.TB, dir, url string) {
+	t.Helper()
+	cmd := exec.Command("git", "remote", "get-url", "origin")
+	cmd.Dir = dir
+	old, err := cmd.Output()
+	if err != nil {
+		Git(t, dir, "remote", "add", "origin", url)
+		return
+	}
+	Git(t, dir, "config", "url."+strings.TrimSpace(string(old))+".insteadOf", url)
+	Git(t, dir, "config", "remote.origin.url", url)
+}

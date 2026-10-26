@@ -121,7 +121,7 @@ func TestAddAndRemoveABridge(t *testing.T) {
 func TestAddAForgeKeepsTheFoundOnes(t *testing.T) {
 	storetest.GitHub(t, map[string]string{"o/r": "O/R"}) // what a run reads of the found one
 	ts, s := forgeServer(t)
-	storetest.Git(t, s.b.GitDir(), "remote", "add", "gh", "git@github.com:o/r.git")
+	storetest.ForgeOrigin(t, s.b.GitDir(), "git@github.com:o/r.git")
 	github := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path { // what adding asks: who the token is, and the project
 		case "/user":

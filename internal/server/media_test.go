@@ -97,7 +97,7 @@ func TestMediaProxiesAndCaches(t *testing.T) {
 func TestFoundForgesReachEveryReader(t *testing.T) {
 	t.Parallel()
 	dir := storetest.Repo(t, false)
-	storetest.Git(t, dir, "remote", "add", "epfl", "git@gitlab-ssh.example.com:g/p.git")
+	storetest.ForgeOrigin(t, dir, "git@gitlab-ssh.example.com:g/p.git")
 	storetest.Init(t, dir)
 	b := storetest.Open(t, dir)
 	s := &apiServer{cfg: &config.Config{Discover: true}, b: b, me: "guilbep"}

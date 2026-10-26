@@ -261,7 +261,7 @@ The token needs the `project` scope: `gh auth refresh -s project`.
 
 ## Forges
 
-The forge projects the issues sync with, GitHub or GitLab, one table each, named as you like: Settings › Sync adds, switches and removes them. [Forges](forges.md) says how a sync goes. With no table, the forges are those the git remotes are on ([Forges](forges.md#adding-a-forge)); one table or more, or `discover = false`, turns that off.
+The forge projects the issues sync with, GitHub or GitLab, one table each, named as you like: Settings › Sync adds, switches and removes them. [Forges](forges.md) says how a sync goes. With no table, the forges are those `origin` is on, its fetch and push URLs ([Forges](forges.md#adding-a-forge)); one table or more, or `discover = false`, turns that off.
 
 ```toml
 [forges]
@@ -284,7 +284,7 @@ sync = true
 | Key | Type | Default | What it does |
 | --- | --- | --- | --- |
 | `publish-private` | true / false | false | Lets what came from a project that isn't public go to one that is. An internal project (GitLab's, or a GitHub Enterprise's) counts as public when it receives, and as not public when it sends. |
-| `discover` | true / false | true | With no `[forges.<name>]` table, finds the forges in the git remotes. A table turns it off whatever it says. |
+| `discover` | true / false | true | With no `[forges.<name>]` table, finds the forges in `origin`'s URLs. A table turns it off whatever it says. |
 | `kind` | `github` or `gitlab` | none | The forge. |
 | `project` | string | none | GitHub: `owner/repo`. GitLab: the project's numeric id, on its page under its name, which a renamed group doesn't change. |
 | `host` | string | `github.com`, `gitlab.com` | The forge's host, for GitHub Enterprise or a GitLab instance. |

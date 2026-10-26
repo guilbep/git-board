@@ -80,7 +80,7 @@ func TestSyncPushesThenPullsBetweenTwoRepos(t *testing.T) {
 // swaps the forges' opener and reader.
 func TestSyncTheWhole(t *testing.T) {
 	pathA, pathB := twoReposWithRemote(t)
-	storetest.Git(t, pathA, "remote", "add", "gh", "https://github.com/o/r.git")
+	storetest.ForgeOrigin(t, pathA, "https://github.com/o/r.git")
 	f := fake.New("github.com/o/r")
 	f.Add(forge.Issue{Title: "From GitHub", Body: "b", Author: forge.Account{ID: "7", Login: "alice"}})
 	stubForges(t, f)
@@ -230,7 +230,7 @@ func TestSyncCreatesWithConsent(t *testing.T) {
 	for _, title := range []string{"internal: rotate the keys", "b", "c"} {
 		seedBug(t, pathA, title)
 	}
-	storetest.Git(t, pathA, "remote", "add", "gh", "https://github.com/o/r.git")
+	storetest.ForgeOrigin(t, pathA, "https://github.com/o/r.git")
 	f := fake.New("github.com/o/r")
 	stubForges(t, f)
 	storetest.GitHub(t, map[string]string{"o/r": "o/r"})

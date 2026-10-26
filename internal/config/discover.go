@@ -3,6 +3,7 @@ package config
 import (
 	"net/url"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -72,8 +73,8 @@ func Discover(urls []string) (forges []Forge, skipped []string) {
 	seen, kinds := map[string]bool{}, map[string]int{}
 	for _, u := range urls {
 		f, skip := FromRemote(u)
-		if skip != "" {
-			skipped = append(skipped, u+": "+skip)
+		if line := u + ": " + skip; skip != "" && !slices.Contains(skipped, line) {
+			skipped = append(skipped, line)
 		}
 		key := strings.ToLower(f.Kind + " " + f.Host + "/" + f.Project)
 		if f.Kind == "" || seen[key] {

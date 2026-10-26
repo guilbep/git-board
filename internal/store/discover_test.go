@@ -55,19 +55,20 @@ func TestForgesFoundInTheRemotes(t *testing.T) {
 		want    []config.Forge
 		skipped string
 	}{
-		{"the wiki", [][]string{{"origin", "git@github.com:EPFL-ENAC/wiki.git"}, {"epfl", "git@gitlab-ssh.epfl.ch:EPFL-ENAC/wiki.git"}},
-			[]config.Forge{gl("gitlab", "gitlab.epfl.ch", "EPFL-ENAC/wiki"), gh("github", "EPFL-ENAC/wiki")}, ""},
-		{"fetch on GitHub, push on GitLab", [][]string{
+		{"the wiki", [][]string{
 			{"origin", "git@github.com:EPFL-ENAC/wiki.git", "git@github.com:EPFL-ENAC/wiki.git", "git@gitlab-ssh.epfl.ch:EPFL-ENAC/wiki.git"},
-			{"upstream", "https://github.com/epfl-enac/wiki"}},
+			{"gh", "git@github.com:EPFL-ENAC/wiki.git"}, {"gl", "git@gitlab-ssh.epfl.ch:EPFL-ENAC/wiki.git"}},
 			[]config.Forge{gh("github", "EPFL-ENAC/wiki"), gl("gitlab", "gitlab.epfl.ch", "EPFL-ENAC/wiki")}, ""},
+		{"origin alone: an upstream isn't read", [][]string{{"origin", "git@github.com:me/wiki.git"}, {"upstream", "https://github.com/epfl-enac/wiki"}},
+			[]config.Forge{gh("github", "me/wiki")}, ""},
+		{"no origin, no forge", [][]string{{"gh", "git@github.com:o/r.git"}}, nil, ""},
 		{"ssh with a port", [][]string{{"origin", "ssh://git@gitlab-ssh.epfl.ch:2222/group/sub/proj.git"}},
 			[]config.Forge{gl("gitlab", "gitlab.epfl.ch", "group/sub/proj")}, ""},
-		{"https with and without .git", [][]string{{"a", "https://github.com/o/r.git"}, {"b", "https://github.com/o/r2"}, {"c", "ssh://ssh.github.com:443/o/r3.git"}},
+		{"https with and without .git", [][]string{{"origin", "https://github.com/o/r.git", "https://github.com/o/r2", "ssh://ssh.github.com:443/o/r3.git"}},
 			[]config.Forge{gh("github", "o/r"), gh("github-2", "o/r2"), gh("github-3", "o/r3")}, ""},
 		{"gitlab.com", [][]string{{"origin", "https://oauth2:secret@gitlab.com/g/p.git"}},
 			[]config.Forge{gl("gitlab", "gitlab.com", "g/p")}, ""},
-		{"an unknown host", [][]string{{"origin", "git@bitbucket.org:o/r.git"}, {"local", "/srv/git/r.git"}, {"gh", "git@github.com:o/r.git"}},
+		{"an unknown host, a local path", [][]string{{"origin", "git@bitbucket.org:o/r.git", "/srv/git/r.git", "git@github.com:o/r.git"}},
 			[]config.Forge{gh("github", "o/r")}, "skipped git@bitbucket.org:o/r.git: not github.com, nor a GitLab host"},
 	} {
 		forges, skipped := found(t, "", c.remotes...)
@@ -77,6 +78,15 @@ func TestForgesFoundInTheRemotes(t *testing.T) {
 		if strings.Join(skipped, "\n") != c.skipped {
 			t.Errorf("%s: skipped %q", c.name, skipped)
 		}
+	}
+
+	// an alias git resolves (insteadOf) names its forge, and isn't told as skipped
+	dir := storetest.Repo(t, false)
+	storetest.Git(t, dir, "remote", "add", "origin", "gh:o/r")
+	storetest.Git(t, dir, "config", "url.git@github.com:.insteadOf", "gh:")
+	forges, err := storetest.Open(t, dir).Forges(&config.Config{Discover: true}, func(s string) { t.Errorf("alias: %s", s) })
+	if err != nil || !reflect.DeepEqual(forges, []config.Forge{gh("github", "o/r")}) {
+		t.Errorf("alias: %+v, %v", forges, err)
 	}
 
 	wiki := []string{"origin", "git@github.com:EPFL-ENAC/wiki.git"}
@@ -151,11 +161,11 @@ func TestResolveGitHubSpelling(t *testing.T) {
 	t.Cleanup(func() { store.GitHubAPI = saved })
 	store.GitHubAPI = srv.URL
 
-	forges, _ := found(t, "", []string{"origin", "git@github.com:epfl-enac/wiki.git"}, []string{"gone", "git@github.com:o/gone.git"})
+	forges, _ := found(t, "", []string{"origin", "git@github.com:epfl-enac/wiki.git", "git@github.com:epfl-enac/wiki.git", "git@github.com:o/gone.git"})
 	ctx := context.Background()
 	var left []string
 	got := store.ResolveForges(ctx, forges, func(f config.Forge, why error) { left = append(left, f.Name) })
-	if len(got) != 1 || got[0].Project != "EPFL-ENAC/wiki" || !got[0].Discovered || !slices.Equal(left, []string{"github"}) { // o/gone: GitHub doesn't know it
+	if len(got) != 1 || got[0].Project != "EPFL-ENAC/wiki" || !got[0].Discovered || !slices.Equal(left, []string{"github-2"}) { // o/gone: GitHub doesn't know it
 		t.Fatalf("resolved %+v, left out %v", got, left)
 	}
 	opened, err := store.OpenForges(ctx, got)

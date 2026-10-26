@@ -357,7 +357,7 @@ func TestCommentOnAStep(t *testing.T) {
 func TestForgeSyncFindsTheForges(t *testing.T) {
 	storetest.GitHub(t, map[string]string{"o/r": "o/r"}) // serial
 	dir := storetest.Repo(t, false)
-	storetest.Git(t, dir, "remote", "add", "gh", "git@github.com:o/r.git")
+	storetest.ForgeOrigin(t, dir, "git@github.com:o/r.git")
 	storetest.Init(t, dir)
 	s := &apiServer{cfg: &config.Config{Discover: true}, b: storetest.Open(t, dir), me: "guilbep", cfgPath: filepath.Join(t.TempDir(), config.FileName)}
 	ts := httptest.NewServer(withCORS(newMux(s, http.NotFoundHandler())))

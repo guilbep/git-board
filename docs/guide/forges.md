@@ -28,7 +28,9 @@ The GitHub Project isn't read with a forge's token but with the `gh` command, lo
 
 ## Adding a forge
 
-With no `[forges.<name>]` table, git-board needs none: it finds the forges in the repository's git remotes, every fetch and push URL of each (`git@host:path.git`, `ssh://[user@]host[:port]/path`, `https://host/path`, with or without `.git`). Each project counts once, whichever remote names it. Their sync is on, with no login: git's credential helper picks the account.
+With no `[forges.<name>]` table, git-board needs none: it finds the forges in `origin`, its fetch URL and every push URL (`git@host:path.git`, `ssh://[user@]host[:port]/path`, `https://host/path`, with or without `.git`, and aliases git resolves through `insteadOf`). Each project counts once. Their sync is on, with no login: git's credential helper picks the account.
+
+Only `origin` is read: a fork's `upstream`, or a colleague's remote, isn't where your team's issues go, and every forge found is pulled from. For one more forge, give `origin` a push URL there (`git remote set-url --add --push origin git@gitlab.example.com:group/project.git`, which also pushes your code there), or write the forges as tables.
 
 - `github.com` is GitHub, its project `owner/repo` as GitHub spells it: each run reads the repository's `full_name` once, as a URL's case is only your typing and the sync keys its links on the name (`git@github.com:epfl-enac/wiki.git` is `EPFL-ENAC/wiki`, as a table naming it). One GitHub doesn't answer for is left out of that run, with why.
 - `gitlab.com`, or a host whose first label holds `gitlab`, is GitLab. The web host drops a first label `ssh`, or a first label's `-ssh`: `git@gitlab-ssh.epfl.ch:EPFL-ENAC/wiki.git` is `gitlab.epfl.ch`, project `EPFL-ENAC/wiki`. Each run reads the project's numeric id once, as its links are keyed on it; a project whose id can't be read is left out of that run, with why, and the others go on.
@@ -69,7 +71,7 @@ An issue is linked to a forge issue once, by the sync, and stays so: linking by 
 
 ## On the command line
 
-`git board sync` runs the whole sync, as Settings › Sync does, each step in a line; `--check` is its dry run, and `--git` syncs with git alone: a pull, then a push. It has no check to wait for: `--check` first is yours to run. It and `git board switch` print the forges found in the remotes, one line each: name, host and project, a GitLab one's with its id, and each URL they skip.
+`git board sync` runs the whole sync, as Settings › Sync does, each step in a line; `--check` is its dry run, and `--git` syncs with git alone: a pull, then a push. It has no check to wait for: `--check` first is yours to run. Creations wait for consent all the same: on a forge never synced with, or 50 or more on one in a run, none is made without `--allow-create`, and the sync says how many wait. It and `git board switch` print the forges found in the remotes, one line each: name, host and project, a GitLab one's with its id, and each URL they skip.
 
 Otherwise the forges are `.git-board.toml`'s, edited in Settings or by hand:
 

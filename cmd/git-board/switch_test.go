@@ -63,8 +63,10 @@ func TestSwitchCommand(t *testing.T) {
 // chdirs and swaps the forges' opener.
 func TestSwitchFindsTheForges(t *testing.T) {
 	dir, _ := seedRepo(t)
-	storetest.Git(t, dir, "remote", "add", "gh", "git@github.com:o/r.git") // not origin, which the switch fetches
-	storetest.Git(t, dir, "remote", "add", "other", "git@bitbucket.org:o/r.git")
+	storetest.Git(t, dir, "remote", "add", "origin", storetest.Repo(t, true)) // the switch fetches its numbers
+	storetest.ForgeOrigin(t, dir, "git@github.com:o/r.git")
+	storetest.Git(t, dir, "remote", "set-url", "--add", "--push", "origin", "git@bitbucket.org:o/r.git")
+	storetest.Git(t, dir, "remote", "add", "upstream", "git@github.com:org/r.git") // not origin: not read
 	t.Chdir(dir)
 	storetest.GitHub(t, map[string]string{"o/r": "o/r"})
 	f := fake.New("github.com/o/r")
@@ -88,7 +90,8 @@ func TestSwitchFindsTheForges(t *testing.T) {
 // answers for GitHub.
 func TestSwitchForgesLeftOut(t *testing.T) {
 	dir, _ := seedRepo(t)
-	storetest.Git(t, dir, "remote", "add", "gh", "git@github.com:o/gone.git")
+	storetest.Git(t, dir, "remote", "add", "origin", storetest.Repo(t, true))
+	storetest.ForgeOrigin(t, dir, "git@github.com:o/gone.git")
 	t.Chdir(dir)
 	storetest.GitHub(t, map[string]string{}) // GitHub knows no o/gone
 	out, err := execute(t, []string{"switch"})
