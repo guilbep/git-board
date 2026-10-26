@@ -14,6 +14,7 @@
       <div class="gb-inbox-status" role="status">
         <span v-for="c in checks" :key="c.name" :class="{ 'gb-inbox-fail': c.failure }">
           <template v-if="c.failure">{{ c.failure }}</template>
+          <template v-else-if="!c.when"><strong>{{ c.name }}</strong> not checked yet</template>
           <template v-else>
             Checked <strong>{{ c.name }}</strong> {{ c.when }}
             <template v-if="c.incoming">
@@ -78,9 +79,9 @@
         </button>
       </li>
     </ul>
-    <div v-else-if="loaded && data && !error" class="gb-inbox-empty">
+    <div v-else-if="loaded && !error" class="gb-inbox-empty">
       <h2 class="h4">Nothing new for you</h2>
-      <p class="gb-hint">{{ following }}</p>
+      <p class="gb-hint">{{ following || 'Issues you open, comment on or are named in show here when they change.' }}</p>
     </div>
   </main>
 
@@ -152,7 +153,7 @@ const checks = computed(() => {
   const incoming = new Map(toPull(remotes.value).map((p) => [p.name, p.issues]));
   return remotes.value.map((r) => ({
     name: r.name,
-    when: r.checked ? when(r.checked, true) : 'not yet',
+    when: r.checked ? when(r.checked, true) : '',
     incoming: incoming.get(r.name) ?? 0,
     failure: failures.value[r.name] ?? '',
   }));
@@ -326,4 +327,5 @@ onBeforeUnmount(() => stopLive());
 .gb-inbox-read .gb-inbox-dot { background: transparent; }
 .gb-inbox-read .gb-inbox-title { font-weight: normal; }
 .gb-inbox-empty { padding: var(--space-5) 0; text-align: center; }
+.gb-inbox-empty .gb-hint { justify-content: center; }
 </style>

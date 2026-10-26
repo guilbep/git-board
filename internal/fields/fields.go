@@ -114,7 +114,7 @@ func resolveAssignedValue(cfg *config.Config, value, me string, today time.Time)
 		return sprint.Slug, nil
 	case value == "@me":
 		if me == "" {
-			return "", fmt.Errorf("@me needs your forge login: a bridge (git bug bridge new) tags your git-bug identity with it, or pass --me / set GIT_BOARD_ME")
+			return "", fmt.Errorf("@me needs your forge login: write as the person a forge sync made of your account (Settings › You), or pass --me / set GIT_BOARD_ME")
 		}
 		return me, nil
 	default:

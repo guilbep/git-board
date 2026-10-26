@@ -225,6 +225,7 @@ import SprintReportDialog from '@/components/SprintReportDialog.vue';
 import { debounced, onLive } from '@/live';
 import { panelMode } from '@/panelsize';
 import { filtersHidden, newIssueRequested, recordRecent } from '@/commands';
+import { numberName } from '@/palette';
 import { changedSince, loadVisit, saveVisit, visit } from '@/lastvisit';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
@@ -242,8 +243,7 @@ import AppHeader from '@/components/AppHeader.vue';
 import FilterSidebar from '@/components/FilterSidebar.vue';
 import IssueBoard from '@/components/IssueBoard.vue';
 import LaneChooser from '@/components/LaneChooser.vue';
-import { boardLanes } from '@/lanes';
-import { forgeNumbers } from '@/issuesync';
+import { boardLanes, noneFirst } from '@/lanes';
 import IssueTable from '@/components/IssueTable.vue';
 import RoadmapView from '@/components/RoadmapView.vue';
 import GbIcon from '@/components/GbIcon.vue';
@@ -375,7 +375,7 @@ const boardBuckets = computed(() => {
   const options = fields.value[groupField.value]?.options ?? [];
   const present = new Set(shown.value.map((b) => b.group));
   const empty = options.filter((o) => !present.has(o)).map((o) => ({ group: o, issues: [] as Issue[] }));
-  return orderBuckets([...shown.value, ...empty], groupField.value, fields.value);
+  return noneFirst(orderBuckets([...shown.value, ...empty], groupField.value, fields.value));
 });
 
 // lanes are values of the field grouped by: another field, every lane
@@ -638,7 +638,7 @@ watch(
       detailId.value = id;
       detailOpen.value = true;
       const i = all.value.find((x) => x.id === id);
-      if (i) recordRecent({ id, title: i.shown_title, number: forgeNumbers(i)[0] });
+      if (i) recordRecent({ id, title: i.shown_title, number: numberName(i) });
     } else detailOpen.value = false;
   },
   { immediate: true },

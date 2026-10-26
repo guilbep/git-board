@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { Bucket, Issue } from './api/board';
-import { boardLanes, laneChoices, limitState, pickCards, toggleLane } from './lanes.ts';
+import { boardLanes, laneChoices, limitState, noneFirst, pickCards, toggleLane } from './lanes.ts';
 
 const issue = (id: string): Issue => ({ id, title: id, shown_title: id, status: 'open', labels: [] });
 const b = (group: string, ...ids: string[]): Bucket => ({ group, issues: ids.map(issue) });
@@ -39,4 +39,11 @@ test('pickCards toggles with Cmd and takes a range with Shift', () => {
   assert.deepEqual(pickCards(['b'], 'b', order, { toggle: true }), []);
   assert.deepEqual(pickCards(['b'], 'd', order, { range: true, anchor: 'b' }), ['b', 'c', 'd']);
   assert.deepEqual(pickCards(['x'], 'c', order, { range: true, anchor: 'a' }), ['x', 'a', 'b', 'c']);
+});
+
+test('noneFirst: the issues with no value lead the board when there are some', () => {
+  const lanes = (bs: Bucket[]) => noneFirst(bs).map((x) => `${x.group}:${x.issues.length}`);
+  assert.deepEqual(lanes([b('backlog'), b('ready'), b('(none)', 'a', 'b')]), ['(none):2', 'backlog:0', 'ready:0']);
+  assert.deepEqual(lanes([b('backlog', 'c'), b('(none)')]), ['backlog:1', '(none):0']);
+  assert.deepEqual(lanes([b('backlog', 'c')]), ['backlog:1']);
 });

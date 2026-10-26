@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { example, jumps, latest, rank } from './palette.ts';
+import { example, jumps, latest, numberName, rank, recentName } from './palette.ts';
 
 const issues = [
   { key: 'i1', label: 'Fix CSV upload on S3', id: 'b9de9e14aa', numbers: ['2528'] },
@@ -55,4 +55,13 @@ test('example: the newest issue’s number, its project number before a forge’
   assert.equal(example([{ project: 'GB-30', numbers: ['36'] }, { numbers: ['2'] }]), 'GB-30');
   assert.equal(example([{ numbers: [] }, { numbers: ['36'] }]), '#36');
   assert.equal(example([]), '#12');
+});
+
+test('an issue opened lately is named as its card names it: its project number, else #its forge number', () => {
+  assert.equal(numberName({ number: 'GB-30', forges: [{ number: '36' }] }), 'GB-30');
+  assert.equal(numberName({ forges: [{}, { number: '36' }] }), '#36');
+  assert.equal(numberName({}), undefined);
+  assert.equal(recentName({ number: 'GB-30' }), 'GB-30');
+  assert.equal(recentName({ number: '36' }), '#36'); // kept before, a bare forge number
+  assert.equal(recentName({}), undefined);
 });

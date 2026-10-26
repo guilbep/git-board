@@ -220,7 +220,7 @@ func withRoles(cfg *config.Config, issues []store.Issue) {
 
 // ErrNoMe is returned when @me means nobody: no --me, and no forge login on
 // the git-bug identity.
-var ErrNoMe = fmt.Errorf("@me needs your forge login: a bridge (git bug bridge new) tags your git-bug identity with it, or pass --me / set GIT_BOARD_ME")
+var ErrNoMe = fmt.Errorf("@me needs your forge login: write as the person a forge sync made of your account (Settings › You), or pass --me / set GIT_BOARD_ME")
 
 // MyLogin is what @me means without --me: the forge login of the git-bug
 // identity git-board writes as, when b knows it (store.Backend does).

@@ -48,7 +48,7 @@ func (s *apiServer) inboxMe(w http.ResponseWriter) (inbox.Me, bool) {
 	}
 	login := s.viewer()
 	if login == "" {
-		writeCoded(w, http.StatusConflict, "no-login", errors.New("your identity has no forge login, so no field and no mention can name you: git bug bridge new tags it, or start the server with --me"))
+		writeCoded(w, http.StatusConflict, "no-login", errors.New("your person has no forge login, so no field and no mention can name you: write as the person a forge sync made of your account, or start the server with --me"))
 		return inbox.Me{}, false
 	}
 	return inbox.Me{ID: p.ID, Login: login}, true

@@ -60,7 +60,7 @@ import { filtersHidden, newIssueRequested, paletteOpen, recentIssues, recordRece
 import { message } from '@/issue';
 import { when } from '@/me';
 import { forgeNumbers } from '@/issuesync';
-import { example, jumps, latest, rank } from '@/palette';
+import { example, jumps, latest, numberName, rank, recentName } from '@/palette';
 import { suggest } from '@/viewfilter';
 import { helpOpen } from '@/shortcuts';
 import GbIcon, { type IconName } from '@/components/GbIcon.vue';
@@ -139,6 +139,7 @@ watch(paletteOpen, (open) => {
   }
 });
 
+// number: as a card names it, GB-30 or #36
 function openIssue(id: string, title: string, number?: string) {
   recordRecent({ id, title, number });
   if (route.path === '/') void router.replace({ query: { ...route.query, issue: id } });
@@ -172,7 +173,7 @@ function hint(i: Issue, number: string | undefined): string {
 
 function issueEntry(i: Issue, group: string): Entry {
   const number = forgeNumbers(i)[0];
-  return { key: `${group}-${i.id}`, label: i.shown_title, group, icon: i.status === 'closed' ? 'closed' : 'open', hint: hint(i, number), act: () => openIssue(i.id, i.shown_title, number) };
+  return { key: `${group}-${i.id}`, label: i.shown_title, group, icon: i.status === 'closed' ? 'closed' : 'open', hint: hint(i, number), act: () => openIssue(i.id, i.shown_title, numberName(i)) };
 }
 
 // An exact #number or id first, at once (Enter opens it); else the filter
@@ -180,7 +181,7 @@ function issueEntry(i: Issue, group: string): Entry {
 const results = computed<Entry[]>(() => {
   const f = query.value.trim();
   if (!f) {
-    const recent = recentIssues().map((r): Entry => ({ key: `r-${r.id}`, label: r.title, group: 'Opened lately', icon: 'clock', hint: r.number ? `#${r.number}` : r.id.slice(0, 7), act: () => openIssue(r.id, r.title, r.number) }));
+    const recent = recentIssues().map((r): Entry => ({ key: `r-${r.id}`, label: r.title, group: 'Opened lately', icon: 'clock', hint: recentName(r) ?? r.id.slice(0, 7), act: () => openIssue(r.id, r.title, recentName(r)) }));
     return [...recent, ...commands.value];
   }
   const items = all.value.map((i) => ({ key: i.id, label: i.shown_title, id: i.id, numbers: forgeNumbers(i), project: i.number, counted: i.counted, issue: i }));

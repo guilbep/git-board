@@ -15,6 +15,14 @@ export function boardLanes(buckets: Bucket[], lanes: string[] | undefined): { sh
   return { shown, hidden };
 }
 
+// noneFirst puts the lane of the issues with no value first when it holds
+// some: last, it is off screen on a wide board, which then looks empty.
+export function noneFirst(buckets: Bucket[]): Bucket[] {
+  const i = buckets.findIndex((b) => b.group === '(none)');
+  if (i <= 0 || !buckets[i]!.issues.length) return buckets;
+  return [buckets[i]!, ...buckets.slice(0, i), ...buckets.slice(i + 1)];
+}
+
 // the lane chooser's list: the lanes, in their order, then the field's
 // other values
 export function laneChoices(lanes: string[] | undefined, values: string[]): string[] {
