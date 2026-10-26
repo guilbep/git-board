@@ -405,12 +405,19 @@ func (r *run) planLabels(pl *plan, p *project, is *issue.Issue, fi forge.Issue, 
 	for _, l := range r.labelSet(p, fi.Labels) {
 		at(l).f = true
 	}
-	// a label held since it was seen is gone from both sides: agreed, and
-	// left alone on each (TestHeldAfterSeen)
+	// a label held since it was seen stays seen, out of the comparison: once
+	// the hold is lifted, the side that changed it since wins
+	// (TestHeldAfterSeen)
+	var held []string
 	for _, l := range split(seen["labels"]) {
-		at(l).s = true
+		if r.held(p, l) {
+			held = append(held, l)
+		} else {
+			at(l).s = true
+		}
 	}
 	pulled, pushed, base := sets(items, pull, push)
+	base = slices.Sorted(slices.Values(append(base, held...)))
 	for _, l := range pulled {
 		if items[l].f {
 			add = append(add, l)

@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/ghbridge"
 	"github.com/guilbep/git-board/internal/ghlabels"
 	"github.com/guilbep/git-board/internal/lint"
 )
@@ -98,7 +97,7 @@ func (s *apiServer) handleLabelList(w http.ResponseWriter, r *http.Request) {
 	repos := s.labelRepos(cfg)
 	existing, errs := githubLabels(repos)
 	rows := []labelRow{}
-	held := ghbridge.HeldLabels(cfg)
+	held := cfg.Held
 	for _, want := range ghlabels.Desired(cfg) {
 		row := labelRow{Label: want, Field: want.Field, Value: want.Value, OwnColor: want.OwnColor, OwnDescription: want.OwnDescription,
 			Count: counts[strings.ToLower(want.Field+":"+want.Value)], GitHub: []labelOnGitHub{}}
@@ -144,7 +143,7 @@ func (s *apiServer) handleLabelSend(w http.ResponseWriter, r *http.Request) {
 		if !ok {
 			continue
 		}
-		for _, c := range ghlabels.Plan(repo, desired, labels, ghbridge.HeldLabels(cfg)) {
+		for _, c := range ghlabels.Plan(repo, desired, labels, cfg.Held) {
 			done := labelChange{Change: c}
 			if !req.DryRun {
 				if err := ghlabels.Apply(c); err != nil {

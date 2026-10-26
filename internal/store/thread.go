@@ -203,7 +203,7 @@ func (b *Backend) thread(is *issue.Issue, l *oplog.Log, v view) Thread {
 		}
 	}
 	for _, r := range v.records[is.ID] {
-		pending(&th, is, r, from, changed)
+		pending(&th, is, r, from, changed, b.heldOn(r.URL))
 	}
 	return th
 }
@@ -212,11 +212,12 @@ func (b *Backend) thread(is *issue.Issue, l *oplog.Log, v view) Thread {
 // a comment neither posted there nor pulled from it; a description or a
 // comment there whose text git-board changed since (EditWas, the forge's);
 // the latest title and status changes, and each label's, when git-board's
-// value isn't the one last seen. A line comment never goes (isLocal).
+// value isn't the one last seen. A line comment never goes (isLocal), nor
+// a label the sync holds off that forge (held).
 // ponytail: compares git-board's texts with the forge's as they are; one
 // that came from another forge, whose #n and @ sync rewrites, shows as an
 // edit waiting.
-func pending(th *Thread, is *issue.Issue, r syncer.Record, from map[int]*oplog.Origin, changed map[int][2][]string) {
+func pending(th *Thread, is *issue.Issue, r syncer.Record, from map[int]*oplog.Origin, changed map[int][2][]string, held func(string) bool) {
 	name := forgeName(r.URL)
 	mark := func(i int) {
 		if e := &th.Events[i]; !slices.Contains(e.Pending, name) {
@@ -272,7 +273,7 @@ func pending(th *Thread, is *issue.Issue, r syncer.Record, from map[int]*oplog.O
 		seen[l] = l != ""
 	}
 	for l, i := range last {
-		if !isAssigneeLabel(l) && slices.Contains(is.Labels, l) != seen[l] {
+		if !isAssigneeLabel(l) && !held(l) && slices.Contains(is.Labels, l) != seen[l] {
 			mark(i)
 		}
 	}

@@ -94,12 +94,17 @@ func isAssignee(l string) bool {
 func (r *run) labelSet(p *project, labels []string) []string {
 	var out []string
 	for _, l := range labels {
-		if !isAssignee(l) && (r.opt.Held == nil || !r.opt.Held(p.key, l)) {
+		if !isAssignee(l) && !r.held(p, l) {
 			out = append(out, l)
 		}
 	}
 	slices.Sort(out)
 	return slices.Compact(out)
+}
+
+// held says whether p holds the label (Options.Held).
+func (r *run) held(p *project, l string) bool {
+	return r.opt.Held != nil && r.opt.Held(p.key, l)
 }
 
 func split(v string) []string {

@@ -473,35 +473,6 @@ func TestSyncCategoryRemovesItsBareLabel(t *testing.T) {
 	}
 }
 
-// The forges' sync holds what has another home: on GitHub, with a
-// Project, the fields the Project holds; everywhere, the fields naming
-// issues.
-func TestHeldLabels(t *testing.T) {
-	t.Parallel()
-	held := ghbridge.HeldLabels(&config.Config{GithubProject: config.GithubProject{Owner: "o", Number: 1}})
-	for _, c := range []struct {
-		key, label string
-		want       bool
-	}{
-		{"github.com/o/r", "status:ready", true},
-		{"github.com/o/r", "prio:p1", true},
-		{"github.com/o/r", "sprint:sprint-12", true},
-		{"github.com/o/r", "est:6", true},
-		{"github.com/o/r", "hold:blocked", false},
-		{"github.com/o/r", "bug", false},
-		{"github.com/o/r", "parent:vm-12", true},
-		{"gitlab.epfl.ch/42400", "status:ready", false},
-		{"gitlab.epfl.ch/42400", "blocked-by:vm-70", true},
-	} {
-		if got := held(c.key, c.label); got != c.want {
-			t.Errorf("held(%s, %s) = %v, want %v", c.key, c.label, got, c.want)
-		}
-	}
-	if ghbridge.HeldLabels(&config.Config{})("github.com/o/r", "status:ready") {
-		t.Error("without a Project, status: held on GitHub")
-	}
-}
-
 // MoSCoW is kept in step as Priority is; Won't, which slugs to won-t, is
 // named in [fields.moscow] project.
 func TestSyncMoSCoW(t *testing.T) {
@@ -540,7 +511,12 @@ func TestSyncMilestoneReadOnly(t *testing.T) {
 	if len(p.Edits) != 0 || len(p.Conflicts) != 0 || !slices.Contains(p.Changes[0].Added, "milestone:v3-1-pilot") {
 		t.Errorf("edits %+v, conflicts %+v, added %v; want the Project's milestone back", p.Edits, p.Conflicts, p.Changes[0].Added)
 	}
-	if !ghbridge.HeldLabels(syncConfig())("gitlab.epfl.ch/42400", "milestone:v3-1-pilot") {
-		t.Error("a milestone: label would go to GitLab, which has milestones")
+}
+
+// The fields the forges' sync holds for the Project are the ones it syncs.
+func TestSyncedAreProjectFields(t *testing.T) {
+	t.Parallel()
+	if got := ghbridge.SyncedFields(); !slices.Equal(got, config.ProjectFields) {
+		t.Errorf("synced %v, config.ProjectFields %v", got, config.ProjectFields)
 	}
 }

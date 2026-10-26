@@ -159,32 +159,14 @@ var synced = []struct {
 // (the issue's milestone, by title) when a project needs them.
 var readOnly = map[string]bool{"milestone": true}
 
-// HeldLabels is what the forges' sync keeps off a forge (syncer.Options
-// Held), each fact having one home: on GitHub, with a Project, the fields
-// the Project holds; on every forge, the fields naming issues (parent:,
-// blocked-by:…), as no forge holds them as labels, and the milestone, a
-// forge's own.
-// ponytail: every GitHub repository of the board, not the Project's alone:
-// one Project per board.
-func HeldLabels(cfg *config.Config) func(key, label string) bool {
-	return func(key, label string) bool {
-		field, _, ok := strings.Cut(label, ":")
-		if !ok {
-			return false
-		}
-		if cfg.TypeOf(field, nil) == config.TypeIssue || readOnly[field] {
-			return true
-		}
-		if cfg.GithubProject.Number == 0 || !strings.HasPrefix(key, "github.com/") {
-			return false
-		}
-		for _, f := range synced {
-			if f.name == field {
-				return true
-			}
-		}
-		return false
+// SyncedFields are the names of the fields kept in step with the Project,
+// in order: config.ProjectFields.
+func SyncedFields() []string {
+	var names []string
+	for _, f := range synced {
+		names = append(names, f.name)
 	}
+	return names
 }
 
 // BasePrefix is where a Project's bases are recorded on bugs.

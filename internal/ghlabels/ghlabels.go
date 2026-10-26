@@ -162,7 +162,7 @@ func Key(repo string) string { return "github.com/" + repo }
 // with its color and description, and an existing one updated only where
 // the file sets its color or description and GitHub's differs. A label the
 // file says nothing about stays as GitHub has it: an organization's labels
-// keep their colors. A label held off repo (ghbridge.HeldLabels) has
+// keep their colors. A label held off repo (config.Held) has
 // another home there, and is never created.
 func Plan(repo string, desired, existing []Label, held func(key, label string) bool) []Change {
 	var res []Change

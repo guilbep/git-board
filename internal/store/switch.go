@@ -260,7 +260,7 @@ func (b *Backend) Switch(ctx context.Context, run SwitchRun) (SwitchReport, erro
 	for _, f := range run.Forges {
 		fs = append(fs, &counted{f: f.Forge, name: f.Name, dry: true, ids: ids, see: func(SyncEvent) {}})
 	}
-	opt := syncer.Options{PublishPrivate: run.PublishPrivate, Local: isLocal, Mirrors: groups,
+	opt := syncer.Options{PublishPrivate: run.PublishPrivate, Local: isLocal, Held: b.held(), Mirrors: groups,
 		Did: func(_, what, _ string, _ int) {
 			if what == "joined" {
 				rep.Joined++

@@ -323,7 +323,10 @@ func TestHeldLabels(t *testing.T) {
 	}
 }
 
-// A label seen before it was held stays on both sides.
+// A label seen before it was held stays on both sides, and stays seen, the
+// issue read again meanwhile: once the hold is lifted (an older binary, or
+// the Project gone), git-board's change since wins, and no stale copy comes
+// back.
 func TestHeldAfterSeen(t *testing.T) {
 	t.Parallel()
 	s, f := newStore(t), fake.New(key)
@@ -340,6 +343,23 @@ func TestHeldAfterSeen(t *testing.T) {
 	}
 	if fi, _ := f.Get("1"); !slices.Contains(fi.Labels, "status:ready") {
 		t.Errorf("the forge has %v, want status:ready kept", fi.Labels)
+	}
+
+	is := only(t, s)
+	if _, err := issue.Do(t.Context(), s, is.ID, issue.ChangeLabels("a", []string{"status:in-review"}, []string{"status:ready"})); err != nil {
+		t.Fatal(err)
+	}
+	f.Edit("1", func(fi *forge.Issue) { fi.Title = "T2" }) // read again, held
+	if _, err := Sync(t.Context(), s, opt, f); err != nil {
+		t.Fatal(err)
+	}
+	syncAll(t, s, f) // the hold lifted
+	want := []string{"bug", "status:in-review"}
+	if got := slices.Sorted(slices.Values(only(t, s).Labels)); !reflect.DeepEqual(got, want) {
+		t.Errorf("git-board has %v, want %v", got, want)
+	}
+	if fi, _ := f.Get("1"); !reflect.DeepEqual(slices.Sorted(slices.Values(fi.Labels)), want) {
+		t.Errorf("the forge has %v, want %v", fi.Labels, want)
 	}
 }
 

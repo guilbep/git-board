@@ -85,9 +85,7 @@ type ForgeRun struct {
 	// (refs/board-remotes/<Merge>/) are merged into the check's copy
 	// first: the whole sync's check counts what its pull brings in.
 	Merge string
-	// Held keeps labels off a forge (syncer.Options): nil holds none.
-	Held func(key, label string) bool
-	See  func(SyncEvent) // nil hears nothing
+	See   func(SyncEvent) // nil hears nothing
 }
 
 // MaxCreate is how many creations on one forge, in one run, need consent
@@ -199,7 +197,7 @@ func (b *Backend) forgeSync(ctx context.Context, run ForgeRun, way syncWay, issu
 		PublishPrivate: run.PublishPrivate,
 		Issue:          issueID,
 		Local:          isLocal,
-		Held:           run.Held,
+		Held:           b.held(),
 		Warn: func(msg string) {
 			ev := SyncEvent{What: "warning", Line: msg}
 			for key, name := range names {

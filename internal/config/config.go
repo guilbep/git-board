@@ -331,6 +331,29 @@ func checkDescriptions(fields map[string]Field) error {
 	return nil
 }
 
+// ProjectFields are the fields the GitHub Project sync keeps in step with
+// the Project (internal/ghbridge), milestone read only.
+var ProjectFields = []string{"status", "prio", "mod", "est", "sprint", "moscow", "milestone"}
+
+// Held says whether the forges' sync keeps a label off the forge named by
+// key (syncer.Options Held), each fact having one home: on GitHub, with a
+// Project, the fields the Project holds; on every forge, the fields naming
+// issues (parent:, blocked-by:…), as no forge holds them as labels, and
+// the milestone, a forge's own.
+// ponytail: every GitHub repository of the board, not the Project's alone:
+// one Project per board.
+func (c *Config) Held(key, label string) bool {
+	field, _, ok := strings.Cut(label, ":")
+	if !ok {
+		return false
+	}
+	field = strings.ToLower(field) // GitHub's label names ignore case
+	if field == "milestone" || c.TypeOf(field, nil) == TypeIssue {
+		return true
+	}
+	return c.GithubProject.Number != 0 && strings.HasPrefix(strings.ToLower(key), "github.com/") && slices.Contains(ProjectFields, field)
+}
+
 // FlatKinds tells the kinds are plain labels, [branches] kinds without
 // [fields.kind] options: bug, not kind:bug. They are the kind field all the
 // same.

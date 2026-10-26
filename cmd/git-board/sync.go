@@ -9,7 +9,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/ghbridge"
 	"github.com/guilbep/git-board/internal/store"
 )
 
@@ -137,7 +136,7 @@ func wholeOne(ctx context.Context, out io.Writer, path, remote string, check, al
 			if err != nil {
 				return err
 			}
-			run := store.ForgeRun{Forges: fs, PublishPrivate: cfg.PublishPrivate, DryRun: check, AllowCreate: allowCreate, Merge: remote, Held: ghbridge.HeldLabels(cfg)}
+			run := store.ForgeRun{Forges: fs, PublishPrivate: cfg.PublishPrivate, DryRun: check, AllowCreate: allowCreate, Merge: remote}
 			run.See = func(e store.SyncEvent) {
 				line := e.Text(check, eventIssue(b, e.Issue))
 				if e.What == "held" {

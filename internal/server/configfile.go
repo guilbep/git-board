@@ -33,6 +33,7 @@ func (s *apiServer) setConfig(cfg *config.Config) {
 	defer s.cfgMu.Unlock()
 	s.cfg = cfg
 	s.b.SetFlatKinds(cfg)
+	s.b.SetHeld(cfg)
 }
 
 func (s *apiServer) configPath() string {
