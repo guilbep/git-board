@@ -1,5 +1,5 @@
 <template>
-  <AppHeader :views="viewNames" :active="activeView" />
+  <AppHeader :views="viewNames" />
 
   <div class="page" :class="{ 'page-filters-hidden': filtersHidden }">
     <!-- the filters folded to a rail (wide screens): its badge counts the
@@ -33,18 +33,29 @@
         <button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" @click="loadConfig">Try again</button>
       </div>
       <div v-if="unknownView" class="epfl-alert epfl-alert-warning notice" role="alert">
-        There is no saved view named “{{ unknownView }}”. Showing {{ activeView || 'all open issues' }} instead.
+        There is no saved view named “{{ unknownView }}”. Showing {{ activeView ? viewLabel(activeView) : 'all open issues' }} instead.
       </div>
 
-      <div class="page-head">
-        <div class="epfl-eyebrow">{{ activeView ? 'Saved view' : 'Issues' }}</div>
-        <h1 class="h3 page-title">{{ activeView || 'All open issues' }}</h1>
-        <p class="page-meta">
-          {{ layout === 'board' ? 'Board' : layout === 'roadmap' ? 'Roadmap' : 'Table' }}
-          <template v-if="groupField"> · grouped by {{ groupField }}</template>
-          <template v-if="loading && buckets"> · updating…</template>
-          <template v-if="sprintView"> · <button type="button" class="page-report" @click="reportOpen = true">Sprint report</button></template>
+      <!-- the saved views, a tab each in the file's order; the layout, a
+           switch on any of them -->
+      <h1 class="page-h1">Issues{{ activeView ? `: ${viewLabel(activeView)}` : '' }}</h1>
+      <div class="view-head">
+        <nav class="view-tabs" aria-label="Views">
+          <router-link
+            v-for="name in viewNames"
+            :key="name"
+            class="gb-tab"
+            :to="{ path: '/', query: { view: name } }"
+            :aria-current="name === activeView ? 'page' : undefined"
+          >{{ viewLabel(name) }}</router-link>
+        </nav>
+        <p class="view-meta">
+          <span v-if="loading && buckets">Updating…</span>
+          <button v-if="sprintView" type="button" class="page-report" @click="reportOpen = true">Sprint report</button>
         </p>
+        <div class="layout-switch" role="group" aria-label="Layout">
+          <button v-for="l in layouts" :key="l" type="button" :aria-pressed="layout === l" @click="setLayout(l)">{{ displayName(l) }}</button>
+        </div>
         <SprintReportDialog v-if="sprintView" v-model="reportOpen" />
       </div>
 
@@ -97,9 +108,10 @@
            saved into .git-board.toml for everyone, or dropped. -->
       <div v-if="viewDirty" class="viewbar" role="region" aria-label="Unsaved changes to the view">
         <span class="viewbar-what">
-          <b>{{ activeView ? `Unsaved changes to ${activeView}` : 'Not a saved view' }}</b>
+          <b>{{ activeView ? `Unsaved changes to ${viewLabel(activeView)}` : 'Not a saved view' }}</b>
           <code v-if="draft.filter" class="viewbar-filter">{{ draft.filter }}</code>
           <span v-else class="viewbar-meta">every issue</span>
+          <span v-if="draft.layout !== viewLayout" class="viewbar-meta">as a {{ draft.layout }}</span>
           <span v-if="draft.group" class="viewbar-meta">grouped by {{ draft.group }}</span>
           <span v-if="draft.sort" class="viewbar-meta">sorted by {{ draft.sort }}</span>
           <span v-if="!sameColumns(draft.columns, view?.columns)" class="viewbar-meta">{{ draft.columns ? 'columns of its own' : 'default columns' }}</span>
@@ -270,9 +282,11 @@ const buckets = ref<Bucket[] | null>(null); // null until a load lands
 const loading = ref(false);
 const listError = ref('');
 
-const viewNames = computed(() => Object.keys(views.value).sort());
+const viewNames = computed(() => Object.keys(views.value)); // the file's order (the server keeps it)
+// a tab's words: current-sprint → Current sprint
+const viewLabel = (name: string) => displayName(name.replaceAll('-', ' '));
 const requestedView = computed(() => (typeof route.query.view === 'string' ? route.query.view : ''));
-// The view in the URL, or the first one (alphabetical) when none is asked for.
+// The view in the URL, or the first one when none is asked for.
 const activeView = computed(() =>
   requestedView.value in views.value ? requestedView.value : (viewNames.value[0] ?? ''),
 );
@@ -282,7 +296,13 @@ const unknownView = computed(() =>
     : '',
 );
 const view = computed(() => views.value[activeView.value]);
-const layout = computed(() => view.value?.layout ?? 'table');
+const layouts = ['table', 'board', 'roadmap'];
+const viewLayout = computed(() => view.value?.layout || 'table');
+// the view's layout, or the switch's (?layout=, so a link keeps it)
+const layout = computed(() => {
+  const l = route.query.layout;
+  return typeof l === 'string' && layouts.includes(l) ? l : viewLayout.value;
+});
 
 type Patch = Record<string, string | string[] | undefined>;
 /** Merge keys into the URL query; undefined removes one. */
@@ -458,6 +478,22 @@ const sortChoices = computed(() =>
   ]),
 );
 
+// a board by nothing is one column: the switch groups it by status, when
+// there's one, and takes that back on the way out
+let switchGrouped = false;
+async function setLayout(l: string) {
+  await setQuery({ layout: l === viewLayout.value ? undefined : l });
+  if (l === 'board' && !groupField.value && groupChoices.value.includes('status')) {
+    groupField.value = 'status';
+    switchGrouped = true;
+    regroup();
+  } else if (l !== 'board' && switchGrouped && groupField.value === 'status') {
+    groupField.value = view.value?.group ?? '';
+    switchGrouped = false;
+    regroup();
+  }
+}
+
 function onSortSelect(event: Event) {
   void setQuery({ sort: (event.target as HTMLSelectElement).value || undefined });
 }
@@ -490,8 +526,8 @@ const lanesChanged = computed(() => !sameColumns(lanes.value, view.value?.lanes)
 const viewDirty = computed(() => {
   const v = view.value;
   const d = draft.value;
-  if (!v) return d.filter !== 'is:open' || d.group !== '' || d.sort !== '' || !!d.columns || !!d.lanes || !!d.limits;
-  return d.filter !== v.filter || d.group !== (v.group ?? '') || d.sort !== (v.sort ?? '') || !sameColumns(d.columns, v.columns) || lanesChanged.value;
+  if (!v) return d.layout !== 'table' || d.filter !== 'is:open' || d.group !== '' || d.sort !== '' || !!d.columns || !!d.lanes || !!d.limits;
+  return d.layout !== viewLayout.value || d.filter !== v.filter || d.group !== (v.group ?? '') || d.sort !== (v.sort ?? '') || !sameColumns(d.columns, v.columns) || lanesChanged.value;
 });
 const naming = ref(false);
 const newName = ref('');
@@ -535,6 +571,7 @@ async function loadConfig() {
 // Back to the view's grouping, columns and lanes (the URL's filter stays:
 // a shared link keeps it).
 function resetView() {
+  switchGrouped = false;
   groupField.value = view.value?.group ?? '';
   columns.value = view.value?.columns;
   lanes.value = view.value?.lanes;
@@ -729,10 +766,22 @@ onBeforeUnmount(offLive);
 
 .notice { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-bottom: var(--space-3); }
 
-.page-head { margin-bottom: var(--space-3); }
-.page-title { margin: 0 0 var(--space-1); overflow-wrap: anywhere; }
-.page-meta { margin: 0; font-size: var(--fs-sm); color: var(--fg-muted); }
+/* the header's Issues says it: the h1 is for screen readers */
+.page-h1 { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+/* the tabs (gitboard.css's .gb-tab), scrolling sideways when they're many,
+   on a line their bar covers; then what the view is doing, and the layout */
+.view-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); margin-bottom: var(--space-3); }
+.view-tabs { display: flex; flex: 1 1 auto; min-width: 0; overflow-x: auto; box-shadow: inset 0 -1px 0 var(--border); }
+.view-tabs .gb-tab { display: inline-flex; flex: none; align-items: center; white-space: nowrap; text-decoration: none; }
+.view-tabs .gb-tab::after { bottom: 0; }
+.view-meta { display: flex; gap: var(--space-2); margin: 0; font-size: var(--fs-sm); color: var(--fg-muted); }
 .page-report { padding: 0; border: 0; background: none; color: var(--fg); font: inherit; text-decoration: underline; cursor: pointer; }
+.layout-switch { display: inline-flex; border: 1px solid var(--border-strong); }
+.layout-switch button { padding: .375rem .75rem; border: 0; background: var(--bg); color: var(--fg-muted); font: inherit; font-size: var(--fs-sm); cursor: pointer; }
+.layout-switch button + button { border-left: 1px solid var(--border-strong); }
+.layout-switch button:hover { color: var(--fg); }
+.layout-switch button[aria-pressed="true"] { background: var(--fg); color: var(--bg); font-weight: var(--w-bold); }
+.layout-switch button:focus-visible { outline: var(--focus-w) solid var(--primary-hover); outline-offset: 0.125rem; }
 
 .toolbar {
   display: flex;

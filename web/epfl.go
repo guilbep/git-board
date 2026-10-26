@@ -8,7 +8,7 @@ import (
 // The EPFL design system for pages built outside the Quasar app — the
 // static site of `git-board html`, which inlines it so the site works from
 // a plain rsync target. Same vendored copy (epfl-design/, see README.md)
-// and logo (public/epfl-logo.svg) the web UI uses: one source.
+// and logo (public/git-board.svg) the web UI uses: one source.
 
 //go:embed epfl-design/tokens/colors_and_type.css
 var epflTokens string
@@ -22,10 +22,10 @@ var epflHeader string
 //go:embed epfl-design/css/templates/layout.css
 var epflLayout string
 
-// EPFLLogoSVG is the EPFL logo, as served to the web UI.
+// LogoSVG is git-board's logo, as served to the web UI.
 //
-//go:embed public/epfl-logo.svg
-var EPFLLogoSVG []byte
+//go:embed public/git-board.svg
+var LogoSVG []byte
 
 // EPFLCSS is the token layer (with Suisse Int'l's @font-face rules, which
 // load from enac-it-fonts.epfl.ch) plus the header and layout classes

@@ -4,7 +4,7 @@
      per target, its images and its record. Yank… and Promote (a candidate
      of the environment before last) act on it. The canvas's release board. -->
 <template>
-  <AppHeader :views="viewNames" active="" />
+  <AppHeader :views="viewNames" />
   <main class="gb-page">
     <nav aria-label="Breadcrumb" class="gb-rel-crumb">
       <router-link to="/releases" class="gb-rel-back"><GbIcon name="back" small />Releases</router-link>
@@ -441,7 +441,7 @@ onBeforeUnmount(offLive);
 
 onMounted(() => {
   void getViews().then(
-    (v) => (viewNames.value = Object.keys(v).sort()),
+    (v) => (viewNames.value = Object.keys(v)),
     () => {},
   );
   load();

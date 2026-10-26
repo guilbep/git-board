@@ -6,7 +6,7 @@
      you write as, the appearance). #/settings/sync?add=1 opens "Add a
      forge". -->
 <template>
-  <AppHeader :views="viewNames" active="" />
+  <AppHeader :views="viewNames" />
   <div class="gb-page set">
     <nav class="set-nav" aria-label="Settings">
       <h1 class="h3 set-title">Settings</h1>
@@ -168,7 +168,7 @@ async function reload() {
     error.value = message(e);
   }
   try {
-    viewNames.value = Object.keys(await getViews()).sort();
+    viewNames.value = Object.keys(await getViews());
   } catch {
     // the header shows no views
   }

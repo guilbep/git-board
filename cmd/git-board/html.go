@@ -8,7 +8,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"time"
 
@@ -78,11 +77,7 @@ func runHTML(out io.Writer, outputDir, me string) error {
 		return fmt.Errorf("creating %s: %w", outputDir, err)
 	}
 
-	names := make([]string, 0, len(cfg.Views))
-	for name := range cfg.Views {
-		names = append(names, name)
-	}
-	sort.Strings(names)
+	names := cfg.ViewNames()
 
 	generated := time.Now()
 	for _, name := range names {
@@ -289,10 +284,10 @@ var tmplFuncs = template.FuncMap{
 // no raw colors or px, borders not shadows, 2px radii.
 //
 // The logo is inlined as a data URI and drawn as a mask over
-// var(--primary), like the web UI's header: the vendored epfl-logo.svg has
-// no fill of its own (black as an <img>), the brand logo is red.
+// var(--primary), like the web UI's header: git-board.svg is drawn
+// black, the logo is red.
 var pageCSS = boardweb.EPFLCSS + `
-.logo-mark { display: block; height: 2rem; aspect-ratio: 182.4 / 53; background: var(--primary); mask: url("data:image/svg+xml;base64,` + base64.StdEncoding.EncodeToString(boardweb.EPFLLogoSVG) + `") center / contain no-repeat; }
+.logo-mark { display: block; height: 2rem; aspect-ratio: 1; background: var(--primary); mask: url("data:image/svg+xml;base64,` + base64.StdEncoding.EncodeToString(boardweb.LogoSVG) + `") center / contain no-repeat; }
 body { margin: 0; }
 .app-name { margin-left: var(--space-3); padding-left: var(--space-3); border-left: var(--border-w) solid var(--border); font-weight: var(--w-bold); font-size: var(--fs-h5); line-height: var(--lh-tight); white-space: nowrap; }
 .epfl-breadcrumb { padding-left: var(--gutter); padding-right: var(--gutter); }
@@ -346,7 +341,7 @@ var pageHead = `<meta name="viewport" content="width=device-width, initial-scale
 // pageHeader is the EPFL header: logo, app name and one nav entry per
 // view, the current one marked with the red dot (class="active").
 const pageHeader = `<header class="epfl-header" role="banner">
-<a class="epfl-logo" href="index.html"><span class="logo-mark" role="img" aria-label="EPFL"></span></a>
+<a class="epfl-logo" href="index.html"><span class="logo-mark" role="img" aria-label="git-board"></span></a>
 <span class="app-name">git-board</span>
 <nav class="epfl-nav" aria-label="Views">{{range .Views}}<a href="{{.}}.html"{{if eq . $.ViewName}} class="active" aria-current="page"{{end}}>{{.}}</a>{{end}}{{if .Releases}}<a href="releases.html"{{if eq .ViewName "Releases"}} class="active" aria-current="page"{{end}}>Releases</a>{{end}}</nav>
 </header>`

@@ -93,17 +93,13 @@ style = "code formatting only; rarely an issue"
 chore = "dependencies, CI, tooling, upgrades, housekeeping"
 design = "design work (Figma), usually a sub-issue of the feat it designs"
 
-# Views are sorted by name: `all`, every open issue in a table, as a
-# forge's issues page, is the one git-board opens on.
-[views.all]
+# Views are the tabs above the issues, in this order; git-board opens on
+# the first. Table, board or roadmap is a switch on every view, `layout`
+# only the one it opens in: `open`, every open issue, as a forge's issues
+# page, is one click from its kanban.
+[views.open]
 layout = "table"
 filter = "is:open"
-sort = "prio asc"
-
-[views.board]
-layout = "board"
-filter = "is:open"
-group = "status"
 sort = "prio asc"
 
 [views.backlog]
@@ -111,7 +107,7 @@ layout = "table"
 filter = "is:open status:backlog,ready"
 sort = "prio asc"
 
-[views.mine]
+[views.assigned-to-me]
 layout = "table"
 filter = "assignee:@me is:open"
 group = "status"

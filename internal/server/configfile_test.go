@@ -1,6 +1,7 @@
 package server
 
 import (
+	"encoding/json"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -198,6 +199,12 @@ func TestSaveViewWritesItsTable(t *testing.T) {
 	var saved map[string]struct{ Columns []string }
 	if code := call(t, "PUT", ts.URL+"/api/views/cols", withCols, &saved); code != http.StatusOK || strings.Join(saved["cols"].Columns, ",") != "title,status,links" {
 		t.Errorf("a view's columns: %d %+v", code, saved["cols"])
+	}
+	// the file's order, the tabs': in-review before cols, unlike the alphabet
+	var raw json.RawMessage
+	call(t, "GET", ts.URL+"/api/views", nil, &raw)
+	if i, j := strings.Index(string(raw), `"in-review"`), strings.Index(string(raw), `"cols"`); i < 0 || j < i {
+		t.Errorf("views not in the file's order: %s", raw)
 	}
 	if code := call(t, "PUT", ts.URL+"/api/views/my%20view", body, nil); code != http.StatusBadRequest {
 		t.Errorf("a name with a space: %d, want 400", code)

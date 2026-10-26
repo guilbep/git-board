@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -230,13 +231,28 @@ func newMux(s *apiServer, static http.Handler) http.Handler {
 	return withGuard(s.withEvents(mux), s.exposed)
 }
 
+// writeViews writes the views as one object in the file's order, the
+// board's tabs' (encoding/json would sort a map's keys); {} for none.
+func writeViews(w http.ResponseWriter, cfg *config.Config) {
+	var b bytes.Buffer
+	b.WriteByte('{')
+	for i, name := range cfg.ViewNames() {
+		if i > 0 {
+			b.WriteByte(',')
+		}
+		k, _ := json.Marshal(name)
+		v, _ := json.Marshal(cfg.Views[name]) // strings, lists and ints: it marshals
+		b.Write(k)
+		b.WriteByte(':')
+		b.Write(v)
+	}
+	b.WriteByte('}')
+	writeJSON(w, http.StatusOK, json.RawMessage(b.Bytes()))
+}
+
 // Both answer {} without a config: a nil map would encode as null.
 func (s *apiServer) handleViews(w http.ResponseWriter, r *http.Request) {
-	views := s.config().Views
-	if views == nil {
-		views = map[string]config.View{}
-	}
-	writeJSON(w, http.StatusOK, views)
+	writeViews(w, s.config())
 }
 
 // fieldResponse is a field as the page gets it: the config's, its type
