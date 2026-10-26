@@ -133,15 +133,17 @@ type SwitchReport struct {
 	Applied     bool
 }
 
+// ErrNoForge: a switch pulls the issues from the forges, and has none.
+var ErrNoForge = errors.New("no forge to pull from: add a git remote on GitHub or GitLab, or a [forges.<name>] table with sync = true to .git-board.toml")
+
 // Switch runs a switch on a copy of the repository, and applies it when
 // asked, by fetching the copy's refs/board/* here. No write reaches a
 // forge: every one is answered in the process.
 func (b *Backend) Switch(ctx context.Context, run SwitchRun) (SwitchReport, error) {
 	rep := SwitchReport{Forges: map[string]int{}}
 	block := func(format string, a ...any) { rep.Blockers = append(rep.Blockers, fmt.Sprintf(format, a...)) }
-	if len(run.Forges) == 0 {
-		block("no forge to pull from: a [forges.<name>] table with sync = true in .git-board.toml")
-		return rep, nil
+	if len(run.Forges) == 0 { // a switch would carry no issue: not a blocker --force lifts
+		return rep, ErrNoForge
 	}
 	if _, err := os.Stat(filepath.Join(b.s.CommonDir(), "board", "sync.lock")); err == nil {
 		block("a forge sync runs, or left board/sync.lock in the git directory")

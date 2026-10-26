@@ -175,12 +175,14 @@ func TestForgeSyncWaitsForTheSwitch(t *testing.T) {
 	}
 }
 
-// With no forge, the switch has nothing to pull, and says so.
+// With no forge, the switch has nothing to pull: an error naming both
+// fixes, which --force doesn't lift.
 func TestSwitchWithoutForges(t *testing.T) {
 	t.Parallel()
 	b := gitbugiotest.New(t)
-	rep, err := b.Switch(t.Context(), gitbugio.SwitchRun{Apply: true})
-	if err != nil || rep.Applied || len(rep.Blockers) != 1 {
+	rep, err := b.Switch(t.Context(), gitbugio.SwitchRun{Apply: true, Force: true})
+	if !errors.Is(err, gitbugio.ErrNoForge) || rep.Applied || !strings.Contains(err.Error(), "git remote on GitHub or GitLab") ||
+		!strings.Contains(err.Error(), "[forges.<name>] table with sync = true") {
 		t.Fatalf("%+v, %v", rep, err)
 	}
 }
