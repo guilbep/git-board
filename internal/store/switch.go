@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -134,6 +135,10 @@ type SwitchReport struct {
 	Writes      []string
 	Blockers    []string
 	Applied     bool
+	// You is who this clone writes as from the switch on: the person made
+	// of its git-bug identity (git config git-bug.identity), board.me once
+	// applied; "" when board.me is set already, or there is none.
+	You, YouID string
 }
 
 // ErrNoForge: a switch pulls the issues from the forges, and has none.
@@ -288,7 +293,11 @@ func (b *Backend) Switch(ctx context.Context, run SwitchRun) (SwitchReport, erro
 	if err := lostComments(scratch, fork, issueOf, &rep); err != nil {
 		return rep, err
 	}
-	if err := carryReleases(ctx, scratch, fork.Users, &rep); err != nil {
+	person := forkPerson(ctx, scratch, fork.Users)
+	if err := carryReleases(ctx, scratch, person, &rep); err != nil {
+		return rep, err
+	}
+	if err := b.you(scratch, fork.Users, person, &rep); err != nil {
 		return rep, err
 	}
 	if err := wouldPush(ctx, scratch, run, opt, records, unlisted, &rep); err != nil {
@@ -317,6 +326,11 @@ func (b *Backend) Switch(ctx context.Context, run SwitchRun) (SwitchReport, erro
 	}
 	if err := b.markSwitched(); err != nil {
 		return rep, fmt.Errorf("applying the switch: %w", err)
+	}
+	if rep.YouID != "" {
+		if err := people.SetMe(ctx, b.s, rep.YouID); err != nil {
+			return rep, fmt.Errorf("applying the switch: %w", err)
+		}
 	}
 	rep.Applied = true
 	return rep, nil
@@ -635,32 +649,37 @@ func readForkRelease(s *gitstore.Store, head gitstore.Hash) ([]forkOp, error) {
 	return out, nil
 }
 
-// carryReleases copies each fork record into the release kind, unless its
-// commit has a record there already, its authors as persons: by login,
-// else by name, else a new one.
-func carryReleases(ctx context.Context, s *gitstore.Store, users []ForkUser, rep *SwitchReport) error {
-	heads, err := s.Refs("refs/releases/")
+// forkIdentity is a git-bug identity's id.
+var forkIdentity = regexp.MustCompile(`^[0-9a-f]{64}$`)
+
+// you is the person the switch made of this clone's git-bug identity, when
+// board.me isn't set: the fork's user of that id, as person finds it.
+func (b *Backend) you(s *gitstore.Store, users []ForkUser, person func(forkID string) (string, error), rep *SwitchReport) error {
+	if me, err := people.Me(ctx, b.s); err != nil || me != "" {
+		return err
+	}
+	out, _ := b.git("config", "--get", "git-bug.identity") // unset: exit 1, no one
+	id := strings.TrimSpace(string(out))
+	if !forkIdentity.MatchString(id) || !slices.ContainsFunc(users, func(u ForkUser) bool { return u.ID == id }) {
+		return nil
+	}
+	pid, err := person(id)
 	if err != nil {
 		return err
 	}
-	rep.Releases = len(heads)
-	have := map[string]bool{}
-	ids, err := oplog.List(s, "release")
+	p, err := people.Load(s, pid)
 	if err != nil {
 		return err
 	}
-	for _, id := range ids {
-		l, err := oplog.Load(s, "release", id)
-		if err != nil {
-			return err
-		}
-		var d releaseData
-		if len(l.Entries) > 0 && json.Unmarshal(l.Entries[0].Data, &d) == nil {
-			have[d.Commit] = true
-		}
-	}
+	rep.You, rep.YouID = p.Name, pid
+	return nil
+}
+
+// forkPerson is the person of each fork identity in s: by login, else by
+// name, else a new one, made once.
+func forkPerson(ctx context.Context, s *gitstore.Store, users []ForkUser) func(forkID string) (string, error) {
 	persons := map[string]string{} // fork identity -> person
-	person := func(forkID string) (string, error) {
+	return func(forkID string) (string, error) {
 		if p, ok := persons[forkID]; ok {
 			return p, nil
 		}
@@ -695,6 +714,31 @@ func carryReleases(ctx context.Context, s *gitstore.Store, users []ForkUser, rep
 		}
 		persons[forkID] = byName
 		return byName, nil
+	}
+}
+
+// carryReleases copies each fork record into the release kind, unless its
+// commit has a record there already, its authors as persons (forkPerson).
+func carryReleases(ctx context.Context, s *gitstore.Store, person func(forkID string) (string, error), rep *SwitchReport) error {
+	heads, err := s.Refs("refs/releases/")
+	if err != nil {
+		return err
+	}
+	rep.Releases = len(heads)
+	have := map[string]bool{}
+	ids, err := oplog.List(s, "release")
+	if err != nil {
+		return err
+	}
+	for _, id := range ids {
+		l, err := oplog.Load(s, "release", id)
+		if err != nil {
+			return err
+		}
+		var d releaseData
+		if len(l.Entries) > 0 && json.Unmarshal(l.Entries[0].Data, &d) == nil {
+			have[d.Commit] = true
+		}
 	}
 	for _, ref := range slices.Sorted(maps.Keys(heads)) {
 		name := "release " + short(strings.TrimPrefix(ref, "refs/releases/"))

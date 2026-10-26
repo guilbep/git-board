@@ -164,6 +164,34 @@ func TestSwitch(t *testing.T) {
 	noWrites(t, fs)
 }
 
+// The switch carries who you are: board.me, unset, becomes the person it
+// made of the clone's git-bug identity, here found by its login; the dry
+// run says so and sets nothing. A board.me set stays.
+func TestSwitchCarriesWhoYouAre(t *testing.T) {
+	t.Parallel()
+	b, run, _ := switchSetup(t)
+	storetest.Git(t, b.GitDir(), "config", "--unset", "board.me")
+	storetest.Git(t, b.GitDir(), "config", "git-bug.identity", forkID('9')) // Alice, alice on GitHub
+	rep, err := b.Switch(t.Context(), run)
+	if err != nil || rep.You != "alice" || rep.YouID == "" {
+		t.Fatalf("dry run: you %q (%s), %v", rep.You, rep.YouID, err)
+	}
+	if _, ok, _ := b.Me(); ok {
+		t.Fatal("the dry run set board.me")
+	}
+	run.Apply, run.Force = true, true
+	if rep, err = b.Switch(t.Context(), run); err != nil || !rep.Applied {
+		t.Fatalf("apply: %v", err)
+	}
+	me, ok, err := b.Me()
+	if err != nil || !ok || me.ID != rep.YouID || me.Login != "alice" {
+		t.Fatalf("me %+v (%v, %v), want alice's person %s", me, ok, err, rep.YouID)
+	}
+	if rep, err = b.Switch(t.Context(), run); err != nil || rep.You != "" {
+		t.Fatalf("board.me set: you %q, %v", rep.You, err)
+	}
+}
+
 // A forge sync refuses a repository still on the fork, until its switch.
 func TestForgeSyncWaitsForTheSwitch(t *testing.T) {
 	t.Parallel()

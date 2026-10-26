@@ -33,8 +33,10 @@ what the next sync would write to the forges, every write answered
 without being made. It writes nothing here but origin's numbers, fetched,
 and nothing on any forge.
 
---apply does the same, then writes the copy's refs/board/* here. It
-never deletes refs/bugs and never pushes. It refuses when the report has
+--apply does the same, then writes the copy's refs/board/* here, and,
+unless board.me is set, makes you the person of your git-bug identity
+(git config git-bug.identity). It never deletes refs/bugs and never
+pushes. It refuses when the report has
 a blocker. --allow-create accepts the issues and comments the next sync
 would create on the forges, that blocker alone; --force applies despite
 every blocker.
@@ -162,6 +164,9 @@ func printSwitch(out io.Writer, rep store.SwitchReport, apply bool) {
 	fmt.Fprintf(out, "The next sync: %d creations on the forges, %d other writes.\n", len(rep.WouldCreate), len(rep.Writes))
 	list("it would create", rep.WouldCreate)
 	list("its other writes", rep.Writes)
+	if rep.You != "" && !rep.Applied {
+		fmt.Fprintf(out, "You: %s, your git-bug identity, who you write as once applied (board.me).\n", rep.You)
+	}
 	if len(rep.Blockers) > 0 {
 		fmt.Fprintln(out, "Blockers:")
 		for _, b := range rep.Blockers {
@@ -170,6 +175,9 @@ func printSwitch(out io.Writer, rep store.SwitchReport, apply bool) {
 	}
 	if rep.Applied {
 		fmt.Fprintln(out, "Applied: refs/board/* written; refs/bugs/* kept; nothing pushed.")
+		if rep.You != "" {
+			fmt.Fprintf(out, "You: %s\n", rep.You)
+		}
 		if rep.Numbers > 0 {
 			r := store.NumbersRemote
 			fmt.Fprintf(out, "Next: git push %s refs/board/seq. Until then, git-board sync and numbers refuse: this clone has numbers %s hasn't.\n", r, r)

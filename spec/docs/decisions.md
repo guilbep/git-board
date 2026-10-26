@@ -353,6 +353,12 @@ answered in the process, to show what it would create.
   edit clock. The switch copies them in edit-clock order into the
   `release` kind, their authors the persons with their login, and skips a
   commit that has a record already.
+- **Who you are carries over.** git-bug's identity is the clone's `git
+  config git-bug.identity`, a 64-hex id. The switch finds its person as
+  it finds a release author's: the fork's user of that id (`git bug user
+  --format json`), by login among the persons' accounts, else by name.
+  The report says "You: <name>", and `--apply` sets `board.me` to that
+  person, unless it is set already.
 - **The switch's mark** is `refs/board/switched`, which `--apply` writes
   last: a commit of nothing, at the switch's time. A repository with
   `refs/bugs` and no mark is still git-bug's: a forge sync refuses it, and
