@@ -1,29 +1,28 @@
 package gitbugio_test
 
 import (
-	"context"
-	"errors"
+	"maps"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
-	"github.com/git-bug/git-bug/bridge/core"
-	"github.com/git-bug/git-bug/bridge/core/auth"
-	"github.com/git-bug/git-bug/cache"
-	"github.com/git-bug/gitconfig"
-
+	"github.com/guilbep/git-board/core/forge"
+	"github.com/guilbep/git-board/core/forge/fake"
+	"github.com/guilbep/git-board/internal/config"
+	"github.com/guilbep/git-board/internal/gitbugio"
 	"github.com/guilbep/git-board/internal/gitbugio/gitbugiotest"
 )
 
-func drain(t *testing.T, results <-chan core.SyncResult, err error) {
-	t.Helper()
-	if err != nil {
-		t.Fatal(err)
+// run is a run with these forges, each named by its host's first word.
+func run(fs ...*fake.Forge) gitbugio.ForgeRun {
+	var r gitbugio.ForgeRun
+	for _, f := range fs {
+		name, _, _ := strings.Cut(f.Key(), ".")
+		r.Forges = append(r.Forges, gitbugio.NamedForge{Name: name, Forge: f})
 	}
-	for r := range results {
-		if r.IsError() {
-			t.Error(r.String())
-		}
-	}
+	return r
 }
 
 // Get brings the forge's issues in and sends nothing; Send sends and gets
@@ -31,125 +30,181 @@ func drain(t *testing.T, results <-chan core.SyncResult, err error) {
 func TestGetAndSendAreOneWay(t *testing.T) {
 	t.Parallel()
 	b := gitbugiotest.New(t)
-	theForge := gitbugiotest.NewForge(t, b, "fk")
-	theForge.UserAct("alice").CreateIssue("from the forge", "body")
+	f := fake.New("github.com/o/r")
+	f.Add(forge.Issue{Title: "from the forge", Body: "body", Author: forge.Account{ID: "7", Login: "alice"}})
 	gitbugiotest.NewIssue(t, b, "from git-board")
 
-	results, err := b.GetForges(context.Background(), nil)
-	drain(t, results, err)
-	if issues, _ := b.ListIssues(); len(issues) != 2 || theForge.Writes() != 0 {
-		t.Fatalf("after Get: %d issues here, %d writes to the forge; want 2 and none", len(issues), theForge.Writes())
+	if _, err := b.GetForges(t.Context(), run(f)); err != nil {
+		t.Fatal(err)
 	}
-	if cfg, _ := b.TestCache().Config().Read(); cfg.Value("git-bug.bridge.fk.lastSyncTime", "") == "" {
-		t.Error("Get didn't move the sync's pull time on, as a sync does")
+	if issues, _ := b.ListIssues(); len(issues) != 2 || len(f.Writes()) != 0 {
+		t.Fatalf("after Get: %d issues here, %d writes to the forge; want 2 and none", len(issues), len(f.Writes()))
 	}
-
-	theForge.UserAct("alice").CreateIssue("later on the forge", "body")
-	results, err = b.SendForges(context.Background(), []string{"fk"})
-	drain(t, results, err)
-	if theForge.Issue("3") == nil || theForge.Issue("3").Title != "from git-board" {
-		t.Errorf("Send didn't create the issue on the forge")
+	f.Add(forge.Issue{Title: "later on the forge", Author: forge.Account{ID: "7", Login: "alice"}})
+	if _, err := b.SendForges(t.Context(), run(f)); err != nil {
+		t.Fatal(err)
+	}
+	if got, ok := f.Get("3"); !ok || got.Title != "from git-board" {
+		t.Errorf("Send didn't create the issue on the forge: %+v", f.All())
 	}
 	if issues, _ := b.ListIssues(); len(issues) != 2 {
 		t.Errorf("Send got %d issues, want the 2 it had", len(issues))
 	}
+}
 
-	if _, err := b.GetForges(context.Background(), []string{"nope"}); err == nil {
-		t.Error("Get on an unknown bridge: no error")
+func counts(events []gitbugio.SyncEvent) map[string]int {
+	out := map[string]int{}
+	for _, e := range events {
+		out[e.Forge+" "+e.What]++
+	}
+	return out
+}
+
+// A dry run writes nothing, here or on a forge, and counts what the run
+// would do: what one forge has goes to the other, a comment by someone
+// with their own token too. The run then does what it said.
+func TestDryRunWritesNothing(t *testing.T) {
+	t.Parallel()
+	b := gitbugiotest.New(t)
+	gh, gl := fake.New("github.com/o/r"), fake.New("gitlab.example.com/7")
+	bob := forge.Account{ID: "8", Login: "bob"}
+	gh.Add(forge.Issue{Title: "from GitHub", Author: forge.Account{ID: "7", Login: "alice"},
+		Comments: []forge.Comment{{Body: "bob's", Author: bob}}})
+	gitbugiotest.NewIssue(t, b, "from git-board")
+	before, err := b.Store().Refs("refs/")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var dry []gitbugio.SyncEvent
+	r := run(gh, gl)
+	r.DryRun, r.See = true, func(e gitbugio.SyncEvent) { dry = append(dry, e) }
+	report, err := b.SyncForges(t.Context(), r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	after, _ := b.Store().Refs("refs/")
+	if !maps.Equal(before, after) || len(gh.Writes()) != 0 || len(gl.Writes()) != 0 {
+		t.Fatalf("a dry run wrote: refs %v -> %v, writes %v %v", before, after, gh.Writes(), gl.Writes())
+	}
+	want := map[string]int{"github created": 1, "github posted": 1, "gitlab posted": 2, "gitlab comment": 1, "gitlab pushed": 1}
+	if got := counts(dry); !maps.Equal(got, want) {
+		t.Errorf("the check counted %v, want %v", got, want)
+	}
+
+	var real []gitbugio.SyncEvent
+	r.DryRun, r.See = false, func(e gitbugio.SyncEvent) { real = append(real, e) }
+	got, err := b.SyncForges(t.Context(), r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != report || !maps.Equal(counts(real), counts(dry)) {
+		t.Errorf("the run did %+v %v, the check said %+v %v", got, counts(real), report, counts(dry))
+	}
+	if len(gl.All()) != 2 {
+		t.Errorf("GitLab has %d issues, want 2", len(gl.All()))
+	}
+}
+
+// A person with their own token writes as themselves, in a dry run too:
+// the views As gives are counted, and their made-up ids never collide.
+func TestDryRunThroughAPersonsToken(t *testing.T) {
+	t.Parallel()
+	b := gitbugiotest.New(t)
+	gh := fake.New("github.com/o/r")
+	alice := forge.Account{ID: "7", Login: "alice"}
+	gh.Add(forge.Issue{Title: "one", Author: alice})
+	if _, err := b.GetForges(t.Context(), run(gh)); err != nil {
+		t.Fatal(err)
+	}
+	gh.Grant(alice)
+	issues, _ := b.ListIssues()
+	p := issues[0].AuthorID
+	for _, is := range []string{gitbugiotest.NewIssue(t, b, "two"), gitbugiotest.NewIssue(t, b, "three")} {
+		gitbugiotest.CommentAs(t, b, is, gitbugio.Person{ID: p}, 1, "by alice")
+	}
+	var dry []gitbugio.SyncEvent
+	r := run(gh)
+	r.DryRun, r.See = true, func(e gitbugio.SyncEvent) { dry = append(dry, e) }
+	if _, err := b.SendForges(t.Context(), r); err != nil {
+		t.Fatal(err)
+	}
+	if got := counts(dry); got["github posted"] != 2 || got["github comment"] != 2 || len(gh.Writes()) != 0 {
+		t.Errorf("counted %v, writes %v", got, gh.Writes())
 	}
 }
 
 // The token git-board acts on GitHub with is the one of whoever writes
-// from it: its identity's GitHub login, as the bridge maps an author to an
-// account, never another person's token.
+// from it: their github.com account's login, never another person's
+// token.
 func TestGitHubToken(t *testing.T) {
 	t.Parallel()
 	b := gitbugiotest.New(t)
-	for login, target := range map[string]string{"alice": "github", "bob": "github", "carol": "gitlab"} {
-		tok := auth.NewToken(target, "tok-"+login)
-		tok.SetMetadata(auth.MetaKeyLogin, login)
-		if target == "gitlab" {
-			tok.SetMetadata(auth.MetaKeyBaseURL, "https://gitlab.example.com/")
-		}
-		if err := auth.Store(b.TestCache(), tok); err != nil {
-			t.Fatal(err)
-		}
+	for _, login := range []string{"alice", "bob"} {
+		gitbugiotest.Token(t, b, "https://github.com", login, "tok-"+login)
 	}
-	as := func(login string, meta map[string]string) *cache.IdentityCache {
-		t.Helper()
-		i, err := b.TestCache().Identities().NewRaw("Someone", "", login, "", nil, meta)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := b.TestCache().SetUserIdentity(t.Context(), i); err != nil {
-			t.Fatal(err)
-		}
-		return i
-	}
-
 	if _, _, err := b.GitHubToken(); err == nil || !strings.Contains(err.Error(), "no GitHub login") {
-		t.Errorf("no login anywhere: err %v, want no GitHub login", err)
+		t.Errorf("no login: err %v, want no GitHub login", err)
 	}
-	as("gl-user", map[string]string{"github-login": "Bob"})
-	if login, tok, err := b.GitHubToken(); err != nil || login != "Bob" || tok != "tok-bob" {
-		t.Errorf("github-login Bob: %q %q %v, want Bob's token", login, tok, err)
-	}
-	as("carol", nil)
+	gitbugiotest.SetMyLogin(t, b, "carol")
 	if _, tok, err := b.GitHubToken(); err == nil || err.Error() != "no GitHub token for carol" || tok != "" {
-		t.Errorf("carol, a GitLab token only: %q %v, want no GitHub token for carol", tok, err)
+		t.Errorf("carol, no token: %q %v, want no GitHub token for carol", tok, err)
 	}
-	me := as("gl-user", nil)
-	if err := b.TestCache().Config().Update(func(f *gitconfig.File) error {
-		return errors.Join(
-			f.Set("git-bug.bridge.gl.target", "gitlab"),
-			f.Set("git-bug.bridge.gl.login-"+me.Id().String(), "gl-user"),
-			f.Set("git-bug.bridge.gh.target", "github"),
-			f.Set("git-bug.bridge.gh.login-"+me.Id().String(), "alice"),
-		)
-	}); err != nil {
+	bob := gitbugiotest.NewPerson(t, b, "Bob", "bob")
+	if err := b.Adopt(bob.ID); err != nil {
 		t.Fatal(err)
 	}
-	if login, tok, err := b.GitHubToken(); err != nil || login != "alice" || tok != "tok-alice" {
-		t.Errorf("the GitHub bridge's link alice: %q %q %v, want alice's token", login, tok, err)
+	if login, tok, err := b.GitHubToken(); err != nil || login != "bob" || tok != "tok-bob" {
+		t.Errorf("bob: %q %q %v, want bob's token", login, tok, err)
 	}
 }
 
-// SetAssignees writes the mode only when it changes, and a change makes
-// the next pull start over.
-func TestSetAssignees(t *testing.T) {
+// A forge's token is its posting account's, on its host; Credentials say
+// which forges have one, never the token.
+func TestForgeToken(t *testing.T) {
 	t.Parallel()
 	b := gitbugiotest.New(t)
-	gitbugiotest.NewForge(t, b, "as")
-	get := func(key string) string {
-		cfg, err := b.TestCache().Config().Read()
-		if err != nil {
+	forges := []config.Forge{
+		{Name: "gh", Kind: "github", Host: "github.com", Project: "o/r", Login: "alice"},
+		{Name: "gl", Kind: "gitlab", Host: "gitlab.example.com", Project: "7", Login: "bob"},
+	}
+	gitbugiotest.Token(t, b, "https://gitlab.example.com", "bob", "gl-secret")
+	gitbugiotest.Token(t, b, "https://github.com", "mallory", "not-alice's")
+	for host, want := range map[string]string{"github.com": "", "gitlab.example.com": "gl-secret", "elsewhere.example": ""} {
+		if got := b.ForgeToken(forges, host); got != want {
+			t.Errorf("ForgeToken(%s) = %q, want %q", host, got, want)
+		}
+	}
+	if got := b.Credentials(forges); len(got) != 1 || got[0] != (gitbugio.Credential{ID: "gl", Target: "gitlab", Host: "gitlab.example.com", Login: "bob"}) {
+		t.Errorf("Credentials = %+v", got)
+	}
+}
+
+// A check's copy left a day ago, by a run killed mid-way, goes with the
+// next check; a newer one, maybe another run's, stays.
+func TestScratchRemovesOldCopies(t *testing.T) {
+	t.Parallel()
+	b := gitbugiotest.New(t)
+	board := filepath.Join(b.Store().CommonDir(), "board")
+	old, recent := filepath.Join(board, "check-old"), filepath.Join(board, "check-recent")
+	for _, d := range []string{old, recent} {
+		if err := os.MkdirAll(d, 0o755); err != nil {
 			t.Fatal(err)
 		}
-		return cfg.Value("git-bug.bridge.as."+key, "")
 	}
-	if err := core.SetBridgeConfig(b.TestCache(), "as", "lastSyncTime", "123"); err != nil {
+	day := time.Now().Add(-25 * time.Hour)
+	if err := os.Chtimes(old, day, day); err != nil {
 		t.Fatal(err)
 	}
-
-	if changed, err := b.SetAssignees("as", "native", false); err != nil || changed || get("assignees") != "" || get("lastSyncTime") != "123" {
-		t.Fatalf("native over none: changed %v, %v, key %q, last sync %q; want nothing written", changed, err, get("assignees"), get("lastSyncTime"))
-	}
-	if _, err := b.SetAssignees("as", "la\x00bels", false); err == nil || get("assignees") != "" || get("lastSyncTime") != "0" {
-		t.Fatalf("a mode git can't store: %v, key %q, last sync %q; want an error, and the full pull already asked", err, get("assignees"), get("lastSyncTime"))
-	}
-	if err := core.SetBridgeConfig(b.TestCache(), "as", "lastSyncTime", "123"); err != nil {
+	_, done, err := gitbugio.Scratch(b, t.Context())
+	if err != nil {
 		t.Fatal(err)
 	}
-	if changed, err := b.SetAssignees("as", "labels", true); err != nil || !changed || get("assignees") != "" || get("lastSyncTime") != "123" {
-		t.Fatalf("labels, dry run: changed %v, %v, key %q, last sync %q; want the change said, nothing written", changed, err, get("assignees"), get("lastSyncTime"))
+	done()
+	if _, err := os.Stat(old); !os.IsNotExist(err) {
+		t.Errorf("the old copy stays: %v", err)
 	}
-	if changed, err := b.SetAssignees("as", "labels", false); err != nil || !changed || get("assignees") != "labels" || get("lastSyncTime") != "0" {
-		t.Fatalf("labels: changed %v, %v, key %q, last sync %q; want labels and a full pull", changed, err, get("assignees"), get("lastSyncTime"))
-	}
-	if err := core.SetBridgeConfig(b.TestCache(), "as", "lastSyncTime", "456"); err != nil {
-		t.Fatal(err)
-	}
-	if changed, err := b.SetAssignees("as", "labels", false); err != nil || changed || get("lastSyncTime") != "456" {
-		t.Fatalf("labels again: changed %v, %v, last sync %q; want nothing written", changed, err, get("lastSyncTime"))
+	if _, err := os.Stat(recent); err != nil {
+		t.Errorf("the recent copy went: %v", err)
 	}
 }

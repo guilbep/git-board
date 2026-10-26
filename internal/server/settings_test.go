@@ -2,26 +2,40 @@ package server
 
 import (
 	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"testing"
 
-	"github.com/git-bug/git-bug/bridge/core"
-
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/gitbugio"
 )
 
-func addBridge(t *testing.T, s *apiServer, name string, kv map[string]string) {
+var (
+	ghForge = config.Forge{Name: "gh", Kind: "github", Host: "github.com", Project: "guilbep/git-bug-sync-test", Login: "guilbep", Sync: true}
+	glForge = config.Forge{Name: "gl", Kind: "gitlab", Host: "gitlab.epfl.ch", Project: "42400", Login: "guilbert", Sync: true}
+)
+
+// forgeServer is newIssueServer with these forges, in a settings file of
+// the test's own.
+func forgeServer(t *testing.T, forges ...config.Forge) (*httptest.Server, *apiServer) {
 	t.Helper()
-	for k, v := range kv {
-		if err := core.SetBridgeConfig(s.b.TestCache(), name, k, v); err != nil {
-			t.Fatal(err)
-		}
+	ts, s := newIssueServer(t)
+	text := ""
+	for _, f := range forges {
+		text = config.WithForge(text, f)
 	}
+	if err := config.Save(s.cfgPath, []byte(text)); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := config.Load(s.cfgPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.cfg = cfg
+	return ts, s
 }
 
 type settingsBody struct {
-	Bridges []gitbugio.Bridge `json:"bridges"`
+	Bridges []bridge `json:"bridges"`
 	Uploads struct {
 		Enabled bool `json:"enabled"`
 	} `json:"uploads"`
@@ -32,21 +46,21 @@ type settingsBody struct {
 
 func TestSettingsListAndToggleBridgeSync(t *testing.T) {
 	t.Setenv("ACCESS_KEY_ID", "")
-	ts, s := newIssueServer(t)
+	gl := glForge
+	gl.Sync = false
+	ts, s := forgeServer(t, ghForge, gl)
 	s.cfg.GithubProject = config.GithubProject{Owner: "guilbep", Number: 1}
 	s.cfg.Fields = map[string]config.Field{"status": {Options: []string{"backlog", "ready", "in-progress", "qa", "done"}}}
-	addBridge(t, s, "gh", map[string]string{"target": "github", "owner": "guilbep", "project": "git-bug-sync-test", "default-login": "guilbep", "sync": "true"})
-	addBridge(t, s, "gl", map[string]string{"target": "gitlab", "project-id": "42400", "base-url": "https://gitlab.epfl.ch/", "default-login": "guilbert"})
 
 	var got settingsBody
 	if code := call(t, "GET", ts.URL+"/api/settings", nil, &got); code != http.StatusOK {
 		t.Fatalf("GET: %d", code)
 	}
-	want := []gitbugio.Bridge{
+	want := []bridge{
 		{Name: "gh", Target: "github", Where: "https://github.com/guilbep/git-bug-sync-test", Sync: true, CanSync: true},
-		{Name: "gl", Target: "gitlab", Where: "https://gitlab.epfl.ch/ project 42400", CanSync: true},
+		{Name: "gl", Target: "gitlab", Where: "https://gitlab.epfl.ch/projects/42400", CanSync: true},
 	}
-	if len(got.Bridges) != 2 || got.Bridges[0] != want[0] || got.Bridges[1] != want[1] {
+	if !reflect.DeepEqual(got.Bridges, want) {
 		t.Errorf("bridges %+v\nwant %+v", got.Bridges, want)
 	}
 	if got.Uploads.Enabled || got.GithubProject.Number != 1 || got.ConfigPath == "" {
@@ -63,9 +77,11 @@ func TestSettingsListAndToggleBridgeSync(t *testing.T) {
 	if code := call(t, "PUT", ts.URL+"/api/bridges/gh/sync", map[string]bool{"sync": false}, nil); code != http.StatusOK {
 		t.Fatalf("PUT: %d", code)
 	}
-	bridges, _ := s.b.SyncBridges()
-	if len(bridges) != 1 || bridges[0].Name != "gl" {
+	if bridges := s.syncForges(); len(bridges) != 1 || bridges[0].Name != "gl" {
 		t.Errorf("sync bridges after the toggles: %+v, want gl only", bridges)
+	}
+	if saved, err := config.Load(s.cfgPath); err != nil || len(saved.Forges) != 2 || saved.Forges[0].Sync || !saved.Forges[1].Sync {
+		t.Errorf("the file has %+v (%v)", saved.Forges, err)
 	}
 	if code := call(t, "PUT", ts.URL+"/api/bridges/nope/sync", map[string]bool{"sync": true}, nil); code != http.StatusNotFound {
 		t.Errorf("an unknown bridge: %d, want 404", code)

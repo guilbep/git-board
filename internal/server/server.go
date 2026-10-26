@@ -12,8 +12,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/git-bug/git-bug/bridge/core"
-
 	"github.com/guilbep/git-board/internal/board"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/fields"
@@ -53,12 +51,15 @@ type apiServer struct {
 	syncing atomic.Bool
 	forgeMu sync.Mutex // guards job, issueDry and checked
 	job     *forgeJob
-	// the forge sync, or one way of it (mode get, send): nil, git-bug's
-	runSync func(ctx context.Context, mode string, dryRun bool, names []string, opts ...core.Option) (<-chan core.SyncResult, error)
-	// one issue's sync (issuesync.go): nil, git-bug's; issueDry is when
+	// the forge sync of forges, or one way of it (mode get, send), its
+	// events told to see: nil, forgeRun
+	runSync func(ctx context.Context, mode string, forges []config.Forge, dryRun bool, see func(gitbugio.SyncEvent)) error
+	// one issue's sync (issuesync.go): nil, issueRun; issueDry is when
 	// each issue's last clean dry run ended
-	runIssueSync func(ctx context.Context, dryRun bool, id string, opts ...core.Option) (<-chan core.SyncResult, error)
+	runIssueSync func(ctx context.Context, forges []config.Forge, dryRun bool, id string, see func(gitbugio.SyncEvent)) error
 	issueDry     map[string]time.Time
+	// openForges opens the adapters of a run: nil, gitbugio.OpenForges
+	openForges func(ctx context.Context, forges []config.Forge) ([]gitbugio.NamedForge, error)
 	// checked is when each git remote was last fetched, pulled or pushed
 	// (remotes.go)
 	checked map[string]time.Time
@@ -90,6 +91,9 @@ type apiServer struct {
 	// githubAPI is GitHub's API for the PR gate (pulls.go): "" is
 	// https://api.github.com; tests, a fake
 	githubAPI string
+	// githubToken is who opens and merges pull requests, and their token:
+	// nil, the backend's (Backend.GitHubToken)
+	githubToken func() (login, token string, err error)
 	// pulls is each branch's PR as the cycle last read it (cycle.go)
 	pulls pullCache
 
@@ -134,9 +138,6 @@ func newMux(s *apiServer, static http.Handler) http.Handler {
 	mux.HandleFunc("POST /api/issues", s.handleNewIssue)
 	mux.HandleFunc("GET /api/issues/{id}/thread", s.handleThread)
 	mux.HandleFunc("POST /api/issues/{id}/sync", s.handleIssueSync)
-	mux.HandleFunc("POST /api/issues/{id}/link", s.handleIssueLink)
-	mux.HandleFunc("POST /api/issues/{id}/unlink", s.handleIssueUnlink)
-	mux.HandleFunc("POST /api/issues/{id}/take", s.handleIssueTake)
 	mux.HandleFunc("GET /api/issues/{id}/refs", s.handleRefs)
 	mux.HandleFunc("GET /api/issues/{id}/branches", s.handleBranches)
 	mux.HandleFunc("GET /api/issues/{id}/environments", s.handleIssueEnvironments)

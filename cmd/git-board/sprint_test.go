@@ -179,16 +179,8 @@ func TestSprintReportAggregatesByStatus(t *testing.T) {
 			t.Fatalf("tag %s into sprint: %v", issue.ID, err)
 		}
 	}
-	c := b.TestCache()
-	extra, _, err := c.Bugs().New(t.Context(), "Second ready bug", "")
-	if err != nil {
-		t.Fatalf("new bug: %v", err)
-	}
-	if _, _, err := extra.ChangeLabels(t.Context(), []string{"status:ready", "sprint:early"}, nil); err != nil {
-		t.Fatalf("label new bug: %v", err)
-	}
-	if err := extra.Commit(t.Context()); err != nil {
-		t.Fatalf("commit new bug: %v", err)
+	if _, err := b.NewIssue("Second ready bug", "", []string{"status:ready", "sprint:early"}); err != nil {
+		t.Fatalf("new issue: %v", err)
 	}
 	if err := b.Close(); err != nil {
 		t.Fatalf("close backend: %v", err)

@@ -20,14 +20,14 @@ const defaultBridgePullLimit = ghbridge.DefaultItemLimit
 func newBridgeCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "bridge",
-		Short: "Bridge GitHub Project (v2) field values into git-bug labels",
-		Long: `Bridge GitHub Project (v2) field values into git-bug labels.
+		Short: "Bridge GitHub Project (v2) field values into labels",
+		Long: `Bridge GitHub Project (v2) field values into labels.
 
-Read-only against GitHub — only calls "gh project item-list", never
-writes back to the Project or any GitHub issue. Matches project items
-to git-bug issues that are already bridged in locally via
-"git-bug bridge pull" (a separate, earlier step); an item with no
-matching git-bug issue is reported unmatched, not an error.
+Pull is read-only against GitHub: it only calls "gh project item-list",
+never writes back to the Project or any GitHub issue. It matches project
+items to the issues the forge sync linked to their GitHub issue; an item
+with no matching issue is reported unmatched, not an error. Sync goes
+both ways.
 
 Meant to run repeatedly, not once: a Project's fields keep changing as
 work progresses, and every run recomputes the diff, so a second run
@@ -74,7 +74,7 @@ func newBridgePullCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "pull",
-		Short: "Sync GitHub Project field values into git-bug labels on matching issues",
+		Short: "Sync GitHub Project field values into labels on matching issues",
 		Example: `  git-board bridge pull                              # dry-run preview
   git-board bridge pull --apply                       # write the labels
   git-board bridge pull --owner EPFL-ENAC --project 40 --apply

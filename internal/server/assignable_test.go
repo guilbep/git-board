@@ -1,7 +1,6 @@
 package server
 
 import (
-	"context"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -9,9 +8,6 @@ import (
 	"sync"
 	"testing"
 	"time"
-
-	"github.com/git-bug/git-bug/bridge/core"
-	"github.com/git-bug/git-bug/bridge/core/auth"
 
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/gitbugio/gitbugiotest"
@@ -38,12 +34,14 @@ func waitAssignable(t *testing.T, ts *httptest.Server, bridge string) forgeStatu
 // the person fields offer them apart from their options.
 func TestForgeSyncFetchesWhoCanBeAssigned(t *testing.T) {
 	t.Parallel()
-	ts, s := newIssueServer(t)
-	s.cfg = &config.Config{Fields: map[string]config.Field{"assignee": {}, "status": {Single: true, Options: []string{"ready"}}}}
+	ts, s := forgeServer(t)
 	gl := fakeGitLab(t)
 	if code := call(t, "POST", ts.URL+"/api/bridges", map[string]string{"target": "gitlab", "url": gl.URL + "/scratchpad/sync-trial", "token": "good-token"}, nil); code != http.StatusOK {
 		t.Fatalf("add a bridge: %d", code)
 	}
+	cfg := *s.config()
+	cfg.Fields = map[string]config.Field{"assignee": {}, "status": {Single: true, Options: []string{"ready"}}}
+	s.setConfig(&cfg)
 	done := make(chan struct{})
 	close(done)
 	s.runSync = fakeSync(nil, done)
@@ -66,8 +64,8 @@ func TestForgeSyncFetchesWhoCanBeAssigned(t *testing.T) {
 	if !slices.Contains(a.People, "alice") || !slices.Contains(a.People, "bob") || len(a.Options) != 0 {
 		t.Errorf("assignee %+v: want alice and bob as people, no options", a)
 	}
-	if !slices.Contains(a.People, "guilbert") { // the identity the bridge's token tagged
-		t.Errorf("people %q: want the git-bug identities too", a.People)
+	if !slices.Contains(a.People, "dev") { // the person git-board writes as
+		t.Errorf("people %q: want the persons too", a.People)
 	}
 	if !slices.IsSortedFunc(a.People, func(x, y string) int { return strings.Compare(strings.ToLower(x), strings.ToLower(y)) }) {
 		t.Errorf("people %q: want sorted", a.People)
@@ -80,93 +78,39 @@ func TestForgeSyncFetchesWhoCanBeAssigned(t *testing.T) {
 	}
 }
 
-// A forge that refuses the list is a warning, not an error: a check with
-// one still allows the run.
-func TestForgeSyncWarnsWhenTheForgeWontSay(t *testing.T) {
-	t.Parallel()
-	ts, s := newIssueServer(t)
-	githubForge(t, s.b)
-	for k, v := range map[string]string{core.ConfigKeySync: "true", "default-login": "guilbep"} {
-		if err := core.SetBridgeConfig(s.b.TestCache(), "gh", k, v); err != nil {
-			t.Fatal(err)
-		}
-	}
-	tok := auth.NewToken("github", "a-token")
-	tok.SetMetadata(auth.MetaKeyLogin, "guilbep")
-	if err := auth.Store(s.b.TestCache(), tok); err != nil {
-		t.Fatal(err)
-	}
-	gh := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/repos/o/r/assignees" || r.Header.Get("Authorization") != "Bearer a-token" {
-			t.Errorf("asked %s with %q", r.URL.Path, r.Header.Get("Authorization"))
-		}
-		w.WriteHeader(http.StatusInternalServerError)
-	}))
+// githubSyncServer is a server with the gh forge, its posting account's
+// token kept, GitHub's API at handler.
+func githubSyncServer(t *testing.T, handler http.HandlerFunc) (*httptest.Server, *apiServer) {
+	t.Helper()
+	ts, s := forgeServer(t, ghForge)
+	gitbugiotest.Token(t, s.b, "https://github.com", "guilbep", "a-token")
+	gh := httptest.NewServer(handler)
 	t.Cleanup(gh.Close)
 	s.githubAPI = gh.URL
 	done := make(chan struct{})
 	close(done)
 	s.runSync = fakeSync(nil, done)
+	return ts, s
+}
 
+// A forge that refuses the list is a warning, not an error: a check with
+// one still allows the run.
+func TestForgeSyncWarnsWhenTheForgeWontSay(t *testing.T) {
+	t.Parallel()
+	ts, _ := githubSyncServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/repos/guilbep/git-bug-sync-test/assignees" || r.Header.Get("Authorization") != "Bearer a-token" {
+			t.Errorf("asked %s with %q", r.URL.Path, r.Header.Get("Authorization"))
+		}
+		w.WriteHeader(http.StatusInternalServerError)
+	})
 	call(t, "POST", ts.URL+"/api/forges/sync", map[string]any{"dry_run": true}, nil)
 	st := waitAssignable(t, ts, "gh")
 	tally := st.Job.Bridges["gh"]
 	if st.Job.State != "done" || st.Job.Errors != 0 || tally == nil || tally.Warnings != 1 || tally.Assignable != 0 {
 		t.Fatalf("job %+v, gh %+v: want done, one warning, no error", st.Job, tally)
 	}
-}
-
-// A forge sync writes the toml's assignees mode where git-bug reads it,
-// and says so: the check that it will, the real run that it does.
-func TestForgeSyncSetsTheAssigneesMode(t *testing.T) {
-	t.Parallel()
-	ts, s := newIssueServer(t)
-	s.cfg = &config.Config{Assignees: "labels"}
-	gl := fakeGitLab(t)
-	if code := call(t, "POST", ts.URL+"/api/bridges", map[string]string{"target": "gitlab", "url": gl.URL + "/scratchpad/sync-trial", "token": "good-token"}, nil); code != http.StatusOK {
-		t.Fatalf("add a bridge: %d", code)
-	}
-	key := func() string {
-		cfg, err := s.b.TestCache().Config().Read()
-		if err != nil {
-			t.Fatal(err)
-		}
-		return cfg.Value("git-bug.bridge.gl.assignees", "")
-	}
-
-	var previewed core.SyncOptions
-	s.runSync = func(_ context.Context, _ string, dryRun bool, _ []string, opts ...core.Option) (<-chan core.SyncResult, error) {
-		if dryRun {
-			for _, o := range opts {
-				o(&previewed)
-			}
-		}
-		out := make(chan core.SyncResult)
-		close(out)
-		return out, nil
-	}
-
-	call(t, "POST", ts.URL+"/api/forges/sync", map[string]any{"dry_run": true}, nil)
-	st := waitAssignable(t, ts, "gl")
-	if previewed.Config[core.ConfigKeyAssignees] != "labels" {
-		t.Errorf("the check synced with assignees %q, want labels: it previews the new mode", previewed.Config[core.ConfigKeyAssignees])
-	}
-	if want := "assignees: gl switches to labels; the next sync pulls every issue again"; st.Job.State != "done" || !slices.Contains(st.Job.Bridges["gl"].Lines, want) {
-		t.Fatalf("check %+v, lines %q: want %q", st.Job, st.Job.Bridges["gl"].Lines, want)
-	}
-	if key() != "" {
-		t.Errorf("the check wrote gl assignees %q", key())
-	}
-
 	if code := call(t, "POST", ts.URL+"/api/forges/sync", map[string]any{"dry_run": false}, nil); code != http.StatusAccepted {
-		t.Fatalf("real run: %d", code)
-	}
-	st = waitAssignable(t, ts, "gl")
-	if want := "assignees: gl switches to labels, pulling every issue again"; st.Job.State != "done" || !slices.Contains(st.Job.Bridges["gl"].Lines, want) {
-		t.Fatalf("run %+v, lines %q: want %q", st.Job, st.Job.Bridges["gl"].Lines, want)
-	}
-	if key() != "labels" {
-		t.Errorf("gl assignees %q, want labels", key())
+		t.Errorf("a run after the check: %d", code)
 	}
 }
 
@@ -174,29 +118,14 @@ func TestForgeSyncSetsTheAssigneesMode(t *testing.T) {
 // keeps neither the run running nor the edits waiting.
 func TestForgeSyncDoesntWaitForWhoCanBeAssigned(t *testing.T) {
 	t.Parallel()
-	ts, s := newIssueServer(t)
-	id := gitbugiotest.NewIssue(t, s.b, "Edit me")
-	githubForge(t, s.b)
-	for k, v := range map[string]string{core.ConfigKeySync: "true", "default-login": "guilbep"} {
-		if err := core.SetBridgeConfig(s.b.TestCache(), "gh", k, v); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if err := auth.Store(s.b.TestCache(), auth.NewToken("github", "a-token")); err != nil {
-		t.Fatal(err)
-	}
 	release := make(chan struct{})
-	gh := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	ts, s := githubSyncServer(t, func(w http.ResponseWriter, r *http.Request) {
 		<-release
 		_, _ = w.Write([]byte(`[{"login":"carol"}]`))
-	}))
+	})
 	free := sync.OnceFunc(func() { close(release) })
-	t.Cleanup(gh.Close)
-	t.Cleanup(free) // before the close, which waits for the handler
-	s.githubAPI = gh.URL
-	done := make(chan struct{})
-	close(done)
-	s.runSync = fakeSync(nil, done)
+	t.Cleanup(free) // before the fake GitHub's close, which waits for the handler
+	id := gitbugiotest.NewIssue(t, s.b, "Edit me")
 
 	call(t, "POST", ts.URL+"/api/forges/sync", map[string]any{"dry_run": true}, nil)
 	if st := waitJob(t, ts); st.Job.State != "done" {
@@ -223,7 +152,7 @@ func TestAssignableFollowsNoRedirect(t *testing.T) {
 	t.Cleanup(forge.Close)
 	req, _ := http.NewRequest(http.MethodGet, forge.URL+"/api/v4/projects/1/users", nil)
 	req.Header.Set("PRIVATE-TOKEN", "a-token")
-	resp, err := assignableHTTP.Do(req)
+	resp, err := forgeHTTP.Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}

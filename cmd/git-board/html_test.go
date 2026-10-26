@@ -1,15 +1,10 @@
 package main
 
 import (
-	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/git-bug/git-bug/cache"
-	"github.com/git-bug/git-bug/repository"
-	"github.com/git-bug/gitconfig"
 
 	"github.com/guilbep/git-board/internal/gitbugio"
 	"github.com/guilbep/git-board/internal/release"
@@ -55,62 +50,19 @@ sort = "prio asc"
 // but with real [views.*] entries.
 func newHTMLTestRepo(t *testing.T) {
 	t.Helper()
-	dir := t.TempDir()
-
-	repo, err := repository.InitDefault(dir, "git-bug")
-	if err != nil {
-		t.Fatalf("InitGoGitRepo: %v", err)
-	}
-	if err := repo.Config().Update(func(f *gitconfig.File) error {
-		return errors.Join(f.Set("user.name", "guilbep"), f.Set("user.email", "guilbep@example.com"))
-	}); err != nil {
-		t.Fatalf("set user: %v", err)
-	}
-
-	c, err := cache.NewRepoCacheNoEvents(repo, nil)
-	if err != nil {
-		t.Fatalf("NewRepoCacheNoEvents: %v", err)
-	}
-	id, err := c.Identities().NewFromGitUser()
-	if err != nil {
-		t.Fatalf("NewFromGitUser: %v", err)
-	}
-	if err := c.SetUserIdentity(t.Context(), id); err != nil {
-		t.Fatalf("SetUserIdentity: %v", err)
-	}
-
-	newLabeled := func(title string, labels ...string) {
-		bug, _, err := c.Bugs().New(t.Context(), title, "")
+	dir, b := seedRepo(t)
+	newLabeled := func(title string, labels ...string) string {
+		id, err := b.NewIssue(title, "", labels)
 		if err != nil {
-			t.Fatalf("new bug %q: %v", title, err)
+			t.Fatalf("new issue %q: %v", title, err)
 		}
-		if _, _, err := bug.ChangeLabels(t.Context(), labels, nil); err != nil {
-			t.Fatalf("label bug %q: %v", title, err)
-		}
-		if err := bug.Commit(t.Context()); err != nil {
-			t.Fatalf("commit bug %q: %v", title, err)
-		}
+		return id
 	}
 	newLabeled("Speed up build", "status:ready", "prio:p0")
 	newLabeled("Fix invoice bug", "status:ready", "prio:p1", "assignee:guilbep", "needs-triage")
 	newLabeled("Groom backlog item", "status:backlog", "prio:p0")
-
-	closed, _, err := c.Bugs().New(t.Context(), "Write specs", "")
-	if err != nil {
-		t.Fatalf("new closed bug: %v", err)
-	}
-	if _, _, err := closed.ChangeLabels(t.Context(), []string{"status:done"}, nil); err != nil {
-		t.Fatalf("label closed bug: %v", err)
-	}
-	if _, err := closed.Close(t.Context()); err != nil {
-		t.Fatalf("close bug: %v", err)
-	}
-	if err := closed.Commit(t.Context()); err != nil {
-		t.Fatalf("commit closed bug: %v", err)
-	}
-
-	if err := c.Close(); err != nil {
-		t.Fatalf("close cache: %v", err)
+	if err := b.CloseBug(newLabeled("Write specs", "status:done")); err != nil {
+		t.Fatalf("close issue: %v", err)
 	}
 
 	if err := os.WriteFile(filepath.Join(dir, configPath), []byte(htmlTestConfig), 0o644); err != nil {

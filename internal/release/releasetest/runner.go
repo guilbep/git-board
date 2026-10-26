@@ -74,12 +74,8 @@ func NewRunner(t *testing.T, environments ...string) (*release.Runner, *Tools, *
 		t.Fatalf("gitbugio.Open: %v", err)
 	}
 	t.Cleanup(func() { _ = b.Close() })
-	id, err := b.TestCache().Identities().NewFromGitUser()
-	if err != nil {
-		t.Fatalf("NewFromGitUser: %v", err)
-	}
-	if err := b.TestCache().SetUserIdentity(t.Context(), id); err != nil {
-		t.Fatalf("SetUserIdentity: %v", err)
+	if _, err := b.NewIdentity("dev", "dev@example.com"); err != nil {
+		t.Fatalf("NewIdentity: %v", err)
 	}
 	tools := NewTools()
 	r := &release.Runner{Cfg: fx.cfg, Base: "dev", Dir: app, B: b, Tools: tools, CacheDir: t.TempDir(), Who: "dev"}

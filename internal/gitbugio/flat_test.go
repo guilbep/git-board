@@ -2,8 +2,10 @@ package gitbugio_test
 
 import (
 	"slices"
+	"strings"
 	"testing"
 
+	"github.com/guilbep/git-board/core/issue"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/gitbugio/gitbugiotest"
 )
@@ -16,16 +18,11 @@ func TestFlatKindsAreTheKindField(t *testing.T) {
 	b.SetFlatKinds(&config.Config{Branches: config.Branches{Kinds: map[string]string{"bug": "fix", "feat": "feat"}}})
 	raw := func(id string) []string {
 		t.Helper()
-		bug, err := b.TestCache().Bugs().ResolvePrefix(t.Context(), id)
+		is, err := issue.Load(b.Store(), id)
 		if err != nil {
 			t.Fatal(err)
 		}
-		var res []string
-		for _, l := range bug.Snapshot().Labels {
-			res = append(res, l.String())
-		}
-		slices.Sort(res)
-		return res
+		return is.Labels
 	}
 	sorted := func(l []string, err error) []string {
 		t.Helper()
@@ -53,11 +50,8 @@ func TestFlatKindsAreTheKindField(t *testing.T) {
 	}
 
 	// a kind:bug written before, beside bug: read once, removed with it
-	bug, _ := b.TestCache().Bugs().ResolvePrefix(t.Context(), id)
-	if _, _, err := bug.ChangeLabels(t.Context(), []string{"kind:bug"}, nil); err != nil {
-		t.Fatal(err)
-	}
-	if err := bug.Commit(t.Context()); err != nil {
+	me, _, _ := b.Me()
+	if _, err := issue.Do(t.Context(), b.Store(), id, issue.ChangeLabels(me.ID, []string{"kind:bug"}, nil)); err != nil {
 		t.Fatal(err)
 	}
 	if got := sorted(b.GetLabels(id)); !slices.Equal(got, []string{"kind:bug", "status:ready"}) {
@@ -102,4 +96,32 @@ func TestFlatKindsAreTheKindField(t *testing.T) {
 	if got := sorted(b.GetLabels(id)); !slices.Equal(got, []string{"feat", "status:ready"}) {
 		t.Errorf("kind:* form read %q, want feat as is", got)
 	}
+}
+
+// An assignee label in any case, as a forge may send it, reads as
+// assignee:, once, and goes with any of its spellings.
+func TestAssigneeInAnyCase(t *testing.T) {
+	t.Parallel()
+	b := gitbugiotest.New(t)
+	id := gitbugiotest.NewIssue(t, b, "x")
+	gitbugiotest.RawLabels(t, b, id, "Assignee:bob", "ASSIGNEE:bob", "assignee:ann")
+	if got := sorted(b.GetLabels(id)); !slices.Equal(got, []string{"assignee:ann", "assignee:bob"}) {
+		t.Fatalf("labels = %q", got)
+	}
+	if got, err := b.ApplyLabelChange(id, []string{"assignee:bob"}, []string{"assignee:ann"}); err != nil || !slices.Equal(got, []string{"assignee:bob"}) {
+		t.Fatalf("after adding bob again, removing ann: %q, %v", got, err)
+	}
+	if got, err := b.ApplyLabelChange(id, nil, []string{"assignee:bob"}); err != nil || len(got) != 0 {
+		t.Fatalf("after removing bob: %q, %v", got, err)
+	}
+	if l := b.Labels(); slices.ContainsFunc(l, func(x string) bool { return strings.HasPrefix(x, "Assignee") || strings.HasPrefix(x, "ASSIGNEE") }) {
+		t.Errorf("Labels = %q", l)
+	}
+}
+
+func sorted(l []string, err error) []string {
+	if err != nil {
+		panic(err)
+	}
+	return slices.Sorted(slices.Values(l))
 }

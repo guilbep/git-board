@@ -1,7 +1,6 @@
 package gitbugio_test
 
 import (
-	"errors"
 	"os"
 	"path/filepath"
 	"slices"
@@ -9,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/guilbep/git-board/internal/gitbugio"
-	"github.com/guilbep/git-board/internal/gitbugio/gitbugiotest"
 )
 
 func write(t *testing.T, dir, name, content string) {
@@ -187,17 +185,6 @@ func TestLineAt(t *testing.T) {
 		if err != nil || got != c.want || ok != c.ok {
 			t.Errorf("LineAt(%s, %s:%d) = %d, %v, %v; want %d, %v", c.from[:7], c.path, c.line, got, ok, err, c.want, c.ok)
 		}
-	}
-}
-
-func TestDiffNoRepo(t *testing.T) {
-	t.Parallel()
-	b := gitbugiotest.New(t)
-	if _, err := b.DiffStat("a", "b"); !errors.Is(err, gitbugio.ErrNoRepo) {
-		t.Fatalf("DiffStat on an in-memory backend: %v, want ErrNoRepo", err)
-	}
-	if b.HasCommit("a") {
-		t.Fatal("HasCommit on an in-memory backend")
 	}
 }
 

@@ -11,8 +11,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/git-bug/git-bug/entity"
-
 	"github.com/guilbep/git-board/internal/gitbugio"
 	"github.com/guilbep/git-board/internal/markdown"
 )
@@ -43,7 +41,7 @@ func decode(w http.ResponseWriter, r *http.Request, into any) bool {
 // writeIssueError answers 404 for an issue that doesn't exist, 400 for what
 // the request got wrong.
 func writeIssueError(w http.ResponseWriter, err error) {
-	if entity.IsErrNotFound(err) {
+	if errors.Is(err, gitbugio.ErrNotFound) {
 		writeError(w, http.StatusNotFound, err)
 		return
 	}
@@ -76,13 +74,19 @@ func (s *apiServer) mediaURL(raw string) string {
 	return "/api/media?url=" + url.QueryEscape(raw)
 }
 
+// forgeHosts are the hosts of the forges of the settings.
 func (s *apiServer) forgeHosts() []string {
-	s.hostsOnce.Do(func() { s.hosts = s.b.ForgeHosts() })
-	return s.hosts
+	var hosts []string
+	for _, f := range s.config().Forges {
+		hosts = append(hosts, f.Host)
+	}
+	return hosts
 }
 
 func (s *apiServer) handleMedia(w http.ResponseWriter, r *http.Request) {
-	s.mediaOnce.Do(func() { s.media = newMediaProxy(s.b.Storage(), s.b.ForgeToken, s.forgeHosts()) })
+	s.mediaOnce.Do(func() {
+		s.media = newMediaProxy(s.b.Storage(), func(host string) string { return s.b.ForgeToken(s.config().Forges, host) }, s.forgeHosts)
+	})
 	s.media.ServeHTTP(w, r)
 }
 
@@ -330,8 +334,6 @@ func (s *apiServer) handleSetMe(w http.ResponseWriter, r *http.Request) {
 
 // lazyOnce groups the server's lazily built parts.
 type lazyOnce struct {
-	hostsOnce sync.Once
-	hosts     []string
 	mediaOnce sync.Once
 	media     *mediaProxy
 }

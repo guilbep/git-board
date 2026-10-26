@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/guilbep/git-board/core/issue"
 	"github.com/guilbep/git-board/internal/config"
 )
 
@@ -119,11 +120,11 @@ func TestSaveSwitchesTheKindForm(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		bug, err := s.b.TestCache().Bugs().ResolvePrefix(t.Context(), id)
+		is, err := issue.Load(s.b.Store(), id)
 		if err != nil {
 			t.Fatal(err)
 		}
-		return bug.Snapshot().Labels[0].String()
+		return is.Labels[0]
 	}
 	flat := "[branches]\nkinds = { bug = \"fix\" }\n"
 	if got := storedAfter(flat); got != "bug" {
@@ -145,7 +146,7 @@ func TestConfigDocsComeInSections(t *testing.T) {
 	for _, d := range docs {
 		ids = append(ids, d.ID)
 	}
-	if strings.Join(ids, ",") != "overview,fields,types,colors,views,roles,filters,sprints,github,attachments,branches,cycle,worktrees,numbers,release,repos" {
+	if strings.Join(ids, ",") != "overview,fields,types,colors,views,roles,filters,sprints,github,forges,attachments,branches,cycle,worktrees,numbers,release,repos" {
 		t.Errorf("sections %v", ids)
 	}
 	if len(docs) > 1 && (!strings.Contains(docs[1].HTML, "<table>") || docs[1].Title != "Fields" || strings.Contains(docs[1].HTML, "<h2")) {

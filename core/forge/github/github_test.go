@@ -1,0 +1,319 @@
+package github
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"net/http"
+	"os"
+	"path/filepath"
+	"slices"
+	"strconv"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/guilbep/git-board/core/forge"
+	"github.com/guilbep/git-board/core/forge/conformance"
+	"github.com/guilbep/git-board/core/forge/fake"
+)
+
+var (
+	ann = forge.Account{ID: "7", Login: "ann"}
+	bob = forge.Account{ID: "8", Login: "bob"}
+)
+
+func TestConformance(t *testing.T) {
+	t.Parallel()
+	conformance.Run(t, func(t *testing.T, f *fake.Forge) forge.Forge { return newHub(t, f).adapter(t) })
+}
+
+// TestListing reads past a page, each issue and comment once though pages
+// repeat one, without pull requests, and with web edits' \r\n undone.
+func TestListing(t *testing.T) {
+	t.Parallel()
+	ctx := t.Context()
+	f := fake.New("example.com/p")
+	for i := range 250 {
+		f.Add(forge.Issue{Author: ann, Title: "i" + strconv.Itoa(i)})
+	}
+	var cs []forge.Comment
+	for i := range 150 {
+		cs = append(cs, forge.Comment{Author: bob, Body: "c" + strconv.Itoa(i)})
+	}
+	cs[0].Body = "one\r\ntwo"
+	many := f.Add(forge.Issue{Author: ann, Title: "many", Body: "a\r\nb", Comments: cs})
+	pr := f.Add(forge.Issue{Author: ann, Title: "a pull request"})
+	f.SetConfidential(pr.Number, true) // served as a pull request
+	h := newHub(t, f)
+	h.repeat = true
+
+	list, err := h.adapter(t).Issues(ctx, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(list) != 251 {
+		t.Fatalf("%d issues, want 251", len(list))
+	}
+	got := list[250]
+	if got.Title != "many" || got.Body != "a\nb" || len(got.Comments) != 150 || got.Comments[0].Body != "one\ntwo" {
+		t.Fatalf("many = %q %q, %d comments, first %q", got.Title, got.Body, len(got.Comments), got.Comments[0].Body)
+	}
+	seen := map[string]bool{}
+	for _, c := range got.Comments {
+		if seen[c.ID] {
+			t.Fatalf("comment %s twice", c.ID)
+		}
+		seen[c.ID] = true
+	}
+
+	// A fresh adapter finds an id of an earlier run by listing every issue.
+	b := h.adapter(t)
+	if is, err := b.Issue(ctx, many.ID); err != nil || is.Number != many.Number || len(is.Comments) != 150 {
+		t.Fatalf("Issue(many) = %s, %d comments, %v", is.Number, len(is.Comments), err)
+	}
+	if _, err := b.Issue(ctx, pr.ID); !errors.Is(err, forge.ErrConfidential) {
+		t.Fatalf("a pull request: %v, want ErrConfidential", err)
+	}
+	if _, err := b.Issue(ctx, "424242"); !errors.Is(err, forge.ErrNotFound) {
+		t.Fatalf("no such id: %v, want ErrNotFound", err)
+	}
+}
+
+// TestSince lists from a minute before since, as GitHub's clock isn't ours.
+func TestSince(t *testing.T) {
+	t.Parallel()
+	f := fake.New("example.com/p")
+	f.Add(forge.Issue{Author: ann, Title: "old", Created: 1000})
+	f.Add(forge.Issue{Author: ann, Title: "just before", Created: 1950})
+	f.Add(forge.Issue{Author: ann, Title: "after", Created: 2100})
+	list, err := newHub(t, f).adapter(t).Issues(t.Context(), 2000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var titles []string
+	for _, is := range list {
+		titles = append(titles, is.Title)
+	}
+	if !slices.Equal(titles, []string{"just before", "after"}) {
+		t.Fatalf("listed %q", titles)
+	}
+}
+
+func answer(code int, header map[string]string, msg string) http.HandlerFunc {
+	return func(w http.ResponseWriter, _ *http.Request) {
+		for k, v := range header {
+			w.Header().Set(k, v)
+		}
+		write(w, code, map[string]string{"message": msg})
+	}
+}
+
+// TestRetries: a rate limit is waited out, three times at most; a read is
+// tried again after a 5xx, a write never is; a refusal is never retried.
+func TestRetries(t *testing.T) {
+	t.Parallel()
+	ctx := t.Context()
+	f := fake.New("example.com/p")
+	is := f.Add(forge.Issue{Author: ann, Title: "T"})
+	h := newHub(t, f)
+	a := h.adapter(t)
+	clock := time.Unix(1_000_000, 0)
+	var slept []time.Duration
+	a.s.now = func() time.Time { return clock }
+	a.s.sleep = func(_ context.Context, d time.Duration) error {
+		if d > 0 {
+			slept = append(slept, d)
+			clock = clock.Add(d)
+		}
+		return nil
+	}
+	if _, err := a.Issues(ctx, 0); err != nil { // the number of is
+		t.Fatal(err)
+	}
+	path := "/repos/o/p/issues/" + is.Number
+	sleeps := func() []time.Duration {
+		s := slept
+		slept = nil
+		return s
+	}
+	hits := func(key string) int {
+		h.mu.Lock()
+		defer h.mu.Unlock()
+		n := h.hits[key]
+		h.hits[key] = 0
+		return n
+	}
+	sleeps()
+
+	h.fault("GET "+path, answer(502, nil, "Bad Gateway"),
+		answer(403, nil, "You have exceeded a secondary rate limit"),
+		answer(429, map[string]string{"Retry-After": "7"}, ""))
+	if _, err := a.Issue(ctx, is.ID); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := sleeps(), []time.Duration{time.Second, time.Minute, 7 * time.Second}; !slices.Equal(got, want) || hits("GET "+path) != 4 {
+		t.Fatalf("slept %v, want %v", got, want)
+	}
+
+	reset := strconv.FormatInt(clock.Unix()+30, 10)
+	h.fault("PATCH "+path, answer(403, map[string]string{"X-RateLimit-Remaining": "0", "X-RateLimit-Reset": reset}, "API rate limit exceeded"))
+	if err := a.SetTitle(ctx, is.ID, "T2"); err != nil {
+		t.Fatal(err)
+	}
+	if got := sleeps(); !slices.Equal(got, []time.Duration{31 * time.Second}) || hits("PATCH "+path) != 2 {
+		t.Fatalf("slept %v, want 31s, until the reset", got)
+	}
+	if got, _ := f.Get(is.Number); got.Title != "T2" {
+		t.Fatalf("title = %q", got.Title)
+	}
+
+	h.fault("POST "+path+"/comments", answer(502, nil, "Bad Gateway"))
+	if _, err := a.CreateComment(ctx, is.ID, "hi"); err == nil || errors.Is(err, forge.ErrRefused) || hits("POST "+path+"/comments") != 1 {
+		t.Fatalf("a write on a 502: %v, want one try and an error", err)
+	}
+
+	for _, code := range []int{403, 422} {
+		h.fault("PATCH "+path, answer(code, nil, "Must have admin rights"))
+		if err := a.SetTitle(ctx, is.ID, "T3"); !errors.Is(err, forge.ErrRefused) || hits("PATCH "+path) != 1 {
+			t.Fatalf("%d: %v, want one try, refused", code, err)
+		}
+	}
+	h.fault("PATCH "+path, answer(410, nil, "This issue was deleted"))
+	if err := a.SetTitle(ctx, is.ID, "T3"); !errors.Is(err, forge.ErrNotFound) {
+		t.Fatalf("410: %v, want not found", err)
+	}
+
+	limited := answer(429, map[string]string{"Retry-After": "1"}, "")
+	h.fault("GET "+path, limited, limited, limited, limited)
+	if _, err := a.Issue(ctx, is.ID); err == nil || errors.Is(err, forge.ErrRefused) || hits("GET "+path) != 4 {
+		t.Fatalf("still limited: %v, want an error after three retries", err)
+	}
+}
+
+// TestPace spaces writes a second apart, and keeps under 500 an hour.
+func TestPace(t *testing.T) {
+	t.Parallel()
+	clock := time.Unix(1_000_000, 0)
+	var slept []time.Duration
+	s := &shared{now: func() time.Time { return clock }, sleep: func(_ context.Context, d time.Duration) error {
+		slept = append(slept, d)
+		clock = clock.Add(d)
+		return nil
+	}}
+	for range 3 {
+		if err := s.pace(t.Context()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if !slices.Equal(slept, []time.Duration{0, time.Second, time.Second}) {
+		t.Fatalf("slept %v", slept)
+	}
+	s.writes, slept = nil, nil
+	for i := range perHour {
+		s.writes = append(s.writes, clock.Add(-30*time.Minute+time.Duration(i)*time.Millisecond))
+	}
+	if err := s.pace(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(slept, []time.Duration{30 * time.Minute}) {
+		t.Fatalf("the 501st write in an hour slept %v, want 30m", slept)
+	}
+}
+
+// TestAs takes a token only when GitHub says it is the account's.
+func TestAs(t *testing.T) {
+	t.Parallel()
+	ctx := t.Context()
+	f := fake.New("example.com/p")
+	f.Grant(bob)
+	a := newHub(t, f).adapter(t)
+	me, err := a.Me(ctx)
+	if err != nil || me != (forge.Account{ID: "1", Login: "board"}) {
+		t.Fatalf("me = %+v, %v", me, err)
+	}
+	if self, err := a.As(ctx, me); err != nil || self != forge.Forge(a) {
+		t.Fatalf("As(me) = %v, %v", self, err)
+	}
+	if _, err := a.As(ctx, ann); !errors.Is(err, forge.ErrNoToken) {
+		t.Fatalf("As(ann), not granted: %v", err)
+	}
+	b, err := a.As(ctx, bob)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if who, _ := b.Me(ctx); who != bob {
+		t.Fatalf("bob's view is %+v's", who)
+	}
+	a.s.tokenOf = func(context.Context, forge.Account) (string, error) { return "t-8-bob", nil }
+	if _, err := a.As(ctx, ann); !errors.Is(err, forge.ErrNoToken) {
+		t.Fatalf("As(ann) with bob's token: %v", err)
+	}
+}
+
+// TestTokenLookup: the environment variable when set, else git's
+// credential helper, asked for the login. It sets environment variables,
+// so it stays serial.
+func TestTokenLookup(t *testing.T) {
+	ctx := t.Context()
+	helper := filepath.Join(t.TempDir(), "helper")
+	script := "#!/bin/sh\n[ \"$1\" = get ] || exit 0\ncase \"$(cat)\" in *username=ann*) echo password=from-helper;; esac\n"
+	if err := os.WriteFile(helper, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// An empty helper first drops the machine's own, keychains included.
+	for k, v := range map[string]string{"GIT_CONFIG_COUNT": "2",
+		"GIT_CONFIG_KEY_0": "credential.helper", "GIT_CONFIG_VALUE_0": "",
+		"GIT_CONFIG_KEY_1": "credential.helper", "GIT_CONFIG_VALUE_1": helper} {
+		t.Setenv(k, v)
+	}
+	const ghe = "ghe.example.test"
+	t.Setenv("GITHUB_TOKEN", "from-env")
+	t.Setenv("GITHUB_ENTERPRISE_TOKEN", "")
+	for _, c := range []struct{ host, login, want string }{
+		{"github.com", "ann", "from-env"},
+		{ghe, "ann", "from-helper"}, // github.com's token never goes to another host
+		{ghe, "bob", ""},
+	} {
+		got, err := lookup(ctx, c.host, c.login)
+		if got != c.want || (c.want == "") != errors.Is(err, forge.ErrNoToken) {
+			t.Errorf("lookup(%s, %s) = %q, %v; want %q", c.host, c.login, got, err, c.want)
+		}
+	}
+	t.Setenv("GITHUB_ENTERPRISE_TOKEN", "from-ghe-env")
+	t.Setenv("GH_TOKEN", "from-gh")
+	if got, _ := lookup(ctx, ghe, "ann"); got != "from-helper" { // no GITHUB_ENTERPRISE_HOST
+		t.Errorf("without GITHUB_ENTERPRISE_HOST: %q", got)
+	}
+	t.Setenv("GITHUB_ENTERPRISE_HOST", ghe)
+	if got, _ := lookup(ctx, ghe, "ann"); got != "from-ghe-env" {
+		t.Errorf("with GITHUB_ENTERPRISE_TOKEN: %q", got)
+	}
+	if got, _ := lookup(ctx, "other.example.test", "ann"); got != "from-helper" {
+		t.Errorf("another host: %q", got)
+	}
+}
+
+// TestNewRefusesClearText: http is for loopback only, and an API of
+// another host is refused.
+func TestNewRefusesClearText(t *testing.T) {
+	for _, api := range []string{"http://ghe.example.test/api/v3", "https://evil.example.test/api/v3"} {
+		_, err := New(t.Context(), Options{Host: "ghe.example.test", Project: "o/r", API: api,
+			Token: func(context.Context, forge.Account) (string, error) { return "t", nil }})
+		if err == nil || errors.Is(err, forge.ErrNoToken) {
+			t.Errorf("New with API %s: %v", api, err)
+		}
+	}
+}
+
+// Printing a Forge shows its key, never its token.
+func TestStringHidesTheToken(t *testing.T) {
+	t.Parallel()
+	a, err := New(t.Context(), Options{Project: "o/r", Token: func(context.Context, forge.Account) (string, error) { return "SECRET-TOKEN", nil }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := fmt.Sprintf("%v %+v", a, a); strings.Contains(got, "SECRET") {
+		t.Errorf("printed %q", got)
+	}
+}

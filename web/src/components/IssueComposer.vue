@@ -12,7 +12,7 @@
       <p v-if="waiting" class="gb-wait" role="status"><GbIcon name="clock" small /> Syncing with the forges… your comment is saved after it.</p>
       <p v-else-if="error" class="gb-save-error" role="alert"><GbIcon name="error" small /> <b>Your comment was not posted.</b> {{ error }} Your text is still here.</p>
       <div class="gb-composer-foot">
-        <p class="gb-hint">Saved in git-bug now, on {{ forgeNames }} at the next sync.</p>
+        <p class="gb-hint">Saved in git-board now, on {{ forgeNames }} at the next sync.</p>
         <button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" :disabled="busy" @click="send(status === 'open' ? 'closed' : 'open')">
           <GbIcon :name="status === 'open' ? 'closed' : 'open'" small />
           {{ status === 'open' ? (text.trim() ? 'Close with comment' : 'Close issue') : (text.trim() ? 'Reopen with comment' : 'Reopen issue') }}

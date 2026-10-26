@@ -105,7 +105,7 @@ export function waiting(remotes: Remote[] | null, forge: ForgeStatus | null, pro
       for (const t of Object.values(job.bridges)) {
         w.send += t.to.issues + t.to.changed;
         w.get += t.from.issues + t.from.changed;
-        w.conflicts += t.conflicts;
+        w.conflicts += t.conflicts ?? 0; // the server stopped serving it with git-bug (M5)
       }
     }
   }

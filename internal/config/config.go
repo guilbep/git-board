@@ -119,6 +119,8 @@ type raw struct {
 	Roles         map[string]string `toml:"roles"`
 	Cycle         Cycle             `toml:"cycle"`
 	Release       Release           `toml:"release"`
+	// Forges holds publish-private and a table per forge (forges.go).
+	Forges map[string]toml.Primitive `toml:"forges"`
 }
 
 // Uploads is the [uploads] table: where files attached to issues go. The
@@ -177,6 +179,11 @@ type Config struct {
 	Cycle Cycle
 	// Release is the [release] table (release.go).
 	Release Release
+	// Forges are the [forges.<name>] tables, by name (forges.go).
+	Forges []Forge
+	// PublishPrivate lets what was pulled from a forge project that isn't
+	// public go to one that is: [forges] publish-private.
+	PublishPrivate bool
 }
 
 // FileName is the config's name, at the root of the repository.
@@ -262,6 +269,10 @@ func parse(data []byte) (*Config, toml.MetaData, error) {
 	if err := checkDescriptions(r.Fields); err != nil {
 		return nil, md, err
 	}
+	forges, publishPrivate, err := parseForges(md, r.Forges)
+	if err != nil {
+		return nil, md, err
+	}
 	// the kinds are plain labels unless [fields.kind] has options of its own
 	if kinds := kindsInOrder(md, r.Branches.Kinds); len(kinds) > 0 && len(r.Fields["kind"].Options) == 0 {
 		if r.Fields == nil {
@@ -272,17 +283,19 @@ func parse(data []byte) (*Config, toml.MetaData, error) {
 		r.Fields["kind"] = f
 	}
 	return &Config{
-		Repos:         r.Repos.List,
-		Assignees:     cmp.Or(r.Repos.Assignees, "native"),
-		Fields:        r.Fields,
-		Sprints:       r.Sprints,
-		Views:         r.Views,
-		GithubProject: r.GithubProject,
-		Uploads:       r.Uploads,
-		Branches:      r.Branches,
-		Roles:         r.Roles,
-		Cycle:         r.Cycle,
-		Release:       r.Release,
+		Repos:          r.Repos.List,
+		Assignees:      cmp.Or(r.Repos.Assignees, "native"),
+		Fields:         r.Fields,
+		Sprints:        r.Sprints,
+		Views:          r.Views,
+		GithubProject:  r.GithubProject,
+		Uploads:        r.Uploads,
+		Branches:       r.Branches,
+		Roles:          r.Roles,
+		Cycle:          r.Cycle,
+		Release:        r.Release,
+		Forges:         forges,
+		PublishPrivate: publishPrivate,
 	}, md, nil
 }
 

@@ -2,22 +2,18 @@ package gitbugio
 
 import (
 	"cmp"
-	"context"
 	"errors"
 	"fmt"
-	"io"
 	"log"
 	"maps"
+	"os/exec"
 	"regexp"
 	"slices"
-	"sort"
 	"strconv"
 	"strings"
 
-	"github.com/git-bug/git-bug/cache"
-	bugent "github.com/git-bug/git-bug/entities/bug"
-	"github.com/git-bug/git-bug/repository"
-	"github.com/go-git/go-git/v5/plumbing/transport"
+	"github.com/guilbep/git-board/core/gitstore"
+	"github.com/guilbep/git-board/core/issue"
 )
 
 // The project's own numbers (CO2-3075): refs/board/seq, a chain of commits
@@ -25,8 +21,8 @@ import (
 //
 //	prefix CO2
 //	start 3052
-//	3052 <git-bug id>
-//	3053 <git-bug id>
+//	3052 <issue id>
+//	3053 <issue id>
 //
 // An issue's number is its line there; else its GitHub number when below
 // start, the number it had before the project numbered its own; else none
@@ -40,10 +36,12 @@ import (
 const NumbersRemote = "origin"
 
 const (
-	seqNamespace = "board"
-	seqKey       = "seq"
-	seqFile      = "numbers"
+	seqRef  = "refs/board/seq"
+	seqFile = "numbers"
 )
+
+// seqCopy is where a remote's counter is fetched to, beside its entities.
+func seqCopy(remote string) string { return "refs/board-remotes/" + remote + "/seq" }
 
 var prefixRe = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9]*$`)
 
@@ -51,7 +49,7 @@ var prefixRe = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9]*$`)
 type Counter struct {
 	Prefix string         // CO2
 	Start  int            // the first number the counter hands out
-	ByID   map[string]int // the numbers it handed out, by git-bug id
+	ByID   map[string]int // the numbers it handed out, by issue id
 }
 
 // ParseCounter reads a numbers file. Blank lines, and keys a later
@@ -109,14 +107,13 @@ func (c Counter) Next() int {
 }
 
 // NumberOf is an issue's number, 0 for none yet: its line, else its GitHub
-// number below Start, from a GitHub issue it is still on: an issue linked
-// to that one since has it, and an unlinked one waits for a line.
+// number below Start.
 func (c Counter) NumberOf(id string, forges []Forge) int {
 	if n, ok := c.ByID[id]; ok {
 		return n
 	}
 	for _, f := range forges {
-		if n, err := strconv.Atoi(f.Number); f.Name == "GitHub" && f.Gone == "" && err == nil && n < c.Start {
+		if n, err := strconv.Atoi(f.Number); f.Name == "GitHub" && err == nil && n < c.Start {
 			return n
 		}
 	}
@@ -128,39 +125,33 @@ func (c Counter) Format(n int) string { return fmt.Sprintf("%s-%d", c.Prefix, n)
 
 // Counter is the project's numbers as this clone last fetched them; ok is
 // false while the project doesn't number its issues.
-func (b *Backend) Counter() (c Counter, ok bool, err error) {
-	h, err := b.repo.ResolveRef(seqNamespace, seqKey)
-	if errors.Is(err, repository.ErrNotFound) {
-		return Counter{}, false, nil
-	}
-	if err != nil {
+func (b *Backend) Counter() (c Counter, ok bool, err error) { return readCounter(b.s) }
+
+func readCounter(s *gitstore.Store) (c Counter, ok bool, err error) {
+	h, err := s.Ref(seqRef)
+	if err != nil || h == gitstore.ZeroHash {
 		return Counter{}, false, err
 	}
-	commit, err := b.repo.ReadCommit(h)
+	commit, err := s.ReadCommit(h)
 	if err != nil {
-		return Counter{}, false, fmt.Errorf("reading refs/board/seq: %w", err)
+		return Counter{}, false, fmt.Errorf("reading %s: %w", seqRef, err)
 	}
-	entries, err := b.repo.ReadTree(commit.TreeHash)
+	entries, err := s.ReadTree(commit.Tree)
 	if err != nil {
-		return Counter{}, false, fmt.Errorf("reading refs/board/seq: %w", err)
+		return Counter{}, false, fmt.Errorf("reading %s: %w", seqRef, err)
 	}
 	for _, e := range entries {
 		if e.Name != seqFile {
 			continue
 		}
-		r, err := b.repo.ReadData(e.Hash)
+		data, err := s.ReadBlob(e.Blob)
 		if err != nil {
-			return Counter{}, false, fmt.Errorf("reading refs/board/seq: %w", err)
-		}
-		defer r.Close()
-		data, err := io.ReadAll(r)
-		if err != nil {
-			return Counter{}, false, fmt.Errorf("reading refs/board/seq: %w", err)
+			return Counter{}, false, fmt.Errorf("reading %s: %w", seqRef, err)
 		}
 		c, err := ParseCounter(data)
 		return c, err == nil, err
 	}
-	return Counter{}, false, fmt.Errorf("refs/board/seq holds no %s file", seqFile)
+	return Counter{}, false, fmt.Errorf("%s holds no %s file", seqRef, seqFile)
 }
 
 // counter is Counter for a listing: nil while the project doesn't number
@@ -177,44 +168,72 @@ func (b *Backend) counter() *Counter {
 	return &c
 }
 
-// FetchNumbers brings the remote's counter and makes it this clone's: a
-// clone never holds numbers the remote hasn't, as numbering pushes at once.
-// A remote without one is no error: the project doesn't number its issues.
+// ErrNumbersAhead: this clone's counter holds numbers the remote hasn't,
+// which taking the remote's would drop: switch --apply's, until
+// refs/board/seq is pushed, or a numbering killed before its push.
+var ErrNumbersAhead = errors.New("refs/board/seq has numbers the remote hasn't")
+
+// FetchNumbers brings the remote's counter and makes it this clone's, when
+// this clone's is behind it or the same: numbering pushes at once. It
+// refuses one ahead, or apart (ErrNumbersAhead). A remote without one is no
+// error: the project doesn't number its issues.
 func (b *Backend) FetchNumbers(remote string) error {
 	theirs, err := b.remoteSeq(remote)
-	if err != nil || theirs == "" {
+	if err != nil || theirs == gitstore.ZeroHash {
 		return err
+	}
+	ours, err := b.s.Ref(seqRef)
+	if err != nil {
+		return err
+	}
+	if ok, err := b.behind(ours, theirs); err != nil || !ok {
+		return cmp.Or(err, fmt.Errorf("%w: git push %s %s first; or, to drop them, git update-ref %s %s",
+			ErrNumbersAhead, remote, seqRef, seqRef, seqCopy(remote)))
 	}
 	return b.setSeq(theirs)
 }
 
-// remoteSeq fetches the remote's counter and says where it is: "" for none.
-func (b *Backend) remoteSeq(remote string) (repository.Hash, error) {
-	if _, err := b.repo.FetchRefs(context.Background(), remote, seqNamespace); err != nil && !errors.Is(err, transport.ErrEmptyRemoteRepository) {
-		return "", fmt.Errorf("fetching the numbers from %s: %w", remote, err)
+// behind says whether ours is theirs or one of its ancestors: taking
+// theirs then drops nothing.
+func (b *Backend) behind(ours, theirs gitstore.Hash) (bool, error) {
+	if ours == gitstore.ZeroHash || ours == theirs {
+		return true, nil
 	}
-	theirs, err := b.repo.ResolveTrackingRef(remote, seqNamespace, seqKey)
-	if errors.Is(err, repository.ErrNotFound) {
-		return "", nil
+	_, err := b.run(nil, "merge-base", "--is-ancestor", ours.String(), theirs.String())
+	if ee := (*exec.ExitError)(nil); errors.As(err, &ee) && ee.ExitCode() == 1 {
+		return false, nil
 	}
-	return theirs, err
+	return err == nil, err
 }
 
-// setSeq points this clone's counter at h; "" removes it.
-func (b *Backend) setSeq(h repository.Hash) error {
-	ours, err := b.repo.ResolveRef(seqNamespace, seqKey)
-	if errors.Is(err, repository.ErrNotFound) {
-		ours = ""
-	} else if err != nil {
-		return err
+// remoteSeq fetches the remote's counter and says where it is: ZeroHash
+// for none.
+func (b *Backend) remoteSeq(remote string) (gitstore.Hash, error) {
+	if err := b.checkRemote(remote); err != nil {
+		return gitstore.ZeroHash, err
 	}
+	if _, err := b.run(nil, "fetch", "--no-write-fetch-head", remote, "+"+seqRef+":"+seqCopy(remote)); err != nil {
+		if strings.Contains(err.Error(), "couldn't find remote ref") {
+			return gitstore.ZeroHash, nil
+		}
+		return gitstore.ZeroHash, fmt.Errorf("fetching the numbers from %s: %w", remote, err)
+	}
+	return b.s.Ref(seqCopy(remote))
+}
+
+// setSeq points this clone's counter at h; ZeroHash removes it.
+func (b *Backend) setSeq(h gitstore.Hash) error {
+	ours, err := b.s.Ref(seqRef)
 	switch {
+	case err != nil:
+		return err
 	case ours == h:
 		return nil
-	case h == "":
-		return b.repo.RemoveRef(seqNamespace, seqKey)
+	case h == gitstore.ZeroHash:
+		_, err := b.run(nil, "update-ref", "-d", seqRef, ours.String())
+		return err
 	}
-	return b.repo.UpdateRef(seqNamespace, seqKey, ours, h)
+	return b.s.UpdateRef(ctx, seqRef, h, ours)
 }
 
 // ErrNumbered: the project numbers its issues already. It starts once.
@@ -256,7 +275,7 @@ func (b *Backend) InitNumbers(remote, prefix string, start int) error {
 	if err := numbered(); err != nil {
 		return err
 	}
-	rejected, err := b.pushCounter(remote, Counter{Prefix: prefix, Start: start, ByID: map[string]int{}}, "")
+	rejected, err := b.pushCounter(remote, Counter{Prefix: prefix, Start: start, ByID: map[string]int{}}, gitstore.ZeroHash)
 	if rejected {
 		if e := numbered(); e != nil {
 			return e
@@ -296,7 +315,7 @@ func (b *Backend) numberOnce(remote string) (n int, rejected bool, err error) {
 	if err != nil {
 		return 0, false, err
 	}
-	head, err := b.repo.ResolveRef(seqNamespace, seqKey)
+	head, err := b.s.Ref(seqRef)
 	if err != nil {
 		return 0, false, err
 	}
@@ -305,8 +324,8 @@ func (b *Backend) numberOnce(remote string) (n int, rejected bool, err error) {
 		return 0, false, err
 	}
 	next := c.Next()
-	for i, e := range todo {
-		c.ByID[e.Id().String()] = next + i
+	for i, is := range todo {
+		c.ByID[is.ID] = next + i
 	}
 	if rejected, err := b.pushCounter(remote, c, head); err != nil {
 		return 0, rejected, err
@@ -340,33 +359,41 @@ func (b *Backend) Numbering(remote string) (Numbering, error) {
 // survey goes through the issues here with c. todo are those numbering
 // numbers now, oldest first: on the remote, as last pushed or fetched (a
 // number other clones can't find an issue for is a gap), without one.
-func (b *Backend) survey(remote string, c Counter) (todo []*cache.BugExcerpt, n Numbering, err error) {
-	onRemote, err := b.repo.ListTrackingRefs(remote, bugent.Namespace)
+func (b *Backend) survey(remote string, c Counter) (todo []*issue.Issue, n Numbering, err error) {
+	if err := validRemote(remote); err != nil {
+		return nil, n, err
+	}
+	prefix := "refs/board-remotes/" + remote + "/issue/"
+	onRemote, err := b.s.Refs(prefix)
+	if err != nil {
+		return nil, n, err
+	}
+	issues, err := b.allIssues()
+	if err != nil {
+		return nil, n, err
+	}
+	v, err := b.view()
 	if err != nil {
 		return nil, n, err
 	}
 	n.GitHub = []int{}
-	for _, id := range b.c.Bugs().AllIds() {
-		e, err := b.c.Bugs().ResolveExcerpt(id)
-		if err != nil {
-			return nil, n, err
-		}
-		forges, _ := forgesOf(e.CreateMetadata)
+	for _, id := range slices.Sorted(maps.Keys(issues)) {
+		forges := forgesOf(v.records[id])
 		github := 0
 		for _, f := range forges {
 			num, _ := strconv.Atoi(f.Number)
-			n.Highest = max(n.Highest, num) // a gone one's too: still taken there
-			if f.Name == "GitHub" && f.Gone == "" && num > 0 && (github == 0 || num < github) {
+			n.Highest = max(n.Highest, num)
+			if f.Name == "GitHub" && num > 0 && (github == 0 || num < github) {
 				github = num
 			}
 		}
-		_, there := onRemote[id.String()]
+		_, there := onRemote[prefix+id]
 		switch {
-		case c.NumberOf(id.String(), forges) > 0:
+		case c.NumberOf(id, forges) > 0:
 			n.Numbered++
 		case there:
 			n.Waiting++
-			todo = append(todo, e)
+			todo = append(todo, issues[id])
 		default:
 			n.Unpushed++
 		}
@@ -374,41 +401,22 @@ func (b *Backend) survey(remote string, c Counter) (todo []*cache.BugExcerpt, n 
 			n.GitHub = append(n.GitHub, github)
 		}
 	}
-	sort.Slice(todo, func(i, j int) bool {
-		if todo[i].CreateUnixTime != todo[j].CreateUnixTime {
-			return todo[i].CreateUnixTime < todo[j].CreateUnixTime
-		}
-		return todo[i].Id() < todo[j].Id()
-	})
+	slices.SortFunc(todo, func(x, y *issue.Issue) int { return cmp.Or(cmp.Compare(x.Created, y.Created), cmp.Compare(x.ID, y.ID)) })
 	return todo, n, nil
 }
 
-// pushCounter commits c on parent ("" for the first commit) and pushes it.
-// When the push fails, the remote's counter says what happened, since what
-// git says differs by server and by race: ours (it landed; a mirror among
-// the remote's push URLs refused it), someone else's (rejected: they took
-// the number), or still parent (a real failure, the counter as it was).
-func (b *Backend) pushCounter(remote string, c Counter, parent repository.Hash) (rejected bool, err error) {
-	data, err := b.repo.StoreData(c.Bytes())
+// pushCounter commits c on parent (ZeroHash for the first commit) and
+// pushes it. When the push fails, the remote's counter says what happened,
+// since what git says differs by server and by race: ours (it landed; a
+// mirror among the remote's push URLs refused it), someone else's
+// (rejected: they took the number), or still parent (a real failure, the
+// counter as it was).
+func (b *Backend) pushCounter(remote string, c Counter, parent gitstore.Hash) (rejected bool, err error) {
+	commit, err := commitCounter(b.s, c, parent)
 	if err != nil {
 		return false, err
 	}
-	tree, err := b.repo.StoreTree([]repository.TreeEntry{{ObjectType: repository.Blob, Hash: data, Name: seqFile}})
-	if err != nil {
-		return false, err
-	}
-	var parents []repository.Hash
-	if parent != "" {
-		parents = append(parents, parent)
-	}
-	commit, err := b.repo.StoreCommit(tree, parents...)
-	if err != nil {
-		return false, err
-	}
-	if err := b.repo.UpdateRef(seqNamespace, seqKey, parent, commit); err != nil {
-		return false, err
-	}
-	if _, err := b.repo.PushRefs(context.Background(), remote, seqNamespace); err != nil {
+	if _, err := b.run(nil, "push", remote, seqRef+":"+seqRef); err != nil {
 		err = fmt.Errorf("pushing the numbers to %s: %w", remote, err)
 		theirs, ferr := b.remoteSeq(remote)
 		switch {
@@ -422,4 +430,26 @@ func (b *Backend) pushCounter(remote string, c Counter, parent repository.Hash) 
 		return true, errors.Join(err, b.setSeq(theirs))
 	}
 	return false, nil
+}
+
+// commitCounter commits c on parent (ZeroHash for the first commit) as
+// refs/board/seq, and answers the commit.
+func commitCounter(s *gitstore.Store, c Counter, parent gitstore.Hash) (gitstore.Hash, error) {
+	data, err := s.WriteBlob(c.Bytes())
+	if err != nil {
+		return gitstore.ZeroHash, err
+	}
+	tree, err := s.WriteTree([]gitstore.TreeEntry{{Name: seqFile, Blob: data}})
+	if err != nil {
+		return gitstore.ZeroHash, err
+	}
+	var parents []gitstore.Hash
+	if parent != gitstore.ZeroHash {
+		parents = append(parents, parent)
+	}
+	commit, err := s.WriteCommit(gitstore.Commit{Tree: tree, Parents: parents})
+	if err != nil {
+		return gitstore.ZeroHash, err
+	}
+	return commit, s.UpdateRef(ctx, seqRef, commit, parent)
 }

@@ -16,11 +16,12 @@ func newSyncCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "sync [path...]",
-		Short: "git bug pull/push on one or more git-bug repos",
-		Long: `git bug pull/push on one or more git-bug repos.
+		Short: "Pull and push the issues of one or more repositories, with git",
+		Long: `Pull and push the issues of one or more repositories, with git.
 
-Each path is a directory containing a git-bug-initialized repo (defaults
-to the current directory if none given). This is deliberately explicit
+Each path is a directory of a git repository (the current directory if
+none given). The forges sync from the Sync page, with the forges of
+.git-board.toml. This is deliberately explicit
 paths, not [repos] from .git-board.toml: that table holds "owner/repo"
 display names, not local clone locations, and there's no established
 convention yet for mapping one to the other — see docs/implementation-plan.md.`,
@@ -39,9 +40,8 @@ convention yet for mapping one to the other — see docs/implementation-plan.md.
 	return cmd
 }
 
-// runSync pulls then pushes each path in turn, in-process (no `git bug`
-// subprocess — internal/gitbugio.Pull/Push wrap cache.RepoCache.Pull/Push
-// directly). Keeps going after a failure on one path so one broken repo
+// runSync pulls then pushes each path in turn, in-process (gitbugio's
+// Pull and Push, over the core's git store). Keeps going after a failure on one path so one broken repo
 // doesn't block the rest; every failure is still surfaced, as a combined
 // error at the end.
 func runSync(out io.Writer, paths []string, remote string) error {
@@ -77,6 +77,9 @@ func syncOne(out io.Writer, path, remote string) error {
 		} else {
 			return fmt.Errorf("pull: %w", err)
 		}
+	}
+	if err := b.Switched(); err != nil {
+		return err
 	}
 	if remote == gitbugio.NumbersRemote {
 		if err := b.FetchNumbers(remote); err != nil {

@@ -1,6 +1,6 @@
 <!-- Settings, in tabs with their address (#/settings/<tab>, settingstabs.ts):
      the Overview (what git-board is, and where each part stands), where
-     your issues go (remotes, forges: git-bug bridges, add one, sync on or
+     your issues go (remotes, forges: add one, sync on or
      off, remove one; the GitHub Project), then this board: the project
      file (.git-board.toml), the project's own numbers, attachments, and
      You (who you write as, the appearance). #/settings/forges?add=1 opens
@@ -27,8 +27,7 @@
           <h2 class="h4">git-board</h2>
           <p>
             A board for this repository's issues, as a GitHub Project is: views, a kanban, sprints, insights.
-            The issues themselves are <a href="https://github.com/git-bug/git-bug" target="_blank" rel="noopener noreferrer">git-bug</a> data,
-            kept in the repository: they travel with git like your code, work offline, and need no database.
+            The issues themselves are kept in the repository, under <code>refs/board</code>: they travel with git like your code, work offline, and need no database.
           </p>
           <p class="set-lead">GitHub, GitLab and the GitHub Project are mirrors, for the people who work there. Each part below says where it stands.</p>
         </div>
@@ -99,7 +98,7 @@
         <ChannelMap current="remotes" />
         <h2 class="h4">Remotes</h2>
         <p class="set-lead">
-          Your issues travel with git, like your code: <code>git bug push</code> sends them to a remote with their comments and people, <code>git bug pull</code> gets them.
+          Your issues travel with git, like your code: <code>git-board sync</code> sends them to a remote with their comments and people, and gets the remote's.
           Push and pull them from <router-link to="/sync#remotes">Sync › Remotes</router-link>.
         </p>
       </div>

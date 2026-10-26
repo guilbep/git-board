@@ -1,7 +1,9 @@
 package gitbugio_test
 
 import (
+	"errors"
 	"maps"
+	"strings"
 	"testing"
 
 	"github.com/guilbep/git-board/internal/gitbugio"
@@ -190,5 +192,28 @@ func TestListIssuesShowsTitlesWithoutTheirNumber(t *testing.T) {
 	}
 	if is := issues[0]; is.Shown != "Wrong example" || is.Title != "Wrong example (#42)" {
 		t.Errorf("Shown, Title = %q, %q; want the title without (#42), and the title as stored", is.Shown, is.Title)
+	}
+}
+
+// What the HTTP API hands on is checked before the core sees it: an id
+// prefix is hex, a comment id is <pack>:<n>, a remote is one git has.
+func TestInputsAreChecked(t *testing.T) {
+	t.Parallel()
+	b := gitbugiotest.New(t)
+	id := gitbugiotest.NewIssue(t, b, "x")
+	for _, p := range []string{"", "%", "a_", "../x", strings.ToUpper(id[:8]), id + "0"} {
+		if _, err := b.GetIssue(p); !errors.Is(err, gitbugio.ErrNotFound) {
+			t.Errorf("GetIssue(%q): %v, want ErrNotFound", p, err)
+		}
+	}
+	for _, c := range []string{"", "x:0", id, id + ":", id + ":-1", id[:39] + ":0"} {
+		if err := b.EditComment(id, c, "y", ""); !errors.Is(err, gitbugio.ErrNoSuchComment) {
+			t.Errorf("EditComment(%q): %v, want ErrNoSuchComment", c, err)
+		}
+	}
+	for _, r := range []string{"", "--upload-pack=touch x", "origin", "a/../b"} {
+		if err := b.Pull(r); err == nil {
+			t.Errorf("Pull(%q) took it", r)
+		}
 	}
 }

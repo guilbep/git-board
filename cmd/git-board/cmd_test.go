@@ -3,16 +3,13 @@ package main
 import (
 	"bytes"
 	"context"
-	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
-	"github.com/git-bug/git-bug/cache"
-	"github.com/git-bug/git-bug/repository"
-	"github.com/git-bug/gitconfig"
-
+	"github.com/guilbep/git-board/internal/gitbugio"
+	"github.com/guilbep/git-board/internal/gitbugio/gitbugiotest"
 	"github.com/guilbep/git-board/internal/server"
 )
 
@@ -21,68 +18,39 @@ const testConfig = `
 single = true
 `
 
-// newTestRepo initializes a real, on-disk git-bug repo with one open bug
-// ("Fix invoice bug", status:ready) and one closed bug ("Write specs"),
+// newTestRepo initializes a real, on-disk repository with one open issue
+// ("Fix invoice bug", status:ready) and one closed issue ("Write specs"),
 // chdirs the test into it, and writes a minimal .git-board.toml. This
-// exercises the exact repo-discovery path (repository.OpenDefault) the
-// CLI uses in production, not a mock.
+// exercises the repository discovery the CLI uses in production, not a
+// mock.
 func newTestRepo(t *testing.T) {
 	t.Helper()
-	dir := t.TempDir()
-
-	repo, err := repository.InitDefault(dir, "git-bug")
+	dir, b := seedRepo(t)
+	if _, err := b.NewIssue("Fix invoice bug", "", []string{"status:ready"}); err != nil {
+		t.Fatalf("new open issue: %v", err)
+	}
+	closed, err := b.NewIssue("Write specs", "", nil)
 	if err != nil {
-		t.Fatalf("InitGoGitRepo: %v", err)
+		t.Fatalf("new closed issue: %v", err)
 	}
-	if err := repo.Config().Update(func(f *gitconfig.File) error {
-		return errors.Join(f.Set("user.name", "guilbep"), f.Set("user.email", "guilbep@example.com"))
-	}); err != nil {
-		t.Fatalf("set user: %v", err)
+	if err := b.CloseBug(closed); err != nil {
+		t.Fatalf("close issue: %v", err)
 	}
-
-	c, err := cache.NewRepoCacheNoEvents(repo, nil)
-	if err != nil {
-		t.Fatalf("NewRepoCacheNoEvents: %v", err)
-	}
-	id, err := c.Identities().NewFromGitUser()
-	if err != nil {
-		t.Fatalf("NewFromGitUser: %v", err)
-	}
-	if err := c.SetUserIdentity(t.Context(), id); err != nil {
-		t.Fatalf("SetUserIdentity: %v", err)
-	}
-
-	open, _, err := c.Bugs().New(t.Context(), "Fix invoice bug", "")
-	if err != nil {
-		t.Fatalf("new open bug: %v", err)
-	}
-	if _, _, err := open.ChangeLabels(t.Context(), []string{"status:ready"}, nil); err != nil {
-		t.Fatalf("label open bug: %v", err)
-	}
-	if err := open.Commit(t.Context()); err != nil {
-		t.Fatalf("commit open bug: %v", err)
-	}
-
-	closed, _, err := c.Bugs().New(t.Context(), "Write specs", "")
-	if err != nil {
-		t.Fatalf("new closed bug: %v", err)
-	}
-	if _, err := closed.Close(t.Context()); err != nil {
-		t.Fatalf("close bug: %v", err)
-	}
-	if err := closed.Commit(t.Context()); err != nil {
-		t.Fatalf("commit closed bug: %v", err)
-	}
-
-	if err := c.Close(); err != nil {
-		t.Fatalf("close cache: %v", err)
-	}
-
 	if err := os.WriteFile(filepath.Join(dir, configPath), []byte(testConfig), 0o644); err != nil {
 		t.Fatalf("write config: %v", err)
 	}
 
 	t.Chdir(dir)
+}
+
+// seedRepo is a repository with guilbep as the person you write as.
+func seedRepo(t *testing.T) (string, *gitbugio.Backend) {
+	t.Helper()
+	dir := gitbugiotest.Repo(t, false)
+	gitbugiotest.Git(t, dir, "config", "user.name", "guilbep")
+	gitbugiotest.Git(t, dir, "config", "user.email", "guilbep@example.com")
+	gitbugiotest.Init(t, dir)
+	return dir, gitbugiotest.Open(t, dir)
 }
 
 func execute(t *testing.T, args []string) (string, error) {

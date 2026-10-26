@@ -20,11 +20,8 @@ from **M2** — the last M2 item, so M2 is now fully shipped.
 
 ## Install
 
-git-board builds against the `bridge-sync` fork of git-bug
-([guilbep/git-bug](https://github.com/guilbep/git-bug/tree/bridge-sync)),
-through a `replace` in `go.mod`: the fork adds two-way sync with GitHub,
-GitLab and Gitea (`git bug bridge sync`). Go refuses `go install ...@latest`
-for a module with a `replace`, so install from a clone:
+git-board embeds its web app, which `make web-build` builds, so install
+from a clone:
 
 ```bash
 git clone git@github.com:guilbep/git-board.git
@@ -913,6 +910,4 @@ site) — the last planned M2 item, so M2 is now fully shipped. See
 
 ## License
 
-git-board is free software, under the GNU General Public License,
-version 3 or (at your option) any later version: GPL-3.0-or-later, the
-text in [LICENSE](LICENSE). It builds against git-bug, which is GPL-3.0.
+git-board is under the MIT License, the text in [LICENSE](LICENSE).

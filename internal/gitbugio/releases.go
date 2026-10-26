@@ -2,35 +2,22 @@ package gitbugio
 
 import (
 	"cmp"
-	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"maps"
 	"slices"
 	"time"
 
-	"github.com/git-bug/git-bug/cache"
-	"github.com/git-bug/git-bug/entities/identity"
-	"github.com/git-bug/git-bug/entity"
-	"github.com/git-bug/git-bug/entity/dag"
-	"github.com/git-bug/git-bug/util/lamport"
-	"github.com/go-git/go-git/v5/plumbing/transport"
+	"github.com/guilbep/git-board/core/oplog"
+	"github.com/guilbep/git-board/core/people"
 )
 
-// A release's page, kept in git as a git-bug entity of git-board's own, in
-// refs/releases/<id>: one record per released commit, frozen at creation
-// but for its notes, comments and yank. Its names are the tags on its
-// commit, read from git, never stored.
-
-// ReleasesNamespace is where the records live: refs/releases.
-const ReleasesNamespace = "releases"
-
-var releaseDef = dag.Definition{
-	Typename:             "release",
-	Namespace:            ReleasesNamespace,
-	OperationUnmarshaler: unmarshalReleaseOp,
-	FormatVersion:        1,
-}
+// A release's page, kept in git as an entity of the core's release kind,
+// in refs/board/release/<id>: one record per released commit, frozen at
+// creation but for its notes, comments and yank. Its names are the tags
+// on its commit, read from git, never stored. The spec's data model has
+// its operations.
 
 // Artifact is an image a release shipped, by digest.
 type Artifact struct {
@@ -71,45 +58,88 @@ type ReleaseRecord struct {
 	Notes     string           `json:"notes"`
 	Comments  []ReleaseComment `json:"comments"`
 	Yanked    string           `json:"yanked"`  // the reason, "" when not
-	Author    string           `json:"author"`  // the creating identity's name
+	Author    string           `json:"author"`  // the creating person's name
 	Created   time.Time        `json:"created"` // as its author's clock had it
-
-	created lamport.Time // when two clones made one for a commit, the earlier counts
 }
 
-func asEntity(e *dag.Entity) *dag.Entity { return e }
+// releaseData is the union of the release operations' fields.
+type releaseData struct {
+	Commit    string        `json:"commit,omitempty"`
+	Previous  string        `json:"previous,omitempty"`
+	Artifacts []Artifact    `json:"artifacts,omitempty"`
+	Chart     ChartArtifact `json:"chart,omitzero"`
+	Assets    []Asset       `json:"assets,omitempty"`
+	Notes     string        `json:"notes,omitempty"`
+	Message   string        `json:"message,omitempty"`
+	Reason    string        `json:"reason,omitempty"`
+}
 
-func compileRelease(e *dag.Entity) ReleaseRecord {
-	r := ReleaseRecord{ID: e.Id().String(), created: e.CreateLamportTime()}
-	for _, op := range e.Operations() {
-		if op, ok := op.(releaseOp); ok { // not a later git-board's
-			op.apply(&r)
+func releaseOp(kind, author string, d releaseData) oplog.Op {
+	raw, _ := json.Marshal(d)
+	return oplog.Op{Kind: kind, Author: author, Time: time.Now().Unix(), Data: raw}
+}
+
+// compileRelease folds a record's operations; name is a person's name.
+func compileRelease(l *oplog.Log, name func(id string) string) (ReleaseRecord, error) {
+	r := ReleaseRecord{ID: l.ID}
+	for i, e := range l.Entries {
+		var d releaseData
+		if err := json.Unmarshal(e.Data, &d); err != nil {
+			return r, fmt.Errorf("release %s, operation %s: %w", l.ID, e.ID, err)
+		}
+		if (i == 0) != (e.Kind == "create") {
+			return r, fmt.Errorf("release %s: operation %s is %q, and only the first is a create", l.ID, e.ID, e.Kind)
+		}
+		switch e.Kind {
+		case "create":
+			if d.Commit == "" {
+				return r, fmt.Errorf("release %s: a record needs its commit", l.ID)
+			}
+			r.Commit, r.Previous, r.Artifacts, r.Chart, r.Assets = d.Commit, d.Previous, d.Artifacts, d.Chart, d.Assets
+			r.Author, r.Created = name(e.Author), time.Unix(e.Time, 0)
+		case "set-notes":
+			r.Notes = d.Notes
+		case "comment":
+			if d.Message == "" {
+				return r, fmt.Errorf("release %s, operation %s: an empty comment", l.ID, e.ID)
+			}
+			r.Comments = append(r.Comments, ReleaseComment{Author: name(e.Author), Message: d.Message, Date: time.Unix(e.Time, 0)})
+		case "yank":
+			if d.Reason == "" {
+				return r, fmt.Errorf("release %s, operation %s: a yank needs its reason", l.ID, e.ID)
+			}
+			r.Yanked = d.Reason
+		default:
+			return r, fmt.Errorf("release %s: unknown operation %q, operation %s", l.ID, e.Kind, e.ID)
 		}
 	}
-	return r
-}
-
-// counts tells r is the record of its commit rather than other: the
-// earlier made, by Lamport time, then the smaller id.
-func (r ReleaseRecord) counts(other ReleaseRecord) bool {
-	return cmp.Or(cmp.Compare(r.created, other.created), cmp.Compare(r.ID, other.ID)) < 0
-}
-
-// releaseResolvers find a record's authors in the identity cache.
-func (b *Backend) releaseResolvers() entity.Resolvers {
-	return entity.Resolvers{&cache.IdentityCache{}: entity.ResolverFunc[*cache.IdentityCache](b.c.Identities().Resolve)}
+	return r, nil
 }
 
 // Releases is the records, one per commit, newest first. A second record
-// for a commit, made on another clone before the two met, never shows.
+// for a commit, made on another clone before the two met, never shows: the
+// one whose id sorts first is the commit's.
 func (b *Backend) Releases() ([]ReleaseRecord, error) {
+	ids, err := oplog.List(b.s, "release")
+	if err != nil {
+		return nil, fmt.Errorf("reading the releases: %w", err)
+	}
+	persons, err := b.allPersons()
+	if err != nil {
+		return nil, err
+	}
+	name := func(id string) string { return personOf(id, persons[id]).Name }
 	byCommit := map[string]ReleaseRecord{}
-	for s := range dag.ReadAll(context.Background(), releaseDef, asEntity, b.repo, b.releaseResolvers()) {
-		if s.Err != nil {
-			return nil, fmt.Errorf("reading the releases: %w", s.Err)
+	for _, id := range ids { // sorted: the first of a commit counts
+		l, err := oplog.Load(b.s, "release", id)
+		if err != nil {
+			return nil, fmt.Errorf("reading the releases: %w", err)
 		}
-		r := compileRelease(s.Entity)
-		if cur, ok := byCommit[r.Commit]; !ok || r.counts(cur) {
+		r, err := compileRelease(l, name)
+		if err != nil {
+			return nil, fmt.Errorf("reading the releases: %w", err)
+		}
+		if _, ok := byCommit[r.Commit]; !ok {
 			byCommit[r.Commit] = r
 		}
 	}
@@ -128,95 +158,109 @@ func (b *Backend) ReleaseFor(commit string) (r ReleaseRecord, ok bool, err error
 	return ReleaseRecord{}, false, err
 }
 
-// CreateRelease records r's commit, previous, artifacts and chart, by you;
-// the rest is the other operations'. A commit that has a record already
-// keeps it, and it is returned.
+// CreateRelease records r's commit, previous, artifacts, chart and assets,
+// by you; the rest is the other operations'. A commit that has a record
+// already keeps it, and it is returned.
 func (b *Backend) CreateRelease(r ReleaseRecord) (ReleaseRecord, error) {
+	if r.Commit == "" {
+		return ReleaseRecord{}, errors.New("a release record needs its commit")
+	}
 	if got, ok, err := b.ReleaseFor(r.Commit); ok || err != nil {
 		return got, err
 	}
-	me, err := b.c.GetUserIdentity(context.Background())
+	me, err := b.me()
 	if err != nil {
 		return ReleaseRecord{}, err
 	}
-	e := dag.New(releaseDef)
-	e.Append(&releaseCreate{OpBase: opBase(releaseCreateOp, me), Commit: r.Commit, Previous: r.Previous, Artifacts: r.Artifacts, Chart: r.Chart, Assets: r.Assets})
-	if err := e.Commit(b.repo); err != nil {
+	op := releaseOp("create", me, releaseData{Commit: r.Commit, Previous: r.Previous, Artifacts: r.Artifacts, Chart: r.Chart, Assets: r.Assets})
+	l, err := oplog.Create(ctx, b.s, "release", "", []oplog.Op{op})
+	if err != nil {
 		return ReleaseRecord{}, fmt.Errorf("recording the release of %s: %w", r.Commit, err)
 	}
-	return compileRelease(e), nil
+	return compileRelease(l, b.personName)
+}
+
+// personName is a person's name, by id.
+func (b *Backend) personName(id string) string {
+	p, _ := people.Load(b.s, id)
+	return personOf(id, p).Name
 }
 
 // SetReleaseNotes replaces the notes of the record with this id.
 func (b *Backend) SetReleaseNotes(id, notes string) error {
-	return b.editRelease(id, func(me identity.Interface) dag.Operation {
-		return &releaseSetNotes{OpBase: opBase(releaseSetNotesOp, me), Notes: notes}
-	})
+	return b.editRelease(id, "set-notes", releaseData{Notes: notes})
 }
 
 // CommentRelease comments on the record with this id.
 func (b *Backend) CommentRelease(id, message string) error {
-	return b.editRelease(id, func(me identity.Interface) dag.Operation {
-		return &releaseComment{OpBase: opBase(releaseCommentOp, me), Message: message}
-	})
+	if message == "" {
+		return errors.New("an empty comment")
+	}
+	return b.editRelease(id, "comment", releaseData{Message: message})
 }
 
 // YankRelease marks the record with this id yanked, for reason.
 func (b *Backend) YankRelease(id, reason string) error {
-	return b.editRelease(id, func(me identity.Interface) dag.Operation {
-		return &releaseYank{OpBase: opBase(releaseYankOp, me), Reason: reason}
-	})
+	if reason == "" {
+		return errors.New("a yank needs its reason")
+	}
+	return b.editRelease(id, "yank", releaseData{Reason: reason})
 }
 
 // editRelease adds an operation by you to the record with this id.
-func (b *Backend) editRelease(id string, op func(me identity.Interface) dag.Operation) error {
-	e, err := dag.Read(context.Background(), releaseDef, asEntity, b.repo, b.releaseResolvers(), entity.Id(id))
+func (b *Backend) editRelease(id, kind string, d releaseData) error {
+	l, err := oplog.Load(b.s, "release", id)
 	if err != nil {
 		return fmt.Errorf("reading release %s: %w", id, err)
 	}
-	me, err := b.c.GetUserIdentity(context.Background())
+	me, err := b.me()
 	if err != nil {
 		return err
 	}
-	e.Append(op(me))
-	if err := e.Commit(b.repo); err != nil {
+	if err := l.Append(ctx, b.s, []oplog.Op{releaseOp(kind, me, d)}); err != nil {
 		return fmt.Errorf("editing release %s: %w", id, err)
 	}
 	return nil
 }
 
-// PushReleases pushes refs/releases to remote, as Push does with the
-// issues. The identities go along, as a record names its authors by
-// identity.
+// PushReleases pushes the records to remote, and the persons who wrote
+// them, as Push does with the issues.
 func (b *Backend) PushReleases(remote string) error {
-	if _, err := b.repo.PushRefs(context.Background(), remote, b.c.Identities().GetNamespace(), ReleasesNamespace); err != nil {
+	if err := b.pushKinds(remote, "person", "release"); err != nil {
 		return fmt.Errorf("pushing the releases to %s: %w", remote, err)
 	}
 	return nil
 }
 
-// PullReleases fetches remote's records, and the identities that wrote
-// them, and merges them into this clone's. An empty remote is nothing to
-// pull.
+// PullReleases fetches remote's entities and merges them, the records and
+// the persons who wrote them with the rest.
+// ponytail: merges the issues too, as Pull does; the release kind alone
+// if that ever gets in the way
 func (b *Backend) PullReleases(remote string) error {
-	_, err := b.repo.FetchRefs(context.Background(), remote, b.c.Identities().GetNamespace(), ReleasesNamespace)
-	if errors.Is(err, transport.ErrEmptyRemoteRepository) {
-		return nil
+	if err := b.Pull(remote); err != nil {
+		return fmt.Errorf("pulling the releases from %s: %w", remote, err)
 	}
-	if err != nil {
-		return fmt.Errorf("fetching the releases from %s: %w", remote, err)
-	}
-	return errors.Join(mergeErr(b.c.Identities().MergeAll(context.Background(), remote)), b.mergeReleases(remote))
+	return nil
 }
 
-// mergeReleases merges remote's fetched records into this clone's, once
-// the identities that wrote them are merged.
-func (b *Backend) mergeReleases(remote string) error {
-	// a merge commit, when both sides edited a record, needs an author;
-	// without one only that record fails
-	var me identity.Interface
-	if i, err := b.c.GetUserIdentity(context.Background()); err == nil {
-		me = i
+// pushKinds pushes the entities of these kinds, those with a ref at all.
+func (b *Backend) pushKinds(remote string, kinds ...string) error {
+	if err := b.checkRemote(remote); err != nil {
+		return err
 	}
-	return mergeErr(dag.MergeAll(context.Background(), releaseDef, asEntity, b.repo, b.releaseResolvers(), remote, me))
+	args := []string{"push", remote}
+	for _, k := range kinds {
+		refs, err := b.s.Refs(oplog.RefName(k, ""))
+		if err != nil {
+			return err
+		}
+		if len(refs) > 0 {
+			args = append(args, fmt.Sprintf("refs/board/%s/*:refs/board/%s/*", k, k))
+		}
+	}
+	if len(args) == 2 {
+		return nil
+	}
+	_, err := b.run(nil, args...)
+	return err
 }

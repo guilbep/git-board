@@ -37,11 +37,11 @@ func newRootCmd() *cobra.Command {
 	var noOpen bool
 	root := &cobra.Command{
 		Use:   "git-board",
-		Short: "Fields, sprints and views over git-bug issues",
-		Long: `Fields, sprints and views over git-bug issues — a config-as-code
+		Short: "Fields, sprints and views over issues kept in git",
+		Long: `Fields, sprints and views over issues kept in git — a config-as-code
 replacement for GitHub Projects. Field values (status, priority, sprint,
-assignees, ...) live as namespaced git-bug labels; run "git-board bridge
---help" to pull them from an actual GitHub Project.
+assignees, ...) live as namespaced labels; run "git-board bridge --help"
+to pull them from an actual GitHub Project.
 
 With no command, "git-board" opens this repository's web UI: in the
 browser where its server already runs, else it starts one here on
@@ -73,7 +73,7 @@ FILTER GRAMMAR (used by ls/view/tui):
 		},
 	}
 	root.Flags().BoolVar(&noOpen, "no-open", false, "don't open the browser")
-	root.AddCommand(newInitCmd(), newViewCmd(), newNumbersCmd(), newLsCmd(), newSetCmd(), newGetCmd(), newTuiCmd(), newBridgeCmd(), newLintCmd(), newMoveCmd(), newCloseCmd(), newSyncCmd(), newSprintCmd(), newHtmlCmd(), newBranchCmd(), newServeCmd(), newReleaseCmd(), newDeployCmd(), newVerifyCmd())
+	root.AddCommand(newInitCmd(), newViewCmd(), newNumbersCmd(), newLsCmd(), newSetCmd(), newGetCmd(), newTuiCmd(), newBridgeCmd(), newLintCmd(), newMoveCmd(), newCloseCmd(), newSyncCmd(), newSprintCmd(), newHtmlCmd(), newBranchCmd(), newServeCmd(), newReleaseCmd(), newDeployCmd(), newVerifyCmd(), newSwitchCmd())
 	return root
 }
 

@@ -40,7 +40,7 @@ func commitFile(t *testing.T, dir, path, content string) string {
 	return git(t, dir, "rev-parse", "HEAD")
 }
 
-// repo is a repository on dev with a git-bug user identity, no login.
+// repo is a repository on dev with a person you write as, no login.
 func repo(t *testing.T) (string, *gitbugio.Backend) {
 	t.Helper()
 	dir := t.TempDir()
@@ -53,11 +53,7 @@ func repo(t *testing.T) (string, *gitbugio.Backend) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = b.Close() })
-	who, err := b.TestCache().Identities().NewFromGitUser()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := b.TestCache().SetUserIdentity(t.Context(), who); err != nil {
+	if _, err := b.NewIdentity("dev", "dev@example.com"); err != nil {
 		t.Fatal(err)
 	}
 	return dir, b

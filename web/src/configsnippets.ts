@@ -55,6 +55,7 @@ export function docSectionAt(text: string, pos: number): string {
   if (header.startsWith('[fields.')) return /^\s*colors\b/.test(line) ? 'colors' : /^\s*(type|unit)\b/.test(line) ? 'types' : 'fields';
   if (header.startsWith('[views.')) return /^\s*filter\b/.test(line) ? 'filters' : 'views';
   if (header.startsWith('[github-project]')) return 'github';
+  if (/^\[forges[.\]]/.test(header)) return 'forges';
   if (header.startsWith('[uploads]')) return 'attachments';
   if (header.startsWith('[repos]')) return 'repos';
   if (header.startsWith('[branches]')) return 'branches';

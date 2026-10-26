@@ -1,5 +1,6 @@
 /git-board
 /dist/
+/spec/site/
 
 # wtx: per-worktree files, local to one checkout
 .env.worktree

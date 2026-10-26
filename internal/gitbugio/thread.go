@@ -1,22 +1,21 @@
 package gitbugio
 
 import (
-	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"net/url"
 	"path"
-	"sort"
+	"regexp"
+	"slices"
 	"strings"
 	"time"
 
-	"github.com/git-bug/git-bug/cache"
-	bugent "github.com/git-bug/git-bug/entities/bug"
-	"github.com/git-bug/git-bug/entities/common"
-	"github.com/git-bug/git-bug/entities/identity"
-	"github.com/git-bug/git-bug/entity"
-	"github.com/git-bug/git-bug/entity/dag"
-	"github.com/git-bug/git-bug/util/timestamp"
+	"github.com/guilbep/git-board/core/issue"
+	"github.com/guilbep/git-board/core/oplog"
+	"github.com/guilbep/git-board/core/people"
+	"github.com/guilbep/git-board/core/syncer"
 )
 
 // ErrNoSuchComment is returned when a comment id isn't one of the issue's.
@@ -26,7 +25,7 @@ var ErrNoSuchComment = errors.New("no such comment on this issue")
 // started: saving would silently replace someone else's text.
 var ErrChangedMeanwhile = errors.New("someone changed this comment meanwhile")
 
-// Person is a git-bug identity, as the page shows it.
+// Person is a person, as the page shows them.
 type Person struct {
 	ID        string `json:"id"`
 	Name      string `json:"name"`
@@ -39,11 +38,6 @@ type Forge struct {
 	Name   string `json:"name"` // GitHub, GitLab, or the host
 	URL    string `json:"url"`
 	Number string `json:"number,omitempty"`
-	// Bridge, in a Thread, is the sync bridge whose project it is: what
-	// link, unlink and take name. "" when no sync bridge is for it.
-	Bridge string `json:"bridge,omitempty"`
-	// Gone: "unlinked", or "deleted" on the forge. Not synced anymore.
-	Gone string `json:"gone,omitempty"`
 }
 
 // Version is one text of an edited comment, oldest first.
@@ -67,14 +61,14 @@ type Event struct {
 	History []Version `json:"history,omitempty"`
 	// Pending are the forges the issue is on that this change hasn't
 	// reached yet: the next forge sync takes it there. EditPending, for a
-	// comment already there: its latest edit hasn't.
+	// comment already there: its latest edit hasn't. EditWas, with
+	// EditPending, is the text the forges have. All three need the sync's
+	// records: empty until M5's second phase.
 	Pending     []string `json:"pending,omitempty"`
 	EditPending []string `json:"edit_pending,omitempty"`
-	// EditWas, with EditPending, is the text the forges have: the newest
-	// version that reached them, for a diff of what the sync will change.
-	EditWas string `json:"edit_was,omitempty"`
-	// Meta is a comment's operation metadata, without the sync engine's
-	// sync:* keys: what the cycle's sign-offs, approvals and runs are.
+	EditWas     string   `json:"edit_was,omitempty"`
+	// Meta is a comment's metadata: what the cycle's sign-offs, approvals
+	// and runs are, and a review comment's anchor.
 	Meta map[string]string `json:"meta,omitempty"`
 
 	Added   []string `json:"added,omitempty"` // labels
@@ -104,373 +98,199 @@ func (b *Backend) Thread(idPrefix string) (Thread, error) {
 	return th[0], nil
 }
 
-// Threads is Thread for each id prefix, reading once what they all need:
-// the counter, and the sync bridges' projects.
+// Threads is Thread for each id prefix, reading once what they all need.
 func (b *Backend) Threads(idPrefixes []string) ([]Thread, error) {
-	c, projects := b.counter(), b.syncProjects()
+	v, err := b.view()
+	if err != nil {
+		return nil, err
+	}
 	res := make([]Thread, 0, len(idPrefixes))
 	for _, p := range idPrefixes {
-		th, err := b.thread(p, c, projects)
+		is, l, err := b.issue(p)
 		if err != nil {
 			return nil, err
 		}
-		res = append(res, th)
+		res = append(res, b.thread(is, l, v))
 	}
 	return res, nil
 }
 
-func (b *Backend) thread(idPrefix string, c *Counter, projects []syncProject) (Thread, error) {
-	bug, err := b.c.Bugs().ResolvePrefix(context.Background(), idPrefix)
-	if err != nil {
-		return Thread{}, fmt.Errorf("resolving %s: %w", idPrefix, err)
-	}
-	excerpt, err := b.c.Bugs().ResolveExcerpt(bug.Id())
-	if err != nil {
-		return Thread{}, fmt.Errorf("resolving %s: %w", idPrefix, err)
-	}
-	snap := bug.Snapshot()
-	issue := b.issueFrom(bug.Id().String(), excerpt, c)
-	createMeta := snap.Operations[0].AllMetadata()
-	_, remotes := forgesOf(createMeta)
-	on := onForges(snap, remotes)
-	forgeBridges(issue.Forges, createMeta, projects)
-	th := Thread{
-		Issue:    issue,
-		Author:   person(snap.Author),
-		EditedAt: snap.EditTime(),
-	}
-	for _, p := range snap.Participants {
-		th.Participants = append(th.Participants, person(p))
-	}
-	for _, item := range snap.Timeline {
-		e := event(snap, item, on)
-		e.Added, e.Removed = b.shown(e.Added), b.shown(e.Removed)
-		th.Events = append(th.Events, e)
-	}
-	return th, nil
-}
-
-// forgeState tells, per operation, which forges a change hasn't reached.
-type forgeState struct {
-	pending  func(opID entity.Id) []string
-	ops      map[entity.CombinedId]dag.Operation // by the timeline's ids
-	lastEdit map[entity.Id]entity.Id             // comment's op → its latest edit
-	edits    map[entity.Id][]dag.Operation       // comment's op → its edits, oldest first
-	meta     map[entity.Id]map[string]string     // op → its metadata, a later SetMetadata winning
-}
-
-// onForges works out where each operation is, as the sync engine records it
-// (bridge/core synctags): an operation pulled from a forge or pushed to it
-// carries sync:<remote>: keys, its own or set later by a SetMetadata. What
-// came before the issue was created on a forge by a push went with it.
-func onForges(snap *bugent.Snapshot, remotes map[string]string) forgeState {
-	meta := map[entity.Id]map[string]string{}
-	since := map[string]int{} // remote prefix → index from which operations must be pushed
-	st := forgeState{ops: map[entity.CombinedId]dag.Operation{}, lastEdit: map[entity.Id]entity.Id{}, edits: map[entity.Id][]dag.Operation{}}
-	index := map[entity.Id]int{}
-	createID := snap.Operations[0].Id()
-	for prefix := range remotes {
-		if _, ok := snap.Operations[0].GetMetadata(prefix + "id"); ok {
-			since[prefix] = 0 // created by the push itself, or pulled from it
+// thread replays an issue's log into its history, as issue.Apply folds it.
+func (b *Backend) thread(is *issue.Issue, l *oplog.Log, v view) Thread {
+	who := func(id string) Person { return personOf(id, v.persons[id]) }
+	th := Thread{Issue: b.issueFrom(is, v), Author: who(is.Author), EditedAt: time.Unix(is.Updated, 0)}
+	th.Participants = append(th.Participants, th.Author)
+	for _, c := range is.Comments {
+		if !slices.ContainsFunc(th.Participants, func(p Person) bool { return p.ID == c.Author }) {
+			th.Participants = append(th.Participants, who(c.Author))
 		}
 	}
-	for i, op := range snap.Operations {
-		index[op.Id()] = i
-		st.ops[entity.CombineIds(snap.Id(), op.Id())] = op
-		meta[op.Id()] = op.AllMetadata()
-		switch o := op.(type) {
-		case *dag.SetMetadataOperation[*bugent.Snapshot]:
-			if meta[o.Target] == nil {
-				meta[o.Target] = map[string]string{}
-			}
-			for k, v := range o.NewMetadata {
-				meta[o.Target][k] = v
-			}
-			// the push that created the issue on a forge records it here
-			for prefix := range remotes {
-				if _, ok := o.NewMetadata[prefix+"id"]; ok && o.Target == createID {
-					since[prefix] = i
+	texts := map[string]int{}         // a text's operation id -> its event
+	origins := map[oplog.Origin]int{} // a comment's origin -> its event
+	from := map[int]*oplog.Origin{}   // an event -> where it was pulled from
+	changed := map[int][2][]string{}  // a labels event -> the labels it added and removed
+	labels := map[string]bool{}
+	title := ""
+	for _, e := range l.Entries {
+		var d struct {
+			Title, Body, Target string
+			Status              issue.Status
+			Add, Remove         []string
+			Meta                map[string]string
+		}
+		_ = json.Unmarshal(e.Data, &d) // Apply read it already
+		ev := Event{ID: e.ID, Author: who(e.Author), At: time.Unix(e.Time, 0)}
+		switch e.Kind {
+		case "create", "comment":
+			if e.Origin != nil {
+				if i, dup := origins[*e.Origin]; dup { // the same comment, pulled again
+					texts[e.ID] = i
+					continue
 				}
+				origins[*e.Origin] = len(th.Events)
+				from[len(th.Events)] = e.Origin
 			}
-		case *bugent.EditCommentOperation:
-			st.lastEdit[o.Target] = op.Id()
-			st.edits[o.Target] = append(st.edits[o.Target], op)
-		}
-	}
-	st.meta = meta
-	st.pending = func(opID entity.Id) []string {
-		var res []string
-		review := isReview(meta[opID])
-		for prefix, name := range remotes {
-			if index[opID] <= since[prefix] {
+			ev.Kind, ev.Body, ev.Meta = "comment", d.Body, maps.Clone(d.Meta)
+			if e.Kind == "create" {
+				ev.Kind, title = "created", d.Title
+			}
+			ev.History = []Version{{Author: ev.Author, At: ev.At, Body: d.Body}}
+			texts[e.ID] = len(th.Events)
+		case "edit-text":
+			if i, ok := texts[d.Target]; ok {
+				t := &th.Events[i]
+				t.Body = d.Body
+				t.History = append(t.History, Version{Author: ev.Author, At: ev.At, Body: d.Body})
+			}
+			continue
+		case "set-meta":
+			if i, ok := texts[d.Target]; ok {
+				t := &th.Events[i]
+				if t.Meta == nil {
+					t.Meta = map[string]string{}
+				}
+				maps.Copy(t.Meta, d.Meta)
+			}
+			continue
+		case "set-title":
+			ev.Kind, ev.Title, ev.Was, title = "title", d.Title, title, d.Title
+		case "set-status":
+			ev.Kind, ev.Status = "status", string(d.Status)
+		case "change-labels":
+			ev.Added, ev.Removed = applyLabels(labels, d.Add, d.Remove)
+			if len(ev.Added) == 0 && len(ev.Removed) == 0 {
 				continue
 			}
-			// a review comment goes to GitHub's pull request, nowhere else
-			// (the fork's PullRemote). ponytail: github.com only, not GHE
-			if review && !strings.HasPrefix(prefix, "sync:github.com/") {
+			changed[len(th.Events)] = [2][]string{ev.Added, ev.Removed}
+			ev.Kind, ev.Added, ev.Removed = "labels", b.shown(slices.Clone(ev.Added)), b.shown(slices.Clone(ev.Removed))
+		default:
+			continue
+		}
+		th.Events = append(th.Events, ev)
+	}
+	for i := range th.Events {
+		e := &th.Events[i]
+		if e.Kind != "created" && e.Kind != "comment" {
+			continue
+		}
+		e.Edited = len(e.History) > 1
+		if !e.Edited {
+			e.History = nil
+		}
+		e.Review = reviewOf(e.Meta)
+		if len(e.Meta) == 0 {
+			e.Meta = nil
+		}
+	}
+	for _, r := range v.records[is.ID] {
+		pending(&th, is, r, from, changed)
+	}
+	return th
+}
+
+// pending marks what hasn't reached the forge of r yet, from its record:
+// a comment neither posted there nor pulled from it; a description or a
+// comment there whose text git-board changed since (EditWas, the forge's);
+// the latest title and status changes, and each label's, when git-board's
+// value isn't the one last seen. A line comment never goes (isLocal).
+// ponytail: compares git-board's texts with the forge's as they are; one
+// that came from another forge, whose #n and @ sync rewrites, shows as an
+// edit waiting.
+func pending(th *Thread, is *issue.Issue, r syncer.Record, from map[int]*oplog.Origin, changed map[int][2][]string) {
+	name := forgeName(r.URL)
+	mark := func(i int) {
+		if e := &th.Events[i]; !slices.Contains(e.Pending, name) {
+			e.Pending = append(e.Pending, name)
+		}
+	}
+	edit := func(e *Event, was string) {
+		e.EditPending = append(e.EditPending, name)
+		if e.EditWas == "" {
+			e.EditWas = was
+		}
+	}
+	title, status := -1, -1
+	last := map[string]int{} // a label -> its last change's event
+	for i := range th.Events {
+		e := &th.Events[i]
+		switch e.Kind {
+		case "created":
+			if was, ok := r.Seen["body"]; ok && was != is.Body {
+				edit(e, was)
+			}
+		case "comment":
+			if isLocal(e.Meta) {
 				continue
 			}
-			there := false
-			for k := range meta[opID] {
-				if strings.HasPrefix(k, prefix) {
-					there = true
-					break
-				}
+			fc := r.Posted[e.ID]
+			if o := from[i]; fc == "" && o != nil && syncer.StateID(o.Forge) == r.Forge {
+				fc = strings.TrimPrefix(o.Event, "comment:")
 			}
-			if !there {
-				res = append(res, name)
+			if fc == "" {
+				mark(i)
+			} else if was, ok := r.Seen["comment:"+fc]; ok && was != e.Body {
+				edit(e, was)
+			}
+		case "title":
+			title = i
+		case "status":
+			status = i
+		case "labels":
+			for _, l := range slices.Concat(changed[i][0], changed[i][1]) {
+				last[l] = i
 			}
 		}
-		sort.Strings(res)
-		return res
 	}
-	return st
+	if title >= 0 && is.Title != r.Seen["title"] {
+		mark(title)
+	}
+	if status >= 0 && string(is.Status) != r.Seen["status"] {
+		mark(status)
+	}
+	seen := map[string]bool{}
+	for l := range strings.SplitSeq(r.Seen["labels"], "\n") {
+		seen[l] = l != ""
+	}
+	for l, i := range last {
+		if !isAssigneeLabel(l) && slices.Contains(is.Labels, l) != seen[l] {
+			mark(i)
+		}
+	}
 }
 
-// forgeVersion is the text of a comment the forges have: the newest of its
-// versions (the comment, then each edit) that reached every forge.
-func (st forgeState) forgeVersion(target entity.Id, history []bugent.CommentHistoryStep) string {
-	ops := []entity.Id{target}
-	for _, e := range st.edits[target] {
-		ops = append(ops, e.Id())
-	}
-	if len(ops) != len(history) {
-		return "" // ponytail: versions and edits always pair up; no diff if not
-	}
-	for i := len(ops) - 1; i >= 0; i-- {
-		if len(st.pending(ops[i])) == 0 {
-			return history[i].Message
-		}
-	}
-	return ""
-}
+func isAssigneeLabel(l string) bool { return strings.HasPrefix(strings.ToLower(l), "assignee:") }
 
-func event(snap *bugent.Snapshot, item bugent.TimelineItem, on forgeState) Event {
-	comment := func(kind string, c bugent.CommentTimelineItem) Event {
-		e := Event{Kind: kind, ID: string(item.CombinedId()), Author: person(c.Author), At: at(c.CreatedAt), Body: c.Message, Edited: len(c.History) > 1}
-		found, err := snap.SearchComment(item.CombinedId())
-		if e.Edited {
-			var edits []dag.Operation
-			if err == nil {
-				edits = on.edits[found.TargetId()]
-			}
-			for i, h := range c.History {
-				// git-bug leaves out who wrote the first version, and an
-				// edit's author: the comment's, and the edit operation's
-				who := h.Author
-				switch {
-				case who != nil:
-				case i == 0:
-					who = c.Author
-				case i-1 < len(edits):
-					who = edits[i-1].Author()
-				}
-				e.History = append(e.History, Version{Author: person(who), At: at(h.UnixTime), Body: h.Message})
-			}
+// forgesOf is where an issue is, from its links: each forge by its URL.
+func forgesOf(links []syncer.Record) []Forge {
+	var res []Forge
+	for _, l := range links {
+		n := l.Number
+		if n == "" {
+			n = lastNumber(l.URL)
 		}
-		if op, ok := on.ops[item.CombinedId()]; ok {
-			for k, v := range op.AllMetadata() {
-				if !strings.HasPrefix(k, "sync:") {
-					if e.Meta == nil {
-						e.Meta = map[string]string{}
-					}
-					e.Meta[k] = v
-				}
-			}
-		}
-		if err == nil {
-			e.Review = reviewOf(on.meta[found.TargetId()])
-			e.Pending = on.pending(found.TargetId())
-			if edit, ok := on.lastEdit[found.TargetId()]; ok && len(e.Pending) == 0 {
-				e.EditPending = on.pending(edit)
-				if len(e.EditPending) > 0 {
-					e.EditWas = on.forgeVersion(found.TargetId(), c.History)
-				}
-			}
-		}
-		return e
-	}
-	change := func(e Event) Event {
-		if op, ok := on.ops[item.CombinedId()]; ok {
-			e.Pending = on.pending(op.Id())
-		}
-		return e
-	}
-	switch it := item.(type) {
-	case *bugent.CreateTimelineItem:
-		return comment("created", it.CommentTimelineItem)
-	case *bugent.AddCommentTimelineItem:
-		return comment("comment", it.CommentTimelineItem)
-	case *bugent.LabelChangeTimelineItem:
-		return change(Event{Kind: "labels", ID: string(it.CombinedId()), Author: person(it.Author), At: at(it.UnixTime), Added: labelStrings(it.Added), Removed: labelStrings(it.Removed)})
-	case *bugent.SetStatusTimelineItem:
-		status := "open"
-		if it.Status == common.ClosedStatus {
-			status = "closed"
-		}
-		return change(Event{Kind: "status", ID: string(it.CombinedId()), Author: person(it.Author), At: at(it.UnixTime), Status: status})
-	case *bugent.SetTitleTimelineItem:
-		return change(Event{Kind: "title", ID: string(it.CombinedId()), Author: person(it.Author), At: at(it.UnixTime), Title: it.Title, Was: it.Was})
-	}
-	return Event{Kind: "unknown", ID: string(item.CombinedId())}
-}
-
-// forgesOf reads where an issue is from its create operation's metadata:
-// the sync engine's sync:<remote>:url (and :number), then the older
-// bridges' <kind>-url (not gitlab-base-url); each gone when its project's
-// sync:<remote>:gone says so, the one place that tells. remotes maps each
-// sync remote's key prefix ("sync:github.com/o/r:") to its forge's name,
-// for the comments to say which forges they haven't reached; not an
-// unlinked one.
-func forgesOf(meta map[string]string) (forges []Forge, remotes map[string]string) {
-	remotes = map[string]string{}
-	seen := map[string]int{} // URL → its forge's index
-	keys := make([]string, 0, len(meta))
-	for k := range meta {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	// add lists the forge of a URL once, and says where it is
-	add := func(u, number string) int {
-		if i, ok := seen[u]; ok {
-			return i
-		}
-		if number == "" {
-			number = lastNumber(u)
-		}
-		seen[u] = len(forges)
-		forges = append(forges, Forge{Name: forgeName(u), URL: u, Number: number})
-		return seen[u]
-	}
-	for _, k := range keys {
-		if prefix, ok := strings.CutSuffix(k, ":url"); ok && strings.HasPrefix(k, "sync:") {
-			i := add(meta[k], meta[prefix+":number"])
-			if g := gone(meta[prefix+":gone"]); g != "" {
-				forges[i].Gone = g
-			} else if _, onForge := meta[prefix+":id"]; onForge {
-				remotes[prefix+":"] = forges[i].Name
-			}
-		}
-	}
-	for _, k := range keys {
-		if kind, ok := strings.CutSuffix(k, "-url"); ok && !strings.HasSuffix(kind, "-base") && !strings.Contains(k, ":") {
-			i := add(meta[k], "")
-			if key := legacyKey(kind, meta); key != "" {
-				if g := gone(meta["sync:"+key+":gone"]); g != "" {
-					forges[i].Gone = g
-				}
-			}
-		}
-	}
-	return forges, remotes
-}
-
-// legacyKey is the sync key of the project an older bridge's issue is on,
-// as the engine makes it (Key of bridge/{github,gitlab}/remote.go): where
-// Unlink, or a push that found it deleted, marks it gone. "" for a kind the
-// engine doesn't sync.
-func legacyKey(kind string, meta map[string]string) string {
-	u, err := url.Parse(meta[kind+"-url"])
-	if err != nil {
-		return ""
-	}
-	switch kind {
-	case "github": // https://github.com/<owner>/<project>/issues/<n>
-		owner, rest, _ := strings.Cut(strings.TrimPrefix(u.Path, "/"), "/")
-		project, _, _ := strings.Cut(rest, "/")
-		return "github.com/" + strings.ToLower(owner+"/"+project)
-	case "gitlab":
-		// older exports left the base URL empty
-		if base, err := url.Parse(meta["gitlab-base-url"]); err == nil && base.Host != "" {
-			u = base
-		}
-		return u.Host + "/" + meta["gitlab-project-id"]
-	}
-	return ""
-}
-
-// gone reads the engine's sync:<remote>:gone mark: Unlink's, or a push's
-// that found the issue deleted.
-func gone(mark string) string {
-	switch mark {
-	case "":
-		return ""
-	case "unlinked":
-		return "unlinked"
-	}
-	return "deleted"
-}
-
-// syncProject is a sync bridge's project, as forgeBridges finds an issue's
-// forge in it.
-type syncProject struct {
-	bridge, target string
-	key            string // the engine's: sync:<key>:url
-	project        string // github, gitea: owner/project, lowercased
-	id, baseURL    string // gitlab
-}
-
-// syncProjects reads the sync bridges' projects from git-bug's config.
-//
-// ponytail: mirrors Key and Legacy of bridge/{github,gitlab,gitea}/remote.go,
-// which need the forge's API; git-bug exporting them would replace this.
-func (b *Backend) syncProjects() []syncProject {
-	bridges, err := b.SyncBridges()
-	if err != nil {
-		return nil
-	}
-	cfg, err := b.c.Config().Read()
-	if err != nil {
-		return nil
-	}
-	var res []syncProject
-	for _, br := range bridges {
-		get := func(k string) string { return cfg.Value("git-bug.bridge."+br.Name+"."+k, "") }
-		host := ""
-		if u, err := url.Parse(get("base-url")); err == nil {
-			host = u.Host
-		}
-		p := syncProject{bridge: br.Name, target: br.Target, project: strings.ToLower(get("owner") + "/" + get("project")), id: get("project-id"), baseURL: get("base-url")}
-		switch br.Target {
-		case "github":
-			p.key = "github.com/" + p.project
-		case "gitlab":
-			p.key = host + "/" + p.id
-		case "gitea":
-			p.key = host + "/" + p.project
-		}
-		res = append(res, p)
+		res = append(res, Forge{Name: forgeName(l.URL), URL: l.URL, Number: n})
 	}
 	return res
-}
-
-// forgeBridges names the sync bridge of each forge an issue is on, as the
-// engine finds a bug's issue: by the sync keys of the bridge's project, or
-// the metadata an older bridge left (an issue it pulled).
-func forgeBridges(forges []Forge, meta map[string]string, projects []syncProject) {
-	for _, p := range projects {
-		var legacy string
-		switch p.target {
-		case "github":
-			if _, ok := meta["github-id"]; ok && strings.HasPrefix(strings.ToLower(meta["github-url"]), "https://github.com/"+p.project+"/issues/") {
-				legacy = meta["github-url"]
-			}
-		case "gitlab":
-			base := strings.TrimSuffix(meta["gitlab-base-url"], "/")
-			if _, ok := meta["gitlab-id"]; ok && meta["gitlab-project-id"] == p.id && (base == "" || base == strings.TrimSuffix(p.baseURL, "/")) {
-				legacy = meta["gitlab-url"]
-			}
-		}
-		u := meta["sync:"+p.key+":url"]
-		if u == "" {
-			u = legacy
-		}
-		for i := range forges {
-			if u != "" && forges[i].URL == u {
-				forges[i].Bridge = p.bridge
-			}
-		}
-	}
 }
 
 func forgeName(u string) string {
@@ -483,8 +303,6 @@ func forgeName(u string) string {
 		return "GitHub"
 	case strings.HasPrefix(host, "gitlab."):
 		return "GitLab"
-	case strings.HasPrefix(host, "gitea.") || strings.HasPrefix(host, "codeberg."):
-		return "Gitea"
 	default:
 		return host
 	}
@@ -499,135 +317,149 @@ func lastNumber(u string) string {
 	return last
 }
 
-func person(i identity.Interface) Person {
-	if i == nil {
-		return Person{}
+// personOf is a person as the page shows them: their first forge login.
+// One not fetched yet shows by id.
+func personOf(id string, p *people.Person) Person {
+	if p == nil {
+		return Person{ID: id, Name: id[:min(7, len(id))]}
 	}
-	return Person{ID: i.Id().String(), Name: i.DisplayName(), Login: i.Login(), AvatarURL: i.AvatarUrl()}
-}
-
-func at(t timestamp.Timestamp) time.Time { return time.Unix(int64(t), 0) }
-
-func labelStrings(labels []common.Label) []string {
-	res := make([]string, len(labels))
-	for i, l := range labels {
-		res[i] = l.String()
+	res := Person{ID: p.ID, Name: p.Name}
+	if ls := logins(p); len(ls) > 0 {
+		res.Login = ls[0]
 	}
 	return res
 }
 
-// Me returns who writes from git-board: the repository's git-bug user
-// identity. false when none is set yet.
+// Me returns who writes from git-board: the person board.me names. false
+// when none is chosen yet.
 func (b *Backend) Me() (Person, bool, error) {
-	set, err := b.c.IsUserIdentitySet()
-	if err != nil || !set {
-		return Person{}, false, err
+	id, err := b.me()
+	if errors.Is(err, ErrNoMe) {
+		return Person{}, false, nil
 	}
-	i, err := b.c.GetUserIdentity(context.Background())
 	if err != nil {
 		return Person{}, false, err
 	}
-	return person(i), true, nil
+	persons, err := b.allPersons()
+	if err != nil {
+		return Person{}, false, err
+	}
+	p, ok := persons[id]
+	if !ok {
+		return Person{}, false, fmt.Errorf("%w: you, person %s", ErrNotFound, id)
+	}
+	return personOf(id, p), true, nil
 }
 
-// NewIssue creates an issue as the user identity, with labels, and returns
-// its id.
+// NewIssue creates an issue as you, with labels, and returns its id.
 func (b *Backend) NewIssue(title, body string, labels []string) (string, error) {
-	bug, _, err := b.c.Bugs().New(context.Background(), title, body)
+	me, err := b.me()
+	if err != nil {
+		return "", err
+	}
+	ops := []oplog.Op{issue.NewCreate(me, title, body)}
+	if labels, _ = b.stored(labels, nil, nil); len(labels) > 0 {
+		ops = append(ops, issue.ChangeLabels(me, labels, nil))
+	}
+	is, err := issue.Create(ctx, b.s, ops...)
 	if err != nil {
 		return "", fmt.Errorf("creating the issue: %w", err)
 	}
-	if labels, _ = b.stored(labels, nil, nil); len(labels) > 0 {
-		if _, _, err := bug.ChangeLabels(context.Background(), labels, nil); err != nil {
-			return "", fmt.Errorf("labelling the issue: %w", err)
-		}
-	}
-	// the creation is staged with the labels: one commit writes both
-	if err := bug.Commit(context.Background()); err != nil {
-		return "", err
-	}
-	return bug.Id().String(), nil
+	return is.ID, nil
 }
 
-// AddComment comments on an issue as the user identity, and returns the
-// comment's id.
+// AddComment comments on an issue as you, and returns the comment's id.
 func (b *Backend) AddComment(idPrefix, body string) (string, error) {
-	var id entity.CombinedId
-	err := b.write(idPrefix, func(bug *cache.BugCache) (err error) {
-		id, _, err = bug.AddComment(context.Background(), body)
-		return err
-	})
-	return string(id), err
+	return b.AddCommentMeta(idPrefix, body, nil)
 }
 
-// AddCommentMeta is AddComment with operation metadata, as the user
-// identity: what the cycle's sign-offs, approvals and runs are.
+// AddCommentMeta is AddComment with metadata: what the cycle's sign-offs,
+// approvals and runs are, and a review comment's anchor.
 func (b *Backend) AddCommentMeta(idPrefix, body string, meta map[string]string) (string, error) {
-	author, err := b.c.GetUserIdentity(context.Background())
+	is, err := b.do(idPrefix, func(me string, _ *issue.Issue, _ *oplog.Log) ([]oplog.Op, error) {
+		if len(meta) == 0 {
+			return []oplog.Op{issue.NewComment(me, body)}, nil
+		}
+		return []oplog.Op{issue.NewCommentMeta(me, body, meta)}, nil
+	})
 	if err != nil {
 		return "", err
 	}
-	var id entity.CombinedId
-	err = b.write(idPrefix, func(bug *cache.BugCache) (err error) {
-		id, _, err = bug.AddCommentRaw(author, time.Now().Unix(), body, nil, meta)
-		return err
-	})
-	return string(id), err
+	return is.Comments[len(is.Comments)-1].ID, nil
+}
+
+var textID = regexp.MustCompile(`^[0-9a-f]{40}:[0-9]+$`)
+
+// text finds one of an issue's texts by id: its body (the created event's
+// id) or a comment, as Apply knows them: a duplicate's id names its
+// comment.
+func text(is *issue.Issue, l *oplog.Log, id string) (target, body string, meta map[string]string, err error) {
+	if !textID.MatchString(id) {
+		return "", "", nil, ErrNoSuchComment
+	}
+	if id == is.BodyOp {
+		return id, is.Body, is.Meta, nil
+	}
+	if i := slices.IndexFunc(is.Comments, func(c issue.Comment) bool { return c.ID == id }); i >= 0 {
+		return id, is.Comments[i].Body, is.Comments[i].Meta, nil
+	}
+	// another id of a comment: a copy of it pulled again
+	for _, e := range l.Entries {
+		if e.ID == id && e.Kind == "comment" && e.Origin != nil {
+			for _, c := range is.Comments {
+				if c.Origin != nil && *c.Origin == *e.Origin {
+					return c.ID, c.Body, c.Meta, nil
+				}
+			}
+		}
+	}
+	return "", "", nil, ErrNoSuchComment
 }
 
 // EditComment replaces the text of one of an issue's comments, or of its
 // description (the created event's id). base is the text the edit started
 // from: if the comment holds another one now, the edit is refused ("" skips
 // the check).
+// ponytail: the check reads, then the write lands; two edits in that
+// instant both land, the later winning
 func (b *Backend) EditComment(idPrefix, commentID, body, base string) error {
-	return b.write(idPrefix, func(bug *cache.BugCache) error {
-		c, err := bug.Snapshot().SearchComment(entity.CombinedId(commentID))
+	_, err := b.do(idPrefix, func(me string, is *issue.Issue, l *oplog.Log) ([]oplog.Op, error) {
+		target, now, _, err := text(is, l, commentID)
 		if err != nil {
-			return ErrNoSuchComment
+			return nil, err
 		}
-		if base != "" && c.Message != base {
-			return ErrChangedMeanwhile
+		if base != "" && now != base {
+			return nil, ErrChangedMeanwhile
 		}
-		_, err = bug.EditComment(context.Background(), c.CombinedId(), body)
-		return err
+		if now == body {
+			return nil, nil
+		}
+		return []oplog.Op{issue.EditText(me, target, body)}, nil
 	})
+	return err
 }
 
 // SetTitle renames an issue.
 func (b *Backend) SetTitle(idPrefix, title string) error {
-	return b.write(idPrefix, func(bug *cache.BugCache) error {
-		if bug.Snapshot().Title == title {
-			return nil
+	_, err := b.do(idPrefix, func(me string, is *issue.Issue, _ *oplog.Log) ([]oplog.Op, error) {
+		if is.Title == title {
+			return nil, nil
 		}
-		_, err := bug.SetTitle(context.Background(), title)
-		return err
+		return []oplog.Op{issue.SetTitle(me, title)}, nil
 	})
+	return err
 }
 
 // SetStatus opens or closes an issue.
 func (b *Backend) SetStatus(idPrefix, status string) error {
-	return b.write(idPrefix, func(bug *cache.BugCache) error {
-		var err error
-		switch {
-		case status == "open" && bug.Snapshot().Status != common.OpenStatus:
-			_, err = bug.Open(context.Background())
-		case status == "closed" && bug.Snapshot().Status != common.ClosedStatus:
-			_, err = bug.Close(context.Background())
-		case status != "open" && status != "closed":
-			err = fmt.Errorf("status %q: want open or closed", status)
+	if status != "open" && status != "closed" {
+		return fmt.Errorf("status %q: want open or closed", status)
+	}
+	_, err := b.do(idPrefix, func(me string, is *issue.Issue, _ *oplog.Log) ([]oplog.Op, error) {
+		if string(is.Status) == status {
+			return nil, nil
 		}
-		return err
+		return []oplog.Op{issue.SetStatus(me, issue.Status(status))}, nil
 	})
-}
-
-// write runs change on an issue and commits what it did.
-func (b *Backend) write(idPrefix string, change func(*cache.BugCache) error) error {
-	bug, err := b.c.Bugs().ResolvePrefix(context.Background(), idPrefix)
-	if err != nil {
-		return fmt.Errorf("resolving %s: %w", idPrefix, err)
-	}
-	if err := change(bug); err != nil {
-		return err
-	}
-	return bug.CommitAsNeeded(context.Background())
+	return err
 }

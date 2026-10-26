@@ -10,7 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/guilbep/git-board/internal/ghbridge"
+	"github.com/guilbep/git-board/internal/config"
+	"github.com/guilbep/git-board/internal/ghpr"
 	"github.com/guilbep/git-board/internal/gitbugio"
 )
 
@@ -76,16 +77,32 @@ func (s *apiServer) numbers() (numbersResponse, error) {
 	return res, nil
 }
 
-// githubRepo is the GitHub forge's repository, owner/name; "" for none.
-// ponytail: the first GitHub forge; a project with two is unheard of
-func (s *apiServer) githubRepo() string {
-	bridges, _ := s.b.Bridges()
-	for _, br := range bridges {
-		if repo, ok := strings.CutPrefix(br.Where, "https://github.com/"); ok && br.Target == "github" {
-			return repo
+// githubForge is the settings' forge on github.com, false for none.
+// ponytail: the first; a project with two is unheard of
+func (s *apiServer) githubForge() (config.Forge, bool) {
+	for _, f := range s.config().Forges {
+		if f.Kind == "github" && f.Host == "github.com" {
+			return f, true
 		}
 	}
-	return ""
+	return config.Forge{}, false
+}
+
+// githubRepo is the GitHub forge's repository, owner/name; "" for none.
+func (s *apiServer) githubRepo() string {
+	f, _ := s.githubForge()
+	return f.Project
+}
+
+// highestOnGitHub is GitHub's highest issue or pull request number of the
+// GitHub forge's repository, asked with its posting account's token.
+func (s *apiServer) highestOnGitHub(ctx context.Context, repo string) (int, error) {
+	f, _ := s.githubForge()
+	token, err := s.b.Token(ctx, f, f.Login)
+	if err != nil {
+		return 0, err
+	}
+	return (&ghpr.Client{API: s.githubAPI, Token: token}).Highest(ctx, repo)
 }
 
 func (s *apiServer) handleNumbers(w http.ResponseWriter, r *http.Request) {
@@ -97,7 +114,7 @@ func (s *apiServer) handleNumbers(w http.ResponseWriter, r *http.Request) {
 	if repo := s.githubRepo(); r.URL.Query().Has("github") && !res.On && repo != "" {
 		ask := s.githubHighest
 		if ask == nil {
-			ask = ghbridge.HighestNumber
+			ask = s.highestOnGitHub
 		}
 		ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 		defer cancel()

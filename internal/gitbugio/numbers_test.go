@@ -3,14 +3,11 @@ package gitbugio_test
 import (
 	"errors"
 	"fmt"
-	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
 	"testing"
-
-	"github.com/git-bug/git-bug/repository/repotest"
 
 	"github.com/guilbep/git-board/internal/gitbugio"
 	"github.com/guilbep/git-board/internal/gitbugio/gitbugiotest"
@@ -50,7 +47,6 @@ func TestCounter(t *testing.T) {
 		{"GitHub, below start", "ccc", github("2518"), 2518},
 		{"GitHub, at start: not yet", "ddd", github("3052"), 0},
 		{"GitLab's never counts", "eee", []gitbugio.Forge{{Name: "GitLab", Number: "34"}}, 0},
-		{"GitHub, unlinked: not its own", "ggg", []gitbugio.Forge{{Name: "GitHub", Number: "2518", Gone: "unlinked"}}, 0},
 		{"nowhere", "fff", nil, 0},
 	} {
 		if got := c.NumberOf(tc.id, tc.forges); got != tc.want {
@@ -271,61 +267,6 @@ func TestNumbering(t *testing.T) {
 	}
 }
 
-// A GitHub number an issue was unlinked from isn't its own anymore: the
-// issue linked to it since has it, and the unlinked one gets the next
-// number, never the same as another's.
-func TestNumbersGoneGitHubNumber(t *testing.T) {
-	t.Parallel()
-	mine, _ := gitbugiotest.NewPair(t)
-	author, err := mine.TestCache().GetUserIdentity(t.Context())
-	if err != nil {
-		t.Fatal(err)
-	}
-	newRaw := func(title string, meta map[string]string) string {
-		t.Helper()
-		bug, _, err := mine.TestCache().Bugs().NewRaw(author, 1, title, "", nil, meta)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := bug.Commit(t.Context()); err != nil {
-			t.Fatal(err)
-		}
-		return bug.Id().String()
-	}
-	// pulled by the old GitHub bridge, then unlinked
-	a := newRaw("Unlinked", map[string]string{
-		"github-id":                "I_1",
-		"github-url":               "https://github.com/o/r/issues/2518",
-		"sync:github.com/o/r:gone": "unlinked",
-	})
-	// linked to #2518 since
-	b := newRaw("Linked", map[string]string{
-		"sync:github.com/o/r:id":     "I_1",
-		"sync:github.com/o/r:url":    "https://github.com/o/r/issues/2518",
-		"sync:github.com/o/r:number": "2518",
-	})
-	pushed(t, mine)
-
-	before, err := mine.Numbering("origin")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := fmt.Sprint(slices.Sorted(slices.Values(before.GitHub))); got != "[0 2518]" || before.Highest != 2518 {
-		t.Errorf("before: GitHub numbers %s, highest %d; want [0 2518], 2518 (still taken on GitHub)", got, before.Highest)
-	}
-	if err := mine.InitNumbers("origin", "CO2", 3052); err != nil {
-		t.Fatal(err)
-	}
-	if n, err := mine.NumberIssues("origin"); n != 1 || err != nil {
-		t.Fatalf("NumberIssues = %d, %v; want 1, the unlinked one", n, err)
-	}
-	for id, want := range map[string]string{a: "CO2-3052", b: "CO2-2518"} {
-		if is, err := mine.GetIssue(id); err != nil || is.Number != want {
-			t.Errorf("GetIssue(%s) = %q, %v; want %s", id[:7], is.Number, err, want)
-		}
-	}
-}
-
 // Two clones number at the very same time, round after round: whoever
 // loses the push takes the next number, whatever the server's refusal says.
 func TestNumbersRealRace(t *testing.T) {
@@ -373,26 +314,13 @@ func TestNumbersRealRace(t *testing.T) {
 // whatever the mirror says.
 func TestNumbersOriginWithAMirror(t *testing.T) {
 	t.Parallel()
-	remote := repotest.NewGoGitRepo(t, true)
-	clone := repotest.NewGoGitRepo(t, false)
-	repotest.AddRemote(t, clone, "origin", remote.GitDir)
-	for _, u := range []string{remote.GitDir, filepath.Join(t.TempDir(), "mirror-gone.git")} {
-		if out, err := exec.Command("git", "-C", clone.GitDir, "config", "--add", "remote.origin.pushurl", u).CombinedOutput(); err != nil {
-			t.Fatalf("%v: %s", err, out)
-		}
+	remote, clone := gitbugiotest.Repo(t, true), gitbugiotest.Repo(t, false)
+	gitbugiotest.Git(t, clone, "remote", "add", "origin", remote)
+	for _, u := range []string{remote, filepath.Join(t.TempDir(), "mirror-gone.git")} {
+		gitbugiotest.Git(t, clone, "config", "--add", "remote.origin.pushurl", u)
 	}
-	b, err := gitbugio.NewForRepo(clone)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = b.Close() })
-	id, err := b.TestCache().Identities().NewFromGitUser()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := b.TestCache().SetUserIdentity(t.Context(), id); err != nil {
-		t.Fatal(err)
-	}
+	gitbugiotest.Init(t, clone)
+	b := gitbugiotest.Open(t, clone)
 
 	if err := b.InitNumbers("origin", "CO2", 1); err != nil {
 		t.Fatalf("InitNumbers: %v", err)
@@ -450,6 +378,42 @@ func TestNumbersOnlyWhatOriginHas(t *testing.T) {
 func pushed(t *testing.T, b *gitbugio.Backend) {
 	t.Helper()
 	if _, err := b.Push("origin"); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// A counter ahead of origin's, as switch --apply leaves it until its push,
+// isn't taken back by a fetch: that would drop the re-key, and the next
+// numbering would give the switched issues new numbers.
+func TestFetchKeepsNumbersOriginHasnt(t *testing.T) {
+	t.Parallel()
+	mine, _ := gitbugiotest.NewPair(t)
+	old := gitbugiotest.NewIssue(t, mine, "Old")
+	if err := mine.InitNumbers("origin", "CO2", 3052); err != nil {
+		t.Fatal(err)
+	}
+	pushed(t, mine)
+	if n, err := mine.NumberIssues("origin"); n != 1 || err != nil {
+		t.Fatal(n, err)
+	}
+	nu := gitbugiotest.NewIssue(t, mine, "New") // the switch's issue for old
+	c, _, _ := mine.Counter()
+	c.ByID[nu] = c.ByID[old]
+	delete(c.ByID, old)
+	if err := gitbugio.CommitCounter(mine, c); err != nil {
+		t.Fatal(err)
+	}
+	if err := mine.FetchNumbers("origin"); !errors.Is(err, gitbugio.ErrNumbersAhead) {
+		t.Fatalf("err = %v, want ErrNumbersAhead", err)
+	}
+	if _, err := mine.NumberIssues("origin"); !errors.Is(err, gitbugio.ErrNumbersAhead) {
+		t.Fatalf("numbering: err = %v, want ErrNumbersAhead", err)
+	}
+	if c2, _, _ := mine.Counter(); c2.ByID[nu] != 3052 {
+		t.Fatalf("the re-key is gone: %v", c2.ByID)
+	}
+	gitbugiotest.Git(t, mine.Store().CommonDir(), "push", "-q", "origin", "refs/board/seq")
+	if err := mine.FetchNumbers("origin"); err != nil {
 		t.Fatal(err)
 	}
 }

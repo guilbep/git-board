@@ -200,19 +200,12 @@ func TestApplyUnconfiguredMultiValuedFields(t *testing.T) {
 	}
 }
 
-// Without --me, @me is the forge login of the git-bug identity.
+// Without --me, @me is the forge login of the person you write as.
 func TestApplyMeFallsBackToTheIdentitysLogin(t *testing.T) {
 	cfg := mustLoadConfig(t)
 	b := gitbugiotest.New(t)
 	id := gitbugiotest.NewIssue(t, b, "x")
-	me, err := b.TestCache().GetUserIdentity(t.Context())
-	if err != nil {
-		t.Fatal(err)
-	}
-	me.SetMetadata("github-login", "guilbep")
-	if err := me.Commit(); err != nil {
-		t.Fatal(err)
-	}
+	gitbugiotest.SetMyLogin(t, b, "guilbep")
 	label, err := fields.Apply(b, cfg, id, "assignee", "@me", "", today)
 	if err != nil || label != "assignee:guilbep" {
 		t.Errorf("Apply @me = %q, %v; want assignee:guilbep", label, err)

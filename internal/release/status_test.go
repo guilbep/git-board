@@ -192,7 +192,7 @@ func TestReconcileCreatesMissing(t *testing.T) {
 	if old, _, _ := r.B.ReleaseFor(first); old.Previous != "" {
 		t.Errorf("v0.9.0's previous = %q", old.Previous)
 	}
-	if got := releasetest.Git(t, fx.AppBare, "for-each-ref", "refs/releases"); got == "" {
+	if got := releasetest.Git(t, fx.AppBare, "for-each-ref", "refs/board/release"); got == "" {
 		t.Error("the records weren't pushed")
 	}
 	fx.Tag(t, c, "v1.0.0") // the final on the rc's commit: same record
@@ -273,14 +273,14 @@ func TestReconcilePushesOnlineOnly(t *testing.T) {
 	if err := r.Reconcile(ctx); err != nil {
 		t.Fatalf("offline Reconcile: %v", err)
 	}
-	if got := releasetest.Git(t, fx.AppBare, "for-each-ref", "refs/releases"); got != "" {
+	if got := releasetest.Git(t, fx.AppBare, "for-each-ref", "refs/board/release"); got != "" {
 		t.Errorf("offline Reconcile pushed %s", got)
 	}
 	r.Offline = false
 	if err := r.Reconcile(ctx); err != nil {
 		t.Fatalf("Reconcile: %v", err)
 	}
-	if got := releasetest.Git(t, fx.AppBare, "for-each-ref", "refs/releases"); got == "" {
+	if got := releasetest.Git(t, fx.AppBare, "for-each-ref", "refs/board/release"); got == "" {
 		t.Error("the record made before wasn't pushed")
 	}
 }

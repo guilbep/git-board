@@ -3,9 +3,7 @@ package gitbugio_test
 import (
 	"testing"
 
-	"github.com/git-bug/git-bug/repository"
-	"github.com/git-bug/git-bug/repository/repotest"
-
+	"github.com/guilbep/git-board/core/gitstore"
 	"github.com/guilbep/git-board/internal/gitbugio"
 	"github.com/guilbep/git-board/internal/gitbugio/gitbugiotest"
 )
@@ -23,7 +21,7 @@ func TestGitHubRepo(t *testing.T) {
 		"https://github.com.evil.com/o/r": "",
 	} {
 		b := gitbugiotest.New(t)
-		repotest.AddRemote(t, b.TestCache(), "origin", url)
+		gitbugiotest.Git(t, b.GitDir(), "remote", "add", "origin", url)
 		if got := b.GitHubRepo("origin"); got != want {
 			t.Errorf("GitHubRepo(%q) = %q, want %q", url, got, want)
 		}
@@ -39,7 +37,7 @@ func TestGitHubRepo(t *testing.T) {
 func TestCompare(t *testing.T) {
 	t.Parallel()
 	b := gitbugiotest.New(t)
-	commit := func(name string, parents ...repository.Hash) repository.Hash {
+	commit := func(name string, parents ...gitstore.Hash) gitstore.Hash {
 		t.Helper()
 		h, err := gitbugio.StoreCommit(b, name, parents...)
 		if err != nil {
@@ -56,7 +54,7 @@ func TestCompare(t *testing.T) {
 
 	for _, tc := range []struct {
 		name                  string
-		mine, theirs          repository.Hash
+		mine, theirs          gitstore.Hash
 		wantAhead, wantBehind bool
 	}{
 		{"ahead", m2, base, true, false},

@@ -12,8 +12,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/git-bug/git-bug/repository"
-
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/filter"
 	"github.com/guilbep/git-board/internal/gitbugio"
@@ -90,7 +88,7 @@ func fillFollows(b any, cfg *config.Config, conditions []filter.Condition, me st
 func readFollowing(b any, cfg *config.Config, me string, issues []gitbugio.Issue, today time.Time) (*filter.Followed, error) {
 	repo, ok := b.(interface {
 		Me() (gitbugio.Person, bool, error)
-		Storage() repository.LocalStorage
+		Storage() gitbugio.Storage
 	})
 	if !ok {
 		return nil, errors.New("follows:@me needs a repository")

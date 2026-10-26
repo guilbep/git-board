@@ -1,85 +1,30 @@
 package main
 
 import (
-	"path/filepath"
 	"strings"
 	"testing"
 
-	"github.com/git-bug/git-bug/cache"
-	"github.com/git-bug/git-bug/repository"
-	"github.com/git-bug/git-bug/repository/repotest"
-
 	"github.com/guilbep/git-board/internal/gitbugio"
+	"github.com/guilbep/git-board/internal/gitbugio/gitbugiotest"
 )
 
-// twoReposWithRemote builds two real, non-bare git-bug repos on disk plus
-// a bare "origin" both point at — the same shape git-bug's own pull/push
-// tests use (repoA/repoB/remote with AddRemote), needed here because
-// runSync/syncOne open real filesystem paths (gitbugio.Open), not
-// in-memory repo handles.
+// twoReposWithRemote builds two real repositories on disk plus a bare
+// "origin" both point at, each with someone to write as: runSync and
+// syncOne open real filesystem paths (gitbugio.Open).
 func twoReposWithRemote(t *testing.T) (pathA, pathB string) {
 	t.Helper()
-	repoA, repoB, _ := repotest.SetupGoGitReposAndRemote(t)
-	pathA, pathB = filepath.Dir(repoA.GitDir), filepath.Dir(repoB.GitDir)
-	// Every repo needs its own local identity set before it can
-	// pull/merge at all — not just the one that happens to seed a bug.
-	// Caught by a real test failure ("No identity is set") on the repo
-	// that only ever pulls, never seeds: identity setup belongs here,
-	// not folded into seedBug.
+	remote := gitbugiotest.Repo(t, true)
+	pathA, pathB = gitbugiotest.Repo(t, false), gitbugiotest.Repo(t, false)
 	for _, path := range []string{pathA, pathB} {
-		setIdentity(t, path)
+		gitbugiotest.Git(t, path, "remote", "add", "origin", remote)
+		gitbugiotest.Init(t, path)
 	}
 	return pathA, pathB
 }
 
-func setIdentity(t *testing.T, path string) {
-	t.Helper()
-	gitDir, err := repository.FindGitDir(path)
-	if err != nil {
-		t.Fatalf("find %s: %v", path, err)
-	}
-	repo, err := repository.OpenDefault(gitDir, "git-bug")
-	if err != nil {
-		t.Fatalf("open %s: %v", path, err)
-	}
-	c, err := cache.NewRepoCacheNoEvents(repo, nil)
-	if err != nil {
-		t.Fatalf("cache for %s: %v", path, err)
-	}
-	defer c.Close()
-	id, err := c.Identities().NewFromGitUser()
-	if err != nil {
-		t.Fatalf("identity for %s: %v", path, err)
-	}
-	if err := c.SetUserIdentity(t.Context(), id); err != nil {
-		t.Fatalf("set identity for %s: %v", path, err)
-	}
-}
-
 func seedBug(t *testing.T, path, title string) {
 	t.Helper()
-	gitDir, err := repository.FindGitDir(path)
-	if err != nil {
-		t.Fatalf("find %s: %v", path, err)
-	}
-	repo, err := repository.OpenDefault(gitDir, "git-bug")
-	if err != nil {
-		t.Fatalf("open %s: %v", path, err)
-	}
-	c, err := cache.NewRepoCacheNoEvents(repo, nil)
-	if err != nil {
-		t.Fatalf("cache for %s: %v", path, err)
-	}
-	defer c.Close()
-	// Bugs().New stages the create operation, as any other: Commit
-	// writes it to the repo.
-	bug, _, err := c.Bugs().New(t.Context(), title, "")
-	if err != nil {
-		t.Fatalf("new bug in %s: %v", path, err)
-	}
-	if err := bug.Commit(t.Context()); err != nil {
-		t.Fatalf("commit bug in %s: %v", path, err)
-	}
+	gitbugiotest.NewIssue(t, gitbugiotest.Open(t, path), title)
 }
 
 func bugTitles(t *testing.T, path string) []string {
@@ -210,5 +155,17 @@ func TestSyncNumbers(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "numbered 1 issue") {
 		t.Errorf("sync said:\n%s", out.String())
+	}
+}
+
+// A repository whose issues are still git-bug's, in refs/bugs, and that no
+// switch marked, isn't synced: the sync says to run git-board switch.
+func TestSyncWaitsForTheSwitch(t *testing.T) {
+	t.Parallel()
+	path, _ := twoReposWithRemote(t)
+	gitbugiotest.Git(t, path, "update-ref", "refs/bugs/"+strings.Repeat("a", 64), strings.TrimSpace(gitbugiotest.Git(t, path, "hash-object", "-w", "--stdin")))
+	out, err := execute(t, []string{"sync", path})
+	if err == nil || !strings.Contains(out, "run git-board switch") {
+		t.Fatalf("err = %v\n%s", err, out)
 	}
 }

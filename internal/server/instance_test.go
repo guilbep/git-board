@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"github.com/guilbep/git-board/internal/gitbugio/gitbugiotest"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -10,8 +11,6 @@ import (
 	"slices"
 	"strings"
 	"testing"
-
-	"github.com/git-bug/git-bug/repository"
 
 	"github.com/guilbep/git-board/internal/gitbugio"
 )
@@ -113,12 +112,9 @@ func TestListenFreeSkipsAPortTakenOnEitherLoopback(t *testing.T) {
 // While a board runs, its file in the repository says where; it goes
 // when the board stops, the repository's lock too.
 func TestServeTellsWhereItRunsUntilItStops(t *testing.T) {
-	dir := t.TempDir()
-	if _, err := repository.InitDefault(dir, "git-bug"); err != nil {
-		t.Fatal(err)
-	}
+	dir := gitbugiotest.Repo(t, false)
 	t.Chdir(dir)
-	gitDir, err := repository.FindGitDir(dir)
+	gitDir, err := gitbugio.FindGitDir(dir)
 	if err != nil {
 		t.Fatal(err)
 	}

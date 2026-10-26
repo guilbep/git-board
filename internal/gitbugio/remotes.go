@@ -1,19 +1,15 @@
 package gitbugio
 
 import (
-	"context"
-	"errors"
 	"regexp"
 	"sort"
+	"strings"
 
-	"github.com/go-git/go-git/v5/plumbing/transport"
-
-	bugent "github.com/git-bug/git-bug/entities/bug"
-	"github.com/git-bug/git-bug/entities/identity"
-	"github.com/git-bug/git-bug/repository"
+	"github.com/guilbep/git-board/core/gitstore"
+	"github.com/guilbep/git-board/core/oplog"
 )
 
-// Remote is a git remote, and what git bug push and pull would move: the
+// Remote is a git remote, and what a push and a pull would move: the
 // issues and people that differ from the remote's, as of the last fetch
 // or push.
 type Remote struct {
@@ -38,30 +34,36 @@ type Ahead struct {
 
 // Remotes lists the repository's git remotes, by name.
 func (b *Backend) Remotes() ([]Remote, error) {
-	urls, err := b.repo.GetRemotes()
-	if err != nil {
+	out, err := b.git("config", "--get-regexp", `^remote\..*\.(url|pushurl)$`)
+	if err != nil && len(out) > 0 {
 		return nil, err
 	}
-	cfg, err := b.c.Config().Read()
-	if err != nil {
-		return nil, err
+	// remote.<name>.url <url>: a name may hold dots, the key's last part never
+	urls, pushURLs := map[string][]string{}, map[string][]string{}
+	for _, l := range lines(out) {
+		key, value, _ := strings.Cut(l, " ")
+		key = strings.TrimPrefix(key, "remote.")
+		dot := strings.LastIndexByte(key, '.')
+		if dot < 0 {
+			continue
+		}
+		if name := key[:dot]; key[dot+1:] == "url" {
+			urls[name] = append(urls[name], NoCredentials(value))
+		} else {
+			pushURLs[name] = append(pushURLs[name], NoCredentials(value))
+		}
 	}
 	res := []Remote{}
 	for name, u := range urls {
-		r := Remote{Name: name, URL: NoCredentials(u), PushURLs: []string{}}
-		for _, key := range []string{"remote." + name + ".pushurl", "remote." + name + ".url"} {
-			for _, e := range cfg.GetAll(key) {
-				r.PushURLs = append(r.PushURLs, NoCredentials(e.Value))
-			}
-			if len(r.PushURLs) > 0 {
-				break
-			}
+		r := Remote{Name: name, URL: u[0], PushURLs: pushURLs[name]}
+		if len(r.PushURLs) == 0 {
+			r.PushURLs = u
 		}
 		var issues, people bool
-		if r.Issues, issues, err = b.ahead(name, bugent.Namespace); err != nil {
+		if r.Issues, issues, err = b.ahead(name, "issue"); err != nil {
 			return nil, err
 		}
-		if r.People, people, err = b.ahead(name, identity.Namespace); err != nil {
+		if r.People, people, err = b.ahead(name, "person"); err != nil {
 			return nil, err
 		}
 		r.Tracked = issues || people
@@ -71,19 +73,20 @@ func (b *Backend) Remotes() ([]Remote, error) {
 	return res, nil
 }
 
-// ahead compares the local refs of a namespace with the remote's tracking
-// ones; tracked tells there are some.
-func (b *Backend) ahead(remote, namespace string) (a Ahead, tracked bool, err error) {
-	local, err := b.repo.ListRefs(namespace)
+// ahead compares the local refs of a kind with the remote's copies here;
+// tracked tells there are some.
+func (b *Backend) ahead(remote, kind string) (a Ahead, tracked bool, err error) {
+	localPrefix, theirPrefix := oplog.RefName(kind, ""), "refs/board-remotes/"+remote+"/"+kind+"/"
+	local, err := b.s.Refs(localPrefix)
 	if err != nil {
 		return a, false, err
 	}
-	theirs, err := b.repo.ListTrackingRefs(remote, namespace)
+	theirs, err := b.s.Refs(theirPrefix)
 	if err != nil {
 		return a, false, err
 	}
-	for key, mine := range local {
-		their, ok := theirs[key]
+	for name, mine := range local {
+		their, ok := theirs[theirPrefix+strings.TrimPrefix(name, localPrefix)]
 		switch {
 		case !ok:
 			a.Send++
@@ -102,8 +105,8 @@ func (b *Backend) ahead(remote, namespace string) (a Ahead, tracked bool, err er
 			}
 		}
 	}
-	for key := range theirs {
-		if _, ok := local[key]; !ok {
+	for name := range theirs {
+		if _, ok := local[localPrefix+strings.TrimPrefix(name, theirPrefix)]; !ok {
 			a.Receive++
 		}
 	}
@@ -114,13 +117,13 @@ func (b *Backend) ahead(remote, namespace string) (a Ahead, tracked bool, err er
 // holds mine (behind), walking both in step, every parent: it stops as soon
 // as one reaches the other's tip, and walks whole histories only for a
 // pair that diverged.
-func (b *Backend) compare(mine, theirs repository.Hash) (ahead, behind bool, err error) {
+func (b *Backend) compare(mine, theirs gitstore.Hash) (ahead, behind bool, err error) {
 	type walk struct {
-		todo []repository.Hash
-		seen map[repository.Hash]bool
-		goal repository.Hash
+		todo []gitstore.Hash
+		seen map[gitstore.Hash]bool
+		goal gitstore.Hash
 	}
-	walks := []*walk{{todo: []repository.Hash{mine}, seen: map[repository.Hash]bool{}, goal: theirs}, {todo: []repository.Hash{theirs}, seen: map[repository.Hash]bool{}, goal: mine}}
+	walks := []*walk{{todo: []gitstore.Hash{mine}, seen: map[gitstore.Hash]bool{}, goal: theirs}, {todo: []gitstore.Hash{theirs}, seen: map[gitstore.Hash]bool{}, goal: mine}}
 	for len(walks[0].todo)+len(walks[1].todo) > 0 {
 		for i, w := range walks {
 			if len(w.todo) == 0 {
@@ -135,7 +138,7 @@ func (b *Backend) compare(mine, theirs repository.Hash) (ahead, behind bool, err
 				continue
 			}
 			w.seen[h] = true
-			c, err := b.repo.ReadCommit(h)
+			c, err := b.s.ReadCommit(h)
 			if err != nil {
 				return false, false, err
 			}
@@ -145,17 +148,6 @@ func (b *Backend) compare(mine, theirs repository.Hash) (ahead, behind bool, err
 	return false, false, nil
 }
 
-// Fetch brings a remote's issues and people in as its tracking refs, as
-// git bug pull does first: nothing local changes. An empty remote is
-// nothing to fetch.
-func (b *Backend) Fetch(remote string) error {
-	_, err := b.c.Fetch(context.Background(), remote)
-	if errors.Is(err, transport.ErrEmptyRemoteRepository) {
-		return nil
-	}
-	return err
-}
-
 // githubURL is a remote on github.com: https://github.com/o/r(.git),
 // git@github.com:o/r.git, ssh://git@github.com/o/r(.git).
 var githubURL = regexp.MustCompile(`^(?:https://|ssh://(?:git@)?|git@)github\.com[:/]([\w.-]+/[\w.-]+?)(?:\.git)?/?$`)
@@ -163,11 +155,14 @@ var githubURL = regexp.MustCompile(`^(?:https://|ssh://(?:git@)?|git@)github\.co
 // GitHubRepo is "owner/name" of the remote when it is on github.com, ""
 // otherwise.
 func (b *Backend) GitHubRepo(remote string) string {
-	urls, err := b.repo.GetRemotes()
+	if b.checkRemote(remote) != nil {
+		return ""
+	}
+	out, err := b.git("remote", "get-url", remote)
 	if err != nil {
 		return ""
 	}
-	return GitHubRepoOf(urls[remote])
+	return GitHubRepoOf(strings.TrimSpace(string(out)))
 }
 
 // GitHubRepoOf is "owner/name" of a remote URL on github.com, "" otherwise.

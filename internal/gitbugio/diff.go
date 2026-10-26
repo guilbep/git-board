@@ -14,15 +14,12 @@ import (
 // git itself, run on the repository, as ChangesIn does. go-git has no
 // rename detection, numstat or attributes.
 
-// ErrNoRepo: the backend has no git directory (an in-memory one).
+// ErrNoRepo: no git repository there.
 var ErrNoRepo = errors.New("no git repository")
 
 // run runs git on the repository; revs are checked by the callers (rev),
 // paths are names as written, never patterns.
 func (b *Backend) run(stdin []byte, args ...string) ([]byte, error) {
-	if b.dir == "" {
-		return nil, ErrNoRepo
-	}
 	cmd := exec.Command("git", append([]string{"--git-dir", b.dir, "--literal-pathspecs"}, args...)...)
 	if stdin != nil {
 		cmd.Stdin = bytes.NewReader(stdin)

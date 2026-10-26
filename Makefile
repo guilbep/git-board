@@ -1,4 +1,4 @@
-.PHONY: build test lint fmt vet ci install install-latest web-dev web-check web-build dist clean
+.PHONY: build test lint fmt vet licences ci install install-latest web-dev web-check web-build dist spec clean
 
 build:
 	go build ./...
@@ -13,6 +13,11 @@ fmt:
 	gofmt -l .
 
 lint: vet fmt
+
+# Every module the build and its tests use, with its licence from the
+# module cache; fails on any GPL, LGPL or AGPL (go test runs it too).
+licences:
+	go test -count=1 -run TestLicences -v ./cmd/git-board/
 
 # Everything CI runs: .github/workflows/ci.yml only sets up Go and Node, then
 # runs this. The web checks and build come first, in prerequisite order,
@@ -60,5 +65,10 @@ dist: web-build
 		rm -rf dist/$$d; echo "dist/$$d"; \
 	done; cd dist && shasum -a 256 * > checksums.txt
 
+# The core's spec, as a site in spec/site/. Strict: a broken link or a
+# missing page fails the build.
+spec:
+	uvx --from zensical==0.0.72 zensical build --strict -f spec/zensical.toml
+
 clean:
-	rm -rf site/
+	rm -rf site/ spec/site/

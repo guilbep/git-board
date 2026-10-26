@@ -1,9 +1,9 @@
 <!-- Choose who you are: comments, edits and new issues are signed with a
-     git-bug identity. Adopting one is what `git bug user adopt` does. -->
+     person of git-board's. Adopting one sets board.me in git's config. -->
 <template>
   <section class="gb-statecard gb-me-choose" aria-labelledby="choose-me">
     <h3 id="choose-me" class="h5">Choose who you are</h3>
-    <p>Comments, edits and new issues are signed with a git-bug identity. Pick yours to start writing.</p>
+    <p>Comments, edits and new issues are signed with a person of git-board's. Pick yours to start writing.</p>
     <fieldset v-if="people.length" class="gb-pick">
       <legend class="gb-hint">People in this repository</legend>
       <label v-for="p in shownPeople" :key="p.id" class="gb-pick-row">
@@ -25,7 +25,7 @@
       </form>
     </details>
     <p v-if="error" class="gb-hint" role="alert"><b>Not saved.</b> {{ error }}</p>
-    <p class="gb-hint">Saved for this repository, as <code>git bug user adopt</code> does.</p>
+    <p class="gb-hint">Saved for this repository, in its git config (<code>board.me</code>).</p>
   </section>
 </template>
 

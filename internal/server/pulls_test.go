@@ -2,8 +2,8 @@ package server
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -13,9 +13,6 @@ import (
 	"strings"
 	"sync"
 	"testing"
-
-	"github.com/git-bug/git-bug/bridge/core/auth"
-	"github.com/git-bug/git-bug/entity"
 
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/gitbugio"
@@ -126,23 +123,21 @@ func gateRepo(t *testing.T, url string, withToken bool) (*apiServer, *fakeGitHub
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = b.Close() })
-	who, err := b.TestCache().Identities().NewRaw("dev", "dev@example.com", "dev", "", nil, nil)
-	if err != nil {
+	if _, err := b.NewIdentity("dev", "dev@example.com"); err != nil {
 		t.Fatal(err)
 	}
-	if err := b.TestCache().SetUserIdentity(t.Context(), who); err != nil {
-		t.Fatal(err)
-	}
-	if withToken {
-		tok := auth.NewToken("github", "tok-dev")
-		tok.SetMetadata(auth.MetaKeyLogin, "dev")
-		if err := auth.Store(b.TestCache(), tok); err != nil {
-			t.Fatal(err)
-		}
-	}
+	gitbugiotest.SetMyLogin(t, b, "dev")
 	id := gitbugiotest.NewImportedIssue(t, b, "[BUG](Equipment) Crash on save (#2518)", "https://github.com/o/r/issues/2518")
 	gh := newFakeGitHub(t)
-	return &apiServer{cfg: &config.Config{}, b: b, me: "guilbep", githubAPI: gh.URL, gitDir: filepath.Join(dir, ".git"), root: dir}, gh, id
+	s := &apiServer{cfg: &config.Config{}, b: b, me: "guilbep", githubAPI: gh.URL, gitDir: filepath.Join(dir, ".git"), root: dir}
+	// ponytail: the token a credential helper gives, in M5's second phase
+	s.githubToken = func() (string, string, error) {
+		if !withToken {
+			return "dev", "", errors.New("no GitHub token for dev")
+		}
+		return "dev", "tok-dev", nil
+	}
+	return s, gh, id
 }
 
 func serve(t *testing.T, s *apiServer) *httptest.Server {
@@ -224,20 +219,8 @@ func TestOpenPull(t *testing.T) {
 		Number int    `json:"number"`
 		URL    string `json:"url"`
 	}
-	// a comment on the branch, written before its pull request
-	head, err := s.b.RevParse("origin/fix/2518-x")
-	if err != nil {
-		t.Fatal(err)
-	}
-	early, err := s.b.CommentWith(id, "early", map[string]string{"review:path": "a.txt", "review:line": "1", "review:side": "new", "review:commit": head})
-	if err != nil {
-		t.Fatal(err)
-	}
 	if code := call(t, "POST", ts.URL+"/api/issues/"+id[:8]+"/pulls", map[string]string{"branch": "fix/2518-x"}, &pr); code != http.StatusCreated || pr.Number != 9 {
 		t.Fatalf("open: %d %+v", code, pr)
-	}
-	if r := commentReview(t, s, id, early); r == nil || r.PR != "github.com/o/r#9" {
-		t.Errorf("the earlier comment's review %+v, want its pull request", r)
 	}
 	var sent map[string]string
 	if err := json.Unmarshal([]byte(gh.body("POST /repos/o/r/pulls")), &sent); err != nil {
@@ -284,62 +267,6 @@ func TestMergePull(t *testing.T) {
 	body, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != http.StatusBadGateway || !strings.Contains(string(body), "Head branch was modified") {
 		t.Errorf("a refused merge: %d %s", resp.StatusCode, body)
-	}
-}
-
-// The sync's PullsOf: the open pull request of each issue's branches on
-// origin, a bare number; none for an issue without one, nor when origin
-// isn't GitHub.
-func TestPullsOf(t *testing.T) {
-	s, _, id := gateRepo(t, "https://github.com/o/r.git", true)
-	other := gitbugiotest.NewIssue(t, s.b, "No branch yet")
-	issues, err := s.b.ListIssues()
-	if err != nil {
-		t.Fatal(err)
-	}
-	head, err := s.b.RevParse("origin/fix/2518-x")
-	if err != nil {
-		t.Fatal(err)
-	}
-	early, err := s.b.CommentWith(id, "early", map[string]string{"review:path": "a.txt", "review:line": "1", "review:side": "new", "review:commit": head})
-	if err != nil {
-		t.Fatal(err)
-	}
-	f := s.pullsOf(context.Background(), issues)
-	// a comment written on the branch since its pull request opened, from
-	// a tab opened before, goes to it
-	if r := commentReview(t, s, id, early); r == nil || r.PR != "github.com/o/r#3082" {
-		t.Errorf("the comment's review %+v, want the open pull request", r)
-	}
-	if f == nil || !slices.Equal(f(entity.Id(id)), []string{"3082"}) || f(entity.Id(other)) != nil {
-		t.Errorf("pulls of #2518 %v, of the other %v; want [3082], none", f(entity.Id(id)), f(entity.Id(other)))
-	}
-
-	s, gh, _ := gateRepo(t, "https://gitlab.com/o/r.git", true)
-	issues, _ = s.b.ListIssues()
-	if s.pullsOf(context.Background(), issues) != nil || len(gh.sent()) != 0 {
-		t.Errorf("a GitLab origin has pull requests, or asked GitHub %v", gh.sent())
-	}
-}
-
-// A send alone stamps the comments waiting for a pull request too: it
-// sends each where its review:pr says.
-func TestSendStamps(t *testing.T) {
-	s, _, id := gateRepo(t, "https://github.com/o/r.git", true)
-	head, err := s.b.RevParse("origin/fix/2518-x")
-	if err != nil {
-		t.Fatal(err)
-	}
-	early, err := s.b.CommentWith(id, "early", map[string]string{"review:path": "a.txt", "review:line": "1", "review:side": "new", "review:commit": head})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if results, err := s.forgeRun(context.Background(), "send", true, nil); err == nil {
-		for range results {
-		}
-	}
-	if r := commentReview(t, s, id, early); r == nil || r.PR != "github.com/o/r#3082" {
-		t.Errorf("the comment's review %+v, want the open pull request", r)
 	}
 }
 

@@ -43,7 +43,7 @@
           </li>
         </ul>
         <p v-if="remoteDone" class="gb-note" role="status"><GbIcon name="check" small /> {{ remoteDone }}</p>
-        <p class="gb-note">Pull and Push move issues and people, as <code>git bug pull</code> and <code>git bug push</code> do. Code goes with <code>git push</code>.</p>
+        <p class="gb-note">Pull and Push move issues and people, as <code>git-board sync</code> does. Code goes with <code>git push</code>.</p>
       </section>
 
       <!-- 2: the forges' API -->
@@ -143,7 +143,7 @@
                 <div><dt>{{ job.dry_run ? 'Changes, up to' : 'Changes pulled' }}</dt><dd>{{ n((b.tally?.from.changes ?? 0) + (b.tally?.from.comments ?? 0) + (b.tally?.from.edits ?? 0)) }}</dd></div>
               </dl>
             </div>
-            <p v-if="b.tally?.linked" class="gb-hint"><GbIcon name="link" small /> {{ plural(b.tally.linked, 'issue') }} found on {{ b.label }} by their git-bug marker: linked by a Get or a Sync, not created again.</p>
+            <p v-if="b.tally?.linked" class="gb-hint"><GbIcon name="link" small /> {{ plural(b.tally.linked, 'issue') }} found on {{ b.label }} by their git-board marker: linked, not created again.</p>
             <p v-if="b.tally?.assignable" class="gb-hint"><GbIcon name="user" small /> {{ b.tally.assignable }} {{ b.tally.assignable === 1 ? 'person' : 'people' }} can be assigned on {{ b.label }}: the assignee boxes offer them.</p>
             <p v-if="b.tally?.stays_local" class="gb-note"><GbIcon name="local" small /> {{ plural(b.tally.stays_local, 'text') }} stay local: no {{ b.label }} token for their authors.</p>
             <details v-if="b.tally?.lines.length" class="gb-lines">
@@ -177,9 +177,6 @@
             <li v-for="b in chosenRows" :key="b.name"><span><b>{{ b.label }}</b>: {{ b.tally ? runWords(mode, b.tally) : 'nothing to do' }}</span></li>
           </ul>
           <p v-if="mode === 'send'" class="epfl-alert epfl-alert-info">Send doesn’t get the forges’ changes first: where an issue changed on both sides, yours replace its title, state and comment texts there. Labels merge: only your changes go. Sync gets theirs first.</p>
-          <p v-for="b in relinkRows" :key="`relink ${b.name}`" class="epfl-alert epfl-alert-danger">
-            <b>{{ b.label }} has {{ plural(b.tally!.linked, 'issue') }} of this repository already,</b> found by their git-bug marker. Send alone would create them again: Get or Sync first, or leave {{ b.label }} out.
-          </p>
           <p v-for="b in conflictRows" :key="`conflict ${b.name}`" class="epfl-alert epfl-alert-danger">
             <b>{{ plural(b.tally!.conflicts, 'issue') }} changed both here and on {{ b.label }}</b> since they last met. Send would replace their titles, states and comment texts there with yours: Get or Sync first, or leave {{ b.label }} out.
           </p>
@@ -193,7 +190,7 @@
         <footer class="gb-dialog-foot">
           <span class="gb-grow" />
           <button type="button" class="epfl-btn epfl-btn-secondary" @click="confirming = false">Cancel</button>
-          <button type="button" class="epfl-btn epfl-btn-primary" :disabled="!chosen.length || relinkRows.length > 0 || conflictRows.length > 0 || bigRows.some((b) => !understood.includes(b.name)) || starting" @click="runReal">
+          <button type="button" class="epfl-btn epfl-btn-primary" :disabled="!chosen.length || conflictRows.length > 0 || bigRows.some((b) => !understood.includes(b.name)) || starting" @click="runReal">
             {{ modeName(mode) }}: {{ chosenRows.map((b) => b.label).join(', ') }}
           </button>
         </footer>
@@ -270,8 +267,6 @@ const bridgeRows = computed(() =>
 );
 const chosenRows = computed(() => bridgeRows.value.filter((b) => chosen.value.includes(b.name)));
 const bigRows = computed(() => (mode.value === 'get' ? [] : chosenRows.value.filter((b) => (b.tally?.to.issues ?? 0) >= bigRun)));
-// a send alone would create again what the check found by its marker
-const relinkRows = computed(() => (mode.value === 'send' ? chosenRows.value.filter((b) => b.tally?.linked) : []));
 // a send alone would replace what the forge changed on these issues
 const conflictRows = computed(() => (mode.value === 'send' ? chosenRows.value.filter((b) => b.tally?.conflicts) : []));
 const n = (v: number | undefined) => (v ?? 0).toLocaleString();

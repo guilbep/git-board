@@ -10,7 +10,7 @@ import (
 // made before keep their IDs.
 func TestReleaseCreateWithoutAssetsIsUnchanged(t *testing.T) {
 	t.Parallel()
-	raw, err := json.Marshal(&releaseCreate{Commit: "c", Previous: "v1"})
+	raw, err := json.Marshal(releaseData{Commit: "c", Previous: "v1"})
 	if err != nil {
 		t.Fatal(err)
 	}

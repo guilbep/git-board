@@ -205,8 +205,6 @@ export interface Forge {
   name: string; // GitHub, GitLab, or the host
   url: string;
   number?: string;
-  bridge?: string; // in a thread: the sync bridge whose project it is
-  gone?: 'unlinked' | 'deleted'; // not synced anymore
 }
 
 export interface IssueEvent {
@@ -320,7 +318,7 @@ export interface SyncDirection {
 export interface BridgeTally {
   to: SyncDirection;
   from: SyncDirection;
-  linked: number; // found on the forge by their git-bug marker
+  linked: number; // found on the forge by their git-board marker
   stays_local: number; // texts no token can post
   conflicts: number; // linked issues changed on both sides: a send alone would replace the forge's titles, states, comment texts
   assignable: number; // who the forge says can be assigned, asked after the run
@@ -1005,7 +1003,7 @@ export function resolveReview(id: string, commentId: string, resolved: boolean):
 }
 
 // Bridges set up from the settings page (settings.go). A credential is
-// listed without its token; a pasted token goes to git-bug's store.
+// listed without its token; a pasted token goes to git's credential helper.
 export interface Credential {
   id: string;
   target: string;
@@ -1079,21 +1077,6 @@ export interface IssueSyncResult {
 
 export function syncIssue(id: string, dryRun: boolean): Promise<IssueSyncResult> {
   return request(`${issuePath(id)}/sync`, json('POST', { dry_run: dryRun }));
-}
-
-// One issue on one forge (issuesync.go), nothing written to it: linked to
-// an issue already there (its number or URL), unlinked for good, or the
-// forge's version taken over what wasn't sent yet.
-export function linkIssue(id: string, bridge: string, issue: string): Promise<{ id: string; url: string; number: string }> {
-  return request(`${issuePath(id)}/link`, json('POST', { bridge, issue }));
-}
-
-export function unlinkIssue(id: string, bridge: string): Promise<Record<string, never>> {
-  return request(`${issuePath(id)}/unlink`, json('POST', { bridge }));
-}
-
-export function takeIssue(id: string, bridge: string): Promise<IssueSyncResult> {
-  return request(`${issuePath(id)}/take`, json('POST', { bridge }));
 }
 
 // Releases (internal/server/releases.go, internal/release): what runs where,

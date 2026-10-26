@@ -2,16 +2,12 @@ package server
 
 import (
 	"cmp"
-	"context"
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
 	"slices"
 	"strconv"
 	"strings"
-
-	"github.com/git-bug/git-bug/entity"
 
 	"github.com/guilbep/git-board/internal/branches"
 	"github.com/guilbep/git-board/internal/ghpr"
@@ -39,11 +35,15 @@ type pullsResponse struct {
 
 // github is GitHub's API as the user: their login and token.
 func (s *apiServer) github() (*ghpr.Client, string, error) {
-	login, token, err := s.b.GitHubToken()
+	token := s.githubToken
+	if token == nil {
+		token = s.b.GitHubToken
+	}
+	login, tok, err := token()
 	if err != nil {
 		return nil, login, err
 	}
-	return &ghpr.Client{API: s.githubAPI, Token: token}, login, nil
+	return &ghpr.Client{API: s.githubAPI, Token: tok}, login, nil
 }
 
 // onOrigin are the issue's branches origin has, by name.
@@ -157,26 +157,7 @@ func (s *apiServer) handleOpenPull(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadGateway, err)
 		return
 	}
-	// the review comments written on the branch before, waiting for its
-	// pull request, go to it at the next sync. ponytail: waits for a
-	// running sync to end, rather than leave them waiting
-	s.writeMu.Lock()
-	s.stampPR(is.ID, repo, in.Branch, pr.Number)
-	s.writeMu.Unlock()
 	writeJSON(w, http.StatusCreated, pr)
-}
-
-// stampPR gives the issue's review comments on the branch's commits that
-// have no pull request this one, logging a failure: the sync sends a
-// review comment where its review:pr says. The caller holds writeMu.
-func (s *apiServer) stampPR(issue, repo, branch string, number int) {
-	_, err := s.b.StampPR(issue, fmt.Sprintf("github.com/%s#%d", repo, number), func(commit string) bool {
-		base, err := s.b.MergeBase(commit, "origin/"+branch)
-		return err == nil && base == commit
-	})
-	if err != nil {
-		log.Printf("review comments for pull request #%d: %v", number, err)
-	}
 }
 
 // prTitle is the issue as lists show it: CO2-3075 and its shown title.
@@ -190,7 +171,7 @@ func prTitle(is gitbugio.Issue) string {
 func prBody(is gitbugio.Issue, repo string) string {
 	body := cmp.Or(is.Number, is.ID[:min(7, len(is.ID))])
 	for _, f := range is.Forges {
-		if f.Gone == "" && f.Number != "" && strings.EqualFold(f.URL, "https://github.com/"+repo+"/issues/"+f.Number) {
+		if f.Number != "" && strings.EqualFold(f.URL, "https://github.com/"+repo+"/issues/"+f.Number) {
 			return body + "\n\nCloses #" + f.Number
 		}
 	}
@@ -291,60 +272,4 @@ func (s *apiServer) handleEditPull(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeError(w, http.StatusBadRequest, fmt.Errorf("#%d isn't the pull request of a branch of this issue", number))
-}
-
-// pullsOf gives the sync (git-bug's PullsOf) the open pull request of each
-// issue's branches on origin, as bare numbers, for a pull to bring in their
-// comments and reviews: nil when origin isn't GitHub or there is no token.
-// All found before the sync starts: the engine asks once per issue, under
-// its lock. A failing lookup leaves that branch out, logged. It stamps the
-// review comments on those branches that wait for a pull request (written
-// since it opened elsewhere, or from a tab opened before), dry runs
-// included, for them to show what the real run sends. The caller holds
-// writeMu.
-// ponytail: one GraphQL request per branch on origin naming an issue, at
-// each sync; list the open pull requests at once if that grows
-func (s *apiServer) pullsOf(ctx context.Context, issues []gitbugio.Issue) func(entity.Id) []string {
-	repo := s.b.GitHubRepo("origin")
-	if repo == "" {
-		return nil
-	}
-	all, err := s.b.Branches()
-	if err != nil {
-		log.Printf("pull requests for the sync: %v", err)
-		return nil
-	}
-	c, _, err := s.github()
-	if err != nil {
-		log.Printf("pull requests for the sync: %v", err)
-		return nil
-	}
-	numbers := map[entity.Id][]string{}
-	for _, br := range all {
-		if br.Remote != "origin" {
-			continue
-		}
-		var named []gitbugio.Issue
-		for _, is := range issues {
-			if branches.Names(br.Name, is) {
-				named = append(named, is)
-			}
-		}
-		if len(named) == 0 {
-			continue
-		}
-		pr, err := c.Find(ctx, repo, br.Name)
-		if err != nil {
-			log.Printf("pull request of %s: %v", br.Name, err)
-			continue
-		}
-		if pr == nil || pr.State != "OPEN" {
-			continue
-		}
-		for _, is := range named {
-			numbers[entity.Id(is.ID)] = append(numbers[entity.Id(is.ID)], strconv.Itoa(pr.Number))
-			s.stampPR(is.ID, repo, br.Name, pr.Number)
-		}
-	}
-	return func(id entity.Id) []string { return numbers[id] }
 }

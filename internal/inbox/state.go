@@ -12,8 +12,6 @@ import (
 	"path/filepath"
 	"slices"
 
-	"github.com/git-bug/git-bug/repository"
-
 	"github.com/guilbep/git-board/internal/gitbugio"
 )
 
@@ -31,7 +29,7 @@ func path(identityID string) string {
 }
 
 // Load reads identityID's file; none yet is an empty State.
-func Load(fs repository.LocalStorage, identityID string) (State, error) {
+func Load(fs gitbugio.Storage, identityID string) (State, error) {
 	f, err := fs.Open(path(identityID))
 	if errors.Is(err, os.ErrNotExist) {
 		return State{}, nil
@@ -49,7 +47,7 @@ func Load(fs repository.LocalStorage, identityID string) (State, error) {
 
 // Save writes it through a temporary file and a rename: a crash leaves the
 // old file or the new one, never half of one.
-func Save(fs repository.LocalStorage, identityID string, s State) error {
+func Save(fs gitbugio.Storage, identityID string, s State) error {
 	p := path(identityID)
 	if err := fs.MkdirAll(filepath.Dir(p), 0o755); err != nil {
 		return err

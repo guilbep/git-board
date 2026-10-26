@@ -90,7 +90,7 @@
               <a :href="f.url" target="_blank" rel="noopener noreferrer">{{ f.name }}{{ f.number ? ` #${f.number}` : '' }}<GbIcon name="external" small /><span class="gb-sr">(opens in a new tab)</span></a>
             </template>
           </span>
-          <span class="gb-mono" title="git-bug id">git-bug {{ thread.id.slice(0, 7) }}</span>
+          <span class="gb-mono" title="The issue's id in git-board">id {{ thread.id.slice(0, 7) }}</span>
         </div>
         <p v-if="saveError && !renaming" class="gb-save-error" role="alert"><GbIcon name="error" small /> <b>Not saved.</b> {{ saveError }}</p>
         <p v-if="waiting" class="gb-wait" role="status"><GbIcon name="clock" small /> Syncing with the forges… your change is saved after it.</p>

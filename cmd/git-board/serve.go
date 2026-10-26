@@ -7,16 +7,16 @@ import (
 	"os/exec"
 	"runtime"
 
-	"github.com/git-bug/git-bug/repository"
 	"github.com/spf13/cobra"
 
+	"github.com/guilbep/git-board/internal/gitbugio"
 	"github.com/guilbep/git-board/internal/server"
 )
 
 // runBoard is a bare "git board": this repository's board in the browser,
 // where it already runs, else started here until Ctrl-C.
 func runBoard(ctx context.Context, out io.Writer, open bool) error {
-	gitDir, err := repository.FindGitDir(".")
+	gitDir, err := gitbugio.FindGitDir(".")
 	if err != nil {
 		return err
 	}

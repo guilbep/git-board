@@ -34,10 +34,21 @@ func (b *Backend) flatKind(l string) (string, bool) {
 	return k, (*flat)[k]
 }
 
+// assignee is an assignee label in any case, as sync reads it (Assignee:
+// from a forge), spelled assignee:.
+func assignee(l string) (string, bool) {
+	const p = "assignee:"
+	if len(l) > len(p) && strings.EqualFold(l[:len(p)], p) {
+		return p + l[len(p):], true
+	}
+	return l, false
+}
+
 // shown are stored labels as git-board reads them: a flat kind's bug is
-// kind:bug, once with a kind:bug stored beside it.
+// kind:bug, once with a kind:bug stored beside it; Assignee:bob is
+// assignee:bob, once.
 func (b *Backend) shown(labels []string) []string {
-	if b.flat.Load() == nil || len(labels) == 0 {
+	if len(labels) == 0 {
 		return labels
 	}
 	res := make([]string, 0, len(labels))
@@ -45,6 +56,7 @@ func (b *Backend) shown(labels []string) []string {
 		if k, ok := b.flatKind(l); ok {
 			l = "kind:" + k
 		}
+		l, _ = assignee(l)
 		if !slices.Contains(res, l) {
 			res = append(res, l)
 		}
@@ -58,6 +70,9 @@ func (b *Backend) shown(labels []string) []string {
 // ponytail: a kind:bug beside bug heals on the next change of kind only
 func (b *Backend) stored(added, removed, raw []string) (a, r []string) {
 	for _, l := range added {
+		if as, ok := assignee(l); ok && slices.ContainsFunc(raw, func(x string) bool { y, _ := assignee(x); return y == as }) {
+			continue // there, in some case
+		}
 		if k, ok := b.flatKind(l); ok {
 			if slices.Contains(raw, k) || slices.Contains(a, k) {
 				continue
@@ -67,6 +82,14 @@ func (b *Backend) stored(added, removed, raw []string) (a, r []string) {
 		a = append(a, l)
 	}
 	for _, l := range removed {
+		if as, ok := assignee(l); ok {
+			for _, x := range raw {
+				if y, _ := assignee(x); y == as && !slices.Contains(r, x) {
+					r = append(r, x)
+				}
+			}
+			continue
+		}
 		k, ok := b.flatKind(l)
 		if !ok {
 			r = append(r, l)
