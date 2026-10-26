@@ -106,9 +106,9 @@ Settings › Labels shows each label's color and description beside GitHub's, an
 
 ## Views
 
-A view is a saved page: it appears in the header, in alphabetical order, and its address can be bookmarked.
+A view is a saved page: a tab above the issues, in the file's order (git-board opens on the first), and its address can be bookmarked. Table, board or roadmap is a switch beside the tabs, on any view; `layout` is the one it opens in.
 
-You rarely need to write one by hand. On the board, change the filter (its box, or a tick in the filters panel), the grouping or the sort, and a bar offers **Save view** (into this view, for everyone) or **Save as new view…**; **Discard** goes back to the saved one. Only the view's table changes in the file, comments included.
+You rarely need to write one by hand. On the board, change the filter (its box, or a tick in the filters panel), the layout, the grouping or the sort, and a bar offers **Save view** (into this view, for everyone) or **Save as new view…**; **Discard** goes back to the saved one. Only the view's table changes in the file, comments included.
 
 ```toml
 [views.current-sprint]

@@ -170,6 +170,7 @@ type Config struct {
 	Fields        map[string]Field
 	Sprints       SprintsConfig
 	Views         map[string]View
+	viewOrder     []string // ViewNames
 	GithubProject GithubProject
 	Uploads       Uploads
 	Branches      Branches
@@ -278,7 +279,7 @@ func parse(data []byte) (*Config, toml.MetaData, error) {
 		return nil, md, err
 	}
 	// the kinds are plain labels unless [fields.kind] has options of its own
-	if kinds := kindsInOrder(md, r.Branches.Kinds); len(kinds) > 0 && len(r.Fields["kind"].Options) == 0 {
+	if kinds := keysInOrder(md, r.Branches.Kinds, "branches", "kinds"); len(kinds) > 0 && len(r.Fields["kind"].Options) == 0 {
 		if r.Fields == nil {
 			r.Fields = map[string]Field{}
 		}
@@ -292,6 +293,7 @@ func parse(data []byte) (*Config, toml.MetaData, error) {
 		Fields:         r.Fields,
 		Sprints:        r.Sprints,
 		Views:          r.Views,
+		viewOrder:      keysInOrder(md, r.Views, "views"),
 		GithubProject:  r.GithubProject,
 		Uploads:        r.Uploads,
 		Branches:       r.Branches,
@@ -304,18 +306,28 @@ func parse(data []byte) (*Config, toml.MetaData, error) {
 	}, md, nil
 }
 
-// kindsInOrder are the [branches] kinds as the file lists them.
-func kindsInOrder(md toml.MetaData, kinds map[string]string) []string {
+// keysInOrder are table's keys (m's) as the file lists them: the
+// [branches] kinds, the views.
+func keysInOrder[V any](md toml.MetaData, m map[string]V, table ...string) []string {
 	var res []string
 	for _, k := range md.Keys() {
-		if len(k) == 3 && k[0] == "branches" && k[1] == "kinds" {
-			res = append(res, k[2])
+		if len(k) == len(table)+1 && slices.Equal(k[:len(table)], table) {
+			res = append(res, k[len(table)])
 		}
 	}
-	if len(res) != len(kinds) { // ponytail: never seen; the sorted kinds then
-		res = slices.Sorted(maps.Keys(kinds))
+	if len(res) != len(m) { // ponytail: never seen; the sorted keys then
+		res = slices.Sorted(maps.Keys(m))
 	}
 	return res
+}
+
+// ViewNames are the views' names as the file lists them: the board's tabs,
+// the first the one it opens on. A Config not parsed from a file: sorted.
+func (c *Config) ViewNames() []string {
+	if len(c.viewOrder) == len(c.Views) {
+		return c.viewOrder
+	}
+	return slices.Sorted(maps.Keys(c.Views))
 }
 
 // checkDescriptions keeps each value's description to GitHub's 100

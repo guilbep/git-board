@@ -3,7 +3,7 @@
      overwritten), one card each, to keep one side. Design: the Claude
      Design canvas's "Conflicts" artboard. -->
 <template>
-  <AppHeader :views="viewNames" active="" />
+  <AppHeader :views="viewNames" />
 
   <main class="page">
     <div class="page-head">
@@ -139,7 +139,7 @@ function resolve(c: Conflict, keep: 'git-board' | 'project') {
 onMounted(async () => {
   void loadSyncStatus();
   try {
-    viewNames.value = Object.keys(await getViews()).sort();
+    viewNames.value = Object.keys(await getViews());
   } catch {
     // the header just shows no views
   }

@@ -4,7 +4,7 @@
      and the board as it was on any day. Each chart says its finding in
      one sentence. -->
 <template>
-  <AppHeader :views="viewNames" active="" />
+  <AppHeader :views="viewNames" />
   <main class="gb-page ins">
     <div class="epfl-eyebrow">Insights</div>
     <h1 class="h3">How the work flows</h1>
@@ -181,7 +181,7 @@ onBeforeUnmount(offLive);
 onMounted(async () => {
   try {
     const [v, f] = await Promise.all([getViews(), getFields()]);
-    viewNames.value = Object.keys(v).sort();
+    viewNames.value = Object.keys(v);
     fields.value = f;
   } catch {
     // the defaults still work

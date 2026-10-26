@@ -83,6 +83,10 @@ func TestParsesViews(t *testing.T) {
 	if cfg.Views["mine"].Filter != "assignee:@me is:open" {
 		t.Errorf("mine.Filter = %q", cfg.Views["mine"].Filter)
 	}
+	// the file's order, not the alphabet's: the tabs, the first opens
+	if got := cfg.ViewNames(); !slices.Equal(got, []string{"current-sprint", "backlog", "mine"}) {
+		t.Errorf("ViewNames = %v", got)
+	}
 }
 
 func TestResolveSprintCurrentNextPrevious(t *testing.T) {

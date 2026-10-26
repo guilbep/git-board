@@ -249,7 +249,8 @@ func orEmpty[T any](s []T) []T {
 
 func (s *apiServer) handleReleases(w http.ResponseWriter, r *http.Request) {
 	if !s.config().Release.Enabled() {
-		writeJSON(w, http.StatusOK, map[string]bool{"enabled": false})
+		// the page's shape still, its lists empty: the page reads them
+		writeJSON(w, http.StatusOK, releasesResponse{Environments: []release.EnvState{}, Binaries: []string{}, Releases: []release.ReleaseRow{}})
 		return
 	}
 	run, done, ok := s.reader(w)
@@ -652,6 +653,7 @@ func (s *apiServer) handleSetup(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
+	setup.Binaries = orEmpty(setup.Binaries) // no main package: [], not null
 	writeJSON(w, http.StatusOK, setup)
 }
 

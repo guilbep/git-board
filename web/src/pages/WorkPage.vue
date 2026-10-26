@@ -5,7 +5,7 @@
      other open one). Agents are the linked worktrees; the aside is what
      waits to go to the forges and the sprint's corrections. -->
 <template>
-  <AppHeader :views="viewNames" active="" />
+  <AppHeader :views="viewNames" />
   <main class="gb-page gb-work">
     <div class="gb-work-main">
       <div class="epfl-eyebrow">Work</div>
@@ -301,7 +301,7 @@ onMounted(async () => {
   });
   void loadForges(); // a run going on shows here too
   try {
-    viewNames.value = Object.keys(await getViews()).sort();
+    viewNames.value = Object.keys(await getViews());
     fields.value = await getFields();
   } catch {
     // no config: fields shown as labels

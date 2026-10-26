@@ -1,5 +1,5 @@
 <template>
-  <AppHeader :views="[]" active="" />
+  <AppHeader :views="[]" />
   <main class="not-found">
     <div class="epfl-eyebrow">Error 404</div>
     <h1 class="h3">Page not found</h1>

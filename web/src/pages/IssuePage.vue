@@ -1,7 +1,7 @@
 <!-- An issue as a full page, at a link to share: #/issues/<git-bug id> (not
      a forge number: an issue can be local, or on two forges). -->
 <template>
-  <AppHeader :views="viewNames" active="" />
+  <AppHeader :views="viewNames" />
   <main class="gb-issuepage">
     <IssuePanel :id="String(route.params.id)" :key="String(route.params.id)" :names="names" :fields="fields" page @open="(other: string) => router.push(`/issues/${other}`)" />
   </main>
@@ -25,7 +25,7 @@ const names = ref<string[]>([]);
 onMounted(async () => {
   try {
     const [views, f] = await Promise.all([getViews(), getFields(), loadColors()]);
-    viewNames.value = Object.keys(views).sort();
+    viewNames.value = Object.keys(views);
     fields.value = f;
     names.value = namespaces([], f);
   } catch {

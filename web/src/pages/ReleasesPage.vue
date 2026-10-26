@@ -4,7 +4,7 @@
      at a time, and says each step as a `releases` event: the page reloads
      on it. The canvas's Releases board; its alerts from the States board. -->
 <template>
-  <AppHeader :views="viewNames" active="" />
+  <AppHeader :views="viewNames" />
   <main class="gb-page">
     <span v-if="repo" class="epfl-eyebrow">{{ repo }}</span>
     <div class="gb-titlerow">
@@ -160,8 +160,8 @@ import RollbackDialog from '@/components/RollbackDialog.vue';
 import { adoptOverlays, cutRelease, deployEnvironment, enableRelease, getConfigDocs, getDraft, getReleaseSetup, getReleases, getViews, promoteRelease, type CutRequest, type ReleaseJob as Job, type Proposal, type ReleaseRow, type ReleaseSetup, type Releases } from '@/api/board';
 import { message } from '@/issue';
 import { debounced, onLive } from '@/live';
-import { behindText, byVersion, envMark, groupReleases, markClass, newest, promotion, releasePath, repoName, repoNames, runs, setupLines, setupToml, sha7, splitParts, tagPattern } from '@/releases';
-import { remotes } from '@/remotes';
+import { behindText, byVersion, envMark, groupReleases, markClass, newest, promotion, releasePath, repoNames, runs, setupLines, setupToml, sha7, splitParts, tagPattern } from '@/releases';
+import { repo } from '@/remotes';
 import { on, when } from '@/when';
 
 const viewNames = ref<string[]>([]);
@@ -192,11 +192,6 @@ const meta = computed(() => {
   if (!envs.value.length) return data.value?.binaries.length ? `${list.format(data.value.binaries)} · published on GitHub` : '';
   const targets = [...new Set(envs.value.flatMap((e) => e.targets.map((t) => t.name)))];
   return envs.value.map((e) => e.name).join(', ') + (targets.length ? ` · deployed to ${list.format(targets)}` : '');
-});
-// the repository, as origin names it
-const repo = computed(() => {
-  const r = remotes.value?.find((x) => x.name === 'origin') ?? remotes.value?.[0];
-  return r ? repoName(r.url) : '';
 });
 
 // each environment's column, worked out once: in a split, the targets lead
@@ -339,7 +334,7 @@ onBeforeUnmount(offLive);
 
 onMounted(async () => {
   void getViews().then(
-    (v) => (viewNames.value = Object.keys(v).sort()),
+    (v) => (viewNames.value = Object.keys(v)),
     () => {},
   );
   await reload(true); // this clone's, at once

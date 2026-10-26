@@ -4,7 +4,7 @@
      Pull; opening a row opens the issue and marks it read. Read rows stay,
      dimmed, until Refresh, so the list doesn't jump while you read. -->
 <template>
-  <AppHeader :views="viewNames" active="" />
+  <AppHeader :views="viewNames" />
   <main class="gb-page gb-inbox">
     <div class="epfl-eyebrow">Inbox</div>
     <h1 class="h3">What happened that concerns you</h1>
@@ -288,7 +288,7 @@ onMounted(async () => {
     if (e.kind === 'issues' || e.kind === 'inbox') reloadSoon();
   });
   try {
-    viewNames.value = Object.keys(await getViews()).sort();
+    viewNames.value = Object.keys(await getViews());
     fields.value = await getFields();
   } catch {
     // no config: no views to follow, fields shown as labels

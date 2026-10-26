@@ -235,5 +235,5 @@ func (s *apiServer) handleSaveView(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.setConfig(cfg)
-	writeJSON(w, http.StatusOK, cfg.Views)
+	writeViews(w, cfg)
 }
