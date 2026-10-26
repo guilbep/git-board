@@ -378,8 +378,11 @@ answered in the process, to show what it would create.
   the numbers (`git-board sync`, `numbers`, the web app's Sync) takes
   origin's only when this clone's is behind it or the same, and otherwise
   refuses: taking it back would drop the re-key, and the next numbering
-  would give every switched issue a new number. So after `--apply`, `git
-  push origin refs/board/seq`; if git refuses it, `--apply` again.
+  would give every switched issue a new number. The whole sync's git step
+  sends a counter strictly ahead of origin's first (a fast-forward, which
+  git refuses otherwise), so after `--apply` the next `git-board sync`
+  carries the re-key; one apart from origin's is refused: `--apply`
+  again.
 - **The sync entity needs no snapshot yet.** A pull of 3,000 fake issues,
   two comments each, makes 21,000 operations: `loadState` reads them in
   0.25 s, `Records` in 0.20 s, and a second pull takes 2.3 s (M4 Pro).

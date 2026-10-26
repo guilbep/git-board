@@ -105,6 +105,10 @@ type SwitchRun struct {
 	// AllowCreate accepts what the next sync would create on the forges:
 	// that blocker alone.
 	AllowCreate bool
+	// LeftOut are the forges left out of the run, each "name: why": their
+	// mirrors aren't joined and their creations not counted, so each is a
+	// blocker only Force lifts.
+	LeftOut []string
 }
 
 // SwitchReport is what a switch found, and did.
@@ -156,6 +160,9 @@ func (b *Backend) Switch(ctx context.Context, run SwitchRun) (SwitchReport, erro
 	block := func(format string, a ...any) { rep.Blockers = append(rep.Blockers, fmt.Sprintf(format, a...)) }
 	if len(run.Forges) == 0 { // a switch would carry no issue: not a blocker --force lifts
 		return rep, ErrNoForge
+	}
+	for _, l := range run.LeftOut {
+		block("forge %s, left out of the switch: its mirrors aren't joined, and what the next sync would create there isn't counted (--force switches without it)", l)
 	}
 	if _, err := os.Stat(filepath.Join(b.s.CommonDir(), "board", "sync.lock")); err == nil {
 		block("a forge sync runs, or left board/sync.lock in the git directory")

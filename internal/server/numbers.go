@@ -38,7 +38,7 @@ type numbersResponse struct {
 	Name   string         `json:"name"`   // the repository's, for a prefix: its GitHub forge's, else origin's
 	GitHub *githubNumbers `json:"github,omitempty"`
 	// Ahead: this clone's counter holds numbers origin hasn't, as switch
-	// --apply leaves it: git push origin refs/board/seq first
+	// --apply leaves it: the next whole sync sends them first
 	Ahead bool   `json:"ahead"`
 	Done  int    `json:"done"`            // a write: how many issues it numbered
 	Error string `json:"error,omitempty"` // started, but the issues not numbered yet

@@ -220,6 +220,23 @@ func TestSwitchWithoutForges(t *testing.T) {
 	}
 }
 
+// A forge left out of the switch is a blocker only --force lifts: its
+// mirrors aren't joined, and its creations not counted.
+func TestSwitchWithAForgeLeftOut(t *testing.T) {
+	t.Parallel()
+	b, run, _ := switchSetup(t)
+	run.Apply, run.AllowCreate = true, true
+	run.LeftOut = []string{"gitlab: gitlab.example.com is down"}
+	rep, err := b.Switch(t.Context(), run)
+	if err != nil || rep.Applied || len(rep.Blockers) == 0 || !strings.Contains(strings.Join(rep.Blockers, "\n"), "forge gitlab: gitlab.example.com is down, left out of the switch") {
+		t.Fatalf("applied %t, blockers %q, %v", rep.Applied, rep.Blockers, err)
+	}
+	run.Force = true
+	if rep, err := b.Switch(t.Context(), run); err != nil || !rep.Applied {
+		t.Fatalf("--force: applied %t, %v", rep.Applied, err)
+	}
+}
+
 // --apply keys origin's numbers again, not this clone's: here, numbers an
 // earlier --apply left unpushed. Until the push, a fetch keeps them.
 func TestSwitchKeysOriginsNumbers(t *testing.T) {

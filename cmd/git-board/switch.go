@@ -43,9 +43,9 @@ would create on the forges, that blocker alone; --force applies despite
 every blocker.
 
 The numbers are keyed again on origin's refs/board/seq, which --apply
-makes this clone's. Push it right after: git push origin refs/board/seq.
-Until then, git-board sync and git-board numbers refuse, as this clone
-holds numbers origin hasn't.
+makes this clone's. The next git-board sync sends it first, a
+fast-forward; if origin's numbers moved on meanwhile, git refuses it and
+the sync says so: run --apply again, which keys origin's numbers.
 
 git-bug's binary reads its own data, on the copy: --git-bug names it.`,
 		Example: `  git-board switch                     # the dry run, and its report
@@ -82,6 +82,7 @@ func runSwitch(ctx context.Context, out io.Writer, run store.SwitchRun) error {
 	if err != nil {
 		return err
 	}
+	run.LeftOut = left
 	var on []config.Forge
 	for _, f := range forges {
 		if f.Sync {
@@ -90,7 +91,7 @@ func runSwitch(ctx context.Context, out io.Writer, run store.SwitchRun) error {
 			fmt.Fprintf(out, "%s: its sync is off, so it isn't pulled\n", f.Name)
 		}
 	}
-	if len(on) == 0 && left > 0 {
+	if len(on) == 0 && len(left) > 0 {
 		return store.ErrForgesLeftOut // not "add a remote": the remotes have them
 	}
 	if run.Forges, err = openForges(ctx, on); err != nil {
@@ -111,14 +112,14 @@ func runSwitch(ctx context.Context, out io.Writer, run store.SwitchRun) error {
 // runForges are the forges of a run: the settings' tables, or those found
 // in the git remotes, each told in a line, its project read (GitLab's id,
 // GitHub's spelling), and each URL skipped or forge left out with why;
-// left counts those left out.
-func runForges(ctx context.Context, out io.Writer, b *store.Backend, cfg *config.Config) (forges []config.Forge, left int, err error) {
+// left are those left out, each "name: why".
+func runForges(ctx context.Context, out io.Writer, b *store.Backend, cfg *config.Config) (forges []config.Forge, left []string, err error) {
 	say := func(s string) { fmt.Fprintln(out, s) }
 	if forges, err = b.Forges(cfg, say); err != nil {
-		return nil, 0, err
+		return nil, nil, err
 	}
 	forges = store.ResolveForges(ctx, forges, func(f config.Forge, why error) {
-		left++
+		left = append(left, fmt.Sprintf("%s: %v", f.Name, why))
 		fmt.Fprintf(out, "forge %s, found in the remotes, is left out: %s %s: %v\n", f.Name, f.Host, cmp.Or(f.Path, f.Project), why)
 	})
 	for _, f := range forges {
@@ -183,11 +184,9 @@ func printSwitch(out io.Writer, rep store.SwitchReport, apply bool) {
 		if rep.You != "" {
 			fmt.Fprintf(out, "You: %s\n", rep.You)
 		}
+		fmt.Fprintln(out, "Next: git-board sync --check, then git-board sync, once every clone runs this git-board.")
 		if rep.Numbers > 0 {
-			r := store.NumbersRemote
-			fmt.Fprintf(out, "Next: git push %s refs/board/seq. Until then, git-board sync and numbers refuse: this clone has numbers %s hasn't.\n", r, r)
-			fmt.Fprintln(out, "  If git refuses that push, run git-board switch --apply again: it keys origin's numbers again.")
+			fmt.Fprintf(out, "  The sync sends the %d numbers keyed again first; if %s's numbers moved on meanwhile, it refuses: run git-board switch --apply again.\n", rep.Numbers, store.NumbersRemote)
 		}
-		fmt.Fprintln(out, "Then git-board sync, once every clone runs this git-board.")
 	}
 }
