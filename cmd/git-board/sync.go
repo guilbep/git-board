@@ -75,7 +75,7 @@ func eachPath(out io.Writer, paths []string, sync func(path string) error) error
 	var failed []string
 	for _, path := range paths {
 		if err := sync(path); err != nil {
-			fmt.Fprintf(out, "%s: %v\n", path, err)
+			fmt.Fprintf(out, "%s: %s\n", path, store.NoCredentials(err.Error())) // a git URL may carry a token
 			failed = append(failed, path)
 		}
 	}

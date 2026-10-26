@@ -115,6 +115,45 @@ func TestAddAndRemoveABridge(t *testing.T) {
 	}
 }
 
+// Adding a forge while the forges are found in the remotes writes theirs
+// too, as GitHub spells it: a table turns the finding off. A project a
+// remote names already is refused. Serial: it answers for GitHub.
+func TestAddAForgeKeepsTheFoundOnes(t *testing.T) {
+	storetest.GitHub(t, map[string]string{"o/r": "O/R"}) // what a run reads of the found one
+	ts, s := forgeServer(t)
+	storetest.Git(t, s.b.GitDir(), "remote", "add", "gh", "git@github.com:o/r.git")
+	github := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path { // what adding asks: who the token is, and the project
+		case "/user":
+			_, _ = io.WriteString(w, `{"login":"me"}`)
+		case "/repos/o/r":
+			_, _ = io.WriteString(w, `{"id":1,"full_name":"O/R"}`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(github.Close)
+	s.githubAPI = github.URL
+
+	code, msg := callError(t, "POST", ts.URL+"/api/bridges", map[string]string{"target": "github", "url": "https://github.com/o/r", "token": "tok"})
+	if code != http.StatusBadRequest || !strings.Contains(msg, "the git remotes name github.com o/r already: it is the forge github") {
+		t.Errorf("a project a remote names: %d %q", code, msg)
+	}
+	gl := fakeGitLab(t)
+	if code := call(t, "POST", ts.URL+"/api/bridges", map[string]string{"target": "gitlab", "url": gl.URL + "/scratchpad/sync-trial", "token": "good-token"}, nil); code != http.StatusOK {
+		t.Fatalf("add: %d", code)
+	}
+	text, _ := os.ReadFile(s.cfgPath)
+	for _, want := range []string{"[forges.github]\nkind = \"github\"\nproject = \"O/R\"\nsync = true\n", "[forges.gl]\nkind = \"gitlab\""} {
+		if !strings.Contains(string(text), want) {
+			t.Errorf("the file lacks %q:\n%s", want, text)
+		}
+	}
+	if f := s.config().Forges; len(f) != 2 || s.config().Discover {
+		t.Errorf("forges %+v, discover %v", f, s.config().Discover)
+	}
+}
+
 // callError sends a JSON request and returns the status and the error the
 // server answered.
 func callError(t *testing.T, method, url string, body any) (int, string) {

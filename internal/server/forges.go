@@ -374,7 +374,7 @@ func (s *apiServer) endJob(job *forgeJob, err error) {
 	now := time.Now()
 	job.State, job.Ended = "done", &now
 	if err != nil {
-		job.State, job.Error = "failed", err.Error()
+		job.State, job.Error = "failed", store.NoCredentials(err.Error()) // a git URL may carry a token
 		job.Errors++
 	}
 	s.syncing.Store(false) // with the state: who sees it ended may start the next at once

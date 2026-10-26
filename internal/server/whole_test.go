@@ -29,7 +29,9 @@ func wholeServer(t *testing.T, forges func(ctx context.Context, mode string, fs 
 		Items: func(string, int, int) ([]ghbridge.Item, error) { projectRead.Add(1); return nil, nil },
 		Meta:  func(string, int) (ghbridge.ProjectMeta, error) { return ghbridge.ProjectMeta{ID: "P"}, nil },
 	}
-	s = &apiServer{cfg: cfg, b: mine, me: "guilbep", cfgPath: filepath.Join(t.TempDir(), config.FileName), project: project, runSync: forges}
+	nowhere := httptest.NewServer(http.NotFoundHandler()) // GitHub, for who can be assigned after a run
+	t.Cleanup(nowhere.Close)
+	s = &apiServer{cfg: cfg, b: mine, me: "guilbep", cfgPath: filepath.Join(t.TempDir(), config.FileName), project: project, runSync: forges, githubAPI: nowhere.URL}
 	ts = httptest.NewServer(withCORS(newMux(s, http.NotFoundHandler())))
 	t.Cleanup(ts.Close)
 	return ts, s, theirs, projectRead
@@ -122,7 +124,7 @@ func TestWholeSyncStopsAtAFailure(t *testing.T) {
 	var fail atomic.Bool
 	ts, s, theirs, projectRead := wholeServer(t, func(context.Context, string, []config.Forge, bool, func(store.SyncEvent)) error {
 		if fail.Load() {
-			return errors.New("GitHub is down")
+			return errors.New("GitHub is down, and git said https://oauth2:secret@gitlab.example.com/g/r.git")
 		}
 		return nil
 	})
@@ -132,7 +134,8 @@ func TestWholeSyncStopsAtAFailure(t *testing.T) {
 	fail.Store(true)
 	call(t, "POST", ts.URL+"/api/sync/all", map[string]any{"dry_run": false}, nil)
 	st := waitWhole(t, ts)
-	if got := stepWords(st.Job); st.Job.State != "failed" || got != "pull done, forges failed, project skipped, push skipped" || st.Job.Error != "forges: GitHub is down" {
+	if got := stepWords(st.Job); st.Job.State != "failed" || got != "pull done, forges failed, project skipped, push skipped" ||
+		st.Job.Error != "forges: GitHub is down, and git said https://gitlab.example.com/g/r.git" || strings.Contains(st.Job.Steps[1].Note, "secret") {
 		t.Fatalf("run %s: %s, %q", st.Job.State, got, st.Job.Error)
 	}
 	if projectRead.Load() != 1 {
