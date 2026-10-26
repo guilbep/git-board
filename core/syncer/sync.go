@@ -457,7 +457,7 @@ func (r *run) pullOne(p *project, fi forge.Issue, final bool) error {
 func (r *run) alone(p *project) ([]forge.Issue, error) {
 	id := r.opt.Issue
 	if l, ok := p.st.link[id]; ok {
-		fi, err := p.f.Issue(r.ctx, l.ForgeID)
+		fi, err := p.f.Issue(r.ctx, forge.Ref{ID: l.ForgeID, Number: l.Number})
 		if errors.Is(err, forge.ErrNotFound) || errors.Is(err, forge.ErrConfidential) {
 			return nil, nil
 		}
@@ -646,7 +646,7 @@ func (r *run) pushTo(p *project) error {
 			if len(pl.pushes()) == 0 {
 				continue
 			}
-			got, err := p.f.Issue(r.ctx, l.ForgeID)
+			got, err := p.f.Issue(r.ctx, forge.Ref{ID: l.ForgeID, Number: l.Number})
 			if errors.Is(err, forge.ErrNotFound) || errors.Is(err, forge.ErrConfidential) {
 				continue // gone or confidential: nothing goes to it
 			}
@@ -672,7 +672,7 @@ func (r *run) pushTo(p *project) error {
 // changed nothing. Comparing with it tells what the push would send.
 func (r *run) virtual(p *project, id string) forge.Issue {
 	seen := p.st.seen[id]
-	fi := forge.Issue{ID: p.st.link[id].ForgeID, Title: seen["title"], Body: seen["body"], Status: seen["status"],
+	fi := forge.Issue{ID: p.st.link[id].ForgeID, Number: p.st.link[id].Number, Title: seen["title"], Body: seen["body"], Status: seen["status"],
 		Labels: split(seen["labels"])}
 	for _, a := range split(seen["assignees"]) {
 		fi.Assignees = append(fi.Assignees, forge.Account{ID: a})

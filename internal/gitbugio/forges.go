@@ -313,11 +313,11 @@ func (c *counted) Issues(ctx context.Context, since int64) ([]forge.Issue, error
 	return c.f.Issues(ctx, since)
 }
 
-func (c *counted) Issue(ctx context.Context, id string) (forge.Issue, error) {
-	if strings.HasPrefix(id, "dry-") {
+func (c *counted) Issue(ctx context.Context, issue forge.Ref) (forge.Issue, error) {
+	if strings.HasPrefix(issue.ID, "dry-") {
 		return forge.Issue{}, forge.ErrNotFound
 	}
-	return c.f.Issue(ctx, id)
+	return c.f.Issue(ctx, issue)
 }
 
 // write makes a write, unless dry, then tells it, with op as its Line: a
@@ -352,10 +352,10 @@ func (c *counted) CreateIssue(ctx context.Context, title, body string) (forge.Is
 	return c.f.CreateIssue(ctx, title, body)
 }
 
-func (c *counted) CreateComment(ctx context.Context, issueID, body string) (forge.Comment, error) {
+func (c *counted) CreateComment(ctx context.Context, issue forge.Ref, body string) (forge.Comment, error) {
 	out := forge.Comment{Body: body}
-	err := c.write("comment", "create-comment", issueID, func() (err error) {
-		out, err = c.f.CreateComment(ctx, issueID, body)
+	err := c.write("comment", "create-comment", issue.ID, func() (err error) {
+		out, err = c.f.CreateComment(ctx, issue, body)
 		return err
 	})
 	if c.dry && err == nil {
@@ -365,30 +365,30 @@ func (c *counted) CreateComment(ctx context.Context, issueID, body string) (forg
 	return out, err
 }
 
-func (c *counted) EditComment(ctx context.Context, issueID, commentID, body string) error {
-	return c.write("edit", "edit-comment", issueID, func() error { return c.f.EditComment(ctx, issueID, commentID, body) })
+func (c *counted) EditComment(ctx context.Context, issue forge.Ref, commentID, body string) error {
+	return c.write("edit", "edit-comment", issue.ID, func() error { return c.f.EditComment(ctx, issue, commentID, body) })
 }
 
-func (c *counted) SetTitle(ctx context.Context, issueID, title string) error {
-	return c.write("change", "set-title", issueID, func() error { return c.f.SetTitle(ctx, issueID, title) })
+func (c *counted) SetTitle(ctx context.Context, issue forge.Ref, title string) error {
+	return c.write("change", "set-title", issue.ID, func() error { return c.f.SetTitle(ctx, issue, title) })
 }
 
-func (c *counted) SetBody(ctx context.Context, issueID, body string) error {
-	return c.write("edit", "set-body", issueID, func() error { return c.f.SetBody(ctx, issueID, body) })
+func (c *counted) SetBody(ctx context.Context, issue forge.Ref, body string) error {
+	return c.write("edit", "set-body", issue.ID, func() error { return c.f.SetBody(ctx, issue, body) })
 }
 
-func (c *counted) SetStatus(ctx context.Context, issueID, status string) error {
-	return c.write("change", "set-status", issueID, func() error { return c.f.SetStatus(ctx, issueID, status) })
+func (c *counted) SetStatus(ctx context.Context, issue forge.Ref, status string) error {
+	return c.write("change", "set-status", issue.ID, func() error { return c.f.SetStatus(ctx, issue, status) })
 }
 
-func (c *counted) ChangeLabels(ctx context.Context, issueID string, add, remove []string) error {
-	return c.write("change", "change-labels", issueID, func() error { return c.f.ChangeLabels(ctx, issueID, add, remove) })
+func (c *counted) ChangeLabels(ctx context.Context, issue forge.Ref, add, remove []string) error {
+	return c.write("change", "change-labels", issue.ID, func() error { return c.f.ChangeLabels(ctx, issue, add, remove) })
 }
 
-func (c *counted) SetAssignees(ctx context.Context, issueID string, users []forge.Account) ([]forge.Account, error) {
+func (c *counted) SetAssignees(ctx context.Context, issue forge.Ref, users []forge.Account) ([]forge.Account, error) {
 	kept := users // a dry run: the forge keeps them all
-	err := c.write("change", "set-assignees", issueID, func() (err error) {
-		kept, err = c.f.SetAssignees(ctx, issueID, users)
+	err := c.write("change", "set-assignees", issue.ID, func() (err error) {
+		kept, err = c.f.SetAssignees(ctx, issue, users)
 		return err
 	})
 	return kept, err

@@ -69,9 +69,8 @@ query for the times REST doesn't give.
   `username`, and never from a prompt. A person's token counts only when GitHub says it is theirs:
   `/user` must give their account's numeric id.
 - **A forge issue's id is GitHub's numeric `id`.** REST names an issue by
-  its number, so the adapter remembers each id's number from its listings.
-  It looks for an id it hasn't seen, one recorded by an earlier run, once,
-  in the listing of every issue.
+  its number, which sync gives with the id (`forge.Ref`), from the link. A
+  read whose issue has another id is not found.
 - **The listing** is every issue updated since the last run, oldest first,
   a hundred a page. It starts a minute early: the last run's start is the
   local clock's, and `updated_at` is GitHub's. An issue or a comment that
@@ -138,9 +137,9 @@ query for the times REST doesn't give.
   someone else, or one GitLab turns away, is no token. Asking the helper
   never prompts.
 - **An issue's id is GitLab's `id`, its number the `iid`.** The API reads
-  an issue by its iid only. So the adapter keeps the iid of every issue it
-  lists, reads or creates, and looks for an id it hasn't seen in the whole
-  listing, once.
+  an issue by its iid only, which sync gives with the id (`forge.Ref`),
+  from the link. Every write reads the issue first, and one whose issue has
+  another id is not found.
 - **Text edits leave no event.** A title or description edited on GitLab
   shows in the issue itself, and in a system note: `changed title from …`,
   `changed the description`. Sync finds the edit by comparing it with last

@@ -55,6 +55,7 @@ func Run(t *testing.T, newForge NewForge) {
 		{"ConfidentialIssues", confidentialIssues},
 		{"ARefusalWarnsOnce", refusalWarnsOnce},
 		{"ALabelRefusedAlone", labelRefusedAlone},
+		{"AnIssueByItsRef", issueByItsRef},
 		{"AssigneesAreTheForges", assigneesAreTheForges},
 	} {
 		t.Run(sc.name, func(t *testing.T) {
@@ -621,7 +622,7 @@ func confidentialIssues(e *env) {
 	if got := gbTitles(e); !reflect.DeepEqual(got, []string{"shown"}) {
 		e.t.Fatalf("git-board = %v", got)
 	}
-	if _, err := a.Issue(e.ctx, c.ID); !errors.Is(err, forge.ErrConfidential) {
+	if _, err := a.Issue(e.ctx, c.Ref()); !errors.Is(err, forge.ErrConfidential) {
 		e.t.Fatalf("reading a confidential issue: %v, want ErrConfidential", err)
 	}
 	// One that turns confidential keeps its mirror, which no longer syncs.
@@ -690,6 +691,19 @@ func labelRefusedAlone(e *env) {
 	e.stable(map[*fake.Forge]forge.Forge{f: a})
 	if len(e.warnings) != 1 {
 		e.t.Fatalf("warned again: %q", e.warnings)
+	}
+}
+
+// An issue is read by its id and number together: a number that is
+// another issue's is not found.
+func issueByItsRef(e *env) {
+	f, a, _, _ := mirrored(e)
+	one, other := onForge(e.t, f, "F"), onForge(e.t, f, "L")
+	if got, err := a.Issue(e.ctx, one.Ref()); err != nil || got.Title != "F" {
+		e.t.Fatalf("by its ref: %+v, %v", got, err)
+	}
+	if _, err := a.Issue(e.ctx, forge.Ref{ID: one.ID, Number: other.Number}); !errors.Is(err, forge.ErrNotFound) {
+		e.t.Fatalf("by another's number: %v, want ErrNotFound", err)
 	}
 }
 

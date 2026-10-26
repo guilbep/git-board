@@ -74,10 +74,10 @@ func TestFakeListing(t *testing.T) {
 	if got, _ := f.Issues(t.Context(), 11); len(got) != 0 {
 		t.Fatalf("since 11 = %+v", got)
 	}
-	if _, err := f.Issue(t.Context(), gone.ID); !errors.Is(err, forge.ErrNotFound) {
+	if _, err := f.Issue(t.Context(), gone.Ref()); !errors.Is(err, forge.ErrNotFound) {
 		t.Fatalf("deleted: %v", err)
 	}
-	if _, err := f.Issue(t.Context(), secret.ID); !errors.Is(err, forge.ErrConfidential) {
+	if _, err := f.Issue(t.Context(), secret.Ref()); !errors.Is(err, forge.ErrConfidential) {
 		t.Fatalf("confidential: %v", err)
 	}
 	if _, err := f.As(t.Context(), forge.Account{ID: "9"}); !errors.Is(err, forge.ErrNoToken) {

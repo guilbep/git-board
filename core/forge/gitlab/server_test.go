@@ -157,7 +157,7 @@ func userJSON(a forge.Account) map[string]any {
 }
 
 func (s *server) issueJSON(r *http.Request, is forge.Issue) map[string]any {
-	_, err := s.f.Issue(r.Context(), is.ID)
+	_, err := s.f.Issue(r.Context(), is.Ref())
 	state := map[string]string{"open": "opened"}[is.Status]
 	if state == "" {
 		state = is.Status
@@ -267,7 +267,7 @@ func (s *server) update(w http.ResponseWriter, r *http.Request, view forge.Forge
 		reply(w, 400, map[string]string{"message": err.Error()})
 		return
 	}
-	ctx, id := r.Context(), is.ID
+	ctx, id := r.Context(), is.Ref()
 	var err error
 	split := func(s string) []string {
 		if s == "" {
@@ -386,7 +386,7 @@ func (s *server) comment(w http.ResponseWriter, r *http.Request, view forge.Forg
 		reply(w, 400, map[string]string{"message": err.Error()})
 		return
 	}
-	c, err := view.CreateComment(r.Context(), is.ID, in.Body)
+	c, err := view.CreateComment(r.Context(), is.Ref(), in.Body)
 	if err != nil {
 		fail(w, err)
 		return
@@ -404,7 +404,7 @@ func (s *server) edit(w http.ResponseWriter, r *http.Request, view forge.Forge) 
 		reply(w, 400, map[string]string{"message": err.Error()})
 		return
 	}
-	if err := view.EditComment(r.Context(), is.ID, r.PathValue("note"), in.Body); err != nil {
+	if err := view.EditComment(r.Context(), is.Ref(), r.PathValue("note"), in.Body); err != nil {
 		fail(w, err)
 		return
 	}

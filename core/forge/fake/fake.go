@@ -270,10 +270,10 @@ func (f *Forge) Issues(_ context.Context, since int64) ([]forge.Issue, error) {
 	return out, nil
 }
 
-func (f *Forge) Issue(_ context.Context, id string) (forge.Issue, error) {
+func (f *Forge) Issue(_ context.Context, issue forge.Ref) (forge.Issue, error) {
 	f.p.mu.Lock()
 	defer f.p.mu.Unlock()
-	e, err := f.p.live(id)
+	e, err := f.p.live(issue)
 	if err != nil {
 		return forge.Issue{}, err
 	}
@@ -295,9 +295,9 @@ func (f *Forge) CreateIssue(_ context.Context, title, body string) (forge.Issue,
 	return out, err
 }
 
-func (f *Forge) CreateComment(_ context.Context, issueID, body string) (forge.Comment, error) {
+func (f *Forge) CreateComment(_ context.Context, issue forge.Ref, body string) (forge.Comment, error) {
 	var out forge.Comment
-	err := f.edit("create-comment", issueID, []string{body}, func(e *entry, p *project, t int64) error {
+	err := f.edit("create-comment", issue, []string{body}, func(e *entry, p *project, t int64) error {
 		out = forge.Comment{ID: p.id(2_000_000), Body: body, Author: f.as, Time: t}
 		e.Comments = append(e.Comments, out)
 		return nil
@@ -305,8 +305,8 @@ func (f *Forge) CreateComment(_ context.Context, issueID, body string) (forge.Co
 	return out, err
 }
 
-func (f *Forge) EditComment(_ context.Context, issueID, commentID, body string) error {
-	return f.edit("edit-comment", issueID, []string{commentID, body}, func(e *entry, _ *project, t int64) error {
+func (f *Forge) EditComment(_ context.Context, issue forge.Ref, commentID, body string) error {
+	return f.edit("edit-comment", issue, []string{commentID, body}, func(e *entry, _ *project, t int64) error {
 		i := slices.IndexFunc(e.Comments, func(c forge.Comment) bool { return c.ID == commentID })
 		if i < 0 {
 			return forge.ErrNotFound
@@ -316,25 +316,25 @@ func (f *Forge) EditComment(_ context.Context, issueID, commentID, body string) 
 	})
 }
 
-func (f *Forge) SetTitle(_ context.Context, issueID, title string) error {
-	return f.set("title", issueID, title, func(e *entry) { e.Title = title })
+func (f *Forge) SetTitle(_ context.Context, issue forge.Ref, title string) error {
+	return f.set("title", issue, title, func(e *entry) { e.Title = title })
 }
 
-func (f *Forge) SetBody(_ context.Context, issueID, body string) error {
-	return f.set("body", issueID, body, func(e *entry) { e.Body = body })
+func (f *Forge) SetBody(_ context.Context, issue forge.Ref, body string) error {
+	return f.set("body", issue, body, func(e *entry) { e.Body = body })
 }
 
-func (f *Forge) SetStatus(_ context.Context, issueID, status string) error {
+func (f *Forge) SetStatus(_ context.Context, issue forge.Ref, status string) error {
 	if status != "open" && status != "closed" {
 		return fmt.Errorf("fake: bad status %q", status)
 	}
-	return f.set("status", issueID, status, func(e *entry) { e.Status = status })
+	return f.set("status", issue, status, func(e *entry) { e.Status = status })
 }
 
-func (f *Forge) ChangeLabels(_ context.Context, issueID string, add, remove []string) error {
+func (f *Forge) ChangeLabels(_ context.Context, issue forge.Ref, add, remove []string) error {
 	args := slices.Concat(add, []string{"--"}, remove)
 	var refused []string
-	err := f.edit("change-labels", issueID, args, func(e *entry, p *project, _ int64) error {
+	err := f.edit("change-labels", issue, args, func(e *entry, p *project, _ int64) error {
 		for _, l := range slices.Concat(add, remove) {
 			if slices.Contains(p.refuseLabels, l) {
 				refused = append(refused, l)
@@ -354,13 +354,13 @@ func (f *Forge) ChangeLabels(_ context.Context, issueID string, add, remove []st
 	return err
 }
 
-func (f *Forge) SetAssignees(_ context.Context, issueID string, users []forge.Account) ([]forge.Account, error) {
+func (f *Forge) SetAssignees(_ context.Context, issue forge.Ref, users []forge.Account) ([]forge.Account, error) {
 	var ids []string
 	for _, u := range users {
 		ids = append(ids, u.ID)
 	}
 	var kept []forge.Account
-	err := f.edit("set-assignees", issueID, ids, func(e *entry, p *project, _ int64) error {
+	err := f.edit("set-assignees", issue, ids, func(e *entry, p *project, _ int64) error {
 		e.Assignees = nil
 		for _, u := range users {
 			if !slices.ContainsFunc(e.Assignees, func(a forge.Account) bool { return a.ID == u.ID }) &&
@@ -374,8 +374,8 @@ func (f *Forge) SetAssignees(_ context.Context, issueID string, users []forge.Ac
 	return kept, err
 }
 
-func (f *Forge) set(field, issueID, value string, do func(*entry)) error {
-	return f.edit("set-"+field, issueID, []string{value}, func(e *entry, _ *project, t int64) error {
+func (f *Forge) set(field string, issue forge.Ref, value string, do func(*entry)) error {
+	return f.edit("set-"+field, issue, []string{value}, func(e *entry, _ *project, t int64) error {
 		do(e)
 		e.Changed[field] = t
 		return nil
@@ -383,9 +383,9 @@ func (f *Forge) set(field, issueID, value string, do func(*entry)) error {
 }
 
 // edit writes to a live issue, and moves its update time.
-func (f *Forge) edit(op, issueID string, args []string, do func(*entry, *project, int64) error) error {
-	return f.write(Write{Op: op, Issue: issueID, Args: args}, func(p *project, t int64) error {
-		e, err := p.live(issueID)
+func (f *Forge) edit(op string, issue forge.Ref, args []string, do func(*entry, *project, int64) error) error {
+	return f.write(Write{Op: op, Issue: issue.ID, Args: args}, func(p *project, t int64) error {
+		e, err := p.live(issue)
 		if err != nil {
 			return err
 		}
@@ -447,9 +447,11 @@ func (p *project) byNumber(number string) *entry {
 	return nil
 }
 
-func (p *project) live(id string) (*entry, error) {
+// live is the issue of that id and number: a number not its own is not
+// found, as on a forge.
+func (p *project) live(issue forge.Ref) (*entry, error) {
 	for _, e := range p.issues {
-		if e.ID == id && !e.deleted {
+		if e.ID == issue.ID && e.Number == issue.Number && !e.deleted {
 			if e.confidential {
 				return nil, forge.ErrConfidential
 			}

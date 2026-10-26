@@ -194,16 +194,16 @@ func (h *hub) patch(w http.ResponseWriter, r *http.Request, ff forge.Forge) {
 		switch k {
 		case "title":
 			_ = json.Unmarshal(v, &s)
-			err = ff.SetTitle(ctx, is.ID, s)
+			err = ff.SetTitle(ctx, is.Ref(), s)
 		case "body":
 			_ = json.Unmarshal(v, &s)
-			err = ff.SetBody(ctx, is.ID, s)
+			err = ff.SetBody(ctx, is.Ref(), s)
 		case "state":
 			_ = json.Unmarshal(v, &s)
-			err = ff.SetStatus(ctx, is.ID, s)
+			err = ff.SetStatus(ctx, is.Ref(), s)
 		case "assignees":
 			_ = json.Unmarshal(v, &logins)
-			_, err = ff.SetAssignees(ctx, is.ID, h.accounts(logins))
+			_, err = ff.SetAssignees(ctx, is.Ref(), h.accounts(logins))
 		}
 		if err != nil {
 			fail(w, err)
@@ -258,7 +258,7 @@ func (h *hub) comment(w http.ResponseWriter, r *http.Request, ff forge.Forge) {
 	if !ok || !read(w, r, &in) {
 		return
 	}
-	c, err := ff.CreateComment(r.Context(), is.ID, in.Body)
+	c, err := ff.CreateComment(r.Context(), is.Ref(), in.Body)
 	if err != nil {
 		fail(w, err)
 		return
@@ -274,7 +274,7 @@ func (h *hub) editComment(w http.ResponseWriter, r *http.Request, ff forge.Forge
 	id := r.PathValue("id")
 	for _, is := range h.f.All() {
 		if slices.ContainsFunc(is.Comments, func(c forge.Comment) bool { return c.ID == id }) {
-			if err := ff.EditComment(r.Context(), is.ID, id, in.Body); err != nil {
+			if err := ff.EditComment(r.Context(), is.Ref(), id, in.Body); err != nil {
 				fail(w, err)
 				return
 			}
@@ -336,7 +336,7 @@ func (h *hub) addLabels(w http.ResponseWriter, r *http.Request, ff forge.Forge) 
 		}
 	}
 	// a label the fake refuses is left out of the answer, as GitHub does
-	if err := ff.ChangeLabels(r.Context(), is.ID, in.Labels, nil); err != nil && !errors.As(err, new(*forge.Refused)) {
+	if err := ff.ChangeLabels(r.Context(), is.Ref(), in.Labels, nil); err != nil && !errors.As(err, new(*forge.Refused)) {
 		fail(w, err)
 		return
 	}
@@ -353,7 +353,7 @@ func (h *hub) removeLabel(w http.ResponseWriter, r *http.Request, ff forge.Forge
 		write(w, http.StatusNotFound, map[string]string{"message": "Label does not exist"})
 		return
 	}
-	if err := ff.ChangeLabels(r.Context(), is.ID, nil, []string{name}); err != nil {
+	if err := ff.ChangeLabels(r.Context(), is.Ref(), nil, []string{name}); err != nil {
 		fail(w, err)
 		return
 	}
@@ -418,7 +418,7 @@ func (h *hub) issueJSON(ctx context.Context, is forge.Issue) map[string]any {
 	if is.Status == "closed" {
 		m["closed_at"] = ts(cmp.Or(is.Changed["status"], is.Created))
 	}
-	if _, err := h.f.Issue(ctx, is.ID); errors.Is(err, forge.ErrConfidential) {
+	if _, err := h.f.Issue(ctx, is.Ref()); errors.Is(err, forge.ErrConfidential) {
 		m["pull_request"] = map[string]any{"url": is.URL}
 	}
 	return m

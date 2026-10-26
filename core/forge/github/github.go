@@ -76,11 +76,9 @@ type shared struct {
 	now                               func() time.Time
 	sleep                             func(context.Context, time.Duration) error
 
-	mu      sync.Mutex
-	numbers map[string]int  // issue id -> number, pull requests' too
-	scanned bool            // numbers holds every issue's
-	labels  map[string]bool // the project's labels known to exist, in lower case
-	writes  []time.Time     // the last hour's writes, for pacing
+	mu     sync.Mutex
+	labels map[string]bool // the project's labels known to exist, in lower case
+	writes []time.Time     // the last hour's writes, for pacing
 }
 
 // New is the project through the posting account's token.
@@ -125,7 +123,7 @@ func New(ctx context.Context, o Options) (*Forge, error) {
 		client: &http.Client{Timeout: time.Minute, CheckRedirect: func(*http.Request, []*http.Request) error {
 			return http.ErrUseLastResponse // a moved issue is gone; and Go would turn a PATCH into a GET
 		}},
-		now: time.Now, sleep: sleep, numbers: map[string]int{}, labels: map[string]bool{},
+		now: time.Now, sleep: sleep, labels: map[string]bool{},
 	}
 	return &Forge{s: s, token: token}, nil
 }
@@ -213,14 +211,17 @@ func (f *Forge) Issues(ctx context.Context, since int64) ([]forge.Issue, error) 
 	return f.read(ctx, gis)
 }
 
-func (f *Forge) Issue(ctx context.Context, id string) (forge.Issue, error) {
-	n, err := f.number(ctx, id)
+func (f *Forge) Issue(ctx context.Context, issue forge.Ref) (forge.Issue, error) {
+	n, err := number(issue)
 	if err != nil {
 		return forge.Issue{}, err
 	}
 	var gi ghIssue
 	if err := f.call(ctx, http.MethodGet, f.s.repo+"/issues/"+n, nil, &gi); err != nil {
 		return forge.Issue{}, err
+	}
+	if id(gi.ID) != issue.ID {
+		return forge.Issue{}, fmt.Errorf("github: #%s is another issue than %s: %w", n, issue.ID, forge.ErrNotFound)
 	}
 	if gi.PullRequest != nil {
 		return forge.Issue{}, fmt.Errorf("github: #%s is a pull request: %w", n, forge.ErrConfidential)
@@ -237,14 +238,11 @@ func (f *Forge) CreateIssue(ctx context.Context, title, body string) (forge.Issu
 	if err := f.call(ctx, http.MethodPost, f.s.repo+"/issues", map[string]string{"title": title, "body": body}, &gi); err != nil {
 		return forge.Issue{}, err
 	}
-	f.s.mu.Lock()
-	f.s.numbers[id(gi.ID)] = gi.Number
-	f.s.mu.Unlock()
 	return gi.issue(nil, ghTimes{}), nil
 }
 
-func (f *Forge) CreateComment(ctx context.Context, issueID, body string) (forge.Comment, error) {
-	n, err := f.number(ctx, issueID)
+func (f *Forge) CreateComment(ctx context.Context, issue forge.Ref, body string) (forge.Comment, error) {
+	n, err := number(issue)
 	if err != nil {
 		return forge.Comment{}, err
 	}
@@ -256,27 +254,27 @@ func (f *Forge) CreateComment(ctx context.Context, issueID, body string) (forge.
 }
 
 // EditComment needs only the comment's id: GitHub names comments alone.
-func (f *Forge) EditComment(ctx context.Context, _, commentID, body string) error {
+func (f *Forge) EditComment(ctx context.Context, _ forge.Ref, commentID, body string) error {
 	return f.call(ctx, http.MethodPatch, f.s.repo+"/issues/comments/"+url.PathEscape(commentID), map[string]string{"body": body}, nil)
 }
 
-func (f *Forge) SetTitle(ctx context.Context, issueID, title string) error {
-	return f.patch(ctx, issueID, map[string]any{"title": title}, nil)
+func (f *Forge) SetTitle(ctx context.Context, issue forge.Ref, title string) error {
+	return f.patch(ctx, issue, map[string]any{"title": title}, nil)
 }
 
-func (f *Forge) SetBody(ctx context.Context, issueID, body string) error {
-	return f.patch(ctx, issueID, map[string]any{"body": body}, nil)
+func (f *Forge) SetBody(ctx context.Context, issue forge.Ref, body string) error {
+	return f.patch(ctx, issue, map[string]any{"body": body}, nil)
 }
 
-func (f *Forge) SetStatus(ctx context.Context, issueID, status string) error {
-	return f.patch(ctx, issueID, map[string]any{"state": status}, nil)
+func (f *Forge) SetStatus(ctx context.Context, issue forge.Ref, status string) error {
+	return f.patch(ctx, issue, map[string]any{"state": status}, nil)
 }
 
 // ChangeLabels makes each added label the project lacks, adds them in one
 // write, then removes the others one by one. An added label GitHub leaves
 // out, as it does without push access, is refused.
-func (f *Forge) ChangeLabels(ctx context.Context, issueID string, add, remove []string) error {
-	n, err := f.number(ctx, issueID)
+func (f *Forge) ChangeLabels(ctx context.Context, issue forge.Ref, add, remove []string) error {
+	n, err := number(issue)
 	if err != nil {
 		return err
 	}
@@ -314,13 +312,13 @@ func (f *Forge) ChangeLabels(ctx context.Context, issueID string, add, remove []
 
 // SetAssignees sends the logins, as GitHub takes, and reads back what it
 // kept: it leaves out an account it won't assign, as one without access.
-func (f *Forge) SetAssignees(ctx context.Context, issueID string, users []forge.Account) ([]forge.Account, error) {
+func (f *Forge) SetAssignees(ctx context.Context, issue forge.Ref, users []forge.Account) ([]forge.Account, error) {
 	logins := []string{}
 	for _, u := range users {
 		logins = append(logins, u.Login)
 	}
 	var gi ghIssue
-	if err := f.patch(ctx, issueID, map[string]any{"assignees": logins}, &gi); err != nil {
+	if err := f.patch(ctx, issue, map[string]any{"assignees": logins}, &gi); err != nil {
 		return nil, err
 	}
 	var kept []forge.Account
@@ -330,8 +328,8 @@ func (f *Forge) SetAssignees(ctx context.Context, issueID string, users []forge.
 	return kept, nil
 }
 
-func (f *Forge) patch(ctx context.Context, issueID string, fields map[string]any, out any) error {
-	n, err := f.number(ctx, issueID)
+func (f *Forge) patch(ctx context.Context, issue forge.Ref, fields map[string]any, out any) error {
+	n, err := number(issue)
 	if err != nil {
 		return err
 	}
@@ -363,42 +361,21 @@ func (f *Forge) label(ctx context.Context, name string) error {
 	return nil
 }
 
-// number is an issue's number, which REST names issues by. An id not seen
-// yet is looked for once, in the listing of every issue.
-func (f *Forge) number(ctx context.Context, id string) (string, error) {
-	f.s.mu.Lock()
-	n, ok := f.s.numbers[id]
-	scanned := f.s.scanned
-	f.s.mu.Unlock()
-	if !ok && !scanned {
-		// ponytail: one listing of every issue per adapter finds the ids of
-		// earlier runs; forge.Forge passing the link's number would save it
-		if _, err := f.issues(ctx, "/issues?state=all"); err != nil {
-			return "", err
-		}
-		f.s.mu.Lock()
-		f.s.scanned = true
-		n, ok = f.s.numbers[id]
-		f.s.mu.Unlock()
+// number is the issue's number, which REST names issues by.
+func number(issue forge.Ref) (string, error) {
+	if _, err := strconv.Atoi(issue.Number); err != nil {
+		return "", fmt.Errorf("github: issue %s: number %q: %w", issue.ID, issue.Number, forge.ErrNotFound)
 	}
-	if !ok {
-		return "", fmt.Errorf("github: issue %s: %w", id, forge.ErrNotFound)
-	}
-	return strconv.Itoa(n), nil
+	return issue.Number, nil
 }
 
-// issues reads every page of an issue listing, each issue once, and
-// remembers their numbers. Pull requests are left out.
+// issues reads every page of an issue listing, each issue once. Pull
+// requests are left out.
 func (f *Forge) issues(ctx context.Context, query string) ([]ghIssue, error) {
 	all, err := pages(ctx, f, f.s.repo+query, func(gi ghIssue) int64 { return gi.ID })
 	if err != nil {
 		return nil, err
 	}
-	f.s.mu.Lock()
-	for _, gi := range all {
-		f.s.numbers[id(gi.ID)] = gi.Number
-	}
-	f.s.mu.Unlock()
 	return slices.DeleteFunc(all, func(gi ghIssue) bool { return gi.PullRequest != nil }), nil
 }
 

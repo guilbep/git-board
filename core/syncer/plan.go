@@ -156,16 +156,16 @@ func (r *run) plan(p *project, is *issue.Issue, fi forge.Issue, who map[string]s
 	ch := is.Changes
 	text(&pl.text, "title", is.Title, r.form(p, is.Title, origin(ch["title"]), true), fi.Title, false, ch["title"], changedAt(fi, "title"), nil,
 		func(v string) oplog.Op { return from(issue.SetTitle(a, v), key, ev, changedAt(fi, "title")) },
-		func(fw forge.Forge, v string) error { return fw.SetTitle(r.ctx, fi.ID, v) })
+		func(fw forge.Forge, v string) error { return fw.SetTitle(r.ctx, fi.Ref(), v) })
 	text(&pl.text, "body", is.Body, wrapLike(seen["body"], r.form(p, is.Body, origin(ch["body"]), false), posted), fi.Body, posted,
 		ch["body"], changedAt(fi, "body"), nil,
 		func(v string) oplog.Op { return from(issue.EditText(a, is.BodyOp, v), key, ev, changedAt(fi, "body")) },
-		func(fw forge.Forge, v string) error { return fw.SetBody(r.ctx, fi.ID, v) })
+		func(fw forge.Forge, v string) error { return fw.SetBody(r.ctx, fi.Ref(), v) })
 	text(&pl.rest, "status", string(is.Status), string(is.Status), fi.Status, false, ch["status"], changedAt(fi, "status"), nil,
 		func(v string) oplog.Op {
 			return from(issue.SetStatus(a, issue.Status(v)), key, ev, changedAt(fi, "status"))
 		},
-		func(fw forge.Forge, v string) error { return fw.SetStatus(r.ctx, fi.ID, v) })
+		func(fw forge.Forge, v string) error { return fw.SetStatus(r.ctx, fi.Ref(), v) })
 
 	pullAdd, pullRemove := r.planLabels(pl, p, is, fi, pull, push)
 	aAdd, aRemove := r.planAssignees(pl, p, is, fi, pull, push)
@@ -236,7 +236,7 @@ func (r *run) plan(p *project, is *issue.Issue, fi forge.Issue, who map[string]s
 		text(&pl.comments, field, c.Body, wrapLike(seen[field], r.form(p, c.Body, origin(cch), false), sent), fc.Body, sent, cch, ft,
 			[]*oplog.Origin{c.Origin},
 			func(v string) oplog.Op { return from(issue.EditText(ca, cid, v), key, field, ft) },
-			func(fw forge.Forge, v string) error { return fw.EditComment(r.ctx, fi.ID, fcID, v) })
+			func(fw forge.Forge, v string) error { return fw.EditComment(r.ctx, fi.Ref(), fcID, v) })
 	}
 	if push {
 		for _, c := range is.Comments {
@@ -259,7 +259,7 @@ func (r *run) plan(p *project, is *issue.Issue, fi forge.Issue, who map[string]s
 			}
 			pl.comments = append(pl.comments, func(x *pushing) error {
 				return r.send(x, c.Author, field, []string{body}, func(fw forge.Forge) ([]oplog.Op, error) {
-					fc, err := fw.CreateComment(r.ctx, fi.ID, body)
+					fc, err := fw.CreateComment(r.ctx, fi.Ref(), body)
 					return []oplog.Op{postedOp(is.Author, time.Now().Unix(), is.ID, cid, fc.ID), rec("comment:"+fc.ID, body)}, err
 				})
 			})
@@ -428,7 +428,7 @@ func (r *run) planLabels(pl *plan, p *project, is *issue.Issue, fi forge.Issue, 
 	}
 	pl.rest = append(pl.rest, func(x *pushing) error {
 		return r.send(x, last.Author, "labels", values, func(fw forge.Forge) ([]oplog.Op, error) {
-			err := fw.ChangeLabels(r.ctx, fi.ID, pAdd, pRemove)
+			err := fw.ChangeLabels(r.ctx, fi.Ref(), pAdd, pRemove)
 			var some *forge.Refused
 			if err != nil && !errors.As(err, &some) {
 				return nil, err
@@ -573,7 +573,7 @@ func (r *run) planAssignees(pl *plan, p *project, is *issue.Issue, fi forge.Issu
 		var kept []string
 		landed := false
 		err := r.send(x, last.Author, "assignees", values, func(fw forge.Forge) ([]oplog.Op, error) {
-			got, err := fw.SetAssignees(r.ctx, fi.ID, users)
+			got, err := fw.SetAssignees(r.ctx, fi.Ref(), users)
 			if err != nil {
 				return nil, err
 			}
@@ -632,7 +632,7 @@ func (r *run) send(x *pushing, person, field string, values []string, write func
 		x.gone = true
 		return nil
 	case errors.Is(err, forge.ErrNotFound):
-		_, e := x.p.f.Issue(r.ctx, x.fi.ID)
+		_, e := x.p.f.Issue(r.ctx, x.fi.Ref())
 		if errors.Is(e, forge.ErrNotFound) || errors.Is(e, forge.ErrConfidential) {
 			x.gone = true
 			return nil

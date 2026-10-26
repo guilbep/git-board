@@ -40,10 +40,6 @@ type project struct {
 	cred       func(ctx context.Context, a forge.Account) (string, error)
 	pace       time.Duration
 	sleep      func(ctx context.Context, d time.Duration) error
-
-	mu      sync.Mutex
-	iids    map[string]int64 // issue id → iid, as GitLab's API takes an iid
-	scanned bool
 }
 
 // Forge is a GitLab project, through one account's token.
@@ -111,7 +107,7 @@ func newProject(baseURL, path string) (*project, error) {
 	p := &project{host: u.Host, path: path, scheme: u.Scheme, root: root, api: root + "/projects/" + url.PathEscape(path),
 		http: &http.Client{Timeout: time.Minute, CheckRedirect: func(*http.Request, []*http.Request) error {
 			return http.ErrUseLastResponse // Go would send PRIVATE-TOKEN along, to any host
-		}}, pace: pace, sleep: sleep, iids: map[string]int64{}}
+		}}, pace: pace, sleep: sleep}
 	p.cred = func(ctx context.Context, a forge.Account) (string, error) {
 		return forge.Password(ctx, p.scheme, p.host, a.Login) // never prompting
 	}
@@ -314,12 +310,6 @@ func text(s string) string { return strings.ReplaceAll(s, "\r\n", "\n") }
 
 func (p *project) issue(iid int64) string { return p.api + "/issues/" + strconv.FormatInt(iid, 10) }
 
-func (p *project) remember(g glIssue) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	p.iids[strconv.FormatInt(g.ID, 10)] = g.IID
-}
-
 // Issues lists from 2 minutes before since, oldest first, without the
 // confidential ones, which GitLab lists to its members.
 func (f *Forge) Issues(ctx context.Context, since int64) ([]forge.Issue, error) {
@@ -329,7 +319,6 @@ func (f *Forge) Issues(ctx context.Context, since int64) ([]forge.Issue, error) 
 	}
 	var out []forge.Issue
 	err := each(ctx, f, f.p.api+"/issues", q, func(g glIssue) (bool, error) {
-		f.p.remember(g)
 		if g.Confidential {
 			return true, nil
 		}
@@ -340,65 +329,32 @@ func (f *Forge) Issues(ctx context.Context, since int64) ([]forge.Issue, error) 
 	return out, err
 }
 
-func (f *Forge) Issue(ctx context.Context, id string) (forge.Issue, error) {
-	g, err := f.read(ctx, id)
+func (f *Forge) Issue(ctx context.Context, issue forge.Ref) (forge.Issue, error) {
+	g, err := f.read(ctx, issue)
 	if err != nil {
 		return forge.Issue{}, err
 	}
 	return f.full(ctx, g)
 }
 
-// read reads the issue alone: ErrNotFound, or ErrConfidential.
-func (f *Forge) read(ctx context.Context, id string) (glIssue, error) {
+// read reads the issue alone, by its iid, GitLab's number: ErrNotFound,
+// or ErrConfidential.
+func (f *Forge) read(ctx context.Context, issue forge.Ref) (glIssue, error) {
 	var g glIssue
-	iid, err := f.iid(ctx, id)
+	iid, err := strconv.ParseInt(issue.Number, 10, 64)
 	if err != nil {
-		return g, err
+		return g, fmt.Errorf("gitlab: issue %s: iid %q: %w", issue.ID, issue.Number, forge.ErrNotFound)
 	}
 	if _, err := f.call(ctx, http.MethodGet, f.p.issue(iid), nil, nil, &g); err != nil {
 		return g, err
 	}
-	f.p.remember(g)
+	if strconv.FormatInt(g.ID, 10) != issue.ID {
+		return g, fmt.Errorf("gitlab: #%d is another issue than %s: %w", iid, issue.ID, forge.ErrNotFound)
+	}
 	if g.Confidential {
-		return g, fmt.Errorf("gitlab: issue %s: %w", id, forge.ErrConfidential)
+		return g, fmt.Errorf("gitlab: issue %s: %w", issue.ID, forge.ErrConfidential)
 	}
 	return g, nil
-}
-
-// iid is the issue's iid. GitLab's REST API reads an issue by its iid only,
-// so an id not listed yet is looked for in the whole listing.
-// ponytail: one full listing per adapter on a miss; the link's number, if the
-// interface carried it, when projects get big.
-func (f *Forge) iid(ctx context.Context, id string) (int64, error) {
-	lookup := func() (int64, bool, bool) {
-		f.p.mu.Lock()
-		defer f.p.mu.Unlock()
-		n, ok := f.p.iids[id]
-		return n, ok, f.p.scanned
-	}
-	if n, ok, scanned := lookup(); ok {
-		return n, nil
-	} else if !scanned {
-		done := true
-		err := each(ctx, f, f.p.api+"/issues", url.Values{"scope": {"all"}, "order_by": {"created_at"}, "sort": {"asc"}},
-			func(g glIssue) (bool, error) {
-				f.p.remember(g)
-				done = strconv.FormatInt(g.ID, 10) != id
-				return done, nil
-			})
-		if err != nil {
-			return 0, err
-		}
-		if done {
-			f.p.mu.Lock()
-			f.p.scanned = true
-			f.p.mu.Unlock()
-		}
-		if n, ok, _ := lookup(); ok {
-			return n, nil
-		}
-	}
-	return 0, fmt.Errorf("gitlab: issue %s: %w", id, forge.ErrNotFound)
 }
 
 // full adds the issue's comments, without system and internal notes, and
@@ -475,12 +431,11 @@ func (f *Forge) CreateIssue(ctx context.Context, title, body string) (forge.Issu
 	if _, err := f.call(ctx, http.MethodPost, f.p.api+"/issues", nil, map[string]string{"title": title, "description": body}, &g); err != nil {
 		return forge.Issue{}, err
 	}
-	f.p.remember(g)
 	return g.issue(), nil
 }
 
-func (f *Forge) CreateComment(ctx context.Context, issueID, body string) (forge.Comment, error) {
-	g, err := f.read(ctx, issueID)
+func (f *Forge) CreateComment(ctx context.Context, issue forge.Ref, body string) (forge.Comment, error) {
+	g, err := f.read(ctx, issue)
 	if err != nil {
 		return forge.Comment{}, err
 	}
@@ -491,8 +446,8 @@ func (f *Forge) CreateComment(ctx context.Context, issueID, body string) (forge.
 	return n.comment(), nil
 }
 
-func (f *Forge) EditComment(ctx context.Context, issueID, commentID, body string) error {
-	g, err := f.read(ctx, issueID)
+func (f *Forge) EditComment(ctx context.Context, issue forge.Ref, commentID, body string) error {
+	g, err := f.read(ctx, issue)
 	if err != nil {
 		return err
 	}
@@ -503,25 +458,25 @@ func (f *Forge) EditComment(ctx context.Context, issueID, commentID, body string
 	return err
 }
 
-func (f *Forge) SetTitle(ctx context.Context, issueID, title string) error {
-	return f.update(ctx, issueID, map[string]any{"title": title}, nil)
+func (f *Forge) SetTitle(ctx context.Context, issue forge.Ref, title string) error {
+	return f.update(ctx, issue, map[string]any{"title": title}, nil)
 }
 
-func (f *Forge) SetBody(ctx context.Context, issueID, body string) error {
-	return f.update(ctx, issueID, map[string]any{"description": body}, nil)
+func (f *Forge) SetBody(ctx context.Context, issue forge.Ref, body string) error {
+	return f.update(ctx, issue, map[string]any{"description": body}, nil)
 }
 
-func (f *Forge) SetStatus(ctx context.Context, issueID, status string) error {
+func (f *Forge) SetStatus(ctx context.Context, issue forge.Ref, status string) error {
 	event := map[string]string{"open": "reopen", "closed": "close"}[status]
 	if event == "" {
 		return fmt.Errorf("gitlab: bad status %q", status)
 	}
-	return f.update(ctx, issueID, map[string]any{"state_event": event}, nil)
+	return f.update(ctx, issue, map[string]any{"state_event": event}, nil)
 }
 
 // ChangeLabels sends the labels by name. GitLab splits them at commas, and
 // its labels can't hold one, so a label with a comma is refused.
-func (f *Forge) ChangeLabels(ctx context.Context, issueID string, add, remove []string) error {
+func (f *Forge) ChangeLabels(ctx context.Context, issue forge.Ref, add, remove []string) error {
 	fields := map[string]any{}
 	var refused []string // a comma would split the label: refused, the others go
 	keep := func(ls []string) (out []string) {
@@ -542,7 +497,7 @@ func (f *Forge) ChangeLabels(ctx context.Context, issueID string, add, remove []
 	}
 	if len(fields) > 0 {
 		var g glIssue
-		if err := f.update(ctx, issueID, fields, &g); err != nil {
+		if err := f.update(ctx, issue, fields, &g); err != nil {
 			return err
 		}
 		for _, l := range add {
@@ -559,7 +514,7 @@ func (f *Forge) ChangeLabels(ctx context.Context, issueID string, add, remove []
 
 // SetAssignees sends the whole set, and returns the assignees GitLab kept:
 // its free edition keeps the first.
-func (f *Forge) SetAssignees(ctx context.Context, issueID string, users []forge.Account) ([]forge.Account, error) {
+func (f *Forge) SetAssignees(ctx context.Context, issue forge.Ref, users []forge.Account) ([]forge.Account, error) {
 	ids := []int64{}
 	for _, u := range users {
 		id, err := strconv.ParseInt(u.ID, 10, 64)
@@ -572,7 +527,7 @@ func (f *Forge) SetAssignees(ctx context.Context, issueID string, users []forge.
 		ids = []int64{0} // GitLab's "no assignee"
 	}
 	var g glIssue
-	if err := f.update(ctx, issueID, map[string]any{"assignee_ids": ids}, &g); err != nil {
+	if err := f.update(ctx, issue, map[string]any{"assignee_ids": ids}, &g); err != nil {
 		return nil, err
 	}
 	return g.issue().Assignees, nil
@@ -580,8 +535,8 @@ func (f *Forge) SetAssignees(ctx context.Context, issueID string, users []forge.
 
 // update writes the fields, and decodes the issue GitLab answers into out,
 // when it isn't nil.
-func (f *Forge) update(ctx context.Context, issueID string, fields map[string]any, out any) error {
-	g, err := f.read(ctx, issueID)
+func (f *Forge) update(ctx context.Context, issue forge.Ref, fields map[string]any, out any) error {
+	g, err := f.read(ctx, issue)
 	if err != nil {
 		return err
 	}

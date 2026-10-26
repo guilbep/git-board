@@ -486,7 +486,7 @@ type rereadFails struct {
 	fail *bool
 }
 
-func (f rereadFails) Issue(ctx context.Context, id string) (forge.Issue, error) {
+func (f rereadFails) Issue(ctx context.Context, id forge.Ref) (forge.Issue, error) {
 	if *f.fail {
 		return forge.Issue{}, errors.New("502")
 	}
