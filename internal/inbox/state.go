@@ -12,7 +12,7 @@ import (
 	"path/filepath"
 	"slices"
 
-	"github.com/guilbep/git-board/internal/gitbugio"
+	"github.com/guilbep/git-board/internal/store"
 )
 
 // State is one identity's file.
@@ -29,7 +29,7 @@ func path(identityID string) string {
 }
 
 // Load reads identityID's file; none yet is an empty State.
-func Load(fs gitbugio.Storage, identityID string) (State, error) {
+func Load(fs store.Storage, identityID string) (State, error) {
 	f, err := fs.Open(path(identityID))
 	if errors.Is(err, os.ErrNotExist) {
 		return State{}, nil
@@ -47,7 +47,7 @@ func Load(fs gitbugio.Storage, identityID string) (State, error) {
 
 // Save writes it through a temporary file and a rename: a crash leaves the
 // old file or the new one, never half of one.
-func Save(fs gitbugio.Storage, identityID string, s State) error {
+func Save(fs store.Storage, identityID string, s State) error {
 	p := path(identityID)
 	if err := fs.MkdirAll(filepath.Dir(p), 0o755); err != nil {
 		return err
@@ -67,7 +67,7 @@ func Save(fs gitbugio.Storage, identityID string, s State) error {
 }
 
 // MarkSeen takes every event th has now as seen, counted or not.
-func (s *State) MarkSeen(th gitbugio.Thread) {
+func (s *State) MarkSeen(th store.Thread) {
 	if s.Seen == nil {
 		s.Seen = map[string][]string{}
 	}

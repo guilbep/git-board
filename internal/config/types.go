@@ -9,7 +9,7 @@ import (
 
 // A field's type says what its values are, and so how git-board sorts,
 // filters, shows and edits them: together the fields and their types are
-// the project's ontology (docs/configuration.md, Types). The values stay
+// the project's ontology (docs/guide/configuration.md, Types). The values stay
 // labels, ns:value, whatever the type.
 const (
 	TypeSelect    = "select"    // ordered values (options), colors, board columns

@@ -5,6 +5,7 @@ package forge
 import (
 	"context"
 	"errors"
+	"fmt"
 )
 
 var (
@@ -18,6 +19,19 @@ var (
 	// ErrNoToken: the account has no token on this forge.
 	ErrNoToken = errors.New("forge: no token")
 )
+
+// Refused is a write the forge refused some values of, for good, Values
+// as the write named them: every other value landed. It is ErrRefused.
+type Refused struct {
+	Values []string
+	Why    string
+}
+
+func (e *Refused) Error() string {
+	return fmt.Sprintf("forge: refused %q: %s", e.Values, e.Why)
+}
+
+func (e *Refused) Is(target error) bool { return target == ErrRefused }
 
 // Visibility is who may read a project.
 type Visibility string
@@ -54,6 +68,13 @@ type Issue struct {
 	Changed          map[string]int64
 }
 
+// Ref names a forge issue: its id, which links are keyed on, and its
+// number, which the forge's API names it by.
+type Ref struct{ ID, Number string }
+
+// Ref is the issue's.
+func (is Issue) Ref() Ref { return Ref{is.ID, is.Number} }
+
 // Forge is one forge project, through one account's token. An adapter
 // maps the forge's answers to the errors above, and paces its own writes.
 // ponytail: rate limits, their pacing and their retries are the adapters'
@@ -77,19 +98,21 @@ type Forge interface {
 	// the last run's start, as recorded: an adapter whose forge moves its
 	// update times late, as GitLab does, lists from its own margin earlier.
 	Issues(ctx context.Context, since int64) ([]Issue, error)
-	// Issue reads one issue: ErrNotFound, or ErrConfidential.
-	Issue(ctx context.Context, id string) (Issue, error)
+	// Issue reads one issue: ErrNotFound, or ErrConfidential. The writes
+	// name it the same way, by its Ref.
+	Issue(ctx context.Context, issue Ref) (Issue, error)
 
 	// The writes. Each fails with ErrRefused when the forge refuses it for
 	// good, and ErrNotFound when the issue or comment is gone.
 	CreateIssue(ctx context.Context, title, body string) (Issue, error)
-	CreateComment(ctx context.Context, issueID, body string) (Comment, error)
-	EditComment(ctx context.Context, issueID, commentID, body string) error
-	SetTitle(ctx context.Context, issueID, title string) error
-	SetBody(ctx context.Context, issueID, body string) error
-	SetStatus(ctx context.Context, issueID, status string) error
-	// ChangeLabels adds and removes labels, leaving the others.
-	ChangeLabels(ctx context.Context, issueID string, add, remove []string) error
+	CreateComment(ctx context.Context, issue Ref, body string) (Comment, error)
+	EditComment(ctx context.Context, issue Ref, commentID, body string) error
+	SetTitle(ctx context.Context, issue Ref, title string) error
+	SetBody(ctx context.Context, issue Ref, body string) error
+	SetStatus(ctx context.Context, issue Ref, status string) error
+	// ChangeLabels adds and removes labels, leaving the others. A *Refused
+	// names the labels it refused; the others landed.
+	ChangeLabels(ctx context.Context, issue Ref, add, remove []string) error
 	// SetAssignees sets the whole set, and returns what the forge kept.
-	SetAssignees(ctx context.Context, issueID string, users []Account) ([]Account, error)
+	SetAssignees(ctx context.Context, issue Ref, users []Account) ([]Account, error)
 }

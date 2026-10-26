@@ -11,8 +11,8 @@ import (
 
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/ghbridge"
-	"github.com/guilbep/git-board/internal/gitbugio"
-	"github.com/guilbep/git-board/internal/gitbugio/gitbugiotest"
+	"github.com/guilbep/git-board/internal/store"
+	"github.com/guilbep/git-board/internal/store/storetest"
 )
 
 // send drives Model.Update the way bubbletea's runtime would, unwrapping
@@ -27,8 +27,8 @@ func key(r rune) tea.KeyMsg { return tea.KeyMsg{Type: tea.KeyRunes, Runes: []run
 func TestUpdateEditFieldWritesThroughAndRerendersList(t *testing.T) {
 	t.Parallel()
 	cfg := mustLoadConfig(t)
-	b := gitbugiotest.New(t)
-	id := gitbugiotest.NewIssue(t, b, "widget")
+	b := storetest.New(t)
+	id := storetest.NewIssue(t, b, "widget")
 	if _, err := b.ApplyLabelChange(id, []string{"status:backlog"}, nil); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
@@ -37,7 +37,7 @@ func TestUpdateEditFieldWritesThroughAndRerendersList(t *testing.T) {
 		t.Fatalf("ListIssues: %v", err)
 	}
 
-	m := New(issues, "is:open", b, cfg, "", today, noopReopen(b))
+	m := New(issues, "is:open", b, cfg, "", today)
 
 	m = send(m, tea.KeyMsg{Type: tea.KeyEnter}) // list -> detail
 	if m.mode != modeDetail {
@@ -110,9 +110,9 @@ func TestUpdateEditFieldWritesThroughAndRerendersList(t *testing.T) {
 func TestUpdateCategoryFilterNarrowsList(t *testing.T) {
 	t.Parallel()
 	cfg := mustLoadConfig(t)
-	b := gitbugiotest.New(t)
-	bugID := gitbugiotest.NewIssue(t, b, "a bug")
-	featureID := gitbugiotest.NewIssue(t, b, "a feature")
+	b := storetest.New(t)
+	bugID := storetest.NewIssue(t, b, "a bug")
+	featureID := storetest.NewIssue(t, b, "a feature")
 	if _, err := b.ApplyLabelChange(bugID, []string{"cat:bug"}, nil); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
@@ -124,7 +124,7 @@ func TestUpdateCategoryFilterNarrowsList(t *testing.T) {
 		t.Fatalf("ListIssues: %v", err)
 	}
 
-	m := New(issues, "is:open", b, cfg, "", today, noopReopen(b))
+	m := New(issues, "is:open", b, cfg, "", today)
 	if got := len(m.list.Items()); got != 2 {
 		t.Fatalf("initial list items = %d, want 2", got)
 	}
@@ -161,10 +161,10 @@ func TestUpdateCategoryFilterNarrowsList(t *testing.T) {
 func TestUpdateStructuredFilterNarrowsList(t *testing.T) {
 	t.Parallel()
 	cfg := mustLoadConfig(t)
-	b := gitbugiotest.New(t)
-	mine := gitbugiotest.NewIssue(t, b, "mine, not validated")
-	other := gitbugiotest.NewIssue(t, b, "someone else's")
-	validated := gitbugiotest.NewIssue(t, b, "mine, validated")
+	b := storetest.New(t)
+	mine := storetest.NewIssue(t, b, "mine, not validated")
+	other := storetest.NewIssue(t, b, "someone else's")
+	validated := storetest.NewIssue(t, b, "mine, validated")
 	for id, labels := range map[string][]string{
 		mine:      {"assignee:guilbep"},
 		other:     {"assignee:someone-else"},
@@ -179,7 +179,7 @@ func TestUpdateStructuredFilterNarrowsList(t *testing.T) {
 		t.Fatalf("ListIssues: %v", err)
 	}
 
-	m := New(issues, "is:open", b, cfg, "", today, noopReopen(b))
+	m := New(issues, "is:open", b, cfg, "", today)
 
 	m = send(m, key('f'))
 	if m.mode != modeFilterInput {
@@ -217,14 +217,14 @@ func TestUpdateStructuredFilterNarrowsList(t *testing.T) {
 func TestUpdateStructuredFilterEscCancelsWithoutApplying(t *testing.T) {
 	t.Parallel()
 	cfg := mustLoadConfig(t)
-	b := gitbugiotest.New(t)
-	gitbugiotest.NewIssue(t, b, "widget")
+	b := storetest.New(t)
+	storetest.NewIssue(t, b, "widget")
 	issues, err := b.ListIssues()
 	if err != nil {
 		t.Fatalf("ListIssues: %v", err)
 	}
 
-	m := New(issues, "is:open", b, cfg, "", today, noopReopen(b))
+	m := New(issues, "is:open", b, cfg, "", today)
 	m = send(m, key('f'))
 	m = send(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("title:*nomatch*")})
 	m = send(m, tea.KeyMsg{Type: tea.KeyEsc})
@@ -243,14 +243,14 @@ func TestUpdateStructuredFilterEscCancelsWithoutApplying(t *testing.T) {
 func TestUpdateStructuredFilterRequiresMeDoesNotCrash(t *testing.T) {
 	t.Parallel()
 	cfg := mustLoadConfig(t)
-	b := gitbugiotest.New(t)
-	gitbugiotest.NewIssue(t, b, "widget")
+	b := storetest.New(t)
+	storetest.NewIssue(t, b, "widget")
 	issues, err := b.ListIssues()
 	if err != nil {
 		t.Fatalf("ListIssues: %v", err)
 	}
 
-	m := New(issues, "is:open", b, cfg, "" /* no me */, today, noopReopen(b))
+	m := New(issues, "is:open", b, cfg, "" /* no me */, today)
 	m = send(m, key('f'))
 	m = send(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("assignee:@me")})
 	m = send(m, tea.KeyMsg{Type: tea.KeyEnter})
@@ -271,18 +271,18 @@ func TestUpdateStructuredFilterRequiresMeDoesNotCrash(t *testing.T) {
 func TestUpdateStructuredFilterSearchesComments(t *testing.T) {
 	t.Parallel()
 	cfg := mustLoadConfig(t)
-	b := gitbugiotest.New(t)
-	id := gitbugiotest.NewIssue(t, b, "Train distances")
+	b := storetest.New(t)
+	id := storetest.NewIssue(t, b, "Train distances")
 	if _, err := b.AddComment(id, "the zebra table is wrong"); err != nil {
 		t.Fatal(err)
 	}
-	gitbugiotest.NewIssue(t, b, "Buildings")
+	storetest.NewIssue(t, b, "Buildings")
 	issues, err := b.ListIssues()
 	if err != nil {
 		t.Fatalf("ListIssues: %v", err)
 	}
 
-	m := New(issues, "is:open", b, cfg, "", today, noopReopen(b))
+	m := New(issues, "is:open", b, cfg, "", today)
 	m = send(m, key('f'))
 	m = send(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("zebra")})
 	m = send(m, tea.KeyMsg{Type: tea.KeyEnter})
@@ -293,7 +293,7 @@ func TestUpdateStructuredFilterSearchesComments(t *testing.T) {
 
 // errBackend is a tui.Backend stub whose write always fails, for the
 // write-error-must-not-crash case. It's the one place a stub replaces
-// gitbugiotest: every other test drives a real repo.
+// storetest: every other test drives a real repo.
 type errBackend struct{}
 
 func (errBackend) GetLabels(string) ([]string, error) { return []string{"status:backlog"}, nil }
@@ -304,19 +304,13 @@ func (errBackend) ApplyLabelChange(string, []string, []string) ([]string, error)
 
 func (errBackend) Close() error { return nil }
 
-// noopReopen is a reopen stub for tests that don't exercise "g" — it's
-// never actually called, but New/Model need a non-nil func regardless.
-func noopReopen(b Backend) func() (Backend, error) {
-	return func() (Backend, error) { return b, nil }
-}
-
 func TestUpdateEditWriteErrorShowsStatusAndDoesNotCrash(t *testing.T) {
 	t.Parallel()
 	cfg := mustLoadConfig(t)
-	issues := []gitbugio.Issue{
+	issues := []store.Issue{
 		{ID: "deadbeef", Title: "x", Status: "open", Labels: []string{"status:backlog"}},
 	}
-	m := New(issues, "is:open", errBackend{}, cfg, "", today, noopReopen(errBackend{}))
+	m := New(issues, "is:open", errBackend{}, cfg, "", today)
 
 	m = send(m, tea.KeyMsg{Type: tea.KeyEnter}) // detail
 	m = send(m, key('e'))                       // field picker
@@ -357,14 +351,14 @@ func containsLabel(labels []string, label string) bool {
 func TestWindowSizeMsgOnFreshModelDoesNotPanic(t *testing.T) {
 	t.Parallel()
 	cfg := mustLoadConfig(t)
-	b := gitbugiotest.New(t)
-	gitbugiotest.NewIssue(t, b, "widget")
+	b := storetest.New(t)
+	storetest.NewIssue(t, b, "widget")
 	issues, err := b.ListIssues()
 	if err != nil {
 		t.Fatalf("ListIssues: %v", err)
 	}
 
-	m := New(issues, "is:open", b, cfg, "", today, noopReopen(b))
+	m := New(issues, "is:open", b, cfg, "", today)
 
 	defer func() {
 		if r := recover(); r != nil {
@@ -389,10 +383,10 @@ func titles(items []list.Item) []string {
 func TestUpdateSortOrdersList(t *testing.T) {
 	t.Parallel()
 	cfg := mustLoadConfig(t)
-	b := gitbugiotest.New(t)
-	p2 := gitbugiotest.NewIssue(t, b, "p2 issue")
-	p0 := gitbugiotest.NewIssue(t, b, "p0 issue")
-	p1 := gitbugiotest.NewIssue(t, b, "p1 issue")
+	b := storetest.New(t)
+	p2 := storetest.NewIssue(t, b, "p2 issue")
+	p0 := storetest.NewIssue(t, b, "p0 issue")
+	p1 := storetest.NewIssue(t, b, "p1 issue")
 	for id, prio := range map[string]string{p2: "prio:p2", p0: "prio:p0", p1: "prio:p1"} {
 		if _, err := b.ApplyLabelChange(id, []string{prio}, nil); err != nil {
 			t.Fatalf("seed: %v", err)
@@ -403,7 +397,7 @@ func TestUpdateSortOrdersList(t *testing.T) {
 		t.Fatalf("ListIssues: %v", err)
 	}
 
-	m := New(issues, "is:open", b, cfg, "", today, noopReopen(b))
+	m := New(issues, "is:open", b, cfg, "", today)
 
 	m = send(m, key('s'))
 	if m.mode != modeSortInput {
@@ -433,10 +427,10 @@ func TestUpdateSortOrdersList(t *testing.T) {
 func TestUpdateSortPersistsAcrossFilter(t *testing.T) {
 	t.Parallel()
 	cfg := mustLoadConfig(t)
-	b := gitbugiotest.New(t)
-	p2 := gitbugiotest.NewIssue(t, b, "p2 issue")
-	p0 := gitbugiotest.NewIssue(t, b, "p0 issue")
-	closed := gitbugiotest.NewIssue(t, b, "p1 issue, will be excluded")
+	b := storetest.New(t)
+	p2 := storetest.NewIssue(t, b, "p2 issue")
+	p0 := storetest.NewIssue(t, b, "p0 issue")
+	closed := storetest.NewIssue(t, b, "p1 issue, will be excluded")
 	for id, prio := range map[string]string{p2: "prio:p2", p0: "prio:p0", closed: "prio:p1"} {
 		if _, err := b.ApplyLabelChange(id, []string{prio}, nil); err != nil {
 			t.Fatalf("seed: %v", err)
@@ -447,7 +441,7 @@ func TestUpdateSortPersistsAcrossFilter(t *testing.T) {
 		t.Fatalf("ListIssues: %v", err)
 	}
 
-	m := New(issues, "is:open", b, cfg, "", today, noopReopen(b))
+	m := New(issues, "is:open", b, cfg, "", today)
 	m = send(m, key('s'))
 	m = send(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("prio")})
 	m = send(m, tea.KeyMsg{Type: tea.KeyEnter})
@@ -466,10 +460,10 @@ func TestUpdateSortPersistsAcrossFilter(t *testing.T) {
 func TestUpdateSortClearRestoresNaturalOrder(t *testing.T) {
 	t.Parallel()
 	cfg := mustLoadConfig(t)
-	b := gitbugiotest.New(t)
-	p2 := gitbugiotest.NewIssue(t, b, "p2 issue")
-	p0 := gitbugiotest.NewIssue(t, b, "p0 issue")
-	p1 := gitbugiotest.NewIssue(t, b, "p1 issue")
+	b := storetest.New(t)
+	p2 := storetest.NewIssue(t, b, "p2 issue")
+	p0 := storetest.NewIssue(t, b, "p0 issue")
+	p1 := storetest.NewIssue(t, b, "p1 issue")
 	for id, prio := range map[string]string{p2: "prio:p2", p0: "prio:p0", p1: "prio:p1"} {
 		if _, err := b.ApplyLabelChange(id, []string{prio}, nil); err != nil {
 			t.Fatalf("seed: %v", err)
@@ -481,7 +475,7 @@ func TestUpdateSortClearRestoresNaturalOrder(t *testing.T) {
 	}
 	natural := titles(ToItems(issues))
 
-	m := New(issues, "is:open", b, cfg, "", today, noopReopen(b))
+	m := New(issues, "is:open", b, cfg, "", today)
 	m = send(m, key('s'))
 	m = send(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("prio")})
 	m = send(m, tea.KeyMsg{Type: tea.KeyEnter})
@@ -505,113 +499,11 @@ func TestUpdateSortClearRestoresNaturalOrder(t *testing.T) {
 	}
 }
 
-// TestGKeyClosesBackendBeforeShellingOut is a regression test for a real
-// bug: "g" shells out to `git bug bug show`, but git-board's own backend
-// holds git-bug's repo-level lock open for the TUI's whole session —
-// confirmed directly (outside this test suite, against the real
-// co2-calculator repo) that the subprocess fails with "already locked by
-// process <our own pid>" unless we release it first. This checks the
-// release actually happens, using a real repo (no mock): after "g", the
-// *original* backend reference must be genuinely closed.
-func TestGKeyClosesBackendBeforeShellingOut(t *testing.T) {
-	t.Parallel()
-	cfg := mustLoadConfig(t)
-	b := gitbugiotest.New(t)
-	id := gitbugiotest.NewIssue(t, b, "widget")
-	issues, err := b.ListIssues()
-	if err != nil {
-		t.Fatalf("ListIssues: %v", err)
-	}
-
-	m := New(issues, "is:open", b, cfg, "", today, noopReopen(b))
-	m = send(m, tea.KeyMsg{Type: tea.KeyEnter}) // list -> detail
-	if m.mode != modeDetail {
-		t.Fatalf("mode = %v, want modeDetail", m.mode)
-	}
-
-	next, cmd := m.Update(key('g'))
-	m = next.(Model)
-	if cmd == nil {
-		t.Error("Update after \"g\" returned a nil Cmd, want the ExecProcess command")
-	}
-	if m.mode != modeDetail {
-		t.Errorf("mode = %v, want modeDetail (g doesn't change mode, the exec suspends the whole program)", m.mode)
-	}
-
-	// The real check: b (captured before New, same backend the Model
-	// started with) must now be genuinely closed — a real operation on
-	// it fails. If "g" forgot to Close(), this would still succeed and
-	// the bug would still be present.
-	if _, err := b.GetLabels(id); err == nil {
-		t.Error("backend still usable after \"g\" — it should have been closed to release the repo lock before shelling out")
-	}
-}
-
-// TestGitBugShowFinishedReopensBackend covers gitBugShowFinishedMsg's
-// three outcomes: subprocess ok, subprocess failed (but reopen still
-// must succeed so further edits keep working), and reopen itself
-// failing.
-func TestGitBugShowFinishedReopensBackend(t *testing.T) {
-	t.Parallel()
-	cfg := mustLoadConfig(t)
-
-	t.Run("subprocess ok", func(t *testing.T) {
-		stale := gitbugiotest.New(t) // simulates the backend "g" already closed
-		_ = stale.Close()
-		fresh := gitbugiotest.New(t)
-		id := gitbugiotest.NewIssue(t, fresh, "widget")
-		m := New(nil, "is:open", stale, cfg, "", today, func() (Backend, error) { return fresh, nil })
-
-		m = send(m, gitBugShowFinishedMsg{err: nil})
-
-		if m.status != "" {
-			t.Errorf("status = %q, want empty after a clean git bug bug show", m.status)
-		}
-		if _, err := m.backend.GetLabels(id); err != nil {
-			t.Errorf("reopened backend not usable: %v", err)
-		}
-	})
-
-	t.Run("subprocess failed, reopen still succeeds", func(t *testing.T) {
-		stale := gitbugiotest.New(t) // simulates the backend "g" already closed
-		_ = stale.Close()
-		fresh := gitbugiotest.New(t)
-		id := gitbugiotest.NewIssue(t, fresh, "widget")
-		m := New(nil, "is:open", stale, cfg, "", today, func() (Backend, error) { return fresh, nil })
-
-		m = send(m, gitBugShowFinishedMsg{err: fmt.Errorf("git-bug not found")})
-
-		if !strings.Contains(m.status, "git-bug not found") {
-			t.Errorf("status = %q, want it to surface the subprocess error", m.status)
-		}
-		if _, err := m.backend.GetLabels(id); err != nil {
-			t.Errorf("reopened backend not usable even though the subprocess itself failed: %v", err)
-		}
-	})
-
-	t.Run("reopen itself fails", func(t *testing.T) {
-		stale := gitbugiotest.New(t) // simulates the backend "g" already closed
-		_ = stale.Close()
-		m := New(nil, "is:open", stale, cfg, "", today, func() (Backend, error) {
-			return nil, fmt.Errorf("repo vanished")
-		})
-
-		m = send(m, gitBugShowFinishedMsg{err: nil})
-
-		if m.backend != nil {
-			t.Error("backend should be nil after a failed reopen, not left pointing at a closed handle")
-		}
-		if !strings.Contains(m.status, "repo vanished") {
-			t.Errorf("status = %q, want it to surface the reopen failure", m.status)
-		}
-	})
-}
-
 func TestIKeyRequiresGithubProjectConfigured(t *testing.T) {
 	t.Parallel()
 	cfg := mustLoadConfig(t) // no [github-project] in the shared fixture
-	b := gitbugiotest.New(t)
-	m := New(nil, "is:open", b, cfg, "", today, noopReopen(b))
+	b := storetest.New(t)
+	m := New(nil, "is:open", b, cfg, "", today)
 
 	m = send(m, key('i'))
 
@@ -627,8 +519,8 @@ func TestIKeyStartsPullWhenConfigured(t *testing.T) {
 	t.Parallel()
 	cfg := mustLoadConfig(t)
 	cfg.GithubProject = config.GithubProject{Owner: "acme", Number: 40}
-	b := gitbugiotest.New(t)
-	m := New(nil, "is:open", b, cfg, "", today, noopReopen(b))
+	b := storetest.New(t)
+	m := New(nil, "is:open", b, cfg, "", today)
 
 	next, cmd := m.Update(key('i'))
 	m = next.(Model)
@@ -654,8 +546,8 @@ func TestIKeyStartsPullWhenConfigured(t *testing.T) {
 func TestBridgePullFinishedStoresPlanForO(t *testing.T) {
 	t.Parallel()
 	cfg := mustLoadConfig(t)
-	b := gitbugiotest.New(t)
-	m := New(nil, "is:open", b, cfg, "", today, noopReopen(b))
+	b := storetest.New(t)
+	m := New(nil, "is:open", b, cfg, "", today)
 	m.bridgeBusy = true
 
 	t.Run("success", func(t *testing.T) {
@@ -691,8 +583,8 @@ func TestBridgePullFinishedStoresPlanForO(t *testing.T) {
 func TestOKeyRequiresAPreviewFirst(t *testing.T) {
 	t.Parallel()
 	cfg := mustLoadConfig(t)
-	b := gitbugiotest.New(t)
-	m := New(nil, "is:open", b, cfg, "", today, noopReopen(b))
+	b := storetest.New(t)
+	m := New(nil, "is:open", b, cfg, "", today)
 
 	m = send(m, key('o'))
 
@@ -710,8 +602,8 @@ func TestOKeyRequiresAPreviewFirst(t *testing.T) {
 func TestOKeyAppliesThePreviewedPlan(t *testing.T) {
 	t.Parallel()
 	cfg := mustLoadConfig(t)
-	b := gitbugiotest.New(t)
-	id := gitbugiotest.NewIssue(t, b, "widget")
+	b := storetest.New(t)
+	id := storetest.NewIssue(t, b, "widget")
 	if _, err := b.ApplyLabelChange(id, []string{"status:backlog"}, nil); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
@@ -720,7 +612,7 @@ func TestOKeyAppliesThePreviewedPlan(t *testing.T) {
 		t.Fatalf("ListIssues: %v", err)
 	}
 
-	m := New(issues, "is:open", b, cfg, "", today, noopReopen(b))
+	m := New(issues, "is:open", b, cfg, "", today)
 	m.bridgePlan = &ghbridge.Plan{
 		Changes: []ghbridge.IssueChange{
 			{BugID: id, Added: []string{"status:ready"}, Removed: []string{"status:backlog"}},

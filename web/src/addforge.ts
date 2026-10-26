@@ -4,13 +4,12 @@
 // addforge.test.ts on it.
 import type { Credential } from './api/board';
 
-// ponytail: the three forges git-bug's sync supports (gitbugio.AddBridge
-// refuses the others); GET /api/forges lists bridges, not forge kinds
-// (token: what docs/forges.md says it needs, in short)
+// the two forges the sync supports (the server refuses the others); GET
+// /api/forges lists forges, not their kinds (token: what docs/guide/forges.md
+// says it needs, in short)
 export const forges = [
   { target: 'github', name: 'GitHub', short: 'gh', placeholder: 'https://github.com/owner/repo', token: 'a classic token with the repo scope' },
   { target: 'gitlab', name: 'GitLab', short: 'gl', placeholder: 'https://gitlab.epfl.ch/group/project', token: 'a token with the api scope' },
-  { target: 'gitea', name: 'Gitea', short: 'gitea', placeholder: 'https://gitea.example.org/owner/repo', token: 'a token with read and write on issues and repositories' },
 ];
 
 export const forgeSteps = ['Forge', 'Project', 'Token', 'Check'];
@@ -40,7 +39,6 @@ export function guessForge(url: string): string {
   const host = hostOf(url);
   if (host === 'github.com') return 'github';
   if (host.includes('gitlab')) return 'gitlab';
-  if (host.includes('gitea')) return 'gitea';
   return '';
 }
 
@@ -51,7 +49,7 @@ export function matchingCredentials(creds: Credential[], target: string, url: st
   return creds.filter((c) => c.target === target && (!host || c.host === host));
 }
 
-const bridgeName = /^[A-Za-z0-9][A-Za-z0-9_-]*$/; // as gitbugio.AddBridge
+const bridgeName = /^[A-Za-z0-9][A-Za-z0-9_-]*$/; // as store.AddBridge
 
 // canGoOn says whether a step is filled enough for the next one
 export function canGoOn(step: number, d: ForgeDraft): boolean {

@@ -9,8 +9,8 @@ import (
 	"testing"
 
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/gitbugio"
-	"github.com/guilbep/git-board/internal/gitbugio/gitbugiotest"
+	"github.com/guilbep/git-board/internal/store"
+	"github.com/guilbep/git-board/internal/store/storetest"
 )
 
 // git runs git in dir, away from the user's own configuration and hooks.
@@ -68,7 +68,7 @@ func TestBranchesOfAnIssue(t *testing.T) {
 	git(t, dir, "update-ref", "refs/remotes/origin/fix/2518-merged", "fix/2518-merged")
 	git(t, dir, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/dev")
 
-	b, err := gitbugio.Open(dir)
+	b, err := store.Open(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -76,7 +76,7 @@ func TestBranchesOfAnIssue(t *testing.T) {
 	if _, err := b.NewIdentity("dev", "dev@example.com"); err != nil {
 		t.Fatal(err)
 	}
-	id := gitbugiotest.NewImportedIssue(t, b, "[BUG](Equipment) Crash on save (#2518)", "https://github.com/o/r/issues/2518")
+	id := storetest.NewImportedIssue(t, b, "[BUG](Equipment) Crash on save (#2518)", "https://github.com/o/r/issues/2518")
 	git(t, dir, "branch", id[:7]+"-by-id")
 	// git-bug's own copy of an issue at origin, an older git-board's: not a branch
 	git(t, dir, "update-ref", "refs/remotes/origin/bugs/"+strings.Repeat("ab", 32), "dev")
@@ -142,7 +142,7 @@ func TestBranchSquashedIntoTheBase(t *testing.T) {
 	git(t, dir, "update-ref", "refs/remotes/origin/dev", "dev")
 	git(t, dir, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/dev")
 
-	b, err := gitbugio.Open(dir)
+	b, err := store.Open(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -150,7 +150,7 @@ func TestBranchSquashedIntoTheBase(t *testing.T) {
 	if _, err := b.NewIdentity("dev", "dev@example.com"); err != nil {
 		t.Fatal(err)
 	}
-	id := gitbugiotest.NewImportedIssue(t, b, "Crash on save (#2518)", "https://github.com/o/r/issues/2518")
+	id := storetest.NewImportedIssue(t, b, "Crash on save (#2518)", "https://github.com/o/r/issues/2518")
 
 	ts := newTestServer(t, b, &config.Config{})
 	var res branchesResponse
@@ -176,8 +176,8 @@ func TestBranchSquashedIntoTheBase(t *testing.T) {
 // No code yet, no remote: still a name, and the command from main.
 func TestBranchesWithoutCode(t *testing.T) {
 	t.Parallel()
-	b := gitbugiotest.New(t)
-	id := gitbugiotest.NewIssue(t, b, "Write specs")
+	b := storetest.New(t)
+	id := storetest.NewIssue(t, b, "Write specs")
 	ts := newTestServer(t, b, &config.Config{Branches: config.Branches{Name: "{kind}/{number}-{slug}"}})
 	var res branchesResponse
 	if resp := getJSON(t, ts.URL+"/api/issues/"+id+"/branches", &res); resp.StatusCode != http.StatusOK {
@@ -193,7 +193,7 @@ func TestBranchesWithoutCode(t *testing.T) {
 
 func TestBranchesOfNoSuchIssue(t *testing.T) {
 	t.Parallel()
-	ts := newTestServer(t, gitbugiotest.New(t), &config.Config{})
+	ts := newTestServer(t, storetest.New(t), &config.Config{})
 	if resp := getJSON(t, ts.URL+"/api/issues/deadbeef/branches", nil); resp.StatusCode != http.StatusNotFound {
 		t.Errorf("status %d, want 404", resp.StatusCode)
 	}

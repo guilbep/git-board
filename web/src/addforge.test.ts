@@ -8,7 +8,7 @@ const draft = (d: Partial<ForgeDraft>): ForgeDraft => ({ target: 'github', url: 
 test('guessForge reads the forge from the address', () => {
   assert.equal(guessForge('https://github.com/guilbep/git-board-test'), 'github');
   assert.equal(guessForge('https://gitlab.epfl.ch/enac/co2'), 'gitlab');
-  assert.equal(guessForge('https://gitea.example.org/a/b'), 'gitea');
+  assert.equal(guessForge('https://gitea.example.org/a/b'), ''); // the sync has GitHub and GitLab only
   assert.equal(guessForge('https://code.example.org/a/b'), '');
   assert.equal(guessForge('github.com/a/b'), ''); // not an address yet
 });
@@ -22,12 +22,12 @@ test('matchingCredentials keeps the forge, and its instance once the address say
   assert.deepEqual(matchingCredentials(creds, 'github', '').map((c) => c.id), ['d7f5c11']);
   assert.deepEqual(matchingCredentials(creds, 'gitlab', '').map((c) => c.id), ['aaaaaaa', 'bbbbbbb']);
   assert.deepEqual(matchingCredentials(creds, 'gitlab', 'https://gitlab.epfl.ch/enac/co2').map((c) => c.id), ['aaaaaaa']);
-  assert.deepEqual(matchingCredentials(creds, 'gitea', 'https://gitea.example.org/a/b'), []);
 });
 
 test('canGoOn: a forge, then a project address and a fair name, then a token', () => {
   assert.equal(canGoOn(0, draft({})), true);
   assert.equal(canGoOn(0, draft({ target: 'jira' })), false);
+  assert.equal(canGoOn(0, draft({ target: 'gitea' })), false);
 
   assert.equal(canGoOn(1, draft({})), false);
   assert.equal(canGoOn(1, draft({ url: 'https://github.com/guilbep' })), false); // no project

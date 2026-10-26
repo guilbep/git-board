@@ -1,5 +1,5 @@
-<!-- Settings › Numbers: the project's own numbers, CO2-3075
-     (docs/configuration.md, Numbers). Not on yet: what they are, then a
+<!-- Settings › Numbers: the project's own numbers, GB-39
+     (docs/guide/configuration.md, Numbers). Not on yet: what they are, then a
      form beside its guidelines: a prefix from the repository's name, a
      start above every number known (GitHub asked), what the issues
      become, and a confirm naming what is pushed where. On: where they
@@ -8,7 +8,7 @@
   <div class="set-panel nb">
     <h2 class="h4">Numbers</h2>
     <p class="nb-lead">
-      One number per issue, the same on every forge: <b>CO2-3075</b>. The counter is kept in git, on origin, where every clone reads it.
+      One number per issue, the same on every forge: <b>{{ numberExample(n) }}</b>. The counter is kept in git, on origin, where every clone reads it.
     </p>
     <p v-if="error" class="epfl-alert epfl-alert-danger" role="alert">{{ error }}</p>
     <p v-if="result" class="epfl-alert epfl-alert-success" role="status">{{ result }}</p>
@@ -16,6 +16,10 @@
     <p v-if="!n && !error" class="nb-muted">Loading…</p>
 
     <template v-if="n?.on">
+      <p v-if="n.ahead" class="epfl-alert epfl-alert-warning" role="alert">
+        <b>This clone's numbers aren't on origin yet.</b> The switch keyed them again here: the next
+        <router-link to="/settings/sync">Sync</router-link> sends them first. If origin's numbers moved on meanwhile, it refuses: run <code>git board switch --apply</code> again.
+      </p>
       <div class="nb-tiles">
         <div class="gb-value gb-value-agreed"><span class="gb-value-label">Prefix</span><span class="gb-value-val">{{ n.prefix }}</span></div>
         <div class="gb-value gb-value-agreed"><span class="gb-value-label">Start</span><span class="gb-value-val">{{ n.start }}</span></div>
@@ -34,7 +38,7 @@
         <button v-else type="button" class="epfl-btn epfl-btn-primary nb-start-btn" @click="confirming = true">Number them now</button>
       </section>
       <p v-if="n.unpushed">
-        {{ issues(n.unpushed) }} not on origin yet: pushed and numbered with the next <b>Push</b> on <router-link to="/sync#remotes">Sync › Remotes</router-link>.
+        {{ issues(n.unpushed) }} not on origin yet: pushed and numbered with the next <router-link to="/settings/sync">Sync</router-link>.
       </p>
       <p v-if="!n.waiting && !n.unpushed" class="nb-muted">Every issue has its number.</p>
     </template>
@@ -42,12 +46,12 @@
     <div v-else-if="n" class="nb-setup">
       <form class="nb-form" @submit.prevent="confirming = true">
         <p>
-          Today your issues go by their forge numbers. GitHub's stay the issues' own below the start (#2518 is CO2-2518); every other issue, made here or
+          Today your issues go by their forge numbers. GitHub's stay the issues' own below the start (#41 is {{ prefixErr ? 'ABC' : prefix }}-41); every other issue, made here or
           imported later, takes the next number.
         </p>
         <p v-if="!n.origin" class="epfl-alert epfl-alert-warning" role="alert">
-          No origin remote: the counter lives on origin. Add one (<code>git remote add origin &lt;url&gt;</code>), push your issues from
-          <router-link to="/sync#remotes">Sync › Remotes</router-link>, then come back.
+          No origin remote: the counter lives on origin. Add one (<code>git remote add origin &lt;url&gt;</code>), push your issues with a
+          <router-link to="/settings/sync">Sync</router-link>, then come back.
         </p>
         <div>
           <label class="nb-label" for="nb-prefix">Prefix</label>
@@ -96,10 +100,10 @@
           <li><b>Choose the prefix once.</b> Once issues carry it, it stays: branches, commits and messages name them by it.</li>
           <li><b>2 to 5 capitals</b> is usual: CO2, GB, INFRA.</li>
           <li><b>Start above every GitHub issue and pull request number.</b> They share one sequence: at or below one, a later import collides with a number already given.</li>
-          <li><b>Numbers go out only with a push you ask for</b>: Start numbering, Number them now, Push on Sync › Remotes, <code>git board numbers</code>. Only issues origin has get one.</li>
+          <li><b>Numbers go out only with a push you ask for</b>: Start numbering, Number them now, a Sync, <code>git board numbers</code>. Only issues origin has get one.</li>
           <li><b>Nothing pushes on its own</b>: not creating an issue, not a forge sync.</li>
         </ul>
-        <p>From a terminal: <code>git board numbers init --prefix {{ prefixErr ? 'CO2' : prefix }} --start {{ startErr ? 3052 : start }}</code>.</p>
+        <p>From a terminal: <code>git board numbers init --prefix {{ prefixErr ? 'ABC' : prefix }} --start {{ startErr ? 100 : start }}</code>.</p>
       </aside>
     </div>
   </div>
@@ -110,7 +114,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { getNumbers, numberIssues, startNumbers, type Numbers } from '@/api/board';
 import { debounced, onLive } from '@/live';
 import { message } from '@/issue';
-import { numbered, numbersPreview, prefixProblem, startProblem, suggestPrefix, suggestStart } from '@/numbers';
+import { numbered, numberExample, numbersPreview, prefixProblem, startProblem, suggestPrefix, suggestStart } from '@/numbers';
 
 // changed: what a start or a numbering left, for the Overview's line
 const emit = defineEmits<{ changed: [n: Numbers] }>();
@@ -183,7 +187,7 @@ const init = () => act(() => startNumbers(prefix.value, start.value), (r) => `Nu
 const run = () => act(numberIssues, (r) => numbered(r.prefix!, r.next!, r.done));
 
 onMounted(() => void load(true));
-// an issue made, or pushed from Sync › Remotes: the counts move
+// an issue made, or pushed with a Sync: the counts move
 const reload = debounced(() => void load());
 const offLive = onLive((e) => (e.kind === 'issues' || e.kind === 'sync') && reload());
 onBeforeUnmount(offLive);

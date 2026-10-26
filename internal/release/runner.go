@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/gitbugio"
+	"github.com/guilbep/git-board/internal/store"
 )
 
 // Step is one step of a release job, as it is reported.
@@ -24,9 +24,9 @@ type Step struct {
 type Runner struct {
 	Cfg      config.Release
 	Branches config.Branches
-	Base     string            // the trunk branch; "": Branches.Base, else the remote's default branch, else dev
-	Dir      string            // the app repo's work tree
-	B        *gitbugio.Backend // the app repo's, for the release records
+	Base     string         // the trunk branch; "": Branches.Base, else the remote's default branch, else dev
+	Dir      string         // the app repo's work tree
+	B        *store.Backend // the app repo's, for the release records
 	Tools    Tools
 	CacheDir string       // where the config repos are cloned
 	Who      string       // login for commit messages
@@ -39,7 +39,7 @@ type Runner struct {
 // New is the Runner of the app repo at dir: cfg's [release] table and
 // branches, the real Tools, the config repos cloned under the git common
 // dir, and the git-bug user (else git's user.name) as Who.
-func New(cfg *config.Config, dir string, b *gitbugio.Backend) (*Runner, error) {
+func New(cfg *config.Config, dir string, b *store.Backend) (*Runner, error) {
 	ctx := context.Background()
 	common, err := Git(ctx, dir, "rev-parse", "--git-common-dir")
 	if err != nil {
@@ -142,7 +142,7 @@ func (r *Runner) reconcile(ctx context.Context) (pushed []Tag, pendErr, err erro
 			continue
 		}
 		recorded[t.Commit] = true
-		rec := gitbugio.ReleaseRecord{Commit: t.Commit}
+		rec := store.ReleaseRecord{Commit: t.Commit}
 		for _, p := range tags[i+1:] {
 			if p.Version.RC == 0 {
 				rec.Previous = p.Name
@@ -161,7 +161,7 @@ func (r *Runner) reconcile(ctx context.Context) (pushed []Tag, pendErr, err erro
 					return pushed, pendErr, err
 				}
 				if ok {
-					rec.Artifacts = append(rec.Artifacts, gitbugio.Artifact{Image: img.Name, Registry: d.Registry, Digest: digest})
+					rec.Artifacts = append(rec.Artifacts, store.Artifact{Image: img.Name, Registry: d.Registry, Digest: digest})
 				}
 			}
 		}

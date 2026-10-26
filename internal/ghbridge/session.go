@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/gitbugio"
+	"github.com/guilbep/git-board/internal/store"
 )
 
 // DefaultItemLimit is how many Project items a sync reads by default.
@@ -37,17 +37,17 @@ var Gh = Project{Items: FetchItems, Meta: FetchProjectMeta, Writer: GhWriter{}, 
 
 // Repo is the git-bug side of a sync.
 type Repo interface {
-	ListIssues() ([]gitbugio.Issue, error)
+	ListIssues() ([]store.Issue, error)
 	ProjectBases(idPrefix, prefix string) (map[string]string, error)
 	LabelWriter
 	BaseWriter
 }
 
-var _ Repo = (*gitbugio.Backend)(nil)
+var _ Repo = (*store.Backend)(nil)
 
 // State is what a sync decides from, read from both sides.
 type State struct {
-	Issues []gitbugio.Issue
+	Issues []store.Issue
 	Items  []Item
 	Meta   ProjectMeta
 	Bases  map[string]map[string]string
@@ -112,7 +112,7 @@ func ResolveConflict(repo Repo, p Project, cfg *config.Config, s State, number i
 				item = it
 			}
 		}
-		var bug gitbugio.Issue
+		var bug store.Issue
 		for _, b := range s.Issues {
 			if b.ID == c.BugID {
 				bug = b

@@ -14,22 +14,23 @@ import (
 	"time"
 
 	"github.com/guilbep/git-board/internal/config"
+	"github.com/guilbep/git-board/internal/store"
 )
 
-// bridge is a forge of .git-board.toml, as the settings page shows it.
+// bridge is a forge, as Settings › Sync shows it (whole.go).
 type bridge struct {
-	Name    string `json:"name"`
-	Target  string `json:"target"` // github, gitlab
-	Where   string `json:"where"`  // the project's page
-	Sync    bool   `json:"sync"`
-	CanSync bool   `json:"can_sync"`
+	Name       string `json:"name"`
+	Target     string `json:"target"`  // github, gitlab
+	Project    string `json:"project"` // owner/repo, a GitLab path or id
+	Where      string `json:"where"`   // the project's page
+	Sync       bool   `json:"sync"`
+	Discovered bool   `json:"discovered,omitempty"` // found in the git remotes, with no table
 }
 
-// settingsResponse is the settings page: the bridges, how attachments and
-// the GitHub Project are set up, and the cycle's stages (guessed, or the
-// file's). The identity is GET /api/me.
+// settingsResponse is the settings page: how attachments and the GitHub
+// Project are set up, and the cycle's stages (guessed, or the file's).
+// The identity is GET /api/me, the forges GET /api/sync/all.
 type settingsResponse struct {
-	Bridges []bridge `json:"bridges"`
 	Uploads struct {
 		Enabled   bool   `json:"enabled"`
 		Endpoint  string `json:"endpoint,omitempty"`
@@ -43,10 +44,7 @@ type settingsResponse struct {
 
 func (s *apiServer) handleSettings(w http.ResponseWriter, r *http.Request) {
 	cfg := s.config()
-	res := settingsResponse{Bridges: []bridge{}, GithubProject: cfg.GithubProject, ConfigPath: s.configPath(), Cycle: cfg.Stages()}
-	for _, f := range cfg.Forges {
-		res.Bridges = append(res.Bridges, bridge{Name: f.Name, Target: f.Kind, Where: f.Where(), Sync: f.Sync, CanSync: true})
-	}
+	res := settingsResponse{GithubProject: cfg.GithubProject, ConfigPath: s.configPath(), Cycle: cfg.Stages()}
 	if st := s.uploadStore(); st != nil {
 		res.Uploads.Enabled, res.Uploads.Endpoint, res.Uploads.PublicURL, res.Uploads.Prefix = true, st.Endpoint, st.PublicURL, st.Prefix
 	}
@@ -113,10 +111,11 @@ func writeBridgeError(w http.ResponseWriter, err error) {
 	writeError(w, code, err)
 }
 
-// handleCredentials lists the forges whose posting account has a token:
-// forge, host and login, never a token.
+// handleCredentials lists the forges whose posting account has a token,
+// the settings' or those found in the git remotes: forge, host and login,
+// never a token.
 func (s *apiServer) handleCredentials(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, s.b.Credentials(s.config().Forges))
+	writeJSON(w, http.StatusOK, s.b.Credentials(s.forges()))
 }
 
 // handleAddBridge adds a forge, sync on unless asked off, once the forge
@@ -148,6 +147,12 @@ func (s *apiServer) handleAddBridge(w http.ResponseWriter, r *http.Request) {
 			return "", err
 		}
 		f.Sync, name = req.Sync == nil || *req.Sync, f.Name
+		if cfg.Discover {
+			// a table turns the remotes' forges off: they get theirs
+			if text, err = s.foundTables(r.Context(), text, f); err != nil {
+				return "", err
+			}
+		}
 		return config.WithForge(text, f), nil
 	})
 	if err != nil {
@@ -155,6 +160,30 @@ func (s *apiServer) handleAddBridge(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"name": name})
+}
+
+// foundTables writes a table for each forge found in the git remotes,
+// GitLab's by its id, before f's: f's table would turn them off. It
+// refuses f when a remote names it already, and a found forge whose id
+// can't be read.
+func (s *apiServer) foundTables(ctx context.Context, text string, f config.Forge) (string, error) {
+	var left []string
+	found := store.ResolveForges(ctx, s.forges(), func(g config.Forge, why error) {
+		left = append(left, fmt.Sprintf("%s (%s %s): %v", g.Name, g.Host, g.Path, why))
+	})
+	if len(left) > 0 {
+		return "", fmt.Errorf("the forges found in the remotes would be dropped, and one can't be written: %s", strings.Join(left, "; "))
+	}
+	for _, g := range found {
+		if strings.EqualFold(g.Host+"/"+g.Project, f.Host+"/"+f.Project) {
+			return "", fmt.Errorf("the git remotes name %s %s already: it is the forge %s", f.Host, f.Project, g.Name)
+		}
+		if g.Name == f.Name {
+			return "", fmt.Errorf("a forge found in the remotes is named %s already", f.Name)
+		}
+		text = config.WithForge(text, g)
+	}
+	return text, nil
 }
 
 // newForge is the forge at the project's address, checked with the forge,
@@ -251,7 +280,9 @@ func (s *apiServer) checkForge(ctx context.Context, f config.Forge, token string
 	if err := get(projectPath, &p); err != nil {
 		return "", "", err
 	}
-	project = f.Project
+	// as the forge spells it: links are keyed on it, and a discovered
+	// forge of the same project reads the same (store.ResolveForges)
+	project = cmp.Or(p.FullName, f.Project)
 	if f.Kind == "gitlab" {
 		project = strconv.FormatInt(p.ID, 10)
 	}

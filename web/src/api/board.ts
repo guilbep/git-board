@@ -16,7 +16,7 @@ export const clientId = Math.random().toString(36).slice(2) + Date.now().toStrin
 export interface Issue {
   id: string;
   title: string;
-  shown_title: string; // the title without a trailing (#2518) of its own (gitbugio.Issue.ShownTitle)
+  shown_title: string; // the title without a trailing (#2518) of its own (store.Issue.ShownTitle)
   status: string;
   labels: string[];
   inherited?: string[]; // what it takes from the project's [roles], for the roles it doesn't set
@@ -106,7 +106,7 @@ export function getColors(): Promise<Record<string, Record<string, string>>> {
 
 // Unsorted: the page sorts (facets.sortIssues), by option order where the
 // server would sort alphabetically. filter: the board's, ⌘K's, a view's —
-// one syntax (docs/configuration.md, Filters); "" is every issue.
+// one syntax (docs/guide/configuration.md, Filters); "" is every issue.
 export function getIssues(filter: string, group = ''): Promise<Bucket[]> {
   const params = new URLSearchParams({ filter });
   if (group) params.set('group', group);
@@ -228,7 +228,7 @@ export interface IssueEvent {
   review?: Review; // comment: a line comment, a reply or a review
 }
 
-// A comment's review:* metadata (internal/gitbugio/review.go), mirrored to
+// A comment's review:* metadata (internal/store/review.go), mirrored to
 // the pull request by the sync.
 export interface Review {
   path?: string;
@@ -324,12 +324,23 @@ export interface BridgeTally {
   assignable: number; // who the forge says can be assigned, asked after the run
   warnings: number;
   errors: number;
+  // creations waiting for consent: on a forge never synced with, or 50 or more in one run
+  held: number;
+  left?: string; // why the forge was left out of the run: it couldn't be read
   lines: string[];
 }
 
-// A run goes both ways (sync), or one: get (git bug bridge pull), send
-// (git bug bridge push). A dry run, the Check, looks both ways.
-export type ForgeMode = 'sync' | 'get' | 'send';
+// A forge run goes both ways (sync), or sends alone (the Work page's Send
+// all); all is the whole sync's (GET /api/sync/all). A dry run, the Check,
+// looks both ways.
+export type ForgeMode = 'sync' | 'send' | 'all';
+
+// A step of the whole sync, as it went
+export interface JobStep {
+  name: 'pull' | 'forges' | 'project' | 'push';
+  state: 'waiting' | 'running' | 'done' | 'failed' | 'skipped';
+  note?: string; // why it failed or was skipped, what it did
+}
 
 export interface ForgeJob {
   dry_run: boolean;
@@ -342,6 +353,7 @@ export interface ForgeJob {
   errors: number;
   error?: string;
   step?: SyncStep; // where it is, while it runs
+  steps?: JobStep[]; // the whole sync's, in order
 }
 
 // Where a run is: the issue a way of a bridge is on, and how many it has
@@ -364,8 +376,28 @@ export function getForges(): Promise<ForgeStatus> {
 }
 
 // A dry run looks at every forge; a real run at bridges (empty: all).
-export function startForgeSync(dryRun: boolean, mode: ForgeMode = 'sync', bridges: string[] = []): Promise<ForgeStatus> {
+export function startForgeSync(dryRun: boolean, mode: 'sync' | 'send' = 'sync', bridges: string[] = []): Promise<ForgeStatus> {
   return request('/api/forges/sync', json('POST', { dry_run: dryRun, mode, bridges }));
+}
+
+// The whole sync (internal/server/whole.go): git pull from origin, the
+// forges, the GitHub Project, git push; Settings › Sync, git-board sync.
+export interface WholeStatus {
+  remote: Remote | null; // origin; null: none
+  forges: Bridge[]; // every forge, sync on or off
+  skipped: string[]; // the remotes' URLs naming no forge: "skipped <url>: why"
+  project: SyncStatus;
+  job: ForgeJob | null;
+}
+
+export function getWhole(): Promise<WholeStatus> {
+  return request('/api/sync/all');
+}
+
+// a check (dryRun) writes nothing; a sync needs a clean one of the last 15
+// minutes, and allowCreate for the creations the check held
+export function startWhole(dryRun: boolean, allowCreate = false): Promise<ForgeStatus> {
+  return request('/api/sync/all', json('POST', { dry_run: dryRun, allow_create: allowCreate }));
 }
 
 // The git remotes (internal/server/remotes.go): issues and people
@@ -389,8 +421,8 @@ export function getRemotes(): Promise<{ remotes: Remote[] }> {
   return request('/api/remotes');
 }
 
-// fetch is the Check: nothing local changes
-export function remoteAction(name: string, action: 'fetch' | 'pull' | 'push'): Promise<{ remotes: Remote[] }> {
+// fetch is a check: nothing local changes (a push is the whole sync's)
+export function remoteAction(name: string, action: 'fetch' | 'pull'): Promise<{ remotes: Remote[] }> {
   return request(`/api/remotes/${encodeURIComponent(name)}/${action}`, { method: 'POST' });
 }
 
@@ -409,6 +441,7 @@ export interface Numbers {
   origin: Remote | null; // where the counter goes
   name: string; // the repository's, for a prefix
   github?: { issues: string; highest: number; error?: string } | undefined; // asked with github: GitHub's answer
+  ahead: boolean; // this clone's counter holds numbers origin hasn't: the next sync sends them first
   done: number; // a write: how many issues it numbered
   error?: string; // started, but the issues not numbered yet
 }
@@ -508,17 +541,18 @@ export async function uploadFile(file: File): Promise<{ url: string; name: strin
   return data;
 }
 
-// Settings (internal/server/settings.go).
+// A forge, as Settings › Sync lists it (internal/server/whole.go).
 export interface Bridge {
   name: string;
-  target: string;
-  where: string;
+  target: string; // github, gitlab
+  project: string; // owner/repo, a GitLab path or id
+  where: string; // the project's page
   sync: boolean;
-  can_sync: boolean;
+  discovered?: boolean; // found in the git remotes, with no table
 }
 
+// Settings (internal/server/settings.go).
 export interface Settings {
-  bridges: Bridge[];
   uploads: { enabled: boolean; endpoint?: string; public_url?: string; prefix?: string };
   github_project: { owner: string; number: number; write?: boolean };
   config_path: string;
@@ -581,7 +615,7 @@ export function enableRelease(s: Pick<ReleaseSetup, 'binaries' | 'platforms' | '
   return request('/api/releases/setup', json('POST', s));
 }
 
-// docs/configuration.md, a section per ## heading, rendered.
+// docs/guide/configuration.md, a section per ## heading, rendered.
 export interface DocSection {
   id: string;
   title: string;
@@ -592,7 +626,7 @@ export function getConfigDocs(): Promise<DocSection[]> {
   return request('/api/config/docs');
 }
 
-// docs/forges.md, in sections: how forges work
+// docs/guide/forges.md, in sections: how forges work
 export function getForgeDocs(): Promise<DocSection[]> {
   return request('/api/forges/docs');
 }
@@ -1242,10 +1276,6 @@ export async function getReleases(): Promise<Releases> {
 export async function getDraft(final = false): Promise<Draft> {
   const d = await request<Draft>(`/api/releases/draft${final ? '?final=1' : ''}`);
   return { ...d, undeployed: d.undeployed ?? [], issues: d.issues ?? [], checks: d.checks ?? [] };
-}
-
-export async function getReleaseJob(): Promise<ReleaseJob | null> {
-  return releaseJob(await request<ReleaseJob | null>('/api/releases/job'));
 }
 
 export async function getRelease(tag: string): Promise<ReleaseDetail> {

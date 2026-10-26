@@ -116,8 +116,8 @@ the Go tests that is:
 
 - `**/*.go`, `go.mod` and `go.sum`;
 - the testdata;
-- every file a `//go:embed` pulls in: `docs/configuration.md`,
-  `docs/forges.md`, `internal/config/default.git-board.toml`,
+- every file a `//go:embed` pulls in: `docs/guide/configuration.md`,
+  `docs/guide/forges.md`, `internal/config/default.git-board.toml`,
   `web/epfl-design/…`, `web/public/epfl-logo.svg`, and `web/dist`.
 
 In a clean checkout `web/dist` holds only its tracked `.gitkeep`. A loose
@@ -317,7 +317,7 @@ results.
 ## Left open
 
 The cycle protocol's M4 brief carried these. M4 settled the ones marked
-so; docs/configuration.md › Tests and checks has the details. The decision
+so; docs/guide/configuration.md › Tests and checks has the details. The decision
 above is unchanged.
 
 - The toml's shape:

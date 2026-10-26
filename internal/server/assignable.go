@@ -9,6 +9,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
@@ -16,7 +17,7 @@ import (
 	"sync"
 
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/gitbugio"
+	"github.com/guilbep/git-board/internal/store"
 )
 
 // assignablePath keeps, by forge name, who its forge said can be
@@ -27,7 +28,7 @@ var assignablePath = filepath.Join("git-board", "assignable.json")
 // posting account's token.
 // ponytail: one page of 100, paginate when a project has more
 func (s *apiServer) assignable(ctx context.Context, f config.Forge) ([]string, error) {
-	api, header, prefix := f.BaseURL()+"/api/v4/projects/"+f.Project+"/users?per_page=100", "PRIVATE-TOKEN", ""
+	api, header, prefix := f.BaseURL()+"/api/v4/projects/"+url.PathEscape(f.Project)+"/users?per_page=100", "PRIVATE-TOKEN", "" // an id, or a found forge's path
 	if f.Kind == "github" {
 		base := f.BaseURL() + "/api/v3"
 		if f.Host == "github.com" {
@@ -74,7 +75,7 @@ func (s *apiServer) assignable(ctx context.Context, f config.Forge) ([]string, e
 // in the bridge's tally and tells the pages. A forge that doesn't answer
 // is a warning: the run went well, the boxes keep the last list.
 func (s *apiServer) fetchAssignable(job *forgeJob) {
-	bridges := slices.DeleteFunc(slices.Clone(s.config().Forges), func(f config.Forge) bool { return !slices.Contains(job.Names, f.Name) })
+	bridges := slices.DeleteFunc(slices.Clone(s.forges()), func(f config.Forge) bool { return !slices.Contains(job.Names, f.Name) })
 	if len(bridges) == 0 {
 		return
 	}
@@ -94,7 +95,7 @@ func (s *apiServer) fetchAssignable(job *forgeJob) {
 	kept := false
 	for i, br := range bridges {
 		if errs[i] == nil {
-			saved[br.Name], kept = logins[i], true
+			saved[assignKey(br)], kept = logins[i], true
 		}
 	}
 	if kept {
@@ -119,22 +120,28 @@ func (s *apiServer) fetchAssignable(job *forgeJob) {
 	s.events.publish(event{Kind: "sync"})
 }
 
-// people are who a person field offers: the git-bug identities and who
-// the configured bridges' forges said can be assigned, once each, sorted.
+// people are who a person field offers: git-board's people and who the
+// forges said can be assigned, once each, sorted.
 func (s *apiServer) people() []string {
 	var all []string
 	if logins, err := s.b.Logins(); err == nil {
 		all = logins
 	}
 	saved, _ := loadAssignable(s.b.Storage())
-	for _, f := range s.config().Forges {
-		all = append(all, saved[f.Name]...)
+	for _, f := range s.forges() {
+		all = append(all, saved[assignKey(f)]...)
 	}
 	slices.SortFunc(all, func(a, b string) int { return cmp.Compare(strings.ToLower(a), strings.ToLower(b)) })
 	return slices.CompactFunc(all, strings.EqualFold)
 }
 
-func loadAssignable(fs gitbugio.Storage) (map[string][]string, error) {
+// assignKey keys a forge's saved list by its project, not its name: a
+// name found in the remotes may change as remotes come and go.
+func assignKey(f config.Forge) string {
+	return strings.ToLower(f.Host + "/" + f.Project)
+}
+
+func loadAssignable(fs store.Storage) (map[string][]string, error) {
 	f, err := fs.Open(assignablePath)
 	if errors.Is(err, os.ErrNotExist) {
 		return map[string][]string{}, nil
@@ -152,7 +159,7 @@ func loadAssignable(fs gitbugio.Storage) (map[string][]string, error) {
 
 // saveAssignable writes through a temporary file and a rename: a reader
 // gets the old list or the new one.
-func saveAssignable(fs gitbugio.Storage, m map[string][]string) error {
+func saveAssignable(fs store.Storage, m map[string][]string) error {
 	if err := fs.MkdirAll(filepath.Dir(assignablePath), 0o755); err != nil {
 		return err
 	}

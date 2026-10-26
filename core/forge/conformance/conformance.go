@@ -54,6 +54,8 @@ func Run(t *testing.T, newForge NewForge) {
 		{"TheGuard", theGuard},
 		{"ConfidentialIssues", confidentialIssues},
 		{"ARefusalWarnsOnce", refusalWarnsOnce},
+		{"ALabelRefusedAlone", labelRefusedAlone},
+		{"AnIssueByItsRef", issueByItsRef},
 		{"AssigneesAreTheForges", assigneesAreTheForges},
 	} {
 		t.Run(sc.name, func(t *testing.T) {
@@ -620,7 +622,7 @@ func confidentialIssues(e *env) {
 	if got := gbTitles(e); !reflect.DeepEqual(got, []string{"shown"}) {
 		e.t.Fatalf("git-board = %v", got)
 	}
-	if _, err := a.Issue(e.ctx, c.ID); !errors.Is(err, forge.ErrConfidential) {
+	if _, err := a.Issue(e.ctx, c.Ref()); !errors.Is(err, forge.ErrConfidential) {
 		e.t.Fatalf("reading a confidential issue: %v, want ErrConfidential", err)
 	}
 	// One that turns confidential keeps its mirror, which no longer syncs.
@@ -666,6 +668,42 @@ func refusalWarnsOnce(e *env) {
 	e.sync(syncer.Options{}, a)
 	if tries.Load() != 2 || len(e.warnings) != 2 {
 		e.t.Fatalf("a later change: tried %d times, %d warnings; want 2", tries.Load(), len(e.warnings))
+	}
+}
+
+// One refused label of a labels write is recorded refused, alone: the
+// write's other add and its remove land, and the refused one is never sent
+// again, nor pulled away.
+func labelRefusedAlone(e *env) {
+	f, a, fi, _ := mirrored(e)
+	f.RefuseLabels("bad")
+	e.do(fi.ID, issue.ChangeLabels(e.me, []string{"ui", "bad"}, []string{"bug"}))
+	e.sync(syncer.Options{}, a)
+	if got := onForge(e.t, f, "F").Labels; !slices.Equal(got, []string{"ui"}) {
+		e.t.Fatalf("forge labels = %v, want ui", got)
+	}
+	if len(e.warnings) != 1 || !strings.Contains(e.warnings[0], `"+bad"`) {
+		e.t.Fatalf("warnings = %q", e.warnings)
+	}
+	if got := e.load(fi.ID).Labels; !slices.Contains(got, "bad") || !slices.Contains(got, "ui") || slices.Contains(got, "bug") {
+		e.t.Fatalf("git-board labels = %v", got)
+	}
+	e.stable(map[*fake.Forge]forge.Forge{f: a})
+	if len(e.warnings) != 1 {
+		e.t.Fatalf("warned again: %q", e.warnings)
+	}
+}
+
+// An issue is read by its id and number together: a number that is
+// another issue's is not found.
+func issueByItsRef(e *env) {
+	f, a, _, _ := mirrored(e)
+	one, other := onForge(e.t, f, "F"), onForge(e.t, f, "L")
+	if got, err := a.Issue(e.ctx, one.Ref()); err != nil || got.Title != "F" {
+		e.t.Fatalf("by its ref: %+v, %v", got, err)
+	}
+	if _, err := a.Issue(e.ctx, forge.Ref{ID: one.ID, Number: other.Number}); !errors.Is(err, forge.ErrNotFound) {
+		e.t.Fatalf("by another's number: %v, want ErrNotFound", err)
 	}
 }
 

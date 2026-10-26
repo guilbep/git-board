@@ -93,6 +93,16 @@ func (s *apiServer) handleSyncApply(w http.ResponseWriter, r *http.Request) {
 	defer done()
 	s.syncMu.Lock()
 	defer s.syncMu.Unlock()
+	if err := s.apply(); err != nil {
+		writeSyncError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, s.status())
+}
+
+// apply syncs the Project's fields, then checks what's left. The caller
+// holds syncMu.
+func (s *apiServer) apply() error {
 	state, err := ghbridge.LoadState(s.b, s.project, s.config(), ghbridge.DefaultItemLimit)
 	if err == nil {
 		_, err = ghbridge.ApplySync(s.b, s.project.Writer, s.b, state.Plan(s.config()), s.config(), state.Meta)
@@ -100,11 +110,7 @@ func (s *apiServer) handleSyncApply(w http.ResponseWriter, r *http.Request) {
 	if err == nil {
 		err = s.check()
 	}
-	if err != nil {
-		writeSyncError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, s.status())
+	return err
 }
 
 // handleSyncResolve is `git-board bridge resolve`: keep "git-board"'s value

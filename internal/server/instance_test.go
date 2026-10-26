@@ -2,7 +2,7 @@ package server
 
 import (
 	"context"
-	"github.com/guilbep/git-board/internal/gitbugio/gitbugiotest"
+	"github.com/guilbep/git-board/internal/store/storetest"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -12,7 +12,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/guilbep/git-board/internal/gitbugio"
+	"github.com/guilbep/git-board/internal/store"
 )
 
 // answering is a server whose /api/repository answers gitDir, as Serve's.
@@ -112,9 +112,9 @@ func TestListenFreeSkipsAPortTakenOnEitherLoopback(t *testing.T) {
 // While a board runs, its file in the repository says where; it goes
 // when the board stops, the repository's lock too.
 func TestServeTellsWhereItRunsUntilItStops(t *testing.T) {
-	dir := gitbugiotest.Repo(t, false)
+	dir := storetest.Repo(t, false)
 	t.Chdir(dir)
-	gitDir, err := gitbugio.FindGitDir(dir)
+	gitDir, err := store.FindGitDir(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -150,7 +150,7 @@ func TestServeTellsWhereItRunsUntilItStops(t *testing.T) {
 	if _, err := os.Stat(instancePath(gitDir)); !os.IsNotExist(err) {
 		t.Errorf("the file stays after the board stopped: %v", err)
 	}
-	b, err := gitbugio.Open(dir)
+	b, err := store.Open(dir)
 	if err != nil {
 		t.Fatalf("the repository stays locked: %v", err)
 	}

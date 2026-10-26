@@ -9,7 +9,8 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/guilbep/git-board/internal/gitbugio/gitbugiotest"
+	"github.com/guilbep/git-board/internal/config"
+	"github.com/guilbep/git-board/internal/store/storetest"
 )
 
 func TestMediaAllowsForgeImagesOnly(t *testing.T) {
@@ -57,7 +58,7 @@ func fakeForge(t *testing.T) (*httptest.Server, *atomic.Int32, *atomic.Value) {
 func TestMediaProxiesAndCaches(t *testing.T) {
 	t.Parallel()
 	forge, hits, auth := fakeForge(t)
-	b := gitbugiotest.New(t)
+	b := storetest.New(t)
 	m := &mediaProxy{storage: b.Storage(), client: forge.Client(), token: func(string) string { return "secret" },
 		allowed: func(*url.URL) bool { return true }}
 	get := func(u string) *httptest.ResponseRecorder {
@@ -86,5 +87,28 @@ func TestMediaProxiesAndCaches(t *testing.T) {
 	m.allowed = func(*url.URL) bool { return false }
 	if rec := get(forge.URL + "/b/other.png"); rec.Code != http.StatusBadRequest {
 		t.Errorf("not a forge image: %d, want 400", rec.Code)
+	}
+}
+
+// With no [forges.<name>] table, the forges found in the git remotes are
+// every reader's: an image on a GitLab a remote names goes through the
+// proxy, and that forge lists among the credentials once its host has a
+// token.
+func TestFoundForgesReachEveryReader(t *testing.T) {
+	t.Parallel()
+	dir := storetest.Repo(t, false)
+	storetest.ForgeOrigin(t, dir, "git@gitlab-ssh.example.com:g/p.git")
+	storetest.Init(t, dir)
+	b := storetest.Open(t, dir)
+	s := &apiServer{cfg: &config.Config{Discover: true}, b: b, me: "guilbep"}
+	if got := s.mediaURL()("https://gitlab.example.com/g/p/uploads/abc/x.png"); !strings.HasPrefix(got, "/api/media?url=") {
+		t.Errorf("an image on the found GitLab: %s, want the proxy", got)
+	}
+	if got := s.mediaURL()("https://gitlab.other.com/g/p/uploads/abc/x.png"); strings.HasPrefix(got, "/api/media") {
+		t.Errorf("an image on a GitLab no remote names: %s", got)
+	}
+	storetest.Token(t, b, "https://gitlab.example.com", "", "secret")
+	if creds := b.Credentials(s.forges()); len(creds) != 1 || creds[0].Host != "gitlab.example.com" || creds[0].ID != "gitlab" {
+		t.Errorf("credentials %+v, want the found GitLab", creds)
 	}
 }

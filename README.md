@@ -1,22 +1,18 @@
 # git-board
 
-Fields, sprints and views over [git-bug](https://github.com/git-bug/git-bug)
-issues — a lightweight, config-as-code replacement for GitHub Projects.
+Issues, fields, sprints and views kept in git, next to your code — a
+lightweight, config-as-code replacement for GitHub Projects, synced with
+GitHub and GitLab.
 
-Field values live as namespaced git-bug labels (`status:ready`, `prio:p1`,
-`sprint:delivery`, ...) instead of a separate Projects database, so they merge
-like any other git-bug operation. Sprints and saved views are just a
-`.git-board.toml` file, reviewed and diffed like the rest of your repo.
-
-Field writes go through git-bug's `cache.RepoCache` API **in-process**
-(`github.com/git-bug/git-bug` imported as a Go library), not the `git-bug`
-CLI binary — so `git-board` needs the target repo to be a normal
-git-bug-initialized repo, but does **not** need `git-bug` installed on PATH.
-
-This is the **M1** milestone (fields, `set` / `get` / `ls` / `view`, the
-filter grammar, and config loading) plus `lint`, `move`, `close`, `sync`,
-`sprint`, numeric-aware `--sort`, and `html` (cron-published static site)
-from **M2** — the last M2 item, so M2 is now fully shipped.
+Each issue is a log of operations under `refs/board/` in the repository:
+it travels with `git push` and `git pull`, works offline, and needs no
+database. Field values are namespaced labels (`status:ready`, `prio:p1`,
+`sprint:delivery`, ...), so they merge like any other operation. Sprints
+and saved views are a `.git-board.toml` file, reviewed and diffed like the
+rest of your repo. The forges are mirrors for the people who work there:
+`git board sync` pulls from them and sends to them, found from `origin`
+with no configuration (docs/guide/forges.md). The core library, its
+storage and sync, is specified in docs/spec/.
 
 ## Install
 
@@ -27,28 +23,24 @@ from a clone:
 git clone git@github.com:guilbep/git-board.git
 cd git-board
 git checkout v0.5.0                 # or stay on main
-make web-build install              # git-board, the web app inside
+make install                        # the web app built, then git-board with it inside
 git-board --help
 ```
 
-`make install` alone builds `git-board` without the web app (its pages
-are embedded at build time from `web/dist`): its web UI is then an empty
-page.
+`make install` builds the web app first: its pages are embedded at build
+time from `web/dist`. `make` alone lists every target.
 
 From a clone, `make install-latest` installs the latest release's binary
 instead, built with the web app. It downloads the archive for this machine
 with `gh` and checks it against `checksums.txt`.
 
-Requires Go 1.26+ (git-bug's module requirement) and Node 22.12+ for the web
-app; `go install` fetches the matching Go toolchain automatically if
-needed. `git` must be on the path (branches' "in dev, squashed" asks
-`git merge-tree`). Install the fork's `git-bug`
-too (see its `INSTALLATION.md`, "The bridge-sync fork"), so that both read
-and write the repository the same way.
+Requires Go 1.26+ and Node 22.12+ for the web app; `go install` fetches
+the matching Go toolchain automatically if needed. `git` must be on the
+path: git-board reads and writes the repository through it.
 
 ### What else to install
 
-git-board runs on `git` alone, git-bug built in. The rest is per feature,
+git-board runs on `git` alone. The rest is per feature,
 and only for that feature:
 
 | For | Install (macOS) |
@@ -102,11 +94,11 @@ only field this project has ever needed it for.
 ## Config: `.git-board.toml`
 
 git-board tracks its own work with git-board: its `.git-board.toml` is at
-the root of this repository, and its issues are git-bug data here
-(`git bug pull origin` fetches them, then run `git board`).
+the root of this repository, and its issues are git-board's, under `refs/board`
+(`git board sync --git` fetches them, then run `git board`).
 
 Optional: without it, every `ns:value` label is a field and `git board`
-works on any git-bug repository. `git board init` writes the default one
+works on any repository. `git board init` writes the default one
 (Settings › Project file offers the same): statuses, priorities, kinds,
 estimates, branch names and four views, the conventions for labels and
 titles in comments. The file adds what labels can't say: the order of a
@@ -125,8 +117,8 @@ a person across every open issue: Needs you, Agents, Waiting on others, To
 send, Since the last retro. From both, Start an agent runs
 [wtx](https://github.com/EPFL-ENAC/wtx) on the issue: a worktree, a tmux
 session and a prompt with its step and gate; Settings › Worktrees writes
-`wtx.toml`. `[cycle]` in [docs/configuration.md](docs/configuration.md#cycle),
-agents in [Worktrees](docs/configuration.md#worktrees).
+`wtx.toml`. `[cycle]` in [docs/guide/configuration.md](docs/guide/configuration.md#cycle),
+agents in [Worktrees](docs/guide/configuration.md#worktrees).
 
 ```toml
 [repos]
@@ -179,14 +171,14 @@ filter = "assignee:@me is:open"
 ```
 
 Every key, with what it does and its default — fields, colors, views,
-filters, sprints, the GitHub Project, attachments: **[docs/configuration.md](docs/configuration.md)**.
+filters, sprints, the GitHub Project, attachments: **[docs/guide/configuration.md](docs/guide/configuration.md)**.
 The settings page shows the same reference next to its editor, at the
 section of the table under the cursor.
 
 ## Usage
 
-Run from inside a git-bug-initialized repo (or a subdirectory of one), next
-to a `.git-board.toml`.
+Run from inside a git repository (or a subdirectory of one), next to a
+`.git-board.toml`.
 
 ```bash
 # this repository's web UI, in the browser (see "Web UI" below)
@@ -224,15 +216,17 @@ git-board lint
 
 # whether a commit's checks are proven: the signed results in
 # refs/notes/ci/*, against the base branch's [cycle.checks] (exit 1 if not;
-# docs/configuration.md, Tests and checks)
+# docs/guide/configuration.md, Tests and checks)
 git-board verify
 git-board verify fix/2518-retry --base origin/main
 
-# git bug pull/push on one or more git-bug repos (defaults to cwd)
+# the whole sync: git pull, the forges, the GitHub Project, git push
+# (defaults to cwd); --check is its dry run, --git keeps to git
+git-board sync --check
 git-board sync
-git-board sync ../co2-calculator ../git-time
+git-board sync --git ../co2-calculator ../git-time
 
-# the project's own numbers, CO2-3075 (docs/configuration.md, Numbers)
+# the project's own numbers, CO2-3075 (docs/guide/configuration.md, Numbers)
 git-board numbers init --prefix CO2 --start 3052
 git-board numbers
 
@@ -270,12 +264,17 @@ errors if neither is set.
 
 ## Syncing (`git-board sync`)
 
-`git-board sync [path...] [--remote origin]` runs `git bug pull` then
-`git bug push` on each path — via the library (`cache.RepoCache.Pull`/
-`Push`), not a `git bug` subprocess, same as everywhere else in git-board.
-Defaults to the current directory if no paths are given; keeps going past
-a path that fails so one broken repo doesn't block the rest, then reports
-every failure together at the end.
+`git-board sync [path...] [--remote origin]` runs the whole sync on each
+path, as Settings › Sync does: a git pull from the remote, the forge sync
+of every forge whose sync is on, the GitHub Project's fields with
+`[github-project]`, then a git push, which numbers the issues origin has.
+A failed pull stops the steps after it; a failed forge or Project step is
+told, and the push still runs; a forge that can't be read is left out,
+told, and the others go on. `--check` runs the same steps writing nothing;
+`--git` syncs with git alone, a pull then a push. Defaults to the current
+directory if no paths are given; keeps going past a path that fails so one
+broken repo doesn't block the rest, then reports every failure together at
+the end. [docs/guide/forges.md](docs/guide/forges.md) says how the forges sync.
 
 Takes explicit local paths, **not** `.git-board.toml`'s `[repos]` list —
 that table holds `"owner/repo"` display names, not filesystem locations,
@@ -286,16 +285,13 @@ Config-driven multi-repo sync is tracked as a follow-up in
 ## Bridging GitHub Projects into labels (`git-board bridge`)
 
 `git-board bridge` maps a GitHub Project (v2)'s custom field values onto the
-`ns:value` labels above, on git-bug issues already bridged in locally via
-`git bug bridge pull` or `git bug bridge sync` (matched by GitHub issue
-URL, not title — a git-bug bug carries the original issue URL in its
-Create-operation metadata when it came from `git-bug`'s own GitHub bridge).
+`ns:value` labels above, on git-board issues a sync already linked to their GitHub issue (matched by
+the GitHub issue's URL, not its title).
 
 It is **read-only against GitHub**: it only runs `gh project item-list`
 (needs `gh` authenticated with at least `read:project` scope) and never
 writes back to the Project or to any GitHub issue. All writes land on the
-local git-bug repo, via the same `ApplyLabelChange`/`ChangeLabels` call
-`git-board set` uses.
+local issues, through the same label change `git-board set` makes.
 
 This is meant to be run **repeatedly**, not once — a GitHub Project's field
 values (status, priority, sprint, assignees, ...) keep changing as work
@@ -353,14 +349,14 @@ just leaves that label untouched, no warning; a non-empty value with no
 matching option prints a warning line and leaves the label untouched too.
 A project item that isn't a GitHub Issue (a PR added straight to the
 Project) is excluded outright and reported as unmatched, same as an Issue
-that hasn't been bridged into git-bug yet.
+no sync has brought into git-board yet.
 
 ### Syncing both ways (`git-board bridge sync`)
 
 `bridge pull` only reads the Project. `bridge sync` keeps status, prio,
 mod, est and sprint in step both ways, the git way: each field is compared
 with the value both sides last agreed on, which git-board records on the
-issue (in git-bug's history, so it travels with the issue).
+issue (in its history, so it travels with the issue).
 
 - Only the Project changed: the label follows.
 - Only git-board changed: the Project follows.
@@ -407,17 +403,17 @@ project = { comite = "Comité Spécialisé", qa = "QA Validation" }
 Views, the `ls`/`tui` filter argument, the web UI's Filter box and ⌘K
 share one syntax:
 `status:ready -prio:p3 assignee:@me is:open "car sharing"`. Every
-qualifier: [Filters in docs/configuration.md](docs/configuration.md#filters).
+qualifier: [Filters in docs/guide/configuration.md](docs/guide/configuration.md#filters).
 
 ## Linting (`git-board lint`)
 
 `git-board lint` is **read-only** — it reports drift, writes nothing, unlike
 everything else in this CLI. It checks every `is:open` issue in the current
-git-bug repo against `.git-board.toml`:
+repository against `.git-board.toml`:
 
 - **double singles** — more than one `ns:*` label for a `[fields.<ns>]` entry
   with `single = true` (e.g. two `status:*` labels). Structurally rare going
-  forward (`fields.Apply`'s swap logic prevents it), but concurrent git-bug
+  forward (`fields.Apply`'s swap logic prevents it), but concurrent
   operations from two people could still produce it.
 - **unknown option values** — a `field:value` label where `value` isn't in
   that field's configured `options` (fields with no configured `options` are
@@ -452,14 +448,14 @@ git-board lint --strict    # exit 1 if anything is found, e.g. in CI
 ### Creating GitHub labels (`git-board lint --create-labels`)
 
 The labels git-board writes (`status:ready`, `prio:p0`, `sprint:delivery`,
-…) live inside git-bug's own label store, not GitHub's — so they don't
+…) live inside git-board's issues, not GitHub's — so they don't
 exist as real, colorable GitHub labels until someone creates them.
 `--create-labels` closes that gap: it diffs every `ns:value` label
 `.git-board.toml`'s `[fields.*]` options and `[[sprints.list]]` entries
-imply against each configured `[repos]` entry's real GitHub labels (via
-`gh label list`), and reports what's missing. Preview only by default,
-same convention as `bridge pull`; `--apply` actually runs `gh label
-create` for each missing one.
+imply against each configured `[repos]` entry's real GitHub labels (read
+through GitHub's API with the forge sync's token), and reports what's
+missing. Preview only by default, same convention as `bridge pull`;
+`--apply` actually creates each missing one.
 
 ```bash
 git-board lint --create-labels           # preview what's missing, writes nothing
@@ -537,10 +533,9 @@ git-board tui "is:open prio:p1"
 | `c` | list | quick-filter by the configured `cat` field's options (`(all)` clears it); coexists with `/` search. The shipped example config doesn't define `[fields.cat]` (Category fills the kind label now — see the bridge field mapping below), so `c` shows "no cat field configured" unless a project opts into one. |
 | `f` | list | structured filter — the same `field:value`/`-field:value`/`is:open`/`title:*glob*` grammar and matcher as `ls`/`view`/the launch argument and the web UI (words look in descriptions and comments too), not the fuzzy `/` search. Empty input + enter clears it. |
 | `s` | list | sort by field, e.g. `prio` (ascending) or `prio desc` — same syntax as `ls --sort`. Persists across a later `f`/`c` filter change. Empty input + enter clears it back to natural order. |
-| `i` | list | preview the GitHub Project bridge (`git-board bridge pull`, dry-run) — matches git-bug's own termui, where `i` is "Pull". Requires `git-board bridge configure` to have been run first. Runs in the background; the TUI stays responsive while it fetches. |
-| `o` | list | apply the plan `i` just previewed (`bridge pull --apply`) — matches git-bug's termui `o`, "Push". Refuses to run before an `i` (no blind apply); the plan is cleared after applying so `o` can't silently re-apply stale data. |
+| `i` | list | preview the GitHub Project bridge (`git-board bridge pull`, dry-run). Requires `git-board bridge configure` to have been run first. Runs in the background; the TUI stays responsive while it fetches. |
+| `o` | list | apply the plan `i` just previewed (`bridge pull --apply`). Refuses to run before an `i` (no blind apply); the plan is cleared after applying so `o` can't silently re-apply stale data. |
 | `e` | detail | edit a field: pick the field, then a value from its configured options, or type free text if it has none (e.g. `assignee`, using the same `+value`/`-value` syntax as `git-board set`) |
-| `g` | detail | view the issue's body and comments — shells out to `git bug bug show <id>` (requires `git-bug` installed as a git subcommand; git-board itself never needs it), suspending the TUI and resuming when it exits |
 | `esc`/`q` | detail, pickers | back |
 | `q`/`ctrl+c` | list | quit |
 
@@ -551,16 +546,11 @@ CLI, because it's the exact same `internal/filter` grammar and code path.
 
 `i`/`o` show a one-line summary (matched/changed/unmatched/field/warning
 counts), not the full per-issue diff — that's what `git-board bridge pull`
-on the CLI is still for. Note these are **not** git-bug's own `i`/`o`
-(which sync git-bug's issue refs with a remote) — same keys, same
-pull/push mnemonic, but bound to git-board's GitHub Project bridge
+on the CLI is still for. Note these are bound to git-board's GitHub Project bridge
 instead, since that's the sync a git-board session actually needs.
 
-git-board's own data model is fields (labels) only — it doesn't store or
-render issue bodies/comments, and doesn't need `git-bug` on PATH for
-anything else (writes go through the library, not the CLI). `g` is the one
-place that changes: it's a deliberate, narrow exception to reuse git-bug's
-own mature viewer instead of building a second one.
+The TUI shows an issue's fields (labels), not its body and comments: the
+web UI (`git board`) shows those.
 
 The detail view renders each label under its configured field name (e.g.
 `Status: ready`, `Assignee: alice, bob`); anything not matching a configured
@@ -573,7 +563,7 @@ repo/network issue) is shown inline and the TUI stays open.
 
 A one-page board, backed by a Go HTTP API in the same module — no Python,
 no separate service. `internal/server` reuses `internal/config`,
-`internal/gitbugio`, `internal/fields` and `internal/board` directly, so
+`internal/store`, `internal/fields` and `internal/board` directly, so
 `ls`/`view`/`set` and the API apply the exact same filter/group and
 field-write logic.
 
@@ -592,10 +582,8 @@ port now serving another repository never opens the wrong board.
 `git board serve` runs the server alone, without a browser, on `--addr`
 (`localhost:8080` by default): what a hosted deployment runs.
 
-While it runs, the server holds the repository (git-bug's lock): another
-`git board` or `git bug` command on it fails with "locked by the process
-pid …"; `git board` adds that this repository's server holds it, and its
-address. Use the web UI there, or stop the server first.
+While it runs, other `git board` commands work on the repository beside
+it: what they change reaches the pages within seconds.
 
 The page has one Filter box, the view's filter until changed; the server
 matches it and counts the sidebar's checkbox filters, one per field (each
@@ -606,10 +594,9 @@ numbers as numbers, missing values last). The filter and sort live in the
 URL (`#/?view=backlog&filter=is:open+status:ready&sort=-est`), so a link
 keeps them.
 
-**Issue management.** git-board is the one interface to the issues; it
-replaces git-bug's own `git bug webui`. The panel (and the full page,
-`#/issues/<git-bug id>`, a link to share; `?issue=<id>` on the board)
-shows an issue's whole history from git-bug: the description and the
+**Issue management.** git-board is the one interface to the issues; The panel (and the full page,
+`#/issues/<id or number>`, a link to share; `?issue=<id>` on the board)
+shows an issue's whole history: the description and the
 comments with their edit history, field changes in words ("set Status to
 qa"), closed/reopened, renames, and per forge what hasn't reached it yet.
 From it: comment (Write/Preview, "Close with comment"), edit any comment
@@ -622,24 +609,24 @@ opens the issue on each forge), and the boxes pick rows for the bulk
 bar: set a field, add an assignee or close them all.
 The side column's **Development** lists the branches naming the issue
 (`fix/2518-…`), ahead and behind the base, in it or not (merged, or squashed in), and **Create
-branch** gives the commands to copy (`[branches]`, docs/configuration.md).
+branch** gives the commands to copy (`[branches]`, docs/guide/configuration.md).
 When origin is on GitHub, a branch there shows its pull request, its checks
 (required first) and approvals, and **Open PR** or **Merge into dev**, done on
 GitHub with your own token.
 The full issue page's **Changes** tab shows the branch's diff, file by file,
 with line comments, replies, resolve, and Comment / Approve / Request
 changes; the sync mirrors them to the open pull request and brings its
-comments back (docs/configuration.md, Branches).
+comments back (docs/guide/configuration.md, Branches).
 The panel opens at the side, resized by dragging its left edge
 (double-click: the default width), or wide over the blurred board with
 2.5rem around it: the expand button or `f` switches; this browser
 remembers both.
-Every write is signed by the repository's git-bug identity: the page asks
-who you are when none is set (`git bug user adopt`). Issue text is
+Every write is signed by who you are in git-board (`board.me` in the
+repository's git config): the page asks when none is set. Issue text is
 rendered on the server (GitHub-flavored Markdown) and cleaned to what
 GitHub allows; forge images go through `/api/media`, which fetches only
 forge image addresses, with your token for private repositories, and
-keeps them in `.git/git-bug/git-board-media`.
+keeps them in `.git/board/git-board-media`.
 
 **Attachments.** Files pasted, dropped or picked in a comment go to an
 S3 bucket a CDN serves — EPFL ENAC's `enacit4r-cdn.epfl.ch` (bucket on
@@ -682,51 +669,39 @@ API. The board reloads (keeping its scroll), an open issue too — unless
 you are writing in it, then it offers the reload and keeps your text.
 
 **Settings** (`#/settings`, the gear in the header), in tabs, each with
-its address (`#/settings/forges`…): first the **Overview**, what git-board
+its address (`#/settings/sync`…): first the **Overview**, what git-board
 is and a card per part saying where it stands; then where your issues go,
-**Remotes**, **Forges** and the **GitHub Project** (below); then this
-board: **Project file**, `.git-board.toml` itself: colored, checked
+the **Sync** (below); then this board: **Project file**, `.git-board.toml` itself: colored, checked
 as you type (the line where it breaks, keys git-board doesn't know),
 "+ View", "+ Sprint" (follows the last one) and "+ Field" to start from,
 a diff to review, and saved without a restart, beside its reference (a
 save is refused when the file changed on disk since the page read it);
 **Numbers**, the project's own (`CO2-3075`), started and run from there
-beside their guidelines (docs/configuration.md, Numbers);
+beside their guidelines (docs/guide/configuration.md, Numbers);
 **Attachments**, and **You**, who you write as and the appearance.
-**Forges** lists the bridges: sync on or off, remove one (its issues
-stay), and **+ Add a forge**, in four steps: the forge, the project, a
-stored or pasted token, and the check the forge makes before anything is
-kept (`#/settings/forges?add=1` opens it). "How forges work" shows
-[docs/forges.md](docs/forges.md).
-
-**Where your issues go** (`#/sync`, the header's Sync button) is three
-ways, side by side, each with its own buttons:
-
-1. **Remotes** (git): issues and people go with git, to any remote. Per
-   remote, how many issues and people a push would send and a pull would
-   receive, as of the last fetch; **Check** fetches and compares
-   (nothing local changes), **Pull** and **Push** are `git bug pull` and
-   `git bug push`. Code still goes with `git push`.
-2. **Forges** (their API): git-bug's forge sync — the fork's `git bug
-   bridge sync` — in the server, which holds the repository (so the
-   command can't run beside it). **Check** is a dry run with its counts
-   per forge both ways; then **Get** brings the forges' changes in only
-   (`git bug bridge pull`), **Send** sends yours only (`git bug bridge
-   push`), **Sync** does both. Each is confirmed with the check's counts
-   (an explicit "I understand" when it creates 50 issues or more on a
-   forge). Send waits when the check found issues on a forge by their
-   git-bug marker: only a pull links them, a send alone would create them
-   again. It waits too when the check found an issue changed both here
-   and on that forge: a send replaces its title, state and comment texts
-   there (labels merge: only your changes go). Get or Sync first.
-   While a run goes on, edits wait and are saved after it.
-3. **GitHub Project** (fields): its write mode, the last check's
-   conflicts, **Check**, and **Pull fields** (**Sync fields** with
-   `write = true`), as on the Conflicts page below.
+**Sync** (`#/settings/sync`, the header's Sync button, which counts what
+waits to go out) is where your issues go, one table with a row per place:
+the git remote, `origin`, with what a push would send and a pull receive
+as of the last fetch; each forge, its kind and project, found in the
+remotes or in `.git-board.toml`, with its sync on or off (a table's can be
+switched and removed); and the GitHub Project, a line under its GitHub
+row, linking the Conflicts page. Each row says its last check, and the
+remotes' URLs that name no forge are listed with why. **Check** runs the
+whole sync writing nothing: a fetch and compare, the forges' dry run, the
+Project's check. **Sync**, after a clean check of the last 15 minutes and
+confirmed with its counts (an explicit "I understand" when it creates 50
+issues or more on a forge), runs it: a git pull, the forges, the
+Project's fields, a git push. A failed pull stops the steps after it,
+any other failure is told and the push still runs, and the report says which, then per forge what came in and went out.
+While it runs, edits wait and are saved after it. **+ Add a forge**, for
+one no remote names, goes in four steps: the forge, the project, a stored
+or pasted token, and the check the forge makes before anything is kept
+(`#/settings/sync?add=1` opens it). "How forges work" shows
+[docs/guide/forges.md](docs/guide/forges.md).
 
 One issue syncs on its own from its panel ("On the forges"): **Send now**
-when it has changes waiting, **Refresh from forges** otherwise — the
-fork's `git bug bridge sync --issue`, a few calls per forge. It dry-runs
+when it has changes waiting, **Refresh from forges** otherwise, a few
+calls per forge. It dry-runs
 first, goes ahead when nothing would change on a forge, else says what it
 would send and asks.
 
@@ -749,7 +724,7 @@ in front of it (simplest), or a token check in `withCORS`/a new middleware
 in `internal/server` (more work, still small).
 
 ```bash
-# run from inside the git-bug repo, next to .git-board.toml
+# run from inside the repository, next to .git-board.toml
 git board                                  # this repository's board, in the browser
 git board serve                            # the server alone, on localhost:8080
 git board serve --addr 127.0.0.1:9090 --me guilbep
@@ -774,7 +749,7 @@ CLI and shouldn't need the (also-unauthenticated) live web UI above. Reuses
 filter/sort/group semantics as `ls`/`view`/the web API — and the TUI's
 `tui.ParseLabels`/`tui.DisplayFieldName` to render known fields under their
 display name (`Status: ready`) instead of raw `status:ready` label text.
-**Read-only** — writes nothing to git-bug, unlike everything else in this
+**Read-only** — writes nothing to the issues, unlike everything else in this
 CLI except `ls`/`view`/`get`/`lint`.
 
 When the project has a `[release]` table, the export also writes
@@ -791,7 +766,7 @@ UI now does too (board columns or grouped tables). The CLI's own
 `render.go` still prints tables only.
 
 ```bash
-# run from inside the git-bug repo, next to .git-board.toml
+# run from inside the repository, next to .git-board.toml
 git-board html                          # writes site/*.html
 git-board html -o /var/www/board        # custom output dir
 
@@ -816,13 +791,13 @@ generation time against `--me`/`GIT_BOARD_ME`, the same single shared
 
 ```
 internal/config/       TOML parsing, sprint resolution — pure, no I/O beyond reading the file.
-internal/gitbugio/     thin wrapper around git-bug's cache.RepoCache API.
+internal/store/        git-board's store over the core (core/): issues, people, releases, forges.
 internal/fields/       ApplyField single/multi-cardinality logic and alias resolution.
 internal/filter/       grammar parser, Matches(issue, conditions, config, me).
 internal/board/        load/sort/group issues — shared by the CLI, the TUI and the web API.
 internal/ghbridge/     `gh project item-list` parsing + field-mapping/diff logic for `bridge pull`.
 internal/lint/          read-only drift checks (labels vs. .git-board.toml) — internal/lint.Run.
-internal/ghlabels/      `gh label list`/`gh label create` — GitHub-side label creation for `lint --create-labels`.
+internal/ghlabels/      GitHub-side labels, through the GitHub forge adapter — for `lint --create-labels` and Settings › Labels.
 internal/server/        the web UI's HTTP API (net/http, no framework) + the embedded web/dist; `git-board serve`.
 cmd/git-board/          main.go + cobra commands, thin rendering (incl. html.go, the static-site generator).
 web/                    Quasar/Vue frontend — one board page, api/board.ts is the only HTTP client.
@@ -849,11 +824,11 @@ go test ./internal/filter/...
 go test ./internal/fields/... -run TestApplySingleCardinalitySwapsLabel -v
 ```
 
-Tests exercise real git-bug repo caches in `t.TempDir()` (via git-bug's own
-`repository.CreateGoGitTestRepo` test helper) rather than a hand-rolled fake
-— it's fast (single-digit milliseconds per test) and the most honest test of
-the real integration. **No `git-bug` binary or network access is needed to
-test** — everything runs against on-disk repo fixtures.
+Tests run against real git repositories in `t.TempDir()` rather than a
+hand-rolled fake, and the forges against fakes (`core/forge/fake`, httptest
+servers). Every test binary is sealed off the network and your tokens
+(`internal/hermetic`): only the live tests, with `BOARD_LIVE=1`, reach a
+forge.
 
 ## Lefthook automation examples
 
@@ -897,7 +872,7 @@ commit-msg:
 
 ## Scope
 
-Shipped: config loading, the in-process git-bug cache adapter, the filter
+Shipped: config loading, the core library (issues in git, sync with GitHub and GitLab), the filter
 grammar (with numeric-aware `--sort`), `set`/`get`/`ls`/`view`, an
 interactive TUI (`git-board tui`), the web UI above, `git-board bridge
 configure`/`bridge pull` (GitHub Project → label bridge, plus `i`/`o`

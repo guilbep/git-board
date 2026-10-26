@@ -54,7 +54,7 @@ export function describeLabels(added: string[], removed: string[]): LabelChange[
 }
 
 // A change git-board holds that a forge doesn't have yet: the next forge
-// sync takes it there (gitbugio's pending / edit_pending).
+// sync takes it there (store's pending / edit_pending).
 export interface WaitingChange {
   event: IssueEvent; // its timeline event
   what: string; // in words: "Comment edited"

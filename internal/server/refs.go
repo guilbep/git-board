@@ -6,7 +6,7 @@ import (
 
 	"github.com/guilbep/git-board/internal/branches"
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/gitbugio"
+	"github.com/guilbep/git-board/internal/store"
 )
 
 // issueRef is an issue an issue field names: its value as written (#12,
@@ -20,7 +20,7 @@ type issueRef struct {
 
 // refersTo: #12 names an issue with that number on one of its forges; a
 // hex prefix of 7 or more, its git-bug id.
-func refersTo(value string, issue gitbugio.Issue) bool {
+func refersTo(value string, issue store.Issue) bool {
 	if n, ok := strings.CutPrefix(value, "#"); ok {
 		for _, f := range issue.Forges {
 			if f.Number == n {
@@ -100,7 +100,7 @@ func (s *apiServer) handleBranches(w http.ResponseWriter, r *http.Request) {
 
 // branchesOf is the branch to create for an issue and the branches naming
 // it, against the base.
-func (s *apiServer) branchesOf(is gitbugio.Issue) (branches.Suggestion, []branches.Branch, error) {
+func (s *apiServer) branchesOf(is store.Issue) (branches.Suggestion, []branches.Branch, error) {
 	sug, err := branches.Suggest(s.b, s.config().Branches, is)
 	if err != nil {
 		return sug, nil, err

@@ -76,11 +76,9 @@ type shared struct {
 	now                               func() time.Time
 	sleep                             func(context.Context, time.Duration) error
 
-	mu      sync.Mutex
-	numbers map[string]int  // issue id -> number, pull requests' too
-	scanned bool            // numbers holds every issue's
-	labels  map[string]bool // the project's labels known to exist, in lower case
-	writes  []time.Time     // the last hour's writes, for pacing
+	mu     sync.Mutex
+	labels map[string]bool // the project's labels known to exist, in lower case
+	writes []time.Time     // the last hour's writes, for pacing
 }
 
 // New is the project through the posting account's token.
@@ -125,7 +123,7 @@ func New(ctx context.Context, o Options) (*Forge, error) {
 		client: &http.Client{Timeout: time.Minute, CheckRedirect: func(*http.Request, []*http.Request) error {
 			return http.ErrUseLastResponse // a moved issue is gone; and Go would turn a PATCH into a GET
 		}},
-		now: time.Now, sleep: sleep, numbers: map[string]int{}, labels: map[string]bool{},
+		now: time.Now, sleep: sleep, labels: map[string]bool{},
 	}
 	return &Forge{s: s, token: token}, nil
 }
@@ -150,6 +148,21 @@ func (f *Forge) Me(ctx context.Context) (forge.Account, error) {
 		f.me = &a
 	}
 	return *f.me, nil
+}
+
+// FullName is the repository's owner/repo as GitHub spells it: a URL may
+// name it in another case.
+func (f *Forge) FullName(ctx context.Context) (string, error) {
+	var r struct {
+		FullName string `json:"full_name"`
+	}
+	if err := f.call(ctx, http.MethodGet, f.s.repo, nil, &r); err != nil {
+		return "", err
+	}
+	if r.FullName == "" {
+		return "", fmt.Errorf("github: %s has no full_name", f.s.project)
+	}
+	return r.FullName, nil
 }
 
 // Visibility is the repository's: internal, on an Enterprise, is private
@@ -213,14 +226,17 @@ func (f *Forge) Issues(ctx context.Context, since int64) ([]forge.Issue, error) 
 	return f.read(ctx, gis)
 }
 
-func (f *Forge) Issue(ctx context.Context, id string) (forge.Issue, error) {
-	n, err := f.number(ctx, id)
+func (f *Forge) Issue(ctx context.Context, issue forge.Ref) (forge.Issue, error) {
+	n, err := number(issue)
 	if err != nil {
 		return forge.Issue{}, err
 	}
 	var gi ghIssue
 	if err := f.call(ctx, http.MethodGet, f.s.repo+"/issues/"+n, nil, &gi); err != nil {
 		return forge.Issue{}, err
+	}
+	if id(gi.ID) != issue.ID {
+		return forge.Issue{}, fmt.Errorf("github: #%s is another issue than %s: %w", n, issue.ID, forge.ErrNotFound)
 	}
 	if gi.PullRequest != nil {
 		return forge.Issue{}, fmt.Errorf("github: #%s is a pull request: %w", n, forge.ErrConfidential)
@@ -237,14 +253,11 @@ func (f *Forge) CreateIssue(ctx context.Context, title, body string) (forge.Issu
 	if err := f.call(ctx, http.MethodPost, f.s.repo+"/issues", map[string]string{"title": title, "body": body}, &gi); err != nil {
 		return forge.Issue{}, err
 	}
-	f.s.mu.Lock()
-	f.s.numbers[id(gi.ID)] = gi.Number
-	f.s.mu.Unlock()
 	return gi.issue(nil, ghTimes{}), nil
 }
 
-func (f *Forge) CreateComment(ctx context.Context, issueID, body string) (forge.Comment, error) {
-	n, err := f.number(ctx, issueID)
+func (f *Forge) CreateComment(ctx context.Context, issue forge.Ref, body string) (forge.Comment, error) {
+	n, err := number(issue)
 	if err != nil {
 		return forge.Comment{}, err
 	}
@@ -256,31 +269,32 @@ func (f *Forge) CreateComment(ctx context.Context, issueID, body string) (forge.
 }
 
 // EditComment needs only the comment's id: GitHub names comments alone.
-func (f *Forge) EditComment(ctx context.Context, _, commentID, body string) error {
+func (f *Forge) EditComment(ctx context.Context, _ forge.Ref, commentID, body string) error {
 	return f.call(ctx, http.MethodPatch, f.s.repo+"/issues/comments/"+url.PathEscape(commentID), map[string]string{"body": body}, nil)
 }
 
-func (f *Forge) SetTitle(ctx context.Context, issueID, title string) error {
-	return f.patch(ctx, issueID, map[string]any{"title": title}, nil)
+func (f *Forge) SetTitle(ctx context.Context, issue forge.Ref, title string) error {
+	return f.patch(ctx, issue, map[string]any{"title": title}, nil)
 }
 
-func (f *Forge) SetBody(ctx context.Context, issueID, body string) error {
-	return f.patch(ctx, issueID, map[string]any{"body": body}, nil)
+func (f *Forge) SetBody(ctx context.Context, issue forge.Ref, body string) error {
+	return f.patch(ctx, issue, map[string]any{"body": body}, nil)
 }
 
-func (f *Forge) SetStatus(ctx context.Context, issueID, status string) error {
-	return f.patch(ctx, issueID, map[string]any{"state": status}, nil)
+func (f *Forge) SetStatus(ctx context.Context, issue forge.Ref, status string) error {
+	return f.patch(ctx, issue, map[string]any{"state": status}, nil)
 }
 
 // ChangeLabels makes each added label the project lacks, adds them in one
 // write, then removes the others one by one. An added label GitHub leaves
 // out, as it does without push access, is refused.
-func (f *Forge) ChangeLabels(ctx context.Context, issueID string, add, remove []string) error {
-	n, err := f.number(ctx, issueID)
+func (f *Forge) ChangeLabels(ctx context.Context, issue forge.Ref, add, remove []string) error {
+	n, err := number(issue)
 	if err != nil {
 		return err
 	}
 	path := f.s.repo + "/issues/" + n + "/labels"
+	var refused []string // left out by GitHub: the others still go
 	if len(add) > 0 {
 		for _, l := range add {
 			if err := f.label(ctx, l); err != nil {
@@ -293,28 +307,33 @@ func (f *Forge) ChangeLabels(ctx context.Context, issueID string, add, remove []
 		}
 		for _, l := range add {
 			if !slices.ContainsFunc(got, func(g label) bool { return strings.EqualFold(g.Name, l) }) {
-				return fmt.Errorf("github: #%s: label %q left out: %w", n, l, forge.ErrRefused)
+				refused = append(refused, l)
 			}
 		}
 	}
 	for _, l := range remove {
 		// not found: the issue doesn't have it, already removed
-		if err := f.call(ctx, http.MethodDelete, path+"/"+url.PathEscape(l), nil, nil); err != nil && !errors.Is(err, forge.ErrNotFound) {
+		if err := f.call(ctx, http.MethodDelete, path+"/"+url.PathEscape(l), nil, nil); errors.Is(err, forge.ErrRefused) {
+			refused = append(refused, l)
+		} else if err != nil && !errors.Is(err, forge.ErrNotFound) {
 			return err
 		}
+	}
+	if len(refused) > 0 {
+		return &forge.Refused{Values: refused, Why: "github: #" + n + " left them out"}
 	}
 	return nil
 }
 
 // SetAssignees sends the logins, as GitHub takes, and reads back what it
 // kept: it leaves out an account it won't assign, as one without access.
-func (f *Forge) SetAssignees(ctx context.Context, issueID string, users []forge.Account) ([]forge.Account, error) {
+func (f *Forge) SetAssignees(ctx context.Context, issue forge.Ref, users []forge.Account) ([]forge.Account, error) {
 	logins := []string{}
 	for _, u := range users {
 		logins = append(logins, u.Login)
 	}
 	var gi ghIssue
-	if err := f.patch(ctx, issueID, map[string]any{"assignees": logins}, &gi); err != nil {
+	if err := f.patch(ctx, issue, map[string]any{"assignees": logins}, &gi); err != nil {
 		return nil, err
 	}
 	var kept []forge.Account
@@ -324,8 +343,8 @@ func (f *Forge) SetAssignees(ctx context.Context, issueID string, users []forge.
 	return kept, nil
 }
 
-func (f *Forge) patch(ctx context.Context, issueID string, fields map[string]any, out any) error {
-	n, err := f.number(ctx, issueID)
+func (f *Forge) patch(ctx context.Context, issue forge.Ref, fields map[string]any, out any) error {
+	n, err := number(issue)
 	if err != nil {
 		return err
 	}
@@ -357,42 +376,101 @@ func (f *Forge) label(ctx context.Context, name string) error {
 	return nil
 }
 
-// number is an issue's number, which REST names issues by. An id not seen
-// yet is looked for once, in the listing of every issue.
-func (f *Forge) number(ctx context.Context, id string) (string, error) {
-	f.s.mu.Lock()
-	n, ok := f.s.numbers[id]
-	scanned := f.s.scanned
-	f.s.mu.Unlock()
-	if !ok && !scanned {
-		// ponytail: one listing of every issue per adapter finds the ids of
-		// earlier runs; forge.Forge passing the link's number would save it
-		if _, err := f.issues(ctx, "/issues?state=all"); err != nil {
-			return "", err
-		}
-		f.s.mu.Lock()
-		f.s.scanned = true
-		n, ok = f.s.numbers[id]
-		f.s.mu.Unlock()
-	}
-	if !ok {
-		return "", fmt.Errorf("github: issue %s: %w", id, forge.ErrNotFound)
-	}
-	return strconv.Itoa(n), nil
+// Label is one of the repository's labels, its color hex without #, as
+// GitHub has it.
+type Label struct {
+	Name        string `json:"name"`
+	Color       string `json:"color"`
+	Description string `json:"description"`
 }
 
-// issues reads every page of an issue listing, each issue once, and
-// remembers their numbers. Pull requests are left out.
+// Labels lists the repository's labels.
+func (f *Forge) Labels(ctx context.Context) ([]Label, error) {
+	type ghLabel struct {
+		ID int64 `json:"id"`
+		Label
+	}
+	all, err := pages(ctx, f, f.s.repo+"/labels", func(l ghLabel) int64 { return l.ID })
+	out := make([]Label, len(all))
+	for i, l := range all {
+		out[i] = l.Label
+	}
+	return out, err
+}
+
+// SetLabel creates the label, or with update edits the one of its name
+// (GitHub's names have no case): its color and description.
+func (f *Forge) SetLabel(ctx context.Context, l Label, update bool) error {
+	in := map[string]string{"name": l.Name, "description": l.Description}
+	if l.Color != "" {
+		in["color"] = l.Color
+	}
+	if update {
+		delete(in, "name")
+		return f.call(ctx, http.MethodPatch, f.s.repo+"/labels/"+url.PathEscape(l.Name), in, nil)
+	}
+	return f.call(ctx, http.MethodPost, f.s.repo+"/labels", in, nil)
+}
+
+// DeleteLabel removes the label from the repository, and so from its
+// issues.
+func (f *Forge) DeleteLabel(ctx context.Context, name string) error {
+	return f.call(ctx, http.MethodDelete, f.s.repo+"/labels/"+url.PathEscape(name), nil, nil)
+}
+
+const labelCountQuery = `query($owner: String!, $name: String!, $label: String!) {
+  repository(owner: $owner, name: $name) {
+    label(name: $label) { issues { totalCount } pullRequests { totalCount } }
+  }
+}`
+
+// LabelCount is how many of the repository's issues and pull requests
+// carry the label.
+func (f *Forge) LabelCount(ctx context.Context, name string) (int, error) {
+	owner, repo, _ := strings.Cut(f.s.project, "/")
+	var r struct {
+		Data struct {
+			Repository struct {
+				Label *struct {
+					Issues, PullRequests struct {
+						TotalCount int `json:"totalCount"`
+					}
+				} `json:"label"`
+			} `json:"repository"`
+		} `json:"data"`
+		Errors []struct {
+			Message string `json:"message"`
+		} `json:"errors"`
+	}
+	in := map[string]any{"query": labelCountQuery, "variables": map[string]string{"owner": owner, "name": repo, "label": name}}
+	if err := f.call(ctx, http.MethodPost, f.s.graphql, in, &r); err != nil {
+		return 0, err
+	}
+	if len(r.Errors) > 0 {
+		return 0, fmt.Errorf("github: graphql: %s", r.Errors[0].Message)
+	}
+	l := r.Data.Repository.Label
+	if l == nil {
+		return 0, fmt.Errorf("%w: label %s", forge.ErrNotFound, name)
+	}
+	return l.Issues.TotalCount + l.PullRequests.TotalCount, nil
+}
+
+// number is the issue's number, which REST names issues by.
+func number(issue forge.Ref) (string, error) {
+	if _, err := strconv.Atoi(issue.Number); err != nil {
+		return "", fmt.Errorf("github: issue %s: number %q: %w", issue.ID, issue.Number, forge.ErrNotFound)
+	}
+	return issue.Number, nil
+}
+
+// issues reads every page of an issue listing, each issue once. Pull
+// requests are left out.
 func (f *Forge) issues(ctx context.Context, query string) ([]ghIssue, error) {
 	all, err := pages(ctx, f, f.s.repo+query, func(gi ghIssue) int64 { return gi.ID })
 	if err != nil {
 		return nil, err
 	}
-	f.s.mu.Lock()
-	for _, gi := range all {
-		f.s.numbers[id(gi.ID)] = gi.Number
-	}
-	f.s.mu.Unlock()
 	return slices.DeleteFunc(all, func(gi ghIssue) bool { return gi.PullRequest != nil }), nil
 }
 

@@ -35,7 +35,6 @@ func forgeServer(t *testing.T, forges ...config.Forge) (*httptest.Server, *apiSe
 }
 
 type settingsBody struct {
-	Bridges []bridge `json:"bridges"`
 	Uploads struct {
 		Enabled bool `json:"enabled"`
 	} `json:"uploads"`
@@ -56,12 +55,16 @@ func TestSettingsListAndToggleBridgeSync(t *testing.T) {
 	if code := call(t, "GET", ts.URL+"/api/settings", nil, &got); code != http.StatusOK {
 		t.Fatalf("GET: %d", code)
 	}
-	want := []bridge{
-		{Name: "gh", Target: "github", Where: "https://github.com/guilbep/git-bug-sync-test", Sync: true, CanSync: true},
-		{Name: "gl", Target: "gitlab", Where: "https://gitlab.epfl.ch/projects/42400", CanSync: true},
+	var whole wholeStatus
+	if code := call(t, "GET", ts.URL+"/api/sync/all", nil, &whole); code != http.StatusOK {
+		t.Fatalf("GET: %d", code)
 	}
-	if !reflect.DeepEqual(got.Bridges, want) {
-		t.Errorf("bridges %+v\nwant %+v", got.Bridges, want)
+	want := []bridge{
+		{Name: "gh", Target: "github", Project: "guilbep/git-bug-sync-test", Where: "https://github.com/guilbep/git-bug-sync-test", Sync: true},
+		{Name: "gl", Target: "gitlab", Project: "42400", Where: "https://gitlab.epfl.ch/projects/42400"},
+	}
+	if !reflect.DeepEqual(whole.Forges, want) || whole.Remote != nil || whole.Project.Project != "guilbep/1" {
+		t.Errorf("forges %+v\nwant %+v\n%+v", whole.Forges, want, whole)
 	}
 	if got.Uploads.Enabled || got.GithubProject.Number != 1 || got.ConfigPath == "" {
 		t.Errorf("settings %+v", got)

@@ -1,35 +1,39 @@
 package main
 
 import (
+	"context"
 	"strings"
 	"testing"
 
-	"github.com/guilbep/git-board/internal/gitbugio"
-	"github.com/guilbep/git-board/internal/gitbugio/gitbugiotest"
+	"github.com/guilbep/git-board/core/forge"
+	"github.com/guilbep/git-board/core/forge/fake"
+	"github.com/guilbep/git-board/internal/config"
+	"github.com/guilbep/git-board/internal/store"
+	"github.com/guilbep/git-board/internal/store/storetest"
 )
 
 // twoReposWithRemote builds two real repositories on disk plus a bare
 // "origin" both point at, each with someone to write as: runSync and
-// syncOne open real filesystem paths (gitbugio.Open).
+// syncOne open real filesystem paths (store.Open).
 func twoReposWithRemote(t *testing.T) (pathA, pathB string) {
 	t.Helper()
-	remote := gitbugiotest.Repo(t, true)
-	pathA, pathB = gitbugiotest.Repo(t, false), gitbugiotest.Repo(t, false)
+	remote := storetest.Repo(t, true)
+	pathA, pathB = storetest.Repo(t, false), storetest.Repo(t, false)
 	for _, path := range []string{pathA, pathB} {
-		gitbugiotest.Git(t, path, "remote", "add", "origin", remote)
-		gitbugiotest.Init(t, path)
+		storetest.Git(t, path, "remote", "add", "origin", remote)
+		storetest.Init(t, path)
 	}
 	return pathA, pathB
 }
 
 func seedBug(t *testing.T, path, title string) {
 	t.Helper()
-	gitbugiotest.NewIssue(t, gitbugiotest.Open(t, path), title)
+	storetest.NewIssue(t, storetest.Open(t, path), title)
 }
 
 func bugTitles(t *testing.T, path string) []string {
 	t.Helper()
-	b, err := gitbugio.Open(path)
+	b, err := store.Open(path)
 	if err != nil {
 		t.Fatalf("open %s: %v", path, err)
 	}
@@ -50,9 +54,9 @@ func TestSyncPushesThenPullsBetweenTwoRepos(t *testing.T) {
 	pathA, pathB := twoReposWithRemote(t)
 	seedBug(t, pathA, "seen only in A until sync")
 
-	// A pushes it to the shared remote.
-	out, err := execute(t, []string{"sync", pathA})
-	if err != nil {
+	// A pushes it to the shared remote, with git alone.
+	out, err := execute(t, []string{"sync", "--git", pathA})
+	if err != nil || strings.Contains(out, "forge") {
 		t.Fatalf("sync A: %v\noutput:\n%s", err, out)
 	}
 
@@ -62,12 +66,60 @@ func TestSyncPushesThenPullsBetweenTwoRepos(t *testing.T) {
 	}
 
 	// B pulls it from the shared remote.
-	out, err = execute(t, []string{"sync", pathB})
+	out, err = execute(t, []string{"sync", "--git", pathB})
 	if err != nil {
 		t.Fatalf("sync B: %v\noutput:\n%s", err, out)
 	}
 	if got := bugTitles(t, pathB); !containsLabel(got, "seen only in A until sync") {
 		t.Errorf("B after sync = %v, want the bug pushed from A", got)
+	}
+}
+
+// The whole sync: git pull, the forges found in the remotes, git push;
+// its check writes nothing, here, on origin or on the forge. Serial: it
+// swaps the forges' opener and reader.
+func TestSyncTheWhole(t *testing.T) {
+	pathA, pathB := twoReposWithRemote(t)
+	storetest.ForgeOrigin(t, pathA, "https://github.com/o/r.git")
+	f := fake.New("github.com/o/r")
+	f.Add(forge.Issue{Title: "From GitHub", Body: "b", Author: forge.Account{ID: "7", Login: "alice"}})
+	stubForges(t, f)
+	storetest.GitHub(t, map[string]string{"o/r": "o/r"})
+
+	out, err := execute(t, []string{"sync", "--check", pathA})
+	if err != nil || !strings.Contains(out, "forge github, found in the remotes: github.com o/r\n") ||
+		!strings.Contains(out, "git fetch from origin...") || !strings.Contains(out, "github: would pull a new issue") ||
+		!strings.Contains(out, "git push to origin: skipped") || !strings.Contains(out, "checked: nothing written") {
+		t.Fatalf("check: %v\n%s", err, out)
+	}
+	if got := bugTitles(t, pathA); len(got) != 0 || len(f.Writes()) != 0 {
+		t.Fatalf("the check wrote %v here, %v on the forge", got, f.Writes())
+	}
+
+	out, err = execute(t, []string{"sync", pathA})
+	if err != nil || !strings.Contains(out, "git pull from origin...") || !strings.Contains(out, "github: pull a new issue") ||
+		!strings.Contains(out, "the GitHub Project: skipped, no [github-project]") || !strings.Contains(out, "git push to origin...") {
+		t.Fatalf("sync: %v\n%s", err, out)
+	}
+	if out, err := execute(t, []string{"sync", "--git", pathB}); err != nil {
+		t.Fatalf("sync B: %v\n%s", err, out)
+	}
+	if got := bugTitles(t, pathB); !containsLabel(got, "From GitHub") {
+		t.Errorf("origin after the sync: %v, want the forge's issue", got)
+	}
+}
+
+// stubForges opens f for every forge a run opens.
+func stubForges(t *testing.T, f *fake.Forge) {
+	t.Helper()
+	saved := openForges
+	t.Cleanup(func() { openForges = saved })
+	openForges = func(_ context.Context, fs []config.Forge) ([]store.NamedForge, error) {
+		var out []store.NamedForge
+		for _, c := range fs {
+			out = append(out, store.NamedForge{Name: c.Name, Forge: f})
+		}
+		return out, nil
 	}
 }
 
@@ -103,8 +155,9 @@ func TestSyncDefaultsToCwdWithNoPaths(t *testing.T) {
 
 	// No remote configured on this fixture -- pull/push against "origin"
 	// should fail cleanly (an error, not a panic), proving sync actually
-	// tried the current directory rather than silently doing nothing.
-	_, err := execute(t, []string{"sync"})
+	// tried the current directory rather than silently doing nothing. The
+	// whole sync skips the git steps instead.
+	_, err := execute(t, []string{"sync", "--git"})
 	if err == nil {
 		t.Fatal("expected an error (no origin remote configured), got nil")
 	}
@@ -140,7 +193,7 @@ func TestSyncContinuesPastOneFailingPath(t *testing.T) {
 func TestSyncNumbers(t *testing.T) {
 	t.Parallel()
 	pathA, pathB := twoReposWithRemote(t)
-	a, err := gitbugio.Open(pathA)
+	a, err := store.Open(pathA)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -149,12 +202,12 @@ func TestSyncNumbers(t *testing.T) {
 	}
 	a.Close()
 	seedBug(t, pathB, "Made before B knew")
-	var out strings.Builder
-	if err := runSync(&out, []string{pathB}, "origin"); err != nil {
-		t.Fatalf("sync: %v\n%s", err, out.String())
+	out, err := execute(t, []string{"sync", "--git", pathB})
+	if err != nil {
+		t.Fatalf("sync: %v\n%s", err, out)
 	}
-	if !strings.Contains(out.String(), "numbered 1 issue") {
-		t.Errorf("sync said:\n%s", out.String())
+	if !strings.Contains(out, "numbered 1 issue") {
+		t.Errorf("sync said:\n%s", out)
 	}
 }
 
@@ -163,9 +216,30 @@ func TestSyncNumbers(t *testing.T) {
 func TestSyncWaitsForTheSwitch(t *testing.T) {
 	t.Parallel()
 	path, _ := twoReposWithRemote(t)
-	gitbugiotest.Git(t, path, "update-ref", "refs/bugs/"+strings.Repeat("a", 64), strings.TrimSpace(gitbugiotest.Git(t, path, "hash-object", "-w", "--stdin")))
+	storetest.Git(t, path, "update-ref", "refs/bugs/"+strings.Repeat("a", 64), strings.TrimSpace(storetest.Git(t, path, "hash-object", "-w", "--stdin")))
 	out, err := execute(t, []string{"sync", path})
 	if err == nil || !strings.Contains(out, "run git-board switch") {
 		t.Fatalf("err = %v\n%s", err, out)
+	}
+}
+
+// A plain sync creates nothing on a forge it never synced with: it says
+// how many wait, and --allow-create makes them.
+func TestSyncCreatesWithConsent(t *testing.T) {
+	pathA, _ := twoReposWithRemote(t)
+	for _, title := range []string{"internal: rotate the keys", "b", "c"} {
+		seedBug(t, pathA, title)
+	}
+	storetest.ForgeOrigin(t, pathA, "https://github.com/o/r.git")
+	f := fake.New("github.com/o/r")
+	stubForges(t, f)
+	storetest.GitHub(t, map[string]string{"o/r": "o/r"})
+
+	out, err := execute(t, []string{"sync", pathA})
+	if err != nil || len(f.All()) != 0 || !strings.Contains(out, "3 issues not created: they need consent, the first sync with this forge (--allow-create)") {
+		t.Fatalf("plain sync: %v, the forge holds %d\n%s", err, len(f.All()), out)
+	}
+	if out, err := execute(t, []string{"sync", "--allow-create", pathA}); err != nil || len(f.All()) != 3 {
+		t.Fatalf("with consent: %v, the forge holds %d\n%s", err, len(f.All()), out)
 	}
 }

@@ -2,14 +2,18 @@ package github
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -69,13 +73,13 @@ func TestListing(t *testing.T) {
 
 	// A fresh adapter finds an id of an earlier run by listing every issue.
 	b := h.adapter(t)
-	if is, err := b.Issue(ctx, many.ID); err != nil || is.Number != many.Number || len(is.Comments) != 150 {
+	if is, err := b.Issue(ctx, many.Ref()); err != nil || is.Number != many.Number || len(is.Comments) != 150 {
 		t.Fatalf("Issue(many) = %s, %d comments, %v", is.Number, len(is.Comments), err)
 	}
-	if _, err := b.Issue(ctx, pr.ID); !errors.Is(err, forge.ErrConfidential) {
+	if _, err := b.Issue(ctx, pr.Ref()); !errors.Is(err, forge.ErrConfidential) {
 		t.Fatalf("a pull request: %v, want ErrConfidential", err)
 	}
-	if _, err := b.Issue(ctx, "424242"); !errors.Is(err, forge.ErrNotFound) {
+	if _, err := b.Issue(ctx, forge.Ref{ID: "424242", Number: "424242"}); !errors.Is(err, forge.ErrNotFound) {
 		t.Fatalf("no such id: %v, want ErrNotFound", err)
 	}
 }
@@ -149,7 +153,7 @@ func TestRetries(t *testing.T) {
 	h.fault("GET "+path, answer(502, nil, "Bad Gateway"),
 		answer(403, nil, "You have exceeded a secondary rate limit"),
 		answer(429, map[string]string{"Retry-After": "7"}, ""))
-	if _, err := a.Issue(ctx, is.ID); err != nil {
+	if _, err := a.Issue(ctx, is.Ref()); err != nil {
 		t.Fatal(err)
 	}
 	if got, want := sleeps(), []time.Duration{time.Second, time.Minute, 7 * time.Second}; !slices.Equal(got, want) || hits("GET "+path) != 4 {
@@ -158,7 +162,7 @@ func TestRetries(t *testing.T) {
 
 	reset := strconv.FormatInt(clock.Unix()+30, 10)
 	h.fault("PATCH "+path, answer(403, map[string]string{"X-RateLimit-Remaining": "0", "X-RateLimit-Reset": reset}, "API rate limit exceeded"))
-	if err := a.SetTitle(ctx, is.ID, "T2"); err != nil {
+	if err := a.SetTitle(ctx, is.Ref(), "T2"); err != nil {
 		t.Fatal(err)
 	}
 	if got := sleeps(); !slices.Equal(got, []time.Duration{31 * time.Second}) || hits("PATCH "+path) != 2 {
@@ -169,25 +173,104 @@ func TestRetries(t *testing.T) {
 	}
 
 	h.fault("POST "+path+"/comments", answer(502, nil, "Bad Gateway"))
-	if _, err := a.CreateComment(ctx, is.ID, "hi"); err == nil || errors.Is(err, forge.ErrRefused) || hits("POST "+path+"/comments") != 1 {
+	if _, err := a.CreateComment(ctx, is.Ref(), "hi"); err == nil || errors.Is(err, forge.ErrRefused) || hits("POST "+path+"/comments") != 1 {
 		t.Fatalf("a write on a 502: %v, want one try and an error", err)
 	}
 
 	for _, code := range []int{403, 422} {
 		h.fault("PATCH "+path, answer(code, nil, "Must have admin rights"))
-		if err := a.SetTitle(ctx, is.ID, "T3"); !errors.Is(err, forge.ErrRefused) || hits("PATCH "+path) != 1 {
+		if err := a.SetTitle(ctx, is.Ref(), "T3"); !errors.Is(err, forge.ErrRefused) || hits("PATCH "+path) != 1 {
 			t.Fatalf("%d: %v, want one try, refused", code, err)
 		}
 	}
 	h.fault("PATCH "+path, answer(410, nil, "This issue was deleted"))
-	if err := a.SetTitle(ctx, is.ID, "T3"); !errors.Is(err, forge.ErrNotFound) {
+	if err := a.SetTitle(ctx, is.Ref(), "T3"); !errors.Is(err, forge.ErrNotFound) {
 		t.Fatalf("410: %v, want not found", err)
 	}
 
 	limited := answer(429, map[string]string{"Retry-After": "1"}, "")
 	h.fault("GET "+path, limited, limited, limited, limited)
-	if _, err := a.Issue(ctx, is.ID); err == nil || errors.Is(err, forge.ErrRefused) || hits("GET "+path) != 4 {
+	if _, err := a.Issue(ctx, is.Ref()); err == nil || errors.Is(err, forge.ErrRefused) || hits("GET "+path) != 4 {
 		t.Fatalf("still limited: %v, want an error after three retries", err)
+	}
+}
+
+// A label GitHub leaves out is refused alone: the other adds and the
+// removes still go.
+func TestLabelRefusedAlone(t *testing.T) {
+	t.Parallel()
+	ctx := t.Context()
+	f := fake.New("example.com/p")
+	is := f.Add(forge.Issue{Author: ann, Title: "T", Labels: []string{"old"}})
+	a := newHub(t, f).adapter(t)
+	f.RefuseLabels("bad")
+	err := a.ChangeLabels(ctx, is.Ref(), []string{"bad", "ui"}, []string{"old"})
+	var some *forge.Refused
+	if !errors.As(err, &some) || !slices.Equal(some.Values, []string{"bad"}) || !errors.Is(err, forge.ErrRefused) {
+		t.Fatalf("err = %v, want bad refused", err)
+	}
+	if got, _ := f.Get(is.Number); !slices.Equal(got.Labels, []string{"ui"}) {
+		t.Fatalf("labels = %v, want ui", got.Labels)
+	}
+}
+
+// The repository's labels: listed past a page, created, edited by name,
+// deleted, and counted with GraphQL.
+func TestLabels(t *testing.T) {
+	t.Parallel()
+	ctx := t.Context()
+	var mu sync.Mutex
+	var calls []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		mu.Lock()
+		calls = append(calls, r.Method+" "+r.URL.Path+" "+strings.TrimSpace(string(body)))
+		mu.Unlock()
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/repos/o/r/labels":
+			var page []map[string]any
+			if r.URL.Query().Get("page") == "1" {
+				for i := range perPage {
+					page = append(page, map[string]any{"id": i, "name": fmt.Sprint("l", i), "color": "ededed"})
+				}
+			} else {
+				page = []map[string]any{{"id": 1000, "name": "bug", "color": "d73a4a", "description": "Something isn't working"}}
+			}
+			_ = json.NewEncoder(w).Encode(page)
+		case r.URL.Path == "/graphql":
+			_, _ = io.WriteString(w, `{"data":{"repository":{"label":{"issues":{"totalCount":2},"pullRequests":{"totalCount":1}}}}}`)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	a, err := New(ctx, Options{Project: "o/r", API: srv.URL, Token: func(context.Context, forge.Account) (string, error) { return "t", nil }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ls, err := a.Labels(ctx)
+	if err != nil || len(ls) != perPage+1 || ls[perPage] != (Label{Name: "bug", Color: "d73a4a", Description: "Something isn't working"}) {
+		t.Fatalf("labels %d, last %+v, %v", len(ls), ls[len(ls)-1], err)
+	}
+	if err := a.SetLabel(ctx, Label{Name: "status:ready", Color: "00897f"}, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.SetLabel(ctx, Label{Name: "kind:feat", Color: "0e8a16", Description: "New"}, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.DeleteLabel(ctx, "wontfix"); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := a.LabelCount(ctx, "wontfix"); n != 3 || err != nil {
+		t.Fatalf("count %d, %v", n, err)
+	}
+	want := []string{
+		`POST /repos/o/r/labels {"color":"00897f","description":"","name":"status:ready"}`,
+		`PATCH /repos/o/r/labels/kind:feat {"color":"0e8a16","description":"New"}`,
+		`DELETE /repos/o/r/labels/wontfix `,
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if got := calls[2:5]; !slices.Equal(got, want) {
+		t.Errorf("writes\n%q\nwant\n%q", got, want)
 	}
 }
 

@@ -93,7 +93,7 @@ func TestLineEndings(t *testing.T) {
 	f := fake.New("example.com/p")
 	is := f.Add(forge.Issue{Author: ann, Title: "T", Body: "a\r\nb\r\n", Comments: []forge.Comment{{Author: ann, Body: "c\r\n\r\nd"}}})
 	_, a := serve(t, f, "p")
-	got, err := a.Issue(t.Context(), is.ID)
+	got, err := a.Issue(t.Context(), is.Ref())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -123,7 +123,7 @@ func TestSystemAndInternalNotes(t *testing.T) {
 			note(55, 4500, "between us, before 15.0", "confidential"),
 		}
 	})
-	got, err := a.Issue(t.Context(), is.ID)
+	got, err := a.Issue(t.Context(), is.Ref())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -135,7 +135,7 @@ func TestSystemAndInternalNotes(t *testing.T) {
 	}
 	// A state event tells the status's change too.
 	f.Edit(is.Number, func(is *forge.Issue) { is.Status = "closed" })
-	if got, _ = a.Issue(t.Context(), is.ID); got.Changed["status"] < time.Now().Unix()-60 {
+	if got, _ = a.Issue(t.Context(), is.Ref()); got.Changed["status"] < time.Now().Unix()-60 {
 		t.Fatalf("changed = %v", got.Changed)
 	}
 }
@@ -149,7 +149,7 @@ func TestConfidential(t *testing.T) {
 	f.SetConfidential(hidden.Number, true)
 	shown := f.Add(forge.Issue{Author: ann, Title: "shown"})
 	_, a := serve(t, f, "p")
-	if _, err := a.Issue(t.Context(), hidden.ID); !errors.Is(err, forge.ErrConfidential) {
+	if _, err := a.Issue(t.Context(), hidden.Ref()); !errors.Is(err, forge.ErrConfidential) {
 		t.Fatalf("reading it unlisted: %v", err)
 	}
 	list, err := a.Issues(t.Context(), 0)
@@ -162,9 +162,9 @@ func TestConfidential(t *testing.T) {
 	f.SetConfidential(shown.Number, true)
 	ctx := t.Context()
 	for name, err := range map[string]error{
-		"title":   a.SetTitle(ctx, shown.ID, "x"),
-		"labels":  a.ChangeLabels(ctx, shown.ID, []string{"bug"}, nil),
-		"comment": func() error { _, err := a.CreateComment(ctx, shown.ID, "x"); return err }(),
+		"title":   a.SetTitle(ctx, shown.Ref(), "x"),
+		"labels":  a.ChangeLabels(ctx, shown.Ref(), []string{"bug"}, nil),
+		"comment": func() error { _, err := a.CreateComment(ctx, shown.Ref(), "x"); return err }(),
 	} {
 		if !errors.Is(err, forge.ErrConfidential) {
 			t.Errorf("%s: %v", name, err)
@@ -199,7 +199,7 @@ func TestNamespacedPath(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := a.SetTitle(t.Context(), is.ID, "T2"); err != nil {
+	if err := a.SetTitle(t.Context(), is.Ref(), "T2"); err != nil {
 		t.Fatal(err)
 	}
 	if got, _ := f.Get(is.Number); got.Title != "T2" {
@@ -214,21 +214,29 @@ func TestErrors(t *testing.T) {
 	is := f.Add(forge.Issue{Author: ann, Title: "T"})
 	_, a := serve(t, f, "p")
 	ctx := t.Context()
-	if _, err := a.Issue(ctx, "424242"); !errors.Is(err, forge.ErrNotFound) {
+	if _, err := a.Issue(ctx, forge.Ref{ID: "424242", Number: "424242"}); !errors.Is(err, forge.ErrNotFound) {
 		t.Errorf("an unknown issue: %v", err)
 	}
-	if err := a.EditComment(ctx, is.ID, "424242", "x"); !errors.Is(err, forge.ErrNotFound) {
+	if err := a.EditComment(ctx, is.Ref(), "424242", "x"); !errors.Is(err, forge.ErrNotFound) {
 		t.Errorf("an unknown comment: %v", err)
 	}
 	f.Before(func(fake.Write) error { return forge.ErrRefused })
-	if err := a.SetTitle(ctx, is.ID, "x"); !errors.Is(err, forge.ErrRefused) {
+	if err := a.SetTitle(ctx, is.Ref(), "x"); !errors.Is(err, forge.ErrRefused) {
 		t.Errorf("a refused write: %v", err)
 	}
-	if err := a.ChangeLabels(ctx, is.ID, []string{"a,b"}, nil); !errors.Is(err, forge.ErrRefused) {
-		t.Errorf("a label with a comma: %v", err)
+	f.Before(nil)
+	// a label with a comma, or one left out, is refused alone: the rest go
+	f.RefuseLabels("bad")
+	err := a.ChangeLabels(ctx, is.Ref(), []string{"a,b", "bad", "ui"}, []string{"c,d"})
+	var some *forge.Refused
+	if !errors.As(err, &some) || !slices.Equal(some.Values, []string{"a,b", "c,d", "bad"}) || !errors.Is(err, forge.ErrRefused) {
+		t.Errorf("refused labels: %v", err)
+	}
+	if got, _ := f.Get(is.Number); !slices.Equal(got.Labels, []string{"ui"}) {
+		t.Errorf("labels = %v, want ui", got.Labels)
 	}
 	f.Delete(is.Number)
-	if err := a.SetStatus(ctx, is.ID, "closed"); !errors.Is(err, forge.ErrNotFound) {
+	if err := a.SetStatus(ctx, is.Ref(), "closed"); !errors.Is(err, forge.ErrNotFound) {
 		t.Errorf("a deleted issue: %v", err)
 	}
 }

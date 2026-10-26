@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/guilbep/git-board/internal/gitbugio"
+	"github.com/guilbep/git-board/internal/store"
 )
 
 // sprintFixtureConfig configures two sprints with dates chosen so
@@ -160,7 +160,7 @@ func TestSprintReportAggregatesByStatus(t *testing.T) {
 	newTestRepo(t)
 	writeConfig(t, sprintFixtureConfig)
 
-	b, err := gitbugio.OpenCwd()
+	b, err := store.OpenCwd()
 	if err != nil {
 		t.Fatalf("OpenCwd: %v", err)
 	}

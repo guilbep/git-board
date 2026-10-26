@@ -7,15 +7,15 @@ import (
 
 	"github.com/guilbep/git-board/internal/board"
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/gitbugio/gitbugiotest"
 	"github.com/guilbep/git-board/internal/inbox"
+	"github.com/guilbep/git-board/internal/store/storetest"
 )
 
 // Search as on GitHub: free text in titles, descriptions and comments;
 // qualifiers on top.
 func TestSearchLooksInCommentsAndBodies(t *testing.T) {
 	t.Parallel()
-	b := gitbugiotest.New(t)
+	b := storetest.New(t)
 	inComment, _ := b.NewIssue("Train distances", "nothing here", []string{"assignee:guilbep"})
 	if _, err := b.AddComment(inComment, "the zebra table is wrong"); err != nil {
 		t.Fatal(err)
@@ -66,15 +66,15 @@ func TestSearchLooksInCommentsAndBodies(t *testing.T) {
 // through the index, a comment by an identity carrying the login.
 func TestInvolvesOnARepository(t *testing.T) {
 	t.Parallel()
-	b := gitbugiotest.New(t)
+	b := storetest.New(t)
 	assigned, _ := b.NewIssue("Train legs", "", []string{"assignee:guilbep"})
 	mentioned, _ := b.NewIssue("Buildings", "ping @guilbep", nil)
 	commented, _ := b.NewIssue("Food", "", nil)
-	other := gitbugiotest.NewPerson(t, b, "Guilbert (GitHub)", "guilbep")
-	gitbugiotest.CommentAs(t, b, commented, other, time.Now().Unix(), "on it")
+	other := storetest.NewPerson(t, b, "Guilbert (GitHub)", "guilbep")
+	storetest.CommentAs(t, b, commented, other, time.Now().Unix(), "on it")
 	// someone else's: an issue you opened involves you (author)
-	stranger := gitbugiotest.NewPerson(t, b, "Ann", "ann")
-	gitbugiotest.IssueAs(t, b, stranger, time.Now().Unix(), "Mail", "guilbep.pierre@epfl.ch")
+	stranger := storetest.NewPerson(t, b, "Ann", "ann")
+	storetest.IssueAs(t, b, stranger, time.Now().Unix(), "Mail", "guilbep.pierre@epfl.ch")
 
 	got, err := board.LoadMatching(b, &config.Config{}, "involves:@me", "guilbep")
 	if err != nil {
@@ -93,14 +93,14 @@ func TestInvolvesOnARepository(t *testing.T) {
 // is: (a close still shows) and without its own follows: (no loop).
 func TestFollowsOnARepository(t *testing.T) {
 	t.Parallel()
-	b := gitbugiotest.New(t)
+	b := storetest.New(t)
 	assigned, _ := b.NewIssue("Train legs", "", []string{"assignee:guilbep"})
 	unfollowed, _ := b.NewIssue("Buildings", "", []string{"assignee:guilbep"})
 	followed, _ := b.NewIssue("Food", "", nil)
 	closedInView, _ := b.NewIssue("Cache factors", "", []string{"area:backend"})
-	gitbugiotest.CloseIssue(t, b, closedInView)
-	ann := gitbugiotest.NewPerson(t, b, "Ann", "ann") // someone else's: an issue you opened involves you
-	gitbugiotest.IssueAs(t, b, ann, time.Now().Unix(), "Unrelated", "")
+	storetest.CloseIssue(t, b, closedInView)
+	ann := storetest.NewPerson(t, b, "Ann", "ann") // someone else's: an issue you opened involves you
+	storetest.IssueAs(t, b, ann, time.Now().Unix(), "Unrelated", "")
 	me, _, _ := b.Me()
 	if err := inbox.Save(b.Storage(), me.ID, inbox.State{Follow: []string{followed}, Unfollow: []string{unfollowed}, Views: []string{"backend", "gone"}}); err != nil {
 		t.Fatal(err)
@@ -131,15 +131,15 @@ func TestFollowsOnARepository(t *testing.T) {
 // involves you, as the inbox says.
 func TestInvolvesYouByIdentity(t *testing.T) {
 	t.Parallel()
-	b := gitbugiotest.New(t) // writes as an identity without a login
+	b := storetest.New(t) // writes as an identity without a login
 	opened, _ := b.NewIssue("Mine", "", nil)
-	ann := gitbugiotest.NewPerson(t, b, "Ann", "ann")
-	hers := gitbugiotest.IssueAs(t, b, ann, time.Now().Unix(), "Hers", "")
+	ann := storetest.NewPerson(t, b, "Ann", "ann")
+	hers := storetest.IssueAs(t, b, ann, time.Now().Unix(), "Hers", "")
 	commented := hers
 	if _, err := b.AddComment(commented, "mine"); err != nil {
 		t.Fatal(err)
 	}
-	gitbugiotest.IssueAs(t, b, ann, time.Now().Unix(), "Not mine", "")
+	storetest.IssueAs(t, b, ann, time.Now().Unix(), "Not mine", "")
 	for _, expr := range []string{"involves:@me", "follows:@me"} {
 		got, err := board.LoadMatching(b, &config.Config{}, expr, "guilbep")
 		if err != nil {

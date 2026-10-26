@@ -3,6 +3,7 @@ package syncer
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -486,7 +487,7 @@ type rereadFails struct {
 	fail *bool
 }
 
-func (f rereadFails) Issue(ctx context.Context, id string) (forge.Issue, error) {
+func (f rereadFails) Issue(ctx context.Context, id forge.Ref) (forge.Issue, error) {
 	if *f.fail {
 		return forge.Issue{}, errors.New("502")
 	}
@@ -524,5 +525,37 @@ func TestNotFoundThenFailedReread(t *testing.T) {
 	syncAll(t, s, ff)
 	if got := f.All()[0].Title; got != "T2" {
 		t.Errorf("title %q: the failure was recorded as a refusal", got)
+	}
+}
+
+// Create is asked once per project before its creations, with their count
+// and whether the run started with no sync entity there: false creates
+// none, and the rest of the push goes on; the next run asks again.
+func TestCreateAsksFirst(t *testing.T) {
+	t.Parallel()
+	s, f := newStore(t), fake.New(key)
+	for _, title := range []string{"one", "two"} {
+		if _, err := issue.Create(t.Context(), s, issue.NewCreate("a", title, "")); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var asked []string
+	ask := func(allow bool) Options {
+		return Options{Create: func(k string, n int, first bool) bool {
+			asked = append(asked, fmt.Sprintf("%s %d %t", k, n, first))
+			return allow
+		}}
+	}
+	if _, err := Sync(t.Context(), s, ask(false), f); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.All()) != 0 || len(refs(t, s)) != 2 {
+		t.Fatalf("held: the forge has %v, refs %v", f.All(), refs(t, s))
+	}
+	if _, err := Sync(t.Context(), s, ask(true), f); err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{key + " 2 true", key + " 2 true"}; !reflect.DeepEqual(asked, want) || len(f.All()) != 2 {
+		t.Fatalf("asked %v, want %v; the forge has %d", asked, want, len(f.All()))
 	}
 }

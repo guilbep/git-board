@@ -1,4 +1,4 @@
-# git-board's project file. Every key is in docs/configuration.md, and
+# git-board's project file. Every key is in docs/guide/configuration.md, and
 # beside the editor in Settings → Project file. Without this file every
 # `ns:value` label is still a field; this adds their order, single or
 # multiple values, sprint dates and saved views.
@@ -50,7 +50,7 @@ options = ["0.5", "1", "2", "4", "8", "16"]
 single = false
 
 # The project's people by role: who sets the risk, approves the plan,
-# reviews, signs off (docs/configuration.md, Roles and Cycle).
+# reviews, signs off (docs/guide/configuration.md, Roles and Cycle).
 # [roles]
 # lead-dev = "your-login"
 

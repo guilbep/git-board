@@ -12,8 +12,8 @@ import (
 	"github.com/guilbep/git-board/internal/branches"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/ghpr"
-	"github.com/guilbep/git-board/internal/gitbugio"
 	"github.com/guilbep/git-board/internal/markdown"
+	"github.com/guilbep/git-board/internal/store"
 )
 
 // Pulls is the server's PR cache, read-only here.
@@ -25,7 +25,7 @@ type Pulls interface {
 
 // Gather fills an Input for the issue from git-bug, git and the PR cache
 // (nil: none). me is the viewer's login.
-func Gather(b *gitbugio.Backend, cfg *config.Config, th gitbugio.Thread, me string, pulls Pulls) (Input, error) {
+func Gather(b *store.Backend, cfg *config.Config, th store.Thread, me string, pulls Pulls) (Input, error) {
 	th.Inherited = cfg.RolesFor(th.Labels)
 	stages := cfg.Stages()
 	in := Input{
@@ -48,7 +48,7 @@ func Gather(b *gitbugio.Backend, cfg *config.Config, th gitbugio.Thread, me stri
 	if p, ok, err := b.Me(); err == nil && ok {
 		myID = p.ID
 	}
-	login := func(p gitbugio.Person) string {
+	login := func(p store.Person) string {
 		if me != "" && p.ID != "" && p.ID == myID {
 			return me
 		}
@@ -105,7 +105,7 @@ func Gather(b *gitbugio.Backend, cfg *config.Config, th gitbugio.Thread, me stri
 
 // gatherCode reads the branches naming the issue, the tests the evidence
 // branch changed, and the plan file.
-func gatherCode(b *gitbugio.Backend, cfg *config.Config, is gitbugio.Issue, stages config.Stages, in *Input) error {
+func gatherCode(b *store.Backend, cfg *config.Config, is store.Issue, stages config.Stages, in *Input) error {
 	sug, err := branches.Suggest(b, cfg.Branches, is)
 	if err != nil {
 		return err
@@ -170,7 +170,7 @@ func gatherCode(b *gitbugio.Backend, cfg *config.Config, is gitbugio.Issue, stag
 // PlanIssue is what a plan file's front matter writes as issue: for
 // gatherCode to find it: the issue's bare number, else its git-bug id's
 // first 7 characters. The agent's prompt names it.
-func PlanIssue(is gitbugio.Issue) string {
+func PlanIssue(is store.Issue) string {
 	if n := is.BareNumber(); n != "" {
 		return n
 	}

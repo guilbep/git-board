@@ -168,7 +168,7 @@ const data = ref<Releases | null>(null);
 const error = ref('');
 const actionError = ref('');
 const pending = ref(false); // an action sent, its answer not back yet
-const doc = ref(''); // docs/configuration.md's ## Release, without [release]
+const doc = ref(''); // docs/guide/configuration.md's ## Release, without [release]
 const setup = ref<ReleaseSetup | null>(null); // what Enable binary release proposes, without [release]
 const showAll = ref(false);
 // a job this page saw running stays shown once done; a failed one always

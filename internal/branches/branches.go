@@ -11,7 +11,7 @@ import (
 	"strings"
 
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/gitbugio"
+	"github.com/guilbep/git-board/internal/store"
 )
 
 // defaultName is GitHub's: 2518-other-equipment-shows-the-wrong-example.
@@ -30,7 +30,7 @@ const slugMax = 50
 // a forge's number to a forge; else its first forge number before the
 // project numbers its issues, else its git-bug id's first 7 characters) and
 // {slug} (its title), made a branch name git takes.
-func Name(cfg config.Branches, is gitbugio.Issue) string {
+func Name(cfg config.Branches, is store.Issue) string {
 	tmpl := cmp.Or(cfg.Name, defaultName)
 	kind := kindOf(cfg, is.Labels)
 	if kind == "" {
@@ -46,7 +46,7 @@ func kindOf(cfg config.Branches, labels []string) string {
 	return cmp.Or(cfg.Kinds[k], k)
 }
 
-func number(is gitbugio.Issue) string {
+func number(is store.Issue) string {
 	return cmp.Or(strings.ToLower(is.Number), is.BareNumber(), is.ID[:min(7, len(is.ID))])
 }
 
@@ -99,7 +99,7 @@ func refSafe(name string) string {
 // ponytail: the first number only, so a number in a slug (#12's
 // fix/12-upgrade-node-24) names no other issue; a template putting a
 // number before {number} (a year) links nothing
-func Names(branch string, is gitbugio.Issue) bool {
+func Names(branch string, is store.Issue) bool {
 	first := true
 	for _, w := range strings.FieldsFunc(branch, func(r rune) bool { return !isAlnum(r) }) {
 		if first && strings.Trim(w, "0123456789") == "" {
@@ -130,13 +130,13 @@ type Suggestion struct {
 // Suggest names the issue's branch, from the base: cfg.Base, else the
 // remote's default branch, else the first of main, master and trunk there
 // is, else main.
-func Suggest(b *gitbugio.Backend, cfg config.Branches, is gitbugio.Issue) (Suggestion, error) {
+func Suggest(b *store.Backend, cfg config.Branches, is store.Issue) (Suggestion, error) {
 	all, err := b.Branches()
 	if err != nil {
 		return Suggestion{}, err
 	}
 	has := func(r, name string) bool {
-		return slices.ContainsFunc(all, func(br gitbugio.Branch) bool { return br.Remote == r && br.Name == name })
+		return slices.ContainsFunc(all, func(br store.Branch) bool { return br.Remote == r && br.Name == name })
 	}
 	base := cmp.Or(cfg.Base, b.RemoteHead(remote))
 	if base == "" {
@@ -164,20 +164,20 @@ type Branch struct {
 	Behind int    `json:"behind"` // the base's commits it hasn't
 	Merged bool   `json:"merged"` // its head is in the base
 	// InBase: its changes are in the base, merged or squashed or rebased in
-	InBase     bool            `json:"in_base"`
-	LastCommit gitbugio.Commit `json:"last_commit"`
+	InBase     bool         `json:"in_base"`
+	LastCommit store.Commit `json:"last_commit"`
 }
 
 // Linked lists the branches naming the issue, local then the remotes',
 // against start (Suggestion.Start); without start, all at zero.
 // ponytail: a branch's whole history, read per branch: fine for the few
 // naming an issue; git's commit-graph if a big repository makes it slow
-func Linked(b *gitbugio.Backend, is gitbugio.Issue, start string) ([]Branch, error) {
+func Linked(b *store.Backend, is store.Issue, start string) ([]Branch, error) {
 	all, err := b.Branches()
 	if err != nil {
 		return nil, err
 	}
-	at := func(br gitbugio.Branch) string { return strings.TrimPrefix(br.Remote+"/"+br.Name, "/") }
+	at := func(br store.Branch) string { return strings.TrimPrefix(br.Remote+"/"+br.Name, "/") }
 	startHash := ""
 	for _, br := range all {
 		if at(br) == start {

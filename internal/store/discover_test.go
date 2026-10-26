@@ -1,0 +1,182 @@
+package store_test
+
+import (
+	"context"
+	"net/http"
+	"net/http/httptest"
+	"reflect"
+	"slices"
+	"strings"
+	"testing"
+
+	"github.com/guilbep/git-board/internal/config"
+	"github.com/guilbep/git-board/internal/store"
+	"github.com/guilbep/git-board/internal/store/storetest"
+)
+
+// found are the forges a repository with those remotes finds, each remote
+// {name, url, push urls…}, under the settings src, and the URLs skipped.
+func found(t *testing.T, src string, remotes ...[]string) ([]config.Forge, []string) {
+	t.Helper()
+	dir := storetest.Repo(t, false)
+	for _, r := range remotes {
+		storetest.Git(t, dir, "remote", "add", r[0], r[1])
+		for _, push := range r[2:] {
+			storetest.Git(t, dir, "remote", "set-url", "--add", "--push", r[0], push)
+		}
+	}
+	cfg, _, err := config.Check([]byte(src))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var skipped []string
+	forges, err := storetest.Open(t, dir).Forges(cfg, func(s string) { skipped = append(skipped, s) })
+	if err != nil {
+		t.Fatal(err)
+	}
+	return forges, skipped
+}
+
+func gh(name, project string) config.Forge {
+	return config.Forge{Name: name, Kind: "github", Host: "github.com", Project: project, Sync: true, Discovered: true}
+}
+
+func gl(name, host, path string) config.Forge {
+	return config.Forge{Name: name, Kind: "gitlab", Host: host, Project: path, Path: path, Sync: true, Discovered: true}
+}
+
+// The wiki's real remotes, and the URL forms: each project once, by kind,
+// host and project, whichever remote or way names it.
+func TestForgesFoundInTheRemotes(t *testing.T) {
+	t.Parallel()
+	for _, c := range []struct {
+		name    string
+		remotes [][]string
+		want    []config.Forge
+		skipped string
+	}{
+		{"the wiki", [][]string{
+			{"origin", "git@github.com:EPFL-ENAC/wiki.git", "git@github.com:EPFL-ENAC/wiki.git", "git@gitlab-ssh.epfl.ch:EPFL-ENAC/wiki.git"},
+			{"gh", "git@github.com:EPFL-ENAC/wiki.git"}, {"gl", "git@gitlab-ssh.epfl.ch:EPFL-ENAC/wiki.git"}},
+			[]config.Forge{gh("github", "EPFL-ENAC/wiki"), gl("gitlab", "gitlab.epfl.ch", "EPFL-ENAC/wiki")}, ""},
+		{"origin alone: an upstream isn't read", [][]string{{"origin", "git@github.com:me/wiki.git"}, {"upstream", "https://github.com/epfl-enac/wiki"}},
+			[]config.Forge{gh("github", "me/wiki")}, ""},
+		{"no origin, no forge", [][]string{{"gh", "git@github.com:o/r.git"}}, nil, ""},
+		{"ssh with a port", [][]string{{"origin", "ssh://git@gitlab-ssh.epfl.ch:2222/group/sub/proj.git"}},
+			[]config.Forge{gl("gitlab", "gitlab.epfl.ch", "group/sub/proj")}, ""},
+		{"https with and without .git", [][]string{{"origin", "https://github.com/o/r.git", "https://github.com/o/r2", "ssh://ssh.github.com:443/o/r3.git"}},
+			[]config.Forge{gh("github", "o/r"), gh("github-2", "o/r2"), gh("github-3", "o/r3")}, ""},
+		{"gitlab.com", [][]string{{"origin", "https://oauth2:secret@gitlab.com/g/p.git"}},
+			[]config.Forge{gl("gitlab", "gitlab.com", "g/p")}, ""},
+		{"an unknown host, a local path", [][]string{{"origin", "git@bitbucket.org:o/r.git", "/srv/git/r.git", "git@github.com:o/r.git"}},
+			[]config.Forge{gh("github", "o/r")}, "skipped git@bitbucket.org:o/r.git: not github.com, nor a GitLab host"},
+	} {
+		forges, skipped := found(t, "", c.remotes...)
+		if !reflect.DeepEqual(forges, c.want) {
+			t.Errorf("%s: forges\n%+v, want\n%+v", c.name, forges, c.want)
+		}
+		if strings.Join(skipped, "\n") != c.skipped {
+			t.Errorf("%s: skipped %q", c.name, skipped)
+		}
+	}
+
+	// an alias git resolves (insteadOf) names its forge, and isn't told as skipped
+	dir := storetest.Repo(t, false)
+	storetest.Git(t, dir, "remote", "add", "origin", "gh:o/r")
+	storetest.Git(t, dir, "config", "url.git@github.com:.insteadOf", "gh:")
+	forges, err := storetest.Open(t, dir).Forges(&config.Config{Discover: true}, func(s string) { t.Errorf("alias: %s", s) })
+	if err != nil || !reflect.DeepEqual(forges, []config.Forge{gh("github", "o/r")}) {
+		t.Errorf("alias: %+v, %v", forges, err)
+	}
+
+	wiki := []string{"origin", "git@github.com:EPFL-ENAC/wiki.git"}
+	table := "[forges.gl]\nkind = \"gitlab\"\nhost = \"gitlab.epfl.ch\"\nproject = \"42400\"\n"
+	if forges, _ := found(t, table, wiki); len(forges) != 1 || forges[0].Name != "gl" {
+		t.Errorf("a table: forges %+v", forges)
+	}
+	if forges, _ := found(t, "[forges]\ndiscover = false\n", wiki); len(forges) != 0 {
+		t.Errorf("discover = false: forges %+v", forges)
+	}
+}
+
+// A GitLab forge found in the remotes reads its id once, and then has the
+// Key() of the table naming that id; one whose path GitLab doesn't know is
+// left out, and the others go on. Serial: it sets the forges' tokens and
+// GitHub's API.
+func TestResolveForges(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.EscapedPath() {
+		case "/api/v4/projects/EPFL-ENAC%2Fwiki":
+			_, _ = w.Write([]byte(`{"id": 42400, "path_with_namespace": "EPFL-ENAC/wiki", "visibility": "public"}`))
+		case "/repos/o/r": // GitHub's, for the found GitHub forge
+			_, _ = w.Write([]byte(`{"full_name": "o/r"}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+	host := strings.TrimPrefix(srv.URL, "http://")
+	t.Setenv("GITLAB_HOST", host)
+	t.Setenv("GITLAB_TOKEN", "t")
+	t.Setenv("GITHUB_TOKEN", "t")
+	saved := store.GitHubAPI
+	t.Cleanup(func() { store.GitHubAPI = saved })
+	store.GitHubAPI = srv.URL
+
+	ctx := context.Background()
+	var left []string
+	got := store.ResolveForges(ctx, []config.Forge{gl("gitlab", host, "EPFL-ENAC/wiki"), gl("gitlab-2", host, "nope/x"), gh("github", "o/r")},
+		func(f config.Forge, why error) { left = append(left, f.Name) })
+	if len(got) != 2 || got[0].Project != "42400" || got[0].Path != "EPFL-ENAC/wiki" || got[1].Name != "github" || len(left) != 1 || left[0] != "gitlab-2" {
+		t.Fatalf("resolved %+v, left out %v", got, left)
+	}
+	opened, err := store.OpenForges(ctx, got[:1])
+	if err != nil {
+		t.Fatal(err)
+	}
+	table, err := store.OpenForges(ctx, []config.Forge{{Name: "gl", Kind: "gitlab", Host: host, Project: "42400"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if opened[0].Key() != table[0].Key() {
+		t.Fatalf("key %q, the table's %q", opened[0].Key(), table[0].Key())
+	}
+}
+
+// A GitHub forge found in the remotes takes GitHub's own spelling of
+// owner/repo, read once through the adapter: a remote naming epfl-enac/wiki
+// has the Key() of a table naming EPFL-ENAC/wiki, as the sync state's id
+// keeps case. Serial: it sets GitHub's token and API.
+func TestResolveGitHubSpelling(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/repos/epfl-enac/wiki" {
+			http.NotFound(w, r)
+			return
+		}
+		_, _ = w.Write([]byte(`{"full_name": "EPFL-ENAC/wiki"}`))
+	}))
+	defer srv.Close()
+	t.Setenv("GITHUB_TOKEN", "t")
+	saved := store.GitHubAPI
+	t.Cleanup(func() { store.GitHubAPI = saved })
+	store.GitHubAPI = srv.URL
+
+	forges, _ := found(t, "", []string{"origin", "git@github.com:epfl-enac/wiki.git", "git@github.com:epfl-enac/wiki.git", "git@github.com:o/gone.git"})
+	ctx := context.Background()
+	var left []string
+	got := store.ResolveForges(ctx, forges, func(f config.Forge, why error) { left = append(left, f.Name) })
+	if len(got) != 1 || got[0].Project != "EPFL-ENAC/wiki" || !got[0].Discovered || !slices.Equal(left, []string{"github-2"}) { // o/gone: GitHub doesn't know it
+		t.Fatalf("resolved %+v, left out %v", got, left)
+	}
+	opened, err := store.OpenForges(ctx, got)
+	if err != nil {
+		t.Fatal(err)
+	}
+	table, err := store.OpenForges(ctx, []config.Forge{{Name: "gh", Kind: "github", Host: "github.com", Project: "EPFL-ENAC/wiki"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if opened[0].Key() != table[0].Key() || opened[0].Key() != "github.com/EPFL-ENAC/wiki" {
+		t.Fatalf("key %q, the table's %q", opened[0].Key(), table[0].Key())
+	}
+}

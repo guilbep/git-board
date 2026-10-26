@@ -7,11 +7,11 @@ import (
 	"testing"
 
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/gitbugio"
-	"github.com/guilbep/git-board/internal/gitbugio/gitbugiotest"
+	"github.com/guilbep/git-board/internal/store"
+	"github.com/guilbep/git-board/internal/store/storetest"
 )
 
-func serverOf(t *testing.T, b *gitbugio.Backend) *httptest.Server {
+func serverOf(t *testing.T, b *store.Backend) *httptest.Server {
 	t.Helper()
 	ts := httptest.NewServer(withCORS(newMux(&apiServer{cfg: &config.Config{}, b: b}, http.NotFoundHandler())))
 	t.Cleanup(ts.Close)
@@ -32,24 +32,27 @@ func origin(t *testing.T, ts *httptest.Server, method, path string) remoteStatus
 // Push and Pull, and each says what is left to move, after a fetch.
 func TestRemotesPushAndPull(t *testing.T) {
 	t.Parallel()
-	mine, theirs := gitbugiotest.NewPair(t)
+	mine, theirs := storetest.NewPair(t)
 	me, them := serverOf(t, mine), serverOf(t, theirs)
 
 	if o := origin(t, me, "GET", "/api/remotes"); o.Tracked || o.Checked != nil {
 		t.Errorf("never fetched: %+v, want not checked", o)
 	}
-	id := gitbugiotest.NewIssue(t, mine, "Export CSV")
-	if o := origin(t, me, "POST", "/api/remotes/origin/fetch"); o.Checked == nil || o.Issues != (gitbugio.Ahead{Send: 1}) || o.People != (gitbugio.Ahead{Send: 1}) {
+	id := storetest.NewIssue(t, mine, "Export CSV")
+	if o := origin(t, me, "POST", "/api/remotes/origin/fetch"); o.Checked == nil || o.Issues != (store.Ahead{Send: 1}) || o.People != (store.Ahead{Send: 1}) {
 		t.Errorf("after a fetch of an empty remote: %+v, want 1 issue and 1 person to send", o)
 	}
-	if o := origin(t, me, "POST", "/api/remotes/origin/push"); o.Issues != (gitbugio.Ahead{}) || o.People != (gitbugio.Ahead{}) {
+	if _, err := mine.Push("origin"); err != nil {
+		t.Fatal(err)
+	}
+	if o := origin(t, me, "GET", "/api/remotes"); o.Issues != (store.Ahead{}) || o.People != (store.Ahead{}) {
 		t.Errorf("after the push: %+v, want nothing left", o)
 	}
 
-	if o := origin(t, them, "POST", "/api/remotes/origin/fetch"); o.Issues != (gitbugio.Ahead{Receive: 1}) || o.People != (gitbugio.Ahead{Send: 1, Receive: 1}) {
+	if o := origin(t, them, "POST", "/api/remotes/origin/fetch"); o.Issues != (store.Ahead{Receive: 1}) || o.People != (store.Ahead{Send: 1, Receive: 1}) {
 		t.Errorf("the colleague's fetch: %+v, want 1 issue to receive, their own person to send", o)
 	}
-	if o := origin(t, them, "POST", "/api/remotes/origin/pull"); o.Issues != (gitbugio.Ahead{}) {
+	if o := origin(t, them, "POST", "/api/remotes/origin/pull"); o.Issues != (store.Ahead{}) {
 		t.Errorf("after the pull: %+v", o)
 	}
 	if _, err := theirs.GetIssue(id); err != nil {
@@ -60,24 +63,26 @@ func TestRemotesPushAndPull(t *testing.T) {
 	if _, err := theirs.ApplyLabelChange(id, []string{"prio:p1"}, nil); err != nil {
 		t.Fatal(err)
 	}
-	origin(t, them, "POST", "/api/remotes/origin/push")
+	if _, err := theirs.Push("origin"); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := mine.ApplyLabelChange(id, []string{"status:ready"}, nil); err != nil {
 		t.Fatal(err)
 	}
-	if o := origin(t, me, "POST", "/api/remotes/origin/fetch"); o.Issues != (gitbugio.Ahead{Send: 1, Receive: 1}) {
+	if o := origin(t, me, "POST", "/api/remotes/origin/fetch"); o.Issues != (store.Ahead{Send: 1, Receive: 1}) {
 		t.Errorf("both changed it: %+v, want 1 to send and 1 to receive", o)
 	}
-	if code := call(t, "POST", me.URL+"/api/remotes/origin/push", nil, nil); code != http.StatusConflict {
-		t.Errorf("a push before pulling their change: %d, want 409 (pull first)", code)
+	if code := call(t, "POST", me.URL+"/api/remotes/origin/push", nil, nil); code != http.StatusNotFound {
+		t.Errorf("a push, the whole sync's alone: %d, want 404", code)
 	}
-	if o := origin(t, me, "POST", "/api/remotes/origin/pull"); o.Issues != (gitbugio.Ahead{Send: 1}) {
+	if o := origin(t, me, "POST", "/api/remotes/origin/pull"); o.Issues != (store.Ahead{Send: 1}) {
 		t.Errorf("after merging: %+v, want the merge to send", o)
 	}
 	if labels, _ := mine.GetLabels(id); strings.Join(labels, " ") != "prio:p1 status:ready" {
 		t.Errorf("merged labels %v", labels)
 	}
 
-	if code := call(t, "POST", me.URL+"/api/remotes/nope/push", nil, nil); code != http.StatusNotFound {
+	if code := call(t, "POST", me.URL+"/api/remotes/nope/fetch", nil, nil); code != http.StatusNotFound {
 		t.Errorf("an unknown remote: %d, want 404", code)
 	}
 }
@@ -94,7 +99,7 @@ func TestRemoteURLsLoseTheirCredentials(t *testing.T) {
 		{"/srv/git/r.git", "/srv/git/r.git"},
 	} {
 		in, want := c[0], c[1]
-		if got := gitbugio.NoCredentials(in); got != want {
+		if got := store.NoCredentials(in); got != want {
 			t.Errorf("NoCredentials(%q) = %q, want %q", in, got, want)
 		}
 	}
@@ -104,14 +109,14 @@ func TestRemoteURLsLoseTheirCredentials(t *testing.T) {
 // them all, before pushing.
 func TestRemotePushURLs(t *testing.T) {
 	t.Parallel()
-	b := gitbugiotest.New(t)
+	b := storetest.New(t)
 	for _, kv := range [][2]string{
 		{"remote.mirror.url", "https://github.com/o/r.git"},
 		{"remote.mirror.pushurl", "https://github.com/o/r.git"},
 		{"remote.mirror.pushurl", "https://oauth2:glpat-secret@gitlab.example.com/g/r.git"},
 		{"remote.plain.url", "/srv/git/r.git"},
 	} {
-		gitbugiotest.Git(t, b.GitDir(), "config", "--add", kv[0], kv[1])
+		storetest.Git(t, b.GitDir(), "config", "--add", kv[0], kv[1])
 	}
 	rs, err := b.Remotes()
 	if err != nil || len(rs) != 2 {
@@ -123,8 +128,8 @@ func TestRemotePushURLs(t *testing.T) {
 	if got := strings.Join(rs[1].PushURLs, " "); got != "/srv/git/r.git" {
 		t.Errorf("plain pushes to %s, want its url", got)
 	}
-	if code := send(t, "POST", serverOf(t, b).URL+"/api/remotes/plain/push", "https://evil.example"); code != http.StatusForbidden {
-		t.Errorf("a push asked by another site: %d, want 403", code)
+	if code := send(t, "POST", serverOf(t, b).URL+"/api/remotes/plain/pull", "https://evil.example"); code != http.StatusForbidden {
+		t.Errorf("a pull asked by another site: %d, want 403", code)
 	}
 }
 
@@ -147,8 +152,6 @@ func TestRemoteEvents(t *testing.T) {
 	for path, want := range map[string]string{
 		"/api/remotes/origin/pull":  "issues", // the boards reload
 		"/api/remotes/origin/fetch": "sync",
-		"/api/remotes/origin/push":  "issues", // it numbers the issues
-		"/api/remotes/mirror/push":  "sync",
 	} {
 		if got := eventFor(httptest.NewRequest("POST", path, nil)).Kind; got != want {
 			t.Errorf("%s: %s, want %s", path, got, want)

@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/guilbep/git-board/internal/gitbugio"
-	"github.com/guilbep/git-board/internal/gitbugio/gitbugiotest"
 	"github.com/guilbep/git-board/internal/server"
+	"github.com/guilbep/git-board/internal/store"
+	"github.com/guilbep/git-board/internal/store/storetest"
 )
 
 const testConfig = `
@@ -44,13 +44,13 @@ func newTestRepo(t *testing.T) {
 }
 
 // seedRepo is a repository with guilbep as the person you write as.
-func seedRepo(t *testing.T) (string, *gitbugio.Backend) {
+func seedRepo(t *testing.T) (string, *store.Backend) {
 	t.Helper()
-	dir := gitbugiotest.Repo(t, false)
-	gitbugiotest.Git(t, dir, "config", "user.name", "guilbep")
-	gitbugiotest.Git(t, dir, "config", "user.email", "guilbep@example.com")
-	gitbugiotest.Init(t, dir)
-	return dir, gitbugiotest.Open(t, dir)
+	dir := storetest.Repo(t, false)
+	storetest.Git(t, dir, "config", "user.name", "guilbep")
+	storetest.Git(t, dir, "config", "user.email", "guilbep@example.com")
+	storetest.Init(t, dir)
+	return dir, storetest.Open(t, dir)
 }
 
 func execute(t *testing.T, args []string) (string, error) {

@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/gitbugio"
 	"github.com/guilbep/git-board/internal/inbox"
+	"github.com/guilbep/git-board/internal/store"
 )
 
 var (
@@ -15,41 +15,41 @@ var (
 	since = now.Add(-inbox.Window)
 	old   = since.Add(-48 * time.Hour) // before the window
 	me    = inbox.Me{ID: "me1", Login: "guilbep"}
-	meP   = gitbugio.Person{ID: "me1", Name: "Guilbert Pierre", Login: "guilbep"}
-	me2   = gitbugio.Person{ID: "me2", Name: "Guilbert (GitHub)", Login: "GuilBep"} // a second identity of yours
-	ann   = gitbugio.Person{ID: "ann", Name: "Ann", Login: "ann"}
+	meP   = store.Person{ID: "me1", Name: "Guilbert Pierre", Login: "guilbep"}
+	me2   = store.Person{ID: "me2", Name: "Guilbert (GitHub)", Login: "GuilBep"} // a second identity of yours
+	ann   = store.Person{ID: "ann", Name: "Ann", Login: "ann"}
 	cfg   = &config.Config{Fields: map[string]config.Field{"pm": {Type: config.TypePerson}, "lead-dev": {Type: config.TypePerson}}}
 )
 
 // fresh makes th's creation fall in the window: a new issue.
-func fresh(th gitbugio.Thread) gitbugio.Thread {
+func fresh(th store.Thread) store.Thread {
 	th.Events[0].At = now.Add(-2 * time.Hour)
 	return th
 }
 
 // inherit gives th the roles it takes from the project (board's withRoles).
-func inherit(th gitbugio.Thread, roles ...string) gitbugio.Thread {
+func inherit(th store.Thread, roles ...string) store.Thread {
 	th.Inherited = roles
 	return th
 }
 
-func ev(kind, id string, who gitbugio.Person, at time.Time) gitbugio.Event {
-	return gitbugio.Event{Kind: kind, ID: id, Author: who, At: at}
+func ev(kind, id string, who store.Person, at time.Time) store.Event {
+	return store.Event{Kind: kind, ID: id, Author: who, At: at}
 }
 
-func comment(id string, who gitbugio.Person, at time.Time, body string) gitbugio.Event {
+func comment(id string, who store.Person, at time.Time, body string) store.Event {
 	e := ev("comment", id, who, at)
 	e.Body = body
 	return e
 }
 
-func labels(id string, who gitbugio.Person, at time.Time, added, removed []string) gitbugio.Event {
+func labels(id string, who store.Person, at time.Time, added, removed []string) store.Event {
 	e := ev("labels", id, who, at)
 	e.Added, e.Removed = added, removed
 	return e
 }
 
-func status(id string, who gitbugio.Person, at time.Time, s string) gitbugio.Event {
+func status(id string, who store.Person, at time.Time, s string) store.Event {
 	e := ev("status", id, who, at)
 	e.Status = s
 	return e
@@ -57,19 +57,19 @@ func status(id string, who gitbugio.Person, at time.Time, s string) gitbugio.Eve
 
 // thread is an issue by author, created before the window, with labels
 // and events after its creation.
-func thread(id string, author gitbugio.Person, lbls []string, events ...gitbugio.Event) gitbugio.Thread {
+func thread(id string, author store.Person, lbls []string, events ...store.Event) store.Thread {
 	created := ev("created", id+"-0", author, old)
-	return gitbugio.Thread{
-		Issue:  gitbugio.Issue{ID: id, Title: id, Status: "open", Labels: lbls},
+	return store.Thread{
+		Issue:  store.Issue{ID: id, Title: id, Status: "open", Labels: lbls},
 		Author: author,
-		Events: append([]gitbugio.Event{created}, events...),
+		Events: append([]store.Event{created}, events...),
 	}
 }
 
 func TestRows(t *testing.T) {
 	for _, tc := range []struct {
 		name    string
-		th      gitbugio.Thread
+		th      store.Thread
 		st      inbox.State
 		views   []string
 		news    []string // nil: no row
@@ -137,7 +137,7 @@ func TestRows(t *testing.T) {
 			th: thread("o", ann, []string{"assignee:guilbep"}, comment("o1", me2, now.Add(-time.Hour), "from GitHub"))},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			rows := inbox.Rows(me, tc.st, []gitbugio.Thread{tc.th}, map[string][]string{tc.th.ID: tc.views}, cfg, since)
+			rows := inbox.Rows(me, tc.st, []store.Thread{tc.th}, map[string][]string{tc.th.ID: tc.views}, cfg, since)
 			if tc.news == nil {
 				if len(rows) != 0 {
 					t.Fatalf("got %+v, want no row", rows)
@@ -157,7 +157,7 @@ func TestRows(t *testing.T) {
 func TestRowsOrderAndDetails(t *testing.T) {
 	older := thread("p", ann, []string{"assignee:guilbep"}, comment("p1", ann, now.Add(-3*time.Hour), "x"), comment("p2", ann, now.Add(-2*time.Hour), "y"))
 	newer := thread("q", ann, []string{"assignee:guilbep"}, comment("q1", ann, now.Add(-time.Hour), "z"))
-	rows := inbox.Rows(me, inbox.State{}, []gitbugio.Thread{older, newer}, nil, cfg, since)
+	rows := inbox.Rows(me, inbox.State{}, []store.Thread{older, newer}, nil, cfg, since)
 	if len(rows) != 2 || rows[0].Issue.ID != "q" || rows[1].Issue.ID != "p" {
 		t.Fatalf("order: %+v, want q then p", rows)
 	}

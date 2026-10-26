@@ -1,5 +1,5 @@
 // Package fields applies field=value assignments as namespaced git-bug
-// labels, via internal/gitbugio. Single-cardinality fields (the default)
+// labels, via internal/store. Single-cardinality fields (the default)
 // swap: any existing "field:*" label is removed before the new one is
 // added. Multi-cardinality fields (assignee) add by default; a leading "-"
 // removes instead (e.g. assignee=-guilbep).
@@ -11,16 +11,16 @@ import (
 	"time"
 
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/gitbugio"
+	"github.com/guilbep/git-board/internal/store"
 )
 
-// Backend is the subset of gitbugio.Backend that field application needs.
+// Backend is the subset of store.Backend that field application needs.
 type Backend interface {
 	GetLabels(idPrefix string) ([]string, error)
 	ApplyLabelChange(idPrefix string, added, removed []string) ([]string, error)
 }
 
-var _ Backend = (*gitbugio.Backend)(nil)
+var _ Backend = (*store.Backend)(nil)
 
 // Apply sets fieldName to value on the issue identified by idPrefix.
 // Returns the resulting label (e.g. "status:ready").
@@ -114,7 +114,7 @@ func resolveAssignedValue(cfg *config.Config, value, me string, today time.Time)
 		return sprint.Slug, nil
 	case value == "@me":
 		if me == "" {
-			return "", fmt.Errorf("@me needs your forge login: a bridge (git bug bridge new) tags your git-bug identity with it, or pass --me / set GIT_BOARD_ME")
+			return "", fmt.Errorf("@me needs your forge login: write as the person a forge sync made of your account (Settings › You), or pass --me / set GIT_BOARD_ME")
 		}
 		return me, nil
 	default:

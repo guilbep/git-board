@@ -2,11 +2,11 @@
 // (GET /api/numbers). Pure, no "@/" imports: node runs numbers.test.ts on
 // it.
 
-const prefixRe = /^[A-Za-z][A-Za-z0-9]*$/; // as gitbugio's prefixRe
+const prefixRe = /^[A-Za-z][A-Za-z0-9]*$/; // as store's prefixRe
 
 // prefixProblem says what's wrong with a prefix, '' when the server takes it
 export function prefixProblem(p: string): string {
-  if (!p) return 'A prefix, like CO2.';
+  if (!p) return 'A prefix, like ABC.';
   return prefixRe.test(p) ? '' : 'A letter, then letters or digits: no dash, no space.';
 }
 
@@ -56,6 +56,12 @@ export function numbersPreview(prefix: string, start: number, github: number[], 
 // numbered says what a numbering did, next being the counter's next number after it
 export function numbered(prefix: string, next: number, done: number): string {
   return done ? `${issues(done)} numbered: ${span(prefix, next - done, done)}.` : 'No issue needed a number.';
+}
+
+// numberExample is a number of the board's own, its next once it numbers
+// its issues (GB-39), else a neutral one
+export function numberExample(n: { on: boolean; prefix?: string | undefined; next?: number | undefined } | null): string {
+  return n?.on && n.prefix && n.next ? `${n.prefix}-${n.next}` : 'ABC-123';
 }
 
 // numbersSummary is the Overview's line

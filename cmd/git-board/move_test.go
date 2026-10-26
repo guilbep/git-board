@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/guilbep/git-board/internal/gitbugio"
+	"github.com/guilbep/git-board/internal/store"
 )
 
 // statusOptionsConfig extends newTestRepo's minimal fixture with a real
@@ -28,7 +28,7 @@ func writeStatusOptionsConfig(t *testing.T) {
 // bug", status:ready).
 func openIssueID(t *testing.T) string {
 	t.Helper()
-	b, err := gitbugio.OpenCwd()
+	b, err := store.OpenCwd()
 	if err != nil {
 		t.Fatalf("OpenCwd: %v", err)
 	}
@@ -60,7 +60,7 @@ func TestMoveAdvancesToNextOption(t *testing.T) {
 		t.Errorf("output = %q, want status:in-progress (ready -> in-progress)", out)
 	}
 
-	b, err := gitbugio.OpenCwd()
+	b, err := store.OpenCwd()
 	if err != nil {
 		t.Fatalf("OpenCwd: %v", err)
 	}
@@ -116,7 +116,7 @@ func TestMoveWithNoStatusSetGoesToFirstOption(t *testing.T) {
 	id := openIssueID(t)
 
 	// Clear the fixture's status:ready first.
-	b, err := gitbugio.OpenCwd()
+	b, err := store.OpenCwd()
 	if err != nil {
 		t.Fatalf("OpenCwd: %v", err)
 	}

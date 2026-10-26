@@ -119,7 +119,8 @@ type raw struct {
 	Roles         map[string]string `toml:"roles"`
 	Cycle         Cycle             `toml:"cycle"`
 	Release       Release           `toml:"release"`
-	// Forges holds publish-private and a table per forge (forges.go).
+	// Forges holds publish-private, discover and a table per forge
+	// (forges.go).
 	Forges map[string]toml.Primitive `toml:"forges"`
 }
 
@@ -184,6 +185,9 @@ type Config struct {
 	// PublishPrivate lets what was pulled from a forge project that isn't
 	// public go to one that is: [forges] publish-private.
 	PublishPrivate bool
+	// Discover finds the forges in the git remotes: no [forges.<name>]
+	// table, and no [forges] discover = false.
+	Discover bool
 }
 
 // FileName is the config's name, at the root of the repository.
@@ -224,7 +228,7 @@ func PathIn(dir string) string {
 func Load(path string) (*Config, error) {
 	// No config is a valid start: fields are the labels' own namespaces.
 	if _, err := os.Stat(path); errors.Is(err, fs.ErrNotExist) {
-		return &Config{}, nil
+		return &Config{Discover: true}, nil
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -269,7 +273,7 @@ func parse(data []byte) (*Config, toml.MetaData, error) {
 	if err := checkDescriptions(r.Fields); err != nil {
 		return nil, md, err
 	}
-	forges, publishPrivate, err := parseForges(md, r.Forges)
+	forges, publishPrivate, discover, err := parseForges(md, r.Forges)
 	if err != nil {
 		return nil, md, err
 	}
@@ -296,6 +300,7 @@ func parse(data []byte) (*Config, toml.MetaData, error) {
 		Release:        r.Release,
 		Forges:         forges,
 		PublishPrivate: publishPrivate,
+		Discover:       discover,
 	}, md, nil
 }
 

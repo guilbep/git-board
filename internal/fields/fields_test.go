@@ -8,7 +8,7 @@ import (
 	"github.com/guilbep/git-board/internal/board"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/fields"
-	"github.com/guilbep/git-board/internal/gitbugio/gitbugiotest"
+	"github.com/guilbep/git-board/internal/store/storetest"
 )
 
 var today = time.Date(2026, 8, 31, 0, 0, 0, 0, time.UTC)
@@ -24,8 +24,8 @@ func mustLoadConfig(t *testing.T) *config.Config {
 
 func TestApplySingleCardinalitySwapsLabel(t *testing.T) {
 	cfg := mustLoadConfig(t)
-	b := gitbugiotest.New(t)
-	id := gitbugiotest.NewIssue(t, b, "x")
+	b := storetest.New(t)
+	id := storetest.NewIssue(t, b, "x")
 	if _, err := b.ApplyLabelChange(id, []string{"status:backlog", "prio:p1"}, nil); err != nil {
 		t.Fatalf("seed labels: %v", err)
 	}
@@ -58,8 +58,8 @@ func TestApplySingleCardinalitySwapsLabel(t *testing.T) {
 // calling ChangeLabels with the target already in the "added" list.
 func TestApplySingleCardinalityNoOpWhenAlreadySet(t *testing.T) {
 	cfg := mustLoadConfig(t)
-	b := gitbugiotest.New(t)
-	id := gitbugiotest.NewIssue(t, b, "x")
+	b := storetest.New(t)
+	id := storetest.NewIssue(t, b, "x")
 	if _, err := b.ApplyLabelChange(id, []string{"status:ready"}, nil); err != nil {
 		t.Fatalf("seed labels: %v", err)
 	}
@@ -83,8 +83,8 @@ func TestApplySingleCardinalityNoOpWhenAlreadySet(t *testing.T) {
 
 func TestApplyMultiCardinalityAddsWithoutRemoving(t *testing.T) {
 	cfg := mustLoadConfig(t)
-	b := gitbugiotest.New(t)
-	id := gitbugiotest.NewIssue(t, b, "x")
+	b := storetest.New(t)
+	id := storetest.NewIssue(t, b, "x")
 	if _, err := b.ApplyLabelChange(id, []string{"assignee:alice"}, nil); err != nil {
 		t.Fatalf("seed labels: %v", err)
 	}
@@ -114,8 +114,8 @@ func TestApplyMultiCardinalityAddsWithoutRemoving(t *testing.T) {
 
 func TestApplyMultiCardinalityRemove(t *testing.T) {
 	cfg := mustLoadConfig(t)
-	b := gitbugiotest.New(t)
-	id := gitbugiotest.NewIssue(t, b, "x")
+	b := storetest.New(t)
+	id := storetest.NewIssue(t, b, "x")
 	if _, err := b.ApplyLabelChange(id, []string{"assignee:alice", "assignee:bob"}, nil); err != nil {
 		t.Fatalf("seed labels: %v", err)
 	}
@@ -139,8 +139,8 @@ func TestApplyMultiCardinalityRemove(t *testing.T) {
 
 func TestApplyResolvesSprintAlias(t *testing.T) {
 	cfg := mustLoadConfig(t)
-	b := gitbugiotest.New(t)
-	id := gitbugiotest.NewIssue(t, b, "x")
+	b := storetest.New(t)
+	id := storetest.NewIssue(t, b, "x")
 
 	label, err := fields.Apply(b, cfg, id, "sprint", "@next", "", today)
 	if err != nil {
@@ -153,8 +153,8 @@ func TestApplyResolvesSprintAlias(t *testing.T) {
 
 func TestApplyResolvesMe(t *testing.T) {
 	cfg := mustLoadConfig(t)
-	b := gitbugiotest.New(t)
-	id := gitbugiotest.NewIssue(t, b, "x")
+	b := storetest.New(t)
+	id := storetest.NewIssue(t, b, "x")
 
 	label, err := fields.Apply(b, cfg, id, "assignee", "@me", "guilbep", today)
 	if err != nil {
@@ -167,8 +167,8 @@ func TestApplyResolvesMe(t *testing.T) {
 
 func TestApplyMeWithoutMeConfiguredErrors(t *testing.T) {
 	cfg := mustLoadConfig(t)
-	b := gitbugiotest.New(t)
-	id := gitbugiotest.NewIssue(t, b, "x")
+	b := storetest.New(t)
+	id := storetest.NewIssue(t, b, "x")
 
 	if _, err := fields.Apply(b, cfg, id, "assignee", "@me", "", today); err == nil {
 		t.Error("expected error when @me used without a configured user")
@@ -178,8 +178,8 @@ func TestApplyMeWithoutMeConfiguredErrors(t *testing.T) {
 // Without a config, assignee still holds several people, and a field that
 // already holds several values keeps them.
 func TestApplyUnconfiguredMultiValuedFields(t *testing.T) {
-	b := gitbugiotest.New(t)
-	id := gitbugiotest.NewIssue(t, b, "x")
+	b := storetest.New(t)
+	id := storetest.NewIssue(t, b, "x")
 	if _, err := b.ApplyLabelChange(id, []string{"assignee:alice", "team:web", "team:api", "sprint:s1"}, nil); err != nil {
 		t.Fatalf("seed labels: %v", err)
 	}
@@ -203,9 +203,9 @@ func TestApplyUnconfiguredMultiValuedFields(t *testing.T) {
 // Without --me, @me is the forge login of the person you write as.
 func TestApplyMeFallsBackToTheIdentitysLogin(t *testing.T) {
 	cfg := mustLoadConfig(t)
-	b := gitbugiotest.New(t)
-	id := gitbugiotest.NewIssue(t, b, "x")
-	gitbugiotest.SetMyLogin(t, b, "guilbep")
+	b := storetest.New(t)
+	id := storetest.NewIssue(t, b, "x")
+	storetest.SetMyLogin(t, b, "guilbep")
 	label, err := fields.Apply(b, cfg, id, "assignee", "@me", "", today)
 	if err != nil || label != "assignee:guilbep" {
 		t.Errorf("Apply @me = %q, %v; want assignee:guilbep", label, err)

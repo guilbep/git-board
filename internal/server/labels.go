@@ -13,7 +13,8 @@ import (
 )
 
 // Settings › Labels: the labels the project defines, their issues, and how
-// each GitHub repository has them (internal/ghlabels, through gh, as you);
+// each GitHub repository has them (internal/ghlabels, through the GitHub
+// forge adapter, with its token rule);
 // GitHub's color and description adopted into a draft of the file, or the
 // file's sent to GitHub; lint, and the GitHub labels outside the project's.
 
@@ -33,9 +34,10 @@ type repoError struct {
 	Message string `json:"message"`
 }
 
-// githubLabels is each repository's labels; one gh can't read is in errs.
-// ponytail: one gh label list per repository on every load; cache them if
-// it drags.
+// githubLabels is each repository's labels; one GitHub didn't answer for
+// is in errs.
+// ponytail: one listing per repository on every load; cache them if it
+// drags.
 func githubLabels(repos []string) (map[string][]ghlabels.Label, []repoError) {
 	res, errs := map[string][]ghlabels.Label{}, []repoError{}
 	for _, repo := range repos {

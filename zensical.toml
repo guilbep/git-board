@@ -1,0 +1,102 @@
+# The docs site: the guide, the core's spec, the decisions. Build it with
+# `make docs`, preview it with `make docs-serve`. docs/prd/ and
+# docs/implementation-plan.md are the history, in the folder but not on
+# the site.
+[project]
+site_name = "git-board"
+docs_dir = "docs"
+site_dir = "site"
+# docs/embed.go embeds the guide in the binary: not a page, and a copy in
+# site/ would be a Go package of the module
+exclude_docs = """
+*.go
+prd/
+implementation-plan.md
+"""
+nav = [
+  { "Overview" = "index.md" },
+  { "Guide" = [
+    { "Configuration" = "guide/configuration.md" },
+    { "Forges" = "guide/forges.md" },
+  ] },
+  { "Spec" = [
+    { "Data model" = "spec/data-model.md" },
+    { "Storage" = "spec/storage.md" },
+    { "Queries and search" = "spec/queries.md" },
+    { "Sync" = "spec/sync.md" },
+    { "Forges" = "spec/forges.md" },
+  ] },
+  { "Decisions" = [
+    { "The spec's decisions" = "spec/decisions.md" },
+    { "ADR 0001: check results are signed git notes" = "adr/0001-check-results-are-signed-git-notes.md" },
+  ] },
+]
+
+# The theme and the Markdown extensions are `zensical new`'s defaults.
+[project.theme]
+language = "en"
+features = [
+  "announce.dismiss",
+  "content.code.annotate",
+  "content.code.copy",
+  "content.code.select",
+  "content.footnote.tooltips",
+  "content.tabs.link",
+  "content.tooltips",
+  "navigation.footer",
+  "navigation.indexes",
+  "navigation.instant",
+  "navigation.instant.prefetch",
+  "navigation.path",
+  "navigation.sections",
+  "navigation.top",
+  "navigation.tracking",
+  "search.highlight",
+]
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme)"
+toggle.icon = "lucide/sun-moon"
+toggle.name = "Switch to light mode"
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: light)"
+scheme = "default"
+toggle.icon = "lucide/sun"
+toggle.name = "Switch to dark mode"
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: dark)"
+scheme = "slate"
+toggle.icon = "lucide/moon"
+toggle.name = "Switch to system preference"
+
+[project.markdown_extensions]
+abbr = {}
+admonition = {}
+attr_list = {}
+def_list = {}
+footnotes = {}
+md_in_html = {}
+toc.permalink = true
+pymdownx.arithmatex.generic = true
+pymdownx.betterem = {}
+pymdownx.caret = {}
+pymdownx.details = {}
+pymdownx.emoji.emoji_generator = "zensical.extensions.emoji.to_svg"
+pymdownx.emoji.emoji_index = "zensical.extensions.emoji.twemoji"
+pymdownx.highlight.anchor_linenums = true
+pymdownx.highlight.line_spans = "__span"
+pymdownx.highlight.pygments_lang_class = true
+pymdownx.inlinehilite = {}
+pymdownx.keys = {}
+pymdownx.magiclink = {}
+pymdownx.mark = {}
+pymdownx.smartsymbols = {}
+pymdownx.superfences.custom_fences = [
+  { name = "mermaid", class = "mermaid", format = "pymdownx.superfences.fence_code_format" },
+]
+pymdownx.tabbed.alternate_style = true
+pymdownx.tabbed.combine_header_slug = true
+pymdownx.tasklist.custom_checkbox = true
+pymdownx.tilde = {}

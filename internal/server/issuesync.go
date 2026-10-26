@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/gitbugio"
+	"github.com/guilbep/git-board/internal/store"
 )
 
 var errIssueDryRunFirst = errors.New("run a dry run of this issue first: it says what the sync would write to the forges")
@@ -95,9 +95,10 @@ func (s *apiServer) handleIssueSync(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, res)
 }
 
-// issueRun is the core's sync of one issue, with forges opened for it.
-func (s *apiServer) issueRun(ctx context.Context, forges []config.Forge, dryRun bool, id string, see func(gitbugio.SyncEvent)) error {
-	run, err := s.openRun(ctx, forges, dryRun, see)
+// issueRun is the core's sync of one issue, with forges opened for it:
+// the person sending this one issue consents to its creation.
+func (s *apiServer) issueRun(ctx context.Context, forges []config.Forge, dryRun bool, id string, see func(store.SyncEvent)) error {
+	run, err := s.openRun(ctx, forges, runOpts{DryRun: dryRun, AllowCreate: true}, see)
 	if err != nil {
 		return err
 	}

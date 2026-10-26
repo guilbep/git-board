@@ -1,5 +1,5 @@
-// The sync page's words: what each way would move, in counts.
-import type { Ahead, BridgeTally, ForgeJob, ForgeMode, ForgeStatus, Remote, SyncReport, SyncStatus, SyncStep } from './api/board';
+// Settings › Sync's words: what each place would move, in counts.
+import type { Ahead, BridgeTally, ForgeJob, ForgeStatus, JobStep, Remote, SyncReport, SyncStatus, SyncStep } from './api/board';
 import { forgeLabel } from './issuesync.ts';
 
 const n = (v: number) => v.toLocaleString();
@@ -8,16 +8,6 @@ export const plural = (v: number, one: string, many = `${one}s`) => `${n(v)} ${v
 // "3 issues to send · 0 to receive"
 export function aheadWords(a: Ahead, one: string, many?: string): string {
   return `${plural(a.send, one, many)} to send · ${n(a.receive)} to receive`;
-}
-
-// what a push to a remote sends: "3 issues and 1 person", or, never
-// checked, the lot
-export function pushWhat(r: Remote): string {
-  if (!r.tracked && !r.checked) return 'the issues and people';
-  const parts = [];
-  if (r.issues.send || !r.people.send) parts.push(plural(r.issues.send, 'issue'));
-  if (r.people.send) parts.push(plural(r.people.send, 'person', 'people'));
-  return parts.join(' and ');
 }
 
 // a check over every forge: "3 issues to get, 2 to send"
@@ -31,19 +21,26 @@ export function checkWords(bridges: Record<string, BridgeTally>): string {
   return `${plural(get, 'issue')} to get, ${n(send)} to send`;
 }
 
-// one forge's part of a run: "create 2 issues, post 3 comments, push 1
-// edit or change, pull 2 issues", the half of its mode for get and send
-export function runWords(mode: ForgeMode, t: BridgeTally): string {
-  const parts = [];
-  if (mode !== 'get') {
-    parts.push(
-      `create ${plural(t.to.issues, 'issue')}`,
-      `post ${plural(t.to.comments, 'comment')}`,
-      `push ${plural(t.to.edits + t.to.changes, 'edit or change', 'edits and changes')}`,
-    );
-  }
-  if (mode !== 'send') parts.push(`pull ${plural(t.from.issues + t.from.changed, 'issue')}`);
-  return parts.join(', ');
+// one forge's part of a sync: "create 2 issues, post 3 comments, push 1
+// edit or change, pull 2 issues"
+export function runWords(t: BridgeTally): string {
+  return [
+    `create ${plural(t.to.issues, 'issue')}`,
+    `post ${plural(t.to.comments, 'comment')}`,
+    `push ${plural(t.to.edits + t.to.changes, 'edit or change', 'edits and changes')}`,
+    `pull ${plural(t.from.issues + t.from.changed, 'issue')}`,
+  ].join(', ');
+}
+
+// a step of the whole sync, in words: "git pull from origin", "the
+// GitHub Project", and how it went
+const stepNames = { pull: 'git pull', forges: 'the forges', project: 'the GitHub Project', push: 'git push' } as const;
+const stateWords = { waiting: 'waits', running: 'running…', done: 'done', failed: 'failed', skipped: 'skipped' } as const;
+
+export function stepLine(s: JobStep, remote: string, dryRun: boolean): string {
+  const name = s.name === 'pull' && dryRun ? 'git fetch' : stepNames[s.name];
+  const where = s.name === 'pull' || s.name === 'push' ? `${name} ${s.name === 'push' ? 'to' : 'from'} ${remote}` : name;
+  return `${where}: ${stateWords[s.state]}${s.note ? `, ${s.note}` : ''}`;
 }
 
 // where a run is: "GitHub (gh) · pulling 12 of 40 · #43 import: users
@@ -54,8 +51,8 @@ export function stepWords(s: SyncStep, bridges: { name: string; target: string }
   return [b ? forgeLabel(b) : s.bridge, `${s.way === 'pull' ? 'pulling' : 'pushing'} ${count}`, s.issue].filter(Boolean).join(' · ');
 }
 
-// a real run's one line: "pulled 2 issues, pushed 0", the half of its
-// mode for get and send, and its errors
+// a real run's one line: "pulled 2 issues, pushed 0", the half of a
+// send, and its errors
 export function doneWords(job: ForgeJob): string {
   let get = 0;
   let send = 0;
@@ -65,7 +62,7 @@ export function doneWords(job: ForgeJob): string {
   }
   const parts = [];
   if (job.mode !== 'send') parts.push(`pulled ${plural(get, 'issue')}`);
-  if (job.mode !== 'get') parts.push(parts.length ? `pushed ${n(send)}` : `pushed ${plural(send, 'issue')}`);
+  parts.push(parts.length ? `pushed ${n(send)}` : `pushed ${plural(send, 'issue')}`);
   if (job.errors) parts.push(plural(job.errors, 'error'));
   return parts.join(', ');
 }
@@ -114,14 +111,14 @@ export function waiting(remotes: Remote[] | null, forge: ForgeStatus | null, pro
   return w;
 }
 
-// "Send 3 · Get 2 · 1 conflict", "Syncing…", or "Sync" when nothing waits
-export function syncLabel(w: Waiting): string {
-  if (w.running) return 'Syncing…';
+// what waits, for the header's Sync: "3 to send · 2 to get · 1 conflict",
+// "Nothing waits"
+export function waitWords(w: Waiting): string {
   const parts = [];
-  if (w.send) parts.push(`Send ${n(w.send)}`);
-  if (w.get) parts.push(`Get ${n(w.get)}`);
+  if (w.send) parts.push(`${n(w.send)} to send`);
+  if (w.get) parts.push(`${n(w.get)} to get`);
   if (w.conflicts) parts.push(plural(w.conflicts, 'conflict'));
-  return parts.join(' · ') || 'Sync';
+  return parts.join(' · ') || 'Nothing waits';
 }
 
 // the tab's dot: yours to send first, then theirs to get

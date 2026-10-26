@@ -18,8 +18,8 @@ import (
 	"github.com/guilbep/git-board/internal/cycle"
 	"github.com/guilbep/git-board/internal/fields"
 	"github.com/guilbep/git-board/internal/ghpr"
-	"github.com/guilbep/git-board/internal/gitbugio"
 	"github.com/guilbep/git-board/internal/proof"
+	"github.com/guilbep/git-board/internal/store"
 )
 
 // The development cycle (docs/prd/dev-cycle.md, M1): an issue's step,
@@ -112,7 +112,7 @@ type cycleResponse struct {
 // issue's from in-review on, and from ready on when plans-in-pr (the
 // draft PR holding the plan), its plan branches when structural, none
 // before (the Work page asks for every issue's at once).
-func (s *apiServer) pullNames(th gitbugio.Thread, stages config.Stages) ([]string, error) {
+func (s *apiServer) pullNames(th store.Thread, stages config.Stages) ([]string, error) {
 	names, err := onOrigin(s.b, th.Issue)
 	if err != nil {
 		return nil, err
@@ -130,7 +130,7 @@ func (s *apiServer) pullNames(th gitbugio.Thread, stages config.Stages) ([]strin
 
 // cycleOf is the issue's step for the viewer. GitHub is asked for the PR
 // only where the step reads it: from review on, and a structural plan's PR.
-func (s *apiServer) cycleOf(ctx context.Context, th gitbugio.Thread) (cycleResponse, error) {
+func (s *apiServer) cycleOf(ctx context.Context, th store.Thread) (cycleResponse, error) {
 	cfg := s.config()
 	stages := cfg.Stages()
 	names, err := s.pullNames(th, stages)

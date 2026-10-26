@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/guilbep/git-board/internal/ghbridge"
-	"github.com/guilbep/git-board/internal/gitbugio/gitbugiotest"
+	"github.com/guilbep/git-board/internal/store/storetest"
 )
 
 // newBridgeTestRepo mirrors newTestRepo but seeds an issue linked to
@@ -17,8 +17,8 @@ func newBridgeTestRepo(t *testing.T) string {
 	t.Helper()
 	dir, b := seedRepo(t)
 	me, _, _ := b.Me()
-	id := gitbugiotest.IssueAs(t, b, me, 1735689600, "cannot change equipment_class", "")
-	gitbugiotest.Link(t, b, id, "https://github.com/EPFL-ENAC/co2-calculator/issues/2605")
+	id := storetest.IssueAs(t, b, me, 1735689600, "cannot change equipment_class", "")
+	storetest.Link(t, b, id, "https://github.com/EPFL-ENAC/co2-calculator/issues/2605")
 
 	if err := os.WriteFile(filepath.Join(dir, configPath), []byte(testConfig), 0o644); err != nil {
 		t.Fatalf("write config: %v", err)

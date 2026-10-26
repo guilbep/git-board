@@ -32,10 +32,13 @@ export function tallyWords(t: BridgeTally, dryRun: boolean): string {
   return words.join('; ') || 'up to date';
 }
 
-const forgeNames: Record<string, string> = { github: 'GitHub', gitlab: 'GitLab', gitea: 'Gitea' };
+const forgeNames: Record<string, string> = { github: 'GitHub', gitlab: 'GitLab' };
+
+// a forge's kind in words: GitHub, GitLab
+export const kindName = (kind: string) => forgeNames[kind] ?? kind;
 
 // a bridge by its forge: "GitLab (gl)"
-export const forgeLabel = (b: { name: string; target: string }) => `${forgeNames[b.target] ?? b.target} (${b.name})`;
+export const forgeLabel = (b: { name: string; target: string }) => `${kindName(b.target)} (${b.name})`;
 
 // forgeNumbers are an issue's numbers on the forges, as the server's
 // HasForgeNumber says

@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/guilbep/git-board/internal/gitbugio"
 	"github.com/guilbep/git-board/internal/release"
 	"github.com/guilbep/git-board/internal/release/releasetest"
+	"github.com/guilbep/git-board/internal/store"
 )
 
 // adopt makes env's overlays run the app's first commit and returns it.
@@ -325,14 +325,14 @@ func TestDeployOnlyImagesInTheOverlay(t *testing.T) {
 
 // record makes c's release record, with a digest per image and registry
 // that the fake registry holds, and returns the digests by <registry>/<image>.
-func record(t *testing.T, r *release.Runner, tools *releasetest.Tools, c string, chart gitbugio.ChartArtifact) map[string]string {
+func record(t *testing.T, r *release.Runner, tools *releasetest.Tools, c string, chart store.ChartArtifact) map[string]string {
 	t.Helper()
-	rec, digests := gitbugio.ReleaseRecord{Commit: c, Chart: chart}, map[string]string{}
+	rec, digests := store.ReleaseRecord{Commit: c, Chart: chart}, map[string]string{}
 	for _, img := range []string{"frontend", "backend"} {
 		for _, reg := range []string{"ghcr.test/app", "quay.test/app"} {
 			d := "sha256:" + c[:6] + reg[:4] + img
 			digests[reg+"/"+img] = d
-			rec.Artifacts = append(rec.Artifacts, gitbugio.Artifact{Image: img, Registry: reg, Digest: d})
+			rec.Artifacts = append(rec.Artifacts, store.Artifact{Image: img, Registry: reg, Digest: d})
 			tools.Images[reg+"/"+img+"@"+d] = releasetest.FakeImage{Digest: d, Revision: "built by the old action"}
 		}
 	}
@@ -351,7 +351,7 @@ func TestDeployUsesRecordedDigests(t *testing.T) {
 	legacy := fx.Commit(t, "legacy")
 	// reuse_unchanged_images left :<sha> on another commit's build
 	tools.Images["ghcr.test/app/frontend:"+legacy] = releasetest.FakeImage{Digest: "sha256:wrong", Revision: "another"}
-	digests := record(t, r, tools, legacy, gitbugio.ChartArtifact{})
+	digests := record(t, r, tools, legacy, store.ChartArtifact{})
 	deploy(t, r, "prod", release.Target{Commit: legacy, Version: "v1.4.19"})
 	if len(tools.Built) != 0 || len(tools.Copied) != 0 || len(tools.Charts) != 0 {
 		t.Errorf("built %+v, copied %q, charts %v; want the record's digests only", tools.Built, tools.Copied, tools.Charts)
@@ -377,7 +377,7 @@ func TestDeployUsesRecordedDigests(t *testing.T) {
 	}
 
 	cut := fx.Commit(t, "cut")
-	record(t, r, tools, cut, gitbugio.ChartArtifact{Version: "v1.5.0-rc.1", Digest: "sha256:chart"})
+	record(t, r, tools, cut, store.ChartArtifact{Version: "v1.5.0-rc.1", Digest: "sha256:chart"})
 	deploy(t, r, "stage", release.Target{Commit: cut, Version: "v1.5.0-rc.1"})
 	if len(tools.Built) != 0 || len(tools.Charts) != 0 {
 		t.Errorf("built %+v, charts %v; want the recorded chart not pushed again", tools.Built, tools.Charts)

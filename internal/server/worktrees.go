@@ -18,7 +18,7 @@ import (
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/cycle"
 	"github.com/guilbep/git-board/internal/fields"
-	"github.com/guilbep/git-board/internal/gitbugio"
+	"github.com/guilbep/git-board/internal/store"
 	"github.com/guilbep/git-board/internal/wtx"
 )
 
@@ -200,17 +200,17 @@ func tempFile(pattern string, data []byte) (string, error) {
 // issueAgent is an issue's agent: its branch, the worktree on it, and
 // wtx's session there.
 type issueAgent struct {
-	Reason   string             `json:"reason,omitempty"` // why Start is refused here; "" when it can start
-	Code     string             `json:"code,omitempty"`
-	Branch   string             `json:"branch"`             // the evidence branch, else the [branches] name for the issue
-	Worktree *gitbugio.Worktree `json:"worktree,omitempty"` // the linked worktree on that branch
-	Session  *wtx.Session       `json:"session,omitempty"`  // wtx status for it, when wtx answers
-	Output   string             `json:"output,omitempty"`   // a write: wtx's last lines
+	Reason   string          `json:"reason,omitempty"` // why Start is refused here; "" when it can start
+	Code     string          `json:"code,omitempty"`
+	Branch   string          `json:"branch"`             // the evidence branch, else the [branches] name for the issue
+	Worktree *store.Worktree `json:"worktree,omitempty"` // the linked worktree on that branch
+	Session  *wtx.Session    `json:"session,omitempty"`  // wtx status for it, when wtx answers
+	Output   string          `json:"output,omitempty"`   // a write: wtx's last lines
 }
 
 // agentOf reads the issue's agent: the branch and worktree from git, and
 // with session the session from wtx when it may run.
-func (s *apiServer) agentOf(ctx context.Context, r *http.Request, th gitbugio.Thread, cyc cycleResponse, session bool) (issueAgent, error) {
+func (s *apiServer) agentOf(ctx context.Context, r *http.Request, th store.Thread, cyc cycleResponse, session bool) (issueAgent, error) {
 	a := issueAgent{Branch: cyc.Evidence.Branch}
 	a.Code, a.Reason = s.wtxAllowed(r, false)
 	if a.Branch == "" {
@@ -224,7 +224,7 @@ func (s *apiServer) agentOf(ctx context.Context, r *http.Request, th gitbugio.Th
 	if err != nil {
 		return a, err
 	}
-	if i := slices.IndexFunc(wts, func(wt gitbugio.Worktree) bool { return wt.Branch == a.Branch }); i >= 0 {
+	if i := slices.IndexFunc(wts, func(wt store.Worktree) bool { return wt.Branch == a.Branch }); i >= 0 {
 		a.Worktree = &wts[i]
 	}
 	if session && a.Code == "" {
@@ -360,7 +360,7 @@ func (s *apiServer) handleIssueAgentAction(w http.ResponseWriter, r *http.Reques
 	case action == "go" && cyc.Step == 3 && cyc.Stage == "ready":
 		in.What, in.Then = "write the plan, in plan mode", planThen(cyc.Stages, th.Issue, a.Branch)
 	}
-	if i := slices.IndexFunc(th.Events, func(e gitbugio.Event) bool { return e.Kind == "created" }); i >= 0 {
+	if i := slices.IndexFunc(th.Events, func(e store.Event) bool { return e.Kind == "created" }); i >= 0 {
 		in.Description = th.Events[i].Body
 	}
 	if cyc.Evidence.Plan != nil {
@@ -418,7 +418,7 @@ func (s *apiServer) handleIssueAgentAction(w http.ResponseWriter, r *http.Reques
 
 // withStatus is th with its status label set to status: the step the
 // issue will be at once it moves.
-func withStatus(th gitbugio.Thread, status string) gitbugio.Thread {
+func withStatus(th store.Thread, status string) store.Thread {
 	labels := slices.DeleteFunc(slices.Clone(th.Issue.Labels), func(l string) bool { return strings.HasPrefix(l, "status:") })
 	th.Issue.Labels = append(labels, "status:"+status)
 	return th
@@ -428,7 +428,7 @@ func withStatus(th gitbugio.Thread, status string) gitbugio.Thread {
 // it in the pane, where plan mode ends: commit it where gather finds it,
 // push, and open the draft PR that holds it, unless plans-in-pr = false.
 // The plan is approved on the board, not by the agent.
-func planThen(stages config.Stages, is gitbugio.Issue, branch string) string {
+func planThen(stages config.Stages, is store.Issue, branch string) string {
 	key := cycle.PlanIssue(is)
 	file := path.Join(stages.Plans, path.Base(branch)+".md")
 	pr := "open a draft PR that holds only the plan (`gh pr create --draft`)"
@@ -442,16 +442,16 @@ func planThen(stages config.Stages, is gitbugio.Issue, branch string) string {
 // as the agent reads it: what is asked (git-board's words) and the thread
 // written out to be quoted (the commenters' words). false: no such line
 // comment on the issue.
-func (s *apiServer) reviewThread(th *gitbugio.Thread, comment string) (what, quoted string, ok bool) {
+func (s *apiServer) reviewThread(th *store.Thread, comment string) (what, quoted string, ok bool) {
 	s.annotate(th)
 	root := comment
-	if i := slices.IndexFunc(th.Events, func(e gitbugio.Event) bool { return e.ID == comment }); i < 0 || th.Events[i].Review == nil || th.Events[i].Review.Path == "" {
+	if i := slices.IndexFunc(th.Events, func(e store.Event) bool { return e.ID == comment }); i < 0 || th.Events[i].Review == nil || th.Events[i].Review.Path == "" {
 		return "", "", false
 	} else if to := th.Events[i].Review.ReplyTo; to != "" {
 		root = to
 	}
 	var b strings.Builder
-	var rv *gitbugio.Review
+	var rv *store.Review
 	for _, e := range th.Events {
 		if e.Review == nil || e.ID != root && e.Review.ReplyTo != root {
 			continue
@@ -483,7 +483,7 @@ func (s *apiServer) reviewThread(th *gitbugio.Thread, comment string) (what, quo
 
 // issueName names the issue as the Work page does: its project number,
 // else its first forge number, else its short id.
-func issueName(is gitbugio.Issue) string {
+func issueName(is store.Issue) string {
 	if is.Number != "" {
 		return is.Number
 	}

@@ -8,7 +8,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/guilbep/git-board/internal/gitbugio"
+	"github.com/guilbep/git-board/internal/store"
 )
 
 // ErrTaken means the tag a cut would push exists already: another clone
@@ -303,13 +303,13 @@ func (r *Runner) finish(ctx context.Context, t Tag, d Draft, where map[string][]
 	if err != nil {
 		return err
 	}
-	var chart gitbugio.ChartArtifact
+	var chart store.ChartArtifact
 	if r.Cfg.Chart != nil && !recorded { // R19: a recorded commit's chart is the deploy's to package
 		digest, err := r.ensureChart(ctx, t.Commit, t.Name)
 		if err != nil {
 			return err
 		}
-		chart = gitbugio.ChartArtifact{Version: t.Name, Digest: digest}
+		chart = store.ChartArtifact{Version: t.Name, Digest: digest}
 	}
 	assets, err := r.binaries(ctx, t, cmp.Or(notes, d.Notes))
 	if err != nil {
@@ -322,7 +322,7 @@ func (r *Runner) finish(ctx context.Context, t Tag, d Draft, where map[string][]
 			if d.Previous != nil {
 				prev = d.Previous.Name
 			}
-			created, err := r.B.CreateRelease(gitbugio.ReleaseRecord{Commit: t.Commit, Previous: prev, Artifacts: arts, Chart: chart, Assets: assets})
+			created, err := r.B.CreateRelease(store.ReleaseRecord{Commit: t.Commit, Previous: prev, Artifacts: arts, Chart: chart, Assets: assets})
 			if err != nil {
 				return "", err
 			}
@@ -407,7 +407,7 @@ func (r *Runner) takes(ctx context.Context, e EnvState, commit string, hotfix bo
 // built refuses an image of commit that none of the registries where lists
 // for it has, by the record or as built from commit: verb ships what ran,
 // it doesn't build. A registry lacking an image another has gets a copy.
-func (r *Runner) built(ctx context.Context, commit string, recorded []gitbugio.Artifact, where map[string][]string, verb string) error {
+func (r *Runner) built(ctx context.Context, commit string, recorded []store.Artifact, where map[string][]string, verb string) error {
 	for _, img := range r.Cfg.Images {
 		found := false
 		for _, reg := range where[img.Name] {

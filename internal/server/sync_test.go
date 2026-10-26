@@ -9,8 +9,8 @@ import (
 
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/ghbridge"
-	"github.com/guilbep/git-board/internal/gitbugio"
-	"github.com/guilbep/git-board/internal/gitbugio/gitbugiotest"
+	"github.com/guilbep/git-board/internal/store"
+	"github.com/guilbep/git-board/internal/store/storetest"
 )
 
 const issueURL = "https://github.com/o/r/issues/7"
@@ -24,15 +24,15 @@ func (r *recordedEdits) Edit(_ string, e ghbridge.ProjectEdit) error {
 
 // syncFixture is issue #7, "in-review" in git-board and "QA Validation" on
 // the Project, last agreed at "ready": a conflict on status.
-func syncFixture(t *testing.T, write bool) (*httptest.Server, *gitbugio.Backend, string, *recordedEdits) {
+func syncFixture(t *testing.T, write bool) (*httptest.Server, *store.Backend, string, *recordedEdits) {
 	t.Helper()
 	cfg := &config.Config{
 		Fields: map[string]config.Field{"status": {Single: true,
 			Options: []string{"ready", "in-review", "qa"}, Project: map[string]string{"qa": "QA Validation"}}},
 		GithubProject: config.GithubProject{Owner: "o", Number: 1, Write: write},
 	}
-	b := gitbugiotest.New(t)
-	id := gitbugiotest.NewImportedIssue(t, b, "Results page", issueURL)
+	b := storetest.New(t)
+	id := storetest.NewImportedIssue(t, b, "Results page", issueURL)
 	if _, err := b.ApplyLabelChange(id, []string{"status:in-review"}, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -143,7 +143,7 @@ func TestSyncResolveKeepingGitBoardNeedsWrite(t *testing.T) {
 
 func TestSyncWithoutAProjectIsABadRequest(t *testing.T) {
 	t.Parallel()
-	b := gitbugiotest.New(t)
+	b := storetest.New(t)
 	ts := newTestServer(t, b, &config.Config{})
 	var st syncStatus
 	getJSON(t, ts.URL+"/api/sync", &st)

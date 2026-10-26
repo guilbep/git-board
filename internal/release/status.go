@@ -6,7 +6,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/guilbep/git-board/internal/gitbugio"
+	"github.com/guilbep/git-board/internal/store"
 )
 
 // TargetState is what one deploy target's overlay says runs in an
@@ -34,11 +34,11 @@ type EnvState struct {
 // ReleaseRow is a release tag, its commit's record and where that commit
 // runs.
 type ReleaseRow struct {
-	Tag            Tag                     `json:"tag"`
-	Names          []string                `json:"names"`          // every release tag on its commit, newest first
-	Record         *gitbugio.ReleaseRecord `json:"record"`         // nil until Reconcile makes it
-	RunsIn         []string                `json:"runsIn"`         // environments whose commit is its commit
-	BeforeGitBoard bool                    `json:"beforeGitBoard"` // its tag wasn't cut by git-board: its subject lacks gitBoardMark
+	Tag            Tag                  `json:"tag"`
+	Names          []string             `json:"names"`          // every release tag on its commit, newest first
+	Record         *store.ReleaseRecord `json:"record"`         // nil until Reconcile makes it
+	RunsIn         []string             `json:"runsIn"`         // environments whose commit is its commit
+	BeforeGitBoard bool                 `json:"beforeGitBoard"` // its tag wasn't cut by git-board: its subject lacks gitBoardMark
 }
 
 // gitBoardMark ends the subject of a tag a cut pushes: v1.4.20 (git-board).
@@ -89,7 +89,7 @@ func (r *Runner) status(ctx context.Context) (Status, map[string]*ConfigRepo, er
 	if err != nil {
 		return Status{}, nil, err
 	}
-	records := map[string]*gitbugio.ReleaseRecord{}
+	records := map[string]*store.ReleaseRecord{}
 	for i := range recs {
 		records[recs[i].Commit] = &recs[i]
 	}

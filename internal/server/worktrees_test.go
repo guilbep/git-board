@@ -16,7 +16,7 @@ import (
 
 	"github.com/guilbep/git-board/internal/board"
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/gitbugio/gitbugiotest"
+	"github.com/guilbep/git-board/internal/store/storetest"
 )
 
 // fakeWtx puts a fake wtx first on PATH, as wtx's own tests fake its
@@ -429,7 +429,7 @@ func TestWtxBusy(t *testing.T) {
 func TestAgentGoAll(t *testing.T) {
 	s, fake, _ := agentRepo(t)
 	s.cfg.Branches.Name = "{slug}"
-	id := gitbugiotest.NewIssue(t, s.b, "All")
+	id := storetest.NewIssue(t, s.b, "All")
 	ts := serve(t, s)
 	if code, c, body := sendFrom(t, "POST", ts.URL+"/api/issues/"+id[:8]+"/agent/go", ts.URL, map[string]string{}); code != http.StatusConflict || c != "branch-all" {
 		t.Fatalf("go on the branch all: %d %q %s", code, c, body)

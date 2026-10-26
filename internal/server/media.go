@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/guilbep/git-board/internal/gitbugio"
+	"github.com/guilbep/git-board/internal/store"
 )
 
 // maxMedia caps an image the proxy fetches.
@@ -27,13 +27,13 @@ const mediaDir = "git-board-media"
 // on disk, and only from a forge's image addresses, so it can't be used to
 // reach anything else from this machine.
 type mediaProxy struct {
-	storage gitbugio.Storage
+	storage store.Storage
 	client  *http.Client
 	token   func(host string) string
 	allowed func(*url.URL) bool
 }
 
-func newMediaProxy(storage gitbugio.Storage, token func(string) string, gitlabHosts func() []string) *mediaProxy {
+func newMediaProxy(storage store.Storage, token func(string) string, gitlabHosts func() []string) *mediaProxy {
 	m := &mediaProxy{storage: storage, token: token,
 		allowed: func(u *url.URL) bool { return forgeMedia(u, gitlabHosts()) }}
 	m.client = &http.Client{

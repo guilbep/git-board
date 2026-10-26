@@ -95,10 +95,10 @@ func TestLive(t *testing.T) {
 	}
 
 	// GitHub to git-board: a rename, and a comment with a browser's \r\n.
-	if err := a.SetTitle(ctx, gi.ID, title+" (renamed on GitHub)"); err != nil {
+	if err := a.SetTitle(ctx, gi.Ref(), title+" (renamed on GitHub)"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := a.CreateComment(ctx, gi.ID, "a comment from GitHub\r\non two lines"); err != nil {
+	if _, err := a.CreateComment(ctx, gi.Ref(), "a comment from GitHub\r\non two lines"); err != nil {
 		t.Fatal(err)
 	}
 	run()
@@ -112,7 +112,7 @@ func TestLive(t *testing.T) {
 
 	// Labels, each way: one added and one removed on GitHub, then in
 	// git-board, with an assignee, the posting account, read back.
-	if err := a.ChangeLabels(ctx, gi.ID, []string{"live-forge"}, []string{"live-test"}); err != nil {
+	if err := a.ChangeLabels(ctx, gi.Ref(), []string{"live-forge"}, []string{"live-test"}); err != nil {
 		t.Fatal(err)
 	}
 	run()
@@ -127,7 +127,7 @@ func TestLive(t *testing.T) {
 		t.Fatal(err)
 	}
 	run()
-	fi, err := a.Issue(ctx, gi.ID)
+	fi, err := a.Issue(ctx, gi.Ref())
 	if err != nil || !slices.Contains(fi.Labels, "live-board") || slices.Contains(fi.Labels, "live-forge") ||
 		!slices.ContainsFunc(fi.Assignees, func(x forge.Account) bool { return x.ID == acc.ID }) {
 		t.Fatalf("on GitHub: labels %v, assignees %v, %v", fi.Labels, fi.Assignees, err)
@@ -138,7 +138,7 @@ func TestLive(t *testing.T) {
 		t.Fatal(err)
 	}
 	run()
-	if fi, err := a.Issue(ctx, gi.ID); err != nil || fi.Status != "closed" {
+	if fi, err := a.Issue(ctx, gi.Ref()); err != nil || fi.Status != "closed" {
 		t.Fatalf("on GitHub: %q, %v; want closed", fi.Status, err)
 	}
 	if r := run(); r.Created+r.Updated+r.Posted+r.Pushed != 0 {

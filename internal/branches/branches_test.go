@@ -7,7 +7,7 @@ import (
 	"github.com/go-git/go-git/v5/plumbing"
 
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/gitbugio"
+	"github.com/guilbep/git-board/internal/store"
 )
 
 const id = "abc1234def5678abc1234def5678abc1234def5678abc1234def5678abcd1234"
@@ -17,10 +17,10 @@ var co2 = config.Branches{
 	Kinds: map[string]string{"bug": "fix", "feat": "feat", "perf": "perf", "task": "chore"},
 }
 
-func issue(title string, number string, labels ...string) gitbugio.Issue {
-	is := gitbugio.Issue{ID: id, Title: title, Labels: labels}
+func issue(title string, number string, labels ...string) store.Issue {
+	is := store.Issue{ID: id, Title: title, Labels: labels}
 	if number != "" {
-		is.Forges = []gitbugio.Forge{{Name: "GitHub", Number: number}}
+		is.Forges = []store.Forge{{Name: "GitHub", Number: number}}
 	}
 	return is
 }
@@ -30,7 +30,7 @@ func TestName(t *testing.T) {
 	tests := []struct {
 		name string
 		cfg  config.Branches
-		is   gitbugio.Issue
+		is   store.Issue
 		want string
 	}{
 		{"co2's example", co2, issue(example, "2518", "bug"), "fix/2518-other-equipment-shows-the-wrong-example"},
@@ -49,7 +49,7 @@ func TestName(t *testing.T) {
 			"3-show-the-emission-factors-of-every-equipment"},
 		{"one long word cut hard", config.Branches{}, issue(strings.Repeat("a", 60), "3"), "3-" + strings.Repeat("a", 50)},
 		{"invalid ref characters from the config", config.Branches{Name: "~{kind}^/..{number}:{slug}.lock", Kinds: map[string]string{"bug": "bug fix.."}}, issue("Crash", "3", "bug"), "bug-fix/3-crash"},
-		{"a project number with its prefix", co2, gitbugio.Issue{ID: id, Title: "SPA routes", Number: "VM-62", Counted: true, Labels: []string{"bug"}}, "fix/vm-62-spa-routes"},
+		{"a project number with its prefix", co2, store.Issue{ID: id, Title: "SPA routes", Number: "VM-62", Counted: true, Labels: []string{"bug"}}, "fix/vm-62-spa-routes"},
 		{"a kind part left empty", config.Branches{Name: "team/{kind}-{number}"}, issue("Crash", "3"), "team/3"},
 	}
 	for _, tt := range tests {
@@ -97,8 +97,8 @@ func TestNames(t *testing.T) {
 }
 
 func TestNamesWhatNameSuggests(t *testing.T) {
-	for _, is := range []gitbugio.Issue{issue("Local only", ""), issue("On GitHub", "2518", "bug"),
-		{ID: id, Title: "SPA routes", Number: "VM-62", Counted: true, Labels: []string{"bug"}, Forges: []gitbugio.Forge{{Name: "GitHub", Number: "66"}}}} {
+	for _, is := range []store.Issue{issue("Local only", ""), issue("On GitHub", "2518", "bug"),
+		{ID: id, Title: "SPA routes", Number: "VM-62", Counted: true, Labels: []string{"bug"}, Forges: []store.Forge{{Name: "GitHub", Number: "66"}}}} {
 		if name := Name(co2, is); !Names(name, is) {
 			t.Errorf("Names(%q) = false for the name it suggests", name)
 		}
@@ -109,12 +109,12 @@ func TestNamesWhatNameSuggests(t *testing.T) {
 // fix/3060-… is CO2-3060's, not GitHub #3060's; an issue the counter hasn't
 // numbered yet names its branch by its id.
 func TestNamesProjectNumbers(t *testing.T) {
-	x := gitbugio.Issue{ID: "aaaaaaaaaa", Title: "Bouncer pool", Number: "CO2-3060", Counted: true, Forges: []gitbugio.Forge{{Name: "GitHub", Number: "3071"}}}
-	y := gitbugio.Issue{ID: "bbbbbbbbbb", Title: "CSV export", Number: "CO2-3075", Counted: true, Forges: []gitbugio.Forge{{Name: "GitHub", Number: "3060"}}}
-	waiting := gitbugio.Issue{ID: "cccccccccc", Title: "New one", Counted: true, Forges: []gitbugio.Forge{{Name: "GitHub", Number: "3080"}}}
+	x := store.Issue{ID: "aaaaaaaaaa", Title: "Bouncer pool", Number: "CO2-3060", Counted: true, Forges: []store.Forge{{Name: "GitHub", Number: "3071"}}}
+	y := store.Issue{ID: "bbbbbbbbbb", Title: "CSV export", Number: "CO2-3075", Counted: true, Forges: []store.Forge{{Name: "GitHub", Number: "3060"}}}
+	waiting := store.Issue{ID: "cccccccccc", Title: "New one", Counted: true, Forges: []store.Forge{{Name: "GitHub", Number: "3080"}}}
 	for _, tc := range []struct {
 		branch string
-		is     gitbugio.Issue
+		is     store.Issue
 		want   bool
 	}{
 		{"fix/3060-bouncer-pool", x, true},

@@ -10,8 +10,9 @@ import (
 	"strings"
 
 	"github.com/guilbep/git-board/internal/branches"
+	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/ghpr"
-	"github.com/guilbep/git-board/internal/gitbugio"
+	"github.com/guilbep/git-board/internal/store"
 )
 
 // The PR gate (docs/prd/work-unit.md, M3): for each branch on origin
@@ -47,7 +48,7 @@ func (s *apiServer) github() (*ghpr.Client, string, error) {
 }
 
 // onOrigin are the issue's branches origin has, by name.
-func onOrigin(b *gitbugio.Backend, is gitbugio.Issue) ([]string, error) {
+func onOrigin(b *store.Backend, is store.Issue) ([]string, error) {
 	all, err := b.Branches()
 	if err != nil {
 		return nil, err
@@ -88,6 +89,12 @@ func (s *apiServer) handlePulls(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	c, login, err := s.github()
+	if errors.Is(err, store.ErrNoMe) { // reading needs no one chosen: any github.com token
+		var tok string
+		if tok, err = s.b.Token(r.Context(), config.Forge{Kind: "github", Host: "github.com"}, ""); err == nil {
+			c = &ghpr.Client{API: s.githubAPI, Token: tok}
+		}
+	}
 	if err != nil {
 		writeError(w, http.StatusBadGateway, err)
 		return
@@ -161,14 +168,14 @@ func (s *apiServer) handleOpenPull(w http.ResponseWriter, r *http.Request) {
 }
 
 // prTitle is the issue as lists show it: CO2-3075 and its shown title.
-func prTitle(is gitbugio.Issue) string {
+func prTitle(is store.Issue) string {
 	return strings.TrimSpace(is.Number + " " + is.ShownTitle())
 }
 
 // prBody names the issue (its project number, else its git-bug id's first
 // 7 characters) and, when it is an issue of the same GitHub repository,
 // closes it there on merge (into the default branch, as GitHub does it).
-func prBody(is gitbugio.Issue, repo string) string {
+func prBody(is store.Issue, repo string) string {
 	body := cmp.Or(is.Number, is.ID[:min(7, len(is.ID))])
 	for _, f := range is.Forges {
 		if f.Number != "" && strings.EqualFold(f.URL, "https://github.com/"+repo+"/issues/"+f.Number) {

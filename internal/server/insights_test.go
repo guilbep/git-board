@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/gitbugio/gitbugiotest"
+	"github.com/guilbep/git-board/internal/store/storetest"
 )
 
 func TestInsightsReplayTheRepository(t *testing.T) {
@@ -14,14 +14,14 @@ func TestInsightsReplayTheRepository(t *testing.T) {
 	s.cfg.Fields = map[string]config.Field{"status": {Single: true, Options: []string{"backlog", "in-progress", "done"}}}
 	start := time.Now().AddDate(0, 0, -3)
 	s.cfg.Sprints = config.SprintsConfig{LengthDays: 14, List: []config.Sprint{{Slug: "s1", Title: "Sprint 1", Start: start}}}
-	a := gitbugiotest.NewIssue(t, s.b, "a")
-	b := gitbugiotest.NewIssue(t, s.b, "b")
+	a := storetest.NewIssue(t, s.b, "a")
+	b := storetest.NewIssue(t, s.b, "b")
 	for id, labels := range map[string][]string{a: {"status:in-progress", "sprint:s1"}, b: {"status:backlog", "sprint:s1"}} {
 		if _, err := s.b.ApplyLabelChange(id, labels, nil); err != nil {
 			t.Fatal(err)
 		}
 	}
-	gitbugiotest.CloseIssue(t, s.b, a)
+	storetest.CloseIssue(t, s.b, a)
 
 	var r struct {
 		Values    []string

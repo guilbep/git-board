@@ -17,7 +17,7 @@
           aria-expanded="true"
           aria-controls="cp-list"
           :aria-activedescendant="results[active] ? `cp-${results[active]!.key}` : undefined"
-          placeholder="Filter the issues, #2528, or a command"
+          :placeholder="`Filter the issues, ${example(latest(all).map((i) => ({ project: i.number, numbers: forgeNumbers(i) })))}, or a command`"
           autocomplete="off" data-1p-ignore data-lpignore="true" data-form-type="other"
           @keydown.down.prevent="move(1)"
           @keydown.up.prevent="move(-1)"
@@ -60,7 +60,7 @@ import { filtersHidden, newIssueRequested, paletteOpen, recentIssues, recordRece
 import { message } from '@/issue';
 import { when } from '@/me';
 import { forgeNumbers } from '@/issuesync';
-import { jumps, latest, rank } from '@/palette';
+import { example, jumps, latest, numberName, rank, recentName } from '@/palette';
 import { suggest } from '@/viewfilter';
 import { helpOpen } from '@/shortcuts';
 import GbIcon, { type IconName } from '@/components/GbIcon.vue';
@@ -139,6 +139,7 @@ watch(paletteOpen, (open) => {
   }
 });
 
+// number: as a card names it, GB-30 or #36
 function openIssue(id: string, title: string, number?: string) {
   recordRecent({ id, title, number });
   if (route.path === '/') void router.replace({ query: { ...route.query, issue: id } });
@@ -158,13 +159,13 @@ const commands = computed<Entry[]>(() => [
   { key: 'insights', label: 'Insights', group: 'Commands', icon: 'chart', act: go('/insights') },
   { key: 'inbox', label: 'Inbox', group: 'Commands', icon: 'inbox', act: go('/inbox') },
   { key: 'settings', label: 'Settings', group: 'Commands', icon: 'settings', act: go('/settings') },
-  { key: 'sync', label: 'Sync: where your issues go', group: 'Commands', icon: 'sync', act: go('/sync') },
-  { key: 'add-forge', label: 'Add a forge', group: 'Commands', icon: 'plus', act: go('/settings/forges?add=1') },
+  { key: 'sync', label: 'Sync: where your issues go', group: 'Commands', icon: 'sync', act: go('/settings/sync') },
+  { key: 'add-forge', label: 'Add a forge', group: 'Commands', icon: 'plus', act: go('/settings/sync?add=1') },
   { key: 'filters', label: filtersHidden.value ? 'Show the filters' : 'Hide the filters', group: 'Commands', icon: 'filter', act: () => { filtersHidden.value = !filtersHidden.value; if (route.path !== '/') void router.push('/'); } },
   { key: 'keys', label: 'Keyboard shortcuts', group: 'Commands', icon: 'title', hint: '?', act: () => (helpOpen.value = true) },
 ]);
 
-// "CO2-3075 · 2 Oct": its number, else its id, and its last change
+// "GB-30 · 2 Oct": its number, else its id, and its last change
 function hint(i: Issue, number: string | undefined): string {
   const name = i.number ?? (number ? `#${number}` : i.id.slice(0, 7));
   return i.updated_at ? `${name} · ${when(i.updated_at)}` : name;
@@ -172,7 +173,7 @@ function hint(i: Issue, number: string | undefined): string {
 
 function issueEntry(i: Issue, group: string): Entry {
   const number = forgeNumbers(i)[0];
-  return { key: `${group}-${i.id}`, label: i.shown_title, group, icon: i.status === 'closed' ? 'closed' : 'open', hint: hint(i, number), act: () => openIssue(i.id, i.shown_title, number) };
+  return { key: `${group}-${i.id}`, label: i.shown_title, group, icon: i.status === 'closed' ? 'closed' : 'open', hint: hint(i, number), act: () => openIssue(i.id, i.shown_title, numberName(i)) };
 }
 
 // An exact #number or id first, at once (Enter opens it); else the filter
@@ -180,7 +181,7 @@ function issueEntry(i: Issue, group: string): Entry {
 const results = computed<Entry[]>(() => {
   const f = query.value.trim();
   if (!f) {
-    const recent = recentIssues().map((r): Entry => ({ key: `r-${r.id}`, label: r.title, group: 'Opened lately', icon: 'clock', hint: r.number ? `#${r.number}` : r.id.slice(0, 7), act: () => openIssue(r.id, r.title, r.number) }));
+    const recent = recentIssues().map((r): Entry => ({ key: `r-${r.id}`, label: r.title, group: 'Opened lately', icon: 'clock', hint: recentName(r) ?? r.id.slice(0, 7), act: () => openIssue(r.id, r.title, recentName(r)) }));
     return [...recent, ...commands.value];
   }
   const items = all.value.map((i) => ({ key: i.id, label: i.shown_title, id: i.id, numbers: forgeNumbers(i), project: i.number, counted: i.counted, issue: i }));

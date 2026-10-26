@@ -9,8 +9,8 @@ import (
 
 	"github.com/guilbep/git-board/internal/board"
 	"github.com/guilbep/git-board/internal/filter"
-	"github.com/guilbep/git-board/internal/gitbugio"
 	"github.com/guilbep/git-board/internal/inbox"
+	"github.com/guilbep/git-board/internal/store"
 )
 
 // The inbox (internal/inbox): what happened that concerns you on the
@@ -48,7 +48,7 @@ func (s *apiServer) inboxMe(w http.ResponseWriter) (inbox.Me, bool) {
 	}
 	login := s.viewer()
 	if login == "" {
-		writeCoded(w, http.StatusConflict, "no-login", errors.New("your identity has no forge login, so no field and no mention can name you: git bug bridge new tags it, or start the server with --me"))
+		writeCoded(w, http.StatusConflict, "no-login", errors.New("your person has no forge login, so no field and no mention can name you: write as the person a forge sync made of your account, or start the server with --me"))
 		return inbox.Me{}, false
 	}
 	return inbox.Me{ID: p.ID, Login: login}, true
@@ -82,8 +82,8 @@ func (s *apiServer) changeInbox(id string, change func(*inbox.State)) error {
 }
 
 // recent is the issues updated within the window.
-func recent(all []gitbugio.Issue, since time.Time) []gitbugio.Issue {
-	var res []gitbugio.Issue
+func recent(all []store.Issue, since time.Time) []store.Issue {
+	var res []store.Issue
 	for _, i := range all {
 		if !i.UpdatedAt.Before(since) {
 			res = append(res, i)
@@ -202,14 +202,14 @@ func (s *apiServer) handleInboxSeen(w http.ResponseWriter, r *http.Request) {
 }
 
 // follow is whether you follow the issue (an id or a prefix), and why.
-func (s *apiServer) follow(me inbox.Me, th gitbugio.Thread) (followResponse, error) {
+func (s *apiServer) follow(me inbox.Me, th store.Thread) (followResponse, error) {
 	st, err := s.loadInbox(me.ID)
 	if err != nil {
 		return followResponse{}, err
 	}
 	cfg := s.config()
 	th.Inherited = cfg.RolesFor(th.Labels) // the project's roles, as on the board
-	inViews, _, err := board.FollowedViews(s.b, cfg, st.Views, me.Login, []gitbugio.Issue{th.Issue}, time.Now())
+	inViews, _, err := board.FollowedViews(s.b, cfg, st.Views, me.Login, []store.Issue{th.Issue}, time.Now())
 	if err != nil {
 		return followResponse{}, err
 	}

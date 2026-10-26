@@ -9,8 +9,8 @@ import (
 	"testing"
 
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/gitbugio"
-	"github.com/guilbep/git-board/internal/gitbugio/gitbugiotest"
+	"github.com/guilbep/git-board/internal/store"
+	"github.com/guilbep/git-board/internal/store/storetest"
 )
 
 func git(t *testing.T, dir string, args ...string) string {
@@ -41,14 +41,14 @@ func commitFile(t *testing.T, dir, path, content string) string {
 }
 
 // repo is a repository on dev with a person you write as, no login.
-func repo(t *testing.T) (string, *gitbugio.Backend) {
+func repo(t *testing.T) (string, *store.Backend) {
 	t.Helper()
 	dir := t.TempDir()
 	git(t, dir, "init", "-q", "-b", "dev")
 	git(t, dir, "config", "user.name", "dev")
 	git(t, dir, "config", "user.email", "dev@example.com")
 	git(t, dir, "commit", "-q", "--allow-empty", "-m", "start")
-	b, err := gitbugio.Open(dir)
+	b, err := store.Open(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -80,7 +80,7 @@ func TestGatherFromRepo(t *testing.T) {
 	commitFile(t, dir, plan, strings.Replace(planDoc, "%s", "draft", 1))
 	git(t, dir, "switch", "-q", "dev")
 
-	id := gitbugiotest.NewImportedIssue(t, b, "Crash on save (#2518)", "https://github.com/o/r/issues/2518")
+	id := storetest.NewImportedIssue(t, b, "Crash on save (#2518)", "https://github.com/o/r/issues/2518")
 	if _, err := b.ApplyLabelChange(id, []string{"status:in-progress", "risk:normal", "assignee:erin"}, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -159,7 +159,7 @@ func TestEvidenceBranch(t *testing.T) {
 	commitFile(t, dir, "new.go", "package x\n")
 	git(t, dir, "switch", "-q", "dev")
 
-	id := gitbugiotest.NewImportedIssue(t, b, "Crash (#2518)", "https://github.com/o/r/issues/2518")
+	id := storetest.NewImportedIssue(t, b, "Crash (#2518)", "https://github.com/o/r/issues/2518")
 	th, err := b.Thread(id)
 	if err != nil {
 		t.Fatal(err)
@@ -196,7 +196,7 @@ func TestGatherPlanDraftedBy(t *testing.T) {
 	git(t, dir, "switch", "-q", "-c", "plan/2518-x", "dev")
 	commitFile(t, dir, "docs/src/implementation-plans/2518-x.md", strings.Replace(planDoc, "%s", "draft", 1))
 	git(t, dir, "switch", "-q", "dev")
-	id := gitbugiotest.NewImportedIssue(t, b, "Crash on save (#2518)", "https://github.com/o/r/issues/2518")
+	id := storetest.NewImportedIssue(t, b, "Crash on save (#2518)", "https://github.com/o/r/issues/2518")
 	th, err := b.Thread(id)
 	if err != nil {
 		t.Fatal(err)
@@ -212,7 +212,7 @@ func TestGatherPlanDraftedBy(t *testing.T) {
 func TestGatherPlanIssue(t *testing.T) {
 	t.Parallel()
 	dir, b := repo(t)
-	numbered := gitbugiotest.NewImportedIssue(t, b, "Crash on save (#2518)", "https://github.com/o/r/issues/2518")
+	numbered := storetest.NewImportedIssue(t, b, "Crash on save (#2518)", "https://github.com/o/r/issues/2518")
 	bare, err := b.NewIssue("Export CSV", "", nil)
 	if err != nil {
 		t.Fatal(err)
@@ -238,7 +238,7 @@ func TestGatherPlanIssue(t *testing.T) {
 
 func TestGatherNoBranch(t *testing.T) {
 	t.Parallel()
-	b := gitbugiotest.New(t)
+	b := storetest.New(t)
 	id, err := b.NewIssue("Export CSV", "", []string{"status:ready"})
 	if err != nil {
 		t.Fatal(err)

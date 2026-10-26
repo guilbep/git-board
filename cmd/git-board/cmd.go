@@ -12,7 +12,7 @@ import (
 	"github.com/guilbep/git-board/internal/board"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/fields"
-	"github.com/guilbep/git-board/internal/gitbugio"
+	"github.com/guilbep/git-board/internal/store"
 	"github.com/guilbep/git-board/internal/tui"
 )
 
@@ -155,9 +155,7 @@ func newTuiCmd() *cobra.Command {
 		Short: "Interactive scrollable, searchable issue browser",
 		Long: `Interactive scrollable, searchable issue browser.
 
-Keys: enter open detail, e edit a field (from detail), g view body/
-comments via "git bug bug show" (from detail; requires git-bug on PATH
-as a git subcommand, not needed for anything else here), c quick-filter
+Keys: enter open detail, e edit a field (from detail), c quick-filter
 by category, f structured filter (same grammar as "ls" — see below —
 empty input clears it), s sort by field e.g. "prio" or "prio desc"
 (same as --sort, persists across a later f/c filter, empty input
@@ -239,7 +237,7 @@ func runTui(filterStr, me string) error {
 		return err
 	}
 
-	b, err := gitbugio.OpenCwd()
+	b, err := store.OpenCwd()
 	if err != nil {
 		return err
 	}
@@ -249,18 +247,16 @@ func runTui(filterStr, me string) error {
 		b.Close()
 		return err
 	}
-	// tui.Run owns b from here — including across a "g" close/reopen
-	// cycle — and closes whichever backend is live when it returns.
-	reopen := func() (tui.Backend, error) { return gitbugio.OpenCwd() }
-	return tui.Run(matched, filterStr, b, cfg, me, time.Now(), reopen)
+	// tui.Run owns b from here, and closes it when it returns.
+	return tui.Run(matched, filterStr, b, cfg, me, time.Now())
 }
 
 // loadMatchingIssues opens the git-bug repo cache in cwd and returns issues
 // matching filterStr — the shared core behind ls/view's table render and the
 // tui's interactive list. The actual matching logic lives in internal/board
 // so the server (internal/server) can reuse it too.
-func loadMatchingIssues(cfg *config.Config, filterStr, me string) ([]gitbugio.Issue, error) {
-	b, err := gitbugio.OpenCwd()
+func loadMatchingIssues(cfg *config.Config, filterStr, me string) ([]store.Issue, error) {
+	b, err := store.OpenCwd()
 	if err != nil {
 		return nil, err
 	}
@@ -275,7 +271,7 @@ func runSet(out io.Writer, idPrefix string, assignments []string, me string) err
 		return err
 	}
 
-	b, err := gitbugio.OpenCwd()
+	b, err := store.OpenCwd()
 	if err != nil {
 		return err
 	}
@@ -297,7 +293,7 @@ func runSet(out io.Writer, idPrefix string, assignments []string, me string) err
 }
 
 func runGet(out io.Writer, idPrefix string) error {
-	b, err := gitbugio.OpenCwd()
+	b, err := store.OpenCwd()
 	if err != nil {
 		return err
 	}

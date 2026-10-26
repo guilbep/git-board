@@ -11,7 +11,7 @@ import (
 
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/ghbridge"
-	"github.com/guilbep/git-board/internal/gitbugio"
+	"github.com/guilbep/git-board/internal/store"
 )
 
 // Seams over the gh calls, for tests.
@@ -88,12 +88,12 @@ func project() ghbridge.Project {
 }
 
 // openSync loads the config, opens the repository and reads both sides.
-func openSync(limit int) (*config.Config, *gitbugio.Backend, ghbridge.State, error) {
+func openSync(limit int) (*config.Config, *store.Backend, ghbridge.State, error) {
 	cfg, err := loadConfig()
 	if err != nil {
 		return nil, nil, ghbridge.State{}, err
 	}
-	b, err := gitbugio.OpenCwd()
+	b, err := store.OpenCwd()
 	if err != nil {
 		return nil, nil, ghbridge.State{}, err
 	}
@@ -106,17 +106,33 @@ func openSync(limit int) (*config.Config, *gitbugio.Backend, ghbridge.State, err
 }
 
 func runBridgeSync(out io.Writer, limit int, apply bool) error {
-	cfg, b, s, err := openSync(limit)
+	cfg, err := loadConfig()
+	if err != nil {
+		return err
+	}
+	b, err := store.OpenCwd()
 	if err != nil {
 		return err
 	}
 	defer b.Close()
+	if err := bridgeSync(out, cfg, b, limit, apply); err != nil || apply {
+		return err
+	}
+	fmt.Fprintln(out, "\ndry run — nothing written. Re-run with --apply to write these changes.")
+	return nil
+}
 
+// bridgeSync reads both sides and prints the plan; with apply, writes it,
+// to the Project with write = true alone. git-board sync's Project step.
+func bridgeSync(out io.Writer, cfg *config.Config, b *store.Backend, limit int, apply bool) error {
+	s, err := ghbridge.LoadState(b, project(), cfg, limit)
+	if err != nil {
+		return err
+	}
 	plan := s.Plan(cfg)
 	printSyncPlan(out, plan)
 
 	if !apply {
-		fmt.Fprintln(out, "\ndry run — nothing written. Re-run with --apply to write these changes.")
 		if len(plan.Edits) > 0 && !cfg.GithubProject.Write {
 			fmt.Fprintln(out, "Writing to the Project also needs write = true under [github-project] in .git-board.toml.")
 		}

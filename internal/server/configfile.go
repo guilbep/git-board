@@ -155,8 +155,8 @@ func (s *apiServer) handleConfigSave(w http.ResponseWriter, r *http.Request) {
 }
 
 // docSection is a part of a doc, one ## heading each: the settings page
-// shows the one for the table under the cursor (docs/configuration.md),
-// or the ones beside a step (docs/forges.md).
+// shows the one for the table under the cursor (docs/guide/configuration.md),
+// or the ones beside a step (docs/guide/forges.md).
 type docSection struct {
 	ID    string `json:"id"`    // the heading's first word: fields, views…
 	Title string `json:"title"` // the heading

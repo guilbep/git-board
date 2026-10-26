@@ -116,7 +116,7 @@ watch(() => [props.id, props.labels.join(' '), props.title], load, { immediate: 
 
 // Environments: where this issue's branch has got to, read only when the
 // issue has a branch. The read is offline, so it never fetches (unlike
-// /api/releases); without [release] it answers 404 and the line hides.
+// /api/releases); without [release] it answers none and the line hides.
 const issueEnvs = ref<IssueEnvironment[]>([]);
 const envLines = computed(() => envLine(issueEnvs.value));
 const envLinks = computed(() => issueEnvs.value.map((e) => (e.in && tagPattern.test(e.version) ? releasePath(e.version) : '')));

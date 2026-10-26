@@ -29,6 +29,27 @@ export function jumps<T extends Item>(query: string, items: T[]): T[] {
   );
 }
 
+// numberName is an issue's number as a card shows it: its project number,
+// else its first forge number, #36
+export function numberName(i: { number?: string | undefined; forges?: { number?: string | undefined }[] | undefined }): string | undefined {
+  const forge = i.forges?.find((f) => f.number)?.number;
+  return i.number ?? (forge ? `#${forge}` : undefined);
+}
+
+// recentName is an issue opened lately's number: an older entry's bare
+// forge number takes its #
+export const recentName = (r: { number?: string | undefined }) => (r.number && /^\d+$/.test(r.number) ? `#${r.number}` : r.number);
+
+// example is a number the palette's box offers to type: the newest
+// issue's, its project number else a forge's; else a neutral one
+export function example(items: { project?: string | undefined; numbers?: string[] | undefined }[]): string {
+  for (const i of items) {
+    if (i.project) return i.project;
+    if (i.numbers?.[0]) return `#${i.numbers[0]}`;
+  }
+  return '#12';
+}
+
 export function rank<T extends { label: string }>(query: string, items: T[]): T[] {
   const q = query.trim().toLowerCase();
   if (!q) return items;

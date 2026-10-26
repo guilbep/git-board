@@ -3,7 +3,7 @@
      href="#" links, none of which fit this app). The saved views are the
      main navigation; the active one carries the signature red dot. They
      never wrap: as many as fit, the rest under "N more" (navfit.ts).
-     The right side: Sync saying what waits, the search, one menu for you
+     The right side: Sync counting what waits to go out, the search, one menu for you
      (the canvas's H1 artboard).
      The logo is drawn as a mask over var(--primary): the vendored
      epfl-logo.svg carries no fill (it renders black as an <img>), while the
@@ -41,8 +41,10 @@
       <router-link ref="inboxLink" to="/inbox" active-class="active">Inbox<span v-if="inboxCount" class="nav-count" :aria-label="`, ${inboxCount} new`">{{ inboxCount }}</span></router-link>
     </nav>
     <div class="app-right">
-      <!-- what waits to go to or come from the remotes and forges -->
-      <router-link to="/sync" class="gb-sync" :class="{ 'gb-sync-waiting': label !== 'Sync' }" :title="w.checked ? `Checked ${when(w.checked, true)}` : 'Not checked yet'">{{ label }}</router-link>
+      <!-- Sync, with the count of what waits to go out to the remotes and forges -->
+      <router-link to="/settings/sync" class="gb-sync" :class="{ 'gb-sync-waiting': w.send || w.running }" :title="`${waitWords(w)} · ${w.checked ? `checked ${when(w.checked, true)}` : 'not checked yet'}`">
+        {{ w.running ? 'Syncing…' : 'Sync' }}<span v-if="w.send && !w.running" class="nav-count" :aria-label="`, ${w.send} to send`">{{ w.send.toLocaleString() }}</span>
+      </router-link>
       <button type="button" class="gb-iconbtn" aria-label="Filter or jump to" title="Filter or jump to (⌘K)" aria-keyshortcuts="Meta+K Control+K" @click="paletteOpen = true">
         <GbIcon name="search" />
       </button>
@@ -54,7 +56,7 @@
           <p class="gb-menu-who"><b>{{ me.me.name }}</b><code v-if="me.me.login">{{ me.me.login }}</code></p>
           <router-link to="/settings/you">You</router-link>
           <router-link to="/settings">Settings</router-link>
-          <router-link to="/sync">Sync</router-link>
+          <router-link to="/settings/sync">Sync</router-link>
           <button type="button" @click="helpOpen = true">Keyboard shortcuts <kbd>?</kbd></button>
           <p class="gb-menu-foot">{{ w.checked ? `Forges checked ${when(w.checked, true)}` : 'Not checked yet' }}</p>
         </div>
@@ -82,7 +84,7 @@ import { forgeStatus, loadForges } from '@/forges';
 import { initials, loadMe, me, when } from '@/me';
 import { loadSyncStatus, syncStatus } from '@/sync';
 import { loadRemotes, remotes } from '@/remotes';
-import { faviconDot, syncLabel, waiting } from '@/ways';
+import { faviconDot, waitWords, waiting } from '@/ways';
 import { setFavicon } from '@/favicon';
 import { fit } from '@/navfit';
 import GbIcon from '@/components/GbIcon.vue';
@@ -95,7 +97,6 @@ const route = useRoute();
 const releasesHere = computed(() => route.path === '/releases' || route.path.startsWith('/releases/'));
 
 const w = computed(() => waiting(remotes.value, forgeStatus.value, syncStatus.value));
-const label = computed(() => syncLabel(w.value));
 // the tab's dot: red to send, teal to get
 watch(() => faviconDot(w.value), setFavicon, { immediate: true });
 

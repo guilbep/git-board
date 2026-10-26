@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/gitbugio/gitbugiotest"
+	"github.com/guilbep/git-board/internal/store/storetest"
 )
 
 func TestSprintReportOfTheCurrentSprint(t *testing.T) {
@@ -18,9 +18,9 @@ func TestSprintReportOfTheCurrentSprint(t *testing.T) {
 	s.cfg.Sprints = config.SprintsConfig{LengthDays: 14, List: []config.Sprint{
 		{Slug: "s1", Title: "Sprint 1", Start: today.AddDate(0, 0, -3)},
 	}}
-	a := gitbugiotest.NewImportedIssue(t, s.b, "Login", "https://github.com/o/r/issues/7")
-	b := gitbugiotest.NewIssue(t, s.b, "Export")
-	c := gitbugiotest.NewIssue(t, s.b, "Elsewhere")
+	a := storetest.NewImportedIssue(t, s.b, "Login", "https://github.com/o/r/issues/7")
+	b := storetest.NewIssue(t, s.b, "Export")
+	c := storetest.NewIssue(t, s.b, "Elsewhere")
 	for id, labels := range map[string][]string{
 		a: {"sprint:s1", "status:in-progress", "assignee:guilbep"},
 		b: {"sprint:s1", "status:validated"},
@@ -30,7 +30,7 @@ func TestSprintReportOfTheCurrentSprint(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	gitbugiotest.CloseIssue(t, s.b, b)
+	storetest.CloseIssue(t, s.b, b)
 
 	var rep struct{ Sprint, Title, Markdown string }
 	if code := call(t, "GET", ts.URL+"/api/report", nil, &rep); code != http.StatusOK {

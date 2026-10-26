@@ -11,7 +11,7 @@ import (
 	"testing"
 
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/gitbugio/gitbugiotest"
+	"github.com/guilbep/git-board/internal/store/storetest"
 )
 
 // fakeGitLab answers what adding a GitLab forge asks: who the token is,
@@ -41,7 +41,7 @@ func fakeGitLab(t *testing.T) *httptest.Server {
 func TestCredentialsNeverShowTheirToken(t *testing.T) {
 	t.Parallel()
 	ts, s := forgeServer(t, ghForge, glForge)
-	gitbugiotest.Token(t, s.b, "https://github.com", "guilbep", "very-secret-value")
+	storetest.Token(t, s.b, "https://github.com", "guilbep", "very-secret-value")
 	resp, err := http.Get(ts.URL + "/api/credentials")
 	if err != nil {
 		t.Fatal(err)
@@ -112,6 +112,45 @@ func TestAddAndRemoveABridge(t *testing.T) {
 	s.syncing.Store(true)
 	if code := call(t, "DELETE", ts.URL+"/api/bridges/gl2", nil, nil); code != http.StatusConflict {
 		t.Errorf("during a forge sync: %d, want 409", code)
+	}
+}
+
+// Adding a forge while the forges are found in the remotes writes theirs
+// too, as GitHub spells it: a table turns the finding off. A project a
+// remote names already is refused. Serial: it answers for GitHub.
+func TestAddAForgeKeepsTheFoundOnes(t *testing.T) {
+	storetest.GitHub(t, map[string]string{"o/r": "O/R"}) // what a run reads of the found one
+	ts, s := forgeServer(t)
+	storetest.ForgeOrigin(t, s.b.GitDir(), "git@github.com:o/r.git")
+	github := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path { // what adding asks: who the token is, and the project
+		case "/user":
+			_, _ = io.WriteString(w, `{"login":"me"}`)
+		case "/repos/o/r":
+			_, _ = io.WriteString(w, `{"id":1,"full_name":"O/R"}`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(github.Close)
+	s.githubAPI = github.URL
+
+	code, msg := callError(t, "POST", ts.URL+"/api/bridges", map[string]string{"target": "github", "url": "https://github.com/o/r", "token": "tok"})
+	if code != http.StatusBadRequest || !strings.Contains(msg, "the git remotes name github.com O/R already: it is the forge github") {
+		t.Errorf("a project a remote names: %d %q", code, msg)
+	}
+	gl := fakeGitLab(t)
+	if code := call(t, "POST", ts.URL+"/api/bridges", map[string]string{"target": "gitlab", "url": gl.URL + "/scratchpad/sync-trial", "token": "good-token"}, nil); code != http.StatusOK {
+		t.Fatalf("add: %d", code)
+	}
+	text, _ := os.ReadFile(s.cfgPath)
+	for _, want := range []string{"[forges.github]\nkind = \"github\"\nproject = \"O/R\"\nsync = true\n", "[forges.gl]\nkind = \"gitlab\""} {
+		if !strings.Contains(string(text), want) {
+			t.Errorf("the file lacks %q:\n%s", want, text)
+		}
+	}
+	if f := s.config().Forges; len(f) != 2 || s.config().Discover {
+		t.Errorf("forges %+v, discover %v", f, s.config().Discover)
 	}
 }
 

@@ -15,8 +15,8 @@ import (
 	"testing"
 
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/gitbugio"
-	"github.com/guilbep/git-board/internal/gitbugio/gitbugiotest"
+	"github.com/guilbep/git-board/internal/store"
+	"github.com/guilbep/git-board/internal/store/storetest"
 )
 
 // fakeGitHub is GitHub's API as the gate uses it, answering with
@@ -118,7 +118,7 @@ func gateRepo(t *testing.T, url string, withToken bool) (*apiServer, *fakeGitHub
 	git(t, dir, "update-ref", "refs/remotes/origin/fix/2518-x", "fix/2518-x")
 	git(t, dir, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/dev")
 
-	b, err := gitbugio.Open(dir)
+	b, err := store.Open(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -126,8 +126,8 @@ func gateRepo(t *testing.T, url string, withToken bool) (*apiServer, *fakeGitHub
 	if _, err := b.NewIdentity("dev", "dev@example.com"); err != nil {
 		t.Fatal(err)
 	}
-	gitbugiotest.SetMyLogin(t, b, "dev")
-	id := gitbugiotest.NewImportedIssue(t, b, "[BUG](Equipment) Crash on save (#2518)", "https://github.com/o/r/issues/2518")
+	storetest.SetMyLogin(t, b, "dev")
+	id := storetest.NewImportedIssue(t, b, "[BUG](Equipment) Crash on save (#2518)", "https://github.com/o/r/issues/2518")
 	gh := newFakeGitHub(t)
 	s := &apiServer{cfg: &config.Config{}, b: b, me: "guilbep", githubAPI: gh.URL, gitDir: filepath.Join(dir, ".git"), root: dir}
 	// ponytail: the token a credential helper gives, in M5's second phase
@@ -181,6 +181,20 @@ func TestPulls(t *testing.T) {
 	}
 }
 
+// With no one chosen, the gate still reads: any github.com token does.
+func TestPullsWithoutAnIdentity(t *testing.T) {
+	s, gh, id := gateRepo(t, "https://github.com/o/r.git", true)
+	s.githubToken = func() (string, string, error) { return "", "", store.ErrNoMe }
+	t.Setenv("GITHUB_TOKEN", "tok-dev")
+	var res gateAnswer
+	if resp := getJSON(t, serve(t, s).URL+"/api/issues/"+id[:8]+"/pulls", &res); resp.StatusCode != http.StatusOK || len(res.Pulls) != 1 || res.Pulls[0].PR == nil || res.Login != "" {
+		t.Fatalf("no identity: %d %+v", resp.StatusCode, res)
+	}
+	if len(gh.sent()) == 0 {
+		t.Error("GitHub wasn't asked")
+	}
+}
+
 // Without GitHub, or without a branch on origin, the gate asks GitHub
 // nothing: Development works offline.
 func TestPullsWithoutGitHub(t *testing.T) {
@@ -190,7 +204,7 @@ func TestPullsWithoutGitHub(t *testing.T) {
 		t.Errorf("a GitLab origin: %d %+v", resp.StatusCode, res)
 	}
 	s, gh2, _ := gateRepo(t, "https://github.com/o/r.git", false)
-	other := gitbugiotest.NewIssue(t, s.b, "No branch yet")
+	other := storetest.NewIssue(t, s.b, "No branch yet")
 	if resp := getJSON(t, serve(t, s).URL+"/api/issues/"+other[:8]+"/pulls", &res); resp.StatusCode != http.StatusOK || res.Repo != "o/r" || len(res.Pulls) != 0 {
 		t.Errorf("no branch on origin: %d %+v", resp.StatusCode, res)
 	}
@@ -270,7 +284,7 @@ func TestMergePull(t *testing.T) {
 	}
 }
 
-func commentReview(t *testing.T, s *apiServer, issue, id string) *gitbugio.Review {
+func commentReview(t *testing.T, s *apiServer, issue, id string) *store.Review {
 	t.Helper()
 	r, err := s.b.CommentReview(issue, id)
 	if err != nil {

@@ -10,7 +10,7 @@ import (
 
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/fields"
-	"github.com/guilbep/git-board/internal/gitbugio"
+	"github.com/guilbep/git-board/internal/store"
 )
 
 func newMoveCmd() *cobra.Command {
@@ -38,7 +38,7 @@ func runMove(out io.Writer, idPrefix string) error {
 		return err
 	}
 
-	b, err := gitbugio.OpenCwd()
+	b, err := store.OpenCwd()
 	if err != nil {
 		return err
 	}

@@ -8,7 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/guilbep/git-board/internal/fields"
-	"github.com/guilbep/git-board/internal/gitbugio"
+	"github.com/guilbep/git-board/internal/store"
 )
 
 func newCloseCmd() *cobra.Command {
@@ -38,7 +38,7 @@ func runClose(out io.Writer, idPrefix string) error {
 	// hardcoded, since a project's own .git-board.toml owns that name.
 	terminal := field.Options[len(field.Options)-1]
 
-	b, err := gitbugio.OpenCwd()
+	b, err := store.OpenCwd()
 	if err != nil {
 		return err
 	}

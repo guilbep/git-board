@@ -10,7 +10,7 @@ import (
 
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/ghbridge"
-	"github.com/guilbep/git-board/internal/gitbugio"
+	"github.com/guilbep/git-board/internal/store"
 )
 
 func TestDecide(t *testing.T) {
@@ -72,11 +72,11 @@ func item(n int, status string) ghbridge.Item {
 		Content: ghbridge.Content{Number: n, Type: "Issue", URL: testURL + "1"}}
 }
 
-func oneBug(labels ...string) []gitbugio.Issue {
-	return []gitbugio.Issue{{ID: "bug1", GithubURL: testURL + "1", Labels: labels}}
+func oneBug(labels ...string) []store.Issue {
+	return []store.Issue{{ID: "bug1", GithubURL: testURL + "1", Labels: labels}}
 }
 
-func plan(it ghbridge.Item, bugs []gitbugio.Issue, bases map[string]string) ghbridge.SyncPlan {
+func plan(it ghbridge.Item, bugs []store.Issue, bases map[string]string) ghbridge.SyncPlan {
 	all := map[string]map[string]string{}
 	if bases != nil {
 		all["bug1"] = bases

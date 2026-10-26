@@ -1,11 +1,15 @@
 package ghlabels
 
 import (
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"reflect"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/guilbep/git-board/internal/config"
@@ -102,14 +106,34 @@ func TestPlanChangesOnlyWhatTheFileSets(t *testing.T) {
 	}
 }
 
-// What reaches gh: the flags of a create and an update, a count's search.
-func TestGhCommands(t *testing.T) {
+// The labels go through the GitHub forge adapter, with its token rule:
+// GITHUB_TOKEN, never gh's. Serial: it sets the environment and API.
+func TestThroughTheAdapter(t *testing.T) {
+	t.Setenv("GITHUB_TOKEN", "forge-token")
+	t.Setenv("GH_TOKEN", "gh-token")
+	var mu sync.Mutex
 	var calls []string
-	orig := Gh
-	t.Cleanup(func() { Gh = orig })
-	Gh = func(args ...string) ([]byte, error) {
-		calls = append(calls, strings.Join(args, " "))
-		return []byte("3\n"), nil
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		mu.Lock()
+		calls = append(calls, r.Header.Get("Authorization")+" "+r.Method+" "+r.URL.Path+" "+strings.TrimSpace(string(body)))
+		mu.Unlock()
+		switch r.URL.Path {
+		case "/repos/o/r/labels":
+			if r.Method == http.MethodGet {
+				_, _ = io.WriteString(w, `[{"id":1,"name":"bug","color":"d73a4a","description":"Broken"}]`)
+			}
+		case "/graphql":
+			_, _ = io.WriteString(w, `{"data":{"repository":{"label":{"issues":{"totalCount":2},"pullRequests":{"totalCount":1}}}}}`)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	saved := API
+	t.Cleanup(func() { API = saved })
+	API = srv.URL
+
+	if got, err := Existing("o/r"); err != nil || !slices.Equal(got, []Label{{Name: "bug", Color: "d73a4a", Description: "Broken"}}) {
+		t.Fatalf("Existing = %+v, %v", got, err)
 	}
 	if err := Apply(Change{Repo: "o/r", Name: "status:ready", Color: "00897f"}); err != nil {
 		t.Fatal(err)
@@ -120,13 +144,25 @@ func TestGhCommands(t *testing.T) {
 	if n, err := Count("o/r", "good first issue"); err != nil || n != 3 {
 		t.Fatalf("Count = %d, %v", n, err)
 	}
-	want := []string{
-		"label create status:ready --repo o/r --color 00897f",
-		"label create feat --repo o/r --color 0e8a16 --description New feature --force",
-		"api graphql -f query=" + countQuery + " -f owner=o -f name=r -f label=good first issue --jq .data.repository.label | .issues.totalCount + .pullRequests.totalCount",
+	if err := Delete("o/r", "wontfix"); err != nil {
+		t.Fatal(err)
 	}
-	if !slices.Equal(calls, want) {
-		t.Errorf("gh calls =\n%s\nwant\n%s", strings.Join(calls, "\n"), strings.Join(want, "\n"))
+	mu.Lock()
+	defer mu.Unlock()
+	for _, c := range calls {
+		if !strings.HasPrefix(c, "Bearer forge-token ") {
+			t.Errorf("not the forge's token: %q", c)
+		}
+	}
+	want := []string{
+		`POST /repos/o/r/labels {"color":"00897f","description":"","name":"status:ready"}`,
+		`PATCH /repos/o/r/labels/feat {"color":"0e8a16","description":"New feature"}`,
+	}
+	if got := []string{strings.TrimPrefix(calls[1], "Bearer forge-token "), strings.TrimPrefix(calls[2], "Bearer forge-token ")}; !slices.Equal(got, want) {
+		t.Errorf("writes\n%s\nwant\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
+	}
+	if last := calls[len(calls)-1]; last != "Bearer forge-token DELETE /repos/o/r/labels/wontfix " {
+		t.Errorf("last call %q", last)
 	}
 }
 

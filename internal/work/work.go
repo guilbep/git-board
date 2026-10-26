@@ -9,35 +9,35 @@ import (
 	"time"
 
 	"github.com/guilbep/git-board/internal/cycle"
-	"github.com/guilbep/git-board/internal/gitbugio"
 	"github.com/guilbep/git-board/internal/inbox"
+	"github.com/guilbep/git-board/internal/store"
 )
 
 // Row is one open issue's cycle, slimmed for a list.
 type Row struct {
-	Issue    gitbugio.Issue `json:"issue"`
-	Step     int            `json:"step"`
-	Of       int            `json:"of"`
-	Name     string         `json:"name"`
-	Risk     string         `json:"risk,omitempty"`
-	Done     bool           `json:"done"`
-	Waits    cycle.Waits    `json:"waits"`
-	Mine     bool           `json:"mine"`
-	Actions  []string       `json:"actions,omitempty"`
-	Since    time.Time      `json:"since"`    // when the gate started waiting
-	Involved bool           `json:"involved"` // the viewer's issue
-	Question *Question      `json:"question,omitempty"`
-	Branch   string         `json:"branch,omitempty"` // the evidence branch (agents match it)
+	Issue    store.Issue `json:"issue"`
+	Step     int         `json:"step"`
+	Of       int         `json:"of"`
+	Name     string      `json:"name"`
+	Risk     string      `json:"risk,omitempty"`
+	Done     bool        `json:"done"`
+	Waits    cycle.Waits `json:"waits"`
+	Mine     bool        `json:"mine"`
+	Actions  []string    `json:"actions,omitempty"`
+	Since    time.Time   `json:"since"`    // when the gate started waiting
+	Involved bool        `json:"involved"` // the viewer's issue
+	Question *Question   `json:"question,omitempty"`
+	Branch   string      `json:"branch,omitempty"` // the evidence branch (agents match it)
 }
 
 // Question is an agent's question to the viewer: a comment with ask
 // metadata, else the newest comment ending in ? the viewer hasn't
 // answered.
 type Question struct {
-	ID   string          `json:"id"`
-	Body string          `json:"body"`
-	By   gitbugio.Person `json:"by"`
-	At   time.Time       `json:"at"`
+	ID   string       `json:"id"`
+	Body string       `json:"body"`
+	By   store.Person `json:"by"`
+	At   time.Time    `json:"at"`
 }
 
 // Groups is Needs you and Waiting on others, oldest wait first.
@@ -47,7 +47,7 @@ type Groups struct {
 }
 
 // RowOf is the thread's row, from its computed cycle.
-func RowOf(th gitbugio.Thread, c cycle.Cycle, me inbox.Me) Row {
+func RowOf(th store.Thread, c cycle.Cycle, me inbox.Me) Row {
 	r := Row{Issue: th.Issue, Step: c.Step, Of: c.Of, Name: c.Name, Risk: c.Risk, Done: c.Done, Waits: c.Waits, Mine: c.Mine,
 		Actions: c.Actions, Involved: Involved(th, me), Question: QuestionOf(th, me), Branch: c.Evidence.Branch}
 	r.Since = Since(th)
@@ -87,7 +87,7 @@ func Group(rows []Row, me string, team bool) Groups {
 // approval, a run or a check), the creation otherwise.
 // ponytail: the last state change, not the gate's own start; the step
 // history (replaying the events through Compute) would give that.
-func Since(th gitbugio.Thread) time.Time {
+func Since(th store.Thread) time.Time {
 	var at time.Time
 	for _, e := range th.Events {
 		if e.Kind != "comment" || len(e.Meta) > 0 {
@@ -99,7 +99,7 @@ func Since(th gitbugio.Thread) time.Time {
 
 // Involved tells whether the issue is the viewer's: its author, or a
 // field naming the login (assignee, pm, reviewer…).
-func Involved(th gitbugio.Thread, me inbox.Me) bool {
+func Involved(th store.Thread, me inbox.Me) bool {
 	if me.Is(th.Author) {
 		return true
 	}
@@ -116,7 +116,7 @@ func Involved(th gitbugio.Thread, me inbox.Me) bool {
 // metadata, else one ending in ?; nil once the viewer commented after it.
 // ponytail: nothing marks an identity as an agent yet, so any other
 // person's question counts; M5 names the agent on the worktree.
-func QuestionOf(th gitbugio.Thread, me inbox.Me) *Question {
+func QuestionOf(th store.Thread, me inbox.Me) *Question {
 	var ask, mark *Question
 	for _, e := range th.Events {
 		if e.Kind != "comment" {

@@ -3,7 +3,7 @@
 // the work flowed each day (a cumulative flow), how many issues close a
 // week, how long an issue takes once started, how the current sprint is
 // burning up, and the board as it was on any day. Pure logic: the server
-// feeds it the history (gitbugio.History).
+// feeds it the history (store.History).
 package insights
 
 import (

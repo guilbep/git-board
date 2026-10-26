@@ -15,21 +15,24 @@
   Without `GOPRIVATE`, `go install` tries the public module proxy/checksum
   DB first, 404s (it's private), and fails — even with the SSH rewrite
   above already in place.
-- `gh` CLI, authenticated, for `bridge pull` and `lint --create-labels`
-  (`read:project` scope at minimum; `repo` scope for `--create-labels
-  --apply`).
+- `gh` CLI, authenticated, for `bridge pull` (`read:project` scope at
+  minimum). The labels (`lint --create-labels`, Settings › Labels) go
+  through GitHub's API with the forge sync's token instead.
 
 ## Workflow
 
 ```bash
+make         # make help: every target, in a line each
 make build   # go build ./...
 make test    # go test ./...
 make vet     # go vet ./...
 make fmt     # gofmt -l . (lists files needing formatting; run gofmt -w to fix)
 make web-check # the web app's typecheck and tests
 make ci      # the web checks and build, then everything above: what CI runs
-make install # go install the git-board binary
+make install # the web app built, then go install the git-board binary
 make install-latest # the latest release's binary instead, web app inside
+make docs    # the docs site (guide, spec, decisions), in site/: a broken link fails it
+make docs-serve # the docs site on localhost, rebuilt on save
 ```
 
 Run `make ci` once a change is done, before it's pushed or landed: CI runs
@@ -88,7 +91,7 @@ send. The per-issue sync touches only that issue.
 ## Conventions
 
 - Real fixtures over mocks: tests spin up a real on-disk git-bug repo
-  (`newTestRepo`/`gitbugiotest`) or a fake CLI script on `PATH` (see
+  (`newTestRepo`/`storetest`) or a fake CLI script on `PATH` (see
   `bridge.go`'s `fetchGithubItems` seam, `lint.go`'s
   `existingGithubLabels`/`createGithubLabel` seams), not hand-rolled mocks.
 - Every bug fix ships with a regression test that fails without the fix.

@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/gitbugio/gitbugiotest"
+	"github.com/guilbep/git-board/internal/store/storetest"
 )
 
 // The page gets each field's type, guessed or configured, and dates
@@ -15,9 +15,9 @@ func TestFieldsSayTheirType(t *testing.T) {
 	ts, s := newIssueServer(t)
 	s.cfg.Fields = map[string]config.Field{"est": {Single: true, Numeric: true}, "status": {Options: []string{"todo", "done"}}}
 	day := func(d int) string { return time.Now().AddDate(0, 0, d).Format("2006-01-02") }
-	a := gitbugiotest.NewIssue(t, s.b, "late")
-	b := gitbugiotest.NewIssue(t, s.b, "soon")
-	c := gitbugiotest.NewIssue(t, s.b, "later")
+	a := storetest.NewIssue(t, s.b, "late")
+	b := storetest.NewIssue(t, s.b, "soon")
+	c := storetest.NewIssue(t, s.b, "later")
 	for id, labels := range map[string][]string{
 		a: {"due:" + day(-2), "parent:#3", "assignee:guilbep", "cat:feat"},
 		b: {"due:" + day(3), "blocked-by:#4"},
@@ -65,9 +65,9 @@ func TestFieldsSayTheirType(t *testing.T) {
 func TestIssueRefsBothWays(t *testing.T) {
 	t.Parallel()
 	ts, s := newIssueServer(t)
-	epic := gitbugiotest.NewImportedIssue(t, s.b, "Hosted git-board", "https://github.com/guilbep/git-board/issues/12")
-	child := gitbugiotest.NewIssue(t, s.b, "OIDC login")
-	other := gitbugiotest.NewIssue(t, s.b, "Webhooks")
+	epic := storetest.NewImportedIssue(t, s.b, "Hosted git-board", "https://github.com/guilbep/git-board/issues/12")
+	child := storetest.NewIssue(t, s.b, "OIDC login")
+	other := storetest.NewIssue(t, s.b, "Webhooks")
 	if _, err := s.b.ApplyLabelChange(child, []string{"parent:#12"}, nil); err != nil {
 		t.Fatal(err)
 	}

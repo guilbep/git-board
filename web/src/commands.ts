@@ -24,6 +24,7 @@ function write(key: string, value: string) {
 export const filtersHidden = ref(read('gb-filters-hidden') === '1');
 watch(filtersHidden, (v) => write('gb-filters-hidden', v ? '1' : '0'));
 
+// number is as a card names it: GB-30, else #36 (palette.ts numberName)
 export type Recent = { id: string; title: string; number?: string | undefined };
 
 export function recentIssues(): Recent[] {

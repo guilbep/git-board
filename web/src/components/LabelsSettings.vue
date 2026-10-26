@@ -1,9 +1,10 @@
 <!-- Settings › Labels: the labels the project defines (each field's
      options, the sprints, the kinds) with their color, description and
      open issues, and how each GitHub repository of [repos] (else origin)
-     has them, read with gh where git board serve runs. Adopt writes
-     GitHub's color and description into the Project file tab's draft;
-     Send to GitHub creates and updates them after a preview. Then lint:
+     has them, read through GitHub's API with the forge sync's token where
+     git board serve runs. Adopt writes GitHub's color and description into
+     the Project file tab's draft; Send to GitHub creates and updates them
+     after a preview, offered only once every repository was read. Then lint:
      git board lint's checks, and the GitHub labels outside the project's,
      each deleted after a confirm. -->
 <template>
@@ -51,7 +52,8 @@
         </table>
       </div>
 
-      <template v-if="d.repos.length && d.rows.length">
+      <!-- a repository GitHub didn't answer for: nothing to compare, nothing to send -->
+      <template v-if="d.repos.length && d.rows.length && !errors.length">
         <div v-if="plan" class="lb-confirm" role="alert">
           <p v-if="!plan.length"><b>GitHub has every label as the file says.</b></p>
           <template v-else>

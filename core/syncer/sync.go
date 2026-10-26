@@ -40,6 +40,16 @@ type Options struct {
 	// each group's places as "<key>#<number>", keys in any case (sync.md's
 	// "Switching from the fork"). Nil leaves the fork's texts to say.
 	Mirrors [][]string
+	// Create, when set, is asked before the push creates issues on a
+	// project: its key, how many it would create, and whether the run
+	// started with no sync entity for it (first). False creates none of
+	// them there, and the rest of the push goes on. Nil creates them.
+	Create func(key string, n int, first bool) bool
+	// Left hears each project left out of the run, by its key, with why:
+	// its visibility, its posting account or its issues couldn't be read.
+	// The run goes on with the others. Nil returns them all, joined, as
+	// the run's error, after the others are synced.
+	Left func(key string, why error)
 }
 
 // Report counts what a run did. Created, Updated and Unchanged count the
@@ -99,6 +109,8 @@ type project struct {
 	vis    forge.Visibility
 	me     forge.Account
 	st     *state
+	first  bool                     // no sync entity when the run started
+	list   []forge.Issue            // the pull's listing, read before any write
 	listed map[string]forge.Issue   // forge id -> as read this run
 	tokens map[string]forge.Forge   // account id -> its view, nil when it has no token
 	acc    map[string]forge.Account // person id -> their account on this server
@@ -110,8 +122,19 @@ func start(ctx context.Context, s *gitstore.Store, opt Options, forges []forge.F
 		return Report{}, err
 	}
 	defer unlock()
-	var unread error // the projects whose visibility can't be read: left out of the run
+	var unread error // the projects left out of the run, when no one hears them (Left)
 	defer func() { err = errors.Join(unread, err) }()
+	leave := func(key string, why error) error {
+		if ctx.Err() != nil {
+			return ctx.Err() // stopped, not unreadable
+		}
+		if opt.Left != nil {
+			opt.Left(key, why)
+		} else {
+			unread = errors.Join(unread, fmt.Errorf("syncer: %s: %w", key, why))
+		}
+		return nil
+	}
 	r := &run{ctx: ctx, s: s, opt: opt, now: time.Now().Unix(), states: map[string]*state{}, pull: pull, push: push,
 		mirrors: map[string][]string{}, forkIDs: map[string]string{}}
 	for _, g := range opt.Mirrors {
@@ -128,17 +151,36 @@ func start(ctx context.Context, s *gitstore.Store, opt Options, forges []forge.F
 		return r.report, err
 	}
 	for _, f := range forges {
+		// a project that can't be read is left out before anything is
+		// written: as not public, it would take what is private, and a
+		// listing missed would make its issues look new
 		vis, verr := f.Visibility(ctx)
 		if verr != nil {
-			unread = errors.Join(unread, fmt.Errorf("syncer: %s: visibility: %w", f.Key(), verr))
-			continue // as not public, it would take what is private
+			if err := leave(f.Key(), fmt.Errorf("visibility: %w", verr)); err != nil {
+				return r.report, err
+			}
+			continue
 		}
 		p := &project{f: f, key: f.Key(), vis: vis, listed: map[string]forge.Issue{}, tokens: map[string]forge.Forge{}, acc: map[string]forge.Account{}}
-		if p.me, err = f.Me(ctx); err != nil {
-			return r.report, fmt.Errorf("syncer: %s: posting account: %w", p.key, err)
+		var merr error
+		if p.me, merr = f.Me(ctx); merr != nil {
+			if err := leave(p.key, fmt.Errorf("posting account: %w", merr)); err != nil {
+				return r.report, err
+			}
+			continue
 		}
 		if p.st, err = loadState(s, p.key); err != nil {
 			return r.report, err
+		}
+		p.first = p.st.log == nil
+		{
+			var lerr error
+			if p.list, lerr = r.listing(p); lerr != nil {
+				if err := leave(p.key, fmt.Errorf("its issues: %w", lerr)); err != nil {
+					return r.report, err
+				}
+				continue
+			}
 		}
 		r.states[p.key] = p.st
 		r.projects = append(r.projects, p)
@@ -390,11 +432,7 @@ func (r *run) listing(p *project) ([]forge.Issue, error) {
 
 // pullFrom reads p's issues and pulls each, as sync.md's pull says.
 func (r *run) pullFrom(p *project) error {
-	list, err := r.listing(p)
-	if err != nil {
-		return err
-	}
-	for _, fi := range list {
+	for _, fi := range p.list {
 		if err := r.ctx.Err(); err != nil {
 			return err
 		}
@@ -457,7 +495,7 @@ func (r *run) pullOne(p *project, fi forge.Issue, final bool) error {
 func (r *run) alone(p *project) ([]forge.Issue, error) {
 	id := r.opt.Issue
 	if l, ok := p.st.link[id]; ok {
-		fi, err := p.f.Issue(r.ctx, l.ForgeID)
+		fi, err := p.f.Issue(r.ctx, forge.Ref{ID: l.ForgeID, Number: l.Number})
 		if errors.Is(err, forge.ErrNotFound) || errors.Is(err, forge.ErrConfidential) {
 			return nil, nil
 		}
@@ -526,11 +564,7 @@ func (r *run) byMarker(p *project, fi forge.Issue) (id string, ok bool, err erro
 // forge issues a push created and stopped before linking, so that it
 // never creates one twice. It takes nothing else from the forge.
 func (r *run) relink(p *project) error {
-	list, err := r.listing(p)
-	if err != nil {
-		return err
-	}
-	for _, fi := range list {
+	for _, fi := range p.list {
 		if _, linked := p.st.links[fi.ID]; linked {
 			continue
 		}
@@ -618,14 +652,21 @@ func createdSeen(author string, now int64, id, title, body string) []oplog.Op {
 }
 
 // pushTo sends git-board's changes to p: it creates the issues p hasn't,
-// oldest first, then writes to each linked one git-board changed.
+// oldest first, when Create lets it, then writes to each linked one
+// git-board changed.
 func (r *run) pushTo(p *project) error {
 	ids := r.oldestFirst()
 	if r.opt.Issue != "" {
 		ids = []string{r.opt.Issue}
 	}
+	var todo []*issue.Issue
 	for _, id := range ids {
 		if is, ok := r.issues[id]; ok && r.mayCreate(p, is) {
+			todo = append(todo, is)
+		}
+	}
+	if len(todo) > 0 && (r.opt.Create == nil || r.opt.Create(p.key, len(todo), p.first)) {
+		for _, is := range todo {
 			if err := r.create(p, is); err != nil {
 				return err
 			}
@@ -646,7 +687,7 @@ func (r *run) pushTo(p *project) error {
 			if len(pl.pushes()) == 0 {
 				continue
 			}
-			got, err := p.f.Issue(r.ctx, l.ForgeID)
+			got, err := p.f.Issue(r.ctx, forge.Ref{ID: l.ForgeID, Number: l.Number})
 			if errors.Is(err, forge.ErrNotFound) || errors.Is(err, forge.ErrConfidential) {
 				continue // gone or confidential: nothing goes to it
 			}
@@ -672,7 +713,7 @@ func (r *run) pushTo(p *project) error {
 // changed nothing. Comparing with it tells what the push would send.
 func (r *run) virtual(p *project, id string) forge.Issue {
 	seen := p.st.seen[id]
-	fi := forge.Issue{ID: p.st.link[id].ForgeID, Title: seen["title"], Body: seen["body"], Status: seen["status"],
+	fi := forge.Issue{ID: p.st.link[id].ForgeID, Number: p.st.link[id].Number, Title: seen["title"], Body: seen["body"], Status: seen["status"],
 		Labels: split(seen["labels"])}
 	for _, a := range split(seen["assignees"]) {
 		fi.Assignees = append(fi.Assignees, forge.Account{ID: a})

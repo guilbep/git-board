@@ -14,8 +14,8 @@ import (
 
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/ghpr"
-	"github.com/guilbep/git-board/internal/gitbugio/gitbugiotest"
 	"github.com/guilbep/git-board/internal/proof"
+	"github.com/guilbep/git-board/internal/store/storetest"
 )
 
 type stepTestsAnswer struct {
@@ -216,7 +216,7 @@ func TestChecksSetup(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "lefthook.yml"), []byte("pre-commit:\n  commands:\n    vet:\n      run: go vet ./...\n    fmt:\n      run: gofmt -l {staged_files}\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	s := &apiServer{cfg: &config.Config{}, b: gitbugiotest.New(t), root: dir, cfgPath: filepath.Join(dir, ".git-board.toml")}
+	s := &apiServer{cfg: &config.Config{}, b: storetest.New(t), root: dir, cfgPath: filepath.Join(dir, ".git-board.toml")}
 	if err := os.WriteFile(s.cfgPath, []byte("# the board\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}

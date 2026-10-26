@@ -8,7 +8,7 @@ import (
 
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/filter"
-	"github.com/guilbep/git-board/internal/gitbugio"
+	"github.com/guilbep/git-board/internal/store"
 )
 
 // None is the value of an issue without the field, as BucketBy names it.
@@ -105,7 +105,7 @@ func Facets(b issueBackend, cfg *config.Config, filterStr, me string) ([]Facet, 
 
 // facetKeys: is, the configured fields, the other label namespaces found
 // on the issues (sprint, mod…), then plain labels.
-func facetKeys(cfg *config.Config, issues []gitbugio.Issue) []string {
+func facetKeys(cfg *config.Config, issues []store.Issue) []string {
 	var configured []string
 	if cfg != nil {
 		for name := range cfg.Fields {
@@ -140,7 +140,7 @@ func owns(key string, c filter.Condition) bool {
 	return false
 }
 
-func valuesOf(issue gitbugio.Issue, key string) []string {
+func valuesOf(issue store.Issue, key string) []string {
 	if key == "is" {
 		return []string{issue.Status}
 	}
@@ -161,14 +161,14 @@ func valuesOf(issue gitbugio.Issue, key string) []string {
 }
 
 // only is an issue with just value for key.
-func only(key, value string) gitbugio.Issue {
+func only(key, value string) store.Issue {
 	switch {
 	case key == "is":
-		return gitbugio.Issue{Status: value}
+		return store.Issue{Status: value}
 	case value == None:
-		return gitbugio.Issue{}
+		return store.Issue{}
 	case key == "label":
-		return gitbugio.Issue{Labels: []string{value}}
+		return store.Issue{Labels: []string{value}}
 	}
-	return gitbugio.Issue{Labels: []string{key + ":" + value}}
+	return store.Issue{Labels: []string{key + ":" + value}}
 }

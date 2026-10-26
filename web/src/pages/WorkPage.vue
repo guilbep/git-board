@@ -114,7 +114,7 @@
         </div>
         <SyncProgress v-if="forgeStatus?.job?.state === 'running'" :job="forgeStatus.job" :bridges="forgeStatus.bridges" :starting="sent || 'Running…'" />
         <p v-else-if="sent" class="gb-hint">{{ sent }}</p>
-        <p class="gb-hint"><router-link to="/sync">Sync</router-link> has the git remotes.</p>
+        <p class="gb-hint">Send all goes to the forges alone; <router-link to="/settings/sync">Sync</router-link> moves everything, git too.</p>
       </section>
       <section aria-labelledby="retro-h">
         <h2 id="retro-h" class="h5">Since the last retro</h2>

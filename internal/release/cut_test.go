@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/guilbep/git-board/internal/gitbugio"
 	"github.com/guilbep/git-board/internal/release"
 	"github.com/guilbep/git-board/internal/release/releasetest"
+	"github.com/guilbep/git-board/internal/store"
 )
 
 func cut(t *testing.T, r *release.Runner, c release.Cut) release.Tag {
@@ -195,7 +195,7 @@ func TestFinalNeedsACandidate(t *testing.T) {
 func TestCutRefusesYanked(t *testing.T) {
 	r, tools, fx := releasetest.NewRunner(t)
 	m := shipped(t, r, fx)
-	record(t, r, tools, m, gitbugio.ChartArtifact{})
+	record(t, r, tools, m, store.ChartArtifact{})
 	rec, _, _ := r.B.ReleaseFor(m)
 	if err := r.B.YankRelease(rec.ID, "corrupts data"); err != nil {
 		t.Fatal(err)
@@ -264,7 +264,7 @@ func TestRollbackComments(t *testing.T) {
 	first := released(t, fx)
 	m := fx.Commit(t, "fix")
 	fx.Tag(t, m, "v1.0.1")
-	record(t, r, tools, m, gitbugio.ChartArtifact{Version: "v1.0.1", Digest: "sha256:chart"})
+	record(t, r, tools, m, store.ChartArtifact{Version: "v1.0.1", Digest: "sha256:chart"})
 	both(t, fx, "prod", release.Deployed{Commit: m, Version: "v1.0.1"})
 	before := heads(t, fx)
 	err := r.Rollback(ctx, "prod", "v1.0.0", "login broken")
@@ -302,13 +302,13 @@ func TestRollbackComments(t *testing.T) {
 func TestRollbackSplit(t *testing.T) {
 	r, tools, fx := releasetest.NewRunner(t)
 	first := released(t, fx)
-	record(t, r, tools, first, gitbugio.ChartArtifact{})
+	record(t, r, tools, first, store.ChartArtifact{})
 	m1 := fx.Commit(t, "one")
 	m2 := fx.Commit(t, "two")
 	fx.Tag(t, m1, "v1.0.1")
 	fx.Tag(t, m2, "v1.0.2")
-	record(t, r, tools, m1, gitbugio.ChartArtifact{})
-	record(t, r, tools, m2, gitbugio.ChartArtifact{})
+	record(t, r, tools, m1, store.ChartArtifact{})
+	record(t, r, tools, m2, store.ChartArtifact{})
 	fx.SetOverlay(t, 0, "prod", release.Deployed{Commit: m2, Version: "v1.0.2"})
 	fx.SetOverlay(t, 1, "prod", release.Deployed{Commit: m1, Version: "v1.0.1"})
 	if err := r.Rollback(ctx, "prod", "v1.0.0", "both broken"); err != nil {
