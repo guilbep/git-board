@@ -242,7 +242,7 @@ The `sprint` field follows these dates: in the filters (sorted by **Dates**, tod
 
 ## GitHub Project
 
-The GitHub Project whose fields (status, priority, sprint…) `git board bridge pull` and `sync` turn into labels and back.
+The GitHub Project whose fields (status, priority, sprint…) `git board bridge pull` and `sync` turn into labels and back. The whole sync, Settings › Sync and `git board sync`, runs `bridge sync` as its third step: after the forges, before the git push.
 
 ```toml
 [github-project]
@@ -261,7 +261,7 @@ The token needs the `project` scope: `gh auth refresh -s project`.
 
 ## Forges
 
-The forge projects the issues sync with, GitHub or GitLab, one table each, named as you like: Settings › Forges adds, switches and removes them. [Forges](forges.md) says how a sync goes. With no table, the forges are those the git remotes are on ([Forges](forges.md#adding-a-forge)); one table or more, or `discover = false`, turns that off.
+The forge projects the issues sync with, GitHub or GitLab, one table each, named as you like: Settings › Sync adds, switches and removes them. [Forges](forges.md) says how a sync goes. With no table, the forges are those the git remotes are on ([Forges](forges.md#adding-a-forge)); one table or more, or `discover = false`, turns that off.
 
 ```toml
 [forges]
@@ -563,7 +563,7 @@ error: not proven: typecheck not run at 4c1e2a0
 
 ### The Work page
 
-**Work** (`/work`, first in the header) is what needs a person, computed from every open issue's step. **Mine** is the viewer's: **Needs you** lists the issues whose gate waits for the viewer, or where another person asked them something, oldest wait first, with the step, what it waits for, since when, and the action (the three risk buttons, Answer, Read the plan, Review, Sign off, or Open); **Waiting on others** lists the issues the viewer is involved in (author, or named by a field such as `pm:alice`, on the issue or inherited from `[roles]`) whose gate waits for someone else. **Team** is every open issue: anyone's gates join Needs you, and the rest join Waiting on others. An issue is in one group at most. **Agents** is one row per linked git worktree (`git worktree list`): its branch, its last commit, and the issue whose evidence branch it is, with that issue's step and state. **To send** counts what waits for the forges, as the Sync page does, with Send all and Check first. **Since the last retro** counts the comments with `correction` metadata on open issues since the current sprint's start (`[sprints]` is the clock; without one it says so).
+**Work** (`/work`, first in the header) is what needs a person, computed from every open issue's step. **Mine** is the viewer's: **Needs you** lists the issues whose gate waits for the viewer, or where another person asked them something, oldest wait first, with the step, what it waits for, since when, and the action (the three risk buttons, Answer, Read the plan, Review, Sign off, or Open); **Waiting on others** lists the issues the viewer is involved in (author, or named by a field such as `pm:alice`, on the issue or inherited from `[roles]`) whose gate waits for someone else. **Team** is every open issue: anyone's gates join Needs you, and the rest join Waiting on others. An issue is in one group at most. **Agents** is one row per linked git worktree (`git worktree list`): its branch, its last commit, and the issue whose evidence branch it is, with that issue's step and state. **To send** counts what waits for the forges, as Settings › Sync does, with Send all (to the forges alone) and Check first. **Since the last retro** counts the comments with `correction` metadata on open issues since the current sprint's start (`[sprints]` is the clock; without one it says so).
 
 A question is a comment by someone else than the viewer with `ask` metadata, or, failing that, whose text ends in a question mark; the viewer's next comment answers it. Since is the issue's last state change (a status, label, title or card comment), not a plain comment. `GET /api/work?who=me|team` returns the groups; it needs an identity with a login, as the Inbox does.
 
@@ -585,7 +585,7 @@ A project can number its issues itself, `CO2-3075`, instead of leaning on a forg
 git board numbers init --prefix CO2 --start 3052
 ```
 
-Choose the prefix once: issues carry it wherever a forge could read the number, in branches (`fix/co2-3075-…`), pull request titles, commits and messages. A bare number collides with the forge's own: GitHub links `#3075` or a branch's `3075` to its issue 3075. `start` is one more than GitHub's highest issue or pull request number (`gh api 'repos/OWNER/REPO/issues?state=all&per_page=1' -q '.[0].number'`). GitHub numbers below it stay the issues' own: `#2518` is `CO2-2518`, even for an issue imported later. Every other issue, made here or brought in from a forge, gets the next number with the next push to `origin` you ask for: **Push** on the Sync page's Remotes, **Number them now** in Settings › Numbers, `git board sync`, or `git board numbers`. The counter only names issues origin has, so other clones never see a number for an issue they can't get: `git board numbers` numbers what was pushed already, and a sync or Push pushes the issues first. Until then an issue shows its short git-bug id. Nothing pushes the counter on its own: not creating an issue, not a forge sync. Pushing the counter is the lock: when two clones number at once, git refuses the second push and that clone takes the next number.
+Choose the prefix once: issues carry it wherever a forge could read the number, in branches (`fix/co2-3075-…`), pull request titles, commits and messages. A bare number collides with the forge's own: GitHub links `#3075` or a branch's `3075` to its issue 3075. `start` is one more than GitHub's highest issue or pull request number (`gh api 'repos/OWNER/REPO/issues?state=all&per_page=1' -q '.[0].number'`). GitHub numbers below it stay the issues' own: `#2518` is `CO2-2518`, even for an issue imported later. Every other issue, made here or brought in from a forge, gets the next number with the next push to `origin` you ask for: **Sync** in Settings › Sync or `git board sync`, **Number them now** in Settings › Numbers, or `git board numbers`. The counter only names issues origin has, so other clones never see a number for an issue they can't get: `git board numbers` numbers what was pushed already, and a sync pushes the issues first. Until then an issue shows its short git-bug id. Nothing pushes the counter on its own: not creating an issue, not a forge sync. Pushing the counter is the lock: when two clones number at once, git refuses the second push and that clone takes the next number.
 
 After the switch, a bare number (`3075`, `fix/3075-…`) and `CO2-3075` are the project's number; `#3075` is always a forge's. git-board always writes a project number with its prefix; `#N` is only ever a forge's. Cards, rows and the issue page show the number before the title.
 

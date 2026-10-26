@@ -1,12 +1,17 @@
 # Forges
 
-## Three ways your issues go
+## Where your issues go
 
-Your issues travel with git, like your code. Forges and the GitHub Project are mirrors, for the people who work there.
+Your issues travel with git, like your code. Forges and the GitHub Project are mirrors, for the people who work there. One sync moves them all, from Settings › Sync or with `git board sync`, in this order:
 
-- **1 · Remotes** · git. Everything: code, branches, issues and people, to and from any git remote (GitHub or GitLab as git servers, a shared server, a colleague). Push and Pull: `git board sync`.
-- **2 · Forges** · their API. A mirror of the issues, comments, labels and assignees on GitHub or GitLab, with the forges of `.git-board.toml` (`[forges]`), or with none there, those its git remotes are on. Check (what would change, nothing written), Get, Send, Sync; and on one issue, in its panel, Send now and Refresh.
-- **3 · GitHub Project** · fields. The Project's fields (status, priority, sprint) as `ns:value` labels here, and back when writing is on. Its conflicts are on the Conflicts page.
+1. **git pull** from `origin`: the issues and people, as code goes, and the numbers origin hands out.
+2. **The forges** whose sync is on, over their API: a mirror of the issues, comments, labels and assignees on GitHub or GitLab, with the forges of `.git-board.toml` (`[forges]`), or with none there, those its git remotes are on.
+3. **The GitHub Project**, with `[github-project]`: its fields (status, priority, sprint) as `ns:value` labels here, and back when `write = true`. Its conflicts are on the Conflicts page.
+4. **git push** to `origin`, which numbers the issues origin now has.
+
+A step that fails stops the steps after it, and the sync says which. A forge that can't be read is told, and the others go on. Without an `origin`, the git steps are skipped.
+
+**Check** runs the same steps and writes nothing: a fetch from origin and a compare, the forges' dry run, the Project's check. **Sync** needs a clean check of the last 15 minutes, and asks first, with the check's counts. On one issue, in its panel: Send now and Refresh.
 
 A forge doesn't replace a remote: the people who use git-board pull and push the issues with git; a forge is for the people who stay on GitHub or GitLab.
 
@@ -27,32 +32,32 @@ With no `[forges.<name>]` table, git-board needs none: it finds the forges in th
 
 - `github.com` is GitHub, its project `owner/repo`.
 - `gitlab.com`, or a host whose first label holds `gitlab`, is GitLab. The web host drops a first label `ssh`, or a first label's `-ssh`: `git@gitlab-ssh.epfl.ch:EPFL-ENAC/wiki.git` is `gitlab.epfl.ch`, project `EPFL-ENAC/wiki`. Each run reads the project's numeric id once, as its links are keyed on it; a project whose id can't be read is left out of that run, with why, and the others go on.
-- Any other host is skipped, and `git board switch` and `git board sync` say which URL.
+- Any other host is skipped, and Settings › Sync, `git board switch` and `git board sync` say which URL.
 
 They are named by their kind, `github`, `gitlab`, then `github-2`… when a kind repeats. One table or more turns this off, and so does `discover = false` in `[forges]`.
 
-Settings › Forges › **+ Add a forge**, in four steps:
+Settings › Sync › **+ Add a forge**, for a forge no remote names, in four steps:
 
 1. **Forge**: GitHub or GitLab.
 2. **Project**: its address, as in your browser (`https://github.com/owner/repo`, `https://gitlab.epfl.ch/group/project`); a short name, `gh` or `gl` when left empty; and whether it syncs.
 3. **Token**: one git's credential helper holds for that host already, or a new one pasted.
 4. **Check**: git-board asks the forge whose token it is, the posting account, and whether it sees the project. Nothing is kept when it doesn't. A GitLab project is kept by its numeric id, which a renamed group doesn't change.
 
-Adding writes a `[forges.<name>]` table, and syncs nothing: the first sync is yours to start, from the Sync page, after its check. The address `#/settings/forges?add=1` opens the steps.
+Adding writes a `[forges.<name>]` table, and syncs nothing: the first sync is yours to start, from Settings › Sync, after its check. While the forges come from the remotes, adding one writes their tables too, as a table turns the finding off; one the remotes name already is refused. The address `#/settings/sync?add=1` opens the steps.
 
 ## Sync on or off
 
-With sync on, the forge takes part in the Sync page's sync: each forge is read first, then every change is sent to each, so an issue, comment or change made on one forge reaches the others in one run. Line comments, replies and reviews (Changes tab) stay in git-board: they never go to a forge.
+With sync on, the forge takes part in the sync's forge step: each forge is read first, then every change is sent to each, so an issue, comment or change made on one forge reaches the others in one run. Line comments, replies and reviews (Changes tab) stay in git-board: they never go to a forge.
 
-The check runs the whole sync on a copy of the repository, and answers the forges' writes without making them: what it counts is what the run then does. A real run needs a check of the last 15 minutes. Send alone is refused where the check found issues on the forge by their marker, which a run stopped before linking: only Get or Sync links them.
+The check runs the forge sync on a copy of the repository, and answers the forges' writes without making them: what it counts is what the run then does. A real run needs a check of the last 15 minutes. The Work page's Send all sends alone, after a check.
 
 Each run, the check too, also asks each forge who can be assigned on its project, and says how many it found. The assignee boxes (every person field) then offer them, with the people git-board knows. A forge that doesn't answer is a warning: the boxes keep its last list.
 
-Off (`sync = false`), the forge is kept but stays out of it, until you switch it on again in the Forges table.
+Off (`sync = false`), the forge is kept but stays out of it, until you switch it on again in Settings › Sync. A forge found in the remotes always syncs: to leave one out, give the forges tables.
 
 ## Removing a forge
 
-**Remove**, in the Forges table, drops the forge's table from `.git-board.toml`. The issues it brought stay, still linked to it, and so does the token in git's credential helper (`git credential reject` removes it).
+**Remove**, in Settings › Sync, drops the forge's table from `.git-board.toml`. The issues it brought stay, still linked to it, and so does the token in git's credential helper (`git credential reject` removes it).
 
 ## One issue
 
@@ -64,7 +69,7 @@ An issue is linked to a forge issue once, by the sync, and stays so: linking by 
 
 ## On the command line
 
-`git board switch` and `git board sync` print the forges found in the remotes, one line each: name, host and project, a GitLab one's with its id. `git board sync` only lists them: it syncs with the git remotes.
+`git board sync` runs the whole sync, as Settings › Sync does, each step in a line; `--check` is its dry run, and `--git` syncs with git alone: a pull, then a push. It has no check to wait for: `--check` first is yours to run. It and `git board switch` print the forges found in the remotes, one line each: name, host and project, a GitLab one's with its id, and each URL they skip.
 
 Otherwise the forges are `.git-board.toml`'s, edited in Settings or by hand:
 
@@ -83,4 +88,3 @@ login = "you"
 sync = true
 ```
 
-The sync itself runs from the Sync page: there is no forge sync command yet.

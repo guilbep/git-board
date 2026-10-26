@@ -23,7 +23,7 @@ export default defineRouter((/* { store, ssrContext } */) => {
     : (import.meta.env.QUASAR_VUE_ROUTER_MODE === 'history' ? createWebHistory : createWebHashHistory);
 
   const Router = createRouter({
-    // a part of a page, #/sync#forges, else the top
+    // a part of a page (#/page#part), else the top
     scrollBehavior: (to) => (to.hash ? { el: to.hash } : { left: 0, top: 0 }),
     routes,
 

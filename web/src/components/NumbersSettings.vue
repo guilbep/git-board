@@ -34,7 +34,7 @@
         <button v-else type="button" class="epfl-btn epfl-btn-primary nb-start-btn" @click="confirming = true">Number them now</button>
       </section>
       <p v-if="n.unpushed">
-        {{ issues(n.unpushed) }} not on origin yet: pushed and numbered with the next <b>Push</b> on <router-link to="/sync#remotes">Sync › Remotes</router-link>.
+        {{ issues(n.unpushed) }} not on origin yet: pushed and numbered with the next <router-link to="/settings/sync">Sync</router-link>.
       </p>
       <p v-if="!n.waiting && !n.unpushed" class="nb-muted">Every issue has its number.</p>
     </template>
@@ -46,8 +46,8 @@
           imported later, takes the next number.
         </p>
         <p v-if="!n.origin" class="epfl-alert epfl-alert-warning" role="alert">
-          No origin remote: the counter lives on origin. Add one (<code>git remote add origin &lt;url&gt;</code>), push your issues from
-          <router-link to="/sync#remotes">Sync › Remotes</router-link>, then come back.
+          No origin remote: the counter lives on origin. Add one (<code>git remote add origin &lt;url&gt;</code>), push your issues with a
+          <router-link to="/settings/sync">Sync</router-link>, then come back.
         </p>
         <div>
           <label class="nb-label" for="nb-prefix">Prefix</label>
@@ -96,7 +96,7 @@
           <li><b>Choose the prefix once.</b> Once issues carry it, it stays: branches, commits and messages name them by it.</li>
           <li><b>2 to 5 capitals</b> is usual: CO2, GB, INFRA.</li>
           <li><b>Start above every GitHub issue and pull request number.</b> They share one sequence: at or below one, a later import collides with a number already given.</li>
-          <li><b>Numbers go out only with a push you ask for</b>: Start numbering, Number them now, Push on Sync › Remotes, <code>git board numbers</code>. Only issues origin has get one.</li>
+          <li><b>Numbers go out only with a push you ask for</b>: Start numbering, Number them now, a Sync, <code>git board numbers</code>. Only issues origin has get one.</li>
           <li><b>Nothing pushes on its own</b>: not creating an issue, not a forge sync.</li>
         </ul>
         <p>From a terminal: <code>git board numbers init --prefix {{ prefixErr ? 'CO2' : prefix }} --start {{ startErr ? 3052 : start }}</code>.</p>
@@ -183,7 +183,7 @@ const init = () => act(() => startNumbers(prefix.value, start.value), (r) => `Nu
 const run = () => act(numberIssues, (r) => numbered(r.prefix!, r.next!, r.done));
 
 onMounted(() => void load(true));
-// an issue made, or pushed from Sync › Remotes: the counts move
+// an issue made, or pushed with a Sync: the counts move
 const reload = debounced(() => void load());
 const offLive = onLive((e) => (e.kind === 'issues' || e.kind === 'sync') && reload());
 onBeforeUnmount(offLive);

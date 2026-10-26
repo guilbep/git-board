@@ -228,9 +228,11 @@ git-board lint
 git-board verify
 git-board verify fix/2518-retry --base origin/main
 
-# git bug pull/push on one or more git-bug repos (defaults to cwd)
+# the whole sync: git pull, the forges, the GitHub Project, git push
+# (defaults to cwd); --check is its dry run, --git keeps to git
+git-board sync --check
 git-board sync
-git-board sync ../co2-calculator ../git-time
+git-board sync --git ../co2-calculator ../git-time
 
 # the project's own numbers, CO2-3075 (docs/configuration.md, Numbers)
 git-board numbers init --prefix CO2 --start 3052
@@ -270,12 +272,16 @@ errors if neither is set.
 
 ## Syncing (`git-board sync`)
 
-`git-board sync [path...] [--remote origin]` runs `git bug pull` then
-`git bug push` on each path — via the library (`cache.RepoCache.Pull`/
-`Push`), not a `git bug` subprocess, same as everywhere else in git-board.
-Defaults to the current directory if no paths are given; keeps going past
-a path that fails so one broken repo doesn't block the rest, then reports
-every failure together at the end.
+`git-board sync [path...] [--remote origin]` runs the whole sync on each
+path, as Settings › Sync does: a git pull from the remote, the forge sync
+of every forge whose sync is on, the GitHub Project's fields with
+`[github-project]`, then a git push, which numbers the issues origin has.
+A step that fails stops the steps after it; a forge that can't be read is
+told, and the others go on. `--check` runs the same steps writing nothing;
+`--git` syncs with git alone, a pull then a push. Defaults to the current
+directory if no paths are given; keeps going past a path that fails so one
+broken repo doesn't block the rest, then reports every failure together at
+the end. [docs/forges.md](docs/forges.md) says how the forges sync.
 
 Takes explicit local paths, **not** `.git-board.toml`'s `[repos]` list —
 that table holds `"owner/repo"` display names, not filesystem locations,
@@ -682,10 +688,9 @@ API. The board reloads (keeping its scroll), an open issue too — unless
 you are writing in it, then it offers the reload and keeps your text.
 
 **Settings** (`#/settings`, the gear in the header), in tabs, each with
-its address (`#/settings/forges`…): first the **Overview**, what git-board
+its address (`#/settings/sync`…): first the **Overview**, what git-board
 is and a card per part saying where it stands; then where your issues go,
-**Remotes**, **Forges** and the **GitHub Project** (below); then this
-board: **Project file**, `.git-board.toml` itself: colored, checked
+the **Sync** (below); then this board: **Project file**, `.git-board.toml` itself: colored, checked
 as you type (the line where it breaks, keys git-board doesn't know),
 "+ View", "+ Sprint" (follows the last one) and "+ Field" to start from,
 a diff to review, and saved without a restart, beside its reference (a
@@ -693,40 +698,29 @@ save is refused when the file changed on disk since the page read it);
 **Numbers**, the project's own (`CO2-3075`), started and run from there
 beside their guidelines (docs/configuration.md, Numbers);
 **Attachments**, and **You**, who you write as and the appearance.
-**Forges** lists the bridges: sync on or off, remove one (its issues
-stay), and **+ Add a forge**, in four steps: the forge, the project, a
-stored or pasted token, and the check the forge makes before anything is
-kept (`#/settings/forges?add=1` opens it). "How forges work" shows
+**Sync** (`#/settings/sync`, the header's Sync button, which counts what
+waits to go out) is where your issues go, one table with a row per place:
+the git remote, `origin`, with what a push would send and a pull receive
+as of the last fetch; each forge, its kind and project, found in the
+remotes or in `.git-board.toml`, with its sync on or off (a table's can be
+switched and removed); and the GitHub Project, a line under its GitHub
+row, linking the Conflicts page. Each row says its last check, and the
+remotes' URLs that name no forge are listed with why. **Check** runs the
+whole sync writing nothing: a fetch and compare, the forges' dry run, the
+Project's check. **Sync**, after a clean check of the last 15 minutes and
+confirmed with its counts (an explicit "I understand" when it creates 50
+issues or more on a forge), runs it: a git pull, the forges, the
+Project's fields, a git push. A step that fails stops the steps after it,
+and the report says which, then per forge what came in and went out.
+While it runs, edits wait and are saved after it. **+ Add a forge**, for
+one no remote names, goes in four steps: the forge, the project, a stored
+or pasted token, and the check the forge makes before anything is kept
+(`#/settings/sync?add=1` opens it). "How forges work" shows
 [docs/forges.md](docs/forges.md).
 
-**Where your issues go** (`#/sync`, the header's Sync button) is three
-ways, side by side, each with its own buttons:
-
-1. **Remotes** (git): issues and people go with git, to any remote. Per
-   remote, how many issues and people a push would send and a pull would
-   receive, as of the last fetch; **Check** fetches and compares
-   (nothing local changes), **Pull** and **Push** are `git bug pull` and
-   `git bug push`. Code still goes with `git push`.
-2. **Forges** (their API): git-bug's forge sync — the fork's `git bug
-   bridge sync` — in the server, which holds the repository (so the
-   command can't run beside it). **Check** is a dry run with its counts
-   per forge both ways; then **Get** brings the forges' changes in only
-   (`git bug bridge pull`), **Send** sends yours only (`git bug bridge
-   push`), **Sync** does both. Each is confirmed with the check's counts
-   (an explicit "I understand" when it creates 50 issues or more on a
-   forge). Send waits when the check found issues on a forge by their
-   git-bug marker: only a pull links them, a send alone would create them
-   again. It waits too when the check found an issue changed both here
-   and on that forge: a send replaces its title, state and comment texts
-   there (labels merge: only your changes go). Get or Sync first.
-   While a run goes on, edits wait and are saved after it.
-3. **GitHub Project** (fields): its write mode, the last check's
-   conflicts, **Check**, and **Pull fields** (**Sync fields** with
-   `write = true`), as on the Conflicts page below.
-
 One issue syncs on its own from its panel ("On the forges"): **Send now**
-when it has changes waiting, **Refresh from forges** otherwise — the
-fork's `git bug bridge sync --issue`, a few calls per forge. It dry-runs
+when it has changes waiting, **Refresh from forges** otherwise, a few
+calls per forge. It dry-runs
 first, goes ahead when nothing would change on a forge, else says what it
 would send and asks.
 

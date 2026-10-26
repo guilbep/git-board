@@ -369,7 +369,7 @@ answered in the process, to show what it would create.
   the forge has can't hide one. `refs/bugs` stays.
 - **The numbers are keyed again on origin's** `refs/board/seq`, which
   `--apply` makes this clone's, the re-key on top, unpushed. A fetch of
-  the numbers (`git-board sync`, `numbers`, the web app's pull) takes
+  the numbers (`git-board sync`, `numbers`, the web app's Sync) takes
   origin's only when this clone's is behind it or the same, and otherwise
   refuses: taking it back would drop the re-key, and the next numbering
   would give every switched issue a new number. So after `--apply`, `git

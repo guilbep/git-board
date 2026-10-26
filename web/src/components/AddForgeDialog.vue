@@ -1,5 +1,5 @@
-<!-- Add a forge, in four steps, as `git bug bridge new` does: the forge,
-     the project (its address, a short name, sync both ways or not), the
+<!-- Add a forge no git remote names, in four steps: the forge, GitHub or
+     GitLab, the project (its address, a short name, sync both ways or not), the
      token (stored or pasted), then the check: the server asks the forge
      whether the token sees the project before keeping anything. Beside
      each step, the section of docs/forges.md it needs. -->
@@ -52,7 +52,7 @@
           </div>
           <label class="af-check">
             <input v-model="sync" type="checkbox" />
-            <span><b>Sync both ways</b><br /><span class="gb-hint">Off, the forge is kept but stays out of Sync with forges, until you switch it on.</span></span>
+            <span><b>Sync both ways</b><br /><span class="gb-hint">Off, the forge is kept but stays out of the Sync, until you switch it on.</span></span>
           </label>
         </div>
 
@@ -91,7 +91,7 @@
           </dl>
           <p v-if="added" class="epfl-alert epfl-alert-success" role="status">
             <b>{{ added }}</b> is added: {{ forge.name }} knows the token and the project.
-            {{ sync ? 'It takes part in the next sync, from the Sync page.' : 'Switch its sync on in the table when you want it in the sync.' }}
+            {{ sync ? 'It takes part in the next Sync, after its Check.' : 'Switch its sync on in the table when you want it in the Sync.' }}
           </p>
           <p v-else-if="error" class="epfl-alert epfl-alert-danger" role="alert">{{ error }}</p>
           <p v-else class="gb-hint">git-board asks {{ forge.name }} whether the token sees the project. Nothing is kept when it doesn't, and nothing is synced either way.</p>
@@ -138,10 +138,10 @@ const docs = ref<DocSection[]>([]);
 
 const forge = computed(() => forges.find((f) => f.target === draft.target) ?? forges[0]!);
 const matching = computed(() => matchingCredentials(creds.value, draft.target, draft.url));
-// beside each step, its section of docs/forges.md: the three ways your
-// issues go, sync on or off, the tokens, what adding does (ids pinned by
+// beside each step, its section of docs/forges.md: where your issues go,
+// sync on or off, the tokens, what adding does (ids pinned by
 // TestForgeDocsComeInSections)
-const helpIds = ['three', 'sync', 'tokens', 'adding'];
+const helpIds = ['where', 'sync', 'tokens', 'adding'];
 const help = computed(() => docs.value.find((d) => d.id === helpIds[step.value]));
 
 // the first stored token fitting, when there is one
@@ -149,7 +149,7 @@ watch(matching, (list) => {
   if (!list.some((c) => c.id === draft.credential)) draft.credential = list[0]?.id ?? '';
 });
 
-const hostHint = (target: string) => (target === 'github' ? 'github.com' : target === 'gitlab' ? 'gitlab.com or your instance' : 'your instance, or Forgejo');
+const hostHint = (target: string) => (target === 'github' ? 'github.com' : 'gitlab.com or your instance');
 const credLabel = computed(() => {
   const c = creds.value.find((x) => x.id === draft.credential);
   return c ? `${c.login || 'a token'} on ${c.host} (stored, ${c.id})` : 'a new one, pasted';
@@ -237,9 +237,9 @@ watch(
 .af-help-h { margin: 0; font-size: .9375rem; font-weight: 700; }
 .af-help-h + .gb-md { margin-top: .375rem; }
 .af-help .gb-md { font-size: .875rem; }
-/* the three channels, a card each */
-.af-help-three :deep(ul) { list-style: none; padding: 0; display: flex; flex-direction: column; gap: .5rem; }
-.af-help-three :deep(li) { padding: .625rem .75rem; background: var(--bg); }
+/* the sync's steps, a card each */
+.af-help-where :deep(ol) { list-style: none; padding: 0; display: flex; flex-direction: column; gap: .5rem; }
+.af-help-where :deep(li) { padding: .625rem .75rem; background: var(--bg); }
 .gb-grow { flex: 1; }
 .gb-linkbtn { padding: 0; border: 0; background: none; color: var(--fg); text-decoration: underline; cursor: pointer; font: inherit; }
 @media (max-width: 59.99rem) {

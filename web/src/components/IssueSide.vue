@@ -104,11 +104,11 @@
           </button>
           <WaitingChanges v-if="showWaiting" :changes="waiting" :forges="forges" @reveal="(id) => emit('reveal', id)" />
         </template>
-        <p class="gb-hint">Waiting changes go out at the next <router-link to="/sync#forges">sync with the forges</router-link>, or now:</p>
+        <p class="gb-hint">Waiting changes go out at the next <router-link to="/settings/sync">Sync</router-link>, or now:</p>
         <IssueSync :id="id" :waiting="waiting.length" on-forges @synced="emit('changed')" />
       </template>
       <template v-else>
-        <p class="gb-hint">Not on the forges yet. The next <router-link to="/sync#forges">sync with the forges</router-link> puts it there, or now:</p>
+        <p class="gb-hint">Not on the forges yet. The next <router-link to="/settings/sync">Sync</router-link> puts it there, or now:</p>
         <IssueSync :id="id" :waiting="waiting.length" :on-forges="false" @synced="emit('changed')" />
       </template>
     </section>

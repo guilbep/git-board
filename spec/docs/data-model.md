@@ -249,7 +249,7 @@ plain label.
 
 The core keeps labels as strings and gives no namespace a meaning: git-board
 reads them. Assignees are the one field a forge holds as its own: sync makes
-`assignee:` labels the forge's assignees, and says how on the Sync page.
+`assignee:` labels the forge's assignees, and says how in Settings › Sync.
 
 ### State {#issue-state}
 
@@ -647,7 +647,7 @@ for the comment sync posted. All three are strings.
 
 ### `refused`
 
-`field` names what was refused, as the Sync page's
+`field` names what was refused, as the sync's
 [Refusals](sync.md#refusals) says, `value` the value sent, and `reason` the
 forge's answer. All four are strings.
 

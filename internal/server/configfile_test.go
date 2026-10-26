@@ -165,8 +165,8 @@ func TestForgeDocsComeInSections(t *testing.T) {
 	for _, d := range docs {
 		ids = append(ids, d.ID)
 	}
-	// the add-a-forge dialog shows three, sync, tokens and adding beside its steps
-	if strings.Join(ids, ",") != "three,tokens,adding,sync,removing,one,on" {
+	// the add-a-forge dialog shows where, sync, tokens and adding beside its steps
+	if strings.Join(ids, ",") != "where,tokens,adding,sync,removing,one,on" {
 		t.Errorf("sections %v", ids)
 	}
 }

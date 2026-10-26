@@ -14,8 +14,8 @@ func newNumbersCmd() *cobra.Command {
 		Short: "Number the issues origin has that have no project number yet",
 		Long: `Number the issues origin has that have no project number yet,
 through the counter on origin (refs/board/seq). An issue only in this
-clone waits for its push: git board sync, or Push on the Sync page, push
-it and number it. A project that doesn't number its issues: nothing.`,
+clone waits for its push: git board sync, or Settings › Sync, push it
+and number it. A project that doesn't number its issues: nothing.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			b, err := store.OpenCwd()

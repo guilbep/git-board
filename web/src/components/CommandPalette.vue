@@ -158,7 +158,7 @@ const commands = computed<Entry[]>(() => [
   { key: 'insights', label: 'Insights', group: 'Commands', icon: 'chart', act: go('/insights') },
   { key: 'inbox', label: 'Inbox', group: 'Commands', icon: 'inbox', act: go('/inbox') },
   { key: 'settings', label: 'Settings', group: 'Commands', icon: 'settings', act: go('/settings') },
-  { key: 'sync', label: 'Sync: where your issues go', group: 'Commands', icon: 'sync', act: go('/sync') },
+  { key: 'sync', label: 'Sync: where your issues go', group: 'Commands', icon: 'sync', act: go('/settings/sync') },
   { key: 'add-forge', label: 'Add a forge', group: 'Commands', icon: 'plus', act: go('/settings/forges?add=1') },
   { key: 'filters', label: filtersHidden.value ? 'Show the filters' : 'Hide the filters', group: 'Commands', icon: 'filter', act: () => { filtersHidden.value = !filtersHidden.value; if (route.path !== '/') void router.push('/'); } },
   { key: 'keys', label: 'Keyboard shortcuts', group: 'Commands', icon: 'title', hint: '?', act: () => (helpOpen.value = true) },

@@ -327,9 +327,17 @@ export interface BridgeTally {
   lines: string[];
 }
 
-// A run goes both ways (sync), or one: get (git bug bridge pull), send
-// (git bug bridge push). A dry run, the Check, looks both ways.
-export type ForgeMode = 'sync' | 'get' | 'send';
+// A forge run goes both ways (sync), or sends alone (the Work page's Send
+// all); all is the whole sync's (GET /api/sync/all). A dry run, the Check,
+// looks both ways.
+export type ForgeMode = 'sync' | 'send' | 'all';
+
+// A step of the whole sync, as it went
+export interface JobStep {
+  name: 'pull' | 'forges' | 'project' | 'push';
+  state: 'waiting' | 'running' | 'done' | 'failed' | 'skipped';
+  note?: string; // why it failed or was skipped, what it did
+}
 
 export interface ForgeJob {
   dry_run: boolean;
@@ -342,6 +350,7 @@ export interface ForgeJob {
   errors: number;
   error?: string;
   step?: SyncStep; // where it is, while it runs
+  steps?: JobStep[]; // the whole sync's, in order
 }
 
 // Where a run is: the issue a way of a bridge is on, and how many it has
@@ -364,8 +373,27 @@ export function getForges(): Promise<ForgeStatus> {
 }
 
 // A dry run looks at every forge; a real run at bridges (empty: all).
-export function startForgeSync(dryRun: boolean, mode: ForgeMode = 'sync', bridges: string[] = []): Promise<ForgeStatus> {
+export function startForgeSync(dryRun: boolean, mode: 'sync' | 'send' = 'sync', bridges: string[] = []): Promise<ForgeStatus> {
   return request('/api/forges/sync', json('POST', { dry_run: dryRun, mode, bridges }));
+}
+
+// The whole sync (internal/server/whole.go): git pull from origin, the
+// forges, the GitHub Project, git push; Settings › Sync, git-board sync.
+export interface WholeStatus {
+  remote: Remote | null; // origin; null: none
+  forges: Bridge[]; // every forge, sync on or off
+  skipped: string[]; // the remotes' URLs naming no forge: "skipped <url>: why"
+  project: SyncStatus;
+  job: ForgeJob | null;
+}
+
+export function getWhole(): Promise<WholeStatus> {
+  return request('/api/sync/all');
+}
+
+// a check (dryRun) writes nothing; a sync needs a clean one of the last 15 minutes
+export function startWhole(dryRun: boolean): Promise<ForgeStatus> {
+  return request('/api/sync/all', json('POST', { dry_run: dryRun }));
 }
 
 // The git remotes (internal/server/remotes.go): issues and people
@@ -508,17 +536,18 @@ export async function uploadFile(file: File): Promise<{ url: string; name: strin
   return data;
 }
 
-// Settings (internal/server/settings.go).
+// A forge, as Settings › Sync lists it (internal/server/whole.go).
 export interface Bridge {
   name: string;
-  target: string;
-  where: string;
+  target: string; // github, gitlab
+  project: string; // owner/repo, a GitLab path or id
+  where: string; // the project's page
   sync: boolean;
-  can_sync: boolean;
+  discovered?: boolean; // found in the git remotes, with no table
 }
 
+// Settings (internal/server/settings.go).
 export interface Settings {
-  bridges: Bridge[];
   uploads: { enabled: boolean; endpoint?: string; public_url?: string; prefix?: string };
   github_project: { owner: string; number: number; write?: boolean };
   config_path: string;
