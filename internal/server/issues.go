@@ -55,29 +55,35 @@ func (s *apiServer) writeThread(w http.ResponseWriter, status int, id string) {
 		writeIssueError(w, err)
 		return
 	}
+	media := s.mediaURL()
 	for i, e := range th.Events {
 		if e.Body != "" {
-			th.Events[i].HTML = markdown.Render(e.Body, s.mediaURL)
+			th.Events[i].HTML = markdown.Render(e.Body, media)
 		}
 	}
 	s.annotate(&th)
 	writeJSON(w, status, th)
 }
 
-// mediaURL is where the page loads an image of issue text from: the image
-// proxy for a forge's images, else the image's own address.
-func (s *apiServer) mediaURL(raw string) string {
-	u, err := url.Parse(raw)
-	if err != nil || !forgeMedia(u, s.forgeHosts()) {
-		return raw
+// mediaURL says where the page loads an image of issue text from: the
+// image proxy for a forge's images, else the image's own address. The
+// forges' hosts are read once, for a render.
+func (s *apiServer) mediaURL() func(raw string) string {
+	hosts := s.forgeHosts()
+	return func(raw string) string {
+		u, err := url.Parse(raw)
+		if err != nil || !forgeMedia(u, hosts) {
+			return raw
+		}
+		return "/api/media?url=" + url.QueryEscape(raw)
 	}
-	return "/api/media?url=" + url.QueryEscape(raw)
 }
 
-// forgeHosts are the hosts of the forges of the settings.
+// forgeHosts are the hosts of the forges: the settings', or those found in
+// the git remotes.
 func (s *apiServer) forgeHosts() []string {
 	var hosts []string
-	for _, f := range s.config().Forges {
+	for _, f := range s.forges() {
 		hosts = append(hosts, f.Host)
 	}
 	return hosts
@@ -85,7 +91,7 @@ func (s *apiServer) forgeHosts() []string {
 
 func (s *apiServer) handleMedia(w http.ResponseWriter, r *http.Request) {
 	s.mediaOnce.Do(func() {
-		s.media = newMediaProxy(s.b.Storage(), func(host string) string { return s.b.ForgeToken(s.config().Forges, host) }, s.forgeHosts)
+		s.media = newMediaProxy(s.b.Storage(), func(host string) string { return s.b.ForgeToken(s.forges(), host) }, s.forgeHosts)
 	})
 	s.media.ServeHTTP(w, r)
 }
@@ -273,7 +279,7 @@ func (s *apiServer) handleMarkdown(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &req) {
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"html": markdown.Render(req.Body, s.mediaURL)})
+	writeJSON(w, http.StatusOK, map[string]string{"html": markdown.Render(req.Body, s.mediaURL())})
 }
 
 // meResponse is who git-board writes as, and who it could.

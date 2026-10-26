@@ -111,10 +111,11 @@ func writeBridgeError(w http.ResponseWriter, err error) {
 	writeError(w, code, err)
 }
 
-// handleCredentials lists the forges whose posting account has a token:
-// forge, host and login, never a token.
+// handleCredentials lists the forges whose posting account has a token,
+// the settings' or those found in the git remotes: forge, host and login,
+// never a token.
 func (s *apiServer) handleCredentials(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, s.b.Credentials(s.config().Forges))
+	writeJSON(w, http.StatusOK, s.b.Credentials(s.forges()))
 }
 
 // handleAddBridge adds a forge, sync on unless asked off, once the forge

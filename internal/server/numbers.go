@@ -84,10 +84,12 @@ func (s *apiServer) numbers() (numbersResponse, error) {
 	return res, nil
 }
 
-// githubForge is the settings' forge on github.com, false for none.
+// githubForge is the forge on github.com, the settings' or one found in
+// the git remotes, false for none. A found one's owner/repo is as its URL
+// spells it: GitHub takes any case.
 // ponytail: the first; a project with two is unheard of
 func (s *apiServer) githubForge() (config.Forge, bool) {
-	for _, f := range s.config().Forges {
+	for _, f := range s.forges() {
 		if f.Kind == "github" && f.Host == "github.com" {
 			return f, true
 		}
