@@ -71,7 +71,7 @@ send. See README.md, "Web UI".`,
 	}
 	// This machine only by default: the server writes to git, and to the
 	// forges with the user's tokens. Anyone who can reach it can.
-	cmd.Flags().StringVar(&addr, "addr", "localhost:8080", "listen address; localhost is both loopback addresses (an address other machines reach exposes your git-bug data and forge tokens to them)")
+	cmd.Flags().StringVar(&addr, "addr", "localhost:8080", "listen address; localhost is both loopback addresses (an address other machines reach exposes your git-board data and forge tokens to them)")
 	meFlag(cmd, &me)
 	return cmd
 }

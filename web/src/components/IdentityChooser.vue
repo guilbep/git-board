@@ -14,8 +14,8 @@
     </fieldset>
     <button type="button" class="epfl-btn epfl-btn-primary epfl-btn-sm" :disabled="!picked || busy" @click="adopt">This is me</button>
 
-    <details class="gb-me-new" :open="!people.length">
-      <summary>Not in the list? Create an identity</summary>
+    <div class="gb-me-new">
+      <p><b>{{ people.length ? 'Not in the list? Create yours' : 'Create yours' }}</b></p>
       <form class="gb-me-form" @submit.prevent="create">
         <label class="epfl-label" for="me-name">Name</label>
         <input id="me-name" v-model="name" class="epfl-input" autocomplete="name" required />
@@ -23,9 +23,9 @@
         <input id="me-email" v-model="email" class="epfl-input" type="email" autocomplete="email" />
         <button type="submit" class="epfl-btn epfl-btn-secondary epfl-btn-sm" :disabled="!name.trim() || busy">Create and use</button>
       </form>
-    </details>
+    </div>
     <p v-if="error" class="gb-hint" role="alert"><b>Not saved.</b> {{ error }}</p>
-    <p class="gb-hint">Saved for this repository, in its git config (<code>board.me</code>).</p>
+    <p class="gb-hint">Saved for this repository as <code>board.me</code>, in its git config.</p>
   </section>
 </template>
 
@@ -70,7 +70,6 @@ const create = () => run(() => createIdentity(name.value, email.value));
 .gb-pick-row { display: flex; gap: .5rem; align-items: flex-start; cursor: pointer; }
 .gb-pick-row input { margin-top: .3rem; accent-color: var(--primary-hover); }
 .gb-linkbtn { justify-self: start; padding: 0; border: 0; background: none; color: var(--fg); text-decoration: underline; cursor: pointer; font: inherit; }
-.gb-me-new summary { font-weight: 700; cursor: pointer; }
-.gb-me-form { display: grid; gap: .375rem; margin-top: .75rem; max-width: 24rem; }
+.gb-me-form { display: grid; gap: .375rem; margin-top: .5rem; max-width: 24rem; }
 .gb-me-form .epfl-btn { justify-self: start; margin-top: .5rem; }
 </style>
