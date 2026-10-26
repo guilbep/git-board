@@ -15,7 +15,7 @@ import (
 )
 
 func newSwitchCmd() *cobra.Command {
-	var apply, force bool
+	var apply, force, allowCreate bool
 	var gitBug string
 	cmd := &cobra.Command{
 		Use:   "switch",
@@ -35,7 +35,9 @@ and nothing on any forge.
 
 --apply does the same, then writes the copy's refs/board/* here. It
 never deletes refs/bugs and never pushes. It refuses when the report has
-a blocker, unless --force.
+a blocker. --allow-create accepts the issues and comments the next sync
+would create on the forges, that blocker alone; --force applies despite
+every blocker.
 
 The numbers are keyed again on origin's refs/board/seq, which --apply
 makes this clone's. Push it right after: git push origin refs/board/seq.
@@ -45,14 +47,16 @@ holds numbers origin hasn't.
 git-bug's binary reads its own data, on the copy: --git-bug names it.`,
 		Example: `  git-board switch                     # the dry run, and its report
   git-board switch --apply
+  git-board switch --apply --allow-create   # the next sync's creations are expected
   git-board switch --git-bug ~/.local/bin/git-bug`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runSwitch(cmd.Context(), cmd.OutOrStdout(), gitbugio.SwitchRun{GitBug: gitBug, Apply: apply, Force: force})
+			return runSwitch(cmd.Context(), cmd.OutOrStdout(), gitbugio.SwitchRun{GitBug: gitBug, Apply: apply, Force: force, AllowCreate: allowCreate})
 		},
 	}
 	cmd.Flags().BoolVar(&apply, "apply", false, "write the switch here, not just report it")
-	cmd.Flags().BoolVar(&force, "force", false, "with --apply, apply despite the report's blockers")
+	cmd.Flags().BoolVar(&allowCreate, "allow-create", false, "with --apply, accept what the next sync would create on the forges")
+	cmd.Flags().BoolVar(&force, "force", false, "with --apply, apply despite every blocker of the report")
 	cmd.Flags().StringVar(&gitBug, "git-bug", "git-bug", "git-bug's binary, which reads the issues it holds")
 	return cmd
 }
@@ -92,7 +96,7 @@ func runSwitch(ctx context.Context, out io.Writer, run gitbugio.SwitchRun) error
 	}
 	printSwitch(out, rep, run.Apply)
 	if run.Apply && !rep.Applied {
-		return errors.New("not applied: the report has blockers (--force applies anyway)")
+		return errors.New("not applied: the report has blockers (--allow-create accepts the creations alone, --force applies despite every blocker)")
 	}
 	return nil
 }

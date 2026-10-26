@@ -128,7 +128,12 @@ func TestSwitch(t *testing.T) {
 	if rep, err = b.Switch(t.Context(), run); err != nil || rep.Applied {
 		t.Fatalf("applied over its blockers: %v, %v", rep.Applied, err)
 	}
-	run.Force = true
+	// --allow-create lifts the creations' blocker alone: the lost still block
+	run.AllowCreate = true
+	if rep, err = b.Switch(t.Context(), run); err != nil || rep.Applied || len(rep.Blockers) != 1 || !strings.Contains(rep.Blockers[0], "aren't on the forges") {
+		t.Fatalf("allow-create: applied %v, blockers %q, %v", rep.Applied, rep.Blockers, err)
+	}
+	run.AllowCreate, run.Force = false, true
 	for range 2 { // twice: the second adds nothing
 		if rep, err = b.Switch(t.Context(), run); err != nil || !rep.Applied {
 			t.Fatalf("not applied: %v", err)

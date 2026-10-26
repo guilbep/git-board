@@ -101,6 +101,9 @@ type SwitchRun struct {
 	// Apply writes refs/board/* here, unless the report has a blocker and
 	// Force isn't set. Otherwise the switch is a dry run.
 	Apply, Force bool
+	// AllowCreate accepts what the next sync would create on the forges:
+	// that blocker alone.
+	AllowCreate bool
 }
 
 // SwitchReport is what a switch found, and did.
@@ -298,8 +301,8 @@ func (b *Backend) Switch(ctx context.Context, run SwitchRun) (SwitchReport, erro
 	if len(rep.Split) > 0 {
 		block("%d of the fork's issues were pulled as two issues or more", len(rep.Split))
 	}
-	if len(rep.WouldCreate) > 0 {
-		block("the next sync would create %d issues or comments on the forges", len(rep.WouldCreate))
+	if len(rep.WouldCreate) > 0 && !run.AllowCreate {
+		block("the next sync would create %d issues or comments on the forges (--allow-create accepts them)", len(rep.WouldCreate))
 	}
 	if !run.Apply || len(rep.Blockers) > 0 && !run.Force {
 		return rep, nil
