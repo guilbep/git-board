@@ -14,21 +14,21 @@ import (
 
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/filter"
-	"github.com/guilbep/git-board/internal/gitbugio"
 	"github.com/guilbep/git-board/internal/inbox"
+	"github.com/guilbep/git-board/internal/store"
 )
 
 // DefaultFilter is used when no filter expression is given.
 const DefaultFilter = "is:open"
 
-// issueBackend is the subset of gitbugio.Backend that loading needs.
+// issueBackend is the subset of store.Backend that loading needs.
 type issueBackend interface {
-	ListIssues() ([]gitbugio.Issue, error)
+	ListIssues() ([]store.Issue, error)
 }
 
 // LoadMatching lists issues in b matching filterStr, using cfg for @me/sprint
 // alias resolution.
-func LoadMatching(b issueBackend, cfg *config.Config, filterStr, me string) ([]gitbugio.Issue, error) {
+func LoadMatching(b issueBackend, cfg *config.Config, filterStr, me string) ([]store.Issue, error) {
 	issues, err := b.ListIssues()
 	if err != nil {
 		return nil, err
@@ -38,13 +38,13 @@ func LoadMatching(b issueBackend, cfg *config.Config, filterStr, me string) ([]g
 
 // Match narrows issues already loaded to filterStr, as LoadMatching does:
 // the TUI's f, on what it loaded.
-func Match(b any, cfg *config.Config, filterStr, me string, issues []gitbugio.Issue, today time.Time) ([]gitbugio.Issue, error) {
+func Match(b any, cfg *config.Config, filterStr, me string, issues []store.Issue, today time.Time) ([]store.Issue, error) {
 	return MatchFollowing(b, cfg, filterStr, me, issues, today, nil)
 }
 
 // MatchFollowing is Match with what follows:@me follows already known
 // (Following), as the inbox has it; nil reads it.
-func MatchFollowing(b any, cfg *config.Config, filterStr, me string, issues []gitbugio.Issue, today time.Time, followed *filter.Followed) ([]gitbugio.Issue, error) {
+func MatchFollowing(b any, cfg *config.Config, filterStr, me string, issues []store.Issue, today time.Time, followed *filter.Followed) ([]store.Issue, error) {
 	conditions, me, err := prepare(b, filterStr, me)
 	if err != nil {
 		return nil, err
@@ -54,7 +54,7 @@ func MatchFollowing(b any, cfg *config.Config, filterStr, me string, issues []gi
 	if err := fillFollows(b, cfg, conditions, me, issues, today, followed); err != nil {
 		return nil, err
 	}
-	matched := make([]gitbugio.Issue, 0, len(issues))
+	matched := make([]store.Issue, 0, len(issues))
 	for _, issue := range issues {
 		if filter.Matches(issue, conditions, cfg, me, today) {
 			matched = append(matched, issue)
@@ -66,7 +66,7 @@ func MatchFollowing(b any, cfg *config.Config, filterStr, me string, issues []gi
 // fillFollows gives follows:@me your inbox's file (internal/inbox): what
 // you followed and unfollowed, and the issues of the views you follow; f
 // when known.
-func fillFollows(b any, cfg *config.Config, conditions []filter.Condition, me string, issues []gitbugio.Issue, today time.Time, f *filter.Followed) error {
+func fillFollows(b any, cfg *config.Config, conditions []filter.Condition, me string, issues []store.Issue, today time.Time, f *filter.Followed) error {
 	if !slices.ContainsFunc(conditions, func(c filter.Condition) bool { return c.Kind == filter.KindFollows }) {
 		return nil
 	}
@@ -85,10 +85,10 @@ func fillFollows(b any, cfg *config.Config, conditions []filter.Condition, me st
 }
 
 // readFollowing is Following from your inbox's file.
-func readFollowing(b any, cfg *config.Config, me string, issues []gitbugio.Issue, today time.Time) (*filter.Followed, error) {
+func readFollowing(b any, cfg *config.Config, me string, issues []store.Issue, today time.Time) (*filter.Followed, error) {
 	repo, ok := b.(interface {
-		Me() (gitbugio.Person, bool, error)
-		Storage() gitbugio.Storage
+		Me() (store.Person, bool, error)
+		Storage() store.Storage
 	})
 	if !ok {
 		return nil, errors.New("follows:@me needs a repository")
@@ -126,7 +126,7 @@ func Following(st inbox.State, inViews map[string][]string) *filter.Followed {
 // in, and the followed views no longer in the config. A view matches
 // without its is: (a close still shows) and its follows: (it can't follow
 // itself).
-func FollowedViews(b any, cfg *config.Config, views []string, me string, issues []gitbugio.Issue, today time.Time) (map[string][]string, []string, error) {
+func FollowedViews(b any, cfg *config.Config, views []string, me string, issues []store.Issue, today time.Time) (map[string][]string, []string, error) {
 	inViews := map[string][]string{}
 	var missing []string
 	for _, name := range views {
@@ -156,7 +156,7 @@ func setOf(ids []string) map[string]bool {
 }
 
 // prepare parses filterStr and finds who @me is. Free text looks in titles,
-// descriptions and comments when b has a full-text index (gitbugio.Backend
+// descriptions and comments when b has a full-text index (store.Backend
 // has git-bug's); else Matches looks at titles.
 func prepare(b any, filterStr, me string) ([]filter.Condition, string, error) {
 	conditions := filter.Parse(filterStr)
@@ -179,7 +179,7 @@ func prepare(b any, filterStr, me string) ([]filter.Condition, string, error) {
 		}
 	}
 	if r, ok := b.(interface {
-		Me() (gitbugio.Person, bool, error)
+		Me() (store.Person, bool, error)
 	}); ok {
 		for i, c := range conditions {
 			if c.Kind == filter.KindFollows || (c.Kind == filter.KindInvolves && c.Value == "@me") {
@@ -212,7 +212,7 @@ func prepare(b any, filterStr, me string) ([]filter.Condition, string, error) {
 }
 
 // withRoles gives each issue the roles it takes from the project.
-func withRoles(cfg *config.Config, issues []gitbugio.Issue) {
+func withRoles(cfg *config.Config, issues []store.Issue) {
 	for i := range issues {
 		issues[i].Inherited = cfg.RolesFor(issues[i].Labels)
 	}
@@ -223,7 +223,7 @@ func withRoles(cfg *config.Config, issues []gitbugio.Issue) {
 var ErrNoMe = fmt.Errorf("@me needs your forge login: a bridge (git bug bridge new) tags your git-bug identity with it, or pass --me / set GIT_BOARD_ME")
 
 // MyLogin is what @me means without --me: the forge login of the git-bug
-// identity git-board writes as, when b knows it (gitbugio.Backend does).
+// identity git-board writes as, when b knows it (store.Backend does).
 func MyLogin(b any) string {
 	if l, ok := b.(interface{ MyLogin() string }); ok {
 		return l.MyLogin()
@@ -233,7 +233,7 @@ func MyLogin(b any) string {
 
 // FieldValue returns the value of a namespaced label (e.g. "prio" from
 // "prio:p1"), or "" if the issue has no such label.
-func FieldValue(issue gitbugio.Issue, fieldName string) string {
+func FieldValue(issue store.Issue, fieldName string) string {
 	prefix := fieldName + ":"
 	for _, l := range issue.AllLabels() {
 		if strings.HasPrefix(l, prefix) {
@@ -249,7 +249,7 @@ func FieldValue(issue gitbugio.Issue, fieldName string) string {
 // its configured options (status follows the workflow), values outside
 // them after, lexically. Issues without the field sort last either way —
 // the web page sorts the same way (web/src/facets.ts).
-func SortByField(issues []gitbugio.Issue, spec string, cfg *config.Config) {
+func SortByField(issues []store.Issue, spec string, cfg *config.Config) {
 	if spec == "" {
 		return
 	}
@@ -306,15 +306,15 @@ func lessNumeric(a, b string, desc bool) bool {
 
 // Bucket is one named group of issues, in first-seen order.
 type Bucket struct {
-	Group  string           `json:"group"`
-	Issues []gitbugio.Issue `json:"issues"`
+	Group  string        `json:"group"`
+	Issues []store.Issue `json:"issues"`
 }
 
 // BucketBy groups issues by the value of a field-derived label. group == ""
 // yields a single bucket (Group: "") containing every issue, matching an
 // ungrouped view.
-func BucketBy(issues []gitbugio.Issue, group string) []Bucket {
-	buckets := map[string][]gitbugio.Issue{}
+func BucketBy(issues []store.Issue, group string) []Bucket {
+	buckets := map[string][]store.Issue{}
 	var order []string
 	for _, issue := range issues {
 		key := ""

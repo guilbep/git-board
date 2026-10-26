@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/guilbep/git-board/internal/branches"
-	"github.com/guilbep/git-board/internal/gitbugio"
+	"github.com/guilbep/git-board/internal/store"
 )
 
 // DraftIssue is an issue a release carries: one a merged branch names.
@@ -161,7 +161,7 @@ func (r *Runner) issues(ctx context.Context, from, to string) (issues []DraftIss
 
 // number is how people name an issue: its project number, else its forge
 // number, else its id's first 7 characters.
-func number(is gitbugio.Issue) string {
+func number(is store.Issue) string {
 	switch {
 	case is.Number != "":
 		return is.Number

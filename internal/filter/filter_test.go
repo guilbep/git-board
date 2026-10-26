@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/gitbugio"
+	"github.com/guilbep/git-board/internal/store"
 )
 
 const fixture = "../config/testdata/git-board.toml"
@@ -70,7 +70,7 @@ func TestParseMultipleConditionsAreAnded(t *testing.T) {
 
 func TestMatchesFieldIsAndTitleGlob(t *testing.T) {
 	cfg := mustLoad(t)
-	issue := gitbugio.Issue{ID: "abc123", Title: "Fix invoice spec", Status: "open", Labels: []string{"status:ready"}}
+	issue := store.Issue{ID: "abc123", Title: "Fix invoice spec", Status: "open", Labels: []string{"status:ready"}}
 
 	if !Matches(issue, Parse("status:ready is:open title:*spec*"), cfg, "", today) {
 		t.Error("expected match")
@@ -82,7 +82,7 @@ func TestMatchesFieldIsAndTitleGlob(t *testing.T) {
 
 func TestMatchesNegatedTitleGlobExcludes(t *testing.T) {
 	cfg := mustLoad(t)
-	issue := gitbugio.Issue{ID: "abc123", Title: "Fix invoice spec", Status: "open"}
+	issue := store.Issue{ID: "abc123", Title: "Fix invoice spec", Status: "open"}
 
 	if Matches(issue, Parse("-title:*spec*"), cfg, "", today) {
 		t.Error("expected exclusion")
@@ -91,7 +91,7 @@ func TestMatchesNegatedTitleGlobExcludes(t *testing.T) {
 
 func TestMatchesFreeTextSubstring(t *testing.T) {
 	cfg := mustLoad(t)
-	issue := gitbugio.Issue{ID: "abc123", Title: "Fix invoice bug", Status: "open"}
+	issue := store.Issue{ID: "abc123", Title: "Fix invoice bug", Status: "open"}
 
 	if !Matches(issue, Parse("invoice"), cfg, "", today) {
 		t.Error("expected match")
@@ -103,7 +103,7 @@ func TestMatchesFreeTextSubstring(t *testing.T) {
 
 func TestMatchesAtMe(t *testing.T) {
 	cfg := mustLoad(t)
-	issue := gitbugio.Issue{ID: "abc123", Title: "x", Status: "open", Labels: []string{"assignee:guilbep"}}
+	issue := store.Issue{ID: "abc123", Title: "x", Status: "open", Labels: []string{"assignee:guilbep"}}
 	conditions := Parse("assignee:@me")
 
 	if !Matches(issue, conditions, cfg, "guilbep", today) {
@@ -116,8 +116,8 @@ func TestMatchesAtMe(t *testing.T) {
 
 func TestMatchesSprintCurrentAndNext(t *testing.T) {
 	cfg := mustLoad(t)
-	current := gitbugio.Issue{ID: "1", Title: "x", Status: "open", Labels: []string{"sprint:delivery"}}
-	next := gitbugio.Issue{ID: "2", Title: "x", Status: "open", Labels: []string{"sprint:post-delivery"}}
+	current := store.Issue{ID: "1", Title: "x", Status: "open", Labels: []string{"sprint:delivery"}}
+	next := store.Issue{ID: "2", Title: "x", Status: "open", Labels: []string{"sprint:post-delivery"}}
 
 	if !Matches(current, Parse("sprint:@current"), cfg, "", today) {
 		t.Error("current issue should match sprint:@current")
@@ -147,9 +147,9 @@ func TestRequiresMe(t *testing.T) {
 func TestGitHubStyleSearch(t *testing.T) {
 	cfg := mustLoad(t)
 	today := time.Date(2026, 10, 15, 0, 0, 0, 0, time.UTC)
-	issue := gitbugio.Issue{ID: "abc", Title: "Train distances", Status: "open",
+	issue := store.Issue{ID: "abc", Title: "Train distances", Status: "open",
 		Labels: []string{"assignee:guilbep", "status:ready", "bug"}, AuthorLogins: []string{"guilbep", "Pierre Guilbert"}}
-	bare := gitbugio.Issue{ID: "def", Title: "Other", Status: "open"}
+	bare := store.Issue{ID: "def", Title: "Other", Status: "open"}
 
 	conds := Parse(`"wrong table" assignee:guilbep`)
 	if len(conds) != 2 || conds[0].Kind != KindText || conds[0].Value != "wrong table" {
@@ -188,8 +188,8 @@ func TestGitHubStyleSearch(t *testing.T) {
 // several values ticked saves into a view.
 func TestMatchesCommaIsEither(t *testing.T) {
 	cfg := mustLoad(t)
-	qa := gitbugio.Issue{ID: "a", Status: "open", Labels: []string{"status:qa", "bug", "assignee:guilbep"}}
-	backlog := gitbugio.Issue{ID: "b", Status: "closed", Labels: []string{"status:backlog"}}
+	qa := store.Issue{ID: "a", Status: "open", Labels: []string{"status:qa", "bug", "assignee:guilbep"}}
+	backlog := store.Issue{ID: "b", Status: "closed", Labels: []string{"status:backlog"}}
 	for _, c := range []struct {
 		filter   string
 		qa, back bool
@@ -219,8 +219,8 @@ func TestMatchesCommaIsEither(t *testing.T) {
 // more hex characters also look in the text.
 func TestMatchesNumberAndIDPrefix(t *testing.T) {
 	cfg := mustLoad(t)
-	n2528 := gitbugio.Issue{ID: "b9de9e14aa", Title: "Fix CSV upload", Status: "open", Forges: []gitbugio.Forge{{Number: "2528"}}}
-	mentions := gitbugio.Issue{ID: "5a3b1c22bb", Title: "Follow-up of 2528", Status: "open", Forges: []gitbugio.Forge{{Number: "2115"}}}
+	n2528 := store.Issue{ID: "b9de9e14aa", Title: "Fix CSV upload", Status: "open", Forges: []store.Forge{{Number: "2528"}}}
+	mentions := store.Issue{ID: "5a3b1c22bb", Title: "Follow-up of 2528", Status: "open", Forges: []store.Forge{{Number: "2115"}}}
 	if c := Parse("#2528"); len(c) != 1 || c[0].Kind != KindNumber || c[0].Value != "2528" {
 		t.Fatalf("Parse(#2528) = %+v", c)
 	}
@@ -275,8 +275,8 @@ func TestWithoutKeepsTheOtherTermsAsTyped(t *testing.T) {
 // GitHub #3060 imported after the switch (CO2-3075).
 func TestMatchesProjectNumbers(t *testing.T) {
 	cfg := mustLoad(t)
-	x := gitbugio.Issue{ID: "aaaaaaaaaa", Title: "Bouncer pool", Status: "open", Number: "CO2-3060", Counted: true, Forges: []gitbugio.Forge{{Name: "GitHub", Number: "3071"}}}
-	y := gitbugio.Issue{ID: "bbbbbbbbbb", Title: "CSV export", Status: "open", Number: "CO2-3075", Counted: true, Forges: []gitbugio.Forge{{Name: "GitHub", Number: "3060"}}}
+	x := store.Issue{ID: "aaaaaaaaaa", Title: "Bouncer pool", Status: "open", Number: "CO2-3060", Counted: true, Forges: []store.Forge{{Name: "GitHub", Number: "3071"}}}
+	y := store.Issue{ID: "bbbbbbbbbb", Title: "CSV export", Status: "open", Number: "CO2-3075", Counted: true, Forges: []store.Forge{{Name: "GitHub", Number: "3060"}}}
 	for expr, want := range map[string][2]bool{ // [x, y]
 		"3060":     {true, false},
 		"CO2-3060": {true, false},

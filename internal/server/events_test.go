@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/gitbugio"
-	"github.com/guilbep/git-board/internal/gitbugio/gitbugiotest"
+	"github.com/guilbep/git-board/internal/store"
+	"github.com/guilbep/git-board/internal/store/storetest"
 )
 
 func TestBrokerDropsASlowClient(t *testing.T) {
@@ -68,7 +68,7 @@ func TestWritesAreStreamed(t *testing.T) {
 	t.Parallel()
 	ts, s := newIssueServer(t)
 	s.cfgPath = filepath.Join(t.TempDir(), ".git-board.toml") // the view save writes there
-	id := gitbugiotest.NewIssue(t, s.b, "Live")
+	id := storetest.NewIssue(t, s.b, "Live")
 	resp, err := http.Get(ts.URL + "/api/events")
 	if err != nil {
 		t.Fatal(err)
@@ -104,18 +104,18 @@ func TestWritesAreStreamed(t *testing.T) {
 func TestForgeSyncStreamsItsSteps(t *testing.T) {
 	t.Parallel()
 	ts, s := forgeServer(t) // no forge to ask who can be assigned, whose answer would be an event too
-	a := gitbugiotest.NewIssue(t, s.b, "Alpha")
-	b := gitbugiotest.NewIssue(t, s.b, "Beta")
+	a := storetest.NewIssue(t, s.b, "Alpha")
+	b := storetest.NewIssue(t, s.b, "Beta")
 	release := make(chan struct{})
-	s.runSync = fakeSync([]gitbugio.SyncEvent{
+	s.runSync = fakeSync([]store.SyncEvent{
 		{Forge: "gh", Way: "pull", What: "updated", Issue: a, Ops: 2},
 		{Forge: "gh", Way: "pull", What: "linked", Issue: a}, // the same issue: no new step
 		{Forge: "gh", Way: "push", What: "posted", Issue: b},
 		{Forge: "gh", Way: "push", What: "comment", Issue: "1000"}, // a write: no step
 		{Forge: "gl", What: "warning", Line: "oops"},               // names no issue: no step
 	}, release)
-	s.runIssueSync = func(_ context.Context, _ []config.Forge, _ bool, id string, see func(gitbugio.SyncEvent)) error {
-		see(gitbugio.SyncEvent{Forge: "gh", Way: "pull", What: "updated", Issue: id, Ops: 1})
+	s.runIssueSync = func(_ context.Context, _ []config.Forge, _ bool, id string, see func(store.SyncEvent)) error {
+		see(store.SyncEvent{Forge: "gh", Way: "pull", What: "updated", Issue: id, Ops: 1})
 		return nil
 	}
 	resp, err := http.Get(ts.URL + "/api/events")

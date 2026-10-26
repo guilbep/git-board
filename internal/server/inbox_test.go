@@ -12,8 +12,8 @@ import (
 
 	"github.com/guilbep/git-board/core/issue"
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/gitbugio/gitbugiotest"
 	"github.com/guilbep/git-board/internal/inbox"
+	"github.com/guilbep/git-board/internal/store/storetest"
 )
 
 func getInbox(t *testing.T, ts *httptest.Server) inboxResponse {
@@ -29,8 +29,8 @@ func TestInboxFlow(t *testing.T) {
 	t.Parallel()
 	ts, s := newIssueServer(t) // writes as the test identity, me: guilbep
 	id, _ := s.b.NewIssue("Train legs", "", []string{"assignee:guilbep"})
-	ann := gitbugiotest.NewPerson(t, s.b, "Ann", "ann")
-	gitbugiotest.CommentAs(t, s.b, id, ann, time.Now().Unix(), "first")
+	ann := storetest.NewPerson(t, s.b, "Ann", "ann")
+	storetest.CommentAs(t, s.b, id, ann, time.Now().Unix(), "first")
 
 	res := getInbox(t, ts)
 	// author: you opened it (the test identity); assignee: the label
@@ -49,7 +49,7 @@ func TestInboxFlow(t *testing.T) {
 	if code := call(t, "PUT", ts.URL+"/api/inbox/follow/"+id, map[string]any{"follow": false}, &f); code != http.StatusOK || f.Following || f.Set == nil || *f.Set {
 		t.Fatalf("unfollow: %d %+v", code, f)
 	}
-	gitbugiotest.CommentAs(t, s.b, id, ann, time.Now().Unix(), "second")
+	storetest.CommentAs(t, s.b, id, ann, time.Now().Unix(), "second")
 	if res := getInbox(t, ts); len(res.Rows) != 0 {
 		t.Fatalf("unfollowed, yet: %+v", res.Rows)
 	}
@@ -83,14 +83,14 @@ func codeOf(t *testing.T, url string) (int, string) {
 
 func TestInboxNeedsWhoYouAre(t *testing.T) {
 	t.Parallel()
-	noLogin := &apiServer{cfg: &config.Config{}, b: gitbugiotest.New(t)} // its identity has no login, no --me
+	noLogin := &apiServer{cfg: &config.Config{}, b: storetest.New(t)} // its identity has no login, no --me
 	ts := httptest.NewServer(withCORS(newMux(noLogin, http.NotFoundHandler())))
 	t.Cleanup(ts.Close)
 	if code, c := codeOf(t, ts.URL+"/api/inbox"); code != http.StatusConflict || c != "no-login" {
 		t.Errorf("no login: %d %q", code, c)
 	}
 
-	b := gitbugiotest.NewEmpty(t) // no one chosen
+	b := storetest.NewEmpty(t) // no one chosen
 	ts2 := httptest.NewServer(withCORS(newMux(&apiServer{cfg: &config.Config{}, b: b, me: "guilbep"}, http.NotFoundHandler())))
 	t.Cleanup(ts2.Close)
 	if code, c := codeOf(t, ts2.URL+"/api/inbox"); code != http.StatusConflict || c != "no-identity" {
@@ -104,7 +104,7 @@ func TestInboxIsPerIdentity(t *testing.T) {
 	ts, s := newIssueServer(t)
 	id, _ := s.b.NewIssue("Train legs", "", []string{"assignee:guilbep"})
 	first, _, _ := s.b.Me()
-	ann := gitbugiotest.NewPerson(t, s.b, "Ann", "ann")
+	ann := storetest.NewPerson(t, s.b, "Ann", "ann")
 
 	if code := call(t, "POST", ts.URL+"/api/me", map[string]any{"id": ann.ID}, nil); code != http.StatusOK {
 		t.Fatalf("adopt ann: %d", code)
@@ -185,18 +185,18 @@ func TestInboxProjectRole(t *testing.T) {
 	t.Parallel()
 	ts, s := newIssueServer(t)
 	s.cfg = &config.Config{Roles: map[string]string{"lead-dev": "guilbep"}, Fields: map[string]config.Field{"lead-dev": {Type: config.TypePerson}}}
-	ann := gitbugiotest.NewPerson(t, s.b, "Ann", "ann")
-	id := gitbugiotest.IssueAs(t, s.b, ann, time.Now().Unix(), "Hers", "")
+	ann := storetest.NewPerson(t, s.b, "Ann", "ann")
+	id := storetest.IssueAs(t, s.b, ann, time.Now().Unix(), "Hers", "")
 	res := getInbox(t, ts)
 	if len(res.Rows) != 1 || !slices.Equal(res.Rows[0].News, []string{"new issue"}) || !slices.Equal(res.Rows[0].Reasons, []string{"lead-dev (project)"}) || !slices.Equal(res.Roles, []string{"lead-dev"}) {
 		t.Fatalf("a new issue as lead-dev: %+v", res)
 	}
 	call(t, "POST", ts.URL+"/api/inbox/seen", map[string]any{"issues": []string{id}}, nil)
-	gitbugiotest.CommentAs(t, s.b, id, ann, time.Now().Unix(), "a comment")
+	storetest.CommentAs(t, s.b, id, ann, time.Now().Unix(), "a comment")
 	if res := getInbox(t, ts); len(res.Rows) != 0 {
 		t.Fatalf("a comment reached the project's lead-dev: %+v", res.Rows)
 	}
-	gitbugiotest.Do(t, s.b, id, issue.SetStatus(ann.ID, issue.Closed))
+	storetest.Do(t, s.b, id, issue.SetStatus(ann.ID, issue.Closed))
 	if res := getInbox(t, ts); len(res.Rows) != 1 || !slices.Equal(res.Rows[0].News, []string{"closed"}) {
 		t.Fatalf("a close as lead-dev: %+v", res.Rows)
 	}

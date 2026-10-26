@@ -4,19 +4,19 @@ import (
 	"testing"
 
 	"github.com/guilbep/git-board/internal/ghbridge"
-	"github.com/guilbep/git-board/internal/gitbugio/gitbugiotest"
+	"github.com/guilbep/git-board/internal/store/storetest"
 )
 
 // TestApplyPlanIsIdempotent exercises the real git-bug backend (via
-// gitbugiotest, no mocks): running BuildPlan+ApplyPlan twice against the
+// storetest, no mocks): running BuildPlan+ApplyPlan twice against the
 // same repo must not double up or conflict labels the second time, since
 // git-bug's ChangeLabels errors on an all-no-op call.
 func TestApplyPlanIsIdempotent(t *testing.T) {
 	items := mustParseFixture(t)
 	cfg := mustLoadConfig(t)
 
-	b := gitbugiotest.New(t)
-	id := gitbugiotest.NewImportedIssue(t, b, "cannot change equipment_class",
+	b := storetest.New(t)
+	id := storetest.NewImportedIssue(t, b, "cannot change equipment_class",
 		"https://github.com/EPFL-ENAC/co2-calculator/issues/2605")
 
 	run := func() []string {
@@ -63,8 +63,8 @@ func TestApplyPlanIsIdempotent(t *testing.T) {
 // be removed locally too, not just accumulate.
 func TestApplyPlanReconcilesAssigneesOnRerun(t *testing.T) {
 	cfg := mustLoadConfig(t)
-	b := gitbugiotest.New(t)
-	id := gitbugiotest.NewImportedIssue(t, b, "x", "https://github.com/o/r/issues/1")
+	b := storetest.New(t)
+	id := storetest.NewImportedIssue(t, b, "x", "https://github.com/o/r/issues/1")
 
 	pull := func(assignees []string) []string {
 		item := ghbridge.Item{

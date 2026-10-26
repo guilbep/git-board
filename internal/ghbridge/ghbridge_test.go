@@ -9,7 +9,7 @@ import (
 
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/ghbridge"
-	"github.com/guilbep/git-board/internal/gitbugio"
+	"github.com/guilbep/git-board/internal/store"
 )
 
 const fixture = "testdata/project-items.json"
@@ -36,10 +36,10 @@ func mustLoadConfig(t *testing.T) *config.Config {
 	return cfg
 }
 
-// bug is a small helper to build a gitbugio.Issue fixture keyed by the
+// bug is a small helper to build a store.Issue fixture keyed by the
 // GitHub issue number, mirroring the fixture's real content.url shape.
-func bug(id string, number int, labels ...string) gitbugio.Issue {
-	return gitbugio.Issue{
+func bug(id string, number int, labels ...string) store.Issue {
+	return store.Issue{
 		ID:        id,
 		GithubURL: "https://github.com/EPFL-ENAC/co2-calculator/issues/" + strconv.Itoa(number),
 		Labels:    labels,
@@ -83,7 +83,7 @@ func changeFor(t *testing.T, plan ghbridge.Plan, number int) ghbridge.IssueChang
 func TestBuildPlanMapsFields(t *testing.T) {
 	items := mustParseFixture(t)
 	cfg := mustLoadConfig(t)
-	bugs := []gitbugio.Issue{bug("bug2605", 2605)}
+	bugs := []store.Issue{bug("bug2605", 2605)}
 
 	plan := ghbridge.BuildPlan(items, bugs, cfg)
 	change := changeFor(t, plan, 2605)
@@ -122,7 +122,7 @@ func TestBuildPlanMapsFields(t *testing.T) {
 }
 
 func TestBuildPlanCategoryLeavesAKindAlone(t *testing.T) {
-	plan := ghbridge.BuildPlan(mustParseFixture(t), []gitbugio.Issue{bug("bug2605", 2605, "bug")}, mustLoadConfig(t))
+	plan := ghbridge.BuildPlan(mustParseFixture(t), []store.Issue{bug("bug2605", 2605, "bug")}, mustLoadConfig(t))
 	change := changeFor(t, plan, 2605)
 	for _, l := range change.Added {
 		if l == "feat" {
@@ -139,7 +139,7 @@ func TestBuildPlanCategoryNotAKindWarns(t *testing.T) {
 			items[i].Labels = nil // GitHub has no kind
 		}
 	}
-	plan := ghbridge.BuildPlan(items, []gitbugio.Issue{bug("bug2605", 2605)}, mustLoadConfig(t))
+	plan := ghbridge.BuildPlan(items, []store.Issue{bug("bug2605", 2605)}, mustLoadConfig(t))
 	change := changeFor(t, plan, 2605)
 	for _, l := range change.Added {
 		if strings.EqualFold(l, "fix") {
@@ -154,7 +154,7 @@ func TestBuildPlanCategoryNotAKindWarns(t *testing.T) {
 func TestBuildPlanMergesDuplicateGenericModuleOptions(t *testing.T) {
 	items := mustParseFixture(t)
 	cfg := mustLoadConfig(t)
-	bugs := []gitbugio.Issue{
+	bugs := []store.Issue{
 		bug("bugGeneric1", 2610),
 		bug("bugGeneric2", 2611),
 	}
@@ -178,7 +178,7 @@ func TestBuildPlanMergesDuplicateGenericModuleOptions(t *testing.T) {
 func TestBuildPlanSkipsEmptyFieldsWithoutWarning(t *testing.T) {
 	items := mustParseFixture(t)
 	cfg := mustLoadConfig(t)
-	bugs := []gitbugio.Issue{bug("bugEmpty", 2620)}
+	bugs := []store.Issue{bug("bugEmpty", 2620)}
 
 	plan := ghbridge.BuildPlan(items, bugs, cfg)
 	change := changeFor(t, plan, 2620)
@@ -194,7 +194,7 @@ func TestBuildPlanSkipsEmptyFieldsWithoutWarning(t *testing.T) {
 func TestBuildPlanWarnsOnUnmatchedConfiguredOptionValue(t *testing.T) {
 	items := mustParseFixture(t)
 	cfg := mustLoadConfig(t)
-	bugs := []gitbugio.Issue{bug("bugWeird", 2621)}
+	bugs := []store.Issue{bug("bugWeird", 2621)}
 
 	plan := ghbridge.BuildPlan(items, bugs, cfg)
 	change := changeFor(t, plan, 2621)
@@ -214,7 +214,7 @@ func TestBuildPlanReportsUnmatchedIssueAndExcludesPRs(t *testing.T) {
 	cfg := mustLoadConfig(t)
 	// No bug for #2650 (not bridged) and none for the PR (#2633, excluded
 	// before matching is even attempted).
-	bugs := []gitbugio.Issue{bug("bug2605", 2605)}
+	bugs := []store.Issue{bug("bug2605", 2605)}
 
 	plan := ghbridge.BuildPlan(items, bugs, cfg)
 
@@ -236,7 +236,7 @@ func TestBuildPlanIsPureNoMutationOfInputs(t *testing.T) {
 	b := bug("bug2605", 2605)
 	bugsBefore := append([]string(nil), b.Labels...)
 
-	_ = ghbridge.BuildPlan(items, []gitbugio.Issue{b}, cfg)
+	_ = ghbridge.BuildPlan(items, []store.Issue{b}, cfg)
 
 	if len(b.Labels) != len(bugsBefore) {
 		t.Errorf("BuildPlan mutated the input Issue's Labels: %v vs %v", b.Labels, bugsBefore)
@@ -254,7 +254,7 @@ func TestBuildPlanUsesTheSyncMapping(t *testing.T) {
 	items := []ghbridge.Item{{Status: "QA Validation", EstHours: &est, Sprint: &ghbridge.Sprint{Title: "Hypercare"},
 		Content: ghbridge.Content{Number: 7, Type: "Issue", URL: bug("b7", 7).GithubURL}}}
 
-	change := changeFor(t, ghbridge.BuildPlan(items, []gitbugio.Issue{bug("b7", 7)}, cfg), 7)
+	change := changeFor(t, ghbridge.BuildPlan(items, []store.Issue{bug("b7", 7)}, cfg), 7)
 	got := map[string]bool{}
 	for _, l := range change.Added {
 		got[l] = true
@@ -286,7 +286,7 @@ func TestBuildPlanCategoryRemovesItsBareLabel(t *testing.T) {
 		for i := range items {
 			items[i].Labels = nil // GitHub has no kind
 		}
-		plan := ghbridge.BuildPlan(items, []gitbugio.Issue{bug("bug2605", 2605, tt.labels...)}, cfg)
+		plan := ghbridge.BuildPlan(items, []store.Issue{bug("bug2605", 2605, tt.labels...)}, cfg)
 		var kind ghbridge.FieldResult
 		for _, f := range changeFor(t, plan, 2605).Fields {
 			if f.Field == "kind" {
@@ -307,7 +307,7 @@ func TestBuildPlanCategoryNotAKindStillRemovesItsBareLabel(t *testing.T) {
 			items[i].Labels = nil // GitHub has no kind
 		}
 	}
-	change := changeFor(t, ghbridge.BuildPlan(items, []gitbugio.Issue{bug("bug2605", 2605, "SPECS")}, mustLoadConfig(t)), 2605)
+	change := changeFor(t, ghbridge.BuildPlan(items, []store.Issue{bug("bug2605", 2605, "SPECS")}, mustLoadConfig(t)), 2605)
 	if !slices.Contains(change.Removed, "SPECS") {
 		t.Errorf("Removed = %v, want SPECS", change.Removed)
 	}
@@ -325,7 +325,7 @@ func TestBuildPlanCategoryKeepsALabelGitHubHas(t *testing.T) {
 			items[i].Labels = []string{"feat"}
 		}
 	}
-	change := changeFor(t, ghbridge.BuildPlan(items, []gitbugio.Issue{bug("bug2605", 2605, "FEAT")}, mustLoadConfig(t)), 2605)
+	change := changeFor(t, ghbridge.BuildPlan(items, []store.Issue{bug("bug2605", 2605, "FEAT")}, mustLoadConfig(t)), 2605)
 	if slices.Contains(change.Removed, "FEAT") {
 		t.Errorf("Removed = %v: FEAT is GitHub's feat", change.Removed)
 	}

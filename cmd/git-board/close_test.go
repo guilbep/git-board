@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/guilbep/git-board/internal/gitbugio"
+	"github.com/guilbep/git-board/internal/store"
 )
 
 func TestCloseSetsTerminalStatusAndCloses(t *testing.T) {
@@ -20,7 +20,7 @@ func TestCloseSetsTerminalStatusAndCloses(t *testing.T) {
 		t.Errorf("output = %q, want status:validated (the last configured option)", out)
 	}
 
-	b, err := gitbugio.OpenCwd()
+	b, err := store.OpenCwd()
 	if err != nil {
 		t.Fatalf("OpenCwd: %v", err)
 	}

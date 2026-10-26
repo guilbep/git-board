@@ -6,31 +6,31 @@ import (
 	"time"
 
 	"github.com/guilbep/git-board/internal/cycle"
-	"github.com/guilbep/git-board/internal/gitbugio"
 	"github.com/guilbep/git-board/internal/inbox"
+	"github.com/guilbep/git-board/internal/store"
 )
 
 var (
 	alice = inbox.Me{ID: "ida", Login: "alice"}
-	bob   = gitbugio.Person{ID: "idb", Login: "bob"}
-	carol = gitbugio.Person{ID: "idc", Login: "carol"}
+	bob   = store.Person{ID: "idb", Login: "bob"}
+	carol = store.Person{ID: "idc", Login: "carol"}
 	t0    = time.Date(2026, 10, 1, 10, 0, 0, 0, time.UTC)
 )
 
 func day(n int) time.Time { return t0.Add(time.Duration(n) * 24 * time.Hour) }
 
-func comment(by gitbugio.Person, n int, body string, meta map[string]string) gitbugio.Event {
-	return gitbugio.Event{Kind: "comment", ID: "c" + body[:1], Author: by, At: day(n), Body: body, Meta: meta}
+func comment(by store.Person, n int, body string, meta map[string]string) store.Event {
+	return store.Event{Kind: "comment", ID: "c" + body[:1], Author: by, At: day(n), Body: body, Meta: meta}
 }
 
-func thread(id string, author gitbugio.Person, labels []string, events ...gitbugio.Event) gitbugio.Thread {
-	th := gitbugio.Thread{Author: author, Events: append([]gitbugio.Event{{Kind: "created", Author: author, At: day(0)}}, events...)}
+func thread(id string, author store.Person, labels []string, events ...store.Event) store.Thread {
+	th := store.Thread{Author: author, Events: append([]store.Event{{Kind: "created", Author: author, At: day(0)}}, events...)}
 	th.ID, th.Labels = id, labels
 	return th
 }
 
 func at(id string, since int, login string, anyone, involved bool) Row {
-	return Row{Issue: gitbugio.Issue{ID: id}, Step: 2, Waits: cycle.Waits{Login: login, Anyone: anyone, What: "set the risk class"}, Since: day(since), Involved: involved}
+	return Row{Issue: store.Issue{ID: id}, Step: 2, Waits: cycle.Waits{Login: login, Anyone: anyone, What: "set the risk class"}, Since: day(since), Involved: involved}
 }
 
 func ids(rows []Row) []string {
@@ -77,7 +77,7 @@ func TestQuestionAsk(t *testing.T) {
 	if q := QuestionOf(th, alice); q == nil || q.Body != "Tolerance is 2mm" || q.At != day(1) || q.By.Login != "bob" {
 		t.Errorf("ask metadata: %+v", q)
 	}
-	me := gitbugio.Person{ID: "ida"}
+	me := store.Person{ID: "ida"}
 	if q := QuestionOf(thread("i", bob, nil, comment(me, 1, "Mine", map[string]string{"ask": "1"})), alice); q != nil {
 		t.Errorf("the viewer's own ask: %+v", q)
 	}
@@ -94,7 +94,7 @@ func TestQuestionMark(t *testing.T) {
 }
 
 func TestQuestionAnswered(t *testing.T) {
-	me := gitbugio.Person{ID: "ida", Login: "alice"}
+	me := store.Person{ID: "ida", Login: "alice"}
 	th := thread("i", bob, nil, comment(bob, 1, "Which tolerance?", map[string]string{"ask": "1"}), comment(me, 2, "2mm.", nil))
 	if q := QuestionOf(th, alice); q != nil {
 		t.Errorf("answered: %+v", q)
@@ -102,7 +102,7 @@ func TestQuestionAnswered(t *testing.T) {
 }
 
 func TestSinceLastStateChange(t *testing.T) {
-	th := thread("i", bob, nil, comment(bob, 1, "Hi", nil), gitbugio.Event{Kind: "labels", At: day(2)}, comment(carol, 3, "Yo", nil))
+	th := thread("i", bob, nil, comment(bob, 1, "Hi", nil), store.Event{Kind: "labels", At: day(2)}, comment(carol, 3, "Yo", nil))
 	if got := Since(th); got != day(2) {
 		t.Errorf("Since = %v, want the labels' %v", got, day(2))
 	}
@@ -116,9 +116,9 @@ func TestSinceLastStateChange(t *testing.T) {
 }
 
 func TestInvolved(t *testing.T) {
-	me := gitbugio.Person{ID: "ida", Login: "alice"}
+	me := store.Person{ID: "ida", Login: "alice"}
 	for _, c := range []struct {
-		th   gitbugio.Thread
+		th   store.Thread
 		want bool
 	}{
 		{thread("a", me, nil), true},
@@ -133,7 +133,7 @@ func TestInvolved(t *testing.T) {
 }
 
 func TestRowOf(t *testing.T) {
-	th := thread("i", bob, []string{"assignee:alice"}, gitbugio.Event{Kind: "labels", At: day(1)}, comment(bob, 2, "Which?", nil))
+	th := thread("i", bob, []string{"assignee:alice"}, store.Event{Kind: "labels", At: day(1)}, comment(bob, 2, "Which?", nil))
 	c := cycle.Cycle{Step: 5, Of: 7, Name: "Code", Waits: cycle.Waits{Login: "alice", What: "commit and open the PR"}, Mine: true}
 	c.Evidence.Branch = "fix/1-x"
 	r := RowOf(th, c, alice)

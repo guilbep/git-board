@@ -10,7 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/gitbugio"
+	"github.com/guilbep/git-board/internal/store"
 )
 
 func newSyncCmd() *cobra.Command {
@@ -43,7 +43,7 @@ convention yet for mapping one to the other — see docs/implementation-plan.md.
 	return cmd
 }
 
-// runSync pulls then pushes each path in turn, in-process (gitbugio's
+// runSync pulls then pushes each path in turn, in-process (store's
 // Pull and Push, over the core's git store). Keeps going after a failure on one path so one broken repo
 // doesn't block the rest; every failure is still surfaced, as a combined
 // error at the end.
@@ -63,7 +63,7 @@ func runSync(out io.Writer, paths []string, remote string) error {
 }
 
 func syncOne(out io.Writer, path, remote string) error {
-	b, err := gitbugio.Open(path)
+	b, err := store.Open(path)
 	if err != nil {
 		return fmt.Errorf("opening: %w", err)
 	}
@@ -84,7 +84,7 @@ func syncOne(out io.Writer, path, remote string) error {
 	if err := b.Switched(); err != nil {
 		return err
 	}
-	if remote == gitbugio.NumbersRemote {
+	if remote == store.NumbersRemote {
 		if err := b.FetchNumbers(remote); err != nil {
 			return fmt.Errorf("numbers: %w", err)
 		}
@@ -98,7 +98,7 @@ func syncOne(out io.Writer, path, remote string) error {
 	if pushOut != "" {
 		fmt.Fprintf(out, "%s: %s\n", path, pushOut)
 	}
-	if remote == gitbugio.NumbersRemote {
+	if remote == store.NumbersRemote {
 		n, err := b.NumberIssues(remote)
 		if err != nil {
 			return fmt.Errorf("numbering: %w", err)

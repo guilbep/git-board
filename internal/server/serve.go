@@ -1,5 +1,5 @@
 // Package server serves the git-board web UI (git board serve): a JSON API over
-// internal/config + internal/gitbugio + internal/fields + internal/board
+// internal/config + internal/store + internal/fields + internal/board
 // (the same packages the CLI and TUI use), plus the built frontend
 // (web/dist, embedded via web/embed.go) as static assets.
 //
@@ -22,7 +22,7 @@ import (
 
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/ghbridge"
-	"github.com/guilbep/git-board/internal/gitbugio"
+	"github.com/guilbep/git-board/internal/store"
 	boardweb "github.com/guilbep/git-board/web"
 )
 
@@ -40,12 +40,12 @@ func Serve(ctx context.Context, addr, me string, ready func(url string)) error {
 		return err
 	}
 
-	b, err := gitbugio.OpenCwd()
+	b, err := store.OpenCwd()
 	if err != nil {
 		return fmt.Errorf("opening the repository: %w", err)
 	}
 	defer b.Close()
-	gitDir, err := gitbugio.FindGitDir(".")
+	gitDir, err := store.FindGitDir(".")
 	if err != nil {
 		return err
 	}

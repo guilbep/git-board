@@ -11,7 +11,7 @@ import (
 	"testing"
 
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/gitbugio/gitbugiotest"
+	"github.com/guilbep/git-board/internal/store/storetest"
 )
 
 // fakeGitLab answers what adding a GitLab forge asks: who the token is,
@@ -41,7 +41,7 @@ func fakeGitLab(t *testing.T) *httptest.Server {
 func TestCredentialsNeverShowTheirToken(t *testing.T) {
 	t.Parallel()
 	ts, s := forgeServer(t, ghForge, glForge)
-	gitbugiotest.Token(t, s.b, "https://github.com", "guilbep", "very-secret-value")
+	storetest.Token(t, s.b, "https://github.com", "guilbep", "very-secret-value")
 	resp, err := http.Get(ts.URL + "/api/credentials")
 	if err != nil {
 		t.Fatal(err)

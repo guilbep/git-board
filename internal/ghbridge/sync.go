@@ -4,7 +4,7 @@ package ghbridge
 //
 // Each field of each issue is decided from three values: the Project's, the
 // label's, and the one both last agreed on (the base, recorded in the bug's
-// history by gitbugio.SetProjectBases). Only the side that changed since is
+// history by store.SetProjectBases). Only the side that changed since is
 // taken; when both changed differently, the field is held, left alone on
 // both sides, until someone resolves it.
 
@@ -20,7 +20,7 @@ import (
 
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/fields"
-	"github.com/guilbep/git-board/internal/gitbugio"
+	"github.com/guilbep/git-board/internal/store"
 )
 
 // Decision is what syncing one field does.
@@ -151,8 +151,8 @@ func BasePrefix(p config.GithubProject) string {
 
 // BuildSyncPlan decides every synced field of every matched issue, without
 // writing anything. bases are the recorded bases, by bug id then field.
-func BuildSyncPlan(items []Item, bugs []gitbugio.Issue, bases map[string]map[string]string, meta ProjectMeta, cfg *config.Config) SyncPlan {
-	byURL := make(map[string]gitbugio.Issue, len(bugs))
+func BuildSyncPlan(items []Item, bugs []store.Issue, bases map[string]map[string]string, meta ProjectMeta, cfg *config.Config) SyncPlan {
+	byURL := make(map[string]store.Issue, len(bugs))
 	for _, b := range bugs {
 		if b.GithubURL != "" {
 			byURL[b.GithubURL] = b
@@ -177,7 +177,7 @@ func BuildSyncPlan(items []Item, bugs []gitbugio.Issue, bases map[string]map[str
 	return plan
 }
 
-func syncIssue(plan *SyncPlan, item Item, bug gitbugio.Issue, bases map[string]string, meta ProjectMeta, cfg *config.Config) {
+func syncIssue(plan *SyncPlan, item Item, bug store.Issue, bases map[string]string, meta ProjectMeta, cfg *config.Config) {
 	change := IssueChange{BugID: bug.ID, GithubURL: bug.GithubURL, Number: item.Content.Number, Title: item.Title}
 	newBases := map[string]string{}
 	record := func(field, value string) {
@@ -293,7 +293,7 @@ func labelChange(labels []string, field, value string) FieldResult {
 // Resolve turns a held conflict into a plan keeping one side: git-board's
 // value written to the Project (ours), or the Project's set on the label
 // (theirs). Both then agree on it.
-func Resolve(c Conflict, ours bool, item Item, bug gitbugio.Issue, meta ProjectMeta, cfg *config.Config) (SyncPlan, error) {
+func Resolve(c Conflict, ours bool, item Item, bug store.Issue, meta ProjectMeta, cfg *config.Config) (SyncPlan, error) {
 	change := IssueChange{BugID: bug.ID, GithubURL: bug.GithubURL, Number: c.Number, Title: c.Title}
 	plan := SyncPlan{Bases: map[string]map[string]string{}}
 	value := c.Project
@@ -483,7 +483,7 @@ type BaseWriter interface {
 	SetProjectBases(idPrefix, prefix string, values map[string]string) error
 }
 
-var _ BaseWriter = (*gitbugio.Backend)(nil)
+var _ BaseWriter = (*store.Backend)(nil)
 
 // ApplySync applies a plan issue by issue: Project edits, then labels, then
 // bases, so a run stopped halfway leaves agreeing values that the next run
@@ -536,7 +536,7 @@ func without(m map[string]string, key string) map[string]string {
 // LoadBases reads the recorded bases of the bugs a Project's items match.
 func LoadBases(b interface {
 	ProjectBases(idPrefix, prefix string) (map[string]string, error)
-}, prefix string, items []Item, bugs []gitbugio.Issue) (map[string]map[string]string, error) {
+}, prefix string, items []Item, bugs []store.Issue) (map[string]map[string]string, error) {
 	urls := map[string]bool{}
 	for _, it := range items {
 		urls[it.Content.URL] = true

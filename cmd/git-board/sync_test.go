@@ -4,32 +4,32 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/guilbep/git-board/internal/gitbugio"
-	"github.com/guilbep/git-board/internal/gitbugio/gitbugiotest"
+	"github.com/guilbep/git-board/internal/store"
+	"github.com/guilbep/git-board/internal/store/storetest"
 )
 
 // twoReposWithRemote builds two real repositories on disk plus a bare
 // "origin" both point at, each with someone to write as: runSync and
-// syncOne open real filesystem paths (gitbugio.Open).
+// syncOne open real filesystem paths (store.Open).
 func twoReposWithRemote(t *testing.T) (pathA, pathB string) {
 	t.Helper()
-	remote := gitbugiotest.Repo(t, true)
-	pathA, pathB = gitbugiotest.Repo(t, false), gitbugiotest.Repo(t, false)
+	remote := storetest.Repo(t, true)
+	pathA, pathB = storetest.Repo(t, false), storetest.Repo(t, false)
 	for _, path := range []string{pathA, pathB} {
-		gitbugiotest.Git(t, path, "remote", "add", "origin", remote)
-		gitbugiotest.Init(t, path)
+		storetest.Git(t, path, "remote", "add", "origin", remote)
+		storetest.Init(t, path)
 	}
 	return pathA, pathB
 }
 
 func seedBug(t *testing.T, path, title string) {
 	t.Helper()
-	gitbugiotest.NewIssue(t, gitbugiotest.Open(t, path), title)
+	storetest.NewIssue(t, storetest.Open(t, path), title)
 }
 
 func bugTitles(t *testing.T, path string) []string {
 	t.Helper()
-	b, err := gitbugio.Open(path)
+	b, err := store.Open(path)
 	if err != nil {
 		t.Fatalf("open %s: %v", path, err)
 	}
@@ -52,7 +52,7 @@ func TestSyncPushesThenPullsBetweenTwoRepos(t *testing.T) {
 
 	// A pushes it to the shared remote, and tells the forge its remotes
 	// name, a URL on GitHub beside origin's.
-	gitbugiotest.Git(t, pathA, "remote", "add", "gh", "https://github.com/o/r.git")
+	storetest.Git(t, pathA, "remote", "add", "gh", "https://github.com/o/r.git")
 	out, err := execute(t, []string{"sync", pathA})
 	if err != nil || !strings.Contains(out, "forge github, found in the remotes: github.com o/r\n") {
 		t.Fatalf("sync A: %v\noutput:\n%s", err, out)
@@ -142,7 +142,7 @@ func TestSyncContinuesPastOneFailingPath(t *testing.T) {
 func TestSyncNumbers(t *testing.T) {
 	t.Parallel()
 	pathA, pathB := twoReposWithRemote(t)
-	a, err := gitbugio.Open(pathA)
+	a, err := store.Open(pathA)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -165,7 +165,7 @@ func TestSyncNumbers(t *testing.T) {
 func TestSyncWaitsForTheSwitch(t *testing.T) {
 	t.Parallel()
 	path, _ := twoReposWithRemote(t)
-	gitbugiotest.Git(t, path, "update-ref", "refs/bugs/"+strings.Repeat("a", 64), strings.TrimSpace(gitbugiotest.Git(t, path, "hash-object", "-w", "--stdin")))
+	storetest.Git(t, path, "update-ref", "refs/bugs/"+strings.Repeat("a", 64), strings.TrimSpace(storetest.Git(t, path, "hash-object", "-w", "--stdin")))
 	out, err := execute(t, []string{"sync", path})
 	if err == nil || !strings.Contains(out, "run git-board switch") {
 		t.Fatalf("err = %v\n%s", err, out)

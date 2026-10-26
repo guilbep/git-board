@@ -11,8 +11,8 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/gitbugio"
 	"github.com/guilbep/git-board/internal/release"
+	"github.com/guilbep/git-board/internal/store"
 )
 
 // Fixture is the repositories behind a NewRunner Runner.
@@ -69,9 +69,9 @@ func NewRunner(t *testing.T, environments ...string) (*release.Runner, *Tools, *
 		fx.ConfigBare = append(fx.ConfigBare, b)
 		fx.cfg.Deploy = append(fx.cfg.Deploy, config.Target{Repo: b, Path: "app/overlays/{env}", Registry: reg})
 	}
-	b, err := gitbugio.Open(app)
+	b, err := store.Open(app)
 	if err != nil {
-		t.Fatalf("gitbugio.Open: %v", err)
+		t.Fatalf("store.Open: %v", err)
 	}
 	t.Cleanup(func() { _ = b.Close() })
 	if _, err := b.NewIdentity("dev", "dev@example.com"); err != nil {

@@ -8,7 +8,7 @@ import (
 
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/ghbridge"
-	"github.com/guilbep/git-board/internal/gitbugio"
+	"github.com/guilbep/git-board/internal/store"
 )
 
 // fetchGithubItems is a seam over ghbridge.FetchItems so tests can swap in
@@ -113,7 +113,7 @@ func runBridgePull(out io.Writer, ownerFlag string, projectFlag, limit int, appl
 		return fmt.Errorf("no GitHub project configured: pass --owner/--project, or run `git-board bridge configure` first")
 	}
 
-	b, err := gitbugio.OpenCwd()
+	b, err := store.OpenCwd()
 	if err != nil {
 		return err
 	}

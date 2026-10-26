@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/gitbugio"
+	"github.com/guilbep/git-board/internal/store"
 )
 
 // dryRunFresh is how long a dry run stands for the real run it allows.
@@ -85,7 +85,7 @@ type stepper struct {
 	last   string         // bridge, way and issue of the last step
 }
 
-func (st *stepper) see(e gitbugio.SyncEvent, name string) (syncStep, bool) {
+func (st *stepper) see(e store.SyncEvent, name string) (syncStep, bool) {
 	key := e.Forge + " " + e.Way
 	if !names(e) || st.last == key+" "+e.Issue {
 		return syncStep{}, false // a write, a warning, or the same issue: the step stays
@@ -99,7 +99,7 @@ func (st *stepper) see(e gitbugio.SyncEvent, name string) (syncStep, bool) {
 }
 
 // names says an event names an issue of git-board's.
-func names(e gitbugio.SyncEvent) bool {
+func names(e store.SyncEvent) bool {
 	switch e.What {
 	case "created", "updated", "linked", "posted", "pushed":
 		return true
@@ -159,7 +159,7 @@ type direction struct {
 }
 
 // add counts an event, and keeps its line.
-func (t *bridgeTally) add(e gitbugio.SyncEvent, line string) {
+func (t *bridgeTally) add(e store.SyncEvent, line string) {
 	switch e.What {
 	case "created":
 		t.From.Issues++
@@ -189,7 +189,7 @@ func (t *bridgeTally) add(e gitbugio.SyncEvent, line string) {
 
 // line says an event in words, its issue by name; "" for a write, which
 // the counts say.
-func line(e gitbugio.SyncEvent, dry bool, name string) string {
+func line(e store.SyncEvent, dry bool, name string) string {
 	var l string
 	switch e.What {
 	case "created":
@@ -216,9 +216,9 @@ func line(e gitbugio.SyncEvent, dry bool, name string) string {
 // tell is a run's events counted into tally, and its steps published:
 // tally is called with forgeMu held. id names the issue a step is on, for
 // its drawer; "" for a full run.
-func (s *apiServer) tell(dry bool, id string, tally func(name string) *bridgeTally, step func(*syncStep)) func(gitbugio.SyncEvent) {
+func (s *apiServer) tell(dry bool, id string, tally func(name string) *bridgeTally, step func(*syncStep)) func(store.SyncEvent) {
 	var st stepper
-	return func(e gitbugio.SyncEvent) {
+	return func(e store.SyncEvent) {
 		name := ""
 		if names(e) {
 			name = s.issueName(e.Issue)
@@ -331,7 +331,7 @@ func (s *apiServer) handleForgeSync(w http.ResponseWriter, r *http.Request) {
 
 // forgeRun is the core's sync, or one way of it, with forges opened for
 // the run.
-func (s *apiServer) forgeRun(ctx context.Context, mode string, forges []config.Forge, dryRun bool, see func(gitbugio.SyncEvent)) error {
+func (s *apiServer) forgeRun(ctx context.Context, mode string, forges []config.Forge, dryRun bool, see func(store.SyncEvent)) error {
 	run, err := s.openRun(ctx, forges, dryRun, see)
 	if err != nil {
 		return err
@@ -350,19 +350,19 @@ func (s *apiServer) forgeRun(ctx context.Context, mode string, forges []config.F
 // openRun opens the forges' adapters for one run, fresh: the settings and
 // the tokens may have changed since the last. A forge found in the
 // remotes whose GitLab id can't be read is left out, with a warning.
-func (s *apiServer) openRun(ctx context.Context, forges []config.Forge, dryRun bool, see func(gitbugio.SyncEvent)) (gitbugio.ForgeRun, error) {
+func (s *apiServer) openRun(ctx context.Context, forges []config.Forge, dryRun bool, see func(store.SyncEvent)) (store.ForgeRun, error) {
 	open := s.openForges
 	if open == nil {
-		open = gitbugio.OpenForges
+		open = store.OpenForges
 	}
-	forges = gitbugio.ResolveForges(ctx, forges, func(f config.Forge, why error) {
-		see(gitbugio.SyncEvent{Forge: f.Name, What: "warning", Line: fmt.Sprintf("left out of the run: %s %s: %v", f.Host, f.Path, why)})
+	forges = store.ResolveForges(ctx, forges, func(f config.Forge, why error) {
+		see(store.SyncEvent{Forge: f.Name, What: "warning", Line: fmt.Sprintf("left out of the run: %s %s: %v", f.Host, f.Path, why)})
 	})
 	fs, err := open(ctx, forges)
 	if err != nil {
-		return gitbugio.ForgeRun{}, err
+		return store.ForgeRun{}, err
 	}
-	return gitbugio.ForgeRun{Forges: fs, PublishPrivate: s.config().PublishPrivate, DryRun: dryRun, See: see}, nil
+	return store.ForgeRun{Forges: fs, PublishPrivate: s.config().PublishPrivate, DryRun: dryRun, See: see}, nil
 }
 
 func (s *apiServer) runForgeSync(job *forgeJob, forges []config.Forge) {

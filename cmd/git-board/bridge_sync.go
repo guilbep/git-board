@@ -11,7 +11,7 @@ import (
 
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/ghbridge"
-	"github.com/guilbep/git-board/internal/gitbugio"
+	"github.com/guilbep/git-board/internal/store"
 )
 
 // Seams over the gh calls, for tests.
@@ -88,12 +88,12 @@ func project() ghbridge.Project {
 }
 
 // openSync loads the config, opens the repository and reads both sides.
-func openSync(limit int) (*config.Config, *gitbugio.Backend, ghbridge.State, error) {
+func openSync(limit int) (*config.Config, *store.Backend, ghbridge.State, error) {
 	cfg, err := loadConfig()
 	if err != nil {
 		return nil, nil, ghbridge.State{}, err
 	}
-	b, err := gitbugio.OpenCwd()
+	b, err := store.OpenCwd()
 	if err != nil {
 		return nil, nil, ghbridge.State{}, err
 	}

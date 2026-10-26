@@ -5,7 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/guilbep/git-board/internal/gitbugio"
+	"github.com/guilbep/git-board/internal/store"
 )
 
 func newNumbersCmd() *cobra.Command {
@@ -18,15 +18,15 @@ clone waits for its push: git board sync, or Push on the Sync page, push
 it and number it. A project that doesn't number its issues: nothing.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			b, err := gitbugio.OpenCwd()
+			b, err := store.OpenCwd()
 			if err != nil {
 				return err
 			}
 			defer b.Close()
-			if err := b.FetchNumbers(gitbugio.NumbersRemote); err != nil {
+			if err := b.FetchNumbers(store.NumbersRemote); err != nil {
 				return err
 			}
-			n, err := b.NumberIssues(gitbugio.NumbersRemote)
+			n, err := b.NumberIssues(store.NumbersRemote)
 			if err != nil {
 				return err
 			}
@@ -54,15 +54,15 @@ issue or pull request number:
   gh api 'repos/OWNER/REPO/issues?state=all&per_page=1' -q '.[0].number'`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			b, err := gitbugio.OpenCwd()
+			b, err := store.OpenCwd()
 			if err != nil {
 				return err
 			}
 			defer b.Close()
-			if err := b.InitNumbers(gitbugio.NumbersRemote, prefix, start); err != nil {
+			if err := b.InitNumbers(store.NumbersRemote, prefix, start); err != nil {
 				return err
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "numbering as %s-N from %d, on %s\n", prefix, start, gitbugio.NumbersRemote)
+			fmt.Fprintf(cmd.OutOrStdout(), "numbering as %s-N from %d, on %s\n", prefix, start, store.NumbersRemote)
 			return nil
 		},
 	}

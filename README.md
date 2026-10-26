@@ -573,7 +573,7 @@ repo/network issue) is shown inline and the TUI stays open.
 
 A one-page board, backed by a Go HTTP API in the same module — no Python,
 no separate service. `internal/server` reuses `internal/config`,
-`internal/gitbugio`, `internal/fields` and `internal/board` directly, so
+`internal/store`, `internal/fields` and `internal/board` directly, so
 `ls`/`view`/`set` and the API apply the exact same filter/group and
 field-write logic.
 
@@ -816,7 +816,7 @@ generation time against `--me`/`GIT_BOARD_ME`, the same single shared
 
 ```
 internal/config/       TOML parsing, sprint resolution — pure, no I/O beyond reading the file.
-internal/gitbugio/     thin wrapper around git-bug's cache.RepoCache API.
+internal/store/        git-board's store over the core (core/): issues, people, releases, forges.
 internal/fields/       ApplyField single/multi-cardinality logic and alias resolution.
 internal/filter/       grammar parser, Matches(issue, conditions, config, me).
 internal/board/        load/sort/group issues — shared by the CLI, the TUI and the web API.

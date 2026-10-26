@@ -10,8 +10,8 @@ import (
 
 	"github.com/guilbep/git-board/core/forge/fake"
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/gitbugio"
-	"github.com/guilbep/git-board/internal/gitbugio/gitbugiotest"
+	"github.com/guilbep/git-board/internal/store"
+	"github.com/guilbep/git-board/internal/store/storetest"
 )
 
 func getWork(t *testing.T, ts *httptest.Server, who string) workResponse {
@@ -41,9 +41,9 @@ func waiting(res workResponse) []string {
 
 // issueBy opens an issue as who, with labels, since NewIssue writes as the
 // test identity.
-func issueBy(t *testing.T, b *gitbugio.Backend, who gitbugio.Person, title string, labels ...string) string {
+func issueBy(t *testing.T, b *store.Backend, who store.Person, title string, labels ...string) string {
 	t.Helper()
-	id := gitbugiotest.IssueAs(t, b, who, time.Now().Unix(), title, twoCriteria)
+	id := storetest.IssueAs(t, b, who, time.Now().Unix(), title, twoCriteria)
 	if _, err := b.ApplyLabelChange(id, labels, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -52,15 +52,15 @@ func issueBy(t *testing.T, b *gitbugio.Backend, who gitbugio.Person, title strin
 
 func TestWorkGroups(t *testing.T) {
 	t.Parallel()
-	b := gitbugiotest.New(t)
+	b := storetest.New(t)
 	cfg := cycleConfig(map[string]string{"pm": "guilbep", "lead-dev": "ann"}, config.Cycle{Risk: "pm", Plan: "lead-dev"})
 	ts := newTestServer(t, b, cfg)
-	ann := gitbugiotest.NewPerson(t, b, "Ann", "ann")
+	ann := storetest.NewPerson(t, b, "Ann", "ann")
 	risk, _ := b.NewIssue("Needs a risk", twoCriteria, []string{"status:ready"})                // step 2, waits for the pm: me
 	plan, _ := b.NewIssue("Needs a plan", twoCriteria, []string{"status:ready", "risk:normal"}) // step 3, waits for ann; mine as author
 	anns := issueBy(t, b, ann, "Ann's", "status:ready", "risk:normal", "pm:ann")                // waits for ann; the inherited pm would make it mine
 	closed, _ := b.NewIssue("Closed", twoCriteria, []string{"status:ready"})
-	gitbugiotest.CloseIssue(t, b, closed)
+	storetest.CloseIssue(t, b, closed)
 
 	res := getWork(t, ts, "me")
 	if !slices.Equal(needs(res), []string{risk}) || !slices.Equal(waiting(res), []string{plan}) {
@@ -81,7 +81,7 @@ func TestWorkGroups(t *testing.T) {
 
 func TestWorkAnyonesGate(t *testing.T) {
 	t.Parallel()
-	b := gitbugiotest.New(t)
+	b := storetest.New(t)
 	ts := newTestServer(t, b, cycleConfig(nil, config.Cycle{}))
 	id, _ := b.NewIssue("Unassigned", twoCriteria, []string{"status:in-progress", "risk:low"}) // step 4, no assignee: anyone
 	if res := getWork(t, ts, "me"); len(res.Needs) != 0 || !slices.Equal(waiting(res), []string{id}) {
@@ -94,11 +94,11 @@ func TestWorkAnyonesGate(t *testing.T) {
 
 func TestWorkQuestion(t *testing.T) {
 	t.Parallel()
-	b := gitbugiotest.New(t)
+	b := storetest.New(t)
 	ts := newTestServer(t, b, cycleConfig(map[string]string{"lead-dev": "ann"}, config.Cycle{Plan: "lead-dev"}))
-	ann := gitbugiotest.NewPerson(t, b, "Ann", "ann")
+	ann := storetest.NewPerson(t, b, "Ann", "ann")
 	id, _ := b.NewIssue("Asked", twoCriteria, []string{"status:ready", "risk:normal"}) // waits for ann
-	cid := gitbugiotest.CommentAs(t, b, id, ann, time.Now().Unix(), "Which tolerance?")
+	cid := storetest.CommentAs(t, b, id, ann, time.Now().Unix(), "Which tolerance?")
 	res := getWork(t, ts, "me")
 	if !slices.Equal(needs(res), []string{id}) || res.Needs[0].Question == nil || res.Needs[0].Question.ID != cid || res.Needs[0].Question.By.Login != "ann" {
 		t.Fatalf("asked: needs %v %+v", needs(res), res.Needs)
@@ -113,13 +113,13 @@ func TestWorkQuestion(t *testing.T) {
 
 func TestWorkNeedsWhoYouAre(t *testing.T) {
 	t.Parallel()
-	noLogin := &apiServer{cfg: &config.Config{}, b: gitbugiotest.New(t)}
+	noLogin := &apiServer{cfg: &config.Config{}, b: storetest.New(t)}
 	ts := httptest.NewServer(withCORS(newMux(noLogin, http.NotFoundHandler())))
 	t.Cleanup(ts.Close)
 	if code, c := codeOf(t, ts.URL+"/api/work"); code != http.StatusConflict || c != "no-login" {
 		t.Errorf("no login: %d %q", code, c)
 	}
-	b := gitbugiotest.NewEmpty(t)
+	b := storetest.NewEmpty(t)
 	ts2 := httptest.NewServer(withCORS(newMux(&apiServer{cfg: &config.Config{}, b: b, me: "guilbep"}, http.NotFoundHandler())))
 	t.Cleanup(ts2.Close)
 	if code, c := codeOf(t, ts2.URL+"/api/work"); code != http.StatusConflict || c != "no-identity" {
@@ -157,10 +157,10 @@ func TestWorkAgents(t *testing.T) {
 
 func TestWorkToSend(t *testing.T) {
 	t.Parallel()
-	b := gitbugiotest.New(t)
+	b := storetest.New(t)
 	ts := newTestServer(t, b, cycleConfig(nil, config.Cycle{}))
-	id := gitbugiotest.NewIssue(t, b, "synced")
-	run := gitbugio.ForgeRun{Forges: []gitbugio.NamedForge{{Name: "gh", Forge: fake.New("github.com/o/r")}}}
+	id := storetest.NewIssue(t, b, "synced")
+	run := store.ForgeRun{Forges: []store.NamedForge{{Name: "gh", Forge: fake.New("github.com/o/r")}}}
 	if _, err := b.SyncForges(t.Context(), run); err != nil {
 		t.Fatal(err)
 	}
@@ -183,7 +183,7 @@ func TestWorkToSend(t *testing.T) {
 // Review Focus 5: no [sprints], no retro clock: the summary says so.
 func TestWorkWithoutSprints(t *testing.T) {
 	t.Parallel()
-	b := gitbugiotest.New(t)
+	b := storetest.New(t)
 	cfg := cycleConfig(nil, config.Cycle{})
 	ts := newTestServer(t, b, cfg)
 	id, _ := b.NewIssue("Corrected", twoCriteria, []string{"status:ready"})

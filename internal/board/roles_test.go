@@ -6,14 +6,14 @@ import (
 
 	"github.com/guilbep/git-board/internal/board"
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/gitbugio/gitbugiotest"
+	"github.com/guilbep/git-board/internal/store/storetest"
 )
 
 // Issues take the project's roles unless they set their own: filters,
 // groups and facets see the inherited value, the PM's board pm:@me too.
 func TestRolesInherit(t *testing.T) {
 	t.Parallel()
-	b := gitbugiotest.New(t)
+	b := storetest.New(t)
 	b.NewIssue("inherits", "", nil)
 	b.NewIssue("overrides", "", []string{"lead-dev:dan"})
 	cfg := &config.Config{Roles: map[string]string{"lead-dev": "bob", "pm": "claire"}}

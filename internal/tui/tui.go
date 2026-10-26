@@ -1,5 +1,5 @@
 // Package tui is an interactive bubbletea front-end over the same
-// internal/gitbugio issue data the CLI's ls/view commands render as a flat
+// internal/store issue data the CLI's ls/view commands render as a flat
 // table. It adds scrolling and search (both native to bubbles/list), a
 // detail view that recognizes configured fields, inline field editing, and
 // a quick category filter — all layered on bubbles/list rather than
@@ -20,23 +20,23 @@ import (
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/fields"
 	"github.com/guilbep/git-board/internal/ghbridge"
-	"github.com/guilbep/git-board/internal/gitbugio"
+	"github.com/guilbep/git-board/internal/store"
 )
 
 // Backend is what the TUI needs from a git-bug repo handle: everything
 // fields.Backend needs for writes, plus Close() — "g" must release
 // git-bug's repo-level lock before shelling out to git-bug (confirmed:
 // the subprocess collides with our own held lock otherwise), and the
-// program must release it again when it exits. *gitbugio.Backend already
+// program must release it again when it exits. *store.Backend already
 // satisfies this.
 type Backend interface {
 	fields.Backend
 	Close() error
 }
 
-// item adapts a gitbugio.Issue to bubbles/list's DefaultItem interface.
+// item adapts a store.Issue to bubbles/list's DefaultItem interface.
 type item struct {
-	issue gitbugio.Issue
+	issue store.Issue
 }
 
 func (i item) Title() string { return i.issue.ShownTitle() }
@@ -47,7 +47,7 @@ func (i item) Description() string {
 
 // ref is the issue's number (CO2-3075, else #2518), which its shown title
 // leaves out, and its short id.
-func ref(is gitbugio.Issue) string {
+func ref(is store.Issue) string {
 	if is.Number != "" {
 		return is.Number + "  " + shortID(is.ID)
 	}
@@ -74,7 +74,7 @@ func shortID(id string) string {
 
 // ToItems converts issues to list.Items, preserving order. Pure — no
 // bubbletea involved, so it's unit tested directly.
-func ToItems(issues []gitbugio.Issue) []list.Item {
+func ToItems(issues []store.Issue) []list.Item {
 	items := make([]list.Item, len(issues))
 	for i, issue := range issues {
 		items[i] = item{issue: issue}
@@ -102,7 +102,7 @@ const (
 type Model struct {
 	list     list.Model
 	mode     mode
-	selected gitbugio.Issue
+	selected store.Issue
 
 	// backend/reopen: see the Backend type doc above — "g" closes it
 	// before shelling out to git-bug, reopen re-acquires it after.
@@ -141,7 +141,7 @@ type Model struct {
 	// structured filter can both be cleared back to it (and so applying
 	// one after the other narrows from the full set, not compounds off
 	// whatever the other left in m.list).
-	allIssues []gitbugio.Issue
+	allIssues []store.Issue
 
 	// baseIssues is the currently narrowed set *before* sorting — set by
 	// applyCatFilter/applyStructuredFilter (== allIssues when nothing's
@@ -150,7 +150,7 @@ type Model struct {
 	// natural order of whatever's currently narrowed, instead of "no-op
 	// sorting" an already-sorted list — sortedItems copies before sorting,
 	// it never mutates baseIssues itself.
-	baseIssues []gitbugio.Issue
+	baseIssues []store.Issue
 
 	// bridgePlan is the last "i" (pull-preview)'s result, applied for
 	// real by "o" — mirrors git-bug's own termui i=Pull/o=Push
@@ -167,8 +167,8 @@ type Model struct {
 // filter expression the caller ran, e.g. "is:open"). backend/cfg/me/today
 // are what field edits need to write through fields.Apply. reopen re-opens
 // the backend against the same repo after "g" closes it to shell out to
-// git-bug — typically gitbugio.OpenCwd.
-func New(issues []gitbugio.Issue, title string, backend Backend, cfg *config.Config, me string, today time.Time, reopen func() (Backend, error)) Model {
+// git-bug — typically store.OpenCwd.
+func New(issues []store.Issue, title string, backend Backend, cfg *config.Config, me string, today time.Time, reopen func() (Backend, error)) Model {
 	l := list.New(ToItems(issues), list.NewDefaultDelegate(), 0, 0)
 	l.Title = title
 	l.SetFilteringEnabled(true)
@@ -240,7 +240,7 @@ const bridgePullLimit = 2000
 // an ordinary async tea.Cmd (not ExecProcess): it doesn't need the
 // terminal, so the TUI stays responsive and rendering "pulling…" while
 // this is in flight.
-func bridgePullCmd(owner string, project int, issues []gitbugio.Issue, cfg *config.Config) tea.Cmd {
+func bridgePullCmd(owner string, project int, issues []store.Issue, cfg *config.Config) tea.Cmd {
 	return func() tea.Msg {
 		items, err := ghbridge.FetchItems(owner, project, bridgePullLimit)
 		if err != nil {
@@ -592,8 +592,8 @@ func (m Model) applyCatFilter(value string) Model {
 // (re)builds the visible list (filter, category filter, sort itself) so a
 // sort persists across a later filter/category-filter change instead of
 // being silently lost.
-func (m Model) sortedItems(issues []gitbugio.Issue) []list.Item {
-	sorted := append([]gitbugio.Issue(nil), issues...)
+func (m Model) sortedItems(issues []store.Issue) []list.Item {
+	sorted := append([]store.Issue(nil), issues...)
 	board.SortByField(sorted, m.sortSpec, m.cfg)
 	return ToItems(sorted)
 }
@@ -762,7 +762,7 @@ func (m Model) View() string {
 // owns backend for the duration of the run — including across a "g"
 // close/reopen cycle — and closes whichever backend is live when it
 // returns; callers should not also close the one they passed in.
-func Run(issues []gitbugio.Issue, title string, backend Backend, cfg *config.Config, me string, today time.Time, reopen func() (Backend, error)) error {
+func Run(issues []store.Issue, title string, backend Backend, cfg *config.Config, me string, today time.Time, reopen func() (Backend, error)) error {
 	final, err := tea.NewProgram(New(issues, title, backend, cfg, me, today, reopen), tea.WithAltScreen()).Run()
 	if fm, ok := final.(Model); ok && fm.backend != nil {
 		_ = fm.backend.Close()

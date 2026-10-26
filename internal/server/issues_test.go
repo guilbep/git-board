@@ -14,13 +14,13 @@ import (
 
 	"github.com/guilbep/git-board/core/forge/fake"
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/gitbugio"
-	"github.com/guilbep/git-board/internal/gitbugio/gitbugiotest"
+	"github.com/guilbep/git-board/internal/store"
+	"github.com/guilbep/git-board/internal/store/storetest"
 )
 
 func newIssueServer(t *testing.T) (*httptest.Server, *apiServer) {
 	t.Helper()
-	b := gitbugiotest.New(t)
+	b := storetest.New(t)
 	// the settings file is the test's own: a save never reaches the checkout's
 	s := &apiServer{cfg: &config.Config{}, b: b, me: "guilbep", cfgPath: filepath.Join(t.TempDir(), config.FileName)}
 	ts := httptest.NewServer(withCORS(newMux(s, http.NotFoundHandler())))
@@ -53,7 +53,7 @@ func call(t *testing.T, method, url string, body, out any) int {
 func TestIssueLifecycle(t *testing.T) {
 	t.Parallel()
 	ts, _ := newIssueServer(t)
-	var th gitbugio.Thread
+	var th store.Thread
 	if code := call(t, "POST", ts.URL+"/api/issues", map[string]any{
 		"title": "Export CSV", "body": "see ![shot](https://github.com/user-attachments/assets/a)", "labels": []string{"status:ready"},
 	}, &th); code != http.StatusCreated {
@@ -89,7 +89,7 @@ func TestIssueLifecycle(t *testing.T) {
 	if code := call(t, "POST", base+"/comments", map[string]any{"body": "done", "status": "closed"}, &th); code != http.StatusOK || th.Status != "closed" {
 		t.Errorf("close with comment: %d %s", code, th.Status)
 	}
-	var again gitbugio.Thread
+	var again store.Thread
 	if code := call(t, "GET", base+"/thread", nil, &again); code != http.StatusOK || len(again.Events) != len(th.Events) {
 		t.Errorf("thread: %d, %d events, want %d", code, len(again.Events), len(th.Events))
 	}
@@ -98,7 +98,7 @@ func TestIssueLifecycle(t *testing.T) {
 func TestIssueWritesAreChecked(t *testing.T) {
 	t.Parallel()
 	ts, _ := newIssueServer(t)
-	var one, two gitbugio.Thread
+	var one, two store.Thread
 	call(t, "POST", ts.URL+"/api/issues", map[string]any{"title": "one"}, &one)
 	call(t, "POST", ts.URL+"/api/issues", map[string]any{"title": "two"}, &two)
 	call(t, "POST", ts.URL+"/api/issues/"+one.ID+"/comments", map[string]any{"body": "hi"}, &one)
@@ -142,8 +142,8 @@ func TestMeAndIdentities(t *testing.T) {
 
 // fakeSync answers a forge sync with given events, holding the run until
 // release is closed.
-func fakeSync(events []gitbugio.SyncEvent, release chan struct{}) func(context.Context, string, []config.Forge, bool, func(gitbugio.SyncEvent)) error {
-	return func(_ context.Context, _ string, _ []config.Forge, _ bool, see func(gitbugio.SyncEvent)) error {
+func fakeSync(events []store.SyncEvent, release chan struct{}) func(context.Context, string, []config.Forge, bool, func(store.SyncEvent)) error {
+	return func(_ context.Context, _ string, _ []config.Forge, _ bool, see func(store.SyncEvent)) error {
 		<-release
 		for _, e := range events {
 			see(e)
@@ -170,10 +170,10 @@ func TestForgeSyncRunsADryRunFirst(t *testing.T) {
 	t.Parallel()
 	ts, s := forgeServer(t, ghForge, glForge)
 	release := make(chan struct{})
-	ev := func(forge, what string, ops int) gitbugio.SyncEvent {
-		return gitbugio.SyncEvent{Forge: forge, What: what, Issue: "0123456789", Ops: ops}
+	ev := func(forge, what string, ops int) store.SyncEvent {
+		return store.SyncEvent{Forge: forge, What: what, Issue: "0123456789", Ops: ops}
 	}
-	events := []gitbugio.SyncEvent{ev("gh", "posted", 0), ev("gh", "pushed", 0), ev("gh", "linked", 0), ev("gh", "edit", 0), ev("gh", "change", 0), ev("gh", "change", 0),
+	events := []store.SyncEvent{ev("gh", "posted", 0), ev("gh", "pushed", 0), ev("gh", "linked", 0), ev("gh", "edit", 0), ev("gh", "change", 0), ev("gh", "change", 0),
 		ev("gl", "created", 3), ev("gl", "updated", 4), {Forge: "gl", What: "warning", Line: "gitlab.epfl.ch/42400 refused labels"}}
 	for range 5 {
 		events = append(events, ev("gh", "comment", 0))
@@ -187,7 +187,7 @@ func TestForgeSyncRunsADryRunFirst(t *testing.T) {
 		t.Fatalf("dry run: %d", code)
 	}
 	// edits wait for the sync
-	var th gitbugio.Thread
+	var th store.Thread
 	if code := call(t, "POST", ts.URL+"/api/issues", map[string]any{"title": "during"}, &th); code != http.StatusConflict {
 		t.Errorf("a write during a sync: %d, want 409", code)
 	}
@@ -209,7 +209,7 @@ func TestForgeSyncRunsADryRunFirst(t *testing.T) {
 
 	release = make(chan struct{})
 	close(release)
-	s.runSync = fakeSync([]gitbugio.SyncEvent{ev("gh", "posted", 0)}, release)
+	s.runSync = fakeSync([]store.SyncEvent{ev("gh", "posted", 0)}, release)
 	if code := call(t, "POST", ts.URL+"/api/forges/sync", map[string]any{"dry_run": false}, nil); code != http.StatusAccepted {
 		t.Fatalf("real run after a dry run: %d", code)
 	}
@@ -221,7 +221,7 @@ func TestForgeSyncRunsADryRunFirst(t *testing.T) {
 	}
 
 	// a dry run that fails doesn't open the way to a real run
-	s.runSync = func(context.Context, string, []config.Forge, bool, func(gitbugio.SyncEvent)) error {
+	s.runSync = func(context.Context, string, []config.Forge, bool, func(store.SyncEvent)) error {
 		return context.Canceled
 	}
 	call(t, "POST", ts.URL+"/api/forges/sync", map[string]any{"dry_run": true}, nil)
@@ -242,8 +242,8 @@ func TestForgeGetAndSend(t *testing.T) {
 	done := make(chan struct{})
 	close(done)
 	ran := make(chan string, 10) // the mode each run was given
-	runs := func(events ...gitbugio.SyncEvent) {
-		s.runSync = func(ctx context.Context, mode string, forges []config.Forge, dryRun bool, see func(gitbugio.SyncEvent)) error {
+	runs := func(events ...store.SyncEvent) {
+		s.runSync = func(ctx context.Context, mode string, forges []config.Forge, dryRun bool, see func(store.SyncEvent)) error {
 			ran <- mode
 			return fakeSync(events, done)(ctx, mode, forges, dryRun, see)
 		}
@@ -261,7 +261,7 @@ func TestForgeGetAndSend(t *testing.T) {
 		return code, mode
 	}
 
-	runs(gitbugio.SyncEvent{Forge: "gh", Way: "pull", What: "linked", Issue: "0123456789"})
+	runs(store.SyncEvent{Forge: "gh", Way: "pull", What: "linked", Issue: "0123456789"})
 	if code, _ := start(map[string]any{"mode": "send"}); code != http.StatusConflict {
 		t.Errorf("a send before a dry run: %d, want 409", code)
 	}
@@ -291,13 +291,13 @@ func TestForgeSyncOverTheCore(t *testing.T) {
 	t.Parallel()
 	ts, s := forgeServer(t, ghForge)
 	gh := fake.New("github.com/guilbep/git-bug-sync-test")
-	s.openForges = func(_ context.Context, forges []config.Forge) ([]gitbugio.NamedForge, error) {
+	s.openForges = func(_ context.Context, forges []config.Forge) ([]store.NamedForge, error) {
 		if len(forges) != 1 || forges[0].Name != "gh" {
 			t.Errorf("opened %+v, want gh", forges)
 		}
-		return []gitbugio.NamedForge{{Name: "gh", Forge: gh}}, nil
+		return []store.NamedForge{{Name: "gh", Forge: gh}}, nil
 	}
-	gitbugiotest.NewIssue(t, s.b, "to GitHub")
+	storetest.NewIssue(t, s.b, "to GitHub")
 	call(t, "POST", ts.URL+"/api/forges/sync", map[string]any{"dry_run": true}, nil)
 	if st := waitJob(t, ts); st.Job.State != "done" || st.Job.Bridges["gh"].To.Issues != 1 || len(gh.Writes()) != 0 {
 		t.Fatalf("check %+v, writes %v", st.Job, gh.Writes())
@@ -331,7 +331,7 @@ func TestCommentOnAStep(t *testing.T) {
 		t.Fatal(err)
 	}
 	base := ts.URL + "/api/issues/" + id[:8] + "/comments"
-	var th gitbugio.Thread
+	var th store.Thread
 	if code := call(t, "POST", base, map[string]any{"body": "plan looks fine", "step": 3}, &th); code != http.StatusOK {
 		t.Fatalf("comment on step 3: %d", code)
 	}
@@ -350,10 +350,10 @@ func TestCommentOnAStep(t *testing.T) {
 // remotes as found there, and a run opens them.
 func TestForgeSyncFindsTheForges(t *testing.T) {
 	t.Parallel()
-	dir := gitbugiotest.Repo(t, false)
-	gitbugiotest.Git(t, dir, "remote", "add", "gh", "git@github.com:o/r.git")
-	gitbugiotest.Init(t, dir)
-	s := &apiServer{cfg: &config.Config{Discover: true}, b: gitbugiotest.Open(t, dir), me: "guilbep", cfgPath: filepath.Join(t.TempDir(), config.FileName)}
+	dir := storetest.Repo(t, false)
+	storetest.Git(t, dir, "remote", "add", "gh", "git@github.com:o/r.git")
+	storetest.Init(t, dir)
+	s := &apiServer{cfg: &config.Config{Discover: true}, b: storetest.Open(t, dir), me: "guilbep", cfgPath: filepath.Join(t.TempDir(), config.FileName)}
 	ts := httptest.NewServer(withCORS(newMux(s, http.NotFoundHandler())))
 	t.Cleanup(ts.Close)
 	var st forgeStatus
@@ -362,11 +362,11 @@ func TestForgeSyncFindsTheForges(t *testing.T) {
 		t.Fatalf("bridges %+v", st.Bridges)
 	}
 	gh := fake.New("github.com/o/r")
-	s.openForges = func(_ context.Context, forges []config.Forge) ([]gitbugio.NamedForge, error) {
+	s.openForges = func(_ context.Context, forges []config.Forge) ([]store.NamedForge, error) {
 		if len(forges) != 1 || forges[0].Project != "o/r" || !forges[0].Discovered {
 			t.Errorf("opened %+v", forges)
 		}
-		return []gitbugio.NamedForge{{Name: "github", Forge: gh}}, nil
+		return []store.NamedForge{{Name: "github", Forge: gh}}, nil
 	}
 	call(t, "POST", ts.URL+"/api/forges/sync", map[string]any{"dry_run": true}, nil)
 	if st := waitJob(t, ts); st.Job.State != "done" || st.Job.Bridges["github"] == nil {

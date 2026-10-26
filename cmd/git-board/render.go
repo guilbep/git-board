@@ -9,13 +9,13 @@ import (
 
 	"github.com/guilbep/git-board/internal/board"
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/gitbugio"
+	"github.com/guilbep/git-board/internal/store"
 	"github.com/guilbep/git-board/internal/tui"
 )
 
 // render prints issues as a table, markdown, or JSON, optionally sorted and
 // grouped. JSON output ignores grouping and prints the flat sorted list.
-func render(out io.Writer, issues []gitbugio.Issue, group, sortSpec string, md, asJSON bool, cfg *config.Config) error {
+func render(out io.Writer, issues []store.Issue, group, sortSpec string, md, asJSON bool, cfg *config.Config) error {
 	board.SortByField(issues, sortSpec, cfg)
 
 	if asJSON {
@@ -51,7 +51,7 @@ func render(out io.Writer, issues []gitbugio.Issue, group, sortSpec string, md, 
 // fieldColumns renders issue's fields as fieldNames-ordered cell values
 // (blank if unset) plus a joined "other" cell for labels without a
 // namespace.
-func fieldColumns(issue gitbugio.Issue, cfg *config.Config, fieldNames []string) (cells []string, other string) {
+func fieldColumns(issue store.Issue, cfg *config.Config, fieldNames []string) (cells []string, other string) {
 	known, otherLabels := tui.ParseLabels(issue.Labels)
 	byName := make(map[string][]string, len(known))
 	for _, f := range known {
@@ -77,7 +77,7 @@ func formatFieldValues(name string, values []string, cfg *config.Config) string 
 	return strings.Join(values, ", ")
 }
 
-func writeTable(out io.Writer, issues []gitbugio.Issue, cfg *config.Config, fieldNames []string) {
+func writeTable(out io.Writer, issues []store.Issue, cfg *config.Config, fieldNames []string) {
 	tw := tabwriter.NewWriter(out, 0, 2, 2, ' ', 0)
 	header := []string{"id", "title", "state"}
 	for _, name := range fieldNames {
@@ -95,7 +95,7 @@ func writeTable(out io.Writer, issues []gitbugio.Issue, cfg *config.Config, fiel
 	tw.Flush()
 }
 
-func writeMarkdownTable(out io.Writer, issues []gitbugio.Issue, cfg *config.Config, fieldNames []string) {
+func writeMarkdownTable(out io.Writer, issues []store.Issue, cfg *config.Config, fieldNames []string) {
 	header := []string{"id", "title", "state"}
 	for _, name := range fieldNames {
 		header = append(header, tui.DisplayFieldName(name))

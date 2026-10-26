@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/guilbep/git-board/internal/gitbugio"
+	"github.com/guilbep/git-board/internal/store"
 )
 
 func main() {
-	b, err := gitbugio.Open("/tmp/smoke-repo")
+	b, err := store.Open("/tmp/smoke-repo")
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "open:", err)
 		os.Exit(1)

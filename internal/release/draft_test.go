@@ -6,15 +6,15 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/guilbep/git-board/internal/gitbugio/gitbugiotest"
 	"github.com/guilbep/git-board/internal/release"
 	"github.com/guilbep/git-board/internal/release/releasetest"
+	"github.com/guilbep/git-board/internal/store/storetest"
 )
 
 // issue makes the forge's issue #n, with labels.
 func issue(t *testing.T, r *release.Runner, n int, title string, labels ...string) {
 	t.Helper()
-	id := gitbugiotest.NewImportedIssue(t, r.B, title, fmt.Sprintf("https://github.com/org/app/issues/%d", n))
+	id := storetest.NewImportedIssue(t, r.B, title, fmt.Sprintf("https://github.com/org/app/issues/%d", n))
 	if len(labels) == 0 {
 		return
 	}

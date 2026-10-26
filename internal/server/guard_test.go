@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/guilbep/git-board/internal/gitbugio/gitbugiotest"
+	"github.com/guilbep/git-board/internal/store/storetest"
 )
 
 // A page on another site can't write through the server: browsers send its
@@ -13,8 +13,8 @@ import (
 func TestWritesFromAnotherSiteAreRefused(t *testing.T) {
 	t.Parallel()
 	cfg := mustLoadConfig(t)
-	b := gitbugiotest.New(t)
-	id := gitbugiotest.NewIssue(t, b, "x")
+	b := storetest.New(t)
+	id := storetest.NewIssue(t, b, "x")
 	ts := newTestServer(t, b, cfg)
 	url := ts.URL + "/api/issues/" + id
 
@@ -61,8 +61,8 @@ func TestWritesFromAnotherSiteAreRefused(t *testing.T) {
 func TestRequestsForAnotherHostAreRefused(t *testing.T) {
 	t.Parallel()
 	cfg := mustLoadConfig(t)
-	b := gitbugiotest.New(t)
-	id := gitbugiotest.NewIssue(t, b, "x")
+	b := storetest.New(t)
+	id := storetest.NewIssue(t, b, "x")
 	ts := newTestServer(t, b, cfg)
 	for _, method := range []string{http.MethodGet, http.MethodPatch} {
 		req, err := http.NewRequest(method, ts.URL+"/api/issues/"+id, strings.NewReader(`{"prio":"p1"}`))

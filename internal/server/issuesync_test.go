@@ -6,8 +6,8 @@ import (
 	"testing"
 
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/gitbugio"
-	"github.com/guilbep/git-board/internal/gitbugio/gitbugiotest"
+	"github.com/guilbep/git-board/internal/store"
+	"github.com/guilbep/git-board/internal/store/storetest"
 )
 
 // One issue syncs on its own: a dry run says what would go where, a real
@@ -15,14 +15,14 @@ import (
 func TestIssueSync(t *testing.T) {
 	t.Parallel()
 	ts, s := forgeServer(t, ghForge, glForge)
-	id := gitbugiotest.NewIssue(t, s.b, "one issue")
+	id := storetest.NewIssue(t, s.b, "one issue")
 	var got []string
-	s.runIssueSync = func(_ context.Context, forges []config.Forge, dryRun bool, issue string, see func(gitbugio.SyncEvent)) error {
+	s.runIssueSync = func(_ context.Context, forges []config.Forge, dryRun bool, issue string, see func(store.SyncEvent)) error {
 		got = append(got, issue)
 		if len(forges) != 2 {
 			t.Errorf("forges %+v, want both", forges)
 		}
-		see(gitbugio.SyncEvent{Forge: "gh", Way: "push", What: "comment", Issue: "1000"})
+		see(store.SyncEvent{Forge: "gh", Way: "push", What: "comment", Issue: "1000"})
 		return nil
 	}
 	var res issueSyncResult

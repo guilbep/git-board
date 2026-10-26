@@ -2,7 +2,7 @@
 // (GET /api/numbers). Pure, no "@/" imports: node runs numbers.test.ts on
 // it.
 
-const prefixRe = /^[A-Za-z][A-Za-z0-9]*$/; // as gitbugio's prefixRe
+const prefixRe = /^[A-Za-z][A-Za-z0-9]*$/; // as store's prefixRe
 
 // prefixProblem says what's wrong with a prefix, '' when the server takes it
 export function prefixProblem(p: string): string {

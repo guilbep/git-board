@@ -88,7 +88,7 @@ send. The per-issue sync touches only that issue.
 ## Conventions
 
 - Real fixtures over mocks: tests spin up a real on-disk git-bug repo
-  (`newTestRepo`/`gitbugiotest`) or a fake CLI script on `PATH` (see
+  (`newTestRepo`/`storetest`) or a fake CLI script on `PATH` (see
   `bridge.go`'s `fetchGithubItems` seam, `lint.go`'s
   `existingGithubLabels`/`createGithubLabel` seams), not hand-rolled mocks.
 - Every bug fix ships with a regression test that fails without the fix.

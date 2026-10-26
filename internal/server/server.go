@@ -16,8 +16,8 @@ import (
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/fields"
 	"github.com/guilbep/git-board/internal/ghbridge"
-	"github.com/guilbep/git-board/internal/gitbugio"
 	"github.com/guilbep/git-board/internal/release"
+	"github.com/guilbep/git-board/internal/store"
 	"github.com/guilbep/git-board/internal/uploads"
 )
 
@@ -25,7 +25,7 @@ import (
 // git-bug repo cache, and the server-wide "current user" for @me values (no
 // per-request auth in v1 — see README).
 //
-// ponytail: one *gitbugio.Backend shared across every request goroutine, no
+// ponytail: one *store.Backend shared across every request goroutine, no
 // serialization beyond git-bug's own per-entity locking (cache/*.go). Fine
 // for the expected single-browser-tab usage this MVP targets; if concurrent
 // PATCHes from multiple clients ever race, wrap handlePatchIssue's body in
@@ -33,7 +33,7 @@ import (
 // per-request Backend instances.
 type apiServer struct {
 	cfg *config.Config // read with config(): the settings page replaces it
-	b   *gitbugio.Backend
+	b   *store.Backend
 	me  string
 
 	cfgMu   sync.RWMutex
@@ -53,13 +53,13 @@ type apiServer struct {
 	job     *forgeJob
 	// the forge sync of forges, or one way of it (mode get, send), its
 	// events told to see: nil, forgeRun
-	runSync func(ctx context.Context, mode string, forges []config.Forge, dryRun bool, see func(gitbugio.SyncEvent)) error
+	runSync func(ctx context.Context, mode string, forges []config.Forge, dryRun bool, see func(store.SyncEvent)) error
 	// one issue's sync (issuesync.go): nil, issueRun; issueDry is when
 	// each issue's last clean dry run ended
-	runIssueSync func(ctx context.Context, forges []config.Forge, dryRun bool, id string, see func(gitbugio.SyncEvent)) error
+	runIssueSync func(ctx context.Context, forges []config.Forge, dryRun bool, id string, see func(store.SyncEvent)) error
 	issueDry     map[string]time.Time
-	// openForges opens the adapters of a run: nil, gitbugio.OpenForges
-	openForges func(ctx context.Context, forges []config.Forge) ([]gitbugio.NamedForge, error)
+	// openForges opens the adapters of a run: nil, store.OpenForges
+	openForges func(ctx context.Context, forges []config.Forge) ([]store.NamedForge, error)
 	// checked is when each git remote was last fetched, pulled or pushed
 	// (remotes.go)
 	checked map[string]time.Time

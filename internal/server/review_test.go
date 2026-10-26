@@ -10,8 +10,8 @@ import (
 	"testing"
 
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/gitbugio"
-	"github.com/guilbep/git-board/internal/gitbugio/gitbugiotest"
+	"github.com/guilbep/git-board/internal/store"
+	"github.com/guilbep/git-board/internal/store/storetest"
 )
 
 // reviewRepo: dev (origin's default), fix/2518-x on origin one commit
@@ -59,7 +59,7 @@ func newReviewRepo(t *testing.T) reviewRepo {
 	c2 := git(t, dir, "rev-parse", "HEAD")
 	git(t, dir, "switch", "-q", "dev")
 
-	b, err := gitbugio.Open(dir)
+	b, err := store.Open(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,8 +67,8 @@ func newReviewRepo(t *testing.T) reviewRepo {
 	if _, err := b.NewIdentity("dev", "dev@example.com"); err != nil {
 		t.Fatal(err)
 	}
-	gitbugiotest.SetMyLogin(t, b, "dev")
-	id := gitbugiotest.NewImportedIssue(t, b, "Crash on save (#2518)", "https://github.com/o/r/issues/2518")
+	storetest.SetMyLogin(t, b, "dev")
+	id := storetest.NewImportedIssue(t, b, "Crash on save (#2518)", "https://github.com/o/r/issues/2518")
 	s := &apiServer{cfg: &config.Config{}, b: b, me: "guilbep"}
 	return reviewRepo{s: s, ts: serve(t, s), dir: dir, id: id, base: base, c1: c1, c2: c2}
 }
@@ -83,7 +83,7 @@ type changesAnswer struct {
 	Commits  []struct {
 		SHA string `json:"sha"`
 	} `json:"commits"`
-	Files []gitbugio.FileStat `json:"files"`
+	Files []store.FileStat `json:"files"`
 }
 
 func (r reviewRepo) url(path string, q url.Values) string {
@@ -146,14 +146,14 @@ func TestChanges(t *testing.T) {
 func TestChangesWithoutBranch(t *testing.T) {
 	t.Parallel()
 	ts, s := newIssueServer(t)
-	id := gitbugiotest.NewIssue(t, s.b, "no code")
+	id := storetest.NewIssue(t, s.b, "no code")
 	if code := call(t, "GET", ts.URL+"/api/issues/"+id[:8]+"/changes", nil, nil); code != http.StatusNotFound {
 		t.Errorf("changes of an issue without a branch: %d, want 404", code)
 	}
 }
 
 // eventOf is the thread event with that id.
-func eventOf(t *testing.T, th gitbugio.Thread, id string) gitbugio.Event {
+func eventOf(t *testing.T, th store.Thread, id string) store.Event {
 	t.Helper()
 	for _, e := range th.Events {
 		if e.ID == id {
@@ -161,16 +161,16 @@ func eventOf(t *testing.T, th gitbugio.Thread, id string) gitbugio.Event {
 		}
 	}
 	t.Fatalf("no event %s", id)
-	return gitbugio.Event{}
+	return store.Event{}
 }
 
 // last is the thread's newest event.
-func last(th gitbugio.Thread) gitbugio.Event { return th.Events[len(th.Events)-1] }
+func last(th store.Thread) store.Event { return th.Events[len(th.Events)-1] }
 
 func TestReviewWrites(t *testing.T) {
 	t.Parallel()
 	r := newReviewRepo(t)
-	var th gitbugio.Thread
+	var th store.Thread
 	if code := call(t, "POST", r.url("/review", nil), map[string]any{"body": "why?", "path": "a.txt", "line": 3, "side": "new", "commit": r.c1[:7]}, &th); code != http.StatusCreated {
 		t.Fatalf("line comment: %d", code)
 	}
@@ -198,7 +198,7 @@ func TestReviewWrites(t *testing.T) {
 		t.Fatalf("approve = %+v", rv)
 	}
 
-	var plain gitbugio.Thread
+	var plain store.Thread
 	if code := call(t, "POST", r.url("/comments", nil), map[string]any{"body": "plain"}, &plain); code != http.StatusOK {
 		t.Fatal(code)
 	}
@@ -226,7 +226,7 @@ func TestReviewWrites(t *testing.T) {
 	if code := call(t, "POST", r.url("/review/"+line.ID+"/resolve", nil), map[string]any{"resolved": true}, &th); code != http.StatusOK || !eventOf(t, th, line.ID).Review.Resolved {
 		t.Fatalf("resolve: %d", code)
 	}
-	th = gitbugio.Thread{} // resolved: false is left out, keeping a decoded true
+	th = store.Thread{} // resolved: false is left out, keeping a decoded true
 	if code := call(t, "POST", r.url("/review/"+line.ID+"/resolve", nil), map[string]any{"resolved": false}, &th); code != http.StatusOK || eventOf(t, th, line.ID).Review.Resolved {
 		t.Fatalf("unresolve: %d", code)
 	}
@@ -255,7 +255,7 @@ func TestReviewWrites(t *testing.T) {
 func TestAnnotateFollowsHead(t *testing.T) {
 	t.Parallel()
 	r := newReviewRepo(t)
-	var th gitbugio.Thread
+	var th store.Thread
 	call(t, "POST", r.url("/review", nil), map[string]any{"body": "on 3", "path": "a.txt", "line": 3, "side": "new", "commit": r.c1}, &th)
 	on3 := last(th).ID
 	call(t, "POST", r.url("/review", nil), map[string]any{"body": "on 5", "path": "a.txt", "line": 5, "side": "new", "commit": r.c1}, &th)
@@ -288,12 +288,12 @@ func TestAnnotateFollowsHead(t *testing.T) {
 func TestAnnotateSkipsInMemory(t *testing.T) {
 	t.Parallel()
 	ts, s := newIssueServer(t)
-	id := gitbugiotest.NewIssue(t, s.b, "review")
+	id := storetest.NewIssue(t, s.b, "review")
 	cid, err := s.b.CommentWith(id, "x", map[string]string{"review:path": "a.txt", "review:line": "1", "review:side": "new", "review:commit": "abc"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	var th gitbugio.Thread
+	var th store.Thread
 	if code := call(t, "GET", ts.URL+"/api/issues/"+id[:8]+"/thread", nil, &th); code != http.StatusOK {
 		t.Fatal(code)
 	}
@@ -316,7 +316,7 @@ func TestAnnotateOwnBranch(t *testing.T) {
 	o1 := git(t, r.dir, "rev-parse", "HEAD")
 	git(t, r.dir, "switch", "-q", "dev")
 
-	var th gitbugio.Thread
+	var th store.Thread
 	call(t, "POST", r.url("/review", nil), map[string]any{"body": "on five", "path": "a.txt", "line": 5, "side": "new", "commit": o1}, &th)
 	other := last(th).ID
 	call(t, "POST", r.url("/review", nil), map[string]any{"body": "on three", "path": "a.txt", "line": 3, "side": "new", "commit": r.c1}, &th)
@@ -343,7 +343,7 @@ func TestAnnotateOwnBranch(t *testing.T) {
 	git(t, r.dir, "update-ref", "refs/remotes/origin/dev", r.c1)
 	git(t, r.dir, "update-ref", "-d", "refs/remotes/origin/fix/2518-x")
 	git(t, r.dir, "branch", "-q", "-D", "fix/2518-x")
-	th = gitbugio.Thread{} // fields left out would keep the decoded ones
+	th = store.Thread{} // fields left out would keep the decoded ones
 	if code := call(t, "GET", r.url("/thread", nil), nil, &th); code != http.StatusOK {
 		t.Fatal(code)
 	}

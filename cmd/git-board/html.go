@@ -16,8 +16,8 @@ import (
 
 	"github.com/guilbep/git-board/internal/board"
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/gitbugio"
 	"github.com/guilbep/git-board/internal/release"
+	"github.com/guilbep/git-board/internal/store"
 	"github.com/guilbep/git-board/internal/tui"
 	boardweb "github.com/guilbep/git-board/web"
 )
@@ -68,7 +68,7 @@ func runHTML(out io.Writer, outputDir, me string) error {
 		return err
 	}
 
-	b, err := gitbugio.OpenCwd()
+	b, err := store.OpenCwd()
 	if err != nil {
 		return err
 	}
@@ -144,7 +144,7 @@ type pageData struct {
 // ("is:open"). The two existing consumers already disagree with each
 // other; this follows "view" since "html" renders configured views, the
 // same thing "view" does.
-func writeViewPage(outputDir, name string, views []string, view config.View, b *gitbugio.Backend, cfg *config.Config, me string, generated time.Time) error {
+func writeViewPage(outputDir, name string, views []string, view config.View, b *store.Backend, cfg *config.Config, me string, generated time.Time) error {
 	issues, err := board.LoadMatching(b, cfg, view.Filter, me)
 	if err != nil {
 		return err
@@ -229,7 +229,7 @@ type releasesHTMLRow struct {
 // releases table, each release's notes inline, as static HTML with the
 // export's stylesheet. It reads the release state offline (no fetch), as
 // the export must: the runner's offline Status.
-func writeReleasesPage(outputDir string, views []string, b *gitbugio.Backend, cfg *config.Config, generated time.Time) error {
+func writeReleasesPage(outputDir string, views []string, b *store.Backend, cfg *config.Config, generated time.Time) error {
 	dir, err := os.Getwd()
 	if err != nil {
 		return err

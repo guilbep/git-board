@@ -11,7 +11,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/gitbugio"
+	"github.com/guilbep/git-board/internal/store"
 )
 
 func newSwitchCmd() *cobra.Command {
@@ -51,7 +51,7 @@ git-bug's binary reads its own data, on the copy: --git-bug names it.`,
   git-board switch --git-bug ~/.local/bin/git-bug`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runSwitch(cmd.Context(), cmd.OutOrStdout(), gitbugio.SwitchRun{GitBug: gitBug, Apply: apply, Force: force, AllowCreate: allowCreate})
+			return runSwitch(cmd.Context(), cmd.OutOrStdout(), store.SwitchRun{GitBug: gitBug, Apply: apply, Force: force, AllowCreate: allowCreate})
 		},
 	}
 	cmd.Flags().BoolVar(&apply, "apply", false, "write the switch here, not just report it")
@@ -62,14 +62,14 @@ git-bug's binary reads its own data, on the copy: --git-bug names it.`,
 }
 
 // openSwitchForges opens the forges a switch pulls from. Tests swap it.
-var openSwitchForges = gitbugio.OpenForges
+var openSwitchForges = store.OpenForges
 
-func runSwitch(ctx context.Context, out io.Writer, run gitbugio.SwitchRun) error {
+func runSwitch(ctx context.Context, out io.Writer, run store.SwitchRun) error {
 	cfg, err := loadConfig()
 	if err != nil {
 		return err
 	}
-	b, err := gitbugio.OpenCwd()
+	b, err := store.OpenCwd()
 	if err != nil {
 		return err
 	}
@@ -104,13 +104,13 @@ func runSwitch(ctx context.Context, out io.Writer, run gitbugio.SwitchRun) error
 // runForges are the forges of a run: the settings' tables, or those found
 // in the git remotes, each told in a line, GitLab's with its id read, and
 // each URL skipped or forge left out with why.
-func runForges(ctx context.Context, out io.Writer, b *gitbugio.Backend, cfg *config.Config) ([]config.Forge, error) {
+func runForges(ctx context.Context, out io.Writer, b *store.Backend, cfg *config.Config) ([]config.Forge, error) {
 	say := func(s string) { fmt.Fprintln(out, s) }
 	forges, err := b.Forges(cfg, say)
 	if err != nil {
 		return nil, err
 	}
-	forges = gitbugio.ResolveForges(ctx, forges, func(f config.Forge, why error) {
+	forges = store.ResolveForges(ctx, forges, func(f config.Forge, why error) {
 		fmt.Fprintf(out, "forge %s, found in the remotes, is left out: %s %s: %v\n", f.Name, f.Host, f.Path, why)
 	})
 	for _, f := range forges {
@@ -126,7 +126,7 @@ func runForges(ctx context.Context, out io.Writer, b *gitbugio.Backend, cfg *con
 	return forges, nil
 }
 
-func printSwitch(out io.Writer, rep gitbugio.SwitchReport, apply bool) {
+func printSwitch(out io.Writer, rep store.SwitchReport, apply bool) {
 	list := func(title string, items []string) {
 		if len(items) == 0 {
 			return
@@ -170,7 +170,7 @@ func printSwitch(out io.Writer, rep gitbugio.SwitchReport, apply bool) {
 	if rep.Applied {
 		fmt.Fprintln(out, "Applied: refs/board/* written; refs/bugs/* kept; nothing pushed.")
 		if rep.Numbers > 0 {
-			r := gitbugio.NumbersRemote
+			r := store.NumbersRemote
 			fmt.Fprintf(out, "Next: git push %s refs/board/seq. Until then, git-board sync and numbers refuse: this clone has numbers %s hasn't.\n", r, r)
 			fmt.Fprintln(out, "  If git refuses that push, run git-board switch --apply again: it keys origin's numbers again.")
 		}

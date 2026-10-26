@@ -3,7 +3,7 @@
 // exist and are visibly colored/filterable in the GitHub Issues UI before
 // the first bridge run, with the colors and descriptions of
 // .git-board.toml. Read/write against GitHub via the `gh` CLI only —
-// never touches the local git-bug repo (that's internal/gitbugio's job).
+// never touches the local git-bug repo (that's internal/store's job).
 package ghlabels
 
 import (

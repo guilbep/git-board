@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/guilbep/git-board/internal/gitbugio"
+	"github.com/guilbep/git-board/internal/store"
 )
 
 // Live updates: every open page holds GET /api/events (Server-Sent
@@ -139,7 +139,7 @@ func eventFor(r *http.Request) event {
 		e.Kind = "issues"
 	case strings.HasPrefix(p, "/api/remotes/") && strings.HasSuffix(p, "/pull"): // merged in
 		e.Kind = "issues"
-	case p == "/api/remotes/"+gitbugio.NumbersRemote+"/push": // it numbers the issues
+	case p == "/api/remotes/"+store.NumbersRemote+"/push": // it numbers the issues
 		e.Kind = "issues"
 	case strings.HasPrefix(p, "/api/numbers/"): // the issues' numbers
 		e.Kind = "issues"

@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/gitbugio/gitbugiotest"
+	"github.com/guilbep/git-board/internal/store/storetest"
 )
 
 // waitAssignable waits for the run to end and its fetch of who can be
@@ -83,7 +83,7 @@ func TestForgeSyncFetchesWhoCanBeAssigned(t *testing.T) {
 func githubSyncServer(t *testing.T, handler http.HandlerFunc) (*httptest.Server, *apiServer) {
 	t.Helper()
 	ts, s := forgeServer(t, ghForge)
-	gitbugiotest.Token(t, s.b, "https://github.com", "guilbep", "a-token")
+	storetest.Token(t, s.b, "https://github.com", "guilbep", "a-token")
 	gh := httptest.NewServer(handler)
 	t.Cleanup(gh.Close)
 	s.githubAPI = gh.URL
@@ -125,7 +125,7 @@ func TestForgeSyncDoesntWaitForWhoCanBeAssigned(t *testing.T) {
 	})
 	free := sync.OnceFunc(func() { close(release) })
 	t.Cleanup(free) // before the fake GitHub's close, which waits for the handler
-	id := gitbugiotest.NewIssue(t, s.b, "Edit me")
+	id := storetest.NewIssue(t, s.b, "Edit me")
 
 	call(t, "POST", ts.URL+"/api/forges/sync", map[string]any{"dry_run": true}, nil)
 	if st := waitJob(t, ts); st.Job.State != "done" {

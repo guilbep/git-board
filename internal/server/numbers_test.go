@@ -12,8 +12,8 @@ import (
 	"time"
 
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/gitbugio"
-	"github.com/guilbep/git-board/internal/gitbugio/gitbugiotest"
+	"github.com/guilbep/git-board/internal/store"
+	"github.com/guilbep/git-board/internal/store/storetest"
 )
 
 // Nothing goes to origin unless the user asks: creating an issue numbers
@@ -21,10 +21,10 @@ import (
 // the push the user asks for numbers it.
 func TestNumbersOnlyOnAPushTheUserAsks(t *testing.T) {
 	t.Parallel()
-	remote, clone := gitbugiotest.Repo(t, true), gitbugiotest.Repo(t, false)
-	gitbugiotest.Git(t, clone, "remote", "add", "origin", remote)
-	gitbugiotest.Init(t, clone)
-	b := gitbugiotest.Open(t, clone)
+	remote, clone := storetest.Repo(t, true), storetest.Repo(t, false)
+	storetest.Git(t, clone, "remote", "add", "origin", remote)
+	storetest.Init(t, clone)
+	b := storetest.Open(t, clone)
 	if err := b.InitNumbers("origin", "CO2", 1); err != nil {
 		t.Fatal(err)
 	}
@@ -63,7 +63,7 @@ func TestNumbersOnlyOnAPushTheUserAsks(t *testing.T) {
 
 // numbersServer serves b, GitHub answering highest (or failing, when
 // highest < 0) through asked.
-func numbersServer(t *testing.T, b *gitbugio.Backend, highest int, asked *int) *httptest.Server {
+func numbersServer(t *testing.T, b *store.Backend, highest int, asked *int) *httptest.Server {
 	t.Helper()
 	cfg := &config.Config{Forges: []config.Forge{{Name: "gh", Kind: "github", Host: "github.com", Project: "o/r"}}}
 	s := &apiServer{cfg: cfg, b: b, githubHighest: func(_ context.Context, repo string) (int, error) {
@@ -86,11 +86,11 @@ func numbersServer(t *testing.T, b *gitbugio.Backend, highest int, asked *int) *
 // the form asks, before the switch.
 func TestNumbersFromSettings(t *testing.T) {
 	t.Parallel()
-	mine, theirs := gitbugiotest.NewPair(t)
+	mine, theirs := storetest.NewPair(t)
 	asked := 0
 	ts := numbersServer(t, mine, 3051, &asked)
-	gitbugiotest.NewImportedIssue(t, mine, "Old", "https://github.com/o/r/issues/2518")
-	gitbugiotest.NewIssue(t, mine, "Made here")
+	storetest.NewImportedIssue(t, mine, "Old", "https://github.com/o/r/issues/2518")
+	storetest.NewIssue(t, mine, "Made here")
 	if _, err := mine.Push("origin"); err != nil {
 		t.Fatal(err)
 	}
@@ -129,11 +129,11 @@ func TestNumbersFromSettings(t *testing.T) {
 	}
 
 	// one more, pushed on its own: waiting; one only here: to push
-	gitbugiotest.NewIssue(t, mine, "Pushed, not numbered")
+	storetest.NewIssue(t, mine, "Pushed, not numbered")
 	if _, err := mine.Push("origin"); err != nil {
 		t.Fatal(err)
 	}
-	gitbugiotest.NewIssue(t, mine, "Only here")
+	storetest.NewIssue(t, mine, "Only here")
 	if call(t, "GET", ts.URL+"/api/numbers", nil, &n); n.Waiting != 1 || n.Unpushed != 1 {
 		t.Fatalf("before running: %+v", n)
 	}
@@ -146,7 +146,7 @@ func TestNumbersFromSettings(t *testing.T) {
 // error; origin's address goes to the page without its credentials.
 func TestNumbersWithoutOrigin(t *testing.T) {
 	t.Parallel()
-	b := gitbugiotest.New(t)
+	b := storetest.New(t)
 	asked := 0
 	ts := numbersServer(t, b, -1, &asked)
 	var n numbersResponse
@@ -163,7 +163,7 @@ func TestNumbersWithoutOrigin(t *testing.T) {
 	}
 
 	// GET only: nothing reaches this address
-	gitbugiotest.Git(t, b.GitDir(), "remote", "add", "origin", "https://oauth2:glpat-secret@gitlab.example.com/g/co2-calculator.git")
+	storetest.Git(t, b.GitDir(), "remote", "add", "origin", "https://oauth2:glpat-secret@gitlab.example.com/g/co2-calculator.git")
 	call(t, "GET", ts.URL+"/api/numbers", nil, &n)
 	if n.Origin == nil || fmt.Sprint(n.Origin.PushURLs) != "[https://gitlab.example.com/g/co2-calculator.git]" {
 		t.Errorf("origin %+v", n.Origin)

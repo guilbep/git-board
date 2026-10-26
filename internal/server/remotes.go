@@ -10,7 +10,7 @@ import (
 
 	"github.com/go-git/go-git/v5/plumbing/transport"
 
-	"github.com/guilbep/git-board/internal/gitbugio"
+	"github.com/guilbep/git-board/internal/store"
 )
 
 // The git remotes: issues and people go with git, as git bug pull and git
@@ -26,7 +26,7 @@ type remotesStatus struct {
 }
 
 type remoteStatus struct {
-	gitbugio.Remote
+	store.Remote
 	Checked *time.Time `json:"checked,omitempty"` // this server's last fetch, pull or push of it
 }
 
@@ -66,7 +66,7 @@ func (s *apiServer) handleRemote(w http.ResponseWriter, r *http.Request) {
 		"fetch": s.b.Fetch,
 		"pull": func(remote string) error {
 			err := s.b.Pull(remote)
-			if err == nil && remote == gitbugio.NumbersRemote {
+			if err == nil && remote == store.NumbersRemote {
 				err = s.b.FetchNumbers(remote)
 			}
 			return err
@@ -75,7 +75,7 @@ func (s *apiServer) handleRemote(w http.ResponseWriter, r *http.Request) {
 		// their own (docs/configuration.md, Numbers)
 		"push": func(remote string) error {
 			_, err := s.b.Push(remote)
-			if err == nil && remote == gitbugio.NumbersRemote {
+			if err == nil && remote == store.NumbersRemote {
 				_, err = s.b.NumberIssues(remote)
 			}
 			return err
@@ -109,7 +109,7 @@ func (s *apiServer) handleRemote(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusConflict, fmt.Errorf("%s has changes this repository doesn't have: pull first", name))
 		return
 	case err != nil:
-		writeError(w, http.StatusBadGateway, errors.New(gitbugio.NoCredentials(fmt.Sprintf("%s %s: %v", action, name, err))))
+		writeError(w, http.StatusBadGateway, errors.New(store.NoCredentials(fmt.Sprintf("%s %s: %v", action, name, err))))
 		return
 	}
 	s.forgeMu.Lock()

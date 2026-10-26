@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/guilbep/git-board/internal/gitbugio"
+	"github.com/guilbep/git-board/internal/store"
 )
 
 const renderTestConfig = `
@@ -33,7 +33,7 @@ func TestLsRendersOneColumnPerConfiguredField(t *testing.T) {
 	}
 	id := openIssueID(t)
 
-	b, err := gitbugio.OpenCwd()
+	b, err := store.OpenCwd()
 	if err != nil {
 		t.Fatalf("OpenCwd: %v", err)
 	}
@@ -88,7 +88,7 @@ func TestLsMarkdownRendersOneColumnPerConfiguredField(t *testing.T) {
 	}
 	id := openIssueID(t)
 
-	b, err := gitbugio.OpenCwd()
+	b, err := store.OpenCwd()
 	if err != nil {
 		t.Fatalf("OpenCwd: %v", err)
 	}

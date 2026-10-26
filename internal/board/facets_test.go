@@ -8,8 +8,8 @@ import (
 
 	"github.com/guilbep/git-board/internal/board"
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/gitbugio/gitbugiotest"
 	"github.com/guilbep/git-board/internal/inbox"
+	"github.com/guilbep/git-board/internal/store/storetest"
 )
 
 // The filters panel: each field's values counted against the rest of the
@@ -17,11 +17,11 @@ import (
 // own terms, which a tick writes a new term after.
 func TestFacetsCountAgainstTheRestOfTheFilter(t *testing.T) {
 	t.Parallel()
-	b := gitbugiotest.New(t)
+	b := storetest.New(t)
 	b.NewIssue("a", "", []string{"status:ready", "assignee:guilbep", "nice to have"})
 	b.NewIssue("b", "", []string{"status:qa", "sprint:s1"})
 	closed, _ := b.NewIssue("c", "", []string{"status:ready"})
-	gitbugiotest.CloseIssue(t, b, closed)
+	storetest.CloseIssue(t, b, closed)
 	b.NewIssue("d", "", nil)
 	cfg := &config.Config{
 		Fields:  map[string]config.Field{"status": {Options: []string{"ready", "qa", "validated"}}},
@@ -114,7 +114,7 @@ func sameSet(got []string, want ...string) bool {
 // unfollowed is left out of the counts too.
 func TestFacetsHonourFollows(t *testing.T) {
 	t.Parallel()
-	b := gitbugiotest.New(t)
+	b := storetest.New(t)
 	if _, err := b.NewIssue("Kept", "", []string{"assignee:guilbep", "status:ready"}); err != nil {
 		t.Fatal(err)
 	}
@@ -148,7 +148,7 @@ func TestFacetsHonourFollows(t *testing.T) {
 // maps over it.
 func TestFacetsNoneIsAnEmptyList(t *testing.T) {
 	t.Parallel()
-	b := gitbugiotest.New(t)
+	b := storetest.New(t)
 	fs, err := board.Facets(b, &config.Config{}, "", "guilbep")
 	if err != nil {
 		t.Fatal(err)

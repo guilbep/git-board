@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/guilbep/git-board/internal/gitbugio"
 	"github.com/guilbep/git-board/internal/release"
 	"github.com/guilbep/git-board/internal/release/releasetest"
+	"github.com/guilbep/git-board/internal/store"
 )
 
 func status(t *testing.T, r *release.Runner) release.Status {
@@ -181,7 +181,7 @@ func TestReconcileCreatesMissing(t *testing.T) {
 		t.Fatalf("Releases = %+v, %v; want v0.9.0's and v1.0.0-rc.1's", recs, err)
 	}
 	rec, ok, err := r.B.ReleaseFor(c)
-	want := []gitbugio.Artifact{
+	want := []store.Artifact{
 		{Image: "frontend", Registry: "ghcr.test/app", Digest: "sha256:fe"},
 		{Image: "frontend", Registry: "quay.test/app", Digest: "sha256:qfe"},
 		{Image: "backend", Registry: "ghcr.test/app", Digest: "sha256:be"},
@@ -218,7 +218,7 @@ func TestReconcileRecordsOncePerRegistry(t *testing.T) {
 		t.Fatalf("Reconcile: %v", err)
 	}
 	rec, _, err := r.B.ReleaseFor(c)
-	if want := []gitbugio.Artifact{{Image: "frontend", Registry: "ghcr.test/app", Digest: "sha256:fe"}}; err != nil || !slices.Equal(rec.Artifacts, want) {
+	if want := []store.Artifact{{Image: "frontend", Registry: "ghcr.test/app", Digest: "sha256:fe"}}; err != nil || !slices.Equal(rec.Artifacts, want) {
 		t.Errorf("artifacts %+v, %v, want %+v", rec.Artifacts, err, want)
 	}
 }
@@ -267,7 +267,7 @@ func TestReconcilePushesOnlineOnly(t *testing.T) {
 	if recs, _ := r.B.Releases(); len(recs) != 0 {
 		t.Errorf("offline Reconcile recorded %+v", recs)
 	}
-	if _, err := r.B.CreateRelease(gitbugio.ReleaseRecord{Commit: c}); err != nil { // its push failed
+	if _, err := r.B.CreateRelease(store.ReleaseRecord{Commit: c}); err != nil { // its push failed
 		t.Fatal(err)
 	}
 	if err := r.Reconcile(ctx); err != nil {

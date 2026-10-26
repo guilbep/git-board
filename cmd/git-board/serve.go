@@ -9,14 +9,14 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/guilbep/git-board/internal/gitbugio"
 	"github.com/guilbep/git-board/internal/server"
+	"github.com/guilbep/git-board/internal/store"
 )
 
 // runBoard is a bare "git board": this repository's board in the browser,
 // where it already runs, else started here until Ctrl-C.
 func runBoard(ctx context.Context, out io.Writer, open bool) error {
-	gitDir, err := gitbugio.FindGitDir(".")
+	gitDir, err := store.FindGitDir(".")
 	if err != nil {
 		return err
 	}

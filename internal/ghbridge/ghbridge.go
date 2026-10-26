@@ -2,7 +2,7 @@
 // git-board's ns:value label model, via `gh project item-list`. Read-only
 // against GitHub: it only shells out to `gh project item-list`, never
 // writes back to the Project or to GitHub issues — all writes land on the
-// local git-bug repo via internal/gitbugio, same as `git-board set`.
+// local git-bug repo via internal/store, same as `git-board set`.
 //
 // Real shape captured from `gh project item-list 40 --owner EPFL-ENAC
 // --format json` (2026-09-02):
@@ -39,7 +39,7 @@ import (
 
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/fields"
-	"github.com/guilbep/git-board/internal/gitbugio"
+	"github.com/guilbep/git-board/internal/store"
 )
 
 // Item is one row of `gh project item-list --format json`'s "items" array.
@@ -137,12 +137,12 @@ type Plan struct {
 }
 
 // BuildPlan maps each project item's fields onto git-bug labels for the
-// matching bug (matched by GitHub issue URL — see gitbugio.Issue.GithubURL)
+// matching bug (matched by GitHub issue URL — see store.Issue.GithubURL)
 // and computes the add/remove label diff, without writing anything. Pure
 // and side-effect-free: safe to call for a --dry-run preview, and ApplyPlan
 // reuses its output for the real write.
-func BuildPlan(items []Item, bugs []gitbugio.Issue, cfg *config.Config) Plan {
-	byURL := make(map[string]gitbugio.Issue, len(bugs))
+func BuildPlan(items []Item, bugs []store.Issue, cfg *config.Config) Plan {
+	byURL := make(map[string]store.Issue, len(bugs))
 	for _, b := range bugs {
 		if b.GithubURL != "" {
 			byURL[b.GithubURL] = b
@@ -178,7 +178,7 @@ func BuildPlan(items []Item, bugs []gitbugio.Issue, cfg *config.Config) Plan {
 	return plan
 }
 
-func planIssue(item Item, bug gitbugio.Issue, cfg *config.Config) IssueChange {
+func planIssue(item Item, bug store.Issue, cfg *config.Config) IssueChange {
 	change := IssueChange{
 		BugID:     bug.ID,
 		GithubURL: bug.GithubURL,
@@ -329,12 +329,12 @@ func normalizeModule(value string) string {
 	return strings.TrimSpace(value)
 }
 
-// LabelWriter is the subset of gitbugio.Backend ApplyPlan needs.
+// LabelWriter is the subset of store.Backend ApplyPlan needs.
 type LabelWriter interface {
 	ApplyLabelChange(idPrefix string, added, removed []string) ([]string, error)
 }
 
-var _ LabelWriter = (*gitbugio.Backend)(nil)
+var _ LabelWriter = (*store.Backend)(nil)
 
 // ApplyPlan writes every changed issue in the plan via ApplyLabelChange —
 // the exact same call `fields.Apply`/`git-board set` makes, so a bridge

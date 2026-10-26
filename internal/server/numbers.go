@@ -12,14 +12,14 @@ import (
 
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/ghpr"
-	"github.com/guilbep/git-board/internal/gitbugio"
+	"github.com/guilbep/git-board/internal/store"
 )
 
 // The project's own numbers from Settings › Numbers (docs/configuration.md,
 // Numbers): where they stand, starting them, numbering what origin has.
 // Only these writes, when asked, push: refs/board/seq, to origin.
 
-const numbersRemote = gitbugio.NumbersRemote
+const numbersRemote = store.NumbersRemote
 
 var (
 	errNoOrigin    = errors.New("no origin remote: the numbers are kept on origin. Add one first (git remote add origin <url>)")
@@ -32,12 +32,12 @@ type numbersResponse struct {
 	Prefix string `json:"prefix,omitempty"`
 	Start  int    `json:"start,omitempty"`
 	Next   int    `json:"next,omitempty"`
-	gitbugio.Numbering
-	Origin *gitbugio.Remote `json:"origin"` // where the counter goes; null without an origin remote
-	Name   string           `json:"name"`   // the repository's, for a prefix: its GitHub forge's, else origin's
-	GitHub *githubNumbers   `json:"github,omitempty"`
-	Done   int              `json:"done"`            // a write: how many issues it numbered
-	Error  string           `json:"error,omitempty"` // started, but the issues not numbered yet
+	store.Numbering
+	Origin *store.Remote  `json:"origin"` // where the counter goes; null without an origin remote
+	Name   string         `json:"name"`   // the repository's, for a prefix: its GitHub forge's, else origin's
+	GitHub *githubNumbers `json:"github,omitempty"`
+	Done   int            `json:"done"`            // a write: how many issues it numbered
+	Error  string         `json:"error,omitempty"` // started, but the issues not numbered yet
 }
 
 // githubNumbers is what GitHub says, asked with ?github=1 before the
@@ -137,7 +137,7 @@ func (s *apiServer) handleNumbersInit(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &req) {
 		return
 	}
-	if err := gitbugio.CheckNumbers(req.Prefix, req.Start); err != nil {
+	if err := store.CheckNumbers(req.Prefix, req.Start); err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
@@ -153,7 +153,7 @@ func (s *apiServer) handleNumbersInit(w http.ResponseWriter, r *http.Request) {
 	n, err := s.b.NumberIssues(numbersRemote)
 	failed := ""
 	if err != nil {
-		failed = gitbugio.NoCredentials("the numbers are on, but the issues aren't numbered yet: " + err.Error())
+		failed = store.NoCredentials("the numbers are on, but the issues aren't numbered yet: " + err.Error())
 	}
 	s.answerNumbers(w, n, failed)
 }
@@ -189,7 +189,7 @@ func (s *apiServer) beginNumbers(w http.ResponseWriter) (func(), bool) {
 		writeError(w, http.StatusInternalServerError, err)
 		return nil, false
 	}
-	if !slices.ContainsFunc(remotes, func(r gitbugio.Remote) bool { return r.Name == numbersRemote }) {
+	if !slices.ContainsFunc(remotes, func(r store.Remote) bool { return r.Name == numbersRemote }) {
 		writeError(w, http.StatusConflict, errNoOrigin)
 		return nil, false
 	}
@@ -219,8 +219,8 @@ func (s *apiServer) answerNumbers(w http.ResponseWriter, done int, failed string
 // numbers, first; else 502, origin's answer without credentials.
 func writeNumbersError(w http.ResponseWriter, err error) {
 	code := http.StatusBadGateway
-	if errors.Is(err, gitbugio.ErrNumbered) || errors.Is(err, gitbugio.ErrNumbersMoved) {
+	if errors.Is(err, store.ErrNumbered) || errors.Is(err, store.ErrNumbersMoved) {
 		code = http.StatusConflict
 	}
-	writeError(w, code, errors.New(gitbugio.NoCredentials(err.Error())))
+	writeError(w, code, errors.New(store.NoCredentials(err.Error())))
 }

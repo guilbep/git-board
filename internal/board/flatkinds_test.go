@@ -8,7 +8,7 @@ import (
 
 	"github.com/guilbep/git-board/internal/board"
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/gitbugio/gitbugiotest"
+	"github.com/guilbep/git-board/internal/store/storetest"
 )
 
 // A view saved as label:bug still finds the issues labelled bug once a
@@ -24,10 +24,10 @@ func TestLabelViewFindsAFlatKind(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	b := gitbugiotest.New(t)
+	b := storetest.New(t)
 	b.SetFlatKinds(cfg)
 	for title, label := range map[string]string{"crash": "bug", "export": "feat"} {
-		gitbugiotest.RawLabels(t, b, gitbugiotest.NewIssue(t, b, title), label) // as GitHub has it
+		storetest.RawLabels(t, b, storetest.NewIssue(t, b, title), label) // as GitHub has it
 	}
 	for filter, want := range map[string][]string{
 		cfg.Views["bugs"].Filter: {"crash"},

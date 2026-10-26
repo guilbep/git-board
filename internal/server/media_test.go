@@ -9,7 +9,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/guilbep/git-board/internal/gitbugio/gitbugiotest"
+	"github.com/guilbep/git-board/internal/store/storetest"
 )
 
 func TestMediaAllowsForgeImagesOnly(t *testing.T) {
@@ -57,7 +57,7 @@ func fakeForge(t *testing.T) (*httptest.Server, *atomic.Int32, *atomic.Value) {
 func TestMediaProxiesAndCaches(t *testing.T) {
 	t.Parallel()
 	forge, hits, auth := fakeForge(t)
-	b := gitbugiotest.New(t)
+	b := storetest.New(t)
 	m := &mediaProxy{storage: b.Storage(), client: forge.Client(), token: func(string) string { return "secret" },
 		allowed: func(*url.URL) bool { return true }}
 	get := func(u string) *httptest.ResponseRecorder {

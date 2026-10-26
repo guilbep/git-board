@@ -12,7 +12,7 @@ import (
 	"github.com/guilbep/git-board/internal/board"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/fields"
-	"github.com/guilbep/git-board/internal/gitbugio"
+	"github.com/guilbep/git-board/internal/store"
 	"github.com/guilbep/git-board/internal/tui"
 )
 
@@ -239,7 +239,7 @@ func runTui(filterStr, me string) error {
 		return err
 	}
 
-	b, err := gitbugio.OpenCwd()
+	b, err := store.OpenCwd()
 	if err != nil {
 		return err
 	}
@@ -251,7 +251,7 @@ func runTui(filterStr, me string) error {
 	}
 	// tui.Run owns b from here — including across a "g" close/reopen
 	// cycle — and closes whichever backend is live when it returns.
-	reopen := func() (tui.Backend, error) { return gitbugio.OpenCwd() }
+	reopen := func() (tui.Backend, error) { return store.OpenCwd() }
 	return tui.Run(matched, filterStr, b, cfg, me, time.Now(), reopen)
 }
 
@@ -259,8 +259,8 @@ func runTui(filterStr, me string) error {
 // matching filterStr — the shared core behind ls/view's table render and the
 // tui's interactive list. The actual matching logic lives in internal/board
 // so the server (internal/server) can reuse it too.
-func loadMatchingIssues(cfg *config.Config, filterStr, me string) ([]gitbugio.Issue, error) {
-	b, err := gitbugio.OpenCwd()
+func loadMatchingIssues(cfg *config.Config, filterStr, me string) ([]store.Issue, error) {
+	b, err := store.OpenCwd()
 	if err != nil {
 		return nil, err
 	}
@@ -275,7 +275,7 @@ func runSet(out io.Writer, idPrefix string, assignments []string, me string) err
 		return err
 	}
 
-	b, err := gitbugio.OpenCwd()
+	b, err := store.OpenCwd()
 	if err != nil {
 		return err
 	}
@@ -297,7 +297,7 @@ func runSet(out io.Writer, idPrefix string, assignments []string, me string) err
 }
 
 func runGet(out io.Writer, idPrefix string) error {
-	b, err := gitbugio.OpenCwd()
+	b, err := store.OpenCwd()
 	if err != nil {
 		return err
 	}

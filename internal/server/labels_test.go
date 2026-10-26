@@ -12,8 +12,8 @@ import (
 
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/ghlabels"
-	"github.com/guilbep/git-board/internal/gitbugio/gitbugiotest"
 	"github.com/guilbep/git-board/internal/lint"
+	"github.com/guilbep/git-board/internal/store/storetest"
 )
 
 const labelsTestConfig = `[repos]
@@ -40,9 +40,9 @@ func TestLabelsTab(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	b := gitbugiotest.New(t)
+	b := storetest.New(t)
 	ts := newTestServer(t, b, cfg)
-	both := gitbugiotest.NewIssue(t, b, "two kinds")
+	both := storetest.NewIssue(t, b, "two kinds")
 	if _, err := b.ApplyLabelChange(both, []string{"kind:feat", "kind:bug"}, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -143,7 +143,7 @@ func TestLabelDeleteOnlyStray(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ts := newTestServer(t, gitbugiotest.New(t), cfg)
+	ts := newTestServer(t, storetest.New(t), cfg)
 
 	var gh []string
 	orig := ghlabels.Gh

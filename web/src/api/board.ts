@@ -16,7 +16,7 @@ export const clientId = Math.random().toString(36).slice(2) + Date.now().toStrin
 export interface Issue {
   id: string;
   title: string;
-  shown_title: string; // the title without a trailing (#2518) of its own (gitbugio.Issue.ShownTitle)
+  shown_title: string; // the title without a trailing (#2518) of its own (store.Issue.ShownTitle)
   status: string;
   labels: string[];
   inherited?: string[]; // what it takes from the project's [roles], for the roles it doesn't set
@@ -228,7 +228,7 @@ export interface IssueEvent {
   review?: Review; // comment: a line comment, a reply or a review
 }
 
-// A comment's review:* metadata (internal/gitbugio/review.go), mirrored to
+// A comment's review:* metadata (internal/store/review.go), mirrored to
 // the pull request by the sync.
 export interface Review {
   path?: string;

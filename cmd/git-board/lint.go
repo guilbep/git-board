@@ -12,8 +12,8 @@ import (
 
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/ghlabels"
-	"github.com/guilbep/git-board/internal/gitbugio"
 	"github.com/guilbep/git-board/internal/lint"
+	"github.com/guilbep/git-board/internal/store"
 )
 
 // existingGithubLabels/applyGithubLabel are seams over ghlabels.Existing/
@@ -27,7 +27,7 @@ var (
 	// reads it, without opening git-bug: a running git board serve holds it.
 	originGithubRepo = func() string {
 		out, _ := exec.Command("git", "config", "--get", "remote.origin.url").Output()
-		return gitbugio.GitHubRepoOf(strings.TrimSpace(string(out)))
+		return store.GitHubRepoOf(strings.TrimSpace(string(out)))
 	}
 )
 
@@ -87,7 +87,7 @@ silently. --apply doesn't create those: the fix is in the template.`,
 }
 
 func runLint(out io.Writer, cfg *config.Config, strict bool) error {
-	b, err := gitbugio.OpenCwd()
+	b, err := store.OpenCwd()
 	if err != nil {
 		return err
 	}

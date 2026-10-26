@@ -14,8 +14,8 @@ import (
 
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/ghpr"
-	"github.com/guilbep/git-board/internal/gitbugio"
-	"github.com/guilbep/git-board/internal/gitbugio/gitbugiotest"
+	"github.com/guilbep/git-board/internal/store"
+	"github.com/guilbep/git-board/internal/store/storetest"
 )
 
 var co2Statuses = []string{"backlog", "comite", "ready", "in-progress", "in-review", "ready-for-validation", "qa", "tests-metier", "validated"}
@@ -60,7 +60,7 @@ type cycleAnswer struct {
 
 func TestCycleOfAnIssue(t *testing.T) {
 	t.Parallel()
-	b := gitbugiotest.New(t)
+	b := storetest.New(t)
 	id, err := b.NewIssue("Export CSV", twoCriteria, []string{"status:ready"})
 	if err != nil {
 		t.Fatal(err)
@@ -187,7 +187,7 @@ func post(t *testing.T, url string, body any) (int, string) {
 
 // issueAt is an issue with two criteria at status, risk low unless labels
 // say otherwise.
-func issueAt(t *testing.T, b *gitbugio.Backend, status string, labels ...string) string {
+func issueAt(t *testing.T, b *store.Backend, status string, labels ...string) string {
 	t.Helper()
 	id, err := b.NewIssue("Export CSV", twoCriteria, append([]string{"status:" + status}, labels...))
 	if err != nil {
@@ -196,7 +196,7 @@ func issueAt(t *testing.T, b *gitbugio.Backend, status string, labels ...string)
 	return id
 }
 
-func lastEvent(t *testing.T, b *gitbugio.Backend, id string) (gitbugio.Thread, gitbugio.Event) {
+func lastEvent(t *testing.T, b *store.Backend, id string) (store.Thread, store.Event) {
 	t.Helper()
 	th, err := b.Thread(id)
 	if err != nil {
@@ -207,7 +207,7 @@ func lastEvent(t *testing.T, b *gitbugio.Backend, id string) (gitbugio.Thread, g
 
 func TestCycleApprovePlan(t *testing.T) {
 	t.Parallel()
-	b := gitbugiotest.New(t)
+	b := storetest.New(t)
 	id := issueAt(t, b, "ready", "risk:normal")
 	cfg := cycleConfig(map[string]string{"lead-dev": "guilbep"}, config.Cycle{Plan: "lead-dev"})
 	url := newTestServer(t, b, cfg).URL + "/api/issues/" + id[:8] + "/cycle/"
@@ -243,7 +243,7 @@ func TestCycleApprovePlan(t *testing.T) {
 
 func TestCycleSignoffRefused(t *testing.T) {
 	t.Parallel()
-	b := gitbugiotest.New(t)
+	b := storetest.New(t)
 	id := issueAt(t, b, "qa", "risk:low")
 	cfg := cycleConfig(map[string]string{"pm": "alice"}, config.Cycle{Signoffs: map[string]string{"qa": "pm"}})
 	before, _ := lastEvent(t, b, id)
@@ -258,7 +258,7 @@ func TestCycleSignoffRefused(t *testing.T) {
 
 func TestCycleSignoffNeedsARun(t *testing.T) {
 	t.Parallel()
-	b := gitbugiotest.New(t)
+	b := storetest.New(t)
 	id := issueAt(t, b, "qa", "risk:low")
 	cfg := cycleConfig(map[string]string{"pm": "guilbep"}, config.Cycle{Signoffs: map[string]string{"qa": "pm"}})
 	url := newTestServer(t, b, cfg).URL + "/api/issues/" + id[:8] + "/cycle/signoff"
@@ -294,7 +294,7 @@ func TestCycleSignoffAtTheMergedHead(t *testing.T) {
 
 func TestCycleVerifyThenSignoff(t *testing.T) {
 	t.Parallel()
-	b := gitbugiotest.New(t)
+	b := storetest.New(t)
 	id := issueAt(t, b, "qa", "risk:low")
 	url := newTestServer(t, b, cycleConfig(nil, config.Cycle{})).URL + "/api/issues/" + id[:8] + "/cycle/"
 	if code, _ := post(t, url+"verify", map[string]string{"output": ""}); code != http.StatusBadRequest {
@@ -330,7 +330,7 @@ func TestCycleVerifyThenSignoff(t *testing.T) {
 
 func TestCycleSignoffCloses(t *testing.T) {
 	t.Parallel()
-	b := gitbugiotest.New(t)
+	b := storetest.New(t)
 	id := issueAt(t, b, "tests-metier", "risk:low")
 	url := newTestServer(t, b, cycleConfig(nil, config.Cycle{})).URL + "/api/issues/" + id[:8] + "/cycle/"
 	if code, body := post(t, url+"verify", map[string]string{"output": "ok"}); code != http.StatusOK {
@@ -347,7 +347,7 @@ func TestCycleSignoffCloses(t *testing.T) {
 
 func TestCycleBadAction(t *testing.T) {
 	t.Parallel()
-	b := gitbugiotest.New(t)
+	b := storetest.New(t)
 	id := issueAt(t, b, "qa")
 	url := newTestServer(t, b, cycleConfig(nil, config.Cycle{})).URL + "/api/issues/" + id[:8] + "/cycle/"
 	if code, _ := post(t, url+"dance", struct{}{}); code != http.StatusNotFound {
@@ -431,7 +431,7 @@ func fakeLLM(t *testing.T, answer string) *[]string {
 
 func TestCycleSuggestRisk(t *testing.T) {
 	asked := fakeLLM(t, "Structural\nThe export changes a schema.")
-	b := gitbugiotest.New(t)
+	b := storetest.New(t)
 	id, err := b.NewIssue("Export CSV", twoCriteria, []string{"status:ready"})
 	if err != nil {
 		t.Fatal(err)
@@ -468,7 +468,7 @@ func TestCycleSuggestRisk(t *testing.T) {
 
 func TestCycleSuggestRiskRefused(t *testing.T) {
 	fakeLLM(t, "I would say it depends.")
-	b := gitbugiotest.New(t)
+	b := storetest.New(t)
 	id, err := b.NewIssue("Export CSV", twoCriteria, []string{"status:ready"})
 	if err != nil {
 		t.Fatal(err)

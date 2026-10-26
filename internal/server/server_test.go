@@ -11,8 +11,8 @@ import (
 
 	"github.com/guilbep/git-board/internal/board"
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/gitbugio"
-	"github.com/guilbep/git-board/internal/gitbugio/gitbugiotest"
+	"github.com/guilbep/git-board/internal/store"
+	"github.com/guilbep/git-board/internal/store/storetest"
 )
 
 func jsonBody(t *testing.T, v any) io.Reader {
@@ -33,7 +33,7 @@ func mustLoadConfig(t *testing.T) *config.Config {
 	return cfg
 }
 
-func newTestServer(t *testing.T, b *gitbugio.Backend, cfg *config.Config) *httptest.Server {
+func newTestServer(t *testing.T, b *store.Backend, cfg *config.Config) *httptest.Server {
 	t.Helper()
 	s := &apiServer{cfg: cfg, b: b, me: "guilbep"}
 	if b != nil && cfg != nil {
@@ -63,10 +63,10 @@ func getJSON(t *testing.T, url string, out any) *http.Response {
 func TestListIssuesFiltersAndBucketsFlat(t *testing.T) {
 	t.Parallel()
 	cfg := mustLoadConfig(t)
-	b := gitbugiotest.New(t)
-	open := gitbugiotest.NewIssue(t, b, "open one")
-	closed := gitbugiotest.NewIssue(t, b, "closed one")
-	gitbugiotest.CloseIssue(t, b, closed)
+	b := storetest.New(t)
+	open := storetest.NewIssue(t, b, "open one")
+	closed := storetest.NewIssue(t, b, "closed one")
+	storetest.CloseIssue(t, b, closed)
 	ts := newTestServer(t, b, cfg)
 
 	var buckets []board.Bucket
@@ -87,10 +87,10 @@ func TestListIssuesFiltersAndBucketsFlat(t *testing.T) {
 func TestListIssuesEmptyFilterIsEveryIssue(t *testing.T) {
 	t.Parallel()
 	cfg := mustLoadConfig(t)
-	b := gitbugiotest.New(t)
-	gitbugiotest.NewIssue(t, b, "open one")
-	closed := gitbugiotest.NewIssue(t, b, "closed one")
-	gitbugiotest.CloseIssue(t, b, closed)
+	b := storetest.New(t)
+	storetest.NewIssue(t, b, "open one")
+	closed := storetest.NewIssue(t, b, "closed one")
+	storetest.CloseIssue(t, b, closed)
 	ts := newTestServer(t, b, cfg)
 
 	for url, want := range map[string]int{"/api/issues": 1, "/api/issues?filter=": 2, "/api/issues?filter=is:closed": 1} {
@@ -111,9 +111,9 @@ func TestListIssuesEmptyFilterIsEveryIssue(t *testing.T) {
 func TestListIssuesGroupsByField(t *testing.T) {
 	t.Parallel()
 	cfg := mustLoadConfig(t)
-	b := gitbugiotest.New(t)
-	a := gitbugiotest.NewIssue(t, b, "a")
-	bb := gitbugiotest.NewIssue(t, b, "b")
+	b := storetest.New(t)
+	a := storetest.NewIssue(t, b, "a")
+	bb := storetest.NewIssue(t, b, "b")
 	if _, err := b.ApplyLabelChange(a, []string{"status:backlog"}, nil); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
@@ -132,8 +132,8 @@ func TestListIssuesGroupsByField(t *testing.T) {
 func TestPatchIssueSwapsSingleCardinalityField(t *testing.T) {
 	t.Parallel()
 	cfg := mustLoadConfig(t)
-	b := gitbugiotest.New(t)
-	id := gitbugiotest.NewIssue(t, b, "x")
+	b := storetest.New(t)
+	id := storetest.NewIssue(t, b, "x")
 	if _, err := b.ApplyLabelChange(id, []string{"status:backlog"}, nil); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
@@ -150,7 +150,7 @@ func TestPatchIssueSwapsSingleCardinalityField(t *testing.T) {
 		t.Fatalf("status = %d, want 200", resp.StatusCode)
 	}
 
-	var issue gitbugio.Issue
+	var issue store.Issue
 	if err := json.NewDecoder(resp.Body).Decode(&issue); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
@@ -165,7 +165,7 @@ func TestPatchIssueSwapsSingleCardinalityField(t *testing.T) {
 func TestConfigFieldsReturnsConfiguredOptions(t *testing.T) {
 	t.Parallel()
 	cfg := mustLoadConfig(t)
-	b := gitbugiotest.New(t)
+	b := storetest.New(t)
 	ts := newTestServer(t, b, cfg)
 
 	var got map[string]config.Field
@@ -182,7 +182,7 @@ func TestConfigFieldsReturnsConfiguredOptions(t *testing.T) {
 func TestCORSPreflightAnsweredBeforeMux(t *testing.T) {
 	t.Parallel()
 	cfg := mustLoadConfig(t)
-	b := gitbugiotest.New(t)
+	b := storetest.New(t)
 	ts := newTestServer(t, b, cfg)
 
 	req, _ := http.NewRequest(http.MethodOptions, ts.URL+"/api/issues/deadbeef", nil)
@@ -212,7 +212,7 @@ func contains(ss []string, s string) bool {
 // Without a .git-board.toml the page still gets objects, not null.
 func TestNoConfigServesEmptyObjects(t *testing.T) {
 	t.Parallel()
-	ts := newTestServer(t, gitbugiotest.New(t), &config.Config{})
+	ts := newTestServer(t, storetest.New(t), &config.Config{})
 	for _, path := range []string{"/api/views", "/api/config/fields"} {
 		resp, err := http.Get(ts.URL + path)
 		if err != nil {

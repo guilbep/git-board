@@ -5,18 +5,18 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/guilbep/git-board/internal/gitbugio"
-	"github.com/guilbep/git-board/internal/gitbugio/gitbugiotest"
 	"github.com/guilbep/git-board/internal/inbox"
+	"github.com/guilbep/git-board/internal/store"
+	"github.com/guilbep/git-board/internal/store/storetest"
 )
 
 func TestStateRoundTrip(t *testing.T) {
-	fs := gitbugiotest.New(t).Storage()
+	fs := storetest.New(t).Storage()
 	st, err := inbox.Load(fs, "me1")
 	if err != nil || !reflect.DeepEqual(st, inbox.State{}) {
 		t.Fatalf("no file yet: %+v, %v; want an empty State", st, err)
 	}
-	st.MarkSeen(gitbugio.Thread{Issue: gitbugio.Issue{ID: "a1"}, Events: []gitbugio.Event{{ID: "e1"}, {ID: "e2"}}})
+	st.MarkSeen(store.Thread{Issue: store.Issue{ID: "a1"}, Events: []store.Event{{ID: "e1"}, {ID: "e2"}}})
 	yes, no := true, false
 	st.SetFollow("b2", &yes)
 	st.SetFollow("c3", &no)
@@ -34,7 +34,7 @@ func TestStateRoundTrip(t *testing.T) {
 }
 
 func TestStateUnreadableIsAnError(t *testing.T) {
-	fs := gitbugiotest.New(t).Storage()
+	fs := storetest.New(t).Storage()
 	if err := fs.MkdirAll("git-board/inbox", 0o755); err != nil {
 		t.Fatal(err)
 	}

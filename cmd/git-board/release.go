@@ -15,8 +15,8 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/gitbugio"
 	"github.com/guilbep/git-board/internal/release"
+	"github.com/guilbep/git-board/internal/store"
 )
 
 // releaseTools builds the registry, builder and chart tools: a var for the
@@ -33,7 +33,7 @@ func newRunner() (*release.Runner, func(), error) {
 	if !cfg.Release.Enabled() {
 		return nil, nil, errors.New("no [release] table with environments or binaries in .git-board.toml")
 	}
-	b, err := gitbugio.OpenCwd()
+	b, err := store.OpenCwd()
 	if err != nil {
 		return nil, nil, err
 	}

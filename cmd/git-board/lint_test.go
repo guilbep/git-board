@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/guilbep/git-board/internal/ghlabels"
-	"github.com/guilbep/git-board/internal/gitbugio"
+	"github.com/guilbep/git-board/internal/store"
 )
 
 // seedDoubleSingle trips the double-single check directly via the backend
@@ -17,7 +17,7 @@ import (
 // real finding to report.
 func seedDoubleSingle(t *testing.T) {
 	t.Helper()
-	b, err := gitbugio.OpenCwd()
+	b, err := store.OpenCwd()
 	if err != nil {
 		t.Fatalf("OpenCwd: %v", err)
 	}

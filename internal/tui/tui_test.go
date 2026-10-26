@@ -3,12 +3,12 @@ package tui
 import (
 	"testing"
 
-	"github.com/guilbep/git-board/internal/gitbugio"
+	"github.com/guilbep/git-board/internal/store"
 )
 
 func TestToItemsPreservesOrderAndFields(t *testing.T) {
 	t.Parallel()
-	issues := []gitbugio.Issue{
+	issues := []store.Issue{
 		{ID: "abcdef1234", Title: "first", Status: "open", Labels: []string{"prio:p1"}},
 		{ID: "b", Title: "second", Status: "closed", Labels: nil},
 	}
@@ -40,8 +40,8 @@ func TestToItemsPreservesOrderAndFields(t *testing.T) {
 
 func TestItemShowsItsNumberBesideTheTitleWithoutIt(t *testing.T) {
 	t.Parallel()
-	it := ToItems([]gitbugio.Issue{{ID: "abcdef1234", Title: "Wrong example (#2518)", Status: "open",
-		Forges: []gitbugio.Forge{{Name: "GitHub", Number: "2518"}}}})[0].(item)
+	it := ToItems([]store.Issue{{ID: "abcdef1234", Title: "Wrong example (#2518)", Status: "open",
+		Forges: []store.Forge{{Name: "GitHub", Number: "2518"}}}})[0].(item)
 	if got, want := it.Title(), "Wrong example"; got != want {
 		t.Errorf("Title() = %q, want %q", got, want)
 	}

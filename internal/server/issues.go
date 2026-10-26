@@ -11,8 +11,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/guilbep/git-board/internal/gitbugio"
 	"github.com/guilbep/git-board/internal/markdown"
+	"github.com/guilbep/git-board/internal/store"
 )
 
 var errSyncing = errors.New("a sync with the forges is running: try again when it ends")
@@ -41,7 +41,7 @@ func decode(w http.ResponseWriter, r *http.Request, into any) bool {
 // writeIssueError answers 404 for an issue that doesn't exist, 400 for what
 // the request got wrong.
 func writeIssueError(w http.ResponseWriter, err error) {
-	if errors.Is(err, gitbugio.ErrNotFound) {
+	if errors.Is(err, store.ErrNotFound) {
 		writeError(w, http.StatusNotFound, err)
 		return
 	}
@@ -181,7 +181,7 @@ func (s *apiServer) handleEditComment(w http.ResponseWriter, r *http.Request) {
 	}
 	defer done()
 	if err := s.b.EditComment(r.PathValue("id"), r.PathValue("comment"), req.Body, req.Base); err != nil {
-		if errors.Is(err, gitbugio.ErrChangedMeanwhile) {
+		if errors.Is(err, store.ErrChangedMeanwhile) {
 			writeCoded(w, http.StatusConflict, "changed", err)
 			return
 		}
@@ -278,8 +278,8 @@ func (s *apiServer) handleMarkdown(w http.ResponseWriter, r *http.Request) {
 
 // meResponse is who git-board writes as, and who it could.
 type meResponse struct {
-	Me         *gitbugio.Person  `json:"me"`
-	Identities []gitbugio.Person `json:"identities"`
+	Me         *store.Person  `json:"me"`
+	Identities []store.Person `json:"identities"`
 }
 
 func (s *apiServer) writeMe(w http.ResponseWriter) {

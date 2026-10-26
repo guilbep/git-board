@@ -18,10 +18,10 @@ import (
 
 	"github.com/guilbep/git-board/core/issue"
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/gitbugio"
-	"github.com/guilbep/git-board/internal/gitbugio/gitbugiotest"
 	"github.com/guilbep/git-board/internal/release"
 	"github.com/guilbep/git-board/internal/release/releasetest"
+	"github.com/guilbep/git-board/internal/store"
+	"github.com/guilbep/git-board/internal/store/storetest"
 )
 
 // releaseServer serves a releasetest fixture's app repo, the working
@@ -278,7 +278,7 @@ func TestIssueEnvironments(t *testing.T) {
 	s, ts, fx := releaseServer(t)
 	c := firstCommit(t, fx)
 	runs(t, fx, "stage", c, "v1.0.0")
-	id := gitbugiotest.NewImportedIssue(t, s.b, "a", "https://github.com/org/app/issues/12")
+	id := storetest.NewImportedIssue(t, s.b, "a", "https://github.com/org/app/issues/12")
 	fx.Merge(t, "fix/12-a", "")
 	later := fx.Commit(t, "later")
 	runs(t, fx, "dev", later, "1.0.1-dev.2.g"+later[:7])
@@ -289,7 +289,7 @@ func TestIssueEnvironments(t *testing.T) {
 	if !slices.Equal(got, want) {
 		t.Errorf("got %+v, want %+v", got, want)
 	}
-	other := gitbugiotest.NewImportedIssue(t, s.b, "b", "https://github.com/org/app/issues/13")
+	other := storetest.NewImportedIssue(t, s.b, "b", "https://github.com/org/app/issues/13")
 	getJSON(t, ts.URL+"/api/issues/"+other+"/environments", &got)
 	if len(got) != 3 || slices.ContainsFunc(got, func(e issueEnvironment) bool { return e.In }) {
 		t.Errorf("an issue no branch names: %+v", got)
@@ -333,7 +333,7 @@ func TestReleasesNotesAndComments(t *testing.T) {
 	c := firstCommit(t, fx)
 	fx.Tag(t, c, "v1.0.0")
 	runs(t, fx, "prod", c, "v1.0.0")
-	if _, err := s.b.CreateRelease(gitbugio.ReleaseRecord{Commit: c}); err != nil {
+	if _, err := s.b.CreateRelease(store.ReleaseRecord{Commit: c}); err != nil {
 		t.Fatal(err)
 	}
 	if status := call(t, "PUT", ts.URL+"/api/releases/v1.0.0/notes", map[string]string{"notes": "the first"}, nil); status != http.StatusOK {
@@ -414,7 +414,7 @@ func TestIssueEnvironmentsReadOffline(t *testing.T) {
 	s, ts, fx := releaseServer(t)
 	c := firstCommit(t, fx)
 	runs(t, fx, "dev", c, "1.0.0-dev.0.g"+c[:7])
-	id := gitbugiotest.NewImportedIssue(t, s.b, "a", "https://github.com/org/app/issues/12")
+	id := storetest.NewImportedIssue(t, s.b, "a", "https://github.com/org/app/issues/12")
 	m := fx.Merge(t, "fix/12-a", "")
 	getJSON(t, ts.URL+"/api/releases", nil) // fetched: dev runs c
 
@@ -464,7 +464,7 @@ func TestReleasesFromOutsideArePublished(t *testing.T) {
 		}
 	}
 
-	gitbugiotest.NewIssue(t, s.b, "edited elsewhere")
+	storetest.NewIssue(t, s.b, "edited elsewhere")
 	if kind := next(5 * time.Second); kind != "issues" {
 		t.Fatalf("an issue edit: %q, want issues", kind)
 	}
@@ -472,7 +472,7 @@ func TestReleasesFromOutsideArePublished(t *testing.T) {
 		t.Errorf("an issue edit also published %q", kind)
 	}
 
-	if _, err := s.b.CreateRelease(gitbugio.ReleaseRecord{Commit: "0123456789abcdef0123456789abcdef01234567"}); err != nil {
+	if _, err := s.b.CreateRelease(store.ReleaseRecord{Commit: "0123456789abcdef0123456789abcdef01234567"}); err != nil {
 		t.Fatal(err)
 	}
 	for timeout := time.After(5 * time.Second); ; {
@@ -495,7 +495,7 @@ func TestReleasesRequestChecks(t *testing.T) {
 	c := firstCommit(t, fx)
 	fx.Tag(t, c, "v1.0.0", "v1.0.1")
 	runs(t, fx, "prod", c, "v1.0.1")
-	if _, err := s.b.CreateRelease(gitbugio.ReleaseRecord{Commit: c}); err != nil { // v1.0.0's and v1.0.1's
+	if _, err := s.b.CreateRelease(store.ReleaseRecord{Commit: c}); err != nil { // v1.0.0's and v1.0.1's
 		t.Fatal(err)
 	}
 	fx.Tag(t, fx.Commit(t, "later"), "v1.0.2") // no record

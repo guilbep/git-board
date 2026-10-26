@@ -4,9 +4,9 @@ import (
 	"testing"
 
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/gitbugio"
-	"github.com/guilbep/git-board/internal/gitbugio/gitbugiotest"
 	"github.com/guilbep/git-board/internal/lint"
+	"github.com/guilbep/git-board/internal/store"
+	"github.com/guilbep/git-board/internal/store/storetest"
 )
 
 func mustLoadConfig(t *testing.T) *config.Config {
@@ -29,7 +29,7 @@ func countChecks(findings []lint.Finding) map[string]int {
 	return counts
 }
 
-func labelIssue(t *testing.T, b *gitbugio.Backend, id string, labels ...string) {
+func labelIssue(t *testing.T, b *store.Backend, id string, labels ...string) {
 	t.Helper()
 	if _, err := b.ApplyLabelChange(id, labels, nil); err != nil {
 		t.Fatalf("ApplyLabelChange: %v", err)
@@ -54,8 +54,8 @@ func TestCleanRepoReportsNothing(t *testing.T) {
 		},
 		Sprints: config.SprintsConfig{List: []config.Sprint{{Slug: "delivery", Title: "Delivery"}}},
 	}
-	b := gitbugiotest.New(t)
-	id := gitbugiotest.NewIssue(t, b, "clean issue")
+	b := storetest.New(t)
+	id := storetest.NewIssue(t, b, "clean issue")
 	labelIssue(t, b, id, "status:ready", "prio:p1", "cat:bug", "sprint:delivery")
 
 	issues, err := b.ListIssues()
@@ -71,10 +71,10 @@ func TestCleanRepoReportsNothing(t *testing.T) {
 func TestDoubleSingleDetected(t *testing.T) {
 	t.Parallel()
 	cfg := mustLoadConfig(t)
-	b := gitbugiotest.New(t)
-	tripping := gitbugiotest.NewIssue(t, b, "double status")
+	b := storetest.New(t)
+	tripping := storetest.NewIssue(t, b, "double status")
 	labelIssue(t, b, tripping, "status:ready", "status:qa", "prio:p1", "est:1", "cat:bug")
-	clean := gitbugiotest.NewIssue(t, b, "single status")
+	clean := storetest.NewIssue(t, b, "single status")
 	labelIssue(t, b, clean, "status:ready", "prio:p1", "est:1", "cat:bug")
 
 	issues, err := b.ListIssues()
@@ -96,10 +96,10 @@ func TestDoubleSingleDetected(t *testing.T) {
 func TestUnknownOptionValueDetected(t *testing.T) {
 	t.Parallel()
 	cfg := mustLoadConfig(t)
-	b := gitbugiotest.New(t)
-	tripping := gitbugiotest.NewIssue(t, b, "bad prio")
+	b := storetest.New(t)
+	tripping := storetest.NewIssue(t, b, "bad prio")
 	labelIssue(t, b, tripping, "status:ready", "prio:p9", "est:1", "cat:bug")
-	clean := gitbugiotest.NewIssue(t, b, "good prio")
+	clean := storetest.NewIssue(t, b, "good prio")
 	labelIssue(t, b, clean, "status:ready", "prio:p1", "est:1", "cat:bug")
 
 	issues, err := b.ListIssues()
@@ -121,10 +121,10 @@ func TestUnknownOptionValueDetected(t *testing.T) {
 func TestMissingRequiredValueDetected(t *testing.T) {
 	t.Parallel()
 	cfg := mustLoadConfig(t)
-	b := gitbugiotest.New(t)
-	tripping := gitbugiotest.NewIssue(t, b, "no prio")
+	b := storetest.New(t)
+	tripping := storetest.NewIssue(t, b, "no prio")
 	labelIssue(t, b, tripping, "status:ready", "est:1", "cat:bug")
-	clean := gitbugiotest.NewIssue(t, b, "has prio")
+	clean := storetest.NewIssue(t, b, "has prio")
 	labelIssue(t, b, clean, "status:ready", "prio:p1", "est:1", "cat:bug")
 
 	issues, err := b.ListIssues()
@@ -152,10 +152,10 @@ func TestMissingRequiredValueDetected(t *testing.T) {
 func TestClosedIssueSkipsOpenOnlyChecks(t *testing.T) {
 	t.Parallel()
 	cfg := mustLoadConfig(t)
-	b := gitbugiotest.New(t)
-	id := gitbugiotest.NewIssue(t, b, "closed, no prio")
+	b := storetest.New(t)
+	id := storetest.NewIssue(t, b, "closed, no prio")
 	labelIssue(t, b, id, "status:ready", "status:qa") // would trip double-single AND missing-prio if open
-	gitbugiotest.CloseIssue(t, b, id)
+	storetest.CloseIssue(t, b, id)
 
 	issues, err := b.ListIssues()
 	if err != nil {
@@ -171,10 +171,10 @@ func TestClosedIssueSkipsOpenOnlyChecks(t *testing.T) {
 func TestOrphanSprintDetected(t *testing.T) {
 	t.Parallel()
 	cfg := mustLoadConfig(t)
-	b := gitbugiotest.New(t)
-	tripping := gitbugiotest.NewIssue(t, b, "orphan sprint")
+	b := storetest.New(t)
+	tripping := storetest.NewIssue(t, b, "orphan sprint")
 	labelIssue(t, b, tripping, "status:ready", "prio:p1", "est:1", "cat:bug", "sprint:nonexistent")
-	clean := gitbugiotest.NewIssue(t, b, "known sprint")
+	clean := storetest.NewIssue(t, b, "known sprint")
 	labelIssue(t, b, clean, "status:ready", "prio:p1", "est:1", "cat:bug", "sprint:delivery")
 
 	issues, err := b.ListIssues()
@@ -196,10 +196,10 @@ func TestOrphanSprintDetected(t *testing.T) {
 func TestDeadOptionDetected(t *testing.T) {
 	t.Parallel()
 	cfg := mustLoadConfig(t)
-	b := gitbugiotest.New(t)
+	b := storetest.New(t)
 	// cat has options bug/feature/chore; only "bug" gets used, so
 	// "feature" and "chore" should be reported dead.
-	id := gitbugiotest.NewIssue(t, b, "only cat:bug used")
+	id := storetest.NewIssue(t, b, "only cat:bug used")
 	labelIssue(t, b, id, "status:ready", "prio:p1", "est:1", "cat:bug")
 
 	issues, err := b.ListIssues()
@@ -231,10 +231,10 @@ func TestDeadOptionDetected(t *testing.T) {
 func TestDeadOptionSeesClosedIssues(t *testing.T) {
 	t.Parallel()
 	cfg := mustLoadConfig(t)
-	b := gitbugiotest.New(t)
-	id := gitbugiotest.NewIssue(t, b, "validated and closed")
+	b := storetest.New(t)
+	id := storetest.NewIssue(t, b, "validated and closed")
 	labelIssue(t, b, id, "status:validated", "prio:p1", "est:1", "cat:bug")
-	gitbugiotest.CloseIssue(t, b, id)
+	storetest.CloseIssue(t, b, id)
 
 	issues, err := b.ListIssues()
 	if err != nil {
@@ -251,10 +251,10 @@ func TestDeadOptionSeesClosedIssues(t *testing.T) {
 func TestKindChecks(t *testing.T) {
 	t.Parallel()
 	cfg := &config.Config{Branches: config.Branches{Kinds: map[string]string{"bug": "fix", "feat": "feat"}}}
-	open := func(id, title string, labels ...string) gitbugio.Issue {
-		return gitbugio.Issue{ID: id, Title: title, Status: "open", Labels: labels}
+	open := func(id, title string, labels ...string) store.Issue {
+		return store.Issue{ID: id, Title: title, Status: "open", Labels: labels}
 	}
-	issues := []gitbugio.Issue{
+	issues := []store.Issue{
 		open("a", "[BUG](Equipment) Wrong example", "bug"),  // agrees
 		open("b", "[Bug](Equipment) Wrong example", "feat"), // the title disagrees
 		open("c", "Export", "bug", "feat"),                  // two kinds

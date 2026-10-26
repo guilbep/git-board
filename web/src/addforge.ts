@@ -4,7 +4,7 @@
 // addforge.test.ts on it.
 import type { Credential } from './api/board';
 
-// ponytail: the three forges git-bug's sync supports (gitbugio.AddBridge
+// ponytail: the three forges git-bug's sync supports (store.AddBridge
 // refuses the others); GET /api/forges lists bridges, not forge kinds
 // (token: what docs/forges.md says it needs, in short)
 export const forges = [
@@ -51,7 +51,7 @@ export function matchingCredentials(creds: Credential[], target: string, url: st
   return creds.filter((c) => c.target === target && (!host || c.host === host));
 }
 
-const bridgeName = /^[A-Za-z0-9][A-Za-z0-9_-]*$/; // as gitbugio.AddBridge
+const bridgeName = /^[A-Za-z0-9][A-Za-z0-9_-]*$/; // as store.AddBridge
 
 // canGoOn says whether a step is filled enough for the next one
 export function canGoOn(step: number, d: ForgeDraft): boolean {
