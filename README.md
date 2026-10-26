@@ -300,7 +300,8 @@ sync. Every run recomputes the diff against the issue's current labels, so
 running it twice back-to-back is a no-op the second time.
 
 ```bash
-# one-time: remember which GitHub Project to pull from
+# one-time: remember which GitHub Project to pull from (or, in the web UI,
+# Settings › Sync, the Project's line: its number, or its address)
 git-board bridge configure --owner EPFL-ENAC --project 40
 
 # preview only — prints the labels that would be added/removed, and a

@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -53,8 +54,8 @@ func (s *apiServer) handleSettings(w http.ResponseWriter, r *http.Request) {
 
 var errNoBridge = errors.New("no forge has that name")
 
-// editForges changes .git-board.toml's forges, the rest of the file
-// untouched, and serves the result at once. beginWrite held.
+// editForges changes .git-board.toml's forges, or its Project, the rest of
+// the file untouched, and serves the result at once. beginWrite held.
 func (s *apiServer) editForges(edit func(cfg *config.Config, text string) (string, error)) error {
 	text, _, _, err := s.readConfigFile()
 	if err != nil {
@@ -308,6 +309,55 @@ func (s *apiServer) handleRemoveBridge(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{})
+}
+
+// githubLogin is GitHub's rule for a user's or an organization's name:
+// letters, digits and single hyphens inside, 39 at most.
+var githubLogin = regexp.MustCompile(`^[A-Za-z0-9](-?[A-Za-z0-9])*$`)
+
+// handleGithubProject sets the GitHub Project, as `git board bridge
+// configure` does; DELETE removes it. write = true stays for the same
+// Project alone: another one is read until the file says otherwise. The
+// last check was another Project's: it goes.
+func (s *apiServer) handleGithubProject(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Owner  string `json:"owner"`
+		Number int    `json:"number"`
+	}
+	if r.Method == http.MethodPut {
+		if !decode(w, r, &req) {
+			return
+		}
+		if len(req.Owner) > 39 || !githubLogin.MatchString(req.Owner) {
+			writeError(w, http.StatusBadRequest, fmt.Errorf("owner %q isn't a GitHub user or organization", req.Owner))
+			return
+		}
+		if req.Number <= 0 {
+			writeError(w, http.StatusBadRequest, fmt.Errorf("number %d: a Project's number is 1 or more", req.Number))
+			return
+		}
+	}
+	done, ok := s.beginWrite(w)
+	if !ok {
+		return
+	}
+	defer done()
+	err := s.editForges(func(cfg *config.Config, text string) (string, error) {
+		if req.Owner == "" {
+			return config.WithoutGithubProject(text), nil
+		}
+		gp := cfg.GithubProject
+		same := strings.EqualFold(gp.Owner, req.Owner) && gp.Number == req.Number
+		return config.WithGithubProject(text, config.GithubProject{Owner: req.Owner, Number: req.Number, Write: gp.Write && same}), nil
+	})
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	s.syncMu.Lock()
+	defer s.syncMu.Unlock()
+	s.last = nil
+	writeJSON(w, http.StatusOK, s.status())
 }
 
 // plainBridgeError says in words what a forge answered a forge's check,

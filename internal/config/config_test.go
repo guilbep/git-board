@@ -178,6 +178,21 @@ func TestSetGithubProjectCreatesNewFile(t *testing.T) {
 	}
 }
 
+// The next table's comments are its own: a change or a removal of the
+// table above keeps them.
+func TestWithAndWithoutGithubProjectKeepTheComments(t *testing.T) {
+	t.Parallel()
+	src := "# mine\n[github-project]\nowner = \"old\"\nnumber = 1\nwrite = true\n\n# the people\n[roles]\nlead = \"me\"\n"
+	text := WithGithubProject(src, GithubProject{Owner: "EPFL-ENAC", Number: 40, Write: true})
+	want := "# mine\n[github-project]\nowner = \"EPFL-ENAC\"\nnumber = 40\nwrite = true\n\n# the people\n[roles]\nlead = \"me\"\n"
+	if text != want {
+		t.Errorf("changed:\n%s\nwant:\n%s", text, want)
+	}
+	if text = WithoutGithubProject(text); text != "# mine\n\n# the people\n[roles]\nlead = \"me\"\n" {
+		t.Errorf("removed:\n%q", text)
+	}
+}
+
 func TestSprintWindowsComputesEndFromNextStartOrLength(t *testing.T) {
 	cfg := mustLoad(t)
 

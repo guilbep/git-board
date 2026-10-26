@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { aheadWords, checkWords, doneWords, faviconDot, pendingWords, runWords, stepLine, stepWords, waitWords, waiting } from './ways.ts';
+import { aheadWords, checkWords, doneWords, faviconDot, pendingWords, readProject, runWords, stepLine, stepWords, waitWords, waiting } from './ways.ts';
 
 const dir = (o: Partial<Record<'issues' | 'changed' | 'comments' | 'edits' | 'changes', number>> = {}) => ({ issues: 0, changed: 0, comments: 0, edits: 0, changes: 0, ...o });
 const tally = (to = dir(), from = dir()) => ({ to, from, linked: 0, stays_local: 0, conflicts: 0, assignable: 0, warnings: 0, errors: 0, held: 0, lines: [] });
@@ -31,7 +31,7 @@ test('stepLine says a step of the whole sync and how it went', () => {
 });
 
 test('pendingWords leaves out what is zero', () => {
-  const r = { checked_at: '', conflicts: [], label_changes: 2, project_writes: 0, warnings: 0, unmatched: 0 };
+  const r = { checked_at: '', title: '', conflicts: [], label_changes: 2, project_writes: 0, warnings: 0, unmatched: 0 };
   assert.equal(pendingWords(r), 'update the labels of 2 issues');
   assert.equal(pendingWords({ ...r, label_changes: 0, project_writes: 1 }), 'write 1 Project field');
 });
@@ -96,4 +96,23 @@ test('doneWords is a real run’s one line, in its mode', () => {
   assert.equal(doneWords(job('sync')), 'pulled 2 issues, pushed 3');
   assert.equal(doneWords(job('all')), 'pulled 2 issues, pushed 3');
   assert.equal(doneWords(job('send', 1)), 'pushed 3 issues, 1 error');
+});
+
+test('readProject reads a number, as the forge owner\'s Project, or a Project\'s address', () => {
+  const p = (owner: string, number: number) => ({ owner, number });
+  assert.deepEqual(readProject('40', 'EPFL-ENAC'), p('EPFL-ENAC', 40));
+  assert.deepEqual(readProject(' 40 ', 'EPFL-ENAC'), p('EPFL-ENAC', 40));
+  assert.deepEqual(readProject('https://github.com/orgs/EPFL-ENAC/projects/40', ''), p('EPFL-ENAC', 40));
+  assert.deepEqual(readProject('https://github.com/orgs/EPFL-ENAC/projects/40/views/2', 'other'), p('EPFL-ENAC', 40));
+  assert.deepEqual(readProject('https://github.com/users/me/projects/3/', ''), p('me', 3));
+  assert.deepEqual(readProject('https://github.com/users/me/projects/3/views/1?filterQuery=is%3Aopen', ''), p('me', 3));
+
+  assert.equal(readProject('', 'EPFL-ENAC'), null);
+  assert.equal(readProject('40', ''), null); // no GitHub forge to take the owner from
+  for (const bad of ['0', '-1', '4.5', '40a', '1e3']) assert.equal(readProject(bad, 'EPFL-ENAC'), null, bad);
+  assert.equal(readProject('https://github.com/EPFL-ENAC/wiki', ''), null); // a repository
+  assert.equal(readProject('https://github.com/orgs/EPFL-ENAC/projects/', ''), null);
+  assert.equal(readProject('https://gitlab.com/orgs/EPFL-ENAC/projects/40', ''), null);
+  assert.equal(readProject('https://github.com/orgs/-bad/projects/40', ''), null); // not a GitHub name
+  assert.equal(readProject('https://github.com/orgs/a--b/projects/40', ''), null);
 });

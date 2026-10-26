@@ -65,9 +65,10 @@ func Decide(project, local, base string, hasBase bool) Decision {
 }
 
 // ProjectMeta is what writing to a Project takes: its id, and its fields by
-// name.
+// name; and its title, for Settings › Sync to show it answers.
 type ProjectMeta struct {
 	ID     string
+	Title  string
 	Fields map[string]ProjectField
 	// Assignable is who can be assigned, by repository ("owner/name"):
 	// GitHub silently drops anyone else. nil when not looked up.
@@ -555,10 +556,10 @@ func LoadBases(b interface {
 	return res, nil
 }
 
-// FetchProjectMeta reads a Project's id, and its fields' ids and options or
-// iterations, with `gh api graphql`.
+// FetchProjectMeta reads a Project's id and title, and its fields' ids and
+// options or iterations, with `gh api graphql`.
 func FetchProjectMeta(owner string, number int) (ProjectMeta, error) {
-	const query = `query($owner:String!,$n:Int!){repositoryOwner(login:$owner){... on ProjectV2Owner{projectV2(number:$n){id fields(first:100){nodes{
+	const query = `query($owner:String!,$n:Int!){repositoryOwner(login:$owner){... on ProjectV2Owner{projectV2(number:$n){id title fields(first:100){nodes{
 		... on ProjectV2FieldCommon{id name}
 		... on ProjectV2SingleSelectField{options{id name}}
 		... on ProjectV2IterationField{configuration{iterations{id title} completedIterations{id title}}}}}}}}}`
@@ -571,8 +572,8 @@ func FetchProjectMeta(owner string, number int) (ProjectMeta, error) {
 		Data struct {
 			RepositoryOwner struct {
 				ProjectV2 *struct {
-					ID     string
-					Fields struct {
+					ID, Title string
+					Fields    struct {
 						Nodes []struct {
 							ID, Name      string
 							Options       []named
@@ -590,7 +591,7 @@ func FetchProjectMeta(owner string, number int) (ProjectMeta, error) {
 	if p == nil {
 		return ProjectMeta{}, fmt.Errorf("no Project %d for %s", number, owner)
 	}
-	meta := ProjectMeta{ID: p.ID, Fields: map[string]ProjectField{}}
+	meta := ProjectMeta{ID: p.ID, Title: p.Title, Fields: map[string]ProjectField{}}
 	for _, f := range p.Fields.Nodes {
 		field := ProjectField{ID: f.ID, Options: map[string]string{}}
 		for _, o := range f.Options {

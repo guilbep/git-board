@@ -1,4 +1,5 @@
-// Settings › Sync's words: what each place would move, in counts.
+// Settings › Sync's words: what each place would move, in counts; and the
+// Project line's field, read.
 import type { Ahead, BridgeTally, ForgeJob, ForgeStatus, JobStep, Remote, SyncReport, SyncStatus, SyncStep } from './api/board';
 import { forgeLabel } from './issuesync.ts';
 
@@ -124,4 +125,19 @@ export function waitWords(w: Waiting): string {
 // the tab's dot: yours to send first, then theirs to get
 export function faviconDot(w: Waiting): 'send' | 'get' | null {
   return w.send ? 'send' : w.get ? 'get' : null;
+}
+
+// a GitHub user's or organization's name, as the server checks it
+const login = /^[A-Za-z0-9](-?[A-Za-z0-9])*$/;
+
+// readProject reads the Project line's field: a number, a Project of the
+// GitHub forge's owner, or a Project's address, its owner and number read
+// from it (https://github.com/orgs/EPFL-ENAC/projects/40/views/1). null:
+// neither, or no forge owner for a number.
+export function readProject(input: string, forgeOwner: string): { owner: string; number: number } | null {
+  const s = input.trim();
+  const url = /^https:\/\/github\.com\/(?:orgs|users)\/([^/]+)\/projects\/(\d+)(?:\/views\/[^/?#]+)?\/?(?:[?#].*)?$/.exec(s);
+  const [owner, digits] = url ? [url[1] ?? '', url[2] ?? ''] : /^\d+$/.test(s) ? [forgeOwner, s] : ['', ''];
+  const number = Number(digits);
+  return owner.length <= 39 && login.test(owner) && Number.isSafeInteger(number) && number > 0 ? { owner, number } : null;
 }

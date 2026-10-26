@@ -360,12 +360,27 @@ func SetGithubProject(path, owner string, number int) error {
 	if err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("reading %s: %w", path, err)
 	}
-	block := fmt.Sprintf("[github-project]\nowner = %q\nnumber = %d\n", owner, number)
-	updated := upsertTable(string(data), "[github-project]", block)
+	updated := WithGithubProject(string(data), GithubProject{Owner: owner, Number: number})
 	if err := os.WriteFile(path, []byte(updated), 0o644); err != nil {
 		return fmt.Errorf("writing %s: %w", path, err)
 	}
 	return nil
+}
+
+// WithGithubProject is content with its [github-project] table replaced,
+// or appended: what Settings › Sync's Project line writes. write = true
+// stays when gp has it. Pure, as WithRelease.
+func WithGithubProject(content string, gp GithubProject) string {
+	block := fmt.Sprintf("[github-project]\nowner = %q\nnumber = %d\n", gp.Owner, gp.Number)
+	if gp.Write {
+		block += "write = true\n"
+	}
+	return upsertTable(content, "[github-project]", block)
+}
+
+// WithoutGithubProject is content without its [github-project] table.
+func WithoutGithubProject(content string) string {
+	return withoutTable(content, "[github-project]")
 }
 
 // WithRelease is content with its [release] table replaced, or appended,
@@ -421,8 +436,8 @@ func WithChecks(content string, checks map[string]Suite) string {
 }
 
 // upsertTable replaces the named top-level table (header through the line
-// before the next "[" header, or EOF) if present, else appends it — a
-// blank line ahead of it if the file is non-empty.
+// before the next "[" header and its comments, or EOF) if present, else
+// appends it — a blank line ahead of it if the file is non-empty.
 func upsertTable(content, header, block string) string {
 	lines := strings.Split(content, "\n")
 	start := -1
@@ -437,6 +452,15 @@ func upsertTable(content, header, block string) string {
 		if strings.HasPrefix(strings.TrimSpace(line), "[") {
 			end = i
 			break
+		}
+	}
+	if end < len(lines) {
+		// the comments above the next header are its own: they stay
+		for end > start+1 && (strings.TrimSpace(lines[end-1]) == "" || strings.HasPrefix(strings.TrimSpace(lines[end-1]), "#")) {
+			end--
+		}
+		for strings.TrimSpace(lines[end]) == "" {
+			end++
 		}
 	}
 
