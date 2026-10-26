@@ -73,8 +73,9 @@ func TestForgeSyncFetchesWhoCanBeAssigned(t *testing.T) {
 	if len(fields["status"].People) != 0 {
 		t.Errorf("status %+v: people only on person fields", fields["status"])
 	}
-	if saved, err := loadAssignable(s.b.Storage()); err != nil || len(saved["gl"]) != 2 {
-		t.Errorf("kept %v (%v): want gl's two", saved, err)
+	glf, _ := s.config().Forge("gl")
+	if saved, err := loadAssignable(s.b.Storage()); err != nil || len(saved[assignKey(glf)]) != 2 {
+		t.Errorf("kept %v (%v): want gl's two, by its project", saved, err)
 	}
 }
 

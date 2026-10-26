@@ -1,5 +1,5 @@
 // Package gitlab is the forge adapter for one GitLab project, over GitLab's
-// REST API v4. docs/spec/guide/forges.md says what it does.
+// REST API v4. docs/guide/forges.md says what it does.
 package gitlab
 
 import (

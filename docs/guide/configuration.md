@@ -591,7 +591,7 @@ After the switch, a bare number (`3075`, `fix/3075-…`) and `CO2-3075` are the 
 
 ## Release
 
-`[release]` is how the project's code reaches its environments: the ordered `environments`, the `checks` a merge must pass, what to build (`images`, `chart`) and the config repos holding each environment's overlay (`[[release.deploy]]`). Without `environments` or `binaries`, the project has no releases. See [the release design](../prd/release.md).
+`[release]` is how the project's code reaches its environments: the ordered `environments`, the `checks` a merge must pass, what to build (`images`, `chart`) and the config repos holding each environment's overlay (`[[release.deploy]]`). Without `environments` or `binaries`, the project has no releases. See [the release design](https://github.com/guilbep/git-board/blob/main/docs/prd/release.md).
 
 A Go program with no deploy targets lists `binaries` instead: the main packages to build per platform and publish as archives on the forge's release. The Releases page writes these for you: **Enable binary release** infers them from the repo.
 

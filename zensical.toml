@@ -8,7 +8,11 @@ docs_dir = "docs"
 site_dir = "site"
 # docs/embed.go embeds the guide in the binary: not a page, and a copy in
 # site/ would be a Go package of the module
-exclude_docs = "*.go"
+exclude_docs = """
+*.go
+prd/
+implementation-plan.md
+"""
 nav = [
   { "Overview" = "index.md" },
   { "Guide" = [

@@ -136,7 +136,7 @@ func TestAddAForgeKeepsTheFoundOnes(t *testing.T) {
 	s.githubAPI = github.URL
 
 	code, msg := callError(t, "POST", ts.URL+"/api/bridges", map[string]string{"target": "github", "url": "https://github.com/o/r", "token": "tok"})
-	if code != http.StatusBadRequest || !strings.Contains(msg, "the git remotes name github.com o/r already: it is the forge github") {
+	if code != http.StatusBadRequest || !strings.Contains(msg, "the git remotes name github.com O/R already: it is the forge github") {
 		t.Errorf("a project a remote names: %d %q", code, msg)
 	}
 	gl := fakeGitLab(t)

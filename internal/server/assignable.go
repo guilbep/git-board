@@ -95,7 +95,7 @@ func (s *apiServer) fetchAssignable(job *forgeJob) {
 	kept := false
 	for i, br := range bridges {
 		if errs[i] == nil {
-			saved[br.Name], kept = logins[i], true
+			saved[assignKey(br)], kept = logins[i], true
 		}
 	}
 	if kept {
@@ -120,8 +120,8 @@ func (s *apiServer) fetchAssignable(job *forgeJob) {
 	s.events.publish(event{Kind: "sync"})
 }
 
-// people are who a person field offers: the git-bug identities and who
-// the configured bridges' forges said can be assigned, once each, sorted.
+// people are who a person field offers: git-board's people and who the
+// forges said can be assigned, once each, sorted.
 func (s *apiServer) people() []string {
 	var all []string
 	if logins, err := s.b.Logins(); err == nil {
@@ -129,10 +129,16 @@ func (s *apiServer) people() []string {
 	}
 	saved, _ := loadAssignable(s.b.Storage())
 	for _, f := range s.forges() {
-		all = append(all, saved[f.Name]...)
+		all = append(all, saved[assignKey(f)]...)
 	}
 	slices.SortFunc(all, func(a, b string) int { return cmp.Compare(strings.ToLower(a), strings.ToLower(b)) })
 	return slices.CompactFunc(all, strings.EqualFold)
+}
+
+// assignKey keys a forge's saved list by its project, not its name: a
+// name found in the remotes may change as remotes come and go.
+func assignKey(f config.Forge) string {
+	return strings.ToLower(f.Host + "/" + f.Project)
 }
 
 func loadAssignable(fs store.Storage) (map[string][]string, error) {

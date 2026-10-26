@@ -280,7 +280,9 @@ func (s *apiServer) checkForge(ctx context.Context, f config.Forge, token string
 	if err := get(projectPath, &p); err != nil {
 		return "", "", err
 	}
-	project = f.Project
+	// as the forge spells it: links are keyed on it, and a discovered
+	// forge of the same project reads the same (store.ResolveForges)
+	project = cmp.Or(p.FullName, f.Project)
 	if f.Kind == "gitlab" {
 		project = strconv.FormatInt(p.ID, 10)
 	}

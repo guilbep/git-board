@@ -9,7 +9,7 @@ Your issues travel with git, like your code. Forges and the GitHub Project are m
 3. **The GitHub Project**, with `[github-project]`: its fields (status, priority, sprint) as `ns:value` labels here, and back when `write = true`. Its conflicts are on the Conflicts page.
 4. **git push** to `origin`, which numbers the issues origin now has.
 
-A step that fails stops the steps after it, and the sync says which. A forge that can't be read is told, and the others go on. Without an `origin`, the git steps are skipped.
+A failed pull stops the steps after it. A forge or the Project that fails is told, and the push still runs: what the forge step linked must reach origin, or another clone creates it again. A forge that can't be read is left out of the run, told, and the others go on. Without an `origin`, the git steps are skipped.
 
 **Check** runs the same steps and writes nothing: a fetch from origin and a compare, the forges' dry run, the Project's check. **Sync** needs a clean check of the last 15 minutes, and asks first, with the check's counts. On one issue, in its panel: Send now and Refresh.
 
@@ -51,7 +51,7 @@ Adding writes a `[forges.<name>]` table, and syncs nothing: the first sync is yo
 
 With sync on, the forge takes part in the sync's forge step: each forge is read first, then every change is sent to each, so an issue, comment or change made on one forge reaches the others in one run. Line comments, replies and reviews (Changes tab) stay in git-board: they never go to a forge.
 
-The check runs the forge sync on a copy of the repository, and answers the forges' writes without making them: what it counts is what the run then does. A real run needs a check of the last 15 minutes. The Work page's Send all sends alone, after a check.
+The check runs the forge sync on a copy of the repository, and answers the forges' writes without making them: it first merges what the pull brings in, so what it counts is what the run then does. A real run needs a check of the last 15 minutes, and syncs only the forges that check read. The Work page's Send all sends alone, after a check.
 
 Each run, the check too, also asks each forge who can be assigned on its project, and says how many it found. The assignee boxes (every person field) then offer them, with the people git-board knows. A forge that doesn't answer is a warning: the boxes keep its last list.
 

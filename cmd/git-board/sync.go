@@ -25,8 +25,9 @@ func newSyncCmd() *cobra.Command {
 git pull from the remote, the forge sync of every forge whose sync is on,
 the GitHub Project's fields when [github-project] is set (written to the
 Project with write = true alone), then a git push to the remote, which
-numbers the issues origin has. A step that fails stops the steps after it,
-and says which; a forge that can't be read is told, and the others go on.
+numbers the issues origin has. A failed pull stops the steps after it; a
+failed forge or Project step is told, and the push still runs; a forge
+that can't be read is left out, told, and the others go on.
 Without the remote, the git steps are skipped.
 
 The forges are those of .git-board.toml, or with no [forges.<name>]
