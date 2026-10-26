@@ -54,6 +54,7 @@ func Run(t *testing.T, newForge NewForge) {
 		{"TheGuard", theGuard},
 		{"ConfidentialIssues", confidentialIssues},
 		{"ARefusalWarnsOnce", refusalWarnsOnce},
+		{"ALabelRefusedAlone", labelRefusedAlone},
 		{"AssigneesAreTheForges", assigneesAreTheForges},
 	} {
 		t.Run(sc.name, func(t *testing.T) {
@@ -666,6 +667,29 @@ func refusalWarnsOnce(e *env) {
 	e.sync(syncer.Options{}, a)
 	if tries.Load() != 2 || len(e.warnings) != 2 {
 		e.t.Fatalf("a later change: tried %d times, %d warnings; want 2", tries.Load(), len(e.warnings))
+	}
+}
+
+// One refused label of a labels write is recorded refused, alone: the
+// write's other add and its remove land, and the refused one is never sent
+// again, nor pulled away.
+func labelRefusedAlone(e *env) {
+	f, a, fi, _ := mirrored(e)
+	f.RefuseLabels("bad")
+	e.do(fi.ID, issue.ChangeLabels(e.me, []string{"ui", "bad"}, []string{"bug"}))
+	e.sync(syncer.Options{}, a)
+	if got := onForge(e.t, f, "F").Labels; !slices.Equal(got, []string{"ui"}) {
+		e.t.Fatalf("forge labels = %v, want ui", got)
+	}
+	if len(e.warnings) != 1 || !strings.Contains(e.warnings[0], `"+bad"`) {
+		e.t.Fatalf("warnings = %q", e.warnings)
+	}
+	if got := e.load(fi.ID).Labels; !slices.Contains(got, "bad") || !slices.Contains(got, "ui") || slices.Contains(got, "bug") {
+		e.t.Fatalf("git-board labels = %v", got)
+	}
+	e.stable(map[*fake.Forge]forge.Forge{f: a})
+	if len(e.warnings) != 1 {
+		e.t.Fatalf("warned again: %q", e.warnings)
 	}
 }
 

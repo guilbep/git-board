@@ -427,11 +427,25 @@ func (r *run) planLabels(pl *plan, p *project, is *issue.Issue, fi forge.Issue, 
 		return add, remove
 	}
 	pl.rest = append(pl.rest, func(x *pushing) error {
-		next := slices.DeleteFunc(slices.Concat(base, pAdd), func(l string) bool { return slices.Contains(pRemove, l) })
-		slices.Sort(next)
 		return r.send(x, last.Author, "labels", values, func(fw forge.Forge) ([]oplog.Op, error) {
-			return []oplog.Op{seenOp(is.Author, time.Now().Unix(), is.ID, "labels", strings.Join(slices.Compact(next), "\n"))},
-				fw.ChangeLabels(r.ctx, fi.ID, pAdd, pRemove)
+			err := fw.ChangeLabels(r.ctx, fi.ID, pAdd, pRemove)
+			var some *forge.Refused
+			if err != nil && !errors.As(err, &some) {
+				return nil, err
+			}
+			add, rm := pAdd, pRemove
+			if some != nil { // the others landed: seen as such, the refused named as values
+				out := func(l string) bool { return slices.Contains(some.Values, l) }
+				add, rm = slices.DeleteFunc(slices.Clone(pAdd), out), slices.DeleteFunc(slices.Clone(pRemove), out)
+				var refused []string
+				for _, l := range some.Values {
+					refused = append(refused, sign(slices.Contains(pAdd, l))+l)
+				}
+				err = &forge.Refused{Values: refused, Why: some.Why}
+			}
+			next := slices.DeleteFunc(slices.Concat(base, add), func(l string) bool { return slices.Contains(rm, l) })
+			slices.Sort(next)
+			return []oplog.Op{seenOp(is.Author, time.Now().Unix(), is.ID, "labels", strings.Join(slices.Compact(next), "\n"))}, err
 		})
 	})
 	return add, remove
@@ -589,7 +603,7 @@ func (r *run) planAssignees(pl *plan, p *project, is *issue.Issue, fi forge.Issu
 }
 
 // send makes one write as person, then records it. A refusal is recorded
-// and warned once; an issue gone or confidential stops the issue's push.
+// and warned once, of the values a *forge.Refused names or else of all; an issue gone or confidential stops the issue's push.
 // "Not found" counts as gone only when the posting account gets it too,
 // and as refused only when that account reads the issue.
 func (r *run) send(x *pushing, person, field string, values []string, write func(forge.Forge) ([]oplog.Op, error)) error {
@@ -598,10 +612,22 @@ func (r *run) send(x *pushing, person, field string, values []string, write func
 	}
 	fw, _ := r.writer(x.p, person)
 	record, err := write(fw)
+	var some *forge.Refused
 	switch {
 	case err == nil:
 		x.wrote = true
 		return x.p.st.write(r.ctx, r.s, x.p.key, record)
+	case errors.As(err, &some): // those values alone; the others landed
+		x.wrote = true
+		if err := x.p.st.write(r.ctx, r.s, x.p.key, record); err != nil {
+			return err
+		}
+		for _, v := range some.Values {
+			if err := r.refuse(x.p, x.is, field, v, errors.New(some.Why)); err != nil {
+				return err
+			}
+		}
+		return nil
 	case errors.Is(err, forge.ErrConfidential):
 		x.gone = true
 		return nil

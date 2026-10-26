@@ -320,15 +320,17 @@ func (c *counted) Issue(ctx context.Context, id string) (forge.Issue, error) {
 	return c.f.Issue(ctx, id)
 }
 
-// write makes a write, unless dry, then tells it, with op as its Line.
+// write makes a write, unless dry, then tells it, with op as its Line: a
+// write some values of were refused landed the others.
 func (c *counted) write(what, op, issueID string, do func() error) error {
+	var err error
 	if !c.dry {
-		if err := do(); err != nil {
-			return err
-		}
+		err = do()
 	}
-	c.see(SyncEvent{Forge: c.name, Way: "push", What: what, Issue: issueID, Line: op})
-	return nil
+	if err == nil || errors.As(err, new(*forge.Refused)) {
+		c.see(SyncEvent{Forge: c.name, Way: "push", What: what, Issue: issueID, Line: op})
+	}
+	return err
 }
 
 // madeUp is a dry run's id for what it would create: never one of a

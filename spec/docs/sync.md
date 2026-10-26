@@ -396,7 +396,10 @@ value and why.
 - **Refused** means for good: the forge answers that the account may not
   do it, or leaves the value out, as GitHub does with an assignee who has
   no access.
-- **The rest goes through.** Other values of the same issue are still sent.
+- **The rest goes through.** Other values of the same issue are still sent,
+  and so are the other labels of the same write: an adapter names the
+  labels it refused (`forge.Refused`), sends the others, and sync records
+  only those refused.
 - **Last seen keeps the forge's value.** The refused value is still
   git-board's change.
 - **Once per value.** Sync records the refusal, warns once, and doesn't

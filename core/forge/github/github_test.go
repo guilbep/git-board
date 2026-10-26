@@ -191,6 +191,25 @@ func TestRetries(t *testing.T) {
 	}
 }
 
+// A label GitHub leaves out is refused alone: the other adds and the
+// removes still go.
+func TestLabelRefusedAlone(t *testing.T) {
+	t.Parallel()
+	ctx := t.Context()
+	f := fake.New("example.com/p")
+	is := f.Add(forge.Issue{Author: ann, Title: "T", Labels: []string{"old"}})
+	a := newHub(t, f).adapter(t)
+	f.RefuseLabels("bad")
+	err := a.ChangeLabels(ctx, is.ID, []string{"bad", "ui"}, []string{"old"})
+	var some *forge.Refused
+	if !errors.As(err, &some) || !slices.Equal(some.Values, []string{"bad"}) || !errors.Is(err, forge.ErrRefused) {
+		t.Fatalf("err = %v, want bad refused", err)
+	}
+	if got, _ := f.Get(is.Number); !slices.Equal(got.Labels, []string{"ui"}) {
+		t.Fatalf("labels = %v, want ui", got.Labels)
+	}
+}
+
 // TestPace spaces writes a second apart, and keeps under 500 an hour.
 func TestPace(t *testing.T) {
 	t.Parallel()

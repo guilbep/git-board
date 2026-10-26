@@ -110,7 +110,8 @@ query for the times REST doesn't give.
   the posting account's; a person's is no token.
 - **Labels are made as needed,** in GitHub's grey, before they are added.
   One write adds the labels; each removal is a write of its own. An added
-  label GitHub leaves out, as it does without push access, is refused.
+  label GitHub leaves out, as it does without push access, is refused
+  alone: the other adds and the removals still go.
   Removing a label the issue no longer has is no error.
 - **Assignees go as logins,** the whole set in one write. The adapter
   reads back what GitHub kept: GitHub leaves out a user without access to
@@ -170,7 +171,8 @@ query for the times REST doesn't give.
   system note, so sync reads the assignees off the issue.
 - **Labels go by name,** in `add_labels` and `remove_labels`. GitLab
   splits them at commas, and its labels hold none, so a label with a comma
-  is refused.
+  is refused, alone: the others are sent. So is an added label GitLab's
+  answer leaves out.
 - **Base URLs compare without their trailing slash.** `https://gitlab.epfl.ch`
   and `https://gitlab.epfl.ch/` are the same server, for projects and for
   tokens.

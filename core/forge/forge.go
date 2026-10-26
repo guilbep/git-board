@@ -5,6 +5,7 @@ package forge
 import (
 	"context"
 	"errors"
+	"fmt"
 )
 
 var (
@@ -18,6 +19,19 @@ var (
 	// ErrNoToken: the account has no token on this forge.
 	ErrNoToken = errors.New("forge: no token")
 )
+
+// Refused is a write the forge refused some values of, for good, Values
+// as the write named them: every other value landed. It is ErrRefused.
+type Refused struct {
+	Values []string
+	Why    string
+}
+
+func (e *Refused) Error() string {
+	return fmt.Sprintf("forge: refused %q: %s", e.Values, e.Why)
+}
+
+func (e *Refused) Is(target error) bool { return target == ErrRefused }
 
 // Visibility is who may read a project.
 type Visibility string
@@ -88,7 +102,8 @@ type Forge interface {
 	SetTitle(ctx context.Context, issueID, title string) error
 	SetBody(ctx context.Context, issueID, body string) error
 	SetStatus(ctx context.Context, issueID, status string) error
-	// ChangeLabels adds and removes labels, leaving the others.
+	// ChangeLabels adds and removes labels, leaving the others. A *Refused
+	// names the labels it refused; the others landed.
 	ChangeLabels(ctx context.Context, issueID string, add, remove []string) error
 	// SetAssignees sets the whole set, and returns what the forge kept.
 	SetAssignees(ctx context.Context, issueID string, users []Account) ([]Account, error)

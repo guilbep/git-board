@@ -335,7 +335,8 @@ func (h *hub) addLabels(w http.ResponseWriter, r *http.Request, ff forge.Forge) 
 			return
 		}
 	}
-	if err := ff.ChangeLabels(r.Context(), is.ID, in.Labels, nil); err != nil {
+	// a label the fake refuses is left out of the answer, as GitHub does
+	if err := ff.ChangeLabels(r.Context(), is.ID, in.Labels, nil); err != nil && !errors.As(err, new(*forge.Refused)) {
 		fail(w, err)
 		return
 	}

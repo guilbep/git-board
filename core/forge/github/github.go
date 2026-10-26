@@ -281,6 +281,7 @@ func (f *Forge) ChangeLabels(ctx context.Context, issueID string, add, remove []
 		return err
 	}
 	path := f.s.repo + "/issues/" + n + "/labels"
+	var refused []string // left out by GitHub: the others still go
 	if len(add) > 0 {
 		for _, l := range add {
 			if err := f.label(ctx, l); err != nil {
@@ -293,15 +294,20 @@ func (f *Forge) ChangeLabels(ctx context.Context, issueID string, add, remove []
 		}
 		for _, l := range add {
 			if !slices.ContainsFunc(got, func(g label) bool { return strings.EqualFold(g.Name, l) }) {
-				return fmt.Errorf("github: #%s: label %q left out: %w", n, l, forge.ErrRefused)
+				refused = append(refused, l)
 			}
 		}
 	}
 	for _, l := range remove {
 		// not found: the issue doesn't have it, already removed
-		if err := f.call(ctx, http.MethodDelete, path+"/"+url.PathEscape(l), nil, nil); err != nil && !errors.Is(err, forge.ErrNotFound) {
+		if err := f.call(ctx, http.MethodDelete, path+"/"+url.PathEscape(l), nil, nil); errors.Is(err, forge.ErrRefused) {
+			refused = append(refused, l)
+		} else if err != nil && !errors.Is(err, forge.ErrNotFound) {
 			return err
 		}
+	}
+	if len(refused) > 0 {
+		return &forge.Refused{Values: refused, Why: "github: #" + n + " left them out"}
 	}
 	return nil
 }

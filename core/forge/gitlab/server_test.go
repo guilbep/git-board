@@ -283,7 +283,10 @@ func (s *server) update(w http.ResponseWriter, r *http.Request, view forge.Forge
 	case in.StateEvent != "":
 		err = view.SetStatus(ctx, id, map[string]string{"close": "closed", "reopen": "open"}[in.StateEvent])
 	case in.AddLabels != "" || in.RemoveLabels != "":
-		err = view.ChangeLabels(ctx, id, split(in.AddLabels), split(in.RemoveLabels))
+		// a label the fake refuses is left out of the answer
+		if err = view.ChangeLabels(ctx, id, split(in.AddLabels), split(in.RemoveLabels)); errors.As(err, new(*forge.Refused)) {
+			err = nil
+		}
 	case in.AssigneeIDs != nil:
 		var users []forge.Account
 		for _, n := range in.AssigneeIDs {

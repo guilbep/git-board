@@ -44,6 +44,7 @@ type project struct {
 	tokens        map[string]bool
 	next          int
 	maxAssignees  int
+	refuseLabels  []string
 	before, after func(Write) error
 	writes        []Write
 }
@@ -111,6 +112,14 @@ func (f *Forge) LimitAssignees(n int) {
 	f.p.mu.Lock()
 	defer f.p.mu.Unlock()
 	f.p.maxAssignees = n
+}
+
+// RefuseLabels refuses these labels, added or removed, for good: a labels
+// write sends the others, and names these in a *forge.Refused.
+func (f *Forge) RefuseLabels(labels ...string) {
+	f.p.mu.Lock()
+	defer f.p.mu.Unlock()
+	f.p.refuseLabels = labels
 }
 
 // Before is called before each write, without the forge's lock: an error
@@ -324,15 +333,25 @@ func (f *Forge) SetStatus(_ context.Context, issueID, status string) error {
 
 func (f *Forge) ChangeLabels(_ context.Context, issueID string, add, remove []string) error {
 	args := slices.Concat(add, []string{"--"}, remove)
-	return f.edit("change-labels", issueID, args, func(e *entry, _ *project, _ int64) error {
+	var refused []string
+	err := f.edit("change-labels", issueID, args, func(e *entry, p *project, _ int64) error {
+		for _, l := range slices.Concat(add, remove) {
+			if slices.Contains(p.refuseLabels, l) {
+				refused = append(refused, l)
+			}
+		}
 		for _, l := range add {
-			if !slices.Contains(e.Labels, l) {
+			if !slices.Contains(e.Labels, l) && !slices.Contains(refused, l) {
 				e.Labels = append(e.Labels, l)
 			}
 		}
-		e.Labels = slices.DeleteFunc(e.Labels, func(l string) bool { return slices.Contains(remove, l) })
+		e.Labels = slices.DeleteFunc(e.Labels, func(l string) bool { return slices.Contains(remove, l) && !slices.Contains(refused, l) })
 		return nil
 	})
+	if err == nil && len(refused) > 0 {
+		err = &forge.Refused{Values: refused, Why: "the fake refuses them"}
+	}
+	return err
 }
 
 func (f *Forge) SetAssignees(_ context.Context, issueID string, users []forge.Account) ([]forge.Account, error) {

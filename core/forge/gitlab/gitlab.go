@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -522,20 +523,38 @@ func (f *Forge) SetStatus(ctx context.Context, issueID, status string) error {
 // its labels can't hold one, so a label with a comma is refused.
 func (f *Forge) ChangeLabels(ctx context.Context, issueID string, add, remove []string) error {
 	fields := map[string]any{}
-	for name, l := range map[string][]string{"add_labels": add, "remove_labels": remove} {
-		for _, x := range l {
-			if strings.Contains(x, ",") {
-				return fmt.Errorf("gitlab: label %q: %w", x, forge.ErrRefused)
+	var refused []string // a comma would split the label: refused, the others go
+	keep := func(ls []string) (out []string) {
+		for _, l := range ls {
+			if strings.Contains(l, ",") {
+				refused = append(refused, l)
+			} else {
+				out = append(out, l)
 			}
 		}
+		return out
+	}
+	add, remove = keep(add), keep(remove)
+	for name, l := range map[string][]string{"add_labels": add, "remove_labels": remove} {
 		if len(l) > 0 {
 			fields[name] = strings.Join(l, ",")
 		}
 	}
-	if len(fields) == 0 {
-		return nil
+	if len(fields) > 0 {
+		var g glIssue
+		if err := f.update(ctx, issueID, fields, &g); err != nil {
+			return err
+		}
+		for _, l := range add {
+			if !slices.ContainsFunc(g.Labels, func(x string) bool { return strings.EqualFold(x, l) }) {
+				refused = append(refused, l) // left out
+			}
+		}
 	}
-	return f.update(ctx, issueID, fields, nil)
+	if len(refused) > 0 {
+		return &forge.Refused{Values: refused, Why: "gitlab: a label with a comma, or one left out"}
+	}
+	return nil
 }
 
 // SetAssignees sends the whole set, and returns the assignees GitLab kept:

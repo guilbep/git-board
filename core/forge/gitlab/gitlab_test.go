@@ -224,8 +224,16 @@ func TestErrors(t *testing.T) {
 	if err := a.SetTitle(ctx, is.ID, "x"); !errors.Is(err, forge.ErrRefused) {
 		t.Errorf("a refused write: %v", err)
 	}
-	if err := a.ChangeLabels(ctx, is.ID, []string{"a,b"}, nil); !errors.Is(err, forge.ErrRefused) {
-		t.Errorf("a label with a comma: %v", err)
+	f.Before(nil)
+	// a label with a comma, or one left out, is refused alone: the rest go
+	f.RefuseLabels("bad")
+	err := a.ChangeLabels(ctx, is.ID, []string{"a,b", "bad", "ui"}, []string{"c,d"})
+	var some *forge.Refused
+	if !errors.As(err, &some) || !slices.Equal(some.Values, []string{"a,b", "c,d", "bad"}) || !errors.Is(err, forge.ErrRefused) {
+		t.Errorf("refused labels: %v", err)
+	}
+	if got, _ := f.Get(is.Number); !slices.Equal(got.Labels, []string{"ui"}) {
+		t.Errorf("labels = %v, want ui", got.Labels)
 	}
 	f.Delete(is.Number)
 	if err := a.SetStatus(ctx, is.ID, "closed"); !errors.Is(err, forge.ErrNotFound) {
