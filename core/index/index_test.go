@@ -254,3 +254,49 @@ func TestIndexPathIsEscaped(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// Two refreshes race: the first reads the heads and loads the issue, the
+// second then writes a newer head, and the first's older one is skipped.
+func TestIndexRacingRefreshes(t *testing.T) {
+	t.Parallel()
+	dir, s := newRepo(t)
+	first, second := openIndex(t, s), openIndex(t, openStore(t, dir))
+	is := mkIssue(t, s, issue.NewCreate("ann", "v0", ""))
+	if err := first.Refresh(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	stored, err := first.heads(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	k := key{"issue", is.ID}
+	head := func() string {
+		h, err := s.Ref(oplog.RefName("issue", is.ID))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return h.String()
+	}
+	if _, err := issue.Do(t.Context(), s, is.ID, issue.SetTitle("ann", "v1")); err != nil {
+		t.Fatal(err)
+	}
+	older := loaded{key: k, head: head()}
+	if older.issue, err = issue.Load(s, is.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := issue.Do(t.Context(), s, is.ID, issue.SetTitle("ann", "v2")); err != nil {
+		t.Fatal(err)
+	}
+	if err := second.Refresh(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if err := first.write(t.Context(), stored, nil, []loaded{older}); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := first.heads(t.Context()); got[k] != head() {
+		t.Fatalf("stored head %s, want the newer %s", got[k], head())
+	}
+	if got, err := first.Issues(t.Context(), Query{}); err != nil || len(got) != 1 || got[0].Title != "v2" {
+		t.Fatalf("issues %+v, %v", got, err)
+	}
+}

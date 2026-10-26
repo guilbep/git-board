@@ -42,6 +42,10 @@ A refresh brings the index up to the refs:
 2. An entity that is new, or whose head differs from the stored one, is
    loaded again, and its rows replaced.
 3. An entity whose ref is gone is dropped.
+4. The writes are one transaction, which skips an entity whose stored head
+   changed since step 2 read it: another refresh wrote it meanwhile, maybe
+   a newer head than this one loaded. A head left behind is loaded again by
+   the next refresh.
 
 Every query refreshes first. So it answers from the refs as they are,
 whoever moved them: this process, another one, or a fetch.

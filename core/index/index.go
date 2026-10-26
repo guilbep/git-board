@@ -193,7 +193,7 @@ func (ix *Index) Refresh(ctx context.Context) error {
 	if len(gone)+len(changed) == 0 {
 		return nil
 	}
-	if err := ix.write(ctx, gone, changed); err != nil {
+	if err := ix.write(ctx, stored, gone, changed); err != nil {
 		return fmt.Errorf("index: refresh: %w", err)
 	}
 	return nil
@@ -219,11 +219,12 @@ func (ix *Index) heads(ctx context.Context) (map[key]string, error) {
 }
 
 // write drops the gone entities and replaces the changed ones' rows, in one
-// transaction. Another refresh may have written some already: each entity's
-// rows are deleted before they are written, so the last write wins, and a
-// head it left behind is loaded again by the next refresh.
-func (ix *Index) write(ctx context.Context, gone []key, changed []loaded) error {
-	tx, err := ix.db.BeginTx(ctx, nil)
+// transaction. Another refresh may have written some since stored, the
+// heads this one read: those are skipped, as that one's head may be newer
+// than what this one loaded. A head left behind is loaded again by the
+// next refresh.
+func (ix *Index) write(ctx context.Context, stored map[key]string, gone []key, changed []loaded) error {
+	tx, err := ix.db.BeginTx(ctx, nil) // immediate (_txlock): the check and the write are one
 	if err != nil {
 		return err
 	}
@@ -231,6 +232,14 @@ func (ix *Index) write(ctx context.Context, gone []key, changed []loaded) error 
 	exec := func(query string, args ...any) error {
 		_, err := tx.ExecContext(ctx, query, args...)
 		return err
+	}
+	moved := func(k key) (bool, error) {
+		var head string
+		err := tx.QueryRowContext(ctx, "SELECT head FROM entities WHERE kind = ? AND id = ?", k.kind, k.id).Scan(&head)
+		if errors.Is(err, sql.ErrNoRows) {
+			err = nil
+		}
+		return head != stored[k], err
 	}
 	drop := func(k key) error {
 		var stmts []string
@@ -251,11 +260,21 @@ func (ix *Index) write(ctx context.Context, gone []key, changed []loaded) error 
 		return exec("DELETE FROM entities WHERE kind = ? AND id = ?", k.kind, k.id)
 	}
 	for _, k := range gone {
+		if m, err := moved(k); err != nil {
+			return err
+		} else if m {
+			continue
+		}
 		if err := drop(k); err != nil {
 			return err
 		}
 	}
 	for _, l := range changed {
+		if m, err := moved(l.key); err != nil {
+			return err
+		} else if m {
+			continue
+		}
 		if err := drop(l.key); err != nil {
 			return err
 		}
