@@ -16,6 +16,10 @@
     <p v-if="!n && !error" class="nb-muted">Loading…</p>
 
     <template v-if="n?.on">
+      <p v-if="n.ahead" class="epfl-alert epfl-alert-warning" role="alert">
+        <b>This clone's numbers aren't on origin yet.</b> The switch keyed them again here; until they're pushed, a Sync and numbering refuse.
+        Push them first: <code>git push origin refs/board/seq</code>. If git refuses it, run <code>git board switch --apply</code> again.
+      </p>
       <div class="nb-tiles">
         <div class="gb-value gb-value-agreed"><span class="gb-value-label">Prefix</span><span class="gb-value-val">{{ n.prefix }}</span></div>
         <div class="gb-value gb-value-agreed"><span class="gb-value-label">Start</span><span class="gb-value-val">{{ n.start }}</span></div>

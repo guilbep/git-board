@@ -425,7 +425,13 @@ func TestFetchKeepsNumbersOriginHasnt(t *testing.T) {
 	if c2, _, _ := mine.Counter(); c2.ByID[nu] != 3052 {
 		t.Fatalf("the re-key is gone: %v", c2.ByID)
 	}
+	if ahead, err := mine.NumbersAhead("origin"); !ahead || err != nil {
+		t.Fatalf("NumbersAhead = %v, %v; want true", ahead, err)
+	}
 	storetest.Git(t, mine.Store().CommonDir(), "push", "-q", "origin", "refs/board/seq")
+	if ahead, err := mine.NumbersAhead("origin"); ahead || err != nil {
+		t.Fatalf("NumbersAhead after the push = %v, %v; want false", ahead, err)
+	}
 	if err := mine.FetchNumbers("origin"); err != nil {
 		t.Fatal(err)
 	}

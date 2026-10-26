@@ -437,6 +437,7 @@ export interface Numbers {
   origin: Remote | null; // where the counter goes
   name: string; // the repository's, for a prefix
   github?: { issues: string; highest: number; error?: string } | undefined; // asked with github: GitHub's answer
+  ahead: boolean; // this clone's counter holds numbers origin hasn't: git push origin refs/board/seq first
   done: number; // a write: how many issues it numbered
   error?: string; // started, but the issues not numbered yet
 }

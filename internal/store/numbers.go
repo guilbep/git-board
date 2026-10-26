@@ -210,6 +210,29 @@ func (b *Backend) numbersOf(remote string) (gitstore.Hash, error) {
 	return theirs, nil
 }
 
+// NumbersAhead says this clone's counter holds numbers the remote hasn't
+// (ErrNumbersAhead's case): its push waits, and syncing and numbering
+// refuse. It asks the remote only when its copy here says so.
+func (b *Backend) NumbersAhead(remote string) (bool, error) {
+	ours, err := b.s.Ref(seqRef)
+	if err != nil || ours == gitstore.ZeroHash {
+		return false, err
+	}
+	if has, err := b.hasRemote(remote); err != nil || !has {
+		return false, err
+	}
+	if theirs, err := b.s.Ref(seqCopy(remote)); err == nil && theirs != gitstore.ZeroHash {
+		if ok, err := b.behind(ours, theirs); err == nil && ok {
+			return false, nil
+		}
+	}
+	_, err = b.numbersOf(remote)
+	if errors.Is(err, ErrNumbersAhead) {
+		return true, nil
+	}
+	return false, err
+}
+
 // behind says whether ours is theirs or one of its ancestors: taking
 // theirs then drops nothing.
 func (b *Backend) behind(ours, theirs gitstore.Hash) (bool, error) {

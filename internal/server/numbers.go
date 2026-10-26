@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"errors"
+	"log"
 	"net/http"
 	"path"
 	"slices"
@@ -36,8 +37,11 @@ type numbersResponse struct {
 	Origin *store.Remote  `json:"origin"` // where the counter goes; null without an origin remote
 	Name   string         `json:"name"`   // the repository's, for a prefix: its GitHub forge's, else origin's
 	GitHub *githubNumbers `json:"github,omitempty"`
-	Done   int            `json:"done"`            // a write: how many issues it numbered
-	Error  string         `json:"error,omitempty"` // started, but the issues not numbered yet
+	// Ahead: this clone's counter holds numbers origin hasn't, as switch
+	// --apply leaves it: git push origin refs/board/seq first
+	Ahead bool   `json:"ahead"`
+	Done  int    `json:"done"`            // a write: how many issues it numbered
+	Error string `json:"error,omitempty"` // started, but the issues not numbered yet
 }
 
 // githubNumbers is what GitHub says, asked with ?github=1 before the
@@ -60,6 +64,9 @@ func (s *apiServer) numbers() (numbersResponse, error) {
 	if on {
 		res.On, res.Prefix, res.Start, res.Next = true, c.Prefix, c.Start, c.Next()
 		res.Numbering.GitHub = nil // the preview's, before the switch
+		if res.Ahead, err = s.b.NumbersAhead(numbersRemote); err != nil {
+			log.Printf("the numbers on %s: %v", numbersRemote, err) // offline: as far as this clone knows
+		}
 	}
 	remotes, err := s.b.Remotes()
 	if err != nil {
