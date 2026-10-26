@@ -22,14 +22,17 @@
 ## Workflow
 
 ```bash
+make         # make help: every target, in a line each
 make build   # go build ./...
 make test    # go test ./...
 make vet     # go vet ./...
 make fmt     # gofmt -l . (lists files needing formatting; run gofmt -w to fix)
 make web-check # the web app's typecheck and tests
 make ci      # the web checks and build, then everything above: what CI runs
-make install # go install the git-board binary
+make install # the web app built, then go install the git-board binary
 make install-latest # the latest release's binary instead, web app inside
+make spec    # the spec site, in spec/site/: a broken link fails it
+make spec-serve # the spec site on localhost, rebuilt on save
 ```
 
 Run `make ci` once a change is done, before it's pushed or landed: CI runs

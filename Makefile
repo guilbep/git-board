@@ -1,45 +1,50 @@
-.PHONY: build test lint fmt vet licences ci install install-latest web-dev web-check web-build dist spec clean
+.PHONY: help build test lint fmt vet licences ci install install-latest web-dev web-check web-build dist spec spec-serve clean
 
-build:
+# The public targets, each with its ## line: a bare make prints them.
+help: ## List the make targets
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-16s\033[0m %s\n", $$1, $$2}'
+
+build: ## Build every package
 	go build ./...
 
-test:
+test: ## Run the Go tests
 	go test ./...
 
-vet:
+vet: ## Run go vet
 	go vet ./...
 
-fmt:
+fmt: ## List the files gofmt would change
 	gofmt -l .
 
-lint: vet fmt
+lint: vet fmt ## vet, then fmt
 
 # Every module the build and its tests use, with its licence from the
 # module cache; fails on any GPL, LGPL or AGPL. Then the web app's runtime
 # packages, from web/package-lock.json; fails on any licence outside the
 # permissive ones (go test runs both).
-licences:
+licences: ## Check every licence, Go modules and the web app's packages
 	go test -count=1 -run TestLicences -v ./cmd/git-board/
 
 # Everything CI runs: .github/workflows/ci.yml only sets up Go and Node, then
 # runs this. The web checks and build come first, in prerequisite order,
 # because the binary embeds web/dist.
-ci: web-check web-build build vet test
+ci: web-check web-build build vet test ## Everything CI runs
 	@test -z "$$(gofmt -l .)" || (echo "gofmt needs to be run on:"; gofmt -l .; exit 1)
 
-install:
+# The web app first: the binary embeds whatever web/dist holds.
+install: web-build ## Build the web app, then install git-board in GOBIN
 	go install ./cmd/git-board
 
 # The latest GitHub release's git-board for this machine, web app inside,
 # checked against its checksums.txt and put where go install puts it.
-install-latest:
+install-latest: ## Install the latest GitHub release's git-board, checksums checked
 	@set -e; d=$$(mktemp -d); trap 'rm -rf "$$d"' EXIT; \
 	gh release download -D "$$d" -p "*_$$(go env GOOS)_$$(go env GOARCH).tar.gz" -p checksums.txt; \
 	(cd "$$d" && shasum -a 256 -c checksums.txt --ignore-missing && tar -xzf git-board_*.tar.gz); \
 	bin=$$(go env GOBIN); bin=$${bin:-$$(go env GOPATH)/bin}; \
 	rm -f "$$bin/git-board" && cp "$$d"/git-board_*/git-board "$$bin/" && "$$bin/git-board" --version
 
-web-dev:
+web-dev: ## Run the web app's dev server
 	cd web && npm run dev
 
 # The web app's dependencies, installed only when the lockfile is newer than
@@ -48,16 +53,16 @@ web/node_modules: web/package-lock.json
 	cd web && npm ci
 	@touch web/node_modules
 
-web-check: web/node_modules
+web-check: web/node_modules ## Typecheck and test the web app
 	cd web && npm run typecheck && npm test
 
-web-build: web/node_modules
+web-build: web/node_modules ## Build the web app into web/dist
 	cd web && npm run build
 
 # A release's archives, the web app inside, in dist/ with checksums.txt:
 # run on a clean checkout of the tag, so the commands report that version.
 PLATFORMS := linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64
-dist: web-build
+dist: web-build ## Build the release archives and checksums.txt into dist/
 	rm -rf dist && mkdir dist
 	@set -e; v=$$(git describe --tags --always --dirty); for p in $(PLATFORMS); do \
 		os=$${p%/*}; arch=$${p#*/}; d=git-board_$${v}_$${os}_$${arch}; \
@@ -69,8 +74,11 @@ dist: web-build
 
 # The core's spec, as a site in spec/site/. Strict: a broken link or a
 # missing page fails the build.
-spec:
+spec: ## Build the spec site into spec/site/ (strict: a broken link fails)
 	uvx --from zensical==0.0.72 zensical build --strict -f spec/zensical.toml
 
-clean:
+spec-serve: ## Preview the spec site on localhost, rebuilt on save
+	uvx --from zensical==0.0.72 zensical serve -f spec/zensical.toml
+
+clean: ## Remove the built sites
 	rm -rf site/ spec/site/
