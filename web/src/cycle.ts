@@ -2,6 +2,8 @@
 // step's buttons, the criteria written into the description.
 import type { Cycle, CycleStages, IssueEvent } from './api/board.ts';
 import { approvers, reviewLine } from './review.ts';
+import { versions } from './sections.ts';
+import { verdicts } from './spec.ts';
 import { on } from './when.ts';
 
 // turn is whose move it is: "waits for erin to set the risk class"
@@ -113,11 +115,15 @@ export function steps(c: Cycle, riskBy?: string, events: IssueEvent[] = []): Ste
     }
     return undefined;
   };
+  // step 1 with a spec role: the version that waits for its verdict (F2)
+  const created = events.find((x) => x.kind === 'created');
+  const v = created ? versions(created).length : 0;
+  const spec = c.waits?.role === 'spec' && created ? `v${v} · ${verdicts(events).findLast((x) => x.v === v)?.verdict === 'request-changes' ? 'changes requested' : 'awaits the verdict'}` : '';
   return STEPS.slice(1).map((name, i) => {
     const n = i + 1;
     const g = n === c.step ? c.gate : gate(n, risk, rule);
     // step 6 under review counts approvals and open threads; merged, its note
-    if (n === c.step && !c.done) return { n, name, state: 'current', line: (c.note || (n === 6 ? reviewLine(c, events) : turn(c))) + (n === 3 ? draft : ''), gate: g };
+    if (n === c.step && !c.done) return { n, name, state: 'current', line: (c.note || spec || (n === 6 ? reviewLine(c, events) : turn(c))) + (n === 3 ? draft : ''), gate: g };
     if (c.skipped?.includes(n)) return { n, name, state: 'skipped', line: `skipped, ${n === 3 ? 'low risk' : (e.kind ?? 'no tests')}`, gate: g };
     if (c.done || n < c.step) return { n, name, state: 'done', line: evidence(n) || g, gate: g };
     return { n, name, state: 'locked', line: LOCKS[n] ?? '', gate: g };

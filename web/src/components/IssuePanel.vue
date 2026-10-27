@@ -143,6 +143,17 @@
                 @flow="reveal"
               />
             </CommentCard>
+            <VerdictBar
+              v-if="cycle && (cycle.step === 1 || spec.on || spec.before)"
+              :state="spec"
+              :reviewer="reviewer(cycle.evidence.people?.spec)"
+              :may="mayGive(cycle.evidence.people, cycle.evidence.author, me?.me?.login)"
+              :moves="cycle.step === 1 && !!cycle.stages.ready"
+              :criteria="!!cycle.evidence.criteria?.length"
+              :busy="giving"
+              :give="give"
+            />
+            <p v-if="verdictError" class="gb-save-error" role="alert"><GbIcon name="error" small /> {{ verdictError }}</p>
             <p v-if="folded"><button type="button" class="gb-linkbtn" aria-expanded="true" @click="reading.description = false">Fold the description</button></p>
           </template>
         </template>
@@ -229,6 +240,9 @@ import IssueFlow from '@/components/IssueFlow.vue';
 import IssueSections from '@/components/IssueSections.vue';
 import IssueSide from '@/components/IssueSide.vue';
 import IssueStep from '@/components/IssueStep.vue';
+import VerdictBar from '@/components/VerdictBar.vue';
+import { mayGive, specOf } from '@/spec';
+import { specVerdict } from '@/api/board';
 
 const props = defineProps<{
   id: string;
@@ -276,6 +290,31 @@ const created = computed(() => thread.value?.events.find((e) => e.kind === 'crea
 // the description's versions, the one shown (the current one on each
 // issue and each new version: not remembered) and Changes since
 const bodyVersions = computed(() => (created.value ? versions(created.value) : []));
+// the description's verdict (VerdictBar): on the current version, from the thread
+const spec = computed(() => specOf(thread.value?.events ?? [], bodyVersions.value));
+// "Person B, PM" for the spec role's holder; anyone but the author without one
+function reviewer(login: string | undefined): string {
+  if (!login) return `Anyone but ${created.value?.author.name ?? 'the author'}`;
+  const name = me.value?.identities?.find((p) => p.login?.toLowerCase() === login.toLowerCase())?.name ?? login;
+  const role = roleOf(props.fields, login);
+  return role ? `${name}, ${role.toUpperCase()}` : name;
+}
+const giving = ref(false);
+const verdictError = ref('');
+async function give(verdict: 'approve' | 'request-changes', body: string) {
+  giving.value = true;
+  verdictError.value = '';
+  try {
+    await specVerdict(props.id, verdict, `body@v${spec.value.v}`, body);
+    await fieldsChanged(); // the status may have moved: the board's row too
+    return true;
+  } catch (e) {
+    verdictError.value = e instanceof Error ? e.message : String(e);
+    return false;
+  } finally {
+    giving.value = false;
+  }
+}
 const shownV = ref(0);
 const changesSince = ref(false);
 watch([() => thread.value?.id, () => bodyVersions.value.length], () => ((shownV.value = bodyVersions.value.length), (changesSince.value = false)), { immediate: true });
