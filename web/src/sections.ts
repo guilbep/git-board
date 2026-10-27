@@ -69,6 +69,19 @@ export function anchorLabel(a: Anchor, sections: Section[]): string {
 const unticked = (s: string) => s.replace(/^(\s*[-*+]\s+)\[[ xX]\]/gm, '$1[ ]');
 export const isTick = (before: string, after: string): boolean => before !== after && unticked(before) === unticked(after);
 
+// ticksOf lists the description's ticks: the edits that only flip
+// checkboxes, with the criteria (1-based) they ticked and unticked
+export function ticksOf(created: IssueEvent): { at: string; author: Person; ticked: number[]; unticked: number[] }[] {
+  const boxes = (s: string) => [...s.matchAll(/^\s*[-*+]\s+\[([ xX])\]/gm)].map((m) => m[1] !== ' ');
+  const h = created.history ?? [];
+  return h.slice(1).flatMap((x, i) => {
+    if (!isTick(h[i]!.body, x.body)) return [];
+    const [b, a] = [boxes(h[i]!.body), boxes(x.body)];
+    const flip = (on: boolean) => a.flatMap((v, k) => (v === on && b[k] !== on ? [k + 1] : []));
+    return [{ at: x.at, author: x.author, ticked: flip(true), unticked: flip(false) }];
+  });
+}
+
 // criteriaOf counts a text's checkbox lines, outside fences, and the ticked ones
 export function criteriaOf(body: string): { n: number; ticked: number } {
   let fence = false;

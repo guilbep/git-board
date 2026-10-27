@@ -101,6 +101,7 @@
           <div class="gb-tabs gb-issue-tabs" role="tablist" aria-label="Issue">
             <button type="button" class="gb-tab" role="tab" :aria-selected="reading.tab === 'conversation'" @click="reading.tab = 'conversation'">Conversation</button>
             <button type="button" class="gb-tab" role="tab" :aria-selected="reading.tab === 'history'" @click="reading.tab = 'history'">History <span class="gb-modes-count">{{ changeCount }}</span></button>
+            <button v-if="created" type="button" class="gb-tab" role="tab" :aria-selected="reading.tab === 'changes'" @click="reading.tab = 'changes'">Changes <span class="gb-modes-count">{{ bodyVersions.length + ticksOf(created).length }}</span></button>
           </div>
         </template>
         <template #intent="{ folded, cycle }">
@@ -162,6 +163,7 @@
         </template>
         <template #flow="{ cycle, failed, send }">
           <HistoryView v-if="reading.tab === 'history'" :thread="thread" :fields="fields" :cycle="cycle" />
+          <IssueChanges v-else-if="reading.tab === 'changes'" :thread="thread" />
           <template v-else>
             <IssueFlow
               ref="flow"
@@ -235,8 +237,9 @@ import { me, on, when } from '@/me';
 import CycleReview from '@/components/CycleReview.vue';
 import CommentCard from '@/components/CommentCard.vue';
 import HistoryView from '@/components/HistoryView.vue';
+import IssueChanges from '@/components/IssueChanges.vue';
 import { carries, loadReading, roleOf, rootOf, saveReading } from '@/flow';
-import { version, versions } from '@/sections';
+import { ticksOf, version, versions } from '@/sections';
 import { steps } from '@/replay';
 import GbIcon from '@/components/GbIcon.vue';
 import IssueComposer from '@/components/IssueComposer.vue';

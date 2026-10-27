@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { IssueEvent } from './api/board.ts';
 import {
-  anchorLabel, anchorOf, anchorString, applySuggestion, changeOf, criteriaOf, diffMarkdown, isTick, lineAt, mdSections, sectionsOf, slugs, stateOf, suggestionOf, version, versions,
+  anchorLabel, anchorOf, anchorString, applySuggestion, changeOf, criteriaOf, ticksOf, diffMarkdown, isTick, lineAt, mdSections, sectionsOf, slugs, stateOf, suggestionOf, version, versions,
 } from './sections.ts';
 
 // 6a's description, as Markdown and as the server renders it
@@ -194,4 +194,10 @@ test('criteria are the checkbox lines', () => {
   assert.deepEqual(criteriaOf(md), { n: 4, ticked: 0 });
   assert.deepEqual(criteriaOf(md.replace('- [ ] Pre-release', '- [x] Pre-release')), { n: 4, ticked: 1 });
   assert.deepEqual(criteriaOf(md + '\n\n```\n- [ ] not one\n```'), { n: 4, ticked: 0 });
+});
+
+test('ticks list what they flip', () => {
+  const h = (...bodies: string[]) => ({ kind: 'created', history: bodies.map((body, i) => ({ author: { id: 'a', name: 'A' }, at: `${i}`, body })) }) as IssueEvent;
+  const t = ticksOf(h('- [ ] a\n- [ ] b', '- [x] a\n- [ ] b', '- [x] a\n- [x] b', '- [ ] a\n- [x] b', '- [ ] a\n- [x] c'));
+  assert.deepEqual(t.map((x) => [x.at, x.ticked, x.unticked]), [['1', [1], []], ['2', [2], []], ['3', [], [1]]]);
 });
