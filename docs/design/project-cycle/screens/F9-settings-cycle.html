@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Settings, Cycle: the steps are declared</title>
+</head>
+<body>
+<style>
+:root{--red:#FF0000;--red-dark:#B51F1F;--canard:#007480;--canard-bg:#EAF4F5;--add:#E6F4EA;--add-fg:#1E5B2E;--g200:#D5D5D5;--g300:#C1C1C1;--g600:#707070;--black:#212121;--subtle:#F5F5F5;--hair:rgba(33,33,33,.1);--mono:ui-monospace,SFMono-Regular,Menlo,monospace;--sans:"Suisse Int'l",Arial,"Helvetica Neue",Helvetica,sans-serif}
+body{margin:0;font-family:var(--sans);color:var(--black);background:#fff}
+a{color:var(--black)}a:hover{color:var(--red)}
+.eyebrow{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--canard);font-weight:700}
+.label{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--g600)}
+.muted{color:var(--g600)}
+.mono{font-family:var(--mono)}
+.btn{font:inherit;font-size:14px;line-height:1.2;padding:9px 16px;border:1px solid var(--black);background:#fff;color:var(--black);border-radius:2px;cursor:pointer;white-space:nowrap}
+.btn.primary{background:var(--red-dark);border-color:var(--red-dark);color:#fff;font-weight:700}
+.btn.sm{font-size:13px;padding:6px 10px}
+.btn.icon{padding:5px 7px;line-height:0}
+.btn:focus-visible,.tab:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--red-dark);outline-offset:2px}
+.nav a{text-decoration:none;font-weight:700;font-size:15px}
+.tab{font:inherit;font-size:14px;background:none;border:0;border-bottom:2px solid transparent;padding:12px 0;color:var(--g600);cursor:pointer}
+.tab.on{color:var(--black);font-weight:700;border-bottom-color:var(--red)}
+.role{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:1px 6px;border:1px solid var(--g300);color:var(--g600);vertical-align:middle;line-height:1.4}
+select,input[type=text]{font:inherit;font-size:13px;padding:5px 8px;border:1px solid var(--g300);background:#fff;color:var(--black);border-radius:2px;min-width:0}
+.row{display:grid;grid-template-columns:24px 34px 128px minmax(0,1fr) 120px 118px minmax(0,1.1fr) 34px;gap:10px;align-items:center;padding:9px 0;border-top:1px solid var(--hair);font-size:13px}
+.row.hd{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--g600);border-top:0;padding-bottom:4px}
+.row .n{font-family:var(--mono);font-size:12px;color:var(--g600)}
+.row .gate{color:var(--g600);font-size:12.5px;line-height:1.35}
+.grip{color:var(--g300);cursor:grab;line-height:0}
+.kinds{display:grid;grid-template-columns:110px minmax(0,1fr) 70px;gap:10px;align-items:center;padding:9px 0;border-top:1px solid var(--hair);font-size:13px}
+.kinds.hd{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--g600);border-top:0;padding-bottom:4px}
+.pill{display:inline-block;font-family:var(--mono);font-size:12px;padding:2px 7px;border:1px solid var(--g300);border-radius:2px;margin:2px 4px 2px 0;background:#fff}
+.pill.off{color:var(--g600);border-style:dashed;text-decoration:line-through}
+.code{font-family:var(--mono);font-size:12px;line-height:1.6;background:var(--subtle);padding:14px 16px;white-space:pre-wrap;margin:0;overflow-wrap:anywhere}
+.code .k{color:var(--red-dark)}
+.code .c{color:var(--g600)}
+.mini{display:grid;gap:3px}
+.mini span{display:block;height:22px;border-top:3px solid var(--canard);font-size:10px;line-height:1.1;padding-top:3px;color:var(--g600);overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.mini span.off{border-top-color:var(--g200)}
+</style>
+<div style="width: 100%; min-height: 1440px; display: flex; flex-direction: column; background: #fff">
+  <header style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px 28px; padding: 14px 32px; border-bottom: 1px solid var(--hair)">
+    <div style="display: flex; align-items: baseline; gap: 12px"><span style="font-weight: 700; font-size: 26px; color: var(--red); letter-spacing: .02em">EPFL</span><span style="font-size: 19px">git-board</span></div>
+    <nav class="nav" aria-label="Views" style="display: flex; flex-wrap: wrap; gap: 20px; flex: 1 1 auto">
+      <a href="#">board</a><a href="#">drafts</a><a href="#">mine</a><span class="muted" aria-hidden="true">|</span><a href="#">Work</a><a href="#">Insights</a><a href="#">Releases</a><a href="#">Inbox</a>
+    </nav>
+    <button class="btn sm">Send 1</button>
+  </header>
+
+  <div style="padding: 24px 40px 0; display: flex; flex-direction: column; gap: 10px; border-bottom: 1px solid var(--hair)">
+    <span class="eyebrow">co2-calculator · Settings</span>
+    <div role="tablist" aria-label="Settings" style="display: flex; flex-wrap: wrap; gap: 24px">
+      <button class="tab" role="tab" aria-selected="false">Overview</button>
+      <button class="tab" role="tab" aria-selected="false">Remotes 1</button>
+      <button class="tab" role="tab" aria-selected="false">Forges 2</button>
+      <button class="tab" role="tab" aria-selected="false">GitHub Project</button>
+      <button class="tab" role="tab" aria-selected="false">Labels</button>
+      <button class="tab on" role="tab" aria-selected="true">Cycle</button>
+      <button class="tab" role="tab" aria-selected="false">Project file</button>
+    </div>
+  </div>
+
+  <div style="display: flex; flex-wrap: wrap; flex: 1 1 auto">
+    <section aria-label="The steps" style="flex: 999 1 640px; min-width: 0; padding: 28px 40px 40px; display: flex; flex-direction: column; gap: 24px">
+      <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 12px">
+        <div style="display: flex; flex-direction: column; gap: 6px"><h1 style="margin: 0; font-size: 28px; line-height: 1.2">The cycle: the steps of this project</h1><span class="muted" style="font-size: 15px; max-width: 760px">Declared under <span class="mono">[cycle]</span> in <span class="mono">.git-board.toml</span>, read from the base branch. Every project starts with the default seven; take steps away, add a sign-off per validation status, give a kind of issue its own list. A step's gate comes with its kind.</span></div>
+        <div style="display: flex; gap: 8px"><button class="btn sm">Reset to the default seven</button><button class="btn sm primary">Write to .git-board.toml</button></div>
+      </div>
+
+      <div style="display: flex; flex-direction: column">
+        <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; padding-bottom: 10px"><span class="label">Steps · 9 · drag to order</span><span class="muted" style="font-size: 13px">A kind of issue skips steps it doesn't list; risk may skip Plan.</span></div>
+        <div class="row hd"><span></span><span>#</span><span>Kind</span><span>Name</span><span>Opens at</span><span>Role</span><span>Gate, done when</span><span></span></div>
+        <div class="row" style="border-top: 0"><span class="grip" aria-hidden="true"><svg width="12" height="16" viewBox="0 0 12 16" fill="currentColor"><circle cx="3" cy="3" r="1.5"/><circle cx="9" cy="3" r="1.5"/><circle cx="3" cy="8" r="1.5"/><circle cx="9" cy="8" r="1.5"/><circle cx="3" cy="13" r="1.5"/><circle cx="9" cy="13" r="1.5"/></svg></span><span class="n">01</span><select aria-label="Kind of step 1"><option>intent</option></select><input type="text" aria-label="Name of step 1" value="Intent"><select aria-label="Opens at, step 1"><option>backlog</option></select><select aria-label="Role, step 1"><option>po</option></select><span class="gate">Criteria under a heading; the PM approves the version. No issue, no agent.</span><button class="btn sm icon" aria-label="Remove step 1"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+        <div class="row"><span class="grip" aria-hidden="true"><svg width="12" height="16" viewBox="0 0 12 16" fill="currentColor"><circle cx="3" cy="3" r="1.5"/><circle cx="9" cy="3" r="1.5"/><circle cx="3" cy="8" r="1.5"/><circle cx="9" cy="8" r="1.5"/><circle cx="3" cy="13" r="1.5"/><circle cx="9" cy="13" r="1.5"/></svg></span><span class="n">02</span><select aria-label="Kind of step 2"><option>risk</option></select><input type="text" aria-label="Name of step 2" value="Risk"><select aria-label="Opens at, step 2"><option>ready</option></select><select aria-label="Role, step 2"><option>lead-dev</option></select><span class="gate">Low, normal or structural, written on the issue.</span><button class="btn sm icon" aria-label="Remove step 2"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+        <div class="row"><span class="grip" aria-hidden="true"><svg width="12" height="16" viewBox="0 0 12 16" fill="currentColor"><circle cx="3" cy="3" r="1.5"/><circle cx="9" cy="3" r="1.5"/><circle cx="3" cy="8" r="1.5"/><circle cx="9" cy="8" r="1.5"/><circle cx="3" cy="13" r="1.5"/><circle cx="9" cy="13" r="1.5"/></svg></span><span class="n">03</span><select aria-label="Kind of step 3"><option>plan</option></select><input type="text" aria-label="Name of step 3" value="Plan"><select aria-label="Opens at, step 3"><option>ready</option></select><select aria-label="Role, step 3"><option>plan</option></select><span class="gate">Approved by the plan role; structural: its own PR first. <b>Skipped at low risk.</b></span><button class="btn sm icon" aria-label="Remove step 3"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+        <div class="row"><span class="grip" aria-hidden="true"><svg width="12" height="16" viewBox="0 0 12 16" fill="currentColor"><circle cx="3" cy="3" r="1.5"/><circle cx="9" cy="3" r="1.5"/><circle cx="3" cy="8" r="1.5"/><circle cx="9" cy="8" r="1.5"/><circle cx="3" cy="13" r="1.5"/><circle cx="9" cy="13" r="1.5"/></svg></span><span class="n">04</span><select aria-label="Kind of step 4"><option>tests</option></select><input type="text" aria-label="Name of step 4" value="Tests"><select aria-label="Opens at, step 4"><option>in-progress</option></select><select aria-label="Role, step 4"><option>—</option></select><span class="gate">By kind: a bug ships a failing test, a feature names a test per criterion, a doc none.</span><button class="btn sm icon" aria-label="Remove step 4"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+        <div class="row"><span class="grip" aria-hidden="true"><svg width="12" height="16" viewBox="0 0 12 16" fill="currentColor"><circle cx="3" cy="3" r="1.5"/><circle cx="9" cy="3" r="1.5"/><circle cx="3" cy="8" r="1.5"/><circle cx="9" cy="8" r="1.5"/><circle cx="3" cy="13" r="1.5"/><circle cx="9" cy="13" r="1.5"/></svg></span><span class="n">05</span><select aria-label="Kind of step 5"><option>code</option></select><input type="text" aria-label="Name of step 5" value="Code"><select aria-label="Opens at, step 5"><option>in-progress</option></select><select aria-label="Role, step 5"><option>—</option></select><span class="gate">A person commits and opens the PR; the checks pass at its head.</span><button class="btn sm icon" aria-label="Remove step 5"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+        <div class="row"><span class="grip" aria-hidden="true"><svg width="12" height="16" viewBox="0 0 12 16" fill="currentColor"><circle cx="3" cy="3" r="1.5"/><circle cx="9" cy="3" r="1.5"/><circle cx="3" cy="8" r="1.5"/><circle cx="9" cy="8" r="1.5"/><circle cx="3" cy="13" r="1.5"/><circle cx="9" cy="13" r="1.5"/></svg></span><span class="n">06</span><select aria-label="Kind of step 6"><option>review</option></select><input type="text" aria-label="Name of step 6" value="Review"><select aria-label="Opens at, step 6"><option>in-review</option></select><select aria-label="Role, step 6"><option>reviewer</option></select><span class="gate">One approval; structural: a second human. The merge opens the next step.</span><button class="btn sm icon" aria-label="Remove step 6"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+        <div class="row" style="background: var(--canard-bg); margin: 0 -8px; padding: 9px 8px"><span class="grip" aria-hidden="true"><svg width="12" height="16" viewBox="0 0 12 16" fill="currentColor"><circle cx="3" cy="3" r="1.5"/><circle cx="9" cy="3" r="1.5"/><circle cx="3" cy="8" r="1.5"/><circle cx="9" cy="8" r="1.5"/><circle cx="3" cy="13" r="1.5"/><circle cx="9" cy="13" r="1.5"/></svg></span><span class="n">07</span><select aria-label="Kind of step 7"><option>signoff</option></select><input type="text" aria-label="Name of step 7" value="QA on staging"><select aria-label="Opens at, step 7"><option>qa</option></select><select aria-label="Role, step 7"><option>pm</option></select><span class="gate">The criteria ticked on staging; the role's person signs off. <b>Added from the validation status.</b></span><button class="btn sm icon" aria-label="Remove step 7"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+        <div class="row"><span class="grip" aria-hidden="true"><svg width="12" height="16" viewBox="0 0 12 16" fill="currentColor"><circle cx="3" cy="3" r="1.5"/><circle cx="9" cy="3" r="1.5"/><circle cx="3" cy="8" r="1.5"/><circle cx="9" cy="8" r="1.5"/><circle cx="3" cy="13" r="1.5"/><circle cx="9" cy="13" r="1.5"/></svg></span><span class="n">08</span><select aria-label="Kind of step 8"><option>signoff</option></select><input type="text" aria-label="Name of step 8" value="Tests métier"><select aria-label="Opens at, step 8"><option>tests-metier</option></select><select aria-label="Role, step 8"><option>metier</option></select><span class="gate">The role's person signs off, with a note.</span><button class="btn sm icon" aria-label="Remove step 8"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+        <div class="row"><span class="grip" aria-hidden="true"><svg width="12" height="16" viewBox="0 0 12 16" fill="currentColor"><circle cx="3" cy="3" r="1.5"/><circle cx="9" cy="3" r="1.5"/><circle cx="3" cy="8" r="1.5"/><circle cx="9" cy="8" r="1.5"/><circle cx="3" cy="13" r="1.5"/><circle cx="9" cy="13" r="1.5"/></svg></span><span class="n">09</span><select aria-label="Kind of step 9"><option>signoff</option></select><input type="text" aria-label="Name of step 9" value="Validated"><select aria-label="Opens at, step 9"><option>validated</option></select><select aria-label="Role, step 9"><option>lead-dev</option></select><span class="gate">The last sign-off closes the issue, and GitHub's with it.</span><button class="btn sm icon" aria-label="Remove step 9"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+        <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding-top: 12px; border-top: 1px solid var(--hair); font-size: 13px">
+          <label style="display: flex; align-items: center; gap: 8px">Add a step <select aria-label="Kind of the new step"><option>sign-off · a role's person says done</option><option>intent</option><option>risk</option><option>plan</option><option>tests</option><option>code</option><option>review</option></select></label>
+          <button class="btn sm">Add</button>
+          <span class="muted">Seven kinds, each with its workspace and its gate. A sign-off is the only kind you can have several times.</span>
+        </div>
+      </div>
+
+      <div style="display: flex; flex-direction: column">
+        <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; padding-bottom: 10px"><span class="label">By kind of issue · which steps</span><span class="muted" style="font-size: 13px">Unlisted kinds walk the whole list. A struck step is skipped for that kind.</span></div>
+        <div class="kinds hd"><span>Kind</span><span>Steps</span><span></span></div>
+        <div class="kinds" style="border-top: 0"><span><b>feat</b></span><span><span class="pill">intent</span><span class="pill">risk</span><span class="pill">plan</span><span class="pill">tests</span><span class="pill">code</span><span class="pill">review</span><span class="pill">qa</span><span class="pill">tests-metier</span><span class="pill">validated</span></span><button class="btn sm">Edit</button></div>
+        <div class="kinds"><span><b>bug</b></span><span><span class="pill">intent</span><span class="pill">risk</span><span class="pill off">plan</span><span class="pill">tests</span><span class="pill">code</span><span class="pill">review</span><span class="pill off">qa</span><span class="pill off">tests-metier</span><span class="pill">validated</span></span><button class="btn sm">Edit</button></div>
+        <div class="kinds"><span><b>doc</b></span><span><span class="pill off">intent</span><span class="pill off">risk</span><span class="pill off">plan</span><span class="pill off">tests</span><span class="pill">code</span><span class="pill">review</span><span class="pill off">qa</span><span class="pill off">tests-metier</span><span class="pill off">validated</span></span><button class="btn sm">Edit</button></div>
+        <div class="kinds"><span><b>chore</b></span><span><span class="pill off">intent</span><span class="pill off">risk</span><span class="pill off">plan</span><span class="pill off">tests</span><span class="pill">code</span><span class="pill">review</span><span class="pill off">qa</span><span class="pill off">tests-metier</span><span class="pill off">validated</span></span><button class="btn sm">Edit</button></div>
+      </div>
+
+      <div style="background: var(--subtle); padding: 12px 16px; font-size: 13px; color: var(--g600); line-height: 1.5">Written to the working tree's <span class="mono">.git-board.toml</span>, as Enable checks does; it counts for the gates once committed on the base branch. Issues in flight keep their step: the step comes from the status and the evidence, and a status that no step opens at shows "not in the cycle" under the card.</div>
+    </section>
+
+    <aside aria-label="The file and the rails" style="flex: 1 1 380px; min-width: 0; border-left: 1px solid var(--hair); padding: 28px 28px 32px; display: flex; flex-direction: column; gap: 18px">
+      <span class="label">What the page writes</span>
+<pre class="code"><span class="k">[cycle]</span>
+steps = ["intent", "risk", "plan", "tests",
+         "code", "review", "qa",
+         "tests-metier", "validated"]
+ready = "ready"
+in-progress = ["in-progress"]
+in-review = ["in-review"]
+
+<span class="k">[cycle.steps.qa]</span>
+kind = "signoff"
+name = "QA on staging"
+status = "qa"
+role = "pm"
+<span class="c"># tests-metier, validated: the same shape</span>
+
+<span class="k">[cycle.kinds.bug]</span>
+tests = "failing-test"
+steps = ["intent", "risk", "tests", "code",
+         "review", "validated"]
+
+<span class="k">[cycle.kinds.doc]</span>
+tests = "none"
+steps = ["code", "review"]
+
+<span class="c"># [cycle.signoffs] of today becomes
+# the signoff steps; bug = "failing-test"
+# becomes [cycle.kinds.bug] tests = …</span></pre>
+      <span class="label">The rails this gives</span>
+      <div style="display: flex; flex-direction: column; gap: 10px; font-size: 12px">
+        <div style="display: flex; flex-direction: column; gap: 4px"><span><b>feat</b> · 9 steps</span><div class="mini" style="grid-template-columns: repeat(9, minmax(0, 1fr))"><span>Intent</span><span>Risk</span><span>Plan</span><span>Tests</span><span>Code</span><span>Review</span><span>QA</span><span>Métier</span><span>Validated</span></div></div>
+        <div style="display: flex; flex-direction: column; gap: 4px"><span><b>bug</b> · 6 steps</span><div class="mini" style="grid-template-columns: repeat(6, minmax(0, 1fr))"><span>Intent</span><span>Risk</span><span>Tests</span><span>Code</span><span>Review</span><span>Validated</span></div></div>
+        <div style="display: flex; flex-direction: column; gap: 4px"><span><b>doc</b>, <b>chore</b> · 2 steps</span><div class="mini" style="grid-template-columns: repeat(2, minmax(0, 120px))"><span>Code</span><span>Review</span></div></div>
+      </div>
+      <span class="muted" style="font-size: 13px; line-height: 1.5">A comment carries <span class="mono">cycle:step = qa</span>, the step's id; the number on the rail is this list's. Renaming a step keeps its id.</span>
+    </aside>
+  </div>
+</div>
+</body>
+</html>

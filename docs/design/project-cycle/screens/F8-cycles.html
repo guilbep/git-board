@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Three cycles, one page: the steps are the project's own</title>
+</head>
+<body>
+<style>
+:root{--red:#FF0000;--red-dark:#B51F1F;--canard:#007480;--canard-bg:#EAF4F5;--add:#E6F4EA;--add-fg:#1E5B2E;--g200:#D5D5D5;--g300:#C1C1C1;--g600:#707070;--black:#212121;--subtle:#F5F5F5;--hair:rgba(33,33,33,.1);--mono:ui-monospace,SFMono-Regular,Menlo,monospace;--sans:"Suisse Int'l",Arial,"Helvetica Neue",Helvetica,sans-serif}
+body{margin:0;font-family:var(--sans);color:var(--black);background:#fff}
+a{color:var(--black)}a:hover{color:var(--red)}
+.eyebrow{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--canard);font-weight:700}
+.label{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--g600)}
+.muted{color:var(--g600)}
+.mono{font-family:var(--mono)}
+.role{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:1px 6px;border:1px solid var(--g300);color:var(--g600);vertical-align:middle;line-height:1.4}
+.decl{font-family:var(--mono);font-size:12.5px;line-height:1.6;background:var(--subtle);padding:10px 14px;white-space:pre-wrap;margin:0}
+.decl .k{color:var(--red-dark)}
+.decl .c{color:var(--g600)}
+.steps{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.steps a,.steps span.lk{display:flex;flex-direction:column;gap:3px;padding:9px 10px 10px;text-decoration:none;color:var(--black);border-top:4px solid var(--g200);min-height:62px;box-sizing:border-box}
+.steps .num{font-family:var(--mono);font-size:12px;color:var(--g600)}
+.steps .nm{font-size:14px;font-weight:700}
+.steps .ev{font-size:12px;line-height:1.3;color:var(--g600)}
+.steps a.done{border-top-color:var(--canard)}
+.steps a.cur{border-top-color:var(--black);background:var(--subtle)}
+.steps span.lk{color:var(--g600)}
+.steps span.lk .nm{font-weight:400;color:var(--g600);display:flex;align-items:center;gap:5px}
+.steps a:focus-visible{outline:2px solid var(--red-dark);outline-offset:2px}
+.ex{border:1px solid var(--hair);display:flex;flex-direction:column}
+.ex .hd{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:8px 16px;padding:14px 20px 10px}
+.ex .bd{padding:0 20px 18px;display:flex;flex-direction:column;gap:12px}
+.fold{border:1px solid var(--hair);display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:6px 16px;padding:10px 14px;font-size:13px}
+.segs{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;font-size:12px}
+.seg{font-family:var(--mono);color:var(--canard);border:1px solid var(--canard-bg);background:var(--canard-bg);padding:3px 8px;white-space:nowrap}
+.seg.cur{color:#fff;background:var(--black);border-color:var(--black)}
+.seg.lk{color:var(--g600);background:#fff;border:1px dashed var(--g300)}
+.fe{display:grid;grid-template-columns:36px minmax(0,1fr);gap:10px;font-size:13px;line-height:1.45;padding:7px 0;border-top:1px solid var(--hair)}
+.fe .s{font-family:var(--mono);font-size:12px;color:var(--canard);padding-top:1px}
+.why{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(300px,100%),1fr));gap:16px}
+.why div{border-top:3px solid var(--canard);padding-top:10px;display:flex;flex-direction:column;gap:6px;font-size:14px;line-height:1.5}
+.why b{font-size:15px}
+</style>
+<div style="width: 100%; min-height: 1280px; box-sizing: border-box; padding: 48px 56px; display: flex; flex-direction: column; gap: 24px; background: #fff">
+  <div style="display: flex; flex-direction: column; gap: 8px">
+    <span class="eyebrow">A sketch, not settled · the same page, three projects</span>
+    <h1 style="margin: 0; font-size: 36px; line-height: 1.15">The cycle is the project's own</h1>
+    <p class="muted" style="margin: 0; font-size: 16px; max-width: 960px">Today every issue walks the same seven steps, two of them skippable. Here the project declares its steps in <span class="mono">[cycle]</span>, a kind of issue may have its own list, and the page follows: the rail has as many cells as there are steps, the flow as many segments, the numbers are the rail's. The gates don't move: they belong to the kind of step.</p>
+  </div>
+
+  <section class="ex" aria-label="co2-calculator, a feature">
+    <div class="hd">
+      <div style="display: flex; flex-direction: column; gap: 4px"><span class="eyebrow" style="color: var(--black)">co2-calculator · feat · structural · nine steps</span><span style="font-size: 20px; font-weight: 700"><span class="mono muted" style="font-weight: 400; font-size: 16px">#395</span> Results page: per-unit breakdown chart</span></div>
+      <span class="muted" style="font-size: 13px"><span style="color: var(--canard); font-weight: 700">Open</span> · qa · <b style="color: var(--black)">alice</b> opened Oct 9 · 22 comments · GitHub #395</span>
+    </div>
+    <div class="bd">
+<pre class="decl"><span class="k">[cycle]</span> steps = ["intent", "risk", "plan", "tests", "code", "review", "qa", "tests-metier", "validated"]   <span class="c"># the three validation statuses are steps, each with its role</span>
+<span class="k">[cycle.signoffs]</span> qa = "pm" · tests-metier = "metier" · validated = "lead-dev"</pre>
+      <ol class="steps" aria-label="The cycle" style="grid-template-columns: repeat(9, minmax(0, 1fr))">
+        <li><a class="done" href="#"><span class="num">01</span><span class="nm">Intent</span><span class="ev">5 criteria · ready</span></a></li>
+        <li><a class="done" href="#"><span class="num">02</span><span class="nm">Risk</span><span class="ev">structural, by alice</span></a></li>
+        <li><a class="done" href="#"><span class="num">03</span><span class="nm">Plan</span><span class="ev">plan PR #401 approved</span></a></li>
+        <li><a class="done" href="#"><span class="num">04</span><span class="nm">Tests</span><span class="ev">per criterion · 5 named</span></a></li>
+        <li><a class="done" href="#"><span class="num">05</span><span class="nm">Code</span><span class="ev">PR #403, by bob</span></a></li>
+        <li><a class="done" href="#"><span class="num">06</span><span class="nm">Review</span><span class="ev">2 approvals · merged</span></a></li>
+        <li><a class="cur" href="#" aria-current="step"><span class="num">07</span><span class="nm">QA on staging</span><span class="ev">3 of 5 checked · waits for bob, PM</span></a></li>
+        <li><span class="lk" aria-disabled="true"><span class="num">08</span><span class="nm"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><rect x="5" y="11" width="14" height="10"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Tests métier</span><span class="ev">opens when QA signs off</span></span></li>
+        <li><span class="lk" aria-disabled="true"><span class="num">09</span><span class="nm"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><rect x="5" y="11" width="14" height="10"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Validated</span><span class="ev">opens when métier signs off · closes</span></span></li>
+      </ol>
+      <div class="fold"><span><b>alice</b> <span class="role">PO</span> · the description, <b>v3</b> · approved by <b>carol</b> <span class="role">PM</span> Oct 10 · 5 criteria, 3 verified</span><span class="muted">Read the description</span></div>
+      <div class="segs"><span class="label">Flow</span><span class="seg">01 Intent · 6</span><span class="seg">02 Risk · 2</span><span class="seg">03 Plan · 5</span><span class="seg">04 Tests · 2</span><span class="seg">05 Code · 1</span><span class="seg">06 Review · 4</span><span class="seg cur">07 QA on staging · 2 · current</span><span class="seg lk">08 Tests métier</span><span class="seg lk">09 Validated</span></div>
+      <div>
+        <div class="fe"><span class="s">07</span><span><b>bob</b> <span class="role">PM</span> ticked criteria 1 to 3 on staging <span class="muted">· Oct 14 11:20</span></span></div>
+        <div class="fe"><span class="s"></span><span><b>bob</b> <span class="role">PM</span>: the per-unit chart is empty for buildings with no floor area; criterion 4 waits on #412. <span class="muted">· 11:24</span></span></div>
+      </div>
+    </div>
+  </section>
+
+  <div style="display: flex; flex-wrap: wrap; gap: 24px">
+    <section class="ex" aria-label="git-board, a doc" style="flex: 1 1 560px; min-width: 0">
+      <div class="hd">
+        <div style="display: flex; flex-direction: column; gap: 4px"><span class="eyebrow" style="color: var(--black)">git-board · doc · two steps</span><span style="font-size: 20px; font-weight: 700"><span class="mono muted" style="font-weight: 400; font-size: 16px">GB-58</span> Guide: explain the signers file</span></div>
+        <span class="muted" style="font-size: 13px"><span style="color: var(--canard); font-weight: 700">Open</span> · in-review · <b style="color: var(--black)">Person A</b> · 3 comments</span>
+      </div>
+      <div class="bd">
+<pre class="decl"><span class="k">[cycle.kinds.doc]</span> steps = ["code", "review"]   <span class="c"># a doc has no criteria, no risk, no plan</span></pre>
+        <ol class="steps" aria-label="The cycle" style="grid-template-columns: repeat(2, minmax(0, 300px))">
+          <li><a class="done" href="#"><span class="num">01</span><span class="nm">Code</span><span class="ev">PR #59, by Person A</span></a></li>
+          <li><a class="cur" href="#" aria-current="step"><span class="num">02</span><span class="nm">Review</span><span class="ev">0 of 1 approval · Person B</span></a></li>
+        </ol>
+        <div class="fold"><span><b>Person A</b> · the description, <b>v1</b> · no criteria: not a step here, so no verdict</span><span class="muted">Read</span></div>
+        <div class="segs"><span class="label">Flow</span><span class="seg">01 Code · 2</span><span class="seg cur">02 Review · 1 · current</span></div>
+        <div>
+          <div class="fe"><span class="s">02</span><span><b>Person B</b> on <span class="mono" style="font-size: 12px">configuration.md:506</span>: say that the namespace is fixed. <span class="muted">· 1 thread open</span></span></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="ex" aria-label="A small project, a bug" style="flex: 1 1 560px; min-width: 0">
+      <div class="hd">
+        <div style="display: flex; flex-direction: column; gap: 4px"><span class="eyebrow" style="color: var(--black)">it4r-agent-kit · bug · four steps</span><span style="font-size: 20px; font-weight: 700"><span class="mono muted" style="font-weight: 400; font-size: 16px">#12</span> wtx brief drops the last line of the issue</span></div>
+        <span class="muted" style="font-size: 13px"><span style="color: var(--canard); font-weight: 700">Open</span> · in-review · <b style="color: var(--black)">Person C</b> · 5 comments</span>
+      </div>
+      <div class="bd">
+<pre class="decl"><span class="k">[cycle]</span> steps = ["intent", "risk", "code", "verify"]   <span class="c"># no plan, no tests-first step: the merge is code's gate</span></pre>
+        <ol class="steps" aria-label="The cycle" style="grid-template-columns: repeat(4, minmax(0, 1fr))">
+          <li><a class="done" href="#"><span class="num">01</span><span class="nm">Intent</span><span class="ev">2 criteria · ready</span></a></li>
+          <li><a class="done" href="#"><span class="num">02</span><span class="nm">Risk</span><span class="ev">low, by Person C</span></a></li>
+          <li><a class="done" href="#"><span class="num">03</span><span class="nm">Code</span><span class="ev">PR #13 · merged by Person D</span></a></li>
+          <li><a class="cur" href="#" aria-current="step"><span class="num">04</span><span class="nm">Verify</span><span class="ev">1 of 2 criteria checked</span></a></li>
+        </ol>
+        <div class="fold"><span><b>Person C</b> · the description, <b>v1</b> · approved by <b>Person D</b> · 2 criteria, 1 verified</span><span class="muted">Read</span></div>
+        <div class="segs"><span class="label">Flow</span><span class="seg">01 Intent · 2</span><span class="seg">02 Risk · 1</span><span class="seg">03 Code · 2</span><span class="seg cur">04 Verify · 1 · current</span></div>
+        <div>
+          <div class="fe"><span class="s">04</span><span><b>Person C</b> ticked criterion 1 · the brief keeps the last line at <span class="mono" style="font-size: 12px">e71b2c4</span> <span class="muted">· yesterday</span></span></div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div class="why">
+    <div><b>The description is always the first entry</b><span>An issue has a text whether or not Intent is a step. Without an Intent step there is no verdict and no criteria gate; the text still folds under the current step's workspace.</span></div>
+    <div><b>A comment carries its step's id, not its number</b><span><span class="mono">cycle:step = qa</span>, <span class="mono">review</span>, <span class="mono">intent</span>. The number is the rail's and changes with the list; the id doesn't. Today's "1" to "7" map onto the default list.</span></div>
+    <div><b>Gates belong to the kind of step</b><span>Review always wants an approval, a sign-off its role's person, Intent its criteria. The project picks which kinds, in which order, and which kinds of issue get which list; risk still skips a step inside the list.</span></div>
+  </div>
+</div>
+</body>
+</html>
