@@ -347,7 +347,7 @@ func (s *apiServer) handleIssueAgentAction(w http.ResponseWriter, r *http.Reques
 			return
 		}
 	}
-	in := wtx.PromptInput{Issue: issueName(th.Issue), Title: th.Title, Step: cyc.Step, Of: cyc.Of, Name: cyc.Name,
+	in := wtx.PromptInput{Issue: issueName(th.Issue), Title: th.Title, Step: cyc.Position(), Of: cyc.Of, Name: cyc.Name,
 		Gate: cyc.Gate, What: cyc.Waits.What, Branch: a.Branch, Brief: req.Brief}
 	switch {
 	case action == "approve":
@@ -356,7 +356,7 @@ func (s *apiServer) handleIssueAgentAction(w http.ResponseWriter, r *http.Reques
 		if l := cyc.Evidence.PlanApproval.By; l != "" {
 			by = " by " + l
 		}
-		in.Then = fmt.Sprintf("The plan is approved%s on the board. Set `status: accepted` in the plan file's front matter, commit and push it, then go on with step %d.", by, cyc.Step)
+		in.Then = fmt.Sprintf("The plan is approved%s on the board. Set `status: accepted` in the plan file's front matter, commit and push it, then go on with step %d.", by, in.Step)
 	case action == "go" && cyc.Step == 3 && cyc.Stage == "ready":
 		in.What, in.Then = "write the plan, in plan mode", planThen(cyc.Stages, th.Issue, a.Branch)
 	}

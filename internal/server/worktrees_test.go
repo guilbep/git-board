@@ -655,6 +655,20 @@ func TestAgentGoLowRisk(t *testing.T) {
 	}
 }
 
+// The prompt counts in the project's list: with code and review, code is
+// step 1 of 2.
+func TestAgentGoCountsInTheList(t *testing.T) {
+	s, fake, id := agentRepo(t)
+	s.cfg.Cycle.Steps = []string{"code", "review"}
+	ts := serve(t, s)
+	if code, _, body := sendFrom(t, "POST", ts.URL+"/api/issues/"+id[:8]+"/agent/go", ts.URL, map[string]string{}); code != http.StatusOK {
+		t.Fatalf("go: %d %s", code, body)
+	}
+	if p := lastPrompt(t, fake); !strings.Contains(p, "step 1 of 2: Code") {
+		t.Errorf("prompt:\n%s", p)
+	}
+}
+
 // Approve briefs the agent in the server's words once the plan role has
 // approved the plan on the board; refused before.
 func TestAgentApprove(t *testing.T) {
