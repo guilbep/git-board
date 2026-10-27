@@ -185,10 +185,14 @@ func (r *run) plan(p *project, is *issue.Issue, fi forge.Issue, who map[string]s
 		ch: ch["title"], ft: changedAt(fi, "title"),
 		pullOp: func(v string) oplog.Op { return from(issue.SetTitle(a, v), key, ev, changedAt(fi, "title")) },
 		write:  func(fw forge.Forge, v string) error { return fw.SetTitle(r.ctx, fi.Ref(), v) }})
+	titled := len(pl.text)
 	text(&pl.text, textField{name: "body", cur: is.Body, g: wrapLike(seen["body"], r.form(p, is.Body, origin(ch["body"]), false), "", posted), f: fi.Body,
 		posted: posted, ch: ch["body"], ft: changedAt(fi, "body"),
 		pullOp: func(v string) oplog.Op { return from(issue.EditText(a, is.BodyOp, v), key, ev, changedAt(fi, "body")) },
 		write:  func(fw forge.Forge, v string) error { return fw.SetBody(r.ctx, fi.Ref(), v) }})
+	if len(pl.text) > titled && r.opt.Published != nil { // the body is pushed
+		r.planPublished(pl, p, is, fi, unwrap(fi.Body).body)
+	}
 	text(&pl.rest, textField{name: "status", cur: string(is.Status), g: string(is.Status), f: fi.Status,
 		ch: ch["status"], ft: changedAt(fi, "status"),
 		pullOp: func(v string) oplog.Op {
@@ -234,6 +238,12 @@ func (r *run) plan(p *project, is *issue.Issue, fi forge.Issue, who map[string]s
 			sent = true
 			pl.sops = append(pl.sops, postedOp(is.Author, now, is.ID, c.ID, fc.ID), seenOp(is.Author, now, is.ID, field, fc.Body))
 			seen = withSeen(seen, field, fc.Body)
+		} else if w.kind == "version" && r.isSync(p, fc.Author) {
+			// a published version's note: sync's own, never a comment
+			if p.st.posted[[2]string{is.ID, w.id}] == "" {
+				pl.sops = append(pl.sops, postedOp(is.Author, now, is.ID, w.id, fc.ID), seenOp(is.Author, now, is.ID, field, fc.Body))
+			}
+			continue
 		} else if who != nil {
 			// a mirror the fork posted: git-board's copy of the original is
 			// the forge's, recorded as posted. The original's text wins: last
@@ -310,6 +320,28 @@ func (r *run) plan(p *project, is *issue.Issue, fi forge.Issue, who map[string]s
 		}
 	}
 	return pl, nil
+}
+
+// planPublished plans the note of the version the body push publishes,
+// as Options.Published says, unless posted already: recorded, or found by
+// its marker.
+func (r *run) planPublished(pl *plan, p *project, is *issue.Issue, fi forge.Issue, before string) {
+	id, note := r.opt.Published(is.ID, before, is.Body)
+	if id == "" || p.st.posted[[2]string{is.ID, id}] != "" || slices.ContainsFunc(fi.Comments, func(fc forge.Comment) bool {
+		w := unwrap(fc.Body)
+		return w.kind == "version" && w.id == id && r.isSync(p, fc.Author)
+	}) {
+		return
+	}
+	w := wrapped{body: note, kind: "version", id: id}
+	w.mark("")
+	body, author := w.String(), is.Changes["body"].Author
+	pl.text = append(pl.text, func(x *pushing) error {
+		return r.send(x, author, "version:"+id, []string{body}, func(fw forge.Forge) ([]oplog.Op, error) {
+			fc, err := fw.CreateComment(r.ctx, fi.Ref(), body)
+			return []oplog.Op{postedOp(is.Author, time.Now().Unix(), is.ID, id, fc.ID), seenOp(is.Author, time.Now().Unix(), is.ID, "comment:"+fc.ID, body)}, err
+		})
+	})
 }
 
 // mirrored is the comment of is that fc mirrors, or that mirrors fc, as the

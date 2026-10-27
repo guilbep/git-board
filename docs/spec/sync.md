@@ -330,7 +330,11 @@ line:
 ```
 
 The first names an issue, in its body. The second names a comment, by its
-id. Pulled back, a text sync's accounts posted loses its header, its quote
+id. A third kind, `<!-- git-board version <id> -->`, ends the note sync
+posts after pushing a new body, when the application gives one
+(`Options.Published`; git-board's reads `**Published v2** · § Expected
+changed`): it is posted once per id, by the body edit's author, recorded
+with a `posted` under that id, and never pulled as a comment. Pulled back, a text sync's accounts posted loses its header, its quote
 and its marker.
 
 A comment's marker also carries keys of its metadata, after its id, as
