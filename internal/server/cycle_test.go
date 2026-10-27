@@ -502,3 +502,84 @@ func TestRiskOf(t *testing.T) {
 		}
 	}
 }
+
+func TestSpecVerdict(t *testing.T) {
+	t.Parallel()
+	b := storetest.New(t)
+	open := cycleConfig(nil, config.Cycle{})
+	pm := cycleConfig(map[string]string{"pm": "bob"}, config.Cycle{Spec: "pm"})
+	as := func(cfg *config.Config, me, id, verdict, on, body string) (int, string) {
+		return post(t, serve(t, &apiServer{cfg: cfg, b: b, me: me}).URL+"/api/issues/"+id[:8]+"/cycle/spec-verdict",
+			map[string]string{"verdict": verdict, "on": on, "body": body})
+	}
+	status := func(id string) []string { th, _ := lastEvent(t, b, id); return th.Labels }
+
+	// with the spec role, step 1 is its holder's
+	id := issueAt(t, b, "backlog")
+	var c cycleAnswer
+	getJSON(t, serve(t, &apiServer{cfg: pm, b: b, me: "bob"}).URL+"/api/issues/"+id[:8]+"/cycle", &c)
+	if c.Step != 1 || !c.Mine || c.Waits.Login != "bob" || !slices.Equal(c.Actions, []string{"spec-verdict"}) {
+		t.Errorf("bob at step 1: %+v", c)
+	}
+	if code, body := as(pm, "carol", id, "approve", "body@v1", ""); code != http.StatusForbidden || !strings.Contains(body, "waits for the pm role: bob") {
+		t.Errorf("the spec holder only: %d %s", code, body)
+	}
+	if code, body := as(pm, "bob", id, "request-changes", "body@v1", " "); code != http.StatusBadRequest {
+		t.Errorf("request-changes without body: %d %s", code, body)
+	}
+	if code, body := as(pm, "bob", id, "request-changes", "body@v1", "Name the remote"); code != http.StatusOK || !slices.Contains(status(id), "status:backlog") {
+		t.Errorf("request-changes: %d %s %v", code, body, status(id))
+	}
+	if code, body := as(pm, "bob", id, "approve", "body@v1", ""); code != http.StatusOK {
+		t.Fatalf("approve: %d %s", code, body)
+	}
+	th, _ := lastEvent(t, b, id)
+	e := th.Events[len(th.Events)-2]
+	if e.Meta["spec:verdict"] != "approve" || e.Meta["spec:on"] != "body@v1" || e.Meta["cycle:step"] != "1" || e.Body != "Approved v1 of the description" || !slices.Contains(th.Labels, "status:ready") {
+		t.Errorf("approval %+v, labels %v", e, th.Labels)
+	}
+
+	// a stale verdict: v2 boxes the items, a tick is none, v3 adds one
+	stale := issueAt(t, b, "backlog")
+	th, _ = lastEvent(t, b, stale)
+	text := th.Events[0].Body
+	ticked := strings.Replace(text, "- Exports", "- [x] Exports", 1)
+	for _, next := range []string{strings.Replace(text, "- Exports", "- [ ] Exports", 1), ticked, ticked + "- Keeps the order\n"} {
+		if err := b.EditComment(stale, th.Events[0].ID, next, text); err != nil {
+			t.Fatal(err)
+		}
+		text = next
+	}
+	before, _ := lastEvent(t, b, stale)
+	if code, body := as(pm, "bob", stale, "approve", "body@v2", ""); code != http.StatusConflict || !strings.Contains(body, "v3 is published") {
+		t.Errorf("a stale verdict is refused: %d %s", code, body)
+	}
+	if th, _ := lastEvent(t, b, stale); len(th.Events) != len(before.Events) || !slices.Contains(th.Labels, "status:backlog") {
+		t.Errorf("a refused verdict wrote %d events, labels %v", len(th.Events)-len(before.Events), th.Labels)
+	}
+
+	// without the role: anyone but the author, whom step 1 waits for
+	alice := storetest.NewPerson(t, b, "Person A", "alice")
+	mine := storetest.IssueAs(t, b, alice, 1, "Export CSV", twoCriteria, "status:backlog")
+	getJSON(t, serve(t, &apiServer{cfg: open, b: b, me: "alice"}).URL+"/api/issues/"+mine[:8]+"/cycle", &c)
+	author := c.Waits.Login
+	if author != "alice" || !slices.Equal(c.Actions, []string{"move-ready"}) {
+		t.Fatalf("step 1 without spec is today's: %+v", c)
+	}
+	if code, body := as(open, author, mine, "approve", "body@v1", ""); code != http.StatusForbidden || !strings.Contains(body, "author does not approve it") {
+		t.Errorf("the author cannot approve: %d %s", code, body)
+	}
+	if code, body := as(open, "carol", mine, "approve", "body@v1", "Fine"); code != http.StatusOK || !slices.Contains(status(mine), "status:ready") {
+		t.Errorf("carol approves: %d %s %v", code, body, status(mine))
+	}
+
+	// no criteria; an approval after ready moves nothing
+	none := storetest.IssueAs(t, b, alice, 2, "Export CSV", "Just a line", "status:backlog")
+	if code, body := as(open, "carol", none, "approve", "body@v1", ""); code != http.StatusBadRequest || !strings.Contains(body, "add acceptance criteria first") {
+		t.Errorf("without criteria: %d %s", code, body)
+	}
+	later := storetest.IssueAs(t, b, alice, 3, "Export CSV", twoCriteria, "status:in-progress")
+	if code, body := as(open, "carol", later, "approve", "body@v1", ""); code != http.StatusOK || !slices.Contains(status(later), "status:in-progress") {
+		t.Errorf("approve after ready moves nothing: %d %s %v", code, body, status(later))
+	}
+}
