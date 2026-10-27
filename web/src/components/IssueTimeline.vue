@@ -68,7 +68,7 @@ import { computed } from 'vue';
 import { colorClass } from '@/colors';
 import { displayName, formatValue, type Fields } from '@/fields';
 import { when } from '@/me';
-import type { Step } from '@/replay';
+import { metaWhat, type Step } from '@/replay';
 import { timeline, type Segment } from '@/timeline';
 import ValueMark from '@/components/ValueMark.vue';
 
@@ -79,12 +79,12 @@ const field = computed(() => props.field ?? 'status');
 const t = computed(() => timeline(props.steps, Date.now(), field.value));
 
 const what: Record<Step['kind'], string> = {
-  created: 'opened the issue', comment: 'commented', edit: 'edited a text', labels: 'changed fields', status: '', title: 'renamed it',
+  created: 'opened the issue', comment: 'commented', edit: 'edited a text', labels: 'changed fields', status: '', title: 'renamed it', meta: '',
 };
 function label(i: number): string {
   const s = props.steps[i];
   if (!s) return '';
-  const verb = s.kind === 'status' ? (s.status === 'closed' ? 'closed it' : 'reopened it') : what[s.kind];
+  const verb = s.kind === 'status' ? (s.status === 'closed' ? 'closed it' : 'reopened it') : s.kind === 'meta' ? metaWhat(s.meta) : what[s.kind];
   return `${s.author.name} ${verb} · ${when(s.at, true)}`;
 }
 

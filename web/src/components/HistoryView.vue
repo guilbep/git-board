@@ -88,7 +88,7 @@ import { colorClass } from '@/colors';
 import { displayName, formatValue, type Fields } from '@/fields';
 import { describeLabels } from '@/history';
 import { on, when } from '@/me';
-import { stateAfter, steps, textDiff, wordDiff, type Step, type WordOp } from '@/replay';
+import { metaWhat, stateAfter, steps, textDiff, wordDiff, type Step, type WordOp } from '@/replay';
 import GbIcon, { type IconName } from '@/components/GbIcon.vue';
 import IssueTimeline from '@/components/IssueTimeline.vue';
 
@@ -147,6 +147,7 @@ function whatOf(s: Step): string {
     case 'labels': return 'changed fields';
     case 'status': return s.status === 'closed' ? 'closed the issue' : 'reopened the issue';
     case 'title': return 'renamed the issue';
+    case 'meta': return metaWhat(s.meta);
   }
 }
 function iconOf(s: Step): IconName {
@@ -156,6 +157,7 @@ function iconOf(s: Step): IconName {
     case 'labels': return (s.added ?? []).concat(s.removed ?? []).every((l) => l.startsWith('assignee:')) ? 'user' : 'tag';
     case 'status': return s.status === 'closed' ? 'closed' : 'open';
     case 'title': return 'title';
+    case 'meta': return 'check';
   }
 }
 const wordClass = (op: WordOp['op']) => (op === '+' ? 'hv-ins' : op === '-' ? 'hv-del' : '');
