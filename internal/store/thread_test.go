@@ -3,6 +3,7 @@ package store_test
 import (
 	"errors"
 	"maps"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -295,5 +296,60 @@ func TestThreadHeldLabelsDontWait(t *testing.T) {
 	}
 	if !slices.Equal(waits, []string{"risk:low"}) {
 		t.Errorf("waiting for GitHub: %q, want only risk:low", waits)
+	}
+}
+
+// A version after the first carries its edit-text operation's id: what
+// thread:applied names.
+func TestHistoryHasEditIDs(t *testing.T) {
+	t.Parallel()
+	b := storetest.New(t)
+	id, err := b.NewIssue("Export CSV", "v1", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	th, _ := b.Thread(id)
+	body := th.Events[0].ID
+	if err := b.EditComment(id, body, "v2", "v1"); err != nil {
+		t.Fatal(err)
+	}
+	th, _ = b.Thread(id)
+	h := th.Events[0].History
+	if len(h) != 2 || h[0].ID != body || h[1].ID == body || !regexp.MustCompile(`^[0-9a-f]{40}:[0-9]+$`).MatchString(h[1].ID) {
+		t.Errorf("history %+v, body %s", h, body)
+	}
+}
+
+// Apply is two operations: the body's edit-text, then a set-meta on the
+// suggestion's root.
+func TestApplyLeavesTwoOperations(t *testing.T) {
+	t.Parallel()
+	b := storetest.New(t)
+	id, err := b.NewIssue("Export CSV", "## Expected\n\n- a", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	root, err := b.AddCommentMeta(id, "```suggestion\n- b\n```", map[string]string{"thread:anchor": "body@v1/expected#1", "thread:kind": "suggestion"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	th, _ := b.Thread(id)
+	before, _ := store.Ops(b, id)
+	if err := b.EditComment(id, th.Events[0].ID, "## Expected\n\n- b", th.Events[0].Body); err != nil {
+		t.Fatal(err)
+	}
+	th, _ = b.Thread(id)
+	edit := th.Events[0].History[1].ID
+	if err := b.SetCommentMetadata(id, root, map[string]string{"thread:resolved": "v2", "thread:applied": edit}); err != nil {
+		t.Fatal(err)
+	}
+	after, _ := store.Ops(b, id)
+	added := after[len(before):]
+	if len(added) != 2 || added[0].Kind != "edit-text" || added[0].ID != edit || added[1].Kind != "set-meta" || !strings.Contains(string(added[1].Data), root) {
+		t.Fatalf("added %+v", added)
+	}
+	m, err := b.CommentMeta(id, root)
+	if err != nil || m["thread:resolved"] != "v2" || m["thread:applied"] != edit {
+		t.Errorf("root meta %v, %v", m, err)
 	}
 }

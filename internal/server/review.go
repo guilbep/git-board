@@ -327,6 +327,47 @@ func (s *apiServer) handleResolve(w http.ResponseWriter, r *http.Request) {
 	s.writeThread(w, http.StatusOK, id)
 }
 
+// handleThreadMeta writes thread:resolved (a person's id, "v<n>" once
+// applied, "" to reopen) and thread:applied (the edit-text's id) on a
+// body thread's first comment: the protocol's only keys set after the
+// comment is posted.
+func (s *apiServer) handleThreadMeta(w http.ResponseWriter, r *http.Request) {
+	var req map[string]string
+	if !decode(w, r, &req) {
+		return
+	}
+	if len(req) == 0 {
+		writeError(w, http.StatusBadRequest, errors.New("no key"))
+		return
+	}
+	for k := range req {
+		if k != "thread:resolved" && k != "thread:applied" {
+			writeError(w, http.StatusBadRequest, fmt.Errorf("%s: only thread:resolved and thread:applied", k))
+			return
+		}
+	}
+	done, ok := s.beginWrite(w)
+	if !ok {
+		return
+	}
+	defer done()
+	id, comment := r.PathValue("id"), r.PathValue("comment")
+	meta, err := s.b.CommentMeta(id, comment)
+	if err != nil {
+		writeIssueError(w, err)
+		return
+	}
+	if meta["thread:anchor"] == "" || meta["thread:reply-to"] != "" {
+		writeError(w, http.StatusBadRequest, errors.New("set a thread's keys on its first comment"))
+		return
+	}
+	if err := s.b.SetCommentMetadata(id, comment, req); err != nil {
+		writeIssueError(w, err)
+		return
+	}
+	s.writeThread(w, http.StatusOK, id)
+}
+
 // annotate fills the review comments of a thread from the issue's branch
 // whose head has the comment's commit, the first: its name, and for a line
 // comment where the line is at that head and whether a change since covers

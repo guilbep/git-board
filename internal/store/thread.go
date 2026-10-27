@@ -42,6 +42,7 @@ type Forge struct {
 
 // Version is one text of an edited comment, oldest first.
 type Version struct {
+	ID     string    `json:"id"` // the text's own, then each edit-text's
 	Author Person    `json:"author"`
 	At     time.Time `json:"at"`
 	Body   string    `json:"body"`
@@ -154,13 +155,13 @@ func (b *Backend) thread(is *issue.Issue, l *oplog.Log, v view) Thread {
 			if e.Kind == "create" {
 				ev.Kind, title = "created", d.Title
 			}
-			ev.History = []Version{{Author: ev.Author, At: ev.At, Body: d.Body}}
+			ev.History = []Version{{ID: e.ID, Author: ev.Author, At: ev.At, Body: d.Body}}
 			texts[e.ID] = len(th.Events)
 		case "edit-text":
 			if i, ok := texts[d.Target]; ok {
 				t := &th.Events[i]
 				t.Body = d.Body
-				t.History = append(t.History, Version{Author: ev.Author, At: ev.At, Body: d.Body})
+				t.History = append(t.History, Version{ID: e.ID, Author: ev.Author, At: ev.At, Body: d.Body})
 			}
 			continue
 		case "set-meta":

@@ -398,3 +398,87 @@ func TestMeSaysUnswitched(t *testing.T) {
 		t.Fatalf("switched: %+v", me)
 	}
 }
+
+// A comment on the description carries its anchor (thread:anchor); a
+// reply its root and the root's anchor; a ```suggestion block the kind.
+func TestThreadComments(t *testing.T) {
+	t.Parallel()
+	ts, s := newIssueServer(t)
+	id, err := s.b.NewIssue("Releases", "## Expected\n\n- a", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	base := ts.URL + "/api/issues/" + id[:8] + "/comments"
+	var th store.Thread
+	last := func() store.Event { return th.Events[len(th.Events)-1] }
+	if code := call(t, "POST", base, map[string]any{"body": "Is this one?", "anchor": "body@v1/expected#3", "step": 1}, &th); code != http.StatusOK {
+		t.Fatalf("anchored: %d", code)
+	}
+	root := last()
+	if root.Meta["thread:anchor"] != "body@v1/expected#3" || root.Meta["cycle:step"] != "1" || root.Meta["thread:kind"] != "" {
+		t.Errorf("root meta %v", root.Meta)
+	}
+	if code := call(t, "POST", base, map[string]any{"body": "Same cut.", "reply_to": root.ID}, &th); code != http.StatusOK {
+		t.Fatalf("reply: %d", code)
+	}
+	reply := last()
+	if reply.Meta["thread:reply-to"] != root.ID || reply.Meta["thread:anchor"] != "body@v1/expected#3" {
+		t.Errorf("reply meta %v", reply.Meta)
+	}
+	sug := "Then say it.\n\n```suggestion\nA missing identity sends the user to Settings.\n```"
+	if code := call(t, "POST", base, map[string]any{"body": sug, "reply_to": root.ID}, &th); code != http.StatusOK || last().Meta["thread:kind"] != "suggestion" {
+		t.Errorf("suggestion: %d %v", code, last().Meta)
+	}
+	if code := call(t, "POST", base, map[string]any{"body": "x", "anchor": "plan@x/y"}, nil); code != http.StatusBadRequest {
+		t.Errorf("a plan anchor: %d", code)
+	}
+	if code := call(t, "POST", base, map[string]any{"body": "x", "reply_to": reply.ID}, nil); code != http.StatusBadRequest {
+		t.Errorf("a reply to a reply: %d", code)
+	}
+}
+
+// The meta route writes thread:resolved and thread:applied on a body
+// thread's root, and nothing else; "" reopens.
+func TestThreadMeta(t *testing.T) {
+	t.Parallel()
+	ts, s := newIssueServer(t)
+	id, err := s.b.NewIssue("Releases", "## Expected\n\n- a", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	root, err := s.b.AddCommentMeta(id, "Is this one?", map[string]string{"thread:anchor": "body@v1/expected"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	plain, err := s.b.AddComment(id, "plain")
+	if err != nil {
+		t.Fatal(err)
+	}
+	meta := func(comment string) string {
+		return ts.URL + "/api/issues/" + id[:8] + "/comments/" + comment + "/meta"
+	}
+	var th store.Thread
+	byID := func(cid string) store.Event {
+		for _, e := range th.Events {
+			if e.ID == cid {
+				return e
+			}
+		}
+		return store.Event{}
+	}
+	if code := call(t, "POST", meta(root), map[string]string{"thread:resolved": "v2", "thread:applied": "abc:1"}, &th); code != http.StatusOK {
+		t.Fatalf("resolve: %d", code)
+	}
+	if m := byID(root).Meta; m["thread:resolved"] != "v2" || m["thread:applied"] != "abc:1" {
+		t.Errorf("root meta %v", m)
+	}
+	if code := call(t, "POST", meta(root), map[string]string{"thread:resolved": ""}, &th); code != http.StatusOK || byID(root).Meta["thread:resolved"] != "" {
+		t.Errorf("the meta route takes an empty value: %d %v", code, byID(root).Meta)
+	}
+	if code := call(t, "POST", meta(root), map[string]string{"cycle:step": "2"}, nil); code != http.StatusBadRequest {
+		t.Errorf("another key: %d", code)
+	}
+	if code := call(t, "POST", meta(plain), map[string]string{"thread:resolved": "v2"}, nil); code != http.StatusBadRequest {
+		t.Errorf("a plain comment: %d", code)
+	}
+}
