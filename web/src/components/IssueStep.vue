@@ -1,135 +1,148 @@
-<!-- The issue's frame under its title (the canvas's C1 to C7): the step bar,
-     the shown step as the main section, the discussion beside it. The step
-     shown is the issue's (internal/cycle), or a done one picked on the bar;
-     a later step is locked and says why. The panel fills the slots: intent
-     (the description), review (the Changes view, step 6 on the page), talk
-     (the discussion of the step shown). -->
+<!-- The issue's frame under its title (docs/prd/time-flow.md): the step
+     bar, then one column, the sidebar beside it. The column is the tabs,
+     the shown step's workspace when head (the Conversation tab), then the
+     flow. The step shown is the issue's (internal/cycle), or a done one
+     picked on the bar; a later step is locked and says why. The panel
+     fills the slots: tabs, intent (the description, folded from step 2
+     on), review (the Changes view, step 6 on the page), flow, side. -->
 <template>
   <p v-if="error && !(current && card)" class="gb-save-error" role="alert"><GbIcon name="error" small /> {{ error }}</p>
-  <nav v-if="cycle" class="gb-stepbar" aria-label="The development cycle">
+  <nav v-if="cycle" class="gb-stepbar" aria-label="The cycle, click a step to jump to its segment">
     <ol class="gb-bar-steps">
-      <li v-for="r in rows" :key="r.n" :class="[`is-${r.state}`, { 'is-shown': r.n === n }]" :aria-current="r.state === 'current' ? 'step' : undefined">
-        <button type="button" :disabled="r.state === 'locked'" :aria-pressed="r.n === n" @click="show(r.n)">
+      <li v-for="r in rows" :key="r.n" :class="[`is-${r.state}`, { 'is-shown': r.n === n }]">
+        <a v-if="r.state === 'done' || r.state === 'current'" class="gb-bar-step" :href="`#/issues/${id}?step=${r.n}`" :aria-current="r.state === 'current' ? 'step' : undefined" @click="jump($event, r.n)">
+          <span class="gb-bar-n">{{ r.n }}</span>
+          <span class="gb-bar-name">{{ r.name }}</span>
+          <span class="gb-bar-line">{{ r.line }}</span>
+        </a>
+        <span v-else class="gb-bar-step" aria-disabled="true">
           <span class="gb-bar-n"><GbIcon v-if="r.state === 'locked'" name="lock" small /><template v-else>{{ r.n }}</template></span>
           <span class="gb-bar-name">{{ r.name }}</span>
           <span class="gb-bar-line">{{ r.line }}</span>
-        </button>
+        </span>
       </li>
     </ol>
   </nav>
 
-  <div class="gb-cols">
-    <section class="gb-shown" :aria-label="`Step ${n}: ${row?.name ?? 'Intent'}`">
-      <p class="gb-eyebrow">Step {{ n }} · {{ row?.name ?? 'Intent' }}<template v-if="risk"> · {{ risk }}</template></p>
-      <slot v-if="n === 1" name="intent" />
+  <div class="gb-row">
+    <section class="gb-column" aria-label="Conversation">
+      <slot name="tabs" />
+      <div class="gb-column-body">
+        <template v-if="head">
+          <p class="gb-eyebrow" tabindex="-1">Step {{ n }} · {{ row?.name ?? 'Intent' }}<template v-if="risk"> · {{ risk }}</template></p>
+          <slot v-if="n === 1" name="intent" :folded="false" :cycle="cycle" />
 
-      <CyclePlan
-        v-if="cycle && n === 3 && !cycle.skipped?.includes(3) && (current || cycle.evidence.plan)"
-        :cycle="cycle"
-        :gate="row?.gate ?? ''"
-        :current="current"
-        :busy="busy || !!agentBusy"
-        :can="has('approve-plan')"
-        :sends="button === 'brief'"
-        :agent="agent"
-        @approve="approve"
-        @revise="revise"
-      />
-      <CycleRisk
-        v-else-if="cycle && n === 2 && (current || risk)"
-        :cycle="cycle"
-        :gate="row?.gate ?? ''"
-        :current="current"
-        :busy="busy"
-        :can="has('set-risk')"
-        :events="events"
-        :risk-by="riskBy"
-        @set="(r) => patch({ risk: r })"
-        @suggest="act('suggest-risk')"
-      />
-      <CycleCode
-        v-else-if="cycle && n === 5 && (current || cycle.evidence.branch)"
-        :id="id"
-        :cycle="cycle"
-        :gate="row?.gate ?? ''"
-        :current="current"
-        :busy="busy"
-        :can="has('ready-for-review')"
-        :agent="agent"
-        @ready="card && pressed(card.buttons[0]!)"
-        @open="(branch) => pull(() => openPull(id, branch))"
-        @edit="(num, title, body) => pull(() => editPull(id, num, title, body))"
-      />
-      <CycleVerify
-        v-else-if="cycle && n === 7 && (current || cycle.done)"
-        :id="id"
-        :cycle="cycle"
-        :status="status"
-        :events="events"
-        :current="current"
-        :forge="forge"
-        :busy="busy"
-        :can="has('signoff')"
-        :needs-why="needsWhy"
-        @check="(i) => act('check', { index: i })"
-        @signoff="(why) => act('signoff', why ? { why } : {})"
-        @run="(output, commit) => act('verify', { output, commit })"
-        @back="patch({ status: cycle.stages.in_progress[0] ?? '' })"
-      />
-      <!-- step 6 on the page is the review's own (CycleReview) -->
-      <template v-else-if="cycle && row && !(n === 6 && $slots.review)">
-        <CycleIntent v-if="n === 1" :cycle="cycle" :current="current" :busy="busy" @save="saveCriteria" />
-        <CycleTests v-if="n === 4 && !cycle.skipped?.includes(4)" :id="id" :cycle="cycle" />
-        <p v-else-if="n !== 1 && row.state === 'done' && row.line !== row.gate" class="gb-note">{{ row.line }}</p>
-        <p class="gb-gate">{{ row.gate }}</p>
-        <template v-if="current">
-          <p v-if="cycle.note" class="gb-note">{{ cycle.note }}</p>
-          <p class="gb-note">{{ cap(turn(cycle)) }}.</p>
-          <div v-if="card" class="gb-cycle-actions">
-            <template v-for="b in card.buttons" :key="b.label">
-              <a v-if="b.action === 'review' && cycle.evidence.pr?.url" :href="cycle.evidence.pr.url" target="_blank" rel="noopener noreferrer" class="epfl-btn epfl-btn-primary epfl-btn-sm">
-                {{ b.label }} #{{ cycle.evidence.pr.number }}<span class="gb-sr">(opens in a new tab)</span>
-              </a>
-              <button v-else-if="b.action !== 'review'" type="button" :class="['epfl-btn', 'epfl-btn-sm', b.action === 'set-risk' ? 'epfl-btn-secondary' : 'epfl-btn-primary']" :disabled="busy" @click="pressed(b)">
-                {{ b.label }}
-              </button>
+          <CyclePlan
+            v-if="cycle && n === 3 && !cycle.skipped?.includes(3) && (current || cycle.evidence.plan)"
+            :cycle="cycle"
+            :gate="row?.gate ?? ''"
+            :current="current"
+            :busy="busy || !!agentBusy"
+            :can="has('approve-plan')"
+            :sends="button === 'brief'"
+            :agent="agent"
+            @approve="approve"
+            @revise="revise"
+          />
+          <CycleRisk
+            v-else-if="cycle && n === 2 && (current || risk)"
+            :cycle="cycle"
+            :gate="row?.gate ?? ''"
+            :current="current"
+            :busy="busy"
+            :can="has('set-risk')"
+            :events="events"
+            :risk-by="riskBy"
+            @set="(r) => patch({ risk: r })"
+            @suggest="act('suggest-risk')"
+          />
+          <CycleCode
+            v-else-if="cycle && n === 5 && (current || cycle.evidence.branch)"
+            :id="id"
+            :cycle="cycle"
+            :gate="row?.gate ?? ''"
+            :current="current"
+            :busy="busy"
+            :can="has('ready-for-review')"
+            :agent="agent"
+            @ready="card && pressed(card.buttons[0]!)"
+            @open="(branch) => pull(() => openPull(id, branch))"
+            @edit="(num, title, body) => pull(() => editPull(id, num, title, body))"
+          />
+          <CycleVerify
+            v-else-if="cycle && n === 7 && (current || cycle.done)"
+            :id="id"
+            :cycle="cycle"
+            :status="status"
+            :events="events"
+            :current="current"
+            :forge="forge"
+            :busy="busy"
+            :can="has('signoff')"
+            :needs-why="needsWhy"
+            @check="(i) => act('check', { index: i })"
+            @signoff="(why) => act('signoff', why ? { why } : {})"
+            @run="(output, commit) => act('verify', { output, commit })"
+            @back="patch({ status: cycle.stages.in_progress[0] ?? '' })"
+          />
+          <!-- step 6 on the page is the review's own (CycleReview) -->
+          <template v-else-if="cycle && row && !(n === 6 && $slots.review)">
+            <CycleIntent v-if="n === 1" :cycle="cycle" :current="current" :busy="busy" @save="saveCriteria" />
+            <CycleTests v-if="n === 4 && !cycle.skipped?.includes(4)" :id="id" :cycle="cycle" />
+            <p v-else-if="n !== 1 && row.state === 'done' && row.line !== row.gate" class="gb-note">{{ row.line }}</p>
+            <p class="gb-gate">{{ row.gate }}</p>
+            <template v-if="current">
+              <p v-if="cycle.note" class="gb-note">{{ cycle.note }}</p>
+              <p class="gb-note">{{ cap(turn(cycle)) }}.</p>
+              <div v-if="card" class="gb-cycle-actions">
+                <template v-for="b in card.buttons" :key="b.label">
+                  <a v-if="b.action === 'review' && cycle.evidence.pr?.url" :href="cycle.evidence.pr.url" target="_blank" rel="noopener noreferrer" class="epfl-btn epfl-btn-primary epfl-btn-sm">
+                    {{ b.label }} #{{ cycle.evidence.pr.number }}<span class="gb-sr">(opens in a new tab)</span>
+                  </a>
+                  <button v-else-if="b.action !== 'review'" type="button" :class="['epfl-btn', 'epfl-btn-sm', b.action === 'set-risk' ? 'epfl-btn-secondary' : 'epfl-btn-primary']" :disabled="busy" @click="pressed(b)">
+                    {{ b.label }}
+                  </button>
+                </template>
+              </div>
+              <!-- a refusal of the card's move: Mark ready for review names the red check -->
+              <p v-if="error && card" class="gb-save-error" role="alert"><GbIcon name="error" small /> {{ error }}</p>
             </template>
-          </div>
-          <!-- a refusal of the card's move: Mark ready for review names the red check -->
-          <p v-if="error && card" class="gb-save-error" role="alert"><GbIcon name="error" small /> {{ error }}</p>
-        </template>
-      </template>
-      <slot
-        v-if="cycle && n === 6"
-        name="review"
-        :cycle="cycle"
-        :current="current"
-        :can="has('review') || has('to-validation')"
-        :sends="button === 'brief'"
-        :verify="() => patch({ status: cycle!.stages.validation[0] ?? '' })"
-      />
+          </template>
+          <slot
+            v-if="cycle && n === 6"
+            name="review"
+            :cycle="cycle"
+            :current="current"
+            :can="has('review') || has('to-validation')"
+            :sends="button === 'brief'"
+            :verify="() => patch({ status: cycle!.stages.validation[0] ?? '' })"
+          />
+          <slot v-if="n !== 1" name="intent" :folded="true" :cycle="cycle" />
 
-      <p v-if="cycle && n !== cycle.step" class="gb-cycle-actions">
-        <button type="button" class="gb-linkbtn" @click="shown = null">Back to step {{ cycle.step }} · {{ cycle.name }}</button>
-      </p>
-      <div v-if="agent" class="gb-agent">
-        <span v-if="agent.reason" class="gb-note">{{ agent.reason }}</span>
-        <button v-else-if="button === 'start'" type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" :disabled="!!agentBusy" @click="run('go', '')">
-          {{ agentBusy === 'go' ? 'Starting…' : 'Start an agent' }}
-        </button>
-        <button v-else type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" :aria-expanded="briefing" :disabled="!!agentBusy" @click="briefing = !briefing">Brief the agent</button>
-        <span v-if="agentNote" class="gb-note" role="status">{{ agentNote }}</span>
-        <form v-if="briefing && button === 'brief'" class="gb-agent-brief" @submit.prevent="run('brief', briefText.trim())">
-          <textarea v-model="briefText" class="epfl-input" rows="3" aria-label="What the agent should do" :disabled="!!agentBusy" />
-          <button type="submit" class="epfl-btn epfl-btn-primary epfl-btn-sm" :disabled="!!agentBusy || !briefText.trim()">{{ agentBusy === 'brief' ? 'Sending…' : 'Send' }}</button>
-        </form>
+          <p v-if="cycle && n !== cycle.step" class="gb-cycle-actions">
+            <button type="button" class="gb-linkbtn" @click="shown = null">Back to step {{ cycle.step }} · {{ cycle.name }}</button>
+          </p>
+          <div v-if="agent" class="gb-agent">
+            <span v-if="agent.reason" class="gb-note">{{ agent.reason }}</span>
+            <button v-else-if="button === 'start'" type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" :disabled="!!agentBusy" @click="run('go', '')">
+              {{ agentBusy === 'go' ? 'Starting…' : 'Start an agent' }}
+            </button>
+            <button v-else type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" :aria-expanded="briefing" :disabled="!!agentBusy" @click="briefing = !briefing">Brief the agent</button>
+            <span v-if="agentNote" class="gb-note" role="status">{{ agentNote }}</span>
+            <form v-if="briefing && button === 'brief'" class="gb-agent-brief" @submit.prevent="run('brief', briefText.trim())">
+              <textarea v-model="briefText" class="epfl-input" rows="3" aria-label="What the agent should do" :disabled="!!agentBusy" />
+              <button type="submit" class="epfl-btn epfl-btn-primary epfl-btn-sm" :disabled="!!agentBusy || !briefText.trim()">{{ agentBusy === 'brief' ? 'Sending…' : 'Send' }}</button>
+            </form>
+          </div>
+          <footer v-if="bar.length" class="gb-cycle-bar" aria-label="Status">
+            <span v-for="s in bar" :key="s">{{ s }}</span>
+          </footer>
+        </template>
+        <slot name="flow" :cycle="cycle" :send="send" />
       </div>
-      <footer v-if="bar.length" class="gb-cycle-bar" aria-label="Status">
-        <span v-for="s in bar" :key="s">{{ s }}</span>
-      </footer>
     </section>
-    <aside class="gb-talk" aria-label="Discussion">
-      <slot name="talk" :step="n" />
+    <aside class="gb-sidebar" aria-label="Fields">
+      <slot name="side" />
     </aside>
   </div>
 </template>
@@ -149,8 +162,8 @@ import CycleTests from '@/components/CycleTests.vue';
 import CycleVerify from '@/components/CycleVerify.vue';
 import GbIcon from '@/components/GbIcon.vue';
 
-const props = defineProps<{ id: string; status: string; labels: string[]; events: IssueEvent[]; forges?: Forge[] | undefined }>();
-const emit = defineEmits<{ changed: []; comment: [body: string, step: number] }>();
+const props = defineProps<{ id: string; status: string; labels: string[]; events: IssueEvent[]; forges?: Forge[] | undefined; head: boolean }>();
+const emit = defineEmits<{ changed: []; comment: [body: string, step: number]; jump: [n: number] }>();
 
 const description = computed(() => props.events.find((e) => e.kind === 'created'));
 const { cycle, error, busy, needsWhy, has, act, patch, edit, press, pull } = useCycle(
@@ -177,6 +190,12 @@ const show = (step: number) => (shown.value = step === cycle.value?.step ? null 
 // a refusal belongs to the step pressed: another step shown drops it
 watch(n, () => (error.value = ''));
 defineExpose({ show });
+// the rail jumps to a step's segment; a new tab or window is the link's
+function jump(e: MouseEvent, step: number) {
+  if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey) return;
+  e.preventDefault();
+  emit('jump', step);
+}
 
 // Intent's criteria go in the description, under its own heading
 function saveCriteria(lines: string[]) {
@@ -202,6 +221,10 @@ const agentNote = ref('');
 const briefing = ref(false);
 const briefText = ref('');
 const button = computed(() => (agent.value ? agentButton(agent.value) : null));
+// the composer's Send to: the agent, once it has a worktree
+const send = computed(() =>
+  button.value === 'brief' ? { name: agent.value?.session?.agent || 'the agent', brief: (body: string) => void run('brief', body) } : undefined,
+);
 watch(cycle, () => void getIssueAgent(props.id).then((a) => (agent.value = a), () => (agent.value = null)));
 
 async function run(action: 'go' | 'brief' | 'approve', brief: string) {

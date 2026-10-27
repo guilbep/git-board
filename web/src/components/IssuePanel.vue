@@ -96,40 +96,45 @@
         <p v-if="waiting" class="gb-wait" role="status"><GbIcon name="clock" small /> Syncing with the forges… your change is saved after it.</p>
       </div>
 
-      <IssueStep ref="step" :id="thread.id" :status="statusValue" :labels="thread.labels" :events="thread.events" :forges="thread.forges" @changed="load" @comment="(b, n) => comment(b, undefined, n)">
-        <template #intent>
-          <CommentCard v-if="created" :data-event="created.id" :event="created" :forges="thread.forges" :mine="created.author.id === meId" :save="edit" @ref="onRef" />
+      <IssueStep ref="step" :id="thread.id" :status="statusValue" :labels="thread.labels" :events="thread.events" :forges="thread.forges" :head="reading.tab === 'conversation'" @jump="jumpTo" @changed="load" @comment="(b, n) => comment(b, undefined, n)">
+        <template #tabs>
+          <div class="gb-tabs gb-issue-tabs" role="tablist" aria-label="Issue">
+            <button type="button" class="gb-tab" role="tab" :aria-selected="reading.tab === 'conversation'" @click="reading.tab = 'conversation'">Conversation</button>
+            <button type="button" class="gb-tab" role="tab" :aria-selected="reading.tab === 'history'" @click="reading.tab = 'history'">History <span class="gb-modes-count">{{ changeCount }}</span></button>
+          </div>
+        </template>
+        <template #intent="{ folded, cycle }">
+          <div v-if="created && folded && !reading.description" class="gb-desc-folded">
+            <span>
+              <b>{{ created.author.name }}</b> · the description<template v-if="cycle?.evidence.criteria?.length"> · {{ cycle.evidence.criteria.length }} {{ cycle.evidence.criteria.length === 1 ? 'criterion' : 'criteria' }}</template><template v-if="created.history?.length"> · edited {{ when(created.history.at(-1)!.at) }}</template>
+            </span>
+            <button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" aria-expanded="false" @click="reading.description = true">Read the description</button>
+          </div>
+          <template v-else-if="created">
+            <CommentCard :data-event="created.id" :event="created" :forges="thread.forges" :mine="created.author.id === meId" :save="edit" @ref="onRef" />
+            <p v-if="folded"><button type="button" class="gb-linkbtn" aria-expanded="true" @click="reading.description = false">Fold the description</button></p>
+          </template>
         </template>
         <template v-if="page" #review="r">
           <CycleReview :id="thread.id" :thread="thread" :me-id="meId" :busy="saving" :focus="focus" :review="review" :resolve="resolve" v-bind="r" />
         </template>
-        <template #talk="{ step: n }">
-          <div class="gb-seg gb-seg-sm" role="group" aria-label="Discussion">
-            <button type="button" :aria-pressed="talk === 'step'" @click="talk = 'step'">This step</button>
-            <button type="button" :aria-pressed="talk === 'all'" @click="talk = 'all'">All</button>
-            <button type="button" :aria-pressed="talk === 'history'" @click="talk = 'history'">History <span class="gb-modes-count">{{ changeCount }}</span></button>
-          </div>
-          <HistoryView v-if="talk === 'history'" :thread="thread" :fields="fields" />
+        <template #flow="{ cycle, send }">
+          <HistoryView v-if="reading.tab === 'history'" :thread="thread" :fields="fields" />
           <template v-else>
-            <ReviewAside v-if="page && n === 6 && talk === 'step'" :events="rest" @line="showLine" />
-            <ol v-if="said(n).length" class="gb-tl" :aria-label="talk === 'step' ? `Step ${n}'s discussion` : 'The whole conversation'">
-              <template v-for="e in said(n)" :key="e.id">
-                <li v-if="e.kind === 'comment'" :data-event="e.id">
-                  <CommentCard :event="e" :forges="thread.forges" :mine="e.author.id === meId" :save="edit" @ref="onRef" @line="showLine" />
-                </li>
-                <TimelineEvent v-else :data-event="e.id" :event="e" :fields="fields" />
-              </template>
-            </ol>
-            <p v-else class="gb-note">Nothing said{{ talk === 'step' ? ' on this step' : '' }} yet.</p>
+            <IssueFlow ref="flow" :events="thread.events" :cycle="cycle" :me-id="meId" :since="since" :forges="thread.forges" :fields="fields" :save="edit" :reading="reading" @ref="onRef" @line="showLine" @workspace="showWorkspace" />
             <IssueComposer
               :status="thread.status"
               :forges="thread.forges"
               :busy="saving"
               :waiting="waiting"
               :error="saveError"
-              :comment="(b: string, st?: 'open' | 'closed') => comment(b, st, talk === 'step' ? n : 0)"
+              :carries="carries(cycle?.step ?? 0)"
+              :send="send?.name"
+              :comment="(b: string, st?: 'open' | 'closed', toAgent?: boolean) => post(b, st, cycle?.step ?? 0, toAgent ? send : undefined)"
             />
           </template>
+        </template>
+        <template #side>
           <IssueSide
             :id="thread.id"
             :title="thread.title"
@@ -154,23 +159,23 @@
 <script setup lang="ts">
 import { onLive } from '@/live';
 import { clampWidth, panelMode, panelWidth, togglePanelMode } from '@/panelsize';
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, toRef, useId, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, toRef, useId, watch } from 'vue';
 import { markSeen, type Thread } from '@/api/board';
 import { inbox, inboxError, loadInbox } from '@/inbox';
+import { loadVisit, saveVisit, visit } from '@/lastvisit';
 import { fieldValues, type Fields } from '@/fields';
 import { useIssue } from '@/issue';
-import { me, on } from '@/me';
+import { me, on, when } from '@/me';
 import CycleReview from '@/components/CycleReview.vue';
-import ReviewAside from '@/components/ReviewAside.vue';
 import CommentCard from '@/components/CommentCard.vue';
 import HistoryView from '@/components/HistoryView.vue';
-import { forStep } from '@/cycle';
+import { carries, loadReading, saveReading } from '@/flow';
 import { steps } from '@/replay';
 import GbIcon from '@/components/GbIcon.vue';
 import IssueComposer from '@/components/IssueComposer.vue';
+import IssueFlow from '@/components/IssueFlow.vue';
 import IssueSide from '@/components/IssueSide.vue';
 import IssueStep from '@/components/IssueStep.vue';
-import TimelineEvent from '@/components/TimelineEvent.vue';
 
 const props = defineProps<{
   id: string;
@@ -184,6 +189,7 @@ const props = defineProps<{
   hasNext?: boolean;
   findRef?: (n: string) => string | undefined; // #n → a local issue's id
   at?: string | undefined; // an event to scroll to once loaded: the inbox's first new one
+  step?: number | undefined; // a segment to jump to once loaded: a rail link's ?step=
 }>();
 const emit = defineEmits<{ close: []; prev: []; next: []; changed: [thread: Thread]; open: [id: string] }>();
 
@@ -195,6 +201,13 @@ watch(
   () => thread.value?.id,
   async (id) => {
     if (id && props.at) void nextTick(() => reveal(props.at!));
+    if (id && props.step) void nextTick(() => jumpTo(props.step!));
+    // the last visit, for the flow's "new since" line: once per issue
+    if (id) {
+      const v = visit(loadVisit(`issue:${id}`), Date.now());
+      saveVisit(`issue:${id}`, v);
+      since.value = v.prev;
+    }
     // an issue the inbox lists is read once opened, from the inbox, the
     // board or a link; on a fresh link the thread can come before the
     // inbox, so the inbox loads first. A failed write leaves it listed,
@@ -205,16 +218,16 @@ watch(
   },
 );
 const meId = computed(() => me.value?.me?.id ?? '');
+const since = ref<number | null>(null);
 const created = computed(() => thread.value?.events.find((e) => e.kind === 'created'));
-const rest = computed(() => thread.value?.events.filter((e) => e.kind !== 'created') ?? []);
 
-// the discussion: the shown step's comments, the whole conversation with
-// its events, or every change in order with the issue as it was
-const talk = ref<'step' | 'all' | 'history'>('step');
-// on the page, step 6's line comments are the review's threads, above
-const said = (n: number) =>
-  talk.value !== 'step' ? rest.value : forStep(rest.value, n).filter((e) => !(props.page && n === 6 && e.review?.path));
+// the person's reading: the tab (Conversation, or every change in order
+// with the issue as it was), the flow's filters, order and grouping; kept
+// in the browser, one for every issue
+const reading = reactive(loadReading());
+watch(reading, saveReading, { deep: true });
 const step = ref<InstanceType<typeof IssueStep> | null>(null);
+const flow = ref<InstanceType<typeof IssueFlow> | null>(null);
 const focus = ref<string>(); // the file a comment's path:line opens in Changes, step 6 on the page
 function showLine(path: string) {
   if (!props.page) return;
@@ -222,7 +235,7 @@ function showLine(path: string) {
   step.value?.show(6);
 }
 const changeCount = computed(() => (thread.value ? steps(thread.value.events).length : 0));
-const comments = computed(() => rest.value.filter((e) => e.kind === 'comment').length);
+const comments = computed(() => thread.value?.events.filter((e) => e.kind === 'comment').length ?? 0);
 const statusValue = computed(() => fieldValues(thread.value?.labels ?? [], 'status')[0] ?? '');
 // the board's fields, and any namespace this issue has besides
 const sideNames = computed(() => {
@@ -263,8 +276,36 @@ async function copyLink() {
 }
 
 // #123 of a local issue opens it here, else the link goes to the forge
-// reveal scrolls to a history item and flashes it (a waiting change's row).
-function reveal(id: string) {
+// a comment carries the issue's step (cycle:step); ticked, it goes to the
+// agent too, as a brief
+async function post(body: string, status: 'open' | 'closed' | undefined, n: number, send?: { brief: (body: string) => void }) {
+  const ok = await comment(body, status, n);
+  if (ok && send && body.trim()) send.brief(body);
+  return ok;
+}
+
+// a done segment's Show the workspace: that step heads the column
+async function showWorkspace(n: number) {
+  step.value?.show(n);
+  await nextTick();
+  const head = rootEl()?.querySelector<HTMLElement>('.gb-column-body > .gb-eyebrow');
+  head?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  head?.focus({ preventScroll: true });
+}
+
+// the rail's jump: the Conversation tab, then the step's segment
+async function jumpTo(n: number) {
+  reading.tab = 'conversation';
+  await nextTick();
+  void flow.value?.jump(n);
+}
+
+// reveal scrolls to a history item and flashes it (a waiting change's
+// row), the flow unfolded first.
+async function reveal(id: string) {
+  if (id === created.value?.id) reading.description = true;
+  flow.value?.unfold(id);
+  await nextTick();
   const el = document.querySelector<HTMLElement>(`[data-event="${CSS.escape(id)}"]`);
   if (!el) return;
   el.scrollIntoView({ block: 'center', behavior: 'smooth' });

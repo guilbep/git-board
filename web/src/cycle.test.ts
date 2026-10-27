@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { Cycle, GatePR, IssueEvent } from './api/board.ts';
-import { cardFor, criteriaLeft, forStep, mergedRun, riskWords, signoffLine, steps, statusBar, suggestion, tiles, turn, withCriteria } from './cycle.ts';
+import { cardFor, criteriaLeft, mergedRun, riskWords, signoffLine, steps, statusBar, suggestion, tiles, turn, withCriteria } from './cycle.ts';
 import { on } from './when.ts';
 
 const at = (c: Partial<Cycle>): Cycle => ({
@@ -146,17 +146,6 @@ test('verify: the run at the merge, the criteria left, what the sign-off does', 
   assert.equal(signoffLine(v(['qa']), 'qa', 'GitHub #37'), 'The sign-off closes the issue as validated, and GitHub #37 with it.');
   assert.equal(signoffLine(v([], 'done'), 'in-review'), 'The sign-off closes the issue as done.');
   assert.equal(signoffLine(v([], ''), 'in-review'), 'The sign-off is written on the issue; its status stays.');
-});
-
-test('each step has its own discussion', () => {
-  const ev = (id: string, kind: IssueEvent['kind'], step?: string) => ({ id, kind, meta: step ? { 'cycle:step': step } : undefined }) as unknown as IssueEvent;
-  const events = [ev('c', 'created'), ev('1', 'comment'), ev('2', 'comment', '3'), ev('3', 'labels'), ev('4', 'comment', '1')];
-  assert.deepEqual(forStep(events, 1).map((e) => e.id), ['1', '4']);
-  assert.deepEqual(forStep(events, 3).map((e) => e.id), ['2']);
-  assert.deepEqual(forStep(events, 6), []);
-  // a review comment without a step is the review's
-  const line = { ...ev('5', 'comment'), review: { path: 'a.go', line: 1, side: 'new', commit: 'c' } } as IssueEvent;
-  assert.deepEqual(forStep([...events, line], 6).map((e) => e.id), ['5']);
 });
 
 test('step 6 counts its approvals and open threads', () => {

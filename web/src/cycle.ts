@@ -124,12 +124,6 @@ export function steps(c: Cycle, riskBy?: string, events: IssueEvent[] = []): Ste
   });
 }
 
-// forStep is a step's discussion: the comments carrying its cycle:step.
-// Without one, a review comment (a line comment, a reply, a review, the
-// PR's) is step 6's, and every other comment step 1's.
-export function forStep(events: IssueEvent[], n: number): IssueEvent[] {
-  return events.filter((e) => e.kind === 'comment' && (e.meta?.['cycle:step'] ?? (e.review ? '6' : '1')) === String(n));
-}
 
 // suggestion is the AI's newest class for step 2 (internal/server/cycle.go
 // suggestRisk): the class, and the sentence under "Suggested: **class**".
