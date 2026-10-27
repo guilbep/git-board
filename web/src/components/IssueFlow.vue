@@ -32,7 +32,10 @@
         {{ foldedWords }} · {{ foldedCount }} {{ foldedCount === 1 ? 'entry' : 'entries' }} ·
         <button type="button" class="gb-linkbtn" @click="reading.show = 'all'">show all</button>
       </p>
-      <h3 v-if="s.n" :id="`step-${s.n}`" tabindex="-1" class="gb-fdiv" :class="{ 'is-current': s.n === step }">{{ divider(s, s.n === step) }}</h3>
+      <div v-if="s.n" class="gb-fdiv-row">
+        <h3 :id="`step-${s.n}`" tabindex="-1" class="gb-fdiv" :class="{ 'is-current': s.n === step }">{{ divider(s, s.n === step) }}</h3>
+        <button v-if="s.n < step || (cycle?.done && s.n !== step)" type="button" class="gb-linkbtn" @click="emit('workspace', s.n)">Show the workspace</button>
+      </div>
       <p v-if="s.n === lastHidden" class="gb-flow-ptr">
         {{ foldedWords }} · <button type="button" class="gb-linkbtn" @click="unfolded = true">show all</button>
       </p>
@@ -84,7 +87,7 @@ const props = defineProps<{
   reading: Reading; // the panel's, the flow writes its picks into it
 }>();
 const reading = toRef(props, 'reading');
-const emit = defineEmits<{ line: [path: string]; ref: [n: string, event: MouseEvent] }>();
+const emit = defineEmits<{ line: [path: string]; ref: [n: string, event: MouseEvent]; workspace: [n: number] }>();
 
 const step = computed(() => props.cycle?.step ?? 0);
 const segs = computed(() => segments(props.events, props.cycle?.stages, step.value, props.cycle?.skipped));
@@ -174,7 +177,9 @@ defineExpose({ jump, unfold });
 .gb-tchip { padding: 4px 8px; text-align: left; }
 .gb-tchip.is-open { border-color: var(--gb-done); color: var(--gb-done); }
 .gb-flow-ptr { margin: 12px 0 0; font-size: .875rem; color: var(--fg-muted); }
-.gb-fdiv { display: flex; align-items: center; gap: 12px; margin: 22px 0 4px; font-size: .75rem; letter-spacing: .12em; text-transform: uppercase; color: var(--gb-done); font-weight: 700; }
+.gb-fdiv-row { display: flex; align-items: center; gap: 12px; margin: 22px 0 4px; }
+.gb-fdiv-row .gb-linkbtn { flex: none; font-size: .75rem; }
+.gb-fdiv { flex: 1 1 auto; display: flex; align-items: center; gap: 12px; margin: 0; font-size: .75rem; letter-spacing: .12em; text-transform: uppercase; color: var(--gb-done); font-weight: 700; }
 .gb-fdiv::after { content: ""; flex: 1 1 auto; border-top: 1px solid var(--border-subtle); }
 .gb-fdiv.is-current { color: var(--fg); }
 .gb-fdiv:focus-visible { outline: var(--focus-w) solid var(--primary-hover); outline-offset: 2px; }

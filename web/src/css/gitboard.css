@@ -381,6 +381,8 @@ a.gb-bar-step:hover .gb-bar-name { text-decoration: underline; text-underline-of
 .gb-linkbtn { padding: 0; border: 0; background: none; color: var(--fg); font: inherit; font-size: .875rem; font-weight: 700; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
 .gb-ws-title { margin: 0; font-size: 1.25rem; line-height: 1.3; }
 .gb-ws-list { display: grid; gap: .25rem; margin: 0; padding-left: 1.25rem; font-size: .875rem; }
+/* the description, folded under a later step's workspace (F7) */
+.gb-desc-folded { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px 20px; padding: 14px 20px; border: 1px solid var(--border-subtle); font-size: .875rem; }
 .gb-eyebrow { margin: 0; font-size: .75rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--fg-muted); }
 .gb-gate { margin: 0; padding: .5rem .75rem; border-left: 3px solid var(--gb-done); background: var(--bg-subtle); font-size: .875rem; font-weight: 700; color: var(--gb-done); }
 .gb-box { display: flex; flex-direction: column; gap: .5rem; padding: .875rem 1rem; border: 1px solid var(--border-subtle); font-size: .875rem; }

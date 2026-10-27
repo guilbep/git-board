@@ -103,8 +103,17 @@
             <button type="button" class="gb-tab" role="tab" :aria-selected="reading.tab === 'history'" @click="reading.tab = 'history'">History <span class="gb-modes-count">{{ changeCount }}</span></button>
           </div>
         </template>
-        <template #intent>
-          <CommentCard v-if="created" :data-event="created.id" :event="created" :forges="thread.forges" :mine="created.author.id === meId" :save="edit" @ref="onRef" />
+        <template #intent="{ folded, cycle }">
+          <div v-if="created && folded && !reading.description" class="gb-desc-folded">
+            <span>
+              <b>{{ created.author.name }}</b> · the description<template v-if="cycle?.evidence.criteria?.length"> · {{ cycle.evidence.criteria.length }} {{ cycle.evidence.criteria.length === 1 ? 'criterion' : 'criteria' }}</template><template v-if="created.history?.length"> · edited {{ when(created.history.at(-1)!.at) }}</template>
+            </span>
+            <button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" aria-expanded="false" @click="reading.description = true">Read the description</button>
+          </div>
+          <template v-else-if="created">
+            <CommentCard :data-event="created.id" :event="created" :forges="thread.forges" :mine="created.author.id === meId" :save="edit" @ref="onRef" />
+            <p v-if="folded"><button type="button" class="gb-linkbtn" aria-expanded="true" @click="reading.description = false">Fold the description</button></p>
+          </template>
         </template>
         <template v-if="page" #review="r">
           <CycleReview :id="thread.id" :thread="thread" :me-id="meId" :busy="saving" :focus="focus" :review="review" :resolve="resolve" v-bind="r" />
@@ -112,7 +121,7 @@
         <template #flow="{ cycle }">
           <HistoryView v-if="reading.tab === 'history'" :thread="thread" :fields="fields" />
           <template v-else>
-            <IssueFlow ref="flow" :events="thread.events" :cycle="cycle" :me-id="meId" :since="since" :forges="thread.forges" :fields="fields" :save="edit" :reading="reading" @ref="onRef" @line="showLine" />
+            <IssueFlow ref="flow" :events="thread.events" :cycle="cycle" :me-id="meId" :since="since" :forges="thread.forges" :fields="fields" :save="edit" :reading="reading" @ref="onRef" @line="showLine" @workspace="showWorkspace" />
             <IssueComposer
               :status="thread.status"
               :forges="thread.forges"
@@ -154,7 +163,7 @@ import { inbox, inboxError, loadInbox } from '@/inbox';
 import { loadVisit, saveVisit, visit } from '@/lastvisit';
 import { fieldValues, type Fields } from '@/fields';
 import { useIssue } from '@/issue';
-import { me, on } from '@/me';
+import { me, on, when } from '@/me';
 import CycleReview from '@/components/CycleReview.vue';
 import CommentCard from '@/components/CommentCard.vue';
 import HistoryView from '@/components/HistoryView.vue';
@@ -263,6 +272,15 @@ async function copyLink() {
 }
 
 // #123 of a local issue opens it here, else the link goes to the forge
+// a done segment's Show the workspace: that step heads the column
+async function showWorkspace(n: number) {
+  step.value?.show(n);
+  await nextTick();
+  const head = rootEl()?.querySelector<HTMLElement>('.gb-column-body > .gb-eyebrow');
+  head?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  head?.focus({ preventScroll: true });
+}
+
 // the rail's jump: the Conversation tab, then the step's segment
 async function jumpTo(n: number) {
   reading.tab = 'conversation';
@@ -273,6 +291,7 @@ async function jumpTo(n: number) {
 // reveal scrolls to a history item and flashes it (a waiting change's
 // row), the flow unfolded first.
 async function reveal(id: string) {
+  if (id === created.value?.id) reading.description = true;
   flow.value?.unfold(id);
   await nextTick();
   const el = document.querySelector<HTMLElement>(`[data-event="${CSS.escape(id)}"]`);

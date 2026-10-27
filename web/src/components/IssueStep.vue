@@ -29,7 +29,7 @@
       <slot name="tabs" />
       <div class="gb-column-body">
         <template v-if="head">
-          <p class="gb-eyebrow">Step {{ n }} · {{ row?.name ?? 'Intent' }}<template v-if="risk"> · {{ risk }}</template></p>
+          <p class="gb-eyebrow" tabindex="-1">Step {{ n }} · {{ row?.name ?? 'Intent' }}<template v-if="risk"> · {{ risk }}</template></p>
           <slot v-if="n === 1" name="intent" :folded="false" :cycle="cycle" />
 
           <CyclePlan
