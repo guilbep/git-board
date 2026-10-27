@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { CycleStages, IssueEvent } from './api/board.ts';
-import { carries, divider, firstNew, fold, pick, READING, readingOf, segments, type Segment } from './flow.ts';
+import { carries, divider, firstNew, fold, items, pick, READING, readingOf, segments, type Segment } from './flow.ts';
 
 const stages: CycleStages = {
   before: ['backlog'], ready: 'ready', in_progress: ['in-progress'], in_review: ['in-review'],
@@ -41,6 +41,20 @@ test('a comment keeps the step it carries', () => {
 test("after the last status move, the issue's step", () => {
   const segs = segments([...events.slice(0, 7), ev('c8', 10)], stages, 5);
   assert.deepEqual(ids(segs).slice(3), [[4, ['l3']], [5, ['c8']]]);
+});
+
+test('low risk at ready: 03 is current', () => {
+  const low = [
+    ev('c1', 1), ev('l1', 2, { kind: 'labels', added: ['status:ready'] }),
+    ev('l2', 3, { kind: 'labels', added: ['risk:low'] }), ev('c2', 4), ev('c3', 5, step(3)),
+  ];
+  assert.deepEqual(ids(segments(low, stages, 3, [3])), [[1, ['c1']], [2, ['l1']], [3, ['l2', 'c2', 'c3']]]);
+});
+
+test('a cycle:step outside 1 to 7 is no step', () => {
+  const bad = ['verify', '0', '9', '3.5'].map((v, i) => ev(`b${i}`, 10 + i, { meta: { 'cycle:step': v } }));
+  assert.deepEqual(ids(segments([...events, ...bad], stages, 6)).slice(-1), [[6, ['l4', 'r1', 'c6', 'b0', 'b1', 'b2', 'b3']]]);
+  assert.equal(segments([...events, ...bad], stages, 6).length, 6);
 });
 
 test('the current segment shows empty', () => {
@@ -101,6 +115,12 @@ test('threads fold their replies', () => {
   const replies = [ev('r4', 12, { review: { path: 'a.go', reply_to: 'r1' } }), ev('r5', 13, { review: { path: 'a.go', reply_to: 'r1' } })];
   const items = fold([events[8]!, events[9]!, ...replies]);
   assert.deepEqual(items.map((i) => [i.event.id, i.replies.map((r) => r.id), i.resolved]), [['r1', ['r4', 'r5'], false], ['c6', [], undefined]]);
+});
+
+test('Newest first keeps the threads', () => {
+  const all = [...events, ev('r4', 12, { review: { path: 'a.go', reply_to: 'r1' } }), ev('r5', 13, { review: { path: 'a.go', reply_to: 'r1' } })];
+  const seg = pick(segments(all, stages, 6), all, { ...READING, newest: true }, 'me', 6)[0]!;
+  assert.deepEqual(items(seg, true).map((i) => [i.event.id, i.replies.map((r) => r.id)]), [['c6', []], ['r1', ['r5', 'r4']], ['l4', []]]);
 });
 
 test('the divider', () => {

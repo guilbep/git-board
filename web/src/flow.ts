@@ -9,16 +9,25 @@ export interface Segment { n: number; entries: IssueEvent[] }
 
 const time = (e: IssueEvent) => Date.parse(e.at);
 
+// stepOf is the step a comment carries (cycle:step), 0 for none: a value
+// outside 1 to 7, another writer's, counts as none.
+export const stepOf = (e: IssueEvent): number => {
+  const v = e.meta?.['cycle:step'] ?? '';
+  return /^[1-7]$/.test(v) ? Number(v) : 0;
+};
+
 // segments cuts the flow at the operations that opened each step (call
 // 3): a status move, the risk set at ready, the close. A comment goes to
 // the step it carries (cycle:step), a line comment without one to Review,
 // anything else to the step running when it was written; after the last
 // move, the issue's own step. Every step from 1 to the highest reached
-// shows, empty ones included, minus the skipped ones. No cycle (step 0):
+// shows, empty ones included, minus the skipped ones; the issue's step is
+// never skipped (low risk waits at 3 for in-progress). No cycle (step 0):
 // one segment, n 0. ponytail: a step opened by evidence alone (a PR, a
 // test run) shows only through the comments that carry it; the server
 // replaying internal/cycle over the operations if that misleads.
-export function segments(events: IssueEvent[], stages: CycleStages | undefined, step: number, skipped: number[] = []): Segment[] {
+export function segments(events: IssueEvent[], stages: CycleStages | undefined, step: number, skip: number[] = []): Segment[] {
+  const skipped = skip.filter((n) => n !== step);
   const sorted = events.filter((e) => e.kind !== 'created').map((e, i) => [e, i] as const)
     .sort(([a, i], [b, j]) => time(a) - time(b) || i - j).map(([e]) => e);
   if (!stages || step === 0) return [{ n: 0, entries: sorted }];
@@ -47,11 +56,11 @@ export function segments(events: IssueEvent[], stages: CycleStages | undefined, 
   let running = 1;
   sorted.forEach((e, i) => {
     let n = running;
-    const carried = e.meta?.['cycle:step'];
+    const carried = stepOf(e);
     if (moves[i] !== undefined) n = running = up(moves[i]);
-    else if (carried) running = Math.max(running, (n = up(Number(carried))));
+    else if (carried) running = Math.max(running, (n = up(carried)));
     else if (e.review) n = up(6);
-    if (i === last) running = up(step);
+    if (i === last) running = step;
     byStep.set(n, [...(byStep.get(n) ?? []), e]);
   });
   const top = Math.max(step, ...byStep.keys());
@@ -132,19 +141,16 @@ export function pick(segs: Segment[], events: IssueEvent[], r: Reading, meId: st
 export interface Item { event: IssueEvent; replies: IssueEvent[]; resolved?: boolean }
 
 // fold is the Threads grouping: a line comment's replies fold under it
-// when it is among the entries; a reply without it stands alone.
+// when it is among the entries, in either order; a reply without it
+// stands alone.
 export function fold(entries: IssueEvent[]): Item[] {
-  const roots = new Map<string, Item>();
+  const roots = new Map<string, Item>(entries.filter((e) => e.review?.path && !e.review.reply_to)
+    .map((e) => [e.id, { event: e, replies: [], resolved: !!e.review!.resolved }]));
   const items: Item[] = [];
   for (const e of entries) {
     const root = e.review?.reply_to ? roots.get(e.review.reply_to) : undefined;
-    if (root) {
-      root.replies.push(e);
-      continue;
-    }
-    const item: Item = { event: e, replies: [] };
-    if (e.review?.path && !e.review.reply_to) roots.set(e.id, Object.assign(item, { resolved: !!e.review.resolved }));
-    items.push(item);
+    if (root) root.replies.push(e);
+    else items.push(roots.get(e.id) ?? { event: e, replies: [] });
   }
   return items;
 }

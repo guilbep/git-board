@@ -78,6 +78,7 @@ import GbIcon from '@/components/GbIcon.vue';
 import MarkdownBody from '@/components/MarkdownBody.vue';
 import MarkdownEditor from '@/components/MarkdownEditor.vue';
 import { editable, verbOf } from '@/review';
+import { stepOf } from '@/flow';
 
 const props = defineProps<{
   event: IssueEvent;
@@ -101,7 +102,7 @@ const shown = ref(0);
 // the issue
 const review = computed(() => props.event.review);
 // the step the comment was written in, as its segment's divider says it
-const step = computed(() => props.event.meta?.['cycle:step']?.padStart(2, '0'));
+const step = computed(() => (stepOf(props.event) ? String(stepOf(props.event)).padStart(2, '0') : undefined));
 const verb = computed(() => verbOf(props.event));
 
 // newest first, as the menu lists them
