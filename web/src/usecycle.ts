@@ -22,6 +22,8 @@ export function useCycle(props: { id: string; labels: string[]; description: str
       error.value = `The step: ${message(e)}`;
     }
   }
+  // another issue: no step until its own is read, not the last one's
+  watch(() => props.id, () => (cycle.value = null));
   // the panel re-reads the thread after every write: labels moving or the
   // description edited re-reads the step
   watch(() => [props.id, props.labels.join('\n'), props.description], load, { immediate: true });

@@ -138,7 +138,7 @@
             <span v-for="s in bar" :key="s">{{ s }}</span>
           </footer>
         </template>
-        <slot name="flow" :cycle="cycle" :send="send" />
+        <slot name="flow" :cycle="cycle" :failed="!cycle && !!error" :send="send" />
       </div>
     </section>
     <aside class="gb-sidebar" aria-label="Fields">

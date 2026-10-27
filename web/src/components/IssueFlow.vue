@@ -79,6 +79,7 @@ import TimelineEvent from '@/components/TimelineEvent.vue';
 const props = defineProps<{
   events: IssueEvent[];
   cycle: Cycle | null;
+  failed?: boolean; // the step could not be read: no cycle to wait for
   meId: string;
   since: number | null; // the last visit, for the "new since" line
   forges?: Forge[] | undefined;
@@ -136,15 +137,20 @@ const sinceIso = computed(() => (props.since === null ? undefined : new Date(pro
 const newId = computed(() => firstNew(shown.value, props.since, props.meId, reading.value.threads));
 
 const root = ref<HTMLElement | null>(null);
-// jump goes to a segment, the rail's: shown first if it is folded. Asked
-// before the cycle has loaded, it waits for the segment.
-let pending: number | undefined;
-async function jump(n: number) {
+// settled waits for the cycle: the segments and the step's head move
+// everything when it lands, so a jump or a reveal asked before goes after,
+// or right away if it failed to load. A newer ask drops an older one.
+let pending: (() => void) | undefined;
+const loaded = () => !!props.cycle || !!props.failed;
+const settled = () => new Promise<void>((ok) => (loaded() ? ok() : (pending = ok)));
+watch(loaded, (has) => {
+  if (has) pending?.();
   pending = undefined;
-  if (!segs.value.some((s) => s.n === n)) {
-    if (!props.cycle) pending = n;
-    return;
-  }
+});
+// jump goes to a segment, the rail's: shown first if it is folded
+async function jump(n: number) {
+  await settled();
+  if (!segs.value.some((s) => s.n === n)) return;
   if (!shown.value.some((s) => s.n === n)) reading.value.show = 'all';
   unfolded.value = true;
   await nextTick();
@@ -152,7 +158,6 @@ async function jump(n: number) {
   el?.scrollIntoView({ block: 'start', behavior: 'smooth' });
   el?.focus({ preventScroll: true });
 }
-watch(segs, () => pending !== undefined && void jump(pending));
 // unfold renders the whole flow, and shows what id is (a thread holding
 // it unfolded, the filters let go if they hide it): what the inbox or
 // the sidebar scrolls to is there
@@ -163,7 +168,7 @@ function unfold(id?: string) {
   if (!shown.value.some((s) => s.entries.includes(e))) Object.assign(reading.value, { show: 'all', mine: false, agent: false, milestones: false });
   if (e.review?.path) open.add(e.review.reply_to ?? e.id);
 }
-defineExpose({ jump, unfold });
+defineExpose({ jump, unfold, settled });
 </script>
 
 <style scoped>
