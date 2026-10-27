@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { CycleStages, IssueEvent } from './api/board.ts';
-import { carries, divider, firstNew, fold, items, pick, READING, readingOf, segments, type Segment } from './flow.ts';
+import { bodyThreads, carries, divider, firstNew, fold, isResolved, isRoot, items, pick, READING, readingOf, roleOf, rootOf, segments, type Segment } from './flow.ts';
 
 const stages: CycleStages = {
   before: ['backlog'], ready: 'ready', in_progress: ['in-progress'], in_review: ['in-review'],
@@ -164,4 +164,54 @@ test('the reading kept', () => {
   assert.deepEqual(readingOf('[]'), READING);
   assert.deepEqual(readingOf('{"show":"open","newest":true,"tab":3}'), { ...READING, show: 'open', newest: true });
   assert.deepEqual(readingOf('{"show":"bogus","threads":"no","mine":true}'), { ...READING, mine: true });
+});
+
+// body threads (thread:*): a question on §3 › 3 and its reply
+const c7 = ev('c7', 10, { meta: { 'thread:anchor': 'body@v1/expected#3' } });
+const c8 = ev('c8', 11, { meta: { 'thread:anchor': 'body@v1/expected#3', 'thread:reply-to': 'c7' }, author: me });
+const resolved = (v: string) => ({ ...c7, meta: { ...c7.meta, 'thread:resolved': v } });
+const open = (all: IssueEvent[]) => ids(pick(segments(all, stages, 6), all, { ...READING, show: 'open' }, 'me', 6)).filter(([, e]) => e.length);
+
+test('a body reply folds under its root', () => {
+  assert.deepEqual(fold([c7, c8]).map((i) => [i.event.id, i.replies.map((r) => r.id), i.resolved]), [['c7', ['c8'], false]]);
+  assert.equal(rootOf(c8), 'c7');
+  assert.equal(rootOf(c7), undefined);
+  assert.ok(isRoot(c7) && !isRoot(c8) && isRoot(events[8]!) && !isRoot(events[9]!));
+  assert.deepEqual(bodyThreads([...events, c7, c8]).map((i) => [i.event.id, i.replies.map((r) => r.id)]), [['c7', ['c8']]]);
+});
+
+test('a body reply without its root stays', () => {
+  assert.deepEqual(fold([c8]), [{ event: c8, replies: [] }]);
+});
+
+test('Open threads counts a body thread', () => {
+  assert.deepEqual(open([...events, c7, c8]), [[6, ['r1', 'c7', 'c8']]]);
+});
+
+test('a resolved body thread is not open', () => {
+  assert.ok(isResolved(resolved('v2')));
+  assert.deepEqual(open([...events, resolved('v2'), c8]), [[6, ['r1']]]);
+});
+
+test('an emptied thread:resolved is open', () => {
+  assert.ok(!isResolved(resolved('')));
+  assert.deepEqual(open([...events, resolved(''), c8]), [[6, ['r1', 'c7', 'c8']]]);
+});
+
+test('pick keeps a thread with no section', () => {
+  const gone = ev('c9', 12, { meta: { 'thread:anchor': 'body@v1/renamed' } });
+  assert.deepEqual(open([...events, gone]), [[6, ['r1', 'c9']]]);
+});
+
+test('readingOf takes where', () => {
+  assert.equal(READING.where, 'section');
+  assert.equal(readingOf('{"where":"flow"}').where, 'flow');
+  assert.equal(readingOf('{"where":"side"}').where, 'section');
+});
+
+test('the role a person holds', () => {
+  const fields = { po: { single: false, options: null, numeric: false, type: 'person', inherits: 'alice' }, risk: { single: true, options: [], numeric: false } };
+  assert.equal(roleOf(fields, 'alice'), 'po');
+  assert.equal(roleOf(fields, 'bob'), undefined);
+  assert.equal(roleOf(fields, undefined), undefined);
 });
