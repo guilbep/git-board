@@ -357,6 +357,14 @@ the marker deleted, the comment is plain text from then on, and Restore
 says which keys that clears. A comment never edited on the forge comes
 back by its record, its metadata untouched.
 
+On a forge whose comments form threads (GitLab's discussions,
+`forge.Replier`), a reply is posted in its root's thread: `Options.ReplyTo`
+names the root, and the root's forge comment is its record's. With the
+root not posted, or gone from the forge, the reply is a comment like any
+other. GitLab can't resolve an issue's thread through its API, so the
+thread's state stays in the keys. GitHub's comments are flat: the quote
+line says what a reply answers.
+
 ## Posting for people without a token
 
 - **A token owner acts directly.** A change goes to a forge with its

@@ -446,6 +446,46 @@ func (f *Forge) CreateComment(ctx context.Context, issue forge.Ref, body string)
 	return n.comment(), nil
 }
 
+// discussion is a thread of notes; key is its first note's.
+type discussion struct {
+	ID    string `json:"id"`
+	Notes []note `json:"notes"`
+}
+
+func (d discussion) key() int64 {
+	if len(d.Notes) == 0 {
+		return 0
+	}
+	return d.Notes[0].ID
+}
+
+// Reply posts body in the discussion holding the note toCommentID.
+func (f *Forge) Reply(ctx context.Context, issue forge.Ref, toCommentID, body string) (forge.Comment, error) {
+	g, err := f.read(ctx, issue)
+	if err != nil {
+		return forge.Comment{}, err
+	}
+	to, _ := strconv.ParseInt(toCommentID, 10, 64)
+	var in string
+	err = each(ctx, f, f.p.issue(g.IID)+"/discussions", nil, func(d discussion) (bool, error) {
+		if slices.ContainsFunc(d.Notes, func(n note) bool { return n.ID == to }) {
+			in = d.ID
+		}
+		return in == "", nil
+	})
+	if err != nil {
+		return forge.Comment{}, err
+	}
+	if in == "" {
+		return forge.Comment{}, fmt.Errorf("gitlab: comment %s: %w", toCommentID, forge.ErrNotFound)
+	}
+	var n note
+	if _, err := f.call(ctx, http.MethodPost, f.p.issue(g.IID)+"/discussions/"+url.PathEscape(in)+"/notes", nil, map[string]string{"body": body}, &n); err != nil {
+		return forge.Comment{}, err
+	}
+	return n.comment(), nil
+}
+
 func (f *Forge) EditComment(ctx context.Context, issue forge.Ref, commentID, body string) error {
 	g, err := f.read(ctx, issue)
 	if err != nil {

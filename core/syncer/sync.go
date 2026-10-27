@@ -46,6 +46,9 @@ type Options struct {
 	// the forge's last body, after git-board's; id names the version (an
 	// operation's id), posted once. id "" posts none.
 	Published func(issueID, before, after string) (id, note string)
+	// ReplyTo is the comment a comment replies to, "" for none: on a forge
+	// with threads (forge.Replier), it is posted in its root's. Nil is none.
+	ReplyTo func(meta map[string]string) string
 	// Held keeps a label in git-board on the project named by key: never
 	// sent there, and the project's own copy of it neither pulled nor
 	// removed. Nil holds none.

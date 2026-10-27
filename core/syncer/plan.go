@@ -89,6 +89,25 @@ func wrapLike(seen, body, keys string, posted bool) string {
 	return w.String()
 }
 
+// replyTo is the comment a comment replies to, as Options.ReplyTo says.
+func (r *run) replyTo(meta map[string]string) string {
+	if r.opt.ReplyTo == nil {
+		return ""
+	}
+	return r.opt.ReplyTo(meta)
+}
+
+// post posts a comment: on a forge with threads, a reply to the forge
+// comment to, when there is one and it is still there.
+func (r *run) post(fw forge.Forge, ref forge.Ref, to, body string) (forge.Comment, error) {
+	if rp, ok := fw.(forge.Replier); ok && to != "" {
+		if fc, err := rp.Reply(r.ctx, ref, to, body); !errors.Is(err, forge.ErrNotFound) {
+			return fc, err
+		}
+	}
+	return fw.CreateComment(r.ctx, ref, body)
+}
+
 // carry is what a comment's marker carries, as Options.Carry says.
 func (r *run) carry(meta map[string]string) string {
 	if r.opt.Carry == nil {
@@ -313,7 +332,7 @@ func (r *run) plan(p *project, is *issue.Issue, fi forge.Issue, who map[string]s
 			}
 			pl.comments = append(pl.comments, func(x *pushing) error {
 				return r.send(x, c.Author, field, []string{body}, func(fw forge.Forge) ([]oplog.Op, error) {
-					fc, err := fw.CreateComment(r.ctx, fi.Ref(), body)
+					fc, err := r.post(fw, fi.Ref(), x.p.st.posted[[2]string{is.ID, r.replyTo(c.Meta)}], body)
 					return []oplog.Op{postedOp(is.Author, time.Now().Unix(), is.ID, cid, fc.ID), rec("comment:"+fc.ID, body)}, err
 				})
 			})

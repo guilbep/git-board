@@ -116,3 +116,10 @@ type Forge interface {
 	// SetAssignees sets the whole set, and returns what the forge kept.
 	SetAssignees(ctx context.Context, issue Ref, users []Account) ([]Account, error)
 }
+
+// Replier is a forge whose comments form threads (GitLab's discussions):
+// Reply posts a comment in the thread holding toCommentID, ErrNotFound when
+// that comment is gone. GitHub's comments are flat; it has none.
+type Replier interface {
+	Reply(ctx context.Context, issue Ref, toCommentID, body string) (Comment, error)
+}

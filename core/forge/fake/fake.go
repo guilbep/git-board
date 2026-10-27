@@ -23,7 +23,7 @@ var ErrCrash = errors.New("fake: the write landed, then the connection broke")
 // Write is one write the forge was asked for, by the account As. Issue is
 // the issue's id, empty for create-issue.
 type Write struct {
-	Op    string // create-issue, create-comment, edit-comment, set-title, set-body, set-status, change-labels, set-assignees
+	Op    string // create-issue, create-comment, reply, edit-comment, set-title, set-body, set-status, change-labels, set-assignees
 	As    forge.Account
 	Issue string
 	Args  []string
@@ -298,6 +298,21 @@ func (f *Forge) CreateIssue(_ context.Context, title, body string) (forge.Issue,
 func (f *Forge) CreateComment(_ context.Context, issue forge.Ref, body string) (forge.Comment, error) {
 	var out forge.Comment
 	err := f.edit("create-comment", issue, []string{body}, func(e *entry, p *project, t int64) error {
+		out = forge.Comment{ID: p.id(2_000_000), Body: body, Author: f.as, Time: t}
+		e.Comments = append(e.Comments, out)
+		return nil
+	})
+	return out, err
+}
+
+// Reply is a comment like any other here, written as a "reply" to
+// toCommentID, ErrNotFound when that one is gone: the fake keeps no threads.
+func (f *Forge) Reply(_ context.Context, issue forge.Ref, toCommentID, body string) (forge.Comment, error) {
+	var out forge.Comment
+	err := f.edit("reply", issue, []string{toCommentID, body}, func(e *entry, p *project, t int64) error {
+		if !slices.ContainsFunc(e.Comments, func(c forge.Comment) bool { return c.ID == toCommentID }) {
+			return forge.ErrNotFound
+		}
 		out = forge.Comment{ID: p.id(2_000_000), Body: body, Author: f.as, Time: t}
 		e.Comments = append(e.Comments, out)
 		return nil

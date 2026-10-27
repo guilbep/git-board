@@ -100,3 +100,39 @@ func TestQuoteOnlyInAMarkedText(t *testing.T) {
 		t.Errorf("unwrapped %+v", w)
 	}
 }
+
+// On a forge with threads, a reply goes to its root's forge comment, posted
+// in the same run; with its root not posted, it is a comment.
+func TestReplyJoinsItsRoot(t *testing.T) {
+	t.Parallel()
+	s, f := newStore(t), newFake()
+	is, err := issue.Create(t.Context(), s, issue.NewCreate("a", "T", "B"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if is, err = issue.Do(t.Context(), s, is.ID, issue.NewComment("a", "root")); err != nil {
+		t.Fatal(err)
+	}
+	root := is.Comments[0].ID
+	if _, err = issue.Do(t.Context(), s, is.ID,
+		issue.NewCommentMeta("a", "answer", map[string]string{"reply-to": root}),
+		issue.NewCommentMeta("a", "orphan", map[string]string{"reply-to": "0000000000000000000000000000000000000000:1"})); err != nil {
+		t.Fatal(err)
+	}
+	opt := Options{ReplyTo: func(m map[string]string) string { return m["reply-to"] }}
+	if _, err := Sync(t.Context(), s, opt, f); err != nil {
+		t.Fatal(err)
+	}
+	cs := f.All()[0].Comments
+	var ops []string
+	for _, w := range f.Writes() {
+		if w.Op == "reply" {
+			ops = append(ops, "reply to "+w.Args[0])
+		} else if w.Op == "create-comment" {
+			ops = append(ops, "comment")
+		}
+	}
+	if want := []string{"comment", "reply to " + cs[0].ID, "comment"}; strings.Join(ops, ", ") != strings.Join(want, ", ") {
+		t.Errorf("writes %v, want %v", ops, want)
+	}
+}
