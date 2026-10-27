@@ -169,7 +169,7 @@ import { me, on, when } from '@/me';
 import CycleReview from '@/components/CycleReview.vue';
 import CommentCard from '@/components/CommentCard.vue';
 import HistoryView from '@/components/HistoryView.vue';
-import { carries, READING } from '@/flow';
+import { carries, loadReading, saveReading } from '@/flow';
 import { steps } from '@/replay';
 import GbIcon from '@/components/GbIcon.vue';
 import IssueComposer from '@/components/IssueComposer.vue';
@@ -222,8 +222,10 @@ const since = ref<number | null>(null);
 const created = computed(() => thread.value?.events.find((e) => e.kind === 'created'));
 
 // the person's reading: the tab (Conversation, or every change in order
-// with the issue as it was), the flow's filters, order and grouping
-const reading = reactive({ ...READING });
+// with the issue as it was), the flow's filters, order and grouping; kept
+// in the browser, one for every issue
+const reading = reactive(loadReading());
+watch(reading, saveReading, { deep: true });
 const step = ref<InstanceType<typeof IssueStep> | null>(null);
 const flow = ref<InstanceType<typeof IssueFlow> | null>(null);
 const focus = ref<string>(); // the file a comment's path:line opens in Changes, step 6 on the page

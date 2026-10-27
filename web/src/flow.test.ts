@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { CycleStages, IssueEvent } from './api/board.ts';
-import { carries, divider, firstNew, fold, pick, READING, segments, type Segment } from './flow.ts';
+import { carries, divider, firstNew, fold, pick, READING, readingOf, segments, type Segment } from './flow.ts';
 
 const stages: CycleStages = {
   before: ['backlog'], ready: 'ready', in_progress: ['in-progress'], in_review: ['in-review'],
@@ -127,4 +127,12 @@ test('the step a new comment carries', () => {
   assert.equal(carries(7), '07 Verify');
   assert.equal(carries(3), '03 Plan');
   assert.equal(carries(0), '');
+});
+
+test('the reading kept', () => {
+  assert.deepEqual(readingOf(null), READING);
+  assert.deepEqual(readingOf('{'), READING);
+  assert.deepEqual(readingOf('[]'), READING);
+  assert.deepEqual(readingOf('{"show":"open","newest":true,"tab":3}'), { ...READING, show: 'open', newest: true });
+  assert.deepEqual(readingOf('{"show":"bogus","threads":"no","mine":true}'), { ...READING, mine: true });
 });

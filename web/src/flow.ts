@@ -77,6 +77,44 @@ export const READING: Reading = {
   tab: 'conversation', show: 'all', mine: false, agent: false, milestones: false, newest: false, threads: true, description: false,
 };
 
+// readingOf reads the kept reading over READING: a key of the wrong
+// type or an unknown value is dropped, anything broken is READING.
+const ONE_OF: Partial<Record<keyof Reading, string[]>> = { tab: ['conversation', 'history'], show: ['step', 'all', 'open'] };
+export function readingOf(raw: string | null): Reading {
+  let kept: unknown;
+  try {
+    kept = JSON.parse(raw ?? 'null');
+  } catch {
+    return { ...READING };
+  }
+  const r: Reading = { ...READING };
+  if (!kept || typeof kept !== 'object' || Array.isArray(kept)) return r;
+  for (const [k, v] of Object.entries(kept)) {
+    const key = k as keyof Reading;
+    if (!(key in READING) || typeof v !== typeof READING[key]) continue;
+    if (ONE_OF[key] && !ONE_OF[key].includes(v as string)) continue;
+    Object.assign(r, { [key]: v });
+  }
+  return r;
+}
+
+// One reading for every issue, the page's and the board's side panel's.
+const KEY = 'gb-reading';
+export function loadReading(): Reading {
+  try {
+    return readingOf(localStorage.getItem(KEY));
+  } catch {
+    return { ...READING };
+  }
+}
+export function saveReading(r: Reading): void {
+  try {
+    localStorage.setItem(KEY, JSON.stringify(r));
+  } catch {
+    // private window or storage full: the reading lasts the visit
+  }
+}
+
 // pick applies the filters: one of This step / All / Open threads; Mine,
 // Agent and Milestones narrow it to their union. Segments stay, emptied,
 // so the rail still has its anchors; Newest first reverses them and their
