@@ -306,11 +306,29 @@ func TestCycleVerifyThenSignoff(t *testing.T) {
 	if _, e := lastEvent(t, b, id); e.Meta["verify:run"] != "1" || e.Meta["cycle:step"] != "7" || e.Body != "Run\n\n```\nok\n```" {
 		t.Errorf("the run %+v", e)
 	}
+	// a box on the first criterion only: the second keeps its comment alone
+	th, _ := lastEvent(t, b, id)
+	boxed := strings.Replace(th.Events[0].Body, "- Exports", "- [ ] Exports", 1)
+	if err := b.EditComment(id, th.Events[0].ID, boxed, th.Events[0].Body); err != nil {
+		t.Fatal(err)
+	}
 	if code, body := post(t, url+"check", map[string]int{"index": 0}); code != http.StatusOK {
 		t.Fatalf("check: %d %s", code, body)
 	}
-	if _, e := lastEvent(t, b, id); e.Meta["verify:criterion"] != "0" || e.Body != "Checked: Exports a CSV" {
+	th, e := lastEvent(t, b, id)
+	if e.Meta["verify:criterion"] != "0" || e.Body != "Checked: Exports a CSV" {
 		t.Errorf("the check %+v", e)
+	}
+	if desc := th.Events[0]; !strings.Contains(desc.Body, "- [x] Exports a CSV") || len(desc.History) != 3 {
+		t.Errorf("the box is not ticked, once: %q, %d texts", desc.Body, len(desc.History))
+	}
+	for _, i := range []int{0, 1} {
+		if code, body := post(t, url+"check", map[string]int{"index": i}); code != http.StatusOK {
+			t.Fatalf("check %d again: %d %s", i, code, body)
+		}
+	}
+	if th, _ := lastEvent(t, b, id); len(th.Events[0].History) != 3 || strings.Contains(th.Events[0].Body, "[x] Keeps") {
+		t.Errorf("a ticked box, or one with none, is not edited: %d texts, %q", len(th.Events[0].History), th.Events[0].Body)
 	}
 	if code, _ := post(t, url+"check", map[string]int{"index": 9}); code != http.StatusBadRequest {
 		t.Errorf("criterion 9: %d", code)

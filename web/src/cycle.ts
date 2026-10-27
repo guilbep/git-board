@@ -144,27 +144,41 @@ export function suggestion(events: IssueEvent[]): { risk: string; why: string } 
 export const riskWords = (risk: string) => (risk === 'low' ? 'low skips step 3, Start work opens step 4' : `${risk} opens step 3`);
 
 // The headings and items internal/cycle/cycle.go's Criteria reads.
-const typedItem = /^([-*+]|\d+[.)])\s+|^\[[ xX]\]\s*/;
+const marker = /^\s*([-*+]|\d+[.)])\s+/;
+const box = /^\[([ xX])\]\s*/;
 const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const headingOf = (hs: string[]) => new RegExp(`^\\s*(#{1,6}\\s*|\\*\\*)(${hs.map(esc).join('|')}):?(\\*\\*)?:?\\s*$`, 'i');
 
-// withCriteria is the description with the criteria written as a list:
-// under the first criteria heading it has (the one the server reads),
-// under a new one, the first of headings, at the end otherwise.
+// criterionOf is a line's criterion: its list marker and box stripped,
+// done when the box is ticked
+export function criterionOf(line: string): { text: string; done: boolean } {
+  const t = line.trim().replace(marker, '');
+  return { text: t.replace(box, '').trim(), done: /^\[[xX]\]/.test(t) };
+}
+
+// withCriteria is the description with the criteria written as a "- [ ]"
+// list: in place of the list under the first criteria heading it has (the
+// one the server reads), a criterion ticked there kept ticked; under a new
+// heading, the first of headings, at the end otherwise.
 export function withCriteria(description: string, lines: string[], headings: string[] = ['Acceptance criteria']): string {
-  const list = lines
-    .map((l) => l.trim().replace(typedItem, '').replace(typedItem, '').trim())
-    .filter(Boolean)
-    .map((l) => `- ${l}`);
   const ls = description.split('\n');
   const re = headingOf(headings.length ? headings : ['Acceptance criteria']);
   const h = ls.findIndex((l) => re.test(l));
-  if (h < 0) return `${description.trimEnd()}${description.trim() ? '\n\n' : ''}## ${headings[0] ?? 'Acceptance criteria'}\n\n${list.join('\n')}`;
   let at = h + 1;
-  while (at < ls.length && !ls[at]?.trim()) at++;
+  const ticked = new Set<string>();
+  for (; h >= 0 && at < ls.length && (!ls[at]?.trim() || marker.test(ls[at] ?? '') || box.test(ls[at]?.trim() ?? '')); at++) {
+    const c = criterionOf(ls[at] ?? '');
+    if (c.done) ticked.add(c.text);
+  }
+  const list = lines
+    .map(criterionOf)
+    .filter((c) => c.text)
+    .map((c) => `- [${c.done || ticked.has(c.text) ? 'x' : ' '}] ${c.text}`);
+  if (h < 0) return `${description.trimEnd()}${description.trim() ? '\n\n' : ''}## ${headings[0] ?? 'Acceptance criteria'}\n\n${list.join('\n')}`;
   const rest = ls.slice(at);
   return [...ls.slice(0, h + 1), '', ...list, ...(rest.length ? ['', ...rest] : [])].join('\n');
 }
+
 
 export interface Tile {
   status: string;

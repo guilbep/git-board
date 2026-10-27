@@ -300,8 +300,32 @@ var (
 // warnings Intent shows, each naming its line: where the description
 // reads differently from how it looks.
 func Criteria(description string, headings []string) (items, problems []string) {
+	items, _, problems = criteria(description, headings)
+	return items, problems
+}
+
+// TickCriterion is the description with criterion i's "[ ]" box ticked;
+// false when it has no such box (ticked already, an item with no box: a
+// box added would be an edit, not a tick, so a version) or no such item.
+func TickCriterion(description string, headings []string, i int) (string, bool) {
+	_, at, _ := criteria(description, headings)
+	if i < 0 || i >= len(at) {
+		return description, false
+	}
+	lines := strings.Split(description, "\n")
+	l := lines[at[i]]
+	m := criteriaItem.FindStringSubmatchIndex(l)
+	if m[6] < 0 || l[m[6]:m[6]+3] != "[ ]" {
+		return description, false
+	}
+	lines[at[i]] = l[:m[6]] + "[x]" + l[m[6]+3:]
+	return strings.Join(lines, "\n"), true
+}
+
+// criteria is Criteria with each item's line, 0-based.
+func criteria(description string, headings []string) (items []string, at []int, problems []string) {
 	if len(headings) == 0 {
-		return nil, nil
+		return nil, nil, nil
 	}
 	q := make([]string, len(headings))
 	for i, h := range headings {
@@ -309,24 +333,24 @@ func Criteria(description string, headings []string) (items, problems []string) 
 	}
 	heading := regexp.MustCompile(`(?i)^\s*(#{1,6}\s*|\*\*)(` + strings.Join(q, "|") + `):?(\*\*)?:?\s*$`)
 	lines := strings.Split(description, "\n")
-	at, ended, indent := -1, false, -1
+	head, ended, indent := -1, false, -1
 	for i, l := range lines {
 		switch m := criteriaItem.FindStringSubmatch(l); {
 		case heading.MatchString(l):
-			if at < 0 {
-				at = i
+			if head < 0 {
+				head = i
 			} else {
 				problems = append(problems, fmt.Sprintf("line %d: a second criteria heading, ignored: only the first list counts", i+1))
 				ended = true
 			}
-		case at < 0 || ended || strings.TrimSpace(l) == "":
+		case head < 0 || ended || strings.TrimSpace(l) == "":
 		case m != nil:
 			if indent < 0 {
 				indent = len(m[1])
 			} else if len(m[1]) > indent {
 				problems = append(problems, fmt.Sprintf("line %d: a sub-item, counted as a criterion of its own", i+1))
 			}
-			items = append(items, strings.TrimSpace(m[4]))
+			items, at = append(items, strings.TrimSpace(m[4])), append(at, i)
 		default:
 			ended = true
 			if len(items) > 0 && !anyHeading.MatchString(l) && itemBeforeHeading(lines[i+1:]) {
@@ -334,10 +358,37 @@ func Criteria(description string, headings []string) (items, problems []string) 
 			}
 		}
 	}
-	if at >= 0 && len(items) == 0 {
-		problems = append(problems, fmt.Sprintf("line %d: no list right under “%s”", at+1, strings.Trim(strings.TrimSpace(lines[at]), "#* :")))
+	if head >= 0 && len(items) == 0 {
+		problems = append(problems, fmt.Sprintf("line %d: no list right under “%s”", head+1, strings.Trim(strings.TrimSpace(lines[head]), "#* :")))
 	}
-	return items, problems
+	if head < 0 {
+		// ponytail: the last list, the likeliest criteria; a list under
+		// another heading is that heading's
+		if l := bareList(lines); l >= 0 {
+			problems = append(problems, fmt.Sprintf("line %d: a list with no heading above it; if these are the criteria, put “## %s” over it", l+1, strings.TrimSpace(headings[0])))
+		}
+	}
+	return items, at, problems
+}
+
+// bareList is the line the description's last list starts on when no
+// heading is right above it, -1 otherwise.
+func bareList(lines []string) int {
+	start := -1
+	for i := len(lines) - 1; i >= 0; i-- {
+		l := lines[i]
+		switch {
+		case criteriaItem.MatchString(l):
+			start = i
+		case strings.TrimSpace(l) == "":
+		case start >= 0:
+			if anyHeading.MatchString(l) {
+				return -1
+			}
+			return start
+		}
+	}
+	return start
 }
 
 // itemBeforeHeading: a list item comes before the next heading.

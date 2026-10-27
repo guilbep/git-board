@@ -197,7 +197,9 @@ func TestCriteriaProblems(t *testing.T) {
 		want       []string
 	}{
 		{"clean", "Intro\n\n## Expected\n\n- one\n- two\n\n## Notes\n\nlater\n- an aside\n", nil},
-		{"no heading", "- one\n", nil},
+		{"no heading", "- one\n", []string{"line 1: a list with no heading above it; if these are the criteria, put “## Acceptance criteria” over it"}},
+		{"a heading lost", "The fix.\n\n1. a defect\n2. another\n\nThe work.\n\n\n- a test fails\n- it passes\n", []string{"line 9: a list with no heading above it; if these are the criteria, put “## Acceptance criteria” over it"}},
+		{"a list under another heading", "Intro\n\n## Steps\n\n- one\n", nil},
 		{"no list", "## Expected\n\nTo be written.\n", []string{"line 1: no list right under “Expected”"}},
 		{"bold, no list", "**Done when:**\n", []string{"line 1: no list right under “Done when”"}},
 		{"a second heading", "## Expected\n- e\n\n**Done when**\n- d\n", []string{"line 4: a second criteria heading, ignored: only the first list counts"}},
@@ -241,5 +243,24 @@ func TestCriteriaOwnHeading(t *testing.T) {
 	}
 	if got, _ := Criteria(d, nil); got != nil {
 		t.Errorf("no headings: %q", got)
+	}
+}
+
+func TestTickCriterion(t *testing.T) {
+	t.Parallel()
+	desc := "Intro\n\n## Expected\n\n- [ ] one\n- two\n  1. [x] three\n"
+	for _, tc := range []struct {
+		i    int
+		want string
+		ok   bool
+	}{
+		{0, "Intro\n\n## Expected\n\n- [x] one\n- two\n  1. [x] three\n", true},
+		{1, desc, false},
+		{2, desc, false},
+		{3, desc, false},
+	} {
+		if got, ok := TickCriterion(desc, co2.Criteria, tc.i); got != tc.want || ok != tc.ok {
+			t.Errorf("tick %d = %q %v, want %q %v", tc.i, got, ok, tc.want, tc.ok)
+		}
 	}
 }

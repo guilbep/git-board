@@ -359,6 +359,15 @@ func (s *apiServer) handleCycleAction(w http.ResponseWriter, r *http.Request) {
 		writeIssueError(w, err)
 		return
 	}
+	// a check ticks its box in the description too: a tick, not a version
+	if desc := th.Events[0]; action == "check" {
+		if ticked, ok := cycle.TickCriterion(desc.Body, cur.Stages.Criteria, *req.Index); ok {
+			if err := s.b.EditComment(id, desc.ID, ticked, desc.Body); err != nil {
+				writeIssueError(w, err)
+				return
+			}
+		}
+	}
 	if action == "approve-plan" && cur.Stage == "ready" && len(cur.Stages.InProgress) > 0 {
 		if _, err := fields.Apply(s.b, cfg, id, "status", cur.Stages.InProgress[0], s.me, time.Now()); err != nil {
 			writeError(w, http.StatusInternalServerError, err)
