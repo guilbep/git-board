@@ -255,7 +255,11 @@ func Compute(in Input) Cycle {
 		}
 	default: // before ready, or a status no option names
 		c.Step = 1
-		if len(in.Criteria) > 0 && in.Stages.Ready != "" {
+		switch {
+		case len(in.Criteria) == 0 || in.Stages.Ready == "":
+		case in.People["spec"] != "": // the verdict moves the status (docs/prd/time-flow.md, open point 1)
+			w, act = Waits{Role: "spec", Login: in.People["spec"], What: "give the verdict on the description"}, "spec-verdict"
+		default:
 			w.What, act = "move the status to "+in.Stages.Ready, "move-ready"
 		}
 	}

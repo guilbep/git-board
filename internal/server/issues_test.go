@@ -482,3 +482,26 @@ func TestThreadMeta(t *testing.T) {
 		t.Errorf("a plain comment: %d", code)
 	}
 }
+
+func TestThreadVersionsHaveHTML(t *testing.T) {
+	t.Parallel()
+	ts, s := newIssueServer(t)
+	id, err := s.b.NewIssue("Releases", "## Expected\n\n- a", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	th, err := s.b.Thread(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.b.EditComment(id, th.Events[0].ID, "## Expected\n\n- b", "## Expected\n\n- a"); err != nil {
+		t.Fatal(err)
+	}
+	if code := call(t, "GET", ts.URL+"/api/issues/"+id[:8]+"/thread", nil, &th); code != http.StatusOK {
+		t.Fatalf("thread: %d", code)
+	}
+	h := th.Events[0].History
+	if len(h) != 2 || !strings.Contains(h[0].HTML, "<li>a</li>") || !strings.Contains(h[1].HTML, "<li>b</li>") {
+		t.Errorf("history %+v", h)
+	}
+}

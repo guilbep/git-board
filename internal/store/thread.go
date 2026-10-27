@@ -46,6 +46,7 @@ type Version struct {
 	Author Person    `json:"author"`
 	At     time.Time `json:"at"`
 	Body   string    `json:"body"`
+	HTML   string    `json:"html,omitempty"` // rendered by the server, the description's
 }
 
 // Event is one item of an issue's history: created (with the description),

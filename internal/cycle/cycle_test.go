@@ -56,6 +56,9 @@ func TestWalk(t *testing.T) {
 	}{
 		{name: "backlog", in: input("backlog", func(in *Input) { in.Criteria = nil }), step: 1, login: "dan", what: "add acceptance criteria", gate: "No issue, no agent"},
 		{name: "backlog, criteria", in: input("backlog", func(in *Input) { in.Me = "dan" }), step: 1, login: "dan", what: "move the status to ready", mine: true, actions: []string{"move-ready"}},
+		{name: "backlog, spec role", in: input("backlog", func(in *Input) { in.People = map[string]string{"spec": "bob"}; in.Me = "bob" }), step: 1, login: "bob", what: "give the verdict on the description", mine: true, actions: []string{"spec-verdict"}},
+		{name: "backlog, spec role, the author", in: input("backlog", func(in *Input) { in.People = map[string]string{"spec": "bob"}; in.Me = "dan" }), step: 1, login: "bob", what: "give the verdict on the description"},
+		{name: "backlog, spec role, no criteria", in: input("backlog", func(in *Input) { in.People = map[string]string{"spec": "bob"}; in.Criteria = nil }), step: 1, login: "dan", what: "add acceptance criteria", gate: "No issue, no agent"},
 		{name: "ready, no criteria", in: input("ready", func(in *Input) { in.Criteria = nil }), step: 1, login: "dan", what: "add acceptance criteria"},
 		{name: "ready, no risk", in: input("ready", nil), step: 2, login: "alice", what: "set the risk class", mine: true, gate: "Class written on the issue", actions: []string{"set-risk"}},
 		{name: "ready, normal", in: input("ready", risk("normal")), step: 3, login: "bob", what: "approve the plan", gate: "Plan approved by the plan role"},

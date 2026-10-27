@@ -61,6 +61,9 @@ func (s *apiServer) writeThread(w http.ResponseWriter, status int, id string) {
 		if e.Body != "" {
 			th.Events[i].HTML = markdown.Render(e.Body, media)
 		}
+		for j, v := range e.History { // the description's versions (sections.ts)
+			th.Events[i].History[j].HTML = markdown.Render(v.Body, media)
+		}
 	}
 	s.annotate(&th)
 	writeJSON(w, status, th)

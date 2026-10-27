@@ -65,6 +65,7 @@ func Gather(b *store.Backend, cfg *config.Config, th store.Thread, me string, pu
 		return board.FieldValue(th.Issue, role)
 	}
 	in.People["risk"], in.People["plan"], in.People["review"] = holder(cfg.Cycle.Risk), holder(cfg.Cycle.Plan), holder(cfg.Cycle.Review)
+	in.People["spec"] = holder(cfg.Cycle.Spec)
 	for status, role := range cfg.Cycle.Signoffs {
 		in.People["signoff:"+status] = holder(role)
 	}
