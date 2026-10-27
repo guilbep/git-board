@@ -96,7 +96,7 @@
         <p v-if="waiting" class="gb-wait" role="status"><GbIcon name="clock" small /> Syncing with the forges… your change is saved after it.</p>
       </div>
 
-      <IssueStep ref="step" :id="thread.id" :status="statusValue" :labels="thread.labels" :events="thread.events" :forges="thread.forges" :head="reading.tab === 'conversation'" @changed="load" @comment="(b, n) => comment(b, undefined, n)">
+      <IssueStep ref="step" :id="thread.id" :status="statusValue" :labels="thread.labels" :events="thread.events" :forges="thread.forges" :head="reading.tab === 'conversation'" @jump="jumpTo" @changed="load" @comment="(b, n) => comment(b, undefined, n)">
         <template #tabs>
           <div class="gb-tabs gb-issue-tabs" role="tablist" aria-label="Issue">
             <button type="button" class="gb-tab" role="tab" :aria-selected="reading.tab === 'conversation'" @click="reading.tab = 'conversation'">Conversation</button>
@@ -178,6 +178,7 @@ const props = defineProps<{
   hasNext?: boolean;
   findRef?: (n: string) => string | undefined; // #n → a local issue's id
   at?: string | undefined; // an event to scroll to once loaded: the inbox's first new one
+  step?: number | undefined; // a segment to jump to once loaded: a rail link's ?step=
 }>();
 const emit = defineEmits<{ close: []; prev: []; next: []; changed: [thread: Thread]; open: [id: string] }>();
 
@@ -189,6 +190,7 @@ watch(
   () => thread.value?.id,
   async (id) => {
     if (id && props.at) void nextTick(() => reveal(props.at!));
+    if (id && props.step) void nextTick(() => jumpTo(props.step!));
     // the last visit, for the flow's "new since" line: once per issue
     if (id) {
       const v = visit(loadVisit(`issue:${id}`), Date.now());
@@ -261,6 +263,13 @@ async function copyLink() {
 }
 
 // #123 of a local issue opens it here, else the link goes to the forge
+// the rail's jump: the Conversation tab, then the step's segment
+async function jumpTo(n: number) {
+  reading.tab = 'conversation';
+  await nextTick();
+  void flow.value?.jump(n);
+}
+
 // reveal scrolls to a history item and flashes it (a waiting change's
 // row), the flow unfolded first.
 async function reveal(id: string) {

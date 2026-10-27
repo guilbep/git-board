@@ -65,7 +65,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, reactive, ref, toRef } from 'vue';
+import { computed, nextTick, reactive, ref, toRef, watch } from 'vue';
 import type { Cycle, Forge, IssueEvent } from '@/api/board';
 import type { Fields } from '@/fields';
 import { divider, firstNew, fold, pick, segments, type Item, type Reading, type Segment } from '@/flow';
@@ -133,8 +133,15 @@ const sinceIso = computed(() => (props.since === null ? undefined : new Date(pro
 const newId = computed(() => firstNew(shown.value, props.since, props.meId));
 
 const root = ref<HTMLElement | null>(null);
-// jump goes to a segment, the rail's: shown first if it is folded
+// jump goes to a segment, the rail's: shown first if it is folded. Asked
+// before the cycle has loaded, it waits for the segment.
+let pending: number | undefined;
 async function jump(n: number) {
+  pending = undefined;
+  if (!segs.value.some((s) => s.n === n)) {
+    if (!props.cycle) pending = n;
+    return;
+  }
   if (!shown.value.some((s) => s.n === n)) reading.value.show = 'all';
   unfolded.value = true;
   await nextTick();
@@ -142,6 +149,7 @@ async function jump(n: number) {
   el?.scrollIntoView({ block: 'start', behavior: 'smooth' });
   el?.focus({ preventScroll: true });
 }
+watch(segs, () => pending !== undefined && void jump(pending));
 // unfold renders the whole flow, and shows what id is (a thread holding
 // it unfolded, the filters let go if they hide it): what the inbox or
 // the sidebar scrolls to is there

@@ -3,7 +3,7 @@
 <template>
   <AppHeader :views="viewNames" />
   <main class="gb-issuepage">
-    <IssuePanel :id="String(route.params.id)" :key="String(route.params.id)" :names="names" :fields="fields" page @open="(other: string) => router.push(`/issues/${other}`)" />
+    <IssuePanel :id="String(route.params.id)" :key="String(route.params.id)" :names="names" :fields="fields" :step="Number(route.query.step) || undefined" page @open="(other: string) => router.push(`/issues/${other}`)" />
   </main>
 </template>
 
