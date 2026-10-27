@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Step 3, Plan</title>
+</head>
+<body>
+<style>
+:root{--red:#FF0000;--red-dark:#B51F1F;--red-active:#871717;--canard:#007480;--canard-bg:#EAF4F5;--add:#E6F4EA;--add-fg:#1E5B2E;--g200:#D5D5D5;--g300:#C1C1C1;--g600:#707070;--black:#212121;--subtle:#F5F5F5;--hair:rgba(33,33,33,.1);--mono:ui-monospace,SFMono-Regular,Menlo,monospace;--sans:"Suisse Int'l",Arial,"Helvetica Neue",Helvetica,sans-serif}
+body{margin:0;font-family:var(--sans);color:var(--black);background:#fff}
+a{color:var(--black)}a:hover{color:var(--red)}
+.eyebrow{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--canard);font-weight:700}
+.label{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--g600)}
+.muted{color:var(--g600)}
+.mono{font-family:var(--mono)}
+.btn{font:inherit;font-size:14px;line-height:1.2;padding:9px 16px;border:1px solid var(--black);background:#fff;color:var(--black);border-radius:2px;cursor:pointer;white-space:nowrap}
+.btn.primary{background:var(--red-dark);border-color:var(--red-dark);color:#fff;font-weight:700}
+.btn.sm{font-size:13px;padding:6px 10px}
+.btn:focus-visible,.steps a:focus-visible,.seg button:focus-visible{outline:2px solid var(--red-dark);outline-offset:2px}
+.nav a{text-decoration:none;font-weight:700;font-size:15px}
+.steps{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}
+.steps a,.steps span.lk{display:flex;flex-direction:column;gap:3px;padding:9px 10px 10px;text-decoration:none;color:var(--black);border-top:4px solid var(--g200);min-height:62px;box-sizing:border-box}
+.steps .num{font-family:var(--mono);font-size:12px;color:var(--g600)}
+.steps .nm{font-size:14px;font-weight:700}
+.steps .ev{font-size:12px;line-height:1.3;color:var(--g600)}
+.steps a.done{border-top-color:var(--canard)}
+.steps a.cur{border-top-color:var(--black);background:var(--subtle)}
+.steps span.lk{color:var(--g600)}
+.steps span.lk .nm{font-weight:400;color:var(--g600);display:flex;align-items:center;gap:5px}
+.seg{display:inline-flex;border:1px solid var(--black);border-radius:2px}
+.seg button{font:inherit;font-size:12px;padding:4px 10px;border:0;background:#fff;color:var(--black);cursor:pointer}
+.seg button.on{background:var(--black);color:#fff}
+.cm{border-top:1px solid var(--hair);padding:12px 0;font-size:14px;line-height:1.45;display:flex;flex-direction:column;gap:4px}
+.ai{display:inline-block;font-size:11px;font-weight:700;padding:1px 6px;background:var(--black);color:#fff;letter-spacing:.04em}
+.t{width:100%;border-collapse:collapse;font-size:14px;line-height:1.4}
+.t th{background:var(--subtle);text-align:left;font-weight:700;padding:8px 10px;border-bottom:1px solid var(--g200);font-size:13px}
+.t td{padding:9px 10px;border-bottom:1px solid var(--hair);vertical-align:top}
+.plan h3{margin:6px 0 0;font-size:17px}
+.plan ol{margin:0;padding-left:22px;display:flex;flex-direction:column;gap:6px}
+.added{background:var(--add);box-shadow:inset 3px 0 0 var(--add-fg);padding:4px 8px;margin-left:-8px}
+</style>
+<div style="width: 100%; min-height: 1100px; display: flex; flex-direction: column; background: #fff">
+  <header style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px 28px; padding: 14px 32px; border-bottom: 1px solid var(--hair)">
+    <div style="display: flex; align-items: baseline; gap: 12px"><span style="font-weight: 700; font-size: 26px; color: var(--red); letter-spacing: .02em">EPFL</span><span style="font-size: 19px">git-board</span></div>
+    <nav class="nav" aria-label="Views" style="display: flex; flex-wrap: wrap; gap: 20px; flex: 1 1 auto">
+      <a href="#">board</a><a href="#">drafts</a><a href="#">mine</a><span class="muted" aria-hidden="true">|</span><a href="#">Work</a><a href="#">Insights</a><a href="#">Releases</a><a href="#">Inbox</a>
+    </nav>
+    <button class="btn sm">Send 1</button>
+  </header>
+
+  <div style="padding: 24px 40px 18px; display: flex; flex-direction: column; gap: 12px; border-bottom: 1px solid var(--hair)">
+    <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 16px">
+      <h1 style="margin: 0; font-size: 28px; line-height: 1.2; flex: 1 1 520px"><span class="mono muted" style="font-weight: 400">GB-31</span> release: in a fork's clone, releases go to its upstream origin</h1>
+      <button class="btn sm">Close issue</button>
+    </div>
+    <div class="muted" style="font-size: 14px; display: flex; flex-wrap: wrap; gap: 4px 16px">
+      <span style="color: var(--canard); font-weight: 700">Open</span><span>bug · p1 · ready · risk normal</span><span><b style="color: var(--black)">Person A</b> opened this Oct 21</span><a href="#">GitHub #37</a><span style="color: var(--red-dark)">Illustration</span>
+    </div>
+    <ol class="steps" aria-label="The cycle">
+      <li><a class="done" href="#"><span class="num">01</span><span class="nm">Intent</span><span class="ev">4 criteria · ready</span></a></li>
+      <li><a class="done" href="#"><span class="num">02</span><span class="nm">Risk class</span><span class="ev">normal, by Person A</span></a></li>
+      <li><a class="cur" href="#" aria-current="step"><span class="num">03</span><span class="nm">Plan</span><span class="ev">v2 · draft PR #41</span></a></li>
+      <li><span class="lk" aria-disabled="true"><span class="num">04</span><span class="nm"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><rect x="5" y="11" width="14" height="10"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Tests first</span><span class="ev">opens once the plan is approved</span></span></li>
+      <li><span class="lk" aria-disabled="true"><span class="num">05</span><span class="nm"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><rect x="5" y="11" width="14" height="10"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Code</span><span class="ev">opens with the test</span></span></li>
+      <li><span class="lk" aria-disabled="true"><span class="num">06</span><span class="nm"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><rect x="5" y="11" width="14" height="10"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Review</span><span class="ev">opens when the PR is ready for review</span></span></li>
+      <li><span class="lk" aria-disabled="true"><span class="num">07</span><span class="nm"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><rect x="5" y="11" width="14" height="10"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Verify</span><span class="ev">opens when the PR is merged</span></span></li>
+    </ol>
+  </div>
+
+  <div style="display: flex; flex-wrap: wrap; flex: 1 1 auto">
+    <section aria-label="Plan" style="flex: 999 1 640px; min-width: 0; padding: 28px 40px 40px; display: flex; flex-direction: column; gap: 16px">
+      <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 12px">
+        <div style="display: flex; flex-direction: column; gap: 6px"><span class="eyebrow">Step 3 · Plan · normal</span><h2 style="margin: 0; font-size: 26px">Choose the release remote; never assume origin</h2></div>
+        <div style="display: flex; gap: 8px; align-items: center">
+          <div class="seg" role="group" aria-label="Version"><button aria-pressed="false">v1</button><button class="on" aria-pressed="true">v2</button></div>
+          <label style="display: flex; gap: 6px; align-items: center; font-size: 13px"><input type="checkbox" checked> Changes since v1</label>
+          <button class="btn sm">Edit</button>
+        </div>
+      </div>
+      <div class="muted" style="font-size: 13px; display: flex; flex-wrap: wrap; gap: 4px 16px"><span class="mono">docs/plans/31-release-remote.md</span><span>status: draft</span><span>issue: 31</span><span>v2 by Claude Code, 10 min ago</span></div>
+      <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px 20px; font-size: 13px; padding: 10px 14px; background: var(--subtle)"><span><b>Worktree</b> <span class="mono">31-release-in-a-fork-s-clone</span></span><span><b>Agent</b> Claude Code, in plan mode</span><span><b>Draft PR</b> <a href="#">#41</a>, the plan only</span><a href="#">Open the session</a></div>
+
+      <article class="plan" style="border: 1px solid var(--hair); padding: 20px 22px; font-size: 15px; line-height: 1.55; display: flex; flex-direction: column; gap: 12px">
+        <p style="margin: 0">A cut reads tags from, pushes to and publishes on <span class="mono">origin</span> whenever a remote of that name exists. In a fork's clone that is upstream, which the token can't write.</p>
+        <h3>Options</h3>
+        <div style="overflow-x: auto"><table class="t">
+          <thead><tr><th>Option</th><th>A fork's clone</th><th>Verdict</th></tr></thead>
+          <tbody>
+            <tr><td>A · <span class="mono">[release] remote</span>, else the one remote the token can push to</td><td>Works with no setup; Settings suggests the key</td><td><b>Chosen</b></td></tr>
+            <tr><td>B · Ask on every cut</td><td>Works, asks each time</td><td class="muted">Rejected: noise</td></tr>
+            <tr><td>C · Keep <span class="mono">origin</span>, warn</td><td>Still pushes upstream</td><td class="muted">Rejected: unsafe</td></tr>
+          </tbody>
+        </table></div>
+        <h3>Steps</h3>
+        <ol>
+          <li><span class="mono">release.Remote()</span> reads <span class="mono">[release] remote</span>, else the only remote the token can push to; none or several: the cut stops and says which.</li>
+          <li><span class="mono">ConfigRepo</span> stops naming <span class="mono">origin</span>.</li>
+          <li>Settings › Releases suggests the key on a fork, and why.</li>
+          <li class="added">The trunk is the chosen remote's default branch, read from its HEAD: <span class="mono">bridge-sync</span> on the fork.</li>
+        </ol>
+        <h3>Tests first</h3>
+        <p style="margin: 0"><span class="mono">TestCutPicksThePushableRemote</span>: a clone with <span class="mono">origin</span> read-only and <span class="mono">fork</span> writable. It fails before the fix.</p>
+      </article>
+
+      <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; border-top: 1px solid var(--hair); padding-top: 16px">
+        <div style="display: flex; flex-direction: column; gap: 4px"><span style="color: var(--canard); font-size: 17px; font-weight: 700">Normal: approved here by the plan role</span><span class="muted" style="font-size: 14px">Person A approves: Claude Code leaves plan mode and writes the failing test, in the same branch.</span></div>
+        <div style="display: flex; gap: 8px"><button class="btn">Ask the agent to revise</button><button class="btn primary">Approve the plan</button></div>
+      </div>
+    </section>
+
+    <aside aria-label="Discussion" style="flex: 1 1 360px; min-width: 0; border-left: 1px solid var(--hair); padding: 28px 28px 32px; display: flex; flex-direction: column; gap: 10px">
+      <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px"><span class="label">Discussion</span><div class="seg" role="group" aria-label="Show"><button class="on" aria-pressed="true">This step 3</button><button aria-pressed="false">All 7</button></div></div>
+      <div class="cm"><span><b>Person A</b> <span class="muted">· to Claude Code · 14:02</span></span><span>The fork's default branch is <span class="mono">bridge-sync</span>, not main. Read the trunk from the chosen remote.</span></div>
+      <div class="cm"><span><b>Claude Code</b> <span class="ai">agent</span> <span class="muted">· 14:09</span></span><span>Revised: v2 reads the trunk from the chosen remote's HEAD (step 4 of the plan). One section changed. <a href="#">See v2</a></span></div>
+      <div class="cm"><span><b>Person B</b> <span class="muted">· 14:20</span></span><span>B would ask on every cut, that's noise. A is right.</span></div>
+      <label for="c3-c" class="muted" style="font-size: 13px; margin-top: 8px">Comment on the plan</label>
+      <textarea id="c3-c" rows="4" style="width: 100%; box-sizing: border-box; border: 1px solid var(--g300); padding: 10px 12px; font: inherit; font-size: 14px; resize: vertical"></textarea>
+      <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px">
+        <label style="display: flex; gap: 6px; align-items: center; font-size: 13px"><input type="checkbox" checked> Send to <select aria-label="Agent" style="font: inherit; font-size: 13px"><option>Claude Code</option><option>OpenCode</option></select></label>
+        <button class="btn sm">Comment</button>
+      </div>
+    </aside>
+  </div>
+</div>
+</body>
+</html>

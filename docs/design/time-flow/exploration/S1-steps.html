@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Step by step, where each step lives</title>
+</head>
+<body>
+<style>
+:root{--red:#FF0000;--red-dark:#B51F1F;--canard:#007480;--g200:#D5D5D5;--g600:#707070;--black:#212121;--subtle:#F5F5F5;--hair:rgba(33,33,33,.1);--mono:ui-monospace,SFMono-Regular,Menlo,monospace;--sans:"Suisse Int'l",Arial,"Helvetica Neue",Helvetica,sans-serif}
+body{margin:0;font-family:var(--sans);color:var(--black);background:#fff}
+a{color:var(--black)}a:hover{color:var(--red)}
+.eyebrow{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--canard);font-weight:700}
+.muted{color:var(--g600)}
+.mono{font-family:var(--mono)}
+.t{width:100%;border-collapse:collapse;font-size:14px;line-height:1.45}
+.t th{background:var(--subtle);text-align:left;font-weight:700;padding:10px 12px;border-bottom:1px solid var(--g200);font-size:13px}
+.t td{padding:12px;border-bottom:1px solid var(--hair);vertical-align:top}
+.t td.n{font-family:var(--mono);color:var(--g600);width:36px}
+.home{display:inline-block;font-size:12px;font-weight:700;padding:3px 8px;border:1px solid currentColor;white-space:nowrap}
+.h-desc{color:var(--canard)}
+.h-field{color:var(--black)}
+.h-code{color:var(--red-dark)}
+.h-talk{color:var(--g600)}
+</style>
+<div style="width: 100%; min-height: 1000px; box-sizing: border-box; padding: 48px 56px; display: flex; flex-direction: column; gap: 24px; background: #fff">
+  <div style="display: flex; flex-direction: column; gap: 8px">
+    <span class="eyebrow">Going step by step</span>
+    <h1 style="margin: 0; font-size: 36px; line-height: 1.15">Where each step of the cycle lives</h1>
+    <p class="muted" style="margin: 0; font-size: 16px; max-width: 900px">What proves the step, where git-board finds it today, who writes it, and how GitHub shows it. From the PRD's step rules (docs/prd/dev-cycle.md).</p>
+  </div>
+
+  <div style="display: flex; flex-wrap: wrap; gap: 8px 16px; font-size: 13px; align-items: center">
+    <span class="home h-desc">in the description</span>
+    <span class="home h-field">a field</span>
+    <span class="home h-code">in the code</span>
+    <span class="home h-talk">in the conversation</span>
+  </div>
+
+  <div style="overflow-x: auto">
+    <table class="t">
+      <thead><tr><th scope="col"></th><th scope="col">Step</th><th scope="col">What proves it</th><th scope="col">Where it lives</th><th scope="col">Who writes it</th><th scope="col">On GitHub</th></tr></thead>
+      <tbody>
+        <tr><td class="n">01</td><td><b>Intent</b></td><td>Acceptance criteria: a list under a heading</td><td><span class="home h-desc">in the description</span></td><td>A person; the agent may draft them</td><td>The issue's body</td></tr>
+        <tr><td class="n">02</td><td><b>Risk class</b></td><td>low, normal or structural</td><td><span class="home h-field">a field</span> <span class="muted">a <span class="mono">risk:</span> label</span></td><td>The lead dev</td><td>A label, or a Project field</td></tr>
+        <tr><td class="n">03</td><td><b>Plan</b></td><td>The plan, approved. Low risk skips it</td><td><span class="home h-code">in the code</span> <span class="muted">a plan file whose front matter names the issue</span><br><span class="home h-talk" style="margin-top: 6px">in the conversation</span> <span class="muted">the approval</span></td><td>The agent drafts; the plan role approves</td><td>The plan's PR, or a comment</td></tr>
+        <tr><td class="n">04</td><td><b>Tests first</b></td><td>A test in the diff that fails before the fix</td><td><span class="home h-code">in the code</span> <span class="muted">the branch's diff and its runs</span></td><td>The agent</td><td>The PR's commits and checks</td></tr>
+        <tr><td class="n">05</td><td><b>Code</b></td><td>Commits on the branch, a PR opened</td><td><span class="home h-code">in the code</span> <span class="muted">the branch, the PR</span></td><td>The agent; a person commits and opens the PR</td><td>The PR</td></tr>
+        <tr><td class="n">06</td><td><b>Review</b></td><td>Approvals; structural needs a second human</td><td><span class="home h-code">in the code</span> <span class="muted">the PR's reviews</span><br><span class="home h-talk" style="margin-top: 6px">in the conversation</span> <span class="muted">line comments, kept as issue comments</span></td><td>Reviewers and bots</td><td>The PR's reviews</td></tr>
+        <tr><td class="n">07</td><td><b>Verify</b></td><td>The criteria ticked, a run at the head, a sign-off per validation status</td><td><span class="home h-desc">in the description</span> <span class="muted">the same list, ticked</span><br><span class="home h-talk" style="margin-top: 6px">in the conversation</span> <span class="muted">the sign-offs</span></td><td>Each role's person</td><td>A ticked task list, comments</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px">
+    <div style="border-top: 3px solid var(--canard); padding-top: 12px; display: flex; flex-direction: column; gap: 4px"><b style="font-size: 28px; color: var(--canard)">2</b><span style="font-size: 14px">steps in the description: 01 writes the list, 07 ticks it</span></div>
+    <div style="border-top: 3px solid var(--black); padding-top: 12px; display: flex; flex-direction: column; gap: 4px"><b style="font-size: 28px">1</b><span style="font-size: 14px">step is a field: 02</span></div>
+    <div style="border-top: 3px solid var(--red-dark); padding-top: 12px; display: flex; flex-direction: column; gap: 4px"><b style="font-size: 28px; color: var(--red-dark)">4</b><span style="font-size: 14px">steps in the code: 03 to 06, the plan, the test, the branch, the PR</span></div>
+    <div style="border-top: 3px solid var(--g600); padding-top: 12px; display: flex; flex-direction: column; gap: 4px"><b style="font-size: 28px; color: var(--g600)">3</b><span style="font-size: 14px">steps also leave words in the conversation: approval, review, sign-off</span></div>
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Today, the Issue view of GB-31</title>
+</head>
+<body>
+<style>
+:root{--red:#FF0000;--red-dark:#B51F1F;--canard:#007480;--g200:#D5D5D5;--g300:#C1C1C1;--g600:#707070;--black:#212121;--subtle:#F5F5F5;--hair:rgba(33,33,33,.1);--mono:ui-monospace,SFMono-Regular,Menlo,monospace;--sans:"Suisse Int'l",Arial,"Helvetica Neue",Helvetica,sans-serif}
+body{margin:0;font-family:var(--sans);color:var(--black);background:#fff}
+a{color:var(--black)}a:hover{color:var(--red)}
+.label{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--g600)}
+.muted{color:var(--g600)}
+.mono{font-family:var(--mono)}
+.btn{font:inherit;font-size:14px;line-height:1.2;padding:9px 16px;border:1px solid var(--black);background:#fff;color:var(--black);border-radius:2px;cursor:pointer;white-space:nowrap}
+.btn.sm{font-size:13px;padding:6px 10px}
+.btn:focus-visible,.seg button:focus-visible,.tab:focus-visible{outline:2px solid var(--red-dark);outline-offset:2px}
+.seg{display:inline-flex;border:1px solid var(--black);border-radius:2px}
+.seg button{font:inherit;font-size:13px;padding:6px 16px;border:0;background:#fff;color:var(--black);cursor:pointer}
+.seg button.on{background:var(--black);color:#fff}
+.tab{font:inherit;font-size:14px;background:none;border:0;border-bottom:2px solid transparent;padding:12px 0;color:var(--g600);cursor:pointer}
+.tab.on{color:var(--black);font-weight:700;border-bottom-color:var(--red)}
+.ticks{display:flex;gap:3px}
+.ticks span{width:22px;height:4px;background:var(--g200)}
+.ticks span.c{background:var(--black)}
+.field{display:flex;flex-direction:column;gap:4px;font-size:14px}
+.field .k{font-size:12px;color:var(--g600)}
+.nav a{text-decoration:none;font-weight:700;font-size:15px}
+.flag{outline:2px dashed var(--red-dark);outline-offset:6px}
+.tag{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:3px 7px;background:var(--red-dark);color:#fff}
+.md h4{margin:6px 0 0;font-size:16px}
+.md ul{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px}
+</style>
+<div style="width: 100%; min-height: 1000px; display: flex; flex-direction: column; background: #fff">
+  <header style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px 28px; padding: 14px 32px; border-bottom: 1px solid var(--hair)">
+    <div style="display: flex; align-items: baseline; gap: 12px"><span style="font-weight: 700; font-size: 26px; color: var(--red); letter-spacing: .02em">EPFL</span><span style="font-size: 19px">git-board</span></div>
+    <nav class="nav" aria-label="Views" style="display: flex; flex-wrap: wrap; gap: 20px; flex: 1 1 auto">
+      <a href="#">board</a><a href="#">drafts</a><a href="#">mine</a><span class="muted" aria-hidden="true">|</span><a href="#">Work</a><a href="#">Insights</a><a href="#">Releases</a><a href="#">Inbox</a>
+    </nav>
+    <button class="btn sm">Send 1</button>
+  </header>
+
+  <div style="padding: 28px 40px 16px; display: flex; flex-direction: column; gap: 12px">
+    <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 16px">
+      <h1 style="margin: 0; font-size: 30px; line-height: 1.2; flex: 1 1 520px"><span class="mono muted" style="font-weight: 400">GB-31</span> release: in a fork's clone, releases go to its upstream origin</h1>
+      <div style="display: flex; gap: 8px; align-items: center">
+        <div class="seg" role="group" aria-label="View"><button class="on" aria-pressed="true">Issue</button><button aria-pressed="false">Cycle</button></div>
+        <button class="btn sm">Close issue</button>
+      </div>
+    </div>
+    <div class="muted" style="font-size: 14px; display: flex; flex-wrap: wrap; gap: 4px 16px">
+      <span style="color: var(--canard); font-weight: 700">Open</span>
+      <span><b style="color: var(--black)">Person A</b> opened this today 12:19 · 0 comments</span>
+      <a href="#">GitHub #37</a>
+      <span class="mono">git-bug 3f90e06</span>
+    </div>
+    <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; font-size: 14px">
+      <span class="ticks" aria-hidden="true"><span class="c"></span><span></span><span></span><span></span><span></span><span></span><span></span></span>
+      <span>Step 1 of 7 · Intent · 1 acceptance criterion</span>
+      <span class="muted">waits for Person A to move the status to ready</span>
+    </div>
+  </div>
+
+  <div style="display: flex; flex-wrap: wrap; flex: 1 1 auto; border-top: 1px solid var(--hair)">
+    <section aria-label="Conversation" style="flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column">
+      <div role="tablist" aria-label="Issue" style="display: flex; gap: 24px; padding: 0 40px; border-bottom: 1px solid var(--hair)">
+        <button class="tab on" role="tab" aria-selected="true">Conversation</button>
+        <button class="tab" role="tab" aria-selected="false">History 4</button>
+        <button class="tab" role="tab" aria-selected="false">Changes</button>
+      </div>
+      <div style="padding: 24px 40px 40px">
+        <article style="border: 1px solid var(--hair)">
+          <div class="muted" style="font-size: 13px; padding: 10px 16px; border-bottom: 1px solid var(--hair)"><b style="color: var(--black)">Person A</b> opened today 12:19</div>
+          <div class="md" style="padding: 18px 20px 24px; font-size: 15px; line-height: 1.55; display: flex; flex-direction: column; gap: 12px">
+            <p style="margin: 0">Seen in the clone of the git-bug fork while trying to cut <span class="mono">v0.11.1-sync.9</span>. That clone has two remotes: <span class="mono">origin</span>, upstream, and <span class="mono">fork</span>, ours.</p>
+            <h4>What the Releases page shows</h4>
+            <ul>
+              <li>The header reads ". · published on GitHub", with no repository name.</li>
+              <li>"All releases" lists only upstream's tags; the fork's <span class="mono">-sync.N</span> tags are missing.</li>
+            </ul>
+            <div class="flag" style="display: flex; flex-direction: column; gap: 10px; margin: 8px 0">
+              <span class="tag" style="align-self: flex-start">The criteria, under Expected: the cycle doesn't see them</span>
+              <h4>Expected</h4>
+              <ul>
+                <li><b>The authority remote is chosen, not assumed.</b> Settings suggests <span class="mono">[release] remote = "fork"</span> and says why.</li>
+                <li><b>Pre-release tags count.</b> <span class="mono">-sync.N</span> tags are listed and the next one is proposed.</li>
+                <li><b>A missing identity sends the user to Settings › identity</b>, not to a CLI command.</li>
+                <li><b>The header names the repository.</b></li>
+              </ul>
+            </div>
+            <p style="margin: 0">Workaround, not tried yet: <span class="mono">[release] remote = "fork"</span> in the fork clone's <span class="mono">.git-board.toml</span>.</p>
+            <div class="flag" style="display: flex; flex-direction: column; gap: 10px; margin: 8px 0 0">
+              <span class="tag" style="align-self: flex-start">A second list, appended by the Cycle view</span>
+              <h4>Acceptance criteria</h4>
+              <ul><li>The authority remote is chosen, not assumed</li></ul>
+            </div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <aside aria-label="Fields" style="flex: 1 1 260px; min-width: 0; border-left: 1px solid var(--hair); padding: 24px 28px; display: flex; flex-direction: column; gap: 18px">
+      <span class="label">Fields</span>
+      <div class="field"><span class="k">Status</span><span>backlog</span></div>
+      <div class="field"><span class="k">Kind</span><span>bug</span></div>
+      <div class="field"><span class="k">Prio</span><span>p1</span></div>
+      <div class="field"><span class="k">Risk</span><span class="muted">not set</span></div>
+      <div class="field"><span class="k">Assignee</span><span>Person A</span></div>
+      <div style="border-top: 1px solid var(--hair); padding-top: 16px; display: flex; flex-direction: column; gap: 6px; font-size: 14px">
+        <span class="label">Development</span>
+        <span class="muted">No branch yet</span>
+      </div>
+    </aside>
+  </div>
+</div>
+</body>
+</html>

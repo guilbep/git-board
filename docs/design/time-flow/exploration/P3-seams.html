@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Proposition 3, two views of one document</title>
+</head>
+<body>
+<style>
+:root{--red:#FF0000;--red-dark:#B51F1F;--red-active:#871717;--canard:#007480;--g200:#D5D5D5;--g600:#707070;--black:#212121;--subtle:#F5F5F5;--hair:rgba(33,33,33,.1);--mono:ui-monospace,SFMono-Regular,Menlo,monospace;--sans:"Suisse Int'l",Arial,"Helvetica Neue",Helvetica,sans-serif}
+body{margin:0;font-family:var(--sans);color:var(--black);background:#fff}
+a{color:var(--black)}a:hover{color:var(--red)}
+.eyebrow{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--g600);font-weight:700}
+.muted{color:var(--g600)}
+.mono{font-family:var(--mono)}
+.btn{font:inherit;font-size:14px;line-height:1.2;padding:9px 16px;border:1px solid var(--black);background:#fff;color:var(--black);border-radius:2px;cursor:pointer;white-space:nowrap}
+.btn.primary{background:var(--red-dark);border-color:var(--red-dark);color:#fff;font-weight:700}
+.btn.sm{font-size:13px;padding:6px 10px}
+.btn:focus-visible,.seg button:focus-visible,.spine a:focus-visible{outline:2px solid var(--red-dark);outline-offset:2px}
+.seg{display:inline-flex;border:1px solid var(--black);border-radius:2px}
+.seg button{font:inherit;font-size:13px;padding:6px 16px;border:0;background:#fff;color:var(--black);cursor:pointer}
+.seg button.on{background:var(--black);color:#fff}
+.spine{list-style:none;margin:0;padding:0}
+.spine a{display:grid;grid-template-columns:34px minmax(0,1fr);gap:10px;padding:16px 16px;border-top:1px solid var(--hair);text-decoration:none;color:var(--black)}
+.spine li:first-child a{border-top:0}
+.spine .n{font-family:var(--mono);font-size:15px;color:var(--g600)}
+.spine .nm,.spine .ev{display:block}
+.spine .nm{font-size:16px;line-height:1.2}
+.spine .ev{font-size:14px;line-height:1.35;color:var(--g600);margin-top:6px}
+.spine .cur{background:var(--subtle)}
+.spine .cur .nm{font-weight:700}
+.spine .cur .ev{color:var(--black)}
+.spine .todo .nm{color:var(--g600)}
+.nav a{text-decoration:none;font-weight:700;font-size:15px}
+.chk{display:flex;gap:8px;align-items:flex-start;font-size:16px;line-height:1.5}
+.chk input{margin-top:6px}
+</style>
+<div style="width: 100%; min-height: 1000px; display: flex; flex-direction: column; background: #fff">
+  <header style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px 28px; padding: 14px 32px; border-bottom: 1px solid var(--hair)">
+    <div style="display: flex; align-items: baseline; gap: 12px"><span style="font-weight: 700; font-size: 26px; color: var(--red); letter-spacing: .02em">EPFL</span><span style="font-size: 19px">git-board</span></div>
+    <nav class="nav" aria-label="Views" style="display: flex; flex-wrap: wrap; gap: 20px; flex: 1 1 auto">
+      <a href="#">board</a><a href="#">drafts</a><a href="#">mine</a><span class="muted" aria-hidden="true">|</span><a href="#">Work</a><a href="#">Insights</a><a href="#">Releases</a><a href="#">Inbox</a>
+    </nav>
+    <button class="btn sm">Send 1</button>
+  </header>
+
+  <div style="padding: 28px 40px 20px; display: flex; flex-direction: column; gap: 12px; border-bottom: 1px solid var(--hair)">
+    <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 16px">
+      <h1 style="margin: 0; font-size: 30px; line-height: 1.2; flex: 1 1 520px"><span class="mono muted" style="font-weight: 400">GB-31</span> release: in a fork's clone, releases go to its upstream origin</h1>
+      <div style="display: flex; gap: 8px; align-items: center">
+        <div class="seg" role="group" aria-label="View"><button aria-pressed="false">Issue</button><button class="on" aria-pressed="true">Cycle</button></div>
+        <button class="btn sm">Close issue</button>
+      </div>
+    </div>
+    <div class="muted" style="font-size: 14px; display: flex; flex-wrap: wrap; gap: 4px 16px">
+      <span style="color: var(--canard); font-weight: 700">Open</span>
+      <span><b style="color: var(--black)">Person A</b> opened this today 12:19 · 0 comments</span>
+      <a href="#">GitHub #37</a>
+      <span class="mono">git-bug 3f90e06</span>
+    </div>
+  </div>
+
+  <div style="display: flex; flex-wrap: wrap; flex: 1 1 auto">
+    <nav aria-label="The cycle" style="flex: 0 1 340px; min-width: 0; padding: 20px 24px 24px 40px; border-right: 1px solid var(--hair)">
+      <ol class="spine">
+        <li><a class="cur" href="#" aria-current="step"><span class="n">01</span><span><span class="nm">Intent</span><span class="ev">4 criteria, under Expected</span></span></a></li>
+        <li><a class="todo" href="#"><span class="n">02</span><span><span class="nm">Risk class</span><span class="ev">Not set</span></span></a></li>
+        <li><a class="todo" href="#"><span class="n">03</span><span><span class="nm">Plan</span><span class="ev">Approved by the plan role</span></span></a></li>
+        <li><a class="todo" href="#"><span class="n">04</span><span><span class="nm">Tests first</span><span class="ev">Every bug fix ships its test</span></span></a></li>
+        <li><a class="todo" href="#"><span class="n">05</span><span><span class="nm">Code</span><span class="ev">A person commits and opens the PR</span></span></a></li>
+        <li><a class="todo" href="#"><span class="n">06</span><span><span class="nm">Review</span><span class="ev">The PR approved</span></span></a></li>
+        <li><a class="todo" href="#"><span class="n">07</span><span><span class="nm">Verify</span><span class="ev">The criteria ticked</span></span></a></li>
+      </ol>
+    </nav>
+
+    <section aria-label="Intent" style="flex: 999 1 560px; min-width: 0; padding: 32px 48px 40px; display: flex; flex-direction: column; gap: 18px">
+      <span class="eyebrow">Step 1 · Intent</span>
+      <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 12px">
+        <h2 style="margin: 0; font-size: 32px; font-weight: 700; line-height: 1.15">Acceptance criteria</h2>
+        <span class="muted" style="font-size: 14px">From the description, under <b style="color: var(--black)">Expected</b></span>
+      </div>
+      <div style="border: 1px solid var(--hair); padding: 18px 20px; display: flex; flex-direction: column; gap: 10px">
+        <label class="chk"><input type="checkbox"> <span><b>The authority remote is chosen, not assumed.</b></span></label>
+        <label class="chk"><input type="checkbox"> <span><b>Pre-release tags count.</b></span></label>
+        <label class="chk"><input type="checkbox"> <span><b>A missing identity sends the user to Settings › identity.</b></span></label>
+        <label class="chk"><input type="checkbox"> <span><b>The header names the repository.</b></span></label>
+        <div style="display: flex; flex-wrap: wrap; gap: 8px; border-top: 1px solid var(--hair); padding-top: 12px; margin-top: 4px">
+          <button class="btn sm">Edit this section of the description</button>
+          <a href="#" class="muted" style="font-size: 14px; align-self: center">Show the whole description</a>
+        </div>
+      </div>
+      <p class="muted" style="margin: 0; font-size: 14px">Counts as the criteria: a list under Acceptance criteria, Done when or Expected, the names set in <span class="mono">[cycle]</span>.</p>
+      <div style="background: var(--subtle); border-left: 4px solid var(--canard); padding: 16px 20px; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px">
+        <div style="display: flex; flex-direction: column; gap: 4px">
+          <span style="font-size: 18px; color: var(--canard); font-weight: 700">No issue, no agent</span>
+          <span class="muted" style="font-size: 14px">waits for Person A to move the status to ready</span>
+        </div>
+        <button class="btn primary">Move to ready</button>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 8px">
+        <span class="eyebrow">About this step in the conversation</span>
+        <span class="muted" style="font-size: 14px">Nothing yet. A comment written here goes to the issue's conversation.</span>
+      </div>
+    </section>
+  </div>
+</div>
+</body>
+</html>

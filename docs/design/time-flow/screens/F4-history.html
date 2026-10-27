@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>History: the flow with a cursor</title>
+</head>
+<body>
+<style>
+:root{--red:#FF0000;--red-dark:#B51F1F;--canard:#007480;--canard-bg:#EAF4F5;--add:#E6F4EA;--add-fg:#1E5B2E;--blue-bg:#E8EEF8;--blue-fg:#2B4C8C;--purple-bg:#F1E8F8;--purple-fg:#5B2E86;--g200:#D5D5D5;--g300:#C1C1C1;--g600:#707070;--black:#212121;--subtle:#F5F5F5;--hair:rgba(33,33,33,.1);--mono:ui-monospace,SFMono-Regular,Menlo,monospace;--sans:"Suisse Int'l",Arial,"Helvetica Neue",Helvetica,sans-serif}
+body{margin:0;font-family:var(--sans);color:var(--black);background:#fff}
+a{color:var(--black)}a:hover{color:var(--red)}
+.eyebrow{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--canard);font-weight:700}
+.label{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--g600)}
+.muted{color:var(--g600)}
+.mono{font-family:var(--mono)}
+.btn{font:inherit;font-size:14px;line-height:1.2;padding:9px 16px;border:1px solid var(--black);background:#fff;color:var(--black);border-radius:2px;cursor:pointer;white-space:nowrap}
+.btn.sm{font-size:13px;padding:6px 10px}
+.btn:focus-visible,.steps a:focus-visible,.seg button:focus-visible,.tab:focus-visible,.chip:focus-visible,input:focus-visible{outline:2px solid var(--red-dark);outline-offset:2px}
+.nav a{text-decoration:none;font-weight:700;font-size:15px}
+.steps{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}
+.steps a{display:flex;flex-direction:column;gap:3px;padding:9px 10px 10px;text-decoration:none;color:var(--black);border-top:4px solid var(--g200);min-height:62px;box-sizing:border-box}
+.steps .num{font-family:var(--mono);font-size:12px;color:var(--g600)}
+.steps .nm{font-size:14px;font-weight:700}
+.steps .ev{font-size:12px;line-height:1.3;color:var(--g600)}
+.steps a.done{border-top-color:var(--canard)}
+.steps a.cur{border-top-color:var(--black);background:var(--subtle)}
+.tab{font:inherit;font-size:14px;background:none;border:0;border-bottom:2px solid transparent;padding:12px 0;color:var(--g600);cursor:pointer}
+.tab.on{color:var(--black);font-weight:700;border-bottom-color:var(--red)}
+.seg{display:inline-flex;border:1px solid var(--black);border-radius:2px}
+.seg button{font:inherit;font-size:12px;padding:4px 10px;border:0;background:#fff;color:var(--black);cursor:pointer}
+.seg button.on{background:var(--black);color:#fff}
+.chip{font:inherit;font-size:12px;padding:4px 10px;border:1px solid var(--g300);background:#fff;color:var(--black);border-radius:2px;cursor:pointer;white-space:nowrap}
+.chip.on{border-color:var(--black);background:var(--black);color:#fff}
+.tag{display:inline-block;font-size:12px;padding:3px 8px;border:1px solid var(--g300);border-radius:2px;background:#fff;white-space:nowrap}
+.role{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:1px 6px;border:1px solid var(--g300);color:var(--g600);vertical-align:middle;line-height:1.4}
+.anchor{font-family:var(--mono);font-size:12px;color:var(--canard);white-space:nowrap}
+.field{display:flex;flex-direction:column;gap:4px;font-size:14px}
+.field .k{font-size:12px;color:var(--g600)}
+.lane{display:grid;grid-template-columns:110px minmax(0,1fr);gap:12px;align-items:center;height:34px}
+.ln{font-size:13px;color:var(--g600);text-align:right}
+.tr{position:relative;height:22px;border-bottom:1px dashed var(--g300)}
+.sq{position:absolute;top:7px;width:8px;height:8px;background:var(--g600);transform:translateX(-50%)}
+.dia{position:absolute;top:6px;width:10px;height:10px;background:var(--red-dark);transform:translateX(-50%) rotate(45deg)}
+.dia.hollow{background:#fff;border:2px solid var(--red-dark);width:7px;height:7px;top:5px}
+.bar{position:absolute;top:2px;height:18px;line-height:18px;font-size:11px;font-weight:700;padding:0 6px;box-sizing:border-box;white-space:nowrap;overflow:hidden}
+.stp{position:absolute;top:2px;height:18px;line-height:18px;font-size:11px;font-family:var(--mono);color:var(--canard);border-left:2px solid var(--canard);padding-left:4px;box-sizing:border-box;white-space:nowrap;overflow:hidden}
+.axis{position:relative;height:18px;margin-left:122px;font-size:12px;color:var(--g600)}
+.axis span{position:absolute;top:2px;transform:translateX(-50%)}
+.cursor{position:absolute;top:14px;bottom:36px;width:2px;background:var(--red);transform:translateX(-1px)}
+.box{display:flex;flex-direction:column;gap:4px;background:#fff;border:1px solid var(--hair);padding:12px 14px}
+.row{display:grid;grid-template-columns:28px 52px 112px 118px minmax(0,1fr) 72px 118px;gap:12px;padding:9px 0;border-top:1px solid var(--hair);font-size:13px;line-height:1.4;align-items:start}
+.row.hd{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--g600);border-top:0;padding-bottom:4px}
+.row .n,.row .t,.row .h{font-family:var(--mono);color:var(--g600);font-size:12px}
+.row .op{font-family:var(--mono);font-size:12px}
+.row .gh{font-size:12px;color:var(--g600)}
+.row.dim{opacity:.45}
+.row.at{background:var(--canard-bg);box-shadow:inset 3px 0 0 var(--red)}
+.day{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--canard);font-weight:700;padding:16px 0 4px}
+.fold{font-size:13px;color:var(--g600);padding:10px 0;border-top:1px solid var(--hair)}
+</style>
+<div style="width: 100%; min-height: 1600px; display: flex; flex-direction: column; background: #fff">
+  <header style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px 28px; padding: 14px 32px; border-bottom: 1px solid var(--hair)">
+    <div style="display: flex; align-items: baseline; gap: 12px"><span style="font-weight: 700; font-size: 26px; color: var(--red); letter-spacing: .02em">EPFL</span><span style="font-size: 19px">git-board</span></div>
+    <nav class="nav" aria-label="Views" style="display: flex; flex-wrap: wrap; gap: 20px; flex: 1 1 auto">
+      <a href="#">board</a><a href="#">drafts</a><a href="#">mine</a><span class="muted" aria-hidden="true">|</span><a href="#">Work</a><a href="#">Insights</a><a href="#">Releases</a><a href="#">Inbox</a>
+    </nav>
+    <button class="btn sm">Send 1</button>
+  </header>
+
+  <div style="padding: 24px 40px 18px; display: flex; flex-direction: column; gap: 12px; border-bottom: 1px solid var(--hair)">
+    <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 16px">
+      <h1 style="margin: 0; font-size: 28px; line-height: 1.2; flex: 1 1 520px"><span class="mono muted" style="font-weight: 400">GB-31</span> release: in a fork's clone, releases go to its upstream origin</h1>
+      <button class="btn sm">Close issue</button>
+    </div>
+    <div class="muted" style="font-size: 14px; display: flex; flex-wrap: wrap; gap: 4px 16px">
+      <span style="color: var(--canard); font-weight: 700">Open</span><span>bug · p1 · in-review · risk normal</span><span><b style="color: var(--black)">Person A</b> <span class="role">PO</span> opened this Oct 21 · 19 comments</span><a href="#">PR #41, merged</a><a href="#">GitHub #37</a><span style="color: var(--red-dark)">Illustration</span>
+    </div>
+    <ol class="steps" aria-label="The cycle">
+      <li><a class="done" href="#"><span class="num">01</span><span class="nm">Intent</span><span class="ev">v2 approved · 4 criteria</span></a></li>
+      <li><a class="done" href="#"><span class="num">02</span><span class="nm">Risk class</span><span class="ev">normal, by Person A</span></a></li>
+      <li><a class="done" href="#"><span class="num">03</span><span class="nm">Plan</span><span class="ev">v2, delivered</span></a></li>
+      <li><a class="done" href="#"><span class="num">04</span><span class="nm">Tests first</span><span class="ev">red at 4c1e2a0, green at 9b2f71d</span></a></li>
+      <li><a class="done" href="#"><span class="num">05</span><span class="nm">Code</span><span class="ev">PR #41, opened by Person A</span></a></li>
+      <li><a class="done" href="#"><span class="num">06</span><span class="nm">Review</span><span class="ev">approved by Person B · merged</span></a></li>
+      <li><a class="cur" href="#" aria-current="step"><span class="num">07</span><span class="nm">Verify</span><span class="ev">3 of 4 criteria checked</span></a></li>
+    </ol>
+  </div>
+
+  <div style="display: flex; flex-wrap: wrap; flex: 1 1 auto">
+    <section aria-label="History" style="flex: 999 1 640px; min-width: 0; display: flex; flex-direction: column">
+      <div role="tablist" aria-label="Issue" style="display: flex; gap: 24px; padding: 0 40px; border-bottom: 1px solid var(--hair)">
+        <button class="tab" role="tab" aria-selected="false">Conversation</button>
+        <button class="tab on" role="tab" aria-selected="true">History 31</button>
+        <button class="tab" role="tab" aria-selected="false">Changes 5</button>
+      </div>
+
+      <div style="padding: 24px 40px 40px; max-width: 1000px; box-sizing: border-box; display: flex; flex-direction: column; gap: 18px">
+
+        <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 8px 16px">
+          <span style="font-size: 15px">The same flow, with a cursor: pick a moment, read the issue as it was then.</span>
+          <span class="muted" style="font-size: 13px">◆ a version · ◇ a tick · ■ a text</span>
+        </div>
+
+        <div aria-label="The issue over time" style="border: 1px solid var(--hair); padding: 14px 20px 10px; display: flex; flex-direction: column; position: relative">
+          <div class="lane"><span class="ln">Texts</span><div class="tr">
+            <span class="sq" style="left: 0.2%"></span><span class="sq" style="left: 1.3%"></span><span class="sq" style="left: 1.6%"></span><span class="sq" style="left: 1.9%"></span><span class="sq" style="left: 2.2%"></span>
+            <span class="sq" style="left: 16.9%"></span><span class="sq" style="left: 17.3%"></span><span class="sq" style="left: 17.7%"></span>
+            <span class="sq" style="left: 20%"></span><span class="sq" style="left: 20.3%"></span><span class="sq" style="left: 20.6%"></span><span class="sq" style="left: 21.1%"></span>
+            <span class="sq" style="left: 36.7%"></span><span class="sq" style="left: 41.2%"></span><span class="sq" style="left: 41.5%"></span>
+            <span class="sq" style="left: 79%"></span><span class="sq" style="left: 79.4%"></span>
+          </div></div>
+          <div class="lane"><span class="ln">Versions</span><div class="tr">
+            <span class="dia" style="left: 0.2%"></span><span class="dia" style="left: 16.7%"></span><span class="dia hollow" style="left: 79%"></span><span class="dia hollow" style="left: 79.5%"></span>
+          </div></div>
+          <div class="lane"><span class="ln">Status</span><div class="tr">
+            <span class="bar" style="left: 0; width: 17.6%; background: var(--subtle); color: var(--g600)">backlog · spec</span>
+            <span class="bar" style="left: 17.6%; width: 3.5%; background: var(--canard-bg); color: var(--canard)">ready</span>
+            <span class="bar" style="left: 21.1%; width: 15.6%; background: var(--blue-bg); color: var(--blue-fg)">in-progress</span>
+            <span class="bar" style="left: 36.7%; width: 63.3%; background: var(--purple-bg); color: var(--purple-fg)">in-review</span>
+          </div></div>
+          <div class="lane"><span class="ln">Steps</span><div class="tr">
+            <span class="stp" style="left: 0; width: 17.6%">01 Intent</span>
+            <span class="stp" style="left: 17.6%; width: 0.1%"></span>
+            <span class="stp" style="left: 17.7%; width: 3.4%">03</span>
+            <span class="stp" style="left: 21.1%; width: 15.6%">04 Tests first</span>
+            <span class="stp" style="left: 36.7%; width: 4.5%">05</span>
+            <span class="stp" style="left: 41.2%; width: 0.5%"></span>
+            <span class="stp" style="left: 41.7%; width: 58.3%">07 Verify</span>
+          </div></div>
+          <div class="axis" aria-hidden="true"><span style="left: 0; transform: none">Oct 21</span><span style="left: 9.3%">Oct 22</span><span style="left: 27.9%">Oct 23</span><span style="left: 46.5%">Oct 24</span><span style="left: 65.1%">Oct 25</span><span style="left: 83.7%">Oct 26</span><span style="left: 100%; transform: translateX(-100%); color: var(--black); font-weight: 700">now</span></div>
+          <div class="cursor" aria-hidden="true" style="left: calc(142px + (100% - 162px) * 0.176)"></div>
+        </div>
+
+        <div style="border: 1px solid var(--hair); padding: 12px 20px; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px">
+          <button class="btn sm" aria-label="Previous change"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M19 12H5"/><path d="M12 5l-7 7 7 7"/></svg></button>
+          <button class="btn sm" aria-label="Next change"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg></button>
+          <label for="f4-r" class="muted" style="font-size: 13px">Scrub</label>
+          <input id="f4-r" type="range" min="1" max="31" value="13" style="flex: 1 1 220px; accent-color: var(--red)">
+          <span style="font-size: 14px">As of <b>Oct 22 10:40</b> · change <b>13 of 31</b></span>
+          <button class="btn sm">Now</button>
+        </div>
+
+        <div aria-label="The issue as of then" style="border: 2px dashed var(--g300); background: var(--subtle); padding: 18px 20px; display: flex; flex-direction: column; gap: 12px">
+          <span class="label">As of Oct 22 10:40 · what the change touched is outlined</span>
+          <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px"><span style="background: var(--canard); color: #fff; font-weight: 700; font-size: 13px; padding: 4px 10px">Open</span><b style="font-size: 18px">release: in a fork's clone, releases go to its upstream origin</b></div>
+          <div style="display: flex; flex-wrap: wrap; gap: 8px; font-size: 13px">
+            <span class="tag">Assignee: Person A</span><span class="tag">Kind: bug</span><span class="tag">Prio: p1</span><span class="tag">Risk: not set yet</span><span class="tag" style="outline: 2px solid var(--red); outline-offset: 1px; background: var(--canard-bg); color: var(--canard); font-weight: 700">Status: ready</span><span class="tag" style="outline: 2px solid var(--red); outline-offset: 1px; font-weight: 700">Spec: v2 approved</span>
+          </div>
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr)); gap: 12px; font-size: 14px">
+            <div class="box"><span class="label">The description, as of then</span><span>v2, published 09:30 · 4 criteria, none ticked</span><span class="muted" style="font-size: 13px">threads: §2 open · §3 resolved by v2 · §4 open</span></div>
+            <div class="box"><span class="label">Texts as of then</span><span>12 · 10 comments and 2 versions</span><span class="muted" style="font-size: 13px">the flow below is cut at this change</span></div>
+            <div class="box"><span class="label">This change</span><span><b>Person B</b> approved v2 · backlog → ready</span><span class="muted" style="font-size: 13px">step 2 opens · on GitHub #37 as a comment and two labels</span></div>
+          </div>
+        </div>
+
+        <div style="display: flex; flex-direction: column">
+          <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px 16px; padding-bottom: 10px">
+            <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px"><span class="label" style="margin-right: 6px">Changes</span><button class="chip on" aria-pressed="true">All 31</button><button class="chip">Texts 19</button><button class="chip">Versions and ticks 4</button><button class="chip">Fields 7</button><button class="chip">Not on GitHub yet 1</button></div>
+            <div class="seg" role="group" aria-label="Order"><button class="on" aria-pressed="true">Oldest first</button><button aria-pressed="false">Newest first</button></div>
+          </div>
+          <div class="row hd"><span>#</span><span>Time</span><span>Who</span><span>Operation</span><span>What</span><span>Op id</span><span>GitHub #37</span></div>
+          <div class="fold">8 earlier changes · <a href="#">show</a></div>
+          <div class="day">Oct 21</div>
+          <div class="row" style="border-top: 0"><span class="n">9</span><span class="t">14:10</span><span>Person B</span><span class="op">comment</span><span>verdict: changes requested on v1 · label <span class="mono">+spec:changes-requested</span></span><span class="h">e4b7c02</span><span class="gh">comment, label ✓</span></div>
+          <div class="day">Oct 22</div>
+          <div class="row" style="border-top: 0"><span class="n">10</span><span class="t">09:30</span><span>Person A</span><span class="op">edit-text</span><span>the body: <b>v2</b> · <span class="anchor">§1</span> <span class="anchor">§3 › 3</span> <span class="anchor">§4</span> changed · then <span class="mono">set-meta</span> thread:resolved=v2 on <span class="mono">7d2f0a1</span> · <a href="#">open in Changes</a></span><span class="h">5e8d1f4</span><span class="gh">body ✓ · a comment "Published v2"</span></div>
+          <div class="row"><span class="n">11</span><span class="t">09:34</span><span>Person A</span><span class="op">comment</span><span>reply on <span class="anchor">§4</span> · to <span class="mono">b2c9e17</span></span><span class="h">c71a9e3</span><span class="gh">comment ✓</span></div>
+          <div class="row"><span class="n">12</span><span class="t">10:02</span><span>Person B</span><span class="op">comment</span><span>on the issue · v2</span><span class="h">0f6b2d8</span><span class="gh">comment ✓</span></div>
+          <div class="row at"><span class="n">13</span><span class="t">10:40</span><span>Person B</span><span class="op">comment</span><span>verdict: <b>approved v2</b> · labels <span class="mono">−status:backlog +status:ready +spec:approved</span></span><span class="h">a93c5e1</span><span class="gh">comment, labels ✓</span></div>
+          <div class="row dim"><span class="n">14</span><span class="t">10:45</span><span>Person A</span><span class="op">change-labels</span><span><span class="mono">+risk:normal</span> · step 02</span><span class="h">6d2e8b0</span><span class="gh">label ✓</span></div>
+          <div class="row dim"><span class="n">15</span><span class="t">13:50</span><span>Claude Code</span><span class="op">comment</span><span>plan v1 drafted · <span class="mono">docs/plans/31-release-remote.md</span> · step 03</span><span class="h">1b4f7a9</span><span class="gh">comment ✓</span></div>
+          <div class="row dim"><span class="n">16</span><span class="t">14:02</span><span>Person A</span><span class="op">comment</span><span>to Claude Code: the fork's default branch is <span class="mono">bridge-sync</span></span><span class="h">8e0c3d5</span><span class="gh">comment ✓</span></div>
+          <div class="row dim"><span class="n">17</span><span class="t">14:09</span><span>Claude Code</span><span class="op">comment</span><span>plan v2 · one section changed</span><span class="h">3a7d9f2</span><span class="gh">comment ✓</span></div>
+          <div class="fold">14 later changes, after the cursor · <a href="#">show</a> · the last one, 31, is not on GitHub yet</div>
+        </div>
+      </div>
+    </section>
+
+    <aside aria-label="Fields" style="flex: 1 1 260px; min-width: 0; border-left: 1px solid var(--hair); padding: 24px 28px; display: flex; flex-direction: column; gap: 18px">
+      <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px"><span class="label">Fields · now</span><span style="font-size: 13px; color: var(--add-fg)">✓ Saved</span></div>
+      <div class="field"><span class="k">Status</span><span>in-review</span></div>
+      <div class="field"><span class="k">Kind</span><span>bug</span></div>
+      <div class="field"><span class="k">Prio</span><span>p1</span></div>
+      <div class="field"><span class="k">Risk</span><span>normal</span></div>
+      <div class="field"><span class="k">Assignee</span><span>Person A</span></div>
+      <div style="border-top: 1px solid var(--hair); padding-top: 16px; display: flex; flex-direction: column; gap: 6px; font-size: 14px">
+        <span class="label">Spec</span>
+        <span>v2 · approved by <b>Person B</b> <span class="role">PM</span></span>
+      </div>
+      <div style="border-top: 1px solid var(--hair); padding-top: 16px; display: flex; flex-direction: column; gap: 6px; font-size: 14px">
+        <span class="label">Development</span>
+        <span class="mono" style="font-size: 13px">31-release-in-a-fork-s-clone</span>
+        <span>PR #41 · merged at <span class="mono">a1f0c3e</span></span>
+      </div>
+    </aside>
+  </div>
+</div>
+</body>
+</html>
