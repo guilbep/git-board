@@ -163,7 +163,17 @@
         </template>
         <template #flow="{ cycle, failed, send }">
           <HistoryView v-if="reading.tab === 'history'" :thread="thread" :fields="fields" :cycle="cycle" />
-          <IssueChanges v-else-if="reading.tab === 'changes'" :thread="thread" />
+          <IssueChanges
+            v-else-if="reading.tab === 'changes'"
+            :thread="thread"
+            :me-id="meId"
+            :fields="fields"
+            :busy="saving"
+            :save="edit"
+            :reply="(root: string, b: string) => comment(b, undefined, cycle?.step ?? 0, { reply_to: root })"
+            :resolve="resolveThread"
+            :apply="apply"
+          />
           <template v-else>
             <IssueFlow
               ref="flow"
