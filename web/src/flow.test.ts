@@ -123,6 +123,15 @@ test('new since the last visit', () => {
   assert.equal(firstNew(segs, at('c6'), 'me'), undefined);
 });
 
+test('new in a folded thread: the line goes above the thread', () => {
+  const reply = ev('r6', 10, { review: { path: 'a.go', reply_to: 'r1' } });
+  const segs = segments([...events, reply], stages, 6);
+  const at = (id: string) => Date.parse(events.find((e) => e.id === id)!.at);
+  assert.equal(firstNew(segs, at('c6'), 'me'), 'r6');
+  assert.equal(firstNew(segs, at('c6'), 'me', true), 'r1');
+  assert.equal(firstNew(segs, at('l4'), 'me', true), 'r1');
+});
+
 test('the step a new comment carries', () => {
   assert.equal(carries(7), '07 Verify');
   assert.equal(carries(3), '03 Plan');

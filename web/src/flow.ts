@@ -166,9 +166,16 @@ export function divider(s: Segment, current: boolean): string {
   return head + span + tail;
 }
 
-// firstNew is the entry the "new since your last visit" line goes above:
-// the first one written after `since` by someone else.
-export function firstNew(segs: Segment[], since: number | null, meId: string): string | undefined {
+// items are a segment's entries as the column lists them: Threads folds
+// the replies under their line comment, Flat lists each on its own.
+export const items = (s: Segment, threads: boolean): Item[] =>
+  threads ? fold(s.entries) : s.entries.map((event) => ({ event, replies: [] }));
+
+// firstNew is the item the "new since your last visit" line goes above:
+// the first one holding an entry written after `since` by someone else, a
+// reply in a folded thread included.
+export function firstNew(segs: Segment[], since: number | null, meId: string, threads = false): string | undefined {
   if (since === null) return undefined;
-  return segs.flatMap((s) => s.entries).find((e) => e.author.id !== meId && time(e) > since)?.id;
+  const isNew = (e: IssueEvent) => e.author.id !== meId && time(e) > since;
+  return segs.flatMap((s) => items(s, threads)).find((it) => [it.event, ...it.replies].some(isNew))?.event.id;
 }

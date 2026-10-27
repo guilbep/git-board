@@ -71,7 +71,7 @@
 import { computed, nextTick, reactive, ref, toRef, watch } from 'vue';
 import type { Cycle, Forge, IssueEvent } from '@/api/board';
 import type { Fields } from '@/fields';
-import { divider, firstNew, fold, pick, segments, type Item, type Reading, type Segment } from '@/flow';
+import { divider, firstNew, items as itemsOf, pick, segments, type Item, type Reading, type Segment } from '@/flow';
 import { on, when } from '@/me';
 import CommentCard from '@/components/CommentCard.vue';
 import TimelineEvent from '@/components/TimelineEvent.vue';
@@ -100,7 +100,7 @@ const shown = computed(() => read(reading.value));
 const total = computed(() => sum(shown.value));
 const narrowed = computed(() => reading.value.show !== 'all' || reading.value.mine || reading.value.agent || reading.value.milestones);
 const threads = computed(() => reading.value.threads);
-const items = (s: Segment): Item[] => (reading.value.threads ? fold(s.entries) : s.entries.map((event) => ({ event, replies: [] })));
+const items = (s: Segment): Item[] => itemsOf(s, reading.value.threads);
 
 // What is folded: under This step the segments before the current one,
 // pointed at above it; under All, a long flow's segments before the
@@ -133,7 +133,7 @@ const firstWords = (e: IssueEvent) => {
 const open = reactive(new Set<string>()); // the threads unfolded
 
 const sinceIso = computed(() => (props.since === null ? undefined : new Date(props.since).toISOString()));
-const newId = computed(() => firstNew(shown.value, props.since, props.meId));
+const newId = computed(() => firstNew(shown.value, props.since, props.meId, reading.value.threads));
 
 const root = ref<HTMLElement | null>(null);
 // jump goes to a segment, the rail's: shown first if it is folded. Asked
