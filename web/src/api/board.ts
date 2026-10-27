@@ -1441,3 +1441,8 @@ export function getLint(): Promise<Lint> {
 export function deleteLabel(repo: string, name: string, dryRun: boolean): Promise<{ count?: number }> {
   return request('/api/labels/delete', json('POST', { repo, name, dry_run: dryRun }));
 }
+
+// The description's verdict (internal/server/cycle.go, spec-verdict): on
+// is body@vN, the current version; body is required to request changes.
+export const specVerdict = (id: string, verdict: 'approve' | 'request-changes', on: string, body: string) =>
+  cycleAction(id, 'spec-verdict', { verdict, on, body });

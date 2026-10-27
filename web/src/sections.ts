@@ -3,6 +3,7 @@
 // grammar, the version count, and a suggestion applied to the Markdown.
 // Pure: built from the thread the server already sends.
 import type { IssueEvent, Person } from './api/board.ts';
+import { lineDiff } from './linediff.ts';
 
 export interface Section { n: number; slug: string; heading: string; html: string }
 
@@ -150,11 +151,6 @@ const RAW = /^ {0,3}(#{1,6}(\s|$)|(=+|-+)\s*$)|^\s*\|/;
 export function diffMarkdown(before: string, after: string): string {
   const a = before.split('\n');
   const b = after.split('\n');
-  const x = a.map(unticked);
-  const y = b.map(unticked);
-  // t[i][j]: the longest common run of x[i:] and y[j:]
-  const t = Array.from({ length: a.length + 1 }, () => new Uint32Array(b.length + 1));
-  for (let i = a.length - 1; i >= 0; i--) for (let j = b.length - 1; j >= 0; j--) t[i]![j] = x[i] === y[j] ? t[i + 1]![j + 1]! + 1 : Math.max(t[i + 1]![j]!, t[i]![j + 1]!);
   const out: string[] = [];
   let fenced = false;
   const mark = (line: string, tag: 'ins' | 'del') => {
@@ -162,17 +158,14 @@ export function diffMarkdown(before: string, after: string): string {
     if (fenced || RAW.test(line) || FENCE.test(line) || !m[2]!.trim()) return tag === 'ins' ? line : undefined;
     return `${m[1]}<${tag}>${m[2]}</${tag}>`;
   };
-  const emit = (line: string | undefined, own: boolean) => {
-    if (line === undefined) return;
-    out.push(line);
-    if (own && FENCE.test(line)) fenced = !fenced;
-  };
   let i = 0;
   let j = 0;
-  while (i < a.length || j < b.length) {
-    if (i < a.length && j < b.length && x[i] === y[j]) (emit(b[j]!, true), i++, j++);
-    else if (j >= b.length || (i < a.length && t[i + 1]![j]! >= t[i]![j + 1]!)) emit(mark(a[i++]!, 'del'), false);
-    else emit(mark(b[j++]!, 'ins'), true);
+  // the diff of the unticked texts, each line emitted as the texts have it
+  for (const d of lineDiff(unticked(before), unticked(after))) {
+    const line = d.op === '-' ? mark(a[i++]!, 'del') : d.op === '+' ? mark(b[j++]!, 'ins') : (i++, b[j++]!);
+    if (line === undefined) continue;
+    out.push(line);
+    if (d.op !== '-' && FENCE.test(line)) fenced = !fenced;
   }
   return out.join('\n');
 }
