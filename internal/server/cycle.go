@@ -227,7 +227,10 @@ func (s *apiServer) handleCycleAction(w http.ResponseWriter, r *http.Request) {
 	}
 	atVerify := cur.Step == 7 && !cur.Done
 	commit := cmp.Or(req.Commit, ev.Head)
-	meta := map[string]string{"cycle:step": "7"}
+	meta := map[string]string{}
+	if cur.At != "" { // verify, check and signoff: verify, or the sign-off's own
+		meta["cycle:step"] = cur.At
+	}
 	var body string
 	switch action {
 	case "approve-plan":
@@ -238,7 +241,7 @@ func (s *apiServer) handleCycleAction(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, errors.New("the plan PR is approved on GitHub"))
 			return
 		}
-		body, meta["plan:approve"], meta["cycle:step"] = "Plan approved", "1", "3"
+		body, meta["plan:approve"], meta["cycle:step"] = "Plan approved", "1", "plan"
 		if c := cmp.Or(ev.Head, ev.PlanHead); c != "" {
 			meta["plan:commit"] = c
 		}
@@ -276,13 +279,13 @@ func (s *apiServer) handleCycleAction(w http.ResponseWriter, r *http.Request) {
 			head = fmt.Sprintf("**Changes requested on v%d of the description**", v)
 		}
 		body = strings.TrimSuffix(head+"\n\n"+body, "\n\n")
-		meta["spec:verdict"], meta["spec:on"], meta["cycle:step"] = req.Verdict, req.On, "1"
+		meta["spec:verdict"], meta["spec:on"], meta["cycle:step"] = req.Verdict, req.On, "intent"
 	case "no-criteria":
 		if !slices.Contains(cur.Actions, action) {
 			writeError(w, http.StatusForbidden, fmt.Errorf("not yours: step 1 waits for %s to %s", cmp.Or(cur.Waits.Login, "anyone"), cur.Waits.What))
 			return
 		}
-		body, meta["intent:criteria"], meta["cycle:step"] = "Accepted without acceptance criteria", "none", "1"
+		body, meta["intent:criteria"], meta["cycle:step"] = "Accepted without acceptance criteria", "none", "intent"
 	case "verify":
 		if !atVerify {
 			writeError(w, http.StatusBadRequest, errNotAtVerify)
@@ -447,7 +450,7 @@ func (s *apiServer) suggestRisk(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer done()
-	meta := map[string]string{"cycle:step": "2", "ai:model": c.Model, "ai:risk": class}
+	meta := map[string]string{"cycle:step": "risk", "ai:model": c.Model, "ai:risk": class}
 	if _, err := s.b.AddCommentMeta(id, strings.TrimSpace("Suggested: **"+class+"**\n\n"+why), meta); err != nil {
 		writeIssueError(w, err)
 		return

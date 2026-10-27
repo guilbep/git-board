@@ -337,17 +337,43 @@ func TestCommentOnAStep(t *testing.T) {
 	}
 	base := ts.URL + "/api/issues/" + id[:8] + "/comments"
 	var th store.Thread
-	if code := call(t, "POST", base, map[string]any{"body": "plan looks fine", "step": 3}, &th); code != http.StatusOK {
-		t.Fatalf("comment on step 3: %d", code)
+	if code := call(t, "POST", base, map[string]any{"body": "plan looks fine", "step": "plan"}, &th); code != http.StatusOK {
+		t.Fatalf("comment on plan: %d", code)
 	}
-	if e := th.Events[len(th.Events)-1]; e.Meta["cycle:step"] != "3" || e.Body != "plan looks fine" {
-		t.Errorf("step 3's comment %+v", e)
+	if e := th.Events[len(th.Events)-1]; e.Meta["cycle:step"] != "plan" || e.Body != "plan looks fine" {
+		t.Errorf("plan's comment %+v", e)
 	}
 	if code := call(t, "POST", base, map[string]any{"body": "plain"}, &th); code != http.StatusOK || th.Events[len(th.Events)-1].Meta["cycle:step"] != "" {
 		t.Errorf("a plain comment: %d %+v", code, th.Events[len(th.Events)-1])
 	}
 	if code := call(t, "POST", base, map[string]any{"body": "x", "step": 8}, nil); code != http.StatusBadRequest {
 		t.Errorf("step 8: %d", code)
+	}
+}
+
+// A comment's step is an id of the project's list; a number from a tab
+// opened before the upgrade reads as the default list's id.
+func TestCommentStepIsTheLists(t *testing.T) {
+	t.Parallel()
+	ts, s := newIssueServer(t)
+	s.cfg = &config.Config{Cycle: config.Cycle{Steps: []string{"code", "review"}}}
+	id, err := s.b.NewIssue("Export CSV", "", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	base := ts.URL + "/api/issues/" + id[:8] + "/comments"
+	var th store.Thread
+	for _, step := range []any{"review", 6} {
+		if code := call(t, "POST", base, map[string]any{"body": "x", "step": step}, &th); code != http.StatusOK {
+			t.Errorf("step %v: %d", step, code)
+		} else if m := th.Events[len(th.Events)-1].Meta; m["cycle:step"] != "review" {
+			t.Errorf("step %v: %v", step, m)
+		}
+	}
+	for _, step := range []any{"plan", "qa", 3, 8} {
+		if code, body := post(t, base, map[string]any{"body": "x", "step": step}); code != http.StatusBadRequest || !strings.Contains(body, "step: one of code, review") {
+			t.Errorf("step %v: %d %s", step, code, body)
+		}
 	}
 }
 
@@ -411,11 +437,11 @@ func TestThreadComments(t *testing.T) {
 	base := ts.URL + "/api/issues/" + id[:8] + "/comments"
 	var th store.Thread
 	last := func() store.Event { return th.Events[len(th.Events)-1] }
-	if code := call(t, "POST", base, map[string]any{"body": "Is this one?", "anchor": "body@v1/expected#3", "step": 1}, &th); code != http.StatusOK {
+	if code := call(t, "POST", base, map[string]any{"body": "Is this one?", "anchor": "body@v1/expected#3", "step": "intent"}, &th); code != http.StatusOK {
 		t.Fatalf("anchored: %d", code)
 	}
 	root := last()
-	if root.Meta["thread:anchor"] != "body@v1/expected#3" || root.Meta["cycle:step"] != "1" || root.Meta["thread:kind"] != "" {
+	if root.Meta["thread:anchor"] != "body@v1/expected#3" || root.Meta["cycle:step"] != "intent" || root.Meta["thread:kind"] != "" {
 		t.Errorf("root meta %v", root.Meta)
 	}
 	if code := call(t, "POST", base, map[string]any{"body": "Same cut.", "reply_to": root.ID}, &th); code != http.StatusOK {

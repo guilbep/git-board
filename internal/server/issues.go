@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/markdown"
 	"github.com/guilbep/git-board/internal/store"
 )
@@ -131,17 +132,37 @@ func (s *apiServer) handleNewIssue(w http.ResponseWriter, r *http.Request) {
 	s.writeThread(w, http.StatusCreated, id)
 }
 
+// stepOf is a comment's step: an id of the project's list, or none. A
+// number 1 to 7, from a tab opened before ids, is the default list's.
+func (s *apiServer) stepOf(raw json.RawMessage) (string, error) {
+	var id string
+	if n, err := strconv.Atoi(string(raw)); err == nil && n >= 1 && n <= 7 {
+		id = config.DefaultSteps[n-1].ID
+	} else if len(raw) > 0 && string(raw) != "null" && json.Unmarshal(raw, &id) != nil {
+		id = string(raw)
+	}
+	steps := s.config().Stages().Steps
+	if id == "" || slices.ContainsFunc(steps, func(st config.Step) bool { return st.ID == id }) {
+		return id, nil
+	}
+	ids := make([]string, len(steps))
+	for i, st := range steps {
+		ids[i] = st.ID
+	}
+	return "", fmt.Errorf("step: one of %s, not %q", strings.Join(ids, ", "), id)
+}
+
 // handleComment comments, and optionally closes or reopens: "Close with
 // comment". A step (1 to 7) puts the comment in that step's discussion;
 // an anchor on a section of the description, a reply_to in that thread
 // (docs/design/time-flow/protocol.md, the thread:* keys).
 func (s *apiServer) handleComment(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Body    string `json:"body"`
-		Status  string `json:"status"`
-		Step    int    `json:"step"`
-		Anchor  string `json:"anchor"`
-		ReplyTo string `json:"reply_to"`
+		Body    string          `json:"body"`
+		Status  string          `json:"status"`
+		Step    json.RawMessage `json:"step"`
+		Anchor  string          `json:"anchor"`
+		ReplyTo string          `json:"reply_to"`
 	}
 	if !decode(w, r, &req) {
 		return
@@ -150,8 +171,9 @@ func (s *apiServer) handleComment(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, errors.New("an empty comment"))
 		return
 	}
-	if req.Step < 0 || req.Step > 7 {
-		writeError(w, http.StatusBadRequest, fmt.Errorf("step: 1 to 7, not %d", req.Step))
+	step, err := s.stepOf(req.Step)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
 		return
 	}
 	if req.Anchor != "" && !bodyAnchor.MatchString(req.Anchor) {
@@ -166,8 +188,8 @@ func (s *apiServer) handleComment(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	if strings.TrimSpace(req.Body) != "" {
 		meta := map[string]string{}
-		if req.Step > 0 {
-			meta["cycle:step"] = strconv.Itoa(req.Step)
+		if step != "" {
+			meta["cycle:step"] = step
 		}
 		if req.Anchor != "" {
 			meta["thread:anchor"] = req.Anchor
