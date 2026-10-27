@@ -772,6 +772,7 @@ export interface CycleEvidence {
   kind?: string; // [branches]' kind, for step 4's rule
   criteria?: string[];
   criteria_problems?: string[]; // where the description reads differently from how it looks
+  no_criteria?: boolean; // accepted as it is (intent:criteria=none)
   risk?: string;
   author?: string;
   assignees?: string[];

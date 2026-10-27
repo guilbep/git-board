@@ -73,10 +73,13 @@ type Input struct {
 	Criteria []string      `json:"criteria,omitempty"`
 	// CriteriaProblems are the description's warnings (Criteria)
 	CriteriaProblems []string `json:"criteria_problems,omitempty"`
-	Risk             string   `json:"risk,omitempty"`
-	Kind             string   `json:"kind,omitempty"` // [branches]' kind: step 4's rule (Stages.KindRule)
-	Author           string   `json:"author,omitempty"`
-	Assignees        []string `json:"assignees,omitempty"`
+	// NoCriteria: an intent:criteria=none comment accepted the issue as
+	// it is (one from before git-board); criteria written later take over
+	NoCriteria bool     `json:"no_criteria,omitempty"`
+	Risk       string   `json:"risk,omitempty"`
+	Kind       string   `json:"kind,omitempty"` // [branches]' kind: step 4's rule (Stages.KindRule)
+	Author     string   `json:"author,omitempty"`
+	Assignees  []string `json:"assignees,omitempty"`
 	// People is the login holding each gate for this issue, "" for
 	// nobody: "risk", "plan", "review", and "signoff:<status>".
 	People map[string]string `json:"people,omitempty"`
@@ -194,11 +197,12 @@ func Compute(in Input) Cycle {
 	}
 	w := Waits{Role: "author", Login: in.Author, What: "add acceptance criteria"}
 	act := "" // what the step's person presses, when it is theirs
+	criteria := len(in.Criteria) > 0 || in.NoCriteria
 	switch stage {
 	case "ready":
 		switch {
-		case len(in.Criteria) == 0:
-			c.Step = 1
+		case !criteria:
+			c.Step, act = 1, "no-criteria"
 		case in.Risk == "":
 			c.Step, w, act = 2, Waits{Role: "risk", Login: in.People["risk"], What: "set the risk class"}, "set-risk"
 		case in.Risk == "low" || approved:
@@ -256,7 +260,9 @@ func Compute(in Input) Cycle {
 	default: // before ready, or a status no option names
 		c.Step = 1
 		switch {
-		case len(in.Criteria) == 0 || in.Stages.Ready == "":
+		case !criteria:
+			act = "no-criteria"
+		case in.Stages.Ready == "":
 		case in.People["spec"] != "": // the verdict moves the status (docs/prd/time-flow.md, open point 1)
 			w, act = Waits{Role: "spec", Login: in.People["spec"], What: "give the verdict on the description"}, "spec-verdict"
 		default:
@@ -267,8 +273,13 @@ func Compute(in Input) Cycle {
 	w.Anyone = w.Login == ""
 	c.Waits = w
 	c.Mine = w.Anyone || (in.Me != "" && strings.EqualFold(w.Login, in.Me))
+	// accepting an issue as it is: its author's, the spec role's, or, with
+	// no spec role, anyone's (an issue from before has an author who may
+	// never open git-board)
+	spec := in.People["spec"]
+	open := act == "no-criteria" && (spec == "" || (in.Me != "" && strings.EqualFold(spec, in.Me)))
 	switch {
-	case !c.Mine || act == "":
+	case act == "" || !c.Mine && !open:
 	case act == "verify":
 		c.Actions = []string{"verify", "check", "signoff"}
 	default:

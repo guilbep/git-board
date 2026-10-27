@@ -87,7 +87,7 @@
           />
           <!-- step 6 on the page is the review's own (CycleReview) -->
           <template v-else-if="cycle && row && !(n === 6 && $slots.review)">
-            <CycleIntent v-if="n === 1" :cycle="cycle" :current="current" :busy="busy" @save="saveCriteria" />
+            <CycleIntent v-if="n === 1" :cycle="cycle" :current="current" :busy="busy" :can-accept="has('no-criteria')" @save="saveCriteria" @accept="act('no-criteria')" />
             <CycleTests v-if="n === 4 && !cycle.skipped?.includes(4)" :id="id" :cycle="cycle" />
             <p v-else-if="n !== 1 && row.state === 'done' && row.line !== row.gate" class="gb-note">{{ row.line }}</p>
             <p class="gb-gate">{{ row.gate }}</p>

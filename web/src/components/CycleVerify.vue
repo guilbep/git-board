@@ -16,6 +16,7 @@
       </label>
     </li>
   </ul>
+  <p v-else-if="cycle.evidence.no_criteria" class="gb-note">Accepted without acceptance criteria: the sign-off alone.</p>
   <p v-else class="gb-note">None written: a "## Acceptance criteria" list in the description.</p>
 
   <ul class="gb-tiles">
@@ -62,7 +63,7 @@
   <template v-if="current">
     <p class="gb-vbar">
       <span><span class="gb-eyebrow">Sign-off</span> <b>{{ label }}</b> · {{ holder }}</span>
-      <span class="gb-note">{{ !total ? 'no criteria written' : left ? `waits for ${left} of ${total} criteria` : `${total} of ${total} criteria checked` }}</span>
+      <span class="gb-note">{{ !total ? (cycle.evidence.no_criteria ? 'accepted without criteria' : 'no criteria written') : left ? `waits for ${left} of ${total} criteria` : `${total} of ${total} criteria checked` }}</span>
     </p>
     <p v-if="cycle.note" class="gb-note">{{ cycle.note }}</p>
     <footer class="gb-step-foot">

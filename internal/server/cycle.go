@@ -170,7 +170,8 @@ var errNotAtVerify = errors.New("not at Verify")
 // step 4's checks gate, checks.go), suggest-risk (the AI's class, a
 // comment: the risk stays a person's), spec-verdict (the description's
 // approval or changes requested, on its current version; an approval
-// before ready then moves the status to ready). The risk and the other status moves
+// before ready then moves the status to ready), no-criteria (an issue
+// accepted as it is, intent:criteria=none). The risk and the other status moves
 // are fields: PATCH the issue.
 func (s *apiServer) handleCycleAction(w http.ResponseWriter, r *http.Request) {
 	action := r.PathValue("action")
@@ -182,7 +183,7 @@ func (s *apiServer) handleCycleAction(w http.ResponseWriter, r *http.Request) {
 		s.suggestRisk(w, r)
 		return
 	}
-	if !slices.Contains([]string{"approve-plan", "verify", "check", "signoff", "spec-verdict"}, action) {
+	if !slices.Contains([]string{"approve-plan", "verify", "check", "signoff", "spec-verdict", "no-criteria"}, action) {
 		writeError(w, http.StatusNotFound, fmt.Errorf("no cycle action %q", action))
 		return
 	}
@@ -264,7 +265,7 @@ func (s *apiServer) handleCycleAction(w http.ResponseWriter, r *http.Request) {
 		case req.Verdict == "request-changes" && body == "":
 			writeError(w, http.StatusBadRequest, errors.New("say which changes"))
 			return
-		case req.Verdict == "approve" && len(ev.Criteria) == 0:
+		case req.Verdict == "approve" && len(ev.Criteria) == 0 && !ev.NoCriteria:
 			// adding them is an edit, so a version this approval isn't on
 			writeError(w, http.StatusBadRequest, errors.New("add acceptance criteria first"))
 			return
@@ -276,6 +277,12 @@ func (s *apiServer) handleCycleAction(w http.ResponseWriter, r *http.Request) {
 		}
 		body = strings.TrimSuffix(head+"\n\n"+body, "\n\n")
 		meta["spec:verdict"], meta["spec:on"], meta["cycle:step"] = req.Verdict, req.On, "1"
+	case "no-criteria":
+		if !slices.Contains(cur.Actions, action) {
+			writeError(w, http.StatusForbidden, fmt.Errorf("not yours: step 1 waits for %s to %s", cmp.Or(cur.Waits.Login, "anyone"), cur.Waits.What))
+			return
+		}
+		body, meta["intent:criteria"], meta["cycle:step"] = "Accepted without acceptance criteria", "none", "1"
 	case "verify":
 		if !atVerify {
 			writeError(w, http.StatusBadRequest, errNotAtVerify)

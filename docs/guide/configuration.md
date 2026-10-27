@@ -437,6 +437,7 @@ Intent warns, naming the line, where the description reads differently from how 
 The card writes:
 - **Set the risk:** a field edit.
 - **Approve the plan:** a `plan:approve` comment. A structural plan is approved on its PR on GitHub instead.
+- **Go on without criteria:** an `intent:criteria=none` comment, for an issue from before git-board that has none. Step 1 counts as done and Verify asks for the sign-off alone; criteria written later take over. With `[cycle] spec` set, only that role's holder presses it; without it, anyone.
 - **Post the run, and tick a criterion:** `verify:run` and `verify:criterion` comments, with the commit they were made at.
 - **Sign off:** a `signoff:status` comment, then the next status. A sign-off needs a run at the branch's head, or a reason, written as `signoff:why`.
 

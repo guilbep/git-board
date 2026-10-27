@@ -87,7 +87,8 @@ export function steps(c: Cycle, riskBy?: string, events: IssueEvent[] = []): Ste
     switch (n) {
       case 1: {
         const k = e.criteria?.length ?? 0;
-        return k === 0 ? 'no criteria' : `${k} ${k === 1 ? 'criterion' : 'criteria'}`;
+        if (k === 0) return e.no_criteria ? 'accepted without criteria' : 'no criteria';
+        return `${k} ${k === 1 ? 'criterion' : 'criteria'}`;
       }
       case 2:
         return risk ? cap(risk) + (riskBy ? `, set by ${riskBy}` : '') : undefined;

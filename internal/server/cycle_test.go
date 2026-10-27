@@ -583,3 +583,46 @@ func TestSpecVerdict(t *testing.T) {
 		t.Errorf("approve after ready moves nothing: %d %s %v", code, body, status(later))
 	}
 }
+
+func TestNoCriteria(t *testing.T) {
+	t.Parallel()
+	b := storetest.New(t)
+	open := cycleConfig(nil, config.Cycle{})
+	pm := cycleConfig(map[string]string{"pm": "bob"}, config.Cycle{Spec: "pm"})
+	as := func(cfg *config.Config, me, id string) (int, string) {
+		return post(t, serve(t, &apiServer{cfg: cfg, b: b, me: me}).URL+"/api/issues/"+id[:8]+"/cycle/no-criteria", map[string]string{})
+	}
+	alice := storetest.NewPerson(t, b, "Person A", "alice")
+
+	// an issue from before, at ready: anyone accepts it as it is, and it moves to Risk
+	old := storetest.IssueAs(t, b, alice, 1, "Export CSV", "Just a line", "status:ready")
+	if code, body := as(open, "carol", old); code != http.StatusOK {
+		t.Fatalf("accept: %d %s", code, body)
+	}
+	th, e := lastEvent(t, b, old)
+	if e.Meta["intent:criteria"] != "none" || e.Meta["cycle:step"] != "1" || e.Body != "Accepted without acceptance criteria" {
+		t.Errorf("the comment: %+v", e)
+	}
+	var c cycleAnswer
+	getJSON(t, serve(t, &apiServer{cfg: open, b: b, me: "carol"}).URL+"/api/issues/"+th.ID[:8]+"/cycle", &c)
+	if c.Step != 2 {
+		t.Errorf("accepted: step %d, want 2", c.Step)
+	}
+	if code, body := as(open, "carol", old); code != http.StatusForbidden {
+		t.Errorf("twice: %d %s", code, body)
+	}
+
+	// with the spec role: its holder, not anyone
+	spec := storetest.IssueAs(t, b, alice, 2, "Export CSV", "Just a line", "status:backlog")
+	if code, body := as(pm, "carol", spec); code != http.StatusForbidden || !strings.Contains(body, "add acceptance criteria") {
+		t.Errorf("carol with a spec role: %d %s", code, body)
+	}
+	if code, body := as(pm, "bob", spec); code != http.StatusOK {
+		t.Errorf("bob holds the spec role: %d %s", code, body)
+	}
+	// then the verdict approves it without criteria
+	if code, body := post(t, serve(t, &apiServer{cfg: pm, b: b, me: "bob"}).URL+"/api/issues/"+spec[:8]+"/cycle/spec-verdict",
+		map[string]string{"verdict": "approve", "on": "body@v1"}); code != http.StatusOK {
+		t.Errorf("approve after no-criteria: %d %s", code, body)
+	}
+}
