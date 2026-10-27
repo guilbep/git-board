@@ -17,6 +17,7 @@
     </div>
 
     <article class="hv-asof" :aria-label="`The issue as of ${when(step.at, true)}`">
+      <span class="gb-eyebrow">As of {{ when(step.at, true) }} · what the change touched is outlined</span>
       <div class="hv-asof-head">
         <span :class="['epfl-badge', state.status === 'open' ? 'epfl-badge-tertiary' : 'epfl-badge-dark']">
           <GbIcon :name="state.status === 'open' ? 'open' : 'closed'" small />{{ state.status === 'open' ? 'Open' : 'Closed' }}
@@ -26,6 +27,22 @@
       <ul v-if="state.labels.length" class="hv-labels">
         <li v-for="l in state.labels" :key="l" class="gb-val" :class="[colorOf(l), { 'hv-hit-label': step.added?.includes(l) }]">{{ labelText(l) }}</li>
       </ul>
+      <div class="hv-boxes">
+        <div v-if="desc" class="hv-box" :class="{ 'hv-hit': step.version !== undefined }">
+          <span class="gb-eyebrow">The description, as of then</span>
+          <span>v{{ desc.v }}, published {{ when(desc.at, true) }} · {{ desc.criteria }}</span>
+          <span v-if="desc.threads" class="hv-muted">threads: {{ desc.threads }}</span>
+        </div>
+        <div class="hv-box">
+          <span class="gb-eyebrow">Texts as of then</span>
+          <span>{{ texts.comments + texts.versions }} · {{ texts.comments }} comment{{ texts.comments === 1 ? '' : 's' }} and {{ texts.versions }} version{{ texts.versions === 1 ? '' : 's' }}</span>
+          <span class="hv-muted">the log below is cut at this change</span>
+        </div>
+        <div class="hv-box">
+          <span class="gb-eyebrow">This change</span>
+          <span><b>{{ step.author.name }}</b> {{ whatOf(step) }}<template v-if="step.kind === 'labels'"> · {{ labelChanges(step).map((c) => `${c.field === 'label' ? 'label' : displayName(c.field)}: ${[c.before.join(', '), c.after.join(', ')].filter(Boolean).join(' → ')}`).join(' · ') }}</template></span>
+        </div>
+      </div>
       <div v-if="touched" class="hv-comment hv-hit">
         <p class="hv-comment-head"><b>{{ touched.author.name }}</b> {{ touched.kind === 'created' ? 'opened' : 'commented' }} {{ on(touched.at) }}<span v-if="touched.edits" class="hv-muted"> · edited {{ touched.edits }}×</span></p>
         <p class="hv-text">{{ touched.body || '(no text)' }}</p>
@@ -88,9 +105,10 @@ import type { Cycle, Thread } from '@/api/board';
 import { colorClass } from '@/colors';
 import { displayName, formatValue, type Fields } from '@/fields';
 import { describeLabels } from '@/history';
-import { segments } from '@/flow';
+import { bodyThreads, resolvedBy, segments } from '@/flow';
+import { anchorLabel, anchorOf, criteriaOf, sectionsOf, stateOf, versions } from '@/sections';
 import { on, when } from '@/me';
-import { metaWhat, stateAfter, steps, textDiff, wordDiff, type Step, type WordOp } from '@/replay';
+import { asOf, metaWhat, stateAfter, steps, textDiff, wordDiff, type Step, type WordOp } from '@/replay';
 import GbIcon, { type IconName } from '@/components/GbIcon.vue';
 import IssueTimeline from '@/components/IssueTimeline.vue';
 
@@ -112,6 +130,25 @@ async function select(i: number) {
   list.value?.querySelector(`[data-step="${i}"]`)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
 }
 const state = computed(() => stateAfter(all.value, pos.value, props.thread.title));
+// the description and its threads as of then: M2's and M3's rules on the
+// events as they were (asOf)
+const then = computed(() => asOf(all.value, pos.value));
+const desc = computed(() => {
+  const created = then.value.find((e) => e.kind === 'created');
+  if (!created) return undefined;
+  const vs = versions(created);
+  const v = vs.at(-1)!;
+  const { n, ticked } = criteriaOf(created.body ?? '');
+  const secs = sectionsOf(created.html ?? '');
+  const threads = bodyThreads(then.value).map((t) => {
+    const a = anchorOf(t.event.meta?.['thread:anchor']);
+    const st = stateOf(t.event, vs);
+    const what = resolvedBy(t, then.value) || (st.state === 'carried' ? `open, carried from v${a!.v}` : st.state === 'outdated' ? `open, written on v${a!.v}` : 'open');
+    return `${a ? anchorLabel(a, secs) : '§'} ${what}`;
+  });
+  return { v: v.n, at: v.at, criteria: `${n} criteri${n === 1 ? 'on' : 'a'}, ${ticked ? `${ticked} ticked` : 'none ticked'}`, threads: threads.join(' · ') };
+});
+const texts = computed(() => ({ comments: then.value.filter((e) => e.kind === 'comment').length, versions: desc.value?.v ?? 0 }));
 // the text the current change wrote, as it was then
 const touched = computed(() => (['created', 'comment', 'edit'].includes(step.value.kind) ? state.value.comments.find((c) => c.id === step.value.event.id) : undefined));
 
@@ -200,6 +237,9 @@ function folded(s: Step): { kind: 'same' | 'add' | 'del' | 'skip'; text: string;
 .hv-asof-head { display: flex; flex-wrap: wrap; align-items: center; gap: .625rem; }
 .hv-asof-title { margin: 0; font-size: 1.125rem; font-weight: 700; }
 .hv-labels { display: flex; flex-wrap: wrap; gap: .375rem; margin: 0; padding: 0; list-style: none; }
+.hv-boxes { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr)); gap: .75rem; font-size: .875rem; }
+.hv-box { display: flex; flex-direction: column; gap: 4px; padding: .75rem .875rem; background: var(--bg); border: 1px solid var(--border-subtle); }
+.hv-box .hv-muted { font-size: .8125rem; }
 .hv-comment { padding: .5rem .75rem; background: var(--bg); border: 1px solid var(--border-subtle); }
 .hv-comment-head { margin: 0 0 .25rem; font-size: .8125rem; }
 .hv-text { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: .875rem; line-height: 1.55; max-height: 14rem; overflow: auto; }

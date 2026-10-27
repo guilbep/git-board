@@ -69,6 +69,18 @@ export function anchorLabel(a: Anchor, sections: Section[]): string {
 const unticked = (s: string) => s.replace(/^(\s*[-*+]\s+)\[[ xX]\]/gm, '$1[ ]');
 export const isTick = (before: string, after: string): boolean => before !== after && unticked(before) === unticked(after);
 
+// criteriaOf counts a text's checkbox lines, outside fences, and the ticked ones
+export function criteriaOf(body: string): { n: number; ticked: number } {
+  let fence = false;
+  const out = { n: 0, ticked: 0 };
+  for (const l of body.split('\n')) {
+    if (/^\s*(```|~~~)/.test(l)) fence = !fence;
+    const box = fence ? undefined : /^\s*[-*+]\s+\[([ xX])\]/.exec(l)?.[1];
+    if (box) ((out.n++), box !== ' ' && out.ticked++);
+  }
+  return out;
+}
+
 // version is the body's: 1 + each edit that changes text and is no tick.
 export function version(created: IssueEvent): number {
   const h = created.history ?? [];

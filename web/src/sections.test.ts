@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { IssueEvent } from './api/board.ts';
 import {
-  anchorLabel, anchorOf, anchorString, applySuggestion, changeOf, diffMarkdown, isTick, lineAt, mdSections, sectionsOf, slugs, stateOf, suggestionOf, version, versions,
+  anchorLabel, anchorOf, anchorString, applySuggestion, changeOf, criteriaOf, diffMarkdown, isTick, lineAt, mdSections, sectionsOf, slugs, stateOf, suggestionOf, version, versions,
 } from './sections.ts';
 
 // 6a's description, as Markdown and as the server renders it
@@ -188,4 +188,10 @@ test('diff marks added and removed lines', () => {
   assert.equal(diffMarkdown('- [ ] one', '- [ ] two'), '- [ ] <del>one</del>\n- [ ] <ins>two</ins>');
   assert.equal(diffMarkdown('## Old\n\nx', '## New\n\nx'), '## New\n\nx');
   assert.equal(diffMarkdown('```\na\n```', '```\nb\n```'), '```\nb\n```');
+});
+
+test('criteria are the checkbox lines', () => {
+  assert.deepEqual(criteriaOf(md), { n: 4, ticked: 0 });
+  assert.deepEqual(criteriaOf(md.replace('- [ ] Pre-release', '- [x] Pre-release')), { n: 4, ticked: 1 });
+  assert.deepEqual(criteriaOf(md + '\n\n```\n- [ ] not one\n```'), { n: 4, ticked: 0 });
 });
