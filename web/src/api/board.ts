@@ -228,7 +228,7 @@ export interface IssueEvent {
   body?: string; // Markdown
   html?: string; // rendered and cleaned by the server
   edited?: boolean;
-  history?: { author: Person; at: string; body: string }[];
+  history?: { id?: string; author: Person; at: string; body: string }[]; // id: the text's, then each edit's
   pending?: string[]; // forges the next sync hasn't taken this change to yet
   edit_pending?: string[]; // a comment there already: forges its latest edit hasn't reached
   edit_was?: string; // with edit_pending: the text the forges have
@@ -280,8 +280,17 @@ export function createIssue(title: string, body: string, labels: string[]): Prom
 
 // A comment, and/or a status: "Close with comment".
 // step: the cycle step whose discussion the comment is in (0: none, step 1's)
-export function addComment(id: string, body: string, status?: 'open' | 'closed', step = 0): Promise<Thread> {
-  return request(`${issuePath(id)}/comments`, json('POST', { body, status: status ?? '', step }));
+// A comment on the description's thread (docs/design/time-flow/protocol.md):
+// its anchor, or the thread's first comment it replies to.
+export interface ThreadOn { anchor?: string; reply_to?: string }
+
+export function addComment(id: string, body: string, status?: 'open' | 'closed', step = 0, on: ThreadOn = {}): Promise<Thread> {
+  return request(`${issuePath(id)}/comments`, json('POST', { body, status: status ?? '', step, ...on }));
+}
+
+// threadMeta sets thread:resolved and thread:applied on a thread's first comment.
+export function threadMeta(id: string, commentId: string, meta: Record<string, string>): Promise<Thread> {
+  return request(`${issuePath(id)}/comments/${encodeURIComponent(commentId)}/meta`, json('POST', meta));
 }
 
 // base is the text the edit started from: 409 if the comment changed since.
