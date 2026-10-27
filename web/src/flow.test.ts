@@ -231,3 +231,29 @@ test('the role a person holds', () => {
   assert.equal(roleOf(fields, 'bob'), undefined);
   assert.equal(roleOf(fields, undefined), undefined);
 });
+
+// On vN: v2 published at 3; an anchor or spec:on names its version, else the time does
+test('On vN keeps its entries and milestone', () => {
+  const all = [
+    ev('created', 0, { kind: 'created' }),
+    ev('c1', 1),
+    ev('version-2', 3, { kind: 'version' }),
+    ev('version-3', 3, { kind: 'version' }), // v3 in the same second: its own
+    ev('c2', 4),
+    ev('c3', 5, { meta: { 'thread:anchor': 'body@v1/expected' } }),
+    ev('c4', 6, { meta: { 'spec:on': 'body@v1', 'spec:verdict': 'approve' } }),
+  ];
+  const at = (h: number) => new Date(Date.UTC(2026, 9, 21, h)).toISOString();
+  const on = (v: number, from: number, to?: number) => ids(pick(segments(all, undefined, 0), all, { ...READING, show: 'version' }, 'me', 0, { v, from: at(from), ...(to ? { to: at(to) } : {}) }));
+  assert.deepEqual(on(2, 3), [[0, ['version-2', 'c2']]]);
+  assert.deepEqual(on(1, 0, 3), [[0, ['c1', 'c3', 'c4']]]);
+});
+
+test('one version reads as all', () => {
+  const segs = segments(events, stages, 6);
+  assert.deepEqual(pick(segs, events, { ...READING, show: 'version' }, 'me', 6), pick(segs, events, READING, 'me', 6));
+});
+
+test('readingOf takes version', () => {
+  assert.equal(readingOf('{"show":"version"}').show, 'version');
+});

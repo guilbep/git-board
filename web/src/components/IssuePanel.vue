@@ -174,6 +174,7 @@
               :fields="fields"
               :save="edit"
               :reading="reading"
+              :shown-v="shownV"
               :pointers="pointers"
               :busy="saving"
               :reply="(root: string, b: string) => comment(b, undefined, cycle?.step ?? 0, { reply_to: root })"
@@ -183,6 +184,7 @@
               @line="showLine"
               @workspace="showWorkspace"
               @thread="toSection"
+              @compare="compare"
             />
             <IssueComposer
               :status="thread.status"
@@ -429,6 +431,16 @@ async function reveal(id: string) {
   void el.offsetWidth; // restart the animation on a second click
   el.classList.add('gb-flash');
   setTimeout(() => el.classList.remove('gb-flash'), 1800);
+}
+
+// a milestone's Compare: the description open on that version, its
+// changes since the one before marked
+async function compare(v: number) {
+  Object.assign(reading, { description: true });
+  shownV.value = v;
+  changesSince.value = true;
+  await nextTick();
+  document.querySelector(`[data-event="${CSS.escape(created.value?.id ?? '')}"]`)?.scrollIntoView({ block: 'start', behavior: 'smooth' });
 }
 
 function onRef(n: string, e: MouseEvent) {

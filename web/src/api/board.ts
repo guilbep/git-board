@@ -221,7 +221,7 @@ export interface Forge {
 }
 
 export interface IssueEvent {
-  kind: 'created' | 'comment' | 'labels' | 'status' | 'title' | 'unknown';
+  kind: 'created' | 'comment' | 'labels' | 'status' | 'title' | 'version' | 'unknown'; // version: the flow's own, a description's version published
   id: string; // created, comment: what editComment takes
   author: Person;
   at: string;

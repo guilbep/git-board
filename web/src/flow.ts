@@ -73,7 +73,7 @@ export function segments(events: IssueEvent[], stages: CycleStages | undefined, 
 // A person's reading of the issue page (call 9), kept in the browser.
 export interface Reading {
   tab: 'conversation' | 'history';
-  show: 'step' | 'all' | 'open';
+  show: 'step' | 'all' | 'version' | 'open';
   mine: boolean;
   agent: boolean;
   milestones: boolean;
@@ -90,7 +90,7 @@ export const READING: Reading = {
 
 // readingOf reads the kept reading over READING: a key of the wrong
 // type or an unknown value is dropped, anything broken is READING.
-const ONE_OF: Partial<Record<keyof Reading, string[]>> = { tab: ['conversation', 'history'], show: ['step', 'all', 'open'], where: ['section', 'flow'] };
+const ONE_OF: Partial<Record<keyof Reading, string[]>> = { tab: ['conversation', 'history'], show: ['step', 'all', 'version', 'open'], where: ['section', 'flow'] };
 export function readingOf(raw: string | null): Reading {
   let kept: unknown;
   try {
@@ -126,11 +126,18 @@ export function saveReading(r: Reading): void {
   }
 }
 
-// pick applies the filters: one of This step / All / Open threads; Mine,
-// Agent and Milestones narrow it to their union. Segments stay, emptied,
-// so the rail still has its anchors; Newest first reverses them and their
-// entries.
-export function pick(segs: Segment[], events: IssueEvent[], r: Reading, meId: string, step: number): Segment[] {
+// pick applies the filters: one of This step / All / On vN / Open
+// threads; Mine, Agent and Milestones narrow it to their union. Segments
+// stay, emptied, so the rail still has its anchors; Newest first reverses
+// them and their entries. On vN (on: the version and while it was the
+// current one, from ≤ at < to) keeps what an anchor or spec:on names on
+// it, else what was written meanwhile, its milestone included; without
+// on (one version) it reads as All.
+export interface On { v: number; from: string; to?: string }
+// the version an entry names: a milestone's own (its id "version-N", two
+// edits in one second share a time), an anchor's or spec:on's
+const named = (e: IssueEvent) => Number(e.kind === 'version' ? e.id.slice(8) : /^body@v([1-9]\d*)(\/|$)/.exec(e.meta?.['thread:anchor'] ?? e.meta?.['spec:on'] ?? '')?.[1]);
+export function pick(segs: Segment[], events: IssueEvent[], r: Reading, meId: string, step: number, on?: On): Segment[] {
   const open = new Set([
     ...threadsOf(events).filter((t) => !t.resolved).flatMap((t) => [t.root, ...t.replies]),
     ...bodyThreads(events).filter((t) => !t.resolved).flatMap((t) => [t.event, ...t.replies]),
@@ -138,6 +145,7 @@ export function pick(segs: Segment[], events: IssueEvent[], r: Reading, meId: st
   const narrow = r.mine || r.agent || r.milestones;
   const keep = (e: IssueEvent) =>
     (r.show !== 'open' || open.has(e.id)) &&
+    (r.show !== 'version' || !on || (named(e) ? named(e) === on.v : time(e) >= Date.parse(on.from) && (!on.to || time(e) < Date.parse(on.to)))) &&
     (!narrow || (r.mine && e.author.id === meId) || (r.agent && !!e.meta?.['ai:model']) || (r.milestones && e.kind !== 'comment'));
   const out = segs.filter((s) => r.show !== 'step' || s.n === step).map((s) => ({ n: s.n, entries: s.entries.filter(keep) }));
   return r.newest ? out.reverse().map((s) => ({ n: s.n, entries: s.entries.reverse() })) : out;

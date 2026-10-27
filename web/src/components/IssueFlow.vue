@@ -7,7 +7,8 @@
       <div class="gb-flow-chips" role="group" aria-label="Flow">
         <span class="gb-eyebrow">Flow</span>
         <button v-if="step" type="button" class="gb-fchip" :aria-pressed="reading.show === 'step'" @click="reading.show = 'step'">This step {{ count({ show: 'step' }) }}</button>
-        <button type="button" class="gb-fchip" :aria-pressed="reading.show === 'all'" @click="reading.show = 'all'">All {{ count({ show: 'all' }) }}</button>
+        <button type="button" class="gb-fchip" :aria-pressed="reading.show === 'all' || (reading.show === 'version' && !cur)" @click="reading.show = 'all'">All {{ count({ show: 'all' }) }}</button>
+        <button v-if="cur" type="button" class="gb-fchip" :aria-pressed="reading.show === 'version'" @click="reading.show = 'version'">On v{{ cur.v }} {{ count({ show: 'version' }) }}</button>
         <button type="button" class="gb-fchip" :aria-pressed="reading.show === 'open'" @click="reading.show = 'open'">Open threads {{ count({ show: 'open' }) }}</button>
         <button type="button" class="gb-fchip" :aria-pressed="reading.mine" @click="reading.mine = !reading.mine">Mine {{ count(only('mine')) }}</button>
         <button type="button" class="gb-fchip" :aria-pressed="reading.agent" @click="reading.agent = !reading.agent">Agent {{ count(only('agent')) }}</button>
@@ -34,6 +35,10 @@
     <p v-if="step" class="gb-note">{{ segs.length }} segments, one per step: a comment carries the step it was written in. Threads fold to their first line; the composer carries the current step.</p>
 
     <p v-if="!total" class="gb-note">{{ narrowed ? 'Nothing in the flow under these filters.' : 'Nothing said yet.' }}</p>
+    <p v-if="reading.show === 'version' && cur && offV" class="gb-flow-ptr">
+      {{ offV }} {{ offV === 1 ? 'entry' : 'entries' }} on {{ cur.to ? 'other versions' : cur.v === 2 ? 'v1' : `v1–v${cur.v - 1}` }} {{ offV === 1 ? 'is' : 'are' }} hidden ·
+      <button type="button" class="gb-linkbtn" @click="reading.show = 'all'">show all</button>
+    </p>
     <template v-for="s in shown" :key="s.n">
       <p v-if="reading.show === 'step' && folded.length" class="gb-flow-ptr">
         {{ foldedWords }} · {{ foldedCount }} {{ foldedCount === 1 ? 'entry' : 'entries' }} ·
@@ -50,7 +55,20 @@
         <ol v-if="s.entries.length" class="gb-fl" :aria-labelledby="s.n ? `step-${s.n}` : undefined" :aria-label="s.n ? undefined : 'The whole conversation'">
           <template v-for="(it, i) in items(s)" :key="it.event.id">
             <li v-if="it.event.id === newId" class="gb-fnew" role="separator" :aria-label="`New since your last visit, ${on(sinceIso!, true)}`">new since your last visit · {{ when(sinceIso!, true) }}</li>
-            <TimelineEvent v-if="it.event.kind !== 'comment'" class="gb-fe" :data-n="gutter(s, i)" :data-event="it.event.id" :event="it.event" :fields="fields" />
+            <!-- a version of the description published: the flow's own milestone -->
+            <li v-if="it.event.kind === 'version'" class="gb-fe gb-fver" :data-n="gutter(s, i)">
+              <span class="gb-fver-text">
+                <span><b>{{ it.event.author.name }}</b> published <b>v{{ pub(it.event).n }}</b> of the description <span class="gb-fver-muted">· {{ when(it.event.at, true) }}</span></span>
+                <span class="gb-fver-muted">
+                  <template v-for="c in pub(it.event).changed" :key="c"><span class="gb-anchor">{{ c }}</span>{{ ' ' }}</template>
+                  <template v-if="pub(it.event).changed.length">changed · </template>
+                  <template v-if="pub(it.event).applied.length">applied {{ pub(it.event).applied.length }} suggested edit{{ pub(it.event).applied.length === 1 ? '' : 's' }} of {{ [...new Set(pub(it.event).applied)].join(', ') }} · </template>
+                  <template v-if="pub(it.event).resolved">resolved {{ pub(it.event).resolved }} thread{{ pub(it.event).resolved === 1 ? '' : 's' }} · </template>
+                  <button type="button" class="gb-linkbtn" @click="emit('compare', pub(it.event).n)">Compare v{{ pub(it.event).n - 1 }}…v{{ pub(it.event).n }}</button>
+                </span>
+              </span>
+            </li>
+            <TimelineEvent v-else-if="it.event.kind !== 'comment'" class="gb-fe" :data-n="gutter(s, i)" :data-event="it.event.id" :event="it.event" :fields="fields" />
             <!-- a comment on the description, its thread under the section: a line pointing at it -->
             <li v-else-if="pointers && it.event.meta?.['thread:anchor']" class="gb-fe gb-fptr" :data-n="gutter(s, i)">
               <span>
@@ -102,9 +120,9 @@
 import { computed, nextTick, reactive, ref, toRef, watch } from 'vue';
 import type { Cycle, Forge, IssueEvent } from '@/api/board';
 import type { Fields } from '@/fields';
-import { divider, firstNew, isRoot, items as itemsOf, pick, roleOf, rootOf, segments, type Item, type Reading, type Segment } from '@/flow';
+import { bodyThreads, divider, firstNew, isRoot, items as itemsOf, pick, roleOf, rootOf, segments, type Item, type On, type Reading, type Segment } from '@/flow';
 import { on, when } from '@/me';
-import { anchorLabel, anchorOf, sectionsOf } from '@/sections';
+import { anchorLabel, anchorOf, changeOf, sectionsOf, versions } from '@/sections';
 import CommentCard from '@/components/CommentCard.vue';
 import ThreadCard from '@/components/ThreadCard.vue';
 import TimelineEvent from '@/components/TimelineEvent.vue';
@@ -119,6 +137,7 @@ const props = defineProps<{
   fields: Fields;
   save: (id: string, body: string, base: string) => Promise<unknown>;
   reading: Reading; // the panel's, the flow writes its picks into it
+  shownV: number; // the description's version shown: On vN's
   // the description's threads are under its sections: the flow points at
   // them; else they show here, as review threads do, with ThreadCard's
   // reply, Resolve and Apply
@@ -130,16 +149,42 @@ const props = defineProps<{
 }>();
 const reading = toRef(props, 'reading');
 // thread: a body thread's anchor, its place in the description
-const emit = defineEmits<{ line: [path: string]; ref: [n: string, event: MouseEvent]; workspace: [n: number]; thread: [root: string] }>();
+const emit = defineEmits<{ line: [path: string]; ref: [n: string, event: MouseEvent]; workspace: [n: number]; thread: [root: string]; compare: [v: number] }>();
 
 const step = computed(() => props.cycle?.step ?? 0);
-const segs = computed(() => segments(props.events, props.cycle?.stages, step.value, props.cycle?.skipped));
-const read = (r: Reading) => pick(segs.value, props.events, r, props.meId, step.value);
+// the description's versions: a milestone for each past v1, sorted into
+// its step as any event; On vN follows the version shown
+const vs = computed(() => {
+  const c = props.events.find((e) => e.kind === 'created');
+  return c ? versions(c) : [];
+});
+const milestones = computed(() => vs.value.slice(1).map((b): IssueEvent => ({ kind: 'version', id: `version-${b.n}`, at: b.at, author: b.author })));
+const cur = computed((): On | undefined => {
+  const k = Math.min(Math.max(props.shownV, 1), vs.value.length);
+  const next = vs.value[k];
+  return vs.value.length > 1 ? { v: k, from: vs.value[k - 1]!.at, ...(next ? { to: next.at } : {}) } : undefined;
+});
+const segs = computed(() => segments([...props.events, ...milestones.value], props.cycle?.stages, step.value, props.cycle?.skipped));
+const read = (r: Reading) => pick(segs.value, props.events, r, props.meId, step.value, cur.value);
 const sum = (ss: Segment[]) => ss.reduce((n, s) => n + s.entries.length, 0);
 const count = (r: Partial<Reading>) => sum(read({ ...reading.value, ...r }));
 // a toggle's count: what it alone would show
 const only = (k: 'mine' | 'agent' | 'milestones') => ({ mine: false, agent: false, milestones: false, [k]: true });
 const shown = computed(() => read(reading.value));
+const offV = computed(() => count({ show: 'all' }) - count({ show: 'version' }));
+// a milestone's line: the sections changed since the version before, the
+// suggestions applied in it and the threads it resolved
+function pub(e: IssueEvent) {
+  const n = Number(e.id.slice(8));
+  const before = sectionsOf(vs.value[n - 2]?.html ?? '');
+  const changed = sectionsOf(vs.value[n - 1]?.html ?? '').flatMap((s) => {
+    const c = changeOf(before, s);
+    return c === 'unchanged' ? [] : [c === 'changed' ? `§${s.n}` : `§${s.n} › ${c}`];
+  });
+  const by = bodyThreads(props.events).filter((t) => t.event.meta?.['thread:resolved'] === `v${n}`);
+  const applied = by.filter((t) => t.event.meta?.['thread:applied']).flatMap((t) => [t.event, ...t.replies].findLast((x) => x.meta?.['thread:kind'] === 'suggestion')?.author.name ?? []);
+  return { n, changed, applied, resolved: by.length };
+}
 const total = computed(() => sum(shown.value));
 const narrowed = computed(() => reading.value.show !== 'all' || reading.value.mine || reading.value.agent || reading.value.milestones);
 const threads = computed(() => reading.value.threads);
@@ -244,6 +289,8 @@ defineExpose({ jump, unfold, settled });
 .gb-fthread { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 6px 12px; padding: 10px 14px; border: 1px solid var(--border-subtle); }
 .gb-flow-where { display: flex; align-items: center; gap: 6px; font-size: .75rem; color: var(--fg-muted); }
 .gb-fptr { padding: 7px 0; color: var(--fg-muted); }
+.gb-fver-text { display: flex; flex-direction: column; gap: 2px; }
+.gb-fver-muted { color: var(--fg-muted); }
 .gb-fthread-q { color: var(--fg-muted); font-style: italic; }
 .gb-fthread-open { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .gb-fthread-open.is-thread { animation: gb-unfold 120ms ease-out; }
