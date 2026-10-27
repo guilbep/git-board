@@ -118,10 +118,10 @@
         <template v-if="page" #review="r">
           <CycleReview :id="thread.id" :thread="thread" :me-id="meId" :busy="saving" :focus="focus" :review="review" :resolve="resolve" v-bind="r" />
         </template>
-        <template #flow="{ cycle, send }">
+        <template #flow="{ cycle, failed, send }">
           <HistoryView v-if="reading.tab === 'history'" :thread="thread" :fields="fields" />
           <template v-else>
-            <IssueFlow ref="flow" :events="thread.events" :cycle="cycle" :me-id="meId" :since="since" :forges="thread.forges" :fields="fields" :save="edit" :reading="reading" @ref="onRef" @line="showLine" @workspace="showWorkspace" />
+            <IssueFlow ref="flow" :events="thread.events" :cycle="cycle" :failed="failed" :me-id="meId" :since="since" :forges="thread.forges" :fields="fields" :save="edit" :reading="reading" @ref="onRef" @line="showLine" @workspace="showWorkspace" />
             <IssueComposer
               :status="thread.status"
               :forges="thread.forges"
@@ -301,9 +301,12 @@ async function jumpTo(n: number) {
 }
 
 // reveal scrolls to a history item and flashes it (a waiting change's
-// row), the flow unfolded first.
+// row), on the Conversation tab with the flow settled and unfolded first.
 async function reveal(id: string) {
+  reading.tab = 'conversation';
   if (id === created.value?.id) reading.description = true;
+  await nextTick();
+  await flow.value?.settled();
   flow.value?.unfold(id);
   await nextTick();
   const el = document.querySelector<HTMLElement>(`[data-event="${CSS.escape(id)}"]`);
