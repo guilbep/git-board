@@ -8,6 +8,7 @@
       <span v-else class="gb-avatar gb-avatar-sm" :class="{ 'gb-avatar-dark': mine }" aria-hidden="true">{{ initials(event.author.name) }}</span>
       <b>{{ event.author.name }}</b>
       <span class="gb-time">{{ verb }} {{ on(event.at, true) }}</span>
+      <span v-if="step" class="gb-time">· step {{ step }}</span>
       <span v-if="review?.state" class="gb-mono gb-time">at {{ review.commit?.slice(0, 7) }}</span>
       <span v-if="event.kind === 'created'" class="gb-tag">Description</span>
       <details v-if="event.edited && event.history" class="gb-hist">
@@ -24,6 +25,18 @@
         </div>
       </details>
       <span class="gb-grow" />
+      <!-- where it is: a review comment stays local (on the pull request
+           only), the rest per forge -->
+      <template v-if="forges?.length">
+        <span v-if="review" class="gb-fstate gb-fstate-local">stays local</span>
+        <template v-else>
+          <span v-for="f in forges" :key="f.url" class="gb-fstate" :class="{ 'gb-fstate-local': event.pending?.includes(f.name) || event.edit_pending?.includes(f.name) }">
+            <template v-if="event.pending?.includes(f.name)"><GbIcon name="clock" small /> not on {{ f.name }} yet, next sync</template>
+            <template v-else-if="event.edit_pending?.includes(f.name)"><GbIcon name="clock" small /> latest edit not on {{ f.name }} yet, next sync</template>
+            <template v-else><a :href="f.url" target="_blank" rel="noopener noreferrer">on {{ f.name }}{{ f.number ? ` #${f.number}` : '' }}</a><GbIcon name="check" small /></template>
+          </span>
+        </template>
+      </template>
       <button v-if="!editing && editable(event)" type="button" class="gb-icon-btn" :aria-label="`Edit ${mine ? 'your' : event.author.name + '’s'} ${event.kind === 'created' ? 'description' : 'comment'}`" @click="startEdit">
         <GbIcon name="edit" />
       </button>
@@ -54,13 +67,6 @@
       <p v-else-if="!review" class="gb-comment-body gb-hint">No description.</p>
     </template>
 
-    <footer v-if="forges?.length && !review" class="gb-comment-foot">
-      <span v-for="f in forges" :key="f.url" class="gb-fstate" :class="{ 'gb-fstate-local': event.pending?.includes(f.name) || event.edit_pending?.includes(f.name) }">
-        <template v-if="event.pending?.includes(f.name)"><GbIcon name="clock" small /> Not on {{ f.name }} yet, next sync</template>
-        <template v-else-if="event.edit_pending?.includes(f.name)"><GbIcon name="clock" small /> Latest edit not on {{ f.name }} yet, next sync</template>
-        <template v-else><GbIcon name="check" small /><a :href="f.url" target="_blank" rel="noopener noreferrer">On {{ f.name }}</a></template>
-      </span>
-    </footer>
   </article>
 </template>
 
@@ -92,8 +98,10 @@ const changed = ref(false);
 const shown = ref(0);
 
 // a line comment, a reply to one, or a review: on the pull request, not
-// the issue, so no per-forge footer
+// the issue
 const review = computed(() => props.event.review);
+// the step the comment was written in, as its segment's divider says it
+const step = computed(() => props.event.meta?.['cycle:step']?.padStart(2, '0'));
 const verb = computed(() => verbOf(props.event));
 
 // newest first, as the menu lists them
