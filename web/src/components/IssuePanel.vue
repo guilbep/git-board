@@ -112,7 +112,18 @@
           </div>
           <template v-else-if="created">
             <CommentCard :data-event="created.id" :event="created" :forges="thread.forges" :mine="created.author.id === meId" :save="edit" :role="roleOf(fields, created.author.login)" @ref="onRef">
-              <IssueSections :html="created.html!" :events="thread.events" :forges="thread.forges" @ref="onRef" />
+              <IssueSections
+                :html="created.html!"
+                :events="thread.events"
+                :forges="thread.forges"
+                :status="thread.status"
+                :busy="saving"
+                :waiting="waiting"
+                :error="saveError"
+                :carried="carries(cycle?.step ?? 0)"
+                :comment="(anchor: string, b: string) => comment(b, undefined, cycle?.step ?? 0, { anchor })"
+                @ref="onRef"
+              />
             </CommentCard>
             <p v-if="folded"><button type="button" class="gb-linkbtn" aria-expanded="true" @click="reading.description = false">Fold the description</button></p>
           </template>
@@ -130,7 +141,7 @@
               :busy="saving"
               :waiting="waiting"
               :error="saveError"
-              :carries="carries(cycle?.step ?? 0)"
+              :carries="[carries(cycle?.step ?? 0), created ? `v${version(created)}` : ''].filter(Boolean)"
               :send="send?.name"
               :comment="(b: string, st?: 'open' | 'closed', toAgent?: boolean) => post(b, st, cycle?.step ?? 0, toAgent ? send : undefined)"
             />
@@ -172,6 +183,7 @@ import CycleReview from '@/components/CycleReview.vue';
 import CommentCard from '@/components/CommentCard.vue';
 import HistoryView from '@/components/HistoryView.vue';
 import { carries, loadReading, roleOf, saveReading } from '@/flow';
+import { version } from '@/sections';
 import { steps } from '@/replay';
 import GbIcon from '@/components/GbIcon.vue';
 import IssueComposer from '@/components/IssueComposer.vue';

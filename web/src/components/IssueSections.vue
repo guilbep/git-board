@@ -7,21 +7,46 @@
       <MarkdownBody class="gb-sec-md" :html="s.html" :forges="forges" @ref="(n, e) => emit('ref', n, e)" />
       <div class="gb-gut">
         <span class="gb-anchor">§{{ s.n }} {{ s.heading || 'intro' }}</span>
-        <button v-if="!threadsIn(s).length" type="button" class="gb-tchip is-ghost">Comment on §{{ s.n }}</button>
+        <button v-if="!threadsIn(s).length" type="button" class="gb-tchip is-ghost" :aria-expanded="composing === s.slug" @click="composing = s.slug">Comment on §{{ s.n }}</button>
         <button v-else type="button" class="gb-tchip" :class="{ 'is-open': threadsIn(s).some((t) => !t.resolved) }" :aria-expanded="open.has(s.slug)" @click="toggle(s.slug)">{{ chip(s) }}</button>
+      </div>
+      <div v-if="composing === s.slug" class="gb-sec-row">
+        <IssueComposer
+          :status="status"
+          :forges="forges"
+          :busy="busy"
+          :waiting="waiting"
+          :error="error"
+          :carries="[carried, `v${v}`, `§${s.n} ${s.heading || 'intro'}`].filter(Boolean)"
+          :comment="(b: string) => post(`body@v${v}/${s.slug}`, b)"
+          :cancel="() => (composing = undefined)"
+        />
       </div>
     </section>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, reactive } from 'vue';
+import { computed, reactive, ref } from 'vue';
 import type { Forge, IssueEvent } from '@/api/board';
 import { bodyThreads, type Item } from '@/flow';
-import { anchorOf, sectionsOf, type Section } from '@/sections';
+import { anchorOf, sectionsOf, version, type Section } from '@/sections';
+import IssueComposer from '@/components/IssueComposer.vue';
 import MarkdownBody from '@/components/MarkdownBody.vue';
 
-const props = defineProps<{ html: string; events: IssueEvent[]; forges?: Forge[] | null | undefined }>();
+const props = defineProps<{
+  html: string;
+  events: IssueEvent[];
+  forges?: Forge[] | null | undefined;
+  // the composer under a section, as the flow's: the issue's status, the
+  // save state, the step it carries ("01 Intent")
+  status: string;
+  busy: boolean;
+  waiting: boolean;
+  error: string;
+  carried: string;
+  comment: (anchor: string, body: string) => Promise<boolean>; // posts a comment with thread:anchor
+}>();
 const emit = defineEmits<{ ref: [n: string, event: MouseEvent] }>();
 
 const sections = computed(() => sectionsOf(props.html));
@@ -31,6 +56,14 @@ const threads = computed(() => bodyThreads(props.events));
 const threadsIn = (s: Section): Item[] => threads.value.filter((t) => anchorOf(t.event.meta?.['thread:anchor'])?.slug === s.slug);
 
 const open = reactive(new Set<string>()); // the sections whose threads are unfolded
+const composing = ref<string>(); // the section whose composer is open: one at a time
+// the body's version, which a new anchor names
+const v = computed(() => version(props.events.find((e) => e.kind === 'created')!));
+async function post(anchor: string, body: string) {
+  const ok = await props.comment(anchor, body);
+  if (ok) composing.value = undefined;
+  return ok;
+}
 const toggle = (slug: string) => (open.has(slug) ? open.delete(slug) : open.add(slug));
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
@@ -50,6 +83,7 @@ function chip(s: Section): string {
 <style scoped>
 .gb-secs { container-type: inline-size; display: flex; flex-direction: column; padding: 1rem 1.25rem 1.25rem; }
 .gb-sec { display: grid; grid-template-columns: minmax(0, 1fr) 164px; gap: 10px 20px; padding: 16px 0; border-top: 1px solid var(--border-subtle); }
+.gb-sec-row { grid-column: 1 / -1; }
 .gb-sec:first-child { border-top: 0; padding-top: 0; }
 .gb-gut { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; font-size: .75rem; color: var(--fg-muted); }
 .gb-sec :deep(.gb-md > :first-child) { margin-top: 0; }

@@ -13,9 +13,10 @@
       <p v-else-if="error" class="gb-save-error" role="alert"><GbIcon name="error" small /> <b>Your comment was not posted.</b> {{ error }} Your text is still here.</p>
       <div class="gb-composer-foot">
         <p class="gb-hint">
-          Saved in git-board now, on {{ forgeNames }} at the next sync.<template v-if="carries"> Carries <span class="gb-carries">{{ carries }}</span></template>
+          Saved in git-board now, on {{ forgeNames }} at the next sync.<template v-if="carries?.length"> Carries<template v-for="c in carries" :key="c"> <span class="gb-carries">{{ c }}</span></template></template>
         </p>
-        <button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" :disabled="busy" @click="post(status === 'open' ? 'closed' : 'open')">
+        <button v-if="cancel" type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" @click="cancel">Cancel</button>
+        <button v-else type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" :disabled="busy" @click="post(status === 'open' ? 'closed' : 'open')">
           <GbIcon :name="status === 'open' ? 'closed' : 'open'" small />
           {{ status === 'open' ? (text.trim() ? 'Close with comment' : 'Close issue') : (text.trim() ? 'Reopen with comment' : 'Reopen issue') }}
         </button>
@@ -42,7 +43,8 @@ const props = defineProps<{
   error: string;
   // posts; send: the comment goes to the agent too, as a brief
   comment: (body: string, status?: 'open' | 'closed', send?: boolean) => Promise<boolean>;
-  carries?: string; // the step the comment is written in: "07 Verify"
+  carries?: string[]; // what the comment carries: its step "07 Verify", the version "v1", an anchor "§3 Expected"
+  cancel?: (() => void) | undefined; // a composer under a section: Cancel in place of Close issue
   send?: string | undefined; // the agent a comment can go to, by name
 }>();
 
