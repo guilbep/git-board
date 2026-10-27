@@ -142,7 +142,7 @@
       </div>
     </section>
     <aside class="gb-sidebar" aria-label="Fields">
-      <slot name="side" />
+      <slot name="side" :cycle="cycle" />
     </aside>
   </div>
 </template>

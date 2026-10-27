@@ -198,7 +198,7 @@
             />
           </template>
         </template>
-        <template #side>
+        <template #side="{ cycle }">
           <IssueSide
             :id="thread.id"
             :title="thread.title"
@@ -209,6 +209,8 @@
             :participants="thread.participants"
             :events="thread.events"
             :saving="saving"
+            :spec="cycle && created && (cycle.step === 1 || spec.on || spec.before) ? spec : undefined"
+            :reviewer="holder(cycle?.evidence.people?.spec)"
             @changed="fieldsChanged"
             @labels="labels"
             @reveal="reveal"
@@ -294,12 +296,17 @@ const created = computed(() => thread.value?.events.find((e) => e.kind === 'crea
 const bodyVersions = computed(() => (created.value ? versions(created.value) : []));
 // the description's verdict (VerdictBar): on the current version, from the thread
 const spec = computed(() => specOf(thread.value?.events ?? [], bodyVersions.value));
-// "Person B, PM" for the spec role's holder; anyone but the author without one
-function reviewer(login: string | undefined): string {
-  if (!login) return `Anyone but ${created.value?.author.name ?? 'the author'}`;
+// the spec role's holder, its name and project role; "Person B, PM" for
+// the verdict bar, anyone but the author without one
+function holder(login: string | undefined) {
+  if (!login) return undefined;
   const name = me.value?.identities?.find((p) => p.login?.toLowerCase() === login.toLowerCase())?.name ?? login;
-  const role = roleOf(props.fields, login);
-  return role ? `${name}, ${role.toUpperCase()}` : name;
+  return { name, role: roleOf(props.fields, login) };
+}
+function reviewer(login: string | undefined): string {
+  const h = holder(login);
+  if (!h) return `Anyone but ${created.value?.author.name ?? 'the author'}`;
+  return h.role ? `${h.name}, ${h.role.toUpperCase()}` : h.name;
 }
 const giving = ref(false);
 const verdictError = ref('');
