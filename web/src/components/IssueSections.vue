@@ -24,6 +24,7 @@
           :save="save"
           :reply="reply"
           :resolve="resolve"
+          :apply="apply"
           @anchor="scrollTo"
           @ref="(n, e) => emit('ref', n, e)"
         />
@@ -72,6 +73,7 @@ const props = defineProps<{
   save: (id: string, body: string, base: string) => Promise<unknown>;
   reply: (root: string, body: string) => Promise<boolean>;
   resolve: (root: string, value: string) => Promise<boolean>;
+  apply: (root: string, body: string, base: string, version: number) => Promise<boolean>;
 }>();
 const emit = defineEmits<{ ref: [n: string, event: MouseEvent] }>();
 

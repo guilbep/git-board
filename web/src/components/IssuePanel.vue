@@ -127,6 +127,7 @@
                 :save="edit"
                 :reply="(root: string, b: string) => comment(b, undefined, cycle?.step ?? 0, { reply_to: root })"
                 :resolve="resolveThread"
+                :apply="apply"
                 @ref="onRef"
               />
             </CommentCard>
@@ -214,7 +215,7 @@ const props = defineProps<{
 const emit = defineEmits<{ close: []; prev: []; next: []; changed: [thread: Thread]; open: [id: string] }>();
 
 const uid = useId();
-const { thread, error, saving, waiting, saveError, load, comment, edit, rename, setStatus, labels, review, resolve, resolveThread } =
+const { thread, error, saving, waiting, saveError, load, comment, edit, rename, setStatus, labels, review, resolve, resolveThread, apply } =
   useIssue(toRef(props, 'id'), (t) => emit('changed', t));
 // the inbox opens an issue at its first new event
 watch(
