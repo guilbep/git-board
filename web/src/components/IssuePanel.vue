@@ -96,40 +96,42 @@
         <p v-if="waiting" class="gb-wait" role="status"><GbIcon name="clock" small /> Syncing with the forges… your change is saved after it.</p>
       </div>
 
-      <IssueStep ref="step" :id="thread.id" :status="statusValue" :labels="thread.labels" :events="thread.events" :forges="thread.forges" @changed="load" @comment="(b, n) => comment(b, undefined, n)">
+      <IssueStep ref="step" :id="thread.id" :status="statusValue" :labels="thread.labels" :events="thread.events" :forges="thread.forges" :head="reading.tab === 'conversation'" @changed="load" @comment="(b, n) => comment(b, undefined, n)">
+        <template #tabs>
+          <div class="gb-tabs gb-issue-tabs" role="tablist" aria-label="Issue">
+            <button type="button" class="gb-tab" role="tab" :aria-selected="reading.tab === 'conversation'" @click="reading.tab = 'conversation'">Conversation</button>
+            <button type="button" class="gb-tab" role="tab" :aria-selected="reading.tab === 'history'" @click="reading.tab = 'history'">History <span class="gb-modes-count">{{ changeCount }}</span></button>
+          </div>
+        </template>
         <template #intent>
           <CommentCard v-if="created" :data-event="created.id" :event="created" :forges="thread.forges" :mine="created.author.id === meId" :save="edit" @ref="onRef" />
         </template>
         <template v-if="page" #review="r">
           <CycleReview :id="thread.id" :thread="thread" :me-id="meId" :busy="saving" :focus="focus" :review="review" :resolve="resolve" v-bind="r" />
         </template>
-        <template #talk="{ step: n }">
-          <div class="gb-seg gb-seg-sm" role="group" aria-label="Discussion">
-            <button type="button" :aria-pressed="talk === 'step'" @click="talk = 'step'">This step</button>
-            <button type="button" :aria-pressed="talk === 'all'" @click="talk = 'all'">All</button>
-            <button type="button" :aria-pressed="talk === 'history'" @click="talk = 'history'">History <span class="gb-modes-count">{{ changeCount }}</span></button>
-          </div>
-          <HistoryView v-if="talk === 'history'" :thread="thread" :fields="fields" />
+        <template #flow="{ cycle }">
+          <HistoryView v-if="reading.tab === 'history'" :thread="thread" :fields="fields" />
           <template v-else>
-            <ReviewAside v-if="page && n === 6 && talk === 'step'" :events="rest" @line="showLine" />
-            <ol v-if="said(n).length" class="gb-tl" :aria-label="talk === 'step' ? `Step ${n}'s discussion` : 'The whole conversation'">
-              <template v-for="e in said(n)" :key="e.id">
+            <ol v-if="rest.length" class="gb-tl" aria-label="The whole conversation">
+              <template v-for="e in rest" :key="e.id">
                 <li v-if="e.kind === 'comment'" :data-event="e.id">
                   <CommentCard :event="e" :forges="thread.forges" :mine="e.author.id === meId" :save="edit" @ref="onRef" @line="showLine" />
                 </li>
                 <TimelineEvent v-else :data-event="e.id" :event="e" :fields="fields" />
               </template>
             </ol>
-            <p v-else class="gb-note">Nothing said{{ talk === 'step' ? ' on this step' : '' }} yet.</p>
+            <p v-else class="gb-note">Nothing said yet.</p>
             <IssueComposer
               :status="thread.status"
               :forges="thread.forges"
               :busy="saving"
               :waiting="waiting"
               :error="saveError"
-              :comment="(b: string, st?: 'open' | 'closed') => comment(b, st, talk === 'step' ? n : 0)"
+              :comment="(b: string, st?: 'open' | 'closed') => comment(b, st, cycle?.step ?? 0)"
             />
           </template>
+        </template>
+        <template #side>
           <IssueSide
             :id="thread.id"
             :title="thread.title"
@@ -154,17 +156,16 @@
 <script setup lang="ts">
 import { onLive } from '@/live';
 import { clampWidth, panelMode, panelWidth, togglePanelMode } from '@/panelsize';
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, toRef, useId, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, toRef, useId, watch } from 'vue';
 import { markSeen, type Thread } from '@/api/board';
 import { inbox, inboxError, loadInbox } from '@/inbox';
 import { fieldValues, type Fields } from '@/fields';
 import { useIssue } from '@/issue';
 import { me, on } from '@/me';
 import CycleReview from '@/components/CycleReview.vue';
-import ReviewAside from '@/components/ReviewAside.vue';
 import CommentCard from '@/components/CommentCard.vue';
 import HistoryView from '@/components/HistoryView.vue';
-import { forStep } from '@/cycle';
+import { READING } from '@/flow';
 import { steps } from '@/replay';
 import GbIcon from '@/components/GbIcon.vue';
 import IssueComposer from '@/components/IssueComposer.vue';
@@ -208,12 +209,9 @@ const meId = computed(() => me.value?.me?.id ?? '');
 const created = computed(() => thread.value?.events.find((e) => e.kind === 'created'));
 const rest = computed(() => thread.value?.events.filter((e) => e.kind !== 'created') ?? []);
 
-// the discussion: the shown step's comments, the whole conversation with
-// its events, or every change in order with the issue as it was
-const talk = ref<'step' | 'all' | 'history'>('step');
-// on the page, step 6's line comments are the review's threads, above
-const said = (n: number) =>
-  talk.value !== 'step' ? rest.value : forStep(rest.value, n).filter((e) => !(props.page && n === 6 && e.review?.path));
+// the person's reading: the tab (Conversation, or every change in order
+// with the issue as it was), the flow's filters, order and grouping
+const reading = reactive({ ...READING });
 const step = ref<InstanceType<typeof IssueStep> | null>(null);
 const focus = ref<string>(); // the file a comment's path:line opens in Changes, step 6 on the page
 function showLine(path: string) {
