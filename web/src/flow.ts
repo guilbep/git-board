@@ -111,12 +111,16 @@ export function fold(entries: IssueEvent[]): Item[] {
   return items;
 }
 
+// carries is the step a new comment is written in, as its segment's
+// divider names it: "07 Verify"; nothing without a cycle.
+export const carries = (step: number): string => (step ? `${String(step).padStart(2, '0')} ${STEPS[step]}` : '');
+
 const days = new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short' });
 
 // divider heads a segment: "01 Intent · Oct 21 – 22 · 12 entries",
 // "07 Verify · Oct 25 · current".
 export function divider(s: Segment, current: boolean): string {
-  const head = `${String(s.n).padStart(2, '0')} ${STEPS[s.n]}`;
+  const head = carries(s.n);
   const t = s.entries.map(time);
   const span = t.length ? ` · ${days.formatRange(Math.min(...t), Math.max(...t))}` : '';
   const n = s.entries.length;

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { CycleStages, IssueEvent } from './api/board.ts';
-import { divider, firstNew, fold, pick, READING, segments, type Segment } from './flow.ts';
+import { carries, divider, firstNew, fold, pick, READING, segments, type Segment } from './flow.ts';
 
 const stages: CycleStages = {
   before: ['backlog'], ready: 'ready', in_progress: ['in-progress'], in_review: ['in-review'],
@@ -121,4 +121,10 @@ test('new since the last visit', () => {
   assert.equal(firstNew(segs, at('l3'), 'me'), 'l4');
   assert.equal(firstNew(segs, at('l3'), 'you'), undefined);
   assert.equal(firstNew(segs, at('c6'), 'me'), undefined);
+});
+
+test('the step a new comment carries', () => {
+  assert.equal(carries(7), '07 Verify');
+  assert.equal(carries(3), '03 Plan');
+  assert.equal(carries(0), '');
 });

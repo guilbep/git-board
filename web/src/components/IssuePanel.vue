@@ -118,7 +118,7 @@
         <template v-if="page" #review="r">
           <CycleReview :id="thread.id" :thread="thread" :me-id="meId" :busy="saving" :focus="focus" :review="review" :resolve="resolve" v-bind="r" />
         </template>
-        <template #flow="{ cycle }">
+        <template #flow="{ cycle, send }">
           <HistoryView v-if="reading.tab === 'history'" :thread="thread" :fields="fields" />
           <template v-else>
             <IssueFlow ref="flow" :events="thread.events" :cycle="cycle" :me-id="meId" :since="since" :forges="thread.forges" :fields="fields" :save="edit" :reading="reading" @ref="onRef" @line="showLine" @workspace="showWorkspace" />
@@ -128,7 +128,9 @@
               :busy="saving"
               :waiting="waiting"
               :error="saveError"
-              :comment="(b: string, st?: 'open' | 'closed') => comment(b, st, cycle?.step ?? 0)"
+              :carries="carries(cycle?.step ?? 0)"
+              :send="send?.name"
+              :comment="(b: string, st?: 'open' | 'closed', toAgent?: boolean) => post(b, st, cycle?.step ?? 0, toAgent ? send : undefined)"
             />
           </template>
         </template>
@@ -167,7 +169,7 @@ import { me, on, when } from '@/me';
 import CycleReview from '@/components/CycleReview.vue';
 import CommentCard from '@/components/CommentCard.vue';
 import HistoryView from '@/components/HistoryView.vue';
-import { READING } from '@/flow';
+import { carries, READING } from '@/flow';
 import { steps } from '@/replay';
 import GbIcon from '@/components/GbIcon.vue';
 import IssueComposer from '@/components/IssueComposer.vue';
@@ -272,6 +274,14 @@ async function copyLink() {
 }
 
 // #123 of a local issue opens it here, else the link goes to the forge
+// a comment carries the issue's step (cycle:step); ticked, it goes to the
+// agent too, as a brief
+async function post(body: string, status: 'open' | 'closed' | undefined, n: number, send?: { brief: (body: string) => void }) {
+  const ok = await comment(body, status, n);
+  if (ok && send && body.trim()) send.brief(body);
+  return ok;
+}
+
 // a done segment's Show the workspace: that step heads the column
 async function showWorkspace(n: number) {
   step.value?.show(n);

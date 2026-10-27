@@ -8,16 +8,19 @@
       Commenting as <b>{{ me?.me?.name }}</b>
     </p>
     <div class="gb-composer">
-      <MarkdownEditor v-model="text" :forges="forges" label="Comment" placeholder="Leave a comment" :disabled="busy" @submit="send()" />
+      <MarkdownEditor v-model="text" :forges="forges" label="Comment" placeholder="Leave a comment" :disabled="busy" @submit="post()" />
       <p v-if="waiting" class="gb-wait" role="status"><GbIcon name="clock" small /> Syncing with the forges… your comment is saved after it.</p>
       <p v-else-if="error" class="gb-save-error" role="alert"><GbIcon name="error" small /> <b>Your comment was not posted.</b> {{ error }} Your text is still here.</p>
       <div class="gb-composer-foot">
-        <p class="gb-hint">Saved in git-board now, on {{ forgeNames }} at the next sync.</p>
-        <button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" :disabled="busy" @click="send(status === 'open' ? 'closed' : 'open')">
+        <p class="gb-hint">
+          Saved in git-board now, on {{ forgeNames }} at the next sync.<template v-if="carries"> Carries <span class="gb-carries">{{ carries }}</span></template>
+        </p>
+        <button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" :disabled="busy" @click="post(status === 'open' ? 'closed' : 'open')">
           <GbIcon :name="status === 'open' ? 'closed' : 'open'" small />
           {{ status === 'open' ? (text.trim() ? 'Close with comment' : 'Close issue') : (text.trim() ? 'Reopen with comment' : 'Reopen issue') }}
         </button>
-        <button type="button" class="epfl-btn epfl-btn-primary epfl-btn-sm" :disabled="busy || !text.trim()" @click="send()">Comment</button>
+        <label v-if="send" class="gb-composer-send"><input v-model="toAgent" type="checkbox" :disabled="busy" /> Send to {{ send }}</label>
+        <button type="button" class="epfl-btn epfl-btn-primary epfl-btn-sm" :disabled="busy || !text.trim()" @click="post()">Comment</button>
       </div>
     </div>
   </template>
@@ -37,21 +40,30 @@ const props = defineProps<{
   busy: boolean;
   waiting: boolean;
   error: string;
-  comment: (body: string, status?: 'open' | 'closed') => Promise<boolean>;
+  // posts; send: the comment goes to the agent too, as a brief
+  comment: (body: string, status?: 'open' | 'closed', send?: boolean) => Promise<boolean>;
+  carries?: string; // the step the comment is written in: "07 Verify"
+  send?: string | undefined; // the agent a comment can go to, by name
 }>();
 
 const text = ref('');
+const toAgent = ref(false);
 const forgeNames = computed(() => {
   const names = [...new Set((props.forges ?? []).map((f) => f.name))];
   return names.length ? names.join(' and ') : 'the forges';
 });
 
-async function send(status?: 'open' | 'closed') {
+async function post(status?: 'open' | 'closed') {
   if (!status && !text.value.trim()) return;
-  if (await props.comment(text.value, status)) text.value = '';
+  if (await props.comment(text.value, status, !!props.send && toAgent.value)) {
+    text.value = '';
+    toAgent.value = false;
+  }
 }
 </script>
 
 <style scoped>
+.gb-carries { padding: 1px 6px; border: 1px solid var(--gb-done); color: var(--gb-done); font-family: var(--font-mono); font-size: .75rem; white-space: nowrap; }
+.gb-composer-send { display: inline-flex; align-items: center; gap: .375rem; font-size: .875rem; }
 .gb-wait { display: flex; gap: .375rem; align-items: center; margin: 0; padding: .5rem 1rem; font-size: .875rem; color: var(--fg); background: var(--bg-subtle); }
 </style>
