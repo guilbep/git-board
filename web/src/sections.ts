@@ -2,7 +2,7 @@
 // rendered text cut at its headings, the slugs anchors name, the anchor
 // grammar, the version count, and a suggestion applied to the Markdown.
 // Pure: built from the thread the server already sends.
-import type { IssueEvent } from './api/board.ts';
+import type { IssueEvent, Person } from './api/board.ts';
 
 export interface Section { n: number; slug: string; heading: string; html: string }
 
@@ -72,6 +72,109 @@ export const isTick = (before: string, after: string): boolean => before !== aft
 export function version(created: IssueEvent): number {
   const h = created.history ?? [];
   return 1 + h.slice(1).filter((v, i) => v.body !== h[i]!.body && !isTick(h[i]!.body, v.body)).length;
+}
+
+// The body's versions, v1 first: vK's text is its last entry before
+// v(K+1), its ticks included, so the last is the current text; at and
+// author are the version's publication.
+export interface BodyVersion { n: number; id: string; author: Person; at: string; body: string; html: string; ticks: number }
+export function versions(created: IssueEvent): BodyVersion[] {
+  const h = created.history?.length ? created.history : [{ id: created.id, author: created.author, at: created.at, body: created.body ?? '', html: created.html }];
+  const out: BodyVersion[] = [];
+  h.forEach((x, i) => {
+    const last = out.at(-1);
+    const prev = h[i - 1]?.body;
+    if (last && (x.body === prev || isTick(prev!, x.body))) {
+      if (x.body !== prev) last.ticks++;
+      Object.assign(last, { body: x.body, html: x.html ?? last.html });
+    } else out.push({ n: out.length + 1, id: x.id ?? '', author: x.author, at: x.at, body: x.body, html: x.html ?? '', ticks: 0 });
+  });
+  out.at(-1)!.html = created.html ?? out.at(-1)!.html;
+  return out;
+}
+
+// a section's HTML with its boxes unticked: a tick changes nothing
+const plain = (h: string) => h.replace(/\s+checked(="[^"]*")?/g, '');
+// the section's items, the text around them first: [rest, item 1, item 2…]
+// ponytail: an item's fragment runs to the next <li>, a nested list's
+// parent included; an item picker would walk the lists
+function itemsOf(h: string): string[] {
+  const f = h.split(/<li\b/);
+  const last = f.length - 1;
+  const cut = last > 0 ? f[last]!.lastIndexOf('</li>') : -1;
+  if (cut >= 0) {
+    f[0] += '\0' + f[last]!.slice(cut);
+    f[last] = f[last]!.slice(0, cut);
+  }
+  return f;
+}
+
+// changeOf: `after`'s section against the version before, by slug,
+// ticks not counted; the item's number when only it differs.
+export function changeOf(before: Section[], after: Section): 'unchanged' | 'changed' | number {
+  const b = before.find((s) => s.slug === after.slug);
+  if (!b) return 'changed';
+  if (plain(b.html) === plain(after.html)) return 'unchanged';
+  const p = itemsOf(plain(b.html));
+  const q = itemsOf(plain(after.html));
+  const diff = q.flatMap((x, i) => (x !== p[i] ? [i] : []));
+  return p.length === q.length && diff.length === 1 && diff[0]! > 0 ? diff[0]! : 'changed';
+}
+
+// A body thread's state against the current version (protocol.md):
+// resolved, current (written on it), carried (its section unchanged
+// since), outdated since the first version its section differs in (a
+// gone section included).
+export type ThreadState = { state: 'resolved' | 'current' | 'carried' } | { state: 'outdated'; since: number };
+export function stateOf(root: IssueEvent, vs: BodyVersion[]): ThreadState {
+  if (root.meta?.['thread:resolved']) return { state: 'resolved' };
+  const a = anchorOf(root.meta?.['thread:anchor']);
+  if (!a || a.v >= vs.length) return { state: 'current' };
+  const at = (v: number) => sectionsOf(vs[v - 1]!.html).find((s) => s.slug === a.slug);
+  const base = at(a.v);
+  for (let k = a.v + 1; k <= vs.length; k++) {
+    const s = at(k);
+    if (!s || !base || plain(s.html) !== plain(base.html)) return { state: 'outdated', since: k };
+  }
+  return { state: 'carried' };
+}
+
+// diffMarkdown is `after` with the lines removed since `before` struck
+// and the added ones marked, inside their quote, list and checkbox
+// markers; ticks compared away. A heading added is the new heading,
+// plain; a removed one is dropped, its struck lines joining the section
+// above. ponytail: lines, not words; inside a fence or a table line
+// nothing is marked (an added line shows, a removed one is dropped).
+const MARKS = /^(\s*(?:>\s*)*(?:(?:[-*+]|\d+[.)])\s+)?(?:\[[ xX]\]\s+)?)(.*)$/;
+const RAW = /^ {0,3}(#{1,6}(\s|$)|(=+|-+)\s*$)|^\s*\|/;
+export function diffMarkdown(before: string, after: string): string {
+  const a = before.split('\n');
+  const b = after.split('\n');
+  const x = a.map(unticked);
+  const y = b.map(unticked);
+  // t[i][j]: the longest common run of x[i:] and y[j:]
+  const t = Array.from({ length: a.length + 1 }, () => new Uint32Array(b.length + 1));
+  for (let i = a.length - 1; i >= 0; i--) for (let j = b.length - 1; j >= 0; j--) t[i]![j] = x[i] === y[j] ? t[i + 1]![j + 1]! + 1 : Math.max(t[i + 1]![j]!, t[i]![j + 1]!);
+  const out: string[] = [];
+  let fenced = false;
+  const mark = (line: string, tag: 'ins' | 'del') => {
+    const m = MARKS.exec(line)!;
+    if (fenced || RAW.test(line) || FENCE.test(line) || !m[2]!.trim()) return tag === 'ins' ? line : undefined;
+    return `${m[1]}<${tag}>${m[2]}</${tag}>`;
+  };
+  const emit = (line: string | undefined, own: boolean) => {
+    if (line === undefined) return;
+    out.push(line);
+    if (own && FENCE.test(line)) fenced = !fenced;
+  };
+  let i = 0;
+  let j = 0;
+  while (i < a.length || j < b.length) {
+    if (i < a.length && j < b.length && x[i] === y[j]) (emit(b[j]!, true), i++, j++);
+    else if (j >= b.length || (i < a.length && t[i + 1]![j]! >= t[i]![j + 1]!)) emit(mark(a[i++]!, 'del'), false);
+    else emit(mark(b[j++]!, 'ins'), true);
+  }
+  return out.join('\n');
 }
 
 // The Markdown source's spans of `sections`: heading lines paired with

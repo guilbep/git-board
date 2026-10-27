@@ -228,7 +228,7 @@ export interface IssueEvent {
   body?: string; // Markdown
   html?: string; // rendered and cleaned by the server
   edited?: boolean;
-  history?: { id?: string; author: Person; at: string; body: string }[]; // id: the text's, then each edit's
+  history?: { id?: string; author: Person; at: string; body: string; html?: string }[]; // id: the text's, then each edit's; html: the description's
   pending?: string[]; // forges the next sync hasn't taken this change to yet
   edit_pending?: string[]; // a comment there already: forges its latest edit hasn't reached
   edit_was?: string; // with edit_pending: the text the forges have

@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { IssueEvent } from './api/board.ts';
 import {
-  anchorLabel, anchorOf, anchorString, applySuggestion, isTick, lineAt, mdSections, sectionsOf, slugs, suggestionOf, version,
+  anchorLabel, anchorOf, anchorString, applySuggestion, changeOf, diffMarkdown, isTick, lineAt, mdSections, sectionsOf, slugs, stateOf, suggestionOf, version, versions,
 } from './sections.ts';
 
 // 6a's description, as Markdown and as the server renders it
@@ -137,4 +137,55 @@ test('applySuggestion without an item replaces the section', () => {
 test('applySuggestion on a gone section is undefined', () => {
   assert.equal(applySuggestion(md, secs, at('body@v1/gone'), 'x'), undefined);
   assert.equal(applySuggestion(md, secs, at('body@v1/expected#9'), 'x'), undefined);
+});
+
+// M3: versions, a section's change, a thread's state, the diff
+const ver = (body: string, html: string, id: string) => ({ id, author: { id: 'a', name: 'Person A' }, at: id, body, html });
+const v1md = '## Expected\n\n- [ ] a\n- [ ] b\n- [ ] c\n\n## Workaround\n\nNone.';
+const v1html = '<h2>Expected</h2>\n<ul>\n<li><input disabled="" type="checkbox"> a</li>\n<li><input disabled="" type="checkbox"> b</li>\n<li><input disabled="" type="checkbox"> c</li>\n</ul>\n<h2>Workaround</h2>\n<p>None.</p>\n';
+const tickhtml = v1html.replace('<input disabled="" type="checkbox"> a', '<input checked="" disabled="" type="checkbox"> a');
+const v2html = tickhtml.replace('> c</li>', '> C</li>').replace('None.', 'Some.');
+const created = (...h: ReturnType<typeof ver>[]) => ({ id: 'c', kind: 'created', author: h[0]!.author, at: '1', body: h.at(-1)!.body, html: h.at(-1)!.html, history: h }) as IssueEvent;
+const three = created(ver(v1md, v1html, '1'), ver(v1md.replace('[ ] a', '[x] a'), tickhtml, '2'), ver(v1md.replace('[ ] a', '[x] a').replace('- [ ] c', '- [ ] C').replace('None.', 'Some.'), v2html, '3'));
+
+test('versions counts no tick', () => {
+  const vs = versions(three);
+  assert.deepEqual(vs.map((v) => [v.n, v.id, v.ticks]), [[1, '1', 1], [2, '3', 0]]);
+  assert.match(vs[0]!.body, /\[x\] a/);
+  assert.equal(vs[1]!.html, v2html);
+});
+
+test('versions without history is v1', () => {
+  const vs = versions({ id: 'c', kind: 'created', author: { id: 'a', name: 'A' }, at: '1', body: 'x', html: '<p>x</p>' } as IssueEvent);
+  assert.deepEqual(vs.map((v) => [v.n, v.id, v.html]), [[1, 'c', '<p>x</p>']]);
+});
+
+test('a tick is unchanged, one item changed names it', () => {
+  const [e1, w1] = sectionsOf(v1html);
+  assert.equal(changeOf([e1!, w1!], sectionsOf(tickhtml)[0]!), 'unchanged');
+  assert.equal(changeOf([e1!, w1!], sectionsOf(v2html)[0]!), 3);
+  assert.equal(changeOf([e1!, w1!], sectionsOf(v2html)[1]!), 'changed');
+  assert.equal(changeOf([w1!], sectionsOf(v2html)[0]!), 'changed');
+});
+
+test('a thread state against the current version', () => {
+  const vs = versions(three);
+  const root = (anchor: string, resolved?: string) => ({ kind: 'comment', meta: { 'thread:anchor': anchor, ...(resolved !== undefined ? { 'thread:resolved': resolved } : {}) } }) as unknown as IssueEvent;
+  assert.deepEqual(stateOf(root('body@v1/expected', 'v2'), vs), { state: 'resolved' });
+  assert.deepEqual(stateOf(root('body@v1/expected', ''), vs), { state: 'outdated', since: 2 });
+  assert.deepEqual(stateOf(root('body@v2/expected'), vs), { state: 'current' });
+  assert.deepEqual(stateOf(root('body@v1/workaround'), vs), { state: 'outdated', since: 2 });
+  assert.deepEqual(stateOf(root('body@v1/gone'), vs), { state: 'outdated', since: 2 });
+  const carried = created(ver(v1md, v1html, '1'), ver(v1md, v1html.replace('None.', 'Some.'), '2'));
+  carried.history![1]!.body = v1md.replace('None.', 'Some.');
+  assert.deepEqual(stateOf(root('body@v1/expected'), versions(carried)), { state: 'carried' });
+});
+
+test('diff marks added and removed lines', () => {
+  assert.equal(diffMarkdown('- old\n> quoted', '- new\n> quoted'), '- <del>old</del>\n- <ins>new</ins>\n> quoted');
+  assert.equal(diffMarkdown('a\n\nb', 'a\n\nb\n\n> c'), 'a\n\nb\n\n> <ins>c</ins>');
+  assert.equal(diffMarkdown('- [ ] one', '- [x] one'), '- [x] one');
+  assert.equal(diffMarkdown('- [ ] one', '- [ ] two'), '- [ ] <del>one</del>\n- [ ] <ins>two</ins>');
+  assert.equal(diffMarkdown('## Old\n\nx', '## New\n\nx'), '## New\n\nx');
+  assert.equal(diffMarkdown('```\na\n```', '```\nb\n```'), '```\nb\n```');
 });
