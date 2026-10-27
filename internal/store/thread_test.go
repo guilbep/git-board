@@ -353,3 +353,38 @@ func TestApplyLeavesTwoOperations(t *testing.T) {
 		t.Errorf("root meta %v, %v", m, err)
 	}
 }
+
+// A text's set-meta operations reach the client one by one, with their
+// ids and times: what History's log and its threads as of then read.
+func TestThreadMetaHistory(t *testing.T) {
+	t.Parallel()
+	b := storetest.New(t)
+	id, err := b.NewIssue("Export CSV", "v1", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, err := b.AddCommentMeta(id, "a question", map[string]string{"thread:anchor": "body@v1/intro"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := b.AddComment(id, "plain"); err != nil {
+		t.Fatal(err)
+	}
+	for _, v := range []string{"alice", ""} {
+		if err := b.SetCommentMetadata(id, c, map[string]string{"thread:resolved": v}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	th, _ := b.Thread(id)
+	m := th.Events[1].MetaHistory
+	op := regexp.MustCompile(`^[0-9a-f]{40}:[0-9]+$`)
+	if len(m) != 2 || m[0].Meta["thread:resolved"] != "alice" || m[1].Meta["thread:resolved"] != "" || m[0].ID == m[1].ID || !op.MatchString(m[0].ID) || !op.MatchString(m[1].ID) {
+		t.Errorf("meta history %+v", m)
+	}
+	if th.Events[1].Meta["thread:resolved"] != "" || th.Events[1].Meta["thread:anchor"] != "body@v1/intro" {
+		t.Errorf("meta %v", th.Events[1].Meta)
+	}
+	if th.Events[2].MetaHistory != nil {
+		t.Errorf("a plain comment has %+v", th.Events[2].MetaHistory)
+	}
+}

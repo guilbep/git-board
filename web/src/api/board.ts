@@ -238,6 +238,7 @@ export interface IssueEvent {
   title?: string;
   was?: string;
   meta?: Record<string, string>; // cycle:step, plan:approve, verify:run, verify:criterion, signoff:status…
+  meta_history?: { id: string; author: Person; at: string; meta: Record<string, string> }[]; // each set-meta merged into meta, oldest first
   review?: Review; // comment: a line comment, a reply or a review
 }
 

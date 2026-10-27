@@ -49,6 +49,14 @@ type Version struct {
 	HTML   string    `json:"html,omitempty"` // rendered by the server, the description's
 }
 
+// MetaSet is one set-meta operation on a text, oldest first.
+type MetaSet struct {
+	ID     string            `json:"id"`
+	Author Person            `json:"author"`
+	At     time.Time         `json:"at"`
+	Meta   map[string]string `json:"meta"`
+}
+
 // Event is one item of an issue's history: created (with the description),
 // comment, labels, status or title.
 type Event struct {
@@ -72,6 +80,9 @@ type Event struct {
 	// Meta is a comment's metadata: what the cycle's sign-offs, approvals
 	// and runs are, and a review comment's anchor.
 	Meta map[string]string `json:"meta,omitempty"`
+	// MetaHistory is each set-meta on the text, merged into Meta: who
+	// resolved a thread, when, and that "" reopened it.
+	MetaHistory []MetaSet `json:"meta_history,omitempty"`
 
 	Added   []string `json:"added,omitempty"` // labels
 	Removed []string `json:"removed,omitempty"`
@@ -172,6 +183,7 @@ func (b *Backend) thread(is *issue.Issue, l *oplog.Log, v view) Thread {
 					t.Meta = map[string]string{}
 				}
 				maps.Copy(t.Meta, d.Meta)
+				t.MetaHistory = append(t.MetaHistory, MetaSet{ID: e.ID, Author: ev.Author, At: ev.At, Meta: maps.Clone(d.Meta)})
 			}
 			continue
 		case "set-title":
