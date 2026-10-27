@@ -129,14 +129,15 @@ function chip(s: Section): string {
 </script>
 
 <style scoped>
-.gb-secs { container-type: inline-size; display: flex; flex-direction: column; padding: 1rem 1.25rem 1.25rem; }
+.gb-secs { display: flex; flex-direction: column; padding: 1rem 1.25rem 1.25rem; }
 .gb-sec { display: grid; grid-template-columns: minmax(0, 1fr) 164px; gap: 10px 20px; padding: 16px 0; border-top: 1px solid var(--border-subtle); }
 .gb-sec-row { grid-column: 1 / -1; }
 .gb-sec-threads { display: flex; flex-direction: column; gap: 12px; }
 .gb-sec:first-child { border-top: 0; padding-top: 0; }
 .gb-gut { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; font-size: .75rem; color: var(--fg-muted); }
 .gb-sec :deep(.gb-md > :first-child) { margin-top: 0; }
-@container (max-width: 720px) {
+/* the README's widths are the viewport's: the gutter keeps 164 px down to 720 */
+@media (max-width: 719.98px) {
   .gb-sec { grid-template-columns: minmax(0, 1fr); }
   .gb-gut { flex-direction: row; flex-wrap: wrap; align-items: center; }
 }
