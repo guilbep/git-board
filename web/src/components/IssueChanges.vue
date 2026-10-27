@@ -47,7 +47,7 @@
           <template v-if="withThreads && changed(s) !== 'unchanged'">
             <div v-for="t in threadsOn(s)" :key="t.event.id" class="ic-row">
               <div class="ic-thread">
-                <span><b>{{ t.event.author.name }}</b> on <span class="gb-anchor">{{ label(t) }}</span> · "{{ firstWords(t.event.body) }}" · {{ plural(1 + t.replies.length, 'comment') }} · {{ resolvedBy(t, thread.events) || 'open' }}</span>
+                <span><b>{{ t.event.author.name }}</b> on <span class="gb-anchor">{{ label(t) }}</span> · "{{ firstWords(t.event.body) }}" · {{ plural(1 + t.replies.length, 'comment') }} · {{ stateOf(t) }}</span>
                 <button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" :aria-expanded="shown.has(t.event.id)" @click="shown.has(t.event.id) ? shown.delete(t.event.id) : shown.add(t.event.id)">{{ shown.has(t.event.id) ? 'Hide' : 'Show' }}</button>
               </div>
               <ThreadCard
@@ -180,18 +180,21 @@ function changed(s: Section): string {
   const c = now ? changeOf(fromSecs.value, now) : 'changed';
   return typeof c === 'number' ? `› ${c} changed` : c;
 }
-// a changed section's threads written on the from-version (ruling 2)
+// a changed section's threads written on the from-version or before, less
+// those a version up to the from-version settled (ruling 2)
 const current = computed(() => sectionsOf(created.value?.html ?? ''));
 const threads = computed(() => bodyThreads(props.thread.events));
 const threadsOn = (s: Section): Item[] => threads.value.filter((t) => {
   const a = anchorOf(t.event.meta?.['thread:anchor']);
-  return a?.slug === s.slug && a.v === to.value - 1;
+  const by = /^v(\d+)$/.exec(t.event.meta?.['thread:resolved'] ?? '')?.[1];
+  return a?.slug === s.slug && a.v < to.value && !(by && +by < to.value);
 });
 const label = (t: Item) => anchorLabel(anchorOf(t.event.meta?.['thread:anchor'])!, current.value);
 const firstWords = (body?: string) => {
   const w = (body ?? '').replace(/```suggestion[\s\S]*?```/g, '').trim().split(/\s+/);
   return w.slice(0, 8).join(' ') + (w.length > 8 ? '…' : '');
 };
+const stateOf = (t: Item) => (t.event.meta?.['thread:applied'] ? `applied in ${t.event.meta['thread:resolved']}` : resolvedBy(t, props.thread.events) || 'open');
 const shown = reactive(new Set<string>()); // the threads unfolded
 
 // the code: the branch's commits and files, as the Code step reads them; read only

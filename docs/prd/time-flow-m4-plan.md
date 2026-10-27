@@ -451,7 +451,10 @@ This plan's calls (the user asked for continuity: no approval stop).
 1. **Changes n counts the versions and the ticks.** The README leaves it
    open; F4's "Changes 5" is F5's "2 versions, 3 ticks".
 2. **"Threads anchored on changed lines" are those written on the
-   compare's from-version, in the sections it changed.** M2's anchors are
+   compare's from-version or before, in the sections it changed, less
+   those an earlier version settled** (amended at Task 10: written on
+   the from-version only, a suggestion made on v1 and applied in v3
+   never showed). M2's anchors are
    sections (its ruling 4), so a section stands for its lines.
 3. **Side by side is built**, as one diff in two columns with CSS hiding
    `ins` on the left and `del` on the right: no second render. *Compare
