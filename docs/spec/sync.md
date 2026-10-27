@@ -89,10 +89,13 @@ A text goes to a project in that project's form:
    [Mentions and references](#mentions-and-references));
 2. a header first, when sync posted it there for someone without a token
    (see [Posting for people without a token](#posting-for-people-without-a-token));
-3. a marker last, when sync created it there (see [Markers](#markers)).
+3. a quote after the header, for a comment the application gives one
+   (`Options.Quote`; git-board's says where a thread comment is anchored):
+   one Markdown quote line, `> …`;
+4. a marker last, when sync created it there (see [Markers](#markers)).
 
-The parts are joined by a blank line (`\n\n`). The header and the marker a
-text has on a project stay the ones it was created with: sync takes them
+The parts are joined by a blank line (`\n\n`). The header, the quote and
+the marker a text has on a project stay the ones it was created with: sync takes them
 from its last seen value there. So the form changes only when the text
 does, or a comment's keys (see [Markers](#markers)). A title, a status, labels and assignees have no header and no
 marker. A title is translated too.
@@ -327,8 +330,8 @@ line:
 ```
 
 The first names an issue, in its body. The second names a comment, by its
-id. Pulled back, a text sync's accounts posted loses its header and its
-marker.
+id. Pulled back, a text sync's accounts posted loses its header, its quote
+and its marker.
 
 A comment's marker also carries keys of its metadata, after its id, as
 `key=value` pairs separated by spaces; which keys, under which names, is
@@ -338,6 +341,10 @@ the application's (`Options.Carry`; git-board's are in
 ```text
 <!-- git-board comment 9c41e5b1d97f2a63c18e0b4d5f6a7928e3b1c0d4:7 step=1 anchor=body@v1/expected#3 -->
 ```
+
+A comment posted under a quote has the word `quoted` after its id, before
+its keys: pulled back, its text loses the quote line only then, so a text
+of its own starting with a quote keeps it.
 
 The keys are rebuilt from the comment's metadata each run, so a metadata
 change alone edits the forge comment. A forge edit of a comment sync

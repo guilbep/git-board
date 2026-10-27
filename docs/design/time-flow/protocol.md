@@ -152,8 +152,11 @@ Then say what replaces the CLI text.
 A missing identity sends the user to Settings › identity; the CLI text is never shown.
 ```
 
-<!-- git-board comment 9c41e77a2d5f8b3c6e1a0d4f7b9c2e5a8d3f6b1c:7 step=01 anchor=body@v1/expected#3 reply-to=7d2f0a1c4e9b36d85a2f1c0e7b4d93a6e8f5c2b1:3 kind=suggestion -->
+<!-- git-board comment 9c41e77a2d5f8b3c6e1a0d4f7b9c2e5a8d3f6b1c:7 quoted step=1 anchor=body@v1/expected#3 reply-to=7d2f0a1c4e9b36d85a2f1c0e7b4d93a6e8f5c2b1:3 kind=suggestion -->
 ```
+
+(`quoted` says sync wrote the quote line, so pull strips it and nothing
+else; `step=1` is the stored value, per the PRD's call 1. Both since M5.)
 
 When Person A applies it: an `edit-text` on `<issue id>:0` with the new
 body (v2), then a `set-meta` on the root comment

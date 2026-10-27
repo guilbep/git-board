@@ -38,6 +38,10 @@ type Options struct {
 	// from its marker's pairs (marked), or with the marker deleted (not
 	// marked); a key given "" is cleared. Nil or empty restores nothing.
 	Restore func(carried string, marked bool, meta map[string]string) map[string]string
+	// Quote is the line a comment is posted under, after its header: a
+	// Markdown quote, one line starting "> ". It is the one posted from
+	// then on, as the header is. Nil or "" posts none.
+	Quote func(issueID string, c issue.Comment) string
 	// Held keeps a label in git-board on the project named by key: never
 	// sent there, and the project's own copy of it neither pulled nor
 	// removed. Nil holds none.
@@ -762,7 +766,7 @@ func (r *run) mayCreate(p *project, is *issue.Issue) bool {
 // form, the body with its marker, and with a header unless its author
 // posts it with their own token (direct).
 func (r *run) sent(p *project, is *issue.Issue, direct bool) (title, body string) {
-	w := wrapped{body: r.form(p, is.Body, origin(is.Changes["body"]), false), marker: marker("issue", is.ID, "")}
+	w := wrapped{body: r.form(p, is.Body, origin(is.Changes["body"]), false), marker: marker("issue", is.ID, false, "")}
 	if !direct {
 		w.header = r.header(is.Author, is.Created, is.Origin, is.ID)
 	}

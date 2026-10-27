@@ -212,3 +212,5 @@ func TestStrangerKeysAreText(t *testing.T) {
 		t.Errorf("comments = %+v", got)
 	}
 }
+
+func newFake() *fake.Forge { return fake.New(key) }

@@ -83,7 +83,7 @@ func wrapLike(seen, body, keys string, posted bool) string {
 	case !posted || w.marker == "":
 		return body
 	default:
-		w.marker = marker(w.kind, w.id, keys)
+		w.mark(keys)
 	}
 	w.body = body
 	return w.String()
@@ -289,7 +289,11 @@ func (r *run) plan(p *project, is *issue.Issue, fi forge.Issue, who map[string]s
 				continue
 			}
 			_, direct := r.writer(p, c.Author)
-			w := wrapped{body: r.form(p, c.Body, origin(cch), false), marker: marker("comment", c.ID, r.carry(c.Meta))}
+			w := wrapped{body: r.form(p, c.Body, origin(cch), false), kind: "comment", id: c.ID}
+			if r.opt.Quote != nil {
+				w.quote = r.opt.Quote(is.ID, c)
+			}
+			w.mark(r.carry(c.Meta))
 			if !direct {
 				w.header = r.header(c.Author, c.Time, c.Origin, is.ID)
 			}
