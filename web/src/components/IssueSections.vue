@@ -8,9 +8,10 @@
       <div class="gb-gut">
         <span class="gb-anchor">§{{ s.n }} {{ s.heading || 'intro' }}</span>
         <button v-if="!threadsIn(s).length" type="button" class="gb-tchip is-ghost" :aria-expanded="composing === s.slug" @click="composing = s.slug">Comment on §{{ s.n }}</button>
+        <button v-else-if="inFlow" type="button" class="gb-tchip" :class="{ 'is-open': threadsIn(s).some((t) => !t.resolved) }" @click="emit('flow', (threadsIn(s).find((t) => !t.resolved) ?? threadsIn(s)[0]!).event.id)">{{ chip(s) }}</button>
         <button v-else type="button" class="gb-tchip" :class="{ 'is-open': threadsIn(s).some((t) => !t.resolved) }" :aria-expanded="open.has(s.slug)" @click="toggle(s.slug)">{{ chip(s) }}</button>
       </div>
-      <div v-if="open.has(s.slug)" class="gb-sec-row gb-sec-threads">
+      <div v-if="!inFlow && open.has(s.slug)" class="gb-sec-row gb-sec-threads">
         <ThreadCard
           v-for="t in threadsIn(s)"
           :key="t.event.id"
@@ -74,8 +75,9 @@ const props = defineProps<{
   reply: (root: string, body: string) => Promise<boolean>;
   resolve: (root: string, value: string) => Promise<boolean>;
   apply: (root: string, body: string, base: string, version: number) => Promise<boolean>;
+  inFlow: boolean; // the threads show in the flow: a chip goes to its section's first open one there
 }>();
-const emit = defineEmits<{ ref: [n: string, event: MouseEvent] }>();
+const emit = defineEmits<{ ref: [n: string, event: MouseEvent]; flow: [root: string] }>();
 
 const sections = computed(() => sectionsOf(props.html));
 // a section's threads: those whose anchor names its slug, any version
@@ -97,14 +99,15 @@ const toggle = (slug: string) => (open.has(slug) ? open.delete(slug) : open.add(
 const root = useTemplateRef<HTMLElement>('root');
 const scrollTo = (slug: string) => root.value?.querySelector(`[data-section="${CSS.escape(slug)}"]`)?.scrollIntoView({ block: 'start' });
 // opens the section of a thread and scrolls to its root (the flow's
-// pointer lines, the inbox)
+// pointer lines, the inbox); with the threads in the flow, to the section
 async function unfold(rootId: string) {
   const t = threads.value.find((t) => t.event.id === rootId);
   const slug = t && anchorOf(t.event.meta?.['thread:anchor'])?.slug;
   if (!slug || !sections.value.some((s) => s.slug === slug)) return false;
-  open.add(slug);
+  if (!props.inFlow) open.add(slug);
   await nextTick();
-  root.value?.querySelector(`[data-event="${CSS.escape(rootId)}"]`)?.scrollIntoView({ block: 'center' });
+  if (props.inFlow) scrollTo(slug);
+  else root.value?.querySelector(`[data-event="${CSS.escape(rootId)}"]`)?.scrollIntoView({ block: 'center' });
   return true;
 }
 defineExpose({ unfold });

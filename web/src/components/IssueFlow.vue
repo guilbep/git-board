@@ -14,6 +14,13 @@
         <button type="button" class="gb-fchip" :aria-pressed="reading.milestones" @click="reading.milestones = !reading.milestones">Milestones {{ count(only('milestones')) }}</button>
       </div>
       <div class="gb-flow-segs">
+        <span class="gb-flow-where">
+          Threads
+          <span class="gb-seg gb-seg-sm" role="group" aria-label="Where threads show">
+            <button type="button" :aria-pressed="reading.where === 'section'" @click="reading.where = 'section'">under their section</button>
+            <button type="button" :aria-pressed="reading.where === 'flow'" @click="reading.where = 'flow'">in the flow</button>
+          </span>
+        </span>
         <div class="gb-seg gb-seg-sm" role="group" aria-label="Order">
           <button type="button" :aria-pressed="!reading.newest" @click="reading.newest = false">Oldest first</button>
           <button type="button" :aria-pressed="reading.newest" @click="reading.newest = true">Newest first</button>
@@ -44,11 +51,19 @@
           <template v-for="(it, i) in items(s)" :key="it.event.id">
             <li v-if="it.event.id === newId" class="gb-fnew" role="separator" :aria-label="`New since your last visit, ${on(sinceIso!, true)}`">new since your last visit · {{ when(sinceIso!, true) }}</li>
             <TimelineEvent v-if="it.event.kind !== 'comment'" class="gb-fe" :data-n="gutter(s, i)" :data-event="it.event.id" :event="it.event" :fields="fields" />
+            <!-- a comment on the description, its thread under the section: a line pointing at it -->
+            <li v-else-if="pointers && it.event.meta?.['thread:anchor']" class="gb-fe gb-fptr" :data-n="gutter(s, i)">
+              <span>
+                {{ when(it.event.at, true) }} · {{ it.event.author.name }} {{ verb(it.event) }}
+                <button type="button" class="gb-anchor" @click="emit('thread', rootOf(it.event) ?? it.event.id)">{{ label(it.event) }}</button>
+                <template v-if="it.event.id === firstPtr"> · under the section</template> ↑
+              </span>
+            </li>
             <li v-else class="gb-fe" :data-n="gutter(s, i)" :data-event="it.event.id">
               <div v-if="it.resolved !== undefined && !open.has(it.event.id)" class="gb-fthread">
                 <span>
                   <b>{{ it.event.author.name }}</b> on
-                  <button type="button" class="gb-anchor" @click="it.event.review && emit('line', it.event.review.path!)">{{ where(it.event) }}</button>
+                  <button type="button" class="gb-anchor" @click="it.event.review ? emit('line', it.event.review.path!) : emit('thread', it.event.id)">{{ where(it.event) }}</button>
                   <span class="gb-fthread-q"> · “{{ firstWords(it.event) }}”</span>
                 </span>
                 <button type="button" class="gb-tchip" :class="{ 'is-open': !it.resolved }" aria-expanded="false" @click="open.add(it.event.id)">
@@ -56,7 +71,23 @@
                 </button>
               </div>
               <div v-else class="gb-fthread-open" :class="{ 'is-thread': it.resolved !== undefined }">
-                <CommentCard v-for="c in [it.event, ...it.replies]" :key="c.id" :data-event="c.id" :event="c" :forges="forges" :mine="c.author.id === meId" :save="save" :role="roleOf(fields, c.author.login)" @ref="(n, ev) => emit('ref', n, ev)" @line="(p) => emit('line', p)" />
+                <ThreadCard
+                  v-if="it.resolved !== undefined && it.event.meta?.['thread:anchor']"
+                  :thread="it"
+                  :events="events"
+                  :sections="sections"
+                  :me-id="meId"
+                  :fields="fields"
+                  :forges="forges"
+                  :busy="busy"
+                  :save="save"
+                  :reply="reply"
+                  :resolve="resolve"
+                  :apply="apply"
+                  @anchor="emit('thread', it.event.id)"
+                  @ref="(n, ev) => emit('ref', n, ev)"
+                />
+                <CommentCard v-else v-for="c in [it.event, ...it.replies]" :key="c.id" :data-event="c.id" :event="c" :forges="forges" :mine="c.author.id === meId" :save="save" :role="roleOf(fields, c.author.login)" @ref="(n, ev) => emit('ref', n, ev)" @line="(p) => emit('line', p)" />
                 <p v-if="it.resolved !== undefined && threads"><button type="button" class="gb-linkbtn" aria-expanded="true" @click="open.delete(it.event.id)">Fold the thread</button></p>
               </div>
             </li>
@@ -71,10 +102,11 @@
 import { computed, nextTick, reactive, ref, toRef, watch } from 'vue';
 import type { Cycle, Forge, IssueEvent } from '@/api/board';
 import type { Fields } from '@/fields';
-import { divider, firstNew, items as itemsOf, pick, roleOf, segments, type Item, type Reading, type Segment } from '@/flow';
+import { divider, firstNew, isRoot, items as itemsOf, pick, roleOf, rootOf, segments, type Item, type Reading, type Segment } from '@/flow';
 import { on, when } from '@/me';
-import { anchorLabel, anchorOf } from '@/sections';
+import { anchorLabel, anchorOf, sectionsOf } from '@/sections';
 import CommentCard from '@/components/CommentCard.vue';
+import ThreadCard from '@/components/ThreadCard.vue';
 import TimelineEvent from '@/components/TimelineEvent.vue';
 
 const props = defineProps<{
@@ -87,9 +119,18 @@ const props = defineProps<{
   fields: Fields;
   save: (id: string, body: string, base: string) => Promise<unknown>;
   reading: Reading; // the panel's, the flow writes its picks into it
+  // the description's threads are under its sections: the flow points at
+  // them; else they show here, as review threads do, with ThreadCard's
+  // reply, Resolve and Apply
+  pointers: boolean;
+  busy: boolean;
+  reply: (root: string, body: string) => Promise<boolean>;
+  resolve: (root: string, value: string) => Promise<boolean>;
+  apply: (root: string, body: string, base: string, version: number) => Promise<boolean>;
 }>();
 const reading = toRef(props, 'reading');
-const emit = defineEmits<{ line: [path: string]; ref: [n: string, event: MouseEvent]; workspace: [n: number] }>();
+// thread: a body thread's anchor, its place in the description
+const emit = defineEmits<{ line: [path: string]; ref: [n: string, event: MouseEvent]; workspace: [n: number]; thread: [root: string] }>();
 
 const step = computed(() => props.cycle?.step ?? 0);
 const segs = computed(() => segments(props.events, props.cycle?.stages, step.value, props.cycle?.skipped));
@@ -102,7 +143,7 @@ const shown = computed(() => read(reading.value));
 const total = computed(() => sum(shown.value));
 const narrowed = computed(() => reading.value.show !== 'all' || reading.value.mine || reading.value.agent || reading.value.milestones);
 const threads = computed(() => reading.value.threads);
-const items = (s: Segment): Item[] => itemsOf(s, reading.value.threads);
+const items = (s: Segment): Item[] => itemsOf(s, reading.value.threads, props.pointers);
 
 // What is folded: under This step the segments before the current one,
 // pointed at above it; under All, a long flow's segments before the
@@ -127,9 +168,13 @@ const foldedWords = computed(() => {
 
 // the gutter: the segment's number on its first entry
 const gutter = (s: Segment, i: number) => (s.n && i === 0 ? pad(s.n) : undefined);
-// a review line's path, a body thread's anchor (ponytail: Task 9's pointer
-// lines and section numbers replace it)
-const where = (e: IssueEvent) => (e.review ? `${e.review.path}${e.review.line ? `:${e.review.line}` : ''}` : anchorLabel(anchorOf(e.meta?.['thread:anchor'])!, []));
+// a body thread's anchor, "§3 › 3"; a review line's path
+const sections = computed(() => sectionsOf(props.events.find((e) => e.kind === 'created')?.html ?? ''));
+const label = (e: IssueEvent) => anchorLabel(anchorOf(e.meta?.['thread:anchor'])!, sections.value);
+const where = (e: IssueEvent) => (e.review ? `${e.review.path}${e.review.line ? `:${e.review.line}` : ''}` : label(e));
+// a pointer line's verb, and the first one, which says where they are
+const verb = (e: IssueEvent) => (e.meta?.['thread:kind'] === 'suggestion' ? 'suggested an edit on' : rootOf(e) ? 'replied on' : 'commented on');
+const firstPtr = computed(() => (props.pointers ? shown.value.flatMap((s) => s.entries).find((e) => e.meta?.['thread:anchor'])?.id : undefined));
 const firstWords = (e: IssueEvent) => {
   const line = (e.body ?? '').trim().split('\n')[0] ?? '';
   return line.length > 60 ? `${line.slice(0, 60)}…` : line;
@@ -169,7 +214,8 @@ function unfold(id?: string) {
   const e = id ? props.events.find((x) => x.id === id) : undefined;
   if (!e || e.kind === 'created') return;
   if (!shown.value.some((s) => s.entries.includes(e))) Object.assign(reading.value, { show: 'all', mine: false, agent: false, milestones: false });
-  if (e.review?.path) open.add(e.review.reply_to ?? e.id);
+  const root = rootOf(e) ?? (isRoot(e) ? e.id : undefined);
+  if (root) open.add(root);
 }
 defineExpose({ jump, unfold, settled });
 </script>
@@ -196,6 +242,8 @@ defineExpose({ jump, unfold, settled });
 /* an event's own li (TimelineEvent): the gutter, its icon, its line */
 .gb-fe.gb-event { grid-template-columns: 44px auto minmax(0, 1fr); align-items: center; }
 .gb-fthread { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 6px 12px; padding: 10px 14px; border: 1px solid var(--border-subtle); }
+.gb-flow-where { display: flex; align-items: center; gap: 6px; font-size: .75rem; color: var(--fg-muted); }
+.gb-fptr { padding: 7px 0; color: var(--fg-muted); }
 .gb-fthread-q { color: var(--fg-muted); font-style: italic; }
 .gb-fthread-open { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .gb-fthread-open.is-thread { animation: gb-unfold 120ms ease-out; }

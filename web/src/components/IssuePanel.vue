@@ -113,6 +113,7 @@
           <template v-else-if="created">
             <CommentCard :data-event="created.id" :event="created" :forges="thread.forges" :mine="created.author.id === meId" :save="edit" :role="roleOf(fields, created.author.login)" @ref="onRef">
               <IssueSections
+                ref="sections"
                 :html="created.html!"
                 :events="thread.events"
                 :forges="thread.forges"
@@ -128,7 +129,9 @@
                 :reply="(root: string, b: string) => comment(b, undefined, cycle?.step ?? 0, { reply_to: root })"
                 :resolve="resolveThread"
                 :apply="apply"
+                :in-flow="reading.where === 'flow'"
                 @ref="onRef"
+                @flow="reveal"
               />
             </CommentCard>
             <p v-if="folded"><button type="button" class="gb-linkbtn" aria-expanded="true" @click="reading.description = false">Fold the description</button></p>
@@ -140,7 +143,27 @@
         <template #flow="{ cycle, failed, send }">
           <HistoryView v-if="reading.tab === 'history'" :thread="thread" :fields="fields" />
           <template v-else>
-            <IssueFlow ref="flow" :events="thread.events" :cycle="cycle" :failed="failed" :me-id="meId" :since="since" :forges="thread.forges" :fields="fields" :save="edit" :reading="reading" @ref="onRef" @line="showLine" @workspace="showWorkspace" />
+            <IssueFlow
+              ref="flow"
+              :events="thread.events"
+              :cycle="cycle"
+              :failed="failed"
+              :me-id="meId"
+              :since="since"
+              :forges="thread.forges"
+              :fields="fields"
+              :save="edit"
+              :reading="reading"
+              :pointers="pointers"
+              :busy="saving"
+              :reply="(root: string, b: string) => comment(b, undefined, cycle?.step ?? 0, { reply_to: root })"
+              :resolve="resolveThread"
+              :apply="apply"
+              @ref="onRef"
+              @line="showLine"
+              @workspace="showWorkspace"
+              @thread="toSection"
+            />
             <IssueComposer
               :status="thread.status"
               :forges="thread.forges"
@@ -188,7 +211,7 @@ import { me, on, when } from '@/me';
 import CycleReview from '@/components/CycleReview.vue';
 import CommentCard from '@/components/CommentCard.vue';
 import HistoryView from '@/components/HistoryView.vue';
-import { carries, loadReading, roleOf, saveReading } from '@/flow';
+import { carries, loadReading, roleOf, rootOf, saveReading } from '@/flow';
 import { version } from '@/sections';
 import { steps } from '@/replay';
 import GbIcon from '@/components/GbIcon.vue';
@@ -249,6 +272,17 @@ const reading = reactive(loadReading());
 watch(reading, saveReading, { deep: true });
 const step = ref<InstanceType<typeof IssueStep> | null>(null);
 const flow = ref<InstanceType<typeof IssueFlow> | null>(null);
+// the description's threads show under its sections when it is rendered
+// and the seg says so; else in the flow (ponytail: while the description
+// is being edited its sections are gone, so are the threads, to the flow)
+const sections = ref<InstanceType<typeof IssueSections> | null>(null);
+const pointers = computed(() => reading.where === 'section' && !!sections.value);
+// a body thread's anchor in the flow: its place in the description
+async function toSection(root: string) {
+  reading.description = true;
+  await nextTick();
+  await sections.value?.unfold(root);
+}
 const focus = ref<string>(); // the file a comment's path:line opens in Changes, step 6 on the page
 function showLine(path: string) {
   if (!props.page) return;
@@ -325,10 +359,14 @@ async function jumpTo(n: number) {
 // row), on the Conversation tab with the flow settled and unfolded first.
 async function reveal(id: string) {
   reading.tab = 'conversation';
-  if (id === created.value?.id) reading.description = true;
+  const e = thread.value?.events.find((x) => x.id === id);
+  // a comment on the description under its section: the section unfolded
+  const under = !!e?.meta?.['thread:anchor'] && reading.where === 'section';
+  if (id === created.value?.id || under) reading.description = true;
   await nextTick();
   await flow.value?.settled();
   flow.value?.unfold(id);
+  if (under) await sections.value?.unfold(rootOf(e!) ?? id);
   await nextTick();
   const el = document.querySelector<HTMLElement>(`[data-event="${CSS.escape(id)}"]`);
   if (!el) return;

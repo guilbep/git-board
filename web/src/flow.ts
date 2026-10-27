@@ -155,9 +155,10 @@ export const isResolved = (e: IssueEvent): boolean => !!(e.review ? e.review.res
 
 // fold is the Threads grouping: a thread's replies fold under its root
 // when it is among the entries, in either order; a reply without it
-// stands alone.
-export function fold(entries: IssueEvent[]): Item[] {
-  const roots = new Map<string, Item>(entries.filter(isRoot).map((e) => [e.id, { event: e, replies: [], resolved: isResolved(e) }]));
+// stands alone. apart leaves body threads unfolded (the flow's pointer
+// lines, one per comment).
+export function fold(entries: IssueEvent[], apart = false): Item[] {
+  const roots = new Map<string, Item>(entries.filter((e) => isRoot(e) && !(apart && e.meta?.['thread:anchor'])).map((e) => [e.id, { event: e, replies: [], resolved: isResolved(e) }]));
   const items: Item[] = [];
   for (const e of entries) {
     const id = rootOf(e);
@@ -206,8 +207,8 @@ export function divider(s: Segment, current: boolean): string {
 
 // items are a segment's entries as the column lists them: Threads folds
 // the replies under their line comment, Flat lists each on its own.
-export const items = (s: Segment, threads: boolean): Item[] =>
-  threads ? fold(s.entries) : s.entries.map((event) => ({ event, replies: [] }));
+export const items = (s: Segment, threads: boolean, apart = false): Item[] =>
+  threads ? fold(s.entries, apart) : s.entries.map((event) => ({ event, replies: [] }));
 
 // firstNew is the item the "new since your last visit" line goes above:
 // the first one holding an entry written after `since` by someone else, a

@@ -180,6 +180,14 @@ test('a body reply folds under its root', () => {
   assert.deepEqual(bodyThreads([...events, c7, c8]).map((i) => [i.event.id, i.replies.map((r) => r.id)]), [['c7', ['c8']]]);
 });
 
+test('pointer lines keep body comments apart', () => {
+  // under their section, the flow lists each body comment on its own, in
+  // time order; review threads still fold
+  const r4 = ev('r4', 12, { review: { path: 'a.go', reply_to: 'r1' } });
+  assert.deepEqual(items({ n: 1, entries: [c7, events[8]!, c8, r4] }, true, true).map((i) => [i.event.id, i.replies.length]), [['c7', 0], ['r1', 1], ['c8', 0]]);
+  assert.deepEqual(items({ n: 1, entries: [c7, c8] }, true).map((i) => i.replies.length), [1]);
+});
+
 test('a body reply without its root stays', () => {
   assert.deepEqual(fold([c8]), [{ event: c8, replies: [] }]);
 });
