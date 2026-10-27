@@ -39,7 +39,7 @@ Taken with the user on 2026-10-26. Not reopened here.
 | A version is an edit that changes text | The body's versions are counted, never stored: the n-th `edit-text` on the body that changes text is v*n*. An edit that only flips `- [ ]` to `- [x]` (a tick, step 7) is not a version. |
 | What becomes of a thread when a version is published | Carried: its section is unchanged, the thread stays open on the new version. Outdated: its section changed and nobody resolved it; it stays open, marked "written on v1, §4 changed in v2". Resolved: by Apply (a suggested edit applied) or by a person. All three are shown in 6b. |
 | Suggested edits | A comment may carry a replacement for its anchored line (a ```suggestion block). The author of the body may *Apply in v*N+1 (writes the next version, resolves the thread) or *Decline*. |
-| Steps are segments | The flow is cut into segments at the operations that opened each step. *This step* and *All* are filters of the flow, not rooms; so are *Open threads*, *On v*N, *Mine*, *Agent*. The step rail jumps to a segment. The composer carries the current step, as today (`cycle:step`). |
+| Steps are segments | The flow is cut into segments at the operations that opened each step. *This step* and *All* are filters of the flow, not rooms; so are *Open threads*, *On v*N, *Mine*, *Agent*. The step rail opens a step at the head of the column. The composer carries the current step, as today (`cycle:step`). |
 | Mid-cycle | From step 2 on, the current step's workspace (the plan, the test runs, the diff, the ticks) heads the column, above the folded description; its segment of the flow follows (6g). The workspaces are row 5's, unchanged inside. |
 | Order and grouping | *Oldest first / Newest first*. *Flat / Threads*: in Threads, a thread folds to its root's first words plus a count and a state. A "new since your last visit" line, from what `lastvisit.ts` already knows. |
 | GitHub stays readable | Every comment is posted flat, in time order. An anchored comment carries a quote header; a suggestion keeps its block; the keys ride in the marker sync already hides on the last line. GitLab gets a discussion per thread. Nothing on the forge needs git-board to be read. |
@@ -94,7 +94,7 @@ state; the composer carrying 07.
 - [ ] *Flat* lists every comment in time order; *Threads* folds each thread to one line (root author, anchor, first words, count, state) that unfolds in place.
 - [ ] *Newest first* reverses the order of entries and of segments.
 - [ ] Every entry shows its sync state when it is not on the forge yet ("not on GitHub yet, next sync"), as today's events do.
-- [ ] The step rail's entries are links to the segments.
+- [ ] The step rail's entries are links that open their step.
 
 ### 6d `F4-history.html` · History: the flow with a cursor
 

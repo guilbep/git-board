@@ -96,7 +96,7 @@
         <p v-if="waiting" class="gb-wait" role="status"><GbIcon name="clock" small /> Syncing with the forges… your change is saved after it.</p>
       </div>
 
-      <IssueStep ref="step" :id="thread.id" :status="statusValue" :labels="thread.labels" :events="thread.events" :forges="thread.forges" :head="reading.tab === 'conversation'" @jump="jumpTo" @changed="load" @comment="(b, n) => comment(b, undefined, n)">
+      <IssueStep ref="step" :id="thread.id" :status="statusValue" :labels="thread.labels" :events="thread.events" :forges="thread.forges" :head="reading.tab === 'conversation'" @open="openStep" @changed="load" @comment="(b, n) => comment(b, undefined, n)">
         <template #tabs>
           <div class="gb-tabs gb-issue-tabs" role="tablist" aria-label="Issue">
             <button type="button" class="gb-tab" role="tab" :aria-selected="reading.tab === 'conversation'" @click="reading.tab = 'conversation'">Conversation</button>
@@ -195,7 +195,7 @@
               :apply="apply"
               @ref="onRef"
               @line="showLine"
-              @workspace="showWorkspace"
+              @open="openStep"
               @thread="toSection"
               @compare="compare"
             />
@@ -286,7 +286,7 @@ watch(
   () => thread.value?.id,
   async (id) => {
     if (id && props.at) void nextTick(() => reveal(props.at!));
-    if (id && props.step) void nextTick(() => jumpTo(props.step!));
+    if (id && props.step) void nextTick(() => openStep(props.step!));
     // the last visit, for the flow's "new since" line: once per issue
     if (id) {
       const v = visit(loadVisit(`issue:${id}`), Date.now());
@@ -416,20 +416,14 @@ async function post(body: string, status: 'open' | 'closed' | undefined, n: numb
   return ok;
 }
 
-// a done segment's Show the workspace: that step heads the column
-async function showWorkspace(n: number) {
+// the rail, a divider's Open step, ?step=: that step heads the column
+async function openStep(n: number) {
+  reading.tab = 'conversation';
   step.value?.show(n);
   await nextTick();
   const head = rootEl()?.querySelector<HTMLElement>('.gb-column-body > .gb-eyebrow');
   head?.scrollIntoView({ block: 'start', behavior: 'smooth' });
   head?.focus({ preventScroll: true });
-}
-
-// the rail's jump: the Conversation tab, then the step's segment
-async function jumpTo(n: number) {
-  reading.tab = 'conversation';
-  await nextTick();
-  void flow.value?.jump(n);
 }
 
 // reveal scrolls to a history item and flashes it (a waiting change's

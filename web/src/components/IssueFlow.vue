@@ -46,7 +46,7 @@
       </p>
       <div v-if="s.n" class="gb-fdiv-row">
         <h3 :id="`step-${s.n}`" tabindex="-1" class="gb-fdiv" :class="{ 'is-current': s.n === step }">{{ divider(s, s.n === step) }}</h3>
-        <button v-if="s.n < step || (cycle?.done && s.n !== step)" type="button" class="gb-linkbtn" @click="emit('workspace', s.n)">Show the workspace</button>
+        <button v-if="s.n < step || (cycle?.done && s.n !== step)" type="button" class="gb-linkbtn" @click="emit('open', s.n)">Open step {{ s.n }} · {{ STEPS[s.n] }}</button>
       </div>
       <p v-if="s.n === lastHidden" class="gb-flow-ptr">
         {{ foldedWords }} · <button type="button" class="gb-linkbtn" @click="unfolded = true">show all</button>
@@ -121,6 +121,7 @@ import { computed, nextTick, reactive, ref, toRef, watch } from 'vue';
 import type { Cycle, Forge, IssueEvent } from '@/api/board';
 import type { Fields } from '@/fields';
 import { bodyThreads, divider, firstNew, isRoot, items as itemsOf, pick, roleOf, rootOf, segments, type Item, type On, type Reading, type Segment } from '@/flow';
+import { STEPS } from '@/cycle';
 import { on, when } from '@/me';
 import { anchorLabel, anchorOf, changeOf, sectionsOf, versions } from '@/sections';
 import CommentCard from '@/components/CommentCard.vue';
@@ -149,7 +150,7 @@ const props = defineProps<{
 }>();
 const reading = toRef(props, 'reading');
 // thread: a body thread's anchor, its place in the description
-const emit = defineEmits<{ line: [path: string]; ref: [n: string, event: MouseEvent]; workspace: [n: number]; thread: [root: string]; compare: [v: number] }>();
+const emit = defineEmits<{ line: [path: string]; ref: [n: string, event: MouseEvent]; open: [n: number]; thread: [root: string]; compare: [v: number] }>();
 
 const step = computed(() => props.cycle?.step ?? 0);
 // the description's versions: a milestone for each past v1, sorted into
@@ -231,7 +232,7 @@ const newId = computed(() => firstNew(shown.value, props.since, props.meId, read
 
 const root = ref<HTMLElement | null>(null);
 // settled waits for the cycle: the segments and the step's head move
-// everything when it lands, so a jump or a reveal asked before goes after,
+// everything when it lands, so a reveal asked before goes after,
 // or right away if it failed to load. A newer ask drops an older one.
 let pending: (() => void) | undefined;
 const loaded = () => !!props.cycle || !!props.failed;
@@ -240,17 +241,6 @@ watch(loaded, (has) => {
   if (has) pending?.();
   pending = undefined;
 });
-// jump goes to a segment, the rail's: shown first if it is folded
-async function jump(n: number) {
-  await settled();
-  if (!segs.value.some((s) => s.n === n)) return;
-  if (!shown.value.some((s) => s.n === n)) reading.value.show = 'all';
-  unfolded.value = true;
-  await nextTick();
-  const el = root.value?.querySelector<HTMLElement>(`#step-${n}`);
-  el?.scrollIntoView({ block: 'start', behavior: 'smooth' });
-  el?.focus({ preventScroll: true });
-}
 // unfold renders the whole flow, and shows what id is (a thread holding
 // it unfolded, the filters let go if they hide it): what the inbox or
 // the sidebar scrolls to is there
@@ -262,7 +252,7 @@ function unfold(id?: string) {
   const root = rootOf(e) ?? (isRoot(e) ? e.id : undefined);
   if (root) open.add(root);
 }
-defineExpose({ jump, unfold, settled });
+defineExpose({ unfold, settled });
 </script>
 
 <style scoped>
