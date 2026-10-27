@@ -1,1 +1,1 @@
-{"clock":7,"ops":[{"kind":"comment","author":"ee004d31386b76440a74651c79871f156633d4ff","time":1793118854,"data":{"body":"Plan approved","meta":{"cycle:step":"3","plan:approve":"1","plan:commit":"394f4349abe379003d87ec31113272163dc4ed2d"}}}]}
+{"clock":8,"ops":[{"kind":"change-labels","author":"ee004d31386b76440a74651c79871f156633d4ff","time":1793118854,"data":{"add":["status:in-progress"],"remove":["status:ready"]}}]}
