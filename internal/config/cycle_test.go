@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -83,6 +84,8 @@ func TestCycleFromFile(t *testing.T) {
 		Kinds:     map[string]string{"bug": "failing-test", "feat": "per-criterion", "doc": "none", "chore": "none"},
 		Roles: map[string]string{"risk": "pm", "plan": "lead-dev", "review": "reviewer",
 			"signoff:ready-for-validation": "lead-dev", "signoff:qa": "pm", "signoff:tests-metier": "metier"},
+		// read 2: a cell per validation status, verify dropped
+		Steps: append(slices.Clone(DefaultSteps[:6]), stepOf("ready-for-validation"), stepOf("qa"), stepOf("tests-metier")),
 	}
 	if !reflect.DeepEqual(s, want) {
 		t.Errorf("Stages()\n got %+v\nwant %+v", s, want)
@@ -261,5 +264,124 @@ func TestCycleSuitesChecked(t *testing.T) {
 		if _, _, err := parse([]byte(toml)); err == nil || !strings.Contains(err.Error(), want) {
 			t.Errorf("%s: err = %v, want %q", toml, err, want)
 		}
+	}
+}
+
+// co2Status is co2-calculator's status field: the stages are guessed from it.
+const co2Status = "[fields.status]\noptions = [\"backlog\", \"comite\", \"ready\", \"in-progress\", \"in-review\", \"ready-for-validation\", \"qa\", \"tests-metier\", \"validated\"]\nsingle = true\n\n"
+
+func stepIDs(steps []Step) []string {
+	ids := []string{}
+	for _, s := range steps {
+		ids = append(ids, s.ID)
+	}
+	return ids
+}
+
+func TestCycleSteps(t *testing.T) {
+	t.Parallel()
+	six := []string{"intent", "risk", "plan", "tests", "code", "review"}
+	for _, tc := range []struct {
+		name, toml string
+		want       []string
+	}{
+		{"no steps", co2Status, append(slices.Clone(six), "verify")},
+		{"no file", "", append(slices.Clone(six), "verify")},
+		// read 2: every validation status a cell, verify gone
+		{"sign-offs", co2Status + "[cycle.signoffs]\nqa = \"pm\"\ntests-metier = \"metier\"\n", append(slices.Clone(six), "ready-for-validation", "qa", "tests-metier")},
+		{"a key no status names", co2Status + "[cycle.signoffs]\nstaging = \"pm\"\nqa = \"pm\"\n", append(slices.Clone(six), "ready-for-validation", "qa", "tests-metier", "staging")},
+		{"code and review", co2Status + "[cycle]\nsteps = [\"code\", \"review\"]\n", []string{"code", "review"}},
+		{"verify with a sign-off", co2Status + "[cycle]\nsteps = [\"review\", \"qa\", \"verify\"]\n\n[cycle.signoffs]\nqa = \"pm\"\n", []string{"review", "qa", "verify"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg, _, err := parse([]byte(tc.toml))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := stepIDs(cfg.Stages().Steps); !slices.Equal(got, tc.want) {
+				t.Errorf("steps = %v, want %v", got, tc.want)
+			}
+		})
+	}
+	cfg, _, err := parse([]byte(co2Status + "[cycle]\nsteps = [\"review\", \"qa\", \"verify\"]\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []Step{{ID: "review", Kind: "review", Name: "Review"}, {ID: "qa", Kind: "signoff", Name: "qa", Status: "qa"}, {ID: "verify", Kind: "signoff", Name: "Verify"}}
+	if got := cfg.Stages().Steps; !reflect.DeepEqual(got, want) {
+		t.Errorf("Steps = %+v, want %+v", got, want)
+	}
+}
+
+func TestCycleStepsChecked(t *testing.T) {
+	t.Parallel()
+	for steps, want := range map[string]string{
+		`["review", "code"]`: `[cycle] steps: "code" after "review": steps keep the cycle's order, intent, risk, plan, tests, code, review, then the sign-offs`,
+		`["qa", "code"]`:     `[cycle] steps: "code" after "qa"`,
+		`["code", "deploy"]`: `[cycle] steps: "deploy" is no step: intent, risk, plan, tests, code, review, verify, a validation status or a [cycle.signoffs] key`,
+		`["code", "code"]`:   `[cycle] steps: "code" twice`,
+		`[]`:                 `[cycle] steps: at least one step`,
+	} {
+		if _, _, err := parse([]byte(co2Status + "[cycle]\nsteps = " + steps + "\n")); err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("%s: err = %v, want %q", steps, err, want)
+		}
+	}
+	for _, steps := range []string{`["intent", "risk", "code", "verify"]`, `["code", "review", "verify"]`, `["tests-metier", "qa"]`} {
+		if _, _, err := parse([]byte(co2Status + "[cycle]\nsteps = " + steps + "\n")); err != nil {
+			t.Errorf("%s: %v", steps, err)
+		}
+	}
+}
+
+// read 3: a kind's rule as a string or as its table's tests; a kind's
+// steps is M3's, a key git-board doesn't know yet.
+func TestCycleKindsTable(t *testing.T) {
+	t.Parallel()
+	cfg, warnings, err := Check([]byte("[cycle.kinds]\nbug = \"failing-test\"\n\n[cycle.kinds.doc]\ntests = \"per-criterion\"\n\n[cycle.kinds.chore]\nsteps = [\"code\"]\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := cfg.Stages()
+	for kind, want := range map[string]string{"bug": "failing-test", "doc": "per-criterion", "chore": "none"} {
+		if got := s.KindRule(kind); got != want {
+			t.Errorf("KindRule(%q) = %q, want %q", kind, got, want)
+		}
+	}
+	if want := []string{"cycle.kinds.chore.steps: git-board doesn't know this key"}; !slices.Equal(warnings, want) {
+		t.Errorf("warnings = %q, want %q", warnings, want)
+	}
+	for toml, want := range map[string]string{
+		"[cycle.kinds.doc]\ntests = \"nope\"\n": `[cycle.kinds] doc: failing-test, per-criterion, none, not "nope"`,
+		"[cycle.kinds]\nbug = 3\n":              `[cycle.kinds] bug: failing-test, per-criterion, none`,
+	} {
+		if _, _, err := parse([]byte(toml)); err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("%s: err = %v, want %q", toml, err, want)
+		}
+	}
+}
+
+func TestCycleReads(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name, toml string
+		want       []string
+	}{
+		{"no file", "", []string{"steps: none, so the default list: intent, risk, plan, tests, code, review, verify"}},
+		{"old forms", co2Status + "[cycle.signoffs]\nqa = \"pm\"\n\n[cycle.kinds]\nbug = \"failing-test\"\n", []string{
+			"steps: none, so the default list with a sign-off per validation status: intent, risk, plan, tests, code, review, ready-for-validation, qa, tests-metier",
+			`[cycle.signoffs] qa = "pm": the sign-off step qa, at status qa, held by the role pm`,
+			`[cycle.kinds] bug = "failing-test": [cycle.kinds.bug] tests = "failing-test"`,
+		}},
+		{"new forms", "[cycle]\nsteps = [\"code\", \"review\"]\n\n[cycle.kinds.bug]\ntests = \"failing-test\"\n", nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg, _, err := parse([]byte(tc.toml))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := cfg.Reads(); !slices.Equal(got, tc.want) {
+				t.Errorf("Reads()\n got %q\nwant %q", got, tc.want)
+			}
+		})
 	}
 }
