@@ -172,6 +172,16 @@ export function fold(entries: IssueEvent[]): Item[] {
 export const bodyThreads = (events: IssueEvent[]): Item[] =>
   fold(events.filter((e) => e.meta?.['thread:anchor'])).filter((t) => isRoot(t.event));
 
+// resolvedBy words a body thread's thread:resolved: "resolved by v2" (an
+// Apply), "resolved by Person B" (a participant), "resolved" (someone the
+// events do not name); "" while open
+export function resolvedBy(t: Item, events: IssueEvent[]): string {
+  const v = t.event.meta?.['thread:resolved'];
+  if (!v) return '';
+  const who = /^v[1-9][0-9]*$/.test(v) ? v : events.find((e) => e.author.id === v)?.author.name;
+  return who ? `resolved by ${who}` : 'resolved';
+}
+
 // roleOf is the project role a person holds ([roles]): the first person
 // field whose project value is their login.
 export const roleOf = (fields: Fields, login: string | undefined): string | undefined =>

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { CycleStages, IssueEvent } from './api/board.ts';
-import { bodyThreads, carries, divider, firstNew, fold, isResolved, isRoot, items, pick, READING, readingOf, roleOf, rootOf, segments, type Segment } from './flow.ts';
+import { bodyThreads, carries, resolvedBy, divider, firstNew, fold, isResolved, isRoot, items, pick, READING, readingOf, roleOf, rootOf, segments, type Segment } from './flow.ts';
 
 const stages: CycleStages = {
   before: ['backlog'], ready: 'ready', in_progress: ['in-progress'], in_review: ['in-review'],
@@ -201,6 +201,14 @@ test('an emptied thread:resolved is open', () => {
 test('pick keeps a thread with no section', () => {
   const gone = ev('c9', 12, { meta: { 'thread:anchor': 'body@v1/renamed' } });
   assert.deepEqual(open([...events, gone]), [[6, ['r1', 'c9']]]);
+});
+
+test('who resolved a thread', () => {
+  const t = (v: string) => fold([resolved(v), c8])[0]!;
+  assert.equal(resolvedBy(t('v2'), [c7, c8]), 'resolved by v2');
+  assert.equal(resolvedBy(t('me'), [c7, c8]), 'resolved by Me');
+  assert.equal(resolvedBy(t('someone'), [c7, c8]), 'resolved');
+  assert.equal(resolvedBy(t(''), [c7, c8]), '');
 });
 
 test('readingOf takes where', () => {

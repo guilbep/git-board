@@ -9,7 +9,7 @@
       <b>{{ event.author.name }}</b>
       <span v-if="role" class="gb-role">{{ role }}</span>
       <span v-if="v" class="gb-time">wrote the description, <b class="gb-ver">v{{ v }}</b> · {{ on(event.at, true) }}</span>
-      <span v-else class="gb-time">{{ verb }} {{ on(event.at, true) }}</span>
+      <span v-else class="gb-time">{{ verb }} {{ on(event.at, true) }}<template v-if="anchor"> · on <button type="button" class="gb-anchor" @click="emit('anchor')">{{ anchor }}</button></template></span>
       <span v-if="step" class="gb-time">· step {{ step }}</span>
       <span v-if="review?.state" class="gb-mono gb-time">at {{ review.commit?.slice(0, 7) }}</span>
       <details v-if="event.edited && event.history" class="gb-hist">
@@ -90,8 +90,9 @@ const props = defineProps<{
   // saves an edit; base is the text it started from (409 "changed" if not current)
   save: (id: string, body: string, base: string) => Promise<unknown>;
   role?: string | undefined; // the author's project role: "po"
+  anchor?: string | undefined; // a body thread root's anchor: "§3 › 3"
 }>();
-const emit = defineEmits<{ ref: [n: string, event: MouseEvent]; line: [path: string] }>();
+const emit = defineEmits<{ ref: [n: string, event: MouseEvent]; line: [path: string]; anchor: [] }>();
 
 const uid = useId();
 const editing = ref(false);
