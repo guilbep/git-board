@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { Cycle, GatePR, IssueEvent } from './api/board.ts';
-import { cardFor, criteriaLeft, mergedRun, riskWords, signoffLine, steps, statusBar, suggestion, tiles, turn, withCriteria } from './cycle.ts';
+import { cardFor, criteriaLeft, criterionOf, mergedRun, riskWords, signoffLine, steps, statusBar, suggestion, tiles, turn, withCriteria } from './cycle.ts';
 import { on } from './when.ts';
 
 const at = (c: Partial<Cycle>): Cycle => ({
@@ -95,21 +95,33 @@ test('the step bar at step 1, and with steps skipped', () => {
 test('the criteria, written under the description\'s own heading', () => {
   const hs = ['Acceptance criteria', 'Done when', 'Expected'];
   // under Expected, the heading the description has, not a new Acceptance criteria
-  assert.equal(withCriteria('It fails.\n\n## Expected\n\nTo be written.', ['a', 'b'], hs), 'It fails.\n\n## Expected\n\n- a\n- b\n\nTo be written.');
-  assert.equal(withCriteria('It fails.', ['a'], hs), 'It fails.\n\n## Acceptance criteria\n\n- a');
-  assert.equal(withCriteria('**done when**', ['a'], ['Done when']), '**done when**\n\n- a');
+  assert.equal(withCriteria('It fails.\n\n## Expected\n\nTo be written.', ['a', 'b'], hs), 'It fails.\n\n## Expected\n\n- [ ] a\n- [ ] b\n\nTo be written.');
+  assert.equal(withCriteria('It fails.', ['a'], hs), 'It fails.\n\n## Acceptance criteria\n\n- [ ] a');
+  assert.equal(withCriteria('**done when**', ['a'], ['Done when']), '**done when**\n\n- [ ] a');
 });
 
 test('the criteria, written into the description', () => {
-  assert.equal(withCriteria('', ['a', 'b']), '## Acceptance criteria\n\n- a\n- b');
-  assert.equal(withCriteria('The import fails.\n', ['a']), 'The import fails.\n\n## Acceptance criteria\n\n- a');
+  assert.equal(withCriteria('', ['a', 'b']), '## Acceptance criteria\n\n- [ ] a\n- [ ] b');
+  assert.equal(withCriteria('The import fails.\n', ['a']), 'The import fails.\n\n## Acceptance criteria\n\n- [ ] a');
   // under the heading already there: the server reads the first one
   assert.equal(
     withCriteria('Intro\n\n**Acceptance criteria:**\n\nTo be written.\n\n## Notes', ['a']),
-    'Intro\n\n**Acceptance criteria:**\n\n- a\n\nTo be written.\n\n## Notes',
+    'Intro\n\n**Acceptance criteria:**\n\n- [ ] a\n\nTo be written.\n\n## Notes',
   );
-  assert.equal(withCriteria('### Acceptance criteria', ['a']), '### Acceptance criteria\n\n- a');
-  assert.equal(withCriteria('', ['- a', '', ' 2) b ', '[ ] c', '* [x] d']), '## Acceptance criteria\n\n- a\n- b\n- c\n- d');
+  assert.equal(withCriteria('### Acceptance criteria', ['a']), '### Acceptance criteria\n\n- [ ] a');
+  // the list under the heading is replaced, and its ticks kept
+  assert.equal(
+    withCriteria('## Acceptance criteria\n\n- [x] a\n- b\n1. [ ] gone\n\nNotes', ['a', 'c']),
+    '## Acceptance criteria\n\n- [x] a\n- [ ] c\n\nNotes',
+  );
+  assert.equal(withCriteria('## Acceptance criteria\n\n- [x] a', ['b']), '## Acceptance criteria\n\n- [ ] b');
+  assert.equal(withCriteria('', ['- a', '', ' 2) b ', '[ ] c', '* [x] d']), '## Acceptance criteria\n\n- [ ] a\n- [ ] b\n- [ ] c\n- [x] d');
+});
+
+test('a line, as a criterion', () => {
+  assert.deepEqual(criterionOf(' 2) [X] b '), { text: 'b', done: true });
+  assert.deepEqual(criterionOf('- [ ] a'), { text: 'a', done: false });
+  assert.deepEqual(criterionOf('plain'), { text: 'plain', done: false });
 });
 
 test('the step bar at verify', () => {

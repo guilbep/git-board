@@ -135,7 +135,14 @@ func TestCycleRolesChecked(t *testing.T) {
 	if _, _, err := parse([]byte("[cycle]\nrisk = \"pm\"\n")); err != nil {
 		t.Errorf("a role nobody holds is anyone's turn: %v", err)
 	}
-	_, _, err := parse([]byte("[cycle]\nrisk = \"p m\"\n"))
+	cfg, _, err := parse([]byte("[cycle]\nspec = \"pm\"\n"))
+	if err != nil || cfg.Stages().Roles["spec"] != "pm" {
+		t.Errorf("spec: %v %v", err, cfg.Stages().Roles)
+	}
+	if _, _, err := parse([]byte("[cycle]\nspec = \"P M\"\n")); err == nil || !strings.Contains(err.Error(), "[cycle] spec: a role name") {
+		t.Errorf("spec err = %v", err)
+	}
+	_, _, err = parse([]byte("[cycle]\nrisk = \"p m\"\n"))
 	if err == nil || !strings.Contains(err.Error(), `[cycle] risk: a role name, not "p m"`) {
 		t.Errorf("err = %v", err)
 	}

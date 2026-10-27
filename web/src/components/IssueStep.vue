@@ -7,7 +7,7 @@
      on), review (the Changes view, step 6 on the page), flow, side. -->
 <template>
   <p v-if="error && !(current && card)" class="gb-save-error" role="alert"><GbIcon name="error" small /> {{ error }}</p>
-  <nav v-if="cycle" class="gb-stepbar" aria-label="The cycle, click a step to jump to its segment">
+  <nav v-if="cycle" class="gb-stepbar" aria-label="The cycle, click a step to open it">
     <ol class="gb-bar-steps">
       <li v-for="r in rows" :key="r.n" :class="[`is-${r.state}`, { 'is-shown': r.n === n }]">
         <a v-if="r.state === 'done' || r.state === 'current'" class="gb-bar-step" :href="`#/issues/${id}?step=${r.n}`" :aria-current="r.state === 'current' ? 'step' : undefined" @click="jump($event, r.n)">
@@ -87,7 +87,7 @@
           />
           <!-- step 6 on the page is the review's own (CycleReview) -->
           <template v-else-if="cycle && row && !(n === 6 && $slots.review)">
-            <CycleIntent v-if="n === 1" :cycle="cycle" :current="current" :busy="busy" @save="saveCriteria" />
+            <CycleIntent v-if="n === 1" :cycle="cycle" :current="current" :busy="busy" :can-accept="has('no-criteria')" @save="saveCriteria" @accept="act('no-criteria')" />
             <CycleTests v-if="n === 4 && !cycle.skipped?.includes(4)" :id="id" :cycle="cycle" />
             <p v-else-if="n !== 1 && row.state === 'done' && row.line !== row.gate" class="gb-note">{{ row.line }}</p>
             <p class="gb-gate">{{ row.gate }}</p>
@@ -142,7 +142,7 @@
       </div>
     </section>
     <aside class="gb-sidebar" aria-label="Fields">
-      <slot name="side" />
+      <slot name="side" :cycle="cycle" />
     </aside>
   </div>
 </template>
@@ -163,7 +163,7 @@ import CycleVerify from '@/components/CycleVerify.vue';
 import GbIcon from '@/components/GbIcon.vue';
 
 const props = defineProps<{ id: string; status: string; labels: string[]; events: IssueEvent[]; forges?: Forge[] | undefined; head: boolean }>();
-const emit = defineEmits<{ changed: []; comment: [body: string, step: number]; jump: [n: number] }>();
+const emit = defineEmits<{ changed: []; comment: [body: string, step: number]; open: [n: number] }>();
 
 const description = computed(() => props.events.find((e) => e.kind === 'created'));
 const { cycle, error, busy, needsWhy, has, act, patch, edit, press, pull } = useCycle(
@@ -190,11 +190,11 @@ const show = (step: number) => (shown.value = step === cycle.value?.step ? null 
 // a refusal belongs to the step pressed: another step shown drops it
 watch(n, () => (error.value = ''));
 defineExpose({ show });
-// the rail jumps to a step's segment; a new tab or window is the link's
+// the rail opens a step at the head of the column; a new tab or window is the link's
 function jump(e: MouseEvent, step: number) {
   if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey) return;
   e.preventDefault();
-  emit('jump', step);
+  emit('open', step);
 }
 
 // Intent's criteria go in the description, under its own heading

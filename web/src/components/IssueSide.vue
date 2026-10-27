@@ -62,6 +62,18 @@
       <p v-if="error" class="gb-hint" role="alert"><b>Not saved.</b> {{ error }}</p>
     </section>
 
+    <section v-if="spec" class="gb-side-sec" aria-labelledby="side-spec">
+      <h3 id="side-spec" class="gb-section-title">Spec</h3>
+      <p class="gb-spec-now">
+        v{{ spec.v }} ·
+        <template v-if="spec.on?.verdict === 'approve'">approved by {{ spec.on.event.author.name }}, {{ when(spec.on.event.at) }}</template>
+        <template v-else-if="spec.on">changes requested</template>
+        <template v-else-if="reviewer">awaits the verdict of <b>{{ reviewer.name }}</b> <span v-if="reviewer.role" class="gb-role">{{ reviewer.role }}</span></template>
+        <template v-else>awaits a verdict</template>
+      </p>
+      <p v-if="specLine" class="gb-hint">{{ specLine }}</p>
+    </section>
+
     <section v-if="incoming.length" class="gb-side-sec" aria-labelledby="side-linked">
       <h3 id="side-linked" class="gb-section-title">Linked issues</h3>
       <div v-for="[field, list] in incoming" :key="field" class="gb-linked">
@@ -146,7 +158,8 @@ import { ApiError, getFollow, getRefs, patchIssue, setFollow, type FollowState, 
 import { followLine } from '@/inboxcheck';
 import { displayName, fieldValues, formatValue, typeOf, type Fields } from '@/fields';
 import { message } from '@/issue';
-import { initials, me } from '@/me';
+import { initials, me, when } from '@/me';
+import type { SpecState } from '@/spec';
 import { syncStatus } from '@/sync';
 import { waitingChanges } from '@/history';
 import GbIcon from '@/components/GbIcon.vue';
@@ -162,6 +175,9 @@ const props = defineProps<{
   participants: Person[] | null;
   events: IssueEvent[];
   saving: boolean;
+  // the description's verdict (VerdictBar's), and the spec role's holder: none, anyone but the author
+  spec?: SpecState | undefined;
+  reviewer?: { name: string; role?: string | undefined } | undefined;
 }>();
 const emit = defineEmits<{ changed: []; labels: [add: string[], remove: string[]]; reveal: [id: string]; open: [id: string] }>();
 
@@ -193,6 +209,14 @@ function dueNote(iso: string): string {
   if (days === 0) return 'Today';
   return `In ${days} day${days === 1 ? '' : 's'}`;
 }
+
+// "v1: changes requested, Oct 21 · 2 threads open"
+const specLine = computed(() => {
+  const s = props.spec;
+  if (!s) return '';
+  const was = s.before && `v${s.before.v}: ${s.before.verdict === 'approve' ? 'approved' : 'changes requested'}, ${when(s.before.event.at)}`;
+  return [was, s.open && `${s.open} thread${s.open === 1 ? '' : 's'} open`].filter(Boolean).join(' · ');
+});
 
 const showWaiting = ref(false);
 const waiting = computed(() => waitingChanges(props.events));

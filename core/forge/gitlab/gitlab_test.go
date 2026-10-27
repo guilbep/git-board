@@ -423,3 +423,27 @@ func TestPath(t *testing.T) {
 		t.Fatalf("%q, %v", got, err)
 	}
 }
+
+// A reply goes into the discussion of the note it answers, found among the
+// issue's discussions, pages read; a note gone is ErrNotFound.
+func TestReply(t *testing.T) {
+	t.Parallel()
+	f := fake.New("example.com/p")
+	var cs []forge.Comment
+	for i := range 3 {
+		cs = append(cs, forge.Comment{Author: ann, Body: fmt.Sprint("c", i), Time: int64(100 + i)})
+	}
+	is := f.Add(forge.Issue{Author: ann, Title: "A", Comments: cs})
+	s, a := serve(t, f, "p")
+	root := is.Comments[2].ID
+	c, err := a.Reply(t.Context(), is.Ref(), root, "an answer")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.threads[c.ID] != root || c.Body != "an answer" {
+		t.Errorf("reply %+v in %q, want in %s's", c, s.threads[c.ID], root)
+	}
+	if _, err := a.Reply(t.Context(), is.Ref(), "999", "lost"); !errors.Is(err, forge.ErrNotFound) {
+		t.Errorf("err = %v, want ErrNotFound", err)
+	}
+}

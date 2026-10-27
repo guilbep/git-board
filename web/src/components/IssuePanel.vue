@@ -96,11 +96,12 @@
         <p v-if="waiting" class="gb-wait" role="status"><GbIcon name="clock" small /> Syncing with the forges… your change is saved after it.</p>
       </div>
 
-      <IssueStep ref="step" :id="thread.id" :status="statusValue" :labels="thread.labels" :events="thread.events" :forges="thread.forges" :head="reading.tab === 'conversation'" @jump="jumpTo" @changed="load" @comment="(b, n) => comment(b, undefined, n)">
+      <IssueStep ref="step" :id="thread.id" :status="statusValue" :labels="thread.labels" :events="thread.events" :forges="thread.forges" :head="reading.tab === 'conversation'" @open="openStep" @changed="load" @comment="(b, n) => comment(b, undefined, n)">
         <template #tabs>
           <div class="gb-tabs gb-issue-tabs" role="tablist" aria-label="Issue">
             <button type="button" class="gb-tab" role="tab" :aria-selected="reading.tab === 'conversation'" @click="reading.tab = 'conversation'">Conversation</button>
             <button type="button" class="gb-tab" role="tab" :aria-selected="reading.tab === 'history'" @click="reading.tab = 'history'">History <span class="gb-modes-count">{{ changeCount }}</span></button>
+            <button v-if="created" type="button" class="gb-tab" role="tab" :aria-selected="reading.tab === 'changes'" @click="reading.tab = 'changes'">Changes <span class="gb-modes-count">{{ bodyVersions.length + ticksOf(created).length }}</span></button>
           </div>
         </template>
         <template #intent="{ folded, cycle }">
@@ -111,7 +112,49 @@
             <button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" aria-expanded="false" @click="reading.description = true">Read the description</button>
           </div>
           <template v-else-if="created">
-            <CommentCard :data-event="created.id" :event="created" :forges="thread.forges" :mine="created.author.id === meId" :save="edit" @ref="onRef" />
+            <CommentCard :data-event="created.id" :event="created" :forges="thread.forges" :mine="created.author.id === meId" :save="edit" :role="roleOf(fields, created.author.login)" @ref="onRef">
+              <template v-if="bodyVersions.length > 1" #head>
+                <span class="gb-seg gb-seg-sm" role="group" aria-label="Version">
+                  <button v-for="bv in bodyVersions" :key="bv.n" type="button" :aria-pressed="bv.n === shownV" @click="shownV = bv.n">v{{ bv.n }}</button>
+                </span>
+                <label v-if="shownV > 1" class="gb-since"><input v-model="changesSince" type="checkbox" /> Changes since v{{ shownV - 1 }}</label>
+              </template>
+              <IssueSections
+                ref="sections"
+                :html="created.html!"
+                :versions="bodyVersions"
+                :shown="shownV"
+                :since="changesSince"
+                :events="thread.events"
+                :forges="thread.forges"
+                :status="thread.status"
+                :busy="saving"
+                :waiting="waiting"
+                :error="saveError"
+                :carried="carries(cycle?.step ?? 0)"
+                :comment="(anchor: string, b: string) => comment(b, undefined, cycle?.step ?? 0, { anchor })"
+                :me-id="meId"
+                :fields="fields"
+                :save="edit"
+                :reply="(root: string, b: string) => comment(b, undefined, cycle?.step ?? 0, { reply_to: root })"
+                :resolve="resolveThread"
+                :apply="apply"
+                :in-flow="reading.where === 'flow'"
+                @ref="onRef"
+                @flow="reveal"
+              />
+            </CommentCard>
+            <VerdictBar
+              v-if="cycle && (cycle.step === 1 || spec.on || spec.before)"
+              :state="spec"
+              :reviewer="reviewer(cycle.evidence.people?.spec)"
+              :may="mayGive(cycle.evidence.people, cycle.evidence.author, me?.me?.login)"
+              :moves="cycle.step === 1 && !!cycle.stages.ready"
+              :criteria="!!cycle.evidence.criteria?.length"
+              :busy="giving"
+              :give="give"
+            />
+            <p v-if="verdictError" class="gb-save-error" role="alert"><GbIcon name="error" small /> {{ verdictError }}</p>
             <p v-if="folded"><button type="button" class="gb-linkbtn" aria-expanded="true" @click="reading.description = false">Fold the description</button></p>
           </template>
         </template>
@@ -119,22 +162,56 @@
           <CycleReview :id="thread.id" :thread="thread" :me-id="meId" :busy="saving" :focus="focus" :review="review" :resolve="resolve" v-bind="r" />
         </template>
         <template #flow="{ cycle, failed, send }">
-          <HistoryView v-if="reading.tab === 'history'" :thread="thread" :fields="fields" />
+          <HistoryView v-if="reading.tab === 'history'" :thread="thread" :fields="fields" :cycle="cycle" />
+          <IssueChanges
+            v-else-if="reading.tab === 'changes'"
+            :thread="thread"
+            :cycle="cycle"
+            :me-id="meId"
+            :fields="fields"
+            :busy="saving"
+            :save="edit"
+            :reply="(root: string, b: string) => comment(b, undefined, cycle?.step ?? 0, { reply_to: root })"
+            :resolve="resolveThread"
+            :apply="apply"
+          />
           <template v-else>
-            <IssueFlow ref="flow" :events="thread.events" :cycle="cycle" :failed="failed" :me-id="meId" :since="since" :forges="thread.forges" :fields="fields" :save="edit" :reading="reading" @ref="onRef" @line="showLine" @workspace="showWorkspace" />
+            <IssueFlow
+              ref="flow"
+              :events="thread.events"
+              :cycle="cycle"
+              :failed="failed"
+              :me-id="meId"
+              :since="since"
+              :forges="thread.forges"
+              :fields="fields"
+              :save="edit"
+              :reading="reading"
+              :shown-v="shownV"
+              :pointers="pointers"
+              :busy="saving"
+              :reply="(root: string, b: string) => comment(b, undefined, cycle?.step ?? 0, { reply_to: root })"
+              :resolve="resolveThread"
+              :apply="apply"
+              @ref="onRef"
+              @line="showLine"
+              @open="openStep"
+              @thread="toSection"
+              @compare="compare"
+            />
             <IssueComposer
               :status="thread.status"
               :forges="thread.forges"
               :busy="saving"
               :waiting="waiting"
               :error="saveError"
-              :carries="carries(cycle?.step ?? 0)"
+              :carries="[carries(cycle?.step ?? 0), created ? `v${version(created)}` : ''].filter(Boolean)"
               :send="send?.name"
               :comment="(b: string, st?: 'open' | 'closed', toAgent?: boolean) => post(b, st, cycle?.step ?? 0, toAgent ? send : undefined)"
             />
           </template>
         </template>
-        <template #side>
+        <template #side="{ cycle }">
           <IssueSide
             :id="thread.id"
             :title="thread.title"
@@ -145,6 +222,8 @@
             :participants="thread.participants"
             :events="thread.events"
             :saving="saving"
+            :spec="cycle && created && (cycle.step === 1 || spec.on || spec.before) ? spec : undefined"
+            :reviewer="holder(cycle?.evidence.people?.spec)"
             @changed="fieldsChanged"
             @labels="labels"
             @reveal="reveal"
@@ -169,13 +248,19 @@ import { me, on, when } from '@/me';
 import CycleReview from '@/components/CycleReview.vue';
 import CommentCard from '@/components/CommentCard.vue';
 import HistoryView from '@/components/HistoryView.vue';
-import { carries, loadReading, saveReading } from '@/flow';
+import IssueChanges from '@/components/IssueChanges.vue';
+import { carries, loadReading, roleOf, rootOf, saveReading } from '@/flow';
+import { ticksOf, version, versions } from '@/sections';
 import { steps } from '@/replay';
 import GbIcon from '@/components/GbIcon.vue';
 import IssueComposer from '@/components/IssueComposer.vue';
 import IssueFlow from '@/components/IssueFlow.vue';
+import IssueSections from '@/components/IssueSections.vue';
 import IssueSide from '@/components/IssueSide.vue';
 import IssueStep from '@/components/IssueStep.vue';
+import VerdictBar from '@/components/VerdictBar.vue';
+import { mayGive, specOf } from '@/spec';
+import { specVerdict } from '@/api/board';
 
 const props = defineProps<{
   id: string;
@@ -194,14 +279,14 @@ const props = defineProps<{
 const emit = defineEmits<{ close: []; prev: []; next: []; changed: [thread: Thread]; open: [id: string] }>();
 
 const uid = useId();
-const { thread, error, saving, waiting, saveError, load, comment, edit, rename, setStatus, labels, review, resolve } =
+const { thread, error, saving, waiting, saveError, load, comment, edit, rename, setStatus, labels, review, resolve, resolveThread, apply } =
   useIssue(toRef(props, 'id'), (t) => emit('changed', t));
 // the inbox opens an issue at its first new event
 watch(
   () => thread.value?.id,
   async (id) => {
     if (id && props.at) void nextTick(() => reveal(props.at!));
-    if (id && props.step) void nextTick(() => jumpTo(props.step!));
+    if (id && props.step) void nextTick(() => openStep(props.step!));
     // the last visit, for the flow's "new since" line: once per issue
     if (id) {
       const v = visit(loadVisit(`issue:${id}`), Date.now());
@@ -220,6 +305,42 @@ watch(
 const meId = computed(() => me.value?.me?.id ?? '');
 const since = ref<number | null>(null);
 const created = computed(() => thread.value?.events.find((e) => e.kind === 'created'));
+// the description's versions, the one shown (the current one on each
+// issue and each new version: not remembered) and Changes since
+const bodyVersions = computed(() => (created.value ? versions(created.value) : []));
+// the description's verdict (VerdictBar): on the current version, from the thread
+const spec = computed(() => specOf(thread.value?.events ?? [], bodyVersions.value));
+// the spec role's holder, its name and project role; "Person B, PM" for
+// the verdict bar, anyone but the author without one
+function holder(login: string | undefined) {
+  if (!login) return undefined;
+  const name = me.value?.identities?.find((p) => p.login?.toLowerCase() === login.toLowerCase())?.name ?? login;
+  return { name, role: roleOf(props.fields, login) };
+}
+function reviewer(login: string | undefined): string {
+  const h = holder(login);
+  if (!h) return `Anyone but ${created.value?.author.name ?? 'the author'}`;
+  return h.role ? `${h.name}, ${h.role.toUpperCase()}` : h.name;
+}
+const giving = ref(false);
+const verdictError = ref('');
+async function give(verdict: 'approve' | 'request-changes', body: string) {
+  giving.value = true;
+  verdictError.value = '';
+  try {
+    await specVerdict(props.id, verdict, `body@v${spec.value.v}`, body);
+    await fieldsChanged(); // the status may have moved: the board's row too
+    return true;
+  } catch (e) {
+    verdictError.value = e instanceof Error ? e.message : String(e);
+    return false;
+  } finally {
+    giving.value = false;
+  }
+}
+const shownV = ref(0);
+const changesSince = ref(false);
+watch([() => thread.value?.id, () => bodyVersions.value.length], () => ((shownV.value = bodyVersions.value.length), (changesSince.value = false)), { immediate: true });
 
 // the person's reading: the tab (Conversation, or every change in order
 // with the issue as it was), the flow's filters, order and grouping; kept
@@ -228,6 +349,17 @@ const reading = reactive(loadReading());
 watch(reading, saveReading, { deep: true });
 const step = ref<InstanceType<typeof IssueStep> | null>(null);
 const flow = ref<InstanceType<typeof IssueFlow> | null>(null);
+// the description's threads show under its sections when it is rendered
+// and the seg says so; else in the flow (ponytail: while the description
+// is being edited its sections are gone, so are the threads, to the flow)
+const sections = ref<InstanceType<typeof IssueSections> | null>(null);
+const pointers = computed(() => reading.where === 'section' && !!sections.value);
+// a body thread's anchor in the flow: its place in the description
+async function toSection(root: string) {
+  reading.description = true;
+  await nextTick();
+  await sections.value?.unfold(root);
+}
 const focus = ref<string>(); // the file a comment's path:line opens in Changes, step 6 on the page
 function showLine(path: string) {
   if (!props.page) return;
@@ -284,8 +416,9 @@ async function post(body: string, status: 'open' | 'closed' | undefined, n: numb
   return ok;
 }
 
-// a done segment's Show the workspace: that step heads the column
-async function showWorkspace(n: number) {
+// the rail, a divider's Open step, ?step=: that step heads the column
+async function openStep(n: number) {
+  reading.tab = 'conversation';
   step.value?.show(n);
   await nextTick();
   const head = rootEl()?.querySelector<HTMLElement>('.gb-column-body > .gb-eyebrow');
@@ -293,21 +426,18 @@ async function showWorkspace(n: number) {
   head?.focus({ preventScroll: true });
 }
 
-// the rail's jump: the Conversation tab, then the step's segment
-async function jumpTo(n: number) {
-  reading.tab = 'conversation';
-  await nextTick();
-  void flow.value?.jump(n);
-}
-
 // reveal scrolls to a history item and flashes it (a waiting change's
 // row), on the Conversation tab with the flow settled and unfolded first.
 async function reveal(id: string) {
   reading.tab = 'conversation';
-  if (id === created.value?.id) reading.description = true;
+  const e = thread.value?.events.find((x) => x.id === id);
+  // a comment on the description under its section: the section unfolded
+  const under = !!e?.meta?.['thread:anchor'] && reading.where === 'section';
+  if (id === created.value?.id || under) reading.description = true;
   await nextTick();
   await flow.value?.settled();
   flow.value?.unfold(id);
+  if (under) await sections.value?.unfold(rootOf(e!) ?? id);
   await nextTick();
   const el = document.querySelector<HTMLElement>(`[data-event="${CSS.escape(id)}"]`);
   if (!el) return;
@@ -316,6 +446,16 @@ async function reveal(id: string) {
   void el.offsetWidth; // restart the animation on a second click
   el.classList.add('gb-flash');
   setTimeout(() => el.classList.remove('gb-flash'), 1800);
+}
+
+// a milestone's Compare: the description open on that version, its
+// changes since the one before marked
+async function compare(v: number) {
+  Object.assign(reading, { description: true });
+  shownV.value = v;
+  changesSince.value = true;
+  await nextTick();
+  document.querySelector(`[data-event="${CSS.escape(created.value?.id ?? '')}"]`)?.scrollIntoView({ block: 'start', behavior: 'smooth' });
 }
 
 function onRef(n: string, e: MouseEvent) {
@@ -404,6 +544,7 @@ async function reloadStale() {
 </script>
 
 <style scoped>
+.gb-since { display: flex; gap: 6px; align-items: center; font-size: .8125rem; }
 .gb-stale { display: flex; align-items: center; gap: .5rem; margin: 0; padding: .5rem 1rem; background: var(--info-bg); color: var(--info-fg); border-bottom: 1px solid var(--info-border); font-size: .875rem; }
 .gb-stale-btn { padding: 0; border: 0; background: none; color: inherit; font: inherit; font-weight: 700; text-decoration: underline; cursor: pointer; }
 .gb-modes-count { margin-left: .25rem; padding: 0 .375rem; border-radius: var(--radius); background: var(--bg-subtle); color: var(--fg-muted); font-size: .75rem; font-weight: 700; }

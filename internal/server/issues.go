@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -59,6 +60,9 @@ func (s *apiServer) writeThread(w http.ResponseWriter, status int, id string) {
 	for i, e := range th.Events {
 		if e.Body != "" {
 			th.Events[i].HTML = markdown.Render(e.Body, media)
+		}
+		for j, v := range e.History { // the description's versions (sections.ts)
+			th.Events[i].History[j].HTML = markdown.Render(v.Body, media)
 		}
 	}
 	s.annotate(&th)
@@ -128,12 +132,16 @@ func (s *apiServer) handleNewIssue(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleComment comments, and optionally closes or reopens: "Close with
-// comment". A step (1 to 7) puts the comment in that step's discussion.
+// comment". A step (1 to 7) puts the comment in that step's discussion;
+// an anchor on a section of the description, a reply_to in that thread
+// (docs/design/time-flow/protocol.md, the thread:* keys).
 func (s *apiServer) handleComment(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Body   string `json:"body"`
-		Status string `json:"status"`
-		Step   int    `json:"step"`
+		Body    string `json:"body"`
+		Status  string `json:"status"`
+		Step    int    `json:"step"`
+		Anchor  string `json:"anchor"`
+		ReplyTo string `json:"reply_to"`
 	}
 	if !decode(w, r, &req) {
 		return
@@ -146,6 +154,10 @@ func (s *apiServer) handleComment(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, fmt.Errorf("step: 1 to 7, not %d", req.Step))
 		return
 	}
+	if req.Anchor != "" && !bodyAnchor.MatchString(req.Anchor) {
+		writeError(w, http.StatusBadRequest, fmt.Errorf("anchor: body@v<n>/<section>[#<item>], not %q", req.Anchor))
+		return
+	}
 	done, ok := s.beginWrite(w)
 	if !ok {
 		return
@@ -153,13 +165,30 @@ func (s *apiServer) handleComment(w http.ResponseWriter, r *http.Request) {
 	defer done()
 	id := r.PathValue("id")
 	if strings.TrimSpace(req.Body) != "" {
-		var err error
+		meta := map[string]string{}
 		if req.Step > 0 {
-			_, err = s.b.AddCommentMeta(id, req.Body, map[string]string{"cycle:step": strconv.Itoa(req.Step)})
-		} else {
-			_, err = s.b.AddComment(id, req.Body)
+			meta["cycle:step"] = strconv.Itoa(req.Step)
 		}
-		if err != nil {
+		if req.Anchor != "" {
+			meta["thread:anchor"] = req.Anchor
+		}
+		if req.ReplyTo != "" {
+			root, err := s.b.CommentMeta(id, req.ReplyTo)
+			if err != nil {
+				writeIssueError(w, err)
+				return
+			}
+			if root["thread:anchor"] == "" || root["thread:reply-to"] != "" {
+				writeError(w, http.StatusBadRequest, errors.New("reply to a thread's first comment"))
+				return
+			}
+			meta["thread:reply-to"], meta["thread:anchor"] = req.ReplyTo, root["thread:anchor"]
+		}
+		// ponytail: the server reads the fence, so no client forgets the key
+		if meta["thread:anchor"] != "" && suggestion.MatchString(req.Body) {
+			meta["thread:kind"] = "suggestion"
+		}
+		if _, err := s.b.AddCommentMeta(id, req.Body, meta); err != nil {
 			writeIssueError(w, err)
 			return
 		}
@@ -172,6 +201,11 @@ func (s *apiServer) handleComment(w http.ResponseWriter, r *http.Request) {
 	}
 	s.writeThread(w, http.StatusOK, id)
 }
+
+var (
+	bodyAnchor = regexp.MustCompile(`^body@v[1-9][0-9]*/[^/#\s]+(#[1-9][0-9]*)?$`)
+	suggestion = regexp.MustCompile("(?m)^```suggestion[ \t]*$")
+)
 
 func (s *apiServer) handleEditComment(w http.ResponseWriter, r *http.Request) {
 	var req struct {

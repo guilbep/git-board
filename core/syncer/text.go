@@ -7,12 +7,23 @@ import (
 	"time"
 )
 
-// marker names a git-board issue or comment in a text sync posts.
-func marker(kind, id string) string { return "<!-- git-board " + kind + " " + id + " -->" }
+// marker names a git-board issue, comment or version in a text sync
+// posts. quoted says the text starts with a quote line, after its header;
+// keys are the "k=v" pairs a comment's marker carries after its id.
+func marker(kind, id string, quoted bool, keys string) string {
+	if quoted {
+		id += " quoted"
+	}
+	if keys != "" {
+		id += " " + keys
+	}
+	return "<!-- git-board " + kind + " " + id + " -->"
+}
 
 var (
-	markerRE = regexp.MustCompile(`(?:^|\n\n)<!-- git-board (issue|comment) ([0-9a-f]{40}(?::[0-9]+)?) -->$`)
+	markerRE = regexp.MustCompile(`(?:^|\n\n)<!-- git-board (issue|comment|version) ([0-9a-f]{40}(?::[0-9]+)?)( quoted)?((?: [a-z][a-z-]*=[^\s>]*)*) -->$`)
 	headerRE = regexp.MustCompile(`^\*From [^\n]*, \d{4}-\d{2}-\d{2}, (?:in|on) [^\n]*\.\*(?:\n\n|$)`)
+	quoteRE  = regexp.MustCompile(`^> [^\n]*(?:\n\n|$)`)
 )
 
 // header is the line naming who wrote a text, when, and where.
@@ -20,11 +31,11 @@ func header(name string, written int64, where string) string {
 	return "*From " + name + ", " + time.Unix(written, 0).UTC().Format("2006-01-02") + ", " + where + ".*"
 }
 
-// wrapped is a text as sync posts it: a header, the text, a marker. Kind
-// and id are the marker's. fork is the fork's own start of a text it
+// wrapped is a text as sync posts it: a header, a quote, the text, a
+// marker. Kind, id and keys are the marker's. fork is the fork's own start of a text it
 // posted, kept as it is: its marker, forkID its id, and its header, whose
 // link is the original's URL.
-type wrapped struct{ header, body, marker, kind, id, fork, forkID, link string }
+type wrapped struct{ header, quote, body, marker, kind, id, keys, fork, forkID, link string }
 
 // unwrap splits a text sync posted, or the fork did. A text with neither
 // form is all body.
@@ -36,11 +47,15 @@ func unwrap(text string) wrapped {
 		w.body = text[len(w.fork):]
 		return w
 	}
-	w.kind, w.id = text[m[2]:m[3]], text[m[4]:m[5]]
-	w.marker, w.body = marker(w.kind, w.id), text[:m[0]]
+	w.kind, w.id, w.keys = text[m[2]:m[3]], text[m[4]:m[5]], strings.TrimPrefix(text[m[8]:m[9]], " ")
+	w.body = text[:m[0]]
 	if h := headerRE.FindString(w.body); h != "" {
 		w.header, w.body = strings.TrimSuffix(h, "\n\n"), w.body[len(h):]
 	}
+	if q := quoteRE.FindString(w.body); m[6] >= 0 && q != "" {
+		w.quote, w.body = strings.TrimSuffix(q, "\n\n"), w.body[len(q):]
+	}
+	w.mark(w.keys)
 	return w
 }
 
@@ -86,11 +101,14 @@ func commentLinked(link string) (host, id string) {
 // forked says the text is in the fork's form.
 func (w wrapped) forked() bool { return w.fork != "" }
 
+// mark sets the marker for w's kind, id and quote, carrying keys.
+func (w *wrapped) mark(keys string) { w.marker = marker(w.kind, w.id, w.quote != "", keys) }
+
 // String joins the parts that aren't empty with a blank line, after the
 // fork's start.
 func (w wrapped) String() string {
 	var parts []string
-	for _, p := range []string{w.header, w.body, w.marker} {
+	for _, p := range []string{w.header, w.quote, w.body, w.marker} {
 		if p != "" {
 			parts = append(parts, p)
 		}

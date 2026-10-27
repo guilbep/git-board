@@ -33,6 +33,7 @@ type Cycle struct {
 	Risk   string            `toml:"risk"` // the role that sets the risk class
 	Plan   string            `toml:"plan"` // the role that approves the plan
 	Review string            `toml:"review"`
+	Spec   string            `toml:"spec"` // the role that gives the description's verdict
 	// Signoffs maps a validation status to the role that signs it off.
 	Signoffs map[string]string `toml:"signoffs"`
 	// Tests are the suites step 4 runs, Checks the checks that gate Mark
@@ -198,7 +199,7 @@ func (c *Config) Stages() Stages {
 	// the file's kinds over the defaults: a project names only what differs
 	s.Kinds = maps.Clone(defaultKinds)
 	maps.Copy(s.Kinds, k.Kinds)
-	roles := map[string]string{"risk": k.Risk, "plan": k.Plan, "review": k.Review}
+	roles := map[string]string{"spec": k.Spec, "risk": k.Risk, "plan": k.Plan, "review": k.Review}
 	for status, role := range k.Signoffs {
 		roles["signoff:"+status] = role
 	}
@@ -243,7 +244,7 @@ func (s Stages) StageOf(status string) string {
 // checkCycle refuses a gate's role that couldn't be a role name. One that
 // [roles] doesn't name is fine: that gate is anyone's.
 func checkCycle(c Cycle) error {
-	for _, g := range []struct{ key, role string }{{"risk", c.Risk}, {"plan", c.Plan}, {"review", c.Review}} {
+	for _, g := range []struct{ key, role string }{{"spec", c.Spec}, {"risk", c.Risk}, {"plan", c.Plan}, {"review", c.Review}} {
 		if g.role != "" && !roleName.MatchString(g.role) {
 			return fmt.Errorf("[cycle] %s: a role name, not %q", g.key, g.role)
 		}

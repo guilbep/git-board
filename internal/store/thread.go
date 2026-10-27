@@ -42,9 +42,19 @@ type Forge struct {
 
 // Version is one text of an edited comment, oldest first.
 type Version struct {
+	ID     string    `json:"id"` // the text's own, then each edit-text's
 	Author Person    `json:"author"`
 	At     time.Time `json:"at"`
 	Body   string    `json:"body"`
+	HTML   string    `json:"html,omitempty"` // rendered by the server, the description's
+}
+
+// MetaSet is one set-meta operation on a text, oldest first.
+type MetaSet struct {
+	ID     string            `json:"id"`
+	Author Person            `json:"author"`
+	At     time.Time         `json:"at"`
+	Meta   map[string]string `json:"meta"`
 }
 
 // Event is one item of an issue's history: created (with the description),
@@ -70,6 +80,9 @@ type Event struct {
 	// Meta is a comment's metadata: what the cycle's sign-offs, approvals
 	// and runs are, and a review comment's anchor.
 	Meta map[string]string `json:"meta,omitempty"`
+	// MetaHistory is each set-meta on the text, merged into Meta: who
+	// resolved a thread, when, and that "" reopened it.
+	MetaHistory []MetaSet `json:"meta_history,omitempty"`
 
 	Added   []string `json:"added,omitempty"` // labels
 	Removed []string `json:"removed,omitempty"`
@@ -154,13 +167,13 @@ func (b *Backend) thread(is *issue.Issue, l *oplog.Log, v view) Thread {
 			if e.Kind == "create" {
 				ev.Kind, title = "created", d.Title
 			}
-			ev.History = []Version{{Author: ev.Author, At: ev.At, Body: d.Body}}
+			ev.History = []Version{{ID: e.ID, Author: ev.Author, At: ev.At, Body: d.Body}}
 			texts[e.ID] = len(th.Events)
 		case "edit-text":
 			if i, ok := texts[d.Target]; ok {
 				t := &th.Events[i]
 				t.Body = d.Body
-				t.History = append(t.History, Version{Author: ev.Author, At: ev.At, Body: d.Body})
+				t.History = append(t.History, Version{ID: e.ID, Author: ev.Author, At: ev.At, Body: d.Body})
 			}
 			continue
 		case "set-meta":
@@ -170,6 +183,7 @@ func (b *Backend) thread(is *issue.Issue, l *oplog.Log, v view) Thread {
 					t.Meta = map[string]string{}
 				}
 				maps.Copy(t.Meta, d.Meta)
+				t.MetaHistory = append(t.MetaHistory, MetaSet{ID: e.ID, Author: ev.Author, At: ev.At, Meta: maps.Clone(d.Meta)})
 			}
 			continue
 		case "set-title":

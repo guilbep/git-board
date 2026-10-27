@@ -4,6 +4,8 @@ import (
 	"fmt"
 
 	"github.com/guilbep/git-board/core/gitstore"
+	"github.com/guilbep/git-board/core/oplog"
+	"github.com/guilbep/git-board/core/syncer"
 )
 
 // EditRelease is editRelease for the tests: an operation a later
@@ -92,3 +94,19 @@ func Places(bug ForkBug, forges []NamedForge, paths map[string]string) ([]string
 
 // Scratch is scratch for the tests.
 var Scratch = (*Backend).scratch
+
+// Ops is an issue's operations, oldest first: what a write left.
+func Ops(b *Backend, idPrefix string) ([]oplog.Entry, error) {
+	_, l, err := b.issue(idPrefix)
+	if err != nil {
+		return nil, err
+	}
+	return l.Entries, nil
+}
+
+// Meanings are the options meanings gives a sync over s, for the tests.
+func Meanings(s *gitstore.Store) syncer.Options {
+	var opt syncer.Options
+	meanings(s, &opt)
+	return opt
+}

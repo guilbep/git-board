@@ -221,14 +221,14 @@ export interface Forge {
 }
 
 export interface IssueEvent {
-  kind: 'created' | 'comment' | 'labels' | 'status' | 'title' | 'unknown';
+  kind: 'created' | 'comment' | 'labels' | 'status' | 'title' | 'version' | 'unknown'; // version: the flow's own, a description's version published
   id: string; // created, comment: what editComment takes
   author: Person;
   at: string;
   body?: string; // Markdown
   html?: string; // rendered and cleaned by the server
   edited?: boolean;
-  history?: { author: Person; at: string; body: string }[];
+  history?: { id?: string; author: Person; at: string; body: string; html?: string }[]; // id: the text's, then each edit's; html: the description's
   pending?: string[]; // forges the next sync hasn't taken this change to yet
   edit_pending?: string[]; // a comment there already: forges its latest edit hasn't reached
   edit_was?: string; // with edit_pending: the text the forges have
@@ -238,6 +238,7 @@ export interface IssueEvent {
   title?: string;
   was?: string;
   meta?: Record<string, string>; // cycle:step, plan:approve, verify:run, verify:criterion, signoff:status…
+  meta_history?: { id: string; author: Person; at: string; meta: Record<string, string> }[]; // each set-meta merged into meta, oldest first
   review?: Review; // comment: a line comment, a reply or a review
 }
 
@@ -280,8 +281,17 @@ export function createIssue(title: string, body: string, labels: string[]): Prom
 
 // A comment, and/or a status: "Close with comment".
 // step: the cycle step whose discussion the comment is in (0: none, step 1's)
-export function addComment(id: string, body: string, status?: 'open' | 'closed', step = 0): Promise<Thread> {
-  return request(`${issuePath(id)}/comments`, json('POST', { body, status: status ?? '', step }));
+// A comment on the description's thread (docs/design/time-flow/protocol.md):
+// its anchor, or the thread's first comment it replies to.
+export interface ThreadOn { anchor?: string; reply_to?: string }
+
+export function addComment(id: string, body: string, status?: 'open' | 'closed', step = 0, on: ThreadOn = {}): Promise<Thread> {
+  return request(`${issuePath(id)}/comments`, json('POST', { body, status: status ?? '', step, ...on }));
+}
+
+// threadMeta sets thread:resolved and thread:applied on a thread's first comment.
+export function threadMeta(id: string, commentId: string, meta: Record<string, string>): Promise<Thread> {
+  return request(`${issuePath(id)}/comments/${encodeURIComponent(commentId)}/meta`, json('POST', meta));
 }
 
 // base is the text the edit started from: 409 if the comment changed since.
@@ -762,6 +772,7 @@ export interface CycleEvidence {
   kind?: string; // [branches]' kind, for step 4's rule
   criteria?: string[];
   criteria_problems?: string[]; // where the description reads differently from how it looks
+  no_criteria?: boolean; // accepted as it is (intent:criteria=none)
   risk?: string;
   author?: string;
   assignees?: string[];
@@ -1432,3 +1443,8 @@ export function getLint(): Promise<Lint> {
 export function deleteLabel(repo: string, name: string, dryRun: boolean): Promise<{ count?: number }> {
   return request('/api/labels/delete', json('POST', { repo, name, dry_run: dryRun }));
 }
+
+// The description's verdict (internal/server/cycle.go, spec-verdict): on
+// is body@vN, the current version; body is required to request changes.
+export const specVerdict = (id: string, verdict: 'approve' | 'request-changes', on: string, body: string) =>
+  cycleAction(id, 'spec-verdict', { verdict, on, body });

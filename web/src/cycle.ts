@@ -2,6 +2,8 @@
 // step's buttons, the criteria written into the description.
 import type { Cycle, CycleStages, IssueEvent } from './api/board.ts';
 import { approvers, reviewLine } from './review.ts';
+import { versions } from './sections.ts';
+import { verdicts } from './spec.ts';
 import { on } from './when.ts';
 
 // turn is whose move it is: "waits for erin to set the risk class"
@@ -85,7 +87,8 @@ export function steps(c: Cycle, riskBy?: string, events: IssueEvent[] = []): Ste
     switch (n) {
       case 1: {
         const k = e.criteria?.length ?? 0;
-        return k === 0 ? 'no criteria' : `${k} ${k === 1 ? 'criterion' : 'criteria'}`;
+        if (k === 0) return e.no_criteria ? 'accepted without criteria' : 'no criteria';
+        return `${k} ${k === 1 ? 'criterion' : 'criteria'}`;
       }
       case 2:
         return risk ? cap(risk) + (riskBy ? `, set by ${riskBy}` : '') : undefined;
@@ -113,11 +116,15 @@ export function steps(c: Cycle, riskBy?: string, events: IssueEvent[] = []): Ste
     }
     return undefined;
   };
+  // step 1 with a spec role: the version that waits for its verdict (F2)
+  const created = events.find((x) => x.kind === 'created');
+  const v = created ? versions(created).length : 0;
+  const spec = c.waits?.role === 'spec' && created ? `v${v} · ${verdicts(events).findLast((x) => x.v === v)?.verdict === 'request-changes' ? 'changes requested' : 'awaits the verdict'}` : '';
   return STEPS.slice(1).map((name, i) => {
     const n = i + 1;
     const g = n === c.step ? c.gate : gate(n, risk, rule);
     // step 6 under review counts approvals and open threads; merged, its note
-    if (n === c.step && !c.done) return { n, name, state: 'current', line: (c.note || (n === 6 ? reviewLine(c, events) : turn(c))) + (n === 3 ? draft : ''), gate: g };
+    if (n === c.step && !c.done) return { n, name, state: 'current', line: (c.note || spec || (n === 6 ? reviewLine(c, events) : turn(c))) + (n === 3 ? draft : ''), gate: g };
     if (c.skipped?.includes(n)) return { n, name, state: 'skipped', line: `skipped, ${n === 3 ? 'low risk' : (e.kind ?? 'no tests')}`, gate: g };
     if (c.done || n < c.step) return { n, name, state: 'done', line: evidence(n) || g, gate: g };
     return { n, name, state: 'locked', line: LOCKS[n] ?? '', gate: g };
@@ -137,27 +144,41 @@ export function suggestion(events: IssueEvent[]): { risk: string; why: string } 
 export const riskWords = (risk: string) => (risk === 'low' ? 'low skips step 3, Start work opens step 4' : `${risk} opens step 3`);
 
 // The headings and items internal/cycle/cycle.go's Criteria reads.
-const typedItem = /^([-*+]|\d+[.)])\s+|^\[[ xX]\]\s*/;
+const marker = /^\s*([-*+]|\d+[.)])\s+/;
+const box = /^\[([ xX])\]\s*/;
 const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const headingOf = (hs: string[]) => new RegExp(`^\\s*(#{1,6}\\s*|\\*\\*)(${hs.map(esc).join('|')}):?(\\*\\*)?:?\\s*$`, 'i');
 
-// withCriteria is the description with the criteria written as a list:
-// under the first criteria heading it has (the one the server reads),
-// under a new one, the first of headings, at the end otherwise.
+// criterionOf is a line's criterion: its list marker and box stripped,
+// done when the box is ticked
+export function criterionOf(line: string): { text: string; done: boolean } {
+  const t = line.trim().replace(marker, '');
+  return { text: t.replace(box, '').trim(), done: /^\[[xX]\]/.test(t) };
+}
+
+// withCriteria is the description with the criteria written as a "- [ ]"
+// list: in place of the list under the first criteria heading it has (the
+// one the server reads), a criterion ticked there kept ticked; under a new
+// heading, the first of headings, at the end otherwise.
 export function withCriteria(description: string, lines: string[], headings: string[] = ['Acceptance criteria']): string {
-  const list = lines
-    .map((l) => l.trim().replace(typedItem, '').replace(typedItem, '').trim())
-    .filter(Boolean)
-    .map((l) => `- ${l}`);
   const ls = description.split('\n');
   const re = headingOf(headings.length ? headings : ['Acceptance criteria']);
   const h = ls.findIndex((l) => re.test(l));
-  if (h < 0) return `${description.trimEnd()}${description.trim() ? '\n\n' : ''}## ${headings[0] ?? 'Acceptance criteria'}\n\n${list.join('\n')}`;
   let at = h + 1;
-  while (at < ls.length && !ls[at]?.trim()) at++;
+  const ticked = new Set<string>();
+  for (; h >= 0 && at < ls.length && (!ls[at]?.trim() || marker.test(ls[at] ?? '') || box.test(ls[at]?.trim() ?? '')); at++) {
+    const c = criterionOf(ls[at] ?? '');
+    if (c.done) ticked.add(c.text);
+  }
+  const list = lines
+    .map(criterionOf)
+    .filter((c) => c.text)
+    .map((c) => `- [${c.done || ticked.has(c.text) ? 'x' : ' '}] ${c.text}`);
+  if (h < 0) return `${description.trimEnd()}${description.trim() ? '\n\n' : ''}## ${headings[0] ?? 'Acceptance criteria'}\n\n${list.join('\n')}`;
   const rest = ls.slice(at);
   return [...ls.slice(0, h + 1), '', ...list, ...(rest.length ? ['', ...rest] : [])].join('\n');
 }
+
 
 export interface Tile {
   status: string;

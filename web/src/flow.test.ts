@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { CycleStages, IssueEvent } from './api/board.ts';
-import { carries, divider, firstNew, fold, items, pick, READING, readingOf, segments, type Segment } from './flow.ts';
+import { bodyThreads, carries, resolvedBy, divider, firstNew, fold, isResolved, isRoot, items, pick, READING, readingOf, roleOf, rootOf, segments, type Segment } from './flow.ts';
 
 const stages: CycleStages = {
   before: ['backlog'], ready: 'ready', in_progress: ['in-progress'], in_review: ['in-review'],
@@ -164,4 +164,114 @@ test('the reading kept', () => {
   assert.deepEqual(readingOf('[]'), READING);
   assert.deepEqual(readingOf('{"show":"open","newest":true,"tab":3}'), { ...READING, show: 'open', newest: true });
   assert.deepEqual(readingOf('{"show":"bogus","threads":"no","mine":true}'), { ...READING, mine: true });
+});
+
+// body threads (thread:*): a question on §3 › 3 and its reply
+const c7 = ev('c7', 10, { meta: { 'thread:anchor': 'body@v1/expected#3' } });
+const c8 = ev('c8', 11, { meta: { 'thread:anchor': 'body@v1/expected#3', 'thread:reply-to': 'c7' }, author: me });
+const resolved = (v: string) => ({ ...c7, meta: { ...c7.meta, 'thread:resolved': v } });
+const open = (all: IssueEvent[]) => ids(pick(segments(all, stages, 6), all, { ...READING, show: 'open' }, 'me', 6)).filter(([, e]) => e.length);
+
+test('a body reply folds under its root', () => {
+  assert.deepEqual(fold([c7, c8]).map((i) => [i.event.id, i.replies.map((r) => r.id), i.resolved]), [['c7', ['c8'], false]]);
+  assert.equal(rootOf(c8), 'c7');
+  assert.equal(rootOf(c7), undefined);
+  assert.ok(isRoot(c7) && !isRoot(c8) && isRoot(events[8]!) && !isRoot(events[9]!));
+  assert.deepEqual(bodyThreads([...events, c7, c8]).map((i) => [i.event.id, i.replies.map((r) => r.id)]), [['c7', ['c8']]]);
+});
+
+test('pointer lines keep body comments apart', () => {
+  // under their section, the flow lists each body comment on its own, in
+  // time order; review threads still fold
+  const r4 = ev('r4', 12, { review: { path: 'a.go', reply_to: 'r1' } });
+  assert.deepEqual(items({ n: 1, entries: [c7, events[8]!, c8, r4] }, true, true).map((i) => [i.event.id, i.replies.length]), [['c7', 0], ['r1', 1], ['c8', 0]]);
+  assert.deepEqual(items({ n: 1, entries: [c7, c8] }, true).map((i) => i.replies.length), [1]);
+});
+
+test('a body reply without its root stays', () => {
+  assert.deepEqual(fold([c8]), [{ event: c8, replies: [] }]);
+});
+
+test('Open threads counts a body thread', () => {
+  assert.deepEqual(open([...events, c7, c8]), [[6, ['r1', 'c7', 'c8']]]);
+});
+
+test('a resolved body thread is not open', () => {
+  assert.ok(isResolved(resolved('v2')));
+  assert.deepEqual(open([...events, resolved('v2'), c8]), [[6, ['r1']]]);
+});
+
+test('an emptied thread:resolved is open', () => {
+  assert.ok(!isResolved(resolved('')));
+  assert.deepEqual(open([...events, resolved(''), c8]), [[6, ['r1', 'c7', 'c8']]]);
+});
+
+test('pick keeps a thread with no section', () => {
+  const gone = ev('c9', 12, { meta: { 'thread:anchor': 'body@v1/renamed' } });
+  assert.deepEqual(open([...events, gone]), [[6, ['r1', 'c9']]]);
+});
+
+test('who resolved a thread', () => {
+  const t = (v: string) => fold([resolved(v), c8])[0]!;
+  assert.equal(resolvedBy(t('v2'), [c7, c8]), 'resolved by v2');
+  assert.equal(resolvedBy(t('me'), [c7, c8]), 'resolved by Me');
+  assert.equal(resolvedBy(t('someone'), [c7, c8]), 'resolved');
+  assert.equal(resolvedBy(t(''), [c7, c8]), '');
+});
+
+test('readingOf takes where', () => {
+  assert.equal(READING.where, 'section');
+  assert.equal(readingOf('{"where":"flow"}').where, 'flow');
+  assert.equal(readingOf('{"where":"side"}').where, 'section');
+});
+
+test('the role a person holds', () => {
+  const fields = { po: { single: false, options: null, numeric: false, type: 'person', inherits: 'alice' }, risk: { single: true, options: [], numeric: false } };
+  assert.equal(roleOf(fields, 'alice'), 'po');
+  assert.equal(roleOf(fields, 'bob'), undefined);
+  assert.equal(roleOf(fields, undefined), undefined);
+});
+
+// On vN: v2 published at 3; an anchor or spec:on names its version, else the time does
+test('On vN keeps its entries and milestone', () => {
+  const all = [
+    ev('created', 0, { kind: 'created' }),
+    ev('c1', 1),
+    ev('version-2', 3, { kind: 'version' }),
+    ev('version-3', 3, { kind: 'version' }), // v3 in the same second: its own
+    ev('c2', 4),
+    ev('c3', 5, { meta: { 'thread:anchor': 'body@v1/expected' } }),
+    ev('c4', 6, { meta: { 'spec:on': 'body@v1', 'spec:verdict': 'approve' } }),
+  ];
+  const at = (h: number) => new Date(Date.UTC(2026, 9, 21, h)).toISOString();
+  const on = (v: number, from: number, to?: number) => ids(pick(segments(all, undefined, 0), all, { ...READING, show: 'version' }, 'me', 0, { v, from: at(from), ...(to ? { to: at(to) } : {}) }));
+  assert.deepEqual(on(2, 3), [[0, ['version-2', 'c2']]]);
+  assert.deepEqual(on(1, 0, 3), [[0, ['c1', 'c3', 'c4']]]);
+});
+
+test('one version reads as all', () => {
+  const segs = segments(events, stages, 6);
+  assert.deepEqual(pick(segs, events, { ...READING, show: 'version' }, 'me', 6), pick(segs, events, READING, 'me', 6));
+});
+
+test('readingOf takes version', () => {
+  assert.equal(readingOf('{"show":"version"}').show, 'version');
+});
+
+const at = (h: number) => new Date(Date.UTC(2026, 9, 21, h)).toISOString();
+test('segments carry when each step opened', () => {
+  assert.deepEqual(segments(events, stages, 6).map((s) => [s.n, s.at]), [
+    [1, undefined], [2, at(2)], [3, at(4)], [4, at(6)], [5, undefined], [6, at(7)],
+  ]);
+});
+
+test('a late carried comment keeps the bars', () => {
+  const segs = segments([...events.slice(0, 7), ev('c9', 8, step(1))], stages, 4);
+  assert.deepEqual(segs.map((s) => [s.n, s.at]), [[1, undefined], [2, at(2)], [3, at(4)], [4, at(6)]]);
+  // a carried step above the running one opens it
+  assert.equal(segments([...events.slice(0, 2), ev('c9', 3, step(2))], stages, 2)[1]!.at, at(3));
+});
+
+test('readingOf takes changes', () => {
+  assert.equal(readingOf(JSON.stringify({ tab: 'changes' })).tab, 'changes');
 });

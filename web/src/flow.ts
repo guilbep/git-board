@@ -3,9 +3,12 @@
 // Pure: built from the thread the server already sends.
 import type { CycleStages, IssueEvent } from './api/board.ts';
 import { STEPS } from './cycle.ts';
+import type { Fields } from './fields.ts';
 import { threadsOf } from './review.ts';
 
-export interface Segment { n: number; entries: IssueEvent[] }
+// at: when the operation that opened the step ran (History's step bars);
+// step 1 and a step nothing opened have none
+export interface Segment { n: number; entries: IssueEvent[]; at?: string }
 
 const time = (e: IssueEvent) => Date.parse(e.at);
 
@@ -53,42 +56,50 @@ export function segments(events: IssueEvent[], stages: CycleStages | undefined, 
   });
   const last = moves.findLastIndex((m) => m !== undefined);
   const byStep = new Map<number, IssueEvent[]>();
+  const opened = new Map<number, string>();
   let running = 1;
   sorted.forEach((e, i) => {
     let n = running;
+    const was = running;
     const carried = stepOf(e);
     if (moves[i] !== undefined) n = running = up(moves[i]);
     else if (carried) running = Math.max(running, (n = up(carried)));
     else if (e.review) n = up(6);
+    // ponytail: a step opened twice (sent back) keeps its first opening
+    if (running > was && !opened.has(running)) opened.set(running, e.at);
     if (i === last) running = step;
     byStep.set(n, [...(byStep.get(n) ?? []), e]);
   });
   const top = Math.max(step, ...byStep.keys());
   const out: Segment[] = [];
-  for (let n = 1; n <= top; n++) if (!skipped.includes(n)) out.push({ n, entries: byStep.get(n) ?? [] });
+  for (let n = 1; n <= top; n++) {
+    const at = opened.get(n);
+    if (!skipped.includes(n)) out.push({ n, entries: byStep.get(n) ?? [], ...(at ? { at } : {}) });
+  }
   return out;
 }
 
 // A person's reading of the issue page (call 9), kept in the browser.
 export interface Reading {
-  tab: 'conversation' | 'history';
-  show: 'step' | 'all' | 'open';
+  tab: 'conversation' | 'history' | 'changes';
+  show: 'step' | 'all' | 'version' | 'open';
   mine: boolean;
   agent: boolean;
   milestones: boolean;
   newest: boolean;
   threads: boolean;
   description: boolean;
+  where: 'section' | 'flow'; // where a body thread shows (6a's seg)
 }
 
 // A first visit: All, Threads, Oldest first, the description folded.
 export const READING: Reading = {
-  tab: 'conversation', show: 'all', mine: false, agent: false, milestones: false, newest: false, threads: true, description: false,
+  tab: 'conversation', show: 'all', mine: false, agent: false, milestones: false, newest: false, threads: true, description: false, where: 'section',
 };
 
 // readingOf reads the kept reading over READING: a key of the wrong
 // type or an unknown value is dropped, anything broken is READING.
-const ONE_OF: Partial<Record<keyof Reading, string[]>> = { tab: ['conversation', 'history'], show: ['step', 'all', 'open'] };
+const ONE_OF: Partial<Record<keyof Reading, string[]>> = { tab: ['conversation', 'history', 'changes'], show: ['step', 'all', 'version', 'open'], where: ['section', 'flow'] };
 export function readingOf(raw: string | null): Reading {
   let kept: unknown;
   try {
@@ -124,15 +135,26 @@ export function saveReading(r: Reading): void {
   }
 }
 
-// pick applies the filters: one of This step / All / Open threads; Mine,
-// Agent and Milestones narrow it to their union. Segments stay, emptied,
-// so the rail still has its anchors; Newest first reverses them and their
-// entries.
-export function pick(segs: Segment[], events: IssueEvent[], r: Reading, meId: string, step: number): Segment[] {
-  const open = new Set(threadsOf(events).filter((t) => !t.resolved).flatMap((t) => [t.root, ...t.replies].map((e) => e.id)));
+// pick applies the filters: one of This step / All / On vN / Open
+// threads; Mine, Agent and Milestones narrow it to their union. Segments
+// stay, emptied, so the rail still has its anchors; Newest first reverses
+// them and their entries. On vN (on: the version and while it was the
+// current one, from ≤ at < to) keeps what an anchor or spec:on names on
+// it, else what was written meanwhile, its milestone included; without
+// on (one version) it reads as All.
+export interface On { v: number; from: string; to?: string }
+// the version an entry names: a milestone's own (its id "version-N", two
+// edits in one second share a time), an anchor's or spec:on's
+const named = (e: IssueEvent) => Number(e.kind === 'version' ? e.id.slice(8) : /^body@v([1-9]\d*)(\/|$)/.exec(e.meta?.['thread:anchor'] ?? e.meta?.['spec:on'] ?? '')?.[1]);
+export function pick(segs: Segment[], events: IssueEvent[], r: Reading, meId: string, step: number, on?: On): Segment[] {
+  const open = new Set([
+    ...threadsOf(events).filter((t) => !t.resolved).flatMap((t) => [t.root, ...t.replies]),
+    ...bodyThreads(events).filter((t) => !t.resolved).flatMap((t) => [t.event, ...t.replies]),
+  ].map((e) => e.id));
   const narrow = r.mine || r.agent || r.milestones;
   const keep = (e: IssueEvent) =>
     (r.show !== 'open' || open.has(e.id)) &&
+    (r.show !== 'version' || !on || (named(e) ? named(e) === on.v : time(e) >= Date.parse(on.from) && (!on.to || time(e) < Date.parse(on.to)))) &&
     (!narrow || (r.mine && e.author.id === meId) || (r.agent && !!e.meta?.['ai:model']) || (r.milestones && e.kind !== 'comment'));
   const out = segs.filter((s) => r.show !== 'step' || s.n === step).map((s) => ({ n: s.n, entries: s.entries.filter(keep) }));
   return r.newest ? out.reverse().map((s) => ({ n: s.n, entries: s.entries.reverse() })) : out;
@@ -140,20 +162,48 @@ export function pick(segs: Segment[], events: IssueEvent[], r: Reading, meId: st
 
 export interface Item { event: IssueEvent; replies: IssueEvent[]; resolved?: boolean }
 
-// fold is the Threads grouping: a line comment's replies fold under it
+// A thread in either protocol: a review line comment (review:*) or a
+// comment on the body (thread:*, docs/design/time-flow/protocol.md).
+export const rootOf = (e: IssueEvent): string | undefined => e.review?.reply_to || e.meta?.['thread:reply-to'] || undefined;
+export const isRoot = (e: IssueEvent): boolean =>
+  e.review ? !!e.review.path && !e.review.reply_to : !!e.meta?.['thread:anchor'] && !e.meta['thread:reply-to'];
+// "" reopens a body thread (the key cannot be removed, only emptied)
+export const isResolved = (e: IssueEvent): boolean => !!(e.review ? e.review.resolved : e.meta?.['thread:resolved']);
+
+// fold is the Threads grouping: a thread's replies fold under its root
 // when it is among the entries, in either order; a reply without it
-// stands alone.
-export function fold(entries: IssueEvent[]): Item[] {
-  const roots = new Map<string, Item>(entries.filter((e) => e.review?.path && !e.review.reply_to)
-    .map((e) => [e.id, { event: e, replies: [], resolved: !!e.review!.resolved }]));
+// stands alone. apart leaves body threads unfolded (the flow's pointer
+// lines, one per comment).
+export function fold(entries: IssueEvent[], apart = false): Item[] {
+  const roots = new Map<string, Item>(entries.filter((e) => isRoot(e) && !(apart && e.meta?.['thread:anchor'])).map((e) => [e.id, { event: e, replies: [], resolved: isResolved(e) }]));
   const items: Item[] = [];
   for (const e of entries) {
-    const root = e.review?.reply_to ? roots.get(e.review.reply_to) : undefined;
+    const id = rootOf(e);
+    const root = id ? roots.get(id) : undefined;
     if (root) root.replies.push(e);
     else items.push(roots.get(e.id) ?? { event: e, replies: [] });
   }
   return items;
 }
+
+// bodyThreads are the threads on the description, in time order.
+export const bodyThreads = (events: IssueEvent[]): Item[] =>
+  fold(events.filter((e) => e.meta?.['thread:anchor'])).filter((t) => isRoot(t.event));
+
+// resolvedBy words a body thread's thread:resolved: "resolved by v2" (an
+// Apply), "resolved by Person B" (a participant), "resolved" (someone the
+// events do not name); "" while open
+export function resolvedBy(t: Item, events: IssueEvent[]): string {
+  const v = t.event.meta?.['thread:resolved'];
+  if (!v) return '';
+  const who = /^v[1-9][0-9]*$/.test(v) ? v : events.find((e) => e.author.id === v)?.author.name;
+  return who ? `resolved by ${who}` : 'resolved';
+}
+
+// roleOf is the project role a person holds ([roles]): the first person
+// field whose project value is their login.
+export const roleOf = (fields: Fields, login: string | undefined): string | undefined =>
+  login ? Object.entries(fields).find(([, f]) => f.type === 'person' && f.inherits === login)?.[0] : undefined;
 
 // carries is the step a new comment is written in, as its segment's
 // divider names it: "07 Verify"; nothing without a cycle.
@@ -174,8 +224,8 @@ export function divider(s: Segment, current: boolean): string {
 
 // items are a segment's entries as the column lists them: Threads folds
 // the replies under their line comment, Flat lists each on its own.
-export const items = (s: Segment, threads: boolean): Item[] =>
-  threads ? fold(s.entries) : s.entries.map((event) => ({ event, replies: [] }));
+export const items = (s: Segment, threads: boolean, apart = false): Item[] =>
+  threads ? fold(s.entries, apart) : s.entries.map((event) => ({ event, replies: [] }));
 
 // firstNew is the item the "new since your last visit" line goes above:
 // the first one holding an entry written after `since` by someone else, a

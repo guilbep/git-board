@@ -29,8 +29,9 @@ type server struct {
 	extra      map[string][]map[string]any                   // more notes, by issue number
 	before     func(http.ResponseWriter, *http.Request) bool // answers instead of the server when true
 
-	mu     sync.Mutex
-	tokens map[string]forge.Account
+	mu      sync.Mutex
+	tokens  map[string]forge.Account
+	threads map[string]string // a reply's note id: its thread's first note's
 }
 
 // serve gives the adapter over f, served by a new server for the project at
@@ -86,6 +87,8 @@ func (s *server) routes() http.Handler {
 	s.handle(m, "POST "+p+"/issues/{iid}/notes", s.comment)
 	s.handle(m, "PUT "+p+"/issues/{iid}/notes/{note}", s.edit)
 	s.handle(m, "GET "+p+"/issues/{iid}/resource_state_events", s.states)
+	s.handle(m, "GET "+p+"/issues/{iid}/discussions", s.discussions)
+	s.handle(m, "POST "+p+"/issues/{iid}/discussions/{d}/notes", s.reply)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if s.before == nil || !s.before(w, r) {
 			m.ServeHTTP(w, r)
@@ -428,4 +431,52 @@ func (s *server) states(w http.ResponseWriter, r *http.Request, _ forge.Forge) {
 		items = append(items, map[string]any{"id": 8_000_000 + num(is.Number), "state": state, "created_at": ts(t)})
 	}
 	s.page(w, r, items)
+}
+
+// discussions are the issue's comments as threads: each its own, "d" and
+// its id, but the replies, in their first note's.
+func (s *server) discussions(w http.ResponseWriter, r *http.Request, _ forge.Forge) {
+	is, ok := s.get(w, r)
+	if !ok {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var items []any
+	at := map[string]map[string]any{}
+	for _, c := range is.Comments {
+		if root, ok := s.threads[c.ID]; ok && at[root] != nil {
+			at[root]["notes"] = append(at[root]["notes"].([]any), noteJSON(c))
+			continue
+		}
+		d := map[string]any{"id": "d" + c.ID, "notes": []any{noteJSON(c)}}
+		at[c.ID] = d
+		items = append(items, d)
+	}
+	s.page(w, r, items)
+}
+
+func (s *server) reply(w http.ResponseWriter, r *http.Request, view forge.Forge) {
+	is, ok := s.get(w, r)
+	if !ok {
+		return
+	}
+	var in struct{ Body string }
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		reply(w, 400, map[string]string{"message": err.Error()})
+		return
+	}
+	root := strings.TrimPrefix(r.PathValue("d"), "d")
+	c, err := view.(forge.Replier).Reply(r.Context(), is.Ref(), root, in.Body)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	s.mu.Lock()
+	if s.threads == nil {
+		s.threads = map[string]string{}
+	}
+	s.threads[c.ID] = root
+	s.mu.Unlock()
+	reply(w, 201, noteJSON(c))
 }

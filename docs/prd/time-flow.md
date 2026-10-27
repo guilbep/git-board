@@ -44,7 +44,7 @@ Taken with the user on 2026-10-26. Not reopened here.
 | A version is an edit that changes text | The body's versions are counted, never stored: the n-th `edit-text` on the body that changes text is v*n*. An edit that only flips `- [ ]` to `- [x]` (a tick, step 7) is not a version. |
 | What becomes of a thread when a version is published | Carried: its section is unchanged, the thread stays open on the new version. Outdated: its section changed and nobody resolved it; it stays open, marked "written on v1, §4 changed in v2". Resolved: by Apply (a suggested edit applied) or by a person. All three are shown in 6b. |
 | Suggested edits | A comment may carry a replacement for its anchored line (a ```suggestion block). The author of the body may *Apply in v*N+1 (writes the next version, resolves the thread) or *Decline*. |
-| Steps are segments | The flow is cut into segments at the operations that opened each step. *This step* and *All* are filters of the flow, not rooms; so are *Open threads*, *On v*N, *Mine*, *Agent*. The step rail jumps to a segment. The composer carries the current step, as today (`cycle:step`). |
+| Steps are segments | The flow is cut into segments at the operations that opened each step. *This step* and *All* are filters of the flow, not rooms; so are *Open threads*, *On v*N, *Mine*, *Agent*. The step rail opens a step at the head of the column. The composer carries the current step, as today (`cycle:step`). |
 | Mid-cycle | From step 2 on, the current step's workspace (the plan, the test runs, the diff, the ticks) heads the column, above the folded description; its segment of the flow follows (6g). The workspaces are row 5's, unchanged inside. |
 | Order and grouping | *Oldest first / Newest first*. *Flat / Threads*: in Threads, a thread folds to its root's first words plus a count and a state. A "new since your last visit" line, from what `lastvisit.ts` already knows. |
 | GitHub stays readable | Every comment is posted flat, in time order. An anchored comment carries a quote header; a suggestion keeps its block; the keys ride in the marker sync already hides on the last line. GitLab gets a discussion per thread. Nothing on the forge needs git-board to be read. |
@@ -130,16 +130,17 @@ calls 2, 5, 6 and 9 need the user's eye.
    The upgrade is the server replaying `internal/cycle` over the issue's
    operations.
 4. **The step rail's entries are links.** A done or current step is an
-   `<a href="#/issues/<id>?step=N">`; a click scrolls to the segment's
-   divider and moves focus to it (a click with a modifier key opens the
-   link as the browser does), and the link opened elsewhere lands on the
-   page scrolled there. A locked or skipped step stays an entry with its
+   `<a href="#/issues/<id>?step=N">`; a click opens that step at the head
+   of the column and moves focus to it (a click with a modifier key opens
+   the link as the browser does), and the link opened elsewhere lands on
+   the page with that step open. Revised 2026-10-27: a click that only
+   scrolled to the segment hid the step, and the step is what a click on
+   the rail is for. A locked or skipped step stays an entry with its
    reason, not a link, as today.
 5. **A done step's workspace stays one click away.** Today a done step
    picked on the bar shows its workspace (the approved plan, the sign-offs).
-   The rail now jumps to the segment, so a done segment's divider carries
-   *Show the workspace*, which brings that step's workspace to the head of
-   the column with today's "Back to step N".
+   The rail does that, and a done segment's divider carries *Open step N ·
+   Name*, the same thing from the flow, with today's "Back to step N".
 6. **The workspace heads the column at step 7 too.** 6c (step 7) draws the
    column without a workspace because it is about the flow; the Mid-cycle
    decision names "the ticks", which are step 7's. At step 1 the
@@ -214,7 +215,8 @@ every proposal.
    narrow it to an author; the three are a union.
 7. **A done step's workspace** (call 5): the divider's *Show the
    workspace*, or should a rail click also bring it to the head, as
-   today? Settled: the divider's button; the rail only jumps.
+   today? Settled: the divider's button; the rail only jumps. Revised
+   2026-10-27: both open the step (call 4).
 8. **The design folder.** It was handed over untracked, one level too
    deep. Settled: the plan's pull request carries it as
    `docs/design/time-flow/` (one level, as the brief and this PRD name

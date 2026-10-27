@@ -89,12 +89,15 @@ A text goes to a project in that project's form:
    [Mentions and references](#mentions-and-references));
 2. a header first, when sync posted it there for someone without a token
    (see [Posting for people without a token](#posting-for-people-without-a-token));
-3. a marker last, when sync created it there (see [Markers](#markers)).
+3. a quote after the header, for a comment the application gives one
+   (`Options.Quote`; git-board's says where a thread comment is anchored):
+   one Markdown quote line, `> …`;
+4. a marker last, when sync created it there (see [Markers](#markers)).
 
-The parts are joined by a blank line (`\n\n`). The header and the marker a
-text has on a project stay the ones it was created with: sync takes them
+The parts are joined by a blank line (`\n\n`). The header, the quote and
+the marker a text has on a project stay the ones it was created with: sync takes them
 from its last seen value there. So the form changes only when the text
-does. A title, a status, labels and assignees have no header and no
+does, or a comment's keys (see [Markers](#markers)). A title, a status, labels and assignees have no header and no
 marker. A title is translated too.
 
 ### What git-board took from a forge
@@ -327,8 +330,40 @@ line:
 ```
 
 The first names an issue, in its body. The second names a comment, by its
-id. Pulled back, a text sync's accounts posted loses its header and its
-marker.
+id. A third kind, `<!-- git-board version <id> -->`, ends the note sync
+posts after pushing a new body, when the application gives one
+(`Options.Published`; git-board's reads `**Published v2** · § Expected
+changed`): it is posted once per id, by the body edit's author, recorded
+with a `posted` under that id, and never pulled as a comment. Pulled back, a text sync's accounts posted loses its header, its quote
+and its marker.
+
+A comment's marker also carries keys of its metadata, after its id, as
+`key=value` pairs separated by spaces; which keys, under which names, is
+the application's (`Options.Carry`; git-board's are in
+`docs/design/time-flow/protocol.md`):
+
+```text
+<!-- git-board comment 9c41e5b1d97f2a63c18e0b4d5f6a7928e3b1c0d4:7 step=1 anchor=body@v1/expected#3 -->
+```
+
+A comment posted under a quote has the word `quoted` after its id, before
+its keys: pulled back, its text loses the quote line only then, so a text
+of its own starting with a quote keeps it.
+
+The keys are rebuilt from the comment's metadata each run, so a metadata
+change alone edits the forge comment. A forge edit of a comment sync
+posted sets the metadata its marker's keys say (`Options.Restore`); with
+the marker deleted, the comment is plain text from then on, and Restore
+says which keys that clears. A comment never edited on the forge comes
+back by its record, its metadata untouched.
+
+On a forge whose comments form threads (GitLab's discussions,
+`forge.Replier`), a reply is posted in its root's thread: `Options.ReplyTo`
+names the root, and the root's forge comment is its record's. With the
+root not posted, or gone from the forge, the reply is a comment like any
+other. GitLab can't resolve an issue's thread through its API, so the
+thread's state stays in the keys. GitHub's comments are flat: the quote
+line says what a reply answers.
 
 ## Posting for people without a token
 

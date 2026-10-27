@@ -231,6 +231,7 @@ func (b *Backend) forgeSync(ctx context.Context, run ForgeRun, way syncWay, issu
 			return run.DryRun // counted as with consent, which the run asks for
 		},
 	}
+	meanings(s, &opt)
 	return way(ctx, s, opt, fs...)
 }
 

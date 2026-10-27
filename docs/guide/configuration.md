@@ -380,10 +380,11 @@ Every key has a default, so a project writes only what the guess got wrong, and 
 | `in-progress` | guessed | Steps 4 and 5: the failing test, then the code and the PR. |
 | `in-review` | guessed | Step 6: the review. |
 | `validation` | guessed | Step 7, one sign-off per status, in the options' order. Signing off the last one moves the issue to the closing status and closes it. With none, Verify happens in in-review once the PR is merged, and its sign-off closes the issue. |
-| `criteria` | `"Acceptance criteria"`, `"Done when"`, `"Expected"` | The headings a description's acceptance criteria are listed under, any heading level or a bold line, in any case, with or without a colon. The first one the description has counts. |
+| `criteria` | `"Acceptance criteria"`, `"Done when"`, `"Expected"` | The headings a description's acceptance criteria are listed under, any heading level or a bold line, in any case, with or without a colon. The first one the description has counts. Step 1 edits that list a row at a time and writes it as `- [ ]` checkboxes; a list with no heading above it is flagged. |
 | `plans` | `"docs/src/implementation-plans"` | Where plan files live: Markdown whose front matter's `issue:` names the issue (`2518`, `"#2518"`, `CO2-2518`, or its git-bug id's first 7 characters), and whose `status:` (`accepted`, `in-progress` or `delivered`) approves the plan. |
 | `plans-in-pr` | `true` | The agent started at step 3 commits its plan and opens a draft PR holding it; Review opens once that PR is marked ready. `false` keeps plans out of PRs: the plan is committed on the branch and the PR opens at step 5. |
 | `test-files` | `*_test.go`, `*.test.ts`, `*.spec.ts`, `test_*.py`, `tests/**` | Which changed files are tests, by path or base name; `dir/**` is everything under `dir`. Before M4 this key was `tests`, which now names the suites (Tests and checks, below): a list there is refused. |
+| `spec` | none | The role (`[roles]`) that gives the description's verdict: its *Approve v*N moves the status to `ready`. Unset, the author moves it, and anyone but the author may approve. |
 | `risk` | none | The role (`[roles]`) that sets the risk class. |
 | `plan` | none | The role that approves the plan. |
 | `review` | none | The role that reviews the PR. |
@@ -396,6 +397,7 @@ Each step's button moves the status, through the same edit as the status field:
 | Button | Who | Moves the status to |
 | --- | --- | --- |
 | Move to ready | the author, once the description lists a criterion | `ready` |
+| Approve v*N* (the verdict bar) | the `spec` role, once the description lists a criterion; set, it replaces Move to ready | `ready` |
 | Approve the plan | the `plan` role | the first `in-progress` |
 | Start work | the assignee, at low risk or once the plan is approved | the first `in-progress` |
 | Mark ready for review | the assignee, with a test, or at once when step 4 is skipped, once every check is proven at the branch's head (Tests and checks, below) | the first `in-review` |
@@ -435,7 +437,8 @@ Intent warns, naming the line, where the description reads differently from how 
 The card writes:
 - **Set the risk:** a field edit.
 - **Approve the plan:** a `plan:approve` comment. A structural plan is approved on its PR on GitHub instead.
-- **Post the run, and tick a criterion:** `verify:run` and `verify:criterion` comments, with the commit they were made at.
+- **Go on without criteria:** an `intent:criteria=none` comment, for an issue from before git-board that has none. Step 1 counts as done and Verify asks for the sign-off alone; criteria written later take over. With `[cycle] spec` set, only that role's holder presses it; without it, anyone.
+- **Post the run, and tick a criterion:** `verify:run` and `verify:criterion` comments, with the commit they were made at. A criterion's `[ ]` box in the description is ticked too: a tick, not a new version. An item with no box keeps the comment alone, since adding the box would be an edit.
 - **Sign off:** a `signoff:status` comment, then the next status. A sign-off needs a run at the branch's head, or a reason, written as `signoff:why`.
 
 A comment is the viewer's when git-board's identity wrote it, since the server writes as that identity. Anyone else's comment counts under its author's forge login. The server refuses a card action from anyone but the gate's person with `waits for the <role> role: <login>`.

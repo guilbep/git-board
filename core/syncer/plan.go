@@ -71,19 +71,49 @@ func changedAt(fi forge.Issue, field string) int64 {
 	return fi.Updated
 }
 
-// wrapLike gives a text the header and marker last seen had, if sync
-// posted it, or the fork's start, if the fork did: the fork's copies end
-// without spaces or blank lines, so a text in its form does too.
-func wrapLike(seen, body string, posted bool) string {
+// wrapLike gives a text the header and marker last seen had, the marker
+// carrying keys, if sync posted it, or the fork's start, if the fork did:
+// the fork's copies end without spaces or blank lines, so a text in its
+// form does too.
+func wrapLike(seen, body, keys string, posted bool) string {
 	w := unwrap(seen)
 	switch {
 	case w.forked():
 		body = strings.TrimRight(body, " \t\r\n")
 	case !posted || w.marker == "":
 		return body
+	default:
+		w.mark(keys)
 	}
 	w.body = body
 	return w.String()
+}
+
+// replyTo is the comment a comment replies to, as Options.ReplyTo says.
+func (r *run) replyTo(meta map[string]string) string {
+	if r.opt.ReplyTo == nil {
+		return ""
+	}
+	return r.opt.ReplyTo(meta)
+}
+
+// post posts a comment: on a forge with threads, a reply to the forge
+// comment to, when there is one and it is still there.
+func (r *run) post(fw forge.Forge, ref forge.Ref, to, body string) (forge.Comment, error) {
+	if rp, ok := fw.(forge.Replier); ok && to != "" {
+		if fc, err := rp.Reply(r.ctx, ref, to, body); !errors.Is(err, forge.ErrNotFound) {
+			return fc, err
+		}
+	}
+	return fw.CreateComment(r.ctx, ref, body)
+}
+
+// carry is what a comment's marker carries, as Options.Carry says.
+func (r *run) carry(meta map[string]string) string {
+	if r.opt.Carry == nil {
+		return ""
+	}
+	return r.opt.Carry(meta)
 }
 
 // plain is a text as git-board keeps it: without the fork's start.
@@ -110,6 +140,7 @@ type textField struct {
 	ft              int64
 	guard           []*oplog.Origin
 	pullOp          func(v string) oplog.Op
+	restore         func(f string) []oplog.Op // a pull's ops besides the text's; nil for none
 	write           func(fw forge.Forge, v string) error
 }
 
@@ -147,6 +178,9 @@ func (r *run) plan(p *project, is *issue.Issue, fi forge.Issue, who map[string]s
 			if v != t.cur || origin(t.ch) != key {
 				pl.ops = append(pl.ops, t.pullOp(v))
 			}
+			if t.restore != nil {
+				pl.ops = append(pl.ops, t.restore(t.f)...)
+			}
 			if seen[t.name] != t.f {
 				pl.sops = append(pl.sops, seenOp(is.Author, now, is.ID, t.name, t.f))
 			}
@@ -170,10 +204,14 @@ func (r *run) plan(p *project, is *issue.Issue, fi forge.Issue, who map[string]s
 		ch: ch["title"], ft: changedAt(fi, "title"),
 		pullOp: func(v string) oplog.Op { return from(issue.SetTitle(a, v), key, ev, changedAt(fi, "title")) },
 		write:  func(fw forge.Forge, v string) error { return fw.SetTitle(r.ctx, fi.Ref(), v) }})
-	text(&pl.text, textField{name: "body", cur: is.Body, g: wrapLike(seen["body"], r.form(p, is.Body, origin(ch["body"]), false), posted), f: fi.Body,
+	titled := len(pl.text)
+	text(&pl.text, textField{name: "body", cur: is.Body, g: wrapLike(seen["body"], r.form(p, is.Body, origin(ch["body"]), false), "", posted), f: fi.Body,
 		posted: posted, ch: ch["body"], ft: changedAt(fi, "body"),
 		pullOp: func(v string) oplog.Op { return from(issue.EditText(a, is.BodyOp, v), key, ev, changedAt(fi, "body")) },
 		write:  func(fw forge.Forge, v string) error { return fw.SetBody(r.ctx, fi.Ref(), v) }})
+	if len(pl.text) > titled && r.opt.Published != nil { // the body is pushed
+		r.planPublished(pl, p, is, fi, unwrap(fi.Body).body)
+	}
 	text(&pl.rest, textField{name: "status", cur: string(is.Status), g: string(is.Status), f: fi.Status,
 		ch: ch["status"], ft: changedAt(fi, "status"),
 		pullOp: func(v string) oplog.Op {
@@ -219,6 +257,12 @@ func (r *run) plan(p *project, is *issue.Issue, fi forge.Issue, who map[string]s
 			sent = true
 			pl.sops = append(pl.sops, postedOp(is.Author, now, is.ID, c.ID, fc.ID), seenOp(is.Author, now, is.ID, field, fc.Body))
 			seen = withSeen(seen, field, fc.Body)
+		} else if w.kind == "version" && r.isSync(p, fc.Author) {
+			// a published version's note: sync's own, never a comment
+			if p.st.posted[[2]string{is.ID, w.id}] == "" {
+				pl.sops = append(pl.sops, postedOp(is.Author, now, is.ID, w.id, fc.ID), seenOp(is.Author, now, is.ID, field, fc.Body))
+			}
+			continue
 		} else if who != nil {
 			// a mirror the fork posted: git-board's copy of the original is
 			// the forge's, recorded as posted. The original's text wins: last
@@ -247,10 +291,21 @@ func (r *run) plan(p *project, is *issue.Issue, fi forge.Issue, who map[string]s
 			ft = fc.Edited
 		}
 		cid, fcID, ca := c.ID, fc.ID, who[fc.Author.ID]
-		text(&pl.comments, textField{name: field, cur: c.Body, g: wrapLike(seen[field], r.form(p, c.Body, origin(cch), false), sent), f: fc.Body,
+		meta := c.Meta
+		text(&pl.comments, textField{name: field, cur: c.Body, g: wrapLike(seen[field], r.form(p, c.Body, origin(cch), false), r.carry(meta), sent), f: fc.Body,
 			posted: sent, ch: cch, ft: ft, guard: []*oplog.Origin{c.Origin},
 			pullOp: func(v string) oplog.Op { return from(issue.EditText(ca, cid, v), key, field, ft) },
-			write:  func(fw forge.Forge, v string) error { return fw.EditComment(r.ctx, fi.Ref(), fcID, v) }})
+			restore: func(f string) []oplog.Op {
+				if !sent || r.opt.Restore == nil {
+					return nil
+				}
+				w := unwrap(f)
+				if m := r.opt.Restore(w.keys, w.marker != "", meta); len(m) > 0 {
+					return []oplog.Op{from(issue.SetMeta(ca, cid, m), key, field, ft)}
+				}
+				return nil
+			},
+			write: func(fw forge.Forge, v string) error { return fw.EditComment(r.ctx, fi.Ref(), fcID, v) }})
 	}
 	if push {
 		for _, c := range is.Comments {
@@ -263,7 +318,11 @@ func (r *run) plan(p *project, is *issue.Issue, fi forge.Issue, who map[string]s
 				continue
 			}
 			_, direct := r.writer(p, c.Author)
-			w := wrapped{body: r.form(p, c.Body, origin(cch), false), marker: marker("comment", c.ID)}
+			w := wrapped{body: r.form(p, c.Body, origin(cch), false), kind: "comment", id: c.ID}
+			if r.opt.Quote != nil {
+				w.quote = r.opt.Quote(is.ID, c)
+			}
+			w.mark(r.carry(c.Meta))
 			if !direct {
 				w.header = r.header(c.Author, c.Time, c.Origin, is.ID)
 			}
@@ -273,13 +332,35 @@ func (r *run) plan(p *project, is *issue.Issue, fi forge.Issue, who map[string]s
 			}
 			pl.comments = append(pl.comments, func(x *pushing) error {
 				return r.send(x, c.Author, field, []string{body}, func(fw forge.Forge) ([]oplog.Op, error) {
-					fc, err := fw.CreateComment(r.ctx, fi.Ref(), body)
+					fc, err := r.post(fw, fi.Ref(), x.p.st.posted[[2]string{is.ID, r.replyTo(c.Meta)}], body)
 					return []oplog.Op{postedOp(is.Author, time.Now().Unix(), is.ID, cid, fc.ID), rec("comment:"+fc.ID, body)}, err
 				})
 			})
 		}
 	}
 	return pl, nil
+}
+
+// planPublished plans the note of the version the body push publishes,
+// as Options.Published says, unless posted already: recorded, or found by
+// its marker.
+func (r *run) planPublished(pl *plan, p *project, is *issue.Issue, fi forge.Issue, before string) {
+	id, note := r.opt.Published(is.ID, before, is.Body)
+	if id == "" || p.st.posted[[2]string{is.ID, id}] != "" || slices.ContainsFunc(fi.Comments, func(fc forge.Comment) bool {
+		w := unwrap(fc.Body)
+		return w.kind == "version" && w.id == id && r.isSync(p, fc.Author)
+	}) {
+		return
+	}
+	w := wrapped{body: note, kind: "version", id: id}
+	w.mark("")
+	body, author := w.String(), is.Changes["body"].Author
+	pl.text = append(pl.text, func(x *pushing) error {
+		return r.send(x, author, "version:"+id, []string{body}, func(fw forge.Forge) ([]oplog.Op, error) {
+			fc, err := fw.CreateComment(r.ctx, fi.Ref(), body)
+			return []oplog.Op{postedOp(is.Author, time.Now().Unix(), is.ID, id, fc.ID), seenOp(is.Author, time.Now().Unix(), is.ID, "comment:"+fc.ID, body)}, err
+		})
+	})
 }
 
 // mirrored is the comment of is that fc mirrors, or that mirrors fc, as the

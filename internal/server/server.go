@@ -161,6 +161,7 @@ func newMux(s *apiServer, static http.Handler) http.Handler {
 	mux.HandleFunc("POST /api/issues/{id}/agent/{action}", s.handleIssueAgentAction)
 	mux.HandleFunc("POST /api/issues/{id}/comments", s.handleComment)
 	mux.HandleFunc("PUT /api/issues/{id}/comments/{comment}", s.handleEditComment)
+	mux.HandleFunc("POST /api/issues/{id}/comments/{comment}/meta", s.handleThreadMeta)
 	mux.HandleFunc("PUT /api/issues/{id}/title", s.handleTitle)
 	mux.HandleFunc("PUT /api/issues/{id}/status", s.handleStatus)
 	mux.HandleFunc("POST /api/issues/{id}/labels", s.handleLabels)

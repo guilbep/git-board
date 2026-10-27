@@ -11,7 +11,7 @@
     "dev": "quasar dev",
     "build": "quasar build",
     "typecheck": "vue-tsc --noEmit",
-    "test": "node --test src/gate.test.ts src/facets.test.ts src/richtext.test.ts src/history.test.ts src/linediff.test.ts src/toml.test.ts src/configsnippets.test.ts src/panelsize.test.ts src/viewfilter.test.ts src/valueicons.test.ts src/replay.test.ts src/roadmap.test.ts src/initials.test.ts src/tablecols.test.ts src/lastvisit.test.ts src/palette.test.ts src/issuesync.test.ts src/timeline.test.ts src/lanes.test.ts src/donut.test.ts src/settingstabs.test.ts src/addforge.test.ts src/ways.test.ts src/inboxcheck.test.ts src/numbers.test.ts src/cycle.test.ts src/work.test.ts src/review.test.ts src/releases.test.ts src/worktrees.test.ts src/labels.test.ts src/steptests.test.ts src/flow.test.ts",
+    "test": "node --test src/gate.test.ts src/facets.test.ts src/richtext.test.ts src/history.test.ts src/linediff.test.ts src/toml.test.ts src/configsnippets.test.ts src/panelsize.test.ts src/viewfilter.test.ts src/valueicons.test.ts src/replay.test.ts src/roadmap.test.ts src/initials.test.ts src/tablecols.test.ts src/lastvisit.test.ts src/palette.test.ts src/issuesync.test.ts src/timeline.test.ts src/lanes.test.ts src/donut.test.ts src/settingstabs.test.ts src/addforge.test.ts src/ways.test.ts src/inboxcheck.test.ts src/numbers.test.ts src/cycle.test.ts src/work.test.ts src/review.test.ts src/releases.test.ts src/worktrees.test.ts src/labels.test.ts src/steptests.test.ts src/flow.test.ts src/sections.test.ts src/spec.test.ts",
     "postinstall": "quasar prepare --silent"
   },
   "dependencies": {

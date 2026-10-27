@@ -81,3 +81,14 @@ func (b *Backend) CommentReview(idPrefix, commentID string) (*Review, error) {
 	}
 	return reviewOf(meta), nil
 }
+
+// CommentMeta is the metadata of one of an issue's comments, as set-meta
+// left it: what a thread's checks read.
+func (b *Backend) CommentMeta(idPrefix, commentID string) (map[string]string, error) {
+	is, l, err := b.issue(idPrefix)
+	if err != nil {
+		return nil, err
+	}
+	_, _, meta, err := text(is, l, commentID)
+	return meta, err
+}

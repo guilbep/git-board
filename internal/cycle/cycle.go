@@ -73,10 +73,13 @@ type Input struct {
 	Criteria []string      `json:"criteria,omitempty"`
 	// CriteriaProblems are the description's warnings (Criteria)
 	CriteriaProblems []string `json:"criteria_problems,omitempty"`
-	Risk             string   `json:"risk,omitempty"`
-	Kind             string   `json:"kind,omitempty"` // [branches]' kind: step 4's rule (Stages.KindRule)
-	Author           string   `json:"author,omitempty"`
-	Assignees        []string `json:"assignees,omitempty"`
+	// NoCriteria: an intent:criteria=none comment accepted the issue as
+	// it is (one from before git-board); criteria written later take over
+	NoCriteria bool     `json:"no_criteria,omitempty"`
+	Risk       string   `json:"risk,omitempty"`
+	Kind       string   `json:"kind,omitempty"` // [branches]' kind: step 4's rule (Stages.KindRule)
+	Author     string   `json:"author,omitempty"`
+	Assignees  []string `json:"assignees,omitempty"`
 	// People is the login holding each gate for this issue, "" for
 	// nobody: "risk", "plan", "review", and "signoff:<status>".
 	People map[string]string `json:"people,omitempty"`
@@ -194,11 +197,12 @@ func Compute(in Input) Cycle {
 	}
 	w := Waits{Role: "author", Login: in.Author, What: "add acceptance criteria"}
 	act := "" // what the step's person presses, when it is theirs
+	criteria := len(in.Criteria) > 0 || in.NoCriteria
 	switch stage {
 	case "ready":
 		switch {
-		case len(in.Criteria) == 0:
-			c.Step = 1
+		case !criteria:
+			c.Step, act = 1, "no-criteria"
 		case in.Risk == "":
 			c.Step, w, act = 2, Waits{Role: "risk", Login: in.People["risk"], What: "set the risk class"}, "set-risk"
 		case in.Risk == "low" || approved:
@@ -255,7 +259,13 @@ func Compute(in Input) Cycle {
 		}
 	default: // before ready, or a status no option names
 		c.Step = 1
-		if len(in.Criteria) > 0 && in.Stages.Ready != "" {
+		switch {
+		case !criteria:
+			act = "no-criteria"
+		case in.Stages.Ready == "":
+		case in.People["spec"] != "": // the verdict moves the status (docs/prd/time-flow.md, open point 1)
+			w, act = Waits{Role: "spec", Login: in.People["spec"], What: "give the verdict on the description"}, "spec-verdict"
+		default:
 			w.What, act = "move the status to "+in.Stages.Ready, "move-ready"
 		}
 	}
@@ -263,8 +273,13 @@ func Compute(in Input) Cycle {
 	w.Anyone = w.Login == ""
 	c.Waits = w
 	c.Mine = w.Anyone || (in.Me != "" && strings.EqualFold(w.Login, in.Me))
+	// accepting an issue as it is: its author's, the spec role's, or, with
+	// no spec role, anyone's (an issue from before has an author who may
+	// never open git-board)
+	spec := in.People["spec"]
+	open := act == "no-criteria" && (spec == "" || (in.Me != "" && strings.EqualFold(spec, in.Me)))
 	switch {
-	case !c.Mine || act == "":
+	case act == "" || !c.Mine && !open:
 	case act == "verify":
 		c.Actions = []string{"verify", "check", "signoff"}
 	default:
@@ -285,8 +300,32 @@ var (
 // warnings Intent shows, each naming its line: where the description
 // reads differently from how it looks.
 func Criteria(description string, headings []string) (items, problems []string) {
+	items, _, problems = criteria(description, headings)
+	return items, problems
+}
+
+// TickCriterion is the description with criterion i's "[ ]" box ticked;
+// false when it has no such box (ticked already, an item with no box: a
+// box added would be an edit, not a tick, so a version) or no such item.
+func TickCriterion(description string, headings []string, i int) (string, bool) {
+	_, at, _ := criteria(description, headings)
+	if i < 0 || i >= len(at) {
+		return description, false
+	}
+	lines := strings.Split(description, "\n")
+	l := lines[at[i]]
+	m := criteriaItem.FindStringSubmatchIndex(l)
+	if m[6] < 0 || l[m[6]:m[6]+3] != "[ ]" {
+		return description, false
+	}
+	lines[at[i]] = l[:m[6]] + "[x]" + l[m[6]+3:]
+	return strings.Join(lines, "\n"), true
+}
+
+// criteria is Criteria with each item's line, 0-based.
+func criteria(description string, headings []string) (items []string, at []int, problems []string) {
 	if len(headings) == 0 {
-		return nil, nil
+		return nil, nil, nil
 	}
 	q := make([]string, len(headings))
 	for i, h := range headings {
@@ -294,24 +333,24 @@ func Criteria(description string, headings []string) (items, problems []string) 
 	}
 	heading := regexp.MustCompile(`(?i)^\s*(#{1,6}\s*|\*\*)(` + strings.Join(q, "|") + `):?(\*\*)?:?\s*$`)
 	lines := strings.Split(description, "\n")
-	at, ended, indent := -1, false, -1
+	head, ended, indent := -1, false, -1
 	for i, l := range lines {
 		switch m := criteriaItem.FindStringSubmatch(l); {
 		case heading.MatchString(l):
-			if at < 0 {
-				at = i
+			if head < 0 {
+				head = i
 			} else {
 				problems = append(problems, fmt.Sprintf("line %d: a second criteria heading, ignored: only the first list counts", i+1))
 				ended = true
 			}
-		case at < 0 || ended || strings.TrimSpace(l) == "":
+		case head < 0 || ended || strings.TrimSpace(l) == "":
 		case m != nil:
 			if indent < 0 {
 				indent = len(m[1])
 			} else if len(m[1]) > indent {
 				problems = append(problems, fmt.Sprintf("line %d: a sub-item, counted as a criterion of its own", i+1))
 			}
-			items = append(items, strings.TrimSpace(m[4]))
+			items, at = append(items, strings.TrimSpace(m[4])), append(at, i)
 		default:
 			ended = true
 			if len(items) > 0 && !anyHeading.MatchString(l) && itemBeforeHeading(lines[i+1:]) {
@@ -319,10 +358,37 @@ func Criteria(description string, headings []string) (items, problems []string) 
 			}
 		}
 	}
-	if at >= 0 && len(items) == 0 {
-		problems = append(problems, fmt.Sprintf("line %d: no list right under “%s”", at+1, strings.Trim(strings.TrimSpace(lines[at]), "#* :")))
+	if head >= 0 && len(items) == 0 {
+		problems = append(problems, fmt.Sprintf("line %d: no list right under “%s”", head+1, strings.Trim(strings.TrimSpace(lines[head]), "#* :")))
 	}
-	return items, problems
+	if head < 0 {
+		// ponytail: the last list, the likeliest criteria; a list under
+		// another heading is that heading's
+		if l := bareList(lines); l >= 0 {
+			problems = append(problems, fmt.Sprintf("line %d: a list with no heading above it; if these are the criteria, put “## %s” over it", l+1, strings.TrimSpace(headings[0])))
+		}
+	}
+	return items, at, problems
+}
+
+// bareList is the line the description's last list starts on when no
+// heading is right above it, -1 otherwise.
+func bareList(lines []string) int {
+	start := -1
+	for i := len(lines) - 1; i >= 0; i-- {
+		l := lines[i]
+		switch {
+		case criteriaItem.MatchString(l):
+			start = i
+		case strings.TrimSpace(l) == "":
+		case start >= 0:
+			if anyHeading.MatchString(l) {
+				return -1
+			}
+			return start
+		}
+	}
+	return start
 }
 
 // itemBeforeHeading: a list item comes before the next heading.

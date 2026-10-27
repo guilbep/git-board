@@ -7,10 +7,11 @@
       <img v-if="event.author.avatar_url" class="gb-avatar gb-avatar-sm" :src="event.author.avatar_url" alt="" />
       <span v-else class="gb-avatar gb-avatar-sm" :class="{ 'gb-avatar-dark': mine }" aria-hidden="true">{{ initials(event.author.name) }}</span>
       <b>{{ event.author.name }}</b>
-      <span class="gb-time">{{ verb }} {{ on(event.at, true) }}</span>
+      <span v-if="role" class="gb-role">{{ role }}</span>
+      <span v-if="v" class="gb-time">wrote the description, <b class="gb-ver">v{{ v }}</b> · {{ on(event.at, true) }}</span>
+      <span v-else class="gb-time">{{ verb }} {{ on(event.at, true) }}<template v-if="anchor"> · on <button type="button" class="gb-anchor" @click="emit('anchor')">{{ anchor }}</button></template></span>
       <span v-if="step" class="gb-time">· step {{ step }}</span>
       <span v-if="review?.state" class="gb-mono gb-time">at {{ review.commit?.slice(0, 7) }}</span>
-      <span v-if="event.kind === 'created'" class="gb-tag">Description</span>
       <details v-if="event.edited && event.history" class="gb-hist">
         <summary>edited<GbIcon name="down" small /></summary>
         <div class="gb-hist-pop">
@@ -37,7 +38,9 @@
           </span>
         </template>
       </template>
-      <button v-if="!editing && editable(event)" type="button" class="gb-icon-btn" :aria-label="`Edit ${mine ? 'your' : event.author.name + '’s'} ${event.kind === 'created' ? 'description' : 'comment'}`" @click="startEdit">
+      <slot name="head" />
+      <button v-if="!editing && v" type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" :aria-label="`Edit ${mine ? 'your' : event.author.name + '’s'} description: publishes v${v + 1}`" @click="startEdit">Edit · publishes v{{ v + 1 }}</button>
+      <button v-else-if="!editing && editable(event)" type="button" class="gb-icon-btn" :aria-label="`Edit ${mine ? 'your' : event.author.name + '’s'} ${event.kind === 'created' ? 'description' : 'comment'}`" @click="startEdit">
         <GbIcon name="edit" />
       </button>
     </header>
@@ -63,8 +66,8 @@
         <span v-if="review.resolved" class="gb-tag">resolved</span>
         <pre v-if="review.text" class="gb-mono gb-comment-quote">{{ review.text }}</pre>
       </div>
-      <MarkdownBody v-if="event.html" class="gb-comment-body" :html="event.html" :forges="forges" @ref="(n, e) => emit('ref', n, e)" />
-      <p v-else-if="!review" class="gb-comment-body gb-hint">No description.</p>
+      <p v-if="!event.html && !review" class="gb-comment-body gb-hint">No description.</p>
+      <slot v-else-if="event.html"><MarkdownBody class="gb-comment-body" :html="event.html" :forges="forges" @ref="(n, e) => emit('ref', n, e)" /></slot>
     </template>
 
   </article>
@@ -79,6 +82,7 @@ import MarkdownBody from '@/components/MarkdownBody.vue';
 import MarkdownEditor from '@/components/MarkdownEditor.vue';
 import { editable, verbOf } from '@/review';
 import { stepOf } from '@/flow';
+import { version } from '@/sections';
 
 const props = defineProps<{
   event: IssueEvent;
@@ -86,8 +90,10 @@ const props = defineProps<{
   mine: boolean;
   // saves an edit; base is the text it started from (409 "changed" if not current)
   save: (id: string, body: string, base: string) => Promise<unknown>;
+  role?: string | undefined; // the author's project role: "po"
+  anchor?: string | undefined; // a body thread root's anchor: "§3 › 3"
 }>();
-const emit = defineEmits<{ ref: [n: string, event: MouseEvent]; line: [path: string] }>();
+const emit = defineEmits<{ ref: [n: string, event: MouseEvent]; line: [path: string]; anchor: [] }>();
 
 const uid = useId();
 const editing = ref(false);
@@ -104,6 +110,8 @@ const review = computed(() => props.event.review);
 // the step the comment was written in, as its segment's divider says it
 const step = computed(() => (stepOf(props.event) ? String(stepOf(props.event)).padStart(2, '0') : undefined));
 const verb = computed(() => verbOf(props.event));
+// the description's version, 0 for a comment
+const v = computed(() => (props.event.kind === 'created' ? version(props.event) : 0));
 
 // newest first, as the menu lists them
 const versions = computed(() => [...(props.event.history ?? [])].reverse());
@@ -134,6 +142,7 @@ async function saveEdit(anyway = false) {
 
 <style scoped>
 .gb-save-error { display: flex; gap: .375rem; align-items: center; margin: 0; padding: .5rem 1rem; color: var(--danger-fg); background: var(--danger-bg); font-size: .875rem; }
+.gb-ver { color: var(--fg); }
 .gb-alert-row { margin: 0; border-radius: 0; }
 .gb-comment-anchor { display: flex; flex-wrap: wrap; align-items: center; gap: .375rem; padding: .5rem 1rem 0; }
 .gb-comment-line { padding: 0; border: 0; background: none; color: var(--primary); font-weight: 700; text-decoration: underline; cursor: pointer; }

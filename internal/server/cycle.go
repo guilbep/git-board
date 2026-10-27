@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -167,7 +168,10 @@ var errNotAtVerify = errors.New("not at Verify")
 // criterion), signoff (which then moves the status on, closing the issue
 // after the last validation status), ready-for-review (the status move
 // step 4's checks gate, checks.go), suggest-risk (the AI's class, a
-// comment: the risk stays a person's). The risk and the other status moves
+// comment: the risk stays a person's), spec-verdict (the description's
+// approval or changes requested, on its current version; an approval
+// before ready then moves the status to ready), no-criteria (an issue
+// accepted as it is, intent:criteria=none). The risk and the other status moves
 // are fields: PATCH the issue.
 func (s *apiServer) handleCycleAction(w http.ResponseWriter, r *http.Request) {
 	action := r.PathValue("action")
@@ -179,7 +183,7 @@ func (s *apiServer) handleCycleAction(w http.ResponseWriter, r *http.Request) {
 		s.suggestRisk(w, r)
 		return
 	}
-	if !slices.Contains([]string{"approve-plan", "verify", "check", "signoff"}, action) {
+	if !slices.Contains([]string{"approve-plan", "verify", "check", "signoff", "spec-verdict", "no-criteria"}, action) {
 		writeError(w, http.StatusNotFound, fmt.Errorf("no cycle action %q", action))
 		return
 	}
@@ -188,6 +192,10 @@ func (s *apiServer) handleCycleAction(w http.ResponseWriter, r *http.Request) {
 		Commit string `json:"commit"`
 		Index  *int   `json:"index"`
 		Why    string `json:"why"`
+		// spec-verdict: approve or request-changes, on body@vN, the comment
+		Verdict string `json:"verdict"`
+		On      string `json:"on"`
+		Body    string `json:"body"`
 	}
 	if !decode(w, r, &req) {
 		return
@@ -234,6 +242,47 @@ func (s *apiServer) handleCycleAction(w http.ResponseWriter, r *http.Request) {
 		if c := cmp.Or(ev.Head, ev.PlanHead); c != "" {
 			meta["plan:commit"] = c
 		}
+	case "spec-verdict":
+		v := bodyVersion(th)
+		if req.Verdict != "approve" && req.Verdict != "request-changes" {
+			writeError(w, http.StatusBadRequest, errors.New("verdict: approve or request-changes"))
+			return
+		}
+		if req.On != fmt.Sprintf("body@v%d", v) {
+			writeError(w, http.StatusConflict, fmt.Errorf("v%d is published: give the verdict on it", v))
+			return
+		}
+		if login := ev.People["spec"]; login != "" {
+			if waitsFor(cfg.Cycle.Spec, login) {
+				return
+			}
+		} else if ev.Author != "" && strings.EqualFold(ev.Author, s.viewer()) {
+			writeError(w, http.StatusForbidden, errors.New("the description's author does not approve it"))
+			return
+		}
+		body = strings.TrimSpace(req.Body)
+		switch {
+		case req.Verdict == "request-changes" && body == "":
+			writeError(w, http.StatusBadRequest, errors.New("say which changes"))
+			return
+		case req.Verdict == "approve" && len(ev.Criteria) == 0 && !ev.NoCriteria:
+			// adding them is an edit, so a version this approval isn't on
+			writeError(w, http.StatusBadRequest, errors.New("add acceptance criteria first"))
+			return
+		}
+		// the first line bold, so the forge reads the verdict as git-board does
+		head := fmt.Sprintf("**Approved v%d of the description**", v)
+		if req.Verdict == "request-changes" {
+			head = fmt.Sprintf("**Changes requested on v%d of the description**", v)
+		}
+		body = strings.TrimSuffix(head+"\n\n"+body, "\n\n")
+		meta["spec:verdict"], meta["spec:on"], meta["cycle:step"] = req.Verdict, req.On, "1"
+	case "no-criteria":
+		if !slices.Contains(cur.Actions, action) {
+			writeError(w, http.StatusForbidden, fmt.Errorf("not yours: step 1 waits for %s to %s", cmp.Or(cur.Waits.Login, "anyone"), cur.Waits.What))
+			return
+		}
+		body, meta["intent:criteria"], meta["cycle:step"] = "Accepted without acceptance criteria", "none", "1"
 	case "verify":
 		if !atVerify {
 			writeError(w, http.StatusBadRequest, errNotAtVerify)
@@ -310,8 +359,23 @@ func (s *apiServer) handleCycleAction(w http.ResponseWriter, r *http.Request) {
 		writeIssueError(w, err)
 		return
 	}
+	// a check ticks its box in the description too: a tick, not a version
+	if desc := th.Events[0]; action == "check" {
+		if ticked, ok := cycle.TickCriterion(desc.Body, cur.Stages.Criteria, *req.Index); ok {
+			if err := s.b.EditComment(id, desc.ID, ticked, desc.Body); err != nil {
+				writeIssueError(w, err)
+				return
+			}
+		}
+	}
 	if action == "approve-plan" && cur.Stage == "ready" && len(cur.Stages.InProgress) > 0 {
 		if _, err := fields.Apply(s.b, cfg, id, "status", cur.Stages.InProgress[0], s.me, time.Now()); err != nil {
+			writeError(w, http.StatusInternalServerError, err)
+			return
+		}
+	}
+	if action == "spec-verdict" && req.Verdict == "approve" && cur.Step == 1 && cur.Stages.Ready != "" {
+		if _, err := fields.Apply(s.b, cfg, id, "status", cur.Stages.Ready, s.me, time.Now()); err != nil {
 			writeError(w, http.StatusInternalServerError, err)
 			return
 		}
@@ -439,4 +503,23 @@ func at(sha string) string {
 		return ""
 	}
 	return " at " + sha[:min(7, len(sha))]
+}
+
+// unticked is a text with its task boxes unticked: a tick is no version.
+var unticked = regexp.MustCompile(`(?m)^(\s*[-*+]\s+)\[[ xX]\]`)
+
+// bodyVersion is the description's version, as web/src/sections.ts
+// counts it: 1 + each edit that changes the text past its ticks.
+func bodyVersion(th store.Thread) int {
+	v := 1
+	if len(th.Events) == 0 || th.Events[0].Kind != "created" {
+		return v
+	}
+	h := th.Events[0].History
+	for i := 1; i < len(h); i++ {
+		if unticked.ReplaceAllString(h[i].Body, "$1[ ]") != unticked.ReplaceAllString(h[i-1].Body, "$1[ ]") {
+			v++
+		}
+	}
+	return v
 }

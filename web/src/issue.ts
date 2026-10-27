@@ -3,8 +3,8 @@
 // the page never patches it by hand.
 import { ref, watch, type Ref } from 'vue';
 import {
-  addComment, ApiError, changeLabels, editComment, getThread, postReview, resolveReview, setStatus, setTitle,
-  type ReviewRequest, type Thread,
+  addComment, ApiError, changeLabels, editComment, getThread, postReview, resolveReview, setStatus, setTitle, threadMeta,
+  type ReviewRequest, type Thread, type ThreadOn,
 } from '@/api/board';
 import { untilSyncEnds } from '@/forges';
 
@@ -77,7 +77,19 @@ export function useIssue(id: Ref<string>, onChange: (t: Thread) => void = () => 
     saveError,
     saveCode,
     load,
-    comment: (body: string, status?: 'open' | 'closed', step = 0) => write(() => addComment(id.value, body, status, step)),
+    comment: (body: string, status?: 'open' | 'closed', step = 0, on?: ThreadOn) => write(() => addComment(id.value, body, status, step, on)),
+    // "" reopens; a person's id, or "v2" once applied
+    resolveThread: (root: string, value: string) => write(() => threadMeta(id.value, root, { 'thread:resolved': value })),
+    // Apply: the description's edit, then the root's keys with the new
+    // version's id. Throws as edit does; a refused edit writes nothing on
+    // the root. ponytail: two calls, not atomic: a failed second one
+    // leaves the edit and an open thread to resolve by hand
+    apply: async (root: string, body: string, base: string, version: number) => {
+      const created = () => thread.value?.events.find((e) => e.kind === 'created');
+      if (!(await write(() => editComment(id.value, created()!.id, body, base), true))) return false;
+      const edit = created()?.history?.at(-1)?.id ?? '';
+      return write(() => threadMeta(id.value, root, { 'thread:resolved': `v${version}`, 'thread:applied': edit }));
+    },
     // throws: the comment card shows why (ApiError code "changed")
     edit: (commentId: string, body: string, base: string) => write(() => editComment(id.value, commentId, body, base), true),
     rename: (title: string) => write(() => setTitle(id.value, title)),

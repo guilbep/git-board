@@ -65,6 +65,7 @@ func Gather(b *store.Backend, cfg *config.Config, th store.Thread, me string, pu
 		return board.FieldValue(th.Issue, role)
 	}
 	in.People["risk"], in.People["plan"], in.People["review"] = holder(cfg.Cycle.Risk), holder(cfg.Cycle.Plan), holder(cfg.Cycle.Review)
+	in.People["spec"] = holder(cfg.Cycle.Spec)
 	for status, role := range cfg.Cycle.Signoffs {
 		in.People["signoff:"+status] = holder(role)
 	}
@@ -85,6 +86,8 @@ func Gather(b *store.Backend, cfg *config.Config, th store.Thread, me string, pu
 			in.Signoffs = append(in.Signoffs, Signoff{Status: m["signoff:status"], By: by, Commit: m["signoff:commit"], Why: m["signoff:why"], At: at})
 		case m["verify:run"] != "":
 			in.Runs = append(in.Runs, Run{By: by, Commit: m["verify:commit"], At: at})
+		case m["intent:criteria"] == "none":
+			in.NoCriteria = true
 		case m["verify:criterion"] != "":
 			if i, err := strconv.Atoi(m["verify:criterion"]); err == nil {
 				in.Checks = append(in.Checks, Check{Index: i, By: by, Commit: m["verify:commit"], At: at})
