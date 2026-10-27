@@ -7,6 +7,7 @@
       <MarkdownBody class="gb-sec-md" :html="s.html" :forges="forges" @ref="(n, e) => emit('ref', n, e)" />
       <div class="gb-gut">
         <span class="gb-anchor">§{{ s.n }} {{ s.heading || 'intro' }}</span>
+        <span v-if="changed(s)">{{ changed(s) }}</span>
         <button v-if="!threadsIn(s).length" type="button" class="gb-tchip is-ghost" :aria-expanded="composing === s.slug" @click="composing = s.slug">Comment on §{{ s.n }}</button>
         <button v-else-if="inFlow" type="button" class="gb-tchip" :class="{ 'is-open': threadsIn(s).some((t) => !t.resolved) }" @click="emit('flow', (threadsIn(s).find((t) => !t.resolved) ?? threadsIn(s)[0]!).event.id)">{{ chip(s) }}</button>
         <button v-else type="button" class="gb-tchip" :class="{ 'is-open': threadsIn(s).some((t) => !t.resolved) }" :aria-expanded="open.has(s.slug)" @click="toggle(s.slug)">{{ chip(s) }}</button>
@@ -47,10 +48,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, reactive, ref, useTemplateRef } from 'vue';
-import type { Forge, IssueEvent } from '@/api/board';
+import { computed, nextTick, reactive, ref, useTemplateRef, watch } from 'vue';
+import { renderMarkdown, type Forge, type IssueEvent } from '@/api/board';
 import { bodyThreads, resolvedBy, type Item } from '@/flow';
-import { anchorOf, sectionsOf, version, type Section } from '@/sections';
+import { anchorOf, changeOf, diffMarkdown, sectionsOf, type BodyVersion, type Section } from '@/sections';
 import type { Fields } from '@/fields';
 import IssueComposer from '@/components/IssueComposer.vue';
 import MarkdownBody from '@/components/MarkdownBody.vue';
@@ -58,6 +59,11 @@ import ThreadCard from '@/components/ThreadCard.vue';
 
 const props = defineProps<{
   html: string;
+  // the body's versions, the one shown and whether its changes since the
+  // one before are marked (the card head's seg and checkbox)
+  versions: BodyVersion[];
+  shown: number;
+  since: boolean;
   events: IssueEvent[];
   forges?: Forge[] | null | undefined;
   // the composer under a section, as the flow's: the issue's status, the
@@ -79,7 +85,27 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{ ref: [n: string, event: MouseEvent]; flow: [root: string] }>();
 
-const sections = computed(() => sectionsOf(props.html));
+// the version shown, or its diff against the one before once rendered:
+// the plain text until the server answers, the last request's answer only
+const diff = ref<string>();
+let asked = 0;
+watch(() => [props.shown, props.since, props.versions] as const, async ([k, since, vs]) => {
+  const n = ++asked;
+  diff.value = undefined;
+  if (!since || k < 2) return;
+  const { html } = await renderMarkdown(diffMarkdown(vs[k - 2]!.body, vs[k - 1]!.body));
+  if (n === asked) diff.value = html;
+}, { immediate: true });
+const sections = computed(() => sectionsOf(diff.value ?? props.versions[props.shown - 1]?.html ?? props.html));
+// a gutter's change against the version before: nothing on v1
+const before = computed(() => (props.shown > 1 ? sectionsOf(props.versions[props.shown - 2]!.html) : undefined));
+const shownSections = computed(() => sectionsOf(props.versions[props.shown - 1]?.html ?? props.html));
+function changed(s: Section): string {
+  const now = shownSections.value.find((x) => x.slug === s.slug);
+  if (!before.value || !now) return '';
+  const c = changeOf(before.value, now);
+  return c === 'unchanged' ? 'unchanged' : c === 'changed' ? `changed in v${props.shown}` : `› ${c} changed in v${props.shown}`;
+}
 // a section's threads: those whose anchor names its slug, any version
 // (ponytail: M3 tells a carried thread from an outdated one)
 const threads = computed(() => bodyThreads(props.events));
@@ -87,8 +113,8 @@ const threadsIn = (s: Section): Item[] => threads.value.filter((t) => anchorOf(t
 
 const open = reactive(new Set<string>()); // the sections whose threads are unfolded
 const composing = ref<string>(); // the section whose composer is open: one at a time
-// the body's version, which a new anchor names
-const v = computed(() => version(props.events.find((e) => e.kind === 'created')!));
+// the version a new anchor names: the one shown
+const v = computed(() => props.shown || 1);
 async function post(anchor: string, body: string) {
   const ok = await props.comment(anchor, body);
   if (ok) composing.value = undefined;
@@ -136,6 +162,8 @@ function chip(s: Section): string {
 .gb-sec:first-child { border-top: 0; padding-top: 0; }
 .gb-gut { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; font-size: .75rem; color: var(--fg-muted); }
 .gb-sec :deep(.gb-md > :first-child) { margin-top: 0; }
+.gb-sec :deep(ins) { background: var(--gb-green-bg); color: var(--gb-green-fg); text-decoration: none; padding: 1px 4px; }
+.gb-sec :deep(del) { background: var(--gb-red-bg); color: var(--gb-red-fg); padding: 1px 4px; }
 /* the README's widths are the viewport's: the gutter keeps 164 px down to 720 */
 @media (max-width: 719.98px) {
   .gb-sec { grid-template-columns: minmax(0, 1fr); }

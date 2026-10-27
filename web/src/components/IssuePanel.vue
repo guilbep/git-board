@@ -112,9 +112,18 @@
           </div>
           <template v-else-if="created">
             <CommentCard :data-event="created.id" :event="created" :forges="thread.forges" :mine="created.author.id === meId" :save="edit" :role="roleOf(fields, created.author.login)" @ref="onRef">
+              <template v-if="bodyVersions.length > 1" #head>
+                <span class="gb-seg gb-seg-sm" role="group" aria-label="Version">
+                  <button v-for="bv in bodyVersions" :key="bv.n" type="button" :aria-pressed="bv.n === shownV" @click="shownV = bv.n">v{{ bv.n }}</button>
+                </span>
+                <label v-if="shownV > 1" class="gb-since"><input v-model="changesSince" type="checkbox" /> Changes since v{{ shownV - 1 }}</label>
+              </template>
               <IssueSections
                 ref="sections"
                 :html="created.html!"
+                :versions="bodyVersions"
+                :shown="shownV"
+                :since="changesSince"
                 :events="thread.events"
                 :forges="thread.forges"
                 :status="thread.status"
@@ -212,7 +221,7 @@ import CycleReview from '@/components/CycleReview.vue';
 import CommentCard from '@/components/CommentCard.vue';
 import HistoryView from '@/components/HistoryView.vue';
 import { carries, loadReading, roleOf, rootOf, saveReading } from '@/flow';
-import { version } from '@/sections';
+import { version, versions } from '@/sections';
 import { steps } from '@/replay';
 import GbIcon from '@/components/GbIcon.vue';
 import IssueComposer from '@/components/IssueComposer.vue';
@@ -264,6 +273,12 @@ watch(
 const meId = computed(() => me.value?.me?.id ?? '');
 const since = ref<number | null>(null);
 const created = computed(() => thread.value?.events.find((e) => e.kind === 'created'));
+// the description's versions, the one shown (the current one on each
+// issue and each new version: not remembered) and Changes since
+const bodyVersions = computed(() => (created.value ? versions(created.value) : []));
+const shownV = ref(0);
+const changesSince = ref(false);
+watch([() => thread.value?.id, () => bodyVersions.value.length], () => ((shownV.value = bodyVersions.value.length), (changesSince.value = false)), { immediate: true });
 
 // the person's reading: the tab (Conversation, or every change in order
 // with the issue as it was), the flow's filters, order and grouping; kept
@@ -463,6 +478,7 @@ async function reloadStale() {
 </script>
 
 <style scoped>
+.gb-since { display: flex; gap: 6px; align-items: center; font-size: .8125rem; }
 .gb-stale { display: flex; align-items: center; gap: .5rem; margin: 0; padding: .5rem 1rem; background: var(--info-bg); color: var(--info-fg); border-bottom: 1px solid var(--info-border); font-size: .875rem; }
 .gb-stale-btn { padding: 0; border: 0; background: none; color: inherit; font: inherit; font-weight: 700; text-decoration: underline; cursor: pointer; }
 .gb-modes-count { margin-left: .25rem; padding: 0 .375rem; border-radius: var(--radius); background: var(--bg-subtle); color: var(--fg-muted); font-size: .75rem; font-weight: 700; }

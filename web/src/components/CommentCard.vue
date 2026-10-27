@@ -38,6 +38,7 @@
           </span>
         </template>
       </template>
+      <slot name="head" />
       <button v-if="!editing && v" type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" :aria-label="`Edit ${mine ? 'your' : event.author.name + '’s'} description: publishes v${v + 1}`" @click="startEdit">Edit · publishes v{{ v + 1 }}</button>
       <button v-else-if="!editing && editable(event)" type="button" class="gb-icon-btn" :aria-label="`Edit ${mine ? 'your' : event.author.name + '’s'} ${event.kind === 'created' ? 'description' : 'comment'}`" @click="startEdit">
         <GbIcon name="edit" />
