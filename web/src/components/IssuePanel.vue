@@ -166,6 +166,7 @@
           <IssueChanges
             v-else-if="reading.tab === 'changes'"
             :thread="thread"
+            :cycle="cycle"
             :me-id="meId"
             :fields="fields"
             :busy="saving"

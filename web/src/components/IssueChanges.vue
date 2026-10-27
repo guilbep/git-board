@@ -69,12 +69,40 @@
         </section>
       </article>
     </template>
+
+    <div class="ic-head">
+      <h2 class="ic-title">The code<template v-if="ev?.branch"> · <span class="gb-mono">{{ ev.branch }}</span></template><template v-if="ev?.pr"> · <a :href="ev.pr.url" target="_blank" rel="noopener noreferrer">PR #{{ ev.pr.number }}<span class="gb-sr">(opens in a new tab)</span></a>, {{ ev.pr.draft ? 'draft' : ev.pr.state.toLowerCase() }}</template></h2>
+      <span v-if="changes" class="ic-muted">{{ plural(changes.commits.length, 'commit') }} · {{ plural(changes.files.length, 'file') }} · +{{ sum('added') }} −{{ sum('deleted') }}</span>
+    </div>
+    <p v-if="!ev?.branch" class="ic-muted">No branch yet.</p>
+    <p v-if="error" class="ic-muted">{{ error }}</p>
+    <div v-if="changes?.commits.length" class="ic-scroll">
+      <table class="ic-table">
+        <thead><tr><th>Commit</th><th>Message</th><th>Who</th><th>When</th></tr></thead>
+        <tbody>
+          <tr v-for="c in changes.commits" :key="c.sha"><td class="gb-mono">{{ c.sha.slice(0, 7) }}</td><td>{{ c.subject }}</td><td>{{ c.author }}</td><td>{{ when(c.date, true) }}</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <template v-if="changes?.files.length">
+      <p class="gb-eyebrow">Files</p>
+      <ul class="ic-files">
+        <li v-for="f in changes.files" :key="f.path"><span class="gb-mono">{{ f.from ? `${f.from} → ` : '' }}{{ f.path }}</span><span v-if="f.binary" class="ic-muted">binary</span><span v-else class="gb-mono"><span class="ic-ok">+{{ f.added }}</span> <span class="ic-ko">−{{ f.deleted }}</span></span></li>
+      </ul>
+    </template>
+    <template v-if="ev?.plan">
+      <p class="gb-eyebrow">The plan</p>
+      <p class="ic-small">
+        <span class="gb-mono">{{ ev.plan.path }}</span><template v-if="ev.plan.status"> · {{ ev.plan.status }}</template><template v-if="ev.plan.by"> · by {{ nameOf(ev.plan.by) }}</template><template v-if="ev.plan_approval"> · approved by {{ nameOf(ev.plan_approval.by) }}, {{ on(ev.plan_approval.at) }}</template>
+      </p>
+    </template>
   </section>
 </template>
 
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue';
-import { renderMarkdown, type Thread } from '@/api/board';
+import { getChanges, renderMarkdown, type Changes, type Cycle, type Thread } from '@/api/board';
+import { message } from '@/issue';
 import type { Fields } from '@/fields';
 import { bodyThreads, isRoot, resolvedBy, type Item } from '@/flow';
 import { on, when } from '@/me';
@@ -85,6 +113,7 @@ import ThreadCard from '@/components/ThreadCard.vue';
 
 const props = defineProps<{
   thread: Thread;
+  cycle?: Cycle | null | undefined;
   // a thread's card, as under a section: its edit, reply, Resolve, Apply
   meId: string;
   fields: Fields;
@@ -165,6 +194,24 @@ const firstWords = (body?: string) => {
 };
 const shown = reactive(new Set<string>()); // the threads unfolded
 
+// the code: the branch's commits and files, as the Code step reads them; read only
+const ev = computed(() => props.cycle?.evidence);
+const changes = ref<Changes | null>(null);
+const error = ref('');
+watch(() => [props.thread.id, ev.value?.branch, ev.value?.head], async () => {
+  const branch = ev.value?.branch;
+  changes.value = null;
+  error.value = '';
+  if (!branch) return;
+  try {
+    changes.value = await getChanges(props.thread.id, { branch });
+  } catch (e) {
+    error.value = `The commits: ${message(e)}`;
+  }
+}, { immediate: true });
+const sum = (k: 'added' | 'deleted') => changes.value?.files.reduce((n, f) => n + f[k], 0) ?? 0;
+const nameOf = (login: string) => props.thread.events.find((e) => e.author.login === login)?.author.name ?? login;
+
 // "criteria 1, 2 and 3 ticked", the unticks after
 const tickWords = computed(() => {
   const net = new Map<number, boolean>();
@@ -211,6 +258,12 @@ const tickWords = computed(() => {
 /* side by side: one diff twice, the before without what was added, the after without what was removed */
 .ic-before :deep(ins), .is-side .ic-after :deep(del) { display: none; }
 .ic-before :deep(:is(li, p):has(> ins)), .is-side .ic-after :deep(:is(li, p):has(> del)) { display: none; }
+.ic-scroll { overflow-x: auto; }
+.ic-table { width: 100%; border-collapse: collapse; font-size: .8125rem; }
+.ic-table th { text-align: left; font-weight: 600; color: var(--fg-muted); }
+.ic-table :is(th, td) { padding: 6px 10px; border-bottom: 1px solid var(--border-subtle); vertical-align: top; }
+.ic-files { list-style: none; margin: 0; padding: 0; font-size: .8125rem; }
+.ic-files li { display: flex; justify-content: space-between; gap: 1rem; padding: 4px 0; border-bottom: 1px solid var(--border-subtle); overflow-wrap: anywhere; }
 @media (max-width: 719.98px) {
   .ic-sec, .is-side .ic-cols { grid-template-columns: minmax(0, 1fr); }
   .ic-gut { flex-direction: row; flex-wrap: wrap; align-items: center; }
