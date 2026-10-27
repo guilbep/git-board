@@ -161,7 +161,7 @@
           <CycleReview :id="thread.id" :thread="thread" :me-id="meId" :busy="saving" :focus="focus" :review="review" :resolve="resolve" v-bind="r" />
         </template>
         <template #flow="{ cycle, failed, send }">
-          <HistoryView v-if="reading.tab === 'history'" :thread="thread" :fields="fields" />
+          <HistoryView v-if="reading.tab === 'history'" :thread="thread" :fields="fields" :cycle="cycle" />
           <template v-else>
             <IssueFlow
               ref="flow"

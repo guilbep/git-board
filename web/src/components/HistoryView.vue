@@ -4,14 +4,15 @@
      (replay.ts): git-bug keeps every operation, so nothing is lost. -->
 <template>
   <section class="hv" aria-label="History">
-    <IssueTimeline :steps="all" :current="pos" :fields="fields" @select="select" />
+    <p class="hv-intro"><span>The same flow, with a cursor: pick a moment, read the issue as it was then.</span><span class="hv-muted">◆ a version · ◇ a tick · ■ a text</span></p>
+    <IssueTimeline :steps="all" :current="pos" :fields="fields" :segments="segs" @select="select" />
     <div class="hv-scrub">
       <button type="button" class="gb-icon-btn" aria-label="Previous change" :disabled="pos <= 0" @click="pos--"><GbIcon name="back" small /></button>
       <input v-model.number="pos" class="hv-range" type="range" min="0" :max="all.length - 1" aria-label="As of" />
       <button type="button" class="gb-icon-btn hv-fwd" aria-label="Next change" :disabled="pos >= all.length - 1" @click="pos++"><GbIcon name="back" small /></button>
       <p class="hv-asof-line">
         As of <b>{{ when(step.at, true) }}</b> <span class="hv-muted">· change {{ pos + 1 }} of {{ all.length }}</span>
-        <button v-if="pos < all.length - 1" type="button" class="hv-latest" @click="pos = all.length - 1">Latest</button>
+        <button v-if="pos < all.length - 1" type="button" class="hv-latest" @click="pos = all.length - 1">Now</button>
       </p>
     </div>
 
@@ -83,18 +84,21 @@
 
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue';
-import type { Thread } from '@/api/board';
+import type { Cycle, Thread } from '@/api/board';
 import { colorClass } from '@/colors';
 import { displayName, formatValue, type Fields } from '@/fields';
 import { describeLabels } from '@/history';
+import { segments } from '@/flow';
 import { on, when } from '@/me';
 import { metaWhat, stateAfter, steps, textDiff, wordDiff, type Step, type WordOp } from '@/replay';
 import GbIcon, { type IconName } from '@/components/GbIcon.vue';
 import IssueTimeline from '@/components/IssueTimeline.vue';
 
-const props = defineProps<{ thread: Thread; fields: Fields }>();
+const props = defineProps<{ thread: Thread; fields: Fields; cycle?: Cycle | null }>();
 
 const all = computed(() => steps(props.thread.events));
+// the step bars: the flow's segments, with no cycle none
+const segs = computed(() => (props.cycle ? segments(props.thread.events, props.cycle.stages, props.cycle.step, props.cycle.skipped) : []));
 const pos = ref(0);
 // the latest change when the history opens or grows
 watch(() => all.value.length, (n) => (pos.value = n - 1), { immediate: true });
@@ -188,6 +192,8 @@ function folded(s: Step): { kind: 'same' | 'add' | 'del' | 'skip'; text: string;
 .hv-range { flex: 1 1 12rem; accent-color: var(--primary); }
 .hv-fwd :deep(svg) { transform: scaleX(-1); }
 .hv-asof-line { flex-basis: 100%; margin: 0; font-size: .875rem; }
+.hv-intro { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 8px 16px; margin: 0; font-size: .9375rem; }
+.hv-intro .hv-muted { font-size: .8125rem; }
 .hv-latest { margin-left: .5rem; padding: 0; border: 0; background: none; color: var(--fg); font: inherit; font-weight: 700; text-decoration: underline; cursor: pointer; }
 
 .hv-asof { display: grid; gap: .625rem; padding: 1rem 1.25rem; border: 1px dashed var(--border-strong); background: var(--bg-subtle); }
