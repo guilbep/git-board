@@ -521,6 +521,7 @@ a.gb-bar-step:hover .gb-bar-name { text-decoration: underline; text-underline-of
    or the flow; an anchor "§3 › 3"; a person's project role */
 .gb-tchip{font:inherit;font-size:.75rem;line-height:1.35;padding:4px 8px;border:1px solid var(--border-strong);border-radius:var(--radius);background:var(--bg);color:var(--fg);text-align:left;white-space:nowrap;cursor:pointer}
 .gb-tchip.is-open{border-color:var(--gb-done);color:var(--gb-done)}
+.gb-tchip.is-warn{border-color:var(--warning-fg);color:var(--warning-fg);background:var(--warning-bg)}
 .gb-tchip.is-ghost{border-style:dashed;color:var(--fg-muted)}
 .gb-anchor{padding:0;border:0;background:none;font-family:var(--font-mono);font-size:.75rem;color:var(--gb-done);white-space:nowrap}
 button.gb-anchor{cursor:pointer}

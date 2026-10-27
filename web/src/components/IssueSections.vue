@@ -9,16 +9,23 @@
         <span class="gb-anchor">§{{ s.n }} {{ s.heading || 'intro' }}</span>
         <span v-if="changed(s)">{{ changed(s) }}</span>
         <button v-if="!threadsIn(s).length" type="button" class="gb-tchip is-ghost" :aria-expanded="composing === s.slug" @click="composing = s.slug">Comment on §{{ s.n }}</button>
-        <button v-else-if="inFlow" type="button" class="gb-tchip" :class="{ 'is-open': threadsIn(s).some((t) => !t.resolved) }" @click="emit('flow', (threadsIn(s).find((t) => !t.resolved) ?? threadsIn(s)[0]!).event.id)">{{ chip(s) }}</button>
-        <button v-else type="button" class="gb-tchip" :class="{ 'is-open': threadsIn(s).some((t) => !t.resolved) }" :aria-expanded="open.has(s.slug)" @click="toggle(s.slug)">{{ chip(s) }}</button>
+        <button v-else-if="inFlow" type="button" class="gb-tchip" :class="chipClass(s)" @click="emit('flow', (threadsIn(s).find((t) => !t.resolved) ?? threadsIn(s)[0]!).event.id)">{{ chip(s) }}</button>
+        <button v-else type="button" class="gb-tchip" :class="chipClass(s)" :aria-expanded="open.has(s.slug)" @click="toggle(s.slug)">{{ chip(s) }}</button>
       </div>
+      <!-- every thread resolved: one line each, Show opens them -->
+      <template v-if="!inFlow && !open.has(s.slug) && threadsIn(s).every((t) => t.resolved)">
+        <div v-for="t in threadsIn(s)" :key="t.event.id" class="gb-sec-row gb-tdone">
+          <span>Thread on <span class="gb-anchor">{{ label(t) }}</span> · {{ [...new Set([t.event, ...t.replies].map((e) => e.author.name))].join(', ') }} · {{ plural(1 + t.replies.length, 'comment') }} · <b>{{ resolvedBy(t, events) }}</b><template v-if="appliedOf(t)">: the suggested edit of {{ appliedOf(t) }} was applied</template></span>
+          <button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" @click="open.add(s.slug)">Show</button>
+        </div>
+      </template>
       <div v-if="!inFlow && open.has(s.slug)" class="gb-sec-row gb-sec-threads">
         <ThreadCard
           v-for="t in threadsIn(s)"
           :key="t.event.id"
           :thread="t"
           :events="events"
-          :sections="sections"
+          :sections="current"
           :me-id="meId"
           :fields="fields"
           :forges="forges"
@@ -51,7 +58,7 @@
 import { computed, nextTick, reactive, ref, useTemplateRef, watch } from 'vue';
 import { renderMarkdown, type Forge, type IssueEvent } from '@/api/board';
 import { bodyThreads, resolvedBy, type Item } from '@/flow';
-import { anchorOf, changeOf, diffMarkdown, sectionsOf, type BodyVersion, type Section } from '@/sections';
+import { anchorLabel, anchorOf, changeOf, diffMarkdown, sectionsOf, stateOf, type BodyVersion, type Section } from '@/sections';
 import type { Fields } from '@/fields';
 import IssueComposer from '@/components/IssueComposer.vue';
 import MarkdownBody from '@/components/MarkdownBody.vue';
@@ -106,8 +113,10 @@ function changed(s: Section): string {
   const c = changeOf(before.value, now);
   return c === 'unchanged' ? 'unchanged' : c === 'changed' ? `changed in v${props.shown}` : `› ${c} changed in v${props.shown}`;
 }
-// a section's threads: those whose anchor names its slug, any version
-// (ponytail: M3 tells a carried thread from an outdated one)
+// the current text's sections: a thread's label, Apply's lines
+const current = computed(() => sectionsOf(props.html));
+// a section's threads: those whose anchor names its slug, any version;
+// each one current, carried or outdated against the current version
 const threads = computed(() => bodyThreads(props.events));
 const threadsIn = (s: Section): Item[] => threads.value.filter((t) => anchorOf(t.event.meta?.['thread:anchor'])?.slug === s.slug);
 
@@ -139,6 +148,20 @@ async function unfold(rootId: string) {
 defineExpose({ unfold });
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+const label = (t: Item) => anchorLabel(anchorOf(t.event.meta?.['thread:anchor'])!, current.value);
+// who wrote the suggestion an Apply resolved the thread with
+const appliedOf = (t: Item) => t.event.meta?.['thread:applied'] && [t.event, ...t.replies].findLast((e) => e.meta?.['thread:kind'] === 'suggestion')?.author.name;
+// an open thread written on an older version: "carried from v1" while its
+// section is unchanged since, "written on v1" (amber) once it changed
+function older(s: Section): { word: string; warn: boolean } | undefined {
+  const open = threadsIn(s).filter((t) => !t.resolved);
+  const states = open.map((t) => ({ t, st: stateOf(t.event, props.versions) }));
+  const out = states.find((x) => x.st.state === 'outdated') ?? states.find((x) => x.st.state === 'carried');
+  if (!out) return undefined;
+  const v = anchorOf(out.t.event.meta?.['thread:anchor'])!.v;
+  return out.st.state === 'outdated' ? { word: `written on v${v}`, warn: true } : { word: `carried from v${v}`, warn: false };
+}
+const chipClass = (s: Section) => ({ 'is-open': threadsIn(s).some((t) => !t.resolved) && !older(s)?.warn, 'is-warn': older(s)?.warn });
 // "2 comments · open ▸", "· resolved by Person B ▸"; unfolded, "› 3 · 2 comments, 1 suggestion ▾",
 // the item when every thread of the section is on the same one
 function chip(s: Section): string {
@@ -146,7 +169,8 @@ function chip(s: Section): string {
   const all = ts.flatMap((t) => [t.event, ...t.replies]);
   // "resolved by v2" when the section has the one thread
   const state = ts.some((t) => !t.resolved) ? 'open' : ts.length === 1 ? resolvedBy(ts[0]!, props.events) : 'resolved';
-  if (!open.has(s.slug)) return `${plural(all.length, 'comment')} · ${state} ▸`;
+  const o = older(s);
+  if (!open.has(s.slug) || o) return `${plural(all.length, 'comment')} · ${state}${o ? ` · ${o.word}` : ''} ${open.has(s.slug) ? '▾' : '▸'}`;
   const items = new Set(ts.map((t) => anchorOf(t.event.meta?.['thread:anchor'])?.item));
   const item = items.size === 1 ? [...items][0] : undefined;
   const sug = all.filter((e) => e.meta?.['thread:kind'] === 'suggestion').length;
@@ -158,9 +182,12 @@ function chip(s: Section): string {
 .gb-secs { display: flex; flex-direction: column; padding: 1rem 1.25rem 1.25rem; }
 .gb-sec { display: grid; grid-template-columns: minmax(0, 1fr) 164px; gap: 10px 20px; padding: 16px 0; border-top: 1px solid var(--border-subtle); }
 .gb-sec-row { grid-column: 1 / -1; }
+.gb-tdone { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 6px 12px; padding: 10px 16px; border: 1px solid var(--border-subtle); font-size: .8125rem; color: var(--fg-muted); }
+.gb-tdone b { color: var(--gb-green-fg); }
 .gb-sec-threads { display: flex; flex-direction: column; gap: 12px; }
 .gb-sec:first-child { border-top: 0; padding-top: 0; }
 .gb-gut { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; font-size: .75rem; color: var(--fg-muted); }
+.gb-gut .gb-tchip { white-space: normal; }
 .gb-sec :deep(.gb-md > :first-child) { margin-top: 0; }
 .gb-sec :deep(ins) { background: var(--gb-green-bg); color: var(--gb-green-fg); text-decoration: none; padding: 1px 4px; }
 .gb-sec :deep(del) { background: var(--gb-red-bg); color: var(--gb-red-fg); padding: 1px 4px; }

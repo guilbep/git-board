@@ -5,6 +5,7 @@
      resolved. -->
 <template>
   <div class="gb-tcard">
+    <p v-if="state.state === 'outdated'" class="gb-tout">Written on v{{ anchor!.v }}. {{ anchorLabel({ text: 'body', v: anchor!.v, slug: anchor!.slug }, sections) }} changed in v{{ state.since }}, so this thread may be answered by the text itself; it stays open until someone resolves it.</p>
     <CommentCard
       v-for="(c, i) in [thread.event, ...thread.replies]"
       :key="c.id"
@@ -14,7 +15,7 @@
       :mine="c.author.id === meId"
       :save="save"
       :role="roleOf(fields, c.author.login)"
-      :anchor="i === 0 && anchor ? anchorLabel(anchor, sections) : undefined"
+      :anchor="i === 0 && anchor ? anchorLabel(anchor, sections) + (anchor.v < v ? ` · v${anchor.v}` : '') : undefined"
       @anchor="emit('anchor', anchor!.slug)"
       @ref="(n, e) => emit('ref', n, e)"
     >
@@ -60,7 +61,7 @@ import { computed, nextTick, ref, useId, useTemplateRef } from 'vue';
 import { ApiError, type Forge, type IssueEvent } from '@/api/board';
 import type { Fields } from '@/fields';
 import { resolvedBy, roleOf, type Item } from '@/flow';
-import { anchorLabel, anchorOf, applySuggestion, lineAt, suggestionOf, version, type Section } from '@/sections';
+import { anchorLabel, anchorOf, applySuggestion, lineAt, stateOf, suggestionOf, versions, type Section } from '@/sections';
 import CommentCard from '@/components/CommentCard.vue';
 import GbIcon from '@/components/GbIcon.vue';
 import MarkdownBody from '@/components/MarkdownBody.vue';
@@ -86,7 +87,9 @@ const anchor = computed(() => anchorOf(props.thread.event.meta?.['thread:anchor'
 const text = ref('');
 // the suggested edit: the anchored line struck, the suggestion added
 const created = computed(() => props.events.find((e) => e.kind === 'created')!);
-const v = computed(() => version(created.value));
+const vs = computed(() => versions(created.value));
+const v = computed(() => vs.value.length);
+const state = computed(() => stateOf(props.thread.event, vs.value));
 const author = computed(() => created.value.author.id === props.meId);
 const sug = (c: IssueEvent) => (c.meta?.['thread:kind'] === 'suggestion' ? suggestionOf(c.body ?? '') : undefined);
 const applied = computed(() => props.thread.event.meta?.['thread:applied']);
@@ -130,6 +133,7 @@ async function send() {
 
 <style scoped>
 .gb-tcard { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.gb-tout { margin: 0; padding: 10px 14px; background: var(--warning-bg); color: var(--warning-fg); font-size: .8125rem; }
 .gb-treply { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 14px; background: var(--bg-subtle); border: 1px solid var(--border-subtle); }
 .gb-treply .epfl-input { flex: 1 1 200px; width: auto; }
 .gb-sugbody :deep(pre:has(> code.language-suggestion)) { display: none; }
