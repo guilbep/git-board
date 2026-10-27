@@ -112,15 +112,7 @@
         <template #flow="{ cycle }">
           <HistoryView v-if="reading.tab === 'history'" :thread="thread" :fields="fields" />
           <template v-else>
-            <ol v-if="rest.length" class="gb-tl" aria-label="The whole conversation">
-              <template v-for="e in rest" :key="e.id">
-                <li v-if="e.kind === 'comment'" :data-event="e.id">
-                  <CommentCard :event="e" :forges="thread.forges" :mine="e.author.id === meId" :save="edit" @ref="onRef" @line="showLine" />
-                </li>
-                <TimelineEvent v-else :data-event="e.id" :event="e" :fields="fields" />
-              </template>
-            </ol>
-            <p v-else class="gb-note">Nothing said yet.</p>
+            <IssueFlow ref="flow" :events="thread.events" :cycle="cycle" :me-id="meId" :since="since" :forges="thread.forges" :fields="fields" :save="edit" :reading="reading" @ref="onRef" @line="showLine" />
             <IssueComposer
               :status="thread.status"
               :forges="thread.forges"
@@ -159,6 +151,7 @@ import { clampWidth, panelMode, panelWidth, togglePanelMode } from '@/panelsize'
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, toRef, useId, watch } from 'vue';
 import { markSeen, type Thread } from '@/api/board';
 import { inbox, inboxError, loadInbox } from '@/inbox';
+import { loadVisit, saveVisit, visit } from '@/lastvisit';
 import { fieldValues, type Fields } from '@/fields';
 import { useIssue } from '@/issue';
 import { me, on } from '@/me';
@@ -169,9 +162,9 @@ import { READING } from '@/flow';
 import { steps } from '@/replay';
 import GbIcon from '@/components/GbIcon.vue';
 import IssueComposer from '@/components/IssueComposer.vue';
+import IssueFlow from '@/components/IssueFlow.vue';
 import IssueSide from '@/components/IssueSide.vue';
 import IssueStep from '@/components/IssueStep.vue';
-import TimelineEvent from '@/components/TimelineEvent.vue';
 
 const props = defineProps<{
   id: string;
@@ -196,6 +189,12 @@ watch(
   () => thread.value?.id,
   async (id) => {
     if (id && props.at) void nextTick(() => reveal(props.at!));
+    // the last visit, for the flow's "new since" line: once per issue
+    if (id) {
+      const v = visit(loadVisit(`issue:${id}`), Date.now());
+      saveVisit(`issue:${id}`, v);
+      since.value = v.prev;
+    }
     // an issue the inbox lists is read once opened, from the inbox, the
     // board or a link; on a fresh link the thread can come before the
     // inbox, so the inbox loads first. A failed write leaves it listed,
@@ -206,13 +205,14 @@ watch(
   },
 );
 const meId = computed(() => me.value?.me?.id ?? '');
+const since = ref<number | null>(null);
 const created = computed(() => thread.value?.events.find((e) => e.kind === 'created'));
-const rest = computed(() => thread.value?.events.filter((e) => e.kind !== 'created') ?? []);
 
 // the person's reading: the tab (Conversation, or every change in order
 // with the issue as it was), the flow's filters, order and grouping
 const reading = reactive({ ...READING });
 const step = ref<InstanceType<typeof IssueStep> | null>(null);
+const flow = ref<InstanceType<typeof IssueFlow> | null>(null);
 const focus = ref<string>(); // the file a comment's path:line opens in Changes, step 6 on the page
 function showLine(path: string) {
   if (!props.page) return;
@@ -220,7 +220,7 @@ function showLine(path: string) {
   step.value?.show(6);
 }
 const changeCount = computed(() => (thread.value ? steps(thread.value.events).length : 0));
-const comments = computed(() => rest.value.filter((e) => e.kind === 'comment').length);
+const comments = computed(() => thread.value?.events.filter((e) => e.kind === 'comment').length ?? 0);
 const statusValue = computed(() => fieldValues(thread.value?.labels ?? [], 'status')[0] ?? '');
 // the board's fields, and any namespace this issue has besides
 const sideNames = computed(() => {
@@ -261,8 +261,11 @@ async function copyLink() {
 }
 
 // #123 of a local issue opens it here, else the link goes to the forge
-// reveal scrolls to a history item and flashes it (a waiting change's row).
-function reveal(id: string) {
+// reveal scrolls to a history item and flashes it (a waiting change's
+// row), the flow unfolded first.
+async function reveal(id: string) {
+  flow.value?.unfold(id);
+  await nextTick();
   const el = document.querySelector<HTMLElement>(`[data-event="${CSS.escape(id)}"]`);
   if (!el) return;
   el.scrollIntoView({ block: 'center', behavior: 'smooth' });
