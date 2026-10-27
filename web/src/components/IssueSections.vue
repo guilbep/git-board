@@ -1,0 +1,60 @@
+<!-- The description as sections (docs/design/time-flow, 6a): the text cut
+     at its headings, each section with a gutter holding its anchor and a
+     chip for its threads. The rules are sections.ts's and flow.ts's. -->
+<template>
+  <div class="gb-secs">
+    <section v-for="s in sections" :key="s.slug" class="gb-sec" :aria-label="`§${s.n} ${s.heading || 'intro'}`">
+      <MarkdownBody class="gb-sec-md" :html="s.html" :forges="forges" @ref="(n, e) => emit('ref', n, e)" />
+      <div class="gb-gut">
+        <span class="gb-anchor">§{{ s.n }} {{ s.heading || 'intro' }}</span>
+        <button v-if="!threadsIn(s).length" type="button" class="gb-tchip is-ghost">Comment on §{{ s.n }}</button>
+        <button v-else type="button" class="gb-tchip" :class="{ 'is-open': threadsIn(s).some((t) => !t.resolved) }" :aria-expanded="open.has(s.slug)" @click="toggle(s.slug)">{{ chip(s) }}</button>
+      </div>
+    </section>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { computed, reactive } from 'vue';
+import type { Forge, IssueEvent } from '@/api/board';
+import { bodyThreads, type Item } from '@/flow';
+import { anchorOf, sectionsOf, type Section } from '@/sections';
+import MarkdownBody from '@/components/MarkdownBody.vue';
+
+const props = defineProps<{ html: string; events: IssueEvent[]; forges?: Forge[] | null | undefined }>();
+const emit = defineEmits<{ ref: [n: string, event: MouseEvent] }>();
+
+const sections = computed(() => sectionsOf(props.html));
+// a section's threads: those whose anchor names its slug, any version
+// (ponytail: M3 tells a carried thread from an outdated one)
+const threads = computed(() => bodyThreads(props.events));
+const threadsIn = (s: Section): Item[] => threads.value.filter((t) => anchorOf(t.event.meta?.['thread:anchor'])?.slug === s.slug);
+
+const open = reactive(new Set<string>()); // the sections whose threads are unfolded
+const toggle = (slug: string) => (open.has(slug) ? open.delete(slug) : open.add(slug));
+
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+// "2 comments · open ▸"; unfolded, "› 3 · 2 comments, 1 suggestion ▾",
+// the item when every thread of the section is on the same one
+function chip(s: Section): string {
+  const ts = threadsIn(s);
+  const all = ts.flatMap((t) => [t.event, ...t.replies]);
+  if (!open.has(s.slug)) return `${plural(all.length, 'comment')} · ${ts.some((t) => !t.resolved) ? 'open' : 'resolved'} ▸`;
+  const items = new Set(ts.map((t) => anchorOf(t.event.meta?.['thread:anchor'])?.item));
+  const item = items.size === 1 ? [...items][0] : undefined;
+  const sug = all.filter((e) => e.meta?.['thread:kind'] === 'suggestion').length;
+  return `${item ? `› ${item} · ` : ''}${plural(all.length - sug, 'comment')}${sug ? `, ${plural(sug, 'suggestion')}` : ''} ▾`;
+}
+</script>
+
+<style scoped>
+.gb-secs { container-type: inline-size; display: flex; flex-direction: column; padding: 1rem 1.25rem 1.25rem; }
+.gb-sec { display: grid; grid-template-columns: minmax(0, 1fr) 164px; gap: 10px 20px; padding: 16px 0; border-top: 1px solid var(--border-subtle); }
+.gb-sec:first-child { border-top: 0; padding-top: 0; }
+.gb-gut { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; font-size: .75rem; color: var(--fg-muted); }
+.gb-sec :deep(.gb-md > :first-child) { margin-top: 0; }
+@container (max-width: 720px) {
+  .gb-sec { grid-template-columns: minmax(0, 1fr); }
+  .gb-gut { flex-direction: row; flex-wrap: wrap; align-items: center; }
+}
+</style>

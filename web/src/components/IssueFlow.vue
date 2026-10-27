@@ -48,7 +48,7 @@
               <div v-if="it.resolved !== undefined && !open.has(it.event.id)" class="gb-fthread">
                 <span>
                   <b>{{ it.event.author.name }}</b> on
-                  <button type="button" class="gb-anchor" @click="emit('line', it.event.review!.path!)">{{ where(it.event) }}</button>
+                  <button type="button" class="gb-anchor" @click="it.event.review && emit('line', it.event.review.path!)">{{ where(it.event) }}</button>
                   <span class="gb-fthread-q"> · “{{ firstWords(it.event) }}”</span>
                 </span>
                 <button type="button" class="gb-tchip" :class="{ 'is-open': !it.resolved }" aria-expanded="false" @click="open.add(it.event.id)">
@@ -56,7 +56,7 @@
                 </button>
               </div>
               <div v-else class="gb-fthread-open" :class="{ 'is-thread': it.resolved !== undefined }">
-                <CommentCard v-for="c in [it.event, ...it.replies]" :key="c.id" :data-event="c.id" :event="c" :forges="forges" :mine="c.author.id === meId" :save="save" @ref="(n, ev) => emit('ref', n, ev)" @line="(p) => emit('line', p)" />
+                <CommentCard v-for="c in [it.event, ...it.replies]" :key="c.id" :data-event="c.id" :event="c" :forges="forges" :mine="c.author.id === meId" :save="save" :role="roleOf(fields, c.author.login)" @ref="(n, ev) => emit('ref', n, ev)" @line="(p) => emit('line', p)" />
                 <p v-if="it.resolved !== undefined && threads"><button type="button" class="gb-linkbtn" aria-expanded="true" @click="open.delete(it.event.id)">Fold the thread</button></p>
               </div>
             </li>
@@ -71,8 +71,9 @@
 import { computed, nextTick, reactive, ref, toRef, watch } from 'vue';
 import type { Cycle, Forge, IssueEvent } from '@/api/board';
 import type { Fields } from '@/fields';
-import { divider, firstNew, items as itemsOf, pick, segments, type Item, type Reading, type Segment } from '@/flow';
+import { divider, firstNew, items as itemsOf, pick, roleOf, segments, type Item, type Reading, type Segment } from '@/flow';
 import { on, when } from '@/me';
+import { anchorLabel, anchorOf } from '@/sections';
 import CommentCard from '@/components/CommentCard.vue';
 import TimelineEvent from '@/components/TimelineEvent.vue';
 
@@ -126,7 +127,9 @@ const foldedWords = computed(() => {
 
 // the gutter: the segment's number on its first entry
 const gutter = (s: Segment, i: number) => (s.n && i === 0 ? pad(s.n) : undefined);
-const where = (e: IssueEvent) => `${e.review!.path}${e.review!.line ? `:${e.review!.line}` : ''}`;
+// a review line's path, a body thread's anchor (ponytail: Task 9's pointer
+// lines and section numbers replace it)
+const where = (e: IssueEvent) => (e.review ? `${e.review.path}${e.review.line ? `:${e.review.line}` : ''}` : anchorLabel(anchorOf(e.meta?.['thread:anchor'])!, []));
 const firstWords = (e: IssueEvent) => {
   const line = (e.body ?? '').trim().split('\n')[0] ?? '';
   return line.length > 60 ? `${line.slice(0, 60)}…` : line;
@@ -177,10 +180,8 @@ defineExpose({ jump, unfold, settled });
 .gb-flow-chips, .gb-flow-segs { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .gb-flow-chips .gb-eyebrow { margin-right: 6px; }
 .gb-flow-segs { gap: 8px 14px; }
-.gb-fchip, .gb-tchip { font: inherit; font-size: .75rem; padding: 4px 10px; border: 1px solid var(--border-strong); border-radius: var(--radius); background: var(--bg); color: var(--fg); white-space: nowrap; cursor: pointer; }
+.gb-fchip { font: inherit; font-size: .75rem; padding: 4px 10px; border: 1px solid var(--border-strong); border-radius: var(--radius); background: var(--bg); color: var(--fg); white-space: nowrap; cursor: pointer; }
 .gb-fchip[aria-pressed="true"] { border-color: var(--fg); background: var(--bg-dark); color: var(--fg-inverse); }
-.gb-tchip { padding: 4px 8px; text-align: left; }
-.gb-tchip.is-open { border-color: var(--gb-done); color: var(--gb-done); }
 .gb-flow-ptr { margin: 12px 0 0; font-size: .875rem; color: var(--fg-muted); }
 .gb-fdiv-row { display: flex; align-items: center; gap: 12px; margin: 22px 0 4px; }
 .gb-fdiv-row .gb-linkbtn { flex: none; font-size: .75rem; }
@@ -196,8 +197,6 @@ defineExpose({ jump, unfold, settled });
 .gb-fe.gb-event { grid-template-columns: 44px auto minmax(0, 1fr); align-items: center; }
 .gb-fthread { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 6px 12px; padding: 10px 14px; border: 1px solid var(--border-subtle); }
 .gb-fthread-q { color: var(--fg-muted); font-style: italic; }
-.gb-anchor { padding: 0; border: 0; background: none; font-family: var(--font-mono); font-size: .75rem; color: var(--gb-done); white-space: nowrap; cursor: pointer; }
-.gb-anchor:hover { text-decoration: underline; }
 .gb-fthread-open { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .gb-fthread-open.is-thread { animation: gb-unfold 120ms ease-out; }
 @keyframes gb-unfold { from { opacity: 0; transform: translateY(-4px); } }

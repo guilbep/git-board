@@ -517,3 +517,12 @@ a.gb-bar-step:hover .gb-bar-name { text-decoration: underline; text-underline-of
 /* a badge with an icon (Open, Closed): the icon centred on the text */
 .epfl-badge{display:inline-flex;align-items:center;gap:.25rem;vertical-align:middle}
 .epfl-badge>.gb-icon{flex:none;width:.875em;height:.875em}
+/* the time flow's chips (docs/design/time-flow): a thread's, in a gutter
+   or the flow; an anchor "§3 › 3"; a person's project role */
+.gb-tchip{font:inherit;font-size:.75rem;line-height:1.35;padding:4px 8px;border:1px solid var(--border-strong);border-radius:var(--radius);background:var(--bg);color:var(--fg);text-align:left;white-space:nowrap;cursor:pointer}
+.gb-tchip.is-open{border-color:var(--gb-done);color:var(--gb-done)}
+.gb-tchip.is-ghost{border-style:dashed;color:var(--fg-muted)}
+.gb-anchor{padding:0;border:0;background:none;font-family:var(--font-mono);font-size:.75rem;color:var(--gb-done);white-space:nowrap}
+button.gb-anchor{cursor:pointer}
+button.gb-anchor:hover{text-decoration:underline}
+.gb-role{display:inline-block;padding:1px 6px;border:1px solid var(--border-strong);font-size:.6875rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;line-height:1.4;color:var(--fg-muted)}
