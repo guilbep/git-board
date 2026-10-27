@@ -225,10 +225,10 @@ func TestWrap(t *testing.T) {
 	h := header("ann", 1792836800, "in git-board")
 	for _, w := range []wrapped{
 		{body: "plain"},
-		{body: "text", marker: marker("issue", id)},
-		{header: h, body: "text\n\nmore", marker: marker("comment", id+":3")},
-		{header: h, marker: marker("comment", id+":0")},
-		{body: "*From x, 2026-01-01, in git-board.*", marker: marker("issue", id)}, // a token owner's text, read as a header
+		{body: "text", marker: marker("issue", id, "")},
+		{header: h, body: "text\n\nmore", marker: marker("comment", id+":3", "")},
+		{header: h, marker: marker("comment", id+":0", "")},
+		{body: "*From x, 2026-01-01, in git-board.*", marker: marker("issue", id, "")}, // a token owner's text, read as a header
 	} {
 		got := unwrap(w.String())
 		if got.String() != w.String() {
@@ -490,7 +490,7 @@ func (failingTokens) As(context.Context, forge.Account) (forge.Forge, error) {
 func TestFailedLookupReleasesTheLock(t *testing.T) {
 	t.Parallel()
 	s, f := newStore(t), fake.New(key)
-	f.Add(forge.Issue{Author: forge.Account{ID: "8", Login: "bob"}, Title: "T", Body: marker("issue", "x") + "\nb"})
+	f.Add(forge.Issue{Author: forge.Account{ID: "8", Login: "bob"}, Title: "T", Body: marker("issue", "x", "") + "\nb"})
 	if r := syncAll(t, s, failingTokens{f}); r.Created != 1 {
 		t.Fatalf("report %+v", r)
 	}

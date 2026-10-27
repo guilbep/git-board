@@ -71,19 +71,30 @@ func changedAt(fi forge.Issue, field string) int64 {
 	return fi.Updated
 }
 
-// wrapLike gives a text the header and marker last seen had, if sync
-// posted it, or the fork's start, if the fork did: the fork's copies end
-// without spaces or blank lines, so a text in its form does too.
-func wrapLike(seen, body string, posted bool) string {
+// wrapLike gives a text the header and marker last seen had, the marker
+// carrying keys, if sync posted it, or the fork's start, if the fork did:
+// the fork's copies end without spaces or blank lines, so a text in its
+// form does too.
+func wrapLike(seen, body, keys string, posted bool) string {
 	w := unwrap(seen)
 	switch {
 	case w.forked():
 		body = strings.TrimRight(body, " \t\r\n")
 	case !posted || w.marker == "":
 		return body
+	default:
+		w.marker = marker(w.kind, w.id, keys)
 	}
 	w.body = body
 	return w.String()
+}
+
+// carry is what a comment's marker carries, as Options.Carry says.
+func (r *run) carry(meta map[string]string) string {
+	if r.opt.Carry == nil {
+		return ""
+	}
+	return r.opt.Carry(meta)
 }
 
 // plain is a text as git-board keeps it: without the fork's start.
@@ -110,6 +121,7 @@ type textField struct {
 	ft              int64
 	guard           []*oplog.Origin
 	pullOp          func(v string) oplog.Op
+	restore         func(f string) []oplog.Op // a pull's ops besides the text's; nil for none
 	write           func(fw forge.Forge, v string) error
 }
 
@@ -147,6 +159,9 @@ func (r *run) plan(p *project, is *issue.Issue, fi forge.Issue, who map[string]s
 			if v != t.cur || origin(t.ch) != key {
 				pl.ops = append(pl.ops, t.pullOp(v))
 			}
+			if t.restore != nil {
+				pl.ops = append(pl.ops, t.restore(t.f)...)
+			}
 			if seen[t.name] != t.f {
 				pl.sops = append(pl.sops, seenOp(is.Author, now, is.ID, t.name, t.f))
 			}
@@ -170,7 +185,7 @@ func (r *run) plan(p *project, is *issue.Issue, fi forge.Issue, who map[string]s
 		ch: ch["title"], ft: changedAt(fi, "title"),
 		pullOp: func(v string) oplog.Op { return from(issue.SetTitle(a, v), key, ev, changedAt(fi, "title")) },
 		write:  func(fw forge.Forge, v string) error { return fw.SetTitle(r.ctx, fi.Ref(), v) }})
-	text(&pl.text, textField{name: "body", cur: is.Body, g: wrapLike(seen["body"], r.form(p, is.Body, origin(ch["body"]), false), posted), f: fi.Body,
+	text(&pl.text, textField{name: "body", cur: is.Body, g: wrapLike(seen["body"], r.form(p, is.Body, origin(ch["body"]), false), "", posted), f: fi.Body,
 		posted: posted, ch: ch["body"], ft: changedAt(fi, "body"),
 		pullOp: func(v string) oplog.Op { return from(issue.EditText(a, is.BodyOp, v), key, ev, changedAt(fi, "body")) },
 		write:  func(fw forge.Forge, v string) error { return fw.SetBody(r.ctx, fi.Ref(), v) }})
@@ -247,10 +262,21 @@ func (r *run) plan(p *project, is *issue.Issue, fi forge.Issue, who map[string]s
 			ft = fc.Edited
 		}
 		cid, fcID, ca := c.ID, fc.ID, who[fc.Author.ID]
-		text(&pl.comments, textField{name: field, cur: c.Body, g: wrapLike(seen[field], r.form(p, c.Body, origin(cch), false), sent), f: fc.Body,
+		meta := c.Meta
+		text(&pl.comments, textField{name: field, cur: c.Body, g: wrapLike(seen[field], r.form(p, c.Body, origin(cch), false), r.carry(meta), sent), f: fc.Body,
 			posted: sent, ch: cch, ft: ft, guard: []*oplog.Origin{c.Origin},
 			pullOp: func(v string) oplog.Op { return from(issue.EditText(ca, cid, v), key, field, ft) },
-			write:  func(fw forge.Forge, v string) error { return fw.EditComment(r.ctx, fi.Ref(), fcID, v) }})
+			restore: func(f string) []oplog.Op {
+				if !sent || r.opt.Restore == nil {
+					return nil
+				}
+				w := unwrap(f)
+				if m := r.opt.Restore(w.keys, w.marker != "", meta); len(m) > 0 {
+					return []oplog.Op{from(issue.SetMeta(ca, cid, m), key, field, ft)}
+				}
+				return nil
+			},
+			write: func(fw forge.Forge, v string) error { return fw.EditComment(r.ctx, fi.Ref(), fcID, v) }})
 	}
 	if push {
 		for _, c := range is.Comments {
@@ -263,7 +289,7 @@ func (r *run) plan(p *project, is *issue.Issue, fi forge.Issue, who map[string]s
 				continue
 			}
 			_, direct := r.writer(p, c.Author)
-			w := wrapped{body: r.form(p, c.Body, origin(cch), false), marker: marker("comment", c.ID)}
+			w := wrapped{body: r.form(p, c.Body, origin(cch), false), marker: marker("comment", c.ID, r.carry(c.Meta))}
 			if !direct {
 				w.header = r.header(c.Author, c.Time, c.Origin, is.ID)
 			}

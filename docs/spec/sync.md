@@ -94,7 +94,7 @@ A text goes to a project in that project's form:
 The parts are joined by a blank line (`\n\n`). The header and the marker a
 text has on a project stay the ones it was created with: sync takes them
 from its last seen value there. So the form changes only when the text
-does. A title, a status, labels and assignees have no header and no
+does, or a comment's keys (see [Markers](#markers)). A title, a status, labels and assignees have no header and no
 marker. A title is translated too.
 
 ### What git-board took from a forge
@@ -329,6 +329,22 @@ line:
 The first names an issue, in its body. The second names a comment, by its
 id. Pulled back, a text sync's accounts posted loses its header and its
 marker.
+
+A comment's marker also carries keys of its metadata, after its id, as
+`key=value` pairs separated by spaces; which keys, under which names, is
+the application's (`Options.Carry`; git-board's are in
+`docs/design/time-flow/protocol.md`):
+
+```text
+<!-- git-board comment 9c41e5b1d97f2a63c18e0b4d5f6a7928e3b1c0d4:7 step=1 anchor=body@v1/expected#3 -->
+```
+
+The keys are rebuilt from the comment's metadata each run, so a metadata
+change alone edits the forge comment. A forge edit of a comment sync
+posted sets the metadata its marker's keys say (`Options.Restore`); with
+the marker deleted, the comment is plain text from then on, and Restore
+says which keys that clears. A comment never edited on the forge comes
+back by its record, its metadata untouched.
 
 ## Posting for people without a token
 

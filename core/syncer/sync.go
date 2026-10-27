@@ -30,6 +30,14 @@ type Options struct {
 	// Local keeps a comment in git-board: one whose metadata it says true
 	// for is never posted. Nil posts every comment.
 	Local func(meta map[string]string) bool
+	// Carry is what a comment's marker carries after its id: "k=v" pairs,
+	// space-separated, no value holding a space or a ">". It is rebuilt
+	// from the comment's metadata each run. Nil carries none.
+	Carry func(meta map[string]string) string
+	// Restore is the metadata a forge edit of a comment sync posted sets,
+	// from its marker's pairs (marked), or with the marker deleted (not
+	// marked); a key given "" is cleared. Nil or empty restores nothing.
+	Restore func(carried string, marked bool, meta map[string]string) map[string]string
 	// Held keeps a label in git-board on the project named by key: never
 	// sent there, and the project's own copy of it neither pulled nor
 	// removed. Nil holds none.
@@ -754,7 +762,7 @@ func (r *run) mayCreate(p *project, is *issue.Issue) bool {
 // form, the body with its marker, and with a header unless its author
 // posts it with their own token (direct).
 func (r *run) sent(p *project, is *issue.Issue, direct bool) (title, body string) {
-	w := wrapped{body: r.form(p, is.Body, origin(is.Changes["body"]), false), marker: marker("issue", is.ID)}
+	w := wrapped{body: r.form(p, is.Body, origin(is.Changes["body"]), false), marker: marker("issue", is.ID, "")}
 	if !direct {
 		w.header = r.header(is.Author, is.Created, is.Origin, is.ID)
 	}

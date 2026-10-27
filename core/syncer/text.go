@@ -7,11 +7,17 @@ import (
 	"time"
 )
 
-// marker names a git-board issue or comment in a text sync posts.
-func marker(kind, id string) string { return "<!-- git-board " + kind + " " + id + " -->" }
+// marker names a git-board issue, comment or version in a text sync
+// posts; keys are the "k=v" pairs a comment's marker carries after its id.
+func marker(kind, id, keys string) string {
+	if keys != "" {
+		id += " " + keys
+	}
+	return "<!-- git-board " + kind + " " + id + " -->"
+}
 
 var (
-	markerRE = regexp.MustCompile(`(?:^|\n\n)<!-- git-board (issue|comment) ([0-9a-f]{40}(?::[0-9]+)?) -->$`)
+	markerRE = regexp.MustCompile(`(?:^|\n\n)<!-- git-board (issue|comment|version) ([0-9a-f]{40}(?::[0-9]+)?)((?: [a-z][a-z-]*=[^\s>]*)*) -->$`)
 	headerRE = regexp.MustCompile(`^\*From [^\n]*, \d{4}-\d{2}-\d{2}, (?:in|on) [^\n]*\.\*(?:\n\n|$)`)
 )
 
@@ -24,7 +30,7 @@ func header(name string, written int64, where string) string {
 // and id are the marker's. fork is the fork's own start of a text it
 // posted, kept as it is: its marker, forkID its id, and its header, whose
 // link is the original's URL.
-type wrapped struct{ header, body, marker, kind, id, fork, forkID, link string }
+type wrapped struct{ header, body, marker, kind, id, keys, fork, forkID, link string }
 
 // unwrap splits a text sync posted, or the fork did. A text with neither
 // form is all body.
@@ -36,8 +42,8 @@ func unwrap(text string) wrapped {
 		w.body = text[len(w.fork):]
 		return w
 	}
-	w.kind, w.id = text[m[2]:m[3]], text[m[4]:m[5]]
-	w.marker, w.body = marker(w.kind, w.id), text[:m[0]]
+	w.kind, w.id, w.keys = text[m[2]:m[3]], text[m[4]:m[5]], strings.TrimPrefix(text[m[6]:m[7]], " ")
+	w.marker, w.body = marker(w.kind, w.id, w.keys), text[:m[0]]
 	if h := headerRE.FindString(w.body); h != "" {
 		w.header, w.body = strings.TrimSuffix(h, "\n\n"), w.body[len(h):]
 	}
