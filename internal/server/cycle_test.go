@@ -535,7 +535,7 @@ func TestSpecVerdict(t *testing.T) {
 	}
 	th, _ := lastEvent(t, b, id)
 	e := th.Events[len(th.Events)-2]
-	if e.Meta["spec:verdict"] != "approve" || e.Meta["spec:on"] != "body@v1" || e.Meta["cycle:step"] != "1" || e.Body != "Approved v1 of the description" || !slices.Contains(th.Labels, "status:ready") {
+	if e.Meta["spec:verdict"] != "approve" || e.Meta["spec:on"] != "body@v1" || e.Meta["cycle:step"] != "1" || e.Body != "**Approved v1 of the description**" || !slices.Contains(th.Labels, "status:ready") {
 		t.Errorf("approval %+v, labels %v", e, th.Labels)
 	}
 

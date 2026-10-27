@@ -63,7 +63,7 @@ const line = computed(() => {
   const { v, on, before, resolvedBy, open } = s.value;
   const out: string[] = [];
   if (before) out.push(`v${before.v}: ${said(before)} by ${before.event.author.name}, ${at(before)}.`);
-  if (on?.verdict === 'request-changes') out.push(`${on.event.author.name}: ${on.event.body ?? ''}`);
+  if (on?.verdict === 'request-changes') out.push(`${on.event.author.name}: ${(on.event.body ?? '').replace(/^\*\*[^\n]*\*\*\n\n/, '')}`);
   if (v > 1 || open) out.push(`${resolvedBy ? `v${v} resolved ${resolvedBy} thread${resolvedBy === 1 ? '' : 's'}; ` : ''}${open} ${open === 1 ? 'is' : 'are'} open.`);
   if (props.moves && ask.value) out.push(`Approving moves the issue to ready and opens step 2.`);
   return out.join(' ');

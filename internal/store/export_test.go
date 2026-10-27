@@ -5,6 +5,7 @@ import (
 
 	"github.com/guilbep/git-board/core/gitstore"
 	"github.com/guilbep/git-board/core/oplog"
+	"github.com/guilbep/git-board/core/syncer"
 )
 
 // EditRelease is editRelease for the tests: an operation a later
@@ -101,4 +102,11 @@ func Ops(b *Backend, idPrefix string) ([]oplog.Entry, error) {
 		return nil, err
 	}
 	return l.Entries, nil
+}
+
+// Meanings are the options meanings gives a sync over s, for the tests.
+func Meanings(s *gitstore.Store) syncer.Options {
+	var opt syncer.Options
+	meanings(s, &opt)
+	return opt
 }

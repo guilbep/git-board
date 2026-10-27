@@ -268,9 +268,13 @@ func (s *apiServer) handleCycleAction(w http.ResponseWriter, r *http.Request) {
 			// adding them is an edit, so a version this approval isn't on
 			writeError(w, http.StatusBadRequest, errors.New("add acceptance criteria first"))
 			return
-		case body == "":
-			body = fmt.Sprintf("Approved v%d of the description", v)
 		}
+		// the first line bold, so the forge reads the verdict as git-board does
+		head := fmt.Sprintf("**Approved v%d of the description**", v)
+		if req.Verdict == "request-changes" {
+			head = fmt.Sprintf("**Changes requested on v%d of the description**", v)
+		}
+		body = strings.TrimSuffix(head+"\n\n"+body, "\n\n")
 		meta["spec:verdict"], meta["spec:on"], meta["cycle:step"] = req.Verdict, req.On, "1"
 	case "verify":
 		if !atVerify {
