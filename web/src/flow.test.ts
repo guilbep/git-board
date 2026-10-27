@@ -257,3 +257,21 @@ test('one version reads as all', () => {
 test('readingOf takes version', () => {
   assert.equal(readingOf('{"show":"version"}').show, 'version');
 });
+
+const at = (h: number) => new Date(Date.UTC(2026, 9, 21, h)).toISOString();
+test('segments carry when each step opened', () => {
+  assert.deepEqual(segments(events, stages, 6).map((s) => [s.n, s.at]), [
+    [1, undefined], [2, at(2)], [3, at(4)], [4, at(6)], [5, undefined], [6, at(7)],
+  ]);
+});
+
+test('a late carried comment keeps the bars', () => {
+  const segs = segments([...events.slice(0, 7), ev('c9', 8, step(1))], stages, 4);
+  assert.deepEqual(segs.map((s) => [s.n, s.at]), [[1, undefined], [2, at(2)], [3, at(4)], [4, at(6)]]);
+  // a carried step above the running one opens it
+  assert.equal(segments([...events.slice(0, 2), ev('c9', 3, step(2))], stages, 2)[1]!.at, at(3));
+});
+
+test('readingOf takes changes', () => {
+  assert.equal(readingOf(JSON.stringify({ tab: 'changes' })).tab, 'changes');
+});

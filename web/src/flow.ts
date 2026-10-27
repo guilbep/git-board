@@ -6,7 +6,9 @@ import { STEPS } from './cycle.ts';
 import type { Fields } from './fields.ts';
 import { threadsOf } from './review.ts';
 
-export interface Segment { n: number; entries: IssueEvent[] }
+// at: when the operation that opened the step ran (History's step bars);
+// step 1 and a step nothing opened have none
+export interface Segment { n: number; entries: IssueEvent[]; at?: string }
 
 const time = (e: IssueEvent) => Date.parse(e.at);
 
@@ -54,25 +56,32 @@ export function segments(events: IssueEvent[], stages: CycleStages | undefined, 
   });
   const last = moves.findLastIndex((m) => m !== undefined);
   const byStep = new Map<number, IssueEvent[]>();
+  const opened = new Map<number, string>();
   let running = 1;
   sorted.forEach((e, i) => {
     let n = running;
+    const was = running;
     const carried = stepOf(e);
     if (moves[i] !== undefined) n = running = up(moves[i]);
     else if (carried) running = Math.max(running, (n = up(carried)));
     else if (e.review) n = up(6);
+    // ponytail: a step opened twice (sent back) keeps its first opening
+    if (running > was && !opened.has(running)) opened.set(running, e.at);
     if (i === last) running = step;
     byStep.set(n, [...(byStep.get(n) ?? []), e]);
   });
   const top = Math.max(step, ...byStep.keys());
   const out: Segment[] = [];
-  for (let n = 1; n <= top; n++) if (!skipped.includes(n)) out.push({ n, entries: byStep.get(n) ?? [] });
+  for (let n = 1; n <= top; n++) {
+    const at = opened.get(n);
+    if (!skipped.includes(n)) out.push({ n, entries: byStep.get(n) ?? [], ...(at ? { at } : {}) });
+  }
   return out;
 }
 
 // A person's reading of the issue page (call 9), kept in the browser.
 export interface Reading {
-  tab: 'conversation' | 'history';
+  tab: 'conversation' | 'history' | 'changes';
   show: 'step' | 'all' | 'version' | 'open';
   mine: boolean;
   agent: boolean;
@@ -90,7 +99,7 @@ export const READING: Reading = {
 
 // readingOf reads the kept reading over READING: a key of the wrong
 // type or an unknown value is dropped, anything broken is READING.
-const ONE_OF: Partial<Record<keyof Reading, string[]>> = { tab: ['conversation', 'history'], show: ['step', 'all', 'version', 'open'], where: ['section', 'flow'] };
+const ONE_OF: Partial<Record<keyof Reading, string[]>> = { tab: ['conversation', 'history', 'changes'], show: ['step', 'all', 'version', 'open'], where: ['section', 'flow'] };
 export function readingOf(raw: string | null): Reading {
   let kept: unknown;
   try {

@@ -4,6 +4,7 @@ import { test } from 'node:test';
 import type { IssueEvent } from './api/board';
 import { steps } from './replay.ts';
 import { timeline } from './timeline.ts';
+import { segments } from './flow.ts';
 
 const who = (name: string) => ({ id: name, name });
 const day = (d: number) => `2026-10-${String(d).padStart(2, '0')}T00:00:00Z`;
@@ -28,7 +29,7 @@ test('timeline: the status band, closed spans and markers on one axis', () => {
   assert.deepEqual(t.closed.map((c) => [Math.round(c.left), Math.round(c.width)]), [[70, 10]]);
   // texts on one lane, changes on the other, each pointing at its step
   assert.deepEqual(t.markers.map((m) => [m.lane, m.kind, Math.round(m.left), m.index]), [
-    ['texts', 'created', 0, 0],
+    ['versions', 'created', 0, 0],
     ['changes', 'labels', 20, 1],
     ['texts', 'comment', 30, 2],
     ['changes', 'labels', 50, 3],
@@ -42,4 +43,43 @@ test('timeline: one instant does not divide by zero', () => {
   assert.equal(t.markers[0]!.left, 0);
   assert.equal(t.segments.length, 1);
   assert.equal(t.segments[0]!.width, 100);
+});
+
+const desc: IssueEvent = {
+  kind: 'created', id: 'd0', author: who('ann'), at: day(1), body: '- [x] a', edited: true,
+  history: [
+    { author: who('ann'), at: day(1), body: '- [ ] a' },
+    { author: who('ann'), at: day(2), body: '- [ ] b' },
+    { author: who('ann'), at: day(3), body: '- [x] b' },
+  ],
+};
+const said: IssueEvent = { kind: 'comment', id: 'k1', author: who('bob'), at: day(4), body: 'y', history: [
+  { author: who('bob'), at: day(4), body: 'y' }, { author: who('bob'), at: day(5), body: 'z' },
+] };
+
+test('the description goes to the versions lane', () => {
+  const t = timeline(steps([desc, said]), Date.parse(day(11)));
+  assert.deepEqual(t.markers.map((m) => [m.lane, m.tick ?? false]), [
+    ['versions', false], ['versions', false], ['versions', true], ['texts', false], ['texts', false],
+  ]);
+});
+
+test('one version is one diamond', () => {
+  const t = timeline(steps(events), Date.parse(day(11)));
+  assert.equal(t.markers.filter((m) => m.lane === 'versions').length, 1);
+});
+
+const stages = {
+  before: ['backlog'], ready: 'ready', in_progress: ['in-progress'], in_review: ['in-review'],
+  validation: [], closing: 'done', criteria: [], kinds: {}, guessed: false,
+};
+test('the step bars run from each opening to the next', () => {
+  const t = timeline(steps(events), Date.parse(day(11)), 'status', segments(events.slice(0, 4), stages, 2));
+  // step 1 from the opening, step 2 from day 6 (ready) to now
+  assert.deepEqual(t.bars.map((b) => [b.n, Math.round(b.left), Math.round(b.width)]), [[1, 0, 50], [2, 50, 50]]);
+});
+
+test('no cycle, no bars', () => {
+  assert.deepEqual(timeline(steps(events), Date.parse(day(11)), 'status', segments(events, stages, 0)).bars, []);
+  assert.deepEqual(timeline(steps(events), Date.parse(day(11))).bars, []);
 });
