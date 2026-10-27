@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>A protocol, one schema read two ways</title>
+</head>
+<body>
+<style>
+:root{--red:#FF0000;--red-dark:#B51F1F;--canard:#007480;--g200:#D5D5D5;--g600:#707070;--black:#212121;--subtle:#F5F5F5;--hair:rgba(33,33,33,.1);--mono:ui-monospace,SFMono-Regular,Menlo,monospace;--sans:"Suisse Int'l",Arial,"Helvetica Neue",Helvetica,sans-serif}
+body{margin:0;font-family:var(--sans);color:var(--black);background:#fff}
+a{color:var(--black)}a:hover{color:var(--red)}
+.eyebrow{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--canard);font-weight:700}
+.muted{color:var(--g600)}
+.mono{font-family:var(--mono)}
+.code{font-family:var(--mono);font-size:13px;line-height:1.6;background:var(--subtle);padding:16px 18px;white-space:pre-wrap;margin:0}
+.k{color:var(--red-dark)}
+.c{color:var(--g600)}
+.src{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:start}
+.pin{font-family:var(--mono);font-size:12px;color:var(--canard);white-space:nowrap;padding-top:2px}
+.rows{list-style:none;margin:0;padding:0}
+.rows li{display:grid;grid-template-columns:30px 110px minmax(0,1fr);gap:10px;padding:11px 0;border-top:1px solid var(--hair);font-size:14px;line-height:1.4}
+.rows li:first-child{border-top:0}
+.rows .n{font-family:var(--mono);color:var(--g600)}
+.home{display:inline-block;font-size:12px;font-weight:700;padding:2px 7px;border:1px solid currentColor;white-space:nowrap}
+.h-desc{color:var(--canard)}
+.h-field{color:var(--black)}
+.h-code{color:var(--red-dark)}
+.h-talk{color:var(--g600)}
+</style>
+<div style="width: 100%; min-height: 1000px; box-sizing: border-box; padding: 48px 56px; display: flex; flex-direction: column; gap: 28px; background: #fff">
+  <div style="display: flex; flex-direction: column; gap: 8px">
+    <span class="eyebrow">A sketch, not settled</span>
+    <h1 style="margin: 0; font-size: 36px; line-height: 1.15">One schema, read as the issue or as the cycle</h1>
+    <p class="muted" style="margin: 0; font-size: 16px; max-width: 920px">The project declares where each step's evidence lives. Both views render from that declaration, so switching between them changes the reading, never the data.</p>
+  </div>
+
+  <div style="display: flex; flex-wrap: wrap; gap: 28px">
+    <section aria-label="The protocol" style="flex: 1 1 360px; min-width: 0; display: flex; flex-direction: column; gap: 10px">
+      <span class="eyebrow" style="color: var(--black)">1 · The protocol, in .git-board.toml</span>
+<pre class="code"><span class="k">[cycle.intent]</span>
+headings = ["Acceptance criteria",
+            "Done when", "Expected"]
+<span class="c"># a list under one of these</span>
+
+<span class="k">[cycle.risk]</span>
+field = "risk"
+
+<span class="k">[cycle.plan]</span>
+files = "docs/plans/*.md"
+<span class="c"># front matter issue: 31</span>
+
+<span class="k">[cycle.verify]</span>
+ticks = "intent"
+<span class="c"># the same list, ticked</span>
+signoffs = ["ready-for-validation"]
+
+<span class="c"># 04 to 06: the branch and its PR,
+# found as today</span></pre>
+    </section>
+
+    <section aria-label="The issue as written" style="flex: 1 1 420px; min-width: 0; display: flex; flex-direction: column; gap: 10px">
+      <span class="eyebrow" style="color: var(--black)">2 · The issue, as written</span>
+      <div style="border: 1px solid var(--hair); padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; font-size: 14px; line-height: 1.55">
+        <div class="src"><span>Seen in the fork's clone while cutting <span class="mono">v0.11.1-sync.9</span>. Two remotes: <span class="mono">origin</span>, upstream, and <span class="mono">fork</span>, ours.</span><span class="pin muted">prose</span></div>
+        <div class="src"><span><b>## What the Releases page shows</b><br>…</span><span class="pin muted">prose</span></div>
+        <div class="src" style="background: #EAF4F5; padding: 10px 12px; margin: 0 -12px">
+          <span><b>## Expected</b><br>- [ ] The authority remote is chosen, not assumed.<br>- [ ] Pre-release tags count.<br>- [ ] A missing identity sends the user to Settings › identity.<br>- [ ] The header names the repository.</span>
+          <span class="pin">01 · 07</span>
+        </div>
+        <div class="src"><span>Workaround, not tried yet: <span class="mono">[release] remote = "fork"</span>.</span><span class="pin muted">prose</span></div>
+        <div class="src" style="border-top: 1px solid var(--hair); padding-top: 10px"><span class="muted">Labels: <span class="mono">risk:normal</span> · plan <span class="mono">docs/plans/31-release-remote.md</span> · branch <span class="mono">31-release-in-a-fork-s-clone</span></span><span class="pin">02 · 03 · 04–06</span></div>
+      </div>
+      <p class="muted" style="margin: 0; font-size: 13px">Read top to bottom, it is the Issue view: prose first, the steps where they fall.</p>
+    </section>
+
+    <section aria-label="Read as the cycle" style="flex: 1 1 380px; min-width: 0; display: flex; flex-direction: column; gap: 10px">
+      <span class="eyebrow" style="color: var(--black)">3 · The same issue, read as the cycle</span>
+      <ol class="rows">
+        <li><span class="n">01</span><b>Intent</b><span><span class="home h-desc">## Expected</span> 4 criteria</span></li>
+        <li><span class="n">02</span><b>Risk class</b><span><span class="home h-field">risk</span> normal</span></li>
+        <li><span class="n">03</span><b>Plan</b><span><span class="home h-code">plan file</span> approved in the conversation</span></li>
+        <li><span class="n">04</span><b>Tests first</b><span><span class="home h-code">branch</span> a failing test in the diff</span></li>
+        <li><span class="n">05</span><b>Code</b><span><span class="home h-code">PR</span> opened by a person</span></li>
+        <li><span class="n">06</span><b>Review</b><span><span class="home h-code">PR reviews</span> approvals</span></li>
+        <li><span class="n">07</span><b>Verify</b><span><span class="home h-desc">## Expected</span> ticked, <span class="home h-talk">sign-offs</span></span></li>
+      </ol>
+      <p class="muted" style="margin: 0; font-size: 13px">Read step by step, it is the Cycle view: each row opens its source in place.</p>
+    </section>
+  </div>
+</div>
+</body>
+</html>

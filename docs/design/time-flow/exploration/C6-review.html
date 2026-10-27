@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Step 6, Review</title>
+</head>
+<body>
+<style>
+:root{--red:#FF0000;--red-dark:#B51F1F;--canard:#007480;--canard-bg:#EAF4F5;--add:#E6F4EA;--add-fg:#1E5B2E;--del:#FBE9EA;--del-fg:#80000C;--g200:#D5D5D5;--g300:#C1C1C1;--g600:#707070;--black:#212121;--subtle:#F5F5F5;--hair:rgba(33,33,33,.1);--mono:ui-monospace,SFMono-Regular,Menlo,monospace;--sans:"Suisse Int'l",Arial,"Helvetica Neue",Helvetica,sans-serif}
+body{margin:0;font-family:var(--sans);color:var(--black);background:#fff}
+a{color:var(--black)}a:hover{color:var(--red)}
+.eyebrow{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--canard);font-weight:700}
+.label{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--g600)}
+.muted{color:var(--g600)}
+.mono{font-family:var(--mono)}
+.btn{font:inherit;font-size:14px;line-height:1.2;padding:9px 16px;border:1px solid var(--black);background:#fff;color:var(--black);border-radius:2px;cursor:pointer;white-space:nowrap}
+.btn.primary{background:var(--red-dark);border-color:var(--red-dark);color:#fff;font-weight:700}
+.btn.sm{font-size:13px;padding:6px 10px}
+.btn:focus-visible,.steps a:focus-visible,.files a:focus-visible{outline:2px solid var(--red-dark);outline-offset:2px}
+.nav a{text-decoration:none;font-weight:700;font-size:15px}
+.steps{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}
+.steps a,.steps span.lk{display:flex;flex-direction:column;gap:3px;padding:9px 10px 10px;text-decoration:none;color:var(--black);border-top:4px solid var(--g200);min-height:62px;box-sizing:border-box}
+.steps .num{font-family:var(--mono);font-size:12px;color:var(--g600)}
+.steps .nm{font-size:14px;font-weight:700}
+.steps .ev{font-size:12px;line-height:1.3;color:var(--g600)}
+.steps a.done{border-top-color:var(--canard)}
+.steps a.cur{border-top-color:var(--black);background:var(--subtle)}
+.steps span.lk{color:var(--g600)}
+.steps span.lk .nm{font-weight:400;color:var(--g600);display:flex;align-items:center;gap:5px}
+.files{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.files a{display:flex;justify-content:space-between;gap:8px;padding:8px 10px;text-decoration:none;font-size:13px;border-left:3px solid transparent}
+.files a.on{background:var(--subtle);border-left-color:var(--black);font-weight:700}
+.files .st{font-family:var(--mono);font-size:12px;color:var(--g600);white-space:nowrap}
+.diff{font-family:var(--mono);font-size:13px;line-height:1.65;border:1px solid var(--hair)}
+.dl{display:grid;grid-template-columns:44px 44px 18px minmax(0,1fr);white-space:pre}
+.dl span.n{color:var(--g600);text-align:right;padding-right:8px;user-select:none}
+.dl.h{background:var(--canard-bg);color:var(--canard)}
+.dl.a{background:var(--add)}
+.dl.d{background:var(--del)}
+.thread{margin:6px 12px 10px 106px;border:1px solid var(--g300);background:#fff;font-family:var(--sans);font-size:14px;line-height:1.45;white-space:normal}
+.cm{border-top:1px solid var(--hair);padding:12px 0;font-size:14px;line-height:1.45;display:flex;flex-direction:column;gap:4px}
+.ai{display:inline-block;font-size:11px;font-weight:700;padding:1px 6px;background:var(--black);color:#fff;letter-spacing:.04em}
+.ok{color:var(--add-fg);font-weight:700}
+</style>
+<div style="width: 100%; min-height: 1100px; display: flex; flex-direction: column; background: #fff">
+  <header style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px 28px; padding: 14px 32px; border-bottom: 1px solid var(--hair)">
+    <div style="display: flex; align-items: baseline; gap: 12px"><span style="font-weight: 700; font-size: 26px; color: var(--red); letter-spacing: .02em">EPFL</span><span style="font-size: 19px">git-board</span></div>
+    <nav class="nav" aria-label="Views" style="display: flex; flex-wrap: wrap; gap: 20px; flex: 1 1 auto">
+      <a href="#">board</a><a href="#">drafts</a><a href="#">mine</a><span class="muted" aria-hidden="true">|</span><a href="#">Work</a><a href="#">Insights</a><a href="#">Releases</a><a href="#">Inbox</a>
+    </nav>
+    <button class="btn sm">Send 1</button>
+  </header>
+
+  <div style="padding: 24px 40px 18px; display: flex; flex-direction: column; gap: 12px; border-bottom: 1px solid var(--hair)">
+    <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 16px">
+      <h1 style="margin: 0; font-size: 28px; line-height: 1.2; flex: 1 1 520px"><span class="mono muted" style="font-weight: 400">GB-31</span> release: in a fork's clone, releases go to its upstream origin</h1>
+      <button class="btn sm">Close issue</button>
+    </div>
+    <div class="muted" style="font-size: 14px; display: flex; flex-wrap: wrap; gap: 4px 16px">
+      <span style="color: var(--canard); font-weight: 700">Open</span><span>bug · p1 · in-review · risk normal</span><a href="#">PR #41</a><a href="#">GitHub #37</a><span style="color: var(--red-dark)">Illustration</span>
+    </div>
+    <ol class="steps" aria-label="The cycle">
+      <li><a class="done" href="#"><span class="num">01</span><span class="nm">Intent</span><span class="ev">4 criteria · ready</span></a></li>
+      <li><a class="done" href="#"><span class="num">02</span><span class="nm">Risk class</span><span class="ev">normal, by Person A</span></a></li>
+      <li><a class="done" href="#"><span class="num">03</span><span class="nm">Plan</span><span class="ev">v2, approved by Person A</span></a></li>
+      <li><a class="done" href="#"><span class="num">04</span><span class="nm">Tests first</span><span class="ev">red at 4c1e2a0, green at 9b2f71d</span></a></li>
+      <li><a class="done" href="#"><span class="num">05</span><span class="nm">Code</span><span class="ev">PR #41, marked ready by Person A</span></a></li>
+      <li><a class="cur" href="#" aria-current="step"><span class="num">06</span><span class="nm">Review</span><span class="ev">0 of 1 approval · 1 thread open</span></a></li>
+      <li><span class="lk" aria-disabled="true"><span class="num">07</span><span class="nm"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><rect x="5" y="11" width="14" height="10"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Verify</span><span class="ev">opens when the PR is merged</span></span></li>
+    </ol>
+  </div>
+
+  <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 20px; padding: 12px 40px; border-bottom: 1px solid var(--hair); font-size: 14px">
+    <span><span class="eyebrow">Step 6 · Review</span> <b style="margin-left: 8px">PR #41</b> <span class="muted">into main · 3 commits · 5 files</span></span>
+    <span style="display: flex; flex-wrap: wrap; gap: 6px 18px"><span><span class="ok">3 of 3</span> checks pass</span><span>Against plan v2: <span class="ok">4 of 4</span> steps found</span><span>Approvals: <b>0 of 1</b></span></span>
+  </div>
+
+  <div style="display: flex; flex-wrap: wrap; flex: 1 1 auto">
+    <nav aria-label="Files" style="flex: 0 1 250px; min-width: 0; padding: 16px 12px 24px 28px; border-right: 1px solid var(--hair)">
+      <span class="label" style="display: block; padding: 0 10px 8px">Files</span>
+      <ul class="files">
+        <li><a class="on" href="#"><span>release/binaries.go</span><span class="st">+5 −6</span></a></li>
+        <li><a href="#"><span>release/remote.go</span><span class="st">+52</span></a></li>
+        <li><a href="#"><span>release/remote_test.go</span><span class="st">+31</span></a></li>
+        <li><a href="#"><span>release/git.go</span><span class="st">+6 −6</span></a></li>
+        <li><a href="#"><span>pages/SettingsReleases.vue</span><span class="st">+41 −2</span></a></li>
+      </ul>
+    </nav>
+
+    <section aria-label="Diff" style="flex: 999 1 560px; min-width: 0; padding: 18px 24px 32px; display: flex; flex-direction: column; gap: 14px">
+      <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px"><span class="mono" style="font-size: 14px; font-weight: 700">internal/release/binaries.go</span><label style="display: flex; gap: 6px; align-items: center; font-size: 13px"><input type="checkbox"> Viewed</label></div>
+      <div class="diff">
+        <div class="dl h"><span class="n"></span><span class="n"></span><span></span><span>@@ -64,9 +64,8 @@ func (r *Runner) status(ctx context.Context) (Status, error)</span></div>
+        <div class="dl"><span class="n">64</span><span class="n">64</span><span></span><span>	names := strings.Fields(remotes)</span></div>
+        <div class="dl d"><span class="n">65</span><span class="n"></span><span>−</span><span>	switch {</span></div>
+        <div class="dl d"><span class="n">66</span><span class="n"></span><span>−</span><span>	case slices.Contains(names, "origin"):</span></div>
+        <div class="dl d"><span class="n">67</span><span class="n"></span><span>−</span><span>		s.Remote = "origin"</span></div>
+        <div class="dl d"><span class="n">68</span><span class="n"></span><span>−</span><span>	case len(names) &gt; 0:</span></div>
+        <div class="dl d"><span class="n">69</span><span class="n"></span><span>−</span><span>		s.Remote = names[0]</span></div>
+        <div class="dl d"><span class="n">70</span><span class="n"></span><span>−</span><span>	}</span></div>
+        <div class="dl a"><span class="n"></span><span class="n">65</span><span>+</span><span>	remote, err := r.pushable(ctx, names)</span></div>
+        <div class="dl a"><span class="n"></span><span class="n">66</span><span>+</span><span>	if err != nil {</span></div>
+        <div class="dl a"><span class="n"></span><span class="n">67</span><span>+</span><span>		return s, err // none, or several: the cut says which</span></div>
+        <div class="thread">
+          <div style="padding: 10px 14px; border-bottom: 1px solid var(--hair); display: flex; flex-direction: column; gap: 4px"><span><b>Person B</b> <span class="muted">· 17:05</span></span><span>Name the remotes that were tried in this error. It's what the user needs to write <span class="mono">[release] remote</span>.</span></div>
+          <div style="padding: 10px 14px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center"><label for="c6-r" class="muted" style="font-size: 13px">Reply</label><input id="c6-r" style="flex: 1 1 200px; font: inherit; font-size: 14px; padding: 6px 8px; border: 1px solid var(--g300)"><button class="btn sm">Send to Claude Code</button><button class="btn sm">Resolve</button></div>
+        </div>
+        <div class="dl a"><span class="n"></span><span class="n">68</span><span>+</span><span>	}</span></div>
+        <div class="dl a"><span class="n"></span><span class="n">69</span><span>+</span><span>	s.Remote = remote</span></div>
+        <div class="dl"><span class="n">71</span><span class="n">70</span><span></span><span>	return s, nil</span></div>
+      </div>
+      <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; border-top: 1px solid var(--hair); padding-top: 16px">
+        <div style="display: flex; flex-direction: column; gap: 4px"><span style="color: var(--canard); font-size: 17px; font-weight: 700">Normal: one approval</span><span class="muted" style="font-size: 14px">The reviewer role: Person B. Merging the PR opens step 7.</span></div>
+        <div style="display: flex; gap: 8px"><button class="btn">Request changes</button><button class="btn primary">Approve</button></div>
+      </div>
+    </section>
+
+    <aside aria-label="Review threads" style="flex: 1 1 300px; min-width: 0; border-left: 1px solid var(--hair); padding: 18px 24px 32px; display: flex; flex-direction: column; gap: 10px">
+      <span class="label">Review · 2 threads</span>
+      <div class="cm"><span><b>Person B</b> · <span class="mono" style="font-size: 12px">binaries.go:67</span></span><span>Name the remotes that were tried in this error.</span><span class="muted" style="font-size: 13px">open</span></div>
+      <div class="cm"><span><b>Review bot</b> <span class="ai">bot</span> · <span class="mono" style="font-size: 12px">git.go:176</span></span><span><span class="mono">ConfigRepo</span> no longer names origin: covered by the test.</span><span class="muted" style="font-size: 13px">resolved</span></div>
+      <span class="muted" style="font-size: 13px; margin-top: 8px">Line comments go to PR #41 on GitHub and stay on the issue, under this step.</span>
+    </aside>
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Step 4, Tests first</title>
+</head>
+<body>
+<style>
+:root{--red:#FF0000;--red-dark:#B51F1F;--canard:#007480;--canard-bg:#EAF4F5;--add:#E6F4EA;--add-fg:#1E5B2E;--bad-bg:#FFE5E5;--bad:#80000C;--g200:#D5D5D5;--g300:#C1C1C1;--g600:#707070;--black:#212121;--subtle:#F5F5F5;--hair:rgba(33,33,33,.1);--mono:ui-monospace,SFMono-Regular,Menlo,monospace;--sans:"Suisse Int'l",Arial,"Helvetica Neue",Helvetica,sans-serif}
+body{margin:0;font-family:var(--sans);color:var(--black);background:#fff}
+a{color:var(--black)}a:hover{color:var(--red)}
+.eyebrow{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--canard);font-weight:700}
+.label{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--g600)}
+.muted{color:var(--g600)}
+.mono{font-family:var(--mono)}
+.btn{font:inherit;font-size:14px;line-height:1.2;padding:9px 16px;border:1px solid var(--black);background:#fff;color:var(--black);border-radius:2px;cursor:pointer;white-space:nowrap}
+.btn.primary{background:var(--red-dark);border-color:var(--red-dark);color:#fff;font-weight:700}
+.btn.sm{font-size:13px;padding:6px 10px}
+.btn:focus-visible,.steps a:focus-visible,.seg button:focus-visible{outline:2px solid var(--red-dark);outline-offset:2px}
+.nav a{text-decoration:none;font-weight:700;font-size:15px}
+.steps{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}
+.steps a,.steps span.lk{display:flex;flex-direction:column;gap:3px;padding:9px 10px 10px;text-decoration:none;color:var(--black);border-top:4px solid var(--g200);min-height:62px;box-sizing:border-box}
+.steps .num{font-family:var(--mono);font-size:12px;color:var(--g600)}
+.steps .nm{font-size:14px;font-weight:700}
+.steps .ev{font-size:12px;line-height:1.3;color:var(--g600)}
+.steps a.done{border-top-color:var(--canard)}
+.steps a.cur{border-top-color:var(--black);background:var(--subtle)}
+.steps span.lk{color:var(--g600)}
+.steps span.lk .nm{font-weight:400;color:var(--g600);display:flex;align-items:center;gap:5px}
+.seg{display:inline-flex;border:1px solid var(--black);border-radius:2px}
+.seg button{font:inherit;font-size:12px;padding:4px 10px;border:0;background:#fff;color:var(--black);cursor:pointer}
+.seg button.on{background:var(--black);color:#fff}
+.cm{border-top:1px solid var(--hair);padding:12px 0;font-size:14px;line-height:1.45;display:flex;flex-direction:column;gap:4px}
+.ai{display:inline-block;font-size:11px;font-weight:700;padding:1px 6px;background:var(--black);color:#fff;letter-spacing:.04em}
+.code{font-family:var(--mono);font-size:13px;line-height:1.6;margin:0;white-space:pre-wrap}
+.ln{display:block;padding:0 12px}
+.ln.a{background:var(--add)}
+.run{border:1px solid var(--hair);padding:14px 16px;display:flex;flex-direction:column;gap:6px;font-size:14px}
+.pill{display:inline-block;font-size:12px;font-weight:700;padding:2px 8px}
+.fail{background:var(--bad-bg);color:var(--bad)}
+.wait{background:var(--subtle);color:var(--g600)}
+.okp{background:var(--add);color:var(--add-fg)}
+.t{width:100%;border-collapse:collapse;font-size:14px;line-height:1.4}
+.t td{padding:8px 10px;border-bottom:1px solid var(--hair);vertical-align:top}
+</style>
+<div style="width: 100%; min-height: 1100px; display: flex; flex-direction: column; background: #fff">
+  <header style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px 28px; padding: 14px 32px; border-bottom: 1px solid var(--hair)">
+    <div style="display: flex; align-items: baseline; gap: 12px"><span style="font-weight: 700; font-size: 26px; color: var(--red); letter-spacing: .02em">EPFL</span><span style="font-size: 19px">git-board</span></div>
+    <nav class="nav" aria-label="Views" style="display: flex; flex-wrap: wrap; gap: 20px; flex: 1 1 auto">
+      <a href="#">board</a><a href="#">drafts</a><a href="#">mine</a><span class="muted" aria-hidden="true">|</span><a href="#">Work</a><a href="#">Insights</a><a href="#">Releases</a><a href="#">Inbox</a>
+    </nav>
+    <button class="btn sm">Send 1</button>
+  </header>
+
+  <div style="padding: 24px 40px 18px; display: flex; flex-direction: column; gap: 12px; border-bottom: 1px solid var(--hair)">
+    <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 16px">
+      <h1 style="margin: 0; font-size: 28px; line-height: 1.2; flex: 1 1 520px"><span class="mono muted" style="font-weight: 400">GB-31</span> release: in a fork's clone, releases go to its upstream origin</h1>
+      <button class="btn sm">Close issue</button>
+    </div>
+    <div class="muted" style="font-size: 14px; display: flex; flex-wrap: wrap; gap: 4px 16px">
+      <span style="color: var(--canard); font-weight: 700">Open</span><span>bug · p1 · in-progress · risk normal</span><span class="mono">31-release-in-a-fork-s-clone</span><a href="#">GitHub #37</a><span style="color: var(--red-dark)">Illustration</span>
+    </div>
+    <ol class="steps" aria-label="The cycle">
+      <li><a class="done" href="#"><span class="num">01</span><span class="nm">Intent</span><span class="ev">4 criteria · ready</span></a></li>
+      <li><a class="done" href="#"><span class="num">02</span><span class="nm">Risk class</span><span class="ev">normal, by Person A</span></a></li>
+      <li><a class="done" href="#"><span class="num">03</span><span class="nm">Plan</span><span class="ev">v2, approved by Person A</span></a></li>
+      <li><a class="cur" href="#" aria-current="step"><span class="num">04</span><span class="nm">Tests first</span><span class="ev">fails at 4c1e2a0</span></a></li>
+      <li><a href="#"><span class="num">05</span><span class="nm">Code</span><span class="ev">open · the fix</span></a></li>
+      <li><span class="lk" aria-disabled="true"><span class="num">06</span><span class="nm"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><rect x="5" y="11" width="14" height="10"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Review</span><span class="ev">opens when the PR is ready for review</span></span></li>
+      <li><span class="lk" aria-disabled="true"><span class="num">07</span><span class="nm"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><rect x="5" y="11" width="14" height="10"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Verify</span><span class="ev">opens when the PR is merged</span></span></li>
+    </ol>
+  </div>
+
+  <div style="display: flex; flex-wrap: wrap; flex: 1 1 auto">
+    <section aria-label="Tests first" style="flex: 999 1 640px; min-width: 0; padding: 28px 40px 40px; display: flex; flex-direction: column; gap: 16px">
+      <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 12px">
+        <div style="display: flex; flex-direction: column; gap: 6px"><span class="eyebrow">Step 4 · Tests first · a bug</span><h2 style="margin: 0; font-size: 26px">The test that fails before the fix</h2></div>
+        <span class="muted" style="font-size: 14px">Rule for a bug: a regression test, red first</span>
+      </div>
+
+      <div style="border: 1px solid var(--hair)">
+        <div class="muted" style="font-size: 13px; padding: 8px 12px; border-bottom: 1px solid var(--hair); display: flex; justify-content: space-between; gap: 8px"><span class="mono">internal/release/remote_test.go</span><span>commit 4c1e2a0 · test only</span></div>
+<pre class="code" style="padding: 8px 0"><span class="ln a">func TestCutPicksThePushableRemote(t *testing.T) {</span><span class="ln a">	t.Parallel()</span><span class="ln a">	r := forkClone(t) // origin read-only, fork writable</span><span class="ln a">	got, err := r.Remote(context.Background())</span><span class="ln a">	require.NoError(t, err)</span><span class="ln a">	require.Equal(t, "fork", got)</span><span class="ln a">}</span></pre>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px">
+        <div class="run"><span><span class="pill fail">FAIL</span> at <span class="mono">4c1e2a0</span>, before the fix</span><span class="mono muted" style="font-size: 12px">expected "fork", actual "origin"</span><span class="muted" style="font-size: 13px">Run by git-board in the worktree, 15:41</span></div>
+        <div class="run"><span><span class="pill wait">PASS</span> at the head, after the fix</span><span class="muted" style="font-size: 13px">Waits for the fix, in step 5</span></div>
+      </div>
+
+      <div style="border: 1px solid var(--hair); padding: 14px 16px; display: flex; flex-direction: column; gap: 8px">
+        <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px"><span class="label">Test suites · declared in [cycle.tests]</span><button class="btn sm">Run the selected</button></div>
+        <div style="overflow-x: auto"><table class="t"><tbody>
+          <tr><td><input type="checkbox" checked aria-label="Run unit"></td><td><b>unit</b> <span class="mono muted" style="font-size: 12px">go test ./internal/release/...</span></td><td>worktree</td><td class="muted">the diff touches internal/release</td><td><span class="pill fail">1 failing</span></td></tr>
+          <tr><td><input type="checkbox" checked aria-label="Run web"></td><td><b>web</b> <span class="mono muted" style="font-size: 12px">npm test</span></td><td>worktree</td><td class="muted">the diff touches web/src/pages</td><td><span class="pill okp">159 pass</span></td></tr>
+          <tr><td><input type="checkbox" aria-label="Run e2e"></td><td><b>e2e</b> <span class="mono muted" style="font-size: 12px">playwright</span></td><td>CI on draft PR #41</td><td class="muted">the Settings page</td><td class="muted">not run</td></tr>
+          <tr><td><input type="checkbox" disabled aria-label="Run lighthouse"></td><td><b>lighthouse</b></td><td>CI</td><td class="muted">not touched</td><td class="muted">–</td></tr>
+          <tr><td><input type="checkbox" disabled aria-label="Run performance"></td><td><b>performance</b></td><td>CI</td><td class="muted">not touched</td><td class="muted">–</td></tr>
+        </tbody></table></div>
+        <span class="muted" style="font-size: 13px">A failure goes to the agent with one click; the result is git-board's run, never the agent's word. For a feature, the rule is the touched suites green, each criterion naming its test.</span>
+      </div>
+
+      <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; border-top: 1px solid var(--hair); padding-top: 16px">
+        <div style="display: flex; flex-direction: column; gap: 4px"><span style="color: var(--canard); font-size: 17px; font-weight: 700">Red first: done</span><span class="muted" style="font-size: 14px">The agent works in <span class="mono">31-release-in-a-fork-s-clone</span>. Step 5 is open.</span></div>
+        <div style="display: flex; gap: 8px"><button class="btn">Open the agent</button><a class="btn primary" href="C5-code.html" style="text-decoration: none">Go to step 5</a></div>
+      </div>
+    </section>
+
+    <aside aria-label="Discussion" style="flex: 1 1 340px; min-width: 0; border-left: 1px solid var(--hair); padding: 28px 28px 32px; display: flex; flex-direction: column; gap: 10px">
+      <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px"><span class="label">Discussion</span><div class="seg" role="group" aria-label="Show"><button class="on" aria-pressed="true">This step 2</button><button aria-pressed="false">All 9</button></div></div>
+      <div class="cm"><span><b>Claude Code</b> <span class="ai">agent</span> <span class="muted">· 15:42</span></span><span>Added <span class="mono">TestCutPicksThePushableRemote</span>. It fails at 4c1e2a0: the cut chose <span class="mono">origin</span>. Starting the fix.</span></div>
+      <div class="cm"><span><b>Person A</b> <span class="muted">· 15:50</span></span><span>Good. Keep the fork case in the test name, it reads as the bug.</span></div>
+      <label for="c4-c" class="muted" style="font-size: 13px; margin-top: 8px">Comment on the tests</label>
+      <textarea id="c4-c" rows="4" style="width: 100%; box-sizing: border-box; border: 1px solid var(--g300); padding: 10px 12px; font: inherit; font-size: 14px; resize: vertical"></textarea>
+      <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px">
+        <label style="display: flex; gap: 6px; align-items: center; font-size: 13px"><input type="checkbox"> Send to <select aria-label="Agent" style="font: inherit; font-size: 13px"><option>Claude Code</option><option>OpenCode</option></select></label>
+        <button class="btn sm">Comment</button>
+      </div>
+    </aside>
+  </div>
+</div>
+</body>
+</html>

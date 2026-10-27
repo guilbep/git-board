@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>One comment, three readings: the core, git-board, GitHub</title>
+</head>
+<body>
+<style>
+:root{--red:#FF0000;--red-dark:#B51F1F;--canard:#007480;--canard-bg:#EAF4F5;--add:#E6F4EA;--add-fg:#1E5B2E;--del:#FBE9EA;--del-fg:#80000C;--g200:#D5D5D5;--g300:#C1C1C1;--g600:#707070;--black:#212121;--subtle:#F5F5F5;--hair:rgba(33,33,33,.1);--mono:ui-monospace,SFMono-Regular,Menlo,monospace;--sans:"Suisse Int'l",Arial,"Helvetica Neue",Helvetica,sans-serif}
+body{margin:0;font-family:var(--sans);color:var(--black);background:#fff}
+a{color:var(--black)}a:hover{color:var(--red)}
+.eyebrow{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--canard);font-weight:700}
+.muted{color:var(--g600)}
+.mono{font-family:var(--mono)}
+.btn{font:inherit;font-size:13px;line-height:1.2;padding:6px 10px;border:1px solid var(--black);background:#fff;color:var(--black);border-radius:2px;cursor:pointer;white-space:nowrap}
+.btn:focus-visible{outline:2px solid var(--red-dark);outline-offset:2px}
+.code{font-family:var(--mono);font-size:12.5px;line-height:1.6;background:var(--subtle);padding:14px 16px;white-space:pre-wrap;margin:0;overflow-wrap:anywhere}
+.k{color:var(--red-dark)}
+.c{color:var(--g600)}
+.m{color:var(--canard)}
+.role{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:1px 6px;border:1px solid var(--g300);color:var(--g600);vertical-align:middle;line-height:1.4}
+.anchor{font-family:var(--mono);font-size:12px;color:var(--canard);white-space:nowrap}
+.chk{display:flex;gap:8px;align-items:flex-start;font-size:14px;line-height:1.45}
+.chk input{margin-top:4px}
+.thread{border:1px solid var(--g300);background:#fff;display:flex;flex-direction:column}
+.cm{padding:10px 14px;border-top:1px solid var(--hair);font-size:13.5px;line-height:1.45;display:flex;flex-direction:column;gap:6px}
+.cm:first-child{border-top:0}
+.sug{font-family:var(--mono);font-size:12px;line-height:1.6;border:1px solid var(--hair)}
+.sug div{padding:3px 8px;white-space:pre-wrap}
+.sug .d{background:var(--del);color:var(--del-fg);text-decoration:line-through}
+.sug .a{background:var(--add);color:var(--add-fg)}
+.rows{list-style:none;margin:0;padding:0}
+.rows li{display:grid;grid-template-columns:150px minmax(0,1.2fr) minmax(0,1fr);gap:16px;padding:11px 0;border-top:1px solid var(--hair);font-size:13.5px;line-height:1.45}
+.rows li.hd{border-top:0;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--g600);padding-bottom:4px}
+.rows b.t{font-weight:700}
+.rows .mono{font-size:12.5px}
+</style>
+<div style="width: 100%; min-height: 1460px; box-sizing: border-box; padding: 48px 56px; display: flex; flex-direction: column; gap: 26px; background: #fff">
+  <div style="display: flex; flex-direction: column; gap: 8px">
+    <span class="eyebrow">A sketch, not settled · key names are a proposal, in the core's form</span>
+    <h1 style="margin: 0; font-size: 36px; line-height: 1.15">One comment, three readings</h1>
+    <p class="muted" style="margin: 0; font-size: 16px; max-width: 960px">Nothing new is stored. A version is the core's <span class="mono">edit-text</span> on the body; an anchor, a reply, a verdict and a step are <span class="mono">meta</span> keys on the comment, the way <span class="mono">cycle:step</span> and <span class="mono">review:path</span> already are. GitHub #37 gets every comment flat and in time order; the keys ride in the marker sync already hides on the last line, and come back on pull.</p>
+  </div>
+
+  <div style="display: flex; flex-wrap: wrap; gap: 24px">
+    <section aria-label="In the core" style="flex: 1 1 340px; min-width: 0; display: flex; flex-direction: column; gap: 10px">
+      <span class="eyebrow" style="color: var(--black)">1 · In the core: the operation</span>
+<pre class="code">{
+  <span class="k">"kind"</span>: "comment",
+  <span class="k">"author"</span>: "b7e4…1f40",   <span class="c">Person B</span>
+  <span class="k">"time"</span>: 1792764300,     <span class="c">Oct 21 14:05</span>
+  <span class="k">"data"</span>: {
+    "body": "Then say what replaces the
+      CLI text.\n\n```suggestion\nA missing
+      identity sends the user to Settings ›
+      identity; the CLI text is never
+      shown.\n```",
+    "meta": {
+      <span class="m">"cycle:step"</span>:      "01",
+      <span class="m">"thread:anchor"</span>:   "body@v1/expected#3",
+      <span class="m">"thread:reply-to"</span>: "7d2f…0a1c",
+      <span class="m">"thread:kind"</span>:     "suggestion"
+    }
+  }
+}
+<span class="c"># body = the issue's text, target &lt;issue&gt;:0
+# v1 = its first version · expected = the
+# section's heading, slugged · 3 = its 3rd item</span></pre>
+      <p class="muted" style="margin: 0; font-size: 13px">The same <span class="mono">comment</span> op as today, with three keys of a new <span class="mono">thread:</span> group. An op with none is a plain comment on the issue. The core gives no key a meaning; git-board does.</p>
+    </section>
+
+    <section aria-label="In git-board" style="flex: 1 1 380px; min-width: 0; display: flex; flex-direction: column; gap: 10px">
+      <span class="eyebrow" style="color: var(--black)">2 · In git-board: under its section, in its step</span>
+      <div style="border: 1px solid var(--hair); padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; background: var(--canard-bg); box-shadow: inset 3px 0 0 var(--canard)">
+        <div style="display: flex; justify-content: space-between; align-items: baseline; gap: 12px"><b style="font-size: 15px">Expected</b><span class="anchor">§3 › 3 · v1</span></div>
+        <label class="chk" style="background: #fff; outline: 2px solid var(--canard); outline-offset: 3px"><input type="checkbox" disabled> <span><b>A missing identity sends the user to Settings › identity</b>, not to a CLI command.</span></label>
+        <div class="thread">
+          <div class="cm"><span><b>Person B</b> <span class="role">PM</span> <span class="muted">· 13:40 · on</span> <span class="anchor">§3 › 3</span></span><span>Is the identity message part of this one?</span></div>
+          <div class="cm">
+            <span><b>Person B</b> <span class="role">PM</span> <span class="muted">· 14:05 · suggested an edit · reply to the thread</span></span>
+            <span>Then say what replaces the CLI text.</span>
+            <div class="sug"><div class="d">…Settings › identity, not to a CLI command.</div><div class="a">…Settings › identity; the CLI text is never shown.</div></div>
+            <div style="display: flex; gap: 8px"><button class="btn">Apply in v2</button><button class="btn">Decline</button></div>
+          </div>
+        </div>
+      </div>
+      <p class="muted" style="margin: 0; font-size: 13px">In the flow, the same comment is an entry of segment 01 that quotes its anchor. In History, it is change 7 of 31. Apply writes the <span class="mono">edit-text</span> that is v2, then a <span class="mono">set-meta</span> on the thread's root: <span class="mono">thread:resolved = v2</span>.</p>
+    </section>
+
+    <section aria-label="On GitHub" style="flex: 1 1 340px; min-width: 0; display: flex; flex-direction: column; gap: 10px">
+      <span class="eyebrow" style="color: var(--black)">3 · On GitHub #37: the comment, as sync posts it</span>
+<pre class="code">&gt; **On v1 · § Expected · 3** ·
+&gt; _A missing identity sends the user to
+&gt; Settings › identity, not to a CLI command._
+
+Then say what replaces the CLI text.
+
+```suggestion
+A missing identity sends the user to
+Settings › identity; the CLI text is
+never shown.
+```
+
+<span class="c">&lt;!-- git-board comment 9c41…e77a:0
+     step=01 anchor=body@v1/expected#3
+     reply-to=7d2f…0a1c kind=suggestion --&gt;</span></pre>
+      <p class="muted" style="margin: 0; font-size: 13px">A flat comment, readable as is: the quote says where, the block shows what. The marker is the one sync already writes, with the keys appended; pulled back, it is stripped and the keys become <span class="mono">meta</span> again. Unlike <span class="mono">review:*</span> line comments, which stay local, a thread on the body is posted. On GitLab the thread becomes a discussion instead of a quote.</p>
+    </section>
+  </div>
+
+  <section aria-label="Where each thing lives" style="display: flex; flex-direction: column; gap: 6px">
+    <span class="eyebrow" style="color: var(--black)">Where each thing lives</span>
+    <ol class="rows">
+      <li class="hd"><span>The thing</span><span>In the core</span><span>On GitHub #37 · GitLab</span></li>
+      <li><b class="t">The description, v2</b><span><span class="mono">edit-text</span> with target <span class="mono">&lt;issue&gt;:0</span>. Versions are counted, never stored: the n-th edit that changes text is v<i>n</i>.</span><span>The issue body, edited; the forge keeps the edit history. Plus a comment: "Published v2 · § intro, § Expected, § Workaround changed".</span></li>
+      <li><b class="t">A tick, at step 07</b><span>An <span class="mono">edit-text</span> on the body that flips <span class="mono">- [ ]</span> to <span class="mono">- [x]</span> and nothing else: a tick, not a version.</span><span>The body, edited.</span></li>
+      <li><b class="t">A section anchor</b><span><span class="mono">thread:anchor = body@v1/expected#3</span>: the text, its version, the section's slug, the item. A reply inherits its root's anchor. Later: <span class="mono">plan@&lt;commit&gt;/steps#4</span> for a plan file.</span><span>A quote header on the comment: <span class="mono">&gt; **On v1 · § Expected · 3** · _the line_</span>.</span></li>
+      <li><b class="t">A reply</b><span><span class="mono">thread:reply-to = &lt;comment id&gt;</span>, the thread's root.</span><span>A flat comment, the quote header repeated. GitLab: a reply in the same discussion.</span></li>
+      <li><b class="t">A suggested edit</b><span>The body carries a <span class="mono">```suggestion</span> block · <span class="mono">thread:kind = suggestion</span>. Apply writes the next version, then <span class="mono">set-meta</span> on the root: <span class="mono">thread:resolved = v2</span>, <span class="mono">thread:applied = &lt;edit op id&gt;</span>.</span><span>The same block, shown as code; still readable.</span></li>
+      <li><b class="t">A verdict</b><span>A <span class="mono">comment</span> with <span class="mono">spec:verdict = approve | request-changes</span> and <span class="mono">spec:on = body@v2</span>; approving moves the status, as a step's button does today.</span><span>A comment whose first line is bold, then the status label, as today.</span></li>
+      <li><b class="t">The step</b><span><span class="mono">cycle:step = 01</span>, as today: set by the composer from the issue's step at that moment, never typed.</span><span>In the marker only; the forge shows nothing, needs nothing.</span></li>
+      <li><b class="t">A milestone</b><span>A <span class="mono">change-labels</span> or <span class="mono">set-status</span> op, as today; PR events arrive through sync.</span><span>The label, the state, the PR link.</span></li>
+      <li><b class="t">Carried, outdated, resolved</b><span>Carried and outdated are computed: an anchor is matched against the later version's section text, unchanged means carried, changed means outdated. Resolved is <span class="mono">thread:resolved</span> on the root, set by Apply or by a person.</span><span>Not written. git-board's reading only; GitLab resolves its discussion.</span></li>
+      <li><b class="t">The round trip</b><span>The <span class="mono">thread:</span>, <span class="mono">spec:</span> and <span class="mono">cycle:step</span> keys are appended to the marker sync writes; pull strips the marker and restores them as <span class="mono">meta</span>, so a comment that went out and came back is the same comment.</span><span>Invisible on GitHub and GitLab. A comment typed on the forge has no keys: a plain comment on the issue, in the step current at pull.</span></li>
+    </ol>
+  </section>
+</div>
+</body>
+</html>

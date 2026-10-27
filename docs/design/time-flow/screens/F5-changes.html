@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Changes: the description's versions, then the code</title>
+</head>
+<body>
+<style>
+:root{--red:#FF0000;--red-dark:#B51F1F;--canard:#007480;--canard-bg:#EAF4F5;--add:#E6F4EA;--add-fg:#1E5B2E;--del:#FBE9EA;--del-fg:#80000C;--g200:#D5D5D5;--g300:#C1C1C1;--g600:#707070;--black:#212121;--subtle:#F5F5F5;--hair:rgba(33,33,33,.1);--mono:ui-monospace,SFMono-Regular,Menlo,monospace;--sans:"Suisse Int'l",Arial,"Helvetica Neue",Helvetica,sans-serif}
+body{margin:0;font-family:var(--sans);color:var(--black);background:#fff}
+a{color:var(--black)}a:hover{color:var(--red)}
+.eyebrow{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--canard);font-weight:700}
+.label{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--g600)}
+.muted{color:var(--g600)}
+.mono{font-family:var(--mono)}
+.btn{font:inherit;font-size:14px;line-height:1.2;padding:9px 16px;border:1px solid var(--black);background:#fff;color:var(--black);border-radius:2px;cursor:pointer;white-space:nowrap}
+.btn.sm{font-size:13px;padding:6px 10px}
+.btn:focus-visible,.steps a:focus-visible,.seg button:focus-visible,.tab:focus-visible,.tchip:focus-visible{outline:2px solid var(--red-dark);outline-offset:2px}
+.nav a{text-decoration:none;font-weight:700;font-size:15px}
+.steps{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}
+.steps a{display:flex;flex-direction:column;gap:3px;padding:9px 10px 10px;text-decoration:none;color:var(--black);border-top:4px solid var(--g200);min-height:62px;box-sizing:border-box}
+.steps .num{font-family:var(--mono);font-size:12px;color:var(--g600)}
+.steps .nm{font-size:14px;font-weight:700}
+.steps .ev{font-size:12px;line-height:1.3;color:var(--g600)}
+.steps a.done{border-top-color:var(--canard)}
+.steps a.cur{border-top-color:var(--black);background:var(--subtle)}
+.tab{font:inherit;font-size:14px;background:none;border:0;border-bottom:2px solid transparent;padding:12px 0;color:var(--g600);cursor:pointer}
+.tab.on{color:var(--black);font-weight:700;border-bottom-color:var(--red)}
+.seg{display:inline-flex;border:1px solid var(--black);border-radius:2px}
+.seg button{font:inherit;font-size:12px;padding:4px 10px;border:0;background:#fff;color:var(--black);cursor:pointer}
+.seg button.on{background:var(--black);color:#fff}
+.tag{display:inline-block;font-size:12px;padding:3px 8px;border:1px solid var(--g300);border-radius:2px;background:#fff;white-space:nowrap}
+.role{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:1px 6px;border:1px solid var(--g300);color:var(--g600);vertical-align:middle;line-height:1.4}
+.ai{display:inline-block;font-size:11px;font-weight:700;padding:1px 6px;background:var(--black);color:#fff;letter-spacing:.04em;vertical-align:middle}
+.anchor{font-family:var(--mono);font-size:12px;color:var(--canard);white-space:nowrap}
+.field{display:flex;flex-direction:column;gap:4px;font-size:14px}
+.field .k{font-size:12px;color:var(--g600)}
+.ver{flex:1 1 260px;min-width:0;border:1px solid var(--hair);padding:12px 14px;display:flex;flex-direction:column;gap:4px;font-size:14px}
+.ver.on{border-color:var(--black);box-shadow:inset 0 3px 0 var(--black)}
+.md h4{margin:0;font-size:16px}
+.md ul{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px}
+.md p{margin:0}
+.chk{display:flex;gap:8px;align-items:flex-start}
+.chk input{margin-top:5px}
+.sec{display:grid;grid-template-columns:minmax(0,1fr) 150px;gap:10px 20px;padding:16px 0;border-top:1px solid var(--hair)}
+.gut{display:flex;flex-direction:column;align-items:flex-start;gap:6px;font-size:12px;color:var(--g600)}
+.tchip{font:inherit;font-size:12px;line-height:1.35;padding:4px 8px;border:1px solid var(--g300);background:#fff;border-radius:2px;cursor:pointer;text-align:left;color:var(--black)}
+.ins{background:var(--add);color:var(--add-fg)}
+.dels{background:var(--del);color:var(--del-fg);text-decoration:line-through}
+.thread{grid-column:1 / -1;border:1px solid var(--g300);background:#fff;display:flex;flex-direction:column}
+.thread.one{flex-direction:row;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:6px 12px;padding:10px 16px;font-size:13px;color:var(--g600)}
+.cm{padding:12px 16px;border-top:1px solid var(--hair);font-size:14px;line-height:1.45;display:flex;flex-direction:column;gap:6px}
+.cm:first-child{border-top:0}
+.sug{font-family:var(--mono);font-size:13px;line-height:1.6;border:1px solid var(--hair)}
+.sug div{padding:3px 10px;white-space:pre-wrap}
+.sug .d{background:var(--del);color:var(--del-fg);text-decoration:line-through}
+.sug .a{background:var(--add);color:var(--add-fg)}
+.row{display:grid;grid-template-columns:84px minmax(0,1fr) 120px 110px 90px;gap:12px;padding:10px 0;border-top:1px solid var(--hair);font-size:14px;line-height:1.4;align-items:start}
+.row.hd{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--g600);border-top:0;padding-bottom:4px}
+.row .h{font-family:var(--mono);font-size:13px}
+.pill{display:inline-block;font-size:12px;font-weight:700;padding:2px 8px}
+.pass{background:var(--add);color:var(--add-fg)}
+.fail{background:var(--del);color:var(--del-fg)}
+.files{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(280px,100%),1fr));gap:4px 24px;font-size:13px}
+.files li{display:flex;justify-content:space-between;gap:8px;padding:5px 0;border-top:1px solid var(--hair)}
+.files .st{font-family:var(--mono);font-size:12px;color:var(--g600);white-space:nowrap}
+</style>
+<div style="width: 100%; min-height: 2240px; display: flex; flex-direction: column; background: #fff">
+  <header style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px 28px; padding: 14px 32px; border-bottom: 1px solid var(--hair)">
+    <div style="display: flex; align-items: baseline; gap: 12px"><span style="font-weight: 700; font-size: 26px; color: var(--red); letter-spacing: .02em">EPFL</span><span style="font-size: 19px">git-board</span></div>
+    <nav class="nav" aria-label="Views" style="display: flex; flex-wrap: wrap; gap: 20px; flex: 1 1 auto">
+      <a href="#">board</a><a href="#">drafts</a><a href="#">mine</a><span class="muted" aria-hidden="true">|</span><a href="#">Work</a><a href="#">Insights</a><a href="#">Releases</a><a href="#">Inbox</a>
+    </nav>
+    <button class="btn sm">Send 1</button>
+  </header>
+
+  <div style="padding: 24px 40px 18px; display: flex; flex-direction: column; gap: 12px; border-bottom: 1px solid var(--hair)">
+    <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 16px">
+      <h1 style="margin: 0; font-size: 28px; line-height: 1.2; flex: 1 1 520px"><span class="mono muted" style="font-weight: 400">GB-31</span> release: in a fork's clone, releases go to its upstream origin</h1>
+      <button class="btn sm">Close issue</button>
+    </div>
+    <div class="muted" style="font-size: 14px; display: flex; flex-wrap: wrap; gap: 4px 16px">
+      <span style="color: var(--canard); font-weight: 700">Open</span><span>bug · p1 · in-review · risk normal</span><span><b style="color: var(--black)">Person A</b> <span class="role">PO</span> opened this Oct 21 · 19 comments</span><a href="#">PR #41, merged</a><a href="#">GitHub #37</a><span style="color: var(--red-dark)">Illustration</span>
+    </div>
+    <ol class="steps" aria-label="The cycle">
+      <li><a class="done" href="#"><span class="num">01</span><span class="nm">Intent</span><span class="ev">v2 approved · 4 criteria</span></a></li>
+      <li><a class="done" href="#"><span class="num">02</span><span class="nm">Risk class</span><span class="ev">normal, by Person A</span></a></li>
+      <li><a class="done" href="#"><span class="num">03</span><span class="nm">Plan</span><span class="ev">v2, delivered</span></a></li>
+      <li><a class="done" href="#"><span class="num">04</span><span class="nm">Tests first</span><span class="ev">red at 4c1e2a0, green at 9b2f71d</span></a></li>
+      <li><a class="done" href="#"><span class="num">05</span><span class="nm">Code</span><span class="ev">PR #41, opened by Person A</span></a></li>
+      <li><a class="done" href="#"><span class="num">06</span><span class="nm">Review</span><span class="ev">approved by Person B · merged</span></a></li>
+      <li><a class="cur" href="#" aria-current="step"><span class="num">07</span><span class="nm">Verify</span><span class="ev">3 of 4 criteria checked</span></a></li>
+    </ol>
+  </div>
+
+  <div style="display: flex; flex-wrap: wrap; flex: 1 1 auto">
+    <section aria-label="Changes" style="flex: 999 1 640px; min-width: 0; display: flex; flex-direction: column">
+      <div role="tablist" aria-label="Issue" style="display: flex; gap: 24px; padding: 0 40px; border-bottom: 1px solid var(--hair)">
+        <button class="tab" role="tab" aria-selected="false">Conversation</button>
+        <button class="tab" role="tab" aria-selected="false">History 31</button>
+        <button class="tab on" role="tab" aria-selected="true">Changes 5</button>
+      </div>
+
+      <div style="padding: 24px 40px 40px; max-width: 1000px; box-sizing: border-box; display: flex; flex-direction: column; gap: 26px">
+
+        <div style="display: flex; flex-direction: column; gap: 14px">
+          <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 8px 16px">
+            <h2 style="margin: 0; font-size: 20px">The description · 2 versions, 3 ticks</h2>
+            <span class="muted" style="font-size: 13px">A version is an edit that changes text. An edit that only flips checkboxes is a tick, listed, not numbered.</span>
+          </div>
+          <div style="display: flex; flex-wrap: wrap; align-items: stretch; gap: 10px">
+            <div class="ver"><span><b>v1</b> <span class="muted">· Oct 21 12:19 · Person A</span></span><span class="muted" style="font-size: 13px">the original · 4 criteria</span><span style="font-size: 13px; color: var(--del-fg)">changes requested by Person B, 14:10</span></div>
+            <span class="muted" aria-hidden="true" style="align-self: center; font-size: 20px">→</span>
+            <div class="ver on"><span><b>v2</b> <span class="muted">· Oct 22 09:30 · Person A</span></span><span class="muted" style="font-size: 13px"><span class="anchor">§1</span> <span class="anchor">§3 › 3</span> <span class="anchor">§4</span> changed · 1 suggested edit applied · resolves 1 thread</span><span style="font-size: 13px; color: var(--add-fg)">approved by Person B, 10:40 · the current text</span></div>
+            <div class="ver" style="border-style: dashed"><span><b>ticks</b> <span class="muted">· Oct 25 · Person B, Person A</span></span><span class="muted" style="font-size: 13px">criteria 1, 2 and 3 ticked at step 07</span><span class="muted" style="font-size: 13px">3 edits in History · not a version</span></div>
+          </div>
+          <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px 16px">
+            <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px"><div class="seg" role="group" aria-label="Compare"><button class="on" aria-pressed="true">v1 → v2</button><button aria-pressed="false">v2 → now</button></div><div class="seg" role="group" aria-label="Layout"><button class="on" aria-pressed="true">Inline</button><button aria-pressed="false">Side by side</button></div></div>
+            <label style="display: flex; gap: 6px; align-items: center; font-size: 13px"><input type="checkbox" checked> Threads written on these lines</label>
+          </div>
+
+          <article aria-label="v1 to v2" style="border: 1px solid var(--hair); padding: 18px 20px 20px; font-size: 15px; line-height: 1.55; display: flex; flex-direction: column">
+            <div class="sec" style="border-top: 0; padding-top: 0">
+              <div class="md"><p>Seen in the clone of the git-bug fork while trying to cut <span class="mono">v0.11.1-sync.9</span>. That clone has two remotes: <span class="mono">origin</span>, upstream, and <span class="mono">fork</span>, ours. The release was made by hand. <span class="ins">git-board 0.10.2 in that clone.</span></p></div>
+              <div class="gut"><span class="anchor">§1 intro</span><span>one sentence added</span></div>
+            </div>
+            <div class="sec">
+              <div class="md" style="display: flex; flex-direction: column; gap: 8px">
+                <h4>What the Releases page shows</h4>
+                <ul>
+                  <li>The header reads ". · published on GitHub", with no repository name.</li>
+                  <li>"All releases" lists only upstream's tags; the fork's <span class="mono">-sync.N</span> tags are missing.</li>
+                  <li>The cut stopped with git-bug's CLI text about a missing identity.</li>
+                </ul>
+              </div>
+              <div class="gut"><span class="anchor">§2 Releases page</span><span>unchanged</span></div>
+              <div class="thread one"><span><b style="color: var(--black)">Person B</b> on <span class="anchor">§2</span> · "Which version of git-board? The header fix shipped in 0.10.3." · 2 comments · answered by the sentence added to §1 · resolved Oct 22</span><button class="btn sm">Show</button></div>
+            </div>
+            <div class="sec" style="background: var(--canard-bg); box-shadow: inset 3px 0 0 var(--canard); padding: 16px 16px 16px 20px">
+              <div class="md" style="display: flex; flex-direction: column; gap: 8px">
+                <h4>Expected</h4>
+                <label class="chk"><input type="checkbox" disabled> <span><b>The authority remote is chosen, not assumed.</b> Settings suggests <span class="mono">[release] remote = "fork"</span> and says why.</span></label>
+                <label class="chk"><input type="checkbox" disabled> <span><b>Pre-release tags count.</b> The next <span class="mono">-sync.N</span> is proposed.</span></label>
+                <div style="display: flex; flex-direction: column; gap: 4px">
+                  <span class="dels" style="font-size: 14px; padding: 1px 4px; align-self: flex-start">A missing identity sends the user to Settings › identity, not to a CLI command.</span>
+                  <label class="chk"><input type="checkbox" disabled> <span class="ins" style="padding: 1px 4px"><b>A missing identity sends the user to Settings › identity</b>; the CLI text is never shown.</span></label>
+                </div>
+                <label class="chk"><input type="checkbox" disabled> <span><b>The header names the repository.</b></span></label>
+              </div>
+              <div class="gut"><span class="anchor">§3 Expected</span><span>› 3 reworded</span></div>
+              <div class="thread">
+                <div class="cm"><span><b>Person B</b> <span class="role">PM</span> <span class="muted">· Oct 21 13:40 · on</span> <span class="anchor">§3 › 3 · v1</span></span><span>Is the identity message part of this one? It's a different page.</span></div>
+                <div class="cm"><span><b>Person A</b> <span class="role">PO</span> <span class="muted">· 13:52</span></span><span>Same cut, same afternoon: keep it, it's one criterion.</span></div>
+                <div class="cm">
+                  <span><b>Person B</b> <span class="role">PM</span> <span class="muted">· 14:05 · suggested an edit ·</span> <span style="color: var(--add-fg); font-weight: 700">applied in v2</span></span>
+                  <span>Then say what replaces the CLI text.</span>
+                  <div class="sug"><div class="d">A missing identity sends the user to Settings › identity, not to a CLI command.</div><div class="a">A missing identity sends the user to Settings › identity; the CLI text is never shown.</div></div>
+                </div>
+              </div>
+            </div>
+            <div class="sec">
+              <div class="md" style="display: flex; flex-direction: column; gap: 4px">
+                <span class="dels" style="padding: 1px 4px; align-self: flex-start">Workaround, not tried yet: <span class="mono">[release] remote = "fork"</span> in the fork clone's <span class="mono">.git-board.toml</span>.</span>
+                <p class="ins" style="padding: 1px 4px">Workaround, tried Oct 22: <span class="mono">[release] remote = "fork"</span> in the fork clone's <span class="mono">.git-board.toml</span> sends the push to the fork; the header still reads ".".</p>
+              </div>
+              <div class="gut"><span class="anchor">§4 Workaround</span><span>rewritten</span></div>
+              <div class="thread one"><span><b style="color: var(--black)">Person B</b> on <span class="anchor">§4</span> · "Not tried yet? Try it before we spec the fix." · 2 comments · written on v1, answered on v2 · resolved by Person B, Oct 22 10:38</span><button class="btn sm">Show</button></div>
+            </div>
+          </article>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 14px">
+          <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 8px 16px">
+            <h2 style="margin: 0; font-size: 20px">The code · <span class="mono" style="font-size: 16px; font-weight: 400">31-release-in-a-fork-s-clone</span> · PR #41, merged</h2>
+            <span class="muted" style="font-size: 13px">3 commits · 5 files · <span class="mono">+135 −14</span> · 2 review threads at step 06, resolved</span>
+          </div>
+          <div style="border: 1px solid var(--hair); padding: 6px 20px 14px">
+            <div class="row hd"><span>Commit</span><span>Message</span><span>Who</span><span>When</span><span>CI</span></div>
+            <div class="row" style="border-top: 0"><span class="h">4c1e2a0</span><span>test: a cut picks the remote the token can push to <span class="muted">· fails before the fix, as step 04 wants</span></span><span>Claude Code <span class="ai">agent</span></span><span class="muted">Oct 22 15:10</span><span><span class="pill fail">FAIL</span></span></div>
+            <div class="row"><span class="h">9b2f71d</span><span>release: choose the remote the token can push to; the trunk is its HEAD</span><span>Claude Code <span class="ai">agent</span></span><span class="muted">Oct 22 15:40</span><span><span class="pill pass">PASS</span></span></div>
+            <div class="row"><span class="h">a1f0c3e</span><span>Merge PR #41 · release: in a fork's clone, releases go to its upstream origin (#31)</span><span>Person B</span><span class="muted">Oct 23 17:48</span><span><span class="pill pass">PASS</span></span></div>
+          </div>
+          <div style="display: flex; flex-wrap: wrap; gap: 24px">
+            <div style="flex: 2 1 420px; min-width: 0; display: flex; flex-direction: column; gap: 6px">
+              <span class="label">Files, in PR #41</span>
+              <ul class="files">
+                <li><span class="mono">release/binaries.go</span><span class="st">+5 −6</span></li>
+                <li><span class="mono">release/remote.go</span><span class="st">+52</span></li>
+                <li><span class="mono">release/remote_test.go</span><span class="st">+31</span></li>
+                <li><span class="mono">release/git.go</span><span class="st">+6 −6</span></li>
+                <li><span class="mono">pages/SettingsReleases.vue</span><span class="st">+41 −2</span></li>
+              </ul>
+            </div>
+            <div style="flex: 1 1 260px; min-width: 0; display: flex; flex-direction: column; gap: 6px; font-size: 14px">
+              <span class="label">The plan</span>
+              <span class="mono" style="font-size: 13px">docs/plans/31-release-remote.md</span>
+              <span>v2 · approved by Person A Oct 22 · marked <b>delivered</b> at the merge</span>
+              <a href="#" style="font-size: 13px">Compare plan v1…v2</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <aside aria-label="Fields" style="flex: 1 1 260px; min-width: 0; border-left: 1px solid var(--hair); padding: 24px 28px; display: flex; flex-direction: column; gap: 18px">
+      <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px"><span class="label">Fields</span><span style="font-size: 13px; color: var(--add-fg)">✓ Saved</span></div>
+      <div class="field"><span class="k">Status</span><span>in-review</span></div>
+      <div class="field"><span class="k">Kind</span><span>bug</span></div>
+      <div class="field"><span class="k">Prio</span><span>p1</span></div>
+      <div class="field"><span class="k">Risk</span><span>normal</span></div>
+      <div class="field"><span class="k">Assignee</span><span>Person A</span></div>
+      <div style="border-top: 1px solid var(--hair); padding-top: 16px; display: flex; flex-direction: column; gap: 6px; font-size: 14px">
+        <span class="label">Spec</span>
+        <span>v2 · approved by <b>Person B</b> <span class="role">PM</span></span>
+      </div>
+      <div style="border-top: 1px solid var(--hair); padding-top: 16px; display: flex; flex-direction: column; gap: 6px; font-size: 14px">
+        <span class="label">Development</span>
+        <span class="mono" style="font-size: 13px">31-release-in-a-fork-s-clone</span>
+        <span>PR #41 · merged at <span class="mono">a1f0c3e</span></span>
+      </div>
+    </aside>
+  </div>
+</div>
+</body>
+</html>

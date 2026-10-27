@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Proposition 2, the cycle in the issue's story</title>
+</head>
+<body>
+<style>
+:root{--red:#FF0000;--red-dark:#B51F1F;--canard:#007480;--g200:#D5D5D5;--g300:#C1C1C1;--g600:#707070;--black:#212121;--subtle:#F5F5F5;--hair:rgba(33,33,33,.1);--mono:ui-monospace,SFMono-Regular,Menlo,monospace;--sans:"Suisse Int'l",Arial,"Helvetica Neue",Helvetica,sans-serif}
+body{margin:0;font-family:var(--sans);color:var(--black);background:#fff}
+a{color:var(--black)}a:hover{color:var(--red)}
+.eyebrow{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--canard);font-weight:700}
+.label{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--g600)}
+.muted{color:var(--g600)}
+.mono{font-family:var(--mono)}
+.btn{font:inherit;font-size:14px;line-height:1.2;padding:9px 16px;border:1px solid var(--black);background:#fff;color:var(--black);border-radius:2px;cursor:pointer;white-space:nowrap}
+.btn.sm{font-size:13px;padding:6px 10px}
+.btn:focus-visible,.dots a:focus-visible,.tab:focus-visible{outline:2px solid var(--red-dark);outline-offset:2px}
+.dots{display:flex;flex-wrap:wrap;gap:4px;list-style:none;margin:0;padding:0}
+.dots a{display:flex;flex-direction:column;gap:6px;width:112px;text-decoration:none;color:var(--g600);font-size:12px}
+.dots a span.bar{height:4px;background:var(--g200)}
+.dots a.d span.bar{background:var(--canard)}
+.dots a.c span.bar{background:var(--black)}
+.dots a.c{color:var(--black);font-weight:700}
+.tab{font:inherit;font-size:14px;background:none;border:0;border-bottom:2px solid transparent;padding:12px 0;color:var(--g600);cursor:pointer}
+.tab.on{color:var(--black);font-weight:700;border-bottom-color:var(--red)}
+.field{display:flex;flex-direction:column;gap:4px;font-size:14px}
+.field .k{font-size:12px;color:var(--g600)}
+.nav a{text-decoration:none;font-weight:700;font-size:15px}
+.md h4{margin:6px 0 0;font-size:16px}
+.chk{display:flex;gap:8px;align-items:flex-start}
+.chk input{margin-top:5px}
+.ev{display:grid;grid-template-columns:44px minmax(0,1fr);gap:12px;font-size:14px;line-height:1.45;padding:10px 0;border-top:1px solid var(--hair)}
+.ev .s{font-family:var(--mono);font-size:12px;color:var(--canard);padding-top:2px}
+</style>
+<div style="width: 100%; min-height: 1240px; display: flex; flex-direction: column; background: #fff">
+  <header style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px 28px; padding: 14px 32px; border-bottom: 1px solid var(--hair)">
+    <div style="display: flex; align-items: baseline; gap: 12px"><span style="font-weight: 700; font-size: 26px; color: var(--red); letter-spacing: .02em">EPFL</span><span style="font-size: 19px">git-board</span></div>
+    <nav class="nav" aria-label="Views" style="display: flex; flex-wrap: wrap; gap: 20px; flex: 1 1 auto">
+      <a href="#">board</a><a href="#">drafts</a><a href="#">mine</a><span class="muted" aria-hidden="true">|</span><a href="#">Work</a><a href="#">Insights</a><a href="#">Releases</a><a href="#">Inbox</a>
+    </nav>
+    <button class="btn sm">Send 1</button>
+  </header>
+
+  <div style="padding: 28px 40px 20px; display: flex; flex-direction: column; gap: 14px; border-bottom: 1px solid var(--hair)">
+    <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 16px">
+      <h1 style="margin: 0; font-size: 30px; line-height: 1.2; flex: 1 1 520px"><span class="mono muted" style="font-weight: 400">GB-31</span> release: in a fork's clone, releases go to its upstream origin</h1>
+      <button class="btn sm">Close issue</button>
+    </div>
+    <div class="muted" style="font-size: 14px; display: flex; flex-wrap: wrap; gap: 4px 16px">
+      <span style="color: var(--canard); font-weight: 700">Open</span>
+      <span><b style="color: var(--black)">Person A</b> opened this Oct 21 · 3 comments</span>
+      <a href="#">GitHub #37</a>
+      <span class="mono">git-bug 3f90e06</span>
+      <span style="color: var(--red-dark)">Illustration: GB-31 as it would read at step 4</span>
+    </div>
+    <ol class="dots" aria-label="The cycle, click a step to jump to its entry">
+      <li><a class="d" href="#s1"><span class="bar"></span>01 Intent</a></li>
+      <li><a class="d" href="#s2"><span class="bar"></span>02 Risk</a></li>
+      <li><a class="d" href="#s3"><span class="bar"></span>03 Plan</a></li>
+      <li><a class="c" href="#s4" aria-current="step"><span class="bar"></span>04 Tests first</a></li>
+      <li><a href="#"><span class="bar"></span>05 Code</a></li>
+      <li><a href="#"><span class="bar"></span>06 Review</a></li>
+      <li><a href="#"><span class="bar"></span>07 Verify</a></li>
+    </ol>
+    <div style="border: 1px solid var(--black); padding: 16px 20px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px">
+      <div style="display: flex; flex-direction: column; gap: 4px">
+        <span class="eyebrow">Next · step 4 · Tests first</span>
+        <span style="font-size: 17px">The agent writes the failing test on <span class="mono" style="font-size: 15px">31-release-in-a-fork-s-clone</span></span>
+        <span class="muted" style="font-size: 14px">Every bug fix ships its test: a run that fails before the fix, then passes.</span>
+      </div>
+      <div style="display: flex; gap: 8px"><button class="btn">Open the agent</button></div>
+    </div>
+  </div>
+
+  <div style="display: flex; flex-wrap: wrap; flex: 1 1 auto">
+    <section aria-label="Conversation" style="flex: 999 1 560px; min-width: 0; padding: 0 40px 40px">
+      <div role="tablist" aria-label="Issue" style="display: flex; gap: 24px; border-bottom: 1px solid var(--hair); margin-bottom: 20px">
+        <button class="tab on" role="tab" aria-selected="true">Conversation</button>
+        <button class="tab" role="tab" aria-selected="false">History 9</button>
+        <button class="tab" role="tab" aria-selected="false">Changes</button>
+      </div>
+
+      <article style="border: 1px solid var(--hair)">
+        <div class="muted" style="font-size: 13px; padding: 10px 16px; border-bottom: 1px solid var(--hair)"><b style="color: var(--black)">Person A</b> opened Oct 21</div>
+        <div class="md" style="padding: 18px 20px 22px; font-size: 15px; line-height: 1.55; display: flex; flex-direction: column; gap: 10px">
+          <p style="margin: 0">Seen in the clone of the git-bug fork while trying to cut <span class="mono">v0.11.1-sync.9</span>. <a href="#">Read the whole description</a></p>
+          <div style="display: flex; justify-content: space-between; align-items: baseline; gap: 12px"><h4>Done when</h4><span class="muted" style="font-size: 13px">0 of 4 verified · ticked at step 7</span></div>
+          <label class="chk"><input type="checkbox"> <span>The authority remote is chosen, not assumed.</span></label>
+          <label class="chk"><input type="checkbox"> <span>Pre-release tags count: the next <span class="mono">-sync.N</span> is proposed.</span></label>
+          <label class="chk"><input type="checkbox"> <span>A missing identity sends the user to Settings › identity.</span></label>
+          <label class="chk"><input type="checkbox"> <span>The header names the repository.</span></label>
+        </div>
+      </article>
+
+      <div style="margin-top: 18px">
+        <div class="ev" id="s1"><span class="s">01</span><span><b>Person A</b> moved the status to ready, with 4 criteria <span class="muted">· Oct 21</span></span></div>
+        <div class="ev" id="s2"><span class="s">02</span><span><b>Person A</b> set the risk to normal <span class="muted">· Oct 21</span></span></div>
+        <div class="ev" id="s3"><span class="s">03</span>
+          <div style="border: 1px solid var(--hair); padding: 14px 16px; display: flex; flex-direction: column; gap: 8px">
+            <span><b>The agent</b> drafted the plan; <b>Person A</b> approved it <span class="muted">· Oct 22</span></span>
+            <span class="mono muted" style="font-size: 13px">docs/plans/31-release-remote.md</span>
+            <span style="font-size: 15px">Choose the authority remote from the remotes the token can push to; suggest <span class="mono">[release] remote</span> in Settings when <span class="mono">origin</span> isn't one.</span>
+            <a href="#" style="font-size: 14px">Read the whole plan</a>
+          </div>
+        </div>
+        <div class="ev" id="s4"><span class="s">04</span><span><b>Person A</b> started the agent on <span class="mono">31-release-in-a-fork-s-clone</span> <span class="muted">· Oct 22</span></span></div>
+        <div class="ev"><span class="s"></span><span><b>Person B</b> commented: the fork also has a <span class="mono">bridge-sync</span> default branch, check the trunk too. <span class="muted">· Oct 22</span></span></div>
+      </div>
+      <div class="muted" style="font-size: 14px; border: 1px solid var(--hair); padding: 12px 16px; margin-top: 16px">Comment</div>
+    </section>
+
+    <aside aria-label="Fields" style="flex: 1 1 260px; min-width: 0; border-left: 1px solid var(--hair); padding: 24px 28px; display: flex; flex-direction: column; gap: 16px">
+      <span class="label">Fields</span>
+      <div class="field"><span class="k">Status</span><span>in-progress</span></div>
+      <div class="field"><span class="k">Kind</span><span>bug</span></div>
+      <div class="field"><span class="k">Prio</span><span>p1</span></div>
+      <div class="field"><span class="k">Risk</span><span>normal</span></div>
+      <div class="field"><span class="k">Assignee</span><span>Person A</span></div>
+      <div style="border-top: 1px solid var(--hair); padding-top: 14px; display: flex; flex-direction: column; gap: 6px; font-size: 14px">
+        <span class="label">Development</span>
+        <span class="mono" style="font-size: 13px">31-release-in-a-fork-s-clone</span>
+        <span class="muted">Agent running · no PR yet</span>
+      </div>
+    </aside>
+  </div>
+</div>
+</body>
+</html>
