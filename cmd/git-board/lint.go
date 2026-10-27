@@ -100,6 +100,11 @@ func runLint(out io.Writer, cfg *config.Config, strict bool) error {
 		return err
 	}
 
+	// how today's forms of [cycle] were read, so a project can write the
+	// new ones when it wants to
+	if reads := cfg.Reads(); len(reads) > 0 {
+		fmt.Fprintf(out, "read:\n  %s\n", strings.Join(reads, "\n  "))
+	}
 	findings := lint.Run(issues, cfg)
 	printLintFindings(out, findings)
 
