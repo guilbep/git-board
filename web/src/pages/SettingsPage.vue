@@ -54,6 +54,15 @@
           </template>
         </section>
 
+        <section v-if="me?.view" aria-labelledby="set-view">
+          <h3 id="set-view" class="h5">Your issue page</h3>
+          <p>{{ viewWords(me) }}</p>
+          <p class="gb-hint">
+            To change it for you: <code>git config board.view classic</code> or <code>cycle</code> (<code>--global</code> for every repository).
+            For the whole team: a <code>[cycle]</code> table in <code>.git-board.toml</code>.
+          </p>
+        </section>
+
         <section aria-labelledby="set-look">
           <h3 id="set-look" class="h5">Appearance</h3>
           <div class="gb-opts" role="radiogroup" aria-labelledby="set-look">
@@ -67,7 +76,7 @@
 
       <!-- v-show: switching tabs keeps an unsaved draft -->
       <div v-show="tab === 'project-file'" class="set-panel set-panel-wide">
-        <p v-if="settings?.cycle.guessed && settings.cycle.closing" class="gb-hint">
+        <p v-if="cycleView && settings?.cycle.guessed && settings.cycle.closing" class="gb-hint">
           The cycle's stages are guessed from the status names: ready <code>{{ settings.cycle.ready || '—' }}</code>, in progress <code>{{ settings.cycle.in_progress.join(', ') || '—' }}</code>,
           in review <code>{{ settings.cycle.in_review.join(', ') || '—' }}</code>, validation <code>{{ settings.cycle.validation.join(', ') || '—' }}</code>, closing <code>{{ settings.cycle.closing || '—' }}</code>.
           Write <code>[cycle]</code> below to fix one the guess got wrong.
@@ -104,7 +113,8 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { getNumbers, getSettings, getViews, getWhole, getWorktrees, type Labels, type Numbers, type Settings, type WholeStatus, type Worktrees } from '@/api/board';
 import { message } from '@/issue';
-import { loadMe, me } from '@/me';
+import { cycleView, loadMe, me } from '@/me';
+import { viewWords } from '@/view';
 import { settingsTab, settingsTabs, syncSummary } from '@/settingstabs';
 import { numberExample, numbersSummary } from '@/numbers';
 import AppHeader from '@/components/AppHeader.vue';
