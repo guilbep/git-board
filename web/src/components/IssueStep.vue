@@ -7,7 +7,7 @@
      review (the Changes view, Review's on the page), flow, side. The bar
      is the project's list ([cycle] steps), a cell per entry. -->
 <template>
-  <p v-if="error && !(current && card)" class="gb-save-error" role="alert"><GbIcon name="error" small /> {{ error }}</p>
+  <p v-if="error && !(here && card)" class="gb-save-error" role="alert"><GbIcon name="error" small /> {{ error }}</p>
   <nav v-if="cycle" class="gb-stepbar" aria-label="The cycle, click a step to open it">
     <ol class="gb-bar-steps">
       <li v-for="r in rows" :key="r.id" :class="[`is-${r.state}`, { 'is-shown': r === row }]">
@@ -87,12 +87,12 @@
             @back="patch({ status: cycle.stages.in_progress[0] ?? '' })"
           />
           <!-- step 6 on the page is the review's own (CycleReview) -->
-          <template v-else-if="cycle && row && !(n === 6 && $slots.review)">
+          <template v-else-if="cycle && (row || here) && !(n === 6 && $slots.review)">
             <CycleIntent v-if="n === 1" :cycle="cycle" :current="current" :busy="busy" :can-accept="has('no-criteria')" @save="saveCriteria" @accept="act('no-criteria')" />
             <CycleTests v-if="n === 4 && !cycle.skipped?.includes(4)" :id="id" :cycle="cycle" />
-            <p v-else-if="n !== 1 && row.state === 'done' && row.line !== row.gate" class="gb-note">{{ row.line }}</p>
-            <p class="gb-gate">{{ row.gate }}</p>
-            <template v-if="current">
+            <p v-else-if="n !== 1 && row?.state === 'done' && row.line !== row.gate" class="gb-note">{{ row.line }}</p>
+            <p v-if="row" class="gb-gate">{{ row.gate }}</p>
+            <template v-if="here">
               <p v-if="cycle.note" class="gb-note">{{ cycle.note }}</p>
               <p class="gb-note">{{ cap(turn(cycle)) }}.</p>
               <div v-if="card" class="gb-cycle-actions">
@@ -193,6 +193,9 @@ const row = computed(() => (shown.value === null ? now.value : rows.value.find((
 // opens, Intent without a cycle
 const n = computed(() => (cycle.value ? (row.value?.n ?? 0) : 1));
 const current = computed(() => row.value?.state === 'current');
+// where the step's note and card go: the current cell, or the column
+// before the list's first step opens (a list that starts at code, at ready)
+const here = computed(() => current.value || (!!cycle.value && !now.value && !row.value));
 const show = (id: string) => (shown.value = id === cycle.value?.at ? null : id);
 // a refusal belongs to the step pressed: another step shown drops it
 watch(row, () => (error.value = ''));

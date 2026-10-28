@@ -320,7 +320,7 @@ func TestComputeAt(t *testing.T) {
 func TestUnlistedKindsHoldNothing(t *testing.T) {
 	t.Parallel()
 	ready := Compute(input("ready", func(in *Input) { listed("code", "review")(in); in.Criteria, in.Me = nil, "erin" }))
-	if ready.At != "" || !slices.Equal(ready.Actions, []string{"start"}) || ready.Note != "plan approved, waits for the status in-progress" {
+	if ready.At != "" || !slices.Equal(ready.Actions, []string{"start"}) || ready.Note != "waits for the status in-progress" {
 		t.Errorf("ready: at %q, actions %v, note %q", ready.At, ready.Actions, ready.Note)
 	}
 	wip := Compute(input("in-progress", func(in *Input) { listed("code", "review")(in); in.Me = "erin" }))

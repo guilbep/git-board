@@ -153,9 +153,12 @@ func gate(step int, risk, rule string) string {
 }
 
 // ApprovedPlan: the plan file is accepted or past it, the plan role
-// approved it in a comment (not structural), or its PR is approved.
+// approved it in a comment (not structural), or its PR is approved; with
+// no plan in the project's list, no approval is asked.
 func ApprovedPlan(in Input) bool {
 	switch {
+	case !slices.ContainsFunc(list(in.Stages), func(s config.Step) bool { return s.Kind == "plan" }):
+		return true
 	case in.Plan != nil && slices.Contains([]string{"accepted", "in-progress", "delivered"}, in.Plan.Status):
 		return true
 	case in.Risk == "structural":
@@ -250,7 +253,7 @@ func Compute(in Input) Cycle {
 	if len(in.Assignees) > 0 {
 		assignee = in.Assignees[0]
 	}
-	approved := ApprovedPlan(in) || !listed("plan")
+	approved := ApprovedPlan(in)
 	noRisk := in.Risk == "" && listed("risk")
 	inProgress := first(in.Stages.InProgress, "in-progress")
 	merged := in.PR != nil && in.PR.State == "MERGED"
@@ -273,8 +276,11 @@ func Compute(in Input) Cycle {
 			// ponytail: the plan doesn't need anyone; whoever is assigned starts
 			c.Step, w, act = 3, Waits{Role: "assignee", Login: assignee, What: "move the status to " + inProgress}, "start"
 			c.Note = "plan approved, waits for the status " + inProgress
-			if in.Risk == "low" {
+			switch {
+			case in.Risk == "low":
 				c.Note = "low risk, waits for the status " + inProgress
+			case !listed("plan"):
+				c.Note = "waits for the status " + inProgress
 			}
 		default:
 			c.Step, w, act = 3, Waits{Role: "plan", Login: in.People["plan"], What: "approve the plan"}, "approve-plan"

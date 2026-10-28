@@ -669,6 +669,23 @@ func TestAgentGoCountsInTheList(t *testing.T) {
 	}
 }
 
+// At ready on a list without plan, no approval holds the start back: the
+// agent codes, and the status moves.
+func TestAgentGoWithoutPlanInTheList(t *testing.T) {
+	s, fake, id := planRepo(t, "normal")
+	s.cfg.Cycle.Steps = []string{"code", "review"}
+	ts := serve(t, s)
+	if code, _, body := sendFrom(t, "POST", ts.URL+"/api/issues/"+id[:8]+"/agent/go", ts.URL, map[string]string{}); code != http.StatusOK {
+		t.Fatalf("go: %d %s", code, body)
+	}
+	if p := lastPrompt(t, fake); !strings.Contains(p, "step 1 of 2: Code") || strings.Contains(p, "plan mode") {
+		t.Errorf("prompt:\n%s", p)
+	}
+	if st := statusOf(t, s, id); st != "in-progress" {
+		t.Errorf("status = %q, want in-progress", st)
+	}
+}
+
 // Approve briefs the agent in the server's words once the plan role has
 // approved the plan on the board; refused before.
 func TestAgentApprove(t *testing.T) {
