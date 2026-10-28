@@ -182,8 +182,10 @@ export function checkSync(): Promise<SyncStatus> {
   return request('/api/sync/check', { method: 'POST' });
 }
 
-export function applySync(): Promise<SyncStatus> {
-  return request('/api/sync/apply', { method: 'POST' });
+// applySync is git board project sync, or with a side its pull (labels)
+// or its push (project)
+export function applySync(side?: 'labels' | 'project'): Promise<SyncStatus> {
+  return side ? request('/api/sync/apply', json('POST', { side })) : request('/api/sync/apply', { method: 'POST' });
 }
 
 // setGithubProject writes [github-project] (Settings › Sync's Project line),
@@ -399,8 +401,9 @@ export function getForges(): Promise<ForgeStatus> {
   return request('/api/forges');
 }
 
-// A dry run looks at every forge; a real run at bridges (empty: all).
-export function startForgeSync(dryRun: boolean, mode: 'sync' | 'send' = 'sync', bridges: string[] = []): Promise<ForgeStatus> {
+// A dry run looks at every forge; a real run at bridges (empty: all),
+// both ways (sync), sending alone (send) or pulling alone (get).
+export function startForgeSync(dryRun: boolean, mode: 'sync' | 'send' | 'get' = 'sync', bridges: string[] = []): Promise<ForgeStatus> {
   return request('/api/forges/sync', json('POST', { dry_run: dryRun, mode, bridges }));
 }
 
@@ -445,9 +448,33 @@ export function getRemotes(): Promise<{ remotes: Remote[] }> {
   return request('/api/remotes');
 }
 
-// fetch is a check: nothing local changes (a push is the whole sync's)
-export function remoteAction(name: string, action: 'fetch' | 'pull'): Promise<{ remotes: Remote[] }> {
+// fetch is a check: nothing local changes; pull merges; push sends
+export function remoteAction(name: string, action: 'fetch' | 'pull' | 'push'): Promise<{ remotes: Remote[] }> {
   return request(`/api/remotes/${encodeURIComponent(name)}/${action}`, { method: 'POST' });
+}
+
+// Start over (internal/server/startover.go): what it finds, and one of
+// its actions: git board reset --hard (reset), reset --hard origin
+// (take), push --prune (push-prune), prune (prune, on origin too with
+// onRemote).
+export interface StartOverStatus {
+  switched: boolean; // false: git-bug's data is the only copy, prune refuses
+  git_bug: { refs: number; cache: boolean; keys: number };
+  remote: boolean; // origin exists
+}
+
+export interface StartOverResult {
+  deleted: number;
+  backup: string; // the bundle's path, '' when nothing was deleted here
+  me: boolean; // board.me was unset
+}
+
+export function getStartOver(): Promise<StartOverStatus> {
+  return request('/api/start-over');
+}
+
+export function startOver(action: 'reset' | 'take' | 'push-prune' | 'prune', onRemote = false): Promise<StartOverResult> {
+  return request('/api/start-over', json('POST', { action, on_remote: onRemote }));
 }
 
 // The project's own numbers (internal/server/numbers.go): CO2-3075,
