@@ -24,6 +24,7 @@ const off = onLive((e) => {
     void loadForges();
     void loadMe();
   }
+  if (e.kind === 'config') void loadMe(); // a [cycle] table saved or gone: the issue page's view
 });
 onBeforeUnmount(off);
 

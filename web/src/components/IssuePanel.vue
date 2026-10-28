@@ -59,7 +59,7 @@
         <button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" @click="load">Try again</button>
       </div>
     </div>
-    <div v-else-if="!thread || !meLoaded" class="gb-ihead" role="status" aria-label="Loading the issue">
+    <div v-else-if="!thread || !layout" class="gb-ihead" role="status" aria-label="Loading the issue">
       <h2 class="gb-skel-title">{{ title || 'Loading…' }}</h2>
       <div class="gb-skel" /><div class="gb-skel gb-skel-short" />
     </div>
@@ -96,7 +96,7 @@
         <p v-if="waiting" class="gb-wait" role="status"><GbIcon name="clock" small /> Syncing with the forges… your change is saved after it.</p>
       </div>
 
-      <IssueStep v-if="cycleView" ref="step" :id="thread.id" :status="statusValue" :labels="thread.labels" :events="thread.events" :forges="thread.forges" :head="reading.tab === 'conversation'" @open="openStep" @changed="load" @comment="(b, id) => comment(b, undefined, id)">
+      <IssueStep v-if="layout === 'cycle'" ref="step" :id="thread.id" :status="statusValue" :labels="thread.labels" :events="thread.events" :forges="thread.forges" :head="reading.tab === 'conversation'" @open="openStep" @changed="load" @comment="(b, id) => comment(b, undefined, id)">
         <template #tabs>
           <div class="gb-tabs gb-issue-tabs" role="tablist" aria-label="Issue">
             <button type="button" class="gb-tab" role="tab" :aria-selected="reading.tab === 'conversation'" @click="reading.tab = 'conversation'">Conversation</button>
@@ -329,8 +329,22 @@ const uid = useId();
 const { thread, error, saving, waiting, saveError, load, comment, edit, rename, setStatus, labels, review, resolve, resolveThread, apply } =
   useIssue(toRef(props, 'id'), (t) => emit('changed', t));
 // the inbox opens an issue at its first new event
+// the layout, chosen once the issue and /api/me are both in, and kept
+// while the issue is open: a [cycle] saved or a board.view changed
+// meanwhile takes effect at the next issue opened, never under a draft
+const layout = ref<'' | 'cycle' | 'classic'>('');
 watch(
-  () => thread.value?.id,
+  () => (meLoaded.value ? thread.value?.id : undefined),
+  (id) => {
+    if (id) layout.value = cycleView.value ? 'cycle' : 'classic';
+  },
+  { immediate: true },
+);
+// once laid out, an issue opens at the inbox's event or the rail's step:
+// before, the skeleton has neither (the visit and the inbox's read wait
+// with them, harmlessly)
+watch(
+  () => (layout.value ? thread.value?.id : undefined),
   async (id) => {
     if (id && props.at) void nextTick(() => reveal(props.at!));
     if (id && props.step) void nextTick(() => openStep(props.step!));

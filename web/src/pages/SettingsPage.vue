@@ -59,7 +59,7 @@
           <p>{{ viewWords(me) }}</p>
           <p class="gb-hint">
             To change it for you: <code>git config board.view classic</code> or <code>cycle</code> (<code>--global</code> for every repository).
-            For the whole team: a <code>[cycle]</code> table in <code>.git-board.toml</code>.
+            For the whole team: a <code>[cycle]</code> table in <code>.git-board.toml</code>. A change to <code>board.view</code> shows when you reload the page.
           </p>
         </section>
 
@@ -172,6 +172,7 @@ watch(() => me.value?.me?.id, () => (choosing.value = false));
 
 // after a save of .git-board.toml: the header's views, the Project's line
 async function reload() {
+  void loadMe(); // the issue page's view follows a [cycle] table saved here
   try {
     settings.value = await getSettings();
   } catch (e) {
