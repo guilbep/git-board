@@ -552,6 +552,33 @@ func ApplySync(labels LabelWriter, project ProjectWriter, bases BaseWriter, plan
 	return skipped, nil
 }
 
+// LabelsOnly is the plan's git-board side: its label changes, no Project
+// edit. Each edit left out takes its base with it, as ApplySync drops an
+// edit it skips: what isn't sent isn't agreed.
+func (p SyncPlan) LabelsOnly() SyncPlan {
+	q := p
+	q.Edits, q.Bases = nil, maps.Clone(p.Bases)
+	for _, e := range p.Edits {
+		q.Bases[e.BugID] = without(q.Bases[e.BugID], e.Field)
+	}
+	return q
+}
+
+// ProjectOnly is the plan's Project side: its edits, no label change. Each
+// label change left out takes its base with it.
+func (p SyncPlan) ProjectOnly() SyncPlan {
+	q := p
+	q.Changes, q.Bases = make([]IssueChange, len(p.Changes)), maps.Clone(p.Bases)
+	for i, c := range p.Changes {
+		for _, f := range c.Fields {
+			q.Bases[c.BugID] = without(q.Bases[c.BugID], f.Field)
+		}
+		c.Fields, c.Added, c.Removed = nil, nil, nil
+		q.Changes[i] = c
+	}
+	return q
+}
+
 func without(m map[string]string, key string) map[string]string {
 	res := make(map[string]string, len(m))
 	for k, v := range m {

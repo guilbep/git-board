@@ -248,6 +248,9 @@ func (b *Backend) pushKinds(remote string, kinds ...string) error {
 	if err := b.checkRemote(remote); err != nil {
 		return err
 	}
+	if err := b.guarded(remote); err != nil {
+		return err
+	}
 	args := []string{"push", remote}
 	for _, k := range kinds {
 		refs, err := b.s.Refs(oplog.RefName(k, ""))

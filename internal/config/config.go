@@ -98,7 +98,7 @@ type reposTable struct {
 
 // GithubProject is the [github-project] table: which GitHub Projects (v2)
 // board `bridge pull` reads from by default, so --owner/--project don't
-// need retyping on every run. Set via `git-board bridge configure`.
+// need retyping on every run. Set via `git board project configure`.
 type GithubProject struct {
 	Owner  string `toml:"owner" json:"owner"`
 	Number int    `toml:"number" json:"number"`

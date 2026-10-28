@@ -92,10 +92,11 @@ test('stepWords says where a run is, with a total when the way has one', () => {
 
 test('doneWords is a real run’s one line, in its mode', () => {
   const bridges = { gh: tally(dir({ issues: 1 }), dir({ issues: 1, changed: 1 })), gl: tally(dir({ changed: 2 }), dir()) };
-  const job = (mode: 'sync' | 'send' | 'all', errors = 0) => ({ dry_run: false, mode, state: 'done' as const, started: '', names: [], bridges, errors });
+  const job = (mode: 'sync' | 'send' | 'get' | 'all', errors = 0) => ({ dry_run: false, mode, state: 'done' as const, started: '', names: [], bridges, errors });
   assert.equal(doneWords(job('sync')), 'pulled 2 issues, pushed 3');
   assert.equal(doneWords(job('all')), 'pulled 2 issues, pushed 3');
   assert.equal(doneWords(job('send', 1)), 'pushed 3 issues, 1 error');
+  assert.equal(doneWords(job('get')), 'pulled 2 issues');
 });
 
 test('readProject reads a number, as the forge owner\'s Project, or a Project\'s address', () => {

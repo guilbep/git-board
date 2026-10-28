@@ -71,6 +71,16 @@ An issue is linked to a forge issue once, by the sync, and stays so: linking by 
 
 ## On the command line
 
+A sync moves your issues to three places, and each has its own commands with git's verbs:
+
+| Side | What it holds | Commands |
+| --- | --- | --- |
+| The git remote (origin) | the board itself, merged without loss | `git board fetch`, `pull`, `push` |
+| The forges | a translation of it, both ways: a write there emails people | `git board forge pull`, `push`, `sync` |
+| The GitHub Project | field values, matched to labels | `git board project pull`, `push`, `sync`, `resolve`, `configure` |
+
+Each acts at once and takes `--check`, which says what it would do and writes nothing. `pull` takes the other side's changes, `push` sends this clone's, `sync` does both.
+
 `git board sync` runs the whole sync, as Settings › Sync does, each step in a line; `--check` is its dry run, and `--git` syncs with git alone: a pull, then a push. It has no check to wait for: `--check` first is yours to run. Creations wait for consent all the same: on a forge never synced with, or 50 or more on one in a run, none is made without `--allow-create`, and the sync says how many wait. It and `git board switch` print the forges found in the remotes, one line each: name, host and project, a GitLab one's with its id, and each URL they skip.
 
 Otherwise the forges are `.git-board.toml`'s, edited in Settings or by hand:
@@ -90,3 +100,45 @@ login = "you"
 sync = true
 ```
 
+
+## Leaving git-bug
+
+A repository whose issues were git-bug's moves to git-board in this order:
+
+1. Stop git-bug's bridge sync wherever it runs: CI, cron, other clones.
+2. `git board switch`, read its report, then `git board switch --apply`.
+3. `git board sync`. It pushes `refs/board` and the switch's mark to
+   origin.
+4. Every other clone runs `git board sync`, which switches it too. No one
+   else runs the switch.
+5. Once no clone or automation uses git-bug, `git board prune` removes
+   git-bug's data from the clone: its refs (`refs/bugs`, `refs/identities`
+   and the old release records in `refs/releases`), its cache
+   `.git/git-bug` and its `git-bug.*` config keys. `-n` says what it would
+   remove. The refs go to a bundle in the git directory first, which it
+   names: `git fetch <bundle> 'refs/*:refs/*'` brings them back.
+6. Last, `git board prune --remote origin` deletes git-bug's refs on
+   origin too. Nothing backs those up: a clone still on git-bug loses its
+   shared issues.
+
+## Starting over
+
+A board can start over from what the forges hold, on the git side alone: no forge and no GitHub Project is touched. Every clone needs this version of git-board or a later one first: an earlier one doesn't know the guard below.
+
+1. `git board reset --hard` empties this clone's board: the issues, the people, the sync links, the release records, the fetched copies and `board.me`. The switch's mark and the numbers' counter stay, so no number is handed out twice.
+2. `git board push --prune` makes origin's board this clone's: what origin has and this clone doesn't is deleted there. It refuses on a clone that didn't start over, and keeps a numbers' counter a teammate moved on meanwhile.
+3. Every other clone stops its automated syncs, then runs `git board reset --hard origin`, which makes its board origin's.
+4. `git board forge pull` refills the board from the forges.
+
+Each writes what it deletes to a bundle in the git directory and names it, with the `git fetch` that brings it back.
+
+**What a forge pull brings back.** Every issue and comment that came from a forge. Not yet what git-board itself posted to a forge: that text carries git-board's marker, which names an issue the empty board no longer has, and the pull leaves it. A repository where git-board never posted to a forge misses nothing.
+
+**The guard.** A reset writes a mark, and a pull or a push between two boards whose marks differ refuses: merged, the old board and the new one would hold every issue twice, both linked to the same forge issue. It says which side started over and how to settle it:
+
+- a clone that missed the start-over: "origin's board was started over on 2026-10-28 15:04: git board reset --hard origin takes it";
+- the clone that started over, before its `push --prune`: "this clone's board was started over on …, origin's wasn't: git board push --prune makes origin match, git board reset --hard origin goes back to it".
+
+A new clone, with no board yet, takes origin's mark as it pulls.
+
+Settings › Sync, Start over, runs the same. On the command line the resets refuse while `git board serve` runs on the repository.

@@ -15,7 +15,7 @@
   Without `GOPRIVATE`, `go install` tries the public module proxy/checksum
   DB first, 404s (it's private), and fails — even with the SSH rewrite
   above already in place.
-- `gh` CLI, authenticated, for `bridge pull` (`read:project` scope at
+- `gh` CLI, authenticated, for `git board project` (`read:project` scope at
   minimum). The labels (`lint --create-labels`, Settings › Labels) go
   through GitHub's API with the forge sync's token instead.
 

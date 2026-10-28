@@ -72,11 +72,11 @@ func TestRemotesPushAndPull(t *testing.T) {
 	if o := origin(t, me, "POST", "/api/remotes/origin/fetch"); o.Issues != (store.Ahead{Send: 1, Receive: 1}) {
 		t.Errorf("both changed it: %+v, want 1 to send and 1 to receive", o)
 	}
-	if code := call(t, "POST", me.URL+"/api/remotes/origin/push", nil, nil); code != http.StatusNotFound {
-		t.Errorf("a push, the whole sync's alone: %d, want 404", code)
-	}
 	if o := origin(t, me, "POST", "/api/remotes/origin/pull"); o.Issues != (store.Ahead{Send: 1}) {
 		t.Errorf("after merging: %+v, want the merge to send", o)
+	}
+	if o := origin(t, me, "POST", "/api/remotes/origin/push"); o.Issues != (store.Ahead{}) {
+		t.Errorf("after the push: %+v, want nothing left", o)
 	}
 	if labels, _ := mine.GetLabels(id); strings.Join(labels, " ") != "prio:p1 status:ready" {
 		t.Errorf("merged labels %v", labels)

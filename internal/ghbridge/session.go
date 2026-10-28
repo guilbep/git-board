@@ -12,7 +12,7 @@ import (
 const DefaultItemLimit = 2000
 
 // ErrNoProject is returned when .git-board.toml names no GitHub Project.
-var ErrNoProject = errors.New("no GitHub project configured: run `git-board bridge configure` first")
+var ErrNoProject = errors.New("no [github-project] in .git-board.toml: git board project configure --owner <org> --project <n>")
 
 // ErrNoWrite is returned when keeping git-board's value would write to a
 // Project the config doesn't allow writing to.

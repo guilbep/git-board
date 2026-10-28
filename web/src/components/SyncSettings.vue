@@ -7,7 +7,7 @@
      creates issues on a forge never synced with, or 50 or more at once:
      the server holds them without it. Below, what a sync would do or did, per
      forge. #/settings/sync?add=1 opens "Add a forge", for one no remote
-     names. The Project's line sets it up, as git board bridge configure
+     names. The Project's line sets it up, as git board project configure
      does: a number or the Project's address, saved, then checked at once. -->
 <template>
   <div class="set-panel sy">
@@ -17,6 +17,7 @@
         <p class="sy-lead">
           Your issues travel with git, like your code; the forges and the GitHub Project are mirrors, for the people who work there.
           One sync moves them all: a git pull from {{ remote }}, the forges, the Project's fields, then a git push. <code>git board sync</code> runs the same.
+          Each row has its own actions, for its side alone: their tooltips name the command that does the same.
         </p>
       </div>
       <div class="sy-actions">
@@ -28,7 +29,7 @@
 
     <div v-if="st" class="gb-table-wrap">
       <table class="gb-table">
-        <thead><tr><th>Where</th><th>Project</th><th>Sync</th><th>Last check</th><th><span class="sy-hidden">Remove</span></th></tr></thead>
+        <thead><tr><th>Where</th><th>Project</th><th>Sync</th><th>Last check</th><th>Actions</th><th><span class="sy-hidden">Remove</span></th></tr></thead>
         <tbody>
           <tr>
             <td><b>{{ remote }}</b> <span class="sy-kind">git</span></td>
@@ -38,6 +39,13 @@
             </td>
             <td>{{ st.remote ? 'On' : '—' }}</td>
             <td>{{ remoteLine }}</td>
+            <td class="sy-acts">
+              <template v-if="st.remote">
+                <button v-for="a in remoteActs" :key="a.action" type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" :title="a.command" :disabled="!!rowBusy || running" @click="remoteDo(a.action)">
+                  {{ rowBusy === a.action ? `${a.label}…` : a.label }}
+                </button>
+              </template>
+            </td>
             <td />
           </tr>
           <template v-for="row in rows" :key="row.f?.name ?? 'project'">
@@ -55,7 +63,7 @@
                     <button type="submit" class="epfl-btn epfl-btn-primary epfl-btn-sm" :disabled="!projectDraft || projectBusy || running">Save</button>
                     <button v-if="st.project.project" type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" @click="editingProject = false">Cancel</button>
                     <p class="sy-note sy-project-help">
-                      {{ projectHint }} In a terminal: <code>git board bridge configure --owner {{ projectDraft?.owner || githubOwner || '…' }} --project {{ projectDraft?.number ?? '…' }}</code>.
+                      {{ projectHint }} In a terminal: <code>git board project configure --owner {{ projectDraft?.owner || githubOwner || '…' }} --project {{ projectDraft?.number ?? '…' }}</code>.
                       <button type="button" class="gb-linkbtn" @click="openProjectDoc">[github-project] in the configuration guide</button>
                     </p>
                   </form>
@@ -63,10 +71,15 @@
                 </td>
                 <td>{{ st.project.project ? (st.project.write ? 'Read and written' : 'Read only') : '—' }}</td>
                 <td>{{ projectLine }} <router-link v-if="st.project.project" to="/conflicts">Conflicts</router-link></td>
+                <td class="sy-acts">
+                  <template v-if="st.project.project && !editingProject">
+                    <button v-for="a in projectActs" :key="a.label" type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" :title="a.command" :disabled="projectBusy || running" @click="projectDo(a.side)">{{ a.label }}</button>
+                  </template>
+                </td>
                 <td><button v-if="st.project.project" type="button" class="gb-linkbtn" :disabled="projectBusy || running" @click="confirmingRemove = projectKey">Remove</button></td>
               </tr>
               <tr v-if="confirmingRemove === projectKey" class="sy-confirm-row">
-                <td colspan="5">
+                <td colspan="6">
                   <p role="alert"><b>Remove the GitHub Project {{ projectName }}?</b> The sync leaves it out from then on. The labels it set stay on the issues.</p>
                   <button type="button" class="epfl-btn epfl-btn-primary epfl-btn-sm" :disabled="projectBusy" @click="removeProject">Remove the Project</button>
                   <button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" @click="confirmingRemove = ''">Cancel</button>
@@ -88,10 +101,19 @@
                   </label>
                 </td>
                 <td>{{ forgeLine(row.f) }}</td>
+                <td class="sy-acts">
+                  <template v-if="row.f.sync">
+                    <button
+                      v-for="a in forgeActs" :key="a.mode" type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm"
+                      :title="checked ? a.command : `Run Check first: ${a.command} follows a clean check of the last 15 minutes`"
+                      :disabled="!checked || starting || running" @click="forgeDo(row.f.name, a.mode)"
+                    >{{ a.label }}</button>
+                  </template>
+                </td>
                 <td><button v-if="!row.f.discovered" type="button" class="gb-linkbtn" :disabled="busy === row.f.name || running" @click="confirmingRemove = row.f.name">Remove</button></td>
               </tr>
               <tr v-if="confirmingRemove === row.f.name" class="sy-confirm-row">
-                <td colspan="5">
+                <td colspan="6">
                   <p role="alert"><b>Remove the forge {{ row.f.name }}?</b> Its settings go. The issues it brought stay, still linked to {{ kindName(row.f.target) }}, and the stored token stays too.</p>
                   <button type="button" class="epfl-btn epfl-btn-primary epfl-btn-sm" :disabled="busy === row.f.name" @click="remove(row.f)">Remove {{ row.f.name }}</button>
                   <button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" @click="confirmingRemove = ''">Cancel</button>
@@ -151,7 +173,7 @@
               (the first sync with it, or 50 or more at once). {{ b.label }} may email everyone watching the project, once per issue: ask watchers to mute it first, or switch its sync off.
             </p>
             <div class="gb-counts">
-              <dl class="sy-countlist">
+              <dl v-if="job.mode !== 'get'" class="sy-countlist">
                 <dt class="gb-section-title"><GbIcon name="up" small /> To {{ b.label }}</dt>
                 <div><dt>Issues {{ job.dry_run ? 'to create' : 'created' }}</dt><dd :class="{ 'gb-num-alert': (b.tally?.held ?? 0) > 0 }">{{ n(b.tally?.to.issues) }}</dd></div>
                 <div><dt>Linked issues with changes</dt><dd>{{ n(b.tally?.to.changed) }}</dd></div>
@@ -177,6 +199,8 @@
         </article>
       </div>
     </section>
+
+    <StartOver @done="afterStartOver" />
 
     <q-dialog v-model="confirming">
       <section class="gb-dialog" role="dialog" aria-modal="true" aria-labelledby="sy-confirm-title">
@@ -225,16 +249,18 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { checkSync, getConfigDocs, getWhole, removeBridge, removeGithubProject, setBridgeSync, setGithubProject, startWhole, type Bridge, type DocSection, type WholeStatus } from '@/api/board';
+import { applySync, checkSync, getConfigDocs, getWhole, remoteAction, removeBridge, removeGithubProject, setBridgeSync, setGithubProject, startForgeSync, startWhole, type Bridge, type DocSection, type WholeStatus } from '@/api/board';
 import { forgeStatus, loadForges, onStep } from '@/forges';
 import { forgeLabel, kindName } from '@/issuesync';
 import { message } from '@/issue';
 import { debounced, onLive } from '@/live';
 import { when } from '@/me';
+import { loadRemotes } from '@/remotes';
 import { aheadWords, checkWords, pendingWords, plural, readProject, runWords, stepLine } from '@/ways';
 import AddForgeDialog from '@/components/AddForgeDialog.vue';
 import ForgesGuide from '@/components/ForgesGuide.vue';
 import GbIcon from '@/components/GbIcon.vue';
+import StartOver from '@/components/StartOver.vue';
 import SyncProgress from '@/components/SyncProgress.vue';
 
 // changed: the sync as it stands, for the Overview's line
@@ -270,7 +296,7 @@ const pullStep = computed(() => job.value?.steps?.find((s) => s.name === 'pull')
 const canRun = computed(() => !starting.value && job.value?.mode === 'all' && job.value.dry_run && job.value.state === 'done' && !job.value.errors);
 const reportTitle = computed(() => {
   const j = job.value!;
-  const what = { all: 'Sync', sync: 'The forges’ sync', send: 'Send' }[j.mode];
+  const what = { all: 'Sync', sync: 'The forges’ sync', send: 'Send', get: 'The forges’ pull' }[j.mode];
   if (j.dry_run) return j.state === 'running' ? 'Checking…' : 'What a sync would do';
   return j.state === 'running' ? `${what}: so far` : `${what} ${j.state === 'failed' ? 'stopped' : 'finished'} ${when(j.ended ?? j.started, true)}`;
 });
@@ -280,6 +306,27 @@ const failedAt = computed(() => {
   return s ? stepLine({ ...s, note: '' }, remote, job.value!.dry_run).replace(/: failed$/, '') : '';
 });
 const stepIcon = { waiting: 'clock', running: 'sync', done: 'check', failed: 'error', skipped: 'forward' } as const;
+
+// each side's actions, one side alone: their commands are their titles
+const remoteActs = [
+  { action: 'fetch', label: 'Fetch', command: 'git board fetch' },
+  { action: 'pull', label: 'Pull', command: 'git board pull' },
+  { action: 'push', label: 'Push', command: 'git board push' },
+] as const;
+const forgeActs = [
+  { mode: 'get', label: 'Pull', command: 'git board forge pull' },
+  { mode: 'send', label: 'Push', command: 'git board forge push' },
+  { mode: 'sync', label: 'Sync', command: 'git board forge sync' },
+] as const;
+const projectActs = [
+  { side: 'labels', label: 'Pull', command: 'git board project pull' },
+  { side: 'project', label: 'Push', command: 'git board project push' },
+  { side: undefined, label: 'Sync', command: 'git board project sync' },
+] as const;
+const rowBusy = ref(''); // the origin row's action, running
+// a forge's own run follows a clean check, as Sync does (the server also
+// wants it fresh, 15 minutes)
+const checked = computed(() => !!job.value?.dry_run && job.value.state === 'done' && !job.value.errors);
 
 const bridgeRows = computed(() => (job.value?.names ?? []).map((name) => {
   const f = st.value?.forges.find((x) => x.name === name);
@@ -427,6 +474,49 @@ async function runReal() {
   await start(false, bigRows.value.length > 0 && bigRows.value.every((b) => understood.value.includes(b.name)));
 }
 
+async function remoteDo(action: 'fetch' | 'pull' | 'push') {
+  rowBusy.value = action;
+  error.value = '';
+  try {
+    await remoteAction(remote, action);
+    await reload();
+    void loadRemotes(); // the header's counts
+  } catch (e) {
+    error.value = `git board ${action}: ${message(e)}`;
+  } finally {
+    rowBusy.value = '';
+  }
+}
+async function forgeDo(name: string, mode: 'get' | 'send' | 'sync') {
+  starting.value = true;
+  startError.value = '';
+  try {
+    forgeStatus.value = await startForgeSync(false, mode, [name]);
+    void loadForges(); // polls while it runs
+  } catch (e) {
+    startError.value = message(e);
+  } finally {
+    starting.value = false;
+  }
+}
+async function projectDo(side?: 'labels' | 'project') {
+  projectBusy.value = true;
+  projectError.value = '';
+  try {
+    await applySync(side);
+    await reload();
+  } catch (e) {
+    projectError.value = message(e);
+  } finally {
+    projectBusy.value = false;
+  }
+}
+// a board started over: every row's line, the header's counts, the job
+async function afterStartOver() {
+  await reload();
+  void loadRemotes();
+  void loadForges();
+}
 async function toggle(f: Bridge, on: boolean) {
   busy.value = f.name;
   error.value = '';
@@ -512,4 +602,6 @@ onMounted(() => {
 .sy-project-help .gb-linkbtn { color: inherit; }
 .sy-doc :deep(th), .sy-doc :deep(td code) { white-space: nowrap; }
 .sy-err { margin-top: .25rem; font-size: .8125rem; color: var(--danger-fg); }
+.sy-acts { white-space: nowrap; }
+.sy-acts .epfl-btn + .epfl-btn { margin-left: .25rem; }
 </style>

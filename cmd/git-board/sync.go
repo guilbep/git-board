@@ -32,8 +32,12 @@ The forges are those of .git-board.toml, or with no [forges.<name>]
 table, those found in the git remotes, each told in a line.
 
 --check runs the same steps and writes nothing: a fetch and compare, the
-forges' dry run, the Project's check. --git syncs with git alone: a pull,
-then a push.
+forges' dry run, the Project's check. --git syncs with git alone: git
+board pull, then git board push.
+
+Each side has its own commands, for one step alone: the git remote's
+git board fetch, pull and push; the forges' git board forge pull, push
+and sync; the GitHub Project's git board project pull, push and sync.
 
 A forge this repository never synced with, or 50 creations or more on
 one, gets no issue created without --allow-create: the sync says how
@@ -132,26 +136,11 @@ func wholeOne(ctx context.Context, out io.Writer, path, remote string, check, al
 	}
 	if len(on) > 0 {
 		run.Forges = func(ctx context.Context) error {
-			fs, err := openForges(ctx, on)
-			if err != nil {
-				return err
-			}
-			run := store.ForgeRun{Forges: fs, PublishPrivate: cfg.PublishPrivate, DryRun: check, AllowCreate: allowCreate, Merge: remote}
-			run.See = func(e store.SyncEvent) {
-				line := e.Text(check, eventIssue(b, e.Issue))
-				if e.What == "held" {
-					line += " (--allow-create)"
-				}
-				if line != "" {
-					say("  %s: %s", e.Forge, line)
-				}
-			}
-			_, err = b.SyncForges(ctx, run)
-			return err
+			return runForgeWay(ctx, b, cfg, on, (*store.Backend).SyncForges, check, allowCreate, remote, say)
 		}
 	}
 	if gp := cfg.GithubProject; !gitOnly && gp.Owner != "" && gp.Number != 0 {
-		run.Project = func(context.Context) error { return bridgeSync(out, cfg, b, defaultBridgePullLimit, !check) }
+		run.Project = func(context.Context) error { return projectRun(out, cfg, b, defaultBridgePullLimit, "both", !check) }
 	}
 	if err := b.SyncWhole(ctx, run); err != nil {
 		return err

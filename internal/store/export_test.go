@@ -110,3 +110,6 @@ func Meanings(s *gitstore.Store) syncer.Options {
 	meanings(s, &opt)
 	return opt
 }
+
+// WriteResetMark is writeResetMark for the tests: a reset's mark alone.
+var WriteResetMark = writeResetMark

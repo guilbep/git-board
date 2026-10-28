@@ -141,7 +141,7 @@ func (s *apiServer) runWhole(job *forgeJob, forges []config.Forge) {
 			if job.DryRun {
 				projectErr = s.check()
 			} else {
-				projectErr = s.apply() // the Project written to with write = true alone
+				projectErr = s.apply("") // the Project written to with write = true alone
 			}
 			return projectErr
 		}

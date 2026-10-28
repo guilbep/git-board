@@ -53,7 +53,7 @@ export function stepWords(s: SyncStep, bridges: { name: string; target: string }
 }
 
 // a real run's one line: "pulled 2 issues, pushed 0", the half of a
-// send, and its errors
+// send or of a get, and its errors
 export function doneWords(job: ForgeJob): string {
   let get = 0;
   let send = 0;
@@ -63,7 +63,7 @@ export function doneWords(job: ForgeJob): string {
   }
   const parts = [];
   if (job.mode !== 'send') parts.push(`pulled ${plural(get, 'issue')}`);
-  parts.push(parts.length ? `pushed ${n(send)}` : `pushed ${plural(send, 'issue')}`);
+  if (job.mode !== 'get') parts.push(parts.length ? `pushed ${n(send)}` : `pushed ${plural(send, 'issue')}`);
   if (job.errors) parts.push(plural(job.errors, 'error'));
   return parts.join(', ');
 }

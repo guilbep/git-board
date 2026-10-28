@@ -265,10 +265,8 @@ func TestForgeSend(t *testing.T) {
 	if code, _ := start(map[string]any{"mode": "send"}); code != http.StatusConflict {
 		t.Errorf("a send before a dry run: %d, want 409", code)
 	}
-	for _, mode := range []string{"push", "get"} {
-		if code, _ := start(map[string]any{"mode": mode}); code != http.StatusBadRequest {
-			t.Errorf("mode %s: %d, want 400", mode, code)
-		}
+	if code, _ := start(map[string]any{"mode": "push"}); code != http.StatusBadRequest {
+		t.Errorf("mode push: %d, want 400", code)
 	}
 	if _, mode := start(map[string]any{"dry_run": true, "mode": "send"}); mode != "sync" {
 		t.Errorf("a dry run ran as %q, want both ways", mode)
@@ -280,6 +278,10 @@ func TestForgeSend(t *testing.T) {
 	start(map[string]any{"dry_run": true})
 	if code, mode := start(map[string]any{"mode": "send", "bridges": []string{"gh"}}); code != http.StatusAccepted || mode != "send" {
 		t.Errorf("a send after a clean dry run: %d %s", code, mode)
+	}
+	start(map[string]any{"dry_run": true})
+	if code, mode := start(map[string]any{"mode": "get"}); code != http.StatusAccepted || mode != "get" {
+		t.Errorf("a pull after a clean dry run: %d %s", code, mode)
 	}
 }
 

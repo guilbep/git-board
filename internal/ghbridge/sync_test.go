@@ -520,3 +520,30 @@ func TestSyncedAreProjectFields(t *testing.T) {
 		t.Errorf("synced %v, config.ProjectFields %v", got, config.ProjectFields)
 	}
 }
+
+// One side of a plan drops the other side's writes, and with each the
+// base it would have recorded: what isn't sent isn't agreed.
+func TestPlanOneSide(t *testing.T) {
+	t.Parallel()
+	plan := ghbridge.SyncPlan{
+		Changes: []ghbridge.IssueChange{{BugID: "b", Number: 1, Fields: []ghbridge.FieldResult{{Field: "status", Added: []string{"status:qa"}}}, Added: []string{"status:qa"}}},
+		Edits:   []ghbridge.ProjectEdit{{BugID: "b", Field: "prio", Value: "high"}},
+		Bases:   map[string]map[string]string{"b": {"status": "qa", "prio": "high", "est": "3"}},
+	}
+
+	labels := plan.LabelsOnly()
+	if len(labels.Edits) != 0 || !reflect.DeepEqual(labels.Bases["b"], map[string]string{"status": "qa", "est": "3"}) ||
+		!slices.Equal(labels.Changes[0].Added, []string{"status:qa"}) {
+		t.Errorf("labels only: %+v", labels)
+	}
+
+	project := plan.ProjectOnly()
+	if len(project.Changes[0].Added) != 0 || len(project.Changes[0].Fields) != 0 || project.Changes[0].Number != 1 ||
+		len(project.Edits) != 1 || !reflect.DeepEqual(project.Bases["b"], map[string]string{"prio": "high", "est": "3"}) {
+		t.Errorf("project only: %+v", project)
+	}
+
+	if len(plan.Bases["b"]) != 3 || len(plan.Changes[0].Added) != 1 {
+		t.Errorf("the plan changed: %+v", plan)
+	}
+}

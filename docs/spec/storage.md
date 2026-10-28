@@ -265,7 +265,7 @@ fetches nor pushes them.
 Fetch:
 
 ```sh
-git fetch <remote> \
+git fetch --prune <remote> \
   +refs/board/issue/*:refs/board-remotes/<remote>/issue/* \
   +refs/board/person/*:refs/board-remotes/<remote>/person/* \
   +refs/board/sync/*:refs/board-remotes/<remote>/sync/* \
@@ -276,10 +276,13 @@ Then each `refs/board-remotes/<remote>/<kind>/<id>` whose id is valid (see
 [Refs](#refs)) is [merged](#merging-two-heads) into `refs/board/<kind>/<id>`,
 which is created when absent.
 
-Fetch never propagates a deletion. An entity whose ref was deleted on the
-remote keeps its ref here, and its fetched head in `refs/board-remotes/`:
-the core never runs `git fetch --prune`. Push deletes nothing on the remote
-either.
+Fetch never propagates a deletion to the board. An entity whose ref was
+deleted on the remote keeps its ref here; only its fetched head in
+`refs/board-remotes/` goes, as `--prune` deletes the copies the refspecs
+name and the remote no longer has. A copy kept would be merged at the next
+fetch, and bring back what the remote deleted: git-board's `push --prune`
+deletes a board on the remote when it starts over (`docs/prd/sync-sides.md`).
+Push deletes nothing on the remote.
 
 The fetched heads stay out of `refs/remotes/`, so they don't show as remote
 branches in `git branch -r` or in an editor's branch list, `git fetch

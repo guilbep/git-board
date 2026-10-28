@@ -366,13 +366,24 @@ answered in the process, to show what it would create.
   entity, as the trials left, doesn't count. The mark goes to the remote
   with the entities, and a clone without one takes the remote's when it
   pulls.
+- **The reset's mark** is `refs/board/reset`, which `git board reset
+  --hard` writes: a commit of a nonce at the reset's time, so that no two
+  resets write the same one. `git board push --prune` sends it, `git board
+  reset --hard <remote>` takes the remote's, and each fetch brings the
+  remote's to `refs/board-remotes/<remote>/reset`. A pull or a push
+  between two boards whose marks differ refuses, naming the side that
+  started over and the command that settles it: merged, the old board and
+  the refilled one would hold every issue twice, both linked to the same
+  forge issue. A clone with no issue, no person and no mark takes the
+  remote's (`docs/prd/sync-sides.md`).
 - **Comment metadata isn't carried.** The pull rebuilds the comments from
   the forges, which hold none, and `git bug bug show --format json` gives a
   comment's `author`, `human_id`, `id` and `message` only, so the switch
   can't read it either: the report says so, once. Neither real repository
   holds any. Every comment no forge has is listed, review comments among
   them: the switch reads each pulled issue's comments, so a comment only
-  the forge has can't hide one. `refs/bugs` stays.
+  the forge has can't hide one. `refs/bugs` stays, until `git board prune`
+  removes git-bug's data, once every clone has switched.
 - **The numbers are keyed again on origin's** `refs/board/seq`, which
   `--apply` makes this clone's, the re-key on top, unpushed. A fetch of
   the numbers (`git-board sync`, `numbers`, the web app's Sync) takes

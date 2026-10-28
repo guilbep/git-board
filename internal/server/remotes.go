@@ -54,9 +54,9 @@ func (s *apiServer) handleRemotes(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, st)
 }
 
-// handleRemote fetches from a remote (a check: nothing local changes) or
-// pulls from it (fetch, then merge), as the Inbox does, and answers the
-// remotes after. A push is the whole sync's (whole.go).
+// handleRemote fetches from a remote (a check: nothing local changes),
+// pulls from it (fetch, then merge), as the Inbox does, or pushes to it,
+// as git board fetch, pull and push do, and answers the remotes after.
 func (s *apiServer) handleRemote(w http.ResponseWriter, r *http.Request) {
 	name, action := r.PathValue("name"), r.PathValue("action")
 	do := map[string]func(string) error{
@@ -68,9 +68,13 @@ func (s *apiServer) handleRemote(w http.ResponseWriter, r *http.Request) {
 			}
 			return err
 		},
+		"push": func(remote string) error {
+			_, err := s.b.PushStep(remote)
+			return err
+		},
 	}[action]
 	if do == nil {
-		writeError(w, http.StatusNotFound, fmt.Errorf("a remote takes fetch or pull, not %q", action))
+		writeError(w, http.StatusNotFound, fmt.Errorf("a remote takes fetch, pull or push, not %q", action))
 		return
 	}
 	st, err := s.remotes()

@@ -330,7 +330,7 @@ func (m Model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			owner, project := m.cfg.GithubProject.Owner, m.cfg.GithubProject.Number
 			if owner == "" || project == 0 {
-				m.status = "no GitHub project configured: run `git-board bridge configure` first"
+				m.status = "no GitHub project configured: run `git board project configure` first"
 				return m, nil
 			}
 			m.bridgeBusy = true

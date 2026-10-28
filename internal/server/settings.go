@@ -315,7 +315,7 @@ func (s *apiServer) handleRemoveBridge(w http.ResponseWriter, r *http.Request) {
 // letters, digits and single hyphens inside, 39 at most.
 var githubLogin = regexp.MustCompile(`^[A-Za-z0-9](-?[A-Za-z0-9])*$`)
 
-// handleGithubProject sets the GitHub Project, as `git board bridge
+// handleGithubProject sets the GitHub Project, as `git board project
 // configure` does; DELETE removes it. write = true stays for the same
 // Project alone: another one is read until the file says otherwise. The
 // last check was another Project's: it goes.
