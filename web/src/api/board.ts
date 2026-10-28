@@ -317,6 +317,10 @@ export interface MeResponse {
   me: Person | null;
   identities: Person[] | null;
   unswitched?: boolean; // the issues are still git-bug's (refs/bugs): run git board switch
+  // the page an issue opens on, and what chose it (docs/prd/classic-view.md)
+  view?: 'classic' | 'cycle';
+  view_from?: 'board.view' | '.git-board.toml' | 'default';
+  view_ignored?: string; // a board.view that is neither
 }
 
 export function getMe(): Promise<MeResponse> {
