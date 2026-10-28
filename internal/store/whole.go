@@ -66,8 +66,8 @@ func (b *Backend) SyncWhole(ctx context.Context, w Whole) error {
 		{StepPush, "no git remote " + w.Remote, nil},
 	}
 	if has {
-		steps[0].do = func(context.Context) (string, error) { return b.pullStep(w.Remote, w.DryRun) }
-		steps[3].do = func(context.Context) (string, error) { return b.pushStep(w.Remote) }
+		steps[0].do = func(context.Context) (string, error) { return b.PullStep(w.Remote, w.DryRun) }
+		steps[3].do = func(context.Context) (string, error) { return b.PushStep(w.Remote) }
 		if w.DryRun {
 			steps[3].do, steps[3].skip = nil, "a check pushes nothing: the fetch compared"
 		}
@@ -102,13 +102,13 @@ func (b *Backend) SyncWhole(ctx context.Context, w Whole) error {
 	return errors.Join(errs...)
 }
 
-// pullStep merges the remote's issues and people in, or with dry only
+// PullStep merges the remote's issues and people in, or with dry only
 // fetches their copies here to compare. Either refuses a repository the
 // switch didn't mark. A counter holding numbers the remote hasn't, the
 // remote's being one of its ancestors (a switch's, or a numbering
 // stopped before its push), is sent first, a fast-forward git refuses
 // otherwise; one apart from the remote's is refused.
-func (b *Backend) pullStep(remote string, dry bool) (string, error) {
+func (b *Backend) PullStep(remote string, dry bool) (string, error) {
 	do, numbers := b.Pull, b.FetchNumbers
 	if dry {
 		do, numbers = b.Fetch, b.numbersBehind
@@ -137,12 +137,14 @@ func (b *Backend) pullStep(remote string, dry bool) (string, error) {
 	return "", numbers(remote)
 }
 
-// pushStep pushes the issues and people, then numbers what the remote
-// now has (NumberIssues), on origin.
-func (b *Backend) pushStep(remote string) (string, error) {
+// PushStep pushes the issues and people, then numbers what the remote
+// now has (NumberIssues), on origin. git refuses a push over commits this
+// clone lacks as non-fast-forward, or as fetch first when it never
+// fetched them.
+func (b *Backend) PushStep(remote string) (string, error) {
 	if _, err := b.Push(remote); err != nil {
-		if strings.Contains(err.Error(), "non-fast-forward") {
-			return "", fmt.Errorf("%s has changes this repository doesn't have: sync again", remote)
+		if msg := err.Error(); strings.Contains(msg, "non-fast-forward") || strings.Contains(msg, "fetch first") {
+			return "", fmt.Errorf("%s has changes this repository doesn't have: git board pull first", remote)
 		}
 		return "", err
 	}
