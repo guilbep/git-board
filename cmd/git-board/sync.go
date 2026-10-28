@@ -132,22 +132,7 @@ func wholeOne(ctx context.Context, out io.Writer, path, remote string, check, al
 	}
 	if len(on) > 0 {
 		run.Forges = func(ctx context.Context) error {
-			fs, err := openForges(ctx, on)
-			if err != nil {
-				return err
-			}
-			run := store.ForgeRun{Forges: fs, PublishPrivate: cfg.PublishPrivate, DryRun: check, AllowCreate: allowCreate, Merge: remote}
-			run.See = func(e store.SyncEvent) {
-				line := e.Text(check, eventIssue(b, e.Issue))
-				if e.What == "held" {
-					line += " (--allow-create)"
-				}
-				if line != "" {
-					say("  %s: %s", e.Forge, line)
-				}
-			}
-			_, err = b.SyncForges(ctx, run)
-			return err
+			return runForgeWay(ctx, b, cfg, on, (*store.Backend).SyncForges, check, allowCreate, remote, say)
 		}
 	}
 	if gp := cfg.GithubProject; !gitOnly && gp.Owner != "" && gp.Number != 0 {
