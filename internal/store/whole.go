@@ -116,6 +116,9 @@ func (b *Backend) PullStep(remote string, dry bool) (string, error) {
 	if err := do(remote); err != nil {
 		return "", err
 	}
+	if err := b.ResetGuard(remote); err != nil { // the check's too: it fetched
+		return "", err
+	}
 	if err := b.Switched(); err != nil {
 		return "", err
 	}

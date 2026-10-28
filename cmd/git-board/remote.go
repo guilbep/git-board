@@ -27,6 +27,9 @@ git board pull merges them.`,
 				if err := b.Fetch(remote); err != nil {
 					return err
 				}
+				if err := b.ResetGuard(remote); err != nil {
+					return err
+				}
 				rs, err := b.Remotes()
 				if err != nil {
 					return err

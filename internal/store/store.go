@@ -579,6 +579,9 @@ func (b *Backend) Pull(remote string) error {
 	if err := b.Fetch(remote); err != nil {
 		return err
 	}
+	if err := b.ResetGuard(remote); err != nil {
+		return err
+	}
 	_, err := oplog.MergeFetched(ctx, b.s, remote)
 	return err
 }
@@ -589,6 +592,9 @@ func (b *Backend) Pull(remote string) error {
 // that fetch costs.
 func (b *Backend) Push(remote string) (string, error) {
 	if err := b.checkRemote(remote); err != nil {
+		return "", err
+	}
+	if err := b.guarded(remote); err != nil {
 		return "", err
 	}
 	// a push URL that refuses (a mirror) fails it, and the others took it
@@ -603,6 +609,9 @@ func (b *Backend) Fetch(remote string) error {
 		return err
 	}
 	if err := b.s.Fetch(ctx, remote); err != nil {
+		return err
+	}
+	if err := b.fetchResetMark(remote); err != nil {
 		return err
 	}
 	return b.fetchMark(remote)
