@@ -3,6 +3,7 @@ package store_test
 import (
 	"errors"
 	"maps"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -215,5 +216,20 @@ func TestInputsAreChecked(t *testing.T) {
 		if err := b.Pull(r); err == nil {
 			t.Errorf("Pull(%q) took it", r)
 		}
+	}
+}
+
+// board.view is a person's: read from every level git reads, the global
+// config among them. Serial: it sets the global config's path.
+func TestViewReadsTheGlobalConfig(t *testing.T) {
+	global := filepath.Join(t.TempDir(), "gitconfig")
+	t.Setenv("GIT_CONFIG_GLOBAL", global)
+	b := storetest.New(t)
+	if got, err := b.ViewSetting(); err != nil || got != "" {
+		t.Fatalf("unset: %q, %v", got, err)
+	}
+	storetest.Git(t, b.GitDir(), "config", "--file", global, "board.view", "cycle")
+	if got, err := b.ViewSetting(); err != nil || got != "cycle" {
+		t.Errorf("global: %q, %v", got, err)
 	}
 }

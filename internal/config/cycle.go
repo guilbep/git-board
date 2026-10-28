@@ -17,6 +17,10 @@ import (
 // key has a default (Stages); a role left out, or one [roles] doesn't
 // name, makes that gate anyone's.
 type Cycle struct {
+	// On says the file has a [cycle] table: the board walks the cycle, and
+	// its issues open on the cycle's page. Without one they open on the
+	// classic page (docs/prd/classic-view.md).
+	On         bool     `toml:"-" json:"on"`
 	Ready      string   `toml:"ready"`
 	InProgress []string `toml:"in-progress"`
 	InReview   []string `toml:"in-review"`

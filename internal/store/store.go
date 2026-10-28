@@ -574,6 +574,17 @@ func (b *Backend) SearchText(text string) (map[string]bool, error) {
 	return res, nil
 }
 
+// ViewSetting is git config board.view, read at every level git reads (a
+// person's choice of issue page, --global for every repository): "" when
+// unset.
+func (b *Backend) ViewSetting() (string, error) {
+	out, err := b.run(nil, "config", "--get", "board.view")
+	if ee := (*exec.ExitError)(nil); errors.As(err, &ee) && ee.ExitCode() == 1 {
+		return "", nil
+	}
+	return strings.TrimSpace(string(out)), err
+}
+
 // Pull fetches remote's entities and merges them into this clone's.
 func (b *Backend) Pull(remote string) error {
 	if err := b.Fetch(remote); err != nil {

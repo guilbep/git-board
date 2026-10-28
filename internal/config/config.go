@@ -265,6 +265,7 @@ func parse(data []byte) (*Config, toml.MetaData, error) {
 	if a := r.Repos.Assignees; a != "" && a != "native" && a != "labels" {
 		return nil, md, fmt.Errorf("[repos] assignees: native or labels, not %q", a)
 	}
+	r.Cycle.On = md.IsDefined("cycle") // a subtable alone, [cycle.signoffs], defines it too
 	if err := readKinds(md, &r.Cycle); err != nil {
 		return nil, md, err
 	}

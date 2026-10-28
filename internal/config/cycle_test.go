@@ -385,3 +385,24 @@ func TestCycleReads(t *testing.T) {
 		})
 	}
 }
+
+// A board walks the cycle when its file has a [cycle] table: any of its
+// keys, or a subtable alone, configures the cycle.
+func TestCycleTableTurnsTheCycleOn(t *testing.T) {
+	t.Parallel()
+	for in, want := range map[string]bool{
+		"":                                     false,
+		"[cycle]\n":                            true,
+		"[cycle]\nready = \"ready\"\n":         true,
+		"[cycle.signoffs]\nqa = \"pm\"\n":      true,
+		"[fields.status]\noptions = [\"a\"]\n": false,
+	} {
+		cfg, _, err := parse([]byte(in))
+		if err != nil {
+			t.Fatalf("%q: %v", in, err)
+		}
+		if cfg.Cycle.On != want {
+			t.Errorf("%q: On = %v, want %v", in, cfg.Cycle.On, want)
+		}
+	}
+}
