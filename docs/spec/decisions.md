@@ -372,7 +372,8 @@ answered in the process, to show what it would create.
   can't read it either: the report says so, once. Neither real repository
   holds any. Every comment no forge has is listed, review comments among
   them: the switch reads each pulled issue's comments, so a comment only
-  the forge has can't hide one. `refs/bugs` stays.
+  the forge has can't hide one. `refs/bugs` stays, until `git board prune`
+  removes git-bug's data, once every clone has switched.
 - **The numbers are keyed again on origin's** `refs/board/seq`, which
   `--apply` makes this clone's, the re-key on top, unpushed. A fetch of
   the numbers (`git-board sync`, `numbers`, the web app's Sync) takes

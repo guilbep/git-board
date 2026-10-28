@@ -90,3 +90,23 @@ login = "you"
 sync = true
 ```
 
+
+## Leaving git-bug
+
+A repository whose issues were git-bug's moves to git-board in this order:
+
+1. Stop git-bug's bridge sync wherever it runs: CI, cron, other clones.
+2. `git board switch`, read its report, then `git board switch --apply`.
+3. `git board sync`. It pushes `refs/board` and the switch's mark to
+   origin.
+4. Every other clone runs `git board sync`, which switches it too. No one
+   else runs the switch.
+5. Once no clone or automation uses git-bug, `git board prune` removes
+   git-bug's data from the clone: its refs (`refs/bugs`, `refs/identities`
+   and the old release records in `refs/releases`), its cache
+   `.git/git-bug` and its `git-bug.*` config keys. `-n` says what it would
+   remove. The refs go to a bundle in the git directory first, which it
+   names: `git fetch <bundle> 'refs/*:refs/*'` brings them back.
+6. Last, `git board prune --remote origin` deletes git-bug's refs on
+   origin too. Nothing backs those up: a clone still on git-bug loses its
+   shared issues.

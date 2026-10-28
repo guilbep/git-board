@@ -38,8 +38,9 @@ and nothing on any forge.
 
 --apply does the same, then writes the copy's refs/board/* here, and,
 unless board.me is set, makes you the person of your git-bug identity
-(git config git-bug.identity). It never deletes refs/bugs and never
-pushes. It refuses when the report has
+(git config git-bug.identity). It never deletes refs/bugs (git board
+prune does, once every clone has switched) and never pushes. It refuses
+when the report has
 a blocker. --allow-create accepts the issues and comments the next sync
 would create on the forges, that blocker alone; --force applies despite
 every blocker.
