@@ -57,3 +57,18 @@ func TestProjectNeedsAProject(t *testing.T) {
 		t.Fatalf("err = %v\n%s", err, out)
 	}
 }
+
+// A conflict held names the command that resolves it: project's own.
+func TestProjectConflictNamesProjectResolve(t *testing.T) {
+	newBridgeTestRepo(t)
+	withFakeProject(t, true)
+	mustExecute(t, "project", "sync")
+	id, _ := onlyIssue(t)
+	mustExecute(t, "set", id, "status=in-review")
+	mustExecute(t, "project", "sync")
+	mustExecute(t, "set", id, "status=ready")
+	out := mustExecute(t, "project", "sync")
+	if !strings.Contains(out, "held: git board project resolve") {
+		t.Fatalf("no project resolve in:\n%s", out)
+	}
+}

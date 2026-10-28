@@ -155,7 +155,7 @@ func projectRun(out io.Writer, cfg *config.Config, b *store.Backend, limit int, 
 		fmt.Fprintf(out, "%d change(s) not written to the Project: set write = true under [github-project] in .git-board.toml.\n", skipped)
 	}
 	if len(plan.Conflicts) > 0 {
-		fmt.Fprintf(out, "%d conflict(s) held: git-board bridge resolve <issue number> <field> --ours | --theirs\n", len(plan.Conflicts))
+		fmt.Fprintf(out, "%d conflict(s) held: git board project resolve <issue number> <field> --ours | --theirs\n", len(plan.Conflicts))
 	}
 	return nil
 }
@@ -168,7 +168,7 @@ func runBridgeResolve(out io.Writer, number int, field string, ours bool) error 
 	defer b.Close()
 	kept, err := ghbridge.ResolveConflict(b, project(), cfg, s, number, field, ours)
 	if errors.Is(err, ghbridge.ErrNotConflict) {
-		return fmt.Errorf("%w: run `git-board bridge sync` to see the conflicts", err)
+		return fmt.Errorf("%w: run `git board project sync` to see the conflicts", err)
 	}
 	if err != nil {
 		return err
