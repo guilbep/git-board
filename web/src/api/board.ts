@@ -359,7 +359,7 @@ export interface BridgeTally {
 // A forge run goes both ways (sync), or sends alone (the Work page's Send
 // all); all is the whole sync's (GET /api/sync/all). A dry run, the Check,
 // looks both ways.
-export type ForgeMode = 'sync' | 'send' | 'all';
+export type ForgeMode = 'sync' | 'send' | 'get' | 'all';
 
 // A step of the whole sync, as it went
 export interface JobStep {
