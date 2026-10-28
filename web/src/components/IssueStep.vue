@@ -181,9 +181,12 @@ const rows = computed(() => (cycle.value ? steps(cycle.value, riskBy.value, prop
 const risk = computed(() => cycle.value?.risk ?? cycle.value?.evidence.risk);
 
 // the step shown, by id, picked on the bar; null is the issue's step, and
-// the frame goes back to it when the step moves or the issue changes
+// the frame goes back to it when the step moves or the issue changes; the
+// cycle's first read isn't a move, so a ?step= picked before it stays
 const shown = ref<string | null>(null);
-watch([() => props.id, () => cycle.value?.at], () => (shown.value = null));
+watch([() => props.id, () => cycle.value?.at], ([id, at], [was, wasAt]) => {
+  if (id !== was || (wasAt !== undefined && at !== wasAt)) shown.value = null;
+});
 const now = computed(() => rows.value.find((r) => r.id === cycle.value?.at));
 const row = computed(() => (shown.value === null ? now.value : rows.value.find((r) => r.id === shown.value)));
 // the shown cell's kind picks the workspace; none before the first step
