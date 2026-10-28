@@ -38,8 +38,16 @@ with nothing changed is a no-op.`,
   git-board bridge pull --owner EPFL-ENAC --project 40 --dry-run`,
 	}
 	cmd.AddCommand(newBridgeConfigureCmd(), newBridgePullCmd(), newBridgeSyncCmd(), newBridgeResolveCmd())
+	// git board project took its place: cobra tells the command run only,
+	// so every one of them says so
+	cmd.Hidden = true
+	for _, c := range append(cmd.Commands(), cmd) {
+		c.Deprecated = bridgeDeprecated
+	}
 	return cmd
 }
+
+const bridgeDeprecated = "use git board project: pull, push, sync, resolve, configure"
 
 func newBridgeConfigureCmd() *cobra.Command {
 	var owner string

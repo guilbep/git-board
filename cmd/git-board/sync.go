@@ -136,7 +136,7 @@ func wholeOne(ctx context.Context, out io.Writer, path, remote string, check, al
 		}
 	}
 	if gp := cfg.GithubProject; !gitOnly && gp.Owner != "" && gp.Number != 0 {
-		run.Project = func(context.Context) error { return bridgeSync(out, cfg, b, defaultBridgePullLimit, !check) }
+		run.Project = func(context.Context) error { return projectRun(out, cfg, b, defaultBridgePullLimit, "both", !check) }
 	}
 	if err := b.SyncWhole(ctx, run); err != nil {
 		return err
