@@ -74,12 +74,19 @@ const stages = {
   validation: [], closing: 'done', criteria: [], kinds: {}, guessed: false,
 };
 test('the step bars run from each opening to the next', () => {
-  const t = timeline(steps(events), Date.parse(day(11)), 'status', segments(events.slice(0, 4), stages, 2));
+  const t = timeline(steps(events), Date.parse(day(11)), 'status', segments(events.slice(0, 4), stages, 'risk'));
   // step 1 from the opening, step 2 from day 6 (ready) to now
-  assert.deepEqual(t.bars.map((b) => [b.n, Math.round(b.left), Math.round(b.width)]), [[1, 0, 50], [2, 50, 50]]);
+  assert.deepEqual(t.bars.map((b) => [b.n, b.name, Math.round(b.left), Math.round(b.width)]), [[1, 'Intent', 0, 50], [2, 'Risk', 50, 50]]);
+});
+
+test('the step bars of a two-step list', () => {
+  const two = { ...stages, steps: [{ id: 'code', kind: 'code', name: 'Code' }, { id: 'review', kind: 'review', name: 'Review' }] };
+  const t = timeline(steps(events), Date.parse(day(11)), 'status', segments(events.slice(0, 4), two, ''));
+  // nothing listed has opened: code, the first, holds it all from the start
+  assert.deepEqual(t.bars.map((b) => [b.n, b.name, Math.round(b.left), Math.round(b.width)]), [[1, 'Code', 0, 100]]);
 });
 
 test('no cycle, no bars', () => {
-  assert.deepEqual(timeline(steps(events), Date.parse(day(11)), 'status', segments(events, stages, 0)).bars, []);
+  assert.deepEqual(timeline(steps(events), Date.parse(day(11)), 'status', segments(events, undefined, '')).bars, []);
   assert.deepEqual(timeline(steps(events), Date.parse(day(11))).bars, []);
 });

@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/cycle"
 	"github.com/guilbep/git-board/internal/inbox"
 	"github.com/guilbep/git-board/internal/store"
@@ -134,7 +135,7 @@ func TestInvolved(t *testing.T) {
 
 func TestRowOf(t *testing.T) {
 	th := thread("i", bob, []string{"assignee:alice"}, store.Event{Kind: "labels", At: day(1)}, comment(bob, 2, "Which?", nil))
-	c := cycle.Cycle{Step: 5, Of: 7, Name: "Code", Waits: cycle.Waits{Login: "alice", What: "commit and open the PR"}, Mine: true}
+	c := cycle.Cycle{Step: 5, At: "code", Of: 7, Name: "Code", Waits: cycle.Waits{Login: "alice", What: "commit and open the PR"}, Mine: true}
 	c.Evidence.Branch = "fix/1-x"
 	r := RowOf(th, c, alice)
 	if r.Step != 5 || !r.Involved || r.Question == nil || r.Since != day(2) || r.Branch != "fix/1-x" || r.Waits.Login != "alice" {
@@ -143,5 +144,16 @@ func TestRowOf(t *testing.T) {
 	th.Events = th.Events[:2]
 	if r := RowOf(th, c, alice); r.Question != nil || r.Since != day(1) {
 		t.Errorf("without the question: %+v", r)
+	}
+}
+
+// The row counts in the project's list, not in the seven.
+func TestRowStepIsTheListsOrdinal(t *testing.T) {
+	t.Parallel()
+	in := cycle.Input{Status: "in-review", Stages: config.Stages{InReview: []string{"in-review"},
+		Steps: []config.Step{config.DefaultSteps[4], config.DefaultSteps[5]}}}
+	r := RowOf(thread("i", bob, nil), cycle.Compute(in), alice)
+	if r.Step != 2 || r.Of != 2 || r.Name != "Review" {
+		t.Errorf("row: step %d of %d, %q", r.Step, r.Of, r.Name)
 	}
 }

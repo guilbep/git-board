@@ -12,6 +12,7 @@
       :data-event="c.id"
       :event="c"
       :forges="forges"
+      :list="list"
       :mine="c.author.id === meId"
       :save="save"
       :role="roleOf(fields, c.author.login)"
@@ -58,7 +59,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, ref, useId, useTemplateRef } from 'vue';
-import { ApiError, type Forge, type IssueEvent } from '@/api/board';
+import { ApiError, type Forge, type IssueEvent, type StageStep } from '@/api/board';
 import type { Fields } from '@/fields';
 import { resolvedBy, roleOf, type Item } from '@/flow';
 import { anchorLabel, anchorOf, applySuggestion, lineAt, stateOf, suggestionOf, versions, type Section } from '@/sections';
@@ -73,6 +74,7 @@ const props = defineProps<{
   meId: string;
   fields: Fields;
   forges?: Forge[] | null | undefined;
+  list?: StageStep[] | undefined; // the project's steps, for the comments' chips
   busy: boolean;
   save: (id: string, body: string, base: string) => Promise<unknown>;
   reply: (root: string, body: string) => Promise<boolean>;

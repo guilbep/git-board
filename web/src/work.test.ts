@@ -54,6 +54,7 @@ test('actionFor', () => {
 
 test('the small words', () => {
   assert.equal(stepLabel(6, 'Review'), '06 Review');
+  assert.equal(stepLabel(0, 'Code'), 'Code');
   assert.equal(sendWords(0), 'Nothing to send');
   assert.equal(sendWords(1), '1 change');
   assert.equal(sendWords(3), '3 changes');

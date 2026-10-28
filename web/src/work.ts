@@ -51,9 +51,9 @@ export function actionFor(r: Pick<WorkRow, 'waits' | 'mine' | 'question' | 'acti
   return { kind: 'open', label: 'Open' };
 }
 
-// stepLabel: "06 Review"
+// stepLabel: "06 Review"; the name alone before the list's first step
 export function stepLabel(step: number, name: string): string {
-  return `${String(step).padStart(2, '0')} ${name}`;
+  return step ? `${String(step).padStart(2, '0')} ${name}` : name;
 }
 
 export function sendWords(pending: number): string {

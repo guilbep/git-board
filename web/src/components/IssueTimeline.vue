@@ -75,7 +75,7 @@
     <div v-if="t.bars.length" class="tl-row">
       <span class="tl-name">Steps</span>
       <div class="tl-track">
-        <span v-for="b in t.bars" :key="b.n" class="tl-stp" :style="{ left: `${b.left}%`, width: `${b.width}%` }" :title="stepName(b.n)">{{ b.width > 10 ? stepName(b.n) : b.width > 2 ? pad(b.n) : '' }}</span>
+        <span v-for="b in t.bars" :key="b.n" class="tl-stp" :style="{ left: `${b.left}%`, width: `${b.width}%` }" :title="stepName(b)">{{ b.width > 10 ? stepName(b) : b.width > 2 ? pad(b.n) : '' }}</span>
       </div>
     </div>
     <div class="tl-row tl-axis" aria-hidden="true">
@@ -93,10 +93,9 @@ import { computed } from 'vue';
 import { colorClass } from '@/colors';
 import { displayName, formatValue, type Fields } from '@/fields';
 import { when } from '@/me';
-import { STEPS } from '@/cycle';
 import type { Segment as StepSegment } from '@/flow';
 import { metaWhat, type Step } from '@/replay';
-import { timeline, type Segment } from '@/timeline';
+import { timeline, type Bar, type Segment } from '@/timeline';
 import ValueMark from '@/components/ValueMark.vue';
 
 const props = defineProps<{ steps: Step[]; current: number; fields: Fields; field?: string; segments?: StepSegment[] }>();
@@ -106,7 +105,7 @@ const field = computed(() => props.field ?? 'status');
 const t = computed(() => timeline(props.steps, Date.now(), field.value, props.segments));
 const cursor = computed(() => t.value.markers[props.current]?.left);
 const pad = (n: number) => String(n).padStart(2, '0');
-const stepName = (n: number) => `${pad(n)} ${STEPS[n] ?? ''}`;
+const stepName = (b: Bar) => `${pad(b.n)} ${b.name}`;
 
 const what: Record<Step['kind'], string> = {
   created: 'opened the issue', comment: 'commented', edit: 'edited a text', labels: 'changed fields', status: '', title: 'renamed it', meta: '',

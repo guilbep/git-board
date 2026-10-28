@@ -75,7 +75,7 @@
 
 <script setup lang="ts">
 import { computed, ref, useId } from 'vue';
-import { ApiError, type Forge, type IssueEvent } from '@/api/board';
+import { ApiError, type Forge, type IssueEvent, type StageStep } from '@/api/board';
 import { initials, on, when } from '@/me';
 import GbIcon from '@/components/GbIcon.vue';
 import MarkdownBody from '@/components/MarkdownBody.vue';
@@ -92,6 +92,7 @@ const props = defineProps<{
   save: (id: string, body: string, base: string) => Promise<unknown>;
   role?: string | undefined; // the author's project role: "po"
   anchor?: string | undefined; // a body thread root's anchor: "§3 › 3"
+  list?: StageStep[] | undefined; // the project's steps, for the chip's number
 }>();
 const emit = defineEmits<{ ref: [n: string, event: MouseEvent]; line: [path: string]; anchor: [] }>();
 
@@ -107,8 +108,13 @@ const shown = ref(0);
 // a line comment, a reply to one, or a review: on the pull request, not
 // the issue
 const review = computed(() => props.event.review);
-// the step the comment was written in, as its segment's divider says it
-const step = computed(() => (stepOf(props.event) ? String(stepOf(props.event)).padStart(2, '0') : undefined));
+// the step the comment was written in, as its segment's divider numbers
+// it; an id the list lacks, as written
+const step = computed(() => {
+  const id = stepOf(props.event);
+  const n = (props.list?.findIndex((s) => s.id === id) ?? -1) + 1;
+  return n ? String(n).padStart(2, '0') : id || undefined;
+});
 const verb = computed(() => verbOf(props.event));
 // the description's version, 0 for a comment
 const v = computed(() => (props.event.kind === 'created' ? version(props.event) : 0));

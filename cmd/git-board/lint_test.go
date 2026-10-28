@@ -301,3 +301,30 @@ func TestLintCreateLabelsTemplateCheckOnlyWarns(t *testing.T) {
 		t.Errorf("a template that doesn't parse: %v\noutput:\n%s", err, out)
 	}
 }
+
+// lint says how it read today's forms of [cycle], so a project can write
+// the new ones when it wants to.
+func TestLintSaysWhatItRead(t *testing.T) {
+	newTestRepo(t)
+	writeConfig(t, testConfig+"\n[cycle.signoffs]\nqa = \"pm\"\n\n[cycle.kinds]\nbug = \"failing-test\"\n")
+
+	out, err := execute(t, []string{"lint"})
+	if err != nil {
+		t.Fatalf("execute: %v\noutput:\n%s", err, out)
+	}
+	for _, want := range []string{"read:\n", `[cycle.signoffs] qa = "pm": the sign-off step qa`, `[cycle.kinds] bug = "failing-test": [cycle.kinds.bug] tests = "failing-test"`} {
+		if !strings.Contains(out, want) {
+			t.Errorf("want %q in:\n%s", want, out)
+		}
+	}
+}
+
+func TestLintRefusesStepsOutOfOrder(t *testing.T) {
+	newTestRepo(t)
+	writeConfig(t, testConfig+"\n[cycle]\nsteps = [\"review\", \"code\"]\n")
+
+	out, err := execute(t, []string{"lint"})
+	if err == nil || !strings.Contains(err.Error(), `"code" after "review"`) {
+		t.Errorf("err = %v, want the order refused\noutput:\n%s", err, out)
+	}
+}

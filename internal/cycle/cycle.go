@@ -111,7 +111,10 @@ type Waits struct {
 
 // Cycle is an issue's step.
 type Cycle struct {
-	Step    int    `json:"step"` // 1 to 7
+	Step int `json:"step"` // the kind's, 1 to 7
+	// At is the list's entry reached ([cycle] steps), "" before the first
+	// one opens; Of is the list's length, Name the entry's name.
+	At      string `json:"at"`
 	Of      int    `json:"of"`
 	Name    string `json:"name"`
 	Stage   string `json:"stage"`
@@ -150,9 +153,12 @@ func gate(step int, risk, rule string) string {
 }
 
 // ApprovedPlan: the plan file is accepted or past it, the plan role
-// approved it in a comment (not structural), or its PR is approved.
+// approved it in a comment (not structural), or its PR is approved; with
+// no plan in the project's list, no approval is asked.
 func ApprovedPlan(in Input) bool {
 	switch {
+	case !slices.ContainsFunc(list(in.Stages), func(s config.Step) bool { return s.Kind == "plan" }):
+		return true
 	case in.Plan != nil && slices.Contains([]string{"accepted", "in-progress", "delivered"}, in.Plan.Status):
 		return true
 	case in.Risk == "structural":
@@ -168,19 +174,79 @@ func first(statuses []string, fallback string) string {
 	return fallback
 }
 
+// list is the project's steps, the default seven when the stages have
+// none (an Input built by hand).
+func list(s config.Stages) []config.Step {
+	if len(s.Steps) == 0 {
+		return config.DefaultSteps
+	}
+	return s.Steps
+}
+
+// Position is At's place in the list, from 1; 0 when At is "". The
+// ordinal, computed, never stored.
+func (c Cycle) Position() int {
+	return slices.IndexFunc(list(c.Evidence.Stages), func(s config.Step) bool { return s.ID == c.At }) + 1
+}
+
+// at is the list's entry the issue has reached, the first rule that gives
+// one: closed, the last entry; at a validation status, its sign-off, else
+// verify; else the last entry whose rank is at most the issue's. A status
+// no listed step opens at falls to the last one before it.
+func at(steps []config.Step, c Cycle, in Input) string {
+	if c.Done {
+		return steps[len(steps)-1].ID
+	}
+	if slices.Contains(in.Stages.Validation, in.Status) {
+		if i := slices.IndexFunc(steps, func(s config.Step) bool { return s.Kind == "signoff" && s.Status == in.Status }); i >= 0 {
+			return steps[i].ID
+		}
+		if slices.ContainsFunc(steps, func(s config.Step) bool { return s.ID == "verify" }) {
+			return "verify"
+		}
+	}
+	// a rank is the kind's index, then a sign-off's place in validation
+	rank := func(s config.Step) [2]int {
+		if s.Kind != "signoff" {
+			return [2]int{slices.IndexFunc(config.DefaultSteps, func(d config.Step) bool { return d.Kind == s.Kind }) + 1, 0}
+		}
+		if s.ID == "verify" {
+			return [2]int{7, 0}
+		}
+		return [2]int{7, slices.Index(in.Stages.Validation, s.Status) + 1}
+	}
+	mine := [2]int{c.Step, slices.Index(in.Stages.Validation, in.Status) + 1}
+	id := ""
+	for _, s := range steps {
+		if r := rank(s); r[0] < mine[0] || r[0] == mine[0] && r[1] <= mine[1] {
+			id = s.ID
+		}
+	}
+	return id
+}
+
 // Compute is the issue's step: the status's stage is the floor, the
 // evidence moves the step within it, and evidence that disagrees is a note.
+// A kind of step the project's list leaves out holds nothing back.
 func Compute(in Input) Cycle {
+	steps := list(in.Stages)
+	listed := func(kind string) bool {
+		return slices.ContainsFunc(steps, func(s config.Step) bool { return s.Kind == kind })
+	}
 	rule := in.Stages.KindRule(in.Kind)
-	c := Cycle{Of: 7, Risk: in.Risk, Stage: in.Stages.StageOf(in.Status), Evidence: in}
-	if in.Risk == "low" {
+	c := Cycle{Of: len(steps), Risk: in.Risk, Stage: in.Stages.StageOf(in.Status), Evidence: in}
+	if in.Risk == "low" && listed("plan") {
 		c.Skipped = append(c.Skipped, 3)
 	}
-	if rule == config.NoTests {
+	if rule == config.NoTests && listed("tests") {
 		c.Skipped = append(c.Skipped, 4)
+	}
+	if !listed("tests") {
+		rule = config.NoTests
 	}
 	if in.Closed || c.Stage == "done" {
 		c.Step, c.Name, c.Done, c.Gate = 7, "Done", true, gate(7, in.Risk, rule)
+		c.At = at(steps, c, in)
 		return c
 	}
 	assignee := ""
@@ -188,6 +254,7 @@ func Compute(in Input) Cycle {
 		assignee = in.Assignees[0]
 	}
 	approved := ApprovedPlan(in)
+	noRisk := in.Risk == "" && listed("risk")
 	inProgress := first(in.Stages.InProgress, "in-progress")
 	merged := in.PR != nil && in.PR.State == "MERGED"
 	draft := in.PR != nil && in.PR.State == "OPEN" && in.PR.Draft
@@ -197,20 +264,23 @@ func Compute(in Input) Cycle {
 	}
 	w := Waits{Role: "author", Login: in.Author, What: "add acceptance criteria"}
 	act := "" // what the step's person presses, when it is theirs
-	criteria := len(in.Criteria) > 0 || in.NoCriteria
+	criteria := len(in.Criteria) > 0 || in.NoCriteria || !listed("intent")
 	switch stage {
 	case "ready":
 		switch {
 		case !criteria:
 			c.Step, act = 1, "no-criteria"
-		case in.Risk == "":
+		case noRisk:
 			c.Step, w, act = 2, Waits{Role: "risk", Login: in.People["risk"], What: "set the risk class"}, "set-risk"
 		case in.Risk == "low" || approved:
 			// ponytail: the plan doesn't need anyone; whoever is assigned starts
 			c.Step, w, act = 3, Waits{Role: "assignee", Login: assignee, What: "move the status to " + inProgress}, "start"
 			c.Note = "plan approved, waits for the status " + inProgress
-			if in.Risk == "low" {
+			switch {
+			case in.Risk == "low":
 				c.Note = "low risk, waits for the status " + inProgress
+			case !listed("plan"):
+				c.Note = "waits for the status " + inProgress
 			}
 		default:
 			c.Step, w, act = 3, Waits{Role: "plan", Login: in.People["plan"], What: "approve the plan"}, "approve-plan"
@@ -227,7 +297,7 @@ func Compute(in Input) Cycle {
 			c.Step, w.What, act = 5, "commit and open the PR", "ready-for-review"
 		}
 		switch {
-		case in.Risk == "":
+		case noRisk:
 			c.Note = "risk not set"
 		case in.Risk != "low" && !approved:
 			c.Note = "plan not approved"
@@ -252,6 +322,7 @@ func Compute(in Input) Cycle {
 	case "validation":
 		c.Step, w, act = 7, Waits{Role: "signoff", Login: in.People["signoff:"+in.Status], What: "sign off " + in.Status}, "verify"
 		switch {
+		case !listed("plan"):
 		case in.Plan != nil && in.Plan.Status != "delivered":
 			c.Note = "plan not marked delivered"
 		case in.Plan == nil && in.Risk != "low":
@@ -263,13 +334,16 @@ func Compute(in Input) Cycle {
 		case !criteria:
 			act = "no-criteria"
 		case in.Stages.Ready == "":
-		case in.People["spec"] != "": // the verdict moves the status (docs/prd/time-flow.md, open point 1)
+		case in.People["spec"] != "" && listed("intent"): // the verdict moves the status (docs/prd/time-flow.md, open point 1)
 			w, act = Waits{Role: "spec", Login: in.People["spec"], What: "give the verdict on the description"}, "spec-verdict"
 		default:
 			w.What, act = "move the status to "+in.Stages.Ready, "move-ready"
 		}
 	}
-	c.Name, c.Gate = Steps[c.Step], gate(c.Step, in.Risk, rule)
+	c.Name, c.Gate, c.At = Steps[c.Step], gate(c.Step, in.Risk, rule), at(steps, c, in)
+	if i := c.Position(); i > 0 {
+		c.Name = steps[i-1].Name
+	}
 	w.Anyone = w.Login == ""
 	c.Waits = w
 	c.Mine = w.Anyone || (in.Me != "" && strings.EqualFold(w.Login, in.Me))

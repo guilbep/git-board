@@ -264,3 +264,100 @@ func TestTickCriterion(t *testing.T) {
 		}
 	}
 }
+
+// over co2's stages, with this list
+func listed(ids ...string) func(*Input) {
+	return func(in *Input) {
+		in.Stages.Steps = nil
+		for _, id := range ids {
+			i := slices.IndexFunc(config.DefaultSteps, func(s config.Step) bool { return s.ID == id })
+			if i < 0 {
+				in.Stages.Steps = append(in.Stages.Steps, config.Step{ID: id, Kind: "signoff", Name: id, Status: id})
+				continue
+			}
+			in.Stages.Steps = append(in.Stages.Steps, config.DefaultSteps[i])
+		}
+	}
+}
+
+var six = []string{"intent", "risk", "plan", "tests", "code", "review"}
+
+func TestComputeAt(t *testing.T) {
+	t.Parallel()
+	signoffs := listed(append(slices.Clone(six), "ready-for-validation", "qa", "tests-metier")...)
+	for _, tc := range []struct {
+		name, status string
+		mod          func(*Input)
+		want         string
+	}{
+		{"backlog", "backlog", nil, "intent"},
+		{"ready, no risk", "ready", nil, "risk"},
+		{"ready, normal", "ready", risk("normal"), "plan"},
+		{"in-progress", "in-progress", approved("normal"), "tests"},
+		{"in-progress, tests", "in-progress", func(in *Input) { approved("normal")(in); in.Tests = []TestFile{{Path: "a_test.go"}} }, "code"},
+		{"in-review", "in-review", nil, "review"},
+		{"qa", "qa", nil, "verify"},
+		{"merged, no validation status", "in-review", func(in *Input) { in.Stages = noValidation; in.PR = &ghpr.PR{State: "MERGED"} }, "verify"},
+		{"sign-offs, ready-for-validation", "ready-for-validation", signoffs, "ready-for-validation"},
+		{"sign-offs, qa", "qa", signoffs, "qa"},
+		{"sign-offs, tests-metier", "tests-metier", signoffs, "tests-metier"},
+		{"qa and verify, at qa", "qa", listed("review", "qa", "verify"), "qa"},
+		{"qa and verify, at tests-metier", "tests-metier", listed("review", "qa", "verify"), "verify"},
+		{"qa alone, at tests-metier", "tests-metier", listed("review", "qa"), "qa"},
+		{"qa alone, at ready-for-validation", "ready-for-validation", listed("review", "qa"), "review"},
+		{"closed", "qa", func(in *Input) { listed("code", "review", "qa")(in); in.Closed = true }, "qa"},
+		{"validated", "validated", listed("code", "review"), "review"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if c := Compute(input(tc.status, tc.mod)); c.At != tc.want {
+				t.Errorf("at = %q, want %q (step %d)", c.At, tc.want, c.Step)
+			}
+		})
+	}
+}
+
+// a kind the list leaves out holds nothing back
+func TestUnlistedKindsHoldNothing(t *testing.T) {
+	t.Parallel()
+	ready := Compute(input("ready", func(in *Input) { listed("code", "review")(in); in.Criteria, in.Me = nil, "erin" }))
+	if ready.At != "" || !slices.Equal(ready.Actions, []string{"start"}) || ready.Note != "waits for the status in-progress" {
+		t.Errorf("ready: at %q, actions %v, note %q", ready.At, ready.Actions, ready.Note)
+	}
+	wip := Compute(input("in-progress", func(in *Input) { listed("code", "review")(in); in.Me = "erin" }))
+	if wip.At != "code" || !slices.Equal(wip.Actions, []string{"ready-for-review"}) || wip.Note != "" || len(wip.Skipped) != 0 {
+		t.Errorf("in-progress: at %q, actions %v, note %q, skipped %v", wip.At, wip.Actions, wip.Note, wip.Skipped)
+	}
+	// low risk skips plan, a doc tests, only when the list has the step
+	low := Compute(input("in-progress", func(in *Input) { listed("intent", "risk", "code")(in); in.Risk, in.Kind = "low", "doc" }))
+	if len(low.Skipped) != 0 {
+		t.Errorf("skipped %v, want none", low.Skipped)
+	}
+	// no plan step: no note about the plan file at a sign-off
+	qa := Compute(input("qa", func(in *Input) { listed("code", "review", "qa")(in); in.Risk = "normal" }))
+	if qa.Note != "" {
+		t.Errorf("qa: note %q", qa.Note)
+	}
+	// no intent: no verdict asked
+	backlog := Compute(input("backlog", func(in *Input) {
+		listed("code", "review")(in)
+		in.People, in.Me = map[string]string{"spec": "bob"}, "dan"
+	}))
+	if !slices.Equal(backlog.Actions, []string{"move-ready"}) {
+		t.Errorf("backlog: actions %v", backlog.Actions)
+	}
+}
+
+func TestComputeOfAndName(t *testing.T) {
+	t.Parallel()
+	c := Compute(input("qa", listed("code", "review", "qa")))
+	if c.Of != 3 || c.Name != "qa" || c.Position() != 3 || c.Step != 7 {
+		t.Errorf("of %d, name %q, position %d, step %d", c.Of, c.Name, c.Position(), c.Step)
+	}
+	c = Compute(input("ready", func(in *Input) { listed("code", "review")(in); in.Risk = "low" }))
+	if c.Of != 2 || c.At != "" || c.Position() != 0 || c.Name != "Plan" {
+		t.Errorf("before the list: of %d, at %q, position %d, name %q", c.Of, c.At, c.Position(), c.Name)
+	}
+	if c := Compute(input("in-review", nil)); c.Of != 7 || c.Position() != 6 || c.Name != "Review" {
+		t.Errorf("default: of %d, position %d, name %q", c.Of, c.Position(), c.Name)
+	}
+}

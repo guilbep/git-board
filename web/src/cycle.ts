@@ -1,6 +1,6 @@
 // The words for an issue's step (api/board.ts Cycle): the step bar, the
 // step's buttons, the criteria written into the description.
-import type { Cycle, CycleStages, IssueEvent } from './api/board.ts';
+import type { Cycle, CycleStages, IssueEvent, StageStep } from './api/board.ts';
 import { approvers, reviewLine } from './review.ts';
 import { versions } from './sections.ts';
 import { verdicts } from './spec.ts';
@@ -47,6 +47,15 @@ export function cardFor(c: Cycle, status: string): { title: string; gate: string
 // The step bar (components/IssueStep.vue): one cell per step, with its
 // evidence when done, whose turn when current, why when locked.
 export const STEPS = ['', 'Intent', 'Risk', 'Plan', 'Tests', 'Code', 'Review', 'Verify'];
+// the default list's ids by number: "6" is review
+export const DEFAULT_IDS: readonly string[] = ['', 'intent', 'risk', 'plan', 'tests', 'code', 'review', 'verify'];
+// listOf is the project's list ([cycle] steps), the default seven when the
+// server sends none (internal/cycle's list)
+export const listOf = (s: CycleStages | undefined): StageStep[] =>
+  s?.steps?.length ? s.steps : DEFAULT_IDS.slice(1).map((id, i) => ({ id, kind: id === 'verify' ? 'signoff' : id, name: STEPS[i + 1]! }));
+// kindOf is an entry's kind as the step's number, 1 to 7: what its gate,
+// evidence and workspace are read by
+export const kindOf = (s: StageStep): number => (s.kind === 'signoff' ? 7 : DEFAULT_IDS.indexOf(s.kind));
 const LOCKS = ['', '', 'opens at ready', 'opens once the risk is set', 'opens when work starts', 'opens with the test', 'opens when the PR is ready for review', 'opens when the PR is merged'];
 
 // gate is the step's rule, as internal/cycle/cycle.go words it: the server
@@ -62,7 +71,9 @@ export function gate(step: number, risk?: string, rule?: string): string {
 }
 
 export interface StepRow {
-  n: number;
+  id: string;
+  i: number; // the entry's place in the list, from 1: the rail's number
+  n: number; // its kind's step, 1 to 7: the gate, the evidence, the workspace
   name: string;
   state: 'done' | 'current' | 'locked' | 'skipped';
   line: string;
@@ -73,17 +84,21 @@ const short = (sha?: string) => (sha ? sha.slice(0, 7) : '');
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 const names = (list: string[]) => (list.length < 2 ? list.join('') : `${list.slice(0, -1).join(', ')} and ${list[list.length - 1]}`);
 
-// steps is the seven cells. The current step is the issue's, even when
-// skipped (low risk waits at step 3 for Start work); a skipped one is
-// skipped wherever it stands. riskBy is who set the risk label, events the
-// review's approvals and threads (the thread knows, the evidence doesn't).
+// steps is one cell per entry of the list. The current one is the
+// issue's (at), even when skipped (low risk waits at plan for Start work);
+// a skipped kind is skipped wherever it stands; before the first entry
+// opens, every cell is to come. riskBy is who set the risk label, events
+// the review's approvals and threads (the thread knows, the evidence
+// doesn't).
 export function steps(c: Cycle, riskBy?: string, events: IssueEvent[] = []): StepRow[] {
   const e = c.evidence ?? {};
   const risk = c.risk ?? e.risk;
   const rule = c.stages.kinds?.[e.kind ?? ''] ?? 'per-criterion';
   // the draft PR holding the plan, read on step 3's line (C3)
   const draft = e.pr?.state === 'OPEN' && e.pr.draft ? ` · draft PR #${e.pr.number}` : '';
-  const evidence = (n: number): string | undefined => {
+  const evidence = (n: number, status?: string): string | undefined => {
+    // a sign-off's own cell: who signed its status off
+    if (status) return e.signoffs?.find((x) => x.status === status)?.by.replace(/^/, 'Signed off by ');
     switch (n) {
       case 1: {
         const k = e.criteria?.length ?? 0;
@@ -120,14 +135,17 @@ export function steps(c: Cycle, riskBy?: string, events: IssueEvent[] = []): Ste
   const created = events.find((x) => x.kind === 'created');
   const v = created ? versions(created).length : 0;
   const spec = c.waits?.role === 'spec' && created ? `v${v} · ${verdicts(events).findLast((x) => x.v === v)?.verdict === 'request-changes' ? 'changes requested' : 'awaits the verdict'}` : '';
-  return STEPS.slice(1).map((name, i) => {
-    const n = i + 1;
-    const g = n === c.step ? c.gate : gate(n, risk, rule);
+  const list = listOf(c.stages);
+  const cur = list.findIndex((s) => s.id === c.at) + 1;
+  return list.map((s, k): StepRow => {
+    const i = k + 1;
+    const n = kindOf(s);
+    const row = { id: s.id, i, n, name: s.name, gate: i === cur ? c.gate : gate(n, risk, rule) };
     // step 6 under review counts approvals and open threads; merged, its note
-    if (n === c.step && !c.done) return { n, name, state: 'current', line: (c.note || spec || (n === 6 ? reviewLine(c, events) : turn(c))) + (n === 3 ? draft : ''), gate: g };
-    if (c.skipped?.includes(n)) return { n, name, state: 'skipped', line: `skipped, ${n === 3 ? 'low risk' : (e.kind ?? 'no tests')}`, gate: g };
-    if (c.done || n < c.step) return { n, name, state: 'done', line: evidence(n) || g, gate: g };
-    return { n, name, state: 'locked', line: LOCKS[n] ?? '', gate: g };
+    if (i === cur && !c.done) return { ...row, state: 'current', line: (c.note || spec || (n === 6 ? reviewLine(c, events) : turn(c))) + (n === 3 ? draft : '') };
+    if (c.skipped?.includes(n)) return { ...row, state: 'skipped', line: `skipped, ${n === 3 ? 'low risk' : (e.kind ?? 'no tests')}` };
+    if (c.done || i < cur) return { ...row, state: 'done', line: evidence(n, s.status) || row.gate };
+    return { ...row, state: 'locked', line: s.status ? `opens at ${s.status}` : (LOCKS[n] ?? '') };
   });
 }
 

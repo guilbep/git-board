@@ -77,7 +77,7 @@ export function useIssue(id: Ref<string>, onChange: (t: Thread) => void = () => 
     saveError,
     saveCode,
     load,
-    comment: (body: string, status?: 'open' | 'closed', step = 0, on?: ThreadOn) => write(() => addComment(id.value, body, status, step, on)),
+    comment: (body: string, status?: 'open' | 'closed', step = '', on?: ThreadOn) => write(() => addComment(id.value, body, status, step, on)),
     // "" reopens; a person's id, or "v2" once applied
     resolveThread: (root: string, value: string) => write(() => threadMeta(id.value, root, { 'thread:resolved': value })),
     // Apply: the description's edit, then the root's keys with the new

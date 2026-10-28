@@ -29,7 +29,7 @@ export interface Timeline {
 }
 
 // a step, from its opening to the next one's, the last to now
-export interface Bar { n: number; left: number; width: number }
+export interface Bar { n: number; name: string; left: number; width: number }
 
 export function timeline(all: Step[], now: number, field = 'status', segs: StepSegment[] = []): Timeline {
   const start = all.length ? Date.parse(all[0]!.at) : now;
@@ -77,7 +77,8 @@ export function timeline(all: Step[], now: number, field = 'status', segs: StepS
     index,
     ...(s.version === 0 ? { tick: true } : {}),
   }));
-  const open = segs.filter((g) => g.n > 0 && (g.n === 1 || g.at)).map((g) => ({ n: g.n, left: g.n === 1 ? 0 : pct(Date.parse(g.at!)) }));
+  // the first segment from the start: it holds what came before any step opened
+  const open = segs.filter((g, i) => g.n > 0 && (i === 0 || g.at)).map((g, i) => ({ n: g.n, name: g.name, left: i === 0 ? 0 : pct(Date.parse(g.at!)) }));
   const bars = open.map((b, i) => ({ ...b, width: (open[i + 1]?.left ?? 100) - b.left }));
   // one instant (a new issue, nothing since): the band is all of it
   const whole = end === start || !band.length;

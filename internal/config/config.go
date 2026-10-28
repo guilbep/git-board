@@ -265,7 +265,13 @@ func parse(data []byte) (*Config, toml.MetaData, error) {
 	if a := r.Repos.Assignees; a != "" && a != "native" && a != "labels" {
 		return nil, md, fmt.Errorf("[repos] assignees: native or labels, not %q", a)
 	}
+	if err := readKinds(md, &r.Cycle); err != nil {
+		return nil, md, err
+	}
 	if err := checkCycle(r.Cycle); err != nil {
+		return nil, md, err
+	}
+	if err := checkSteps(r.Cycle, (&Config{Fields: r.Fields, Cycle: r.Cycle}).Stages().Validation); err != nil {
 		return nil, md, err
 	}
 	if err := checkRelease(r.Release); err != nil {

@@ -231,7 +231,7 @@ func TestCycleApprovePlan(t *testing.T) {
 		t.Errorf("approve: %d %+v", code, c)
 	}
 	th, _ := lastEvent(t, b, id)
-	if e := th.Events[len(th.Events)-2]; e.Meta["plan:approve"] != "1" || e.Meta["cycle:step"] != "3" || !slices.Contains(th.Labels, "status:in-progress") {
+	if e := th.Events[len(th.Events)-2]; e.Meta["plan:approve"] != "1" || e.Meta["cycle:step"] != "plan" || !slices.Contains(th.Labels, "status:in-progress") {
 		t.Errorf("approval %+v, labels %v", e, th.Labels)
 	}
 
@@ -270,7 +270,7 @@ func TestCycleSignoffNeedsARun(t *testing.T) {
 	}
 	th, e := lastEvent(t, b, id)
 	signed := th.Events[len(th.Events)-2] // then the status moved
-	if signed.Meta["signoff:why"] != "ran it by hand" || signed.Meta["signoff:status"] != "qa" || !slices.Contains(th.Labels, "status:tests-metier") {
+	if signed.Meta["signoff:why"] != "ran it by hand" || signed.Meta["signoff:status"] != "qa" || signed.Meta["cycle:step"] != "qa" || !slices.Contains(th.Labels, "status:tests-metier") {
 		t.Errorf("sign-off %+v, then %+v, labels %v", signed, e, th.Labels)
 	}
 }
@@ -303,7 +303,7 @@ func TestCycleVerifyThenSignoff(t *testing.T) {
 	if code, body := post(t, url+"verify", map[string]string{"output": "ok", "commit": ""}); code != http.StatusOK {
 		t.Fatalf("verify: %d %s", code, body)
 	}
-	if _, e := lastEvent(t, b, id); e.Meta["verify:run"] != "1" || e.Meta["cycle:step"] != "7" || e.Body != "Run\n\n```\nok\n```" {
+	if _, e := lastEvent(t, b, id); e.Meta["verify:run"] != "1" || e.Meta["cycle:step"] != "verify" || e.Body != "Run\n\n```\nok\n```" {
 		t.Errorf("the run %+v", e)
 	}
 	// a box on the first criterion only: the second keeps its comment alone
@@ -470,7 +470,7 @@ func TestCycleSuggestRisk(t *testing.T) {
 		t.Errorf("the model was sent %q, want the title and the description", *asked)
 	}
 	th, e := lastEvent(t, b, id)
-	if e.Body != "Suggested: **structural**\n\nThe export changes a schema." || e.Meta["ai:risk"] != "structural" || e.Meta["ai:model"] != "test-model" || e.Meta["cycle:step"] != "2" {
+	if e.Body != "Suggested: **structural**\n\nThe export changes a schema." || e.Meta["ai:risk"] != "structural" || e.Meta["ai:model"] != "test-model" || e.Meta["cycle:step"] != "risk" {
 		t.Errorf("the comment: %q %v", e.Body, e.Meta)
 	}
 	if slices.ContainsFunc(th.Labels, func(l string) bool { return strings.HasPrefix(l, "risk:") }) {
@@ -553,7 +553,7 @@ func TestSpecVerdict(t *testing.T) {
 	}
 	th, _ := lastEvent(t, b, id)
 	e := th.Events[len(th.Events)-2]
-	if e.Meta["spec:verdict"] != "approve" || e.Meta["spec:on"] != "body@v1" || e.Meta["cycle:step"] != "1" || e.Body != "**Approved v1 of the description**" || !slices.Contains(th.Labels, "status:ready") {
+	if e.Meta["spec:verdict"] != "approve" || e.Meta["spec:on"] != "body@v1" || e.Meta["cycle:step"] != "intent" || e.Body != "**Approved v1 of the description**" || !slices.Contains(th.Labels, "status:ready") {
 		t.Errorf("approval %+v, labels %v", e, th.Labels)
 	}
 
@@ -618,7 +618,7 @@ func TestNoCriteria(t *testing.T) {
 		t.Fatalf("accept: %d %s", code, body)
 	}
 	th, e := lastEvent(t, b, old)
-	if e.Meta["intent:criteria"] != "none" || e.Meta["cycle:step"] != "1" || e.Body != "Accepted without acceptance criteria" {
+	if e.Meta["intent:criteria"] != "none" || e.Meta["cycle:step"] != "intent" || e.Body != "Accepted without acceptance criteria" {
 		t.Errorf("the comment: %+v", e)
 	}
 	var c cycleAnswer

@@ -6,7 +6,7 @@
     <div class="gb-flow-controls">
       <div class="gb-flow-chips" role="group" aria-label="Flow">
         <span class="gb-eyebrow">Flow</span>
-        <button v-if="step" type="button" class="gb-fchip" :aria-pressed="reading.show === 'step'" @click="reading.show = 'step'">This step {{ count({ show: 'step' }) }}</button>
+        <button v-if="cycle" type="button" class="gb-fchip" :aria-pressed="reading.show === 'step'" @click="reading.show = 'step'">This step {{ count({ show: 'step' }) }}</button>
         <button type="button" class="gb-fchip" :aria-pressed="reading.show === 'all' || (reading.show === 'version' && !cur)" @click="reading.show = 'all'">All {{ count({ show: 'all' }) }}</button>
         <button v-if="cur" type="button" class="gb-fchip" :aria-pressed="reading.show === 'version'" @click="reading.show = 'version'">On v{{ cur.v }} {{ count({ show: 'version' }) }}</button>
         <button type="button" class="gb-fchip" :aria-pressed="reading.show === 'open'" @click="reading.show = 'open'">Open threads {{ count({ show: 'open' }) }}</button>
@@ -32,27 +32,27 @@
         </div>
       </div>
     </div>
-    <p v-if="step" class="gb-note">{{ segs.length }} segments, one per step: a comment carries the step it was written in. Threads fold to their first line; the composer carries the current step.</p>
+    <p v-if="cycle" class="gb-note">{{ segs.length }} segments, one per step: a comment carries the step it was written in. Threads fold to their first line; the composer carries the current step.</p>
 
     <p v-if="!total" class="gb-note">{{ narrowed ? 'Nothing in the flow under these filters.' : 'Nothing said yet.' }}</p>
     <p v-if="reading.show === 'version' && cur && offV" class="gb-flow-ptr">
       {{ offV }} {{ offV === 1 ? 'entry' : 'entries' }} on {{ cur.to ? 'other versions' : cur.v === 2 ? 'v1' : `v1–v${cur.v - 1}` }} {{ offV === 1 ? 'is' : 'are' }} hidden ·
       <button type="button" class="gb-linkbtn" @click="reading.show = 'all'">show all</button>
     </p>
-    <template v-for="s in shown" :key="s.n">
+    <template v-for="s in shown" :key="s.id">
       <p v-if="reading.show === 'step' && folded.length" class="gb-flow-ptr">
         {{ foldedWords }} · {{ foldedCount }} {{ foldedCount === 1 ? 'entry' : 'entries' }} ·
         <button type="button" class="gb-linkbtn" @click="reading.show = 'all'">show all</button>
       </p>
       <div v-if="s.n" class="gb-fdiv-row">
-        <h3 :id="`step-${s.n}`" tabindex="-1" class="gb-fdiv" :class="{ 'is-current': s.n === step }">{{ divider(s, s.n === step) }}</h3>
-        <button v-if="s.n < step || (cycle?.done && s.n !== step)" type="button" class="gb-linkbtn" @click="emit('open', s.n)">Open step {{ s.n }} · {{ STEPS[s.n] }}</button>
+        <h3 :id="`step-${s.id}`" tabindex="-1" class="gb-fdiv" :class="{ 'is-current': s.id === step }">{{ divider(s, s.id === step) }}</h3>
+        <button v-if="s.n < pos || (cycle?.done && s.id !== step)" type="button" class="gb-linkbtn" @click="emit('open', s.id)">Open step {{ s.n }} · {{ s.name }}</button>
       </div>
       <p v-if="s.n === lastHidden" class="gb-flow-ptr">
         {{ foldedWords }} · <button type="button" class="gb-linkbtn" @click="unfolded = true">show all</button>
       </p>
       <template v-if="!hidden.has(s.n)">
-        <ol v-if="s.entries.length" class="gb-fl" :aria-labelledby="s.n ? `step-${s.n}` : undefined" :aria-label="s.n ? undefined : 'The whole conversation'">
+        <ol v-if="s.entries.length" class="gb-fl" :aria-labelledby="s.n ? `step-${s.id}` : undefined" :aria-label="s.n ? undefined : 'The whole conversation'">
           <template v-for="(it, i) in items(s)" :key="it.event.id">
             <li v-if="it.event.id === newId" class="gb-fnew" role="separator" :aria-label="`New since your last visit, ${on(sinceIso!, true)}`">new since your last visit · {{ when(sinceIso!, true) }}</li>
             <!-- a version of the description published: the flow's own milestone -->
@@ -97,6 +97,7 @@
                   :me-id="meId"
                   :fields="fields"
                   :forges="forges"
+                  :list="list"
                   :busy="busy"
                   :save="save"
                   :reply="reply"
@@ -105,7 +106,7 @@
                   @anchor="emit('thread', it.event.id)"
                   @ref="(n, ev) => emit('ref', n, ev)"
                 />
-                <CommentCard v-else v-for="c in [it.event, ...it.replies]" :key="c.id" :data-event="c.id" :event="c" :forges="forges" :mine="c.author.id === meId" :save="save" :role="roleOf(fields, c.author.login)" @ref="(n, ev) => emit('ref', n, ev)" @line="(p) => emit('line', p)" />
+                <CommentCard v-else v-for="c in [it.event, ...it.replies]" :key="c.id" :data-event="c.id" :event="c" :forges="forges" :list="list" :mine="c.author.id === meId" :save="save" :role="roleOf(fields, c.author.login)" @ref="(n, ev) => emit('ref', n, ev)" @line="(p) => emit('line', p)" />
                 <p v-if="it.resolved !== undefined && threads"><button type="button" class="gb-linkbtn" aria-expanded="true" @click="open.delete(it.event.id)">Fold the thread</button></p>
               </div>
             </li>
@@ -121,7 +122,7 @@ import { computed, nextTick, reactive, ref, toRef, watch } from 'vue';
 import type { Cycle, Forge, IssueEvent } from '@/api/board';
 import type { Fields } from '@/fields';
 import { bodyThreads, divider, firstNew, isRoot, items as itemsOf, pick, roleOf, rootOf, segments, type Item, type On, type Reading, type Segment } from '@/flow';
-import { STEPS } from '@/cycle';
+import { listOf } from '@/cycle';
 import { on, when } from '@/me';
 import { anchorLabel, anchorOf, changeOf, sectionsOf, versions } from '@/sections';
 import CommentCard from '@/components/CommentCard.vue';
@@ -150,9 +151,13 @@ const props = defineProps<{
 }>();
 const reading = toRef(props, 'reading');
 // thread: a body thread's anchor, its place in the description
-const emit = defineEmits<{ line: [path: string]; ref: [n: string, event: MouseEvent]; open: [n: number]; thread: [root: string]; compare: [v: number] }>();
+const emit = defineEmits<{ line: [path: string]; ref: [n: string, event: MouseEvent]; open: [id: string]; thread: [root: string]; compare: [v: number] }>();
 
-const step = computed(() => props.cycle?.step ?? 0);
+// the issue's step, by id, and its place in the list; '' and 0 before the
+// first step opens
+const step = computed(() => props.cycle?.at ?? '');
+const list = computed(() => listOf(props.cycle?.stages));
+const pos = computed(() => list.value.findIndex((s) => s.id === step.value) + 1);
 // the description's versions: a milestone for each past v1, sorted into
 // its step as any event; On vN follows the version shown
 const vs = computed(() => {
@@ -198,7 +203,7 @@ const items = (s: Segment): Item[] => itemsOf(s, reading.value.threads, props.po
 const LONG = 100;
 const unfolded = ref(false);
 const folded = computed((): Segment[] => {
-  const before = (ss: Segment[]) => ss.filter((s) => s.n && s.n < step.value);
+  const before = (ss: Segment[]) => ss.filter((s) => s.n && s.n < pos.value);
   if (reading.value.show === 'step') return before(read({ ...reading.value, show: 'all' }));
   return reading.value.show === 'all' && !unfolded.value && total.value > LONG ? before(shown.value) : [];
 });

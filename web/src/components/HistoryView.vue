@@ -135,7 +135,7 @@ const props = defineProps<{ thread: Thread; fields: Fields; cycle?: Cycle | null
 
 const all = computed(() => steps(props.thread.events));
 // the step bars: the flow's segments, with no cycle none
-const segs = computed(() => (props.cycle ? segments(props.thread.events, props.cycle.stages, props.cycle.step, props.cycle.skipped) : []));
+const segs = computed(() => (props.cycle ? segments(props.thread.events, props.cycle.stages, props.cycle.at, props.cycle.skipped) : []));
 const pos = ref(0);
 // the latest change when the history opens or grows
 watch(() => all.value.length, (n) => (pos.value = n - 1), { immediate: true });

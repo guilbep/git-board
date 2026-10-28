@@ -48,7 +48,7 @@ type Groups struct {
 
 // RowOf is the thread's row, from its computed cycle.
 func RowOf(th store.Thread, c cycle.Cycle, me inbox.Me) Row {
-	r := Row{Issue: th.Issue, Step: c.Step, Of: c.Of, Name: c.Name, Risk: c.Risk, Done: c.Done, Waits: c.Waits, Mine: c.Mine,
+	r := Row{Issue: th.Issue, Step: c.Position(), Of: c.Of, Name: c.Name, Risk: c.Risk, Done: c.Done, Waits: c.Waits, Mine: c.Mine,
 		Actions: c.Actions, Involved: Involved(th, me), Question: QuestionOf(th, me), Branch: c.Evidence.Branch}
 	r.Since = Since(th)
 	if r.Question != nil {
