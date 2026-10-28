@@ -241,11 +241,11 @@
           </div>
           <HistoryView v-if="reading.tab === 'history'" :thread="thread" :fields="fields" />
           <template v-else>
-            <CommentCard v-if="created" :data-event="created.id" :event="created" :forges="thread.forges" :mine="created.author.id === meId" :save="edit" :role="roleOf(fields, created.author.login)" @ref="onRef" />
+            <CommentCard v-if="created" :data-event="created.id" :event="created" :forges="thread.forges" :mine="created.author.id === meId" :save="edit" :role="roleOf(fields, created.author.login)" plain @ref="onRef" />
             <ol class="gb-tl" aria-label="Conversation">
               <template v-for="e in rest" :key="e.id">
                 <li v-if="e.kind === 'comment'" :data-event="e.id">
-                  <CommentCard :event="e" :forges="thread.forges" :mine="e.author.id === meId" :save="edit" :role="roleOf(fields, e.author.login)" @ref="onRef" />
+                  <CommentCard :event="e" :forges="thread.forges" :mine="e.author.id === meId" :save="edit" :role="roleOf(fields, e.author.login)" plain @ref="onRef" />
                 </li>
                 <TimelineEvent v-else :data-event="e.id" :event="e" :fields="fields" />
               </template>

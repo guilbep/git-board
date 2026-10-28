@@ -93,6 +93,7 @@ const props = defineProps<{
   role?: string | undefined; // the author's project role: "po"
   anchor?: string | undefined; // a body thread root's anchor: "§3 › 3"
   list?: StageStep[] | undefined; // the project's steps, for the chip's number
+  plain?: boolean; // the classic page: no description versions, no step chip
 }>();
 const emit = defineEmits<{ ref: [n: string, event: MouseEvent]; line: [path: string]; anchor: [] }>();
 
@@ -111,13 +112,14 @@ const review = computed(() => props.event.review);
 // the step the comment was written in, as its segment's divider numbers
 // it; an id the list lacks, as written
 const step = computed(() => {
+  if (props.plain) return undefined;
   const id = stepOf(props.event);
   const n = (props.list?.findIndex((s) => s.id === id) ?? -1) + 1;
   return n ? String(n).padStart(2, '0') : id || undefined;
 });
 const verb = computed(() => verbOf(props.event));
 // the description's version, 0 for a comment
-const v = computed(() => (props.event.kind === 'created' ? version(props.event) : 0));
+const v = computed(() => (props.event.kind === 'created' && !props.plain ? version(props.event) : 0));
 
 // newest first, as the menu lists them
 const versions = computed(() => [...(props.event.history ?? [])].reverse());
