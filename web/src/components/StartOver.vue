@@ -26,7 +26,7 @@
         </dl>
         <template v-if="c.button">
           <label v-if="c.id === 'prune' && st?.remote" class="sy-check">
-            <input v-model="onRemote" type="checkbox" /> Also on origin: only once no clone and no automation uses git-bug
+            <input v-model="onRemote" type="checkbox" /> Also on origin, with no backup there: only once no clone and no automation uses git-bug
           </label>
           <form class="so-confirm" @submit.prevent="run(c)">
             <label :for="`so-${c.id}`">Type <b>{{ repo || '…' }}</b> to confirm</label>

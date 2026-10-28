@@ -111,3 +111,12 @@ func TestSyncApplyOneSide(t *testing.T) {
 		t.Fatalf("project: %d, edits %+v", resp.StatusCode, rec.edits)
 	}
 }
+
+// A start-over changes the issues every tab shows: it is an issues event,
+// which the pages reload on, not a settings one.
+func TestStartOverTellsEveryTab(t *testing.T) {
+	t.Parallel()
+	if e := eventFor(httptest.NewRequest("POST", "/api/start-over", nil)); e.Kind != "issues" {
+		t.Errorf("kind %q, want issues", e.Kind)
+	}
+}

@@ -43,3 +43,8 @@ test('a result says what went and where it is kept', () => {
   assert.equal(resultLine({ deleted: 3, backup: '', me: false }), '3 refs deleted');
   assert.equal(resultLine({ deleted: 1, backup: '/b', me: true }), '1 refs deleted, backed up in /b; board.me is unset: its person is gone');
 });
+
+test('git-bug’s refs on origin go with no backup, and the card says so', () => {
+  const prune = cardsFor({ ...none, remote: true, git_bug: { refs: 1, cache: false, keys: 0 } }).at(-1)!;
+  assert.match(prune.loses, /On origin, nothing backs them up/);
+});

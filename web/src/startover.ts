@@ -52,7 +52,7 @@ function prune(switched: boolean): Card {
     does: switched
       ? 'Deletes git-bug’s refs (refs/bugs, refs/identities and its old release records), its cache, .git/git-bug, and its git-bug.* config keys. git-board’s board stays.'
       : 'git board switch first: git-bug’s issues are this repository’s only copy until then.',
-    loses: 'git-bug’s copy of the issues, which the switch carried into git-board.',
+    loses: 'git-bug’s copy of the issues, which the switch carried into git-board. Here it goes to a bundle first. On origin, nothing backs them up.',
     when: 'Once no clone and no automation uses git-bug any more.',
     command: 'git board prune',
     button: switched ? 'Remove git-bug’s data' : '',
@@ -78,7 +78,7 @@ export const steps: string[] = [
 export const notes: string[] = [
   'A forge pull brings back every issue and comment that came from a forge, not yet what git-board itself posted to one. A repository where git-board never posted misses nothing.',
   'Every clone needs this version of git-board or a later one first: an earlier one doesn’t know the mark that keeps a clone left behind from doubling the board.',
-  'Each action first writes what it deletes to a bundle in the git directory, and names it.',
+  'Each action first writes what it deletes to a bundle in the git directory, and names it; git-bug’s refs on origin excepted.',
 ];
 
 // canConfirm: the repository's name, typed exactly, spaces at the ends aside
