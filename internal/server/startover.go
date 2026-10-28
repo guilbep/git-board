@@ -115,7 +115,7 @@ func (s *apiServer) handleStartOver(w http.ResponseWriter, r *http.Request) {
 		rep.Deleted += p.Remote
 		rep.Backup = p.Backup
 	}
-	if errors.Is(err, store.ErrNotSwitched) {
+	if errors.Is(err, store.ErrNotSwitched) || errors.Is(err, store.ErrNoStartOver) {
 		writeError(w, http.StatusConflict, err)
 		return
 	}

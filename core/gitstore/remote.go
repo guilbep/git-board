@@ -20,11 +20,13 @@ func checkRemote(remote string) error {
 
 // Fetch brings the remote's entity refs to refs/board-remotes/<remote>/<kind>/:
 // out of refs/remotes/, so branch lists and git fetch --prune leave them.
+// It prunes the copies of refs the remote no longer has: a merge of the
+// copies would bring back what the remote deleted (git board push --prune).
 func (s *Store) Fetch(ctx context.Context, remote string) error {
 	if err := checkRemote(remote); err != nil {
 		return err
 	}
-	args := []string{"fetch", remote}
+	args := []string{"fetch", "--prune", remote}
 	for _, k := range Kinds {
 		args = append(args, fmt.Sprintf("+refs/board/%s/*:refs/board-remotes/%s/%s/*", k, remote, k))
 	}

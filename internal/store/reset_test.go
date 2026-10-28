@@ -283,3 +283,103 @@ func TestPushPruneOverADivergedRef(t *testing.T) {
 		t.Errorf("origin's counter %s, want %s", got, ours)
 	}
 }
+
+// A clone with no board that had fetched origin's board before a
+// start-over takes the new mark as it pulls, and with it nothing of the
+// old board: a fetch prunes the copies origin no longer has.
+func TestPullDoesNotBringBackAStartedOverBoard(t *testing.T) {
+	t.Parallel()
+	mine, _ := storetest.NewPair(t)
+	storetest.NewIssue(t, mine, "old")
+	pushedTo(t, mine)
+	origin := strings.TrimSpace(storetest.Git(t, mine.GitDir(), "remote", "get-url", "origin"))
+	dir := storetest.Repo(t, false)
+	storetest.Git(t, dir, "remote", "add", "origin", origin)
+	fresh := storetest.Open(t, dir)
+	if err := fresh.Fetch("origin"); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := mine.ResetHard(""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := mine.PushPrune("origin"); err != nil {
+		t.Fatal(err)
+	}
+	if err := fresh.Pull("origin"); err != nil {
+		t.Fatalf("pull: %v", err)
+	}
+	if n := issueCount(t, fresh); n != 0 {
+		t.Errorf("the old board came back: %d issues", n)
+	}
+	pushedTo(t, fresh)
+	if left := storetest.Git(t, origin, "for-each-ref", "refs/board/issue"); left != "" {
+		t.Errorf("origin got the old board back: %q", left)
+	}
+}
+
+// A teammate numbered issues since this clone's last pull: push --prune
+// takes their counter, rather than rewinding it and handing the same
+// numbers out twice.
+func TestPushPruneKeepsATeammatesNumbers(t *testing.T) {
+	t.Parallel()
+	mine, theirs := storetest.NewPair(t)
+	if err := store.WriteCounter(mine, []byte("prefix X\nstart 1\n1 a\n")); err != nil {
+		t.Fatal(err)
+	}
+	storetest.Git(t, mine.GitDir(), "push", "-q", "origin", "refs/board/seq")
+	c1 := strings.TrimSpace(storetest.Git(t, mine.GitDir(), "rev-parse", "refs/board/seq"))
+	storetest.Git(t, theirs.GitDir(), "fetch", "-q", "origin", "refs/board/seq:refs/board/seq")
+	tree := strings.TrimSpace(storetest.Git(t, theirs.GitDir(), "mktree"))
+	c2 := strings.TrimSpace(storetest.Git(t, theirs.GitDir(), "commit-tree", tree, "-p", c1, "-m", "2"))
+	storetest.Git(t, theirs.GitDir(), "update-ref", "refs/board/seq", c2)
+	storetest.Git(t, theirs.GitDir(), "push", "-q", "origin", "refs/board/seq")
+
+	if _, err := mine.ResetHard(""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := mine.PushPrune("origin"); err != nil {
+		t.Fatal(err)
+	}
+	origin := strings.TrimSpace(storetest.Git(t, mine.GitDir(), "remote", "get-url", "origin"))
+	if got := strings.TrimSpace(storetest.Git(t, origin, "rev-parse", "refs/board/seq")); got != c2 {
+		t.Errorf("origin's counter %s, want the teammate's %s (this clone's was %s)", got, c2, c1)
+	}
+	if ours, _ := mine.Store().Ref("refs/board/seq"); ours.String() != c2 {
+		t.Errorf("this clone's counter %s, want %s", ours, c2)
+	}
+}
+
+// push --prune is the second step of a start-over: on a clone that didn't
+// start over, or whose start-over origin has already, it refuses, rather
+// than rewinding what teammates pushed.
+func TestPushPruneNeedsAStartOver(t *testing.T) {
+	t.Parallel()
+	mine, theirs := storetest.NewPair(t)
+	id := storetest.NewIssue(t, mine, "shared")
+	pushedTo(t, mine)
+	if err := theirs.Pull("origin"); err != nil {
+		t.Fatal(err)
+	}
+	them, _, _ := theirs.Me()
+	storetest.CommentAs(t, theirs, id, them, 2, "from theirs")
+	pushedTo(t, theirs)
+	origin := strings.TrimSpace(storetest.Git(t, mine.GitDir(), "remote", "get-url", "origin"))
+	before := storetest.Git(t, origin, "rev-parse", "refs/board/issue/"+id)
+
+	if _, err := mine.PushPrune("origin"); !errors.Is(err, store.ErrNoStartOver) || !strings.Contains(err.Error(), "git board reset --hard first") {
+		t.Fatalf("without a reset: %v", err)
+	}
+	if after := storetest.Git(t, origin, "rev-parse", "refs/board/issue/"+id); after != before {
+		t.Errorf("origin's issue moved: %s, then %s", before, after)
+	}
+	if _, err := mine.ResetHard(""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := mine.PushPrune("origin"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := mine.PushPrune("origin"); !errors.Is(err, store.ErrNoStartOver) {
+		t.Errorf("a second push --prune: %v", err)
+	}
+}

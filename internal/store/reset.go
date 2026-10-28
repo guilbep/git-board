@@ -33,6 +33,11 @@ func resetCopy(remote string) string { return "refs/board-remotes/" + remote + "
 // apart, and the error says which and how to settle it.
 var ErrStartedOver = errors.New("a board started over")
 
+// ErrNoStartOver: push --prune is a start-over's second step, and this
+// clone has none for the remote, as none started here, or the remote has
+// it already.
+var ErrNoStartOver = errors.New("no start-over here to push")
+
 type startedOver struct{ msg string }
 
 func (s startedOver) Error() string        { return s.msg }
@@ -241,10 +246,11 @@ func (b *Backend) dropRefs(refs []string, all map[string]gitstore.Hash) error {
 	return err
 }
 
-// PushPrune makes the remote's board this clone's. It fetches the
-// remote's board to refs/board-pruned/, writes it to a bundle and drops
-// it, then pushes every ref under refs/board/, forced, deleting there
-// what this clone doesn't have. Forced, since it means to make the remote
+// PushPrune makes the remote's board this clone's: a start-over's second
+// step, refused (ErrNoStartOver) unless this clone's reset's mark is one
+// the remote hasn't. It fetches the remote's board to refs/board-pruned/,
+// writes it to a bundle and drops it, then pushes every ref under
+// refs/board/, forced, deleting there what this clone doesn't have. Forced, since it means to make the remote
 // match: a clone that started over could otherwise neither pull, which
 // the reset's mark refuses, nor push over a ref the remote moved
 // meanwhile. Unguarded: it is one of the ways out of a guard.
@@ -256,12 +262,44 @@ func (b *Backend) PushPrune(remote string) (ResetReport, error) {
 	if err := b.checkRemote(remote); err != nil {
 		return rep, err
 	}
+	if err := b.fetchResetMark(remote); err != nil {
+		return rep, err
+	}
+	mark, err := b.s.Ref(resetRef)
+	if err != nil {
+		return rep, err
+	}
+	theirMark, err := b.s.Ref(resetCopy(remote))
+	switch {
+	case err != nil:
+		return rep, err
+	case mark == gitstore.ZeroHash:
+		return rep, fmt.Errorf("%w: this clone's board didn't start over; git board reset --hard first", ErrNoStartOver)
+	case mark == theirMark:
+		return rep, fmt.Errorf("%w: %s has this clone's start-over already", ErrNoStartOver, remote)
+	}
 	if _, err := b.run(nil, "fetch", "--no-write-fetch-head", "--quiet", remote, "+refs/board/*:refs/board-pruned/*"); err != nil {
 		return rep, fmt.Errorf("fetching %s's board to back it up: %w", remote, err)
 	}
 	theirs, err := b.s.Refs("refs/board-pruned/")
 	if err != nil {
 		return rep, err
+	}
+	// a counter the remote moved on since this clone's (a teammate
+	// numbered issues) is taken, so that no number is handed out twice;
+	// only one apart from it is overwritten
+	if seq, ok := theirs["refs/board-pruned/seq"]; ok {
+		ours, err := b.s.Ref(seqRef)
+		if err != nil {
+			return rep, err
+		}
+		if on, err := b.behind(ours, seq); err != nil {
+			return rep, err
+		} else if on {
+			if err := b.setSeq(seq); err != nil {
+				return rep, err
+			}
+		}
 	}
 	ours, err := b.s.Refs("refs/board/")
 	if err != nil {
