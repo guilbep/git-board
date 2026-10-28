@@ -85,3 +85,18 @@ func TestPullWaitsForTheSwitch(t *testing.T) {
 		t.Fatalf("err = %v\n%s", err, out)
 	}
 }
+
+func TestPushPruneCommand(t *testing.T) {
+	pathA, _ := twoReposWithRemote(t)
+	seedBug(t, pathA, "goes")
+	t.Chdir(pathA)
+	for _, args := range [][]string{{"push"}, {"reset", "--hard"}} {
+		if out, err := execute(t, args); err != nil {
+			t.Fatalf("%v: %v\n%s", args, err, out)
+		}
+	}
+	out, err := execute(t, []string{"push", "--prune"})
+	if err != nil || !strings.Contains(out, "pushed to origin, and deleted there") {
+		t.Fatalf("push --prune: %v\n%s", err, out)
+	}
+}

@@ -209,3 +209,77 @@ func TestResetHardKeepsMeWhenTheRemoteHasIt(t *testing.T) {
 		t.Errorf("board.me %q, then %q; Me %v", before, after, rep.Me)
 	}
 }
+
+// The whole start-over: one clone empties its board and gives it to
+// origin; the other is refused until it takes origin's, and the issues
+// it had fetched don't come back with its next pull.
+func TestPushPruneMakesTheRemoteMatch(t *testing.T) {
+	t.Parallel()
+	mine, theirs := storetest.NewPair(t)
+	storetest.NewIssue(t, mine, "mine")
+	pushedTo(t, mine)
+	storetest.NewIssue(t, theirs, "theirs")
+	if err := theirs.Pull("origin"); err != nil {
+		t.Fatal(err)
+	}
+	pushedTo(t, theirs)
+	origin := strings.TrimSpace(storetest.Git(t, mine.GitDir(), "remote", "get-url", "origin"))
+
+	if _, err := mine.ResetHard(""); err != nil {
+		t.Fatal(err)
+	}
+	rep, err := mine.PushPrune("origin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if left := storetest.Git(t, origin, "for-each-ref", "refs/board/issue"); left != "" {
+		t.Errorf("origin's issues left: %q", left)
+	}
+	ours, _ := mine.Store().Ref("refs/board/reset")
+	if theirsMark := strings.TrimSpace(storetest.Git(t, origin, "rev-parse", "refs/board/reset")); theirsMark != ours.String() {
+		t.Errorf("origin's mark %s, want %s", theirsMark, ours)
+	}
+	if heads := storetest.Git(t, mine.GitDir(), "bundle", "list-heads", rep.Backup); strings.Count(heads, "refs/board-pruned/issue/") != 2 || rep.Deleted < 2 {
+		t.Errorf("the backup (%d deleted): %q", rep.Deleted, heads)
+	}
+
+	if err := theirs.Pull("origin"); !errors.Is(err, store.ErrStartedOver) {
+		t.Fatalf("the clone left behind pulled: %v", err)
+	}
+	if _, err := theirs.ResetHard("origin"); err != nil {
+		t.Fatal(err)
+	}
+	if err := theirs.Pull("origin"); err != nil {
+		t.Fatal(err)
+	}
+	if n := issueCount(t, theirs); n != 0 {
+		t.Errorf("%d issues came back", n)
+	}
+}
+
+// A ref origin moved since this clone's reset, its counter numbered by a
+// teammate, doesn't stop the push: it makes origin match.
+func TestPushPruneOverADivergedRef(t *testing.T) {
+	t.Parallel()
+	mine, theirs := storetest.NewPair(t)
+	if err := store.WriteCounter(mine, []byte("1")); err != nil {
+		t.Fatal(err)
+	}
+	storetest.Git(t, mine.GitDir(), "push", "-q", "origin", "refs/board/seq")
+	if err := store.WriteCounter(theirs, []byte("2")); err != nil {
+		t.Fatal(err)
+	}
+	storetest.Git(t, theirs.GitDir(), "push", "-q", "-f", "origin", "refs/board/seq")
+
+	if _, err := mine.ResetHard(""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := mine.PushPrune("origin"); err != nil {
+		t.Fatal(err)
+	}
+	origin := strings.TrimSpace(storetest.Git(t, mine.GitDir(), "remote", "get-url", "origin"))
+	ours, _ := mine.Store().Ref("refs/board/seq")
+	if got := strings.TrimSpace(storetest.Git(t, origin, "rev-parse", "refs/board/seq")); got != ours.String() {
+		t.Errorf("origin's counter %s, want %s", got, ours)
+	}
+}

@@ -68,24 +68,46 @@ step, alone: no forge, no GitHub Project.`,
 }
 
 func newPushCmd() *cobra.Command {
-	return &cobra.Command{
+	var prune bool
+	cmd := &cobra.Command{
 		Use:   "push [remote]",
 		Short: "Push this clone's board to the remote",
 		Long: `Push this clone's issues and people to the remote (origin by default),
 then, on origin, number the issues it now has. The push isn't forced: when
 the remote holds changes this clone doesn't have, it refuses, and git
-board pull merges them first. It is git board sync's last step, alone.`,
+board pull merges them first. It is git board sync's last step, alone.
+
+--prune makes the remote's board this clone's: what the remote has and
+this clone doesn't is deleted there, and a ref the remote moved is
+overwritten. The remote's board is first written to a bundle in the git
+directory, which it names. It is how a board started over with git board
+reset --hard reaches origin; every other clone then runs git board reset
+--hard origin.`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			out := cmd.OutOrStdout()
 			return onRemote(args, func(b *store.Backend, remote string) error {
+				if prune {
+					rep, err := b.PushPrune(remote)
+					if err != nil {
+						return err
+					}
+					fmt.Fprintf(out, "pushed to %s, and deleted there %d refs this clone doesn't have\n", remote, rep.Deleted)
+					if rep.Backup != "" {
+						fmt.Fprintf(out, "  %s's board as it was: %s; git fetch %s 'refs/board-pruned/*:refs/board/*' brings it here\n", remote, rep.Backup, rep.Backup)
+					}
+					return nil
+				}
 				note, err := b.PushStep(remote)
 				if err == nil {
-					said(cmd.OutOrStdout(), "pushed to "+remote, note)
+					said(out, "pushed to "+remote, note)
 				}
 				return err
 			})
 		},
 	}
+	cmd.Flags().BoolVar(&prune, "prune", false, "make the remote's board this clone's, deleting there what isn't here")
+	return cmd
 }
 
 // onRemote opens the repository here and runs do on the remote args name,

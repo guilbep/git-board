@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"maps"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -238,4 +239,55 @@ func (b *Backend) dropRefs(refs []string, all map[string]gitstore.Hash) error {
 	}
 	_, err := b.run([]byte(del.String()), "update-ref", "--stdin")
 	return err
+}
+
+// PushPrune makes the remote's board this clone's. It fetches the
+// remote's board to refs/board-pruned/, writes it to a bundle and drops
+// it, then pushes every ref under refs/board/, forced, deleting there
+// what this clone doesn't have. Forced, since it means to make the remote
+// match: a clone that started over could otherwise neither pull, which
+// the reset's mark refuses, nor push over a ref the remote moved
+// meanwhile. Unguarded: it is one of the ways out of a guard.
+// ponytail: a push landing on the remote between the fetch and the push
+// is overwritten, and isn't in the bundle; --force-with-lease per ref if
+// that window ever matters.
+func (b *Backend) PushPrune(remote string) (ResetReport, error) {
+	var rep ResetReport
+	if err := b.checkRemote(remote); err != nil {
+		return rep, err
+	}
+	if _, err := b.run(nil, "fetch", "--no-write-fetch-head", "--quiet", remote, "+refs/board/*:refs/board-pruned/*"); err != nil {
+		return rep, fmt.Errorf("fetching %s's board to back it up: %w", remote, err)
+	}
+	theirs, err := b.s.Refs("refs/board-pruned/")
+	if err != nil {
+		return rep, err
+	}
+	ours, err := b.s.Refs("refs/board/")
+	if err != nil {
+		return rep, err
+	}
+	names := slices.Sorted(maps.Keys(theirs))
+	for _, name := range names {
+		if _, here := ours["refs/board/"+strings.TrimPrefix(name, "refs/board-pruned/")]; !here {
+			rep.Deleted++
+		}
+	}
+	if rep.Backup, err = b.backup(remote+"-board-backup", names); err != nil {
+		return rep, err
+	}
+	if err := b.dropRefs(names, theirs); err != nil {
+		return rep, err
+	}
+	if _, err := b.run(nil, "push", "--quiet", "--prune", "--force", remote, "refs/board/*:refs/board/*"); err != nil {
+		return rep, fmt.Errorf("pushing to %s: %w", remote, err)
+	}
+	copies, err := b.s.Refs("refs/board-remotes/" + remote + "/")
+	if err != nil {
+		return rep, err
+	}
+	if err := b.dropRefs(slices.Sorted(maps.Keys(copies)), copies); err != nil {
+		return rep, err
+	}
+	return rep, b.Fetch(remote)
 }
