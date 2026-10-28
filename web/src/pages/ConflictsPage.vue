@@ -1,5 +1,5 @@
 <!-- Sync conflicts: the fields git-board and the GitHub Project both changed
-     since they last agreed (git-board bridge sync holds them, nothing is
+     since they last agreed (git board project sync holds them, nothing is
      overwritten), one card each, to keep one side. Design: the Claude
      Design canvas's "Conflicts" artboard. -->
 <template>
@@ -31,7 +31,7 @@
 
     <div v-if="error" class="epfl-alert epfl-alert-danger notice" role="alert"><b>Not done.</b> {{ error }}</div>
     <div v-if="status && !status.project" class="epfl-alert epfl-alert-warning notice">
-      No GitHub Project is configured: run <code>git-board bridge configure</code>.
+      No GitHub Project is configured: run <code>git board project configure</code>.
     </div>
     <div v-else-if="status && !status.write" class="epfl-alert epfl-alert-info notice">
       This board doesn't write to the Project (no <code>write = true</code> under <code>[github-project]</code>):

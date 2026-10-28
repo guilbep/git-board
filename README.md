@@ -45,7 +45,7 @@ and only for that feature:
 
 | For | Install (macOS) |
 |---|---|
-| `lint --create-labels`, `bridge` (GitHub Projects) | `brew install gh`, then `gh auth login` |
+| `lint --create-labels`, `project` (GitHub Projects) | `brew install gh`, then `gh auth login` |
 | Start an agent (Cycle, Work) | [wtx](https://github.com/EPFL-ENAC/wtx) |
 | Run step 4's tests and checks, `verify` | `ssh-keygen` (macOS has it), `git config user.signingkey` naming your SSH key |
 | `release` and `deploy`, with `[release] images` | Docker Desktop (buildx), `brew install crane trivy` |
@@ -282,37 +282,42 @@ and there's no established convention yet for mapping one to the other.
 Config-driven multi-repo sync is tracked as a follow-up in
 `docs/implementation-plan.md`, not solved here.
 
-## Bridging GitHub Projects into labels (`git-board bridge`)
+## The GitHub Project (`git board project`)
 
-`git-board bridge` maps a GitHub Project (v2)'s custom field values onto the
-`ns:value` labels above, on git-board issues a sync already linked to their GitHub issue (matched by
-the GitHub issue's URL, not its title).
+`git board project` keeps a GitHub Project (v2)'s custom field values and
+the `ns:value` labels above in step, on git-board issues a sync already
+linked to their GitHub issue (matched by the GitHub issue's URL, not its
+title). It was `git-board bridge`, which still works, deprecated, for one
+more release.
 
-It is **read-only against GitHub**: it only runs `gh project item-list`
-(needs `gh` authenticated with at least `read:project` scope) and never
-writes back to the Project or to any GitHub issue. All writes land on the
-local issues, through the same label change `git-board set` makes.
+It has git's verbs, as the git remote and the forges have theirs:
+
+- `pull` takes the Project's changes into the labels, and writes nothing
+  to the Project;
+- `push` writes git-board's changes to the Project, and changes no label;
+- `sync` does both: the third step of `git board sync`.
+
+Each acts at once; `--check` says what it would change and writes nothing.
+They read the Project with `gh project item-list` (needs `gh`
+authenticated with at least `read:project` scope); the labels change
+through the same label change `git-board set` makes.
 
 This is meant to be run **repeatedly**, not once — a GitHub Project's field
 values (status, priority, sprint, assignees, ...) keep changing as work
-progresses, so re-running `bridge pull` is how the label model stays in
-sync. Every run recomputes the diff against the issue's current labels, so
-running it twice back-to-back is a no-op the second time.
+progresses. Every run compares again, so running it twice back-to-back is
+a no-op the second time.
 
 ```bash
-# one-time: remember which GitHub Project to pull from (or, in the web UI,
+# one-time: remember which GitHub Project to read (or, in the web UI,
 # Settings › Sync, the Project's line: its number, or its address)
-git-board bridge configure --owner EPFL-ENAC --project 40
+git board project configure --owner EPFL-ENAC --project 40
 
-# preview only — prints the labels that would be added/removed, and a
-# matched/unmatched/warnings summary. This is the default; no flags needed.
-git-board bridge pull
+# what the Project would change on the labels, and a
+# matched/unmatched/warnings summary
+git board project pull --check
 
-# actually write the labels
-git-board bridge pull --apply
-
-# override the configured project for one run
-git-board bridge pull --owner EPFL-ENAC --project 40 --dry-run
+# write the labels
+git board project pull
 ```
 
 Field mapping:
@@ -325,7 +330,7 @@ Field mapping:
 | Module | `mod:<value>` | single — the two duplicate "Generic" options are merged into one `mod:generic` |
 | Est. hours | `est:<value>` | single |
 | Sprint | `sprint:<slug>` | single — the `[[sprints.list]]` slug of the iteration's title, else the title as a slug (`Hypercare` → `sprint:hypercare`); list the iterations for `@current` to find them |
-| Assignees | `assignee:<user>` | multi — one label per assignee, added *and* removed to mirror GitHub exactly (`bridge sync` merges both ways instead) |
+| Assignees | `assignee:<user>` | multi — one label per assignee, merged person by person (below) |
 
 `Milestone` and `Size` are **not** imported — the PRD calls them dead/unused
 fields.
@@ -339,7 +344,7 @@ change. What goes is the bare label an earlier bridge wrote, Category as
 is (`FEAT`, `SPECS`): a sync would send it to GitHub, which applies `feat`
 (beside a `bug`, if there is one) or creates `SPECS`.
 
-`bridge pull` reads values exactly as `bridge sync` does: a
+Every verb reads values the same way: a
 `[fields.<name>] project = { … }` alias first, then the slug of the
 Project's name; a numeric field takes any number (its `options` are the
 usual picks, not a limit). A value that doesn't slugify to one of a
@@ -352,12 +357,14 @@ A project item that isn't a GitHub Issue (a PR added straight to the
 Project) is excluded outright and reported as unmatched, same as an Issue
 no sync has brought into git-board yet.
 
-### Syncing both ways (`git-board bridge sync`)
+### Both ways
 
-`bridge pull` only reads the Project. `bridge sync` keeps status, prio,
-mod, est and sprint in step both ways, the git way: each field is compared
-with the value both sides last agreed on, which git-board records on the
-issue (in its history, so it travels with the issue).
+Status, prio, mod, est and sprint are kept in step the git way: each field
+is compared with the value both sides last agreed on, which git-board
+records on the issue (in its history, so it travels with the issue).
+`pull` takes the first case below, `push` the second, `sync` both; a value
+a verb leaves for the other side isn't recorded as agreed, so the other
+verb still sends it.
 
 - Only the Project changed: the label follows.
 - Only git-board changed: the Project follows.
@@ -378,9 +385,9 @@ issue (in its history, so it travels with the issue).
   warning. Without `write`, assignees only come from GitHub.
 
 ```bash
-git-board bridge sync                         # what would change, on each side
-git-board bridge sync --apply
-git-board bridge resolve 2605 status --theirs # or --ours
+git board project sync --check                 # what would change, on each side
+git board project sync
+git board project resolve 2605 status --theirs # or --ours
 ```
 
 Writing to the Project is off unless the config says so, and needs a `gh`
@@ -418,7 +425,7 @@ repository against `.git-board.toml`:
   operations from two people could still produce it.
 - **unknown option values** — a `field:value` label where `value` isn't in
   that field's configured `options` (fields with no configured `options` are
-  free-form and skipped). Same check `bridge pull` already warns on.
+  free-form and skipped). Same check `git board project pull` already warns on.
 - **missing values** — an open issue with no value at all for a configured
   single-cardinality field (the PRD calls out `prio` specifically; every
   configured single field is checked, since real drift shows up on `status`
@@ -455,7 +462,7 @@ exist as real, colorable GitHub labels until someone creates them.
 `.git-board.toml`'s `[fields.*]` options and `[[sprints.list]]` entries
 imply against each configured `[repos]` entry's real GitHub labels (read
 through GitHub's API with the forge sync's token), and reports what's
-missing. Preview only by default, same convention as `bridge pull`;
+missing. Preview only by default, same convention as the old `bridge pull`;
 `--apply` actually creates each missing one.
 
 ```bash
@@ -508,7 +515,7 @@ git-board sprint report <slug>         # issues in that sprint, aggregated by st
   `next`/`previous`. Matches `ResolveSprint`'s own `(nil, nil)` return for
   "nothing resolves" — it's not a `%!s(<nil>)` crash waiting to happen.
 - **`new`** appends `[[sprints.list]]` via the same targeted text-surgery
-  `git-board bridge configure` uses to write `[github-project]` — find the
+  `git board project configure` uses to write `[github-project]` — find the
   right spot in the raw file and splice text in, rather than decode the
   whole TOML document and re-encode it (which would silently drop comments
   and reorder tables). Refuses a slug that's already used, or a `--start`
@@ -534,8 +541,8 @@ git-board tui "is:open prio:p1"
 | `c` | list | quick-filter by the configured `cat` field's options (`(all)` clears it); coexists with `/` search. The shipped example config doesn't define `[fields.cat]` (Category fills the kind label now — see the bridge field mapping below), so `c` shows "no cat field configured" unless a project opts into one. |
 | `f` | list | structured filter — the same `field:value`/`-field:value`/`is:open`/`title:*glob*` grammar and matcher as `ls`/`view`/the launch argument and the web UI (words look in descriptions and comments too), not the fuzzy `/` search. Empty input + enter clears it. |
 | `s` | list | sort by field, e.g. `prio` (ascending) or `prio desc` — same syntax as `ls --sort`. Persists across a later `f`/`c` filter change. Empty input + enter clears it back to natural order. |
-| `i` | list | preview the GitHub Project bridge (`git-board bridge pull`, dry-run). Requires `git-board bridge configure` to have been run first. Runs in the background; the TUI stays responsive while it fetches. |
-| `o` | list | apply the plan `i` just previewed (`bridge pull --apply`). Refuses to run before an `i` (no blind apply); the plan is cleared after applying so `o` can't silently re-apply stale data. |
+| `i` | list | preview the GitHub Project's fields as labels (a dry run). Requires `git board project configure` to have been run first. Runs in the background; the TUI stays responsive while it fetches. |
+| `o` | list | apply the plan `i` just previewed. Refuses to run before an `i` (no blind apply); the plan is cleared after applying so `o` can't silently re-apply stale data. |
 | `e` | detail | edit a field: pick the field, then a value from its configured options, or type free text if it has none (e.g. `assignee`, using the same `+value`/`-value` syntax as `git-board set`) |
 | `esc`/`q` | detail, pickers | back |
 | `q`/`ctrl+c` | list | quit |
@@ -546,7 +553,7 @@ for "I remember a word in the title." `f` is precise and composable —
 CLI, because it's the exact same `internal/filter` grammar and code path.
 
 `i`/`o` show a one-line summary (matched/changed/unmatched/field/warning
-counts), not the full per-issue diff — that's what `git-board bridge pull`
+counts), not the full per-issue diff — that's what `git board project pull --check`
 on the CLI is still for. Note these are bound to git-board's GitHub Project bridge
 instead, since that's the sync a git-board session actually needs.
 
@@ -707,10 +714,10 @@ first, goes ahead when nothing would change on a forge, else says what it
 would send and asks.
 
 With a `[github-project]`, a **Conflicts** page (`#/conflicts`) is the web
-side of `git-board bridge sync`/`resolve`: "Check the Project" lists the
+side of `git board project sync`/`resolve`: "Check the Project" lists the
 fields both sides changed since they last agreed, each with git-board's
 value, the Project's and the last agreed one, and "Keep git-board's" /
-"Keep the Project's" resolves it; "Sync now" is `bridge sync --apply`. The
+"Keep the Project's" resolves it; "Sync now" is `git board project sync`. The
 Project is read only when you press one of those (it costs GitHub API
 points and takes seconds on a big Project); the header's count is the last
 check's. Keeping git-board's value needs `write = true`, like the CLI.
@@ -796,7 +803,7 @@ internal/store/        git-board's store over the core (core/): issues, people, 
 internal/fields/       ApplyField single/multi-cardinality logic and alias resolution.
 internal/filter/       grammar parser, Matches(issue, conditions, config, me).
 internal/board/        load/sort/group issues — shared by the CLI, the TUI and the web API.
-internal/ghbridge/     `gh project item-list` parsing + field-mapping/diff logic for `bridge pull`.
+internal/ghbridge/     `gh project item-list` parsing + field-mapping/diff logic for `git board project`.
 internal/lint/          read-only drift checks (labels vs. .git-board.toml) — internal/lint.Run.
 internal/ghlabels/      GitHub-side labels, through the GitHub forge adapter — for `lint --create-labels` and Settings › Labels.
 internal/server/        the web UI's HTTP API (net/http, no framework) + the embedded web/dist; `git-board serve`.
@@ -875,8 +882,8 @@ commit-msg:
 
 Shipped: config loading, the core library (issues in git, sync with GitHub and GitLab), the filter
 grammar (with numeric-aware `--sort`), `set`/`get`/`ls`/`view`, an
-interactive TUI (`git-board tui`), the web UI above, `git-board bridge
-configure`/`bridge pull` (GitHub Project → label bridge, plus `i`/`o`
+interactive TUI (`git-board tui`), the web UI above, `git board
+project` (GitHub Project ↔ labels, plus `i`/`o`
 from inside the TUI), `git-board lint` (read-only drift report),
 `git-board move`/`close`, `git-board sync` (explicit local paths,
 not `[repos].list`), `git-board sprint` (`ls`/`current`/`next`/

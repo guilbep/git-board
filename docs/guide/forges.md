@@ -71,6 +71,16 @@ An issue is linked to a forge issue once, by the sync, and stays so: linking by 
 
 ## On the command line
 
+A sync moves your issues to three places, and each has its own commands with git's verbs:
+
+| Side | What it holds | Commands |
+| --- | --- | --- |
+| The git remote (origin) | the board itself, merged without loss | `git board fetch`, `pull`, `push` |
+| The forges | a translation of it, both ways: a write there emails people | `git board forge pull`, `push`, `sync` |
+| The GitHub Project | field values, matched to labels | `git board project pull`, `push`, `sync`, `resolve`, `configure` |
+
+Each acts at once and takes `--check`, which says what it would do and writes nothing. `pull` takes the other side's changes, `push` sends this clone's, `sync` does both.
+
 `git board sync` runs the whole sync, as Settings › Sync does, each step in a line; `--check` is its dry run, and `--git` syncs with git alone: a pull, then a push. It has no check to wait for: `--check` first is yours to run. Creations wait for consent all the same: on a forge never synced with, or 50 or more on one in a run, none is made without `--allow-create`, and the sync says how many wait. It and `git board switch` print the forges found in the remotes, one line each: name, host and project, a GitLab one's with its id, and each URL they skip.
 
 Otherwise the forges are `.git-board.toml`'s, edited in Settings or by hand:

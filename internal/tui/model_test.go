@@ -510,8 +510,8 @@ func TestIKeyRequiresGithubProjectConfigured(t *testing.T) {
 	if m.bridgeBusy {
 		t.Error("bridgeBusy = true, want false — nothing should start without a configured project")
 	}
-	if !strings.Contains(m.status, "bridge configure") {
-		t.Errorf("status = %q, want it to point at `git-board bridge configure`", m.status)
+	if !strings.Contains(m.status, "project configure") {
+		t.Errorf("status = %q, want it to point at `git board project configure`", m.status)
 	}
 }
 

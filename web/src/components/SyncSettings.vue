@@ -7,7 +7,7 @@
      creates issues on a forge never synced with, or 50 or more at once:
      the server holds them without it. Below, what a sync would do or did, per
      forge. #/settings/sync?add=1 opens "Add a forge", for one no remote
-     names. The Project's line sets it up, as git board bridge configure
+     names. The Project's line sets it up, as git board project configure
      does: a number or the Project's address, saved, then checked at once. -->
 <template>
   <div class="set-panel sy">
@@ -55,7 +55,7 @@
                     <button type="submit" class="epfl-btn epfl-btn-primary epfl-btn-sm" :disabled="!projectDraft || projectBusy || running">Save</button>
                     <button v-if="st.project.project" type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" @click="editingProject = false">Cancel</button>
                     <p class="sy-note sy-project-help">
-                      {{ projectHint }} In a terminal: <code>git board bridge configure --owner {{ projectDraft?.owner || githubOwner || '…' }} --project {{ projectDraft?.number ?? '…' }}</code>.
+                      {{ projectHint }} In a terminal: <code>git board project configure --owner {{ projectDraft?.owner || githubOwner || '…' }} --project {{ projectDraft?.number ?? '…' }}</code>.
                       <button type="button" class="gb-linkbtn" @click="openProjectDoc">[github-project] in the configuration guide</button>
                     </p>
                   </form>

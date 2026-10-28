@@ -84,7 +84,7 @@ func (s *apiServer) handleSyncCheck(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, s.status())
 }
 
-// handleSyncApply is `git-board bridge sync --apply`: conflicts stay held,
+// handleSyncApply is `git board project sync`: conflicts stay held,
 // and the Project is only written to with write = true.
 func (s *apiServer) handleSyncApply(w http.ResponseWriter, r *http.Request) {
 	done, ok := s.beginWrite(w)
@@ -114,7 +114,7 @@ func (s *apiServer) apply() error {
 	return err
 }
 
-// handleSyncResolve is `git-board bridge resolve`: keep "git-board"'s value
+// handleSyncResolve is `git board project resolve`: keep "git-board"'s value
 // (written to the Project) or the "project"'s (set on the label).
 func (s *apiServer) handleSyncResolve(w http.ResponseWriter, r *http.Request) {
 	var req struct {

@@ -32,8 +32,12 @@ The forges are those of .git-board.toml, or with no [forges.<name>]
 table, those found in the git remotes, each told in a line.
 
 --check runs the same steps and writes nothing: a fetch and compare, the
-forges' dry run, the Project's check. --git syncs with git alone: a pull,
-then a push.
+forges' dry run, the Project's check. --git syncs with git alone: git
+board pull, then git board push.
+
+Each side has its own commands, for one step alone: the git remote's
+git board fetch, pull and push; the forges' git board forge pull, push
+and sync; the GitHub Project's git board project pull, push and sync.
 
 A forge this repository never synced with, or 50 creations or more on
 one, gets no issue created without --allow-create: the sync says how

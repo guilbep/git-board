@@ -40,8 +40,13 @@ func newRootCmd() *cobra.Command {
 		Short: "Fields, sprints and views over issues kept in git",
 		Long: `Fields, sprints and views over issues kept in git — a config-as-code
 replacement for GitHub Projects. Field values (status, priority, sprint,
-assignees, ...) live as namespaced labels; run "git-board bridge --help"
-to pull them from an actual GitHub Project.
+assignees, ...) live as namespaced labels; "git board project --help"
+says how to keep them in step with an actual GitHub Project.
+
+A sync moves the issues three places, each with its own commands: the
+git remote ("git board fetch", "pull", "push"), the forges ("git board
+forge pull|push|sync") and the GitHub Project ("git board project
+pull|push|sync"). "git board sync" runs all three.
 
 With no command, "git-board" opens this repository's web UI: in the
 browser where its server already runs, else it starts one here on
@@ -159,9 +164,9 @@ Keys: enter open detail, e edit a field (from detail), c quick-filter
 by category, f structured filter (same grammar as "ls" — see below —
 empty input clears it), s sort by field e.g. "prio" or "prio desc"
 (same as --sort, persists across a later f/c filter, empty input
-clears it), i/o preview/apply the GitHub Project bridge (same
-pull/push mnemonic as git-bug's own termui, bound to
-"bridge pull"/"...--apply" instead — requires "bridge configure" first),
+clears it), i/o preview/apply the GitHub Project's fields as labels
+(same pull/push mnemonic as git-bug's own termui; requires "git board
+project configure" first),
 / bubbles/list's own fuzzy text search, esc/q back or quit.
 
 The optional [filter] argument uses the same grammar as "ls" (see
