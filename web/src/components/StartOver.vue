@@ -96,7 +96,11 @@ async function run(c: Card) {
 
 <style scoped>
 .so { border-top: var(--border-w) solid var(--border-subtle); padding-top: 1rem; }
-.so-summary { display: flex; flex-wrap: wrap; align-items: baseline; gap: .25rem 1rem; cursor: pointer; }
+.so-summary { display: flex; flex-wrap: wrap; align-items: baseline; gap: .25rem 1rem; cursor: pointer; list-style: none; }
+/* flex hides the browser's marker: draw one, so that it reads as opening */
+.so-summary::-webkit-details-marker { display: none; }
+.so-summary::before { content: '▸'; color: var(--fg-muted); }
+.so[open] > .so-summary::before { content: '▾'; }
 .so-heading { font-size: 1.125rem; font-weight: 700; }
 .so-body { display: grid; gap: 1rem; margin-top: 1rem; }
 .so-lead { margin: 0; max-width: 44rem; }
