@@ -42,7 +42,7 @@ three.**
 | `sync` | Unchanged: git pull, the forges, the Project, git push. `--git` stays, as `pull` then `push`. **(call)** |
 | Dry runs | Every new verb acts by default and takes `--check`, as `sync` does. `project` follows that rule, so it doesn't take `bridge`'s `--apply`. **(call)** |
 | `reset --hard` | The git side only. `git board reset --hard` empties this clone's board; `git board reset --hard <remote>` makes it the remote's. **(user)** It writes a backup bundle first, and only `--hard` exists, with no soft or mixed form. **(call)** |
-| `push --prune` | Deletes the remote's board refs that this clone doesn't have. **(user)** It fetches what it is about to delete and bundles it first. **(call)** |
+| `push --prune` | Deletes the remote's board refs that this clone doesn't have. **(user)** It fetches the remote's board and bundles it first, then pushes forced (M2). **(call)** |
 | A clone left behind | Guarded. **(user)** Each reset writes a mark, and a pull or a push between two boards with different marks refuses, naming the command that settles it. A clone that missed a start-over would otherwise merge the old board into the refilled one: every issue twice, both copies linked to the same forge issue, pushed to origin for everyone. |
 | What a reset keeps | The switch's mark, `refs/board/switched`: without it, a repository that still holds git-bug's data refuses every pull, forge sync and `prune`. The numbers' counter, `refs/board/seq`: the refilled issues are numbered after the old highest, so no number is handed out twice, and the prefix stays. `push --prune` keeps origin's copy of both, since this clone has them. **(call)** |
 | `prune` | Removes git-bug's data after the switch. Built (3c1649a). **(user)** |
@@ -65,13 +65,15 @@ three.**
   (`pushStep`): the issues, the people and the switch's mark, then the
   numbering of the new issues. It isn't forced.
 - **`git board push --prune [<remote>]`** fetches the remote's board,
-  writes the refs it is about to delete to a bundle in the git directory
-  and names it, then pushes and deletes on the remote every ref under
+  writes it whole to a bundle in the git directory and names it, then
+  pushes and deletes on the remote every ref under
   `refs/board/` that this clone doesn't have, with git's own `--prune`
-  (`git push --prune <remote> 'refs/board/*:refs/board/*'`). Checked on
-  2026-10-28: with no local ref left, it deletes them all. A ref both
-  sides have but whose heads diverged isn't touched, because the push
-  isn't forced: pull first.
+  (`git push --prune --force <remote> 'refs/board/*:refs/board/*'`).
+  Checked on 2026-10-28: with no local ref left, it deletes them all. The
+  push is forced, after the bundle of the remote's whole board (M2's
+  ruling): a clone that started over can neither pull, which the reset's
+  mark refuses, nor push over a ref the remote moved meanwhile, such as
+  the numbers' counter a teammate advanced.
 
 ### Starting over
 

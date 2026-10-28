@@ -120,3 +120,25 @@ A repository whose issues were git-bug's moves to git-board in this order:
 6. Last, `git board prune --remote origin` deletes git-bug's refs on
    origin too. Nothing backs those up: a clone still on git-bug loses its
    shared issues.
+
+## Starting over
+
+A board can start over from what the forges hold, on the git side alone: no forge and no GitHub Project is touched. Every clone needs this version of git-board or a later one first: an earlier one doesn't know the guard below.
+
+1. `git board reset --hard` empties this clone's board: the issues, the people, the sync links, the release records, the fetched copies and `board.me`. The switch's mark and the numbers' counter stay, so no number is handed out twice.
+2. `git board push --prune` makes origin's board this clone's: what origin has and this clone doesn't is deleted there.
+3. Every other clone stops its automated syncs, then runs `git board reset --hard origin`, which makes its board origin's.
+4. `git board forge pull` refills the board from the forges.
+
+Each writes what it deletes to a bundle in the git directory and names it, with the `git fetch` that brings it back.
+
+**What a forge pull brings back.** Every issue and comment that came from a forge. Not yet what git-board itself posted to a forge: that text carries git-board's marker, which names an issue the empty board no longer has, and the pull leaves it. A repository where git-board never posted to a forge misses nothing.
+
+**The guard.** A reset writes a mark, and a pull or a push between two boards whose marks differ refuses: merged, the old board and the new one would hold every issue twice, both linked to the same forge issue. It says which side started over and how to settle it:
+
+- a clone that missed the start-over: "origin's board was started over on 2026-10-28 15:04: git board reset --hard origin takes it";
+- the clone that started over, before its `push --prune`: "this clone's board was started over on …, origin's wasn't: git board push --prune makes origin match, git board reset --hard origin goes back to it".
+
+A new clone, with no board yet, takes origin's mark as it pulls.
+
+Settings › Sync, Start over, runs the same. On the command line the resets refuse while `git board serve` runs on the repository.
