@@ -2,14 +2,12 @@ package store
 
 import (
 	"errors"
-	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
-	"time"
 )
 
 // gitBugRef is a ref of git-bug's: its issues, its identities and the
@@ -81,18 +79,11 @@ func (b *Backend) Prune(remote string, dryRun bool) (PruneReport, error) {
 		return rep, nil
 	}
 
-	if len(refs) > 0 {
-		rep.Backup = filepath.Join(b.s.CommonDir(), "git-bug-backup-"+time.Now().Format("20060102-150405")+".bundle")
-		if _, err := b.run([]byte(strings.Join(refs, "\n")+"\n"), "bundle", "create", "--quiet", rep.Backup, "--stdin"); err != nil {
-			return rep, err
-		}
-		var del strings.Builder
-		for _, name := range refs {
-			fmt.Fprintf(&del, "delete %s %s\n", name, all[name])
-		}
-		if _, err := b.run([]byte(del.String()), "update-ref", "--stdin"); err != nil {
-			return rep, err
-		}
+	if rep.Backup, err = b.backup("git-bug-backup", refs); err != nil {
+		return rep, err
+	}
+	if err := b.dropRefs(refs, all); err != nil {
+		return rep, err
 	}
 	if rep.Cache != "" {
 		if err := os.RemoveAll(rep.Cache); err != nil {

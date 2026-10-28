@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/guilbep/git-board/core/gitstore"
+	"github.com/guilbep/git-board/core/people"
 	"github.com/guilbep/git-board/internal/store"
 	"github.com/guilbep/git-board/internal/store/storetest"
 )
@@ -110,4 +112,100 @@ func TestResetGuardIsQuietWithoutMarks(t *testing.T) {
 		t.Fatal(err)
 	}
 	pushedTo(t, theirs)
+}
+
+// The board goes, bar the switch's mark and the numbers' counter, after a
+// bundle of what goes: the issues, the people, the fetched copies, and
+// board.me with its person.
+func TestResetHardEmptiesTheBoard(t *testing.T) {
+	t.Parallel()
+	b := storetest.New(t)
+	a := storetest.NewIssue(t, b, "a")
+	storetest.NewIssue(t, b, "b")
+	c, err := store.StoreCommit(b, "x")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, ref := range []string{"refs/board/switched", "refs/board-remotes/origin/issue/" + a} {
+		if err := b.Store().UpdateRef(t.Context(), ref, c, gitstore.ZeroHash); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := store.WriteCounter(b, []byte("{}")); err != nil {
+		t.Fatal(err)
+	}
+	seq, _ := b.Store().Ref("refs/board/seq")
+
+	rep, err := b.ResetHard("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := issueCount(t, b); n != 0 {
+		t.Errorf("%d issues left", n)
+	}
+	if got, _ := b.Store().Ref("refs/board/switched"); got != c {
+		t.Errorf("the switch's mark: %s", got)
+	}
+	if got, _ := b.Store().Ref("refs/board/seq"); got != seq {
+		t.Errorf("the counter: %s", got)
+	}
+	if got, _ := b.Store().Ref("refs/board/reset"); got == gitstore.ZeroHash {
+		t.Error("no reset's mark")
+	}
+	if copies, _ := b.Store().Refs("refs/board-remotes/"); len(copies) != 0 {
+		t.Errorf("copies left: %v", copies)
+	}
+	if me, _ := people.Me(t.Context(), b.Store()); !rep.Me || me != "" {
+		t.Errorf("board.me %q, Me %v", me, rep.Me)
+	}
+	if heads := storetest.Git(t, b.GitDir(), "bundle", "list-heads", rep.Backup); !strings.Contains(heads, "refs/board/issue/"+a) {
+		t.Errorf("the backup: %q", heads)
+	}
+}
+
+func TestResetHardTakesTheRemote(t *testing.T) {
+	t.Parallel()
+	mine, theirs := storetest.NewPair(t)
+	storetest.NewIssue(t, mine, "kept")
+	pushedTo(t, mine)
+	if err := theirs.Pull("origin"); err != nil {
+		t.Fatal(err)
+	}
+	storetest.NewIssue(t, theirs, "local only")
+
+	if _, err := theirs.ResetHard("origin"); err != nil {
+		t.Fatal(err)
+	}
+	is, _ := theirs.ListIssues()
+	if len(is) != 1 || is[0].Title != "kept" {
+		t.Fatalf("issues %+v", is)
+	}
+}
+
+func TestResetHardTakesAnEmptyRemote(t *testing.T) {
+	t.Parallel()
+	_, theirs := storetest.NewPair(t)
+	storetest.NewIssue(t, theirs, "local only")
+	if _, err := theirs.ResetHard("origin"); err != nil {
+		t.Fatal(err)
+	}
+	if n := issueCount(t, theirs); n != 0 {
+		t.Errorf("%d issues left", n)
+	}
+}
+
+func TestResetHardKeepsMeWhenTheRemoteHasIt(t *testing.T) {
+	t.Parallel()
+	_, theirs := storetest.NewPair(t)
+	storetest.NewIssue(t, theirs, "theirs")
+	pushedTo(t, theirs)
+	before, _ := people.Me(t.Context(), theirs.Store())
+
+	rep, err := theirs.ResetHard("origin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after, _ := people.Me(t.Context(), theirs.Store()); rep.Me || after != before || before == "" {
+		t.Errorf("board.me %q, then %q; Me %v", before, after, rep.Me)
+	}
 }
