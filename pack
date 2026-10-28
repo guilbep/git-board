@@ -1,1 +1,1 @@
-{"clock":52,"ops":[{"kind":"seen","author":"ee004d31386b76440a74651c79871f156633d4ff","time":1793225100,"data":{"issue":"11cf928817d9737c5df8ca59f7239819a80d5569","field":"labels","value":"kind:feat\nmoscow:shouldhave\nprio:p2\nrisk:normal\nstatus:in-progress"}}]}
+{"clock":53,"ops":[{"kind":"seen","author":"ee004d31386b76440a74651c79871f156633d4ff","time":1793225102,"data":{"issue":"2b0917078cdcf019f2c6c2adc138ffa23a6a0d8d","field":"labels","value":"kind:bug\nprio:p3\nstatus:backlog"}}]}
