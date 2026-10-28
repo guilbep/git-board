@@ -166,8 +166,10 @@ func (s *Store) ReadTree(h Hash) ([]TreeEntry, error) {
 func (s *Store) WriteCommit(c Commit) (Hash, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	sig := object.Signature{Name: "git-board", Email: "git-board@localhost", When: time.Now()}
-	obj := object.Commit{Author: sig, Committer: sig, Message: "git-board", TreeHash: c.Tree, ParentHashes: c.Parents}
+	// No identity and no message, as git-bug writes its own: a log filtered
+	// on --author=' <>' hides entity commits from both.
+	sig := object.Signature{When: time.Now()}
+	obj := object.Commit{Author: sig, Committer: sig, TreeHash: c.Tree, ParentHashes: c.Parents}
 	o := s.repo.Storer.NewEncodedObject()
 	if err := obj.Encode(o); err != nil {
 		return ZeroHash, err
