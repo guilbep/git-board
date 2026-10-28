@@ -126,7 +126,7 @@ A repository whose issues were git-bug's moves to git-board in this order:
 A board can start over from what the forges hold, on the git side alone: no forge and no GitHub Project is touched. Every clone needs this version of git-board or a later one first: an earlier one doesn't know the guard below.
 
 1. `git board reset --hard` empties this clone's board: the issues, the people, the sync links, the release records, the fetched copies and `board.me`. The switch's mark and the numbers' counter stay, so no number is handed out twice.
-2. `git board push --prune` makes origin's board this clone's: what origin has and this clone doesn't is deleted there.
+2. `git board push --prune` makes origin's board this clone's: what origin has and this clone doesn't is deleted there. It refuses on a clone that didn't start over, and keeps a numbers' counter a teammate moved on meanwhile.
 3. Every other clone stops its automated syncs, then runs `git board reset --hard origin`, which makes its board origin's.
 4. `git board forge pull` refills the board from the forges.
 

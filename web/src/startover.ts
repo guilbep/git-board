@@ -28,7 +28,7 @@ const reset: Card = {
 const pushPrune: Card = {
   id: 'push-prune',
   title: 'Make origin’s board this clone’s',
-  does: 'Pushes this clone’s board to origin, and deletes there what this clone doesn’t have. A ref origin moved meanwhile is overwritten.',
+  does: 'Pushes this clone’s board to origin, and deletes there what this clone doesn’t have. A ref origin moved meanwhile is overwritten, but for a numbers’ counter a teammate moved on, which is kept. It refuses on a clone that didn’t start over.',
   loses: 'Origin’s board as it was, kept first in a bundle here. Every other clone’s pulls and pushes then refuse, until it takes origin’s board.',
   when: 'Second, after emptying this clone’s board. Stop the automated syncs of the other clones first.',
   command: 'git board push --prune',

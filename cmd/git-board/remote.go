@@ -79,10 +79,12 @@ board pull merges them first. It is git board sync's last step, alone.
 
 --prune makes the remote's board this clone's: what the remote has and
 this clone doesn't is deleted there, and a ref the remote moved is
-overwritten. The remote's board is first written to a bundle in the git
-directory, which it names. It is how a board started over with git board
-reset --hard reaches origin; every other clone then runs git board reset
---hard origin.`,
+overwritten, but for a numbers' counter the remote moved on, which is
+taken, so that no number is handed out twice. The remote's board is first
+written to a bundle in the git directory, which it names. It is how a
+board started over with git board reset --hard reaches origin, and it
+refuses on a clone that didn't start over, or whose start-over the remote
+has already. Every other clone then runs git board reset --hard origin.`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			out := cmd.OutOrStdout()

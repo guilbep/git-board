@@ -72,8 +72,11 @@ three.**
   Checked on 2026-10-28: with no local ref left, it deletes them all. The
   push is forced, after the bundle of the remote's whole board (M2's
   ruling): a clone that started over can neither pull, which the reset's
-  mark refuses, nor push over a ref the remote moved meanwhile, such as
-  the numbers' counter a teammate advanced.
+  mark refuses, nor push over a ref the remote moved meanwhile. After the
+  review: it refuses (`ErrNoStartOver`) unless this clone's reset's mark is
+  one the remote hasn't, so that it never rewinds teammates' work outside a
+  start-over, and it takes a numbers' counter the remote moved on rather
+  than rewinding it, so that no number is handed out twice.
 
 ### Starting over
 
