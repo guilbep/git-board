@@ -211,6 +211,8 @@ func newMux(s *apiServer, static http.Handler) http.Handler {
 	mux.HandleFunc("POST /api/sync/resolve", s.handleSyncResolve)
 	mux.HandleFunc("PUT /api/github-project", s.handleGithubProject)
 	mux.HandleFunc("DELETE /api/github-project", s.handleGithubProject)
+	mux.HandleFunc("GET /api/start-over", s.handleStartOverStatus)
+	mux.HandleFunc("POST /api/start-over", s.handleStartOver)
 	mux.HandleFunc("GET /api/sync/all", s.handleWhole)
 	mux.HandleFunc("POST /api/sync/all", s.handleWholeSync)
 	mux.HandleFunc("GET /api/releases", s.handleReleases)

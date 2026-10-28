@@ -84,9 +84,20 @@ func (s *apiServer) handleSyncCheck(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, s.status())
 }
 
-// handleSyncApply is `git board project sync`: conflicts stay held,
-// and the Project is only written to with write = true.
+// handleSyncApply is `git board project sync`, or with a side its pull
+// ("labels") or its push ("project"): conflicts stay held, and the Project
+// is only written to with write = true.
 func (s *apiServer) handleSyncApply(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Side string `json:"side"` // labels, project; empty: both
+	}
+	if r.ContentLength != 0 && !decode(w, r, &req) {
+		return
+	}
+	if req.Side != "" && req.Side != "labels" && req.Side != "project" {
+		writeError(w, http.StatusBadRequest, fmt.Errorf(`side %q: want "labels", "project" or none`, req.Side))
+		return
+	}
 	done, ok := s.beginWrite(w)
 	if !ok {
 		return
@@ -94,19 +105,26 @@ func (s *apiServer) handleSyncApply(w http.ResponseWriter, r *http.Request) {
 	defer done()
 	s.syncMu.Lock()
 	defer s.syncMu.Unlock()
-	if err := s.apply(); err != nil {
+	if err := s.apply(req.Side); err != nil {
 		writeSyncError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, s.status())
 }
 
-// apply syncs the Project's fields, then checks what's left. The caller
-// holds syncMu.
-func (s *apiServer) apply() error {
+// apply syncs the Project's fields, one side ("labels", "project") or
+// both (""), then checks what's left. The caller holds syncMu.
+func (s *apiServer) apply(side string) error {
 	state, err := ghbridge.LoadState(s.b, s.project, s.config(), ghbridge.DefaultItemLimit)
 	if err == nil {
-		_, err = ghbridge.ApplySync(s.b, s.project.Writer, s.b, state.Plan(s.config()), s.config(), state.Meta)
+		plan := state.Plan(s.config())
+		switch side {
+		case "labels":
+			plan = plan.LabelsOnly()
+		case "project":
+			plan = plan.ProjectOnly()
+		}
+		_, err = ghbridge.ApplySync(s.b, s.project.Writer, s.b, plan, s.config(), state.Meta)
 	}
 	if err == nil {
 		err = s.check()

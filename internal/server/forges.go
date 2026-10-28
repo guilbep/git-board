@@ -37,16 +37,16 @@ type forgeStatus struct {
 	Job     *forgeJob    `json:"job"`
 }
 
-// the modes of a forge run: both ways, or push alone (send, the Work
-// page's Send all). A dry run looks both ways. The whole sync's job is
-// mode all (whole.go).
-var forgeModes = []string{"sync", "send"}
+// the modes of a forge run: both ways, push alone (send, the Work page's
+// Send all), or pull alone (get). A dry run looks both ways. The whole
+// sync's job is mode all (whole.go).
+var forgeModes = []string{"sync", "send", "get"}
 
 // forgeJob is one run of the forge sync, in the background: a co2 dry run
 // took over three minutes.
 type forgeJob struct {
 	DryRun  bool                    `json:"dry_run"`
-	Mode    string                  `json:"mode"`  // sync, send; all: the whole sync
+	Mode    string                  `json:"mode"`  // sync, send, get; all: the whole sync
 	Names   []string                `json:"names"` // the bridges of the run
 	State   string                  `json:"state"` // running, done, failed
 	Started time.Time               `json:"started"`
@@ -280,7 +280,7 @@ func (s *apiServer) handleForges(w http.ResponseWriter, r *http.Request) {
 func (s *apiServer) handleForgeSync(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		DryRun      bool     `json:"dry_run"`
-		Mode        string   `json:"mode"`         // sync (empty), send
+		Mode        string   `json:"mode"`         // sync (empty), send, get
 		Bridges     []string `json:"bridges"`      // a real run: some of the dry run's; empty: all
 		AllowCreate bool     `json:"allow_create"` // consent to the creations the check held
 	}
@@ -291,7 +291,7 @@ func (s *apiServer) handleForgeSync(w http.ResponseWriter, r *http.Request) {
 		req.Mode = "sync"
 	}
 	if !slices.Contains(forgeModes, req.Mode) {
-		writeError(w, http.StatusBadRequest, fmt.Errorf("mode %q: want sync or send", req.Mode))
+		writeError(w, http.StatusBadRequest, fmt.Errorf("mode %q: want sync, send or get", req.Mode))
 		return
 	}
 	s.forgeMu.Lock()
@@ -353,16 +353,19 @@ type runOpts struct {
 	Merge               string
 }
 
-// forgeRun is the core's sync, or its push alone, with forges opened for
-// the run.
+// forgeRun is the core's sync, or its push or its pull alone, with forges
+// opened for the run.
 func (s *apiServer) forgeRun(ctx context.Context, mode string, forges []config.Forge, o runOpts, see func(store.SyncEvent)) error {
 	run, err := s.openRun(ctx, forges, o, see)
 	if err != nil {
 		return err
 	}
-	if mode == "send" {
+	switch mode {
+	case "send":
 		_, err = s.b.SendForges(ctx, run)
-	} else {
+	case "get":
+		_, err = s.b.GetForges(ctx, run)
+	default:
 		_, err = s.b.SyncForges(ctx, run)
 	}
 	return err
