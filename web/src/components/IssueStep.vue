@@ -3,20 +3,21 @@
      the shown step's workspace when head (the Conversation tab), then the
      flow. The step shown is the issue's (internal/cycle), or a done one
      picked on the bar; a later step is locked and says why. The panel
-     fills the slots: tabs, intent (the description, folded from step 2
-     on), review (the Changes view, step 6 on the page), flow, side. -->
+     fills the slots: tabs, intent (the description, folded off Intent),
+     review (the Changes view, Review's on the page), flow, side. The bar
+     is the project's list ([cycle] steps), a cell per entry. -->
 <template>
   <p v-if="error && !(current && card)" class="gb-save-error" role="alert"><GbIcon name="error" small /> {{ error }}</p>
   <nav v-if="cycle" class="gb-stepbar" aria-label="The cycle, click a step to open it">
     <ol class="gb-bar-steps">
-      <li v-for="r in rows" :key="r.n" :class="[`is-${r.state}`, { 'is-shown': r.n === n }]">
-        <a v-if="r.state === 'done' || r.state === 'current'" class="gb-bar-step" :href="`#/issues/${id}?step=${r.n}`" :aria-current="r.state === 'current' ? 'step' : undefined" @click="jump($event, r.n)">
-          <span class="gb-bar-n">{{ r.n }}</span>
+      <li v-for="r in rows" :key="r.id" :class="[`is-${r.state}`, { 'is-shown': r === row }]">
+        <a v-if="r.state === 'done' || r.state === 'current'" class="gb-bar-step" :href="`#/issues/${id}?step=${r.id}`" :aria-current="r.state === 'current' ? 'step' : undefined" @click="jump($event, r.id)">
+          <span class="gb-bar-n">{{ r.i }}</span>
           <span class="gb-bar-name">{{ r.name }}</span>
           <span class="gb-bar-line">{{ r.line }}</span>
         </a>
         <span v-else class="gb-bar-step" aria-disabled="true">
-          <span class="gb-bar-n"><GbIcon v-if="r.state === 'locked'" name="lock" small /><template v-else>{{ r.n }}</template></span>
+          <span class="gb-bar-n"><GbIcon v-if="r.state === 'locked'" name="lock" small /><template v-else>{{ r.i }}</template></span>
           <span class="gb-bar-name">{{ r.name }}</span>
           <span class="gb-bar-line">{{ r.line }}</span>
         </span>
@@ -29,7 +30,7 @@
       <slot name="tabs" />
       <div class="gb-column-body">
         <template v-if="head">
-          <p class="gb-eyebrow" tabindex="-1">Step {{ n }} · {{ row?.name ?? 'Intent' }}<template v-if="risk"> · {{ risk }}</template></p>
+          <p v-if="row || !cycle" class="gb-eyebrow" tabindex="-1">Step {{ row?.i ?? 1 }} · {{ row?.name ?? 'Intent' }}<template v-if="risk"> · {{ risk }}</template></p>
           <slot v-if="n === 1" name="intent" :folded="false" :cycle="cycle" />
 
           <CyclePlan
@@ -119,8 +120,8 @@
           />
           <slot v-if="n !== 1" name="intent" :folded="true" :cycle="cycle" />
 
-          <p v-if="cycle && n !== cycle.step" class="gb-cycle-actions">
-            <button type="button" class="gb-linkbtn" @click="shown = null">Back to step {{ cycle.step }} · {{ cycle.name }}</button>
+          <p v-if="cycle && now && row !== now" class="gb-cycle-actions">
+            <button type="button" class="gb-linkbtn" @click="shown = null">Back to step {{ now.i }} · {{ cycle.name }}</button>
           </p>
           <div v-if="agent" class="gb-agent">
             <span v-if="agent.reason" class="gb-note">{{ agent.reason }}</span>
@@ -163,7 +164,7 @@ import CycleVerify from '@/components/CycleVerify.vue';
 import GbIcon from '@/components/GbIcon.vue';
 
 const props = defineProps<{ id: string; status: string; labels: string[]; events: IssueEvent[]; forges?: Forge[] | undefined; head: boolean }>();
-const emit = defineEmits<{ changed: []; comment: [body: string, step: number]; open: [n: number] }>();
+const emit = defineEmits<{ changed: []; comment: [body: string, step: string]; open: [id: string] }>();
 
 const description = computed(() => props.events.find((e) => e.kind === 'created'));
 const { cycle, error, busy, needsWhy, has, act, patch, edit, press, pull } = useCycle(
@@ -179,19 +180,22 @@ const riskBy = computed(() => props.events.findLast((e) => e.kind === 'labels' &
 const rows = computed(() => (cycle.value ? steps(cycle.value, riskBy.value, props.events) : []));
 const risk = computed(() => cycle.value?.risk ?? cycle.value?.evidence.risk);
 
-// the step shown, picked on the bar; null is the issue's step, and the
-// frame goes back to it when the step moves or the issue changes
-const shown = ref<number | null>(null);
-watch([() => props.id, () => cycle.value?.step], () => (shown.value = null));
-const n = computed(() => shown.value ?? cycle.value?.step ?? 1);
-const row = computed(() => rows.value[n.value - 1]);
-const current = computed(() => !!cycle.value && n.value === cycle.value.step && !cycle.value.done);
-const show = (step: number) => (shown.value = step === cycle.value?.step ? null : step);
+// the step shown, by id, picked on the bar; null is the issue's step, and
+// the frame goes back to it when the step moves or the issue changes
+const shown = ref<string | null>(null);
+watch([() => props.id, () => cycle.value?.at], () => (shown.value = null));
+const now = computed(() => rows.value.find((r) => r.id === cycle.value?.at));
+const row = computed(() => (shown.value === null ? now.value : rows.value.find((r) => r.id === shown.value)));
+// the shown cell's kind picks the workspace; none before the first step
+// opens, Intent without a cycle
+const n = computed(() => (cycle.value ? (row.value?.n ?? 0) : 1));
+const current = computed(() => row.value?.state === 'current');
+const show = (id: string) => (shown.value = id === cycle.value?.at ? null : id);
 // a refusal belongs to the step pressed: another step shown drops it
-watch(n, () => (error.value = ''));
+watch(row, () => (error.value = ''));
 defineExpose({ show });
 // the rail opens a step at the head of the column; a new tab or window is the link's
-function jump(e: MouseEvent, step: number) {
+function jump(e: MouseEvent, step: string) {
   if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey) return;
   e.preventDefault();
   emit('open', step);
@@ -232,7 +236,7 @@ async function run(action: 'go' | 'brief' | 'approve', brief: string) {
   agentNote.value = '';
   try {
     agent.value = await agentAction(props.id, action, brief);
-    agentNote.value = { go: `Session ${agent.value.session?.session ?? agent.value.branch} started.`, brief: 'Sent to the agent.', approve: 'Sent to the agent: the plan is approved, it goes on with step 4.' }[action];
+    agentNote.value = { go: `Session ${agent.value.session?.session ?? agent.value.branch} started.`, brief: 'Sent to the agent.', approve: 'Sent to the agent: the plan is approved, it goes on with the next step.' }[action];
     // go at low risk, or with the plan approved, moved the status
     if (action === 'go') emit('changed');
     briefing.value = false;
@@ -244,7 +248,7 @@ async function run(action: 'go' | 'brief' | 'approve', brief: string) {
   }
 }
 
-// Approve the plan on the board, then brief the agent on to step 4.
+// Approve the plan on the board, then brief the agent on to the next step.
 async function approve() {
   const plan = !!cycle.value?.evidence.plan; // no file: nothing to accept, the server refuses
   if ((await act('approve-plan')) && plan && button.value === 'brief') void run('approve', '');
@@ -257,7 +261,7 @@ const pressed = (b: CardButton) => (b.action === 'start' && button.value === 'st
 // Ask the agent to revise: a comment in the plan's discussion, and a
 // brief when it has a worktree
 function revise(body: string) {
-  emit('comment', body, 3);
+  emit('comment', body, 'plan');
   if (button.value === 'brief') void run('brief', body);
 }
 </script>

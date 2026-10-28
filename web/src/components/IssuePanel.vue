@@ -96,7 +96,7 @@
         <p v-if="waiting" class="gb-wait" role="status"><GbIcon name="clock" small /> Syncing with the forges… your change is saved after it.</p>
       </div>
 
-      <IssueStep ref="step" :id="thread.id" :status="statusValue" :labels="thread.labels" :events="thread.events" :forges="thread.forges" :head="reading.tab === 'conversation'" @open="openStep" @changed="load" @comment="(b, n) => comment(b, undefined, n)">
+      <IssueStep ref="step" :id="thread.id" :status="statusValue" :labels="thread.labels" :events="thread.events" :forges="thread.forges" :head="reading.tab === 'conversation'" @open="openStep" @changed="load" @comment="(b, id) => comment(b, undefined, id)">
         <template #tabs>
           <div class="gb-tabs gb-issue-tabs" role="tablist" aria-label="Issue">
             <button type="button" class="gb-tab" role="tab" :aria-selected="reading.tab === 'conversation'" @click="reading.tab = 'conversation'">Conversation</button>
@@ -131,12 +131,12 @@
                 :busy="saving"
                 :waiting="waiting"
                 :error="saveError"
-                :carried="carries(cycle?.step ?? 0)"
-                :comment="(anchor: string, b: string) => comment(b, undefined, cycle?.step ?? 0, { anchor })"
+                :carried="carries(here(cycle))"
+                :comment="(anchor: string, b: string) => comment(b, undefined, cycle?.at ?? '', { anchor })"
                 :me-id="meId"
                 :fields="fields"
                 :save="edit"
-                :reply="(root: string, b: string) => comment(b, undefined, cycle?.step ?? 0, { reply_to: root })"
+                :reply="(root: string, b: string) => comment(b, undefined, cycle?.at ?? '', { reply_to: root })"
                 :resolve="resolveThread"
                 :apply="apply"
                 :in-flow="reading.where === 'flow'"
@@ -145,11 +145,11 @@
               />
             </CommentCard>
             <VerdictBar
-              v-if="cycle && (cycle.step === 1 || spec.on || spec.before)"
+              v-if="cycle && (cycle.at === 'intent' || spec.on || spec.before)"
               :state="spec"
               :reviewer="reviewer(cycle.evidence.people?.spec)"
               :may="mayGive(cycle.evidence.people, cycle.evidence.author, me?.me?.login)"
-              :moves="cycle.step === 1 && !!cycle.stages.ready"
+              :moves="cycle.at === 'intent' && !!cycle.stages.ready"
               :criteria="!!cycle.evidence.criteria?.length"
               :busy="giving"
               :give="give"
@@ -171,7 +171,7 @@
             :fields="fields"
             :busy="saving"
             :save="edit"
-            :reply="(root: string, b: string) => comment(b, undefined, cycle?.step ?? 0, { reply_to: root })"
+            :reply="(root: string, b: string) => comment(b, undefined, cycle?.at ?? '', { reply_to: root })"
             :resolve="resolveThread"
             :apply="apply"
           />
@@ -190,7 +190,7 @@
               :shown-v="shownV"
               :pointers="pointers"
               :busy="saving"
-              :reply="(root: string, b: string) => comment(b, undefined, cycle?.step ?? 0, { reply_to: root })"
+              :reply="(root: string, b: string) => comment(b, undefined, cycle?.at ?? '', { reply_to: root })"
               :resolve="resolveThread"
               :apply="apply"
               @ref="onRef"
@@ -205,9 +205,9 @@
               :busy="saving"
               :waiting="waiting"
               :error="saveError"
-              :carries="[carries(cycle?.step ?? 0), created ? `v${version(created)}` : ''].filter(Boolean)"
+              :carries="[carries(here(cycle)), created ? `v${version(created)}` : ''].filter(Boolean)"
               :send="send?.name"
-              :comment="(b: string, st?: 'open' | 'closed', toAgent?: boolean) => post(b, st, cycle?.step ?? 0, toAgent ? send : undefined)"
+              :comment="(b: string, st?: 'open' | 'closed', toAgent?: boolean) => post(b, st, cycle?.at ?? '', toAgent ? send : undefined)"
             />
           </template>
         </template>
@@ -222,7 +222,7 @@
             :participants="thread.participants"
             :events="thread.events"
             :saving="saving"
-            :spec="cycle && created && (cycle.step === 1 || spec.on || spec.before) ? spec : undefined"
+            :spec="cycle && created && (cycle.at === 'intent' || spec.on || spec.before) ? spec : undefined"
             :reviewer="holder(cycle?.evidence.people?.spec)"
             @changed="fieldsChanged"
             @labels="labels"
@@ -239,7 +239,8 @@
 import { onLive } from '@/live';
 import { clampWidth, panelMode, panelWidth, togglePanelMode } from '@/panelsize';
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, toRef, useId, watch } from 'vue';
-import { markSeen, type Thread } from '@/api/board';
+import { markSeen, type Cycle, type Thread } from '@/api/board';
+import { listOf } from '@/cycle';
 import { inbox, inboxError, loadInbox } from '@/inbox';
 import { loadVisit, saveVisit, visit } from '@/lastvisit';
 import { fieldValues, type Fields } from '@/fields';
@@ -274,7 +275,7 @@ const props = defineProps<{
   hasNext?: boolean;
   findRef?: (n: string) => string | undefined; // #n → a local issue's id
   at?: string | undefined; // an event to scroll to once loaded: the inbox's first new one
-  step?: number | undefined; // a segment to jump to once loaded: a rail link's ?step=
+  step?: string | undefined; // a step's id to open once loaded: a rail link's ?step=
 }>();
 const emit = defineEmits<{ close: []; prev: []; next: []; changed: [thread: Thread]; open: [id: string] }>();
 
@@ -364,7 +365,7 @@ const focus = ref<string>(); // the file a comment's path:line opens in Changes,
 function showLine(path: string) {
   if (!props.page) return;
   focus.value = path;
-  step.value?.show(6);
+  step.value?.show('review');
 }
 const changeCount = computed(() => (thread.value ? steps(thread.value.events).length : 0));
 const comments = computed(() => thread.value?.events.filter((e) => e.kind === 'comment').length ?? 0);
@@ -410,16 +411,23 @@ async function copyLink() {
 // #123 of a local issue opens it here, else the link goes to the forge
 // a comment carries the issue's step (cycle:step); ticked, it goes to the
 // agent too, as a brief
-async function post(body: string, status: 'open' | 'closed' | undefined, n: number, send?: { brief: (body: string) => void }) {
-  const ok = await comment(body, status, n);
+async function post(body: string, status: 'open' | 'closed' | undefined, at: string, send?: { brief: (body: string) => void }) {
+  const ok = await comment(body, status, at);
   if (ok && send && body.trim()) send.brief(body);
   return ok;
 }
 
+// the issue's step as its segment's divider names it, for the composer
+function here(c: Cycle | null | undefined) {
+  const list = listOf(c?.stages);
+  const n = list.findIndex((s) => s.id === c?.at) + 1;
+  return n ? { n, name: list[n - 1]!.name } : undefined;
+}
+
 // the rail, a divider's Open step, ?step=: that step heads the column
-async function openStep(n: number) {
+async function openStep(id: string) {
   reading.tab = 'conversation';
-  step.value?.show(n);
+  step.value?.show(id);
   await nextTick();
   const head = rootEl()?.querySelector<HTMLElement>('.gb-column-body > .gb-eyebrow');
   head?.scrollIntoView({ block: 'start', behavior: 'smooth' });

@@ -2,79 +2,104 @@
 // cut into a segment per step, and the readings a person picks of it.
 // Pure: built from the thread the server already sends.
 import type { CycleStages, IssueEvent } from './api/board.ts';
-import { STEPS } from './cycle.ts';
+import { DEFAULT_IDS, kindOf, listOf } from './cycle.ts';
 import type { Fields } from './fields.ts';
 import { threadsOf } from './review.ts';
 
-// at: when the operation that opened the step ran (History's step bars);
-// step 1 and a step nothing opened have none
-export interface Segment { n: number; entries: IssueEvent[]; at?: string }
+// id: the list's entry, n its position from 1, 0 without a cycle; at: when
+// the operation that opened it ran (History's step bars): intent and a
+// step nothing opened have none
+export interface Segment { id: string; n: number; name: string; entries: IssueEvent[]; at?: string }
 
 const time = (e: IssueEvent) => Date.parse(e.at);
 
-// stepOf is the step a comment carries (cycle:step), 0 for none: a value
-// outside 1 to 7, another writer's, counts as none.
-export const stepOf = (e: IssueEvent): number => {
-  const v = e.meta?.['cycle:step'] ?? '';
-  return /^[1-7]$/.test(v) ? Number(v) : 0;
-};
+// idOf reads a cycle:step or ?step= value as an id: "1" to "7", written
+// before the list, are the default list's
+export const idOf = (v: string): string => (/^[1-7]$/.test(v) ? DEFAULT_IDS[Number(v)]! : v);
 
-// segments cuts the flow at the operations that opened each step (call
-// 3): a status move, the risk set at ready, the close. A comment goes to
-// the step it carries (cycle:step), a line comment without one to Review,
-// anything else to the step running when it was written; after the last
-// move, the issue's own step. Every step from 1 to the highest reached
-// shows, empty ones included, minus the skipped ones; the issue's step is
-// never skipped (low risk waits at 3 for in-progress). No cycle (step 0):
-// one segment, n 0. ponytail: a step opened by evidence alone (a PR, a
-// test run) shows only through the comments that carry it; the server
-// replaying internal/cycle over the operations if that misleads.
-export function segments(events: IssueEvent[], stages: CycleStages | undefined, step: number, skip: number[] = []): Segment[] {
-  const skipped = skip.filter((n) => n !== step);
+// stepOf is the id a comment carries (cycle:step), '' for none
+export const stepOf = (e: IssueEvent): string => idOf(e.meta?.['cycle:step'] ?? '');
+
+// segments cuts the flow at the operations that opened each entry of the
+// list (call 3): a status move, the risk set at ready, the close. A move
+// reaches the entry internal/cycle's at would: at a validation status its
+// sign-off, else verify; else the last entry ranked at most the status's
+// step. A comment goes to the entry it carries (cycle:step), a line comment
+// without one to Review, anything else (an id the list lacks included) to
+// the entry running when it was written; after the last move, current's.
+// Every entry from the first to the highest reached shows, empty ones
+// included, minus the skipped kinds; current is never skipped (low risk
+// waits at plan for in-progress). Before the first entry opens, the first
+// segment takes the entries. No cycle: one segment, n 0. ponytail: a step
+// opened by evidence alone (a PR, a test run) shows only through the
+// comments that carry it; the server replaying internal/cycle over the
+// operations if that misleads.
+export function segments(events: IssueEvent[], stages: CycleStages | undefined, current: string, skip: number[] = []): Segment[] {
   const sorted = events.filter((e) => e.kind !== 'created').map((e, i) => [e, i] as const)
     .sort(([a, i], [b, j]) => time(a) - time(b) || i - j).map(([e]) => e);
-  if (!stages || step === 0) return [{ n: 0, entries: sorted }];
-  const up = (n: number) => {
-    while (n < 7 && skipped.includes(n)) n++;
-    return n;
+  if (!stages) return [{ id: '', n: 0, name: '', entries: sorted }];
+  // positions from 1, 0 for none reached
+  const list = listOf(stages);
+  const has = (kind: string) => list.some((s) => s.kind === kind);
+  const cur = list.findIndex((s) => s.id === current) + 1;
+  const skipped = (i: number) => i !== cur && skip.includes(kindOf(list[i - 1]!));
+  const up = (i: number) => {
+    while (i && i < list.length && skipped(i)) i++;
+    return i;
   };
-  const of = (s: string) => {
-    if (s === stages.ready) return 2;
-    if (stages.in_progress.includes(s)) return 4;
+  // the entry an issue at step k and status s reaches; a sign-off ranks by
+  // its status's place in validation
+  const reach = (k: number, s = '') => {
+    const v = stages.validation.indexOf(s) + 1;
+    const signoff = v ? list.findIndex((x) => x.kind === 'signoff' && x.status === s) + 1 || list.findIndex((x) => x.id === 'verify') + 1 : 0;
+    if (signoff) return signoff;
+    const rank = (x: (typeof list)[number]) => [kindOf(x), x.kind === 'signoff' && x.id !== 'verify' ? stages.validation.indexOf(x.status ?? '') + 1 : 0] as const;
+    return list.findLastIndex((x) => rank(x)[0] < k || (rank(x)[0] === k && rank(x)[1] <= v)) + 1;
+  };
+  // the step a status opens, as internal/cycle's Compute: a kind the list
+  // leaves out holds nothing back (ready is plan without risk, in-progress
+  // code without tests)
+  const stepAt = (s: string, risk: boolean) => {
+    if (s === stages.ready) return risk || !has('risk') ? 3 : 2;
+    if (stages.in_progress.includes(s)) return has('tests') ? 4 : 5;
     if (stages.in_review.includes(s)) return 6;
-    return stages.validation.includes(s) || s === stages.closing ? 7 : 1;
+    return stages.validation.includes(s) ? 7 : 1;
   };
   const labels = new Set<string>();
   const moves = sorted.map((e) => {
     e.removed?.forEach((l) => labels.delete(l));
     e.added?.forEach((l) => labels.add(l));
     const risk = [...labels].some((l) => l.startsWith('risk:'));
-    const status = e.added?.find((l) => l.startsWith('status:'));
-    if (status) return of(status.slice(7)) === 2 && risk ? 3 : of(status.slice(7));
-    if (e.added?.some((l) => l.startsWith('risk:')) && labels.has(`status:${stages.ready}`)) return 3;
-    return e.kind === 'status' && e.status === 'closed' ? 7 : undefined;
+    const status = e.added?.find((l) => l.startsWith('status:'))?.slice(7);
+    if (status) return status === stages.closing ? list.length : reach(stepAt(status, risk), status);
+    if (e.added?.some((l) => l.startsWith('risk:')) && labels.has(`status:${stages.ready}`)) return reach(3);
+    return e.kind === 'status' && e.status === 'closed' ? list.length : undefined;
   });
   const last = moves.findLastIndex((m) => m !== undefined);
+  const review = list.findIndex((s) => s.kind === 'review') + 1;
   const byStep = new Map<number, IssueEvent[]>();
   const opened = new Map<number, string>();
-  let running = 1;
+  let running = reach(1);
   sorted.forEach((e, i) => {
     let n = running;
     const was = running;
-    const carried = stepOf(e);
+    const carried = list.findIndex((s) => s.id === stepOf(e)) + 1;
     if (moves[i] !== undefined) n = running = up(moves[i]);
     else if (carried) running = Math.max(running, (n = up(carried)));
-    else if (e.review) n = up(6);
+    else if (e.review && review) n = up(review);
     // ponytail: a step opened twice (sent back) keeps its first opening
     if (running > was && !opened.has(running)) opened.set(running, e.at);
-    if (i === last) running = step;
-    byStep.set(n, [...(byStep.get(n) ?? []), e]);
+    if (i === last) running = cur;
+    // nothing reached yet: the first segment, under the description
+    const k = n || up(1);
+    byStep.set(k, [...(byStep.get(k) ?? []), e]);
   });
-  const top = Math.max(step, ...byStep.keys());
+  const top = Math.max(cur, 1, ...byStep.keys());
   const out: Segment[] = [];
   for (let n = 1; n <= top; n++) {
     const at = opened.get(n);
-    if (!skipped.includes(n)) out.push({ n, entries: byStep.get(n) ?? [], ...(at ? { at } : {}) });
+    const { id, name } = list[n - 1]!;
+    if (!skipped(n)) out.push({ id, n, name, entries: byStep.get(n) ?? [], ...(at ? { at } : {}) });
   }
   return out;
 }
@@ -146,7 +171,7 @@ export interface On { v: number; from: string; to?: string }
 // the version an entry names: a milestone's own (its id "version-N", two
 // edits in one second share a time), an anchor's or spec:on's
 const named = (e: IssueEvent) => Number(e.kind === 'version' ? e.id.slice(8) : /^body@v([1-9]\d*)(\/|$)/.exec(e.meta?.['thread:anchor'] ?? e.meta?.['spec:on'] ?? '')?.[1]);
-export function pick(segs: Segment[], events: IssueEvent[], r: Reading, meId: string, step: number, on?: On): Segment[] {
+export function pick(segs: Segment[], events: IssueEvent[], r: Reading, meId: string, current: string, on?: On): Segment[] {
   const open = new Set([
     ...threadsOf(events).filter((t) => !t.resolved).flatMap((t) => [t.root, ...t.replies]),
     ...bodyThreads(events).filter((t) => !t.resolved).flatMap((t) => [t.event, ...t.replies]),
@@ -156,8 +181,9 @@ export function pick(segs: Segment[], events: IssueEvent[], r: Reading, meId: st
     (r.show !== 'open' || open.has(e.id)) &&
     (r.show !== 'version' || !on || (named(e) ? named(e) === on.v : time(e) >= Date.parse(on.from) && (!on.to || time(e) < Date.parse(on.to)))) &&
     (!narrow || (r.mine && e.author.id === meId) || (r.agent && !!e.meta?.['ai:model']) || (r.milestones && e.kind !== 'comment'));
-  const out = segs.filter((s) => r.show !== 'step' || s.n === step).map((s) => ({ n: s.n, entries: s.entries.filter(keep) }));
-  return r.newest ? out.reverse().map((s) => ({ n: s.n, entries: s.entries.reverse() })) : out;
+  // This step before the first entry opens: the first segment, where the entries sit
+  const out = segs.filter((s) => r.show !== 'step' || s.id === (current || segs[0]?.id)).map((s) => ({ ...s, entries: s.entries.filter(keep) }));
+  return r.newest ? out.reverse().map((s) => ({ ...s, entries: s.entries.reverse() })) : out;
 }
 
 export interface Item { event: IssueEvent; replies: IssueEvent[]; resolved?: boolean }
@@ -206,15 +232,15 @@ export const roleOf = (fields: Fields, login: string | undefined): string | unde
   login ? Object.entries(fields).find(([, f]) => f.type === 'person' && f.inherits === login)?.[0] : undefined;
 
 // carries is the step a new comment is written in, as its segment's
-// divider names it: "07 Verify"; nothing without a cycle.
-export const carries = (step: number): string => (step ? `${String(step).padStart(2, '0')} ${STEPS[step]}` : '');
+// divider names it: "02 Review"; nothing without a cycle.
+export const carries = (s: { n: number; name: string } | undefined): string => (s?.n ? `${String(s.n).padStart(2, '0')} ${s.name}` : '');
 
 const days = new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short' });
 
 // divider heads a segment: "01 Intent · Oct 21 – 22 · 12 entries",
 // "07 Verify · Oct 25 · current".
 export function divider(s: Segment, current: boolean): string {
-  const head = carries(s.n);
+  const head = carries(s);
   const t = s.entries.map(time);
   const span = t.length ? ` · ${days.formatRange(Math.min(...t), Math.max(...t))}` : '';
   const n = s.entries.length;

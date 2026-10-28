@@ -1,13 +1,15 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { Cycle, GatePR, IssueEvent } from './api/board.ts';
-import { cardFor, criteriaLeft, criterionOf, mergedRun, riskWords, signoffLine, steps, statusBar, suggestion, tiles, turn, withCriteria } from './cycle.ts';
+import { cardFor, criteriaLeft, criterionOf, DEFAULT_IDS, mergedRun, riskWords, signoffLine, steps, statusBar, suggestion, tiles, turn, withCriteria } from './cycle.ts';
 import { on } from './when.ts';
 
 const at = (c: Partial<Cycle>): Cycle => ({
   step: 7, of: 7, name: 'Verify', stage: 'validation', done: false, gate: 'Green codes are not proof', mine: true,
   waits: { role: 'signoff', login: 'alice', what: 'sign off qa', anyone: false }, actions: ['verify', 'check', 'signoff'],
   evidence: {}, stages: { ready: 'ready', in_progress: [], in_review: [], validation: ['qa'], closing: 'validated', guessed: true, criteria: ['Acceptance criteria', 'Done when', 'Expected'], kinds: { bug: 'failing-test', feat: 'per-criterion', doc: 'none', chore: 'none' } },
+  // the default list's entry for the step, unless the test names one
+  at: DEFAULT_IDS[c.step ?? 7]!,
   ...c,
 });
 
@@ -170,7 +172,7 @@ test('step 6 counts its approvals and open threads', () => {
   // merged, the server's note says what waits
   assert.equal(steps({ ...c, note: 'merged, waits for the status qa' }, undefined, events)[5]!.line, 'merged, waits for the status qa');
   // done, the issue's approval counts before the sync takes it to the PR
-  assert.equal(steps({ ...c, step: 7, name: 'Verify' }, undefined, approved)[5]!.line, 'erin approved');
+  assert.equal(steps({ ...c, step: 7, at: 'verify', name: 'Verify' }, undefined, approved)[5]!.line, 'erin approved');
 });
 
 test('the sign-off tiles', () => {
@@ -214,4 +216,35 @@ test('the AI\'s newest suggestion, and what a class opens', () => {
   ]), { risk: 'structural', why: 'The export changes a schema.' });
   assert.equal(riskWords('low'), 'low skips step 3, Start work opens step 4');
   assert.equal(riskWords('normal'), 'normal opens step 3');
+});
+
+// the project's list, as the server sends it: qa and tests-metier are sign-offs
+const list = (...ids: string[]) => ({
+  ...at({}).stages, validation: ['qa', 'tests-metier'],
+  steps: ids.map((id) => (['qa', 'tests-metier'].includes(id) ? { id, kind: 'signoff', name: id, status: id } : { id, kind: id, name: id })),
+});
+
+test("the rail is the list's", () => {
+  const rows = steps(at({ step: 6, at: 'review', name: 'review', stages: list('code', 'review'), evidence: { branch: 'docs/1-x' } }));
+  assert.deepEqual(rows.map((r) => [r.id, r.i, r.n, r.state, r.line]), [['code', 1, 5, 'done', 'docs/1-x'], ['review', 2, 6, 'current', '0 of 1 approval · 0 threads open']]);
+});
+
+test('a struck plan stays a cell', () => {
+  const rows = steps(at({ step: 5, at: 'code', risk: 'low', skipped: [3], stages: list('intent', 'plan', 'code', 'review') }));
+  assert.deepEqual(rows.map((r) => [r.id, r.i, r.state]), [['intent', 1, 'done'], ['plan', 2, 'skipped'], ['code', 3, 'current'], ['review', 4, 'locked']]);
+});
+
+test('nothing current before the first step opens', () => {
+  assert.deepEqual(steps(at({ step: 2, at: '', stages: list('code', 'review') })).map((r) => r.state), ['locked', 'locked']);
+});
+
+test('the sign-off cells', () => {
+  const stages = list('intent', 'code', 'review', 'qa', 'tests-metier');
+  const signoffs = [{ status: 'qa', by: 'alice', at: '2026-10-18T10:00:00Z' }];
+  const rows = steps(at({ at: 'tests-metier', stages, evidence: { signoffs }, waits: { role: 'signoff', login: 'bob', what: 'sign off tests-metier', anyone: false } }));
+  assert.deepEqual(rows.slice(3).map((r) => [r.id, r.i, r.n, r.state, r.line]), [
+    ['qa', 4, 7, 'done', 'Signed off by alice'],
+    ['tests-metier', 5, 7, 'current', 'waits for bob to sign off tests-metier'],
+  ]);
+  assert.equal(steps(at({ step: 6, at: 'review', stages }))[3]!.line, 'opens at qa');
 });

@@ -3,7 +3,7 @@
 <template>
   <AppHeader :views="viewNames" />
   <main class="gb-issuepage">
-    <IssuePanel :id="String(route.params.id)" :key="String(route.params.id)" :names="names" :fields="fields" :step="Number(route.query.step) || undefined" page @open="(other: string) => router.push(`/issues/${other}`)" />
+    <IssuePanel :id="String(route.params.id)" :key="String(route.params.id)" :names="names" :fields="fields" :step="route.query.step ? idOf(String(route.query.step)) : undefined" page @open="(other: string) => router.push(`/issues/${other}`)" />
   </main>
 </template>
 
@@ -13,6 +13,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { getFields, getViews, type FieldConfig } from '@/api/board';
 import { loadColors } from '@/colors';
 import { namespaces } from '@/facets';
+import { idOf } from '@/flow';
 import AppHeader from '@/components/AppHeader.vue';
 import IssuePanel from '@/components/IssuePanel.vue';
 

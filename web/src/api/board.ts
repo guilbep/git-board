@@ -280,12 +280,12 @@ export function createIssue(title: string, body: string, labels: string[]): Prom
 }
 
 // A comment, and/or a status: "Close with comment".
-// step: the cycle step whose discussion the comment is in (0: none, step 1's)
+// step: the id of the cycle step whose discussion the comment is in ('': none)
 // A comment on the description's thread (docs/design/time-flow/protocol.md):
 // its anchor, or the thread's first comment it replies to.
 export interface ThreadOn { anchor?: string; reply_to?: string }
 
-export function addComment(id: string, body: string, status?: 'open' | 'closed', step = 0, on: ThreadOn = {}): Promise<Thread> {
+export function addComment(id: string, body: string, status?: 'open' | 'closed', step = '', on: ThreadOn = {}): Promise<Thread> {
   return request(`${issuePath(id)}/comments`, json('POST', { body, status: status ?? '', step, ...on }));
 }
 
@@ -792,7 +792,8 @@ export interface CycleEvidence {
   checks?: { index: number; by: string; commit?: string; at: string }[];
 }
 export interface Cycle {
-  step: number; // 1 to 7
+  step: number; // the kind's, 1 to 7
+  at: string; // the id of the list's entry reached, '' before the first opens
   of: number;
   name: string;
   stage: string;
@@ -824,7 +825,11 @@ export interface CycleStages {
   kinds: Record<string, string>; // step 4's rule by kind: failing-test, per-criterion, none
   guessed: boolean;
   roles?: Record<string, string>; // the role holding each gate: risk, plan, review, signoff:<status>
+  steps?: StageStep[]; // the rail's cells, in order ([cycle] steps); the default seven when absent
 }
+
+// a cell of the rail: a sign-off's status is its validation status
+export interface StageStep { id: string; kind: string; name: string; status?: string }
 
 // The Work page (internal/work, internal/server/work.go): every open
 // issue's cycle, grouped into what needs the viewer and what waits on others.
