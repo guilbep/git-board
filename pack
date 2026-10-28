@@ -1,1 +1,1 @@
-{"clock":54,"ops":[{"kind":"seen","author":"ee004d31386b76440a74651c79871f156633d4ff","time":1793225104,"data":{"issue":"2b0917078cdcf019f2c6c2adc138ffa23a6a0d8d","field":"assignees","value":"161889"}}]}
+{"clock":55,"ops":[{"kind":"seen","author":"ee004d31386b76440a74651c79871f156633d4ff","time":1793225106,"data":{"issue":"09ea25b7c3b507826d4d2e3d8d771239fb3b54dc","field":"labels","value":"kind:feat\nprio:p2\nstatus:backlog"}}]}
