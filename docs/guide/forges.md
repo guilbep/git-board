@@ -128,7 +128,7 @@ A board can start over from what the forges hold, on the git side alone: no forg
 1. `git board reset --hard` empties this clone's board: the issues, the people, the sync links, the release records, the fetched copies and `board.me`. The switch's mark and the numbers' counter stay, so no number is handed out twice.
 2. `git board push --prune` makes origin's board this clone's: what origin has and this clone doesn't is deleted there. It refuses on a clone that didn't start over, and keeps a numbers' counter a teammate moved on meanwhile.
 3. Every other clone stops its automated syncs, then runs `git board reset --hard origin`, which makes its board origin's.
-4. `git board forge pull` refills the board from the forges.
+4. `git board forge pull` refills the board from the forges: on a big project, several minutes (see [Long syncs](#long-syncs)).
 
 Each writes what it deletes to a bundle in the git directory and names it, with the `git fetch` that brings it back.
 
@@ -142,3 +142,18 @@ Each writes what it deletes to a bundle in the git directory and names it, with 
 A new clone, with no board yet, takes origin's mark as it pulls.
 
 Settings › Sync, Start over, runs the same. On the command line the resets refuse while `git board serve` runs on the repository.
+
+## Long syncs
+
+The first sync with a forge, or the first after starting over, reads every issue the forge holds. A thousand issues take several minutes, mostly for their comments: one request per issue that has any. The listing comes in within seconds, and the bar then has an end: "GitHub (gh) · pulling 412 of 1,034 · #412 Export CSV · about 6 min left". With 200 issues or more to read, it says the sync takes minutes. The command line says so too, and where it is every hundred issues.
+
+You can close the page: the sync runs in git-board's server, not in the page. Open Settings › Sync again to follow it.
+
+**When a sync is cut.** A shutdown, a crash or a stopped server breaks nothing:
+
+- **What it pulled stays.** Each issue is written as the pull reaches it, and nothing is made twice.
+- **The next sync isn't blocked.** The lock a run holds is the system's, and it goes with the process.
+- **The next run goes on from where it stopped.** Its journal, in `board/sync.lock` in the git directory, lists the issues it read. The next sync, or check, skips those not updated since.
+- **You're told where it stopped.** Settings › Sync says: "The last sync stopped today 14:02, at 612 of 1,034 issues from GitHub (gh)…". The command line says it as well.
+
+**When the connection drops.** A read waits and tries again, after 1, 2, 4 seconds and so on, up to 30 seconds between tries and for 5 minutes in all: long enough for a Wi-Fi drop or a laptop asleep. The progress says so: "GitHub doesn't answer: trying again in 30 s". It says a rate limit's wait the same way. A write is never tried again, as the forge may have made it: the sync stops, and the next one goes on.
