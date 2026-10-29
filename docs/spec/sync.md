@@ -523,18 +523,44 @@ forge, and never makes a thing twice.
 
 A run syncs git-board with every project it is given:
 
-1. It takes the run's lock, `board/sync.lock` in git's common directory,
-   created only if it doesn't exist. Another run holding it is an error
-   naming the file. The run removes it at the end. A run killed before then
-   leaves it behind, to remove by hand, like git's own lock files.
+1. It takes the run's lock: an OS lock (`flock`, or `LockFileEx` on
+   Windows) on `board/sync.lock` in git's common directory, held while the
+   run has the file open. Another run holding it for more than a tenth of
+   a second is an error naming its process: a look at the lock (is a run
+   going on? where did the last stop?) holds it an instant, and is waited
+   out. The OS drops the lock when the process ends, however it ends,
+   so a run killed mid-way blocks no other. The file is never removed:
+   a run that opened it just before would lock a file no other run sees.
 2. It reads each project's visibility, and its posting account. A project
    whose visibility it can't read is left out, and the run returns that
    error at its end; a posting account it can't read stops it.
 3. It pulls from each project: the issues listed as updated since that
-   project's last `run`, or every issue when there is none.
+   project's last `run`, or every issue when there is none. A listing reads
+   a request per page: an issue whose comments cost a request of their own
+   is listed partial, and the pull completes each issue as it reaches it,
+   before anything reads its comments.
 4. It pushes to each project. As every project is pulled first, an issue
    pulled from one goes to the others in the same run.
 5. It records a `run` in each project's sync entity it wrote to.
+
+**Going on after a cut.** The lock file also holds the run's journal:
+- its first line is the run's own, with its process id and start;
+- then comes a line for each forge issue the pull finished, naming the forge, the issue's id, and the start of the run that read it;
+- and a line for each listing, with its total.
+
+A run reads the journal it finds and writes it back under its own line. It skips a listed issue, with no read of its comments and no pull, when all three hold:
+- the journal has it;
+- it is linked, and its issue is here;
+- the forge last updated it more than 5 minutes before the start of the run that read it.
+
+That is `since`'s rule, applied to what a cut run reached. A skipped issue stays out of the push's listing, so a push that writes to it reads it.
+
+Nothing is journaled for an issue the pull didn't finish:
+- one whose write failed;
+- one skipped because its issue isn't here;
+- a mirror waiting for the walk's end, until it is pulled.
+
+A run that records its `run` for a project drops the journal's lines for that project: the next run lists from that start. A run drops, at its start, the lines of a project it isn't given: a forge taken out of the sync, or turned off, takes them along. A pull that walks a listing to its end marks it so: the journal still serves the next run, but that pull isn't cut. A reset of the board (`git board reset --hard`, either form) empties the journal, as what it says was pulled went with the refs; it refuses while a sync runs. A run of one issue alone neither reads the journal nor adds to it, and a dry run keeps its own, on its own copy. Only an added line moves the file's time, which says when a cut run stopped.
 
 It reports how many forge issues it created, updated or left unchanged in
 git-board, and how many issues it created or wrote to on the forges. Its

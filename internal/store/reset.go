@@ -15,6 +15,7 @@ import (
 	"github.com/guilbep/git-board/core/gitstore"
 	"github.com/guilbep/git-board/core/oplog"
 	"github.com/guilbep/git-board/core/people"
+	"github.com/guilbep/git-board/core/syncer"
 )
 
 // The reset's mark: written by git board reset --hard, a commit of a
@@ -159,6 +160,12 @@ func (b *Backend) ResetHard(remote string) (ResetReport, error) {
 		if err := b.checkRemote(remote); err != nil {
 			return rep, err
 		}
+	}
+	// the sync's journal says what it pulled into the refs that go: a sync
+	// that went on from it would skip those issues for good. A sync that
+	// runs refuses the reset.
+	if err := syncer.Forget(b.s); err != nil {
+		return rep, err
 	}
 	all, err := b.s.Refs("refs/")
 	if err != nil {

@@ -1,6 +1,7 @@
 package server
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -9,6 +10,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/guilbep/git-board/core/syncer"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/store"
 )
@@ -35,6 +37,21 @@ type syncBridge struct {
 type forgeStatus struct {
 	Bridges []syncBridge `json:"bridges"`
 	Job     *forgeJob    `json:"job"`
+	Cut     *cutRun      `json:"cut,omitempty"` // a sync cut, as by a restart: the next goes on from there
+}
+
+// cutRun is a sync that stopped before it went through (syncer.Cut), with
+// no run going on.
+type cutRun struct {
+	At     time.Time  `json:"at"`
+	Forges []cutForge `json:"forges"`
+}
+
+type cutForge struct {
+	Name  string `json:"name,omitempty"` // the bridge whose key it is; "" when none says (a GitLab id)
+	Key   string `json:"key"`
+	Read  int    `json:"read"`
+	Total int    `json:"total"`
 }
 
 // the modes of a forge run: both ways, push alone (send, the Work page's
@@ -87,36 +104,15 @@ func (j *forgeJob) tally(name string) *bridgeTally {
 	return t
 }
 
-// syncStep is where a run is: the bridge, the way, how many issues that
-// way has come to so far, and the issue it is on.
+// syncStep is where a run is: the bridge, the way, how many issues of how
+// many it has come to, and the issue it is on.
 type syncStep struct {
 	Bridge string `json:"bridge"`
 	Way    string `json:"way"` // pull, push
 	Done   int    `json:"done"`
-	// ponytail: Total is never set, the run doesn't say how many it will
-	// write; the page shows the count alone
-	Total int    `json:"total,omitempty"`
-	Issue string `json:"issue,omitempty"` // "#43 import: users lose their work"
-}
-
-// stepper turns a run's events into its steps: one each time a way of a
-// bridge comes to another issue.
-type stepper struct {
-	counts map[string]int // issues come to, per bridge and way
-	last   string         // bridge, way and issue of the last step
-}
-
-func (st *stepper) see(e store.SyncEvent, name string) (syncStep, bool) {
-	key := e.Forge + " " + e.Way
-	if !names(e) || st.last == key+" "+e.Issue {
-		return syncStep{}, false // a write, a warning, or the same issue: the step stays
-	}
-	st.last = key + " " + e.Issue
-	if st.counts == nil {
-		st.counts = map[string]int{}
-	}
-	st.counts[key]++
-	return syncStep{Bridge: e.Forge, Way: e.Way, Done: st.counts[key], Issue: name}, true
+	Total  int    `json:"total,omitempty"`
+	Issue  string `json:"issue,omitempty"` // "#43 import: users lose their work"
+	Wait   string `json:"wait,omitempty"`  // "GitHub doesn't answer: trying again in 30 s", until the next step
 }
 
 // names says an event names an issue of git-board's.
@@ -222,27 +218,45 @@ func (t *bridgeTally) add(e store.SyncEvent, line string) {
 // tally is called with forgeMu held. id names the issue a step is on, for
 // its drawer; "" for a full run.
 func (s *apiServer) tell(dry bool, id string, tally func(name string) *bridgeTally, step func(*syncStep)) func(store.SyncEvent) {
-	var st stepper
+	var last syncStep // a wait is the step it waits in
+	var sent time.Time
+	var waitShown bool // the pages show a wait, which the next step clears
 	return func(e store.SyncEvent) {
 		name := ""
 		if names(e) {
 			name = s.issueName(e.Issue)
 		}
 		text := e.Text(dry, name)
-		next, moved := st.see(e, name)
+		next, moved := syncStep{Bridge: e.Forge, Way: e.Way, Done: e.Done, Total: e.Total, Issue: e.Line}, e.What == "progress"
+		if e.What == "waiting" {
+			next, moved = last, true
+			next.Bridge, next.Wait = cmp.Or(next.Bridge, e.Forge), e.Line
+		}
+		// a step is published at most every stepEvery, but a wait, a new
+		// way and a way's last always: a burst (a push with nothing to
+		// send) would fill every page's buffer, and drop its stream
+		publish := moved && (next.Wait != "" || waitShown || next.Bridge != last.Bridge || next.Way != last.Way || next.Done == next.Total || time.Since(sent) >= stepEvery)
+		if moved {
+			last = next
+			last.Wait = ""
+		}
 		s.forgeMu.Lock()
 		if e.Forge != "" {
 			tally(e.Forge).add(e, text)
 		}
 		if moved && step != nil {
-			step(&next)
+			step(&next) // the job keeps every step, for a page loading mid-run
 		}
 		s.forgeMu.Unlock()
-		if moved {
+		if publish {
+			sent, waitShown = time.Now(), next.Wait != ""
 			s.events.publish(event{Kind: "progress", ID: id, Step: &next})
 		}
 	}
 }
+
+// stepEvery is how often a run's steps reach the pages, at most.
+const stepEvery = 200 * time.Millisecond
 
 // forges are the settings' forges, or with no table, those found in the
 // git remotes (Backend.Forges), their GitLab ids read by each run.
@@ -262,10 +276,21 @@ func (s *apiServer) syncForges() []config.Forge {
 
 func (s *apiServer) forgeSnapshot() forgeStatus {
 	bridges := []syncBridge{}
+	keys := map[string]string{} // a forge's key, as an adapter makes it -> its name
 	for _, f := range s.syncForges() {
 		bridges = append(bridges, syncBridge{Name: f.Name, Target: f.Kind, Discovered: f.Discovered})
+		keys[cmp.Or(f.Host, f.Kind+".com")+"/"+cmp.Or(f.Path, f.Project)] = f.Name // github.com, gitlab.com by default
 	}
-	return forgeStatus{Bridges: bridges, Job: s.job}
+	st := forgeStatus{Bridges: bridges, Job: s.job}
+	if s.job == nil || s.job.State != "running" {
+		if c, err := syncer.Cut(s.b.Store()); err == nil && c != nil {
+			st.Cut = &cutRun{At: c.At}
+			for _, f := range c.Forges {
+				st.Cut.Forges = append(st.Cut.Forges, cutForge{Name: keys[f.Key], Key: f.Key, Read: f.Read, Total: f.Total})
+			}
+		}
+	}
+	return st
 }
 
 func (s *apiServer) handleForges(w http.ResponseWriter, r *http.Request) {

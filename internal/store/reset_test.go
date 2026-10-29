@@ -2,6 +2,8 @@ package store_test
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -381,5 +383,32 @@ func TestPushPruneNeedsAStartOver(t *testing.T) {
 	}
 	if _, err := mine.PushPrune("origin"); !errors.Is(err, store.ErrNoStartOver) {
 		t.Errorf("a second push --prune: %v", err)
+	}
+}
+
+// A reset forgets the sync's journal: what it says was pulled went with
+// the refs, and the next pull must read it again.
+func TestResetHardForgetsTheJournal(t *testing.T) {
+	t.Parallel()
+	mine, theirs := storetest.NewPair(t)
+	pushedTo(t, mine)
+	journal := "{\"pid\":1,\"started\":5}\n{\"forge\":\"github.com/o/r\",\"id\":\"100\",\"run\":5}\n"
+	for _, c := range []struct {
+		b      *store.Backend
+		remote string
+	}{{mine, ""}, {theirs, "origin"}} {
+		path := filepath.Join(c.b.Store().CommonDir(), "board", "sync.lock")
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(journal), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := c.b.ResetHard(c.remote); err != nil {
+			t.Fatal(err)
+		}
+		if data, _ := os.ReadFile(path); len(data) != 0 {
+			t.Errorf("reset --hard %s left the journal: %q", c.remote, data)
+		}
 	}
 }

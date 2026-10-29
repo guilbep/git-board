@@ -52,14 +52,21 @@ func TestListing(t *testing.T) {
 	h := newHub(t, f)
 	h.repeat = true
 
-	list, err := h.adapter(t).Issues(ctx, 0)
+	a := h.adapter(t)
+	list, err := a.Issues(ctx, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(list) != 251 {
 		t.Fatalf("%d issues, want 251", len(list))
 	}
-	got := list[250]
+	if !list[250].Partial || list[250].Comments != nil || list[0].Partial {
+		t.Fatalf("the listing reads comments: %+v", list[250])
+	}
+	got, err := a.Complete(ctx, list[250])
+	if err != nil {
+		t.Fatal(err)
+	}
 	if got.Title != "many" || got.Body != "a\nb" || len(got.Comments) != 150 || got.Comments[0].Body != "one\ntwo" {
 		t.Fatalf("many = %q %q, %d comments, first %q", got.Title, got.Body, len(got.Comments), got.Comments[0].Body)
 	}
@@ -195,6 +202,103 @@ func TestRetries(t *testing.T) {
 	}
 }
 
+// hangUp drops the connection mid-answer, as a Wi-Fi gone or a laptop
+// asleep does: after the status line, where Go's client doesn't try again
+// by itself.
+func hangUp(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Length", "100")
+	w.WriteHeader(http.StatusOK)
+	w.(http.Flusher).Flush()
+	panic(http.ErrAbortHandler)
+}
+
+// A read waits out an outage, a dropped connection or a 5xx, in waits
+// doubling to 30 s, each told, for 5 minutes at most; then it gives up.
+func TestAReadWaitsOutAnOutage(t *testing.T) {
+	t.Parallel()
+	f := fake.New("example.com/p")
+	is := f.Add(forge.Issue{Author: ann, Title: "T"})
+	h := newHub(t, f)
+	a := h.adapter(t)
+	var slept []time.Duration
+	a.s.sleep = func(_ context.Context, d time.Duration) error {
+		if d > 0 {
+			slept = append(slept, d)
+		}
+		return nil
+	}
+	var heard []string
+	ctx := forge.WithWaits(t.Context(), func(w forge.Wait) { heard = append(heard, fmt.Sprint(w.Forge, " ", w.Why, " ", w.For)) })
+	path := "GET /repos/o/p/issues/" + is.Number
+	h.fault(path, hangUp, answer(502, nil, "Bad Gateway"), hangUp, hangUp, hangUp, hangUp, hangUp)
+	if _, err := a.Issue(ctx, is.Ref()); err != nil {
+		t.Fatal(err)
+	}
+	s := time.Second
+	if want := []time.Duration{s, 2 * s, 4 * s, 8 * s, 16 * s, 30 * s, 30 * s}; !slices.Equal(slept, want) {
+		t.Fatalf("slept %v, want %v", slept, want)
+	}
+	if len(heard) != 7 || heard[0] != a.Key()+" GitHub doesn't answer 1s" || heard[1] != a.Key()+" GitHub answers 502 2s" {
+		t.Fatalf("heard %q", heard)
+	}
+
+	slept = nil
+	for range 20 {
+		h.fault(path, hangUp)
+	}
+	if _, err := a.Issue(ctx, is.Ref()); err == nil {
+		t.Fatal("a read still down after 5 minutes didn't give up")
+	}
+	var total time.Duration
+	for _, d := range slept {
+		total += d
+	}
+	if total > 5*time.Minute || total < 4*time.Minute {
+		t.Fatalf("waited %v in all (%v), want about 5 minutes", total, slept)
+	}
+}
+
+// A read waiting out an outage stops when its run does, not when the wait
+// ends.
+func TestAWaitEndsWithItsRun(t *testing.T) {
+	t.Parallel()
+	f := fake.New("example.com/p")
+	is := f.Add(forge.Issue{Author: ann, Title: "T"})
+	h := newHub(t, f)
+	a := h.adapter(t)
+	a.s.sleep = sleep // the real wait, not the hub's
+	h.fault("GET /repos/o/p/issues/"+is.Number, hangUp, hangUp)
+	ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
+	defer cancel()
+	began := time.Now()
+	if _, err := a.Issue(ctx, is.Ref()); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("err = %v, want the run's end", err)
+	}
+	if d := time.Since(began); d > 900*time.Millisecond {
+		t.Fatalf("stopped after %v, the first wait being a second", d)
+	}
+}
+
+// A write isn't tried again after a dropped connection: GitHub may have
+// made it.
+func TestAWriteIsntRetried(t *testing.T) {
+	t.Parallel()
+	f := fake.New("example.com/p")
+	is := f.Add(forge.Issue{Author: ann, Title: "T"})
+	h := newHub(t, f)
+	a := h.adapter(t)
+	key := "POST /repos/o/p/issues/" + is.Number + "/comments"
+	h.fault(key, hangUp)
+	if _, err := a.CreateComment(t.Context(), is.Ref(), "hi"); err == nil {
+		t.Fatal("no error")
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.hits[key] != 1 {
+		t.Fatalf("%d tries", h.hits[key])
+	}
+}
+
 // A label GitHub leaves out is refused alone: the other adds and the
 // removes still go.
 func TestLabelRefusedAlone(t *testing.T) {
@@ -285,7 +389,7 @@ func TestPace(t *testing.T) {
 		return nil
 	}}
 	for range 3 {
-		if err := s.pace(t.Context()); err != nil {
+		if err := s.pace(t.Context(), ""); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -296,7 +400,7 @@ func TestPace(t *testing.T) {
 	for i := range perHour {
 		s.writes = append(s.writes, clock.Add(-30*time.Minute+time.Duration(i)*time.Millisecond))
 	}
-	if err := s.pace(t.Context()); err != nil {
+	if err := s.pace(t.Context(), ""); err != nil {
 		t.Fatal(err)
 	}
 	if !slices.Equal(slept, []time.Duration{30 * time.Minute}) {

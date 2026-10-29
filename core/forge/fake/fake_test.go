@@ -28,10 +28,11 @@ func TestFakeReturnsCopies(t *testing.T) {
 	f.Add(added)
 	added.Labels[0], added.Comments[0].Body = "x", "x"
 	got, _ := f.Issues(t.Context(), 0)
-	got[0].Labels[0], got[0].Comments[0].Body = "y", "y"
+	whole, _ := f.Complete(t.Context(), got[0])
+	got[0].Labels[0], whole.Comments[0].Body = "y", "y"
 	again, _ := f.Issues(t.Context(), 0)
-	if again[0].Labels[0] != "bug" || again[0].Comments[0].Body != "hi" {
-		t.Fatalf("issue = %+v", again[0])
+	if whole, _ := f.Complete(t.Context(), again[0]); again[0].Labels[0] != "bug" || whole.Comments[0].Body != "hi" {
+		t.Fatalf("issue = %+v", whole)
 	}
 }
 

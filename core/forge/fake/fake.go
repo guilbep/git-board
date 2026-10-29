@@ -264,10 +264,21 @@ func (f *Forge) Issues(_ context.Context, since int64) ([]forge.Issue, error) {
 	var out []forge.Issue
 	for _, e := range f.p.issues {
 		if !e.deleted && !e.confidential && e.Updated >= since {
-			out = append(out, clone(e.Issue))
+			is := clone(e.Issue)
+			if len(is.Comments) > 0 { // as GitHub lists them: the comments are a request each
+				is.Comments, is.Partial = nil, true
+			}
+			out = append(out, is)
 		}
 	}
 	return out, nil
+}
+
+func (f *Forge) Complete(ctx context.Context, is forge.Issue) (forge.Issue, error) {
+	if !is.Partial {
+		return is, nil
+	}
+	return f.Issue(ctx, is.Ref())
 }
 
 func (f *Forge) Issue(_ context.Context, issue forge.Ref) (forge.Issue, error) {

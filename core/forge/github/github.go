@@ -245,7 +245,24 @@ func (f *Forge) Issue(ctx context.Context, issue forge.Ref) (forge.Issue, error)
 	if err != nil {
 		return forge.Issue{}, err
 	}
-	return out[0], nil
+	return f.Complete(ctx, out[0])
+}
+
+// Complete reads a listed issue's comments, a request per hundred.
+func (f *Forge) Complete(ctx context.Context, is forge.Issue) (forge.Issue, error) {
+	if !is.Partial {
+		return is, nil
+	}
+	cs, err := pages(ctx, f, f.s.repo+"/issues/"+is.Number+"/comments", func(c ghComment) int64 { return c.ID })
+	if err != nil {
+		return is, err
+	}
+	is.Comments = nil
+	for _, c := range cs {
+		is.Comments = append(is.Comments, c.comment())
+	}
+	is.Partial = false
+	return is, nil
 }
 
 func (f *Forge) CreateIssue(ctx context.Context, title, body string) (forge.Issue, error) {
@@ -253,7 +270,7 @@ func (f *Forge) CreateIssue(ctx context.Context, title, body string) (forge.Issu
 	if err := f.call(ctx, http.MethodPost, f.s.repo+"/issues", map[string]string{"title": title, "body": body}, &gi); err != nil {
 		return forge.Issue{}, err
 	}
-	return gi.issue(nil, ghTimes{}), nil
+	return gi.issue(ghTimes{}), nil
 }
 
 func (f *Forge) CreateComment(ctx context.Context, issue forge.Ref, body string) (forge.Comment, error) {
@@ -474,8 +491,10 @@ func (f *Forge) issues(ctx context.Context, query string) ([]ghIssue, error) {
 	return slices.DeleteFunc(all, func(gi ghIssue) bool { return gi.PullRequest != nil }), nil
 }
 
-// read completes issues with their comments and change times. An issue
-// whose comments or times fail to load is an error, never half an issue.
+// read completes issues with their change times, a query per hundred. An
+// issue with comments is Partial: they are a request each, which Complete
+// makes. An issue whose times fail to load is an error, never half an
+// issue.
 func (f *Forge) read(ctx context.Context, gis []ghIssue) ([]forge.Issue, error) {
 	times := map[string]ghTimes{}
 	for chunk := range slices.Chunk(gis, perPage) {
@@ -485,19 +504,13 @@ func (f *Forge) read(ctx context.Context, gis []ghIssue) ([]forge.Issue, error) 
 	}
 	out := make([]forge.Issue, 0, len(gis))
 	for _, gi := range gis {
-		var cs []ghComment
-		if gi.Comments > 0 {
-			var err error
-			path := f.s.repo + "/issues/" + strconv.Itoa(gi.Number) + "/comments"
-			if cs, err = pages(ctx, f, path, func(c ghComment) int64 { return c.ID }); err != nil {
-				return nil, err
-			}
-		}
 		t, ok := times[gi.NodeID]
 		if !ok {
 			return nil, fmt.Errorf("github: #%d: no change times", gi.Number)
 		}
-		out = append(out, gi.issue(cs, t))
+		is := gi.issue(t)
+		is.Partial = gi.Comments > 0
+		out = append(out, is)
 	}
 	return out, nil
 }
@@ -574,8 +587,9 @@ var errUnauthorized = errors.New("github: bad credentials")
 
 // call makes one request, and reads its answer into out. A write is paced.
 // A rate limit is waited out and the request tried again, three times at
-// most. A read is also tried again after a 5xx or a broken connection; a
-// write never is, as GitHub may have made it.
+// most. A read is also tried again after a 5xx or a broken connection,
+// for as long as forge.Backoff says; a write never is, as GitHub may have
+// made it. Each wait is told (forge.Waiting).
 func (f *Forge) call(ctx context.Context, method, u string, in, out any) error {
 	var body []byte
 	if in != nil {
@@ -585,20 +599,24 @@ func (f *Forge) call(ctx context.Context, method, u string, in, out any) error {
 		}
 	}
 	read := method == http.MethodGet || u == f.s.graphql
-	for try := 0; ; try++ {
+	var limits, fails int // rate limits waited out; a read's failures, waited for waited
+	var waited time.Duration
+	for {
 		if !read {
-			if err := f.s.pace(ctx); err != nil {
+			if err := f.s.pace(ctx, f.Key()); err != nil {
 				return err
 			}
 		}
 		code, h, data, err := f.do(ctx, method, u, body)
 		var wait time.Duration
+		var why string
 		switch {
 		case err != nil:
-			if !read || try == retries {
+			var ok bool
+			if wait, ok = forge.Backoff(fails, waited); !ok || !read || ctx.Err() != nil {
 				return err
 			}
-			wait = time.Second << try
+			fails, waited, why = fails+1, waited+wait, "GitHub doesn't answer"
 		case code < 300:
 			if out == nil || len(data) == 0 {
 				return nil
@@ -613,15 +631,20 @@ func (f *Forge) call(ctx context.Context, method, u string, in, out any) error {
 			}
 			_ = json.Unmarshal(data, &e)
 			limit, limited := rateLimited(code, h, e.Message, f.s.now())
+			var ok bool
 			switch {
-			case limited && try < retries:
-				wait = limit
-			case code >= 500 && read && try < retries:
-				wait = time.Second << try
+			case limited && limits < retries:
+				limits, wait, why = limits+1, limit, "GitHub's rate limit"
+			case code >= 500 && read:
+				if wait, ok = forge.Backoff(fails, waited); !ok {
+					return statusError(method, u, code, e.Message, limited)
+				}
+				fails, waited, why = fails+1, waited+wait, fmt.Sprintf("GitHub answers %d", code)
 			default:
 				return statusError(method, u, code, e.Message, limited)
 			}
 		}
+		forge.Waiting(ctx, forge.Wait{Forge: f.Key(), Why: why, For: wait})
 		if err := f.s.sleep(ctx, wait); err != nil {
 			return err
 		}
@@ -698,7 +721,7 @@ func statusError(method, u string, code int, msg string, limited bool) error {
 // asks, which keeps under its 80 a minute, and under 500 an hour.
 // ponytail: one pace per New, shared by its As views; one per token if
 // several projects on one host sync at once.
-func (s *shared) pace(ctx context.Context) error {
+func (s *shared) pace(ctx context.Context, key string) error {
 	s.mu.Lock()
 	now := s.now()
 	s.writes = slices.DeleteFunc(s.writes, func(t time.Time) bool { return now.Sub(t) >= time.Hour })
@@ -711,6 +734,9 @@ func (s *shared) pace(ctx context.Context) error {
 	}
 	s.writes = append(s.writes, at)
 	s.mu.Unlock()
+	if d := at.Sub(now); d > 5*time.Second { // a second between writes isn't worth telling
+		forge.Waiting(ctx, forge.Wait{Forge: key, Why: "GitHub's limit of 500 writes an hour", For: d})
+	}
 	return s.sleep(ctx, at.Sub(now))
 }
 
@@ -791,7 +817,7 @@ type events struct {
 // state_reason: one closed as not planned is closed. Its title, body and
 // status changed when GitHub last renamed it, edited its body, and closed
 // or reopened it, else at its creation.
-func (gi ghIssue) issue(cs []ghComment, t ghTimes) forge.Issue {
+func (gi ghIssue) issue(t ghTimes) forge.Issue {
 	created := gi.Created.Unix()
 	is := forge.Issue{
 		ID: id(gi.ID), Number: strconv.Itoa(gi.Number), URL: gi.URL, Author: gi.User.account(),
@@ -803,9 +829,6 @@ func (gi ghIssue) issue(cs []ghComment, t ghTimes) forge.Issue {
 	}
 	for _, u := range gi.Assignees {
 		is.Assignees = append(is.Assignees, u.account())
-	}
-	for _, c := range cs {
-		is.Comments = append(is.Comments, c.comment())
 	}
 	if t.LastEditedAt != nil {
 		is.Changed["body"] = t.LastEditedAt.Unix()

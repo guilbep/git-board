@@ -396,15 +396,23 @@ export interface ForgeJob {
 // come to. A pull has no total: the forge doesn't say how many it holds.
 export interface SyncStep {
   bridge: string;
-  way: 'pull' | 'push';
+  way: 'pull' | 'push' | ''; // '': a wait before the run's first step
   done: number;
   total?: number;
   issue?: string; // "#43 import: users lose their work"
+  wait?: string; // "GitHub doesn't answer: trying again in 30 s", until the next step
 }
 
 export interface ForgeStatus {
   bridges: { name: string; target: string }[];
   job: ForgeJob | null;
+  cut?: CutRun; // a sync cut, as by a restart: the next goes on from there
+}
+
+// a sync that stopped before it went through, per forge how far its pull got
+export interface CutRun {
+  at: string;
+  forges: { name?: string; key: string; read: number; total: number }[];
 }
 
 export function getForges(): Promise<ForgeStatus> {

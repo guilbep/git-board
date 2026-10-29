@@ -1,6 +1,6 @@
 // Settings › Sync's words: what each place would move, in counts; and the
 // Project line's field, read.
-import type { Ahead, BridgeTally, ForgeJob, ForgeStatus, JobStep, Remote, SyncReport, SyncStatus, SyncStep } from './api/board';
+import type { Ahead, BridgeTally, CutRun, ForgeJob, ForgeStatus, JobStep, Remote, SyncReport, SyncStatus, SyncStep } from './api/board';
 import { forgeLabel } from './issuesync.ts';
 
 const n = (v: number) => v.toLocaleString();
@@ -48,6 +48,7 @@ export function stepLine(s: JobStep, remote: string, dryRun: boolean): string {
 // lose their work"; a pull counts up with no total
 export function stepWords(s: SyncStep, bridges: { name: string; target: string }[]): string {
   const b = bridges.find((b) => b.name === s.bridge);
+  if (!s.way) return b ? forgeLabel(b) : s.bridge; // a wait before the first step: the listing's
   const count = s.total ? `${n(s.done)} of ${n(s.total)}` : n(s.done);
   return [b ? forgeLabel(b) : s.bridge, `${s.way === 'pull' ? 'pulling' : 'pushing'} ${count}`, s.issue].filter(Boolean).join(' · ');
 }
@@ -140,4 +141,43 @@ export function readProject(input: string, forgeOwner: string): { owner: string;
   const [owner, digits] = url ? [url[1] ?? '', url[2] ?? ''] : /^\d+$/.test(s) ? [forgeOwner, s] : ['', ''];
   const number = Number(digits);
   return owner.length <= 39 && login.test(owner) && Number.isSafeInteger(number) && number > 0 ? { owner, number } : null;
+}
+
+// a way's bar at a moment: when (ms), and how many issues it had done
+export interface BarSample {
+  at: number;
+  done: number;
+}
+
+// msLeft is the rest of a way at its rate from first to last: 0 until 20
+// issues are done, and once the way is done
+export function msLeft(first: BarSample, last: BarSample, total: number): number {
+  const done = last.done - first.done;
+  if (done < 20 || last.done >= total) return 0;
+  return ((last.at - first.at) / done) * (total - last.done);
+}
+
+// "about 17 min left"; "" when not known
+export function timeLeft(first: BarSample, last: BarSample, total: number): string {
+  const ms = msLeft(first, last, total);
+  if (!ms) return '';
+  if (ms < 60_000) return 'less than a minute left';
+  if (ms < 90_000) return 'about a minute left';
+  return `about ${n(Math.round(ms / 60_000))} min left`;
+}
+
+// longPull: a pull that takes minutes, with 200 issues or more left (the
+// CLI's longPull), or over a minute at its rate
+export function longPull(s: SyncStep, left: number): boolean {
+  return s.way === 'pull' && !!s.total && (s.total - s.done >= 200 || left > 60_000);
+}
+
+// "The last sync stopped today 14:02, at 612 of 1,034 issues from GitHub
+// (gh)…": a forge without a name in the settings is said by its key
+export function cutWords(cut: CutRun, bridges: { name: string; target: string }[], when: string): string {
+  const parts = cut.forges.map((f, i) => {
+    const b = bridges.find((b) => b.name === f.name);
+    return `${n(f.read)} of ${n(f.total)}${i ? '' : ' issues'} from ${b ? forgeLabel(b) : f.key}`;
+  });
+  return `The last sync stopped ${when}, at ${parts.join(', ')}. The next sync goes on from there: what it pulled stays.`;
 }

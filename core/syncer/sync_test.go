@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/guilbep/git-board/core/forge"
 	"github.com/guilbep/git-board/core/forge/fake"
@@ -168,15 +169,137 @@ func TestDuplicateNotMirrored(t *testing.T) {
 func TestRunLock(t *testing.T) {
 	t.Parallel()
 	s, f := newStore(t), fake.New(key)
-	unlock, err := lock(s)
+	j, err := lock(s, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Sync(t.Context(), s, Options{}, f); !errors.Is(err, ErrLocked) {
-		t.Fatalf("err = %v, want ErrLocked", err)
+	_, err = Sync(t.Context(), s, Options{}, f)
+	if !errors.Is(err, ErrLocked) || !strings.Contains(err.Error(), fmt.Sprintf("process %d", os.Getpid())) {
+		t.Fatalf("err = %v, want ErrLocked naming process %d", err, os.Getpid())
 	}
-	unlock()
+	j.unlock()
 	syncAll(t, s, f)
+}
+
+// The fake lists an issue without its comments, as GitHub and GitLab do:
+// the pull completes each issue it reaches, and the push, which plans
+// against the forge's comments, never posts one again.
+func TestAPartialListingPostsNothingTwice(t *testing.T) {
+	t.Parallel()
+	s, f := newStore(t), fake.New(key)
+	f.Add(sample())
+	if list, _ := f.Issues(t.Context(), 0); len(list) != 1 || !list[0].Partial || list[0].Comments != nil {
+		t.Fatalf("the fake's listing isn't partial: %+v", list)
+	}
+	syncAll(t, s, f)
+	is := only(t, s)
+	if len(is.Comments) != 1 || is.Comments[0].Body != "hi" {
+		t.Fatalf("pulled comments = %+v", is.Comments)
+	}
+	if _, err := issue.Do(t.Context(), s, is.ID, issue.NewComment("a", "mine")); err != nil {
+		t.Fatal(err)
+	}
+	for range 2 {
+		syncAll(t, s, f)
+	}
+	fi, _ := f.Issue(t.Context(), forge.Ref{ID: "100", Number: "1"})
+	if len(fi.Comments) != 2 {
+		t.Fatalf("forge comments = %+v", fi.Comments)
+	}
+	if is := only(t, s); len(is.Comments) != 2 {
+		t.Fatalf("git-board comments = %+v", is.Comments)
+	}
+}
+
+// Progress hears each issue the pull reaches and each the push walks,
+// done of a total known from the start, with the issue's name.
+func TestProgressCountsEveryIssue(t *testing.T) {
+	t.Parallel()
+	s, f := newStore(t), fake.New(key)
+	for i, title := range []string{"one", "two", "three"} {
+		f.Add(forge.Issue{Author: ann(), Title: title, Status: "open", Created: int64(1000 + i)}) // the push walks them oldest first
+	}
+	var got []string
+	opt := Options{Progress: func(k, way string, done, total int, name string) {
+		if k == key {
+			got = append(got, fmt.Sprintf("%s %d/%d %s", way, done, total, name))
+		}
+	}}
+	if _, err := Sync(t.Context(), s, opt, f); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"pull 1/3 #1 one", "pull 2/3 #2 two", "pull 3/3 #3 three", "push 1/3 #1 one", "push 2/3 #2 two", "push 3/3 #3 three"}
+	if !slices.Equal(got, want) {
+		t.Fatalf("progress = %q\nwant %q", got, want)
+	}
+}
+
+// Running says a run holds the lock: not a file left behind.
+func TestRunningSaysAHeldLock(t *testing.T) {
+	t.Parallel()
+	s := newStore(t)
+	if Running(s) {
+		t.Fatal("running before any run")
+	}
+	j, err := lock(s, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !Running(s) {
+		t.Fatal("not running while the lock is held")
+	}
+	j.unlock()
+	if Running(s) {
+		t.Fatal("running after the run, its file left")
+	}
+}
+
+// A run waits out a look at the lock (Running's, Cut's), which holds it an
+// instant.
+func TestALookDoesntStopARun(t *testing.T) {
+	t.Parallel()
+	s := newStore(t)
+	j, err := lock(s, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	j.unlock()
+	f, err := os.OpenFile(filepath.Join(s.CommonDir(), "board", "sync.lock"), os.O_RDWR, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := tryLock(f); err != nil {
+		t.Fatal(err)
+	}
+	go func() {
+		time.Sleep(20 * time.Millisecond)
+		unlockFile(f)
+		f.Close()
+	}()
+	if j, err = lock(s, 2); err != nil {
+		t.Fatalf("a run during a look: %v", err)
+	}
+	j.unlock()
+}
+
+// A lock file a killed run left, which no process holds, keeps no run out.
+func TestALeftLockBlocksNothing(t *testing.T) {
+	t.Parallel()
+	s, f := newStore(t), fake.New(key)
+	f.Add(sample())
+	path := filepath.Join(s.CommonDir(), "board", "sync.lock")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("12345\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if r := syncAll(t, s, f); r.Created != 1 {
+		t.Fatalf("report = %+v", r)
+	}
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("the lock file is gone: %v", err) // never removed: a second run can't lock another of that name
+	}
 }
 
 // A run that wrote records its start; the next lists from there, so an
@@ -494,11 +617,11 @@ func TestFailedLookupReleasesTheLock(t *testing.T) {
 	if r := syncAll(t, s, failingTokens{f}); r.Created != 1 {
 		t.Fatalf("report %+v", r)
 	}
-	unlock, err := lock(s)
+	j, err := lock(s, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
-	unlock()
+	j.unlock()
 }
 
 // A push alone after a crash between creating a forge issue and linking it

@@ -103,6 +103,8 @@ type SyncEvent struct {
 	Forge, Way, What, Issue string
 	Ops                     int // created, updated: the operations pulled
 	Line                    string
+	// progress: where the way is, done of total, Line the issue's name
+	Done, Total int
 }
 
 // Text says the event in words, its issue by name ("would create CO2-3
@@ -120,7 +122,7 @@ func (e SyncEvent) Text(dry bool, name string) string {
 		l = "create " + name
 	case "pushed":
 		l = "send the changes of " + name
-	case "warning":
+	case "warning", "waiting":
 		return e.Line
 	case "left":
 		return "left out of the run: " + e.Line
@@ -214,6 +216,9 @@ func (b *Backend) forgeSync(ctx context.Context, run ForgeRun, way syncWay, issu
 			}
 			see(SyncEvent{Forge: names[key], Way: way, What: what, Issue: id, Ops: ops})
 		},
+		Progress: func(key, way string, done, total int, name string) {
+			see(SyncEvent{Forge: names[key], Way: way, What: "progress", Done: done, Total: total, Line: name})
+		},
 		Left: func(key string, why error) {
 			see(SyncEvent{Forge: names[key], What: "left", Line: why.Error()})
 		},
@@ -232,7 +237,19 @@ func (b *Backend) forgeSync(ctx context.Context, run ForgeRun, way syncWay, issu
 		},
 	}
 	meanings(s, &opt)
+	ctx = forge.WithWaits(ctx, func(w forge.Wait) {
+		see(SyncEvent{Forge: names[w.Forge], What: "waiting", Line: WaitWords(w.Why, w.For)})
+	})
 	return way(ctx, s, opt, fs...)
+}
+
+// WaitWords says a forge's wait: "GitHub doesn't answer: trying again in
+// 30 s".
+func WaitWords(why string, d time.Duration) string {
+	if d < time.Minute {
+		return fmt.Sprintf("%s: trying again in %d s", why, int(d.Round(time.Second)/time.Second))
+	}
+	return fmt.Sprintf("%s: trying again in %d min", why, int(d.Round(time.Minute)/time.Minute))
 }
 
 // ErrNotSwitched: the repository's issues are still the git-bug fork's.
@@ -331,9 +348,9 @@ func (b *Backend) scratch(ctx context.Context) (*gitstore.Store, func(), error) 
 	return scratchOf(ctx, b.s.CommonDir(), b.s.CommonDir())
 }
 
-// scratchOf is a mirror of the repository at from, in home's board folder.
-// It first removes the copies a day old: a run killed mid-way leaves its
-// own.
+// scratchOf is a mirror of the repository at from, in home's board folder,
+// with from's sync journal. It first removes the copies a day old: a run
+// killed mid-way leaves its own.
 func scratchOf(ctx context.Context, from, home string) (*gitstore.Store, func(), error) {
 	parent := filepath.Join(home, "board")
 	if err := os.MkdirAll(parent, 0o755); err != nil {
@@ -360,6 +377,13 @@ func scratchOf(ctx context.Context, from, home string) (*gitstore.Store, func(),
 	if err != nil {
 		done()
 		return nil, nil, err
+	}
+	// the sync's journal (syncer's journal.go), for the check to skip what
+	// a cut run read; the copy's own, which goes with it
+	if data, err := os.ReadFile(filepath.Join(from, "board", "sync.lock")); err == nil {
+		if err := os.MkdirAll(filepath.Join(dir, "board"), 0o755); err == nil {
+			_ = os.WriteFile(filepath.Join(dir, "board", "sync.lock"), data, 0o644)
+		}
 	}
 	return s, done, nil
 }
@@ -397,6 +421,13 @@ func (c *counted) As(ctx context.Context, a forge.Account) (forge.Forge, error) 
 
 func (c *counted) Issues(ctx context.Context, since int64) ([]forge.Issue, error) {
 	return c.f.Issues(ctx, since)
+}
+
+func (c *counted) Complete(ctx context.Context, is forge.Issue) (forge.Issue, error) {
+	if strings.HasPrefix(is.ID, "dry-") {
+		return is, nil // a dry run's made-up issue: nothing on the forge to read
+	}
+	return c.f.Complete(ctx, is)
 }
 
 func (c *counted) Issue(ctx context.Context, issue forge.Ref) (forge.Issue, error) {

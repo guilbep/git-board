@@ -17,14 +17,15 @@ export interface LiveEvent {
 type Listener = (e: LiveEvent) => void;
 const listeners = new Set<Listener>();
 
-// when a change from elsewhere last arrived (the header's notice)
+// when a change from elsewhere last arrived (the header's notice); a run's
+// progress is no change, and a long sync's would keep the notice on
 export const lastLive = ref(0);
 
 let source: EventSource | null = null;
 let broken = false;
 
 function tell(e: LiveEvent) {
-  lastLive.value = Date.now();
+  if (e.kind !== 'progress') lastLive.value = Date.now();
   for (const l of listeners) l(e);
 }
 

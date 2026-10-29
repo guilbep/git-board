@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { aheadWords, checkWords, doneWords, faviconDot, pendingWords, readProject, runWords, stepLine, stepWords, waitWords, waiting } from './ways.ts';
+import { aheadWords, checkWords, cutWords, doneWords, faviconDot, longPull, pendingWords, readProject, runWords, stepLine, stepWords, timeLeft, waitWords, waiting } from './ways.ts';
 
 const dir = (o: Partial<Record<'issues' | 'changed' | 'comments' | 'edits' | 'changes', number>> = {}) => ({ issues: 0, changed: 0, comments: 0, edits: 0, changes: 0, ...o });
 const tally = (to = dir(), from = dir()) => ({ to, from, linked: 0, stays_local: 0, conflicts: 0, assignable: 0, warnings: 0, errors: 0, held: 0, lines: [] });
@@ -116,4 +116,40 @@ test('readProject reads a number, as the forge owner\'s Project, or a Project\'s
   assert.equal(readProject('https://gitlab.com/orgs/EPFL-ENAC/projects/40', ''), null);
   assert.equal(readProject('https://github.com/orgs/-bad/projects/40', ''), null); // not a GitHub name
   assert.equal(readProject('https://github.com/orgs/a--b/projects/40', ''), null);
+});
+
+test('timeLeft says nothing before 20 issues, then the rest at the rate so far', () => {
+  const first = { at: 0, done: 1 };
+  assert.equal(timeLeft(first, { at: 5_000, done: 15 }, 1034), '');
+  assert.equal(timeLeft(first, { at: 21_000, done: 22 }, 1034), 'about 17 min left'); // 1 s an issue, 1012 left
+  assert.equal(timeLeft(first, { at: 21_000, done: 22 }, 100), 'about a minute left'); // 78 s
+  assert.equal(timeLeft(first, { at: 21_000, done: 22 }, 60), 'less than a minute left');
+  assert.equal(timeLeft(first, { at: 21_000, done: 60 }, 60), '');
+});
+
+test('longPull: a pull with 200 issues or more left, or over a minute', () => {
+  assert.equal(longPull({ bridge: 'gh', way: 'pull', done: 1, total: 1034 }, 0), true);
+  assert.equal(longPull({ bridge: 'gh', way: 'pull', done: 1, total: 150 }, 0), false);
+  assert.equal(longPull({ bridge: 'gh', way: 'pull', done: 30, total: 150 }, 90_000), true);
+  assert.equal(longPull({ bridge: 'gh', way: 'push', done: 1, total: 1034 }, 0), false);
+  assert.equal(longPull({ bridge: 'gh', way: 'pull', done: 3 }, 0), false);
+});
+
+test('cutWords says where a cut sync stopped, and that the next goes on', () => {
+  const bridges = [{ name: 'gh', target: 'github' }];
+  const cut = {
+    at: '2026-10-29T14:02:00Z',
+    forges: [
+      { name: 'gh', key: 'github.com/o/r', read: 612, total: 1034 },
+      { key: 'gitlab.example.com/g/p', read: 0, total: 20 },
+    ],
+  };
+  assert.equal(
+    cutWords(cut, bridges, 'today 14:02'),
+    'The last sync stopped today 14:02, at 612 of 1,034 issues from GitHub (gh), 0 of 20 from gitlab.example.com/g/p. The next sync goes on from there: what it pulled stays.',
+  );
+});
+
+test('stepWords: a wait before any step names the forge alone', () => {
+  assert.equal(stepWords({ bridge: 'gh', way: '', done: 0, wait: "GitHub doesn't answer: trying again in 4 s" }, [{ name: 'gh', target: 'github' }]), 'GitHub (gh)');
 });

@@ -1,11 +1,15 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/guilbep/git-board/core/forge"
 	"github.com/guilbep/git-board/core/forge/fake"
+	"github.com/guilbep/git-board/internal/store"
 	"github.com/guilbep/git-board/internal/store/storetest"
 )
 
@@ -55,6 +59,23 @@ func TestForgePullTakesOnly(t *testing.T) {
 	}
 }
 
+// A forge pull over a cut sync's journal says where that sync stopped.
+func TestForgePullSaysACutSync(t *testing.T) {
+	dir, _, _ := forgeSetup(t)
+	board := filepath.Join(dir, ".git", "board")
+	if err := os.MkdirAll(board, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	journal := "{\"pid\":1,\"started\":5}\n{\"forge\":\"github.com/o/r\",\"total\":1034}\n"
+	if err := os.WriteFile(filepath.Join(board, "sync.lock"), []byte(journal), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out, err := execute(t, []string{"forge", "pull"})
+	if err != nil || !strings.Contains(out, "read 0 of 1,034 issues of github.com/o/r: a pull goes on from there") {
+		t.Fatalf("pull: %v\n%s", err, out)
+	}
+}
+
 // A forge push sends this clone's issues and takes nothing.
 func TestForgePushSendsOnly(t *testing.T) {
 	dir, _, f := forgeSetup(t)
@@ -75,5 +96,34 @@ func TestForgeNeedsAForge(t *testing.T) {
 	out, err := execute(t, []string{"forge", "sync"})
 	if err == nil || !strings.Contains(err.Error(), "no forge has its sync on") {
 		t.Fatalf("err = %v\n%s", err, out)
+	}
+}
+
+// A long pull says so at its first issue read, counting what is left, then
+// where it is every hundred; a short one, and a push, only every hundred.
+func TestProgressLines(t *testing.T) {
+	t.Parallel()
+	long := 10 * time.Second // the way has run that long
+	for _, c := range []struct {
+		e     store.SyncEvent
+		first bool
+		ran   time.Duration
+		want  string
+	}{
+		{store.SyncEvent{Way: "pull", Done: 1, Total: 1034}, true, 0, "1,034 issues to read: this takes several minutes"},
+		{store.SyncEvent{Way: "pull", Done: 409, Total: 1000}, true, 0, "592 issues to read: this takes several minutes"}, // after a cut, 408 skipped
+		{store.SyncEvent{Way: "pull", Done: 2, Total: 1034}, false, long, ""},
+		{store.SyncEvent{Way: "pull", Done: 400, Total: 1034}, false, long, "pulling 400 of 1,034"},
+		{store.SyncEvent{Way: "pull", Done: 1034, Total: 1034}, false, long, "pulling 1,034 of 1,034"},
+		{store.SyncEvent{Way: "pull", Done: 1, Total: 12}, true, 0, ""},
+		{store.SyncEvent{Way: "push", Done: 1, Total: 1034}, true, 0, ""},
+		{store.SyncEvent{Way: "push", Done: 100, Total: 1034}, false, long, "pushing 100 of 1,034"},
+		// a quiet push walks a thousand issues in a moment: nothing to say
+		{store.SyncEvent{Way: "push", Done: 100, Total: 1034}, false, time.Second, ""},
+		{store.SyncEvent{Way: "push", Done: 1034, Total: 1034}, false, time.Second, ""},
+	} {
+		if got := progressLine(c.e, c.first, c.ran); !strings.HasPrefix(got, c.want) || (c.want == "") != (got == "") {
+			t.Errorf("%+v after %v: %q, want %q…", c.e, c.ran, got, c.want)
+		}
 	}
 }

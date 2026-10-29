@@ -56,7 +56,9 @@ func TestGetAndSendAreOneWay(t *testing.T) {
 func counts(events []store.SyncEvent) map[string]int {
 	out := map[string]int{}
 	for _, e := range events {
-		out[e.Forge+" "+e.What]++
+		if e.What != "progress" { // where the run is, not what it does
+			out[e.Forge+" "+e.What]++
+		}
 	}
 	return out
 }
@@ -210,6 +212,55 @@ func TestScratchRemovesOldCopies(t *testing.T) {
 	}
 }
 
+// A check's copy holds the journal: after a cut run, the check skips what
+// that run read, as the next run will. What the check reads stays in the
+// copy.
+func TestScratchCarriesTheJournal(t *testing.T) {
+	t.Parallel()
+	b := storetest.New(t)
+	board := filepath.Join(b.Store().CommonDir(), "board")
+	if err := os.MkdirAll(board, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	journal := "{\"pid\":1,\"started\":5}\n{\"forge\":\"github.com/o/r\",\"total\":10}\n"
+	if err := os.WriteFile(filepath.Join(board, "sync.lock"), []byte(journal), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	s, done, err := store.Scratch(b, t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer done()
+	if got, err := os.ReadFile(filepath.Join(s.CommonDir(), "board", "sync.lock")); err != nil || string(got) != journal {
+		t.Fatalf("the copy's journal: %q, %v", got, err)
+	}
+}
+
+// A check runs on a copy, its journal too: the real one is as it was.
+func TestACheckLeavesTheJournal(t *testing.T) {
+	t.Parallel()
+	b := storetest.New(t)
+	f := fake.New("github.com/o/r")
+	f.Add(forge.Issue{Author: forge.Account{ID: "7", Login: "ann"}, Title: "Export CSV", Status: "open", Created: 1000})
+	board := filepath.Join(b.Store().CommonDir(), "board")
+	if err := os.MkdirAll(board, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	journal := "{\"pid\":1,\"started\":5}\n{\"forge\":\"github.com/o/r\",\"total\":10}\n{\"forge\":\"gitlab.com/g/p\",\"total\":3}\n"
+	path := filepath.Join(board, "sync.lock")
+	if err := os.WriteFile(path, []byte(journal), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	r := run(f)
+	r.DryRun = true
+	if _, err := b.SyncForges(t.Context(), r); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := os.ReadFile(path); err != nil || string(got) != journal {
+		t.Fatalf("after a check, the journal: %q, %v", got, err)
+	}
+}
+
 // Creations on a forge the repository never synced with, or MaxCreate or
 // more on one, wait for consent: the run tells them (held) and creates
 // none there, its other writes made. A check counts them as made, held.
@@ -247,5 +298,19 @@ func TestCreateNeedsConsent(t *testing.T) {
 	}
 	if len(held) != 0 || len(f.All()) != 2 {
 		t.Fatalf("run with consent: held %+v, forge %d issues", held, len(f.All()))
+	}
+}
+
+// A forge's wait says why, and when it asks again.
+func TestWaitWords(t *testing.T) {
+	t.Parallel()
+	for d, want := range map[time.Duration]string{
+		30 * time.Second:               "GitHub doesn't answer: trying again in 30 s",
+		90 * time.Second:               "GitHub doesn't answer: trying again in 2 min",
+		12*time.Minute + 3*time.Second: "GitHub doesn't answer: trying again in 12 min",
+	} {
+		if got := store.WaitWords("GitHub doesn't answer", d); got != want {
+			t.Errorf("%v: %q, want %q", d, got, want)
+		}
 	}
 }

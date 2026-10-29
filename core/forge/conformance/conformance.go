@@ -56,6 +56,7 @@ func Run(t *testing.T, newForge NewForge) {
 		{"ARefusalWarnsOnce", refusalWarnsOnce},
 		{"ALabelRefusedAlone", labelRefusedAlone},
 		{"AnIssueByItsRef", issueByItsRef},
+		{"AListedIssueCompleted", listedThenCompleted},
 		{"AssigneesAreTheForges", assigneesAreTheForges},
 	} {
 		t.Run(sc.name, func(t *testing.T) {
@@ -704,6 +705,32 @@ func issueByItsRef(e *env) {
 	}
 	if _, err := a.Issue(e.ctx, forge.Ref{ID: one.ID, Number: other.Number}); !errors.Is(err, forge.ErrNotFound) {
 		e.t.Fatalf("by another's number: %v, want ErrNotFound", err)
+	}
+}
+
+// A listed issue, completed, is the issue read alone; an issue that is
+// whole comes back as it is.
+func listedThenCompleted(e *env) {
+	_, a, _, _ := mirrored(e)
+	list, err := a.Issues(e.ctx, 0)
+	if err != nil || len(list) != 2 {
+		e.t.Fatalf("listed %d, %v", len(list), err)
+	}
+	for _, fi := range list {
+		got, err := a.Complete(e.ctx, fi)
+		if err != nil {
+			e.t.Fatal(err)
+		}
+		want, err := a.Issue(e.ctx, fi.Ref())
+		if err != nil {
+			e.t.Fatal(err)
+		}
+		if got.Partial || len(got.Comments) != 1 || !reflect.DeepEqual(got, want) {
+			e.t.Fatalf("%s completed:\n%+v\nread alone:\n%+v", fi.Title, got, want)
+		}
+		if again, err := a.Complete(e.ctx, got); err != nil || !reflect.DeepEqual(again, got) {
+			e.t.Fatalf("%s completed again: %+v, %v", fi.Title, again, err)
+		}
 	}
 }
 

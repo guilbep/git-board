@@ -5,7 +5,9 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -98,8 +100,8 @@ func TestWritesAreStreamed(t *testing.T) {
 	}
 }
 
-// A forge run says where it is: a step each time a way of a bridge comes
-// to another issue, streamed as it goes and kept on the job for a page
+// A forge run says where it is: a step at each progress the run tells,
+// done of total, streamed as it goes and kept on the job for a page
 // loading mid-run. One issue's own sync names the issue, for its drawer.
 func TestForgeSyncStreamsItsSteps(t *testing.T) {
 	t.Parallel()
@@ -108,13 +110,17 @@ func TestForgeSyncStreamsItsSteps(t *testing.T) {
 	b := storetest.NewIssue(t, s.b, "Beta")
 	release := make(chan struct{})
 	s.runSync = fakeSync([]store.SyncEvent{
-		{Forge: "gh", Way: "pull", What: "updated", Issue: a, Ops: 2},
-		{Forge: "gh", Way: "pull", What: "linked", Issue: a}, // the same issue: no new step
+		{Forge: "gh", Way: "pull", What: "progress", Done: 1, Total: 2, Line: "#1 Alpha"},
+		{Forge: "gh", What: "waiting", Line: "GitHub doesn't answer: trying again in 30 s"}, // the step, waiting
+		{Forge: "gh", Way: "pull", What: "progress", Done: 1, Total: 2, Line: "#1 Alpha"},   // at once: it clears the wait
+		{Forge: "gh", Way: "pull", What: "updated", Issue: a, Ops: 2},                       // a write: counted, no step
+		{Forge: "gh", Way: "push", What: "progress", Done: 2, Total: 2, Line: "#2 Beta"},
 		{Forge: "gh", Way: "push", What: "posted", Issue: b},
-		{Forge: "gh", Way: "push", What: "comment", Issue: "1000"}, // a write: no step
-		{Forge: "gl", What: "warning", Line: "oops"},               // names no issue: no step
+		{Forge: "gh", Way: "push", What: "comment", Issue: "1000"},
+		{Forge: "gl", What: "warning", Line: "oops"},
 	}, release)
 	s.runIssueSync = func(_ context.Context, _ []config.Forge, _ bool, id string, see func(store.SyncEvent)) error {
+		see(store.SyncEvent{Forge: "gh", Way: "pull", What: "progress", Done: 1, Total: 1, Line: "#1 Alpha"})
 		see(store.SyncEvent{Forge: "gh", Way: "pull", What: "updated", Issue: id, Ops: 1})
 		return nil
 	}
@@ -133,8 +139,10 @@ func TestForgeSyncStreamsItsSteps(t *testing.T) {
 	}
 	close(release)
 	want := []syncStep{
-		{Bridge: "gh", Way: "pull", Done: 1, Issue: a[:7] + " Alpha"},
-		{Bridge: "gh", Way: "push", Done: 1, Issue: b[:7] + " Beta"},
+		{Bridge: "gh", Way: "pull", Done: 1, Total: 2, Issue: "#1 Alpha"},
+		{Bridge: "gh", Way: "pull", Done: 1, Total: 2, Issue: "#1 Alpha", Wait: "GitHub doesn't answer: trying again in 30 s"},
+		{Bridge: "gh", Way: "pull", Done: 1, Total: 2, Issue: "#1 Alpha"},
+		{Bridge: "gh", Way: "push", Done: 2, Total: 2, Issue: "#2 Beta"},
 	}
 	for _, w := range want {
 		if e := readEvent(t, sc); e.Kind != "progress" || e.Step == nil || *e.Step != w {
@@ -144,7 +152,7 @@ func TestForgeSyncStreamsItsSteps(t *testing.T) {
 	if e := readEvent(t, sc); e.Kind != "sync" {
 		t.Errorf("the end: %+v", e)
 	}
-	if st := waitJob(t, ts); st.Job.Step == nil || *st.Job.Step != want[1] {
+	if st := waitJob(t, ts); st.Job.Step == nil || *st.Job.Step != want[3] {
 		t.Errorf("the job keeps its last step: %+v", st.Job.Step)
 	}
 
@@ -153,5 +161,73 @@ func TestForgeSyncStreamsItsSteps(t *testing.T) {
 	}
 	if e := readEvent(t, sc); e.Kind != "progress" || e.ID != a || e.Step == nil || e.Step.Issue != want[0].Issue {
 		t.Errorf("one issue's step names it: %+v", e)
+	}
+}
+
+// A sync cut, as by a restart, is said with the forges, by name where the
+// journal's key is the forge's, until a run goes through.
+func TestForgesSayACutSync(t *testing.T) {
+	t.Parallel()
+	ts, s := forgeServer(t, config.Forge{Name: "gh", Kind: "github", Project: "o/r", Sync: true})
+	board := filepath.Join(s.b.Store().CommonDir(), "board")
+	if err := os.MkdirAll(board, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	journal := `{"pid":1,"started":5}
+{"forge":"github.com/o/r","total":3}
+{"forge":"github.com/o/r","id":"100","run":5}
+{"forge":"gitlab.example.com/g/p","total":2}
+`
+	if err := os.WriteFile(filepath.Join(board, "sync.lock"), []byte(journal), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var st forgeStatus
+	if getJSON(t, ts.URL+"/api/forges", &st); st.Cut == nil {
+		t.Fatal("no cut said")
+	}
+	want := []cutForge{{Name: "gh", Key: "github.com/o/r", Read: 1, Total: 3}, {Key: "gitlab.example.com/g/p", Total: 2}}
+	if !slices.Equal(st.Cut.Forges, want) || st.Cut.At.IsZero() {
+		t.Fatalf("cut = %+v, want %+v", st.Cut, want)
+	}
+}
+
+// A run that tells a thousand steps at once (a push walking issues with
+// nothing to send, a pull skipping what a cut run read) keeps every page's
+// stream: the steps are thinned, the last of each way kept, and the run's
+// end arrives.
+func TestABurstOfStepsKeepsTheStream(t *testing.T) {
+	t.Parallel()
+	ts, s := forgeServer(t)
+	var evs []store.SyncEvent
+	for i := 1; i <= 1000; i++ {
+		evs = append(evs, store.SyncEvent{Forge: "gh", Way: "push", What: "progress", Done: i, Total: 1000, Line: "#1 Alpha"})
+	}
+	release := make(chan struct{})
+	s.runSync = fakeSync(evs, release)
+	resp, err := http.Get(ts.URL + "/api/events")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	sc := bufio.NewScanner(resp.Body)
+	if code := call(t, "POST", ts.URL+"/api/forges/sync", map[string]any{"dry_run": true}, nil); code != http.StatusAccepted {
+		t.Fatalf("start: %d", code)
+	}
+	if e := readEvent(t, sc); e.Kind != "sync" {
+		t.Fatalf("the start: %+v", e)
+	}
+	close(release)
+	var last *syncStep
+	for {
+		e := readEvent(t, sc)
+		if e.Kind == "sync" {
+			break
+		}
+		if e.Kind == "progress" {
+			last = e.Step
+		}
+	}
+	if last == nil || last.Done != 1000 {
+		t.Fatalf("the last step seen: %+v, want 1000 of 1000", last)
 	}
 }
