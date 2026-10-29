@@ -66,6 +66,10 @@ type Options struct {
 	// started with no sync entity for it (first). False creates none of
 	// them there, and the rest of the push goes on. Nil creates them.
 	Create func(key string, n int, first bool) bool
+	// Progress hears each forge issue the pull reaches, and each issue the
+	// push walks: done of total, the total known before the first, and the
+	// issue's name ("#43 Export CSV"). Nil hears nothing.
+	Progress func(key, way string, done, total int, name string)
 	// Left hears each project left out of the run, by its key, with why:
 	// its visibility, its posting account or its issues couldn't be read.
 	// The run goes on with the others. Nil returns them all, joined, as
@@ -436,10 +440,11 @@ func (r *run) listing(p *project) ([]forge.Issue, error) {
 // is completed first, the one place a listed issue is: what follows, and
 // the push's plan, read its comments.
 func (r *run) pullFrom(p *project) error {
-	for _, fi := range p.list {
+	for i, fi := range p.list {
 		if err := r.ctx.Err(); err != nil {
 			return err
 		}
+		r.progress(p.key, "pull", i+1, len(p.list), fi.Number, fi.Title)
 		fi, err := p.f.Complete(r.ctx, fi)
 		if err != nil {
 			return fmt.Errorf("syncer: forge issue %s: %w", fi.Number, err)
@@ -495,6 +500,19 @@ func (r *run) pullOne(p *project, fi forge.Issue, final bool) error {
 		r.report.Unchanged++
 	}
 	return nil
+}
+
+// progress tells Progress where a way is, the issue named by its number
+// on the forge, when it has one, and its title.
+func (r *run) progress(key, way string, done, total int, number, title string) {
+	if r.opt.Progress == nil {
+		return
+	}
+	name := title
+	if number != "" {
+		name = "#" + number + " " + title
+	}
+	r.opt.Progress(key, way, done, total, name)
 }
 
 // alone lists what concerns the issue synced alone on p: its forge issue
@@ -673,14 +691,22 @@ func (r *run) pushTo(p *project) error {
 			todo = append(todo, is)
 		}
 	}
+	done, total := 0, len(ids)
 	if len(todo) > 0 && (r.opt.Create == nil || r.opt.Create(p.key, len(todo), p.first)) {
+		total += len(todo)
 		for _, is := range todo {
+			done++
+			r.progress(p.key, "push", done, total, "", is.Title)
 			if err := r.create(p, is); err != nil {
 				return err
 			}
 		}
 	}
 	for _, id := range ids {
+		done++
+		if is, ok := r.issues[id]; ok {
+			r.progress(p.key, "push", done, total, p.st.link[id].Number, is.Title)
+		}
 		l, ok := p.st.link[id]
 		if _, here := r.issues[id]; !ok || !here {
 			continue

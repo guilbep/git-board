@@ -98,8 +98,8 @@ func TestWritesAreStreamed(t *testing.T) {
 	}
 }
 
-// A forge run says where it is: a step each time a way of a bridge comes
-// to another issue, streamed as it goes and kept on the job for a page
+// A forge run says where it is: a step at each progress the run tells,
+// done of total, streamed as it goes and kept on the job for a page
 // loading mid-run. One issue's own sync names the issue, for its drawer.
 func TestForgeSyncStreamsItsSteps(t *testing.T) {
 	t.Parallel()
@@ -108,13 +108,15 @@ func TestForgeSyncStreamsItsSteps(t *testing.T) {
 	b := storetest.NewIssue(t, s.b, "Beta")
 	release := make(chan struct{})
 	s.runSync = fakeSync([]store.SyncEvent{
-		{Forge: "gh", Way: "pull", What: "updated", Issue: a, Ops: 2},
-		{Forge: "gh", Way: "pull", What: "linked", Issue: a}, // the same issue: no new step
+		{Forge: "gh", Way: "pull", What: "progress", Done: 1, Total: 2, Line: "#1 Alpha"},
+		{Forge: "gh", Way: "pull", What: "updated", Issue: a, Ops: 2}, // a write: counted, no step
+		{Forge: "gh", Way: "push", What: "progress", Done: 2, Total: 2, Line: "#2 Beta"},
 		{Forge: "gh", Way: "push", What: "posted", Issue: b},
-		{Forge: "gh", Way: "push", What: "comment", Issue: "1000"}, // a write: no step
-		{Forge: "gl", What: "warning", Line: "oops"},               // names no issue: no step
+		{Forge: "gh", Way: "push", What: "comment", Issue: "1000"},
+		{Forge: "gl", What: "warning", Line: "oops"},
 	}, release)
 	s.runIssueSync = func(_ context.Context, _ []config.Forge, _ bool, id string, see func(store.SyncEvent)) error {
+		see(store.SyncEvent{Forge: "gh", Way: "pull", What: "progress", Done: 1, Total: 1, Line: "#1 Alpha"})
 		see(store.SyncEvent{Forge: "gh", Way: "pull", What: "updated", Issue: id, Ops: 1})
 		return nil
 	}
@@ -133,8 +135,8 @@ func TestForgeSyncStreamsItsSteps(t *testing.T) {
 	}
 	close(release)
 	want := []syncStep{
-		{Bridge: "gh", Way: "pull", Done: 1, Issue: a[:7] + " Alpha"},
-		{Bridge: "gh", Way: "push", Done: 1, Issue: b[:7] + " Beta"},
+		{Bridge: "gh", Way: "pull", Done: 1, Total: 2, Issue: "#1 Alpha"},
+		{Bridge: "gh", Way: "push", Done: 2, Total: 2, Issue: "#2 Beta"},
 	}
 	for _, w := range want {
 		if e := readEvent(t, sc); e.Kind != "progress" || e.Step == nil || *e.Step != w {

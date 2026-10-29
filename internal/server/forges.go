@@ -87,36 +87,14 @@ func (j *forgeJob) tally(name string) *bridgeTally {
 	return t
 }
 
-// syncStep is where a run is: the bridge, the way, how many issues that
-// way has come to so far, and the issue it is on.
+// syncStep is where a run is: the bridge, the way, how many issues of how
+// many it has come to, and the issue it is on.
 type syncStep struct {
 	Bridge string `json:"bridge"`
 	Way    string `json:"way"` // pull, push
 	Done   int    `json:"done"`
-	// ponytail: Total is never set, the run doesn't say how many it will
-	// write; the page shows the count alone
-	Total int    `json:"total,omitempty"`
-	Issue string `json:"issue,omitempty"` // "#43 import: users lose their work"
-}
-
-// stepper turns a run's events into its steps: one each time a way of a
-// bridge comes to another issue.
-type stepper struct {
-	counts map[string]int // issues come to, per bridge and way
-	last   string         // bridge, way and issue of the last step
-}
-
-func (st *stepper) see(e store.SyncEvent, name string) (syncStep, bool) {
-	key := e.Forge + " " + e.Way
-	if !names(e) || st.last == key+" "+e.Issue {
-		return syncStep{}, false // a write, a warning, or the same issue: the step stays
-	}
-	st.last = key + " " + e.Issue
-	if st.counts == nil {
-		st.counts = map[string]int{}
-	}
-	st.counts[key]++
-	return syncStep{Bridge: e.Forge, Way: e.Way, Done: st.counts[key], Issue: name}, true
+	Total  int    `json:"total,omitempty"`
+	Issue  string `json:"issue,omitempty"` // "#43 import: users lose their work"
 }
 
 // names says an event names an issue of git-board's.
@@ -222,14 +200,13 @@ func (t *bridgeTally) add(e store.SyncEvent, line string) {
 // tally is called with forgeMu held. id names the issue a step is on, for
 // its drawer; "" for a full run.
 func (s *apiServer) tell(dry bool, id string, tally func(name string) *bridgeTally, step func(*syncStep)) func(store.SyncEvent) {
-	var st stepper
 	return func(e store.SyncEvent) {
 		name := ""
 		if names(e) {
 			name = s.issueName(e.Issue)
 		}
 		text := e.Text(dry, name)
-		next, moved := st.see(e, name)
+		next, moved := syncStep{Bridge: e.Forge, Way: e.Way, Done: e.Done, Total: e.Total, Issue: e.Line}, e.What == "progress"
 		s.forgeMu.Lock()
 		if e.Forge != "" {
 			tally(e.Forge).add(e, text)

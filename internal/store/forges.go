@@ -103,6 +103,8 @@ type SyncEvent struct {
 	Forge, Way, What, Issue string
 	Ops                     int // created, updated: the operations pulled
 	Line                    string
+	// progress: where the way is, done of total, Line the issue's name
+	Done, Total int
 }
 
 // Text says the event in words, its issue by name ("would create CO2-3
@@ -213,6 +215,9 @@ func (b *Backend) forgeSync(ctx context.Context, run ForgeRun, way syncWay, issu
 				way = "push"
 			}
 			see(SyncEvent{Forge: names[key], Way: way, What: what, Issue: id, Ops: ops})
+		},
+		Progress: func(key, way string, done, total int, name string) {
+			see(SyncEvent{Forge: names[key], Way: way, What: "progress", Done: done, Total: total, Line: name})
 		},
 		Left: func(key string, why error) {
 			see(SyncEvent{Forge: names[key], What: "left", Line: why.Error()})

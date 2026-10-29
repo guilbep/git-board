@@ -210,6 +210,29 @@ func TestAPartialListingPostsNothingTwice(t *testing.T) {
 	}
 }
 
+// Progress hears each issue the pull reaches and each the push walks,
+// done of a total known from the start, with the issue's name.
+func TestProgressCountsEveryIssue(t *testing.T) {
+	t.Parallel()
+	s, f := newStore(t), fake.New(key)
+	for i, title := range []string{"one", "two", "three"} {
+		f.Add(forge.Issue{Author: ann(), Title: title, Status: "open", Created: int64(1000 + i)}) // the push walks them oldest first
+	}
+	var got []string
+	opt := Options{Progress: func(k, way string, done, total int, name string) {
+		if k == key {
+			got = append(got, fmt.Sprintf("%s %d/%d %s", way, done, total, name))
+		}
+	}}
+	if _, err := Sync(t.Context(), s, opt, f); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"pull 1/3 #1 one", "pull 2/3 #2 two", "pull 3/3 #3 three", "push 1/3 #1 one", "push 2/3 #2 two", "push 3/3 #3 three"}
+	if !slices.Equal(got, want) {
+		t.Fatalf("progress = %q\nwant %q", got, want)
+	}
+}
+
 // Running says a run holds the lock: not a file left behind.
 func TestRunningSaysAHeldLock(t *testing.T) {
 	t.Parallel()

@@ -6,6 +6,8 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
+	"golang.org/x/text/language"
+	"golang.org/x/text/message"
 
 	"github.com/guilbep/git-board/core/syncer"
 	"github.com/guilbep/git-board/internal/config"
@@ -107,6 +109,12 @@ func runForgeWay(ctx context.Context, b *store.Backend, cfg *config.Config, on [
 	}
 	run := store.ForgeRun{Forges: fs, PublishPrivate: cfg.PublishPrivate, DryRun: check, AllowCreate: allowCreate, Merge: merge}
 	run.See = func(e store.SyncEvent) {
+		if e.What == "progress" {
+			if line := progressLine(e); line != "" {
+				say("  %s: %s", e.Forge, line)
+			}
+			return
+		}
 		line := e.Text(check, eventIssue(b, e.Issue))
 		if e.What == "held" {
 			line += " (--allow-create)"
@@ -117,4 +125,26 @@ func runForgeWay(ctx context.Context, b *store.Backend, cfg *config.Config, on [
 	}
 	_, err = way(b, ctx, run)
 	return err
+}
+
+// longPull is how many issues a pull reads before it says it takes minutes
+// (the web's ways.ts says the same).
+const longPull = 200
+
+var english = message.NewPrinter(language.English)
+
+// progressLine is a way's line every hundred issues; a long pull's first
+// says it takes minutes. "" between.
+func progressLine(e store.SyncEvent) string {
+	switch {
+	case e.Way == "pull" && e.Done == 1 && e.Total >= longPull:
+		return english.Sprintf("%d issues to read: this takes several minutes", e.Total)
+	case e.Done%100 == 0 || e.Done == e.Total && e.Total >= 100:
+		verb := "pulling"
+		if e.Way == "push" {
+			verb = "pushing"
+		}
+		return english.Sprintf("%s %d of %d", verb, e.Done, e.Total)
+	}
+	return ""
 }

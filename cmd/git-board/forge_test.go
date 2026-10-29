@@ -6,6 +6,7 @@ import (
 
 	"github.com/guilbep/git-board/core/forge"
 	"github.com/guilbep/git-board/core/forge/fake"
+	"github.com/guilbep/git-board/internal/store"
 	"github.com/guilbep/git-board/internal/store/storetest"
 )
 
@@ -75,5 +76,27 @@ func TestForgeNeedsAForge(t *testing.T) {
 	out, err := execute(t, []string{"forge", "sync"})
 	if err == nil || !strings.Contains(err.Error(), "no forge has its sync on") {
 		t.Fatalf("err = %v\n%s", err, out)
+	}
+}
+
+// A long pull says so at its first issue, then where it is every hundred;
+// a short one, and a push, only every hundred.
+func TestProgressLines(t *testing.T) {
+	t.Parallel()
+	for _, c := range []struct {
+		e    store.SyncEvent
+		want string
+	}{
+		{store.SyncEvent{Way: "pull", Done: 1, Total: 1034}, "1,034 issues to read: this takes several minutes"},
+		{store.SyncEvent{Way: "pull", Done: 2, Total: 1034}, ""},
+		{store.SyncEvent{Way: "pull", Done: 400, Total: 1034}, "pulling 400 of 1,034"},
+		{store.SyncEvent{Way: "pull", Done: 1034, Total: 1034}, "pulling 1,034 of 1,034"},
+		{store.SyncEvent{Way: "pull", Done: 1, Total: 12}, ""},
+		{store.SyncEvent{Way: "push", Done: 1, Total: 1034}, ""},
+		{store.SyncEvent{Way: "push", Done: 100, Total: 1034}, "pushing 100 of 1,034"},
+	} {
+		if got := progressLine(c.e); !strings.HasPrefix(got, c.want) || (c.want == "") != (got == "") {
+			t.Errorf("%+v: %q, want %q…", c.e, got, c.want)
+		}
 	}
 }

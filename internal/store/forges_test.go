@@ -56,7 +56,9 @@ func TestGetAndSendAreOneWay(t *testing.T) {
 func counts(events []store.SyncEvent) map[string]int {
 	out := map[string]int{}
 	for _, e := range events {
-		out[e.Forge+" "+e.What]++
+		if e.What != "progress" { // where the run is, not what it does
+			out[e.Forge+" "+e.What]++
+		}
 	}
 	return out
 }
