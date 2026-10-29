@@ -225,11 +225,35 @@ func TestViewReadsTheGlobalConfig(t *testing.T) {
 	global := filepath.Join(t.TempDir(), "gitconfig")
 	t.Setenv("GIT_CONFIG_GLOBAL", global)
 	b := storetest.New(t)
-	if got, err := b.ViewSetting(); err != nil || got != "" {
-		t.Fatalf("unset: %q, %v", got, err)
+	if got, scope, err := b.ViewSetting(); err != nil || got != "" || scope != "" {
+		t.Fatalf("unset: %q (%q), %v", got, scope, err)
 	}
 	storetest.Git(t, b.GitDir(), "config", "--file", global, "board.view", "cycle")
-	if got, err := b.ViewSetting(); err != nil || got != "cycle" {
-		t.Errorf("global: %q, %v", got, err)
+	if got, scope, err := b.ViewSetting(); err != nil || got != "cycle" || scope != "global" {
+		t.Errorf("global: %q (%q), %v", got, scope, err)
+	}
+}
+
+func TestSetViewIsThisRepositorys(t *testing.T) {
+	global := filepath.Join(t.TempDir(), "gitconfig")
+	t.Setenv("GIT_CONFIG_GLOBAL", global)
+	b := storetest.New(t)
+	storetest.Git(t, b.GitDir(), "config", "--file", global, "board.view", "cycle")
+	if err := b.SetView("classic"); err != nil {
+		t.Fatal(err)
+	}
+	if got, scope, err := b.ViewSetting(); err != nil || got != "classic" || scope != "local" {
+		t.Errorf("set here: %q (%q), %v", got, scope, err)
+	}
+	if out := storetest.Git(t, b.GitDir(), "config", "--file", global, "board.view"); strings.TrimSpace(out) != "cycle" {
+		t.Errorf("the global one changed: %q", out)
+	}
+	for range 2 { // unsetting what isn't set is no error
+		if err := b.SetView(""); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got, scope, err := b.ViewSetting(); err != nil || got != "cycle" || scope != "global" {
+		t.Errorf("unset here: %q (%q), %v", got, scope, err)
 	}
 }

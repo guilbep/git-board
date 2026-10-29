@@ -556,6 +556,27 @@ func TestResolveView(t *testing.T) {
 
 // /api/me says which page an issue opens on, and why: the person's
 // board.view, else the board's [cycle] table, else the classic page.
+func TestSetViewFromSettings(t *testing.T) {
+	t.Parallel()
+	ts, s := newIssueServer(t)
+	s.setConfig(&config.Config{Cycle: config.Cycle{On: true}})
+	var me meResponse
+	if code := call(t, "PUT", ts.URL+"/api/me/view", map[string]string{"view": "classic"}, &me); code != 200 ||
+		me.View != "classic" || me.ViewFrom != "board.view" || me.ViewScope != "local" {
+		t.Fatalf("classic: %d, %q from %q (%q)", code, me.View, me.ViewFrom, me.ViewScope)
+	}
+	if out := storetest.Git(t, s.b.GitDir(), "config", "--local", "board.view"); strings.TrimSpace(out) != "classic" {
+		t.Errorf("git config says %q", out)
+	}
+	if code := call(t, "PUT", ts.URL+"/api/me/view", map[string]string{"view": ""}, &me); code != 200 ||
+		me.View != "cycle" || me.ViewFrom != ".git-board.toml" {
+		t.Errorf("as the board says: %d, %q from %q", code, me.View, me.ViewFrom)
+	}
+	if code := call(t, "PUT", ts.URL+"/api/me/view", map[string]string{"view": "kanban"}, nil); code != 400 {
+		t.Errorf("kanban: %d, want 400", code)
+	}
+}
+
 func TestMeSaysTheView(t *testing.T) {
 	t.Parallel()
 	ts, s := newIssueServer(t)

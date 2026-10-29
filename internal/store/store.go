@@ -575,14 +575,29 @@ func (b *Backend) SearchText(text string) (map[string]bool, error) {
 }
 
 // ViewSetting is git config board.view, read at every level git reads (a
-// person's choice of issue page, --global for every repository): "" when
-// unset.
-func (b *Backend) ViewSetting() (string, error) {
-	out, err := b.run(nil, "config", "--get", "board.view")
+// person's choice of issue page, --global for every repository), with the
+// level that set it ("local", "global"…): "" when unset.
+func (b *Backend) ViewSetting() (view, scope string, err error) {
+	out, err := b.run(nil, "config", "--show-scope", "--get", "board.view")
 	if ee := (*exec.ExitError)(nil); errors.As(err, &ee) && ee.ExitCode() == 1 {
-		return "", nil
+		return "", "", nil
 	}
-	return strings.TrimSpace(string(out)), err
+	scope, view, _ = strings.Cut(strings.TrimSpace(string(out)), "\t")
+	return view, scope, err
+}
+
+// SetView sets board.view in this repository's own config, or unsets it
+// there for "": a global board.view is left alone.
+func (b *Backend) SetView(view string) error {
+	if view != "" {
+		_, err := b.run(nil, "config", "--local", "board.view", view)
+		return err
+	}
+	_, err := b.run(nil, "config", "--local", "--unset", "board.view")
+	if ee := (*exec.ExitError)(nil); errors.As(err, &ee) && ee.ExitCode() == 5 {
+		return nil // wasn't set
+	}
+	return err
 }
 
 // Pull fetches remote's entities and merges them into this clone's.

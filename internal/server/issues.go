@@ -348,10 +348,12 @@ type meResponse struct {
 	// View is the page an issue opens on, classic or cycle, and ViewFrom
 	// what chose it: the person's git config board.view, the board's
 	// [cycle] table, or neither (docs/prd/classic-view.md). ViewIgnored is
-	// a board.view that is neither.
+	// a board.view that is neither; ViewScope the git config level that set
+	// board.view ("local" is this repository's, as Settings writes it).
 	View        string `json:"view"`
 	ViewFrom    string `json:"view_from"`
 	ViewIgnored string `json:"view_ignored,omitempty"`
+	ViewScope   string `json:"view_scope,omitempty"`
 }
 
 // resolveView is the page an issue opens on: board.view when it says
@@ -385,16 +387,37 @@ func (s *apiServer) writeMe(w http.ResponseWriter) {
 		return
 	}
 	res.Unswitched = errors.Is(s.b.Switched(), store.ErrNotSwitched)
-	setting, err := s.b.ViewSetting()
+	setting, scope, err := s.b.ViewSetting()
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
 	res.View, res.ViewFrom, res.ViewIgnored = resolveView(setting, s.config().Cycle.On)
+	res.ViewScope = scope
 	writeJSON(w, http.StatusOK, res)
 }
 
 func (s *apiServer) handleMe(w http.ResponseWriter, r *http.Request) { s.writeMe(w) }
+
+// handleSetView is Settings' choice of issue page ({"view"}: classic,
+// cycle, or "" for what the board says), this repository's board.view.
+func (s *apiServer) handleSetView(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		View string `json:"view"`
+	}
+	if !decode(w, r, &req) {
+		return
+	}
+	if req.View != "" && req.View != "classic" && req.View != "cycle" {
+		writeError(w, http.StatusBadRequest, fmt.Errorf("view %q: classic, cycle, or empty for what the board says", req.View))
+		return
+	}
+	if err := s.b.SetView(req.View); err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	s.writeMe(w)
+}
 
 // handleSetMe adopts an identity ({"id"}) or creates one ({"name",
 // "email"}): who comments and edits from git-board.
