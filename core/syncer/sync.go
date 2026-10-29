@@ -115,6 +115,7 @@ type run struct {
 	states     map[string]*state // by forge key, the run's projects' and others read for a header or a reference
 	issues     map[string]*issue.Issue
 	pull, push bool
+	j          *journal // what a cut run read, and what this one does
 	report     Report
 	mirrors    map[string][]string // a place, in lower case -> the others of its group
 	later      []listed            // the fork's mirrors, pulled once every original is
@@ -142,11 +143,12 @@ type project struct {
 }
 
 func start(ctx context.Context, s *gitstore.Store, opt Options, forges []forge.Forge, pull, push bool) (_ Report, err error) {
-	unlock, err := lock(s)
+	now := time.Now().Unix()
+	j, err := lock(s, now)
 	if err != nil {
 		return Report{}, err
 	}
-	defer unlock()
+	defer j.unlock()
 	var unread error // the projects left out of the run, when no one hears them (Left)
 	defer func() { err = errors.Join(unread, err) }()
 	leave := func(key string, why error) error {
@@ -160,7 +162,7 @@ func start(ctx context.Context, s *gitstore.Store, opt Options, forges []forge.F
 		}
 		return nil
 	}
-	r := &run{ctx: ctx, s: s, opt: opt, now: time.Now().Unix(), states: map[string]*state{}, pull: pull, push: push,
+	r := &run{ctx: ctx, s: s, opt: opt, now: now, j: j, states: map[string]*state{}, pull: pull, push: push,
 		mirrors: map[string][]string{}, forkIDs: map[string]string{}}
 	for _, g := range opt.Mirrors {
 		for _, place := range g {
@@ -220,9 +222,11 @@ func start(ctx context.Context, s *gitstore.Store, opt Options, forges []forge.F
 			}
 		}
 		for _, x := range r.later {
-			if err := r.pullOne(x.p, x.fi, true); err != nil {
+			reached, err := r.pullOne(x.p, x.fi, true)
+			if err != nil {
 				return r.report, err
 			}
+			r.reached(x.p, x.fi, reached)
 		}
 	}
 	if push {
@@ -240,6 +244,8 @@ func start(ctx context.Context, s *gitstore.Store, opt Options, forges []forge.F
 	if !pull || !push || opt.Issue != "" {
 		return r.report, nil
 	}
+	var recorded []string
+	defer func() { j.drop(recorded) }() // listed from this run's start next time: what the journal says of them is older
 	for _, p := range r.projects {
 		if !p.st.wrote {
 			continue // a quiet run records nothing, and the entity doesn't grow
@@ -251,6 +257,7 @@ func start(ctx context.Context, s *gitstore.Store, opt Options, forges []forge.F
 		if err := p.st.write(ctx, s, p.key, []oplog.Op{runOp(who.ID, time.Now().Unix(), r.now)}); err != nil {
 			return r.report, err
 		}
+		recorded = append(recorded, p.key)
 	}
 	return r.report, nil
 }
@@ -438,13 +445,21 @@ func (r *run) listing(p *project) ([]forge.Issue, error) {
 
 // pullFrom reads p's issues and pulls each, as sync.md's pull says. Each
 // is completed first, the one place a listed issue is: what follows, and
-// the push's plan, read its comments.
+// the push's plan, read its comments. One a cut run read, unchanged
+// since, is skipped (goesOn).
 func (r *run) pullFrom(p *project) error {
+	if r.opt.Issue == "" {
+		r.j.listed(p.key, len(p.list))
+	}
 	for i, fi := range p.list {
 		if err := r.ctx.Err(); err != nil {
 			return err
 		}
 		r.progress(p.key, "pull", i+1, len(p.list), fi.Number, fi.Title)
+		if r.goesOn(p, fi) {
+			r.report.Unchanged++
+			continue // out of p.listed too: a push that writes to it reads it
+		}
 		fi, err := p.f.Complete(r.ctx, fi)
 		if err != nil {
 			return fmt.Errorf("syncer: forge issue %s: %w", fi.Number, err)
@@ -453,45 +468,70 @@ func (r *run) pullFrom(p *project) error {
 			return fmt.Errorf("syncer: forge issue %s: bad status %q", fi.ID, fi.Status)
 		}
 		p.listed[fi.ID] = fi
-		if err := r.pullOne(p, fi, r.opt.Issue != ""); err != nil {
+		reached, err := r.pullOne(p, fi, r.opt.Issue != "")
+		if err != nil {
 			return err
 		}
+		r.reached(p, fi, reached)
 	}
 	return nil
 }
 
+// goesOn says a listed forge issue was read by a run that didn't record
+// its run, and is as that run read it: linked, its issue here, and not
+// updated since a margin before that run started. A run of one issue
+// reads all it lists.
+func (r *run) goesOn(p *project, fi forge.Issue) bool {
+	read, ok := r.j.since(p.key, fi.ID)
+	if !ok || r.opt.Issue != "" {
+		return false
+	}
+	id, linked := p.st.links[fi.ID]
+	_, here := r.issues[id]
+	return linked && here && fi.Updated < read-goOnMargin
+}
+
+// reached journals a forge issue the pull finished, for a run that goes
+// on after this one is cut.
+func (r *run) reached(p *project, fi forge.Issue, reached bool) {
+	if reached && r.opt.Issue == "" {
+		r.j.reached(p.key, fi.ID, r.now)
+	}
+}
+
 // pullOne pulls a listed forge issue. A mirror the fork posted waits for
-// every original to be pulled, unless final.
-func (r *run) pullOne(p *project, fi forge.Issue, final bool) error {
+// every original to be pulled, unless final. reached says it is pulled: not
+// waiting, nor skipped.
+func (r *run) pullOne(p *project, fi forge.Issue, final bool) (reached bool, _ error) {
 	id, err := r.match(p, fi, final)
 	if err != nil {
-		return err
+		return false, err
 	}
 	if r.opt.Issue != "" && id != r.opt.Issue {
 		r.report.Unchanged++
-		return nil
+		return false, nil
 	}
 	switch id {
 	case "":
 		r.report.Unchanged++
-		return nil
+		return false, nil
 	case "later":
 		r.later = append(r.later, listed{p, fi})
-		return nil
+		return false, nil
 	case "new":
 		id, err := r.pullNew(p, fi)
 		if err != nil {
-			return err
+			return false, err
 		}
 		if w := unwrap(fi.Body); w.forkID != "" && r.isSync(p, fi.Author) {
 			r.forkIDs[w.forkID] = id
 		}
 		r.report.Created++
-		return nil
+		return true, nil
 	}
 	wrote, _, pulled, err := r.reconcile(p, id, fi, true, false)
 	if err != nil {
-		return err
+		return false, err
 	}
 	if wrote {
 		r.report.Updated++
@@ -499,7 +539,7 @@ func (r *run) pullOne(p *project, fi forge.Issue, final bool) error {
 	} else {
 		r.report.Unchanged++
 	}
-	return nil
+	return true, nil
 }
 
 // progress tells Progress where a way is, the issue named by its number

@@ -168,7 +168,7 @@ func TestDuplicateNotMirrored(t *testing.T) {
 func TestRunLock(t *testing.T) {
 	t.Parallel()
 	s, f := newStore(t), fake.New(key)
-	unlock, err := lock(s)
+	j, err := lock(s, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -176,7 +176,7 @@ func TestRunLock(t *testing.T) {
 	if !errors.Is(err, ErrLocked) || !strings.Contains(err.Error(), fmt.Sprintf("process %d", os.Getpid())) {
 		t.Fatalf("err = %v, want ErrLocked naming process %d", err, os.Getpid())
 	}
-	unlock()
+	j.unlock()
 	syncAll(t, s, f)
 }
 
@@ -240,14 +240,14 @@ func TestRunningSaysAHeldLock(t *testing.T) {
 	if Running(s) {
 		t.Fatal("running before any run")
 	}
-	unlock, err := lock(s)
+	j, err := lock(s, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !Running(s) {
 		t.Fatal("not running while the lock is held")
 	}
-	unlock()
+	j.unlock()
 	if Running(s) {
 		t.Fatal("running after the run, its file left")
 	}
@@ -588,11 +588,11 @@ func TestFailedLookupReleasesTheLock(t *testing.T) {
 	if r := syncAll(t, s, failingTokens{f}); r.Created != 1 {
 		t.Fatalf("report %+v", r)
 	}
-	unlock, err := lock(s)
+	j, err := lock(s, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
-	unlock()
+	j.unlock()
 }
 
 // A push alone after a crash between creating a forge issue and linking it

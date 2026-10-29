@@ -1,11 +1,11 @@
 package syncer
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 
 	"github.com/guilbep/git-board/core/gitstore"
 )
@@ -17,8 +17,9 @@ var errHeld = errors.New("held")
 // common directory, held while the file is open. The OS drops it when the
 // process ends, however it ends, so a file a killed run left keeps no one
 // out. The file is never removed: a run that opened it just before would
-// lock a file no other run sees.
-func lock(s *gitstore.Store) (func(), error) {
+// lock a file no other run sees. It holds the journal (journal.go), which
+// the run started at started goes on from.
+func lock(s *gitstore.Store, started int64) (*journal, error) {
 	dir := filepath.Join(s.CommonDir(), "board")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, err
@@ -35,25 +36,21 @@ func lock(s *gitstore.Store) (func(), error) {
 		}
 		return nil, fmt.Errorf("syncer: locking %s: %w", path, err)
 	}
-	if err := f.Truncate(0); err != nil {
+	j, err := openJournal(f, started)
+	if err != nil {
+		unlockFile(f)
 		f.Close()
 		return nil, err
 	}
-	if _, err := fmt.Fprintf(f, "%d\n", os.Getpid()); err != nil {
-		f.Close()
-		return nil, err
-	}
-	// unlocked first: a process forking as it closes shares the open file
-	// until it execs, and with it the lock
-	return func() { unlockFile(f); f.Close() }, nil
+	return j, nil
 }
 
 // holder is the process id the lock's holder wrote on the file's first
 // line, or "?".
 func holder(path string) string {
 	data, _ := os.ReadFile(path)
-	if line, _, _ := bytes.Cut(data, []byte("\n")); len(line) > 0 {
-		return string(line)
+	if head, _, _ := readJournal(data); head.PID > 0 {
+		return strconv.Itoa(head.PID)
 	}
 	return "?"
 }
