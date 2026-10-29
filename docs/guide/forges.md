@@ -145,7 +145,7 @@ Settings › Sync, Start over, runs the same. On the command line the resets ref
 
 ## Long syncs
 
-The first sync with a forge, or the first after starting over, reads every issue the forge holds. A thousand issues take several minutes, mostly for their comments: one request per issue that has any. The listing comes in within seconds, and the bar then has an end: "GitHub (gh) · pulling 412 of 1,034 · #412 Export CSV · about 6 min left". With 200 issues or more to read, it says the sync takes minutes. The command line says so too, and where it is every hundred issues.
+The first sync with a forge, or the first after starting over, reads every issue the forge holds. A thousand issues take several minutes, mostly for their comments: one request per issue that has any. The listing comes in within seconds, and the bar then has an end: "GitHub (gh) · pulling 412 of 1,034 · #412 Export CSV · about 6 min left". With 200 issues or more to read, it says the sync takes minutes. The command line says so too, and where it is every hundred issues once a way has run two seconds: a push with nothing to send walks a thousand issues in a moment, and says nothing.
 
 You can close the page: the sync runs in git-board's server, not in the page. Open Settings › Sync again to follow it.
 

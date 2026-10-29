@@ -525,8 +525,10 @@ A run syncs git-board with every project it is given:
 
 1. It takes the run's lock: an OS lock (`flock`, or `LockFileEx` on
    Windows) on `board/sync.lock` in git's common directory, held while the
-   run has the file open. Another run holding it is an error naming its
-   process. The OS drops the lock when the process ends, however it ends,
+   run has the file open. Another run holding it for more than a tenth of
+   a second is an error naming its process: a look at the lock (is a run
+   going on? where did the last stop?) holds it an instant, and is waited
+   out. The OS drops the lock when the process ends, however it ends,
    so a run killed mid-way blocks no other. The file is never removed:
    a run that opened it just before would lock a file no other run sees.
 2. It reads each project's visibility, and its posting account. A project
@@ -558,7 +560,7 @@ Nothing is journaled for an issue the pull didn't finish:
 - one skipped because its issue isn't here;
 - a mirror waiting for the walk's end, until it is pulled.
 
-A run that records its `run` for a project drops the journal's lines for that project: the next run lists from that start. A pull that walks a listing to its end marks it so: the journal still serves the next run, but that pull isn't cut. A reset of the board (`git board reset --hard`, either form) empties the journal, as what it says was pulled went with the refs; it refuses while a sync runs. A run of one issue alone neither reads the journal nor adds to it, and a dry run keeps its own, on its own copy.
+A run that records its `run` for a project drops the journal's lines for that project: the next run lists from that start. A run drops, at its start, the lines of a project it isn't given: a forge taken out of the sync, or turned off, takes them along. A pull that walks a listing to its end marks it so: the journal still serves the next run, but that pull isn't cut. A reset of the board (`git board reset --hard`, either form) empties the journal, as what it says was pulled went with the refs; it refuses while a sync runs. A run of one issue alone neither reads the journal nor adds to it, and a dry run keeps its own, on its own copy. Only an added line moves the file's time, which says when a cut run stopped.
 
 It reports how many forge issues it created, updated or left unchanged in
 git-board, and how many issues it created or wrote to on the forges. Its
