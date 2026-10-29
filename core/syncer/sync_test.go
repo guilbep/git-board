@@ -172,11 +172,52 @@ func TestRunLock(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Sync(t.Context(), s, Options{}, f); !errors.Is(err, ErrLocked) {
-		t.Fatalf("err = %v, want ErrLocked", err)
+	_, err = Sync(t.Context(), s, Options{}, f)
+	if !errors.Is(err, ErrLocked) || !strings.Contains(err.Error(), fmt.Sprintf("process %d", os.Getpid())) {
+		t.Fatalf("err = %v, want ErrLocked naming process %d", err, os.Getpid())
 	}
 	unlock()
 	syncAll(t, s, f)
+}
+
+// Running says a run holds the lock: not a file left behind.
+func TestRunningSaysAHeldLock(t *testing.T) {
+	t.Parallel()
+	s := newStore(t)
+	if Running(s) {
+		t.Fatal("running before any run")
+	}
+	unlock, err := lock(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !Running(s) {
+		t.Fatal("not running while the lock is held")
+	}
+	unlock()
+	if Running(s) {
+		t.Fatal("running after the run, its file left")
+	}
+}
+
+// A lock file a killed run left, which no process holds, keeps no run out.
+func TestALeftLockBlocksNothing(t *testing.T) {
+	t.Parallel()
+	s, f := newStore(t), fake.New(key)
+	f.Add(sample())
+	path := filepath.Join(s.CommonDir(), "board", "sync.lock")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("12345\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if r := syncAll(t, s, f); r.Created != 1 {
+		t.Fatalf("report = %+v", r)
+	}
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("the lock file is gone: %v", err) // never removed: a second run can't lock another of that name
+	}
 }
 
 // A run that wrote records its start; the next lists from there, so an

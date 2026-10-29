@@ -523,10 +523,12 @@ forge, and never makes a thing twice.
 
 A run syncs git-board with every project it is given:
 
-1. It takes the run's lock, `board/sync.lock` in git's common directory,
-   created only if it doesn't exist. Another run holding it is an error
-   naming the file. The run removes it at the end. A run killed before then
-   leaves it behind, to remove by hand, like git's own lock files.
+1. It takes the run's lock: an OS lock (`flock`, or `LockFileEx` on
+   Windows) on `board/sync.lock` in git's common directory, held while the
+   run has the file open. Another run holding it is an error naming its
+   process. The OS drops the lock when the process ends, however it ends,
+   so a run killed mid-way blocks no other. The file is never removed:
+   a run that opened it just before would lock a file no other run sees.
 2. It reads each project's visibility, and its posting account. A project
    whose visibility it can't read is left out, and the run returns that
    error at its end; a posting account it can't read stops it.

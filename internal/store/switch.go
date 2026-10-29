@@ -8,9 +8,7 @@ import (
 	"fmt"
 	"maps"
 	"net/url"
-	"os"
 	"os/exec"
-	"path/filepath"
 	"regexp"
 	"slices"
 	"strconv"
@@ -181,8 +179,8 @@ func (b *Backend) Switch(ctx context.Context, run SwitchRun) (SwitchReport, erro
 	for _, l := range run.LeftOut {
 		block("forge %s, left out of the switch: its mirrors aren't joined, and what the next sync would create there isn't counted (--force switches without it)", l)
 	}
-	if _, err := os.Stat(filepath.Join(b.s.CommonDir(), "board", "sync.lock")); err == nil {
-		block("a forge sync runs, or left board/sync.lock in the git directory")
+	if syncer.Running(b.s) {
+		block("a forge sync runs")
 	}
 	// the numbers are keyed again on origin's: this clone's may be behind,
 	// or hold an earlier --apply's that never reached origin

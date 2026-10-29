@@ -6,8 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"maps"
-	"os"
-	"path/filepath"
 	"slices"
 	"strings"
 	"time"
@@ -251,25 +249,6 @@ func start(ctx context.Context, s *gitstore.Store, opt Options, forges []forge.F
 		}
 	}
 	return r.report, nil
-}
-
-// lock takes the run's lock file, made only if it doesn't exist.
-func lock(s *gitstore.Store) (func(), error) {
-	dir := filepath.Join(s.CommonDir(), "board")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return nil, err
-	}
-	path := filepath.Join(dir, "sync.lock")
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
-	if errors.Is(err, os.ErrExist) {
-		return nil, fmt.Errorf("%w: %s exists; remove it if no sync runs", ErrLocked, path)
-	}
-	if err != nil {
-		return nil, err
-	}
-	fmt.Fprintf(f, "%d\n", os.Getpid())
-	f.Close()
-	return func() { os.Remove(path) }, nil
 }
 
 // loadIssues reads every issue.
