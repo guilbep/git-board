@@ -4,8 +4,15 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
+	"errors"
 	"io"
+	"maps"
 	"os"
+	"path/filepath"
+	"slices"
+	"time"
+
+	"github.com/guilbep/git-board/core/gitstore"
 )
 
 // goOnMargin is how long before the start of the run that read it a forge
@@ -143,4 +150,62 @@ func (j *journal) drop(keys []string) {
 func (j *journal) unlock() {
 	unlockFile(j.f) // first: a process forking as it closes shares the open file, and with it the lock
 	j.f.Close()
+}
+
+// CutRun is what the journal says of runs that recorded no run: when it
+// was last written, and the forges whose listing the pull didn't read to
+// its end.
+type CutRun struct {
+	At     time.Time
+	Forges []CutForge
+}
+
+// CutForge is how many of its last listing's issues a forge's pulls read.
+type CutForge struct {
+	Key         string
+	Read, Total int
+}
+
+// Cut is the run cut before it went through, from its journal: nil when
+// there is none, or while a run holds the lock.
+func Cut(s *gitstore.Store) (*CutRun, error) {
+	f, err := os.OpenFile(filepath.Join(s.CommonDir(), "board", "sync.lock"), os.O_RDWR, 0)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	if err := tryLock(f); errors.Is(err, errHeld) {
+		return nil, nil // a run goes on: it says where it is
+	} else if err != nil {
+		return nil, err
+	}
+	defer unlockFile(f)
+	data, err := io.ReadAll(f)
+	if err != nil {
+		return nil, err
+	}
+	info, err := f.Stat()
+	if err != nil {
+		return nil, err
+	}
+	_, read, totals := readJournal(data)
+	c := &CutRun{At: info.ModTime()}
+	for _, key := range slices.Sorted(maps.Keys(totals)) {
+		n := 0
+		for k := range read {
+			if k[0] == key {
+				n++
+			}
+		}
+		if n < totals[key] {
+			c.Forges = append(c.Forges, CutForge{Key: key, Read: n, Total: totals[key]})
+		}
+	}
+	if len(c.Forges) == 0 {
+		return nil, nil
+	}
+	return c, nil
 }

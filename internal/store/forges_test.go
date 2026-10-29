@@ -212,6 +212,30 @@ func TestScratchRemovesOldCopies(t *testing.T) {
 	}
 }
 
+// A check's copy holds the journal: after a cut run, the check skips what
+// that run read, as the next run will. What the check reads stays in the
+// copy.
+func TestScratchCarriesTheJournal(t *testing.T) {
+	t.Parallel()
+	b := storetest.New(t)
+	board := filepath.Join(b.Store().CommonDir(), "board")
+	if err := os.MkdirAll(board, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	journal := "{\"pid\":1,\"started\":5}\n{\"forge\":\"github.com/o/r\",\"total\":10}\n"
+	if err := os.WriteFile(filepath.Join(board, "sync.lock"), []byte(journal), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	s, done, err := store.Scratch(b, t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer done()
+	if got, err := os.ReadFile(filepath.Join(s.CommonDir(), "board", "sync.lock")); err != nil || string(got) != journal {
+		t.Fatalf("the copy's journal: %q, %v", got, err)
+	}
+}
+
 // Creations on a forge the repository never synced with, or MaxCreate or
 // more on one, wait for consent: the run tells them (held) and creates
 // none there, its other writes made. A check counts them as made, held.

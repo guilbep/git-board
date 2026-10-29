@@ -5,7 +5,9 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -157,5 +159,32 @@ func TestForgeSyncStreamsItsSteps(t *testing.T) {
 	}
 	if e := readEvent(t, sc); e.Kind != "progress" || e.ID != a || e.Step == nil || e.Step.Issue != want[0].Issue {
 		t.Errorf("one issue's step names it: %+v", e)
+	}
+}
+
+// A sync cut, as by a restart, is said with the forges, by name where the
+// journal's key is the forge's, until a run goes through.
+func TestForgesSayACutSync(t *testing.T) {
+	t.Parallel()
+	ts, s := forgeServer(t, config.Forge{Name: "gh", Kind: "github", Project: "o/r", Sync: true})
+	board := filepath.Join(s.b.Store().CommonDir(), "board")
+	if err := os.MkdirAll(board, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	journal := `{"pid":1,"started":5}
+{"forge":"github.com/o/r","total":3}
+{"forge":"github.com/o/r","id":"100","run":5}
+{"forge":"gitlab.example.com/g/p","total":2}
+`
+	if err := os.WriteFile(filepath.Join(board, "sync.lock"), []byte(journal), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var st forgeStatus
+	if getJSON(t, ts.URL+"/api/forges", &st); st.Cut == nil {
+		t.Fatal("no cut said")
+	}
+	want := []cutForge{{Name: "gh", Key: "github.com/o/r", Read: 1, Total: 3}, {Key: "gitlab.example.com/g/p", Total: 2}}
+	if !slices.Equal(st.Cut.Forges, want) || st.Cut.At.IsZero() {
+		t.Fatalf("cut = %+v, want %+v", st.Cut, want)
 	}
 }

@@ -10,6 +10,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/guilbep/git-board/core/syncer"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/store"
 )
@@ -36,6 +37,21 @@ type syncBridge struct {
 type forgeStatus struct {
 	Bridges []syncBridge `json:"bridges"`
 	Job     *forgeJob    `json:"job"`
+	Cut     *cutRun      `json:"cut,omitempty"` // a sync cut, as by a restart: the next goes on from there
+}
+
+// cutRun is a sync that stopped before it went through (syncer.Cut), with
+// no run going on.
+type cutRun struct {
+	At     time.Time  `json:"at"`
+	Forges []cutForge `json:"forges"`
+}
+
+type cutForge struct {
+	Name  string `json:"name,omitempty"` // the bridge whose key it is; "" when none says (a GitLab id)
+	Key   string `json:"key"`
+	Read  int    `json:"read"`
+	Total int    `json:"total"`
 }
 
 // the modes of a forge run: both ways, push alone (send, the Work page's
@@ -250,10 +266,21 @@ func (s *apiServer) syncForges() []config.Forge {
 
 func (s *apiServer) forgeSnapshot() forgeStatus {
 	bridges := []syncBridge{}
+	keys := map[string]string{} // a forge's key, as an adapter makes it -> its name
 	for _, f := range s.syncForges() {
 		bridges = append(bridges, syncBridge{Name: f.Name, Target: f.Kind, Discovered: f.Discovered})
+		keys[cmp.Or(f.Host, f.Kind+".com")+"/"+cmp.Or(f.Path, f.Project)] = f.Name // github.com, gitlab.com by default
 	}
-	return forgeStatus{Bridges: bridges, Job: s.job}
+	st := forgeStatus{Bridges: bridges, Job: s.job}
+	if s.job == nil || s.job.State != "running" {
+		if c, err := syncer.Cut(s.b.Store()); err == nil && c != nil {
+			st.Cut = &cutRun{At: c.At}
+			for _, f := range c.Forges {
+				st.Cut.Forges = append(st.Cut.Forges, cutForge{Name: keys[f.Key], Key: f.Key, Read: f.Read, Total: f.Total})
+			}
+		}
+	}
+	return st
 }
 
 func (s *apiServer) handleForges(w http.ResponseWriter, r *http.Request) {

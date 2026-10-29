@@ -348,9 +348,9 @@ func (b *Backend) scratch(ctx context.Context) (*gitstore.Store, func(), error) 
 	return scratchOf(ctx, b.s.CommonDir(), b.s.CommonDir())
 }
 
-// scratchOf is a mirror of the repository at from, in home's board folder.
-// It first removes the copies a day old: a run killed mid-way leaves its
-// own.
+// scratchOf is a mirror of the repository at from, in home's board folder,
+// with from's sync journal. It first removes the copies a day old: a run
+// killed mid-way leaves its own.
 func scratchOf(ctx context.Context, from, home string) (*gitstore.Store, func(), error) {
 	parent := filepath.Join(home, "board")
 	if err := os.MkdirAll(parent, 0o755); err != nil {
@@ -377,6 +377,13 @@ func scratchOf(ctx context.Context, from, home string) (*gitstore.Store, func(),
 	if err != nil {
 		done()
 		return nil, nil, err
+	}
+	// the sync's journal (syncer's journal.go), for the check to skip what
+	// a cut run read; the copy's own, which goes with it
+	if data, err := os.ReadFile(filepath.Join(from, "board", "sync.lock")); err == nil {
+		if err := os.MkdirAll(filepath.Join(dir, "board"), 0o755); err == nil {
+			_ = os.WriteFile(filepath.Join(dir, "board", "sync.lock"), data, 0o644)
+		}
 	}
 	return s, done, nil
 }

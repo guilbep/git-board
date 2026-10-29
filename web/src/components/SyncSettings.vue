@@ -135,6 +135,7 @@
       <button type="button" class="epfl-btn epfl-btn-primary" :disabled="!canRun" @click="confirming = true">{{ running && !job?.dry_run ? 'Syncing…' : 'Sync' }}</button>
       <span class="sy-note">Check says what a sync would do, and writes nothing. Sync needs a clean check of the last 15 minutes.</span>
     </div>
+    <p v-if="!running && forgeStatus?.cut" class="epfl-alert epfl-alert-warning" role="status">{{ cutWords(forgeStatus.cut, forgeStatus.bridges, when(forgeStatus.cut.at, true)) }}</p>
     <p v-if="startError" class="epfl-alert epfl-alert-danger" role="alert"><b>Not started.</b> {{ startError }}</p>
 
     <!-- the last run: its steps, then per forge -->
@@ -150,7 +151,7 @@
       </ol>
       <SyncProgress v-if="running && forgeStep === 'running'" :job="job" :bridges="forgeStatus?.bridges ?? []" :starting="job.dry_run ? 'Checking the forges…' : 'Syncing the forges…'" />
       <p v-if="job.state === 'failed'" class="epfl-alert epfl-alert-danger" role="alert">
-        <b>{{ job.dry_run ? 'The check' : 'The sync' }} stopped{{ failedAt ? ` at ${failedAt}` : '' }}.</b> {{ failedAt ? '' : `${job.error}.` }}{{ job.dry_run ? '' : ' Nothing already written was undone.' }}
+        <b>{{ job.dry_run ? 'The check' : 'The sync' }} stopped{{ failedAt ? ` at ${failedAt}` : '' }}.</b> {{ failedAt ? '' : `${job.error}.` }}{{ job.dry_run ? '' : ' Nothing already written was undone, and the next sync goes on from where it stopped.' }}
       </p>
       <p v-else-if="job.dry_run && job.state === 'done' && job.errors" class="epfl-alert epfl-alert-danger" role="alert">
         <b>The check had {{ plural(job.errors, 'error') }}</b> (see the details below). Fix {{ job.errors === 1 ? 'it' : 'them' }} and check again: a sync needs a clean check.
@@ -256,7 +257,7 @@ import { message } from '@/issue';
 import { debounced, onLive } from '@/live';
 import { when } from '@/me';
 import { loadRemotes } from '@/remotes';
-import { aheadWords, checkWords, pendingWords, plural, readProject, runWords, stepLine } from '@/ways';
+import { aheadWords, checkWords, cutWords, pendingWords, plural, readProject, runWords, stepLine } from '@/ways';
 import AddForgeDialog from '@/components/AddForgeDialog.vue';
 import ForgesGuide from '@/components/ForgesGuide.vue';
 import GbIcon from '@/components/GbIcon.vue';

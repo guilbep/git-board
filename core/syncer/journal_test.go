@@ -209,3 +209,31 @@ func TestAWaitingMirrorIsntReached(t *testing.T) {
 		t.Fatalf("%d issues: the mirror didn't join", len(all))
 	}
 }
+
+// Cut says how far a cut run got, per forge, and nothing once a run went
+// through, or while one holds the lock.
+func TestCutSaysWhereARunStopped(t *testing.T) {
+	t.Parallel()
+	s, r, _ := tenOld(t)
+	if c, err := Cut(s); err != nil || c != nil {
+		t.Fatalf("before any run: %+v, %v", c, err)
+	}
+	cut(t, s, r, "i6")
+	c, err := Cut(s)
+	if err != nil || c == nil || len(c.Forges) != 1 || c.Forges[0] != (CutForge{Key: key, Read: 6, Total: 10}) || c.At.IsZero() {
+		t.Fatalf("after the cut: %+v, %v", c, err)
+	}
+	j, err := lock(s, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c, _ := Cut(s); c != nil {
+		t.Fatalf("while a run holds the lock: %+v", c)
+	}
+	j.unlock()
+	r.then("")
+	syncAll(t, s, r)
+	if c, err := Cut(s); err != nil || c != nil {
+		t.Fatalf("after a run went through: %+v, %v", c, err)
+	}
+}

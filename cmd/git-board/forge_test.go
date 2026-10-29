@@ -1,6 +1,8 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -53,6 +55,23 @@ func TestForgePullTakesOnly(t *testing.T) {
 	}
 	if refs := storetest.Git(t, origin, "for-each-ref", "refs/board"); refs != "" {
 		t.Errorf("origin got %q", refs)
+	}
+}
+
+// A forge pull over a cut sync's journal says where that sync stopped.
+func TestForgePullSaysACutSync(t *testing.T) {
+	dir, _, _ := forgeSetup(t)
+	board := filepath.Join(dir, ".git", "board")
+	if err := os.MkdirAll(board, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	journal := "{\"pid\":1,\"started\":5}\n{\"forge\":\"github.com/o/r\",\"total\":1034}\n"
+	if err := os.WriteFile(filepath.Join(board, "sync.lock"), []byte(journal), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out, err := execute(t, []string{"forge", "pull"})
+	if err != nil || !strings.Contains(out, "read 0 of 1,034 issues of github.com/o/r: a pull goes on from there") {
+		t.Fatalf("pull: %v\n%s", err, out)
 	}
 }
 

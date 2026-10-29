@@ -1,6 +1,6 @@
 // Settings › Sync's words: what each place would move, in counts; and the
 // Project line's field, read.
-import type { Ahead, BridgeTally, ForgeJob, ForgeStatus, JobStep, Remote, SyncReport, SyncStatus, SyncStep } from './api/board';
+import type { Ahead, BridgeTally, CutRun, ForgeJob, ForgeStatus, JobStep, Remote, SyncReport, SyncStatus, SyncStep } from './api/board';
 import { forgeLabel } from './issuesync.ts';
 
 const n = (v: number) => v.toLocaleString();
@@ -169,4 +169,14 @@ export function timeLeft(first: BarSample, last: BarSample, total: number): stri
 // CLI's longPull), or over a minute at its rate
 export function longPull(s: SyncStep, left: number): boolean {
   return s.way === 'pull' && !!s.total && (s.total - s.done >= 200 || left > 60_000);
+}
+
+// "The last sync stopped today 14:02, at 612 of 1,034 issues from GitHub
+// (gh)…": a forge without a name in the settings is said by its key
+export function cutWords(cut: CutRun, bridges: { name: string; target: string }[], when: string): string {
+  const parts = cut.forges.map((f, i) => {
+    const b = bridges.find((b) => b.name === f.name);
+    return `${n(f.read)} of ${n(f.total)}${i ? '' : ' issues'} from ${b ? forgeLabel(b) : f.key}`;
+  });
+  return `The last sync stopped ${when}, at ${parts.join(', ')}. The next sync goes on from there: what it pulled stays.`;
 }

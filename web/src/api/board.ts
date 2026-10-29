@@ -406,6 +406,13 @@ export interface SyncStep {
 export interface ForgeStatus {
   bridges: { name: string; target: string }[];
   job: ForgeJob | null;
+  cut?: CutRun; // a sync cut, as by a restart: the next goes on from there
+}
+
+// a sync that stopped before it went through, per forge how far its pull got
+export interface CutRun {
+  at: string;
+  forges: { name?: string; key: string; read: number; total: number }[];
 }
 
 export function getForges(): Promise<ForgeStatus> {
