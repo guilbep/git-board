@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/spf13/cobra"
 	"golang.org/x/text/language"
@@ -114,14 +115,18 @@ func runForgeWay(ctx context.Context, b *store.Backend, cfg *config.Config, on [
 		}
 	}
 	run := store.ForgeRun{Forges: fs, PublishPrivate: cfg.PublishPrivate, DryRun: check, AllowCreate: allowCreate, Merge: merge}
-	first := map[string]bool{} // forge and way: told once
+	began := map[string]time.Time{} // forge and way: when its first step came
 	run.See = func(e store.SyncEvent) {
 		if e.What == "progress" {
 			key := e.Forge + " " + e.Way
-			if line := progressLine(e, !first[key]); line != "" {
+			at, seen := began[key]
+			if !seen {
+				at = time.Now()
+				began[key] = at
+			}
+			if line := progressLine(e, !seen, time.Since(at)); line != "" {
 				say("  %s: %s", e.Forge, line)
 			}
-			first[key] = true
 			return
 		}
 		line := e.Text(check, eventIssue(b, e.Issue))
@@ -136,20 +141,24 @@ func runForgeWay(ctx context.Context, b *store.Backend, cfg *config.Config, on [
 	return err
 }
 
+// slowWay is how long a way runs before its progress lines.
+const slowWay = 2 * time.Second
+
 // longPull is how many issues a pull reads before it says it takes minutes
 // (the web's ways.ts says the same).
 const longPull = 200
 
 var english = message.NewPrinter(language.English)
 
-// progressLine is a way's line every hundred issues; at the first issue a
-// long pull reads, it says it takes minutes, counting what is left (a cut
-// run's issues skipped before it). "" between.
-func progressLine(e store.SyncEvent, first bool) string {
+// progressLine is a way's line every hundred issues, once it ran for
+// slowWay: a quiet push walks a thousand in a moment, and says nothing. At
+// the first issue a long pull reads, it says it takes minutes, counting
+// what is left (a cut run's issues skipped before it). "" between.
+func progressLine(e store.SyncEvent, first bool, ran time.Duration) string {
 	switch left := e.Total - e.Done + 1; {
 	case e.Way == "pull" && first && left >= longPull:
 		return english.Sprintf("%d issues to read: this takes several minutes", left)
-	case e.Done%100 == 0 || e.Done == e.Total && e.Total >= 100:
+	case ran >= slowWay && (e.Done%100 == 0 || e.Done == e.Total && e.Total >= 100):
 		verb := "pulling"
 		if e.Way == "push" {
 			verb = "pushing"
