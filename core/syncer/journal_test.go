@@ -14,6 +14,7 @@ import (
 	"github.com/guilbep/git-board/core/forge"
 	"github.com/guilbep/git-board/core/forge/fake"
 	"github.com/guilbep/git-board/core/gitstore"
+	"github.com/guilbep/git-board/core/oplog"
 )
 
 // reads is a fake whose reads of an issue the pull reaches are told, by
@@ -91,8 +92,8 @@ func TestACutPullGoesOn(t *testing.T) {
 	if n := len(issues(t, s)); n != 10 {
 		t.Fatalf("%d issues, want 10", n)
 	}
-	if !slices.Contains(bar, "6/10") || bar[0] != "1/10" {
-		t.Fatalf("the bar = %v: what was read counts as done", bar)
+	if bar[0] != "7/10" || bar[len(bar)-1] != "10/10" || len(bar) != 4 {
+		t.Fatalf("the bar = %v: what was read counts as done, the first step being the first issue read", bar)
 	}
 }
 
@@ -235,5 +236,52 @@ func TestCutSaysWhereARunStopped(t *testing.T) {
 	syncAll(t, s, r)
 	if c, err := Cut(s); err != nil || c != nil {
 		t.Fatalf("after a run went through: %+v, %v", c, err)
+	}
+}
+
+// An issue gone, or made confidential, between the listing and its read is
+// as if not listed: the run goes on.
+func TestAnIssueGoneMidPull(t *testing.T) {
+	t.Parallel()
+	s, r, _ := tenOld(t)
+	g := &gone{reads: r, title: "i4"}
+	if _, err := Sync(t.Context(), s, Options{}, g); err != nil {
+		t.Fatal(err)
+	}
+	if n := len(issues(t, s)); n != 9 {
+		t.Fatalf("%d issues, want the 9 not gone", n)
+	}
+}
+
+// gone is a forge whose issue title vanished after the listing.
+type gone struct {
+	*reads
+	title string
+}
+
+func (g *gone) Complete(ctx context.Context, is forge.Issue) (forge.Issue, error) {
+	if is.Title == g.title {
+		return forge.Issue{}, forge.ErrNotFound
+	}
+	return g.reads.Complete(ctx, is)
+}
+
+// A pull that walked its listing to the end isn't cut, though it reached
+// fewer issues than listed: one linked to an issue not here is left.
+func TestAPullThatWentThroughIsntCut(t *testing.T) {
+	t.Parallel()
+	s, r, added := tenOld(t)
+	st, err := loadState(s, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.write(t.Context(), s, key, []oplog.Op{linkOp("a", 1, "nothere", added[3].ID, added[3].Number, "")}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Pull(t.Context(), s, Options{}, r); err != nil {
+		t.Fatal(err)
+	}
+	if c, err := Cut(s); err != nil || c != nil {
+		t.Fatalf("a pull that went through: %+v, %v", c, err)
 	}
 }

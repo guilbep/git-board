@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"maps"
 	"os"
@@ -30,11 +31,18 @@ type journal struct {
 	f      *os.File
 	head   journalLine
 	read   map[[2]string]int64 // (forge key, forge issue id) -> the start of the run that read it
-	totals map[string]int      // forge key -> how many issues its last listing held
+	totals map[string]listing  // forge key -> its last listing
+}
+
+// listing is a project's last listing: how many issues it held, and
+// whether the pull walked it to its end.
+type listing struct {
+	total int
+	done  bool
 }
 
 // journalLine is one line: the run's (PID, Started), an issue read (Forge,
-// ID, Run), or a listing (Forge, Total).
+// ID, Run), or a listing (Forge, Total, and Done once walked to its end).
 type journalLine struct {
 	PID     int    `json:"pid,omitempty"`
 	Started int64  `json:"started,omitempty"`
@@ -42,12 +50,13 @@ type journalLine struct {
 	ID      string `json:"id,omitempty"`
 	Run     int64  `json:"run,omitempty"`
 	Total   int    `json:"total,omitempty"`
+	Done    bool   `json:"done,omitempty"`
 }
 
 // readJournal reads a lock file's text: its run's line, and what the
 // journal holds. A line it can't read, as a cut write leaves, is skipped.
-func readJournal(data []byte) (head journalLine, read map[[2]string]int64, totals map[string]int) {
-	read, totals = map[[2]string]int64{}, map[string]int{}
+func readJournal(data []byte) (head journalLine, read map[[2]string]int64, totals map[string]listing) {
+	read, totals = map[[2]string]int64{}, map[string]listing{}
 	sc := bufio.NewScanner(bytes.NewReader(data))
 	for first := true; sc.Scan(); first = false {
 		var l journalLine
@@ -60,7 +69,7 @@ func readJournal(data []byte) (head journalLine, read map[[2]string]int64, total
 		case l.ID != "":
 			read[[2]string{l.Forge, l.ID}] = l.Run
 		case l.Forge != "":
-			totals[l.Forge] = l.Total
+			totals[l.Forge] = listing{l.Total, l.Done}
 		}
 	}
 	return head, read, totals
@@ -97,8 +106,8 @@ func (j *journal) rewrite() error {
 
 func (j *journal) lines() []journalLine {
 	out := []journalLine{j.head}
-	for k, n := range j.totals {
-		out = append(out, journalLine{Forge: k, Total: n})
+	for k, l := range j.totals {
+		out = append(out, journalLine{Forge: k, Total: l.total, Done: l.done})
 	}
 	for k, run := range j.read {
 		out = append(out, journalLine{Forge: k[0], ID: k[1], Run: run})
@@ -126,8 +135,16 @@ func (j *journal) reached(key, id string, run int64) {
 
 // listed records how many issues a project's listing held.
 func (j *journal) listed(key string, n int) {
-	j.totals[key] = n
+	j.totals[key] = listing{total: n}
 	j.add(journalLine{Forge: key, Total: n})
+}
+
+// finished records that the pull walked a project's listing to its end.
+func (j *journal) finished(key string) {
+	l := j.totals[key]
+	l.done = true
+	j.totals[key] = l
+	j.add(journalLine{Forge: key, Total: l.total, Done: true})
 }
 
 // drop forgets what the journal holds of projects whose run is recorded:
@@ -153,7 +170,7 @@ func (j *journal) unlock() {
 }
 
 // CutRun is what the journal says of runs that recorded no run: when it
-// was last written, and the forges whose listing the pull didn't read to
+// was last written, and the forges whose listing the pull didn't walk to
 // its end.
 type CutRun struct {
 	At     time.Time
@@ -194,18 +211,42 @@ func Cut(s *gitstore.Store) (*CutRun, error) {
 	_, read, totals := readJournal(data)
 	c := &CutRun{At: info.ModTime()}
 	for _, key := range slices.Sorted(maps.Keys(totals)) {
+		if totals[key].done {
+			continue
+		}
 		n := 0
 		for k := range read {
 			if k[0] == key {
 				n++
 			}
 		}
-		if n < totals[key] {
-			c.Forges = append(c.Forges, CutForge{Key: key, Read: n, Total: totals[key]})
+		if n < totals[key].total {
+			c.Forges = append(c.Forges, CutForge{Key: key, Read: n, Total: totals[key].total})
 		}
 	}
 	if len(c.Forges) == 0 {
 		return nil, nil
 	}
 	return c, nil
+}
+
+// Forget empties the journal, as a reset of the board's refs must: what it
+// says was pulled went with them. ErrLocked while a run holds the lock.
+func Forget(s *gitstore.Store) error {
+	path := filepath.Join(s.CommonDir(), "board", "sync.lock")
+	f, err := os.OpenFile(path, os.O_RDWR, 0)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	if err := tryLock(f); errors.Is(err, errHeld) {
+		return fmt.Errorf("%w (process %s): %s", ErrLocked, holder(path), path)
+	} else if err != nil {
+		return err
+	}
+	defer unlockFile(f)
+	return f.Truncate(0)
 }

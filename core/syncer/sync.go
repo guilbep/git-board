@@ -455,15 +455,22 @@ func (r *run) pullFrom(p *project) error {
 		if err := r.ctx.Err(); err != nil {
 			return err
 		}
-		r.progress(p.key, "pull", i+1, len(p.list), fi.Number, fi.Title)
 		if r.goesOn(p, fi) {
+			// counted done by the next issue read, so the rate is the reads';
+			// out of p.listed too: a push that writes to it reads it
 			r.report.Unchanged++
-			continue // out of p.listed too: a push that writes to it reads it
+			continue
 		}
-		fi, err := p.f.Complete(r.ctx, fi)
+		r.progress(p.key, "pull", i+1, len(p.list), fi.Number, fi.Title)
+		whole, err := p.f.Complete(r.ctx, fi)
+		if errors.Is(err, forge.ErrNotFound) || errors.Is(err, forge.ErrConfidential) {
+			r.report.Unchanged++
+			continue // gone or made confidential since the listing: as if not listed
+		}
 		if err != nil {
-			return fmt.Errorf("syncer: forge issue %s: %w", fi.Number, err)
+			return fmt.Errorf("syncer: forge issue #%s: %w", fi.Number, err)
 		}
+		fi = whole
 		if fi.Status != "open" && fi.Status != "closed" {
 			return fmt.Errorf("syncer: forge issue %s: bad status %q", fi.ID, fi.Status)
 		}
@@ -473,6 +480,9 @@ func (r *run) pullFrom(p *project) error {
 			return err
 		}
 		r.reached(p, fi, reached)
+	}
+	if r.opt.Issue == "" {
+		r.j.finished(p.key) // walked to its end: not cut, though some issues weren't reached
 	}
 	return nil
 }

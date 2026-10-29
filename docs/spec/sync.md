@@ -558,7 +558,7 @@ Nothing is journaled for an issue the pull didn't finish:
 - one skipped because its issue isn't here;
 - a mirror waiting for the walk's end, until it is pulled.
 
-A run that records its `run` for a project drops the journal's lines for that project: the next run lists from that start. A run of one issue alone neither reads the journal nor adds to it, and a dry run keeps its own, on its own copy.
+A run that records its `run` for a project drops the journal's lines for that project: the next run lists from that start. A pull that walks a listing to its end marks it so: the journal still serves the next run, but that pull isn't cut. A reset of the board (`git board reset --hard`, either form) empties the journal, as what it says was pulled went with the refs; it refuses while a sync runs. A run of one issue alone neither reads the journal nor adds to it, and a dry run keeps its own, on its own copy.
 
 It reports how many forge issues it created, updated or left unchanged in
 git-board, and how many issues it created or wrote to on the forges. Its
