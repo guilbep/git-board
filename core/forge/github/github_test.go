@@ -258,6 +258,27 @@ func TestAReadWaitsOutAnOutage(t *testing.T) {
 	}
 }
 
+// A read waiting out an outage stops when its run does, not when the wait
+// ends.
+func TestAWaitEndsWithItsRun(t *testing.T) {
+	t.Parallel()
+	f := fake.New("example.com/p")
+	is := f.Add(forge.Issue{Author: ann, Title: "T"})
+	h := newHub(t, f)
+	a := h.adapter(t)
+	a.s.sleep = sleep // the real wait, not the hub's
+	h.fault("GET /repos/o/p/issues/"+is.Number, hangUp, hangUp)
+	ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
+	defer cancel()
+	began := time.Now()
+	if _, err := a.Issue(ctx, is.Ref()); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("err = %v, want the run's end", err)
+	}
+	if d := time.Since(began); d > 900*time.Millisecond {
+		t.Fatalf("stopped after %v, the first wait being a second", d)
+	}
+}
+
 // A write isn't tried again after a dropped connection: GitHub may have
 // made it.
 func TestAWriteIsntRetried(t *testing.T) {

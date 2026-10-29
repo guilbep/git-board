@@ -336,6 +336,9 @@ func TestRetries(t *testing.T) {
 	fail("POST /api/v4/projects/p/issues", 429, 1)
 	_, err = a.CreateIssue(ctx, "T", "")
 	check("429 on a create", err, true, 7*s)
+	fail("POST /api/v4/projects/p/issues", -1, 1) // tried again, it would go through
+	_, err = a.CreateIssue(ctx, "T", "")
+	check("dropped on a create", err, false)
 
 	fail("", 0, 0)
 	mu.Lock()

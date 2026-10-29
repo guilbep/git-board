@@ -236,6 +236,31 @@ func TestScratchCarriesTheJournal(t *testing.T) {
 	}
 }
 
+// A check runs on a copy, its journal too: the real one is as it was.
+func TestACheckLeavesTheJournal(t *testing.T) {
+	t.Parallel()
+	b := storetest.New(t)
+	f := fake.New("github.com/o/r")
+	f.Add(forge.Issue{Author: forge.Account{ID: "7", Login: "ann"}, Title: "Export CSV", Status: "open", Created: 1000})
+	board := filepath.Join(b.Store().CommonDir(), "board")
+	if err := os.MkdirAll(board, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	journal := "{\"pid\":1,\"started\":5}\n{\"forge\":\"github.com/o/r\",\"total\":10}\n{\"forge\":\"gitlab.com/g/p\",\"total\":3}\n"
+	path := filepath.Join(board, "sync.lock")
+	if err := os.WriteFile(path, []byte(journal), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	r := run(f)
+	r.DryRun = true
+	if _, err := b.SyncForges(t.Context(), r); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := os.ReadFile(path); err != nil || string(got) != journal {
+		t.Fatalf("after a check, the journal: %q, %v", got, err)
+	}
+}
+
 // Creations on a forge the repository never synced with, or MaxCreate or
 // more on one, wait for consent: the run tells them (held) and creates
 // none there, its other writes made. A check counts them as made, held.
