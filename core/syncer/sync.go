@@ -149,6 +149,13 @@ func start(ctx context.Context, s *gitstore.Store, opt Options, forges []forge.F
 		return Report{}, err
 	}
 	defer j.unlock()
+	if opt.Issue == "" { // every forge whose sync is on takes part
+		var keys []string
+		for _, f := range forges {
+			keys = append(keys, f.Key())
+		}
+		j.keep(keys)
+	}
 	var unread error // the projects left out of the run, when no one hears them (Left)
 	defer func() { err = errors.Join(unread, err) }()
 	leave := func(key string, why error) error {
@@ -458,6 +465,9 @@ func (r *run) pullFrom(p *project) error {
 		if r.goesOn(p, fi) {
 			// counted done by the next issue read, so the rate is the reads';
 			// out of p.listed too: a push that writes to it reads it
+			if w := unwrap(fi.Body); w.forkID != "" && r.isSync(p, fi.Author) {
+				r.forkIDs[w.forkID] = p.st.links[fi.ID] // the issue its mirrors join, as pullOne would say
+			}
 			r.report.Unchanged++
 			continue
 		}

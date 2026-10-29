@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"time"
 
 	"github.com/guilbep/git-board/core/gitstore"
 )
@@ -29,7 +30,7 @@ func lock(s *gitstore.Store, started int64) (*journal, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := tryLock(f); err != nil {
+	if err := takeLock(f); err != nil {
 		f.Close()
 		if errors.Is(err, errHeld) {
 			return nil, fmt.Errorf("%w (process %s): %s", ErrLocked, holder(path), path)
@@ -43,6 +44,17 @@ func lock(s *gitstore.Store, started int64) (*journal, error) {
 		return nil, err
 	}
 	return j, nil
+}
+
+// takeLock is tryLock, waiting out a look at the lock (Running's, Cut's),
+// which holds it an instant: errHeld once it was held a tenth of a second.
+func takeLock(f *os.File) error {
+	err := tryLock(f)
+	for i := 0; i < 10 && errors.Is(err, errHeld); i++ {
+		time.Sleep(10 * time.Millisecond)
+		err = tryLock(f)
+	}
+	return err
 }
 
 // holder is the process id the lock's holder wrote on the file's first
@@ -62,7 +74,7 @@ func Running(s *gitstore.Store) bool {
 		return false // no run ever took it
 	}
 	defer f.Close()
-	err = tryLock(f)
+	err = takeLock(f) // Cut's look isn't a run
 	if err == nil {
 		unlockFile(f) // it was free: let it go before a fork can share it
 	}

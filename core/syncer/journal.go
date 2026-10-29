@@ -88,7 +88,13 @@ func openJournal(f *os.File, started int64) (*journal, error) {
 }
 
 // rewrite writes the whole file again: the run's line, then the journal.
+// It keeps the file's time, which only an added line moves: Cut's.
 func (j *journal) rewrite() error {
+	info, err := j.f.Stat()
+	if err != nil {
+		return err
+	}
+	defer os.Chtimes(j.f.Name(), info.ModTime(), info.ModTime())
 	var b bytes.Buffer
 	for _, l := range j.lines() {
 		data, _ := json.Marshal(l)
@@ -97,7 +103,7 @@ func (j *journal) rewrite() error {
 	if err := j.f.Truncate(0); err != nil {
 		return err
 	}
-	_, err := j.f.WriteAt(b.Bytes(), 0)
+	_, err = j.f.WriteAt(b.Bytes(), 0)
 	if err == nil {
 		_, err = j.f.Seek(int64(b.Len()), io.SeekStart)
 	}
@@ -163,6 +169,25 @@ func (j *journal) drop(keys []string) {
 	_ = j.rewrite()
 }
 
+// keep forgets what the journal holds of projects other than keys': a
+// forge taken out of the sync, or turned off, takes it along.
+func (j *journal) keep(keys []string) {
+	var out []string
+	for k := range j.totals {
+		if !slices.Contains(keys, k) {
+			out = append(out, k)
+		}
+	}
+	for k := range j.read {
+		if !slices.Contains(keys, k[0]) {
+			out = append(out, k[0])
+		}
+	}
+	if len(out) > 0 {
+		j.drop(out)
+	}
+}
+
 // unlock lets the lock go.
 func (j *journal) unlock() {
 	unlockFile(j.f) // first: a process forking as it closes shares the open file, and with it the lock
@@ -170,7 +195,7 @@ func (j *journal) unlock() {
 }
 
 // CutRun is what the journal says of runs that recorded no run: when it
-// was last written, and the forges whose listing the pull didn't walk to
+// last gained a line, and the forges whose listing the pull didn't walk to
 // its end.
 type CutRun struct {
 	At     time.Time
@@ -242,7 +267,7 @@ func Forget(s *gitstore.Store) error {
 		return err
 	}
 	defer f.Close()
-	if err := tryLock(f); errors.Is(err, errHeld) {
+	if err := takeLock(f); errors.Is(err, errHeld) {
 		return fmt.Errorf("%w (process %s): %s", ErrLocked, holder(path), path)
 	} else if err != nil {
 		return err

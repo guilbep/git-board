@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/guilbep/git-board/core/forge"
 	"github.com/guilbep/git-board/core/forge/fake"
@@ -251,6 +252,34 @@ func TestRunningSaysAHeldLock(t *testing.T) {
 	if Running(s) {
 		t.Fatal("running after the run, its file left")
 	}
+}
+
+// A run waits out a look at the lock (Running's, Cut's), which holds it an
+// instant.
+func TestALookDoesntStopARun(t *testing.T) {
+	t.Parallel()
+	s := newStore(t)
+	j, err := lock(s, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	j.unlock()
+	f, err := os.OpenFile(filepath.Join(s.CommonDir(), "board", "sync.lock"), os.O_RDWR, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := tryLock(f); err != nil {
+		t.Fatal(err)
+	}
+	go func() {
+		time.Sleep(20 * time.Millisecond)
+		unlockFile(f)
+		f.Close()
+	}()
+	if j, err = lock(s, 2); err != nil {
+		t.Fatalf("a run during a look: %v", err)
+	}
+	j.unlock()
 }
 
 // A lock file a killed run left, which no process holds, keeps no run out.

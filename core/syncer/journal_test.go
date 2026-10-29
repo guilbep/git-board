@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/guilbep/git-board/core/forge"
 	"github.com/guilbep/git-board/core/forge/fake"
@@ -283,5 +284,59 @@ func TestAPullThatWentThroughIsntCut(t *testing.T) {
 	}
 	if c, err := Cut(s); err != nil || c != nil {
 		t.Fatalf("a pull that went through: %+v, %v", c, err)
+	}
+}
+
+// The cut's time is when the journal last gained a line: a run after it
+// that reads nothing, as a sync of one issue, doesn't move it.
+func TestTheCutKeepsItsTime(t *testing.T) {
+	t.Parallel()
+	s, r, _ := tenOld(t)
+	cut(t, s, r, "i6")
+	then := time.Now().Add(-time.Hour).Truncate(time.Second)
+	if err := os.Chtimes(filepath.Join(s.CommonDir(), "board", "sync.lock"), then, then); err != nil {
+		t.Fatal(err)
+	}
+	r.then("")
+	if _, err := Sync(t.Context(), s, Options{Issue: issues(t, s)[0].ID}, r); err != nil {
+		t.Fatal(err)
+	}
+	if c, err := Cut(s); err != nil || c == nil || !c.At.Equal(then) {
+		t.Fatalf("after a sync of one issue: %+v, %v, want the cut at %v", c, err, then)
+	}
+}
+
+// A forge out of the sync, taken out or turned off, takes its journal with
+// it: no notice says where it stopped.
+func TestAForgeOutOfTheSyncTakesItsJournal(t *testing.T) {
+	t.Parallel()
+	s, r, _ := tenOld(t)
+	cut(t, s, r, "i6")
+	if _, err := Pull(t.Context(), s, Options{}, fake.New("example.com/other")); err != nil {
+		t.Fatal(err)
+	}
+	if c, err := Cut(s); err != nil || c != nil {
+		t.Fatalf("after a pull without it: %+v, %v", c, err)
+	}
+}
+
+// An original a run skips, read by one before, is still the issue its
+// mirror joins: a pull of a, then of a and b, makes one issue.
+func TestASkippedOriginalJoinsItsMirror(t *testing.T) {
+	t.Parallel()
+	s := newStore(t)
+	a, b := fake.New("example.com/a"), fake.New("example.com/b")
+	board := forge.Account{ID: "1", Login: "board"}
+	for _, f := range []*fake.Forge{a, b} {
+		f.Add(forge.Issue{Author: board, Created: 1000, Title: "T", Body: forkMarker('5') + "\nB", Status: "open"})
+	}
+	if _, err := Pull(t.Context(), s, Options{}, a); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Pull(t.Context(), s, Options{}, a, b); err != nil {
+		t.Fatal(err)
+	}
+	if all := issues(t, s); len(all) != 1 {
+		t.Fatalf("%d issues: b's copy didn't join the one pulled from a", len(all))
 	}
 }
