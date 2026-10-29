@@ -34,6 +34,8 @@ becomes something a board, or a person, turns on.**
 | Which wins | `board.view` when set, else the file. Any other value of `board.view` counts as unset, and the page says so. **(call)** |
 | Off means off | With the classic page:<ul><li>the issue page has no step, flow, review or verdict;</li><li>the header has no Work;</li><li>Settings drops the hint about the cycle's guessed stages.</li></ul>The cycle's data stays: comments keep their `cycle:step`, and the verdicts and sign-offs stay comments. Turning it back on loses nothing. **(user)** |
 | The server | It reports the view; the web decides what to draw. The cycle's endpoints keep working, because a person with `board.view cycle` on a board without `[cycle]` walks the default cycle. No endpoint gates a status or a field today, so there is no gate to turn off. **(call)** |
+| Settings › You | Three choices: As the board says, Classic, The cycle's. They write `board.view` in this repository's git config (`--local`); As the board says unsets it there. A global `board.view` is left alone, and stays a command. **(user, 2026-10-29; the level: call)** |
+| The issue page's switch | On the cycle's page, a Cycle \| Classic switch at the end of the meta line shows the issue as the classic page does, for that issue and the next ones in the tab, until switched back or the page reloads. It writes nothing. Someone on the classic page has no switch. An unsent comment or edit is asked about first: the two pages have their own composers. **(user, 2026-10-29; how long it lasts: call)** |
 | Breaking | A board with no `[cycle]` table, this repository and co2-calculator among them, opens on the classic page after this release. The release notes say how to keep the cycle: `[cycle]` in the file, or `git config board.view cycle`. **(user, accepted)** |
 
 ## What the server says
@@ -47,7 +49,12 @@ becomes something a board, or a person, turns on.**
 
 When `board.view` holds another value, `view_from` is still `"default"` or
 `".git-board.toml"`, and a third field, `view_ignored`, holds the value
-that was ignored.
+that was ignored. `view_scope` is the git config level that set
+`board.view` (`"local"`, `"global"`…).
+
+`PUT /api/me/view` takes `{"view": "classic" | "cycle" | ""}`: it sets
+this repository's `board.view`, or unsets it for `""`, and answers with
+`/api/me`.
 
 The config keeps, beside its `[cycle]` values, whether the file has the
 table at all: `Cycle.On`, read with the TOML decoder's `IsDefined("cycle")`.
@@ -59,17 +66,17 @@ table at all: `Cycle.On`, read with the TOML decoder's `IsDefined("cycle")`.
   skeleton they show today, so the page never flashes one layout and then
   the other.
 - **The header** lists Work only with the cycle view.
-- **Settings › You** says which page your issues open on and why, with the
-  two commands that change it: `git config board.view …` for you,
-  `[cycle]` in the file for everyone.
+- **Settings › You** says which page your issues open on and why, and
+  lets you pick: As the board says, Classic, The cycle's. It names
+  `[cycle]` in the file for everyone and `git config --global` for every
+  repository.
+- **The issue page**, on the cycle's page, has the Cycle | Classic switch.
 - **Settings › Project file's** hint about the guessed stages shows only
   with the cycle view.
 
 ## Not in this PRD
 
-- **A toggle on the page** that writes `board.view`. The command does it,
-  and Settings › You names it.
-- **A per-issue choice of layout.**
+- **A saved per-issue choice of layout.** The switch lasts for the tab.
 - **Removing any cycle code.**
 
 ## Left to the builder

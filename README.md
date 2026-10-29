@@ -108,8 +108,8 @@ views, and the GitHub Project to sync with.
 
 An issue opens on the classic page (the description, the comments and
 changes in order, History, the fields) unless the board's `.git-board.toml`
-has a `[cycle]` table, or you set `git config board.view cycle`: then its
-page is its step in the development cycle, computed from its
+has a `[cycle]` table, or you pick the cycle's page in Settings › You
+(`git config board.view cycle`): then its page is its step in the development cycle, computed from its
 status and the evidence (criteria, risk, plan file, tests in the branch,
 PR, sign-offs). A bar of the seven steps runs under the title: a done step
 reopens, a later one is locked and says why. The step shown is the main
