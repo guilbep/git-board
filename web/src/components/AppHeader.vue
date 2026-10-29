@@ -16,7 +16,8 @@
     <nav class="epfl-nav" aria-label="Main">
       <!-- an issue's page (/issues/:id) is under Issues too -->
       <router-link to="/" :class="{ active: issuesHere }" :aria-current="issuesHere ? 'page' : undefined">Issues</router-link>
-      <router-link to="/work" active-class="active">Work</router-link>
+      <!-- the cycle's work units: with the cycle's issue page alone -->
+      <router-link v-if="cycleView" to="/work" active-class="active">Work</router-link>
       <router-link to="/insights" active-class="active">Insights</router-link>
       <!-- a release's page (/releases/:tag) is under Releases too -->
       <router-link to="/releases" active-class="active" :class="{ active: releasesHere }" :aria-current="releasesHere ? 'page' : undefined">Releases</router-link>
@@ -67,7 +68,7 @@ import KeyboardHelp from '@/components/KeyboardHelp.vue';
 import CommandPalette from '@/components/CommandPalette.vue';
 import { paletteOpen } from '@/commands';
 import { forgeStatus, loadForges } from '@/forges';
-import { initials, loadMe, me, when } from '@/me';
+import { cycleView, initials, loadMe, me, when } from '@/me';
 import { loadSyncStatus, syncStatus } from '@/sync';
 import { loadRemotes, remotes, repo } from '@/remotes';
 import { faviconDot, waitWords, waiting } from '@/ways';

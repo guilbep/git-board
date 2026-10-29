@@ -106,13 +106,16 @@ field's values (`options`: status follows the workflow when sorted and on
 a board), single or multiple values, sprint dates (`@current`), saved
 views, and the GitHub Project to sync with.
 
-An issue's page is its step in the development cycle, computed from its
+An issue opens on the classic page (the description, the comments and
+changes in order, History, the fields) unless the board's `.git-board.toml`
+has a `[cycle]` table, or you pick the cycle's page in Settings › You
+(`git config board.view cycle`): then its page is its step in the development cycle, computed from its
 status and the evidence (criteria, risk, plan file, tests in the branch,
 PR, sign-offs). A bar of the seven steps runs under the title: a done step
 reopens, a later one is locked and says why. The step shown is the main
 screen (the description at Intent, the plan to approve, the diff at
 Review, the run and the sign-offs at Verify), with its button that moves
-the status, and its own discussion beside it. The Work page is what needs
+the status, and its own discussion beside it. With the cycle, the Work page is what needs
 a person across every open issue: Needs you, Agents, Waiting on others, To
 send, Since the last retro. From both, Start an agent runs
 [wtx](https://github.com/EPFL-ENAC/wtx) on the issue: a worktree, a tmux

@@ -76,7 +76,7 @@
           </ul>
           <div v-if="Object.keys(setup.checks).length" class="gb-cycle-actions">
             <button type="button" class="epfl-btn epfl-btn-primary epfl-btn-sm" :disabled="busy || setup.declared" @click="write">Write to .git-board.toml</button>
-            <span class="gb-note">They gate once committed on {{ t.base }}.</span>
+            <span class="gb-note">They gate once committed on {{ t.base }}. They go in the board’s [cycle] table: a board with one opens every issue on the cycle’s page, for everyone.</span>
           </div>
         </template>
       </template>

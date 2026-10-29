@@ -345,6 +345,32 @@ type meResponse struct {
 	// Unswitched: the issues are still git-bug's, in refs/bugs, and no
 	// switch marked the repository: the board shows none of them
 	Unswitched bool `json:"unswitched,omitempty"`
+	// View is the page an issue opens on, classic or cycle, and ViewFrom
+	// what chose it: the person's git config board.view, the board's
+	// [cycle] table, or neither (docs/prd/classic-view.md). ViewIgnored is
+	// a board.view that is neither; ViewScope the git config level that set
+	// board.view ("local" is this repository's, as Settings writes it).
+	View        string `json:"view"`
+	ViewFrom    string `json:"view_from"`
+	ViewIgnored string `json:"view_ignored,omitempty"`
+	ViewScope   string `json:"view_scope,omitempty"`
+}
+
+// resolveView is the page an issue opens on: board.view when it says
+// classic or cycle, else the cycle's when the file has [cycle], else the
+// classic page; ignored is a board.view that said something else.
+func resolveView(setting string, cycleOn bool) (view, from, ignored string) {
+	switch v := strings.ToLower(strings.TrimSpace(setting)); v {
+	case "classic", "cycle":
+		return v, "board.view", ""
+	case "":
+	default:
+		ignored = setting
+	}
+	if cycleOn {
+		return "cycle", ".git-board.toml", ignored
+	}
+	return "classic", "default", ignored
 }
 
 func (s *apiServer) writeMe(w http.ResponseWriter) {
@@ -361,10 +387,37 @@ func (s *apiServer) writeMe(w http.ResponseWriter) {
 		return
 	}
 	res.Unswitched = errors.Is(s.b.Switched(), store.ErrNotSwitched)
+	setting, scope, err := s.b.ViewSetting()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	res.View, res.ViewFrom, res.ViewIgnored = resolveView(setting, s.config().Cycle.On)
+	res.ViewScope = scope
 	writeJSON(w, http.StatusOK, res)
 }
 
 func (s *apiServer) handleMe(w http.ResponseWriter, r *http.Request) { s.writeMe(w) }
+
+// handleSetView is Settings' choice of issue page ({"view"}: classic,
+// cycle, or "" for what the board says), this repository's board.view.
+func (s *apiServer) handleSetView(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		View string `json:"view"`
+	}
+	if !decode(w, r, &req) {
+		return
+	}
+	if req.View != "" && req.View != "classic" && req.View != "cycle" {
+		writeError(w, http.StatusBadRequest, fmt.Errorf("view %q: classic, cycle, or empty for what the board says", req.View))
+		return
+	}
+	if err := s.b.SetView(req.View); err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	s.writeMe(w)
+}
 
 // handleSetMe adopts an identity ({"id"}) or creates one ({"name",
 // "email"}): who comments and edits from git-board.

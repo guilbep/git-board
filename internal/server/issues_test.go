@@ -533,3 +533,64 @@ func TestThreadVersionsHaveHTML(t *testing.T) {
 		t.Errorf("history %+v", h)
 	}
 }
+
+func TestResolveView(t *testing.T) {
+	t.Parallel()
+	for _, c := range []struct {
+		setting             string
+		on                  bool
+		view, from, ignored string
+	}{
+		{"", false, "classic", "default", ""},
+		{"", true, "cycle", ".git-board.toml", ""},
+		{"classic", true, "classic", "board.view", ""},
+		{"Cycle ", false, "cycle", "board.view", ""},
+		{"kanban", true, "cycle", ".git-board.toml", "kanban"},
+	} {
+		view, from, ignored := resolveView(c.setting, c.on)
+		if view != c.view || from != c.from || ignored != c.ignored {
+			t.Errorf("resolveView(%q, %v) = %q %q %q, want %q %q %q", c.setting, c.on, view, from, ignored, c.view, c.from, c.ignored)
+		}
+	}
+}
+
+// /api/me says which page an issue opens on, and why: the person's
+// board.view, else the board's [cycle] table, else the classic page.
+func TestSetViewFromSettings(t *testing.T) {
+	t.Parallel()
+	ts, s := newIssueServer(t)
+	s.setConfig(&config.Config{Cycle: config.Cycle{On: true}})
+	var me meResponse
+	if code := call(t, "PUT", ts.URL+"/api/me/view", map[string]string{"view": "classic"}, &me); code != 200 ||
+		me.View != "classic" || me.ViewFrom != "board.view" || me.ViewScope != "local" {
+		t.Fatalf("classic: %d, %q from %q (%q)", code, me.View, me.ViewFrom, me.ViewScope)
+	}
+	if out := storetest.Git(t, s.b.GitDir(), "config", "--local", "board.view"); strings.TrimSpace(out) != "classic" {
+		t.Errorf("git config says %q", out)
+	}
+	if code := call(t, "PUT", ts.URL+"/api/me/view", map[string]string{"view": ""}, &me); code != 200 ||
+		me.View != "cycle" || me.ViewFrom != ".git-board.toml" {
+		t.Errorf("as the board says: %d, %q from %q", code, me.View, me.ViewFrom)
+	}
+	if code := call(t, "PUT", ts.URL+"/api/me/view", map[string]string{"view": "kanban"}, nil); code != 400 {
+		t.Errorf("kanban: %d, want 400", code)
+	}
+}
+
+func TestMeSaysTheView(t *testing.T) {
+	t.Parallel()
+	ts, s := newIssueServer(t)
+	var me meResponse
+	if call(t, "GET", ts.URL+"/api/me", nil, &me); me.View != "classic" || me.ViewFrom != "default" {
+		t.Errorf("by default: %q from %q", me.View, me.ViewFrom)
+	}
+	storetest.Git(t, s.b.GitDir(), "config", "board.view", "cycle")
+	if call(t, "GET", ts.URL+"/api/me", nil, &me); me.View != "cycle" || me.ViewFrom != "board.view" {
+		t.Errorf("board.view cycle: %q from %q", me.View, me.ViewFrom)
+	}
+	storetest.Git(t, s.b.GitDir(), "config", "--unset", "board.view")
+	s.setConfig(&config.Config{Cycle: config.Cycle{On: true}})
+	if call(t, "GET", ts.URL+"/api/me", nil, &me); me.View != "cycle" || me.ViewFrom != ".git-board.toml" {
+		t.Errorf("a [cycle] table: %q from %q", me.View, me.ViewFrom)
+	}
+}

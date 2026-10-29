@@ -59,7 +59,7 @@
         <button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" @click="load">Try again</button>
       </div>
     </div>
-    <div v-else-if="!thread" class="gb-ihead" role="status" aria-label="Loading the issue">
+    <div v-else-if="!thread || !layout" class="gb-ihead" role="status" aria-label="Loading the issue">
       <h2 class="gb-skel-title">{{ title || 'Loading…' }}</h2>
       <div class="gb-skel" /><div class="gb-skel gb-skel-short" />
     </div>
@@ -91,12 +91,16 @@
             </template>
           </span>
           <span class="gb-mono" title="The issue's id in git-board">id {{ thread.id.slice(0, 7) }}</span>
+          <span v-if="cycleView" class="gb-seg gb-seg-sm gb-pageswitch" role="group" aria-label="Page" title="Classic: the issue as someone on the classic page sees it">
+            <button type="button" :aria-pressed="layout === 'cycle'" @click="switchLayout('cycle', $event)">Cycle</button>
+            <button type="button" :aria-pressed="layout === 'classic'" @click="switchLayout('classic', $event)">Classic</button>
+          </span>
         </div>
         <p v-if="saveError && !renaming" class="gb-save-error" role="alert"><GbIcon name="error" small /> <b>Not saved.</b> {{ saveError }}</p>
         <p v-if="waiting" class="gb-wait" role="status"><GbIcon name="clock" small /> Syncing with the forges… your change is saved after it.</p>
       </div>
 
-      <IssueStep ref="step" :id="thread.id" :status="statusValue" :labels="thread.labels" :events="thread.events" :forges="thread.forges" :head="reading.tab === 'conversation'" @open="openStep" @changed="load" @comment="(b, id) => comment(b, undefined, id)">
+      <IssueStep v-if="layout === 'cycle'" ref="step" :id="thread.id" :status="statusValue" :labels="thread.labels" :events="thread.events" :forges="thread.forges" :head="reading.tab === 'conversation'" @open="openStep" @changed="load" @comment="(b, id) => comment(b, undefined, id)">
         <template #tabs>
           <div class="gb-tabs gb-issue-tabs" role="tablist" aria-label="Issue">
             <button type="button" class="gb-tab" role="tab" :aria-selected="reading.tab === 'conversation'" @click="reading.tab = 'conversation'">Conversation</button>
@@ -231,6 +235,51 @@
           />
         </template>
       </IssueStep>
+      <!-- the classic page (docs/prd/classic-view.md): the description, then
+           every comment and change in order, the composer; the fields aside -->
+      <div v-else class="gb-cols">
+        <div class="gb-maincol">
+          <div class="gb-tabs gb-issue-tabs" role="tablist" aria-label="Issue">
+            <button type="button" class="gb-tab" role="tab" :aria-selected="reading.tab !== 'history'" @click="reading.tab = 'conversation'">Conversation</button>
+            <button type="button" class="gb-tab" role="tab" :aria-selected="reading.tab === 'history'" @click="reading.tab = 'history'">History <span class="gb-modes-count">{{ changeCount }}</span></button>
+          </div>
+          <HistoryView v-if="reading.tab === 'history'" :thread="thread" :fields="fields" />
+          <template v-else>
+            <CommentCard v-if="created" :data-event="created.id" :event="created" :forges="thread.forges" :mine="created.author.id === meId" :save="edit" :role="roleOf(fields, created.author.login)" plain @ref="onRef" />
+            <ol class="gb-tl" aria-label="Conversation">
+              <template v-for="e in rest" :key="e.id">
+                <li v-if="e.kind === 'comment'" :data-event="e.id">
+                  <CommentCard :event="e" :forges="thread.forges" :mine="e.author.id === meId" :save="edit" :role="roleOf(fields, e.author.login)" plain @ref="onRef" />
+                </li>
+                <TimelineEvent v-else :data-event="e.id" :event="e" :fields="fields" />
+              </template>
+            </ol>
+            <IssueComposer
+              :status="thread.status"
+              :forges="thread.forges"
+              :busy="saving"
+              :waiting="waiting"
+              :error="saveError"
+              :comment="(b: string, st?: 'open' | 'closed') => post(b, st, '')"
+            />
+          </template>
+        </div>
+        <IssueSide
+          :id="thread.id"
+          :title="thread.title"
+          :labels="thread.labels"
+          :names="sideNames"
+          :fields="fields"
+          :forges="thread.forges"
+          :participants="thread.participants"
+          :events="thread.events"
+          :saving="saving"
+          @changed="fieldsChanged"
+          @labels="labels"
+          @reveal="reveal"
+          @open="(other: string) => emit('open', other)"
+        />
+      </div>
     </template>
   </component>
 </template>
@@ -245,7 +294,7 @@ import { inbox, inboxError, loadInbox } from '@/inbox';
 import { loadVisit, saveVisit, visit } from '@/lastvisit';
 import { fieldValues, type Fields } from '@/fields';
 import { useIssue } from '@/issue';
-import { me, on, when } from '@/me';
+import { classicPeek, cycleView, loadMe, me, meLoaded, on, when } from '@/me';
 import CycleReview from '@/components/CycleReview.vue';
 import CommentCard from '@/components/CommentCard.vue';
 import HistoryView from '@/components/HistoryView.vue';
@@ -259,6 +308,7 @@ import IssueFlow from '@/components/IssueFlow.vue';
 import IssueSections from '@/components/IssueSections.vue';
 import IssueSide from '@/components/IssueSide.vue';
 import IssueStep from '@/components/IssueStep.vue';
+import TimelineEvent from '@/components/TimelineEvent.vue';
 import VerdictBar from '@/components/VerdictBar.vue';
 import { mayGive, specOf } from '@/spec';
 import { specVerdict } from '@/api/board';
@@ -283,8 +333,33 @@ const uid = useId();
 const { thread, error, saving, waiting, saveError, load, comment, edit, rename, setStatus, labels, review, resolve, resolveThread, apply } =
   useIssue(toRef(props, 'id'), (t) => emit('changed', t));
 // the inbox opens an issue at its first new event
+// the layout, chosen once the issue and /api/me are both in, and kept
+// while the issue is open: a [cycle] saved or a board.view changed
+// meanwhile takes effect at the next issue opened, never under a draft
+const layout = ref<'' | 'cycle' | 'classic'>('');
 watch(
-  () => thread.value?.id,
+  () => (meLoaded.value ? thread.value?.id : undefined),
+  (id) => {
+    if (id) layout.value = cycleView.value && !classicPeek.value ? 'cycle' : 'classic';
+  },
+  { immediate: true },
+);
+// the header's switch, on the cycle's page: the classic one, this issue and
+// the next, until switched back. The two pages have their own composers,
+// so an unsent comment or edit is asked about first.
+function switchLayout(to: 'cycle' | 'classic', e: Event) {
+  if (to === layout.value) return;
+  const panel = (e.currentTarget as HTMLElement).closest('.gb-panel');
+  const draft = [...(panel?.querySelectorAll('textarea') ?? [])].some((t) => t.value.trim());
+  if (draft && !window.confirm('What you’re writing here would be lost. Switch anyway?')) return;
+  classicPeek.value = to === 'classic';
+  layout.value = to;
+}
+// once laid out, an issue opens at the inbox's event or the rail's step:
+// before, the skeleton has neither (the visit and the inbox's read wait
+// with them, harmlessly)
+watch(
+  () => (layout.value ? thread.value?.id : undefined),
   async (id) => {
     if (id && props.at) void nextTick(() => reveal(props.at!));
     if (id && props.step) void nextTick(() => openStep(props.step!));
@@ -306,6 +381,9 @@ watch(
 const meId = computed(() => me.value?.me?.id ?? '');
 const since = ref<number | null>(null);
 const created = computed(() => thread.value?.events.find((e) => e.kind === 'created'));
+// the classic page's conversation: the comments and the changes, in order,
+// as before the cycle (a description's published versions are the flow's)
+const rest = computed(() => thread.value?.events.filter((e) => ['comment', 'labels', 'status', 'title'].includes(e.kind)) ?? []);
 // the description's versions, the one shown (the current one on each
 // issue and each new version: not remembered) and Changes since
 const bodyVersions = computed(() => (created.value ? versions(created.value) : []));
@@ -521,6 +599,7 @@ function leaveField(e: KeyboardEvent) {
   rootEl()?.focus({ preventScroll: true });
 }
 onMounted(() => {
+  if (!meLoaded.value) void loadMe(); // which layout: the header may not have asked yet
   window.addEventListener('keydown', onKey);
   if (!props.page) void nextTick(() => rootEl()?.focus({ preventScroll: true }));
 });

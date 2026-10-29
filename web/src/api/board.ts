@@ -317,6 +317,11 @@ export interface MeResponse {
   me: Person | null;
   identities: Person[] | null;
   unswitched?: boolean; // the issues are still git-bug's (refs/bugs): run git board switch
+  // the page an issue opens on, and what chose it (docs/prd/classic-view.md)
+  view?: 'classic' | 'cycle';
+  view_from?: 'board.view' | '.git-board.toml' | 'default';
+  view_ignored?: string; // a board.view that is neither
+  view_scope?: string; // the git config level that set board.view: local is this repository's
 }
 
 export function getMe(): Promise<MeResponse> {
@@ -329,6 +334,11 @@ export function adoptIdentity(id: string): Promise<MeResponse> {
 
 export function createIdentity(name: string, email: string): Promise<MeResponse> {
   return request('/api/me', json('POST', { name, email }));
+}
+
+// setView sets this repository's board.view; '' unsets it, for what the board says
+export function setView(view: '' | 'classic' | 'cycle'): Promise<MeResponse> {
+  return request('/api/me/view', json('PUT', { view }));
 }
 
 // The sync with the forges (internal/server/forges.go).
