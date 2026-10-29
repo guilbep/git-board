@@ -57,9 +57,16 @@
         <section v-if="me?.view" aria-labelledby="set-view">
           <h3 id="set-view" class="h5">Your issue page</h3>
           <p>{{ viewWords(me) }}</p>
+          <div class="gb-opts" role="radiogroup" aria-labelledby="set-view">
+            <label v-for="o in viewOptions" :key="o.value" class="gb-opt" :class="{ on: viewChoice === o.value }">
+              <input type="radio" name="view" :value="o.value" :checked="viewChoice === o.value" :disabled="viewSaving" @change="pickView(o.value)" />
+              <span><b>{{ o.label }}</b><br /><span class="gb-hint">{{ o.hint }}</span></span>
+            </label>
+          </div>
+          <p v-if="viewError" class="gb-save-error" role="alert"><b>Not saved.</b> {{ viewError }}</p>
           <p class="gb-hint">
-            To change it for you: <code>git config board.view classic</code> or <code>cycle</code> (<code>--global</code> for every repository).
-            For the whole team: a <code>[cycle]</code> table in <code>.git-board.toml</code>. A change to <code>board.view</code> shows when you reload the page.
+            This sets <code>board.view</code> in this repository’s git config, for you alone. For the whole team: a <code>[cycle]</code> table in <code>.git-board.toml</code>.
+            From a terminal, <code>git config --global board.view classic</code> or <code>cycle</code> sets it for every repository; a change made there shows when you reload the page.
           </p>
         </section>
 
@@ -111,9 +118,9 @@ import { themePref } from '@/theme';
 import { debounced, onLive } from '@/live';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
-import { getNumbers, getSettings, getViews, getWhole, getWorktrees, type Labels, type Numbers, type Settings, type WholeStatus, type Worktrees } from '@/api/board';
+import { getNumbers, getSettings, getViews, getWhole, getWorktrees, setView, type Labels, type Numbers, type Settings, type WholeStatus, type Worktrees } from '@/api/board';
 import { message } from '@/issue';
-import { cycleView, loadMe, me } from '@/me';
+import { classicPeek, cycleView, loadMe, me } from '@/me';
 import { viewWords } from '@/view';
 import { settingsTab, settingsTabs, syncSummary } from '@/settingstabs';
 import { numberExample, numbersSummary } from '@/numbers';
@@ -154,7 +161,7 @@ const cards = computed(() => {
     numbers: `One number per issue, the same on every forge: ${numberExample(numbers.value)}.`,
     attachments: 'Files attached to comments, on S3 behind a CDN.',
     worktrees: 'One agent, one worktree, one branch, one PR: wtx, started from here.',
-    you: 'Who you write as, and the appearance.',
+    you: 'Who you write as, your issue page, and the appearance.',
   };
   return [{ id: 'sync', label: 'Sync' }, ...boardTabs].map((t) => ({ id: t.id, title: t.label, what: what[t.id] ?? '', state: state[t.id] ?? '' }));
 });
@@ -163,6 +170,27 @@ const themeOptions = [
   { value: 'light', label: 'Light', hint: 'always' },
   { value: 'dark', label: 'Dark', hint: 'always' },
 ] as const;
+// the issue page: '' follows the board, unless a global board.view says otherwise
+const viewOptions = [
+  { value: '', label: 'As the board says', hint: 'the cycle’s page if .git-board.toml has a [cycle] table, else the classic one; a board.view in your global git config comes first' },
+  { value: 'classic', label: 'Classic', hint: 'the description, then the comments and changes in order; the fields aside' },
+  { value: 'cycle', label: 'The cycle’s', hint: 'each issue’s steps, its review, and its changes' },
+] as const;
+const viewChoice = computed(() => (me.value?.view_from === 'board.view' && me.value.view_scope === 'local' ? me.value.view : ''));
+const viewSaving = ref(false);
+const viewError = ref('');
+async function pickView(v: '' | 'classic' | 'cycle') {
+  viewSaving.value = true;
+  viewError.value = '';
+  try {
+    me.value = await setView(v);
+    classicPeek.value = false; // the page picked here, not the issue switch's
+  } catch (e) {
+    viewError.value = message(e);
+  } finally {
+    viewSaving.value = false;
+  }
+}
 const viewNames = ref<string[]>([]);
 const error = ref('');
 const choosing = ref(false);

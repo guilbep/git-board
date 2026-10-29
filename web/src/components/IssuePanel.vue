@@ -91,6 +91,10 @@
             </template>
           </span>
           <span class="gb-mono" title="The issue's id in git-board">id {{ thread.id.slice(0, 7) }}</span>
+          <span v-if="cycleView" class="gb-seg gb-seg-sm gb-pageswitch" role="group" aria-label="Page" title="Classic: the issue as someone on the classic page sees it">
+            <button type="button" :aria-pressed="layout === 'cycle'" @click="switchLayout('cycle', $event)">Cycle</button>
+            <button type="button" :aria-pressed="layout === 'classic'" @click="switchLayout('classic', $event)">Classic</button>
+          </span>
         </div>
         <p v-if="saveError && !renaming" class="gb-save-error" role="alert"><GbIcon name="error" small /> <b>Not saved.</b> {{ saveError }}</p>
         <p v-if="waiting" class="gb-wait" role="status"><GbIcon name="clock" small /> Syncing with the forges… your change is saved after it.</p>
@@ -290,7 +294,7 @@ import { inbox, inboxError, loadInbox } from '@/inbox';
 import { loadVisit, saveVisit, visit } from '@/lastvisit';
 import { fieldValues, type Fields } from '@/fields';
 import { useIssue } from '@/issue';
-import { cycleView, loadMe, me, meLoaded, on, when } from '@/me';
+import { classicPeek, cycleView, loadMe, me, meLoaded, on, when } from '@/me';
 import CycleReview from '@/components/CycleReview.vue';
 import CommentCard from '@/components/CommentCard.vue';
 import HistoryView from '@/components/HistoryView.vue';
@@ -336,10 +340,21 @@ const layout = ref<'' | 'cycle' | 'classic'>('');
 watch(
   () => (meLoaded.value ? thread.value?.id : undefined),
   (id) => {
-    if (id) layout.value = cycleView.value ? 'cycle' : 'classic';
+    if (id) layout.value = cycleView.value && !classicPeek.value ? 'cycle' : 'classic';
   },
   { immediate: true },
 );
+// the header's switch, on the cycle's page: the classic one, this issue and
+// the next, until switched back. The two pages have their own composers,
+// so an unsent comment or edit is asked about first.
+function switchLayout(to: 'cycle' | 'classic', e: Event) {
+  if (to === layout.value) return;
+  const panel = (e.currentTarget as HTMLElement).closest('.gb-panel');
+  const draft = [...(panel?.querySelectorAll('textarea') ?? [])].some((t) => t.value.trim());
+  if (draft && !window.confirm('What you’re writing here would be lost. Switch anyway?')) return;
+  classicPeek.value = to === 'classic';
+  layout.value = to;
+}
 // once laid out, an issue opens at the inbox's event or the rail's step:
 // before, the skeleton has neither (the visit and the inbox's read wait
 // with them, harmlessly)

@@ -9,6 +9,9 @@ export const me = ref<MeResponse | null>(null);
 export const meLoaded = ref(false);
 // the cycle's page, not the classic one: a failed /api/me is classic
 export const cycleView = computed(() => me.value?.view === 'cycle');
+// classicPeek: someone on the cycle's page looks at issues as the classic
+// page shows them, from the issue's switch: in this tab, until switched back
+export const classicPeek = ref(false);
 
 export async function loadMe(): Promise<void> {
   try {
