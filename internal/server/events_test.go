@@ -112,6 +112,7 @@ func TestForgeSyncStreamsItsSteps(t *testing.T) {
 	s.runSync = fakeSync([]store.SyncEvent{
 		{Forge: "gh", Way: "pull", What: "progress", Done: 1, Total: 2, Line: "#1 Alpha"},
 		{Forge: "gh", What: "waiting", Line: "GitHub doesn't answer: trying again in 30 s"}, // the step, waiting
+		{Forge: "gh", Way: "pull", What: "progress", Done: 1, Total: 2, Line: "#1 Alpha"},   // at once: it clears the wait
 		{Forge: "gh", Way: "pull", What: "updated", Issue: a, Ops: 2},                       // a write: counted, no step
 		{Forge: "gh", Way: "push", What: "progress", Done: 2, Total: 2, Line: "#2 Beta"},
 		{Forge: "gh", Way: "push", What: "posted", Issue: b},
@@ -140,6 +141,7 @@ func TestForgeSyncStreamsItsSteps(t *testing.T) {
 	want := []syncStep{
 		{Bridge: "gh", Way: "pull", Done: 1, Total: 2, Issue: "#1 Alpha"},
 		{Bridge: "gh", Way: "pull", Done: 1, Total: 2, Issue: "#1 Alpha", Wait: "GitHub doesn't answer: trying again in 30 s"},
+		{Bridge: "gh", Way: "pull", Done: 1, Total: 2, Issue: "#1 Alpha"},
 		{Bridge: "gh", Way: "push", Done: 2, Total: 2, Issue: "#2 Beta"},
 	}
 	for _, w := range want {
@@ -150,7 +152,7 @@ func TestForgeSyncStreamsItsSteps(t *testing.T) {
 	if e := readEvent(t, sc); e.Kind != "sync" {
 		t.Errorf("the end: %+v", e)
 	}
-	if st := waitJob(t, ts); st.Job.Step == nil || *st.Job.Step != want[2] {
+	if st := waitJob(t, ts); st.Job.Step == nil || *st.Job.Step != want[3] {
 		t.Errorf("the job keeps its last step: %+v", st.Job.Step)
 	}
 
@@ -186,5 +188,46 @@ func TestForgesSayACutSync(t *testing.T) {
 	want := []cutForge{{Name: "gh", Key: "github.com/o/r", Read: 1, Total: 3}, {Key: "gitlab.example.com/g/p", Total: 2}}
 	if !slices.Equal(st.Cut.Forges, want) || st.Cut.At.IsZero() {
 		t.Fatalf("cut = %+v, want %+v", st.Cut, want)
+	}
+}
+
+// A run that tells a thousand steps at once (a push walking issues with
+// nothing to send, a pull skipping what a cut run read) keeps every page's
+// stream: the steps are thinned, the last of each way kept, and the run's
+// end arrives.
+func TestABurstOfStepsKeepsTheStream(t *testing.T) {
+	t.Parallel()
+	ts, s := forgeServer(t)
+	var evs []store.SyncEvent
+	for i := 1; i <= 1000; i++ {
+		evs = append(evs, store.SyncEvent{Forge: "gh", Way: "push", What: "progress", Done: i, Total: 1000, Line: "#1 Alpha"})
+	}
+	release := make(chan struct{})
+	s.runSync = fakeSync(evs, release)
+	resp, err := http.Get(ts.URL + "/api/events")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	sc := bufio.NewScanner(resp.Body)
+	if code := call(t, "POST", ts.URL+"/api/forges/sync", map[string]any{"dry_run": true}, nil); code != http.StatusAccepted {
+		t.Fatalf("start: %d", code)
+	}
+	if e := readEvent(t, sc); e.Kind != "sync" {
+		t.Fatalf("the start: %+v", e)
+	}
+	close(release)
+	var last *syncStep
+	for {
+		e := readEvent(t, sc)
+		if e.Kind == "sync" {
+			break
+		}
+		if e.Kind == "progress" {
+			last = e.Step
+		}
+	}
+	if last == nil || last.Done != 1000 {
+		t.Fatalf("the last step seen: %+v, want 1000 of 1000", last)
 	}
 }

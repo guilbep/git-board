@@ -219,6 +219,8 @@ func (t *bridgeTally) add(e store.SyncEvent, line string) {
 // its drawer; "" for a full run.
 func (s *apiServer) tell(dry bool, id string, tally func(name string) *bridgeTally, step func(*syncStep)) func(store.SyncEvent) {
 	var last syncStep // a wait is the step it waits in
+	var sent time.Time
+	var waitShown bool // the pages show a wait, which the next step clears
 	return func(e store.SyncEvent) {
 		name := ""
 		if names(e) {
@@ -230,6 +232,10 @@ func (s *apiServer) tell(dry bool, id string, tally func(name string) *bridgeTal
 			next, moved = last, true
 			next.Bridge, next.Wait = cmp.Or(next.Bridge, e.Forge), e.Line
 		}
+		// a step is published at most every stepEvery, but a wait, a new
+		// way and a way's last always: a burst (a push with nothing to
+		// send) would fill every page's buffer, and drop its stream
+		publish := moved && (next.Wait != "" || waitShown || next.Bridge != last.Bridge || next.Way != last.Way || next.Done == next.Total || time.Since(sent) >= stepEvery)
 		if moved {
 			last = next
 			last.Wait = ""
@@ -239,14 +245,18 @@ func (s *apiServer) tell(dry bool, id string, tally func(name string) *bridgeTal
 			tally(e.Forge).add(e, text)
 		}
 		if moved && step != nil {
-			step(&next)
+			step(&next) // the job keeps every step, for a page loading mid-run
 		}
 		s.forgeMu.Unlock()
-		if moved {
+		if publish {
+			sent, waitShown = time.Now(), next.Wait != ""
 			s.events.publish(event{Kind: "progress", ID: id, Step: &next})
 		}
 	}
 }
+
+// stepEvery is how often a run's steps reach the pages, at most.
+const stepEvery = 200 * time.Millisecond
 
 // forges are the settings' forges, or with no table, those found in the
 // git remotes (Backend.Forges), their GitLab ids read by each run.
