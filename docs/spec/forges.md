@@ -74,7 +74,10 @@ query for the times REST doesn't give.
 - **The listing** is every issue updated since the last run, oldest first,
   a hundred a page. It starts a minute early: the last run's start is the
   local clock's, and `updated_at` is GitHub's. An issue or a comment that
-  two pages both list counts once.
+  two pages both list counts once. It reads the issues and their times,
+  a request per hundred, and no comments: an issue with comments is
+  partial, and `Complete` reads them, a request per hundred comments, when
+  the pull reaches it.
 - **Pull requests are never synced.** GitHub's listing of issues holds them;
   the adapter leaves them out. GitHub has no confidential issues, so reading
   a pull request alone is the core's confidential error: sync never reads
@@ -156,7 +159,9 @@ query for the times REST doesn't give.
   it up. The margin costs a handful of issues re-read per sync.
 - **Listings are read page by page,** 100 at a time, oldest first, up to
   the last `X-Next-Page`. An issue or a note listed twice, as a page read
-  after a change can repeat one, counts once.
+  after a change can repeat one, counts once. The listing reads the issues
+  alone: each is partial, and `Complete` reads its notes and state events
+  when the pull reaches it.
 - **Comments are the notes people wrote.** System notes are GitLab's own,
   and give only the change times above. Internal notes are for the
   project's members, so sync never reads them.

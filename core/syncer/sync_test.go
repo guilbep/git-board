@@ -180,6 +180,36 @@ func TestRunLock(t *testing.T) {
 	syncAll(t, s, f)
 }
 
+// The fake lists an issue without its comments, as GitHub and GitLab do:
+// the pull completes each issue it reaches, and the push, which plans
+// against the forge's comments, never posts one again.
+func TestAPartialListingPostsNothingTwice(t *testing.T) {
+	t.Parallel()
+	s, f := newStore(t), fake.New(key)
+	f.Add(sample())
+	if list, _ := f.Issues(t.Context(), 0); len(list) != 1 || !list[0].Partial || list[0].Comments != nil {
+		t.Fatalf("the fake's listing isn't partial: %+v", list)
+	}
+	syncAll(t, s, f)
+	is := only(t, s)
+	if len(is.Comments) != 1 || is.Comments[0].Body != "hi" {
+		t.Fatalf("pulled comments = %+v", is.Comments)
+	}
+	if _, err := issue.Do(t.Context(), s, is.ID, issue.NewComment("a", "mine")); err != nil {
+		t.Fatal(err)
+	}
+	for range 2 {
+		syncAll(t, s, f)
+	}
+	fi, _ := f.Issue(t.Context(), forge.Ref{ID: "100", Number: "1"})
+	if len(fi.Comments) != 2 {
+		t.Fatalf("forge comments = %+v", fi.Comments)
+	}
+	if is := only(t, s); len(is.Comments) != 2 {
+		t.Fatalf("git-board comments = %+v", is.Comments)
+	}
+}
+
 // Running says a run holds the lock: not a file left behind.
 func TestRunningSaysAHeldLock(t *testing.T) {
 	t.Parallel()

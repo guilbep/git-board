@@ -52,14 +52,21 @@ func TestListing(t *testing.T) {
 	h := newHub(t, f)
 	h.repeat = true
 
-	list, err := h.adapter(t).Issues(ctx, 0)
+	a := h.adapter(t)
+	list, err := a.Issues(ctx, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(list) != 251 {
 		t.Fatalf("%d issues, want 251", len(list))
 	}
-	got := list[250]
+	if !list[250].Partial || list[250].Comments != nil || list[0].Partial {
+		t.Fatalf("the listing reads comments: %+v", list[250])
+	}
+	got, err := a.Complete(ctx, list[250])
+	if err != nil {
+		t.Fatal(err)
+	}
 	if got.Title != "many" || got.Body != "a\nb" || len(got.Comments) != 150 || got.Comments[0].Body != "one\ntwo" {
 		t.Fatalf("many = %q %q, %d comments, first %q", got.Title, got.Body, len(got.Comments), got.Comments[0].Body)
 	}

@@ -245,7 +245,24 @@ func (f *Forge) Issue(ctx context.Context, issue forge.Ref) (forge.Issue, error)
 	if err != nil {
 		return forge.Issue{}, err
 	}
-	return out[0], nil
+	return f.Complete(ctx, out[0])
+}
+
+// Complete reads a listed issue's comments, a request per hundred.
+func (f *Forge) Complete(ctx context.Context, is forge.Issue) (forge.Issue, error) {
+	if !is.Partial {
+		return is, nil
+	}
+	cs, err := pages(ctx, f, f.s.repo+"/issues/"+is.Number+"/comments", func(c ghComment) int64 { return c.ID })
+	if err != nil {
+		return is, err
+	}
+	is.Comments = nil
+	for _, c := range cs {
+		is.Comments = append(is.Comments, c.comment())
+	}
+	is.Partial = false
+	return is, nil
 }
 
 func (f *Forge) CreateIssue(ctx context.Context, title, body string) (forge.Issue, error) {
@@ -253,7 +270,7 @@ func (f *Forge) CreateIssue(ctx context.Context, title, body string) (forge.Issu
 	if err := f.call(ctx, http.MethodPost, f.s.repo+"/issues", map[string]string{"title": title, "body": body}, &gi); err != nil {
 		return forge.Issue{}, err
 	}
-	return gi.issue(nil, ghTimes{}), nil
+	return gi.issue(ghTimes{}), nil
 }
 
 func (f *Forge) CreateComment(ctx context.Context, issue forge.Ref, body string) (forge.Comment, error) {
@@ -474,8 +491,10 @@ func (f *Forge) issues(ctx context.Context, query string) ([]ghIssue, error) {
 	return slices.DeleteFunc(all, func(gi ghIssue) bool { return gi.PullRequest != nil }), nil
 }
 
-// read completes issues with their comments and change times. An issue
-// whose comments or times fail to load is an error, never half an issue.
+// read completes issues with their change times, a query per hundred. An
+// issue with comments is Partial: they are a request each, which Complete
+// makes. An issue whose times fail to load is an error, never half an
+// issue.
 func (f *Forge) read(ctx context.Context, gis []ghIssue) ([]forge.Issue, error) {
 	times := map[string]ghTimes{}
 	for chunk := range slices.Chunk(gis, perPage) {
@@ -485,19 +504,13 @@ func (f *Forge) read(ctx context.Context, gis []ghIssue) ([]forge.Issue, error) 
 	}
 	out := make([]forge.Issue, 0, len(gis))
 	for _, gi := range gis {
-		var cs []ghComment
-		if gi.Comments > 0 {
-			var err error
-			path := f.s.repo + "/issues/" + strconv.Itoa(gi.Number) + "/comments"
-			if cs, err = pages(ctx, f, path, func(c ghComment) int64 { return c.ID }); err != nil {
-				return nil, err
-			}
-		}
 		t, ok := times[gi.NodeID]
 		if !ok {
 			return nil, fmt.Errorf("github: #%d: no change times", gi.Number)
 		}
-		out = append(out, gi.issue(cs, t))
+		is := gi.issue(t)
+		is.Partial = gi.Comments > 0
+		out = append(out, is)
 	}
 	return out, nil
 }
@@ -791,7 +804,7 @@ type events struct {
 // state_reason: one closed as not planned is closed. Its title, body and
 // status changed when GitHub last renamed it, edited its body, and closed
 // or reopened it, else at its creation.
-func (gi ghIssue) issue(cs []ghComment, t ghTimes) forge.Issue {
+func (gi ghIssue) issue(t ghTimes) forge.Issue {
 	created := gi.Created.Unix()
 	is := forge.Issue{
 		ID: id(gi.ID), Number: strconv.Itoa(gi.Number), URL: gi.URL, Author: gi.User.account(),
@@ -803,9 +816,6 @@ func (gi ghIssue) issue(cs []ghComment, t ghTimes) forge.Issue {
 	}
 	for _, u := range gi.Assignees {
 		is.Assignees = append(is.Assignees, u.account())
-	}
-	for _, c := range cs {
-		is.Comments = append(is.Comments, c.comment())
 	}
 	if t.LastEditedAt != nil {
 		is.Changed["body"] = t.LastEditedAt.Unix()

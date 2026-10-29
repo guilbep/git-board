@@ -533,7 +533,10 @@ A run syncs git-board with every project it is given:
    whose visibility it can't read is left out, and the run returns that
    error at its end; a posting account it can't read stops it.
 3. It pulls from each project: the issues listed as updated since that
-   project's last `run`, or every issue when there is none.
+   project's last `run`, or every issue when there is none. A listing reads
+   a request per page: an issue whose comments cost a request of their own
+   is listed partial, and the pull completes each issue as it reaches it,
+   before anything reads its comments.
 4. It pushes to each project. As every project is pulled first, an issue
    pulled from one goes to the others in the same run.
 5. It records a `run` in each project's sync entity it wrote to.

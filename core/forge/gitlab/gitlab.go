@@ -311,7 +311,9 @@ func text(s string) string { return strings.ReplaceAll(s, "\r\n", "\n") }
 func (p *project) issue(iid int64) string { return p.api + "/issues/" + strconv.FormatInt(iid, 10) }
 
 // Issues lists from 2 minutes before since, oldest first, without the
-// confidential ones, which GitLab lists to its members.
+// confidential ones, which GitLab lists to its members. Each is Partial:
+// its notes and state events are requests of their own, which Complete
+// makes.
 func (f *Forge) Issues(ctx context.Context, since int64) ([]forge.Issue, error) {
 	q := url.Values{"scope": {"all"}, "order_by": {"created_at"}, "sort": {"asc"}}
 	if since > 0 {
@@ -319,12 +321,12 @@ func (f *Forge) Issues(ctx context.Context, since int64) ([]forge.Issue, error) 
 	}
 	var out []forge.Issue
 	err := each(ctx, f, f.p.api+"/issues", q, func(g glIssue) (bool, error) {
-		if g.Confidential {
-			return true, nil
+		if !g.Confidential {
+			is := g.issue()
+			is.Partial = true
+			out = append(out, is)
 		}
-		is, err := f.full(ctx, g)
-		out = append(out, is)
-		return err == nil, err
+		return true, nil
 	})
 	return out, err
 }
@@ -334,7 +336,9 @@ func (f *Forge) Issue(ctx context.Context, issue forge.Ref) (forge.Issue, error)
 	if err != nil {
 		return forge.Issue{}, err
 	}
-	return f.full(ctx, g)
+	is := g.issue()
+	is.Partial = true
+	return f.Complete(ctx, is)
 }
 
 // read reads the issue alone, by its iid, GitLab's number: ErrNotFound,
@@ -357,13 +361,19 @@ func (f *Forge) read(ctx context.Context, issue forge.Ref) (glIssue, error) {
 	return g, nil
 }
 
-// full adds the issue's comments, without system and internal notes, and
-// when its title, body and status last changed.
-func (f *Forge) full(ctx context.Context, g glIssue) (forge.Issue, error) {
-	is := g.issue()
-	is.Changed = map[string]int64{}
-	at := f.p.issue(g.IID)
-	err := each(ctx, f, at+"/notes", url.Values{"sort": {"asc"}, "order_by": {"created_at"}}, func(n note) (bool, error) {
+// Complete adds a listed issue's comments, without system and internal
+// notes, and when its title, body and status last changed.
+func (f *Forge) Complete(ctx context.Context, is forge.Issue) (forge.Issue, error) {
+	if !is.Partial {
+		return is, nil
+	}
+	iid, err := strconv.ParseInt(is.Number, 10, 64)
+	if err != nil {
+		return is, fmt.Errorf("gitlab: issue number %q: %w", is.Number, err)
+	}
+	is.Comments, is.Changed = nil, map[string]int64{}
+	at := f.p.issue(iid)
+	err = each(ctx, f, at+"/notes", url.Values{"sort": {"asc"}, "order_by": {"created_at"}}, func(n note) (bool, error) {
 		switch {
 		case n.System:
 			if field := n.changes(); field != "" {
@@ -384,6 +394,7 @@ func (f *Forge) full(ctx context.Context, g glIssue) (forge.Issue, error) {
 	if errors.Is(err, forge.ErrNotFound) {
 		err = nil // GitLab before 13.2: the system notes said it
 	}
+	is.Partial = err != nil
 	return is, err
 }
 

@@ -55,7 +55,9 @@ type Comment struct {
 
 // Issue is a forge issue. Status is open or closed. Times are in Unix
 // seconds. Changed holds when title, body and status last changed; a field
-// missing from it changed at Updated.
+// missing from it changed at Updated. A Partial issue, as a listing gives
+// it, lacks its comments, and on some forges its Changed: Complete reads
+// them.
 type Issue struct {
 	ID, Number, URL  string
 	Author           Account
@@ -66,6 +68,7 @@ type Issue struct {
 	Assignees        []Account
 	Comments         []Comment
 	Changed          map[string]int64
+	Partial          bool
 }
 
 // Ref names a forge issue: its id, which links are keyed on, and its
@@ -97,8 +100,13 @@ type Forge interface {
 	// order, without the confidential ones. since 0 lists them all. since is
 	// the last run's start, as recorded: an adapter whose forge moves its
 	// update times late, as GitLab does, lists from its own margin earlier.
+	// An issue listed may be Partial: what costs a request per issue is
+	// left to Complete, so that a listing takes a request per page.
 	Issues(ctx context.Context, since int64) ([]Issue, error)
-	// Issue reads one issue: ErrNotFound, or ErrConfidential. The writes
+	// Complete reads what a listing left out of an issue it listed, and
+	// gives back one that isn't Partial as it is.
+	Complete(ctx context.Context, is Issue) (Issue, error)
+	// Issue reads one issue, whole: ErrNotFound, or ErrConfidential. The writes
 	// name it the same way, by its Ref.
 	Issue(ctx context.Context, issue Ref) (Issue, error)
 

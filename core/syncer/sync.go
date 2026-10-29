@@ -432,11 +432,17 @@ func (r *run) listing(p *project) ([]forge.Issue, error) {
 	return p.f.Issues(r.ctx, p.st.lastRun)
 }
 
-// pullFrom reads p's issues and pulls each, as sync.md's pull says.
+// pullFrom reads p's issues and pulls each, as sync.md's pull says. Each
+// is completed first, the one place a listed issue is: what follows, and
+// the push's plan, read its comments.
 func (r *run) pullFrom(p *project) error {
 	for _, fi := range p.list {
 		if err := r.ctx.Err(); err != nil {
 			return err
+		}
+		fi, err := p.f.Complete(r.ctx, fi)
+		if err != nil {
+			return fmt.Errorf("syncer: forge issue %s: %w", fi.Number, err)
 		}
 		if fi.Status != "open" && fi.Status != "closed" {
 			return fmt.Errorf("syncer: forge issue %s: bad status %q", fi.ID, fi.Status)

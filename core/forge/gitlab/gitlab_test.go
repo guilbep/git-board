@@ -61,8 +61,12 @@ func TestPagingAndRepeats(t *testing.T) {
 	if got := titlesOf(list); !slices.Equal(got, []string{"A", "B", "C"}) {
 		t.Fatalf("issues = %v", got)
 	}
+	c, err := a.Complete(t.Context(), list[2])
+	if err != nil {
+		t.Fatal(err)
+	}
 	var bodies []string
-	for _, c := range list[2].Comments {
+	for _, c := range c.Comments {
 		bodies = append(bodies, c.Body)
 	}
 	if !slices.Equal(bodies, []string{"c0", "c1", "c2", "c3", "c4"}) {

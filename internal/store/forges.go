@@ -399,6 +399,13 @@ func (c *counted) Issues(ctx context.Context, since int64) ([]forge.Issue, error
 	return c.f.Issues(ctx, since)
 }
 
+func (c *counted) Complete(ctx context.Context, is forge.Issue) (forge.Issue, error) {
+	if strings.HasPrefix(is.ID, "dry-") {
+		return is, nil // a dry run's made-up issue: nothing on the forge to read
+	}
+	return c.f.Complete(ctx, is)
+}
+
 func (c *counted) Issue(ctx context.Context, issue forge.Ref) (forge.Issue, error) {
 	if strings.HasPrefix(issue.ID, "dry-") {
 		return forge.Issue{}, forge.ErrNotFound
