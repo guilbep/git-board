@@ -98,23 +98,25 @@ func TestForgeNeedsAForge(t *testing.T) {
 	}
 }
 
-// A long pull says so at its first issue, then where it is every hundred;
-// a short one, and a push, only every hundred.
+// A long pull says so at its first issue read, counting what is left, then
+// where it is every hundred; a short one, and a push, only every hundred.
 func TestProgressLines(t *testing.T) {
 	t.Parallel()
 	for _, c := range []struct {
-		e    store.SyncEvent
-		want string
+		e     store.SyncEvent
+		first bool
+		want  string
 	}{
-		{store.SyncEvent{Way: "pull", Done: 1, Total: 1034}, "1,034 issues to read: this takes several minutes"},
-		{store.SyncEvent{Way: "pull", Done: 2, Total: 1034}, ""},
-		{store.SyncEvent{Way: "pull", Done: 400, Total: 1034}, "pulling 400 of 1,034"},
-		{store.SyncEvent{Way: "pull", Done: 1034, Total: 1034}, "pulling 1,034 of 1,034"},
-		{store.SyncEvent{Way: "pull", Done: 1, Total: 12}, ""},
-		{store.SyncEvent{Way: "push", Done: 1, Total: 1034}, ""},
-		{store.SyncEvent{Way: "push", Done: 100, Total: 1034}, "pushing 100 of 1,034"},
+		{store.SyncEvent{Way: "pull", Done: 1, Total: 1034}, true, "1,034 issues to read: this takes several minutes"},
+		{store.SyncEvent{Way: "pull", Done: 409, Total: 1000}, true, "592 issues to read: this takes several minutes"}, // after a cut, 408 skipped
+		{store.SyncEvent{Way: "pull", Done: 2, Total: 1034}, false, ""},
+		{store.SyncEvent{Way: "pull", Done: 400, Total: 1034}, false, "pulling 400 of 1,034"},
+		{store.SyncEvent{Way: "pull", Done: 1034, Total: 1034}, false, "pulling 1,034 of 1,034"},
+		{store.SyncEvent{Way: "pull", Done: 1, Total: 12}, true, ""},
+		{store.SyncEvent{Way: "push", Done: 1, Total: 1034}, true, ""},
+		{store.SyncEvent{Way: "push", Done: 100, Total: 1034}, false, "pushing 100 of 1,034"},
 	} {
-		if got := progressLine(c.e); !strings.HasPrefix(got, c.want) || (c.want == "") != (got == "") {
+		if got := progressLine(c.e, c.first); !strings.HasPrefix(got, c.want) || (c.want == "") != (got == "") {
 			t.Errorf("%+v: %q, want %q…", c.e, got, c.want)
 		}
 	}

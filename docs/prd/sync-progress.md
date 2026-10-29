@@ -43,7 +43,7 @@ that survives a lost connection or a shutdown, continuing gracefully.
 | What a cut run leaves | The lock file holds the run's journal. Its first line is the run: process id and start time. Then it gets one line for each forge issue the pull has pulled, or found unchanged: the forge, the issue's id, and the start of the run that read it. A run that ends without recording its `run` leaves its journal: cut, failed, stopped, or a pull alone. A run that records its `run` empties the file. **(call)** |
 | Going on | A run reads the journal it finds and writes back what it keeps. A listed issue is skipped, with no `Complete()` and no pull, when all three hold:<ul><li>the journal has it;</li><li>it is linked;</li><li>the forge says it was last updated more than 5 minutes before the start of the run that read it.</li></ul>So the issue is as git-board last read it: this is `since`'s rule, applied to what the cut run reached. 5 minutes is more than the adapters' own margins (GitHub 1, GitLab 2) for the two clocks. A skipped issue stays out of the push's listing, so a push that writes to it reads it fresh. A run of one issue alone neither reads nor writes the journal, and neither does a dry run, on its own copy. **(call)** |
 | Not reached | Nothing goes in the journal for an issue the pull didn't finish:<ul><li>one whose write failed;</li><li>one skipped because its issue isn't here;</li><li>a mirror waiting for the end of the walk, until it is pulled.</li></ul> **(call)** |
-| Retries | A read retries a broken connection, a timeout or a 5xx for up to 5 minutes, with doubling waits of at most 30 s. The progress line says so: "GitHub doesn't answer: trying again in 30 s". A rate limit's wait, already waited out, is said the same way. A write is never retried, as before: the forge may have made it. **(call)** |
+| Retries | A read retries a broken connection, a timeout or a 5xx until its waits add up to 5 minutes, waits doubling to at most 30 s (each try has its own minute's timeout on top). The progress line says so: "GitHub doesn't answer: trying again in 30 s". A rate limit's wait, already waited out, is said the same way. A write is never retried, as before: the forge may have made it. **(call)** |
 | After a restart | The run is gone from the server's memory, but its journal is on disk. Settings › Sync says the last sync stopped at k of n issues from that forge, and when, and that Sync goes on from there. The command line says the same when it starts a sync over a cut journal. Nothing resumes by itself: a sync writes to the forges, and the person starts it. **(call)** |
 | The bar's numbers after a cut | The next run counts its total over the whole listing. Issues the journal lets it skip count as done at once, so the bar starts where the cut run stopped. **(call)** |
 
@@ -70,3 +70,8 @@ that survives a lost connection or a shutdown, continuing gracefully.
   That only happens during the upgrade itself. **(call)**
 - **The forge interface** gains `Complete()`: every adapter, and the dry
   run's wrapper, implements it.
+- **An older git-board refuses to sync in a clone where this one has run.**
+  It makes the lock file only if it doesn't exist, and this version never
+  removes it. Every git-board that syncs one clone, a cron job's included,
+  needs this version; until then, deleting `board/sync.lock` lets the old
+  one run once. **(call)**

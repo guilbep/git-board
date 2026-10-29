@@ -396,7 +396,7 @@ export interface ForgeJob {
 // come to. A pull has no total: the forge doesn't say how many it holds.
 export interface SyncStep {
   bridge: string;
-  way: 'pull' | 'push';
+  way: 'pull' | 'push' | ''; // '': a wait before the run's first step
   done: number;
   total?: number;
   issue?: string; // "#43 import: users lose their work"

@@ -106,8 +106,10 @@ query for the times REST doesn't give.
   from there, as sync records every write as it makes it.
 - **A read is tried again after a 5xx or a broken connection, a write never
   is.** GitHub may have made it (see [Echoes](sync.md#echoes)). A read waits
-  1, 2, 4 seconds and so on, up to 30, for 5 minutes in all
-  (`forge.Backoff`): long enough for a Wi-Fi drop or a laptop asleep. Each
+  1, 2, 4 seconds and so on, up to 30, until the waits add up to 5
+  minutes (`forge.Backoff`): long enough for a Wi-Fi drop or a laptop
+  asleep. Each try has the client's own minute before it fails, so a run
+  of hung tries takes longer than the waits. Each
   wait, and each rate limit's, is told to the run (`forge.Waiting`), and the
   progress says it: "GitHub doesn't answer: trying again in 30 s".
 - **Errors.** A 404, a 410 and a redirect, as for an issue moved to

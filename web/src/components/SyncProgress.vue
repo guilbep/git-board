@@ -23,8 +23,10 @@ import { longPull, msLeft, stepWords, timeLeft, type BarSample } from '@/ways';
 // starting is the line before the first step
 const props = defineProps<{ job: ForgeJob; bridges: { name: string; target: string }[]; starting: string }>();
 
-// the way's first sample and its last, for the rate; long: the total of a
-// pull that takes minutes, said until the run ends
+// the way's first sample and its last, for the rate (the first is the
+// first issue read: those a cut run read are skipped before it); long:
+// the issues left to read of a pull that takes minutes, said until the run
+// ends
 let way = '';
 let first: BarSample = { at: 0, done: 0 };
 const left = ref('');
@@ -39,7 +41,7 @@ watch(
       first = now;
     }
     left.value = timeLeft(first, now, s.total);
-    if (longPull(s, msLeft(first, now, s.total))) long.value ||= s.total;
+    if (longPull(s, msLeft(first, now, s.total))) long.value ||= s.total - s.done + 1; // what is left at the first issue read
   },
   { immediate: true },
 );

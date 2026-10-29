@@ -149,3 +149,7 @@ test('cutWords says where a cut sync stopped, and that the next goes on', () => 
     'The last sync stopped today 14:02, at 612 of 1,034 issues from GitHub (gh), 0 of 20 from gitlab.example.com/g/p. The next sync goes on from there: what it pulled stays.',
   );
 });
+
+test('stepWords: a wait before any step names the forge alone', () => {
+  assert.equal(stepWords({ bridge: 'gh', way: '', done: 0, wait: "GitHub doesn't answer: trying again in 4 s" }, [{ name: 'gh', target: 'github' }]), 'GitHub (gh)');
+});

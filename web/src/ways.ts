@@ -48,6 +48,7 @@ export function stepLine(s: JobStep, remote: string, dryRun: boolean): string {
 // lose their work"; a pull counts up with no total
 export function stepWords(s: SyncStep, bridges: { name: string; target: string }[]): string {
   const b = bridges.find((b) => b.name === s.bridge);
+  if (!s.way) return b ? forgeLabel(b) : s.bridge; // a wait before the first step: the listing's
   const count = s.total ? `${n(s.done)} of ${n(s.total)}` : n(s.done);
   return [b ? forgeLabel(b) : s.bridge, `${s.way === 'pull' ? 'pulling' : 'pushing'} ${count}`, s.issue].filter(Boolean).join(' · ');
 }

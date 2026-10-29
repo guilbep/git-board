@@ -114,11 +114,14 @@ func runForgeWay(ctx context.Context, b *store.Backend, cfg *config.Config, on [
 		}
 	}
 	run := store.ForgeRun{Forges: fs, PublishPrivate: cfg.PublishPrivate, DryRun: check, AllowCreate: allowCreate, Merge: merge}
+	first := map[string]bool{} // forge and way: told once
 	run.See = func(e store.SyncEvent) {
 		if e.What == "progress" {
-			if line := progressLine(e); line != "" {
+			key := e.Forge + " " + e.Way
+			if line := progressLine(e, !first[key]); line != "" {
 				say("  %s: %s", e.Forge, line)
 			}
+			first[key] = true
 			return
 		}
 		line := e.Text(check, eventIssue(b, e.Issue))
@@ -139,12 +142,13 @@ const longPull = 200
 
 var english = message.NewPrinter(language.English)
 
-// progressLine is a way's line every hundred issues; a long pull's first
-// says it takes minutes. "" between.
-func progressLine(e store.SyncEvent) string {
-	switch {
-	case e.Way == "pull" && e.Done == 1 && e.Total >= longPull:
-		return english.Sprintf("%d issues to read: this takes several minutes", e.Total)
+// progressLine is a way's line every hundred issues; at the first issue a
+// long pull reads, it says it takes minutes, counting what is left (a cut
+// run's issues skipped before it). "" between.
+func progressLine(e store.SyncEvent, first bool) string {
+	switch left := e.Total - e.Done + 1; {
+	case e.Way == "pull" && first && left >= longPull:
+		return english.Sprintf("%d issues to read: this takes several minutes", left)
 	case e.Done%100 == 0 || e.Done == e.Total && e.Total >= 100:
 		verb := "pulling"
 		if e.Way == "push" {
