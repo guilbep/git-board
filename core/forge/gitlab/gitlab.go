@@ -599,8 +599,9 @@ func (f *Forge) update(ctx context.Context, issue forge.Ref, fields map[string]a
 
 // call sends one request with the token, and decodes GitLab's answer into
 // out. It paces writes, waits out a spent rate limit, and retries a 429,
-// and a 5xx for a read. A write is never retried after a 5xx: GitLab may
-// have made it.
+// three times at most; a read's 5xx or dropped connection, for as long as
+// forge.Backoff says. A write is never retried after a 5xx or a drop:
+// GitLab may have made it. Each wait is told (forge.Waiting).
 func (f *Forge) call(ctx context.Context, method, at string, q url.Values, in, out any) (http.Header, error) {
 	var body []byte
 	if in != nil {
@@ -614,7 +615,18 @@ func (f *Forge) call(ctx context.Context, method, at string, q url.Values, in, o
 	}
 	what := method + " " + strings.TrimPrefix(at, f.p.root)
 	write := method != http.MethodGet
-	for try := 0; ; try++ {
+	var limits, fails int // 429s waited out; a read's failures, waited for waited
+	var waited time.Duration
+	retry := func(why string) error {
+		wait, ok := forge.Backoff(fails, waited)
+		if !ok {
+			return errOutage
+		}
+		fails, waited = fails+1, waited+wait
+		forge.Waiting(ctx, forge.Wait{Forge: f.Key(), Why: why, For: wait})
+		return f.p.sleep(ctx, wait)
+	}
+	for {
 		if err := f.wait(ctx, write); err != nil {
 			return nil, err
 		}
@@ -632,13 +644,16 @@ func (f *Forge) call(ctx context.Context, method, at string, q url.Values, in, o
 			f.lastWrite = time.Now()
 			f.mu.Unlock()
 		}
-		if err != nil {
-			return nil, fmt.Errorf("gitlab: %s: %w", what, err)
+		var data []byte
+		if err == nil {
+			data, err = io.ReadAll(io.LimitReader(resp.Body, 64<<20))
+			resp.Body.Close()
 		}
-		data, err := io.ReadAll(io.LimitReader(resp.Body, 64<<20))
-		resp.Body.Close()
 		if err != nil {
-			return nil, fmt.Errorf("gitlab: %s: %w", what, err)
+			if write || ctx.Err() != nil || retry("GitLab doesn't answer") != nil {
+				return nil, fmt.Errorf("gitlab: %s: %w", what, err)
+			}
+			continue
 		}
 		f.limits(resp.Header)
 		code := resp.StatusCode
@@ -650,25 +665,42 @@ func (f *Forge) call(ctx context.Context, method, at string, q url.Values, in, o
 			}
 			return resp.Header, nil
 		}
-		if (code == http.StatusTooManyRequests || (code >= 500 && method == http.MethodGet)) && try < retries {
-			if err := f.p.sleep(ctx, backoff(resp.Header, try)); err != nil {
+		switch {
+		case code == http.StatusTooManyRequests && limits < retries:
+			wait := backoff(resp.Header, limits)
+			limits++
+			forge.Waiting(ctx, forge.Wait{Forge: f.Key(), Why: "GitLab's rate limit", For: wait})
+			if err := f.p.sleep(ctx, wait); err != nil {
 				return nil, err
 			}
 			continue
+		case code >= 500 && !write:
+			if err := retry(fmt.Sprintf("GitLab answers %d", code)); err == nil {
+				continue
+			} else if !errors.Is(err, errOutage) {
+				return nil, err
+			}
 		}
 		return nil, refusal(what, code, data)
 	}
 }
+
+// errOutage: a read failed for longer than forge.Outage.
+var errOutage = errors.New("gitlab: down for too long")
 
 // wait waits out a spent rate limit, and paces a write after the last one.
 func (f *Forge) wait(ctx context.Context, write bool) error {
 	f.mu.Lock()
 	at := f.notBefore
 	f.notBefore = time.Time{}
+	spent := time.Until(at) > 0
 	if next := f.lastWrite.Add(f.p.pace); write && next.After(at) {
 		at = next
 	}
 	f.mu.Unlock()
+	if spent {
+		forge.Waiting(ctx, forge.Wait{Forge: f.Key(), Why: "GitLab's rate limit", For: time.Until(at)})
+	}
 	return f.p.sleep(ctx, time.Until(at))
 }
 

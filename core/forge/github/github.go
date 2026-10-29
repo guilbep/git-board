@@ -587,8 +587,9 @@ var errUnauthorized = errors.New("github: bad credentials")
 
 // call makes one request, and reads its answer into out. A write is paced.
 // A rate limit is waited out and the request tried again, three times at
-// most. A read is also tried again after a 5xx or a broken connection; a
-// write never is, as GitHub may have made it.
+// most. A read is also tried again after a 5xx or a broken connection,
+// for as long as forge.Backoff says; a write never is, as GitHub may have
+// made it. Each wait is told (forge.Waiting).
 func (f *Forge) call(ctx context.Context, method, u string, in, out any) error {
 	var body []byte
 	if in != nil {
@@ -598,20 +599,24 @@ func (f *Forge) call(ctx context.Context, method, u string, in, out any) error {
 		}
 	}
 	read := method == http.MethodGet || u == f.s.graphql
-	for try := 0; ; try++ {
+	var limits, fails int // rate limits waited out; a read's failures, waited for waited
+	var waited time.Duration
+	for {
 		if !read {
-			if err := f.s.pace(ctx); err != nil {
+			if err := f.s.pace(ctx, f.Key()); err != nil {
 				return err
 			}
 		}
 		code, h, data, err := f.do(ctx, method, u, body)
 		var wait time.Duration
+		var why string
 		switch {
 		case err != nil:
-			if !read || try == retries {
+			var ok bool
+			if wait, ok = forge.Backoff(fails, waited); !ok || !read || ctx.Err() != nil {
 				return err
 			}
-			wait = time.Second << try
+			fails, waited, why = fails+1, waited+wait, "GitHub doesn't answer"
 		case code < 300:
 			if out == nil || len(data) == 0 {
 				return nil
@@ -626,15 +631,20 @@ func (f *Forge) call(ctx context.Context, method, u string, in, out any) error {
 			}
 			_ = json.Unmarshal(data, &e)
 			limit, limited := rateLimited(code, h, e.Message, f.s.now())
+			var ok bool
 			switch {
-			case limited && try < retries:
-				wait = limit
-			case code >= 500 && read && try < retries:
-				wait = time.Second << try
+			case limited && limits < retries:
+				limits, wait, why = limits+1, limit, "GitHub's rate limit"
+			case code >= 500 && read:
+				if wait, ok = forge.Backoff(fails, waited); !ok {
+					return statusError(method, u, code, e.Message, limited)
+				}
+				fails, waited, why = fails+1, waited+wait, fmt.Sprintf("GitHub answers %d", code)
 			default:
 				return statusError(method, u, code, e.Message, limited)
 			}
 		}
+		forge.Waiting(ctx, forge.Wait{Forge: f.Key(), Why: why, For: wait})
 		if err := f.s.sleep(ctx, wait); err != nil {
 			return err
 		}
@@ -711,7 +721,7 @@ func statusError(method, u string, code int, msg string, limited bool) error {
 // asks, which keeps under its 80 a minute, and under 500 an hour.
 // ponytail: one pace per New, shared by its As views; one per token if
 // several projects on one host sync at once.
-func (s *shared) pace(ctx context.Context) error {
+func (s *shared) pace(ctx context.Context, key string) error {
 	s.mu.Lock()
 	now := s.now()
 	s.writes = slices.DeleteFunc(s.writes, func(t time.Time) bool { return now.Sub(t) >= time.Hour })
@@ -724,6 +734,9 @@ func (s *shared) pace(ctx context.Context) error {
 	}
 	s.writes = append(s.writes, at)
 	s.mu.Unlock()
+	if d := at.Sub(now); d > 5*time.Second { // a second between writes isn't worth telling
+		forge.Waiting(ctx, forge.Wait{Forge: key, Why: "GitHub's limit of 500 writes an hour", For: d})
+	}
 	return s.sleep(ctx, at.Sub(now))
 }
 

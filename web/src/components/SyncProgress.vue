@@ -7,7 +7,7 @@
   <div class="gb-progress" role="status">
     <progress v-if="job.step?.total" :value="job.step.done" :max="job.step.total" />
     <progress v-else />
-    <span>{{ job.step ? stepWords(job.step, bridges) : starting }}<template v-if="left"> · {{ left }}</template></span>
+    <span>{{ job.step ? stepWords(job.step, bridges) : starting }}<template v-if="job.step?.wait"> · {{ job.step.wait }}</template><template v-else-if="left"> · {{ left }}</template></span>
     <p v-if="long" class="gb-hint">
       About {{ long.toLocaleString() }} issues to read: this takes several minutes. You can close this page, the sync goes on in git-board’s server;
       a sync cut off goes on, next time, from where it stopped.

@@ -1,6 +1,7 @@
 package server
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -95,6 +96,7 @@ type syncStep struct {
 	Done   int    `json:"done"`
 	Total  int    `json:"total,omitempty"`
 	Issue  string `json:"issue,omitempty"` // "#43 import: users lose their work"
+	Wait   string `json:"wait,omitempty"`  // "GitHub doesn't answer: trying again in 30 s", until the next step
 }
 
 // names says an event names an issue of git-board's.
@@ -200,6 +202,7 @@ func (t *bridgeTally) add(e store.SyncEvent, line string) {
 // tally is called with forgeMu held. id names the issue a step is on, for
 // its drawer; "" for a full run.
 func (s *apiServer) tell(dry bool, id string, tally func(name string) *bridgeTally, step func(*syncStep)) func(store.SyncEvent) {
+	var last syncStep // a wait is the step it waits in
 	return func(e store.SyncEvent) {
 		name := ""
 		if names(e) {
@@ -207,6 +210,14 @@ func (s *apiServer) tell(dry bool, id string, tally func(name string) *bridgeTal
 		}
 		text := e.Text(dry, name)
 		next, moved := syncStep{Bridge: e.Forge, Way: e.Way, Done: e.Done, Total: e.Total, Issue: e.Line}, e.What == "progress"
+		if e.What == "waiting" {
+			next, moved = last, true
+			next.Bridge, next.Wait = cmp.Or(next.Bridge, e.Forge), e.Line
+		}
+		if moved {
+			last = next
+			last.Wait = ""
+		}
 		s.forgeMu.Lock()
 		if e.Forge != "" {
 			tally(e.Forge).add(e, text)

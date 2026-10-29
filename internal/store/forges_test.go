@@ -251,3 +251,17 @@ func TestCreateNeedsConsent(t *testing.T) {
 		t.Fatalf("run with consent: held %+v, forge %d issues", held, len(f.All()))
 	}
 }
+
+// A forge's wait says why, and when it asks again.
+func TestWaitWords(t *testing.T) {
+	t.Parallel()
+	for d, want := range map[time.Duration]string{
+		30 * time.Second:               "GitHub doesn't answer: trying again in 30 s",
+		90 * time.Second:               "GitHub doesn't answer: trying again in 2 min",
+		12*time.Minute + 3*time.Second: "GitHub doesn't answer: trying again in 12 min",
+	} {
+		if got := store.WaitWords("GitHub doesn't answer", d); got != want {
+			t.Errorf("%v: %q, want %q", d, got, want)
+		}
+	}
+}

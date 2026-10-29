@@ -400,6 +400,7 @@ export interface SyncStep {
   done: number;
   total?: number;
   issue?: string; // "#43 import: users lose their work"
+  wait?: string; // "GitHub doesn't answer: trying again in 30 s", until the next step
 }
 
 export interface ForgeStatus {

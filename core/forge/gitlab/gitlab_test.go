@@ -245,9 +245,10 @@ func TestErrors(t *testing.T) {
 	}
 }
 
-// A 429 is retried after Retry-After, a read's 5xx after 1, 2 and 4 s,
-// and a spent rate limit waits for its reset. A create's 5xx isn't retried:
-// it may have landed.
+// A 429 is retried after Retry-After, three times at most; a read's 5xx
+// or dropped connection after 1, 2, 4 s… up to 30 s, for 5 minutes at
+// most; and a spent rate limit waits for its reset. Each wait is told. A
+// create's 5xx isn't retried: it may have landed.
 func TestRetries(t *testing.T) {
 	t.Parallel()
 	var mu sync.Mutex
@@ -267,8 +268,14 @@ func TestRetries(t *testing.T) {
 				return false
 			}
 			n--
-			if code == 429 {
+			switch code {
+			case 429:
 				w.Header().Set("Retry-After", "7")
+			case -1: // the connection drops mid-answer
+				w.Header().Set("Content-Length", "100")
+				w.WriteHeader(http.StatusOK)
+				w.(http.Flusher).Flush()
+				panic(http.ErrAbortHandler)
 			}
 			w.WriteHeader(code)
 			return true
@@ -280,7 +287,9 @@ func TestRetries(t *testing.T) {
 		defer mu.Unlock()
 		failing, code, n, slept = k, c, times, nil
 	}
-	ctx, s := t.Context(), time.Second
+	var heard []string
+	ctx := forge.WithWaits(t.Context(), func(w forge.Wait) { heard = append(heard, w.Why) })
+	s := time.Second
 	check := func(what string, err error, ok bool, want ...time.Duration) {
 		t.Helper()
 		if (err == nil) != ok || !slices.Equal(slept, want) {
@@ -302,7 +311,25 @@ func TestRetries(t *testing.T) {
 	check("503 three times", err, true, s, 2*s, 4*s)
 	fail("GET /api/v4/projects/p", 500, 4)
 	_, err = a.Visibility(ctx)
-	check("500 four times", err, false, s, 2*s, 4*s)
+	check("500 four times", err, true, s, 2*s, 4*s, 8*s)
+	fail("GET /api/v4/projects/p", -1, 2)
+	heard = nil
+	_, err = a.Visibility(ctx)
+	check("dropped twice", err, true, s, 2*s)
+	if !slices.Equal(heard, []string{"GitLab doesn't answer", "GitLab doesn't answer"}) {
+		t.Fatalf("heard %q", heard)
+	}
+	fail("GET /api/v4/projects/p", 500, 100)
+	if _, err = a.Visibility(ctx); err == nil {
+		t.Fatal("still 500 after 5 minutes: no error")
+	}
+	var total time.Duration
+	for _, d := range slept {
+		total += d
+	}
+	if total > 5*time.Minute || total < 4*time.Minute {
+		t.Fatalf("waited %v (%v), want about 5 minutes", total, slept)
+	}
 	fail("POST /api/v4/projects/p/issues", 502, 1)
 	_, err = a.CreateIssue(ctx, "T", "")
 	check("502 on a create", err, false)

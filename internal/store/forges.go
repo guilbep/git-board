@@ -122,7 +122,7 @@ func (e SyncEvent) Text(dry bool, name string) string {
 		l = "create " + name
 	case "pushed":
 		l = "send the changes of " + name
-	case "warning":
+	case "warning", "waiting":
 		return e.Line
 	case "left":
 		return "left out of the run: " + e.Line
@@ -237,7 +237,19 @@ func (b *Backend) forgeSync(ctx context.Context, run ForgeRun, way syncWay, issu
 		},
 	}
 	meanings(s, &opt)
+	ctx = forge.WithWaits(ctx, func(w forge.Wait) {
+		see(SyncEvent{Forge: names[w.Forge], What: "waiting", Line: WaitWords(w.Why, w.For)})
+	})
 	return way(ctx, s, opt, fs...)
+}
+
+// WaitWords says a forge's wait: "GitHub doesn't answer: trying again in
+// 30 s".
+func WaitWords(why string, d time.Duration) string {
+	if d < time.Minute {
+		return fmt.Sprintf("%s: trying again in %d s", why, int(d.Round(time.Second)/time.Second))
+	}
+	return fmt.Sprintf("%s: trying again in %d min", why, int(d.Round(time.Minute)/time.Minute))
 }
 
 // ErrNotSwitched: the repository's issues are still the git-bug fork's.

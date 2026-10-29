@@ -105,7 +105,11 @@ query for the times REST doesn't give.
   limit gives no reset time. When a limit stops a run, the next one resumes
   from there, as sync records every write as it makes it.
 - **A read is tried again after a 5xx or a broken connection, a write never
-  is.** GitHub may have made it (see [Echoes](sync.md#echoes)).
+  is.** GitHub may have made it (see [Echoes](sync.md#echoes)). A read waits
+  1, 2, 4 seconds and so on, up to 30, for 5 minutes in all
+  (`forge.Backoff`): long enough for a Wi-Fi drop or a laptop asleep. Each
+  wait, and each rate limit's, is told to the run (`forge.Waiting`), and the
+  progress says it: "GitHub doesn't answer: trying again in 30 s".
 - **Errors.** A 404, a 410 and a redirect, as for an issue moved to
   another repository, are not found. A 403 and a 422 are refused, rate
   limits aside. A token GitHub rejects, a 401, stops the run when it is
@@ -193,8 +197,9 @@ query for the times REST doesn't give.
 - **Writes go 250 ms apart,** under GitLab's default limit of 300 issues
   or notes created a minute. A 429 is tried again after its `Retry-After`,
   else at the limit's `RateLimit-Reset`, three times at most. A read that
-  gets a 5xx is tried again after 1, 2, then 4 seconds. A write never is,
-  as GitLab may have made it (see [Echoes](sync.md#echoes)). Once
+  gets a 5xx, or whose connection drops, is tried again as GitHub's is, for
+  5 minutes. A write never is, as GitLab may have made it (see
+  [Echoes](sync.md#echoes)). Each wait is told, as on GitHub. Once
   `RateLimit-Remaining` is 0, the next request waits for `RateLimit-Reset`.
 - **Errors.** A 404, a 410 and a redirect are not found: a redirect is
   never followed, as Go would send `PRIVATE-TOKEN` along to any host. A

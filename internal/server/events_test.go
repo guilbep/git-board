@@ -109,7 +109,8 @@ func TestForgeSyncStreamsItsSteps(t *testing.T) {
 	release := make(chan struct{})
 	s.runSync = fakeSync([]store.SyncEvent{
 		{Forge: "gh", Way: "pull", What: "progress", Done: 1, Total: 2, Line: "#1 Alpha"},
-		{Forge: "gh", Way: "pull", What: "updated", Issue: a, Ops: 2}, // a write: counted, no step
+		{Forge: "gh", What: "waiting", Line: "GitHub doesn't answer: trying again in 30 s"}, // the step, waiting
+		{Forge: "gh", Way: "pull", What: "updated", Issue: a, Ops: 2},                       // a write: counted, no step
 		{Forge: "gh", Way: "push", What: "progress", Done: 2, Total: 2, Line: "#2 Beta"},
 		{Forge: "gh", Way: "push", What: "posted", Issue: b},
 		{Forge: "gh", Way: "push", What: "comment", Issue: "1000"},
@@ -136,6 +137,7 @@ func TestForgeSyncStreamsItsSteps(t *testing.T) {
 	close(release)
 	want := []syncStep{
 		{Bridge: "gh", Way: "pull", Done: 1, Total: 2, Issue: "#1 Alpha"},
+		{Bridge: "gh", Way: "pull", Done: 1, Total: 2, Issue: "#1 Alpha", Wait: "GitHub doesn't answer: trying again in 30 s"},
 		{Bridge: "gh", Way: "push", Done: 2, Total: 2, Issue: "#2 Beta"},
 	}
 	for _, w := range want {
@@ -146,7 +148,7 @@ func TestForgeSyncStreamsItsSteps(t *testing.T) {
 	if e := readEvent(t, sc); e.Kind != "sync" {
 		t.Errorf("the end: %+v", e)
 	}
-	if st := waitJob(t, ts); st.Job.Step == nil || *st.Job.Step != want[1] {
+	if st := waitJob(t, ts); st.Job.Step == nil || *st.Job.Step != want[2] {
 		t.Errorf("the job keeps its last step: %+v", st.Job.Step)
 	}
 
