@@ -211,3 +211,49 @@ func TestLabelDeleteOnlyStray(t *testing.T) {
 		t.Errorf("last call = %q", last)
 	}
 }
+
+// The issue's label picker reads [labels]: the list, its colors and
+// descriptions; defined false without the table.
+func TestLabelsListForThePicker(t *testing.T) {
+	t.Parallel()
+	b := storetest.New(t)
+	var res struct {
+		Defined      bool              `json:"defined"`
+		List         []string          `json:"list"`
+		Colors       map[string]string `json:"colors"`
+		Descriptions map[string]string `json:"descriptions"`
+	}
+	ts := newTestServer(t, b, &config.Config{Labels: config.Labels{Defined: true, List: []string{"needs-design", "regression"}, Colors: map[string]string{"regression": "red"}}})
+	if resp := getJSON(t, ts.URL+"/api/config/labels", &res); resp.StatusCode != http.StatusOK {
+		t.Fatalf("status %d", resp.StatusCode)
+	}
+	if !res.Defined || len(res.List) != 2 || res.Colors["regression"] != config.PaletteHex["red"] || res.Colors["needs-design"] == "" || res.Descriptions == nil {
+		t.Errorf("labels %+v", res)
+	}
+	none := newTestServer(t, b, &config.Config{})
+	res.Defined, res.List = true, nil
+	if getJSON(t, none.URL+"/api/config/labels", &res); res.Defined || res.List == nil || len(res.List) != 0 {
+		t.Errorf("no table: %+v", res)
+	}
+}
+
+// Adopt on a [labels] list label writes [labels.colors] and
+// [labels.descriptions], not a field's tables.
+func TestAdoptALabelOfTheList(t *testing.T) {
+	t.Parallel()
+	ts := newTestServer(t, storetest.New(t), &config.Config{})
+	text := "[labels]\nlist = [\"needs-design\"]\n"
+	var adopted struct {
+		Text string `json:"text"`
+	}
+	postJSON(t, ts.URL+"/api/labels/adopt", map[string]string{"text": text, "field": "", "value": "needs-design",
+		"color": "5319E7", "description": "Waits for a design decision"}, &adopted)
+	for _, want := range []string{"[labels.colors]\nneeds-design = \"#5319e7\"", "[labels.descriptions]\nneeds-design = \"Waits for a design decision\""} {
+		if !strings.Contains(adopted.Text, want) {
+			t.Errorf("adopted text lacks %q:\n%s", want, adopted.Text)
+		}
+	}
+	if strings.Contains(adopted.Text, "[fields.") {
+		t.Errorf("a field's table written:\n%s", adopted.Text)
+	}
+}

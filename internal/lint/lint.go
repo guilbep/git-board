@@ -32,12 +32,13 @@ const (
 	CheckTwoKinds        = "two-kinds"
 	CheckKindTitle       = "kind-title"
 	CheckNoKind          = "no-kind"
+	CheckLabelOutside    = "label-outside"
 )
 
 // CheckOrder is every check name in the order Run reports them, for a
 // stable CLI summary grouping.
 var CheckOrder = []string{CheckDoubleSingle, CheckUnknownValue, CheckMissingRequired, CheckOrphanSprint, CheckDeadOption,
-	CheckTwoKinds, CheckKindTitle, CheckNoKind}
+	CheckTwoKinds, CheckKindTitle, CheckNoKind, CheckLabelOutside}
 
 // Finding is one drift report. IssueID/Title are "" for CheckDeadOption,
 // which is a config-inventory question ("does any issue use this option"),
@@ -70,6 +71,28 @@ func Run(issues []store.Issue, cfg *config.Config) []Finding {
 	findings = append(findings, checkOrphanSprints(open, cfg)...)
 	findings = append(findings, checkDeadOptions(issues, cfg)...)
 	findings = append(findings, checkKinds(open, cfg)...)
+	findings = append(findings, checkLabels(open, cfg)...)
+	return findings
+}
+
+// checkLabels: with a [labels] table, an open issue's plain labels that
+// aren't in its list (a kind, in the flat form, is the kind field's),
+// each with what to do.
+func checkLabels(issues []store.Issue, cfg *config.Config) []Finding {
+	if !cfg.Labels.Defined {
+		return nil
+	}
+	var findings []Finding
+	for _, issue := range issues {
+		for _, l := range issue.Labels {
+			_, kind := cfg.Branches.Kinds[l]
+			if strings.Contains(l, ":") || kind || slices.Contains(cfg.Labels.List, l) {
+				continue
+			}
+			findings = append(findings, Finding{Check: CheckLabelOutside, IssueID: issue.ID, Title: issue.Title,
+				Message: fmt.Sprintf("label %q isn't in [labels] list: add it there, or remove it", l)})
+		}
+	}
 	return findings
 }
 

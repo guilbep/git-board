@@ -1,0 +1,68 @@
+/* What the screens need beyond gitboard.css and head.css: the components'
+   scoped styles the head's markup relies on (IssuePanel, IssueSide,
+   IssueSync, IssueComposer, CommentCard), app.css's primary button, and a
+   few board helpers (a panel shown in place, a hovered control, the pins).
+   Tokens only, as the app's are. */
+
+/* app.css: primary buttons fill the dark red (white on the red is 4.0:1) */
+.epfl-btn-primary { background: var(--epfl-red-dark); border-color: var(--epfl-red-dark); }
+.epfl-btn-primary:hover:not(:disabled) { background: var(--primary-active); border-color: var(--primary-active); }
+
+/* IssuePanel.vue, scoped */
+.gb-modes-count { margin-left: var(--space-1); padding: 0 0.375rem; border-radius: var(--radius); background: var(--bg-subtle); color: var(--fg-muted); font-size: 0.75rem; font-weight: var(--w-bold); }
+.gb-ptop-crumb a { display: inline-flex; align-items: center; gap: var(--space-1); color: var(--fg); }
+.gb-save-error, .gb-wait { display: flex; gap: 0.375rem; align-items: center; margin: 0.75rem 0 0; padding: var(--space-2) 0.75rem; font-size: var(--fs-sm); }
+.gb-save-error { color: var(--danger-fg); background: var(--danger-bg); }
+.gb-wait { background: var(--bg-subtle); }
+
+/* IssueSide.vue, scoped: Spec and Linked issues */
+.gb-ref { display: flex; align-items: center; gap: 0.375rem; width: 100%; margin-top: 0.375rem; padding: var(--space-1) 0; border: 0; background: none; color: var(--fg); font: inherit; font-size: var(--fs-sm); text-align: left; cursor: pointer; }
+.gb-ref:hover:not(:disabled) { text-decoration: underline; }
+.gb-linked + .gb-linked { margin-top: 0.75rem; }
+.gb-linked-name { margin: 0; font-size: 0.8125rem; font-weight: var(--w-bold); }
+.gb-linked-name .gb-hint { display: inline; margin-left: var(--space-1); font-weight: var(--w-normal); }
+.gb-spec-now { margin: 0; font-size: var(--fs-sm); }
+
+/* IssueSync.vue, scoped: in the forge popover */
+.gb-isync { display: grid; gap: var(--space-2); margin-top: 0.75rem; }
+.gb-isync-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.gb-isync-plan { display: grid; gap: 0.375rem; margin: 0; padding: 0.625rem 0.75rem; border: var(--border-w) solid var(--border); border-left: 0.1875rem solid var(--warning); background: var(--warning-bg); font-size: var(--fs-sm); }
+.gb-isync-title { margin: 0; font-weight: var(--w-bold); }
+.gb-isync ul { margin: 0; padding-left: 1.125rem; }
+
+/* ValueMark.vue, scoped: a value's mark, in its color */
+.gb-vmark { flex: none; width: 1rem; height: 1rem; color: var(--c-dot, var(--fg-muted)); vertical-align: -0.15em; }
+
+/* IssueComposer.vue, scoped */
+.gb-composer-send { display: inline-flex; align-items: center; gap: 0.375rem; font-size: var(--fs-sm); }
+
+/* ---- board helpers ---- */
+/* a drawer drawn in a frame: its own height, no shadow */
+.bd .gb-panel { height: auto; box-shadow: none; max-width: none; }
+/* a popover's panel shown in place, in a specimen box */
+.gb-pop-panel.bd-panel { position: static; width: 21rem; max-height: none; }
+.bd-panel.is-wide { width: 22rem; }
+/* a control as it looks hovered, for a static screen */
+.bd-hover.gb-stepper-arrow, .bd-hover.gb-stepper-box { background: var(--bg-subtle); border-color: var(--fg-muted); }
+.bd-hover.gb-stepper-arrow { color: var(--primary); }
+.bd-hover.gb-icon-btn { border-color: var(--border-strong); }
+.bd-hover.gb-icon-btn.gb-bell, .bd-hover.gb-icon-btn.gb-bell.is-off, .bd-hover.gb-icon-btn.gb-bell.is-part, .bd-hover.gb-forge-btn, .bd-hover.gb-hv, .bd-hover.gb-people { color: var(--primary); }
+/* a bar button shown alone keeps the bar's size */
+.bd-spec-box > .gb-pop > .gb-icon-btn, .bd-spec-box > .gb-hforges .gb-icon-btn { width: 2.25rem; height: 2.25rem; }
+.bd-hover.gb-bchip { border-color: var(--fg); }
+.bd-hover.gb-bchip.is-review { border-color: var(--warning-fg); }
+.bd-focus.gb-stepper-arrow, .bd-focus.gb-stepper-box { outline: var(--focus-w) solid var(--fg-muted); outline-offset: 0.125rem; }
+.bd-focus.gb-icon-btn, .bd-focus.gb-hv { outline: var(--focus-w) solid var(--primary-hover); outline-offset: 0.125rem; }
+/* a tooltip, as the browser shows a title: drawn for the screen */
+.bd-tip { display: inline-block; max-width: 22rem; margin-top: var(--space-1); padding: var(--space-1) var(--space-2); background: var(--bg-dark); color: var(--fg-inverse); font-size: var(--fs-xs); line-height: var(--lh-normal); border-radius: var(--radius); }
+/* the pins sit on the head's lines */
+.bd .gb-ptop-crumb, .bd .gb-hforges, .bd .gb-head-title, .bd .gb-hline, .bd .gb-bline, .bd .gb-stepper, .bd .gb-ptop-measure { position: relative; }
+.bd .gb-tabs-people .bd-pin { top: -0.5rem; right: -1.5rem; bottom: auto; }
+.bd .gb-ptop-measure { overflow: visible; }
+.bd .gb-ptop-crumb .bd-pin { left: -0.75rem; }
+/* a bar alone, for the moves board */
+.bd-barbox { overflow: visible; border: var(--border-w) solid var(--border-subtle); }
+.bd-barbox .gb-ptop { position: static; }
+/* a lane row drawn outside the step page */
+.bd .gb-stepbar { padding-top: var(--space-3); }
+.bd .gb-bar-step { color: var(--fg); }

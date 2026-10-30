@@ -111,3 +111,16 @@ func TestSetViewTextWritesLanesAndLimits(t *testing.T) {
 		t.Errorf("no lanes kept a line\n%s", none)
 	}
 }
+
+func TestSetLabelsTable(t *testing.T) {
+	t.Parallel()
+	text := "[labels]\nlist = [\"needs-design\"]\n\n[views.board]\nlayout = \"board\"\n"
+	got := SetLabelsTable(text, "colors", map[string]string{"needs-design": "#d73a4a"})
+	want := "[labels]\nlist = [\"needs-design\"]\n\n[labels.colors]\nneeds-design = \"#d73a4a\"\n\n[views.board]\nlayout = \"board\"\n"
+	if got != want {
+		t.Errorf("got\n%s\nwant\n%s", got, want)
+	}
+	if again := SetLabelsTable(got, "colors", nil); again != text {
+		t.Errorf("removed: got\n%q\nwant\n%q", again, text)
+	}
+}

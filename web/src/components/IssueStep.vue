@@ -24,6 +24,26 @@
       </li>
     </ol>
   </nav>
+  <!-- branched out (docs/design/issue-head, open point 6): with several
+       branches, each its own Tests, Code and Review; the least advanced
+       open one is the issue's step -->
+  <div v-if="cycle && lanes.length > 1" class="gb-lanes" role="group" aria-label="The issue's branches, each at its own step">
+    <p class="gb-lanes-title">{{ lanes.length }} branches, each at its own step; the issue moves with the slowest open one.</p>
+    <ol class="gb-lanes-list">
+      <li v-for="l in lanes" :key="l.branch" class="gb-lane" :class="{ 'is-done': l.done, 'is-closed': l.closed, 'is-evidence': l.branch === cycle.evidence.branch && !l.done }">
+        <span class="gb-mono gb-lane-face" :title="l.branch">{{ faceOf(l.branch) }}</span>
+        <span v-for="s in laneSteps" :key="s.n" class="gb-lane-cell" :class="laneCell(l, s.n)">
+          <GbIcon v-if="l.done || l.step > s.n" name="check" small />{{ s.name }}
+        </span>
+        <span class="gb-lane-end">
+          <template v-if="l.closed">closed</template>
+          <template v-else-if="l.done">merged</template>
+          <a v-else-if="l.pr" :href="l.pr.url" target="_blank" rel="noopener noreferrer">GitHub #{{ l.pr.number }}{{ l.pr.draft ? ', draft' : '' }}<span class="gb-sr">(opens in a new tab)</span></a>
+          <template v-else-if="l.step === 4">no test yet</template>
+        </span>
+      </li>
+    </ol>
+  </div>
 
   <div class="gb-row">
     <section class="gb-column" aria-label="Conversation">
@@ -142,7 +162,7 @@
         <slot name="flow" :cycle="cycle" :failed="!cycle && !!error" :send="send" />
       </div>
     </section>
-    <aside class="gb-sidebar" aria-label="Fields">
+    <aside v-if="$slots.side" class="gb-sidebar" aria-label="Fields">
       <slot name="side" :cycle="cycle" />
     </aside>
   </div>
@@ -162,6 +182,8 @@ import CycleRisk from '@/components/CycleRisk.vue';
 import CycleTests from '@/components/CycleTests.vue';
 import CycleVerify from '@/components/CycleVerify.vue';
 import GbIcon from '@/components/GbIcon.vue';
+import { faceOf } from '@/branchstate';
+import type { CycleLane } from '@/api/board';
 
 const props = defineProps<{ id: string; status: string; labels: string[]; events: IssueEvent[]; forges?: Forge[] | undefined; head: boolean }>();
 const emit = defineEmits<{ changed: []; comment: [body: string, step: string]; open: [id: string] }>();
@@ -172,6 +194,16 @@ const { cycle, error, busy, needsWhy, has, act, patch, edit, press, pull } = use
   () => emit('changed'),
 );
 const card = computed(() => (cycle.value ? cardFor(cycle.value, props.status) : null));
+// the lanes: Tests, Code and Review as the project's list names them
+const lanes = computed(() => cycle.value?.evidence.lanes ?? []);
+const laneSteps = computed(() =>
+  [4, 5, 6].map((n) => ({ n, name: cycle.value?.stages?.steps?.find((s) => s.kind === ['', '', '', '', 'tests', 'code', 'review'][n])?.name ?? ['', '', '', '', 'Tests', 'Code', 'Review'][n]! })),
+);
+function laneCell(l: CycleLane, n: number): string {
+  if (l.closed) return 'is-off';
+  if (l.done || l.step > n) return 'is-past';
+  return l.step === n ? 'is-now' : 'is-ahead';
+}
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 const forge = computed(() => props.forges?.filter((f) => f.number).map((f) => `${f.name} #${f.number}`)[0]);
 
@@ -199,7 +231,7 @@ const here = computed(() => current.value || (!!cycle.value && !now.value && !ro
 const show = (id: string) => (shown.value = id === cycle.value?.at ? null : id);
 // a refusal belongs to the step pressed: another step shown drops it
 watch(row, () => (error.value = ''));
-defineExpose({ show });
+defineExpose({ show, cycle }); // cycle: the head v2 says the spec's verdict under the branch line
 // the rail opens a step at the head of the column; a new tab or window is the link's
 function jump(e: MouseEvent, step: string) {
   if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey) return;

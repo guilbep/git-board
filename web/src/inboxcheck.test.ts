@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { FRESH, checkFailure, followLine, followingLine, mergeRows, toCheck, toPull } from './inboxcheck.ts';
+import { FRESH, bellState, checkFailure, followLine, followingLine, mergeRows, toCheck, toPull } from './inboxcheck.ts';
 import type { InboxRow, Remote } from './api/board';
 
 const remote = (name: string, checked: string | undefined, receive = 0): Remote => ({
@@ -54,4 +54,12 @@ test('the side column says why you follow an issue, or that a project role bring
 test('the empty inbox says what you follow, project roles included', () => {
   assert.equal(followingLine(1, [], []), 'Following 1 open issue');
   assert.equal(followingLine(102, ['backend'], ['lead-dev']), 'Following 102 open issues · view backend · lead-dev of the project: its new and closed issues');
+});
+
+test('the bell: its shape and tone from the follow line', () => {
+  assert.deepEqual(bellState({ following: true, reasons: [], set: true }), { shape: 'bell', tone: 'on', label: 'Inbox: following. You follow it.' });
+  assert.deepEqual(bellState({ following: false, reasons: [], set: false }), { shape: 'bell-off', tone: 'off', label: 'Inbox: not following. You unfollowed it.' });
+  assert.equal(bellState({ following: true, reasons: ['assignee'], set: null }).label, 'Inbox: following. Because: assignee');
+  assert.deepEqual(bellState({ following: false, reasons: ['pm (project)'], set: null }), { shape: 'bell', tone: 'part', label: 'Inbox: new and closed only. As pm of the project.' });
+  assert.equal(bellState({ following: false, reasons: [], set: null }).shape, 'bell-off');
 });

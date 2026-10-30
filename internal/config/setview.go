@@ -158,8 +158,19 @@ func unquote(v string) string {
 // empty. An inline `sub = {…}` in [fields.<field>] goes, values holding
 // what it held. Every other line of the file is kept, comments too.
 func SetFieldTable(text, field, sub string, values map[string]string) string {
+	return setSubTable(text, "fields."+field, sub, values)
+}
+
+// SetLabelsTable is SetFieldTable for the [labels] table: [labels.colors],
+// [labels.descriptions].
+func SetLabelsTable(text, sub string, values map[string]string) string {
+	return setSubTable(text, "labels", sub, values)
+}
+
+// setSubTable is [parent.sub] written whole, as SetFieldTable says.
+func setSubTable(text, parent, sub string, values map[string]string) string {
 	lines := strings.Split(text, "\n")
-	if start, end := tableSpan(lines, "[fields."+field+"]"); start >= 0 {
+	if start, end := tableSpan(lines, "["+parent+"]"); start >= 0 {
 		for i := end - 1; i > start; i-- {
 			if m := keyLine.FindStringSubmatch(lines[i]); m != nil && m[2] == sub {
 				lines = append(lines[:i], lines[i+1:]...)
@@ -168,7 +179,7 @@ func SetFieldTable(text, field, sub string, values map[string]string) string {
 	}
 	var block []string
 	if len(values) > 0 {
-		block = append(block, "[fields."+field+"."+sub+"]")
+		block = append(block, "["+parent+"."+sub+"]")
 		for _, k := range slices.Sorted(maps.Keys(values)) {
 			key := k
 			if !viewName.MatchString(k) { // a bare key is letters, digits, - and _
@@ -177,7 +188,7 @@ func SetFieldTable(text, field, sub string, values map[string]string) string {
 			block = append(block, key+" = "+tomlString(values[k]))
 		}
 	}
-	if start, end := tableSpan(lines, "[fields."+field+"."+sub+"]"); start >= 0 {
+	if start, end := tableSpan(lines, "["+parent+"."+sub+"]"); start >= 0 {
 		if len(block) == 0 && start > 0 && strings.TrimSpace(lines[start-1]) == "" {
 			start-- // its blank line goes with it
 		}
@@ -186,7 +197,7 @@ func SetFieldTable(text, field, sub string, values map[string]string) string {
 	if len(block) == 0 {
 		return strings.Join(lines, "\n")
 	}
-	if _, end := tableSpan(lines, "[fields."+field+"]"); end >= 0 {
+	if _, end := tableSpan(lines, "["+parent+"]"); end >= 0 {
 		return strings.Join(slices.Concat(lines[:end], []string{""}, block, lines[end:]), "\n")
 	}
 	if base := strings.TrimRight(strings.Join(lines, "\n"), "\n"); base != "" {

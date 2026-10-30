@@ -742,8 +742,36 @@ export interface IssueBranches {
   branches: IssueBranch[];
 }
 
+// [labels]: the plain labels the project allows, for the issue's label
+// picker (internal/server labels.go, handleLabelsList); colors in hex
+// without #; defined false without the table: nothing to pick.
+export interface LabelList {
+  defined: boolean;
+  list: string[];
+  colors: Record<string, string>;
+  descriptions: Record<string, string>;
+}
+
+export function getLabelList(): Promise<LabelList> {
+  return request('/api/config/labels');
+}
+
 export function getBranches(id: string): Promise<IssueBranches> {
   return request(`${issuePath(id)}/branches`);
+}
+
+// Create a branch (internal/server refs.go, handleCreateBranch): git
+// branch --no-track from the start, then git push -u origin; the server's
+// checkout stays. The answer is the branches, the new one among them;
+// pushed false with why when origin refused it: the branch is local.
+export interface CreatedBranch extends IssueBranches {
+  created: string;
+  pushed: boolean;
+  push_error?: string;
+}
+
+export function createBranch(id: string, name: string): Promise<CreatedBranch> {
+  return request(`${issuePath(id)}/branches`, json('POST', { name }));
 }
 
 // The PR gate (internal/server/pulls.go, internal/ghpr): each branch
@@ -835,6 +863,20 @@ export interface CycleEvidence {
   signoffs?: CycleSignoff[];
   runs?: { by: string; commit?: string; at: string }[];
   checks?: { index: number; by: string; commit?: string; at: string }[];
+  lanes?: CycleLane[]; // the issue's branches, branched out (internal/cycle, PickLane)
+}
+// One branch of the issue in the cycle: its own Tests (4), Code (5) and
+// Review (6) between the issue's Plan and Verify; 7 once merged. The
+// evidence branch is the least advanced open one.
+export interface CycleLane {
+  branch: string;
+  head: string;
+  step: number;
+  done: boolean;
+  closed: boolean;
+  tests: number;
+  pr?: { number: number; url: string; state: string; draft: boolean } | null;
+  at: string;
 }
 export interface Cycle {
   step: number; // the kind's, 1 to 7

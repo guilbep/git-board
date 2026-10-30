@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1440">
+<title>16d · Create a branch: GitHub's dialog, tighter, on the convention</title>
+<link rel="stylesheet" href="epfl.css">
+<link rel="stylesheet" href="drawer.css">
+<link rel="stylesheet" href="board.css">
+</head>
+<body>
+<div class="bd">
+  <p class="bd-eyebrow">16d · Create a branch</p><h2 class="bd-title">GitHub's dialog, tighter, on the convention</h2><p class="bd-lead">GitHub asks for a name, a repository, a source and what next, then creates the branch on GitHub. git-board knows the name and the source already, and creates nothing: it gives the two commands.</p>
+  <div class="bd-row">
+    <div style="flex: 0 0 44rem">
+      <p class="bd-cat">The plus at the end of the PR line</p>
+      <div class="bd-spec-box is-tall" style="min-height: 22rem"><div class="gb-dev" aria-label="Branches and pull requests"><span class="gb-dev-mark" title="Branches and pull requests"><svg class="feather gb-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="18" cy="18" r="3"></circle><circle cx="6" cy="6" r="3"></circle><path d="M13 6h3a2 2 0 0 1 2 2v7"></path><line x1="6" y1="9" x2="6" y2="21"></line></svg></span><span class="gb-anchor"><button type="button" class="gb-chip is-review" aria-label="PR #3155 by yuki-t · 15 checks passed · waits for an approval" aria-haspopup="dialog" aria-expanded="false"><svg class="feather gb-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg><b>#3155</b> <span class="gb-chip-word">review</span></button></span><button type="button" class="gb-tail is-merged"><svg class="feather gb-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="18" cy="18" r="3"></circle><circle cx="6" cy="6" r="3"></circle><path d="M6 21V9a9 9 0 0 0 9 9"></path></svg>1 merged</button><span class="gb-anchor"><button type="button" class="gb-iconbtn" aria-label="Create a branch" aria-haspopup="dialog" aria-expanded="true"><svg class="feather gb-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg></button><div class="gb-pop is-left" role="dialog" aria-label="Create a branch" style="width: 30rem">
+    <div class="gb-pop-head"><p class="gb-pop-title">Create a branch</p><span class="gb-pop-sub gb-mono">{kind}/{number}-{slug}</span></div>
+    <div class="gb-form">
+      <div class="gb-inline"> <label class="epfl-label" for="bn-1" style="width: 3rem">Name</label><input id="bn-1" class="epfl-input gb-mono gb-grow" value="test/2771-implement-tests-to-validate-all-equations" spellcheck="false"></div>
+      <div class="gb-inline"><span class="epfl-label" style="width: 3rem">From</span><span class="gb-mono">origin/dev</span><span class="gb-hint">origin's default branch, or <span class="gb-mono">[branches] base</span></span></div>
+      <pre class="gb-cmd">git switch -c test/2771-implement-tests-to-validate-all-equations origin/dev
+git push -u origin test/2771-implement-tests-to-validate-all-equations</pre>
+      <div class="gb-inline"><button type="button" class="epfl-btn epfl-btn-primary epfl-btn-sm gb-btnicon"><svg class="feather gb-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>Copy</button><span class="gb-hint">git-board creates no branch: run these in the repository.</span></div>
+    </div>
+  </div></span></div></div>
+    </div>
+    <div class="bd-grow">
+      <table class="bd-table">
+        <tbody><tr><th>GitHub's dialog</th><th>git-board's popover</th></tr>
+        <tr><td>Branch name, typed or proposed</td><td>Proposed by <span class="bd-code-inline">[branches] name = "{kind}/{number}-{slug}"</span> (default.git-board.toml), editable</td></tr>
+        <tr><td>Repository destination</td><td>None: the commands run in the repository</td></tr>
+        <tr><td>Branch source</td><td><span class="bd-code-inline">origin/dev</span>: origin's default branch, or <span class="bd-code-inline">[branches] base</span></td></tr>
+        <tr><td>What's next: check out locally</td><td>The commands, one Copy</td></tr>
+        <tr><td>Create branch (on GitHub)</td><td>Nothing created: "git-board creates no branch" (IssueBranches.vue)</td></tr>
+      </tbody></table>
+      <div class="bd-gap"></div>
+      <p class="bd-cat">The names it proposes</p>
+      <table class="bd-table">
+        <tbody><tr><th>Issue</th><th>Kind</th><th>Name</th></tr>
+        <tr><td>#2771 [TEST](CO2 Calculations validation) Implement tests to validate all equations calculating kg-CO2-eq</td><td>test</td><td><span class="bd-code-inline">test/2771-implement-tests-to-validate-all-equations</span></td></tr>
+        <tr><td>#2810 billing: totals round twice on discounted lines</td><td>bug</td><td><span class="bd-code-inline">bug/2810-billing-totals-round-twice-on-discounted-lines</span></td></tr>
+        <tr><td>#2811 pdf: the invoice footer cuts the VAT number</td><td>none</td><td><span class="bd-code-inline">2811-pdf-the-invoice-footer-cuts-the-vat-number</span></td></tr>
+      </tbody></table>
+      <p class="bd-note">As branches.go builds them: the leading [TEST](scope) dropped, lower-case words between dashes, cut between words at 50 characters; with no kind, "{kind}/" drops. Checked against the docs' own example, #2518, where bug maps to fix.</p>
+    </div>
+  </div>
+</div>
+</body>
+</html>

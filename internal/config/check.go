@@ -55,6 +55,13 @@ func Check(data []byte) (*Config, []string, error) {
 			warnings = append(warnings, fmt.Sprintf("views.%s: layout %q isn't board, table or roadmap (shown as a table)", name, l))
 		}
 	}
+	listed := map[string]bool{}
+	for _, l := range cfg.Labels.List {
+		if listed[l] {
+			warnings = append(warnings, fmt.Sprintf("labels: %q is listed twice", l))
+		}
+		listed[l] = true
+	}
 	seen := map[string]bool{}
 	for _, sp := range cfg.Sprints.List {
 		if seen[sp.Slug] {

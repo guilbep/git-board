@@ -511,3 +511,60 @@ func TestHeld(t *testing.T) {
 		t.Error("without a Project, status: held on GitHub")
 	}
 }
+
+// [labels] (docs/design/issue-head, open point 7): the plain labels the
+// project allows; no table, none defined; an empty list, defined.
+func TestLabelsTable(t *testing.T) {
+	t.Parallel()
+	cfg, warnings, err := Check([]byte(`[labels]
+list = ["needs-design", "regression", "security", "regression"]
+[labels.colors]
+regression = "Red"
+[labels.descriptions]
+needs-design = "waits for a design decision"
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.Labels.Defined || !slices.Equal(cfg.Labels.List, []string{"needs-design", "regression", "security", "regression"}) {
+		t.Errorf("labels %+v", cfg.Labels)
+	}
+	if cfg.Labels.Colors["regression"] != "red" || cfg.Labels.Descriptions["needs-design"] == "" {
+		t.Errorf("colors %v, descriptions %v", cfg.Labels.Colors, cfg.Labels.Descriptions)
+	}
+	if !slices.Contains(warnings, `labels: "regression" is listed twice`) {
+		t.Errorf("warnings %v", warnings)
+	}
+	if got := cfg.LabelColors(); got["regression"] != "red" || got["needs-design"] != Palette[0] || got["security"] != Palette[1] {
+		t.Errorf("LabelColors %v", got)
+	}
+
+	empty, _, err := Check([]byte("[labels]\nlist = []\n"))
+	if err != nil || !empty.Labels.Defined || len(empty.Labels.List) != 0 {
+		t.Errorf("an empty list: %+v %v", empty.Labels, err)
+	}
+	none, _, err := Check([]byte("[sprints]\nlength_days = 14\n"))
+	if err != nil || none.Labels.Defined {
+		t.Errorf("no table: %+v %v", none.Labels, err)
+	}
+	_, warnings, err = Check([]byte("[labels]\nlist = [\"x\"]\npick = true\n"))
+	if err != nil || !slices.ContainsFunc(warnings, func(w string) bool { return strings.HasPrefix(w, "labels.pick") }) {
+		t.Errorf("an unknown key: %v %v", warnings, err)
+	}
+}
+
+func TestLabelsRefused(t *testing.T) {
+	t.Parallel()
+	for name, file := range map[string]string{
+		"a field's value":      "[labels]\nlist = [\"prio:p1\"]\n",
+		"a kind":               "[branches]\nkinds = { bug = \"fix\" }\n[labels]\nlist = [\"bug\"]\n",
+		"empty":                "[labels]\nlist = [\" \"]\n",
+		"a color off the list": "[labels]\nlist = [\"a\"]\n[labels.colors]\nb = \"red\"\n",
+		"not a color":          "[labels]\nlist = [\"a\"]\n[labels.colors]\na = \"rouge\"\n",
+		"too long":             "[labels]\nlist = [\"a\"]\n[labels.descriptions]\na = \"" + strings.Repeat("x", 101) + "\"\n",
+	} {
+		if _, _, err := Check([]byte(file)); err == nil {
+			t.Errorf("%s: accepted", name)
+		}
+	}
+}

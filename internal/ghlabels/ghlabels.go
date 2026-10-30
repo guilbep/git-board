@@ -65,8 +65,9 @@ type Label struct {
 // [fields.<name>] option (fields with no configured Options are free-form —
 // assignee — and have no fixed value set to create labels for), plus
 // one "sprint:<slug>" per [[sprints.list]] entry; the kinds as the kind
-// field stores them (cfg.Label). Fields by name, values in their order. A
-// label's color is the one the board shows, its description the file's.
+// field stores them (cfg.Label); then [labels] list's, plain, with no
+// field (Field ""). Fields by name, values in their order. A label's color
+// is the one the board shows, its description the file's.
 func Desired(cfg *config.Config) []Label {
 	values := map[string][]string{}
 	for name, f := range cfg.Fields {
@@ -85,6 +86,12 @@ func Desired(cfg *config.Config) []Label {
 			labels = append(labels, Label{Name: cfg.Label(name, v), Color: config.Hex(colors[v]), Description: desc,
 				Field: name, Value: v, OwnColor: own != "", OwnDescription: desc != ""})
 		}
+	}
+	colors := cfg.LabelColors()
+	for _, name := range cfg.Labels.List {
+		own, desc := find(cfg.Labels.Colors, name), find(cfg.Labels.Descriptions, name)
+		labels = append(labels, Label{Name: name, Color: config.Hex(colors[name]), Description: desc,
+			Value: name, OwnColor: own != "", OwnDescription: desc != ""})
 	}
 	return labels
 }

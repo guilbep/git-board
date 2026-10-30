@@ -85,7 +85,7 @@ type Input struct {
 	People map[string]string `json:"people,omitempty"`
 	Me     string            `json:"-"` // the viewer's login, "" unknown
 
-	Branch       string     `json:"branch,omitempty"` // the evidence branch
+	Branch       string     `json:"branch,omitempty"` // the evidence branch: the least advanced open lane (PickLane)
 	Head         string     `json:"head,omitempty"`
 	Base         string     `json:"base,omitempty"`
 	PlanBranch   string     `json:"plan_branch,omitempty"`
@@ -99,6 +99,128 @@ type Input struct {
 	Signoffs     []Signoff  `json:"signoffs,omitempty"`
 	Runs         []Run      `json:"runs,omitempty"`
 	Checks       []Check    `json:"checks,omitempty"`
+	// Lanes are the issue's branches, branched out: each its own Tests,
+	// Code and Review between the issue's Plan and Verify (PickLane)
+	Lanes []Lane `json:"lanes,omitempty"`
+}
+
+// Lane is one branch of the issue in the cycle (docs/design/issue-head,
+// open point 6, branched out): Intent, Risk and Plan are the issue's,
+// once; from Tests on, each branch of its folder runs its own Tests, Code
+// and Review; the lanes join again at Verify once each is merged or
+// closed. The issue's step is its least advanced open lane.
+type Lane struct {
+	Branch string    `json:"branch"`
+	Head   string    `json:"head"`
+	Step   int       `json:"step"`   // 4 Tests, 5 Code, 6 Review, 7 merged
+	Done   bool      `json:"done"`   // merged: its PR, or its work in the base
+	Closed bool      `json:"closed"` // its PR closed unmerged: out of the cycle
+	Tests  int       `json:"tests"`  // the tests its diff changed
+	Gate   *LanePR   `json:"pr,omitempty"`
+	At     time.Time `json:"at"` // its last commit
+
+	InBase bool       `json:"-"` // its work is in the base (branches.Branch's)
+	Files  []TestFile `json:"-"`
+	PR     *ghpr.PR   `json:"-"`
+	PRAt   time.Time  `json:"-"`
+	Ref    string     `json:"-"` // where git reads it: origin/<name> or <name>
+}
+
+// LanePR is a lane's gate, as its chip says it.
+type LanePR struct {
+	Number int    `json:"number"`
+	URL    string `json:"url"`
+	State  string `json:"state"`
+	Draft  bool   `json:"draft"`
+}
+
+// laneStep is where a lane is: merged, in review (its PR open and marked
+// ready), at Code once its tests are in (or the kind needs none), else at
+// Tests.
+func laneStep(l Lane, rule string) int {
+	switch {
+	case l.Done:
+		return 7
+	case l.PR != nil && l.PR.State == "OPEN" && !l.PR.Draft:
+		return 6
+	case len(l.Files) > 0 || rule == config.NoTests:
+		return 5
+	}
+	return 4
+}
+
+// PickLane steps each lane and makes the least advanced open one the
+// evidence (Branch, Head, Tests, PR): the issue goes no further than its
+// slowest branch, and a new branch never hides behind a merged one. Ties
+// go to the newest commit. With every lane merged or closed, the newest
+// merged one is the evidence, so Verify opens.
+func PickLane(in Input) Input {
+	if len(in.Lanes) == 0 {
+		return in
+	}
+	rule := in.Stages.KindRule(in.Kind)
+	if !slices.ContainsFunc(list(in.Stages), func(s config.Step) bool { return s.Kind == "tests" }) {
+		rule = config.NoTests
+	}
+	lanes := slices.Clone(in.Lanes)
+	pick := -1
+	better := func(i int) bool {
+		if pick < 0 {
+			return true
+		}
+		a, b := lanes[i], lanes[pick]
+		if a.Step != b.Step {
+			return a.Step < b.Step
+		}
+		return a.At.After(b.At)
+	}
+	for i := range lanes {
+		l := &lanes[i]
+		l.Done = l.InBase || l.PR != nil && l.PR.State == "MERGED"
+		l.Closed = !l.Done && l.PR != nil && l.PR.State == "CLOSED"
+		l.Step = laneStep(*l, rule)
+		l.Tests = len(l.Files)
+		if l.PR != nil {
+			l.Gate = &LanePR{Number: l.PR.Number, URL: l.PR.URL, State: l.PR.State, Draft: l.PR.Draft}
+		}
+	}
+	for _, open := range []func(Lane) bool{
+		func(l Lane) bool { return !l.Done && !l.Closed },
+		func(l Lane) bool { return l.Done },
+		func(Lane) bool { return true },
+	} {
+		for i, l := range lanes {
+			if open(l) && better(i) {
+				pick = i
+			}
+		}
+		if pick >= 0 {
+			break
+		}
+	}
+	l := lanes[pick]
+	in.Lanes = lanes
+	in.Branch, in.Head, in.Tests, in.PR, in.PRAt = l.Branch, l.Head, l.Files, l.PR, l.PRAt
+	return in
+}
+
+// behind is the note when the issue has several lanes and its status is
+// ahead of the least advanced open one: that lane holds it back.
+func behind(in Input, step int) string {
+	open := 0
+	var slow *Lane
+	for i, l := range in.Lanes {
+		if !l.Done && !l.Closed {
+			open++
+			if l.Branch == in.Branch {
+				slow = &in.Lanes[i]
+			}
+		}
+	}
+	if len(in.Lanes) < 2 || slow == nil || slow.Step >= step {
+		return ""
+	}
+	return fmt.Sprintf("%s is at %s: the issue moves on when each of its %d open branches does", slow.Branch, Steps[slow.Step], open)
 }
 
 // Waits is whose turn it is, and to do what.
@@ -339,6 +461,9 @@ func Compute(in Input) Cycle {
 		default:
 			w.What, act = "move the status to "+in.Stages.Ready, "move-ready"
 		}
+	}
+	if c.Note == "" {
+		c.Note = behind(in, c.Step)
 	}
 	c.Name, c.Gate, c.At = Steps[c.Step], gate(c.Step, in.Risk, rule), at(steps, c, in)
 	if i := c.Position(); i > 0 {

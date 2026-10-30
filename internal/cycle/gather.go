@@ -96,18 +96,19 @@ func Gather(b *store.Backend, cfg *config.Config, th store.Thread, me string, pu
 	}
 
 	if pulls != nil {
-		if in.Branch != "" {
-			in.PR, in.PRAt = pulls.PR(in.Branch)
+		for i := range in.Lanes {
+			in.Lanes[i].PR, in.Lanes[i].PRAt = pulls.PR(in.Lanes[i].Branch)
 		}
 		if in.PlanBranch != "" {
 			in.PlanPR, _ = pulls.PR(in.PlanBranch)
 		}
 	}
-	return in, nil
+	return PickLane(in), nil
 }
 
-// gatherCode reads the branches naming the issue, the tests the evidence
-// branch changed, and the plan file.
+// gatherCode reads the branches naming the issue, each a lane with the
+// tests its diff changed, and the plan file. PickLane, once the PRs are
+// in, makes one the evidence.
 func gatherCode(b *store.Backend, cfg *config.Config, is store.Issue, stages config.Stages, in *Input) error {
 	sug, err := branches.Suggest(b, cfg.Branches, is)
 	if err != nil {
@@ -119,27 +120,46 @@ func gatherCode(b *store.Backend, cfg *config.Config, is store.Issue, stages con
 	}
 	in.Base = sug.Start
 	ref := func(br branches.Branch) string { return strings.TrimPrefix(br.Remote+"/"+br.Name, "/") }
-	var evidence, plan string
-	var newest time.Time
+	var plan string
+	seen := map[string]int{} // a branch's local and remote copies are one lane: the newer, local on a tie
+	shared, work := map[string]bool{}, map[string]bool{}
 	for _, br := range linked {
-		switch {
-		case strings.HasPrefix(br.Name, "plan/"):
+		if strings.HasPrefix(br.Name, "plan/") {
 			if in.PlanBranch == "" {
 				in.PlanBranch, in.PlanHead, plan = br.Name, br.LastCommit.SHA, ref(br)
 			}
-		case evidence == "" || br.LastCommit.Date.After(newest): // local first on a tie
-			in.Branch, in.Head, evidence, newest = br.Name, br.LastCommit.SHA, ref(br), br.LastCommit.Date
+			continue
 		}
+		shared[br.Name] = shared[br.Name] || br.Remote != ""
+		work[br.Name] = work[br.Name] || br.Ahead > 0
+		// in the base: merged and the base moved on, or squashed in (a
+		// branch still at the base's commit is a new one, not merged work)
+		l := Lane{Branch: br.Name, Head: br.LastCommit.SHA, At: br.LastCommit.Date, Ref: ref(br), InBase: br.Merged && br.Behind > 0 || br.InBase && !br.Merged}
+		if i, ok := seen[br.Name]; ok {
+			if l.At.After(in.Lanes[i].At) {
+				in.Lanes[i] = l
+			}
+			continue
+		}
+		seen[br.Name] = len(in.Lanes)
+		in.Lanes = append(in.Lanes, l)
 	}
+	// a lane is shared (on origin, made there by Create too) or holds
+	// work: a branch only here with nothing in it is no one's lane yet,
+	// and holds no issue back
+	in.Lanes = slices.DeleteFunc(in.Lanes, func(l Lane) bool { return !shared[l.Branch] && !work[l.Branch] && !l.InBase })
+	// newest first: the plan file is looked for in the newest lane first
+	slices.SortStableFunc(in.Lanes, func(a, b Lane) int { return b.At.Compare(a.At) })
 
-	if evidence != "" {
-		files, err := b.ChangedFiles(in.Base, evidence)
+	for i := range in.Lanes {
+		l := &in.Lanes[i]
+		files, err := b.ChangedFiles(in.Base, l.Ref)
 		if err != nil {
 			return err
 		}
 		for _, f := range files {
 			if slices.ContainsFunc(stages.TestFiles, func(p string) bool { return matchTest(p, f) }) {
-				in.Tests = append(in.Tests, TestFile{Path: f, Commit: b.FirstCommitAdding(in.Base, evidence, f)})
+				l.Files = append(l.Files, TestFile{Path: f, Commit: b.FirstCommitAdding(in.Base, l.Ref, f)})
 			}
 		}
 	}
@@ -148,7 +168,11 @@ func gatherCode(b *store.Backend, cfg *config.Config, is store.Issue, stages con
 	if is.BareNumber() == "" {
 		re = `^issue: *["']?` + PlanIssue(is)
 	}
-	for _, r := range []string{evidence, plan, in.Base} {
+	refs := make([]string, 0, len(in.Lanes)+2)
+	for _, l := range in.Lanes {
+		refs = append(refs, l.Ref)
+	}
+	for _, r := range append(refs, plan, in.Base) {
 		if r == "" {
 			continue
 		}

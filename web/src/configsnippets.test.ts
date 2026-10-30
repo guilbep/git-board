@@ -36,4 +36,6 @@ test('docSectionAt follows the table under the cursor', () => {
   assert.equal(at('[repos]'), 'repos');
   assert.equal(at('base'), 'branches');
   assert.equal(at('pm = '), 'roles');
+  assert.equal(docSectionAt('[labels]\nlist = ["needs-design"]\n[labels.colors]\nneeds-design = "red"\n', 12), 'labels');
+  assert.equal(docSectionAt('[labels]\nlist = ["needs-design"]\n[labels.colors]\nneeds-design = "red"\n', 50), 'labels');
 });

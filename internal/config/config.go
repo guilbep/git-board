@@ -119,9 +119,75 @@ type raw struct {
 	Roles         map[string]string `toml:"roles"`
 	Cycle         Cycle             `toml:"cycle"`
 	Release       Release           `toml:"release"`
+	Labels        Labels            `toml:"labels"`
 	// Forges holds publish-private, discover and a table per forge
 	// (forges.go).
 	Forges map[string]toml.Primitive `toml:"forges"`
+}
+
+// Labels is the [labels] table: the plain labels the project allows
+// besides its fields (docs/design/issue-head, open point 7), yes-or-no
+// flags that can stack and that no field holds (needs-design, regression).
+// The issue's head offers them as checkboxes, never free text; Settings ›
+// Labels sends them to GitHub with their colors and descriptions; lint
+// reports the plain labels outside them. No table, no labels to pick.
+type Labels struct {
+	List         []string          `toml:"list"`
+	Colors       map[string]string `toml:"colors"`       // a palette name or #rrggbb; else the palette in turn
+	Descriptions map[string]string `toml:"descriptions"` // GitHub's, 100 characters at most
+	// Defined: the file has a [labels] table, an empty list too (no
+	// label allowed), which lint then holds the issues to
+	Defined bool `toml:"-"`
+}
+
+// checkLabels: a listed label is plain (prio:p1 is a field's value), not
+// a kind, and the colors and descriptions are the list's own.
+func checkLabels(l Labels, kinds map[string]string) error {
+	for _, name := range l.List {
+		switch {
+		case strings.TrimSpace(name) == "":
+			return errors.New("[labels] list: an empty label")
+		case strings.Contains(name, ":"):
+			return fmt.Errorf("[labels] list: %q is a field's value (name:value): give that field the option instead", name)
+		case kinds[name] != "":
+			return fmt.Errorf("[labels] list: %q is a kind, in [branches] kinds already", name)
+		}
+	}
+	for name, color := range l.Colors {
+		if !slices.Contains(l.List, name) {
+			return fmt.Errorf("[labels] colors: %q isn't in the list", name)
+		}
+		c := normColor(color)
+		if !slices.Contains(Palette, c) && !isHex(c) {
+			return fmt.Errorf("[labels] colors: %q for %q isn't a color: %s, or #rrggbb", color, name, strings.Join(Palette, ", "))
+		}
+		l.Colors[name] = c
+	}
+	for name, d := range l.Descriptions {
+		if !slices.Contains(l.List, name) {
+			return fmt.Errorf("[labels] descriptions: %q isn't in the list", name)
+		}
+		if n := utf8.RuneCountInString(d); n > 100 {
+			return fmt.Errorf("[labels] descriptions: %q's is %d characters, GitHub takes 100 at most", name, n)
+		}
+	}
+	return nil
+}
+
+// LabelColors are the list's colors: the file's, else the palette's in
+// turn, as a field's values get theirs.
+func (c *Config) LabelColors() map[string]string {
+	res := map[string]string{}
+	i := 0
+	for _, l := range c.Labels.List {
+		if col := c.Labels.Colors[l]; col != "" {
+			res[l] = col
+			continue
+		}
+		res[l] = Palette[i%len(Palette)]
+		i++
+	}
+	return res
 }
 
 // Uploads is the [uploads] table: where files attached to issues go. The
@@ -138,7 +204,7 @@ type Uploads struct {
 // (internal/branches).
 type Branches struct {
 	Base string `toml:"base"` // default: the remote's default branch, else main, master or trunk
-	Name string `toml:"name"` // {kind}, {number}, {slug}; default "{number}-{slug}"
+	Name string `toml:"name"` // {kind}, {number}, {n}, {slug}; default "{number}/{n}-{slug}"
 	// Kinds maps an issue's kind (its kind: field, or a flat label listed
 	// here) to the {kind} of its branch: bug = "fix".
 	Kinds map[string]string `toml:"kinds"`
@@ -189,6 +255,8 @@ type Config struct {
 	// Discover finds the forges in the git remotes: no [forges.<name>]
 	// table, and no [forges] discover = false.
 	Discover bool
+	// Labels is the [labels] table: the plain labels the project allows.
+	Labels Labels
 }
 
 // FileName is the config's name, at the root of the repository.
@@ -281,6 +349,10 @@ func parse(data []byte) (*Config, toml.MetaData, error) {
 	if err := checkDescriptions(r.Fields); err != nil {
 		return nil, md, err
 	}
+	r.Labels.Defined = md.IsDefined("labels")
+	if err := checkLabels(r.Labels, r.Branches.Kinds); err != nil {
+		return nil, md, err
+	}
 	forges, publishPrivate, discover, err := parseForges(md, r.Forges)
 	if err != nil {
 		return nil, md, err
@@ -307,6 +379,7 @@ func parse(data []byte) (*Config, toml.MetaData, error) {
 		Roles:          r.Roles,
 		Cycle:          r.Cycle,
 		Release:        r.Release,
+		Labels:         r.Labels,
 		Forges:         forges,
 		PublishPrivate: publishPrivate,
 		Discover:       discover,

@@ -60,5 +60,6 @@ export function docSectionAt(text: string, pos: number): string {
   if (header.startsWith('[repos]')) return 'repos';
   if (header.startsWith('[branches]')) return 'branches';
   if (header.startsWith('[roles]')) return 'roles';
+  if (/^\[labels[.\]]/.test(header)) return 'labels';
   return 'overview';
 }

@@ -252,3 +252,37 @@ func TestGatherNoBranch(t *testing.T) {
 		t.Errorf("Gather = %+v, %v", in, err)
 	}
 }
+
+// Branched out: each branch of the issue's folder is a lane; the evidence
+// is the least advanced, the older branch still without its tests, not
+// the newest one (which has them).
+func TestGatherLanes(t *testing.T) {
+	dir, b := repo(t)
+	t.Setenv("TEST_GIT_DATE", "2026-01-01T10:00:00Z")
+	git(t, dir, "switch", "-q", "-c", "fix/2518/1-first")
+	commitFile(t, dir, "first.go", "package x\n")
+	t.Setenv("TEST_GIT_DATE", "2026-01-02T10:00:00Z")
+	git(t, dir, "switch", "-q", "-c", "fix/2518/2-second", "dev")
+	commitFile(t, dir, "second_test.go", "package x\n")
+	git(t, dir, "switch", "-q", "dev")
+
+	id := storetest.NewImportedIssue(t, b, "Crash (#2518)", "https://github.com/o/r/issues/2518")
+	th, err := b.Thread(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	in, err := Gather(b, co2Config(), th, "", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if in.Branch != "fix/2518/1-first" || len(in.Tests) != 0 {
+		t.Errorf("evidence %q with %d tests, want the first, none", in.Branch, len(in.Tests))
+	}
+	steps := map[string]int{}
+	for _, l := range in.Lanes {
+		steps[l.Branch] = l.Step
+	}
+	if len(in.Lanes) != 2 || steps["fix/2518/1-first"] != 4 || steps["fix/2518/2-second"] != 5 {
+		t.Errorf("lanes %+v", in.Lanes)
+	}
+}

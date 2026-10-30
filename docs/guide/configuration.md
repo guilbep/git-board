@@ -104,6 +104,29 @@ bug = "Something isn't working"
 
 Settings › Labels shows each label's color and description beside GitHub's, and writes GitHub's into these tables (see Repos).
 
+## Labels
+
+`[labels]` lists the plain labels the project allows besides its fields: yes-or-no flags that can stack and that no field holds, such as `needs-design` or `regression`. A label an issue can carry only one of (a priority, a kind, a team) is a field's option instead.
+
+```toml
+[labels]
+list = ["needs-design", "regression", "security"]
+
+[labels.colors]
+regression = "red"
+
+[labels.descriptions]
+needs-design = "waits for a design decision"
+```
+
+| Key | Default | What it does |
+| --- | --- | --- |
+| `list` | none: nothing to pick | The labels, in the order the issue's head offers them as checkboxes, never as free text. A label with a colon (`prio:p1`) is a field's value and a kind is the kind field's: both are refused. |
+| `colors` | the palette, in turn | A label's color: a palette name or `#rrggbb`, as in `[fields.<name>.colors]`. |
+| `descriptions` | none | A label's description on GitHub, 100 characters at most. |
+
+Settings › Labels sends them to GitHub with the fields' labels and no longer counts them among the labels outside the project's. With the table, `git board lint` reports an open issue's plain labels outside the list (`label-outside`); an empty list allows none. Without it, lint says nothing about labels and the issue's head has nothing to pick: a label already on an issue shows with a warning.
+
 ## Views
 
 A view is a saved page: a tab above the issues, in the file's order (git-board opens on the first), and its address can be bookmarked. Table, board or roadmap is a switch beside the tabs, on any view; `layout` is the one it opens in.
@@ -326,17 +349,17 @@ The full issue page has a **Changes** tab: the branch from where it left the bas
 ```toml
 [branches]
 base = "dev"
-name = "{kind}/{number}-{slug}"
+name = "{kind}/{number}/{n}-{slug}"
 kinds = { bug = "bug", feat = "feat", perf = "perf", chore = "chore" }
 ```
 
 | Key | Default | What it does |
 | --- | --- | --- |
 | `base` | the remote's default branch, else `main`, `master` or `trunk` | The branch a new branch starts from (`origin/<base>`, or `<base>` without a remote), and the one "in dev" and ahead/behind compare with. |
-| `name` | `"{number}-{slug}"` (GitHub's) | The branch's name. `{number}`: the issue's project number with its prefix, in lower case (`vm-62`), once the project numbers its issues (see Numbers), else its number on its first forge, else its git-bug id's first 7 characters. `{kind}`: its kind, through `kinds`; without one, `{kind}/` is dropped. `{slug}`: its title in lower-case words, without a leading `[BUG](Scope)` or a trailing `(#1234)`, cut at about 50 characters. |
+| `name` | `"{number}/{n}-{slug}"`: each branch in the issue's folder | The branch's name. `{number}`: the issue's project number with its prefix, in lower case (`vm-62`), once the project numbers its issues (see Numbers), else its number on its first forge, else its git-bug id's first 7 characters. `{n}`: the branch's place in the issue's folder, one more than the highest among its branches and the base's last merge commits that name one: `fix/2518/1-…`, then `fix/2518/2-…`; counted, never stored. `{kind}`: its kind, through `kinds`; without one, `{kind}/` is dropped. `{slug}`: its title in lower-case words, without a leading `[BUG](Scope)` or a trailing `(#1234)`, cut at about 50 characters. A name without `{n}` (`{kind}/{number}-{slug}`, the form before folders) still links its branches. |
 | `kinds` | none | The project's kinds, each to the `{kind}` of its branch. They are the `kind` field (a column, a group, a filter, one per issue) in either of two forms. Without `options` in `[fields.kind]`, the default, a kind is GitHub's plain label (`bug`), shown and filtered as `kind:bug`, in `kinds` order; `[fields.kind.colors]` and `descriptions` still apply. With `options` in `[fields.kind]`, the kinds are `kind:bug` labels like any field's. `git board project pull` and `sync` fill a missing kind from the Project's Category (`FEAT` → `feat`); `git board lint` reports an issue with two kinds, a title starting with a bracket (`[BUG]`: the kind is its label, which wins when they disagree), and how many have none. |
 
-`[BUG](Equipment) Other equipment shows the wrong example (#2518)`, labeled `bug`, gives `fix/2518-other-equipment-shows-the-wrong-example`. What git doesn't take in a branch name becomes `-`.
+`[BUG](Equipment) Other equipment shows the wrong example (#2518)`, labeled `bug`, gives `fix/2518/1-other-equipment-shows-the-wrong-example`, and its second branch `fix/2518/2-…`. What git doesn't take in a branch name becomes `-`. The issue's head makes the branch from its plus (*Create*: `git branch --no-track` from the base, then `git push -u origin`, the server's checkout untouched, on a server listening on localhost only), or gives the commands to run yourself.
 
 A branch names an issue when its first number is the issue's number, with or without the project's prefix (`fix/vm-62-…`, `fix/62-…`, `2518-…`: its project number once the project numbers its issues, else a forge's), or when a word in it starts the issue's git-bug id (7 characters or more). Local branches and the remotes' (as last fetched) are listed.
 

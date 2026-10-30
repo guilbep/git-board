@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1440">
+<title>19f · Proposal: Branch, review, merge: the PR is only the gate</title>
+<link rel="stylesheet" href="epfl.css">
+<link rel="stylesheet" href="drawer.css">
+<link rel="stylesheet" href="board.css">
+</head>
+<body>
+<div class="bd">
+  <p class="bd-eyebrow">19f · Proposal</p><h2 class="bd-title">Branch, review, merge: the PR is only the gate</h2><p class="bd-lead">guilbep, 30 Oct: stop saying PR or MR; it is a branch, reviewed before it is merged, and the branches of an issue live in its folder. To decide; nothing here is built.</p>
+  <div class="bd-grid is-3">
+    <div>
+      <p class="bd-cat">Names: a folder per issue</p>
+      <table class="bd-table">
+        <tbody><tr><th>Branch</th><th>Name</th></tr>
+        <tr><td>2771/1</td><td><span class="bd-code-inline">test/2771/1-implement-tests-to-validate-all-equations</span></td></tr>
+        <tr><td>2771/2</td><td><span class="bd-code-inline">test/2771/2-reference-examples</span></td></tr>
+        <tr><td>2810/1</td><td><span class="bd-code-inline">bug/2810/1-billing-totals-round-twice-on-discounted-lines</span></td></tr>
+        <tr><td>2811/1</td><td><span class="bd-code-inline">2811/1-pdf-the-invoice-footer-cuts-the-vat-number</span> (no kind)</td></tr>
+      </tbody></table>
+      <p class="bd-note"><span class="bd-code-inline">[branches] name = "{kind}/{number}/{n}-{slug}"</span>. No branch is ever named <span class="bd-code-inline">test/2771</span>, so git's folder rule always holds. {n} is counted from git: the issue's branches and the merges on dev that name them; never stored, never reused. The issue's number stays the first number in the name, as git-board's linking needs.</p>
+    </div>
+    <div>
+      <p class="bd-cat">Words: three steps of a branch</p>
+      <ol class="bd-track"><li class="is-done"><svg class="feather gb-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polyline points="20 6 9 17 4 12"></polyline></svg><span>Branch</span></li><li class="is-now"><svg class="feather gb-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg><span>Review</span></li><li class="is-todo"><svg class="feather gb-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><line x1="5" y1="12" x2="19" y2="12"></line></svg><span>Merge</span></li></ol>
+      <ul class="bd-list" style="margin-top: var(--space-2)">
+        <li><b>Branch</b>: made from the issue, in its folder.</li>
+        <li><b>Review</b>: asked from the issue, answered in the issue (Approve, Request changes), as git-board's review already is.</li>
+        <li><b>Merge</b>: from the issue, into dev.</li>
+        <li><b>The gate</b>: GitHub's PR or GitLab's MR, as docs/prd/work-unit.md already calls it: opened by git-board when review is asked, because the forge runs its checks and rules there. Shown only as a link.</li>
+      </ul>
+    </div>
+    <div>
+      <p class="bd-cat">The chips name the branch</p>
+      <div class="gb-dev"><span class="gb-dev-mark"><svg class="feather gb-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><line x1="6" y1="3" x2="6" y2="15"></line><circle cx="18" cy="6" r="3"></circle><circle cx="6" cy="18" r="3"></circle><path d="M18 9a9 9 0 0 1-9 9"></path></svg></span><span class="gb-anchor"><button type="button" class="gb-chip is-review" aria-label="PR #3155 by yuki-t · 15 checks passed · waits for an approval from sam-o" aria-haspopup="dialog" aria-expanded="false"><svg class="feather gb-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg><b>2771/2</b> <span class="gb-chip-word">review</span><span class="gb-chip-to"><svg class="feather gb-ic gb-ic-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg></span><span class="gb-faces" aria-hidden="true"><span class="gb-av is-sm" title="sam-o">SA</span></span></button></span><span class="gb-anchor"><button type="button" class="gb-chip is-branch" aria-label="Branch 2771/3: not in review yet"><svg class="feather gb-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><line x1="6" y1="3" x2="6" y2="15"></line><circle cx="18" cy="6" r="3"></circle><circle cx="6" cy="18" r="3"></circle><path d="M18 9a9 9 0 0 1-9 9"></path></svg><b>2771/3</b> <span class="gb-chip-word">draft</span><span class="gb-chip-to"><svg class="feather gb-ic gb-ic-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg></span><span class="gb-faces" aria-hidden="true"><span class="gb-av is-me is-sm" title="yuki-t">YU</span></span></button></span><button type="button" class="gb-tail is-merged"><svg class="feather gb-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="18" cy="18" r="3"></circle><circle cx="6" cy="6" r="3"></circle><path d="M6 21V9a9 9 0 0 0 9 9"></path></svg>1 merged</button><button type="button" class="gb-iconbtn" aria-label="Create a branch"><svg class="feather gb-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg></button></div>
+      <p class="bd-note">2771/2 waits for a review; 2771/3 is still yours, not asked for review yet; 2771/1 is merged. The gate's number (#3155) moves into the popover.</p>
+    </div>
+  </div>
+  <div class="bd-gap"></div>
+  <div class="bd-row">
+    <div><p class="bd-cat">A branch, opened</p><div class="gb-pop is-static" style="width: 24rem">
+    <div class="gb-pop-head"><p class="gb-pop-title">Branch 2771/2</p><span class="gb-pop-sub gb-mono">test/2771/2-reference-examples</span></div>
+    <ol class="bd-track"><li class="is-done"><svg class="feather gb-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polyline points="20 6 9 17 4 12"></polyline></svg><span>Branch</span></li><li class="is-now"><svg class="feather gb-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg><span>Review: waits for sam-o</span></li><li class="is-todo"><svg class="feather gb-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><line x1="5" y1="12" x2="19" y2="12"></line></svg><span>Merge</span></li></ol>
+    <ul class="gb-pop-rows" style="margin-top: var(--space-2)"><li class="gb-pop-row"><span class="gb-state is-ok"><svg class="feather gb-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polyline points="20 6 9 17 4 12"></polyline></svg></span><span class="gb-grow">15 checks passed</span></li><li class="gb-pop-row"><span class="gb-state is-wait"><svg class="feather gb-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg></span><span class="gb-grow">Waits for an approval from sam-o</span></li></ul>
+    <div class="gb-pop-foot"><button type="button" class="epfl-btn epfl-btn-primary epfl-btn-sm" disabled="">Merge into dev</button><a href="#" class="gb-pop-sub">The gate: GitHub #3155 <svg class="feather gb-ic gb-ic-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg></a></div>
+  </div></div>
+    <div><p class="bd-cat">A new branch</p><div class="gb-pop is-static" style="width: 30rem">
+    <div class="gb-pop-head"><p class="gb-pop-title">New branch for #2771</p><span class="gb-pop-sub gb-mono">{kind}/{number}/{n}-{slug}</span></div>
+    <div class="gb-form">
+      <div class="gb-inline"><span class="epfl-label" style="width: 3rem">Name</span><span class="gb-mono" style="white-space: nowrap">test/2771/4-</span><input class="epfl-input gb-mono gb-grow" value="planner-submodules" aria-label="What this branch does" spellcheck="false"></div>
+      <div class="gb-inline"><span class="epfl-label" style="width: 3rem">From</span><span class="gb-mono">origin/dev</span><span class="gb-hint">4: the issue's fourth branch, counted from git</span></div>
+      <div class="gb-inline"><button type="button" class="epfl-btn epfl-btn-primary epfl-btn-sm gb-btnicon"><svg class="feather gb-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><line x1="6" y1="3" x2="6" y2="15"></line><circle cx="18" cy="6" r="3"></circle><circle cx="6" cy="18" r="3"></circle><path d="M18 9a9 9 0 0 1-9 9"></path></svg>Create</button><button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm gb-btnicon"><svg class="feather gb-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>Copy the commands</button></div>
+      <p class="gb-hint">Create makes the branch from origin/dev and pushes it; it never switches yours. Then: <span class="gb-mono">git switch test/2771/4-planner-submodules</span></p>
+    </div>
+  </div></div>
+  </div>
+</div>
+</body>
+</html>

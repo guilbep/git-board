@@ -2,12 +2,16 @@ package store
 
 import (
 	"bytes"
+	"context"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -183,6 +187,49 @@ func (b *Backend) Worktrees() ([]Worktree, error) {
 	}
 	flush()
 	return res, nil
+}
+
+// MergeSubjects are the subjects of the last max merge commits on ref's
+// first-parent line, where a merged branch's name stays once the branch
+// is deleted; none when git can't read them.
+func (b *Backend) MergeSubjects(ref string, max int) []string {
+	out, err := b.git("log", "--first-parent", "--merges", "--format=%s", "-n", strconv.Itoa(max), "--end-of-options", ref, "--")
+	if err != nil {
+		return nil
+	}
+	return lines(out)
+}
+
+// HasBranch tells whether a local branch, or origin's, has that name.
+func (b *Backend) HasBranch(name string) bool {
+	all, err := b.Branches()
+	if err != nil {
+		return false
+	}
+	return slices.ContainsFunc(all, func(br Branch) bool { return br.Name == name && (br.Remote == "" || br.Remote == "origin") })
+}
+
+// CreateBranch makes a local branch at start, tracking nothing: git
+// branch --no-track. It never switches: the work tree keeps its checkout.
+func (b *Backend) CreateBranch(name, start string) error {
+	out, err := exec.Command("git", "--git-dir", b.dir, "branch", "--no-track", "--end-of-options", name, start).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("git branch %s: %s", name, strings.TrimSpace(string(out)))
+	}
+	return nil
+}
+
+// PushBranch pushes a branch to a remote and makes it the branch's
+// upstream: git push -u, with the credentials git finds for the remote,
+// never a prompt (no terminal answers one here).
+func (b *Backend) PushBranch(ctx context.Context, remote, name string) error {
+	cmd := exec.CommandContext(ctx, "git", "--git-dir", b.dir, "push", "-u", remote, "--end-of-options", "refs/heads/"+name+":refs/heads/"+name)
+	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("git push %s %s: %s", remote, name, strings.TrimSpace(string(out)))
+	}
+	return nil
 }
 
 // git runs git on the repository.

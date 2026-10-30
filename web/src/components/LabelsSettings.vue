@@ -21,7 +21,7 @@
 
     <template v-if="d">
       <p v-if="!d.repos.length" class="lb-muted">No GitHub repository: set <code>[repos]</code> in the project file, or an origin on GitHub.</p>
-      <p v-if="!d.rows.length" class="lb-muted">The project file defines no label yet: no field with options, no sprint, no kind.</p>
+      <p v-if="!d.rows.length" class="lb-muted">The project file defines no label yet: no field with options, no sprint, no kind, no <code>[labels] list</code>.</p>
       <div v-else class="gb-table-wrap">
         <table class="gb-table">
           <thead>

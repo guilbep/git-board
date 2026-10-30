@@ -2,6 +2,7 @@ package cycle
 
 import (
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -359,5 +360,91 @@ func TestComputeOfAndName(t *testing.T) {
 	}
 	if c := Compute(input("in-review", nil)); c.Of != 7 || c.Position() != 6 || c.Name != "Review" {
 		t.Errorf("default: of %d, position %d, name %q", c.Of, c.Position(), c.Name)
+	}
+}
+
+// lane is a branch of the issue: its last commit at day, tests or not, a PR or not.
+func lane(name string, day int, tests bool, pr *ghpr.PR) Lane {
+	l := Lane{Branch: name, Head: name + "-head", At: time.Date(2026, 10, day, 10, 0, 0, 0, time.UTC), PR: pr}
+	if tests {
+		l.Files = []TestFile{{Path: "x_test.go"}}
+	}
+	return l
+}
+
+func pr(n int, state string, draft bool) *ghpr.PR {
+	return &ghpr.PR{Number: n, State: state, Draft: draft}
+}
+
+// Branched out (docs/design/issue-head, open point 6): each branch its own
+// Tests, Code and Review; the issue's evidence is its least advanced open
+// branch, merged and closed ones aside.
+func TestPickLane(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name   string
+		lanes  []Lane
+		want   string
+		steps  []int
+		merged bool
+	}{
+		{"one branch, as before", []Lane{lane("fix/2518/1-a", 1, true, nil)}, "fix/2518/1-a", []int{5}, false},
+		{"the least advanced holds the issue back", []Lane{lane("fix/2518/1-a", 1, true, pr(3155, "OPEN", false)), lane("fix/2518/2-b", 2, false, nil)}, "fix/2518/2-b", []int{6, 4}, false},
+		{"a merged one aside", []Lane{lane("fix/2518/1-a", 3, true, pr(3155, "MERGED", false)), lane("fix/2518/2-b", 1, true, pr(3160, "OPEN", false))}, "fix/2518/2-b", []int{7, 6}, false},
+		{"a closed one aside", []Lane{lane("fix/2518/1-a", 1, false, pr(3155, "CLOSED", false)), lane("fix/2518/2-b", 2, true, nil)}, "fix/2518/2-b", []int{4, 5}, false},
+		{"a draft is not in review yet", []Lane{lane("fix/2518/1-a", 1, true, pr(3155, "DRAFT_IGNORED", true)), lane("fix/2518/2-b", 2, true, pr(3160, "OPEN", true))}, "fix/2518/2-b", []int{5, 5}, false},
+		{"a tie goes to the newest", []Lane{lane("fix/2518/1-a", 1, false, nil), lane("fix/2518/2-b", 2, false, nil)}, "fix/2518/2-b", []int{4, 4}, false},
+		{"all merged: the newest merged, so Verify opens", []Lane{lane("fix/2518/1-a", 1, true, pr(3155, "MERGED", false)), lane("fix/2518/2-b", 2, true, pr(3160, "MERGED", false))}, "fix/2518/2-b", []int{7, 7}, true},
+		{"merged without a PR: its work in the base", []Lane{{Branch: "fix/2518/1-a", InBase: true, At: time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)}, lane("fix/2518/2-b", 2, false, nil)}, "fix/2518/2-b", []int{7, 4}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			in := PickLane(input("in-progress", func(in *Input) { in.Lanes = tc.lanes }))
+			if in.Branch != tc.want {
+				t.Errorf("evidence %q, want %q", in.Branch, tc.want)
+			}
+			var steps []int
+			for _, l := range in.Lanes {
+				steps = append(steps, l.Step)
+			}
+			if !slices.Equal(steps, tc.steps) {
+				t.Errorf("steps %v, want %v", steps, tc.steps)
+			}
+			if merged := in.PR != nil && in.PR.State == "MERGED"; merged != tc.merged {
+				t.Errorf("merged %v, want %v", merged, tc.merged)
+			}
+		})
+	}
+}
+
+// A kind with no tests: a branch is at Code from its first commit.
+func TestPickLaneNoTests(t *testing.T) {
+	t.Parallel()
+	in := PickLane(input("in-progress", func(in *Input) {
+		in.Stages.Kinds = map[string]string{"docs": config.NoTests}
+		in.Kind = "docs"
+		in.Lanes = []Lane{lane("docs/2518/1-a", 1, false, nil)}
+	}))
+	if in.Lanes[0].Step != 5 {
+		t.Errorf("step %d, want 5", in.Lanes[0].Step)
+	}
+}
+
+// The status went to in-review with the first branch; the second, still at
+// Tests, says it holds the issue back.
+func TestBehindNote(t *testing.T) {
+	t.Parallel()
+	c := Compute(PickLane(input("in-review", func(in *Input) {
+		in.Risk = "low"
+		in.Lanes = []Lane{lane("fix/2518/1-a", 1, true, pr(3155, "OPEN", false)), lane("fix/2518/2-b", 2, false, nil)}
+	})))
+	if c.Step != 6 || !strings.Contains(c.Note, "fix/2518/2-b is at Tests") || !strings.Contains(c.Note, "2 open branches") {
+		t.Errorf("step %d, note %q", c.Step, c.Note)
+	}
+	one := Compute(PickLane(input("in-review", func(in *Input) {
+		in.Risk = "low"
+		in.Lanes = []Lane{lane("fix/2518/1-a", 1, true, pr(3155, "OPEN", false))}
+	})))
+	if one.Note != "" {
+		t.Errorf("one branch, note %q", one.Note)
 	}
 }

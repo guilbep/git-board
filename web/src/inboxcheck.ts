@@ -53,3 +53,15 @@ export function followingLine(following: number, views: string[], roles: string[
   if (roles.length) parts.push(`${roles.join(', ')} of the project: its new and closed issues`);
   return parts.join(' · ');
 }
+
+// bellState: the bar's bell (docs/design/issue-head, 16g), from followLine.
+// Following: a bell in the text color; a project role, a grey bell (new
+// and closed only); not following, a grey bell-off. Its label is the
+// line's state and reason, the button's name and tooltip.
+export function bellState(f: FollowState): { shape: 'bell' | 'bell-off'; tone: 'on' | 'off' | 'part'; label: string } {
+  const l = followLine(f);
+  const label = `Inbox: ${l.state.toLowerCase()}. ${l.because}`;
+  if (l.state === 'Following') return { shape: 'bell', tone: 'on', label };
+  if (l.state === 'New and closed only') return { shape: 'bell', tone: 'part', label };
+  return { shape: 'bell-off', tone: 'off', label };
+}

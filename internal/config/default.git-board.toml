@@ -71,13 +71,14 @@ single = false
 length_days = 14
 start_weekday = "monday"
 
-# An issue's branch: its kind, number and title, e.g. bug/vm-12-login-fails,
-# the kind's word itself. The kinds are plain labels, GitHub's way (`bug`,
+# An issue's branch: its kind, number, place in the issue's folder and
+# title, e.g. bug/vm-12/1-login-fails, then bug/vm-12/2-…; the kind's word
+# itself. The kinds are plain labels, GitHub's way (`bug`,
 # `feat`), and the kind field all the same: a column, a group, a filter, one
 # per issue. Rather `kind:bug` labels? Give [fields.kind] these kinds as
 # options.
 [branches]
-name = "{kind}/{number}-{slug}"
+name = "{kind}/{number}/{n}-{slug}"
 kinds = { bug = "bug", feat = "feat", polish = "polish", docs = "docs", refactor = "refactor", perf = "perf", test = "test", style = "style", chore = "chore", design = "design" }
 
 # What each kind means, the label's description on GitHub too.

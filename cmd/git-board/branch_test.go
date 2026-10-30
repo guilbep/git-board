@@ -16,7 +16,7 @@ func TestBranchPrintsTheNameAndTheCommand(t *testing.T) {
 	if err != nil {
 		t.Fatalf("execute: %v\noutput:\n%s", err, out)
 	}
-	name := id[:7] + "-fix-invoice-bug"
+	name := id[:7] + "/1-fix-invoice-bug" // in the issue's folder (docs/design/issue-head, decision 3)
 	if want := name + "\ngit switch -c " + name + " origin/dev\n"; out != want {
 		t.Errorf("output %q, want %q", out, want)
 	}

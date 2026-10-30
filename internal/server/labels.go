@@ -99,8 +99,12 @@ func (s *apiServer) handleLabelList(w http.ResponseWriter, r *http.Request) {
 	rows := []labelRow{}
 	held := cfg.Held
 	for _, want := range ghlabels.Desired(cfg) {
+		key := want.Field + ":" + want.Value
+		if want.Field == "" { // [labels] list's: plain
+			key = want.Name
+		}
 		row := labelRow{Label: want, Field: want.Field, Value: want.Value, OwnColor: want.OwnColor, OwnDescription: want.OwnDescription,
-			Count: counts[strings.ToLower(want.Field+":"+want.Value)], GitHub: []labelOnGitHub{}}
+			Count: counts[strings.ToLower(key)], GitHub: []labelOnGitHub{}}
 		for _, repo := range repos {
 			if labels, ok := existing[repo]; ok {
 				got := labelOnGitHub{Repo: repo, State: ghlabels.State(want, labels)}
@@ -192,10 +196,14 @@ func (s *apiServer) handleLabelAdopt(w http.ResponseWriter, r *http.Request) {
 		return m
 	}
 	f, text := cfg.Fields[req.Field], req.Text
-	if req.Color != "" {
-		text = config.SetFieldTable(text, req.Field, "colors", set(f.Colors, "#"+strings.ToLower(req.Color)))
+	colors, descriptions, write := f.Colors, f.Descriptions, func(sub string, m map[string]string) string { return config.SetFieldTable(text, req.Field, sub, m) }
+	if req.Field == "" { // [labels] list's: [labels.colors] and .descriptions
+		colors, descriptions, write = cfg.Labels.Colors, cfg.Labels.Descriptions, func(sub string, m map[string]string) string { return config.SetLabelsTable(text, sub, m) }
 	}
-	text = config.SetFieldTable(text, req.Field, "descriptions", set(f.Descriptions, strings.TrimSpace(req.Description)))
+	if req.Color != "" {
+		text = write("colors", set(colors, "#"+strings.ToLower(req.Color)))
+	}
+	text = write("descriptions", set(descriptions, strings.TrimSpace(req.Description)))
 	if _, res := checkConfig(text); !res.OK {
 		writeJSON(w, http.StatusBadRequest, res)
 		return
@@ -283,4 +291,28 @@ func (s *apiServer) handleLabelDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"deleted": true})
+}
+
+// handleLabelsList answers [labels]: the plain labels the project allows,
+// with their colors and descriptions, for the issue's label picker; defined
+// is false without the table (no picker: nothing to pick).
+func (s *apiServer) handleLabelsList(w http.ResponseWriter, r *http.Request) {
+	cfg := s.config()
+	colors := map[string]string{}
+	for name, c := range cfg.LabelColors() {
+		colors[name] = config.Hex(c)
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"defined":      cfg.Labels.Defined,
+		"list":         orEmpty(cfg.Labels.List),
+		"colors":       colors,
+		"descriptions": orEmptyMap(cfg.Labels.Descriptions),
+	})
+}
+
+func orEmptyMap(m map[string]string) map[string]string {
+	if m == nil {
+		return map[string]string{}
+	}
+	return m
 }

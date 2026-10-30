@@ -1,21 +1,25 @@
 // Package branches is an issue's code: the branch it suggests creating,
 // named from [branches], and the branches whose name names it. The issue
-// is the unit of work; its code hangs off it by name. Read-only: nothing
-// here creates or pushes a branch.
+// is the unit of work; its code hangs off it by name, each branch in the
+// issue's folder (fix/2518/1-…, fix/2518/2-…). Read-only: the server
+// creates the branch (store.CreateBranch), from the name made here.
 package branches
 
 import (
 	"cmp"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/store"
 )
 
-// defaultName is GitHub's: 2518-other-equipment-shows-the-wrong-example.
-const defaultName = "{number}-{slug}"
+// defaultName puts each branch in the issue's folder, the first one too:
+// 2518/1-other-equipment-shows-the-wrong-example (docs/design/issue-head,
+// decision 3).
+const defaultName = "{number}/{n}-{slug}"
 
 // remote is where branches come from and go to.
 // ponytail: origin only; a setting when a project's remote isn't origin
@@ -24,19 +28,71 @@ const remote = "origin"
 // slugMax is about how long a slug gets, cut between words.
 const slugMax = 50
 
-// Name is the branch an issue suggests: cfg.Name with {kind} (the issue's
-// kind through cfg.Kinds; without one, "{kind}/" is dropped), {number}
-// (its project number with its prefix in lower case, vm-62: a bare 62 is
-// a forge's number to a forge; else its first forge number before the
-// project numbers its issues, else its git-bug id's first 7 characters) and
-// {slug} (its title), made a branch name git takes.
+// Name is the issue's first branch: NameAt with {n} at 1.
 func Name(cfg config.Branches, is store.Issue) string {
+	return NameAt(cfg, is, 1)
+}
+
+// NameAt is the branch an issue suggests: cfg.Name with {kind} (the
+// issue's kind through cfg.Kinds; without one, "{kind}/" is dropped),
+// {number} (its project number with its prefix in lower case, vm-62: a
+// bare 62 is a forge's number to a forge; else its first forge number
+// before the project numbers its issues, else its git-bug id's first 7
+// characters), {n} (the branch's place in the issue's folder) and {slug}
+// (its title), made a branch name git takes.
+func NameAt(cfg config.Branches, is store.Issue, n int) string {
 	tmpl := cmp.Or(cfg.Name, defaultName)
 	kind := kindOf(cfg, is.Labels)
 	if kind == "" {
 		tmpl = strings.ReplaceAll(tmpl, "{kind}/", "")
 	}
-	return refSafe(strings.NewReplacer("{kind}", kind, "{number}", number(is), "{slug}", Slug(is.Title)).Replace(tmpl))
+	return refSafe(strings.NewReplacer("{kind}", kind, "{number}", number(is), "{n}", strconv.Itoa(n), "{slug}", Slug(is.Title)).Replace(tmpl))
+}
+
+// nSentinel stands for {n} while the folder is found: digits no name holds.
+const nSentinel = 987654321
+
+// Folder is what the issue's branches share before {n}: "fix/2518/" for
+// "{kind}/{number}/{n}-{slug}"; "" when the template has no {n}.
+func Folder(cfg config.Branches, is store.Issue) string {
+	name := NameAt(cfg, is, nSentinel)
+	i := strings.Index(name, strconv.Itoa(nSentinel))
+	if i < 0 || !strings.Contains(cmp.Or(cfg.Name, defaultName), "{n}") {
+		return ""
+	}
+	return name[:i]
+}
+
+// Next is the {n} of the issue's next branch: one more than the highest
+// found in its folder among the branch names and the subjects of merge
+// commits (where a merged branch's name stays once it is deleted). A
+// deleted branch never merged frees its number.
+func Next(folder string, names, subjects []string) int {
+	if folder == "" {
+		return 1
+	}
+	at := regexp.MustCompile(`(?:^|[^A-Za-z0-9._-])` + regexp.QuoteMeta(folder) + `(\d+)(?:-|$|[^A-Za-z0-9])`)
+	high := 0
+	see := func(s string) {
+		for _, m := range at.FindAllStringSubmatch(s, -1) {
+			if n, err := strconv.Atoi(m[1]); err == nil && n > high && n < nSentinel {
+				high = n
+			}
+		}
+	}
+	for _, name := range names {
+		see(name)
+	}
+	for _, s := range subjects {
+		see(s)
+	}
+	return high + 1
+}
+
+// Valid tells whether name is a branch name git takes as it is, and a
+// word a command line takes as is: refSafe changes nothing in it.
+func Valid(name string) bool {
+	return name != "" && refSafe(name) == name
 }
 
 // kindOf is the issue's kind (cfg.Kind) as its branch says it, through
@@ -96,23 +152,35 @@ func refSafe(name string) string {
 // (BareNumber) as the name's first number, with or without the project's
 // prefix (fix/vm-62-…, fix/62-…, 2518-…), or its git-bug id's
 // first 7 characters or more as a word (abc1234-…).
+// A folder named by an id (abc1234/1-…) holds no number: its {n} names
+// no issue.
 // ponytail: the first number only, so a number in a slug (#12's
 // fix/12-upgrade-node-24) names no other issue; a template putting a
 // number before {number} (a year) links nothing
 func Names(branch string, is store.Issue) bool {
 	first := true
 	for _, w := range strings.FieldsFunc(branch, func(r rune) bool { return !isAlnum(r) }) {
+		if len(w) >= 7 && strings.HasPrefix(is.ID, w) {
+			return true
+		}
+		if first && len(w) >= 7 && isHexID(w) {
+			first = false // an id's folder: the {n} after it is no issue's number
+			continue
+		}
 		if first && strings.Trim(w, "0123456789") == "" {
 			first = false
 			if is.HasNumber(w) {
 				return true
 			}
 		}
-		if len(w) >= 7 && strings.HasPrefix(is.ID, w) {
-			return true
-		}
 	}
 	return false
+}
+
+// isHexID: a word as a git-bug id's prefix is written, hex digits with a
+// letter among them (a number alone is a number).
+func isHexID(w string) bool {
+	return strings.Trim(w, "0123456789abcdef") == "" && strings.Trim(w, "0123456789") != ""
 }
 
 func isAlnum(r rune) bool {
@@ -152,9 +220,20 @@ func Suggest(b *store.Backend, cfg config.Branches, is store.Issue) (Suggestion,
 	if !has(remote, base) && has("", base) {
 		start = base
 	}
-	name := Name(cfg, is)
+	n := 1
+	if folder := Folder(cfg, is); folder != "" {
+		names := make([]string, 0, len(all))
+		for _, br := range all {
+			names = append(names, br.Name)
+		}
+		n = Next(folder, names, b.MergeSubjects(start, mergesRead))
+	}
+	name := NameAt(cfg, is, n)
 	return Suggestion{Suggested: name, Base: base, Start: start, Command: "git switch -c " + name + " " + start}, nil
 }
+
+// mergesRead is how many of the base's last merge commits Next reads.
+const mergesRead = 500
 
 // Branch is a branch naming the issue, against the base.
 type Branch struct {

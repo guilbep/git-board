@@ -147,7 +147,7 @@ func TestConfigDocsComeInSections(t *testing.T) {
 	for _, d := range docs {
 		ids = append(ids, d.ID)
 	}
-	if strings.Join(ids, ",") != "overview,fields,types,colors,views,roles,filters,sprints,github,forges,attachments,branches,cycle,worktrees,numbers,release,repos" {
+	if strings.Join(ids, ",") != "overview,fields,types,colors,labels,views,roles,filters,sprints,github,forges,attachments,branches,cycle,worktrees,numbers,release,repos" {
 		t.Errorf("sections %v", ids)
 	}
 	if len(docs) > 1 && (!strings.Contains(docs[1].HTML, "<table>") || docs[1].Title != "Fields" || strings.Contains(docs[1].HTML, "<h2")) {

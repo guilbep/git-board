@@ -1,10 +1,11 @@
 <!-- The panel's side column: fields (one PATCH each, as before), the
      "Held" marker of a field in conflict with the GitHub Project, plain
      labels, the branches (Development), the forges and what waits for
-     them, participants. -->
+     them, participants. `only` keeps some sections: the head v2's
+     popovers each host one (docs/design/issue-head). -->
 <template>
   <div class="gb-side">
-    <section class="gb-side-sec" aria-labelledby="side-fields">
+    <section v-if="shows('fields')" class="gb-side-sec" aria-labelledby="side-fields">
       <div class="gb-side-head">
         <h3 id="side-fields" class="gb-section-title">Fields</h3>
         <span class="gb-saved" role="status">{{ saving ? 'Saving…' : saved ? '✓ Saved' : '' }}</span>
@@ -62,7 +63,7 @@
       <p v-if="error" class="gb-hint" role="alert"><b>Not saved.</b> {{ error }}</p>
     </section>
 
-    <section v-if="spec" class="gb-side-sec" aria-labelledby="side-spec">
+    <section v-if="spec && shows('spec')" class="gb-side-sec" aria-labelledby="side-spec">
       <h3 id="side-spec" class="gb-section-title">Spec</h3>
       <p class="gb-spec-now">
         v{{ spec.v }} ·
@@ -74,7 +75,7 @@
       <p v-if="specLine" class="gb-hint">{{ specLine }}</p>
     </section>
 
-    <section v-if="incoming.length" class="gb-side-sec" aria-labelledby="side-linked">
+    <section v-if="incoming.length && shows('linked')" class="gb-side-sec" aria-labelledby="side-linked">
       <h3 id="side-linked" class="gb-section-title">Linked issues</h3>
       <div v-for="[field, list] in incoming" :key="field" class="gb-linked">
         <p class="gb-linked-name">{{ inverseName(field) }} <span class="gb-hint">{{ list.length }}</span></p>
@@ -84,7 +85,7 @@
       </div>
     </section>
 
-    <section class="gb-side-sec" aria-labelledby="side-labels">
+    <section v-if="shows('labels')" class="gb-side-sec" aria-labelledby="side-labels">
       <h3 id="side-labels" class="gb-section-title">Labels</h3>
       <ul class="gb-chips">
         <li v-for="l in plain" :key="l" class="gb-chip">
@@ -98,9 +99,9 @@
       </form>
     </section>
 
-    <IssueBranches :id="id" :labels="labels" :title="title" />
+    <IssueBranches v-if="shows('development')" :id="id" :labels="labels" :title="title" />
 
-    <section v-if="forges?.length || forgeStatus?.bridges.length" class="gb-side-sec" aria-labelledby="side-forges">
+    <section v-if="(forges?.length || forgeStatus?.bridges.length) && shows('forges')" class="gb-side-sec" aria-labelledby="side-forges">
       <h3 id="side-forges" class="gb-section-title">On the forges</h3>
       <template v-if="forges?.length">
         <ul class="gb-plain-list">
@@ -125,7 +126,7 @@
       </template>
     </section>
 
-    <section v-if="participants?.length" class="gb-side-sec" aria-labelledby="side-people">
+    <section v-if="participants?.length && shows('people')" class="gb-side-sec" aria-labelledby="side-people">
       <h3 id="side-people" class="gb-section-title">Participants</h3>
       <ul class="gb-plain-list">
         <li v-for="p in participants" :key="p.id" class="gb-person">
@@ -135,7 +136,7 @@
       </ul>
     </section>
 
-    <section v-if="follow" class="gb-side-sec" aria-labelledby="side-inbox">
+    <section v-if="follow && shows('inbox')" class="gb-side-sec" aria-labelledby="side-inbox">
       <h3 id="side-inbox" class="gb-section-title">Inbox</h3>
       <p class="gb-follow-state"><strong>{{ followSaid.state }}</strong> <span class="gb-hint">{{ followSaid.because }}</span></p>
       <div class="gb-follow-actions">
@@ -143,7 +144,7 @@
         <button v-if="follow.set !== null" type="button" class="gb-linkbtn" :disabled="followBusy" @click="setFollowTo(null)">Back to automatic</button>
       </div>
     </section>
-    <p v-else-if="followError" class="gb-hint">{{ followError }}</p>
+    <p v-else-if="followError && shows('inbox')" class="gb-hint">{{ followError }}</p>
   </div>
 </template>
 
@@ -178,12 +179,17 @@ const props = defineProps<{
   // the description's verdict (VerdictBar's), and the spec role's holder: none, anyone but the author
   spec?: SpecState | undefined;
   reviewer?: { name: string; role?: string | undefined } | undefined;
+  // only these sections, for the head v2's popovers and its Spec and Linked
+  // line: fields, spec, linked, labels, development, forges, people, inbox
+  only?: string[] | undefined;
 }>();
 const emit = defineEmits<{ changed: []; labels: [add: string[], remove: string[]]; reveal: [id: string]; open: [id: string] }>();
+const shows = (s: string) => !props.only || props.only.includes(s);
 
 // issue fields, both ways: the issues this one names, and those naming it
 const refs = ref<IssueRefs>({ out: {}, in: {} });
 async function loadRefs() {
+  if (!shows('fields') && !shows('linked')) return;
   try {
     refs.value = await getRefs(props.id);
   } catch {
@@ -303,6 +309,7 @@ const follow = ref<FollowState | null>(null);
 const followError = ref('');
 const followBusy = ref(false);
 async function loadFollow() {
+  if (!shows('inbox')) return;
   try {
     follow.value = await getFollow(props.id);
     followError.value = '';
@@ -351,5 +358,5 @@ const followSaid = computed(() => (follow.value ? followLine(follow.value) : { s
 .gb-linked + .gb-linked { margin-top: .75rem; }
 .gb-linked-name { margin: 0; font-size: .8125rem; font-weight: 700; }
 .gb-linked-name .gb-hint { display: inline; margin-left: .25rem; font-weight: 400; }
-.gb-waiting-toggle { display: inline-flex; align-items: center; gap: .375rem; margin-top: .5rem; padding: 0; border: 0; background: none; font: inherit; font-size: .875rem; font-weight: 700; color: var(--fg); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.gb-waiting-toggle { display: inline-flex; align-items: center; gap: .375rem; margin-top: .5rem; padding: 0; border: 0; background: none; font: inherit; font-size: .875rem; font-weight: 700; color: var(--fg); text-decoration: underline; text-underline-offset: .125rem; cursor: pointer; }
 </style>

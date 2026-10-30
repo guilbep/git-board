@@ -194,3 +194,24 @@ func TestTemplatesReadsEveryLabelsShape(t *testing.T) {
 		t.Errorf("Templates = %+v, want %+v", got, want)
 	}
 }
+
+// [labels] list's labels are the project's: plain, with no field, colored
+// and described by the file; no longer stray on GitHub.
+func TestDesiredHoldsTheLabelsList(t *testing.T) {
+	t.Parallel()
+	cfg := &config.Config{Labels: config.Labels{List: []string{"needs-design", "regression"}, Colors: map[string]string{"regression": "red"}, Descriptions: map[string]string{"needs-design": "waits for a design decision"}, Defined: true}}
+	got := Desired(cfg)
+	if !slices.Equal(names(got), []string{"needs-design", "regression"}) {
+		t.Fatalf("Desired %v", names(got))
+	}
+	if got[0].Field != "" || got[0].Value != "needs-design" || got[0].Description == "" || !got[0].OwnDescription || got[0].OwnColor {
+		t.Errorf("needs-design %+v", got[0])
+	}
+	if got[1].Color != config.PaletteHex["red"] || !got[1].OwnColor {
+		t.Errorf("regression %+v", got[1])
+	}
+	stray := Stray(cfg, got, []Label{{Name: "needs-design"}, {Name: "Regression"}, {Name: "wontfix"}})
+	if !slices.Equal(names(stray), []string{"wontfix"}) {
+		t.Errorf("Stray %v, want wontfix only", names(stray))
+	}
+}

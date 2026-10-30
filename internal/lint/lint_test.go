@@ -304,3 +304,31 @@ func TestKindChecks(t *testing.T) {
 		t.Errorf("kind field: %v, want 2 two-kinds and no double-single or missing-value", got)
 	}
 }
+
+// With [labels], an open issue's plain labels outside its list are
+// reported; a kind (flat) and a field's value never are; without the
+// table, nothing.
+func TestLabelsOutsideTheList(t *testing.T) {
+	t.Parallel()
+	b := storetest.New(t)
+	id := storetest.NewIssue(t, b, "Crash on save")
+	labelIssue(t, b, id, "needs-design", "wontfix", "bug", "prio:p1")
+	issues, err := b.ListIssues()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := &config.Config{Branches: config.Branches{Kinds: map[string]string{"bug": "fix"}}, Labels: config.Labels{List: []string{"needs-design"}, Defined: true}}
+	var got []string
+	for _, f := range lint.Run(issues, cfg) {
+		if f.Check == lint.CheckLabelOutside {
+			got = append(got, f.Message)
+		}
+	}
+	if len(got) != 1 || got[0] != `label "wontfix" isn't in [labels] list: add it there, or remove it` {
+		t.Errorf("findings %q", got)
+	}
+	cfg.Labels = config.Labels{}
+	if n := countChecks(lint.Run(issues, cfg))[lint.CheckLabelOutside]; n != 0 {
+		t.Errorf("without [labels]: %d findings", n)
+	}
+}

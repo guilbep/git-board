@@ -56,6 +56,7 @@ filter = "is:open status:draft"
 [views.mine]
 layout = "table"
 filter = "assignee:@me is:open -status:done"
+columns = ["links", "title", "assignee", "due", "est", "kind", "risk"]
 
 # git-board's own binary release (docs/guide/configuration.md, Release): a cut
 # runs the build in a clean checkout of the tag and publishes the archives
