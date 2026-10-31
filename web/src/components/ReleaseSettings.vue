@@ -234,15 +234,15 @@ onMounted(() => void draft.load());
 </script>
 
 <style scoped>
-.set-panel { display: grid; gap: 1rem; container-type: inline-size; }
+.set-panel { display: grid; gap: .75rem; container-type: inline-size; }
 /* the forms left, the reference right, like the old editor; one column when narrow */
-.set-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1rem; align-items: start; }
-.set-main { display: grid; gap: 1rem; min-width: 0; }
+.set-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: .75rem; align-items: start; }
+.set-main { display: grid; gap: .75rem; min-width: 0; }
 @container (max-width: 52rem) { .set-cols { grid-template-columns: minmax(0, 1fr); } }
 h2, h3, p { margin: 0; }
 .rls-lead { max-width: 42rem; color: var(--fg-muted); }
 .rls-muted { color: var(--fg-muted); }
-.rls-grid { display: flex; gap: 1rem; flex-wrap: wrap; }
+.rls-grid { display: flex; gap: .75rem; flex-wrap: wrap; }
 .rls-field { display: grid; gap: .25rem; font-size: .8125rem; }
 .rls-field > span { color: var(--fg-muted); }
 .rls-input { padding: .375rem .625rem; border: 1px solid var(--border); background: var(--bg); color: var(--fg); font: inherit; }

@@ -175,10 +175,10 @@ onMounted(() => void draft.load());
 </script>
 
 <style scoped>
-.vs { display: grid; gap: 1rem; container-type: inline-size; }
+.vs { display: grid; gap: .75rem; container-type: inline-size; }
 /* the forms left, the reference right, like the old editor; one column when narrow */
-.set-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1rem; align-items: start; }
-.set-main { display: grid; gap: 1rem; min-width: 0; }
+.set-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: .75rem; align-items: start; }
+.set-main { display: grid; gap: .75rem; min-width: 0; }
 @container (max-width: 52rem) { .set-cols { grid-template-columns: minmax(0, 1fr); } }
 h2, p { margin: 0; }
 .vs-lead { max-width: 42rem; color: var(--fg-muted); }
@@ -190,7 +190,7 @@ h2, p { margin: 0; }
 .vs-btn:hover:not(:disabled) { border-color: var(--fg); }
 .vs-btn:disabled { color: var(--fg-subtle); cursor: default; }
 .vs-card { flex: 1; min-width: 0; }
-.vs-form { display: flex; gap: 1rem; flex-wrap: wrap; }
+.vs-form { display: flex; gap: .75rem; flex-wrap: wrap; }
 .vs-field { display: grid; gap: .25rem; font-size: .8125rem; }
 .vs-field > span { color: var(--fg-muted); }
 .vs-grow { flex: 1; min-width: 12rem; }

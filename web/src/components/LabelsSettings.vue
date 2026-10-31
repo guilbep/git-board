@@ -326,7 +326,7 @@ onMounted(() => {
 .lb h2, .lb h3, .lb h4, .lb p, .lb ul { margin: 0; }
 .lb-lead { max-width: 48rem; color: var(--fg-muted); }
 .lb-muted { color: var(--fg-muted); }
-.lb-own { display: grid; gap: .75rem; padding: 1rem 1.25rem; border: 1px solid var(--border); border-left: 3px solid var(--primary); background: var(--bg); }
+.lb-own { display: grid; gap: .75rem; padding: .75rem 1rem; border: 1px solid var(--border); border-left: 3px solid var(--primary); background: var(--bg); }
 .lb-tag { padding: .375rem .625rem; border: 1px solid var(--border); background: var(--bg); color: var(--fg); font: inherit; }
 .lb-tag:focus, .lb-desc:focus { outline: 2px solid var(--fg); outline-offset: 2px; border-color: var(--fg); }
 .lb-tiny { max-width: 6rem; }

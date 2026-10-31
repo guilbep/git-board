@@ -327,8 +327,8 @@ onMounted(() => {
 .cfg-main { display: grid; gap: .5rem; min-width: 0; }
 /* side by side while each half has room, else the reference under */
 @container (max-width: 52rem) { .cfg-body { grid-template-columns: minmax(0, 1fr); } }
-.cfg-doc { container-type: inline-size; display: grid; align-content: start; gap: .5rem; height: max(24rem, calc(100vh - 13rem)); min-height: 0; padding: 1rem 1.25rem; border: 1px solid var(--border); background: var(--bg-subtle); overflow: auto; }
-@container (max-width: 52rem) { .cfg-doc { height: auto; } }
+.cfg-doc { container-type: inline-size; position: sticky; top: calc(var(--header-h) + .75rem); display: grid; align-content: start; gap: .5rem; height: calc(100vh - var(--header-h) - 1.5rem); min-height: 0; padding: .75rem .875rem; border: 1px solid var(--border); background: var(--bg-subtle); overflow: auto; }
+@container (max-width: 52rem) { .cfg-doc { position: static; height: auto; max-height: 32rem; } }
 .cfg-doc-head { display: flex; align-items: baseline; gap: .5rem; }
 .cfg-doc-title { margin: 0; font-size: .8125rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--primary); }
 .cfg-doc-nav { display: flex; flex-wrap: wrap; gap: .25rem; }

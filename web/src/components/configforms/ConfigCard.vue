@@ -34,7 +34,7 @@ const asking = ref(false);
 </script>
 
 <style scoped>
-.cc { display: grid; gap: .75rem; padding: 1rem 1.25rem; border: 1px solid var(--border); border-left: 3px solid var(--border-strong); background: var(--bg); }
+.cc { display: grid; gap: .625rem; padding: .75rem 1rem; border: 1px solid var(--border); border-left: 3px solid var(--border-strong); background: var(--bg); }
 .cc-head { display: flex; align-items: baseline; gap: .75rem; }
 .cc-title { margin: 0; font-size: 1rem; }
 .gb-grow { flex: 1; }
