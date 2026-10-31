@@ -33,6 +33,13 @@ export function loadConfigModel(): Promise<void> {
 
 export const configModelReady = computed(() => loaded.value);
 
+// inputValue reads a native input's or select's value out of its event:
+// on a plain element @input and @change hand the event, not the value
+export function inputValue(e: Event): string {
+  const t = e.target;
+  return t instanceof HTMLInputElement || t instanceof HTMLSelectElement ? t.value : '';
+}
+
 // the sections' dirty marks, for the tab row's dot: a tab registers its
 // draft's dirtiness here under its own name
 export const dirtySections = ref<Record<string, boolean>>({});

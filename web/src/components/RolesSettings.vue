@@ -8,40 +8,46 @@
       the side panel shows the inherited value greyed, <em>bob · project</em>. A role is a person field of the same name.
     </p>
 
-    <p v-if="modelError" class="epfl-alert epfl-alert-danger" role="alert">{{ modelError }}</p>
-    <p v-else-if="!draft.value.value" class="rs-muted">Loading…</p>
+    <div class="set-cols">
+      <div class="set-main">
+        <p v-if="modelError" class="epfl-alert epfl-alert-danger" role="alert">{{ modelError }}</p>
+        <p v-else-if="!draft.value.value" class="rs-muted">Loading…</p>
 
-    <template v-else>
-      <ConfigRows :rows="rows" add-label="Add a role" @update="rows = $event" @add="rows = [...rows, { role: '', login: '' }]">
-        <template #row="{ row }">
-          <div class="rs-row">
-            <input v-model="row.role" class="rs-input" placeholder="lead-dev" aria-label="Role" spellcheck="false" />
-            <span class="rs-arrow">→</span>
-            <input v-model="row.login" class="rs-input" placeholder="login" aria-label="Who holds the role" spellcheck="false" />
-          </div>
+        <template v-else>
+          <ConfigRows :rows="rows" add-label="Add a role" @update="rows = $event" @add="rows = [...rows, { role: '', login: '' }]">
+            <template #row="{ row }">
+              <div class="rs-row">
+                <input v-model="row.role" class="rs-input" placeholder="lead-dev" aria-label="Role" spellcheck="false" />
+                <span class="rs-arrow">→</span>
+                <input v-model="row.login" class="rs-input" placeholder="login" aria-label="Who holds the role" spellcheck="false" />
+              </div>
+            </template>
+          </ConfigRows>
+          <p class="gb-hint">
+            The name is a field's: lower-case letters, digits and <code>-</code>. One login each; a role declared here is a
+            <code>person</code> field, so <code>lead-dev:@me</code> finds the issues that take you as lead dev while the project names you.
+          </p>
+
+          <ConfigSaveBar
+            section="roles"
+            :dirty="draft.dirty.value"
+            :saving="draft.saving.value"
+            :saved="draft.saved.value"
+            :valid="valid"
+            :error="draft.saveError.value"
+            :conflict="draft.conflict.value"
+            :state="state"
+            @save="save"
+            @discard="reset"
+            @reload="draft.load()"
+          />
         </template>
-      </ConfigRows>
-      <p class="gb-hint">
-        The name is a field's: lower-case letters, digits and <code>-</code>. One login each; a role declared here is a
-        <code>person</code> field, so <code>lead-dev:@me</code> finds the issues that take you as lead dev while the project names you.
-      </p>
 
-      <ConfigSaveBar
-        section="roles"
-        :dirty="draft.dirty.value"
-        :saving="draft.saving.value"
-        :saved="draft.saved.value"
-        :valid="valid"
-        :error="draft.saveError.value"
-        :conflict="draft.conflict.value"
-        :state="state"
-        @save="save"
-        @discard="reset"
-        @reload="draft.load()"
-      />
-    </template>
 
-    <ConfigRefPanel :sections="['roles']" title="what a role does" />
+      </div>
+
+      <ConfigRefPanel :sections="['roles']" title="what a role does" />
+    </div>
   </div>
 </template>
 
@@ -94,7 +100,11 @@ onMounted(() => void draft.load());
 </script>
 
 <style scoped>
-.set-panel { display: grid; gap: 1rem; max-width: 64rem; }
+.set-panel { display: grid; gap: 1rem; container-type: inline-size; }
+/* the forms left, the reference right, like the old editor; one column when narrow */
+.set-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1rem; align-items: start; }
+.set-main { display: grid; gap: 1rem; min-width: 0; }
+@container (max-width: 52rem) { .set-cols { grid-template-columns: minmax(0, 1fr); } }
 h2, p { margin: 0; }
 .rs-lead { max-width: 42rem; color: var(--fg-muted); }
 .rs-muted { color: var(--fg-muted); }

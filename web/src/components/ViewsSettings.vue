@@ -11,73 +11,79 @@
       <code>layout</code> is only the one it opens in. On the board, change the filter and <b>Save view</b> writes here too.
     </p>
 
-    <p v-if="modelError" class="epfl-alert epfl-alert-danger" role="alert">{{ modelError }}</p>
-    <p v-else-if="!draft.value.value" class="vs-muted">Loading…</p>
+    <div class="set-cols">
+      <div class="set-main">
+        <p v-if="modelError" class="epfl-alert epfl-alert-danger" role="alert">{{ modelError }}</p>
+        <p v-else-if="!draft.value.value" class="vs-muted">Loading…</p>
 
-    <template v-else>
-      <div class="vs-tools">
-        <ConfigPreset label="+ Add a view" :presets="viewPresets" @pick="addPreset" />
-        <span class="gb-hint">or start from a blank one</span>
-        <button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" @click="addBlank">Blank view</button>
-      </div>
-
-      <div v-for="(v, i) in views" :key="v.key" class="vs-item">
-        <span class="vs-order">
-          <button type="button" class="vs-btn" :disabled="i === 0" aria-label="Move the tab up" @click="move(i, -1)">↑</button>
-          <button type="button" class="vs-btn" :disabled="i === views.length - 1" aria-label="Move the tab down" @click="move(i, 1)">↓</button>
-        </span>
-        <ConfigCard
-          class="vs-card"
-          :title="v.name || 'a new view'"
-          :removable="true"
-          :confirm="`The tab ${v.name} goes from everyone's board. A link to it (#/…?view=${v.name}) shows the first view instead.`"
-          @remove="remove(i)"
-        >
-          <div class="vs-form">
-            <label class="vs-field">
-              <span>Name</span>
-              <input v-model="v.name" class="vs-input" :disabled="!v.isNew" spellcheck="false" aria-label="The view's name" />
-            </label>
-            <label class="vs-field">
-              <span>Opens as</span>
-              <select v-model="v.view.layout" class="vs-input vs-small" aria-label="Layout">
-                <option value="table">table</option>
-                <option value="board">board</option>
-                <option value="roadmap">roadmap</option>
-              </select>
-            </label>
-            <label class="vs-field vs-grow">
-              <span>Filter</span>
-              <input v-model="v.view.filter" class="vs-input" spellcheck="false" placeholder="is:open" aria-label="Filter" />
-            </label>
-            <label class="vs-field">
-              <span>Group by</span>
-              <input v-model="v.view.group" class="vs-input vs-small" spellcheck="false" placeholder="status" aria-label="Group" />
-            </label>
-            <label class="vs-field">
-              <span>Sort</span>
-              <input v-model="v.view.sort" class="vs-input vs-small" spellcheck="false" placeholder="prio asc" aria-label="Sort" />
-            </label>
+        <template v-else>
+          <div class="vs-tools">
+            <ConfigPreset label="+ Add a view" :presets="viewPresets" @pick="addPreset" />
+            <span class="gb-hint">or start from a blank one</span>
+            <button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" @click="addBlank">Blank view</button>
           </div>
-        </ConfigCard>
+
+          <div v-for="(v, i) in views" :key="v.key" class="vs-item">
+            <span class="vs-order">
+              <button type="button" class="vs-btn" :disabled="i === 0" aria-label="Move the tab up" @click="move(i, -1)">↑</button>
+              <button type="button" class="vs-btn" :disabled="i === views.length - 1" aria-label="Move the tab down" @click="move(i, 1)">↓</button>
+            </span>
+            <ConfigCard
+              class="vs-card"
+              :title="v.name || 'a new view'"
+              :removable="true"
+              :confirm="`The tab ${v.name} goes from everyone's board. A link to it (#/…?view=${v.name}) shows the first view instead.`"
+              @remove="remove(i)"
+            >
+              <div class="vs-form">
+                <label class="vs-field">
+                  <span>Name</span>
+                  <input v-model="v.name" class="vs-input" :disabled="!v.isNew" spellcheck="false" aria-label="The view's name" />
+                </label>
+                <label class="vs-field">
+                  <span>Opens as</span>
+                  <select v-model="v.view.layout" class="vs-input vs-small" aria-label="Layout">
+                    <option value="table">table</option>
+                    <option value="board">board</option>
+                    <option value="roadmap">roadmap</option>
+                  </select>
+                </label>
+                <label class="vs-field vs-grow">
+                  <span>Filter</span>
+                  <input v-model="v.view.filter" class="vs-input" spellcheck="false" placeholder="is:open" aria-label="Filter" />
+                </label>
+                <label class="vs-field">
+                  <span>Group by</span>
+                  <input v-model="v.view.group" class="vs-input vs-small" spellcheck="false" placeholder="status" aria-label="Group" />
+                </label>
+                <label class="vs-field">
+                  <span>Sort</span>
+                  <input v-model="v.view.sort" class="vs-input vs-small" spellcheck="false" placeholder="prio asc" aria-label="Sort" />
+                </label>
+              </div>
+            </ConfigCard>
+          </div>
+
+          <ConfigSaveBar
+            section="views"
+            :dirty="draft.dirty.value"
+            :saving="draft.saving.value"
+            :saved="draft.saved.value"
+            :valid="valid"
+            :error="draft.saveError.value"
+            :conflict="draft.conflict.value"
+            :state="state"
+            @save="save"
+            @discard="reset"
+            @reload="draft.load()"
+          />
+        </template>
+
+
       </div>
 
-      <ConfigSaveBar
-        section="views"
-        :dirty="draft.dirty.value"
-        :saving="draft.saving.value"
-        :saved="draft.saved.value"
-        :valid="valid"
-        :error="draft.saveError.value"
-        :conflict="draft.conflict.value"
-        :state="state"
-        @save="save"
-        @discard="reset"
-        @reload="draft.load()"
-      />
-    </template>
-
-    <ConfigRefPanel :sections="['views', 'filters']" title="a view's keys, the filter's syntax" />
+      <ConfigRefPanel :sections="['views', 'filters']" title="a view's keys, the filter's syntax" />
+    </div>
   </div>
 </template>
 
@@ -169,7 +175,11 @@ onMounted(() => void draft.load());
 </script>
 
 <style scoped>
-.vs { display: grid; gap: 1rem; }
+.vs { display: grid; gap: 1rem; container-type: inline-size; }
+/* the forms left, the reference right, like the old editor; one column when narrow */
+.set-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1rem; align-items: start; }
+.set-main { display: grid; gap: 1rem; min-width: 0; }
+@container (max-width: 52rem) { .set-cols { grid-template-columns: minmax(0, 1fr); } }
 h2, p { margin: 0; }
 .vs-lead { max-width: 42rem; color: var(--fg-muted); }
 .vs-muted { color: var(--fg-muted); }

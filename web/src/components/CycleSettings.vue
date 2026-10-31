@@ -14,126 +14,132 @@
       board is a kanban of them and every issue has a next step; off, the issues open on the classic page.
     </p>
 
-    <p v-if="modelError" class="epfl-alert epfl-alert-danger" role="alert">{{ modelError }}</p>
-    <p v-else-if="!draft.value.value" class="cs-muted">Loading…</p>
+    <div class="set-cols">
+      <div class="set-main">
+        <p v-if="modelError" class="epfl-alert epfl-alert-danger" role="alert">{{ modelError }}</p>
+        <p v-else-if="!draft.value.value" class="cs-muted">Loading…</p>
 
-    <template v-else>
-      <label class="cs-on">
-        <input type="checkbox" :checked="on" @change="setOn(($event.target as HTMLInputElement).checked)" />
-        <span>Walk the cycle — the board's issues take the stages' kanban, the cycle page opens them</span>
-      </label>
+        <template v-else>
+          <label class="cs-on">
+            <input type="checkbox" :checked="on" @change="setOn(($event.target as HTMLInputElement).checked)" />
+            <span>Walk the cycle — the board's issues take the stages' kanban, the cycle page opens them</span>
+          </label>
 
-      <template v-if="on">
-        <div class="cs-grid">
-          <label class="cs-field">
-            <span>Ready (the first stage)</span>
-            <input :value="draft.value.value.cycle.ready" class="cs-input" placeholder="guessed: ready" spellcheck="false" aria-label="The ready status" @input="set({ ready: ($event.target as HTMLInputElement).value })" />
-          </label>
-          <label class="cs-field">
-            <span>In progress</span>
-            <input :value="(draft.value.value.cycle['in-progress'] ?? []).join(', ')" class="cs-input" placeholder="guessed from the names" spellcheck="false" aria-label="The in-progress statuses, comma-separated" @input="set({ 'in-progress': list($event) })" />
-          </label>
-          <label class="cs-field">
-            <span>In review</span>
-            <input :value="(draft.value.value.cycle['in-review'] ?? []).join(', ')" class="cs-input" spellcheck="false" aria-label="The in-review statuses, comma-separated" @input="set({ 'in-review': list($event) })" />
-          </label>
-          <label class="cs-field">
-            <span>Validation</span>
-            <input :value="(draft.value.value.cycle.validation ?? []).join(', ')" class="cs-input" spellcheck="false" aria-label="The validation statuses, comma-separated" @input="set({ validation: list($event) })" />
-          </label>
-        </div>
-        <p class="gb-hint">
-          Comma-separated status names; empty takes the guess from the names' words (ready, wip, review, validation…). The
-          last validation status closes the issue.
-        </p>
-
-        <div class="cs-grid">
-          <label v-for="g in gates" :key="g.key" class="cs-field">
-            <span>{{ g.label }}</span>
-            <input :value="draft.value.value.cycle[g.key]" class="cs-input" :placeholder="`a role of [roles], else anyone`" spellcheck="false" :aria-label="g.label" @input="set({ [g.key]: ($event.target as HTMLInputElement).value })" />
-          </label>
-          <label class="cs-field">
-            <span>Plans live in</span>
-            <input :value="draft.value.value.cycle.plans" class="cs-input" placeholder="docs/src/implementation-plans" spellcheck="false" aria-label="Where the plans live" @input="set({ plans: ($event.target as HTMLInputElement).value })" />
-          </label>
-        </div>
-
-        <h3 class="h5">Checks — they gate Mark ready for review</h3>
-        <div class="cs-tools">
-          <button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" :disabled="proposing" @click="propose">
-            {{ proposing ? 'Reading the project…' : 'Propose from the project' }}
-          </button>
-          <span v-if="proposalNote" class="gb-hint">{{ proposalNote }}</span>
-        </div>
-        <ConfigRows :rows="suiteRows('checks')" add-label="Add a check" @update="setSuites('checks', $event)" @add="addSuite('checks')">
-          <template #row="{ row, set: setRow }">
-            <div class="cs-suite">
-              <input :model-value="row.name" class="cs-input cs-name" placeholder="make ci" aria-label="The check's name" @update:model-value="setRow({ ...row, name: $event })" />
-              <input :model-value="(row.suite.run ?? []).join(' ')" class="cs-input cs-run" placeholder="the command's words, space-separated" aria-label="What runs" @update:model-value="setRow({ ...row, suite: { ...row.suite, run: words($event) } })" />
-              <select :model-value="row.suite.where ?? 'worktree'" class="cs-input cs-where" aria-label="Where it runs" @update:model-value="setRow({ ...row, suite: { ...row.suite, where: $event } })">
-                <option value="worktree">in the worktree</option>
-                <option value="ci">in CI</option>
-              </select>
+          <template v-if="on">
+            <div class="cs-grid">
+              <label class="cs-field">
+                <span>Ready (the first stage)</span>
+                <input :value="draft.value.value.cycle.ready" class="cs-input" placeholder="guessed: ready" spellcheck="false" aria-label="The ready status" @input="set({ ready: ($event.target as HTMLInputElement).value })" />
+              </label>
+              <label class="cs-field">
+                <span>In progress</span>
+                <input :value="(draft.value.value.cycle['in-progress'] ?? []).join(', ')" class="cs-input" placeholder="guessed from the names" spellcheck="false" aria-label="The in-progress statuses, comma-separated" @input="set({ 'in-progress': list(inputValue($event)) })" />
+              </label>
+              <label class="cs-field">
+                <span>In review</span>
+                <input :value="(draft.value.value.cycle['in-review'] ?? []).join(', ')" class="cs-input" spellcheck="false" aria-label="The in-review statuses, comma-separated" @input="set({ 'in-review': list(inputValue($event)) })" />
+              </label>
+              <label class="cs-field">
+                <span>Validation</span>
+                <input :value="(draft.value.value.cycle.validation ?? []).join(', ')" class="cs-input" spellcheck="false" aria-label="The validation statuses, comma-separated" @input="set({ validation: list(inputValue($event)) })" />
+              </label>
             </div>
-          </template>
-        </ConfigRows>
+            <p class="gb-hint">
+              Comma-separated status names; empty takes the guess from the names' words (ready, wip, review, validation…). The
+              last validation status closes the issue.
+            </p>
 
-        <h3 class="h5">Tests — they run at the validate step</h3>
-        <ConfigRows :rows="suiteRows('tests')" add-label="Add a test suite" @update="setSuites('tests', $event)" @add="addSuite('tests')">
-          <template #row="{ row, set: setRow }">
-            <div class="cs-suite">
-              <input :model-value="row.name" class="cs-input cs-name" placeholder="unit" aria-label="The suite's name" @update:model-value="setRow({ ...row, name: $event })" />
-              <input :model-value="(row.suite.run ?? []).join(' ')" class="cs-input cs-run" placeholder="the command's words, space-separated" aria-label="What runs" @update:model-value="setRow({ ...row, suite: { ...row.suite, run: words($event) } })" />
-              <select :model-value="row.suite.where ?? 'worktree'" class="cs-input cs-where" aria-label="Where it runs" @update:model-value="setRow({ ...row, suite: { ...row.suite, where: $event } })">
-                <option value="worktree">in the worktree</option>
-                <option value="ci">in CI</option>
-              </select>
+            <div class="cs-grid">
+              <label v-for="g in gates" :key="g.key" class="cs-field">
+                <span>{{ g.label }}</span>
+                <input :value="draft.value.value.cycle[g.key]" class="cs-input" :placeholder="`a role of [roles], else anyone`" spellcheck="false" :aria-label="g.label" @input="set({ [g.key]: ($event.target as HTMLInputElement).value })" />
+              </label>
+              <label class="cs-field">
+                <span>Plans live in</span>
+                <input :value="draft.value.value.cycle.plans" class="cs-input" placeholder="docs/src/implementation-plans" spellcheck="false" aria-label="Where the plans live" @input="set({ plans: ($event.target as HTMLInputElement).value })" />
+              </label>
             </div>
-          </template>
-        </ConfigRows>
 
-        <h3 class="h5">Kinds' rules</h3>
-        <ConfigRows :rows="kindRows" add-label="Add a kind" @update="kindRows = $event" @add="kindRows = [...kindRows, { k: 'bug', v: 'failing-test' }]">
-          <template #row="{ row, set: setRow }">
-            <div class="cs-pair">
-              <input :model-value="row.k" class="cs-input cs-opt" placeholder="bug" spellcheck="false" aria-label="The kind" @update:model-value="setRow({ ...row, k: $event })" />
-              <select :model-value="row.v" class="cs-input cs-opt" aria-label="The rule" @update:model-value="setRow({ ...row, v: $event })">
-                <option value="failing-test">failing-test — a red test justifies it</option>
-                <option value="per-criterion">per-criterion — the criteria say done</option>
-                <option value="no-tests">no-tests — none needed</option>
-              </select>
+            <h3 class="h5">Checks — they gate Mark ready for review</h3>
+            <div class="cs-tools">
+              <button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" :disabled="proposing" @click="propose">
+                {{ proposing ? 'Reading the project…' : 'Propose from the project' }}
+              </button>
+              <span v-if="proposalNote" class="gb-hint">{{ proposalNote }}</span>
             </div>
+            <ConfigRows :rows="suiteRows('checks')" add-label="Add a check" @update="setSuites('checks', $event)" @add="addSuite('checks')">
+              <template #row="{ row, set: setRow }">
+                <div class="cs-suite">
+                  <input :value="row.name" class="cs-input cs-name" placeholder="make ci" aria-label="The check's name" @input="setRow({ ...row, name: inputValue($event) })" />
+                  <input :value="(row.suite.run ?? []).join(' ')" class="cs-input cs-run" placeholder="the command's words, space-separated" aria-label="What runs" @input="setRow({ ...row, suite: { ...row.suite, run: words(inputValue($event)) } })" />
+                  <select :value="row.suite.where ?? 'worktree'" class="cs-input cs-where" aria-label="Where it runs" @change="setRow({ ...row, suite: { ...row.suite, where: inputValue($event) } })">
+                    <option value="worktree">in the worktree</option>
+                    <option value="ci">in CI</option>
+                  </select>
+                </div>
+              </template>
+            </ConfigRows>
+
+            <h3 class="h5">Tests — they run at the validate step</h3>
+            <ConfigRows :rows="suiteRows('tests')" add-label="Add a test suite" @update="setSuites('tests', $event)" @add="addSuite('tests')">
+              <template #row="{ row, set: setRow }">
+                <div class="cs-suite">
+                  <input :value="row.name" class="cs-input cs-name" placeholder="unit" aria-label="The suite's name" @input="setRow({ ...row, name: inputValue($event) })" />
+                  <input :value="(row.suite.run ?? []).join(' ')" class="cs-input cs-run" placeholder="the command's words, space-separated" aria-label="What runs" @input="setRow({ ...row, suite: { ...row.suite, run: words(inputValue($event)) } })" />
+                  <select :value="row.suite.where ?? 'worktree'" class="cs-input cs-where" aria-label="Where it runs" @change="setRow({ ...row, suite: { ...row.suite, where: inputValue($event) } })">
+                    <option value="worktree">in the worktree</option>
+                    <option value="ci">in CI</option>
+                  </select>
+                </div>
+              </template>
+            </ConfigRows>
+
+            <h3 class="h5">Kinds' rules</h3>
+            <ConfigRows :rows="kindRows" add-label="Add a kind" @update="kindRows = $event" @add="kindRows = [...kindRows, { k: 'bug', v: 'failing-test' }]">
+              <template #row="{ row, set: setRow }">
+                <div class="cs-pair">
+                  <input :value="row.k" class="cs-input cs-opt" placeholder="bug" spellcheck="false" aria-label="The kind" @input="setRow({ ...row, k: inputValue($event) })" />
+                  <select :value="row.v" class="cs-input cs-opt" aria-label="The rule" @change="setRow({ ...row, v: inputValue($event) })">
+                    <option value="failing-test">failing-test — a red test justifies it</option>
+                    <option value="per-criterion">per-criterion — the criteria say done</option>
+                    <option value="no-tests">no-tests — none needed</option>
+                  </select>
+                </div>
+              </template>
+            </ConfigRows>
+
+            <ConfigSaveBar
+              section="cycle"
+              :dirty="draft.dirty.value"
+              :saving="draft.saving.value"
+              :saved="draft.saved.value"
+              :valid="valid"
+              :error="draft.saveError.value"
+              :conflict="draft.conflict.value"
+              :state="state"
+              @save="draft.save()"
+              @discard="reset"
+              @reload="draft.load()"
+            />
           </template>
-        </ConfigRows>
+          <p v-else class="gb-hint">
+            Off: the file holds no [cycle] table, the issues open on the classic page. Saving removes every [cycle.*] table —
+            including the tests and checks.
+          </p>
+        </template>
 
-        <ConfigSaveBar
-          section="cycle"
-          :dirty="draft.dirty.value"
-          :saving="draft.saving.value"
-          :saved="draft.saved.value"
-          :valid="valid"
-          :error="draft.saveError.value"
-          :conflict="draft.conflict.value"
-          :state="state"
-          @save="draft.save()"
-          @discard="reset"
-          @reload="draft.load()"
-        />
-      </template>
-      <p v-else class="gb-hint">
-        Off: the file holds no [cycle] table, the issues open on the classic page. Saving removes every [cycle.*] table —
-        including the tests and checks.
-      </p>
-    </template>
 
-    <ConfigRefPanel :sections="['cycle', 'kinds']" title="the cycle's stages, the suites" />
+      </div>
+
+      <ConfigRefPanel :sections="['cycle', 'kinds']" title="the cycle's stages, the suites" />
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
 import { getChecksSetup, type ConfigSuite } from '@/api/board';
-import { SectionDraft, configModel, configModelError } from '@/configmodel';
+import { SectionDraft, configModel, configModelError, inputValue } from '@/configmodel';
 import { message } from '@/issue';
 import ConfigRefPanel from '@/components/configforms/ConfigRefPanel.vue';
 import ConfigRows from '@/components/configforms/ConfigRows.vue';
@@ -229,8 +235,8 @@ function setOn(v: boolean) {
 }
 
 // list reads a comma-separated input back
-function list(e: Event): string[] {
-  return ((e.target as HTMLInputElement).value || '').split(',').map((s) => s.trim());
+function list(line: string): string[] {
+  return (line || '').split(',').map((s) => s.trim());
 }
 
 // words splits a command line the way an argv holds it
@@ -306,7 +312,11 @@ onMounted(() => void draft.load());
 </script>
 
 <style scoped>
-.set-panel { display: grid; gap: 1rem; max-width: 64rem; }
+.set-panel { display: grid; gap: 1rem; container-type: inline-size; }
+/* the forms left, the reference right, like the old editor; one column when narrow */
+.set-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1rem; align-items: start; }
+.set-main { display: grid; gap: 1rem; min-width: 0; }
+@container (max-width: 52rem) { .set-cols { grid-template-columns: minmax(0, 1fr); } }
 h2, h3, p { margin: 0; }
 .cs-lead { max-width: 42rem; color: var(--fg-muted); }
 .cs-muted { color: var(--fg-muted); }

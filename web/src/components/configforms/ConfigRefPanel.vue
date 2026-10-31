@@ -1,29 +1,26 @@
 <!-- The reference, per tab: the sections of docs/guide/configuration.md the
-     tab owns, rendered as the old editor's panel was (its TOML examples
-     colored, its tables labelled per column when narrow), folded until
-     asked for. The server serves the doc sectioned (GET /api/config/docs);
-     the panel fetches once per page. -->
+     tab owns, in a side column like the old editor's — the forms left, the
+     reference right, scrolling on its own. The server serves the doc
+     sectioned (GET /api/config/docs); the panel fetches once per page. -->
 <template>
-  <aside class="crp" :class="{ open }">
-    <button type="button" class="crp-toggle" :aria-expanded="open" @click="open = !open">
-      Reference
-      <span class="crp-hint">{{ open ? 'hide' : title }}</span>
-    </button>
-    <div v-if="open" class="crp-body">
-      <nav class="crp-nav" aria-label="Reference sections">
-        <button
-          v-for="d in mine"
-          :key="d.id"
-          type="button"
-          class="crp-tab"
-          :aria-current="d.id === id ? 'true' : undefined"
-          @click="id = d.id"
-        >
-          {{ d.title }}
-        </button>
-      </nav>
-      <div v-if="doc" ref="bodyEl" class="gb-md crp-doc" v-html="doc.html" />
+  <aside class="crp">
+    <div class="crp-head">
+      <h3 class="crp-title">Reference</h3>
+      <span class="crp-hint">{{ title }}</span>
     </div>
+    <nav v-if="mine.length > 1" class="crp-nav" aria-label="Reference sections">
+      <button
+        v-for="d in mine"
+        :key="d.id"
+        type="button"
+        class="crp-tab"
+        :aria-current="d.id === id ? 'true' : undefined"
+        @click="id = d.id"
+      >
+        {{ d.title }}
+      </button>
+    </nav>
+    <div v-if="doc" ref="bodyEl" class="gb-md crp-doc" v-html="doc.html" />
   </aside>
 </template>
 
@@ -34,11 +31,10 @@ import { tomlTokens } from '@/toml';
 
 const props = defineProps<{
   sections: string[]; // the doc headings' ids the tab owns, in display order
-  title?: string; // what the closed toggle says, the first section's title when empty
+  title?: string; // what the head's hint says, the first section's title when empty
 }>();
 
 const docs = ref<DocSection[]>([]);
-const open = ref(false);
 const id = ref(props.sections[0] ?? '');
 
 // the tab's sections, in the order the tab named them
@@ -83,20 +79,19 @@ function enhance(el: HTMLElement) {
 
 const bodyEl = ref<HTMLElement | null>(null);
 watch(
-  [doc, open],
+  doc,
   () => void nextTick(() => {
-    if (bodyEl.value && open.value) enhance(bodyEl.value);
+    if (bodyEl.value) enhance(bodyEl.value);
   }),
   { flush: 'post' },
 );
 </script>
 
 <style scoped>
-.crp { border: 1px solid var(--border); background: var(--bg-subtle); }
-.crp-toggle { display: flex; align-items: baseline; gap: .625rem; width: 100%; padding: .5rem .875rem; border: 0; background: none; color: var(--primary); font: inherit; font-size: .8125rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; cursor: pointer; }
-.crp-toggle:hover { color: var(--fg); }
-.crp-hint { font-weight: 400; text-transform: none; letter-spacing: 0; color: var(--fg-muted); }
-.crp-body { display: grid; gap: .75rem; padding: .25rem 1.25rem 1rem; }
+.crp { container-type: inline-size; display: grid; align-content: start; gap: .75rem; height: max(24rem, calc(100vh - 13rem)); min-height: 0; padding: 1rem 1.25rem; border: 1px solid var(--border); background: var(--bg-subtle); overflow: auto; }
+.crp-head { display: flex; align-items: baseline; gap: .5rem; }
+.crp-title { margin: 0; font-size: .8125rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--primary); }
+.crp-hint { color: var(--fg-muted); }
 .crp-nav { display: flex; flex-wrap: wrap; gap: .25rem; }
 .crp-tab { padding: .125rem .5rem; border: 1px solid var(--border); background: var(--bg); color: var(--fg); font: inherit; font-size: .75rem; cursor: pointer; }
 .crp-tab:hover { border-color: var(--fg); }
@@ -105,6 +100,7 @@ watch(
 .crp-doc :deep(table) { width: 100%; border-collapse: collapse; font-size: .875rem; }
 .crp-doc :deep(th), .crp-doc :deep(td) { padding: .375rem .5rem; border: 0; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
 .crp-doc :deep(th) { font-size: .8125rem; color: var(--fg-muted); }
+.crp-doc :deep(td:first-child code) { white-space: nowrap; }
 .crp-doc :deep(pre) { padding: .625rem .875rem; background: var(--bg); border: 1px solid var(--border); white-space: pre-wrap; overflow-wrap: anywhere; font-size: .8125rem; color: var(--fg); }
 .crp-doc :deep(pre code) { color: inherit; }
 /* a narrow reference: each table row a card, its cells labelled */

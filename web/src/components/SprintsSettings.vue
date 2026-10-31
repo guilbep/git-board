@@ -10,52 +10,58 @@
       <code>sprint:@current</code> finds today's sprint and a board grouped by sprint knows each one's span.
     </p>
 
-    <p v-if="modelError" class="epfl-alert epfl-alert-danger" role="alert">{{ modelError }}</p>
-    <p v-else-if="!draft.value.value" class="ss-muted">Loading…</p>
+    <div class="set-cols">
+      <div class="set-main">
+        <p v-if="modelError" class="epfl-alert epfl-alert-danger" role="alert">{{ modelError }}</p>
+        <p v-else-if="!draft.value.value" class="ss-muted">Loading…</p>
 
-    <template v-else>
-      <div class="ss-keys">
-        <label class="ss-key">
-          <span>Sprint length, in days</span>
-          <input v-model.number="lengthDays" type="number" min="1" class="ss-num" aria-label="Sprint length in days" />
-        </label>
-        <label class="ss-key">
-          <span>Starts on</span>
-          <select v-model="startWeekday" class="ss-num" aria-label="The weekday a sprint starts on">
-            <option value="">—</option>
-            <option v-for="d in weekdays" :key="d" :value="d">{{ d }}</option>
-          </select>
-        </label>
-      </div>
-      <p class="gb-hint">The length is the last sprint's, whose end has no next start, and what <b>+ Sprint</b> adds to the last start.</p>
-
-      <ConfigRows :rows="list" add-label="+ Sprint" @update="list = $event" @add="add">
-        <template #row="{ row }">
-          <div class="ss-row">
-            <input v-model="row.slug" class="ss-input ss-slug" placeholder="s12" aria-label="Slug" spellcheck="false" />
-            <input v-model="row.title" class="ss-input" placeholder="Sprint 12" aria-label="Title" />
-            <input v-model="row.start" type="date" class="ss-input ss-date" aria-label="First day" />
+        <template v-else>
+          <div class="ss-keys">
+            <label class="ss-key">
+              <span>Sprint length, in days</span>
+              <input v-model.number="lengthDays" type="number" min="1" class="ss-num" aria-label="Sprint length in days" />
+            </label>
+            <label class="ss-key">
+              <span>Starts on</span>
+              <select v-model="startWeekday" class="ss-num" aria-label="The weekday a sprint starts on">
+                <option value="">—</option>
+                <option v-for="d in weekdays" :key="d" :value="d">{{ d }}</option>
+              </select>
+            </label>
           </div>
+          <p class="gb-hint">The length is the last sprint's, whose end has no next start, and what <b>+ Sprint</b> adds to the last start.</p>
+
+          <ConfigRows :rows="list" add-label="+ Sprint" @update="list = $event" @add="add">
+            <template #row="{ row }">
+              <div class="ss-row">
+                <input v-model="row.slug" class="ss-input ss-slug" placeholder="s12" aria-label="Slug" spellcheck="false" />
+                <input v-model="row.title" class="ss-input" placeholder="Sprint 12" aria-label="Title" />
+                <input v-model="row.start" type="date" class="ss-input ss-date" aria-label="First day" />
+              </div>
+            </template>
+          </ConfigRows>
+          <p class="gb-hint">The slug is the label's value: <code>sprint:s12</code>. A sprint lasts until the next one starts.</p>
+
+          <ConfigSaveBar
+            section="sprints"
+            :dirty="draft.dirty.value"
+            :saving="draft.saving.value"
+            :saved="draft.saved.value"
+            :valid="valid"
+            :error="draft.saveError.value"
+            :conflict="draft.conflict.value"
+            :state="state"
+            @save="save"
+            @discard="reset"
+            @reload="draft.load()"
+          />
         </template>
-      </ConfigRows>
-      <p class="gb-hint">The slug is the label's value: <code>sprint:s12</code>. A sprint lasts until the next one starts.</p>
 
-      <ConfigSaveBar
-        section="sprints"
-        :dirty="draft.dirty.value"
-        :saving="draft.saving.value"
-        :saved="draft.saved.value"
-        :valid="valid"
-        :error="draft.saveError.value"
-        :conflict="draft.conflict.value"
-        :state="state"
-        @save="save"
-        @discard="reset"
-        @reload="draft.load()"
-      />
-    </template>
 
-    <ConfigRefPanel :sections="['sprints']" title="sprints and their dates" />
+      </div>
+
+      <ConfigRefPanel :sections="['sprints']" title="sprints and their dates" />
+    </div>
   </div>
 </template>
 
@@ -130,7 +136,11 @@ onMounted(() => void draft.load());
 </script>
 
 <style scoped>
-.set-panel { display: grid; gap: 1rem; max-width: 64rem; }
+.set-panel { display: grid; gap: 1rem; container-type: inline-size; }
+/* the forms left, the reference right, like the old editor; one column when narrow */
+.set-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1rem; align-items: start; }
+.set-main { display: grid; gap: 1rem; min-width: 0; }
+@container (max-width: 52rem) { .set-cols { grid-template-columns: minmax(0, 1fr); } }
 h2, p { margin: 0; }
 .ss-lead { max-width: 42rem; color: var(--fg-muted); }
 .ss-muted { color: var(--fg-muted); }

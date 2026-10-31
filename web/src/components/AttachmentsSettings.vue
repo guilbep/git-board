@@ -10,37 +10,43 @@
       and bucket prefix, and the public URL that serves it; empty is EPFL's.
     </p>
 
-    <p v-if="modelError" class="epfl-alert epfl-alert-danger" role="alert">{{ modelError }}</p>
-    <p v-else-if="!draft.value.value" class="as-muted">Loading…</p>
+    <div class="set-cols">
+      <div class="set-main">
+        <p v-if="modelError" class="epfl-alert epfl-alert-danger" role="alert">{{ modelError }}</p>
+        <p v-else-if="!draft.value.value" class="as-muted">Loading…</p>
 
-    <template v-else>
-      <div class="as-grid">
-        <label v-for="f in fields" :key="f.key" class="as-field">
-          <span>{{ f.label }}</span>
-          <input :value="draft.value.value[f.key]" class="as-input" :placeholder="f.placeholder" spellcheck="false" :aria-label="f.label" @input="set(f.key, ($event.target as HTMLInputElement).value)" />
-        </label>
+        <template v-else>
+          <div class="as-grid">
+            <label v-for="f in fields" :key="f.key" class="as-field">
+              <span>{{ f.label }}</span>
+              <input :value="draft.value.value[f.key]" class="as-input" :placeholder="f.placeholder" spellcheck="false" :aria-label="f.label" @input="set(f.key, ($event.target as HTMLInputElement).value)" />
+            </label>
+          </div>
+          <p class="gb-hint">
+            Every key empty takes EPFL's S3 and CDN, the prefix <code>git-board/&lt;repository&gt;</code>. Off in the file, the
+            comment box holds no attach button.
+          </p>
+
+          <ConfigSaveBar
+            section="uploads"
+            :dirty="draft.dirty.value"
+            :saving="draft.saving.value"
+            :saved="draft.saved.value"
+            :valid="true"
+            :error="draft.saveError.value"
+            :conflict="draft.conflict.value"
+            :state="state"
+            @save="draft.save()"
+            @discard="reset"
+            @reload="draft.load()"
+          />
+        </template>
+
+
       </div>
-      <p class="gb-hint">
-        Every key empty takes EPFL's S3 and CDN, the prefix <code>git-board/&lt;repository&gt;</code>. Off in the file, the
-        comment box holds no attach button.
-      </p>
 
-      <ConfigSaveBar
-        section="uploads"
-        :dirty="draft.dirty.value"
-        :saving="draft.saving.value"
-        :saved="draft.saved.value"
-        :valid="true"
-        :error="draft.saveError.value"
-        :conflict="draft.conflict.value"
-        :state="state"
-        @save="draft.save()"
-        @discard="reset"
-        @reload="draft.load()"
-      />
-    </template>
-
-    <ConfigRefPanel :sections="['uploads']" title="the uploads table" />
+      <ConfigRefPanel :sections="['uploads']" title="the uploads table" />
+    </div>
   </div>
 </template>
 
@@ -95,7 +101,11 @@ onMounted(() => void draft.load());
 </script>
 
 <style scoped>
-.set-panel { display: grid; gap: 1rem; max-width: 64rem; }
+.set-panel { display: grid; gap: 1rem; container-type: inline-size; }
+/* the forms left, the reference right, like the old editor; one column when narrow */
+.set-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1rem; align-items: start; }
+.set-main { display: grid; gap: 1rem; min-width: 0; }
+@container (max-width: 52rem) { .set-cols { grid-template-columns: minmax(0, 1fr); } }
 h2, p { margin: 0; }
 .as-lead { max-width: 42rem; color: var(--fg-muted); }
 .as-muted { color: var(--fg-muted); }

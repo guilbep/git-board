@@ -24,7 +24,7 @@
       <h3 id="lb-own" class="h5">The project's plain labels</h3>
       <ConfigRows :rows="labelsDraft.value.value.list" add-label="Add a label" @update="labelsDraft.value.value.list = $event" @add="labelsDraft.value.value.list = [...labelsDraft.value.value.list, '']">
         <template #row="{ row, set }">
-          <input :model-value="row" class="lb-tag" placeholder="needs-design" spellcheck="false" aria-label="A plain label" @update:model-value="set($event)" />
+          <input :value="row" class="lb-tag" placeholder="needs-design" spellcheck="false" aria-label="A plain label" @input="set(inputValue($event))" />
         </template>
         <template #extra>
           <ConfigPreset label="From the preset" :presets="[labelsPreset]" @pick="labelsDraft.value.value.list = [...labelsDraft.value.value.list, ...labelsPreset.value.list]" />
@@ -38,8 +38,8 @@
         <ConfigRows :rows="labelsDraft.value.value.colors" add-label="Add a color" @update="labelsDraft.value.value.colors = $event" @add="labelsDraft.value.value.colors = [...labelsDraft.value.value.colors, { k: '', v: 'grey' }]">
           <template #row="{ row, set }">
             <div class="lb-pair">
-              <input :model-value="row.k" class="lb-tag" list="lb-label-names" spellcheck="false" aria-label="Label" @update:model-value="set({ ...row, k: $event })" />
-              <select :model-value="row.v" class="lb-tag lb-tiny" aria-label="Color" @update:model-value="set({ ...row, v: $event })">
+              <input :value="row.k" class="lb-tag" list="lb-label-names" spellcheck="false" aria-label="Label" @input="set({ ...row, k: inputValue($event) })" />
+              <select :value="row.v" class="lb-tag lb-tiny" aria-label="Color" @change="set({ ...row, v: inputValue($event) })">
                 <option v-for="c in palette" :key="c" :value="c">{{ c }}</option>
                 <option v-if="row.v && !palette.includes(row.v)" :value="row.v">{{ row.v }}</option>
               </select>
@@ -53,8 +53,8 @@
         <ConfigRows :rows="labelsDraft.value.value.descriptions" add-label="Add a description" @update="labelsDraft.value.value.descriptions = $event" @add="labelsDraft.value.value.descriptions = [...labelsDraft.value.value.descriptions, { k: '', v: '' }]">
           <template #row="{ row, set }">
             <div class="lb-pair">
-              <input :model-value="row.k" class="lb-tag" list="lb-label-names" spellcheck="false" aria-label="Label" @update:model-value="set({ ...row, k: $event })" />
-              <input :model-value="row.v" class="lb-desc" placeholder="what the label means" aria-label="Description" @update:model-value="set({ ...row, v: $event })" />
+              <input :value="row.k" class="lb-tag" list="lb-label-names" spellcheck="false" aria-label="Label" @input="set({ ...row, k: inputValue($event) })" />
+              <input :value="row.v" class="lb-desc" placeholder="what the label means" aria-label="Description" @input="set({ ...row, v: inputValue($event) })" />
             </div>
           </template>
         </ConfigRows>
@@ -185,7 +185,7 @@
 import { computed, nextTick, onMounted, ref } from 'vue';
 import { deleteLabel, getLabels, getLint, saveConfigSection, sendLabels, type ConfigField, type LabelChange, type LabelRow, type Labels, type Lint, type StrayLabel } from '@/api/board';
 import { labelsPreset } from '@/configpresets';
-import { configModel, configModelError, loadConfigModel, SectionDraft } from '@/configmodel';
+import { configModel, configModelError, loadConfigModel, SectionDraft, inputValue } from '@/configmodel';
 import ConfigPreset from '@/components/configforms/ConfigPreset.vue';
 import ConfigRows from '@/components/configforms/ConfigRows.vue';
 import ConfigSaveBar from '@/components/configforms/ConfigSaveBar.vue';
