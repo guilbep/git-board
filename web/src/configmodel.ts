@@ -40,6 +40,13 @@ export function inputValue(e: Event): string {
   return t instanceof HTMLInputElement || t instanceof HTMLSelectElement ? t.value : '';
 }
 
+// plainClone takes a (possibly reactive) piece of the model back to plain
+// JSON data: structuredClone refuses Vue's proxies, and the model is a
+// deep reactive ref — a shallow spread leaves every nested object a proxy
+export function plainClone<T>(v: T): T {
+  return JSON.parse(JSON.stringify(v)) as T;
+}
+
 // the sections' dirty marks, for the tab row's dot: a tab registers its
 // draft's dirtiness here under its own name
 export const dirtySections = ref<Record<string, boolean>>({});
@@ -76,7 +83,11 @@ export class SectionDraft<T> {
   }
 
   reset(m: ConfigModel) {
-    this.value.value = structuredClone(this.from(m));
+    // plainClone, not structuredClone: the model is a deep reactive ref,
+    // and a from() that copies a nested object or array shallowly — as the
+    // views draft does — hands structuredClone a proxy, which it refuses
+    // (DataCloneError). The drafts are pure JSON API data.
+    this.value.value = plainClone(this.from(m));
     this.removed.value = [];
     this.base.value = m.hash;
     this.conflict.value = false;

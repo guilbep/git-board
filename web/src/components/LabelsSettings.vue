@@ -191,7 +191,7 @@
 import { computed, nextTick, onMounted, ref } from 'vue';
 import { deleteLabel, getLabels, getLint, saveConfigSection, sendLabels, type ConfigField, type LabelChange, type LabelRow, type Labels, type Lint, type StrayLabel } from '@/api/board';
 import { labelsPreset } from '@/configpresets';
-import { configModel, configModelError, loadConfigModel, SectionDraft, inputValue } from '@/configmodel';
+import { configModel, configModelError, loadConfigModel, SectionDraft, inputValue, plainClone } from '@/configmodel';
 import ConfigPreset from '@/components/configforms/ConfigPreset.vue';
 import ConfigRows from '@/components/configforms/ConfigRows.vue';
 import ConfigRefPanel from '@/components/configforms/ConfigRefPanel.vue';
@@ -275,13 +275,13 @@ const adopt = (row: LabelRow, g: { color: string; description: string }) =>
     if (!m) throw new Error('The project file is not loaded yet.');
     const color = g.color ? (g.color.startsWith('#') ? g.color : `#${g.color}`) : '';
     if (row.field) {
-      const f: ConfigField = structuredClone(m.fields[row.field] ?? { single: false, options: [] });
+      const f: ConfigField = plainClone(m.fields[row.field] ?? { single: false, options: [] });
       f.colors = { ...(f.colors ?? {}), [row.value]: color };
       if (g.description) f.descriptions = { ...(f.descriptions ?? {}), [row.value]: g.description };
       const r = await saveConfigSection('fields', { set: { [row.field]: f }, remove: [] }, m.hash);
       configModel.value = r.model;
     } else {
-      const l = structuredClone(m.labels);
+      const l = plainClone(m.labels);
       l.colors = { ...(l.colors ?? {}), [row.value]: color };
       if (g.description) l.descriptions = { ...(l.descriptions ?? {}), [row.value]: g.description };
       const r = await saveConfigSection('labels', { list: l.list, colors: l.colors, descriptions: l.descriptions }, m.hash);
