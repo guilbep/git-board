@@ -279,7 +279,9 @@ onBeforeUnmount(offLive);
 .set-via { margin-left: auto; font-size: .8125rem; font-weight: 400; color: var(--fg-muted); }
 .set-dot { flex: none; width: .5rem; height: .5rem; margin-left: auto; border-radius: 50%; background: var(--warning); }
 .set-tab:has(.set-via) .set-dot { margin-left: .5rem; }
-.set-main { flex: 1; min-width: 0; }
+/* the content column, capped and centered: two 50/50 columns stretch
+   absurdly past ~1400px, the forms go limp and the reference's lines run */
+.set-main { flex: 1; min-width: 0; max-width: 87.5rem; margin-inline: auto; }
 .set-panel { display: flex; flex-direction: column; gap: 1.25rem; max-width: 64rem; }
 .set-panel-wide { max-width: none; }
 .set-panel h2, .set-panel h3, .set-panel p { margin: 0; }
