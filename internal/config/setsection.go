@@ -104,15 +104,16 @@ func setTableKeys(text, header, anchor string, keys []string, vals map[string]st
 }
 
 // deleteTable is text without the [dotted] table and its [dotted.*]
-// subtables: their spans and the comment block directly above each header
-// (it describes the table), one blank line above gone as well. Nothing
-// there is, nothing changes.
+// subtables (their [[dotted.*]] array tables too): their spans and the
+// comment block directly above each header (it describes the table), one
+// blank line above gone as well. Nothing there is, nothing changes.
 func deleteTable(text, dotted string) string {
 	for {
 		lines := strings.Split(text, "\n")
 		start := -1
 		for i, l := range lines {
-			if t := strings.TrimSpace(l); t == "["+dotted+"]" || strings.HasPrefix(t, "["+dotted+".") {
+			t := strings.TrimSpace(l)
+			if t == "["+dotted+"]" || t == "[["+dotted+"]]" || strings.HasPrefix(t, "["+dotted+".") || strings.HasPrefix(t, "[["+dotted+".") {
 				start = i
 				break
 			}
@@ -133,9 +134,6 @@ func deleteTable(text, dotted string) string {
 				break
 			}
 			start--
-		}
-		if start > 0 && strings.TrimSpace(lines[start-1]) == "" && (end >= len(lines) || strings.TrimSpace(lines[end]) == "") {
-			start-- // its blank line above goes with it, when one stays below
 		}
 		text = strings.Join(slices.Concat(lines[:start], lines[end:]), "\n")
 	}
@@ -317,6 +315,289 @@ func DeleteViewText(text, name string) (string, error) {
 		return "", fmt.Errorf("a view's name is letters, digits, - and _, not %q", name)
 	}
 	return deleteTable(text, "views."+name), nil
+}
+
+// tomlTableString is a map as an inline table, sorted: { a = "x" }.
+func tomlTableString(m map[string]string) string {
+	if len(m) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(m))
+	for _, k := range slices.Sorted(maps.Keys(m)) {
+		key := k
+		if !viewName.MatchString(k) {
+			key = tomlString(k)
+		}
+		parts = append(parts, key+" = "+tomlString(m[k]))
+	}
+	return "{ " + strings.Join(parts, ", ") + " }"
+}
+
+// tomlArrayArray is a list of lists as a TOML array of arrays, the argv
+// lists of [cycle.tests.<name>] tools: [["go", "version"]].
+func tomlArrayArray(list [][]string) string {
+	if len(list) == 0 {
+		return ""
+	}
+	parts := make([]string, len(list))
+	for i, item := range list {
+		parts[i] = tomlArray(item)
+	}
+	return "[" + strings.Join(parts, ", ") + "]"
+}
+
+// SetBranchesText is text with the [branches] table holding b: base, name,
+// and the kinds as [branches.kinds]. Nothing of the three, the table goes.
+func SetBranchesText(text string, b Branches) (string, error) {
+	vals := map[string]string{"base": tomlString(b.Base), "name": tomlString(b.Name)}
+	for k, v := range vals {
+		if v == `""` {
+			vals[k] = ""
+		}
+	}
+	if vals["base"] == "" && vals["name"] == "" && len(b.Kinds) == 0 {
+		return deleteTable(text, "branches"), nil
+	}
+	text = setTableKeys(text, "[branches]", "", []string{"base", "name"}, vals, false)
+	return setSubTable(text, "branches", "kinds", b.Kinds), nil
+}
+
+// SetCycleText is text with the [cycle] family on or off and holding c:
+// the table's keys, the kinds as [cycle.kinds] string rules (a kind's
+// table form holds the same rule, tests — a string writes it back as
+// one), and the suites as [cycle.tests.<name>] and [cycle.checks.<name>]
+// with their [cycle.tests.<name>.env]. Off, every [cycle.*] table goes.
+func SetCycleText(text string, on bool, c Cycle) (string, error) {
+	if !on {
+		return deleteTable(text, "cycle"), nil
+	}
+	vals := map[string]string{
+		"ready":       tomlString(c.Ready),
+		"in-progress": tomlArray(c.InProgress),
+		"in-review":   tomlArray(c.InReview),
+		"validation":  tomlArray(c.Validation),
+		"plans":       tomlString(c.Plans),
+		"plans-in-pr": "",
+		"test-files":  tomlArray(c.TestFiles),
+		"criteria":    tomlArray(c.Criteria),
+		"steps":       tomlArray(c.Steps),
+		"risk":        tomlString(c.Risk),
+		"plan":        tomlString(c.Plan),
+		"review":      tomlString(c.Review),
+		"spec":        tomlString(c.Spec),
+		"signoffs":    tomlTableString(c.Signoffs),
+		"signers":     tomlString(c.Signers),
+	}
+	if c.PlansInPR != nil {
+		vals["plans-in-pr"] = strconv.FormatBool(*c.PlansInPR)
+	}
+	for k, v := range vals {
+		if v == `""` {
+			vals[k] = ""
+		}
+	}
+	text = setTableKeys(text, "[cycle]", "", slices.Sorted(maps.Keys(vals)), vals, false)
+	text = setSubTable(text, "cycle", "kinds", c.Kinds)
+	text = setSuites(text, "cycle.tests", c.Tests)
+	return setSuites(text, "cycle.checks", c.Checks), nil
+}
+
+// setSuites is every suite of a family as its table: [parent.<name>] with
+// run, files, where, dir, tools, and env as the subtable. A suite the file
+// has that suites doesn't is deleted; a new one joins its family, after
+// the family's last table.
+func setSuites(text, parent string, suites map[string]Suite) string {
+	for _, name := range subTables(text, parent) {
+		if _, keep := suites[name]; !keep {
+			text = deleteTable(text, parent+"."+name)
+		}
+	}
+	for _, name := range slices.Sorted(maps.Keys(suites)) {
+		if !viewName.MatchString(name) {
+			continue // the check refuses it; the writer writes what it can
+		}
+		s := suites[name]
+		vals := map[string]string{
+			"run":   tomlArray(s.Run),
+			"files": tomlArray(s.Files),
+			"where": tomlString(s.Where),
+			"dir":   tomlString(s.Dir),
+			"tools": tomlArrayArray(s.Tools),
+		}
+		for k, v := range vals {
+			if v == "" || v == `""` || v == "[]" {
+				vals[k] = ""
+			}
+		}
+		text = setTableKeys(text, "["+parent+"."+name+"]", lastTableHeader(text, parent), slices.Sorted(maps.Keys(vals)), vals, false)
+		text = setSubTable(text, parent+"."+name, "env", s.Env)
+	}
+	return text
+}
+
+// subTables are the bare names of the [parent.<name>] tables in the text,
+// in file order. A quoted name is skipped: suites are bare keys.
+func subTables(text, parent string) []string {
+	var out []string
+	for _, l := range strings.Split(text, "\n") {
+		t := strings.TrimSpace(l)
+		after, ok := strings.CutPrefix(t, "["+parent+".")
+		if !ok {
+			continue
+		}
+		name, _, isTable := strings.Cut(after, "]")
+		if isTable && viewName.MatchString(name) {
+			out = append(out, name)
+		}
+	}
+	return out
+}
+
+// SetReposText is text with the [repos] table holding the list and, when
+// it isn't native, assignees. No list, the table goes.
+func SetReposText(text string, repos []string, assignees string) (string, error) {
+	if len(repos) == 0 && (assignees == "" || assignees == "native") {
+		return deleteTable(text, "repos"), nil
+	}
+	vals := map[string]string{"list": tomlArrayAlways(repos), "assignees": ""}
+	if assignees != "" && assignees != "native" {
+		vals["assignees"] = tomlString(assignees)
+	}
+	return setTableKeys(text, "[repos]", "", []string{"list", "assignees"}, vals, true), nil
+}
+
+// SetUploadsText is text with the [uploads] table holding u. Every key
+// empty (the defaults), the table goes.
+func SetUploadsText(text string, u Uploads) (string, error) {
+	vals := map[string]string{
+		"endpoint":   tomlString(u.Endpoint),
+		"public_url": tomlString(u.PublicURL),
+		"prefix":     tomlString(u.Prefix),
+		"region":     tomlString(u.Region),
+	}
+	empty := true
+	for k, v := range vals {
+		if v == `""` {
+			vals[k] = ""
+		} else {
+			empty = false
+		}
+	}
+	if empty {
+		return deleteTable(text, "uploads"), nil
+	}
+	return setTableKeys(text, "[uploads]", "", slices.Sorted(maps.Keys(vals)), vals, false), nil
+}
+
+// SetReleaseText is text with the [release] family holding r: the table's
+// keys, the chart as [release.chart], the deploy targets as
+// [[release.deploy]] (replaced whole, in the form's order). Nothing of
+// release in it, every [release.*] table goes.
+func SetReleaseText(text string, r Release) (string, error) {
+	vals := map[string]string{
+		"remote":         tomlString(r.Remote),
+		"environments":   tomlArray(r.Environments),
+		"follow":         "",
+		"checks":         tomlString(r.Checks),
+		"images":         tomlImages(r.Images),
+		"version_values": tomlArray(r.VersionValues),
+		"builder":        tomlString(r.Builder),
+		"binaries":       tomlArray(r.Binaries),
+		"platforms":      tomlArray(r.Platforms),
+		"build":          tomlString(r.Build),
+	}
+	if r.Follow != nil {
+		vals["follow"] = tomlString(*r.Follow)
+	}
+	empty := true
+	for k, v := range vals {
+		if v == "" || v == `""` || v == "[]" {
+			vals[k] = ""
+		} else {
+			empty = false
+		}
+	}
+	if empty && r.Chart == nil && len(r.Deploy) == 0 {
+		return deleteTable(text, "release"), nil
+	}
+	text = setTableKeys(text, "[release]", "", slices.Sorted(maps.Keys(vals)), vals, false)
+	if r.Chart == nil {
+		text = deleteTable(text, "release.chart")
+	} else {
+		chart := map[string]string{"path": r.Chart.Path, "registry": r.Chart.Registry}
+		for k, v := range chart {
+			if v == "" {
+				delete(chart, k)
+			}
+		}
+		text = setSubTable(text, "release", "chart", chart)
+	}
+	return setDeploy(text, r.Deploy), nil
+}
+
+// tomlImages is the images as an inline array of inline tables.
+func tomlImages(images []Image) string {
+	if len(images) == 0 {
+		return ""
+	}
+	parts := make([]string, len(images))
+	for i, im := range images {
+		parts[i] = "{ name = " + tomlString(im.Name) + ", context = " + tomlString(im.Context) + " }"
+	}
+	return "[" + strings.Join(parts, ", ") + "]"
+}
+
+// setDeploy replaces the [[release.deploy]] tables with targets, in order:
+// the old ones go whole, the new ones follow the [release] table, else the
+// file's end. No targets, none stay.
+func setDeploy(text string, targets []Target) string {
+	lines := strings.Split(text, "\n")
+	for {
+		start := slices.IndexFunc(lines, func(l string) bool { return strings.TrimSpace(l) == "[[release.deploy]]" })
+		if start < 0 {
+			break
+		}
+		end := len(lines)
+		for i := start + 1; i < len(lines); i++ {
+			if strings.HasPrefix(strings.TrimSpace(lines[i]), "[") {
+				end = i
+				break
+			}
+		}
+		for end > start+1 { // the comments before the next table are its
+			if l := strings.TrimSpace(lines[end-1]); l != "" && !strings.HasPrefix(l, "#") {
+				break
+			}
+			end--
+		}
+		if start > 0 && strings.TrimSpace(lines[start-1]) == "" {
+			start--
+		}
+		lines = slices.Concat(lines[:start], lines[end:])
+	}
+	if len(targets) == 0 {
+		return strings.Join(lines, "\n")
+	}
+	var block []string
+	for i, t := range targets {
+		if i > 0 {
+			block = append(block, "")
+		}
+		block = append(block, "[[release.deploy]]",
+			"repo = "+tomlString(t.Repo),
+			"path = "+tomlString(t.Path))
+		if t.Registry != "" {
+			block = append(block, "registry = "+tomlString(t.Registry))
+		}
+	}
+	at := len(lines)
+	if _, end := tableSpan(lines, "[release]"); end >= 0 {
+		at = end
+	}
+	if at > 0 && strings.TrimSpace(lines[at-1]) != "" {
+		block = append([]string{""}, block...) // one blank line over the first
+	}
+	return strings.Join(slices.Concat(lines[:at], block, lines[at:]), "\n")
 }
 
 // MoveViewText is text with the [views.<name>] table where [views.before]

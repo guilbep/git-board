@@ -21,42 +21,42 @@ type Cycle struct {
 	// its issues open on the cycle's page. Without one they open on the
 	// classic page (docs/prd/classic-view.md).
 	On         bool     `toml:"-" json:"on"`
-	Ready      string   `toml:"ready"`
-	InProgress []string `toml:"in-progress"`
-	InReview   []string `toml:"in-review"`
-	Validation []string `toml:"validation"`
-	Plans      string   `toml:"plans"` // default "docs/src/implementation-plans"
+	Ready      string   `toml:"ready" json:"ready"`
+	InProgress []string `toml:"in-progress" json:"in-progress"`
+	InReview   []string `toml:"in-review" json:"in-review"`
+	Validation []string `toml:"validation" json:"validation"`
+	Plans      string   `toml:"plans" json:"plans"` // default "docs/src/implementation-plans"
 	// PlansInPR: the draft PR opened at step 3 holds the plan; false
 	// keeps plans out of PRs, the PR opens at step 5. Default true.
-	PlansInPR *bool    `toml:"plans-in-pr"`
-	TestFiles []string `toml:"test-files"` // default defaultTests
+	PlansInPR *bool    `toml:"plans-in-pr" json:"plans-in-pr"`
+	TestFiles []string `toml:"test-files" json:"test-files"` // default defaultTests
 	// Criteria are the headings a description's acceptance criteria are
 	// listed under; default defaultCriteria.
-	Criteria []string `toml:"criteria"`
+	Criteria []string `toml:"criteria" json:"criteria"`
 	// Steps is the project's list of steps, in order (docs/prd/project-cycle.md);
 	// none is the default (Stages).
-	Steps []string `toml:"steps"`
+	Steps []string `toml:"steps" json:"steps"`
 	// KindsFile is [cycle.kinds] as the file writes it, a kind's rule as a
 	// string or as its table's tests; parse reads it into Kinds.
-	KindsFile map[string]toml.Primitive `toml:"kinds"`
+	KindsFile map[string]toml.Primitive `toml:"kinds" json:"-"`
 	// Kinds maps an issue's kind to step 4's rule (KindRules), over
 	// defaultKinds.
-	Kinds map[string]string `toml:"-"`
+	Kinds map[string]string `toml:"-" json:"kinds"`
 	// shortKinds are the kinds the file gave as a string, for Reads.
-	shortKinds []string
-	Risk       string `toml:"risk"` // the role that sets the risk class
-	Plan       string `toml:"plan"` // the role that approves the plan
-	Review     string `toml:"review"`
-	Spec       string `toml:"spec"` // the role that gives the description's verdict
+	shortKinds []string `json:"-"`
+	Risk       string   `toml:"risk" json:"risk"` // the role that sets the risk class
+	Plan       string   `toml:"plan" json:"plan"` // the role that approves the plan
+	Review     string   `toml:"review" json:"review"`
+	Spec       string   `toml:"spec" json:"spec"` // the role that gives the description's verdict
 	// Signoffs maps a validation status to the role that signs it off.
-	Signoffs map[string]string `toml:"signoffs"`
+	Signoffs map[string]string `toml:"signoffs" json:"signoffs"`
 	// Tests are the suites step 4 runs, Checks the checks that gate Mark
 	// ready for review (docs/adr/0001-check-results-are-signed-git-notes.md).
-	Tests  map[string]Suite `toml:"tests"`
-	Checks map[string]Suite `toml:"checks"`
+	Tests  map[string]Suite `toml:"tests" json:"tests"`
+	Checks map[string]Suite `toml:"checks" json:"checks"`
 	// Signers is the OpenSSH allowed_signers file a result's signature is
 	// verified against, read from the base branch; default ".allowed_signers".
-	Signers string `toml:"signers"`
+	Signers string `toml:"signers" json:"signers"`
 }
 
 // Suite is a [cycle.tests.<name>] or [cycle.checks.<name>] table: what runs,

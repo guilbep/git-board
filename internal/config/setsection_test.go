@@ -171,6 +171,189 @@ func TestSetSprints(t *testing.T) {
 	}
 }
 
+func TestSetBranches(t *testing.T) {
+	t.Parallel()
+	before := "# branch names\n[branches]\nbase = \"main\"\nname = \"{number}/{n}-{slug}\" # the default\n\n[branches.kinds]\nbug = \"fix\"\n\n[views.open]\nlayout = \"table\"\n"
+	after, err := SetBranchesText(before, Branches{Base: "trunk", Name: "{kind}/{slug}", Kinds: map[string]string{"bug": "fix", "feat": "feat"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "# branch names\n[branches]\nbase = \"trunk\"\nname = \"{kind}/{slug}\" # the default\n\n[branches.kinds]\nbug = \"fix\"\nfeat = \"feat\"\n\n[views.open]\nlayout = \"table\"\n"
+	if after != want {
+		t.Errorf("got\n%s\nwant\n%s", after, want)
+	}
+	none, err := SetBranchesText(before, Branches{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if none != "[views.open]\nlayout = \"table\"\n" {
+		t.Errorf("no branches left the table behind:\n%s", none)
+	}
+	afterDefault := saveTwice(t, func(text string) (string, error) {
+		return SetBranchesText(text, Branches{Kinds: map[string]string{"bug": "fix"}})
+	})
+	if !strings.Contains(afterDefault, "[branches.kinds]\nbug = \"fix\"") {
+		t.Errorf("the default's inline kinds didn't come back as a table:\n%s", afterDefault)
+	}
+}
+
+func TestSetCycle(t *testing.T) {
+	t.Parallel()
+	before := "[fields.status]\noptions = [\"backlog\"]\n"
+	off, err := SetCycleText(before, false, Cycle{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if off != before {
+		t.Errorf("off changed the file:\n%s", off)
+	}
+	on, err := SetCycleText(before, true, Cycle{Ready: "ready", InProgress: []string{"in-progress"}, Risk: "pm", Kinds: map[string]string{"bug": FailingTest}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "[fields.status]\noptions = [\"backlog\"]\n\n[cycle]\nin-progress = [\"in-progress\"]\nready = \"ready\"\nrisk = \"pm\"\n\n[cycle.kinds]\nbug = \"failing-test\"\n"
+	if on != want {
+		t.Errorf("got\n%s\nwant\n%s", on, want)
+	}
+	if cfg, _, err := Check([]byte(on)); err != nil || !cfg.Cycle.On {
+		t.Errorf("check: %v, on %v", err, cfg != nil && cfg.Cycle.On)
+	}
+	// a suite with its env and tools, byte-stable
+	suite := Cycle{Tests: map[string]Suite{"unit": {
+		Run:   []string{"go", "test", "./..."},
+		Files: []string{"**/*.go"},
+		Env:   map[string]string{"CGO": "0"},
+		Tools: [][]string{{"go", "version"}},
+	}}}
+	withSuite, err := SetCycleText(before, true, suite)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(withSuite, "run = [\"go\", \"test\", \"./...\"]") || !strings.Contains(withSuite, "tools = [[\"go\", \"version\"]]") {
+		t.Errorf("the suite didn't come out:\n%s", withSuite)
+	}
+	if !strings.Contains(withSuite, "[cycle.tests.unit.env]\nCGO = \"0\"") {
+		t.Errorf("the suite's env:\n%s", withSuite)
+	}
+	twice, err := SetCycleText(withSuite, true, suite)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if twice != withSuite {
+		t.Errorf("not byte-stable:\nfirst\n%s\nsecond\n%s", withSuite, twice)
+	}
+	// a suite dropped from the map goes from the file
+	gone, err := SetCycleText(withSuite, true, Cycle{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(gone, "cycle.tests") {
+		t.Errorf("the dropped suite stayed:\n%s", gone)
+	}
+}
+
+func TestSetCycleOnTheDefaultFile(t *testing.T) {
+	t.Parallel()
+	cfg, _, err := Check([]byte(Default))
+	if err != nil {
+		t.Fatal(err)
+	}
+	after := saveTwice(t, func(text string) (string, error) { return SetCycleText(text, true, cfg.Cycle) })
+	if !strings.Contains(after, "[cycle]\n") {
+		t.Errorf("[cycle] went:\n%s", after)
+	}
+	if _, warns, err := Check([]byte(after)); err != nil || len(warns) > 0 {
+		t.Errorf("check: %v %v", err, warns)
+	}
+}
+
+func TestSetReposUploads(t *testing.T) {
+	t.Parallel()
+	before := "[fields.status]\noptions = [\"backlog\"]\n"
+	repos, err := SetReposText(before, []string{"epfl-enac/one", "epfl-enac/two"}, "labels")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "[fields.status]\noptions = [\"backlog\"]\n\n[repos]\nlist = [\"epfl-enac/one\", \"epfl-enac/two\"]\nassignees = \"labels\"\n"
+	if repos != want {
+		t.Errorf("got\n%s\nwant\n%s", repos, want)
+	}
+	gone, err := SetReposText(repos, nil, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gone != before {
+		t.Errorf("no repos left the table behind:\n%s", gone)
+	}
+	ups, err := SetUploadsText(before, Uploads{Prefix: "gb/x", Region: "us-east-1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(ups, "prefix = \"gb/x\"") {
+		t.Errorf("uploads:\n%s", ups)
+	}
+	upsgone, err := SetUploadsText(ups, Uploads{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(upsgone, "uploads") {
+		t.Errorf("the defaults left the table behind:\n%s", upsgone)
+	}
+}
+
+func TestSetRelease(t *testing.T) {
+	t.Parallel()
+	before := "[fields.status]\noptions = [\"backlog\"]\n"
+	r := Release{
+		Environments: []string{"dev", "stage", "prod"},
+		Checks:       "make ci",
+		Images:       []Image{{Name: "board", Context: "."}},
+		Chart:        &Chart{Path: "chart", Registry: "registry.epfl.ch/x"},
+		Deploy: []Target{
+			{Repo: "epfl-enac/app-deploy", Path: "apps/app/{env}", Registry: "registry.epfl.ch/x"},
+			{Repo: "epfl-enac/app-deploy", Path: "apps/app/{env}", Registry: "registry.epfl.ch/y"},
+		},
+	}
+	after, err := SetReleaseText(before, r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(after, "environments = [\"dev\", \"stage\", \"prod\"]") ||
+		!strings.Contains(after, "images = [{ name = \"board\", context = \".\" }]") ||
+		!strings.Contains(after, "[release.chart]\npath = \"chart\"") {
+		t.Errorf("release:\n%s", after)
+	}
+	if strings.Count(after, "[[release.deploy]]") != 2 || !strings.Contains(after, "repo = \"epfl-enac/app-deploy\"") {
+		t.Errorf("deploy:\n%s", after)
+	}
+	twice, err := SetReleaseText(after, r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if twice != after {
+		t.Errorf("not byte-stable:\nfirst\n%s\nsecond\n%s", after, twice)
+	}
+	if cfg, _, err := Check([]byte(after)); err != nil || len(cfg.Release.Environments) != 3 {
+		t.Errorf("check: %v", err)
+	}
+	// one target left, one gone
+	r.Deploy = r.Deploy[:1]
+	only, err := SetReleaseText(after, r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Count(only, "[[release.deploy]]") != 1 {
+		t.Errorf("the dropped target stayed:\n%s", only)
+	}
+	none, err := SetReleaseText(after, Release{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(none, "release") {
+		t.Errorf("no release left tables behind:\n%s", none)
+	}
+}
+
 func TestDeleteAndMoveViews(t *testing.T) {
 	t.Parallel()
 	before := "# views are the tabs\n[views.open]\nlayout = \"table\"\n\n[views.backlog]\n# the backlog, ready first\nfilter = \"is:open\"\n\n[views.mine]\nlayout = \"board\"\n"

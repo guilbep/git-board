@@ -13,7 +13,7 @@ var viewName = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
 
 // keyLine is `key = "value"  # comment`: the key, the value as written,
 // and what follows it.
-var keyLine = regexp.MustCompile(`^(\s*([A-Za-z0-9_-]+)\s*=\s*)(\[[^\]]*\]|\{[^}]*\}|"(?:[^"\\]|\\.)*"|'[^']*'|[^#\s]+)(.*)$`)
+var keyLine = regexp.MustCompile(`^(\s*([A-Za-z0-9_-]+)\s*=\s*)(\[(?:[^\[\]]|\[[^\[\]]*\])*\]|\{[^}]*\}|"(?:[^"\\]|\\.)*"|'[^']*'|[^#\s]+)(.*)$`)
 
 // SetViewText is text with the [views.<name>] table holding v, the way the
 // board's "Save view" writes it: its layout, filter, group and sort lines

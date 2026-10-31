@@ -194,20 +194,20 @@ func (c *Config) LabelColors() map[string]string {
 // keys stay out of the file: ACCESS_KEY_ID, ACCESS_KEY_SECRET and
 // BUCKET_NAME in the environment (internal/uploads).
 type Uploads struct {
-	Endpoint  string `toml:"endpoint"`   // S3, default https://s3.epfl.ch
-	PublicURL string `toml:"public_url"` // where the bucket is served, default https://enacit4r-cdn.epfl.ch
-	Prefix    string `toml:"prefix"`     // default git-board/<repository>
-	Region    string `toml:"region"`     // default us-east-1
+	Endpoint  string `toml:"endpoint" json:"endpoint"`     // S3, default https://s3.epfl.ch
+	PublicURL string `toml:"public_url" json:"public_url"` // where the bucket is served, default https://enacit4r-cdn.epfl.ch
+	Prefix    string `toml:"prefix" json:"prefix"`         // default git-board/<repository>
+	Region    string `toml:"region" json:"region"`         // default us-east-1
 }
 
 // Branches is the [branches] table: the branch an issue suggests
 // (internal/branches).
 type Branches struct {
-	Base string `toml:"base"` // default: the remote's default branch, else main, master or trunk
-	Name string `toml:"name"` // {kind}, {number}, {n}, {slug}; default "{number}/{n}-{slug}"
+	Base string `toml:"base" json:"base"` // default: the remote's default branch, else main, master or trunk
+	Name string `toml:"name" json:"name"` // {kind}, {number}, {n}, {slug}; default "{number}/{n}-{slug}"
 	// Kinds maps an issue's kind (its kind: field, or a flat label listed
 	// here) to the {kind} of its branch: bug = "fix".
-	Kinds map[string]string `toml:"kinds"`
+	Kinds map[string]string `toml:"kinds" json:"kinds"`
 }
 
 // Kind is an issue's kind: its kind: field, else the first of its flat
