@@ -124,7 +124,7 @@
 import { themePref } from '@/theme';
 import { debounced, onLive } from '@/live';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { useRoute } from 'vue-router';
+import { onBeforeRouteLeave, useRoute } from 'vue-router';
 import { getNumbers, getSettings, getViews, getWhole, getWorktrees, setView, type Labels, type Numbers, type Settings, type WholeStatus, type Worktrees } from '@/api/board';
 import { message } from '@/issue';
 import { classicPeek, cycleView, loadMe, me } from '@/me';
@@ -247,12 +247,17 @@ onMounted(() => {
   loadNumbers();
   getWorktrees().then((w) => (worktrees.value = w), () => {});
 });
-// a form tab with a draft: say so before the page goes
+// a form tab with a draft: say so before the page goes — the browser's
+// beforeunload for a reload or a close, the router's guard for a link
 const beforeUnload = (e: BeforeUnloadEvent) => {
   if (Object.values(dirtySections.value).some(Boolean)) e.preventDefault();
 };
 onMounted(() => window.addEventListener('beforeunload', beforeUnload));
 onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload));
+onBeforeRouteLeave(() => {
+  if (!Object.values(dirtySections.value).some(Boolean)) return true;
+  return window.confirm('A project-file form has unsaved changes. Leave anyway?');
+});
 // the Overview's numbers line: started, or an issue numbered, from anywhere
 const loadNumbers = () => void getNumbers().then((n) => (numbers.value = n), () => {});
 const reloadNumbers = debounced(loadNumbers);

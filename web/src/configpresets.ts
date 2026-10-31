@@ -97,6 +97,19 @@ export const labelsPreset: Preset<ConfigLabels> = {
 // fills it
 export const sprintsPreset: { length_days: number; start_weekday: string } = { length_days: 14, start_weekday: 'monday' };
 
+// the branches' kinds, the default file's: bug's branches say fix
+export const branchKindsPreset: Preset<Record<string, string>> = {
+  label: 'the usual kinds',
+  why: 'bug → fix, feat → feat, docs, test, chore, design and the rest as they are',
+  value: { bug: 'fix', feat: 'feat', docs: 'docs', refactor: 'refactor', perf: 'perf', test: 'test', style: 'style', chore: 'chore', design: 'design' },
+};
+
+// the release environments, small first
+export const releasePresets: Preset<string[]>[] = [
+  { label: 'dev, prod', why: 'dev follows the trunk, prod takes the finals: two environments, no candidates', value: ['dev', 'prod'] },
+  { label: 'dev, stage, prod', why: 'stage takes the candidates, a release is checked there before prod', value: ['dev', 'stage', 'prod'] },
+];
+
 // nextSprint is the sprint after the list's last: its start plus
 // length_days, its number plus one (s12 → s13), as the board's button
 export function nextSprint(list: ConfigSprint[], lengthDays: number): ConfigSprint {

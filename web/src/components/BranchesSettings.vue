@@ -31,6 +31,9 @@
 
       <h3 class="h5">Kinds</h3>
       <ConfigRows :rows="kindRows" add-label="Add a kind" @update="kindRows = $event" @add="kindRows = [...kindRows, { k: '', v: 'feat' }]">
+        <template #extra>
+          <ConfigPreset label="From the preset" :presets="[branchKindsPreset]" @pick="kindRows = [...kindRows, ...Object.entries(branchKindsPreset.value).map(([k, v]) => ({ k, v }))] as Pair[]" />
+        </template>
         <template #row="{ row, set: setRow }">
           <div class="bs-pair">
             <input :model-value="row.k" class="bs-input bs-opt" list="bs-kind-names" placeholder="bug" spellcheck="false" aria-label="The issue's kind" @update:model-value="setRow({ ...row, k: $event })" />
@@ -68,7 +71,9 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
+import { branchKindsPreset } from '@/configpresets';
 import { SectionDraft, configModel, configModelError } from '@/configmodel';
+import ConfigPreset from '@/components/configforms/ConfigPreset.vue';
 import ConfigRefPanel from '@/components/configforms/ConfigRefPanel.vue';
 import ConfigRows from '@/components/configforms/ConfigRows.vue';
 import ConfigSaveBar from '@/components/configforms/ConfigSaveBar.vue';

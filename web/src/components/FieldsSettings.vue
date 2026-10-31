@@ -12,6 +12,23 @@
     </p>
 
     <p v-if="modelError" class="epfl-alert epfl-alert-danger" role="alert">{{ modelError }}</p>
+
+    <!-- no file yet: start from the default, one whole-file save (the raw
+         route, exactly what it is for), then the form reads it -->
+    <div v-else-if="configModel && !configModel.exists" class="fs-start">
+      <p class="fs-lead">
+        No project file yet: every <code>ns:value</code> label is a field, in no order. The default declares the statuses,
+        priorities, kinds and estimates, the branch names and four views, each explained in a comment.
+      </p>
+      <p class="fs-startrow">
+        <button type="button" class="epfl-btn epfl-btn-primary epfl-btn-sm" :disabled="starting" @click="startFromDefault">
+          {{ starting ? 'Writing the default…' : 'Start from the default' }}
+        </button>
+        <span class="gb-hint">or, in a terminal, <code>git board init</code></span>
+      </p>
+      <p v-if="startError" class="epfl-alert epfl-alert-danger" role="alert">{{ startError }}</p>
+    </div>
+
     <p v-else-if="!draft.value.value" class="fs-muted">Loading…</p>
 
     <template v-else>
@@ -127,9 +144,11 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted } from 'vue';
+import { computed, onMounted, ref } from 'vue';
+import { getConfigFile, saveConfig } from '@/api/board';
 import { fieldPresets, takeUnique } from '@/configpresets';
-import { SectionDraft, configModel, configModelError } from '@/configmodel';
+import { SectionDraft, configModel, configModelError, loadConfigModel } from '@/configmodel';
+import { message } from '@/issue';
 import ConfigCard from '@/components/configforms/ConfigCard.vue';
 import ConfigPreset from '@/components/configforms/ConfigPreset.vue';
 import ConfigRefPanel from '@/components/configforms/ConfigRefPanel.vue';
@@ -259,6 +278,27 @@ function reset() {
   if (configModel.value) draft.reset(configModel.value);
 }
 
+// startFromDefault writes the whole default file through the raw route —
+// the one whole-file save the forms make — then reads it back
+const starting = ref(false);
+const startError = ref('');
+
+async function startFromDefault() {
+  starting.value = true;
+  startError.value = '';
+  try {
+    const file = await getConfigFile();
+    if (!file.default) throw new Error('The default project file is not available.');
+    await saveConfig(file.default, file.hash);
+    await loadConfigModel();
+    if (configModel.value) draft.reset(configModel.value);
+  } catch (e) {
+    startError.value = message(e);
+  } finally {
+    starting.value = false;
+  }
+}
+
 async function save() {
   await draft.save();
 }
@@ -271,6 +311,8 @@ onMounted(() => void draft.load());
 h2, p { margin: 0; }
 .fs-lead { max-width: 42rem; color: var(--fg-muted); }
 .fs-muted { color: var(--fg-muted); }
+.fs-start { display: grid; gap: .75rem; padding: 1.25rem; border: 1px solid var(--border); border-left: 3px solid var(--primary); background: var(--bg); }
+.fs-startrow { display: flex; align-items: center; gap: .75rem; }
 .fs-tools { display: flex; align-items: center; gap: .75rem; flex-wrap: wrap; }
 .fs-card { border-left-color: var(--primary); }
 .fs-form { display: flex; gap: 1rem; flex-wrap: wrap; align-items: end; }

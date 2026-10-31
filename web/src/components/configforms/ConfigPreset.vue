@@ -1,8 +1,8 @@
 <!-- A preset menu: Add opens the list, each preset with its one-line why;
      picking one adds and selects it, it never overwrites silently. -->
 <template>
-  <span class="cpm">
-    <button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" :aria-expanded="open" @click="open = !open">{{ label }}</button>
+  <span ref="rootEl" class="cpm" @keydown.escape.stop="close()">
+    <button ref="toggleEl" type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" :aria-expanded="open" @click="open = !open">{{ label }}</button>
     <div v-if="open" class="cpm-menu" role="menu">
       <button v-for="(p, i) in presets" :key="p.label" type="button" role="menuitem" class="cpm-item" @click="pick(i)">
         <b>{{ p.label }}</b>
@@ -23,7 +23,14 @@ defineProps<{
 
 const emit = defineEmits<{ pick: [index: number] }>();
 
+const rootEl = ref<HTMLElement | null>(null);
+const toggleEl = ref<HTMLButtonElement | null>(null);
 const open = ref(false);
+
+function close() {
+  open.value = false;
+  toggleEl.value?.focus();
+}
 
 function pick(i: number) {
   open.value = false;

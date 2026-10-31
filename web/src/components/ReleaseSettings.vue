@@ -16,6 +16,9 @@
 
     <template v-else>
       <ConfigRows :rows="draft.value.value.environments" add-label="Add an environment" @update="draft.value.value.environments = $event" @add="draft.value.value.environments = [...draft.value.value.environments, '']">
+        <template #extra>
+          <ConfigPreset label="From the preset" :presets="releasePresets" @pick="draft.value.value && (draft.value.value.environments = [...releasePresets[$event]!.value])" />
+        </template>
         <template #row="{ row, index, set }">
           <div class="rls-env">
             <input :model-value="row" class="rls-input" placeholder="dev" spellcheck="false" :aria-label="`Environment ${index + 1}`" @update:model-value="set($event)" />
@@ -65,8 +68,7 @@
         </label>
       </div>
 
-      <h3 class="h5">Deploy — the config repos holding the overlays</h3>
-      <ConfigRows :rows="deployRows" add-label="Add a deploy target" @update="deployRows = $event" @add="deployRows = [...deployRows, { repo: '', path: 'apps/app/{env}' }]">
+      <h3 class="h5">Deploy — the config repos holding the overlays</h3>      <ConfigRows :rows="deployRows" add-label="Add a deploy target" @update="deployRows = $event" @add="deployRows = [...deployRows, { repo: '', path: 'apps/app/{env}' }]">
         <template #row="{ row, set: setRow }">
           <div class="rls-pair">
             <input :model-value="row.repo" class="rls-input" placeholder="epfl-enac/app-deploy" spellcheck="false" aria-label="The config repository" @update:model-value="setRow({ ...row, repo: $event })" />
@@ -114,7 +116,9 @@
 <script setup lang="ts">
 import { computed, onMounted } from 'vue';
 import type { ConfigRelease } from '@/api/board';
+import { releasePresets } from '@/configpresets';
 import { SectionDraft, configModel, configModelError } from '@/configmodel';
+import ConfigPreset from '@/components/configforms/ConfigPreset.vue';
 import ConfigRefPanel from '@/components/configforms/ConfigRefPanel.vue';
 import ConfigRows from '@/components/configforms/ConfigRows.vue';
 import ConfigSaveBar from '@/components/configforms/ConfigSaveBar.vue';
