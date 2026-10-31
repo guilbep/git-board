@@ -29,10 +29,17 @@ type configModel struct {
 	ViewOrder []string             `json:"view_order"`
 	Sprints   config.SprintsConfig `json:"sprints"`
 	Roles     map[string]string    `json:"roles"`
+	// Branches, Cycle (its On says the file has the table), Repos, Uploads
+	// and Release, as the file holds them
+	Branches config.Branches `json:"branches"`
+	Cycle    config.Cycle    `json:"cycle"`
+	Repos    struct {
+		List      []string `json:"list"`
+		Assignees string   `json:"assignees"` // how the forges hold assignees: native, labels; preserved
+	} `json:"repos"`
+	Uploads config.Uploads `json:"uploads"`
+	Release config.Release `json:"release"`
 }
-
-// (M2 adds the sections it writes: branches, cycle, release, repos,
-// uploads — the model grows, the routes don't.)
 
 func (s *apiServer) configModel() (configModel, error) {
 	text, exists, hash, err := s.readConfigFile()
@@ -67,7 +74,37 @@ func (s *apiServer) configModel() (configModel, error) {
 	for role, who := range cfg.Roles {
 		m.Roles[role] = who
 	}
+	m.Branches = cfg.Branches
+	if m.Branches.Kinds == nil {
+		m.Branches.Kinds = map[string]string{}
+	}
+	m.Cycle = cfg.Cycle
+	m.Cycle.Kinds = orEmptyStringMap(cfg.Cycle.Kinds)
+	m.Cycle.Signoffs = orEmptyStringMap(cfg.Cycle.Signoffs)
+	if m.Cycle.Tests == nil {
+		m.Cycle.Tests = map[string]config.Suite{}
+	}
+	if m.Cycle.Checks == nil {
+		m.Cycle.Checks = map[string]config.Suite{}
+	}
+	m.Repos.List = orEmpty(cfg.Repos)
+	m.Repos.Assignees = cfg.Assignees
+	m.Uploads = cfg.Uploads
+	m.Release = cfg.Release
+	if m.Release.Images == nil {
+		m.Release.Images = []config.Image{}
+	}
+	if m.Release.Deploy == nil {
+		m.Release.Deploy = []config.Target{}
+	}
 	return m, nil
+}
+
+func orEmptyStringMap(m map[string]string) map[string]string {
+	if m == nil {
+		return map[string]string{}
+	}
+	return m
 }
 
 func orSprints(list []config.Sprint) []config.Sprint {
@@ -203,8 +240,44 @@ func sectionWriter(section string, r *http.Request, w http.ResponseWriter) (func
 			return nil, nil
 		}
 		return func(text string) (string, error) { return config.SetRolesText(text, req) }, nil
+	case "branches":
+		var req config.Branches
+		if !decode(w, r, &req) {
+			return nil, nil
+		}
+		return func(text string) (string, error) { return config.SetBranchesText(text, req) }, nil
+	case "cycle":
+		var req struct {
+			On    bool         `json:"on"`
+			Cycle config.Cycle `json:"cycle"`
+		}
+		if !decode(w, r, &req) {
+			return nil, nil
+		}
+		return func(text string) (string, error) { return config.SetCycleText(text, req.On, req.Cycle) }, nil
+	case "repos":
+		var req struct {
+			List      []string `json:"list"`
+			Assignees string   `json:"assignees"`
+		}
+		if !decode(w, r, &req) {
+			return nil, nil
+		}
+		return func(text string) (string, error) { return config.SetReposText(text, req.List, req.Assignees) }, nil
+	case "uploads":
+		var req config.Uploads
+		if !decode(w, r, &req) {
+			return nil, nil
+		}
+		return func(text string) (string, error) { return config.SetUploadsText(text, req) }, nil
+	case "release":
+		var req config.Release
+		if !decode(w, r, &req) {
+			return nil, nil
+		}
+		return func(text string) (string, error) { return config.SetReleaseText(text, req) }, nil
 	}
-	return nil, fmt.Errorf("no section %q: fields, labels, views, sprints, roles", section)
+	return nil, fmt.Errorf("no section %q: fields, labels, views, sprints, roles, branches, cycle, repos, uploads, release", section)
 }
 
 // setViewsText applies each view's table, alphabetically for a stable

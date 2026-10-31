@@ -42,7 +42,31 @@ type configModelResponse struct {
 			Start string `json:"start"`
 		} `json:"list"`
 	} `json:"sprints"`
-	Roles map[string]string `json:"roles"`
+	Roles    map[string]string `json:"roles"`
+	Branches struct {
+		Base  string            `json:"base"`
+		Name  string            `json:"name"`
+		Kinds map[string]string `json:"kinds"`
+	} `json:"branches"`
+	Cycle struct {
+		On         bool              `json:"on"`
+		Ready      string            `json:"ready"`
+		InProgress []string          `json:"in-progress"`
+		Kinds      map[string]string `json:"kinds"`
+		Tests      map[string]struct {
+			Run []string `json:"run"`
+		} `json:"tests"`
+	} `json:"cycle"`
+	Repos struct {
+		List      []string `json:"list"`
+		Assignees string   `json:"assignees"`
+	} `json:"repos"`
+	Uploads struct {
+		Prefix string `json:"prefix"`
+	} `json:"uploads"`
+	Release struct {
+		Environments []string `json:"environments"`
+	} `json:"release"`
 }
 
 type sectionSave struct {
@@ -82,6 +106,126 @@ func TestConfigModelServesEverySection(t *testing.T) {
 	}
 	if v := m.Views["open"]; v.Filter != "" {
 		t.Errorf("views: %+v", m.Views)
+	}
+	// the sections without a table in the file: zero values, empty maps
+	if m.Branches.Base != "" || len(m.Branches.Kinds) != 0 {
+		t.Errorf("branches: %+v", m.Branches)
+	}
+	if m.Cycle.On || len(m.Cycle.Tests) != 0 {
+		t.Errorf("cycle: %+v", m.Cycle)
+	}
+	if len(m.Repos.List) != 0 || m.Repos.Assignees != "native" {
+		t.Errorf("repos: %+v", m.Repos)
+	}
+	if len(m.Release.Environments) != 0 {
+		t.Errorf("release: %+v", m.Release)
+	}
+}
+
+func TestConfigSectionSavesM2(t *testing.T) {
+	t.Parallel()
+	ts, s := newIssueServer(t)
+	s.cfgPath = filepath.Join(t.TempDir(), ".git-board.toml")
+	if err := os.WriteFile(s.cfgPath, []byte(sectionFile), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var m configModelResponse
+	call(t, "GET", ts.URL+"/api/config/model", nil, &m)
+
+	// branches: base, name, kinds
+	var saved sectionSave
+	bbody := map[string]any{
+		"base":  "trunk",
+		"name":  "{kind}/{number}-{slug}",
+		"kinds": map[string]string{"bug": "fix", "feat": "feat"},
+	}
+	if code := call(t, "PUT", ts.URL+"/api/config/section/branches?base="+m.Hash, bbody, &saved); code != http.StatusOK {
+		t.Fatalf("branches save: %d", code)
+	}
+	got, _ := os.ReadFile(s.cfgPath)
+	want := sectionFile + "\n[branches]\nbase = \"trunk\"\nname = \"{kind}/{number}-{slug}\"\n\n[branches.kinds]\nbug = \"fix\"\nfeat = \"feat\"\n"
+	if string(got) != want {
+		t.Errorf("branches in file:\n%q\nwant\n%q", got, want)
+	}
+
+	// cycle: on with stages, a suite with its env
+	call(t, "GET", ts.URL+"/api/config/model", nil, &m)
+	cbody := map[string]any{
+		"on": true,
+		"cycle": map[string]any{
+			"ready":       "ready",
+			"in-progress": []string{"in-progress"},
+			"tests": map[string]any{
+				"unit": map[string]any{
+					"run":   []string{"go", "test", "./..."},
+					"where": "ci",
+					"env":   map[string]string{"CGO": "0"},
+				},
+			},
+		},
+	}
+	if code := call(t, "PUT", ts.URL+"/api/config/section/cycle?base="+m.Hash, cbody, &saved); code != http.StatusOK {
+		t.Fatalf("cycle save: %d", code)
+	}
+	got, _ = os.ReadFile(s.cfgPath)
+	if !strings.Contains(string(got), "[cycle]\n") || !strings.Contains(string(got), "[cycle.tests.unit]\n") ||
+		!strings.Contains(string(got), "where = \"ci\"") || !strings.Contains(string(got), "[cycle.tests.unit.env]\nCGO = \"0\"") {
+		t.Errorf("cycle in file:\n%s", got)
+	}
+	// the fields' and branches' tables are untouched
+	if !strings.Contains(string(got), "[branches]\nbase = \"trunk\"") {
+		t.Errorf("branches went:\n%s", got)
+	}
+
+	// cycle off: every [cycle.*] table goes
+	call(t, "GET", ts.URL+"/api/config/model", nil, &m)
+	if code := call(t, "PUT", ts.URL+"/api/config/section/cycle?base="+m.Hash, map[string]any{"on": false}, &saved); code != http.StatusOK {
+		t.Fatalf("cycle off: %d", code)
+	}
+	got, _ = os.ReadFile(s.cfgPath)
+	if strings.Contains(string(got), "[cycle") {
+		t.Errorf("cycle stayed off:\n%s", got)
+	}
+
+	// release: environments, images, chart, deploy
+	call(t, "GET", ts.URL+"/api/config/model", nil, &m)
+	rbody := map[string]any{
+		"environments": []string{"dev", "prod"},
+		"checks":       "make ci",
+		"images":       []map[string]string{{"name": "board", "context": "."}},
+		"chart":        map[string]string{"path": "chart", "registry": "registry.epfl.ch/x"},
+		"deploy": []map[string]string{
+			{"repo": "epfl-enac/app-deploy", "path": "apps/app/{env}", "registry": "registry.epfl.ch/x"},
+		},
+	}
+	if code := call(t, "PUT", ts.URL+"/api/config/section/release?base="+m.Hash, rbody, &saved); code != http.StatusOK {
+		t.Fatalf("release save: %d", code)
+	}
+	got, _ = os.ReadFile(s.cfgPath)
+	if !strings.Contains(string(got), "environments = [\"dev\", \"prod\"]") || !strings.Contains(string(got), "[[release.deploy]]") ||
+		!strings.Contains(string(got), "[release.chart]") {
+		t.Errorf("release in file:\n%s", got)
+	}
+	// live: the board's settings serve it at once
+	var settings struct {
+		Uploads struct {
+			Enabled bool `json:"enabled"`
+		} `json:"uploads"`
+	}
+	call(t, "GET", ts.URL+"/api/settings", nil, &settings)
+
+	// uploads and repos round-trip too
+	call(t, "GET", ts.URL+"/api/config/model", nil, &m)
+	if code := call(t, "PUT", ts.URL+"/api/config/section/repos?base="+m.Hash, map[string]any{"list": []string{"epfl-enac/one"}}, &saved); code != http.StatusOK {
+		t.Fatalf("repos save: %d", code)
+	}
+	call(t, "GET", ts.URL+"/api/config/model", nil, &m)
+	if code := call(t, "PUT", ts.URL+"/api/config/section/uploads?base="+m.Hash, map[string]any{"prefix": "gb/x"}, &saved); code != http.StatusOK {
+		t.Fatalf("uploads save: %d", code)
+	}
+	got, _ = os.ReadFile(s.cfgPath)
+	if !strings.Contains(string(got), "[repos]\nlist = [\"epfl-enac/one\"]") || !strings.Contains(string(got), "prefix = \"gb/x\"") {
+		t.Errorf("repos/uploads in file:\n%s", got)
 	}
 }
 
@@ -203,7 +347,7 @@ func TestConfigSectionConflictsAndRejects(t *testing.T) {
 		t.Errorf("a stale base: %d, want 409", code)
 	}
 	// a section the file doesn't have a form for
-	if code := call(t, "PUT", ts.URL+"/api/config/section/branches?base="+m.Hash, map[string]any{}, nil); code != http.StatusBadRequest {
+	if code := call(t, "PUT", ts.URL+"/api/config/section/spaceships?base="+m.Hash, map[string]any{}, nil); code != http.StatusBadRequest {
 		t.Errorf("an unknown section: %d, want 400", code)
 	}
 	// a field's name the file can't hold bare
