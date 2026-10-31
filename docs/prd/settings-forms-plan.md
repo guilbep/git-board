@@ -285,28 +285,28 @@ tests as above. `make ci` green per milestone.
 
 ### M2 — the work: branches, cycle, repos, attachments, release
 
-- [ ] Writers: `SetBranchesText`, `SetCycleText` (keys, kinds, signoffs,
+- [x] Writers: `SetBranchesText`, `SetCycleText` (keys, kinds, signoffs,
   tests, checks), `SetReposText`, `SetUploadsText`, `SetReleaseText` + tests.
-- [ ] The API grows those sections; tests.
-- [ ] `BranchesSettings.vue`, `CycleSettings.vue` (with *Propose from the
+- [x] The API grows those sections; tests.
+- [x] `BranchesSettings.vue`, `CycleSettings.vue` (with *Propose from the
   project* through `/api/checks/setup`), `ReposSettings.vue`,
   `AttachmentsSettings.vue`, `ReleaseSettings.vue`.
-- [ ] `make ci` green; handover.
+- [x] `make ci` green; handover.
 
 ### M3 — presets, polish, docs
 
-- [ ] `configpresets.ts` filled out and wired into every *Add* menu; the
+- [x] `configpresets.ts` filled out and wired into every *Add* menu; the
   *No project file yet* state of the old editor becomes the Fields tab's
   empty state: *Start from the default* writes the whole default file
   through one save (a `PUT /api/config/fields`-like whole-default route or
   the existing `PUT /api/config` — decided when built, default: the raw
   route, it is exactly what it is for).
-- [ ] Dirty-tab guard, empty states, narrow layout (the `@container`
+- [x] Dirty-tab guard, empty states, narrow layout (the `@container`
   patterns `ConfigEditor` already uses), keyboard pass, contrast pass
   (EPFL tokens only, no raw hex/px — same rules as the rest of the app).
-- [ ] `docs/guide/configuration.md`: each section's heading gains its
+- [x] `docs/guide/configuration.md`: each section's heading gains its
   settings address ("Settings › Fields"); the Overview card's words.
-- [ ] `make ci` green; final review and handover.
+- [x] `make ci` green; final review and handover.
 
 ## Risks and rulings
 
