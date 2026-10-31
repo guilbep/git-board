@@ -17,167 +17,173 @@
       stands on GitHub. A label an issue can carry only one of (a priority, a kind) is a field's option, in <router-link to="/settings/fields">Fields</router-link>.
     </p>
 
-    <p v-if="modelError" class="epfl-alert epfl-alert-danger" role="alert">{{ modelError }}</p>
+    <div class="set-cols">
+      <div class="set-forms">
+        <p v-if="modelError" class="epfl-alert epfl-alert-danger" role="alert">{{ modelError }}</p>
 
-    <!-- the [labels] table, as the forms hold it -->
-    <section v-if="labelsDraft.value.value" class="lb-own" aria-labelledby="lb-own">
-      <h3 id="lb-own" class="h5">The project's plain labels</h3>
-      <ConfigRows :rows="labelsDraft.value.value.list" add-label="Add a label" @update="labelsDraft.value.value.list = $event" @add="labelsDraft.value.value.list = [...labelsDraft.value.value.list, '']">
-        <template #row="{ row, set }">
-          <input :value="row" class="lb-tag" placeholder="needs-design" spellcheck="false" aria-label="A plain label" @input="set(inputValue($event))" />
-        </template>
-        <template #extra>
-          <ConfigPreset label="From the preset" :presets="[labelsPreset]" @pick="labelsDraft.value.value.list = [...labelsDraft.value.value.list, ...labelsPreset.value.list]" />
-        </template>
-      </ConfigRows>
-      <p class="gb-hint">
-        The order the issue's head offers them as checkboxes, never as free text. A label with a colon (<code>prio:p1</code>) is a field's value; a kind is the kind field's — both refused.
-      </p>
-      <details class="lb-more" :open="labelsDraft.value.value.colors.length > 0">
-        <summary>Colors <span class="lb-count">{{ labelsDraft.value.value.colors.length }}</span></summary>
-        <ConfigRows :rows="labelsDraft.value.value.colors" add-label="Add a color" @update="labelsDraft.value.value.colors = $event" @add="labelsDraft.value.value.colors = [...labelsDraft.value.value.colors, { k: '', v: 'grey' }]">
-          <template #row="{ row, set }">
-            <div class="lb-pair">
-              <input :value="row.k" class="lb-tag" list="lb-label-names" spellcheck="false" aria-label="Label" @input="set({ ...row, k: inputValue($event) })" />
-              <select :value="row.v" class="lb-tag lb-tiny" aria-label="Color" @change="set({ ...row, v: inputValue($event) })">
-                <option v-for="c in palette" :key="c" :value="c">{{ c }}</option>
-                <option v-if="row.v && !palette.includes(row.v)" :value="row.v">{{ row.v }}</option>
-              </select>
-            </div>
-          </template>
-        </ConfigRows>
-        <datalist id="lb-label-names"><option v-for="l in labelsDraft.value.value.list" :key="l" :value="l" /></datalist>
-      </details>
-      <details class="lb-more" :open="labelsDraft.value.value.descriptions.length > 0">
-        <summary>Descriptions <span class="lb-count">{{ labelsDraft.value.value.descriptions.length }}</span></summary>
-        <ConfigRows :rows="labelsDraft.value.value.descriptions" add-label="Add a description" @update="labelsDraft.value.value.descriptions = $event" @add="labelsDraft.value.value.descriptions = [...labelsDraft.value.value.descriptions, { k: '', v: '' }]">
-          <template #row="{ row, set }">
-            <div class="lb-pair">
-              <input :value="row.k" class="lb-tag" list="lb-label-names" spellcheck="false" aria-label="Label" @input="set({ ...row, k: inputValue($event) })" />
-              <input :value="row.v" class="lb-desc" placeholder="what the label means" aria-label="Description" @input="set({ ...row, v: inputValue($event) })" />
-            </div>
-          </template>
-        </ConfigRows>
-      </details>
-      <ConfigSaveBar
-        section="labels"
-        :dirty="labelsDraft.dirty.value"
-        :saving="labelsDraft.saving.value"
-        :saved="labelsDraft.saved.value"
-        :valid="true"
-        :error="labelsDraft.saveError.value"
-        :conflict="labelsDraft.conflict.value"
-        :state="`${labelsDraft.value.value.list.length} label${labelsDraft.value.value.list.length === 1 ? '' : 's'}`"
-        @save="labelsDraft.save()"
-        @discard="resetLabels"
-        @reload="labelsDraft.load()"
-      />
-    </section>
-
-    <p v-if="error" ref="errorEl" class="epfl-alert epfl-alert-danger" role="alert">{{ error }}</p>
-    <p v-for="e in errors" :key="e.repo" class="epfl-alert epfl-alert-warning" role="alert">{{ e.repo }}: {{ e.message }}</p>
-    <p v-if="result" ref="resultEl" class="epfl-alert epfl-alert-success" role="status">{{ result }}</p>
-    <p v-if="!d && !error" class="lb-muted">Loading…</p>
-
-    <template v-if="d">
-      <p v-if="!d.repos.length" class="lb-muted">No GitHub repository: set <code>[repos]</code> in the project file, or an origin on GitHub.</p>
-      <p v-if="!d.rows.length" class="lb-muted">The project file defines no label yet: no field with options, no sprint, no kind, no <code>[labels] list</code>.</p>
-      <div v-else class="gb-table-wrap">
-        <table class="gb-table">
-          <thead>
-            <tr>
-              <th>Label</th>
-              <th>Description</th>
-              <th>Open issues</th>
-              <th v-for="r in d.repos" :key="r">{{ r }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="row in d.rows" :key="row.name">
-              <td><span class="lb-name"><span class="gb-dot" :style="dot(row.color)" />{{ row.name }}</span></td>
-              <td class="lb-muted">{{ row.description }}</td>
-              <td>{{ row.count }}</td>
-              <td v-for="(g, i) in cells(row)" :key="i">
-                <span v-if="!g" class="lb-muted">—</span>
-                <div v-else class="lb-gh">
-                  <span :class="`lb-${g.state}`">{{ stateText[g.state] }}</span>
-                  <template v-if="g.state === 'color' || g.state === 'description'">
-                    <span class="lb-name lb-muted"><span class="gb-dot" :style="dot(g.color)" />{{ g.description || 'No description' }}</span>
-                    <button type="button" class="gb-linkbtn" :disabled="!!busy" @click="adopt(row, g)">Adopt</button>
-                  </template>
+        <!-- the [labels] table, as the forms hold it -->
+        <section v-if="labelsDraft.value.value" class="lb-own" aria-labelledby="lb-own">
+          <h3 id="lb-own" class="h5">The project's plain labels</h3>
+          <ConfigRows :rows="labelsDraft.value.value.list" add-label="Add a label" @update="labelsDraft.value.value.list = $event" @add="labelsDraft.value.value.list = [...labelsDraft.value.value.list, '']">
+            <template #row="{ row, set }">
+              <input :value="row" class="lb-tag" placeholder="needs-design" spellcheck="false" aria-label="A plain label" @input="set(inputValue($event))" />
+            </template>
+            <template #extra>
+              <ConfigPreset label="From the preset" :presets="[labelsPreset]" @pick="labelsDraft.value.value.list = [...labelsDraft.value.value.list, ...labelsPreset.value.list]" />
+            </template>
+          </ConfigRows>
+          <p class="gb-hint">
+            The order the issue's head offers them as checkboxes, never as free text. A label with a colon (<code>prio:p1</code>) is a field's value; a kind is the kind field's — both refused.
+          </p>
+          <details class="lb-more" :open="labelsDraft.value.value.colors.length > 0">
+            <summary>Colors <span class="lb-count">{{ labelsDraft.value.value.colors.length }}</span></summary>
+            <ConfigRows :rows="labelsDraft.value.value.colors" add-label="Add a color" @update="labelsDraft.value.value.colors = $event" @add="labelsDraft.value.value.colors = [...labelsDraft.value.value.colors, { k: '', v: 'grey' }]">
+              <template #row="{ row, set }">
+                <div class="lb-pair">
+                  <input :value="row.k" class="lb-tag" list="lb-label-names" spellcheck="false" aria-label="Label" @input="set({ ...row, k: inputValue($event) })" />
+                  <select :value="row.v" class="lb-tag lb-tiny" aria-label="Color" @change="set({ ...row, v: inputValue($event) })">
+                    <option v-for="c in palette" :key="c" :value="c">{{ c }}</option>
+                    <option v-if="row.v && !palette.includes(row.v)" :value="row.v">{{ row.v }}</option>
+                  </select>
                 </div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+              </template>
+            </ConfigRows>
+            <datalist id="lb-label-names"><option v-for="l in labelsDraft.value.value.list" :key="l" :value="l" /></datalist>
+          </details>
+          <details class="lb-more" :open="labelsDraft.value.value.descriptions.length > 0">
+            <summary>Descriptions <span class="lb-count">{{ labelsDraft.value.value.descriptions.length }}</span></summary>
+            <ConfigRows :rows="labelsDraft.value.value.descriptions" add-label="Add a description" @update="labelsDraft.value.value.descriptions = $event" @add="labelsDraft.value.value.descriptions = [...labelsDraft.value.value.descriptions, { k: '', v: '' }]">
+              <template #row="{ row, set }">
+                <div class="lb-pair">
+                  <input :value="row.k" class="lb-tag" list="lb-label-names" spellcheck="false" aria-label="Label" @input="set({ ...row, k: inputValue($event) })" />
+                  <input :value="row.v" class="lb-desc" placeholder="what the label means" aria-label="Description" @input="set({ ...row, v: inputValue($event) })" />
+                </div>
+              </template>
+            </ConfigRows>
+          </details>
+          <ConfigSaveBar
+            section="labels"
+            :dirty="labelsDraft.dirty.value"
+            :saving="labelsDraft.saving.value"
+            :saved="labelsDraft.saved.value"
+            :valid="true"
+            :error="labelsDraft.saveError.value"
+            :conflict="labelsDraft.conflict.value"
+            :state="`${labelsDraft.value.value.list.length} label${labelsDraft.value.value.list.length === 1 ? '' : 's'}`"
+            @save="labelsDraft.save()"
+            @discard="resetLabels"
+            @reload="labelsDraft.load()"
+          />
+        </section>
+
+        <p v-if="error" ref="errorEl" class="epfl-alert epfl-alert-danger" role="alert">{{ error }}</p>
+        <p v-for="e in errors" :key="e.repo" class="epfl-alert epfl-alert-warning" role="alert">{{ e.repo }}: {{ e.message }}</p>
+        <p v-if="result" ref="resultEl" class="epfl-alert epfl-alert-success" role="status">{{ result }}</p>
+        <p v-if="!d && !error" class="lb-muted">Loading…</p>
+
+        <template v-if="d">
+          <p v-if="!d.repos.length" class="lb-muted">No GitHub repository: set <code>[repos]</code> in the project file, or an origin on GitHub.</p>
+          <p v-if="!d.rows.length" class="lb-muted">The project file defines no label yet: no field with options, no sprint, no kind, no <code>[labels] list</code>.</p>
+          <div v-else class="gb-table-wrap">
+            <table class="gb-table">
+              <thead>
+                <tr>
+                  <th>Label</th>
+                  <th>Description</th>
+                  <th>Open issues</th>
+                  <th v-for="r in d.repos" :key="r">{{ r }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="row in d.rows" :key="row.name">
+                  <td><span class="lb-name"><span class="gb-dot" :style="dot(row.color)" />{{ row.name }}</span></td>
+                  <td class="lb-muted">{{ row.description }}</td>
+                  <td>{{ row.count }}</td>
+                  <td v-for="(g, i) in cells(row)" :key="i">
+                    <span v-if="!g" class="lb-muted">—</span>
+                    <div v-else class="lb-gh">
+                      <span :class="`lb-${g.state}`">{{ stateText[g.state] }}</span>
+                      <template v-if="g.state === 'color' || g.state === 'description'">
+                        <span class="lb-name lb-muted"><span class="gb-dot" :style="dot(g.color)" />{{ g.description || 'No description' }}</span>
+                        <button type="button" class="gb-linkbtn" :disabled="!!busy" @click="adopt(row, g)">Adopt</button>
+                      </template>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- a repository GitHub didn't answer for: nothing to compare, nothing to send -->
+          <template v-if="d.repos.length && d.rows.length && !errors.length">
+            <div v-if="plan" class="lb-confirm" role="alert">
+              <p v-if="!plan.length"><b>GitHub has every label as the file says.</b></p>
+              <template v-else>
+                <p><b>Send to GitHub: {{ changes(plan.length) }}</b></p>
+                <ul>
+                  <li v-for="c in plan" :key="c.repo + c.name"><code>{{ c.repo }}</code> {{ changeText(c) }}</li>
+                </ul>
+              </template>
+              <div class="lb-actions">
+                <button v-if="plan.length" type="button" class="epfl-btn epfl-btn-primary" :disabled="!!busy" @click="send">{{ busy === 'send' ? 'Sending…' : `Send ${changes(plan.length)}` }}</button>
+                <button type="button" class="epfl-btn epfl-btn-secondary" :disabled="!!busy" @click="plan = null">{{ plan.length ? 'Cancel' : 'Close' }}</button>
+              </div>
+            </div>
+            <div v-else class="lb-actions">
+              <button type="button" class="epfl-btn epfl-btn-primary" :disabled="!!busy" @click="preview">{{ busy === 'preview' ? 'Reading GitHub…' : 'Send to GitHub' }}</button>
+            </div>
+            <p class="gb-hint">Creates the missing labels and updates the colors and descriptions the file sets. A label the file doesn't define is never changed.</p>
+          </template>
+        </template>
+
+        <section class="lb-lint" aria-labelledby="lb-lint">
+          <h3 id="lb-lint" class="h5">Lint</h3>
+          <p class="lb-muted">What <code>git board lint</code> finds in the issues, then the GitHub labels outside the project's.</p>
+          <p v-if="!lint" class="lb-muted">Loading…</p>
+          <template v-else>
+            <p v-if="!lint.findings.length" class="lb-muted">No finding.</p>
+            <div v-for="g in byCheck(lint.findings)" :key="g.check" class="lb-check">
+              <h4 class="lb-check-name">{{ g.check }} · {{ issues(g.findings.length) }}</h4>
+              <ul>
+                <li v-for="(f, i) in g.findings" :key="i">
+                  <template v-if="f.issue_id"><router-link :to="`/issues/${f.issue_id}`">{{ f.title }}</router-link>: </template>{{ f.message }}
+                </li>
+              </ul>
+            </div>
+
+            <h4 class="lb-check-name">On GitHub, outside the project's labels</h4>
+            <p v-if="!lint.stray.length" class="lb-muted">None.</p>
+            <div v-else class="gb-table-wrap">
+              <table class="gb-table">
+                <thead>
+                  <tr><th>Repository</th><th>Label</th><th>Description</th><th>Issues here</th><th /></tr>
+                </thead>
+                <tbody>
+                  <tr v-for="s in lint.stray" :key="s.repo + s.name">
+                    <td><code>{{ s.repo }}</code></td>
+                    <td><span class="lb-name"><span class="gb-dot" :style="dot(s.color)" />{{ s.name }}</span></td>
+                    <td class="lb-muted">{{ s.description }}</td>
+                    <td>{{ s.count }}</td>
+                    <td>
+                      <div v-if="deleting?.label === s" class="lb-confirm lb-confirm-row" role="alert">
+                        <p><b>{{ deleteConfirm(s.repo, s.name, deleting.count) }}</b></p>
+                        <div class="lb-actions">
+                          <button type="button" class="epfl-btn epfl-btn-primary epfl-btn-sm" :disabled="!!busy" @click="remove(s)">{{ busy === 'delete' ? 'Deleting…' : 'Delete' }}</button>
+                          <button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" :disabled="!!busy" @click="deleting = null">Cancel</button>
+                        </div>
+                      </div>
+                      <button v-else type="button" class="gb-linkbtn" :disabled="!!busy" @click="askDelete(s)">{{ busy === 'count' && asked === s ? 'Counting…' : 'Delete' }}</button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </template>
+        </section>
       </div>
 
-      <!-- a repository GitHub didn't answer for: nothing to compare, nothing to send -->
-      <template v-if="d.repos.length && d.rows.length && !errors.length">
-        <div v-if="plan" class="lb-confirm" role="alert">
-          <p v-if="!plan.length"><b>GitHub has every label as the file says.</b></p>
-          <template v-else>
-            <p><b>Send to GitHub: {{ changes(plan.length) }}</b></p>
-            <ul>
-              <li v-for="c in plan" :key="c.repo + c.name"><code>{{ c.repo }}</code> {{ changeText(c) }}</li>
-            </ul>
-          </template>
-          <div class="lb-actions">
-            <button v-if="plan.length" type="button" class="epfl-btn epfl-btn-primary" :disabled="!!busy" @click="send">{{ busy === 'send' ? 'Sending…' : `Send ${changes(plan.length)}` }}</button>
-            <button type="button" class="epfl-btn epfl-btn-secondary" :disabled="!!busy" @click="plan = null">{{ plan.length ? 'Cancel' : 'Close' }}</button>
-          </div>
-        </div>
-        <div v-else class="lb-actions">
-          <button type="button" class="epfl-btn epfl-btn-primary" :disabled="!!busy" @click="preview">{{ busy === 'preview' ? 'Reading GitHub…' : 'Send to GitHub' }}</button>
-        </div>
-        <p class="gb-hint">Creates the missing labels and updates the colors and descriptions the file sets. A label the file doesn't define is never changed.</p>
-      </template>
-    </template>
-
-    <section class="lb-lint" aria-labelledby="lb-lint">
-      <h3 id="lb-lint" class="h5">Lint</h3>
-      <p class="lb-muted">What <code>git board lint</code> finds in the issues, then the GitHub labels outside the project's.</p>
-      <p v-if="!lint" class="lb-muted">Loading…</p>
-      <template v-else>
-        <p v-if="!lint.findings.length" class="lb-muted">No finding.</p>
-        <div v-for="g in byCheck(lint.findings)" :key="g.check" class="lb-check">
-          <h4 class="lb-check-name">{{ g.check }} · {{ issues(g.findings.length) }}</h4>
-          <ul>
-            <li v-for="(f, i) in g.findings" :key="i">
-              <template v-if="f.issue_id"><router-link :to="`/issues/${f.issue_id}`">{{ f.title }}</router-link>: </template>{{ f.message }}
-            </li>
-          </ul>
-        </div>
-
-        <h4 class="lb-check-name">On GitHub, outside the project's labels</h4>
-        <p v-if="!lint.stray.length" class="lb-muted">None.</p>
-        <div v-else class="gb-table-wrap">
-          <table class="gb-table">
-            <thead>
-              <tr><th>Repository</th><th>Label</th><th>Description</th><th>Issues here</th><th /></tr>
-            </thead>
-            <tbody>
-              <tr v-for="s in lint.stray" :key="s.repo + s.name">
-                <td><code>{{ s.repo }}</code></td>
-                <td><span class="lb-name"><span class="gb-dot" :style="dot(s.color)" />{{ s.name }}</span></td>
-                <td class="lb-muted">{{ s.description }}</td>
-                <td>{{ s.count }}</td>
-                <td>
-                  <div v-if="deleting?.label === s" class="lb-confirm lb-confirm-row" role="alert">
-                    <p><b>{{ deleteConfirm(s.repo, s.name, deleting.count) }}</b></p>
-                    <div class="lb-actions">
-                      <button type="button" class="epfl-btn epfl-btn-primary epfl-btn-sm" :disabled="!!busy" @click="remove(s)">{{ busy === 'delete' ? 'Deleting…' : 'Delete' }}</button>
-                      <button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" :disabled="!!busy" @click="deleting = null">Cancel</button>
-                    </div>
-                  </div>
-                  <button v-else type="button" class="gb-linkbtn" :disabled="!!busy" @click="askDelete(s)">{{ busy === 'count' && asked === s ? 'Counting…' : 'Delete' }}</button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </template>
-    </section>
+      <ConfigRefPanel :sections="['labels']" title="the [labels] table, adopt, lint" />
+    </div>
   </div>
 </template>
 
@@ -188,6 +194,7 @@ import { labelsPreset } from '@/configpresets';
 import { configModel, configModelError, loadConfigModel, SectionDraft, inputValue } from '@/configmodel';
 import ConfigPreset from '@/components/configforms/ConfigPreset.vue';
 import ConfigRows from '@/components/configforms/ConfigRows.vue';
+import ConfigRefPanel from '@/components/configforms/ConfigRefPanel.vue';
 import ConfigSaveBar from '@/components/configforms/ConfigSaveBar.vue';
 import { message } from '@/issue';
 import { byCheck, changeText, deleteConfirm, stateText } from '@/labels';

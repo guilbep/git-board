@@ -14,7 +14,7 @@ const allowed = new Set(['ImageLightbox.vue']);
 const dir = join(import.meta.dirname, 'components');
 const files = readdirSync(dir).filter((f) => f.endsWith('.vue'));
 
-test('the settings' + ' components never bind model-value on native elements', () => {
+test('the settings components never bind model-value on native elements', () => {
   const bad: string[] = [];
   for (const f of files) {
     if (allowed.has(f)) continue;
@@ -24,15 +24,19 @@ test('the settings' + ' components never bind model-value on native elements', (
   assert.deepEqual(bad, []);
 });
 
-test('the settings' + ' row inputs read the value out of the event', () => {
+test('the settings row inputs read the value out of the event', () => {
   // @input="set(x: $event)" stores the event, not the text: the value goes
-  // through inputValue($event) or ($event.target as HTMLInputElement).value
+  // through inputValue($event) or ($event.target as HTMLInputElement).value.
+  // Scoped to the settings' forms — a view may pass the event on purpose
+  // (IssueBoard's moveAll reads the target and resets the select itself).
   const bare: string[] = [];
   for (const f of files) {
     if (allowed.has(f)) continue;
     const lines = readFileSync(join(dir, f), 'utf8').split('\n');
+    const text = lines.join('\n');
+    if (!/configforms\/|@\/configmodel/.test(text)) continue;
     lines.forEach((line, i) => {
-      if (/@input="[^"]*\$event/.test(line) && !/inputValue\(\$event\)|\$event\.target|\(\$event\)/.test(line)) {
+      if (/@(?:input|change)="[^"]*\$event/.test(line) && !/inputValue\(\$event\)|\$event\.target|\(\$event\)/.test(line)) {
         bare.push(`${f}:${i + 1}`);
       }
     });

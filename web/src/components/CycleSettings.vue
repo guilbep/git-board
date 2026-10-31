@@ -15,7 +15,7 @@
     </p>
 
     <div class="set-cols">
-      <div class="set-main">
+      <div class="set-forms">
         <p v-if="modelError" class="epfl-alert epfl-alert-danger" role="alert">{{ modelError }}</p>
         <p v-else-if="!draft.value.value" class="cs-muted">Loading…</p>
 
@@ -131,7 +131,7 @@
 
       </div>
 
-      <ConfigRefPanel :sections="['cycle', 'kinds']" title="the cycle's stages, the suites" />
+      <ConfigRefPanel :sections="['cycle']" title="the cycle's stages, the suites" />
     </div>
   </div>
 </template>
@@ -315,7 +315,7 @@ onMounted(() => void draft.load());
 .set-panel { display: grid; gap: .75rem; container-type: inline-size; }
 /* the forms left, the reference right, like the old editor; one column when narrow */
 .set-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: .75rem; align-items: start; }
-.set-main { display: grid; gap: .75rem; min-width: 0; }
+.set-forms { display: grid; gap: .75rem; min-width: 0; }
 @container (max-width: 52rem) { .set-cols { grid-template-columns: minmax(0, 1fr); } }
 h2, h3, p { margin: 0; }
 .cs-lead { max-width: 42rem; color: var(--fg-muted); }
