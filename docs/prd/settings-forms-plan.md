@@ -262,26 +262,26 @@ tests as above. `make ci` green per milestone.
 
 ### M1 — the plumbing and the board's core sections
 
-- [ ] Task 0: this plan, first commit on `feat/settings-forms`.
-- [ ] `internal/config`: `SetFieldsText`, `SetRolesText`, `SetLabelsListText`,
+- [x] Task 0: this plan, first commit on `feat/settings-forms`.
+- [x] `internal/config`: `SetFieldsText`, `SetRolesText`, `SetLabelsListText`,
   `SetSprintsText`, `DeleteViewText` + tests (round-trip, comments kept,
   append/remove/rename).
-- [ ] `internal/server/configsections.go`: `GET /api/config/model`,
+- [x] `internal/server/configsections.go`: `GET /api/config/model`,
   `PUT /api/config/{section}` for fields, labels, views, sprints, roles;
   tests.
-- [ ] `web/src/configmodel.ts` + tests; `settingstabs.ts` the new tab list
+- [x] `web/src/configmodel.ts` + tests; `settingstabs.ts` the new tab list
   and redirects; `SettingsPage.vue` renders the group; the shared
   `configforms/` bits including the **Reference panel** (folded, the
   `/api/config/docs` sections rendered as the old editor did).
-- [ ] `FieldsSettings.vue` (with the types select and the palette-picker
+- [x] `FieldsSettings.vue` (with the types select and the palette-picker
   color rows), `RolesSettings.vue`, `SprintsSettings.vue`,
   `ViewsSettings.vue` (with the filter-syntax reference beside the filter
   input), `LabelsSettings.vue` extended with the `[labels]` forms; Adopt
   switches to `PUT /api/config/fields`; `configdraft.ts` retired from
   everything but the Advanced tab.
-- [ ] Old links re-pointed (`ReleasesPage`, `LabelPicker`, `LabelsSettings`,
+- [x] Old links re-pointed (`ReleasesPage`, `LabelPicker`, `LabelsSettings`,
   the board's Save-view bar); Overview's project-file card lists sections.
-- [ ] `make ci` green; a handover note.
+- [x] `make ci` green; a handover note.
 
 ### M2 — the work: branches, cycle, repos, attachments, release
 

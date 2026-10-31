@@ -112,6 +112,16 @@
       <NumbersSettings v-if="tab === 'numbers'" @changed="numbers = $event" />
       <WorktreesSettings v-if="tab === 'worktrees'" @changed="worktrees = $event" />
 
+      <!-- the sections whose forms come in the next milestone (the plan's
+           M2): their tab is there, the file itself holds them meanwhile -->
+      <div v-if="['branches', 'cycle', 'release', 'repos'].includes(tab)" class="set-panel">
+        <h2 class="h4">{{ groups.flatMap((g) => g.tabs).find((t) => t.id === tab)?.label }}</h2>
+        <p>
+          Its forms are on their way — the next milestone of <code>docs/prd/settings-forms-plan.md</code>. Until then the section is
+          yours in the file itself: <router-link to="/settings/advanced">Advanced</router-link>.
+        </p>
+      </div>
+
       <div v-if="tab === 'attachments'" class="set-panel">
         <h2 class="h4">Attachments</h2>
         <p v-if="settings?.uploads.enabled">
