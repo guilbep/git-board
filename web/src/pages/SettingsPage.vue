@@ -28,7 +28,7 @@
     <main class="set-main">
       <p v-if="error" class="epfl-alert epfl-alert-danger" role="alert">{{ error }}</p>
 
-      <div v-if="tab === 'overview'" class="set-panel">
+      <div v-if="tab === 'overview'" class="set-wrap">
         <div class="set-about">
           <h2 class="h4">git-board</h2>
           <p>
@@ -48,7 +48,7 @@
         </ul>
       </div>
 
-      <div v-if="tab === 'you'" class="set-panel">
+      <div v-if="tab === 'you'" class="set-wrap">
         <h2 class="h4">You</h2>
         <section aria-labelledby="set-me">
           <h3 id="set-me" class="h5">Who you write as</h3>
@@ -92,18 +92,18 @@
       <!-- the project file, a tab per section: each form drafts its own
            section and saves it alone, the file's other lines untouched.
            v-show: switching tabs keeps an unsaved draft. -->
-      <div v-show="tab === 'fields'" class="set-panel set-panel-wide"><FieldsSettings /></div>
-      <div v-show="tab === 'labels'" class="set-panel set-panel-wide"><LabelsSettings @changed="labels = $event" /></div>
-      <div v-show="tab === 'views'" class="set-panel set-panel-wide"><ViewsSettings /></div>
-      <div v-show="tab === 'sprints'" class="set-panel set-panel-wide"><SprintsSettings /></div>
-      <div v-show="tab === 'roles'" class="set-panel set-panel-wide"><RolesSettings /></div>
-      <div v-show="tab === 'branches'" class="set-panel set-panel-wide"><BranchesSettings /></div>
-      <div v-show="tab === 'cycle'" class="set-panel set-panel-wide"><CycleSettings /></div>
-      <div v-show="tab === 'release'" class="set-panel set-panel-wide"><ReleaseSettings /></div>
-      <div v-show="tab === 'repos'" class="set-panel set-panel-wide"><ReposSettings /></div>
-      <div v-show="tab === 'attachments'" class="set-panel set-panel-wide"><AttachmentsSettings /></div>
+      <div v-show="tab === 'fields'" class="set-wrap set-wrap-wide"><FieldsSettings /></div>
+      <div v-show="tab === 'labels'" class="set-wrap set-wrap-wide"><LabelsSettings @changed="labels = $event" /></div>
+      <div v-show="tab === 'views'" class="set-wrap set-wrap-wide"><ViewsSettings /></div>
+      <div v-show="tab === 'sprints'" class="set-wrap set-wrap-wide"><SprintsSettings /></div>
+      <div v-show="tab === 'roles'" class="set-wrap set-wrap-wide"><RolesSettings /></div>
+      <div v-show="tab === 'branches'" class="set-wrap set-wrap-wide"><BranchesSettings /></div>
+      <div v-show="tab === 'cycle'" class="set-wrap set-wrap-wide"><CycleSettings /></div>
+      <div v-show="tab === 'release'" class="set-wrap set-wrap-wide"><ReleaseSettings /></div>
+      <div v-show="tab === 'repos'" class="set-wrap set-wrap-wide"><ReposSettings /></div>
+      <div v-show="tab === 'attachments'" class="set-wrap set-wrap-wide"><AttachmentsSettings /></div>
       <!-- Advanced: the file itself, for what the forms don't cover -->
-      <div v-show="tab === 'advanced'" class="set-panel set-panel-wide">
+      <div v-show="tab === 'advanced'" class="set-wrap set-wrap-wide">
         <p v-if="cycleView && settings?.cycle.guessed && settings.cycle.closing" class="gb-hint">
           The cycle's stages are guessed from the status names: ready <code>{{ settings.cycle.ready || '—' }}</code>, in progress <code>{{ settings.cycle.in_progress.join(', ') || '—' }}</code>,
           in review <code>{{ settings.cycle.in_review.join(', ') || '—' }}</code>, validation <code>{{ settings.cycle.validation.join(', ') || '—' }}</code>, closing <code>{{ settings.cycle.closing || '—' }}</code>.
@@ -282,10 +282,10 @@ onBeforeUnmount(offLive);
 /* the content column, capped and centered: two 50/50 columns stretch
    absurdly past ~1400px, the forms go limp and the reference's lines run */
 .set-main { flex: 1; min-width: 0; max-width: 87.5rem; margin-inline: auto; }
-.set-panel { display: flex; flex-direction: column; gap: 1.25rem; max-width: 64rem; }
-.set-panel-wide { max-width: none; }
-.set-panel h2, .set-panel h3, .set-panel p { margin: 0; }
-.set-panel section { display: grid; gap: .5rem; }
+.set-wrap { display: flex; flex-direction: column; gap: 1.25rem; max-width: 64rem; }
+.set-wrap-wide { max-width: none; }
+.set-wrap h2, .set-wrap h3, .set-wrap p { margin: 0; }
+.set-wrap section { display: grid; gap: .5rem; }
 .set-lead { max-width: 40rem; color: var(--fg-muted); }
 .set-about { display: grid; gap: .625rem; max-width: 46rem; }
 .set-about p { font-size: 1.0625rem; }

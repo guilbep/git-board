@@ -220,6 +220,7 @@ onMounted(() => void load());
 </script>
 
 <style scoped>
+.set-panel { display: flex; flex-direction: column; gap: 1.25rem; max-width: 64rem; }
 .wk h2, .wk h3, .wk h4, .wk p { margin: 0; }
 .wk-lead { max-width: 40rem; color: var(--fg-muted); }
 .wk-muted { color: var(--fg-muted); }

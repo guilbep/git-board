@@ -564,6 +564,7 @@ onMounted(() => {
 </script>
 
 <style scoped>
+.set-panel { display: flex; flex-direction: column; gap: 1.25rem; max-width: 64rem; }
 .sy h2, .sy h3, .sy p { margin: 0; }
 .sy-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 1rem; }
 .sy-head h2 { margin-bottom: .375rem; }
