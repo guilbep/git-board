@@ -34,73 +34,7 @@ func SetViewText(text, name string, v View) (string, error) {
 			vals[k] = "" // empty: no line
 		}
 	}
-	header := "[views." + name + "]"
-
-	lines := strings.Split(text, "\n")
-	start := -1
-	for i, l := range lines {
-		if strings.TrimSpace(l) == header {
-			start = i
-			break
-		}
-	}
-	if start < 0 {
-		var b strings.Builder
-		b.WriteString(header + "\n")
-		for _, k := range keys {
-			if vals[k] != "" {
-				b.WriteString(k + " = " + vals[k] + "\n")
-			}
-		}
-		if base := strings.TrimRight(text, "\n"); base != "" {
-			return base + "\n\n" + b.String(), nil
-		}
-		return b.String(), nil
-	}
-
-	end := len(lines)
-	for i := start + 1; i < len(lines); i++ {
-		if strings.HasPrefix(strings.TrimSpace(lines[i]), "[") {
-			end = i
-			break
-		}
-	}
-	var block []string
-	seen := map[string]bool{}
-	lastKey := -1 // in block: where missing keys go
-	for _, l := range lines[start+1 : end] {
-		m := keyLine.FindStringSubmatch(l)
-		if m == nil {
-			block = append(block, l)
-			continue
-		}
-		k := m[2]
-		want, ours := vals[k]
-		if !ours {
-			block = append(block, l)
-			lastKey = len(block) - 1
-			continue
-		}
-		seen[k] = true
-		if want == "" {
-			continue
-		}
-		if m[3] != want && unquote(m[3]) != unquote(want) {
-			l = m[1] + want + m[4]
-		}
-		block = append(block, l)
-		lastKey = len(block) - 1
-	}
-	var missing []string
-	for _, k := range keys {
-		if !seen[k] && vals[k] != "" {
-			missing = append(missing, k+" = "+vals[k])
-		}
-	}
-	block = append(block[:lastKey+1], append(missing, block[lastKey+1:]...)...)
-
-	out := append(append(append([]string{}, lines[:start+1]...), block...), lines[end:]...)
-	return strings.Join(out, "\n"), nil
+	return setTableKeys(text, "[views."+name+"]", keys, vals, false), nil
 }
 
 // tomlArray writes strings as a TOML array, "" for none.
