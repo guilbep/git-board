@@ -127,6 +127,13 @@ clean on every file touched):
   Fit's width (`--gb-prose`); the bar's crumb and a paragraph lose the
   browser's margins; a loose checklist's boxes hang.
 
+**2026-10-31, the second pass.** Finished in `docs/prd/issue-head.md` and
+its plan, `docs/prd/issue-head-m2-plan.md`: W0-2, W0-9, W0-10, E-* for the
+head's files, W2-2, W3-1, W3-4 and W3-6 landed there as H-7, H-3, H-9, H-8,
+H-4, H-11, H-6 and H-5; D-1 there too. Left from this plan: W0-8 (✓ ✗ ● in
+`WorktreesSettings.vue`, the side column's are gone with it), W2-7's
+*Resolve*, and E-* for the other files `make web-lint` names.
+
 ## The milestones
 
 | ID | Milestone | Wave | Needs | Decision | Size |

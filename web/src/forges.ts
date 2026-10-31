@@ -2,11 +2,21 @@
 // and the sync page. While a run goes on it's polled; edits refused
 // meanwhile wait for its end (issue.ts).
 import { ref } from 'vue';
-import { getForges, type ForgeStatus, type Issue } from '@/api/board';
+import { getForges, type ForgeStatus, type Issue, type IssueSyncResult } from '@/api/board';
 import { forgeNumbers } from '@/issuesync';
 import type { LiveEvent } from '@/live';
 
 export const forgeStatus = ref<ForgeStatus | null>(null);
+
+// Each issue's last run from its forge popover: Refresh, a dry run of that
+// issue alone, or its real run after it. The bar's "changed on both sides"
+// and "new there" read a check, and "out of reach" either, until a whole
+// run is done after it (forgestate.ts checkHolds). Kept for the page, not
+// stored: a reload asks for a Refresh again.
+export const issueChecks = ref<Record<string, IssueSyncResult>>({});
+export function noteCheck(id: string, r: IssueSyncResult): void {
+  issueChecks.value = { ...issueChecks.value, [id]: r };
+}
 
 // onStep keeps the running job's step from a progress event, as it comes:
 // the poll would show it up to 1.5 s later. One issue's own sync (e.id)

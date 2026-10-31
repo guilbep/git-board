@@ -1029,3 +1029,25 @@ nothing is stored.
 - A review thread goes to the issue's agent quoted as data
   (`internal/wtx/prompt.go`'s `Thread`, `internal/server/worktrees.go`'s
   `reviewThread`); the agent answers, a person resolves and decides.
+
+## Status update (2026-10-31): the issue head
+
+- The issue drawer's head is the one of `docs/design/issue-head/`: the bar
+  holds the issue's identity (view, position, number, the forges, the
+  inbox bell, More), one block under the title holds the status and its
+  next step, the fields, the branches, and the conversation shares a
+  column, *Fit* at 52rem or *Fill*, *Comfortable* or *Compact*, kept per
+  browser. The side column and the head before are retired.
+- Branches are named in the issue's folder, `{kind}/{number}/{n}-{slug}`,
+  `{n}` counted (`internal/branches`); git-board can make and push one
+  from the head (`POST /api/issues/{id}/branches`, localhost only); with
+  several branches the cycle runs a lane per branch (`cycle.PickLane`).
+- `[labels] list` names the labels a project uses; the head's picker
+  offers only those, `git board lint` reports `label-outside`.
+- The forges' icons say what waits, what's new there after a Refresh, a
+  forge out of reach, an issue changed on both sides.
+- Value and dark colors are token files, `web/src/css/tokens/`; `make
+  web-lint` reports the EPFL adherence linter's problems (not in `ci`).
+- Plans: `docs/prd/issue-head-plan.md` (the first pass),
+  `docs/prd/issue-head.md` and `docs/prd/issue-head-m2-plan.md` (the
+  second).

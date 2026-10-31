@@ -11,11 +11,11 @@ import (
 )
 
 // Palette is the colors a field value can take ([fields.<name>.colors]);
-// the web draws each as a tinted chip (web/src/css/gitboard.css).
+// the web draws each as a tinted chip (web/src/css/tokens/values.css).
 var Palette = []string{"grey", "blue", "purple", "amber", "orange", "green", "red", "teal", "pink"}
 
 // PaletteHex is each Palette color as its dot is drawn, the --gb-<name>-dot
-// of web/src/css/gitboard.css (TestPaletteHexMatchesCSS): what a GitHub
+// of web/src/css/tokens/values.css (TestPaletteHexMatchesCSS): what a GitHub
 // label gets for it.
 var PaletteHex = map[string]string{"grey": "8a8a8a", "blue": "3a7bc8", "purple": "8e44ad", "amber": "d99100", "orange": "e06a00",
 	"green": "4f9a1a", "red": "e00000", "teal": "00897f", "pink": "d63a8e"}

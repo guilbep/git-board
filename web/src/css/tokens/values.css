@@ -1,0 +1,18 @@
+/* git-board's value colors (config.Color, GET /api/colors), as tokens: a
+   tinted chip with strong text (6.6:1 or more), a dot or a top border for
+   columns, and the cycle's done. Raw values live here and only here, as the
+   EPFL token layer's do (make web-lint skips this folder); gitboard.css's
+   .gb-c-<color> classes use them; tokens/dark.css re-values them.
+   internal/config's PaletteHex is these dots (TestPaletteHexMatchesCSS). */
+:root{
+  --gb-grey-bg:#EEEEEE;--gb-grey-fg:#424242;--gb-grey-dot:#8A8A8A;
+  --gb-blue-bg:#E8F1FB;--gb-blue-fg:#1E4A72;--gb-blue-dot:#3A7BC8;
+  --gb-purple-bg:#F1E8FA;--gb-purple-fg:#5B2A86;--gb-purple-dot:#8E44AD;
+  --gb-amber-bg:#FDF2DC;--gb-amber-fg:#6E4D0B;--gb-amber-dot:#D99100;
+  --gb-orange-bg:#FFE9D6;--gb-orange-fg:#8A3B00;--gb-orange-dot:#E06A00;
+  --gb-green-bg:#ECFAE0;--gb-green-fg:#33531A;--gb-green-dot:#4F9A1A;
+  --gb-red-bg:#FFE5E5;--gb-red-fg:#80000C;--gb-red-dot:#E00000;
+  --gb-teal-bg:#DFF5F3;--gb-teal-fg:#00524F;--gb-teal-dot:#00897F;
+  --gb-done:#007480; /* the cycle's done: canard */
+  --gb-pink-bg:#FCE4F1;--gb-pink-fg:#8A1453;--gb-pink-dot:#D63A8E
+}

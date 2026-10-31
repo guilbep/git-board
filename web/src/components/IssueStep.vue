@@ -1,10 +1,10 @@
 <!-- The issue's frame under its title (docs/prd/time-flow.md): the step
-     bar, then one column, the sidebar beside it. The column is the tabs,
+     bar, then one column; the fields are the head's (IssueHead). The column is the tabs,
      the shown step's workspace when head (the Conversation tab), then the
      flow. The step shown is the issue's (internal/cycle), or a done one
      picked on the bar; a later step is locked and says why. The panel
      fills the slots: tabs, intent (the description, folded off Intent),
-     review (the Changes view, Review's on the page), flow, side. The bar
+     review (the Changes view, Review's on the page), flow. The bar
      is the project's list ([cycle] steps), a cell per entry. -->
 <template>
   <p v-if="error && !(here && card)" class="gb-save-error" role="alert"><GbIcon name="error" small /> {{ error }}</p>
@@ -162,9 +162,6 @@
         <slot name="flow" :cycle="cycle" :failed="!cycle && !!error" :send="send" />
       </div>
     </section>
-    <aside v-if="$slots.side" class="gb-sidebar" aria-label="Fields">
-      <slot name="side" :cycle="cycle" />
-    </aside>
   </div>
 </template>
 

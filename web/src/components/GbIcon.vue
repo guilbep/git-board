@@ -12,7 +12,7 @@ export type IconName =
   | 'close' | 'up' | 'down' | 'link' | 'expand' | 'edit' | 'check' | 'clock' | 'local' | 'tag'
   | 'user' | 'title' | 'open' | 'closed' | 'sync' | 'plus' | 'warn' | 'external' | 'error' | 'back' | 'settings' | 'filter' | 'collapse' | 'search' | 'chart' | 'inbox' | 'undo' | 'info' | 'forward' | 'lock'
   // Feather 4.29.0's, for the issue head (docs/design/issue-head)
-  | 'github' | 'gitlab' | 'bell' | 'bell-off' | 'branch' | 'pull' | 'merge' | 'cloud-off' | 'eye' | 'slash' | 'arrow-up' | 'arrow-down' | 'more' | 'copy' | 'upload' | 'align-justify';
+  | 'github' | 'gitlab' | 'bell' | 'bell-off' | 'branch' | 'pull' | 'merge' | 'cloud-off' | 'eye' | 'slash' | 'arrow-up' | 'arrow-down' | 'more' | 'copy' | 'upload' | 'align-justify' | 'maximize';
 
 defineProps<{ name: IconName; small?: boolean }>();
 
@@ -63,5 +63,6 @@ const paths: Record<IconName, string[]> = {
   copy: ['M11 9h9a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-9a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2Z', 'M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1'],
   upload: ['M16 16l-4-4-4 4', 'M12 12v9', 'M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3'],
   'align-justify': ['M21 10H3', 'M21 6H3', 'M21 14H3', 'M21 18H3'],
+  maximize: ['M8 3H5a2 2 0 0 0-2 2v3', 'M21 8V5a2 2 0 0 0-2-2h-3', 'M3 16v3a2 2 0 0 0 2 2h3', 'M16 21h3a2 2 0 0 0 2-2v-3'],
 };
 </script>

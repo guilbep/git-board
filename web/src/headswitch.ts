@@ -1,30 +1,7 @@
-// Which head the issue drawer shows (docs/prd/issue-head-plan.md, Calls
-// taken 2): the new one, v2, unless this browser asked for the one before
-// (localStorage gb-head = v1, the More menu's "Previous head"). Kept per
-// browser, as the panel's width and mode are (panelsize.ts). Goes with
-// the side column in W3-1.
+// How the issue drawer lays the issue out, kept per browser as the
+// panel's width and mode are (panelsize.ts): the bar's Fit and Fill, and
+// Comfortable and Compact (docs/design/issue-head/README.md).
 import { ref, watch } from 'vue';
-
-const KEY = 'gb-head';
-
-function read(): 'v1' | 'v2' {
-  try {
-    return localStorage.getItem(KEY) === 'v1' ? 'v1' : 'v2';
-  } catch {
-    return 'v2';
-  }
-}
-
-export const head = ref<'v1' | 'v2'>(read());
-
-watch(head, (v) => {
-  try {
-    if (v === 'v1') localStorage.setItem(KEY, 'v1');
-    else localStorage.removeItem(KEY);
-  } catch {
-    // no storage (a private window): the choice lasts the page
-  }
-});
 
 // The issue's width in the drawer, the bar's Fit and Fill: Fit, the
 // default, keeps the head and the conversation to a reading width; Fill

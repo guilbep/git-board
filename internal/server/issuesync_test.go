@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/store"
@@ -30,11 +31,16 @@ func TestIssueSync(t *testing.T) {
 	if code := call(t, "POST", ts.URL+"/api/issues/"+id+"/sync", map[string]bool{"dry_run": false}, nil); code != http.StatusConflict {
 		t.Errorf("a real run before its dry run: %d, want 409", code)
 	}
+	before := time.Now()
 	if code := call(t, "POST", ts.URL+"/api/issues/"+id+"/sync", map[string]bool{"dry_run": true}, &res); code != http.StatusOK {
 		t.Fatalf("dry run: %d", code)
 	}
 	if !res.DryRun || res.Writes != 1 || res.Bridges["gh"].To.Comments != 1 {
 		t.Errorf("dry run %+v", res)
+	}
+	// when it came back, by the server's clock: the page compares it with job.ended
+	if res.Ended.Before(before) || res.Ended.After(time.Now()) {
+		t.Errorf("ended %v, want between %v and now", res.Ended, before)
 	}
 	if _, listed := res.Bridges["gl"]; !listed {
 		t.Errorf("every sync bridge is listed, up to date or not: %v", res.Bridges)

@@ -70,16 +70,16 @@ func TestWalk(t *testing.T) {
 		{name: "ready, normal, plan accepted", in: input("ready", func(in *Input) { in.Risk = "normal"; in.Plan = &Plan{Path: "p.md", Status: "accepted"} }), step: 3, login: "erin", what: "move the status to in-progress", note: "plan approved, waits for the status in-progress"},
 		{name: "ready, low, the assignee", in: input("ready", func(in *Input) { in.Risk = "low"; in.Me = "erin" }), step: 3, login: "erin", what: "move the status to in-progress", mine: true, note: "low risk, waits for the status in-progress", skipped: []int{3}, actions: []string{"start"}},
 		{name: "ready, low", in: input("ready", risk("low")), step: 3, login: "erin", what: "move the status to in-progress", note: "low risk, waits for the status in-progress", gate: "Skipped, low risk", skipped: []int{3}},
-		{name: "ready, structural, PR approved", in: input("ready", func(in *Input) { in.Risk = "structural"; in.PlanPR = &ghpr.PR{Decision: "APPROVED"} }), step: 3, login: "erin", what: "move the status to in-progress", note: "plan approved, waits for the status in-progress", gate: "Structural: plan PR approved first"},
+		{name: "ready, structural, PR approved", in: input("ready", func(in *Input) { in.Risk = "structural"; in.PlanPR = &ghpr.PR{Decision: "APPROVED"} }), step: 3, login: "erin", what: "move the status to in-progress", note: "plan approved, waits for the status in-progress", gate: "Structural: the plan’s gate approved first"},
 		{name: "ready, structural, PR waiting", in: input("ready", func(in *Input) {
 			in.Risk = "structural"
 			in.PlanPR = &ghpr.PR{Decision: "REVIEW_REQUIRED"}
 			in.Me = "bob"
-		}), step: 3, login: "bob", what: "approve the plan PR on GitHub", mine: true},
+		}), step: 3, login: "bob", what: "approve the plan’s gate on GitHub", mine: true},
 		{name: "in-progress, no tests", in: input("in-progress", approved("normal")), step: 4, login: "erin", what: "write the tests", gate: "The touched suites green, each criterion names its test"},
 		{name: "in-progress, a bug", in: input("in-progress", func(in *Input) { approved("normal")(in); in.Kind = "bug" }), step: 4, login: "erin", what: "write the failing test", gate: "A test that fails before the fix"},
-		{name: "in-progress, a doc", in: input("in-progress", func(in *Input) { approved("normal")(in); in.Kind = "doc"; in.Me = "erin" }), step: 5, login: "erin", what: "commit and open the PR", mine: true, gate: "A human commits and opens the PR", skipped: []int{4}, actions: []string{"ready-for-review"}},
-		{name: "in-progress, tests", in: input("in-progress", func(in *Input) { approved("normal")(in); in.Tests = []TestFile{{Path: "a_test.go", Commit: "c1"}} }), step: 5, login: "erin", what: "commit and open the PR", gate: "A human commits and opens the PR"},
+		{name: "in-progress, a doc", in: input("in-progress", func(in *Input) { approved("normal")(in); in.Kind = "doc"; in.Me = "erin" }), step: 5, login: "erin", what: "commit and ask for review", mine: true, gate: "A human commits and asks for review", skipped: []int{4}, actions: []string{"ready-for-review"}},
+		{name: "in-progress, tests", in: input("in-progress", func(in *Input) { approved("normal")(in); in.Tests = []TestFile{{Path: "a_test.go", Commit: "c1"}} }), step: 5, login: "erin", what: "commit and ask for review", gate: "A human commits and asks for review"},
 		{name: "in-progress, the floor", in: input("in-progress", func(in *Input) { in.Criteria = nil }), step: 4, login: "erin", what: "write the tests", note: "risk not set"},
 		{name: "in-progress, plan not approved", in: input("in-progress", risk("normal")), step: 4, login: "erin", what: "write the tests", note: "plan not approved"},
 		{name: "in-progress, low", in: input("in-progress", risk("low")), step: 4, login: "erin", what: "write the tests", skipped: []int{3}},
@@ -87,13 +87,13 @@ func TestWalk(t *testing.T) {
 			approved("normal")(in)
 			in.Tests = []TestFile{{Path: "a_test.go"}}
 			in.PR = &ghpr.PR{Number: 3082, State: "OPEN"}
-		}), step: 5, login: "erin", what: "commit and open the PR", note: "PR #3082 open, waits for the status in-review"},
+		}), step: 5, login: "erin", what: "commit and ask for review", note: "GitHub #3082 open, waits for the status in-review"},
 		{name: "in-progress, draft PR", in: input("in-progress", func(in *Input) {
 			approved("normal")(in)
 			in.Tests = []TestFile{{Path: "a_test.go"}}
 			in.PR = &ghpr.PR{Number: 41, State: "OPEN", Draft: true}
 			in.Me = "erin"
-		}), step: 5, login: "erin", what: "commit and open the PR", mine: true, note: "draft PR #41, waits for it to be marked ready for review"},
+		}), step: 5, login: "erin", what: "commit and ask for review", mine: true, note: "GitHub #41, a draft, waits for it to be marked ready for review"},
 		{name: "in-progress, draft PR, no test yet", in: input("in-progress", func(in *Input) {
 			approved("normal")(in)
 			in.PR = &ghpr.PR{Number: 41, State: "OPEN", Draft: true}
@@ -102,10 +102,10 @@ func TestWalk(t *testing.T) {
 			approved("normal")(in)
 			in.PR = &ghpr.PR{Number: 41, State: "OPEN", Draft: true}
 			in.Me = "carol"
-		}), step: 6, login: "carol", what: "review the PR", mine: true, note: "PR #41 is still a draft on GitHub"},
-		{name: "in-progress, tests, the assignee", in: input("in-progress", func(in *Input) { approved("normal")(in); in.Tests = []TestFile{{Path: "a_test.go"}}; in.Me = "erin" }), step: 5, login: "erin", what: "commit and open the PR", mine: true, actions: []string{"ready-for-review"}},
-		{name: "in-review", in: input("in-review", approved("normal")), step: 6, login: "carol", what: "review the PR", gate: "A human who can explain the diff"},
-		{name: "in-review, structural", in: input("in-review", func(in *Input) { in.Risk = "structural"; in.Me = "carol" }), step: 6, login: "carol", what: "review the PR", mine: true, gate: "Structural: a second human", actions: []string{"review"}},
+		}), step: 6, login: "carol", what: "review the branch", mine: true, note: "GitHub #41 is still a draft"},
+		{name: "in-progress, tests, the assignee", in: input("in-progress", func(in *Input) { approved("normal")(in); in.Tests = []TestFile{{Path: "a_test.go"}}; in.Me = "erin" }), step: 5, login: "erin", what: "commit and ask for review", mine: true, actions: []string{"ready-for-review"}},
+		{name: "in-review", in: input("in-review", approved("normal")), step: 6, login: "carol", what: "review the branch", gate: "A human who can explain the diff"},
+		{name: "in-review, structural", in: input("in-review", func(in *Input) { in.Risk = "structural"; in.Me = "carol" }), step: 6, login: "carol", what: "review the branch", mine: true, gate: "Structural: a second human", actions: []string{"review"}},
 		{name: "in-review, merged", in: input("in-review", func(in *Input) {
 			approved("normal")(in)
 			in.PR = &ghpr.PR{Number: 3082, State: "MERGED"}
@@ -120,7 +120,7 @@ func TestWalk(t *testing.T) {
 			approved("normal")(in)
 			in.Stages = noValidation
 			in.PR = &ghpr.PR{Number: 3082, State: "OPEN"}
-		}), step: 6, login: "carol", what: "review the PR"},
+		}), step: 6, login: "carol", what: "review the branch"},
 		{name: "qa", in: input("qa", risk("normal")), step: 7, login: "alice", what: "sign off qa", mine: true, note: "no plan file", gate: "Green codes are not proof", actions: []string{"verify", "check", "signoff"}},
 		{name: "qa, plan not delivered", in: input("qa", func(in *Input) { in.Risk = "normal"; in.Plan = &Plan{Path: "p.md", Status: "accepted"} }), step: 7, login: "alice", what: "sign off qa", mine: true, note: "plan not marked delivered", actions: []string{"verify", "check", "signoff"}},
 		{name: "tests-metier, anyone", in: input("tests-metier", risk("low")), step: 7, what: "sign off tests-metier", mine: true, actions: []string{"verify", "check", "signoff"}, skipped: []int{3}},

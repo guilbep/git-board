@@ -403,8 +403,18 @@ export interface SyncStep {
   wait?: string; // "GitHub doesn't answer: trying again in 30 s", until the next step
 }
 
+// a bridge of the sync; host and path say which issue links are its
+// (forgestate.ts bridgeFor): path, owner/repo or a GitLab path, none for a
+// GitLab table, which names its project by id
+export interface SyncBridge {
+  name: string;
+  target: string;
+  host: string;
+  path?: string;
+}
+
 export interface ForgeStatus {
-  bridges: { name: string; target: string }[];
+  bridges: SyncBridge[];
   job: ForgeJob | null;
   cut?: CutRun; // a sync cut, as by a restart: the next goes on from there
 }
@@ -942,7 +952,7 @@ export interface WorkAgent {
   issue?: Issue;
   step?: number;
   name?: string;
-  state: string; // "Waits for you", "Waits for bob to review the PR", "No issue"
+  state: string; // "Waits for you", "Waits for bob to review the branch", "No issue"
   at: string; // the last commit
   session?: WtxSession; // wtx status on its branch
 }
@@ -1224,6 +1234,7 @@ export interface IssueSyncResult {
   writes: number; // sent, or would be sent, to the forges
   errors: number;
   bridges: Record<string, BridgeTally>;
+  ended: string; // when it came back, by the server's clock, as job.ended
 }
 
 export function syncIssue(id: string, dryRun: boolean): Promise<IssueSyncResult> {

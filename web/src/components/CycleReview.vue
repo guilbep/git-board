@@ -14,7 +14,7 @@
     <template v-else>
       <div class="gb-ch-bar">
         <a v-if="cycle.evidence.pr" :href="cycle.evidence.pr.url" target="_blank" rel="noopener noreferrer" class="gb-ch-branch">
-          PR #{{ cycle.evidence.pr.number }}<span class="gb-sr">(opens in a new tab)</span>
+          GitHub #{{ cycle.evidence.pr.number }}<span class="gb-sr">(opens in a new tab)</span>
         </a>
         <select v-if="branchNames.length > 1" v-model="branch" class="epfl-select" aria-label="Branch">
           <option v-for="n in branchNames" :key="n" :value="n">{{ n }}</option>

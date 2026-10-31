@@ -1,5 +1,6 @@
-/* The issue head, v2 (docs/design/issue-head/README.md; the screens'
-   drawer.css, ported). EPFL to the letter: tokens only (no hex, no px),
+/* The issue head (docs/design/issue-head/README.md; the screens'
+   drawer.css, ported). The class names keep their v2 from the time the
+   head before it lived beside it. EPFL to the letter: tokens only (no hex, no px),
    borders not shadows (a shadow on popovers only), 2px radii, pills on
    counts only, hover changes the color or the border, focus a 2px outline
    2px off, disabled at opacity 1, fades only. Loaded after gitboard.css. */
@@ -9,7 +10,9 @@
 .gb-ptop-sep { flex: none; color: var(--fg-subtle); }
 .gb-ptop-num { flex: none; font-family: var(--font-mono); color: var(--fg); }
 .gb-ptop-state { flex: none; }
-.is-head-v2 .gb-ptop-crumb { flex-wrap: nowrap; gap: var(--space-2); min-width: 0; white-space: nowrap; }
+/* the crumb never goes under 7rem, the number whole: the switches go into
+   More first (the 56rem step below), so no icon draws over it */
+.is-head-v2 .gb-ptop-crumb { flex-wrap: nowrap; gap: var(--space-2); min-width: 7rem; white-space: nowrap; }
 .gb-ptop .gb-pop > .gb-icon-btn, .gb-ptop > .gb-icon-btn { width: 2.25rem; height: 2.25rem; }
 .gb-icon-btn[aria-expanded="true"] { border-color: var(--border); background: var(--bg-subtle); color: var(--primary-hover); }
 .gb-icon-btn:focus-visible { outline: var(--focus-w) solid var(--primary-hover); outline-offset: 0.125rem; }
@@ -39,6 +42,10 @@
   line-height: 1;
 }
 .gb-fcount .gb-icon { width: 0.5625rem; height: 0.5625rem; }
+/* new there since the last sync: blue, the arrow down; with a count to
+   send as well, in the bottom corner, so the forge's shape still shows */
+.gb-fcount.is-in { background: var(--info-fg); color: var(--fg-inverse); }
+.gb-fcount.is-under { top: auto; bottom: 0; }
 .gb-fbadge {
   position: absolute;
   top: 0;
@@ -247,6 +254,18 @@ button.gb-hby:hover { color: var(--link-hover); }
 .gb-people:focus-visible { outline: var(--focus-w) solid var(--primary-hover); outline-offset: 0.125rem; }
 .gb-people-more { margin-left: var(--space-1); }
 
+/* the active tab: EPFL's red dot under it, not the 2px bar (row 15b); the
+   board's other tabs keep their bar */
+.is-head-v2 .gb-issue-tabs .gb-tab[aria-selected="true"]::after {
+  left: 50%;
+  right: auto;
+  bottom: calc(-1 * var(--border-w));
+  width: 0.4375rem;
+  height: 0.375rem;
+  margin-left: -0.21875rem;
+  background: var(--primary);
+}
+
 /* ---------- popovers: the one place a shadow goes ---------- */
 .gb-pop { position: relative; display: inline-flex; }
 .gb-pop-panel {
@@ -273,11 +292,6 @@ button.gb-hby:hover { color: var(--link-hover); }
   box-shadow: var(--shadow);
 }
 .gb-pop-panel.is-right { left: auto; right: 0; }
-.gb-pop-panel:has(.gb-side) { width: 22rem; }
-.gb-pop-panel .gb-side-sec { padding: 0; border-top: 0; }
-.gb-pop-panel .gb-chip { height: auto; min-height: 2.25rem; padding-top: 0.125rem; padding-bottom: 0.125rem; }
-.gb-pop-panel .gb-side-head { margin-bottom: var(--space-2); }
-.gb-pop-panel .gb-side-head .gb-section-title { display: none; }
 .gb-pop-title { margin: 0 0 var(--space-2); font-size: var(--fs-sm); font-weight: var(--w-bold); }
 .gb-pop-list { display: grid; gap: var(--space-1); margin: 0; padding: 0; list-style: none; }
 .gb-pop-item {
@@ -346,6 +360,10 @@ a.gb-pop-item { text-decoration: none; }
 .gb-fe-ref { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); min-height: 2rem; padding: 0 var(--space-2); }
 .gb-fe-x { display: inline-flex; padding: var(--space-1); color: var(--fg-muted); background: none; border: var(--border-w) solid transparent; border-radius: var(--radius); cursor: pointer; }
 .gb-fe-x:hover { color: var(--primary); }
+/* an issue field's value, to open */
+.gb-fe-open { display: flex; align-items: center; gap: var(--space-1); min-width: 0; padding: 0; font: inherit; color: var(--fg); text-align: left; background: none; border: 0; cursor: pointer; }
+.gb-fe-open:hover { color: var(--link-hover); text-decoration: underline; }
+.gb-fe-open:focus-visible { outline: var(--focus-w) solid var(--primary-hover); outline-offset: 0.125rem; }
 .gb-pop-item.is-quiet { color: var(--fg-muted); }
 
 /* a person field: faces alone, the name on hover; an empty face to fill */
@@ -477,7 +495,13 @@ a.gb-pop-item { text-decoration: none; }
 /* the drawer's own width, not the window's: a side panel dragged narrow
    reads as a phone. Copy link and Open as a page move into More. */
 .is-head-v2.gb-panel { container-type: inline-size; }
-.gb-pop-item.gb-narrow-only { display: none; }
+.gb-pop-item.gb-narrow-only, .gb-pop-item.gb-mid-only { display: none; }
+/* under 56rem the crumb, the issue's icons and the moves fill the bar: Fit
+   and Fill, Comfortable and Compact go into More as checkbox items */
+@container (max-width: 56rem) {
+  .gb-ptop .gb-ptop-measure { display: none; }
+  .gb-pop-item.gb-mid-only { display: flex; }
+}
 @container (max-width: 30rem) {
   .gb-ptop { gap: 0; padding-right: var(--space-2); }
   .gb-ptop .gb-wide-only { display: none; }
@@ -486,4 +510,5 @@ a.gb-pop-item { text-decoration: none; }
   .gb-pop-item.gb-narrow-only { display: flex; }
   .gb-head-title { font-size: var(--fs-h5); }
   .gb-ptop-view { max-width: 5rem; }
+  .is-head-v2 .gb-ptop-crumb { min-width: 6rem; }
 }

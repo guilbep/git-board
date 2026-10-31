@@ -232,7 +232,7 @@ onMounted(load);
 .lb-confirm ul { padding-left: 1.25rem; }
 .lb-confirm-row { padding: .5rem .75rem; gap: .5rem; }
 .lb-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
-.lb-lint { display: grid; gap: .75rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+.lb-lint { display: grid; gap: .75rem; padding-top: 1rem; border-top: var(--border-w) solid var(--border); }
 .lb-check { display: grid; gap: .25rem; }
 .lb-check ul { padding-left: 1.25rem; }
 .lb-check-name { font-size: .9375rem; }

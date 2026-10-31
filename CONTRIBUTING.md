@@ -28,6 +28,7 @@ make test    # go test ./...
 make vet     # go vet ./...
 make fmt     # gofmt -l . (lists files needing formatting; run gofmt -w to fix)
 make web-check # the web app's typecheck and tests
+make web-lint  # the EPFL adherence linter on web/src, reporting only (EPFL_SKILL=../epfl-design-skill); its count is in docs/prd/issue-head-m2-plan.md
 make ci      # the web checks and build, then everything above: what CI runs
 make install # the web app built, then go install the git-board binary
 make install-latest # the latest release's binary instead, web app inside

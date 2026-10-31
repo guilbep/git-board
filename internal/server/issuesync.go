@@ -13,12 +13,16 @@ import (
 var errIssueDryRunFirst = errors.New("run a dry run of this issue first: it says what the sync would write to the forges")
 
 // issueSyncResult is one issue's sync, per bridge as the full sync counts
-// it. Writes are what it sends, or would send, to the forges.
+// it. Writes are what it sends, or would send, to the forges. Ended is
+// when it came back, by the server's clock: the page holds a check until
+// a whole run ends after it (forgestate.ts checkHolds), and job.ended is
+// that clock's too.
 type issueSyncResult struct {
 	DryRun  bool                    `json:"dry_run"`
 	Writes  int                     `json:"writes"`
 	Errors  int                     `json:"errors"`
 	Bridges map[string]*bridgeTally `json:"bridges"`
+	Ended   time.Time               `json:"ended"`
 }
 
 // handleIssueSync syncs one issue with every sync bridge (SyncIssue): its
@@ -78,13 +82,14 @@ func (s *apiServer) handleIssueSync(w http.ResponseWriter, r *http.Request) {
 	for _, t := range res.Bridges {
 		res.Writes += t.To.Issues + t.To.Comments + t.To.Edits + t.To.Changes
 	}
+	res.Ended = time.Now()
 
 	s.forgeMu.Lock()
 	if s.issueDry == nil {
 		s.issueDry = map[string]time.Time{}
 	}
 	if req.DryRun && res.Errors == 0 {
-		s.issueDry[issue.ID] = time.Now()
+		s.issueDry[issue.ID] = res.Ended
 	} else {
 		delete(s.issueDry, issue.ID) // a real run, or a failed dry run: dry run again
 	}

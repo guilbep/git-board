@@ -27,7 +27,7 @@
 
   <form v-if="pr" class="gb-code-pr" @submit.prevent="emit('edit', pr.number, title.trim(), body)">
     <p class="gb-eyebrow">
-      {{ pr.draft ? 'Draft PR' : 'PR' }} <a :href="pr.url" target="_blank" rel="noopener noreferrer">#{{ pr.number }}<span class="gb-sr">(opens in a new tab)</span></a>{{ pr.draft && cycle.stages.plans_in_pr && !cycle.skipped?.includes(3) ? ', opened at step 3 with the plan' : `, ${pr.state.toLowerCase()}` }}
+      The gate: <a :href="pr.url" target="_blank" rel="noopener noreferrer">GitHub #{{ pr.number }}<span class="gb-sr">(opens in a new tab)</span></a>{{ pr.draft ? ', a draft' : '' }}{{ pr.draft && cycle.stages.plans_in_pr && !cycle.skipped?.includes(3) ? ', opened at step 3 with the plan' : `, ${pr.state.toLowerCase()}` }}
     </p>
     <label class="gb-code-fld">Title<input v-model="title" class="epfl-input" :disabled="!current || busy" /></label>
     <label class="gb-code-fld">Description<textarea v-model="body" class="epfl-input" rows="4" :disabled="!current || busy" /></label>
@@ -113,7 +113,7 @@ const tiles = computed(() => {
   if (checks.length) {
     const green = checks.filter((c) => c.state === 'success').length;
     const failed = checks.some((c) => c.state === 'failure');
-    out.push({ pill: failed ? 'Failed' : green === checks.length ? 'Pass' : 'Running', what: `${green} of ${checks.length} checks green`, line: `on PR #${pr.value?.number}` });
+    out.push({ pill: failed ? 'Failed' : green === checks.length ? 'Pass' : 'Running', what: `${green} of ${checks.length} checks green`, line: `on GitHub #${pr.value?.number}` });
   }
   return out;
 });

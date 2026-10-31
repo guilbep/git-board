@@ -22,32 +22,32 @@ const row = (what: string, more: Partial<WorkRow> = {}): Pick<WorkRow, 'waits' |
 test('waitsFor says what the viewer owes', () => {
   assert.equal(waitsFor(row('set the risk class')), 'A risk class');
   assert.equal(waitsFor(row('approve the plan')), 'Your read of the plan');
-  assert.equal(waitsFor(row('approve the plan PR on GitHub')), 'Your approval of the plan PR');
-  assert.equal(waitsFor(row('review the PR')), 'Your review');
-  assert.equal(waitsFor(row('review the PR', { risk: 'structural' })), 'A second human');
+  assert.equal(waitsFor(row('approve the plan’s gate on GitHub')), 'Your approval of the plan’s gate');
+  assert.equal(waitsFor(row('review the branch')), 'Your review');
+  assert.equal(waitsFor(row('review the branch', { risk: 'structural' })), 'A second human');
   assert.equal(waitsFor(row('sign off qa')), 'Your sign-off: qa');
   assert.equal(waitsFor(row('add acceptance criteria')), 'Acceptance criteria');
   assert.equal(waitsFor(row('write the failing test')), 'The failing test');
-  assert.equal(waitsFor(row('commit and open the PR')), 'The PR');
+  assert.equal(waitsFor(row('commit and ask for review')), 'Your ask for review');
   assert.equal(waitsFor(row('move the status to in-progress')), 'The status: in-progress');
 });
 
 test('waitsFor names who else, and the question', () => {
-  assert.equal(waitsFor(row('review the PR', { mine: false, waits: { login: 'bob', what: 'review the PR', anyone: false } })), 'bob to review the PR');
+  assert.equal(waitsFor(row('review the branch', { mine: false, waits: { login: 'bob', what: 'review the branch', anyone: false } })), 'bob to review the branch');
   assert.equal(waitsFor(row('write the failing test', { waits: { what: 'write the failing test', anyone: true } })), 'Anyone to write the failing test');
   const q = { id: 'c1', body: ' Which tolerance? ', by: { id: 'b', name: 'Bob' }, at: before(60) };
-  assert.equal(waitsFor(row('review the PR', { question: q })), 'Your answer: "Which tolerance?"');
+  assert.equal(waitsFor(row('review the branch', { question: q })), 'Your answer: "Which tolerance?"');
   const long = { ...q, body: 'x'.repeat(100) };
-  assert.equal(waitsFor(row('review the PR', { question: long })), `Your answer: "${'x'.repeat(79)}…"`);
+  assert.equal(waitsFor(row('review the branch', { question: long })), `Your answer: "${'x'.repeat(79)}…"`);
 });
 
 test('actionFor', () => {
   assert.deepEqual(actionFor(row('set the risk class', { actions: ['set-risk'] })), { kind: 'risk' });
   assert.deepEqual(actionFor(row('approve the plan', { actions: ['approve-plan'] })), { kind: 'open', label: 'Read the plan' });
-  assert.deepEqual(actionFor(row('review the PR', { actions: ['review'] })), { kind: 'open', label: 'Review' });
+  assert.deepEqual(actionFor(row('review the branch', { actions: ['review'] })), { kind: 'open', label: 'Review' });
   assert.deepEqual(actionFor(row('sign off qa', { actions: ['verify', 'check', 'signoff'] })), { kind: 'open', label: 'Sign off qa' });
   assert.deepEqual(actionFor(row('write the failing test')), { kind: 'open', label: 'Open' });
-  assert.deepEqual(actionFor(row('review the PR', { mine: false, actions: ['review'] })), { kind: 'open', label: 'Open' });
+  assert.deepEqual(actionFor(row('review the branch', { mine: false, actions: ['review'] })), { kind: 'open', label: 'Open' });
   const q = { id: 'c1', body: 'Which?', by: { id: 'b', name: 'Bob' }, at: before(60) };
   assert.deepEqual(actionFor(row('set the risk class', { actions: ['set-risk'], question: q })), { kind: 'answer' });
 });
