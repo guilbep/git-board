@@ -4,7 +4,7 @@
 <template>
   <div class="cc">
     <div class="cc-head">
-      <h4 class="cc-title">{{ title }}</h4>
+      <slot name="head"><h4 class="cc-title">{{ title }}</h4></slot>
       <span class="gb-grow" />
       <button v-if="removable" type="button" class="gb-linkbtn cc-remove" @click="asking = true">Remove</button>
     </div>
@@ -29,6 +29,13 @@ defineProps<{
 }>();
 
 defineEmits<{ remove: [] }>();
+
+defineSlots<{
+  /** the head's left side: the title by default, a richer head per card */
+  head?(): unknown;
+  /** the card's body, shown while Remove isn't asking */
+  default?(): unknown;
+}>();
 
 const asking = ref(false);
 </script>

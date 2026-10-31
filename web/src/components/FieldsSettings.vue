@@ -1,8 +1,10 @@
-<!-- Settings › Fields: the project's ontology, one card a field — its
-     type (the 7, guessed until set), its options in workflow order,
-     single, numeric, unit, and its colors and descriptions as rows. Add
-     offers the presets; Remove takes the field's tables out. The file's
-     other fields keep their lines, comments included. -->
+<!-- Settings › Fields: the project's ontology, one card a field. The
+     values are chips — drag to reorder, Enter to add, paste a list — the
+     cardinality is "an issue can have" (one value / several), and the
+     per-value details (color, description, GitHub Project name) sit in
+     one table keyed by value. Add offers the presets; Remove takes the
+     field's tables out. The file's other fields keep their lines,
+     comments included. -->
 <template>
   <div class="set-panel fs">
     <h2 class="h4">Fields</h2>
@@ -12,7 +14,7 @@
     </p>
 
     <div class="set-cols">
-      <div class="set-main">
+      <div class="set-forms">
         <p v-if="modelError" class="epfl-alert epfl-alert-danger" role="alert">{{ modelError }}</p>
 
         <!-- no file yet: start from the default, one whole-file save (the raw
@@ -37,6 +39,8 @@
           <div class="fs-tools">
             <ConfigPreset label="+ Add a field" :presets="fieldPresets" @pick="addPreset" />
             <button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" @click="addBlank">Blank field</button>
+            <span class="gb-grow" />
+            <router-link class="gb-linkbtn" to="/settings/advanced">Edit the file instead</router-link>
           </div>
 
           <ConfigCard
@@ -48,82 +52,136 @@
             :confirm="`The field ${f.name} and its colors, descriptions and labels go from the file. The issues keep their ${f.name}:… labels, in no order.`"
             @remove="remove(f)"
           >
-            <div class="fs-form">
-              <label class="fs-field">
-                <span>Name</span>
-                <input :value="f.name" class="fs-input" :disabled="!f.isNew" spellcheck="false" aria-label="The field's name" @input="f.name = ($event.target as HTMLInputElement).value" />
-              </label>
-              <label class="fs-field">
-                <span>Type</span>
-                <select v-model="f.type" class="fs-input fs-small" aria-label="Type">
-                  <option value="">guessed</option>
-                  <option v-for="t in types" :key="t.id" :value="t.id">{{ t.label }}</option>
-                </select>
-              </label>
-              <label class="fs-field fs-check">
-                <input v-model="f.single" type="checkbox" />
-                <span>single — one value at a time</span>
-              </label>
-              <label class="fs-field fs-check">
-                <input v-model="f.numeric" type="checkbox" />
-                <span>numeric — sorts as numbers</span>
-              </label>
-              <label v-if="f.type === 'number' || f.numeric" class="fs-field">
-                <span>Unit</span>
-                <input v-model="f.unit" class="fs-input fs-tiny" placeholder="h" spellcheck="false" aria-label="Unit" />
-              </label>
+            <template #head>
+              <span class="fs-ns">fields.</span>
+              <input
+                :value="f.name"
+                class="fs-name"
+                :disabled="!f.isNew"
+                spellcheck="false"
+                aria-label="The field's name"
+                @input="f.name = ($event.target as HTMLInputElement).value"
+              />
+              <span class="fs-sum">{{ summary(f) }}</span>
+              <span v-if="changed(f)" class="fs-dirty">Unsaved changes</span>
+            </template>
+
+            <div class="fs-body">
+              <div class="fs-block">
+                <span class="fs-label">Values <em>— drag to reorder; left is first in the workflow</em></span>
+                <div class="fs-chips">
+                  <span
+                    v-for="(o, i) in f.options"
+                    :key="`${o}-${i}`"
+                    class="fs-chip"
+                    draggable="true"
+                    :class="{ 'fs-chip-hold': dragFrom === i }"
+                    @dragstart="dragFrom = i"
+                    @dragover.prevent
+                    @dragend="dragFrom = null"
+                    @drop="dropAt(f, i)"
+                  >
+                    <span class="fs-dot" :class="dotClass(f, o)" :style="dotStyle(f, o)" aria-hidden="true" />
+                    {{ o }}
+                    <button type="button" class="fs-chip-x" :aria-label="`Remove ${o}`" @click="removeOption(f, i)">×</button>
+                  </span>
+                  <input
+                    class="fs-add"
+                    :placeholder="f.type === 'number' || f.numeric ? 'Type a number, press Enter' : 'Type a value, press Enter'"
+                    spellcheck="false"
+                    :aria-label="`Add a value to ${f.name}`"
+                    @keydown="chipKey(f, $event)"
+                    @paste="chipPaste(f, $event)"
+                  />
+                </div>
+                <p v-if="f.type === 'number' || f.numeric" class="gb-hint">
+                  All values are numbers — sorted by value, filterable by range. Paste a list too: <code>0.5, 1, 2, 4, 8</code>.
+                </p>
+                <p v-else class="gb-hint">Paste a list too: <code>todo, doing, done</code> or one per line.</p>
+              </div>
+
+              <div class="fs-form">
+                <label class="fs-field">
+                  <span>Type</span>
+                  <select v-model="f.type" class="fs-input fs-small" aria-label="Type">
+                    <option value="">guessed</option>
+                    <option v-for="t in types" :key="t.id" :value="t.id">{{ t.label }}</option>
+                  </select>
+                </label>
+                <fieldset class="fs-cardinality">
+                  <legend>An issue can have</legend>
+                  <label class="fs-radio"><input v-model="f.single" type="radio" :value="true" /> one value</label>
+                  <label class="fs-radio"><input v-model="f.single" type="radio" :value="false" /> several values</label>
+                </fieldset>
+                <label class="fs-check">
+                  <input v-model="f.numeric" type="checkbox" />
+                  <span>numeric — sorts as numbers</span>
+                </label>
+                <label v-if="f.type === 'number' || f.numeric" class="fs-field">
+                  <span>Unit</span>
+                  <input v-model="f.unit" class="fs-input fs-tiny" placeholder="h" spellcheck="false" aria-label="Unit shown after the number" />
+                </label>
+              </div>
+
+              <details class="fs-more" :open="detailKeys(f).length > 0">
+                <summary>
+                  Per-value details <span class="fs-count">{{ detailKeys(f).length }}</span>
+                  <span class="fs-morehint">colors, descriptions, GitHub Project names</span>
+                </summary>
+                <div v-if="detailKeys(f).length" class="fs-tablewrap">
+                  <table class="fs-table">
+                    <thead>
+                      <tr>
+                        <th>Value</th>
+                        <th>Color</th>
+                        <th>Description</th>
+                        <th>GitHub Project name</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr v-for="k in detailKeys(f)" :key="k">
+                        <td class="fs-tvalue">{{ k }}</td>
+                        <td>
+                          <select
+                            :value="pairOf(f, 'colors', k)"
+                            class="fs-input fs-tiny"
+                            :aria-label="`Color for ${k}`"
+                            @change="setPair(f, 'colors', k, inputValue($event))"
+                          >
+                            <option value="">—</option>
+                            <option v-for="c in palette" :key="c" :value="c">{{ c }}</option>
+                            <option v-if="pairOf(f, 'colors', k) && !palette.includes(pairOf(f, 'colors', k))" :value="pairOf(f, 'colors', k)">
+                              {{ pairOf(f, 'colors', k) }}
+                            </option>
+                          </select>
+                        </td>
+                        <td>
+                          <input
+                            :value="pairOf(f, 'descriptions', k)"
+                            class="fs-cell"
+                            placeholder="what the value means"
+                            spellcheck="false"
+                            :aria-label="`Description for ${k}`"
+                            @input="setPair(f, 'descriptions', k, inputValue($event))"
+                          />
+                        </td>
+                        <td>
+                          <input
+                            :value="pairOf(f, 'project', k)"
+                            class="fs-cell"
+                            placeholder="if different"
+                            spellcheck="false"
+                            :aria-label="`GitHub Project name for ${k}`"
+                            @input="setPair(f, 'project', k, inputValue($event))"
+                          />
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                <p v-else class="gb-hint">No values yet: the details come once the values do.</p>
+              </details>
             </div>
-
-            <details class="fs-more" :open="f.options.length > 0">
-              <summary>Options, in workflow order <span class="fs-count">{{ f.options.length }}</span></summary>
-              <ConfigRows :rows="f.options" add-label="Add an option" @update="f.options = $event" @add="f.options = [...f.options, '']">
-                <template #row="{ row, set }">
-                  <input :value="row" class="fs-input fs-opt" placeholder="ready" spellcheck="false" :aria-label="`${f.name}'s option`" @input="set(inputValue($event))" />
-                </template>
-              </ConfigRows>
-            </details>
-
-            <details class="fs-more" :open="f.colors.length > 0">
-              <summary>Colors <span class="fs-count">{{ f.colors.length }}</span></summary>
-              <ConfigRows :rows="f.colors" add-label="Add a color" @update="f.colors = $event" @add="f.colors = [...f.colors, { k: '', v: 'grey' }]">
-                <template #row="{ row, set }">
-                  <div class="fs-pair">
-                    <input :value="row.k" class="fs-input fs-opt" :placeholder="f.options[0] || 'value'" spellcheck="false" aria-label="Value" @input="set({ ...row, k: inputValue($event) })" />
-                    <select :value="row.v" class="fs-input fs-tiny" aria-label="Color" @change="set({ ...row, v: inputValue($event) })">
-                      <option v-for="c in palette" :key="c" :value="c">{{ c }}</option>
-                      <option v-if="row.v && !palette.includes(row.v)" :value="row.v">{{ row.v }}</option>
-                    </select>
-                  </div>
-                </template>
-              </ConfigRows>
-              <p class="gb-hint">A palette name, or a hex <code>#d73a4a</code> typed over one. A value without one takes the palette in turn.</p>
-            </details>
-
-            <details class="fs-more" :open="f.descriptions.length > 0">
-              <summary>Descriptions <span class="fs-count">{{ f.descriptions.length }}</span></summary>
-              <ConfigRows :rows="f.descriptions" add-label="Add a description" @update="f.descriptions = $event" @add="f.descriptions = [...f.descriptions, { k: '', v: '' }]">
-                <template #row="{ row, set }">
-                  <div class="fs-pair">
-                    <input :value="row.k" class="fs-input fs-opt" spellcheck="false" aria-label="Value" @input="set({ ...row, k: inputValue($event) })" />
-                    <input :value="row.v" class="fs-input fs-desc" placeholder="what the value means" aria-label="Description" @input="set({ ...row, v: inputValue($event) })" />
-                  </div>
-                </template>
-              </ConfigRows>
-              <p class="gb-hint">What the value's label says on GitHub, 100 characters at most.</p>
-            </details>
-
-            <details v-if="f.type === 'select' || !f.type" class="fs-more" :open="f.project.length > 0">
-              <summary>GitHub Project names <span class="fs-count">{{ f.project.length }}</span></summary>
-              <ConfigRows :rows="f.project" add-label="Add a name" @update="f.project = $event" @add="f.project = [...f.project, { k: '', v: '' }]">
-                <template #row="{ row, set }">
-                  <div class="fs-pair">
-                    <input :value="row.k" class="fs-input fs-opt" placeholder="wont" spellcheck="false" aria-label="Value" @input="set({ ...row, k: inputValue($event) })" />
-                    <input :value="row.v" class="fs-input fs-opt" placeholder="Won't" aria-label="The Project's name" @input="set({ ...row, v: inputValue($event) })" />
-                  </div>
-                </template>
-              </ConfigRows>
-              <p class="gb-hint">The Project's option name for a value, when it doesn't slug to the value.</p>
-            </details>
           </ConfigCard>
 
           <ConfigSaveBar
@@ -140,8 +198,6 @@
             @reload="draft.load()"
           />
         </template>
-
-
       </div>
 
       <ConfigRefPanel :sections="['fields', 'types', 'colors']" title="a field's keys, the types" />
@@ -158,7 +214,6 @@ import { message } from '@/issue';
 import ConfigCard from '@/components/configforms/ConfigCard.vue';
 import ConfigPreset from '@/components/configforms/ConfigPreset.vue';
 import ConfigRefPanel from '@/components/configforms/ConfigRefPanel.vue';
-import ConfigRows from '@/components/configforms/ConfigRows.vue';
 import ConfigSaveBar from '@/components/configforms/ConfigSaveBar.vue';
 
 const types = [
@@ -188,6 +243,7 @@ type FieldRow = {
   project: Pair[];
 };
 type Pair = { k: string; v: string };
+type PairMap = 'colors' | 'descriptions' | 'project';
 
 const modelError = configModelError;
 let key = 0;
@@ -245,6 +301,110 @@ const fields = computed({
     if (draft.value.value) draft.value.value = rows;
   },
 });
+
+// the file's fields as the cards hold them, for the per-card change badge
+const baseRows = computed(() => (configModel.value ? draft.from(configModel.value) : []));
+
+function changed(f: FieldRow): boolean {
+  const base = baseRows.value.find((x) => x.name === f.name);
+  if (!base) return true;
+  return JSON.stringify(rowOf(f)) !== JSON.stringify(rowOf(base));
+}
+
+// what the card's head says the field is, in the page's words
+function summary(f: FieldRow): string {
+  const card = f.single ? 'one per issue' : 'several per issue';
+  if (f.type === 'number' || (f.numeric && f.options.length > 0)) return `Numbers · ${f.unit ? `in ${f.unit}` : 'no unit'} · ${card}`;
+  if (f.type === 'text') return `Free text · ${card}`;
+  if (f.type === 'date') return `Dates · ${card}`;
+  if (f.type === 'person') return `Forge logins · ${card}`;
+  if (f.type === 'iteration') return `Spans of dates, sprints · ${card}`;
+  if (f.type === 'issue') return `Another issue · ${card}`;
+  if (f.options.length > 0) return `${f.options.length} values, in workflow order · ${card}`;
+  return 'Guessed from the labels';
+}
+
+// the values as chips: drag to reorder, Enter (or a comma) adds, paste
+// splits a list; the chip's dot takes the value's color when it has one
+const dragFrom = ref<number | null>(null);
+
+function dropAt(f: FieldRow, i: number) {
+  const from = dragFrom.value;
+  dragFrom.value = null;
+  if (from === null || from === i) return;
+  const options = [...f.options];
+  const moved = options[from];
+  if (moved === undefined) return;
+  options.splice(from, 1);
+  options.splice(i, 0, moved);
+  f.options = options;
+}
+
+function removeOption(f: FieldRow, i: number) {
+  f.options = f.options.filter((_, j) => j !== i);
+}
+
+function chipKey(f: FieldRow, e: KeyboardEvent) {
+  if (e.key !== 'Enter' && e.key !== ',') return;
+  e.preventDefault();
+  addChips(f, e.target as HTMLInputElement);
+}
+
+function chipPaste(f: FieldRow, e: ClipboardEvent) {
+  const text = e.clipboardData?.getData('text') ?? '';
+  if (!/[,\n]/.test(text)) return; // a plain word: let the input take it
+  e.preventDefault();
+  const el = e.target as HTMLInputElement;
+  addWords(f, `${(el as HTMLInputElement).value},${text}`);
+  el.value = '';
+}
+
+function addChips(f: FieldRow, el: HTMLInputElement) {
+  addWords(f, el.value);
+  el.value = '';
+}
+
+function addWords(f: FieldRow, text: string) {
+  const words = text.split(/[,\n]/).map((s) => s.trim()).filter((s) => s && !f.options.includes(s));
+  if (words.length) f.options = [...f.options, ...words];
+}
+
+// the per-value details: one table keyed by value — the options in their
+// order, then the pair keys the options lost; a cell emptied removes its
+// pair
+function detailKeys(f: FieldRow): string[] {
+  const keys: string[] = [];
+  for (const k of [...f.options, ...f.colors.map((r) => r.k), ...f.descriptions.map((r) => r.k), ...f.project.map((r) => r.k)]) {
+    if (!keys.includes(k)) keys.push(k);
+  }
+  return keys;
+}
+
+function pairOf(f: FieldRow, map: PairMap, k: string): string {
+  return f[map].find((r) => r.k === k)?.v ?? '';
+}
+
+function setPair(f: FieldRow, map: PairMap, k: string, v: string) {
+  const rows = f[map];
+  const r = rows.find((x) => x.k === k);
+  if (!v.trim()) {
+    if (r) f[map] = rows.filter((x) => x !== r);
+  } else if (r && r.v !== v) {
+    f[map] = rows.map((x) => (x === r ? { k, v } : x));
+  } else if (!r) {
+    f[map] = [...rows, { k, v }];
+  }
+}
+
+function dotClass(f: FieldRow, o: string): string {
+  const c = pairOf(f, 'colors', o);
+  return palette.includes(c) ? `gb-c-${c}` : '';
+}
+
+function dotStyle(f: FieldRow, o: string): Record<string, string> | undefined {
+  const c = pairOf(f, 'colors', o);
+  return c && !palette.includes(c) ? { '--c-dot': c } : undefined;
+}
 
 function remove(f: FieldRow) {
   fields.value = fields.value.filter((x) => x !== f);
@@ -316,7 +476,7 @@ onMounted(() => void draft.load());
 .fs { display: grid; gap: .75rem; container-type: inline-size; }
 /* the forms left, the reference right, like the old editor; one column when narrow */
 .set-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: .75rem; align-items: start; }
-.set-main { display: grid; gap: .75rem; min-width: 0; }
+.set-forms { display: grid; gap: .75rem; min-width: 0; }
 @container (max-width: 52rem) { .set-cols { grid-template-columns: minmax(0, 1fr); } }
 h2, p { margin: 0; }
 .fs-lead { max-width: 42rem; color: var(--fg-muted); }
@@ -325,21 +485,50 @@ h2, p { margin: 0; }
 .fs-startrow { display: flex; align-items: center; gap: .75rem; }
 .fs-tools { display: flex; align-items: center; gap: .75rem; flex-wrap: wrap; }
 .fs-card { border-left-color: var(--primary); }
+/* the card's head: fields.<name>, what the field is, the unsaved mark */
+.fs-ns { font-size: .8125rem; color: var(--fg-muted); }
+.fs-name { width: 9rem; min-height: 2rem; padding: 0 .5rem; border: 1px solid var(--border); background: var(--bg); color: var(--fg); font-family: var(--font-mono); font-size: 1rem; font-weight: 700; }
+.fs-name:disabled { border-color: transparent; background: none; padding-left: 0; }
+.fs-name:focus { outline: 2px solid var(--fg); outline-offset: 2px; }
+.fs-sum { color: var(--fg-muted); font-size: .8125rem; }
+.fs-dirty { font-size: .75rem; font-weight: 700; color: var(--danger); }
+/* the body: values as chips, the cardinality, the details' table */
+.fs-body { display: grid; gap: .75rem; }
+.fs-block { display: grid; gap: .375rem; }
+.fs-label { font-weight: 700; font-size: .875rem; }
+.fs-label em { font-style: normal; font-weight: 400; color: var(--fg-muted); }
+.fs-chips { display: flex; flex-wrap: wrap; align-items: center; gap: .375rem; min-height: 2.25rem; padding: .375rem .5rem; border: 1px solid var(--border); background: var(--bg); }
+.fs-chips:focus-within { border-color: var(--fg); }
+.fs-chip { display: inline-flex; align-items: center; gap: .375rem; padding: 0 .125rem 0 .5rem; min-height: 1.625rem; border: 1px solid var(--border); background: var(--bg-subtle); font-family: var(--font-mono); font-size: .8125rem; cursor: grab; }
+.fs-chip:active { cursor: grabbing; }
+.fs-chip-hold { opacity: .4; }
+.fs-dot { width: .625rem; height: .625rem; background: var(--c-dot, var(--border-strong)); }
+.fs-chip-x { width: 1.25rem; border: 0; background: none; color: var(--fg-muted); font: inherit; cursor: pointer; }
+.fs-chip-x:hover { color: var(--danger); }
+.fs-add { flex: 1 1 9rem; min-height: 1.625rem; border: 0; background: none; color: var(--fg); font: inherit; font-size: .8125rem; }
 .fs-form { display: flex; gap: .75rem; flex-wrap: wrap; align-items: end; }
 .fs-field { display: grid; gap: .25rem; font-size: .8125rem; }
 .fs-field > span { color: var(--fg-muted); }
-.fs-check { grid-template-columns: auto 1fr; align-items: center; display: flex; gap: .375rem; padding-bottom: .375rem; }
+.fs-check { display: flex; gap: .375rem; align-items: center; padding-bottom: .375rem; font-size: .8125rem; }
 .fs-input { padding: .375rem .625rem; border: 1px solid var(--border); background: var(--bg); color: var(--fg); font: inherit; }
-.fs-input:disabled { color: var(--fg-muted); background: var(--bg-subtle); }
 .fs-input:focus { outline: 2px solid var(--fg); outline-offset: 2px; border-color: var(--fg); }
 .fs-small { max-width: 14rem; }
 .fs-tiny { max-width: 4.5rem; }
-.fs-opt { width: 10rem; }
-.fs-desc { flex: 1; min-width: 12rem; }
-.fs-pair { display: flex; gap: .5rem; }
+.fs-cardinality { display: flex; gap: .375rem; align-items: center; margin: 0; padding: 0; border: 0; }
+.fs-cardinality legend { padding: 0; margin-bottom: .25rem; font-size: .8125rem; font-weight: 700; color: var(--fg-muted); }
+.fs-radio { display: inline-flex; align-items: center; gap: .375rem; min-height: 2rem; padding: 0 .625rem; border: 1px solid var(--border); cursor: pointer; font-size: .8125rem; }
+.fs-radio:has(input:checked) { border-color: var(--fg); background: var(--fg); color: var(--bg); font-weight: 700; }
 .fs-more { display: grid; gap: .5rem; }
 .fs-more summary { cursor: pointer; font-size: .875rem; font-weight: 700; color: var(--fg-muted); }
 .fs-more summary:hover { color: var(--fg); }
 .fs-more[open] summary { margin-bottom: .25rem; }
+.fs-morehint { font-weight: 400; color: var(--fg-muted); }
 .fs-count { display: inline-block; margin-left: .375rem; padding: 0 .375rem; border: 1px solid var(--border); font-weight: 400; font-size: .75rem; color: var(--fg-muted); }
+.fs-tablewrap { overflow-x: auto; border: 1px solid var(--border); }
+.fs-table { width: 100%; min-width: 34rem; border-collapse: collapse; font-size: .8125rem; }
+.fs-table th { padding: .375rem .5rem; border-bottom: 1px solid var(--border); background: var(--bg-subtle); text-align: left; font-size: .75rem; color: var(--fg-muted); }
+.fs-table td { padding: .25rem .5rem; border-bottom: 1px solid var(--border); vertical-align: middle; }
+.fs-tvalue { font-family: var(--font-mono); font-weight: 700; }
+.fs-cell { width: 100%; box-sizing: border-box; min-height: 1.75rem; padding: .25rem .5rem; border: 1px solid var(--border); background: var(--bg); color: var(--fg); font: inherit; font-size: .8125rem; }
+.fs-cell:focus { outline: 2px solid var(--fg); outline-offset: 2px; }
 </style>
