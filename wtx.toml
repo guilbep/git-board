@@ -27,22 +27,28 @@ name = "shell"
 role = "shell"
 
 [agent]
-tool = "claude"
-llm = "opus"
-subagent_model = "sonnet"
-auto_compact_window = 200000
-explore_agent_model = "haiku"
+tool = "opencode"
+# opencode models are `provider/model`. The rcp-aias models carry their own
+# org path, so these are the full ids already.
+llm = "rcp-aias/moonshotai/Kimi-K2.7-Code"
 
-# Plan on one model, implement on another. A brief starts on
-# plan_model in plan mode. With Claude, accepting the plan carries
-# the same conversation on to build_model, at the effort the plan
-# asked for. With opencode the agent switch does it, and the
-# effort routing does not apply.
+# Plan on one model, implement on another. A brief starts the plan agent on
+# plan_model; accepting the plan switches opencode to the build agent, and the
+# model follows the agent through the generated opencode.json. The plan's own
+# `wtx-effort:` line does nothing under opencode, it belongs to Claude's
+# ExitPlanMode handoff. The effort still reaches a brief, as
+# `opencode run --variant`.
 [agent.orchestration]
 enabled = true
-plan_model = "fable"
-build_model = "opus"
-build_effort = "xhigh"
+plan_model = "rcp-aias/moonshotai/Kimi-K2.7-Code"
+build_model = "rcp-aias/moonshotai/Kimi-K2.7-Code"
+build_effort = "high"
+
+# opencode's own models. small_model is what a subagent runs on; provider is
+# the prefix for a bare model name (the ids above already carry theirs).
+[agent.opencode]
+provider = "rcp-aias"
+small_model = "rcp-aias/zai-org/GLM-5.3-Flash"
 
 # Added to the baseline wtx ships. A repo can tighten, never loosen.
 [permissions]
