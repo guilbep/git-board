@@ -175,6 +175,8 @@ func TestNamesInFolders(t *testing.T) {
 	is := issue("Implement tests", "2771", "kind:test")
 	one := store.Issue{ID: "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210", Title: "The first issue", Forges: []store.Forge{{Name: "GitHub", Number: "1"}}}
 	byID := issue("Local only", "") // abc1234/1-local-only
+	footer := issue("PDF footer", "2811")
+	counted := store.Issue{ID: id, Title: "Rounding", Number: "CO2-421", Counted: true}
 	for _, tc := range []struct {
 		branch string
 		is     store.Issue
@@ -186,6 +188,10 @@ func TestNamesInFolders(t *testing.T) {
 		{"test/2771/1-implement-tests", one, false}, // its {n} is no issue's number
 		{"abc1234/1-local-only", byID, true},
 		{"abc1234/1-local-only", one, false}, // an id's folder: the 1 after it names no issue
+		{"2811/1-pdf-footer", footer, true},  // no kind: the folder alone
+		{"test/2771b-x", is, false},          // a letter glued to the number: not a number word
+		{"feat/co2-421/1-x", counted, true},  // a project number, its prefix a word of its own
+		{"feat/co2-421/1-x", footer, false},
 	} {
 		if got := Names(tc.branch, tc.is); got != tc.want {
 			t.Errorf("Names(%q, %s) = %v, want %v", tc.branch, tc.is.Title, got, tc.want)

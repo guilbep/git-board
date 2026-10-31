@@ -34,7 +34,7 @@ export function cardFor(c: Cycle, status: string): { title: string; gate: string
   const card = (title: string, buttons: CardButton[]) => ({ title, gate: c.gate, buttons });
   if (has('set-risk')) return card('Set the risk', ['low', 'normal', 'structural'].map((risk) => ({ label: risk, action: 'set-risk', body: { risk } })));
   if (has('approve-plan')) return card('Approve the plan', [{ label: 'Approve the plan', action: 'approve-plan' }]);
-  if (has('review')) return card('Review', [{ label: 'Review the PR', action: 'review' }]);
+  if (has('review')) return card('Review', [{ label: 'Review the branch', action: 'review' }]);
   if (has('signoff')) return card(`Sign off ${status}`, [{ label: `Sign off ${status}`, action: 'signoff' }]);
   // a POST: the server moves the status once the checks are proven
   if (has('ready-for-review')) return card('Mark ready for review', [{ label: 'Mark ready for review', action: 'ready-for-review' }]);
@@ -56,18 +56,18 @@ export const listOf = (s: CycleStages | undefined): StageStep[] =>
 // kindOf is an entry's kind as the step's number, 1 to 7: what its gate,
 // evidence and workspace are read by
 export const kindOf = (s: StageStep): number => (s.kind === 'signoff' ? 7 : DEFAULT_IDS.indexOf(s.kind));
-const LOCKS = ['', '', 'opens at ready', 'opens once the risk is set', 'opens when work starts', 'opens with the test', 'opens when the PR is ready for review', 'opens when the PR is merged'];
+const LOCKS = ['', '', 'opens at ready', 'opens once the risk is set', 'opens when work starts', 'opens with the test', 'opens when the branch is in review', 'opens when the branch is merged'];
 
 // gate is the step's rule, as internal/cycle/cycle.go words it: the server
 // only sends the current step's. rule is step 4's, by kind ([cycle.kinds]).
 export function gate(step: number, risk?: string, rule?: string): string {
-  if (step === 3 && risk === 'structural') return 'Structural: plan PR approved first';
+  if (step === 3 && risk === 'structural') return 'Structural: the plan’s gate approved first';
   if (step === 3 && risk === 'low') return 'Skipped, low risk';
   if (step === 4 && rule === 'none') return 'Skipped: no tests for this kind';
   if (step === 4 && rule === 'failing-test') return 'A test that fails before the fix';
   if (step === 4) return 'The touched suites green, each criterion names its test';
   if (step === 6 && risk === 'structural') return 'Structural: a second human';
-  return ['', 'No issue, no agent', 'Class written on the issue', 'Plan approved by the plan role', '', 'A human commits and opens the PR', 'A human who can explain the diff', 'Green codes are not proof'][step] ?? '';
+  return ['', 'No issue, no agent', 'Class written on the issue', 'Plan approved by the plan role', '', 'A human commits and asks for review', 'A human who can explain the diff', 'Green codes are not proof'][step] ?? '';
 }
 
 export interface StepRow {
@@ -94,8 +94,8 @@ export function steps(c: Cycle, riskBy?: string, events: IssueEvent[] = []): Ste
   const e = c.evidence ?? {};
   const risk = c.risk ?? e.risk;
   const rule = c.stages.kinds?.[e.kind ?? ''] ?? 'per-criterion';
-  // the draft PR holding the plan, read on step 3's line (C3)
-  const draft = e.pr?.state === 'OPEN' && e.pr.draft ? ` · draft PR #${e.pr.number}` : '';
+  // the draft gate holding the plan, read on step 3's line (C3)
+  const draft = e.pr?.state === 'OPEN' && e.pr.draft ? ` · GitHub #${e.pr.number}, a draft` : '';
   const evidence = (n: number, status?: string): string | undefined => {
     // a sign-off's own cell: who signed its status off
     if (status) return e.signoffs?.find((x) => x.status === status)?.by.replace(/^/, 'Signed off by ');
@@ -109,7 +109,7 @@ export function steps(c: Cycle, riskBy?: string, events: IssueEvent[] = []): Ste
         return risk ? cap(risk) + (riskBy ? `, set by ${riskBy}` : '') : undefined;
       case 3:
         if (e.plan_approval) return `Approved by ${e.plan_approval.by}`;
-        if (e.plan_pr) return e.plan_pr.decision === 'APPROVED' || e.plan_pr.state === 'MERGED' ? `Plan PR #${e.plan_pr.number} approved` : `Plan PR #${e.plan_pr.number}, waits for approval`;
+        if (e.plan_pr) return e.plan_pr.decision === 'APPROVED' || e.plan_pr.state === 'MERGED' ? `The plan’s gate, GitHub #${e.plan_pr.number}, approved` : `The plan’s gate, GitHub #${e.plan_pr.number}, waits for approval`;
         return e.plan?.path && e.plan.path + draft;
       case 4:
         return e.tests?.[0] ? e.tests[0].path + (e.tests[0].commit ? ` at ${short(e.tests[0].commit)}` : '') : undefined;
@@ -120,7 +120,7 @@ export function steps(c: Cycle, riskBy?: string, events: IssueEvent[] = []): Ste
         if (!e.pr) return undefined;
         const by = approvers(e.pr, events);
         if (by.length) return `${names(by)} approved`;
-        return e.pr.state === 'MERGED' ? `PR #${e.pr.number} merged` : `PR #${e.pr.number} open`;
+        return e.pr.state === 'MERGED' ? `GitHub #${e.pr.number} merged` : `GitHub #${e.pr.number} open`;
       }
       case 7: {
         const n = c.stages?.validation?.length ?? 0;
@@ -244,11 +244,11 @@ export function signoffLine(c: Cycle, status: string, forge?: string): string {
 export function statusBar(c: Cycle, waiting: number | null): string[] {
   const e = c.evidence ?? {};
   const out = [e.branch ? e.branch + (e.head ? ` at ${short(e.head)}` : '') : 'no branch yet'];
-  if (!e.pr) out.push('no PR');
-  else if (e.pr.state === 'MERGED') out.push(`PR #${e.pr.number} merged`);
-  else if (e.pr.draft) out.push(`draft PR #${e.pr.number}`);
-  else if (e.pr.checks?.length) out.push(`PR #${e.pr.number} · ${e.pr.checks.filter((k) => k.state === 'success').length} of ${e.pr.checks.length} checks green`);
-  else out.push(`PR #${e.pr.number} open`);
+  if (!e.pr) out.push('no gate yet'); // not "not in review": in-review needs no PR (cycle.go)
+  else if (e.pr.state === 'MERGED') out.push(`GitHub #${e.pr.number} merged`);
+  else if (e.pr.draft) out.push(`GitHub #${e.pr.number}, a draft`);
+  else if (e.pr.checks?.length) out.push(`GitHub #${e.pr.number} · ${e.pr.checks.filter((k) => k.state === 'success').length} of ${e.pr.checks.length} checks green`);
+  else out.push(`GitHub #${e.pr.number} open`);
   if (waiting === null) return out;
   out.push(waiting ? `waits for ${waiting} change${waiting === 1 ? '' : 's'} on the forges` : 'in sync');
   return out;

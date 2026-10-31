@@ -5,7 +5,7 @@
   <component
     :is="page ? 'div' : 'aside'"
     class="gb-panel"
-    :class="[page ? 'gb-panel-page' : panelMode === 'wide' ? 'gb-panel-wide' : 'gb-panel-xl', { 'is-head-v2': v2, 'is-fill': v2 && fill, 'is-compact': v2 && compact }]"
+    :class="[page ? 'gb-panel-page' : panelMode === 'wide' ? 'gb-panel-wide' : 'gb-panel-xl', 'is-head-v2', { 'is-fill': fill, 'is-compact': compact }]"
     :style="!page && panelMode === 'side' && panelWidth ? { width: `${panelWidth}px` } : undefined"
     :aria-labelledby="`title-${uid}`"
     :tabindex="page ? undefined : 0"
@@ -32,18 +32,14 @@
     <div class="gb-ptop">
       <p class="gb-ptop-crumb">
         <template v-if="page"><router-link :to="{ path: '/' }"><GbIcon name="back" small /> Board</router-link></template>
-        <span v-else-if="v2" class="gb-ptop-view">{{ crumb }}<template v-if="position"> / {{ position }}</template></span>
-        <template v-else>
-          <span>{{ crumb }}</span>
-          <template v-if="position"><span aria-hidden="true">/</span><span>{{ position }}</span></template>
-        </template>
-        <template v-if="v2 && thread">
+        <span v-else class="gb-ptop-view">{{ crumb }}<template v-if="position"> / {{ position }}</template></span>
+        <template v-if="thread">
           <span class="gb-ptop-sep" aria-hidden="true">›</span>
           <span class="gb-ptop-num">{{ barNumber }}</span>
           <span v-if="thread.status === 'closed'" class="epfl-badge epfl-badge-tertiary gb-ptop-state">Closed</span>
         </template>
       </p>
-      <template v-if="v2 && thread && layout">
+      <template v-if="thread && layout">
         <ForgeIcons :id="thread.id" :forges="thread.forges" :events="thread.events" @changed="fieldsChanged" @reveal="reveal" />
         <InboxBell :id="thread.id" :labels="thread.labels" :events="thread.events" />
         <GbPopover label="More" title="This issue" align="right">
@@ -56,8 +52,8 @@
               <button v-if="cycleView" type="button" role="menuitem" class="gb-pop-item" @click="(e: MouseEvent) => (close(), switchLayout(layout === 'cycle' ? 'classic' : 'cycle', e))"><GbIcon name="title" small /> {{ layout === 'cycle' ? 'The classic page' : 'The cycle’s page' }}</button>
               <button type="button" role="menuitem" class="gb-pop-item gb-narrow-only" @click="copyLink"><GbIcon :name="copied ? 'check' : 'link'" small /> {{ copied ? 'Link copied' : 'Copy link to this issue' }}</button>
               <router-link v-if="!page" role="menuitem" class="gb-pop-item gb-narrow-only" :to="`/issues/${id}`"><GbIcon name="external" small /> Open as a page of its own</router-link>
-              <button type="button" role="menuitemcheckbox" class="gb-pop-item gb-narrow-only" :aria-checked="compact" @click="close(), setDensity(compact ? 'comfortable' : 'compact')"><GbIcon name="align-justify" small /> Compact spacing<GbIcon v-if="compact" name="check" small class="gb-pop-check" /></button>
-              <button type="button" role="menuitem" class="gb-pop-item" @click="close(false), backToV1()"><GbIcon name="undo" small /> The previous head</button>
+              <button type="button" role="menuitemcheckbox" class="gb-pop-item gb-mid-only" :aria-checked="fill" @click="close(), setWidth(fill ? 'fit' : 'fill')"><GbIcon name="maximize" small /> Fill the panel<GbIcon v-if="fill" name="check" small class="gb-pop-check" /></button>
+              <button type="button" role="menuitemcheckbox" class="gb-pop-item gb-mid-only" :aria-checked="compact" @click="close(), setDensity(compact ? 'comfortable' : 'compact')"><GbIcon name="align-justify" small /> Compact spacing<GbIcon v-if="compact" name="check" small class="gb-pop-check" /></button>
             </div>
           </template>
         </GbPopover>
@@ -74,7 +70,6 @@
       <template v-if="!page">
         <button type="button" class="gb-icon-btn" aria-label="Previous issue (k)" title="Previous issue (k)" :disabled="!hasPrev" @click="emit('prev')"><GbIcon name="up" /></button>
         <button type="button" class="gb-icon-btn" aria-label="Next issue (j)" title="Next issue (j)" :disabled="!hasNext" @click="emit('next')"><GbIcon name="down" /></button>
-        <span v-if="!v2" class="gb-keys" aria-hidden="true"><kbd>k</kbd><kbd>j</kbd></span>
         <span class="gb-tbsep" aria-hidden="true" />
       </template>
       <button type="button" class="gb-icon-btn gb-wide-only" :aria-label="copied ? 'Link copied' : 'Copy link to this issue'" :title="copied ? 'Link copied' : 'Copy link to this issue'" @click="copyLink"><GbIcon :name="copied ? 'check' : 'link'" /></button>
@@ -82,7 +77,6 @@
       <router-link v-if="!page" class="gb-icon-btn gb-wide-only" :to="`/issues/${id}`" aria-label="Open as a page of its own" title="Open as a page of its own"><GbIcon name="external" /></router-link>
       <template v-if="!page">
         <span class="gb-tbsep" aria-hidden="true" />
-        <span v-if="!v2" class="gb-keys" aria-hidden="true"><kbd>Esc</kbd></span>
         <button type="button" class="gb-icon-btn" aria-label="Close panel (Esc)" title="Close panel (Esc)" @click="emit('close')"><GbIcon name="close" /></button>
       </template>
     </div>
@@ -99,9 +93,9 @@
     </div>
 
     <template v-else>
-      <!-- the head v2 (docs/design/issue-head): the title alone, the fields
+      <!-- the head (docs/design/issue-head): the title alone, the fields
            line, the branch line; the identity is the bar's -->
-      <div v-if="v2" class="gb-ihead gb-ihead-v2">
+      <div class="gb-ihead gb-ihead-v2">
         <IssueHead
           :thread="thread"
           :fields="fields"
@@ -114,7 +108,6 @@
           :reviewer="holder(stepCycle?.evidence.people?.spec)"
           @changed="fieldsChanged"
           @labels="labels"
-          @reveal="reveal"
           @open="(other: string) => emit('open', other)"
         >
           <template #rename>
@@ -128,41 +121,6 @@
         <p v-if="saveError && !renaming" class="gb-save-error" role="alert"><GbIcon name="error" small /> <b>Not saved.</b> {{ saveError }}</p>
         <p v-if="waiting" class="gb-wait" role="status"><GbIcon name="clock" small /> Syncing with the forges… your change is saved after it.</p>
       </div>
-      <div v-else class="gb-ihead">
-        <div class="gb-ititle">
-          <h2 v-if="!renaming" :id="`title-${uid}`"><span v-if="thread.number" class="gb-num">{{ thread.number }}</span>{{ thread.shown_title }}</h2>
-          <form v-else class="gb-rename" @submit.prevent="saveTitle">
-            <input autocomplete="off" data-1p-ignore data-lpignore="true" data-form-type="other" ref="titleInput" v-model="newTitle" class="epfl-input" aria-label="Title" :disabled="saving" @keydown.esc.stop="renaming = false" />
-            <button type="submit" class="epfl-btn epfl-btn-primary epfl-btn-sm" :disabled="saving || !newTitle.trim()">Save</button>
-            <button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" @click="renaming = false">Cancel</button>
-          </form>
-          <button v-if="!renaming" type="button" class="gb-icon-btn" aria-label="Edit title" @click="startRename"><GbIcon name="edit" /></button>
-          <button v-if="!renaming" type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" :disabled="saving" @click="toggleStatus">
-            <GbIcon :name="thread.status === 'open' ? 'closed' : 'open'" small />
-            {{ thread.status === 'open' ? 'Close issue' : 'Reopen issue' }}
-          </button>
-        </div>
-        <div class="gb-imeta">
-          <span :class="['epfl-badge', thread.status === 'open' ? 'epfl-badge-tertiary' : 'epfl-badge-dark']">
-            <GbIcon :name="thread.status === 'open' ? 'open' : 'closed'" small />{{ thread.status === 'open' ? 'Open' : 'Closed' }}
-          </span>
-          <span><b>{{ thread.author.name }}</b> opened this {{ on(thread.created_at) }} · {{ comments }} comment{{ comments === 1 ? '' : 's' }}</span>
-          <span v-if="thread.forges?.length" class="gb-forgelinks">
-            <template v-for="(f, i) in thread.forges" :key="f.url">
-              <span v-if="i" aria-hidden="true">·</span>
-              <a :href="f.url" target="_blank" rel="noopener noreferrer">{{ f.name }}{{ f.number ? ` #${f.number}` : '' }}<GbIcon name="external" small /><span class="gb-sr">(opens in a new tab)</span></a>
-            </template>
-          </span>
-          <span class="gb-mono" title="The issue's id in git-board">id {{ thread.id.slice(0, 7) }}</span>
-          <button type="button" class="gb-linkbtn" title="The head of docs/design/issue-head: the title alone, the fields and branch lines" @click="toV2">The new head</button>
-          <span v-if="cycleView" class="gb-seg gb-seg-sm gb-pageswitch" role="group" aria-label="Page" title="Classic: the issue as someone on the classic page sees it">
-            <button type="button" :aria-pressed="layout === 'cycle'" @click="switchLayout('cycle', $event)">Cycle</button>
-            <button type="button" :aria-pressed="layout === 'classic'" @click="switchLayout('classic', $event)">Classic</button>
-          </span>
-        </div>
-        <p v-if="saveError && !renaming" class="gb-save-error" role="alert"><GbIcon name="error" small /> <b>Not saved.</b> {{ saveError }}</p>
-        <p v-if="waiting" class="gb-wait" role="status"><GbIcon name="clock" small /> Syncing with the forges… your change is saved after it.</p>
-      </div>
 
       <IssueStep v-if="layout === 'cycle'" ref="step" :id="thread.id" :status="statusValue" :labels="thread.labels" :events="thread.events" :forges="thread.forges" :head="reading.tab === 'conversation'" @open="openStep" @changed="load" @comment="(b, id) => comment(b, undefined, id)">
         <template #tabs>
@@ -172,7 +130,7 @@
             <button type="button" class="gb-tab" role="tab" :aria-selected="reading.tab === 'history'" @click="reading.tab = 'history'">History <span class="gb-modes-count">{{ changeCount }}</span></button>
             <button v-if="created" type="button" class="gb-tab" role="tab" :aria-selected="reading.tab === 'changes'" @click="reading.tab = 'changes'">Changes <span class="gb-modes-count">{{ bodyVersions.length + ticksOf(created).length }}</span></button>
           </div>
-          <span v-if="v2" class="gb-tabs-people"><PeopleButton :author="thread.author" :events="thread.events" /></span>
+          <span class="gb-tabs-people"><PeopleButton :author="thread.author" :events="thread.events" /></span>
           </div>
         </template>
         <template #intent="{ folded, cycle }">
@@ -282,28 +240,10 @@
             />
           </template>
         </template>
-        <template v-if="!v2" #side="{ cycle }">
-          <IssueSide
-            :id="thread.id"
-            :title="thread.title"
-            :labels="thread.labels"
-            :names="sideNames"
-            :fields="fields"
-            :forges="thread.forges"
-            :participants="thread.participants"
-            :events="thread.events"
-            :saving="saving"
-            :spec="cycle && created && (cycle.at === 'intent' || spec.on || spec.before) ? spec : undefined"
-            :reviewer="holder(cycle?.evidence.people?.spec)"
-            @changed="fieldsChanged"
-            @labels="labels"
-            @reveal="reveal"
-            @open="(other: string) => emit('open', other)"
-          />
-        </template>
       </IssueStep>
       <!-- the classic page (docs/prd/classic-view.md): the description, then
-           every comment and change in order, the composer; the fields aside -->
+           every comment and change in order, the composer; the fields are
+           the head's -->
       <div v-else class="gb-cols">
         <div class="gb-maincol">
           <div class="gb-tabrow">
@@ -311,7 +251,7 @@
             <button type="button" class="gb-tab" role="tab" :aria-selected="reading.tab !== 'history'" @click="reading.tab = 'conversation'">Conversation</button>
             <button type="button" class="gb-tab" role="tab" :aria-selected="reading.tab === 'history'" @click="reading.tab = 'history'">History <span class="gb-modes-count">{{ changeCount }}</span></button>
           </div>
-          <span v-if="v2" class="gb-tabs-people"><PeopleButton :author="thread.author" :events="thread.events" /></span>
+          <span class="gb-tabs-people"><PeopleButton :author="thread.author" :events="thread.events" /></span>
           </div>
           <HistoryView v-if="reading.tab === 'history'" :thread="thread" :fields="fields" />
           <template v-else>
@@ -334,22 +274,6 @@
             />
           </template>
         </div>
-        <IssueSide
-          v-if="!v2"
-          :id="thread.id"
-          :title="thread.title"
-          :labels="thread.labels"
-          :names="sideNames"
-          :fields="fields"
-          :forges="thread.forges"
-          :participants="thread.participants"
-          :events="thread.events"
-          :saving="saving"
-          @changed="fieldsChanged"
-          @labels="labels"
-          @reveal="reveal"
-          @open="(other: string) => emit('open', other)"
-        />
       </div>
     </template>
   </component>
@@ -365,7 +289,7 @@ import { inbox, inboxError, loadInbox } from '@/inbox';
 import { loadVisit, saveVisit, visit } from '@/lastvisit';
 import { fieldValues, type Fields } from '@/fields';
 import { useIssue } from '@/issue';
-import { classicPeek, cycleView, loadMe, me, meLoaded, on, when } from '@/me';
+import { classicPeek, cycleView, loadMe, me, meLoaded, when } from '@/me';
 import CycleReview from '@/components/CycleReview.vue';
 import CommentCard from '@/components/CommentCard.vue';
 import HistoryView from '@/components/HistoryView.vue';
@@ -377,7 +301,6 @@ import GbIcon from '@/components/GbIcon.vue';
 import IssueComposer from '@/components/IssueComposer.vue';
 import IssueFlow from '@/components/IssueFlow.vue';
 import IssueSections from '@/components/IssueSections.vue';
-import IssueSide from '@/components/IssueSide.vue';
 import IssueStep from '@/components/IssueStep.vue';
 import ForgeIcons from '@/components/ForgeIcons.vue';
 import GbPopover from '@/components/GbPopover.vue';
@@ -385,7 +308,7 @@ import InboxBell from '@/components/InboxBell.vue';
 import IssueHead from '@/components/IssueHead.vue';
 import PeopleButton from '@/components/PeopleButton.vue';
 import { idLabel } from '@/forges';
-import { head, headDensity, headWidth } from '@/headswitch';
+import { headDensity, headWidth } from '@/headswitch';
 import TimelineEvent from '@/components/TimelineEvent.vue';
 import VerdictBar from '@/components/VerdictBar.vue';
 import { mayGive, specOf } from '@/spec';
@@ -524,7 +447,6 @@ function showLine(path: string) {
   step.value?.show('review');
 }
 const changeCount = computed(() => (thread.value ? steps(thread.value.events).length : 0));
-const comments = computed(() => thread.value?.events.filter((e) => e.kind === 'comment').length ?? 0);
 const statusValue = computed(() => fieldValues(thread.value?.labels ?? [], 'status')[0] ?? '');
 // the board's fields, and any namespace this issue has besides
 const sideNames = computed(() => {
@@ -546,11 +468,6 @@ async function saveTitle() {
 }
 const toggleStatus = () => setStatus(thread.value?.status === 'open' ? 'closed' : 'open');
 
-// the head v2 (docs/design/issue-head), the default; More goes back to the
-// one before, kept per browser (headswitch.ts)
-const v2 = computed(() => head.value === 'v2');
-const backToV1 = () => (head.value = 'v1');
-const toV2 = () => (head.value = 'v2');
 // the bar's Fit and Fill: the head and the conversation at a reading width, or the panel's
 const fill = computed(() => headWidth.value === 'fill');
 const setWidth = (w: 'fit' | 'fill') => (headWidth.value = w);

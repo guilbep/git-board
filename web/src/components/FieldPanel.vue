@@ -6,7 +6,7 @@
     <template v-if="open">
       <button v-if="names.length > 1" type="button" class="gb-fp-back" @click="open = ''"><GbIcon name="back" small /> All fields</button>
       <p v-if="names.length > 1" class="gb-fp-name">{{ displayName(open) }}</p>
-      <FieldEditor :id="id" :name="open" :fields="fields" :labels="labels" @changed="emit('changed')" @done="names.length > 1 ? (open = '') : emit('done')" />
+      <FieldEditor :id="id" :name="open" :fields="fields" :labels="labels" :refs="refs[open] ?? []" :refs-known="refsKnown" @changed="emit('changed')" @done="names.length > 1 ? (open = '') : emit('done')" @open="(id) => emit('open', id)" />
     </template>
     <ul v-else class="gb-fp-rows">
       <li v-for="n in names" :key="n">
@@ -25,14 +25,16 @@
 
 <script setup lang="ts">
 import { ref, watch } from 'vue';
+import type { IssueRef } from '@/api/board';
 import { displayName, fieldValues, formatValue, typeOf, type Fields } from '@/fields';
 import { me } from '@/me';
 import FieldEditor from '@/components/FieldEditor.vue';
 import GbIcon from '@/components/GbIcon.vue';
 import ValueMark from '@/components/ValueMark.vue';
 
-const props = defineProps<{ id: string; names: string[]; fields: Fields; labels: string[] }>();
-const emit = defineEmits<{ changed: []; done: [] }>();
+// refs: the issues each issue field names, as the head read them (IssueHead)
+const props = defineProps<{ id: string; names: string[]; fields: Fields; labels: string[]; refs: Record<string, IssueRef[]>; refsKnown: boolean }>();
+const emit = defineEmits<{ changed: []; done: []; open: [id: string] }>();
 
 const open = ref('');
 watch(() => props.names.join(' '), () => (open.value = props.names.length === 1 ? props.names[0]! : ''), { immediate: true });

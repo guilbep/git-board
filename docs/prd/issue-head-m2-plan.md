@@ -53,6 +53,54 @@ docs` when a milestone touches `docs/`. And:
    `tokens/dark.css`: the same custom properties, the same values, loaded
    before `gitboard.css` (H-7).
 
+## Progress
+
+**2026-10-31.** In the main checkout, uncommitted, on top of 558eb94.
+Checked: `npm run typecheck` clean, `npm test` 305 of 305 (6 new), the
+adherence linter clean on every file touched, `make web-lint` 301 problems
+(514 before); `gofmt -l`, `go vet ./...` and `go test ./...` clean in a copy
+of the tree with git 2.43 (the Mac's shell has no Go). The drawer run for
+real on a throwaway board at 1440, 704 and 416px: one head, the date note,
+an issue field opening its issue, *Linked issues*, More's *Fill the panel*
+at 704 setting what the bar's *Fill* shows at 1440. `make ci` and `make
+docs` not run on the Mac.
+
+- Done: H-1 (the floor is 7rem, not 10: at 10 the bar overflowed by 44px
+  between 31 and 34rem), H-2, H-3 (`--ignore-pattern` for
+  `web/src/css/tokens/**` rather than a second config), H-4 (no server
+  change: `/api/forges`'s job is the last run, `left` per bridge; a forge
+  is the bridge of its kind, none when two share one), H-5 (the store is
+  H-4's, `issueChecks` in `forges.ts`; beside a count to send, the blue
+  count sits in the icon's bottom corner, not in one pill: one pill hid
+  the forge's shape), H-6 (Go and web together: `Waits.What` is a key the
+  Work page matches), H-7 (`TestPaletteHexMatchesCSS` reads
+  `tokens/values.css`), H-8 (seven screens pixel-identical before and
+  after), H-9, H-11 (an issue field's editor opens its issues, a date's
+  says how near or late: the two things the side column did that the head
+  didn't), D-1.
+- H-10, 2026-10-31: the PM read the arrow right ("ok for the pm"); it
+  stays as built.
+- Finished the same day: H-6's last words in `web/src/cycle.ts`, the
+  step-6 card's *Review the branch* and the lock reasons "opens when the
+  branch is in review" and "opens when the branch is merged" (the first
+  search caught `PR #N` only); H-3's count in `CONTRIBUTING.md`.
+- After a code review, the same day: H-4 has a server change after all.
+  `/api/forges` lists each bridge's host and project path, and a forge
+  link is the bridge on its host, in its project (a GitLab of any name,
+  two GitLabs on two hosts); none when two named by id share a host. Out
+  of reach is the newer of the issue's own last run and the job; the
+  issue's real run stays its last, saying which forges it reached. H-5:
+  "new there" counts each operation pulled once (it added the issues
+  changed besides); the issue sync answers its time, `ended`, the
+  server's clock as `job.ended`, and only a whole run done after it drops
+  the check, not one that failed. H-11: the head reads an issue's
+  references once per change of its labels, for the blocker, each issue
+  field's editor and *Linked issues*; "no such issue here" only from a
+  read of these values; a date that doesn't exist gives no note. The step
+  bar says "no gate yet" with no PR: an issue in review may have none.
+  H-3's count lives here, not in `CONTRIBUTING.md`. `make ci` green, web
+  307 of 307.
+
 ## The milestones
 
 | ID | Milestone | Wave | Needs | Decision | Size |

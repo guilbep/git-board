@@ -258,7 +258,7 @@ type Cycle struct {
 func gate(step int, risk, rule string) string {
 	switch {
 	case step == 3 && risk == "structural":
-		return "Structural: plan PR approved first"
+		return "Structural: the plan’s gate approved first"
 	case step == 3 && risk == "low":
 		return "Skipped, low risk"
 	case step == 4 && rule == config.NoTests:
@@ -271,7 +271,7 @@ func gate(step int, risk, rule string) string {
 		return "Structural: a second human"
 	}
 	return [...]string{"", "No issue, no agent", "Class written on the issue", "Plan approved by the plan role",
-		"", "A human commits and opens the PR", "A human who can explain the diff", "Green codes are not proof"}[step]
+		"", "A human commits and asks for review", "A human who can explain the diff", "Green codes are not proof"}[step]
 }
 
 // ApprovedPlan: the plan file is accepted or past it, the plan role
@@ -407,7 +407,7 @@ func Compute(in Input) Cycle {
 		default:
 			c.Step, w, act = 3, Waits{Role: "plan", Login: in.People["plan"], What: "approve the plan"}, "approve-plan"
 			if in.Risk == "structural" {
-				w.What, act = "approve the plan PR on GitHub", ""
+				w.What, act = "approve the plan’s gate on GitHub", ""
 			}
 		}
 	case "in-progress":
@@ -416,7 +416,7 @@ func Compute(in Input) Cycle {
 			w.What = "write the failing test"
 		}
 		if len(in.Tests) > 0 || rule == config.NoTests {
-			c.Step, w.What, act = 5, "commit and open the PR", "ready-for-review"
+			c.Step, w.What, act = 5, "commit and ask for review", "ready-for-review"
 		}
 		switch {
 		case noRisk:
@@ -427,14 +427,14 @@ func Compute(in Input) Cycle {
 			// the draft PR holding the plan: step 4's own state (C4)
 		case draft:
 			// Review opens when the draft PR is marked ready, not before
-			c.Note, act = fmt.Sprintf("draft PR #%d, waits for it to be marked ready for review", in.PR.Number), ""
+			c.Note, act = fmt.Sprintf("GitHub #%d, a draft, waits for it to be marked ready for review", in.PR.Number), ""
 		case in.PR != nil && in.PR.State == "OPEN":
-			c.Note = fmt.Sprintf("PR #%d open, waits for the status %s", in.PR.Number, first(in.Stages.InReview, "in-review"))
+			c.Note = fmt.Sprintf("GitHub #%d open, waits for the status %s", in.PR.Number, first(in.Stages.InReview, "in-review"))
 		}
 	case "in-review":
-		c.Step, w, act = 6, Waits{Role: "review", Login: in.People["review"], What: "review the PR"}, "review"
+		c.Step, w, act = 6, Waits{Role: "review", Login: in.People["review"], What: "review the branch"}, "review"
 		if draft {
-			c.Note, act = fmt.Sprintf("PR #%d is still a draft on GitHub", in.PR.Number), ""
+			c.Note, act = fmt.Sprintf("GitHub #%d is still a draft", in.PR.Number), ""
 		}
 		if merged { // with a validation status: the stage above is false otherwise
 			next := in.Stages.Validation[0]

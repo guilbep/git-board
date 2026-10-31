@@ -21,18 +21,18 @@ export function waitsFor(r: Pick<WorkRow, 'waits' | 'mine' | 'risk' | 'question'
   const w = r.waits;
   if (w.anyone) return `Anyone to ${w.what}`;
   if (!r.mine) return `${w.login} to ${w.what}`;
-  if (w.what === 'review the PR') return r.risk === 'structural' ? 'A second human' : 'Your review';
+  if (w.what === 'review the branch') return r.risk === 'structural' ? 'A second human' : 'Your review';
   if (w.what.startsWith('sign off ')) return `Your sign-off: ${w.what.slice('sign off '.length)}`;
   if (w.what.startsWith('move the status to ')) return `The status: ${w.what.slice('move the status to '.length)}`;
   return (
     {
       'set the risk class': 'A risk class',
       'approve the plan': 'Your read of the plan',
-      'approve the plan PR on GitHub': 'Your approval of the plan PR',
+      'approve the plan’s gate on GitHub': 'Your approval of the plan’s gate',
       'add acceptance criteria': 'Acceptance criteria',
       'write the failing test': 'The failing test',
       'write the tests': 'The tests',
-      'commit and open the PR': 'The PR',
+      'commit and ask for review': 'Your ask for review',
     }[w.what] ?? w.what
   );
 }

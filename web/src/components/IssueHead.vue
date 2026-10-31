@@ -32,13 +32,13 @@
           <span v-if="held(f.name)" class="gb-flag is-held">held</span>
         </template>
         <template #default="{ close }">
-          <FieldPanel :id="thread.id" :names="[f.name]" :fields="fields" :labels="thread.labels" @changed="emit('changed')" @done="close()" />
+          <FieldPanel :id="thread.id" :names="[f.name]" :fields="fields" :labels="thread.labels" :refs="refs.out" :refs-known="refsKnown" @changed="emit('changed')" @done="close()" @open="(id) => (close(), emit('open', id))" />
         </template>
       </GbPopover>
       <GbPopover v-if="allFields.length" :label="line.more.length ? `${line.more.length} more field${line.more.length === 1 ? '' : 's'} set: ${line.more.map(displayName).join(', ')}. Every field` : 'Every field, to read or set'" title="Fields" button-class="gb-hv is-quiet">
         <template #button>{{ line.more.length ? `+${line.more.length} more` : 'More fields' }}</template>
         <template #default="{ close }">
-          <FieldPanel :id="thread.id" :names="allFields" :fields="fields" :labels="thread.labels" @changed="emit('changed')" @done="close()" />
+          <FieldPanel :id="thread.id" :names="allFields" :fields="fields" :labels="thread.labels" :refs="refs.out" :refs-known="refsKnown" @changed="emit('changed')" @done="close()" @open="(id) => (close(), emit('open', id))" />
         </template>
       </GbPopover>
       <GbPopover v-if="shownLabels.length || listed" :label="shownLabels.length ? `Labels: ${shownLabels.join(', ')}${outside ? ', some outside the project’s list' : ''}` : 'Add a label'" title="Labels" :button-class="shownLabels.length ? 'gb-hv' : 'gb-hv is-quiet'">
@@ -52,7 +52,7 @@
 
     <BranchLine :id="thread.id" :labels="thread.labels" :title="thread.title" />
 
-    <IssueSide class="gb-head-extra" v-bind="side" :only="['spec', 'linked']" :spec="spec" :reviewer="reviewer" @changed="emit('changed')" @labels="(a, r) => emit('labels', a, r)" @reveal="(id) => emit('reveal', id)" @open="(id) => emit('open', id)" />
+    <IssueSide class="gb-head-extra" :linked="refs.in" :spec="spec" :reviewer="reviewer" @open="(id) => emit('open', id)" />
   </div>
 </template>
 
@@ -85,7 +85,7 @@ const props = defineProps<{
   spec?: SpecState | undefined;
   reviewer?: { name: string; role?: string | undefined } | undefined;
 }>();
-const emit = defineEmits<{ changed: []; labels: [add: string[], remove: string[]]; reveal: [id: string]; open: [id: string] }>();
+const emit = defineEmits<{ changed: []; labels: [add: string[], remove: string[]]; open: [id: string] }>();
 
 const status = computed(() => fieldValues(props.thread.labels, 'status')[0] ?? '');
 const line = computed(() => fieldLine(props.names, props.thread.labels));
@@ -115,36 +115,32 @@ const myLogin = computed(() => me.value?.me?.login ?? '');
 const held = (name: string) => !!syncStatus.value?.last?.conflicts.some((c) => c.bug_id === props.thread.id && c.field === name);
 const statusFlag = computed(() => (held('status') ? 'held' : line.value.blockedBy.length ? 'blocked' : ''));
 
-// what blocks it, to open: the issue named in blocked-by
-const refs = ref<IssueRefs>({ out: {}, in: {} });
+// the issues its issue fields name, and those naming it: read once for the
+// head, and again when its labels change, for the blocker to open, each
+// issue field's editor (out) and Linked issues (in). known: the last read
+// is of these labels, so a value it has no issue for names none here; one
+// failed or on its way leaves the last read, and known false.
+const refsKey = computed(() => `${props.thread.id} ${props.thread.labels.join(' ')}`);
+const read = ref<{ key: string; id: string; refs: IssueRefs } | null>(null);
 watch(
-  () => [props.thread.id, line.value.blockedBy.join(' ')],
-  async () => {
-    if (!line.value.blockedBy.length) return;
+  refsKey,
+  async (key) => {
+    const id = props.thread.id;
     try {
-      refs.value = await getRefs(props.thread.id);
+      const refs = await getRefs(id);
+      if (key === refsKey.value) read.value = { key, id, refs }; // else a newer read is on its way
     } catch {
-      refs.value = { out: {}, in: {} };
+      // the last read stays
     }
   },
   { immediate: true },
 );
+const refs = computed<IssueRefs>(() => (read.value?.id === props.thread.id ? read.value.refs : { out: {}, in: {} }));
+const refsKnown = computed(() => read.value?.key === refsKey.value);
+// what blocks it, to open: the issue named in blocked-by
 const blocker = (v: string) => refs.value.out['blocked-by']?.find((r) => r.value === v);
 function openBlocker(v: string) {
   const id = blocker(v)?.id;
   if (id) emit('open', id);
 }
-
-// what every IssueSide here shares: today's editors, one section each
-const side = computed(() => ({
-  id: props.thread.id,
-  title: props.thread.title,
-  labels: props.thread.labels,
-  names: props.names,
-  fields: props.fields,
-  forges: props.thread.forges,
-  participants: props.thread.participants,
-  events: props.thread.events,
-  saving: props.saving,
-}));
 </script>

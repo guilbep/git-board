@@ -40,7 +40,7 @@ type workAgent struct {
 	Issue   *store.Issue `json:"issue,omitempty"`
 	Step    int          `json:"step,omitempty"`
 	Name    string       `json:"name,omitempty"`
-	State   string       `json:"state"` // "Waits for you", "Waits for bob to review the PR", "No issue"
+	State   string       `json:"state"` // "Waits for you", "Waits for bob to review the branch", "No issue"
 	At      time.Time    `json:"at"`    // the last commit
 	Session *wtx.Session `json:"session,omitempty"`
 }

@@ -236,7 +236,7 @@ func TestCycleApprovePlan(t *testing.T) {
 	}
 
 	structural := issueAt(t, b, "ready", "risk:structural")
-	if code, body := post(t, newTestServer(t, b, cfg).URL+"/api/issues/"+structural[:8]+"/cycle/approve-plan", struct{}{}); code != http.StatusBadRequest || !strings.Contains(body, "the plan PR is approved on GitHub") {
+	if code, body := post(t, newTestServer(t, b, cfg).URL+"/api/issues/"+structural[:8]+"/cycle/approve-plan", struct{}{}); code != http.StatusBadRequest || !strings.Contains(body, "the plan’s gate is approved on GitHub") {
 		t.Errorf("structural: %d %s", code, body)
 	}
 }

@@ -51,7 +51,7 @@ const pr = (p: Partial<GatePR>): GatePR =>
 test('the step bar: done, current, locked with its reason', () => {
   const rows = steps(
     at({
-      step: 3, name: 'Plan', risk: 'structural', gate: 'Structural: plan PR approved first', note: 'plan not approved',
+      step: 3, name: 'Plan', risk: 'structural', gate: 'Structural: the plan’s gate approved first', note: 'plan not approved',
       evidence: { criteria: ['a', 'b', 'c', 'd'], risk: 'structural', plan_pr: pr({ number: 3089 }) },
     }),
     'erin',
@@ -62,13 +62,13 @@ test('the step bar: done, current, locked with its reason', () => {
     [3, 'Plan', 'current', 'plan not approved'],
     [4, 'Tests', 'locked', 'opens when work starts'],
     [5, 'Code', 'locked', 'opens with the test'],
-    [6, 'Review', 'locked', 'opens when the PR is ready for review'],
-    [7, 'Verify', 'locked', 'opens when the PR is merged'],
+    [6, 'Review', 'locked', 'opens when the branch is in review'],
+    [7, 'Verify', 'locked', 'opens when the branch is merged'],
   ]);
   // each step's own gate, for the main section when it is shown
   assert.deepEqual(rows.map((r) => r.gate), [
-    'No issue, no agent', 'Class written on the issue', 'Structural: plan PR approved first', 'The touched suites green, each criterion names its test',
-    'A human commits and opens the PR', 'Structural: a second human', 'Green codes are not proof',
+    'No issue, no agent', 'Class written on the issue', 'Structural: the plan’s gate approved first', 'The touched suites green, each criterion names its test',
+    'A human commits and asks for review', 'Structural: a second human', 'Green codes are not proof',
   ]);
 });
 
@@ -80,8 +80,8 @@ test('the step bar at step 1, and with steps skipped', () => {
     ['locked', 'opens once the risk is set'],
     ['locked', 'opens when work starts'],
     ['locked', 'opens with the test'],
-    ['locked', 'opens when the PR is ready for review'],
-    ['locked', 'opens when the PR is merged'],
+    ['locked', 'opens when the branch is in review'],
+    ['locked', 'opens when the branch is merged'],
   ]);
   // low risk waits at step 3 for Start work: current, its gate says skipped
   const low = steps(at({ step: 3, risk: 'low', skipped: [3], gate: 'Skipped, low risk', note: 'low risk, waits for the status in-progress', evidence: { criteria: ['a'] } }));
@@ -140,7 +140,7 @@ test('the step bar at verify', () => {
   );
   assert.deepEqual(rows.map((r) => r.line), ['1 criterion', 'Normal', 'Approved by erin', 'api/a_test.go at 2c8e4a1', 'Committed by dan', 'erin and alice approved', 'waits for alice to sign off qa']);
   assert.deepEqual(rows.map((r) => r.state), ['done', 'done', 'done', 'done', 'done', 'done', 'current']);
-  assert.equal(steps(at({ evidence: { branch: 'fix/1-x', head: '4f2e9c1a00', pr: pr({ number: 7, state: 'MERGED' }) } }))[5]?.line, 'PR #7 merged');
+  assert.equal(steps(at({ evidence: { branch: 'fix/1-x', head: '4f2e9c1a00', pr: pr({ number: 7, state: 'MERGED' }) } }))[5]?.line, 'GitHub #7 merged');
   assert.equal(steps(at({ evidence: { branch: 'fix/1-x', head: '4f2e9c1a00' } }))[4]?.line, 'fix/1-x at 4f2e9c1');
   assert.deepEqual(steps(at({ done: true, name: 'Done', evidence: {} })).map((r) => r.state), Array(7).fill('done'));
 });
@@ -188,21 +188,21 @@ test('the sign-off tiles', () => {
 });
 
 test('the status bar', () => {
-  assert.deepEqual(statusBar(at({ evidence: {} }), null), ['no branch yet', 'no PR']);
+  assert.deepEqual(statusBar(at({ evidence: {} }), null), ['no branch yet', 'no gate yet']);
   const checks = [{ name: 'Tests', state: 'success', required: true }, { name: 'Lint', state: 'pending', required: false }] as GatePR['checks'];
-  assert.deepEqual(statusBar(at({ evidence: { branch: 'fix/1-x', head: '4f2e9c1a00', pr: pr({ number: 7, checks }) } }), 2), ['fix/1-x at 4f2e9c1', 'PR #7 · 1 of 2 checks green', 'waits for 2 changes on the forges']);
-  assert.deepEqual(statusBar(at({ evidence: { branch: 'fix/1-x', pr: pr({ number: 7, state: 'MERGED' }) } }), 0), ['fix/1-x', 'PR #7 merged', 'in sync']);
-  assert.deepEqual(statusBar(at({ evidence: { pr: pr({ number: 7 }) } }), 1)[1], 'PR #7 open');
-  assert.deepEqual(statusBar(at({ evidence: { pr: pr({ number: 41, draft: true }) } }), 1)[1], 'draft PR #41');
+  assert.deepEqual(statusBar(at({ evidence: { branch: 'fix/1-x', head: '4f2e9c1a00', pr: pr({ number: 7, checks }) } }), 2), ['fix/1-x at 4f2e9c1', 'GitHub #7 · 1 of 2 checks green', 'waits for 2 changes on the forges']);
+  assert.deepEqual(statusBar(at({ evidence: { branch: 'fix/1-x', pr: pr({ number: 7, state: 'MERGED' }) } }), 0), ['fix/1-x', 'GitHub #7 merged', 'in sync']);
+  assert.deepEqual(statusBar(at({ evidence: { pr: pr({ number: 7 }) } }), 1)[1], 'GitHub #7 open');
+  assert.deepEqual(statusBar(at({ evidence: { pr: pr({ number: 41, draft: true }) } }), 1)[1], 'GitHub #41, a draft');
 });
 
 test('the draft PR that holds the plan, on step 3\'s line', () => {
   const plan = { path: 'docs/plans/41-x.md', status: 'draft' } as NonNullable<Cycle['evidence']['plan']>;
   const draft = pr({ number: 41, draft: true });
   const current = steps(at({ step: 3, name: 'Plan', risk: 'normal', note: '', waits: { role: 'plan', login: 'bob', what: 'approve the plan', anyone: false }, evidence: { plan, pr: draft } }));
-  assert.equal(current[2]?.line, 'waits for bob to approve the plan · draft PR #41');
+  assert.equal(current[2]?.line, 'waits for bob to approve the plan · GitHub #41, a draft');
   const done = steps(at({ step: 4, name: 'Tests', evidence: { plan, pr: draft } }));
-  assert.equal(done[2]?.line, 'docs/plans/41-x.md · draft PR #41');
+  assert.equal(done[2]?.line, 'docs/plans/41-x.md · GitHub #41, a draft');
   // ready for review: no longer a draft
   assert.equal(steps(at({ step: 4, name: 'Tests', evidence: { plan, pr: pr({ number: 41 }) } }))[2]?.line, 'docs/plans/41-x.md');
 });

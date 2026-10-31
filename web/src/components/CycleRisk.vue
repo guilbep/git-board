@@ -45,7 +45,7 @@ const emit = defineEmits<{ set: [risk: string]; suggest: [] }>();
 const CLASSES: Record<string, string> = {
   low: 'A copy, a style, a config value. Step 3 is skipped; a plan is written after, if at all.',
   normal: 'Behaviour changes in one area. The plan is approved here by the plan role; one review.',
-  structural: 'Data, a schema, a public interface. The plan goes through its own PR first, and review needs a second person.',
+  structural: 'Data, a schema, a public interface. The plan goes through its own gate first, and review needs a second person.',
 };
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 

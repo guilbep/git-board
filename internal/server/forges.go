@@ -25,11 +25,16 @@ var errDryRunFirst = errors.New("check first: a run writes, the check (a dry run
 
 // A bridge is a forge of .git-board.toml ([forges.<name>]), by its name.
 
-// syncBridge is a forge taking part in the sync.
+// syncBridge is a forge taking part in the sync. Host and Path say which
+// issue links are its (forgestate.ts bridgeFor): its host, and its
+// project's path as a link spells it, GitHub's owner/repo or a GitLab
+// path; "" for a GitLab table, which names its project by id.
 type syncBridge struct {
 	Name       string `json:"name"`
 	Target     string `json:"target"`               // github, gitlab
 	Discovered bool   `json:"discovered,omitempty"` // found in the git remotes, with no table
+	Host       string `json:"host"`
+	Path       string `json:"path,omitempty"`
 }
 
 // forgeStatus is the sync with the forges: which bridges take part, and
@@ -278,8 +283,13 @@ func (s *apiServer) forgeSnapshot() forgeStatus {
 	bridges := []syncBridge{}
 	keys := map[string]string{} // a forge's key, as an adapter makes it -> its name
 	for _, f := range s.syncForges() {
-		bridges = append(bridges, syncBridge{Name: f.Name, Target: f.Kind, Discovered: f.Discovered})
-		keys[cmp.Or(f.Host, f.Kind+".com")+"/"+cmp.Or(f.Path, f.Project)] = f.Name // github.com, gitlab.com by default
+		host := cmp.Or(f.Host, f.Kind+".com") // github.com, gitlab.com by default
+		path := f.Path
+		if f.Kind == "github" {
+			path = f.Project
+		}
+		bridges = append(bridges, syncBridge{Name: f.Name, Target: f.Kind, Discovered: f.Discovered, Host: host, Path: path})
+		keys[host+"/"+cmp.Or(f.Path, f.Project)] = f.Name
 	}
 	st := forgeStatus{Bridges: bridges, Job: s.job}
 	if s.job == nil || s.job.State != "running" {

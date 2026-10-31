@@ -135,7 +135,7 @@ func TestInvolved(t *testing.T) {
 
 func TestRowOf(t *testing.T) {
 	th := thread("i", bob, []string{"assignee:alice"}, store.Event{Kind: "labels", At: day(1)}, comment(bob, 2, "Which?", nil))
-	c := cycle.Cycle{Step: 5, At: "code", Of: 7, Name: "Code", Waits: cycle.Waits{Login: "alice", What: "commit and open the PR"}, Mine: true}
+	c := cycle.Cycle{Step: 5, At: "code", Of: 7, Name: "Code", Waits: cycle.Waits{Login: "alice", What: "commit and ask for review"}, Mine: true}
 	c.Evidence.Branch = "fix/1-x"
 	r := RowOf(th, c, alice)
 	if r.Step != 5 || !r.Involved || r.Question == nil || r.Since != day(2) || r.Branch != "fix/1-x" || r.Waits.Login != "alice" {

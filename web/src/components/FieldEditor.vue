@@ -39,7 +39,10 @@
 
     <ul v-if="kind === 'refs' && values.length" class="gb-pop-list">
       <li v-for="v in values" :key="v" class="gb-fe-ref">
-        <span>{{ v }}</span>
+        <button v-if="refOf(v)?.id" type="button" class="gb-fe-open" :title="`Open ${v}`" @click="emit('open', refOf(v)!.id!)">
+          <GbIcon :name="refOf(v)!.status === 'closed' ? 'closed' : 'open'" small /> <span class="gb-mono">{{ v }}</span> {{ refOf(v)!.title }}
+        </button>
+        <span v-else>{{ v }}<span v-if="type === 'issue' && refsKnown" class="gb-pop-muted">: no such issue here</span></span>
         <button type="button" class="gb-fe-x" :aria-label="`Remove ${v}`" :title="`Remove ${v}`" :disabled="busy" @click="remove(v)"><GbIcon name="close" small /></button>
       </li>
     </ul>
@@ -65,6 +68,7 @@
       <button v-if="kind === 'value' && values.length" type="button" class="gb-linkbtn" :disabled="busy" @click="remove(values[0]!)">Clear</button>
     </form>
 
+    <p v-if="due" class="gb-fe-note" :class="{ 'is-error': due.endsWith('late') }">{{ due }}</p>
     <p v-if="held" class="gb-fe-note is-held">
       The Project says <b>{{ held.project || 'nothing' }}</b>; both values stay until someone picks one.
       <router-link to="/conflicts">Resolve in Conflicts</router-link>
@@ -76,7 +80,9 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
+import type { IssueRef } from '@/api/board';
 import { displayName, fieldValues, formatValue, typeOf, type Fields } from '@/fields';
+import { dueNote } from '@/headfields';
 import { patchField } from '@/fieldwrite';
 import { message } from '@/issue';
 import { initials, me } from '@/me';
@@ -84,8 +90,10 @@ import { syncStatus } from '@/sync';
 import GbIcon from '@/components/GbIcon.vue';
 import ValueMark from '@/components/ValueMark.vue';
 
-const props = defineProps<{ id: string; name: string; fields: Fields; labels: string[] }>();
-const emit = defineEmits<{ changed: []; done: [] }>();
+// refs: the issues an issue field names, each to open, as the head read
+// them; refsKnown: read for these values, so one with none is no issue here
+const props = defineProps<{ id: string; name: string; fields: Fields; labels: string[]; refs: IssueRef[]; refsKnown: boolean }>();
+const emit = defineEmits<{ changed: []; done: []; open: [id: string] }>();
 
 const f = computed(() => props.fields[props.name]);
 const type = computed(() => typeOf(props.name, props.fields));
@@ -130,6 +138,10 @@ const entry = computed(() => {
 const inputType = computed(() => (type.value === 'date' ? 'date' : type.value === 'number' ? 'number' : 'search'));
 const inherited = computed(() => (!values.value.length && f.value?.inherits ? f.value.inherits : ''));
 const held = computed(() => syncStatus.value?.last?.conflicts.find((c) => c.bug_id === props.id && c.field === props.name));
+// a date: late, today, in n days (the old side column's note)
+const due = computed(() => (type.value === 'date' && values.value[0] ? dueNote(values.value[0], new Date()) : ''));
+
+const refOf = (v: string) => props.refs.find((r) => r.value === v);
 
 const draft = ref('');
 watch(

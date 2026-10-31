@@ -38,6 +38,11 @@ Taken with the user on 2026-10-21. Not reopened here.
 
 The lock reasons are C1's words.
 
+The pages name the gate as the issue head does (`docs/prd/issue-head.md`,
+the cycle's words, 2026-10-30): "GitHub #N" and "GitHub #N, a draft" where
+this document says PR, "the plan's gate" for the plan PR; a branch waits to
+be reviewed, then merged. The buttons keep the names below.
+
 | # | Step | Opens | Its button | Moves the status to |
 | --- | --- | --- | --- | --- |
 | 1 | Intent | always | Move to ready, once the description lists a criterion | `ready` |

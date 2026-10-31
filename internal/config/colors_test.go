@@ -80,7 +80,7 @@ func TestHexColors(t *testing.T) {
 // PaletteHex is the web's dots, not a third set of colors.
 func TestPaletteHexMatchesCSS(t *testing.T) {
 	t.Parallel()
-	css, err := os.ReadFile("../../web/src/css/gitboard.css")
+	css, err := os.ReadFile("../../web/src/css/tokens/values.css")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -90,7 +90,7 @@ func TestPaletteHexMatchesCSS(t *testing.T) {
 	}
 	for _, c := range Palette {
 		if PaletteHex[c] == "" || PaletteHex[c] != dots[c] {
-			t.Errorf("%s: PaletteHex %q, gitboard.css --gb-%s-dot %q", c, PaletteHex[c], c, dots[c])
+			t.Errorf("%s: PaletteHex %q, tokens/values.css --gb-%s-dot %q", c, PaletteHex[c], c, dots[c])
 		}
 	}
 	if len(PaletteHex) != len(Palette) {

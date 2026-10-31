@@ -238,7 +238,7 @@ func (s *apiServer) handleCycleAction(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if ev.Risk == "structural" {
-			writeError(w, http.StatusBadRequest, errors.New("the plan PR is approved on GitHub"))
+			writeError(w, http.StatusBadRequest, errors.New("the plan’s gate is approved on GitHub"))
 			return
 		}
 		body, meta["plan:approve"], meta["cycle:step"] = "Plan approved", "1", "plan"

@@ -50,7 +50,8 @@ import { stepWords } from '@/ways';
 import GbIcon from '@/components/GbIcon.vue';
 
 const props = defineProps<{ id: string; waiting: number; onForges: boolean }>();
-const emit = defineEmits<{ synced: [] }>();
+// checked: a dry run's answer, for the bar's badges; synced: a real run's
+const emit = defineEmits<{ synced: [result: IssueSyncResult]; checked: [result: IssueSyncResult] }>();
 
 const busy = ref('');
 const plan = ref<IssueSyncResult | null>(null);
@@ -76,6 +77,7 @@ async function start() {
   busy.value = 'Checking the forges…';
   try {
     const dry = await syncIssue(props.id, true);
+    emit('checked', dry);
     if (dry.errors) {
       done.value = dry;
       return;
@@ -109,16 +111,16 @@ async function real() {
   busy.value = 'Syncing…';
   plan.value = null;
   done.value = await syncIssue(props.id, false);
-  emit('synced');
+  emit('synced', done.value);
 }
 </script>
 
 <style scoped>
 .gb-isync { display: grid; gap: .5rem; margin-top: .75rem; }
 .gb-isync-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
-.gb-isync-plan, .gb-isync-done { display: grid; gap: .375rem; margin: 0; padding: .625rem .75rem; border: 1px solid var(--border); background: var(--bg-subtle); font-size: .875rem; }
-.gb-isync-plan { border-left: 3px solid var(--warning); background: var(--warning-bg); }
-.gb-isync-done { border-left: 3px solid var(--success); }
+.gb-isync-plan, .gb-isync-done { display: grid; gap: .375rem; margin: 0; padding: .625rem .75rem; border: var(--border-w) solid var(--border); background: var(--bg-subtle); font-size: .875rem; }
+.gb-isync-plan { border-left: 0.1875rem solid var(--warning); background: var(--warning-bg); }
+.gb-isync-done { border-left: 0.1875rem solid var(--success); }
 .gb-isync-err { border-left-color: var(--danger); background: var(--danger-bg); color: var(--danger-fg); }
 .gb-isync-title { margin: 0; font-weight: 700; }
 .gb-isync ul { margin: 0; padding-left: 1.125rem; }

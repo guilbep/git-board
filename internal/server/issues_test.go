@@ -392,7 +392,7 @@ func TestForgeSyncFindsTheForges(t *testing.T) {
 	t.Cleanup(ts.Close)
 	var st forgeStatus
 	call(t, "GET", ts.URL+"/api/forges", nil, &st)
-	if want := []syncBridge{{Name: "github", Target: "github", Discovered: true}}; !slices.Equal(st.Bridges, want) {
+	if want := []syncBridge{{Name: "github", Target: "github", Discovered: true, Host: "github.com", Path: "o/r"}}; !slices.Equal(st.Bridges, want) {
 		t.Fatalf("bridges %+v", st.Bridges)
 	}
 	gh := fake.New("github.com/o/r")

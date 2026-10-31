@@ -4,7 +4,7 @@
 <template>
   <p v-if="strip" class="gb-plan-agent">
     <template v-for="(w, i) in strip.words" :key="w"><template v-if="i"> · </template>{{ w }}</template>
-    <template v-if="strip.draft"> · <a :href="strip.draft.url" target="_blank" rel="noopener noreferrer">Draft PR #{{ strip.draft.number }}, the plan only<span class="gb-sr">(opens in a new tab)</span></a></template>
+    <template v-if="strip.draft"> · <a :href="strip.draft.url" target="_blank" rel="noopener noreferrer">GitHub #{{ strip.draft.number }}, a draft, the plan only<span class="gb-sr">(opens in a new tab)</span></a></template>
   </p>
   <template v-if="plan">
     <h3 class="gb-ws-title">{{ title }}</h3>
@@ -12,7 +12,7 @@
       <span class="gb-mono">{{ plan.path }}</span>
       <span v-if="plan.issue">issue: {{ plan.issue }}</span>
       <span v-if="plan.status">status: {{ plan.status }}</span>
-      <a v-if="pr" :href="pr.url" target="_blank" rel="noopener noreferrer">plan PR #{{ pr.number }}<span class="gb-sr">(opens in a new tab)</span></a>
+      <a v-if="pr" :href="pr.url" target="_blank" rel="noopener noreferrer">the plan’s gate, GitHub #{{ pr.number }}<span class="gb-sr">(opens in a new tab)</span></a>
     </p>
     <!-- ponytail: the whole file, clamped, rather than its summary, options and why parsed out -->
     <MarkdownBody v-if="html" :html="html" :class="['gb-clamp', { 'is-open': open }]" />

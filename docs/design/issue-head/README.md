@@ -44,7 +44,7 @@ still open is under *Open points*.
 | Waits on their source | The block of what waits (rows 9 to 14) goes. A held prio carries a *held* flag; a hold carries its flag in the status box, and "by #2802" after it; the changes waiting for a forge are that forge's count; a PR's state is its branch's chip. |
 | Inbox | A bell in the bar. Bell, in the text color: the issue reaches your inbox. Bell-off, grey: it doesn't. Grey bell: a project role brings new and closed only. Hover turns it red, as EPFL links and tags do. The popover offers git-board's three choices, applied on click: Automatic, Following, Not following (row 16g). |
 | Forges | An icon each in the bar, GitHub's and GitLab's as Feather draws them. Nothing waiting: the bare icon. Changes to send: a yellow count with an up arrow. A sync running, a forge out of reach, an issue changed on both sides, an issue not on the forge yet: a small badge each. The popover lists each forge and offers Send now and Refresh (row 16e, row 18). |
-| Participants | At the end of the tab row: the author, then the latest to comment, four faces and "7 in this conversation"; three faces and +N on a phone. Assignees stay in the fields: who does it is not who talks (rows 16f and 18). |
+| Participants | At the end of the tab row: the author, then the latest to comment, four faces then +N at every width (2026-10-31: they fit beside the tabs at 416, so no second rule for a phone); "7 in this conversation" is the button's name and tooltip. Assignees stay in the fields: who does it is not who talks (rows 16f and 18). |
 | Branches | One chip per branch, its color for whose move: red the author's, yellow a reviewer's, blue the machines', green anyone may merge, grey a draft, canard merged. A chip shows its state icon, its number, a word, and an arrow to the face whose move it is. Red first, then yellow, blue, green, drafts, branches without a gate; four chips, then "+N more"; merged and closed fold at the end (rows 16c and 18). |
 | Create a branch | A popover from the plus at the end of the branch line: the name `[branches]` proposes, editable, from origin's default branch, and the commands to copy (row 16d). |
 | Labels | Off by default: no chip, no *Add label*. A manager who wants some lists them in `.git-board.toml`; the picker offers that list as checkboxes, never free text; a label from a forge outside the list shows with a warning (row 16b). |
@@ -62,6 +62,15 @@ still open is under *Open points*.
 | Comfortable and Compact | 2026-10-30, after an outside critique of the density: the bar offers *Comfortable*, the default, the spacing as designed, and *Compact*, opted into and kept per browser (in a narrow drawer, More's *Compact spacing*). Compact: the title in EPFL's h5 (20px bold), 8px between the head's lines, linked issues on one line, the tabs under the head, a comment's header a line rather than a band with its time and forges at 12px, the text at line height 1.5 with its headings under the title's weight, a loose list's items as close as a tight one's. The text keeps its 15px. Measured on a GB-36-like issue at 1440×900: the description's first line at 303px, not 464; a one-line comment 73px tall, not 126; the description and two comments on screen, not the description alone. |
 | Fill keeps the prose at Fit's width | 2026-10-30, the same critique: in Fill, paragraphs, lists and headings stop at the width they have at Fit (115 characters a line, not 180); code, tables, images, the head and the branch rows take the panel's. Two browser margins went, in both spacings: the bar's crumb paragraph (a 62px bar, now 51) and a paragraph's 1em under it (15px between paragraphs, not the 12 asked, and 15 more under every comment). A loose checklist's boxes hang as a tight one's do, without bullets. |
 | EPFL to the letter | Tokens only (no hex, no px), Feather icons, borders not shadows (a shadow on popovers only), 2px radii, pills only on counts, hover changes color or border, a 2px focus outline 2px off, disabled at opacity 1, sentence case, no emoji, the red dot under the active tab (row 15b). The value marks (status, prio, kind) stay git-board's own: Feather has none. |
+| The bar under 56rem | 2026-10-31 (`docs/prd/issue-head.md`, H-1), after the redraw found the bar broken at 704: under 56rem of drawer, *Fit · Fill* and *Comfortable · Compact* leave the bar for More, as *Fill the panel* and *Compact spacing*, checkbox items that set the same state; the crumb never goes under 7rem, the view's name shortening first. Measured from 64 down to 24rem: the bar never overflows and the number always shows whole. |
+| The red dot, built | 2026-10-31 (H-2): the issue's tabs carry EPFL's dot, 0.4375 by 0.375rem, `--primary`; the board's other tabs keep their underline until a pass of their own. |
+| New on the forge | 2026-10-31 (open point 8, H-5): after this issue's *Refresh*, a forge with something to bring in shows a blue "↓N", gone once its own sync, or a whole sync from Settings, is done after it (a whole sync that fails keeps it), by the server's clock; never polled. With changes to send as well, the blue count sits in the icon's bottom corner, so the forge's shape still shows. *Changed on both sides* reads the same check; *out of reach* the newer of this issue's own last run and the last run the server keeps (H-4). A forge link is its bridge by its host and project, as the server lists each bridge's. |
+| The crumb's three parts | 2026-10-31 (open point 11): the view, the position and the number, as built: *current-sprint / 3 of 12 › #2771*. |
+| The waits block stays gone | 2026-10-31 (open point 2): each wait on its source, guilbep's "things live where they matter, always" (2026-10-29). |
+| Dark mode, later | 2026-10-31 (open point 10): the dark values moved to `web/src/css/tokens/dark.css` (H-7); the tints' contrast in dark is a pass of its own. |
+| The cycle's words | 2026-10-31 (H-6): the cycle's pages and the server's notes say "GitHub #N", "GitHub #N, a draft" and "the plan's gate" where they said PR; a branch waits to be reviewed. *Mark ready for review* and *Start verification* keep their names. |
+| The arrow, checked | 2026-10-31 (open point 9, H-10): shown 20d cold, the PM read the arrow as moving the status on; it stays an icon, its target in its tooltip and name. |
+| The head before, retired | 2026-10-31 (H-11): the switch, the old title row and meta line, and the side column are gone; Spec and Linked issues stay under the branch line. An issue field's values open their issue from its editor, and a date's editor says how near or late it is, as the side column did. |
 
 ## The screens
 
@@ -75,8 +84,10 @@ the viewer). Each board says what differs from the morning's drawing (rows
 16 to 19) and what is not built. The acceptance criteria are what a reviewer
 ticks; a box left open is not built, or found wrong. `O2-epfl.html` and
 `R1-blind.html` are records of rows 15b and 18, kept as drawn on
-`drawer.css`; the other screens of rows 16 and 19 (`P1` to `P7`, `U1` to
-`U6`) are superseded by these.
+`drawer.css`; the other screens of rows 16 and 19 were deleted on
+2026-10-31, the canvas keeps them. Redrawn on 2026-10-31 after the second
+pass (`docs/prd/issue-head.md`): `V1`, `V3`, `V5`, `V6`, `W1` and `W5`, with
+`gitboard.css` and `head.css` copied again that day.
 
 ### 20a `V1-bar-2771.html` · #2771: the bar, the head, the conversation
 
@@ -87,23 +98,23 @@ ticks; a box left open is not built, or found wrong. `O2-epfl.html` and
 - [x] Assignees as faces only, the viewer in black; *More fields* and *Label…* muted and dotted; no *Set prio · sprint*.
 - [x] The branch line shows *2771/2 review → PD* in yellow and "1 merged" as a plain chip.
 - [x] The tab row ends with four faces then +N; "N in this conversation" is the button's name.
-- [ ] The active tab carries EPFL's red dot: the app draws its 2px underline (`gitboard.css` `.gb-tab`).
+- [x] The active tab carries EPFL's red dot (H-2).
 
 ### 20b `V2-bar-2810.html` · #2810, the crowded one
 
 - [x] The title takes one line; the fields take two.
 - [x] The status box shows *in-review* and a red *blocked* flag; "by #2802" opens the blocking issue; the arrow moves to ready-for-validation.
 - [x] Prio *p1* carries a yellow *held* flag; its editor names the Project's value and links to Conflicts.
-- [ ] The held flag's tooltip names the Project's value, and its popover offers Resolve (W2-7, in part).
+- [ ] The held flag's tooltip names the Project's value, and its popover offers Resolve (W2-7, in part; not in the second pass).
 - [x] GitLab's icon carries "↑2"; GitHub's is bare.
 - [x] *2810/1 checks fail → PA* red, *2810/2 draft → PB* grey, *2810/3 checks run* blue; the hover sentence in `internal/ghpr`'s words.
 - [x] Linked issues under the branch line while there are any.
 
 ### 20c `V3-widths.html` · At 704 and on a phone
 
-- [ ] At 704 nothing in the bar goes: **found wrong**. Between 30 and about 52rem, *Fit · Fill* and *Comfortable · Compact* crush the crumb to nothing and the forges draw over it. To fix: hide the two switches under about 52rem (a container query), or give the crumb a minimum width.
+- [x] At 704 the bar keeps the crumb whole: under 56rem the two switches move into More (H-1).
 - [x] At 416 the two switches, copy link and open as a page move into More, with *Compact spacing*; the view's name shortens before the number; the title is 20px; buttons are 2rem.
-- [ ] Three faces then +N on a phone: the build shows four at every width (`PeopleButton.vue`). To settle, or to build.
+- [x] Four faces then +N at every width (decision *Participants*, 2026-10-31).
 
 ### 20d `V4-stepper.html` · The next step: the arrow on the status box
 
@@ -115,14 +126,14 @@ ticks; a box left open is not built, or found wrong. `O2-epfl.html` and
 ### 20e `V5-bar-moves.html` · The bar at 1024, 704 and 416
 
 - [x] The bar at 1024 and 416 drops elements in the order the board's table says.
-- [ ] The bar at 704 (see 20c).
+- [x] The bar at 880 and 704: the switches in More (H-1).
 
 ### 20f `V6-lanes.html` · Branches in the issue's folder; the cycle, branched out
 
 - [x] The names follow `branches.go`: `{kind}/{number}/{n}-{slug}`, `{n}` counted from the branches and the base's last 500 merge subjects; no kind, no folder prefix.
 - [x] With two branches or more, a row per branch under the step bar: Tests, Code, Review; past cells ticked, the issue's lane in red, a merged lane in canard, a closed one struck; the row's end names the gate, "merged", "closed" or "no test yet".
 - [x] The issue's step is its least advanced open lane.
-- [ ] The cycle's own texts say branch, review, merge (W3-4, in part).
+- [x] The cycle's own texts say "GitHub #N" and "the plan's gate" (H-6).
 
 ### 20g `V7-fit-fill.html` · Fit and Fill
 
@@ -133,7 +144,7 @@ ticks; a box left open is not built, or found wrong. `O2-epfl.html` and
 
 - [x] Compact: the title 20px bold, 8px between the head's lines, linked issues on one line, the tabs under the head, a comment's header a line with its time and forges at 12px, the text at 1.5 with headings at the body size, a loose list's items as close as a tight one's; the text keeps its 15px.
 - [x] Both: no browser margin under the bar's crumb (a 51px bar) nor under a paragraph; a loose checklist's boxes hang.
-- [ ] Which one is the default, once both have been used.
+- [ ] Which one is the default, once both have been used (guilbep's call).
 
 ### 20i `W1-fields.html` · The fields line, and one editor per value
 
@@ -165,8 +176,8 @@ ticks; a box left open is not built, or found wrong. `O2-epfl.html` and
 ### 20m `W5-forges.html` · The forges in the bar
 
 - [x] Bare (in sync), a yellow count with an up arrow (to send), a blue sync badge (syncing), an upload icon (not on the forges yet).
-- [ ] A red cloud-off (out of reach) and a triangle (changed on both sides): in `forgestate.ts` and `head.css`, not wired (W2-2).
-- [ ] The blue "↓3" after a check (W3-6, open point 8).
+- [x] A red cloud-off (out of reach, from the newer of this issue's last run and the board's) and a triangle (changed on both sides, from this issue's Refresh) (H-4).
+- [x] The blue "↓3" after this issue's Refresh; beside a count to send, in the bottom corner (H-5).
 - [x] Each icon's name and tooltip say the forge, the issue's number there and the state in words.
 - [x] The popover lists each forge with its link and state, *See the N waiting changes*, then *Send now* (or *Put it on the forges*) and *Refresh from forges*: a dry run first, then it asks.
 
@@ -192,7 +203,7 @@ check of the three choices the notes left open. Records, kept as drawn
 | Region | Rule |
 | --- | --- |
 | Bar | Today's `.gb-ptop`, 3.5rem high, a hairline under it. Left: the view's name (ellipsis), "›" (EPFL's breadcrumb separator), the number in mono, the Closed badge. Right: the forges, the bell, More, a separator, previous, next, a separator, copy link, expand, open as a page, close. |
-| Column | `max-width: 40rem` with its padding, centred; the head, the tab row and the conversation share it. |
+| Column | *Fit*: `--gb-fit`, 52rem, centred; *Fill*: the panel's width, the prose kept at Fit's (`--gb-prose`). The head, the tab row and the conversation share it. |
 | Title | `--fs-h4` (1.5rem), normal weight, `--lh-normal`; `--fs-h5` under 30rem. |
 | Fields line | A wrapping flex row, gap `var(--space-2) var(--space-3)`, `--fs-sm`; the status stepper first. |
 | Branch line | A wrapping flex row, gap `var(--space-2)`, `margin-top: var(--space-3)`; a git-pull-request mark first, the plus last. |
@@ -265,9 +276,9 @@ is the drawer as drawn before the build, lint-clean, kept for `O2` and `R1`.
 
 | Width | Changes |
 | --- | --- |
-| ≥ 64rem | as drawn (19a, 19b) |
-| 40 to 64rem | the column fills; the block wraps (19c, 704) |
-| < 30rem | the bar drops copy link and open as a page into More, the view's name shortens; the title steps down to `--fs-h5`; three faces then +N; popovers keep inside the drawer (19c, 416) |
+| ≥ 56rem | as drawn (20a, 20b) |
+| 30 to 56rem | *Fit · Fill* and *Comfortable · Compact* go into More; the column fills; the block wraps (20c, 704) |
+| < 30rem | the bar drops copy link and open as a page into More too, the view's name shortens; the title steps down to `--fs-h5`; four faces then +N; popovers keep inside the drawer (20c, 416) |
 
 ## Edge cases
 
@@ -295,13 +306,13 @@ is the drawer as drawn before the build, lint-clean, kept for `O2` and `R1`.
 Not decided on the canvas. The plan marks the milestones that wait on them.
 
 1. *Decided 2026-10-30, see Decisions.* **The side column goes.** J-line 2 moves Fields, Labels, Development, Forges, Participants and Inbox out of it. `time-flow`'s README (row 6) kept "Fields keep the sidebar"; this supersedes it once confirmed. Spec and Linked still need a place: proposed, a line under the branch line while they have content.
-2. **The waits block is gone.** Each wait now sits on its source (*Decisions*). Read from "things live where they matter, always"; to confirm.
+2. *Decided 2026-10-31, see Decisions.* **The waits block is gone.** Each wait now sits on its source (*Decisions*). Read from "things live where they matter, always"; to confirm.
 3. *Decided 2026-10-30.* **The branch's name in its folder.** Proposed: `[branches] name = "{kind}/{number}/{n}-{slug}"`, so `test/2771/1-implement-tests-to-validate-all-equations`, `test/2771/2-reference-examples`, and `2811/1-…` with no kind. `{n}` is counted, never stored: one more than the highest found among the issue's branches and the merge commits on the base that name one. The issue's number stays the first number in the name, which `branches.Names` needs; a branch named `test/2771` never exists, so git's folder rule holds. A deleted, never-merged branch's number can come back.
 4. *Decided 2026-10-30: both, Create and Copy.* **git-board makes the branch.** Proposed: *Create* runs `git branch --no-track <name> <start>` and `git push -u origin <name>`, never `git switch` (it would change the checked-out branch of the clone the server runs in), only when the server listens on localhost, as `wtx` runs are guarded (`worktrees.go`); otherwise the popover keeps *Copy the commands*. The popover then gives `git switch <name>`.
 5. *Decided 2026-10-30.* **The words.** Proposed: a branch's three steps are *Branch*, *Review*, *Merge*; the chips name the branch (2771/2), and the gate's number (#3155) moves into its popover as "The gate: GitHub #3155"; *Open PR into dev* becomes *Ask for review*, which opens the gate. *Mark ready for review* and *Start verification* (`cycle-protocol.md`) keep their names.
 6. *Decided 2026-10-30, built.* **Several branches and the cycle: branched out.** `cycle.Gather` follows the newest branch (`gather.go`); with branch 2 in review and branch 3 started, which one is step 6's? guilbep asked, 2026-10-30: "I guess it should 'branched out'?" Proposed, branched out: Intent, Risk and Plan stay the issue's, once; from Tests on, each branch of the issue's folder runs its own lane, Tests, Code, Review (branch, review, merge), drawn as one row per branch (2771/1, 2771/2) under steps 4 to 6 of the step bar; the lanes join again at Verify, which opens once every branch is merged or closed, and the sign-off closes the issue as today. The issue's own step, and the status the cycle proposes, is its least advanced open lane, so a new branch never hides behind a merged one. To confirm; then W3-5.
 7. *Decided 2026-10-30.* **The labels key.** Proposed: `[labels] list = [...]`, after `[repos] list` and `[sprints] list`. It supersedes row 8a's `[issue] labels = true`.
-8. **"New on the forge".** The blue "↓3" needs a check (a dry run) to know; proposed only after a Refresh, never polled.
-9. **The arrow without words.** The blind check found icons alone misread on chips; the arrow sits on the status it moves and its tooltip names the target. A quick check with the PM before the words go.
-10. **Dark mode.** `dark.css` redefines the app's colors; the drawer uses only semantic tokens, but the tints' contrast in dark needs a pass once `dark.css` is on tokens.
-11. **The position in the bar.** Today's crumb shows the view and the position ("3 / 12"); the boards show the view and the number. Keeping all three is proposed: *current-sprint 3/12 › #2771*.
+8. *Decided 2026-10-31, built.* **"New on the forge".** The blue "↓3" needs a check (a dry run) to know; proposed only after a Refresh, never polled.
+9. *Decided 2026-10-31: the PM read the arrow right; it stays.* **The arrow without words.** The blind check found icons alone misread on chips; the arrow sits on the status it moves and its tooltip names the target. A quick check with the PM before the words go.
+10. *Decided 2026-10-31: later.* **Dark mode.** `dark.css` redefines the app's colors; the drawer uses only semantic tokens, but the tints' contrast in dark needs a pass once `dark.css` is on tokens.
+11. *Decided 2026-10-31: all three.* **The position in the bar.** Today's crumb shows the view and the position ("3 / 12"); the boards show the view and the number. Keeping all three is proposed: *current-sprint 3/12 › #2771*.

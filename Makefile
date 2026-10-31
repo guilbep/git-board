@@ -1,4 +1,4 @@
-.PHONY: help build test lint fmt vet licences ci install install-latest web-dev web-check web-build dist docs docs-serve clean
+.PHONY: help build test lint fmt vet licences ci install install-latest web-dev web-check web-lint web-build dist docs docs-serve clean
 
 # The public targets, each with its ## line: a bare make prints them.
 help: ## List the make targets
@@ -55,6 +55,15 @@ web/node_modules: web/package-lock.json
 
 web-check: web/node_modules ## Typecheck and test the web app
 	cd web && npm run typecheck && npm test
+
+# The EPFL design system's adherence linter (web/README.md), from the skill
+# cloned next to this repo. web/src/css/tokens holds the raw values, as the
+# skill's own tokens folder does, so it is skipped. It reports and never fails: not part of ci until
+# the count is 0 (docs/prd/issue-head-m2-plan.md, H-3).
+EPFL_SKILL ?= ../epfl-design-skill
+web-lint: ## Report the EPFL adherence linter's problems in web/src (needs EPFL_SKILL)
+	@test -f $(EPFL_SKILL)/adherence/.stylelintrc.json || (echo "web-lint: no $(EPFL_SKILL)/adherence/.stylelintrc.json; clone EPFL-ENAC/epfl-design-skill there or set EPFL_SKILL"; exit 1)
+	-npx --yes --package=stylelint@16 --package=postcss-html -- stylelint "web/src/**/*.{css,vue}" --ignore-pattern "web/src/css/tokens/**" --config $(EPFL_SKILL)/adherence/.stylelintrc.json
 
 web-build: web/node_modules ## Build the web app into web/dist
 	cd web && npm run build

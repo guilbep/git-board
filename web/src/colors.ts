@@ -18,7 +18,8 @@ export async function loadColors(): Promise<void> {
 // the classes of the #rrggbb colors (labels.hexRules)
 const hexStyle = document.head.appendChild(document.createElement('style'));
 
-// colorClass is the CSS class of a value's color (gitboard.css), '' for none.
+// colorClass is the CSS class of a value's color (gitboard.css, its values
+// in tokens/values.css), '' for none.
 export function colorClass(field: string, value: string): string {
   const c = colors.value[field]?.[value];
   return !c ? '' : c.startsWith('#') ? `gb-c-x${c.slice(1)}` : `gb-c-${c}`;
