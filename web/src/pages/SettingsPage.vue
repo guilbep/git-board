@@ -97,12 +97,17 @@
       <div v-show="tab === 'views'" class="set-panel set-panel-wide"><ViewsSettings /></div>
       <div v-show="tab === 'sprints'" class="set-panel set-panel-wide"><SprintsSettings /></div>
       <div v-show="tab === 'roles'" class="set-panel set-panel-wide"><RolesSettings /></div>
+      <div v-show="tab === 'branches'" class="set-panel set-panel-wide"><BranchesSettings /></div>
+      <div v-show="tab === 'cycle'" class="set-panel set-panel-wide"><CycleSettings /></div>
+      <div v-show="tab === 'release'" class="set-panel set-panel-wide"><ReleaseSettings /></div>
+      <div v-show="tab === 'repos'" class="set-panel set-panel-wide"><ReposSettings /></div>
+      <div v-show="tab === 'attachments'" class="set-panel set-panel-wide"><AttachmentsSettings /></div>
       <!-- Advanced: the file itself, for what the forms don't cover -->
       <div v-show="tab === 'advanced'" class="set-panel set-panel-wide">
         <p v-if="cycleView && settings?.cycle.guessed && settings.cycle.closing" class="gb-hint">
           The cycle's stages are guessed from the status names: ready <code>{{ settings.cycle.ready || '—' }}</code>, in progress <code>{{ settings.cycle.in_progress.join(', ') || '—' }}</code>,
           in review <code>{{ settings.cycle.in_review.join(', ') || '—' }}</code>, validation <code>{{ settings.cycle.validation.join(', ') || '—' }}</code>, closing <code>{{ settings.cycle.closing || '—' }}</code>.
-          Write <code>[cycle]</code> below to fix one the guess got wrong.
+          Set them in <router-link to="/settings/cycle">Cycle</router-link>, or edit the file below.
         </p>
         <ConfigEditor @saved="reload" />
       </div>
@@ -111,28 +116,6 @@
 
       <NumbersSettings v-if="tab === 'numbers'" @changed="numbers = $event" />
       <WorktreesSettings v-if="tab === 'worktrees'" @changed="worktrees = $event" />
-
-      <!-- the sections whose forms come in the next milestone (the plan's
-           M2): their tab is there, the file itself holds them meanwhile -->
-      <div v-if="['branches', 'cycle', 'release', 'repos'].includes(tab)" class="set-panel">
-        <h2 class="h4">{{ groups.flatMap((g) => g.tabs).find((t) => t.id === tab)?.label }}</h2>
-        <p>
-          Its forms are on their way — the next milestone of <code>docs/prd/settings-forms-plan.md</code>. Until then the section is
-          yours in the file itself: <router-link to="/settings/advanced">Advanced</router-link>.
-        </p>
-      </div>
-
-      <div v-if="tab === 'attachments'" class="set-panel">
-        <h2 class="h4">Attachments</h2>
-        <p v-if="settings?.uploads.enabled">
-          Files attached to comments go to <code>{{ settings.uploads.endpoint }}</code>, under <code>{{ settings.uploads.prefix }}/</code>,
-          served at <a :href="settings.uploads.public_url" target="_blank" rel="noopener noreferrer">{{ settings.uploads.public_url }}</a>.
-        </p>
-        <p v-else-if="settings">
-          Off. Set <code>ACCESS_KEY_ID</code>, <code>ACCESS_KEY_SECRET</code> and <code>BUCKET_NAME</code> where the git-board server runs,
-          and optionally <code>[uploads]</code> in <code>.git-board.toml</code>.
-        </p>
-      </div>
     </main>
   </div>
 </template>
@@ -151,9 +134,14 @@ import { settingsGroups, settingsTab, syncSummary } from '@/settingstabs';
 import { numberExample, numbersSummary } from '@/numbers';
 import AppHeader from '@/components/AppHeader.vue';
 import IdentityChooser from '@/components/IdentityChooser.vue';
+import AttachmentsSettings from '@/components/AttachmentsSettings.vue';
+import BranchesSettings from '@/components/BranchesSettings.vue';
 import ConfigEditor from '@/components/ConfigEditor.vue';
+import CycleSettings from '@/components/CycleSettings.vue';
 import FieldsSettings from '@/components/FieldsSettings.vue';
 import LabelsSettings from '@/components/LabelsSettings.vue';
+import ReleaseSettings from '@/components/ReleaseSettings.vue';
+import ReposSettings from '@/components/ReposSettings.vue';
 import SyncSettings from '@/components/SyncSettings.vue';
 import NumbersSettings from '@/components/NumbersSettings.vue';
 import RolesSettings from '@/components/RolesSettings.vue';

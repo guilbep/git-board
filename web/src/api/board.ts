@@ -703,6 +703,30 @@ export interface ConfigSprint {
   start: string; // RFC 3339 as the server holds it; a form edits YYYY-MM-DD
 }
 
+export interface ConfigSuite {
+  run?: string[] | null; // an argv, never a shell line
+  files?: string[] | null; // git glob pathspecs of what it reads
+  where?: string | undefined; // worktree (default) or ci
+  dir?: string | undefined; // from the checkout's root
+  env?: Record<string, string> | undefined;
+  tools?: string[][] | null; // version commands: their output names the toolchain
+}
+
+export interface ConfigRelease {
+  remote?: string | undefined;
+  environments?: string[] | null;
+  follow?: string | null | undefined; // the environment that follows the trunk
+  checks?: string | undefined;
+  images?: { name: string; context: string }[] | null;
+  chart?: { path: string; registry: string } | null;
+  version_values?: string[] | null;
+  builder?: string | undefined;
+  deploy?: { repo: string; path: string; registry?: string }[] | null;
+  binaries?: string[] | null;
+  platforms?: string[] | null;
+  build?: string | undefined;
+}
+
 export interface ConfigModel {
   hash: string;
   exists: boolean;
@@ -713,6 +737,31 @@ export interface ConfigModel {
   view_order: string[]; // the file's order: the tabs', the first is the landing one
   sprints: { length_days: number; start_weekday: string; list: ConfigSprint[] };
   roles: Record<string, string>;
+  branches: { base?: string | undefined; name?: string | undefined; kinds?: Record<string, string> | undefined };
+  cycle: {
+    on: boolean; // the file has a [cycle] table
+    ready?: string | undefined;
+    'in-progress'?: string[] | null;
+    'in-review'?: string[] | null;
+    validation?: string[] | null;
+    plans?: string | undefined;
+    'plans-in-pr'?: boolean | null | undefined;
+    'test-files'?: string[] | null;
+    criteria?: string[] | null;
+    steps?: string[] | null;
+    kinds?: Record<string, string> | undefined;
+    risk?: string | undefined;
+    plan?: string | undefined;
+    review?: string | undefined;
+    spec?: string | undefined;
+    signoffs?: Record<string, string> | undefined;
+    tests?: Record<string, ConfigSuite> | undefined;
+    checks?: Record<string, ConfigSuite> | undefined;
+    signers?: string | undefined;
+  };
+  repos: { list: string[]; assignees: string }; // assignees: how the forges hold them; native, labels
+  uploads: { endpoint?: string | undefined; public_url?: string | undefined; prefix?: string | undefined; region?: string | undefined };
+  release: ConfigRelease;
 }
 
 export function getConfigModel(): Promise<ConfigModel> {
@@ -722,7 +771,9 @@ export function getConfigModel(): Promise<ConfigModel> {
 // saveConfigSection applies one section's draft: fields and views take
 // {set, remove, order?} (a removal is a name the draft dropped, an order
 // the tabs'), labels {list, colors, descriptions}, sprints the table, roles
-// role → login. The answer is the check and the fresh model.
+// role → login, branches and uploads and release the section's value, cycle
+// {on, cycle}, repos {list, assignees}. The answer is the check and the
+// fresh model.
 export function saveConfigSection(section: string, value: unknown, base: string): Promise<{ check: ConfigCheck; model: ConfigModel }> {
   return request(`/api/config/section/${encodeURIComponent(section)}?base=${encodeURIComponent(base)}`, json('PUT', value));
 }
