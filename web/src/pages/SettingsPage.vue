@@ -10,11 +10,19 @@
   <div class="gb-page set">
     <nav class="set-nav" aria-label="Settings">
       <h1 class="h3 set-title">Settings</h1>
-      <router-link to="/settings/overview" class="set-tab" :aria-current="tab === 'overview' ? 'page' : undefined">Overview</router-link>
-      <div class="set-group">Where your issues go</div>
-      <router-link to="/settings/sync" class="set-tab" :aria-current="tab === 'sync' ? 'page' : undefined">Sync <span class="set-via">git, forges, Project</span></router-link>
-      <div class="set-group">This board</div>
-      <router-link v-for="t in boardTabs" :key="t.id" :to="`/settings/${t.id}`" class="set-tab" :aria-current="tab === t.id ? 'page' : undefined">{{ t.label }}</router-link>
+      <template v-for="(g, gi) in groups" :key="gi">
+        <div v-if="g.group" class="set-group">{{ g.group }}</div>
+        <router-link
+          v-for="t in g.tabs"
+          :key="t.id"
+          :to="`/settings/${t.id}`"
+          class="set-tab"
+          :aria-current="tab === t.id ? 'page' : undefined"
+        >
+          {{ t.label }}<span v-if="'via' in t && t.via" class="set-via">{{ t.via }}</span>
+          <span v-if="dirtySections[t.id]" class="set-dot" title="Unsaved changes" />
+        </router-link>
+      </template>
     </nav>
 
     <main class="set-main">
@@ -81,8 +89,16 @@
         </section>
       </div>
 
-      <!-- v-show: switching tabs keeps an unsaved draft -->
-      <div v-show="tab === 'project-file'" class="set-panel set-panel-wide">
+      <!-- the project file, a tab per section: each form drafts its own
+           section and saves it alone, the file's other lines untouched.
+           v-show: switching tabs keeps an unsaved draft. -->
+      <div v-show="tab === 'fields'" class="set-panel set-panel-wide"><FieldsSettings /></div>
+      <div v-show="tab === 'labels'" class="set-panel set-panel-wide"><LabelsSettings @changed="labels = $event" /></div>
+      <div v-show="tab === 'views'" class="set-panel set-panel-wide"><ViewsSettings /></div>
+      <div v-show="tab === 'sprints'" class="set-panel set-panel-wide"><SprintsSettings /></div>
+      <div v-show="tab === 'roles'" class="set-panel set-panel-wide"><RolesSettings /></div>
+      <!-- Advanced: the file itself, for what the forms don't cover -->
+      <div v-show="tab === 'advanced'" class="set-panel set-panel-wide">
         <p v-if="cycleView && settings?.cycle.guessed && settings.cycle.closing" class="gb-hint">
           The cycle's stages are guessed from the status names: ready <code>{{ settings.cycle.ready || '—' }}</code>, in progress <code>{{ settings.cycle.in_progress.join(', ') || '—' }}</code>,
           in review <code>{{ settings.cycle.in_review.join(', ') || '—' }}</code>, validation <code>{{ settings.cycle.validation.join(', ') || '—' }}</code>, closing <code>{{ settings.cycle.closing || '—' }}</code>.
@@ -92,8 +108,6 @@
       </div>
 
       <SyncSettings v-if="tab === 'sync'" @changed="whole = $event" />
-
-      <LabelsSettings v-if="tab === 'labels'" @changed="labels = $event" />
 
       <NumbersSettings v-if="tab === 'numbers'" @changed="numbers = $event" />
       <WorktreesSettings v-if="tab === 'worktrees'" @changed="worktrees = $event" />
@@ -122,19 +136,24 @@ import { getNumbers, getSettings, getViews, getWhole, getWorktrees, setView, typ
 import { message } from '@/issue';
 import { classicPeek, cycleView, loadMe, me } from '@/me';
 import { viewWords } from '@/view';
-import { settingsTab, settingsTabs, syncSummary } from '@/settingstabs';
+import { dirtySections, loadConfigModel } from '@/configmodel';
+import { settingsGroups, settingsTab, syncSummary } from '@/settingstabs';
 import { numberExample, numbersSummary } from '@/numbers';
 import AppHeader from '@/components/AppHeader.vue';
 import IdentityChooser from '@/components/IdentityChooser.vue';
 import ConfigEditor from '@/components/ConfigEditor.vue';
+import FieldsSettings from '@/components/FieldsSettings.vue';
 import LabelsSettings from '@/components/LabelsSettings.vue';
 import SyncSettings from '@/components/SyncSettings.vue';
 import NumbersSettings from '@/components/NumbersSettings.vue';
+import RolesSettings from '@/components/RolesSettings.vue';
+import SprintsSettings from '@/components/SprintsSettings.vue';
+import ViewsSettings from '@/components/ViewsSettings.vue';
 import WorktreesSettings from '@/components/WorktreesSettings.vue';
 
 const route = useRoute();
 const tab = computed(() => settingsTab(route.params.tab));
-const boardTabs = settingsTabs.filter((t) => ['project-file', 'labels', 'numbers', 'attachments', 'worktrees', 'you'].includes(t.id));
+const groups = settingsGroups();
 
 const settings = ref<Settings | null>(null);
 const worktrees = ref<Worktrees | null>(null);
@@ -142,12 +161,13 @@ const whole = ref<WholeStatus | null>(null);
 const numbers = ref<Numbers | null>(null);
 const labels = ref<Labels | null>(null);
 
-// the Overview: a card per tab, what it's for and where it stands
+// the Overview: a card per part, what it's for and where it stands; the
+// project file's sections are one card, each its own tab beside it
 const cards = computed(() => {
   const s = settings.value;
   const state: Record<string, string> = {
     sync: whole.value ? syncSummary(whole.value) : '…',
-    'project-file': `${viewNames.value.length} saved view${viewNames.value.length === 1 ? '' : 's'}.`,
+    fields: `${viewNames.value.length} saved view${viewNames.value.length === 1 ? '' : 's'}; the fields, sprints, roles and views are tabs beside this one.`,
     labels: labels.value ? `${labels.value.rows.length} label${labels.value.rows.length === 1 ? '' : 's'}${labels.value.repos.length ? `, on ${labels.value.repos.join(', ')}` : ''}.` : 'Open the tab to read GitHub.',
     numbers: numbers.value ? numbersSummary(numbers.value) : '…',
     attachments: !s ? '…' : s.uploads.enabled ? `On, served at ${s.uploads.public_url}.` : 'Off.',
@@ -156,14 +176,22 @@ const cards = computed(() => {
   };
   const what: Record<string, string> = {
     sync: 'Where your issues go: git, the forges, the GitHub Project. One Check, one Sync.',
-    'project-file': 'Fields, views, sprints, colors, branch names: .git-board.toml.',
+    fields: 'The project file (.git-board.toml), as forms: the fields, labels, views, sprints and roles, a tab each; the raw file under Advanced.',
     labels: "The project's labels, their colors and descriptions, on GitHub; lint.",
     numbers: `One number per issue, the same on every forge: ${numberExample(numbers.value)}.`,
     attachments: 'Files attached to comments, on S3 behind a CDN.',
     worktrees: 'One agent, one worktree, one branch, one PR: wtx, started from here.',
     you: 'Who you write as, your issue page, and the appearance.',
   };
-  return [{ id: 'sync', label: 'Sync' }, ...boardTabs].map((t) => ({ id: t.id, title: t.label, what: what[t.id] ?? '', state: state[t.id] ?? '' }));
+  return [
+    { id: 'sync', label: 'Sync' },
+    { id: 'fields', label: 'Project file' },
+    { id: 'labels', label: 'Labels' },
+    { id: 'numbers', label: 'Numbers' },
+    { id: 'attachments', label: 'Attachments' },
+    { id: 'worktrees', label: 'Worktrees' },
+    { id: 'you', label: 'You' },
+  ].map((t) => ({ id: t.id, title: t.label, what: what[t.id] ?? '', state: state[t.id] ?? '' }));
 });
 const themeOptions = [
   { value: 'system', label: 'System', hint: 'as the computer is set' },
@@ -215,11 +243,18 @@ async function reload() {
 
 onMounted(() => {
   if (!me.value) void loadMe();
+  void loadConfigModel();
   void reload();
   getWhole().then((w) => (whole.value = w), () => {});
   loadNumbers();
   getWorktrees().then((w) => (worktrees.value = w), () => {});
 });
+// a form tab with a draft: say so before the page goes
+const beforeUnload = (e: BeforeUnloadEvent) => {
+  if (Object.values(dirtySections.value).some(Boolean)) e.preventDefault();
+};
+onMounted(() => window.addEventListener('beforeunload', beforeUnload));
+onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload));
 // the Overview's numbers line: started, or an issue numbered, from anywhere
 const loadNumbers = () => void getNumbers().then((n) => (numbers.value = n), () => {});
 const reloadNumbers = debounced(loadNumbers);
@@ -239,6 +274,8 @@ onBeforeUnmount(offLive);
 .set-tab[aria-current='page'] { font-weight: 700; background: var(--bg-subtle); box-shadow: inset 3px 0 0 var(--primary); }
 .set-group { margin: 1.25rem 0 .375rem; padding: 0 .875rem; font-size: .75rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--fg-muted); }
 .set-via { margin-left: auto; font-size: .8125rem; font-weight: 400; color: var(--fg-muted); }
+.set-dot { flex: none; width: .5rem; height: .5rem; margin-left: auto; border-radius: 50%; background: var(--warning); }
+.set-tab:has(.set-via) .set-dot { margin-left: .5rem; }
 .set-main { flex: 1; min-width: 0; }
 .set-panel { display: flex; flex-direction: column; gap: 1.25rem; max-width: 64rem; }
 .set-panel-wide { max-width: none; }

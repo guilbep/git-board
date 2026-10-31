@@ -675,6 +675,58 @@ export function saveConfig(text: string, base: string): Promise<ConfigCheck> {
   return request('/api/config', json('PUT', { text, base }));
 }
 
+// .git-board.toml's sections, typed, as the settings' forms read and write
+// them (configsections.go): GET /api/config/model answers every section,
+// PUT /api/config/section/<name>?base=<hash> applies one — only its tables
+// change in the file, comments kept — and serves the check and the fresh
+// model. A field's value here is the form's whole draft for the section.
+export interface ConfigField {
+  single?: boolean;
+  options?: string[] | null;
+  numeric?: boolean;
+  type?: string | undefined; // select, iteration, person, number, date, issue, text; '': guessed
+  unit?: string | undefined; // a number's: h
+  project?: Record<string, string> | undefined; // the GitHub Project's name for a value
+  colors?: Record<string, string> | undefined; // a palette name or #rrggbb
+  descriptions?: Record<string, string> | undefined; // GitHub's, 100 characters at most
+}
+
+export interface ConfigLabels {
+  list: string[];
+  colors?: Record<string, string> | undefined;
+  descriptions?: Record<string, string> | undefined;
+}
+
+export interface ConfigSprint {
+  slug: string;
+  title: string;
+  start: string; // RFC 3339 as the server holds it; a form edits YYYY-MM-DD
+}
+
+export interface ConfigModel {
+  hash: string;
+  exists: boolean;
+  error?: string; // the file doesn't parse: the forms show it, Advanced fixes it
+  fields: Record<string, ConfigField>;
+  labels: ConfigLabels;
+  views: Record<string, ViewConfig>;
+  view_order: string[]; // the file's order: the tabs', the first is the landing one
+  sprints: { length_days: number; start_weekday: string; list: ConfigSprint[] };
+  roles: Record<string, string>;
+}
+
+export function getConfigModel(): Promise<ConfigModel> {
+  return request('/api/config/model');
+}
+
+// saveConfigSection applies one section's draft: fields and views take
+// {set, remove, order?} (a removal is a name the draft dropped, an order
+// the tabs'), labels {list, colors, descriptions}, sprints the table, roles
+// role → login. The answer is the check and the fresh model.
+export function saveConfigSection(section: string, value: unknown, base: string): Promise<{ check: ConfigCheck; model: ConfigModel }> {
+  return request(`/api/config/section/${encodeURIComponent(section)}?base=${encodeURIComponent(base)}`, json('PUT', value));
+}
+
 // ReleaseSetup is what Enable binary release proposes from the repository.
 export interface ReleaseSetup {
   binaries: string[]; // main packages, ./cmd/git-board

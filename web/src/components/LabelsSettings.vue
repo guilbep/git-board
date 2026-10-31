@@ -1,19 +1,79 @@
-<!-- Settings › Labels: the labels the project defines (each field's
-     options, the sprints, the kinds) with their color, description and
-     open issues, and how each GitHub repository of [repos] (else origin)
-     has them, read through GitHub's API with the forge sync's token where
-     git board serve runs. Adopt writes GitHub's color and description into
-     the Project file tab's draft; Send to GitHub creates and updates them
-     after a preview, offered only once every repository was read. Then lint:
-     git board lint's checks, and the GitHub labels outside the project's,
-     each deleted after a confirm. -->
+<!-- Settings › Labels: the [labels] table the project file holds — the
+     plain labels the project allows, their colors and descriptions, saved
+     through the section API like every form tab — and how the labels the
+     project defines (each field's options, the sprints, the kinds) stand
+     on each GitHub repository of [repos] (else origin), read through
+     GitHub's API with the forge sync's token where git board serve runs.
+     Adopt writes GitHub's color and description into the file through the
+     same API; Send to GitHub creates and updates them after a preview,
+     offered only once every repository was read. Then lint: git board
+     lint's checks, and the GitHub labels outside the project's, each
+     deleted after a confirm. -->
 <template>
   <div class="set-panel lb">
     <h2 class="h4">Labels</h2>
     <p class="lb-lead">
-      The labels the <router-link to="/settings/project-file">project file</router-link> defines, and how GitHub has them.
-      Colors and descriptions are set in the file; a hex color like <code>"#d73a4a"</code> paints the dot.
+      The project's own plain labels — yes-or-no flags that stack and that no field holds — then how every label the project defines
+      stands on GitHub. A label an issue can carry only one of (a priority, a kind) is a field's option, in <router-link to="/settings/fields">Fields</router-link>.
     </p>
+
+    <p v-if="modelError" class="epfl-alert epfl-alert-danger" role="alert">{{ modelError }}</p>
+
+    <!-- the [labels] table, as the forms hold it -->
+    <section v-if="labelsDraft.value.value" class="lb-own" aria-labelledby="lb-own">
+      <h3 id="lb-own" class="h5">The project's plain labels</h3>
+      <ConfigRows :rows="labelsDraft.value.value.list" add-label="Add a label" @update="labelsDraft.value.value.list = $event" @add="labelsDraft.value.value.list = [...labelsDraft.value.value.list, '']">
+        <template #row="{ row, set }">
+          <input :model-value="row" class="lb-tag" placeholder="needs-design" spellcheck="false" aria-label="A plain label" @update:model-value="set($event)" />
+        </template>
+        <template #extra>
+          <ConfigPreset label="From the preset" :presets="[labelsPreset]" @pick="labelsDraft.value.value.list = [...labelsDraft.value.value.list, ...labelsPreset.value.list]" />
+        </template>
+      </ConfigRows>
+      <p class="gb-hint">
+        The order the issue's head offers them as checkboxes, never as free text. A label with a colon (<code>prio:p1</code>) is a field's value; a kind is the kind field's — both refused.
+      </p>
+      <details class="lb-more" :open="labelsDraft.value.value.colors.length > 0">
+        <summary>Colors <span class="lb-count">{{ labelsDraft.value.value.colors.length }}</span></summary>
+        <ConfigRows :rows="labelsDraft.value.value.colors" add-label="Add a color" @update="labelsDraft.value.value.colors = $event" @add="labelsDraft.value.value.colors = [...labelsDraft.value.value.colors, { k: '', v: 'grey' }]">
+          <template #row="{ row, set }">
+            <div class="lb-pair">
+              <input :model-value="row.k" class="lb-tag" list="lb-label-names" spellcheck="false" aria-label="Label" @update:model-value="set({ ...row, k: $event })" />
+              <select :model-value="row.v" class="lb-tag lb-tiny" aria-label="Color" @update:model-value="set({ ...row, v: $event })">
+                <option v-for="c in palette" :key="c" :value="c">{{ c }}</option>
+                <option v-if="row.v && !palette.includes(row.v)" :value="row.v">{{ row.v }}</option>
+              </select>
+            </div>
+          </template>
+        </ConfigRows>
+        <datalist id="lb-label-names"><option v-for="l in labelsDraft.value.value.list" :key="l" :value="l" /></datalist>
+      </details>
+      <details class="lb-more" :open="labelsDraft.value.value.descriptions.length > 0">
+        <summary>Descriptions <span class="lb-count">{{ labelsDraft.value.value.descriptions.length }}</span></summary>
+        <ConfigRows :rows="labelsDraft.value.value.descriptions" add-label="Add a description" @update="labelsDraft.value.value.descriptions = $event" @add="labelsDraft.value.value.descriptions = [...labelsDraft.value.value.descriptions, { k: '', v: '' }]">
+          <template #row="{ row, set }">
+            <div class="lb-pair">
+              <input :model-value="row.k" class="lb-tag" list="lb-label-names" spellcheck="false" aria-label="Label" @update:model-value="set({ ...row, k: $event })" />
+              <input :model-value="row.v" class="lb-desc" placeholder="what the label means" aria-label="Description" @update:model-value="set({ ...row, v: $event })" />
+            </div>
+          </template>
+        </ConfigRows>
+      </details>
+      <ConfigSaveBar
+        section="labels"
+        :dirty="labelsDraft.dirty.value"
+        :saving="labelsDraft.saving.value"
+        :saved="labelsDraft.saved.value"
+        :valid="true"
+        :error="labelsDraft.saveError.value"
+        :conflict="labelsDraft.conflict.value"
+        :state="`${labelsDraft.value.value.list.length} label${labelsDraft.value.value.list.length === 1 ? '' : 's'}`"
+        @save="labelsDraft.save()"
+        @discard="resetLabels"
+        @reload="labelsDraft.load()"
+      />
+    </section>
+
     <p v-if="error" ref="errorEl" class="epfl-alert epfl-alert-danger" role="alert">{{ error }}</p>
     <p v-for="e in errors" :key="e.repo" class="epfl-alert epfl-alert-warning" role="alert">{{ e.repo }}: {{ e.message }}</p>
     <p v-if="result" ref="resultEl" class="epfl-alert epfl-alert-success" role="status">{{ result }}</p>
@@ -123,15 +183,17 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref } from 'vue';
-import { useRouter } from 'vue-router';
-import { adoptLabel, deleteLabel, getLabels, getLint, sendLabels, type LabelChange, type LabelRow, type Labels, type Lint, type StrayLabel } from '@/api/board';
-import { configText } from '@/configdraft';
+import { deleteLabel, getLabels, getLint, saveConfigSection, sendLabels, type ConfigField, type LabelChange, type LabelRow, type Labels, type Lint, type StrayLabel } from '@/api/board';
+import { labelsPreset } from '@/configpresets';
+import { configModel, configModelError, loadConfigModel, SectionDraft } from '@/configmodel';
+import ConfigPreset from '@/components/configforms/ConfigPreset.vue';
+import ConfigRows from '@/components/configforms/ConfigRows.vue';
+import ConfigSaveBar from '@/components/configforms/ConfigSaveBar.vue';
 import { message } from '@/issue';
 import { byCheck, changeText, deleteConfirm, stateText } from '@/labels';
 
 // changed: what a load left, for the Overview's line
 const emit = defineEmits<{ changed: [d: Labels] }>();
-const router = useRouter();
 const d = ref<Labels | null>(null);
 const lint = ref<Lint | null>(null);
 const plan = ref<LabelChange[] | null>(null);
@@ -177,12 +239,50 @@ function load() {
   );
 }
 
-// adopt writes GitHub's color and description into the project file, as
-// the Project file tab holds it, and opens that tab to review and save
+// the [labels] table, as the forms hold it: its maps as rows
+type Pair = { k: string; v: string };
+const modelError = configModelError;
+const palette = ['grey', 'blue', 'purple', 'amber', 'orange', 'green', 'red', 'teal', 'pink'];
+const toPairs = (m?: Record<string, string>): Pair[] => Object.entries(m ?? {}).map(([k, v]) => ({ k, v }));
+const kvOf = (rows: Pair[]): Record<string, string> | undefined => {
+  const out = Object.fromEntries(rows.filter((r) => r.k.trim() && r.v.trim()).map((r) => [r.k.trim(), r.v]));
+  return Object.keys(out).length ? out : undefined;
+};
+
+const labelsDraft = new SectionDraft<{ list: string[]; colors: Pair[]; descriptions: Pair[] }>(
+  'labels',
+  (m) => ({ list: [...m.labels.list], colors: toPairs(m.labels.colors), descriptions: toPairs(m.labels.descriptions) }),
+  (a, b) => JSON.stringify(a) !== JSON.stringify(b),
+  (value) => ({ list: value.list.filter((l) => l.trim()), colors: kvOf(value.colors), descriptions: kvOf(value.descriptions) }),
+);
+function resetLabels() {
+  if (configModel.value) labelsDraft.reset(configModel.value);
+}
+
+// adopt writes GitHub's color and description into the file through the
+// section API: the field's table gets them, or the [labels] one for a
+// plain label; the comparison below refreshes
 const adopt = (row: LabelRow, g: { color: string; description: string }) =>
   run('adopt', async () => {
-    configText.value = (await adoptLabel(configText.value, row, g)).text;
-    await router.push('/settings/project-file');
+    const m = configModel.value;
+    if (!m) throw new Error('The project file is not loaded yet.');
+    const color = g.color ? (g.color.startsWith('#') ? g.color : `#${g.color}`) : '';
+    if (row.field) {
+      const f: ConfigField = structuredClone(m.fields[row.field] ?? { single: false, options: [] });
+      f.colors = { ...(f.colors ?? {}), [row.value]: color };
+      if (g.description) f.descriptions = { ...(f.descriptions ?? {}), [row.value]: g.description };
+      const r = await saveConfigSection('fields', { set: { [row.field]: f }, remove: [] }, m.hash);
+      configModel.value = r.model;
+    } else {
+      const l = structuredClone(m.labels);
+      l.colors = { ...(l.colors ?? {}), [row.value]: color };
+      if (g.description) l.descriptions = { ...(l.descriptions ?? {}), [row.value]: g.description };
+      const r = await saveConfigSection('labels', { list: l.list, colors: l.colors, descriptions: l.descriptions }, m.hash);
+      configModel.value = r.model;
+      labelsDraft.reset(r.model);
+    }
+    result.value = `Adopted ${row.name}'s color and description into the file.`;
+    load();
   });
 
 const preview = () =>
@@ -216,13 +316,26 @@ const remove = (s: StrayLabel) =>
     load();
   });
 
-onMounted(load);
+onMounted(() => {
+  load();
+  void labelsDraft.load();
+});
 </script>
 
 <style scoped>
 .lb h2, .lb h3, .lb h4, .lb p, .lb ul { margin: 0; }
 .lb-lead { max-width: 48rem; color: var(--fg-muted); }
 .lb-muted { color: var(--fg-muted); }
+.lb-own { display: grid; gap: .75rem; padding: 1rem 1.25rem; border: 1px solid var(--border); border-left: 3px solid var(--primary); background: var(--bg); }
+.lb-tag { padding: .375rem .625rem; border: 1px solid var(--border); background: var(--bg); color: var(--fg); font: inherit; }
+.lb-tag:focus, .lb-desc:focus { outline: 2px solid var(--fg); outline-offset: 2px; border-color: var(--fg); }
+.lb-tiny { max-width: 6rem; }
+.lb-desc { flex: 1; min-width: 12rem; padding: .375rem .625rem; border: 1px solid var(--border); background: var(--bg); color: var(--fg); font: inherit; }
+.lb-pair { display: flex; gap: .5rem; }
+.lb-more summary { cursor: pointer; font-size: .875rem; font-weight: 700; color: var(--fg-muted); }
+.lb-more summary:hover { color: var(--fg); }
+.lb-more { display: grid; gap: .5rem; }
+.lb-count { display: inline-block; margin-left: .375rem; padding: 0 .375rem; border: 1px solid var(--border); font-weight: 400; font-size: .75rem; color: var(--fg-muted); }
 .lb-name { display: inline-flex; align-items: center; gap: .375rem; white-space: nowrap; }
 .lb-gh { display: flex; flex-wrap: wrap; gap: .25rem .5rem; align-items: center; }
 .lb-same { color: var(--success-fg); }

@@ -18,14 +18,17 @@ import (
 
 // configModel is every section the forms edit, as the file holds it now.
 type configModel struct {
-	Hash    string                  `json:"hash"`
-	Exists  bool                    `json:"exists"`
-	Error   string                  `json:"error,omitempty"` // the file doesn't parse: the forms show it, Advanced fixes it
-	Fields  map[string]config.Field `json:"fields"`
-	Labels  config.Labels           `json:"labels"`
-	Views   map[string]config.View  `json:"views"`
-	Sprints config.SprintsConfig    `json:"sprints"`
-	Roles   map[string]string       `json:"roles"`
+	Hash   string                  `json:"hash"`
+	Exists bool                    `json:"exists"`
+	Error  string                  `json:"error,omitempty"` // the file doesn't parse: the forms show it, Advanced fixes it
+	Fields map[string]config.Field `json:"fields"`
+	Labels config.Labels           `json:"labels"`
+	Views  map[string]config.View  `json:"views"`
+	// ViewOrder is the file's order: the tabs', the first the landing one.
+	// The map above is sorted, this is the file's.
+	ViewOrder []string             `json:"view_order"`
+	Sprints   config.SprintsConfig `json:"sprints"`
+	Roles     map[string]string    `json:"roles"`
 }
 
 // (M2 adds the sections it writes: branches, cycle, release, repos,
@@ -58,6 +61,7 @@ func (s *apiServer) configModel() (configModel, error) {
 	for name, v := range cfg.Views {
 		m.Views[name] = v
 	}
+	m.ViewOrder = cfg.ViewNames()
 	m.Sprints = cfg.Sprints
 	m.Sprints.List = orSprints(cfg.Sprints.List)
 	for role, who := range cfg.Roles {
@@ -158,6 +162,7 @@ func sectionWriter(section string, r *http.Request, w http.ResponseWriter) (func
 		var req struct {
 			Set    map[string]config.View `json:"set"`
 			Remove []string               `json:"remove"`
+			Order  []string               `json:"order"` // the tabs': each view moved above the one before it
 		}
 		if !decode(w, r, &req) {
 			return nil, nil
@@ -174,6 +179,13 @@ func sectionWriter(section string, r *http.Request, w http.ResponseWriter) (func
 					continue
 				}
 				if text, err = config.DeleteViewText(text, name); err != nil {
+					return "", err
+				}
+			}
+			// the file's order is the tabs': realize it pairwise, each view
+			// moved above the one before it leaves the earlier ones alone
+			for i := 1; i < len(req.Order); i++ {
+				if text, err = config.MoveViewText(text, req.Order[i], req.Order[i-1]); err != nil {
 					return "", err
 				}
 			}
