@@ -327,7 +327,8 @@ onMounted(() => {
 .cfg-main { display: grid; gap: .5rem; min-width: 0; }
 /* side by side while each half has room, else the reference under */
 @container (max-width: 52rem) { .cfg-body { grid-template-columns: minmax(0, 1fr); } }
-.cfg-doc { container-type: inline-size; position: sticky; top: calc(var(--header-h) + .75rem); display: grid; align-content: start; gap: .5rem; height: calc(100vh - var(--header-h) - 1.5rem); min-height: 0; padding: .75rem .875rem; border: 1px solid var(--border); background: var(--bg-subtle); overflow: auto; }
+/* no container-type here either: see ConfigRefPanel — it stays off the sticky box */
+.cfg-doc { position: sticky; top: calc(var(--header-h) + .75rem); display: grid; align-content: start; gap: .5rem; height: calc(100vh - var(--header-h) - 1.5rem); min-height: 0; padding: .75rem .875rem; border: 1px solid var(--border); background: var(--bg-subtle); overflow: auto; }
 @container (max-width: 52rem) { .cfg-doc { position: static; height: auto; max-height: 32rem; } }
 .cfg-doc-head { display: flex; align-items: baseline; gap: .5rem; }
 .cfg-doc-title { margin: 0; font-size: .8125rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--primary); }
@@ -336,6 +337,7 @@ onMounted(() => {
 .cfg-doc-tab:hover { border-color: var(--fg); }
 .cfg-doc-tab[aria-current] { border-color: var(--fg); background: var(--fg); color: var(--bg); font-weight: 700; }
 .cfg-doc-section { margin: .5rem 0 0; font-size: 1.0625rem; font-weight: 700; }
+.cfg-doc-body { container-type: inline-size; }
 .cfg-doc-body .gb-md { font-size: .9375rem; }
 .cfg-doc-body :deep(table) { width: 100%; border-collapse: collapse; font-size: .875rem; }
 .cfg-doc-body :deep(th), .cfg-doc-body :deep(td) { padding: .375rem .5rem; border: 0; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; overflow-wrap: normal; }

@@ -88,7 +88,10 @@ watch(
 </script>
 
 <style scoped>
-.crp { container-type: inline-size; position: sticky; top: calc(var(--header-h) + .75rem); display: grid; align-content: start; gap: .625rem; height: calc(100vh - var(--header-h) - 1.5rem); min-height: 0; padding: .75rem .875rem; border: 1px solid var(--border); background: var(--bg-subtle); overflow: auto; }
+/* no container-type here: Safari lets a sticky element that is also a
+   size container escape its grid area and paint over the forms; the
+   container lives on .crp-doc, the tables' ancestor */
+.crp { position: sticky; top: calc(var(--header-h) + .75rem); display: grid; align-content: start; gap: .625rem; height: calc(100vh - var(--header-h) - 1.5rem); min-height: 0; padding: .75rem .875rem; border: 1px solid var(--border); background: var(--bg-subtle); overflow: auto; }
 .crp-head { display: flex; align-items: baseline; gap: .5rem; }
 .crp-title { margin: 0; font-size: .8125rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--primary); }
 .crp-hint { color: var(--fg-muted); }
@@ -96,7 +99,7 @@ watch(
 .crp-tab { padding: .125rem .5rem; border: 1px solid var(--border); background: var(--bg); color: var(--fg); font: inherit; font-size: .75rem; cursor: pointer; }
 .crp-tab:hover { border-color: var(--fg); }
 .crp-tab[aria-current] { border-color: var(--fg); background: var(--fg); color: var(--bg); font-weight: 700; }
-.crp-doc { font-size: .875rem; }
+.crp-doc { container-type: inline-size; font-size: .875rem; }
 .crp-doc :deep(table) { width: 100%; border-collapse: collapse; font-size: .8125rem; }
 .crp-doc :deep(th), .crp-doc :deep(td) { padding: .25rem .375rem; border: 0; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
 .crp-doc :deep(th) { font-size: .75rem; color: var(--fg-muted); }
