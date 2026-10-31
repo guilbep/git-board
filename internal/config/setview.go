@@ -34,7 +34,7 @@ func SetViewText(text, name string, v View) (string, error) {
 			vals[k] = "" // empty: no line
 		}
 	}
-	return setTableKeys(text, "[views."+name+"]", keys, vals, false), nil
+	return setTableKeys(text, "[views."+name+"]", "", keys, vals, false), nil
 }
 
 // tomlArray writes strings as a TOML array, "" for none.

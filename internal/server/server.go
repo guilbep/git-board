@@ -187,6 +187,8 @@ func newMux(s *apiServer, static http.Handler) http.Handler {
 	mux.HandleFunc("GET /api/config", s.handleConfigFile)
 	mux.HandleFunc("POST /api/config/check", s.handleConfigCheck)
 	mux.HandleFunc("GET /api/config/docs", s.handleConfigDocs)
+	mux.HandleFunc("GET /api/config/model", s.handleConfigModel)
+	mux.HandleFunc("PUT /api/config/section/{section}", s.handleConfigSection)
 	mux.HandleFunc("PUT /api/config", s.handleConfigSave)
 	mux.HandleFunc("PUT /api/bridges/{name}/sync", s.handleBridgeSync)
 	mux.HandleFunc("GET /api/credentials", s.handleCredentials)

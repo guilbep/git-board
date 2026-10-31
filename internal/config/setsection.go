@@ -20,8 +20,10 @@ import (
 // key, trailing comments are kept. The table's own key lines stay when
 // own is false (a key the writer doesn't know is someone else's — a
 // future one); own is true, the form owns the table and a key line it
-// doesn't name goes.
-func setTableKeys(text, header string, keys []string, vals map[string]string, own bool) string {
+// doesn't name goes. A table the file hasn't is appended after the
+// anchor's table (a family's new member joins its family, the file's
+// areas stay whole), else at the end.
+func setTableKeys(text, header, anchor string, keys []string, vals map[string]string, own bool) string {
 	lines := strings.Split(text, "\n")
 	start := -1
 	for i, l := range lines {
@@ -31,17 +33,26 @@ func setTableKeys(text, header string, keys []string, vals map[string]string, ow
 		}
 	}
 	if start < 0 {
-		var b strings.Builder
-		b.WriteString(header + "\n")
+		var block []string
+		block = append(block, header)
 		for _, k := range keys {
 			if vals[k] != "" {
-				b.WriteString(k + " = " + vals[k] + "\n")
+				block = append(block, k+" = "+vals[k])
+			}
+		}
+		if anchor != "" {
+			if _, aEnd := tableSpan(lines, anchor); aEnd >= 0 {
+				at := aEnd // the span's trailing blanks are its next table's
+				if at > 0 && strings.TrimSpace(lines[at-1]) != "" {
+					block = append([]string{""}, block...) // one blank line over it
+				}
+				return strings.Join(slices.Concat(lines[:at], block, lines[at:]), "\n")
 			}
 		}
 		if base := strings.TrimRight(text, "\n"); base != "" {
-			return base + "\n\n" + b.String()
+			return base + "\n\n" + strings.Join(block, "\n") + "\n"
 		}
-		return b.String()
+		return strings.Join(block, "\n") + "\n"
 	}
 
 	end := len(lines)
@@ -136,6 +147,18 @@ func tableSpanOf(text, header string) (start, end int) {
 	return tableSpan(strings.Split(text, "\n"), header)
 }
 
+// lastTableHeader is the file's last [prefix…] table's header, "" when
+// there is none: where a new table of the family joins.
+func lastTableHeader(text, prefix string) string {
+	last := ""
+	for _, l := range strings.Split(text, "\n") {
+		if t := strings.TrimSpace(l); strings.HasPrefix(t, "["+prefix+".") && strings.HasSuffix(t, "]") {
+			last = t
+		}
+	}
+	return last
+}
+
 // SetFieldsText is text with the fields named in set holding their value
 // and the fields named in remove gone, one table at a time: every field
 // the map doesn't name keeps its lines, comments included. A field's
@@ -166,7 +189,7 @@ func SetFieldsText(text string, set map[string]Field, remove []string) (string, 
 		if f.Unit != "" {
 			vals["unit"] = tomlString(f.Unit)
 		}
-		text = setTableKeys(text, "[fields."+name+"]", []string{"single", "options", "numeric", "type", "unit"}, vals, false)
+		text = setTableKeys(text, "[fields."+name+"]", lastTableHeader(text, "fields"), []string{"single", "options", "numeric", "type", "unit"}, vals, false)
 		text = SetFieldTable(text, name, "project", f.Project)
 		text = SetFieldTable(text, name, "colors", f.Colors)
 		text = SetFieldTable(text, name, "descriptions", f.Descriptions)
@@ -191,7 +214,7 @@ func SetRolesText(text string, roles map[string]string) (string, error) {
 	if len(keys) == 0 {
 		return deleteTable(text, "roles"), nil
 	}
-	return setTableKeys(text, "[roles]", keys, vals, true), nil
+	return setTableKeys(text, "[roles]", "", keys, vals, true), nil
 }
 
 // tomlArrayAlways is tomlArray that writes an empty list as []: [labels]
@@ -214,7 +237,7 @@ func SetLabelsText(text string, l Labels) (string, error) {
 	if !hasTable && len(l.List) == 0 && len(l.Colors) == 0 && len(l.Descriptions) == 0 {
 		return text, nil
 	}
-	text = setTableKeys(text, "[labels]", []string{"list"}, map[string]string{"list": tomlArrayAlways(l.List)}, false)
+	text = setTableKeys(text, "[labels]", "", []string{"list"}, map[string]string{"list": tomlArrayAlways(l.List)}, false)
 	text = SetLabelsTable(text, "colors", l.Colors)
 	text = SetLabelsTable(text, "descriptions", l.Descriptions)
 	return text, nil
@@ -261,7 +284,7 @@ func SetSprintsText(text string, s SprintsConfig) (string, error) {
 		vals["start_weekday"] = tomlString(s.StartWeekday)
 	}
 	if len(keys) > 0 {
-		text = setTableKeys(text, "[sprints]", keys, vals, false)
+		text = setTableKeys(text, "[sprints]", "", keys, vals, false)
 	}
 	if len(s.List) == 0 {
 		return text, nil

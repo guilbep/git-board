@@ -62,16 +62,16 @@ func (f Field) KnownValue(value string) bool {
 
 // Sprint is one entry in [[sprints.list]].
 type Sprint struct {
-	Slug  string    `toml:"slug"`
-	Title string    `toml:"title"`
-	Start time.Time `toml:"start"`
+	Slug  string    `toml:"slug" json:"slug"`
+	Title string    `toml:"title" json:"title"`
+	Start time.Time `toml:"start" json:"start"`
 }
 
 // SprintsConfig is the [sprints] table.
 type SprintsConfig struct {
-	LengthDays   int      `toml:"length_days"`
-	StartWeekday string   `toml:"start_weekday"`
-	List         []Sprint `toml:"list"`
+	LengthDays   int      `toml:"length_days" json:"length_days"`
+	StartWeekday string   `toml:"start_weekday" json:"start_weekday"`
+	List         []Sprint `toml:"list" json:"list"`
 }
 
 // View is one [views.<name>] table.
@@ -132,12 +132,12 @@ type raw struct {
 // Labels sends them to GitHub with their colors and descriptions; lint
 // reports the plain labels outside them. No table, no labels to pick.
 type Labels struct {
-	List         []string          `toml:"list"`
-	Colors       map[string]string `toml:"colors"`       // a palette name or #rrggbb; else the palette in turn
-	Descriptions map[string]string `toml:"descriptions"` // GitHub's, 100 characters at most
+	List         []string          `toml:"list" json:"list"`
+	Colors       map[string]string `toml:"colors" json:"colors"`             // a palette name or #rrggbb; else the palette in turn
+	Descriptions map[string]string `toml:"descriptions" json:"descriptions"` // GitHub's, 100 characters at most
 	// Defined: the file has a [labels] table, an empty list too (no
 	// label allowed), which lint then holds the issues to
-	Defined bool `toml:"-"`
+	Defined bool `toml:"-" json:"-"`
 }
 
 // checkLabels: a listed label is plain (prio:p1 is a field's value), not
