@@ -52,6 +52,20 @@ test('several field tables are refused', () => {
   assert.ok(!r.ok);
 });
 
+test('a list of tables is refused, not read as a rename to 0', () => {
+  const r = tomlToField('[[fields.status]]\nsingle = true\n');
+  assert.ok(!r.ok);
+  if (!r.ok) assert.match(r.error, /list of tables/);
+});
+
+test('content outside the field table is refused, not ignored', () => {
+  for (const text of ['foo = 1\n[fields.status]\nsingle = true\n', '[labels]\nx = "y"\n[fields.status]\n']) {
+    const r = tomlToField(text);
+    assert.ok(!r.ok);
+    if (!r.ok) assert.match(r.error, /outside it/);
+  }
+});
+
 test('wrong value types are refused', () => {
   assert.ok(!tomlToField('single = "yes"\n').ok);
   assert.ok(!tomlToField('options = [1, 2]\n').ok);

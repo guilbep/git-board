@@ -63,12 +63,19 @@ export function tomlToField(text: string): ParsedField {
   let body: unknown = doc;
   const fields = (doc as Record<string, unknown>)['fields'];
   if (fields !== undefined) {
-    const keys = typeof fields === 'object' && fields !== null ? Object.keys(fields) : [];
+    if (Array.isArray(fields)) return { ok: false, error: 'One field: [fields.<name>] — [[fields.<name>]] declares a list of tables.' };
+    if (typeof fields !== 'object' || fields === null) return { ok: false, error: 'fields is not a table.' };
+    const rest = Object.keys(doc as Record<string, unknown>).filter((k) => k !== 'fields');
+    if (rest.length) {
+      return { ok: false, error: `Only the field's table belongs in the snippet — ${rest.join(', ')} ${rest.length > 1 ? 'are' : 'is'} outside it.` };
+    }
+    const keys = Object.keys(fields);
     const first = keys[0];
     if (first === undefined) return { ok: false, error: 'No field table: keep one [fields.<name>].' };
     if (keys.length > 1) return { ok: false, error: 'One field per snippet: this holds several tables.' };
     name = first;
     body = (fields as Record<string, unknown>)[first];
+    if (Array.isArray(body)) return { ok: false, error: `[[fields.${first}]] is a list of tables — the card wants one [fields.${first}].` };
   }
   if (typeof body !== 'object' || body === null) return { ok: false, error: 'The field is not a table of keys.' };
 

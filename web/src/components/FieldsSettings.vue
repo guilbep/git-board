@@ -516,8 +516,11 @@ function addPreset(i: number) {
   ];
 }
 
-const hasTomlError = computed(() => Object.values(tomlError.value).some(Boolean));
-const valid = computed(() => fields.value.every((f) => !f.name.trim() || /^[A-Za-z0-9_-]+$/.test(f.name.trim())) && !hasTomlError.value);
+const hasTomlError = computed(() => fields.value.some((f) => tomlError.value[f.key]));
+const valid = computed(() => {
+  const names = fields.value.map((f) => f.name.trim()).filter(Boolean);
+  return names.every((n) => /^[A-Za-z0-9_-]+$/.test(n)) && new Set(names).size === names.length && !hasTomlError.value;
+});
 const state = computed(() => `${fields.value.length} field${fields.value.length === 1 ? '' : 's'} · ${fields.value.reduce((n, f) => n + f.options.length, 0)} options`);
 
 function reset() {
