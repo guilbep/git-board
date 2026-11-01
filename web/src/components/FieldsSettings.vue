@@ -1001,7 +1001,7 @@ h2, p { margin: 0; }
 .fs-name { width: 9rem; min-height: 2rem; padding: 0 .5rem; border: 1px solid var(--border); background: var(--bg); color: var(--fg); font-family: var(--font-mono); font-size: 1rem; font-weight: 700; }
 .fs-name:disabled { border-color: transparent; background: none; padding-left: 0; }
 .fs-name:focus { outline: 2px solid var(--fg); outline-offset: 2px; }
-.fs-sum { color: var(--fg-muted); font-size: .8125rem; white-space: nowrap; }
+.fs-sum { color: var(--fg-muted); font-size: .8125rem; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .fs-dirty { font-size: .75rem; font-weight: 700; color: var(--danger); }
 /* the editor's two renderings: the form and this field's TOML */
 .fs-mode { display: inline-flex; border: 1px solid var(--border); }

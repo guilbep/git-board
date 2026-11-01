@@ -16,8 +16,10 @@ test('the Fields list shows each name whole', async ({ page }) => {
   expect(cut).toEqual([]);
 });
 
-test('the Fields editor keeps Remove inside its card', async ({ page }) => {
-  await page.goto('/#/settings/fields/due');
+for (const name of ['due', 'prio']) test(`the Fields editor of ${name} stays in its column, Remove inside its card`, async ({ page }) => {
+  await page.goto(`/#/settings/fields/${name}`);
+  // a select's per-value table used to push the card under the reference
+  expect(await right(page, '.fl-ed .cc')).toBeLessThanOrEqual(await page.locator('.crp:visible').evaluate((e) => e.getBoundingClientRect().left));
   const card = await right(page, '.fl-ed .cc');
   expect(await right(page, '.fl-ed .cc-remove')).toBeLessThanOrEqual(card);
   // the summary is one line
