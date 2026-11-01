@@ -33,7 +33,9 @@ type configModelResponse struct {
 	Views map[string]struct {
 		Filter string `json:"filter"`
 	} `json:"views"`
-	Sprints struct {
+	ViewOrder  []string `json:"view_order"`
+	FieldOrder []string `json:"field_order"`
+	Sprints    struct {
 		LengthDays   int    `json:"length_days"`
 		StartWeekday string `json:"start_weekday"`
 		List         []struct {
@@ -329,6 +331,64 @@ func TestConfigSectionSaves(t *testing.T) {
 	call(t, "GET", ts.URL+"/api/views", nil, &served)
 	if _, ok := served["mine"]; !ok {
 		t.Errorf("not served at once: %v", served)
+	}
+}
+
+func TestConfigSectionRealizesTheOrder(t *testing.T) {
+	t.Parallel()
+	ts, s := newIssueServer(t)
+	s.cfgPath = filepath.Join(t.TempDir(), ".git-board.toml")
+	file := "# our board\n" +
+		"[fields.zulu]\nnumeric = true\noptions = [\"1\", \"2\"]\n\n" +
+		"# the middle one\n[fields.est]\nsingle = true\n\n[fields.est.colors]\nzulu = \"teal\"\n\n" +
+		"[fields.alpha]\n\n" +
+		"[labels]\nlist = [\"needs-design\"]\n\n" +
+		"[views.open]\nlayout = \"table\"\n\n[views.mine]\nlayout = \"board\"\n"
+	if err := os.WriteFile(s.cfgPath, []byte(file), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var m configModelResponse
+	call(t, "GET", ts.URL+"/api/config/model", nil, &m)
+	if got, want := strings.Join(m.FieldOrder, ","), "zulu,est,alpha"; got != want {
+		t.Fatalf("field_order = %q, want %q", got, want)
+	}
+	if got, want := strings.Join(m.ViewOrder, ","), "open,mine"; got != want {
+		t.Fatalf("view_order = %q, want %q", got, want)
+	}
+
+	// the list's order wins: alpha first, and a same-order save doesn't
+	// move a line — it once reversed the views on every save
+	save := func(section string, body map[string]any) configModelResponse {
+		var out sectionSave
+		if code := call(t, "PUT", ts.URL+"/api/config/section/"+section+"?base="+m.Hash, body, &out); code != http.StatusOK {
+			t.Fatalf("%s save: %d", section, code)
+		}
+		return out.Model
+	}
+	m = save("fields", map[string]any{"set": map[string]any{}, "remove": []string{}, "order": []string{"alpha", "est", "zulu"}})
+	if got, want := strings.Join(m.FieldOrder, ","), "alpha,est,zulu"; got != want {
+		t.Fatalf("field_order = %q, want %q", got, want)
+	}
+	m = save("fields", map[string]any{"set": map[string]any{}, "remove": []string{}, "order": []string{"alpha", "est", "zulu"}})
+	if got, want := strings.Join(m.FieldOrder, ","), "alpha,est,zulu"; got != want {
+		t.Fatalf("second save, field_order = %q, want %q", got, want)
+	}
+	m = save("views", map[string]any{"set": map[string]any{}, "remove": []string{}, "order": []string{"mine", "open"}})
+	if got, want := strings.Join(m.ViewOrder, ","), "mine,open"; got != want {
+		t.Fatalf("view_order = %q, want %q", got, want)
+	}
+	m = save("views", map[string]any{"set": map[string]any{}, "remove": []string{}, "order": []string{"mine", "open"}})
+	if got, want := strings.Join(m.ViewOrder, ","), "mine,open"; got != want {
+		t.Fatalf("second save, view_order = %q, want %q", got, want)
+	}
+
+	// the rest of the file is untouched: the labels, the comments, the
+	// subtable with its field
+	got, _ := os.ReadFile(s.cfgPath)
+	for _, want := range []string{"# our board", "list = [\"needs-design\"]", "# the middle one", "[fields.est.colors]", "zulu = \"teal\""} {
+		if !strings.Contains(string(got), want) {
+			t.Errorf("the file lost %q:\n%s", want, got)
+		}
 	}
 }
 

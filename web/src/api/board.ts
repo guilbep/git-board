@@ -735,6 +735,7 @@ export interface ConfigModel {
   labels: ConfigLabels;
   views: Record<string, ViewConfig>;
   view_order: string[]; // the file's order: the tabs', the first is the landing one
+  field_order: string[]; // the file's order likewise: the fields page's list
   sprints: { length_days: number; start_weekday: string; list: ConfigSprint[] };
   roles: Record<string, string>;
   branches: { base?: string | undefined; name?: string | undefined; kinds?: Record<string, string> | undefined };

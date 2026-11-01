@@ -1,10 +1,13 @@
-<!-- Settings › Fields: the project's ontology, one card a field. The
-     values are chips — drag to reorder, Enter to add, paste a list — the
-     cardinality is "an issue can have" (one value / several), and the
-     per-value details (color, description, GitHub Project name) sit in
-     one table keyed by value. Add offers the presets; Remove takes the
-     field's tables out. The file's other fields keep their lines,
-     comments included. -->
+<!-- Settings › Fields: the project's ontology — a list of every field on
+     the left, one field's editor on the right, each field at its own
+     address (#/settings/fields/<name>). The list is the file's order:
+     drag a row, or Alt+↑/↓ on it, and the save writes the tables back in
+     that order. The editor's values are chips — drag to reorder, Enter to
+     add, paste a list — the cardinality is "an issue can have" (one value
+     / several), and the per-value details (color, description, GitHub
+     Project name) sit in one table keyed by value. Form | TOML switches
+     the editor to the field's own table. The file's other fields keep
+     their lines, comments included. -->
 <template>
   <div class="set-panel fs">
     <h2 class="h4">Fields</h2>
@@ -36,169 +39,204 @@
         <p v-else-if="!draft.value.value" class="fs-muted">Loading…</p>
 
         <template v-else>
-          <div class="fs-tools">
-            <ConfigPreset label="+ Add a field" :presets="fieldPresets" @pick="addPreset" />
-            <button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" @click="addBlank">Blank field</button>
-            <span class="gb-grow" />
-            <router-link class="gb-linkbtn" to="/settings/advanced">Edit the file instead</router-link>
-          </div>
-
-          <ConfigCard
-            v-for="f in fields"
-            :key="f.key"
-            class="fs-card"
-            :title="f.name || 'a new field'"
-            :removable="true"
-            :confirm="`The field ${f.name} and its colors, descriptions and labels go from the file. The issues keep their ${f.name}:… labels, in no order.`"
-            @remove="remove(f)"
-          >
-            <template #head>
-              <span class="fs-ns">fields.</span>
-              <input
-                :value="f.name"
-                class="fs-name"
-                :disabled="!f.isNew"
-                spellcheck="false"
-                aria-label="The field's name"
-                @input="f.name = ($event.target as HTMLInputElement).value"
-              />
-              <span class="fs-sum">{{ summary(f) }}</span>
-              <span v-if="changed(f)" class="fs-dirty">Unsaved changes</span>
-              <span class="fs-mode" role="group" aria-label="Edit as a form or as TOML">
-                <button type="button" class="fs-modebtn" :class="{ 'fs-mode-on': !tomlOpen[f.key] }" @click="closeToml(f)">Form</button>
-                <button type="button" class="fs-modebtn" :class="{ 'fs-mode-on': tomlOpen[f.key] }" @click="openToml(f)">TOML</button>
-              </span>
-            </template>
-
-            <div v-if="tomlOpen[f.key]" class="fs-toml">
-              <textarea
-                class="fs-tomledit"
-                :value="tomlText[f.key]"
-                spellcheck="false"
-                rows="10"
-                :aria-label="`The TOML of ${f.name || 'the new field'}`"
-                @input="tomlInput(f, ($event.target as HTMLTextAreaElement).value)"
-              />
-              <p v-if="tomlError[f.key]" class="fs-tomlerr" role="alert">{{ tomlError[f.key] }}</p>
-              <p v-else class="gb-hint">This card's table only — it applies as you type. Comments are lost when you switch back to the form.</p>
-            </div>
-            <div v-else class="fs-body">
-              <div class="fs-block">
-                <span class="fs-label">Values <em>— drag to reorder; left is first in the workflow</em></span>
-                <div class="fs-chips">
-                  <span
-                    v-for="(o, i) in f.options"
-                    :key="`${o}-${i}`"
-                    class="fs-chip"
+          <div class="fl-work">
+            <div class="fl-list">
+              <p class="fl-listhead">
+                {{ fields.length }} field{{ fields.length === 1 ? '' : 's' }} <em>— drag a row, or Alt+↑/↓, to set the order on issues</em>
+              </p>
+              <ol class="fl-rows">
+                <li v-for="(f, i) in orderedRows" :key="f.key">
+                  <router-link
+                    class="fl-row"
+                    :class="{ 'fl-row-sel': f.key === selectedKey, 'fl-row-hold': listFrom === i }"
+                    :to="`/settings/fields/${f.name}`"
+                    :aria-current="f.key === selectedKey ? 'true' : undefined"
                     draggable="true"
-                    :class="{ 'fs-chip-hold': dragFrom === i }"
-                    @dragstart="dragFrom = i"
+                    @dragstart="listFrom = i"
                     @dragover.prevent
-                    @dragend="dragFrom = null"
-                    @drop="dropAt(f, i)"
+                    @dragend="listFrom = null"
+                    @drop="dropRow(i)"
+                    @keydown.alt.up.prevent="moveRow(f, -1)"
+                    @keydown.alt.down.prevent="moveRow(f, 1)"
                   >
-                    <span class="fs-dot" :class="dotClass(f, o)" :style="dotStyle(f, o)" aria-hidden="true" />
-                    {{ o }}
-                    <button type="button" class="fs-chip-x" :aria-label="`Remove ${o}`" @click="removeOption(f, i)">×</button>
-                  </span>
-                  <input
-                    class="fs-add"
-                    :placeholder="f.type === 'number' || f.numeric ? 'Type a number, press Enter' : 'Type a value, press Enter'"
-                    spellcheck="false"
-                    :aria-label="`Add a value to ${f.name}`"
-                    @keydown="chipKey(f, $event)"
-                    @paste="chipPaste(f, $event)"
-                  />
-                </div>
-                <p v-if="f.type === 'number' || f.numeric" class="gb-hint">
-                  All values are numbers — sorted by value, filterable by range. Paste a list too: <code>0.5, 1, 2, 4, 8</code>.
-                </p>
-                <p v-else class="gb-hint">Paste a list too: <code>todo, doing, done</code> or one per line.</p>
-              </div>
-
-              <div class="fs-form">
-                <label class="fs-field">
-                  <span>Type</span>
-                  <select v-model="f.type" class="fs-input fs-small" aria-label="Type">
-                    <option value="">guessed</option>
-                    <option v-for="t in types" :key="t.id" :value="t.id">{{ t.label }}</option>
-                  </select>
-                </label>
-                <fieldset class="fs-cardinality">
-                  <legend>An issue can have</legend>
-                  <label class="fs-radio"><input v-model="f.single" type="radio" :value="true" /> one value</label>
-                  <label class="fs-radio"><input v-model="f.single" type="radio" :value="false" /> several values</label>
-                </fieldset>
-                <label class="fs-check">
-                  <input v-model="f.numeric" type="checkbox" />
-                  <span>numeric — sorts as numbers</span>
-                </label>
-                <label v-if="f.type === 'number' || f.numeric" class="fs-field">
-                  <span>Unit</span>
-                  <input v-model="f.unit" class="fs-input fs-tiny" placeholder="h" spellcheck="false" aria-label="Unit shown after the number" />
-                </label>
-              </div>
-
-              <details class="fs-more" :open="detailKeys(f).length > 0">
-                <summary>
-                  Per-value details <span class="fs-count">{{ detailKeys(f).length }}</span>
-                  <span class="fs-morehint">colors, descriptions, GitHub Project names</span>
-                </summary>
-                <div v-if="detailKeys(f).length" class="fs-tablewrap">
-                  <table class="fs-table">
-                    <thead>
-                      <tr>
-                        <th>Value</th>
-                        <th>Color</th>
-                        <th>Description</th>
-                        <th>GitHub Project name</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr v-for="k in detailKeys(f)" :key="k">
-                        <td class="fs-tvalue">{{ k }}</td>
-                        <td>
-                          <select
-                            :value="pairOf(f, 'colors', k)"
-                            class="fs-input fs-tiny"
-                            :aria-label="`Color for ${k}`"
-                            @change="setPair(f, 'colors', k, inputValue($event))"
-                          >
-                            <option value="">—</option>
-                            <option v-for="c in palette" :key="c" :value="c">{{ c }}</option>
-                            <option v-if="pairOf(f, 'colors', k) && !palette.includes(pairOf(f, 'colors', k))" :value="pairOf(f, 'colors', k)">
-                              {{ pairOf(f, 'colors', k) }}
-                            </option>
-                          </select>
-                        </td>
-                        <td>
-                          <input
-                            :value="pairOf(f, 'descriptions', k)"
-                            class="fs-cell"
-                            placeholder="what the value means"
-                            spellcheck="false"
-                            :aria-label="`Description for ${k}`"
-                            @input="setPair(f, 'descriptions', k, inputValue($event))"
-                          />
-                        </td>
-                        <td>
-                          <input
-                            :value="pairOf(f, 'project', k)"
-                            class="fs-cell"
-                            placeholder="if different"
-                            spellcheck="false"
-                            :aria-label="`GitHub Project name for ${k}`"
-                            @input="setPair(f, 'project', k, inputValue($event))"
-                          />
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-                <p v-else class="gb-hint">No values yet: the details come once the values do.</p>
-              </details>
+                    <span class="fl-line1">
+                      <span class="fl-grip" aria-hidden="true">⋮⋮</span>
+                      <span class="fl-nm">{{ f.name || 'a new field' }}</span>
+                      <span v-if="changed(f)" class="fl-dot" title="Unsaved changes" />
+                      <span class="fl-sum">{{ summary(f) }}</span>
+                    </span>
+                    <span class="fl-values">{{ f.options.join(' → ') }}</span>
+                  </router-link>
+                </li>
+              </ol>
+              <p class="fl-addrow">
+                <ConfigPreset label="+ Add a field" :presets="fieldPresets" @pick="addPreset" />
+                <button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" @click="addBlank">Blank field</button>
+                <span class="gb-grow" />
+                <router-link class="gb-linkbtn" to="/settings/advanced">Edit the file instead</router-link>
+              </p>
             </div>
-          </ConfigCard>
+
+            <div v-if="selected" class="fl-ed">
+              <ConfigCard
+                :key="selected.key"
+                class="fs-card"
+                :title="selected.name || 'a new field'"
+                :removable="true"
+                :confirm="`The field ${selected.name} and its colors, descriptions and labels go from the file. The issues keep their ${selected.name}:… labels, in no order.`"
+                @remove="remove(selected)"
+              >
+                <template #head>
+                  <span class="fs-ns">fields.</span>
+                  <input
+                    ref="nameInput"
+                    :value="selected.name"
+                    class="fs-name"
+                    :disabled="!selected.isNew"
+                    spellcheck="false"
+                    aria-label="The field's name"
+                    @input="selected.name = ($event.target as HTMLInputElement).value"
+                  />
+                  <span class="fs-sum">{{ summary(selected) }}</span>
+                  <span v-if="changed(selected)" class="fs-dirty">Unsaved changes</span>
+                  <span class="fs-mode" role="group" aria-label="Edit as a form or as TOML">
+                    <button type="button" class="fs-modebtn" :class="{ 'fs-mode-on': !tomlOpen[selected.key] }" @click="closeToml(selected)">Form</button>
+                    <button type="button" class="fs-modebtn" :class="{ 'fs-mode-on': tomlOpen[selected.key] }" @click="openToml(selected)">TOML</button>
+                  </span>
+                </template>
+
+                <div v-if="tomlOpen[selected.key]" class="fs-toml">
+                  <textarea
+                    class="fs-tomledit"
+                    :value="tomlText[selected.key]"
+                    spellcheck="false"
+                    rows="10"
+                    :aria-label="`The TOML of ${selected.name || 'the new field'}`"
+                    @input="tomlInput(selected, ($event.target as HTMLTextAreaElement).value)"
+                  />
+                  <p v-if="tomlError[selected.key]" class="fs-tomlerr" role="alert">{{ tomlError[selected.key] }}</p>
+                  <p v-else class="gb-hint">This field's table only — it applies as you type. Comments are lost when you switch back to the form.</p>
+                </div>
+                <div v-else class="fs-body">
+                  <div class="fs-block">
+                    <span class="fs-label">Values <em>— drag to reorder; left is first in the workflow</em></span>
+                    <div class="fs-chips">
+                      <span
+                        v-for="(o, i) in selected.options"
+                        :key="`${o}-${i}`"
+                        class="fs-chip"
+                        draggable="true"
+                        :class="{ 'fs-chip-hold': dragFrom === i }"
+                        @dragstart="dragFrom = i"
+                        @dragover.prevent
+                        @dragend="dragFrom = null"
+                        @drop="dropAt(selected, i)"
+                      >
+                        <span class="fs-dot" :class="dotClass(selected, o)" :style="dotStyle(selected, o)" aria-hidden="true" />
+                        {{ o }}
+                        <button type="button" class="fs-chip-x" :aria-label="`Remove ${o}`" @click="removeOption(selected, i)">×</button>
+                      </span>
+                      <input
+                        class="fs-add"
+                        :placeholder="selected.type === 'number' || selected.numeric ? 'Type a number, press Enter' : 'Type a value, press Enter'"
+                        spellcheck="false"
+                        :aria-label="`Add a value to ${selected.name}`"
+                        @keydown="chipKey(selected, $event)"
+                        @paste="chipPaste(selected, $event)"
+                      />
+                    </div>
+                    <p v-if="selected.type === 'number' || selected.numeric" class="gb-hint">
+                      All values are numbers — sorted by value, filterable by range. Paste a list too: <code>0.5, 1, 2, 4, 8</code>.
+                    </p>
+                    <p v-else class="gb-hint">Paste a list too: <code>todo, doing, done</code> or one per line.</p>
+                  </div>
+
+                  <div class="fs-form">
+                    <label class="fs-field">
+                      <span>Type</span>
+                      <select v-model="selected.type" class="fs-input fs-small" aria-label="Type">
+                        <option value="">guessed</option>
+                        <option v-for="t in types" :key="t.id" :value="t.id">{{ t.label }}</option>
+                      </select>
+                    </label>
+                    <fieldset class="fs-cardinality">
+                      <legend>An issue can have</legend>
+                      <label class="fs-radio"><input v-model="selected.single" type="radio" :value="true" /> one value</label>
+                      <label class="fs-radio"><input v-model="selected.single" type="radio" :value="false" /> several values</label>
+                    </fieldset>
+                    <label class="fs-check">
+                      <input v-model="selected.numeric" type="checkbox" />
+                      <span>numeric — sorts as numbers</span>
+                    </label>
+                    <label v-if="selected.type === 'number' || selected.numeric" class="fs-field">
+                      <span>Unit</span>
+                      <input v-model="selected.unit" class="fs-input fs-tiny" placeholder="h" spellcheck="false" aria-label="Unit shown after the number" />
+                    </label>
+                  </div>
+
+                  <details class="fs-more" :open="detailKeys(selected).length > 0">
+                    <summary>
+                      Per-value details <span class="fs-count">{{ detailKeys(selected).length }}</span>
+                      <span class="fs-morehint">colors, descriptions, GitHub Project names</span>
+                    </summary>
+                    <div v-if="detailKeys(selected).length" class="fs-tablewrap">
+                      <table class="fs-table">
+                        <thead>
+                          <tr>
+                            <th>Value</th>
+                            <th>Color</th>
+                            <th>Description</th>
+                            <th>GitHub Project name</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr v-for="k in detailKeys(selected)" :key="k">
+                            <td class="fs-tvalue">{{ k }}</td>
+                            <td>
+                              <select
+                                :value="pairOf(selected, 'colors', k)"
+                                class="fs-input fs-tiny"
+                                :aria-label="`Color for ${k}`"
+                                @change="setPair(selected, 'colors', k, inputValue($event))"
+                              >
+                                <option value="">—</option>
+                                <option v-for="c in palette" :key="c" :value="c">{{ c }}</option>
+                                <option v-if="pairOf(selected, 'colors', k) && !palette.includes(pairOf(selected, 'colors', k))" :value="pairOf(selected, 'colors', k)">
+                                  {{ pairOf(selected, 'colors', k) }}
+                                </option>
+                              </select>
+                            </td>
+                            <td>
+                              <input
+                                :value="pairOf(selected, 'descriptions', k)"
+                                class="fs-cell"
+                                placeholder="what the value means"
+                                spellcheck="false"
+                                :aria-label="`Description for ${k}`"
+                                @input="setPair(selected, 'descriptions', k, inputValue($event))"
+                              />
+                            </td>
+                            <td>
+                              <input
+                                :value="pairOf(selected, 'project', k)"
+                                class="fs-cell"
+                                placeholder="if different"
+                                spellcheck="false"
+                                :aria-label="`GitHub Project name for ${k}`"
+                                @input="setPair(selected, 'project', k, inputValue($event))"
+                              />
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                    <p v-else class="gb-hint">No values yet: the details come once the values do.</p>
+                  </details>
+                </div>
+              </ConfigCard>
+            </div>
+            <p v-else class="fs-muted">No field — add one below the list.</p>
+          </div>
 
           <ConfigSaveBar
             section="fields"
@@ -222,8 +260,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue';
-import { getConfigFile, saveConfig } from '@/api/board';
+import { computed, nextTick, onMounted, ref, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+import { getConfigFile, saveConfig, type ConfigField } from '@/api/board';
 import { fieldPresets, takeUnique } from '@/configpresets';
 import { fieldToToml, tomlToField, type FieldToml } from '@/fieldtoml';
 import { SectionDraft, configModel, configModelError, loadConfigModel, inputValue } from '@/configmodel';
@@ -244,8 +283,8 @@ const types = [
 ];
 const palette = ['grey', 'blue', 'purple', 'amber', 'orange', 'green', 'red', 'teal', 'pink'];
 
-// the field as the card holds it: its maps as pairs (the rows' source of
-// truth), the file's Record read back at the edges
+// the field as the editor holds it: its maps as pairs (the rows' source
+// of truth), the file's Record read back at the edges
 type FieldRow = {
   key: number;
   name: string;
@@ -261,6 +300,9 @@ type FieldRow = {
 };
 type Pair = { k: string; v: string };
 type PairMap = 'colors' | 'descriptions' | 'project';
+// the section's draft: the rows, and the list's order as row keys — keys,
+// not names, so a rename rides along and the order the user set survives
+type FieldsValue = { rows: FieldRow[]; order: number[] };
 
 const modelError = configModelError;
 let key = 0;
@@ -271,29 +313,36 @@ const kvOf = (rows: Pair[]): Record<string, string> | undefined => {
   return Object.keys(out).length ? out : undefined;
 };
 
-// the draft is the rows; the remove list is the names the file has that
-// the draft lost — deleted, or renamed
-const draft = new SectionDraft<FieldRow[]>(
+const asRow = (name: string, f: ConfigField): FieldRow => ({
+  key: key++,
+  name,
+  isNew: false,
+  single: f.single ?? false,
+  numeric: f.numeric ?? false,
+  type: f.type ?? '',
+  unit: f.unit ?? '',
+  options: [...(f.options ?? [])],
+  colors: toPairs(f.colors),
+  descriptions: toPairs(f.descriptions),
+  project: toPairs(f.project),
+});
+
+// the draft is the rows and the list's order; the remove list is the
+// names the file has that the draft lost — deleted, or renamed
+const draft = new SectionDraft<FieldsValue>(
   'fields',
-  (m) =>
-    Object.entries(m.fields).map(([name, f]) => ({
-      key: key++,
-      name,
-      isNew: false,
-      single: f.single ?? false,
-      numeric: f.numeric ?? false,
-      type: f.type ?? '',
-      unit: f.unit ?? '',
-      options: [...(f.options ?? [])],
-      colors: toPairs(f.colors),
-      descriptions: toPairs(f.descriptions),
-      project: toPairs(f.project),
-    })),
-  (a, b) => JSON.stringify(a.map(rowOf)) !== JSON.stringify(b.map(rowOf)),
-  (rows) => {
-    const names = rows.map((f) => f.name.trim()).filter(Boolean);
+  (m) => {
+    const rows = Object.entries(m.fields).map(([name, f]) => asRow(name, f));
+    const byKey = new Map(rows.map((r) => [r.name, r.key]));
+    const order = m.field_order.map((n) => byKey.get(n)).filter((k): k is number => k !== undefined);
+    for (const r of rows) if (!order.includes(r.key)) order.push(r.key);
+    return { rows, order };
+  },
+  (a, b) => JSON.stringify(a.rows.map(rowOf)) !== JSON.stringify(b.rows.map(rowOf)) || JSON.stringify(a.order) !== JSON.stringify(b.order),
+  (value) => {
+    const names = value.rows.map((f) => f.name.trim()).filter(Boolean);
     const set: Record<string, unknown> = {};
-    for (const f of rows) {
+    for (const f of value.rows) {
       if (!f.name.trim()) continue;
       set[f.name.trim()] = {
         single: f.single ?? false,
@@ -306,21 +355,40 @@ const draft = new SectionDraft<FieldRow[]>(
         project: kvOf(f.project),
       };
     }
-    return { set, remove: Object.keys(configModel.value?.fields ?? {}).filter((n) => !names.includes(n)) };
+    const remove = Object.keys(configModel.value?.fields ?? {}).filter((n) => !names.includes(n));
+    // the list's order, as the names that will exist once this save
+    // lands; sent only when it isn't the file's already
+    const model = configModel.value;
+    const exists = (n: string) => n in set || (n in (model?.fields ?? {}) && !remove.includes(n));
+    const order = value.order.map((k) => value.rows.find((r) => r.key === k)?.name.trim()).filter((n): n is string => !!n && exists(n));
+    const body: { set: Record<string, unknown>; remove: string[]; order?: string[] } = { set, remove };
+    if (JSON.stringify(order) !== JSON.stringify((model?.field_order ?? []).filter(exists))) body.order = order;
+    return body;
   },
 );
 
 const rowOf = (f: FieldRow) => [f.name, f.single, f.numeric, f.type, f.unit, f.options, f.colors, f.descriptions, f.project];
 
-const fields = computed({
-  get: () => draft.value.value ?? [],
+const fields = computed<FieldRow[]>({
+  get: () => draft.value.value?.rows ?? [],
   set: (rows) => {
-    if (draft.value.value) draft.value.value = rows;
+    if (draft.value.value) draft.value.value = { ...draft.value.value, rows };
   },
 });
 
-// the file's fields as the cards hold them, for the per-card change badge
-const baseRows = computed(() => (configModel.value ? draft.from(configModel.value) : []));
+// the list's rows: the draft's order, then anything it doesn't name yet
+const orderedRows = computed(() => {
+  const rows = fields.value;
+  const inOrder = (draft.value.value?.order ?? []).map((k) => rows.find((r) => r.key === k)).filter((r): r is FieldRow => !!r);
+  return [...inOrder, ...rows.filter((r) => !inOrder.includes(r))];
+});
+
+function setOrder(keys: number[]) {
+  if (draft.value.value) draft.value.value = { ...draft.value.value, order: keys };
+}
+
+// the file's fields as the editor holds them, for the change badge
+const baseRows = computed(() => (configModel.value ? draft.from(configModel.value).rows : []));
 
 function changed(f: FieldRow): boolean {
   const base = baseRows.value.find((x) => x.name === f.name);
@@ -328,7 +396,7 @@ function changed(f: FieldRow): boolean {
   return JSON.stringify(rowOf(f)) !== JSON.stringify(rowOf(base));
 }
 
-// what the card's head says the field is, in the page's words
+// what the list and the editor's head say the field is, in the page's words
 function summary(f: FieldRow): string {
   const card = f.single ? 'one per issue' : 'several per issue';
   if (f.type === 'number' || (f.numeric && f.options.length > 0)) return `Numbers · ${f.unit ? `in ${f.unit}` : 'no unit'} · ${card}`;
@@ -339,6 +407,65 @@ function summary(f: FieldRow): string {
   if (f.type === 'issue') return `Another issue · ${card}`;
   if (f.options.length > 0) return `${f.options.length} values, in workflow order · ${card}`;
   return 'Guessed from the labels';
+}
+
+// the field at the address: #/settings/fields/<name>, none is the first
+const route = useRoute();
+const router = useRouter();
+const routeName = computed(() => (typeof route.params.name === 'string' ? route.params.name : ''));
+const selectedKey = ref<number | null>(null);
+
+watch(
+  [routeName, fields],
+  ([n, rows]) => {
+    const hit = n ? rows.find((r) => r.name === n) : undefined;
+    if (hit) {
+      selectedKey.value = hit.key;
+      return;
+    }
+    // the address names nothing here — a bare #/settings/fields, a field
+    // renamed or removed: stay on the selection while it lives, else the
+    // first field
+    if (!rows.some((r) => r.key === selectedKey.value)) selectedKey.value = rows[0]?.key ?? null;
+  },
+  { immediate: true },
+);
+
+// a rename (the TOML side does them) keeps the row and moves the address
+watch(
+  () => fields.value.find((r) => r.key === selectedKey.value)?.name,
+  (name) => {
+    const n = routeName.value;
+    if (name && n && n !== name && !fields.value.some((r) => r.name === n)) {
+      void router.replace({ path: `/settings/fields/${name}` });
+    }
+  },
+);
+
+const selected = computed(() => fields.value.find((r) => r.key === selectedKey.value) ?? null);
+
+// the list's order: drag a row onto another, or Alt+↑/↓ on a focused row
+const listFrom = ref<number | null>(null);
+
+function dropRow(i: number) {
+  const from = listFrom.value;
+  listFrom.value = null;
+  if (from === null || from === i) return;
+  const keys = orderedRows.value.map((r) => r.key);
+  const moved = keys[from];
+  if (moved === undefined) return;
+  keys.splice(from, 1);
+  keys.splice(i, 0, moved);
+  setOrder(keys);
+}
+
+function moveRow(f: FieldRow, d: number) {
+  const keys = orderedRows.value.map((r) => r.key);
+  const i = keys.indexOf(f.key);
+  const j = i + d;
+  if (i < 0 || j < 0 || j >= keys.length) return;
+  keys.splice(j, 0, ...keys.splice(i, 1));
+  setOrder(keys);
 }
 
 // the values as chips: drag to reorder, Enter (or a comma) adds, paste
@@ -386,8 +513,8 @@ function addWords(f: FieldRow, text: string) {
   if (words.length) f.options = [...f.options, ...words];
 }
 
-// the card's other rendering: a [fields.<name>] snippet, applied as it is
-// typed. While it parses, the snippet is the source of truth — a key
+// the editor's other rendering: a [fields.<name>] snippet, applied as it
+// is typed. While it parses, the snippet is the source of truth — a key
 // absent from it leaves the field, exactly as the file would; while it
 // does not, the row keeps its last good state and Save is held.
 const tomlOpen = ref<Record<number, boolean>>({});
@@ -489,31 +616,49 @@ function remove(f: FieldRow) {
   fields.value = fields.value.filter((x) => x !== f);
 }
 
+// a new field lands at the list's bottom, opened, its name focused
+const nameInput = ref<HTMLInputElement | null>(null);
+const focusName = ref(false);
+
+function openNew(f: FieldRow) {
+  selectedKey.value = f.key;
+  void router.push({ path: `/settings/fields/${f.name}` });
+  focusName.value = f.isNew;
+}
+
+watch(selectedKey, async () => {
+  if (!focusName.value) return;
+  focusName.value = false;
+  await nextTick();
+  nameInput.value?.focus();
+});
+
 function addBlank() {
-  fields.value = [...fields.value, { key: key++, name: '', isNew: true, single: false, numeric: false, type: '', unit: '', options: [], colors: [], descriptions: [], project: [] }];
+  const f: FieldRow = { key: key++, name: takeUnique('new_field', fields.value.map((x) => x.name)), isNew: true, single: false, numeric: false, type: '', unit: '', options: [], colors: [], descriptions: [], project: [] };
+  fields.value = [...fields.value, f];
+  openNew(f);
 }
 
 function addPreset(i: number) {
   const p = fieldPresets[i];
   if (!p) return;
   const taken = fields.value.map((f) => f.name);
-  const f = p.value.field;
-  fields.value = [
-    ...fields.value,
-    {
-      key: key++,
-      name: takeUnique(p.value.name, taken),
-      isNew: false,
-      single: f.single ?? false,
-      numeric: f.numeric ?? false,
-      type: f.type ?? '',
-      unit: f.unit ?? '',
-      options: [...(f.options ?? [])],
-      colors: toPairs(f.colors),
-      descriptions: toPairs(f.descriptions),
-      project: toPairs(f.project),
-    },
-  ];
+  const pf = p.value.field;
+  const f: FieldRow = {
+    key: key++,
+    name: takeUnique(p.value.name, taken),
+    isNew: false,
+    single: pf.single ?? false,
+    numeric: pf.numeric ?? false,
+    type: pf.type ?? '',
+    unit: pf.unit ?? '',
+    options: [...(pf.options ?? [])],
+    colors: toPairs(pf.colors),
+    descriptions: toPairs(pf.descriptions),
+    project: toPairs(pf.project),
+  };
+  fields.value = [...fields.value, f];
+  openNew(f);
 }
 
 const hasTomlError = computed(() => fields.value.some((f) => tomlError.value[f.key]));
@@ -557,8 +702,8 @@ onMounted(() => void draft.load());
 
 <style scoped>
 .fs { display: grid; gap: .75rem; container-type: inline-size; }
-/* the forms left, the reference right, like the old editor; one column when narrow */
-.set-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: .75rem; align-items: start; }
+/* the work left (list over editor), the reference right; one column when narrow */
+.set-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 20rem); gap: .75rem; align-items: start; }
 .set-forms { display: grid; gap: .75rem; min-width: 0; }
 @container (max-width: 52rem) { .set-cols { grid-template-columns: minmax(0, 1fr); } }
 h2, p { margin: 0; }
@@ -566,7 +711,28 @@ h2, p { margin: 0; }
 .fs-muted { color: var(--fg-muted); }
 .fs-start { display: grid; gap: .75rem; padding: 1.25rem; border: 1px solid var(--border); border-left: 3px solid var(--primary); background: var(--bg); }
 .fs-startrow { display: flex; align-items: center; gap: .75rem; }
-.fs-tools { display: flex; align-items: center; gap: .75rem; flex-wrap: wrap; }
+/* the work area: the list a fixed column, the editor the rest */
+.fl-work { display: grid; grid-template-columns: 17rem minmax(0, 1fr); gap: .75rem; align-items: start; }
+@container (max-width: 44rem) { .fl-work { grid-template-columns: minmax(0, 1fr); } }
+/* the list: one row a field, in the file's order */
+.fl-list { display: grid; gap: .5rem; min-width: 0; }
+.fl-listhead { font-size: .8125rem; color: var(--fg-muted); }
+.fl-listhead em { font-style: normal; }
+.fl-rows { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.fl-row { display: grid; gap: .125rem; min-height: 2.75rem; padding: .375rem .5rem; border: 1px solid var(--border); background: var(--bg); color: var(--fg); text-decoration: none; cursor: grab; }
+.fl-row:active { cursor: grabbing; }
+.fl-row:hover { border-color: var(--border-strong); }
+.fl-row-sel { border-color: var(--fg); border-left: 3px solid var(--primary); padding-left: calc(.5rem - 2px); }
+.fl-row-hold { opacity: .4; }
+.fl-line1 { display: flex; align-items: center; gap: .375rem; min-width: 0; }
+.fl-grip { color: var(--fg-muted); font-size: .75rem; }
+.fl-nm { overflow: hidden; font-family: var(--font-mono); font-weight: 700; font-size: .875rem; text-overflow: ellipsis; white-space: nowrap; }
+.fl-dot { width: .5rem; height: .5rem; flex: none; background: var(--danger); }
+.fl-sum { overflow: hidden; font-size: .75rem; color: var(--fg-muted); text-overflow: ellipsis; white-space: nowrap; }
+.fl-values { overflow: hidden; font-family: var(--font-mono); font-size: .75rem; color: var(--fg-muted); text-overflow: ellipsis; white-space: nowrap; }
+.fl-addrow { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+/* the editor: the selected field's card */
+.fl-ed { display: grid; gap: .75rem; min-width: 0; }
 .fs-card { border-left-color: var(--primary); }
 /* the card's head: fields.<name>, what the field is, the unsaved mark */
 .fs-ns { font-size: .8125rem; color: var(--fg-muted); }
@@ -575,7 +741,7 @@ h2, p { margin: 0; }
 .fs-name:focus { outline: 2px solid var(--fg); outline-offset: 2px; }
 .fs-sum { color: var(--fg-muted); font-size: .8125rem; }
 .fs-dirty { font-size: .75rem; font-weight: 700; color: var(--danger); }
-/* the card's two renderings: the form and this field's TOML */
+/* the editor's two renderings: the form and this field's TOML */
 .fs-mode { display: inline-flex; border: 1px solid var(--border); }
 .fs-modebtn { min-height: 1.625rem; padding: 0 .5rem; border: 0; background: none; color: var(--fg-muted); font: inherit; font-size: .75rem; cursor: pointer; }
 .fs-modebtn + .fs-modebtn { border-left: 1px solid var(--border); }
@@ -618,7 +784,7 @@ h2, p { margin: 0; }
 .fs-morehint { font-weight: 400; color: var(--fg-muted); }
 .fs-count { display: inline-block; margin-left: .375rem; padding: 0 .375rem; border: 1px solid var(--border); font-weight: 400; font-size: .75rem; color: var(--fg-muted); }
 .fs-tablewrap { overflow-x: auto; border: 1px solid var(--border); }
-.fs-table { width: 100%; min-width: 34rem; border-collapse: collapse; font-size: .8125rem; }
+.fs-table { width: 100%; min-width: 30rem; border-collapse: collapse; font-size: .8125rem; }
 .fs-table th { padding: .375rem .5rem; border-bottom: 1px solid var(--border); background: var(--bg-subtle); text-align: left; font-size: .75rem; color: var(--fg-muted); }
 .fs-table td { padding: .25rem .5rem; border-bottom: 1px solid var(--border); vertical-align: middle; }
 .fs-tvalue { font-family: var(--font-mono); font-weight: 700; }

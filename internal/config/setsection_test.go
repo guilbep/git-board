@@ -57,6 +57,46 @@ func TestSetFieldsWritesWholeAndRemoves(t *testing.T) {
 	}
 }
 
+func TestMoveFieldTakesTheSubtablesAndTheComment(t *testing.T) {
+	t.Parallel()
+	before := "# the fields\n\n# the workflow, in order\n[fields.status]\nsingle = true\n\n[fields.status.colors]\nready = \"green\"\n\n# the estimates\n[fields.est]\nnumeric = true\n\n[views.open]\nlayout = \"table\"\n"
+	after, err := MoveFieldText(before, "est", "status")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "# the fields\n\n# the estimates\n[fields.est]\nnumeric = true\n\n# the workflow, in order\n[fields.status]\nsingle = true\n\n[fields.status.colors]\nready = \"green\"\n\n[views.open]\nlayout = \"table\"\n"
+	if after != want {
+		t.Errorf("got\n%s\nwant\n%s", after, want)
+	}
+	cfg, _, err := Check([]byte(after))
+	if err != nil {
+		t.Errorf("check: %v", err)
+	} else if got, want := cfg.FieldOrder(), []string{"est", "status"}; !slices.Equal(got, want) {
+		t.Errorf("FieldOrder = %v, want %v", got, want)
+	}
+}
+
+func TestParseFieldOrderIsTheFileOrder(t *testing.T) {
+	t.Parallel()
+	text := "[fields.status]\nsingle = true\n\n[fields.est]\nnumeric = true\n\n[fields.kind]\n"
+	cfg, _, err := parse([]byte(text))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := cfg.FieldOrder(), []string{"status", "est", "kind"}; !slices.Equal(got, want) {
+		t.Errorf("FieldOrder = %v, want %v", got, want)
+	}
+	// one the file lost track of (never seen): sorted
+	text = "[fields.status]\n"
+	cfg, _, err = parse([]byte(text))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := cfg.FieldOrder(), []string{"status"}; !slices.Equal(got, want) {
+		t.Errorf("FieldOrder = %v, want %v", got, want)
+	}
+}
+
 func TestSetFieldsAddsAFieldAtTheEnd(t *testing.T) {
 	t.Parallel()
 	before := "[views.open]\nlayout = \"table\"\n"

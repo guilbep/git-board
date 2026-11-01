@@ -649,3 +649,89 @@ func MoveViewText(text, name, before string) (string, error) {
 	out := slices.Concat(without[:to], block, without[to:])
 	return strings.Join(out, "\n"), nil
 }
+
+// MoveFieldText is text with the [fields.<name>] table — its subtables
+// ([fields.<name>.colors] and friends) moving with it — where the
+// [fields.<before>] table was, the file's order the fields page's list:
+// before "" puts it last. The table's comment block moves with it; the
+// target's comment block stays its own; the other tables' lines are
+// untouched.
+func MoveFieldText(text, name, before string) (string, error) {
+	if !viewName.MatchString(name) {
+		return "", fmt.Errorf("a field's name is letters, digits, - and _, not %q", name)
+	}
+	if before != "" && !viewName.MatchString(before) {
+		return "", fmt.Errorf("a field's name is letters, digits, - and _, not %q", before)
+	}
+	if name == before {
+		return text, nil
+	}
+	lines := strings.Split(text, "\n")
+	start, end := fieldSpan(lines, name)
+	if start < 0 {
+		return "", fmt.Errorf("no [fields.%s] table to move", name)
+	}
+	from := start // the comment block above describes the field: it moves too
+	for from > 0 && strings.HasPrefix(strings.TrimSpace(lines[from-1]), "#") {
+		from--
+	}
+	block := slices.Clone(lines[from:end])
+	without := slices.Concat(lines[:from], lines[end:])
+	if from > 0 && strings.TrimSpace(lines[from-1]) == "" && (end >= len(lines) || strings.TrimSpace(lines[end]) == "") {
+		without = slices.Concat(lines[:from-1], lines[end:]) // its blank line above goes with it, when one stays below
+	}
+
+	to := len(without) // last: the block goes at the end
+	if before != "" {
+		tStart, _ := fieldSpan(without, before)
+		if tStart < 0 {
+			return "", fmt.Errorf("no [fields.%s] table to move before", before)
+		}
+		to = tStart
+		for to > 0 && strings.HasPrefix(strings.TrimSpace(without[to-1]), "#") {
+			to-- // the comments above the target describe the target: the block goes over them
+		}
+	}
+	if to > 0 && strings.TrimSpace(without[to-1]) != "" {
+		block = append([]string{""}, block...) // one blank line over it
+	}
+	if to >= len(without) || strings.TrimSpace(without[to]) != "" {
+		block = append(block, "") // one blank line under it
+	}
+	out := slices.Concat(without[:to], block, without[to:])
+	return strings.Join(out, "\n"), nil
+}
+
+// fieldSpan is the [fields.<name>] table's span with its subtables
+// ([fields.<name>.colors] and friends): from the table's first header
+// line to the line before the next header outside it — the blank lines
+// and the comment block above that one stay out — -1 when there is none.
+func fieldSpan(lines []string, name string) (start, end int) {
+	head := "[fields." + name + "]"
+	sub := "[fields." + name + "."
+	for i, l := range lines {
+		t := strings.TrimSpace(l)
+		if t == head || strings.HasPrefix(t, sub) {
+			start = i
+			break
+		}
+	}
+	if start < 0 {
+		return -1, -1
+	}
+	end = len(lines)
+	for i := start + 1; i < len(lines); i++ {
+		t := strings.TrimSpace(lines[i])
+		if strings.HasPrefix(t, "[") && !strings.HasPrefix(t, sub) {
+			end = i
+			break
+		}
+	}
+	for end > start+1 { // the next table's comments and blanks are its own
+		if l := strings.TrimSpace(lines[end-1]); l != "" && !strings.HasPrefix(l, "#") {
+			break
+		}
+		end--
+	}
+	return start, end
+}

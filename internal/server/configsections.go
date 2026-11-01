@@ -26,9 +26,12 @@ type configModel struct {
 	Views  map[string]config.View  `json:"views"`
 	// ViewOrder is the file's order: the tabs', the first the landing one.
 	// The map above is sorted, this is the file's.
-	ViewOrder []string             `json:"view_order"`
-	Sprints   config.SprintsConfig `json:"sprints"`
-	Roles     map[string]string    `json:"roles"`
+	ViewOrder []string `json:"view_order"`
+	// FieldOrder is the file's order likewise: the fields page's list, the
+	// order an issue's fields line takes.
+	FieldOrder []string             `json:"field_order"`
+	Sprints    config.SprintsConfig `json:"sprints"`
+	Roles      map[string]string    `json:"roles"`
 	// Branches, Cycle (its On says the file has the table), Repos, Uploads
 	// and Release, as the file holds them
 	Branches config.Branches `json:"branches"`
@@ -69,6 +72,7 @@ func (s *apiServer) configModel() (configModel, error) {
 		m.Views[name] = v
 	}
 	m.ViewOrder = cfg.ViewNames()
+	m.FieldOrder = cfg.FieldOrder()
 	m.Sprints = cfg.Sprints
 	m.Sprints.List = orSprints(cfg.Sprints.List)
 	for role, who := range cfg.Roles {
@@ -184,11 +188,26 @@ func sectionWriter(section string, r *http.Request, w http.ResponseWriter) (func
 		var req struct {
 			Set    map[string]config.Field `json:"set"`
 			Remove []string                `json:"remove"`
+			Order  []string                `json:"order"` // the list's: each field moved above the one before it
 		}
 		if !decode(w, r, &req) {
 			return nil, nil
 		}
-		return func(text string) (string, error) { return config.SetFieldsText(text, req.Set, req.Remove) }, nil
+		return func(text string) (string, error) {
+			text, err := config.SetFieldsText(text, req.Set, req.Remove)
+			if err != nil {
+				return "", err
+			}
+			// the file's order is the list's: realize it pairwise, from the
+			// bottom up — each field moved above the one after it, which the
+			// later moves leave where they put it
+			for i := len(req.Order) - 2; i >= 0; i-- {
+				if text, err = config.MoveFieldText(text, req.Order[i], req.Order[i+1]); err != nil {
+					return "", err
+				}
+			}
+			return text, nil
+		}, nil
 	case "labels":
 		var req config.Labels
 		if !decode(w, r, &req) {
@@ -219,10 +238,11 @@ func sectionWriter(section string, r *http.Request, w http.ResponseWriter) (func
 					return "", err
 				}
 			}
-			// the file's order is the tabs': realize it pairwise, each view
-			// moved above the one before it leaves the earlier ones alone
-			for i := 1; i < len(req.Order); i++ {
-				if text, err = config.MoveViewText(text, req.Order[i], req.Order[i-1]); err != nil {
+			// the file's order is the tabs': realize it pairwise, from the
+			// bottom up — each view moved above the one after it, which the
+			// later moves leave where they put it
+			for i := len(req.Order) - 2; i >= 0; i-- {
+				if text, err = config.MoveViewText(text, req.Order[i], req.Order[i+1]); err != nil {
 					return "", err
 				}
 			}

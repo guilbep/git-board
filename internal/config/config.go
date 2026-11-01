@@ -237,6 +237,7 @@ type Config struct {
 	Sprints       SprintsConfig
 	Views         map[string]View
 	viewOrder     []string // ViewNames
+	fieldOrder    []string // FieldOrder
 	GithubProject GithubProject
 	Uploads       Uploads
 	Branches      Branches
@@ -373,6 +374,7 @@ func parse(data []byte) (*Config, toml.MetaData, error) {
 		Sprints:        r.Sprints,
 		Views:          r.Views,
 		viewOrder:      keysInOrder(md, r.Views, "views"),
+		fieldOrder:     keysInOrder(md, r.Fields, "fields"),
 		GithubProject:  r.GithubProject,
 		Uploads:        r.Uploads,
 		Branches:       r.Branches,
@@ -408,6 +410,16 @@ func (c *Config) ViewNames() []string {
 		return c.viewOrder
 	}
 	return slices.Sorted(maps.Keys(c.Views))
+}
+
+// FieldOrder is the fields' names as the file lists them: the fields
+// page's list order, the order an issue's fields line takes. A Config not
+// parsed from a file: sorted.
+func (c *Config) FieldOrder() []string {
+	if len(c.fieldOrder) == len(c.Fields) {
+		return c.fieldOrder
+	}
+	return slices.Sorted(maps.Keys(c.Fields))
 }
 
 // checkDescriptions keeps each value's description to GitHub's 100
