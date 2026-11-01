@@ -97,6 +97,23 @@ func TestCycleFallsBackToLeadTime(t *testing.T) {
 	}
 }
 
+// An issue opened and closed in the same minute was imported closed: its
+// lead time is the import's, and it stays out of the median, counted.
+func TestCycleLeavesOutIssuesClosedAtImport(t *testing.T) {
+	t.Parallel()
+	issues := []Issue{
+		{ID: "x", Created: at(0, 0), Changes: []Change{{At: at(4, 0), Status: "closed"}}},
+		{ID: "y", Created: at(1, 0), Changes: []Change{{At: at(1, 0), Status: "closed"}}},
+	}
+	r := Compute(issues, Options{Field: "status", Workflow: []string{"backlog", "in-progress", "done"}, From: at(0, 0), To: at(6, 0)})
+	if len(r.Cycle.Days) != 1 || r.Cycle.Days[0] != 4 || r.Cycle.Imported != 1 {
+		t.Errorf("cycle %+v", r.Cycle)
+	}
+	if !strings.Contains(r.Headlines["cycle"], "1 closed as it was imported left out") {
+		t.Errorf("headline %q", r.Headlines["cycle"])
+	}
+}
+
 // The sprint's issues by status at the end of the burn-up: the donut.
 func TestBurnupSaysWhereTheSprintStands(t *testing.T) {
 	r := Compute(sample(), Options{

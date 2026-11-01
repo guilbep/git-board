@@ -38,9 +38,15 @@
                 <input :value="row.k" class="bs-input bs-opt" list="bs-kind-names" placeholder="e.g. bug" spellcheck="false" aria-label="The issue's kind" @input="setRow({ ...row, k: inputValue($event) })" />
                 <span class="bs-arrow">→</span>
                 <input :value="row.v" class="bs-input bs-opt" placeholder="e.g. fix" spellcheck="false" aria-label="The branch's kind" @input="setRow({ ...row, v: inputValue($event) })" />
+                <span v-if="notAKind(row.k)" class="bs-bad">not a kind</span>
               </div>
             </template>
           </ConfigRows>
+          <p v-if="strangers.length" class="gb-hint bs-bad-line" role="status">
+            {{ strangers.join(', ') }} {{ strangers.length === 1 ? 'is not a value' : 'are not values' }} of the kind field
+            ({{ fieldKinds.join(', ') }}): no issue can carry {{ strangers.length === 1 ? 'it' : 'them' }}. Remove {{ strangers.length === 1 ? 'it' : 'them' }} here, or add
+            {{ strangers.length === 1 ? 'it' : 'them' }} in <router-link to="/settings/fields/kind">Fields</router-link>.
+          </p>
           <datalist id="bs-kind-names">
             <option v-for="k in fieldKinds" :key="k" :value="k" />
           </datalist>
@@ -94,6 +100,10 @@ const kvOf = (rows: Pair[]): Record<string, string> | undefined => {
 
 // the kinds the kind field holds, for the datalist
 const fieldKinds = computed(() => configModel.value?.fields['kind']?.options ?? []);
+// a key the kind field doesn't hold: no issue can carry it (the flat kinds'
+// field is made of these keys, so it never says so)
+const notAKind = (k: string) => fieldKinds.value.length > 0 && k.trim() !== '' && !fieldKinds.value.includes(k.trim());
+const strangers = computed(() => kindRows.value.map((r) => r.k.trim()).filter(notAKind));
 
 const draft = new SectionDraft<Branches>(
   'branches',
@@ -140,4 +150,6 @@ h2, h3, p { margin: 0; }
 .bs-opt { width: 10rem; }
 .bs-pair { display: flex; align-items: center; gap: .5rem; }
 .bs-arrow { color: var(--fg-muted); }
+.bs-bad { font-size: .75rem; font-weight: 700; color: var(--danger-fg); white-space: nowrap; }
+.bs-bad-line { color: var(--danger-fg); }
 </style>

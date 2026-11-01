@@ -429,6 +429,11 @@ repository against `.git-board.toml`:
 - **unknown option values** — a `field:value` label where `value` isn't in
   that field's configured `options` (fields with no configured `options` are
   free-form and skipped). Same check `git board project pull` already warns on.
+  A value that matches an option but for case or punctuation (`P-2`) says
+  which one was meant (`did you mean prio:p2?`).
+- **near values** — on a field with no `options`, two spellings of one value
+  (`risk:-normal` and `risk:normal`): each issue carrying the less used one
+  is told which most issues use.
 - **missing values** — an open issue with no value at all for a configured
   single-cardinality field (the PRD calls out `prio` specifically; every
   configured single field is checked, since real drift shows up on `status`

@@ -90,7 +90,7 @@
                 <td v-else-if="key === 'is'">{{ issue.status }}</td>
                 <td v-else-if="key === 'links'" class="cell-links" @click.stop>
                   <a v-for="f in issue.forges ?? []" :key="f.url" :href="f.url" target="_blank" rel="noopener noreferrer" class="forge-link" :title="`Open on ${f.name}${f.number ? ` #${f.number}` : ''}`">
-                    <span v-if="f.name !== 'GitHub'" class="forge-tag">{{ f.name === 'GitLab' ? 'GL' : f.name }}</span>#{{ f.number || '?' }}
+                    {{ f.name }} #{{ f.number || '?' }}
                   </a>
                 </td>
                 <td v-else-if="key === 'other'" class="cell-other">{{ otherLabels(issue.labels, names).join(', ') }}</td>
@@ -129,7 +129,7 @@ const props = defineProps<{
 const emit = defineEmits<{ open: [issue: Issue]; sort: [key: string]; changed: []; 'update:columns': [columns: string[] | undefined] }>();
 
 const cols = computed(() => shownColumns(props.columns, props.names));
-const labels: Record<string, string> = { id: 'ID', title: 'Title', is: 'State', other: 'Other labels', links: 'Forge' };
+const labels: Record<string, string> = { id: 'ID', title: 'Title', is: 'State', other: 'Other labels', links: 'On the forge' };
 const label = (key: string) => labels[key] ?? displayName(key);
 
 function groupLabel(value: string): string {
@@ -296,7 +296,6 @@ function bulkClose() {
 .cell-other { color: var(--fg-muted); }
 .cell-links { white-space: nowrap; cursor: default; }
 .forge-link { display: flex; align-items: center; gap: .25rem; color: var(--fg-muted); font-family: var(--font-mono); font-size: var(--fs-sm); text-decoration: none; }
-.forge-tag { padding: 0 .25rem; border: 1px solid var(--border); font-size: .6875rem; font-family: inherit; }
 .forge-link:hover { text-decoration: underline; }
 .forge-link + .forge-link { margin-top: .25rem; }
 

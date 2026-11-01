@@ -26,6 +26,7 @@ import (
 const (
 	CheckDoubleSingle    = "double-single"
 	CheckUnknownValue    = "unknown-value"
+	CheckNearValue       = "near-value"
 	CheckMissingRequired = "missing-value"
 	CheckOrphanSprint    = "orphan-sprint"
 	CheckDeadOption      = "dead-option"
@@ -38,7 +39,7 @@ const (
 
 // CheckOrder is every check name in the order Run reports them, for a
 // stable CLI summary grouping.
-var CheckOrder = []string{CheckDoubleSingle, CheckUnknownValue, CheckMissingRequired, CheckOrphanSprint, CheckDeadOption,
+var CheckOrder = []string{CheckDoubleSingle, CheckUnknownValue, CheckNearValue, CheckMissingRequired, CheckOrphanSprint, CheckDeadOption,
 	CheckProjectKey, CheckTwoKinds, CheckKindTitle, CheckNoKind, CheckLabelOutside}
 
 // Finding is one drift report. IssueID/Title are "" for CheckDeadOption,
@@ -69,6 +70,7 @@ func Run(issues []store.Issue, cfg *config.Config) []Finding {
 	var findings []Finding
 	findings = append(findings, checkSingleCardinality(open, cfg)...)
 	findings = append(findings, checkUnknownValues(open, cfg)...)
+	findings = append(findings, checkNearValues(open, cfg)...)
 	findings = append(findings, checkOrphanSprints(open, cfg)...)
 	findings = append(findings, checkDeadOptions(issues, cfg)...)
 	findings = append(findings, checkProjectKeys(cfg)...)
@@ -164,10 +166,76 @@ func checkUnknownValues(issues []store.Issue, cfg *config.Config) []Finding {
 			if !ok || cfg.Fields[name].KnownValue(value) {
 				continue
 			}
-			findings = append(findings, Finding{
-				Check: CheckUnknownValue, IssueID: issue.ID, Title: issue.Title,
-				Message: fmt.Sprintf("%s has no matching [fields.%s] option", l, name),
-			})
+			msg := fmt.Sprintf("%s has no matching [fields.%s] option", l, name)
+			if i := slices.IndexFunc(cfg.Fields[name].Options, func(o string) bool { return fold(o) == fold(value) }); i >= 0 {
+				msg += fmt.Sprintf(": did you mean %s:%s?", name, cfg.Fields[name].Options[i])
+			}
+			findings = append(findings, Finding{Check: CheckUnknownValue, IssueID: issue.ID, Title: issue.Title, Message: msg})
+		}
+	}
+	return findings
+}
+
+// fold is a value as a typo leaves it: lower case, letters and digits only
+// (-normal and normal, P-2 and p2 are one)
+func fold(v string) string {
+	return strings.Map(func(r rune) rune {
+		if r >= 'a' && r <= 'z' || r >= '0' && r <= '9' {
+			return r
+		}
+		if r >= 'A' && r <= 'Z' {
+			return r + 'a' - 'A'
+		}
+		return -1
+	}, v)
+}
+
+// checkNearValues: on a field with no options (undeclared, or declared
+// without a list), two spellings of one value are a typo. The spelling
+// most open issues carry is the meant one; each issue carrying another is
+// told so. A field with options is checkUnknownValues'.
+func checkNearValues(issues []store.Issue, cfg *config.Config) []Finding {
+	uses := map[string]map[string]int{} // field+fold -> spelling -> issues
+	for _, issue := range issues {
+		for _, l := range issue.Labels {
+			name, value, ok := strings.Cut(l, ":")
+			if !ok || len(cfg.Fields[name].Options) > 0 || fold(value) == "" {
+				continue
+			}
+			k := name + ":" + fold(value)
+			if uses[k] == nil {
+				uses[k] = map[string]int{}
+			}
+			uses[k][value]++
+		}
+	}
+	var findings []Finding
+	for _, issue := range issues {
+		for _, l := range issue.Labels {
+			name, value, ok := strings.Cut(l, ":")
+			if !ok {
+				continue
+			}
+			spellings := uses[name+":"+fold(value)]
+			if len(spellings) < 2 {
+				continue
+			}
+			// the most used, then the shortest, then the first in order
+			meant := slices.SortedFunc(maps.Keys(spellings), func(a, b string) int {
+				if spellings[a] != spellings[b] {
+					return spellings[b] - spellings[a]
+				}
+				if len(a) != len(b) {
+					return len(a) - len(b)
+				}
+				return strings.Compare(a, b)
+			})[0]
+			if value == meant {
+				continue
+			}
+			n := spellings[meant]
+			findings = append(findings, Finding{Check: CheckNearValue, IssueID: issue.ID, Title: issue.Title,
+				Message: fmt.Sprintf("%s: did you mean %s:%s (%d issue%s)?", l, name, meant, n, map[bool]string{true: "", false: "s"}[n == 1])})
 		}
 	}
 	return findings

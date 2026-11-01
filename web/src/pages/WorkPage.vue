@@ -36,7 +36,7 @@
               <tbody>
                 <tr v-for="r in data.needs" :key="r.issue.id">
                   <td>
-                    <router-link :to="`/issues/${r.issue.id}`"><span v-if="numberOf(r.issue)" class="gb-work-num">#{{ numberOf(r.issue) }}</span> {{ r.issue.shown_title }}</router-link>
+                    <router-link :to="`/issues/${r.issue.id}`"><span v-if="numberOf(r.issue)" class="gb-work-num">{{ numberOf(r.issue) }}</span> {{ r.issue.shown_title }}</router-link>
                     <button v-if="canStart(r)" type="button" class="gb-linkbtn gb-work-start" :disabled="busy" @click="start(r.issue.id)">{{ starting === r.issue.id ? 'Starting…' : 'Start an agent' }}</button>
                   </td>
                   <td class="gb-work-step">{{ stepLabel(r.step, r.name) }}</td>
@@ -85,7 +85,7 @@
               <tbody>
                 <tr v-for="r in data.waiting" :key="r.issue.id">
                   <td>
-                    <router-link :to="`/issues/${r.issue.id}`"><span v-if="numberOf(r.issue)" class="gb-work-num">#{{ numberOf(r.issue) }}</span> {{ r.issue.shown_title }}</router-link>
+                    <router-link :to="`/issues/${r.issue.id}`"><span v-if="numberOf(r.issue)" class="gb-work-num">{{ numberOf(r.issue) }}</span> {{ r.issue.shown_title }}</router-link>
                     <button v-if="canStart(r)" type="button" class="gb-linkbtn gb-work-start" :disabled="busy" @click="start(r.issue.id)">{{ starting === r.issue.id ? 'Starting…' : 'Start an agent' }}</button>
                   </td>
                   <td class="gb-work-step">{{ stepLabel(r.step, r.name) }}</td>
@@ -104,7 +104,7 @@
       <section aria-labelledby="send-h">
         <h2 id="send-h" class="h5">For the forges <span class="gb-work-n">{{ sendWords(data.pending) }}</span></h2>
         <ul v-if="data.to_send.length" class="gb-work-lines">
-          <li v-for="(l, i) in data.to_send" :key="i"><span class="gb-work-num">#{{ numberOf(l.issue) || l.issue.id.slice(0, 7) }}</span> {{ l.what }}</li>
+          <li v-for="(l, i) in data.to_send" :key="i"><span class="gb-work-num">{{ numberOf(l.issue) || l.issue.id.slice(0, 7) }}</span> {{ l.what }}</li>
           <li v-if="data.pending > data.to_send.length" class="gb-hint">and {{ data.pending - data.to_send.length }} more</li>
         </ul>
         <p v-else class="gb-hint">The forges have everything.</p>
@@ -175,7 +175,8 @@ const who = computed<'me' | 'team'>(() => (route.query.who === 'team' ? 'team' :
 const rows = computed(() => (data.value ? [...data.value.needs, ...data.value.waiting] : []));
 const names = computed(() => namespaces(rows.value.map((r) => r.issue), fields.value));
 
-const numberOf = (i: Issue) => forgeNumbers(i)[0] ?? '';
+// the project's number (GB-22) names an issue; a forge's only without one
+const numberOf = (i: Issue) => i.number || (forgeNumbers(i)[0] ? `#${forgeNumbers(i)[0]}` : '');
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 const label = (r: WorkRow) => {
   const a = actionFor(r);

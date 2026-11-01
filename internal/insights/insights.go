@@ -76,6 +76,9 @@ type Cycle struct {
 	Days   []float64 `json:"days"`
 	Median float64   `json:"median"`
 	P85    float64   `json:"p85"`
+	// Imported counts the issues left out for being opened and closed in
+	// the same minute: imported closed, their "lead time" the import's
+	Imported int `json:"imported,omitempty"`
 }
 
 // Burnup follows the sprint: per day, its issues and those closed.
@@ -299,6 +302,10 @@ func cycleFrom(issues []Issue, o Options, fromStarted bool) Cycle {
 		if begin.IsZero() || closed.IsZero() || closed.Before(o.From) || closed.After(o.To) || closed.Before(begin) {
 			continue
 		}
+		if !fromStarted && closed.Sub(begin) < time.Minute {
+			c.Imported++
+			continue
+		}
 		c.Days = append(c.Days, closed.Sub(begin).Hours()/24)
 	}
 	sorted := slices.Clone(c.Days)
@@ -390,7 +397,11 @@ func (r *Report) headlines() {
 		if c.From == "opened" {
 			from = "being opened"
 		}
-		r.Headlines["cycle"] = fmt.Sprintf("Half the issues close within %s of %s, 85%% within %s (%d issues).", duration(c.Median), from, duration(c.P85), len(c.Days))
+		r.Headlines["cycle"] = fmt.Sprintf("Half the issues close within %s of %s, 85%% within %s (%d issues", duration(c.Median), from, duration(c.P85), len(c.Days))
+		if c.Imported > 0 {
+			r.Headlines["cycle"] += fmt.Sprintf("; %d closed as it was imported left out", c.Imported)
+		}
+		r.Headlines["cycle"] += ")."
 	} else {
 		r.Headlines["cycle"] = "No issue went from started to closed in this period."
 	}

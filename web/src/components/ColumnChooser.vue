@@ -33,7 +33,7 @@ const emit = defineEmits<{ 'update:columns': [columns: string[] | undefined] }>(
 
 const shown = computed(() => shownColumns(props.columns, props.names));
 const list = computed(() => chooserColumns(props.columns, props.names));
-const labels: Record<string, string> = { id: 'ID', title: 'Title', is: 'State', other: 'Other labels', links: 'Forge' };
+const labels: Record<string, string> = { id: 'ID', title: 'Title', is: 'State', other: 'Other labels', links: 'On the forge' };
 const label = (key: string) => labels[key] ?? displayName(key);
 const move = (key: string, by: -1 | 1) => emit('update:columns', savedColumns(moveColumn(shown.value, key, by), props.names));
 
