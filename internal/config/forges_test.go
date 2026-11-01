@@ -64,13 +64,13 @@ func TestWithAndWithoutForge(t *testing.T) {
 	gl := Forge{Name: "gl", Kind: "gitlab", Project: "7", Host: "gitlab.epfl.ch"}
 	text := WithForge(WithForge(src, gh), gl)
 	cfg, _, err := parse([]byte(text))
-	if err != nil || len(cfg.Forges) != 2 || cfg.Forges[0] != gh || cfg.Forges[1] != gl {
+	if err != nil || len(cfg.Forges) != 2 || cfg.Forges[0].Name != gh.Name || cfg.Forges[0].Kind != gh.Kind || cfg.Forges[0].Project != gh.Project || cfg.Forges[0].Login != gh.Login || cfg.Forges[1].Name != gl.Name || cfg.Forges[1].Project != gl.Project {
 		t.Fatalf("%s\nforges %+v, %v", text, cfg.Forges, err)
 	}
 	gh.Sync = false
 	text = WithoutForge(WithForge(text, gh), "gl")
 	cfg, _, err = parse([]byte(text))
-	if err != nil || len(cfg.Forges) != 1 || cfg.Forges[0] != gh || !strings.HasPrefix(text, src) || strings.Contains(text, "\n\n\n") {
+	if err != nil || len(cfg.Forges) != 1 || cfg.Forges[0].Name != gh.Name || cfg.Forges[0].Sync || !strings.HasPrefix(text, src) || strings.Contains(text, "\n\n\n") {
 		t.Fatalf("%q\nforges %+v, %v", text, cfg.Forges, err)
 	}
 }

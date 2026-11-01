@@ -33,12 +33,13 @@ const (
 	CheckKindTitle       = "kind-title"
 	CheckNoKind          = "no-kind"
 	CheckLabelOutside    = "label-outside"
+	CheckProjectKey      = "project-key"
 )
 
 // CheckOrder is every check name in the order Run reports them, for a
 // stable CLI summary grouping.
 var CheckOrder = []string{CheckDoubleSingle, CheckUnknownValue, CheckMissingRequired, CheckOrphanSprint, CheckDeadOption,
-	CheckTwoKinds, CheckKindTitle, CheckNoKind, CheckLabelOutside}
+	CheckProjectKey, CheckTwoKinds, CheckKindTitle, CheckNoKind, CheckLabelOutside}
 
 // Finding is one drift report. IssueID/Title are "" for CheckDeadOption,
 // which is a config-inventory question ("does any issue use this option"),
@@ -70,6 +71,7 @@ func Run(issues []store.Issue, cfg *config.Config) []Finding {
 	findings = append(findings, checkUnknownValues(open, cfg)...)
 	findings = append(findings, checkOrphanSprints(open, cfg)...)
 	findings = append(findings, checkDeadOptions(issues, cfg)...)
+	findings = append(findings, checkProjectKeys(cfg)...)
 	findings = append(findings, checkKinds(open, cfg)...)
 	findings = append(findings, checkLabels(open, cfg)...)
 	return findings
@@ -228,6 +230,21 @@ func checkDeadOptions(issues []store.Issue, cfg *config.Config) []Finding {
 }
 
 var titleKind = regexp.MustCompile(`^\s*\[([^\]]+)\]`) // [BUG](Equipment)
+
+// checkProjectKeys suggests the forge field mappings for the fields still
+// renaming values the old way: [fields.X] project is read as
+// [forges.gh.fields.X.values] since the mappings exist, but the new form
+// is the one the Forges page edits. A finding per field, no issue.
+func checkProjectKeys(cfg *config.Config) []Finding {
+	var findings []Finding
+	for _, name := range slices.Sorted(maps.Keys(cfg.Fields)) {
+		if len(cfg.Fields[name].Project) > 0 {
+			findings = append(findings, Finding{Check: CheckProjectKey,
+				Message: fmt.Sprintf("fields.%s.project: move it to [forges.gh.fields.%s.values] — where each field lives on a forge (Settings › Forges › Fields)", name, name)})
+		}
+	}
+	return findings
+}
 
 // checkKinds reads the kinds with [branches] kinds, either form (kind:bug,
 // or bug, which the backend reads as kind:bug): two kinds on one issue; a

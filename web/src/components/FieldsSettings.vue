@@ -225,6 +225,7 @@
                             <th>Color</th>
                             <th>Description</th>
                             <th>GitHub Project name</th>
+                            <th>Also read as</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -264,9 +265,20 @@
                                 @input="setPair(selected, 'project', k, inputValue($event))"
                               />
                             </td>
+                            <td>
+                              <input
+                                :value="aliasOf(selected, k)"
+                                class="fs-cell"
+                                placeholder="a retired name, folded in"
+                                spellcheck="false"
+                                :aria-label="`Old names of ${k}, comma apart`"
+                                @input="setAlias(selected, k, inputValue($event))"
+                              />
+                            </td>
                           </tr>
                         </tbody>
                       </table>
+                      <p class="gb-hint">Also read as: a value's retired names (<code>could</code> → <code>couldhave</code>). An issue or a forge reading the old name stores the current one; Adopt rewrites the labels.</p>
                     </div>
                     <p v-else class="gb-hint">No values yet: the details come once the values do.</p>
                   </details>
@@ -334,12 +346,13 @@ type FieldRow = {
   type: string;
   unit: string;
   options: string[];
+  aliases: Pair[];
   colors: Pair[];
   descriptions: Pair[];
   project: Pair[];
 };
 type Pair = { k: string; v: string };
-type PairMap = 'colors' | 'descriptions' | 'project';
+type PairMap = 'aliases' | 'colors' | 'descriptions' | 'project';
 // the section's draft: the rows, and the list's order as row keys — keys,
 // not names, so a rename rides along and the order the user set survives
 type FieldsValue = { rows: FieldRow[]; order: number[] };
@@ -373,6 +386,7 @@ const asRow = (name: string, f: ConfigField): FieldRow => {
     colors: toPairs(f.colors),
     descriptions: toPairs(f.descriptions),
     project: toPairs(f.project),
+    aliases: toPairs(f.aliases),
   };
 };
 
@@ -402,6 +416,7 @@ const draft = new SectionDraft<FieldsValue>(
         colors: kvOf(f.colors),
         descriptions: kvOf(f.descriptions),
         project: kvOf(f.project),
+        aliases: kvOf(f.aliases),
       };
     }
     const remove = Object.keys(configModel.value?.fields ?? {}).filter((n) => !names.includes(n));
@@ -416,7 +431,7 @@ const draft = new SectionDraft<FieldsValue>(
   },
 );
 
-const rowOf = (f: FieldRow) => [f.name, f.single, f.numeric, f.type, f.unit, f.options, f.colors, f.descriptions, f.project];
+const rowOf = (f: FieldRow) => [f.name, f.single, f.numeric, f.type, f.unit, f.options, f.aliases, f.colors, f.descriptions, f.project];
 
 const fields = computed<FieldRow[]>({
   get: () => draft.value.value?.rows ?? [],
@@ -652,6 +667,7 @@ const rowToToml = (f: FieldRow): FieldToml => ({
   type: f.type || undefined,
   unit: f.unit || undefined,
   options: f.options,
+  aliases: kvOf(f.aliases),
   colors: kvOf(f.colors),
   descriptions: kvOf(f.descriptions),
   project: kvOf(f.project),
@@ -732,10 +748,22 @@ async function takeFile() {
 // pair
 function detailKeys(f: FieldRow): string[] {
   const keys: string[] = [];
-  for (const k of [...f.options, ...f.colors.map((r) => r.k), ...f.descriptions.map((r) => r.k), ...f.project.map((r) => r.k)]) {
+  for (const k of [...f.options, ...f.colors.map((r) => r.k), ...f.descriptions.map((r) => r.k), ...f.project.map((r) => r.k), ...f.aliases.map((r) => r.v)]) {
     if (!keys.includes(k)) keys.push(k);
   }
   return keys;
+}
+
+// the field's aliases, as the details table's "Also read as" cell holds
+// them: one value's retired names, comma apart (could → couldhave)
+function aliasOf(f: FieldRow, k: string): string {
+  return f.aliases.filter((r) => r.v === k).map((r) => r.k).join(', ');
+}
+
+function setAlias(f: FieldRow, k: string, text: string) {
+  const olds = text.split(',').map((s) => s.trim()).filter(Boolean);
+  const rest = f.aliases.filter((r) => r.v !== k);
+  f.aliases = [...rest, ...olds.map((old) => ({ k: old, v: k }))];
 }
 
 function pairOf(f: FieldRow, map: PairMap, k: string): string {
@@ -786,7 +814,7 @@ watch(selectedKey, async () => {
 });
 
 function addBlank() {
-  const f: FieldRow = { key: key++, name: takeUnique('new_field', fields.value.map((x) => x.name)), isNew: true, single: false, numeric: false, type: '', unit: '', options: [], colors: [], descriptions: [], project: [] };
+  const f: FieldRow = { key: key++, name: takeUnique('new_field', fields.value.map((x) => x.name)), isNew: true, single: false, numeric: false, type: '', unit: '', options: [], aliases: [], colors: [], descriptions: [], project: [] };
   fields.value = [...fields.value, f];
   openNew(f);
 }
@@ -805,6 +833,7 @@ function addPreset(i: number) {
     type: pf.type ?? '',
     unit: pf.unit ?? '',
     options: [...(pf.options ?? [])],
+    aliases: toPairs(pf.aliases),
     colors: toPairs(pf.colors),
     descriptions: toPairs(pf.descriptions),
     project: toPairs(pf.project),

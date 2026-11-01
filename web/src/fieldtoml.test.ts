@@ -71,3 +71,13 @@ test('wrong value types are refused', () => {
   assert.ok(!tomlToField('options = [1, 2]\n').ok);
   assert.ok(!tomlToField('colors = "green"\n').ok);
 });
+
+test('aliases round-trip, and an unknown key is still refused', () => {
+  const text = fieldToToml('moscow', { single: true, options: ['couldhave', 'wonthave'], aliases: { could: 'couldhave' } });
+  const r = tomlToField(text);
+  assert.ok(r.ok);
+  assert.deepEqual(r.ok && r.field.aliases, { could: 'couldhave' });
+  const bad = tomlToField('[fields.x]\nalso = ["label"]\n');
+  assert.ok(!bad.ok);
+  assert.match(bad.ok ? '' : bad.error, /aliases, project/);
+});

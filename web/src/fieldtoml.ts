@@ -15,6 +15,7 @@ export type FieldToml = {
   colors?: Record<string, string> | undefined;
   descriptions?: Record<string, string> | undefined;
   project?: Record<string, string> | undefined;
+  aliases?: Record<string, string> | undefined;
 };
 
 export type ParsedField = { ok: true; name?: string | undefined; field: FieldToml } | { ok: false; error: string };
@@ -36,7 +37,7 @@ export function fieldToToml(name: string, f: FieldToml): string {
   if (f.type) lines.push(`type = ${str(f.type)}`);
   if (f.unit) lines.push(`unit = ${str(f.unit)}`);
   if (f.options?.length) lines.push(`options = [${f.options.map(str).join(', ')}]`);
-  for (const map of ['colors', 'descriptions', 'project'] as const) {
+  for (const map of ['aliases', 'colors', 'descriptions', 'project'] as const) {
     const m = f[map];
     if (m && Object.keys(m).length) {
       const body = Object.entries(m)
@@ -93,7 +94,7 @@ export function tomlToField(text: string): ParsedField {
         return { ok: false, error: 'options is a list of quoted strings.' };
       }
       field.options = v;
-    } else if (k === 'colors' || k === 'descriptions' || k === 'project') {
+    } else if (k === 'colors' || k === 'descriptions' || k === 'project' || k === 'aliases') {
       if (!isStringMap(v)) return { ok: false, error: `${k} maps values to quoted strings.` };
       field[k] = Object.fromEntries(Object.entries(v)); // smol-toml hands out null-prototype maps
     } else {
@@ -101,7 +102,7 @@ export function tomlToField(text: string): ParsedField {
     }
   }
   if (unknown.length) {
-    return { ok: false, error: `Unknown key${unknown.length > 1 ? 's' : ''} ${unknown.join(', ')} — a field knows single, numeric, type, unit, options, colors, descriptions, project.` };
+    return { ok: false, error: `Unknown key${unknown.length > 1 ? 's' : ''} ${unknown.join(', ')} — a field knows single, numeric, type, unit, options, colors, descriptions, aliases, project.` };
   }
   return { ok: true, name, field };
 }

@@ -42,9 +42,23 @@ type Field struct {
 	Type string `toml:"type" json:"type,omitempty"`
 	// Unit follows a number field's values: "h" for hours.
 	Unit string `toml:"unit" json:"unit,omitempty"`
+	// Aliases fold a value's old names into the current one:
+	// could = "couldhave" reads moscow:could as moscow:couldhave, and
+	// Adopt rewrites the labels. The keys are not options.
+	Aliases map[string]string `toml:"aliases" json:"aliases,omitempty"`
 	// Flat: the kind field of plain labels, [branches] kinds (bug, not
 	// kind:bug); parse sets it.
 	Flat bool `toml:"-" json:"-"`
+}
+
+// AliasOf is value's current name on the field: couldhave for could,
+// value itself when no alias (or option) holds it. Reading a forge or an
+// issue goes through here, so an old label shows as its current value.
+func (f Field) AliasOf(value string) string {
+	if cur, ok := f.Aliases[value]; ok {
+		return cur
+	}
+	return value
 }
 
 // KnownValue reports whether value is one of Options — or true if Options is
@@ -356,6 +370,12 @@ func parse(data []byte) (*Config, toml.MetaData, error) {
 	}
 	forges, publishPrivate, discover, err := parseForges(md, r.Forges)
 	if err != nil {
+		return nil, md, err
+	}
+	if err := checkAliases(r.Fields); err != nil {
+		return nil, md, err
+	}
+	if err := checkFieldMappings(&Config{Fields: r.Fields, Roles: r.Roles, Sprints: r.Sprints, Forges: forges}); err != nil {
 		return nil, md, err
 	}
 	// the kinds are plain labels unless [fields.kind] has options of its own

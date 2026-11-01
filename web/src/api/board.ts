@@ -687,6 +687,7 @@ export interface ConfigField {
   type?: string | undefined; // select, iteration, person, number, date, issue, text; '': guessed
   unit?: string | undefined; // a number's: h
   project?: Record<string, string> | undefined; // the GitHub Project's name for a value
+  aliases?: Record<string, string> | undefined; // a value's old names, folded into the current one
   colors?: Record<string, string> | undefined; // a palette name or #rrggbb
   descriptions?: Record<string, string> | undefined; // GitHub's, 100 characters at most
 }

@@ -188,6 +188,7 @@ func SetFieldsText(text string, set map[string]Field, remove []string) (string, 
 			vals["unit"] = tomlString(f.Unit)
 		}
 		text = setTableKeys(text, "[fields."+name+"]", lastTableHeader(text, "fields"), []string{"single", "options", "numeric", "type", "unit"}, vals, false)
+		text = SetFieldTable(text, name, "aliases", f.Aliases)
 		text = SetFieldTable(text, name, "project", f.Project)
 		text = SetFieldTable(text, name, "colors", f.Colors)
 		text = SetFieldTable(text, name, "descriptions", f.Descriptions)

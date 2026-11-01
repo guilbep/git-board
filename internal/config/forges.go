@@ -28,6 +28,10 @@ type Forge struct {
 	// Project is its path until the run reads its id; Path keeps the path.
 	Discovered bool   `toml:"-" json:"discovered,omitempty"`
 	Path       string `toml:"-" json:"path,omitempty"`
+	// Fields maps a git-board field to where it lives on this forge
+	// (mapping.go): only the overrides; a field missing follows its
+	// type's default.
+	Fields map[string]FieldMapping `toml:"fields" json:"fields,omitempty"`
 }
 
 // BaseURL is the forge's web address: https, or http for a loopback host,
@@ -124,7 +128,9 @@ func (c *Config) Forge(name string) (Forge, bool) {
 }
 
 // WithForge is content with f's table replaced, or appended. The file's
-// other tables and comments stay. Pure, as WithRelease.
+// other tables and comments stay, and so do the forge's [forges.<name>.*]
+// subtables — [forges.gh.fields] above all: the mappings aren't the
+// bridges API's to rewrite. Pure, as WithRelease.
 func WithForge(content string, f Forge) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "[forges.%s]\nkind = %q\nproject = %q\n", f.Name, f.Kind, f.Project)
@@ -135,7 +141,70 @@ func WithForge(content string, f Forge) string {
 		fmt.Fprintf(&b, "login = %q\n", f.Login)
 	}
 	fmt.Fprintf(&b, "sync = %t\n", f.Sync)
-	return upsertTable(content, "[forges."+f.Name+"]", b.String())
+	text := upsertTable(content, "[forges."+f.Name+"]", b.String())
+	if sub := forgeSubTables(content, "[forges."+f.Name+"."); sub != "" {
+		text = insertAfterTable(text, "[forges."+f.Name+"]", sub)
+	}
+	return text
+}
+
+// forgeSubTables is the text of every [prefix…] table, with the comments above
+// each: the block WithForge re-inserts after its base table.
+func forgeSubTables(content, prefix string) string {
+	lines := strings.Split(content, "\n")
+	var kept []string
+	for i, line := range lines {
+		t := strings.TrimSpace(line)
+		if strings.HasPrefix(t, "["+prefix) || (i > 0 && kept != nil && strings.HasPrefix(lines[i-1], "["+prefix)) {
+			kept = append(kept, line)
+			continue
+		}
+		// the body of a subtable, and the comments above its header
+		if kept != nil {
+			if t != "" && !strings.HasPrefix(t, "[") {
+				kept = append(kept, line)
+			} else if t == "" && len(kept) > 0 && kept[len(kept)-1] != "" {
+				kept = append(kept, line)
+			}
+		}
+	}
+	out := strings.TrimRight(strings.Join(kept, "\n"), "\n")
+	for strings.Contains(out, "\n\n\n") {
+		out = strings.ReplaceAll(out, "\n\n\n", "\n\n")
+	}
+	return out
+}
+
+// insertAfterTable is content with block inserted at the end of header's
+// table, before the next one.
+func insertAfterTable(content, header, block string) string {
+	lines := strings.Split(content, "\n")
+	start := -1
+	for i, line := range lines {
+		if strings.TrimSpace(line) == header {
+			start = i
+			break
+		}
+	}
+	if start < 0 {
+		return content
+	}
+	end := len(lines)
+	for i := start + 1; i < len(lines); i++ {
+		if strings.HasPrefix(strings.TrimSpace(lines[i]), "[") {
+			end = i
+			break
+		}
+	}
+	for end > start+1 && strings.TrimSpace(lines[end-1]) == "" {
+		end--
+	}
+	var out []string
+	out = append(out, lines[:end]...)
+	out = append(out, "")
+	out = append(out, strings.Split(block, "\n")...)
+	out = append(out, lines[end:]...)
+	return strings.Join(out, "\n")
 }
 
 var blankLines = regexp.MustCompile(`\n{3,}`)

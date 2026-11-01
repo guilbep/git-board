@@ -81,7 +81,7 @@ func TestAddAndRemoveABridge(t *testing.T) {
 	}
 	host := strings.TrimPrefix(gl.URL, "http://")
 	want := config.Forge{Name: "gl", Kind: "gitlab", Host: host, Project: "42400", Login: "guilbert", Sync: true}
-	if f := s.config().Forges; len(f) != 1 || f[0] != want {
+	if f := s.config().Forges; len(f) != 1 || f[0].Name != want.Name || f[0].Kind != want.Kind || f[0].Host != want.Host || f[0].Project != want.Project || f[0].Login != want.Login || f[0].Sync != want.Sync {
 		t.Errorf("forges after add: %+v, want %+v", f, want)
 	}
 	if creds := s.b.Credentials(s.config().Forges); len(creds) != 1 || creds[0].Login != "guilbert" {
