@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/guilbep/git-board/internal/store/storetest"
 )
 
 // The settings' forms: one GET for every section typed, one PUT per
@@ -331,6 +333,28 @@ func TestConfigSectionSaves(t *testing.T) {
 	call(t, "GET", ts.URL+"/api/views", nil, &served)
 	if _, ok := served["mine"]; !ok {
 		t.Errorf("not served at once: %v", served)
+	}
+}
+
+func TestFieldUsageCountsTheIssuesPerField(t *testing.T) {
+	t.Parallel()
+	ts, s := newIssueServer(t)
+	one := storetest.NewIssue(t, s.b, "one")
+	storetest.NewIssue(t, s.b, "two")
+	for _, id := range []string{one} {
+		if code := call(t, "POST", ts.URL+"/api/issues/"+id+"/labels", map[string]any{"add": []string{"status:ready", "est:2", "plain"}}, nil); code != http.StatusOK {
+			t.Fatalf("labels: %d", code)
+		}
+	}
+	var usage map[string]int
+	if code := call(t, "GET", ts.URL+"/api/fields/usage", nil, &usage); code != http.StatusOK {
+		t.Fatalf("usage: %d", code)
+	}
+	if usage["status"] != 1 || usage["est"] != 1 {
+		t.Errorf("usage = %v, want status and est at 1 (a plain label is no field)", usage)
+	}
+	if _, ok := usage["plain"]; ok {
+		t.Errorf("a plain label is not a field: %v", usage)
 	}
 }
 

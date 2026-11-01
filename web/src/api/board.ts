@@ -779,6 +779,13 @@ export function saveConfigSection(section: string, value: unknown, base: string)
   return request(`/api/config/section/${encodeURIComponent(section)}?base=${encodeURIComponent(base)}`, json('PUT', value));
 }
 
+// getFieldUsage counts, per field namespace, the issues carrying one of
+// its ns:value labels: the Remove confirm's "N issues use it". A field
+// no issue uses is absent, not zero.
+export function getFieldUsage(): Promise<Record<string, number>> {
+  return request('/api/fields/usage');
+}
+
 // ReleaseSetup is what Enable binary release proposes from the repository.
 export interface ReleaseSetup {
   binaries: string[]; // main packages, ./cmd/git-board

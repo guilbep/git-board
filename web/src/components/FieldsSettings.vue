@@ -83,7 +83,7 @@
                 class="fs-card"
                 :title="selected.name || 'a new field'"
                 :removable="true"
-                :confirm="`The field ${selected.name} and its colors, descriptions and labels go from the file. The issues keep their ${selected.name}:… labels, in no order.`"
+                :confirm="removeConfirm"
                 @remove="remove(selected)"
               >
                 <template #head>
@@ -118,15 +118,22 @@
                   <p v-else class="gb-hint">This field's table only — it applies as you type. Comments are lost when you switch back to the form.</p>
                 </div>
                 <div v-else class="fs-body">
-                  <div class="fs-block">
-                    <span class="fs-label">Values <em>— drag to reorder; left is first in the workflow</em></span>
+                <div v-if="selected.type === 'text'" class="fs-block">
+                  <span class="fs-label">Values</span>
+                  <p class="gb-hint">
+                    Free text: an issue writes whatever the field holds — no values to list, nothing to order. The values come back if
+                    the cardinality goes back to one or several.
+                  </p>
+                </div>
+                <div v-else class="fs-block">
+                    <span class="fs-label">Values <em>— {{ numbers(selected) ? 'sorted by value' : 'drag to reorder; left is first in the workflow' }}</em></span>
                     <div class="fs-chips">
                       <span
                         v-for="(o, i) in selected.options"
                         :key="`${o}-${i}`"
                         class="fs-chip"
-                        draggable="true"
-                        :class="{ 'fs-chip-hold': dragFrom === i }"
+                        :class="{ 'fs-chip-hold': dragFrom === i, 'fs-chip-fixed': numbers(selected) }"
+                        :draggable="numbers(selected) ? 'false' : 'true'"
                         @dragstart="dragFrom = i"
                         @dragover.prevent
                         @dragend="dragFrom = null"
@@ -138,46 +145,45 @@
                       </span>
                       <input
                         class="fs-add"
-                        :placeholder="selected.type === 'number' || selected.numeric ? 'Type a number, press Enter' : 'Type a value, press Enter'"
+                        :placeholder="numbers(selected) ? 'Type a number, press Enter' : 'Type a value, press Enter'"
                         spellcheck="false"
                         :aria-label="`Add a value to ${selected.name}`"
                         @keydown="chipKey(selected, $event)"
                         @paste="chipPaste(selected, $event)"
                       />
                     </div>
-                    <p v-if="selected.type === 'number' || selected.numeric" class="gb-hint">
+                    <p v-if="numbers(selected)" class="gb-hint">
                       All values are numbers — sorted by value, filterable by range. Paste a list too: <code>0.5, 1, 2, 4, 8</code>.
                     </p>
                     <p v-else class="gb-hint">Paste a list too: <code>todo, doing, done</code> or one per line.</p>
                   </div>
 
                   <div class="fs-form">
-                    <label class="fs-field">
-                      <span>Type</span>
-                      <select v-model="selected.type" class="fs-input fs-small" aria-label="Type">
-                        <option value="">guessed</option>
-                        <option v-for="t in types" :key="t.id" :value="t.id">{{ t.label }}</option>
-                      </select>
-                    </label>
                     <fieldset class="fs-cardinality">
                       <legend>An issue can have</legend>
-                      <label class="fs-radio"><input v-model="selected.single" type="radio" :value="true" /> one value</label>
-                      <label class="fs-radio"><input v-model="selected.single" type="radio" :value="false" /> several values</label>
+                      <label class="fs-radio"><input type="radio" :checked="cardOf(selected) === 'one'" @change="setCard(selected, 'one')" /> one value</label>
+                      <label class="fs-radio"><input type="radio" :checked="cardOf(selected) === 'many'" @change="setCard(selected, 'many')" /> several values</label>
+                      <label class="fs-radio"><input type="radio" :checked="cardOf(selected) === 'text'" @change="setCard(selected, 'text')" /> any text, no list</label>
                     </fieldset>
-                    <label class="fs-check">
-                      <input v-model="selected.numeric" type="checkbox" />
-                      <span>numeric — sorts as numbers</span>
-                    </label>
-                    <label v-if="selected.type === 'number' || selected.numeric" class="fs-field">
-                      <span>Unit</span>
-                      <input v-model="selected.unit" class="fs-input fs-tiny" placeholder="h" spellcheck="false" aria-label="Unit shown after the number" />
+                    <template v-if="numbers(selected)">
+                      <label class="fs-field">
+                        <span>Unit</span>
+                        <input v-model="selected.unit" class="fs-input fs-tiny" :placeholder="selected.name === 'est' ? 'h' : ''" spellcheck="false" aria-label="Unit shown after the number" />
+                      </label>
+                      <button type="button" class="gb-linkbtn" @click="selected.type = 'select'">Treat them as labels instead</button>
+                    </template>
+                    <label v-else class="fs-field">
+                      <span>Type</span>
+                      <select :value="selected.type" class="fs-input fs-small" aria-label="Type" @change="selected.type = inputValue($event)">
+                        <option value="">guessed — {{ inferLabel(selected) }}</option>
+                        <option v-for="t in types" :key="t.id" :value="t.id">{{ t.label }}</option>
+                      </select>
                     </label>
                   </div>
 
                   <details class="fs-more" :open="detailKeys(selected).length > 0">
                     <summary>
-                      Per-value details <span class="fs-count">{{ detailKeys(selected).length }}</span>
-                      <span class="fs-morehint">colors, descriptions, GitHub Project names</span>
+                      Per-value details <span class="fs-morehint">{{ detailsSummary(selected) }}</span>
                     </summary>
                     <div v-if="detailKeys(selected).length" class="fs-tablewrap">
                       <table class="fs-table">
@@ -262,8 +268,9 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { getConfigFile, saveConfig, type ConfigField } from '@/api/board';
+import { getConfigFile, saveConfig, getFieldUsage, type ConfigField } from '@/api/board';
 import { fieldPresets, takeUnique } from '@/configpresets';
+import { allNumbers, inferType, type FieldType } from '@/fieldinfer';
 import { fieldToToml, tomlToField, type FieldToml } from '@/fieldtoml';
 import { SectionDraft, configModel, configModelError, loadConfigModel, inputValue } from '@/configmodel';
 import { message } from '@/issue';
@@ -313,19 +320,28 @@ const kvOf = (rows: Pair[]): Record<string, string> | undefined => {
   return Object.keys(out).length ? out : undefined;
 };
 
-const asRow = (name: string, f: ConfigField): FieldRow => ({
-  key: key++,
-  name,
-  isNew: false,
-  single: f.single ?? false,
-  numeric: f.numeric ?? false,
-  type: f.type ?? '',
-  unit: f.unit ?? '',
-  options: [...(f.options ?? [])],
-  colors: toPairs(f.colors),
-  descriptions: toPairs(f.descriptions),
-  project: toPairs(f.project),
-});
+// what the values say the field is: the file's numbers sort by value, the
+// editor keeps them that way
+const sortByNumber = (options: string[]): string[] => [...options].sort((a, b) => (parseFloat(a) || 0) - (parseFloat(b) || 0));
+
+const asRow = (name: string, f: ConfigField): FieldRow => {
+  const options = [...(f.options ?? [])];
+  // a numbers field's order is the values': sort it, in the file too
+  const fixed = f.type === 'number' || f.numeric || (f.type !== 'select' && f.type !== 'text' && allNumbers(options));
+  return {
+    key: key++,
+    name,
+    isNew: false,
+    single: f.single ?? false,
+    numeric: f.numeric ?? false,
+    type: f.type ?? '',
+    unit: f.unit ?? '',
+    options: fixed ? sortByNumber(options) : options,
+    colors: toPairs(f.colors),
+    descriptions: toPairs(f.descriptions),
+    project: toPairs(f.project),
+  };
+};
 
 // the draft is the rows and the list's order; the remove list is the
 // names the file has that the draft lost — deleted, or renamed
@@ -396,17 +412,71 @@ function changed(f: FieldRow): boolean {
   return JSON.stringify(rowOf(f)) !== JSON.stringify(rowOf(base));
 }
 
-// what the list and the editor's head say the field is, in the page's words
+// what the editor says the field is, in the page's words: the explicit
+// type, else what the values and the name infer
+const roles = computed(() => Object.keys(configModel.value?.roles ?? {}));
+
 function summary(f: FieldRow): string {
+  if (f.type === 'text') return 'Free text · no list';
+  const t: FieldType = f.type === '' ? inferType(f.name, f.options, f.numeric, roles.value) : (f.type as FieldType);
   const card = f.single ? 'one per issue' : 'several per issue';
-  if (f.type === 'number' || (f.numeric && f.options.length > 0)) return `Numbers · ${f.unit ? `in ${f.unit}` : 'no unit'} · ${card}`;
-  if (f.type === 'text') return `Free text · ${card}`;
-  if (f.type === 'date') return `Dates · ${card}`;
-  if (f.type === 'person') return `Forge logins · ${card}`;
-  if (f.type === 'iteration') return `Spans of dates, sprints · ${card}`;
-  if (f.type === 'issue') return `Another issue · ${card}`;
-  if (f.options.length > 0) return `${f.options.length} values, in workflow order · ${card}`;
-  return 'Guessed from the labels';
+  switch (t) {
+    case 'number':
+      return `Numbers${f.unit ? ` in ${f.unit}` : ''} · ${card}`;
+    case 'date':
+      return `Dates · ${card}`;
+    case 'person':
+      return `Forge logins · ${card}`;
+    case 'iteration':
+      return `Sprints · ${card}`;
+    case 'issue':
+      return `Another issue · ${card}`;
+  }
+  return f.options.length ? `${f.options.length} values, in workflow order · ${card}` : `Guessed from the labels · ${card}`;
+}
+
+// the numbers mode: an explicit type decides, then the file's numeric,
+// then what the values are — "treat them as labels" is type = select
+function numbers(f: FieldRow): boolean {
+  if (f.type && f.type !== 'number') return false;
+  return f.type === 'number' || f.numeric || allNumbers(f.options);
+}
+
+// the three cardinalities: one value, several, or any text (type text)
+function cardOf(f: FieldRow): 'one' | 'many' | 'text' {
+  return f.type === 'text' ? 'text' : f.single ? 'one' : 'many';
+}
+
+function setCard(f: FieldRow, m: 'one' | 'many' | 'text') {
+  if (m === 'text') {
+    f.type = 'text';
+    return;
+  }
+  if (f.type === 'text') f.type = '';
+  f.single = m === 'one';
+}
+
+// the dropdown's "guessed" says what the guess is
+function inferLabel(f: FieldRow): string {
+  const labels: Record<FieldType, string> = {
+    select: 'values as labels',
+    number: 'numbers',
+    date: 'dates',
+    person: 'forge logins',
+    iteration: 'sprints',
+    issue: 'another issue',
+    text: 'free text',
+  };
+  return labels[inferType(f.name, f.options, f.numeric, roles.value)];
+}
+
+// the details toggle's one line: what is set, not a bare count
+function detailsSummary(f: FieldRow): string {
+  const parts: string[] = [];
+  if (f.colors.length) parts.push(`${f.colors.length} color${f.colors.length === 1 ? '' : 's'}`);
+  if (f.descriptions.length) parts.push(`${f.descriptions.length} description${f.descriptions.length === 1 ? '' : 's'}`);
+  if (f.project.length) parts.push(`${f.project.length} GitHub name${f.project.length === 1 ? '' : 's'}`);
+  return parts.length ? parts.join(' · ') : 'colors, descriptions, GitHub Project names';
 }
 
 // the field at the address: #/settings/fields/<name>, none is the first
@@ -510,7 +580,9 @@ function addChips(f: FieldRow, el: HTMLInputElement) {
 
 function addWords(f: FieldRow, text: string) {
   const words = text.split(/[,\n]/).map((s) => s.trim()).filter((s) => s && !f.options.includes(s));
-  if (words.length) f.options = [...f.options, ...words];
+  if (!words.length) return;
+  const options = [...f.options, ...words];
+  f.options = numbers(f) ? sortByNumber(options) : options;
 }
 
 // the editor's other rendering: a [fields.<name>] snippet, applied as it
@@ -661,8 +733,19 @@ function addPreset(i: number) {
   openNew(f);
 }
 
-const hasTomlError = computed(() => fields.value.some((f) => tomlError.value[f.key]));
-const valid = computed(() => {
+// how many issues carry each field's ns:value labels: the Remove
+// confirm's sentence. A field no issue uses is absent, not zero.
+const usage = ref<Record<string, number>>({});
+
+const removeConfirm = computed(() => {
+  const f = selected.value;
+  if (!f) return '';
+  const n = usage.value[f.name];
+  const uses = n === undefined ? 'No issue uses it yet' : n === 1 ? 'One issue uses it' : `${n} issues use it`;
+  return `${uses}. Removing the field ${f.name} takes its values, colors, descriptions and GitHub names from the file. The issues keep their ${f.name}:… labels, in no order.`;
+});
+
+const hasTomlError = computed(() => fields.value.some((f) => tomlError.value[f.key]));const valid = computed(() => {
   const names = fields.value.map((f) => f.name.trim()).filter(Boolean);
   return names.every((n) => /^[A-Za-z0-9_-]+$/.test(n)) && new Set(names).size === names.length && !hasTomlError.value;
 });
@@ -697,7 +780,12 @@ async function save() {
   await draft.save();
 }
 
-onMounted(() => void draft.load());
+onMounted(() => {
+  void draft.load();
+  getFieldUsage()
+    .then((u) => (usage.value = u))
+    .catch(() => {}); // the confirm says "No issue uses it yet" without it
+});
 </script>
 
 <style scoped>
@@ -760,6 +848,7 @@ h2, p { margin: 0; }
 .fs-chips:focus-within { border-color: var(--fg); }
 .fs-chip { display: inline-flex; align-items: center; gap: .375rem; padding: 0 .125rem 0 .5rem; min-height: 1.625rem; border: 1px solid var(--border); background: var(--bg-subtle); font-family: var(--font-mono); font-size: .8125rem; cursor: grab; }
 .fs-chip:active { cursor: grabbing; }
+.fs-chip-fixed { cursor: default; }
 .fs-chip-hold { opacity: .4; }
 .fs-dot { width: .625rem; height: .625rem; background: var(--c-dot, var(--border-strong)); }
 .fs-chip-x { width: 1.25rem; border: 0; background: none; color: var(--fg-muted); font: inherit; cursor: pointer; }
@@ -768,7 +857,6 @@ h2, p { margin: 0; }
 .fs-form { display: flex; gap: .75rem; flex-wrap: wrap; align-items: end; }
 .fs-field { display: grid; gap: .25rem; font-size: .8125rem; }
 .fs-field > span { color: var(--fg-muted); }
-.fs-check { display: flex; gap: .375rem; align-items: center; padding-bottom: .375rem; font-size: .8125rem; }
 .fs-input { padding: .375rem .625rem; border: 1px solid var(--border); background: var(--bg); color: var(--fg); font: inherit; }
 .fs-input:focus { outline: 2px solid var(--fg); outline-offset: 2px; border-color: var(--fg); }
 .fs-small { max-width: 14rem; }
@@ -782,7 +870,6 @@ h2, p { margin: 0; }
 .fs-more summary:hover { color: var(--fg); }
 .fs-more[open] summary { margin-bottom: .25rem; }
 .fs-morehint { font-weight: 400; color: var(--fg-muted); }
-.fs-count { display: inline-block; margin-left: .375rem; padding: 0 .375rem; border: 1px solid var(--border); font-weight: 400; font-size: .75rem; color: var(--fg-muted); }
 .fs-tablewrap { overflow-x: auto; border: 1px solid var(--border); }
 .fs-table { width: 100%; min-width: 30rem; border-collapse: collapse; font-size: .8125rem; }
 .fs-table th { padding: .375rem .5rem; border-bottom: 1px solid var(--border); background: var(--bg-subtle); text-align: left; font-size: .75rem; color: var(--fg-muted); }
