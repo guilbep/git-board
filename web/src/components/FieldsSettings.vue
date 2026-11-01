@@ -88,7 +88,7 @@
                       <span v-if="changed(f)" class="fl-dot" title="Unsaved changes" />
                       <span class="fl-sum">{{ summary(f) }}</span>
                     </span>
-                    <span class="fl-values">{{ f.options.join(' → ') }}</span>
+                    <span class="fl-values">{{ valueless(f) ? '' : f.options.join(' → ') }}</span>
                   </router-link>
                 </li>
               </ol>
@@ -154,7 +154,26 @@
                   <p v-else class="gb-hint">This field's table only — it applies as you type. Comments are lost when you switch back to the form.</p>
                 </div>
                 <div v-else class="fs-body">
-                <div v-if="selected.type === 'text'" class="fs-block">
+                <!-- the type first: it decides the rest of the form -->
+                <label v-if="!numbers(selected)" class="fs-field fs-type">
+                  <span>Type</span>
+                  <select :value="selected.type" class="fs-input fs-small" aria-label="Type" @change="selected.type = inputValue($event)">
+                    <option value="">guessed — {{ inferLabel(selected) }}</option>
+                    <option v-for="t in types" :key="t.id" :value="t.id">{{ t.label }}</option>
+                  </select>
+                </label>
+                <!-- a date, a person, an issue, a sprint: no values of its own -->
+                <div v-if="valueless(selected)" class="fs-block">
+                  <span class="fs-label">Values</span>
+                  <p class="gb-hint">
+                    {{ bareHint[kindOf(selected)] }}
+                    <router-link v-if="kindOf(selected) === 'iteration'" class="gb-linkbtn" to="/settings/sprints">Sprints</router-link>
+                  </p>
+                  <p v-if="selected.options.length" class="gb-hint fs-drop">
+                    The file lists {{ selected.options.length }} value{{ selected.options.length === 1 ? '' : 's' }} for it ({{ selected.options.join(', ') }}): saving takes them out, with their colors and descriptions.
+                  </p>
+                </div>
+                <div v-else-if="selected.type === 'text'" class="fs-block">
                   <span class="fs-label">Values</span>
                   <p class="gb-hint">
                     Free text: an issue writes whatever the field holds — no values to list, nothing to order. The values come back if
@@ -203,7 +222,7 @@
                       <legend>An issue can have</legend>
                       <label class="fs-radio"><input type="radio" :checked="cardOf(selected) === 'one'" @change="setCard(selected, 'one')" /> one value</label>
                       <label class="fs-radio"><input type="radio" :checked="cardOf(selected) === 'many'" @change="setCard(selected, 'many')" /> several values</label>
-                      <label class="fs-radio"><input type="radio" :checked="cardOf(selected) === 'text'" @change="setCard(selected, 'text')" /> any text, no list</label>
+                      <label v-if="!valueless(selected)" class="fs-radio"><input type="radio" :checked="cardOf(selected) === 'text'" @change="setCard(selected, 'text')" /> any text, no list</label>
                     </fieldset>
                     <template v-if="numbers(selected)">
                       <label class="fs-field">
@@ -212,16 +231,9 @@
                       </label>
                       <button type="button" class="gb-linkbtn" @click="selected.type = 'select'">Treat them as labels instead</button>
                     </template>
-                    <label v-else class="fs-field">
-                      <span>Type</span>
-                      <select :value="selected.type" class="fs-input fs-small" aria-label="Type" @change="selected.type = inputValue($event)">
-                        <option value="">guessed — {{ inferLabel(selected) }}</option>
-                        <option v-for="t in types" :key="t.id" :value="t.id">{{ t.label }}</option>
-                      </select>
-                    </label>
                   </div>
 
-                  <details class="fs-more" :open="detailKeys(selected).length > 0">
+                  <details v-if="!valueless(selected)" class="fs-more" :open="detailKeys(selected).length > 0">
                     <summary>
                       Per-value details <span class="fs-morehint">{{ detailsSummary(selected) }}</span>
                     </summary>
@@ -412,17 +424,7 @@ const draft = new SectionDraft<FieldsValue>(
       // its own) is not turned into a [fields.kind] table
       const was = saved[f.name.trim()];
       if (was && JSON.stringify(rowOf(asRow(f.name.trim(), was))) === JSON.stringify(rowOf(f))) continue;
-      set[f.name.trim()] = {
-        single: f.single ?? false,
-        numeric: f.numeric ?? false,
-        type: f.type || undefined,
-        unit: f.unit || undefined,
-        options: f.options.filter((o) => o.trim()),
-        colors: kvOf(f.colors),
-        descriptions: kvOf(f.descriptions),
-        project: kvOf(f.project),
-        aliases: kvOf(f.aliases),
-      };
+      set[f.name.trim()] = rowToToml(f);
     }
     const remove = Object.keys(configModel.value?.fields ?? {}).filter((n) => !names.includes(n));
     // the list's order, as the names that will exist once this save
@@ -496,6 +498,23 @@ function summary(f: FieldRow): string {
   }
   return f.options.length ? `${f.options.length} values, in workflow order · ${card}` : `Guessed from the labels · ${card}`;
 }
+
+// what the field is: its type, else the guess
+function kindOf(f: FieldRow): FieldType {
+  return (f.type || inferType(f.name, f.options, f.numeric, roles.value)) as FieldType;
+}
+
+// the types whose values are not a list the file keeps
+function valueless(f: FieldRow): boolean {
+  return ['date', 'person', 'issue', 'iteration'].includes(kindOf(f));
+}
+
+const bareHint: Partial<Record<FieldType, string>> = {
+  date: 'A date per issue, YYYY-MM-DD, picked on the issue: red once past, amber within a week. No values to list.',
+  person: 'Forge logins, @me for you: the people come from the forges and the roles. No values to list.',
+  issue: 'Another issue, #12: its page links it, and the other issue shows it back (Sub-issues, Blocks). No values to list.',
+  iteration: 'A sprint: the values are the sprints, with their dates, and @current is the running one. They are set in',
+};
 
 // the numbers mode: an explicit type decides, then the file's numeric,
 // then what the values are — "treat them as labels" is type = select
@@ -688,17 +707,25 @@ const tomlText = ref<Record<number, string>>({});
 const tomlError = ref<Record<number, string | undefined>>({});
 const renamedFrom = ref<Record<number, string | undefined>>({});
 
-const rowToToml = (f: FieldRow): FieldToml => ({
-  single: f.single,
-  numeric: f.numeric,
-  type: f.type || undefined,
-  unit: f.unit || undefined,
-  options: f.options,
-  aliases: kvOf(f.aliases),
-  colors: kvOf(f.colors),
-  descriptions: kvOf(f.descriptions),
-  project: kvOf(f.project),
-});
+// the field as the file gets it: a date, a person, an issue or a sprint
+// has no values of its own, so its options and their details go — and its
+// type is written once the values were what said it (a guess from the name
+// stays a guess)
+function rowToToml(f: FieldRow): FieldToml {
+  const bare = valueless(f);
+  const kind = kindOf(f);
+  return {
+    single: f.single,
+    numeric: f.numeric,
+    type: f.type || (bare && inferType(f.name, [], f.numeric, roles.value) !== kind ? kind : undefined),
+    unit: f.unit || undefined,
+    options: bare ? [] : f.options.filter((o) => o.trim()),
+    aliases: bare ? undefined : kvOf(f.aliases),
+    colors: bare ? undefined : kvOf(f.colors),
+    descriptions: bare ? undefined : kvOf(f.descriptions),
+    project: bare ? undefined : kvOf(f.project),
+  };
+}
 
 function openToml(f: FieldRow) {
   tomlOpen.value[f.key] = true;
@@ -1008,6 +1035,8 @@ h2, p { margin: 0; }
 .fs-input:focus { outline: 2px solid var(--fg); outline-offset: 2px; border-color: var(--fg); }
 .fs-small { max-width: 14rem; }
 .fs-tiny { max-width: 4.5rem; }
+.fs-type { justify-self: start; }
+.fs-drop { color: var(--fg); }
 .fs-cardinality { display: flex; gap: .375rem; align-items: center; margin: 0; padding: 0; border: 0; }
 .fs-cardinality legend { padding: 0; margin-bottom: .25rem; font-size: .8125rem; font-weight: 700; color: var(--fg-muted); }
 .fs-radio { display: inline-flex; align-items: center; gap: .375rem; min-height: 2rem; padding: 0 .625rem; border: 1px solid var(--border); cursor: pointer; font-size: .8125rem; }

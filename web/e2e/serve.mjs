@@ -69,6 +69,21 @@ single = true
 numeric = true
 options = ["1", "2", "4", "8"]
 
+# one field a type, for the type's own form
+[fields.due]
+type = "date"
+
+[fields.sprint]
+single = true
+
+# a date by its values alone; a select a test turns into an issue
+[fields.when]
+options = ["2026-01-01", "2026-02-01"]
+
+[fields.size]
+options = ["s", "m", "l"]
+colors = { s = "green" }
+
 # the kinds are flat: plain labels, no [fields.kind]
 [branches.kinds]
 bug = "fix"

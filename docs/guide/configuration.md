@@ -66,6 +66,8 @@ The fields and their types are the project's **ontology**: the kinds of things a
 | `issue` | parent, blocked-by | a link to the other issue, and on it the reverse: Sub-issues, Blocks | the names `parent`, `blocked-by`, `blocks`, `depends-on`, `duplicate-of`; values that are all `#12` or git-bug ids |
 | `text` | anything free | a plain text box | only when set |
 
+In Settings › Fields the form follows the type: a select lists its values in order, a number its unit, and a date, a person, an issue or a sprint has no values of its own. Saving such a field takes its `options` out of the file, with their colors and descriptions.
+
 Set a type when the guess is wrong, or for a field no issue uses yet:
 
 ```toml
