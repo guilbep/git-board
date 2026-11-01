@@ -6,7 +6,7 @@
 // so nothing leaves this machine. Playwright's webServer runs this; it
 // lives until killed. E2E_SKIP_BUILD=1 reuses web/dist and the binary.
 import { execFileSync, spawn } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -53,9 +53,10 @@ mkdirSync(env.HOME, { recursive: true });
 sh('git', ['init', '-q', '-b', 'main'], repo);
 sh('git', ['config', 'commit.gpgsign', 'false'], repo); // signed commits break go-git reads
 sh('git', ['remote', 'add', 'origin', 'git@github.com:o/r.git'], repo);
+// E2E_TOML: another file instead, a real board's, for a one-off smoke run
 writeFileSync(
   join(repo, '.git-board.toml'),
-  `[fields.status]
+  process.env.E2E_TOML ? readFileSync(process.env.E2E_TOML, 'utf8') : `[fields.status]
 single = true
 options = ["backlog", "ready", "in-progress", "done"]
 

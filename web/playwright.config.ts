@@ -19,6 +19,6 @@ export default defineConfig({
     url: `http://127.0.0.1:${port}/api/config/model`,
     timeout: 300_000, // the web build and the go build come first
     reuseExistingServer: false,
-    env: { E2E_PORT: port, E2E_DIR: dir },
+    env: { E2E_PORT: port, E2E_DIR: dir, E2E_TOML: process.env.E2E_TOML ?? '' },
   },
 });

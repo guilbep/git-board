@@ -47,7 +47,8 @@ A page's regression gets an e2e test in `web/e2e/` (we favor them over unit
 tests for what the browser shows). `web/e2e/serve.mjs` builds the web app and
 the binary, makes a repository with a `.git-board.toml` and a GitHub origin, and
 serves it with a fake GitHub on the port after `E2E_PORT` (18321): nothing
-leaves the machine. `make web-e2e` is not part of `make ci` yet: CI would need the
+leaves the machine; `E2E_TOML=<path>` serves another board's file instead, for a
+one-off smoke run of `e2e/tabs.spec.ts`. `make web-e2e` is not part of `make ci` yet: CI would need the
 browser installed.
 
 The `web/` frontend (Quasar/Vue) has its own toolchain: `make web-dev` /
