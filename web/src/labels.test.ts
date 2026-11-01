@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { byCheck, changeText, deleteConfirm, hexRules } from './labels.ts';
+import { byCheck, changeText, deleteConfirm, hexRules, lintLines } from './labels.ts';
 
 test('a change says what Send to GitHub does, as lint --create-labels does', () => {
   assert.equal(changeText({ name: 'feat', color: '0e8a16', description: 'A new feature' }), 'Create feat #0e8a16 "A new feature"');
@@ -29,4 +29,28 @@ test('a hex color paints the dot only: one rule per color, the palette names lef
   const css = hexRules({ kind: { bug: '#d73a4a', feat: 'teal', docs: '#d73a4a' }, status: { ready: '#ffffff' } });
   assert.equal(css, '.gb-c-xd73a4a{--c-bg:var(--bg-subtle);--c-fg:var(--fg);--c-dot:#d73a4a}\n.gb-c-xffffff{--c-bg:var(--bg-subtle);--c-fg:var(--fg);--c-dot:#ffffff}');
   assert.equal(hexRules({}), '');
+});
+
+test('lintLines: a missing value and a dead option a line per field, the rest a line per finding', () => {
+  const f = (check: string, message: string, issue_id = '', title = '') => ({ check, message, issue_id, title });
+  const lines = lintLines([
+    f('unknown-value', 'moscow:could has no matching [fields.moscow] option', 'a', 'A'),
+    f('missing-value', 'no est value', 'a', 'A'),
+    f('missing-value', 'no moscow value', 'a', 'A'),
+    f('missing-value', 'no est value', 'b', 'B'),
+    f('dead-option', 'est:2: no issue carries it'),
+    f('dead-option', 'est:4: no issue carries it'),
+    f('dead-option', 'moscow:musthave: no issue carries it'),
+  ]);
+  assert.deepEqual(lines, [
+    { check: 'unknown-value', items: [{ text: 'moscow:could has no matching [fields.moscow] option', issue: { id: 'a', title: 'A' } }] },
+    {
+      check: 'missing-value',
+      items: [
+        { text: 'est: 2 open issues have none', filter: 'is:open no:est' },
+        { text: 'moscow: 1 open issue has none', filter: 'is:open no:moscow' },
+      ],
+    },
+    { check: 'dead-option', items: [{ text: 'est: no issue carries 2, 4' }, { text: 'moscow: no issue carries musthave' }] },
+  ]);
 });

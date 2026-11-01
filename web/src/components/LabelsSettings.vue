@@ -18,6 +18,11 @@
       <div class="set-forms">
         <p v-if="modelError" class="epfl-alert epfl-alert-danger" role="alert">{{ modelError }}</p>
 
+        <!-- three parts, one at a time: the file's plain labels, the labels on GitHub, lint -->
+        <div class="gb-tabs lb-tabs" role="tablist" aria-label="Labels">
+          <button v-for="t in subTabs" :key="t.id" type="button" class="gb-tab" role="tab" :aria-selected="sub === t.id" @click="sub = t.id">{{ t.label }}</button>
+        </div>
+        <div v-show="sub === 'plain'" role="tabpanel">
         <!-- the [labels] table, as the forms hold it -->
         <section v-if="labelsDraft.value.value" class="lb-own" aria-labelledby="lb-own">
           <h3 id="lb-own" class="h5">The project's plain labels</h3>
@@ -73,6 +78,8 @@
           />
         </section>
 
+        </div>
+        <div v-show="sub === 'github'" role="tabpanel">
         <p v-if="error" ref="errorEl" class="epfl-alert epfl-alert-danger" role="alert">{{ error }}</p>
         <p v-for="e in errors" :key="e.repo" class="epfl-alert epfl-alert-warning" role="alert">{{ e.repo }}: {{ e.message }}</p>
         <p v-if="result" ref="resultEl" class="epfl-alert epfl-alert-success" role="status">{{ result }}</p>
@@ -131,7 +138,79 @@
             </div>
           </section>
 
-          <template v-if="d.undeclared.length">
+
+          <!-- a repository GitHub didn't answer for: nothing to compare, nothing to send -->
+          <template v-if="d.repos.length && d.rows.length && !errors.length">
+            <div v-if="plan" class="lb-confirm" role="alert">
+              <p v-if="!plan.length"><b>GitHub has every label as the file says.</b></p>
+              <template v-else>
+                <p><b>Send to GitHub: {{ changes(plan.length) }}</b></p>
+                <ul>
+                  <li v-for="c in plan" :key="c.repo + c.name"><code>{{ c.repo }}</code> {{ changeText(c) }}</li>
+                </ul>
+              </template>
+              <div class="lb-actions">
+                <button v-if="plan.length" type="button" class="epfl-btn epfl-btn-primary" :disabled="!!busy" @click="send">{{ busy === 'send' ? 'Sending…' : `Send ${changes(plan.length)}` }}</button>
+                <button type="button" class="epfl-btn epfl-btn-secondary" :disabled="!!busy" @click="plan = null">{{ plan.length ? 'Cancel' : 'Close' }}</button>
+              </div>
+            </div>
+            <div v-else class="lb-actions">
+              <button type="button" class="epfl-btn epfl-btn-primary" :disabled="!!busy" @click="preview">{{ busy === 'preview' ? 'Reading GitHub…' : 'Send to GitHub' }}</button>
+            </div>
+            <p class="gb-hint">Creates the missing labels and updates the colors and descriptions the file sets. A label the file doesn't define is never changed.</p>
+          </template>
+        </template>
+
+        <section class="lb-stray" aria-labelledby="lb-stray">
+            <h3 id="lb-stray" class="h5">On GitHub, outside the project's labels</h3>
+            <p v-if="!lint" class="lb-muted">Loading…</p>
+            <p v-else-if="!lint.stray.length" class="lb-muted">None.</p>
+            <div v-else class="gb-table-wrap">
+              <table class="gb-table">
+                <thead>
+                  <tr><th>Repository</th><th>Label</th><th>Description</th><th>Issues here</th><th /></tr>
+                </thead>
+                <tbody>
+                  <tr v-for="s in lint.stray" :key="s.repo + s.name">
+                    <td><code>{{ s.repo }}</code></td>
+                    <td><span class="lb-name"><span class="gb-dot" :style="dot(s.color)" />{{ s.name }}</span></td>
+                    <td class="lb-muted">{{ s.description }}</td>
+                    <td>{{ s.count }}</td>
+                    <td>
+                      <div v-if="deleting?.label === s" class="lb-confirm lb-confirm-row" role="alert">
+                        <p><b>{{ deleteConfirm(s.repo, s.name, deleting.count) }}</b></p>
+                        <div class="lb-actions">
+                          <button type="button" class="epfl-btn epfl-btn-primary epfl-btn-sm" :disabled="!!busy" @click="remove(s)">{{ busy === 'delete' ? 'Deleting…' : 'Delete' }}</button>
+                          <button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" :disabled="!!busy" @click="deleting = null">Cancel</button>
+                        </div>
+                      </div>
+                      <button v-else type="button" class="gb-linkbtn" :disabled="!!busy" @click="askDelete(s)">{{ busy === 'count' && asked === s ? 'Counting…' : 'Delete' }}</button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+        </section>
+        </div>
+        <div v-show="sub === 'lint'" role="tabpanel">
+        <section class="lb-lint" aria-labelledby="lb-lint">
+          <h3 id="lb-lint" class="h5">Lint</h3>
+          <p class="lb-muted">What <code>git board lint</code> finds on the open issues: a missing value counted per field.</p>
+          <p v-if="!lint" class="lb-muted">Loading…</p>
+          <template v-else>
+            <p v-if="!lint.findings.length" class="lb-muted">No finding.</p>
+            <div v-for="g in lintLines(lint.findings)" :key="g.check" class="lb-check">
+              <h4 class="lb-check-name">{{ g.check }}</h4>
+              <ul>
+                <li v-for="(l, i) in g.items" :key="i">
+                  <template v-if="l.issue"><router-link :to="`/issues/${l.issue.id}`">{{ l.issue.title }}</router-link>: </template>{{ l.text }}
+                  <router-link v-if="l.filter" :to="{ path: '/', query: { filter: l.filter } }" class="gb-linkbtn">Show them</router-link>
+                </li>
+              </ul>
+            </div>
+
+          </template>
+          <template v-if="d && d.undeclared.length">
             <section aria-labelledby="lb-undecl">
               <h3 id="lb-undecl" class="h5">On the issues, not declared</h3>
               <p class="lb-muted">Every namespace on an issue is a field. These values exist on the issues or GitHub, but no field's options name them — add the option, or declare the field.</p>
@@ -171,73 +250,8 @@
               </div>
             </section>
           </template>
-
-          <!-- a repository GitHub didn't answer for: nothing to compare, nothing to send -->
-          <template v-if="d.repos.length && d.rows.length && !errors.length">
-            <div v-if="plan" class="lb-confirm" role="alert">
-              <p v-if="!plan.length"><b>GitHub has every label as the file says.</b></p>
-              <template v-else>
-                <p><b>Send to GitHub: {{ changes(plan.length) }}</b></p>
-                <ul>
-                  <li v-for="c in plan" :key="c.repo + c.name"><code>{{ c.repo }}</code> {{ changeText(c) }}</li>
-                </ul>
-              </template>
-              <div class="lb-actions">
-                <button v-if="plan.length" type="button" class="epfl-btn epfl-btn-primary" :disabled="!!busy" @click="send">{{ busy === 'send' ? 'Sending…' : `Send ${changes(plan.length)}` }}</button>
-                <button type="button" class="epfl-btn epfl-btn-secondary" :disabled="!!busy" @click="plan = null">{{ plan.length ? 'Cancel' : 'Close' }}</button>
-              </div>
-            </div>
-            <div v-else class="lb-actions">
-              <button type="button" class="epfl-btn epfl-btn-primary" :disabled="!!busy" @click="preview">{{ busy === 'preview' ? 'Reading GitHub…' : 'Send to GitHub' }}</button>
-            </div>
-            <p class="gb-hint">Creates the missing labels and updates the colors and descriptions the file sets. A label the file doesn't define is never changed.</p>
-          </template>
-        </template>
-
-        <section class="lb-lint" aria-labelledby="lb-lint">
-          <h3 id="lb-lint" class="h5">Lint</h3>
-          <p class="lb-muted">What <code>git board lint</code> finds in the issues, then the GitHub labels outside the project's.</p>
-          <p v-if="!lint" class="lb-muted">Loading…</p>
-          <template v-else>
-            <p v-if="!lint.findings.length" class="lb-muted">No finding.</p>
-            <div v-for="g in byCheck(lint.findings)" :key="g.check" class="lb-check">
-              <h4 class="lb-check-name">{{ g.check }} · {{ issues(g.findings.length) }}</h4>
-              <ul>
-                <li v-for="(f, i) in g.findings" :key="i">
-                  <template v-if="f.issue_id"><router-link :to="`/issues/${f.issue_id}`">{{ f.title }}</router-link>: </template>{{ f.message }}
-                </li>
-              </ul>
-            </div>
-
-            <h4 class="lb-check-name">On GitHub, outside the project's labels</h4>
-            <p v-if="!lint.stray.length" class="lb-muted">None.</p>
-            <div v-else class="gb-table-wrap">
-              <table class="gb-table">
-                <thead>
-                  <tr><th>Repository</th><th>Label</th><th>Description</th><th>Issues here</th><th /></tr>
-                </thead>
-                <tbody>
-                  <tr v-for="s in lint.stray" :key="s.repo + s.name">
-                    <td><code>{{ s.repo }}</code></td>
-                    <td><span class="lb-name"><span class="gb-dot" :style="dot(s.color)" />{{ s.name }}</span></td>
-                    <td class="lb-muted">{{ s.description }}</td>
-                    <td>{{ s.count }}</td>
-                    <td>
-                      <div v-if="deleting?.label === s" class="lb-confirm lb-confirm-row" role="alert">
-                        <p><b>{{ deleteConfirm(s.repo, s.name, deleting.count) }}</b></p>
-                        <div class="lb-actions">
-                          <button type="button" class="epfl-btn epfl-btn-primary epfl-btn-sm" :disabled="!!busy" @click="remove(s)">{{ busy === 'delete' ? 'Deleting…' : 'Delete' }}</button>
-                          <button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" :disabled="!!busy" @click="deleting = null">Cancel</button>
-                        </div>
-                      </div>
-                      <button v-else type="button" class="gb-linkbtn" :disabled="!!busy" @click="askDelete(s)">{{ busy === 'count' && asked === s ? 'Counting…' : 'Delete' }}</button>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </template>
         </section>
+        </div>
       </div>
 
       <ConfigRefPanel :sections="['labels']" title="the [labels] table, adopt, lint" />
@@ -256,7 +270,7 @@ import ConfigRows from '@/components/configforms/ConfigRows.vue';
 import ConfigRefPanel from '@/components/configforms/ConfigRefPanel.vue';
 import ConfigSaveBar from '@/components/configforms/ConfigSaveBar.vue';
 import { message } from '@/issue';
-import { byCheck, changeText, deleteConfirm, stateText } from '@/labels';
+import { changeText, deleteConfirm, lintLines, stateText } from '@/labels';
 
 // changed: what a load left, for the menu's line
 const emit = defineEmits<{ changed: [d: Labels] }>();
@@ -277,7 +291,13 @@ const dot = (hex: string) => (hex ? { '--c-dot': `#${hex}` } : undefined);
 // a row's state on each repository, none where gh couldn't read it
 const cells = (row: LabelRow) => (d.value?.repos ?? []).map((r) => row.github.find((g) => g.repo === r));
 const changes = (n: number) => `${n} change${n === 1 ? '' : 's'}`;
-const issues = (n: number) => `${n} issue${n === 1 ? '' : 's'}`;
+// the three parts, one shown at a time
+const subTabs = [
+  { id: 'plain', label: 'Plain labels' },
+  { id: 'github', label: 'On GitHub' },
+  { id: 'lint', label: 'Lint' },
+] as const;
+const sub = ref<(typeof subTabs)[number]['id']>('plain');
 
 // the undeclared labels, grouped under their field: a declared field's
 // extra values (status:ready-for-validation, sprint:13, assignee:guilbep)

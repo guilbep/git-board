@@ -36,7 +36,12 @@ func (b *Backend) Token(ctx context.Context, f config.Forge, login string) (stri
 	}
 	t, err := find(ctx, f.Kind, f.BaseURL(), login)
 	if err == nil && t == "" {
-		err = fmt.Errorf("no token for %q on %s", login, f.Host)
+		// what to do, not an empty login in quotes
+		who := f.Host
+		if login != "" {
+			who = login + " on " + f.Host
+		}
+		err = fmt.Errorf("no token for %s: set GITHUB_TOKEN (GITLAB_TOKEN) where git-board runs, or store one with git's credential helper", who)
 	}
 	return t, err
 }
