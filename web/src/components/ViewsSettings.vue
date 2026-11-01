@@ -50,15 +50,15 @@
                 </label>
                 <label class="vs-field vs-grow">
                   <span>Filter</span>
-                  <input v-model="v.view.filter" class="vs-input" spellcheck="false" placeholder="is:open" aria-label="Filter" />
+                  <input v-model="v.view.filter" class="vs-input" spellcheck="false" placeholder="e.g. is:open" aria-label="Filter" />
                 </label>
                 <label class="vs-field">
                   <span>Group by</span>
-                  <input v-model="v.view.group" class="vs-input vs-small" spellcheck="false" placeholder="status" aria-label="Group" />
+                  <input v-model="v.view.group" class="vs-input vs-small" spellcheck="false" placeholder="e.g. status" aria-label="Group" />
                 </label>
                 <label class="vs-field">
                   <span>Sort</span>
-                  <input v-model="v.view.sort" class="vs-input vs-small" spellcheck="false" placeholder="prio asc" aria-label="Sort" />
+                  <input v-model="v.view.sort" class="vs-input vs-small" spellcheck="false" placeholder="e.g. prio asc" aria-label="Sort" />
                 </label>
               </div>
             </ConfigCard>

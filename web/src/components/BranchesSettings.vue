@@ -19,11 +19,11 @@
           <div class="bs-form">
             <label class="bs-field">
               <span>Base</span>
-              <input :value="draft.value.value.base" class="bs-input" placeholder="the remote's default branch" spellcheck="false" aria-label="The base branch" @input="set({ base: ($event.target as HTMLInputElement).value })" />
+              <input :value="draft.value.value.base" class="bs-input" placeholder="empty: the remote's default branch" spellcheck="false" aria-label="The base branch" @input="set({ base: ($event.target as HTMLInputElement).value })" />
             </label>
             <label class="bs-field bs-grow">
               <span>Name</span>
-              <input :value="draft.value.value.name" class="bs-input" placeholder="{number}/{n}-{slug}" spellcheck="false" aria-label="The branch's name template" @input="set({ name: ($event.target as HTMLInputElement).value })" />
+              <input :value="draft.value.value.name" class="bs-input" placeholder="empty: {number}/{n}-{slug}" spellcheck="false" aria-label="The branch's name template" @input="set({ name: ($event.target as HTMLInputElement).value })" />
             </label>
           </div>
           <p class="gb-hint">
@@ -38,9 +38,9 @@
             </template>
             <template #row="{ row, set: setRow }">
               <div class="bs-pair">
-                <input :value="row.k" class="bs-input bs-opt" list="bs-kind-names" placeholder="bug" spellcheck="false" aria-label="The issue's kind" @input="setRow({ ...row, k: inputValue($event) })" />
+                <input :value="row.k" class="bs-input bs-opt" list="bs-kind-names" placeholder="e.g. bug" spellcheck="false" aria-label="The issue's kind" @input="setRow({ ...row, k: inputValue($event) })" />
                 <span class="bs-arrow">→</span>
-                <input :value="row.v" class="bs-input bs-opt" placeholder="fix" spellcheck="false" aria-label="The branch's kind" @input="setRow({ ...row, v: inputValue($event) })" />
+                <input :value="row.v" class="bs-input bs-opt" placeholder="e.g. fix" spellcheck="false" aria-label="The branch's kind" @input="setRow({ ...row, v: inputValue($event) })" />
               </div>
             </template>
           </ConfigRows>

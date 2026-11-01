@@ -9,7 +9,7 @@
 <template>
   <div class="set-panel ff">
     <p class="ff-crumb"><router-link to="/settings/sync">Sync</router-link> › {{ forge?.name ?? '…' }}</p>
-    <h2 class="h4">{{ forge ? `${forge.name} · ${forge.kind} · ${forge.project}` : 'Forge fields' }}</h2>
+    <h2 class="h4">{{ forge ? title(forge) : 'Forge fields' }}</h2>
     <p class="ff-lead">
       Where each field is written and read on {{ forge?.kind === 'gitlab' ? 'GitLab' : 'GitHub' }}. A field left on
       <b>default</b> follows its type; only overrides go into <code>[forges.{{ forgeName }}.fields]</code>.
@@ -35,7 +35,7 @@
               <tbody>
                 <tr v-for="row in rows" :key="row.name">
                   <td>
-                    <code>{{ row.name }}</code><br />
+                    <code class="ff-name">{{ row.name }}</code><br />
                     <span class="ff-muted">{{ row.type }}</span>
                   </td>
                   <td>
@@ -136,6 +136,15 @@ import { fieldTarget, targetsFor, targetLabels, typeOf, type ForgeMapping, type 
 import ConfigSaveBar from '@/components/configforms/ConfigSaveBar.vue';
 import { message } from '@/issue';
 
+// the forge's kind, said once: "GitHub · o/r", its name only when it isn't the kind's
+const kindName = (k: string) => (k === 'gitlab' ? 'GitLab' : 'GitHub');
+function title(f: { name: string; kind: string; project: string }): string {
+  return f.name === f.kind ? `${kindName(f.kind)} · ${f.project}` : `${f.name} (${kindName(f.kind)}) · ${f.project}`;
+}
+
+// what a row's field is, in words (the Fields list's)
+const typeWords: Record<string, string> = { select: 'values', number: 'a number', date: 'a date', person: 'a person', iteration: 'a sprint', issue: 'an issue', text: 'free text' };
+
 const route = useRoute();
 const forgeName = computed(() => {
   const n = typeof route.params.name === 'string' ? route.params.name : '';
@@ -172,7 +181,7 @@ const rows = computed<Row[]>(() => {
     const fm: ForgeMapping = f.fields?.[name] ?? {};
     out.push({
       name,
-      type: `${cf.type || 'guessed'} · ${cf.single ? 'one' : 'several'}`,
+      type: `${typeWords[typeOf(m.fields, name, roles.value)] ?? 'values'} · ${cf.single ? 'one per issue' : 'several per issue'}`,
       target,
       defaultTarget: fieldTarget({ ...f, fields: {} }, m.fields, name, roles.value, projectNumber.value),
       targets: targetsFor(f.kind, typeOf(m.fields, name, roles.value), name),
@@ -378,4 +387,5 @@ watch(forgeName, () => {
   .ff-work { flex-direction: column-reverse; }
   .ff-aside { width: auto; }
 }
+.ff-name { color: var(--fg); background: none; padding: 0; font-weight: 700; }
 </style>

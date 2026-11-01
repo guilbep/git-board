@@ -34,8 +34,8 @@
           <ConfigRows :rows="list" add-label="+ Sprint" @update="list = $event" @add="add">
             <template #row="{ row }">
               <div class="ss-row">
-                <input v-model="row.slug" class="ss-input ss-slug" placeholder="s12" aria-label="Slug" spellcheck="false" />
-                <input v-model="row.title" class="ss-input" placeholder="Sprint 12" aria-label="Title" />
+                <input v-model="row.slug" class="ss-input ss-slug" placeholder="e.g. s12" aria-label="Slug" spellcheck="false" />
+                <input v-model="row.title" class="ss-input" placeholder="e.g. Sprint 12" aria-label="Title" />
                 <input v-model="row.start" type="date" class="ss-input ss-date" aria-label="First day" />
               </div>
             </template>

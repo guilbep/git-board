@@ -157,7 +157,7 @@
                 <!-- the type first: it decides the rest of the form -->
                 <label v-if="!numbers(selected)" class="fs-field fs-type">
                   <span>Type</span>
-                  <select :value="selected.type" class="fs-input fs-small" aria-label="Type" @change="selected.type = inputValue($event)">
+                  <select :value="selected.type" class="fs-input fs-small" aria-label="Type" @change="setType(selected, inputValue($event))">
                     <option value="">guessed — {{ inferLabel(selected) }}</option>
                     <option v-for="t in types" :key="t.id" :value="t.id">{{ t.label }}</option>
                   </select>
@@ -540,6 +540,13 @@ function forgeLines(f: FieldRow): { forge: string; forgeLabel: string; text: str
     return { forge: forge.name, forgeLabel: forge.kind === 'gitlab' ? 'GitLab' : 'GitHub', text };
   });
   return out.length ? out : null;
+}
+
+// a new field typed as a date or a sprint starts at one value an issue: an
+// issue has one due date, sits in one sprint
+function setType(f: FieldRow, t: string) {
+  f.type = t;
+  if (f.isNew && (t === 'date' || t === 'iteration')) f.single = true;
 }
 
 // the three cardinalities: one value, several, or any text (type text)

@@ -5,10 +5,13 @@
 <template>
   <div class="set-panel as">
     <h2 class="h4">Attachments</h2>
-    <p class="as-lead">
-      Files attached to comments upload to an S3 bucket and are served from a CDN. The keys are the S3's endpoint, region
-      and bucket prefix, and the public URL that serves it; empty is EPFL's.
+    <p class="as-lead">Files attached to comments upload to an S3 bucket, served by a CDN.</p>
+    <!-- the switch that decides comes first: the server's keys, not the file -->
+    <p v-if="status" class="as-status" :class="status.enabled ? 'as-on' : 'as-off'" role="status">
+      <template v-if="status.enabled"><b>On</b>, served at {{ status.public_url }}.</template>
+      <template v-else><b>Off on this server</b>: set <code>ACCESS_KEY_ID</code>, <code>ACCESS_KEY_SECRET</code> and <code>BUCKET_NAME</code> where git-board runs, then restart it.</template>
     </p>
+    <h3 class="as-h">Where the files go, once on</h3>
 
     <div class="set-cols">
       <div class="set-forms">
@@ -22,10 +25,7 @@
               <input :value="draft.value.value[f.key]" class="as-input" :placeholder="f.placeholder" spellcheck="false" :aria-label="f.label" @input="set(f.key, ($event.target as HTMLInputElement).value)" />
             </label>
           </div>
-          <p class="gb-hint">
-            Every key empty takes EPFL's S3 and CDN, the prefix <code>git-board/&lt;repository&gt;</code>. Off in the file, the
-            comment box holds no attach button.
-          </p>
+          <p class="gb-hint">An empty key takes EPFL's default, shown in it.</p>
 
           <ConfigSaveBar
             section="uploads"
@@ -51,7 +51,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted } from 'vue';
+import { computed, onMounted, ref } from 'vue';
+import { getUploadStatus, type UploadStatus } from '@/api/board';
 import { SectionDraft, configModel, configModelError } from '@/configmodel';
 import ConfigRefPanel from '@/components/configforms/ConfigRefPanel.vue';
 import ConfigSaveBar from '@/components/configforms/ConfigSaveBar.vue';
@@ -61,10 +62,10 @@ type Uploads = { endpoint: string; public_url: string; prefix: string; region: s
 const modelError = configModelError;
 
 const fields = [
-  { key: 'endpoint', label: 'S3 endpoint', placeholder: 'https://s3.epfl.ch' },
-  { key: 'public_url', label: 'Public URL (the CDN)', placeholder: 'https://enacit4r-cdn.epfl.ch' },
-  { key: 'prefix', label: 'Bucket prefix', placeholder: 'git-board/<repository>' },
-  { key: 'region', label: 'Region', placeholder: 'us-east-1' },
+  { key: 'endpoint', label: 'S3 endpoint', placeholder: 'empty: https://s3.epfl.ch' },
+  { key: 'public_url', label: 'Public URL (the CDN)', placeholder: 'empty: https://enacit4r-cdn.epfl.ch' },
+  { key: 'prefix', label: 'Bucket prefix', placeholder: 'empty: git-board/<repository>' },
+  { key: 'region', label: 'Region', placeholder: 'empty: us-east-1' },
 ] as const;
 
 const draft = new SectionDraft<Uploads>(
@@ -90,14 +91,22 @@ function set(key: keyof Uploads, v: string) {
 
 const state = computed(() => {
   const u = draft.value.value;
-  return u && (u.endpoint || u.public_url || u.prefix || u.region) ? 'attachments on' : 'the defaults';
+  const n = u ? [u.endpoint, u.public_url, u.prefix, u.region].filter(Boolean).length : 0;
+  return n ? `${n} key${n === 1 ? '' : 's'} set` : 'no key set: the defaults';
 });
 
 function reset() {
   if (configModel.value) draft.reset(configModel.value);
 }
 
-onMounted(() => void draft.load());
+const status = ref<UploadStatus | null>(null);
+
+onMounted(() => {
+  void draft.load();
+  getUploadStatus()
+    .then((s) => (status.value = s))
+    .catch(() => {}); // no status line without it
+});
 </script>
 
 <style scoped>
@@ -114,4 +123,8 @@ h2, p { margin: 0; }
 .as-field > span { color: var(--fg-muted); }
 .as-input { min-width: 16rem; padding: .375rem .625rem; border: 1px solid var(--border); background: var(--bg); color: var(--fg); font: inherit; }
 .as-input:focus { outline: 2px solid var(--fg); outline-offset: 2px; border-color: var(--fg); }
+.as-status { margin: 0; padding: .5rem .75rem; border-left: 3px solid var(--border-strong); background: var(--bg-subtle); }
+.as-on { border-left-color: var(--success); }
+.as-off { border-left-color: var(--warning); }
+.as-h { margin: .25rem 0 0; font-size: 1rem; }
 </style>

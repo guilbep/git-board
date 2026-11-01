@@ -30,7 +30,8 @@
         </button>
         <WaitingChanges v-if="showWaiting" :changes="waiting" :forges="forges ?? []" @reveal="(id) => emit('reveal', id)" />
       </template>
-      <p class="gb-pop-note">Waiting changes go out at the next <router-link to="/settings/sync">Sync</router-link>, or now:</p>
+      <p v-if="waiting.length" class="gb-pop-note">Waiting changes go out at the next <router-link to="/settings/sync">Sync</router-link>, or now:</p>
+      <p v-else class="gb-pop-note">Nothing waits to go out. What changed on the forges comes in at the next <router-link to="/settings/sync">Sync</router-link>, or now:</p>
       <IssueSync :id="id" :waiting="waiting.length" on-forges @checked="(r) => noteCheck(id, r)" @synced="synced" />
     </GbPopover>
     <GbPopover v-if="!forges?.length && bridges" label="Not on the forges yet" title="On the forges" button-class="gb-icon-btn gb-forge-btn" align="right">

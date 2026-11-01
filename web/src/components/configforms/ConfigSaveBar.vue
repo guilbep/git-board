@@ -12,7 +12,15 @@
     <span v-else-if="state" class="csb-state" :class="dirty ? 'csb-dirty' : 'csb-ok'" role="status">{{ state }}</span>
     <span class="gb-grow" />
     <button v-if="dirty" type="button" class="gb-linkbtn" @click="$emit('discard')">Discard changes</button>
-    <button type="button" class="epfl-btn epfl-btn-primary epfl-btn-sm" :disabled="!dirty || saving || !valid" @click="$emit('save')">
+    <!-- a disabled Save says why, in words a touch screen shows too -->
+    <span v-if="!saving && (!dirty || !valid)" :id="`csb-why-${section}`" class="csb-why">{{ !dirty ? 'No change to save' : 'Fix what is marked to save' }}</span>
+    <button
+      type="button"
+      class="epfl-btn epfl-btn-primary epfl-btn-sm"
+      :disabled="!dirty || saving || !valid"
+      :aria-describedby="!saving && (!dirty || !valid) ? `csb-why-${section}` : undefined"
+      @click="$emit('save')"
+    >
       {{ saving ? 'Saving…' : 'Save' }}
     </button>
   </div>
@@ -37,6 +45,7 @@ defineEmits<{ save: []; discard: []; reload: [] }>();
 .csb { position: sticky; bottom: 0; z-index: 5; display: flex; align-items: center; gap: .75rem; flex-wrap: wrap; padding: .625rem 0; background: var(--bg); border-top: 1px solid var(--border); }
 .csb .gb-linkbtn { font-size: .875rem; }
 .gb-grow { flex: 1; }
+.csb-why { font-size: .8125rem; color: var(--fg-muted); }
 .csb-state { font-size: .8125rem; font-weight: 700; padding: .25rem .625rem; border: 1px solid var(--border); color: var(--fg-muted); }
 .csb-ok { color: var(--success-fg); border-color: var(--success-border); background: var(--success-bg); }
 .csb-dirty { color: var(--warning-fg); border-color: var(--warning-border); background: var(--warning-bg); }

@@ -23,7 +23,7 @@
             </template>
             <template #row="{ row, index, set }">
               <div class="rls-env">
-                <input :value="row" class="rls-input" placeholder="dev" spellcheck="false" :aria-label="`Environment ${index + 1}`" @input="set(inputValue($event))" />
+                <input :value="row" class="rls-input" placeholder="e.g. dev" spellcheck="false" :aria-label="`Environment ${index + 1}`" @input="set(inputValue($event))" />
                 <span class="rls-tag">{{ tag(index) }}</span>
               </div>
             </template>
@@ -36,15 +36,15 @@
           <div class="rls-grid">
             <label class="rls-field">
               <span>A merge must pass</span>
-              <input :value="draft.value.value.checks" class="rls-input" placeholder="make ci" spellcheck="false" aria-label="The checks command" @input="set('checks', ($event.target as HTMLInputElement).value)" />
+              <input :value="draft.value.value.checks" class="rls-input" placeholder="e.g. make ci" spellcheck="false" aria-label="The checks command" @input="set('checks', ($event.target as HTMLInputElement).value)" />
             </label>
             <label class="rls-field">
               <span>Tags and release records on</span>
-              <input :value="draft.value.value.remote" class="rls-input" placeholder="origin" spellcheck="false" aria-label="The authority remote" @input="set('remote', ($event.target as HTMLInputElement).value)" />
+              <input :value="draft.value.value.remote" class="rls-input" placeholder="empty: origin" spellcheck="false" aria-label="The authority remote" @input="set('remote', ($event.target as HTMLInputElement).value)" />
             </label>
             <label class="rls-field">
               <span>Follows the trunk</span>
-              <input :value="draft.value.value.follow ?? ''" class="rls-input" placeholder="the first environment" spellcheck="false" aria-label="The environment that follows the trunk" @input="set('follow', ($event.target as HTMLInputElement).value || null)" />
+              <input :value="draft.value.value.follow ?? ''" class="rls-input" placeholder="empty: the first environment" spellcheck="false" aria-label="The environment that follows the trunk" @input="set('follow', ($event.target as HTMLInputElement).value || null)" />
             </label>
           </div>
 
@@ -52,8 +52,8 @@
           <ConfigRows :rows="imageRows" add-label="Add an image" @update="imageRows = $event" @add="imageRows = [...imageRows, { name: '', context: '.' }]">
             <template #row="{ row, set: setRow }">
               <div class="rls-pair">
-                <input :value="row.name" class="rls-input" placeholder="board" spellcheck="false" aria-label="The image's name" @input="setRow({ ...row, name: inputValue($event) })" />
-                <input :value="row.context" class="rls-input" placeholder="." spellcheck="false" aria-label="The docker build context" @input="setRow({ ...row, context: inputValue($event) })" />
+                <input :value="row.name" class="rls-input" placeholder="e.g. web" spellcheck="false" aria-label="The image's name" @input="setRow({ ...row, name: inputValue($event) })" />
+                <input :value="row.context" class="rls-input" placeholder="empty: ." spellcheck="false" aria-label="The docker build context" @input="setRow({ ...row, context: inputValue($event) })" />
               </div>
             </template>
           </ConfigRows>
@@ -62,19 +62,19 @@
           <div class="rls-grid">
             <label class="rls-field">
               <span>Chart directory</span>
-              <input :value="draft.value.value.chartPath ?? ''" class="rls-input" placeholder="chart" spellcheck="false" aria-label="The chart's directory" @input="setChart('path', ($event.target as HTMLInputElement).value)" />
+              <input :value="draft.value.value.chartPath ?? ''" class="rls-input" placeholder="e.g. chart" spellcheck="false" aria-label="The chart's directory" @input="setChart('path', ($event.target as HTMLInputElement).value)" />
             </label>
             <label class="rls-field">
               <span>OCI registry</span>
-              <input :value="draft.value.value.chartRegistry ?? ''" class="rls-input" placeholder="registry.epfl.ch/enac" spellcheck="false" aria-label="The OCI registry" @input="setChart('registry', ($event.target as HTMLInputElement).value)" />
+              <input :value="draft.value.value.chartRegistry ?? ''" class="rls-input" placeholder="e.g. registry.example.org/team" spellcheck="false" aria-label="The OCI registry" @input="setChart('registry', ($event.target as HTMLInputElement).value)" />
             </label>
           </div>
 
           <h3 class="h5">Deploy — the config repos holding the overlays</h3>      <ConfigRows :rows="deployRows" add-label="Add a deploy target" @update="deployRows = $event" @add="deployRows = [...deployRows, { repo: '', path: 'apps/app/{env}' }]">
             <template #row="{ row, set: setRow }">
               <div class="rls-pair">
-                <input :value="row.repo" class="rls-input" placeholder="epfl-enac/app-deploy" spellcheck="false" aria-label="The config repository" @input="setRow({ ...row, repo: inputValue($event) })" />
-                <input :value="row.path" class="rls-input" placeholder="apps/app/{env}" spellcheck="false" aria-label="The overlays' path, {env} in it" @input="setRow({ ...row, path: inputValue($event) })" />
+                <input :value="row.repo" class="rls-input" placeholder="e.g. acme/app-deploy" spellcheck="false" aria-label="The config repository" @input="setRow({ ...row, repo: inputValue($event) })" />
+                <input :value="row.path" class="rls-input" placeholder="e.g. apps/app/{env}" spellcheck="false" aria-label="The overlays' path, {env} in it" @input="setRow({ ...row, path: inputValue($event) })" />
               </div>
             </template>
           </ConfigRows>
@@ -87,7 +87,7 @@
             <summary>Binaries <span class="rls-count">{{ binaries.length }}</span></summary>
             <ConfigRows :rows="binaries" add-label="Add a main package" @update="set('binaries', $event)" @add="set('binaries', [...binaries, './cmd/…'])">
               <template #row="{ row, set }">
-                <input :value="row" class="rls-input" placeholder="./cmd/git-board" spellcheck="false" aria-label="A main package" @input="set(inputValue($event))" />
+                <input :value="row" class="rls-input" placeholder="e.g. ./cmd/app" spellcheck="false" aria-label="A main package" @input="set(inputValue($event))" />
               </template>
             </ConfigRows>
             <p class="gb-hint">
@@ -227,8 +227,12 @@ const valid = computed(() => {
 const state = computed(() => {
   const r = draft.value.value;
   if (!r) return '';
+  // what gets released: environments and images, or binaries alone
   const n = r.environments.filter((e) => e.trim()).length;
-  return n ? `${n} environment${n === 1 ? '' : 's'} · ${r.images.length} image${r.images.length === 1 ? '' : 's'}` : 'no releases';
+  const b = r.binaries.filter((x) => x.trim()).length;
+  const bins = b ? `${b} binar${b === 1 ? 'y' : 'ies'}` : '';
+  if (n) return [`${n} environment${n === 1 ? '' : 's'}`, `${r.images.length} image${r.images.length === 1 ? '' : 's'}`, bins].filter(Boolean).join(' · ');
+  return b ? `${bins} · finals, deployed nowhere` : 'off: no environment, no binary';
 });
 
 function reset() {

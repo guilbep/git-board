@@ -26,7 +26,7 @@
       </div>
       <div class="gb-inbox-actions">
         <button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" :disabled="busy" @click="refresh(true)">Refresh</button>
-        <button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" :disabled="!unread.length" @click="markAll">Mark all read</button>
+        <button v-if="unread.length" type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" @click="markAll">Mark all read</button>
         <button type="button" class="gb-icon-btn" aria-label="Inbox settings" :aria-expanded="menuOpen" @click="menuOpen = !menuOpen">
           <GbIcon name="settings" small />
         </button>

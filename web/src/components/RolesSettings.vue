@@ -17,9 +17,9 @@
           <ConfigRows :rows="rows" add-label="Add a role" @update="rows = $event" @add="rows = [...rows, { role: '', login: '' }]">
             <template #row="{ row }">
               <div class="rs-row">
-                <input v-model="row.role" class="rs-input" placeholder="lead-dev" aria-label="Role" spellcheck="false" />
+                <input v-model="row.role" class="rs-input" placeholder="e.g. lead-dev" aria-label="Role" spellcheck="false" />
                 <span class="rs-arrow">→</span>
-                <input v-model="row.login" class="rs-input" placeholder="login" aria-label="Who holds the role" spellcheck="false" />
+                <input v-model="row.login" class="rs-input" placeholder="a login" aria-label="Who holds the role" spellcheck="false" />
               </div>
             </template>
           </ConfigRows>

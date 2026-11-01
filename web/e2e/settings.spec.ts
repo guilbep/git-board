@@ -30,7 +30,7 @@ test('Sync is in the project file group, with each forge’s fields a link away'
   await expect(nav.locator('.set-group').first().locator('+ a')).toContainText('Sync');
   await page.getByRole('link', { name: 'its fields' }).click();
   await expect(page).toHaveURL(/#\/settings\/forge-fields\/github$/);
-  await expect(page.getByRole('heading', { name: 'github · github · o/r' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'GitHub · o/r' })).toBeVisible();
   await expect(page).toHaveURL(/#\/settings\/forge-fields\/github$/); // the Fields tab, mounted beside, leaves the address be
   expect(errs).toEqual([]);
 });
@@ -39,7 +39,7 @@ test('Forge fields shows the forge found in the remotes, and a save writes its t
   const errs = errors(page);
   await page.goto('/#/settings/forge-fields');
   await expect(page.getByText('No forge')).toHaveCount(0);
-  await expect(page.getByRole('heading', { name: 'github · github · o/r' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'GitHub · o/r' })).toBeVisible();
   await expect(page.getByText('found in the git remotes')).toBeVisible();
 
   // one override, saved: the file gets the forge's table and the mapping

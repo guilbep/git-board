@@ -184,7 +184,7 @@ const cards = computed(() => {
     fields: `${viewNames.value.length} saved view${viewNames.value.length === 1 ? '' : 's'}; the fields, sprints, roles and views are tabs beside this one.`,
     labels: labels.value ? `${labels.value.rows.length} label${labels.value.rows.length === 1 ? '' : 's'}${labels.value.repos.length ? `, on ${labels.value.repos.join(', ')}` : ''}.` : 'Open the tab to read GitHub.',
     numbers: numbers.value ? numbersSummary(numbers.value) : '…',
-    attachments: !s ? '…' : s.uploads.enabled ? `On, served at ${s.uploads.public_url}.` : 'Off.',
+    attachments: !s ? '…' : s.uploads.enabled ? `On, served at ${s.uploads.public_url}.` : 'Off on this server.',
     worktrees: !worktrees.value ? '…' : worktrees.value.config ? 'wtx.toml written.' : worktrees.value.code === 'no-config' ? 'No wtx.toml yet.' : (worktrees.value.reason ?? ''),
     you: me.value?.me ? `You write as ${me.value.me.name}.` : 'Not chosen yet: pick who you write as.',
   };
