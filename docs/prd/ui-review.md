@@ -2,9 +2,9 @@
 
 Nov 1, 2026 · @Pierre Guilbert
 
-A review of every page, menu, dialog and hover state of the web app, on this repository's own board (38 issues, the real `.git-board.toml`), at 1440 px, on a 390 px phone and in dark mode. It found 50 problems. The layout bugs are fixed on this branch; the rest is proposed here, each with what "done" means, for review before any of it is built.
+A review of every page, menu, dialog and hover state of the web app, on this repository's own board (38 issues, the real `.git-board.toml`), at 1440 px, on a 390 px phone and in dark mode. It found 46 problems, numbered as in the review (1–33 from the pages, 34–46 from the menus, dialogs and hovers). The layout bugs are fixed on this branch; the rest is proposed here, each with what "done" means, for review before any of it is built.
 
-The screenshots are in the session's scratchpad (`shots/`, `ui/`); a Playwright test pins each fix, as for the layout bugs (`web/e2e/layout.spec.ts`).
+A Playwright test pins each fix, as for the layout bugs (`web/e2e/layout.spec.ts`). A proposal that undoes an earlier PRD's decision says so on an **Overrides** line.
 
 ## Problem
 
@@ -35,19 +35,20 @@ Non-goals: a visual redesign (the EPFL tokens and type stay), new features, the 
 | 3 | The Fields editor's head squeezed, Remove over the reference; the Roles × over it | **Fixed** (2a2a4e2, e29c551): the card head wraps; a card never grows past its column (a select's per-value table pushed the whole editor under the reference); a row's inputs shrink with it. |
 | 4 | Hints broke around code chips (". One login each") | **Fixed** (2a2a4e2): `.gb-hint` was `display:flex`, so every text run and `<code>` wrapped on its own; it is a paragraph now. One rule, every hint. |
 | 5 | The Sync table broke words into syllables on a phone | **Fixed** (2a2a4e2): the table keeps a minimum width and scrolls sideways. |
-| 6 | The board on a phone showed one lane | **Not a bug**: the board scrolls sideways, as kanbans do. Proposed in D-19: one lane a screen, snapping. |
+| 6 | The board on a phone showed one lane | **Not a bug**: the board scrolls sideways, as kanbans do. Proposed in D-6: one lane a screen, snapping. |
 | 7 | Forge fields' "Written to" panel overflowed; "blue = an override" with nothing blue | **Fixed** (2a2a4e2): the panel wraps; the legend shows with an override. |
-| 40 | The Columns menu cuts its list mid-row, no sign it scrolls | To do: the menu grows to the viewport, a fade at the cut. |
+| 40 | The Columns menu cut its list mid-row, no sign it scrolls | **Fixed** (6575f67): the menu takes the screen's height (every column at 900 px), a shade at the cut past it. Checked on this board; not pinned by a test (the e2e board has no issues, so no table). |
+| — | A release cut from the current branch | **Not a bug**: the review ran on a clone whose `origin/HEAD` is this branch; the trunk is origin's default branch. |
 
 ## B. Contradictions: proposals to validate
 
 Each has a proposal and, where there is a real choice, the alternative.
 
-**B-8. "1 to send", "2 changes", "1 issue to send".** The header and Sync count issues; Work counts changes (#51's risk and its description).
-Proposal: count **issues** everywhere, the changes as detail: "1 issue to send (2 changes)" on Work, "1 issue to send" elsewhere. One function on the server answers both numbers; every page reads it.
+**B-8. "1 to send" in the header, "2 changes" on Work.** Not the same thing: the header counts issues waiting for **origin** (a git push, `ways.ts` `waiting()`); Work counts changes waiting for **the forges** (`/api/work`'s `pending`, #51's risk and its description). Neither page says which.
+Proposal: every count names where it goes. The header: "1 to push · 2 for GitHub" (it reads `pending` too, the board-wide forge count `ways.ts` notes it lacks); Work: "For GitHub: 2 changes on 1 issue"; Sync's origin row: "1 issue to push". Touches: `ways.ts`, `work.ts` `sendWords`, the header, `/api/work`.
 
-**B-9. `doc` vs `docs`.** Done (your call, made): `[branches.kinds]` maps the kind `doc` to the branch prefix `docs` (`doc = "docs"`). Your issues carry `kind:doc`. In your uncommitted `.git-board.toml`, not committed.
-Proposal for the code: Branches › Kinds offers only the kind field's values as keys (a select, not free text), so a key the field lacks can't be typed; an existing one shows "not a kind" in red, like lint.
+**B-9. `doc` vs `docs`.** Done (your call, made): `[branches.kinds]` maps the kind `doc` to the branch prefix `docs` (`doc = "docs"`); your issues carry `kind:doc`. In your uncommitted `.git-board.toml`, not committed. It doesn't clear lint's "no-kind": that one is GB-9 and GB-22, which carry no kind at all.
+Proposal for the code: Branches › Kinds marks a key the kind field doesn't hold: "not a kind: no issue can carry it" (the input stays free text, with the kind field's values suggested). In this file that marks `design`, `perf`, `refactor`, `style` and `test` (the kind field holds feat, bug, doc, chore): either they go, or the kind field gains them. Touches: `BranchesSettings.vue`.
 
 **B-10. Release settings says "no releases", the Releases page lists 18.** The summary counts environments only; a `binaries` table makes releases with none.
 Proposal: the summary says what is released: "1 binary · finals, published on GitHub", "3 environments · 2 images", "off: no environments and no binaries".
@@ -75,7 +76,9 @@ Proposal: two buttons, each saying its side: "Send now" (when there is something
 The rule: **one home per thing, and links to it.** A page that needs a thing it doesn't own links to the owner's page; it doesn't copy its text or its button.
 
 **C-16. The intro repeated in the Reference panel** (Fields, Views, Sprints, Roles, Labels, Branches, Cycle, Repos).
-Proposal: the Reference panel goes from every tab. Each tab keeps one line of intro (B goal 3) and a "Reference" link at its end that opens the section's reference in a side sheet (the same text, from `docs/guide/configuration.md`, the one source). The forms get the page's full width, which also fixes the three-column squeeze at 1440 px behind A-2/A-3.
+Proposal, light: the panel stays and loses its first paragraph, the one that repeats the tab's intro; nothing else moves.
+Proposal, full: the Reference panel goes from every tab. Each tab keeps one line of intro (goal 3) and a "Reference" link at its end that opens the section's reference in a side sheet (the same text, from `docs/guide/configuration.md`, the one source). The forms get the page's full width, which also fixes the three-column squeeze at 1440 px behind A-2/A-3.
+Overrides (full only): `settings-forms-plan.md` › The reference, per tab.
 
 **C-17. The open filter twice** (`is:open` in the box, "open" ticked in State), and the empty state suggesting `is:open` when it's already there.
 Proposal: the facet panel is the filter's other face, so it stays; the box shows the same query. The duplicate is the empty state's advice: it suggests a filter one step broader than the current one (drop the last term), never the current one.
@@ -83,8 +86,8 @@ Proposal: the facet panel is the filter's other face, so it stays; the box shows
 **C-18. "Board" is both a view (tab) and a layout (switch).**
 Proposal: the default view is named for what it shows, not how: "Open issues" (the file's `[views.board]` keeps its key; `title` is the shown name). The layout switch keeps Table / Board / Roadmap.
 
-**C-19. Sync has four entry points** (the header, the Sync tab's Check/Sync bar, Work's Send all, the issue popover), with different verbs per row (Fetch/Pull/Push vs Pull/Push/Sync).
-Proposal: the header's **Sync** is the one entry: it opens a panel with the count (B-8), Check, and Sync. The Sync tab keeps the per-side rows for when one side needs a hand, each row with the same three verbs (Pull, Push, Sync; origin's Fetch becomes Pull's "check first" step), and drops its own bottom bar. Work's "Send all" goes; its "To send" box links to the header panel. The issue popover keeps "Send now" for that one issue (B-37).
+**C-19. Sync has four entry points** (the header, the Sync tab's Check/Sync bar, Work's Send all, the issue popover).
+Proposal: the header's **Sync** is the one entry: it opens a panel with the counts (B-8), Check, and Sync. The Sync tab keeps the per-side rows for when one side needs a hand, with their verbs as sync-sides set them (git's fetch, pull, push for origin; pull, push, sync for a forge: different sides, different verbs, on purpose), and drops its own bottom bar. Work's "Send all" goes; its "To send" box links to the header panel. The issue popover keeps "Send now" for that one issue (B-37).
 
 **C-20. The overview cards repeat the side menu, for some tabs.**
 Proposal: Settings opens on the first tab (Sync); the overview's sentence on what git-board is moves to the side menu's head, its per-tab state to each menu item's hint ("1 forge · Project #40", "7 fields", "off").
@@ -102,7 +105,7 @@ Proposal: the header's 🔍 goes; the box in the page is the one (⌘K everywher
 Proposal: the menu is "You" things only: who you write as (once, "guilbep" with the identity's name if it differs), your issue page, appearance, keyboard shortcuts. Settings and Sync are already in the header.
 
 **C-36. An issue closes from three places** (✓ beside the status, ⋯ › Close the issue, Close issue under the comment box).
-Proposal: two: the status menu's last item ("done, and close"), and the comment box's "Close with comment" (GitHub's pattern: closing with a reason). The ✓ and the ⋯ item go.
+Proposal: two. The ✓ is the status box's advance arrow (`issue-head-plan.md` W0-3, W1-6: on the last status it closes), and the comment box's "Close issue" stays (closing with a reason). The ⋯ menu's "Close the issue" goes. The ✓ gets a visible tooltip and label at its last step: "Close as done".
 
 **C-43. "How forges work" is the Sync intro, a dialog, and the Add-a-forge wizard's side panel.**
 Proposal: one guide page section; the Sync tab links it once; the wizard keeps only the step's own help ("Which forge: GitHub or GitLab. GitHub was found in your remotes: guilbep/git-board", which it also doesn't say today).
@@ -137,7 +140,8 @@ Proposal: lead time leaves out issues opened and closed within a minute of each 
 Proposal: rows grouped by step ("01 Intent · 17 issues wait for acceptance criteria"), collapsed past five; the row is the link (Open goes); Start an agent on hover and focus. The retro box says "No sprint is running. Set sprints in Settings › Sprints" with the link. Work joins the header when the cycle is on (it is the cycle's page).
 
 **D-30. The issue page's unlabelled controls** (GitHub icon, bell, ⋯, Fit/Fill, Comfortable/Compact, ✓, a floating avatar).
-Proposal: icon buttons get visible labels at ≥ 1024 px ("GitHub #17", "Following"); Fit/Fill and Comfortable/Compact move into the ⋯ menu under "Layout"; the ✓ goes (C-36); the avatar beside the tabs (the viewer) goes. The text column widens to 52 rem at "Fill".
+Proposal: icon buttons get visible labels at ≥ 1024 px ("GitHub #17", "Following"); Fit/Fill and Comfortable/Compact keep their place and gain a group label each ("Width", "Spacing"); the ✓ is labelled (C-36); the avatar beside the tabs (the viewer) goes. The text column widens to 52 rem at "Fill".
+Alternative: Fit/Fill and Comfortable/Compact move into ⋯ › Layout. Overrides: `issue-head-plan.md` (the bar's switches, `headswitch.ts`).
 
 **D-31. The release page.** Empty "Runs in" and "Images" headings; the comment box between Conversation and the release's details; headings in two cases. The Cut dialog's empty "Before it is cut".
 Proposal: a section with nothing shows nothing (or one muted line, "No image"); the order is the record, then the conversation, the comment box last; one heading style (the h2 of Notes). The Cut dialog lists its checks under "Before it is cut", or drops the heading.
@@ -160,23 +164,23 @@ Proposal: an action's result shows on its row (inline, as Settings' rows do); th
 **D-42. "+ Add a field" offers fields that exist** (status, prio).
 Proposal: a preset the file has shows as "status · already declared" and opens that field.
 
-**D-45. The focus ring is the brand red**, so every focused input reads as invalid.
+**D-44. The focus ring is the brand red**, so every focused input reads as invalid.
 Proposal: focus is the text color (as the forms already do with `outline: 2px solid var(--fg)`), red is for errors only. One rule in `gitboard.css`.
 
-**D-48. Sync › GitHub Project › Change reflows the whole table.**
+**D-45. Sync › GitHub Project › Change reflows the whole table.**
 Proposal: Change opens the same small form in a popover anchored to the row.
 
-**D-49. A lane's "⋯" is a "move every card to another lane" select.**
+**D-46. A lane's "⋯" is a "move every card to another lane" select.**
 Proposal: the ⋯ is a menu (Move every card to…, Hide this lane, Set a limit); the select is its first item.
 
-**D-19. The phone board** (from A-6): one lane a screen, swiped, the lane names as tabs above.
+**D-6. The phone board** (from A-6): one lane a screen, swiped, the lane names as tabs above.
 
 ## Order
 
-1. **The cheap, global ones** (one rule each): D-45 focus, D-25 placeholders, D-26 disabled reasons, D-33 labels, C-22, B-10, B-11, B-37, A-40.
+1. **The cheap, global ones** (one rule each): D-44 focus, D-25 placeholders, D-26 disabled reasons, D-33 labels, C-22, B-10, B-11, B-37.
 2. **One home per thing**: C-16 (the Reference panel goes; unblocks the widths), C-34, C-35, C-36, C-21, C-43, then C-19 (Sync), the largest.
 3. **The counts and names**: B-8, B-12, B-15, C-18, B-14, B-9's select.
-4. **The pages**: D-23 Labels, D-29 Work, D-30 issue page, D-38 New issue, D-39 filter, D-31 release, D-28 Insights, D-32 frame, D-19 phone board.
+4. **The pages**: D-23 Labels, D-29 Work, D-30 issue page, D-38 New issue, D-39 filter, D-31 release, D-28 Insights, D-32 frame, D-6 phone board, D-45, D-46.
 
 Each step lands with its Playwright tests (fail first, collect page errors) and a screenshot pass at 390, 1440 and dark.
 
@@ -186,3 +190,5 @@ Each step lands with its Playwright tests (fail first, collect page errors) and 
 2. C-18: rename the default view's shown name, or leave "Board"?
 3. C-20: drop the Settings overview, or keep it as the page Settings opens on?
 4. C-19: is Sync per side (the tab's rows) still needed once the header panel exists, or only behind "Advanced"?
+5. C-16: the light proposal (drop the repeated paragraph) or the full one (the panel becomes a sheet)?
+6. D-30: label the issue bar's switches, or move them into ⋯?
