@@ -162,10 +162,11 @@
                         <router-link class="gb-linkbtn" :to="g.declared ? `/settings/fields/${g.field}` : '/settings/fields'">
                           {{ g.declared ? 'Add the option in Fields' : 'Declare this field' }}
                         </router-link>
-                        <span v-if="g.staleHome" class="lb-stale">
+                        <span v-if="g.staleHome && !migrated.includes(g.field)" class="lb-stale">
                           left over from an old mapping —
                           <button type="button" class="gb-linkbtn" @click="askMigrate(g.field)">Migrate</button>
                         </span>
+                        <span v-else-if="g.staleHome" class="lb-muted">moved — the labels stay in git-board</span>
                       </td>
                     </tr>
                   </tbody>
@@ -313,9 +314,12 @@ const undeclaredGroups = computed(() => {
   return groups;
 });
 
-// the leftover's migration: the preview counts, the run moves
+// the leftover's migration: the preview counts, the run moves. What moved
+// says so in its row — the labels stay in git-board by design, and
+// re-running them is harmless but reads as unfinished.
 const migratePlans = ref<{ field: string; plans: MigratePlan[] } | null>(null);
 const migrating = ref('');
+const migrated = ref<string[]>([]);
 
 async function askMigrate(field: string) {
   migratePlans.value = { field, plans: (await previewFieldMigration(field)).plans };
@@ -327,6 +331,7 @@ async function runMigrate() {
   try {
     const r = await runFieldMigration(migratePlans.value.field);
     if (r.error) error.value = r.error;
+    else migrated.value = [...migrated.value, migratePlans.value.field];
     migratePlans.value = null;
     load();
   } catch (e) {

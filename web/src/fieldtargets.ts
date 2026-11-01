@@ -19,7 +19,6 @@ export interface ForgeModel {
 // default.
 export interface ForgeMapping {
   to?: string | undefined;
-  as?: string | undefined; // namespaced (default), plain
   field?: string | undefined; // the Project column, for project
   values?: Record<string, string> | null | undefined; // value → name on the forge
 }
@@ -98,11 +97,4 @@ export function targetsFor(kind: string, fieldType: string, field: string): { id
       return [entry('label'), entry('project', 'a Project field'), entry('none')];
     }
   }
-}
-
-// the forge's spelling of a field's value label, as the server's
-// config.FieldLabel spells it
-export function forgeLabel(forge: ForgeModel, field: string, value: string): string {
-  const m = forge.fields?.[field];
-  return m?.to === 'label' && m.as === 'plain' ? value : `${field}:${value}`;
 }

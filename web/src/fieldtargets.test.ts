@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { defaultTarget, fieldTarget, forgeLabel, targetsFor, type ForgeModel } from './fieldtargets.ts';
+import { defaultTarget, fieldTarget, targetsFor, type ForgeModel } from './fieldtargets.ts';
 
 const fields = {
   status: { single: true, options: ['todo', 'done'] },
@@ -46,10 +46,4 @@ test('targetsFor offers what the forge has, the default first, the paid tier mar
   assert.match(targetsFor('gitlab', 'select', 'status')[1]?.label ?? '', /paid tier/);
   assert.deepEqual(targetsFor('github', 'person', 'reviewer').map((t) => t.id), ['label', 'assignees', 'none']);
   assert.deepEqual(targetsFor('gitlab', 'issue', 'parent').map((t) => t.id), ['label', 'assignees', 'milestone', 'due-date', 'none']);
-});
-
-test('forgeLabel spells the value as the forge has it', () => {
-  const plain: ForgeModel = { ...gh, fields: { moscow: { to: 'label', as: 'plain' } } };
-  assert.equal(forgeLabel(plain, 'moscow', 'couldhave'), 'couldhave');
-  assert.equal(forgeLabel(gh, 'status', 'ready'), 'status:ready');
 });

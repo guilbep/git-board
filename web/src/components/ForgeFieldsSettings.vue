@@ -56,11 +56,6 @@
                     >
                       <option v-for="c in projectColumns(row)" :key="c" :value="c">{{ c }}</option>
                     </select>
-                    <fieldset v-else-if="row.target === 'label'" class="ff-as">
-                      <legend class="ff-muted">Label form</legend>
-                      <label><input type="radio" :checked="row.as !== 'plain'" @change="setAs(row, 'namespaced')" /> namespaced</label>
-                      <label><input type="radio" :checked="row.as === 'plain'" @change="setAs(row, 'plain')" /> plain</label>
-                    </fieldset>
                     <span v-else class="ff-muted">—</span>
                   </td>
                   <td>
@@ -130,7 +125,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { previewFieldMigration, runFieldMigration, type ConfigField, type ConfigModel, type MigratePlan } from '@/api/board';
 import { configModel, configModelError, inputValue, loadConfigModel, SectionDraft } from '@/configmodel';
@@ -156,7 +151,6 @@ interface Row {
   defaultTarget: string;
   targets: { id: string; label: string }[];
   projectField: string;
-  as: string;
   renamed: number;
   aliases: number;
 }
@@ -178,7 +172,6 @@ const rows = computed<Row[]>(() => {
       defaultTarget: fieldTarget({ ...f, fields: {} }, m.fields, name, roles.value, projectNumber.value),
       targets: targetsFor(f.kind, cf.type || 'select', name),
       projectField: fm.field ?? name.charAt(0).toUpperCase() + name.slice(1),
-      as: fm.as ?? '',
       renamed: Object.keys(fm.values ?? {}).length,
       aliases: Object.keys(cf.aliases ?? {}).length,
     });
@@ -207,7 +200,6 @@ function cleanMappings(set: Record<string, ForgeMapping>): Record<string, ForgeM
   const out: Record<string, ForgeMapping> = {};
   for (const [name, m] of Object.entries(set)) {
     const clean: ForgeMapping = { to: m.to };
-    if (m.as) clean.as = m.as;
     if (m.field) clean.field = m.field;
     if (m.values && Object.keys(m.values).length) clean.values = m.values;
     if (clean.to) out[name] = clean;
@@ -230,10 +222,6 @@ function setTarget(row: Row, to: string) {
 
 function setProjectField(row: Row, field: string) {
   patch(row.name, { field: field === row.name ? undefined : field });
-}
-
-function setAs(row: Row, as: string) {
-  patch(row.name, { as: as === 'plain' ? 'plain' : undefined });
 }
 
 // the values' renames, as the details expander holds them
@@ -275,7 +263,10 @@ function askMigration(name: string, m: ForgeMapping) {
     migration.value = null;
     return;
   }
-  const from = forge.value?.fields?.[name]?.to ?? 'label';
+  // from is where the field lives now, the saved model's effective target
+  // (mapping, old project map, Project columns, type default) — not the
+  // saved mapping's `to` alone
+  const from = forge.value && configModel.value ? fieldTarget(forge.value, configModel.value.fields, name, roles.value, projectNumber.value) : 'label';
   migration.value = { field: name, from: targetLabels[from] ?? from, to: targetLabels[m.to] ?? m.to };
   migrationPlans.value = null;
   previewFieldMigration(name).then((r) => (migrationPlans.value = r.plans)).catch(() => (migrationPlans.value = []));
@@ -293,7 +284,6 @@ const toml = computed(() => {
   const lines = [`[forges.${m.name}.fields]`];
   for (const [name, fm] of Object.entries(m.fields)) {
     const parts = [`to = "${fm.to}"`];
-    if (fm.as) parts.push(`as = "${fm.as}"`);
     if (fm.field) parts.push(`field = "${fm.field}"`);
     lines.push(`${name} = { ${parts.join(', ')} }`);
   }
@@ -314,6 +304,12 @@ function reset() {
 
 async function save() {
   await draft.save();
+  // saved: the file's mappings moved, the open preview counted for the
+  // old ones — counted again
+  if (migration.value && !draft.dirty.value) {
+    migrationPlans.value = null;
+    previewFieldMigration(migration.value.field).then((r) => (migrationPlans.value = r.plans)).catch(() => (migrationPlans.value = []));
+  }
 }
 
 const runMigration = () =>
@@ -328,6 +324,14 @@ const runMigration = () =>
 onMounted(() => {
   void draft.load();
   void loadConfigModel();
+});
+
+// the tab stays mounted across forges (v-show): a change of address is a
+// change of draft, or a save would write one forge's mappings onto
+// another. The migration panel went with the forge it counted for.
+watch(forgeName, () => {
+  void draft.load();
+  migration.value = null;
 });
 </script>
 
@@ -344,9 +348,6 @@ onMounted(() => {
 .ff-select { min-height: 2.25rem; padding: 0 .5rem; border: 1px solid var(--border); background: var(--bg); color: var(--fg); font: inherit; }
 .ff-select:focus { outline: 2px solid var(--fg); outline-offset: 2px; border-color: var(--fg); }
 .ff-override { border: 2px solid var(--primary); background: var(--bg-accent, var(--bg)); font-weight: 700; }
-.ff-as { display: flex; gap: .75rem; align-items: center; margin: 0; padding: 0; border: 0; }
-.ff-as legend { float: left; margin-right: .5rem; padding: 0; font-size: .8125rem; }
-.ff-as label { display: inline-flex; gap: .25rem; align-items: center; font-size: .8125rem; }
 .ff-renames { display: grid; gap: .5rem; padding: .75rem 1rem; border: 1px solid var(--border); }
 .ff-renames summary { cursor: pointer; font-weight: 700; color: var(--fg-muted); }
 .ff-rename-rows { display: grid; gap: .375rem; }
