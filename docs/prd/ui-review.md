@@ -37,9 +37,13 @@ Built overnight on this branch, in the order below; each step's Playwright tests
 | D-31 | yes | Empty sections left out; the Cut dialog's checks only with checks. |
 | D-32 | yes | Conflicts in the page frame; Releases' eyebrow is the section, its title a sentence; settings rows at one input size; the inbox menu with the others' shadow. |
 | D-33, D-38, D-39, D-42, D-45, D-6 | yes | Field types in words; New issue's inputs by type, its actions in reach; a half-typed term not applied; a declared preset opens its field; the Project's number set under its row; the phone board one lane a screen. |
-| D-46 | **(call)** | The lane's control stays a select (one action: a menu would hold one item) and says **Move all…** instead of ⋯. |
+| D-46 | **(call)** | The lane's control stays a select (one action: a menu would hold one item), shown as ⇄ instead of ⋯: "Move all…" in words squeezed the lane titles (IN-PROGRESS on two lines). Its tooltip and label say it. |
 
 Open questions, as answered by the calls: 1 no key; 2 kept; 3 dropped; 4 kept (the tab is the home); 5 light; 6 neither (they were labelled).
+
+**Not pinned by a test.** The e2e board has no issue and no identity, so these were checked by eye on this repository's board and have no regression test: Work's grouping, New issue's inputs, the Insights nudge, the issue numbers (B-12), the forge number beside its logo, the lane control, the phone board's snap, and the release page's grid (a real bug: `display: grid` was missing). Next step: seed the e2e board with an identity and two issues, then pin them.
+
+**Still cramped.** Fields at 1440 px: list, editor and reference side by side leave a select's per-value table scrolling inside its card. The full C-16 (the reference as a side sheet) is what gives it room.
 
 ## Problem
 
