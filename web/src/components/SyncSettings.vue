@@ -584,6 +584,7 @@ onMounted(() => {
 .sy-sub td:first-child { padding-left: 1.75rem; }
 .sy-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .gb-table-wrap { position: relative; }
+.gb-table-wrap > .gb-table { min-width: 46rem; }
 .sy-switch { display: inline-flex; align-items: center; gap: .5rem; cursor: pointer; font-weight: 700; }
 .sy-switch input { width: 1.125rem; height: 1.125rem; accent-color: var(--primary-hover); }
 .sy-confirm-row td { background: var(--warning-bg); }

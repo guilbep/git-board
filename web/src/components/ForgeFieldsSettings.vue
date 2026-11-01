@@ -120,7 +120,7 @@
         <aside class="ff-aside" aria-label="What this writes">
           <h3 class="h5">Written to <code>.git-board.toml</code></h3>
           <pre class="ff-toml">{{ toml || '— nothing: every field follows its type default' }}</pre>
-          <p class="ff-muted">blue = an override. Everything else is the type's default, unwritten.</p>
+          <p v-if="toml" class="ff-muted">blue = an override. Everything else is the type's default, unwritten.</p>
         </aside>
       </div>
     </template>
@@ -373,7 +373,7 @@ watch(forgeName, () => {
 .ff-migrate { display: grid; gap: .75rem; padding: 1rem 1.25rem; border: var(--border-w) solid var(--fg); }
 .ff-migrate ol { margin: 0; padding-left: 1.25rem; display: grid; gap: .25rem; }
 .ff-actions { display: flex; gap: .5rem; flex-wrap: wrap; }
-.ff-toml { margin: 0; padding: .875rem 1rem; border: 1px solid var(--border); background: var(--bg-subtle); font-size: .8125rem; line-height: 1.55; overflow-x: auto; }
+.ff-toml { margin: 0; padding: .875rem 1rem; border: 1px solid var(--border); background: var(--bg-subtle); font-size: .8125rem; line-height: 1.55; overflow-x: auto; white-space: pre-wrap; }
 @media (max-width: 59.99rem) {
   .ff-work { flex-direction: column-reverse; }
   .ff-aside { width: auto; }

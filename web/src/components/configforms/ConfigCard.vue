@@ -42,7 +42,7 @@ const asking = ref(false);
 
 <style scoped>
 .cc { display: grid; gap: .625rem; padding: .75rem 1rem; border: 1px solid var(--border); border-left: 3px solid var(--border-strong); background: var(--bg); }
-.cc-head { display: flex; align-items: baseline; gap: .75rem; }
+.cc-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: .375rem .75rem; min-width: 0; }
 .cc-title { margin: 0; font-size: 1rem; }
 .gb-grow { flex: 1; }
 .cc-remove { font-size: .8125rem; }

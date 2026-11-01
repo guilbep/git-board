@@ -985,9 +985,9 @@ h2, p { margin: 0; }
 .fl-row-hold { opacity: .4; }
 .fl-line1 { display: flex; align-items: center; gap: .375rem; min-width: 0; }
 .fl-grip { color: var(--fg-muted); font-size: .75rem; }
-.fl-nm { overflow: hidden; font-family: var(--font-mono); font-weight: 700; font-size: .875rem; text-overflow: ellipsis; white-space: nowrap; }
+.fl-nm { flex: none; max-width: 100%; overflow: hidden; font-family: var(--font-mono); font-weight: 700; font-size: .875rem; text-overflow: ellipsis; white-space: nowrap; }
 .fl-dot { width: .5rem; height: .5rem; flex: none; background: var(--danger); }
-.fl-sum { overflow: hidden; font-size: .75rem; color: var(--fg-muted); text-overflow: ellipsis; white-space: nowrap; }
+.fl-sum { flex: 1 1 0; min-width: 0; overflow: hidden; font-size: .75rem; color: var(--fg-muted); text-overflow: ellipsis; white-space: nowrap; }
 .fl-values { overflow: hidden; font-family: var(--font-mono); font-size: .75rem; color: var(--fg-muted); text-overflow: ellipsis; white-space: nowrap; }
 .fl-addrow { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
 .fl-filter { max-width: 15rem; }
@@ -1001,7 +1001,7 @@ h2, p { margin: 0; }
 .fs-name { width: 9rem; min-height: 2rem; padding: 0 .5rem; border: 1px solid var(--border); background: var(--bg); color: var(--fg); font-family: var(--font-mono); font-size: 1rem; font-weight: 700; }
 .fs-name:disabled { border-color: transparent; background: none; padding-left: 0; }
 .fs-name:focus { outline: 2px solid var(--fg); outline-offset: 2px; }
-.fs-sum { color: var(--fg-muted); font-size: .8125rem; }
+.fs-sum { color: var(--fg-muted); font-size: .8125rem; white-space: nowrap; }
 .fs-dirty { font-size: .75rem; font-weight: 700; color: var(--danger); }
 /* the editor's two renderings: the form and this field's TOML */
 .fs-mode { display: inline-flex; border: 1px solid var(--border); }

@@ -56,7 +56,7 @@ function remove(i: number) {
 
 <style scoped>
 .cr { display: grid; gap: .375rem; }
-.cr-row { display: flex; align-items: center; gap: .5rem; }
+.cr-row { display: flex; align-items: center; gap: .5rem; min-width: 0; }
 .cr-order { display: flex; flex-direction: column; gap: .125rem; }
 .cr-btn { flex: none; width: 1.5rem; height: 1.25rem; padding: 0; border: 1px solid var(--border); background: var(--bg); color: var(--fg); font: inherit; font-size: .6875rem; line-height: 1; cursor: pointer; }
 .cr-btn:hover:not(:disabled) { border-color: var(--fg); }

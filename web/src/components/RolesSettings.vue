@@ -109,7 +109,7 @@ h2, p { margin: 0; }
 .rs-lead { max-width: 42rem; color: var(--fg-muted); }
 .rs-muted { color: var(--fg-muted); }
 .rs-row { display: flex; align-items: center; gap: .5rem; }
-.rs-input { flex: 1; max-width: 14rem; padding: .375rem .625rem; border: 1px solid var(--border); background: var(--bg); color: var(--fg); font: inherit; }
+.rs-input { flex: 1; min-width: 0; max-width: 14rem; padding: .375rem .625rem; border: 1px solid var(--border); background: var(--bg); color: var(--fg); font: inherit; }
 .rs-input:focus { outline: 2px solid var(--fg); outline-offset: 2px; border-color: var(--fg); }
 .rs-arrow { color: var(--fg-muted); }
 </style>
