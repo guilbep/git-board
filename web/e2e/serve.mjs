@@ -6,14 +6,16 @@
 // so nothing leaves this machine. Playwright's webServer runs this; it
 // lives until killed. E2E_SKIP_BUILD=1 reuses web/dist and the binary.
 import { execFileSync, spawn } from 'node:child_process';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
 const root = resolve(import.meta.dirname, '../..');
 const port = process.env.E2E_PORT ?? '18321';
+// E2E_DIR: the tests read the file there (playwright.config.ts sets it)
 const work = process.env.E2E_DIR ?? mkdtempSync(join(tmpdir(), 'git-board-e2e-'));
+rmSync(work, { recursive: true, force: true });
 const bin = join(root, 'web/e2e/.bin/git-board');
 
 // the fake GitHub: GET /repos/<owner>/<repo> is the repository, as named
@@ -46,7 +48,8 @@ if (!process.env.E2E_SKIP_BUILD) {
 }
 
 const repo = join(work, 'repo');
-sh('mkdir', ['-p', repo, env.HOME], work);
+mkdirSync(repo, { recursive: true });
+mkdirSync(env.HOME, { recursive: true });
 sh('git', ['init', '-q', '-b', 'main'], repo);
 sh('git', ['config', 'commit.gpgsign', 'false'], repo); // signed commits break go-git reads
 sh('git', ['remote', 'add', 'origin', 'git@github.com:o/r.git'], repo);
@@ -64,6 +67,34 @@ options = ["p0", "p1", "p2", "p3"]
 single = true
 numeric = true
 options = ["1", "2", "4", "8"]
+
+# the kinds are flat: plain labels, no [fields.kind]
+[branches.kinds]
+bug = "fix"
+feat = "feat"
+
+# what the forms don't show, and must keep
+[cycle]
+ready = "ready"
+test-files = ["*_test.go"]
+criteria = ["it works"]
+plans-in-pr = false
+
+[release]
+environments = ["dev", "prod"]
+follow = ""
+binaries = ["./cmd/x"]
+platforms = ["linux/amd64"]
+build = "make dist"
+
+[repos]
+list = ["o/r"]
+assignees = "labels"
+
+[[sprints.list]]
+slug = "s1"
+title = "Sprint 1"
+start = 2026-10-05
 `,
 );
 sh('git', ['add', '.'], repo);

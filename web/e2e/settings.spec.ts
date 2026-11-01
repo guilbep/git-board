@@ -2,6 +2,7 @@
 // (no [forges] table): the model once answered "forges": null, which broke
 // the Fields page, and the Forge fields page said "No forge declared".
 import { expect, test, type Page } from '@playwright/test';
+import { boardFile } from './board';
 
 // errors collects the page's uncaught errors: a page that throws is broken
 // even when it shows something
@@ -29,6 +30,8 @@ test('Sync is in the project file group, with each forge’s fields a link away'
   await expect(nav.locator('.set-group').first().locator('+ a')).toContainText('Sync');
   await page.getByRole('link', { name: 'its fields' }).click();
   await expect(page).toHaveURL(/#\/settings\/forge-fields\/github$/);
+  await expect(page.getByRole('heading', { name: 'github · github · o/r' })).toBeVisible();
+  await expect(page).toHaveURL(/#\/settings\/forge-fields\/github$/); // the Fields tab, mounted beside, leaves the address be
   expect(errs).toEqual([]);
 });
 
@@ -55,5 +58,21 @@ test('Forge fields shows the forge found in the remotes, and a save writes its t
   expect(model.forges[0].discovered).toBeFalsy();
   expect(model.forges[0].fields?.prio?.to).toBe(other);
   expect(model.error ?? '').toBe('');
+  expect(errs).toEqual([]);
+});
+
+test('Forge fields saves a Project column, and the default again removes the override', async ({ page }) => {
+  const errs = errors(page);
+  await page.goto('/#/settings/forge-fields/github');
+  await page.getByLabel('est lives in').selectOption('project');
+  await expect(page.getByLabel('Project field for est')).toBeVisible(); // the draft's target shows its details
+  await page.getByRole('button', { name: /^Save/ }).click();
+  await expect(page.getByRole('button', { name: 'Discard changes' })).toHaveCount(0);
+  expect(boardFile()).toMatch(/est = \{ to = "project", field = "Est" \}/);
+
+  await page.getByLabel('est lives in').selectOption('label');
+  await page.getByRole('button', { name: /^Save/ }).click();
+  await expect(page.getByRole('button', { name: 'Discard changes' })).toHaveCount(0);
+  expect(boardFile()).not.toMatch(/^est = /m);
   expect(errs).toEqual([]);
 });
