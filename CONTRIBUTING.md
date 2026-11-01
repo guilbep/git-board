@@ -28,6 +28,7 @@ make test    # go test ./...
 make vet     # go vet ./...
 make fmt     # gofmt -l . (lists files needing formatting; run gofmt -w to fix)
 make web-check # the web app's typecheck and tests
+make web-e2e # the browser tests (web/e2e, Playwright) on this checkout's binary and a throwaway repo; first run: cd web && npx playwright install chromium
 make web-lint  # the EPFL adherence linter on web/src, reporting only (EPFL_SKILL=../epfl-design-skill); its count is in docs/prd/issue-head-m2-plan.md
 make ci      # the web checks and build, then everything above: what CI runs
 make install # the web app built, then go install the git-board binary
@@ -41,6 +42,13 @@ Run `make ci` once a change is done, before it's pushed or landed: CI runs
 (`npm ci`) only when `web/package-lock.json` is newer than `web/node_modules`.
 While working, the package's own tests are enough
 (`go test ./internal/server/ -run TestName`).
+
+A page's regression gets an e2e test in `web/e2e/` (we favor them over unit
+tests for what the browser shows). `web/e2e/serve.mjs` builds the web app and
+the binary, makes a repository with a `.git-board.toml` and a GitHub origin, and
+serves it with a fake GitHub on the port after `E2E_PORT` (18321): nothing
+leaves the machine. `make web-e2e` is not part of `make ci` yet: CI would need the
+browser installed.
 
 The `web/` frontend (Quasar/Vue) has its own toolchain: `make web-dev` /
 `make web-build`, or `cd web && npm run dev`/`build`/`typecheck` directly.

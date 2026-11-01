@@ -1,8 +1,8 @@
-.PHONY: help build test lint fmt vet licences ci install install-latest web-dev web-check web-lint web-build dist docs docs-serve clean
+.PHONY: help build test web-e2e lint fmt vet licences ci install install-latest web-dev web-check web-lint web-build dist docs docs-serve clean
 
 # The public targets, each with its ## line: a bare make prints them.
 help: ## List the make targets
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-16s\033[0m %s\n", $$1, $$2}'
+	@grep -E '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-16s\033[0m %s\n", $$1, $$2}'
 
 build: ## Build every package
 	go build ./...
@@ -64,6 +64,11 @@ EPFL_SKILL ?= ../epfl-design-skill
 web-lint: ## Report the EPFL adherence linter's problems in web/src (needs EPFL_SKILL)
 	@test -f $(EPFL_SKILL)/adherence/.stylelintrc.json || (echo "web-lint: no $(EPFL_SKILL)/adherence/.stylelintrc.json; clone EPFL-ENAC/epfl-design-skill there or set EPFL_SKILL"; exit 1)
 	-npx --yes --package=stylelint@16 --package=postcss-html -- stylelint "web/src/**/*.{css,vue}" --ignore-pattern "web/src/css/tokens/**" --config $(EPFL_SKILL)/adherence/.stylelintrc.json
+
+# The browser tests: web/e2e/serve.mjs builds the web app and the binary,
+# then serves a throwaway repository (CONTRIBUTING.md, Workflow).
+web-e2e: web/node_modules ## Run the browser tests (Playwright, web/e2e)
+	cd web && npx playwright test
 
 web-build: web/node_modules ## Build the web app into web/dist
 	cd web && npm run build
