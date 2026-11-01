@@ -51,20 +51,11 @@
               <tr class="sy-sub">
                 <td><span class="sy-kind">GitHub Project</span></td>
                 <td class="sy-wrap">
-                  <template v-if="st.project.project && !editingProject">
-                    {{ projectName }}<button type="button" class="gb-linkbtn sy-small" :disabled="projectBusy || running" @click="changeProject">Change</button>
+                  <template v-if="st.project.project">
+                    {{ projectName }}<button v-if="!editingProject" type="button" class="gb-linkbtn sy-small" :disabled="projectBusy || running" @click="changeProject">Change</button>
                     <div v-if="st.project.last?.title" class="sy-note">{{ st.project.last.title }}</div>
                   </template>
-                  <form v-else class="sy-project" @submit.prevent="saveProject">
-                    <label for="sy-project">Project number</label>
-                    <input id="sy-project" v-model="projectInput" class="epfl-input" placeholder="40" autocomplete="off" data-1p-ignore />
-                    <button type="submit" class="epfl-btn epfl-btn-primary epfl-btn-sm" :disabled="!projectDraft || projectBusy || running">Save</button>
-                    <button v-if="st.project.project" type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" @click="editingProject = false">Cancel</button>
-                    <p class="sy-note sy-project-help">
-                      {{ projectHint }} In a terminal: <code>git board project configure --owner {{ projectDraft?.owner || githubOwner || '…' }} --project {{ projectDraft?.number ?? '…' }}</code>.
-                      <button type="button" class="gb-linkbtn" @click="openProjectDoc">[github-project] in the configuration guide</button>
-                    </p>
-                  </form>
+                  <span v-else-if="!st.project.project" class="sy-note">None yet</span>
                   <div v-if="projectError" class="sy-err" role="alert">{{ projectError }}</div>
                 </td>
                 <td>{{ st.project.project ? (st.project.write ? 'Read and written' : 'Read only') : '—' }}</td>
@@ -75,6 +66,21 @@
                   </template>
                 </td>
                 <td><button v-if="st.project.project" type="button" class="gb-linkbtn" :disabled="projectBusy || running" @click="confirmingRemove = projectKey">Remove</button></td>
+              </tr>
+              <!-- the number to set opens under the row: the table's columns stay put -->
+              <tr v-if="!st.project.project || editingProject" class="sy-sub sy-editrow">
+                <td colspan="6">
+                  <form class="sy-project" @submit.prevent="saveProject">
+                    <label for="sy-project">Project number</label>
+                    <input id="sy-project" v-model="projectInput" class="epfl-input" placeholder="40" autocomplete="off" data-1p-ignore />
+                    <button type="submit" class="epfl-btn epfl-btn-primary epfl-btn-sm" :disabled="!projectDraft || projectBusy || running">Save</button>
+                    <button v-if="st.project.project" type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" @click="editingProject = false">Cancel</button>
+                    <p class="sy-note sy-project-help">
+                      {{ projectHint }} In a terminal: <code>git board project configure --owner {{ projectDraft?.owner || githubOwner || '…' }} --project {{ projectDraft?.number ?? '…' }}</code>.
+                      <button type="button" class="gb-linkbtn" @click="openProjectDoc">[github-project] in the configuration guide</button>
+                    </p>
+                  </form>
+                </td>
               </tr>
               <tr v-if="confirmingRemove === projectKey" class="sy-confirm-row">
                 <td colspan="6">

@@ -346,6 +346,7 @@ onBeforeUnmount(() => stopLive());
 tr:hover .gb-work-start, tr:focus-within .gb-work-start { opacity: 1; }
 @media (hover: none) { .gb-work-start { opacity: 1; } }
 .gb-work-note { display: block; font-size: .8125rem; color: var(--fg-muted); }
+.gb-work-table td { vertical-align: top; }
 .gb-work-grouprow th { padding-top: .75rem; background: var(--bg-subtle); font-weight: 700; text-align: left; }
 .gb-work-lines li { padding: .125rem 0; font-size: .9375rem; }
 .gb-work-send { display: flex; gap: var(--space-2); margin: var(--space-3) 0; }

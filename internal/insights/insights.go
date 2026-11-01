@@ -399,7 +399,7 @@ func (r *Report) headlines() {
 		}
 		r.Headlines["cycle"] = fmt.Sprintf("Half the issues close within %s of %s, 85%% within %s (%d issues", duration(c.Median), from, duration(c.P85), len(c.Days))
 		if c.Imported > 0 {
-			r.Headlines["cycle"] += fmt.Sprintf("; %d closed as it was imported left out", c.Imported)
+			r.Headlines["cycle"] += fmt.Sprintf("; %d closed at import, left out", c.Imported)
 		}
 		r.Headlines["cycle"] += ")."
 	} else {

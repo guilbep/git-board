@@ -34,7 +34,7 @@
           title="Move all to…"
           @change="moveAll(bucket, $event)"
         >
-          <option value="" selected disabled>⋯</option>
+          <option value="" selected disabled>Move all…</option>
           <option v-for="b in buckets.filter((x) => x.group !== bucket.group)" :key="b.group" :value="b.group">Move all to {{ groupLabel(b.group) }}</option>
         </select>
       </h2>
@@ -230,7 +230,7 @@ function meta(issue: Issue) {
 .column-count { margin-left: auto; color: var(--fg-muted); font-weight: var(--w-normal); font-variant-numeric: tabular-nums; }
 .column-count.is-at { padding: 0 .375rem; color: var(--warning-fg); background: var(--warning-bg); font-weight: var(--w-bold); }
 .column-count.is-over { padding: 0 .375rem; color: var(--danger-fg); background: var(--danger-bg); font-weight: var(--w-bold); }
-.column-move { width: 1.75rem; height: 1.5rem; padding: 0; border: 1px solid transparent; background: none; color: var(--fg-muted); font: inherit; font-weight: var(--w-bold); text-align: center; cursor: pointer; appearance: none; -webkit-appearance: none; }
+.column-move { width: auto; height: 1.5rem; padding: 0 .375rem; border: 1px solid transparent; background: none; color: var(--fg-muted); font: inherit; font-size: .75rem; font-weight: var(--w-bold); text-align: center; cursor: pointer; appearance: none; -webkit-appearance: none; }
 .column-move:hover, .column-move:focus-visible { border-color: var(--border-strong); color: var(--fg); }
 .cards li { position: relative; }
 .card-pick { position: absolute; top: .5rem; right: 1rem; /* clear of the lane's scrollbar */ z-index: 1; width: 1rem; height: 1rem; margin: 0; opacity: 0; accent-color: var(--primary-hover); cursor: pointer; }

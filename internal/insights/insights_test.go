@@ -109,7 +109,7 @@ func TestCycleLeavesOutIssuesClosedAtImport(t *testing.T) {
 	if len(r.Cycle.Days) != 1 || r.Cycle.Days[0] != 4 || r.Cycle.Imported != 1 {
 		t.Errorf("cycle %+v", r.Cycle)
 	}
-	if !strings.Contains(r.Headlines["cycle"], "1 closed as it was imported left out") {
+	if !strings.Contains(r.Headlines["cycle"], "1 closed at import, left out") {
 		t.Errorf("headline %q", r.Headlines["cycle"])
 	}
 }
