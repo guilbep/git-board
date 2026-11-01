@@ -100,6 +100,10 @@ func runMigrate(ctx context.Context, out io.Writer, paths []string, field string
 			return err
 		}
 		say := func(line string) { fmt.Fprintln(out, path+": "+line) }
+		persons, err := b.Persons()
+		if err != nil {
+			return err
+		}
 		open := func(f config.Forge) (forge.Forge, error) {
 			forges, err := store.OpenForges(ctx, []config.Forge{f})
 			if err != nil {
@@ -107,7 +111,7 @@ func runMigrate(ctx context.Context, out io.Writer, paths []string, field string
 			}
 			return forges[0].Forge, nil
 		}
-		_, err = migrate.Migrate(ctx, cfg, field, issues, open, say)
+		_, err = migrate.Migrate(ctx, cfg, field, issues, persons, open, say)
 		return err
 	})
 }

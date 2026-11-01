@@ -7,6 +7,21 @@ import (
 	"github.com/guilbep/git-board/core/people"
 )
 
+// Persons lists every person, as the sync reads them: a name, an email,
+// and the accounts (server, id, login) a forge write resolves through.
+func (b *Backend) Persons() ([]people.Person, error) {
+	persons, err := b.allPersons()
+	if err != nil {
+		return nil, err
+	}
+	res := make([]people.Person, 0, len(persons))
+	for _, p := range persons {
+		res = append(res, *p)
+	}
+	slices.SortFunc(res, func(x, y people.Person) int { return cmp.Compare(x.Name, y.Name) })
+	return res, nil
+}
+
 // Identities lists the persons, by name.
 func (b *Backend) Identities() ([]Person, error) {
 	persons, err := b.allPersons()

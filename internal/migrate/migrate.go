@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/guilbep/git-board/core/forge"
+	"github.com/guilbep/git-board/core/people"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/store"
 )
@@ -110,7 +111,7 @@ func Preview(cfg *config.Config, field string, issues []store.Issue) []Plan {
 		case config.TargetProject:
 			p.Note = "a sync run writes the Project column; migration takes the old labels off the forge"
 		case config.TargetAssignees:
-			p.Note = "migration sets the assignees and takes the labels off the forge"
+			p.Note = "migration sets the assignees (git-board's accounts) and takes the labels off the forge"
 		default:
 			p.Note = "a sync run writes the new home; migration takes the old labels off the forge"
 		}
@@ -119,13 +120,35 @@ func Preview(cfg *config.Config, field string, issues []store.Issue) []Plan {
 	return plans
 }
 
+// account is value's account on the forge's server: a login's, else a
+// person name's — the sync's way (core/syncer's assignee). GitLab assigns
+// by user id, so the migration resolves the same people the sync does;
+// one no person carries goes as the login alone, and the forge refuses it
+// where a login isn't enough.
+func account(persons []people.Person, server, value string) (forge.Account, bool) {
+	for _, byName := range []bool{false, true} {
+		for _, pe := range persons {
+			for _, a := range pe.Accounts {
+				if !strings.EqualFold(a.Server, server) {
+					continue
+				}
+				if (!byName && strings.EqualFold(a.Login, value)) || (byName && strings.EqualFold(pe.Name, value)) {
+					return forge.Account{ID: a.ID, Login: a.Login}, true
+				}
+			}
+		}
+	}
+	return forge.Account{}, false
+}
+
 // Migrate writes what Preview counts, through the forge adapters with
 // their token rule: per issue carrying the field, the values to the
 // target (the assignees alone, the one native slot the adapters set per
-// issue), then the field's labels off the issue. say reports each forge.
-// A forge that refuses keeps its note and the others go on; the error is
-// the first refusal, the plans carry what landed.
-func Migrate(ctx context.Context, cfg *config.Config, field string, issues []store.Issue, open func(config.Forge) (forge.Forge, error), say func(string)) ([]Plan, error) {
+// issue, resolved through the persons' accounts), then the field's labels
+// off the issue. say reports each forge. A forge that refuses keeps its
+// note and the others go on; the error is the first refusal, the plans
+// carry what landed.
+func Migrate(ctx context.Context, cfg *config.Config, field string, issues []store.Issue, persons []people.Person, open func(config.Forge) (forge.Forge, error), say func(string)) ([]Plan, error) {
 	var plans []Plan
 	var firstErr error
 	for _, f := range cfg.Forges {
@@ -147,35 +170,47 @@ func Migrate(ctx context.Context, cfg *config.Config, field string, issues []sto
 			}
 			continue
 		}
-		labels := 0
+		labels, moved := 0, 0
+		var ferr error
 		for _, st := range s {
+			ok := true
 			if target == config.TargetAssignees {
-				accounts := []forge.Account{}
+				accounts := make([]forge.Account, 0, len(st.values))
 				for _, v := range st.values {
-					accounts = append(accounts, forge.Account{Login: v})
+					if a, resolved := account(persons, f.Host, v); resolved {
+						accounts = append(accounts, a)
+					} else {
+						accounts = append(accounts, forge.Account{Login: v})
+					}
 				}
 				if _, err := fw.SetAssignees(ctx, st.ref, accounts); err != nil {
 					say(fmt.Sprintf("%s #%s: the assignees refused: %v", f.Name, st.ref.Number, err))
-					if firstErr == nil {
-						firstErr = err
-					}
-					continue
+					ferr, ok = err, false
 				}
 			}
 			// the labels leave the issue, wherever the values went: they
 			// are the old home's spelling, held off this forge since the
 			// mapping, and the forge keeps them defined
-			if err := fw.ChangeLabels(ctx, st.ref, nil, nsLabels(field, st.values)); err != nil {
-				say(fmt.Sprintf("%s #%s: the labels refused: %v", f.Name, st.ref.Number, err))
-				if firstErr == nil {
-					firstErr = err
+			if ok {
+				if err := fw.ChangeLabels(ctx, st.ref, nil, nsLabels(field, st.values)); err != nil {
+					say(fmt.Sprintf("%s #%s: the labels refused: %v", f.Name, st.ref.Number, err))
+					ferr, ok = err, false
 				}
-				continue
 			}
-			labels += len(st.values)
+			if ok {
+				moved++
+				labels += len(st.values)
+			}
 		}
 		p.Labels = labels
-		p.Note = fmt.Sprintf("%d issues moved to %s, %d labels off the issues", len(s), target, labels)
+		switch {
+		case ferr == nil:
+			p.Note = fmt.Sprintf("%d issues moved to %s, %d labels off the issues", len(s), target, labels)
+		case moved == 0:
+			p.Note = fmt.Sprintf("nothing moved: %v", ferr)
+		default:
+			p.Note = fmt.Sprintf("%d of %d issues moved to %s; the rest refused: %v", moved, len(s), target, ferr)
+		}
 		say(fmt.Sprintf("%s (%s): %s", f.Name, f.Project, p.Note))
 		plans = append(plans, p)
 	}

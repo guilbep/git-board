@@ -32,6 +32,11 @@ func (s *apiServer) migrateField(w http.ResponseWriter, r *http.Request, run boo
 		return
 	}
 	say := func(string) {} // ponytail: the run's lines, streamed when there is a channel for them
+	persons, err := s.b.Persons()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
 	open := func(f config.Forge) (forge.Forge, error) {
 		forges, err := store.OpenForges(r.Context(), []config.Forge{f})
 		if err != nil {
@@ -39,7 +44,7 @@ func (s *apiServer) migrateField(w http.ResponseWriter, r *http.Request, run boo
 		}
 		return forges[0].Forge, nil
 	}
-	plans, err := migrate.Migrate(r.Context(), cfg, field, issues, open, say)
+	plans, err := migrate.Migrate(r.Context(), cfg, field, issues, persons, open, say)
 	body := map[string]any{"plans": plans}
 	if err != nil {
 		body["error"] = err.Error()
