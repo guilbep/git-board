@@ -460,10 +460,12 @@ func checkDescriptions(fields map[string]Field) error {
 var ProjectFields = []string{"status", "prio", "mod", "est", "sprint", "moscow", "milestone"}
 
 // Held says whether the forges' sync keeps a label off the forge named by
-// key (syncer.Options Held), each fact having one home: on GitHub, with a
-// Project, the fields the Project holds; on every forge, the fields naming
-// issues (parent:, blocked-by:…), as no forge holds them as labels, and
-// the milestone, a forge's own.
+// key (syncer.Options Held): a label is held when its field's home on
+// that forge (FieldTarget) is not a label — the Project, the assignees,
+// the milestone, the due date, nowhere. The milestone is the forge's own,
+// never ours; an issue reference (parent:) is held where its field says
+// so, as everywhere the field maps to sub-issues or nothing. A label
+// without a namespace is never held.
 // ponytail: every GitHub repository of the board, not the Project's alone:
 // one Project per board.
 func (c *Config) Held(key, label string) bool {
@@ -472,10 +474,15 @@ func (c *Config) Held(key, label string) bool {
 		return false
 	}
 	field = strings.ToLower(field) // GitHub's label names ignore case
-	if field == "milestone" || c.TypeOf(field, nil) == TypeIssue {
+	if field == "milestone" {
 		return true
 	}
-	return c.GithubProject.Number != 0 && strings.HasPrefix(strings.ToLower(key), "github.com/") && slices.Contains(ProjectFields, field)
+	f, _ := c.forgeOf(key)
+	switch c.FieldTarget(f, field) {
+	case TargetLabel, TargetScopedLabel:
+		return false
+	}
+	return true
 }
 
 // FlatKinds tells the kinds are plain labels, [branches] kinds without

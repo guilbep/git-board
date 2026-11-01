@@ -246,10 +246,14 @@ func TestBuildPlanIsPureNoMutationOfInputs(t *testing.T) {
 // bridge pull reads the Project the way bridge sync does: option aliases,
 // any number for a numeric field, sprints outside the list by their title.
 func TestBuildPlanUsesTheSyncMapping(t *testing.T) {
-	cfg := &config.Config{Fields: map[string]config.Field{
-		"status": {Single: true, Options: []string{"qa"}, Project: map[string]string{"qa": "QA Validation"}},
-		"est":    {Single: true, Options: []string{"1", "2"}, Numeric: true},
-	}}
+	cfg := &config.Config{
+		Fields: map[string]config.Field{
+			"status": {Single: true, Options: []string{"qa"}, Project: map[string]string{"qa": "QA Validation"}},
+			"est":    {Single: true, Options: []string{"1", "2"}, Numeric: true},
+		},
+		// the pull runs against the configured Project: these fields live there
+		GithubProject: config.GithubProject{Owner: "o", Number: 1},
+	}
 	est := 3.5
 	items := []ghbridge.Item{{Status: "QA Validation", EstHours: &est, Sprint: &ghbridge.Sprint{Title: "Hypercare"},
 		Content: ghbridge.Content{Number: 7, Type: "Issue", URL: bug("b7", 7).GithubURL}}}
@@ -328,5 +332,38 @@ func TestBuildPlanCategoryKeepsALabelGitHubHas(t *testing.T) {
 	change := changeFor(t, ghbridge.BuildPlan(items, []store.Issue{bug("bug2605", 2605, "FEAT")}, mustLoadConfig(t)), 2605)
 	if slices.Contains(change.Removed, "FEAT") {
 		t.Errorf("Removed = %v: FEAT is GitHub's feat", change.Removed)
+	}
+}
+
+// A field the mappings send to the Project syncs there by the mapping's
+// column and value names, extractor or no: risk is nobody's known field,
+// the item's raw value comes as gh lists it, by column name.
+func TestMappingSendsAnyFieldToTheProject(t *testing.T) {
+	t.Parallel()
+	cfg := &config.Config{
+		Fields: map[string]config.Field{
+			"risk": {Single: true, Options: []string{"normal", "structural"}},
+		},
+		Forges: []config.Forge{{Name: "gh", Kind: "github", Host: "github.com",
+			Fields: map[string]config.FieldMapping{
+				"risk": {To: "project", Field: "Risk", Values: map[string]string{"structural": "Structural"}},
+			}}},
+	}
+	items := []ghbridge.Item{{Extra: map[string]string{"Risk": "Structural"},
+		Content: ghbridge.Content{Number: 9, Type: "Issue", URL: bug("b9", 9).GithubURL}}}
+
+	change := changeFor(t, ghbridge.BuildPlan(items, []store.Issue{bug("b9", 9)}, cfg), 9)
+	if !slices.Contains(change.Added, "risk:structural") {
+		t.Errorf("added = %v, want risk:structural — the Project's Structural read back", change.Added)
+	}
+	// and the other way: git-board's value written by the mapping's names.
+	// The Project still reads Normal, the base agrees, the issue moved to
+	// structural: the edit takes the mapping's rename and option id.
+	plan := ghbridge.BuildSyncPlan([]ghbridge.Item{{Extra: map[string]string{"Risk": "Normal"},
+		Content: ghbridge.Content{Number: 9, Type: "Issue", URL: bug("b9", 9).GithubURL}}},
+		[]store.Issue{bug("b9", 9, "risk:structural")}, map[string]map[string]string{"b9": {"risk": "normal"}}, ghbridge.ProjectMeta{ID: "P",
+			Fields: map[string]ghbridge.ProjectField{"Risk": {ID: "F-risk", Options: map[string]string{"Structural": "o-structural", "Normal": "o-normal"}}}}, cfg)
+	if len(plan.Edits) != 1 || plan.Edits[0].Kind != ghbridge.EditOption || plan.Edits[0].Arg != "o-structural" {
+		t.Errorf("edits = %+v, want risk:normal → Structural", plan.Edits)
 	}
 }

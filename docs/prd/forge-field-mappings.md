@@ -140,9 +140,9 @@ One line under the summary: **On GitHub: Project › Status · On GitLab: scoped
 
 Each ships on its own.
 
-1. **Labels page grouping** — every namespace under its field, declared or not. No config change; answers the stray question.
-2. **Mapping config and labels only** — `[forges.<name>.fields]`, `to = "label"` with `as`, `values`, field `aliases`, validation; the old `project` key read as the new form.
-3. **Native targets on GitHub** — `project` (any field), `assignees`, `milestone`, `sub-issues`, plus closing on the last status.
+1. **Labels page grouping** — every namespace under its field, declared or not. No config change; answers the stray question. *(done)*
+2. **Mapping config and labels only** — `[forges.<name>.fields]`, `to = "label"` with `as`, `values`, field `aliases`, validation; the old `project` key read as the new form. *(done)*
+3. **Native targets on GitHub** — the keystone: the forges' sync holds a label off a forge when its field's home there is not a label (config.Held reads the mappings), and the GitHub Project sync takes its fields from the config — any field can be a `project` target, by the mapping's column and value names (Item keeps the raw values gh lists by column name). Assignees already flow through the syncer's assignee sync once the labels are held; the closing rule holds wherever the status field lives, since `git board close` sets the last option and the issue state together. **Deferred**: `milestone` and `sub-issues` as write targets in the syncer (the forge interface has no SetMilestone/SetSubIssue yet) — the labels stay held off the forge meanwhile, nothing is lost, and the PRD's acceptance criteria don't depend on them. *(core done)*
 4. **Migration preview** and `git board sync --migrate`; switch the person and issue defaults.
 5. **GitLab targets** — scoped labels, milestone, due date, and the paid-tier ones the EPFL instance turns out to have.
 6. **Settings › Forges Fields table** and the line in the field editor.

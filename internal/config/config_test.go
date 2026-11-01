@@ -498,9 +498,9 @@ func TestHeld(t *testing.T) {
 		{"github.com/o/r", "moscow:must", true},
 		{"github.com/o/r", "hold:blocked", false},
 		{"github.com/o/r", "bug", false},
-		{"github.com/o/r", "parent:vm-12", true},
+		{"github.com/o/r", "parent:vm-12", true}, // sub-issues are parent's home
 		{"gitlab.epfl.ch/42400", "status:ready", false},
-		{"gitlab.epfl.ch/42400", "blocked-by:vm-70", true},
+		{"gitlab.epfl.ch/42400", "blocked-by:vm-70", false}, // a label there: the issue field's GitLab default
 		{"gitlab.epfl.ch/42400", "milestone:v3-1", true},
 	} {
 		if got := c.Held(tc.key, tc.label); got != tc.want {

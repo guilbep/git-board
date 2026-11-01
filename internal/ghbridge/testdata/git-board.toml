@@ -17,6 +17,12 @@ numeric = true
 [fields.assignee]
 single = false
 
+# the Project the fixtures' items come from: the fields it always synced
+# live there, as the mappings read the old default
+[github-project]
+owner = "EPFL-ENAC"
+number = 1
+
 [sprints]
 length_days = 14
 start_weekday = "monday"

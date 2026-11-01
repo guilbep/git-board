@@ -47,15 +47,20 @@ type FieldMapping struct {
 }
 
 // FieldTarget is where field lives on the forge: its mapping's `to`, else
-// the type's default (Default), else the old [fields.X] project map's
-// reading — a GitHub field with renames there lived in the Project
-// already, and keeps doing so until the mapping is written.
+// the old homes the file already implies — a GitHub field with a project
+// map lived in the Project, and with [github-project] configured the
+// fields it always synced still do — else the type's default (DefaultTarget).
 func (c *Config) FieldTarget(f Forge, field string) string {
 	if m, ok := f.Fields[field]; ok && m.To != "" {
 		return m.To
 	}
 	if f.Kind == "github" {
-		if pf, ok := c.Fields[field]; ok && len(pf.Project) > 0 {
+		if len(c.Fields[field].Project) > 0 {
+			return TargetProject
+		}
+		// [github-project] configured: the fields it always synced live
+		// there, declared or not — today's behavior, kept
+		if c.GithubProject.Number != 0 && slices.Contains(ProjectFields, field) {
 			return TargetProject
 		}
 	}
@@ -117,14 +122,32 @@ func (c *Config) FieldLabel(f Forge, field, value string) string {
 }
 
 // forgeOf is the forge a sync key names ("github.com/o/r"): its host
-// starts the key.
+// starts the key. No table for the host: a synthetic one, the kind from
+// the host's first label — the type defaults hold for a project the file
+// never named, as for one it did.
 func (c *Config) forgeOf(key string) (Forge, bool) {
 	for _, f := range c.Forges {
 		if strings.HasPrefix(strings.ToLower(key), strings.ToLower(f.Host)+"/") {
 			return f, true
 		}
 	}
-	return Forge{}, false
+	kind := "github"
+	if !strings.HasPrefix(strings.ToLower(key), "github.com/") {
+		kind = "gitlab"
+	}
+	return Forge{Kind: kind, Host: strings.SplitN(key, "/", 2)[0]}, true
+}
+
+// GitHubForge is the config's GitHub forge: the first declared, else a
+// synthetic one for github.com. The Project sync and the type defaults
+// name the kind, not the table.
+func (c *Config) GitHubForge() Forge {
+	for _, f := range c.Forges {
+		if f.Kind == "github" {
+			return f
+		}
+	}
+	return Forge{Name: "gh", Kind: "github", Host: "github.com"}
 }
 
 // checkFieldMappings refuses a mapping the field's type or the forge
