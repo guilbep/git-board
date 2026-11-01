@@ -12,6 +12,7 @@ export interface ForgeModel {
   project: string;
   host: string;
   sync: boolean;
+  discovered?: boolean; // found in the git remotes, no table yet
   fields?: Record<string, ForgeMapping> | null;
 }
 

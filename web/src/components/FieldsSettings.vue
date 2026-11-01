@@ -549,7 +549,7 @@ function detailsSummary(f: FieldRow): string {
   if (f.colors.length) parts.push(`${f.colors.length} color${f.colors.length === 1 ? '' : 's'}`);
   if (f.descriptions.length) parts.push(`${f.descriptions.length} description${f.descriptions.length === 1 ? '' : 's'}`);
   if (f.project.length) parts.push(`${f.project.length} GitHub name${f.project.length === 1 ? '' : 's'}`);
-  return parts.length ? parts.join(' · ') : 'colors, descriptions, GitHub Project names';
+  return parts.length ? parts.join(' · ') : 'colors, descriptions, old names';
 }
 
 // the field at the address: #/settings/fields/<name>, none is the first

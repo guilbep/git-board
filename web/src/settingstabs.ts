@@ -2,12 +2,14 @@
 // one this list doesn't know, is the Overview. Pure, no "@/" imports: node
 // runs settingstabs.test.ts on it.
 
-// the Overview first: what git-board is and where things stand; then where
-// your issues go, one Sync; the project file, a tab per section, the raw
-// file last under Advanced; the appearance, which few change, last under You
+// the Overview first, then the tabs by where they are kept: the project
+// file (.git-board.toml) first, the Sync with it, for the forges and the
+// GitHub Project are its tables, the raw file last; then what lives
+// elsewhere, each saying where: the numbers in git, the worktrees in
+// wtx.toml, you in git config and this browser
 export const settingsTabs = [
   { id: 'overview', label: 'Overview' },
-  { id: 'sync', label: 'Sync', via: 'git, forges, Project' },
+  { id: 'sync', label: 'Sync', group: 'The project file', via: 'forges, Project' },
   { id: 'forge-fields', label: 'Forge fields', group: 'The project file', via: 'where each field lives' },
   { id: 'fields', label: 'Fields', group: 'The project file' },
   { id: 'labels', label: 'Labels', group: 'The project file' },
@@ -19,10 +21,10 @@ export const settingsTabs = [
   { id: 'release', label: 'Release', group: 'The project file' },
   { id: 'repos', label: 'Repos', group: 'The project file' },
   { id: 'attachments', label: 'Attachments', group: 'The project file' },
-  { id: 'numbers', label: 'Numbers', group: 'The project file' },
-  { id: 'worktrees', label: 'Worktrees', group: 'The project file' },
   { id: 'advanced', label: 'Advanced', group: 'The project file', via: 'the file itself' },
-  { id: 'you', label: 'You' },
+  { id: 'numbers', label: 'Numbers', group: 'Kept elsewhere', via: 'refs/board/seq' },
+  { id: 'worktrees', label: 'Worktrees', group: 'Kept elsewhere', via: 'wtx.toml' },
+  { id: 'you', label: 'You', group: 'Kept elsewhere', via: 'git config, this browser' },
 ] as const;
 
 export type SettingsTab = (typeof settingsTabs)[number]['id'];

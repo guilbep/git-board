@@ -8,14 +8,17 @@
      as it stands. -->
 <template>
   <div class="set-panel ff">
-    <p class="ff-crumb"><router-link to="/settings/sync">Forges</router-link> › {{ forge?.name ?? '…' }}</p>
+    <p class="ff-crumb"><router-link to="/settings/sync">Sync</router-link> › {{ forge?.name ?? '…' }}</p>
     <h2 class="h4">{{ forge ? `${forge.name} · ${forge.kind} · ${forge.project}` : 'Forge fields' }}</h2>
     <p class="ff-lead">
       Where each field is written and read on {{ forge?.kind === 'gitlab' ? 'GitLab' : 'GitHub' }}. A field left on
       <b>default</b> follows its type; only overrides go into <code>[forges.{{ forgeName }}.fields]</code>.
     </p>
 
-    <p v-if="!forge" class="ff-muted">No forge declared: add one in <router-link to="/settings/sync">Forges</router-link>.</p>
+    <p v-if="forge?.discovered" class="ff-muted ff-found">
+      {{ forge.name }} is found in the git remotes, it has no table yet: saving writes its <code>[forges.{{ forge.name }}]</code>, and every found forge's, to <code>.git-board.toml</code>.
+    </p>
+    <p v-if="!forge" class="ff-muted">No forge: add one in <router-link to="/settings/sync">Sync</router-link>, or a git remote on GitHub or GitLab.</p>
     <template v-else>
       <div class="ff-work">
         <div class="ff-main">

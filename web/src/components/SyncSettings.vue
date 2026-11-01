@@ -19,6 +19,10 @@
           One sync moves them all: a git pull from {{ remote }}, the forges, the Project's fields, then a git push. <code>git board sync</code> runs the same.
           Each row has its own actions, for its side alone: their tooltips name the command that does the same.
         </p>
+        <p class="sy-lead">
+          Kept in <code>.git-board.toml</code>: the forges (<code>[forges.&lt;name&gt;]</code>, where each field lives on them with it) and the GitHub Project (<code>[github-project]</code>).
+          Elsewhere: {{ remote }} is a git remote, a forge found in the remotes has no table until one is written, the tokens are in git's credential helper, the checks in <code>.git</code>.
+        </p>
       </div>
       <div class="sy-actions">
         <button type="button" class="epfl-btn epfl-btn-secondary" @click="guideOpen = true">How forges work</button>
@@ -91,7 +95,10 @@
                 <td><b>{{ row.f.name }}</b> <span class="sy-kind">{{ kindName(row.f.target) }}</span></td>
                 <td class="sy-wrap">
                   <a :href="row.f.where" target="_blank" rel="noopener noreferrer">{{ row.f.project }}</a>
-                  <div class="sy-note">{{ row.f.discovered ? 'found in the remotes' : 'in .git-board.toml' }}</div>
+                  <div class="sy-note">
+                    {{ row.f.discovered ? 'found in the remotes' : 'in .git-board.toml' }} ·
+                    <router-link :to="`/settings/forge-fields/${row.f.name}`">its fields</router-link>
+                  </div>
                 </td>
                 <td>
                   <span v-if="row.f.discovered" title="A forge found in the remotes syncs: give the forges tables in .git-board.toml to leave one out">On</span>
