@@ -90,7 +90,7 @@
                 </li>
               </ol>
               <p class="fl-addrow">
-                <ConfigPreset label="+ Add a field" :presets="fieldPresets" @pick="addPreset" />
+                <ConfigPreset label="+ Add a field" :presets="presetsShown" @pick="addPreset" />
                 <button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" @click="addBlank">Blank field</button>
                 <span class="gb-grow" />
                 <router-link class="gb-linkbtn" to="/settings/advanced">Edit the file instead</router-link>
@@ -877,9 +877,20 @@ function addBlank() {
   openNew(f);
 }
 
+// a preset the list already holds says so, and opens that field instead
+const presetsShown = computed(() =>
+  fieldPresets.map((p) => (fields.value.some((f) => f.name === p.value.name) ? { ...p, label: `${p.label} · already declared`, why: 'opens it' } : p)),
+);
+
 function addPreset(i: number) {
   const p = fieldPresets[i];
   if (!p) return;
+  const have = fields.value.find((f) => f.name === p.value.name);
+  if (have) {
+    selectedKey.value = have.key;
+    void router.push({ path: `/settings/fields/${have.name}` });
+    return;
+  }
   const taken = fields.value.map((f) => f.name);
   const pf = p.value.field;
   const f: FieldRow = {

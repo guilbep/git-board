@@ -25,30 +25,36 @@
         Tell git-board your forge login: without it, no role and no field can name you. Start the server with <code>--me your-login</code>, or set <code>GIT_BOARD_ME</code>.
       </p>
       <p v-else-if="error" class="gb-error">{{ error.message }}</p>
-      <p v-if="agentNote" class="gb-hint" role="status">{{ agentNote }}</p>
+      <p v-if="agentNote && !noteFor" class="gb-hint" role="status">{{ agentNote }}</p>
 
       <template v-if="data">
         <section class="gb-work-group" aria-labelledby="needs-h">
           <h2 id="needs-h" class="h5">Needs you <span class="gb-work-n">{{ data.needs.length }}</span></h2>
           <div v-if="data.needs.length" class="gb-table-wrap">
+            <!-- grouped by what they wait for: the step and its gate, five a group until asked -->
             <table class="gb-table gb-work-table">
-              <thead><tr><th>Issue</th><th>Step</th><th>Waits for</th><th>Since</th><th><span class="visually-hidden">Action</span></th></tr></thead>
-              <tbody>
-                <tr v-for="r in data.needs" :key="r.issue.id">
+              <thead><tr><th>Issue</th><th>Since</th><th><span class="visually-hidden">Action</span></th></tr></thead>
+              <tbody v-for="g in needGroups" :key="g.key">
+                <tr class="gb-work-grouprow">
+                  <th colspan="3" scope="colgroup"><span class="gb-work-step">{{ g.step }}</span> · {{ g.waits }} <span class="gb-work-n">{{ g.rows.length }}</span></th>
+                </tr>
+                <tr v-for="r in shownRows(g)" :key="r.issue.id">
                   <td>
                     <router-link :to="`/issues/${r.issue.id}`"><span v-if="numberOf(r.issue)" class="gb-work-num">{{ numberOf(r.issue) }}</span> {{ r.issue.shown_title }}</router-link>
                     <button v-if="canStart(r)" type="button" class="gb-linkbtn gb-work-start" :disabled="busy" @click="start(r.issue.id)">{{ starting === r.issue.id ? 'Starting…' : 'Start an agent' }}</button>
+                    <span v-if="noteFor === r.issue.id && agentNote" class="gb-work-note" role="status">{{ agentNote }}</span>
                   </td>
-                  <td class="gb-work-step">{{ stepLabel(r.step, r.name) }}</td>
-                  <td>{{ waitsFor(r) }}</td>
                   <td class="gb-work-since">{{ ago(r.since) }}</td>
                   <td class="gb-work-action">
                     <template v-if="actionFor(r).kind === 'risk'">
                       <button v-for="k in ['low', 'normal', 'structural']" :key="k" type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" :disabled="busy" @click="setRisk(r, k)">{{ cap(k) }}</button>
                     </template>
                     <button v-else-if="actionFor(r).kind === 'answer'" type="button" class="epfl-btn epfl-btn-primary epfl-btn-sm" @click="answer(r)">Answer</button>
-                    <router-link v-else :to="`/issues/${r.issue.id}`" class="epfl-btn epfl-btn-secondary epfl-btn-sm">{{ label(r) }}</router-link>
+                    <router-link v-else-if="label(r) !== 'Open'" :to="`/issues/${r.issue.id}`" class="epfl-btn epfl-btn-secondary epfl-btn-sm">{{ label(r) }}</router-link>
                   </td>
+                </tr>
+                <tr v-if="g.rows.length > shownRows(g).length">
+                  <td colspan="3"><button type="button" class="gb-linkbtn" @click="opened.push(g.key)">Show {{ g.rows.length - shownRows(g).length }} more</button></td>
                 </tr>
               </tbody>
             </table>
@@ -224,11 +230,13 @@ const briefing = ref('');
 const briefText = ref('');
 const starting = ref('');
 const agentNote = ref('');
+const noteFor = ref(''); // the row an action's result shows on
 const withAgent = computed(() => new Set(data.value?.agents.map((a) => a.issue?.id)));
 const canStart = (r: WorkRow) => !!data.value?.can_start && !withAgent.value.has(r.issue.id);
 async function agent(id: string, action: 'go' | 'brief', text: string) {
   busy.value = true;
   agentNote.value = '';
+  noteFor.value = action === 'go' ? id : '';
   try {
     const r = await agentAction(id, action, text);
     agentNote.value = action === 'go' ? `Session ${r.session?.session ?? r.branch} started.` : 'Sent to the agent.';
@@ -246,6 +254,21 @@ function start(id: string) {
   starting.value = id;
   void agent(id, 'go', '');
 }
+
+// Needs you, grouped by step and what it waits for, in the server's order;
+// a group shows five rows until it is opened
+const needGroups = computed(() => {
+  const out: { key: string; step: string; waits: string; rows: WorkRow[] }[] = [];
+  for (const r of data.value?.needs ?? []) {
+    const key = `${r.step}|${waitsFor(r)}`;
+    let g = out.find((x) => x.key === key);
+    if (!g) out.push((g = { key, step: stepLabel(r.step, r.name), waits: waitsFor(r), rows: [] }));
+    g.rows.push(r);
+  }
+  return out;
+});
+const opened = ref<string[]>([]);
+const shownRows = (g: { key: string; rows: WorkRow[] }) => (opened.value.includes(g.key) ? g.rows : g.rows.slice(0, 5));
 
 // Answer: the panel, scrolled to the question
 const detailOpen = ref(false);
@@ -318,7 +341,12 @@ onBeforeUnmount(() => stopLive());
 .gb-work-session { font-size: .875rem; }
 .gb-work-brief { display: grid; flex-basis: 100%; gap: var(--space-2); justify-items: start; }
 .gb-work-brief textarea { width: 100%; }
-.gb-work-start { display: block; font-size: .8125rem; color: var(--fg-muted); }
+.gb-work-start { display: block; font-size: .8125rem; color: var(--fg-muted); opacity: 0; }
+/* Start an agent shows on the row the pointer or the focus is on, always on a touch screen */
+tr:hover .gb-work-start, tr:focus-within .gb-work-start { opacity: 1; }
+@media (hover: none) { .gb-work-start { opacity: 1; } }
+.gb-work-note { display: block; font-size: .8125rem; color: var(--fg-muted); }
+.gb-work-grouprow th { padding-top: .75rem; background: var(--bg-subtle); font-weight: 700; text-align: left; }
 .gb-work-lines li { padding: .125rem 0; font-size: .9375rem; }
 .gb-work-send { display: flex; gap: var(--space-2); margin: var(--space-3) 0; }
 .gb-work-aside p { margin: 0 0 var(--space-2); }

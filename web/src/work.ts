@@ -62,7 +62,7 @@ export function sendWords(pending: number): string {
 }
 
 export function retroWords(retro: { sprint?: string; corrections: number }): string {
-  if (!retro.sprint) return 'No current sprint: [sprints] is the retro’s clock.';
+  if (!retro.sprint) return 'No sprint is running: the retro counts from one. Set them in Settings › Sprints.';
   if (retro.corrections === 0) return 'No correction flagged this sprint.';
   return `${retro.corrections} agent correction${retro.corrections === 1 ? '' : 's'} flagged in reviews.`;
 }

@@ -61,5 +61,5 @@ test('the small words', () => {
   assert.equal(retroWords({ sprint: 's1', corrections: 5 }), '5 agent corrections flagged in reviews.');
   assert.equal(retroWords({ sprint: 's1', corrections: 1 }), '1 agent correction flagged in reviews.');
   assert.equal(retroWords({ sprint: 's1', corrections: 0 }), 'No correction flagged this sprint.');
-  assert.equal(retroWords({ corrections: 0 }), 'No current sprint: [sprints] is the retro’s clock.');
+  assert.equal(retroWords({ corrections: 0 }), 'No sprint is running: the retro counts from one. Set them in Settings › Sprints.');
 });

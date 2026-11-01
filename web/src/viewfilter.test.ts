@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { Facet } from './facets.ts';
-import { composeFilter, suggest, withFacet } from './viewfilter.ts';
+import { completeTerms, composeFilter, suggest, withFacet } from './viewfilter.ts';
 
 test('composeFilter: an older link\'s filter, the view\'s with its ticks and words', () => {
   assert.deepEqual(composeFilter('is:open', {}, ''), { filter: 'is:open', skipped: [] });
@@ -55,4 +55,10 @@ test('suggest completes the last word\'s value, from the facets\' values', () =>
   assert.deepEqual(suggest('status:ready', values), []); // done
   assert.deepEqual(suggest('travel', values), []);
   assert.deepEqual(suggest('status:ready ', values), []); // a new word: nothing yet
+});
+
+test('completeTerms leaves out a field with no value yet', () => {
+  assert.equal(completeTerms('is:open prio:'), 'is:open');
+  assert.equal(completeTerms('is:open -status: prio:p1'), 'is:open prio:p1');
+  assert.equal(completeTerms('is:open  words'), 'is:open words');
 });

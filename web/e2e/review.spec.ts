@@ -94,3 +94,24 @@ test('D-23: Labels in three parts, lint a line per field', async ({ page }) => {
   await expect(page.getByRole('heading', { name: /outside the project's labels/ })).toBeVisible();
   expect(errs).toEqual([]);
 });
+
+test('D-39: a half-typed term neither filters the board nor offers to save the view', async ({ page }) => {
+  await page.goto('/#/');
+  const box = page.getByRole('combobox', { name: 'Filter' });
+  await box.click();
+  await page.keyboard.press('End');
+  await page.keyboard.type(' prio:');
+  await page.waitForTimeout(500);
+  const bar = page.getByRole('region', { name: 'Unsaved changes to the view' });
+  await expect(bar).toHaveCount(0);
+  await page.keyboard.type('p1');
+  await expect(bar).toBeVisible();
+});
+
+test('D-42: a field preset already declared opens that field', async ({ page }) => {
+  await page.goto('/#/settings/fields/prio');
+  await page.getByRole('button', { name: '+ Add a field' }).click();
+  await page.getByRole('menuitem', { name: /status · already declared/ }).click();
+  await expect(page).toHaveURL(/\/settings\/fields\/status$/);
+  await expect(page.locator('.fl-nm', { hasText: /^status_2$|^status-2$/ })).toHaveCount(0);
+});

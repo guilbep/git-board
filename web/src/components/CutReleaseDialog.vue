@@ -53,7 +53,7 @@
       </div>
       <p id="cut-hint" class="gb-hint gb-cut-hint">{{ hint[0] }} <b v-if="hint[1]" class="gb-fg">{{ hint[1] }}</b>{{ hint[2] }}</p>
 
-      <section aria-labelledby="cut-checks">
+      <section v-if="draft.checks.length || loading || error" aria-labelledby="cut-checks">
         <div class="gb-side-head gb-cut-head">
           <h3 id="cut-checks" class="gb-section-title">Before it is cut</h3>
           <span v-if="loading" class="gb-note" role="status">Checking again…</span>

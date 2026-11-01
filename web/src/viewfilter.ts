@@ -60,3 +60,14 @@ export function composeFilter(
   if (q.trim()) terms.push(q.trim());
   return { filter: terms.join(' '), skipped };
 }
+
+// completeTerms is the filter as the board applies it while it is typed: a
+// field named with no value yet (prio:, -status:) is left out until the
+// value comes, so a half-typed term neither empties the board nor offers
+// to save the view
+export function completeTerms(filter: string): string {
+  return filter
+    .split(/\s+/)
+    .filter((t) => t && !/^-?[^\s:"]+:$/.test(t))
+    .join(' ');
+}

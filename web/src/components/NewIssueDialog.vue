@@ -31,7 +31,7 @@
             <option v-if="values[name] && !fields[name]?.options?.includes(values[name]!)" :value="values[name]">{{ values[name] }}</option>
             <option v-for="o in fields[name]?.options ?? []" :key="o" :value="o">{{ formatValue(name, o, fields) }}</option>
           </select>
-          <input autocomplete="off" data-1p-ignore data-lpignore="true" data-form-type="other" v-else :id="`new-${name}`" v-model="values[name]" class="epfl-input" :placeholder="isMulti(name) ? 'comma-separated, or @me' : ''" :list="fields[name]?.people?.length ? `new-people-${name}` : undefined" />
+          <input autocomplete="off" data-1p-ignore data-lpignore="true" data-form-type="other" v-else :id="`new-${name}`" v-model="values[name]" class="epfl-input" :type="inputType(name)" :placeholder="hint(name)" :list="fields[name]?.people?.length ? `new-people-${name}` : undefined" />
           <datalist v-if="fields[name]?.people?.length" :id="`new-people-${name}`"><option v-for="p in fields[name]!.people" :key="p" :value="p" /></datalist>
           <small v-if="from[name]" class="gb-from-view">from the view: {{ name }}:{{ from[name] }}</small>
         </div>
@@ -81,6 +81,19 @@ for (const name of props.names) {
 }
 
 const isMulti = (name: string) => (props.fields[name] ? !props.fields[name]!.single : name === 'assignee');
+// the input follows the field's type: a date picker for a date, the right
+// example for the rest (an issue is #12, a person a login or @me)
+const inputType = (name: string) => (props.fields[name]?.type === 'date' && !isMulti(name) ? 'date' : 'text');
+function hint(name: string): string {
+  const t = props.fields[name]?.type;
+  const many = isMulti(name) ? ', comma-separated' : '';
+  if (t === 'issue') return `e.g. #12${many}`;
+  if (t === 'person' || name === 'assignee') return `a login, or @me${many}`;
+  if (t === 'date') return `YYYY-MM-DD${many}`;
+  if (t === 'number') return `a number${many}`;
+  if (t === 'iteration') return `a sprint, or @current${many}`;
+  return isMulti(name) ? 'comma-separated' : '';
+}
 
 async function create(another: boolean) {
   if (!title.value.trim() || busy.value) return;

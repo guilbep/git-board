@@ -5,7 +5,7 @@
 <template>
   <AppHeader :views="viewNames" />
 
-  <main class="page">
+  <main class="gb-page page">
     <div class="page-head">
       <div class="epfl-eyebrow">Sync with the GitHub Project{{ status?.project ? ` ${status.project}` : '' }}</div>
       <h1 class="h3 page-title">{{ heading }}</h1>
@@ -147,7 +147,7 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.page { max-width: 64rem; padding: var(--space-4) var(--gutter) var(--space-5); }
+.page { max-width: 64rem; }
 
 .page-head { margin-bottom: var(--space-4); }
 .page-title { margin: 0 0 var(--space-2); }

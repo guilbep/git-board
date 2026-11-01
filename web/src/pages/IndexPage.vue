@@ -249,7 +249,7 @@ import {
   NONE, PLAIN, STATE, namespaces, parseSelection, parseSort, prefillFrom, sortIssues, type Facet,
 } from '@/facets';
 import { loadColors } from '@/colors';
-import { composeFilter, suggest, withFacet } from '@/viewfilter';
+import { completeTerms, composeFilter, suggest, withFacet } from '@/viewfilter';
 import { displayName, orderBuckets } from '@/fields';
 import AppHeader from '@/components/AppHeader.vue';
 import FilterSidebar from '@/components/FilterSidebar.vue';
@@ -310,6 +310,8 @@ const setQuery = (patch: Patch) => router.replace({ query: { ...route.query, ...
 
 const viewFilter = computed(() => view.value?.filter ?? 'is:open');
 const filter = computed(() => (typeof route.query.filter === 'string' ? route.query.filter : viewFilter.value));
+// what the board shows: the filter without a term still being typed (prio:)
+const applied = computed(() => completeTerms(filter.value));
 // the empty state's suggestion: the filter one term shorter (never the
 // filter itself)
 const broader = computed(() => filter.value.trim().split(/\s+/).slice(0, -1).join(' '));
@@ -340,7 +342,7 @@ function setFacet(key: string, values: string[]) {
 const activeFilters = computed(() => facetList.value.filter((f) => f.selected.length).length);
 const modified = computed(
   () =>
-    filter.value !== viewFilter.value ||
+    applied.value !== completeTerms(viewFilter.value) ||
     groupField.value !== (view.value?.group ?? '') ||
     Object.keys(route.query).some((k) => k !== 'view' && k !== 'issue'),
 );
@@ -515,7 +517,7 @@ function message(e: unknown): string {
 // saved one: the bar offers to save it into .git-board.toml.
 const draft = computed<ViewConfig>(() => ({
   layout: layout.value,
-  filter: filter.value,
+  filter: applied.value,
   group: groupField.value,
   sort: sortValue.value || (view.value?.sort ?? ''),
   columns: columns.value,
@@ -596,9 +598,9 @@ async function load() {
   const mine = ++latest;
   loading.value = true;
   listError.value = '';
-  loaded = filter.value;
+  loaded = applied.value;
   try {
-    const [result, fs] = await Promise.all([getIssues(filter.value, groupField.value), getFacets(filter.value), loadColors()]);
+    const [result, fs] = await Promise.all([getIssues(applied.value, groupField.value), getFacets(applied.value), loadColors()]);
     if (mine === latest) {
       buckets.value = result;
       facetList.value = fs;
@@ -618,9 +620,9 @@ watch(activeView, resetView);
 // the filter runs on the server (git-bug's full-text index for words):
 // asked once typing pauses, unless a tick or the view asked already
 let filterTimer: ReturnType<typeof setTimeout> | undefined;
-watch(filter, () => {
+watch(applied, () => {
   clearTimeout(filterTimer);
-  filterTimer = setTimeout(() => filter.value !== loaded && void load(), 300);
+  filterTimer = setTimeout(() => applied.value !== loaded && void load(), 300);
 });
 
 // An older link (?q=words&f.status=ready): its filter, in the box.

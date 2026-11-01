@@ -6,9 +6,9 @@
 <template>
   <AppHeader :views="viewNames" />
   <main class="gb-page">
-    <span v-if="repo" class="epfl-eyebrow">{{ repo }}</span>
+    <span class="epfl-eyebrow">Releases</span>
     <div class="gb-titlerow">
-      <h1 class="gb-h1">Releases</h1>
+      <h1 class="gb-h1">What was released, and where it runs</h1>
       <span v-if="meta" class="gb-meta">{{ meta }}</span>
       <div v-if="canCut" class="gb-titlerow-actions">
         <button type="button" class="epfl-btn epfl-btn-primary" :disabled="busy" @click="openDialog({ kind: 'cut' })"><GbIcon name="tag" />Cut a release</button>

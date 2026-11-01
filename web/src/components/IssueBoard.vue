@@ -197,6 +197,12 @@ function meta(issue: Issue) {
   padding-bottom: var(--space-3);
 }
 
+/* a phone: one lane a screen, the next one peeking, a swipe snaps to it */
+@media (max-width: 47.99rem) {
+  .board { grid-auto-columns: 85%; scroll-snap-type: x mandatory; }
+  .board-column { scroll-snap-align: start; }
+}
+
 @media (min-width: 48rem) {
   /* each column scrolls on its own under its title, the board as tall as
      the window under the sticky tools */

@@ -12,6 +12,8 @@
     <GbPopover v-for="f in states" :key="f.forge.url" :label="f.state.label" title="On the forges" button-class="gb-icon-btn gb-forge-btn" align="right">
       <template #button>
         <GbIcon :name="f.state.kind === 'other' ? 'external' : f.state.kind" />
+        <!-- the number beside the logo: which issue there, said once -->
+        <span v-if="f.forge.number" class="gb-fnum" aria-hidden="true">#{{ f.forge.number }}</span>
         <template v-if="f.state.badge === 'count'">
           <span v-if="f.state.n" class="gb-fcount" aria-hidden="true"><GbIcon name="arrow-up" small />{{ f.state.n }}</span>
           <span v-if="f.state.incoming" class="gb-fcount is-in" :class="{ 'is-under': f.state.n }" aria-hidden="true"><GbIcon name="arrow-down" small />{{ f.state.incoming }}</span>
@@ -80,3 +82,7 @@ const showWaiting = ref(false);
 
 const badgeIcon: Record<Exclude<ForgeBadge, 'count' | null>, 'sync' | 'cloud-off' | 'warn'> = { syncing: 'sync', unreachable: 'cloud-off', conflict: 'warn' };
 </script>
+
+<style scoped>
+.gb-fnum { margin-left: .25rem; font-size: .8125rem; font-weight: 700; }
+</style>
