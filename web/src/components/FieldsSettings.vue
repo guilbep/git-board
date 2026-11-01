@@ -39,7 +39,7 @@
         <p v-else-if="!draft.value.value" class="fs-muted">Loading…</p>
 
         <template v-else>
-          <div class="fl-work">
+          <div class="fl-work" :class="{ 'fl-work-sel': !!routeName }">
             <div class="fl-list">
               <p class="fl-listhead">
                 {{ fields.length }} field{{ fields.length === 1 ? '' : 's' }} <em>— drag a row, or Alt+↑/↓, to set the order on issues</em>
@@ -78,6 +78,7 @@
             </div>
 
             <div v-if="selected" class="fl-ed">
+              <router-link class="fl-back" to="/settings/fields">← All fields</router-link>
               <ConfigCard
                 :key="selected.key"
                 class="fs-card"
@@ -801,7 +802,15 @@ h2, p { margin: 0; }
 .fs-startrow { display: flex; align-items: center; gap: .75rem; }
 /* the work area: the list a fixed column, the editor the rest */
 .fl-work { display: grid; grid-template-columns: 17rem minmax(0, 1fr); gap: .75rem; align-items: start; }
-@container (max-width: 44rem) { .fl-work { grid-template-columns: minmax(0, 1fr); } }
+/* a phone (under ~640px): the list and the editor are separate screens —
+   the address decides which one; the editor carries the way back */
+.fl-back { display: none; align-items: center; justify-self: start; }
+@container (max-width: 40rem) {
+  .fl-work { grid-template-columns: minmax(0, 1fr); }
+  .fl-work-sel .fl-list { display: none; }
+  .fl-work:not(.fl-work-sel) .fl-ed { display: none; }
+  .fl-work-sel .fl-back { display: inline-flex; }
+}
 /* the list: one row a field, in the file's order */
 .fl-list { display: grid; gap: .5rem; min-width: 0; }
 .fl-listhead { font-size: .8125rem; color: var(--fg-muted); }

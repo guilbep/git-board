@@ -8,6 +8,7 @@
 <template>
   <AppHeader :views="viewNames" />
   <div class="gb-page set">
+    <!-- the menu: a sidebar from 60rem up, a dropdown under it -->
     <nav class="set-nav" aria-label="Settings">
       <h1 class="h3 set-title">Settings</h1>
       <template v-for="(g, gi) in groups" :key="gi">
@@ -24,6 +25,12 @@
         </router-link>
       </template>
     </nav>
+    <div class="set-menudrop">
+      <label class="set-menulabel" for="set-menu">Settings</label>
+      <select id="set-menu" class="set-menuselect" :value="tab" @change="goTab(($event.target as HTMLSelectElement).value)">
+        <option v-for="t in tabs" :key="t.id" :value="t.id">{{ t.label }}{{ dirtySections[t.id] ? ' — unsaved changes' : '' }}</option>
+      </select>
+    </div>
 
     <main class="set-main">
       <p v-if="error" class="epfl-alert epfl-alert-danger" role="alert">{{ error }}</p>
@@ -124,13 +131,13 @@
 import { themePref } from '@/theme';
 import { debounced, onLive } from '@/live';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { onBeforeRouteLeave, useRoute } from 'vue-router';
+import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router';
 import { getNumbers, getSettings, getViews, getWhole, getWorktrees, setView, type Labels, type Numbers, type Settings, type WholeStatus, type Worktrees } from '@/api/board';
 import { message } from '@/issue';
 import { classicPeek, cycleView, loadMe, me } from '@/me';
 import { viewWords } from '@/view';
 import { dirtySections, loadConfigModel } from '@/configmodel';
-import { settingsGroups, settingsTab, syncSummary } from '@/settingstabs';
+import { settingsGroups, settingsTab, settingsTabs, syncSummary } from '@/settingstabs';
 import { numberExample, numbersSummary } from '@/numbers';
 import AppHeader from '@/components/AppHeader.vue';
 import IdentityChooser from '@/components/IdentityChooser.vue';
@@ -150,8 +157,15 @@ import ViewsSettings from '@/components/ViewsSettings.vue';
 import WorktreesSettings from '@/components/WorktreesSettings.vue';
 
 const route = useRoute();
+const router = useRouter();
 const tab = computed(() => settingsTab(route.params.tab));
 const groups = settingsGroups();
+const tabs = settingsTabs;
+
+// the dropdown's move: a plain push — the leave guard asks on dirty tabs
+function goTab(id: string) {
+  if (id !== tab.value) void router.push({ path: `/settings/${id}` });
+}
 
 const settings = ref<Settings | null>(null);
 const worktrees = ref<Worktrees | null>(null);
@@ -299,15 +313,15 @@ onBeforeUnmount(offLive);
 .set-card-state { margin-top: .25rem; font-size: .9375rem; overflow-wrap: anywhere; }
 .gb-linkbtn { justify-self: start; padding: 0; border: 0; background: none; color: var(--fg); text-decoration: underline; cursor: pointer; font: inherit; }
 .set-login { color: var(--fg-muted); }
-/* phones: the menu, a few rows above the tab */
-@media (max-width: 47.99rem) {
+/* the dropdown, under 60rem (960px): the sidebar's rows don't fit, a
+   select above the page does — the options carry the unsaved marks */
+.set-menudrop { display: none; }
+@media (max-width: 59.99rem) {
   .set { flex-direction: column; align-items: stretch; gap: 1.5rem; padding: 1.25rem 1rem 2rem; }
-  .set-nav { width: auto; flex-direction: row; flex-wrap: wrap; }
-  .set-title, .set-group { flex-basis: 100%; }
-  .set-title { margin-bottom: .25rem; }
-  .set-group { margin-top: .5rem; }
-  .set-tab { padding: .5rem .75rem; }
-  .set-tab[aria-current='page'] { box-shadow: inset 0 -3px 0 var(--primary); }
-  .set-via { margin-left: 0; }
+  .set-nav { display: none; }
+  .set-menudrop { display: grid; gap: .25rem; max-width: 24rem; }
+  .set-menulabel { font-size: .75rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--fg-muted); }
+  .set-menuselect { min-height: 2.5rem; padding: 0 .625rem; border: 1px solid var(--border); background: var(--bg); color: var(--fg); font: inherit; }
+  .set-main { align-self: center; width: 100%; }
 }
 </style>
