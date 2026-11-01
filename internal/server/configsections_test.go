@@ -1,6 +1,7 @@
 package server
 
 import (
+	"encoding/json"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -512,5 +513,75 @@ func TestConfigSectionForgeFields(t *testing.T) {
 	// a bogus forge name is refused
 	if code := call(t, "PUT", ts.URL+"/api/config/section/forge-fields?base="+saved.Model.Hash, map[string]any{"forge": "my forge", "set": map[string]any{}, "remove": []string{}}, nil); code != http.StatusBadRequest {
 		t.Errorf("a spaced forge name: %d, want 400", code)
+	}
+}
+
+// With no [forges] table the model's forges are those found in the
+// remotes, never null (the Fields page reads them); a mapping saved on a
+// found one writes its table first, so the file still loads. Serial: it
+// answers for GitHub.
+func TestConfigSectionForgeFieldsOnAFoundForge(t *testing.T) {
+	storetest.GitHub(t, map[string]string{"o/r": "o/r"})
+	ts, s := forgeServer(t)
+	if err := os.WriteFile(s.cfgPath, []byte(sectionFile), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	type model struct {
+		Hash   string `json:"hash"`
+		Forges []struct {
+			Name       string `json:"name"`
+			Discovered bool   `json:"discovered"`
+		} `json:"forges"`
+	}
+	var raw map[string]json.RawMessage
+	call(t, "GET", ts.URL+"/api/config/model", nil, &raw)
+	if string(raw["forges"]) != "[]" {
+		t.Errorf("no forge: %s, want []", raw["forges"])
+	}
+
+	storetest.ForgeOrigin(t, s.b.GitDir(), "git@github.com:o/r.git")
+	var m model
+	call(t, "GET", ts.URL+"/api/config/model", nil, &m)
+	if len(m.Forges) != 1 || m.Forges[0].Name != "github" || !m.Forges[0].Discovered {
+		t.Fatalf("forges: %+v", m.Forges)
+	}
+	body := map[string]any{"forge": "github", "set": map[string]any{"status": map[string]any{"to": "label"}}, "remove": []string{}}
+	if code, msg := callError(t, "PUT", ts.URL+"/api/config/section/forge-fields?base="+m.Hash, body); code != http.StatusOK {
+		t.Fatalf("save: %d %s", code, msg)
+	}
+	text, _ := os.ReadFile(s.cfgPath)
+	for _, want := range []string{"[forges.github]\nkind = \"github\"\nproject = \"o/r\"\nsync = true\n", `status = { to = "label" }`} {
+		if !strings.Contains(string(text), want) {
+			t.Errorf("the file lacks %q:\n%s", want, text)
+		}
+	}
+	m = model{} // omitempty: a stale discovered would stay
+	call(t, "GET", ts.URL+"/api/config/model", nil, &m)
+	if len(m.Forges) != 1 || m.Forges[0].Discovered {
+		t.Errorf("after the save: %+v", m.Forges)
+	}
+	if code, _ := callError(t, "PUT", ts.URL+"/api/config/section/forge-fields?base="+m.Hash, map[string]any{"forge": "nope", "set": map[string]any{}, "remove": []string{}}); code != http.StatusBadRequest {
+		t.Errorf("an unknown forge: %d, want 400", code)
+	}
+}
+
+// The model never answers null at its top: the pages read every key as
+// it is (view_order.flatMap, forges.find), a file without views or forges
+// included.
+func TestConfigModelHasNoNulls(t *testing.T) {
+	t.Parallel()
+	for name, text := range map[string]string{"empty": "", "fields only": "[fields.prio]\noptions = [\"p0\"]\n"} {
+		ts, s := newIssueServer(t)
+		s.cfgPath = filepath.Join(t.TempDir(), ".git-board.toml")
+		if err := os.WriteFile(s.cfgPath, []byte(text), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		var raw map[string]json.RawMessage
+		call(t, "GET", ts.URL+"/api/config/model", nil, &raw)
+		for k, v := range raw {
+			if string(v) == "null" {
+				t.Errorf("%s: %s is null", name, k)
+			}
+		}
 	}
 }

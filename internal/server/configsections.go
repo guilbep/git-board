@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"regexp"
 	"sort"
+	"strings"
 
 	"github.com/guilbep/git-board/internal/config"
 )
@@ -49,7 +50,7 @@ type configModel struct {
 	Uploads config.Uploads `json:"uploads"`
 	Release config.Release `json:"release"`
 	// Forges are the [forges.<name>] tables, their field mappings with
-	// them: the Forges page's Fields table resolves where each field
+	// them, or with none the forges found in the remotes (Discovered): the Forges page's Fields table resolves where each field
 	// lives (config.FieldTarget's rules, mirrored client-side).
 	Forges        []config.Forge       `json:"forges"`
 	GithubProject config.GithubProject `json:"github_project"`
@@ -65,6 +66,7 @@ func (s *apiServer) configModel() (configModel, error) {
 	m.Views = map[string]config.View{}
 	m.Roles = map[string]string{}
 	m.Forges = []config.Forge{}
+	m.ViewOrder, m.FieldOrder = []string{}, []string{}
 	if !exists {
 		return m, nil
 	}
@@ -83,8 +85,8 @@ func (s *apiServer) configModel() (configModel, error) {
 	for name, v := range cfg.Views {
 		m.Views[name] = v
 	}
-	m.ViewOrder = cfg.ViewNames()
-	m.FieldOrder = cfg.FieldOrder()
+	m.ViewOrder = orEmpty(cfg.ViewNames())
+	m.FieldOrder = orEmpty(cfg.FieldOrder())
 	m.Sprints = cfg.Sprints
 	m.Sprints.List = orSprints(cfg.Sprints.List)
 	for role, who := range cfg.Roles {
@@ -106,7 +108,6 @@ func (s *apiServer) configModel() (configModel, error) {
 	m.Repos.List = orEmpty(cfg.Repos)
 	m.Repos.Assignees = cfg.Assignees
 	m.GithubProject = cfg.GithubProject
-	m.Forges = cfg.Forges
 	m.Uploads = cfg.Uploads
 	m.Release = cfg.Release
 	if m.Release.Images == nil {
@@ -115,7 +116,17 @@ func (s *apiServer) configModel() (configModel, error) {
 	if m.Release.Deploy == nil {
 		m.Release.Deploy = []config.Target{}
 	}
-	m.Forges = cfg.Forges
+	// with no table, the forges are those found in the remotes, as the
+	// Sync page lists them: a mapping saved on one writes its table first
+	// (sectionWriter's forge-fields)
+	if cfg.Discover {
+		m.Forges = s.forges()
+	} else {
+		m.Forges = cfg.Forges
+	}
+	if m.Forges == nil {
+		m.Forges = []config.Forge{}
+	}
 	return m, nil
 }
 
@@ -146,7 +157,7 @@ func (s *apiServer) handleConfigModel(w http.ResponseWriter, r *http.Request) {
 // the check and the fresh model. The body's shape is the section's own:
 // the same JSON the model answers, so a form sends back what it holds.
 func (s *apiServer) handleConfigSection(w http.ResponseWriter, r *http.Request) {
-	apply, err := sectionWriter(r.PathValue("section"), r, w)
+	apply, err := s.sectionWriter(r.PathValue("section"), r, w)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
@@ -197,7 +208,7 @@ func (s *apiServer) handleConfigSection(w http.ResponseWriter, r *http.Request) 
 // sectionWriter decodes the section's body and returns what applies it to
 // the file's text. It answers the request itself (and returns nil, nil)
 // when the body is wrong; a section it doesn't know is an error.
-func sectionWriter(section string, r *http.Request, w http.ResponseWriter) (func(string) (string, error), error) {
+func (s *apiServer) sectionWriter(section string, r *http.Request, w http.ResponseWriter) (func(string) (string, error), error) {
 	switch section {
 	case "fields":
 		var req struct {
@@ -237,6 +248,17 @@ func sectionWriter(section string, r *http.Request, w http.ResponseWriter) (func
 			return nil, nil
 		}
 		return func(text string) (string, error) {
+			// a forge found in the remotes has no table to hold its
+			// mappings: every found forge gets one first, as Add a forge
+			// writes them (a table turns discovery off, for all of them)
+			if cfg, _, err := config.Check([]byte(text)); err == nil && cfg.Discover {
+				if text, _, err = s.resolveFound(r.Context(), text); err != nil {
+					return "", err
+				}
+			}
+			if !strings.Contains(text, "[forges."+req.Forge+"]") {
+				return "", fmt.Errorf("no forge is named %s: add it in Sync", req.Forge)
+			}
 			return config.SetForgeFieldsText(text, req.Forge, req.Set, req.Remove), nil
 		}, nil
 	case "labels":
