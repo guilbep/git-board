@@ -32,14 +32,13 @@
         <GbIcon name="search" />
       </button>
       <details v-if="me?.me" ref="menu" class="gb-menu" @keydown.esc="close(menu)">
-        <summary class="gb-iconbtn" :aria-label="`${me.me.name}: you, settings, shortcuts`">
+        <summary class="gb-iconbtn" :aria-label="`${me.me.name}: you, settings, shortcuts`" :title="me.me.name">
           <span class="gb-avatar gb-avatar-dark" aria-hidden="true">{{ initials(me.me.name) }}</span>
         </summary>
         <div class="gb-menu-panel" @click="close(menu)">
-          <p class="gb-menu-who"><b>{{ me.me.name }}</b><code v-if="me.me.login">{{ me.me.login }}</code></p>
+          <p class="gb-menu-who"><b>{{ me.me.name }}</b><code v-if="me.me.login && me.me.login !== me.me.name">{{ me.me.login }}</code></p>
           <router-link to="/settings/you">You</router-link>
           <router-link to="/settings">Settings</router-link>
-          <router-link to="/settings/sync">Sync</router-link>
           <button type="button" @click="helpOpen = true">Keyboard shortcuts <kbd>?</kbd></button>
           <p class="gb-menu-foot">{{ w.checked ? `Forges checked ${when(w.checked, true)}` : 'Not checked yet' }}</p>
         </div>

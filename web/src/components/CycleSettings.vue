@@ -9,10 +9,7 @@
 <template>
   <div class="set-panel cs">
     <h2 class="h4">Cycle</h2>
-    <p class="cs-lead">
-      The project's way of working, as stages every issue walks: ready, in progress, in review, validation, done. On, the
-      board is a kanban of them and every issue has a next step; off, the issues open on the classic page.
-    </p>
+    <p class="cs-lead">Whether issues walk the cycle's steps (ready, in progress, review, validation, done), or open on the classic page.</p>
 
     <div class="set-cols">
       <div class="set-forms">

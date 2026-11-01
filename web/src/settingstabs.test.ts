@@ -2,18 +2,19 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { settingsGroups, settingsTab, settingsTabs, syncSummary } from './settingstabs.ts';
 
-test('settingsTab takes the address, the Overview without one or for an unknown link', () => {
+test('settingsTab takes the address, the Sync without one or for an unknown link', () => {
   assert.equal(settingsTab('sync'), 'sync');
   assert.equal(settingsTab('fields'), 'fields');
   assert.equal(settingsTab('advanced'), 'advanced');
   assert.equal(settingsTab('numbers'), 'numbers');
   assert.equal(settingsTab('labels'), 'labels');
-  assert.equal(settingsTab(''), 'overview');
-  assert.equal(settingsTab(undefined), 'overview');
-  assert.equal(settingsTab('bridges'), 'overview');
-  assert.equal(settingsTab(['sync']), 'overview');
+  assert.equal(settingsTab(''), 'sync');
+  assert.equal(settingsTab(undefined), 'sync');
+  assert.equal(settingsTab('bridges'), 'sync');
+  assert.equal(settingsTab(['sync']), 'sync');
   // the old tabs' links: General held who you write as; the three ways are
   // one Sync; the Project file is a tab per section, the fields first
+  assert.equal(settingsTab('overview'), 'sync');
   assert.equal(settingsTab('general'), 'you');
   assert.equal(settingsTab('remotes'), 'sync');
   assert.equal(settingsTab('forges'), 'sync');
@@ -22,10 +23,10 @@ test('settingsTab takes the address, the Overview without one or for an unknown 
   assert.equal(settingsTab('forge-fields'), 'forge-fields');
 });
 
-test('the tabs, in the menu order: the Overview, the project file with its Sync, then what is kept elsewhere', () => {
+test('the tabs, in the menu order: the project file with its Sync, then what is kept elsewhere', () => {
   assert.deepEqual(
     settingsTabs.map((t) => t.id),
-    ['overview', 'sync', 'forge-fields', 'fields', 'labels', 'views', 'sprints', 'roles', 'branches', 'cycle', 'release', 'repos', 'attachments', 'advanced', 'numbers', 'worktrees', 'you'],
+    ['sync', 'forge-fields', 'fields', 'labels', 'views', 'sprints', 'roles', 'branches', 'cycle', 'release', 'repos', 'attachments', 'advanced', 'numbers', 'worktrees', 'you'],
   );
 });
 
@@ -33,15 +34,14 @@ test('the sidebar groups by where a tab is kept: the project file, the Sync in i
   const groups = settingsGroups();
   assert.deepEqual(
     groups.map((g) => g.group),
-    ['', 'The project file', 'Kept elsewhere'],
+    ['The project file', 'Kept elsewhere'],
   );
   const byId = (i: number) => groups[i]?.tabs.map((t) => t.id) ?? [];
-  assert.deepEqual(byId(0), ['overview']);
-  assert.deepEqual(byId(1), ['sync', 'forge-fields', 'fields', 'labels', 'views', 'sprints', 'roles', 'branches', 'cycle', 'release', 'repos', 'attachments', 'advanced']);
-  assert.deepEqual(byId(2), ['numbers', 'worktrees', 'you']);
+  assert.deepEqual(byId(0), ['sync', 'forge-fields', 'fields', 'labels', 'views', 'sprints', 'roles', 'branches', 'cycle', 'release', 'repos', 'attachments', 'advanced']);
+  assert.deepEqual(byId(1), ['numbers', 'worktrees', 'you']);
 });
 
-test('the Overview says in one line where the sync stands', () => {
+test('the Sync says in one line where it stands', () => {
   const none = { project: '', write: false, last: null };
   assert.equal(syncSummary({ remote: null, forges: [], project: none }), 'No origin: the issues are only on this computer, no forge with sync on.');
   assert.equal(syncSummary({ remote: { name: 'origin' }, forges: [{ sync: true }, { sync: false }], project: none }), 'origin, 1 forge with sync on.');

@@ -12,10 +12,7 @@
 <template>
   <div class="set-panel lb">
     <h2 class="h4">Labels</h2>
-    <p class="lb-lead">
-      The project's own plain labels — yes-or-no flags that stack and that no field holds — then how every label the project defines
-      stands on GitHub. A label an issue can carry only one of (a priority, a kind) is a field's option, in <router-link to="/settings/fields">Fields</router-link>.
-    </p>
+    <p class="lb-lead">The yes-or-no labels an issue can carry, and how the project's labels stand on GitHub.</p>
 
     <div class="set-cols">
       <div class="set-forms">
@@ -261,7 +258,7 @@ import ConfigSaveBar from '@/components/configforms/ConfigSaveBar.vue';
 import { message } from '@/issue';
 import { byCheck, changeText, deleteConfirm, stateText } from '@/labels';
 
-// changed: what a load left, for the Overview's line
+// changed: what a load left, for the menu's line
 const emit = defineEmits<{ changed: [d: Labels] }>();
 const d = ref<Labels | null>(null);
 const lint = ref<Lint | null>(null);

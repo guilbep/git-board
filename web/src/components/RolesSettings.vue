@@ -3,10 +3,7 @@
 <template>
   <div class="set-panel">
     <h2 class="h4">Roles</h2>
-    <p class="rs-lead">
-      A project's people by role: who sets the risk, approves the plan, reviews, signs off. Every issue takes them, unless it sets its own —
-      the side panel shows the inherited value greyed, <em>bob · project</em>. A role is a person field of the same name.
-    </p>
+    <p class="rs-lead">Who holds each role for the whole project; an issue can still name its own.</p>
 
     <div class="set-cols">
       <div class="set-forms">

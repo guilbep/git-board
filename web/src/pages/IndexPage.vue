@@ -150,7 +150,7 @@
         <div v-else-if="total === 0" class="state state-empty">
           <p class="state-title">No issues match this filter.</p>
           <p v-if="modified"><button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" @click="resetAll">Back to {{ activeView || 'the open issues' }}</button></p>
-          <p v-else>Try a broader one, for example <code>is:open</code>.</p>
+          <p v-else-if="broader">Try a broader one: <button type="button" class="gb-linkbtn" @click="setFilter(broader)"><code>{{ broader }}</code></button></p>
         </div>
         <div v-else-if="layout === 'board'">
           <p v-if="moveError" class="epfl-alert epfl-alert-danger notice" role="alert"><b>Not moved.</b> {{ moveError }}</p>
@@ -310,6 +310,9 @@ const setQuery = (patch: Patch) => router.replace({ query: { ...route.query, ...
 
 const viewFilter = computed(() => view.value?.filter ?? 'is:open');
 const filter = computed(() => (typeof route.query.filter === 'string' ? route.query.filter : viewFilter.value));
+// the empty state's suggestion: the filter one term shorter (never the
+// filter itself)
+const broader = computed(() => filter.value.trim().split(/\s+/).slice(0, -1).join(' '));
 function setFilter(f: string) {
   return setQuery({ filter: f === viewFilter.value ? undefined : f });
 }

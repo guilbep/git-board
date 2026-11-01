@@ -6,10 +6,7 @@
 <template>
   <div class="set-panel vs">
     <h2 class="h4">Views</h2>
-    <p class="vs-lead">
-      A view is a saved page: a tab above the issues, in this order. Table, board or roadmap is a switch on every view —
-      <code>layout</code> is only the one it opens in. On the board, change the filter and <b>Save view</b> writes here too.
-    </p>
+    <p class="vs-lead">The tabs above the issues, in this order: each a saved filter, grouping and sort.</p>
 
     <div class="set-cols">
       <div class="set-forms">

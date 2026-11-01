@@ -48,7 +48,6 @@
             <div class="gb-pop-menu" role="menu" aria-label="This issue">
               <button type="button" role="menuitem" class="gb-pop-item" @click="close(false), startRename()"><GbIcon name="edit" small /> Edit the title</button>
               <button type="button" role="menuitem" class="gb-pop-item" @click="copyId"><GbIcon :name="idCopied ? 'check' : 'copy'" small /> {{ idCopied ? 'Copied' : `Copy the id, ${thread.id.slice(0, 7)}` }}</button>
-              <button type="button" role="menuitem" class="gb-pop-item" :disabled="saving" @click="close(), toggleStatus()"><GbIcon :name="thread.status === 'open' ? 'closed' : 'open'" small /> {{ thread.status === 'open' ? 'Close the issue' : 'Reopen the issue' }}</button>
               <button v-if="cycleView" type="button" role="menuitem" class="gb-pop-item" @click="(e: MouseEvent) => (close(), switchLayout(layout === 'cycle' ? 'classic' : 'cycle', e))"><GbIcon name="title" small /> {{ layout === 'cycle' ? 'The classic page' : 'The cycle’s page' }}</button>
               <button type="button" role="menuitem" class="gb-pop-item gb-narrow-only" @click="copyLink"><GbIcon :name="copied ? 'check' : 'link'" small /> {{ copied ? 'Link copied' : 'Copy link to this issue' }}</button>
               <router-link v-if="!page" role="menuitem" class="gb-pop-item gb-narrow-only" :to="`/issues/${id}`"><GbIcon name="external" small /> Open as a page of its own</router-link>
@@ -466,7 +465,6 @@ async function startRename() {
 async function saveTitle() {
   if (await rename(newTitle.value.trim())) renaming.value = false;
 }
-const toggleStatus = () => setStatus(thread.value?.status === 'open' ? 'closed' : 'open');
 
 // the bar's Fit and Fill: the head and the conversation at a reading width, or the panel's
 const fill = computed(() => headWidth.value === 'fill');

@@ -4,20 +4,17 @@
 <template>
   <section class="cfg" aria-labelledby="set-file">
     <div class="cfg-head">
-      <h2 id="set-file" class="h4">Project file</h2>
+      <h2 id="set-file" class="h4">The file</h2>
       <code class="cfg-path">{{ file?.path }}</code>
     </div>
-    <p class="gb-hint">The project's ontology (its fields and their types: what an issue can say about itself), its colors, views and sprints, the GitHub Project, attachments. The reference beside the editor follows your cursor; changes apply as soon as you save.</p>
+    <p class="gb-hint">The whole <code>.git-board.toml</code>, every tab's keys and any the forms don't show. Checked as you type; the reference beside it follows your cursor.</p>
 
     <!-- the save stays in reach above the editor, however far it scrolls -->
     <div class="cfg-tools" role="toolbar" aria-label="The file">
-      <button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" @click="snippet(addView)">+ View</button>
-      <button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" @click="snippet(addSprint)">+ Sprint</button>
-      <button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" @click="snippet(addField)">+ Field</button>
       <span class="gb-grow" />
       <span class="cfg-state" :class="stateClass" role="status">{{ stateText }}</span>
       <button v-if="dirty" type="button" class="gb-linkbtn" @click="discard">Discard changes</button>
-      <button v-if="!reviewing" type="button" class="epfl-btn epfl-btn-primary epfl-btn-sm" :disabled="!dirty || !check?.ok" @click="review">Review changes</button>
+      <button v-if="!reviewing" type="button" class="epfl-btn epfl-btn-primary epfl-btn-sm" :disabled="!dirty || !check?.ok" @click="review">Save…</button>
       <template v-else>
         <button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" @click="reviewing = false">Keep editing</button>
         <button type="button" class="epfl-btn epfl-btn-primary epfl-btn-sm" :disabled="!dirty || !check?.ok || saving" @click="save">{{ saving ? 'Saving…' : 'Save and apply' }}</button>
@@ -107,7 +104,7 @@
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { ApiError, checkConfig, getConfigDocs, getConfigFile, saveConfig, type ConfigCheck, type ConfigFile, type DocSection } from '@/api/board';
 import { configText } from '@/configdraft';
-import { addField, addSprint, addView, docSectionAt, type Snippet } from '@/configsnippets';
+import { docSectionAt } from '@/configsnippets';
 import { message } from '@/issue';
 import { lineDiff } from '@/linediff';
 import { tomlTokens } from '@/toml';
@@ -241,13 +238,6 @@ async function select(start: number, end: number) {
 function goTo(line: number, col: number) {
   const before = lines.value.slice(0, line - 1).join('\n').length + (line > 1 ? 1 : 0);
   void select(before + col - 1, before + col - 1);
-}
-
-function snippet(fn: (t: string) => Snippet) {
-  const s = fn(text.value);
-  text.value = s.text;
-  reviewing.value = false;
-  void select(...s.select);
 }
 
 function review() {

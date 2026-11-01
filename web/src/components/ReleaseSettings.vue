@@ -6,10 +6,7 @@
 <template>
   <div class="set-panel rls">
     <h2 class="h4">Release</h2>
-    <p class="rls-lead">
-      How the project's code gets to its environments: <code>git board release</code> tags, builds and deploys — dev
-      follows the trunk's head, candidates go to the middle environments, finals to the last one.
-    </p>
+    <p class="rls-lead">What a release builds, and the environments it goes through.</p>
 
     <div class="set-cols">
       <div class="set-forms">

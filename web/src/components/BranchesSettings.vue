@@ -5,10 +5,7 @@
 <template>
   <div class="set-panel bs">
     <h2 class="h4">Branches</h2>
-    <p class="bs-lead">
-      The branch an issue suggests: <code>git board branch 42</code> builds it from the base, named by the template, its
-      <code>{kind}</code> from the issue's kind — <code>kind:bug</code>, else a flat label listed under Kinds.
-    </p>
+    <p class="bs-lead">How an issue's branch is named, and the base it starts from.</p>
 
     <div class="set-cols">
       <div class="set-forms">

@@ -57,8 +57,8 @@ const groups = [
     ],
   },
   {
-    title: 'Settings: project file',
-    keys: [{ keys: [mod, 'S'], what: 'Review the changes before saving' }],
+    title: 'Settings › The file',
+    keys: [{ keys: [mod, 'S'], what: 'Save, after a look at the changes' }],
   },
 ];
 </script>

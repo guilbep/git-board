@@ -15,17 +15,11 @@
       <div>
         <h2 class="h4">Sync</h2>
         <p class="sy-lead">
-          Your issues travel with git, like your code; the forges and the GitHub Project are mirrors, for the people who work there.
-          One sync moves them all: a git pull from {{ remote }}, the forges, the Project's fields, then a git push. <code>git board sync</code> runs the same.
-          Each row has its own actions, for its side alone: their tooltips name the command that does the same.
-        </p>
-        <p class="sy-lead">
-          Kept in <code>.git-board.toml</code>: the forges (<code>[forges.&lt;name&gt;]</code>, where each field lives on them with it) and the GitHub Project (<code>[github-project]</code>).
-          Elsewhere: {{ remote }} is a git remote, a forge found in the remotes has no table until one is written, the tokens are in git's credential helper, the checks in <code>.git</code>.
+          Where your issues go besides git: one Sync pulls {{ remote }}, the forges and the Project's fields, then pushes. Each row
+          does it for its side alone. The forges and the Project are kept in <code>.git-board.toml</code>; the tokens, in git's credential helper. <button type="button" class="gb-linkbtn" @click="guideOpen = true">How forges work</button>
         </p>
       </div>
       <div class="sy-actions">
-        <button type="button" class="epfl-btn epfl-btn-secondary" @click="guideOpen = true">How forges work</button>
         <button type="button" class="epfl-btn epfl-btn-secondary" @click="adding = true">+ Add a forge</button>
       </div>
     </div>
@@ -271,7 +265,7 @@ import GbIcon from '@/components/GbIcon.vue';
 import StartOver from '@/components/StartOver.vue';
 import SyncProgress from '@/components/SyncProgress.vue';
 
-// changed: the sync as it stands, for the Overview's line
+// changed: the sync as it stands, for the menu's line
 const emit = defineEmits<{ changed: [st: WholeStatus] }>();
 
 const remote = 'origin'; // the whole sync's, as git-board sync's default

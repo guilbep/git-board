@@ -116,7 +116,7 @@ import { debounced, onLive } from '@/live';
 import { message } from '@/issue';
 import { numbered, numberExample, numbersPreview, prefixProblem, startProblem, suggestPrefix, suggestStart } from '@/numbers';
 
-// changed: what a start or a numbering left, for the Overview's line
+// changed: what a start or a numbering left, for the menu's line
 const emit = defineEmits<{ changed: [n: Numbers] }>();
 const n = ref<Numbers | null>(null);
 const prefix = ref('');

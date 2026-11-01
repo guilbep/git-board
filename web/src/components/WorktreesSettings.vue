@@ -136,7 +136,7 @@ import { getWorktrees, previewWtx, writeWtx, type Worktrees, type WtxAnswers } f
 import { message } from '@/issue';
 import { agentTools, extraDeny, previewOf, previewStale, setWhoCommits, toolsLine, whoCommits, withGate, writeConfirm, WTX_OWN } from '@/worktrees';
 
-// changed: what a load or a write left, for the Overview's line
+// changed: what a load or a write left, for the menu's line
 const emit = defineEmits<{ changed: [d: Worktrees] }>();
 const d = ref<Worktrees | null>(null);
 const a = ref<WtxAnswers | null>(null);

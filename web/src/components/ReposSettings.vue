@@ -5,10 +5,7 @@
 <template>
   <div class="set-panel rs">
     <h2 class="h4">Repos</h2>
-    <p class="rs-lead">
-      The GitHub repositories the project's labels, numbers and issues live on — <code>owner/name</code>, in this order.
-      None, and origin stands for them all. The issue pages read them in this order; the label page asks each.
-    </p>
+    <p class="rs-lead">The GitHub repositories the project spans, the first one numbering the issues.</p>
 
     <div class="set-cols">
       <div class="set-forms">

@@ -64,7 +64,7 @@ export function numberExample(n: { on: boolean; prefix?: string | undefined; nex
   return n?.on && n.prefix && n.next ? `${n.prefix}-${n.next}` : 'ABC-123';
 }
 
-// numbersSummary is the Overview's line
+// numbersSummary is the settings menu's line
 export function numbersSummary(n: { on: boolean; prefix?: string | undefined; next?: number | undefined }): string {
   return n.on ? `${n.prefix} · next ${n.prefix}-${n.next}.` : 'Off: issues go by their forge numbers.';
 }

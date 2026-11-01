@@ -11,10 +11,7 @@
 <template>
   <div class="set-panel fs">
     <h2 class="h4">Fields</h2>
-    <p class="fs-lead">
-      A field is a label namespace: <code>status:ready</code> is the value <code>ready</code> of the field <code>status</code>. Every
-      namespace found on the issues is already a field; declare one here to give it an order, a cardinality, a type or colors.
-    </p>
+    <p class="fs-lead">What an issue can say about itself: each field's values, their order, and how many an issue holds.</p>
 
     <div class="set-cols">
       <div class="set-forms">

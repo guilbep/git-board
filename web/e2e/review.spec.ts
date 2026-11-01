@@ -48,3 +48,36 @@ test('D-26: a disabled Save says why', async ({ page }) => {
   await expect(page.locator('.csb-why:visible')).toHaveText('No change to save');
   expect(errs).toEqual([]);
 });
+
+test('C-20: Settings opens on Sync, each menu item says where it stands', async ({ page }) => {
+  await page.goto('/#/settings');
+  await expect(page.getByRole('heading', { name: 'Sync', exact: true })).toBeVisible();
+  await expect(page.locator('.set-state').filter({ hasText: /origin/ })).toBeVisible();
+  await expect(page.getByRole('link', { name: /^Overview/ })).toHaveCount(0);
+});
+
+test('C-16: the reference beside a form drops its pointer back to the form', async ({ page }) => {
+  await page.goto('/#/settings/fields');
+  await expect(page.locator('.crp:visible')).toContainText('options');
+  await expect(page.getByText(/These are the forms of Settings/)).toHaveCount(0);
+});
+
+test('C-21, B-15: the file tab is "The file", saved like the others, no quick-add buttons', async ({ page }) => {
+  await page.goto('/#/settings/advanced');
+  await expect(page.getByRole('heading', { name: 'The file' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Save…' })).toBeVisible();
+  await expect(page.getByRole('button', { name: '+ View' })).toHaveCount(0);
+});
+
+test('C-43: Add a forge names the forge the remotes already give', async ({ page }) => {
+  await page.goto('/#/settings/sync');
+  await page.getByRole('button', { name: '+ Add a forge' }).click();
+  await expect(page.getByText(/Already found in your git remotes/)).toContainText('GitHub · o/r');
+  await expect(page.getByRole('heading', { name: 'How forges work' })).toHaveCount(0);
+});
+
+test('C-34: one way to the command palette, the header’s', async ({ page }) => {
+  await page.goto('/#/');
+  await expect(page.getByRole('button', { name: 'Filter or jump to' })).toHaveCount(1);
+  await expect(page.getByRole('button', { name: /Filter or jump ⌘K|Filter or jump Ctrl/ })).toHaveCount(0);
+});

@@ -102,19 +102,15 @@
 
     <aside v-if="data" class="gb-work-aside">
       <section aria-labelledby="send-h">
-        <h2 id="send-h" class="h5">To send <span class="gb-work-n">{{ sendWords(data.pending) }}</span></h2>
+        <h2 id="send-h" class="h5">For the forges <span class="gb-work-n">{{ sendWords(data.pending) }}</span></h2>
         <ul v-if="data.to_send.length" class="gb-work-lines">
           <li v-for="(l, i) in data.to_send" :key="i"><span class="gb-work-num">#{{ numberOf(l.issue) || l.issue.id.slice(0, 7) }}</span> {{ l.what }}</li>
           <li v-if="data.pending > data.to_send.length" class="gb-hint">and {{ data.pending - data.to_send.length }} more</li>
         </ul>
         <p v-else class="gb-hint">The forges have everything.</p>
-        <div v-if="data.pending" class="gb-work-send">
-          <button type="button" class="epfl-btn epfl-btn-primary epfl-btn-sm" :disabled="busy" @click="send(false)">Send all</button>
-          <button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" :disabled="busy" @click="send(true)">Check first</button>
-        </div>
         <SyncProgress v-if="forgeStatus?.job?.state === 'running'" :job="forgeStatus.job" :bridges="forgeStatus.bridges" :starting="sent || 'Running…'" />
         <p v-else-if="sent" class="gb-hint">{{ sent }}</p>
-        <p class="gb-hint">Send all goes to the forges alone; <router-link to="/settings/sync">Sync</router-link> moves everything, git too.</p>
+        <p v-if="data.pending" class="gb-hint">They go out with the next <router-link to="/settings/sync">Sync</router-link>.</p>
       </section>
       <section aria-labelledby="retro-h">
         <h2 id="retro-h" class="h5">Since the last retro</h2>
@@ -154,7 +150,7 @@ import { useRoute, useRouter } from 'vue-router';
 import AppHeader from '@/components/AppHeader.vue';
 import IssuePanel from '@/components/IssuePanel.vue';
 import SyncProgress from '@/components/SyncProgress.vue';
-import { agentAction, ApiError, getFields, getViews, getWork, patchIssue, startForgeSync, type Issue, type WorkResponse, type WorkRow } from '@/api/board';
+import { agentAction, ApiError, getFields, getViews, getWork, patchIssue, type Issue, type WorkResponse, type WorkRow } from '@/api/board';
 import { namespaces } from '@/facets';
 import type { Fields } from '@/fields';
 import { forgeStatus, loadForges, onStep } from '@/forges';
@@ -220,21 +216,6 @@ watch(() => forgeStatus.value?.job?.state, (now, was) => {
   if (job.state === 'failed') sent.value = `Stopped: ${job.error ?? ''}`;
   else sent.value = job.dry_run ? `Checked: ${checkWords(job.bridges)}.` : `Sent: ${doneWords(job)}.`;
 });
-
-// send: everything the forges wait for; dry: a check, nothing moves
-async function send(dry: boolean) {
-  busy.value = true;
-  sent.value = '';
-  try {
-    forgeStatus.value = await startForgeSync(dry, dry ? 'sync' : 'send');
-    sent.value = dry ? 'Checking…' : 'Sending…';
-    void loadForges(); // polls while it runs
-  } catch (e) {
-    sent.value = e instanceof Error ? e.message : String(e);
-  } finally {
-    busy.value = false;
-  }
-}
 
 // the agents, through wtx (internal/server/worktrees.go): Brief on an
 // Agents row, Start an agent on an issue that has none

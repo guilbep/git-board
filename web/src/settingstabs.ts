@@ -1,14 +1,14 @@
 // Settings in tabs, each with its address: #/settings/<tab>. No tab, or
-// one this list doesn't know, is the Overview. Pure, no "@/" imports: node
+// one this list doesn't know, is the Sync. Pure, no "@/" imports: node
 // runs settingstabs.test.ts on it.
 
-// the Overview first, then the tabs by where they are kept: the project
+// the tabs by where they are kept (each menu item says where it stands:
+// no Overview repeating them): the project
 // file (.git-board.toml) first, the Sync with it, for the forges and the
 // GitHub Project are its tables, the raw file last; then what lives
 // elsewhere, each saying where: the numbers in git, the worktrees in
 // wtx.toml, you in git config and this browser
 export const settingsTabs = [
-  { id: 'overview', label: 'Overview' },
   { id: 'sync', label: 'Sync', group: 'The project file', via: 'forges, Project' },
   { id: 'forge-fields', label: 'Forge fields', group: 'The project file', via: 'where each field lives' },
   { id: 'fields', label: 'Fields', group: 'The project file' },
@@ -21,7 +21,7 @@ export const settingsTabs = [
   { id: 'release', label: 'Release', group: 'The project file' },
   { id: 'repos', label: 'Repos', group: 'The project file' },
   { id: 'attachments', label: 'Attachments', group: 'The project file' },
-  { id: 'advanced', label: 'Advanced', group: 'The project file', via: 'the file itself' },
+  { id: 'advanced', label: 'The file', group: 'The project file', via: '.git-board.toml' },
   { id: 'numbers', label: 'Numbers', group: 'Kept elsewhere', via: 'refs/board/seq' },
   { id: 'worktrees', label: 'Worktrees', group: 'Kept elsewhere', via: 'wtx.toml' },
   { id: 'you', label: 'You', group: 'Kept elsewhere', via: 'git config, this browser' },
@@ -32,12 +32,12 @@ export type SettingsTab = (typeof settingsTabs)[number]['id'];
 // old tabs' links: General held who you write as; Remotes, Forges and the
 // GitHub Project are one Sync; the Project file is a tab per section, the
 // fields first
-const moved: Record<string, SettingsTab> = { general: 'you', remotes: 'sync', forges: 'sync', 'github-project': 'sync', 'project-file': 'fields' };
+const moved: Record<string, SettingsTab> = { overview: 'sync', general: 'you', remotes: 'sync', forges: 'sync', 'github-project': 'sync', 'project-file': 'fields' };
 
 // settingsTab is the tab of the route's :tab param
 export function settingsTab(param: unknown): SettingsTab {
   if (typeof param === 'string' && moved[param]) return moved[param];
-  return settingsTabs.find((t) => t.id === param)?.id ?? 'overview';
+  return settingsTabs.find((t) => t.id === param)?.id ?? 'sync';
 }
 
 // the groups, in order, as the sidebar shows them: a run of tabs under one
@@ -50,10 +50,10 @@ export function settingsGroups(): { group: string; tabs: { id: SettingsTab; labe
     if (!g || g.group !== group) out.push((g = { group, tabs: [] }));
     g.tabs.push(t);
   }
-  return out;
+  return out.filter((g) => g.tabs.length);
 }
 
-// syncSummary is the Overview's line for the Sync: "origin, 2 forges with
+// syncSummary is the Sync's line in the menu: "origin, 2 forges with
 // sync on, the GitHub Project EPFL-ENAC/40."
 export function syncSummary(s: { remote: { name: string } | null; forges: { sync: boolean }[]; project: { project: string } }): string {
   const on = s.forges.filter((f) => f.sync).length;

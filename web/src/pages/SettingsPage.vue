@@ -1,5 +1,5 @@
 <!-- Settings, in tabs with their address (#/settings/<tab>, settingstabs.ts):
-     the Overview (what git-board is, and where each part stands), the Sync
+     each with where it stands under its name; the Sync first
      (where your issues go: the git remote, the forges, the GitHub Project,
      one Check and one Sync), then this board: the project file
      (.git-board.toml), the project's own numbers, attachments, and You (who
@@ -21,6 +21,7 @@
           :aria-current="tab === t.id ? 'page' : undefined"
         >
           {{ t.label }}<span v-if="'via' in t && t.via" class="set-via">{{ t.via }}</span>
+          <span v-if="menuState[t.id]" class="set-state" :title="menuState[t.id]">{{ menuState[t.id] }}</span>
           <span v-if="dirtySections[t.id]" class="set-dot" title="Unsaved changes" />
         </router-link>
       </template>
@@ -34,26 +35,6 @@
 
     <main class="set-main">
       <p v-if="error" class="epfl-alert epfl-alert-danger" role="alert">{{ error }}</p>
-
-      <div v-if="tab === 'overview'" class="set-wrap">
-        <div class="set-about">
-          <h2 class="h4">git-board</h2>
-          <p>
-            A board for this repository's issues, as a GitHub Project is: views, a kanban, sprints, insights.
-            The issues themselves are kept in the repository, under <code>refs/board</code>: they travel with git like your code, work offline, and need no database.
-          </p>
-          <p class="set-lead">GitHub, GitLab and the GitHub Project are mirrors, for the people who work there: one Sync moves the issues everywhere. Each part below says where it stands.</p>
-        </div>
-        <ul class="set-cards">
-          <li v-for="c in cards" :key="c.id" :class="`set-card-${c.id}`">
-            <router-link :to="`/settings/${c.id}`">
-              <span class="set-card-title">{{ c.title }}</span>
-              <span class="set-card-what">{{ c.what }}</span>
-              <b class="set-card-state">{{ c.state }}</b>
-            </router-link>
-          </li>
-        </ul>
-      </div>
 
       <div v-if="tab === 'you'" class="set-wrap">
         <h2 class="h4">You</h2>
@@ -139,7 +120,7 @@ import { classicPeek, cycleView, loadMe, me } from '@/me';
 import { viewWords } from '@/view';
 import { dirtySections, loadConfigModel } from '@/configmodel';
 import { settingsGroups, settingsTab, settingsTabs, syncSummary } from '@/settingstabs';
-import { numberExample, numbersSummary } from '@/numbers';
+import { numbersSummary } from '@/numbers';
 import AppHeader from '@/components/AppHeader.vue';
 import IdentityChooser from '@/components/IdentityChooser.vue';
 import AttachmentsSettings from '@/components/AttachmentsSettings.vue';
@@ -175,37 +156,18 @@ const whole = ref<WholeStatus | null>(null);
 const numbers = ref<Numbers | null>(null);
 const labels = ref<Labels | null>(null);
 
-// the Overview: a card per part, what it's for and where it stands; the
-// project file's sections are one card, each its own tab beside it
-const cards = computed(() => {
+// where each part stands, under its name in the menu (what the Overview's
+// cards said, without repeating the menu)
+const menuState = computed<Record<string, string>>(() => {
   const s = settings.value;
-  const state: Record<string, string> = {
-    sync: whole.value ? syncSummary(whole.value) : '…',
-    fields: `${viewNames.value.length} saved view${viewNames.value.length === 1 ? '' : 's'}; the fields, sprints, roles and views are tabs beside this one.`,
-    labels: labels.value ? `${labels.value.rows.length} label${labels.value.rows.length === 1 ? '' : 's'}${labels.value.repos.length ? `, on ${labels.value.repos.join(', ')}` : ''}.` : 'Open the tab to read GitHub.',
-    numbers: numbers.value ? numbersSummary(numbers.value) : '…',
-    attachments: !s ? '…' : s.uploads.enabled ? `On, served at ${s.uploads.public_url}.` : 'Off on this server.',
-    worktrees: !worktrees.value ? '…' : worktrees.value.config ? 'wtx.toml written.' : worktrees.value.code === 'no-config' ? 'No wtx.toml yet.' : (worktrees.value.reason ?? ''),
-    you: me.value?.me ? `You write as ${me.value.me.name}.` : 'Not chosen yet: pick who you write as.',
+  return {
+    sync: whole.value ? syncSummary(whole.value) : '',
+    labels: labels.value ? `${labels.value.rows.length} label${labels.value.rows.length === 1 ? '' : 's'}` : '',
+    numbers: numbers.value ? numbersSummary(numbers.value) : '',
+    attachments: !s ? '' : s.uploads.enabled ? 'on' : 'off on this server',
+    worktrees: !worktrees.value ? '' : worktrees.value.config ? 'wtx.toml written' : worktrees.value.code === 'no-config' ? 'no wtx.toml yet' : (worktrees.value.reason ?? ''),
+    you: me.value?.me ? `as ${me.value.me.name}` : 'not chosen yet',
   };
-  const what: Record<string, string> = {
-    sync: 'Where your issues go: git, the forges, the GitHub Project. One Check, one Sync.',
-    fields: 'The project file (.git-board.toml), as forms: the fields, labels, views, sprints and roles, a tab each; the raw file under Advanced.',
-    labels: "The project's labels, their colors and descriptions, on GitHub; lint.",
-    numbers: `One number per issue, the same on every forge: ${numberExample(numbers.value)}.`,
-    attachments: 'Files attached to comments, on S3 behind a CDN.',
-    worktrees: 'One agent, one worktree, one branch, one PR: wtx, started from here.',
-    you: 'Who you write as, your issue page, and the appearance.',
-  };
-  return [
-    { id: 'sync', label: 'Sync' },
-    { id: 'fields', label: 'Project file' },
-    { id: 'labels', label: 'Labels' },
-    { id: 'numbers', label: 'Numbers' },
-    { id: 'attachments', label: 'Attachments' },
-    { id: 'worktrees', label: 'Worktrees' },
-    { id: 'you', label: 'You' },
-  ].map((t) => ({ id: t.id, title: t.label, what: what[t.id] ?? '', state: state[t.id] ?? '' }));
 });
 const themeOptions = [
   { value: 'system', label: 'System', hint: 'as the computer is set' },
@@ -274,7 +236,7 @@ onBeforeRouteLeave(() => {
   if (!Object.values(dirtySections.value).some(Boolean)) return true;
   return window.confirm('A project-file form has unsaved changes. Leave anyway?');
 });
-// the Overview's numbers line: started, or an issue numbered, from anywhere
+// the menu's numbers line: started, or an issue numbered, from anywhere
 const loadNumbers = () => void getNumbers().then((n) => (numbers.value = n), () => {});
 const reloadNumbers = debounced(loadNumbers);
 const offLive = onLive((e) => {
@@ -288,10 +250,11 @@ onBeforeUnmount(offLive);
 .set { display: flex; align-items: flex-start; gap: 3rem; }
 .set-nav { flex: none; width: 15rem; display: flex; flex-direction: column; gap: .125rem; }
 .set-title { margin: 0 0 1rem; }
-.set-tab { display: flex; align-items: baseline; gap: .625rem; padding: .625rem .875rem; color: var(--fg); text-decoration: none; }
+.set-tab { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 .625rem; padding: .625rem .875rem; color: var(--fg); text-decoration: none; }
 .set-tab:hover { background: var(--bg-subtle); color: var(--fg); }
 .set-tab[aria-current='page'] { font-weight: 700; background: var(--bg-subtle); box-shadow: inset 3px 0 0 var(--primary); }
 .set-group { margin: 1.25rem 0 .375rem; padding: 0 .875rem; font-size: .75rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--fg-muted); }
+.set-state { flex-basis: 100%; min-width: 0; overflow: hidden; font-size: .75rem; font-weight: 400; color: var(--fg-muted); text-overflow: ellipsis; white-space: nowrap; }
 .set-via { margin-left: auto; font-size: .8125rem; font-weight: 400; color: var(--fg-muted); }
 .set-dot { flex: none; width: .5rem; height: .5rem; margin-left: auto; border-radius: 50%; background: var(--warning); }
 .set-tab:has(.set-via) .set-dot { margin-left: .5rem; }
@@ -302,17 +265,6 @@ onBeforeUnmount(offLive);
 .set-wrap-wide { max-width: none; }
 .set-wrap h2, .set-wrap h3, .set-wrap p { margin: 0; }
 .set-wrap section { display: grid; gap: .5rem; }
-.set-lead { max-width: 40rem; color: var(--fg-muted); }
-.set-about { display: grid; gap: .625rem; max-width: 46rem; }
-.set-about p { font-size: 1.0625rem; }
-.set-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(17rem, 100%), 1fr)); gap: .75rem; margin: 0; padding: 0; list-style: none; }
-.set-cards li { border: 1px solid var(--border); border-top: 4px solid var(--card-top, var(--border)); }
-.set-card-sync { --card-top: var(--primary); }
-.set-cards a { display: grid; gap: .25rem; height: 100%; box-sizing: border-box; padding: .875rem 1rem; color: var(--fg); text-decoration: none; }
-.set-cards a:hover { background: var(--bg-subtle); }
-.set-card-title { font-weight: 700; }
-.set-card-what { font-size: .875rem; color: var(--fg-muted); }
-.set-card-state { margin-top: .25rem; font-size: .9375rem; overflow-wrap: anywhere; }
 .gb-linkbtn { justify-self: start; padding: 0; border: 0; background: none; color: var(--fg); text-decoration: underline; cursor: pointer; font: inherit; }
 .set-login { color: var(--fg-muted); }
 /* the dropdown, under 60rem (960px): the sidebar's rows don't fit, a

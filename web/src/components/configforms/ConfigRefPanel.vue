@@ -51,6 +51,11 @@ onMounted(() => {
 // the TOML examples colored, the tables labelled per column when narrow —
 // the old editor's enhanceDoc, by the rendered HTML the server serves
 function enhance(el: HTMLElement) {
+  // the guide's pointer back to this very form ("These are the forms of
+  // Settings › …") says nothing here
+  for (const p of el.querySelectorAll<HTMLElement>('p')) {
+    if (p.children.length === 1 && p.firstElementChild?.tagName === 'EM' && /^These are the forms of Settings/.test(p.textContent ?? '')) p.remove();
+  }
   for (const code of el.querySelectorAll<HTMLElement>('pre > code.language-toml')) {
     if (code.dataset.done) continue;
     code.dataset.done = '1';

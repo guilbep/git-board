@@ -5,10 +5,7 @@
 <template>
   <div class="set-panel">
     <h2 class="h4">Sprints</h2>
-    <p class="ss-lead">
-      Sprints are a field like any other (<code>sprint:s12</code>); the list gives them dates, so that
-      <code>sprint:@current</code> finds today's sprint and a board grouped by sprint knows each one's span.
-    </p>
+    <p class="ss-lead">The sprints' dates, so <code>sprint:@current</code> finds today's.</p>
 
     <div class="set-cols">
       <div class="set-forms">
