@@ -114,6 +114,45 @@
             </table>
           </div>
 
+          <!-- every namespace found is a field: the labels on the issues
+               or a repository that no field's option declares, under
+               their field, with the way to declare it -->
+          <template v-if="d.undeclared.length">
+            <section aria-labelledby="lb-undecl">
+              <h3 id="lb-undecl" class="h5">On the issues, not declared</h3>
+              <p class="lb-muted">Every namespace on an issue is a field. These values exist on the issues or GitHub, but no field's options name them — add the option, or declare the field.</p>
+              <div class="gb-table-wrap">
+                <table class="gb-table">
+                  <thead>
+                    <tr>
+                      <th>Field</th>
+                      <th>Values</th>
+                      <th>Open issues</th>
+                      <th v-for="r in d.repos" :key="r">{{ r }}</th>
+                      <th />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="g in undeclaredGroups" :key="g.field">
+                      <td><code>{{ g.field }}</code><span v-if="!g.declared" class="lb-muted"> · not declared</span></td>
+                      <td><span v-for="(v, i) in g.rows" :key="v.name">{{ i ? ', ' : '' }}<span class="lb-name"><span class="gb-dot" :style="dot(v.color)" />{{ v.name }}</span></span></td>
+                      <td>{{ g.count }}</td>
+                      <td v-for="(r, i) in d.repos" :key="i">
+                        <span v-if="g.onRepo[i]" class="lb-same">On GitHub</span>
+                        <span v-else class="lb-muted">—</span>
+                      </td>
+                      <td>
+                        <router-link class="gb-linkbtn" :to="g.declared ? `/settings/fields/${g.field}` : '/settings/fields'">
+                          {{ g.declared ? 'Add the option in Fields' : 'Declare this field' }}
+                        </router-link>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </template>
+
           <!-- a repository GitHub didn't answer for: nothing to compare, nothing to send -->
           <template v-if="d.repos.length && d.rows.length && !errors.length">
             <div v-if="plan" class="lb-confirm" role="alert">
@@ -219,6 +258,25 @@ const dot = (hex: string) => (hex ? { '--c-dot': `#${hex}` } : undefined);
 const cells = (row: LabelRow) => (d.value?.repos ?? []).map((r) => row.github.find((g) => g.repo === r));
 const changes = (n: number) => `${n} change${n === 1 ? '' : 's'}`;
 const issues = (n: number) => `${n} issue${n === 1 ? '' : 's'}`;
+
+// the undeclared labels, grouped under their field: a declared field's
+// extra values (status:ready-for-validation, sprint:13, assignee:guilbep)
+// and the fields no table declares (risk, roles), each with its count and
+// where it stands on GitHub
+const undeclaredGroups = computed(() => {
+  const groups: { field: string; declared: boolean; rows: LabelRow[]; count: number; onRepo: boolean[] }[] = [];
+  for (const row of d.value?.undeclared ?? []) {
+    let g = groups.find((x) => x.field === row.field);
+    if (!g) {
+      g = { field: row.field, declared: !!configModel.value?.fields[row.field], rows: [], count: 0, onRepo: (d.value?.repos ?? []).map(() => false) };
+      groups.push(g);
+    }
+    g.rows.push(row);
+    g.count += row.count;
+    g.onRepo = (d.value?.repos ?? []).map((r) => g.rows.some((row) => row.github.find((x) => x.repo === r)?.state === 'same'));
+  }
+  return groups;
+});
 
 async function run(kind: typeof busy.value, fn: () => Promise<void>) {
   busy.value = kind;

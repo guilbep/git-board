@@ -119,7 +119,60 @@ func (s *apiServer) handleLabelList(w http.ResponseWriter, r *http.Request) {
 		}
 		rows = append(rows, row)
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"repos": orEmpty(repos), "rows": rows, "errors": errs})
+	writeJSON(w, http.StatusOK, map[string]any{"repos": orEmpty(repos), "rows": rows, "undeclared": s.undeclaredRows(cfg, repos, existing, counts), "errors": errs})
+}
+
+// undeclaredRows groups the namespaced labels found on the issues or a
+// repository that no field's option declares: every namespace found is a
+// field (the reference's rule, never implemented until now), so
+// sprint:13, risk:structural and assignee:guilbep land here, under their
+// field, instead of "outside the project". Namespace-less labels stay
+// stray (handleLint). Rows in field, then value, order.
+func (s *apiServer) undeclaredRows(cfg *config.Config, repos []string, existing map[string][]ghlabels.Label, counts map[string]int) []labelRow {
+	known := map[string]bool{}
+	for _, l := range ghlabels.Desired(cfg) {
+		known[strings.ToLower(l.Name)] = true
+	}
+	names := map[string]string{} // lowercased → as GitHub or the issue has it
+	add := func(name string) {
+		_, value, namespaced := strings.Cut(name, ":")
+		if !namespaced || value == "" || known[strings.ToLower(name)] {
+			return
+		}
+		low := strings.ToLower(name)
+		if _, ok := names[low]; !ok {
+			names[low] = name
+		}
+	}
+	for _, labels := range existing {
+		for _, l := range labels {
+			add(l.Name)
+		}
+	}
+	if issues, err := s.b.ListIssues(); err == nil {
+		for _, is := range issues {
+			for _, l := range is.Labels {
+				add(l)
+			}
+		}
+	}
+	rows := []labelRow{}
+	for _, low := range slices.Sorted(maps.Keys(names)) {
+		name := names[low]
+		ns, value, _ := strings.Cut(name, ":")
+		row := labelRow{Label: ghlabels.Label{Name: name}, Field: ns, Value: value, Count: counts[low], GitHub: []labelOnGitHub{}}
+		for _, repo := range repos {
+			if labels, ok := existing[repo]; ok {
+				got := labelOnGitHub{Repo: repo, State: "missing"}
+				if i := slices.IndexFunc(labels, func(l ghlabels.Label) bool { return strings.EqualFold(l.Name, name) }); i >= 0 {
+					got.State, got.Color, got.Description = "same", labels[i].Color, labels[i].Description
+				}
+				row.GitHub = append(row.GitHub, got)
+			}
+		}
+		rows = append(rows, row)
+	}
+	return rows
 }
 
 type labelChange struct {

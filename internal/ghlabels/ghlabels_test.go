@@ -101,8 +101,9 @@ func TestPlanChangesOnlyWhatTheFileSets(t *testing.T) {
 	}
 	cfg := &config.Config{Fields: map[string]config.Field{"assignee": {}}}
 	existing = append(existing, Label{Name: "assignee:alice"}, Label{Name: "kind:bug"})
-	if got := names(Stray(cfg, desired, existing)); !slices.Equal(got, []string{"wontfix", "kind:bug"}) {
-		t.Errorf("Stray = %v, want wontfix, kind:bug", got)
+	// a namespaced label is a field's value, declared or not: never stray
+	if got := names(Stray(cfg, desired, existing)); !slices.Equal(got, []string{"wontfix"}) {
+		t.Errorf("Stray = %v, want wontfix only", got)
 	}
 }
 

@@ -1628,7 +1628,7 @@ export interface LabelRow extends GithubLabel {
   count: number; // open issues
   github: { repo: string; state: LabelState; color: string; description: string }[];
 }
-export interface Labels { repos: string[]; rows: LabelRow[]; errors: RepoError[] }
+export interface Labels { repos: string[]; rows: LabelRow[]; undeclared: LabelRow[]; errors: RepoError[] }
 export interface LabelChange extends GithubLabel { repo: string; update: boolean; was?: GithubLabel; error?: string }
 export interface LintFinding { check: string; issue_id: string; title: string; message: string }
 export interface StrayLabel extends GithubLabel { repo: string; count: number }
