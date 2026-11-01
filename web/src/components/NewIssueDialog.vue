@@ -86,13 +86,13 @@ const isMulti = (name: string) => (props.fields[name] ? !props.fields[name]!.sin
 const inputType = (name: string) => (props.fields[name]?.type === 'date' && !isMulti(name) ? 'date' : 'text');
 function hint(name: string): string {
   const t = props.fields[name]?.type;
-  const many = isMulti(name) ? ', comma-separated' : '';
-  if (t === 'issue') return `e.g. #12${many}`;
-  if (t === 'person' || name === 'assignee') return `a login, or @me${many}`;
+  const many = isMulti(name) ? ', …' : '';
+  if (t === 'issue') return `#12${many}`;
+  if (t === 'person' || name === 'assignee') return `login or @me${many}`;
   if (t === 'date') return `YYYY-MM-DD${many}`;
   if (t === 'number') return `a number${many}`;
-  if (t === 'iteration') return `a sprint, or @current${many}`;
-  return isMulti(name) ? 'comma-separated' : '';
+  if (t === 'iteration') return `a sprint or @current${many}`;
+  return isMulti(name) ? 'a, b, …' : '';
 }
 
 async function create(another: boolean) {

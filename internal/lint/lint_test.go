@@ -343,9 +343,15 @@ func TestNearValuesSayWhatWasMeant(t *testing.T) {
 		{ID: "a", Title: "A", Status: "open", Labels: []string{"risk:normal", "prio:p1"}},
 		{ID: "b", Title: "B", Status: "open", Labels: []string{"risk:normal"}},
 		{ID: "c", Title: "C", Status: "open", Labels: []string{"risk:-normal", "prio:P-2"}},
+		// numbers are told apart by their point: 1.5 is not a typo of 15
+		{ID: "d", Title: "D", Status: "open", Labels: []string{"points:1.5"}},
+		{ID: "e", Title: "E", Status: "open", Labels: []string{"points:15"}},
 	}
 	var got []string
 	for _, f := range lint.Run(issues, cfg) {
+		if f.IssueID == "d" || f.IssueID == "e" {
+			t.Errorf("a number flagged: %+v", f)
+		}
 		if f.IssueID == "c" {
 			got = append(got, f.Check+": "+f.Message)
 		}
