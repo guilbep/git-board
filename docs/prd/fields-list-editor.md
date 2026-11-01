@@ -164,7 +164,7 @@ The page succeeds if the person who owns the project file stops editing `.git-bo
 
 Answered against the code (milestone 1, Nov 1 2026):
 
-- [x] **Where Fields lives in Settings.** → **Recommendation: keep it under Project file**, as today's tab. The GitHub Project mapping (`project`) is already a per-field column here; a separate GitHub Project tab would split one file section across two tabs. *Pierre to confirm.*
+- [x] **Where Fields lives in Settings.** Under Project file, as today's tab — decided Nov 1 2026. The GitHub Project mapping (`project`) stays a per-field column here; the Forges canvas's "3 · GitHub Project · fields" is this column, not a separate tab.
 - [x] **Real key names.** All exist: `unit`, `colors`, `descriptions`, `project` (not `github`), `type` with `text` for free text. The Data model table above is corrected and locked.
 - [x] **What "guessed" means.** `type` empty = inferred by `TypeOf`: explicit type → numeric → role → name (sprint, assignee, due…) → what the values parse as → select. The editor should *show* the inference ("numbers", "dates", "forge logins") instead of a dead "guessed" entry.
 - [x] **The 1, 2, 4, 8, 16 vs 0.5, 1, 2, 4, 8 mismatch.** The form reads the file (the draft builds from the server-parsed model, and inputs bind `:value` since `ec93614`). The screenshot predates that binding fix — inputs drifted from the file. F2 (Form | File) already shipped at card granularity (`2225a891`); F3 is new, but the server already answers 409 `changed` on a stale hash, which covers the concurrent-save case.
