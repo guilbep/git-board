@@ -485,6 +485,16 @@ func (c *Config) Held(key, label string) bool {
 	return true
 }
 
+// SyncsAssignees says whether the assignees live natively on the forge a
+// sync key names: the assignee field's home there (FieldTarget) is the
+// forge's own assignees. A mapping moving them to a label, or nowhere,
+// silences the native writes and reads — both sync ways read the field
+// from its home alone.
+func (c *Config) SyncsAssignees(key string) bool {
+	f, _ := c.forgeOf(key)
+	return c.FieldTarget(f, "assignee") == TargetAssignees
+}
+
 // FlatKinds tells the kinds are plain labels, [branches] kinds without
 // [fields.kind] options: bug, not kind:bug. They are the kind field all the
 // same.

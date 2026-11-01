@@ -49,6 +49,16 @@ func (b *Backend) heldOn(u string) func(string) bool {
 	return func(l string) bool { return held != nil && held(key, l) }
 }
 
+// assigneesOn is the config's word on the assignees: false when the
+// assignee field's home on the forge of key is not the forge's own
+// assignees (config.SyncsAssignees). No config set, every forge has them.
+func (b *Backend) assigneesOn() func(key string) bool {
+	return func(key string) bool {
+		cfg := b.cfg.Load()
+		return cfg == nil || cfg.SyncsAssignees(key)
+	}
+}
+
 // flatKind is the flat kind label l is, as kind:bug or as bug.
 func (b *Backend) flatKind(l string) (string, bool) {
 	flat := b.flat.Load()

@@ -446,6 +446,61 @@ func TestHeldLabels(t *testing.T) {
 	}
 }
 
+// The assignees live where their field's mapping says: Options.Assignees
+// false plans no native write or read — their home is elsewhere on that
+// forge, and a field is read from its home alone. The assignee labels go
+// through as ordinary labels meanwhile.
+func TestAssigneesAnotherHome(t *testing.T) {
+	t.Parallel()
+	s, f := newStore(t), fake.New(key)
+	one := sample()
+	one.Labels = []string{"bug"}
+	one.Assignees = []forge.Account{{ID: "8", Login: "bob"}}
+	f.Add(one)
+	opt := Options{Assignees: func(string) bool { return false }}
+	if _, err := Sync(t.Context(), s, opt, f); err != nil {
+		t.Fatal(err)
+	}
+	if got := only(t, s).Labels; slices.ContainsFunc(got, func(l string) bool { return strings.HasPrefix(l, "assignee:") }) {
+		t.Errorf("git-board has %v, want the forge's assignee not pulled", got)
+	}
+
+	// and neither side moves: a change locally stays a label, the forge's
+	// own assignees stay the forge's
+	if _, err := Sync(t.Context(), s, opt, f); err != nil {
+		t.Fatal(err)
+	}
+	is := only(t, s)
+	if _, err := issue.Do(t.Context(), s, is.ID, issue.ChangeLabels("a", []string{"assignee:bob"}, nil)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Sync(t.Context(), s, opt, f); err != nil {
+		t.Fatal(err)
+	}
+	if fi, _ := f.Get("1"); len(fi.Assignees) != 1 {
+		t.Errorf("the forge has %v, want its own assignee kept", fi.Assignees)
+	}
+
+	// and the write: an assignee named in git-board goes nowhere native
+	s2, f2 := newStore(t), fake.New(key)
+	two := sample()
+	two.Labels = []string{"bug"}
+	f2.Add(two)
+	if _, err := Sync(t.Context(), s2, opt, f2); err != nil {
+		t.Fatal(err)
+	}
+	is2 := only(t, s2)
+	if _, err := issue.Do(t.Context(), s2, is2.ID, issue.ChangeLabels("a", []string{"assignee:bob"}, nil)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Sync(t.Context(), s2, opt, f2); err != nil {
+		t.Fatal(err)
+	}
+	if fi, _ := f2.Get("1"); len(fi.Assignees) != 0 {
+		t.Errorf("the forge has %v, want no assignee written", fi.Assignees)
+	}
+}
+
 // A label seen before it was held stays on both sides, and stays seen, the
 // issue read again meanwhile: once the hold is lifted (an older binary, or
 // the Project gone), git-board's change since wins, and no stale copy comes

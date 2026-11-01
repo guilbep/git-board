@@ -257,11 +257,16 @@ func planIssue(item Item, bug store.Issue, cfg *config.Config) IssueChange {
 	}
 	add(planKind(cfg, bug.Labels, item.Labels, item.Category))
 
-	assigneeRes := planAssignees(bug.Labels, item.Assignees)
-	if len(assigneeRes.Added) > 0 || len(assigneeRes.Removed) > 0 {
-		change.Fields = append(change.Fields, assigneeRes)
-		change.Added = append(change.Added, assigneeRes.Added...)
-		change.Removed = append(change.Removed, assigneeRes.Removed...)
+	// the assignees merge where their field's home is the native
+	// assignees: a mapping moving them to a label, or nowhere, leaves both
+	// sides alone — a field is read from its home alone
+	if cfg.FieldTarget(cfg.GitHubForge(), "assignee") == config.TargetAssignees {
+		assigneeRes := planAssignees(bug.Labels, item.Assignees)
+		if len(assigneeRes.Added) > 0 || len(assigneeRes.Removed) > 0 {
+			change.Fields = append(change.Fields, assigneeRes)
+			change.Added = append(change.Added, assigneeRes.Added...)
+			change.Removed = append(change.Removed, assigneeRes.Removed...)
+		}
 	}
 
 	return change

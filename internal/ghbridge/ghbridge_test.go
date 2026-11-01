@@ -121,6 +121,42 @@ func TestBuildPlanMapsFields(t *testing.T) {
 	}
 }
 
+// The assignees live where their field's mapping says: with the assignee
+// field on a label, the Project's assignees move nothing — default (no
+// mapping) they merge as ever.
+func TestBuildPlanLeavesTheAssigneesWhenTheirHomeIsALabel(t *testing.T) {
+	cfg := &config.Config{
+		Fields: map[string]config.Field{
+			"assignee": {Type: config.TypePerson},
+			"status":   {Single: true, Options: []string{"qa"}, Project: map[string]string{"qa": "QA Validation"}},
+		},
+		GithubProject: config.GithubProject{Owner: "o", Number: 1},
+	}
+	item := ghbridge.Item{Status: "QA Validation", Assignees: []string{"guilbep"},
+		Content: ghbridge.Content{Number: 7, Type: "Issue", URL: bug("b7", 7).GithubURL}}
+	bugs := []store.Issue{bug("b7", 7)}
+
+	// the default target is the native assignees: they merge as before
+	change := changeFor(t, ghbridge.BuildPlan([]ghbridge.Item{item}, bugs, cfg), 7)
+	if got := slices.ContainsFunc(change.Fields, func(f ghbridge.FieldResult) bool {
+		return f.Field == "assignee" && slices.Contains(f.Added, "assignee:guilbep")
+	}); !got {
+		t.Errorf("Fields = %+v, want the Project's assignee merged in", change.Fields)
+	}
+
+	// mapped to a label: the Project's assignees move nothing
+	cfg.Fields["assignee"] = config.Field{Type: config.TypePerson}
+	cfg.Forges = append(cfg.Forges, config.Forge{Name: "gh", Kind: "github", Host: "github.com",
+		Fields: map[string]config.FieldMapping{"assignee": {To: config.TargetLabel}}})
+	change = changeFor(t, ghbridge.BuildPlan([]ghbridge.Item{item}, bugs, cfg), 7)
+	if slices.ContainsFunc(change.Fields, func(f ghbridge.FieldResult) bool { return f.Field == "assignee" }) {
+		t.Errorf("Fields = %+v, want no assignee: their home is a label", change.Fields)
+	}
+	if slices.ContainsFunc(change.Added, func(l string) bool { return strings.HasPrefix(l, "assignee:") }) {
+		t.Errorf("Added = %v, want no assignee label", change.Added)
+	}
+}
+
 func TestBuildPlanCategoryLeavesAKindAlone(t *testing.T) {
 	plan := ghbridge.BuildPlan(mustParseFixture(t), []store.Issue{bug("bug2605", 2605, "bug")}, mustLoadConfig(t))
 	change := changeFor(t, plan, 2605)

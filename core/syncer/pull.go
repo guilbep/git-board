@@ -147,8 +147,12 @@ func (r *run) pullNew(p *project, fi forge.Issue) (string, error) {
 	ev := "issue:" + fi.ID
 	labels := strings.Join(r.labelSet(p, fi.Labels), "\n")
 	add := split(labels)
-	for _, as := range fi.Assignees {
-		add = append(add, "assignee:"+as.Login)
+	// the assignees live where their field's mapping says: with another
+	// home on this forge, the forge's own assignees are no one's to pull
+	if r.opt.Assignees == nil || r.opt.Assignees(key) {
+		for _, as := range fi.Assignees {
+			add = append(add, "assignee:"+as.Login)
+		}
 	}
 	ops := []oplog.Op{from(issue.NewCreate(a, fi.Title, plain(fi.Body)), key, ev, fi.Created)}
 	if fi.Status == "closed" {
@@ -172,7 +176,7 @@ func (r *run) pullNew(p *project, fi forge.Issue) (string, error) {
 		seenOp(a, now, is.ID, "status", fi.Status),
 		seenOp(a, now, is.ID, "labels", labels),
 	}
-	if len(fi.Assignees) > 0 {
+	if len(fi.Assignees) > 0 && (r.opt.Assignees == nil || r.opt.Assignees(key)) {
 		sops = append(sops, seenOp(a, now, is.ID, "assignees", ids(fi.Assignees)))
 	}
 	for _, c := range fi.Comments {

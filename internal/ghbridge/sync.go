@@ -197,15 +197,19 @@ func syncedFields(cfg *config.Config) []syncedField {
 		}
 		seen[name] = true
 		m := gh.Fields[name]
+		known, hasExtractor := syncedByName[name]
 		column := m.Field
 		if column == "" {
-			if known, ok := syncedByName[name]; ok {
+			if hasExtractor {
 				column = known.project
 			} else {
 				column = name
 			}
+		} else if hasExtractor && strings.EqualFold(column, known.project) {
+			// the mapping's spelling of a known column: as the Project has
+			// it, so the field is found whatever case the mapping names
+			column = known.project
 		}
-		known, hasExtractor := syncedByName[name]
 		value := known.value
 		if !hasExtractor {
 			column = titleCase(column)
@@ -323,33 +327,38 @@ func syncIssue(plan *SyncPlan, item Item, bug store.Issue, bases map[string]stri
 		}
 	}
 
-	// Assignees merge as a set, person by person, so they never conflict.
-	assignable, checked := meta.Assignable[repoOf(item.Content.URL)]
-	a := syncAssignees(item, bug.Labels, bases["assignee"], cfg.GithubProject.Write)
-	if checked {
-		var refused []string
-		a.ghAdd = slices.DeleteFunc(a.ghAdd, func(login string) bool {
-			if slices.Contains(assignable, login) {
-				return false
+	// Assignees merge as a set, person by person, so they never conflict —
+	// where their field's home is the native assignees: a mapping moving
+	// them to a label, or nowhere, leaves both sides alone (one place read
+	// from, the field's target).
+	if cfg.FieldTarget(cfg.GitHubForge(), "assignee") == config.TargetAssignees {
+		assignable, checked := meta.Assignable[repoOf(item.Content.URL)]
+		a := syncAssignees(item, bug.Labels, bases["assignee"], cfg.GithubProject.Write)
+		if checked {
+			var refused []string
+			a.ghAdd = slices.DeleteFunc(a.ghAdd, func(login string) bool {
+				if slices.Contains(assignable, login) {
+					return false
+				}
+				refused = append(refused, login)
+				return true
+			})
+			for _, login := range refused {
+				change.Warnings = append(change.Warnings, fmt.Sprintf("%s can't be assigned on GitHub (no access to %s), kept in git-board only", login, repoOf(item.Content.URL)))
+				a.base = strings.Join(slices.DeleteFunc(strings.Split(a.base, ","), func(s string) bool { return s == login }), ",")
 			}
-			refused = append(refused, login)
-			return true
-		})
-		for _, login := range refused {
-			change.Warnings = append(change.Warnings, fmt.Sprintf("%s can't be assigned on GitHub (no access to %s), kept in git-board only", login, repoOf(item.Content.URL)))
-			a.base = strings.Join(slices.DeleteFunc(strings.Split(a.base, ","), func(s string) bool { return s == login }), ",")
 		}
+		if len(a.added)+len(a.removed) > 0 {
+			change.Fields = append(change.Fields, FieldResult{Field: "assignee", Added: a.added, Removed: a.removed})
+			change.Added = append(change.Added, a.added...)
+			change.Removed = append(change.Removed, a.removed...)
+		}
+		if len(a.ghAdd)+len(a.ghRemove) > 0 {
+			plan.Edits = append(plan.Edits, ProjectEdit{BugID: bug.ID, ItemID: item.ID, Number: item.Content.Number,
+				Field: "assignee", Value: a.base, Kind: EditAssignees, URL: item.Content.URL, Add: a.ghAdd, Remove: a.ghRemove})
+		}
+		record("assignee", a.base)
 	}
-	if len(a.added)+len(a.removed) > 0 {
-		change.Fields = append(change.Fields, FieldResult{Field: "assignee", Added: a.added, Removed: a.removed})
-		change.Added = append(change.Added, a.added...)
-		change.Removed = append(change.Removed, a.removed...)
-	}
-	if len(a.ghAdd)+len(a.ghRemove) > 0 {
-		plan.Edits = append(plan.Edits, ProjectEdit{BugID: bug.ID, ItemID: item.ID, Number: item.Content.Number,
-			Field: "assignee", Value: a.base, Kind: EditAssignees, URL: item.Content.URL, Add: a.ghAdd, Remove: a.ghRemove})
-	}
-	record("assignee", a.base)
 
 	res, warning := planKind(cfg, bug.Labels, item.Labels, item.Category)
 	if warning != "" {

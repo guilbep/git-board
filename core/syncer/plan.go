@@ -220,8 +220,10 @@ func (r *run) plan(p *project, is *issue.Issue, fi forge.Issue, who map[string]s
 		write: func(fw forge.Forge, v string) error { return fw.SetStatus(r.ctx, fi.Ref(), v) }})
 
 	pullAdd, pullRemove := r.planLabels(pl, p, is, fi, pull, push)
-	aAdd, aRemove := r.planAssignees(pl, p, is, fi, pull, push)
-	pullAdd, pullRemove = append(pullAdd, aAdd...), append(pullRemove, aRemove...)
+	if r.opt.Assignees == nil || r.opt.Assignees(key) {
+		aAdd, aRemove := r.planAssignees(pl, p, is, fi, pull, push)
+		pullAdd, pullRemove = append(pullAdd, aAdd...), append(pullRemove, aRemove...)
+	}
 	if len(pullAdd) > 0 || len(pullRemove) > 0 {
 		pl.ops = append(pl.ops, from(issue.ChangeLabels(a, pullAdd, pullRemove), key, ev, changedAt(fi, "labels")))
 	}

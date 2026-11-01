@@ -51,6 +51,11 @@ type Options struct {
 	// sent there, and the project's own copy of it neither pulled nor
 	// removed. Nil holds none.
 	Held func(key, label string) bool
+	// Assignees says whether the assignees live natively on the project
+	// named by key: false plans no assignee write or read there — the
+	// field's mapping gives them another home on that forge, and a field
+	// is read from its home alone. Nil is true everywhere.
+	Assignees func(key string) bool
 	// Did hears each issue the run wrote for, as Report counts them, on the
 	// project named by its key: "created" and "updated" with the number of
 	// operations pulled, "linked" for a forge issue found by its marker or
