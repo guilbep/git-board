@@ -64,9 +64,25 @@
               />
               <span class="fs-sum">{{ summary(f) }}</span>
               <span v-if="changed(f)" class="fs-dirty">Unsaved changes</span>
+              <span class="fs-mode" role="group" aria-label="Edit as a form or as TOML">
+                <button type="button" class="fs-modebtn" :class="{ 'fs-mode-on': !tomlOpen[f.key] }" @click="closeToml(f)">Form</button>
+                <button type="button" class="fs-modebtn" :class="{ 'fs-mode-on': tomlOpen[f.key] }" @click="openToml(f)">TOML</button>
+              </span>
             </template>
 
-            <div class="fs-body">
+            <div v-if="tomlOpen[f.key]" class="fs-toml">
+              <textarea
+                class="fs-tomledit"
+                :value="tomlText[f.key]"
+                spellcheck="false"
+                rows="10"
+                :aria-label="`The TOML of ${f.name || 'the new field'}`"
+                @input="tomlInput(f, ($event.target as HTMLTextAreaElement).value)"
+              />
+              <p v-if="tomlError[f.key]" class="fs-tomlerr" role="alert">{{ tomlError[f.key] }}</p>
+              <p v-else class="gb-hint">This card's table only — it applies as you type. Comments are lost when you switch back to the form.</p>
+            </div>
+            <div v-else class="fs-body">
               <div class="fs-block">
                 <span class="fs-label">Values <em>— drag to reorder; left is first in the workflow</em></span>
                 <div class="fs-chips">
@@ -206,9 +222,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { getConfigFile, saveConfig } from '@/api/board';
 import { fieldPresets, takeUnique } from '@/configpresets';
+import { fieldToToml, tomlToField, type FieldToml } from '@/fieldtoml';
 import { SectionDraft, configModel, configModelError, loadConfigModel, inputValue } from '@/configmodel';
 import { message } from '@/issue';
 import ConfigCard from '@/components/configforms/ConfigCard.vue';
@@ -369,6 +386,68 @@ function addWords(f: FieldRow, text: string) {
   if (words.length) f.options = [...f.options, ...words];
 }
 
+// the card's other rendering: a [fields.<name>] snippet, applied as it is
+// typed. While it parses, the snippet is the source of truth — a key
+// absent from it leaves the field, exactly as the file would; while it
+// does not, the row keeps its last good state and Save is held.
+const tomlOpen = ref<Record<number, boolean>>({});
+const tomlText = ref<Record<number, string>>({});
+const tomlError = ref<Record<number, string | undefined>>({});
+
+const rowToToml = (f: FieldRow): FieldToml => ({
+  single: f.single,
+  numeric: f.numeric,
+  type: f.type || undefined,
+  unit: f.unit || undefined,
+  options: f.options,
+  colors: kvOf(f.colors),
+  descriptions: kvOf(f.descriptions),
+  project: kvOf(f.project),
+});
+
+function openToml(f: FieldRow) {
+  tomlOpen.value[f.key] = true;
+  tomlText.value[f.key] = fieldToToml(f.name, rowToToml(f));
+  tomlError.value[f.key] = undefined;
+}
+
+function closeToml(f: FieldRow) {
+  tomlOpen.value[f.key] = false;
+}
+
+function tomlInput(f: FieldRow, text: string) {
+  tomlText.value[f.key] = text;
+  const r = tomlToField(text);
+  if (!r.ok) {
+    tomlError.value[f.key] = r.error;
+    return;
+  }
+  tomlError.value[f.key] = undefined;
+  applyToml(f, r.name, r.field);
+}
+
+function applyToml(f: FieldRow, name: string | undefined, t: FieldToml) {
+  if (name) f.name = name;
+  f.single = t.single ?? false;
+  f.numeric = t.numeric ?? false;
+  f.type = t.type ?? '';
+  f.unit = t.unit ?? '';
+  f.options = t.options ? [...t.options] : [];
+  f.colors = toPairs(t.colors);
+  f.descriptions = toPairs(t.descriptions);
+  f.project = toPairs(t.project);
+}
+
+// a reload or a save rebuilds the rows: the snippets go with the old ones
+watch(
+  () => draft.base.value,
+  () => {
+    tomlOpen.value = {};
+    tomlText.value = {};
+    tomlError.value = {};
+  },
+);
+
 // the per-value details: one table keyed by value — the options in their
 // order, then the pair keys the options lost; a cell emptied removes its
 // pair
@@ -437,7 +516,8 @@ function addPreset(i: number) {
   ];
 }
 
-const valid = computed(() => fields.value.every((f) => !f.name.trim() || /^[A-Za-z0-9_-]+$/.test(f.name.trim())));
+const hasTomlError = computed(() => Object.values(tomlError.value).some(Boolean));
+const valid = computed(() => fields.value.every((f) => !f.name.trim() || /^[A-Za-z0-9_-]+$/.test(f.name.trim())) && !hasTomlError.value);
 const state = computed(() => `${fields.value.length} field${fields.value.length === 1 ? '' : 's'} · ${fields.value.reduce((n, f) => n + f.options.length, 0)} options`);
 
 function reset() {
@@ -492,6 +572,16 @@ h2, p { margin: 0; }
 .fs-name:focus { outline: 2px solid var(--fg); outline-offset: 2px; }
 .fs-sum { color: var(--fg-muted); font-size: .8125rem; }
 .fs-dirty { font-size: .75rem; font-weight: 700; color: var(--danger); }
+/* the card's two renderings: the form and this field's TOML */
+.fs-mode { display: inline-flex; border: 1px solid var(--border); }
+.fs-modebtn { min-height: 1.625rem; padding: 0 .5rem; border: 0; background: none; color: var(--fg-muted); font: inherit; font-size: .75rem; cursor: pointer; }
+.fs-modebtn + .fs-modebtn { border-left: 1px solid var(--border); }
+.fs-modebtn:hover { color: var(--fg); }
+.fs-mode-on { background: var(--fg); color: var(--bg); font-weight: 700; }
+.fs-toml { display: grid; gap: .375rem; }
+.fs-tomledit { padding: .5rem .625rem; border: 1px solid var(--border); background: var(--bg); color: var(--fg); font-family: var(--font-mono); font-size: .8125rem; line-height: 1.5; resize: vertical; white-space: pre; }
+.fs-tomledit:focus { outline: 2px solid var(--fg); outline-offset: 2px; }
+.fs-tomlerr { color: var(--danger); font-size: .8125rem; }
 /* the body: values as chips, the cardinality, the details' table */
 .fs-body { display: grid; gap: .75rem; }
 .fs-block { display: grid; gap: .375rem; }
