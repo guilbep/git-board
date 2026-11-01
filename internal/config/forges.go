@@ -214,6 +214,65 @@ func WithoutForge(content, name string) string {
 	return withoutTable(content, "[forges."+name+"]")
 }
 
+// SetForgeFieldsText is content with a forge's [forges.<name>.fields]
+// holding set, without remove: one inline table per field
+// (status = { to = "project", field = "Status" }), one values subtable
+// where the mapping renames values. The other keys and the comments
+// stay; the parse refuses a mapping that fits nothing, as the file would.
+func SetForgeFieldsText(content, forge string, set map[string]FieldMapping, remove []string) string {
+	header := "[forges." + forge + ".fields]"
+	for _, field := range remove {
+		content = deleteTable(content, "forges."+forge+".fields."+field)
+		content = setTableKeys(content, header, lastTableHeader(content, "forges."+forge), []string{field}, map[string]string{field: ""}, false)
+	}
+	if len(set) == 0 {
+		return content
+	}
+	keys := slices.Sorted(maps.Keys(set))
+	vals := map[string]string{}
+	for _, field := range keys {
+		vals[field] = set[field].toml()
+	}
+	content = setTableKeys(content, header, lastTableHeader(content, "forges."+forge), keys, vals, false)
+	for _, field := range keys {
+		// the values subtable sits one level under the inline mapping, as
+		// TOML requires: status = { … } and [forges.gh.fields.status.values]
+		sub := "[forges." + forge + ".fields." + field + ".values]"
+		if len(set[field].Values) == 0 {
+			content = deleteTable(content, sub)
+			continue
+		}
+		var b strings.Builder
+		fmt.Fprintf(&b, "%s\n", sub)
+		for _, v := range slices.Sorted(maps.Keys(set[field].Values)) {
+			fmt.Fprintf(&b, "%s = %s\n", quoteKey(v), tomlString(set[field].Values[v]))
+		}
+		content = upsertTable(content, sub, b.String())
+	}
+	return content
+}
+
+// quoteKey is a table key bare when it can be, quoted when not
+// (in-progress stays bare, "In Progress" doesn't).
+func quoteKey(k string) string {
+	if viewName.MatchString(k) {
+		return k
+	}
+	return tomlString(k)
+}
+
+// toml is the mapping as one inline table, only what is set.
+func (m FieldMapping) toml() string {
+	parts := []string{"to = " + tomlString(m.To)}
+	if m.As != "" {
+		parts = append(parts, "as = "+tomlString(m.As))
+	}
+	if m.Field != "" {
+		parts = append(parts, "field = "+tomlString(m.Field))
+	}
+	return "{ " + strings.Join(parts, ", ") + " }"
+}
+
 func withoutTable(content, header string) string {
 	out := blankLines.ReplaceAllString(upsertTable(content, header, ""), "\n\n")
 	return strings.TrimRight(out, "\n") + "\n"

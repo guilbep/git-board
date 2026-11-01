@@ -100,6 +100,7 @@
            section and saves it alone, the file's other lines untouched.
            v-show: switching tabs keeps an unsaved draft. -->
       <div v-show="tab === 'fields'" class="set-wrap set-wrap-wide"><FieldsSettings /></div>
+      <div v-show="tab === 'forge-fields'" class="set-wrap set-wrap-wide"><ForgeFieldsSettings /></div>
       <div v-show="tab === 'labels'" class="set-wrap set-wrap-wide"><LabelsSettings @changed="labels = $event" /></div>
       <div v-show="tab === 'views'" class="set-wrap set-wrap-wide"><ViewsSettings /></div>
       <div v-show="tab === 'sprints'" class="set-wrap set-wrap-wide"><SprintsSettings /></div>
@@ -146,6 +147,7 @@ import BranchesSettings from '@/components/BranchesSettings.vue';
 import ConfigEditor from '@/components/ConfigEditor.vue';
 import CycleSettings from '@/components/CycleSettings.vue';
 import FieldsSettings from '@/components/FieldsSettings.vue';
+import ForgeFieldsSettings from '@/components/ForgeFieldsSettings.vue';
 import LabelsSettings from '@/components/LabelsSettings.vue';
 import ReleaseSettings from '@/components/ReleaseSettings.vue';
 import ReposSettings from '@/components/ReposSettings.vue';

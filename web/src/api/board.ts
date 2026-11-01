@@ -733,6 +733,8 @@ export interface ConfigModel {
   exists: boolean;
   error?: string; // the file doesn't parse: the forms show it, Advanced fixes it
   fields: Record<string, ConfigField>;
+  forges: import('@/fieldtargets').ForgeModel[]; // the [forges.<name>] tables, mappings with them
+  github_project?: { owner: string; number: number; write?: boolean };
   labels: ConfigLabels;
   views: Record<string, ViewConfig>;
   view_order: string[]; // the file's order: the tabs', the first is the landing one

@@ -454,3 +454,63 @@ func TestConfigSectionConflictsAndRejects(t *testing.T) {
 		t.Errorf("during a sync: %d, want 409", code)
 	}
 }
+
+// The forges' Fields table: the model answers the [forges.<name>] tables
+// whole, and the forge-fields section writes the mappings — the inline
+// tables and the values subtables, the rest of the file kept.
+func TestConfigSectionForgeFields(t *testing.T) {
+	t.Parallel()
+	ts, s := newIssueServer(t)
+	s.cfgPath = filepath.Join(t.TempDir(), ".git-board.toml")
+	src := sectionFile + "\n[forges.gh]\nkind = \"github\"\nproject = \"o/r\"\nsync = true\n"
+	if err := os.WriteFile(s.cfgPath, []byte(src), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var m struct {
+		Hash   string `json:"hash"`
+		Forges []struct {
+			Name   string `json:"name"`
+			Kind   string `json:"kind"`
+			Fields map[string]struct {
+				To     string            `json:"to"`
+				Field  string            `json:"field"`
+				As     string            `json:"as"`
+				Values map[string]string `json:"values"`
+			} `json:"fields"`
+		} `json:"forges"`
+	}
+	call(t, "GET", ts.URL+"/api/config/model", nil, &m)
+	if len(m.Forges) != 1 || m.Forges[0].Name != "gh" {
+		t.Fatalf("forges: %+v", m.Forges)
+	}
+
+	// the mapping lands, the forge and the fields stay
+	var saved sectionSave
+	body := map[string]any{"forge": "gh", "set": map[string]any{
+		"status": map[string]any{"to": "project", "field": "Status"},
+	}, "remove": []string{}}
+	if code := call(t, "PUT", ts.URL+"/api/config/section/forge-fields?base="+m.Hash, body, &saved); code != http.StatusOK {
+		t.Fatalf("save: %d", code)
+	}
+	text, _ := os.ReadFile(s.cfgPath)
+	for _, want := range []string{"[forges.gh]", "sync = true", `status = { to = "project", field = "Status" }`, "[fields.status]"} {
+		if !strings.Contains(string(text), want) {
+			t.Errorf("the file lost %q:\n%s", want, text)
+		}
+	}
+	// a mapping that fits nothing is refused, the file untouched
+	bad := map[string]any{"forge": "gh", "set": map[string]any{
+		"status": map[string]any{"to": "weight"},
+	}, "remove": []string{}}
+	if code := call(t, "PUT", ts.URL+"/api/config/section/forge-fields?base="+saved.Model.Hash, bad, nil); code != http.StatusBadRequest {
+		t.Errorf("weight on a select: %d, want 400", code)
+	}
+	got, _ := os.ReadFile(s.cfgPath)
+	if !strings.Contains(string(got), `status = { to = "project", field = "Status" }`) {
+		t.Errorf("a refused save changed the file:\n%s", got)
+	}
+	// a bogus forge name is refused
+	if code := call(t, "PUT", ts.URL+"/api/config/section/forge-fields?base="+saved.Model.Hash, map[string]any{"forge": "my forge", "set": map[string]any{}, "remove": []string{}}, nil); code != http.StatusBadRequest {
+		t.Errorf("a spaced forge name: %d, want 400", code)
+	}
+}

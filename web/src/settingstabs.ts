@@ -8,6 +8,7 @@
 export const settingsTabs = [
   { id: 'overview', label: 'Overview' },
   { id: 'sync', label: 'Sync', via: 'git, forges, Project' },
+  { id: 'forge-fields', label: 'Forge fields', group: 'The project file', via: 'where each field lives' },
   { id: 'fields', label: 'Fields', group: 'The project file' },
   { id: 'labels', label: 'Labels', group: 'The project file' },
   { id: 'views', label: 'Views', group: 'The project file' },

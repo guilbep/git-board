@@ -19,12 +19,13 @@ test('settingsTab takes the address, the Overview without one or for an unknown 
   assert.equal(settingsTab('forges'), 'sync');
   assert.equal(settingsTab('github-project'), 'sync');
   assert.equal(settingsTab('project-file'), 'fields');
+  assert.equal(settingsTab('forge-fields'), 'forge-fields');
 });
 
 test('the tabs, in the menu order: the Overview, the Sync, the project file per section, You', () => {
   assert.deepEqual(
     settingsTabs.map((t) => t.id),
-    ['overview', 'sync', 'fields', 'labels', 'views', 'sprints', 'roles', 'branches', 'cycle', 'release', 'repos', 'attachments', 'numbers', 'worktrees', 'advanced', 'you'],
+    ['overview', 'sync', 'forge-fields', 'fields', 'labels', 'views', 'sprints', 'roles', 'branches', 'cycle', 'release', 'repos', 'attachments', 'numbers', 'worktrees', 'advanced', 'you'],
   );
 });
 
@@ -35,7 +36,7 @@ test('the sidebar groups: the project file\u2019s sections together, the rest wi
     ['', 'The project file', ''],
   );
   const byId = (i: number) => groups[i]?.tabs.map((t) => t.id) ?? [];
-  assert.deepEqual(byId(1), ['fields', 'labels', 'views', 'sprints', 'roles', 'branches', 'cycle', 'release', 'repos', 'attachments', 'numbers', 'worktrees', 'advanced']);
+  assert.deepEqual(byId(1), ['forge-fields', 'fields', 'labels', 'views', 'sprints', 'roles', 'branches', 'cycle', 'release', 'repos', 'attachments', 'numbers', 'worktrees', 'advanced']);
   assert.deepEqual(byId(0), ['overview', 'sync']);
   assert.deepEqual(byId(2), ['you']);
 });

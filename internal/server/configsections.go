@@ -1,12 +1,18 @@
 package server
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
+	"regexp"
 	"sort"
 
 	"github.com/guilbep/git-board/internal/config"
 )
+
+// validForgeName is a [forges.<name>] table's: letters, digits, - and _
+// (config.forgeName's rule, spelled here so the section says so).
+var validForgeName = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
 
 // The settings' forms read and write one section of .git-board.toml at a
 // time. GET /api/config/model answers every section typed, from the config
@@ -42,6 +48,11 @@ type configModel struct {
 	} `json:"repos"`
 	Uploads config.Uploads `json:"uploads"`
 	Release config.Release `json:"release"`
+	// Forges are the [forges.<name>] tables, their field mappings with
+	// them: the Forges page's Fields table resolves where each field
+	// lives (config.FieldTarget's rules, mirrored client-side).
+	Forges        []config.Forge       `json:"forges"`
+	GithubProject config.GithubProject `json:"github_project"`
 }
 
 func (s *apiServer) configModel() (configModel, error) {
@@ -53,6 +64,7 @@ func (s *apiServer) configModel() (configModel, error) {
 	m.Fields = map[string]config.Field{}
 	m.Views = map[string]config.View{}
 	m.Roles = map[string]string{}
+	m.Forges = []config.Forge{}
 	if !exists {
 		return m, nil
 	}
@@ -93,6 +105,8 @@ func (s *apiServer) configModel() (configModel, error) {
 	}
 	m.Repos.List = orEmpty(cfg.Repos)
 	m.Repos.Assignees = cfg.Assignees
+	m.GithubProject = cfg.GithubProject
+	m.Forges = cfg.Forges
 	m.Uploads = cfg.Uploads
 	m.Release = cfg.Release
 	if m.Release.Images == nil {
@@ -101,6 +115,7 @@ func (s *apiServer) configModel() (configModel, error) {
 	if m.Release.Deploy == nil {
 		m.Release.Deploy = []config.Target{}
 	}
+	m.Forges = cfg.Forges
 	return m, nil
 }
 
@@ -207,6 +222,22 @@ func sectionWriter(section string, r *http.Request, w http.ResponseWriter) (func
 				}
 			}
 			return text, nil
+		}, nil
+	case "forge-fields":
+		var req struct {
+			Forge  string                         `json:"forge"`
+			Set    map[string]config.FieldMapping `json:"set"`
+			Remove []string                       `json:"remove"`
+		}
+		if !decode(w, r, &req) {
+			return nil, nil
+		}
+		if !validForgeName.MatchString(req.Forge) {
+			writeError(w, http.StatusBadRequest, errors.New("a forge's name is letters, digits, - and _, not "+req.Forge))
+			return nil, nil
+		}
+		return func(text string) (string, error) {
+			return config.SetForgeFieldsText(text, req.Forge, req.Set, req.Remove), nil
 		}, nil
 	case "labels":
 		var req config.Labels

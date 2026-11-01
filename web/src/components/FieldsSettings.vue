@@ -128,6 +128,14 @@
                     <button type="button" class="fs-modebtn" :class="{ 'fs-mode-on': tomlOpen[selected.key] }" @click="openToml(selected)">TOML</button>
                   </span>
                 </template>
+                <!-- where the field lives on each forge: one line, each part
+                     linked to that forge's row (the mappings PRD) -->
+                <p v-if="forgeLines(selected)" class="fs-forges">
+                  <template v-for="(part, i) in forgeLines(selected)" :key="part.forge">
+                    <span v-if="i"> · </span>
+                    On {{ part.forgeLabel }}: <router-link :to="`/settings/forge-fields/${part.forge}`" class="gb-linkbtn">{{ part.text }}</router-link>
+                  </template>
+                </p>
 
                 <div v-if="tomlOpen[selected.key]" class="fs-toml">
                   <textarea
@@ -224,7 +232,6 @@
                             <th>Value</th>
                             <th>Color</th>
                             <th>Description</th>
-                            <th>GitHub Project name</th>
                             <th>Also read as</th>
                           </tr>
                         </thead>
@@ -253,16 +260,6 @@
                                 spellcheck="false"
                                 :aria-label="`Description for ${k}`"
                                 @input="setPair(selected, 'descriptions', k, inputValue($event))"
-                              />
-                            </td>
-                            <td>
-                              <input
-                                :value="pairOf(selected, 'project', k)"
-                                class="fs-cell"
-                                placeholder="if different"
-                                spellcheck="false"
-                                :aria-label="`GitHub Project name for ${k}`"
-                                @input="setPair(selected, 'project', k, inputValue($event))"
                               />
                             </td>
                             <td>
@@ -318,6 +315,7 @@ import { fieldPresets, takeUnique } from '@/configpresets';
 import { allNumbers, inferType, type FieldType } from '@/fieldinfer';
 import { fieldToToml, tomlToField, type FieldToml } from '@/fieldtoml';
 import { SectionDraft, configModel, configModelError, loadConfigModel, inputValue } from '@/configmodel';
+import { fieldTarget, targetLabels } from '@/fieldtargets';
 import { message } from '@/issue';
 import ConfigCard from '@/components/configforms/ConfigCard.vue';
 import ConfigPreset from '@/components/configforms/ConfigPreset.vue';
@@ -496,6 +494,25 @@ function summary(f: FieldRow): string {
 function numbers(f: FieldRow): boolean {
   if (f.type && f.type !== 'number') return false;
   return f.type === 'number' || f.numeric || allNumbers(f.options);
+}
+
+// where the field lives on each declared forge, the editor's one line
+// under the summary: On GitHub: Project › Status · On GitLab: scoped
+// label — each part linked to that forge's row. No forge, no line; the
+// Project column only when a Project is configured or the file implies
+// one (the forge's own [github-project]).
+function forgeLines(f: FieldRow): { forge: string; forgeLabel: string; text: string }[] | null {
+  const m = configModel.value;
+  if (!m || !m.forges.length) return null;
+  const roles = Object.keys(m.roles ?? {});
+  const projectNumber = m.github_project?.number ?? 0;
+  const out = m.forges.map((forge) => {
+    const to = fieldTarget(forge, m.fields, f.name, roles, projectNumber);
+    const column = forge.fields?.[f.name]?.field;
+    const text = to === 'project' ? `Project › ${column ?? f.name.charAt(0).toUpperCase() + f.name.slice(1)}` : targetLabels[to] ?? to;
+    return { forge: forge.name, forgeLabel: forge.kind === 'gitlab' ? 'GitLab' : 'GitHub', text };
+  });
+  return out.length ? out : null;
 }
 
 // the three cardinalities: one value, several, or any text (type text)
@@ -990,6 +1007,8 @@ h2, p { margin: 0; }
 .fs-more summary:hover { color: var(--fg); }
 .fs-more[open] summary { margin-bottom: .25rem; }
 .fs-morehint { font-weight: 400; color: var(--fg-muted); }
+.fs-forges { margin: 0; padding: 0 1rem .5rem; font-size: .875rem; color: var(--fg-muted); }
+.fs-forges a { font-weight: 700; }
 .fs-tablewrap { overflow-x: auto; border: 1px solid var(--border); }
 .fs-table { width: 100%; min-width: 30rem; border-collapse: collapse; font-size: .8125rem; }
 .fs-table th { padding: .375rem .5rem; border-bottom: 1px solid var(--border); background: var(--bg-subtle); text-align: left; font-size: .75rem; color: var(--fg-muted); }

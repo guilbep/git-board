@@ -117,6 +117,23 @@
           <!-- every namespace found is a field: the labels on the issues
                or a repository that no field's option declares, under
                their field, with the way to declare it -->
+          <!-- the leftover migration's preview: counted, then run -->
+          <section v-if="migratePlans" class="lb-migrate" aria-label="The migration's preview">
+            <h3 class="h5">Migrate <code>{{ migratePlans.field }}</code></h3>
+            <ul>
+              <li v-for="p in migratePlans.plans" :key="p.forge">
+                <b>{{ p.forge }}</b> ({{ p.repo }}): <b>{{ p.issues }} issues</b> carry it{{ p.labels ? `, ${p.labels} labels come off` : '' }} — {{ p.note }}
+              </li>
+            </ul>
+            <p class="lb-muted">Nothing is written until you run it. Same as <code>git board sync --migrate {{ migratePlans.field }}</code>.</p>
+            <div class="lb-migrate-actions">
+              <button type="button" class="epfl-btn epfl-btn-primary epfl-btn-sm" :disabled="!!migrating" @click="runMigrate">
+                {{ migrating ? 'Migrating…' : 'Run the migration' }}
+              </button>
+              <button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" @click="migratePlans = null">Not now</button>
+            </div>
+          </section>
+
           <template v-if="d.undeclared.length">
             <section aria-labelledby="lb-undecl">
               <h3 id="lb-undecl" class="h5">On the issues, not declared</h3>
@@ -145,6 +162,10 @@
                         <router-link class="gb-linkbtn" :to="g.declared ? `/settings/fields/${g.field}` : '/settings/fields'">
                           {{ g.declared ? 'Add the option in Fields' : 'Declare this field' }}
                         </router-link>
+                        <span v-if="g.staleHome" class="lb-stale">
+                          left over from an old mapping —
+                          <button type="button" class="gb-linkbtn" @click="askMigrate(g.field)">Migrate</button>
+                        </span>
                       </td>
                     </tr>
                   </tbody>
@@ -228,7 +249,8 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref } from 'vue';
-import { deleteLabel, getLabels, getLint, saveConfigSection, sendLabels, type ConfigField, type LabelChange, type LabelRow, type Labels, type Lint, type StrayLabel } from '@/api/board';
+import { deleteLabel, getLabels, getLint, previewFieldMigration, runFieldMigration, saveConfigSection, sendLabels, type ConfigField, type LabelChange, type LabelRow, type Labels, type Lint, type MigratePlan, type StrayLabel } from '@/api/board';
+import { fieldTarget } from '@/fieldtargets';
 import { labelsPreset } from '@/configpresets';
 import { configModel, configModelError, loadConfigModel, SectionDraft, inputValue, plainClone } from '@/configmodel';
 import ConfigPreset from '@/components/configforms/ConfigPreset.vue';
@@ -262,13 +284,26 @@ const issues = (n: number) => `${n} issue${n === 1 ? '' : 's'}`;
 // the undeclared labels, grouped under their field: a declared field's
 // extra values (status:ready-for-validation, sprint:13, assignee:guilbep)
 // and the fields no table declares (risk, roles), each with its count and
-// where it stands on GitHub
+// where it stands on GitHub. A declared field whose forge home is no
+// longer a label (assignee in the native assignees) is a mapping's
+// leftover: Migrate moves the values (the forge-fields page's preview,
+// run here after it).
 const undeclaredGroups = computed(() => {
-  const groups: { field: string; declared: boolean; rows: LabelRow[]; count: number; onRepo: boolean[] }[] = [];
+  const m = configModel.value;
+  const roles = Object.keys(m?.roles ?? {});
+  const projectNumber = m?.github_project?.number ?? 0;
+  const groups: { field: string; declared: boolean; staleHome: boolean; rows: LabelRow[]; count: number; onRepo: boolean[] }[] = [];
   for (const row of d.value?.undeclared ?? []) {
     let g = groups.find((x) => x.field === row.field);
     if (!g) {
-      g = { field: row.field, declared: !!configModel.value?.fields[row.field], rows: [], count: 0, onRepo: (d.value?.repos ?? []).map(() => false) };
+      const declared = !!m?.fields[row.field];
+      const staleHome =
+        declared &&
+        (m?.forges ?? []).some((f) => {
+          const to = fieldTarget(f, m!.fields, row.field, roles, projectNumber);
+          return to !== 'label' && to !== 'scoped-label';
+        });
+      g = { field: row.field, declared, staleHome, rows: [], count: 0, onRepo: (d.value?.repos ?? []).map(() => false) };
       groups.push(g);
     }
     g.rows.push(row);
@@ -277,6 +312,29 @@ const undeclaredGroups = computed(() => {
   }
   return groups;
 });
+
+// the leftover's migration: the preview counts, the run moves
+const migratePlans = ref<{ field: string; plans: MigratePlan[] } | null>(null);
+const migrating = ref('');
+
+async function askMigrate(field: string) {
+  migratePlans.value = { field, plans: (await previewFieldMigration(field)).plans };
+}
+
+async function runMigrate() {
+  if (!migratePlans.value) return;
+  migrating.value = migratePlans.value.field;
+  try {
+    const r = await runFieldMigration(migratePlans.value.field);
+    if (r.error) error.value = r.error;
+    migratePlans.value = null;
+    load();
+  } catch (e) {
+    error.value = message(e);
+  } finally {
+    migrating.value = '';
+  }
+}
 
 async function run(kind: typeof busy.value, fn: () => Promise<void>) {
   busy.value = kind;
@@ -391,6 +449,10 @@ onMounted(() => {
 .lb h2, .lb h3, .lb h4, .lb p, .lb ul { margin: 0; }
 .lb-lead { max-width: 48rem; color: var(--fg-muted); }
 .lb-muted { color: var(--fg-muted); }
+.lb-stale { display: block; font-size: .8125rem; color: var(--fg-muted); }
+.lb-migrate { display: grid; gap: .5rem; margin: 1rem 0; padding: 1rem 1.25rem; border: 1px solid var(--fg); }
+.lb-migrate ul { margin: 0; padding-left: 1.25rem; display: grid; gap: .25rem; }
+.lb-migrate-actions { display: flex; gap: .5rem; }
 .lb-own { display: grid; gap: .75rem; padding: .75rem 1rem; border: 1px solid var(--border); border-left: 3px solid var(--primary); background: var(--bg); }
 .lb-tag { padding: .375rem .625rem; border: 1px solid var(--border); background: var(--bg); color: var(--fg); font: inherit; }
 .lb-tag:focus, .lb-desc:focus { outline: 2px solid var(--fg); outline-offset: 2px; border-color: var(--fg); }
