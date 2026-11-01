@@ -787,6 +787,30 @@ export function getFieldUsage(): Promise<Record<string, number>> {
   return request('/api/fields/usage');
 }
 
+// MigratePlan is what moving one field to its new forge home would do on
+// one forge: the issues touched, the forge labels taken off them, and
+// what a sync run does instead when migration has nothing of its own.
+export interface MigratePlan {
+  forge: string;
+  repo: string;
+  target: string;
+  issues: number;
+  labels: number;
+  note?: string;
+}
+
+// previewFieldMigration counts, per declared forge, what running the
+// migration would do to a field. Nothing is written.
+export function previewFieldMigration(field: string): Promise<{ plans: MigratePlan[] }> {
+  return request(`/api/fields/migrate?field=${encodeURIComponent(field)}`);
+}
+
+// runFieldMigration writes it: the values to the target the sync won't
+// revisit (the assignees), the old labels off the forge's issues.
+export function runFieldMigration(field: string): Promise<{ plans: MigratePlan[]; error?: string }> {
+  return request(`/api/fields/migrate?field=${encodeURIComponent(field)}`, json('POST', {}));
+}
+
 // ReleaseSetup is what Enable binary release proposes from the repository.
 export interface ReleaseSetup {
   binaries: string[]; // main packages, ./cmd/git-board

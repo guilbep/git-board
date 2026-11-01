@@ -189,6 +189,8 @@ func newMux(s *apiServer, static http.Handler) http.Handler {
 	mux.HandleFunc("GET /api/config/docs", s.handleConfigDocs)
 	mux.HandleFunc("GET /api/config/model", s.handleConfigModel)
 	mux.HandleFunc("GET /api/fields/usage", s.handleFieldUsage)
+	mux.HandleFunc("GET /api/fields/migrate", func(w http.ResponseWriter, r *http.Request) { s.migrateField(w, r, false) })
+	mux.HandleFunc("POST /api/fields/migrate", func(w http.ResponseWriter, r *http.Request) { s.migrateField(w, r, true) })
 	mux.HandleFunc("PUT /api/config/section/{section}", s.handleConfigSection)
 	mux.HandleFunc("PUT /api/config", s.handleConfigSave)
 	mux.HandleFunc("PUT /api/bridges/{name}/sync", s.handleBridgeSync)

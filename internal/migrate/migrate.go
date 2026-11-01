@@ -1,0 +1,205 @@
+// Package migrate moves a field's values to the home its forge mapping
+// names (docs/prd/forge-field-mappings.md): a run of sync writes the new
+// target by itself; what migration adds is the old labels' removal from
+// the forge, and the values' first write for a target the sync only
+// maintains (the assignees). Changing a mapping moves nothing by itself —
+// the preview counts, the user runs it.
+package migrate
+
+import (
+	"context"
+	"fmt"
+	"slices"
+	"strings"
+
+	"github.com/guilbep/git-board/core/forge"
+	"github.com/guilbep/git-board/internal/config"
+	"github.com/guilbep/git-board/internal/store"
+)
+
+// Plan is what migrating one field on one forge would do, or did.
+type Plan struct {
+	Forge  string `json:"forge"`
+	Repo   string `json:"repo"`   // owner/repo, or the numeric id
+	Target string `json:"target"` // the field's home there now
+	Issues int    `json:"issues"` // issues here that carry the field
+	Labels int    `json:"labels"` // the forge's labels the move takes off the issues
+	// Note says what a sync does instead, when migration has nothing of
+	// its own to write.
+	Note string `json:"note,omitempty"`
+}
+
+// Issue is one issue's stake in a migration: its forge ref, and the
+// field's values here.
+type stake struct {
+	is     store.Issue
+	ref    forge.Ref
+	values []string
+}
+
+// refOf is the forge ref of a linked issue: its URL's last number
+// (github.com/o/r/issues/2605 → 2605). No link, no stake.
+func refOf(url string) forge.Ref {
+	n := ""
+	for i := len(url) - 1; i >= 0 && url[i] != '/'; i-- {
+		if url[i] < '0' || url[i] > '9' {
+			n = ""
+			break
+		}
+		n = string(url[i]) + n
+	}
+	if n == "" {
+		return forge.Ref{}
+	}
+	return forge.Ref{Number: n}
+}
+
+// urlOn says whether an issue's link points at this forge's project:
+// the host, and on GitHub the owner/repo too — two forges of one host is
+// the norm. A GitLab table names its project by numeric id, its issue
+// URLs by path, so the host decides there (one project per table).
+func urlOn(f config.Forge, url string) bool {
+	u := strings.ToLower(url)
+	if !strings.HasPrefix(u, "https://"+strings.ToLower(f.Host)+"/") {
+		return false
+	}
+	if f.Kind == "github" {
+		return strings.HasPrefix(u[len("https://"+f.Host+"/"):], strings.ToLower(f.Project)+"/")
+	}
+	return true
+}
+
+// stakes is, per forge, the issues carrying the field, with their values
+// as the storage has them (namespaced labels; aliases folded).
+func stakes(cfg *config.Config, f config.Forge, field string, issues []store.Issue) []stake {
+	var out []stake
+	for _, is := range issues {
+		values := []string{}
+		for _, l := range is.Labels {
+			if ns, v, ok := strings.Cut(l, ":"); ok && strings.EqualFold(ns, field) && v != "" {
+				values = append(values, cfg.Fields[field].AliasOf(v))
+			}
+		}
+		if len(values) == 0 {
+			continue
+		}
+		if !urlOn(f, is.GithubURL) {
+			continue
+		}
+		ref := refOf(is.GithubURL)
+		if ref.Number == "" {
+			continue
+		}
+		out = append(out, stake{is: is, ref: ref, values: values})
+	}
+	return out
+}
+
+// Preview counts, per declared forge, what Migrate would do to field.
+// No forge declares the field's home away from labels: nothing to
+// migrate, the note says the sync carries the values.
+func Preview(cfg *config.Config, field string, issues []store.Issue) []Plan {
+	var plans []Plan
+	for _, f := range cfg.Forges {
+		target := cfg.FieldTarget(f, field)
+		s := stakes(cfg, f, field, issues)
+		p := Plan{Forge: f.Name, Repo: f.Project, Target: target, Issues: len(s)}
+		switch target {
+		case config.TargetLabel, config.TargetScopedLabel:
+			p.Note = "still a label there — nothing to migrate"
+		case config.TargetProject:
+			p.Note = "a sync run writes the Project column; migration takes the old labels off the forge"
+		case config.TargetAssignees:
+			p.Note = "migration sets the assignees and takes the labels off the forge"
+		default:
+			p.Note = "a sync run writes the new home; migration takes the old labels off the forge"
+		}
+		plans = append(plans, p)
+	}
+	return plans
+}
+
+// Migrate writes what Preview counts, through the forge adapters with
+// their token rule: per issue carrying the field, the values to the
+// target (the assignees alone, the one native slot the adapters set per
+// issue), then the field's labels off the issue. say reports each forge.
+// A forge that refuses keeps its note and the others go on; the error is
+// the first refusal, the plans carry what landed.
+func Migrate(ctx context.Context, cfg *config.Config, field string, issues []store.Issue, open func(config.Forge) (forge.Forge, error), say func(string)) ([]Plan, error) {
+	var plans []Plan
+	var firstErr error
+	for _, f := range cfg.Forges {
+		target := cfg.FieldTarget(f, field)
+		s := stakes(cfg, f, field, issues)
+		p := Plan{Forge: f.Name, Repo: f.Project, Target: target, Issues: len(s)}
+		switch target {
+		case config.TargetLabel, config.TargetScopedLabel:
+			p.Note = "still a label there — nothing to migrate"
+			plans = append(plans, p)
+			continue
+		}
+		fw, err := open(f)
+		if err != nil {
+			p.Note = err.Error()
+			plans = append(plans, p)
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
+		}
+		labels := 0
+		for _, st := range s {
+			if target == config.TargetAssignees {
+				accounts := []forge.Account{}
+				for _, v := range st.values {
+					accounts = append(accounts, forge.Account{Login: v})
+				}
+				if _, err := fw.SetAssignees(ctx, st.ref, accounts); err != nil {
+					say(fmt.Sprintf("%s #%s: the assignees refused: %v", f.Name, st.ref.Number, err))
+					if firstErr == nil {
+						firstErr = err
+					}
+					continue
+				}
+			}
+			// the labels leave the issue, wherever the values went: they
+			// are the old home's spelling, held off this forge since the
+			// mapping, and the forge keeps them defined
+			if err := fw.ChangeLabels(ctx, st.ref, nil, nsLabels(field, st.values, f)); err != nil {
+				say(fmt.Sprintf("%s #%s: the labels refused: %v", f.Name, st.ref.Number, err))
+				if firstErr == nil {
+					firstErr = err
+				}
+				continue
+			}
+			labels += len(st.values)
+		}
+		p.Labels = labels
+		p.Note = fmt.Sprintf("%d issues moved to %s, %d labels off the issues", len(s), target, labels)
+		say(fmt.Sprintf("%s (%s): %s", f.Name, f.Project, p.Note))
+		plans = append(plans, p)
+	}
+	return plans, firstErr
+}
+
+// nsLabels is the field's labels as the forge has them, the file's
+// spelling: namespaced (status:ready) or plain (ready) as the mapping
+// says — a plain one's values are one per issue, the removal list is the
+// values all the same.
+func nsLabels(field string, values []string, f config.Forge) []string {
+	plain := false
+	if m, ok := f.Fields[field]; ok && m.To == config.TargetLabel && m.As == "plain" {
+		plain = true
+	}
+	var out []string
+	for _, v := range values {
+		label := field + ":" + v
+		if plain {
+			label = v
+		}
+		if !slices.Contains(out, label) {
+			out = append(out, label)
+		}
+	}
+	return out
+}

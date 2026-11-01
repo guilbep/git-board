@@ -64,32 +64,35 @@ func (c *Config) FieldTarget(f Forge, field string) string {
 			return TargetProject
 		}
 	}
-	return DefaultTarget(f.Kind, c.TypeOf(field, c.Fields[field].Options))
+	return DefaultTarget(f.Kind, field, c.TypeOf(field, c.Fields[field].Options))
 }
 
 // DefaultTarget is the target a field of that type uses on the forge when
 // nothing is written: chosen to work on any plan, every default a free
 // feature. The type is TypeOf's spelling (select, iteration, person,
-// number, date, issue, text).
-func DefaultTarget(kind, fieldType string) string {
+// number, date, issue, text). The assignees slot is one per forge, and
+// the forges' sync reads and writes it for the field named assignee —
+// another person field (reviewer) lives in its labels until a mapping
+// says otherwise.
+func DefaultTarget(kind, field, fieldType string) string {
 	switch kind {
 	case "gitlab":
-		switch fieldType {
-		case TypePerson:
+		switch {
+		case field == "assignee" && fieldType == TypePerson:
 			return TargetAssignees
-		case TypeIteration:
+		case fieldType == TypeIteration:
 			return TargetMilestone
-		case TypeDate:
+		case fieldType == TypeDate:
 			return TargetDueDate
 		}
 		return TargetLabel
 	default: // github, and the shape any Gitea/Forgejo adapter would take
-		switch fieldType {
-		case TypePerson:
+		switch {
+		case field == "assignee" && fieldType == TypePerson:
 			return TargetAssignees
-		case TypeIssue:
+		case fieldType == TypeIssue:
 			return TargetSubIssues
-		case TypeText:
+		case fieldType == TypeText:
 			return TargetNone
 		}
 		return TargetLabel
@@ -154,6 +157,7 @@ func (c *Config) GitHubForge() Forge {
 // can't carry, with the table's name in the message: the editor names the
 // line from it.
 func checkFieldMappings(c *Config) error {
+	assignees := map[string]string{} // forge name → the field in its one slot
 	for _, f := range c.Forges {
 		for _, name := range slices.Sorted(maps.Keys(f.Fields)) {
 			m := f.Fields[name]
@@ -165,6 +169,12 @@ func checkFieldMappings(c *Config) error {
 			t := c.TypeOf(name, field.Options)
 			if err := checkTarget(where, m.To, t, f.Kind); err != nil {
 				return err
+			}
+			if m.To == TargetAssignees {
+				if prev, ok := assignees[f.Name]; ok {
+					return fmt.Errorf("%s to: %s has the assignees on this forge already — one slot per forge", where, prev)
+				}
+				assignees[f.Name] = name
 			}
 			if m.To == "" { // details alone are nothing to validate further
 				continue

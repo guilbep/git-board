@@ -477,7 +477,9 @@ func (p *project) byNumber(number string) *entry {
 // found, as on a forge.
 func (p *project) live(issue forge.Ref) (*entry, error) {
 	for _, e := range p.issues {
-		if e.ID == issue.ID && e.Number == issue.Number && !e.deleted {
+		// an empty ID names the issue by number alone, as an adapter that
+		// reads its forge's numbers from a URL does
+		if e.Number == issue.Number && (issue.ID == "" || e.ID == issue.ID) && !e.deleted {
 			if e.confidential {
 				return nil, forge.ErrConfidential
 			}
