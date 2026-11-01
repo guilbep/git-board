@@ -44,7 +44,7 @@
 
           <ConfigSaveBar
             section="sprints"
-            :dirty="draft.dirty.value"
+            :dirty="draft.dirty.value || edited"
             :saving="draft.saving.value"
             :saved="draft.saved.value"
             :valid="valid"
@@ -68,7 +68,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
 import type { ConfigSprint } from '@/api/board';
-import { nextSprint, sprintsPreset, toSprintStart } from '@/configpresets';
+import { nextSprint, sprintsPreset, toSprintStart, fromSprintStart } from '@/configpresets';
 import { SectionDraft, configModel, configModelError } from '@/configmodel';
 import ConfigRefPanel from '@/components/configforms/ConfigRefPanel.vue';
 import ConfigRows from '@/components/configforms/ConfigRows.vue';
@@ -84,7 +84,7 @@ const draft = new SectionDraft<Sprints>(
   (m) => ({
     length_days: m.sprints.length_days,
     start_weekday: m.sprints.start_weekday,
-    list: m.sprints.list.map((s) => ({ ...s })),
+    list: m.sprints.list.map((s) => ({ ...s, start: fromSprintStart(s.start) })),
   }),
   (a, b) =>
     a.length_days !== b.length_days || a.start_weekday !== b.start_weekday || JSON.stringify(a.list) !== JSON.stringify(b.list),
@@ -123,9 +123,19 @@ function reset() {
   if (configModel.value) draft.reset(configModel.value);
 }
 
+// the inputs edit their own copies, the draft takes them at the save:
+// edited is what makes Save live meanwhile
+const edited = computed(() => {
+  const v = draft.value.value;
+  if (!v) return false;
+  return lengthDays.value !== (v.length_days || sprintsPreset.length_days) || startWeekday.value !== v.start_weekday || JSON.stringify(list.value) !== JSON.stringify(v.list);
+});
+
 async function save() {
+  const v = draft.value.value;
   draft.value.value = {
-    length_days: lengthDays.value,
+    // the preset shown for an unset length isn't written
+    length_days: v && !v.length_days && lengthDays.value === sprintsPreset.length_days ? 0 : lengthDays.value,
     start_weekday: startWeekday.value,
     list: list.value,
   };

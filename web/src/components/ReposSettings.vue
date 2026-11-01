@@ -59,7 +59,8 @@ const draft = new SectionDraft<Repos>(
   'repos',
   (m) => ({ list: [...m.repos.list] }),
   (a, b) => JSON.stringify(a.list) !== JSON.stringify(b.list),
-  (value) => ({ list: value.list.filter((r) => r.trim()) }),
+  // assignees is the Sync's, sent back as the file has it: the table is the form's, a key left out goes
+  (value) => ({ list: value.list.filter((r) => r.trim()), assignees: configModel.value?.repos.assignees ?? '' }),
 );
 
 const valid = computed(() => (draft.value.value?.list ?? []).every((r) => /^[\w.-]+\/[\w.-]*$/.test(r.trim()) || !r.trim()));

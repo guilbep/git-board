@@ -108,24 +108,25 @@
               </template>
             </ConfigRows>
 
-            <ConfigSaveBar
-              section="cycle"
-              :dirty="draft.dirty.value"
-              :saving="draft.saving.value"
-              :saved="draft.saved.value"
-              :valid="valid"
-              :error="draft.saveError.value"
-              :conflict="draft.conflict.value"
-              :state="state"
-              @save="draft.save()"
-              @discard="reset"
-              @reload="draft.load()"
-            />
           </template>
           <p v-else class="gb-hint">
             Off: the file holds no [cycle] table, the issues open on the classic page. Saving removes every [cycle.*] table —
             including the tests and checks.
           </p>
+          <!-- outside the v-if: turning the cycle off is saved here too -->
+          <ConfigSaveBar
+            section="cycle"
+            :dirty="draft.dirty.value"
+            :saving="draft.saving.value"
+            :saved="draft.saved.value"
+            :valid="valid"
+            :error="draft.saveError.value"
+            :conflict="draft.conflict.value"
+            :state="state"
+            @save="draft.save()"
+            @discard="reset"
+            @reload="draft.load()"
+          />
         </template>
 
 
@@ -206,7 +207,11 @@ const draft = new SectionDraft<{ on: boolean; cycle: Cycle }>(
     const c = value.cycle;
     return {
       on: true,
+      // the keys this form doesn't show (test-files, criteria, steps,
+      // signoffs, signers, plans-in-pr) go back as the file has them: the
+      // writer drops a key left out
       cycle: {
+        ...configModel.value?.cycle,
         ready: c.ready || undefined,
         'in-progress': c['in-progress'].filter((s) => s.trim()),
         'in-review': c['in-review'].filter((s) => s.trim()),

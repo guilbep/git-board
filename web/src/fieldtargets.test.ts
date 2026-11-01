@@ -42,8 +42,11 @@ test('fieldTarget takes the mapping, then the old homes, then the default', () =
 
 test('targetsFor offers what the forge has, the default first, the paid tier marked', () => {
   assert.deepEqual(targetsFor('github', 'select', 'status').map((t) => t.id), ['label', 'project', 'none']);
-  assert.deepEqual(targetsFor('gitlab', 'select', 'status').map((t) => t.id), ['label', 'scoped-label', 'assignees', 'milestone', 'due-date', 'none']);
+  // the native slots for their own type alone, as config.checkTarget has it
+  assert.deepEqual(targetsFor('gitlab', 'select', 'status').map((t) => t.id), ['label', 'scoped-label', 'none']);
+  assert.deepEqual(targetsFor('gitlab', 'iteration', 'sprint').map((t) => t.id), ['label', 'iteration', 'milestone', 'none']);
+  assert.deepEqual(targetsFor('gitlab', 'date', 'due').map((t) => t.id), ['label', 'due-date', 'none']);
   assert.match(targetsFor('gitlab', 'select', 'status')[1]?.label ?? '', /paid tier/);
   assert.deepEqual(targetsFor('github', 'person', 'reviewer').map((t) => t.id), ['label', 'assignees', 'none']);
-  assert.deepEqual(targetsFor('gitlab', 'issue', 'parent').map((t) => t.id), ['label', 'assignees', 'milestone', 'due-date', 'none']);
+  assert.deepEqual(targetsFor('gitlab', 'issue', 'parent').map((t) => t.id), ['label', 'none']);
 });

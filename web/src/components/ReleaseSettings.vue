@@ -44,7 +44,7 @@
             </label>
             <label class="rls-field">
               <span>Follows the trunk</span>
-              <input :value="draft.value.value.follow ?? ''" class="rls-input" placeholder="the first environment" spellcheck="false" aria-label="The environment that follows the trunk" @input="set('follow', ($event.target as HTMLInputElement).value)" />
+              <input :value="draft.value.value.follow ?? ''" class="rls-input" placeholder="the first environment" spellcheck="false" aria-label="The environment that follows the trunk" @input="set('follow', ($event.target as HTMLInputElement).value || null)" />
             </label>
           </div>
 
@@ -130,11 +130,11 @@ import ConfigRows from '@/components/configforms/ConfigRows.vue';
 import ConfigSaveBar from '@/components/configforms/ConfigSaveBar.vue';
 
 type ImageRow = { name: string; context: string };
-type DeployRow = { repo: string; path: string };
+type DeployRow = { repo: string; path: string; registry?: string };
 type Release = {
   remote: string;
   environments: string[];
-  follow: string;
+  follow: string | null; // null: no key, the first follows; "": none does
   checks: string;
   images: ImageRow[];
   chartPath: string;
@@ -150,20 +150,25 @@ const draft = new SectionDraft<Release>(
   (m) => ({
     remote: m.release.remote ?? '',
     environments: [...(m.release.environments ?? [])],
-    follow: m.release.follow ?? '',
+    follow: m.release.follow ?? null,
     checks: m.release.checks ?? '',
     images: (m.release.images ?? []).map((i) => ({ ...i })),
     chartPath: m.release.chart?.path ?? '',
     chartRegistry: m.release.chart?.registry ?? '',
-    deploy: (m.release.deploy ?? []).map((t) => ({ repo: t.repo, path: t.path })),
+    deploy: (m.release.deploy ?? []).map((t) => ({ ...t })),
     binaries: [...(m.release.binaries ?? [])],
   }),
   (a, b) => JSON.stringify(a) !== JSON.stringify(b),
   (value) => {
+    // the keys this form doesn't show (version_values, builder,
+    // platforms, build) go back as the file has them: the writer drops a
+    // key left out
     const r: ConfigRelease = {
+      ...configModel.value?.release,
+      chart: null, // the form's, below
       remote: value.remote || undefined,
       environments: value.environments.filter((e) => e.trim()),
-      follow: value.follow || null,
+      follow: value.follow,
       checks: value.checks || undefined,
       images: value.images.filter((i) => i.name.trim()),
       deploy: value.deploy.filter((t) => t.repo.trim()),

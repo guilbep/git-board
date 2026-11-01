@@ -399,12 +399,19 @@ const draft = new SectionDraft<FieldsValue>(
     for (const r of rows) if (!order.includes(r.key)) order.push(r.key);
     return { rows, order };
   },
-  (a, b) => JSON.stringify(a.rows.map(rowOf)) !== JSON.stringify(b.rows.map(rowOf)) || JSON.stringify(a.order) !== JSON.stringify(b.order),
+  // the order by name: each from() numbers its rows afresh
+  (a, b) => JSON.stringify(a.rows.map(rowOf)) !== JSON.stringify(b.rows.map(rowOf)) || JSON.stringify(orderNames(a)) !== JSON.stringify(orderNames(b)),
   (value) => {
     const names = value.rows.map((f) => f.name.trim()).filter(Boolean);
     const set: Record<string, unknown> = {};
+    const saved = configModel.value?.fields ?? {};
     for (const f of value.rows) {
       if (!f.name.trim()) continue;
+      // a field as the file has it is left alone: its lines stay as
+      // written, and the kinds' flat field ([branches.kinds], no table of
+      // its own) is not turned into a [fields.kind] table
+      const was = saved[f.name.trim()];
+      if (was && JSON.stringify(rowOf(asRow(f.name.trim(), was))) === JSON.stringify(rowOf(f))) continue;
       set[f.name.trim()] = {
         single: f.single ?? false,
         numeric: f.numeric ?? false,
@@ -429,6 +436,7 @@ const draft = new SectionDraft<FieldsValue>(
   },
 );
 
+const orderNames = (v: FieldsValue) => v.order.map((k) => v.rows.find((r) => r.key === k)?.name);
 const rowOf = (f: FieldRow) => [f.name, f.single, f.numeric, f.type, f.unit, f.options, f.aliases, f.colors, f.descriptions, f.project];
 
 const fields = computed<FieldRow[]>({
@@ -555,7 +563,9 @@ function detailsSummary(f: FieldRow): string {
 // the field at the address: #/settings/fields/<name>, none is the first
 const route = useRoute();
 const router = useRouter();
-const routeName = computed(() => (typeof route.params.name === 'string' ? route.params.name : ''));
+// the address's field, on this tab alone: the page keeps every tab mounted,
+// and #/settings/forge-fields/<forge> names a forge, not a field
+const routeName = computed(() => (route.params.tab === 'fields' && typeof route.params.name === 'string' ? route.params.name : ''));
 const selectedKey = ref<number | null>(null);
 
 watch(

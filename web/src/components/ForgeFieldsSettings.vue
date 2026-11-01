@@ -132,7 +132,7 @@ import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { previewFieldMigration, runFieldMigration, type ConfigField, type ConfigModel, type MigratePlan } from '@/api/board';
 import { configModel, configModelError, inputValue, loadConfigModel, SectionDraft } from '@/configmodel';
-import { fieldTarget, targetsFor, targetLabels, type ForgeMapping, type ForgeModel } from '@/fieldtargets';
+import { fieldTarget, targetsFor, targetLabels, typeOf, type ForgeMapping, type ForgeModel } from '@/fieldtargets';
 import ConfigSaveBar from '@/components/configforms/ConfigSaveBar.vue';
 import { message } from '@/issue';
 
@@ -158,10 +158,12 @@ interface Row {
   aliases: number;
 }
 
+// the rows follow the draft: a target picked shows its details at once
 const rows = computed<Row[]>(() => {
   const m = configModel.value ?? undefined;
-  const f = forge.value;
-  if (!m || !f) return [];
+  const saved = forge.value;
+  if (!m || !saved) return [];
+  const f: ForgeModel = { ...saved, fields: draft.value.value?.set ?? saved.fields ?? {} };
   const out: Row[] = [];
   for (const name of m.field_order) {
     const cf: ConfigField | undefined = m.fields[name];
@@ -173,7 +175,7 @@ const rows = computed<Row[]>(() => {
       type: `${cf.type || 'guessed'} · ${cf.single ? 'one' : 'several'}`,
       target,
       defaultTarget: fieldTarget({ ...f, fields: {} }, m.fields, name, roles.value, projectNumber.value),
-      targets: targetsFor(f.kind, cf.type || 'select', name),
+      targets: targetsFor(f.kind, typeOf(m.fields, name, roles.value), name),
       projectField: fm.field ?? name.charAt(0).toUpperCase() + name.slice(1),
       renamed: Object.keys(fm.values ?? {}).length,
       aliases: Object.keys(cf.aliases ?? {}).length,
@@ -220,17 +222,28 @@ function patch(name: string, m: Partial<ForgeMapping>) {
 }
 
 function setTarget(row: Row, to: string) {
-  patch(row.name, { to });
+  const v = draft.value.value;
+  // the default again, no renames: no override, the file's goes
+  if (v && to === row.defaultTarget && !Object.keys(v.set[row.name]?.values ?? {}).length) {
+    const set = { ...v.set };
+    delete set[row.name];
+    const remove = forge.value?.fields?.[row.name] ? [...new Set([...v.remove, row.name])] : v.remove;
+    draft.value.value = { ...v, set, remove };
+    migration.value = null;
+    return;
+  }
+  // a Project column needs its name: the one the row shows
+  patch(row.name, to === 'project' ? { to, field: row.projectField } : { to, field: undefined });
 }
 
 function setProjectField(row: Row, field: string) {
-  patch(row.name, { field: field === row.name ? undefined : field });
+  patch(row.name, { field }); // a project mapping always names its column
 }
 
 // the values' renames, as the details expander holds them
 const renaming = ref('');
 const renamingValues = computed(() => {
-  const m = forge.value?.fields?.[renaming.value]?.values ?? {};
+  const m = draft.value.value?.set[renaming.value]?.values ?? {};
   const options = configModel.value?.fields[renaming.value]?.options ?? [];
   return options.map((v) => ({ value: v, on: m[v] ?? '' }));
 });

@@ -39,7 +39,7 @@ export const targetLabels: Record<string, string> = {
 };
 
 // A field's type, as the server reads it: the file's, else the inference.
-function typeOf(fields: Record<string, ConfigField>, name: string, roles: string[]): FieldType {
+export function typeOf(fields: Record<string, ConfigField>, name: string, roles: string[]): FieldType {
   const f = fields[name] ?? {};
   return f.type ? (f.type as FieldType) : inferType(name, f.options ?? [], !!f.numeric, roles);
 }
@@ -85,7 +85,8 @@ export function targetsFor(kind: string, fieldType: string, field: string): { id
   switch (kind) {
     case 'gitlab': {
       if (field === 'assignee' && fieldType === 'person') return [entry('assignees'), entry('label'), entry('none')];
-      const all = [entry('label'), entry('assignees'), entry('milestone'), entry('due-date'), entry('none')];
+      // the native slots take their own type alone (config.checkTarget)
+      const all = [entry('label'), ...(fieldType === 'person' ? [entry('assignees')] : []), ...(fieldType === 'iteration' ? [entry('milestone')] : []), ...(fieldType === 'date' ? [entry('due-date')] : []), entry('none')];
       if (fieldType === 'select') all.splice(1, 0, entry('scoped-label', 'needs a paid tier'));
       if (fieldType === 'iteration') all.splice(1, 0, entry('iteration', 'needs a paid tier'));
       if (fieldType === 'number') all.splice(1, 0, entry('weight', 'needs a paid tier'));

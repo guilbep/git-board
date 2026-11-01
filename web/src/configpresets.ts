@@ -133,10 +133,10 @@ function iso(d: Date): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
-// fromSprintStart reads a sprint's start back from the server's RFC 3339
+// fromSprintStart reads a sprint's start back from the server's RFC 3339:
+// the file's day, as written, whatever this browser's time zone
 export function fromSprintStart(rfc: string): string {
-  const d = new Date(rfc);
-  return Number.isNaN(d.getTime()) ? '' : iso(d);
+  return /^\d{4}-\d{2}-\d{2}/.exec(rfc)?.[0] ?? '';
 }
 
 // toSprintStart sends a date the way the server's time.Time reads it
