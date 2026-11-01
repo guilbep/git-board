@@ -130,7 +130,9 @@ func (c *Config) Forge(name string) (Forge, bool) {
 // WithForge is content with f's table replaced, or appended. The file's
 // other tables and comments stay, and so do the forge's [forges.<name>.*]
 // subtables — [forges.gh.fields] above all: the mappings aren't the
-// bridges API's to rewrite. Pure, as WithRelease.
+// bridges API's to rewrite. They stay because upsertTable's span ends at
+// the next header line, a subtable's included; only the base table's own
+// keys are rewritten. Pure, as WithRelease.
 func WithForge(content string, f Forge) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "[forges.%s]\nkind = %q\nproject = %q\n", f.Name, f.Kind, f.Project)
@@ -141,70 +143,7 @@ func WithForge(content string, f Forge) string {
 		fmt.Fprintf(&b, "login = %q\n", f.Login)
 	}
 	fmt.Fprintf(&b, "sync = %t\n", f.Sync)
-	text := upsertTable(content, "[forges."+f.Name+"]", b.String())
-	if sub := forgeSubTables(content, "[forges."+f.Name+"."); sub != "" {
-		text = insertAfterTable(text, "[forges."+f.Name+"]", sub)
-	}
-	return text
-}
-
-// forgeSubTables is the text of every [prefix…] table, with the comments above
-// each: the block WithForge re-inserts after its base table.
-func forgeSubTables(content, prefix string) string {
-	lines := strings.Split(content, "\n")
-	var kept []string
-	for i, line := range lines {
-		t := strings.TrimSpace(line)
-		if strings.HasPrefix(t, "["+prefix) || (i > 0 && kept != nil && strings.HasPrefix(lines[i-1], "["+prefix)) {
-			kept = append(kept, line)
-			continue
-		}
-		// the body of a subtable, and the comments above its header
-		if kept != nil {
-			if t != "" && !strings.HasPrefix(t, "[") {
-				kept = append(kept, line)
-			} else if t == "" && len(kept) > 0 && kept[len(kept)-1] != "" {
-				kept = append(kept, line)
-			}
-		}
-	}
-	out := strings.TrimRight(strings.Join(kept, "\n"), "\n")
-	for strings.Contains(out, "\n\n\n") {
-		out = strings.ReplaceAll(out, "\n\n\n", "\n\n")
-	}
-	return out
-}
-
-// insertAfterTable is content with block inserted at the end of header's
-// table, before the next one.
-func insertAfterTable(content, header, block string) string {
-	lines := strings.Split(content, "\n")
-	start := -1
-	for i, line := range lines {
-		if strings.TrimSpace(line) == header {
-			start = i
-			break
-		}
-	}
-	if start < 0 {
-		return content
-	}
-	end := len(lines)
-	for i := start + 1; i < len(lines); i++ {
-		if strings.HasPrefix(strings.TrimSpace(lines[i]), "[") {
-			end = i
-			break
-		}
-	}
-	for end > start+1 && strings.TrimSpace(lines[end-1]) == "" {
-		end--
-	}
-	var out []string
-	out = append(out, lines[:end]...)
-	out = append(out, "")
-	out = append(out, strings.Split(block, "\n")...)
-	out = append(out, lines[end:]...)
-	return strings.Join(out, "\n")
+	return upsertTable(content, "[forges."+f.Name+"]", b.String())
 }
 
 var blankLines = regexp.MustCompile(`\n{3,}`)
@@ -229,6 +168,12 @@ func SetForgeFieldsText(content, forge string, set map[string]FieldMapping, remo
 		return content
 	}
 	keys := slices.Sorted(maps.Keys(set))
+	// a mapping without its target means nothing (the parse refuses one):
+	// nothing of it written
+	keys = slices.DeleteFunc(keys, func(field string) bool { return set[field].To == "" })
+	if len(keys) == 0 {
+		return content
+	}
 	vals := map[string]string{}
 	for _, field := range keys {
 		vals[field] = set[field].toml()
@@ -237,17 +182,17 @@ func SetForgeFieldsText(content, forge string, set map[string]FieldMapping, remo
 	for _, field := range keys {
 		// the values subtable sits one level under the inline mapping, as
 		// TOML requires: status = { … } and [forges.gh.fields.status.values]
-		sub := "[forges." + forge + ".fields." + field + ".values]"
+		dotted := "forges." + forge + ".fields." + field + ".values"
 		if len(set[field].Values) == 0 {
-			content = deleteTable(content, sub)
+			content = deleteTable(content, dotted)
 			continue
 		}
 		var b strings.Builder
-		fmt.Fprintf(&b, "%s\n", sub)
+		fmt.Fprintf(&b, "[%s]\n", dotted)
 		for _, v := range slices.Sorted(maps.Keys(set[field].Values)) {
 			fmt.Fprintf(&b, "%s = %s\n", quoteKey(v), tomlString(set[field].Values[v]))
 		}
-		content = upsertTable(content, sub, b.String())
+		content = upsertTable(content, "["+dotted+"]", b.String())
 	}
 	return content
 }

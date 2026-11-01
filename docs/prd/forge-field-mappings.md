@@ -78,7 +78,8 @@ Fields stay forge-agnostic in `[fields.*]`. Each forge in `[forges.<name>]` gets
 
 - A target that doesn't fit the type is refused with the line: `weight` on a select field, `assignees` on a number field.
 - A target the forge doesn't offer is refused: `scoped-label` on GitHub, `sub-issues` on GitLab.
-- `as = "plain"` is refused when two fields share a value name (the plain label can't be traced back to one field).
+- A mapping's details fit its target even before `to` is set: a `field` key or a `values` table without a `to` is refused, as on a target that can't hold them.
+- `as` (a label's plain spelling, `ready` instead of `status:ready`) is planned, not applied: nothing writes a plain label yet, so the parse refuses it. It ships when the sync spells labels the mapping's way — until then the namespaced spelling is the only one.
 - The existing `project` key keeps working, read as `[forges.gh.fields.<name>.values]`; lint suggests moving it.
 
 ## Sync rules
@@ -141,7 +142,7 @@ One line under the summary: **On GitHub: Project › Status · On GitLab: scoped
 Each ships on its own.
 
 1. **Labels page grouping** — every namespace under its field, declared or not. No config change; answers the stray question. *(done)*
-2. **Mapping config and labels only** — `[forges.<name>.fields]`, `to = "label"` with `as`, `values`, field `aliases`, validation; the old `project` key read as the new form. *(done)*
+2. **Mapping config and labels only** — `[forges.<name>.fields]`, `to = "label"` with `values`, field `aliases`, validation; the old `project` key read as the new form. *(done; `as` — the plain-label spelling — is refused until the sync writes it, see Validation)*
 3. **Native targets on GitHub** — the keystone: the forges' sync holds a label off a forge when its field's home there is not a label (config.Held reads the mappings), and the GitHub Project sync takes its fields from the config — any field can be a `project` target, by the mapping's column and value names (Item keeps the raw values gh lists by column name). Assignees already flow through the syncer's assignee sync once the labels are held; the closing rule holds wherever the status field lives, since `git board close` sets the last option and the issue state together. **Deferred**: `milestone` and `sub-issues` as write targets in the syncer (the forge interface has no SetMilestone/SetSubIssue yet) — the labels stay held off the forge meanwhile, nothing is lost, and the PRD's acceptance criteria don't depend on them. *(core done)*
 4. **Migration preview** and `git board sync --migrate`; switch the person and issue defaults. *(done — internal/migrate, GET|POST /api/fields/migrate, sync --migrate; the defaults changed with M3, the old labels read as a fallback until the migration runs)*
 5. **GitLab targets** — scoped labels, milestone, due date, and the paid-tier ones the EPFL instance turns out to have. *(config, validation and defaults done in M2/M3; the adapters' write targets deferred like M3's — the config and the UI accept and offer them, marked "needs a paid tier")*

@@ -165,7 +165,7 @@ func Migrate(ctx context.Context, cfg *config.Config, field string, issues []sto
 			// the labels leave the issue, wherever the values went: they
 			// are the old home's spelling, held off this forge since the
 			// mapping, and the forge keeps them defined
-			if err := fw.ChangeLabels(ctx, st.ref, nil, nsLabels(field, st.values, f)); err != nil {
+			if err := fw.ChangeLabels(ctx, st.ref, nil, nsLabels(field, st.values)); err != nil {
 				say(fmt.Sprintf("%s #%s: the labels refused: %v", f.Name, st.ref.Number, err))
 				if firstErr == nil {
 					firstErr = err
@@ -182,21 +182,12 @@ func Migrate(ctx context.Context, cfg *config.Config, field string, issues []sto
 	return plans, firstErr
 }
 
-// nsLabels is the field's labels as the forge has them, the file's
-// spelling: namespaced (status:ready) or plain (ready) as the mapping
-// says — a plain one's values are one per issue, the removal list is the
-// values all the same.
-func nsLabels(field string, values []string, f config.Forge) []string {
-	plain := false
-	if m, ok := f.Fields[field]; ok && m.To == config.TargetLabel && m.As == "plain" {
-		plain = true
-	}
+// nsLabels is the field's labels as the forge has them, the namespaced
+// spelling the storage keeps (status:ready), each once.
+func nsLabels(field string, values []string) []string {
 	var out []string
 	for _, v := range values {
 		label := field + ":" + v
-		if plain {
-			label = v
-		}
 		if !slices.Contains(out, label) {
 			out = append(out, label)
 		}

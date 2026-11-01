@@ -5,6 +5,9 @@ import (
 	"testing"
 )
 
+// WithForge keeps the mappings' subtables: upsertTable's span ends at the
+// next header line, a subtable's included, so a re-saved forge table
+// leaves [forges.gh.fields] and its values alone.
 func TestWithForgeKeepsTheFieldsSubtables(t *testing.T) {
 	src := `# mine
 [forges.gh]
@@ -98,5 +101,42 @@ options = ["todo", "in-progress"]
 	}
 	if !strings.Contains(text, "[forges.gh]") || !strings.Contains(text, "sync = true") {
 		t.Errorf("the forge table lost:\n%s", text)
+	}
+}
+
+// The renames cleared, the values subtable goes with them: a stale one
+// would keep the old names applying on the sync, and coming back in the
+// editor after a reload.
+func TestSetForgeFieldsClearsTheValuesSubtable(t *testing.T) {
+	src := `[forges.gh]
+kind = "github"
+project = "o/r"
+sync = true
+
+[fields.status]
+options = ["todo", "in-progress"]
+
+[forges.gh.fields]
+status = { to = "project", field = "Status" }
+
+[forges.gh.fields.status.values]
+in-progress = "In Progress"
+`
+	text := SetForgeFieldsText(src, "gh", map[string]FieldMapping{
+		"status": {To: TargetProject, Field: "Status"}, // the renames cleared
+	}, nil)
+	if strings.Contains(text, "values") || strings.Contains(text, "In Progress") {
+		t.Errorf("the cleared renames left their subtable:\n%s", text)
+	}
+	cfg, _, err := parse([]byte(text))
+	if err != nil {
+		t.Fatalf("parse: %v\n%s", err, text)
+	}
+	gh, _ := cfg.Forge("gh")
+	if len(gh.Fields["status"].Values) != 0 {
+		t.Errorf("values = %v, want none", gh.Fields["status"].Values)
+	}
+	if gh.Fields["status"].To != TargetProject || gh.Fields["status"].Field != "Status" {
+		t.Errorf("mapping = %+v, want the mapping kept", gh.Fields["status"])
 	}
 }

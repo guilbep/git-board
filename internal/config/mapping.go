@@ -15,7 +15,7 @@ import (
 // The targets, as `to` spells them. One per forge slot; a field is read
 // back from its target alone.
 const (
-	TargetLabel       = "label"        // the namespaced label, status:ready (or plain, ready)
+	TargetLabel       = "label"        // the namespaced label, status:ready
 	TargetScopedLabel = "scoped-label" // GitLab's status::ready, paid tier
 	TargetProject     = "project"      // a GitHub Project field ([github-project])
 	TargetAssignees   = "assignees"    // the forge's native assignees
@@ -33,9 +33,10 @@ type FieldMapping struct {
 	// To is the target: label, scoped-label, project, assignees,
 	// milestone, iteration, weight, due-date, sub-issues, none.
 	To string `toml:"to" json:"to"`
-	// As is how a label spells its value: namespaced (the default,
-	// status:ready) or plain (ready). Labels only; plain is refused when
-	// two fields share a value, the label can't be traced back then.
+	// As is how a label spells its value: namespaced (status:ready) or
+	// plain (ready). Planned, not applied: nothing writes a plain label
+	// yet, so the parse refuses it — leaving it out keeps the file honest
+	// until the sync spells labels the mapping's way.
 	As string `toml:"as" json:"as,omitempty"`
 	// Field is which GitHub Project field to use, for project alone; the
 	// default is the git-board field's name.
@@ -113,17 +114,6 @@ func (c *Config) FieldValues(f Forge, field string) map[string]string {
 	return nil
 }
 
-// FieldLabel is the label a field's value carries on the forge: plain
-// (ready) when the mapping says so, namespaced (status:ready) otherwise —
-// the file's own spelling, since the values in git-bug stay namespaced
-// labels either way.
-func (c *Config) FieldLabel(f Forge, field, value string) string {
-	if m, ok := f.Fields[field]; ok && m.To == TargetLabel && m.As == "plain" {
-		return value
-	}
-	return c.Label(field, value)
-}
-
 // forgeOf is the forge a sync key names ("github.com/o/r"): its host
 // starts the key. No table for the host: a synthetic one, the kind from
 // the host's first label — the type defaults hold for a project the file
@@ -176,14 +166,21 @@ func checkFieldMappings(c *Config) error {
 				}
 				assignees[f.Name] = name
 			}
-			if m.To == "" { // details alone are nothing to validate further
+			// as is planned, not applied: nothing writes a plain label
+			// yet, so a file carrying one would silently change nothing
+			// (and the migration would remove the wrong labels). Refused
+			// until the sync spells labels the mapping's way.
+			if m.As != "" {
+				return fmt.Errorf("%s as: not applied yet — labels keep the namespaced spelling (status:ready); leave as out until the sync writes it", where)
+			}
+			if m.To == "" { // the details' fit is the target's to say
+				if m.Field != "" {
+					return fmt.Errorf("%s field: a project's key, and to is empty", where)
+				}
+				if len(m.Values) > 0 {
+					return fmt.Errorf("%s values: renames of a target, and to is empty", where)
+				}
 				continue
-			}
-			if m.As != "" && m.As != "namespaced" && m.As != "plain" {
-				return fmt.Errorf("%s as: namespaced or plain, not %q", where, m.As)
-			}
-			if m.As != "" && m.To != TargetLabel {
-				return fmt.Errorf("%s as: a label's spelling, not a %s's", where, m.To)
 			}
 			if m.Field != "" && m.To != TargetProject {
 				return fmt.Errorf("%s field: a project's key, not a %s's", where, m.To)
@@ -200,21 +197,6 @@ func checkFieldMappings(c *Config) error {
 				}
 				if strings.TrimSpace(on) == "" {
 					return fmt.Errorf("%s values: %q's name is empty", where, v)
-				}
-			}
-			if m.As == "plain" {
-				if !field.Single {
-					return fmt.Errorf("%s as: plain labels fit a one-value field; %s takes several", where, name)
-				}
-				for other, of := range c.Fields {
-					if other == name {
-						continue
-					}
-					for _, v := range of.Options {
-						if slices.ContainsFunc(field.Options, func(o string) bool { return strings.EqualFold(o, v) }) {
-							return fmt.Errorf("%s as: plain refused, %s's values share %q", where, other, v)
-						}
-					}
 				}
 			}
 		}

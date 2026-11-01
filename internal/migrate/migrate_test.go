@@ -19,7 +19,7 @@ func migrateConfig() *config.Config {
 		},
 		Forges: []config.Forge{
 			{Name: "gh", Kind: "github", Host: "github.com", Project: "o/r",
-				Fields: map[string]config.FieldMapping{"moscow": {To: config.TargetLabel, As: "plain"}}},
+				Fields: map[string]config.FieldMapping{"moscow": {To: config.TargetLabel}}},
 			{Name: "gl", Kind: "gitlab", Host: "gitlab.epfl.ch", Project: "7"},
 		},
 	}
@@ -78,9 +78,9 @@ func TestPreviewCountsTheIssues(t *testing.T) {
 }
 
 // The run sets the assignees and takes the field's labels off the issues
-// — the forge's spelling of them (plain, on gh, for moscow) — and the
-// storage keeps its own: the namespaced labels stay in git-board. An
-// issue with no forge link has no stake.
+// — the namespaced spelling the storage keeps — and the storage keeps its
+// own: the namespaced labels stay in git-board. An issue with no forge
+// link has no stake.
 func TestRunSetsTheAssigneesAndTakesTheLabelsOff(t *testing.T) {
 	t.Parallel()
 	cfg := migrateConfig()
@@ -137,7 +137,7 @@ func TestRunSetsTheAssigneesAndTakesTheLabelsOff(t *testing.T) {
 }
 
 // The aliases fold on the way out: moscow:could reads couldhave, so the
-// plain label removed from gh is couldhave — and a Project target takes
+// label removed from gh is moscow:couldhave — and a Project target takes
 // the old labels off without writing anything itself: the sync does that.
 func TestRunReadsTheAliases(t *testing.T) {
 	t.Parallel()

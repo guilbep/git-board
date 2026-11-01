@@ -34,7 +34,7 @@ sync = true
 
 [forges.gh.fields]
 status = { to = "project", field = "Status" }
-moscow = { to = "label", as = "plain" }
+moscow = { to = "label" }
 
 [forges.gh.fields.status.values]
 in-progress = "In Progress"
@@ -113,21 +113,6 @@ project = "o/r"
 	}
 }
 
-func TestFieldLabelFollowsAs(t *testing.T) {
-	t.Parallel()
-	cfg, err := parseMapping(t, mappingConfig)
-	if err != nil {
-		t.Fatal(err)
-	}
-	gh, _ := cfg.Forge("gh")
-	if got := cfg.FieldLabel(gh, "status", "ready"); got != "status:ready" {
-		t.Errorf("namespaced = %q", got)
-	}
-	if got := cfg.FieldLabel(gh, "moscow", "couldhave"); got != "couldhave" {
-		t.Errorf("plain = %q", got)
-	}
-}
-
 func TestAliasesFoldAnOldValue(t *testing.T) {
 	t.Parallel()
 	cfg, err := parseMapping(t, mappingConfig)
@@ -202,7 +187,7 @@ project = "o/r"
 [forges.gh.fields.x]
 to = "label"
 as = "plain"
-`, "takes several"},
+`, "as: not applied yet"},
 		{`[fields.x]
 single = true
 options = ["a"]
@@ -210,9 +195,8 @@ options = ["a"]
 kind = "gitlab"
 project = "7"
 [forges.gl.fields.x]
-to = "label"
 as = "maybe"
-`, "namespaced or plain"},
+`, "as: not applied yet"},
 		{`[fields.x]
 single = true
 options = ["a"]
@@ -244,6 +228,24 @@ project = "o/r"
 [forges.gh.fields.y]
 to = "label"
 `, "no [fields.y]"},
+		// the details fit their target, whatever to says: an empty one
+		// carries no field key and no renames
+		{`[fields.x]
+options = ["a"]
+[forges.gh]
+kind = "github"
+project = "o/r"
+[forges.gh.fields.x]
+field = "X"
+`, "field: a project's key, and to is empty"},
+		{`[fields.x]
+options = ["a"]
+[forges.gh]
+kind = "github"
+project = "o/r"
+[forges.gh.fields.x.values]
+a = "A"
+`, "values: renames of a target, and to is empty"},
 	} {
 		_, err := parseMapping(t, bad.text)
 		if err == nil {
