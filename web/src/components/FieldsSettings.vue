@@ -39,13 +39,29 @@
         <p v-else-if="!draft.value.value" class="fs-muted">Loading…</p>
 
         <template v-else>
+          <!-- the file changed under the page (a pull, another tab): the
+               draft's edits are against the old text -->
+          <div v-if="fileChanged" class="epfl-alert epfl-alert-warning fl-changed" role="alert">
+            <span>The file changed since the page read it. Reloading takes the draft's edits away.</span>
+            <button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" @click="takeFile">Reload the file</button>
+            <button type="button" class="gb-linkbtn" @click="fileChanged = false">Keep editing</button>
+          </div>
+
           <div class="fl-work" :class="{ 'fl-work-sel': !!routeName }">
             <div class="fl-list">
               <p class="fl-listhead">
                 {{ fields.length }} field{{ fields.length === 1 ? '' : 's' }} <em>— drag a row, or Alt+↑/↓, to set the order on issues</em>
               </p>
+              <input
+                v-if="fields.length > 12"
+                v-model="filter"
+                class="fs-input fl-filter"
+                placeholder="Find a field or a value…"
+                spellcheck="false"
+                aria-label="Find a field"
+              />
               <ol class="fl-rows">
-                <li v-for="(f, i) in orderedRows" :key="f.key">
+                <li v-for="(f, i) in visibleRows" :key="f.key">
                   <router-link
                     class="fl-row"
                     :class="{ 'fl-row-sel': f.key === selectedKey, 'fl-row-hold': listFrom === i }"
@@ -62,6 +78,13 @@
                     <span class="fl-line1">
                       <span class="fl-grip" aria-hidden="true">⋮⋮</span>
                       <span class="fl-nm">{{ f.name || 'a new field' }}</span>
+                      <span
+                        v-if="tomlError[f.key]"
+                        class="fl-warn"
+                        role="img"
+                        :aria-label="`Its TOML has an error: ${tomlError[f.key]}`"
+                        :title="tomlError[f.key]"
+                      >!</span>
                       <span v-if="changed(f)" class="fl-dot" title="Unsaved changes" />
                       <span class="fl-sum">{{ summary(f) }}</span>
                     </span>
@@ -116,6 +139,10 @@
                     @input="tomlInput(selected, ($event.target as HTMLTextAreaElement).value)"
                   />
                   <p v-if="tomlError[selected.key]" class="fs-tomlerr" role="alert">{{ tomlError[selected.key] }}</p>
+                  <p v-else-if="renamedFrom[selected.key]" class="gb-hint">
+                    Renamed from <code>{{ renamedFrom[selected.key] }}</code> — the issues keep their old
+                    <code>{{ renamedFrom[selected.key] }}:…</code> labels; lint finds them.
+                  </p>
                   <p v-else class="gb-hint">This field's table only — it applies as you type. Comments are lost when you switch back to the form.</p>
                 </div>
                 <div v-else class="fs-body">
@@ -267,8 +294,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { onLive } from '@/live';
 import { getConfigFile, saveConfig, getFieldUsage, type ConfigField } from '@/api/board';
 import { fieldPresets, takeUnique } from '@/configpresets';
 import { allNumbers, inferType, type FieldType } from '@/fieldinfer';
@@ -400,6 +428,14 @@ const orderedRows = computed(() => {
   return [...inOrder, ...rows.filter((r) => !inOrder.includes(r))];
 });
 
+// the list, filtered once it is long (the box shows past 12 fields)
+const filter = ref('');
+const visibleRows = computed(() => {
+  const q = filter.value.trim().toLowerCase();
+  if (!q) return orderedRows.value;
+  return orderedRows.value.filter((r) => r.name.toLowerCase().includes(q) || r.options.some((o) => o.toLowerCase().includes(q)));
+});
+
 function setOrder(keys: number[]) {
   if (draft.value.value) draft.value.value = { ...draft.value.value, order: keys };
 }
@@ -522,7 +558,7 @@ function dropRow(i: number) {
   const from = listFrom.value;
   listFrom.value = null;
   if (from === null || from === i) return;
-  const keys = orderedRows.value.map((r) => r.key);
+  const keys = visibleRows.value.map((r) => r.key);
   const moved = keys[from];
   if (moved === undefined) return;
   keys.splice(from, 1);
@@ -531,7 +567,7 @@ function dropRow(i: number) {
 }
 
 function moveRow(f: FieldRow, d: number) {
-  const keys = orderedRows.value.map((r) => r.key);
+  const keys = visibleRows.value.map((r) => r.key);
   const i = keys.indexOf(f.key);
   const j = i + d;
   if (i < 0 || j < 0 || j >= keys.length) return;
@@ -593,6 +629,7 @@ function addWords(f: FieldRow, text: string) {
 const tomlOpen = ref<Record<number, boolean>>({});
 const tomlText = ref<Record<number, string>>({});
 const tomlError = ref<Record<number, string | undefined>>({});
+const renamedFrom = ref<Record<number, string | undefined>>({});
 
 const rowToToml = (f: FieldRow): FieldToml => ({
   single: f.single,
@@ -623,7 +660,11 @@ function tomlInput(f: FieldRow, text: string) {
     return;
   }
   tomlError.value[f.key] = undefined;
+  const from = f.name;
   applyToml(f, r.name, r.field);
+  // a header rename is worth its own sentence: the issues keep the old key
+  if (r.name && r.name !== from) renamedFrom.value[f.key] = from;
+  else delete renamedFrom.value[f.key];
 }
 
 function applyToml(f: FieldRow, name: string | undefined, t: FieldToml) {
@@ -645,8 +686,31 @@ watch(
     tomlOpen.value = {};
     tomlText.value = {};
     tomlError.value = {};
+    renamedFrom.value = {};
   },
 );
+
+// the file changed under the page (a pull, another tab, a terminal): with
+// edits in the draft a banner asks; with none, the file is the truth
+const fileChanged = ref(false);
+
+async function checkFile() {
+  await loadConfigModel();
+  if (configModel.value && configModel.value.hash !== draft.base.value) {
+    if (draft.dirty.value) fileChanged.value = true;
+    else draft.reset(configModel.value);
+  }
+}
+
+const offLive = onLive((e) => {
+  if (e.kind === 'config') void checkFile();
+});
+onBeforeUnmount(offLive);
+
+async function takeFile() {
+  fileChanged.value = false;
+  await draft.load();
+}
 
 // the per-value details: one table keyed by value — the options in their
 // order, then the pair keys the options lost; a cell emptied removes its
@@ -828,6 +892,9 @@ h2, p { margin: 0; }
 .fl-sum { overflow: hidden; font-size: .75rem; color: var(--fg-muted); text-overflow: ellipsis; white-space: nowrap; }
 .fl-values { overflow: hidden; font-family: var(--font-mono); font-size: .75rem; color: var(--fg-muted); text-overflow: ellipsis; white-space: nowrap; }
 .fl-addrow { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+.fl-filter { max-width: 15rem; }
+.fl-warn { flex: none; box-sizing: border-box; width: 1rem; height: 1rem; padding: 0; border-radius: 50%; background: var(--warning); color: var(--bg); font: 700 .6875rem/1rem var(--font-mono); text-align: center; cursor: help; }
+.fl-changed { display: flex; align-items: center; gap: .75rem; flex-wrap: wrap; }
 /* the editor: the selected field's card */
 .fl-ed { display: grid; gap: .75rem; min-width: 0; }
 .fs-card { border-left-color: var(--primary); }
