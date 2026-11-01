@@ -162,6 +162,10 @@
                         class="fs-chip"
                         :class="{ 'fs-chip-hold': dragFrom === i, 'fs-chip-fixed': numbers(selected) }"
                         :draggable="numbers(selected) ? 'false' : 'true'"
+                        tabindex="0"
+                        :aria-label="`${o} — Alt+Left or Alt+Right moves it`"
+                        @keydown.alt.left.prevent="!numbers(selected) && moveOption(selected, i, -1)"
+                        @keydown.alt.right.prevent="!numbers(selected) && moveOption(selected, i, 1)"
                         @dragstart="dragFrom = i"
                         @dragover.prevent
                         @dragend="dragFrom = null"
@@ -593,6 +597,17 @@ function dropAt(f: FieldRow, i: number) {
 
 function removeOption(f: FieldRow, i: number) {
   f.options = f.options.filter((_, j) => j !== i);
+}
+
+// a focused chip moves with Alt+←/→, the keyboard's drag
+function moveOption(f: FieldRow, i: number, d: number) {
+  const j = i + d;
+  if (j < 0 || j >= f.options.length) return;
+  const options = [...f.options];
+  const moved = options[i];
+  if (moved === undefined) return;
+  options.splice(j, 0, ...options.splice(i, 1));
+  f.options = options;
 }
 
 function chipKey(f: FieldRow, e: KeyboardEvent) {
