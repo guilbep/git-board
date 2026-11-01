@@ -6,6 +6,41 @@ A review of every page, menu, dialog and hover state of the web app, on this rep
 
 A Playwright test pins each fix, as for the layout bugs (`web/e2e/layout.spec.ts`). A proposal that undoes an earlier PRD's decision says so on an **Overrides** line.
 
+## Status, Nov 2, 2026: built
+
+Built overnight on this branch, in the order below; each step's Playwright tests are in `web/e2e/review.spec.ts` and `layout.spec.ts`, the Go ones beside their package. Where the plan left a choice, the call made is marked **(call)**, for review.
+
+| # | Done | How |
+| --- | --- | --- |
+| A-1…7, 40 | yes | 2a2a4e2, e29c551, 6575f67 (above). The release page's two columns were never a grid either: fixed (abd1973). |
+| B-8 | partly | Work's box is **For the forges** and links to Sync. The header's count is unchanged: it adds the git push to the last check's tallies, and a board-wide count of what waits for the forges needs a server count (`ways.ts` notes it). |
+| B-9 | yes | `doc = "docs"` in your uncommitted file; Branches marks a kind the kind field lacks, and says how to fix it. |
+| B-10, B-11, B-37 | yes | The release summary counts binaries; Attachments leads with the server switch; the forge popover's note follows its buttons. |
+| B-12 | yes | Work names an issue by GB-N; the table's column is **On the forge**, "GitHub #18". |
+| B-13 | yes | New lint check **near-value** (`risk:-normal: did you mean risk:normal (2 issues)?`), and unknown-value names the option a typo meant. README updated. |
+| B-14 | yes | The flow says "closed ones included"; an open issue at done is "1 open issue says done: close it?". |
+| B-15 | yes | The tab is **The file**, its button **Save…** (the review follows). |
+| C-16 | light **(call)** | The reference keeps its place and drops its pointer line; each tab's intro is one sentence that no longer repeats it. |
+| C-17 | yes | The empty board suggests the filter one term shorter. |
+| C-18 | no **(call)** | "Board" kept: renaming the default view touches every board's file for a word. |
+| C-19 | **(call)** | The Sync tab is the one home: the header links to it, Work's Send all and Check first are gone, the issue popover keeps Send now for one issue. No header panel (the tab is one click away). |
+| C-20 | yes | No Overview: Settings opens on Sync, and each menu item says where it stands (origin…, 23 labels, off on this server, as guilbep). |
+| C-21, C-22, C-35, C-43 | yes | |
+| C-34 | **(call)** | The header's 🔍 stays (every page has a header); the sidebar's copy went. The opposite of the proposal, for one header everywhere. |
+| C-36 | yes | The ⋯ menu's Close went; the ✓ advance (W0-3) and the comment box's Close stay. |
+| D-23 | yes | Labels in three parts: Plain labels, On GitHub (both GitHub tables), Lint (a missing value or a dead option one line per field, "Show them" filtering the board). No `[lint]` key **(call)**: grouped, the lines no longer bury the page. The missing-token error says what to do. |
+| D-24, D-27 | yes | One-sentence intros; the guide's examples are `acme/app`; `start_weekday` and `[repos] assignees` left the reference. The EPFL upload defaults stay, named as EPFL's. |
+| D-25, D-26, D-44 | yes | Placeholders "e.g." or "empty:", italic and lighter; a disabled Save says why; Mark all read shows only with something unread; focus in the text color. The forge rows' disabled buttons keep their hover reason. |
+| D-28 | yes | Lead time leaves out issues opened and closed in the same minute and says how many (on this board 8: the median goes from 1 h to 2 h). The time machine spans the row; the table's toggle says "Show". |
+| D-29, D-41 | yes | Work grouped by step and what it waits for, five a group; Open only when it is not the title's link; Start an agent on hover or focus (always on touch); a row's result on the row. |
+| D-30 | partly **(call)** | The forge number shows beside its logo. The switches already have words and labels: unchanged. The avatar beside the tabs is the conversation's people (people.ts), not the viewer: the proposal was wrong, it stays. |
+| D-31 | yes | Empty sections left out; the Cut dialog's checks only with checks. |
+| D-32 | yes | Conflicts in the page frame; Releases' eyebrow is the section, its title a sentence; settings rows at one input size; the inbox menu with the others' shadow. |
+| D-33, D-38, D-39, D-42, D-45, D-6 | yes | Field types in words; New issue's inputs by type, its actions in reach; a half-typed term not applied; a declared preset opens its field; the Project's number set under its row; the phone board one lane a screen. |
+| D-46 | **(call)** | The lane's control stays a select (one action: a menu would hold one item) and says **Move all…** instead of ⋯. |
+
+Open questions, as answered by the calls: 1 no key; 2 kept; 3 dropped; 4 kept (the tab is the home); 5 light; 6 neither (they were labelled).
+
 ## Problem
 
 The app grew page by page, and each page explains itself, offers its own way to do the common things, and styles its own controls. Four things follow:

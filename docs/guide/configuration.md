@@ -6,7 +6,7 @@ The file is optional. Without it, every `ns:value` label is a field and git-boar
 
 It lives at the root of the repository. Edit it in **Settings → Project file**: it is checked as you type and applies as soon as you save. Editing it by hand works too; restart `git board` (or `git board serve`) after.
 
-A repository without one starts from the default: **Start from the default** in Settings → Project file, or `git board init` in a terminal (it never overwrites a file). The default declares a status workflow (`backlog`, `ready`, `in-progress`, `in-review`, `ready-for-validation`, `validated`), priorities `p0` to `p3`, an on-hold field beside the status (`hold:blocked`, `hold:paused`), the ten IT4R kinds, GitHub's plain labels (`bug`, `feat`, … `chore`, `design`) with their descriptions, each the prefix of its branches (`bug/vm-12-login-fails`), estimates in hours, MoSCoW, sprints of 14 days, and four views (all, backlog, board, mine), each explained in a comment.
+A repository without one starts from the default: **Start from the default** in Settings › Fields, or `git board init` in a terminal (it never overwrites a file). The default declares a status workflow (`backlog`, `ready`, `in-progress`, `in-review`, `ready-for-validation`, `validated`), priorities `p0` to `p3`, an on-hold field beside the status (`hold:blocked`, `hold:paused`), ten kinds, GitHub's plain labels (`bug`, `feat`, … `chore`, `design`) with their descriptions, each the prefix of its branches (`bug/vm-12-login-fails`), estimates in hours, MoSCoW, sprints of 14 days, and four views (all, backlog, board, mine), each explained in a comment.
 
 | Table | What it sets |
 | --- | --- |
@@ -272,7 +272,6 @@ start = 2026-10-19
 | Key | Type | What it does |
 | --- | --- | --- |
 | `length_days` | number | The length of the last sprint, whose end has no next start. Also what **+ Sprint** adds to the last start. |
-| `start_weekday` | string | Read, not used yet. |
 | `slug` | string | The label's value: `sprint:s12`. |
 | `title` | string | The name shown. |
 | `start` | date, `YYYY-MM-DD`, no quotes | First day. A sprint lasts until the next one starts. |
@@ -285,7 +284,7 @@ The `sprint` field follows these dates: in the filters (sorted by **Dates**, tod
 
 The GitHub Project whose fields `git board project pull`, `push` and `sync` turn into labels and back, by the Project's field names: `Status` (`status:`), `Priority` (`prio:`), `Sprint` (`sprint:`, an iteration field), `Est. hours` (`est:`, a number), `MoSCoW` (`moscow:`), `Module` (`mod:`), and `Milestone` (`milestone:`, its title as a slug), which is read only: the issue's own, a deliverable, set on GitHub. An option whose name doesn't slug to the value is named in the field's `project` table, as the default file does for MoSCoW's "Won't". The whole sync, Settings › Sync and `git board sync`, runs `git board project sync` as its third step: after the forges, before the git push.
 
-Settings › Sync sets it up, on the Project's line: a number, a Project of the GitHub forge's owner, or the Project's address (`https://github.com/orgs/EPFL-ENAC/projects/40`), checked as soon as it is saved; another Project than the one written to is only read, until `write = true` is set again. `git board project configure --owner EPFL-ENAC --project 40` writes the same.
+Settings › Sync sets it up, on the Project's line: a number, a Project of the GitHub forge's owner, or the Project's address (`https://github.com/orgs/acme/projects/40`), checked as soon as it is saved; another Project than the one written to is only read, until `write = true` is set again. `git board project configure --owner acme --project 40` writes the same.
 
 ```toml
 [github-project]
@@ -344,7 +343,7 @@ Files attached to comments go to an S3 bucket that a CDN serves; the comment get
 
 ```toml
 [uploads]
-prefix = "git-board/co2-calculator"
+prefix = "git-board/app"
 ```
 
 | Key | Default | What it does |
@@ -679,18 +678,18 @@ images = [
   { name = "frontend", context = "./frontend" },
   { name = "backend", context = "./backend" },
 ]
-chart = { path = "./helm", registry = "oci://ghcr.io/epfl-enac/co2-calculator/helm" }
+chart = { path = "./helm", registry = "oci://ghcr.io/acme/app/helm" }
 version_values = ["backend.env.APP_VERSION"]
 
 [[release.deploy]]
-repo = "git@github.com:EPFL-ENAC/enack8s-app-config.git"
-path = "epfl/co2-calculator/overlays/{env}"
-registry = "ghcr.io/epfl-enac/epfl/co2-calculator"
+repo = "git@github.com:acme/k8s-app-config.git"
+path = "apps/app/overlays/{env}"
+registry = "ghcr.io/acme/app"
 
 [[release.deploy]]
-repo = "git@github.com:EPFL-ENAC/openshift-app-config.git"
-path = "epfl/co2-calculator/overlays/{env}"
-registry = "quay-its.epfl.ch/svc1751"
+repo = "git@github.com:acme/openshift-app-config.git"
+path = "apps/app/overlays/{env}"
+registry = "quay.example.org/acme"
 ```
 
 | Key | Default | What it does |
@@ -713,8 +712,7 @@ A deploy edits the overlay's `kustomization.yaml` and nothing else (comments, ke
 
 ```toml
 [repos]
-list = ["EPFL-ENAC/co2-calculator"]
-assignees = "native"
+list = ["acme/app"]
 ```
 
 `list` is the GitHub repositories whose labels the project keeps; without `[repos]`, origin's when it is on GitHub. They are reached through GitHub's API with the forge sync's token: `GITHUB_TOKEN` when set, else git's credential helper for github.com ([Forges](forges.md#tokens)). Not `gh`'s, which may be another token. When a repository can't be read, the tab says why and offers no Send to GitHub.
@@ -723,8 +721,9 @@ assignees = "native"
 
 - **Adopt** writes GitHub's color and description of a label into `[fields.<name>.colors]` and `[fields.<name>.descriptions]`, and opens the Project file tab to review and save. An organization's labels keep their colors this way.
 - **Send to GitHub** first lists, per repository, each label it creates and each change, then creates the missing labels and updates those whose color or description the file sets. A label outside the project's is never touched, and one the file gives no color or description of its own keeps GitHub's.
-- **Lint** shows `git board lint`'s findings, then the GitHub labels outside the project's (a `bug` beside `kind:bug`, GitHub's old defaults) with their issues. **Delete** removes one from its repository, after a confirmation that says how many issues lose it.
+- **On GitHub** also lists the GitHub labels outside the project's (a `bug` beside `kind:bug`, GitHub's old defaults) with their issues. **Delete** removes one from its repository, after a confirmation that says how many issues lose it.
+- **Lint** shows `git board lint`'s findings on the open issues, a missing value counted per field with the issues a link away.
 
 `git board lint --create-labels` prints the same plan, and `--apply` carries it out.
 
-`assignees` is no longer read: an issue's `assignee:<login>` labels are always the forge's own assignees, on every forge (GitLab's free edition takes one; the others stay in git-board).
+An issue's `assignee:<login>` labels are always the forge's own assignees, on every forge (GitLab's free edition takes one; the others stay in git-board).
