@@ -128,6 +128,10 @@ func deleteTable(text, dotted string) string {
 				break
 			}
 		}
+		// the comment block right over the next table is that table's
+		for end < len(lines) && end > start+1 && strings.HasPrefix(strings.TrimSpace(lines[end-1]), "#") {
+			end--
+		}
 		for start > 0 { // the comment block above describes the table
 			prev := strings.TrimSpace(lines[start-1])
 			if !strings.HasPrefix(prev, "#") {
@@ -171,7 +175,9 @@ func SetFieldsText(text string, set map[string]Field, remove []string) (string, 
 			return "", fmt.Errorf("a field's name is letters, digits, - and _, not %q", name)
 		}
 		f := set[name]
-		vals := map[string]string{}
+		// every key the form holds: "" drops one it cleared (single
+		// unticked, the options emptied, the type or unit unset)
+		vals := map[string]string{"single": "", "options": "", "numeric": "", "type": "", "unit": ""}
 		if f.Single {
 			vals["single"] = "true"
 		}
@@ -272,18 +278,16 @@ func SetSprintsText(text string, s SprintsConfig) (string, error) {
 		}
 		text = strings.Join(slices.Concat(lines[:start], lines[end:]), "\n")
 	}
-	var keys []string
-	vals := map[string]string{}
+	// both keys, "" dropping one unset; no table is made for nothing
+	vals := map[string]string{"length_days": "", "start_weekday": ""}
 	if s.LengthDays > 0 {
-		keys = append(keys, "length_days")
 		vals["length_days"] = strconv.Itoa(s.LengthDays)
 	}
 	if s.StartWeekday != "" {
-		keys = append(keys, "start_weekday")
 		vals["start_weekday"] = tomlString(s.StartWeekday)
 	}
-	if len(keys) > 0 {
-		text = setTableKeys(text, "[sprints]", "", keys, vals, false)
+	if start, _ := tableSpan(strings.Split(text, "\n"), "[sprints]"); start >= 0 || vals["length_days"] != "" || vals["start_weekday"] != "" {
+		text = setTableKeys(text, "[sprints]", "", []string{"length_days", "start_weekday"}, vals, false)
 	}
 	if len(s.List) == 0 {
 		return text, nil
@@ -507,9 +511,6 @@ func SetReleaseText(text string, r Release) (string, error) {
 		"platforms":      tomlArray(r.Platforms),
 		"build":          tomlString(r.Build),
 	}
-	if r.Follow != nil {
-		vals["follow"] = tomlString(*r.Follow)
-	}
 	empty := true
 	for k, v := range vals {
 		if v == "" || v == `""` || v == "[]" {
@@ -517,6 +518,12 @@ func SetReleaseText(text string, r Release) (string, error) {
 		} else {
 			empty = false
 		}
+	}
+	// follow = "" says no environment follows the trunk: kept, unlike an
+	// empty key elsewhere, for absent means the first one does
+	if r.Follow != nil {
+		vals["follow"] = tomlString(*r.Follow)
+		empty = false
 	}
 	if empty && r.Chart == nil && len(r.Deploy) == 0 {
 		return deleteTable(text, "release"), nil
@@ -710,6 +717,7 @@ func MoveFieldText(text, name, before string) (string, error) {
 func fieldSpan(lines []string, name string) (start, end int) {
 	head := "[fields." + name + "]"
 	sub := "[fields." + name + "."
+	start = -1 // not found, unless a line says so
 	for i, l := range lines {
 		t := strings.TrimSpace(l)
 		if t == head || strings.HasPrefix(t, sub) {

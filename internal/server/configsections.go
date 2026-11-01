@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 
@@ -227,8 +228,13 @@ func (s *apiServer) sectionWriter(section string, r *http.Request, w http.Respon
 			// the file's order is the list's: realize it pairwise, from the
 			// bottom up — each field moved above the one after it, which the
 			// later moves leave where they put it
-			for i := len(req.Order) - 2; i >= 0; i-- {
-				if text, err = config.MoveFieldText(text, req.Order[i], req.Order[i+1]); err != nil {
+			// a flat field (the kinds of [branches.kinds]) has no table to move
+			order := req.Order
+			if cfg, _, err := config.Check([]byte(text)); err == nil {
+				order = slices.DeleteFunc(slices.Clone(order), func(n string) bool { return cfg.Fields[n].Flat })
+			}
+			for i := len(order) - 2; i >= 0; i-- {
+				if text, err = config.MoveFieldText(text, order[i], order[i+1]); err != nil {
 					return "", err
 				}
 			}

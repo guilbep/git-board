@@ -417,8 +417,13 @@ func keysInOrder[V any](md toml.MetaData, m map[string]V, table ...string) []str
 			res = append(res, k[len(table)])
 		}
 	}
-	if len(res) != len(m) { // ponytail: never seen; the sorted keys then
-		res = slices.Sorted(maps.Keys(m))
+	// the keys the file has no table for (the flat kinds' field, made from
+	// [branches.kinds]) after the file's, by name
+	res = slices.DeleteFunc(res, func(k string) bool { _, ok := m[k]; return !ok })
+	for _, k := range slices.Sorted(maps.Keys(m)) {
+		if !slices.Contains(res, k) {
+			res = append(res, k)
+		}
 	}
 	return res
 }

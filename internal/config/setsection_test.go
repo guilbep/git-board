@@ -431,3 +431,74 @@ func TestDeleteAndMoveViews(t *testing.T) {
 		t.Errorf("moving a view there isn't")
 	}
 }
+
+// A key the form cleared goes: single unticked, the options emptied, the
+// type unset; a sprint's length and weekday back to their defaults.
+func TestSectionWritersClearKeys(t *testing.T) {
+	t.Parallel()
+	text := "[fields.a]\nsingle = true\noptions = [\"x\"]\ntype = \"select\"\n# kept\n"
+	got, err := SetFieldsText(text, map[string]Field{"a": {}}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "[fields.a]\n# kept\n" {
+		t.Errorf("fields:\n%q", got)
+	}
+	text = "[sprints]\nlength_days = 7\nstart_weekday = \"monday\"\n"
+	if got, err = SetSprintsText(text, SprintsConfig{}); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(got, "length_days") || strings.Contains(got, "start_weekday") {
+		t.Errorf("sprints:\n%q", got)
+	}
+	if got, _ = SetSprintsText("", SprintsConfig{}); strings.Contains(got, "[sprints]") {
+		t.Errorf("an empty table made:\n%q", got)
+	}
+}
+
+// Moving a field the file has no table for is refused, the text untouched.
+func TestMoveFieldTextRefusesAMissingField(t *testing.T) {
+	t.Parallel()
+	text := "top = 1\n\n[fields.a]\nsingle = true\n"
+	if _, err := MoveFieldText(text, "nope", "a"); err == nil {
+		t.Error("moving a missing field: no error")
+	}
+	if _, err := MoveFieldText(text, "a", "nope"); err == nil {
+		t.Error("moving above a missing field: no error")
+	}
+}
+
+// Deleting a table keeps the comment over the next one.
+func TestDeleteTableKeepsTheNextComment(t *testing.T) {
+	t.Parallel()
+	got := deleteTable("# a's\n[fields.a]\nsingle = true\n\n# b is the status\n[fields.b]\nsingle = true\n", "fields.a")
+	if got != "# b is the status\n[fields.b]\nsingle = true\n" {
+		t.Errorf("%q", got)
+	}
+}
+
+// follow = "" (no environment follows the trunk) stays: absent means dev.
+func TestSetReleaseTextKeepsAnEmptyFollow(t *testing.T) {
+	t.Parallel()
+	none := ""
+	got, err := SetReleaseText("", Release{Environments: []string{"dev", "prod"}, Follow: &none})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(got, `follow = ""`) {
+		t.Errorf("%q", got)
+	}
+}
+
+// The flat kinds' field, with no table, doesn't make the fields' order
+// alphabetical: the file's order holds, the kinds after it.
+func TestFieldOrderKeepsTheFileWithFlatKinds(t *testing.T) {
+	t.Parallel()
+	cfg, _, err := Check([]byte("[fields.status]\noptions = [\"a\"]\n\n[fields.prio]\noptions = [\"p0\"]\n\n[branches.kinds]\nbug = \"fix\"\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := cfg.FieldOrder(); !slices.Equal(got, []string{"status", "prio", "kind"}) {
+		t.Errorf("%v", got)
+	}
+}
