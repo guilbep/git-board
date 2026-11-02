@@ -66,7 +66,7 @@
 
       <section class="ins-card ins-wide" aria-labelledby="h-flow">
         <h2 id="h-flow" class="ins-headline">{{ r.headlines.flow }}</h2>
-        <p class="ins-sub">Cumulative flow: issues per {{ displayName(r.field).toLowerCase() }}, each day. A band that widens is work piling up there.</p>
+        <p class="ins-sub">Cumulative flow: every issue, closed ones included, per {{ displayName(r.field).toLowerCase() }}, each day. A band that widens is work piling up there.</p>
         <FlowChart :field="r.field" :days="r.days" :values="r.values" :series="r.all" :label="`Cumulative flow of ${r.field}`" />
       </section>
 
@@ -77,7 +77,12 @@
           <DonutChart :entries="sprintEntries" :field="r.field" :caption="r.burnup.title" :label="`${r.burnup.title} by ${r.field}`" />
         </section>
         <section class="ins-card" aria-labelledby="h-od">
-          <h2 id="h-od" class="ins-headline">{{ standsHeadline(openEntries, 'the open issues', 'are') }}</h2>
+          <!-- an open issue at a done value is a nudge, not a statistic -->
+          <h2 v-if="openDone.n" id="h-od" class="ins-headline">
+            {{ openDone.n }} open issue{{ openDone.n === 1 ? ' says' : 's say' }} {{ openDone.keys }}:
+            <router-link :to="{ path: '/', query: { filter: `is:open ${r.field}:${openDone.first}` } }">close {{ openDone.n === 1 ? 'it' : 'them' }}?</router-link>
+          </h2>
+          <h2 v-else id="h-od" class="ins-headline">{{ standsHeadline(openEntries, 'the open issues', 'are') }}</h2>
           <p class="ins-sub">The open issues today, by {{ displayName(r.field).toLowerCase() }}.</p>
           <DonutChart :entries="openEntries" :field="r.field" caption="open" :label="`Open issues by ${r.field}`" />
         </section>
@@ -96,7 +101,7 @@
           <p class="ins-sub">Burn-up: the sprint's issues and the closed ones, against an even pace.</p>
           <BurnupChart v-bind="r.burnup" :label="`Burn-up of ${r.burnup.title}`" />
         </section>
-        <section class="ins-card" aria-labelledby="h-tm">
+        <section class="ins-card ins-span" aria-labelledby="h-tm">
           <h2 id="h-tm" class="ins-headline">The board on {{ dayLabel(r.days[tm]!) }}: {{ tmTotal }} open issues</h2>
           <p class="ins-sub">Time machine: drag to any day of the period. The ticks are today's counts.</p>
           <input v-model.number="tm" class="ins-slider" type="range" :min="0" :max="r.days.length - 1" :aria-label="`Day: ${dayLabel(r.days[tm]!)}`" />
@@ -114,7 +119,7 @@
       </div>
 
       <details class="ins-data">
-        <summary>The numbers, as a table</summary>
+        <summary>Show the numbers as a table</summary>
         <div class="gb-table-wrap">
           <table class="gb-table">
             <thead><tr><th>Week of</th><th>Opened</th><th>Closed</th></tr></thead>
@@ -209,6 +214,11 @@ const ordered = (counts: Record<string, number>) =>
   r.value ? [...r.value.values, ...Object.keys(counts).filter((k) => !r.value!.values.includes(k))].map((key) => ({ key, n: counts[key] ?? 0 })).filter((e) => e.n) : [];
 const sprintEntries = computed(() => ordered(r.value?.burnup?.status ?? {}));
 const openEntries = computed(() => ordered(Object.fromEntries((r.value?.values ?? []).map((v) => [v, count(v, last.value)]))));
+// the open issues whose value says done (valueicons.ts): they should be closed
+const openDone = computed(() => {
+  const done = r.value ? openEntries.value.filter((e) => valueIcon(r.value!.field, e.key) === 'st-done') : [];
+  return { n: done.reduce((t, e) => t + e.n, 0), keys: done.map((e) => e.key).join(' or '), first: done[0]?.key ?? '' };
+});
 // "61% of Hypercare is validated or done", from the values whose words
 // say done (valueicons.ts); else the biggest share
 function standsHeadline(entries: { key: string; n: number }[], what: string, is: 'is' | 'are'): string {
@@ -269,6 +279,7 @@ const days1 = (d: number) => (d < 1 ? `${Math.round(d * 24)} h` : `${Math.round(
 .ins-tile-delta { font-size: .8125rem; color: var(--fg-muted); }
 .ins-card { padding: 1.25rem 1.5rem; border: 1px solid var(--border); background: var(--bg); }
 .ins-wide { margin-bottom: 1rem; }
+.ins-span { grid-column: 1 / -1; }
 .ins-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(22rem, 1fr)); gap: 1rem; }
 .ins-headline { margin: 0; font-size: 1.0625rem; font-weight: 700; line-height: 1.35; }
 .ins-sub { margin: .25rem 0 .75rem; font-size: .8125rem; color: var(--fg-muted); }

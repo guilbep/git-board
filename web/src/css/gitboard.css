@@ -27,7 +27,8 @@
 .gb-select{box-sizing:border-box;display:flex;align-items:center;justify-content:space-between;gap:.5rem;width:100%;height:2.75rem;padding:0 .75rem;font-size:1rem;text-align:left;border:var(--border-w) solid var(--border-strong);border-radius:var(--radius);background:var(--bg);color:var(--fg);cursor:pointer;transition:border-color var(--t-fast)}
 .gb-select:hover{border-color:var(--fg)}
 .gb-select[aria-invalid="true"]{border-color:var(--primary-hover)}
-.gb-hint{display:flex;flex-wrap:wrap;align-items:center;gap:.375rem;margin-top:.5rem;font-size:.8125rem;color:var(--fg-muted)}
+span.gb-hint{display:inline;margin:0}
+.gb-hint{display:block;margin-top:.5rem;font-size:.8125rem;color:var(--fg-muted)}
 .gb-icon-btn{display:inline-flex;align-items:center;justify-content:center;width:2.75rem;height:2.75rem;padding:0;border:var(--border-w) solid transparent;border-radius:var(--radius);background:transparent;color:var(--fg);cursor:pointer;transition:border-color var(--t-fast)}
 .gb-icon-btn:hover{border-color:var(--border-strong);color:var(--fg)}
 .gb-icon-btn .gb-icon{width:1.25rem;height:1.25rem}
@@ -213,6 +214,9 @@
 .gb-alert-row .gb-icon{margin-top:.2rem}
 /* dialogs */
 .gb-dialog{position:absolute;left:50%;top:4rem;transform:translateX(-50%);box-sizing:border-box;width:min(50rem,calc(100% - 2rem));background:var(--bg);border:var(--border-w) solid var(--border);box-shadow:var(--shadow-lg)}
+/* a tall dialog scrolls its body; its head and its actions stay in reach */
+.gb-dialog{display:flex;flex-direction:column;max-height:calc(100vh - 5rem)}
+.gb-dialog>.gb-dialog-body{overflow:auto;min-height:0}
 .gb-dialog-head{display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:.75rem .75rem .75rem 2rem;border-bottom:var(--border-w) solid var(--border-subtle)}
 .gb-dialog-head h2{font-size:1.25rem;font-weight:700}
 .gb-dialog-body{display:flex;flex-direction:column;gap:1.25rem;padding:1.5rem 2rem}
@@ -480,3 +484,5 @@ a.gb-bar-step:hover .gb-bar-name { text-decoration: underline; text-underline-of
 button.gb-anchor{cursor:pointer}
 button.gb-anchor:hover{text-decoration:underline}
 .gb-role{display:inline-block;padding:.0625rem .375rem;border:var(--border-w) solid var(--border-strong);font-size:.6875rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;line-height:1.4;color:var(--fg-muted)}
+/* a settings row's inputs at the forms' one size (rows held them at the page's) */
+.cr .cr-main input, .cr .cr-main select { font-size: .875rem; }

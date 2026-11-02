@@ -10,6 +10,7 @@ import (
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/ghlabels"
 	"github.com/guilbep/git-board/internal/lint"
+	"github.com/guilbep/git-board/internal/store"
 )
 
 // Settings › Labels: the labels the project defines, their issues, and how
@@ -52,11 +53,12 @@ func githubLabels(repos []string) (map[string][]ghlabels.Label, []repoError) {
 }
 
 // labelCounts is how many issues carry each label, as the board reads it
-// (a flat kind as kind:bug); open ones only when open.
-func (s *apiServer) labelCounts(open bool) (map[string]int, error) {
+// (a flat kind as kind:bug); open ones only when open. The issues come
+// back too, the read is the callers': the undeclared rows group them.
+func (s *apiServer) labelCounts(open bool) (map[string]int, []store.Issue, error) {
 	issues, err := s.b.ListIssues()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	res := map[string]int{}
 	for _, issue := range issues {
@@ -67,7 +69,7 @@ func (s *apiServer) labelCounts(open bool) (map[string]int, error) {
 			res[strings.ToLower(l)]++
 		}
 	}
-	return res, nil
+	return res, issues, nil
 }
 
 type labelOnGitHub struct {
@@ -89,7 +91,7 @@ type labelRow struct {
 
 func (s *apiServer) handleLabelList(w http.ResponseWriter, r *http.Request) {
 	cfg := s.config()
-	counts, err := s.labelCounts(true)
+	counts, issues, err := s.labelCounts(true)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
@@ -119,7 +121,58 @@ func (s *apiServer) handleLabelList(w http.ResponseWriter, r *http.Request) {
 		}
 		rows = append(rows, row)
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"repos": orEmpty(repos), "rows": rows, "errors": errs})
+	writeJSON(w, http.StatusOK, map[string]any{"repos": orEmpty(repos), "rows": rows, "undeclared": s.undeclaredRows(cfg, repos, existing, counts, issues), "errors": errs})
+}
+
+// undeclaredRows groups the namespaced labels found on the issues or a
+// repository that no field's option declares: every namespace found is a
+// field (the reference's rule, never implemented until now), so
+// sprint:13, risk:structural and assignee:guilbep land here, under their
+// field, instead of "outside the project". Namespace-less labels stay
+// stray (handleLint). Rows in field, then value, order.
+func (s *apiServer) undeclaredRows(cfg *config.Config, repos []string, existing map[string][]ghlabels.Label, counts map[string]int, issues []store.Issue) []labelRow {
+	known := map[string]bool{}
+	for _, l := range ghlabels.Desired(cfg) {
+		known[strings.ToLower(l.Name)] = true
+	}
+	names := map[string]string{} // lowercased → as GitHub or the issue has it
+	add := func(name string) {
+		_, value, namespaced := strings.Cut(name, ":")
+		if !namespaced || value == "" || known[strings.ToLower(name)] {
+			return
+		}
+		low := strings.ToLower(name)
+		if _, ok := names[low]; !ok {
+			names[low] = name
+		}
+	}
+	for _, labels := range existing {
+		for _, l := range labels {
+			add(l.Name)
+		}
+	}
+	for _, is := range issues {
+		for _, l := range is.Labels {
+			add(l)
+		}
+	}
+	rows := []labelRow{}
+	for _, low := range slices.Sorted(maps.Keys(names)) {
+		name := names[low]
+		ns, value, _ := strings.Cut(name, ":")
+		row := labelRow{Label: ghlabels.Label{Name: name}, Field: ns, Value: value, Count: counts[low], GitHub: []labelOnGitHub{}}
+		for _, repo := range repos {
+			if labels, ok := existing[repo]; ok {
+				got := labelOnGitHub{Repo: repo, State: "missing"}
+				if i := slices.IndexFunc(labels, func(l ghlabels.Label) bool { return strings.EqualFold(l.Name, name) }); i >= 0 {
+					got.State, got.Color, got.Description = "same", labels[i].Color, labels[i].Description
+				}
+				row.GitHub = append(row.GitHub, got)
+			}
+		}
+		rows = append(rows, row)
+	}
+	return rows
 }
 
 type labelChange struct {
@@ -233,11 +286,12 @@ func (s *apiServer) handleLint(w http.ResponseWriter, r *http.Request) {
 	// ponytail: counted as the board reads labels, so in the flat form a
 	// stray kind:bug counts the bug issues too; the delete's confirm asks
 	// GitHub for its own count.
-	counts, err := s.labelCounts(false)
+	counts, _, err := s.labelCounts(false)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
+
 	repos := s.labelRepos(cfg)
 	existing, errs := githubLabels(repos)
 	desired := ghlabels.Desired(cfg)

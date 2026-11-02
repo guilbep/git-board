@@ -206,14 +206,15 @@ func Apply(c Change) error {
 	return g.SetLabel(ctx, github.Label{Name: c.Name, Color: c.Color, Description: c.Description}, c.Update)
 }
 
-// Stray is repo's labels outside the project's: not desired, and not a
-// value of a free-form field (assignee:alice). A bug beside kind:bug,
-// GitHub's old defaults.
+// Stray is repo's labels outside the project's: no namespace (a bug,
+// GitHub's old defaults), and not one of [labels]. A namespaced label is
+// a field's value, declared or not — every namespace found is a field,
+// and Settings › Labels groups it there (Undeclared); lint never calls it
+// stray, so a Delete can't take a field's values away in one click.
 func Stray(cfg *config.Config, desired, existing []Label) []Label {
 	var res []Label
 	for _, l := range existing {
-		ns, _, field := strings.Cut(l.Name, ":")
-		if f, ok := cfg.Fields[ns]; field && ok && len(f.Options) == 0 {
+		if _, value, namespaced := strings.Cut(l.Name, ":"); namespaced && value != "" {
 			continue
 		}
 		if _, ok := lookup(desired, l.Name); !ok {

@@ -5,7 +5,7 @@
      list in the project file. Without the list, nothing to pick. -->
 <template>
   <div class="gb-fe">
-    <p v-if="!defined" class="gb-fe-note">The project file lists no labels to pick: add <code>[labels] list</code> in <router-link to="/settings/project-file">Settings › Project file</router-link>.</p>
+    <p v-if="!defined" class="gb-fe-note">The project file lists no labels to pick: add them in <router-link to="/settings/labels">Settings › Labels</router-link>.</p>
     <ul v-if="list.length" class="gb-pop-list" role="menu" aria-label="Labels">
       <li v-for="l in list" :key="l" role="none">
         <button type="button" role="menuitemcheckbox" class="gb-pop-item gb-lp-item" :aria-checked="line.picked.includes(l)" :title="descriptions[l]" :disabled="busy" @click="toggle(l)">

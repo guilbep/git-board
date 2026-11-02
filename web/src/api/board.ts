@@ -675,6 +675,144 @@ export function saveConfig(text: string, base: string): Promise<ConfigCheck> {
   return request('/api/config', json('PUT', { text, base }));
 }
 
+// .git-board.toml's sections, typed, as the settings' forms read and write
+// them (configsections.go): GET /api/config/model answers every section,
+// PUT /api/config/section/<name>?base=<hash> applies one — only its tables
+// change in the file, comments kept — and serves the check and the fresh
+// model. A field's value here is the form's whole draft for the section.
+export interface ConfigField {
+  single?: boolean;
+  options?: string[] | null;
+  numeric?: boolean;
+  type?: string | undefined; // select, iteration, person, number, date, issue, text; '': guessed
+  unit?: string | undefined; // a number's: h
+  project?: Record<string, string> | undefined; // the GitHub Project's name for a value
+  aliases?: Record<string, string> | undefined; // a value's old names, folded into the current one
+  colors?: Record<string, string> | undefined; // a palette name or #rrggbb
+  descriptions?: Record<string, string> | undefined; // GitHub's, 100 characters at most
+}
+
+export interface ConfigLabels {
+  list: string[];
+  colors?: Record<string, string> | undefined;
+  descriptions?: Record<string, string> | undefined;
+}
+
+export interface ConfigSprint {
+  slug: string;
+  title: string;
+  start: string; // RFC 3339 as the server holds it; a form edits YYYY-MM-DD
+}
+
+export interface ConfigSuite {
+  run?: string[] | null; // an argv, never a shell line
+  files?: string[] | null; // git glob pathspecs of what it reads
+  where?: string | undefined; // worktree (default) or ci
+  dir?: string | undefined; // from the checkout's root
+  env?: Record<string, string> | undefined;
+  tools?: string[][] | null; // version commands: their output names the toolchain
+}
+
+export interface ConfigRelease {
+  remote?: string | undefined;
+  environments?: string[] | null;
+  follow?: string | null | undefined; // the environment that follows the trunk
+  checks?: string | undefined;
+  images?: { name: string; context: string }[] | null;
+  chart?: { path: string; registry: string } | null;
+  version_values?: string[] | null;
+  builder?: string | undefined;
+  deploy?: { repo: string; path: string; registry?: string }[] | null;
+  binaries?: string[] | null;
+  platforms?: string[] | null;
+  build?: string | undefined;
+}
+
+export interface ConfigModel {
+  hash: string;
+  exists: boolean;
+  error?: string; // the file doesn't parse: the forms show it, Advanced fixes it
+  fields: Record<string, ConfigField>;
+  forges: import('@/fieldtargets').ForgeModel[]; // the [forges.<name>] tables, mappings with them
+  github_project?: { owner: string; number: number; write?: boolean };
+  labels: ConfigLabels;
+  views: Record<string, ViewConfig>;
+  view_order: string[]; // the file's order: the tabs', the first is the landing one
+  field_order: string[]; // the file's order likewise: the fields page's list
+  sprints: { length_days: number; start_weekday: string; list: ConfigSprint[] };
+  roles: Record<string, string>;
+  branches: { base?: string | undefined; name?: string | undefined; kinds?: Record<string, string> | undefined };
+  cycle: {
+    on: boolean; // the file has a [cycle] table
+    ready?: string | undefined;
+    'in-progress'?: string[] | null;
+    'in-review'?: string[] | null;
+    validation?: string[] | null;
+    plans?: string | undefined;
+    'plans-in-pr'?: boolean | null | undefined;
+    'test-files'?: string[] | null;
+    criteria?: string[] | null;
+    steps?: string[] | null;
+    kinds?: Record<string, string> | undefined;
+    risk?: string | undefined;
+    plan?: string | undefined;
+    review?: string | undefined;
+    spec?: string | undefined;
+    signoffs?: Record<string, string> | undefined;
+    tests?: Record<string, ConfigSuite> | undefined;
+    checks?: Record<string, ConfigSuite> | undefined;
+    signers?: string | undefined;
+  };
+  repos: { list: string[]; assignees: string }; // assignees: how the forges hold them; native, labels
+  uploads: { endpoint?: string | undefined; public_url?: string | undefined; prefix?: string | undefined; region?: string | undefined };
+  release: ConfigRelease;
+}
+
+export function getConfigModel(): Promise<ConfigModel> {
+  return request('/api/config/model');
+}
+
+// saveConfigSection applies one section's draft: fields and views take
+// {set, remove, order?} (a removal is a name the draft dropped, an order
+// the tabs'), labels {list, colors, descriptions}, sprints the table, roles
+// role → login, branches and uploads and release the section's value, cycle
+// {on, cycle}, repos {list, assignees}. The answer is the check and the
+// fresh model.
+export function saveConfigSection(section: string, value: unknown, base: string): Promise<{ check: ConfigCheck; model: ConfigModel }> {
+  return request(`/api/config/section/${encodeURIComponent(section)}?base=${encodeURIComponent(base)}`, json('PUT', value));
+}
+
+// getFieldUsage counts, per field namespace, the issues carrying one of
+// its ns:value labels: the Remove confirm's "N issues use it". A field
+// no issue uses is absent, not zero.
+export function getFieldUsage(): Promise<Record<string, number>> {
+  return request('/api/fields/usage');
+}
+
+// MigratePlan is what moving one field to its new forge home would do on
+// one forge: the issues touched, the forge labels taken off them, and
+// what a sync run does instead when migration has nothing of its own.
+export interface MigratePlan {
+  forge: string;
+  repo: string;
+  target: string;
+  issues: number;
+  labels: number;
+  note?: string;
+}
+
+// previewFieldMigration counts, per declared forge, what running the
+// migration would do to a field. Nothing is written.
+export function previewFieldMigration(field: string): Promise<{ plans: MigratePlan[] }> {
+  return request(`/api/fields/migrate?field=${encodeURIComponent(field)}`);
+}
+
+// runFieldMigration writes it: the values to the target the sync won't
+// revisit (the assignees), the old labels off the forge's issues.
+export function runFieldMigration(field: string): Promise<{ plans: MigratePlan[]; error?: string }> {
+  return request(`/api/fields/migrate?field=${encodeURIComponent(field)}`, json('POST', {}));
+}
+
 // ReleaseSetup is what Enable binary release proposes from the repository.
 export interface ReleaseSetup {
   binaries: string[]; // main packages, ./cmd/git-board
@@ -1517,7 +1655,7 @@ export interface LabelRow extends GithubLabel {
   count: number; // open issues
   github: { repo: string; state: LabelState; color: string; description: string }[];
 }
-export interface Labels { repos: string[]; rows: LabelRow[]; errors: RepoError[] }
+export interface Labels { repos: string[]; rows: LabelRow[]; undeclared: LabelRow[]; errors: RepoError[] }
 export interface LabelChange extends GithubLabel { repo: string; update: boolean; was?: GithubLabel; error?: string }
 export interface LintFinding { check: string; issue_id: string; title: string; message: string }
 export interface StrayLabel extends GithubLabel { repo: string; count: number }

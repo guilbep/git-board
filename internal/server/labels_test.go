@@ -93,6 +93,20 @@ func TestLabelsTab(t *testing.T) {
 		t.Errorf("rows = %q, want %q", got, want)
 	}
 
+	// every namespace found is a field: the kinds' values are grouped
+	// under kind, undeclared, not stray — GitHub's wontfix stays stray
+	var undecl struct {
+		Undeclared []labelRow `json:"undeclared"`
+	}
+	getJSON(t, ts.URL+"/api/labels", &undecl)
+	got = nil
+	for _, r := range undecl.Undeclared {
+		got = append(got, fmt.Sprint(r.Field, ":", r.Value, " ", r.Count))
+	}
+	if want := []string{"kind:bug 1", "kind:feat 1"}; !slices.Equal(got, want) {
+		t.Errorf("undeclared = %q, want the kinds under their field", got)
+	}
+
 	var sent struct {
 		Changes []labelChange `json:"changes"`
 	}

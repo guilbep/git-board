@@ -6,9 +6,9 @@
 <template>
   <AppHeader :views="viewNames" />
   <main class="gb-page">
-    <span v-if="repo" class="epfl-eyebrow">{{ repo }}</span>
+    <span class="epfl-eyebrow">Releases</span>
     <div class="gb-titlerow">
-      <h1 class="gb-h1">Releases</h1>
+      <h1 class="gb-h1">What was released, and where it runs</h1>
       <span v-if="meta" class="gb-meta">{{ meta }}</span>
       <div v-if="canCut" class="gb-titlerow-actions">
         <button type="button" class="epfl-btn epfl-btn-primary" :disabled="busy" @click="openDialog({ kind: 'cut' })"><GbIcon name="tag" />Cut a release</button>
@@ -34,13 +34,13 @@
         <p class="gb-hint">Publishing needs the gh CLI, signed in: <span class="gb-mono">gh auth login</span>.</p>
         <div class="gb-actions">
           <button type="button" class="epfl-btn epfl-btn-primary" :disabled="pending" @click="enable">Enable binary release</button>
-          <router-link class="epfl-btn epfl-btn-secondary" to="/settings/project-file">Edit .git-board.toml instead</router-link>
+          <router-link class="epfl-btn epfl-btn-secondary" to="/settings/advanced">Edit .git-board.toml instead</router-link>
         </div>
       </template>
       <template v-else>
         <p v-if="setup?.note" class="epfl-alert epfl-alert-info" role="status">{{ setup.note }}</p>
         <div v-if="doc" class="gb-md" v-html="doc" />
-        <p><router-link to="/settings/project-file">Edit .git-board.toml in Settings</router-link></p>
+        <p><router-link to="/settings/release">Set up the release in Settings</router-link></p>
       </template>
     </section>
 

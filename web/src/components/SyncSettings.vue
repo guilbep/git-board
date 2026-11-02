@@ -15,13 +15,11 @@
       <div>
         <h2 class="h4">Sync</h2>
         <p class="sy-lead">
-          Your issues travel with git, like your code; the forges and the GitHub Project are mirrors, for the people who work there.
-          One sync moves them all: a git pull from {{ remote }}, the forges, the Project's fields, then a git push. <code>git board sync</code> runs the same.
-          Each row has its own actions, for its side alone: their tooltips name the command that does the same.
+          Where your issues go besides git: one Sync pulls {{ remote }}, the forges and the Project's fields, then pushes. Each row
+          does it for its side alone. The forges and the Project are kept in <code>.git-board.toml</code>; the tokens, in git's credential helper. <button type="button" class="gb-linkbtn" @click="guideOpen = true">How forges work</button>
         </p>
       </div>
       <div class="sy-actions">
-        <button type="button" class="epfl-btn epfl-btn-secondary" @click="guideOpen = true">How forges work</button>
         <button type="button" class="epfl-btn epfl-btn-secondary" @click="adding = true">+ Add a forge</button>
       </div>
     </div>
@@ -53,20 +51,11 @@
               <tr class="sy-sub">
                 <td><span class="sy-kind">GitHub Project</span></td>
                 <td class="sy-wrap">
-                  <template v-if="st.project.project && !editingProject">
-                    {{ projectName }}<button type="button" class="gb-linkbtn sy-small" :disabled="projectBusy || running" @click="changeProject">Change</button>
+                  <template v-if="st.project.project">
+                    {{ projectName }}<button v-if="!editingProject" type="button" class="gb-linkbtn sy-small" :disabled="projectBusy || running" @click="changeProject">Change</button>
                     <div v-if="st.project.last?.title" class="sy-note">{{ st.project.last.title }}</div>
                   </template>
-                  <form v-else class="sy-project" @submit.prevent="saveProject">
-                    <label for="sy-project">Project number</label>
-                    <input id="sy-project" v-model="projectInput" class="epfl-input" placeholder="40" autocomplete="off" data-1p-ignore />
-                    <button type="submit" class="epfl-btn epfl-btn-primary epfl-btn-sm" :disabled="!projectDraft || projectBusy || running">Save</button>
-                    <button v-if="st.project.project" type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" @click="editingProject = false">Cancel</button>
-                    <p class="sy-note sy-project-help">
-                      {{ projectHint }} In a terminal: <code>git board project configure --owner {{ projectDraft?.owner || githubOwner || '…' }} --project {{ projectDraft?.number ?? '…' }}</code>.
-                      <button type="button" class="gb-linkbtn" @click="openProjectDoc">[github-project] in the configuration guide</button>
-                    </p>
-                  </form>
+                  <span v-else-if="!st.project.project" class="sy-note">None yet</span>
                   <div v-if="projectError" class="sy-err" role="alert">{{ projectError }}</div>
                 </td>
                 <td>{{ st.project.project ? (st.project.write ? 'Read and written' : 'Read only') : '—' }}</td>
@@ -77,6 +66,21 @@
                   </template>
                 </td>
                 <td><button v-if="st.project.project" type="button" class="gb-linkbtn" :disabled="projectBusy || running" @click="confirmingRemove = projectKey">Remove</button></td>
+              </tr>
+              <!-- the number to set opens under the row: the table's columns stay put -->
+              <tr v-if="!st.project.project || editingProject" class="sy-sub sy-editrow">
+                <td colspan="6">
+                  <form class="sy-project" @submit.prevent="saveProject">
+                    <label for="sy-project">Project number</label>
+                    <input id="sy-project" v-model="projectInput" class="epfl-input" placeholder="40" autocomplete="off" data-1p-ignore />
+                    <button type="submit" class="epfl-btn epfl-btn-primary epfl-btn-sm" :disabled="!projectDraft || projectBusy || running">Save</button>
+                    <button v-if="st.project.project" type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" @click="editingProject = false">Cancel</button>
+                    <p class="sy-note sy-project-help">
+                      {{ projectHint }} In a terminal: <code>git board project configure --owner {{ projectDraft?.owner || githubOwner || '…' }} --project {{ projectDraft?.number ?? '…' }}</code>.
+                      <button type="button" class="gb-linkbtn" @click="openProjectDoc">[github-project] in the configuration guide</button>
+                    </p>
+                  </form>
+                </td>
               </tr>
               <tr v-if="confirmingRemove === projectKey" class="sy-confirm-row">
                 <td colspan="6">
@@ -91,7 +95,10 @@
                 <td><b>{{ row.f.name }}</b> <span class="sy-kind">{{ kindName(row.f.target) }}</span></td>
                 <td class="sy-wrap">
                   <a :href="row.f.where" target="_blank" rel="noopener noreferrer">{{ row.f.project }}</a>
-                  <div class="sy-note">{{ row.f.discovered ? 'found in the remotes' : 'in .git-board.toml' }}</div>
+                  <div class="sy-note">
+                    {{ row.f.discovered ? 'found in the remotes' : 'in .git-board.toml' }} ·
+                    <router-link :to="`/settings/forge-fields/${row.f.name}`">its fields</router-link>
+                  </div>
                 </td>
                 <td>
                   <span v-if="row.f.discovered" title="A forge found in the remotes syncs: give the forges tables in .git-board.toml to leave one out">On</span>
@@ -264,7 +271,7 @@ import GbIcon from '@/components/GbIcon.vue';
 import StartOver from '@/components/StartOver.vue';
 import SyncProgress from '@/components/SyncProgress.vue';
 
-// changed: the sync as it stands, for the Overview's line
+// changed: the sync as it stands, for the menu's line
 const emit = defineEmits<{ changed: [st: WholeStatus] }>();
 
 const remote = 'origin'; // the whole sync's, as git-board sync's default
@@ -564,6 +571,7 @@ onMounted(() => {
 </script>
 
 <style scoped>
+.set-panel { display: flex; flex-direction: column; gap: 1.25rem; max-width: 64rem; }
 .sy h2, .sy h3, .sy p { margin: 0; }
 .sy-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 1rem; }
 .sy-head h2 { margin-bottom: .375rem; }
@@ -576,6 +584,7 @@ onMounted(() => {
 .sy-sub td:first-child { padding-left: 1.75rem; }
 .sy-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .gb-table-wrap { position: relative; }
+.gb-table-wrap > .gb-table { min-width: 46rem; }
 .sy-switch { display: inline-flex; align-items: center; gap: .5rem; cursor: pointer; font-weight: 700; }
 .sy-switch input { width: 1.125rem; height: 1.125rem; accent-color: var(--primary-hover); }
 .sy-confirm-row td { background: var(--warning-bg); }

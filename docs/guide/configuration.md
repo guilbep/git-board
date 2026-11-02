@@ -6,7 +6,7 @@ The file is optional. Without it, every `ns:value` label is a field and git-boar
 
 It lives at the root of the repository. Edit it in **Settings → Project file**: it is checked as you type and applies as soon as you save. Editing it by hand works too; restart `git board` (or `git board serve`) after.
 
-A repository without one starts from the default: **Start from the default** in Settings → Project file, or `git board init` in a terminal (it never overwrites a file). The default declares a status workflow (`backlog`, `ready`, `in-progress`, `in-review`, `ready-for-validation`, `validated`), priorities `p0` to `p3`, an on-hold field beside the status (`hold:blocked`, `hold:paused`), the ten IT4R kinds, GitHub's plain labels (`bug`, `feat`, … `chore`, `design`) with their descriptions, each the prefix of its branches (`bug/vm-12-login-fails`), estimates in hours, MoSCoW, sprints of 14 days, and four views (all, backlog, board, mine), each explained in a comment.
+A repository without one starts from the default: **Start from the default** in Settings › Fields, or `git board init` in a terminal (it never overwrites a file). The default declares a status workflow (`backlog`, `ready`, `in-progress`, `in-review`, `ready-for-validation`, `validated`), priorities `p0` to `p3`, an on-hold field beside the status (`hold:blocked`, `hold:paused`), ten kinds, GitHub's plain labels (`bug`, `feat`, … `chore`, `design`) with their descriptions, each the prefix of its branches (`bug/vm-12-login-fails`), estimates in hours, MoSCoW, sprints of 14 days, and four views (all, backlog, board, mine), each explained in a comment.
 
 | Table | What it sets |
 | --- | --- |
@@ -22,6 +22,8 @@ A repository without one starts from the default: **Start from the default** in 
 | `[repos]` | the GitHub repositories whose labels Settings › Labels and `git board lint --create-labels` keep, and how the forges hold assignees |
 
 ## Fields
+
+*These are the forms of Settings › Fields; this section is the reference.*
 
 A field is a label namespace: `status:ready` is the value `ready` of the field `status`. Every namespace found on the issues is already a field; declare one here to give it an order, a cardinality or colors.
 
@@ -50,6 +52,8 @@ single = false
 
 ## Types
 
+*These are the forms of Settings › Fields; this section is the reference.*
+
 The fields and their types are the project's **ontology**: the kinds of things an issue can say about itself, and how they relate. An assignee is a person, a sprint is a span of dates, a parent is another issue. The type decides how a field sorts, filters, shows and is edited; its values stay labels (`due:2026-10-30`, `parent:#12`), so they travel to GitHub and GitLab like any label.
 
 | Type | For | What it gives | Guessed from |
@@ -61,6 +65,8 @@ The fields and their types are the project's **ontology**: the kinds of things a
 | `date` | due date, deadline | a date picker, red once past, amber within a week, "3 days late" | the names `due`, `deadline`; values that are all `YYYY-MM-DD` |
 | `issue` | parent, blocked-by | a link to the other issue, and on it the reverse: Sub-issues, Blocks | the names `parent`, `blocked-by`, `blocks`, `depends-on`, `duplicate-of`; values that are all `#12` or git-bug ids |
 | `text` | anything free | a plain text box | only when set |
+
+In Settings › Fields the form follows the type: a select lists its values in order, a number its unit, and a date, a person, an issue or a sprint has no values of its own. Saving such a field takes its `options` out of the file, with their colors and descriptions.
 
 Set a type when the guess is wrong, or for a field no issue uses yet:
 
@@ -81,6 +87,8 @@ An issue field names the other issue by its forge number, `#12`, or by its git-b
 On hold is a field beside the status, never a status: the default's `hold` (`blocked`, `paused`) leaves a blocked issue at its place in the workflow. An issue without one isn't missing a value.
 
 ## Colors
+
+*These are the forms of Settings › Fields and Labels; this section is the reference.*
 
 Every field value already has a color, picked from words in it: done, validated or closed are green; review or qa purple; validation pink; in-progress, doing or wip blue; ready or feat teal; waiting, comite or p2 amber; test, p1 or high orange; blocked, bug, fix or p0 red; backlog, todo, p3 or low grey. Other values take blue, purple, teal and pink in turn. Numbers and assignees stay plain.
 
@@ -106,6 +114,8 @@ Settings › Labels shows each label's color and description beside GitHub's, an
 
 ## Labels
 
+*These are the forms of Settings › Labels; this section is the reference.*
+
 `[labels]` lists the plain labels the project allows besides its fields: yes-or-no flags that can stack and that no field holds, such as `needs-design` or `regression`. A label an issue can carry only one of (a priority, a kind, a team) is a field's option instead.
 
 ```toml
@@ -128,6 +138,8 @@ needs-design = "waits for a design decision"
 Settings › Labels sends them to GitHub with the fields' labels and no longer counts them among the labels outside the project's. With the table, `git board lint` reports an open issue's plain labels outside the list (`label-outside`); an empty list allows none. Without it, lint says nothing about labels and the issue's head has nothing to pick: a label already on an issue shows with a warning.
 
 ## Views
+
+*These are the forms of Settings › Views; this section is the reference.*
 
 A view is a saved page: a tab above the issues, in the file's order (git-board opens on the first), and its address can be bookmarked. Table, board or roadmap is a switch beside the tabs, on any view; `layout` is the one it opens in.
 
@@ -190,6 +202,8 @@ them all; a lane's ⋯ menu moves every card it holds.
 
 ## Roles
 
+*These are the forms of Settings › Roles; this section is the reference.*
+
 A project's people by role, as the team's roles page names them: the lead developer, the project manager, the code reviewer. Every issue takes them, unless it sets its own.
 
 ```toml
@@ -208,6 +222,8 @@ The inbox brings a role you hold for the project only the project's new issues a
 | a role (`lead-dev`, `pm`, `reviewer`, …) | One login. The name is a field's: lower-case letters, digits and `-`; declared in `[fields]`, it is a `person`. |
 
 ## Filters
+
+*These are the forms of Settings › Views (the filter syntax, beside the form); this section is the reference.*
 
 One syntax everywhere: a view's `filter`, the board's **Filter** box, ⌘K, and the command line (`git-board ls`, `git-board tui` and its `f`). Conditions combine with AND, as in GitHub's search; a leading `-` negates any of them.
 
@@ -234,6 +250,8 @@ On the board, the Filter box holds the view's filter until you change it; the ad
 
 ## Sprints
 
+*These are the forms of Settings › Sprints; this section is the reference.*
+
 Sprints are a field like any other (`sprint:s12`). The list gives them dates, so that `sprint:@current` finds today's sprint.
 
 ```toml
@@ -254,7 +272,6 @@ start = 2026-10-19
 | Key | Type | What it does |
 | --- | --- | --- |
 | `length_days` | number | The length of the last sprint, whose end has no next start. Also what **+ Sprint** adds to the last start. |
-| `start_weekday` | string | Read, not used yet. |
 | `slug` | string | The label's value: `sprint:s12`. |
 | `title` | string | The name shown. |
 | `start` | date, `YYYY-MM-DD`, no quotes | First day. A sprint lasts until the next one starts. |
@@ -267,7 +284,7 @@ The `sprint` field follows these dates: in the filters (sorted by **Dates**, tod
 
 The GitHub Project whose fields `git board project pull`, `push` and `sync` turn into labels and back, by the Project's field names: `Status` (`status:`), `Priority` (`prio:`), `Sprint` (`sprint:`, an iteration field), `Est. hours` (`est:`, a number), `MoSCoW` (`moscow:`), `Module` (`mod:`), and `Milestone` (`milestone:`, its title as a slug), which is read only: the issue's own, a deliverable, set on GitHub. An option whose name doesn't slug to the value is named in the field's `project` table, as the default file does for MoSCoW's "Won't". The whole sync, Settings › Sync and `git board sync`, runs `git board project sync` as its third step: after the forges, before the git push.
 
-Settings › Sync sets it up, on the Project's line: a number, a Project of the GitHub forge's owner, or the Project's address (`https://github.com/orgs/EPFL-ENAC/projects/40`), checked as soon as it is saved; another Project than the one written to is only read, until `write = true` is set again. `git board project configure --owner EPFL-ENAC --project 40` writes the same.
+Settings › Sync sets it up, on the Project's line: a number, a Project of the GitHub forge's owner, or the Project's address (`https://github.com/orgs/acme/projects/40`), checked as soon as it is saved; another Project than the one written to is only read, until `write = true` is set again. `git board project configure --owner acme --project 40` writes the same.
 
 ```toml
 [github-project]
@@ -320,11 +337,13 @@ No token goes in this file, which is committed. A token comes from `GITHUB_TOKEN
 
 ## Attachments
 
+*These are the forms of Settings › Attachments; this section is the reference.*
+
 Files attached to comments go to an S3 bucket that a CDN serves; the comment gets a link to them. The keys stay out of this file: set `ACCESS_KEY_ID`, `ACCESS_KEY_SECRET` and `BUCKET_NAME` where the git-board server (`git board`, `git board serve`) runs. Without them, attaching is off.
 
 ```toml
 [uploads]
-prefix = "git-board/co2-calculator"
+prefix = "git-board/app"
 ```
 
 | Key | Default | What it does |
@@ -337,6 +356,8 @@ prefix = "git-board/co2-calculator"
 Files are public to anyone with the link, even for a private repository, and stay cached on the CDN for up to a year after a delete.
 
 ## Branches
+
+*These are the forms of Settings › Branches; this section is the reference.*
 
 An issue's **Development** section lists the branches whose name names it: *merged into dev* when the branch's last commit is in `dev`, *in dev, squashed* when its changes are there by a squash or a rebase (what `git merge-tree` makes of the two is `dev` as it is), else *not in dev*. Merging with merge commits (`--no-ff`) keeps the first one exact. **Create branch** gives the command creating its branch (`git board branch <id>` prints the same). git-board creates and pushes no branch.
 
@@ -373,7 +394,7 @@ git config --global board.view classic  # every repository: the classic page
 git config --unset board.view           # back to what the file says
 ```
 
-A choice in Settings › You, or a `[cycle]` table saved in Settings › Project file, shows at once; a `git config` run from a terminal shows when you reload the page. An issue already open keeps its page until you open the next one. Settings › You says which page your issues open on, and why. On the cycle's page, the issue's meta line ends with a **Cycle | Classic** switch: Classic shows the issue as someone on the classic page sees it, and the next issues too, in that tab, until you switch back or reload. It saves nothing. With something unsent in a comment box, it asks first, since the two pages have their own. With the classic page the header has no Work. Turning the cycle off loses nothing: the cycle's comments, verdicts and sign-offs stay comments, and come back as the cycle's when it is on again (docs/prd/classic-view.md).
+A choice in Settings › You, or a `[cycle]` table saved in Settings › Cycle, shows at once; a `git config` run from a terminal shows when you reload the page. An issue already open keeps its page until you open the next one. Settings › You says which page your issues open on, and why. On the cycle's page, the issue's meta line ends with a **Cycle | Classic** switch: Classic shows the issue as someone on the classic page sees it, and the next issues too, in that tab, until you switch back or reload. It saves nothing. With something unsent in a comment box, it asks first, since the two pages have their own. With the classic page the header has no Work. Turning the cycle off loses nothing: the cycle's comments, verdicts and sign-offs stay comments, and come back as the cycle's when it is on again (docs/prd/classic-view.md).
 
 With the cycle on, an issue's page is its **step** in the development cycle (docs/prd/cycle-protocol.md). Under the title, the step bar runs through the project's steps, a cell each, numbered in order: by default the seven, Intent, Risk, Plan, Tests, Code, Review and Verify (`steps`, below). A done step reopens when clicked, a later one is locked and says why ("opens when the PR is ready for review"), and a skipped one says so. The current step is the page's main section: at Intent the description, its criteria and Move to ready; at Risk the three classes; at Plan the plan file, who drafted it, Approve the plan or Ask the agent to revise; at Code Mark ready for review; at Review the PR and its changes; at Verify the full run, the criteria to tick, the sign-off tiles, Sign off or Send back to in-progress. A status bar under it gives the branch and its head, the PR and its checks, and what waits for the forges. The right column is the discussion: **This step** (the comments posted on that step), **All** (every comment and event in order) and **History**, with the fields under it. Each step's button moves the status, as the next table says. Under 900px the step bar shows numbers only, with the current step's name, and the discussion goes under the step. The step is never stored: the server computes it on every read from the status and the evidence. The status is the floor (its stage gives the first step it can be at), and the evidence moves the step within that stage, never below it. Evidence that disagrees with the status shows after the line ("plan not approved"), it never makes another step.
 
@@ -405,7 +426,7 @@ qa = "pm"
 tests-metier = "metier"
 ```
 
-Every key has a default, so a project writes only what the guess got wrong, and Settings › Project file says what was guessed. The stages are guessed from the status options, in their order, on the words of each name (split at `-`, `_` and spaces). The last option is the closing status. A word among `validation`, `qa`, `uat`, `acceptance`, `test`, `tests`, `metier`, `verify` or `staging` makes a validation status; `review`, `reviewing` or `pr` makes in-review; `progress`, `doing`, `wip`, `dev`, `development`, `implementing` or `coding` makes in-progress; the first with `ready`, `todo`, `planned` or `selected` is ready. Every other status is before ready. With co2-calculator's nine statuses the guess is the table above. The roles are unset by default, and a gate whose role is unset, or names nobody, is anyone's turn.
+Every key has a default, so a project writes only what the guess got wrong, and Settings › Cycle says what was guessed. The stages are guessed from the status options, in their order, on the words of each name (split at `-`, `_` and spaces). The last option is the closing status. A word among `validation`, `qa`, `uat`, `acceptance`, `test`, `tests`, `metier`, `verify` or `staging` makes a validation status; `review`, `reviewing` or `pr` makes in-review; `progress`, `doing`, `wip`, `dev`, `development`, `implementing` or `coding` makes in-progress; the first with `ready`, `todo`, `planned` or `selected` is ready. Every other status is before ready. With co2-calculator's nine statuses the guess is the table above. The roles are unset by default, and a gate whose role is unset, or names nobody, is anyone's turn.
 
 | Key | Default | What it does |
 | --- | --- | --- |
@@ -521,7 +542,7 @@ env = { CGO_ENABLED = "0" }
 
 A suite's name is letters, digits, `_`, `.` and `-`. The table `[cycle.tests.<suite>]` used to be the key `tests` under `[cycle]`, the test-file patterns, which is now `test-files`. A list under `tests` is refused.
 
-**The base branch's file rules.** Step 4 and the gate read `.git-board.toml` and the signers file from the base branch. The base is `origin/main`, or whatever Branches works out, never the issue's branch. This means a branch can't add a command that then runs on its reviewer's machine, and it can't add its own signer. A change to these tables counts once it is committed on the base. Settings › Project file still shows the working tree's file.
+**The base branch's file rules.** Step 4 and the gate read `.git-board.toml` and the signers file from the base branch. The base is `origin/main`, or whatever Branches works out, never the issue's branch. This means a branch can't add a command that then runs on its reviewer's machine, and it can't add its own signer. A change to these tables counts once it is committed on the base. Settings › Advanced still shows the working tree's file.
 
 **A run.** Run the selected answers at once, and the run goes on in the background. A server runs one run at a time; a second one gets `busy`. Each picked name runs like this:
 
@@ -610,6 +631,8 @@ A question is a comment by someone else than the viewer with `ask` metadata, or,
 
 ## Worktrees
 
+*These are the forms of Settings › Worktrees; this section is the reference.*
+
 git-board starts agents with [wtx](https://github.com/EPFL-ENAC/wtx): one agent, one worktree, one branch, one PR. wtx, `wt` and `tmux` run on the machine where `git board serve` runs, and git-board calls wtx there, with an argument list, never a shell line.
 
 **Settings › Worktrees** says whether wtx, wt and tmux are on that machine (`wtx doctor --json`), then **Set up wtx**: what wtx read in the repository (`wtx init --edit --no-notes`, the existing `wtx.toml` merged with a fresh scan), to correct before writing. The base branch, the protected branches, the agent and its plan and build models are edited; the ports and panes are shown as wtx read them. **Who commits** is a deny rule in `[permissions] deny`: *A person commits and opens the PR* denies `Bash(git commit *)`, `Bash(git push *)` and `Bash(gh pr create *)`; *The agent may commit; a person pushes* denies `Bash(git push *)` alone. **Never allowed** is the other deny rules, added to wtx's own (force pushes, pushes to the protected branches, changing the remote). **Preview the files** runs `wtx init --from-json` in a scratch repository and shows `wtx.toml` and `.wt.toml`; **Write wtx.toml** runs the same command in the main checkout with `--force`, so the written files are the preview byte for byte; wtx also adds its lines to `.gitignore`. A missing who-commits rule is written as *A person commits*, the radio's default. They are left uncommitted: you commit them. git-board writes no TOML itself.
@@ -632,6 +655,8 @@ After the switch, a bare number (`3075`, `fix/3075-…`) and `CO2-3075` are the 
 
 ## Release
 
+*These are the forms of Settings › Release; this section is the reference.*
+
 `[release]` is how the project's code reaches its environments: the ordered `environments`, the `checks` a merge must pass, what to build (`images`, `chart`) and the config repos holding each environment's overlay (`[[release.deploy]]`). Without `environments` or `binaries`, the project has no releases. See [the release design](https://github.com/guilbep/git-board/blob/main/docs/prd/release.md).
 
 A Go program with no deploy targets lists `binaries` instead: the main packages to build per platform and publish as archives on the forge's release. The Releases page writes these for you: **Enable binary release** infers them from the repo.
@@ -653,18 +678,18 @@ images = [
   { name = "frontend", context = "./frontend" },
   { name = "backend", context = "./backend" },
 ]
-chart = { path = "./helm", registry = "oci://ghcr.io/epfl-enac/co2-calculator/helm" }
+chart = { path = "./helm", registry = "oci://ghcr.io/acme/app/helm" }
 version_values = ["backend.env.APP_VERSION"]
 
 [[release.deploy]]
-repo = "git@github.com:EPFL-ENAC/enack8s-app-config.git"
-path = "epfl/co2-calculator/overlays/{env}"
-registry = "ghcr.io/epfl-enac/epfl/co2-calculator"
+repo = "git@github.com:acme/k8s-app-config.git"
+path = "apps/app/overlays/{env}"
+registry = "ghcr.io/acme/app"
 
 [[release.deploy]]
-repo = "git@github.com:EPFL-ENAC/openshift-app-config.git"
-path = "epfl/co2-calculator/overlays/{env}"
-registry = "quay-its.epfl.ch/svc1751"
+repo = "git@github.com:acme/openshift-app-config.git"
+path = "apps/app/overlays/{env}"
+registry = "quay.example.org/acme"
 ```
 
 | Key | Default | What it does |
@@ -683,10 +708,11 @@ A deploy edits the overlay's `kustomization.yaml` and nothing else (comments, ke
 
 ## Repos
 
+*These are the forms of Settings › Repos; this section is the reference.*
+
 ```toml
 [repos]
-list = ["EPFL-ENAC/co2-calculator"]
-assignees = "native"
+list = ["acme/app"]
 ```
 
 `list` is the GitHub repositories whose labels the project keeps; without `[repos]`, origin's when it is on GitHub. They are reached through GitHub's API with the forge sync's token: `GITHUB_TOKEN` when set, else git's credential helper for github.com ([Forges](forges.md#tokens)). Not `gh`'s, which may be another token. When a repository can't be read, the tab says why and offers no Send to GitHub.
@@ -695,8 +721,9 @@ assignees = "native"
 
 - **Adopt** writes GitHub's color and description of a label into `[fields.<name>.colors]` and `[fields.<name>.descriptions]`, and opens the Project file tab to review and save. An organization's labels keep their colors this way.
 - **Send to GitHub** first lists, per repository, each label it creates and each change, then creates the missing labels and updates those whose color or description the file sets. A label outside the project's is never touched, and one the file gives no color or description of its own keeps GitHub's.
-- **Lint** shows `git board lint`'s findings, then the GitHub labels outside the project's (a `bug` beside `kind:bug`, GitHub's old defaults) with their issues. **Delete** removes one from its repository, after a confirmation that says how many issues lose it.
+- **On GitHub** also lists the GitHub labels outside the project's (a `bug` beside `kind:bug`, GitHub's old defaults) with their issues. **Delete** removes one from its repository, after a confirmation that says how many issues lose it.
+- **Lint** shows `git board lint`'s findings on the open issues, a missing value counted per field with the issues a link away.
 
 `git board lint --create-labels` prints the same plan, and `--apply` carries it out.
 
-`assignees` is no longer read: an issue's `assignee:<login>` labels are always the forge's own assignees, on every forge (GitLab's free edition takes one; the others stay in git-board).
+An issue's `assignee:<login>` labels are always the forge's own assignees, on every forge (GitLab's free edition takes one; the others stay in git-board).

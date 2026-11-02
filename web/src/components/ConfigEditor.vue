@@ -4,20 +4,17 @@
 <template>
   <section class="cfg" aria-labelledby="set-file">
     <div class="cfg-head">
-      <h2 id="set-file" class="h4">Project file</h2>
+      <h2 id="set-file" class="h4">The file</h2>
       <code class="cfg-path">{{ file?.path }}</code>
     </div>
-    <p class="gb-hint">The project's ontology (its fields and their types: what an issue can say about itself), its colors, views and sprints, the GitHub Project, attachments. The reference beside the editor follows your cursor; changes apply as soon as you save.</p>
+    <p class="gb-hint">The whole <code>.git-board.toml</code>, every tab's keys and any the forms don't show. Checked as you type; the reference beside it follows your cursor.</p>
 
     <!-- the save stays in reach above the editor, however far it scrolls -->
     <div class="cfg-tools" role="toolbar" aria-label="The file">
-      <button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" @click="snippet(addView)">+ View</button>
-      <button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" @click="snippet(addSprint)">+ Sprint</button>
-      <button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" @click="snippet(addField)">+ Field</button>
       <span class="gb-grow" />
       <span class="cfg-state" :class="stateClass" role="status">{{ stateText }}</span>
       <button v-if="dirty" type="button" class="gb-linkbtn" @click="discard">Discard changes</button>
-      <button v-if="!reviewing" type="button" class="epfl-btn epfl-btn-primary epfl-btn-sm" :disabled="!dirty || !check?.ok" @click="review">Review changes</button>
+      <button v-if="!reviewing" type="button" class="epfl-btn epfl-btn-primary epfl-btn-sm" :disabled="!dirty || !check?.ok" @click="review">Save…</button>
       <template v-else>
         <button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" @click="reviewing = false">Keep editing</button>
         <button type="button" class="epfl-btn epfl-btn-primary epfl-btn-sm" :disabled="!dirty || !check?.ok || saving" @click="save">{{ saving ? 'Saving…' : 'Save and apply' }}</button>
@@ -107,7 +104,7 @@
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { ApiError, checkConfig, getConfigDocs, getConfigFile, saveConfig, type ConfigCheck, type ConfigFile, type DocSection } from '@/api/board';
 import { configText } from '@/configdraft';
-import { addField, addSprint, addView, docSectionAt, type Snippet } from '@/configsnippets';
+import { docSectionAt } from '@/configsnippets';
 import { message } from '@/issue';
 import { lineDiff } from '@/linediff';
 import { tomlTokens } from '@/toml';
@@ -243,13 +240,6 @@ function goTo(line: number, col: number) {
   void select(before + col - 1, before + col - 1);
 }
 
-function snippet(fn: (t: string) => Snippet) {
-  const s = fn(text.value);
-  text.value = s.text;
-  reviewing.value = false;
-  void select(...s.select);
-}
-
 function review() {
   if (dirty.value && check.value?.ok) reviewing.value = true;
 }
@@ -327,8 +317,9 @@ onMounted(() => {
 .cfg-main { display: grid; gap: .5rem; min-width: 0; }
 /* side by side while each half has room, else the reference under */
 @container (max-width: 52rem) { .cfg-body { grid-template-columns: minmax(0, 1fr); } }
-.cfg-doc { container-type: inline-size; display: grid; align-content: start; gap: .5rem; height: max(24rem, calc(100vh - 13rem)); min-height: 0; padding: 1rem 1.25rem; border: 1px solid var(--border); background: var(--bg-subtle); overflow: auto; }
-@container (max-width: 52rem) { .cfg-doc { height: auto; } }
+/* no container-type here either: see ConfigRefPanel — it stays off the sticky box */
+.cfg-doc { position: sticky; top: calc(var(--header-h) + .75rem); display: grid; align-content: start; gap: .5rem; height: calc(100vh - var(--header-h) - 1.5rem); min-height: 0; padding: .75rem .875rem; border: 1px solid var(--border); background: var(--bg-subtle); overflow: auto; }
+@container (max-width: 52rem) { .cfg-doc { position: static; height: auto; max-height: 32rem; } }
 .cfg-doc-head { display: flex; align-items: baseline; gap: .5rem; }
 .cfg-doc-title { margin: 0; font-size: .8125rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--primary); }
 .cfg-doc-nav { display: flex; flex-wrap: wrap; gap: .25rem; }
@@ -336,6 +327,7 @@ onMounted(() => {
 .cfg-doc-tab:hover { border-color: var(--fg); }
 .cfg-doc-tab[aria-current] { border-color: var(--fg); background: var(--fg); color: var(--bg); font-weight: 700; }
 .cfg-doc-section { margin: .5rem 0 0; font-size: 1.0625rem; font-weight: 700; }
+.cfg-doc-body { container-type: inline-size; }
 .cfg-doc-body .gb-md { font-size: .9375rem; }
 .cfg-doc-body :deep(table) { width: 100%; border-collapse: collapse; font-size: .875rem; }
 .cfg-doc-body :deep(th), .cfg-doc-body :deep(td) { padding: .375rem .5rem; border: 0; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; overflow-wrap: normal; }

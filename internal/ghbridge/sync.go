@@ -17,6 +17,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/fields"
@@ -132,19 +133,27 @@ type SyncPlan struct {
 	Unmatched []UnmatchedItem
 }
 
-// synced are the fields kept in step with the Project, with the Project's
-// name for each and its raw value on an item.
-var synced = []struct {
+// syncedField is one field the Project sync keeps in step with, as the
+// config's mappings name them.
+type syncedField struct {
 	name, project string
 	value         func(Item) string
+	readOnly      bool
+}
+
+// syncedByName are the Project columns the known fields use when the
+// config writes no mapping key, and how their typed values read.
+var syncedByName = map[string]struct {
+	project string
+	value   func(Item) string
 }{
-	{"status", "Status", func(i Item) string { return i.Status }},
-	{"prio", "Priority", func(i Item) string { return i.Priority }},
-	{"mod", "Module", func(i Item) string { return normalizeModule(i.Module) }},
-	{"est", "Est. hours", func(i Item) string { return formatEstHours(i.EstHours) }},
-	{"sprint", "Sprint", sprintTitle},
-	{"moscow", "MoSCoW", func(i Item) string { return i.MoSCoW }},
-	{"milestone", "Milestone", func(i Item) string {
+	"status": {"Status", func(i Item) string { return i.Status }},
+	"prio":   {"Priority", func(i Item) string { return i.Priority }},
+	"mod":    {"Module", func(i Item) string { return normalizeModule(i.Module) }},
+	"est":    {"Est. hours", func(i Item) string { return formatEstHours(i.EstHours) }},
+	"sprint": {"Sprint", sprintTitle},
+	"moscow": {"MoSCoW", func(i Item) string { return i.MoSCoW }},
+	"milestone": {"Milestone", func(i Item) string {
 		if i.Milestone == nil {
 			return ""
 		}
@@ -159,14 +168,72 @@ var synced = []struct {
 // (the issue's milestone, by title) when a project needs them.
 var readOnly = map[string]bool{"milestone": true}
 
-// SyncedFields are the names of the fields kept in step with the Project,
-// in order: config.ProjectFields.
+// SyncedFields are the names of the fields the Project knows extractors
+// for, in the old order: config.ProjectFields.
 func SyncedFields() []string {
 	var names []string
-	for _, f := range synced {
-		names = append(names, f.name)
+	for _, name := range config.ProjectFields {
+		if _, ok := syncedByName[name]; ok {
+			names = append(names, name)
+		}
 	}
 	return names
+}
+
+// syncedFields is the config's Project fields, in the file's field order:
+// the ones whose GitHub target is the Project — by mapping, by the old
+// project map, or by [github-project] being configured — each with the
+// column the mapping names, else the known one, else the field's own. A
+// field with no known extractor reads the item's raw value by column
+// name (Item.Extra). The milestone is decided after these, read only:
+// the Project shows the issue's milestone, it isn't a field's home here.
+func syncedFields(cfg *config.Config) []syncedField {
+	gh := cfg.GitHubForge()
+	res := []syncedField{}
+	seen := map[string]bool{}
+	add := func(name string) {
+		if seen[name] || cfg.FieldTarget(gh, name) != config.TargetProject {
+			return
+		}
+		seen[name] = true
+		m := gh.Fields[name]
+		known, hasExtractor := syncedByName[name]
+		column := m.Field
+		if column == "" {
+			if hasExtractor {
+				column = known.project
+			} else {
+				column = name
+			}
+		} else if hasExtractor && strings.EqualFold(column, known.project) {
+			// the mapping's spelling of a known column: as the Project has
+			// it, so the field is found whatever case the mapping names
+			column = known.project
+		}
+		value := known.value
+		if !hasExtractor {
+			column = titleCase(column)
+			value = func(i Item) string { return i.Extra[column] }
+		}
+		res = append(res, syncedField{name: name, project: column, value: value, readOnly: readOnly[name]})
+	}
+	for _, name := range cfg.FieldOrder() {
+		add(name)
+	}
+	for _, name := range config.ProjectFields { // the Project's own columns, declared or not
+		add(name)
+	}
+	return res
+}
+
+// titleCase is a column's name as the Project has it: gh lists fields by
+// their name, and the known columns are spelled with a capital.
+func titleCase(name string) string {
+	if name == "" {
+		return name
+	}
+	r := []rune(name)
+	return string(unicode.ToUpper(r[0])) + string(r[1:])
 }
 
 // BasePrefix is where a Project's bases are recorded on bugs.
@@ -217,7 +284,7 @@ func syncIssue(plan *SyncPlan, item Item, bug store.Issue, bases map[string]stri
 		change.Removed = append(change.Removed, res.Removed...)
 	}
 
-	for _, f := range synced {
+	for _, f := range syncedFields(cfg) {
 		pf, onProject := meta.Fields[f.project]
 		if !onProject {
 			continue
@@ -236,7 +303,7 @@ func syncIssue(plan *SyncPlan, item Item, bug store.Issue, bases map[string]stri
 		base, hasBase := bases[f.name]
 
 		d := Decide(p, l, base, hasBase)
-		if readOnly[f.name] && d != Agreed {
+		if f.readOnly && d != Agreed {
 			d = TakeProject
 		}
 		switch d {
@@ -260,33 +327,38 @@ func syncIssue(plan *SyncPlan, item Item, bug store.Issue, bases map[string]stri
 		}
 	}
 
-	// Assignees merge as a set, person by person, so they never conflict.
-	assignable, checked := meta.Assignable[repoOf(item.Content.URL)]
-	a := syncAssignees(item, bug.Labels, bases["assignee"], cfg.GithubProject.Write)
-	if checked {
-		var refused []string
-		a.ghAdd = slices.DeleteFunc(a.ghAdd, func(login string) bool {
-			if slices.Contains(assignable, login) {
-				return false
+	// Assignees merge as a set, person by person, so they never conflict —
+	// where their field's home is the native assignees: a mapping moving
+	// them to a label, or nowhere, leaves both sides alone (one place read
+	// from, the field's target).
+	if cfg.FieldTarget(cfg.GitHubForge(), "assignee") == config.TargetAssignees {
+		assignable, checked := meta.Assignable[repoOf(item.Content.URL)]
+		a := syncAssignees(item, bug.Labels, bases["assignee"], cfg.GithubProject.Write)
+		if checked {
+			var refused []string
+			a.ghAdd = slices.DeleteFunc(a.ghAdd, func(login string) bool {
+				if slices.Contains(assignable, login) {
+					return false
+				}
+				refused = append(refused, login)
+				return true
+			})
+			for _, login := range refused {
+				change.Warnings = append(change.Warnings, fmt.Sprintf("%s can't be assigned on GitHub (no access to %s), kept in git-board only", login, repoOf(item.Content.URL)))
+				a.base = strings.Join(slices.DeleteFunc(strings.Split(a.base, ","), func(s string) bool { return s == login }), ",")
 			}
-			refused = append(refused, login)
-			return true
-		})
-		for _, login := range refused {
-			change.Warnings = append(change.Warnings, fmt.Sprintf("%s can't be assigned on GitHub (no access to %s), kept in git-board only", login, repoOf(item.Content.URL)))
-			a.base = strings.Join(slices.DeleteFunc(strings.Split(a.base, ","), func(s string) bool { return s == login }), ",")
 		}
+		if len(a.added)+len(a.removed) > 0 {
+			change.Fields = append(change.Fields, FieldResult{Field: "assignee", Added: a.added, Removed: a.removed})
+			change.Added = append(change.Added, a.added...)
+			change.Removed = append(change.Removed, a.removed...)
+		}
+		if len(a.ghAdd)+len(a.ghRemove) > 0 {
+			plan.Edits = append(plan.Edits, ProjectEdit{BugID: bug.ID, ItemID: item.ID, Number: item.Content.Number,
+				Field: "assignee", Value: a.base, Kind: EditAssignees, URL: item.Content.URL, Add: a.ghAdd, Remove: a.ghRemove})
+		}
+		record("assignee", a.base)
 	}
-	if len(a.added)+len(a.removed) > 0 {
-		change.Fields = append(change.Fields, FieldResult{Field: "assignee", Added: a.added, Removed: a.removed})
-		change.Added = append(change.Added, a.added...)
-		change.Removed = append(change.Removed, a.removed...)
-	}
-	if len(a.ghAdd)+len(a.ghRemove) > 0 {
-		plan.Edits = append(plan.Edits, ProjectEdit{BugID: bug.ID, ItemID: item.ID, Number: item.Content.Number,
-			Field: "assignee", Value: a.base, Kind: EditAssignees, URL: item.Content.URL, Add: a.ghAdd, Remove: a.ghRemove})
-	}
-	record("assignee", a.base)
 
 	res, warning := planKind(cfg, bug.Labels, item.Labels, item.Category)
 	if warning != "" {
@@ -329,7 +401,7 @@ func Resolve(c Conflict, ours bool, item Item, bug store.Issue, meta ProjectMeta
 	if ours {
 		value = c.Local
 		var pf ProjectField
-		for _, f := range synced {
+		for _, f := range syncedFields(cfg) {
 			if f.name == c.Field {
 				pf = meta.Fields[f.project]
 			}
@@ -447,7 +519,7 @@ func toLabel(cfg *config.Config, field, raw string) (string, bool) {
 	case "est":
 		return raw, f.KnownValue(raw)
 	}
-	for value, name := range f.Project {
+	for value, name := range cfg.FieldValues(cfg.GitHubForge(), field) {
 		if name == raw {
 			return value, true
 		}
@@ -489,7 +561,7 @@ func toProject(cfg *config.Config, pf ProjectField, field, value string) (kind, 
 		}
 		return "", "", false
 	}
-	if name, ok := cfg.Fields[field].Project[value]; ok {
+	if name, ok := cfg.FieldValues(cfg.GitHubForge(), field)[value]; ok {
 		id, ok := pf.Options[name]
 		return EditOption, id, ok
 	}

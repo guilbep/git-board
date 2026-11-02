@@ -26,7 +26,7 @@
       </div>
       <div class="gb-inbox-actions">
         <button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" :disabled="busy" @click="refresh(true)">Refresh</button>
-        <button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" :disabled="!unread.length" @click="markAll">Mark all read</button>
+        <button v-if="unread.length" type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" @click="markAll">Mark all read</button>
         <button type="button" class="gb-icon-btn" aria-label="Inbox settings" :aria-expanded="menuOpen" @click="menuOpen = !menuOpen">
           <GbIcon name="settings" small />
         </button>
@@ -306,7 +306,7 @@ onBeforeUnmount(() => stopLive());
 .gb-inbox-status strong { color: var(--fg); }
 .gb-inbox-fail { color: var(--danger-fg); }
 .gb-inbox-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
-.gb-inbox-menu { position: absolute; right: 0; top: 100%; z-index: 5; width: min(20rem, calc(100vw - 2rem)); margin-top: var(--space-2); padding: var(--space-3); display: flex; flex-direction: column; gap: var(--space-3); background: var(--bg); border: var(--border-w) solid var(--border-strong); }
+.gb-inbox-menu { position: absolute; right: 0; top: 100%; z-index: 5; width: min(20rem, calc(100vw - 2rem)); margin-top: var(--space-2); padding: var(--space-3); display: flex; flex-direction: column; gap: var(--space-3); background: var(--bg); border: var(--border-w) solid var(--border-strong); box-shadow: var(--shadow); }
 .gb-inbox-views { display: flex; flex-direction: column; gap: var(--space-2); margin: 0; padding: 0; border: 0; }
 .gb-inbox-check { display: flex; gap: var(--space-2); align-items: flex-start; font-size: .875rem; }
 .gb-inbox-x { width: 1.75rem; height: 1.75rem; border: var(--border-w) solid var(--border); background: var(--bg); color: var(--fg); cursor: pointer; }

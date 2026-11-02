@@ -34,7 +34,7 @@
           title="Move all to…"
           @change="moveAll(bucket, $event)"
         >
-          <option value="" selected disabled>⋯</option>
+          <option value="" selected disabled>⇄</option>
           <option v-for="b in buckets.filter((x) => x.group !== bucket.group)" :key="b.group" :value="b.group">Move all to {{ groupLabel(b.group) }}</option>
         </select>
       </h2>
@@ -195,6 +195,12 @@ function meta(issue: Issue) {
   align-items: start;
   overflow-x: auto;
   padding-bottom: var(--space-3);
+}
+
+/* a phone: one lane a screen, the next one peeking, a swipe snaps to it */
+@media (max-width: 47.99rem) {
+  .board { grid-auto-columns: 85%; scroll-snap-type: x mandatory; }
+  .board-column { scroll-snap-align: start; }
 }
 
 @media (min-width: 48rem) {

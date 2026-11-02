@@ -21,3 +21,9 @@
 /* Quasar only lets a dialog's direct child <div> take clicks; the panel is
    an <aside>, the dialogs <section>s */
 .q-dialog__inner > * { pointer-events: all; }
+
+/* A focused field is outlined in the text color: red is for errors (the
+   kit's red ring made every focused input read as invalid). Placeholders
+   are examples, lighter and italic, never mistaken for a value. */
+.epfl-input:focus, .epfl-select:focus, .gb-textarea:focus { outline-color: var(--fg); }
+input::placeholder, textarea::placeholder { color: var(--fg-subtle); font-style: italic; opacity: 1; }

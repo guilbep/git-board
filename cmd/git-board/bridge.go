@@ -120,6 +120,9 @@ func runBridgePull(out io.Writer, ownerFlag string, projectFlag, limit int, appl
 	if owner == "" || project == 0 {
 		return fmt.Errorf("no GitHub project configured: pass --owner/--project, or run `git-board bridge configure` first")
 	}
+	// the flags name the Project for this run as the table would: the
+	// fields it syncs live there for the run either way
+	cfg.GithubProject.Owner, cfg.GithubProject.Number = owner, project
 
 	b, err := store.OpenCwd()
 	if err != nil {

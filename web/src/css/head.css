@@ -18,6 +18,7 @@
 .gb-icon-btn:focus-visible { outline: var(--focus-w) solid var(--primary-hover); outline-offset: 0.125rem; }
 .gb-hforges { display: inline-flex; align-items: center; }
 .gb-icon-btn.gb-forge-btn { position: relative; }
+.gb-ptop .gb-pop > .gb-icon-btn.gb-forge-btn { width: auto; min-width: 2.25rem; padding: 0 .375rem; }
 .gb-icon-btn.gb-forge-btn:hover, .gb-icon-btn.gb-bell:hover { color: var(--primary); }
 .gb-icon-btn.gb-bell.is-off, .gb-icon-btn.gb-bell.is-part { color: var(--fg-subtle); }
 .gb-icon-btn.gb-bell.is-off:hover, .gb-icon-btn.gb-bell.is-part:hover { color: var(--primary); }

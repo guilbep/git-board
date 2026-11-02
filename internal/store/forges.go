@@ -200,6 +200,7 @@ func (b *Backend) forgeSync(ctx context.Context, run ForgeRun, way syncWay, issu
 		Issue:          issueID,
 		Local:          isLocal,
 		Held:           b.held(),
+		Assignees:      b.assigneesOn(),
 		Warn: func(msg string) {
 			ev := SyncEvent{What: "warning", Line: msg}
 			for key, name := range names {

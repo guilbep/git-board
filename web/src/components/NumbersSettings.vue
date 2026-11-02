@@ -116,7 +116,7 @@ import { debounced, onLive } from '@/live';
 import { message } from '@/issue';
 import { numbered, numberExample, numbersPreview, prefixProblem, startProblem, suggestPrefix, suggestStart } from '@/numbers';
 
-// changed: what a start or a numbering left, for the Overview's line
+// changed: what a start or a numbering left, for the menu's line
 const emit = defineEmits<{ changed: [n: Numbers] }>();
 const n = ref<Numbers | null>(null);
 const prefix = ref('');
@@ -194,6 +194,7 @@ onBeforeUnmount(offLive);
 </script>
 
 <style scoped>
+.set-panel { display: flex; flex-direction: column; gap: 1.25rem; max-width: 64rem; }
 .nb h2, .nb h3, .nb p { margin: 0; }
 .nb-lead { max-width: 40rem; color: var(--fg-muted); }
 .nb-muted { color: var(--fg-muted); }

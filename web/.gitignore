@@ -25,3 +25,8 @@ node_modules
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# e2e: the built binary, the reports
+/e2e/.bin/
+/test-results/
+/playwright-report/

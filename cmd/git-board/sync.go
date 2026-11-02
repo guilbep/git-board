@@ -8,13 +8,16 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/guilbep/git-board/core/forge"
 	"github.com/guilbep/git-board/internal/config"
+	"github.com/guilbep/git-board/internal/migrate"
 	"github.com/guilbep/git-board/internal/store"
 )
 
 func newSyncCmd() *cobra.Command {
 	var remote string
 	var check, gitOnly, allowCreate bool
+	var migrateField string
 
 	cmd := &cobra.Command{
 		Use:   "sync [path...]",
@@ -60,6 +63,9 @@ see docs/implementation-plan.md.`,
 			if len(paths) == 0 {
 				paths = []string{"."}
 			}
+			if migrateField != "" {
+				return runMigrate(cmd.Context(), cmd.OutOrStdout(), paths, migrateField)
+			}
 			return eachPath(cmd.OutOrStdout(), paths, func(path string) error {
 				return wholeOne(cmd.Context(), cmd.OutOrStdout(), path, remote, check, allowCreate, gitOnly)
 			})
@@ -69,7 +75,45 @@ see docs/implementation-plan.md.`,
 	cmd.Flags().BoolVar(&check, "check", false, "the dry run: say what a sync would do, write nothing")
 	cmd.Flags().BoolVar(&gitOnly, "git", false, "sync with git alone: pull, then push")
 	cmd.Flags().BoolVar(&allowCreate, "allow-create", false, "create issues on a forge never synced with, or 50 or more on one")
+	cmd.Flags().StringVar(&migrateField, "migrate", "", "move one field's values to the home its forge mappings name: the old labels off the forge, the assignees set")
 	return cmd
+}
+
+// runMigrate is sync --migrate <field>: the migration a mapping change
+// needs after its first sync run, per path, each told.
+func runMigrate(ctx context.Context, out io.Writer, paths []string, field string) error {
+	return eachPath(out, paths, func(path string) error {
+		cfg, err := config.Load(config.PathIn(path))
+		if err != nil {
+			return err
+		}
+		if _, ok := cfg.Fields[field]; !ok {
+			return fmt.Errorf("no field named %s in %s", field, config.PathIn(path))
+		}
+		b, err := store.Open(path)
+		if err != nil {
+			return fmt.Errorf("opening: %w", err)
+		}
+		defer b.Close()
+		issues, err := b.ListIssues()
+		if err != nil {
+			return err
+		}
+		say := func(line string) { fmt.Fprintln(out, path+": "+line) }
+		persons, err := b.Persons()
+		if err != nil {
+			return err
+		}
+		open := func(f config.Forge) (forge.Forge, error) {
+			forges, err := store.OpenForges(ctx, []config.Forge{f})
+			if err != nil {
+				return nil, err
+			}
+			return forges[0].Forge, nil
+		}
+		_, err = migrate.Migrate(ctx, cfg, field, issues, persons, open, say)
+		return err
+	})
 }
 
 // eachPath syncs each path in turn, keeping going after a failure on one so

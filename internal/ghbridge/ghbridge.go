@@ -59,6 +59,49 @@ type Item struct {
 	Milestone *Milestone `json:"milestone"`
 	Sprint    *Sprint    `json:"sprint"`
 	Title     string     `json:"title"`
+	// Extra holds the Project's other fields, by column name as gh lists
+	// them ("Risk": "High"): a field whose target is the Project reads
+	// its raw value here. scalars only; strings as they come, numbers
+	// stringified.
+	Extra map[string]string `json:"-"`
+}
+
+// UnmarshalJSON decodes the known fields, then keeps the rest: gh
+// flattens every Project field to the item's top level, by column name.
+func (i *Item) UnmarshalJSON(data []byte) error {
+	type plain Item
+	var p plain
+	if err := json.Unmarshal(data, &p); err != nil {
+		return err
+	}
+	*i = Item(p)
+	var raw map[string]any
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	known := map[string]bool{"id": true, "assignees": true, "content": true, "priority": true, "status": true, "module": true,
+		"category": true, "labels": true, "est. hours": true, "moscow": true, "milestone": true, "sprint": true, "title": true}
+	for k, v := range raw {
+		if known[k] {
+			continue
+		}
+		switch x := v.(type) {
+		case string:
+			i.setExtra(k, x)
+		case float64:
+			i.setExtra(k, strconv.FormatFloat(x, 'f', -1, 64))
+		case bool:
+			i.setExtra(k, strconv.FormatBool(x))
+		}
+	}
+	return nil
+}
+
+func (i *Item) setExtra(k, v string) {
+	if i.Extra == nil {
+		i.Extra = map[string]string{}
+	}
+	i.Extra[k] = v
 }
 
 // Milestone is the issue's milestone, if it has one: a deliverable.
@@ -209,16 +252,21 @@ func planIssue(item Item, bug store.Issue, cfg *config.Config) IssueChange {
 		// left untouched — expected GitHub Project drift, not an error.
 	}
 
-	for _, f := range synced {
+	for _, f := range syncedFields(cfg) {
 		add(planField(cfg, bug.Labels, f.name, f.value(item)))
 	}
 	add(planKind(cfg, bug.Labels, item.Labels, item.Category))
 
-	assigneeRes := planAssignees(bug.Labels, item.Assignees)
-	if len(assigneeRes.Added) > 0 || len(assigneeRes.Removed) > 0 {
-		change.Fields = append(change.Fields, assigneeRes)
-		change.Added = append(change.Added, assigneeRes.Added...)
-		change.Removed = append(change.Removed, assigneeRes.Removed...)
+	// the assignees merge where their field's home is the native
+	// assignees: a mapping moving them to a label, or nowhere, leaves both
+	// sides alone — a field is read from its home alone
+	if cfg.FieldTarget(cfg.GitHubForge(), "assignee") == config.TargetAssignees {
+		assigneeRes := planAssignees(bug.Labels, item.Assignees)
+		if len(assigneeRes.Added) > 0 || len(assigneeRes.Removed) > 0 {
+			change.Fields = append(change.Fields, assigneeRes)
+			change.Added = append(change.Added, assigneeRes.Added...)
+			change.Removed = append(change.Removed, assigneeRes.Removed...)
+		}
 	}
 
 	return change

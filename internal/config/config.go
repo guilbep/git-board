@@ -42,9 +42,23 @@ type Field struct {
 	Type string `toml:"type" json:"type,omitempty"`
 	// Unit follows a number field's values: "h" for hours.
 	Unit string `toml:"unit" json:"unit,omitempty"`
+	// Aliases fold a value's old names into the current one:
+	// could = "couldhave" reads moscow:could as moscow:couldhave, and
+	// Adopt rewrites the labels. The keys are not options.
+	Aliases map[string]string `toml:"aliases" json:"aliases,omitempty"`
 	// Flat: the kind field of plain labels, [branches] kinds (bug, not
 	// kind:bug); parse sets it.
 	Flat bool `toml:"-" json:"-"`
+}
+
+// AliasOf is value's current name on the field: couldhave for could,
+// value itself when no alias (or option) holds it. Reading a forge or an
+// issue goes through here, so an old label shows as its current value.
+func (f Field) AliasOf(value string) string {
+	if cur, ok := f.Aliases[value]; ok {
+		return cur
+	}
+	return value
 }
 
 // KnownValue reports whether value is one of Options — or true if Options is
@@ -62,16 +76,16 @@ func (f Field) KnownValue(value string) bool {
 
 // Sprint is one entry in [[sprints.list]].
 type Sprint struct {
-	Slug  string    `toml:"slug"`
-	Title string    `toml:"title"`
-	Start time.Time `toml:"start"`
+	Slug  string    `toml:"slug" json:"slug"`
+	Title string    `toml:"title" json:"title"`
+	Start time.Time `toml:"start" json:"start"`
 }
 
 // SprintsConfig is the [sprints] table.
 type SprintsConfig struct {
-	LengthDays   int      `toml:"length_days"`
-	StartWeekday string   `toml:"start_weekday"`
-	List         []Sprint `toml:"list"`
+	LengthDays   int      `toml:"length_days" json:"length_days"`
+	StartWeekday string   `toml:"start_weekday" json:"start_weekday"`
+	List         []Sprint `toml:"list" json:"list"`
 }
 
 // View is one [views.<name>] table.
@@ -132,12 +146,12 @@ type raw struct {
 // Labels sends them to GitHub with their colors and descriptions; lint
 // reports the plain labels outside them. No table, no labels to pick.
 type Labels struct {
-	List         []string          `toml:"list"`
-	Colors       map[string]string `toml:"colors"`       // a palette name or #rrggbb; else the palette in turn
-	Descriptions map[string]string `toml:"descriptions"` // GitHub's, 100 characters at most
+	List         []string          `toml:"list" json:"list"`
+	Colors       map[string]string `toml:"colors" json:"colors"`             // a palette name or #rrggbb; else the palette in turn
+	Descriptions map[string]string `toml:"descriptions" json:"descriptions"` // GitHub's, 100 characters at most
 	// Defined: the file has a [labels] table, an empty list too (no
 	// label allowed), which lint then holds the issues to
-	Defined bool `toml:"-"`
+	Defined bool `toml:"-" json:"-"`
 }
 
 // checkLabels: a listed label is plain (prio:p1 is a field's value), not
@@ -194,20 +208,20 @@ func (c *Config) LabelColors() map[string]string {
 // keys stay out of the file: ACCESS_KEY_ID, ACCESS_KEY_SECRET and
 // BUCKET_NAME in the environment (internal/uploads).
 type Uploads struct {
-	Endpoint  string `toml:"endpoint"`   // S3, default https://s3.epfl.ch
-	PublicURL string `toml:"public_url"` // where the bucket is served, default https://enacit4r-cdn.epfl.ch
-	Prefix    string `toml:"prefix"`     // default git-board/<repository>
-	Region    string `toml:"region"`     // default us-east-1
+	Endpoint  string `toml:"endpoint" json:"endpoint"`     // S3, default https://s3.epfl.ch
+	PublicURL string `toml:"public_url" json:"public_url"` // where the bucket is served, default https://enacit4r-cdn.epfl.ch
+	Prefix    string `toml:"prefix" json:"prefix"`         // default git-board/<repository>
+	Region    string `toml:"region" json:"region"`         // default us-east-1
 }
 
 // Branches is the [branches] table: the branch an issue suggests
 // (internal/branches).
 type Branches struct {
-	Base string `toml:"base"` // default: the remote's default branch, else main, master or trunk
-	Name string `toml:"name"` // {kind}, {number}, {n}, {slug}; default "{number}/{n}-{slug}"
+	Base string `toml:"base" json:"base"` // default: the remote's default branch, else main, master or trunk
+	Name string `toml:"name" json:"name"` // {kind}, {number}, {n}, {slug}; default "{number}/{n}-{slug}"
 	// Kinds maps an issue's kind (its kind: field, or a flat label listed
 	// here) to the {kind} of its branch: bug = "fix".
-	Kinds map[string]string `toml:"kinds"`
+	Kinds map[string]string `toml:"kinds" json:"kinds"`
 }
 
 // Kind is an issue's kind: its kind: field, else the first of its flat
@@ -237,6 +251,7 @@ type Config struct {
 	Sprints       SprintsConfig
 	Views         map[string]View
 	viewOrder     []string // ViewNames
+	fieldOrder    []string // FieldOrder
 	GithubProject GithubProject
 	Uploads       Uploads
 	Branches      Branches
@@ -357,6 +372,12 @@ func parse(data []byte) (*Config, toml.MetaData, error) {
 	if err != nil {
 		return nil, md, err
 	}
+	if err := checkAliases(r.Fields); err != nil {
+		return nil, md, err
+	}
+	if err := checkFieldMappings(&Config{Fields: r.Fields, Roles: r.Roles, Sprints: r.Sprints, Forges: forges}); err != nil {
+		return nil, md, err
+	}
 	// the kinds are plain labels unless [fields.kind] has options of its own
 	if kinds := keysInOrder(md, r.Branches.Kinds, "branches", "kinds"); len(kinds) > 0 && len(r.Fields["kind"].Options) == 0 {
 		if r.Fields == nil {
@@ -373,6 +394,7 @@ func parse(data []byte) (*Config, toml.MetaData, error) {
 		Sprints:        r.Sprints,
 		Views:          r.Views,
 		viewOrder:      keysInOrder(md, r.Views, "views"),
+		fieldOrder:     keysInOrder(md, r.Fields, "fields"),
 		GithubProject:  r.GithubProject,
 		Uploads:        r.Uploads,
 		Branches:       r.Branches,
@@ -395,8 +417,13 @@ func keysInOrder[V any](md toml.MetaData, m map[string]V, table ...string) []str
 			res = append(res, k[len(table)])
 		}
 	}
-	if len(res) != len(m) { // ponytail: never seen; the sorted keys then
-		res = slices.Sorted(maps.Keys(m))
+	// the keys the file has no table for (the flat kinds' field, made from
+	// [branches.kinds]) after the file's, by name
+	res = slices.DeleteFunc(res, func(k string) bool { _, ok := m[k]; return !ok })
+	for _, k := range slices.Sorted(maps.Keys(m)) {
+		if !slices.Contains(res, k) {
+			res = append(res, k)
+		}
 	}
 	return res
 }
@@ -408,6 +435,16 @@ func (c *Config) ViewNames() []string {
 		return c.viewOrder
 	}
 	return slices.Sorted(maps.Keys(c.Views))
+}
+
+// FieldOrder is the fields' names as the file lists them: the fields
+// page's list order, the order an issue's fields line takes. A Config not
+// parsed from a file: sorted.
+func (c *Config) FieldOrder() []string {
+	if len(c.fieldOrder) == len(c.Fields) {
+		return c.fieldOrder
+	}
+	return slices.Sorted(maps.Keys(c.Fields))
 }
 
 // checkDescriptions keeps each value's description to GitHub's 100
@@ -428,10 +465,12 @@ func checkDescriptions(fields map[string]Field) error {
 var ProjectFields = []string{"status", "prio", "mod", "est", "sprint", "moscow", "milestone"}
 
 // Held says whether the forges' sync keeps a label off the forge named by
-// key (syncer.Options Held), each fact having one home: on GitHub, with a
-// Project, the fields the Project holds; on every forge, the fields naming
-// issues (parent:, blocked-by:…), as no forge holds them as labels, and
-// the milestone, a forge's own.
+// key (syncer.Options Held): a label is held when its field's home on
+// that forge (FieldTarget) is not a label — the Project, the assignees,
+// the milestone, the due date, nowhere. The milestone is the forge's own,
+// never ours; an issue reference (parent:) is held where its field says
+// so, as everywhere the field maps to sub-issues or nothing. A label
+// without a namespace is never held.
 // ponytail: every GitHub repository of the board, not the Project's alone:
 // one Project per board.
 func (c *Config) Held(key, label string) bool {
@@ -440,10 +479,25 @@ func (c *Config) Held(key, label string) bool {
 		return false
 	}
 	field = strings.ToLower(field) // GitHub's label names ignore case
-	if field == "milestone" || c.TypeOf(field, nil) == TypeIssue {
+	if field == "milestone" {
 		return true
 	}
-	return c.GithubProject.Number != 0 && strings.HasPrefix(strings.ToLower(key), "github.com/") && slices.Contains(ProjectFields, field)
+	f, _ := c.forgeOf(key)
+	switch c.FieldTarget(f, field) {
+	case TargetLabel, TargetScopedLabel:
+		return false
+	}
+	return true
+}
+
+// SyncsAssignees says whether the assignees live natively on the forge a
+// sync key names: the assignee field's home there (FieldTarget) is the
+// forge's own assignees. A mapping moving them to a label, or nowhere,
+// silences the native writes and reads — both sync ways read the field
+// from its home alone.
+func (c *Config) SyncsAssignees(key string) bool {
+	f, _ := c.forgeOf(key)
+	return c.FieldTarget(f, "assignee") == TargetAssignees
 }
 
 // FlatKinds tells the kinds are plain labels, [branches] kinds without

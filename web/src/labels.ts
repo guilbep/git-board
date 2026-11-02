@@ -45,3 +45,30 @@ export function hexRules(colors: Record<string, Record<string, string>>): string
   const hex = new Set(Object.values(colors).flatMap((values) => Object.values(values).filter((c) => /^#[0-9a-f]{6}$/.test(c))));
   return [...hex].map((c) => `.gb-c-x${c.slice(1)}{--c-bg:var(--bg-subtle);--c-fg:var(--fg);--c-dot:${c}}`).join('\n');
 }
+
+// lintLines is lint's findings as Labels › Lint shows them: a group per
+// check, in the server's order; a missing value and a dead option one
+// line per field (est: 32 open issues have none · Show them), the rest one
+// line per finding, linked to its issue
+export type LintLine = { text: string; issue?: { id: string; title: string }; filter?: string };
+export function lintLines(findings: { check: string; message: string; issue_id: string; title: string }[]): { check: string; items: LintLine[] }[] {
+  return byCheck(findings).map((g) => {
+    if (g.check === 'missing-value') {
+      const by = new Map<string, number>();
+      for (const f of g.findings) {
+        const field = /^no (\S+) value$/.exec(f.message)?.[1] ?? f.message;
+        by.set(field, (by.get(field) ?? 0) + 1);
+      }
+      return { check: g.check, items: [...by].map(([field, n]) => ({ text: `${field}: ${n} open issue${n === 1 ? ' has' : 's have'} none`, filter: `is:open no:${field}` })) };
+    }
+    if (g.check === 'dead-option') {
+      const by = new Map<string, string[]>();
+      for (const f of g.findings) {
+        const [field = '', value = ''] = (/^([^:]+):(.*): no issue carries it$/.exec(f.message) ?? []).slice(1);
+        by.set(field, [...(by.get(field) ?? []), value]);
+      }
+      return { check: g.check, items: [...by].map(([field, values]) => ({ text: `${field}: no issue carries ${values.join(', ')}` })) };
+    }
+    return { check: g.check, items: g.findings.map((f) => (f.issue_id ? { text: f.message, issue: { id: f.issue_id, title: f.title } } : { text: f.message })) };
+  });
+}

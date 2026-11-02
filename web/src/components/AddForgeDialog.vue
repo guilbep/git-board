@@ -23,6 +23,10 @@
 
         <fieldset v-if="step === 0" class="af-fields">
           <legend class="af-legend">Which forge?</legend>
+          <p v-for="f in found" :key="f.name" class="gb-hint af-found">
+            Already found in your git remotes: <b>{{ f.kind === 'gitlab' ? 'GitLab' : 'GitHub' }} · {{ f.project }}</b>, synced without a table.
+            Add it here only to give it a name, a token or a field mapping of its own.
+          </p>
           <div class="gb-opts">
             <label v-for="f in forges" :key="f.target" class="gb-opt" :class="{ on: draft.target === f.target }">
               <input v-model="draft.target" type="radio" name="af-forge" :value="f.target" />
@@ -105,7 +109,7 @@
         </footer>
       </form>
 
-      <aside class="af-help" aria-labelledby="af-help-title">
+      <aside v-if="help" class="af-help" aria-labelledby="af-help-title">
         <h3 id="af-help-title" class="af-help-title">How forges work</h3>
         <div v-if="help" :class="`af-help-${help.id}`">
           <h4 class="af-help-h">{{ help.title }}</h4>
@@ -123,6 +127,7 @@ import { addBridge, getCredentials, getForgeDocs, type Credential, type DocSecti
 import { canGoOn, forges, forgeSteps, guessForge, matchingCredentials, type ForgeDraft } from '@/addforge';
 import { message } from '@/issue';
 import GbIcon from '@/components/GbIcon.vue';
+import { configModel } from '@/configmodel';
 
 const open = defineModel<boolean>({ required: true });
 const emit = defineEmits<{ added: [name: string]; guide: [] }>();
@@ -136,12 +141,16 @@ const added = ref('');
 const creds = ref<Credential[]>([]);
 const docs = ref<DocSection[]>([]);
 
+// the forges the git remotes already give, synced with no table
+const found = computed(() => (configModel.value?.forges ?? []).filter((f) => f.discovered));
+
 const forge = computed(() => forges.find((f) => f.target === draft.target) ?? forges[0]!);
 const matching = computed(() => matchingCredentials(creds.value, draft.target, draft.url));
 // beside each step, its section of docs/guide/forges.md: where your issues go,
 // sync on or off, the tokens, what adding does (ids pinned by
 // TestForgeDocsComeInSections)
-const helpIds = ['where', 'sync', 'tokens', 'adding'];
+// (none beside the first: the Sync tab's intro and its guide say where issues go)
+const helpIds = ['', 'sync', 'tokens', 'adding'];
 const help = computed(() => docs.value.find((d) => d.id === helpIds[step.value]));
 
 // the first stored token fitting, when there is one
@@ -231,6 +240,7 @@ watch(
 .af-sum dd { margin: 0; font-weight: 700; }
 .af-url { overflow-wrap: anywhere; }
 .af-foot { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; margin-top: auto; padding-top: .5rem; }
+.af:not(:has(.af-help)) { grid-template-columns: minmax(0, 1fr); width: min(44rem, calc(100vw - 2rem)); }
 .af-help { overflow: auto; display: flex; flex-direction: column; gap: .75rem; padding: 1.5rem 1.75rem; background: var(--bg-subtle); font-size: .875rem; }
 .af-help p { margin: 0; }
 .af-help-title { margin: 0; font-size: 1.0625rem; font-weight: 700; }

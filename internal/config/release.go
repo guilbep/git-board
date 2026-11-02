@@ -11,25 +11,25 @@ import (
 // environments (internal/release). Absent or without environments, the
 // project has no releases.
 type Release struct {
-	Remote       string   `toml:"remote"`       // the authority for tags and release records, default origin
-	Environments []string `toml:"environments"` // ordered, e.g. dev, stage, prod
+	Remote       string   `toml:"remote" json:"remote"`             // the authority for tags and release records, default origin
+	Environments []string `toml:"environments" json:"environments"` // ordered, e.g. dev, stage, prod
 	// Follow is the environment that follows the trunk's head. Absent: "dev"
 	// when listed. "": none does.
-	Follow        *string  `toml:"follow"`
-	Checks        string   `toml:"checks"`         // the command a merge must pass, e.g. "make ci"
-	Images        []Image  `toml:"images"`         // what to build
-	Chart         *Chart   `toml:"chart"`          // the helm chart to package
-	VersionValues []string `toml:"version_values"` // dotted paths, under the chart's valuesInline, that carry the version
-	Builder       string   `toml:"builder"`        // a remote buildx builder, instead of the local one
-	Deploy        []Target `toml:"deploy"`         // the config repos holding the overlays
+	Follow        *string  `toml:"follow" json:"follow"`
+	Checks        string   `toml:"checks" json:"checks"`                 // the command a merge must pass, e.g. "make ci"
+	Images        []Image  `toml:"images" json:"images"`                 // what to build
+	Chart         *Chart   `toml:"chart" json:"chart"`                   // the helm chart to package
+	VersionValues []string `toml:"version_values" json:"version_values"` // dotted paths, under the chart's valuesInline, that carry the version
+	Builder       string   `toml:"builder" json:"builder"`               // a remote buildx builder, instead of the local one
+	Deploy        []Target `toml:"deploy" json:"deploy"`                 // the config repos holding the overlays
 	// Binaries are main packages built per platform and published as
 	// archives on the forge's release: "./cmd/git-board". A table with
 	// binaries and no environments is enabled: finals only, deployed nowhere.
-	Binaries  []string `toml:"binaries"`
-	Platforms []string `toml:"platforms"` // os/arch; empty: DefaultPlatforms
+	Binaries  []string `toml:"binaries" json:"binaries"`
+	Platforms []string `toml:"platforms" json:"platforms"` // os/arch; empty: DefaultPlatforms
 	// Build is a command run with sh -c in a clean checkout of the tag
 	// instead of the Go builds; it leaves the archives in dist/.
-	Build string `toml:"build"`
+	Build string `toml:"build" json:"build"`
 }
 
 // DefaultPlatforms are the platforms binaries are built for when
@@ -46,22 +46,22 @@ func (r Release) BuildPlatforms() []string {
 
 // Image is an image to build: its name and docker build context.
 type Image struct {
-	Name    string `toml:"name"`
-	Context string `toml:"context"`
+	Name    string `toml:"name" json:"name"`
+	Context string `toml:"context" json:"context"`
 }
 
 // Chart is the helm chart: its directory and the OCI registry it goes to.
 type Chart struct {
-	Path     string `toml:"path"`
-	Registry string `toml:"registry"`
+	Path     string `toml:"path" json:"path"`
+	Registry string `toml:"registry" json:"registry"`
 }
 
 // Target is a config repo's overlays: Path has {env}; Registry is where its
 // images are.
 type Target struct {
-	Repo     string `toml:"repo"`
-	Path     string `toml:"path"`
-	Registry string `toml:"registry"`
+	Repo     string `toml:"repo" json:"repo"`
+	Path     string `toml:"path" json:"path"`
+	Registry string `toml:"registry" json:"registry"`
 }
 
 // Enabled is whether the project has releases: environments to deploy

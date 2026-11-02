@@ -164,27 +164,40 @@ func (s *apiServer) handleAddBridge(w http.ResponseWriter, r *http.Request) {
 }
 
 // foundTables writes a table for each forge found in the git remotes,
-// GitLab's by its id, before f's: f's table would turn them off. It
-// refuses f when a remote names it already, and a found forge whose id
-// can't be read.
+// before f's: f's table would turn them off. It refuses f when a remote
+// names it already.
 func (s *apiServer) foundTables(ctx context.Context, text string, f config.Forge) (string, error) {
-	var left []string
-	found := store.ResolveForges(ctx, s.forges(), func(g config.Forge, why error) {
-		left = append(left, fmt.Sprintf("%s (%s %s): %v", g.Name, g.Host, g.Path, why))
-	})
-	if len(left) > 0 {
-		return "", fmt.Errorf("the forges found in the remotes would be dropped, and one can't be written: %s", strings.Join(left, "; "))
+	for _, g := range s.forges() {
+		if g.Name == f.Name {
+			return "", fmt.Errorf("a forge found in the remotes is named %s already", f.Name)
+		}
+	}
+	text, found, err := s.resolveFound(ctx, text)
+	if err != nil {
+		return "", err
 	}
 	for _, g := range found {
 		if strings.EqualFold(g.Host+"/"+g.Project, f.Host+"/"+f.Project) {
 			return "", fmt.Errorf("the git remotes name %s %s already: it is the forge %s", f.Host, f.Project, g.Name)
 		}
-		if g.Name == f.Name {
-			return "", fmt.Errorf("a forge found in the remotes is named %s already", f.Name)
-		}
-		text = config.WithForge(text, g)
 	}
 	return text, nil
+}
+
+// resolveFound writes the found forges' tables, GitLab's by its id, a
+// GitHub one by its current name; it refuses when one can't be read.
+func (s *apiServer) resolveFound(ctx context.Context, text string) (string, []config.Forge, error) {
+	var left []string
+	found := store.ResolveForges(ctx, s.forges(), func(g config.Forge, why error) {
+		left = append(left, fmt.Sprintf("%s (%s %s): %v", g.Name, g.Host, g.Path, why))
+	})
+	if len(left) > 0 {
+		return "", nil, fmt.Errorf("the forges found in the remotes would be dropped, and one can't be written: %s", strings.Join(left, "; "))
+	}
+	for _, g := range found {
+		text = config.WithForge(text, g)
+	}
+	return text, found, nil
 }
 
 // newForge is the forge at the project's address, checked with the forge,

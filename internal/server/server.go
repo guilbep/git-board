@@ -187,6 +187,11 @@ func newMux(s *apiServer, static http.Handler) http.Handler {
 	mux.HandleFunc("GET /api/config", s.handleConfigFile)
 	mux.HandleFunc("POST /api/config/check", s.handleConfigCheck)
 	mux.HandleFunc("GET /api/config/docs", s.handleConfigDocs)
+	mux.HandleFunc("GET /api/config/model", s.handleConfigModel)
+	mux.HandleFunc("GET /api/fields/usage", s.handleFieldUsage)
+	mux.HandleFunc("GET /api/fields/migrate", func(w http.ResponseWriter, r *http.Request) { s.migrateField(w, r, false) })
+	mux.HandleFunc("POST /api/fields/migrate", func(w http.ResponseWriter, r *http.Request) { s.migrateField(w, r, true) })
+	mux.HandleFunc("PUT /api/config/section/{section}", s.handleConfigSection)
 	mux.HandleFunc("PUT /api/config", s.handleConfigSave)
 	mux.HandleFunc("PUT /api/bridges/{name}/sync", s.handleBridgeSync)
 	mux.HandleFunc("GET /api/credentials", s.handleCredentials)
@@ -420,6 +425,29 @@ func (s *apiServer) handleFacets(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, facets)
+}
+
+// handleFieldUsage counts, per field namespace, the issues that carry at
+// least one of its ns:value labels: the fields page's Remove confirm ("N
+// issues use it"), the list's quiet sizes. A field no issue uses is
+// absent, not zero.
+func (s *apiServer) handleFieldUsage(w http.ResponseWriter, r *http.Request) {
+	issues, err := s.b.ListIssues()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	usage := map[string]int{}
+	for _, is := range issues {
+		seen := map[string]bool{}
+		for _, l := range is.Labels {
+			if ns, _, ok := strings.Cut(l, ":"); ok && !seen[ns] {
+				seen[ns] = true
+				usage[ns]++
+			}
+		}
+	}
+	writeJSON(w, http.StatusOK, usage)
 }
 
 func filterOf(q url.Values) string {

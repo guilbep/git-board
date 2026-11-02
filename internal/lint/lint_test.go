@@ -332,3 +332,35 @@ func TestLabelsOutsideTheList(t *testing.T) {
 		t.Errorf("without [labels]: %d findings", n)
 	}
 }
+
+// Two spellings of one value, differing by punctuation or case alone, are a
+// typo: on a field with options lint names the option, on a field with
+// none it names the spelling most issues use.
+func TestNearValuesSayWhatWasMeant(t *testing.T) {
+	t.Parallel()
+	cfg := &config.Config{Fields: map[string]config.Field{"prio": {Options: []string{"p1", "p2"}}}}
+	issues := []store.Issue{
+		{ID: "a", Title: "A", Status: "open", Labels: []string{"risk:normal", "prio:p1"}},
+		{ID: "b", Title: "B", Status: "open", Labels: []string{"risk:normal"}},
+		{ID: "c", Title: "C", Status: "open", Labels: []string{"risk:-normal", "prio:P-2"}},
+		// numbers are told apart by their point: 1.5 is not a typo of 15
+		{ID: "d", Title: "D", Status: "open", Labels: []string{"points:1.5"}},
+		{ID: "e", Title: "E", Status: "open", Labels: []string{"points:15"}},
+	}
+	var got []string
+	for _, f := range lint.Run(issues, cfg) {
+		if f.IssueID == "d" || f.IssueID == "e" {
+			t.Errorf("a number flagged: %+v", f)
+		}
+		if f.IssueID == "c" {
+			got = append(got, f.Check+": "+f.Message)
+		}
+	}
+	want := []string{
+		"unknown-value: prio:P-2 has no matching [fields.prio] option: did you mean prio:p2?",
+		"near-value: risk:-normal: did you mean risk:normal (2 issues)?",
+	}
+	if len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
+		t.Errorf("got %q\nwant %q", got, want)
+	}
+}

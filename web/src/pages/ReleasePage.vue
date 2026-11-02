@@ -125,7 +125,7 @@
         </div>
 
         <aside class="gb-side" aria-label="Release details">
-          <section class="gb-side-sec" aria-labelledby="runs">
+          <section v-if="runsIn.length" class="gb-side-sec" aria-labelledby="runs">
             <div class="gb-side-head"><h2 id="runs" class="gb-section-title">Runs in</h2></div>
             <div class="gb-rel-runs">
               <template v-for="e in runsIn" :key="e.env.name">
@@ -148,9 +148,10 @@
             <p class="gb-note gb-rel-after">Read from the config repos' overlays and their history.</p>
           </section>
 
-          <section class="gb-side-sec" aria-labelledby="imgs">
+          <!-- a section with nothing to say is left out: a binary release has no image -->
+          <section v-if="images.length || record?.chart.version || !record?.assets?.length" class="gb-side-sec" aria-labelledby="imgs">
             <div class="gb-side-head"><h2 id="imgs" class="gb-section-title">Images</h2></div>
-            <p v-if="!images.length && !record?.chart.version && !record?.assets?.length" class="gb-hint">None recorded.</p>
+            <p v-if="!images.length && !record?.chart.version" class="gb-hint">None recorded.</p>
             <div v-else class="gb-artifacts">
               <div v-for="[name, img] in images" :key="name" class="gb-artifact"><b>{{ name }}</b><span class="gb-mono">{{ [...img.registries, short(img.digest)].join(' · ') }}</span></div>
               <div v-if="record?.chart.version" class="gb-artifact"><b>chart</b><span class="gb-mono">{{ [record.chart.version, ...(record.chart.digest ? [short(record.chart.digest)] : [])].join(' · ') }}</span></div>
@@ -457,7 +458,7 @@ onMounted(() => {
 .gb-rel-meta { margin-top: -.75rem; }
 .gb-rel-job { margin: 1.5rem 0 0; }
 /* the release board's columns: no panel padding, a rule above */
-.gb-rel-cols { grid-template-columns: minmax(0, 1fr) 20rem; gap: 3rem; margin-top: 2rem; padding: 2rem 0 0; border-top: 1px solid var(--border-subtle); }
+.gb-rel-cols { display: grid; grid-template-columns: minmax(0, 1fr) 20rem; gap: 3rem; margin-top: 2rem; padding: 2rem 0 0; border-top: 1px solid var(--border-subtle); }
 .gb-rel-cols .gb-maincol { gap: 2rem; }
 .gb-rel-after { margin-top: .5rem; }
 .gb-rel-edit { justify-content: flex-end; margin-top: .75rem; }
