@@ -17,50 +17,25 @@
           </dl>
         </div>
       </div>
+      <p class="kh-foot">
+        <template v-if="tipsOff">Tips are off. <button type="button" class="gb-linkbtn" @click="resetTips()">Show tips again</button></template>
+        <template v-else>A tip shows one of these at a time, until you use it. <button type="button" class="gb-linkbtn" @click="setTipsOff(true)">Hide tips</button></template>
+      </p>
     </section>
   </q-dialog>
 </template>
 
 <script setup lang="ts">
 import { helpOpen } from '@/shortcuts';
+import { groups as titles, keyLabel, shortcuts } from '@/keys';
+import { resetTips, setTipsOff, tipsOff } from '@/tips';
 import GbIcon from '@/components/GbIcon.vue';
 
-const mod = typeof navigator !== 'undefined' && /Mac/.test(navigator.platform) ? '⌘' : 'Ctrl';
-const alt = mod === '⌘' ? '⌥' : 'Alt';
-const groups = [
-  {
-    title: 'Board',
-    keys: [
-      { keys: [mod, 'K'], what: 'Filter the issues, jump to one, or run a command' },
-      { keys: ['Tab'], what: `In ${mod}K, complete a field's value (status:r → status:ready)` },
-      { keys: ['c'], what: 'New issue' },
-      { keys: ['?'], what: 'This list' },
-    ],
-  },
-  {
-    title: 'Issue panel',
-    keys: [
-      { keys: ['j'], what: 'Next issue' },
-      { keys: ['k'], what: 'Previous issue' },
-      { keys: ['f'], what: 'Wide over the board, or back to the side' },
-      { keys: ['Esc'], what: 'Leave the field you type in; again: close the panel' },
-      { keys: [mod, 'Enter'], what: 'Send the comment' },
-    ],
-  },
-  {
-    title: 'Filters',
-    keys: [
-      { keys: ['Click'], what: 'Add or remove a value' },
-      { keys: [alt, 'Click'], what: 'Only this value; again: every value but it' },
-      { keys: ['Shift', 'Click'], what: 'A range, from the last value clicked' },
-      { keys: ['Space'], what: 'Toggle the focused value' },
-    ],
-  },
-  {
-    title: 'Settings › The file',
-    keys: [{ keys: [mod, 'S'], what: 'Save, after a look at the changes' }],
-  },
-];
+// the registry's groups, in its order (keys.ts: the one list)
+const groups = titles.map((title) => ({
+  title,
+  keys: shortcuts.filter((k) => k.group === title).map((k) => ({ keys: k.keys.map((key) => keyLabel(key)), what: k.what })),
+}));
 </script>
 
 <style scoped>
@@ -73,4 +48,5 @@ const groups = [
 .kh dt { display: flex; gap: .25rem; white-space: nowrap; }
 .kh dd { margin: 0; font-size: .875rem; }
 .kh kbd { padding: .05rem .375rem; border: 1px solid var(--border-strong); border-bottom-width: 2px; background: var(--bg-subtle); font-family: var(--font-mono); font-size: .75rem; }
+.kh-foot { margin: 1.25rem 0 0; padding-top: .75rem; border-top: 1px solid var(--border-subtle); color: var(--fg-muted); font-size: .8125rem; }
 </style>

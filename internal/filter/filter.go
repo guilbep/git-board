@@ -7,7 +7,9 @@
 // (its project number), free text and "quoted phrases". Conditions
 // are AND'd; a,b is either value (status:ready,qa), as in GitHub's search.
 // Pure logic, and the only parser of the grammar: the CLI, the TUI, the
-// web API and so the web page all go through it.
+// web API and so the web page all go through it. The page explains it in
+// web/src/filterhelp.ts (and docs/guide/configuration.md, Filters): a word
+// added here is added there too.
 package filter
 
 import (

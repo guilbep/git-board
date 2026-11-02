@@ -30,6 +30,7 @@ import (
 	"github.com/guilbep/git-board/core/oplog"
 	"github.com/guilbep/git-board/core/people"
 	"github.com/guilbep/git-board/core/syncer"
+	"github.com/guilbep/git-board/internal/avatar"
 	"github.com/guilbep/git-board/internal/config"
 )
 
@@ -363,6 +364,7 @@ type view struct {
 	c       *Counter
 	records map[string][]syncer.Record
 	persons map[string]*people.Person
+	avatars avatar.Mode // board.avatars, read once per view
 }
 
 // ponytail: folds every sync entity on each call, cheap while they are
@@ -376,7 +378,11 @@ func (b *Backend) view() (view, error) {
 	if err != nil {
 		return view{}, err
 	}
-	return view{c: b.counter(), records: records, persons: persons}, nil
+	avatars, err := b.avatarMode()
+	if err != nil {
+		return view{}, err
+	}
+	return view{c: b.counter(), records: records, persons: persons, avatars: avatars}, nil
 }
 
 // issueFrom is a core issue as git-board reads it: its labels shown, its
@@ -584,6 +590,44 @@ func (b *Backend) ViewSetting() (view, scope string, err error) {
 	}
 	scope, view, _ = strings.Cut(strings.TrimSpace(string(out)), "\t")
 	return view, scope, err
+}
+
+// AvatarsSetting is git config board.avatars, read at every level git
+// reads, as ViewSetting: the mode (Forge when unset), the level that set
+// it, and the value when it was none of forge, gravatar, none.
+func (b *Backend) AvatarsSetting() (m avatar.Mode, scope, ignored string, err error) {
+	out, err := b.run(nil, "config", "--show-scope", "--get", "board.avatars")
+	if ee := (*exec.ExitError)(nil); errors.As(err, &ee) && ee.ExitCode() == 1 {
+		return avatar.Forge, "", "", nil
+	}
+	if err != nil {
+		return "", "", "", err
+	}
+	scope, v, _ := strings.Cut(strings.TrimSpace(string(out)), "\t")
+	m, ignored = avatar.ParseMode(v)
+	return m, scope, ignored, nil
+}
+
+// avatarMode is the mode alone, for the persons a call makes.
+// ponytail: one git config per call that makes persons; cache it on the
+// Backend (dropped in SetAvatars) if it ever shows in a profile.
+func (b *Backend) avatarMode() (avatar.Mode, error) {
+	m, _, _, err := b.AvatarsSetting()
+	return m, err
+}
+
+// SetAvatars sets board.avatars in this repository's own config, or
+// unsets it there for "": a global board.avatars is left alone.
+func (b *Backend) SetAvatars(m avatar.Mode) error {
+	if m != "" {
+		_, err := b.run(nil, "config", "--local", "board.avatars", string(m))
+		return err
+	}
+	_, err := b.run(nil, "config", "--local", "--unset", "board.avatars")
+	if ee := (*exec.ExitError)(nil); errors.As(err, &ee) && ee.ExitCode() == 5 {
+		return nil // wasn't set
+	}
+	return err
 }
 
 // SetView sets board.view in this repository's own config, or unsets it

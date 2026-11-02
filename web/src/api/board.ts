@@ -322,7 +322,13 @@ export interface MeResponse {
   view_from?: 'board.view' | '.git-board.toml' | 'default';
   view_ignored?: string; // a board.view that is neither
   view_scope?: string; // the git config level that set board.view: local is this repository's
+  // where pictures come from, board.avatars (docs/prd/avatars.md)
+  avatars?: AvatarsMode;
+  avatars_scope?: string; // the git config level that set it
+  avatars_ignored?: string; // a board.avatars that is none of the three
 }
+
+export type AvatarsMode = 'forge' | 'gravatar' | 'none';
 
 export function getMe(): Promise<MeResponse> {
   return request('/api/me');
@@ -339,6 +345,11 @@ export function createIdentity(name: string, email: string): Promise<MeResponse>
 // setView sets this repository's board.view; '' unsets it, for what the board says
 export function setView(view: '' | 'classic' | 'cycle'): Promise<MeResponse> {
   return request('/api/me/view', json('PUT', { view }));
+}
+
+// setAvatars sets this repository's board.avatars; '' unsets it, for the default (forge)
+export function setAvatars(avatars: '' | AvatarsMode): Promise<MeResponse> {
+  return request('/api/me/avatars', json('PUT', { avatars }));
 }
 
 // The sync with the forges (internal/server/forges.go).

@@ -77,6 +77,7 @@
 </template>
 
 <script setup lang="ts">
+import { bottomBarShown } from '@/keys';
 import ValueMark from '@/components/ValueMark.vue';
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { idLabel } from '@/forges';
@@ -127,6 +128,9 @@ function moveAll(bucket: Bucket, e: Event) {
   if (!window.confirm(`Move all ${n} card${n === 1 ? '' : 's'} of ${groupLabel(bucket.group)} to ${groupLabel(to)}?`)) return;
   emit('moveMany', bucket.issues.map((issue) => ({ issue, from: bucket.group })), to);
 }
+// the picked cards' bar holds the window's foot: the key line steps aside
+watch(() => picked.value.length > 0, (v) => (bottomBarShown.value = v), { immediate: true });
+onBeforeUnmount(() => (bottomBarShown.value = false));
 function onKey(e: KeyboardEvent) {
   if (e.key === 'Escape' && picked.value.length && !document.querySelector('.q-dialog')) picked.value = [];
 }

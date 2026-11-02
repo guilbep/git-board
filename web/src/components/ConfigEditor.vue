@@ -65,8 +65,8 @@
           @click="followCursor"
           @keyup="followCursor"
           @focus="followCursor"
-            @keydown.meta.s.prevent="review"
-            @keydown.ctrl.s.prevent="review"
+            @keydown.meta.s.prevent="noteUse('save'), review()"
+            @keydown.ctrl.s.prevent="noteUse('save'), review()"
           />
         </div>
       </div>
@@ -101,6 +101,7 @@
 </template>
 
 <script setup lang="ts">
+import { noteUse } from '@/keys';
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { ApiError, checkConfig, getConfigDocs, getConfigFile, saveConfig, type ConfigCheck, type ConfigFile, type DocSection } from '@/api/board';
 import { configText } from '@/configdraft';

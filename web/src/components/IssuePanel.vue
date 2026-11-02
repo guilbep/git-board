@@ -279,6 +279,7 @@
 </template>
 
 <script setup lang="ts">
+import { noteUse } from '@/keys';
 import { onLive } from '@/live';
 import { clampWidth, panelMode, panelWidth, togglePanelMode } from '@/panelsize';
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, toRef, useId, watch } from 'vue';
@@ -580,9 +581,18 @@ function onRef(n: string, e: MouseEvent) {
 function onKey(e: KeyboardEvent) {
   if (props.page || e.ctrlKey || e.metaKey || e.altKey) return;
   if (e.target instanceof Element && e.target.closest('input, textarea, select, [contenteditable]')) return;
-  if (e.key === 'j' && props.hasNext) emit('next');
-  if (e.key === 'k' && props.hasPrev) emit('prev');
-  if (e.key === 'f') togglePanelMode();
+  if (e.key === 'j' && props.hasNext) {
+    noteUse('next');
+    emit('next');
+  }
+  if (e.key === 'k' && props.hasPrev) {
+    noteUse('prev');
+    emit('prev');
+  }
+  if (e.key === 'f') {
+    noteUse('wide');
+    togglePanelMode();
+  }
 }
 
 // the side panel's width: dragged from its left edge, or ←/→ on it

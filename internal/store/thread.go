@@ -16,6 +16,7 @@ import (
 	"github.com/guilbep/git-board/core/oplog"
 	"github.com/guilbep/git-board/core/people"
 	"github.com/guilbep/git-board/core/syncer"
+	"github.com/guilbep/git-board/internal/avatar"
 )
 
 // ErrNoSuchComment is returned when a comment id isn't one of the issue's.
@@ -130,7 +131,7 @@ func (b *Backend) Threads(idPrefixes []string) ([]Thread, error) {
 
 // thread replays an issue's log into its history, as issue.Apply folds it.
 func (b *Backend) thread(is *issue.Issue, l *oplog.Log, v view) Thread {
-	who := func(id string) Person { return personOf(id, v.persons[id]) }
+	who := func(id string) Person { return personOf(id, v.persons[id], v.avatars) }
 	th := Thread{Issue: b.issueFrom(is, v), Author: who(is.Author), EditedAt: time.Unix(is.Updated, 0)}
 	th.Participants = append(th.Participants, th.Author)
 	for _, c := range is.Comments {
@@ -332,13 +333,14 @@ func lastNumber(u string) string {
 	return last
 }
 
-// personOf is a person as the page shows them: their first forge login.
-// One not fetched yet shows by id.
-func personOf(id string, p *people.Person) Person {
+// personOf is a person as the page shows them: their first forge login,
+// and their picture as m allows (internal/avatar). One not fetched yet
+// shows by id. The email stays here: the page never gets it.
+func personOf(id string, p *people.Person, m avatar.Mode) Person {
 	if p == nil {
 		return Person{ID: id, Name: id[:min(7, len(id))]}
 	}
-	res := Person{ID: p.ID, Name: p.Name}
+	res := Person{ID: p.ID, Name: p.Name, AvatarURL: avatar.URL(*p, m)}
 	if ls := logins(p); len(ls) > 0 {
 		res.Login = ls[0]
 	}
@@ -363,7 +365,11 @@ func (b *Backend) Me() (Person, bool, error) {
 	if !ok {
 		return Person{}, false, fmt.Errorf("%w: you, person %s", ErrNotFound, id)
 	}
-	return personOf(id, p), true, nil
+	m, err := b.avatarMode()
+	if err != nil {
+		return Person{}, false, err
+	}
+	return personOf(id, p, m), true, nil
 }
 
 // NewIssue creates an issue as you, with labels, and returns its id.

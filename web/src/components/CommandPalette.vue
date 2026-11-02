@@ -43,11 +43,19 @@
           >
             <GbIcon :name="item.icon" small />
             <span class="cp-label">{{ item.label }}</span>
-            <span v-if="item.hint" class="cp-hint">{{ item.hint }}</span>
+            <span v-if="item.keys" class="cp-keys"><kbd v-for="k in item.keys" :key="k">{{ keyLabel(k) }}</kbd></span>
+            <span v-else-if="item.hint" class="cp-hint">{{ item.hint }}</span>
           </li>
         </template>
         <li v-if="error" class="cp-empty" role="status">{{ error }}</li>
       </ul>
+      <!-- the palette's own keys, and the way to every other one -->
+      <p class="cp-foot">
+        <span><kbd>↑</kbd><kbd>↓</kbd> move</span>
+        <span><kbd>↵</kbd> open</span>
+        <span><kbd>Tab</kbd> complete</span>
+        <button type="button" class="cp-foot-help" @click="paletteOpen = false, (helpOpen = true)"><kbd>?</kbd> every shortcut</button>
+      </p>
     </div>
   </q-dialog>
 </template>
@@ -63,13 +71,15 @@ import { forgeNumbers } from '@/issuesync';
 import { example, jumps, latest, numberName, rank, recentName } from '@/palette';
 import { suggest } from '@/viewfilter';
 import { helpOpen } from '@/shortcuts';
+import { byId, keyContext, keyLabel, noteUse } from '@/keys';
 import GbIcon, { type IconName } from '@/components/GbIcon.vue';
 
 const props = defineProps<{ views: string[] }>();
 const route = useRoute();
 const router = useRouter();
 
-type Entry = { key: string; label: string; group: string; icon: IconName; hint?: string | undefined; keep?: boolean; act: () => void };
+// keys: the entry's shortcut, drawn as keys (keys.ts's spelling: Mod, Alt)
+type Entry = { key: string; label: string; group: string; icon: IconName; hint?: string | undefined; keys?: string[] | undefined; keep?: boolean; act: () => void };
 
 const query = ref('');
 const active = ref(0);
@@ -86,6 +96,7 @@ const suggestions = computed(() => suggest(query.value, values.value).slice(0, 4
 function complete(e: KeyboardEvent) {
   const s = suggestions.value[0];
   if (!s) return;
+  noteUse('complete');
   e.preventDefault();
   query.value = s;
 }
@@ -154,7 +165,14 @@ function filterBoard(f: string) {
 }
 
 const commands = computed<Entry[]>(() => [
-  { key: 'new', label: 'New issue', group: 'Commands', icon: 'plus', hint: 'c', act: () => { newIssueRequested.value = true; if (route.path !== '/') void router.push('/'); } },
+  // with an issue open: its panel's keys, as commands
+  ...(keyContext.value.includes('panel')
+    ? (['next', 'prev', 'wide'] as const).map((id): Entry => {
+        const s = byId(id)!;
+        return { key: id, label: s.what, group: 'Commands', icon: id === 'wide' ? 'expand' : id === 'next' ? 'down' : 'up', keys: s.keys, act: () => press(s.keys[0]!) };
+      })
+    : []),
+  { key: 'new', label: 'New issue', group: 'Commands', icon: 'plus', keys: ['c'], act: () => { newIssueRequested.value = true; if (route.path !== '/') void router.push('/'); } },
   ...props.views.map((v): Entry => ({ key: `view-${v}`, label: `View: ${v}`, group: 'Commands', icon: 'tag', act: () => void router.push({ path: '/', query: { view: v } }) })),
   { key: 'insights', label: 'Insights', group: 'Commands', icon: 'chart', act: go('/insights') },
   { key: 'inbox', label: 'Inbox', group: 'Commands', icon: 'inbox', act: go('/inbox') },
@@ -162,8 +180,14 @@ const commands = computed<Entry[]>(() => [
   { key: 'sync', label: 'Sync: where your issues go', group: 'Commands', icon: 'sync', act: go('/settings/sync') },
   { key: 'add-forge', label: 'Add a forge', group: 'Commands', icon: 'plus', act: go('/settings/sync?add=1') },
   { key: 'filters', label: filtersHidden.value ? 'Show the filters' : 'Hide the filters', group: 'Commands', icon: 'filter', act: () => { filtersHidden.value = !filtersHidden.value; if (route.path !== '/') void router.push('/'); } },
-  { key: 'keys', label: 'Keyboard shortcuts', group: 'Commands', icon: 'title', hint: '?', act: () => (helpOpen.value = true) },
+  { key: 'keys', label: 'Keyboard shortcuts', group: 'Commands', icon: 'title', keys: ['?'], act: () => (helpOpen.value = true) },
 ]);
+
+// a panel key, pressed once the palette has closed: the panel's own
+// handler acts, as for the key itself
+function press(key: string) {
+  setTimeout(() => window.dispatchEvent(new KeyboardEvent('keydown', { key })), 0);
+}
 
 // "GB-30 · 2 Oct": its number, else its id, and its last change
 function hint(i: Issue, number: string | undefined): string {
@@ -189,7 +213,7 @@ const results = computed<Entry[]>(() => {
   const n = found.value?.length ?? 0;
   const filterRow: Entry = { key: 'filter', label: `Filter the board by «${f}»`, group: 'Filter', icon: 'filter', hint: searching.value || !found.value ? '…' : `${n} ${n === 1 ? 'issue' : 'issues'}`, act: () => filterBoard(f) };
   const issues = latest(found.value ?? []).filter((i) => !jumped.some((j) => j.id === i.id)).slice(0, 10);
-  const completions = suggestions.value.map((s, i): Entry => ({ key: `s-${s}`, label: s, group: 'Complete', icon: 'filter', hint: i ? undefined : 'Tab', keep: true, act: () => {
+  const completions = suggestions.value.map((s, i): Entry => ({ key: `s-${s}`, label: s, group: 'Complete', icon: 'filter', keys: i ? undefined : ['Tab'], keep: true, act: () => {
     query.value = s;
     input.value?.focus();
   } }));
@@ -221,4 +245,11 @@ function run(item: Entry | undefined) {
 .cp-item.is-active { background: var(--bg-muted); box-shadow: inset 3px 0 0 var(--primary); }
 .cp-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cp-empty { padding: 1rem; color: var(--fg-muted); }
+.cp-keys { display: inline-flex; gap: .1875rem; }
+.cp kbd { min-width: .75rem; padding: 0 .3125rem; border: var(--border-w) solid var(--border-strong); border-bottom-width: .125rem; border-radius: var(--radius); background: var(--bg); color: var(--fg); font-family: var(--font-sans); font-size: .75rem; line-height: 1.35; text-align: center; }
+.cp-foot { display: flex; flex-wrap: wrap; align-items: center; gap: .375rem 1rem; margin: 0; padding: .5rem 1rem; border-top: var(--border-w) solid var(--border-subtle); color: var(--fg-muted); font-size: .78125rem; }
+.cp-foot > span, .cp-foot-help { display: inline-flex; align-items: center; gap: .25rem; }
+.cp-foot-help { margin-left: auto; padding: 0; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; }
+.cp-foot-help:hover { color: var(--fg); }
+.cp-foot-help:focus-visible { outline: var(--focus-w) solid var(--primary-hover); outline-offset: .125rem; }
 </style>

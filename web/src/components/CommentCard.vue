@@ -4,8 +4,7 @@
 <template>
   <article class="gb-comment" :class="{ 'gb-comment-mine': mine }" :aria-labelledby="`c-${uid}`">
     <header :id="`c-${uid}`" class="gb-comment-head">
-      <img v-if="event.author.avatar_url" class="gb-avatar gb-avatar-sm" :src="event.author.avatar_url" alt="" />
-      <span v-else class="gb-avatar gb-avatar-sm" :class="{ 'gb-avatar-dark': mine }" aria-hidden="true">{{ initials(event.author.name) }}</span>
+      <GbAvatar :name="event.author.name" :src="event.author.avatar_url" small :dark="mine" />
       <b>{{ event.author.name }}</b>
       <span v-if="role" class="gb-role">{{ role }}</span>
       <span v-if="v" class="gb-time">wrote the description, <b class="gb-ver">v{{ v }}</b> · {{ on(event.at, true) }}</span>
@@ -74,9 +73,10 @@
 </template>
 
 <script setup lang="ts">
+import GbAvatar from '@/components/GbAvatar.vue';
 import { computed, ref, useId } from 'vue';
 import { ApiError, type Forge, type IssueEvent, type StageStep } from '@/api/board';
-import { initials, on, when } from '@/me';
+import { on, when } from '@/me';
 import GbIcon from '@/components/GbIcon.vue';
 import MarkdownBody from '@/components/MarkdownBody.vue';
 import MarkdownEditor from '@/components/MarkdownEditor.vue';

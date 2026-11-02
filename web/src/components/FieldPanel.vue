@@ -24,6 +24,7 @@
 </template>
 
 <script setup lang="ts">
+import { personByLogin } from '@/people';
 import { ref, watch } from 'vue';
 import type { IssueRef } from '@/api/board';
 import { displayName, fieldValues, formatValue, typeOf, type Fields } from '@/fields';
@@ -40,7 +41,7 @@ const open = ref('');
 watch(() => props.names.join(' '), () => (open.value = props.names.length === 1 ? props.names[0]! : ''), { immediate: true });
 
 const valuesOf = (n: string) => fieldValues(props.labels, n);
-const nameOf = (login: string) => me.value?.identities?.find((p) => p.login?.toLowerCase() === login.replace(/^@/, '').toLowerCase())?.name ?? login;
+const nameOf = (login: string) => personByLogin(me.value?.identities, login)?.name ?? login;
 const said = (n: string) => valuesOf(n).map((v) => (typeOf(n, props.fields) === 'person' ? nameOf(v) : formatValue(n, v, props.fields))).join(', ');
 const inheritedOf = (n: string) => (props.fields[n]?.inherits ? `${nameOf(props.fields[n]!.inherits!)} · project` : '');
 </script>

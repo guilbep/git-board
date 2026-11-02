@@ -28,9 +28,13 @@ func (b *Backend) Identities() ([]Person, error) {
 	if err != nil {
 		return nil, err
 	}
+	m, err := b.avatarMode()
+	if err != nil {
+		return nil, err
+	}
 	res := []Person{}
 	for id, p := range persons {
-		res = append(res, personOf(id, p))
+		res = append(res, personOf(id, p, m))
 	}
 	slices.SortFunc(res, func(x, y Person) int { return cmp.Or(cmp.Compare(x.Name, y.Name), cmp.Compare(x.ID, y.ID)) })
 	return res, nil
@@ -56,7 +60,11 @@ func (b *Backend) NewIdentity(name, email string) (Person, error) {
 	if err := people.SetMe(ctx, b.s, p.ID); err != nil {
 		return Person{}, err
 	}
-	return personOf(p.ID, p), nil
+	m, err := b.avatarMode()
+	if err != nil {
+		return Person{}, err
+	}
+	return personOf(p.ID, p, m), nil
 }
 
 // MyLogin is the forge login of the person git-board writes as: what @me

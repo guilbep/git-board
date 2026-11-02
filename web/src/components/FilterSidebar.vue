@@ -14,7 +14,7 @@
       <div class="filters-head">
         <h2 class="filters-title">Filters</h2>
         <span class="filters-head-r">
-          <button type="button" class="filters-help" aria-label="Keyboard shortcuts for the filters" title="Keyboard shortcuts (?)" @click="helpOpen = true">?</button>
+          <FilterHelp @try="emit('try', $event)" />
           <button type="button" class="filters-reset" :disabled="!modified" @click="emit('reset')">Reset</button>
           <button type="button" class="filters-hide" aria-label="Hide filters" title="Hide filters" @click="emit('hide')"><GbIcon name="collapse" small /></button>
         </span>
@@ -73,9 +73,10 @@
 </template>
 
 <script setup lang="ts">
+import FilterHelp from '@/components/FilterHelp.vue';
+import { noteUse } from '@/keys';
 import ValueMark from '@/components/ValueMark.vue';
 import GbIcon from '@/components/GbIcon.vue';
-import { helpOpen } from '@/shortcuts';
 import { colorClass } from '@/colors';
 import { facetLabel, pick, sortOptions, valueLabel, type Facet, type OptionSort, type Selection } from '@/facets';
 import type { Fields } from '@/fields';
@@ -83,7 +84,7 @@ import type { Fields } from '@/fields';
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue';
 
 const props = defineProps<{ facets: Facet[]; sel: Selection; fields: Fields; modified: boolean }>();
-const emit = defineEmits<{ set: [key: string, values: string[]]; reset: []; hide: [] }>();
+const emit = defineEmits<{ set: [key: string, values: string[]]; reset: []; hide: []; try: [term: string] }>();
 
 // Each section's order: workflow when the field has configured options,
 // else by count; a choice is kept in this browser.
@@ -148,6 +149,8 @@ watch(() => props.sel, () => void nextTick(syncChecks), { deep: true });
 onMounted(syncChecks);
 
 function onPick(f: Facet, value: string, e: MouseEvent) {
+  if (e.altKey) noteUse('only');
+  else if (e.shiftKey) noteUse('range');
   const next = pick(props.sel[f.key] ?? [], value, order(f), { alt: e.altKey, shift: e.shiftKey, anchor: anchors[f.key] });
   if (!e.shiftKey) anchors[f.key] = value;
   emit('set', f.key, next);
@@ -239,8 +242,6 @@ const active = computed(() => Object.values(props.sel).filter((v) => v.length).l
 .filters-hide { display: inline-flex; align-items: center; justify-content: center; width: 2rem; height: 2rem; padding: 0; border: 1px solid var(--border); background: none; color: var(--fg); cursor: pointer; }
 .filters-hide:hover, .filters-hide:focus-visible { border-color: var(--fg); }
 @media (max-width: 63.99rem) { .filters-hide { display: none; } }
-.filters-help { display: inline-flex; align-items: center; justify-content: center; width: 1.5rem; height: 1.5rem; border: var(--border-w) solid var(--border); border-radius: 50%; font-size: 0.75rem; font-weight: var(--w-bold); color: var(--fg-muted); cursor: pointer;  padding: 0; background: none; }
-.filters-help:hover, .filters-help:focus-visible { border-color: var(--fg); color: var(--fg); }
 
 .filters-tools { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); padding: 0.25rem 0 0 1.25rem; }
 .filters-sort { display: inline-flex; border: var(--border-w) solid var(--border); border-radius: var(--radius); overflow: hidden; }

@@ -22,7 +22,7 @@
         <template #button>
           <span v-if="!f.values.length" class="gb-hassign" aria-hidden="true"><GbIcon name="user" small /></span>
           <span v-else-if="typeOf(f.name, fields) === 'person'" class="gb-hfaces">
-            <span v-for="v in f.values.slice(0, 4)" :key="v" class="gb-avatar gb-avatar-sm" :class="{ 'gb-avatar-dark': v === myLogin }" :title="`${nameOf(v)}${v === myLogin ? ' (you)' : ''}`">{{ initials(nameOf(v)) }}</span>
+            <GbAvatar v-for="v in f.values.slice(0, 4)" :key="v" :name="nameOf(v)" :src="avatarOf(v)" small :dark="v === myLogin" :title="`${nameOf(v)}${v === myLogin ? ' (you)' : ''}`" />
             <span v-if="f.values.length > 4" class="gb-hfaces-more">+{{ f.values.length - 4 }}</span>
           </span>
           <template v-else>
@@ -57,12 +57,14 @@
 </template>
 
 <script setup lang="ts">
+import GbAvatar from '@/components/GbAvatar.vue';
+import { personByLogin } from '@/people';
 import { computed, onMounted, ref, watch } from 'vue';
 import { getRefs, type IssueRefs, type Thread } from '@/api/board';
 import { displayName, fieldValues, formatValue, typeOf, type Fields } from '@/fields';
 import { fieldLine, labelLine } from '@/headfields';
 import { labelList, loadLabelList } from '@/labellist';
-import { initials, me } from '@/me';
+import { me } from '@/me';
 import type { SpecState } from '@/spec';
 import { syncStatus } from '@/sync';
 import BranchLine from '@/components/BranchLine.vue';
@@ -108,7 +110,8 @@ const slots = computed(() =>
 const allFields = computed(() => props.names.filter((n) => n !== 'status'));
 const said = (name: string, values: string[]) => values.map((v) => (typeOf(name, props.fields) === 'person' ? nameOf(v) : formatValue(name, v, props.fields))).join(', ');
 // a person field holds logins: their names, as the identities say them
-const nameOf = (login: string) => me.value?.identities?.find((p) => p.login?.toLowerCase() === login.replace(/^@/, '').toLowerCase())?.name ?? login;
+const nameOf = (login: string) => personByLogin(me.value?.identities, login)?.name ?? login;
+const avatarOf = (login: string) => personByLogin(me.value?.identities, login)?.avatar_url;
 const myLogin = computed(() => me.value?.me?.login ?? '');
 
 // a conflict with the GitHub Project the last check held on this field

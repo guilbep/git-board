@@ -11,6 +11,8 @@ import (
 
 	"github.com/guilbep/git-board/core/oplog"
 	"github.com/guilbep/git-board/core/people"
+
+	"github.com/guilbep/git-board/internal/avatar"
 )
 
 // A release's page, kept in git as an entity of the core's release kind,
@@ -128,7 +130,7 @@ func (b *Backend) Releases() ([]ReleaseRecord, error) {
 	if err != nil {
 		return nil, err
 	}
-	name := func(id string) string { return personOf(id, persons[id]).Name }
+	name := func(id string) string { return personOf(id, persons[id], avatar.None).Name }
 	byCommit := map[string]ReleaseRecord{}
 	for _, id := range ids { // sorted: the first of a commit counts
 		l, err := oplog.Load(b.s, "release", id)
@@ -183,7 +185,7 @@ func (b *Backend) CreateRelease(r ReleaseRecord) (ReleaseRecord, error) {
 // personName is a person's name, by id.
 func (b *Backend) personName(id string) string {
 	p, _ := people.Load(b.s, id)
-	return personOf(id, p).Name
+	return personOf(id, p, avatar.None).Name
 }
 
 // SetReleaseNotes replaces the notes of the record with this id.

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { peopleLabel, peopleOf } from './people.ts';
+import { peopleLabel, peopleOf, personByLogin } from './people.ts';
 import type { IssueEvent, Person } from './api/board';
 
 const a: Person = { id: 'a', name: 'Person A' };
@@ -21,4 +21,12 @@ test('the author commenting stays first, once; the viewer is marked', () => {
 test('the label', () => {
   assert.equal(peopleLabel(1), '1 in this conversation');
   assert.equal(peopleLabel(7), '7 in this conversation');
+});
+
+test('personByLogin: a person field names a person by login, case and @ aside', () => {
+  const ids: Person[] = [{ id: 'x', name: 'Alice Martin', login: 'alice', avatar_url: 'https://avatars.githubusercontent.com/u/1?s=88' }, { id: 'y', name: 'No Login' }];
+  assert.equal(personByLogin(ids, '@Alice')?.id, 'x');
+  assert.equal(personByLogin(ids, 'alice')?.avatar_url, 'https://avatars.githubusercontent.com/u/1?s=88');
+  assert.equal(personByLogin(ids, 'bob'), undefined);
+  assert.equal(personByLogin(null, 'alice'), undefined);
 });

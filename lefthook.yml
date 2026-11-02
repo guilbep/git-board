@@ -3,6 +3,11 @@
 # as [cycle.checks]. No pre-push hook: wtx's push guard owns .git/hooks/pre-push.
 pre-commit:
   commands:
+    # leftovers a tool failed to clean up: gofmt -w's backup (store.go.6848929500013182692),
+    # an editor's or a patch's (.orig, .rej, ~): never committed
+    strays:
+      run: "! printf '%s\\n' {staged_files} | grep -E '\\.[A-Za-z0-9]+\\.[0-9]{6,}$|\\.(orig|rej)$|~$'"
+      fail_text: "a stray backup is staged (gofmt -w's NAME.go.<digits>, .orig, .rej, ~): unstage and delete it"
     gofmt:
       glob: "*.go"
       run: "! gofmt -l {staged_files} | grep ."

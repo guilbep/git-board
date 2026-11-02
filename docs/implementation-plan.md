@@ -1051,3 +1051,9 @@ nothing is stored.
 - Plans: `docs/prd/issue-head-plan.md` (the first pass),
   `docs/prd/issue-head.md` and `docs/prd/issue-head-m2-plan.md` (the
   second).
+
+### Status 2026-11-02: avatars, the header and help
+
+- Avatars (`docs/prd/avatars.md`): `internal/avatar` (github.com account by numeric id, Gravatar opt-in, initials otherwise), git config `board.avatars` (`forge` default, `gravatar`, `none`), `PUT /api/me/avatars`, `GbAvatar.vue` everywhere a person is drawn, Settings › You › Pictures. The email never reaches the page (`TestMeNeverSendsEmail`).
+- Header and help (`docs/prd/header-help.md`, canvas https://claude.ai/artifact/Fpo7pBejtJDvPtce4AjQPY): Sync drawn as the issue's forge button; Settings as the nav's cog; the avatar opens an account card; the search field shows `⌘K` and `?`; one shortcut registry (`web/src/keys.ts`) behind the list, the palette's keys, the key line at the foot and the tips (`tips.ts`: one at a time, for where you are, retired after 3 uses); "How filtering works" (`FilterHelp.vue`) from the filters' ?s; the Filter box is a combobox with examples and completions (`filterhelp.ts`).
+- Tests: `e2e/header.spec.ts`, `e2e/filterhelp.spec.ts`; unit `keys`, `tips`, `filterhelp`, `people`; Go `internal/avatar`, `internal/store` (avatars), `internal/server` (avatars).

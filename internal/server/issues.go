@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/guilbep/git-board/internal/avatar"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/markdown"
 	"github.com/guilbep/git-board/internal/store"
@@ -354,6 +355,13 @@ type meResponse struct {
 	ViewFrom    string `json:"view_from"`
 	ViewIgnored string `json:"view_ignored,omitempty"`
 	ViewScope   string `json:"view_scope,omitempty"`
+	// Avatars is where pictures come from, the person's git config
+	// board.avatars (docs/prd/avatars.md): forge, gravatar or none;
+	// AvatarsScope the level that set it, AvatarsIgnored a value that is
+	// none of the three (read as forge).
+	Avatars        string `json:"avatars"`
+	AvatarsScope   string `json:"avatars_scope,omitempty"`
+	AvatarsIgnored string `json:"avatars_ignored,omitempty"`
 }
 
 // resolveView is the page an issue opens on: board.view when it says
@@ -394,6 +402,12 @@ func (s *apiServer) writeMe(w http.ResponseWriter) {
 	}
 	res.View, res.ViewFrom, res.ViewIgnored = resolveView(setting, s.config().Cycle.On)
 	res.ViewScope = scope
+	avatars, avScope, avIgnored, err := s.b.AvatarsSetting()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	res.Avatars, res.AvatarsScope, res.AvatarsIgnored = string(avatars), avScope, avIgnored
 	writeJSON(w, http.StatusOK, res)
 }
 
@@ -413,6 +427,28 @@ func (s *apiServer) handleSetView(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.b.SetView(req.View); err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	s.writeMe(w)
+}
+
+// handleSetAvatars is Settings' choice of pictures ({"avatars"}: forge,
+// gravatar, none, or "" for the default), this repository's
+// board.avatars.
+func (s *apiServer) handleSetAvatars(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Avatars string `json:"avatars"`
+	}
+	if !decode(w, r, &req) {
+		return
+	}
+	m := avatar.Mode(req.Avatars)
+	if m != "" && m != avatar.Forge && m != avatar.Gravatar && m != avatar.None {
+		writeError(w, http.StatusBadRequest, fmt.Errorf("avatars %q: forge, gravatar, none, or empty for the default", req.Avatars))
+		return
+	}
+	if err := s.b.SetAvatars(m); err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}

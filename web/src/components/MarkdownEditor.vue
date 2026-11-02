@@ -19,8 +19,8 @@
       :aria-label="label"
       :placeholder="placeholder"
       :disabled="disabled"
-      @keydown.enter.ctrl.exact.prevent="emit('submit')"
-      @keydown.enter.meta.exact.prevent="emit('submit')"
+      @keydown.enter.ctrl.exact.prevent="noteUse('send'), emit('submit')"
+      @keydown.enter.meta.exact.prevent="noteUse('send'), emit('submit')"
       @paste="onPaste"
       @dragover="onDragOver"
       @drop="onDropFiles"
@@ -36,6 +36,7 @@
 </template>
 
 <script setup lang="ts">
+import { noteUse } from '@/keys';
 import { onMounted, ref } from 'vue';
 import { renderMarkdown, uploadFile, type Forge } from '@/api/board';
 import { message } from '@/issue';

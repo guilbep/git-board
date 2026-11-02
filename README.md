@@ -123,6 +123,14 @@ session and a prompt with its step and gate; Settings › Worktrees writes
 `wtx.toml`. `[cycle]` in [docs/guide/configuration.md](docs/guide/configuration.md#cycle),
 agents in [Worktrees](docs/guide/configuration.md#worktrees).
 
+People show their picture where there were initials: their github.com
+account's by default, also Gravatar's (by a hash of the email) if you
+choose it, or none, in Settings › You › Pictures (`git config
+board.avatars forge|gravatar|none`, `--global` for every repository). The
+server makes the picture's address, the page never gets an email, and a
+picture that can't load shows the initials
+([docs/prd/avatars.md](docs/prd/avatars.md)).
+
 ```toml
 [repos]
 list = ["EPFL-ENAC/co2-calculator", "EPFL-ENAC/co2-calculator-back-office-doc"]

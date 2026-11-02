@@ -170,6 +170,7 @@ func newMux(s *apiServer, static http.Handler) http.Handler {
 	mux.HandleFunc("GET /api/me", s.handleMe)
 	mux.HandleFunc("POST /api/me", s.handleSetMe)
 	mux.HandleFunc("PUT /api/me/view", s.handleSetView)
+	mux.HandleFunc("PUT /api/me/avatars", s.handleSetAvatars)
 	mux.HandleFunc("GET /api/inbox", s.handleInbox)
 	mux.HandleFunc("GET /api/work", s.handleWork)
 	mux.HandleFunc("POST /api/inbox/seen", s.handleInboxSeen)

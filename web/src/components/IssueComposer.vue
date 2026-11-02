@@ -4,7 +4,7 @@
   <IdentityChooser v-if="me && !me.me" />
   <template v-else>
     <p class="gb-composer-as">
-      <span class="gb-avatar gb-avatar-sm gb-avatar-dark" aria-hidden="true">{{ initials(me?.me?.name ?? '?') }}</span>
+      <GbAvatar :name="me?.me?.name ?? '?'" :src="me?.me?.avatar_url" small dark />
       Commenting as <b>{{ me?.me?.name }}</b>
     </p>
     <div class="gb-composer">
@@ -28,9 +28,10 @@
 </template>
 
 <script setup lang="ts">
+import GbAvatar from '@/components/GbAvatar.vue';
 import { computed, ref } from 'vue';
 import type { Forge } from '@/api/board';
-import { initials, me } from '@/me';
+import { me } from '@/me';
 import GbIcon from '@/components/GbIcon.vue';
 import IdentityChooser from '@/components/IdentityChooser.vue';
 import MarkdownEditor from '@/components/MarkdownEditor.vue';

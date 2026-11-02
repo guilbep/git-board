@@ -4,20 +4,27 @@
   <div class="page" :class="{ 'page-filters-hidden': filtersHidden }">
     <!-- the filters folded to a rail (wide screens): its badge counts the
          filters still applied -->
-    <button
-      v-if="filtersHidden"
-      type="button"
-      class="filters-rail"
-      :aria-label="activeFilters ? `Show filters, ${activeFilters} applied` : 'Show filters'"
-      title="Show filters"
-      @click="filtersHidden = false"
-    >
-      <GbIcon name="filter" small />
-      <span class="filters-rail-label">Filters</span>
-      <span v-if="activeFilters" class="filters-rail-badge">{{ activeFilters }}</span>
-    </button>
+    <div v-if="filtersHidden" class="filters-rail">
+      <button
+        type="button"
+        class="filters-rail-show"
+        :aria-label="activeFilters ? `Show filters, ${activeFilters} applied` : 'Show filters'"
+        title="Show filters"
+        @click="filtersHidden = false"
+      >
+        <GbIcon name="filter" small />
+        <span class="filters-rail-label">Filters</span>
+        <span v-if="activeFilters" class="filters-rail-badge">{{ activeFilters }}</span>
+      </button>
+      <!-- the panel's ?, kept when it folds -->
+      <FilterHelp align="left" @try="tryWord" />
+    </div>
     <FilterSidebar
       v-show="!filtersHidden"
+      @mouseenter="inFilters = true"
+      @mouseleave="inFilters = false"
+      @focusin="inFilters = true"
+      @focusout="inFilters = false"
       @hide="filtersHidden = true"
       :facets="facetList"
       :sel="sel"
@@ -25,6 +32,7 @@
       :modified="modified"
       @set="setFacet"
       @reset="resetAll"
+      @try="tryWord"
     />
 
     <main class="main">
@@ -66,19 +74,56 @@
       <div class="toolbar">
         <div class="toolbar-field toolbar-search">
           <label class="epfl-label" for="filter">Filter</label>
-          <input
-            id="filter"
-            class="epfl-input"
-            type="search"
-            title="Words in titles, descriptions, comments; #number; field:value"
-            spellcheck="false"
-            placeholder="Words, #12, status:ready, assignee:@me, is:closed…"
-            autocomplete="off"
-            list="filter-suggest"
-            :value="filter"
-            @input="setFilter(($event.target as HTMLInputElement).value)"
-          />
-          <datalist id="filter-suggest"><option v-for="s in suggestions" :key="s" :value="s" /></datalist>
+          <!-- a combobox (docs/prd/header-help.md, 5): examples from this
+               board when empty, completions with their counts as you type,
+               the filters' ? at its end -->
+          <div class="fbox" @focusout="onBoxLeave">
+            <input
+              id="filter"
+              ref="filterInput"
+              class="epfl-input"
+              type="search"
+              role="combobox"
+              aria-autocomplete="list"
+              :aria-expanded="boxOpen && boxOptions.length > 0"
+              aria-controls="filter-list"
+              :aria-activedescendant="boxActive >= 0 ? `filter-opt-${boxActive}` : undefined"
+              title="Words in titles, descriptions, comments; #number; field:value"
+              spellcheck="false"
+              placeholder="Words, #12, status:ready, assignee:@me, is:closed…"
+              autocomplete="off"
+              :value="filter"
+              @focus="boxOpen = true"
+              @click="boxOpen = true"
+              @input="onBoxInput"
+              @keydown="onBoxKey"
+            />
+            <FilterHelp ref="boxHelp" button-class="filters-help fbox-help" align="right" @try="tryWord" />
+            <div v-if="boxOpen && boxOptions.length" class="fbox-pop" @mousedown.prevent>
+              <p v-if="!completing" class="fbox-head">{{ filter.trim() ? 'Add' : 'Try' }}</p>
+              <ul id="filter-list" role="listbox" aria-label="Filter suggestions">
+                <li
+                  v-for="(o, i) in boxOptions"
+                  :id="`filter-opt-${i}`"
+                  :key="o.value"
+                  role="option"
+                  :aria-selected="i === boxActive"
+                  :class="{ on: i === boxActive }"
+                  @mousemove="boxActive = i"
+                  @click="takeOption(i)"
+                >
+                  <code>{{ o.label }}</code>
+                  <span>{{ o.note }}</span>
+                </li>
+              </ul>
+              <p class="fbox-foot">
+                <span><kbd>↑</kbd><kbd>↓</kbd> choose</span>
+                <span v-if="completing"><kbd>Tab</kbd> complete</span>
+                <span v-if="trick" class="fbox-trick">{{ trick }}</span>
+                <button type="button" class="gb-linkbtn fbox-how" @click="boxOpen = false, boxHelp?.show()">How filtering works</button>
+              </p>
+            </div>
+          </div>
         </div>
         <div class="toolbar-field">
           <label class="epfl-label" for="group">Group by</label>
@@ -233,13 +278,16 @@
 </template>
 
 <script setup lang="ts">
+import FilterHelp from '@/components/FilterHelp.vue';
+import { keyContext, noteUse } from '@/keys';
 import SprintReportDialog from '@/components/SprintReportDialog.vue';
 import { debounced, onLive } from '@/live';
 import { panelMode } from '@/panelsize';
 import { filtersHidden, newIssueRequested, recordRecent } from '@/commands';
 import { numberName } from '@/palette';
 import { changedSince, loadVisit, saveVisit, visit } from '@/lastvisit';
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { me } from '@/me';
 import { useRoute, useRouter } from 'vue-router';
 import {
   changeLabels, filterValues, getFacets, getFields, getIssues, getViews, saveView,
@@ -250,6 +298,7 @@ import {
 } from '@/facets';
 import { loadColors } from '@/colors';
 import { completeTerms, composeFilter, suggest, withFacet } from '@/viewfilter';
+import { examples, nextTrick } from '@/filterhelp';
 import { displayName, orderBuckets } from '@/fields';
 import AppHeader from '@/components/AppHeader.vue';
 import FilterSidebar from '@/components/FilterSidebar.vue';
@@ -327,6 +376,80 @@ const sortValue = computed(() => (typeof route.query.sort === 'string' ? route.q
 const values = ref<Record<string, string[]>>({});
 void filterValues().then((v) => (values.value = v));
 const suggestions = computed(() => suggest(filter.value, values.value));
+
+// the Filter box's list: examples from this board when it's empty, else
+// the completions of its last word, each with its count from the facets
+const filterInput = ref<HTMLInputElement | null>(null);
+const boxHelp = ref<InstanceType<typeof FilterHelp> | null>(null);
+const boxOpen = ref(false);
+const boxActive = ref(-1);
+// completing: the last word's values; else examples from this board, the
+// ones the box doesn't hold yet, added after what it holds
+const completing = computed(() => suggestions.value.length > 0);
+const boxOptions = computed<{ value: string; label: string; note: string }[]>(() => {
+  if (!completing.value) {
+    const f = filter.value.trim();
+    const held = f.split(/\s+/);
+    return examples(fields.value, me.value?.me?.login ?? '')
+      .filter((e) => !held.includes(e.term))
+      .map((e) => ({ value: f ? `${f} ${e.term}` : e.term, label: e.term, note: e.means }));
+  }
+  return suggestions.value.slice(0, 8).map((full) => {
+    const word = full.split(/\s+/).at(-1) ?? full;
+    const [key, v] = [word.slice(0, word.indexOf(':')), word.slice(word.indexOf(':') + 1).split(',').at(-1) ?? ''];
+    const n = facetList.value.find((f) => f.key === key)?.options.find(([o]) => o === v)?.[1];
+    return { value: full, label: word, note: n === undefined ? '' : `${n} ${n === 1 ? 'issue' : 'issues'}` };
+  });
+});
+const trick = computed(() => (completing.value ? nextTrick(filter.value) : null));
+watch(boxOptions, () => (boxActive.value = -1));
+function onBoxInput(e: Event) {
+  boxOpen.value = true;
+  void setFilter((e.target as HTMLInputElement).value);
+}
+function takeOption(i: number) {
+  const o = boxOptions.value[i];
+  if (!o) return;
+  void setFilter(o.value);
+  boxActive.value = -1;
+  filterInput.value?.focus();
+}
+// ↑↓ choose; Tab and Enter take the chosen one (Tab the first completion
+// when none is chosen); Esc closes the list first; else the keys do what
+// they did
+function onBoxKey(e: KeyboardEvent) {
+  const n = boxOptions.value.length;
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    if (!n) return;
+    e.preventDefault();
+    boxOpen.value = true;
+    boxActive.value = e.key === 'ArrowDown' ? (boxActive.value + 1) % n : (boxActive.value - 1 + n) % n;
+    return;
+  }
+  if (!boxOpen.value || !n) return;
+  if (e.key === 'Enter' && boxActive.value >= 0) {
+    e.preventDefault();
+    takeOption(boxActive.value);
+  } else if (e.key === 'Tab' && !e.shiftKey && (boxActive.value >= 0 || completing.value)) {
+    e.preventDefault();
+    takeOption(Math.max(boxActive.value, 0));
+  } else if (e.key === 'Escape') {
+    e.preventDefault();
+    e.stopPropagation();
+    boxOpen.value = false;
+  }
+}
+function onBoxLeave(e: FocusEvent) {
+  const box = e.currentTarget as HTMLElement;
+  if (!(e.relatedTarget instanceof Node && box.contains(e.relatedTarget))) boxOpen.value = false;
+}
+// Try, in "How filtering works": the word joins what the box holds
+function tryWord(term: string) {
+  const f = filter.value.trim();
+  void setFilter(f ? `${f} ${term}` : term);
+  boxOpen.value = false;
+  void nextTick(() => filterInput.value?.focus());
+}
 
 // the facets, the server's for the filter: the ticks are the values it
 // lets through, a tick writes a new filter
@@ -646,6 +769,13 @@ onMounted(async () => {
 // The issue panel: ?issue=<id> in the URL, so a link opens it; j / k move
 // through the issues as the board shows them.
 const detailOpen = ref(false);
+// where you are, for the key line and the tips (keys.ts): the board, an
+// issue open over it, the pointer or the focus in the filters
+const inFilters = ref(false);
+watch([detailOpen, inFilters], ([open, filters]) => {
+  keyContext.value = ['board', ...(open ? (['panel'] as const) : []), ...(filters ? (['filters'] as const) : [])];
+}, { immediate: true });
+onBeforeUnmount(() => (keyContext.value = []));
 const detailId = ref('');
 const flat = computed(() => shown.value.flatMap((b) => b.issues));
 const index = computed(() => flat.value.findIndex((i) => i.id === detailId.value));
@@ -715,6 +845,7 @@ function onKey(e: KeyboardEvent) {
   if (e.key !== 'c' || e.ctrlKey || e.metaKey || e.altKey || detailOpen.value || newOpen.value) return;
   if (e.target instanceof Element && e.target.closest('input, textarea, select, [contenteditable]')) return;
   e.preventDefault();
+  noteUse('new');
   newOpen.value = true;
 }
 onMounted(() => window.addEventListener('keydown', onKey));
@@ -764,8 +895,11 @@ onBeforeUnmount(offLive);
 }
 .main { min-width: 0; padding: var(--space-4) 0 var(--space-5); }
 .page-filters-hidden { grid-template-columns: 2.75rem minmax(0, 1fr); }
-.filters-rail { position: sticky; top: var(--header-h); align-self: start; display: flex; flex-direction: column; align-items: center; gap: var(--space-2); width: 2.75rem; min-height: 12rem; margin-top: var(--space-4); padding: var(--space-3) 0; border: var(--border-w) solid var(--border); background: var(--bg-subtle); color: var(--fg); cursor: pointer; font: inherit; }
-.filters-rail:hover, .filters-rail:focus-visible { border-color: var(--fg); }
+/* the folded filters: the rail shows them, its ? the shortcuts */
+.filters-rail { position: sticky; top: var(--header-h); align-self: start; display: flex; flex-direction: column; align-items: center; gap: var(--space-2); width: 2.75rem; margin-top: var(--space-4); padding-bottom: var(--space-3); border: var(--border-w) solid var(--border); background: var(--bg-subtle); }
+.filters-rail:has(.filters-rail-show:hover) { border-color: var(--fg); }
+.filters-rail-show { display: flex; flex-direction: column; align-items: center; gap: var(--space-2); width: 100%; min-height: 12rem; padding: var(--space-3) 0; border: 0; background: none; color: var(--fg); cursor: pointer; font: inherit; }
+.filters-rail-show:focus-visible { outline: var(--focus-w) solid var(--primary-hover); outline-offset: -0.125rem; }
 .filters-rail-label { writing-mode: vertical-rl; transform: rotate(180deg); font-weight: var(--w-bold); font-size: var(--fs-sm); letter-spacing: .04em; }
 .filters-rail-badge { min-width: 1.25rem; padding: 0 .25rem; background: var(--primary); color: var(--on-primary); font-size: .75rem; font-weight: var(--w-bold); text-align: center; border-radius: var(--radius); }
 
@@ -797,6 +931,20 @@ onBeforeUnmount(offLive);
 }
 .toolbar-field { flex: 0 1 13rem; min-width: 0; }
 .toolbar-search { flex: 1 1 20rem; max-width: 32rem; }
+.fbox { position: relative; }
+.fbox > .epfl-input { width: 100%; padding-right: 2.5rem; }
+.fbox > :deep(.fbox-help) { position: absolute; top: 50%; right: .625rem; transform: translateY(-50%); }
+.fbox-pop { position: absolute; z-index: 25; top: calc(100% + .25rem); left: 0; width: max(100%, 30rem); border: var(--border-w) solid var(--border-strong); background: var(--bg); box-shadow: var(--shadow); font-size: .875rem; }
+.fbox-head { margin: 0; padding: .625rem 1rem .25rem; color: var(--fg-muted); font-size: .75rem; font-weight: var(--w-bold); letter-spacing: .06em; text-transform: uppercase; }
+.fbox-pop ul { margin: 0; padding: .25rem 0; list-style: none; }
+.fbox-pop li { display: flex; align-items: center; gap: .75rem; padding: .4375rem 1rem; cursor: pointer; }
+.fbox-pop li.on { background: var(--bg-muted); box-shadow: inset 3px 0 0 var(--primary); }
+.fbox-pop li > span { margin-left: auto; color: var(--fg-muted); font-size: .8125rem; text-align: right; }
+.fbox-pop code { padding: .0625rem .3125rem; border: var(--border-w) solid var(--border-subtle); background: var(--bg-subtle); font-size: .8125rem; }
+.fbox-foot { display: flex; flex-wrap: wrap; align-items: center; gap: .375rem 1rem; margin: 0; padding: .5rem 1rem; border-top: var(--border-w) solid var(--border-subtle); color: var(--fg-muted); font-size: .78125rem; }
+.fbox-foot > span { display: inline-flex; align-items: center; gap: .1875rem; }
+.fbox-how { margin-left: auto; }
+.fbox-pop kbd { min-width: .75rem; padding: 0 .3125rem; border: var(--border-w) solid var(--border-strong); border-bottom-width: .125rem; border-radius: var(--radius); background: var(--bg); color: var(--fg); font-family: var(--font-sans); font-size: .71875rem; line-height: 1.35; text-align: center; }
 .toolbar-lanes { flex: 0 0 auto; }
 .toolbar-new { display: flex; align-items: center; gap: .5rem; margin-left: auto; }
 /* as high as the fields beside it */

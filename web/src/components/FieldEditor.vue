@@ -26,7 +26,7 @@
         <button type="button" role="menuitemcheckbox" class="gb-pop-item" :aria-checked="values.includes(o)" :disabled="busy" @click="toggle(o)">
           <span class="gb-fe-box" :class="{ 'is-on': values.includes(o) }" aria-hidden="true"><GbIcon v-if="values.includes(o)" name="check" small /></span>
           <template v-if="kind === 'many' && type === 'person'">
-            <span class="gb-avatar gb-avatar-sm" :class="{ 'gb-avatar-dark': o === myLogin }" aria-hidden="true">{{ initials(nameOf(o)) }}</span>
+            <GbAvatar :name="nameOf(o)" :src="personByLogin(me?.identities, o)?.avatar_url" small :dark="o === myLogin" />
             <span>{{ nameOf(o) }}<span v-if="o === myLogin" class="gb-pop-muted"> · you</span></span>
           </template>
           <template v-else>
@@ -79,13 +79,15 @@
 </template>
 
 <script setup lang="ts">
+import GbAvatar from '@/components/GbAvatar.vue';
+import { personByLogin } from '@/people';
 import { computed, ref, watch } from 'vue';
 import type { IssueRef } from '@/api/board';
 import { displayName, fieldValues, formatValue, typeOf, type Fields } from '@/fields';
 import { dueNote } from '@/headfields';
 import { patchField } from '@/fieldwrite';
 import { message } from '@/issue';
-import { initials, me } from '@/me';
+import { me } from '@/me';
 import { syncStatus } from '@/sync';
 import GbIcon from '@/components/GbIcon.vue';
 import ValueMark from '@/components/ValueMark.vue';
@@ -102,7 +104,7 @@ const values = computed(() => fieldValues(props.labels, props.name));
 // issue already holds several values of, as the server decides (fields.Single)
 const single = computed(() => (f.value ? f.value.single : type.value !== 'person' && values.value.length < 2));
 const myLogin = computed(() => me.value?.me?.login ?? '');
-const nameOf = (login: string) => me.value?.identities?.find((p) => p.login?.toLowerCase() === login.replace(/^@/, '').toLowerCase())?.name ?? login;
+const nameOf = (login: string) => personByLogin(me.value?.identities, login)?.name ?? login;
 
 // one: a menu of options; many: checkboxes (options, or the people to
 // pick); refs: the issues it names, and one to add; value: one input

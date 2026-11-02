@@ -73,7 +73,7 @@
             </span>
           </span>
           <span class="gb-inbox-who">
-            <span v-for="p in r.who" :key="p.id" class="gb-avatar gb-avatar-sm gb-avatar-dark" :title="p.name">{{ initials(p.name) }}</span>
+            <GbAvatar v-for="p in r.who" :key="p.id" :name="p.name" :src="p.avatar_url" small dark :title="p.name" />
           </span>
           <span class="gb-hint gb-inbox-when">{{ when(r.latest, true) }}</span>
         </button>
@@ -116,6 +116,7 @@
 </template>
 
 <script setup lang="ts">
+import GbAvatar from '@/components/GbAvatar.vue';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import AppHeader from '@/components/AppHeader.vue';
@@ -128,7 +129,7 @@ import { inbox, inboxError, loadInbox } from '@/inbox';
 import { forgeNumbers } from '@/issuesync';
 import { checkFailure, followingLine, mergeRows, toCheck, toPull } from '@/inboxcheck';
 import { debounced, onLive } from '@/live';
-import { initials, me, when } from '@/me';
+import { me, when } from '@/me';
 import { panelMode } from '@/panelsize';
 
 const route = useRoute();

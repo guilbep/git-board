@@ -62,7 +62,7 @@
   color: var(--fg-inverse);
 }
 .gb-fbadge .gb-icon { width: 0.6875rem; height: 0.6875rem; }
-.gb-fbadge.is-unreachable { background: var(--danger-fg); }
+.gb-fbadge.is-unreachable, .gb-fbadge.is-conflict { background: var(--danger-fg); }
 .gb-fbadge.is-syncing { background: var(--info-fg); }
 
 /* ---------- the head: one block over a 40rem column ---------- */

@@ -3,7 +3,7 @@
      href="#" links, none of which fit this app). git-board's logo, then the
      repository's name; the main navigation, Issues first (the saved views
      are its tabs, IndexPage).
-     The right side: Sync counting what waits to go out, the search, one menu for you
+     The right side: Sync, badged as an issue's forges are, the search field, one menu for you
      (the canvas's H1 artboard).
      The logo is drawn as a mask over var(--primary): git-board.svg is drawn
      black, the logo is red. Same file, same shape, only the color. -->
@@ -22,29 +22,44 @@
       <!-- a release's page (/releases/:tag) is under Releases too -->
       <router-link to="/releases" active-class="active" :class="{ active: releasesHere }" :aria-current="releasesHere ? 'page' : undefined">Releases</router-link>
       <router-link to="/inbox" active-class="active">Inbox<span v-if="inboxCount" class="nav-count" :aria-label="`, ${inboxCount} new`">{{ inboxCount }}</span></router-link>
+      <!-- Settings, as a cog: every /settings page is under it -->
+      <router-link to="/settings" class="nav-cog" :class="{ active: settingsHere }" :aria-current="settingsHere ? 'page' : undefined" aria-label="Settings" title="Settings"><GbIcon name="settings" /></router-link>
     </nav>
+    <!-- the tip, when the header has room for it (else the strip below) -->
+    <div ref="tipSlot" class="app-tip"><TipLine v-if="tipWhere === 'header'" /></div>
     <div class="app-right">
-      <!-- Sync, with the count of what waits to go out to the remotes and forges -->
-      <router-link to="/settings/sync" class="gb-sync" :class="{ 'gb-sync-waiting': w.send || w.running }" :title="`${waitWords(w)} · ${w.checked ? `checked ${when(w.checked, true)}` : 'not checked yet'}`">
-        {{ w.running ? 'Syncing…' : 'Sync' }}<span v-if="w.send && !w.running" class="nav-count" :aria-label="`, ${w.send} to send`">{{ w.send.toLocaleString() }}</span>
+      <!-- Sync, drawn as an issue's forge button (ForgeIcons, docs/design
+           issue-head 16e): the icon alone when nothing waits; a yellow count,
+           up arrow, to send; a blue one, down arrow, to get; a blue badge
+           while a sync runs; a red one for changes on both sides -->
+      <router-link to="/settings/sync" class="gb-iconbtn gb-sync" active-class="active" :aria-label="`Sync: ${syncWords}`" :title="`Sync: ${syncWords} · ${w.checked ? `checked ${when(w.checked, true)}` : 'not checked yet'}`">
+        <GbIcon name="sync" />
+        <span v-if="w.running" class="gb-fbadge is-syncing" aria-hidden="true"><GbIcon name="sync" small /></span>
+        <span v-else-if="w.conflicts" class="gb-fbadge is-conflict" aria-hidden="true"><GbIcon name="warn" small /></span>
+        <template v-else>
+          <span v-if="w.send" class="gb-fcount" aria-hidden="true"><GbIcon name="arrow-up" small />{{ w.send.toLocaleString() }}</span>
+          <span v-if="w.get" class="gb-fcount is-in" :class="{ 'is-under': w.send }" aria-hidden="true"><GbIcon name="arrow-down" small />{{ w.get.toLocaleString() }}</span>
+        </template>
       </router-link>
-      <button type="button" class="gb-iconbtn" aria-label="Filter or jump to" title="Filter or jump to (⌘K)" aria-keyshortcuts="Meta+K Control+K" @click="paletteOpen = true">
-        <GbIcon name="search" />
-      </button>
+      <!-- the palette, as a search field (Zensical's), and the shortcut
+           list's key beside ⌘K: two buttons in one field -->
+      <div class="gb-search" role="group" aria-label="Search and shortcuts">
+        <button type="button" class="gb-search-go" aria-label="Search: filter or jump to" title="Filter the issues, jump to one, or run a command" aria-keyshortcuts="Meta+K Control+K" @click="paletteOpen = true">
+          <GbIcon name="search" />
+          <span class="gb-search-label">Search</span>
+          <kbd class="gb-search-key" aria-hidden="true">{{ mac ? '⌘K' : 'Ctrl K' }}</kbd>
+        </button>
+        <button type="button" class="gb-search-key gb-search-help" aria-label="Keyboard shortcuts" title="Keyboard shortcuts (?)" aria-keyshortcuts="?" @click="helpOpen = true">?</button>
+      </div>
+      <!-- you: the account card (A2), Settings being the nav's cog -->
       <details v-if="me?.me" ref="menu" class="gb-menu" @keydown.esc="close(menu)">
-        <summary class="gb-iconbtn" :aria-label="`${me.me.name}: you, settings, shortcuts`" :title="me.me.name">
-          <span class="gb-avatar gb-avatar-dark" aria-hidden="true">{{ initials(me.me.name) }}</span>
+        <summary class="gb-iconbtn" :aria-label="`${me.me.name}: your account`" :title="me.me.name">
+          <GbAvatar :name="me.me.name" :src="me.me.avatar_url" dark />
         </summary>
-        <div class="gb-menu-panel" @click="close(menu)">
-          <p class="gb-menu-who"><b>{{ me.me.name }}</b><code v-if="me.me.login && me.me.login !== me.me.name">{{ me.me.login }}</code></p>
-          <router-link to="/settings/you">You</router-link>
-          <router-link to="/settings">Settings</router-link>
-          <button type="button" @click="helpOpen = true">Keyboard shortcuts <kbd>?</kbd></button>
-          <p class="gb-menu-foot">{{ w.checked ? `Forges checked ${when(w.checked, true)}` : 'Not checked yet' }}</p>
-        </div>
+        <AccountCard :me="me.me" class="gb-menu-panel" @close="close(menu)" />
       </details>
-      <router-link v-else to="/settings" class="gb-iconbtn" active-class="active" aria-label="Settings" title="Settings">
-        <GbIcon name="settings" />
+      <router-link v-else to="/settings/you" class="gb-iconbtn" aria-label="Choose who you write as" title="Choose who you write as">
+        <GbIcon name="user" />
       </router-link>
     </div>
   </header>
@@ -52,7 +67,9 @@
     <b>This repository’s issues are still git-bug’s</b> (in <code>refs/bugs</code>), so the board shows none of them.
     Move them once, in a terminal: <code>git board switch</code> says what it would do, <code>git board switch --apply</code> does it, then <code>git board sync</code>.
   </p>
+  <div v-if="tipWhere === 'strip'" class="app-tipstrip"><TipLine /></div>
   <KeyboardHelp />
+  <KeyLine />
   <CommandPalette :views="views" />
   <LiveNotice />
 </template>
@@ -64,15 +81,20 @@ import { useRoute } from 'vue-router';
 import { helpOpen } from '@/shortcuts';
 import '@/theme'; // keeps <html data-theme> in step with the choice
 import KeyboardHelp from '@/components/KeyboardHelp.vue';
+import KeyLine from '@/components/KeyLine.vue';
+import TipLine from '@/components/TipLine.vue';
+import { noteUse } from '@/keys';
 import CommandPalette from '@/components/CommandPalette.vue';
 import { paletteOpen } from '@/commands';
 import { forgeStatus, loadForges } from '@/forges';
-import { cycleView, initials, loadMe, me, when } from '@/me';
+import { cycleView, loadMe, me, when } from '@/me';
 import { loadSyncStatus, syncStatus } from '@/sync';
 import { loadRemotes, remotes, repo } from '@/remotes';
 import { faviconDot, waitWords, waiting } from '@/ways';
 import { setFavicon } from '@/favicon';
 import GbIcon from '@/components/GbIcon.vue';
+import GbAvatar from '@/components/GbAvatar.vue';
+import AccountCard from '@/components/AccountCard.vue';
 import { inbox, loadInbox } from '@/inbox';
 import { debounced, onLive } from '@/live';
 
@@ -81,12 +103,19 @@ defineProps<{ views: string[] }>();
 const route = useRoute();
 // the issues, or one issue's page
 const issuesHere = computed(() => route.path === '/' || route.path.startsWith('/issues/'));
+// every Settings page, under the cog
+const settingsHere = computed(() => route.path.startsWith('/settings'));
 // Releases, or one release's page
 const releasesHere = computed(() => route.path === '/releases' || route.path.startsWith('/releases/'));
 
 const w = computed(() => waiting(remotes.value, forgeStatus.value, syncStatus.value));
 // the tab's dot: red to send, teal to get
 watch(() => faviconDot(w.value), setFavicon, { immediate: true });
+
+// what the Sync button says: running, else what waits
+const syncWords = computed(() => (w.value.running ? 'syncing now' : waitWords(w.value).toLowerCase()));
+// the palette's key, as this keyboard writes it
+const mac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
 
 const inboxCount = computed(() => inbox.value?.rows.length ?? 0);
 // the repository's name, else git-board's; the tab says it too, with the
@@ -112,6 +141,20 @@ watch(
 
 const menu = ref<HTMLDetailsElement | null>(null);
 
+// where the tip goes (docs/prd/header-help.md, 4): the header from 80rem
+// when its free space takes a tip, a strip under it from 48rem, else none
+const tipSlot = ref<HTMLElement | null>(null);
+const slotWidth = ref(0);
+const viewport = ref(window.innerWidth);
+const remPx = () => parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+const tipWhere = computed<'header' | 'strip' | null>(() => {
+  const rem = remPx();
+  if (viewport.value >= 80 * rem && slotWidth.value >= 24 * rem) return 'header';
+  return viewport.value >= 48 * rem ? 'strip' : null;
+});
+const slotWatch = new ResizeObserver(([e]) => (slotWidth.value = e?.contentRect.width ?? 0));
+const onResize = () => (viewport.value = window.innerWidth);
+
 // a menu folds on a click elsewhere, on a choice in it, and on Escape
 function close(d: HTMLDetailsElement | null) {
   if (!d?.open) return;
@@ -130,21 +173,27 @@ let stopLive = () => {};
 function onKey(e: KeyboardEvent) {
   if (e.key.toLowerCase() === 'k' && (e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey) {
     e.preventDefault();
+    if (!paletteOpen.value) noteUse('palette');
     paletteOpen.value = !paletteOpen.value;
     return;
   }
   if (e.key !== '?' || e.ctrlKey || e.metaKey || e.altKey) return;
   if (e.target instanceof Element && e.target.closest('input, textarea, select, [contenteditable]')) return;
   e.preventDefault();
+  noteUse('help');
   helpOpen.value = true;
 }
 onBeforeUnmount(() => {
+  slotWatch.disconnect();
+  window.removeEventListener('resize', onResize);
   window.removeEventListener('keydown', onKey);
   document.removeEventListener('click', fold);
   stopLive();
 });
 
 onMounted(() => {
+  if (tipSlot.value) slotWatch.observe(tipSlot.value);
+  window.addEventListener('resize', onResize);
   window.addEventListener('keydown', onKey);
   document.addEventListener('click', fold);
   if (!syncStatus.value) void loadSyncStatus();
@@ -172,33 +221,47 @@ onMounted(() => {
 .app-header { position: sticky; top: 0; z-index: 30; }
 .app-unswitched { margin: 0; border-radius: 0; }
 /* the nav takes what's left, on one line */
-.app-header .epfl-nav { min-width: 0; align-items: center; }
+.app-header .epfl-nav { flex: 0 1 auto; min-width: 0; align-items: center; }
 .app-header .epfl-nav > a { flex: none; white-space: nowrap; }
 
 /* the menu's panel, as the column chooser's */
-.gb-menu-panel { position: absolute; z-index: 15; width: 16rem; padding: .25rem 0; background: var(--bg); border: var(--border-w) solid var(--border-strong); box-shadow: var(--shadow); }
+.gb-menu-panel { position: absolute; z-index: 15; width: 18.75rem; background: var(--bg); border: var(--border-w) solid var(--border-strong); box-shadow: var(--shadow); }
 
-.app-right { display: flex; align-items: center; gap: .75rem; margin-left: auto; }
+.app-right { display: flex; align-items: center; gap: .75rem; }
+/* the space between the nav and the right side: the tip's, when it fits */
+.app-tip { flex: 1; display: flex; justify-content: flex-end; min-width: 0; padding: 0 1rem; }
+.app-tipstrip { display: flex; justify-content: flex-end; align-items: center; min-height: 1.875rem; padding: 0 var(--gutter, 1.75rem); border-bottom: var(--border-w) solid var(--border-subtle); background: var(--bg-subtle); }
 .gb-iconbtn { font: inherit; background: none; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; width: 2.75rem; height: 2.75rem; padding: 0; border: 1px solid var(--border-strong); color: var(--fg); }
 .gb-iconbtn:hover, .gb-iconbtn.active, .gb-menu[open] .gb-iconbtn { border-color: var(--fg); }
 .gb-iconbtn:focus-visible { outline: var(--focus-w) solid var(--primary-hover); outline-offset: 0.125rem; }
 
-/* Sync: a quiet link when nothing waits, a small button when something does */
-.gb-sync { display: inline-flex; align-items: center; min-height: 2.75rem; padding: 0 .5rem; color: var(--fg-muted); font-size: .875rem; text-decoration: none; white-space: nowrap; }
-.gb-sync:hover { color: var(--fg); }
-.gb-sync-waiting { min-height: 2.25rem; padding: .25rem .6rem; border: 1px solid var(--border-strong); color: var(--fg); font-weight: 700; }
-.gb-sync-waiting:hover { border-color: var(--fg); }
+/* Sync: the issue's forge button, its badges from head.css */
+.gb-sync { position: relative; text-decoration: none; }
+.gb-sync:hover { color: var(--primary); }
+.gb-sync .gb-fcount, .gb-sync .gb-fbadge { top: -0.375rem; right: -0.375rem; }
+.gb-sync .gb-fcount.is-under { top: auto; bottom: -0.375rem; }
+
+/* the palette, drawn as a search field: grey, its keys at the end; the
+   ? keycap is a button of its own */
+.gb-search { display: inline-flex; align-items: center; width: 15rem; height: 2.75rem; border: var(--border-w) solid transparent; border-radius: var(--radius); background: var(--bg-subtle); }
+.gb-search:hover { border-color: var(--border-strong); }
+.gb-search-go { flex: 1; display: inline-flex; align-items: center; gap: .5rem; height: 100%; min-width: 0; padding: 0 .375rem 0 .75rem; border: 0; background: none; color: var(--fg-muted); font: inherit; font-size: var(--fs-sm); cursor: pointer; text-align: left; }
+.gb-search-go .gb-icon { flex: none; width: 1.125rem; height: 1.125rem; color: var(--fg); }
+.gb-search-go:hover { color: var(--fg); }
+.gb-search-label { flex: 1; }
+.gb-search-key { padding: .0625rem .375rem; border: var(--border-w) solid var(--border); border-bottom-width: .125rem; border-radius: var(--radius); background: var(--bg); color: var(--fg-muted); font-family: var(--font-sans); font-size: .75rem; line-height: 1.3; }
+.gb-search-help { margin-right: .5rem; min-width: 1.5rem; cursor: pointer; font-weight: var(--w-bold); }
+.gb-search-help:hover { border-color: var(--fg); color: var(--fg); }
+.gb-search-go:focus-visible, .gb-search-help:focus-visible { outline: var(--focus-w) solid var(--primary-hover); outline-offset: 0.125rem; }
+
+/* Settings, the nav's last entry: a cog, the red dot under it when there */
+.app-header .epfl-nav > a.nav-cog { display: inline-flex; align-items: center; }
+.nav-cog .gb-icon { width: 1.25rem; height: 1.25rem; }
 
 .gb-menu { position: relative; }
 .gb-menu summary { list-style: none; }
 .gb-menu summary::-webkit-details-marker { display: none; }
 .gb-menu-panel { right: 0; margin-top: .375rem; font-size: var(--fs-sm); }
-.gb-menu-panel > a, .gb-menu-panel > button { display: flex; justify-content: space-between; align-items: center; box-sizing: border-box; width: 100%; padding: .5rem .875rem; border: 0; background: none; color: var(--fg); font: inherit; text-align: left; text-decoration: none; cursor: pointer; }
-.gb-menu-panel > a:hover, .gb-menu-panel > button:hover { color: var(--primary); }
-.gb-menu-panel kbd { padding: 0 .3rem; border: 1px solid var(--border); font-family: var(--font-mono); font-size: .75rem; }
-.gb-menu-who { display: flex; flex-direction: column; gap: .125rem; margin: 0; padding: .5rem .875rem .625rem; border-bottom: 1px solid var(--border-subtle); }
-.gb-menu-who code { color: var(--fg-muted); font-size: .75rem; }
-.gb-menu-foot { margin: 0; padding: .5rem .875rem; border-top: 1px solid var(--border-subtle); color: var(--fg-muted); font-size: .8125rem; }
 
 .nav-count {
   margin-left: var(--space-1);
@@ -235,5 +298,9 @@ onMounted(() => {
     overflow-x: auto;
   }
   .app-right { order: 2; }
+  .app-tip { display: none; }
+  .gb-search { width: 2.75rem; }
+  .gb-search-go { justify-content: center; padding: 0; }
+  .gb-search-label, .gb-search-key { display: none; }
 }
 </style>

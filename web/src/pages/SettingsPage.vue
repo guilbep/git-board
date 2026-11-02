@@ -75,6 +75,28 @@
             </label>
           </div>
         </section>
+
+        <section aria-labelledby="set-tips">
+          <h3 id="set-tips" class="h5">Tips</h3>
+          <label class="set-check"><input type="checkbox" :checked="!tipsOff" @change="setTipsOff(!($event.target as HTMLInputElement).checked)" /> Show a tip in the header: one keyboard shortcut at a time, for where you are</label>
+          <p class="gb-hint">A tip stops once you have used its shortcut three times, or hidden it with its ×. Kept in this browser. <button type="button" class="gb-linkbtn" @click="resetTips()">Show every tip again</button></p>
+        </section>
+
+        <section v-if="me" aria-labelledby="set-pictures">
+          <h3 id="set-pictures" class="h5">Pictures</h3>
+          <div class="gb-opts" role="radiogroup" aria-labelledby="set-pictures">
+            <label v-for="o in avatarOptions" :key="o.value" class="gb-opt" :class="{ on: avatarChoice === o.value }">
+              <input type="radio" name="avatars" :value="o.value" :checked="avatarChoice === o.value" :disabled="avatarSaving" @change="pickAvatars(o.value)" />
+              <span><b>{{ o.label }}</b><br /><span class="gb-hint">{{ o.hint }}</span></span>
+            </label>
+          </div>
+          <p v-if="me.avatars_ignored" class="gb-hint">Your git config says <code>board.avatars = {{ me.avatars_ignored }}</code>, which is none of these: read as forge accounts.</p>
+          <p v-if="avatarError" class="gb-save-error" role="alert"><b>Not saved.</b> {{ avatarError }}</p>
+          <p class="gb-hint">
+            This sets <code>board.avatars</code> in this repository’s git config, for you alone. A picture that can’t load shows the initials.
+            From a terminal, <code>git config --global board.avatars gravatar</code> sets it for every repository.
+          </p>
+        </section>
       </div>
 
       <!-- the project file, a tab per section: each form drafts its own
@@ -114,7 +136,8 @@ import { themePref } from '@/theme';
 import { debounced, onLive } from '@/live';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router';
-import { getNumbers, getSettings, getViews, getWhole, getWorktrees, setView, type Labels, type Numbers, type Settings, type WholeStatus, type Worktrees } from '@/api/board';
+import { resetTips, setTipsOff, tipsOff } from '@/tips';
+import { getNumbers, getSettings, getViews, getWhole, getWorktrees, setAvatars, setView, type AvatarsMode, type Labels, type Numbers, type Settings, type WholeStatus, type Worktrees } from '@/api/board';
 import { message } from '@/issue';
 import { classicPeek, cycleView, loadMe, me } from '@/me';
 import { viewWords } from '@/view';
@@ -195,6 +218,26 @@ async function pickView(v: '' | 'classic' | 'cycle') {
     viewSaving.value = false;
   }
 }
+// where pictures come from (docs/prd/avatars.md): each says what the browser asks, and whom
+const avatarOptions = [
+  { value: 'forge', label: 'Forge accounts', hint: 'GitHub pictures, by account: GitHub learns which of its users this page shows' },
+  { value: 'gravatar', label: 'Forge accounts, then Gravatar', hint: 'also Gravatar, by a hash of each person’s email: mostly people made here, who have one' },
+  { value: 'none', label: 'Initials only', hint: 'no picture: the browser asks nobody' },
+] as const;
+const avatarChoice = computed(() => me.value?.avatars ?? 'forge');
+const avatarSaving = ref(false);
+const avatarError = ref('');
+async function pickAvatars(v: AvatarsMode) {
+  avatarSaving.value = true;
+  avatarError.value = '';
+  try {
+    me.value = await setAvatars(v);
+  } catch (e) {
+    avatarError.value = message(e);
+  } finally {
+    avatarSaving.value = false;
+  }
+}
 const viewNames = ref<string[]>([]);
 const error = ref('');
 const choosing = ref(false);
@@ -247,6 +290,7 @@ onBeforeUnmount(offLive);
 </script>
 
 <style scoped>
+.set-check { display: flex; align-items: flex-start; gap: .625rem; line-height: 1.45; }
 .set { display: flex; align-items: flex-start; gap: 3rem; }
 .set-nav { flex: none; width: 15rem; display: flex; flex-direction: column; gap: .125rem; }
 .set-title { margin: 0 0 1rem; }

@@ -5,12 +5,12 @@
 <template>
   <GbPopover v-if="rows.length" :label="peopleLabel(rows.length)" title="In this conversation" button-class="gb-people" align="right">
     <template #button>
-      <span v-for="r in rows.slice(0, 4)" :key="r.person.id" class="gb-avatar gb-avatar-sm" :class="{ 'gb-avatar-dark': r.you }" aria-hidden="true">{{ initials(r.person.name) }}</span>
+      <GbAvatar v-for="r in rows.slice(0, 4)" :key="r.person.id" :name="r.person.name" :src="r.person.avatar_url" small :dark="r.you" />
       <span v-if="rows.length > 4" class="gb-people-more" aria-hidden="true">+{{ rows.length - 4 }}</span>
     </template>
     <ul class="gb-pop-list">
       <li v-for="r in rows" :key="r.person.id" class="gb-pop-person">
-        <span class="gb-avatar gb-avatar-sm" :class="{ 'gb-avatar-dark': r.you }" aria-hidden="true">{{ initials(r.person.name) }}</span>
+        <GbAvatar :name="r.person.name" :src="r.person.avatar_url" small :dark="r.you" />
         <b>{{ r.person.name }}</b>
         <span class="gb-pop-muted">{{ r.role }}<template v-if="r.you"> · you</template></span>
       </li>
@@ -19,9 +19,10 @@
 </template>
 
 <script setup lang="ts">
+import GbAvatar from '@/components/GbAvatar.vue';
 import { computed } from 'vue';
 import type { IssueEvent, Person } from '@/api/board';
-import { initials, me } from '@/me';
+import { me } from '@/me';
 import { peopleLabel, peopleOf } from '@/people';
 import GbPopover from '@/components/GbPopover.vue';
 
