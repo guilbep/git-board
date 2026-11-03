@@ -12,6 +12,7 @@ import (
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/fromforge"
 	"github.com/guilbep/git-board/internal/ghlabels"
+	"github.com/guilbep/git-board/internal/lint"
 )
 
 // fakeGitHub answers EPFL-ENAC/test's labels and Project as GitHub has
@@ -56,6 +57,15 @@ func TestAFileFromTheForgeAgreesWithIt(t *testing.T) {
 	}
 	if cfg.GithubProject.Owner != "EPFL-ENAC" || cfg.GithubProject.Number != 53 {
 		t.Errorf("github-project = %+v", cfg.GithubProject)
+	}
+	// the template it came from, and no drift from it on the first day
+	if cfg.Template.Name != "enac" {
+		t.Errorf("template = %+v", cfg.Template)
+	}
+	for _, f := range lint.Run(nil, cfg) {
+		if f.Check == lint.CheckTemplate {
+			t.Errorf("drift: %s", f.Message)
+		}
 	}
 	for field, want := range map[string][]string{
 		"status": {"backlog", "ready", "in-progress", "in-review", "ready-for-validation", "validated"},

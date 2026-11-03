@@ -133,6 +133,7 @@ type raw struct {
 	Branches      Branches          `toml:"branches"`
 	Roles         map[string]string `toml:"roles"`
 	Cycle         Cycle             `toml:"cycle"`
+	Template      TemplateRef       `toml:"template"`
 	Release       Release           `toml:"release"`
 	Labels        Labels            `toml:"labels"`
 	// Forges holds publish-private, discover and a table per forge
@@ -293,6 +294,15 @@ type Config struct {
 	Discover bool
 	// Labels is the [labels] table: the plain labels the project allows.
 	Labels Labels
+	// Template is the [template] table: the template the file came from,
+	// for lint to list the drift.
+	Template TemplateRef
+}
+
+// TemplateRef names a built-in template and its version (templates/).
+type TemplateRef struct {
+	Name    string `toml:"name"`
+	Version int    `toml:"version"`
 }
 
 // FileName is the config's name, at the root of the repository.
@@ -426,6 +436,7 @@ func parse(data []byte) (*Config, toml.MetaData, error) {
 		Cycle:          r.Cycle,
 		Release:        r.Release,
 		Labels:         r.Labels,
+		Template:       r.Template,
 		Forges:         forges,
 		PublishPrivate: publishPrivate,
 		Discover:       discover,

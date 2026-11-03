@@ -11,6 +11,12 @@
 #   no final period.
 # - A branch starts with its kind's label: bug/…, feat/…
 
+# The template this file came from: git board lint lists what a newer one
+# has that this file doesn't. Raise the version when the template changes.
+[template]
+name = "enac"
+version = 1
+
 # The workflow, in order: the Project's Status column. The last one closes
 # the issue.
 [fields.status]

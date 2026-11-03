@@ -36,12 +36,13 @@ const (
 	CheckLabelOutside    = "label-outside"
 	CheckProjectKey      = "project-key"
 	CheckKindPrefix      = "kind-prefix"
+	CheckTemplate        = "template"
 )
 
 // CheckOrder is every check name in the order Run reports them, for a
 // stable CLI summary grouping.
 var CheckOrder = []string{CheckDoubleSingle, CheckUnknownValue, CheckNearValue, CheckMissingRequired, CheckOrphanSprint, CheckDeadOption,
-	CheckProjectKey, CheckKindPrefix, CheckTwoKinds, CheckKindTitle, CheckNoKind, CheckLabelOutside}
+	CheckProjectKey, CheckKindPrefix, CheckTemplate, CheckTwoKinds, CheckKindTitle, CheckNoKind, CheckLabelOutside}
 
 // Finding is one drift report. IssueID/Title are "" for CheckDeadOption,
 // which is a config-inventory question ("does any issue use this option"),
@@ -76,6 +77,7 @@ func Run(issues []store.Issue, cfg *config.Config) []Finding {
 	findings = append(findings, checkDeadOptions(issues, cfg)...)
 	findings = append(findings, checkProjectKeys(cfg)...)
 	findings = append(findings, checkKindPrefixes(cfg)...)
+	findings = append(findings, checkTemplate(cfg)...)
 	findings = append(findings, checkKinds(open, cfg)...)
 	findings = append(findings, checkLabels(open, cfg)...)
 	return findings
@@ -394,6 +396,47 @@ func checkKinds(issues []store.Issue, cfg *config.Config) []Finding {
 		}
 		findings = append(findings, Finding{Check: CheckNoKind,
 			Message: fmt.Sprintf("%d open %s none of [branches] kinds (%s)", missing, have, strings.Join(slices.Sorted(maps.Keys(kinds)), ", "))})
+	}
+	return findings
+}
+
+// checkTemplate: what the built-in template the file names ([template])
+// has that the file lacks, its fields and their values, and a newer
+// version. What the file has more, or spells or colors otherwise (the
+// forge's), is the project's.
+// ponytail: built-in templates only; a file or URL template isn't fetched at lint
+func checkTemplate(cfg *config.Config) []Finding {
+	name := cfg.Template.Name
+	text, err := config.Template(name)
+	if name == "" || err != nil {
+		return nil
+	}
+	tmpl, _, err := config.Check([]byte(text))
+	if err != nil {
+		return nil
+	}
+	var findings []Finding
+	add := func(format string, a ...any) {
+		findings = append(findings, Finding{Check: CheckTemplate, Message: fmt.Sprintf(format, a...)})
+	}
+	if v := tmpl.Template.Version; v > cfg.Template.Version {
+		add("this file is from template %s version %d; %s is at version %d", name, cfg.Template.Version, name, v)
+	}
+	for _, field := range tmpl.FieldOrder() {
+		have, ok := cfg.Fields[field]
+		if !ok {
+			add("%s: template %s has this field, this file doesn't", field, name)
+			continue
+		}
+		var missing []string
+		for _, o := range tmpl.Fields[field].Options {
+			if !slices.ContainsFunc(have.Options, func(h string) bool { return config.Slug(h) == config.Slug(o) }) {
+				missing = append(missing, o)
+			}
+		}
+		if len(missing) > 0 {
+			add("%s: template %s has %s, this file doesn't", field, name, strings.Join(missing, ", "))
+		}
 	}
 	return findings
 }
