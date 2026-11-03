@@ -246,6 +246,7 @@ func runTui(filterStr, me string) error {
 	if err != nil {
 		return err
 	}
+	firstPull(os.Stderr, b)
 
 	matched, err := board.LoadMatching(b, cfg, filterStr, me)
 	if err != nil {
@@ -266,8 +267,22 @@ func loadMatchingIssues(cfg *config.Config, filterStr, me string) ([]store.Issue
 		return nil, err
 	}
 	defer b.Close()
+	firstPull(os.Stderr, b)
 
 	return board.LoadMatching(b, cfg, filterStr, me)
+}
+
+// firstPull brings a fresh clone its remote's board (store.PullIfEmpty)
+// and says so; a remote it can't read is said, not an error: the board
+// opens empty, with the reason
+func firstPull(out io.Writer, b *store.Backend) {
+	n, err := b.PullIfEmpty(store.BoardRemote)
+	switch {
+	case err != nil:
+		fmt.Fprintf(out, "git-board: %v\n", err)
+	case n > 0:
+		fmt.Fprintf(out, "git-board: a fresh clone: pulled %d issue%s from %s\n", n, map[bool]string{true: "", false: "s"}[n == 1], store.BoardRemote)
+	}
 }
 
 func runSet(out io.Writer, idPrefix string, assignments []string, me string) error {

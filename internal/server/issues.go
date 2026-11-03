@@ -362,6 +362,9 @@ type meResponse struct {
 	Avatars        string `json:"avatars"`
 	AvatarsScope   string `json:"avatars_scope,omitempty"`
 	AvatarsIgnored string `json:"avatars_ignored,omitempty"`
+	// FirstPull: this clone opened with no board, and the server pulled
+	// its remote's, or couldn't (docs/prd/clone-shows-board.md)
+	FirstPull *firstPullNote `json:"first_pull,omitempty"`
 }
 
 // resolveView is the page an issue opens on: board.view when it says
@@ -408,6 +411,9 @@ func (s *apiServer) writeMe(w http.ResponseWriter) {
 		return
 	}
 	res.Avatars, res.AvatarsScope, res.AvatarsIgnored = string(avatars), avScope, avIgnored
+	s.firstMu.Lock()
+	res.FirstPull = s.first
+	s.firstMu.Unlock()
 	writeJSON(w, http.StatusOK, res)
 }
 
