@@ -1,7 +1,7 @@
 <!-- Settings › Branches: the [branches] table — the base an issue's branch
      starts from, its name template ({kind}, {number}, {n}, {slug}), and
-     the kinds as [branches.kinds], a kind's label to the {kind} of its
-     branch: bug = fix. Add offers the kinds the default file ships. -->
+     the kinds as [branches.kinds]: a kind's label is the {kind} of its
+     branch, bug = bug, always. Add offers the kinds the default file ships. -->
 <template>
   <div class="set-panel bs">
     <h2 class="h4">Branches</h2>
@@ -29,15 +29,13 @@
           </p>
 
           <h3 class="h5">Kinds</h3>
-          <ConfigRows :rows="kindRows" add-label="Add a kind" @update="kindRows = $event" @add="kindRows = [...kindRows, { k: '', v: 'feat' }]">
+          <ConfigRows :rows="kindRows" add-label="Add a kind" @update="kindRows = $event" @add="kindRows = [...kindRows, { k: '', v: '' }]">
             <template #extra>
               <ConfigPreset label="From the preset" :presets="[branchKindsPreset]" @pick="kindRows = [...kindRows, ...Object.entries(branchKindsPreset.value).map(([k, v]) => ({ k, v }))] as Pair[]" />
             </template>
             <template #row="{ row, set: setRow }">
               <div class="bs-pair">
                 <input :value="row.k" class="bs-input bs-opt" list="bs-kind-names" placeholder="e.g. bug" spellcheck="false" aria-label="The issue's kind" @input="setRow({ ...row, k: inputValue($event) })" />
-                <span class="bs-arrow">→</span>
-                <input :value="row.v" class="bs-input bs-opt" placeholder="e.g. fix" spellcheck="false" aria-label="The branch's kind" @input="setRow({ ...row, v: inputValue($event) })" />
                 <span v-if="notAKind(row.k)" class="bs-bad">not a kind</span>
               </div>
             </template>
@@ -51,8 +49,8 @@
             <option v-for="k in fieldKinds" :key="k" :value="k" />
           </datalist>
           <p class="gb-hint">
-            The issue's kind is its <code>kind:</code> label, else its first flat label listed here; the branch kind is its
-            <code>{kind}</code>: bug → fix, feat → feat. The list knows the kinds the kind field holds.
+            The issue's kind is its <code>kind:</code> label, else its first flat label listed here; its branch starts with
+            it: <code>{kind}</code> is bug for a bug, always. The list knows the kinds the kind field holds.
           </p>
 
           <ConfigSaveBar
@@ -94,10 +92,12 @@ const modelError = configModelError;
 
 const toPairs = (m?: Record<string, string>): Pair[] => Object.entries(m ?? {}).map(([k, v]) => ({ k, v }));
 const kvOf = (rows: Pair[]): Record<string, string> | undefined => {
-  const out = Object.fromEntries(rows.filter((r) => r.k.trim() && r.v.trim()).map((r) => [r.k.trim(), r.v]));
+  const out = Object.fromEntries(rows.filter((r) => r.k.trim()).map((r) => [r.k.trim(), r.k.trim()]));
   return Object.keys(out).length ? out : undefined;
 };
 
+// a kind's branch word is the kind itself, always (the parse refuses
+// bug = "fix"), so a row is its key
 // the kinds the kind field holds, for the datalist
 const fieldKinds = computed(() => configModel.value?.fields['kind']?.options ?? []);
 // a key the kind field doesn't hold: no issue can carry it (the flat kinds'
@@ -149,7 +149,6 @@ h2, h3, p { margin: 0; }
 .bs-input:focus { outline: 2px solid var(--fg); outline-offset: 2px; border-color: var(--fg); }
 .bs-opt { width: 10rem; }
 .bs-pair { display: flex; align-items: center; gap: .5rem; }
-.bs-arrow { color: var(--fg-muted); }
 .bs-bad { font-size: .75rem; font-weight: 700; color: var(--danger-fg); white-space: nowrap; }
 .bs-bad-line { color: var(--danger-fg); }
 </style>

@@ -91,7 +91,7 @@ func TestConfigFileStartsFromTheDefault(t *testing.T) {
 
 	var f configFile
 	call(t, "GET", ts.URL+"/api/config", nil, &f)
-	if f.Exists || f.Default != config.Default {
+	if start, _ := config.Start(""); f.Exists || f.Default != start {
 		t.Fatalf("GET without a file: exists %v, default %d bytes", f.Exists, len(f.Default))
 	}
 	if code := call(t, "PUT", ts.URL+"/api/config", map[string]string{"text": f.Default, "base": f.Hash}, nil); code != http.StatusOK {
@@ -127,7 +127,7 @@ func TestSaveSwitchesTheKindForm(t *testing.T) {
 		}
 		return is.Labels[0]
 	}
-	flat := "[branches]\nkinds = { bug = \"fix\" }\n"
+	flat := "[branches]\nkinds = { bug = \"bug\" }\n"
 	if got := storedAfter(flat); got != "bug" {
 		t.Errorf("flat form stored %q, want bug", got)
 	}

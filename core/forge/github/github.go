@@ -860,3 +860,93 @@ func id(n int64) string { return strconv.FormatInt(n, 10) }
 // lf undoes a web edit's \r\n, which would break the blank lines around
 // sync's header and marker.
 func lf(s string) string { return strings.ReplaceAll(s, "\r\n", "\n") }
+
+// Project is one of the repository's GitHub Projects (v2), its fields in
+// the Project's order.
+type Project struct {
+	Owner  string
+	Number int
+	Title  string
+	Fields []ProjectField
+}
+
+// ProjectField is a Project's field: its type (SINGLE_SELECT, NUMBER,
+// ITERATION, DATE, TEXT, or one of GitHub's own: TITLE, ASSIGNEES…), a
+// single select's options in order, an iteration's length in days and
+// start day.
+type ProjectField struct {
+	Name     string
+	DataType string
+	Options  []ProjectOption
+	Duration int
+	StartDay int
+}
+
+// ProjectOption is a single select's option: its color as GitHub names it
+// (GRAY, BLUE…) and its description.
+type ProjectOption struct {
+	Name, Color, Description string
+}
+
+const projectsQuery = `query($owner: String!, $name: String!) {
+  repository(owner: $owner, name: $name) {
+    projectsV2(first: 10) { nodes { number title owner { ... on Organization { login } ... on User { login } }
+      fields(first: 50) { nodes {
+        ... on ProjectV2FieldCommon { name dataType }
+        ... on ProjectV2SingleSelectField { options { name color description } }
+        ... on ProjectV2IterationField { configuration { duration startDay } }
+      } } } }
+  }
+}`
+
+// Projects lists the Projects linked to the repository. A token without
+// the read:project scope gets GitHub's error.
+func (f *Forge) Projects(ctx context.Context) ([]Project, error) {
+	owner, repo, _ := strings.Cut(f.s.project, "/")
+	var r struct {
+		Data struct {
+			Repository struct {
+				ProjectsV2 struct {
+					Nodes []struct {
+						Number int    `json:"number"`
+						Title  string `json:"title"`
+						Owner  struct {
+							Login string `json:"login"`
+						} `json:"owner"`
+						Fields struct {
+							Nodes []struct {
+								Name          string          `json:"name"`
+								DataType      string          `json:"dataType"`
+								Options       []ProjectOption `json:"options"`
+								Configuration struct {
+									Duration int `json:"duration"`
+									StartDay int `json:"startDay"`
+								} `json:"configuration"`
+							} `json:"nodes"`
+						} `json:"fields"`
+					} `json:"nodes"`
+				} `json:"projectsV2"`
+			} `json:"repository"`
+		} `json:"data"`
+		Errors []struct {
+			Message string `json:"message"`
+		} `json:"errors"`
+	}
+	in := map[string]any{"query": projectsQuery, "variables": map[string]string{"owner": owner, "name": repo}}
+	if err := f.call(ctx, http.MethodPost, f.s.graphql, in, &r); err != nil {
+		return nil, err
+	}
+	if len(r.Errors) > 0 {
+		return nil, fmt.Errorf("github: graphql: %s", r.Errors[0].Message)
+	}
+	var out []Project
+	for _, n := range r.Data.Repository.ProjectsV2.Nodes {
+		p := Project{Owner: cmp.Or(n.Owner.Login, owner), Number: n.Number, Title: n.Title}
+		for _, fl := range n.Fields.Nodes {
+			p.Fields = append(p.Fields, ProjectField{Name: fl.Name, DataType: fl.DataType, Options: fl.Options,
+				Duration: fl.Configuration.Duration, StartDay: fl.Configuration.StartDay})
+		}
+		out = append(out, p)
+	}
+	return out, nil
+}

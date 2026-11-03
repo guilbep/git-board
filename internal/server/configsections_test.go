@@ -142,13 +142,13 @@ func TestConfigSectionSavesM2(t *testing.T) {
 	bbody := map[string]any{
 		"base":  "trunk",
 		"name":  "{kind}/{number}-{slug}",
-		"kinds": map[string]string{"bug": "fix", "feat": "feat"},
+		"kinds": map[string]string{"bug": "bug", "feat": "feat"},
 	}
 	if code := call(t, "PUT", ts.URL+"/api/config/section/branches?base="+m.Hash, bbody, &saved); code != http.StatusOK {
 		t.Fatalf("branches save: %d", code)
 	}
 	got, _ := os.ReadFile(s.cfgPath)
-	want := sectionFile + "\n[branches]\nbase = \"trunk\"\nname = \"{kind}/{number}-{slug}\"\n\n[branches.kinds]\nbug = \"fix\"\nfeat = \"feat\"\n"
+	want := sectionFile + "\n[branches]\nbase = \"trunk\"\nname = \"{kind}/{number}-{slug}\"\n\n[branches.kinds]\nbug = \"bug\"\nfeat = \"feat\"\n"
 	if string(got) != want {
 		t.Errorf("branches in file:\n%q\nwant\n%q", got, want)
 	}

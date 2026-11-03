@@ -56,14 +56,14 @@ func TestCheckTakesBranches(t *testing.T) {
 	src := `[branches]
 base = "dev"
 name = "{kind}/{number}-{slug}"
-kinds = { bug = "fix", feat = "feat" }
+kinds = { bug = "bug", feat = "feat" }
 `
 	cfg, warnings, err := Check([]byte(src))
 	if err != nil || len(warnings) != 0 {
 		t.Fatalf("%v %v", err, warnings)
 	}
 	b := cfg.Branches
-	if b.Base != "dev" || b.Name != "{kind}/{number}-{slug}" || b.Kinds["bug"] != "fix" || b.Kinds["feat"] != "feat" {
+	if b.Base != "dev" || b.Name != "{kind}/{number}-{slug}" || b.Kinds["bug"] != "bug" || b.Kinds["feat"] != "feat" {
 		t.Errorf("branches %+v", b)
 	}
 }

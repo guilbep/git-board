@@ -35,12 +35,14 @@ const (
 	CheckNoKind          = "no-kind"
 	CheckLabelOutside    = "label-outside"
 	CheckProjectKey      = "project-key"
+	CheckKindPrefix      = "kind-prefix"
+	CheckTemplate        = "template"
 )
 
 // CheckOrder is every check name in the order Run reports them, for a
 // stable CLI summary grouping.
 var CheckOrder = []string{CheckDoubleSingle, CheckUnknownValue, CheckNearValue, CheckMissingRequired, CheckOrphanSprint, CheckDeadOption,
-	CheckProjectKey, CheckTwoKinds, CheckKindTitle, CheckNoKind, CheckLabelOutside}
+	CheckProjectKey, CheckKindPrefix, CheckTemplate, CheckTwoKinds, CheckKindTitle, CheckNoKind, CheckLabelOutside}
 
 // Finding is one drift report. IssueID/Title are "" for CheckDeadOption,
 // which is a config-inventory question ("does any issue use this option"),
@@ -74,6 +76,8 @@ func Run(issues []store.Issue, cfg *config.Config) []Finding {
 	findings = append(findings, checkOrphanSprints(open, cfg)...)
 	findings = append(findings, checkDeadOptions(issues, cfg)...)
 	findings = append(findings, checkProjectKeys(cfg)...)
+	findings = append(findings, checkKindPrefixes(cfg)...)
+	findings = append(findings, checkTemplate(cfg)...)
 	findings = append(findings, checkKinds(open, cfg)...)
 	findings = append(findings, checkLabels(open, cfg)...)
 	return findings
@@ -297,6 +301,34 @@ func checkDeadOptions(issues []store.Issue, cfg *config.Config) []Finding {
 	return findings
 }
 
+// namedPrefix is the branch prefix a label's description names: "should
+// prefix branch by bug/", ENAC's labels' way.
+var namedPrefix = regexp.MustCompile(`(?i)prefix(?:es)? (?:the |a |your )?branch(?:es)? (?:by|with) ([\w.-]+)/`)
+
+// checkKindPrefixes: a label's description naming another branch prefix
+// than the label itself. A branch starts with its kind's label, always
+// (config's checkKindWords), so "prefix branch by fix/" on bug is wrong.
+// One finding per label, no issue.
+func checkKindPrefixes(cfg *config.Config) []Finding {
+	var findings []Finding
+	check := func(label, d string) {
+		if m := namedPrefix.FindStringSubmatch(d); m != nil && !strings.EqualFold(m[1], label) {
+			findings = append(findings, Finding{Check: CheckKindPrefix,
+				Message: fmt.Sprintf("%s's description names the branch prefix %s/: its branches start %s/, fix the description", label, m[1], label)})
+		}
+	}
+	for _, name := range cfg.FieldOrder() {
+		ds := cfg.Fields[name].Descriptions
+		for _, v := range slices.Sorted(maps.Keys(ds)) {
+			check(cfg.Label(name, v), ds[v])
+		}
+	}
+	for _, l := range slices.Sorted(maps.Keys(cfg.Labels.Descriptions)) {
+		check(l, cfg.Labels.Descriptions[l])
+	}
+	return findings
+}
+
 var titleKind = regexp.MustCompile(`^\s*\[([^\]]+)\]`) // [BUG](Equipment)
 
 // checkProjectKeys suggests the forge field mappings for the fields still
@@ -364,6 +396,51 @@ func checkKinds(issues []store.Issue, cfg *config.Config) []Finding {
 		}
 		findings = append(findings, Finding{Check: CheckNoKind,
 			Message: fmt.Sprintf("%d open %s none of [branches] kinds (%s)", missing, have, strings.Join(slices.Sorted(maps.Keys(kinds)), ", "))})
+	}
+	return findings
+}
+
+// checkTemplate: what the built-in template the file names ([template])
+// has that the file lacks, its fields and their values, and a newer
+// version. What the file has more, or spells or colors otherwise (the
+// forge's), is the project's, and so are the values of a field its GitHub
+// Project holds.
+// ponytail: built-in templates only; a file or URL template isn't fetched at lint
+func checkTemplate(cfg *config.Config) []Finding {
+	name := cfg.Template.Name
+	text, err := config.Template(name)
+	if name == "" || err != nil {
+		return nil
+	}
+	tmpl, _, err := config.Check([]byte(text))
+	if err != nil {
+		return nil
+	}
+	var findings []Finding
+	add := func(format string, a ...any) {
+		findings = append(findings, Finding{Check: CheckTemplate, Message: fmt.Sprintf(format, a...)})
+	}
+	if v := tmpl.Template.Version; v > cfg.Template.Version {
+		add("this file is from template %s version %d; %s is at version %d", name, cfg.Template.Version, name, v)
+	}
+	for _, field := range tmpl.FieldOrder() {
+		have, ok := cfg.Fields[field]
+		if !ok {
+			add("%s: template %s has this field, this file doesn't", field, name)
+			continue
+		}
+		if cfg.GithubProject.Number != 0 && cfg.FieldTarget(cfg.GitHubForge(), field) == config.TargetProject {
+			continue // its values are the Project's, which init read
+		}
+		var missing []string
+		for _, o := range tmpl.Fields[field].Options {
+			if !slices.ContainsFunc(have.Options, func(h string) bool { return config.Slug(h) == config.Slug(o) }) {
+				missing = append(missing, o)
+			}
+		}
+		if len(missing) > 0 {
+			add("%s: template %s has %s, this file doesn't", field, name, strings.Join(missing, ", "))
+		}
 	}
 	return findings
 }

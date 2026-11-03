@@ -381,7 +381,7 @@ func TestFlatKinds(t *testing.T) {
 bug = "red"
 
 [branches]
-kinds = { test = "test", bug = "fix", feat = "feat" }
+kinds = { test = "test", bug = "bug", feat = "feat" }
 `))
 	if err != nil {
 		t.Fatal(err)
@@ -394,7 +394,7 @@ kinds = { test = "test", bug = "fix", feat = "feat" }
 		t.Errorf("Label: %q %q %q", cfg.Label("kind", "bug"), cfg.Label("kind", "chore"), cfg.Label("status", "ready"))
 	}
 
-	cfg, _, err = parse([]byte("[fields.kind]\noptions = [\"bug\", \"chore\"]\n\n[branches]\nkinds = { bug = \"fix\" }\n"))
+	cfg, _, err = parse([]byte("[fields.kind]\noptions = [\"bug\", \"chore\"]\n\n[branches]\nkinds = { bug = \"bug\" }\n"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -404,6 +404,23 @@ kinds = { test = "test", bug = "fix", feat = "feat" }
 	// a Config built by hand, as tests do
 	if !(&Config{Branches: Branches{Kinds: map[string]string{"bug": "fix"}}}).FlatKinds() {
 		t.Error("kinds without a kind field: not flat")
+	}
+}
+
+// A branch starts with its kind's label: [branches] kinds can't send a
+// kind to another word, and the refusal names the line and the fix.
+func TestKindIsItsBranchPrefix(t *testing.T) {
+	t.Parallel()
+	_, _, err := parse([]byte("[branches]\nname = \"{kind}/{slug}\"\nkinds = { feat = \"feat\", bug = \"fix\" }\n"))
+	if err == nil || !strings.Contains(err.Error(), "line 3") || !strings.Contains(err.Error(), `bug = "bug"`) {
+		t.Errorf("err = %v", err)
+	}
+	_, _, err = parse([]byte("[branches.kinds]\nfeat = \"feat\"\nbug = \"fix\"\n"))
+	if err == nil || !strings.Contains(err.Error(), "line 3") {
+		t.Errorf("table form: err = %v", err)
+	}
+	if _, _, err := parse([]byte("[branches]\nkinds = { bug = \"bug\", feat = \"feat\" }\n")); err != nil {
+		t.Error(err)
 	}
 }
 
@@ -426,8 +443,8 @@ func TestSetFieldTable(t *testing.T) {
 			"[fields.kind]\nsingle = true\n\n[fields.kind.colors]\nbug = \"#d73a4a\"\n\"nice to have\" = \"teal\"\n\n# Estimate\n[fields.est]\n"},
 		{"table", "[fields.kind]\nsingle = true\n\n[fields.kind.colors]\nbug = \"red\"  # org\n\n# Estimate\n[fields.est]\n",
 			"[fields.kind]\nsingle = true\n\n[fields.kind.colors]\nbug = \"#d73a4a\"\n\"nice to have\" = \"teal\"\n\n# Estimate\n[fields.est]\n"},
-		{"no field table", "[branches]\nkinds = { bug = \"fix\" }\n",
-			"[branches]\nkinds = { bug = \"fix\" }\n\n[fields.kind.colors]\nbug = \"#d73a4a\"\n\"nice to have\" = \"teal\"\n"},
+		{"no field table", "[branches]\nkinds = { bug = \"bug\" }\n",
+			"[branches]\nkinds = { bug = \"bug\" }\n\n[fields.kind.colors]\nbug = \"#d73a4a\"\n\"nice to have\" = \"teal\"\n"},
 	} {
 		if got := SetFieldTable(tt.in, "kind", "colors", colors); got != tt.want {
 			t.Errorf("%s:\n%s\nwant\n%s", tt.name, got, tt.want)
@@ -557,7 +574,7 @@ func TestLabelsRefused(t *testing.T) {
 	t.Parallel()
 	for name, file := range map[string]string{
 		"a field's value":      "[labels]\nlist = [\"prio:p1\"]\n",
-		"a kind":               "[branches]\nkinds = { bug = \"fix\" }\n[labels]\nlist = [\"bug\"]\n",
+		"a kind":               "[branches]\nkinds = { bug = \"bug\" }\n[labels]\nlist = [\"bug\"]\n",
 		"empty":                "[labels]\nlist = [\" \"]\n",
 		"a color off the list": "[labels]\nlist = [\"a\"]\n[labels.colors]\nb = \"red\"\n",
 		"not a color":          "[labels]\nlist = [\"a\"]\n[labels.colors]\na = \"rouge\"\n",

@@ -1,0 +1,14 @@
+[
+  {"id": 1, "name": "bug", "color": "d73a4a", "description": "Something isn't working: should prefix branch by bug/"},
+  {"id": 2, "name": "chore", "color": "BFDADC", "description": "dependencies, CI, tooling, upgrades, housekeeping"},
+  {"id": 3, "name": "design", "color": "F9D0C4", "description": "design work (Figma), usually a sub-issue of the feat it designs"},
+  {"id": 4, "name": "docs", "color": "0075ca", "description": "Improvements or additions to documentation: should prefix branch by docs/"},
+  {"id": 5, "name": "feat", "color": "3A2CCD", "description": "New feature or request: should prefix branch by feat/"},
+  {"id": 6, "name": "hold:blocked", "color": "B60205", "description": "waiting for something outside the team, or for another issue"},
+  {"id": 7, "name": "hold:paused", "color": "D4C5F9", "description": "deprioritized, or its developer away for a while"},
+  {"id": 8, "name": "perf", "color": "120608", "description": "A code change that improves perforamnce: should prefix branch by perf/"},
+  {"id": 9, "name": "polish", "color": "EBCF04", "description": "Clean up of UI, UX or phrasing (small changes <30mn): should prefix branch by polish/"},
+  {"id": 10, "name": "refactor", "color": "68E4C5", "description": "Refactor code structure or implementation: should prefix branch by refactor/"},
+  {"id": 11, "name": "style", "color": "5A0DAB", "description": "Changes that do not affect the meaning of the code (white-space, formatting, missing semi-colons etc"},
+  {"id": 12, "name": "test", "color": "FEDE6E", "description": "Adding missing tests or correcting existing tests: should prefix branch by test/"}
+]

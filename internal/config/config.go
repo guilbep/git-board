@@ -3,6 +3,7 @@
 package config
 
 import (
+	"bytes"
 	"cmp"
 	"errors"
 	"fmt"
@@ -132,6 +133,7 @@ type raw struct {
 	Branches      Branches          `toml:"branches"`
 	Roles         map[string]string `toml:"roles"`
 	Cycle         Cycle             `toml:"cycle"`
+	Template      TemplateRef       `toml:"template"`
 	Release       Release           `toml:"release"`
 	Labels        Labels            `toml:"labels"`
 	// Forges holds publish-private, discover and a table per forge
@@ -220,8 +222,28 @@ type Branches struct {
 	Base string `toml:"base" json:"base"` // default: the remote's default branch, else main, master or trunk
 	Name string `toml:"name" json:"name"` // {kind}, {number}, {n}, {slug}; default "{number}/{n}-{slug}"
 	// Kinds maps an issue's kind (its kind: field, or a flat label listed
-	// here) to the {kind} of its branch: bug = "fix".
+	// here) to the {kind} of its branch: the kind itself, bug = "bug"
+	// (checkKindWords).
 	Kinds map[string]string `toml:"kinds" json:"kinds"`
+}
+
+// checkKindWords: a branch starts with its kind's label, always, so a
+// kind's word is the kind itself (bug = "bug"); bug = "fix" is refused at
+// its line, with the fix.
+func checkKindWords(data []byte, kinds map[string]string) error {
+	for _, k := range slices.Sorted(maps.Keys(kinds)) {
+		w := kinds[k]
+		if w == k {
+			continue
+		}
+		at := regexp.MustCompile(`(?m)^.*\b` + regexp.QuoteMeta(k) + `\s*=\s*"` + regexp.QuoteMeta(w) + `"`).FindIndex(data)
+		line := ""
+		if at != nil {
+			line = fmt.Sprintf("line %d: ", bytes.Count(data[:at[0]], []byte("\n"))+1)
+		}
+		return fmt.Errorf(`%s[branches] kinds: %s = %q: a branch starts with its kind's label, write %s = %q (its branches start %s/)`, line, k, w, k, k, k)
+	}
+	return nil
 }
 
 // Kind is an issue's kind: its kind: field, else the first of its flat
@@ -272,6 +294,15 @@ type Config struct {
 	Discover bool
 	// Labels is the [labels] table: the plain labels the project allows.
 	Labels Labels
+	// Template is the [template] table: the template the file came from,
+	// for lint to list the drift.
+	Template TemplateRef
+}
+
+// TemplateRef names a built-in template and its version (templates/).
+type TemplateRef struct {
+	Name    string `toml:"name"`
+	Version int    `toml:"version"`
 }
 
 // FileName is the config's name, at the root of the repository.
@@ -364,6 +395,9 @@ func parse(data []byte) (*Config, toml.MetaData, error) {
 	if err := checkDescriptions(r.Fields); err != nil {
 		return nil, md, err
 	}
+	if err := checkKindWords(data, r.Branches.Kinds); err != nil {
+		return nil, md, err
+	}
 	r.Labels.Defined = md.IsDefined("labels")
 	if err := checkLabels(r.Labels, r.Branches.Kinds); err != nil {
 		return nil, md, err
@@ -402,6 +436,7 @@ func parse(data []byte) (*Config, toml.MetaData, error) {
 		Cycle:          r.Cycle,
 		Release:        r.Release,
 		Labels:         r.Labels,
+		Template:       r.Template,
 		Forges:         forges,
 		PublishPrivate: publishPrivate,
 		Discover:       discover,

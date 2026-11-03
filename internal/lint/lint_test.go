@@ -1,6 +1,7 @@
 package lint_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/guilbep/git-board/internal/config"
@@ -362,5 +363,34 @@ func TestNearValuesSayWhatWasMeant(t *testing.T) {
 	}
 	if len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
 		t.Errorf("got %q\nwant %q", got, want)
+	}
+}
+
+// A label's description that names another branch prefix than the label:
+// a branch starts with its kind's label, always.
+func TestKindPrefixInDescription(t *testing.T) {
+	t.Parallel()
+	cfg, _, err := config.Check([]byte(`[branches]
+kinds = { bug = "bug", feat = "feat" }
+
+[fields.kind.descriptions]
+bug = "Something isn't working: should prefix branch by fix/"
+feat = "New feature or request: should prefix branch by feat/"
+
+[labels]
+list = ["needs-design"]
+descriptions = { needs-design = "should prefix branch by design/" }
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, f := range lint.Run(nil, cfg) {
+		if f.Check == lint.CheckKindPrefix {
+			got = append(got, f.Message)
+		}
+	}
+	if len(got) != 2 || !strings.Contains(got[0], "bug") || !strings.Contains(got[0], "fix/") || !strings.Contains(got[1], "needs-design") {
+		t.Errorf("findings %q", got)
 	}
 }

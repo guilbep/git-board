@@ -17,7 +17,7 @@ import (
 func TestLabelViewFindsAFlatKind(t *testing.T) {
 	t.Parallel()
 	path := filepath.Join(t.TempDir(), config.FileName)
-	if err := os.WriteFile(path, []byte("[branches]\nkinds = { bug = \"fix\", feat = \"feat\" }\n\n[views.bugs]\nfilter = \"label:bug\"\n"), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte("[branches]\nkinds = { bug = \"bug\", feat = \"feat\" }\n\n[views.bugs]\nfilter = \"label:bug\"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	cfg, err := config.Load(path)

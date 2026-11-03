@@ -32,3 +32,27 @@ func TestDefaultChecksClean(t *testing.T) {
 		}
 	}
 }
+
+// ENAC's template checks clean, with the forge's spelling and EPFL-ENAC's
+// labels byte for byte (docs/prd/board-template.md).
+func TestENACTemplateChecksClean(t *testing.T) {
+	t.Parallel()
+	s, err := Template("enac")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg, warnings, err := Check([]byte(s))
+	if err != nil || len(warnings) > 0 {
+		t.Fatalf("Check: %v, warnings %q", err, warnings)
+	}
+	if p := cfg.Fields["prio"].Options; !slices.Equal(p, []string{"P0", "P1", "P2", "P3"}) {
+		t.Errorf("prio = %q", p)
+	}
+	k := cfg.Fields["kind"]
+	if k.Colors["perf"] != "#120608" || k.Descriptions["perf"] != "A code change that improves perforamnce: should prefix branch by perf/" {
+		t.Errorf("perf = %q, %q", k.Colors["perf"], k.Descriptions["perf"])
+	}
+	if _, err := Template("nope"); err == nil {
+		t.Error("an unknown template loaded")
+	}
+}

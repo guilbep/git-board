@@ -64,7 +64,12 @@ func (s *apiServer) handleConfigFile(w http.ResponseWriter, r *http.Request) {
 	}
 	res := map[string]any{"path": s.configPath(), "text": text, "exists": exists, "hash": hash}
 	if !exists {
-		res["default"] = config.Default // what the page offers to start from
+		// what the page offers to start from: what a plain init writes
+		start, err := config.Start("")
+		if err != nil {
+			start = config.Default
+		}
+		res["default"] = start
 	}
 	writeJSON(w, http.StatusOK, res)
 }

@@ -226,6 +226,16 @@ func syncedFields(cfg *config.Config) []syncedField {
 	return res
 }
 
+// ProjectColumns is each field the Project holds by the column it is
+// there: syncedFields', column first.
+func ProjectColumns(cfg *config.Config) map[string]string {
+	res := map[string]string{}
+	for _, f := range syncedFields(cfg) {
+		res[f.project] = f.name
+	}
+	return res
+}
+
 // titleCase is a column's name as the Project has it: gh lists fields by
 // their name, and the known columns are spelled with a capital.
 func titleCase(name string) string {
@@ -526,6 +536,12 @@ func toLabel(cfg *config.Config, field, raw string) (string, bool) {
 	}
 	// "-" slugs to nothing: not a value, and not "cleared" either
 	value := config.Slug(raw)
+	// an option spelled as the forge does (P0, Must) is the one its slug is
+	for _, o := range f.Options {
+		if config.Slug(o) == value {
+			return o, value != ""
+		}
+	}
 	return value, value != "" && f.KnownValue(value)
 }
 
@@ -567,7 +583,7 @@ func toProject(cfg *config.Config, pf ProjectField, field, value string) (kind, 
 	}
 	// sorted, so duplicate names pick the same option every run
 	for _, name := range slices.Sorted(maps.Keys(pf.Options)) {
-		if config.Slug(normalizeModule(name)) == value {
+		if config.Slug(normalizeModule(name)) == config.Slug(value) {
 			return EditOption, pf.Options[name], true
 		}
 	}
