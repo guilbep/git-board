@@ -29,6 +29,7 @@ nav = [
   { "Decisions" = [
     { "The spec's decisions" = "spec/decisions.md" },
     { "ADR 0001: check results are signed git notes" = "adr/0001-check-results-are-signed-git-notes.md" },
+    { "ADR 0002: the board is kept in a datastore" = "adr/0002-datastores.md" },
   ] },
 ]
 
