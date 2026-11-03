@@ -85,7 +85,7 @@ import KeyLine from '@/components/KeyLine.vue';
 import TipLine from '@/components/TipLine.vue';
 import { noteUse } from '@/keys';
 import CommandPalette from '@/components/CommandPalette.vue';
-import { paletteOpen } from '@/commands';
+import { openShortcuts, paletteOpen } from '@/commands';
 import { forgeStatus, loadForges } from '@/forges';
 import { cycleView, loadMe, me, when } from '@/me';
 import { loadSyncStatus, syncStatus } from '@/sync';
@@ -177,11 +177,11 @@ function onKey(e: KeyboardEvent) {
     paletteOpen.value = !paletteOpen.value;
     return;
   }
-  if (e.key !== '?' || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.key !== '?' || e.ctrlKey || e.metaKey || e.altKey || e.defaultPrevented) return;
   if (e.target instanceof Element && e.target.closest('input, textarea, select, [contenteditable]')) return;
   e.preventDefault();
   noteUse('help');
-  helpOpen.value = true;
+  openShortcuts();
 }
 onBeforeUnmount(() => {
   slotWatch.disconnect();

@@ -32,11 +32,13 @@ test('B-10: the Release summary counts the binaries', async ({ page }) => {
   await expect(page.getByText('2 environments · 0 images · 1 binary')).toBeVisible();
 });
 
-test('C-22, D-33: Forge fields says the kind once, each field in words', async ({ page }) => {
-  await page.goto('/#/settings/forge-fields/github');
-  await expect(page.getByRole('heading', { name: 'GitHub · o/r' })).toBeVisible();
-  await expect(page.getByRole('row', { name: /status/ }).getByText('values · one per issue')).toBeVisible();
-  await expect(page.getByRole('row', { name: /due/ }).getByText('a date · several per issue')).toBeVisible();
+test('C-22, D-33: each field says where it lives, the forge named once, in words', async ({ page }) => {
+  await page.goto('/#/settings/fields/status');
+  // the list: a place per forge on each field
+  await expect(page.locator('.fl-row', { hasText: 'status' }).first().locator('.fl-place')).toHaveText(/Label/);
+  // the editor: the forge by its kind, once
+  await expect(page.locator('.fp-forge')).toHaveCount(1);
+  await expect(page.locator('.fp-forge')).toHaveText('GitHub');
 });
 
 test('D-26: a disabled Save says why', async ({ page }) => {

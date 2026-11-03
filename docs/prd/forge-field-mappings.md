@@ -98,6 +98,8 @@ Fields stay forge-agnostic in `[fields.*]`. Each forge in `[forges.<name>]` gets
 
 ### Settings › Forges › a forge › Fields
 
+*Superseded 2026-11-02 by `fields-one-editor.md`: a field's places are edited in its editor, Settings › Fields; this table is gone.*
+
 One row per field, in field order: Field (name, type) · Lives in (dropdown of the targets this forge offers; the default marked) · Details (only what the target needs) · Values ("3 renamed" / "1 alias") · State (In sync / N issues to migrate / Target missing on the forge). Changing Lives in opens the migration preview before anything is written.
 
 ### Field editor (Settings › Fields)

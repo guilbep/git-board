@@ -122,11 +122,54 @@ test('with reduced motion, the tip doesn’t change', async ({ browser }) => {
 test('the tips turn off from the list, and back on from Settings', async ({ page }) => {
   await page.setViewportSize({ width: 1100, height: 800 });
   await page.goto('/#/');
-  await page.keyboard.press('?');
+  await page.getByRole('button', { name: 'Keyboard shortcuts' }).click();
   await page.getByRole('button', { name: 'Hide tips' }).click();
   await page.keyboard.press('Escape');
   await expect(page.locator('.gb-tip')).toHaveCount(0);
   await page.goto('/#/settings/you');
   await page.getByRole('button', { name: 'Show every tip again' }).click();
   await expect(page.locator('.gb-tip')).toBeVisible();
+});
+
+test('in the palette, ? on an empty box and the footer’s ? open every shortcut', async ({ page }) => {
+  await page.goto('/#/');
+  const open = () => page.getByRole('button', { name: 'Search: filter or jump to' }).click();
+  const list = page.getByRole('heading', { name: 'Keyboard shortcuts' });
+  await open();
+  await expect(page.locator('.cp-input')).toBeFocused();
+  await page.keyboard.press('?');
+  await expect(list).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(list).toBeHidden();
+  await expect(page.getByRole('dialog', { name: 'Filter the issues, jump to one, or run a command' })).toBeHidden();
+  await open();
+  await page.getByRole('button', { name: /every shortcut/ }).click();
+  await expect(list).toBeVisible();
+  await page.keyboard.press('Escape');
+  // after a word, ? is part of the search
+  await open();
+  await expect(page.locator('.cp-input')).toBeFocused();
+  await page.keyboard.type('why?');
+  await expect(page.locator('.cp-input')).toHaveValue('why?');
+  await expect(list).toBeHidden();
+});
+
+test('in the palette, Tab completes, and is offered only when it can', async ({ page }) => {
+  await page.goto('/#/');
+  await page.getByRole('button', { name: 'Search: filter or jump to' }).click();
+  const input = page.locator('.cp-input');
+  const foot = page.locator('.cp-foot');
+  await input.pressSequentially('2');
+  await expect(foot).not.toContainText('complete');
+  // nothing to complete: Tab stays in the box, never off to the address bar
+  await input.press('Tab');
+  await expect(input).toBeFocused();
+  await input.press('Shift+Tab');
+  await expect(input).toBeFocused();
+  await input.fill('');
+  await input.pressSequentially('is:c');
+  await expect(foot).toContainText('complete');
+  await input.press('Tab');
+  await expect(input).toHaveValue('is:closed');
+  await expect(input).toBeFocused();
 });

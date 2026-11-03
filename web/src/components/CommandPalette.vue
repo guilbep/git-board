@@ -4,8 +4,8 @@
      New issue, Insights, Settings, Sync, the filters, shortcuts). Nothing
      typed: the issues opened lately, then the commands. -->
 <template>
-  <q-dialog v-model="paletteOpen" position="top" @show="onShow">
-    <div class="cp" role="dialog" aria-label="Filter the issues, jump to one, or run a command">
+  <q-dialog v-model="paletteOpen" position="top" @show="onShow" @hide="onHide">
+    <div class="cp" role="dialog" aria-label="Filter the issues, jump to one, or run a command" @keydown="onKey">
       <div class="cp-search">
         <GbIcon name="search" small />
         <input
@@ -53,8 +53,8 @@
       <p class="cp-foot">
         <span><kbd>↑</kbd><kbd>↓</kbd> move</span>
         <span><kbd>↵</kbd> open</span>
-        <span><kbd>Tab</kbd> complete</span>
-        <button type="button" class="cp-foot-help" @click="paletteOpen = false, (helpOpen = true)"><kbd>?</kbd> every shortcut</button>
+        <span v-if="suggestions.length"><kbd>Tab</kbd> complete</span>
+        <button type="button" class="cp-foot-help" @click="showShortcuts"><kbd v-if="!query">?</kbd> every shortcut</button>
       </p>
     </div>
   </q-dialog>
@@ -64,7 +64,7 @@
 import { computed, nextTick, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { filterValues, getIssues, type Issue } from '@/api/board';
-import { filtersHidden, newIssueRequested, paletteOpen, recentIssues, recordRecent } from '@/commands';
+import { filtersHidden, helpAfterPalette, newIssueRequested, openShortcuts, paletteOpen, recentIssues, recordRecent } from '@/commands';
 import { message } from '@/issue';
 import { when } from '@/me';
 import { forgeNumbers } from '@/issuesync';
@@ -99,6 +99,27 @@ function complete(e: KeyboardEvent) {
   noteUse('complete');
   e.preventDefault();
   query.value = s;
+}
+
+// the shortcut list, once the palette has closed (commands.ts)
+const showShortcuts = openShortcuts;
+function onHide() {
+  if (!helpAfterPalette.value) return;
+  helpAfterPalette.value = false;
+  helpOpen.value = true;
+}
+// the palette is a modal with one box: Tab completes, or stays (it would
+// leave for the browser's address bar); ? in an empty box is the shortcut
+// list, as everywhere else, and after something it is part of the search
+function onKey(e: KeyboardEvent) {
+  if (e.key === 'Tab') {
+    e.preventDefault();
+    return;
+  }
+  if (e.key !== '?' || query.value || e.ctrlKey || e.metaKey || e.altKey) return;
+  e.preventDefault();
+  noteUse('help');
+  showShortcuts();
 }
 
 async function onShow() {

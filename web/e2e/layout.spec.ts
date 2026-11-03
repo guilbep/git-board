@@ -50,12 +50,13 @@ test('a hint reads as a sentence: a code chip shares the line of the text after 
   expect(same).toBe(true);
 });
 
-test('Forge fields: the written-to panel wraps, and the legend waits for an override', async ({ page }) => {
-  await page.goto('/#/settings/forge-fields/github');
-  const pre = page.locator('.ff-toml');
-  await expect(pre).toContainText('nothing');
-  expect(await pre.evaluate((e) => e.scrollWidth <= e.clientWidth)).toBe(true);
-  await expect(page.getByText('blue = an override')).toHaveCount(0);
+test('Fields: Where it lives fits its card, and the places’ TOML waits for an override', async ({ page }) => {
+  await page.goto('/#/settings/fields/due');
+  const block = page.locator('.fp');
+  await expect(block).toBeVisible();
+  expect(await block.evaluate((e) => e.scrollWidth <= e.clientWidth)).toBe(true);
+  await page.getByRole('button', { name: 'TOML', exact: true }).click();
+  await expect(page.locator('.fs-places-toml')).toHaveCount(0);
 });
 
 test.describe('on a phone', () => {

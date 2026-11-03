@@ -55,7 +55,7 @@ The check runs the forge sync on a copy of the repository, and answers the forge
 
 Each run, the check too, also asks each forge who can be assigned on its project, and says how many it found. The assignee boxes (every person field) then offer them, with the people git-board knows. A forge that doesn't answer is a warning: the boxes keep its last list.
 
-Off (`sync = false`), the forge is kept but stays out of it, until you switch it on again in Settings › Sync. A forge found in the remotes always syncs: to leave one out, give the forges tables. Saving where a field lives on one (Settings › Forge fields, its row's **its fields** link in Settings › Sync) writes them: its table and every found forge's, as adding a forge does, since a table turns the finding off.
+Off (`sync = false`), the forge is kept but stays out of it, until you switch it on again in Settings › Sync. A forge found in the remotes always syncs: to leave one out, give the forges tables. Saving where a field lives on one (Settings › Fields, **Where it lives** on each field; its row in Settings › Sync says where its fields live) writes them: its table and every found forge's, as adding a forge does, since a table turns the finding off.
 
 ## Removing a forge
 

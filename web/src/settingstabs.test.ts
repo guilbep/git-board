@@ -20,13 +20,13 @@ test('settingsTab takes the address, the Sync without one or for an unknown link
   assert.equal(settingsTab('forges'), 'sync');
   assert.equal(settingsTab('github-project'), 'sync');
   assert.equal(settingsTab('project-file'), 'fields');
-  assert.equal(settingsTab('forge-fields'), 'forge-fields');
+  assert.equal(settingsTab('forge-fields'), 'fields'); // edited on each field now
 });
 
 test('the tabs, in the menu order: the project file with its Sync, then what is kept elsewhere', () => {
   assert.deepEqual(
     settingsTabs.map((t) => t.id),
-    ['sync', 'forge-fields', 'fields', 'labels', 'views', 'sprints', 'roles', 'branches', 'cycle', 'release', 'repos', 'attachments', 'advanced', 'numbers', 'worktrees', 'you'],
+    ['sync', 'fields', 'labels', 'views', 'sprints', 'roles', 'branches', 'cycle', 'release', 'repos', 'attachments', 'advanced', 'numbers', 'worktrees', 'you'],
   );
 });
 
@@ -37,7 +37,7 @@ test('the sidebar groups by where a tab is kept: the project file, the Sync in i
     ['The project file', 'Kept elsewhere'],
   );
   const byId = (i: number) => groups[i]?.tabs.map((t) => t.id) ?? [];
-  assert.deepEqual(byId(0), ['sync', 'forge-fields', 'fields', 'labels', 'views', 'sprints', 'roles', 'branches', 'cycle', 'release', 'repos', 'attachments', 'advanced']);
+  assert.deepEqual(byId(0), ['sync', 'fields', 'labels', 'views', 'sprints', 'roles', 'branches', 'cycle', 'release', 'repos', 'attachments', 'advanced']);
   assert.deepEqual(byId(1), ['numbers', 'worktrees', 'you']);
 });
 

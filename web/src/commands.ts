@@ -2,6 +2,7 @@
 // own open state, a request for the board's New issue dialog, the filters
 // panel's fold (kept in this browser), and the issues opened lately.
 import { ref, watch } from 'vue';
+import { helpOpen } from './shortcuts';
 
 export const paletteOpen = ref(false);
 export const newIssueRequested = ref(false);
@@ -38,4 +39,15 @@ export function recentIssues(): Recent[] {
 export function recordRecent(r: Recent) {
   if (!r.title) return;
   write('gb-recent', JSON.stringify([r, ...recentIssues().filter((x) => x.id !== r.id)].slice(0, 8)));
+}
+
+// the shortcut list, from anywhere: over the palette, it waits for the
+// palette to close (CommandPalette's hide), two dialogs at once leave the
+// first one over the page
+export const helpAfterPalette = ref(false);
+export function openShortcuts() {
+  if (paletteOpen.value) {
+    helpAfterPalette.value = true;
+    paletteOpen.value = false;
+  } else helpOpen.value = true;
 }

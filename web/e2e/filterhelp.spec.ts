@@ -51,20 +51,23 @@ test('the empty Filter box offers examples; ↓ ↵ takes one', async ({ page })
   await expect(box).toHaveValue(first);
 });
 
-test('typing completes; Tab takes it; Esc closes the list first', async ({ page }) => {
+test('typing completes; Esc closes the list first; Tab takes one', async ({ page }) => {
   await page.goto('/#/');
   const box = page.locator('#filter');
   await box.fill('');
-  await box.pressSequentially('status:re');
+  // the e2e board has no issue, so no field has values yet: is: always has two
+  await box.pressSequentially('is:');
   const list = page.getByRole('listbox', { name: 'Filter suggestions' });
-  await expect(list.getByRole('option', { name: /status:ready/ })).toBeVisible();
-  await expect(page.locator('.fbox-trick')).toContainText('-status:');
-  await box.press('Tab');
-  await expect(box).toHaveValue('status:ready');
-  await expect(box).toBeFocused();
+  await expect(list.getByRole('option', { name: /is:closed/ })).toBeVisible();
   await box.press('Escape');
   await expect(list).toBeHidden();
-  await expect(box).toHaveValue('status:ready');
+  await expect(box).toHaveValue('is:'); // the list closed, the box kept
+  await box.press('ArrowDown'); // opens it again, on the first
+  await expect(list.getByRole('option').first()).toHaveAttribute('aria-selected', 'true');
+  await box.press('ArrowDown');
+  await box.press('Tab');
+  await expect(box).toHaveValue('is:closed');
+  await expect(box).toBeFocused();
 });
 
 test('the list’s link opens How filtering works', async ({ page }) => {

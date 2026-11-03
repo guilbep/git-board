@@ -10,7 +10,6 @@
 // wtx.toml, you in git config and this browser
 export const settingsTabs = [
   { id: 'sync', label: 'Sync', group: 'The project file', via: 'forges, Project' },
-  { id: 'forge-fields', label: 'Forge fields', group: 'The project file', via: 'where each field lives' },
   { id: 'fields', label: 'Fields', group: 'The project file' },
   { id: 'labels', label: 'Labels', group: 'The project file' },
   { id: 'views', label: 'Views', group: 'The project file' },
@@ -32,7 +31,8 @@ export type SettingsTab = (typeof settingsTabs)[number]['id'];
 // old tabs' links: General held who you write as; Remotes, Forges and the
 // GitHub Project are one Sync; the Project file is a tab per section, the
 // fields first
-const moved: Record<string, SettingsTab> = { overview: 'sync', general: 'you', remotes: 'sync', forges: 'sync', 'github-project': 'sync', 'project-file': 'fields' };
+// Forge fields: where a field lives is edited on the field (docs/prd/fields-one-editor.md)
+const moved: Record<string, SettingsTab> = { overview: 'sync', general: 'you', remotes: 'sync', forges: 'sync', 'github-project': 'sync', 'project-file': 'fields', 'forge-fields': 'fields' };
 
 // settingsTab is the tab of the route's :tab param
 export function settingsTab(param: unknown): SettingsTab {

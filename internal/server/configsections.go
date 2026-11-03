@@ -3,6 +3,7 @@ package server
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 	"regexp"
 	"slices"
@@ -209,21 +210,61 @@ func (s *apiServer) handleConfigSection(w http.ResponseWriter, r *http.Request) 
 // sectionWriter decodes the section's body and returns what applies it to
 // the file's text. It answers the request itself (and returns nil, nil)
 // when the body is wrong; a section it doesn't know is an error.
+// forgeTable is a [forges.<name>] table's header, its name captured
+var forgeTable = regexp.MustCompile(`(?m)^\[forges\.([A-Za-z0-9_-]+)\]\s*$`)
+
 func (s *apiServer) sectionWriter(section string, r *http.Request, w http.ResponseWriter) (func(string) (string, error), error) {
 	switch section {
 	case "fields":
+		// a field and where it lives on each forge, in one write
+		// (docs/prd/fields-one-editor.md): Forges is each forge's
+		// mappings to set and remove, as the forge-fields section takes
 		var req struct {
 			Set    map[string]config.Field `json:"set"`
 			Remove []string                `json:"remove"`
 			Order  []string                `json:"order"` // the list's: each field moved above the one before it
+			Forges map[string]struct {
+				Set    map[string]config.FieldMapping `json:"set"`
+				Remove []string                       `json:"remove"`
+			} `json:"forges"`
 		}
 		if !decode(w, r, &req) {
 			return nil, nil
+		}
+		for f := range req.Forges {
+			if !validForgeName.MatchString(f) {
+				writeError(w, http.StatusBadRequest, errors.New("a forge's name is letters, digits, - and _, not "+f))
+				return nil, nil
+			}
 		}
 		return func(text string) (string, error) {
 			text, err := config.SetFieldsText(text, req.Set, req.Remove)
 			if err != nil {
 				return "", err
+			}
+			// a removed field leaves no mapping behind, on any forge
+			// (the forges by their tables: without the field, the file
+			// doesn't load until its mappings are gone too)
+			if len(req.Remove) > 0 {
+				for _, m := range forgeTable.FindAllStringSubmatch(text, -1) {
+					text = config.SetForgeFieldsText(text, m[1], nil, req.Remove)
+				}
+			}
+			// the places: a forge only found in the remotes gets its table
+			// first, every found one's, as the forge-fields section does
+			if len(req.Forges) > 0 {
+				if cfg, _, err := config.Check([]byte(text)); err == nil && cfg.Discover {
+					if text, _, err = s.resolveFound(r.Context(), text); err != nil {
+						return "", err
+					}
+				}
+				for _, forge := range slices.Sorted(maps.Keys(req.Forges)) {
+					if !strings.Contains(text, "[forges."+forge+"]") {
+						return "", fmt.Errorf("no forge is named %s: add it in Sync", forge)
+					}
+					p := req.Forges[forge]
+					text = config.SetForgeFieldsText(text, forge, p.Set, p.Remove)
+				}
 			}
 			// the file's order is the list's: realize it pairwise, from the
 			// bottom up — each field moved above the one after it, which the

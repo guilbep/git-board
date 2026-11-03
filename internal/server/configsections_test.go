@@ -585,3 +585,99 @@ func TestConfigModelHasNoNulls(t *testing.T) {
 		}
 	}
 }
+
+// One editor for a field and its places (docs/prd/fields-one-editor.md):
+// the fields section writes the field and its mappings in one write; a
+// bad mapping refuses the whole save; a removed field takes its mappings
+// with it, on every forge.
+func TestConfigSectionFieldsWithTheirPlaces(t *testing.T) {
+	t.Parallel()
+	ts, s := newIssueServer(t)
+	s.cfgPath = filepath.Join(t.TempDir(), ".git-board.toml")
+	src := sectionFile + "\n[forges.gh]\nkind = \"github\"\nproject = \"o/r\"\nsync = true\n\n[forges.lab]\nkind = \"gitlab\"\nproject = \"42\"\nsync = true\n"
+	if err := os.WriteFile(s.cfgPath, []byte(src), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var m struct {
+		Hash string `json:"hash"`
+	}
+	call(t, "GET", ts.URL+"/api/config/model", nil, &m)
+
+	var saved sectionSave
+	body := map[string]any{
+		"set":    map[string]any{"prio": map[string]any{"single": true, "options": []string{"p0", "p1"}}},
+		"remove": []string{},
+		"order":  []string{},
+		"forges": map[string]any{
+			"gh":  map[string]any{"set": map[string]any{"prio": map[string]any{"to": "project", "field": "Priority", "values": map[string]string{"p0": "Urgent"}}}, "remove": []string{}},
+			"lab": map[string]any{"set": map[string]any{"prio": map[string]any{"to": "label"}}, "remove": []string{}},
+		},
+	}
+	if code := call(t, "PUT", ts.URL+"/api/config/section/fields?base="+m.Hash, body, &saved); code != http.StatusOK {
+		t.Fatalf("save: %d", code)
+	}
+	text, _ := os.ReadFile(s.cfgPath)
+	for _, want := range []string{"[fields.prio]", `prio = { to = "project", field = "Priority" }`, "[forges.gh.fields.prio.values]", `p0 = "Urgent"`, `prio = { to = "label" }`, "[fields.status]"} {
+		if !strings.Contains(string(text), want) {
+			t.Errorf("the file lacks %q:\n%s", want, text)
+		}
+	}
+
+	// a place that fits nothing refuses the whole save: the field's change too
+	bad := map[string]any{
+		"set":    map[string]any{"prio": map[string]any{"single": true, "options": []string{"p0", "p1", "p2"}}},
+		"remove": []string{}, "order": []string{},
+		"forges": map[string]any{"gh": map[string]any{"set": map[string]any{"prio": map[string]any{"to": "weight"}}, "remove": []string{}}},
+	}
+	if code := call(t, "PUT", ts.URL+"/api/config/section/fields?base="+saved.Model.Hash, bad, nil); code != http.StatusBadRequest {
+		t.Errorf("weight on a select: %d, want 400", code)
+	}
+	if got, _ := os.ReadFile(s.cfgPath); string(got) != string(text) {
+		t.Errorf("a refused save changed the file:\n%s", got)
+	}
+	if code := call(t, "PUT", ts.URL+"/api/config/section/fields?base="+saved.Model.Hash, map[string]any{"set": map[string]any{}, "remove": []string{}, "order": []string{}, "forges": map[string]any{"my forge": map[string]any{}}}, nil); code != http.StatusBadRequest {
+		t.Errorf("a spaced forge name: %d, want 400", code)
+	}
+
+	// removing the field removes its places, on both forges
+	if code, msg := callError(t, "PUT", ts.URL+"/api/config/section/fields?base="+saved.Model.Hash, map[string]any{"set": map[string]any{}, "remove": []string{"prio"}, "order": []string{}}); code != http.StatusOK {
+		t.Fatalf("remove: %d %s", code, msg)
+	}
+	got, _ := os.ReadFile(s.cfgPath)
+	for _, gone := range []string{"[fields.prio]", "prio = {", "fields.prio.values", "Urgent"} {
+		if strings.Contains(string(got), gone) {
+			t.Errorf("%q left behind:\n%s", gone, got)
+		}
+	}
+	for _, kept := range []string{"[forges.gh]", "[forges.lab]", "[fields.status]"} {
+		if !strings.Contains(string(got), kept) {
+			t.Errorf("%q lost:\n%s", kept, got)
+		}
+	}
+}
+
+// A place saved with the field on a forge only found in the remotes
+// writes the found forges' tables first. Serial: it answers for GitHub.
+func TestConfigSectionFieldsPlaceOnAFoundForge(t *testing.T) {
+	storetest.GitHub(t, map[string]string{"o/r": "o/r"})
+	ts, s := forgeServer(t)
+	if err := os.WriteFile(s.cfgPath, []byte(sectionFile), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	storetest.ForgeOrigin(t, s.b.GitDir(), "git@github.com:o/r.git")
+	var m struct {
+		Hash string `json:"hash"`
+	}
+	call(t, "GET", ts.URL+"/api/config/model", nil, &m)
+	body := map[string]any{"set": map[string]any{}, "remove": []string{}, "order": []string{},
+		"forges": map[string]any{"github": map[string]any{"set": map[string]any{"status": map[string]any{"to": "label"}}, "remove": []string{}}}}
+	if code, msg := callError(t, "PUT", ts.URL+"/api/config/section/fields?base="+m.Hash, body); code != http.StatusOK {
+		t.Fatalf("save: %d %s", code, msg)
+	}
+	text, _ := os.ReadFile(s.cfgPath)
+	for _, want := range []string{"[forges.github]\nkind = \"github\"\nproject = \"o/r\"\nsync = true\n", `status = { to = "label" }`} {
+		if !strings.Contains(string(text), want) {
+			t.Errorf("the file lacks %q:\n%s", want, text)
+		}
+	}
+}

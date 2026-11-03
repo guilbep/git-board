@@ -96,8 +96,8 @@
                 <td class="sy-wrap">
                   <a :href="row.f.where" target="_blank" rel="noopener noreferrer">{{ row.f.project }}</a>
                   <div class="sy-note">
-                    {{ row.f.discovered ? 'found in the remotes' : 'in .git-board.toml' }} ·
-                    <router-link :to="`/settings/forge-fields/${row.f.name}`">its fields</router-link>
+                    {{ row.f.discovered ? 'found in the remotes' : 'in .git-board.toml' }}
+                    <template v-if="placesLine(row.f.name)"> · fields: {{ placesLine(row.f.name) }} · <router-link to="/settings/fields">change it in Fields</router-link></template>
                   </div>
                 </td>
                 <td>
@@ -265,6 +265,8 @@ import { debounced, onLive } from '@/live';
 import { when } from '@/me';
 import { loadRemotes } from '@/remotes';
 import { aheadWords, checkWords, cutWords, pendingWords, plural, readProject, runWords, stepLine } from '@/ways';
+import { configModel, loadConfigModel } from '@/configmodel';
+import { placesSummary } from '@/fieldplaces';
 import AddForgeDialog from '@/components/AddForgeDialog.vue';
 import ForgesGuide from '@/components/ForgesGuide.vue';
 import GbIcon from '@/components/GbIcon.vue';
@@ -568,6 +570,16 @@ onMounted(() => {
   void reload();
   void loadForges();
 });
+
+// where a forge's fields live, in a line: edited on each field, in Fields
+// (docs/prd/fields-one-editor.md)
+if (!configModel.value) void loadConfigModel();
+function placesLine(forge: string): string {
+  const m = configModel.value;
+  const f = m?.forges.find((x) => x.name === forge);
+  if (!m || !f) return '';
+  return placesSummary(f, m.fields, m.field_order, Object.keys(m.roles ?? {}), m.github_project?.number ?? 0);
+}
 </script>
 
 <style scoped>

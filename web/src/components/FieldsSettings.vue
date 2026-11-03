@@ -86,6 +86,11 @@
                       <span class="fl-sum">{{ summary(f) }}</span>
                     </span>
                     <span class="fl-values">{{ valueless(f) ? '' : f.options.join(' → ') }}</span>
+                    <span v-if="configModel?.forges.length && f.name.trim()" class="fl-places">
+                      <span v-for="pl in placeChips(f)" :key="pl.forge" class="fl-place" :class="{ 'fl-place-own': pl.own }" :title="`On ${pl.title}: ${pl.text}`">
+                        <GbIcon :name="pl.kind === 'gitlab' ? 'gitlab' : 'github'" small />{{ pl.text }}
+                      </span>
+                    </span>
                   </router-link>
                 </li>
               </ol>
@@ -125,14 +130,6 @@
                     <button type="button" class="fs-modebtn" :class="{ 'fs-mode-on': tomlOpen[selected.key] }" @click="openToml(selected)">TOML</button>
                   </span>
                 </template>
-                <!-- where the field lives on each forge: one line, each part
-                     linked to that forge's row (the mappings PRD) -->
-                <p v-if="forgeLines(selected)" class="fs-forges">
-                  <template v-for="(part, i) in forgeLines(selected)" :key="part.forge">
-                    <span v-if="i"> · </span>
-                    On {{ part.forgeLabel }}: <router-link :to="`/settings/forge-fields/${part.forge}`" class="gb-linkbtn">{{ part.text }}</router-link>
-                  </template>
-                </p>
 
                 <div v-if="tomlOpen[selected.key]" class="fs-toml">
                   <textarea
@@ -149,6 +146,10 @@
                     <code>{{ renamedFrom[selected.key] }}:…</code> labels; lint finds them.
                   </p>
                   <p v-else class="gb-hint">This field's table only — it applies as you type. Comments are lost when you switch back to the form.</p>
+                  <template v-if="placesToml(selected.name, draft.value.value.places)">
+                    <p class="gb-hint">Where it lives, written with it (edit it in the form):</p>
+                    <pre class="fs-places-toml">{{ placesToml(selected.name, draft.value.value.places) }}</pre>
+                  </template>
                 </div>
                 <div v-else class="fs-body">
                 <!-- the type first: it decides the rest of the form -->
@@ -288,8 +289,31 @@
                     </div>
                     <p v-else class="gb-hint">No values yet: the details come once the values do.</p>
                   </details>
+                  <!-- where it lives on each forge, saved with the field -->
+                  <FieldPlaces
+                    v-if="configModel?.forges.length && selected.name.trim()"
+                    :field="selected.name.trim()"
+                    :fields="fieldsWith(selected)"
+                    :forges="configModel.forges"
+                    :places="draft.value.value.places"
+                    :roles="Object.keys(configModel.roles ?? {})"
+                    :project-number="configModel.github_project?.number ?? 0"
+                    :options="valueless(selected) ? [] : selected.options"
+                    @set="setPlace"
+                  />
                 </div>
               </ConfigCard>
+              <!-- a place changed and saved: the issues move when you say so -->
+              <section v-if="migrating.length" class="fs-migrate" aria-labelledby="fs-mig">
+                <h3 id="fs-mig" class="h5">Move the issues to their new place</h3>
+                <ul>
+                  <li v-for="m in migrating" :key="m.field">
+                    <code>{{ m.field }}</code>: <template v-if="m.plans">{{ m.plans.map((p) => `${p.forge}, ${p.issues} issue${p.issues === 1 ? '' : 's'}${p.labels ? ` (${p.labels} labels come off)` : ''}`).join(' · ') || 'nothing to move' }}</template><template v-else>counting…</template>
+                    <button type="button" class="epfl-btn epfl-btn-primary epfl-btn-sm" :disabled="!!migrateBusy" @click="runMigration(m.field)">{{ migrateBusy === m.field ? 'Migrating…' : 'Run the migration' }}</button>
+                  </li>
+                </ul>
+                <p class="fs-muted">Nothing on the forges changes until you run it. Same as <code>git board sync --migrate &lt;field&gt;</code>. <button type="button" class="gb-linkbtn" @click="migrating = []">Not now</button></p>
+              </section>
             </div>
             <p v-else class="fs-muted">No field — add one below the list.</p>
           </div>
@@ -319,12 +343,15 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { onLive } from '@/live';
-import { getConfigFile, saveConfig, getFieldUsage, type ConfigField } from '@/api/board';
+import { getConfigFile, saveConfig, getFieldUsage, previewFieldMigration, runFieldMigration, type ConfigField, type MigratePlan } from '@/api/board';
 import { fieldPresets, takeUnique } from '@/configpresets';
 import { allNumbers, inferType, type FieldType } from '@/fieldinfer';
 import { fieldToToml, tomlToField, type FieldToml } from '@/fieldtoml';
 import { SectionDraft, configModel, configModelError, loadConfigModel, inputValue } from '@/configmodel';
-import { fieldTarget, targetLabels } from '@/fieldtargets';
+import { fieldTarget, targetLabels, type ForgeMapping } from '@/fieldtargets';
+import { placesBody, placesOf, placesToml, samePlaces, type Places } from '@/fieldplaces';
+import FieldPlaces from '@/components/FieldPlaces.vue';
+import GbIcon from '@/components/GbIcon.vue';
 import { message } from '@/issue';
 import ConfigCard from '@/components/configforms/ConfigCard.vue';
 import ConfigPreset from '@/components/configforms/ConfigPreset.vue';
@@ -362,7 +389,8 @@ type Pair = { k: string; v: string };
 type PairMap = 'aliases' | 'colors' | 'descriptions' | 'project';
 // the section's draft: the rows, and the list's order as row keys — keys,
 // not names, so a rename rides along and the order the user set survives
-type FieldsValue = { rows: FieldRow[]; order: number[] };
+// places: where each field lives on each forge (fieldplaces.ts), saved with the fields
+type FieldsValue = { rows: FieldRow[]; order: number[]; places: Places };
 
 const modelError = configModelError;
 let key = 0;
@@ -406,10 +434,10 @@ const draft = new SectionDraft<FieldsValue>(
     const byKey = new Map(rows.map((r) => [r.name, r.key]));
     const order = m.field_order.map((n) => byKey.get(n)).filter((k): k is number => k !== undefined);
     for (const r of rows) if (!order.includes(r.key)) order.push(r.key);
-    return { rows, order };
+    return { rows, order, places: placesOf(m.forges) };
   },
   // the order by name: each from() numbers its rows afresh
-  (a, b) => JSON.stringify(a.rows.map(rowOf)) !== JSON.stringify(b.rows.map(rowOf)) || JSON.stringify(orderNames(a)) !== JSON.stringify(orderNames(b)),
+  (a, b) => JSON.stringify(a.rows.map(rowOf)) !== JSON.stringify(b.rows.map(rowOf)) || JSON.stringify(orderNames(a)) !== JSON.stringify(orderNames(b)) || !samePlaces(a.places, b.places),
   (value) => {
     const names = value.rows.map((f) => f.name.trim()).filter(Boolean);
     const set: Record<string, unknown> = {};
@@ -429,8 +457,11 @@ const draft = new SectionDraft<FieldsValue>(
     const model = configModel.value;
     const exists = (n: string) => n in set || (n in (model?.fields ?? {}) && !remove.includes(n));
     const order = value.order.map((k) => value.rows.find((r) => r.key === k)?.name.trim()).filter((n): n is string => !!n && exists(n));
-    const body: { set: Record<string, unknown>; remove: string[]; order?: string[] } = { set, remove };
+    const body: { set: Record<string, unknown>; remove: string[]; order?: string[]; forges?: unknown } = { set, remove };
     if (JSON.stringify(order) !== JSON.stringify((model?.field_order ?? []).filter(exists))) body.order = order;
+    // where the fields live: what changed on each forge, in the same write
+    const forges = placesBody(model?.forges ?? [], value.places, remove);
+    if (forges) body.forges = forges;
     return body;
   },
 );
@@ -520,23 +551,35 @@ function numbers(f: FieldRow): boolean {
   return f.type === 'number' || f.numeric || allNumbers(f.options);
 }
 
-// where the field lives on each declared forge, the editor's one line
-// under the summary: On GitHub: Project › Status · On GitLab: scoped
-// label — each part linked to that forge's row. No forge, no line; the
-// Project column only when a Project is configured or the file implies
-// one (the forge's own [github-project]).
-function forgeLines(f: FieldRow): { forge: string; forgeLabel: string; text: string }[] | null {
+// where a field lives on each forge, as the draft has it: a chip each in
+// the list, outlined when it isn't the type's default
+function placeChips(f: FieldRow): { forge: string; kind: string; title: string; text: string; own: boolean }[] {
   const m = configModel.value;
-  if (!m || !m.forges.length) return null;
+  const v = draft.value.value;
+  if (!m || !v) return [];
   const roles = Object.keys(m.roles ?? {});
   const projectNumber = m.github_project?.number ?? 0;
-  const out = m.forges.map((forge) => {
-    const to = fieldTarget(forge, m.fields, f.name, roles, projectNumber);
-    const column = forge.fields?.[f.name]?.field;
-    const text = to === 'project' ? `Project › ${column ?? f.name.charAt(0).toUpperCase() + f.name.slice(1)}` : targetLabels[to] ?? to;
-    return { forge: forge.name, forgeLabel: forge.kind === 'gitlab' ? 'GitLab' : 'GitHub', text };
+  const fields = fieldsWith(f);
+  const name = f.name.trim();
+  return m.forges.map((forge) => {
+    const to = fieldTarget({ ...forge, fields: v.places[forge.name] ?? {} }, fields, name, roles, projectNumber);
+    const def = fieldTarget({ ...forge, fields: {} }, fields, name, roles, projectNumber);
+    const column = v.places[forge.name]?.[name]?.field;
+    const text = to === 'project' ? `Project › ${column ?? name}` : (targetLabels[to] ?? to);
+    return { forge: forge.name, kind: forge.kind, title: forge.kind === 'gitlab' ? 'GitLab' : 'GitHub', text, own: to !== def };
   });
-  return out.length ? out : null;
+}
+// the model's fields with this one as drafted: its type decides its places
+function fieldsWith(f: FieldRow): Record<string, ConfigField> {
+  return { ...(configModel.value?.fields ?? {}), [f.name.trim()]: rowToToml(f) as unknown as ConfigField };
+}
+function setPlace(forge: string, field: string, mapping: ForgeMapping | null) {
+  const v = draft.value.value;
+  if (!v) return;
+  const places = { ...v.places, [forge]: { ...v.places[forge] } };
+  if (mapping) places[forge]![field] = mapping;
+  else delete places[forge]![field];
+  draft.value.value = { ...v, places };
 }
 
 // a new field typed as a date or a sprint starts at one value an issue: an
@@ -586,8 +629,8 @@ function detailsSummary(f: FieldRow): string {
 // the field at the address: #/settings/fields/<name>, none is the first
 const route = useRoute();
 const router = useRouter();
-// the address's field, on this tab alone: the page keeps every tab mounted,
-// and #/settings/forge-fields/<forge> names a forge, not a field
+// the address's field, on this tab alone: the page keeps every tab mounted
+// (an old #/settings/forge-fields/<forge> names a forge, not a field)
 const routeName = computed(() => (route.params.tab === 'fields' && typeof route.params.name === 'string' ? route.params.name : ''));
 const selectedKey = ref<number | null>(null);
 
@@ -954,8 +997,29 @@ async function startFromDefault() {
   }
 }
 
+// the places a save moved: their migration, counted, run when asked
+const migrating = ref<{ field: string; plans: MigratePlan[] | null }[]>([]);
+const migrateBusy = ref('');
 async function save() {
+  const before = configModel.value;
+  const moved = before && draft.value.value ? Object.values(placesBody(before.forges, draft.value.value.places) ?? {}).flatMap((p) => [...Object.keys(p.set), ...p.remove]) : [];
   await draft.save();
+  if (draft.dirty.value || draft.saveError.value) return;
+  migrating.value = [...new Set(moved)].map((field) => ({ field, plans: null }));
+  for (const m of migrating.value)
+    previewFieldMigration(m.field)
+      .then((r) => (m.plans = r.plans ?? []))
+      .catch(() => (m.plans = []));
+}
+function runMigration(field: string) {
+  migrateBusy.value = field;
+  runFieldMigration(field)
+    .then((r) => {
+      if (r.error) draft.saveError.value = r.error;
+      else migrating.value = migrating.value.filter((m) => m.field !== field);
+    })
+    .catch((e) => (draft.saveError.value = message(e)))
+    .finally(() => (migrateBusy.value = ''));
 }
 
 onMounted(() => {
@@ -1061,8 +1125,6 @@ h2, p { margin: 0; }
 .fs-more summary:hover { color: var(--fg); }
 .fs-more[open] summary { margin-bottom: .25rem; }
 .fs-morehint { font-weight: 400; color: var(--fg-muted); }
-.fs-forges { margin: 0; padding: 0 1rem .5rem; font-size: .875rem; color: var(--fg-muted); }
-.fs-forges a { font-weight: 700; }
 .fs-tablewrap { overflow-x: auto; border: 1px solid var(--border); }
 .fs-table { width: 100%; min-width: 30rem; border-collapse: collapse; font-size: .8125rem; }
 .fs-table th { padding: .375rem .5rem; border-bottom: 1px solid var(--border); background: var(--bg-subtle); text-align: left; font-size: .75rem; color: var(--fg-muted); }
@@ -1070,4 +1132,11 @@ h2, p { margin: 0; }
 .fs-tvalue { font-family: var(--font-mono); font-weight: 700; }
 .fs-cell { width: 100%; box-sizing: border-box; min-height: 1.75rem; padding: .25rem .5rem; border: 1px solid var(--border); background: var(--bg); color: var(--fg); font: inherit; font-size: .8125rem; }
 .fs-cell:focus { outline: 2px solid var(--fg); outline-offset: 2px; }
+.fl-places { display: flex; flex-wrap: wrap; gap: .25rem; margin-top: .25rem; }
+.fl-place { display: inline-flex; align-items: center; gap: .25rem; padding: 0 .375rem; border: var(--border-w) solid var(--border-subtle); color: var(--fg-muted); font-size: .75rem; }
+.fl-place-own { border-color: var(--fg); color: var(--fg); }
+.fs-places-toml { margin: 0; padding: .5rem .75rem; background: var(--bg-subtle); font-size: .75rem; white-space: pre-wrap; }
+.fs-migrate { display: grid; gap: .5rem; padding: .75rem 1rem; border: var(--border-w) solid var(--border); border-left: .1875rem solid var(--warning); background: var(--warning-bg); }
+.fs-migrate ul { display: grid; gap: .5rem; margin: 0; padding-left: 1.125rem; }
+.fs-migrate li { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
 </style>
