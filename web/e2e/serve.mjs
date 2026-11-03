@@ -23,10 +23,17 @@ const work = process.env.E2E_DIR ?? mkdtempSync(join(tmpdir(), 'git-board-e2e-')
 rmSync(work, { recursive: true, force: true });
 const bin = join(root, 'web/e2e/.bin/git-board');
 
-// the fake GitHub: GET /repos/<owner>/<repo> is the repository, as named
+// the fake GitHub: GET /repos/<owner>/<repo> is the repository, as named;
+// EPFL-ENAC/test has ENAC's labels and Project (POST /graphql), as GitHub
+// has them, for the board git board init starts from them
+const enacLabels = readFileSync(join(root, 'internal/ghlabels/testdata/enac-labels.json'), 'utf8');
+const enacProject = readFileSync(join(root, 'internal/fromforge/testdata/enac-project.json'), 'utf8');
 const github = createServer((req, res) => {
-  const m = /^\/repos\/([^/]+)\/([^/]+)$/.exec(req.url ?? '');
+  const url = (req.url ?? '').split('?')[0];
   res.setHeader('Content-Type', 'application/json');
+  if (url === '/repos/EPFL-ENAC/test/labels') return res.end(enacLabels);
+  if (url === '/graphql' && req.method === 'POST') return res.end(enacProject);
+  const m = /^\/repos\/([^/]+)\/([^/]+)$/.exec(url);
   if (!m) return res.writeHead(404).end('{"message":"Not Found"}');
   res.end(JSON.stringify({ id: 1, full_name: `${m[1]}/${m[2]}`, private: false }));
 });
@@ -50,7 +57,7 @@ const env = {
 // tests' storetest.GitHub does at run time
 if (!process.env.E2E_SKIP_BUILD) {
   sh('npm', ['run', 'build'], join(root, 'web'), process.env);
-  sh('go', ['build', '-ldflags', `-X github.com/guilbep/git-board/internal/store.GitHubAPI=${api}`, '-o', bin, './cmd/git-board'], root, process.env);
+  sh('go', ['build', '-ldflags', `-X github.com/guilbep/git-board/internal/store.GitHubAPI=${api} -X github.com/guilbep/git-board/internal/ghlabels.API=${api}`, '-o', bin, './cmd/git-board'], root, process.env);
 }
 
 const repo = join(work, 'repo');
@@ -160,9 +167,24 @@ sh(bin, ['push'], seed);
 sh('git', ['clone', '-q', origin, clone], work);
 const cloneBoard = await serve(clone, Number(port) + 2);
 
-console.log(`e2e board: ${repo} on :${port}, GitHub at ${api}; clone board: ${clone} on :${Number(port) + 2}`);
+// the ENAC board, on E2E_PORT+4: git board init on a clone of
+// EPFL-ENAC/test, its file from the forge's labels and Project
+const enac = join(work, 'enac');
+mkdirSync(enac, { recursive: true });
+sh('git', ['init', '-q', '-b', 'main'], enac);
+sh('git', ['config', 'commit.gpgsign', 'false'], enac);
+sh('git', ['remote', 'add', 'origin', 'git@github.com:EPFL-ENAC/test.git'], enac);
+// not execFileSync: the fake GitHub, in this process, answers the init
+await new Promise((ok, fail) =>
+  spawn(bin, ['init', '--template', 'enac'], { cwd: enac, env, stdio: 'inherit' }).on('exit', (c) => (c === 0 ? ok() : fail(new Error(`init: exit ${c}`)))),
+);
+sh('git', ['add', '.'], enac);
+sh('git', ['commit', '-q', '-m', 'the ENAC board'], enac);
+const enacBoard = await serve(enac, Number(port) + 4);
+
+console.log(`e2e board: ${repo} on :${port}, GitHub at ${api}; clone board: ${clone} on :${Number(port) + 2}; ENAC board: ${enac} on :${Number(port) + 4}`);
 const board = await serve(repo, port);
 // one board gone, or a signal: both go
-process.on('exit', () => [board, cloneBoard].forEach((b) => b.kill()));
-for (const b of [board, cloneBoard]) b.on('exit', (code) => process.exit(code ?? 1));
+process.on('exit', () => [board, cloneBoard, enacBoard].forEach((b) => b.kill()));
+for (const b of [board, cloneBoard, enacBoard]) b.on('exit', (code) => process.exit(code ?? 1));
 for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => process.exit(0));

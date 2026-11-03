@@ -226,6 +226,16 @@ func syncedFields(cfg *config.Config) []syncedField {
 	return res
 }
 
+// ProjectColumns is each field the Project holds by the column it is
+// there: syncedFields', column first.
+func ProjectColumns(cfg *config.Config) map[string]string {
+	res := map[string]string{}
+	for _, f := range syncedFields(cfg) {
+		res[f.project] = f.name
+	}
+	return res
+}
+
 // titleCase is a column's name as the Project has it: gh lists fields by
 // their name, and the known columns are spelled with a capital.
 func titleCase(name string) string {
