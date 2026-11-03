@@ -1,6 +1,6 @@
 # ADR 0002: The board is kept in a datastore, cut at the pack
 
-- Status: proposed
+- Status: accepted (2026-11-03)
 - Date: 2026-11-03
 - Issue #76. The PRD is `docs/prd/datastores.md` (on the branch
   `bug/74-clone-shows-board` for now, not yet on main).
