@@ -608,7 +608,7 @@ func TestSetupInfersAndEnables(t *testing.T) {
 // Enabling releases takes a kind form edited by hand while the server ran.
 func TestEnableSwitchesTheKindForm(t *testing.T) {
 	s, ts := setupServer(t, "git@github.com:acme/app.git")
-	if err := os.WriteFile(s.cfgPath, []byte("[branches]\nkinds = { bug = \"fix\" }\n"), 0o644); err != nil {
+	if err := os.WriteFile(s.cfgPath, []byte("[branches]\nkinds = { bug = \"bug\" }\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if code, body := post(t, ts.URL+"/api/releases/setup", release.Setup{Binaries: []string{"./cmd/app"}}); code != 200 {

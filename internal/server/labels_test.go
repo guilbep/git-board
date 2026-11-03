@@ -29,7 +29,7 @@ options = ["ready", "done"]
 feat = "#0e8a16"
 
 [branches]
-kinds = { bug = "fix", feat = "feat" }
+kinds = { bug = "bug", feat = "feat" }
 `
 
 // fakeLabels serves GitHub's labels API for o/r, with these labels, the

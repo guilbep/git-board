@@ -53,4 +53,4 @@ layout = "table"
 filter = "assignee:@me is:open"
 
 [branches]
-kinds = { bug = "fix", feat = "feat" }
+kinds = { bug = "bug", feat = "feat" }

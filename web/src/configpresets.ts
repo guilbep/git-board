@@ -100,8 +100,8 @@ export const sprintsPreset: { length_days: number; start_weekday: string } = { l
 // the branches' kinds, the default file's: bug's branches say fix
 export const branchKindsPreset: Preset<Record<string, string>> = {
   label: 'the usual kinds',
-  why: 'bug → fix, feat → feat, docs, test, chore, design and the rest as they are',
-  value: { bug: 'fix', feat: 'feat', docs: 'docs', refactor: 'refactor', perf: 'perf', test: 'test', style: 'style', chore: 'chore', design: 'design' },
+  why: 'bug, feat, docs, test, chore, design and the rest, each its branches\' prefix',
+  value: { bug: 'bug', feat: 'feat', docs: 'docs', refactor: 'refactor', perf: 'perf', test: 'test', style: 'style', chore: 'chore', design: 'design' },
 };
 
 // the release environments, small first

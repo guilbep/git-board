@@ -127,7 +127,7 @@ func TestSaveSwitchesTheKindForm(t *testing.T) {
 		}
 		return is.Labels[0]
 	}
-	flat := "[branches]\nkinds = { bug = \"fix\" }\n"
+	flat := "[branches]\nkinds = { bug = \"bug\" }\n"
 	if got := storedAfter(flat); got != "bug" {
 		t.Errorf("flat form stored %q, want bug", got)
 	}

@@ -92,7 +92,7 @@ colors = { s = "green" }
 
 # the kinds are flat: plain labels, no [fields.kind]
 [branches.kinds]
-bug = "fix"
+bug = "bug"
 feat = "feat"
 
 # what the forms don't show, and must keep

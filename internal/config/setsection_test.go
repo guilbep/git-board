@@ -213,12 +213,12 @@ func TestSetSprints(t *testing.T) {
 
 func TestSetBranches(t *testing.T) {
 	t.Parallel()
-	before := "# branch names\n[branches]\nbase = \"main\"\nname = \"{number}/{n}-{slug}\" # the default\n\n[branches.kinds]\nbug = \"fix\"\n\n[views.open]\nlayout = \"table\"\n"
-	after, err := SetBranchesText(before, Branches{Base: "trunk", Name: "{kind}/{slug}", Kinds: map[string]string{"bug": "fix", "feat": "feat"}})
+	before := "# branch names\n[branches]\nbase = \"main\"\nname = \"{number}/{n}-{slug}\" # the default\n\n[branches.kinds]\nbug = \"bug\"\n\n[views.open]\nlayout = \"table\"\n"
+	after, err := SetBranchesText(before, Branches{Base: "trunk", Name: "{kind}/{slug}", Kinds: map[string]string{"bug": "bug", "feat": "feat"}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "# branch names\n[branches]\nbase = \"trunk\"\nname = \"{kind}/{slug}\" # the default\n\n[branches.kinds]\nbug = \"fix\"\nfeat = \"feat\"\n\n[views.open]\nlayout = \"table\"\n"
+	want := "# branch names\n[branches]\nbase = \"trunk\"\nname = \"{kind}/{slug}\" # the default\n\n[branches.kinds]\nbug = \"bug\"\nfeat = \"feat\"\n\n[views.open]\nlayout = \"table\"\n"
 	if after != want {
 		t.Errorf("got\n%s\nwant\n%s", after, want)
 	}
@@ -230,9 +230,9 @@ func TestSetBranches(t *testing.T) {
 		t.Errorf("no branches left the table behind:\n%s", none)
 	}
 	afterDefault := saveTwice(t, func(text string) (string, error) {
-		return SetBranchesText(text, Branches{Kinds: map[string]string{"bug": "fix"}})
+		return SetBranchesText(text, Branches{Kinds: map[string]string{"bug": "bug"}})
 	})
-	if !strings.Contains(afterDefault, "[branches.kinds]\nbug = \"fix\"") {
+	if !strings.Contains(afterDefault, "[branches.kinds]\nbug = \"bug\"") {
 		t.Errorf("the default's inline kinds didn't come back as a table:\n%s", afterDefault)
 	}
 }
@@ -494,7 +494,7 @@ func TestSetReleaseTextKeepsAnEmptyFollow(t *testing.T) {
 // alphabetical: the file's order holds, the kinds after it.
 func TestFieldOrderKeepsTheFileWithFlatKinds(t *testing.T) {
 	t.Parallel()
-	cfg, _, err := Check([]byte("[fields.status]\noptions = [\"a\"]\n\n[fields.prio]\noptions = [\"p0\"]\n\n[branches.kinds]\nbug = \"fix\"\n"))
+	cfg, _, err := Check([]byte("[fields.status]\noptions = [\"a\"]\n\n[fields.prio]\noptions = [\"p0\"]\n\n[branches.kinds]\nbug = \"bug\"\n"))
 	if err != nil {
 		t.Fatal(err)
 	}
