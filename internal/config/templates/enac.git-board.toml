@@ -1,0 +1,163 @@
+# git-board's project file, from ENAC's template: the EPFL-ENAC labels and
+# the "ENAC-IT4R Template" GitHub Project, their names, colors and
+# descriptions as GitHub has them (docs/prd/board-template.md), so the
+# forge and this file agree from the first day. Every key is in
+# docs/guide/configuration.md, and beside the editor in Settings → Project
+# file.
+#
+# Conventions
+# - Titles: "area: what goes wrong" for a bug, "area: what to do" otherwise
+#   (billing: totals round twice on discounted lines). No [BUG], no (#123),
+#   no final period.
+# - A branch starts with its kind's label: bug/…, feat/…
+
+# The workflow, in order: the Project's Status column. The last one closes
+# the issue.
+[fields.status]
+single = true
+options = ["backlog", "ready", "in-progress", "in-review", "ready-for-validation", "validated"]
+
+[fields.status.colors]
+backlog = "grey"
+ready = "blue"
+in-progress = "amber"
+in-review = "orange"
+ready-for-validation = "purple"
+validated = "green"
+
+[fields.status.descriptions]
+backlog = "Known, not yet specified"
+ready = "Specified and prioritized; can be started"
+in-progress = "Branch created"
+in-review = "Pull request open"
+ready-for-validation = "Merged into dev, waiting for validation"
+validated = "Signed off; released with the next tag"
+
+# On hold, beside the status, never a status: the hold:blocked and
+# hold:paused labels.
+[fields.hold]
+single = true
+options = ["blocked", "paused"]
+
+[fields.hold.colors]
+blocked = "#b60205"
+paused = "#d4c5f9"
+
+[fields.hold.descriptions]
+blocked = "waiting for something outside the team, or for another issue"
+paused = "deprioritized, or its developer away for a while"
+
+# The Project's Priority.
+[fields.prio]
+single = true
+options = ["P0", "P1", "P2", "P3"]
+
+[fields.prio.colors]
+P0 = "red"
+P1 = "orange"
+P2 = "amber"
+P3 = "grey"
+
+[fields.prio.descriptions]
+P0 = "Now: production broken, data at risk, or the team blocked"
+P1 = "This cycle: before the next staging review"
+P2 = "Soon: the default for accepted work"
+P3 = "Someday: when convenient"
+
+# The Project's MoSCoW: is it promised for its milestone? Not a priority.
+# Won't is Wont here: a label value is one word.
+[fields.moscow]
+single = true
+options = ["Must", "Should", "Could", "Wont"]
+project = { Wont = "Won't" }
+
+[fields.moscow.colors]
+Must = "purple"
+Should = "blue"
+Could = "green"
+Wont = "grey"
+
+[fields.moscow.descriptions]
+Must = "The milestone fails without it"
+Should = "Important; the milestone survives without it"
+Could = "If time allows; the first to go"
+Wont = "Agreed out of this milestone, on record"
+
+# The Project's Est. hours.
+[fields.est]
+single = true
+numeric = true
+unit = "h"
+options = ["0.5", "1", "2", "4", "8", "16"]
+
+# The Project's Sprint, an iteration of 14 days.
+[fields.sprint]
+single = true
+type = "iteration"
+
+# The Project's Sub-issues progress: an issue's parent, GitHub's sub-issues.
+[fields.parent]
+single = true
+type = "issue"
+
+[fields.assignee]
+single = false
+
+# The project's people by role: who sets the risk, approves the plan,
+# reviews, signs off (docs/guide/configuration.md, Roles and Cycle).
+# [roles]
+# lead-dev = "your-login"
+
+[sprints]
+length_days = 14
+start_weekday = "monday"
+
+# An issue's branch: its kind, number, place in the issue's folder and
+# title, e.g. bug/vm-12/1-login-fails. The kinds are plain labels, GitHub's
+# way (bug, feat), and the kind field all the same.
+[branches]
+name = "{kind}/{number}/{n}-{slug}"
+kinds = { bug = "bug", feat = "feat", polish = "polish", docs = "docs", refactor = "refactor", perf = "perf", test = "test", style = "style", chore = "chore", design = "design" }
+
+# The kinds' labels, as EPFL-ENAC has them on GitHub, typos included: a
+# corrected description would differ from GitHub's.
+[fields.kind.colors]
+bug = "#d73a4a"
+feat = "#3a2ccd"
+polish = "#ebcf04"
+docs = "#0075ca"
+refactor = "#68e4c5"
+perf = "#120608"
+test = "#fede6e"
+style = "#5a0dab"
+chore = "#bfdadc"
+design = "#f9d0c4"
+
+[fields.kind.descriptions]
+bug = "Something isn't working: should prefix branch by bug/"
+feat = "New feature or request: should prefix branch by feat/"
+polish = "Clean up of UI, UX or phrasing (small changes <30mn): should prefix branch by polish/"
+docs = "Improvements or additions to documentation: should prefix branch by docs/"
+refactor = "Refactor code structure or implementation: should prefix branch by refactor/"
+perf = "A code change that improves perforamnce: should prefix branch by perf/"
+test = "Adding missing tests or correcting existing tests: should prefix branch by test/"
+style = "Changes that do not affect the meaning of the code (white-space, formatting, missing semi-colons etc"
+chore = "dependencies, CI, tooling, upgrades, housekeeping"
+design = "design work (Figma), usually a sub-issue of the feat it designs"
+
+# Views are the tabs above the issues, in this order; git-board opens on
+# the first.
+[views.open]
+layout = "table"
+filter = "is:open"
+sort = "prio asc"
+
+[views.backlog]
+layout = "table"
+filter = "is:open status:backlog,ready"
+sort = "prio asc"
+
+[views.assigned-to-me]
+layout = "table"
+filter = "assignee:@me is:open"
+group = "status"

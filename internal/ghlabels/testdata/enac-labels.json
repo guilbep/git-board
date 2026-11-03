@@ -1,0 +1,14 @@
+[
+  {"name": "bug", "color": "d73a4a", "description": "Something isn't working: should prefix branch by bug/"},
+  {"name": "chore", "color": "BFDADC", "description": "dependencies, CI, tooling, upgrades, housekeeping"},
+  {"name": "design", "color": "F9D0C4", "description": "design work (Figma), usually a sub-issue of the feat it designs"},
+  {"name": "docs", "color": "0075ca", "description": "Improvements or additions to documentation: should prefix branch by docs/"},
+  {"name": "feat", "color": "3A2CCD", "description": "New feature or request: should prefix branch by feat/"},
+  {"name": "hold:blocked", "color": "B60205", "description": "waiting for something outside the team, or for another issue"},
+  {"name": "hold:paused", "color": "D4C5F9", "description": "deprioritized, or its developer away for a while"},
+  {"name": "perf", "color": "120608", "description": "A code change that improves perforamnce: should prefix branch by perf/"},
+  {"name": "polish", "color": "EBCF04", "description": "Clean up of UI, UX or phrasing (small changes <30mn): should prefix branch by polish/"},
+  {"name": "refactor", "color": "68E4C5", "description": "Refactor code structure or implementation: should prefix branch by refactor/"},
+  {"name": "style", "color": "5A0DAB", "description": "Changes that do not affect the meaning of the code (white-space, formatting, missing semi-colons etc"},
+  {"name": "test", "color": "FEDE6E", "description": "Adding missing tests or correcting existing tests: should prefix branch by test/"}
+]
