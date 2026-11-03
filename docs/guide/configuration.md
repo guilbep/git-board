@@ -8,6 +8,31 @@ It lives at the root of the repository. Edit it in **Settings → Project file**
 
 A repository without one starts from the default: **Start from the default** in Settings › Fields, or `git board init` in a terminal (it never overwrites a file). The default declares a status workflow (`backlog`, `ready`, `in-progress`, `in-review`, `ready-for-validation`, `validated`), priorities `p0` to `p3`, an on-hold field beside the status (`hold:blocked`, `hold:paused`), ten kinds, GitHub's plain labels (`bug`, `feat`, … `chore`, `design`) with their descriptions, each the prefix of its branches (`bug/vm-12-login-fails`), estimates in hours, MoSCoW, sprints of 14 days, and four views (all, backlog, board, mine), each explained in a comment.
 
+### A new board: its forge, then a template
+
+`git board init` starts the file from a template, then, when origin is on GitHub, from the forge itself, so the two agree on the first day (Settings › Labels shows nothing to adopt):
+
+1. **The template.** `--template` names it: `enac` (built in: EPFL-ENAC's labels and GitHub Project, values spelled as GitHub has them, `P0`, `Must`), a file, or an `http(s)` URL. Without the flag, the global file's `template`; without that, the default above.
+2. **The forge.** With a token (`GITHUB_TOKEN`, else git's credential helper), init reads origin's labels and its first GitHub Project: their names, colors and descriptions, and each Project field's values in order. They win over the template, which fills only what the forge lacks. The Project goes in `[github-project]`, so its fields' labels are held there, not created. No token, or nothing read: the template, and a line saying what wasn't read.
+
+The global file is `~/.config/git-board/config.toml` (`$XDG_CONFIG_HOME/git-board/config.toml` when it is set):
+
+```toml
+template = "enac"   # a built-in name, a file or a URL
+```
+
+It only starts new boards: a repository with a `.git-board.toml` never reads it.
+
+A template names itself in a `[template]` table, which init copies:
+
+```toml
+[template]
+name = "enac"
+version = 1
+```
+
+`git board lint` then lists the drift (`template`): what the built-in template has that the file lacks (a field, a value) and a newer version. What the file has more, or spells or colors as its forge does, is the project's. A file or URL template isn't compared.
+
 | Table | What it sets |
 | --- | --- |
 | `[fields.<name>]` | a field's type, values, order, single or multiple: together, the project's ontology |
@@ -19,6 +44,7 @@ A repository without one starts from the default: **Start from the default** in 
 | `[uploads]` | where attached files go |
 | `[branches]` | the branch an issue suggests: its base and its name |
 | `[cycle]`, `[cycle.signoffs]` | the development cycle: which statuses are which stage, where plans live, which files are tests, who holds each gate |
+| `[template]` | the template the file came from, and its version, for lint's drift |
 | `[repos]` | the GitHub repositories whose labels Settings › Labels and `git board lint --create-labels` keep, and how the forges hold assignees |
 
 ## Fields

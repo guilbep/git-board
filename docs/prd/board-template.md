@@ -1,6 +1,6 @@
 # A new board starts as its forge, else as a template: PRD
 
-Nov 3, 2026 · issue #75 · Status: in progress (branch feat/75-board-template)
+Nov 3, 2026 · issue #75 · Status: done, ready to land (branch feat/75-board-template)
 
 Written from the issue's brief; the brief's choices are marked (user) and
 are final.
