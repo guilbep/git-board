@@ -2,8 +2,7 @@
 
 - Status: accepted (2026-11-03)
 - Date: 2026-11-03
-- Issue #76. The PRD is `docs/prd/datastores.md` (on the branch
-  `bug/74-clone-shows-board` for now, not yet on main).
+- Issue #76. The PRD is `docs/prd/datastores.md`.
 - Builds on the core's spec: [Data model](../spec/data-model.md),
   [Storage](../spec/storage.md) and [Sync](../spec/sync.md). It changes
   neither the storage format nor the refs.
