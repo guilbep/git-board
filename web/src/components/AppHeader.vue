@@ -96,7 +96,7 @@ import { openShortcuts, paletteOpen } from '@/commands';
 import { forgeStatus, loadForges } from '@/forges';
 import { cycleView, loadMe, me, when } from '@/me';
 import { loadSyncStatus, syncStatus } from '@/sync';
-import { loadRemotes, remotes, repo } from '@/remotes';
+import { checkOrigin, loadRemotes, remotes, repo } from '@/remotes';
 import { faviconDot, waitWords, waiting } from '@/ways';
 import { setFavicon } from '@/favicon';
 import GbIcon from '@/components/GbIcon.vue';
@@ -207,7 +207,7 @@ onMounted(() => {
   document.addEventListener('click', fold);
   if (!syncStatus.value) void loadSyncStatus();
   if (!forgeStatus.value) void loadForges();
-  if (!remotes.value) void loadRemotes();
+  void checkOrigin(); // what waits to get, fetched once in five minutes
   if (!me.value) void loadMe();
   if (!inbox.value) void loadInbox();
   stopLive = onLive((e) => {

@@ -76,7 +76,11 @@ func Serve(ctx context.Context, addr, me string, ready func(url string)) error {
 	// the pages' event streams end with ctx
 	srv := &http.Server{Handler: withCORS(newMux(s, http.FileServerFS(dist))), BaseContext: func(net.Listener) context.Context { return ctx }}
 	go s.watchRefs(3*time.Second, ctx.Done()) // changes made outside the API reach the pages
-	go s.firstPull()                          // a fresh clone opens on its remote's board
+	// a fresh clone opens on its remote's board; the writes wait from
+	// here, so that a page's fetch on open can't go first and leave
+	// origin fetched, the board still empty, and nothing pulled
+	s.writeMu.Lock()
+	go s.firstPull()
 
 	errs := make(chan error, len(listeners))
 	for _, l := range listeners {
@@ -171,9 +175,9 @@ func resolveMe(flag string) string {
 // firstPull brings a fresh clone its remote's board, once, as the server
 // starts (store.PullIfEmpty, docs/prd/clone-shows-board.md). What came,
 // or why nothing did, is kept for /api/me: the page that opens next says
-// it; a page already open hears it now.
+// it; a page already open hears it now. Called with writeMu held: it lets
+// go once the pull is done.
 func (s *apiServer) firstPull() {
-	s.writeMu.Lock()
 	n, err := s.b.PullIfEmpty(store.BoardRemote)
 	s.writeMu.Unlock()
 	note := firstPullNote{Remote: store.BoardRemote, Issues: n}

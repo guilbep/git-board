@@ -2,7 +2,8 @@
 // the sync page, which writes every answer of its fetches, pulls and
 // pushes here.
 import { computed, ref } from 'vue';
-import { getRemotes, type Remote } from '@/api/board';
+import { getRemotes, remoteAction, type Remote } from '@/api/board';
+import { toCheck } from '@/inboxcheck';
 import { repoName } from '@/releases';
 
 export const remotes = ref<Remote[] | null>(null);
@@ -19,5 +20,20 @@ export async function loadRemotes(): Promise<void> {
     remotes.value = (await getRemotes()).remotes;
   } catch {
     remotes.value = null; // the header just counts nothing for them
+  }
+}
+
+// checkOrigin: on opening the page, origin is fetched when this server
+// hasn't in five minutes (the inbox's FRESH), so that Sync's badge says
+// what waits to get. A fetch changes nothing local: never a pull, Pull
+// stays a click (docs/prd/clone-shows-board.md, 2). A refused fetch
+// leaves the badge as it was: the sync page says why.
+export async function checkOrigin(): Promise<void> {
+  await loadRemotes();
+  if (!toCheck(remotes.value ?? [], Date.now(), false).includes('origin')) return;
+  try {
+    remotes.value = (await remoteAction('origin', 'fetch')).remotes;
+  } catch {
+    // offline, a forge sync running, origin unreadable: nothing to count
   }
 }

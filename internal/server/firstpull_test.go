@@ -30,6 +30,7 @@ func TestFirstPullOnAFreshClone(t *testing.T) {
 		t.Fatal(err)
 	}
 	ts, s := serverOn(t, mine)
+	s.writeMu.Lock()
 	s.firstPull()
 	var me meResponse
 	call(t, "GET", ts.URL+"/api/me", nil, &me)
@@ -47,6 +48,7 @@ func TestFirstPullWhenOriginCantBeRead(t *testing.T) {
 	b := storetest.New(t)
 	storetest.Git(t, b.GitDir(), "remote", "add", "origin", filepath.Join(t.TempDir(), "gone.git"))
 	ts, s := serverOn(t, b)
+	s.writeMu.Lock()
 	s.firstPull()
 	var me meResponse
 	call(t, "GET", ts.URL+"/api/me", nil, &me)
@@ -61,6 +63,7 @@ func TestFirstPullSaysNothingOnABoard(t *testing.T) {
 	b := storetest.New(t)
 	storetest.NewIssue(t, b, "here already")
 	ts, s := serverOn(t, b)
+	s.writeMu.Lock()
 	s.firstPull()
 	var me meResponse
 	call(t, "GET", ts.URL+"/api/me", nil, &me)
