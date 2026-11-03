@@ -5,10 +5,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	"net/http"
 	"os"
-	"strings"
-	"time"
 
 	"github.com/spf13/cobra"
 
@@ -37,53 +34,12 @@ never overwrites one.
 	return cmd
 }
 
-// readTemplate is the file a template names: a built-in one (enac), an
-// http(s) URL, or a path; "" is the default. It must check, or nothing is
-// written.
-func readTemplate(spec string) (string, error) {
-	var s string
-	var err error
-	switch {
-	case spec == "":
-		return config.Default, nil
-	case strings.HasPrefix(spec, "https://") || strings.HasPrefix(spec, "http://"):
-		s, err = fetchTemplate(spec)
-	case !strings.ContainsAny(spec, `/\.`):
-		s, err = config.Template(spec)
-	default:
-		var b []byte
-		b, err = os.ReadFile(spec)
-		s = string(b)
-	}
-	if err != nil {
-		return "", err
-	}
-	if _, _, err := config.Check([]byte(s)); err != nil {
-		return "", fmt.Errorf("template %s: %w", spec, err)
-	}
-	return s, nil
-}
-
-func fetchTemplate(url string) (string, error) {
-	c := http.Client{Timeout: 30 * time.Second}
-	resp, err := c.Get(url)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("template %s: %s", url, resp.Status)
-	}
-	b, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-	return string(b), err
-}
-
 func runInit(out io.Writer, template string) error {
 	path := config.Path()
 	if path == config.FileName {
 		return errors.New("not in a git repository")
 	}
-	content, err := readTemplate(template)
+	content, err := config.Start(template)
 	if err != nil {
 		return err
 	}

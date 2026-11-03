@@ -91,7 +91,7 @@ func TestConfigFileStartsFromTheDefault(t *testing.T) {
 
 	var f configFile
 	call(t, "GET", ts.URL+"/api/config", nil, &f)
-	if f.Exists || f.Default != config.Default {
+	if start, _ := config.Start(""); f.Exists || f.Default != start {
 		t.Fatalf("GET without a file: exists %v, default %d bytes", f.Exists, len(f.Default))
 	}
 	if code := call(t, "PUT", ts.URL+"/api/config", map[string]string{"text": f.Default, "base": f.Hash}, nil); code != http.StatusOK {
