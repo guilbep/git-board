@@ -3,9 +3,14 @@
 // .git-board.toml with fields and no [forges] table, and an origin on
 // GitHub, so its forge is found in the remotes, as on a fresh clone. A fake
 // GitHub answers what the server asks of it (a found forge's current name),
-// so nothing leaves this machine. Playwright's webServer runs this; it
-// lives until killed. E2E_SKIP_BUILD=1 reuses web/dist and the binary.
+// so nothing leaves this machine: git never reaches origin either, its
+// first look fails at once, as an unreachable origin's does. Beside it, on
+// E2E_PORT + 2, the clone board: a fresh clone of a local origin that holds
+// two issues, whose first open pulls them (docs/prd/clone-shows-board.md).
+// Playwright's webServer runs this; it lives until killed.
+// E2E_SKIP_BUILD=1 reuses web/dist and the binary.
 import { execFileSync, spawn } from 'node:child_process';
+import { once } from 'node:events';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
@@ -38,6 +43,7 @@ const env = {
   GITHUB_TOKEN: 'e2e-token',
   GIT_AUTHOR_NAME: 'E2E', GIT_AUTHOR_EMAIL: 'e2e@example.com',
   GIT_COMMITTER_NAME: 'E2E', GIT_COMMITTER_EMAIL: 'e2e@example.com',
+  GIT_ALLOW_PROTOCOL: 'file', // git reaches local paths only: origin, git@github.com:o/r.git, can't be read
 };
 
 // the binary takes the fake GitHub's address at build time, as the Go
@@ -116,7 +122,47 @@ start = 2026-10-05
 sh('git', ['add', '.'], repo);
 sh('git', ['commit', '-q', '-m', 'the e2e board'], repo);
 
-console.log(`e2e board: ${repo} on :${port}, GitHub at ${api}`);
-const board = spawn(bin, ['serve', '--addr', `127.0.0.1:${port}`], { cwd: repo, env, stdio: 'inherit' });
-board.on('exit', (code) => process.exit(code ?? 1));
-for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => board.kill(sig));
+// a board served on p, once it answers
+const serve = async (dir, p) => {
+  const b = spawn(bin, ['serve', '--addr', `127.0.0.1:${p}`], { cwd: dir, env, stdio: 'inherit' });
+  for (let i = 0; i < 100; i++) {
+    if (await fetch(`http://127.0.0.1:${p}/api/config/model`).then((r) => r.ok, () => false)) return b;
+    await new Promise((ok) => setTimeout(ok, 100));
+  }
+  throw new Error(`the board on :${p} didn't answer`);
+};
+
+// the clone board: origin gets two issues from a seed clone (made through
+// its server: no command writes an issue), then a fresh clone of it opens
+const origin = join(work, 'origin.git');
+const seed = join(work, 'seed');
+const clone = join(work, 'clone');
+sh('git', ['init', '-q', '--bare', '-b', 'main', origin], work);
+mkdirSync(seed);
+sh('git', ['init', '-q', '-b', 'main'], seed);
+sh('git', ['config', 'commit.gpgsign', 'false'], seed);
+sh('git', ['remote', 'add', 'origin', origin], seed);
+sh('git', ['commit', '-q', '--allow-empty', '-m', 'the clone board'], seed);
+sh('git', ['push', '-q', 'origin', 'main'], seed);
+const seeder = await serve(seed, Number(port) + 3);
+try {
+  const post = async (path, body) => {
+    const r = await fetch(`http://127.0.0.1:${Number(port) + 3}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    if (!r.ok) throw new Error(`the seed's ${path}: ${r.status} ${await r.text()}`);
+  };
+  await post('/api/me', { name: 'Seed', email: 'seed@example.com' });
+  for (const title of ['Seeded alpha', 'Seeded beta']) await post('/api/issues', { title, body: '', labels: [] });
+} finally {
+  seeder.kill();
+  await once(seeder, 'exit'); // its lock goes with it
+}
+sh(bin, ['push'], seed);
+sh('git', ['clone', '-q', origin, clone], work);
+const cloneBoard = await serve(clone, Number(port) + 2);
+
+console.log(`e2e board: ${repo} on :${port}, GitHub at ${api}; clone board: ${clone} on :${Number(port) + 2}`);
+const board = await serve(repo, port);
+// one board gone, or a signal: both go
+process.on('exit', () => [board, cloneBoard].forEach((b) => b.kill()));
+for (const b of [board, cloneBoard]) b.on('exit', (code) => process.exit(code ?? 1));
+for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => process.exit(0));

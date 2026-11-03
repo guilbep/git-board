@@ -326,6 +326,8 @@ export interface MeResponse {
   avatars?: AvatarsMode;
   avatars_scope?: string; // the git config level that set it
   avatars_ignored?: string; // a board.avatars that is none of the three
+  // this clone opened with no board: what the server pulled from its remote, or why not
+  first_pull?: { remote: string; issues: number; error?: string };
 }
 
 export type AvatarsMode = 'forge' | 'gravatar' | 'none';

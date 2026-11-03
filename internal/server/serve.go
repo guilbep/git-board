@@ -76,6 +76,11 @@ func Serve(ctx context.Context, addr, me string, ready func(url string)) error {
 	// the pages' event streams end with ctx
 	srv := &http.Server{Handler: withCORS(newMux(s, http.FileServerFS(dist))), BaseContext: func(net.Listener) context.Context { return ctx }}
 	go s.watchRefs(3*time.Second, ctx.Done()) // changes made outside the API reach the pages
+	// a fresh clone opens on its remote's board; the writes wait from
+	// here, so that a page's fetch on open can't go first and leave
+	// origin fetched, the board still empty, and nothing pulled
+	s.writeMu.Lock()
+	go s.firstPull()
 
 	errs := make(chan error, len(listeners))
 	for _, l := range listeners {
@@ -165,4 +170,39 @@ func resolveMe(flag string) string {
 		return flag
 	}
 	return os.Getenv("GIT_BOARD_ME")
+}
+
+// firstPull brings a fresh clone its remote's board, once, as the server
+// starts (store.PullIfEmpty, docs/prd/clone-shows-board.md). What came,
+// or why nothing did, is kept for /api/me: the page that opens next says
+// it; a page already open hears it now. Called with writeMu held: it lets
+// go once the pull is done.
+func (s *apiServer) firstPull() {
+	n, err := s.b.PullIfEmpty(store.BoardRemote)
+	s.writeMu.Unlock()
+	note := firstPullNote{Remote: store.BoardRemote, Issues: n}
+	switch {
+	case err != nil:
+		log.Print(err)
+		note.Error = err.Error()
+	case n > 0:
+		log.Printf("a fresh clone: pulled %d issue%s from %s", n, map[bool]string{true: "", false: "s"}[n == 1], store.BoardRemote)
+	default:
+		return // nothing to say
+	}
+	s.firstMu.Lock()
+	s.first = &note
+	s.firstMu.Unlock()
+	s.events.publish(event{Kind: "settings"}) // the pages reload who you are, and the note with it
+	if n > 0 {
+		s.events.publish(event{Kind: "issues"})
+	}
+}
+
+// firstPullNote is what the first open of a fresh clone did: how many
+// issues it pulled from which remote, or why it couldn't.
+type firstPullNote struct {
+	Remote string `json:"remote"`
+	Issues int    `json:"issues"`
+	Error  string `json:"error,omitempty"`
 }

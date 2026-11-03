@@ -68,6 +68,13 @@
     Move them once, in a terminal: <code>git board switch</code> says what it would do, <code>git board switch --apply</code> does it, then <code>git board sync</code>.
   </p>
   <div v-if="tipWhere === 'strip'" class="app-tipstrip"><TipLine /></div>
+  <!-- a fresh clone: its board came from origin as it opened, or couldn't
+       (docs/prd/clone-shows-board.md) -->
+  <p v-if="me?.first_pull && !firstPullHidden" class="epfl-alert app-unswitched" :class="me.first_pull.error ? 'epfl-alert-warning' : 'epfl-alert-success'" role="status">
+    <template v-if="me.first_pull.error"><b>This clone has no board yet.</b> {{ me.first_pull.error }}. Pull it from Sync once {{ me.first_pull.remote }} answers.</template>
+    <template v-else><b>This clone had no board:</b> {{ me.first_pull.issues }} issue{{ me.first_pull.issues === 1 ? '' : 's' }} pulled from {{ me.first_pull.remote }}.</template>
+    <button type="button" class="gb-linkbtn" @click="firstPullHidden = true">Hide</button>
+  </p>
   <KeyboardHelp />
   <KeyLine />
   <CommandPalette :views="views" />
@@ -89,7 +96,7 @@ import { openShortcuts, paletteOpen } from '@/commands';
 import { forgeStatus, loadForges } from '@/forges';
 import { cycleView, loadMe, me, when } from '@/me';
 import { loadSyncStatus, syncStatus } from '@/sync';
-import { loadRemotes, remotes, repo } from '@/remotes';
+import { checkOrigin, loadRemotes, remotes, repo } from '@/remotes';
 import { faviconDot, waitWords, waiting } from '@/ways';
 import { setFavicon } from '@/favicon';
 import GbIcon from '@/components/GbIcon.vue';
@@ -140,6 +147,8 @@ watch(
 );
 
 const menu = ref<HTMLDetailsElement | null>(null);
+// the fresh clone's note, hidden for this page load
+const firstPullHidden = ref(false);
 
 // where the tip goes (docs/prd/header-help.md, 4): the header from 80rem
 // when its free space takes a tip, a strip under it from 48rem, else none
@@ -198,7 +207,7 @@ onMounted(() => {
   document.addEventListener('click', fold);
   if (!syncStatus.value) void loadSyncStatus();
   if (!forgeStatus.value) void loadForges();
-  if (!remotes.value) void loadRemotes();
+  void checkOrigin(); // what waits to get, fetched once in five minutes
   if (!me.value) void loadMe();
   if (!inbox.value) void loadInbox();
   stopLive = onLive((e) => {

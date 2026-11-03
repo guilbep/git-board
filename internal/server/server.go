@@ -84,7 +84,10 @@ type apiServer struct {
 
 	// live updates (events.go): the pages listening, and the refs last
 	// seen: all of them, and the releases' alone
-	events      broker
+	events broker
+	// first is what the first open of a fresh clone pulled (serve.go)
+	firstMu     sync.Mutex
+	first       *firstPullNote
 	refsMu      sync.Mutex
 	refs        string
 	releaseRefs string
