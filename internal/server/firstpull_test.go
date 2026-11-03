@@ -57,6 +57,47 @@ func TestFirstPullWhenOriginCantBeRead(t *testing.T) {
 	}
 }
 
+// A board with work of its own, origin two ahead: opening pulls nothing,
+// the page's fetch on open finds the two to get (Sync's badge) and changes
+// nothing local; Pull brings them (docs/prd/clone-shows-board.md, 2).
+func TestOpeningBehindOriginWaitsForPull(t *testing.T) {
+	t.Parallel()
+	mine, theirs := storetest.NewPair(t)
+	storetest.NewIssue(t, theirs, "theirs, one")
+	storetest.NewIssue(t, theirs, "theirs, two")
+	if _, err := theirs.Push("origin"); err != nil {
+		t.Fatal(err)
+	}
+	storetest.NewIssue(t, mine, "mine, not pushed")
+	ts, s := serverOn(t, mine)
+	s.writeMu.Lock()
+	s.firstPull()
+	issues := func() int {
+		t.Helper()
+		is, err := mine.ListIssues()
+		if err != nil {
+			t.Fatal(err)
+		}
+		return len(is)
+	}
+	var st remotesStatus
+	call(t, "GET", ts.URL+"/api/remotes", nil, &st)
+	if len(st.Remotes) != 1 || st.Remotes[0].Checked != nil || issues() != 1 {
+		t.Fatalf("opened: %+v, %d issues; want origin unchecked, 1 issue", st.Remotes, issues())
+	}
+	call(t, "POST", ts.URL+"/api/remotes/origin/fetch", nil, &st)
+	if o := st.Remotes[0]; o.Checked == nil || o.Issues.Receive != 2 || o.Issues.Send != 1 {
+		t.Errorf("after the fetch on open: %+v; want 2 to get, 1 to send", o)
+	}
+	if n := issues(); n != 1 {
+		t.Errorf("the fetch changed the board: %d issues", n)
+	}
+	call(t, "POST", ts.URL+"/api/remotes/origin/pull", nil, &st)
+	if n := issues(); n != 3 {
+		t.Errorf("after Pull: %d issues, want 3", n)
+	}
+}
+
 // A board with issues, or no remote: nothing to say.
 func TestFirstPullSaysNothingOnABoard(t *testing.T) {
 	t.Parallel()
