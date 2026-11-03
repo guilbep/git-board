@@ -48,6 +48,20 @@ func TestTemplateDrift(t *testing.T) {
 		t.Errorf("findings\n%q\nwant\n%q", msgs, want)
 	}
 
+	// with the Project named, its fields' values are the Project's: a
+	// MoSCoW without Could isn't drift
+	cfg, _, err = config.Check([]byte(strings.Replace(old, "version = 0", "version = 1", 1) + "\n[github-project]\nowner = \"EPFL-ENAC\"\nnumber = 53\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	msgs = nil
+	for _, f := range checkTemplate(cfg) {
+		msgs = append(msgs, f.Message)
+	}
+	if want := []string{"est: template enac has this field, this file doesn't"}; !slices.Equal(msgs, want) {
+		t.Errorf("with the Project: %q, want %q", msgs, want)
+	}
+
 	// no [template], or one that isn't built in: nothing to compare to
 	for _, src := range []string{"", "[template]\nname = \"ours\"\n"} {
 		cfg, _, err := config.Check([]byte(src))

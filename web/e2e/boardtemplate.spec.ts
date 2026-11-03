@@ -13,7 +13,7 @@ test('a board from its forge: no label differs, none to adopt', async ({ page, r
   await page.goto(`${enac}/#/settings/labels`);
   const table = page.locator('.gb-table').first();
   await expect(table.getByText('perf', { exact: true })).toBeVisible();
-  await expect(table.getByText('Same')).toHaveCount(12);
+  await expect(table.getByText('Same', { exact: true })).toHaveCount(12);
   await expect(table.getByText('In the Project').first()).toBeVisible();
   await expect(page.getByText('Color differs')).toHaveCount(0);
   await expect(page.getByText('Description differs')).toHaveCount(0);

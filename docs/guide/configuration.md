@@ -31,7 +31,7 @@ name = "enac"
 version = 1
 ```
 
-`git board lint` then lists the drift (`template`): what the built-in template has that the file lacks (a field, a value) and a newer version. What the file has more, or spells or colors as its forge does, is the project's. A file or URL template isn't compared.
+`git board lint` then lists the drift (`template`): what the built-in template has that the file lacks (a field, a value) and a newer version. What the file has more, or spells or colors as its forge does, is the project's, and so are the values of a field its `[github-project]` holds. A file or URL template isn't compared.
 
 | Table | What it sets |
 | --- | --- |

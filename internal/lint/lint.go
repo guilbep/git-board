@@ -403,7 +403,8 @@ func checkKinds(issues []store.Issue, cfg *config.Config) []Finding {
 // checkTemplate: what the built-in template the file names ([template])
 // has that the file lacks, its fields and their values, and a newer
 // version. What the file has more, or spells or colors otherwise (the
-// forge's), is the project's.
+// forge's), is the project's, and so are the values of a field its GitHub
+// Project holds.
 // ponytail: built-in templates only; a file or URL template isn't fetched at lint
 func checkTemplate(cfg *config.Config) []Finding {
 	name := cfg.Template.Name
@@ -427,6 +428,9 @@ func checkTemplate(cfg *config.Config) []Finding {
 		if !ok {
 			add("%s: template %s has this field, this file doesn't", field, name)
 			continue
+		}
+		if cfg.GithubProject.Number != 0 && cfg.FieldTarget(cfg.GitHubForge(), field) == config.TargetProject {
+			continue // its values are the Project's, which init read
 		}
 		var missing []string
 		for _, o := range tmpl.Fields[field].Options {
