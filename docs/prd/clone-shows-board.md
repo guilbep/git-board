@@ -1,7 +1,9 @@
 # A clone shows its board
 
-Status: PRD 2026-11-03, issue p0; first cut built the same day (acceptance 1, 3, 4; 2 is the fetch-on-open follow-up). First of four (then board-template,
-visibility-matrix, datastores).
+Status: PRD 2026-11-03, issue p0; built the same day: acceptance 1 to 4 (2: a page
+opening fetches origin once in five minutes, Sync's badge says "N to get"); 5
+waits for visibility-matrix's test repository. First of four (then
+board-template, visibility-matrix, datastores).
 
 ## Why
 
