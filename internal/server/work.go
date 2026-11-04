@@ -8,16 +8,16 @@ import (
 	"time"
 
 	"github.com/guilbep/git-board/core/cycle"
+	"github.com/guilbep/git-board/core/cycle/work"
 	"github.com/guilbep/git-board/core/inbox"
 	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/branches"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/evidence"
-	"github.com/guilbep/git-board/internal/work"
 	"github.com/guilbep/git-board/internal/wtx"
 )
 
-// The Work page (internal/work): every open issue's cycle, grouped.
+// The Work page (core/cycle/work): every open issue's cycle, grouped.
 // GET /api/work?who=me|team (default me).
 type workResponse struct {
 	Me      inbox.Me     `json:"me"`

@@ -1116,7 +1116,7 @@ export interface CycleStages {
 // a cell of the rail: a sign-off's status is its validation status
 export interface StageStep { id: string; kind: string; name: string; status?: string }
 
-// The Work page (internal/work, internal/server/work.go): every open
+// The Work page (core/cycle/work, internal/server/work.go): every open
 // issue's cycle, grouped into what needs the viewer and what waits on others.
 export interface WorkRow {
   issue: Issue;
