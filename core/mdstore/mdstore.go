@@ -255,5 +255,33 @@ func takeOver(path string) {
 	}
 }
 
+// LockFiles takes the board's lock, .board/board.lock, waiting while
+// another holds it, in this process or another, until ctx is done: the
+// Markdown files are read in, written and rendered by one at a time
+// (internal/store). The OS lets it go when its holder dies; the file
+// stays, as a lock file in use is never removed.
+func (s *Store) LockFiles(ctx context.Context) (unlock func(), err error) {
+	f, err := os.OpenFile(filepath.Join(s.root(), "board.lock"), os.O_RDWR|os.O_CREATE, 0o644)
+	if err != nil {
+		return nil, fmt.Errorf("mdstore: %w", err)
+	}
+	for {
+		err := filelock.TryLock(f)
+		if err == nil {
+			return func() { filelock.Unlock(f); f.Close() }, nil
+		}
+		if !errors.Is(err, filelock.ErrHeld) {
+			f.Close()
+			return nil, fmt.Errorf("mdstore: locking %s: %w", f.Name(), err)
+		}
+		select {
+		case <-ctx.Done():
+			f.Close()
+			return nil, fmt.Errorf("mdstore: %s is held: %w", f.Name(), ctx.Err())
+		case <-time.After(5 * time.Millisecond):
+		}
+	}
+}
+
 // Folder is the machine's own folder.
 func (s *Store) Folder() string { return s.folder }
