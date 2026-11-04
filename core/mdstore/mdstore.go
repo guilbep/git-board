@@ -22,6 +22,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -107,7 +108,7 @@ func (s *Store) Heads(_ context.Context, kind string) (map[string]string, error)
 		if !ok || !entityID.MatchString(id) {
 			continue
 		}
-		data, err := readFile(s.path(kind, id))
+		data, err := readPacks(s.path(kind, id))
 		if err != nil {
 			return nil, err
 		}
@@ -120,7 +121,7 @@ func (s *Store) Heads(_ context.Context, kind string) (map[string]string, error)
 
 // Packs are an entity's packs, and how many.
 func (s *Store) Packs(_ context.Context, kind, id string) ([][]byte, string, error) {
-	data, err := readFile(s.path(kind, id))
+	data, err := readPacks(s.path(kind, id))
 	if err != nil {
 		return nil, "", err
 	}
@@ -153,6 +154,24 @@ func readFile(path string) ([]byte, error) {
 		return nil, fmt.Errorf("mdstore: %w", err)
 	}
 	return data, nil
+}
+
+// readPacks is a pack file's whole packs (whole).
+func readPacks(path string) ([]byte, error) {
+	data, err := readFile(path)
+	return whole(data), err
+}
+
+// whole is data without a last line that is being appended. A reader may
+// see an append in parts (a write that crosses a page is copied a page at
+// a time), so a pack cut short at the end: Add writes each with its line
+// feed, and a pack cut short is never JSON, while a whole one whose line
+// feed a hand edit took is. A version is whole data's.
+func whole(data []byte) []byte {
+	if i := bytes.LastIndexByte(data, '\n'); !json.Valid(data[i+1:]) {
+		return data[:i+1]
+	}
+	return data
 }
 
 // lines are a pack file's packs. A merge may leave a line twice: it is
@@ -188,7 +207,7 @@ func (s *Store) Add(_ context.Context, kind, id string, pack []byte, prev string
 	if err != nil {
 		return "", err
 	}
-	if version(data) != prev {
+	if version(whole(data)) != prev { // no append is half done under the lock
 		return "", fmt.Errorf("%w: %s %s", datastore.ErrMoved, kind, id)
 	}
 	line := append(bytes.Clone(pack), '\n')
