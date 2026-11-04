@@ -10,8 +10,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/guilbep/git-board/core/release"
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/store"
 )
 
 var (
@@ -258,14 +258,14 @@ func deployedOf(envs ...EnvState) [][]Deployed {
 // that of <registry>/<image>:<commit> when built from the commit. When no
 // registry has one, the image is built on the first; a registry still
 // lacking it gets a copy.
-func (r *Runner) ensureImages(ctx context.Context, t Target, recorded []store.Artifact, where map[string][]string) ([]store.Artifact, error) {
+func (r *Runner) ensureImages(ctx context.Context, t Target, recorded []release.Artifact, where map[string][]string) ([]release.Artifact, error) {
 	tree := "" // the checkout of the commit, made for the first build
 	defer func() {
 		if tree != "" {
 			r.removeCheckout(tree)
 		}
 	}()
-	var arts []store.Artifact
+	var arts []release.Artifact
 	for _, img := range r.Cfg.Images {
 		regs := where[img.Name]
 		err := r.do(img.Name, func() (string, error) {
@@ -305,7 +305,7 @@ func (r *Runner) ensureImages(ctx context.Context, t Target, recorded []store.Ar
 				if err := r.Tools.Tag(ctx, reg+"/"+img.Name+"@"+digests[reg], t.Version); err != nil {
 					return "", fmt.Errorf("%s: %w", img.Name, err)
 				}
-				arts = append(arts, store.Artifact{Image: img.Name, Registry: reg, Digest: digests[reg]})
+				arts = append(arts, release.Artifact{Image: img.Name, Registry: reg, Digest: digests[reg]})
 			}
 			return detail, nil
 		})
@@ -318,7 +318,7 @@ func (r *Runner) ensureImages(ctx context.Context, t Target, recorded []store.Ar
 
 // existing is img's digest on reg for commit: the record's, else that of
 // <reg>/<img>:<commit> when built from commit, else "".
-func (r *Runner) existing(ctx context.Context, recorded []store.Artifact, img, reg, commit string) (string, error) {
+func (r *Runner) existing(ctx context.Context, recorded []release.Artifact, img, reg, commit string) (string, error) {
 	for _, a := range recorded {
 		if a.Image == img && a.Registry == reg {
 			return a.Digest, nil

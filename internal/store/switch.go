@@ -19,6 +19,7 @@ import (
 	"github.com/guilbep/git-board/core/issue"
 	"github.com/guilbep/git-board/core/oplog"
 	"github.com/guilbep/git-board/core/people"
+	"github.com/guilbep/git-board/core/release"
 	"github.com/guilbep/git-board/core/syncer"
 )
 
@@ -609,7 +610,7 @@ var forkReleaseKinds = map[int]string{1: "create", 2: "set-notes", 3: "comment",
 type forkOp struct {
 	author, kind string
 	time         int64
-	data         releaseData
+	data         release.Data
 }
 
 // readForkRelease is a record's operations, its packs by edit clock.
@@ -663,7 +664,7 @@ func readForkRelease(s *gitstore.Store, head gitstore.Hash) ([]forkOp, error) {
 				Type      int   `json:"type"`
 				Timestamp int64 `json:"timestamp"`
 			}
-			var d releaseData
+			var d release.Data
 			if err := errors.Join(json.Unmarshal(r, &o), json.Unmarshal(r, &d)); err != nil {
 				return nil, fmt.Errorf("commit %s: %w", h, err)
 			}
@@ -763,16 +764,16 @@ func carryReleases(ctx context.Context, s *gitstore.Store, person func(forkID st
 	}
 	rep.Releases = len(heads)
 	have := map[string]bool{}
-	ids, err := oplog.ListContext(ctx, s, "release")
+	ids, err := oplog.ListContext(ctx, s, release.Kind)
 	if err != nil {
 		return err
 	}
 	for _, id := range ids {
-		l, err := oplog.LoadContext(ctx, s, "release", id)
+		l, err := oplog.LoadContext(ctx, s, release.Kind, id)
 		if err != nil {
 			return err
 		}
-		var d releaseData
+		var d release.Data
 		if len(l.Entries) > 0 && json.Unmarshal(l.Entries[0].Data, &d) == nil {
 			have[d.Commit] = true
 		}
@@ -796,7 +797,7 @@ func carryReleases(ctx context.Context, s *gitstore.Store, person func(forkID st
 			raw, _ := json.Marshal(o.data)
 			out = append(out, oplog.Op{Kind: o.kind, Author: who, Time: o.time, Data: raw})
 		}
-		if _, err := oplog.Create(ctx, s, "release", "", out); err != nil {
+		if _, err := oplog.Create(ctx, s, release.Kind, "", out); err != nil {
 			return fmt.Errorf("%s: %w", name, err)
 		}
 		have[ops[0].data.Commit] = true

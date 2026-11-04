@@ -18,10 +18,10 @@ import (
 
 	"github.com/guilbep/git-board/core/issue"
 	"github.com/guilbep/git-board/core/model"
+	"github.com/guilbep/git-board/core/release"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/ship"
 	"github.com/guilbep/git-board/internal/ship/shiptest"
-	"github.com/guilbep/git-board/internal/store"
 	"github.com/guilbep/git-board/internal/store/storetest"
 )
 
@@ -365,7 +365,7 @@ func TestReleasesNotesAndComments(t *testing.T) {
 	c := firstCommit(t, fx)
 	fx.Tag(t, c, "v1.0.0")
 	runs(t, fx, "prod", c, "v1.0.0")
-	if _, err := s.b.CreateRelease(store.ReleaseRecord{Commit: c}); err != nil {
+	if _, err := s.b.CreateRelease(release.Record{Commit: c}); err != nil {
 		t.Fatal(err)
 	}
 	if status := call(t, "PUT", ts.URL+"/api/releases/v1.0.0/notes", map[string]string{"notes": "the first"}, nil); status != http.StatusOK {
@@ -504,7 +504,7 @@ func TestReleasesFromOutsideArePublished(t *testing.T) {
 		t.Errorf("an issue edit also published %q", kind)
 	}
 
-	if _, err := s.b.CreateRelease(store.ReleaseRecord{Commit: "0123456789abcdef0123456789abcdef01234567"}); err != nil {
+	if _, err := s.b.CreateRelease(release.Record{Commit: "0123456789abcdef0123456789abcdef01234567"}); err != nil {
 		t.Fatal(err)
 	}
 	for timeout := time.After(5 * time.Second); ; {
@@ -527,7 +527,7 @@ func TestReleasesRequestChecks(t *testing.T) {
 	c := firstCommit(t, fx)
 	fx.Tag(t, c, "v1.0.0", "v1.0.1")
 	runs(t, fx, "prod", c, "v1.0.1")
-	if _, err := s.b.CreateRelease(store.ReleaseRecord{Commit: c}); err != nil { // v1.0.0's and v1.0.1's
+	if _, err := s.b.CreateRelease(release.Record{Commit: c}); err != nil { // v1.0.0's and v1.0.1's
 		t.Fatal(err)
 	}
 	fx.Tag(t, fx.Commit(t, "later"), "v1.0.2") // no record

@@ -14,6 +14,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/guilbep/git-board/core/release"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/store"
 )
@@ -147,7 +148,7 @@ func (r *Runner) reconcile(ctx context.Context) (pushed []Tag, pendErr, err erro
 			continue
 		}
 		recorded[t.Commit] = true
-		rec := store.ReleaseRecord{Commit: t.Commit}
+		rec := release.Record{Commit: t.Commit}
 		for _, p := range tags[i+1:] {
 			if p.Version.RC == 0 {
 				rec.Previous = p.Name
@@ -166,7 +167,7 @@ func (r *Runner) reconcile(ctx context.Context) (pushed []Tag, pendErr, err erro
 					return pushed, pendErr, err
 				}
 				if ok {
-					rec.Artifacts = append(rec.Artifacts, store.Artifact{Image: img.Name, Registry: d.Registry, Digest: digest})
+					rec.Artifacts = append(rec.Artifacts, release.Artifact{Image: img.Name, Registry: d.Registry, Digest: digest})
 				}
 			}
 		}

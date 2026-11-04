@@ -19,6 +19,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/guilbep/git-board/core/release"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/store"
 )
@@ -98,7 +99,7 @@ func Infer(ctx context.Context, dir string) (Setup, error) {
 // binaries builds the archives of t in a clean checkout of it and
 // publishes them on the forge's release with notes: the build and
 // publish steps. Nothing when the table lists no binaries.
-func (r *Runner) binaries(ctx context.Context, t Tag, notes string) ([]store.Asset, error) {
+func (r *Runner) binaries(ctx context.Context, t Tag, notes string) ([]release.Asset, error) {
 	if len(r.Cfg.Binaries) == 0 {
 		return nil, nil
 	}
@@ -111,7 +112,7 @@ func (r *Runner) binaries(ctx context.Context, t Tag, notes string) ([]store.Ass
 	}
 	defer r.removeCheckout(dir)
 	dist := filepath.Join(dir, "dist")
-	var assets []store.Asset
+	var assets []release.Asset
 	err = r.do("build", func() (string, error) {
 		what := "for " + strings.Join(r.Cfg.BuildPlatforms(), ", ")
 		if r.Cfg.Build != "" {
@@ -279,7 +280,7 @@ func zipDir(out, dir string) error {
 // checksums writes dist/checksums.txt over dist's files, in sha256sum's
 // format, and returns them as assets; none when dist doesn't exist.
 // ponytail: a build command's own checksums.txt is rewritten, the same
-func checksums(dist string) ([]store.Asset, error) {
+func checksums(dist string) ([]release.Asset, error) {
 	entries, err := os.ReadDir(dist) // sorted by name
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, nil
@@ -287,7 +288,7 @@ func checksums(dist string) ([]store.Asset, error) {
 	if err != nil {
 		return nil, err
 	}
-	var assets []store.Asset
+	var assets []release.Asset
 	var b strings.Builder
 	for _, e := range entries {
 		if !e.Type().IsRegular() || e.Name() == "checksums.txt" {
@@ -304,7 +305,7 @@ func checksums(dist string) ([]store.Asset, error) {
 			return nil, err
 		}
 		sum := fmt.Sprintf("%x", h.Sum(nil))
-		assets = append(assets, store.Asset{Name: e.Name(), SHA256: sum})
+		assets = append(assets, release.Asset{Name: e.Name(), SHA256: sum})
 		fmt.Fprintf(&b, "%s  %s\n", sum, e.Name())
 	}
 	if len(assets) == 0 {

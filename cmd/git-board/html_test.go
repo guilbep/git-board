@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/guilbep/git-board/core/release"
 	"github.com/guilbep/git-board/internal/ship"
 	"github.com/guilbep/git-board/internal/ship/shiptest"
-	"github.com/guilbep/git-board/internal/store"
 )
 
 const htmlTestConfig = `
@@ -291,7 +291,7 @@ func TestHTMLWritesReleases(t *testing.T) {
 
 	c := shiptest.Git(t, fx.App, "rev-list", "--max-parents=0", "HEAD")
 	fx.Tag(t, c, "v1.0.1-rc.1")
-	rec, err := r.B.CreateRelease(store.ReleaseRecord{Commit: c})
+	rec, err := r.B.CreateRelease(release.Record{Commit: c})
 	if err != nil {
 		t.Fatalf("CreateRelease: %v", err)
 	}
