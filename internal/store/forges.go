@@ -84,7 +84,9 @@ type ForgeRun struct {
 	AllowCreate bool
 	// Merge, in a dry run, is the git remote whose fetched copies
 	// (refs/board-remotes/<Merge>/) are merged into the check's copy
-	// first: the whole sync's check counts what its pull brings in.
+	// first: the whole sync's check counts what its pull brings in. A
+	// board kept outside git has no remote's copies, and no pull: Merge is
+	// ignored there.
 	Merge string
 	See   func(SyncEvent) // nil hears nothing
 }
@@ -190,9 +192,6 @@ func (b *Backend) forgeSync(ctx context.Context, run ForgeRun, way syncWay, issu
 			}
 		}
 	case run.DryRun:
-		if run.Merge != "" {
-			return syncer.Report{}, b.missing("merging what " + run.Merge + " has")
-		}
 		scratch, done, err := b.memScratch(ctx)
 		if err != nil {
 			return syncer.Report{}, err
