@@ -165,7 +165,7 @@ func TestIndexRebuilds(t *testing.T) {
 				t.Fatalf("after: %v, want %v and %v", got, x.ID, y.ID)
 			}
 			var v int
-			if err := ix.db.QueryRow("PRAGMA user_version").Scan(&v); err != nil || v != 1 {
+			if err := ix.db.QueryRow("PRAGMA user_version").Scan(&v); err != nil || v != version {
 				t.Fatalf("user_version = %d, %v", v, err)
 			}
 		})

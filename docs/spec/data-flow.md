@@ -57,7 +57,7 @@ flowchart TB
   ds --> copy
   store -. "renders NNN-slug.md, reads hand edits" .-> md
   index -. "sqlite, for git and forge only" .-> folder
-  index -. "git_board_index_v1, on PostgreSQL" .-> pg
+  index -. "git_board_index_v2, on PostgreSQL" .-> pg
   syncer -. "sync.lock, journal" .-> folder
 ```
 
