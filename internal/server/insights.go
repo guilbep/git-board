@@ -52,6 +52,12 @@ func (s *apiServer) handleInsights(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, insights.Compute(history, o))
 }
 
+// BurnupSprint is burnupSprint, for git board insights: values are the
+// labels in use, by field.
+func BurnupSprint(cfg *config.Config, now time.Time, values map[string][]string) *insights.Sprint {
+	return burnupSprint(cfg, now, values)
+}
+
 // burnupSprint is the sprint the burn-up follows: today's, when an issue
 // is in it, else the latest started one that has issues.
 func burnupSprint(cfg *config.Config, now time.Time, values map[string][]string) *insights.Sprint {

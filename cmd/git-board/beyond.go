@@ -10,7 +10,7 @@ import (
 // addBeyond adds what goes beyond gh and glab (#88 P2): deleting, undo,
 // labels, config, forge status and login, insights, and -C.
 func addBeyond(root *cobra.Command) {
-	root.AddCommand(newDeleteCmd(), newUndoCmd(), newLabelsCmd(), newConfigCmd())
+	root.AddCommand(newDeleteCmd(), newUndoCmd(), newLabelsCmd(), newConfigCmd(), newInsightsCmd())
 	forgeAuth(root)
 	var dir string
 	root.PersistentFlags().StringVarP(&dir, "directory", "C", "", "run as if started in this directory, as git -C does")

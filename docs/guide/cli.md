@@ -354,6 +354,21 @@ direction is refused (exit code 2). `-L, --limit` keeps the first N after
 sorting. `--group <field>` groups, `--md` and `--json` render. `view
 <name>` runs a view from `.git-board.toml`.
 
+## `insights`: flow, throughput, cycle time
+
+```bash
+git board insights                         # the last 90 days, by status
+git board insights --days 30 --field prio
+git board insights --view backlog --json
+```
+
+What the web UI's Insights page shows, as text: the headlines, the open
+issues by the field's value today and `--days` ago, the issues opened and
+closed each week (the last `--weeks`, 8), the cycle time's median and
+85th percentile, and the current sprint's burn-up. `--view` takes a
+view's issues alone, open and closed. `--json` prints what the page reads
+(`GET /api/insights`).
+
 ## JSON output
 
 The field names below are stable: new ones may come, these keep their
@@ -432,6 +447,7 @@ Errors go to stderr, prefixed `error:`.
 | `gh label edit old --name new` | `glab label edit` | `git board labels rename old new` (on every issue) |
 | `gh issue develop N` | `glab mr create --related-issue N` | `git board branch N` (prints the branch and the command) |
 | | `glab issue view N -s` (system notes) | `git board log N` (every change, text edits too) |
+| | `glab issue board view` (counts) | `git board insights` (flow, throughput, cycle time, burn-up) |
 | `gh project item-edit …` | `glab issue board …` | `git board move N --next`, `git board project` |
 
 `N` is any [name of an issue](#naming-an-issue). Not there yet: templates, pinning, locking (no permissions in a
