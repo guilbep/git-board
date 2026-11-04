@@ -410,9 +410,42 @@ kinds = { bug = "bug", feat = "feat", perf = "perf", chore = "chore" }
 
 A branch names an issue when its first number is the issue's number, with or without the project's prefix (`fix/vm-62-…`, `fix/62-…`, `2518-…`: its project number once the project numbers its issues, else a forge's), or when a word in it starts the issue's git-bug id (7 characters or more). Local branches and the remotes' (as last fetched) are listed.
 
+## Experimental features
+
+*These are the toggles of Settings › Experimental; this section is the reference.*
+
+Three features are still being built, and stay off unless the team turns them on. git-board's core, your issues kept in git and synced with whatever forge, works without them.
+
+```toml
+[experimental]
+features = ["cycle", "agents", "worktrees"]
+```
+
+| Feature | What it turns on |
+|---|---|
+| `cycle` | The development cycle: the cycle's issue page, its steps and gates, step 4's tests and checks, the Work page, Settings › Cycle, the issue page choice in Settings › You, and `git board verify`. |
+| `agents` | Coding agents: Start an agent and Brief the agent on an issue, Send to the agent from the composer and a review thread, the Work page's Agents, and the AI's risk suggestion (`LLM_BASE_URL`). |
+| `worktrees` | Settings › Worktrees, which writes `wtx.toml` ([Worktrees](#worktrees)). |
+
+The file's list is the team's. One person trying a feature alone sets it in their clone's git config, a comma list that replaces the file's list in that clone (empty turns them all off there):
+
+```sh
+git config board.experimental cycle,agents   # this clone
+git config --unset board.experimental        # back to the file's list
+```
+
+While a feature is off:
+
+- its commands are hidden from `git board --help` and refuse with a sentence naming the switch (`git board verify` is the cycle's);
+- its API routes answer 404 with `{"code": "experimental", "error": "…"}`, the error naming the switch: `/api/issues/{id}/cycle…`, `/api/issues/{id}/tests…`, `/api/checks/setup`, `/api/work` and `PUT /api/me/view` (the cycle); `/api/issues/{id}/agent…` (the agents); `/api/worktrees…` (the worktrees);
+- the web UI hides its pages, tabs, menu entries and controls: `GET /api/me` lists the features on as `experimental`;
+- with the cycle off, an issue opens on the classic page whatever `board.view` says, a comment carries no step, and `[cycle]` is not checked: what a broken table fails is a warning in Settings › The file, not an error that stops every command. With the cycle on, it is refused as before.
+
+A name the list doesn't know is a warning, and ignored.
+
 ## Cycle
 
-**On or off.** A board with a `[cycle]` table walks the cycle. Any of its keys, or a subtable such as `[cycle.signoffs]` alone, is enough, even an empty `[cycle]`. A board without one opens its issues on the **classic page**: the title and its meta line; the Conversation tab with the description, every comment and change in order, and the composer; the History tab; and the fields aside. Each person can choose for themselves, and that wins over the file: in Settings › You (As the board says, Classic, or The cycle's), which sets `board.view` in this repository's git config, or with git config directly:
+**On or off.** The cycle is experimental: with `"cycle"` in [`[experimental] features`](#experimental-features), a board with a `[cycle]` table walks the cycle. Any of its keys, or a subtable such as `[cycle.signoffs]` alone, is enough, even an empty `[cycle]`. A board without one opens its issues on the **classic page**: the title and its meta line; the Conversation tab with the description, every comment and change in order, and the composer; the History tab; and the fields aside. Each person can choose for themselves, and that wins over the file: in Settings › You (As the board says, Classic, or The cycle's), which sets `board.view` in this repository's git config, or with git config directly:
 
 ```sh
 git config board.view cycle             # this repository: the cycle's page
@@ -660,6 +693,8 @@ A question is a comment by someone else than the viewer with `ask` metadata, or,
 ## Worktrees
 
 *These are the forms of Settings › Worktrees; this section is the reference.*
+
+Experimental: Settings › Worktrees needs `"worktrees"`, and starting or briefing an agent `"agents"`, in [`[experimental] features`](#experimental-features).
 
 git-board starts agents with [wtx](https://github.com/EPFL-ENAC/wtx): one agent, one worktree, one branch, one PR. wtx, `wt` and `tmux` run on the machine where `git board serve` runs, and git-board calls wtx there, with an argument list, never a shell line.
 

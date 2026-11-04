@@ -50,7 +50,7 @@
           </template>
         </section>
 
-        <section v-if="me?.view" aria-labelledby="set-view">
+        <section v-if="me?.view && cycleOn" aria-labelledby="set-view">
           <h3 id="set-view" class="h5">Your issue page</h3>
           <p>{{ viewWords(me) }}</p>
           <div class="gb-opts" role="radiogroup" aria-labelledby="set-view">
@@ -108,10 +108,11 @@
       <div v-show="tab === 'sprints'" class="set-wrap set-wrap-wide"><SprintsSettings /></div>
       <div v-show="tab === 'roles'" class="set-wrap set-wrap-wide"><RolesSettings /></div>
       <div v-show="tab === 'branches'" class="set-wrap set-wrap-wide"><BranchesSettings /></div>
-      <div v-show="tab === 'cycle'" class="set-wrap set-wrap-wide"><CycleSettings /></div>
+      <div v-if="cycleOn" v-show="tab === 'cycle'" class="set-wrap set-wrap-wide"><CycleSettings /></div>
       <div v-show="tab === 'release'" class="set-wrap set-wrap-wide"><ReleaseSettings /></div>
       <div v-show="tab === 'repos'" class="set-wrap set-wrap-wide"><ReposSettings /></div>
       <div v-show="tab === 'attachments'" class="set-wrap set-wrap-wide"><AttachmentsSettings /></div>
+      <div v-show="tab === 'experimental'" class="set-wrap set-wrap-wide"><ExperimentalSettings /></div>
       <!-- Advanced: the file itself, for what the forms don't cover -->
       <div v-show="tab === 'advanced'" class="set-wrap set-wrap-wide">
         <p v-if="cycleView && settings?.cycle.guessed && settings.cycle.closing" class="gb-hint">
@@ -139,10 +140,11 @@ import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router';
 import { resetTips, setTipsOff, tipsOff } from '@/tips';
 import { getDatastore, getNumbers, getSettings, getViews, getWhole, getWorktrees, setAvatars, setView, type AvatarsMode, type Datastore, type Labels, type Numbers, type Settings, type WholeStatus, type Worktrees } from '@/api/board';
 import { message } from '@/issue';
-import { classicPeek, cycleView, loadMe, me } from '@/me';
+import { classicPeek, cycleOn, cycleView, loadMe, me, worktreesOn } from '@/me';
+import { featureOn, type Feature } from '@/experimental';
 import { viewWords } from '@/view';
 import { dirtySections, loadConfigModel } from '@/configmodel';
-import { settingsGroups, settingsTab, settingsTabs, syncSummary } from '@/settingstabs';
+import { settingsGroups, settingsTab, syncSummary, visibleTabs } from '@/settingstabs';
 import { numbersSummary } from '@/numbers';
 import AppHeader from '@/components/AppHeader.vue';
 import IdentityChooser from '@/components/IdentityChooser.vue';
@@ -150,6 +152,7 @@ import AttachmentsSettings from '@/components/AttachmentsSettings.vue';
 import BranchesSettings from '@/components/BranchesSettings.vue';
 import ConfigEditor from '@/components/ConfigEditor.vue';
 import CycleSettings from '@/components/CycleSettings.vue';
+import ExperimentalSettings from '@/components/ExperimentalSettings.vue';
 import FieldsSettings from '@/components/FieldsSettings.vue';
 import LabelsSettings from '@/components/LabelsSettings.vue';
 import ReleaseSettings from '@/components/ReleaseSettings.vue';
@@ -165,9 +168,11 @@ import WorktreesSettings from '@/components/WorktreesSettings.vue';
 
 const route = useRoute();
 const router = useRouter();
-const tab = computed(() => settingsTab(route.params.tab));
-const groups = settingsGroups();
-const tabs = settingsTabs;
+// an experimental feature's tab shows while it is on (/api/me)
+const isOn = (f: string) => featureOn(me.value?.experimental, f as Feature);
+const tab = computed(() => settingsTab(route.params.tab, isOn));
+const groups = computed(() => settingsGroups(isOn));
+const tabs = computed(() => visibleTabs(isOn));
 
 // the dropdown's move: a plain push — the leave guard asks on dirty tabs
 function goTab(id: string) {
@@ -269,8 +274,15 @@ onMounted(() => {
   void reload();
   getWhole().then((w) => (whole.value = w), () => {});
   loadNumbers();
-  getWorktrees().then((w) => (worktrees.value = w), () => {});
 });
+// the menu's worktrees line, while the worktrees are on
+watch(
+  worktreesOn,
+  (on) => {
+    if (on) getWorktrees().then((w) => (worktrees.value = w), () => {});
+  },
+  { immediate: true },
+);
 // a form tab with a draft: say so before the page goes — the browser's
 // beforeunload for a reload or a close, the router's guard for a link
 const beforeUnload = (e: BeforeUnloadEvent) => {

@@ -319,6 +319,9 @@ export interface MeResponse {
   avatars_ignored?: string; // a board.avatars that is none of the three
   // this clone opened with no board: what the server pulled from its remote, or why not
   first_pull?: { remote: string; issues: number; error?: string };
+  // the work-in-progress features on ([experimental] features, or this
+  // clone's board.experimental): the page hides the others (experimental.ts)
+  experimental?: string[];
 }
 
 export type AvatarsMode = 'forge' | 'gravatar' | 'none';
@@ -774,6 +777,9 @@ export interface ConfigRelease {
 export interface ConfigModel {
   hash: string;
   exists: boolean;
+  // [experimental] features as the file lists them; local, this clone's
+  // board.experimental when set (it wins); on, what runs here; known, every feature
+  experimental: { features: string[]; local: string[] | null; on: string[]; known: { name: string; title: string; description: string }[] };
   error?: string; // the file doesn't parse: the forms show it, Advanced fixes it
   fields: Record<string, ConfigField>;
   forges: import('@/fieldtargets').ForgeModel[]; // the [forges.<name>] tables, mappings with them

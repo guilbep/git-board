@@ -138,6 +138,7 @@ type raw struct {
 	Template      TemplateRef       `toml:"template"`
 	Release       Release           `toml:"release"`
 	Labels        Labels            `toml:"labels"`
+	Experimental  experimentalTable `toml:"experimental"`
 	// Forges holds publish-private, discover and a table per forge
 	// (forges.go).
 	Forges map[string]toml.Primitive `toml:"forges"`
@@ -302,6 +303,14 @@ type Config struct {
 	// Unknown is the file's keys git-board doesn't read, a misspelled one
 	// above all (Load): each is its zero value, so lint names them.
 	Unknown []string
+	// Features are [experimental] features, the work-in-progress features
+	// the team turned on; a clone's git config board.experimental
+	// replaces them (experimental.go, Experimental).
+	Features []string
+	// local is board.experimental, when this clone's git config sets it
+	// (UseLocal); cycleErr what [cycle] fails, kept while the cycle is off
+	local    *[]string
+	cycleErr error
 }
 
 // TemplateRef names a built-in template and its version (templates/).
@@ -348,7 +357,9 @@ func PathIn(dir string) string {
 func Load(path string) (*Config, error) {
 	// No config is a valid start: fields are the labels' own namespaces.
 	if _, err := os.Stat(path); errors.Is(err, fs.ErrNotExist) {
-		return &Config{Discover: true}, nil
+		cfg := &Config{Discover: true}
+		cfg.UseLocal(filepath.Dir(path))
+		return cfg, nil
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -362,6 +373,12 @@ func Load(path string) (*Config, error) {
 		cfg.Unknown = append(cfg.Unknown, k.String())
 	}
 	warnUnknown(path, cfg.Unknown)
+	// a clone's own board.experimental, the cycle's table checked when it
+	// turns the cycle on
+	cfg.UseLocal(filepath.Dir(path))
+	if cfg.local != nil && slices.Contains(*cfg.local, FeatureCycle) && cfg.cycleErr != nil {
+		return nil, fmt.Errorf("parsing %s: %w", path, cfg.cycleErr)
+	}
 	return cfg, nil
 }
 
@@ -394,11 +411,6 @@ func parse(data []byte) (*Config, toml.MetaData, error) {
 	if err != nil {
 		return nil, md, err
 	}
-	// M1's test-file globs were [cycle] tests; the name is the suites' now,
-	// and the decoder would drop a list there without a word
-	if md.Type("cycle", "tests") == "Array" {
-		return nil, md, errors.New("[cycle] tests: the test-file globs are test-files now; [cycle.tests.<name>] tables are the suites step 4 runs")
-	}
 	if err := checkColors(r.Fields); err != nil {
 		return nil, md, err
 	}
@@ -412,14 +424,11 @@ func parse(data []byte) (*Config, toml.MetaData, error) {
 		return nil, md, fmt.Errorf("[repos] assignees: native or labels, not %q", a)
 	}
 	r.Cycle.On = md.IsDefined("cycle") // a subtable alone, [cycle.signoffs], defines it too
-	if err := readKinds(md, &r.Cycle); err != nil {
-		return nil, md, err
-	}
-	if err := checkCycle(r.Cycle); err != nil {
-		return nil, md, err
-	}
-	if err := checkSteps(r.Cycle, (&Config{Fields: r.Fields, Cycle: r.Cycle}).Stages().Validation); err != nil {
-		return nil, md, err
+	// the cycle is experimental: its table breaks the file only when the
+	// team turned it on; off, what it fails is a warning (Check)
+	cycleErr := checkCycleTable(md, &r.Cycle, r.Fields)
+	if cycleErr != nil && slices.Contains(r.Experimental.Features, FeatureCycle) {
+		return nil, md, cycleErr
 	}
 	if err := checkRelease(r.Release); err != nil {
 		return nil, md, err
@@ -472,6 +481,8 @@ func parse(data []byte) (*Config, toml.MetaData, error) {
 		Forges:         forges,
 		PublishPrivate: publishPrivate,
 		Discover:       discover,
+		Features:       r.Experimental.Features,
+		cycleErr:       cycleErr,
 	}, md, nil
 }
 

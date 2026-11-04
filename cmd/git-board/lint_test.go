@@ -306,7 +306,7 @@ func TestLintCreateLabelsTemplateCheckOnlyWarns(t *testing.T) {
 // the new ones when it wants to.
 func TestLintSaysWhatItRead(t *testing.T) {
 	newTestRepo(t)
-	writeConfig(t, testConfig+"\n[cycle.signoffs]\nqa = \"pm\"\n\n[cycle.kinds]\nbug = \"failing-test\"\n")
+	writeConfig(t, testConfig+"\n[experimental]\nfeatures = [\"cycle\"]\n\n[cycle.signoffs]\nqa = \"pm\"\n\n[cycle.kinds]\nbug = \"failing-test\"\n")
 
 	out, err := execute(t, []string{"lint"})
 	if err != nil {
@@ -321,7 +321,7 @@ func TestLintSaysWhatItRead(t *testing.T) {
 
 func TestLintRefusesStepsOutOfOrder(t *testing.T) {
 	newTestRepo(t)
-	writeConfig(t, testConfig+"\n[cycle]\nsteps = [\"review\", \"code\"]\n")
+	writeConfig(t, testConfig+"\n[experimental]\nfeatures = [\"cycle\"]\n\n[cycle]\nsteps = [\"review\", \"code\"]\n")
 
 	out, err := execute(t, []string{"lint"})
 	if err == nil || !strings.Contains(err.Error(), `"code" after "review"`) {

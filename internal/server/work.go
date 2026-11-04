@@ -114,8 +114,12 @@ func (s *apiServer) work(ctx context.Context, me inbox.Me, team bool, now time.T
 	}
 	g := work.Group(rows, me.Login, team)
 	res := workResponse{Me: me, Needs: g.Needs, Waiting: g.Waiting, Retro: retroOf(cfg, threads, now)}
-	if res.Agents, err = s.agents(rows); err != nil {
-		return workResponse{}, err
+	// the agents are experimental on their own: off, the page lists none
+	res.Agents = []workAgent{}
+	if cfg.Experimental(config.FeatureAgents) {
+		if res.Agents, err = s.agents(rows); err != nil {
+			return workResponse{}, err
+		}
 	}
 	res.ToSend, res.Pending = pendingLines(threads)
 	return res, nil
@@ -238,6 +242,10 @@ func retroOf(cfg *config.Config, threads []store.Thread, now time.Time) retroSum
 // the session on its branch. When wtx can't run from here, or its status
 // fails (no wtx.toml yet), the rows stay as they are and Reason says why.
 func (s *apiServer) withSessions(r *http.Request, res *workResponse) {
+	if !s.config().Experimental(config.FeatureAgents) {
+		res.Reason = config.ExperimentalOff(config.FeatureAgents).Error()
+		return
+	}
 	if _, res.Reason = s.wtxAllowed(r, false); res.Reason != "" {
 		return
 	}

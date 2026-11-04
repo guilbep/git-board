@@ -170,6 +170,7 @@ import { computed, ref, watch } from 'vue';
 import { agentAction, editPull, getIssueAgent, openPull, type Forge, type IssueAgent, type IssueEvent } from '@/api/board';
 import { cardFor, steps, statusBar, turn, withCriteria, type CardButton } from '@/cycle';
 import { message } from '@/issue';
+import { agentsOn } from '@/me';
 import { agentButton, agentWords } from '@/worktrees';
 import { useCycle } from '@/usecycle';
 import CycleCode from '@/components/CycleCode.vue';
@@ -264,7 +265,14 @@ const button = computed(() => (agent.value ? agentButton(agent.value) : null));
 const send = computed(() =>
   button.value === 'brief' ? { name: agent.value?.session?.agent || 'the agent', brief: (body: string) => void run('brief', body) } : undefined,
 );
-watch(cycle, () => void getIssueAgent(props.id).then((a) => (agent.value = a), () => (agent.value = null)));
+// the agents are experimental: off, no agent and no request
+watch(cycle, () => {
+  if (!agentsOn.value) {
+    agent.value = null;
+    return;
+  }
+  void getIssueAgent(props.id).then((a) => (agent.value = a), () => (agent.value = null));
+});
 
 async function run(action: 'go' | 'brief' | 'approve', brief: string) {
   agentBusy.value = action;

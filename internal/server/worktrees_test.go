@@ -137,6 +137,7 @@ var someAnswers = map[string]any{"answers": map[string]any{"repo": map[string]an
 func TestWorktreesRefusedExposed(t *testing.T) {
 	fake := fakeWtx(t)
 	s, _, _ := gateRepo(t, "https://github.com/o/r.git", false)
+	s.cfg.Features = allFeatures
 	s.exposed = []string{"*"} // what --addr 0.0.0.0:8080 sets
 	ts := serve(t, s)
 	var a worktreesAnswer
@@ -158,6 +159,7 @@ func TestWorktreesRefusedExposed(t *testing.T) {
 func TestWorktreesRefusedOrigin(t *testing.T) {
 	fake := fakeWtx(t)
 	s, _, _ := gateRepo(t, "https://github.com/o/r.git", false)
+	s.cfg.Features = allFeatures
 	ts := serve(t, s)
 	if code, c, _ := sendFrom(t, "POST", ts.URL+"/api/worktrees/preview", "", someAnswers); code != http.StatusForbidden || c != "origin" {
 		t.Fatalf("no Origin: %d %q", code, c)
@@ -176,6 +178,7 @@ func TestWorktreesRefusedOrigin(t *testing.T) {
 
 func TestWorktreesRefusedNoWtx(t *testing.T) {
 	s, _, _ := gateRepo(t, "https://github.com/o/r.git", false)
+	s.cfg.Features = allFeatures
 	ts := serve(t, s)
 	t.Setenv("PATH", t.TempDir()) // after git ran: no wtx, no git either
 	var a worktreesAnswer
@@ -191,6 +194,7 @@ func TestWorktreesRefusedNoWtx(t *testing.T) {
 func TestWorktreesSettings(t *testing.T) {
 	fake := fakeWtx(t)
 	s, _, _ := gateRepo(t, "https://github.com/o/r.git", false)
+	s.cfg.Features = allFeatures
 	var a worktreesAnswer
 	getJSON(t, serve(t, s).URL+"/api/worktrees", &a)
 	if !a.Local || !a.Wtx || a.Reason != "" || a.Code != "" || !a.Config || a.Doctor == nil || len(a.Doctor.Checks) != 3 || a.Answers == nil || a.Answers.Repo.BaseBranch != "dev" {
@@ -209,6 +213,7 @@ func TestWorktreesNoConfig(t *testing.T) {
 	fake := fakeWtx(t)
 	_ = os.WriteFile(filepath.Join(fake, "doctor.json"), []byte(`{"ok": false, "checks": [{"name": "wtx.toml in r", "ok": false, "hard": true}]}`), 0o644)
 	s, _, _ := gateRepo(t, "https://github.com/o/r.git", false)
+	s.cfg.Features = allFeatures
 	var a worktreesAnswer
 	getJSON(t, serve(t, s).URL+"/api/worktrees", &a)
 	if a.Config || a.Code != "no-config" || a.Reason != "No wtx.toml in this repository yet" || a.Answers == nil {
@@ -223,6 +228,7 @@ type filesAnswer struct {
 func TestWtxPreviewThenWrite(t *testing.T) {
 	fake := fakeWtx(t)
 	s, _, _ := gateRepo(t, "https://github.com/o/r.git", false)
+	s.cfg.Features = allFeatures
 	root := filepath.Dir(s.gitDir)
 	ts := serve(t, s)
 	live, cancel := s.events.subscribe()

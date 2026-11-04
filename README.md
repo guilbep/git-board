@@ -46,7 +46,7 @@ and only for that feature:
 | For | Install (macOS) |
 |---|---|
 | `lint --create-labels`, `project` (GitHub Projects) | `brew install gh`, then `gh auth login` |
-| Start an agent (Cycle, Work) | [wtx](https://github.com/EPFL-ENAC/wtx) |
+| Start an agent (Cycle, Work; experimental) | [wtx](https://github.com/EPFL-ENAC/wtx) |
 | Run step 4's tests and checks, `verify` | `ssh-keygen` (macOS has it), `git config user.signingkey` naming your SSH key |
 | `release` and `deploy`, with `[release] images` | Docker Desktop (buildx), `brew install crane trivy` |
 | `release` and `deploy`, with `[release] chart` | `brew install helm` (3.8+) |
@@ -106,10 +106,23 @@ field's values (`options`: status follows the workflow when sorted and on
 a board), single or multiple values, sprint dates (`@current`), saved
 views, and the GitHub Project to sync with.
 
-An issue opens on the classic page (the description, the comments and
-changes in order, History, the fields) unless the board's `.git-board.toml`
-has a `[cycle]` table, or you pick the cycle's page in Settings › You
-(`git config board.view cycle`): then its page is its step in the development cycle, computed from its
+An issue opens on the classic page: the description, the comments and
+changes in order, History, the fields.
+
+**Experimental features.** The development cycle, the coding agents and
+the worktrees are still being built, and off unless the team turns them
+on: `[experimental] features = ["cycle", "agents", "worktrees"]` in
+`.git-board.toml` (Settings › Experimental), or, for one person trying
+them in their clone, `git config board.experimental cycle,agents` (a
+comma list that replaces the file's there). Off, their commands are
+hidden and refuse naming the switch, their API routes answer 404, the web
+UI hides their pages, tabs and controls, and a `[cycle]` table is not
+checked (a broken one is a warning, not an error). See
+[Experimental features](docs/guide/configuration.md#experimental-features).
+
+With the cycle on, an issue opens on the cycle's page when the board's
+`.git-board.toml` has a `[cycle]` table, or you pick it in Settings › You
+(`git config board.view cycle`): its page is its step in the development cycle, computed from its
 status and the evidence (criteria, risk, plan file, tests in the branch,
 PR, sign-offs). A bar of the seven steps runs under the title: a done step
 reopens, a later one is locked and says why. The step shown is the main
@@ -117,7 +130,7 @@ screen (the description at Intent, the plan to approve, the diff at
 Review, the run and the sign-offs at Verify), with its button that moves
 the status, and its own discussion beside it. With the cycle, the Work page is what needs
 a person across every open issue: Needs you, Agents, Waiting on others, To
-send, Since the last retro. From both, Start an agent runs
+send, Since the last retro. With the agents on, from both, Start an agent runs
 [wtx](https://github.com/EPFL-ENAC/wtx) on the issue: a worktree, a tmux
 session and a prompt with its step and gate; Settings › Worktrees writes
 `wtx.toml`. `[cycle]` in [docs/guide/configuration.md](docs/guide/configuration.md#cycle),
@@ -254,7 +267,8 @@ git-board lint
 
 # whether a commit's checks are proven: the signed results in
 # refs/notes/ci/*, against the base branch's [cycle.checks] (exit 1 if not;
-# docs/guide/configuration.md, Tests and checks)
+# docs/guide/configuration.md, Tests and checks); the cycle's, experimental:
+# hidden, and refused until [experimental] features turns "cycle" on
 git-board verify
 git-board verify fix/2518-retry --base origin/main
 

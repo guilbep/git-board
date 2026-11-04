@@ -6,6 +6,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/BurntSushi/toml"
 )
 
 var co2Statuses = []string{"backlog", "comite", "ready", "in-progress", "in-review", "ready-for-validation", "qa", "tests-metier", "validated"}
@@ -66,7 +68,7 @@ tests-metier = "metier"
 `
 
 func TestCycleFromFile(t *testing.T) {
-	cfg, md, err := parse([]byte(co2Cycle))
+	cfg, md, err := parseOn([]byte(co2Cycle))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -135,21 +137,21 @@ func TestStageOf(t *testing.T) {
 }
 
 func TestCycleRolesChecked(t *testing.T) {
-	if _, _, err := parse([]byte("[cycle]\nrisk = \"pm\"\n")); err != nil {
+	if _, _, err := parseOn([]byte("[cycle]\nrisk = \"pm\"\n")); err != nil {
 		t.Errorf("a role nobody holds is anyone's turn: %v", err)
 	}
-	cfg, _, err := parse([]byte("[cycle]\nspec = \"pm\"\n"))
+	cfg, _, err := parseOn([]byte("[cycle]\nspec = \"pm\"\n"))
 	if err != nil || cfg.Stages().Roles["spec"] != "pm" {
 		t.Errorf("spec: %v %v", err, cfg.Stages().Roles)
 	}
-	if _, _, err := parse([]byte("[cycle]\nspec = \"P M\"\n")); err == nil || !strings.Contains(err.Error(), "[cycle] spec: a role name") {
+	if _, _, err := parseOn([]byte("[cycle]\nspec = \"P M\"\n")); err == nil || !strings.Contains(err.Error(), "[cycle] spec: a role name") {
 		t.Errorf("spec err = %v", err)
 	}
-	_, _, err = parse([]byte("[cycle]\nrisk = \"p m\"\n"))
+	_, _, err = parseOn([]byte("[cycle]\nrisk = \"p m\"\n"))
 	if err == nil || !strings.Contains(err.Error(), `[cycle] risk: a role name, not "p m"`) {
 		t.Errorf("err = %v", err)
 	}
-	_, _, err = parse([]byte("[cycle.signoffs]\nqa = \"Pm\"\n"))
+	_, _, err = parseOn([]byte("[cycle.signoffs]\nqa = \"Pm\"\n"))
 	if err == nil || !strings.Contains(err.Error(), `[cycle.signoffs] qa: a role name, not "Pm"`) {
 		t.Errorf("err = %v", err)
 	}
@@ -157,7 +159,7 @@ func TestCycleRolesChecked(t *testing.T) {
 
 func TestCycleProtocol(t *testing.T) {
 	t.Parallel()
-	cfg, md, err := parse([]byte("[cycle]\ncriteria = [\"Definition of done\"]\n\n[cycle.kinds]\ndoc = \"per-criterion\"\nspike = \"none\"\n"))
+	cfg, md, err := parseOn([]byte("[cycle]\ncriteria = [\"Definition of done\"]\n\n[cycle.kinds]\ndoc = \"per-criterion\"\nspike = \"none\"\n"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -178,11 +180,11 @@ func TestCycleProtocol(t *testing.T) {
 	if r := (&Config{}).Stages().KindRule("doc"); r != "none" {
 		t.Errorf("default doc rule = %q after a file changed it", r)
 	}
-	_, _, err = parse([]byte("[cycle.kinds]\nbug = \"fails-first\"\n"))
+	_, _, err = parseOn([]byte("[cycle.kinds]\nbug = \"fails-first\"\n"))
 	if err == nil || !strings.Contains(err.Error(), `[cycle.kinds] bug: failing-test, per-criterion, none, not "fails-first"`) {
 		t.Errorf("err = %v", err)
 	}
-	_, _, err = parse([]byte("[cycle]\ncriteria = [\" \"]\n"))
+	_, _, err = parseOn([]byte("[cycle]\ncriteria = [\" \"]\n"))
 	if err == nil || !strings.Contains(err.Error(), "[cycle] criteria: a heading") {
 		t.Errorf("err = %v", err)
 	}
@@ -195,7 +197,7 @@ func TestPlansInPR(t *testing.T) {
 	if !(&Config{}).Stages().PlansInPR {
 		t.Error("plans-in-pr unset: want true")
 	}
-	cfg, warnings, err := Check([]byte("[cycle]\nplans-in-pr = false\n"))
+	cfg, warnings, err := checkOn([]byte("[cycle]\nplans-in-pr = false\n"))
 	if err != nil || len(warnings) != 0 {
 		t.Fatalf("Check: %v %q", err, warnings)
 	}
@@ -206,7 +208,7 @@ func TestPlansInPR(t *testing.T) {
 
 func TestCycleSuites(t *testing.T) {
 	t.Parallel()
-	cfg, md, err := parse([]byte(`[cycle]
+	cfg, md, err := parseOn([]byte(`[cycle]
 test-files = ["*_test.go"]
 signers = "ci/signers"
 
@@ -243,7 +245,7 @@ run = ["go", "vet", "./..."]
 		t.Errorf("TestFiles = %v", s.TestFiles)
 	}
 	// M1's globs under tests: refused, naming the new key
-	if _, _, err := parse([]byte("[cycle]\ntests = [\"*.go\"]\n")); err == nil || !strings.Contains(err.Error(), "test-files") {
+	if _, _, err := parseOn([]byte("[cycle]\ntests = [\"*.go\"]\n")); err == nil || !strings.Contains(err.Error(), "test-files") {
 		t.Error("tests as a list of globs: want an error")
 	}
 }
@@ -261,7 +263,7 @@ func TestCycleSuitesChecked(t *testing.T) {
 		"[cycle.tests.\"a b\"]\nrun = [\"go\"]\n":                       "[cycle.tests.a b]: a name of letters",
 		"[cycle]\nsigners = \"../keys\"\n":                              "[cycle] signers: a path in the repository",
 	} {
-		if _, _, err := parse([]byte(toml)); err == nil || !strings.Contains(err.Error(), want) {
+		if _, _, err := parseOn([]byte(toml)); err == nil || !strings.Contains(err.Error(), want) {
 			t.Errorf("%s: err = %v, want %q", toml, err, want)
 		}
 	}
@@ -294,7 +296,7 @@ func TestCycleSteps(t *testing.T) {
 		{"verify with a sign-off", co2Status + "[cycle]\nsteps = [\"review\", \"qa\", \"verify\"]\n\n[cycle.signoffs]\nqa = \"pm\"\n", []string{"review", "qa", "verify"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			cfg, _, err := parse([]byte(tc.toml))
+			cfg, _, err := parseOn([]byte(tc.toml))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -303,7 +305,7 @@ func TestCycleSteps(t *testing.T) {
 			}
 		})
 	}
-	cfg, _, err := parse([]byte(co2Status + "[cycle]\nsteps = [\"review\", \"qa\", \"verify\"]\n"))
+	cfg, _, err := parseOn([]byte(co2Status + "[cycle]\nsteps = [\"review\", \"qa\", \"verify\"]\n"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -322,12 +324,12 @@ func TestCycleStepsChecked(t *testing.T) {
 		`["code", "code"]`:   `[cycle] steps: "code" twice`,
 		`[]`:                 `[cycle] steps: at least one step`,
 	} {
-		if _, _, err := parse([]byte(co2Status + "[cycle]\nsteps = " + steps + "\n")); err == nil || !strings.Contains(err.Error(), want) {
+		if _, _, err := parseOn([]byte(co2Status + "[cycle]\nsteps = " + steps + "\n")); err == nil || !strings.Contains(err.Error(), want) {
 			t.Errorf("%s: err = %v, want %q", steps, err, want)
 		}
 	}
 	for _, steps := range []string{`["intent", "risk", "code", "verify"]`, `["code", "review", "verify"]`, `["tests-metier", "qa"]`} {
-		if _, _, err := parse([]byte(co2Status + "[cycle]\nsteps = " + steps + "\n")); err != nil {
+		if _, _, err := parseOn([]byte(co2Status + "[cycle]\nsteps = " + steps + "\n")); err != nil {
 			t.Errorf("%s: %v", steps, err)
 		}
 	}
@@ -337,7 +339,7 @@ func TestCycleStepsChecked(t *testing.T) {
 // steps is M3's, a key git-board doesn't know yet.
 func TestCycleKindsTable(t *testing.T) {
 	t.Parallel()
-	cfg, warnings, err := Check([]byte("[cycle.kinds]\nbug = \"failing-test\"\n\n[cycle.kinds.doc]\ntests = \"per-criterion\"\n\n[cycle.kinds.chore]\nsteps = [\"code\"]\n"))
+	cfg, warnings, err := checkOn([]byte("[cycle.kinds]\nbug = \"failing-test\"\n\n[cycle.kinds.doc]\ntests = \"per-criterion\"\n\n[cycle.kinds.chore]\nsteps = [\"code\"]\n"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -354,7 +356,7 @@ func TestCycleKindsTable(t *testing.T) {
 		"[cycle.kinds.doc]\ntests = \"nope\"\n": `[cycle.kinds] doc: failing-test, per-criterion, none, not "nope"`,
 		"[cycle.kinds]\nbug = 3\n":              `[cycle.kinds] bug: failing-test, per-criterion, none`,
 	} {
-		if _, _, err := parse([]byte(toml)); err == nil || !strings.Contains(err.Error(), want) {
+		if _, _, err := parseOn([]byte(toml)); err == nil || !strings.Contains(err.Error(), want) {
 			t.Errorf("%s: err = %v, want %q", toml, err, want)
 		}
 	}
@@ -375,7 +377,7 @@ func TestCycleReads(t *testing.T) {
 		{"new forms", "[cycle]\nsteps = [\"code\", \"review\"]\n\n[cycle.kinds.bug]\ntests = \"failing-test\"\n", nil},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			cfg, _, err := parse([]byte(tc.toml))
+			cfg, _, err := parseOn([]byte(tc.toml))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -397,7 +399,7 @@ func TestCycleTableTurnsTheCycleOn(t *testing.T) {
 		"[cycle.signoffs]\nqa = \"pm\"\n":      true,
 		"[fields.status]\noptions = [\"a\"]\n": false,
 	} {
-		cfg, _, err := parse([]byte(in))
+		cfg, _, err := parseOn([]byte(in))
 		if err != nil {
 			t.Fatalf("%q: %v", in, err)
 		}
@@ -405,4 +407,16 @@ func TestCycleTableTurnsTheCycleOn(t *testing.T) {
 			t.Errorf("%q: On = %v, want %v", in, cfg.Cycle.On, want)
 		}
 	}
+}
+
+// cycleOn turns the cycle on, so the file's [cycle] is checked: these
+// tests are the cycle's.
+const cycleOn = "[experimental]\nfeatures = [\"cycle\"]\n\n"
+
+func parseOn(data []byte) (*Config, toml.MetaData, error) {
+	return parse(append([]byte(cycleOn), data...))
+}
+
+func checkOn(data []byte) (*Config, []string, error) {
+	return Check(append([]byte(cycleOn), data...))
 }

@@ -113,14 +113,14 @@ func TestWorkQuestion(t *testing.T) {
 
 func TestWorkNeedsWhoYouAre(t *testing.T) {
 	t.Parallel()
-	noLogin := &apiServer{cfg: &config.Config{}, b: storetest.New(t)}
+	noLogin := &apiServer{cfg: &config.Config{Features: allFeatures}, b: storetest.New(t)}
 	ts := httptest.NewServer(withCORS(newMux(noLogin, http.NotFoundHandler())))
 	t.Cleanup(ts.Close)
 	if code, c := codeOf(t, ts.URL+"/api/work"); code != http.StatusConflict || c != "no-login" {
 		t.Errorf("no login: %d %q", code, c)
 	}
 	b := storetest.NewEmpty(t)
-	ts2 := httptest.NewServer(withCORS(newMux(&apiServer{cfg: &config.Config{}, b: b, me: "guilbep"}, http.NotFoundHandler())))
+	ts2 := httptest.NewServer(withCORS(newMux(&apiServer{cfg: &config.Config{Features: allFeatures}, b: b, me: "guilbep"}, http.NotFoundHandler())))
 	t.Cleanup(ts2.Close)
 	if code, c := codeOf(t, ts2.URL+"/api/work"); code != http.StatusConflict || c != "no-identity" {
 		t.Errorf("no identity: %d %q", code, c)
