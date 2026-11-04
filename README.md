@@ -2,7 +2,15 @@
 
 Issues, fields, sprints and views kept in git, next to your code — a
 lightweight, config-as-code replacement for GitHub Projects, synced with
-GitHub and GitLab.
+GitHub and GitLab. Your issues are yours: independent of any forge, every
+change kept.
+
+**Documentation: <https://guilbep.github.io/git-board/>** — the
+[user manual](https://guilbep.github.io/git-board/manual/) (install, first
+steps, everyday work, teams, owning your issues), the
+[CLI reference](https://guilbep.github.io/git-board/guide/cli/), the
+configuration guide, the core's spec and the architecture decisions. The
+same pages are in [docs/](docs/index.md).
 
 Each issue is a log of operations under `refs/board/` in the repository:
 it travels with `git push` and `git pull`, works offline, and needs no
@@ -45,8 +53,8 @@ and only for that feature:
 
 | For | Install (macOS) |
 |---|---|
-| `lint --create-labels`, `project` (GitHub Projects) | `brew install gh`, then `gh auth login` |
-| Start an agent (Cycle, Work) | [wtx](https://github.com/EPFL-ENAC/wtx) |
+| `project` (GitHub Projects), and `lint`'s issue-template check | `brew install gh`, then `gh auth login` (`lint --create-labels` itself goes through the forge token: `GITHUB_TOKEN`, else git's credential helper) |
+| Start an agent (Cycle, Work; experimental) | [wtx](https://github.com/EPFL-ENAC/wtx) |
 | Run step 4's tests and checks, `verify` | `ssh-keygen` (macOS has it), `git config user.signingkey` naming your SSH key |
 | `release` and `deploy`, with `[release] images` | Docker Desktop (buildx), `brew install crane trivy` |
 | `release` and `deploy`, with `[release] chart` | `brew install helm` (3.8+) |
@@ -106,10 +114,23 @@ field's values (`options`: status follows the workflow when sorted and on
 a board), single or multiple values, sprint dates (`@current`), saved
 views, and the GitHub Project to sync with.
 
-An issue opens on the classic page (the description, the comments and
-changes in order, History, the fields) unless the board's `.git-board.toml`
-has a `[cycle]` table, or you pick the cycle's page in Settings › You
-(`git config board.view cycle`): then its page is its step in the development cycle, computed from its
+An issue opens on the classic page: the description, the comments and
+changes in order, History, the fields.
+
+**Experimental features.** The development cycle, the coding agents and
+the worktrees are still being built, and off unless the team turns them
+on: `[experimental] features = ["cycle", "agents", "worktrees"]` in
+`.git-board.toml` (Settings › Experimental), or, for one person trying
+them in their clone, `git config board.experimental cycle,agents` (a
+comma list that replaces the file's there). Off, their commands are
+hidden and refuse naming the switch, their API routes answer 404, the web
+UI hides their pages, tabs and controls, and a `[cycle]` table is not
+checked (a broken one is a warning, not an error). See
+[Experimental features](docs/guide/configuration.md#experimental-features).
+
+With the cycle on, an issue opens on the cycle's page when the board's
+`.git-board.toml` has a `[cycle]` table, or you pick it in Settings › You
+(`git config board.view cycle`): its page is its step in the development cycle, computed from its
 status and the evidence (criteria, risk, plan file, tests in the branch,
 PR, sign-offs). A bar of the seven steps runs under the title: a done step
 reopens, a later one is locked and says why. The step shown is the main
@@ -117,7 +138,7 @@ screen (the description at Intent, the plan to approve, the diff at
 Review, the run and the sign-offs at Verify), with its button that moves
 the status, and its own discussion beside it. With the cycle, the Work page is what needs
 a person across every open issue: Needs you, Agents, Waiting on others, To
-send, Since the last retro. From both, Start an agent runs
+send, Since the last retro. With the agents on, from both, Start an agent runs
 [wtx](https://github.com/EPFL-ENAC/wtx) on the issue: a worktree, a tmux
 session and a prompt with its step and gate; Settings › Worktrees writes
 `wtx.toml`. `[cycle]` in [docs/guide/configuration.md](docs/guide/configuration.md#cycle),
@@ -195,28 +216,55 @@ Run from inside a git repository (or a subdirectory of one), next to a
 # this repository's web UI, in the browser (see "Web UI" below)
 git board
 
+# who you write as: once per clone, before the first write
+git-board me --new          # from git user.name and user.email
+git-board me --ls           # or write as someone already on the board:
+git-board me <person-id>
+
 # open issues
 git-board ls
 
-# ad-hoc filter, grouped and sorted
+# ad-hoc filter, grouped and sorted; the ten last changed
 git-board ls "is:open -title:*spec*" --group status --sort "prio asc"
+git-board ls --sort "updated desc" --limit 10
 
 # a named view from .git-board.toml, rendered as markdown or JSON
 git-board view current-sprint --md
 git-board view backlog --json
 
-# set fields on an issue (single-cardinality fields swap; assignee is multi)
-git-board set <issue-id> status=ready prio=p1 sprint=@next assignee=+guilbep
+# create an issue, with its description and fields (-F file, -e editor)
+git-board new "Login fails on Safari" prio=p1 assignee=+@me -b "Steps: ..."
 
-# show an issue's fields (labels)
+# an issue with its fields, description and comments (--md, --json)
+git-board show <issue-id>
+
+# comment (no flag: the editor), edit your last comment
+git-board comment <issue-id> -b "Fixed in 4e5f6a7"
+git-board comment <issue-id> --edit-last
+
+# edit the title or the description
+git-board edit <issue-id> --title "Login fails on Safari 17"
+
+# set fields (single-cardinality fields swap; assignee is multi); held to
+# the config's options unless --force; field= clears; label=+x a plain label
+git-board set <issue-id> status=ready prio=p1 sprint=@next assignee=+@me
+git-board set <issue-id> prio= label=+regression
+git-board set --filter "status:ready no:assignee" assignee=+@me --apply
+
+# an issue's fields (labels), one per line, for scripts
 git-board get <issue-id>
 
-# advance status to the next configured option (backlog -> ready -> ...)
+# step status through the configured options (backlog -> ready -> ...)
 git-board move <issue-id> --next
+git-board move <issue-id> --prev
 
 # set status to the last configured option (the terminal state, whatever
-# it's called in your config) and close the issue
-git-board close <issue-id>
+# it's called in your config) and close the issue; reopen undoes it
+git-board close <issue-id> -c "Fixed in 4e5f6a7"
+git-board reopen <issue-id>
+
+# every change made to an issue: who, when, what (--field status, --json)
+git-board log <issue-id>
 
 # the branch to create for an issue, and the command creating it
 # ([branches] in .git-board.toml); it creates nothing
@@ -227,7 +275,8 @@ git-board lint
 
 # whether a commit's checks are proven: the signed results in
 # refs/notes/ci/*, against the base branch's [cycle.checks] (exit 1 if not;
-# docs/guide/configuration.md, Tests and checks)
+# docs/guide/configuration.md, Tests and checks); the cycle's, experimental:
+# hidden, and refused until [experimental] features turns "cycle" on
 git-board verify
 git-board verify fix/2518-retry --base origin/main
 
@@ -270,8 +319,13 @@ git-board deploy dev --watch
 ```
 
 `@me` (in filters, e.g. the `mine` view, or as a field value) resolves from
-`--me` on `ls`/`view`/`set`, falling back to the `GIT_BOARD_ME` env var. It
-errors if neither is set.
+`--me` on `ls`/`view`/`set`/`new`, falling back to the `GIT_BOARD_ME` env
+var, then to the forge login of the person you write as. It errors if
+none is set.
+
+Every issue command, its flags, its JSON output and its exit codes, with
+a table for those coming from `gh` and `glab`, are in
+[docs/guide/cli.md](docs/guide/cli.md).
 
 ## Syncing (`git-board sync`)
 
@@ -342,9 +396,10 @@ Field mapping:
 | Est. hours | `est:<value>` | single |
 | Sprint | `sprint:<slug>` | single — the `[[sprints.list]]` slug of the iteration's title, else the title as a slug (`Hypercare` → `sprint:hypercare`); list the iterations for `@current` to find them |
 | Assignees | `assignee:<user>` | multi — one label per assignee, merged person by person (below) |
+| MoSCoW | `moscow:<value>` | single |
+| Milestone | `milestone:<slug>` | single, **read only**: the issue's GitHub milestone, which a Project edit can't set; the Project's value always wins |
 
-`Milestone` and `Size` are **not** imported — the PRD calls them dead/unused
-fields.
+`Size` is **not** imported — the PRD calls it a dead/unused field.
 
 Category says the same thing as the kind labels (`bug`, `feat`, `perf`…),
 and the labels win: Category only fills a kind the issue doesn't have,
@@ -399,7 +454,11 @@ verb still sends it.
 git board project sync --check                 # what would change, on each side
 git board project sync
 git board project resolve 2605 status --theirs # or --ours
+git board project resolve EPFL-ENAC/co2-calculator#2605 status --ours
 ```
+
+A number two repositories of the Project both have in conflict is refused:
+name the repository, `owner/repo#number` (or the issue's URL).
 
 Writing to the Project is off unless the config says so, and needs a `gh`
 token with the `project` scope (`gh auth refresh -s project`):
@@ -430,6 +489,10 @@ qualifier: [Filters in docs/guide/configuration.md](docs/guide/configuration.md#
 everything else in this CLI. It checks every `is:open` issue in the current
 repository against `.git-board.toml`:
 
+- **unknown keys** — a key in `.git-board.toml` git-board doesn't read, a
+  misspelled one above all (`[github-project] wirte = true`, `[view.x]` for
+  `[views.x]`): it would be its zero value without a word. Every command also
+  warns of it on stderr, once, and runs on.
 - **double singles** — more than one `ns:*` label for a `[fields.<ns>]` entry
   with `single = true` (e.g. two `status:*` labels). Structurally rare going
   forward (`fields.Apply`'s swap logic prevents it), but concurrent
@@ -488,7 +551,7 @@ git-board lint --create-labels --apply   # create the missing labels on GitHub
 
 Free-form fields (no `options` configured — `assignee`, `est`) have no
 fixed value set, so nothing to create labels for; Category isn't a
-configured field at all anymore (see "Bridging GitHub Projects" above),
+configured field at all anymore (see the Project's field mapping above),
 so it's not part of this check either.
 
 It also reads the labels each issue template applies
@@ -522,11 +585,13 @@ git-board sprint report <slug>         # issues in that sprint, aggregated by st
 ```
 
 - **`ls`**'s end date is computed, not stored: a sprint's end is the next
-  sprint's start, or `start + [sprints].length_days` for the last one.
+  sprint's start, or `start + [sprints].length_days` for the last one
+  (without `length_days`, as long as the sprint before it, else 14 days).
   `current`/`next`/`previous` print the same computed range for the sprint
-  they resolve to.
-- **No sprint resolves** (before the first configured sprint has started, or
-  nothing configured at all) is a normal outcome, not an error: `current`
+  they resolve to. Once the last sprint has ended there is no current one
+  (`@current` matches nothing), and `previous` is the one that ended.
+- **No sprint resolves** (before the first configured sprint has started,
+  after the last one has ended, or nothing configured at all) is a normal outcome, not an error: `current`
   prints `no sprint currently active` and exits 0, same idea for
   `next`/`previous`. Matches `ResolveSprint`'s own `(nil, nil)` return for
   "nothing resolves" — it's not a `%!s(<nil>)` crash waiting to happen.
@@ -557,8 +622,8 @@ git-board tui "is:open prio:p1"
 | `c` | list | quick-filter by the configured `cat` field's options (`(all)` clears it); coexists with `/` search. The shipped example config doesn't define `[fields.cat]` (Category fills the kind label now — see the bridge field mapping below), so `c` shows "no cat field configured" unless a project opts into one. |
 | `f` | list | structured filter — the same `field:value`/`-field:value`/`is:open`/`title:*glob*` grammar and matcher as `ls`/`view`/the launch argument and the web UI (words look in descriptions and comments too), not the fuzzy `/` search. Empty input + enter clears it. |
 | `s` | list | sort by field, e.g. `prio` (ascending) or `prio desc` — same syntax as `ls --sort`. Persists across a later `f`/`c` filter change. Empty input + enter clears it back to natural order. |
-| `i` | list | preview the GitHub Project's fields as labels (a dry run). Requires `git board project configure` to have been run first. Runs in the background; the TUI stays responsive while it fetches. |
-| `o` | list | apply the plan `i` just previewed. Refuses to run before an `i` (no blind apply); the plan is cleared after applying so `o` can't silently re-apply stale data. |
+| `i` | list | preview `git board project pull` (a dry run): the Project's changes into the labels. Requires `git board project configure` to have been run first. Runs in the background; the TUI stays responsive while it fetches. |
+| `o` | list | apply the pull `i` just previewed, decided again from the issues as they are now: an edit made in between stays. Refuses to run before an `i` (no blind apply); the preview is cleared after applying so `o` can't silently re-apply stale data. |
 | `e` | detail | edit a field: pick the field, then a value from its configured options, or type free text if it has none (e.g. `assignee`, using the same `+value`/`-value` syntax as `git-board set`) |
 | `esc`/`q` | detail, pickers | back |
 | `q`/`ctrl+c` | list | quit |
@@ -568,10 +633,12 @@ for "I remember a word in the title." `f` is precise and composable —
 `assignee:guilbep -status:validated` narrows exactly like it would on the
 CLI, because it's the exact same `internal/filter` grammar and code path.
 
-`i`/`o` show a one-line summary (matched/changed/unmatched/field/warning
+`i`/`o` show a one-line summary (matched/changed/unmatched/conflict/warning
 counts), not the full per-issue diff — that's what `git board project pull --check`
-on the CLI is still for. Note these are bound to git-board's GitHub Project bridge
-instead, since that's the sync a git-board session actually needs.
+on the CLI is still for. They are `git board project pull`, the sync's
+git-board side: only what changed on the Project since both sides last agreed
+is taken, a change made in git-board and not yet pushed stays, and someone
+assigned in git-board stays assigned.
 
 The TUI shows an issue's fields (labels), not its body and comments: the
 web UI (`git board`) shows those.
@@ -657,12 +724,15 @@ S3 bucket a CDN serves — EPFL ENAC's `enacit4r-cdn.epfl.ch` (bucket on
 `s3.epfl.ch`) by default — and the comment gets their Markdown (an image
 shows, other files link), so they show in git-board, on GitHub and on
 GitLab alike. Set where the git-board server runs:
-`ACCESS_KEY_ID`, `ACCESS_KEY_SECRET`, `BUCKET_NAME`; optionally in
-`.git-board.toml`:
+`ACCESS_KEY_ID`, `ACCESS_KEY_SECRET`, `BUCKET_NAME`, and `UPLOADS_ENDPOINT`
+for an S3 service other than `https://s3.epfl.ch`: the keys go only where
+the server's environment says, so an `[uploads] endpoint` in the committed
+file that differs turns attaching off, as does a `prefix` with a `..`.
+Optionally in `.git-board.toml`:
 
 ```toml
 [uploads]
-endpoint = "https://s3.epfl.ch"              # S3
+endpoint = "https://s3.epfl.ch"              # S3: must be UPLOADS_ENDPOINT's
 public_url = "https://enacit4r-cdn.epfl.ch"  # where the bucket is served
 prefix = "git-board/co2-calculator"          # default git-board/<repository>
 ```
@@ -743,7 +813,12 @@ check's. Keeping git-board's value needs `write = true`, like the CLI.
 browser's `Origin`, or a body that isn't JSON). Anyone who can reach the
 port can read and write every issue, and through the forge sync post to
 GitHub and GitLab with your tokens: only pass an `--addr` other machines
-can reach on a network you trust. Upgrade path when that stops being fine: a reverse proxy doing auth
+can reach on a network you trust. On every interface (`--addr
+0.0.0.0:8080`), it answers a request for an IP address or this machine's
+own name, never for another name: a website pointing its own domain at
+your machine (DNS rebinding) gets a 403. Running a branch's tests,
+making a branch and starting an agent, which run your repository's code
+or sign with your key, need a server on localhost. Upgrade path when that stops being fine: a reverse proxy doing auth
 in front of it (simplest), or a token check in `withCORS`/a new middleware
 in `internal/server` (more work, still small).
 
@@ -767,14 +842,18 @@ cd .. && go build -o git-board ./cmd/git-board
 ## Static site (`git-board html`)
 
 Generates a static HTML site, one page per configured `[views.*]`, plus an
-`index.html` linking to all of them — for PM/non-dev users who don't want a
+`index.html` linking to all of them (a view's name is its page's file name:
+one with a path in it, or named `index` or `releases`, is refused before
+anything is written) — for PM/non-dev users who don't want a
 CLI and shouldn't need the (also-unauthenticated) live web UI above. Reuses
 `internal/board`'s `LoadMatching`/`SortByField`/`BucketBy` — the exact same
 filter/sort/group semantics as `ls`/`view`/the web API — and the TUI's
 `tui.ParseLabels`/`tui.DisplayFieldName` to render known fields under their
 display name (`Status: ready`) instead of raw `status:ready` label text.
-**Read-only** — writes nothing to the issues, unlike everything else in this
-CLI except `ls`/`view`/`get`/`lint`.
+It writes no issue. On a fresh clone it first pulls origin's board, as
+`ls`, `view` and `tui` do. A view with no `filter` lists every issue,
+closed ones included, here and in `git-board view`; the web UI shows such
+a view's open issues (`is:open`).
 
 When the project has a `[release]` table, the export also writes
 `releases.html`: the environment strip, the releases table and each

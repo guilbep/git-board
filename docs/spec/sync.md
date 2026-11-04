@@ -137,8 +137,11 @@ the issue's assignees, a user of that forge. Sync never sends an
   that, by a name: the person of that name with an account there. The id
   is that account's.
 - **Pulled,** a forge assignee becomes `assignee:<login>`, with the login
-  of their account on that forge. A removed one takes away every assignee
-  label naming them.
+  of their account on that forge, and gets a person as an author does (see
+  [Authors](#authors)). A removed one takes away every assignee label
+  naming them.
+- **A label naming the login of one of the forge's assignees** holds that
+  assignee, even with no person: it is never sent as a removal.
 - **A forge's own label that looks like an assignee label,** as an older
   sync left on some issues, is in neither field. Sync leaves it as it is.
 - **A name that matches no account on the forge** is refused there (see
@@ -512,7 +515,10 @@ forge, and never makes a thing twice.
   forge issue with a marker from sync's accounts, and links the issue the
   marker names, with the `seen` a new forge issue gets: the title and body
   as the create sent them, header and marker included, so that a forge
-  edit made since is the forge's change. The push then sends the rest.
+  edit made since is the forge's change. The issue may have changed here
+  since the create, so each of the two is the forge's when an earlier
+  state of the issue sends it, else what the issue sends now: an edit made
+  here since is git-board's change. The push then sends the rest.
 - **A comment posted but not recorded.** The next pull finds the forge
   comment's marker, and records it with a `posted` and a `seen`. It isn't
   posted again.
@@ -785,7 +791,9 @@ its `id` is the numeric id, as a string (see [People](data-model.md#people)).
 The pull loads every person once. A person that fails to load stops the
 pull with an error, before it writes anything for the issue at hand:
 ownership can't be decided without every person. Issues already pulled
-stay pulled, as with any failed write. Then, for each author:
+stay pulled, as with any failed write. Then, for each author, and for
+each of the issue's assignees when the forge's assignees are pulled (so
+the `assignee:<login>` label pulled for one names a person):
 
 - **A person holds the account:** the author is that person, or, when two
   hold it, its [owner](data-model.md#account-owner).

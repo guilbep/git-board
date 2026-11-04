@@ -1,6 +1,7 @@
 package server
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -155,6 +156,27 @@ func TestRemoteEvents(t *testing.T) {
 	} {
 		if got := eventFor(httptest.NewRequest("POST", path, nil)).Kind; got != want {
 			t.Errorf("%s: %s, want %s", path, got, want)
+		}
+	}
+}
+
+// On a board kept outside git, what only git does is refused 409
+// missing, its sentence the message (ADR 0002), not 502.
+func TestGitOnlyActionsAreMissingOffGit(t *testing.T) {
+	t.Parallel()
+	dir := storetest.Repo(t, false)
+	storetest.Init(t, dir)
+	storetest.Git(t, dir, "remote", "add", "origin", storetest.Repo(t, true))
+	storetest.Git(t, dir, "config", store.DatastoreKey, "markdown:issues")
+	ts := newTestServer(t, storetest.Open(t, dir), mustLoadConfig(t))
+	for _, c := range []struct{ path, body string }{
+		{"/api/remotes/origin/pull", `{}`},
+		{"/api/remotes/origin/push", `{}`},
+		{"/api/start-over", `{"action":"reset"}`},
+	} {
+		code, got, out := sendFrom(t, "POST", ts.URL+c.path, "", json.RawMessage(c.body))
+		if code != http.StatusConflict || got != "missing" {
+			t.Errorf("%s: %d %s, want 409 missing", c.path, code, out)
 		}
 	}
 }

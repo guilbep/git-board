@@ -1,6 +1,7 @@
 package fields_test
 
 import (
+	"errors"
 	"slices"
 	"testing"
 	"time"
@@ -213,5 +214,120 @@ func TestApplyMeFallsBackToTheIdentitysLogin(t *testing.T) {
 	issues, err := board.LoadMatching(b, cfg, "assignee:@me", "")
 	if err != nil || len(issues) != 1 {
 		t.Errorf("LoadMatching assignee:@me = %d issues, %v; want the one", len(issues), err)
+	}
+}
+
+// The review's probes: each wrote a label nothing reads, and exited 0.
+func TestParseRefusesMalformedAssignments(t *testing.T) {
+	t.Parallel()
+	for _, s := range []string{"=x", "status", "status=-", "assignee=+", "status= ready", "status=a\nb", "a b=c", "prio:p1=x", "status=+-x"} {
+		if a, err := fields.Parse(s); err == nil {
+			t.Errorf("Parse(%q) = %+v, want an error", s, a)
+		}
+	}
+	for s, want := range map[string]fields.Assignment{
+		"status=ready":   {Field: "status", Value: "ready"},
+		"status=":        {Field: "status"},
+		"assignee=+@me":  {Field: "assignee", Op: '+', Value: "@me"},
+		"label=-urgent":  {Field: "label", Op: '-', Value: "urgent"},
+		"status=in prog": {Field: "status", Value: "in prog"},
+	} {
+		if got, err := fields.Parse(s); err != nil || got != want {
+			t.Errorf("Parse(%q) = %+v, %v; want %+v", s, got, err, want)
+		}
+	}
+}
+
+// assignee=+@me adds you, -@me removes you: the sign is split off before
+// @me resolves (review: fields.go:108).
+func TestApplySignedMeResolves(t *testing.T) {
+	t.Parallel()
+	cfg := mustLoadConfig(t)
+	b := storetest.New(t)
+	id := storetest.NewIssue(t, b, "x")
+	storetest.SetMyLogin(t, b, "guilbep")
+	if label, err := fields.Apply(b, cfg, id, "assignee", "+@me", "", today); err != nil || label != "assignee:guilbep" {
+		t.Fatalf("Apply +@me = %q, %v; want assignee:guilbep", label, err)
+	}
+	if _, err := fields.Apply(b, cfg, id, "assignee", "-@me", "", today); err != nil {
+		t.Fatalf("Apply -@me: %v", err)
+	}
+	if got, _ := b.GetLabels(id); len(got) != 0 {
+		t.Errorf("labels = %v, want none after -@me", got)
+	}
+}
+
+// status= clears the field instead of writing "status:"; -value drops a
+// single field's value; +value on a single field is refused.
+func TestApplyClearsAndRemovesSingleFields(t *testing.T) {
+	t.Parallel()
+	cfg := mustLoadConfig(t)
+	b := storetest.New(t)
+	id := storetest.NewIssue(t, b, "x")
+	if _, err := b.ApplyLabelChange(id, []string{"status:ready", "prio:p1", "assignee:a", "assignee:b"}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if label, err := fields.Apply(b, cfg, id, "status", "", "", today); err != nil || label != "" {
+		t.Fatalf("Apply status= = %q, %v", label, err)
+	}
+	if _, err := fields.Apply(b, cfg, id, "prio", "-p1", "", today); err != nil {
+		t.Fatalf("Apply prio=-p1: %v", err)
+	}
+	if _, err := fields.Apply(b, cfg, id, "assignee", "", "", today); err != nil {
+		t.Fatalf("Apply assignee=: %v", err)
+	}
+	if _, err := fields.Apply(b, cfg, id, "prio", "+p2", "", today); err == nil {
+		t.Error("Apply prio=+p2 on a single field: want an error")
+	}
+	if _, err := fields.Apply(b, cfg, id, "", "x", "", today); err == nil {
+		t.Error("Apply with no field name: want an error")
+	}
+	if got, _ := b.GetLabels(id); len(got) != 0 {
+		t.Errorf("labels = %v, want none", got)
+	}
+}
+
+// label=+name and label=-name add and remove a plain label.
+func TestApplyPlainLabels(t *testing.T) {
+	t.Parallel()
+	cfg := mustLoadConfig(t)
+	b := storetest.New(t)
+	id := storetest.NewIssue(t, b, "x")
+	if _, err := fields.Apply(b, cfg, id, "label", "+urgent", "", today); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := b.GetLabels(id); !slices.Equal(got, []string{"urgent"}) {
+		t.Fatalf("labels = %v, want [urgent]", got)
+	}
+	if _, err := fields.Apply(b, cfg, id, "label", "-urgent", "", today); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := b.GetLabels(id); len(got) != 0 {
+		t.Errorf("labels = %v, want none", got)
+	}
+	if _, err := fields.Apply(b, cfg, id, "label", "+prio:p1", "", today); err == nil {
+		t.Error("label=+prio:p1: want an error naming prio=p1")
+	}
+}
+
+func TestCheckHoldsToTheConfig(t *testing.T) {
+	t.Parallel()
+	cfg := mustLoadConfig(t)
+	inUse := []string{"team:web"}
+	for _, s := range []string{"prio=p9", "milestone=v1", "est=lots", "sprint=nope", "status=Ready"} {
+		a, _ := fields.Parse(s)
+		if err := fields.Check(cfg, a, inUse); !errors.Is(err, fields.ErrUnchecked) {
+			t.Errorf("Check(%s) = %v, want ErrUnchecked", s, err)
+		}
+	}
+	for _, s := range []string{"prio=p0", "prio=-p9", "prio=", "est=3.5", "sprint=delivery", "assignee=+bob", "team=data", "due=2026-10-01", "label=+urgent"} {
+		a, _ := fields.Parse(s)
+		if err := fields.Check(cfg, a, inUse); err != nil {
+			t.Errorf("Check(%s) = %v, want nil", s, err)
+		}
+	}
+	a, _ := fields.Parse("due=tomorrow")
+	if err := fields.Check(cfg, a, inUse); err == nil {
+		t.Error("Check(due=tomorrow): want an error, due is a date")
 	}
 }

@@ -56,8 +56,8 @@ func newServeCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "serve",
 		Short: "Serve the web UI and its API, without opening a browser",
-		Long: `Serve the web UI and its JSON API for the git-bug repository in the
-working directory, until stopped. No auth: it listens on this machine
+		Long: `Serve the web UI and its JSON API for the board of the repository in
+the working directory, until stopped. No auth: it listens on this machine
 only by default, and refuses what another site could make a browser
 send. See README.md, "Web UI".`,
 		Example: `  git-board serve

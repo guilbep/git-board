@@ -11,7 +11,6 @@ import (
 
 	"github.com/guilbep/git-board/internal/board"
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/fields"
 	"github.com/guilbep/git-board/internal/store"
 	"github.com/guilbep/git-board/internal/tui"
 )
@@ -53,14 +52,20 @@ browser where its server already runs, else it starts one here on
 localhost, port 8080 or the next free one, until Ctrl-C. Each repository
 gets its own. "git-board serve" runs the server alone.
 
-FILTER GRAMMAR (used by ls/view/tui):
-  field:value             issue has the label field:value
-  -field:value            issue does NOT have that label
+FILTER GRAMMAR (used by ls/view/tui/set --filter; all of it in
+docs/guide/configuration.md, Filters):
+  field:value             issue has the label field:value; field:a,b either
+  -<condition>            negates any condition
   field:@current/@next/@previous   resolves against [sprints] in .git-board.toml
-  field:@me               resolves to --me / GIT_BOARD_ME
-  is:open / is:closed     issue status
-  title:*glob*            glob match on title
-  free text               substring match on title
+  field:@me               you: --me / GIT_BOARD_ME, else the forge login of
+                          the person you write as (git board me)
+  is:open / is:closed     issue state
+  author:x  involves:x  follows:@me   who opened it, is in it, what you follow
+  label:x                 a plain label (or a full one: label:status:ready)
+  no:field                no value for that field
+  title:*glob*            the title, without case
+  #2528, CO2-3075         an issue by its forge or project number
+  free text, "a phrase"   words in the title, the description or a comment
   Conditions are AND'd together — combine as many as you like.`,
 		Example: `  git-board                                    # this repository's web UI
   git-board ls                                 # open issues
@@ -68,6 +73,9 @@ FILTER GRAMMAR (used by ls/view/tui):
   git-board ls "sprint:@current is:open" --group status
   git-board view backlog --md
   git-board set a1b2c3 status=ready prio=p1
+  git-board new "Login fails on Safari" prio=p1 -e
+  git-board show a1b2c3
+  git-board comment a1b2c3 -b "Fixed in 4e5f6a7"
   git-board tui "assignee:@me is:open" --me guilbep`,
 		Version:       buildVersion(),
 		SilenceUsage:  true,
@@ -78,13 +86,16 @@ FILTER GRAMMAR (used by ls/view/tui):
 		},
 	}
 	root.Flags().BoolVar(&noOpen, "no-open", false, "don't open the browser")
-	root.AddCommand(newInitCmd(), newViewCmd(), newNumbersCmd(), newLsCmd(), newSetCmd(), newGetCmd(), newTuiCmd(), newBridgeCmd(), newLintCmd(), newMoveCmd(), newCloseCmd(), newSyncCmd(), newSprintCmd(), newHtmlCmd(), newExportCmd(), newImportCmd(), newDatastoreCmd(), newBranchCmd(), newServeCmd(), newReleaseCmd(), newDeployCmd(), newVerifyCmd(), newSwitchCmd(), newPruneCmd(), newFetchCmd(), newPullCmd(), newPushCmd(), newForgeCmd(), newProjectCmd(), newResetCmd())
+	root.AddCommand(newInitCmd(), newViewCmd(), newNumbersCmd(), newLsCmd(), newSetCmd(), newGetCmd(), newTuiCmd(), newBridgeCmd(), newLintCmd(), newMoveCmd(), newCloseCmd(), newSyncCmd(), newSprintCmd(), newHtmlCmd(), newExportCmd(), newImportCmd(), newDatastoreCmd(), newBranchCmd(), newServeCmd(), newReleaseCmd(), newDeployCmd(), newVerifyCmd(), newSwitchCmd(), newPruneCmd(), newFetchCmd(), newPullCmd(), newPushCmd(), newForgeCmd(), newProjectCmd(), newResetCmd(),
+		newMeCmd(), newNewCmd(), newShowCmd(), newCommentCmd(), newEditCmd(), newReopenCmd(), newLogCmd())
+	usageErrors(root)
 	return root
 }
 
 func newLsCmd() *cobra.Command {
 	var group, sort, me string
 	var md, asJSON bool
+	var limit int
 
 	cmd := &cobra.Command{
 		Use:   "ls [filter]",
@@ -94,18 +105,24 @@ func newLsCmd() *cobra.Command {
   git-board ls "sprint:delivery is:open" --group status --sort "prio asc"
   git-board ls "assignee:@me is:open" --me guilbep
   git-board ls "title:*login*" --json
-  git-board ls "#2528"                                  # quoted: # starts a shell comment`,
+  git-board ls "#2528"                                  # quoted: # starts a shell comment
+  git-board ls --sort "updated desc" --limit 10         # the ten last changed
+  git-board ls "login is:closed" --sort created`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			filterStr := defaultFilter
 			if len(args) > 0 {
 				filterStr = args[0]
 			}
-			return runLs(cmd.OutOrStdout(), filterStr, group, sort, md, asJSON, resolveMe(me))
+			if limit < 0 {
+				return usageError{fmt.Errorf("--limit %d: a count, 0 for all", limit)}
+			}
+			return runLs(cmd.OutOrStdout(), filterStr, group, sort, limit, md, asJSON, resolveMe(me))
 		},
 	}
 	cmd.Flags().StringVar(&group, "group", "", "group results by field")
-	cmd.Flags().StringVar(&sort, "sort", "", `sort results, e.g. "prio asc"`)
+	cmd.Flags().StringVar(&sort, "sort", "", `sort by created, updated, title or a field, then asc or desc: "prio asc", "updated desc"`)
+	cmd.Flags().IntVarP(&limit, "limit", "L", 0, "list this many at most, after sorting (0: all)")
 	cmd.Flags().BoolVar(&md, "md", false, "render as markdown")
 	cmd.Flags().BoolVar(&asJSON, "json", false, "render as JSON")
 	meFlag(cmd, &me)
@@ -134,21 +151,68 @@ func newViewCmd() *cobra.Command {
 }
 
 func newSetCmd() *cobra.Command {
-	var me string
+	var me, filterStr string
+	var force, apply bool
 
 	cmd := &cobra.Command{
-		Use:   "set <id> field=value [field=value...]",
+		Use:   "set <id> field=value [field=value...] | set --filter <filter> field=value... [--apply]",
 		Short: "Set one or more fields on an issue",
+		Long: `Set one or more fields on an issue, in one change.
+
+  field=value     a single field (status, prio) swaps to value; a multi
+                  field (assignee) adds it
+  field=+value    a multi field adds value
+  field=-value    removes value, from a single field or a multi one
+  field=          clears the field: every value it holds goes
+  label=+name     adds the plain label name (bug, not kind:bug)
+  label=-name     removes it
+
+Values resolve first: @me is --me, GIT_BOARD_ME, else the forge login of
+the person you write as (git board me); @current, @next and @previous are
+sprints; a configured alias is its current name.
+
+Each value is held to .git-board.toml before anything is written: one of
+the field's options, a number for a number field, a YYYY-MM-DD date for a
+date field, a sprint for a sprint field, a [labels] label when the project
+lists them, and a field that is configured or already on some issue. One
+that isn't is refused, and nothing is written; --force writes it anyway.
+Removing and clearing are never refused: they are how a wrong value goes.
+
+Setting status to its last option closes the issue, as "git board close"
+does; setting it to another option on a closed issue reopens it.
+
+--filter sets the fields on every issue the filter matches (ls's
+grammar), each in one change. It only shows what each would change
+until --apply writes it.`,
 		Example: `  git-board set a1b2c3 status=ready prio=p1
   git-board set a1b2c3 sprint=@next --me guilbep
-  git-board set a1b2c3 assignee=+guilbep     # multi-cardinality: add
-  git-board set a1b2c3 assignee=-guilbep     # multi-cardinality: remove`,
-		Args: cobra.MinimumNArgs(2),
+  git-board set a1b2c3 assignee=+@me         # multi-cardinality: add yourself
+  git-board set a1b2c3 assignee=-guilbep     # multi-cardinality: remove
+  git-board set a1b2c3 prio=                 # clear the field
+  git-board set a1b2c3 label=+regression     # a plain label
+  git-board set a1b2c3 milestone=v1 --force  # a field nothing configures yet
+  git-board set --filter "sprint:@current status:ready no:assignee" assignee=+@me          # what it would do
+  git-board set --filter "sprint:@current status:ready no:assignee" assignee=+@me --apply  # do it`,
+		Args: func(cmd *cobra.Command, args []string) error {
+			if cmd.Flags().Changed("filter") {
+				return cobra.MinimumNArgs(1)(cmd, args)
+			}
+			return cobra.MinimumNArgs(2)(cmd, args)
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runSet(cmd.OutOrStdout(), args[0], args[1:], resolveMe(me))
+			if cmd.Flags().Changed("filter") {
+				return runSetMatching(cmd.OutOrStdout(), filterStr, args, resolveMe(me), force, apply)
+			}
+			if apply {
+				return usageError{fmt.Errorf("--apply goes with --filter: set <id> writes at once")}
+			}
+			return runSet(cmd.OutOrStdout(), args[0], args[1:], resolveMe(me), force)
 		},
 	}
 	meFlag(cmd, &me)
+	cmd.Flags().StringVar(&filterStr, "filter", "", "set the fields on every issue this filter matches (ls's grammar)")
+	cmd.Flags().BoolVar(&apply, "apply", false, "with --filter: write the changes, not only show them")
+	cmd.Flags().BoolVar(&force, "force", false, "write values .git-board.toml doesn't allow (an unknown field, a value outside the options)")
 	return cmd
 }
 
@@ -164,9 +228,9 @@ Keys: enter open detail, e edit a field (from detail), c quick-filter
 by category, f structured filter (same grammar as "ls" — see below —
 empty input clears it), s sort by field e.g. "prio" or "prio desc"
 (same as --sort, persists across a later f/c filter, empty input
-clears it), i/o preview/apply the GitHub Project's fields as labels
-(same pull/push mnemonic as git-bug's own termui; requires "git board
-project configure" first),
+clears it), i/o preview/apply the GitHub Project's fields as labels,
+as git board project pull does (requires "git board project configure"
+first),
 / bubbles/list's own fuzzy text search, esc/q back or quit.
 
 The optional [filter] argument uses the same grammar as "ls" (see
@@ -208,12 +272,12 @@ func loadConfig() (*config.Config, error) {
 	return config.Load(config.Path())
 }
 
-func runLs(out io.Writer, filterStr, group, sort string, md, asJSON bool, me string) error {
+func runLs(out io.Writer, filterStr, group, sort string, limit int, md, asJSON bool, me string) error {
 	cfg, err := loadConfig()
 	if err != nil {
 		return err
 	}
-	return listAndRender(out, cfg, filterStr, group, sort, md, asJSON, me)
+	return listAndRender(out, cfg, filterStr, group, sort, limit, md, asJSON, me)
 }
 
 func runView(out io.Writer, name string, md, asJSON bool, me string) error {
@@ -225,15 +289,15 @@ func runView(out io.Writer, name string, md, asJSON bool, me string) error {
 	if !ok {
 		return fmt.Errorf("unknown view %q", name)
 	}
-	return listAndRender(out, cfg, view.Filter, view.Group, view.Sort, md, asJSON, me)
+	return listAndRender(out, cfg, view.Filter, view.Group, view.Sort, 0, md, asJSON, me)
 }
 
-func listAndRender(out io.Writer, cfg *config.Config, filterStr, group, sort string, md, asJSON bool, me string) error {
+func listAndRender(out io.Writer, cfg *config.Config, filterStr, group, sort string, limit int, md, asJSON bool, me string) error {
 	matched, err := loadMatchingIssues(cfg, filterStr, me)
 	if err != nil {
 		return err
 	}
-	return render(out, matched, group, sort, md, asJSON, cfg)
+	return render(out, matched, group, sort, limit, md, asJSON, cfg)
 }
 
 func runTui(filterStr, me string) error {
@@ -285,7 +349,7 @@ func firstPull(out io.Writer, b *store.Backend) {
 	}
 }
 
-func runSet(out io.Writer, idPrefix string, assignments []string, me string) error {
+func runSet(out io.Writer, idPrefix string, args []string, me string, force bool) error {
 	cfg, err := loadConfig()
 	if err != nil {
 		return err
@@ -297,19 +361,111 @@ func runSet(out io.Writer, idPrefix string, assignments []string, me string) err
 	}
 	defer b.Close()
 
-	today := time.Now()
-	for _, assignment := range assignments {
-		fieldName, value, ok := strings.Cut(assignment, "=")
-		if !ok {
-			return fmt.Errorf("invalid assignment %q, expected field=value", assignment)
-		}
-		label, err := fields.Apply(b, cfg, idPrefix, fieldName, value, me, today)
-		if err != nil {
+	assignments, err := parseAssignments(b, cfg, args, me, force)
+	if err != nil {
+		return err
+	}
+	current, err := b.GetLabels(idPrefix)
+	if err != nil {
+		return err
+	}
+	labels, results, err := foldAssignments(cfg, current, assignments)
+	if err != nil {
+		return err
+	}
+	added, removed := labelDelta(current, labels)
+	if len(added) > 0 || len(removed) > 0 {
+		if _, err := b.ApplyLabelChange(idPrefix, added, removed); err != nil {
 			return err
 		}
-		fmt.Fprintf(out, "%s: %s\n", idPrefix, label)
+	}
+	state, err := statusInStep(b, cfg, idPrefix, assignments, labels)
+	if err != nil {
+		return err
+	}
+	for i, a := range assignments {
+		line := idPrefix + ": " + describe(a, results[i])
+		if i == len(assignments)-1 {
+			line += state
+		}
+		fmt.Fprintln(out, line)
 	}
 	return nil
+}
+
+// runSetMatching is set on every issue filterStr matches: what each would
+// change, written with apply.
+func runSetMatching(out io.Writer, filterStr string, args []string, me string, force, apply bool) error {
+	cfg, err := loadConfig()
+	if err != nil {
+		return err
+	}
+	b, err := store.OpenCwd()
+	if err != nil {
+		return err
+	}
+	defer b.Close()
+
+	assignments, err := parseAssignments(b, cfg, args, me, force)
+	if err != nil {
+		return err
+	}
+	issues, err := board.LoadMatching(b, cfg, filterStr, me)
+	if err != nil {
+		return err
+	}
+	if apply {
+		if err := needMe(b); err != nil {
+			return err
+		}
+	}
+	changed := 0
+	for _, is := range issues {
+		labels, _, err := foldAssignments(cfg, is.Labels, assignments)
+		if err != nil {
+			return fmt.Errorf("%s: %w", shortID(is.ID), err)
+		}
+		added, removed := labelDelta(is.Labels, labels)
+		if len(added)+len(removed) == 0 {
+			continue
+		}
+		changed++
+		var parts []string
+		for _, l := range added {
+			parts = append(parts, "+"+l)
+		}
+		for _, l := range removed {
+			parts = append(parts, "-"+l)
+		}
+		line := shortID(is.ID) + " " + is.Headline() + ": " + strings.Join(parts, " ")
+		if apply {
+			if _, err := b.ApplyLabelChange(is.ID, added, removed); err != nil {
+				return fmt.Errorf("%s: %w (%d written before it)", shortID(is.ID), err, changed-1)
+			}
+			state, err := statusInStep(b, cfg, is.ID, assignments, labels)
+			if err != nil {
+				return fmt.Errorf("%s: %w", shortID(is.ID), err)
+			}
+			line += state
+		}
+		fmt.Fprintln(out, line)
+	}
+	switch {
+	case changed == 0:
+		fmt.Fprintf(out, "nothing to change on the %d issue%s matching\n", len(issues), plural(len(issues)))
+	case apply:
+		fmt.Fprintf(out, "%d issue%s changed\n", changed, plural(changed))
+	default:
+		fmt.Fprintf(out, "%d issue%s would change; --apply writes it\n", changed, plural(changed))
+	}
+	return nil
+}
+
+func plural(n int) string {
+	if n == 1 {
+		return ""
+	}
+	return "s"
 }
 
 func runGet(out io.Writer, idPrefix string) error {

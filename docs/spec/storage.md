@@ -43,18 +43,20 @@ An entity commit is:
 - **its tree:** one entry, `pack`, a blob (mode `100644`);
 - **its parents:** none for the entity's first commit, the head it was
   written on for an append, and both heads for a merge;
-- **its author and committer:** `git-board <git-board@localhost>`;
-- **its message:** `git-board`;
+- **its author and committer:** empty, a name and an email of nothing,
+  with the time it was written: who wrote each operation is in the pack
+  (its `author`), not in the commit;
+- **its message:** none;
 - **unsigned,** whatever git's configuration asks for.
+
+A `git log` that leaves out `--author=' <>'` so hides the board's commits.
 
 ```text
 $ git cat-file -p refs/board/issue/3f7a9c2e41b6d08a5e1f93c7b2d4a6e8f0c1b3d5
 tree <tree>
 parent <parent>
-author git-board <git-board@localhost> <time>
-committer git-board <git-board@localhost> <time>
-
-git-board
+author  <> <time>
+committer  <> <time>
 
 $ git cat-file -p <tree>
 100644 blob 8c04e5b1d97f2a63c18e0b4d5f6a7928e3b1c0d4	pack

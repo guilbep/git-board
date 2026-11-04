@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"slices"
 	"time"
 
 	"github.com/guilbep/git-board/internal/config"
@@ -23,6 +24,13 @@ type issueSyncResult struct {
 	Errors  int                     `json:"errors"`
 	Bridges map[string]*bridgeTally `json:"bridges"`
 	Ended   time.Time               `json:"ended"`
+}
+
+// issueCheck is an issue's last clean dry run: when it ended, and the
+// sync bridges it read, those a forge left out not among them.
+type issueCheck struct {
+	ended time.Time
+	read  []string
 }
 
 // handleIssueSync syncs one issue with every sync bridge (SyncIssue): its
@@ -45,7 +53,7 @@ func (s *apiServer) handleIssueSync(w http.ResponseWriter, r *http.Request) {
 	s.forgeMu.Lock()
 	last, dried := s.issueDry[issue.ID]
 	s.forgeMu.Unlock()
-	if !req.DryRun && (!dried || time.Since(last) > dryRunFresh) {
+	if !req.DryRun && (!dried || time.Since(last.ended) > dryRunFresh) {
 		writeError(w, http.StatusConflict, errIssueDryRunFirst)
 		return
 	}
@@ -66,7 +74,13 @@ func (s *apiServer) handleIssueSync(w http.ResponseWriter, r *http.Request) {
 		return res.Bridges[name]
 	}
 	for _, f := range forges {
-		tally(f.Name)
+		t := tally(f.Name)
+		if !req.DryRun && !slices.Contains(last.read, f.Name) {
+			t.add(store.SyncEvent{Forge: f.Name, What: "warning"}, "not in the check: run Check again to sync it")
+		}
+	}
+	if !req.DryRun { // only what the check read, as the full sync does
+		forges = slices.DeleteFunc(forges, func(f config.Forge) bool { return !slices.Contains(last.read, f.Name) })
 	}
 	run := s.runIssueSync
 	if run == nil {
@@ -86,10 +100,16 @@ func (s *apiServer) handleIssueSync(w http.ResponseWriter, r *http.Request) {
 
 	s.forgeMu.Lock()
 	if s.issueDry == nil {
-		s.issueDry = map[string]time.Time{}
+		s.issueDry = map[string]issueCheck{}
 	}
 	if req.DryRun && res.Errors == 0 {
-		s.issueDry[issue.ID] = res.Ended
+		check := issueCheck{ended: res.Ended}
+		for _, f := range forges {
+			if res.Bridges[f.Name].Left == "" {
+				check.read = append(check.read, f.Name)
+			}
+		}
+		s.issueDry[issue.ID] = check
 	} else {
 		delete(s.issueDry, issue.ID) // a real run, or a failed dry run: dry run again
 	}

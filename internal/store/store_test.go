@@ -2,6 +2,7 @@ package store_test
 
 import (
 	"errors"
+	"fmt"
 	"maps"
 	"path/filepath"
 	"strings"
@@ -202,7 +203,9 @@ func TestInputsAreChecked(t *testing.T) {
 	t.Parallel()
 	b := storetest.New(t)
 	id := storetest.NewIssue(t, b, "x")
-	for _, p := range []string{"", "%", "a_", "../x", strings.ToUpper(id[:8]), id + "0"} {
+	// upper case is refused: "DEADBEEF", as id[:8] in upper case is the id
+	// itself when its first 8 digits have no letter
+	for _, p := range []string{"", "%", "a_", "../x", "DEADBEEF", id + "0"} {
 		if _, err := b.GetIssue(p); !errors.Is(err, store.ErrNotFound) {
 			t.Errorf("GetIssue(%q): %v, want ErrNotFound", p, err)
 		}
@@ -255,5 +258,38 @@ func TestSetViewIsThisRepositorys(t *testing.T) {
 	}
 	if got, scope, err := b.ViewSetting(); err != nil || got != "cycle" || scope != "global" {
 		t.Errorf("unset here: %q (%q), %v", got, scope, err)
+	}
+}
+
+// GetIssue folds the forges' links again only when a sync entity moved:
+// a sync names each issue it touches, and a fold per name made a big
+// pull's naming quadratic.
+func TestGetIssueFoldsTheLinksOnce(t *testing.T) {
+	t.Parallel()
+	b := storetest.New(t)
+	var ids []string
+	for i := range 3 {
+		id := storetest.NewIssue(t, b, fmt.Sprint("issue ", i))
+		storetest.Link(t, b, id, fmt.Sprintf("https://github.com/o/r/issues/%d", i+1))
+		ids = append(ids, id)
+	}
+	for range 5 {
+		for _, id := range ids {
+			if _, err := b.GetIssue(id); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	if n := store.RecordsFolds(b); n != 1 {
+		t.Fatalf("folded the links %d times for 15 reads, want 1", n)
+	}
+	id := storetest.NewIssue(t, b, "issue 3")
+	storetest.Link(t, b, id, "https://github.com/o/r/issues/4")
+	got, err := b.GetIssue(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.BareNumber() != "4" || store.RecordsFolds(b) != 2 {
+		t.Fatalf("after a link: number %q, folds %d", got.BareNumber(), store.RecordsFolds(b))
 	}
 }

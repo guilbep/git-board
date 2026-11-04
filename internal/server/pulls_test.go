@@ -284,15 +284,6 @@ func TestMergePull(t *testing.T) {
 	}
 }
 
-func commentReview(t *testing.T, s *apiServer, issue, id string) *store.Review {
-	t.Helper()
-	r, err := s.b.CommentReview(issue, id)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return r
-}
-
 // An edit writes the title and description of the issue's own PR, and no
 // other: the number is found again on GitHub first.
 func TestEditPull(t *testing.T) {

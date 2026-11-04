@@ -136,6 +136,9 @@ func (s *apiServer) handleNewIssue(w http.ResponseWriter, r *http.Request) {
 // stepOf is a comment's step: an id of the project's list, or none. A
 // number 1 to 7, from a tab opened before ids, is the default list's.
 func (s *apiServer) stepOf(raw json.RawMessage) (string, error) {
+	if !s.config().Experimental(config.FeatureCycle) {
+		return "", nil // the cycle is off: a comment is in no step
+	}
 	var id string
 	if n, err := strconv.Atoi(string(raw)); err == nil && n >= 1 && n <= 7 {
 		id = config.DefaultSteps[n-1].ID
@@ -170,6 +173,10 @@ func (s *apiServer) handleComment(w http.ResponseWriter, r *http.Request) {
 	}
 	if strings.TrimSpace(req.Body) == "" && req.Status == "" {
 		writeError(w, http.StatusBadRequest, errors.New("an empty comment"))
+		return
+	}
+	if req.Status != "" && req.Status != "open" && req.Status != "closed" { // before the comment is written
+		writeError(w, http.StatusBadRequest, fmt.Errorf("status %q: want open or closed", req.Status))
 		return
 	}
 	step, err := s.stepOf(req.Step)
@@ -362,6 +369,10 @@ type meResponse struct {
 	Avatars        string `json:"avatars"`
 	AvatarsScope   string `json:"avatars_scope,omitempty"`
 	AvatarsIgnored string `json:"avatars_ignored,omitempty"`
+	// Experimental are the work-in-progress features on: cycle, agents,
+	// worktrees ([experimental] features, or this clone's
+	// board.experimental); the page hides the others
+	Experimental []string `json:"experimental"`
 	// FirstPull: this clone opened with no board, and the server pulled
 	// its remote's, or couldn't (docs/prd/clone-shows-board.md)
 	FirstPull *firstPullNote `json:"first_pull,omitempty"`
@@ -403,8 +414,14 @@ func (s *apiServer) writeMe(w http.ResponseWriter) {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
-	res.View, res.ViewFrom, res.ViewIgnored = resolveView(setting, s.config().Cycle.On)
+	cfg := s.config()
+	res.Experimental = cfg.ExperimentalOn()
+	res.View, res.ViewFrom, res.ViewIgnored = resolveView(setting, cfg.Cycle.On)
 	res.ViewScope = scope
+	if !cfg.Experimental(config.FeatureCycle) {
+		// no cycle's page while the cycle is off, whatever board.view says
+		res.View, res.ViewFrom, res.ViewIgnored, res.ViewScope = "classic", "default", "", ""
+	}
 	avatars, avScope, avIgnored, err := s.b.AvatarsSetting()
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)

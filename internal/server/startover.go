@@ -120,7 +120,7 @@ func (s *apiServer) handleStartOver(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		writeError(w, http.StatusBadGateway, errors.New(store.NoCredentials(err.Error())))
+		writeError(w, http.StatusBadGateway, noCredentials(err.Error(), err))
 		return
 	}
 	if req.Action != "prune" {

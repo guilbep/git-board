@@ -58,6 +58,8 @@ func Run(t *testing.T, newForge NewForge) {
 		{"AnIssueByItsRef", issueByItsRef},
 		{"AListedIssueCompleted", listedThenCompleted},
 		{"AssigneesAreTheForges", assigneesAreTheForges},
+		{"AnAssigneeWhoWroteNothing", assigneeWhoWroteNothing},
+		{"ACrashThenALocalEdit", crashThenLocalEdit},
 	} {
 		t.Run(sc.name, func(t *testing.T) {
 			t.Parallel()
@@ -753,6 +755,47 @@ func assigneesAreTheForges(e *env) {
 	e.sync(syncer.Options{}, a)
 	if got := e.load(fi.ID).Labels; slices.Contains(got, "assignee:ann") || !slices.Contains(got, "Assignee:bob") {
 		e.t.Fatalf("labels = %v; want ann's removed, bob's kept", got)
+	}
+	e.stable(map[*fake.Forge]forge.Forge{f: a})
+}
+
+// An assignee who wrote nothing on the forge issue has no person before
+// the pull: the next sync still keeps them assigned on the forge.
+func assigneeWhoWroteNothing(e *env) {
+	f, a := e.forge("example.com/p")
+	carol := forge.Account{ID: "9", Login: "carol"}
+	f.Add(forge.Issue{Author: ann, Title: "F", Body: "fb", Assignees: []forge.Account{carol}})
+	e.sync(syncer.Options{}, a)
+	e.sync(syncer.Options{}, a)
+	if got := onForge(e.t, f, "F"); len(got.Assignees) != 1 || got.Assignees[0].ID != carol.ID {
+		e.t.Fatalf("forge assignees = %+v, want carol", got.Assignees)
+	}
+	if got := e.byTitle("F").Labels; !slices.Contains(got, "assignee:carol") {
+		e.t.Fatalf("labels = %v", got)
+	}
+	if len(e.warnings) > 0 {
+		e.t.Fatalf("warnings = %q", e.warnings)
+	}
+	e.stable(map[*fake.Forge]forge.Forge{f: a})
+}
+
+// A push that stopped after its create, then an edit here: the next run
+// links the forge issue and pushes the edit, instead of pulling the
+// forge's text, which is only what the create sent.
+func crashThenLocalEdit(e *env) {
+	f, a := e.forge("example.com/p")
+	l := e.create("L", "lb")
+	crashOnce(f, "create-issue")
+	if _, err := syncer.Sync(e.ctx, e.s, syncer.Options{}, a); err == nil {
+		e.t.Fatal("the crash wasn't reported")
+	}
+	e.do(l.ID, issue.SetTitle(e.me, "L2"))
+	e.sync(syncer.Options{}, a)
+	if got := e.load(l.ID).Title; got != "L2" {
+		e.t.Fatalf("git-board title = %q, want the edit here", got)
+	}
+	if got := titles(f); !reflect.DeepEqual(got, []string{"L2"}) {
+		e.t.Fatalf("forge = %v, want one L2", got)
 	}
 	e.stable(map[*fake.Forge]forge.Forge{f: a})
 }

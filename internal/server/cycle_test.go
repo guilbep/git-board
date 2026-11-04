@@ -27,8 +27,9 @@ func cycleConfig(roles map[string]string, c config.Cycle) *config.Config {
 			"status": {Single: true, Options: co2Statuses},
 			"risk":   {Single: true, Options: []string{"low", "normal", "structural"}},
 		},
-		Roles: roles,
-		Cycle: c,
+		Roles:    roles,
+		Cycle:    c,
+		Features: allFeatures, // the cycle's tests: every experimental feature on
 	}
 }
 
@@ -173,10 +174,17 @@ func (c *pullCache) age(branch string, d time.Duration) {
 }
 
 // post is a JSON POST, and the answer's status and body.
+// post sends body as the board's own page does: with its Origin.
 func post(t *testing.T, url string, body any) (int, string) {
 	t.Helper()
 	data, _ := json.Marshal(body)
-	resp, err := http.Post(url, "application/json", bytes.NewReader(data))
+	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(data))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Origin", req.URL.Scheme+"://"+req.URL.Host)
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -411,7 +419,7 @@ func TestCycleSignoffClosesFromReview(t *testing.T) {
 	s.cfg = &config.Config{Fields: map[string]config.Field{
 		"status": {Single: true, Options: []string{"backlog", "ready", "in-progress", "in-review", "done"}},
 		"risk":   {Single: true, Options: []string{"low", "normal", "structural"}},
-	}}
+	}, Features: allFeatures}
 	s.pulls.put("fix/2518-x", &ghpr.PR{Number: 3082, State: "MERGED", MergeCommit: "deadbee0"}, nil)
 	url := serve(t, s).URL + "/api/issues/" + id[:8] + "/cycle"
 	var c cycleAnswer

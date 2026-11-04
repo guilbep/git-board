@@ -23,11 +23,12 @@ func newBridgeCmd() *cobra.Command {
 		Short: "Bridge GitHub Project (v2) field values into labels",
 		Long: `Bridge GitHub Project (v2) field values into labels.
 
-Pull is read-only against GitHub: it only calls "gh project item-list",
+Pull is read-only against GitHub: it only reads the Project with gh,
 never writes back to the Project or any GitHub issue. It matches project
 items to the issues the forge sync linked to their GitHub issue; an item
-with no matching issue is reported unmatched, not an error. Sync goes
-both ways.
+with no matching issue is reported unmatched, not an error. It is git
+board project pull: a field changed in git-board since both sides last
+agreed stays. Sync goes both ways.
 
 Meant to run repeatedly, not once: a Project's fields keep changing as
 work progresses, and every run recomputes the diff, so a second run
@@ -82,7 +83,7 @@ func newBridgePullCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "pull",
-		Short: "Sync GitHub Project field values into labels on matching issues",
+		Short: "Take the GitHub Project's changes into the labels (git board project pull)",
 		Example: `  git-board bridge pull                              # dry-run preview
   git-board bridge pull --apply                       # write the labels
   git-board bridge pull --owner EPFL-ENAC --project 40 --apply
@@ -129,71 +130,11 @@ func runBridgePull(out io.Writer, ownerFlag string, projectFlag, limit int, appl
 		return err
 	}
 	defer b.Close()
-
-	issues, err := b.ListIssues()
-	if err != nil {
+	// git board project pull: only the side that changed since both
+	// agreed is taken, so a change made here isn't overwritten
+	if err := projectRun(out, cfg, b, limit, "labels", apply); err != nil || apply {
 		return err
 	}
-
-	items, err := fetchGithubItems(owner, project, limit)
-	if err != nil {
-		return err
-	}
-
-	plan := ghbridge.BuildPlan(items, issues, cfg)
-	printBridgePlan(out, plan)
-
-	if !apply {
-		fmt.Fprintln(out, "\ndry run — nothing written. Re-run with --apply to write these changes.")
-		return nil
-	}
-	if err := ghbridge.ApplyPlan(b, plan); err != nil {
-		return err
-	}
-	fmt.Fprintln(out, "\napplied.")
+	fmt.Fprintln(out, "\ndry run — nothing written. Re-run with --apply to write these changes.")
 	return nil
-}
-
-// printBridgePlan renders what BuildPlan found: per-issue label changes,
-// then a summary — matched/not-matched, fields set, and any values that
-// didn't map to a configured option (skipped, not silently dropped).
-func printBridgePlan(out io.Writer, plan ghbridge.Plan) {
-	fieldsSet := 0
-	changed := 0
-	warnings := 0
-	for _, c := range plan.Changes {
-		if len(c.Added) == 0 && len(c.Removed) == 0 && len(c.Warnings) == 0 {
-			continue
-		}
-		changed++
-		for _, f := range c.Fields {
-			if len(f.Added) > 0 || len(f.Removed) > 0 {
-				fieldsSet++
-			}
-		}
-		warnings += len(c.Warnings)
-		fmt.Fprintf(out, "#%d %s\n", c.Number, c.Title)
-		for _, l := range c.Added {
-			fmt.Fprintf(out, "  + %s\n", l)
-		}
-		for _, l := range c.Removed {
-			fmt.Fprintf(out, "  - %s\n", l)
-		}
-		for _, w := range c.Warnings {
-			fmt.Fprintf(out, "  ! %s\n", w)
-		}
-	}
-
-	notAnIssue, notBridged := 0, 0
-	for _, u := range plan.Unmatched {
-		fmt.Fprintf(out, "unmatched #%d %s: %s\n", u.Number, u.Title, u.Reason)
-		if u.NotAnIssue {
-			notAnIssue++
-		} else {
-			notBridged++
-		}
-	}
-
-	fmt.Fprintf(out, "\nsummary: %d issue(s) matched (%d changed), %d unmatched (%d not an issue, %d not bridged), %d field(s) set, %d value warning(s)\n",
-		len(plan.Changes), changed, len(plan.Unmatched), notAnIssue, notBridged, fieldsSet, warnings)
 }

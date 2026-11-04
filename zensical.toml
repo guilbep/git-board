@@ -15,7 +15,17 @@ implementation-plan.md
 """
 nav = [
   { "Overview" = "index.md" },
+  { "Manual" = [
+    { "User manual" = "manual/index.md" },
+    { "Install" = "manual/install.md" },
+    { "First steps" = "manual/first-steps.md" },
+    { "Everyday work" = "manual/everyday.md" },
+    { "Working as a team" = "manual/together.md" },
+    { "Owning your issues" = "manual/ownership.md" },
+    { "Questions" = "manual/faq.md" },
+  ] },
   { "Guide" = [
+    { "Issues from the command line" = "guide/cli.md" },
     { "Configuration" = "guide/configuration.md" },
     { "Forges" = "guide/forges.md" },
     { "Where the board is kept" = "guide/datastores.md" },
@@ -30,8 +40,24 @@ nav = [
   ] },
   { "Decisions" = [
     { "The spec's decisions" = "spec/decisions.md" },
-    { "ADR 0001: check results are signed git notes" = "adr/0001-check-results-are-signed-git-notes.md" },
-    { "ADR 0002: the board is kept in a datastore" = "adr/0002-datastores.md" },
+    { "ADR 0001: check results are signed lines in git notes, keyed by content" = "adr/0001-check-results-are-signed-git-notes.md" },
+    { "ADR 0002: the board is kept in a datastore, cut at the pack" = "adr/0002-datastores.md" },
+    { "ADR 0003: git-board owns its data model; git-bug goes" = "adr/0003-own-core-instead-of-git-bug.md" },
+    { "ADR 0004: an entity is a log of operations, ordered by (clock, pack hash)" = "adr/0004-entities-are-operation-logs.md" },
+    { "ADR 0005: core/ is a library and never imports internal/" = "adr/0005-core-is-a-library.md" },
+    { "ADR 0006: go-git reads objects; the git binary moves refs and talks to remotes" = "adr/0006-go-git-reads-git-binary-moves-refs.md" },
+    { "ADR 0007: every field is a label, ns:value" = "adr/0007-every-field-is-a-label.md" },
+    { "ADR 0008: sync with forges is part of the data model" = "adr/0008-sync-state-in-the-data-model.md" },
+    { "ADR 0009: queries read a disposable index, never the source of truth" = "adr/0009-queries-read-a-disposable-index.md" },
+    { "ADR 0010: forge tokens come from the environment, else git's credential helper" = "adr/0010-tokens-from-env-or-git-credential-helper.md" },
+    { "ADR 0011: shared settings live in a committed .git-board.toml; each clone's own in git config" = "adr/0011-shared-settings-in-git-board-toml.md" },
+    { "ADR 0012: one static Go binary, the web app and its reference docs inside" = "adr/0012-one-go-binary-web-app-embedded.md" },
+    { "ADR 0013: the web server has no login: loopback by default, host and origin checked" = "adr/0013-local-server-without-auth.md" },
+    { "ADR 0014: tests are hermetic, on real repositories and fakes, never on the network" = "adr/0014-hermetic-tests-on-real-repositories.md" },
+    { "ADR 0015: attachments go to an S3 bucket behind a CDN, not into git" = "adr/0015-attachments-on-s3-not-in-git.md" },
+    { "ADR 0016: project numbers come from one counter, refs/board/seq on origin" = "adr/0016-project-numbers-are-a-counter-on-origin.md" },
+    { "ADR 0017: mIT, permissive dependencies only, and few of them" = "adr/0017-permissive-licences-few-dependencies.md" },
+    { "ADR 0018: you own your issues; work in progress is opt-in" = "adr/0018-own-your-issues-work-in-progress-is-opt-in.md" },
   ] },
 ]
 

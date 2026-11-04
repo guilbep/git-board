@@ -2,7 +2,7 @@
 
 ## Overview
 
-The file is optional. Without it, every `ns:value` label is a field and git-board works on any git-bug repository. The file adds what labels can't say: the order of a field's values, single or multiple values, colors, sprint dates, saved views, the GitHub Project to sync with, and where attachments go.
+The file is optional. Without it, every `ns:value` label is a field and git-board works on any git repository. The file adds what labels can't say: the order of a field's values, single or multiple values, colors, sprint dates, saved views, the GitHub Project to sync with, and where attachments go.
 
 It lives at the root of the repository. Edit it in **Settings → Project file**: it is checked as you type and applies as soon as you save. Editing it by hand works too; restart `git board` (or `git board serve`) after.
 
@@ -89,7 +89,7 @@ The fields and their types are the project's **ontology**: the kinds of things a
 | `person` | assignee, reviewer | logins, `@me`, several at once | the names `assignee`, `assignees`, `reviewer`, `owner` |
 | `number` | estimate, points | numeric sorting, a `unit` after the values | `numeric = true` |
 | `date` | due date, deadline | a date picker, red once past, amber within a week, "3 days late" | the names `due`, `deadline`; values that are all `YYYY-MM-DD` |
-| `issue` | parent, blocked-by | a link to the other issue, and on it the reverse: Sub-issues, Blocks | the names `parent`, `blocked-by`, `blocks`, `depends-on`, `duplicate-of`; values that are all `#12` or git-bug ids |
+| `issue` | parent, blocked-by | a link to the other issue, and on it the reverse: Sub-issues, Blocks | the names `parent`, `blocked-by`, `blocks`, `depends-on`, `duplicate-of`; values that are all `#12` or issue ids |
 | `text` | anything free | a plain text box | only when set |
 
 In Settings › Fields the form follows the type: a select lists its values in order, a number its unit, and a date, a person, an issue or a sprint has no values of its own. Saving such a field takes its `options` out of the file, with their colors and descriptions.
@@ -108,7 +108,7 @@ unit = "pt"
 type = "issue"
 ```
 
-An issue field names the other issue by its forge number, `#12`, or by its git-bug id, at least its first 7 characters.
+An issue field names the other issue by its forge number, `#12`, or by its id, at least its first 7 characters.
 
 On hold is a field beside the status, never a status: the default's `hold` (`blocked`, `paused`) leaves a blocked issue at its place in the workflow. An issue without one isn't missing a value.
 
@@ -259,16 +259,16 @@ One syntax everywhere: a view's `filter`, the board's **Filter** box, ⌘K, and 
 | `-status:ready` | issues without it |
 | `status:ready,qa` | either value, as in GitHub's search; works with `is:`, `label:` and `author:` too |
 | `sprint:@current`, `@next`, `@previous` | the sprint of today, the next or the previous one, from `[[sprints.list]]` |
-| `assignee:@me` | you: your git-bug identity's GitHub or GitLab login |
+| `assignee:@me` | you: the GitHub or GitLab login of the person you write as (`git board me`) |
 | `is:open`, `is:closed` | open or closed issues |
-| `title:*spec*` | a title matching the pattern |
+| `title:*spec*` | a title matching the pattern, without case: `*` any text, `/` included, `?` one character, `[a-z]` and `[!a-z]` a class (a `[` that closes none is a `[`) |
 | `author:guilbep`, `author:@me` | who opened the issue |
 | `involves:guilbep`, `involves:@me` | issues someone is in: the author, a person field (assignee, reviewer…), a comment, an @mention |
 | `follows:@me` | what your inbox follows: `involves:@me`, the issues you followed and the views you follow, without those you unfollowed |
 | `label:bug` | a plain label, or a full one: `label:status:ready`; `label:bug` also finds the kind `bug` when the kinds are plain labels (see Branches) |
 | `no:assignee` | no value for that field; `no:label`: no plain label (a plain kind is the kind field, not one) |
 | `#2528` | the issue with that number on a forge |
-| `travel`, `"car sharing"` | words in the title, the description or a comment; a number (`2528`), or the first 7 characters or more of a git-bug id, also finds that issue |
+| `travel`, `"car sharing"` | words in the title, the description or a comment; a number (`2528`), or the first 7 characters or more of an id, also finds that issue |
 
 An empty filter is every issue, open or closed. A view without one shows the open issues (`is:open`), as `git-board ls` does without one.
 
@@ -297,7 +297,7 @@ start = 2026-10-19
 
 | Key | Type | What it does |
 | --- | --- | --- |
-| `length_days` | number | The length of the last sprint, whose end has no next start. Also what **+ Sprint** adds to the last start. |
+| `length_days` | number | The length of the last sprint, whose end has no next start; without it, as long as the sprint before it, else 14 days. Once the last sprint has ended, `@current` is no sprint. Also what **+ Sprint** adds to the last start. |
 | `slug` | string | The label's value: `sprint:s12`. |
 | `title` | string | The name shown. |
 | `start` | date, `YYYY-MM-DD`, no quotes | First day. A sprint lasts until the next one starts. |
@@ -374,9 +374,9 @@ prefix = "git-board/app"
 
 | Key | Default | What it does |
 | --- | --- | --- |
-| `endpoint` | `https://s3.epfl.ch` | The S3 service. |
+| `endpoint` | `https://s3.epfl.ch` | The S3 service. The keys are the server's, so is where they go: it must be the server's `UPLOADS_ENDPOINT` (else `https://s3.epfl.ch`), or attaching is off. |
 | `public_url` | `https://enacit4r-cdn.epfl.ch` | Where the bucket is served. |
-| `prefix` | `git-board/<repository>` | The folder in the bucket. |
+| `prefix` | `git-board/<repository>` | The folder in the bucket; a `..` in it turns attaching off. |
 | `region` | `us-east-1` | The S3 region. |
 
 Files are public to anyone with the link, even for a private repository, and stay cached on the CDN for up to a year after a delete.
@@ -403,16 +403,49 @@ kinds = { bug = "bug", feat = "feat", perf = "perf", chore = "chore" }
 | Key | Default | What it does |
 | --- | --- | --- |
 | `base` | the remote's default branch, else `main`, `master` or `trunk` | The branch a new branch starts from (`origin/<base>`, or `<base>` without a remote), and the one "in dev" and ahead/behind compare with. |
-| `name` | `"{number}/{n}-{slug}"`: each branch in the issue's folder | The branch's name. `{number}`: the issue's project number with its prefix, in lower case (`vm-62`), once the project numbers its issues (see Numbers), else its number on its first forge, else its git-bug id's first 7 characters. `{n}`: the branch's place in the issue's folder, one more than the highest among its branches and the base's last merge commits that name one: `fix/2518/1-…`, then `fix/2518/2-…`; counted, never stored. `{kind}`: its kind, through `kinds`; without one, `{kind}/` is dropped. `{slug}`: its title in lower-case words, without a leading `[BUG](Scope)` or a trailing `(#1234)`, cut at about 50 characters. A name without `{n}` (`{kind}/{number}-{slug}`, the form before folders) still links its branches. |
+| `name` | `"{number}/{n}-{slug}"`: each branch in the issue's folder | The branch's name. `{number}`: the issue's project number with its prefix, in lower case (`vm-62`), once the project numbers its issues (see Numbers), else its number on its first forge, else its id's first 7 characters. `{n}`: the branch's place in the issue's folder, one more than the highest among its branches and the base's last merge commits that name one: `fix/2518/1-…`, then `fix/2518/2-…`; counted, never stored. `{kind}`: its kind, through `kinds`; without one, `{kind}/` is dropped. `{slug}`: its title in lower-case words, without a leading `[BUG](Scope)` or a trailing `(#1234)`, cut at about 50 characters. A name without `{n}` (`{kind}/{number}-{slug}`, the form before folders) still links its branches. |
 | `kinds` | none | The project's kinds, each to the `{kind}` of its branch: the kind itself, always (`bug = "bug"`; a branch starts with its kind's label, and `bug = "fix"` is refused with its line). `git board lint` reports a label description that names another prefix ("should prefix branch by fix/" on `bug`). They are the `kind` field (a column, a group, a filter, one per issue) in either of two forms. Without `options` in `[fields.kind]`, the default, a kind is GitHub's plain label (`bug`), shown and filtered as `kind:bug`, in `kinds` order; `[fields.kind.colors]` and `descriptions` still apply. With `options` in `[fields.kind]`, the kinds are `kind:bug` labels like any field's. `git board project pull` and `sync` fill a missing kind from the Project's Category (`FEAT` → `feat`); `git board lint` reports an issue with two kinds, a title starting with a bracket (`[BUG]`: the kind is its label, which wins when they disagree), and how many have none. |
 
 `[BUG](Equipment) Other equipment shows the wrong example (#2518)`, labeled `bug`, gives `bug/2518/1-other-equipment-shows-the-wrong-example`, and its second branch `bug/2518/2-…`. What git doesn't take in a branch name becomes `-`. The issue's head makes the branch from its plus (*Create*: `git branch --no-track` from the base, then `git push -u origin`, the server's checkout untouched, on a server listening on localhost only), or gives the commands to run yourself.
 
-A branch names an issue when its first number is the issue's number, with or without the project's prefix (`fix/vm-62-…`, `fix/62-…`, `2518-…`: its project number once the project numbers its issues, else a forge's), or when a word in it starts the issue's git-bug id (7 characters or more). Local branches and the remotes' (as last fetched) are listed.
+A branch names an issue when its first number is the issue's number, with or without the project's prefix (`fix/vm-62-…`, `fix/62-…`, `2518-…`: its project number once the project numbers its issues, else a forge's), or when a word in it starts the issue's id (7 characters or more). Local branches and the remotes' (as last fetched) are listed.
+
+## Experimental features
+
+*These are the toggles of Settings › Experimental; this section is the reference.*
+
+Three features are still being built, and stay off unless the team turns them on. git-board's core, your issues kept in git and synced with whatever forge, works without them.
+
+```toml
+[experimental]
+features = ["cycle", "agents", "worktrees"]
+```
+
+| Feature | What it turns on |
+|---|---|
+| `cycle` | The development cycle: the cycle's issue page, its steps and gates, step 4's tests and checks, the Work page, Settings › Cycle, the issue page choice in Settings › You, and `git board verify`. |
+| `agents` | Coding agents: Start an agent and Brief the agent on an issue, Send to the agent from the composer and a review thread, the Work page's Agents, and the AI's risk suggestion (`LLM_BASE_URL`). |
+| `worktrees` | Settings › Worktrees, which writes `wtx.toml` ([Worktrees](#worktrees)). |
+
+The file's list is the team's. One person trying a feature alone sets it in their clone's git config, a comma list that replaces the file's list in that clone (empty turns them all off there):
+
+```sh
+git config board.experimental cycle,agents   # this clone
+git config --unset board.experimental        # back to the file's list
+```
+
+While a feature is off:
+
+- its commands are hidden from `git board --help` and refuse with a sentence naming the switch (`git board verify` is the cycle's);
+- its API routes answer 404 with `{"code": "experimental", "error": "…"}`, the error naming the switch: `/api/issues/{id}/cycle…`, `/api/issues/{id}/tests…`, `/api/checks/setup`, `/api/work` and `PUT /api/me/view` (the cycle); `/api/issues/{id}/agent…` (the agents); `/api/worktrees…` (the worktrees);
+- the web UI hides its pages, tabs, menu entries and controls: `GET /api/me` lists the features on as `experimental`;
+- with the cycle off, an issue opens on the classic page whatever `board.view` says, a comment carries no step, and `[cycle]` is not checked: what a broken table fails is a warning in Settings › The file, not an error that stops every command. With the cycle on, it is refused as before.
+
+A name the list doesn't know is a warning, and ignored.
 
 ## Cycle
 
-**On or off.** A board with a `[cycle]` table walks the cycle. Any of its keys, or a subtable such as `[cycle.signoffs]` alone, is enough, even an empty `[cycle]`. A board without one opens its issues on the **classic page**: the title and its meta line; the Conversation tab with the description, every comment and change in order, and the composer; the History tab; and the fields aside. Each person can choose for themselves, and that wins over the file: in Settings › You (As the board says, Classic, or The cycle's), which sets `board.view` in this repository's git config, or with git config directly:
+**On or off.** The cycle is experimental: with `"cycle"` in [`[experimental] features`](#experimental-features), a board with a `[cycle]` table walks the cycle. Any of its keys, or a subtable such as `[cycle.signoffs]` alone, is enough, even an empty `[cycle]`. A board without one opens its issues on the **classic page**: the title and its meta line; the Conversation tab with the description, every comment and change in order, and the composer; the History tab; and the fields aside. Each person can choose for themselves, and that wins over the file: in Settings › You (As the board says, Classic, or The cycle's), which sets `board.view` in this repository's git config, or with git config directly:
 
 ```sh
 git config board.view cycle             # this repository: the cycle's page
@@ -462,7 +495,7 @@ Every key has a default, so a project writes only what the guess got wrong, and 
 | `in-review` | guessed | Step 6: the review. |
 | `validation` | guessed | Step 7, one sign-off per status, in the options' order. Signing off the last one moves the issue to the closing status and closes it. With none, Verify happens in in-review once the PR is merged, and its sign-off closes the issue. |
 | `criteria` | `"Acceptance criteria"`, `"Done when"`, `"Expected"` | The headings a description's acceptance criteria are listed under, any heading level or a bold line, in any case, with or without a colon. The first one the description has counts. Step 1 edits that list a row at a time and writes it as `- [ ]` checkboxes; a list with no heading above it is flagged. |
-| `plans` | `"docs/src/implementation-plans"` | Where plan files live: Markdown whose front matter's `issue:` names the issue (`2518`, `"#2518"`, `CO2-2518`, or its git-bug id's first 7 characters), and whose `status:` (`accepted`, `in-progress` or `delivered`) approves the plan. |
+| `plans` | `"docs/src/implementation-plans"` | Where plan files live: Markdown whose front matter's `issue:` names the issue (`2518`, `"#2518"`, `CO2-2518`, or its id's first 7 characters), and whose `status:` (`accepted`, `in-progress` or `delivered`) approves the plan. |
 | `plans-in-pr` | `true` | The agent started at step 3 commits its plan and opens a draft PR holding it; Review opens once that PR is marked ready. `false` keeps plans out of PRs: the plan is committed on the branch and the PR opens at step 5. |
 | `test-files` | `*_test.go`, `*.test.ts`, `*.spec.ts`, `test_*.py`, `tests/**` | Which changed files are tests, by path or base name; `dir/**` is everything under `dir`. Before M4 this key was `tests`, which now names the suites (Tests and checks, below): a list there is refused. |
 | `spec` | none | The role (`[roles]`) that gives the description's verdict: its *Approve v*N moves the status to `ready`. Unset, the author moves it, and anyone but the author may approve. |
@@ -639,6 +672,8 @@ Only a command that runs the same in a clean checkout is proposed. Each of these
 
 Write to .git-board.toml adds the `[cycle.checks.<name>]` tables to the working tree's file, through `GET` and `POST /api/checks/setup`. Trim `files` there, then commit the file on the base for the checks to gate.
 
+**Only from this machine.** A test run executes the branch's code and signs its proof with your key, so `POST /api/issues/{id}/tests/run` and `POST /api/checks/setup` answer 403, as making a branch does, unless the server listens on localhost alone (`exposed` otherwise) and the request comes from the board's own page (`origin` otherwise).
+
 **Verifying without the server.** `git board verify [commit]` applies the same gate in any clone, with no server. The commit defaults to `HEAD`. It prints each check's verdict at the commit, and exits 1 when the commit isn't proven. The base defaults as on the server: `[branches] base`, else origin's default branch, else `main`, and `origin/<name>` when that exists. `--base` names another.
 
 ```console
@@ -659,6 +694,8 @@ A question is a comment by someone else than the viewer with `ask` metadata, or,
 
 *These are the forms of Settings › Worktrees; this section is the reference.*
 
+Experimental: Settings › Worktrees needs `"worktrees"`, and starting or briefing an agent `"agents"`, in [`[experimental] features`](#experimental-features).
+
 git-board starts agents with [wtx](https://github.com/EPFL-ENAC/wtx): one agent, one worktree, one branch, one PR. wtx, `wt` and `tmux` run on the machine where `git board serve` runs, and git-board calls wtx there, with an argument list, never a shell line.
 
 **Settings › Worktrees** says whether wtx, wt and tmux are on that machine (`wtx doctor --json`), then **Set up wtx**: what wtx read in the repository (`wtx init --edit --no-notes`, the existing `wtx.toml` merged with a fresh scan), to correct before writing. The base branch, the protected branches, the agent and its plan and build models are edited; the ports and panes are shown as wtx read them. **Who commits** is a deny rule in `[permissions] deny`: *A person commits and opens the PR* denies `Bash(git commit *)`, `Bash(git push *)` and `Bash(gh pr create *)`; *The agent may commit; a person pushes* denies `Bash(git push *)` alone. **Never allowed** is the other deny rules, added to wtx's own (force pushes, pushes to the protected branches, changing the remote). **Preview the files** runs `wtx init --from-json` in a scratch repository and shows `wtx.toml` and `.wt.toml`; **Write wtx.toml** runs the same command in the main checkout with `--force`, so the written files are the preview byte for byte; wtx also adds its lines to `.gitignore`. A missing who-commits rule is written as *A person commits*, the radio's default. They are left uncommitted: you commit them. git-board writes no TOML itself.
@@ -675,7 +712,7 @@ A project can number its issues itself, `CO2-3075`, instead of leaning on a forg
 git board numbers init --prefix CO2 --start 3052
 ```
 
-Choose the prefix once: issues carry it wherever a forge could read the number, in branches (`fix/co2-3075-…`), pull request titles, commits and messages. A bare number collides with the forge's own: GitHub links `#3075` or a branch's `3075` to its issue 3075. `start` is one more than GitHub's highest issue or pull request number (`gh api 'repos/OWNER/REPO/issues?state=all&per_page=1' -q '.[0].number'`). GitHub numbers below it stay the issues' own: `#2518` is `CO2-2518`, even for an issue imported later. Every other issue, made here or brought in from a forge, gets the next number with the next push to `origin` you ask for: **Sync** in Settings › Sync or `git board sync`, **Number them now** in Settings › Numbers, or `git board numbers`. The counter only names issues origin has, so other clones never see a number for an issue they can't get: `git board numbers` numbers what was pushed already, and a sync pushes the issues first. Until then an issue shows its short git-bug id. Nothing pushes the counter on its own: not creating an issue, not a forge sync. Pushing the counter is the lock: when two clones number at once, git refuses the second push and that clone takes the next number.
+Choose the prefix once: issues carry it wherever a forge could read the number, in branches (`fix/co2-3075-…`), pull request titles, commits and messages. A bare number collides with the forge's own: GitHub links `#3075` or a branch's `3075` to its issue 3075. `start` is one more than GitHub's highest issue or pull request number (`gh api 'repos/OWNER/REPO/issues?state=all&per_page=1' -q '.[0].number'`). GitHub numbers below it stay the issues' own: `#2518` is `CO2-2518`, even for an issue imported later. Every other issue, made here or brought in from a forge, gets the next number with the next push to `origin` you ask for: **Sync** in Settings › Sync or `git board sync`, **Number them now** in Settings › Numbers, or `git board numbers`. The counter only names issues origin has, so other clones never see a number for an issue they can't get: `git board numbers` numbers what was pushed already, and a sync pushes the issues first. Until then an issue shows its short id. Nothing pushes the counter on its own: not creating an issue, not a forge sync. Pushing the counter is the lock: when two clones number at once, git refuses the second push and that clone takes the next number.
 
 After the switch, a bare number (`3075`, `fix/3075-…`) and `CO2-3075` are the project's number; `#3075` is always a forge's. git-board always writes a project number with its prefix; `#N` is only ever a forge's. Cards, rows and the issue page show the number before the title.
 

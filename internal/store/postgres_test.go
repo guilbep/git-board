@@ -143,6 +143,9 @@ func TestRedact(t *testing.T) {
 		"postgres://u@db/b?password=s3cret&sslmode=disable",
 		"host=db user=u password=s3cret dbname=b",
 		"host=db password='s 3cret' dbname=b",
+		"postgres://u@db/b?sslpassword=s3cret",
+		"postgres://u@db/b?PassWord=s3cret",
+		"host=db sslpassword=s3cret dbname=b",
 	} {
 		if got := store.Redact(v); strings.Contains(got, "s3cret") || strings.Contains(got, "3cret") {
 			t.Errorf("Redact(%q) = %q", v, got)

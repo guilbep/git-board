@@ -1,12 +1,14 @@
 # Queries and search
 
-Lists and search read a local index of the issues and people, kept in
-sqlite. This page says where it lives, how it stays fresh, what a query
+Lists and search read an index of the issues and people, kept in
+sqlite on the machine, or, for a board kept in PostgreSQL, in that database
+(ADR 0002, [How the data flows](data-flow.md)). This page says where it lives, how it stays fresh, what a query
 asks, and how a program hears that entities changed.
 
 ## Where it lives
 
-The index is one sqlite file, `<git common dir>/board/index.db`. The git
+For a board kept in git, in Markdown files or on the forges alone, the
+index is one sqlite file, `<git common dir>/board/index.db`. The git
 common dir is what `git rev-parse --git-common-dir` gives, so every
 worktree of a repository shares one index. The core creates the `board`
 directory when it is missing.
@@ -18,6 +20,21 @@ directory when it is missing.
 - **Two processes can use it at once,** like git-board's server and a
   command. The file is in WAL mode, so a read doesn't wait for a write, and
   a write waits up to 5 seconds for another (sqlite's `busy_timeout`).
+
+For a board kept in PostgreSQL, the index is the same tables in the
+schema `git_board_index` of the board's database, shared by every machine.
+What differs from sqlite:
+
+- **A different rebuild:** an index of another version is dropped and made
+  again (`DROP TABLE`) under an advisory lock, not deleted as a file.
+- **A different text search:** a `tsvector` with the `simple`
+  configuration, the text tokenized as sqlite's `unicode61` does, so a
+  query finds the same issues; one issue's indexed text is cut at 300,000
+  bytes.
+- **The same order:** `Labels` sorts byte for byte (`COLLATE "C"`),
+  whatever the database's collation.
+- **Several writers:** a refresh takes a table lock, so two machines
+  refreshing at once write one after the other.
 
 ## What it holds
 
@@ -116,11 +133,16 @@ last edits left them.
   matches every issue.
 - **FTS5's own syntax is never read.** Each word is quoted, so `"`, `*`,
   `-`, `:`, `AND`, `OR`, `NOT` and parentheses are plain text.
+- **On PostgreSQL** (a board kept there, ADR 0002), an issue's text is
+  indexed up to its first 300,000 bytes of tokens: a `tsvector` holds at
+  most 1 MB, and one issue's text never fails a query. A word past that
+  isn't found.
 
 ## Labels
 
 `Labels` answers every label in use: each label at least one issue has,
-sorted byte for byte, each once. A label no issue has anymore isn't one.
+sorted byte for byte, each once, whatever a PostgreSQL database's
+collation. A label no issue has anymore isn't one.
 
 ## Prefixes
 
@@ -159,8 +181,8 @@ changed.
   listing any kind fails. The next poll compares with the last poll that
   succeeded, and a skipped baseline leaves the next poll as the baseline.
 - **A poll's changes come together:** each entity that appeared, moved, or
-  was removed, with its kind, id and new head. A removed one has the zero
-  hash as its head. They are sorted by kind, then
+  was removed, with its kind, id and new head. A removed one has the empty
+  version, `""`, as its head (ADR 0002: a version is opaque). They are sorted by kind, then
   id. A poll with no change reports nothing.
 - **It reports heads, not writes.** An entity written several times between
   two polls is reported once, with its head at that poll. One created and

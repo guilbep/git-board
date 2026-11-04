@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"github.com/guilbep/git-board/core/datastore"
+	"github.com/guilbep/git-board/core/forge"
+	"github.com/guilbep/git-board/core/forge/fake"
 	"github.com/guilbep/git-board/core/mdstore"
 	"github.com/guilbep/git-board/internal/store"
 	"github.com/guilbep/git-board/internal/store/storetest"
@@ -125,5 +127,48 @@ func TestMarkdownBoardWritesInARow(t *testing.T) {
 	}
 	if data, _ := os.ReadFile(files[0]); !strings.Contains(string(data), "a write to it") || !strings.Contains(string(data), "body, by hand") {
 		t.Fatalf("the file after:\n%s", data)
+	}
+}
+
+// The forge sync writes the board past the backend's writes: the files
+// follow it too, so a hand edit made after the sync is read in, not lost.
+func TestMarkdownBoardFollowsAForgeSync(t *testing.T) {
+	t.Parallel()
+	dir := storetest.Repo(t, false)
+	storetest.Git(t, dir, "config", store.DatastoreKey, "markdown:issues")
+	storetest.Init(t, dir)
+	b := storetest.Open(t, dir)
+	other, err := b.NewIssue("Other", "x", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := fake.New("github.com/o/r")
+	f.Add(forge.Issue{Author: forge.Account{ID: "7", Login: "ann"}, Title: "Pulled", Body: "pulled body", Status: "open", Created: 1000})
+	if _, err := b.SyncForges(t.Context(), run(f)); err != nil {
+		t.Fatal(err)
+	}
+	files, _ := filepath.Glob(filepath.Join(dir, "issues", "*pulled.md"))
+	if len(files) != 1 {
+		t.Fatalf("no file rendered for the pulled issue")
+	}
+	edit(t, files[0], "pulled body", "pulled body, by hand")
+	if _, err := b.AddComment(other, "a write elsewhere"); err != nil {
+		t.Fatal(err)
+	}
+	list, err := b.ListIssues()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, is := range list {
+		if is.Title != "Pulled" {
+			continue
+		}
+		th, err := b.Thread(is.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := th.Events[0].Body; got != "pulled body, by hand" {
+			t.Errorf("body %q, want the hand edit", got)
+		}
 	}
 }

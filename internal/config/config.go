@@ -7,6 +7,7 @@ import (
 	"cmp"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"maps"
 	"os"
@@ -16,6 +17,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 	"unicode/utf8"
@@ -136,6 +138,7 @@ type raw struct {
 	Template      TemplateRef       `toml:"template"`
 	Release       Release           `toml:"release"`
 	Labels        Labels            `toml:"labels"`
+	Experimental  experimentalTable `toml:"experimental"`
 	// Forges holds publish-private, discover and a table per forge
 	// (forges.go).
 	Forges map[string]toml.Primitive `toml:"forges"`
@@ -297,6 +300,17 @@ type Config struct {
 	// Template is the [template] table: the template the file came from,
 	// for lint to list the drift.
 	Template TemplateRef
+	// Unknown is the file's keys git-board doesn't read, a misspelled one
+	// above all (Load): each is its zero value, so lint names them.
+	Unknown []string
+	// Features are [experimental] features, the work-in-progress features
+	// the team turned on; a clone's git config board.experimental
+	// replaces them (experimental.go, Experimental).
+	Features []string
+	// local is board.experimental, when this clone's git config sets it
+	// (UseLocal); cycleErr what [cycle] fails, kept while the cycle is off
+	local    *[]string
+	cycleErr error
 }
 
 // TemplateRef names a built-in template and its version (templates/).
@@ -343,17 +357,52 @@ func PathIn(dir string) string {
 func Load(path string) (*Config, error) {
 	// No config is a valid start: fields are the labels' own namespaces.
 	if _, err := os.Stat(path); errors.Is(err, fs.ErrNotExist) {
-		return &Config{Discover: true}, nil
+		cfg := &Config{Discover: true}
+		cfg.UseLocal(filepath.Dir(path))
+		return cfg, nil
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
-	cfg, _, err := parse(data)
+	cfg, md, err := parse(data)
 	if err != nil {
 		return nil, fmt.Errorf("parsing %s: %w", path, err)
 	}
+	for _, k := range md.Undecoded() {
+		cfg.Unknown = append(cfg.Unknown, k.String())
+	}
+	warnUnknown(path, cfg.Unknown)
+	// a clone's own board.experimental, the cycle's table checked when it
+	// turns the cycle on
+	cfg.UseLocal(filepath.Dir(path))
+	if cfg.local != nil && slices.Contains(*cfg.local, FeatureCycle) && cfg.cycleErr != nil {
+		return nil, fmt.Errorf("parsing %s: %w", path, cfg.cycleErr)
+	}
 	return cfg, nil
+}
+
+// Warnings is where Load names the keys it doesn't know: stderr, every
+// command's.
+var Warnings io.Writer = os.Stderr
+
+// warned is the keys Load has named, by file: a command loads its config
+// more than once.
+var warned sync.Map
+
+// warnUnknown names each unknown key on Warnings, once a file and key: a
+// misspelled key isn't an error (an older git-board reads a newer file),
+// but it shouldn't be silently nothing.
+func warnUnknown(path string, keys []string) {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		abs = path
+	}
+	for _, k := range keys {
+		if _, done := warned.LoadOrStore(abs+"\x00"+k, true); !done {
+			fmt.Fprintf(Warnings, "warning: %s: %s: git-board doesn't know this key, ignored (git board lint)\n", path, k)
+		}
+	}
 }
 
 func parse(data []byte) (*Config, toml.MetaData, error) {
@@ -361,11 +410,6 @@ func parse(data []byte) (*Config, toml.MetaData, error) {
 	md, err := toml.Decode(string(data), &r)
 	if err != nil {
 		return nil, md, err
-	}
-	// M1's test-file globs were [cycle] tests; the name is the suites' now,
-	// and the decoder would drop a list there without a word
-	if md.Type("cycle", "tests") == "Array" {
-		return nil, md, errors.New("[cycle] tests: the test-file globs are test-files now; [cycle.tests.<name>] tables are the suites step 4 runs")
 	}
 	if err := checkColors(r.Fields); err != nil {
 		return nil, md, err
@@ -380,14 +424,11 @@ func parse(data []byte) (*Config, toml.MetaData, error) {
 		return nil, md, fmt.Errorf("[repos] assignees: native or labels, not %q", a)
 	}
 	r.Cycle.On = md.IsDefined("cycle") // a subtable alone, [cycle.signoffs], defines it too
-	if err := readKinds(md, &r.Cycle); err != nil {
-		return nil, md, err
-	}
-	if err := checkCycle(r.Cycle); err != nil {
-		return nil, md, err
-	}
-	if err := checkSteps(r.Cycle, (&Config{Fields: r.Fields, Cycle: r.Cycle}).Stages().Validation); err != nil {
-		return nil, md, err
+	// the cycle is experimental: its table breaks the file only when the
+	// team turned it on; off, what it fails is a warning (Check)
+	cycleErr := checkCycleTable(md, &r.Cycle, r.Fields)
+	if cycleErr != nil && slices.Contains(r.Experimental.Features, FeatureCycle) {
+		return nil, md, cycleErr
 	}
 	if err := checkRelease(r.Release); err != nil {
 		return nil, md, err
@@ -440,6 +481,8 @@ func parse(data []byte) (*Config, toml.MetaData, error) {
 		Forges:         forges,
 		PublishPrivate: publishPrivate,
 		Discover:       discover,
+		Features:       r.Experimental.Features,
+		cycleErr:       cycleErr,
 	}, md, nil
 }
 
@@ -565,6 +608,10 @@ func SetGithubProject(path, owner string, number int) error {
 		return fmt.Errorf("reading %s: %w", path, err)
 	}
 	updated := WithGithubProject(string(data), GithubProject{Owner: owner, Number: number})
+	// a file every command would fail on isn't written: the old one stays
+	if _, _, err := parse([]byte(updated)); err != nil {
+		return fmt.Errorf("%s with [github-project] owner = %q, number = %d wouldn't parse, left as it was: %w", path, owner, number, err)
+	}
 	if err := os.WriteFile(path, []byte(updated), 0o644); err != nil {
 		return fmt.Errorf("writing %s: %w", path, err)
 	}
@@ -648,7 +695,7 @@ func upsertTable(content, header, block string) string {
 	end := len(lines)
 	for i, line := range lines {
 		if start < 0 {
-			if strings.TrimSpace(line) == header {
+			if sameHeader(line, header) {
 				start = i
 			}
 			continue
@@ -690,6 +737,50 @@ func upsertTable(content, header, block string) string {
 	return b.String()
 }
 
+// tableHeader matches a table's header line: the spaces TOML allows
+// inside the brackets, and a comment after them.
+var tableHeader = regexp.MustCompile(`^\s*\[\s*([^\[\]]*?)\s*\]\s*(#.*)?$`)
+
+// sameHeader is whether line is header's table: [ a . b ]  # c is [a.b].
+// A quoted key's own spaces count, the ones around the dots don't.
+func sameHeader(line, header string) bool {
+	norm := func(l string) (string, bool) {
+		m := tableHeader.FindStringSubmatch(l)
+		if m == nil {
+			return "", false
+		}
+		var parts []string
+		for _, p := range splitDotted(m[1]) {
+			parts = append(parts, strings.TrimSpace(p))
+		}
+		return strings.Join(parts, "."), true
+	}
+	got, ok := norm(line)
+	want, _ := norm(header)
+	return ok && got == want
+}
+
+// splitDotted splits a dotted key at the dots outside quotes.
+func splitDotted(key string) []string {
+	var parts []string
+	var quote rune
+	start := 0
+	for i, r := range key {
+		switch {
+		case quote != 0:
+			if r == quote {
+				quote = 0
+			}
+		case r == '"' || r == '\'':
+			quote = r
+		case r == '.':
+			parts = append(parts, key[start:i])
+			start = i + 1
+		}
+	}
+	return append(parts, key[start:])
+}
+
 // dateOnly strips time-of-day/location so sprint boundaries compare by
 // calendar day regardless of the TOML decoder's local timezone.
 func dateOnly(t time.Time) time.Time {
@@ -709,7 +800,9 @@ func sortedSprints(list []Sprint) []Sprint {
 
 // ResolveSprint resolves "current" / "next" / "previous" against the sprint
 // calendar. The "current" sprint is the last one whose start date is on or
-// before today; next/previous are its neighbours in start-date order.
+// before today, unless that is the last sprint and it has ended
+// (SprintWindows' end): then there is none, and "previous" is it.
+// next/previous are its neighbours in start-date order.
 func ResolveSprint(sprints SprintsConfig, which string, today time.Time) (*Sprint, error) {
 	today = dateOnly(today)
 	ordered := sortedSprints(sprints.List)
@@ -720,6 +813,17 @@ func ResolveSprint(sprints SprintsConfig, which string, today time.Time) (*Sprin
 			idx = i
 		} else {
 			break
+		}
+	}
+
+	// the last sprint ends: past it there is no current one, and the
+	// previous is the one that ended
+	if idx >= 0 && idx == len(ordered)-1 && !today.Before(dateOnly(ordered[idx].Start).AddDate(0, 0, lastSprintDays(sprints, ordered))) {
+		if which == "previous" {
+			return &ordered[idx], nil
+		}
+		if which == "current" {
+			return nil, nil
 		}
 	}
 
@@ -745,6 +849,24 @@ func ResolveSprint(sprints SprintsConfig, which string, today time.Time) (*Sprin
 	}
 }
 
+// defaultSprintDays is the default file's length_days.
+const defaultSprintDays = 14
+
+// lastSprintDays is how long the last sprint of ordered lasts: length_days,
+// else as long as the one before it, else defaultSprintDays. Never 0: a
+// sprint that ended the day it started stayed @current for ever.
+func lastSprintDays(sprints SprintsConfig, ordered []Sprint) int {
+	if sprints.LengthDays > 0 {
+		return sprints.LengthDays
+	}
+	if n := len(ordered); n >= 2 {
+		if d := int(dateOnly(ordered[n-1].Start).Sub(dateOnly(ordered[n-2].Start)).Hours() / 24); d > 0 {
+			return d
+		}
+	}
+	return defaultSprintDays
+}
+
 // SprintWindow is a configured sprint plus its computed end date.
 type SprintWindow struct {
 	Sprint
@@ -753,7 +875,8 @@ type SprintWindow struct {
 
 // SprintWindows returns every configured sprint, ordered by start date (the
 // same ordering ResolveSprint uses — see sortedSprints), with End computed
-// as the next sprint's start date, or Start+LengthDays for the last one.
+// as the next sprint's start date, or Start+LengthDays for the last one
+// (lastSprintDays without it).
 // This window math isn't in ResolveSprint itself (which only needs
 // start-date ordering to resolve @current/@next/@previous), so it's new
 // here rather than duplicated from anywhere.
@@ -761,7 +884,7 @@ func SprintWindows(sprints SprintsConfig) []SprintWindow {
 	ordered := sortedSprints(sprints.List)
 	windows := make([]SprintWindow, len(ordered))
 	for i, s := range ordered {
-		end := dateOnly(s.Start).AddDate(0, 0, sprints.LengthDays)
+		end := dateOnly(s.Start).AddDate(0, 0, lastSprintDays(sprints, ordered))
 		if i+1 < len(ordered) {
 			end = dateOnly(ordered[i+1].Start)
 		}

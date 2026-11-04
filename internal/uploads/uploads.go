@@ -20,6 +20,7 @@ import (
 	"os"
 	"path"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -45,18 +46,29 @@ type Store struct {
 }
 
 // FromEnv is the store of ACCESS_KEY_ID, ACCESS_KEY_SECRET and BUCKET_NAME,
-// with s's addresses or EPFL's; false without the keys.
+// with s's addresses or EPFL's; false without the keys. The keys are the
+// server's, and so is the S3 service they're sent to: UPLOADS_ENDPOINT,
+// else EPFL's. A committed [uploads] endpoint elsewhere is refused (false),
+// as is a prefix with a ".." in it, which would leave the board's folder of
+// a shared bucket.
 func FromEnv(s config.Uploads, repo string) (*Store, bool) {
+	endpoint := strings.TrimSuffix(or(os.Getenv("UPLOADS_ENDPOINT"), "https://s3.epfl.ch"), "/")
 	st := &Store{
 		AccessKey: os.Getenv("ACCESS_KEY_ID"),
 		SecretKey: os.Getenv("ACCESS_KEY_SECRET"),
 		Bucket:    os.Getenv("BUCKET_NAME"),
-		Endpoint:  or(s.Endpoint, "https://s3.epfl.ch"),
+		Endpoint:  endpoint,
 		PublicURL: strings.TrimSuffix(or(s.PublicURL, "https://enacit4r-cdn.epfl.ch"), "/"),
 		Prefix:    strings.Trim(or(s.Prefix, "git-board/"+safeName(repo)), "/"),
 		Region:    or(s.Region, "us-east-1"),
 		ACL:       "public-read",
 		Client:    &http.Client{Timeout: 2 * time.Minute},
+	}
+	if s.Endpoint != "" && strings.TrimSuffix(s.Endpoint, "/") != endpoint {
+		return st, false
+	}
+	if slices.Contains(strings.Split(st.Prefix, "/"), "..") {
+		return st, false
 	}
 	return st, st.AccessKey != "" && st.SecretKey != "" && st.Bucket != ""
 }

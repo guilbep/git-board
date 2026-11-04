@@ -3,6 +3,8 @@
 // proxy's address in dev. DOM calls only, never HTML strings: the server
 // stays the one place text becomes HTML.
 
+import { safeHref } from './links.ts';
+
 export type RefToken = { text: string; ref?: string; mention?: string };
 
 // #123 not glued to a word; @name as git-bug's sync recognises it
@@ -55,7 +57,8 @@ export function enhance(el: HTMLElement, opts: EnhanceOptions): void {
     if (tokens.length === 1 && !tokens[0]!.ref && !tokens[0]!.mention) continue;
     const frag = document.createDocumentFragment();
     for (const t of tokens) {
-      const href = t.ref ? opts.refHref(t.ref) : t.mention ? opts.mentionHref(t.mention) : undefined;
+      // only an http(s) href, whatever the caller built it from (links.ts)
+      const href = safeHref(t.ref ? opts.refHref(t.ref) : t.mention ? opts.mentionHref(t.mention) : undefined);
       if (!href) {
         frag.append(t.text);
         continue;

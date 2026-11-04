@@ -56,6 +56,18 @@ type configModel struct {
 	// lives (config.FieldTarget's rules, mirrored client-side).
 	Forges        []config.Forge       `json:"forges"`
 	GithubProject config.GithubProject `json:"github_project"`
+	// Experimental is the [experimental] table, and what this clone runs
+	Experimental experimentalModel `json:"experimental"`
+}
+
+// experimentalModel is [experimental] features as the file lists them;
+// Local, this clone's board.experimental when set (it wins: null when
+// unset); On, the features on here; Known, every feature, described.
+type experimentalModel struct {
+	Features []string                     `json:"features"`
+	Local    []string                     `json:"local"`
+	On       []string                     `json:"on"`
+	Known    []config.ExperimentalFeature `json:"known"`
 }
 
 func (s *apiServer) configModel() (configModel, error) {
@@ -69,6 +81,8 @@ func (s *apiServer) configModel() (configModel, error) {
 	m.Roles = map[string]string{}
 	m.Forges = []config.Forge{}
 	m.ViewOrder, m.FieldOrder = []string{}, []string{}
+	m.Experimental = experimentalModel{Features: []string{}, On: s.config().ExperimentalOn(), Known: config.ExperimentalFeatures}
+	m.Experimental.Local, _ = s.config().Local()
 	if !exists {
 		return m, nil
 	}
@@ -107,6 +121,7 @@ func (s *apiServer) configModel() (configModel, error) {
 	if m.Cycle.Checks == nil {
 		m.Cycle.Checks = map[string]config.Suite{}
 	}
+	m.Experimental.Features = orEmpty(cfg.Features)
 	m.Repos.List = orEmpty(cfg.Repos)
 	m.Repos.Assignees = cfg.Assignees
 	m.GithubProject = cfg.GithubProject
@@ -308,6 +323,14 @@ func (s *apiServer) sectionWriter(section string, r *http.Request, w http.Respon
 			}
 			return config.SetForgeFieldsText(text, req.Forge, req.Set, req.Remove), nil
 		}, nil
+	case "experimental":
+		var req struct {
+			Features []string `json:"features"`
+		}
+		if !decode(w, r, &req) {
+			return nil, nil
+		}
+		return func(text string) (string, error) { return config.SetExperimentalText(text, req.Features), nil }, nil
 	case "labels":
 		var req config.Labels
 		if !decode(w, r, &req) {

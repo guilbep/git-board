@@ -332,3 +332,31 @@ func TestHTMLWritesReleases(t *testing.T) {
 		t.Errorf("releases.html written without [release]")
 	}
 }
+
+// A view's name is a file name under -o: one that leaves it, or that is
+// the index's or the releases page's, is refused before anything is
+// written.
+func TestHTMLRefusesAViewNameThatIsntItsOwnPage(t *testing.T) {
+	for _, name := range []string{`"../escaped"`, `"a/b"`, "index", "releases", `".."`} {
+		t.Run(name, func(t *testing.T) {
+			newHTMLTestRepo(t)
+			cfg := htmlTestConfig + "\n[views." + name + "]\nfilter = \"is:open\"\n"
+			if err := os.WriteFile(configPath, []byte(cfg), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			root := t.TempDir()
+			site := filepath.Join(root, "out", "site")
+
+			out, err := execute(t, []string{"html", "-o", site})
+			if err == nil || !strings.Contains(err.Error(), "view") {
+				t.Errorf("err = %v\n%s", err, out)
+			}
+			if _, err := os.Stat(filepath.Join(root, "out", "escaped.html")); err == nil {
+				t.Error("wrote escaped.html outside -o")
+			}
+			if entries, _ := os.ReadDir(site); len(entries) != 0 {
+				t.Errorf("wrote %d file(s) in -o", len(entries))
+			}
+		})
+	}
+}

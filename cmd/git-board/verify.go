@@ -23,11 +23,17 @@ func newVerifyCmd() *cobra.Command {
 		Long: `Reads the [cycle.checks.*] and the signers file of the base branch's
 .git-board.toml, then each check's signed results in refs/notes/ci/*
 (docs/adr/0001), and prints its verdict at the commit (default HEAD).
-Exits 1 when the commit isn't proven: the server's gate, without a server.`,
+Exits 1 when the commit isn't proven: the server's gate, without a server.
+The development cycle's: experimental, on with [experimental] features =
+["cycle"] in .git-board.toml.`,
 		Example: `  git board verify
   git board verify fix/2518-retry --base origin/main`,
-		Args: cobra.MaximumNArgs(1),
+		Args:   cobra.MaximumNArgs(1),
+		Hidden: true, // the cycle is experimental (needExperimental)
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := needExperimental(".", config.FeatureCycle); err != nil {
+				return err
+			}
 			commit := "HEAD"
 			if len(args) == 1 {
 				commit = args[0]

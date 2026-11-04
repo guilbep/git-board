@@ -59,22 +59,25 @@ and a gh token with the project scope.`,
 func newBridgeResolveCmd() *cobra.Command {
 	var ours, theirs bool
 	cmd := &cobra.Command{
-		Use:   "resolve <issue number> <field>",
+		Use:   "resolve <issue> <field>",
 		Short: "Resolve a conflict by keeping one side",
 		Long: `Resolve a conflict "git-board bridge sync" held, by keeping git-board's
 value (--ours, written to the Project) or the Project's (--theirs, set on
-the label). Both then agree on it.`,
-		Example: `  git-board bridge resolve 2605 status --theirs`,
-		Args:    cobra.ExactArgs(2),
+the label). Both then agree on it. The issue is its number, or
+owner/repo#number (or its URL) when two repositories of the Project have
+that number in conflict.`,
+		Example: `  git-board bridge resolve 2605 status --theirs
+  git-board bridge resolve EPFL-ENAC/co2-calculator#2605 status --ours`,
+		Args: cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if ours == theirs {
 				return fmt.Errorf("pass one of --ours or --theirs")
 			}
-			number, err := strconv.Atoi(args[0])
+			repo, number, err := parseIssueRef(args[0])
 			if err != nil {
-				return fmt.Errorf("issue number %q: %w", args[0], err)
+				return err
 			}
-			return runBridgeResolve(cmd.OutOrStdout(), number, args[1], ours)
+			return runBridgeResolve(cmd.OutOrStdout(), repo, number, args[1], ours)
 		},
 	}
 	cmd.Flags().BoolVar(&ours, "ours", false, "keep git-board's value, written to the Project")
@@ -139,6 +142,9 @@ func projectRun(out io.Writer, cfg *config.Config, b *store.Backend, limit int, 
 		plan = plan.ProjectOnly()
 	}
 	printSyncPlan(out, plan)
+	if s.Truncated {
+		fmt.Fprintf(out, "warning: read %d items, the --limit: the Project may have more, which this run leaves out; raise --limit\n", len(s.Items))
+	}
 
 	if !apply {
 		if len(plan.Edits) > 0 && !cfg.GithubProject.Write {
@@ -160,20 +166,41 @@ func projectRun(out io.Writer, cfg *config.Config, b *store.Backend, limit int, 
 	return nil
 }
 
-func runBridgeResolve(out io.Writer, number int, field string, ours bool) error {
+// parseIssueRef reads 2605, owner/repo#2605 or the issue's GitHub URL.
+func parseIssueRef(ref string) (repo string, number int, err error) {
+	n := ref
+	if rest, ok := strings.CutPrefix(ref, "https://github.com/"); ok {
+		parts := strings.Split(strings.TrimSuffix(rest, "/"), "/")
+		if len(parts) != 4 || parts[2] != "issues" {
+			return "", 0, fmt.Errorf("issue %q: an issue's URL is https://github.com/<owner>/<repo>/issues/<number>", ref)
+		}
+		repo, n = parts[0]+"/"+parts[1], parts[3]
+	} else if r, num, ok := strings.Cut(ref, "#"); ok {
+		if strings.Count(r, "/") != 1 {
+			return "", 0, fmt.Errorf("issue %q: owner/repo#number", ref)
+		}
+		repo, n = r, num
+	}
+	if number, err = strconv.Atoi(n); err != nil {
+		return "", 0, fmt.Errorf("issue %q: its number, owner/repo#number or its URL", ref)
+	}
+	return repo, number, nil
+}
+
+func runBridgeResolve(out io.Writer, repo string, number int, field string, ours bool) error {
 	cfg, b, s, err := openSync(ghbridge.DefaultItemLimit)
 	if err != nil {
 		return err
 	}
 	defer b.Close()
-	kept, err := ghbridge.ResolveConflict(b, project(), cfg, s, number, field, ours)
+	kept, err := ghbridge.ResolveConflictIn(b, project(), cfg, s, repo, number, field, ours)
 	if errors.Is(err, ghbridge.ErrNotConflict) {
 		return fmt.Errorf("%w: run `git board project sync` to see the conflicts", err)
 	}
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(out, "#%d %s: kept %s on both sides\n", number, field, show(kept))
+	fmt.Fprintf(out, "%s#%d %s: kept %s on both sides\n", repo, number, field, show(kept))
 	return nil
 }
 

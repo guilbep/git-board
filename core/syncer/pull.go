@@ -25,19 +25,18 @@ type authors struct {
 // loadAuthors reads every person. One that fails to load stops the run:
 // ownership can't be decided without every person.
 func loadAuthors(s oplog.Datastore) (*authors, error) {
-	dir, err := people.LoadDirectory(s)
-	if err != nil {
-		return nil, fmt.Errorf("syncer: people: %w", err)
-	}
 	ids, err := people.List(s)
 	if err != nil {
 		return nil, err
 	}
-	au := &authors{s: s, dir: dir, persons: map[string]*people.Person{}}
+	au := &authors{s: s, dir: people.NewDirectory(), persons: map[string]*people.Person{}}
 	for _, id := range ids {
-		if au.persons[id], err = people.Load(s, id); err != nil {
+		p, err := people.Load(s, id)
+		if err != nil {
 			return nil, fmt.Errorf("syncer: people: %w", err)
 		}
+		au.persons[id] = p
+		au.dir.Put(p)
 	}
 	return au, nil
 }
@@ -45,11 +44,16 @@ func loadAuthors(s oplog.Datastore) (*authors, error) {
 func (au *authors) byID(id string) *people.Person { return au.persons[id] }
 
 // of gives the person id of each author of fi, the issue's and its
-// comments', by forge account id.
-func (au *authors) of(ctx context.Context, server string, fi forge.Issue) (map[string]string, error) {
+// comments', by forge account id. With assignees, it also gives a person
+// to each of fi's assignees, so the assignee:<login> label pulled for one
+// names someone (sync.md, "Assignees").
+func (au *authors) of(ctx context.Context, server string, fi forge.Issue, assignees bool) (map[string]string, error) {
 	accounts := []forge.Account{fi.Author}
 	for _, c := range fi.Comments {
 		accounts = append(accounts, c.Author)
+	}
+	if assignees {
+		accounts = append(accounts, fi.Assignees...)
 	}
 	who := map[string]string{}
 	for _, a := range accounts {
@@ -101,6 +105,12 @@ func (r *run) labelSet(p *project, labels []string) []string {
 	return slices.Compact(out)
 }
 
+// pullsAssignees says whether p's forge assignees are the assignees here
+// (Options.Assignees).
+func (r *run) pullsAssignees(p *project) bool {
+	return r.opt.Assignees == nil || r.opt.Assignees(p.key)
+}
+
 // held says whether p holds the label (Options.Held).
 func (r *run) held(p *project, l string) bool {
 	return r.opt.Held != nil && r.opt.Held(p.key, l)
@@ -138,7 +148,7 @@ func ids(accounts []forge.Account) string {
 // pullNew makes an issue from a forge issue, and links it.
 func (r *run) pullNew(p *project, fi forge.Issue) (string, error) {
 	key, now := p.key, r.now
-	who, err := r.au.of(r.ctx, p.f.Server(), fi)
+	who, err := r.au.of(r.ctx, p.f.Server(), fi, r.pullsAssignees(p))
 	if err != nil {
 		return "", err
 	}
@@ -148,7 +158,7 @@ func (r *run) pullNew(p *project, fi forge.Issue) (string, error) {
 	add := split(labels)
 	// the assignees live where their field's mapping says: with another
 	// home on this forge, the forge's own assignees are no one's to pull
-	if r.opt.Assignees == nil || r.opt.Assignees(key) {
+	if r.pullsAssignees(p) {
 		for _, as := range fi.Assignees {
 			add = append(add, "assignee:"+as.Login)
 		}
@@ -175,7 +185,7 @@ func (r *run) pullNew(p *project, fi forge.Issue) (string, error) {
 		seenOp(a, now, is.ID, "status", fi.Status),
 		seenOp(a, now, is.ID, "labels", labels),
 	}
-	if len(fi.Assignees) > 0 && (r.opt.Assignees == nil || r.opt.Assignees(key)) {
+	if len(fi.Assignees) > 0 && r.pullsAssignees(p) {
 		sops = append(sops, seenOp(a, now, is.ID, "assignees", ids(fi.Assignees)))
 	}
 	for _, c := range fi.Comments {
@@ -202,7 +212,7 @@ func (r *run) reconcile(p *project, id string, fi forge.Issue, pull, push bool) 
 		return false, false, 0, err
 	}
 	r.issues[id] = is
-	who, err := r.au.of(r.ctx, p.f.Server(), fi)
+	who, err := r.au.of(r.ctx, p.f.Server(), fi, r.pullsAssignees(p))
 	if err != nil {
 		return false, false, 0, err
 	}

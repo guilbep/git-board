@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -167,6 +168,12 @@ type Backend struct {
 	issues  map[string]*issue.Issue
 	persons map[string]*people.Person
 	heads   map[string]string // ref -> version of what's loaded
+	// recs are the forges' links (syncer.Records) as of the sync
+	// entities' heads recHeads: folded again only when one moved
+	recMu    sync.Mutex
+	recs     map[string][]syncer.Record
+	recHeads map[string]string
+	recFolds int // how many times they were folded, for the tests
 
 	// Tokens finds a forge account's token, Approve stores one: nil, the
 	// environment and git's credential helper (tokens.go). Tests set
@@ -394,10 +401,8 @@ type view struct {
 	avatars avatar.Mode // board.avatars, read once per view
 }
 
-// ponytail: folds every sync entity on each call, cheap while they are
-// small; cache by the sync refs' heads once real projects fill them (M6).
 func (b *Backend) view() (view, error) {
-	records, err := syncer.Records(b.ds)
+	records, err := b.records()
 	if err != nil {
 		return view{}, err
 	}
@@ -410,6 +415,28 @@ func (b *Backend) view() (view, error) {
 		return view{}, err
 	}
 	return view{c: b.counter(), records: records, persons: persons, avatars: avatars}, nil
+}
+
+// records are the forges' links, folded again only when a sync entity
+// moved: a sync's history grows without bound, and every GetIssue reads
+// them. The map is shared: read it, never write it.
+func (b *Backend) records() (map[string][]syncer.Record, error) {
+	heads, err := b.ds.Heads(ctx, "sync")
+	if err != nil {
+		return nil, err
+	}
+	b.recMu.Lock()
+	defer b.recMu.Unlock()
+	if b.recs != nil && maps.Equal(heads, b.recHeads) {
+		return b.recs, nil
+	}
+	recs, err := syncer.Records(b.ds)
+	if err != nil {
+		return nil, err
+	}
+	b.recs, b.recHeads = recs, heads
+	b.recFolds++
+	return recs, nil
 }
 
 // issueFrom is a core issue as git-board reads it: its labels shown, its
@@ -496,6 +523,31 @@ func (b *Backend) GetIssue(idPrefix string) (Issue, error) {
 		return Issue{}, err
 	}
 	return b.issueFrom(is, v), nil
+}
+
+// IssueNamer gives issues as GetIssue does, for many calls in a row (a
+// sync run's events): the forges' links and the persons are read again at
+// most every fresh, not on each call. An issue linked since shows its
+// forge number from the next read on.
+func (b *Backend) IssueNamer(fresh time.Duration) func(idPrefix string) (Issue, error) {
+	var mu sync.Mutex
+	var v view
+	var at time.Time
+	return func(idPrefix string) (Issue, error) {
+		is, _, err := b.issue(idPrefix)
+		if err != nil {
+			return Issue{}, err
+		}
+		mu.Lock()
+		defer mu.Unlock()
+		if at.IsZero() || time.Since(at) >= fresh {
+			if v, err = b.view(); err != nil {
+				return Issue{}, err
+			}
+			at = time.Now()
+		}
+		return b.issueFrom(is, v), nil
+	}
 }
 
 // issue is an issue by id prefix, and its log.

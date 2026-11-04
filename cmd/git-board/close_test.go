@@ -1,6 +1,7 @@
 package main
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -63,4 +64,44 @@ func containsLabel(labels []string, label string) bool {
 		}
 	}
 	return false
+}
+
+func TestCloseWithCommentAndReopen(t *testing.T) {
+	newTestRepo(t)
+	writeStatusOptionsConfig(t)
+	id := openIssueID(t)
+
+	if out, err := execute(t, []string{"close", id, "-c", "Fixed in 4e5f6a7"}); err != nil {
+		t.Fatalf("close -c: %v\n%s", err, out)
+	}
+	th := threadOf(t, id)
+	if th.Status != "closed" || !slices.Equal(comments(th), []string{"Fixed in 4e5f6a7"}) {
+		t.Fatalf("after close -c: %s, %q", th.Status, comments(th))
+	}
+	out, err := execute(t, []string{"reopen", id, "-c", "Not on Safari"})
+	if err != nil || !strings.Contains(out, "status:backlog") {
+		t.Fatalf("reopen: %v\n%s", err, out)
+	}
+	if labels, state := labelsOf(t, id); state != "open" || !slices.Equal(labels, []string{"status:backlog"}) {
+		t.Errorf("after reopen: %s %v", state, labels)
+	}
+
+	// a status that isn't the terminal one stays
+	if _, err := execute(t, []string{"set", id, "status=in-progress"}); err != nil {
+		t.Fatal(err)
+	}
+	b, err := store.OpenCwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := b.CloseBug(id); err != nil {
+		t.Fatal(err)
+	}
+	b.Close()
+	if _, err := execute(t, []string{"reopen", id}); err != nil {
+		t.Fatal(err)
+	}
+	if labels, state := labelsOf(t, id); state != "open" || !slices.Equal(labels, []string{"status:in-progress"}) {
+		t.Errorf("after reopen: %s %v, want in-progress kept", state, labels)
+	}
 }

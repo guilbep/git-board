@@ -229,7 +229,17 @@ func Suggest(b *store.Backend, cfg config.Branches, is store.Issue) (Suggestion,
 		n = Next(folder, names, b.MergeSubjects(start, mergesRead))
 	}
 	name := NameAt(cfg, is, n)
-	return Suggestion{Suggested: name, Base: base, Start: start, Command: "git switch -c " + name + " " + start}, nil
+	return Suggestion{Suggested: name, Base: base, Start: start, Command: "git switch -c " + shellWord(name) + " " + shellWord(start)}, nil
+}
+
+// shellWord is s as one shell word: as is when it's plain, else single
+// quoted. The base comes from the committed [branches] base, and the
+// command is copied into a shell.
+func shellWord(s string) string {
+	if s != "" && strings.Trim(s, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._/@+-=:,") == "" {
+		return s
+	}
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
 // mergesRead is how many of the base's last merge commits Next reads.

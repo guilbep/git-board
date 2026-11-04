@@ -113,3 +113,10 @@ func Meanings(s *gitstore.Store) syncer.Options {
 
 // WriteResetMark is writeResetMark for the tests: a reset's mark alone.
 var WriteResetMark = writeResetMark
+
+// RecordsFolds is how many times b folded the forges' links.
+func RecordsFolds(b *Backend) int {
+	b.recMu.Lock()
+	defer b.recMu.Unlock()
+	return b.recFolds
+}

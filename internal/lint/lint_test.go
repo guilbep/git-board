@@ -394,3 +394,19 @@ descriptions = { needs-design = "should prefix branch by design/" }
 		t.Errorf("findings %q", got)
 	}
 }
+
+// A key .git-board.toml has and git-board doesn't read is a finding: a
+// misspelled one is otherwise its zero value without a word.
+func TestRunReportsUnknownConfigKeys(t *testing.T) {
+	t.Parallel()
+	cfg := &config.Config{Unknown: []string{"github-project.wirte", "fields.status.singel"}}
+	var got []string
+	for _, f := range lint.Run(nil, cfg) {
+		if f.Check == lint.CheckUnknownKey {
+			got = append(got, f.Message)
+		}
+	}
+	if len(got) != 2 || !strings.Contains(got[0], "github-project.wirte") || !strings.Contains(got[1], "fields.status.singel") {
+		t.Errorf("unknown-key findings = %q", got)
+	}
+}

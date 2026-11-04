@@ -26,7 +26,7 @@ import (
 	boardweb "github.com/guilbep/git-board/web"
 )
 
-// Serve serves the git-bug repository in the working directory until ctx
+// Serve serves the board of the repository in the working directory until ctx
 // ends, or Ctrl-C (SIGTERM too). addr "" is "git board": localhost on
 // the first port from 8080 free on both loopback addresses. me is the current user for @me
 // (GIT_BOARD_ME when empty). ready gets the board's URL once it listens.

@@ -76,6 +76,9 @@ by hand only if you need it (see *Left open* in ADR 0002).
 - **Numbers.** Settings › Numbers starts them as on a git board; the
   counter is a row in the database, so numbering needs no push, and a sync
   numbers what has no number yet.
+- **Sync from one machine.** Two machines running a forge sync on one
+  PostgreSQL board at the same time can create the same forge issue twice
+  (issue #83): leave the forge sync to one server.
 - **Backups** are the database's: `pg_dump` the two schemas.
 - **Tests.** `make test-pg` runs the PostgreSQL tests against
   `GIT_BOARD_TEST_POSTGRES`, a DSN whose user may create databases.
@@ -90,10 +93,12 @@ git board datastore copy     # the board in git, into issues/
 The folder, from the checkout's top, holds one file per issue,
 `NNN-slug.md`, as `git board export --md` writes it, and the board itself
 in `issues/.board/`: each issue's, person's and record's operations, one
-line per write, in `<kind>/<id>.jsonl`. Commit both with the code.
+line per write, in `<kind>/<id>.jsonl`. Commit both with the code. A
+folder outside the checkout (an absolute path, or one up with `..`) is
+refused.
 
-- **The files follow the board.** After each write here, every file whose
-  issue changed is written again.
+- **The files follow the board.** After each write here, a forge sync's
+  too, every file whose issue changed is written again.
 - **Edit a file by hand**: the title, the description, `state`, the fields,
   labels and assignees, a comment's text; or add a comment under a heading
   `### Your name · 2026-11-04T10:00:00Z`. The next write reads your edits

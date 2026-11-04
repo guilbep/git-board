@@ -306,7 +306,7 @@ func TestLintCreateLabelsTemplateCheckOnlyWarns(t *testing.T) {
 // the new ones when it wants to.
 func TestLintSaysWhatItRead(t *testing.T) {
 	newTestRepo(t)
-	writeConfig(t, testConfig+"\n[cycle.signoffs]\nqa = \"pm\"\n\n[cycle.kinds]\nbug = \"failing-test\"\n")
+	writeConfig(t, testConfig+"\n[experimental]\nfeatures = [\"cycle\"]\n\n[cycle.signoffs]\nqa = \"pm\"\n\n[cycle.kinds]\nbug = \"failing-test\"\n")
 
 	out, err := execute(t, []string{"lint"})
 	if err != nil {
@@ -321,10 +321,28 @@ func TestLintSaysWhatItRead(t *testing.T) {
 
 func TestLintRefusesStepsOutOfOrder(t *testing.T) {
 	newTestRepo(t)
-	writeConfig(t, testConfig+"\n[cycle]\nsteps = [\"review\", \"code\"]\n")
+	writeConfig(t, testConfig+"\n[experimental]\nfeatures = [\"cycle\"]\n\n[cycle]\nsteps = [\"review\", \"code\"]\n")
 
 	out, err := execute(t, []string{"lint"})
 	if err == nil || !strings.Contains(err.Error(), `"code" after "review"`) {
 		t.Errorf("err = %v, want the order refused\noutput:\n%s", err, out)
+	}
+}
+
+// A misspelled key in .git-board.toml is a lint finding; every command
+// still runs (it is only warned of, on stderr).
+func TestLintReportsAMisspelledConfigKey(t *testing.T) {
+	newTestRepo(t)
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(configPath, append(data, "\n[github-project]\nowner = \"o\"\nnumber = 1\nwirte = true\n"...), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	mustExecute(t, "ls")
+	out := mustExecute(t, "lint")
+	if !strings.Contains(out, "unknown-key:") || !strings.Contains(out, "github-project.wirte") {
+		t.Errorf("no unknown-key finding:\n%s", out)
 	}
 }

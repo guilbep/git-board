@@ -12,7 +12,7 @@ func LoadDirectory(s oplog.Datastore) (*Directory, error) {
 	if err != nil {
 		return nil, err
 	}
-	d := &Directory{owner: map[[2]string]*Person{}}
+	d := NewDirectory()
 	for _, id := range ids {
 		p, err := Load(s, id)
 		if err != nil {
@@ -21,6 +21,15 @@ func LoadDirectory(s oplog.Datastore) (*Directory, error) {
 		d.Put(p)
 	}
 	return d, nil
+}
+
+// NewDirectory is a directory of persons already read.
+func NewDirectory(persons ...*Person) *Directory {
+	d := &Directory{owner: map[[2]string]*Person{}}
+	for _, p := range persons {
+		d.Put(p)
+	}
+	return d
 }
 
 // Put takes in a person made or changed since the directory loaded. It owns

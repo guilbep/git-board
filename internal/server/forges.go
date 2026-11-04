@@ -129,12 +129,12 @@ func names(e store.SyncEvent) bool {
 	return false
 }
 
-// issueName labels an issue in a step: its project number, else its forge
+// stepName labels an issue in a step: its project number, else its forge
 // number, else its short id, and its title. One a dry run would pull is
 // only in the dry run's copy: its short id.
-func (s *apiServer) issueName(id string) string {
+func stepName(get func(string) (store.Issue, error), id string) string {
 	short := id[:min(7, len(id))]
-	i, err := s.b.GetIssue(id)
+	i, err := get(id)
 	if err != nil {
 		return short
 	}
@@ -226,10 +226,13 @@ func (s *apiServer) tell(dry bool, id string, tally func(name string) *bridgeTal
 	var last syncStep // a wait is the step it waits in
 	var sent time.Time
 	var waitShown bool // the pages show a wait, which the next step clears
+	// a run names its issues from one read of the links a second: each a
+	// read of every sync entity would make a big pull's naming quadratic
+	get := s.b.IssueNamer(time.Second)
 	return func(e store.SyncEvent) {
 		name := ""
 		if names(e) {
-			name = s.issueName(e.Issue)
+			name = stepName(get, e.Issue)
 		}
 		text := e.Text(dry, name)
 		next, moved := syncStep{Bridge: e.Forge, Way: e.Way, Done: e.Done, Total: e.Total, Issue: e.Line}, e.What == "progress"

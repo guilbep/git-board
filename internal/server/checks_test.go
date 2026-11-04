@@ -210,14 +210,43 @@ func TestRunTestsRefuses(t *testing.T) {
 	}
 }
 
+// A test run executes the branch's code and signs with the operator's
+// key: only from the board's own page, on a server on localhost, as a
+// branch is made. So is setting up the checks it runs.
+func TestRunTestsIsLocalOnly(t *testing.T) {
+	t.Parallel()
+	b := storetest.New(t)
+	id := storetest.NewIssue(t, b, "x")
+	// the cycle on: off, its routes answer 404 before the local check
+	local := &apiServer{cfg: &config.Config{Features: allFeatures}, b: b}
+	exposed := &apiServer{cfg: &config.Config{Features: allFeatures}, b: b, exposed: []string{"*"}}
+	body := map[string]any{"names": []string{"unit"}}
+	for _, c := range []struct {
+		s      *apiServer
+		origin bool
+		code   string
+	}{{local, false, "origin"}, {exposed, true, "exposed"}} {
+		ts := serve(t, c.s)
+		origin := ""
+		if c.origin {
+			origin = ts.URL
+		}
+		for _, path := range []string{"/api/issues/" + id + "/tests/run", "/api/checks/setup"} {
+			if code, got, out := sendFrom(t, "POST", ts.URL+path, origin, body); code != http.StatusForbidden || got != c.code {
+				t.Errorf("%s, want %s: %d %s", path, c.code, code, out)
+			}
+		}
+	}
+}
+
 func TestChecksSetup(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "lefthook.yml"), []byte("pre-commit:\n  commands:\n    vet:\n      run: go vet ./...\n    fmt:\n      run: gofmt -l {staged_files}\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	s := &apiServer{cfg: &config.Config{}, b: storetest.New(t), root: dir, cfgPath: filepath.Join(dir, ".git-board.toml")}
-	if err := os.WriteFile(s.cfgPath, []byte("# the board\n"), 0o644); err != nil {
+	s := &apiServer{cfg: &config.Config{Features: allFeatures}, b: storetest.New(t), root: dir, cfgPath: filepath.Join(dir, ".git-board.toml")}
+	if err := os.WriteFile(s.cfgPath, []byte("# the board\n[experimental]\nfeatures = [\"cycle\"]\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	url := serve(t, s).URL + "/api/checks/setup"
@@ -248,7 +277,7 @@ func TestChecksSetup(t *testing.T) {
 // it close the issue.
 func TestCycleSignoffNotProvenAtMerge(t *testing.T) {
 	s, id, keyFile := checksRepo(t)
-	s.cfg = &config.Config{Fields: map[string]config.Field{
+	s.cfg = &config.Config{Features: allFeatures, Fields: map[string]config.Field{
 		"status": {Single: true, Options: []string{"backlog", "ready", "in-progress", "in-review", "done"}},
 		"risk":   {Single: true, Options: []string{"low", "normal", "structural"}},
 	}}

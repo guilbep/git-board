@@ -102,6 +102,10 @@ colors = { s = "green" }
 bug = "bug"
 feat = "feat"
 
+# the cycle is experimental: on, so Settings › Cycle shows
+[experimental]
+features = ["cycle"]
+
 # what the forms don't show, and must keep
 [cycle]
 ready = "ready"

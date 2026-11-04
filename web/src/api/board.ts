@@ -1,6 +1,7 @@
 import { fieldTypes } from '@/fieldtypes';
 import type { Facet } from '@/facets';
 import type { LabelState } from '@/labels';
+import { errorOf } from '@/apierror';
 // Typed client for the git-board server's API (internal/server). All HTTP
 // for the board page goes through here — never fetch() from a component
 // directly.
@@ -72,19 +73,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     throw new Error('The git-board server is not reachable.');
   });
   if (!res.ok) {
-    // The server answers errors as {"error": "...", "code"?: "..."}
-    // (writeError, writeCoded in internal/server); surface that
-    // message, e.g. "@me" with no --me set.
-    const body = await res.text();
-    let message = body;
-    let code = '';
-    try {
-      const parsed = JSON.parse(body) as { error?: string; code?: string };
-      message = parsed.error ?? body;
-      code = parsed.code ?? '';
-    } catch {
-      // not JSON: keep the raw body
-    }
+    // The server's message, e.g. "@me" with no --me set, or a config
+    // check's (apierror.ts)
+    const { message, code } = errorOf(await res.text());
     throw new ApiError(message || `${init?.method ?? 'GET'} ${path} failed (${res.status})`, res.status, code);
   }
   return res.json() as Promise<T>;
@@ -328,6 +319,9 @@ export interface MeResponse {
   avatars_ignored?: string; // a board.avatars that is none of the three
   // this clone opened with no board: what the server pulled from its remote, or why not
   first_pull?: { remote: string; issues: number; error?: string };
+  // the work-in-progress features on ([experimental] features, or this
+  // clone's board.experimental): the page hides the others (experimental.ts)
+  experimental?: string[];
 }
 
 export type AvatarsMode = 'forge' | 'gravatar' | 'none';
@@ -783,6 +777,9 @@ export interface ConfigRelease {
 export interface ConfigModel {
   hash: string;
   exists: boolean;
+  // [experimental] features as the file lists them; local, this clone's
+  // board.experimental when set (it wins); on, what runs here; known, every feature
+  experimental: { features: string[]; local: string[] | null; on: string[]; known: { name: string; title: string; description: string }[] };
   error?: string; // the file doesn't parse: the forms show it, Advanced fixes it
   fields: Record<string, ConfigField>;
   forges: import('@/fieldtargets').ForgeModel[]; // the [forges.<name>] tables, mappings with them

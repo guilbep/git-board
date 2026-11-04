@@ -4,9 +4,6 @@
 
 - Go 1.26.6+ (`GOTOOLCHAIN=auto` will fetch a newer one automatically if
   `go.mod` needs it).
-- git-bug comes from its `bridge-sync` fork, through the `replace` in
-  `go.mod`: bump it with
-  `go mod edit -replace=github.com/git-bug/git-bug=github.com/guilbep/git-bug@<commit> && go mod tidy`.
 - This is a private module: `go install`/`go get` need
   ```
   go env -w GOPRIVATE=github.com/guilbep/*
@@ -85,12 +82,12 @@ guilbep/git-board-test is set up for the PR gate and review (M3, M4):
   Owners*; require status checks to pass, with `Tests`. Check it took with
   `curl https://api.github.com/repos/guilbep/git-board-test/rules/branches/main`:
   `[]` means nothing is enforced.
-- **Each account's token on its own git-bug identity** in the scratch
-  clone, typed at the prompt, never on the command line:
-  `git bug bridge auth add-token -t github -l <login> -u <identity id>`, run
-  while no server holds the repository (git-bug locks it). git-board
-  picks the token whose login matches the current identity's
-  `github-login`, so switching identity in git-board switches accounts.
+- **Each account's token in git's credential helper**, never in a file or
+  on the command line: Settings › Sync › Add a forge stores it with
+  `git credential approve`, or `GH_TOKEN`/`GITLAB_TOKEN` for their own host
+  only (ADR 0010). git-board picks the token whose login is the account of
+  the person you write as on that forge, so choosing another person
+  (`git board me <id>`) switches accounts.
 - Tokens are classic, `repo` scope only: a GraphQL field that needs
   `read:org` fails the whole query.
 
@@ -100,7 +97,7 @@ send. The per-issue sync touches only that issue.
 
 ## Conventions
 
-- Real fixtures over mocks: tests spin up a real on-disk git-bug repo
+- Real fixtures over mocks: tests spin up a real on-disk git repository
   (`newTestRepo`/`storetest`) or a fake CLI script on `PATH` (see
   `bridge.go`'s `fetchGithubItems` seam, `lint.go`'s
   `existingGithubLabels`/`createGithubLabel` seams), not hand-rolled mocks.

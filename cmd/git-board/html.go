@@ -30,9 +30,8 @@ func newHtmlCmd() *cobra.Command {
 		Use:   "html",
 		Short: "Generate a static, read-only HTML site, one page per view",
 		Long: `Generate a static HTML site: one page per configured [views.*] in
-.git-board.toml, plus an index.html linking to all of them. Read-only —
-writes nothing to git-bug, unlike everything else in this CLI except
-ls/view/get/lint.
+.git-board.toml, plus an index.html linking to all of them. It writes no
+issue: on a fresh clone it may first pull origin's board, as ls does.
 
 Meant to be cron-published so PM/non-dev users can browse the board
 without a CLI or the (also-unauthenticated) live web UI, e.g. a periodic
@@ -67,6 +66,13 @@ func runHTML(out io.Writer, outputDir, me string) error {
 		return err
 	}
 
+	names := cfg.ViewNames()
+	for _, name := range names {
+		if err := pageName(name); err != nil {
+			return err
+		}
+	}
+
 	b, err := store.OpenCwd()
 	if err != nil {
 		return err
@@ -76,8 +82,6 @@ func runHTML(out io.Writer, outputDir, me string) error {
 	if err := os.MkdirAll(outputDir, 0o755); err != nil {
 		return fmt.Errorf("creating %s: %w", outputDir, err)
 	}
-
-	names := cfg.ViewNames()
 
 	generated := time.Now()
 	for _, name := range names {
@@ -99,6 +103,20 @@ func runHTML(out io.Writer, outputDir, me string) error {
 		return fmt.Errorf("index: %w", err)
 	}
 	fmt.Fprintln(out, "index.html")
+	return nil
+}
+
+// pageName refuses a view name that isn't a page of its own under -o:
+// one with a path in it would be written elsewhere (a committed
+// [views."../x"] outside -o), and index or releases would be written over
+// by the index or the releases page.
+func pageName(name string) error {
+	switch {
+	case name == "" || name == "." || name == ".." || strings.ContainsAny(name, `/\`) || name != filepath.Base(name):
+		return fmt.Errorf("view %q: a view's name is its page's file name, without a path", name)
+	case name == "index" || name == "releases":
+		return fmt.Errorf("view %q: %s.html is the site's own page, rename the view", name, name)
+	}
 	return nil
 }
 

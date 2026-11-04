@@ -17,7 +17,11 @@
         <button type="button" :aria-pressed="who === 'team'" @click="setWho('team')">Team</button>
       </div>
 
-      <p v-if="error?.code === 'no-identity'" class="gb-work-need">
+      <p v-if="error?.code === 'experimental'" class="gb-work-need">
+        The Work page is the development cycle’s, an experimental feature that is off on this board.
+        <router-link to="/settings/experimental">Turn it on in Settings › Experimental</router-link>
+      </p>
+      <p v-else-if="error?.code === 'no-identity'" class="gb-work-need">
         The page shows what waits for the identity you write as, and none is chosen here yet.
         <router-link to="/settings/you">Choose who you write as</router-link>
       </p>
@@ -162,6 +166,7 @@ import type { Fields } from '@/fields';
 import { forgeStatus, loadForges, onStep } from '@/forges';
 import { forgeNumbers } from '@/issuesync';
 import { debounced, onLive } from '@/live';
+import { latestOnly } from '@/latest';
 import { checkWords, doneWords } from '@/ways';
 import { me } from '@/me';
 import { panelMode } from '@/panelsize';
@@ -189,11 +194,17 @@ const label = (r: WorkRow) => {
   return a.kind === 'open' ? a.label : '';
 };
 
+// Me then Team quickly: the one asked last shows, whichever answers last
+const reloads = latestOnly();
 async function reload() {
+  const current = reloads.start();
   try {
-    data.value = await getWork(who.value);
+    const got = await getWork(who.value);
+    if (!current()) return;
+    data.value = got;
     error.value = null;
   } catch (e) {
+    if (!current()) return;
     if (e instanceof ApiError) error.value = e;
     else error.value = new ApiError(e instanceof Error ? e.message : String(e), 0, '');
   }

@@ -196,3 +196,33 @@ func TestWholeRunTakesOnlyTheCheckedForges(t *testing.T) {
 		t.Errorf("gl's lines %v, want it told as not in the check", lines)
 	}
 }
+
+// The whole sync on a board kept outside git, a forge's sync on: its check
+// has no remote's copies to merge, and passes, so the run may follow.
+func TestWholeSyncOffGit(t *testing.T) {
+	t.Parallel()
+	dir := storetest.Repo(t, false)
+	storetest.Init(t, dir)
+	storetest.Git(t, dir, "config", store.DatastoreKey, "markdown:issues")
+	b := storetest.Open(t, dir)
+	storetest.NewIssue(t, b, "x")
+	cfg := mustLoadConfig(t)
+	cfg.Forges = []config.Forge{{Name: "gh", Kind: "github", Host: "github.com", Project: "o/r", Sync: true}}
+	cfg.Discover = false
+	s := &apiServer{cfg: cfg, b: b, me: "guilbep"}
+	s.openForges = func(context.Context, []config.Forge) ([]store.NamedForge, error) { return nil, nil }
+	ts := httptest.NewServer(withCORS(newMux(s, http.NotFoundHandler())))
+	t.Cleanup(ts.Close)
+	if code := call(t, "POST", ts.URL+"/api/sync/all", map[string]any{"dry_run": true}, nil); code != http.StatusAccepted {
+		t.Fatalf("check: %d", code)
+	}
+	if st := waitWhole(t, ts); st.Job.State != "done" {
+		t.Fatalf("check %s: %q; %s", st.Job.State, st.Job.Error, stepWords(st.Job))
+	}
+	if code := call(t, "POST", ts.URL+"/api/sync/all", map[string]any{"dry_run": false}, nil); code != http.StatusAccepted {
+		t.Fatalf("run after the check: %d", code)
+	}
+	if st := waitWhole(t, ts); st.Job.State != "done" {
+		t.Fatalf("run %s: %q; %s", st.Job.State, st.Job.Error, stepWords(st.Job))
+	}
+}

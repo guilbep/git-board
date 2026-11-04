@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"net/http"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -29,6 +30,7 @@ func (s *apiServer) config() *config.Config {
 // setConfig takes cfg for every request from now on; the kind form may
 // have changed.
 func (s *apiServer) setConfig(cfg *config.Config) {
+	cfg.UseLocal(filepath.Dir(s.configPath())) // this clone's board.experimental stays
 	s.cfgMu.Lock()
 	defer s.cfgMu.Unlock()
 	s.cfg = cfg

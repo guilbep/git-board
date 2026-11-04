@@ -33,14 +33,14 @@
       </div>
       <div v-if="menuOpen && data" class="gb-inbox-menu" role="group" aria-label="Inbox settings">
         <label class="gb-inbox-check">
-          <input type="checkbox" :checked="data.fields" @change="saveSettings(data.views, !data.fields)" />
+          <input type="checkbox" :checked="data.fields" @change="saveSettings(data.views, !data.fields, $event)" />
           <span><strong>Also field changes on issues I'm in</strong><br /><span class="gb-hint">Sprint, priority, status… where you're assignee, reviewer, pm…</span></span>
         </label>
         <fieldset class="gb-inbox-views">
           <legend><strong>Follow views</strong></legend>
           <span v-if="!viewNames.length" class="gb-hint">No saved views yet: <code>[views]</code> in <code>.git-board.toml</code>.</span>
           <label v-for="v in viewNames" :key="v" class="gb-inbox-check">
-            <input type="checkbox" :checked="data.views.includes(v)" @change="toggleView(v)" /> {{ v }}
+            <input type="checkbox" :checked="data.views.includes(v)" @change="toggleView(v, $event)" /> {{ v }}
           </label>
           <span v-for="v in data.views_missing" :key="v" class="gb-inbox-check gb-hint">
             {{ v }} (no longer exists)
@@ -58,6 +58,7 @@
       Tell git-board your forge login: without it, no field and no mention can name you. Start the server with <code>--me your-login</code>, or set <code>GIT_BOARD_ME</code>.
     </p>
     <p v-else-if="error" class="gb-error">{{ error.message }}</p>
+    <p v-if="writeError" class="gb-error" role="alert">{{ writeError }}</p>
 
     <ul v-if="rows.length" class="gb-inbox-rows">
       <li v-for="r in rows" :key="r.issue.id" :class="{ 'gb-inbox-read': read.has(r.issue.id) }">
@@ -130,6 +131,7 @@ import { forgeNumbers } from '@/issuesync';
 import { checkFailure, followingLine, mergeRows, toCheck, toPull } from '@/inboxcheck';
 import { debounced, onLive } from '@/live';
 import { me, when } from '@/me';
+import { message } from '@/issue';
 import { panelMode } from '@/panelsize';
 
 const route = useRoute();
@@ -231,25 +233,44 @@ function open(r: InboxRow) {
   setIssue(r.issue.id);
 }
 
+// a write refused (Mark all read, a follow): said above the rows
+const writeError = ref('');
+
 async function markAll() {
   const ids = unread.value;
-  const m = new Map(read.value);
+  const before = read.value;
+  const m = new Map(before);
   for (const r of rows.value) if (ids.includes(r.issue.id)) m.set(r.issue.id, r.latest);
   read.value = m;
-  await markSeen(ids);
+  writeError.value = '';
+  try {
+    await markSeen(ids);
+  } catch (e) {
+    read.value = before; // not read after all
+    writeError.value = `Not marked read: ${message(e)}`;
+    return;
+  }
   await loadInbox(); // the header's count: this tab's own write comes back skipped (live.ts)
 }
 
-async function saveSettings(views: string[], f: boolean) {
-  await setInboxSettings(views, f);
+async function saveSettings(views: string[], f: boolean, ev?: Event) {
+  writeError.value = '';
+  try {
+    await setInboxSettings(views, f);
+  } catch (e) {
+    // the box back as it was: its value didn't change, so Vue won't
+    if (ev?.target instanceof HTMLInputElement) ev.target.checked = !ev.target.checked;
+    writeError.value = `Not saved: ${message(e)}`;
+    return;
+  }
   await reload(false);
 }
 
-function toggleView(v: string) {
+function toggleView(v: string, ev?: Event) {
   const d = data.value;
   if (!d) return;
   const views = d.views.includes(v) ? d.views.filter((x) => x !== v) : [...d.views, v];
-  void saveSettings(views, d.fields);
+  void saveSettings(views, d.fields, ev);
 }
 
 // The issue panel: ?issue=<id>, as on the board; j / k go through the rows.

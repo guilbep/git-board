@@ -1,10 +1,12 @@
 package hermetic
 
 import (
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -34,5 +36,36 @@ func TestSealed(t *testing.T) {
 	}
 	if out, _ := exec.Command("git", "config", "--get-all", "credential.helper").Output(); len(out) != 0 {
 		t.Errorf("a credential helper: %s", out)
+	}
+}
+
+// Every test binary of cmd/, internal/ and core/ is sealed: a package whose
+// tests don't call Run from TestMain reaches the network with the user's
+// credential helper.
+func TestEveryPackageIsSealed(t *testing.T) {
+	t.Parallel()
+	for _, root := range []string{"../../cmd", "../../internal", "../../core"} {
+		err := filepath.WalkDir(root, func(dir string, d fs.DirEntry, err error) error {
+			switch {
+			case err != nil || !d.IsDir():
+				return err
+			case d.Name() == "testdata":
+				return filepath.SkipDir
+			}
+			tests, _ := filepath.Glob(filepath.Join(dir, "*_test.go"))
+			if len(tests) == 0 || filepath.Base(dir) == "hermetic" {
+				return nil
+			}
+			for _, f := range tests {
+				if src, err := os.ReadFile(f); err == nil && strings.Contains(string(src), "hermetic.Run(m)") {
+					return nil
+				}
+			}
+			t.Errorf("%s: no TestMain calling hermetic.Run(m)", dir)
+			return nil
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 }

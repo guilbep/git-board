@@ -56,10 +56,10 @@ type apiServer struct {
 	// the forge sync of forges, or one way of it (mode get, send), its
 	// events told to see: nil, forgeRun
 	runSync func(ctx context.Context, mode string, forges []config.Forge, o runOpts, see func(store.SyncEvent)) error
-	// one issue's sync (issuesync.go): nil, issueRun; issueDry is when
-	// each issue's last clean dry run ended
+	// one issue's sync (issuesync.go): nil, issueRun; issueDry is each
+	// issue's last clean dry run: when it ended, and the forges it read
 	runIssueSync func(ctx context.Context, forges []config.Forge, dryRun bool, id string, see func(store.SyncEvent)) error
-	issueDry     map[string]time.Time
+	issueDry     map[string]issueCheck
 	// openForges opens the adapters of a run: nil, store.OpenForges
 	openForges func(ctx context.Context, forges []config.Forge) ([]store.NamedForge, error)
 	// checked is when each git remote was last fetched, pulled or pushed
@@ -156,19 +156,19 @@ func newMux(s *apiServer, static http.Handler) http.Handler {
 	mux.HandleFunc("POST /api/issues/{id}/pulls", s.handleOpenPull)
 	mux.HandleFunc("POST /api/issues/{id}/pulls/{number}/merge", s.handleMergePull)
 	mux.HandleFunc("PATCH /api/issues/{id}/pulls/{number}", s.handleEditPull)
-	mux.HandleFunc("GET /api/issues/{id}/cycle", s.handleCycle)
-	mux.HandleFunc("POST /api/issues/{id}/cycle/{action}", s.handleCycleAction)
-	mux.HandleFunc("GET /api/issues/{id}/tests", s.handleStepTests)
-	mux.HandleFunc("POST /api/issues/{id}/tests/run", s.handleRunTests)
-	mux.HandleFunc("GET /api/issues/{id}/tests/log/{hash}", s.handleRunLog)
-	mux.HandleFunc("GET /api/checks/setup", s.handleChecksSetup)
-	mux.HandleFunc("POST /api/checks/setup", s.handleWriteChecks)
+	mux.HandleFunc("GET /api/issues/{id}/cycle", s.experimental(config.FeatureCycle, s.handleCycle))
+	mux.HandleFunc("POST /api/issues/{id}/cycle/{action}", s.experimental(config.FeatureCycle, s.handleCycleAction))
+	mux.HandleFunc("GET /api/issues/{id}/tests", s.experimental(config.FeatureCycle, s.handleStepTests))
+	mux.HandleFunc("POST /api/issues/{id}/tests/run", s.experimental(config.FeatureCycle, s.handleRunTests))
+	mux.HandleFunc("GET /api/issues/{id}/tests/log/{hash}", s.experimental(config.FeatureCycle, s.handleRunLog))
+	mux.HandleFunc("GET /api/checks/setup", s.experimental(config.FeatureCycle, s.handleChecksSetup))
+	mux.HandleFunc("POST /api/checks/setup", s.experimental(config.FeatureCycle, s.handleWriteChecks))
 	mux.HandleFunc("GET /api/issues/{id}/changes", s.handleChanges)
 	mux.HandleFunc("GET /api/issues/{id}/changes/file", s.handleChangesFile)
 	mux.HandleFunc("POST /api/issues/{id}/review", s.handleReview)
 	mux.HandleFunc("POST /api/issues/{id}/review/{comment}/resolve", s.handleResolve)
-	mux.HandleFunc("GET /api/issues/{id}/agent", s.handleIssueAgent)
-	mux.HandleFunc("POST /api/issues/{id}/agent/{action}", s.handleIssueAgentAction)
+	mux.HandleFunc("GET /api/issues/{id}/agent", s.experimental(config.FeatureAgents, s.handleIssueAgent))
+	mux.HandleFunc("POST /api/issues/{id}/agent/{action}", s.experimental(config.FeatureAgents, s.handleIssueAgentAction))
 	mux.HandleFunc("POST /api/issues/{id}/comments", s.handleComment)
 	mux.HandleFunc("PUT /api/issues/{id}/comments/{comment}", s.handleEditComment)
 	mux.HandleFunc("POST /api/issues/{id}/comments/{comment}/meta", s.handleThreadMeta)
@@ -177,10 +177,10 @@ func newMux(s *apiServer, static http.Handler) http.Handler {
 	mux.HandleFunc("POST /api/issues/{id}/labels", s.handleLabels)
 	mux.HandleFunc("GET /api/me", s.handleMe)
 	mux.HandleFunc("POST /api/me", s.handleSetMe)
-	mux.HandleFunc("PUT /api/me/view", s.handleSetView)
+	mux.HandleFunc("PUT /api/me/view", s.experimental(config.FeatureCycle, s.handleSetView))
 	mux.HandleFunc("PUT /api/me/avatars", s.handleSetAvatars)
 	mux.HandleFunc("GET /api/inbox", s.handleInbox)
-	mux.HandleFunc("GET /api/work", s.handleWork)
+	mux.HandleFunc("GET /api/work", s.experimental(config.FeatureCycle, s.handleWork))
 	mux.HandleFunc("POST /api/inbox/seen", s.handleInboxSeen)
 	mux.HandleFunc("GET /api/inbox/follow/{id}", s.handleFollow)
 	mux.HandleFunc("PUT /api/inbox/follow/{id}", s.handleSetFollow)
@@ -219,9 +219,9 @@ func newMux(s *apiServer, static http.Handler) http.Handler {
 	mux.HandleFunc("POST /api/labels/adopt", s.handleLabelAdopt)
 	mux.HandleFunc("POST /api/labels/delete", s.handleLabelDelete)
 	mux.HandleFunc("GET /api/lint", s.handleLint)
-	mux.HandleFunc("GET /api/worktrees", s.handleWorktrees)
-	mux.HandleFunc("POST /api/worktrees/preview", s.handleWtxPreview)
-	mux.HandleFunc("POST /api/worktrees/init", s.handleWtxInit)
+	mux.HandleFunc("GET /api/worktrees", s.experimental(config.FeatureWorktrees, s.handleWorktrees))
+	mux.HandleFunc("POST /api/worktrees/preview", s.experimental(config.FeatureWorktrees, s.handleWtxPreview))
+	mux.HandleFunc("POST /api/worktrees/init", s.experimental(config.FeatureWorktrees, s.handleWtxInit))
 	mux.HandleFunc("GET /api/sync", s.handleSyncStatus)
 	mux.HandleFunc("POST /api/sync/check", s.handleSyncCheck)
 	mux.HandleFunc("POST /api/sync/apply", s.handleSyncApply)
@@ -468,8 +468,15 @@ func filterOf(q url.Values) string {
 
 func (s *apiServer) handleGetIssue(w http.ResponseWriter, r *http.Request) {
 	issue, err := s.b.GetIssue(r.PathValue("id"))
-	if err != nil {
+	switch {
+	case errors.Is(err, store.ErrNotFound):
 		writeError(w, http.StatusNotFound, err)
+		return
+	case errors.Is(err, store.ErrAmbiguous):
+		writeError(w, http.StatusBadRequest, err)
+		return
+	case err != nil: // the board failed to read: the issue isn't gone
+		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, issue)
@@ -529,6 +536,21 @@ func writeError(w http.ResponseWriter, status int, err error) {
 	}
 	writeJSON(w, status, map[string]string{"error": err.Error()})
 }
+
+// noCredentials is err with any URL's credentials taken out of its text
+// (store.NoCredentials), its chain kept: a datastore.ErrMissing in it is
+// still answered 409 missing.
+func noCredentials(msg string, err error) error {
+	return redacted{store.NoCredentials(msg), err}
+}
+
+type redacted struct {
+	msg string
+	err error
+}
+
+func (r redacted) Error() string { return r.msg }
+func (r redacted) Unwrap() error { return r.err }
 
 // writeCoded is writeError with a code the page acts on: syncing (retry
 // when the forge sync ends), changed (someone edited meanwhile).

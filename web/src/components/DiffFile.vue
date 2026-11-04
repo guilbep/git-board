@@ -41,11 +41,11 @@
             <tr v-if="draftAt?.row === i" class="gb-df-thread">
               <td colspan="3">
                 <div class="gb-df-draft">
-                  <MarkdownEditor v-model="draft" :label="`Comment on line ${draftAt.line}`" :disabled="busy" @submit="send" />
+                  <MarkdownEditor v-model="draft" v-model:uploading="uploading" :label="`Comment on line ${draftAt.line}`" :disabled="busy" @submit="send" />
                   <div class="gb-composer-foot">
                     <span class="gb-hint">On the pull request at the next sync.</span>
                     <button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" :disabled="busy" @click="draftAt = null">Cancel</button>
-                    <button type="button" class="epfl-btn epfl-btn-primary epfl-btn-sm" :disabled="busy || !draft.trim()" @click="send">Comment</button>
+                    <button type="button" class="epfl-btn epfl-btn-primary epfl-btn-sm" :disabled="busy || uploading || !draft.trim()" @click="send">Comment</button>
                   </div>
                 </div>
               </td>
@@ -137,13 +137,14 @@ const loose = computed(() => placement.value.loose);
 
 const draftAt = ref<{ row: number; side: 'old' | 'new'; line: number } | null>(null);
 const draft = ref('');
+const uploading = ref(false); // a file uploads in the editor: sending waits for it (MarkdownEditor)
 function compose(row: number, side: 'old' | 'new', line: number) {
   draftAt.value = { row, side, line };
   draft.value = '';
 }
 async function send() {
   const at = draftAt.value;
-  if (!at || !draft.value.trim()) return;
+  if (!at || uploading.value || !draft.value.trim()) return;
   if (await props.comment({ body: draft.value, path: props.file.path, line: at.line, side: at.side, commit: props.range.to })) draftAt.value = null;
 }
 

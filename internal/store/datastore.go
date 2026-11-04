@@ -122,7 +122,7 @@ func (b *Backend) Capabilities() Capabilities {
 }
 
 // CopyFromGit copies the git repository's board into the datastore this
-// clone names, entities that aren't there yet and the counter if it has
+// clone names, the packs that aren't there yet and the counter if it has
 // none: a board leaving git keeps its ids. It answers how many entities it
 // copied. The git refs stay as they are.
 func (b *Backend) CopyFromGit(ctx context.Context) (int, error) {
@@ -499,15 +499,21 @@ func (b *Backend) Unredact(v string) string {
 	return v
 }
 
-// Redact hides a datastore value's password: a URL's, in its user part or
-// its query, or a key=value string's.
+// Redact hides a datastore value's passwords: a URL's, in its user part or
+// its query (password, sslpassword), or a key=value string's.
 func Redact(v string) string {
 	if u, err := url.Parse(v); err == nil && u.Scheme != "" {
 		if _, has := u.User.Password(); u.User != nil && has {
 			u.User = url.UserPassword(u.User.Username(), "xxxxx")
 		}
-		if q := u.Query(); q.Has("password") {
-			q.Set("password", "xxxxx")
+		q, hidden := u.Query(), false
+		for k := range q { // password, sslpassword, in any case
+			if strings.HasSuffix(strings.ToLower(k), "password") {
+				q.Set(k, "xxxxx")
+				hidden = true
+			}
+		}
+		if hidden {
 			u.RawQuery = q.Encode()
 		}
 		return u.String()
@@ -516,7 +522,7 @@ func Redact(v string) string {
 }
 
 // kvPassword is a key=value string's password, quoted or not.
-var kvPassword = regexp.MustCompile(`(password\s*=\s*)('(?:[^'\\]|\\.)*'|\S+)`)
+var kvPassword = regexp.MustCompile(`(?i)(password\s*=\s*)('(?:[^'\\]|\\.)*'|\S+)`)
 
 // CheckDatastore refuses a board.datastore value git-board can't open.
 func CheckDatastore(v string) error {
@@ -524,8 +530,12 @@ func CheckDatastore(v string) error {
 	case v == "git", v == ForgeOnly:
 		return nil
 	case IsMarkdown(v):
-		if strings.TrimSpace(strings.TrimPrefix(v, Markdown)) == "" {
+		dir := strings.TrimSpace(strings.TrimPrefix(v, Markdown))
+		if dir == "" {
 			return fmt.Errorf("%q: name the folder, markdown:issues", v)
+		}
+		if !filepath.IsLocal(dir) {
+			return fmt.Errorf("%q: a folder of the checkout, from its top, like markdown:issues: the board goes with the code", v)
 		}
 		return nil
 	case IsPostgres(v):
@@ -590,8 +600,11 @@ func (b *Backend) TestDatastore(ctx context.Context, v string) TestResult {
 }
 
 // CopyGitTo copies the board in git into the datastore v names, as git
-// board datastore copy does: what is there already is left alone.
+// board datastore copy does: only what isn't there yet is written.
 func (b *Backend) CopyGitTo(ctx context.Context, v string) (int, error) {
+	if err := CheckDatastore(v); err != nil {
+		return 0, err
+	}
 	if IsMarkdown(v) {
 		m, err := mdstore.Open(markdownDir(b.root, v), b.s.Folder())
 		if err != nil {

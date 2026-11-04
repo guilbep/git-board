@@ -2,6 +2,8 @@ package pgstore_test
 
 import (
 	"context"
+	"errors"
+	"sync"
 	"testing"
 
 	"github.com/guilbep/git-board/core/datastore"
@@ -87,5 +89,67 @@ func TestCopyKeepsIDs(t *testing.T) {
 	// it goes on from there: a write lands on the copied version
 	if err := got.Append(ctx, s, []oplog.Op{{Kind: "comment", Author: "a", Time: 3}}); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// A second copy brings what was written in the source since the first:
+// the new packs of an entity copied already, not only new entities.
+func TestCopyAgainBringsNewPacks(t *testing.T) {
+	t.Parallel()
+	ctx := t.Context()
+	from := memstore.New(t.TempDir())
+	l, err := oplog.Create(ctx, from, "issue", "", []oplog.Op{{Kind: "create", Author: "a", Time: 1}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := open(t)
+	if n, err := s.Copy(ctx, from); err != nil || n != 1 {
+		t.Fatalf("copied %d, %v; want 1", n, err)
+	}
+	if err := l.Append(ctx, from, []oplog.Op{{Kind: "comment", Author: "a", Time: 2}}); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := s.Copy(ctx, from); err != nil || n != 1 {
+		t.Fatalf("copied again %d, %v; want 1", n, err)
+	}
+	got, err := oplog.Load(s, "issue", l.ID)
+	if err != nil || len(got.Entries) != 2 {
+		t.Fatalf("loaded %+v, %v; want both operations", got, err)
+	}
+	if n, err := s.Copy(ctx, from); err != nil || n != 0 {
+		t.Fatalf("copied a third time %d, %v; want 0", n, err)
+	}
+}
+
+// Several processes opening a fresh database's index at once, as the
+// server, a command and the TUI starting together do, all get it.
+func TestIndexDBAtOnce(t *testing.T) {
+	t.Parallel()
+	for range 4 {
+		dsn := pgtest.DSN(t)
+		var stores []*pgstore.Store
+		for range 8 {
+			s, err := pgstore.Open(t.Context(), dsn, t.TempDir())
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { s.Close() })
+			stores = append(stores, s)
+		}
+		var wg sync.WaitGroup
+		errs := make([]error, len(stores))
+		for i, s := range stores {
+			wg.Go(func() {
+				db, err := s.IndexDB(t.Context())
+				if err == nil {
+					db.Close()
+				}
+				errs[i] = err
+			})
+		}
+		wg.Wait()
+		if err := errors.Join(errs...); err != nil {
+			t.Fatal(err)
+		}
 	}
 }
