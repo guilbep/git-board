@@ -116,6 +116,10 @@ last edits left them.
   matches every issue.
 - **FTS5's own syntax is never read.** Each word is quoted, so `"`, `*`,
   `-`, `:`, `AND`, `OR`, `NOT` and parentheses are plain text.
+- **On PostgreSQL** (a board kept there, ADR 0002), an issue's text is
+  indexed up to its first 300,000 bytes of tokens: a `tsvector` holds at
+  most 1 MB, and one issue's text never fails a query. A word past that
+  isn't found.
 
 ## Labels
 

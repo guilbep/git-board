@@ -349,7 +349,7 @@ func (ix *Index) insertIssue(ctx context.Context, tx *sql.Tx, is *issue.Issue) e
 	}
 	args = []any{n, is.Title, is.Body, strings.Join(comments, "\n")}
 	if ix.pg { // one text, tokenized here as sqlite's unicode61 does
-		args = []any{n, tokens(is.Title) + " " + tokens(is.Body) + " " + tokens(strings.Join(comments, "\n"))}
+		args = []any{n, capTokens(tokens(is.Title) + " " + tokens(is.Body) + " " + tokens(strings.Join(comments, "\n")))}
 	}
 	if _, err := tx.ExecContext(ctx, ix.sql(texts), args...); err != nil {
 		return err
@@ -360,6 +360,24 @@ func (ix *Index) insertIssue(ctx context.Context, tx *sql.Tx, is *issue.Issue) e
 		}
 	}
 	return nil
+}
+
+// maxTokens bounds the text PostgreSQL indexes for one issue. A tsvector
+// holds at most 1 MB, and takes at most about 2.5 times its text's bytes
+// (each lexeme's entry and position), so one issue's text never fails the
+// refresh, and with it every query (queries.md).
+const maxTokens = 300_000
+
+// capTokens is toks cut, at a token's end, to maxTokens bytes.
+func capTokens(toks string) string {
+	if len(toks) <= maxTokens {
+		return toks
+	}
+	toks = toks[:maxTokens+1]
+	if i := strings.LastIndexByte(toks, ' '); i >= 0 {
+		return toks[:i]
+	}
+	return ""
 }
 
 func (ix *Index) insertPerson(ctx context.Context, tx *sql.Tx, p *people.Person) error {

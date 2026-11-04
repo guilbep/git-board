@@ -2,7 +2,7 @@ package index
 
 import (
 	"errors"
-
+	"fmt"
 	"reflect"
 	"slices"
 	"strings"
@@ -219,4 +219,25 @@ func TestLabelsByteOrder(t *testing.T) {
 			t.Errorf("labels = %q, %v, want %q", got, err, want)
 		}
 	})
+}
+
+// An issue whose text is bigger than a tsvector takes fails no query: its
+// text is indexed up to a bound, and the other issues still answer.
+func TestHugeTextFailsNoQuery(t *testing.T) {
+	t.Parallel()
+	_, s := newRepo(t)
+	ix := openIndex(t, s)
+	mkIssue(t, s, issue.NewCreate("p", "small", "fine"))
+	var b strings.Builder
+	b.WriteString("needle ")
+	for i := range 150000 {
+		fmt.Fprintf(&b, "%08x ", uint32(i)*2654435761)
+	}
+	mkIssue(t, s, issue.NewCreate("p", "log dump", b.String()))
+	if got, err := ix.Issues(t.Context(), Query{}); err != nil || len(got) != 2 {
+		t.Fatalf("issues = %d, %v, want 2", len(got), err)
+	}
+	if got, err := ix.Issues(t.Context(), Query{Text: "needle"}); err != nil || len(got) != 1 || got[0].Title != "log dump" {
+		t.Fatalf("search = %+v, %v", got, err)
+	}
 }
