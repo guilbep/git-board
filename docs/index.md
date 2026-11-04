@@ -40,12 +40,13 @@ kept, in the store you choose (git, PostgreSQL or Markdown files).
 - **The decisions**: [the spec's](spec/decisions.md), the choices it
   starts from, each linked to the PRD; and the architecture decision
   records, from [ADR 0001](adr/0001-check-results-are-signed-git-notes.md)
-  to [ADR 0019](adr/0019-deleting-is-a-tombstone.md):
+  to [ADR 0020](adr/0020-the-core-in-layers.md):
   why git-board has its own core ([0003](adr/0003-own-core-instead-of-git-bug.md)),
   keeps issues as operation logs ([0004](adr/0004-entities-are-operation-logs.md)),
   syncs forges as mirrors ([0008](adr/0008-sync-state-in-the-data-model.md)),
   lets you choose where the board is kept ([0002](adr/0002-datastores.md)),
-  and what it is for ([0018](adr/0018-own-your-issues-work-in-progress-is-opt-in.md)).
+  what it is for ([0018](adr/0018-own-your-issues-work-in-progress-is-opt-in.md)),
+  and how the core is split, proposed ([0020](adr/0020-the-core-in-layers.md)).
 
 ## The core
 

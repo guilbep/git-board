@@ -84,4 +84,11 @@ Bad, and accepted:
 - Files are not copied by `git board datastore copy`, the Markdown export,
   or the switch: they stay where they are, linked.
 - This sits uneasily with the vision of full ownership of the board: the
-  issue text is owned, its attachments are rented.
+  issue text is owned, its attachments are rented. Asked again on
+  2026-11-04 after the datastores (ADR 0002): **files stay on S3**, not in
+  the board's datastore. A 100 MB spreadsheet in a comment would go into
+  every clone's history (git), every backup and row read (PostgreSQL), or
+  the repository's working tree (Markdown), and no forge would show it.
+  Ownership of files is the bucket's: pick the S3 service (any
+  S3-compatible one, self-hosted included) and you own them there. Copying
+  a board's files along with `datastore copy` or an export is still open.

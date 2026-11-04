@@ -56,9 +56,10 @@ nav = [
     { "ADR 0014: tests are hermetic, on real repositories and fakes, never on the network" = "adr/0014-hermetic-tests-on-real-repositories.md" },
     { "ADR 0015: attachments go to an S3 bucket behind a CDN, not into git" = "adr/0015-attachments-on-s3-not-in-git.md" },
     { "ADR 0016: project numbers come from one counter, refs/board/seq on origin" = "adr/0016-project-numbers-are-a-counter-on-origin.md" },
-    { "ADR 0017: mIT, permissive dependencies only, and few of them" = "adr/0017-permissive-licences-few-dependencies.md" },
+    { "ADR 0017: MIT, permissive dependencies only, and few of them" = "adr/0017-permissive-licences-few-dependencies.md" },
     { "ADR 0018: you own your issues; work in progress is opt-in" = "adr/0018-own-your-issues-work-in-progress-is-opt-in.md" },
     { "ADR 0019: deleting is a tombstone: hidden everywhere, kept in history" = "adr/0019-deleting-is-a-tombstone.md" },
+    { "ADR 0020: the core in layers: a kernel, then issues, releases and the cycle (proposed)" = "adr/0020-the-core-in-layers.md" },
   ] },
 ]
 
