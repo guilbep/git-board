@@ -35,7 +35,7 @@ make docs-serve # the docs site on localhost, rebuilt on save
 ```
 
 Run `make ci` once a change is done, before it's pushed or landed: CI runs
-`make ci` and nothing else. It installs the web app's dependencies
+`make ci`, and `make web-e2e` in a job beside it. It installs the web app's dependencies
 (`npm ci`) only when `web/package-lock.json` is newer than `web/node_modules`.
 While working, the package's own tests are enough
 (`go test ./internal/server/ -run TestName`).
@@ -45,8 +45,9 @@ tests for what the browser shows). `web/e2e/serve.mjs` builds the web app and
 the binary, makes a repository with a `.git-board.toml` and a GitHub origin, and
 serves it with a fake GitHub on the port after `E2E_PORT` (18321): nothing
 leaves the machine; `E2E_TOML=<path>` serves another board's file instead, for a
-one-off smoke run of `e2e/tabs.spec.ts`. `make web-e2e` is not part of `make ci` yet: CI would need the
-browser installed.
+one-off smoke run of `e2e/tabs.spec.ts`. `make web-e2e` is not part of `make ci`, which stays fast:
+CI runs it in its own job (`e2e` in `.github/workflows/ci.yml`), Playwright's
+Chromium in a cache.
 
 The `web/` frontend (Quasar/Vue) has its own toolchain: `make web-dev` /
 `make web-build`, or `cd web && npm run dev`/`build`/`typecheck` directly.
