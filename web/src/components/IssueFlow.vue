@@ -11,7 +11,7 @@
         <button v-if="cur" type="button" class="gb-fchip" :aria-pressed="reading.show === 'version'" @click="reading.show = 'version'">On v{{ cur.v }} {{ count({ show: 'version' }) }}</button>
         <button type="button" class="gb-fchip" :aria-pressed="reading.show === 'open'" @click="reading.show = 'open'">Open threads {{ count({ show: 'open' }) }}</button>
         <button type="button" class="gb-fchip" :aria-pressed="reading.mine" @click="reading.mine = !reading.mine">Mine {{ count(only('mine')) }}</button>
-        <button type="button" class="gb-fchip" :aria-pressed="reading.agent" @click="reading.agent = !reading.agent">Agent {{ count(only('agent')) }}</button>
+        <button v-if="agentsOn" type="button" class="gb-fchip" :aria-pressed="reading.agent" @click="reading.agent = !reading.agent">Agent {{ count(only('agent')) }}</button>
         <button type="button" class="gb-fchip" :aria-pressed="reading.milestones" @click="reading.milestones = !reading.milestones">Milestones {{ count(only('milestones')) }}</button>
       </div>
       <div class="gb-flow-segs">
@@ -123,7 +123,7 @@ import type { Cycle, Forge, IssueEvent } from '@/api/board';
 import type { Fields } from '@/fields';
 import { bodyThreads, divider, firstNew, isRoot, items as itemsOf, pick, roleOf, rootOf, segments, type Item, type On, type Reading, type Segment } from '@/flow';
 import { listOf } from '@/cycle';
-import { on, when } from '@/me';
+import { agentsOn, on, when } from '@/me';
 import { anchorLabel, anchorOf, changeOf, sectionsOf, versions } from '@/sections';
 import CommentCard from '@/components/CommentCard.vue';
 import ThreadCard from '@/components/ThreadCard.vue';

@@ -17,7 +17,11 @@
         <button type="button" :aria-pressed="who === 'team'" @click="setWho('team')">Team</button>
       </div>
 
-      <p v-if="error?.code === 'no-identity'" class="gb-work-need">
+      <p v-if="error?.code === 'experimental'" class="gb-work-need">
+        The Work page is the development cycle’s, an experimental feature that is off on this board.
+        <router-link to="/settings/experimental">Turn it on in Settings › Experimental</router-link>
+      </p>
+      <p v-else-if="error?.code === 'no-identity'" class="gb-work-need">
         The page shows what waits for the identity you write as, and none is chosen here yet.
         <router-link to="/settings/you">Choose who you write as</router-link>
       </p>
