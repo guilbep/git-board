@@ -250,6 +250,31 @@ by field. Deleted issues don't count. `--json` prints `[{"label",
 one change each. A field's value is a label too. It doesn't check the new
 name against `.git-board.toml`: `git board lint` does.
 
+## `config`: settings
+
+```bash
+git board config list                               # the file's keys, then this clone's
+git board config get views.backlog.filter
+git board config set views.backlog.filter "is:open prio:p1"
+git board config set sprints.length_days 14
+git board config unset github-project.write
+git board config set board.view classic             # this clone's git config
+```
+
+A dotted key, like `github-project.owner` or `views.backlog.filter`, is
+in `.git-board.toml`, which the team shares and commits. `set` changes
+that key's line alone: every other line and comment stays. It refuses
+(exit code 2) a key git-board doesn't read, and a value that leaves the
+file broken. A value is TOML when it is one (`true`, `14`, `["a", "b"]`),
+else a string: quote `'"14"'` for a string of digits. A key inside an
+array of tables (`[[sprints.list]]`) is edited in the file.
+
+A key `board.<name>` is this clone's own, in git config: `board.view`,
+`board.avatars`, `board.datastore`, `board.experimental`, and `board.me`,
+which `git board me` sets. `set` writes it with `--local`; `get` reads it
+at every level git does. A datastore URL is printed without its password.
+`get` of a key not set exits with code 3.
+
 ## `close`, `reopen`, `move`
 
 ```bash
@@ -374,6 +399,7 @@ Errors go to stderr, prefixed `error:`.
 | `gh issue comment N --delete-last` | `glab issue note delete` | `git board comment N --delete <ref>` |
 | | | `git board undo N` (your last change, inverted) |
 | `gh issue status` | | `git board ls "involves:@me is:open"` |
+| `gh config get/set` | `glab config get/set` | `git board config get/set/list` |
 | `gh label list` | `glab label list` | `git board labels` (with counts) |
 | `gh label edit old --name new` | `glab label edit` | `git board labels rename old new` (on every issue) |
 | `gh issue develop N` | `glab mr create --related-issue N` | `git board branch N` (prints the branch and the command) |
