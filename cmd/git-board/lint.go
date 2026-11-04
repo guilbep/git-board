@@ -101,8 +101,8 @@ func runLint(out io.Writer, cfg *config.Config, strict bool) error {
 	}
 
 	// how today's forms of [cycle] were read, so a project can write the
-	// new ones when it wants to
-	if reads := cfg.Reads(); len(reads) > 0 {
+	// new ones when it wants to: the cycle's, when it is on
+	if reads := cfg.Reads(); cfg.Experimental(config.FeatureCycle) && len(reads) > 0 {
 		fmt.Fprintf(out, "read:\n  %s\n", strings.Join(reads, "\n  "))
 	}
 	findings := lint.Run(issues, cfg)
