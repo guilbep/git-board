@@ -616,6 +616,43 @@ export interface UploadStatus {
   public_url?: string;
 }
 
+// Datastore is where the board is kept (ADR 0002), and what that
+// datastore can do: a control needing what it lacks is shown disabled.
+export type Datastore = {
+  datastore: string; // git, PostgreSQL, the forges alone
+  where: string; // the server, without its password
+  forge_only: boolean; // each write goes to the forges at once
+  replica: boolean; // pull, push, start over
+  counter: boolean; // project numbers
+  setting: string; // board.datastore, its password hidden: git, forge, or a postgres:// URL
+  env: boolean; // GIT_BOARD_DATASTORE sets it: the page can't change it
+  restart: boolean; // saved, not yet what the server opened with
+};
+
+// DatastoreTest is what a connection test found; copied, what a copy wrote.
+export type DatastoreTest = {
+  ok: boolean;
+  line: string;
+  probe?: { server: string; where: string; tables: boolean; entities: number };
+  copied?: number;
+};
+
+export function getDatastore(): Promise<Datastore> {
+  return request('/api/datastore');
+}
+
+export function setDatastore(url: string): Promise<Datastore> {
+  return request('/api/datastore', { method: 'PUT', body: JSON.stringify({ url }) });
+}
+
+export function testDatastore(url: string): Promise<DatastoreTest> {
+  return request('/api/datastore/test', { method: 'POST', body: JSON.stringify({ url }) });
+}
+
+export function copyToDatastore(url: string): Promise<DatastoreTest> {
+  return request('/api/datastore/copy', { method: 'POST', body: JSON.stringify({ url }) });
+}
+
 export function getUploadStatus(): Promise<UploadStatus> {
   return request('/api/uploads');
 }

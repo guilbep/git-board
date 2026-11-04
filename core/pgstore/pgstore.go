@@ -108,6 +108,41 @@ func (s *Store) setup(ctx context.Context) error {
 	return tx.Commit()
 }
 
+// Probe is what a connection test finds, writing nothing.
+type Probe struct {
+	Server   string `json:"server"`   // the server's version
+	Where    string `json:"where"`    // user@host:port/database
+	Tables   bool   `json:"tables"`   // git-board's tables are there
+	Entities int    `json:"entities"` // how many entities they keep
+}
+
+// Try connects to dsn and says what is there, making nothing.
+func Try(ctx context.Context, dsn string) (Probe, error) {
+	cfg, err := pgx.ParseConfig(dsn)
+	if err != nil {
+		return Probe{}, fmt.Errorf("pgstore: %w", err)
+	}
+	p := Probe{Where: fmt.Sprintf("%s@%s:%d/%s", cfg.User, cfg.Host, cfg.Port, cfg.Database)}
+	conn, err := pgx.ConnectConfig(ctx, cfg)
+	if err != nil {
+		return p, fmt.Errorf("connecting to %s: %w", p.Where, err)
+	}
+	defer conn.Close(ctx)
+	if err := conn.QueryRow(ctx, "SHOW server_version").Scan(&p.Server); err != nil {
+		return p, err
+	}
+	var reg *string
+	if err := conn.QueryRow(ctx, "SELECT to_regclass('git_board.entities')::text").Scan(&reg); err != nil {
+		return p, err
+	}
+	if p.Tables = reg != nil; p.Tables {
+		if err := conn.QueryRow(ctx, "SELECT count(*) FROM git_board.entities").Scan(&p.Entities); err != nil {
+			return p, err
+		}
+	}
+	return p, nil
+}
+
 // Close closes the connections.
 func (s *Store) Close() error { return s.db.Close() }
 

@@ -1,14 +1,18 @@
 package store
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/jackc/pgx/v5"
 
 	"github.com/guilbep/git-board/core/datastore"
 	"github.com/guilbep/git-board/core/gitstore"
@@ -48,23 +52,29 @@ func IsPostgres(url string) bool {
 
 // openDatastore opens the datastore the clone names: s itself for git.
 // The machine's folder stays <common dir>/board.
-func openDatastore(ctx context.Context, s *gitstore.Store) (oplog.Datastore, error) {
+func openDatastore(ctx context.Context, s *gitstore.Store) (oplog.Datastore, string, error) {
+	ds, url, err := openNamed(ctx, s)
+	return ds, cmp.Or(url, "git"), err
+}
+
+func openNamed(ctx context.Context, s *gitstore.Store) (oplog.Datastore, string, error) {
 	url, err := DatastoreURL(ctx, s)
 	switch {
 	case err != nil:
-		return nil, err
+		return nil, url, err
 	case url == "" || url == "git":
-		return s, nil
+		return s, url, nil
 	case url == ForgeOnly:
-		return openForgeOnly(s)
+		ds, err := openForgeOnly(s)
+		return ds, url, err
 	case IsPostgres(url):
 		p, err := pgstore.Open(ctx, url, s.Folder())
 		if err != nil {
-			return nil, fmt.Errorf("opening the board's datastore (%s): %w", DatastoreKey, err)
+			return nil, url, fmt.Errorf("opening the board's datastore (%s): %s", DatastoreKey, Redact(err.Error()))
 		}
-		return p, nil
+		return p, url, nil
 	}
-	return nil, fmt.Errorf("%s %q: git, forge, or a postgres:// URL", DatastoreKey, url)
+	return nil, url, fmt.Errorf("%s %q: git, forge, or a postgres:// URL", DatastoreKey, Redact(url))
 }
 
 // closeDatastore closes ds when it isn't the git repository.
@@ -296,4 +306,114 @@ func (b *Backend) wrote(id string) {
 	if f := b.OnWrite; f != nil {
 		f(id)
 	}
+}
+
+// DatastoreSetting is this clone's board.datastore as a page may show it,
+// its password hidden: "git" when unset. env says GIT_BOARD_DATASTORE sets
+// it, over git config, and a page can't change it.
+func (b *Backend) DatastoreSetting() (value string, env, restart bool, err error) {
+	v, err := DatastoreURL(ctx, b.s)
+	if err != nil {
+		return "", false, false, err
+	}
+	v = cmp.Or(v, "git")
+	return Redact(v), os.Getenv(DatastoreEnv) != "", v != b.openedAs, nil
+}
+
+// Unredact is the setting a page sent back: its own value when the page
+// sent the redacted one it was shown, so the password stays.
+func (b *Backend) Unredact(v string) string {
+	cur, err := DatastoreURL(ctx, b.s)
+	if err == nil && cur != "" && v == Redact(cur) {
+		return cur
+	}
+	return v
+}
+
+// Redact hides a URL's password.
+func Redact(v string) string {
+	if u, err := url.Parse(v); err == nil && u.User != nil {
+		if _, has := u.User.Password(); has {
+			return u.Redacted()
+		}
+	}
+	return v
+}
+
+// CheckDatastore refuses a board.datastore value git-board can't open.
+func CheckDatastore(v string) error {
+	switch {
+	case v == "git", v == ForgeOnly:
+		return nil
+	case IsPostgres(v):
+		_, err := pgx.ParseConfig(v)
+		return err
+	}
+	return fmt.Errorf("%q: git, forge, or a postgres:// URL", v)
+}
+
+// SetDatastore writes board.datastore in this clone's git config ("git"
+// unsets it). It takes effect when git-board opens the repository again.
+func (b *Backend) SetDatastore(v string) error {
+	if err := CheckDatastore(v); err != nil {
+		return err
+	}
+	if v == "git" {
+		_, err := b.run(nil, "config", "--local", "--unset", DatastoreKey)
+		if ee := (*exec.ExitError)(nil); errors.As(err, &ee) && ee.ExitCode() == 5 {
+			return nil // wasn't set
+		}
+		return err
+	}
+	_, err := b.run(nil, "config", "--local", DatastoreKey, v)
+	return err
+}
+
+// TestResult is what a connection test found.
+type TestResult struct {
+	OK     bool           `json:"ok"`
+	Line   string         `json:"line"` // what a user reads
+	Probe  *pgstore.Probe `json:"probe,omitempty"`
+	Copied int            `json:"copied,omitempty"`
+}
+
+// TestDatastore tries the datastore v names, writing nothing.
+func (b *Backend) TestDatastore(ctx context.Context, v string) TestResult {
+	if err := CheckDatastore(v); err != nil {
+		return TestResult{Line: err.Error()}
+	}
+	switch {
+	case v == "git":
+		return TestResult{OK: true, Line: "the board in this repository's refs/board/*"}
+	case v == ForgeOnly:
+		return TestResult{OK: true, Line: "a copy in .git/board, filled from the forges with sync on"}
+	}
+	p, err := pgstore.Try(ctx, v)
+	if err != nil {
+		return TestResult{Line: Redact(err.Error()), Probe: &p}
+	}
+	line := fmt.Sprintf("connected to PostgreSQL %s at %s: ", p.Server, p.Where)
+	switch {
+	case !p.Tables:
+		line += "no board there yet; git-board makes its tables when it opens it"
+	case p.Entities == 0:
+		line += "git-board's tables, empty"
+	default:
+		line += fmt.Sprintf("a board of %d entities", p.Entities)
+	}
+	return TestResult{OK: true, Line: line, Probe: &p}
+}
+
+// CopyGitTo copies the board in git into the PostgreSQL database v names,
+// as git board datastore copy does: what is there already is left alone.
+func (b *Backend) CopyGitTo(ctx context.Context, v string) (int, error) {
+	if !IsPostgres(v) {
+		return 0, errors.New("a copy goes to a postgres:// URL")
+	}
+	p, err := pgstore.Open(ctx, v, b.s.Folder())
+	if err != nil {
+		return 0, errors.New(Redact(err.Error()))
+	}
+	defer p.Close()
+	return p.Copy(ctx, gitCounter{b.s})
 }

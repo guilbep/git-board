@@ -143,10 +143,12 @@ type Backend struct {
 	// s is the git repository: the code, and the board when it is kept in
 	// git. ds is where the board is kept (ADR 0002): s itself, or another
 	// datastore. What only git does checks b.git first.
-	s   *gitstore.Store
-	ds  oplog.Datastore
-	ix  *index.Index
-	dir string // the git directory, for what only git does
+	s  *gitstore.Store
+	ds oplog.Datastore
+	// openedAs is the board.datastore it opened with: "git" when unset
+	openedAs string
+	ix       *index.Index
+	dir      string // the git directory, for what only git does
 	// flat are the kinds stored as plain labels, by label (SetFlatKinds)
 	flat atomic.Pointer[map[string]bool]
 	// cfg says which labels the forges' sync holds (SetHeld)
@@ -196,7 +198,7 @@ func Open(path string) (*Backend, error) {
 	if err != nil {
 		return nil, fmt.Errorf("opening the repository: %w", err)
 	}
-	ds, err := openDatastore(context.Background(), s)
+	ds, openedAs, err := openDatastore(context.Background(), s)
 	if err != nil {
 		return nil, err
 	}
@@ -205,7 +207,7 @@ func Open(path string) (*Backend, error) {
 		closeDatastore(ds, s)
 		return nil, fmt.Errorf("opening the index: %w", err)
 	}
-	b := &Backend{s: s, ds: ds, ix: ix, dir: dir, issues: map[string]*issue.Issue{}, persons: map[string]*people.Person{}, heads: map[string]string{}}
+	b := &Backend{s: s, ds: ds, openedAs: openedAs, ix: ix, dir: dir, issues: map[string]*issue.Issue{}, persons: map[string]*people.Person{}, heads: map[string]string{}}
 	// the kind form and the held labels; a config that doesn't parse is the
 	// command's to report
 	if cfg, err := config.Load(config.PathIn(path)); err == nil {
