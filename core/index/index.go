@@ -201,9 +201,9 @@ func (ix *Index) Refresh(ctx context.Context) error {
 		}
 		l := loaded{key: k, head: head}
 		if k.kind == "issue" {
-			l.issue, l.err = issue.LoadContext(ctx, ix.s, k.id)
+			l.issue, l.err = issue.LoadAt(ctx, ix.s, k.id, head)
 		} else {
-			l.person, l.err = people.LoadContext(ctx, ix.s, k.id)
+			l.person, l.err = people.LoadAt(ctx, ix.s, k.id, head)
 		}
 		if err := ctx.Err(); err != nil { // a load cut short isn't a broken entity
 			return err

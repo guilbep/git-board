@@ -52,6 +52,15 @@ type Datastore interface {
 	Folder() string
 }
 
+// Versioned is a datastore whose versions name what they hold: an entity's
+// packs at a version Heads gave stay what they were, whatever the entity
+// became since. A reader that has the version reads them without asking
+// for the entity's version again. git is one: a version is a commit.
+type Versioned interface {
+	// PacksAt are every pack of the entity at version, in any order.
+	PacksAt(ctx context.Context, kind, id, version string) ([][]byte, error)
+}
+
 // Counter is a datastore that keeps a shared counter, for project numbers.
 type Counter interface {
 	// Count reads the counter: its value (nil when none was started) and

@@ -20,7 +20,10 @@ import (
 // read them are made here: a pack's clock is 1 + its parents' highest, and a
 // pack with no operation is a merge.
 
-var _ datastore.Datastore = (*Store)(nil)
+var (
+	_ datastore.Datastore = (*Store)(nil)
+	_ datastore.Versioned = (*Store)(nil)
+)
 
 // EntityRef is an entity's ref.
 func EntityRef(kind, id string) string { return "refs/board/" + kind + "/" + id }
@@ -70,15 +73,30 @@ func (s *Store) Packs(_ context.Context, kind, id string) ([][]byte, string, err
 	if head == ZeroHash {
 		return nil, "", fmt.Errorf("%w: %s", datastore.ErrNotFound, name)
 	}
+	packs, err := s.packsAt(head)
+	return packs, head.String(), err
+}
+
+// PacksAt are every pack reachable from version, a commit: what the entity
+// held then. Its ref isn't read.
+func (s *Store) PacksAt(_ context.Context, kind, id, version string) ([][]byte, error) {
+	h := NewHash(version)
+	if !entityID.MatchString(id) || h == ZeroHash || h.String() != version {
+		return nil, fmt.Errorf("%w: %s at %q", datastore.ErrNotFound, EntityRef(kind, id), version)
+	}
+	return s.packsAt(h)
+}
+
+func (s *Store) packsAt(head Hash) ([][]byte, error) {
 	nodes, err := s.Walk(head)
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 	packs := make([][]byte, 0, len(nodes))
 	for _, n := range nodes {
 		packs = append(packs, n.Pack)
 	}
-	return packs, head.String(), nil
+	return packs, nil
 }
 
 // Add writes pack in a commit on prev, and moves the entity's ref there if

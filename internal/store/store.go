@@ -252,31 +252,48 @@ func (b *Backend) loadAny(id string) (*issue.Issue, *oplog.Log, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	name := oplog.RefName("issue", id)
+	is, err := b.fold(l)
+	return is, l, err
+}
+
+// fold is the issue l folds to, from the cache when it holds l's version.
+func (b *Backend) fold(l *oplog.Log) (*issue.Issue, error) {
+	name := oplog.RefName("issue", l.ID)
 	b.mu.Lock()
-	is, ok := b.issues[id]
+	is, ok := b.issues[l.ID]
 	ok = ok && b.heads[name] == l.Version
 	b.mu.Unlock()
 	if ok {
-		return is, l, nil
+		return is, nil
 	}
-	if is, err = issue.Apply(l); err != nil {
-		return nil, nil, err
+	is, err := issue.Apply(l)
+	if err != nil {
+		return nil, err
 	}
 	b.issueFolds.Add(1)
 	// the issue and its version are set together, so a slower reader of an
 	// older version leaves an older pair, folded again on the next read,
 	// never an issue under another's version
 	b.mu.Lock()
-	b.issues[id], b.heads[name] = is, l.Version
+	b.issues[l.ID], b.heads[name] = is, l.Version
 	b.mu.Unlock()
-	return is, l, nil
+	return is, nil
+}
+
+// issueAt is an issue at a head Heads gave, deleted or not, through the
+// cache.
+func (b *Backend) issueAt(id, head string) (*issue.Issue, error) {
+	l, err := oplog.LoadAt(ctx, b.ds, "issue", id, head)
+	if err != nil {
+		return nil, err
+	}
+	return b.fold(l)
 }
 
 // all is every entity of a kind ("issue", "person") at its head, through
-// the cache: load reads one again. One that fails to load is left out and
-// logged, as the index keeps a broken entity out.
-func all[T any](b *Backend, kind string, cache map[string]T, load func(id string) (T, error)) (map[string]T, error) {
+// the cache: load reads one again, at the head Heads gave. One that fails
+// to load is left out and logged, as the index keeps a broken entity out.
+func all[T any](b *Backend, kind string, cache map[string]T, load func(id, head string) (T, error)) (map[string]T, error) {
 	heads, err := b.ds.Heads(ctx, kind)
 	if err != nil {
 		return nil, err
@@ -292,7 +309,7 @@ func all[T any](b *Backend, kind string, cache map[string]T, load func(id string
 		ok = ok && b.heads[name] == head
 		b.mu.Unlock()
 		if !ok {
-			if v, err = load(id); err != nil {
+			if v, err = load(id, head); err != nil {
 				log.Printf("%s %s: %v", kind, id, err)
 				continue
 			}
@@ -304,17 +321,14 @@ func all[T any](b *Backend, kind string, cache map[string]T, load func(id string
 
 // allIssues is every issue a view shows: a deleted one is left out.
 func (b *Backend) allIssues() (map[string]*issue.Issue, error) {
-	issues, err := all(b, "issue", b.issues, func(id string) (*issue.Issue, error) {
-		is, _, err := b.loadAny(id)
-		return is, err
-	})
+	issues, err := all(b, "issue", b.issues, b.issueAt)
 	maps.DeleteFunc(issues, func(_ string, is *issue.Issue) bool { return is.Deleted })
 	return issues, err
 }
 
 func (b *Backend) allPersons() (map[string]*people.Person, error) {
-	return all(b, "person", b.persons, func(id string) (*people.Person, error) {
-		l, err := oplog.LoadContext(ctx, b.ds, "person", id)
+	return all(b, "person", b.persons, func(id, head string) (*people.Person, error) {
+		l, err := oplog.LoadAt(ctx, b.ds, "person", id, head)
 		if err != nil {
 			return nil, err
 		}
