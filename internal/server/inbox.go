@@ -8,12 +8,12 @@ import (
 	"time"
 
 	"github.com/guilbep/git-board/core/filter"
+	"github.com/guilbep/git-board/core/inbox"
 	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/board"
-	"github.com/guilbep/git-board/internal/inbox"
 )
 
-// The inbox (internal/inbox): what happened that concerns you on the
+// The inbox (core/inbox): what happened that concerns you on the
 // issues of the last 14 days. Your file is yours, not the repository's:
 // it takes inboxMu, never writeMu, and answers during a forge sync.
 
@@ -142,14 +142,14 @@ func (s *apiServer) inbox(me inbox.Me, now time.Time) (inboxResponse, error) {
 	if err != nil {
 		return inboxResponse{}, err
 	}
-	res := inboxResponse{Me: me, Rows: inbox.Rows(me, st, threads, inViews, cfg, since), Fields: st.Fields,
+	res := inboxResponse{Me: me, Rows: inbox.Rows(me, st, threads, inViews, cfg.IssueSchema(), since), Fields: st.Fields,
 		Views: st.Views, ViewsMissing: missing, Following: len(following)}
 	if res.Rows == nil {
 		res.Rows = []inbox.Row{}
 	}
 	res.Roles = []string{}
 	for _, role := range slices.Sorted(maps.Keys(cfg.Roles)) {
-		if _, ok := filter.PersonField(role+":"+cfg.Roles[role], me.Login, &cfg.Schema); ok {
+		if _, ok := filter.PersonField(role+":"+cfg.Roles[role], me.Login, cfg.IssueSchema()); ok {
 			res.Roles = append(res.Roles, role)
 		}
 	}
@@ -214,7 +214,7 @@ func (s *apiServer) follow(me inbox.Me, th model.Thread) (followResponse, error)
 	if err != nil {
 		return followResponse{}, err
 	}
-	following, reasons, set := inbox.Follows(me, st, th, inViews[th.ID], cfg)
+	following, reasons, set := inbox.Follows(me, st, th, inViews[th.ID], cfg.IssueSchema())
 	if reasons == nil {
 		reasons = []string{}
 	}

@@ -1,6 +1,6 @@
 // Package work is the Work page's rows: every open issue's cycle, grouped
 // into what needs the viewer and what waits on others (the Inbox's shape,
-// internal/inbox, with the cycle as its source).
+// core/inbox, with the cycle as its source).
 package work
 
 import (
@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/guilbep/git-board/core/inbox"
 	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/cycle"
-	"github.com/guilbep/git-board/internal/inbox"
 )
 
 // Row is one open issue's cycle, slimmed for a list.

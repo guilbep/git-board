@@ -10,7 +10,6 @@ import (
 	"github.com/guilbep/git-board/core/fields"
 	"github.com/guilbep/git-board/core/filter"
 	"github.com/guilbep/git-board/core/model"
-	"github.com/guilbep/git-board/internal/config"
 )
 
 // Window is how far back the inbox looks: issues updated since, events
@@ -46,8 +45,8 @@ type Row struct {
 // automatic). views are the followed views th is in. Not followed but a
 // role you hold for the whole project (lead-dev, pm…): its reasons are
 // that role, "lead-dev (project)", and only its creation and closing show.
-func Follows(me Me, st State, th model.Thread, views []string, cfg *config.Config) (bool, []string, *bool) {
-	reasons := filter.Involvement(involved(me, th), me.Login, me.ID, schemaOf(cfg))
+func Follows(me Me, st State, th model.Thread, views []string, s *fields.Schema) (bool, []string, *bool) {
+	reasons := filter.Involvement(involved(me, th), me.Login, me.ID, s)
 	set := st.Set(th.ID)
 	if set != nil && *set {
 		reasons = append(reasons, "followed")
@@ -58,7 +57,7 @@ func Follows(me Me, st State, th model.Thread, views []string, cfg *config.Confi
 	following := len(reasons) > 0 && (set == nil || *set)
 	if !following && set == nil {
 		for _, l := range th.Inherited {
-			if f, ok := filter.PersonField(l, me.Login, schemaOf(cfg)); ok {
+			if f, ok := filter.PersonField(l, me.Login, s); ok {
 				reasons = append(reasons, f+projectRole)
 			}
 		}
@@ -94,10 +93,10 @@ func involved(me Me, th model.Thread) filter.Involved {
 // Rows is what happened that concerns you on threads, newest first:
 // events dated since, unseen, not yours. inViews are the followed views
 // each issue is in, by id.
-func Rows(me Me, st State, threads []model.Thread, inViews map[string][]string, cfg *config.Config, since time.Time) []Row {
+func Rows(me Me, st State, threads []model.Thread, inViews map[string][]string, s *fields.Schema, since time.Time) []Row {
 	var rows []Row
 	for _, th := range threads {
-		if r, ok := rowOf(me, st, th, inViews[th.ID], cfg, since); ok {
+		if r, ok := rowOf(me, st, th, inViews[th.ID], s, since); ok {
 			rows = append(rows, r)
 		}
 	}
@@ -105,11 +104,11 @@ func Rows(me Me, st State, threads []model.Thread, inViews map[string][]string, 
 	return rows
 }
 
-func rowOf(me Me, st State, th model.Thread, views []string, cfg *config.Config, since time.Time) (Row, bool) {
-	following, reasons, _ := Follows(me, st, th, views, cfg)
+func rowOf(me Me, st State, th model.Thread, views []string, s *fields.Schema, since time.Time) (Row, bool) {
+	following, reasons, _ := Follows(me, st, th, views, s)
 	watching := !following && slices.ContainsFunc(reasons, func(r string) bool { return strings.HasSuffix(r, projectRole) })
 	inField := slices.ContainsFunc(th.Labels, func(l string) bool {
-		_, ok := filter.PersonField(l, me.Login, schemaOf(cfg))
+		_, ok := filter.PersonField(l, me.Login, s)
 		return ok
 	})
 	seen := map[string]bool{}
@@ -121,9 +120,9 @@ func rowOf(me Me, st State, th model.Thread, views []string, cfg *config.Config,
 	var comments, changes int
 	var status string
 	var notes []string // once each: new issue, added you as…, removed you as…, mentioned you
-	note := func(s string) {
-		if !slices.Contains(notes, s) {
-			notes = append(notes, s)
+	note := func(n string) {
+		if !slices.Contains(notes, n) {
+			notes = append(notes, n)
 		}
 	}
 	for _, e := range th.Events {
@@ -132,13 +131,13 @@ func rowOf(me Me, st State, th model.Thread, views []string, cfg *config.Config,
 		}
 		addressed := false // to you: shows followed or not, unfollowed included
 		for _, l := range e.Added {
-			if f, ok := filter.PersonField(l, me.Login, schemaOf(cfg)); ok {
+			if f, ok := filter.PersonField(l, me.Login, s); ok {
 				note("added you as " + f)
 				addressed = true
 			}
 		}
 		for _, l := range e.Removed {
-			if f, ok := filter.PersonField(l, me.Login, schemaOf(cfg)); ok {
+			if f, ok := filter.PersonField(l, me.Login, s); ok {
 				note("removed you as " + f)
 				addressed = true
 			}
@@ -213,12 +212,4 @@ func plural(n int, what string) string {
 		return "1 " + what
 	}
 	return fmt.Sprintf("%d %ss", n, what)
-}
-
-// schemaOf is cfg's schema, nil for none.
-func schemaOf(cfg *config.Config) *fields.Schema {
-	if cfg == nil {
-		return nil
-	}
-	return &cfg.Schema
 }

@@ -230,6 +230,15 @@ type Config struct {
 	cycleErr error
 }
 
+// IssueSchema is the schema the core's issue domain reads (core/fields:
+// assignments, filters, the inbox): the file's, nil for no config.
+func (c *Config) IssueSchema() *fields.Schema {
+	if c == nil {
+		return nil
+	}
+	return &c.Schema
+}
+
 // TemplateRef names a built-in template and its version (templates/).
 type TemplateRef struct {
 	Name    string `toml:"name"`

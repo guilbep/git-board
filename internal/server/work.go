@@ -7,11 +7,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/guilbep/git-board/core/inbox"
 	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/branches"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/cycle"
-	"github.com/guilbep/git-board/internal/inbox"
 	"github.com/guilbep/git-board/internal/work"
 	"github.com/guilbep/git-board/internal/wtx"
 )

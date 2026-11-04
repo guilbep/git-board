@@ -132,7 +132,7 @@ func runClose(out io.Writer, idPrefix, comment, reason, duplicateOf string) erro
 	if err := addComment(b, is.ID, dupNote); err != nil {
 		return err
 	}
-	label, err := fields.Apply(b, &cfg.Schema, is.ID, "status", terminal, "", time.Now())
+	label, err := fields.Apply(b, cfg.IssueSchema(), is.ID, "status", terminal, "", time.Now())
 	if err != nil {
 		return err
 	}
@@ -216,7 +216,7 @@ func runReopen(out io.Writer, idPrefix, comment string) error {
 	if options := cfg.Fields["status"].Options; len(options) > 0 {
 		status := currentStatusValue(labels)
 		if status == "" || status == options[len(options)-1] {
-			label, err := fields.Apply(b, &cfg.Schema, idPrefix, "status", options[0], "", time.Now())
+			label, err := fields.Apply(b, cfg.IssueSchema(), idPrefix, "status", options[0], "", time.Now())
 			if err != nil {
 				return err
 			}

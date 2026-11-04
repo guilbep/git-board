@@ -372,13 +372,13 @@ func (s *apiServer) handleCycleAction(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if action == "approve-plan" && cur.Stage == "ready" && len(cur.Stages.InProgress) > 0 {
-		if _, err := fields.Apply(s.b, &cfg.Schema, id, "status", cur.Stages.InProgress[0], s.me, time.Now()); err != nil {
+		if _, err := fields.Apply(s.b, cfg.IssueSchema(), id, "status", cur.Stages.InProgress[0], s.me, time.Now()); err != nil {
 			writeError(w, http.StatusInternalServerError, err)
 			return
 		}
 	}
 	if action == "spec-verdict" && req.Verdict == "approve" && cur.Step == 1 && cur.Stages.Ready != "" {
-		if _, err := fields.Apply(s.b, &cfg.Schema, id, "status", cur.Stages.Ready, s.me, time.Now()); err != nil {
+		if _, err := fields.Apply(s.b, cfg.IssueSchema(), id, "status", cur.Stages.Ready, s.me, time.Now()); err != nil {
 			writeError(w, http.StatusInternalServerError, err)
 			return
 		}
@@ -495,7 +495,7 @@ func (s *apiServer) signedOff(id string, stages config.Stages, status string) er
 	if next == "" {
 		return nil
 	}
-	if _, err := fields.Apply(s.b, &s.config().Schema, id, "status", next, s.me, time.Now()); err != nil {
+	if _, err := fields.Apply(s.b, s.config().IssueSchema(), id, "status", next, s.me, time.Now()); err != nil {
 		return err
 	}
 	if next == stages.Closing {

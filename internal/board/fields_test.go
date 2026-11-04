@@ -33,7 +33,7 @@ func TestApplyMeWithoutMeConfiguredErrors(t *testing.T) {
 	id := storetest.NewIssue(t, b, "x")
 	storetest.Git(t, dir, "config", "--unset", "board.me")
 
-	if _, err := fields.Apply(b, &cfg.Schema, id, "assignee", "@me", "", today); err == nil {
+	if _, err := fields.Apply(b, cfg.IssueSchema(), id, "assignee", "@me", "", today); err == nil {
 		t.Error("expected error when @me used without a configured user")
 	}
 }
@@ -48,7 +48,7 @@ func TestApplyMeFallsBackToTheIdentitysName(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	label, err := fields.Apply(b, &cfg.Schema, id, "assignee", "@me", "", today)
+	label, err := fields.Apply(b, cfg.IssueSchema(), id, "assignee", "@me", "", today)
 	if err != nil || label != "assignee:"+me.Name {
 		t.Errorf("Apply @me = %q, %v; want assignee:%s", label, err, me.Name)
 	}
@@ -65,7 +65,7 @@ func TestApplyMeFallsBackToTheIdentitysLogin(t *testing.T) {
 	b := storetest.New(t)
 	id := storetest.NewIssue(t, b, "x")
 	storetest.SetMyLogin(t, b, "guilbep")
-	label, err := fields.Apply(b, &cfg.Schema, id, "assignee", "@me", "", today)
+	label, err := fields.Apply(b, cfg.IssueSchema(), id, "assignee", "@me", "", today)
 	if err != nil || label != "assignee:guilbep" {
 		t.Errorf("Apply @me = %q, %v; want assignee:guilbep", label, err)
 	}
@@ -83,10 +83,10 @@ func TestApplySignedMeResolves(t *testing.T) {
 	b := storetest.New(t)
 	id := storetest.NewIssue(t, b, "x")
 	storetest.SetMyLogin(t, b, "guilbep")
-	if label, err := fields.Apply(b, &cfg.Schema, id, "assignee", "+@me", "", today); err != nil || label != "assignee:guilbep" {
+	if label, err := fields.Apply(b, cfg.IssueSchema(), id, "assignee", "+@me", "", today); err != nil || label != "assignee:guilbep" {
 		t.Fatalf("Apply +@me = %q, %v; want assignee:guilbep", label, err)
 	}
-	if _, err := fields.Apply(b, &cfg.Schema, id, "assignee", "-@me", "", today); err != nil {
+	if _, err := fields.Apply(b, cfg.IssueSchema(), id, "assignee", "-@me", "", today); err != nil {
 		t.Fatalf("Apply -@me: %v", err)
 	}
 	if got, _ := b.GetLabels(id); len(got) != 0 {

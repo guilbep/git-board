@@ -195,7 +195,7 @@ func FilterByField(issues []model.Issue, fieldName, value string) []model.Issue 
 // call, same as fields.Apply itself, so it's covered by the same
 // storetest-fixture style as fields_test.go.
 func ApplyField(b fields.Backend, cfg *config.Config, issueID, fieldName, value, me string, today time.Time) (labels []string, applied string, err error) {
-	applied, err = fields.Apply(b, &cfg.Schema, issueID, fieldName, value, me, today)
+	applied, err = fields.Apply(b, cfg.IssueSchema(), issueID, fieldName, value, me, today)
 	if err != nil {
 		return nil, "", err
 	}

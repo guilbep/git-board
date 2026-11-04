@@ -1,5 +1,5 @@
 // Package inbox is one identity's inbox: what it follows and has seen (its
-// file, in git-bug's local storage), and the rows: what happened that
+// file, in the board's local storage), and the rows: what happened that
 // concerns it (rows.go). Pure but for the file; the server gathers the
 // threads.
 package inbox
@@ -12,8 +12,9 @@ import (
 	"path/filepath"
 	"slices"
 
+	"github.com/go-git/go-billy/v5"
+
 	"github.com/guilbep/git-board/core/model"
-	"github.com/guilbep/git-board/internal/store"
 )
 
 // State is one identity's file.
@@ -25,12 +26,21 @@ type State struct {
 	Fields   bool                `json:"fields,omitempty"`   // also field changes on issues you're in
 }
 
+// Files is where the file is kept: what Load and Save use of a billy
+// filesystem (internal/store's Storage is one).
+type Files interface {
+	Open(filename string) (billy.File, error)
+	Create(filename string) (billy.File, error)
+	MkdirAll(filename string, perm os.FileMode) error
+	Rename(oldpath, newpath string) error
+}
+
 func path(identityID string) string {
 	return filepath.Join("git-board", "inbox", identityID+".json")
 }
 
 // Load reads identityID's file; none yet is an empty State.
-func Load(fs store.Storage, identityID string) (State, error) {
+func Load(fs Files, identityID string) (State, error) {
 	f, err := fs.Open(path(identityID))
 	if errors.Is(err, os.ErrNotExist) {
 		return State{}, nil
@@ -48,7 +58,7 @@ func Load(fs store.Storage, identityID string) (State, error) {
 
 // Save writes it through a temporary file and a rename: a crash leaves the
 // old file or the new one, never half of one.
-func Save(fs store.Storage, identityID string, s State) error {
+func Save(fs Files, identityID string, s State) error {
 	p := path(identityID)
 	if err := fs.MkdirAll(filepath.Dir(p), 0o755); err != nil {
 		return err

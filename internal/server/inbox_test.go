@@ -11,9 +11,9 @@ import (
 	"time"
 
 	"github.com/guilbep/git-board/core/fields"
+	"github.com/guilbep/git-board/core/inbox"
 	"github.com/guilbep/git-board/core/issue"
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/inbox"
 	"github.com/guilbep/git-board/internal/store/storetest"
 )
 

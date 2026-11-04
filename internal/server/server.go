@@ -518,7 +518,7 @@ func (s *apiServer) handlePatchIssue(w http.ResponseWriter, r *http.Request) {
 
 	today := time.Now()
 	for _, name := range names {
-		if _, err := fields.Apply(s.b, &s.config().Schema, id, name, assignments[name], s.me, today); err != nil {
+		if _, err := fields.Apply(s.b, s.config().IssueSchema(), id, name, assignments[name], s.me, today); err != nil {
 			writeError(w, http.StatusBadRequest, err)
 			return
 		}

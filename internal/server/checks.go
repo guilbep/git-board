@@ -316,7 +316,7 @@ func (s *apiServer) readyForReview(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if _, err := fields.Apply(s.b, &s.config().Schema, id, "status", cur.Stages.InReview[0], s.me, time.Now()); err != nil {
+	if _, err := fields.Apply(s.b, s.config().IssueSchema(), id, "status", cur.Stages.InReview[0], s.me, time.Now()); err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}

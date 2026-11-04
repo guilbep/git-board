@@ -75,7 +75,7 @@ func runMove(out io.Writer, idPrefix string, back bool) error {
 		return err
 	}
 
-	label, err := fields.Apply(b, &cfg.Schema, idPrefix, "status", next, "", time.Now())
+	label, err := fields.Apply(b, cfg.IssueSchema(), idPrefix, "status", next, "", time.Now())
 	if err != nil {
 		return err
 	}

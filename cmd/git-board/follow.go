@@ -9,15 +9,15 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/guilbep/git-board/core/inbox"
 	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/board"
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/inbox"
 	"github.com/guilbep/git-board/internal/store"
 )
 
 // The inbox's three choices for an issue, as the web UI's bell offers
-// them (internal/inbox): Following, Not following, Automatic.
+// them (core/inbox): Following, Not following, Automatic.
 
 func newFollowCmd() *cobra.Command {
 	var me string
@@ -160,7 +160,7 @@ func followOf(b *store.Backend, cfg *config.Config, m inbox.Me, st inbox.State, 
 	if err != nil {
 		return followState{}, err
 	}
-	following, reasons, set := inbox.Follows(m, st, th, inViews[th.ID], cfg)
+	following, reasons, set := inbox.Follows(m, st, th, inViews[th.ID], cfg.IssueSchema())
 	if reasons == nil {
 		reasons = []string{}
 	}

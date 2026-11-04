@@ -404,7 +404,7 @@ func (s *apiServer) handleIssueAgentAction(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	if start {
-		if _, err := fields.Apply(s.b, &s.config().Schema, th.ID, "status", cyc.Stages.InProgress[0], s.me, time.Now()); err != nil {
+		if _, err := fields.Apply(s.b, s.config().IssueSchema(), th.ID, "status", cyc.Stages.InProgress[0], s.me, time.Now()); err != nil {
 			writeError(w, http.StatusInternalServerError, err)
 			return
 		}

@@ -11,9 +11,9 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/guilbep/git-board/core/inbox"
 	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/board"
-	"github.com/guilbep/git-board/internal/inbox"
 	"github.com/guilbep/git-board/internal/store"
 )
 
@@ -113,7 +113,7 @@ func runNeedsYou(out io.Writer, me string, js *jsonOut, markRead bool, now time.
 	if err != nil {
 		return err
 	}
-	for _, r := range inbox.Rows(m, st, threads, inViews, cfg, since) {
+	for _, r := range inbox.Rows(m, st, threads, inViews, cfg.IssueSchema(), since) {
 		if slices.Contains(r.Reasons, "author") {
 			rep.Opened = append(rep.Opened, r)
 		} else {

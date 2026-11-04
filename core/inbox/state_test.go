@@ -5,13 +5,13 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/go-git/go-billy/v5/osfs"
+	"github.com/guilbep/git-board/core/inbox"
 	"github.com/guilbep/git-board/core/model"
-	"github.com/guilbep/git-board/internal/inbox"
-	"github.com/guilbep/git-board/internal/store/storetest"
 )
 
 func TestStateRoundTrip(t *testing.T) {
-	fs := storetest.New(t).Storage()
+	fs := osfs.New(t.TempDir())
 	st, err := inbox.Load(fs, "me1")
 	if err != nil || !reflect.DeepEqual(st, inbox.State{}) {
 		t.Fatalf("no file yet: %+v, %v; want an empty State", st, err)
@@ -34,7 +34,7 @@ func TestStateRoundTrip(t *testing.T) {
 }
 
 func TestStateUnreadableIsAnError(t *testing.T) {
-	fs := storetest.New(t).Storage()
+	fs := osfs.New(t.TempDir())
 	if err := fs.MkdirAll("git-board/inbox", 0o755); err != nil {
 		t.Fatal(err)
 	}

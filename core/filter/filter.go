@@ -334,7 +334,7 @@ func matchOne(issue model.Issue, labels map[string]bool, c Condition, value stri
 }
 
 // Involved is what Involvement reads of an issue: from the list (an
-// Issue) or from its thread (internal/inbox), so the two can't disagree.
+// Issue) or from its thread (core/inbox), so the two can't disagree.
 type Involved struct {
 	AuthorLogins    []string
 	AuthorID        string
