@@ -58,8 +58,7 @@ git-board's config implies (one per [fields.<name>] option, plus one per
 [repos] entry (else origin's, when it is on GitHub), through GitHub's API
 with the forge sync's token (GITHUB_TOKEN, else git's credential helper
 for github.com) — so they're visible
-and colored in the GitHub Issues UI, not just inside git-bug's own
-label store. A missing label is created with its color and description;
+and colored in the GitHub Issues UI, not just inside git-board. A missing label is created with its color and description;
 an existing one is updated only where .git-board.toml sets its
 color or description. Preview only by default; --apply carries it out. It
 also reports the labels an issue template (.github/ISSUE_TEMPLATE) applies

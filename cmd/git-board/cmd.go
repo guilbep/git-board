@@ -52,14 +52,20 @@ browser where its server already runs, else it starts one here on
 localhost, port 8080 or the next free one, until Ctrl-C. Each repository
 gets its own. "git-board serve" runs the server alone.
 
-FILTER GRAMMAR (used by ls/view/tui):
-  field:value             issue has the label field:value
-  -field:value            issue does NOT have that label
+FILTER GRAMMAR (used by ls/view/tui/set --filter; all of it in
+docs/guide/configuration.md, Filters):
+  field:value             issue has the label field:value; field:a,b either
+  -<condition>            negates any condition
   field:@current/@next/@previous   resolves against [sprints] in .git-board.toml
-  field:@me               resolves to --me / GIT_BOARD_ME
-  is:open / is:closed     issue status
-  title:*glob*            glob match on title
-  free text               substring match on title
+  field:@me               you: --me / GIT_BOARD_ME, else the forge login of
+                          the person you write as (git board me)
+  is:open / is:closed     issue state
+  author:x  involves:x  follows:@me   who opened it, is in it, what you follow
+  label:x                 a plain label (or a full one: label:status:ready)
+  no:field                no value for that field
+  title:*glob*            the title, without case
+  #2528, CO2-3075         an issue by its forge or project number
+  free text, "a phrase"   words in the title, the description or a comment
   Conditions are AND'd together — combine as many as you like.`,
 		Example: `  git-board                                    # this repository's web UI
   git-board ls                                 # open issues
@@ -222,9 +228,9 @@ Keys: enter open detail, e edit a field (from detail), c quick-filter
 by category, f structured filter (same grammar as "ls" — see below —
 empty input clears it), s sort by field e.g. "prio" or "prio desc"
 (same as --sort, persists across a later f/c filter, empty input
-clears it), i/o preview/apply the GitHub Project's fields as labels
-(same pull/push mnemonic as git-bug's own termui; requires "git board
-project configure" first),
+clears it), i/o preview/apply the GitHub Project's fields as labels,
+as git board project pull does (requires "git board project configure"
+first),
 / bubbles/list's own fuzzy text search, esc/q back or quit.
 
 The optional [filter] argument uses the same grammar as "ls" (see

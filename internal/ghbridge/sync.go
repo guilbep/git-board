@@ -271,7 +271,7 @@ func BuildSyncPlan(items []Item, bugs []store.Issue, bases map[string]map[string
 		bug, ok := byURL[item.Content.URL]
 		if !ok {
 			plan.Unmatched = append(plan.Unmatched, UnmatchedItem{Number: item.Content.Number, URL: item.Content.URL, Title: item.Title,
-				Reason: "no matching git-bug bug (not pulled with `git bug bridge pull` yet?)"})
+				Reason: "no matching issue here (not pulled from the forge yet? git board sync)"})
 			continue
 		}
 		syncIssue(&plan, item, bug, bases[bug.ID], meta, cfg)

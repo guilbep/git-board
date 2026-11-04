@@ -30,9 +30,8 @@ func newHtmlCmd() *cobra.Command {
 		Use:   "html",
 		Short: "Generate a static, read-only HTML site, one page per view",
 		Long: `Generate a static HTML site: one page per configured [views.*] in
-.git-board.toml, plus an index.html linking to all of them. Read-only —
-writes nothing to git-bug, unlike everything else in this CLI except
-ls/view/get/lint.
+.git-board.toml, plus an index.html linking to all of them. It writes no
+issue: on a fresh clone it may first pull origin's board, as ls does.
 
 Meant to be cron-published so PM/non-dev users can browse the board
 without a CLI or the (also-unauthenticated) live web UI, e.g. a periodic

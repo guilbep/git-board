@@ -76,6 +76,9 @@ by hand only if you need it (see *Left open* in ADR 0002).
 - **Numbers.** Settings › Numbers starts them as on a git board; the
   counter is a row in the database, so numbering needs no push, and a sync
   numbers what has no number yet.
+- **Sync from one machine.** Two machines running a forge sync on one
+  PostgreSQL board at the same time can create the same forge issue twice
+  (issue #83): leave the forge sync to one server.
 - **Backups** are the database's: `pg_dump` the two schemas.
 - **Tests.** `make test-pg` runs the PostgreSQL tests against
   `GIT_BOARD_TEST_POSTGRES`, a DSN whose user may create databases.

@@ -24,20 +24,13 @@ Every branch has its own git worktree, tmux session and agent. The session is
   from the main checkout.
 - A pre-push hook enforces this. If it refuses a push, that is the design, not a
   bug to work around.
-- There are no dev server panes. git-bug locks its cache in the main checkout's
-  `.git/git-bug/lock`, even from a worktree, so only one process across all
-  checkouts can hold this repo's board: a `git board` (or `git board serve`)
-  run from a worktree fails with "already locked by the process pid N" while
-  another checkout's server or TUI is running, and names that board's URL. Tests are unaffected, they use
-  throwaway repos.
-- `refs/bugs` (this repo's issues) is shared by every checkout. `git bug push`
-  and `git bug bridge` are denied in a worktree.
+- There are no dev server panes. The board (`refs/board/*`, and its index and
+  sync lock in `.git/board/`) is shared by every checkout of this repository:
+  a `git board serve` started from a worktree serves the same board as the main
+  checkout's. Tests are unaffected, they use throwaway repos.
 
 ### Directories outside this repo
 
-- `git-bug` at `../git-bug`, access `read`: the fork go.mod's replace pins.
-  Fork changes go in a worktree of the fork off `bridge-sync`, not through
-  `--with`: wtx pairs from `origin`, and there `origin` is upstream.
 - `co2-calculator` at `../co2-calculator`, access `read`: a real board, with
   its own `.git-board.toml`.
 - `co2-calculator-back-office-doc` at `../co2-calculator-back-office-doc`,

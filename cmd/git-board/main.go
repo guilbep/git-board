@@ -1,6 +1,6 @@
-// Command git-board is fields, sprints and views over git-bug issues.
-// Field writes go through git-bug's cache API in-process — no `git-bug`
-// binary required on PATH, just a normal git-bug-initialized repo.
+// Command git-board keeps a repository's issues as its own: operations in
+// git (or PostgreSQL, or Markdown files), synced with GitHub and GitLab,
+// read and written from the command line, a TUI and a web UI.
 package main
 
 import (

@@ -67,3 +67,7 @@ binaries = ["./cmd/git-board"]
 platforms = ["linux/amd64", "linux/arm64", "darwin/amd64", "darwin/arm64", "windows/amd64"]
 build = "(cd web && npm ci) && make dist"
 
+# The work-in-progress features this team uses (docs/guide/configuration.md,
+# Experimental features; ADR 0018).
+[experimental]
+features = ["cycle", "agents", "worktrees"]

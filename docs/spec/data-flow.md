@@ -115,8 +115,9 @@ sequenceDiagram
   datastore's `Heads` (one version per entity), loads again only the
   entities whose version moved, and then answers from its tables.
 - **One issue** is its packs, read from the datastore, sorted by oplog
-  and folded by `core/issue`. `internal/store` keeps the folded issue per
-  version, so an unchanged issue isn't folded twice.
+  and folded by `core/issue`. A listing keeps the folded issues per
+  version, so an unchanged issue isn't folded twice there; reading one
+  issue (its page, a write) folds it again each time.
 - **The pages' change events** compare the datastore's heads every few
   seconds: a write from another clone, another machine or the command line
   reaches every open page.
@@ -128,7 +129,9 @@ else: the issues it pulls into, and the `sync` entities that keep its
 links and last seen values. It doesn't know where they are kept, so a
 board in PostgreSQL syncs with GitHub exactly as one in git does. Its lock
 and journal are in the machine's folder: two runs on one machine never
-overlap.
+overlap. Two machines on one shared PostgreSQL board aren't kept apart yet,
+and may create the same forge issue twice (issue #83): sync from one
+machine.
 
 ## What lives where
 
