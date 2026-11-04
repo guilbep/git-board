@@ -1073,3 +1073,9 @@ nothing is stored.
 - Markdown: `git board import --md` (`internal/store/mdimport.go`, tests `TestImportMarkdown*`); the Markdown folder datastore (`core/mdstore`, `board.datastore markdown:<dir>`, `TestMarkdownBoard`), its files rendered after each write, hand edits read in first.
 - Who you write as stays `board.me` in the clone's git config on every datastore (`Backend.whoStore`).
 - Not done: the pages don't yet disable pull, push and start over on a datastore that can't run them (the server refuses them with the sentence).
+
+### Status 2026-11-04: beyond gh (#88 P2, branch `cli/beyond`)
+
+- Deleting (ADR 0019, `docs/adr/0019-deleting-is-a-tombstone.md`): a `delete` issue operation whose target is the create (the issue) or a comment. A tombstone: the text stays in the log. `issue.Issue.Deleted` and `Removed`; the index leaves a deleted issue out of every query and a deleted comment out of search; `internal/store` answers not found (`ErrDeleted`) and leaves it out of lists, threads, exports and insights; a Markdown board removes the file and skips it when it comes back; sync keeps a deleted issue linked and skips it both ways, and never pulls a deleted comment again. CLI: `git board delete <id>`, `comment --delete <ref>`, a confirmation on a terminal, `--yes`. Not in the web UI yet.
+- `git board undo [<id>] [--force]` (`internal/store/undo.go`): the inverse of your last pack on an issue, or anywhere by time. Refuses a create, a delete, a set-meta, and another's write after yours.
+- `git board labels [rename]`, `git board config get|set|unset|list` (`internal/config/keys.go`: one key's line rewritten, an unknown key refused through the decoder's undecoded keys), `-C <dir>`, `git board forge status [--check]` and `forge login <forge>`, `git board insights [--json]`.

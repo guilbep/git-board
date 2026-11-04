@@ -409,7 +409,7 @@ written).
 |---|---|
 | 0 | done; an empty `ls` too |
 | 1 | an error not below |
-| 2 | a wrong command line: a flag, an argument, an assignment malformed or not allowed by the config |
+| 2 | a wrong command line: a flag, an argument, an assignment malformed or not allowed by the config; a config key git-board doesn't read; an undo refused; a delete with no terminal to ask and no `--yes` |
 | 3 | no such issue, comment or person, or a prefix naming several |
 | 4 | no one chosen to write as: `git board me` |
 | 5 | someone changed the text meanwhile: your edit is refused, your text kept |
