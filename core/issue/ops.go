@@ -70,9 +70,14 @@ func Create(ctx context.Context, s oplog.Datastore, ops ...oplog.Op) (*Issue, er
 	return Apply(l)
 }
 
-// Load reads an issue.
+// Load reads an issue: LoadContext with no deadline.
 func Load(s oplog.Datastore, id string) (*Issue, error) {
-	l, err := oplog.Load(s, "issue", id)
+	return LoadContext(context.Background(), s, id)
+}
+
+// LoadContext reads an issue; ctx bounds the datastore's read.
+func LoadContext(ctx context.Context, s oplog.Datastore, id string) (*Issue, error) {
+	l, err := oplog.LoadContext(ctx, s, "issue", id)
 	if err != nil {
 		return nil, err
 	}
@@ -82,9 +87,14 @@ func Load(s oplog.Datastore, id string) (*Issue, error) {
 // List returns the ids of the issues, sorted.
 func List(s oplog.Datastore) ([]string, error) { return oplog.List(s, "issue") }
 
+// ListContext is List; ctx bounds the datastore's read.
+func ListContext(ctx context.Context, s oplog.Datastore) ([]string, error) {
+	return oplog.ListContext(ctx, s, "issue")
+}
+
 // Do appends ops to an issue and returns its new state.
 func Do(ctx context.Context, s oplog.Datastore, id string, ops ...oplog.Op) (*Issue, error) {
-	l, err := oplog.Load(s, "issue", id)
+	l, err := oplog.LoadContext(ctx, s, "issue", id)
 	if err != nil {
 		return nil, err
 	}

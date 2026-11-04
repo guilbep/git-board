@@ -327,7 +327,7 @@ func (b *Backend) me() (string, error) {
 // listings. The issue is shared with every other reader: read it, never
 // write it. The log is the caller's own.
 func (b *Backend) loadIssue(id string) (*issue.Issue, *oplog.Log, error) {
-	l, err := oplog.Load(b.ds, "issue", id)
+	l, err := oplog.LoadContext(ctx, b.ds, "issue", id)
 	if errors.Is(err, oplog.ErrNotFound) {
 		return nil, nil, fmt.Errorf("%w: issue %s", ErrNotFound, id)
 	}
@@ -393,7 +393,7 @@ func (b *Backend) allIssues() (map[string]*issue.Issue, error) {
 
 func (b *Backend) allPersons() (map[string]*people.Person, error) {
 	return all(b, "person", b.persons, func(id string) (*people.Person, error) {
-		l, err := oplog.Load(b.ds, "person", id)
+		l, err := oplog.LoadContext(ctx, b.ds, "person", id)
 		if err != nil {
 			return nil, err
 		}

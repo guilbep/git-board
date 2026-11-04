@@ -192,9 +192,12 @@ func (ix *Index) Refresh(ctx context.Context) error {
 		}
 		l := loaded{key: k, head: head}
 		if k.kind == "issue" {
-			l.issue, l.err = issue.Load(ix.s, k.id)
+			l.issue, l.err = issue.LoadContext(ctx, ix.s, k.id)
 		} else {
-			l.person, l.err = people.Load(ix.s, k.id)
+			l.person, l.err = people.LoadContext(ctx, ix.s, k.id)
+		}
+		if err := ctx.Err(); err != nil { // a load cut short isn't a broken entity
+			return err
 		}
 		if errors.Is(l.err, oplog.ErrNotFound) { // its ref went since the listing
 			gone = append(gone, k)

@@ -546,7 +546,7 @@ func wouldPush(ctx context.Context, from *gitstore.Store, run SwitchRun, opt syn
 		}
 	}
 	title := func(id string) string {
-		is, err := issue.Load(from, id)
+		is, err := issue.LoadContext(ctx, from, id)
 		if err != nil {
 			return ""
 		}
@@ -724,13 +724,13 @@ func forkPerson(ctx context.Context, s *gitstore.Store, users []ForkUser) func(f
 		if i := slices.IndexFunc(users, func(u ForkUser) bool { return u.ID == forkID }); i >= 0 {
 			u = users[i]
 		}
-		all, err := people.List(s)
+		all, err := people.ListContext(ctx, s)
 		if err != nil {
 			return "", err
 		}
 		var byName string
 		for _, id := range all {
-			pe, err := people.Load(s, id)
+			pe, err := people.LoadContext(ctx, s, id)
 			if err != nil {
 				return "", err
 			}
@@ -763,12 +763,12 @@ func carryReleases(ctx context.Context, s *gitstore.Store, person func(forkID st
 	}
 	rep.Releases = len(heads)
 	have := map[string]bool{}
-	ids, err := oplog.List(s, "release")
+	ids, err := oplog.ListContext(ctx, s, "release")
 	if err != nil {
 		return err
 	}
 	for _, id := range ids {
-		l, err := oplog.Load(s, "release", id)
+		l, err := oplog.LoadContext(ctx, s, "release", id)
 		if err != nil {
 			return err
 		}
