@@ -183,8 +183,7 @@ func nameOfPerson(p Person) string {
 }
 
 // ParseMarkdown splits an exported file into its front matter and the
-// rest. ponytail: the front matter only; reading the comments back is the
-// import's (the next issue).
+// rest. The import reads the rest too (parseMD, mdimport.go).
 func ParseMarkdown(data []byte) (Front, string, error) {
 	var f Front
 	rest, ok := bytes.CutPrefix(data, []byte("---\n"))
