@@ -220,7 +220,7 @@ func (r *run) plan(p *project, is *issue.Issue, fi forge.Issue, who map[string]s
 		write: func(fw forge.Forge, v string) error { return fw.SetStatus(r.ctx, fi.Ref(), v) }})
 
 	pullAdd, pullRemove := r.planLabels(pl, p, is, fi, pull, push)
-	if r.opt.Assignees == nil || r.opt.Assignees(key) {
+	if r.pullsAssignees(p) {
 		aAdd, aRemove := r.planAssignees(pl, p, is, fi, pull, push)
 		pullAdd, pullRemove = append(pullAdd, aAdd...), append(pullRemove, aRemove...)
 	}
@@ -607,8 +607,16 @@ func (r *run) planAssignees(pl *plan, p *project, is *issue.Issue, fi forge.Issu
 		}
 		acc, ok := r.assignee(p, l[len("assignee:"):])
 		if !ok {
-			unknown = append(unknown, l[len("assignee:"):])
-			continue
+			// a label naming the login of one of the forge's own
+			// assignees holds it, person or not: never a removal there
+			i := slices.IndexFunc(fi.Assignees, func(a forge.Account) bool {
+				return strings.EqualFold(a.Login, l[len("assignee:"):])
+			})
+			if i < 0 {
+				unknown = append(unknown, l[len("assignee:"):])
+				continue
+			}
+			acc = fi.Assignees[i]
 		}
 		at(acc.ID).g = true
 		accounts[acc.ID], names[acc.ID] = acc, append(names[acc.ID], l)

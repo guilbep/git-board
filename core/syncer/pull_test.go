@@ -6,6 +6,7 @@ import (
 	"maps"
 	"os/exec"
 	"reflect"
+	"slices"
 	"testing"
 	"time"
 
@@ -603,5 +604,31 @@ func TestPullSkipsLinkWithBadIssueID(t *testing.T) {
 	}
 	if !reflect.DeepEqual(before, refs(t, s)) {
 		t.Fatal("refs moved")
+	}
+}
+
+// A forge assignee who wrote nothing on the issue gets a person, so the
+// assignee:<login> label pulled for them names someone, and the next sync
+// keeps them assigned on the forge instead of unassigning them.
+func TestPulledAssigneeWithoutPersonStaysAssigned(t *testing.T) {
+	t.Parallel()
+	s, f := newStore(t), fake.New(key)
+	f.Add(forge.Issue{ID: "100", Number: "1", URL: "https://example.com/p/1", Author: ann(), Created: 1000,
+		Title: "T", Body: "B", Status: "open", Assignees: []forge.Account{{ID: "9", Login: "carol"}}})
+	var warns []string
+	opt := Options{Warn: func(s string) { warns = append(warns, s) }}
+	for range 2 {
+		if _, err := Sync(t.Context(), s, opt, f); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if fi, _ := f.Get("1"); len(fi.Assignees) != 1 || fi.Assignees[0].Login != "carol" {
+		t.Errorf("forge assignees = %v, want carol", fi.Assignees)
+	}
+	if got := only(t, s).Labels; !slices.Contains(got, "assignee:carol") {
+		t.Errorf("labels = %v, want assignee:carol", got)
+	}
+	if len(warns) > 0 {
+		t.Errorf("warnings: %q", warns)
 	}
 }
