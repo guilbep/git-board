@@ -106,7 +106,8 @@ func TestSetAndGet(t *testing.T) {
 	rest := out[idx+len(`"id": "`):]
 	id := rest[:strings.Index(rest, `"`)]
 
-	if _, err := execute(t, []string{"set", id, "prio=p1"}); err != nil {
+	// prio is neither configured nor on any issue in this fixture: --force
+	if _, err := execute(t, []string{"set", id, "prio=p1", "--force"}); err != nil {
 		t.Fatalf("set: %v", err)
 	}
 

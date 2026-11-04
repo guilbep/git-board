@@ -195,28 +195,55 @@ Run from inside a git repository (or a subdirectory of one), next to a
 # this repository's web UI, in the browser (see "Web UI" below)
 git board
 
+# who you write as: once per clone, before the first write
+git-board me --new          # from git user.name and user.email
+git-board me --ls           # or write as someone already on the board:
+git-board me <person-id>
+
 # open issues
 git-board ls
 
-# ad-hoc filter, grouped and sorted
+# ad-hoc filter, grouped and sorted; the ten last changed
 git-board ls "is:open -title:*spec*" --group status --sort "prio asc"
+git-board ls --sort "updated desc" --limit 10
 
 # a named view from .git-board.toml, rendered as markdown or JSON
 git-board view current-sprint --md
 git-board view backlog --json
 
-# set fields on an issue (single-cardinality fields swap; assignee is multi)
-git-board set <issue-id> status=ready prio=p1 sprint=@next assignee=+guilbep
+# create an issue, with its description and fields (-F file, -e editor)
+git-board new "Login fails on Safari" prio=p1 assignee=+@me -b "Steps: ..."
 
-# show an issue's fields (labels)
+# an issue with its fields, description and comments (--md, --json)
+git-board show <issue-id>
+
+# comment (no flag: the editor), edit your last comment
+git-board comment <issue-id> -b "Fixed in 4e5f6a7"
+git-board comment <issue-id> --edit-last
+
+# edit the title or the description
+git-board edit <issue-id> --title "Login fails on Safari 17"
+
+# set fields (single-cardinality fields swap; assignee is multi); held to
+# the config's options unless --force; field= clears; label=+x a plain label
+git-board set <issue-id> status=ready prio=p1 sprint=@next assignee=+@me
+git-board set <issue-id> prio= label=+regression
+git-board set --filter "status:ready no:assignee" assignee=+@me --apply
+
+# an issue's fields (labels), one per line, for scripts
 git-board get <issue-id>
 
-# advance status to the next configured option (backlog -> ready -> ...)
+# step status through the configured options (backlog -> ready -> ...)
 git-board move <issue-id> --next
+git-board move <issue-id> --prev
 
 # set status to the last configured option (the terminal state, whatever
-# it's called in your config) and close the issue
-git-board close <issue-id>
+# it's called in your config) and close the issue; reopen undoes it
+git-board close <issue-id> -c "Fixed in 4e5f6a7"
+git-board reopen <issue-id>
+
+# every change made to an issue: who, when, what (--field status, --json)
+git-board log <issue-id>
 
 # the branch to create for an issue, and the command creating it
 # ([branches] in .git-board.toml); it creates nothing
@@ -270,8 +297,13 @@ git-board deploy dev --watch
 ```
 
 `@me` (in filters, e.g. the `mine` view, or as a field value) resolves from
-`--me` on `ls`/`view`/`set`, falling back to the `GIT_BOARD_ME` env var. It
-errors if neither is set.
+`--me` on `ls`/`view`/`set`/`new`, falling back to the `GIT_BOARD_ME` env
+var, then to the forge login of the person you write as. It errors if
+none is set.
+
+Every issue command, its flags, its JSON output and its exit codes, with
+a table for those coming from `gh` and `glab`, are in
+[docs/guide/cli.md](docs/guide/cli.md).
 
 ## Syncing (`git-board sync`)
 

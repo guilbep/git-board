@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 	"time"
 
@@ -14,25 +15,27 @@ import (
 )
 
 func newMoveCmd() *cobra.Command {
-	var next bool
+	var next, prev bool
 
 	cmd := &cobra.Command{
-		Use:     "move <id>",
-		Short:   "Advance an issue's status to the next configured option",
-		Example: `  git-board move a1b2c3 --next`,
-		Args:    cobra.ExactArgs(1),
+		Use:   "move <id> --next|--prev",
+		Short: "Move an issue's status to the next or the previous configured option",
+		Example: `  git-board move a1b2c3 --next
+  git-board move a1b2c3 --prev`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if !next {
-				return fmt.Errorf("specify --next (the only supported direction for now)")
+			if next == prev {
+				return usageError{fmt.Errorf("specify --next or --prev")}
 			}
-			return runMove(cmd.OutOrStdout(), args[0])
+			return runMove(cmd.OutOrStdout(), args[0], prev)
 		},
 	}
 	cmd.Flags().BoolVar(&next, "next", false, "advance to the next status option")
+	cmd.Flags().BoolVar(&prev, "prev", false, "go back to the previous status option")
 	return cmd
 }
 
-func runMove(out io.Writer, idPrefix string) error {
+func runMove(out io.Writer, idPrefix string, back bool) error {
 	cfg, err := loadConfig()
 	if err != nil {
 		return err
@@ -49,7 +52,11 @@ func runMove(out io.Writer, idPrefix string) error {
 		return err
 	}
 
-	next, err := nextStatusOption(cfg, currentStatusValue(labels))
+	step := nextStatusOption
+	if back {
+		step = prevStatusOption
+	}
+	next, err := step(cfg, currentStatusValue(labels))
 	if err != nil {
 		return err
 	}
@@ -58,7 +65,12 @@ func runMove(out io.Writer, idPrefix string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(out, "%s: %s\n", idPrefix, label)
+	// as set does: onto the last option closes, back from it reopens
+	state, err := statusInStep(b, cfg, idPrefix, []fields.Assignment{{Field: "status", Value: next}}, []string{label})
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(out, "%s: %s%s\n", idPrefix, label, state)
 	return nil
 }
 
@@ -96,4 +108,23 @@ func nextStatusOption(cfg *config.Config, current string) (string, error) {
 		}
 	}
 	return "", fmt.Errorf("current status %q doesn't match any configured [fields.status] option", current)
+}
+
+// prevStatusOption is nextStatusOption's mirror: the option before
+// current; an error at the first one, or with none set.
+func prevStatusOption(cfg *config.Config, current string) (string, error) {
+	field, ok := cfg.Fields["status"]
+	if !ok || len(field.Options) == 0 {
+		return "", fmt.Errorf("no [fields.status] options configured in .git-board.toml")
+	}
+	i := slices.Index(field.Options, current)
+	switch {
+	case current == "":
+		return "", fmt.Errorf("no status set: nothing to go back from")
+	case i < 0:
+		return "", fmt.Errorf("current status %q doesn't match any configured [fields.status] option", current)
+	case i == 0:
+		return "", fmt.Errorf("status %q is already the first option: nothing to go back to", current)
+	}
+	return field.Options[i-1], nil
 }

@@ -1,9 +1,11 @@
 package main
 
 import (
+	"cmp"
 	"encoding/json"
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 	"text/tabwriter"
 
@@ -15,8 +17,13 @@ import (
 
 // render prints issues as a table, markdown, or JSON, optionally sorted and
 // grouped. JSON output ignores grouping and prints the flat sorted list.
-func render(out io.Writer, issues []store.Issue, group, sortSpec string, md, asJSON bool, cfg *config.Config) error {
-	board.SortByField(issues, sortSpec, cfg)
+func render(out io.Writer, issues []store.Issue, group, sortSpec string, limit int, md, asJSON bool, cfg *config.Config) error {
+	if err := sortIssues(issues, sortSpec, cfg); err != nil {
+		return err
+	}
+	if limit > 0 && len(issues) > limit {
+		issues = issues[:limit]
+	}
 
 	if asJSON {
 		enc := json.NewEncoder(out)
@@ -45,6 +52,48 @@ func render(out io.Writer, issues []store.Issue, group, sortSpec string, md, asJ
 			writeTable(out, bucket.Issues, cfg, fieldNames)
 		}
 	}
+	return nil
+}
+
+// sortKeys are the keys --sort takes besides the fields: what every issue
+// has.
+var sortKeys = map[string]func(x, y store.Issue) int{
+	"created": func(x, y store.Issue) int { return x.CreatedAt.Compare(y.CreatedAt) },
+	"updated": func(x, y store.Issue) int { return x.UpdatedAt.Compare(y.UpdatedAt) },
+	"title": func(x, y store.Issue) int {
+		return cmp.Compare(strings.ToLower(x.ShownTitle()), strings.ToLower(y.ShownTitle()))
+	},
+}
+
+// sortIssues sorts by spec, "key [asc|desc]": created, updated, title, or
+// a field (board.SortByField). A key that is none of them, or another
+// direction, is an error: a sort that does nothing says so.
+func sortIssues(issues []store.Issue, spec string, cfg *config.Config) error {
+	if spec == "" {
+		return nil
+	}
+	key, dir, _ := strings.Cut(strings.TrimSpace(spec), " ")
+	dir = strings.TrimSpace(dir)
+	if dir != "" && dir != "asc" && dir != "desc" {
+		return usageError{fmt.Errorf("--sort %q: the direction is asc or desc", spec)}
+	}
+	if by, ok := sortKeys[key]; ok {
+		slices.SortStableFunc(issues, func(x, y store.Issue) int {
+			if dir == "desc" {
+				return by(y, x)
+			}
+			return by(x, y)
+		})
+		return nil
+	}
+	_, known := cfg.Fields[key]
+	for _, is := range issues {
+		known = known || slices.ContainsFunc(is.AllLabels(), func(l string) bool { return strings.HasPrefix(l, key+":") })
+	}
+	if !known && len(issues) > 0 {
+		return usageError{fmt.Errorf("--sort %q: %s is no field here; sort by created, updated, title or a field (%s)", spec, key, strings.Join(tui.FieldNames(cfg, issues), ", "))}
+	}
+	board.SortByField(issues, spec, cfg)
 	return nil
 }
 
@@ -102,7 +151,7 @@ func writeMarkdownTable(out io.Writer, issues []store.Issue, cfg *config.Config,
 	}
 	header = append(header, "other")
 	fmt.Fprintf(out, "| %s |\n", strings.Join(header, " | "))
-	fmt.Fprintf(out, "|%s|\n", strings.Repeat("---|", len(header)))
+	fmt.Fprintf(out, "|%s\n", strings.Repeat("---|", len(header)))
 
 	for _, issue := range issues {
 		cells, other := fieldColumns(issue, cfg, fieldNames)
@@ -117,4 +166,11 @@ func shortID(id string) string {
 		return id[:8]
 	}
 	return id
+}
+
+// writeJSON prints v as indented JSON, as ls --json does.
+func writeJSON(out io.Writer, v any) error {
+	enc := json.NewEncoder(out)
+	enc.SetIndent("", "  ")
+	return enc.Encode(v)
 }
