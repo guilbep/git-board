@@ -420,6 +420,6 @@ Errors go to stderr, prefixed `error:`.
 | `gh project item-edit …` | `glab issue board …` | `git board move N in-progress`, `move N --next`, `git board project` |
 
 `N` is any [name of an issue](#naming-an-issue). Not there yet: deleting
-an issue or a comment, templates, pinning, locking (no permissions in a
-board kept in git), `--web`, `--jq` and `--template`, shell completion of
-ids and values.
+an issue or a comment, pinning, locking (no permissions in a board kept
+in git), `--jq` and `--template` (Go templates of the output), shell
+completion of ids and values.

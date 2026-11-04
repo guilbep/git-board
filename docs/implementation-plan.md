@@ -1073,3 +1073,10 @@ nothing is stored.
 - Markdown: `git board import --md` (`internal/store/mdimport.go`, tests `TestImportMarkdown*`); the Markdown folder datastore (`core/mdstore`, `board.datastore markdown:<dir>`, `TestMarkdownBoard`), its files rendered after each write, hand edits read in first.
 - Who you write as stays `board.me` in the clone's git config on every datastore (`Backend.whoStore`).
 - Not done: the pages don't yet disable pull, push and start over on a datastore that can't run them (the server refuses them with the sentence).
+
+### Status 2026-11-04: what needs you, from the command line (#88 P1)
+
+- `git board status` (`cmd/git-board/status.go`): the open issues `assignee:@me`, then the inbox as the server computes it (`inbox.Rows`), split into what you opened (reason `author`) and the rest. Marks nothing read unless `--mark-read`. `follow`/`unfollow`/`follow --auto` write the same inbox file as the web bell.
+- `branch --create` runs the suggested `git switch -c`; `show --web` (the running board, else one started here; `runningBoard`/`serveBoard` are vars) and `show --forge`; `move <id> <status>` is `set status=`.
+- `close --reason`: the core and the forge sync carry no close reason (GitHub's `state_reason` is dropped on pull), so it is a field, `closed-as:not-planned|duplicate` (ADR 0007); `completed` writes none, `reopen` removes it. `--duplicate-of` sets `duplicate-of` and comments "Duplicate of #n". ponytail: map `closed-as` to GitHub's `state_reason` and GitLab's duplicate link in the forge sync.
+- `new --template` reads `.github/ISSUE_TEMPLATE` (Markdown and issue forms) and `.gitlab/issue_templates`; `new` asks on a terminal (never with `--no-prompt`, `GIT_BOARD_NO_PROMPT`, or stdin not a terminal). No new dependency.
