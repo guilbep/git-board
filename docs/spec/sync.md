@@ -494,8 +494,17 @@ Deletions are never propagated, either way.
   doesn't create it there again.
 - **A comment sync posted** and the forge deleted isn't posted again: its
   `posted` record stays.
-- **git-board deletes nothing on a forge.** It has no operation that
-  deletes.
+- **An issue deleted in git-board** (a `delete` of its `create`, see
+  [Data model](data-model.md#delete)) stays linked to its forge issues. A
+  pull finds the link and skips it: nothing is pulled into it, nothing
+  pushed from it, and no new issue is made from the forge's. An issue
+  deleted before any push is never created on a forge.
+- **A comment deleted in git-board** isn't pulled again: one pulled from
+  the project is known by its origin, one sync posted by its `posted`
+  record or its marker. Its forge copy isn't edited.
+- **git-board deletes nothing on a forge.** A `delete` hides the issue or
+  the comment in git-board alone; the forge keeps its copy
+  ([ADR 0019](../adr/0019-deleting-is-a-tombstone.md)).
 - **"Not found" is checked twice.** Sync takes a forge issue as deleted only
   when the posting account's token gets "not found" too. A forge gives
   the same answer when a token lacks access to a private project. When

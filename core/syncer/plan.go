@@ -239,10 +239,20 @@ func (r *run) plan(p *project, is *issue.Issue, fi forge.Issue, who map[string]s
 		}
 		return &is.Comments[i]
 	}
+	pulledFrom := oplog.Origin{Forge: key}
 	for _, fc := range fi.Comments {
 		field := "comment:" + fc.ID
 		var c *issue.Comment
 		sent := false
+		// a comment deleted here stays so: not pulled again, nor edited
+		// (docs/adr/0019). The forge keeps its copy.
+		pulledFrom.Event = field
+		if slices.ContainsFunc(is.Removed, func(c issue.Comment) bool { return c.Origin != nil && *c.Origin == pulledFrom }) {
+			continue
+		}
+		if w := unwrap(fc.Body); w.kind == "comment" && is.IsRemoved(w.id) && r.isSync(p, fc.Author) {
+			continue
+		}
 		if cid, ok := p.st.postedBy[fc.ID]; ok {
 			if c, sent = comment(cid), true; c == nil {
 				continue

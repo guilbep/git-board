@@ -1,6 +1,7 @@
 package main
 
 import (
+	"io"
 	"os"
 	"path/filepath"
 	"slices"
@@ -101,11 +102,11 @@ func TestNewFromATemplate(t *testing.T) {
 func promptAnswers(t *testing.T) {
 	t.Helper()
 	was := isTerminal
-	isTerminal = func(any) bool { return true }
+	isTerminal = func(io.Reader) bool { return true }
 	t.Cleanup(func() { isTerminal = was })
 }
 
-func executeIn(t *testing.T, stdin string, args ...string) (string, string, error) {
+func executePrompt(t *testing.T, stdin string, args ...string) (string, string, error) {
 	t.Helper()
 	cmd := newRootCmd()
 	var out, errOut strings.Builder
@@ -123,7 +124,7 @@ func TestNewAsksOnATerminal(t *testing.T) {
 	writeTemplates(t)
 	promptAnswers(t)
 
-	out, asked, err := executeIn(t, "1\nLogin fails\n\n", "new")
+	out, asked, err := executePrompt(t, "1\nLogin fails\n\n", "new")
 	if err != nil {
 		t.Fatalf("new, asked: %v\n%s", err, asked)
 	}
@@ -139,7 +140,7 @@ func TestNewAsksOnATerminal(t *testing.T) {
 
 	// no template, the description in the editor
 	opened := editorWrites(t, "Typed in the editor.\n")
-	out, asked, err = executeIn(t, "0\nPlain\ne\n", "new", "prio=p2")
+	out, asked, err = executePrompt(t, "0\nPlain\ne\n", "new", "prio=p2")
 	if err != nil {
 		t.Fatalf("new, asked: %v\n%s", err, asked)
 	}
@@ -150,15 +151,15 @@ func TestNewAsksOnATerminal(t *testing.T) {
 
 	// an empty title writes nothing
 	before := len(listIDs(t))
-	if _, _, err := executeIn(t, "0\n\n", "new"); exitCode(err) != exitUsage {
+	if _, _, err := executePrompt(t, "0\n\n", "new"); exitCode(err) != exitUsage {
 		t.Errorf("new, no title typed = %v, want exit %d", err, exitUsage)
 	}
 	// never asks with --no-prompt, nor GIT_BOARD_NO_PROMPT
-	if _, asked, err := executeIn(t, "0\nNope\n\n", "new", "--no-prompt"); exitCode(err) != exitUsage || asked != "" {
+	if _, asked, err := executePrompt(t, "0\nNope\n\n", "new", "--no-prompt"); exitCode(err) != exitUsage || asked != "" {
 		t.Errorf("new --no-prompt = %v, asked %q", err, asked)
 	}
 	t.Setenv("GIT_BOARD_NO_PROMPT", "1")
-	if _, asked, err := executeIn(t, "0\nNope\n\n", "new"); exitCode(err) != exitUsage || asked != "" {
+	if _, asked, err := executePrompt(t, "0\nNope\n\n", "new"); exitCode(err) != exitUsage || asked != "" {
 		t.Errorf("new, GIT_BOARD_NO_PROMPT = %v, asked %q", err, asked)
 	}
 	if after := len(listIDs(t)); after != before {

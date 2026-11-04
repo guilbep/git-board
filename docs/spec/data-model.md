@@ -110,7 +110,7 @@ new head writes a new pack, so its operations get new ids (see
 
 ## Issues
 
-An issue has a title, a body, a status, labels and comments. It has seven
+An issue has a title, a body, a status, labels and comments. It has eight
 operations:
 
 | `kind` | `data` | What it does |
@@ -122,6 +122,7 @@ operations:
 | `set-status` | `status`: `"open"` or `"closed"` | opens or closes the issue |
 | `change-labels` | `add`, `remove`: lists of labels | adds and removes labels |
 | `set-meta` | `target`, `meta` | sets metadata on the body or a comment |
+| `delete` | `target` | hides the issue, or a comment |
 
 ### `create`
 
@@ -236,6 +237,24 @@ the issue's own metadata.
 }
 ```
 
+### `delete`
+
+`target` is an operation's id, as for `edit-text`: the `create`
+operation's hides the issue, a `comment` operation's hides that comment.
+A delete is a tombstone: the text it hides stays in the log, in every
+clone that has it ([ADR 0019](../adr/0019-deleting-is-a-tombstone.md)).
+
+```json
+{
+  "kind": "delete",
+  "author": "b7e41c09d2a85f36e1c4a0d7b9f2e5c83a6d1f40",
+  "time": 1792836800,
+  "data": {
+    "target": "8c04e5b1d97f2a63c18e0b4d5f6a7928e3b1c0d4:0"
+  }
+}
+```
+
 ### Labels
 
 Every field of an issue besides its title, body, status and comments is a
@@ -280,8 +299,13 @@ An issue's state follows from its operations, applied in order:
    `edit-text` finds it. A `comment`'s own `meta` is its first. A target
    that isn't the `create` operation, nor a `comment` met earlier, is an
    error.
-9. An operation whose `author` is empty is an error.
-10. Any other `kind` is an error, which names the kind.
+9. `delete` of the `create` operation marks the issue deleted. `delete`
+   of a comment, by any of its ids, takes it out of the comments: its body
+   and metadata go with it. An `edit-text` or a `set-meta` of a deleted
+   comment changes nothing, and a second delete neither. A target found as
+   `edit-text` finds it, else an error.
+10. An operation whose `author` is empty is an error.
+11. Any other `kind` is an error, which names the kind.
 
 Two clones that pull the same forge comment before fetching each other each
 write a `comment` for it, with the same `origin`. Once they merge, the first
@@ -302,12 +326,15 @@ An issue's state holds:
 | `labels` | the labels, sorted and unique |
 | `comments` | the comments, in the order they were added |
 | `meta` | the `create` operation's metadata, as `set-meta` left it |
+| `deleted` | true once a `delete` hid the issue; absent otherwise |
+| `removed` | the deleted comments, in the order they were added, each without `body` and `meta` |
 | `changes` | for each field, the operation that last changed it: its `author`, `time` and `origin` |
 
 The fields of `changes` are `title`, `body` and `status`, set first by
 `create`; `label:<label>` for each label an operation added or removed,
 present or not; and `comment:<comment id>` for each comment, set by its
-`comment` and by each `edit-text` of it. Sync reads them (see
+`comment` and by each `edit-text` of it, and gone once it is deleted;
+`deleted`, set by the `delete` of the issue. Sync reads them (see
 [Sync](sync.md#what-git-board-took-from-a-forge)).
 
 A comment holds:

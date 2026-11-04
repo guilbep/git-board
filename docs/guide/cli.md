@@ -9,6 +9,10 @@ sync touches the network.
 `git board X` and `git-board X` are the same command: the binary is a git
 subcommand.
 
+`-C <dir>` runs any command as if started in `<dir>`, as `git -C` does:
+`git-board -C ~/src/co2-calculator ls`. `git -C <dir> board ls` is the
+same.
+
 ## Naming an issue
 
 Every command taking `<id>` takes any of:
@@ -168,6 +172,57 @@ error names.
 It prints the comment's ref; `--json` prints `{"id", "ref", "issue"}`.
 The description is not a comment: `edit` changes it.
 
+`--delete <ref>` deletes a comment: see [Deleting](#delete-an-issue-or-a-comment).
+
+## `delete`: an issue or a comment
+
+```bash
+git board delete a1b2c3d                        # asks first
+git board delete a1b2c3d --yes
+git board comment a1b2c3d --delete 9c8b7a6:1 --yes
+```
+
+A deleted issue leaves every list, search, page, export and sync; its id
+answers not found (exit code 3). A deleted comment leaves its issue's
+page, its log and search.
+
+A delete hides; it doesn't erase. The text stays in the board's history,
+in every clone that fetched it, and on the forges it was synced to: a
+forge keeps its copy. **A secret pasted into an issue is leaked: revoke
+it.** Deleting it keeps it from being shown, searched or synced again. A
+pull never brings a deleted issue or comment back.
+[ADR 0019](../adr/0019-deleting-is-a-tombstone.md) says why.
+
+On a terminal it asks first. `--yes` doesn't ask, and is needed when no
+one is at a terminal (a script, CI): without it, exit code 2. Deleting is
+in the command line only, not yet in the web UI.
+
+## `undo`: your last change
+
+```bash
+git board undo a1b2c3d              # your last change to it
+git board undo                      # your last change, on any issue
+git board undo a1b2c3d --force      # though someone wrote after you
+```
+
+It writes the inverse of your last change: a label added is removed and
+one removed added back; a status, a title or a text goes back to what it
+was; a new comment is deleted. A change is what one command wrote, so
+`edit -e`'s title and description go back together. Undoing twice redoes.
+Nothing is erased: the change and its undo are both in `git board log`.
+
+Refused, exit code 2, with the reason:
+
+- creating an issue: `git board delete` deletes it;
+- a delete: never undone;
+- a change of metadata (a review thread resolved, a Project field);
+- someone else wrote to the issue after you, or a sync pulled into it:
+  `--force` undoes yours anyway, over theirs.
+
+Changes a sync pulled are not yours to undo here. `--json` prints
+`{"issue", "title", "undone", "what"}`: the operations undone and a line
+for each thing put back.
+
 ## `edit`: title and description
 
 ```bash
@@ -222,6 +277,71 @@ one: the state and the status never disagree.
 `--filter <filter>` sets the fields on every issue the filter matches
 (`ls`'s grammar). It prints what each issue would get and writes nothing
 until `--apply`.
+
+## `labels`: what is in use
+
+```bash
+git board labels                         # every label, with counts
+git board labels --plain --json
+git board labels rename regresion regression
+git board labels rename prio:p0 prio:p1
+```
+
+`labels` lists every label on the board's issues, with how many open and
+closed issues have it: the plain labels first, then each field's values,
+by field. Deleted issues don't count. `--json` prints `[{"label",
+"field", "value", "open", "closed"}]`.
+
+`labels rename <old> <new>` renames a label on every issue that has it,
+one change each. A field's value is a label too. It doesn't check the new
+name against `.git-board.toml`: `git board lint` does.
+
+## `config`: settings
+
+```bash
+git board config list                               # the file's keys, then this clone's
+git board config get views.backlog.filter
+git board config set views.backlog.filter "is:open prio:p1"
+git board config set sprints.length_days 14
+git board config unset github-project.write
+git board config set board.view classic             # this clone's git config
+```
+
+A dotted key, like `github-project.owner` or `views.backlog.filter`, is
+in `.git-board.toml`, which the team shares and commits. `set` changes
+that key's line alone: every other line and comment stays. It refuses
+(exit code 2) a key git-board doesn't read, and a value that leaves the
+file broken. A value is TOML when it is one (`true`, `14`, `["a", "b"]`),
+else a string: quote `'"14"'` for a string of digits. A key inside an
+array of tables (`[[sprints.list]]`) is edited in the file.
+
+A key `board.<name>` is this clone's own, in git config: `board.view`,
+`board.avatars`, `board.datastore`, `board.experimental`, and `board.me`,
+which `git board me` sets. `set` writes it with `--local`; `get` reads it
+at every level git does. A datastore URL is printed without its password.
+`get` of a key not set exits with code 3.
+
+## `forge status`, `forge login`: tokens
+
+```bash
+git board forge status                 # each forge, and whether a token is found
+git board forge status --check         # and whose each token is, asking the forge
+git board forge login github           # a hidden prompt
+gh auth token | git board forge login github --login guilbep
+```
+
+`forge status` lists the forges (those of `.git-board.toml`, else those
+found in the git remotes) and, for each, whether a token is found for its
+posting account and for your own account on that host, and where: an
+environment variable or git's credential helper. No token is printed.
+It doesn't touch the network, unless `--check`. `--json` prints it.
+
+`forge login <forge>` stores a token in git's credential helper (`git
+credential approve`), as Settings › Sync does: git-board keeps no token
+of its own ([ADR 0010](../adr/0010-tokens-from-env-or-git-credential-helper.md)).
+The token is read at a hidden prompt on a terminal, else from the first
+line of stdin; never from the command line. It is for `--login`, by
+default your own account on that host, else the forge's posting account.
 
 ## `close`, `reopen`, `move`
 
@@ -381,6 +501,21 @@ sorting. `--group <field>` groups, `--md` renders as Markdown, and
 `--json`, `--jq` and `--template` as [JSON](#json-output). `view
 <name>` runs a view from `.git-board.toml`.
 
+## `insights`: flow, throughput, cycle time
+
+```bash
+git board insights                         # the last 90 days, by status
+git board insights --days 30 --field prio
+git board insights --view backlog --json
+```
+
+What the web UI's Insights page shows, as text: the headlines, the open
+issues by the field's value today and `--days` ago, the issues opened and
+closed each week (the last `--weeks`, 8), the cycle time's median and
+85th percentile, and the current sprint's burn-up. `--view` takes a
+view's issues alone, open and closed. `--json` prints what the page reads
+(`GET /api/insights`).
+
 ## JSON output
 
 ```bash
@@ -482,7 +617,7 @@ offers nothing when it can't read them.
 |---|---|
 | 0 | done; an empty `ls` too |
 | 1 | an error not below |
-| 2 | a wrong command line: a flag, an argument, an assignment malformed or not allowed by the config |
+| 2 | a wrong command line: a flag, an argument, an assignment malformed or not allowed by the config; a config key git-board doesn't read; an undo refused; a delete with no terminal to ask and no `--yes` |
 | 3 | no such issue, comment or person, or a prefix naming several |
 | 4 | no one chosen to write as: `git board me` |
 | 5 | someone changed the text meanwhile: your edit is refused, your text kept |
@@ -493,7 +628,8 @@ Errors go to stderr, prefixed `error:`.
 
 | gh | glab | git board |
 |---|---|---|
-| `gh auth status` | `glab auth status` | `git board me` (who you write as; forge tokens only matter to `sync`) |
+| `gh auth status` | `glab auth status` | `git board me` (who you write as), `git board forge status` (the forges' tokens) |
+| `gh auth login --with-token` | `glab auth login --stdin` | `git board forge login <forge>` (into git's credential helper) |
 | `gh issue create -t T -b B -l bug -a @me` | `glab issue create -t T -d B -l bug -a @me` | `git board new T -b B label=+bug assignee=+@me` |
 | `gh issue create -e` | `glab issue create` | `git board new -e` |
 | `gh issue create` (asks) | `glab issue create` (asks) | `git board new` (asks on a terminal; `--no-prompt`) |
@@ -524,9 +660,17 @@ Errors go to stderr, prefixed `error:`.
 | | `glab issue view N -s` (system notes) | `git board log N` (every change, text edits too) |
 | | | `git board show N --at 2026-10-01`, `git board ls --at 2026-10-01` (the board as it was) |
 | | | `git board diff N --since 7d` (what changed: fields, a text diff, new comments) |
+| `gh issue delete N --yes` | `glab issue delete N` | `git board delete N --yes` (hidden, kept in history) |
+| `gh issue comment N --delete-last` | `glab issue note delete` | `git board comment N --delete <ref>` |
+| | | `git board undo N` (your last change, inverted) |
+| `gh -R owner/repo issue list` | `glab -R owner/repo issue list` | `git board -C <dir> ls` (a clone: the board is in it) |
+| `gh config get/set` | `glab config get/set` | `git board config get/set/list` |
+| `gh label list` | `glab label list` | `git board labels` (with counts) |
+| `gh label edit old --name new` | `glab label edit` | `git board labels rename old new` (on every issue) |
+| | `glab issue board view` (counts) | `git board insights` (flow, throughput, cycle time, burn-up) |
 | `gh project item-edit …` | `glab issue board …` | `git board move N in-progress`, `move N --next`, `git board project` |
 | `gh completion -s zsh` | `glab completion -s zsh` | `git board completion zsh` |
 
-`N` is any [name of an issue](#naming-an-issue). Not there yet: deleting
-an issue or a comment, pinning, locking (no permissions in a board kept
-in git).
+`N` is any [name of an issue](#naming-an-issue). Not there yet: pinning,
+locking (no permissions in a board kept in git), `transfer` between
+boards.

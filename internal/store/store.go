@@ -329,11 +329,24 @@ func (b *Backend) me() (string, error) {
 	return id, err
 }
 
-// loadIssue is an issue and its log. The log is read each time; the issue
-// is folded again only when the log's version moved, as all keeps it for
-// listings. The issue is shared with every other reader: read it, never
-// write it. The log is the caller's own.
+// ErrDeleted: the issue was deleted (docs/adr/0019). It is a not found.
+var ErrDeleted = fmt.Errorf("%w: deleted", ErrNotFound)
+
+// loadIssue is an issue and its log, as loadAny, and not found when a
+// delete hid it: every view goes through it, so none shows it.
 func (b *Backend) loadIssue(id string) (*issue.Issue, *oplog.Log, error) {
+	is, l, err := b.loadAny(id)
+	if err == nil && is.Deleted {
+		return nil, nil, fmt.Errorf("issue %s: %w", id, ErrDeleted)
+	}
+	return is, l, err
+}
+
+// loadAny is an issue and its log, deleted or not. The log is read each
+// time; the issue is folded again only when the log's version moved, as
+// all keeps it for listings. The issue is shared with every other reader:
+// read it, never write it. The log is the caller's own.
+func (b *Backend) loadAny(id string) (*issue.Issue, *oplog.Log, error) {
 	l, err := oplog.LoadContext(ctx, b.ds, "issue", id)
 	if errors.Is(err, oplog.ErrNotFound) {
 		return nil, nil, fmt.Errorf("%w: issue %s", ErrNotFound, id)
@@ -391,11 +404,14 @@ func all[T any](b *Backend, kind string, cache map[string]T, load func(id string
 	return out, nil
 }
 
+// allIssues is every issue a view shows: a deleted one is left out.
 func (b *Backend) allIssues() (map[string]*issue.Issue, error) {
-	return all(b, "issue", b.issues, func(id string) (*issue.Issue, error) {
-		is, _, err := b.loadIssue(id)
+	issues, err := all(b, "issue", b.issues, func(id string) (*issue.Issue, error) {
+		is, _, err := b.loadAny(id)
 		return is, err
 	})
+	maps.DeleteFunc(issues, func(_ string, is *issue.Issue) bool { return is.Deleted })
+	return issues, err
 }
 
 func (b *Backend) allPersons() (map[string]*people.Person, error) {
