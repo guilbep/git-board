@@ -231,10 +231,38 @@ git board view backlog --md
 [Configuration › Filters](configuration.md#filters). `--sort` takes `created`,
 `updated`, `title` or a field, then `asc` or `desc`; any other key or
 direction is refused (exit code 2). `-L, --limit` keeps the first N after
-sorting. `--group <field>` groups, `--md` and `--json` render. `view
+sorting. `--group <field>` groups, `--md` renders as Markdown, and
+`--json`, `--jq` and `--template` as [JSON](#json-output). `view
 <name>` runs a view from `.git-board.toml`.
 
 ## JSON output
+
+```bash
+git board ls --json                              # every field
+git board ls --json id,title,labels              # only these
+git board ls "assignee:@me" --jq '.[].title'
+git board ls --template '{{range .}}{{.title}} ({{timeago .updated_at}}){{"\n"}}{{end}}'
+git board show a1b2c3d --jq '.events[] | select(.kind == "comment") | .body'
+```
+
+`ls`, `view`, `show`, `log`, `me`, `comment` and `new` take `--json`.
+Alone, it prints every field. With a list, `--json id,title`, it keeps
+those: in a list, of each item. A field an item lacks is `null`. A name
+the command doesn't print is refused (exit code 2), with the list of
+those it does, before anything is written. `--json=id,title` says the
+same; the word after `--json` is taken as fields when it has a comma or
+is one of them, so `ls --json title` prints titles and `ls title --json`
+searches for "title".
+
+`--jq <expression>` filters the JSON with jq (gojq, built in: no `jq` to
+install). A string prints as it is, anything else as JSON on one line.
+`--template <template>` prints it through a Go template
+([text/template](https://pkg.go.dev/text/template)), with gh's helpers:
+`join <sep> <list>`, `pluck <field> <list>`, `timeago <time>`, `timefmt
+<layout> <time>` (a Go layout, `2006-01-02`), `truncate <n> <text>`. Each
+implies `--json`, and goes with its fields: `--json id,title --jq ...`.
+A wrong expression or template is refused (exit code 2). `new` has no
+`--template`: it is kept for an issue template, as gh's.
 
 The field names below are stable: new ones may come, these keep their
 names and meanings. Times are RFC 3339.
@@ -268,6 +296,32 @@ edit's text: the `created` entry's id for the description), `title` and
 `was`, `state` (`open`, `closed`), `added` and `removed`, `body` (the text
 written).
 
+## Shell completion
+
+```bash
+git board completion bash > ~/.local/share/bash-completion/completions/git-board
+git board completion zsh > "${fpath[1]}/_git-board"
+git board completion fish > ~/.config/fish/completions/git-board.fish
+```
+
+`git board completion <shell>` prints the script for bash, zsh, fish or
+PowerShell; `git board completion <shell> --help` says where it goes. It
+completes the `git-board` form: `git board ...` goes through git's own
+completion, which doesn't know this command's words. Tab then completes:
+
+| Where | What |
+|---|---|
+| `<id>` (`show`, `comment`, `edit`, `set`, `close`, `reopen`, `move`, `log`, `branch`, `get`) | the issues by short id or project number, each with its title |
+| `set` and `new`'s `field=value` | the fields, then their options; `@current`, `@next` and the sprints for a sprint; `@me` for a person; else the values on the issues. After `+` or `-` too |
+| `move`, after the id | the status options |
+| a filter (`ls`, `tui`, `set --filter`) | the qualifiers, `is:` and the fields, then their values, for the filter's last word |
+| `view` | the views |
+| `me` | the people on the board |
+| `--group`, `--sort`, `--field`, `--json=` | the fields |
+
+A completion reads the board and `.git-board.toml`, writes nothing, and
+offers nothing when it can't read them.
+
 ## Exit codes
 
 | Code | |
@@ -290,6 +344,9 @@ Errors go to stderr, prefixed `error:`.
 | `gh issue create -e` | `glab issue create` | `git board new -e` |
 | `gh issue list -a @me -l bug -S text` | `glab issue list -a @me -l bug --search text` | `git board ls "assignee:@me label:bug text"` |
 | `gh issue list -L 10 --json …` | `glab issue list -P 10 -O json` | `git board ls -L 10 --json` |
+| `gh issue list --json number,title` | | `git board ls --json number,title` |
+| `gh issue list --json title --jq '.[].title'` | | `git board ls --jq '.[].title'` |
+| `gh issue list --json title -t '{{range .}}…'` | | `git board ls --template '{{range .}}…'` |
 | `gh issue view N -c` | `glab issue view N -c` | `git board show N` |
 | `gh issue view N --json …` | `glab issue view N -F json` | `git board show N --json` |
 | `gh issue comment N -b B` | `glab issue note N -m B` | `git board comment N -b B` |
@@ -305,8 +362,8 @@ Errors go to stderr, prefixed `error:`.
 | `gh issue develop N` | `glab mr create --related-issue N` | `git board branch N` (prints the branch and the command) |
 | | `glab issue view N -s` (system notes) | `git board log N` (every change, text edits too) |
 | `gh project item-edit …` | `glab issue board …` | `git board move N --next`, `git board project` |
+| `gh completion -s zsh` | `glab completion -s zsh` | `git board completion zsh` |
 
 `N` is any [name of an issue](#naming-an-issue). Not there yet: deleting
 an issue or a comment, templates, pinning, locking (no permissions in a
-board kept in git), `--web`, `--jq` and `--template`, shell completion of
-ids and values.
+board kept in git), `--web`.

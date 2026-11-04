@@ -1073,3 +1073,10 @@ nothing is stored.
 - Markdown: `git board import --md` (`internal/store/mdimport.go`, tests `TestImportMarkdown*`); the Markdown folder datastore (`core/mdstore`, `board.datastore markdown:<dir>`, `TestMarkdownBoard`), its files rendered after each write, hand edits read in first.
 - Who you write as stays `board.me` in the clone's git config on every datastore (`Backend.whoStore`).
 - Not done: the pages don't yet disable pull, push and start over on a datastore that can't run them (the server refuses them with the sentence).
+
+### Status 2026-11-04: JSON fields, --jq, --template, completion (#88 P1)
+
+- `--json [fields]` (`cmd/git-board/output.go`, `addJSON`): alone, every field as before; `--json id,title` keeps those, an unknown one is refused (exit 2) with the list, in `PreRunE`, before a write. `jsonFieldArgs` reads `--json id,title` as `--json=id,title`; the flag reads as a bool's, so `--json` alone needs no value. On `ls`, `view`, `show`, `log`, `me`, `comment`, `new`.
+- `--jq` with `github.com/itchyny/gojq` (MIT, and its `timefmt-go`, MIT; it moved `go-runewidth` to v0.0.31): the one new dependency, a jq in pure Go, as gh uses. `--template`, `text/template` with gh's `join`, `pluck`, `timeago`, `timefmt`, `truncate`. `new` has no `--template`: kept for an issue template (#88), as gh's.
+- Shell completion (`completion.go`, `addCompletions`): ids and project numbers with titles, `field=value` and options, status for `move`'s second argument (for `move <id> <status>`, #88), filter qualifiers and values, views, people, `--group`/`--sort`/`--field`/`--json=`. On any error it offers nothing. `git board completion` is cobra's.
+- Tests: `TestJSONFields`, `TestJSONFieldsCheckedFirst`, `TestJQAndTemplate`, `TestJSONFieldArgs`, `TestCompletion`, `TestCompletionCommand`.
