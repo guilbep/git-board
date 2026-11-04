@@ -1,6 +1,7 @@
 package store_test
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -39,7 +40,7 @@ func TestMarkdownBoard(t *testing.T) {
 
 	storetest.Git(t, dir, "config", store.DatastoreKey, "markdown:issues")
 	b := storetest.Open(t, dir)
-	if c := b.Capabilities(); c.Datastore != "Markdown files" || c.Replica || c.Counter {
+	if c := b.Capabilities(); c.Datastore != "Markdown files" || c.Replica || !c.Counter {
 		t.Fatalf("capabilities %+v", c)
 	}
 	if _, err := b.GetIssue(first); err != nil {
@@ -170,5 +171,82 @@ func TestMarkdownBoardFollowsAForgeSync(t *testing.T) {
 		if got := th.Events[0].Body; got != "pulled body, by hand" {
 			t.Errorf("body %q, want the hand edit", got)
 		}
+	}
+}
+
+// Issue #84: a Markdown board numbers its issues on the default branch,
+// through .board/numbers; on another branch the counter is read, and
+// numbering says why it waits, without failing the sync.
+func TestMarkdownBoardNumbers(t *testing.T) {
+	t.Parallel()
+	dir := storetest.Repo(t, false)
+	storetest.Git(t, dir, "switch", "-q", "-c", "main") // an unborn main, whatever git's default
+	storetest.Git(t, dir, "config", store.DatastoreKey, "markdown:issues")
+	storetest.Init(t, dir)
+	b := storetest.Open(t, dir)
+	if c := b.Capabilities(); !c.Counter {
+		t.Fatalf("capabilities %+v: a Markdown board counts", c)
+	}
+	if err := b.InitNumbers(store.NumbersRemote, "GB", 1); err != nil {
+		t.Fatalf("start the numbers on main: %v", err)
+	}
+	first, err := b.NewIssue("Made on main", "", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n, err := b.NumberIssues(store.NumbersRemote); err != nil || n != 1 {
+		t.Fatalf("numbering on main: %d, %v", n, err)
+	}
+	c, ok, err := b.Counter()
+	if err != nil || !ok || c.ByID[first] != 1 {
+		t.Fatalf("counter %+v, %v, %v; want %s as GB-1", c, ok, err, first)
+	}
+	data, err := os.ReadFile(filepath.Join(dir, "issues", mdstore.Board, "numbers"))
+	if err != nil || string(data) != "prefix GB\nstart 1\n1 "+first+"\n" {
+		t.Fatalf(".board/numbers = %q, %v: refs/board/seq's format", data, err)
+	}
+	if files, _ := filepath.Glob(filepath.Join(dir, "issues", "*made-on-main.md")); len(files) != 1 || filepath.Base(files[0]) != "1-made-on-main.md" {
+		t.Errorf("the issue's file, named by its number: %v", files)
+	}
+	if w := b.NumbersWait(); w != "" {
+		t.Errorf("on main, NumbersWait = %q", w)
+	}
+
+	storetest.Git(t, dir, "add", "-A")
+	storetest.Git(t, dir, "commit", "-q", "-m", "the board")
+	storetest.Git(t, dir, "switch", "-q", "-c", "feat/csv")
+	second, err := b.NewIssue("Made on a branch", "", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = b.NumberIssues(store.NumbersRemote)
+	if !errors.Is(err, datastore.ErrMissing) || !strings.Contains(err.Error(), "feat/csv") {
+		t.Fatalf("numbering on feat/csv: %v; want why it waits", err)
+	}
+	if w := b.NumbersWait(); !strings.Contains(w, "main") || !strings.Contains(w, "feat/csv") {
+		t.Errorf("NumbersWait = %q", w)
+	}
+	if c, _, _ := b.Counter(); c.ByID[first] != 1 || c.ByID[second] != 0 {
+		t.Errorf("on the branch, the counter reads %+v", c)
+	}
+	var heard []string
+	w := store.Whole{Remote: "origin", Step: func(name, state, note string) {
+		if name == store.StepPush {
+			heard = append(heard, state+": "+note)
+		}
+	}}
+	if err := b.SyncWhole(t.Context(), w); err != nil || len(heard) != 2 || !strings.HasPrefix(heard[1], "skipped: ") || !strings.Contains(heard[1], "feat/csv") {
+		t.Fatalf("sync on the branch: %v, the push step %q", err, heard)
+	}
+
+	storetest.Git(t, dir, "add", "-A")
+	storetest.Git(t, dir, "commit", "-q", "-m", "on the branch")
+	storetest.Git(t, dir, "switch", "-q", "main")
+	storetest.Git(t, dir, "merge", "-q", "--no-edit", "feat/csv")
+	if n, err := b.NumberIssues(store.NumbersRemote); err != nil || n != 1 {
+		t.Fatalf("numbering on main after the merge: %d, %v", n, err)
+	}
+	if c, _, _ := b.Counter(); c.ByID[second] != 2 {
+		t.Errorf("after the merge, %+v; want %s as GB-2", c, second)
 	}
 }

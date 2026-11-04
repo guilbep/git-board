@@ -183,3 +183,34 @@ func TestNumbersEvents(t *testing.T) {
 		}
 	}
 }
+
+// Issue #84: Settings › Numbers on a Markdown board starts the numbers
+// and numbers on the default branch; on another, it says why numbering
+// waits, and a run answers 409 missing with the same sentence.
+func TestNumbersOnAMarkdownBoard(t *testing.T) {
+	t.Parallel()
+	dir := storetest.Repo(t, false)
+	storetest.Git(t, dir, "switch", "-q", "-c", "main")
+	storetest.Git(t, dir, "config", store.DatastoreKey, "markdown:issues")
+	storetest.Init(t, dir)
+	b := storetest.Open(t, dir)
+	ts := numbersServer(t, b, 0, new(int))
+	var n numbersResponse
+	if code := call(t, "POST", ts.URL+"/api/numbers/init", map[string]any{"prefix": "GB", "start": 1}, &n); code != http.StatusOK || !n.On || n.Kept != "Markdown files" || n.Waits != "" {
+		t.Fatalf("start on main: %d %+v", code, n)
+	}
+	storetest.NewIssue(t, b, "On main")
+	if code := call(t, "POST", ts.URL+"/api/numbers/run", map[string]any{}, &n); code != http.StatusOK || n.Done != 1 || n.Next != 2 {
+		t.Fatalf("run on main: %d %+v", code, n)
+	}
+	storetest.Git(t, dir, "add", "-A")
+	storetest.Git(t, dir, "commit", "-q", "-m", "the board")
+	storetest.Git(t, dir, "switch", "-q", "-c", "feat/csv")
+	storetest.NewIssue(t, b, "On a branch")
+	if code := call(t, "GET", ts.URL+"/api/numbers", nil, &n); code != http.StatusOK || n.Waiting != 1 || !strings.Contains(n.Waits, "feat/csv") || !strings.Contains(n.Waits, "main") {
+		t.Fatalf("on feat/csv: %d %+v", code, n)
+	}
+	if code, msg := callError(t, "POST", ts.URL+"/api/numbers/run", map[string]any{}); code != http.StatusConflict || msg != n.Waits {
+		t.Errorf("run on feat/csv: %d %q, want 409 %q", code, msg, n.Waits)
+	}
+}

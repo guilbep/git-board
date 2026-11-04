@@ -141,7 +141,7 @@ datastore's name.
 | Capability | What needs it | git | PostgreSQL | Markdown folder | Forge only |
 |---|---|---|---|---|---|
 | **Replica**: fetch, push, merge with remotes; the reset and switched marks guard it | offline work with several writers; Sync's git part; Start over; `git board remote` | yes | no: one shared server. Offline only when the server is local | no | no |
-| **Counter**: a shared counter with compare-and-swap | project numbers (`CO2-3075`) | `refs/board/seq` | a row | no | the forge's numbers only |
+| **Counter**: a shared counter with compare-and-swap | project numbers (`CO2-3075`) | `refs/board/seq` | a row | `.board/numbers`, written on the default branch alone (issue #84, ADR 0016) | the forge's numbers only |
 | **git log of the board** | debugging, nothing in the product | yes | no | no | no |
 | **A code clone** (not the datastore's: the deployment's) | signed check notes and proof refs (ADR 0001), branches, diffs, the cycle, releases' tags, `verify` | with a clone | with a clone | with a clone | with a clone |
 

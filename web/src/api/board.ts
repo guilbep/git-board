@@ -530,6 +530,7 @@ export interface Numbers {
   ahead: boolean; // this clone's counter holds numbers origin hasn't: the next sync sends them first
   kept?: string; // where the counter is kept when not on origin: the datastore's name (PostgreSQL)
   missing?: string; // the datastore keeps no counter: why
+  waits?: string; // the counter can't be written here, why: a Markdown board numbers on its default branch alone
   done: number; // a write: how many issues it numbered
   error?: string; // started, but the issues not numbered yet
 }
