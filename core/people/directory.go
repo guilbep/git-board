@@ -1,13 +1,13 @@
 package people
 
-import "github.com/guilbep/git-board/core/gitstore"
+import "github.com/guilbep/git-board/core/oplog"
 
 // Directory finds a person by account.
 type Directory struct{ owner map[[2]string]*Person }
 
 // LoadDirectory reads every person. An account belongs to the person whose
 // id sorts first in byte order.
-func LoadDirectory(s *gitstore.Store) (*Directory, error) {
+func LoadDirectory(s oplog.Datastore) (*Directory, error) {
 	ids, err := List(s)
 	if err != nil {
 		return nil, err

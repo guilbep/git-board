@@ -21,6 +21,8 @@ import (
 	"github.com/go-git/go-git/v5/plumbing/filemode"
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/go-git/go-git/v5/storage/filesystem"
+
+	"github.com/guilbep/git-board/core/datastore"
 )
 
 // Hash is a git object id.
@@ -29,8 +31,9 @@ type Hash = plumbing.Hash
 // ZeroHash is the hash of no object. It stands for an absent ref.
 var ZeroHash = plumbing.ZeroHash
 
-// ErrRefMoved is returned when a ref is not where the write read it.
-var ErrRefMoved = errors.New("gitstore: ref moved since it was read")
+// ErrRefMoved is returned when a ref is not where the write read it. It is
+// the datastore's ErrMoved, so a caller of either checks one error.
+var ErrRefMoved = datastore.ErrMoved
 
 // Store is a git repository.
 type Store struct {

@@ -253,12 +253,17 @@ func (r *run) plan(p *project, is *issue.Issue, fi forge.Issue, who map[string]s
 			c = &is.Comments[i]
 		} else if w := unwrap(fc.Body); who != nil && w.kind == "comment" && r.isSync(p, fc.Author) {
 			// posted, then stopped before its record
-			if c = comment(w.id); c == nil || matched[c.ID] || p.st.posted[[2]string{is.ID, c.ID}] != "" {
+			switch c = comment(w.id); {
+			case c == nil && r.opt.ForgeOnly:
+				// its id never arrives: a forge-only copy has nowhere to
+				// fetch it from, so the text is pulled as new (ADR 0002)
+			case c == nil || matched[c.ID] || p.st.posted[[2]string{is.ID, c.ID}] != "":
 				continue
+			default:
+				sent = true
+				pl.sops = append(pl.sops, postedOp(is.Author, now, is.ID, c.ID, fc.ID), seenOp(is.Author, now, is.ID, field, fc.Body))
+				seen = withSeen(seen, field, fc.Body)
 			}
-			sent = true
-			pl.sops = append(pl.sops, postedOp(is.Author, now, is.ID, c.ID, fc.ID), seenOp(is.Author, now, is.ID, field, fc.Body))
-			seen = withSeen(seen, field, fc.Body)
 		} else if w.kind == "version" && r.isSync(p, fc.Author) {
 			// a published version's note: sync's own, never a comment
 			if p.st.posted[[2]string{is.ID, w.id}] == "" {

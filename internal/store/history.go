@@ -8,6 +8,7 @@ import (
 	"maps"
 	"slices"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/guilbep/git-board/core/oplog"
@@ -67,8 +68,8 @@ func (b *Backend) historyOf(id string, created int64, entries []oplog.Entry) ins
 }
 
 // RefsFingerprint changes whenever an issue, a person or a release record
-// changes in git: their refs and the commits they point to, hashed. Cheap:
-// the refs only.
+// changes: their versions in the datastore (in git, their refs and the
+// commits they point to), hashed. Cheap: the heads only.
 func (b *Backend) RefsFingerprint() string {
 	return b.fingerprint("refs/board/issue/", "refs/board/person/", "refs/board/release/")
 }
@@ -84,7 +85,7 @@ func (b *Backend) ReleasesFingerprint() string {
 func (b *Backend) fingerprint(prefixes ...string) string {
 	h := sha256.New()
 	for _, p := range prefixes {
-		refs, err := b.s.Refs(p)
+		refs, err := b.refsUnder(p)
 		if err != nil {
 			continue
 		}
@@ -116,4 +117,24 @@ func applyLabels(labels map[string]bool, add, remove []string) (added, removed [
 		}
 	}
 	return added, removed
+}
+
+// refsUnder are the refs under prefix, by name, with what they point to.
+// The board's entities (refs/board/<kind>/) are the datastore's heads, named
+// as git names them; any other prefix is the git repository's.
+func (b *Backend) refsUnder(prefix string) (map[string]string, error) {
+	out := map[string]string{}
+	if kind, ok := strings.CutPrefix(prefix, "refs/board/"); ok && strings.HasSuffix(kind, "/") {
+		kind = strings.TrimSuffix(kind, "/")
+		heads, err := b.ds.Heads(ctx, kind)
+		for id, v := range heads {
+			out[prefix+id] = v
+		}
+		return out, err
+	}
+	refs, err := b.s.Refs(prefix)
+	for name, h := range refs {
+		out[name] = h.String()
+	}
+	return out, err
 }

@@ -10,7 +10,6 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/guilbep/git-board/core/gitstore"
 	"github.com/guilbep/git-board/core/issue"
 	"github.com/guilbep/git-board/core/oplog"
 	"github.com/guilbep/git-board/core/syncer"
@@ -187,7 +186,7 @@ var anchorRE = regexp.MustCompile(`^body@v([1-9][0-9]*)/([^/#\s]+)(?:#([1-9][0-9
 // marker's keys, the quote over a thread comment, the note on a version
 // published, a reply's root. Each reads the issue from s when called.
 // ponytail: an issue's log read per comment posted, cache it if runs grow
-func meanings(s *gitstore.Store, opt *syncer.Options) {
+func meanings(s oplog.Datastore, opt *syncer.Options) {
 	opt.Carry = func(meta map[string]string) string {
 		var kv []string
 		for _, k := range carried {

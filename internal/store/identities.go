@@ -46,18 +46,18 @@ func (b *Backend) Adopt(idPrefix string) error {
 	if err != nil {
 		return err
 	}
-	return people.SetMe(ctx, b.s, id)
+	return people.SetMe(ctx, b.whoStore(), id)
 }
 
 // NewIdentity creates a person and adopts them. You create them, or no one
 // when no one is chosen yet.
 func (b *Backend) NewIdentity(name, email string) (Person, error) {
-	author, _ := people.Me(ctx, b.s)
-	p, err := people.Create(ctx, b.s, people.NewCreate(author, name, email))
+	author, _ := people.Me(ctx, b.whoStore())
+	p, err := people.Create(ctx, b.ds, people.NewCreate(author, name, email))
 	if err != nil {
 		return Person{}, err
 	}
-	if err := people.SetMe(ctx, b.s, p.ID); err != nil {
+	if err := people.SetMe(ctx, b.whoStore(), p.ID); err != nil {
 		return Person{}, err
 	}
 	m, err := b.avatarMode()

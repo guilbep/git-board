@@ -1,11 +1,13 @@
-// Package oplog keeps an entity as a log of operations, in a chain of git
-// commits under its ref.
+// Package oplog keeps an entity as a log of operations, in packs a
+// datastore keeps (ADR 0002). It encodes, hashes and orders them; the
+// datastore never reads them. git.go is its git half.
 package oplog
 
 import (
 	"cmp"
 	"context"
 	"crypto/rand"
+	"crypto/sha1"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -15,7 +17,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/guilbep/git-board/core/gitstore"
+	"github.com/guilbep/git-board/core/datastore"
 )
 
 // Origin says where on a forge an operation came from.
@@ -40,23 +42,27 @@ type Entry struct {
 	Clock uint64
 }
 
-// Log is an entity: its head commit, and its operations in order.
+// Log is an entity: its version, and its operations in order.
 type Log struct {
 	Kind, ID string
-	Head     gitstore.Hash
-	Entries  []Entry
+	// Version is the datastore's for the entity as read: in git, its head
+	// commit.
+	Version string
+	Entries []Entry
+	// clock is the highest of its packs', merges' included. 0 when unknown.
+	clock uint64
 }
 
-// ErrNotFound is returned when an entity has no ref.
-var ErrNotFound = errors.New("oplog: no such entity")
+// Datastore is where entities are kept.
+type Datastore = datastore.Datastore
+
+// ErrNotFound is returned when an entity has no pack.
+var ErrNotFound = datastore.ErrNotFound
 
 // ErrBadName is returned for a kind or an id that names no entity.
 var ErrBadName = errors.New("oplog: bad kind or id")
 
-// updateRef moves a ref. Tests swap it.
-var updateRef = (*gitstore.Store).UpdateRef
-
-// tries is how many times a write is tried on a moved ref.
+// tries is how many times a write is tried on a moved entity.
 const tries = 5
 
 // pack is a commit's blob. Its fields are in the order they are written.
@@ -66,14 +72,23 @@ type pack struct {
 	Ops   []Op   `json:"ops"`
 }
 
-// node is one commit of an entity.
+// node is one pack, as read: its hash, its fields.
 type node struct {
-	parents []gitstore.Hash
-	blob    gitstore.Hash // the pack's
+	hash string // the git blob id of its bytes
 	pack
 }
 
-// RefName is an entity's ref.
+// Hash is a pack's id: the git blob id of its bytes,
+// sha1("blob <len>\x00" + bytes). It needs no git, so it is the same in
+// every datastore.
+func Hash(data []byte) string {
+	h := sha1.New()
+	fmt.Fprintf(h, "blob %d\x00", len(data))
+	h.Write(data)
+	return hex.EncodeToString(h.Sum(nil))
+}
+
+// RefName is an entity's ref in git, and its name in messages.
 func RefName(kind, id string) string { return "refs/board/" + kind + "/" + id }
 
 // IsID says whether id is an entity id: 40 lowercase hex digits.
@@ -81,9 +96,9 @@ func IsID(id string) bool { return idPattern.MatchString(id) }
 
 var idPattern = regexp.MustCompile(`^[0-9a-f]{40}$`)
 
-// checkKind refuses a kind that isn't one of gitstore.Kinds.
+// checkKind refuses a kind that isn't one of datastore.Kinds.
 func checkKind(kind string) error {
-	if !slices.Contains(gitstore.Kinds, kind) {
+	if !slices.Contains(datastore.Kinds, kind) {
 		return fmt.Errorf("%w: kind %q", ErrBadName, kind)
 	}
 	return nil
@@ -111,9 +126,9 @@ func checkOps(ops []Op) error {
 	return nil
 }
 
-// Create writes an entity's first commit. An empty id means the first
+// Create writes an entity's first pack. An empty id means the first
 // pack's hash.
-func Create(ctx context.Context, s *gitstore.Store, kind, id string, ops []Op) (*Log, error) {
+func Create(ctx context.Context, ds Datastore, kind, id string, ops []Op) (*Log, error) {
 	err := checkName(kind, id)
 	if id == "" {
 		err = checkKind(kind)
@@ -129,44 +144,57 @@ func Create(ctx context.Context, s *gitstore.Store, kind, id string, ops []Op) (
 	}
 	nonce := make([]byte, 16)
 	rand.Read(nonce) // never fails, since Go 1.24
-	c, n, err := writePack(s, pack{Clock: 1, Nonce: hex.EncodeToString(nonce), Ops: ops})
+	data, n, err := encode(pack{Clock: 1, Nonce: hex.EncodeToString(nonce), Ops: ops})
 	if err != nil {
 		return nil, err
 	}
 	if id == "" {
-		id = n.blob.String()
+		id = n.hash
 	}
-	if err := updateRef(s, ctx, RefName(kind, id), c, gitstore.ZeroHash); err != nil {
+	v, err := ds.Add(ctx, kind, id, data, "")
+	if err != nil {
 		return nil, fmt.Errorf("oplog: create %s: %w", RefName(kind, id), err)
 	}
-	return &Log{Kind: kind, ID: id, Head: c, Entries: n.entries()}, nil
+	return &Log{Kind: kind, ID: id, Version: v, Entries: n.entries(), clock: 1}, nil
 }
 
 // Load reads an entity and orders its operations.
-func Load(s *gitstore.Store, kind, id string) (*Log, error) {
+func Load(ds Datastore, kind, id string) (*Log, error) {
 	if err := checkName(kind, id); err != nil {
 		return nil, err
 	}
-	name := RefName(kind, id)
-	head, err := s.Ref(name)
+	packs, v, err := ds.Packs(context.Background(), kind, id)
 	if err != nil {
-		return nil, err
+		if errors.Is(err, ErrNotFound) {
+			return nil, err
+		}
+		return nil, fmt.Errorf("oplog: %s: %w", RefName(kind, id), err)
 	}
-	if head == gitstore.ZeroHash {
-		return nil, fmt.Errorf("%w: %s", ErrNotFound, name)
+	nodes := make([]node, 0, len(packs))
+	for _, data := range packs {
+		n, err := decode(data)
+		if err != nil {
+			return nil, fmt.Errorf("oplog: %s: %w", RefName(kind, id), err)
+		}
+		nodes = append(nodes, n)
 	}
-	nodes, err := walk(s, head)
-	if err != nil {
-		return nil, err
-	}
-	return &Log{Kind: kind, ID: id, Head: head, Entries: order(nodes)}, nil
+	return build(kind, id, v, nodes), nil
 }
 
-// Append writes ops in one commit on the head. When the ref moved, it
-// reloads and writes them again on the new head. Appending nothing writes
-// nothing. Once the write lands, l gets the new head and the new entries,
-// which sort last, without reading the entity again.
-func (l *Log) Append(ctx context.Context, s *gitstore.Store, ops []Op) error {
+// build is the log of an entity's packs.
+func build(kind, id, version string, nodes []node) *Log {
+	l := &Log{Kind: kind, ID: id, Version: version, Entries: order(nodes)}
+	for _, n := range nodes {
+		l.clock = max(l.clock, n.Clock)
+	}
+	return l
+}
+
+// Append writes ops in one pack on the entity's version. When the entity
+// moved, it reloads and writes them again on the new version. Appending
+// nothing writes nothing. Once the write lands, l gets the new version and
+// the new entries, which sort last, without reading the entity again.
+func (l *Log) Append(ctx context.Context, ds Datastore, ops []Op) error {
 	if err := checkName(l.Kind, l.ID); err != nil {
 		return err
 	}
@@ -177,24 +205,27 @@ func (l *Log) Append(ctx context.Context, s *gitstore.Store, ops []Op) error {
 		return fmt.Errorf("oplog: %w", err)
 	}
 	name := RefName(l.Kind, l.ID)
+	if l.clock == 0 { // a log not read here: its clock is unknown
+		fresh, err := Load(ds, l.Kind, l.ID)
+		if err != nil {
+			return err
+		}
+		*l = *fresh
+	}
 	for try := 1; ; try++ {
-		head, err := readNode(s, l.Head)
+		data, n, err := encode(pack{Clock: l.clock + 1, Ops: ops})
 		if err != nil {
 			return err
 		}
-		c, n, err := writePack(s, pack{Clock: head.Clock + 1, Ops: ops}, l.Head)
-		if err != nil {
-			return err
-		}
-		err = updateRef(s, ctx, name, c, l.Head)
+		v, err := ds.Add(ctx, l.Kind, l.ID, data, l.Version)
 		if err == nil {
-			l.Head, l.Entries = c, slices.Concat(l.Entries, n.entries())
+			l.Version, l.Entries, l.clock = v, slices.Concat(l.Entries, n.entries()), n.Clock
 			return nil
 		}
-		if !errors.Is(err, gitstore.ErrRefMoved) || try == tries {
+		if !errors.Is(err, datastore.ErrMoved) || try == tries {
 			return fmt.Errorf("oplog: append %s: %w", name, err)
 		}
-		fresh, err := Load(s, l.Kind, l.ID)
+		fresh, err := Load(ds, l.Kind, l.ID)
 		if err != nil {
 			return err
 		}
@@ -202,20 +233,19 @@ func (l *Log) Append(ctx context.Context, s *gitstore.Store, ops []Op) error {
 	}
 }
 
-// List returns the ids of a kind's entities, sorted. A ref whose name isn't
-// an id isn't an entity, and is left out.
-func List(s *gitstore.Store, kind string) ([]string, error) {
+// List returns the ids of a kind's entities, sorted. A name that isn't an
+// id isn't an entity, and is left out.
+func List(ds Datastore, kind string) ([]string, error) {
 	if err := checkKind(kind); err != nil {
 		return nil, err
 	}
-	prefix := RefName(kind, "")
-	refs, err := s.Refs(prefix)
+	heads, err := ds.Heads(context.Background(), kind)
 	if err != nil {
 		return nil, err
 	}
-	ids := make([]string, 0, len(refs))
-	for name := range refs {
-		if id := strings.TrimPrefix(name, prefix); IsID(id) {
+	ids := make([]string, 0, len(heads))
+	for id := range heads {
+		if IsID(id) {
 			ids = append(ids, id)
 		}
 	}
@@ -223,109 +253,43 @@ func List(s *gitstore.Store, kind string) ([]string, error) {
 	return ids, nil
 }
 
-// writePack writes p in a commit on parents. It returns the commit and the
-// node a reader reads from it: its ops are decoded from the stored bytes,
-// so entries built from them are the ones a Load gives.
-func writePack(s *gitstore.Store, p pack, parents ...gitstore.Hash) (commit gitstore.Hash, n node, err error) {
+// encode is a pack's bytes, and the node a reader reads from them: its ops
+// are decoded from the stored bytes, so entries built from them are the ones
+// a Load gives.
+func encode(p pack) ([]byte, node, error) {
 	data, err := json.Marshal(p)
 	if err != nil {
-		return commit, n, err
+		return nil, node{}, err
 	}
-	n.parents = parents
-	if err := json.Unmarshal(data, &n.pack); err != nil {
-		return commit, n, err
-	}
-	if n.blob, err = s.WriteBlob(data); err != nil {
-		return commit, n, err
-	}
-	tree, err := s.WriteTree([]gitstore.TreeEntry{{Name: "pack", Blob: n.blob}})
-	if err != nil {
-		return commit, n, err
-	}
-	commit, err = s.WriteCommit(gitstore.Commit{Tree: tree, Parents: parents})
-	return commit, n, err
+	n, err := decode(data)
+	return data, n, err
 }
 
-// readNode reads a commit and its pack. Other tree entries, unknown pack
-// fields and the nonce are ignored.
-func readNode(s *gitstore.Store, h gitstore.Hash) (n node, err error) {
-	defer func() {
-		if err != nil {
-			err = fmt.Errorf("oplog: commit %s: %w", h, err)
-		}
-	}()
-	c, err := s.ReadCommit(h)
-	if err != nil {
-		return n, err
-	}
-	entries, err := s.ReadTree(c.Tree)
-	if err != nil {
-		return n, err
-	}
-	n.parents = c.Parents
-	for _, e := range entries {
-		if e.Name == "pack" {
-			n.blob = e.Blob
-		}
-	}
-	if n.blob == gitstore.ZeroHash {
-		return n, errors.New("no pack")
-	}
-	data, err := s.ReadBlob(n.blob)
-	if err != nil {
-		return n, err
-	}
+// decode reads a pack. Unknown fields and the nonce are ignored. An
+// operation with no kind or no time is refused.
+func decode(data []byte) (n node, err error) {
+	n.hash = Hash(data)
 	// ponytail: encoding/json matches keys in any case and keeps the last of
 	// two equal keys; the spec says case-sensitive and unique. A strict
 	// decoder if another implementation ever disagrees.
 	if err := json.Unmarshal(data, &n.pack); err != nil {
-		return n, fmt.Errorf("pack: %w", err)
+		return n, fmt.Errorf("pack %s: %w", n.hash, err)
 	}
-	if len(n.Ops) == 0 && len(n.parents) < 2 {
-		return n, errors.New("a pack with no operation")
+	if err := checkOps(n.Ops); err != nil {
+		return n, fmt.Errorf("pack %s: %w", n.hash, err)
 	}
-	return n, checkOps(n.Ops)
-}
-
-// walk reads every commit reachable from head and checks their clocks.
-// ponytail: every load reads the whole history; keep the nodes per commit
-// if long entities make it slow.
-func walk(s *gitstore.Store, head gitstore.Hash) (map[gitstore.Hash]node, error) {
-	nodes := map[gitstore.Hash]node{}
-	for todo := []gitstore.Hash{head}; len(todo) > 0; {
-		h := todo[len(todo)-1]
-		todo = todo[:len(todo)-1]
-		if _, ok := nodes[h]; ok {
-			continue
-		}
-		n, err := readNode(s, h)
-		if err != nil {
-			return nil, err
-		}
-		nodes[h] = n
-		todo = append(todo, n.parents...)
-	}
-	for h, n := range nodes {
-		want := uint64(1)
-		for _, p := range n.parents {
-			want = max(want, nodes[p].Clock+1)
-		}
-		if n.Clock != want {
-			return nil, fmt.Errorf("oplog: commit %s: clock %d, want %d", h, n.Clock, want)
-		}
-	}
-	return nodes, nil
+	return n, nil
 }
 
 // order sorts the packs by (clock, hash) and lists their operations. Two
-// commits with the same pack blob count as one pack.
-func order(nodes map[gitstore.Hash]node) []Entry {
-	packs := map[gitstore.Hash]node{}
+// packs with the same bytes count as one.
+func order(nodes []node) []Entry {
+	packs := map[string]node{}
 	for _, n := range nodes {
-		packs[n.blob] = n
+		packs[n.hash] = n
 	}
 	sorted := slices.SortedFunc(maps.Values(packs), func(a, b node) int {
-		return cmp.Or(cmp.Compare(a.Clock, b.Clock), strings.Compare(a.blob.String(), b.blob.String()))
+		return cmp.Or(cmp.Compare(a.Clock, b.Clock), strings.Compare(a.hash, b.hash))
 	})
 	var out []Entry
 	for _, n := range sorted {
@@ -334,11 +298,11 @@ func order(nodes map[gitstore.Hash]node) []Entry {
 	return out
 }
 
-// entries are a commit's operations, with their ids and its clock.
+// entries are a pack's operations, with their ids and its clock.
 func (n node) entries() []Entry {
 	out := make([]Entry, len(n.Ops))
 	for i, op := range n.Ops {
-		out[i] = Entry{Op: op, ID: fmt.Sprintf("%s:%d", n.blob, i), Clock: n.Clock}
+		out[i] = Entry{Op: op, ID: fmt.Sprintf("%s:%d", n.hash, i), Clock: n.Clock}
 	}
 	return out
 }

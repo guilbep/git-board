@@ -2,6 +2,7 @@ package index
 
 import (
 	"bytes"
+	"context"
 	"database/sql"
 	"fmt"
 	"os"
@@ -15,6 +16,8 @@ import (
 	"github.com/guilbep/git-board/core/gitstore"
 	"github.com/guilbep/git-board/core/issue"
 	"github.com/guilbep/git-board/core/oplog"
+	"github.com/guilbep/git-board/core/pgstore"
+	"github.com/guilbep/git-board/core/pgstore/pgtest"
 )
 
 func gitRun(t *testing.T, dir string, args ...string) {
@@ -44,7 +47,11 @@ func newRepo(t *testing.T) (string, *gitstore.Store) {
 
 func openIndex(t *testing.T, s *gitstore.Store) *Index {
 	t.Helper()
-	ix, err := Open(t.Context(), s)
+	var ds oplog.Datastore = s
+	if os.Getenv("GIT_BOARD_TEST_INDEX") == "pg" {
+		ds = onPG(t, s)
+	}
+	ix, err := Open(t.Context(), ds)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -109,6 +116,7 @@ func TestIndexSeesOtherWrites(t *testing.T) {
 }
 
 func TestIndexRebuilds(t *testing.T) {
+	sqliteOnly(t)
 	t.Parallel()
 	for _, tc := range []struct {
 		name  string
@@ -213,7 +221,7 @@ func TestIndexSkipsBroken(t *testing.T) {
 		t.Fatal(err)
 	}
 	// A ref whose name isn't an id isn't an entity.
-	gitRun(t, dir, "update-ref", "refs/board/issue/not-an-id", bad.Head.String())
+	gitRun(t, dir, "update-ref", "refs/board/issue/not-an-id", bad.Version)
 	ix := openIndex(t, s)
 	if got := ids(t, ix, Query{}); !slices.Equal(got, []string{good.ID}) {
 		t.Fatalf("issues = %v, want %v", got, good.ID)
@@ -227,7 +235,7 @@ func TestIndexSkipsBroken(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := s.UpdateRef(t.Context(), oplog.RefName("issue", bad.ID), head, bad.Head); err != nil {
+	if err := s.UpdateRef(t.Context(), oplog.RefName("issue", bad.ID), head, gitstore.NewHash(bad.Version)); err != nil {
 		t.Fatal(err)
 	}
 	if br, err := ix.Broken(t.Context()); err != nil || len(br) != 0 {
@@ -239,6 +247,7 @@ func TestIndexSkipsBroken(t *testing.T) {
 }
 
 func TestIndexPathIsEscaped(t *testing.T) {
+	sqliteOnly(t)
 	t.Parallel()
 	dir := filepath.Join(t.TempDir(), "C# 100%?x")
 	if err := os.Mkdir(dir, 0o777); err != nil {
@@ -298,5 +307,39 @@ func TestIndexRacingRefreshes(t *testing.T) {
 	}
 	if got, err := first.Issues(t.Context(), Query{}); err != nil || len(got) != 1 || got[0].Title != "v2" {
 		t.Fatalf("issues %+v, %v", got, err)
+	}
+}
+
+// pgOf is each repository's index database, by common dir: two indexes of
+// one repository, as two processes open, share it.
+var pgOf sync.Map
+
+// onPG is s with its index on PostgreSQL (GIT_BOARD_TEST_INDEX=pg): every
+// test of the index then runs on PostgreSQL's SQL, with the packs in git.
+func onPG(t *testing.T, s *gitstore.Store) oplog.Datastore {
+	t.Helper()
+	dsn, _ := pgOf.LoadOrStore(s.CommonDir(), pgtest.DSN(t))
+	p, err := pgstore.Open(t.Context(), dsn.(string), t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { p.Close() })
+	return gitIndexedOnPG{s, p}
+}
+
+// gitIndexedOnPG keeps its packs in git and its index on PostgreSQL.
+type gitIndexedOnPG struct {
+	*gitstore.Store
+	pg *pgstore.Store
+}
+
+func (g gitIndexedOnPG) IndexDB(ctx context.Context) (*sql.DB, error) { return g.pg.IndexDB(ctx) }
+
+// sqliteOnly skips a test of the sqlite file when the index runs on
+// PostgreSQL.
+func sqliteOnly(t *testing.T) {
+	t.Helper()
+	if os.Getenv("GIT_BOARD_TEST_INDEX") == "pg" {
+		t.Skip("the sqlite file's: the index runs on PostgreSQL")
 	}
 }

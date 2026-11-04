@@ -6,7 +6,8 @@
 // no Overview repeating them): the project
 // file (.git-board.toml) first, the Sync with it, for the forges and the
 // GitHub Project are its tables, the raw file last; then what lives
-// elsewhere, each saying where: the numbers in git, the worktrees in
+// elsewhere, each saying where: where the board is kept, in git config;
+// the numbers in git, the worktrees in
 // wtx.toml, you in git config and this browser
 export const settingsTabs = [
   { id: 'sync', label: 'Sync', group: 'The project file', via: 'forges, Project' },
@@ -21,6 +22,7 @@ export const settingsTabs = [
   { id: 'repos', label: 'Repos', group: 'The project file' },
   { id: 'attachments', label: 'Attachments', group: 'The project file' },
   { id: 'advanced', label: 'The file', group: 'The project file', via: '.git-board.toml' },
+  { id: 'datastore', label: 'Datastore', group: 'Kept elsewhere', via: 'git config board.datastore' },
   { id: 'numbers', label: 'Numbers', group: 'Kept elsewhere', via: 'refs/board/seq' },
   { id: 'worktrees', label: 'Worktrees', group: 'Kept elsewhere', via: 'wtx.toml' },
   { id: 'you', label: 'You', group: 'Kept elsewhere', via: 'git config, this browser' },

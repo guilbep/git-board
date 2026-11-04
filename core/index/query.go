@@ -9,6 +9,10 @@ import (
 	"strings"
 	"unicode"
 
+	"golang.org/x/text/runes"
+	"golang.org/x/text/transform"
+	"golang.org/x/text/unicode/norm"
+
 	"github.com/guilbep/git-board/core/issue"
 )
 
@@ -52,7 +56,7 @@ func (ix *Index) Issues(ctx context.Context, q Query) ([]Summary, error) {
 	if err := ix.Refresh(ctx); err != nil {
 		return nil, err
 	}
-	where, args := []string{"1"}, []any{}
+	where, args := []string{"1 = 1"}, []any{}
 	if q.Status != "" {
 		where, args = append(where, "status = ?"), append(args, string(q.Status))
 	}
@@ -62,7 +66,12 @@ func (ix *Index) Issues(ctx context.Context, q Query) ([]Summary, error) {
 	if q.Author != "" {
 		where, args = append(where, "author = ?"), append(args, q.Author)
 	}
-	if m := match(q.Text); m != "" {
+	switch m := match(q.Text); {
+	case ix.pg:
+		if m := tsquery(q.Text); m != "" {
+			where, args = append(where, "n IN (SELECT n FROM texts WHERE doc @@ to_tsquery('simple', ?))"), append(args, m)
+		}
+	case m != "":
 		where, args = append(where, "n IN (SELECT rowid FROM texts WHERE texts MATCH ?)"), append(args, m)
 	}
 	dir := "ASC"
@@ -74,7 +83,7 @@ func (ix *Index) Issues(ctx context.Context, q Query) ([]Summary, error) {
 	if q.Limit > 0 {
 		query, args = query+" LIMIT ?", append(args, q.Limit)
 	}
-	rows, err := ix.db.QueryContext(ctx, query, args...)
+	rows, err := ix.db.QueryContext(ctx, ix.sql(query), args...)
 	if err != nil {
 		return nil, fmt.Errorf("index: issues: %w", err)
 	}
@@ -111,6 +120,40 @@ func match(text string) string {
 
 func isToken(r rune) bool { return unicode.In(r, unicode.L, unicode.N, unicode.Co) }
 
+// tsquery is match for PostgreSQL, as FTS5 reads match's: each word's
+// tokens in a row (<->), the last a prefix, the words ANDed; in
+// to_tsquery's syntax with the 'simple' configuration, over the tokens
+// that tokens gives. It is "" when no token is left, which matches every
+// issue.
+func tsquery(text string) string {
+	var words []string
+	for _, w := range strings.Fields(text) {
+		toks := strings.Fields(tokens(w))
+		if len(toks) == 0 {
+			continue
+		}
+		for i, tok := range toks {
+			toks[i] = "'" + tok + "'"
+		}
+		words = append(words, strings.Join(toks, " <-> ")+":*")
+	}
+	return strings.Join(words, " & ")
+}
+
+// tokens is text as unicode61 tokenizes it, for PostgreSQL to index and
+// search alike: lower case, without diacritics, each run of token
+// characters a word, joined by spaces.
+func tokens(text string) string {
+	folded, _, err := transform.String(fold, text)
+	if err != nil {
+		folded = text
+	}
+	return strings.Join(strings.FieldsFunc(strings.ToLower(folded), func(r rune) bool { return !isToken(r) }), " ")
+}
+
+// fold takes the diacritics off, as unicode61's remove_diacritics does.
+var fold = transform.Chain(norm.NFD, runes.Remove(runes.In(unicode.Mn)), norm.NFC)
+
 // ForAccount answers the person that owns an account: of the persons
 // holding it, the one whose id sorts first. It refreshes first.
 func (ix *Index) ForAccount(ctx context.Context, server, id string) (string, bool, error) {
@@ -118,7 +161,7 @@ func (ix *Index) ForAccount(ctx context.Context, server, id string) (string, boo
 		return "", false, err
 	}
 	var p sql.NullString
-	err := ix.db.QueryRowContext(ctx, "SELECT min(person) FROM accounts WHERE server = ? AND id = ?", server, id).Scan(&p)
+	err := ix.db.QueryRowContext(ctx, ix.sql("SELECT min(person) FROM accounts WHERE server = ? AND id = ?"), server, id).Scan(&p)
 	if err != nil {
 		return "", false, fmt.Errorf("index: account: %w", err)
 	}
@@ -170,7 +213,11 @@ func (ix *Index) Resolve(ctx context.Context, kind, prefix string) (string, erro
 		return "", err
 	}
 	// the prefix is hex only, so the bounds compare as plain text
-	rows, err := ix.db.QueryContext(ctx, "SELECT id FROM "+table+" WHERE id >= ? AND id < ? ORDER BY id LIMIT 2", prefix, prefix+"g")
+	query := "SELECT id FROM " + table + " WHERE id >= ? AND id < ? ORDER BY id LIMIT 2"
+	if ix.pg {
+		query = "SELECT id FROM " + table + ` WHERE id COLLATE "C" >= ? AND id COLLATE "C" < ? ORDER BY id COLLATE "C" LIMIT 2`
+	}
+	rows, err := ix.db.QueryContext(ctx, ix.sql(query), prefix, prefix+"g")
 	if err != nil {
 		return "", fmt.Errorf("index: resolve: %w", err)
 	}

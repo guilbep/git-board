@@ -122,7 +122,7 @@ func compileRelease(l *oplog.Log, name func(id string) string) (ReleaseRecord, e
 // for a commit, made on another clone before the two met, never shows: the
 // one whose id sorts first is the commit's.
 func (b *Backend) Releases() ([]ReleaseRecord, error) {
-	ids, err := oplog.List(b.s, "release")
+	ids, err := oplog.List(b.ds, "release")
 	if err != nil {
 		return nil, fmt.Errorf("reading the releases: %w", err)
 	}
@@ -133,7 +133,7 @@ func (b *Backend) Releases() ([]ReleaseRecord, error) {
 	name := func(id string) string { return personOf(id, persons[id], avatar.None).Name }
 	byCommit := map[string]ReleaseRecord{}
 	for _, id := range ids { // sorted: the first of a commit counts
-		l, err := oplog.Load(b.s, "release", id)
+		l, err := oplog.Load(b.ds, "release", id)
 		if err != nil {
 			return nil, fmt.Errorf("reading the releases: %w", err)
 		}
@@ -175,7 +175,7 @@ func (b *Backend) CreateRelease(r ReleaseRecord) (ReleaseRecord, error) {
 		return ReleaseRecord{}, err
 	}
 	op := releaseOp("create", me, releaseData{Commit: r.Commit, Previous: r.Previous, Artifacts: r.Artifacts, Chart: r.Chart, Assets: r.Assets})
-	l, err := oplog.Create(ctx, b.s, "release", "", []oplog.Op{op})
+	l, err := oplog.Create(ctx, b.ds, "release", "", []oplog.Op{op})
 	if err != nil {
 		return ReleaseRecord{}, fmt.Errorf("recording the release of %s: %w", r.Commit, err)
 	}
@@ -184,7 +184,7 @@ func (b *Backend) CreateRelease(r ReleaseRecord) (ReleaseRecord, error) {
 
 // personName is a person's name, by id.
 func (b *Backend) personName(id string) string {
-	p, _ := people.Load(b.s, id)
+	p, _ := people.Load(b.ds, id)
 	return personOf(id, p, avatar.None).Name
 }
 
@@ -211,7 +211,7 @@ func (b *Backend) YankRelease(id, reason string) error {
 
 // editRelease adds an operation by you to the record with this id.
 func (b *Backend) editRelease(id, kind string, d releaseData) error {
-	l, err := oplog.Load(b.s, "release", id)
+	l, err := oplog.Load(b.ds, "release", id)
 	if err != nil {
 		return fmt.Errorf("reading release %s: %w", id, err)
 	}
@@ -219,7 +219,7 @@ func (b *Backend) editRelease(id, kind string, d releaseData) error {
 	if err != nil {
 		return err
 	}
-	if err := l.Append(ctx, b.s, []oplog.Op{releaseOp(kind, me, d)}); err != nil {
+	if err := l.Append(ctx, b.ds, []oplog.Op{releaseOp(kind, me, d)}); err != nil {
 		return fmt.Errorf("editing release %s: %w", id, err)
 	}
 	return nil
@@ -228,6 +228,9 @@ func (b *Backend) editRelease(id, kind string, d releaseData) error {
 // PushReleases pushes the records to remote, and the persons who wrote
 // them, as Push does with the issues.
 func (b *Backend) PushReleases(remote string) error {
+	if !b.inGit() {
+		return nil // the datastore is shared: the records are there
+	}
 	if err := b.pushKinds(remote, "person", "release"); err != nil {
 		return fmt.Errorf("pushing the releases to %s: %w", remote, err)
 	}
@@ -239,6 +242,9 @@ func (b *Backend) PushReleases(remote string) error {
 // ponytail: merges the issues too, as Pull does; the release kind alone
 // if that ever gets in the way
 func (b *Backend) PullReleases(remote string) error {
+	if !b.inGit() {
+		return nil
+	}
 	if err := b.Pull(remote); err != nil {
 		return fmt.Errorf("pulling the releases from %s: %w", remote, err)
 	}

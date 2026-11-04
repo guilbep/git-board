@@ -39,9 +39,14 @@ type numbersResponse struct {
 	GitHub *githubNumbers `json:"github,omitempty"`
 	// Ahead: this clone's counter holds numbers origin hasn't, as switch
 	// --apply leaves it: the next whole sync sends them first
-	Ahead bool   `json:"ahead"`
-	Done  int    `json:"done"`            // a write: how many issues it numbered
-	Error string `json:"error,omitempty"` // started, but the issues not numbered yet
+	Ahead bool `json:"ahead"`
+	// Kept is where the counter is kept: "" on origin, else the
+	// datastore's name (PostgreSQL), which needs no origin and no push
+	Kept string `json:"kept,omitempty"`
+	// Missing: the datastore keeps no counter, the sentence why
+	Missing string `json:"missing,omitempty"`
+	Done    int    `json:"done"`            // a write: how many issues it numbered
+	Error   string `json:"error,omitempty"` // started, but the issues not numbered yet
 }
 
 // githubNumbers is what GitHub says, asked with ?github=1 before the
@@ -54,6 +59,12 @@ type githubNumbers struct {
 
 func (s *apiServer) numbers() (numbersResponse, error) {
 	var res numbersResponse
+	if c := s.b.Capabilities(); !c.Replica {
+		res.Kept = c.Datastore
+		if !c.Counter {
+			res.Missing = "project numbers need a datastore that counts; this board is kept in " + c.Datastore + ": its issues go by the forges' numbers"
+		}
+	}
 	c, on, err := s.b.Counter()
 	if err != nil {
 		return res, err
@@ -193,6 +204,9 @@ func (s *apiServer) handleNumbersRun(w http.ResponseWriter, r *http.Request) {
 // beginNumbers starts a write to origin's counter: origin there, the
 // write lock held, origin's issues fetched (what "on origin" means).
 func (s *apiServer) beginNumbers(w http.ResponseWriter) (func(), bool) {
+	if !s.b.Capabilities().Replica { // the datastore's counter: no origin, nothing to fetch
+		return s.beginWrite(w)
+	}
 	remotes, err := s.b.Remotes()
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)

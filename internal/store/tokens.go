@@ -108,7 +108,7 @@ func (b *Backend) GitHubToken() (login, token string, err error) {
 	if err != nil {
 		return "", "", err
 	}
-	p, err := people.Load(b.s, id)
+	p, err := people.Load(b.ds, id)
 	if err != nil {
 		return "", "", err
 	}

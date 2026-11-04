@@ -107,7 +107,8 @@ func TestExportMarkdownReadsBack(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if desc, _, _ := strings.Cut(read[a], "\n### "); strings.TrimSpace(desc) != "the **body**" {
+	// the description ends at the comments' line
+	if desc, _, _ := strings.Cut(read[a], "\n<!-- git-board comments -->"); strings.TrimSpace(desc) != "the **body**" {
 		t.Errorf("description %q", desc)
 	}
 	got := mdComment.FindAllStringSubmatch(read[a], -1)

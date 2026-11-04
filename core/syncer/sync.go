@@ -11,13 +11,17 @@ import (
 	"time"
 
 	"github.com/guilbep/git-board/core/forge"
-	"github.com/guilbep/git-board/core/gitstore"
 	"github.com/guilbep/git-board/core/issue"
 	"github.com/guilbep/git-board/core/oplog"
 )
 
 // Options are git-board's settings for a run.
 type Options struct {
+	// ForgeOnly is a board kept on the forges alone, in a copy pull fills
+	// (ADR 0002, section 4): a marker from sync's accounts naming an id that
+	// isn't here is pulled as new, as anyone's text is, since that id has
+	// nowhere to arrive from.
+	ForgeOnly bool
 	// PublishPrivate lets what was pulled from a project that isn't public
 	// go to one that is.
 	PublishPrivate bool
@@ -94,25 +98,25 @@ var ErrLocked = errors.New("syncer: another sync runs")
 // Sync pulls from every forge, then pushes to every forge, as sync.md's "A
 // run" says. A failed write stops it with the error; what was written stays
 // written, and recorded.
-func Sync(ctx context.Context, s *gitstore.Store, opt Options, forges ...forge.Forge) (Report, error) {
+func Sync(ctx context.Context, s oplog.Datastore, opt Options, forges ...forge.Forge) (Report, error) {
 	return start(ctx, s, opt, forges, true, true)
 }
 
 // Pull is a run's pull alone.
-func Pull(ctx context.Context, s *gitstore.Store, opt Options, forges ...forge.Forge) (Report, error) {
+func Pull(ctx context.Context, s oplog.Datastore, opt Options, forges ...forge.Forge) (Report, error) {
 	return start(ctx, s, opt, forges, true, false)
 }
 
 // Push is a run's push alone. It reads each forge issue it writes to, and
 // takes nothing from it.
-func Push(ctx context.Context, s *gitstore.Store, opt Options, forges ...forge.Forge) (Report, error) {
+func Push(ctx context.Context, s oplog.Datastore, opt Options, forges ...forge.Forge) (Report, error) {
 	return start(ctx, s, opt, forges, false, true)
 }
 
 // run is one sync run's working state.
 type run struct {
 	ctx        context.Context
-	s          *gitstore.Store
+	s          oplog.Datastore
 	opt        Options
 	now        int64
 	au         *authors
@@ -147,7 +151,7 @@ type project struct {
 	acc    map[string]forge.Account // person id -> their account on this server
 }
 
-func start(ctx context.Context, s *gitstore.Store, opt Options, forges []forge.Forge, pull, push bool) (_ Report, err error) {
+func start(ctx context.Context, s oplog.Datastore, opt Options, forges []forge.Forge, pull, push bool) (_ Report, err error) {
 	now := time.Now().Unix()
 	j, err := lock(s, now)
 	if err != nil {
@@ -641,6 +645,9 @@ func (r *run) byMarker(p *project, fi forge.Issue) (id string, ok bool, err erro
 		return "", false, nil
 	}
 	is, here := r.issues[w.id]
+	if !here && r.opt.ForgeOnly {
+		return "", false, nil // its id never arrives: pulled as new (ADR 0002)
+	}
 	if !here || p.st.anyLink[w.id] {
 		return "", true, nil
 	}

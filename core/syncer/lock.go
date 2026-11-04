@@ -3,12 +3,11 @@ package syncer
 import (
 	"errors"
 	"fmt"
+	"github.com/guilbep/git-board/core/oplog"
 	"os"
 	"path/filepath"
 	"strconv"
 	"time"
-
-	"github.com/guilbep/git-board/core/gitstore"
 )
 
 // errHeld: another open file holds the OS lock.
@@ -20,8 +19,8 @@ var errHeld = errors.New("held")
 // out. The file is never removed: a run that opened it just before would
 // lock a file no other run sees. It holds the journal (journal.go), which
 // the run started at started goes on from.
-func lock(s *gitstore.Store, started int64) (*journal, error) {
-	dir := filepath.Join(s.CommonDir(), "board")
+func lock(s oplog.Datastore, started int64) (*journal, error) {
+	dir := s.Folder()
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, err
 	}
@@ -68,8 +67,8 @@ func holder(path string) string {
 }
 
 // Running says a run holds the lock now, in this process or another.
-func Running(s *gitstore.Store) bool {
-	f, err := os.OpenFile(filepath.Join(s.CommonDir(), "board", "sync.lock"), os.O_RDWR, 0)
+func Running(s oplog.Datastore) bool {
+	f, err := os.OpenFile(filepath.Join(s.Folder(), "sync.lock"), os.O_RDWR, 0)
 	if err != nil {
 		return false // no run ever took it
 	}

@@ -5,10 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"slices"
+	"strings"
 	"time"
 
-	"github.com/guilbep/git-board/core/gitstore"
 	"github.com/guilbep/git-board/core/oplog"
 )
 
@@ -37,7 +39,7 @@ func RemoveAccount(author, server, id string) oplog.Op {
 
 // Create writes a new person. The first operation must be a create. Every
 // operation is in the first pack, so any may have an empty author.
-func Create(ctx context.Context, s *gitstore.Store, ops ...oplog.Op) (*Person, error) {
+func Create(ctx context.Context, s oplog.Datastore, ops ...oplog.Op) (*Person, error) {
 	if len(ops) == 0 || ops[0].Kind != "create" {
 		return nil, errors.New("people: the first operation must be a create")
 	}
@@ -53,7 +55,7 @@ func Create(ctx context.Context, s *gitstore.Store, ops ...oplog.Op) (*Person, e
 }
 
 // Load reads a person.
-func Load(s *gitstore.Store, id string) (*Person, error) {
+func Load(s oplog.Datastore, id string) (*Person, error) {
 	l, err := oplog.Load(s, "person", id)
 	if err != nil {
 		return nil, err
@@ -62,10 +64,10 @@ func Load(s *gitstore.Store, id string) (*Person, error) {
 }
 
 // List returns the ids of the persons, sorted.
-func List(s *gitstore.Store) ([]string, error) { return oplog.List(s, "person") }
+func List(s oplog.Datastore) ([]string, error) { return oplog.List(s, "person") }
 
 // Do appends ops to a person and returns its new state.
-func Do(ctx context.Context, s *gitstore.Store, id string, ops ...oplog.Op) (*Person, error) {
+func Do(ctx context.Context, s oplog.Datastore, id string, ops ...oplog.Op) (*Person, error) {
 	l, err := oplog.Load(s, "person", id)
 	if err != nil {
 		return nil, err
@@ -88,10 +90,38 @@ func pending(entries []oplog.Entry, ops []oplog.Op) []oplog.Entry {
 	return out
 }
 
-// Me is the person id in the local config key board.me, or "" when unset.
-func Me(ctx context.Context, s *gitstore.Store) (string, error) { return s.Config(ctx, "board.me") }
+// configStore is a datastore that keeps a local config: git, whose board.me
+// is in git config.
+type configStore interface {
+	Config(ctx context.Context, key string) (string, error)
+	SetConfig(ctx context.Context, key, value string) error
+}
 
-// SetMe sets board.me. It doesn't check the id.
-func SetMe(ctx context.Context, s *gitstore.Store, id string) error {
-	return s.SetConfig(ctx, "board.me", id)
+// meFile is who I am on a board kept elsewhere than git: a file in the
+// machine's folder (ADR 0002, section 2).
+const meFile = "me"
+
+// Me is who writes on this machine: the person id in the local config key
+// board.me for a git board, in the folder's file "me" for another. "" when
+// unset.
+func Me(ctx context.Context, s oplog.Datastore) (string, error) {
+	if c, ok := s.(configStore); ok {
+		return c.Config(ctx, "board.me")
+	}
+	data, err := os.ReadFile(filepath.Join(s.Folder(), meFile))
+	if errors.Is(err, os.ErrNotExist) {
+		return "", nil
+	}
+	return strings.TrimSpace(string(data)), err
+}
+
+// SetMe sets who writes on this machine. It doesn't check the id.
+func SetMe(ctx context.Context, s oplog.Datastore, id string) error {
+	if c, ok := s.(configStore); ok {
+		return c.SetConfig(ctx, "board.me", id)
+	}
+	if err := os.MkdirAll(s.Folder(), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(s.Folder(), meFile), []byte(id+"\n"), 0o644)
 }

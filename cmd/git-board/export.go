@@ -53,3 +53,65 @@ func runExport(out io.Writer, dir string) error {
 	fmt.Fprintf(out, "%d written in %s\n", len(written), dir)
 	return nil
 }
+
+func newImportCmd() *cobra.Command {
+	var md string
+	cmd := &cobra.Command{
+		Use:   "import --md <dir>",
+		Short: "Read a folder of Markdown issues into the board, as export writes them",
+		Long: `Read every dir/*.md that export wrote, or that was written the same way.
+
+A file whose id is an issue here gives it what differs, as you: the title,
+the description, the state, the fields, labels and assignees, a comment's
+text, and new comments (a "### <who> · <time>" heading with no marker).
+When the issue changed since the file's updated, a field that differs is a
+conflict: the board's value stays, and it is listed.
+
+A file with no id, or one this board doesn't have, is a new issue, with the
+author, comments and times it names; its new id is written back into it.
+A Markdown file that isn't an issue file is skipped. On a board kept in
+Markdown files (board.datastore markdown:<dir>), --md is that folder, and
+the next write reads it in anyway.`,
+		Example: `  git board export --md issues
+  $EDITOR issues/0042-*.md
+  git board import --md issues`,
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runImport(cmd.OutOrStdout(), md)
+		},
+	}
+	cmd.Flags().StringVar(&md, "md", "", "the folder to read the Markdown files from")
+	return cmd
+}
+
+func runImport(out io.Writer, dir string) error {
+	b, err := store.OpenCwd()
+	if err != nil {
+		return err
+	}
+	defer b.Close()
+	if dir == "" {
+		dir = b.MarkdownDir()
+	}
+	if dir == "" {
+		return fmt.Errorf("import needs --md <dir>")
+	}
+	rep, err := b.ImportMarkdown(dir)
+	if err != nil {
+		return err
+	}
+	for _, n := range rep.Created {
+		fmt.Fprintln(out, "created", n)
+	}
+	for _, n := range rep.Updated {
+		fmt.Fprintln(out, "updated", n)
+	}
+	for _, c := range rep.Conflicts {
+		fmt.Fprintln(out, "conflict", c)
+	}
+	for _, s := range rep.Skipped {
+		fmt.Fprintln(out, "skipped", s)
+	}
+	fmt.Fprintf(out, "%d created, %d updated, %d unchanged, %d conflicts\n", len(rep.Created), len(rep.Updated), rep.Unchanged, len(rep.Conflicts))
+	return nil
+}

@@ -13,6 +13,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/guilbep/git-board/core/datastore"
 	"github.com/guilbep/git-board/internal/board"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/fields"
@@ -131,6 +132,10 @@ func newMux(s *apiServer, static http.Handler) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/events", s.handleEvents)
 	mux.HandleFunc("GET /api/repository", s.handleRepository)
+	mux.HandleFunc("GET /api/datastore", s.handleDatastore)
+	mux.HandleFunc("PUT /api/datastore", s.handleSetDatastore)
+	mux.HandleFunc("POST /api/datastore/test", s.handleTestDatastore)
+	mux.HandleFunc("POST /api/datastore/copy", s.handleCopyDatastore)
 	mux.HandleFunc("GET /api/views", s.handleViews)
 	mux.HandleFunc("PUT /api/views/{name}", s.handleSaveView)
 	mux.HandleFunc("GET /api/config/fields", s.handleFields)
@@ -518,6 +523,10 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 }
 
 func writeError(w http.ResponseWriter, status int, err error) {
+	if errors.Is(err, datastore.ErrMissing) { // ADR 0002: answered as a refusal, its sentence the message
+		writeCoded(w, http.StatusConflict, "missing", err)
+		return
+	}
 	writeJSON(w, status, map[string]string{"error": err.Error()})
 }
 

@@ -79,6 +79,9 @@ func (b *Backend) fetchResetMark(remote string) error {
 // Otherwise it refuses, saying which side started over and the command
 // that settles it.
 func (b *Backend) ResetGuard(remote string) error {
+	if !b.inGit() {
+		return nil // no replica: no one starts over apart
+	}
 	ours, err := b.s.Ref(resetRef)
 	if err != nil {
 		return err
@@ -156,6 +159,9 @@ type ResetReport struct {
 // one of a board gone), and unsets board.me once its person is gone.
 func (b *Backend) ResetHard(remote string) (ResetReport, error) {
 	var rep ResetReport
+	if err := b.needGit("starting over"); err != nil {
+		return rep, err
+	}
 	if remote != "" {
 		if err := b.checkRemote(remote); err != nil {
 			return rep, err
@@ -164,7 +170,7 @@ func (b *Backend) ResetHard(remote string) (ResetReport, error) {
 	// the sync's journal says what it pulled into the refs that go: a sync
 	// that went on from it would skip those issues for good. A sync that
 	// runs refuses the reset.
-	if err := syncer.Forget(b.s); err != nil {
+	if err := syncer.Forget(b.ds); err != nil {
 		return rep, err
 	}
 	all, err := b.s.Refs("refs/")
@@ -213,7 +219,7 @@ func (b *Backend) ResetHard(remote string) (ResetReport, error) {
 			}
 		}
 	}
-	id, err := people.Me(ctx, b.s)
+	id, err := people.Me(ctx, b.whoStore())
 	if err != nil || id == "" {
 		return rep, err
 	}
@@ -266,6 +272,9 @@ func (b *Backend) dropRefs(refs []string, all map[string]gitstore.Hash) error {
 // that window ever matters.
 func (b *Backend) PushPrune(remote string) (ResetReport, error) {
 	var rep ResetReport
+	if err := b.needGit("starting over"); err != nil {
+		return rep, err
+	}
 	if err := b.checkRemote(remote); err != nil {
 		return rep, err
 	}

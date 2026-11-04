@@ -1,6 +1,7 @@
 # ADR 0002: The board is kept in a datastore, cut at the pack
 
-- Status: accepted (2026-11-03)
+- Status: accepted (2026-11-03); steps 3 to 5 built (2026-11-04), see
+  [As built](#as-built)
 - Date: 2026-11-03
 - Issue #76. The PRD is `docs/prd/datastores.md`.
 - Builds on the core's spec: [Data model](../spec/data-model.md),
@@ -319,21 +320,75 @@ Unchanged:
 - `.git-board.toml` stays in the code checkout. Its defaults (#75) aren't
   touched here.
 
+## As built
+
+Steps 2 (Markdown import), 3 (the cut), 4 (PostgreSQL) and 5 (forge
+only) landed on 2026-11-04, and the Markdown folder as a datastore with
+them. Where the
+build differs from the decision above, and why:
+
+- **The interface is `core/datastore`, not `core/oplog`.** `*gitstore.Store`
+  implements it itself, so every caller and test that held a git store
+  keeps working; gitstore can't import oplog, which imports it for
+  `Merge`. `oplog.Datastore` names the same interface.
+- **The interface has a fourth method, `Folder`**: the machine's own
+  folder (section 2), which the index, the sync lock and the caches need.
+  For git it stays `<common dir>/board`.
+- **The git datastore's checks live in `gitstore`** (`Walk`, `ReadNode`):
+  a pack's clock and the merge rule read parents, which only git has.
+  `Merge` and `MergeFetched` stay oplog's git half (`merge.go`).
+- **A malformed operation is named by its pack's id**, not by its commit:
+  the same message in every datastore.
+- **`ErrRefMoved` is `datastore.ErrMoved`**, so a caller of either checks
+  one error.
+
+What this ADR left open is settled:
+
+- **Where a datastore is configured:** `board.datastore` in the clone's
+  git config (`git`, `forge`, or a `postgres://` URL), over which
+  `GIT_BOARD_DATASTORE` wins. Never `.git-board.toml`: a URL may hold a
+  password. Settings › Datastore edits it, tests a URL and copies a git
+  board in; a change takes effect when the server starts again.
+- **The PostgreSQL index replaces sqlite**: the same tables, in the schema
+  `git_board_index`, shared by every machine; its search tokenizes as
+  unicode61 does, and every index test runs on it (`make test-pg`).
+- **Who I am** stays `board.me` in the clone's git config, whatever keeps
+  the board: it is the clone's, not the board's. `<folder>/me` is only for
+  a datastore with no clone.
+- **`core/watch`** reads `Heads`; the server's change events compare the
+  datastore's heads.
+- **Copying a board out of git** is `git board datastore copy` (and the
+  tab's button): packs as they are, the counter with them. Into git stays
+  open.
+- **Forge only** sends each write from `git board serve` at once; a
+  write from the command line goes with the next sync. Its re-pulled texts
+  keep the header sync posted them with, as anyone's text does.
+
+Markdown, as built, differs from section 5:
+
+- **Import is not a forge adapter.** `git board import --md` reads the
+  files straight into operations: a file's `updated` against the issue's
+  is the last seen (a field changed on both sides is a conflict, the
+  board's kept), names find the people, and a new file's id is written
+  back. A folder adapter for sync would have taken every author as sync's
+  account and every pulled text with sync's header; this keeps them.
+- **The Markdown folder is a datastore** (`core/mdstore`,
+  `board.datastore markdown:<dir>`): packs as JSON lines in
+  `<dir>/.board/<kind>/<id>.jsonl`, merged by git's union driver; a
+  version is the count of lines, a write takes the file's lock. After
+  each write, the backend reads the folder's hand edits in, then renders
+  the files.
+
 ## Left open
 
-- Where a non-git board's datastore is configured, and the local folder
-  and `board.me` beside it. This waits on the init and config work (#75).
-- The local folder's default path for a board with no clone.
+- The local folder's default path for a board with no clone (a hosted
+  git-board).
 - Whether `Heads` should return the versions of every kind in one call: the
   index reads two kinds and the change events three.
-- The PostgreSQL index: keep the local sqlite one, or query PostgreSQL.
-- Copying a board from one datastore to another (`git board move-store`?):
-  out of git, the packs copy as they are; into git, they must be chained
-  into commits again, clock by clock, and packs of one clock need a merge
-  each. The Counter and the marks need their own step.
-- `core/watch` polls refs, and nothing outside core uses it: the server
-  compares fingerprints (`internal/server/events.go:170`, `:196`). It moves
-  to `Heads` or goes.
+- Copying a board into git: its packs must be chained into commits again,
+  clock by clock, and packs of one clock need a merge each.
+- The pages don't yet disable a control a datastore can't run (pull, push,
+  start over): the server refuses it, 409 `missing`, with the sentence.
 
 ## Evidence
 

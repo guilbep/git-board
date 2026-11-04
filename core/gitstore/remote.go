@@ -4,11 +4,13 @@ import (
 	"context"
 	"fmt"
 	"strings"
+
+	"github.com/guilbep/git-board/core/datastore"
 )
 
-// Kinds are the entity kinds, listed once. git-board reads release's
-// operations. refs/board/seq is git-board's own and is not one of them.
-var Kinds = []string{"issue", "person", "sync", "release"}
+// Kinds are the entity kinds, the datastore's. refs/board/seq is
+// git-board's own and is not one of them.
+var Kinds = datastore.Kinds
 
 // checkRemote refuses a remote name git would take for an option, or none.
 func checkRemote(remote string) error {

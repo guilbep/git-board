@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/guilbep/git-board/core/forge"
-	"github.com/guilbep/git-board/core/gitstore"
 	"github.com/guilbep/git-board/core/issue"
 	"github.com/guilbep/git-board/core/oplog"
 	"github.com/guilbep/git-board/core/people"
@@ -18,14 +17,14 @@ import (
 // authors finds the person of each forge account, writing it first when
 // there is none or its login changed.
 type authors struct {
-	s       *gitstore.Store
+	s       oplog.Datastore
 	dir     *people.Directory
 	persons map[string]*people.Person
 }
 
 // loadAuthors reads every person. One that fails to load stops the run:
 // ownership can't be decided without every person.
-func loadAuthors(s *gitstore.Store) (*authors, error) {
+func loadAuthors(s oplog.Datastore) (*authors, error) {
 	dir, err := people.LoadDirectory(s)
 	if err != nil {
 		return nil, fmt.Errorf("syncer: people: %w", err)

@@ -8,7 +8,6 @@ import (
 	"slices"
 	"time"
 
-	"github.com/guilbep/git-board/core/gitstore"
 	"github.com/guilbep/git-board/core/oplog"
 )
 
@@ -57,7 +56,7 @@ func ChangeLabels(author string, add, remove []string) oplog.Op {
 }
 
 // Create writes a new issue. The first operation must be a create.
-func Create(ctx context.Context, s *gitstore.Store, ops ...oplog.Op) (*Issue, error) {
+func Create(ctx context.Context, s oplog.Datastore, ops ...oplog.Op) (*Issue, error) {
 	if len(ops) == 0 || ops[0].Kind != "create" {
 		return nil, errors.New("issue: the first operation must be a create")
 	}
@@ -72,7 +71,7 @@ func Create(ctx context.Context, s *gitstore.Store, ops ...oplog.Op) (*Issue, er
 }
 
 // Load reads an issue.
-func Load(s *gitstore.Store, id string) (*Issue, error) {
+func Load(s oplog.Datastore, id string) (*Issue, error) {
 	l, err := oplog.Load(s, "issue", id)
 	if err != nil {
 		return nil, err
@@ -81,10 +80,10 @@ func Load(s *gitstore.Store, id string) (*Issue, error) {
 }
 
 // List returns the ids of the issues, sorted.
-func List(s *gitstore.Store) ([]string, error) { return oplog.List(s, "issue") }
+func List(s oplog.Datastore) ([]string, error) { return oplog.List(s, "issue") }
 
 // Do appends ops to an issue and returns its new state.
-func Do(ctx context.Context, s *gitstore.Store, id string, ops ...oplog.Op) (*Issue, error) {
+func Do(ctx context.Context, s oplog.Datastore, id string, ops ...oplog.Op) (*Issue, error) {
 	l, err := oplog.Load(s, "issue", id)
 	if err != nil {
 		return nil, err

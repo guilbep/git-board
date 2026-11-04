@@ -1,4 +1,4 @@
-.PHONY: help build test web-e2e lint fmt vet licences ci install install-latest web-dev web-check web-lint web-build dist docs docs-serve clean
+.PHONY: help build test test-pg web-e2e lint fmt vet licences ci install install-latest web-dev web-check web-lint web-build dist docs docs-serve clean
 
 # The public targets, each with its ## line: a bare make prints them.
 help: ## List the make targets
@@ -9,6 +9,11 @@ build: ## Build every package
 
 test: ## Run the Go tests
 	go test ./...
+
+test-pg: ## Run the PostgreSQL tests too, the index's on PostgreSQL (needs GIT_BOARD_TEST_POSTGRES)
+	@test -n "$$GIT_BOARD_TEST_POSTGRES" || { echo "GIT_BOARD_TEST_POSTGRES: a DSN whose user may create databases"; exit 1; }
+	go test -count=1 ./core/... ./internal/store/...
+	GIT_BOARD_TEST_INDEX=pg go test -count=1 ./core/index/
 
 vet: ## Run go vet
 	go vet ./...

@@ -293,7 +293,7 @@ func (s *apiServer) forgeSnapshot() forgeStatus {
 	}
 	st := forgeStatus{Bridges: bridges, Job: s.job}
 	if s.job == nil || s.job.State != "running" {
-		if c, err := syncer.Cut(s.b.Store()); err == nil && c != nil {
+		if c, err := syncer.Cut(s.b.Datastore()); err == nil && c != nil {
 			st.Cut = &cutRun{At: c.At}
 			for _, f := range c.Forges {
 				st.Cut.Forges = append(st.Cut.Forges, cutForge{Name: keys[f.Key], Key: f.Key, Read: f.Read, Total: f.Total})

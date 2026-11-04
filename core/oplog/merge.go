@@ -1,5 +1,9 @@
 package oplog
 
+// This file is oplog's git half: merging heads that came from a fetch. Only
+// git has parents, and only git merges; it is the one file of oplog that
+// imports gitstore.
+
 import (
 	"context"
 	"errors"
@@ -10,6 +14,31 @@ import (
 
 	"github.com/guilbep/git-board/core/gitstore"
 )
+
+// updateRef moves a ref. Tests swap it.
+var updateRef = (*gitstore.Store).UpdateRef
+
+// gitNodes are a walk's commits as the packs they hold.
+func gitNodes(commits map[gitstore.Hash]gitstore.Node) ([]node, error) {
+	out := make([]node, 0, len(commits))
+	for h, c := range commits {
+		n, err := decode(c.Pack)
+		if err != nil {
+			return nil, fmt.Errorf("oplog: commit %s: %w", h, err)
+		}
+		out = append(out, n)
+	}
+	return out, nil
+}
+
+// walk is gitstore's walk, with oplog's prefix on its errors.
+func walk(s *gitstore.Store, head gitstore.Hash) (map[gitstore.Hash]gitstore.Node, error) {
+	nodes, err := s.Walk(head)
+	if err != nil {
+		return nil, fmt.Errorf("oplog: %w", err)
+	}
+	return nodes, nil
+}
 
 // Merge joins the entity's local head with other, a head from elsewhere,
 // and returns the entity as it then is. other is read and checked before
@@ -29,7 +58,7 @@ func Merge(ctx context.Context, s *gitstore.Store, kind, id string, other gitsto
 		if err != nil {
 			return nil, err
 		}
-		next, nodes := other, theirs // no local ref, or other contains it
+		next, commits := other, theirs // no local ref, or other contains it
 		if head != gitstore.ZeroHash {
 			ours, err := walk(s, head)
 			if err != nil {
@@ -39,16 +68,21 @@ func Merge(ctx context.Context, s *gitstore.Store, kind, id string, other gitsto
 			_, theirsHasHead := theirs[head]
 			switch {
 			case oursHasOther:
-				next, nodes = head, ours
+				next, commits = head, ours
 			case !theirsHasHead:
-				p := pack{Clock: 1 + max(ours[head].Clock, theirs[other].Clock), Ops: []Op{}}
-				c, n, err := writePack(s, p, head, other)
+				data, _, err := encode(pack{Clock: 1 + max(ours[head].Clock, theirs[other].Clock), Ops: []Op{}})
 				if err != nil {
 					return nil, err
 				}
-				nodes = maps.Clone(ours)
-				maps.Copy(nodes, theirs)
-				next, nodes[c] = c, n
+				c, blob, err := s.WritePack(data, head, other)
+				if err != nil {
+					return nil, err
+				}
+				commits = maps.Clone(ours)
+				maps.Copy(commits, theirs)
+				next = c
+				commits[c] = gitstore.Node{Parents: []gitstore.Hash{head, other}, Blob: blob, Pack: data,
+					Clock: 1 + max(ours[head].Clock, theirs[other].Clock)}
 			}
 		}
 		if next != head {
@@ -60,7 +94,11 @@ func Merge(ctx context.Context, s *gitstore.Store, kind, id string, other gitsto
 				return nil, err
 			}
 		}
-		return &Log{Kind: kind, ID: id, Head: next, Entries: order(nodes)}, nil
+		nodes, err := gitNodes(commits)
+		if err != nil {
+			return nil, err
+		}
+		return build(kind, id, next.String(), nodes), nil
 	}
 }
 

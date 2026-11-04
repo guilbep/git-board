@@ -70,6 +70,10 @@ func (b *Backend) Remotes() ([]Remote, error) {
 			r.PushURLs = u
 		}
 		var issues, people bool
+		if !b.inGit() { // the board isn't in git: no remote holds it
+			res = append(res, r)
+			continue
+		}
 		if r.Issues, issues, err = b.ahead(name, "issue"); err != nil {
 			return nil, err
 		}

@@ -374,6 +374,7 @@ func (b *Backend) Me() (Person, bool, error) {
 
 // NewIssue creates an issue as you, with labels, and returns its id.
 func (b *Backend) NewIssue(title, body string, labels []string) (string, error) {
+	b.readMarkdown()
 	me, err := b.me()
 	if err != nil {
 		return "", err
@@ -382,10 +383,11 @@ func (b *Backend) NewIssue(title, body string, labels []string) (string, error) 
 	if labels, _ = b.stored(labels, nil, nil); len(labels) > 0 {
 		ops = append(ops, issue.ChangeLabels(me, labels, nil))
 	}
-	is, err := issue.Create(ctx, b.s, ops...)
+	is, err := issue.Create(ctx, b.ds, ops...)
 	if err != nil {
 		return "", fmt.Errorf("creating the issue: %w", err)
 	}
+	b.wrote(is.ID)
 	return is.ID, nil
 }
 

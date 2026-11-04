@@ -52,6 +52,9 @@ func (b *Backend) SyncWhole(ctx context.Context, w Whole) error {
 	if err != nil {
 		return err
 	}
+	if !b.inGit() {
+		return b.syncShared(ctx, w, step)
+	}
 	if !has && w.Forges == nil && w.Project == nil {
 		return fmt.Errorf("nothing to sync: no git remote %s, no forge with its sync on, no [github-project]", w.Remote)
 	}
@@ -174,4 +177,48 @@ func (b *Backend) hasRemote(remote string) (bool, error) {
 		return false, err
 	}
 	return slices.Contains(lines(out), remote), nil
+}
+
+// syncShared is SyncWhole for a board kept elsewhere than git: the datastore
+// is shared, so there is nothing to pull or push. Its last step numbers the
+// issues on the datastore's counter, as a push numbers them on origin's.
+func (b *Backend) syncShared(ctx context.Context, w Whole, step func(string, string, string)) error {
+	shared := "the board is kept in " + b.kind() + ": nothing to pull from git"
+	step(StepPull, "skipped", shared)
+	var errs []error
+	for _, s := range []struct {
+		name, skip string
+		do         func(context.Context) error
+	}{
+		{StepForges, "no forge has its sync on", w.Forges},
+		{StepProject, "no [github-project] in .git-board.toml", w.Project},
+	} {
+		if s.do == nil {
+			step(s.name, "skipped", s.skip)
+			continue
+		}
+		step(s.name, "running", "")
+		if err := s.do(ctx); err != nil {
+			step(s.name, "failed", NoCredentials(err.Error()))
+			errs = append(errs, fmt.Errorf("%s: %w", s.name, err))
+			continue
+		}
+		step(s.name, "done", "")
+	}
+	if w.DryRun {
+		step(StepPush, "skipped", "a check numbers nothing")
+		return errors.Join(errs...)
+	}
+	step(StepPush, "running", "")
+	n, err := b.NumberIssues(NumbersRemote)
+	switch {
+	case err != nil:
+		step(StepPush, "failed", err.Error())
+		errs = append(errs, fmt.Errorf("%s: %w", StepPush, err))
+	case n > 0:
+		step(StepPush, "done", fmt.Sprintf("numbered %d issues", n))
+	default:
+		step(StepPush, "done", "nothing to push: the board is kept in "+b.kind())
+	}
+	return errors.Join(errs...)
 }
