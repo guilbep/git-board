@@ -208,6 +208,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
+import { memo } from '@/memo';
 import { useRoute } from 'vue-router';
 import AppHeader from '@/components/AppHeader.vue';
 import GbIcon from '@/components/GbIcon.vue';
@@ -325,8 +326,10 @@ function happened(c: ReleaseRow): string {
 }
 
 // the record's notes and comments, as the server renders Markdown
+// each text rendered once: a reload (every releases or config event)
+// asks only for a note or comment new or changed since
+const md = memo((s: string) => renderMarkdown(s).then((r) => r.html));
 async function rendered(rec: ReleaseRecord | null): Promise<string[]> {
-  const md = (s: string) => renderMarkdown(s).then((r) => r.html);
   return Promise.all([rec?.notes ? md(rec.notes) : '', ...(rec?.comments ?? []).map((c) => md(c.message))]);
 }
 
