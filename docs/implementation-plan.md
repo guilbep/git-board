@@ -1101,3 +1101,18 @@ nothing is stored.
 - Deleting (ADR 0019, `docs/adr/0019-deleting-is-a-tombstone.md`): a `delete` issue operation whose target is the create (the issue) or a comment. A tombstone: the text stays in the log. `issue.Issue.Deleted` and `Removed`; the index leaves a deleted issue out of every query and a deleted comment out of search; `internal/store` answers not found (`ErrDeleted`) and leaves it out of lists, threads, exports and insights; a Markdown board removes the file and skips it when it comes back; sync keeps a deleted issue linked and skips it both ways, and never pulls a deleted comment again. CLI: `git board delete <id>`, `comment --delete <ref>`, a confirmation on a terminal, `--yes`. Not in the web UI yet.
 - `git board undo [<id>] [--force]` (`internal/store/undo.go`): the inverse of your last pack on an issue, or anywhere by time. Refuses a create, a delete, a set-meta, and another's write after yours.
 - `git board labels [rename]`, `git board config get|set|unset|list` (`internal/config/keys.go`: one key's line rewritten, an unknown key refused through the decoder's undecoded keys), `-C <dir>`, `git board forge status [--check]` and `forge login <forge>`, `git board insights [--json]`.
+
+### Status 2026-11-04: the issue domain's satellites in the core (ADR 0020 step 2, branch `feat/kernel`)
+
+The read model, the fields, the filters and the inbox are core packages
+in the issue layer, importable without `internal/`.
+
+- `core/model`: `Issue`, `Thread`, `Event`, `Person`, `Forge`, `Review`,
+  `Mentions`, from `internal/store`; JSON tags unchanged.
+- `core/fields`: the schema (`Schema`: fields, types, sprints, roles,
+  plain labels), from `internal/config`, which embeds it in `Config`, and
+  the assignments, from `internal/fields`.
+- `core/filter`, `core/inbox`, from `internal/`; they take
+  `Config.IssueSchema()`.
+- `BenchmarkMatches` (`core/filter`) times the filter over 5,000 issues:
+  unchanged by the move.

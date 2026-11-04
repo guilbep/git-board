@@ -23,6 +23,7 @@ flowchart TB
     domain["core/issue · core/people<br/>Apply: operations → state"]
     syncer["core/syncer<br/>forge sync: plan, pull, push,<br/>sync entities"]
     index["core/index<br/>lists, search, lookups"]
+    read["core/model · fields · filter · inbox<br/>issues as surfaces read them,<br/>fields, filters, the inbox"]
     oplog["core/oplog<br/>packs: encode, hash, order"]
     ds{{"core/datastore.Datastore<br/>Heads · Packs · Add · Folder"}}
   end
@@ -45,6 +46,7 @@ flowchart TB
   store --> domain
   store --> syncer
   store --> index
+  store --> read
   store --> code
   domain --> oplog
   syncer --> oplog
@@ -68,6 +70,7 @@ flowchart TB
 | `core/issue`, `core/people` | an entity's state, folded from its operations (`Apply`) | where the operations are kept |
 | `core/syncer` | forge sync; its bookkeeping (links, last seen, posted) is operations in `sync` entities | git: a forge sync runs the same on every datastore |
 | `core/index` | lists, search and lookups, a cache brought up to the datastore before each query | the truth: it is never the source |
+| `core/model`, `core/fields`, `core/filter`, `core/inbox` | the issue as every surface reads it (`model.Issue`, `model.Thread`), the fields' schema and assignments, the filter grammar, what a person follows | the config file: `internal/config` reads it into a `fields.Schema` |
 | `core/oplog` | packs: their bytes, their id (the git blob id of the bytes), their order (clock, then id) | where the packs are kept |
 | `core/datastore` | the interface, and its errors: `ErrNotFound`, `ErrMoved`, `ErrMissing` | the packs' content |
 | `core/gitstore`, `core/pgstore`, `core/mdstore` | the bytes, a version per entity, the compare-and-swap | operations |

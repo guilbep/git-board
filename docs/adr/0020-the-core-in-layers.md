@@ -1,6 +1,8 @@
 # ADR 0020: The core in layers: a kernel, then issues, releases and the cycle
 
-- Status: accepted (2026-11-04, Pierre: "we should have a kernel").
+- Status: accepted (2026-11-04, Pierre: "we should have a kernel"). Step
+  1, the guard, and step 2, the issue domain's satellites, are done
+  (2026-11-04; see Step 2 below).
 - Date: 2026-11-04
 - Builds on [ADR 0005](0005-core-is-a-library.md) (core/ is a library),
   [ADR 0018](0018-own-your-issues-work-in-progress-is-opt-in.md) (what the
@@ -33,7 +35,7 @@ enforces it.**
 | Layer | Packages (target) | What it owns |
 |---|---|---|
 | **Kernel** | `core/oplog`, `core/datastore` and the stores, `core/people`, `core/watch`, `core/forge` | operations, where they are kept, who wrote them, the forges' adapters |
-| **Issues** | `core/issue`, `core/index`, `core/syncer`, plus fields, filters, the inbox (from `internal/fields`, `internal/filter`, `internal/inbox`) | issues, comments, fields as labels (ADR 0007), queries, their sync with forges |
+| **Issues** | `core/issue`, `core/index`, `core/syncer`, `core/model` (the read model, from `internal/store`), `core/fields` (the schema, from `internal/config`, and the assignments, from `internal/fields`), `core/filter`, `core/inbox` (from `internal/filter`, `internal/inbox`) | issues, comments, fields as labels (ADR 0007), queries, the inbox, their sync with forges |
 | **Releases** | `core/release` (from `internal/store/releases.go`, `internal/release`), `core/proof` (from `internal/proof`) | versions, what each shipped (which issues), deploys, signed check results (ADR 0001) |
 | **Cycle** | `core/cycle` (from `internal/cycle`, `internal/work`) | an issue's steps from intent to verified; experimental (ADR 0018) |
 
@@ -83,10 +85,35 @@ nothing else. When releases go to forges through it, its generic half
 - The move is mechanical but wide: every surface's imports change. It goes
   in steps, one domain per pull request, with the import guard first.
 
+## Step 2: the issue domain's satellites
+
+Done 2026-11-04. What moved, and what it settles:
+
+- **`core/model`**: `Issue`, `Thread`, `Event`, `Person`, `Forge`,
+  `Review`, `Version`, `MetaSet`, `Mentions`, from `internal/store`, names
+  and JSON tags unchanged (`docs/guide/cli.md` › JSON output).
+  `internal/store` folds the core's operations into them. Not
+  `core/board`: `internal/board` and ten of its callers use them, and a
+  package board importing a package board needs an alias.
+- **`core/fields`**: the schema (`Field`, the types, `Sprints` with
+  `Resolve` and `Windows`, `Labels`, the roles, in a `Schema`), from
+  `internal/config`, and the assignments, from `internal/fields`.
+  `internal/config` reads and checks the TOML and embeds `fields.Schema`
+  in `Config`; `Config.IssueSchema` hands it to the core.
+- **`core/filter`**, **`core/inbox`**: they read a `model.Issue` or
+  `model.Thread` and a `*fields.Schema`; the inbox keeps its file in
+  `inbox.Files`, the four calls it makes of a billy filesystem.
+
+Fields and filters are the issue domain's, not the kernel's: a field is
+a label (ADR 0007), labels are an issue's, and a release has none. Should
+releases grow fields, the schema moves down then.
+
+`[branches] kinds` stay in `internal/config`: they name branches too. The
+core knows a flat kind by its field, `Field.Flat`, which config sets on
+parse.
+
 ## Left open
 
-- Whether fields and filters are the issue domain's or the kernel's: a
-  release has no fields today.
 - Whether deploys are a release's operations or their own kind.
-- The order of the steps; the proposal is: the guard, then releases (the
-  decided one), then issues' satellites, then the cycle.
+- The order of the steps left: the issues' satellites went second; the
+  proposal for the rest is releases, then the cycle.
