@@ -6,16 +6,22 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/guilbep/git-board/core/datastore"
 	"github.com/guilbep/git-board/core/gitstore"
+	"github.com/guilbep/git-board/core/issue"
 	"github.com/guilbep/git-board/core/oplog"
+	"github.com/guilbep/git-board/core/people"
 	"github.com/guilbep/git-board/core/pgstore"
+	"github.com/guilbep/git-board/core/syncer"
 )
 
 // DatastoreEnv names the board's datastore, over git config's
-// board.datastore: "git" (the default) or a postgres:// URL. Neither is
+// board.datastore: "git" (the default), a postgres:// URL, or "forge"
+// (the forges alone, ForgeOnly). Neither is
 // shared: a URL may hold a password, so it never goes in .git-board.toml.
 const DatastoreEnv = "GIT_BOARD_DATASTORE"
 
@@ -49,6 +55,8 @@ func openDatastore(ctx context.Context, s *gitstore.Store) (oplog.Datastore, err
 		return nil, err
 	case url == "" || url == "git":
 		return s, nil
+	case url == ForgeOnly:
+		return openForgeOnly(s)
 	case IsPostgres(url):
 		p, err := pgstore.Open(ctx, url, s.Folder())
 		if err != nil {
@@ -56,7 +64,7 @@ func openDatastore(ctx context.Context, s *gitstore.Store) (oplog.Datastore, err
 		}
 		return p, nil
 	}
-	return nil, fmt.Errorf("%s %q: git, or a postgres:// URL", DatastoreKey, url)
+	return nil, fmt.Errorf("%s %q: git, forge, or a postgres:// URL", DatastoreKey, url)
 }
 
 // closeDatastore closes ds when it isn't the git repository.
@@ -81,14 +89,16 @@ func (b *Backend) Where() string {
 // disabled, with the sentence of missing as its title.
 type Capabilities struct {
 	Datastore string `json:"datastore"`
-	Replica   bool   `json:"replica"` // fetch, push, merge with remotes; start over
-	Counter   bool   `json:"counter"` // project numbers
+	Where     string `json:"where"`      // the server, without its password
+	ForgeOnly bool   `json:"forge_only"` // each write goes to the forges at once
+	Replica   bool   `json:"replica"`    // fetch, push, merge with remotes; start over
+	Counter   bool   `json:"counter"`    // project numbers
 }
 
 // Capabilities says what the board's datastore can do.
 func (b *Backend) Capabilities() Capabilities {
 	_, counts := b.ds.(datastore.Counter)
-	return Capabilities{Datastore: b.kind(), Replica: b.inGit(), Counter: b.inGit() || counts}
+	return Capabilities{Datastore: b.kind(), Where: b.Where(), ForgeOnly: b.forgeOnly(), Replica: b.inGit(), Counter: b.inGit() || counts}
 }
 
 // CopyFromGit copies the git repository's board into the datastore this
@@ -160,4 +170,130 @@ func copyJournal(from, to string) error {
 		return err
 	}
 	return os.WriteFile(to, data, 0o644)
+}
+
+// ForgeOnly is board.datastore's value for a board kept on the forges
+// alone (ADR 0002, section 4).
+const ForgeOnly = "forge"
+
+// forgeCopy is a forge-only board's datastore: a disposable git copy in
+// the machine's folder, with no remote, that pull fills from the forges.
+// Each write goes to the forges at once (OnWrite); throwing the copy away
+// loses only what they hadn't got yet. Who I am stays in the clone's git
+// config, and the machine's folder is the clone's.
+type forgeCopy struct {
+	copy, clone *gitstore.Store
+}
+
+// forgeCopyDir is where a clone keeps its forge-only copy.
+func forgeCopyDir(clone *gitstore.Store) string {
+	return filepath.Join(clone.Folder(), "forge-copy.git")
+}
+
+func openForgeOnly(clone *gitstore.Store) (oplog.Datastore, error) {
+	dir := forgeCopyDir(clone)
+	if _, err := os.Stat(filepath.Join(dir, "HEAD")); errors.Is(err, os.ErrNotExist) {
+		if err := os.MkdirAll(filepath.Dir(dir), 0o755); err != nil {
+			return nil, err
+		}
+		if out, err := exec.Command("git", "init", "-q", "--bare", dir).CombinedOutput(); err != nil {
+			return nil, fmt.Errorf("making the forge-only copy: %w: %s", err, strings.TrimSpace(string(out)))
+		}
+	}
+	c, err := gitstore.Open(dir)
+	if err != nil {
+		return nil, fmt.Errorf("opening the forge-only copy: %w", err)
+	}
+	return &forgeCopy{copy: c, clone: clone}, nil
+}
+
+func (f *forgeCopy) Heads(ctx context.Context, kind string) (map[string]string, error) {
+	return f.copy.Heads(ctx, kind)
+}
+
+func (f *forgeCopy) Packs(ctx context.Context, kind, id string) ([][]byte, string, error) {
+	return f.copy.Packs(ctx, kind, id)
+}
+
+func (f *forgeCopy) Add(ctx context.Context, kind, id string, pack []byte, prev string) (string, error) {
+	return f.copy.Add(ctx, kind, id, pack, prev)
+}
+
+func (f *forgeCopy) Folder() string { return f.clone.Folder() }
+
+// Config and SetConfig are the clone's: board.me stays where it was.
+func (f *forgeCopy) Config(ctx context.Context, key string) (string, error) {
+	return f.clone.Config(ctx, key)
+}
+
+func (f *forgeCopy) SetConfig(ctx context.Context, key, value string) error {
+	return f.clone.SetConfig(ctx, key, value)
+}
+
+// Name is where the board is kept, for a user to read.
+func (f *forgeCopy) Name() string { return "the forges alone" }
+
+// forgeOnly says the board is kept on the forges alone.
+func (b *Backend) forgeOnly() bool { _, ok := b.ds.(*forgeCopy); return ok }
+
+// ErrNotOnForge: a forge-only copy holds writes the forges haven't got:
+// throwing it away would lose them.
+var ErrNotOnForge = errors.New("issues the forges haven't got yet")
+
+// DropCopy throws a forge-only board's copy away, and its sync journal: the
+// next sync pulls the board again. It refuses while an issue isn't on a
+// forge yet, unless force.
+func (b *Backend) DropCopy(force bool) (int, error) {
+	f, ok := b.ds.(*forgeCopy)
+	if !ok {
+		return 0, errors.New("the board isn't kept on the forges alone: there is no copy to throw away")
+	}
+	waiting, err := b.notOnForge()
+	if err != nil {
+		return 0, err
+	}
+	if len(waiting) > 0 && !force {
+		return len(waiting), fmt.Errorf("%d %w (sync first, or --force to lose them)", len(waiting), ErrNotOnForge)
+	}
+	if err := syncer.Forget(b.ds); err != nil {
+		return len(waiting), err
+	}
+	if err := os.RemoveAll(forgeCopyDir(f.clone)); err != nil {
+		return len(waiting), err
+	}
+	c, err := openForgeOnly(f.clone)
+	if err != nil {
+		return len(waiting), err
+	}
+	f.copy = c.(*forgeCopy).copy
+	b.mu.Lock()
+	b.issues, b.persons, b.heads = map[string]*issue.Issue{}, map[string]*people.Person{}, map[string]string{}
+	b.mu.Unlock()
+	return len(waiting), nil
+}
+
+// notOnForge are the issues linked to no forge yet.
+func (b *Backend) notOnForge() ([]string, error) {
+	ids, err := issue.List(b.ds)
+	if err != nil {
+		return nil, err
+	}
+	records, err := syncer.Records(b.ds)
+	if err != nil {
+		return nil, err
+	}
+	var out []string
+	for _, id := range ids {
+		if len(records[id]) == 0 {
+			out = append(out, id)
+		}
+	}
+	return out, nil
+}
+
+// wrote tells OnWrite an issue changed.
+func (b *Backend) wrote(id string) {
+	if f := b.OnWrite; f != nil {
+		f(id)
+	}
 }

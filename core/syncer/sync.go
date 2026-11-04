@@ -17,6 +17,11 @@ import (
 
 // Options are git-board's settings for a run.
 type Options struct {
+	// ForgeOnly is a board kept on the forges alone, in a copy pull fills
+	// (ADR 0002, section 4): a marker from sync's accounts naming an id that
+	// isn't here is pulled as new, as anyone's text is, since that id has
+	// nowhere to arrive from.
+	ForgeOnly bool
 	// PublishPrivate lets what was pulled from a project that isn't public
 	// go to one that is.
 	PublishPrivate bool
@@ -640,6 +645,9 @@ func (r *run) byMarker(p *project, fi forge.Issue) (id string, ok bool, err erro
 		return "", false, nil
 	}
 	is, here := r.issues[w.id]
+	if !here && r.opt.ForgeOnly {
+		return "", false, nil // its id never arrives: pulled as new (ADR 0002)
+	}
 	if !here || p.st.anyLink[w.id] {
 		return "", true, nil
 	}

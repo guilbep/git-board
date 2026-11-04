@@ -183,7 +183,7 @@ func (b *Backend) hasRemote(remote string) (bool, error) {
 // is shared, so there is nothing to pull or push. Its last step numbers the
 // issues on the datastore's counter, as a push numbers them on origin's.
 func (b *Backend) syncShared(ctx context.Context, w Whole, step func(string, string, string)) error {
-	shared := "the board is kept in " + b.kind() + ", shared: nothing to pull"
+	shared := "the board is kept in " + b.kind() + ": nothing to pull from git"
 	step(StepPull, "skipped", shared)
 	var errs []error
 	for _, s := range []struct {

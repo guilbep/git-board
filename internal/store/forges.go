@@ -208,6 +208,7 @@ func (b *Backend) forgeSync(ctx context.Context, run ForgeRun, way syncWay, issu
 		fs = append(fs, &counted{f: f.Forge, name: f.Name, dry: run.DryRun, ids: ids, see: see})
 	}
 	opt := syncer.Options{
+		ForgeOnly:      b.forgeOnly(),
 		PublishPrivate: run.PublishPrivate,
 		Issue:          issueID,
 		Local:          isLocal,

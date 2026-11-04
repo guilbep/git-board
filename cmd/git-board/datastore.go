@@ -44,6 +44,34 @@ left alone, so a second run copies nothing. The git refs aren't touched.`,
 			return runDatastoreCopy(cmd.Context(), cmd.OutOrStdout())
 		},
 	})
+	var force bool
+	drop := &cobra.Command{
+		Use:   "drop",
+		Short: "Throw a forge-only board's copy away: the next sync pulls it again",
+		Long: `Throw away the copy a board kept on the forges alone (board.datastore forge)
+holds, and its sync journal; the next git board sync pulls the board from
+the forges again. It refuses while an issue isn't on a forge yet: those
+would be lost. --force throws them away too.`,
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			b, err := store.OpenCwd()
+			if err != nil {
+				return err
+			}
+			defer b.Close()
+			n, err := b.DropCopy(force)
+			if err != nil {
+				return err
+			}
+			if n > 0 {
+				fmt.Fprintf(cmd.OutOrStdout(), "%d issues not on a forge were thrown away\n", n)
+			}
+			fmt.Fprintln(cmd.OutOrStdout(), "the copy is gone: git board sync pulls the board again")
+			return nil
+		},
+	}
+	drop.Flags().BoolVar(&force, "force", false, "throw away the issues no forge has yet too")
+	cmd.AddCommand(drop)
 	return cmd
 }
 
@@ -58,6 +86,9 @@ func runDatastore(out io.Writer) error {
 	fmt.Fprintf(out, "kept in   %s\n", b.Where())
 	fmt.Fprintf(out, "replica   %s (pull, push, start over)\n", yes[c.Replica])
 	fmt.Fprintf(out, "counter   %s (project numbers)\n", yes[c.Counter])
+	if c.ForgeOnly {
+		fmt.Fprintln(out, "each write goes to the forges at once, from git board serve")
+	}
 	return nil
 }
 

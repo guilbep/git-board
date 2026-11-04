@@ -386,6 +386,7 @@ func (b *Backend) NewIssue(title, body string, labels []string) (string, error) 
 	if err != nil {
 		return "", fmt.Errorf("creating the issue: %w", err)
 	}
+	b.wrote(is.ID)
 	return is.ID, nil
 }
 

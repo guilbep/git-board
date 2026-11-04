@@ -76,6 +76,9 @@ func Serve(ctx context.Context, addr, me string, ready func(url string)) error {
 	// the pages' event streams end with ctx
 	srv := &http.Server{Handler: withCORS(newMux(s, http.FileServerFS(dist))), BaseContext: func(net.Listener) context.Context { return ctx }}
 	go s.watchRefs(3*time.Second, ctx.Done()) // changes made outside the API reach the pages
+	if b.Capabilities().ForgeOnly {
+		s.startPushing(ctx) // each write goes to the forges at once
+	}
 	// a fresh clone opens on its remote's board; the writes wait from
 	// here, so that a page's fetch on open can't go first and leave
 	// origin fetched, the board still empty, and nothing pulled

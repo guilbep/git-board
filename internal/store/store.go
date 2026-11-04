@@ -165,6 +165,11 @@ type Backend struct {
 	Tokens  func(ctx context.Context, kind, baseURL, login string) (string, error)
 	Approve func(ctx context.Context, baseURL, login, token string) error
 
+	// OnWrite is told each issue a write here changed, once it landed: on a
+	// forge-only board, the server sends it to the forges at once. Nil is
+	// no one.
+	OnWrite func(issueID string)
+
 	// the code's commits, read with go-git itself (codeRepo, code.go)
 	codeOnce sync.Once
 	code     *git.Repository
@@ -516,7 +521,11 @@ func (b *Backend) do(idPrefix string, ops func(me string, is *issue.Issue, l *op
 	if err != nil || len(list) == 0 {
 		return is, err
 	}
-	return issue.Do(ctx, b.ds, is.ID, list...)
+	done, err := issue.Do(ctx, b.ds, is.ID, list...)
+	if err == nil {
+		b.wrote(done.ID)
+	}
+	return done, err
 }
 
 // ApplyLabelChange adds and removes labels on an issue in one operation,
