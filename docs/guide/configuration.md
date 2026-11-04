@@ -261,7 +261,7 @@ One syntax everywhere: a view's `filter`, the board's **Filter** box, ⌘K, and 
 | `sprint:@current`, `@next`, `@previous` | the sprint of today, the next or the previous one, from `[[sprints.list]]` |
 | `assignee:@me` | you: your git-bug identity's GitHub or GitLab login |
 | `is:open`, `is:closed` | open or closed issues |
-| `title:*spec*` | a title matching the pattern |
+| `title:*spec*` | a title matching the pattern, without case: `*` any text, `/` included, `?` one character, `[a-z]` and `[!a-z]` a class (a `[` that closes none is a `[`) |
 | `author:guilbep`, `author:@me` | who opened the issue |
 | `involves:guilbep`, `involves:@me` | issues someone is in: the author, a person field (assignee, reviewer…), a comment, an @mention |
 | `follows:@me` | what your inbox follows: `involves:@me`, the issues you followed and the views you follow, without those you unfollowed |
