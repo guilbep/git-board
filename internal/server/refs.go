@@ -115,14 +115,15 @@ func (s *apiServer) branchesOf(is store.Issue) (branches.Suggestion, []branches.
 }
 
 // localWrite is the gate a write to the repository's branches passes, as
-// wtx runs do (wtxAllowed): loopback only, and a same-host Origin, the
-// board's own page. code is "" when allowed.
-func (s *apiServer) localWrite(r *http.Request) (code, reason string) {
+// wtx runs do (wtxAllowed), and a run of the repository's code: loopback
+// only, and a same-host Origin, the board's own page. what says what is
+// refused ("branches are made"). code is "" when allowed.
+func (s *apiServer) localWrite(r *http.Request, what string) (code, reason string) {
 	switch origin := r.Header.Get("Origin"); {
 	case len(s.exposed) > 0:
-		return "exposed", "The server listens beyond this machine: branches are made only from a server on localhost."
+		return "exposed", "The server listens beyond this machine: " + what + " only from a server on localhost."
 	case origin == "" || !sameHost(origin, r.Host) && !devOrigins[origin]:
-		return "origin", "A branch is made only on a request from this board's own page."
+		return "origin", strings.ToUpper(what[:1]) + what[1:] + " only on a request from this board's own page."
 	}
 	return "", ""
 }
@@ -139,7 +140,7 @@ const pushTimeout = time.Minute
 // the issue, and be new. A refused push leaves the branch local, its push
 // command on the chip; the answer is the branches as GET gives them.
 func (s *apiServer) handleCreateBranch(w http.ResponseWriter, r *http.Request) {
-	if code, reason := s.localWrite(r); code != "" {
+	if code, reason := s.localWrite(r, "branches are made"); code != "" {
 		writeCoded(w, http.StatusForbidden, code, errors.New(reason))
 		return
 	}

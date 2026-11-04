@@ -746,7 +746,9 @@ GitHub and GitLab with your tokens: only pass an `--addr` other machines
 can reach on a network you trust. On every interface (`--addr
 0.0.0.0:8080`), it answers a request for an IP address or this machine's
 own name, never for another name: a website pointing its own domain at
-your machine (DNS rebinding) gets a 403. Upgrade path when that stops being fine: a reverse proxy doing auth
+your machine (DNS rebinding) gets a 403. Running a branch's tests,
+making a branch and starting an agent, which run your repository's code
+or sign with your key, need a server on localhost. Upgrade path when that stops being fine: a reverse proxy doing auth
 in front of it (simplest), or a token check in `withCORS`/a new middleware
 in `internal/server` (more work, still small).
 

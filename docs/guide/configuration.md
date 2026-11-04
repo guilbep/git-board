@@ -639,6 +639,8 @@ Only a command that runs the same in a clean checkout is proposed. Each of these
 
 Write to .git-board.toml adds the `[cycle.checks.<name>]` tables to the working tree's file, through `GET` and `POST /api/checks/setup`. Trim `files` there, then commit the file on the base for the checks to gate.
 
+**Only from this machine.** A test run executes the branch's code and signs its proof with your key, so `POST /api/issues/{id}/tests/run` and `POST /api/checks/setup` answer 403, as making a branch does, unless the server listens on localhost alone (`exposed` otherwise) and the request comes from the board's own page (`origin` otherwise).
+
 **Verifying without the server.** `git board verify [commit]` applies the same gate in any clone, with no server. The commit defaults to `HEAD`. It prints each check's verdict at the commit, and exits 1 when the commit isn't proven. The base defaults as on the server: `[branches] base`, else origin's default branch, else `main`, and `origin/<name>` when that exists. `--base` names another.
 
 ```console

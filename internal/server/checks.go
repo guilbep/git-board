@@ -147,6 +147,11 @@ func (s *apiServer) handleStepTests(w http.ResponseWriter, r *http.Request) {
 // commit that added the test. 202 at once; a cycle event after each
 // result.
 func (s *apiServer) handleRunTests(w http.ResponseWriter, r *http.Request) {
+	// it runs the branch's code and signs with the operator's key
+	if code, reason := s.localWrite(r, "tests run"); code != "" {
+		writeCoded(w, http.StatusForbidden, code, errors.New(reason))
+		return
+	}
 	var req struct {
 		Names  []string `json:"names"`
 		Target string   `json:"target"`
@@ -360,6 +365,11 @@ func (s *apiServer) handleChecksSetup(w http.ResponseWriter, r *http.Request) {
 // tree's .git-board.toml. They gate once committed on the base branch:
 // the gate reads the base's toml, never this file.
 func (s *apiServer) handleWriteChecks(w http.ResponseWriter, r *http.Request) {
+	// what it writes is what runs tests run
+	if code, reason := s.localWrite(r, "checks are set up"); code != "" {
+		writeCoded(w, http.StatusForbidden, code, errors.New(reason))
+		return
+	}
 	done, ok := s.beginWrite(w)
 	if !ok {
 		return

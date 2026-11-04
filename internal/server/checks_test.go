@@ -210,6 +210,34 @@ func TestRunTestsRefuses(t *testing.T) {
 	}
 }
 
+// A test run executes the branch's code and signs with the operator's
+// key: only from the board's own page, on a server on localhost, as a
+// branch is made. So is setting up the checks it runs.
+func TestRunTestsIsLocalOnly(t *testing.T) {
+	t.Parallel()
+	b := storetest.New(t)
+	id := storetest.NewIssue(t, b, "x")
+	local := &apiServer{cfg: &config.Config{}, b: b}
+	exposed := &apiServer{cfg: &config.Config{}, b: b, exposed: []string{"*"}}
+	body := map[string]any{"names": []string{"unit"}}
+	for _, c := range []struct {
+		s      *apiServer
+		origin bool
+		code   string
+	}{{local, false, "origin"}, {exposed, true, "exposed"}} {
+		ts := serve(t, c.s)
+		origin := ""
+		if c.origin {
+			origin = ts.URL
+		}
+		for _, path := range []string{"/api/issues/" + id + "/tests/run", "/api/checks/setup"} {
+			if code, got, out := sendFrom(t, "POST", ts.URL+path, origin, body); code != http.StatusForbidden || got != c.code {
+				t.Errorf("%s, want %s: %d %s", path, c.code, code, out)
+			}
+		}
+	}
+}
+
 func TestChecksSetup(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()

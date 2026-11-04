@@ -173,10 +173,17 @@ func (c *pullCache) age(branch string, d time.Duration) {
 }
 
 // post is a JSON POST, and the answer's status and body.
+// post sends body as the board's own page does: with its Origin.
 func post(t *testing.T, url string, body any) (int, string) {
 	t.Helper()
 	data, _ := json.Marshal(body)
-	resp, err := http.Post(url, "application/json", bytes.NewReader(data))
+	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(data))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Origin", req.URL.Scheme+"://"+req.URL.Host)
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}
