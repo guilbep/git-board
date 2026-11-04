@@ -7,11 +7,15 @@ Every change is signed. Run `git board me --new` (you, from git's
 already on the board (`git board me --ls`). The web UI asks the same in
 Settings › You.
 
-## "@me needs your forge login"
+## What `@me` means
 
-`@me` in a filter or an assignment means your login on a forge, and a
-board that never synced with one doesn't know it. Pass `--me <login>`, set
-`GIT_BOARD_ME`, or write the login itself: `assignee=+ada`.
+`@me` in a filter or an assignment is the person you write as
+(`git board me`): their login on a forge when they have an account, else
+their name. On a board that never synced with a forge,
+`assignee=+@me` writes `assignee:Ada Lovelace`, and `assignee:@me` and
+`involves:@me` find it, before and after you have an account. A sync sends
+the name to a forge as your login there. `--me <login>` or `GIT_BOARD_ME`
+says who you are instead.
 
 ## `set` refuses a value
 

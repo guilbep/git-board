@@ -54,6 +54,11 @@ type Condition struct {
 	// MeID is, for @me in involves: and follows:, your identity (board
 	// fills it): you are it as well as your login.
 	MeID string
+	// Mine are, for @me without --me, every name a label may name you by
+	// (board fills it): your forge logins and your name. @me matches when
+	// any does, so assignee:Ada, written before Ada had an account, is
+	// still hers once @me is her login. Nil: @me is me alone.
+	Mine []string
 	// Followed is, for follows:@me, what your inbox follows besides what
 	// you're in (board fills it); nil: only what you're in.
 	Followed *Followed
@@ -226,6 +231,16 @@ func Matches(issue store.Issue, conditions []Condition, cfg *config.Config, me s
 
 // matchOne is one condition with one value.
 func matchOne(issue store.Issue, labels map[string]bool, c Condition, value string, cfg *config.Config, me string, today time.Time) bool {
+	if value == "@me" && len(c.Mine) > 0 {
+		mine := c.Mine
+		c.Mine = nil
+		for _, name := range mine {
+			if matchOne(issue, labels, c, value, cfg, name, today) {
+				return true
+			}
+		}
+		return false
+	}
 	var ok bool
 	switch c.Kind {
 	case KindIs:

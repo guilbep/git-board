@@ -91,14 +91,14 @@ func readFollowing(b any, cfg *config.Config, me string, issues []store.Issue, t
 		Storage() store.Storage
 	})
 	if !ok {
-		return nil, errors.New("follows:@me needs a repository")
+		return nil, &FilterError{errors.New("follows:@me needs a repository")}
 	}
 	p, set, err := repo.Me()
 	if err != nil {
 		return nil, err
 	}
 	if !set {
-		return nil, errors.New("follows:@me: choose who you write as first")
+		return nil, &FilterError{fmt.Errorf("follows:@me: %w", store.ErrNoMe)}
 	}
 	st, err := inbox.Load(repo.Storage(), p.ID)
 	if err != nil {
@@ -161,10 +161,16 @@ func setOf(ids []string) map[string]bool {
 func prepare(b any, filterStr, me string) ([]filter.Condition, string, error) {
 	conditions := filter.Parse(filterStr)
 	if filter.RequiresMe(conditions) && me == "" {
-		me = MyLogin(b)
+		me = MyName(b)
+		if n, ok := b.(interface{ MyNames() []string }); ok {
+			mine := n.MyNames()
+			for i := range conditions {
+				conditions[i].Mine = mine
+			}
+		}
 	}
 	if filter.RequiresMe(conditions) && me == "" {
-		return nil, "", ErrNoMe
+		return nil, "", &FilterError{ErrNoMe}
 	}
 	if s, ok := b.(interface {
 		SearchText(string) (map[string]bool, error)
@@ -218,15 +224,31 @@ func withRoles(cfg *config.Config, issues []store.Issue) {
 	}
 }
 
-// ErrNoMe is returned when @me means nobody: no --me, and no forge login on
-// the git-bug identity.
-var ErrNoMe = fmt.Errorf("@me needs your forge login: write as the person a forge sync made of your account (Settings › You), or pass --me / set GIT_BOARD_ME")
+// FilterError is a filter that can't be answered as written, whatever the
+// board holds: @me when it means nobody, follows:@me with no one to follow
+// for. It is the request's to fix (the API answers 400); any other error
+// from loading or matching is reading the board failing (500).
+type FilterError struct{ Err error }
 
-// MyLogin is what @me means without --me: the forge login of the git-bug
-// identity git-board writes as, when b knows it (store.Backend does).
-func MyLogin(b any) string {
-	if l, ok := b.(interface{ MyLogin() string }); ok {
-		return l.MyLogin()
+func (e *FilterError) Error() string { return e.Err.Error() }
+func (e *FilterError) Unwrap() error { return e.Err }
+
+// IsFilterError says err is, or wraps, a FilterError.
+func IsFilterError(err error) bool {
+	var fe *FilterError
+	return errors.As(err, &fe)
+}
+
+// ErrNoMe, in a FilterError, is returned when @me means nobody: no --me, and no one chosen
+// to write as.
+var ErrNoMe = fmt.Errorf("@me is the person you write as: choose one (git board me --new, Settings › You), or pass --me / set GIT_BOARD_ME")
+
+// MyName is what @me means without --me: the forge login of the person
+// git-board writes as, else their name, when b knows them (store.Backend
+// does).
+func MyName(b any) string {
+	if l, ok := b.(interface{ MyName() string }); ok {
+		return l.MyName()
 	}
 	return ""
 }

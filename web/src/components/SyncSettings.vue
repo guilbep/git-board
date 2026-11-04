@@ -33,13 +33,15 @@
             <td><b>{{ remote }}</b> <span class="sy-kind">git</span></td>
             <td class="sy-wrap">
               <template v-if="st.remote">{{ st.remote.url }}<div v-if="st.remote.push_urls.join(' ') !== st.remote.url" class="sy-note">Pushes to {{ st.remote.push_urls.join(', ') }}</div></template>
+              <template v-else-if="kept">None: not needed, {{ kept }}.</template>
               <template v-else>None: <code>git remote add {{ remote }} &lt;url&gt;</code>. The git steps are skipped.</template>
             </td>
-            <td>{{ st.remote ? 'On' : '—' }}</td>
-            <td>{{ remoteLine }}</td>
+            <td>{{ st.remote && !kept ? 'On' : '—' }}</td>
+            <td v-if="kept && st.remote" class="sy-off" aria-disabled="true" :title="noGit('comparing the board with a remote')">Not compared: {{ kept }}</td>
+            <td v-else>{{ remoteLine }}</td>
             <td class="sy-acts">
               <template v-if="st.remote">
-                <button v-for="a in remoteActs" :key="a.action" type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" :title="a.command" :disabled="!!rowBusy || running" @click="remoteDo(a.action)">
+                <button v-for="a in remoteActs" :key="a.action" type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" :title="noGit(a.needs) || a.command" :disabled="!!rowBusy || running || !!noGit(a.needs)" @click="remoteDo(a.action)">
                   {{ rowBusy === a.action ? `${a.label}…` : a.label }}
                 </button>
               </template>
@@ -153,7 +155,7 @@
       </div>
       <ol v-if="job.steps?.length" class="sy-steps">
         <li v-for="s in job.steps" :key="s.name" :class="`sy-step-${s.state}`">
-          <GbIcon :name="stepIcon[s.state]" small /> {{ stepLine(s, remote, job.dry_run) }}
+          <GbIcon :name="stepIcon[s.state]" small /> {{ stepLine(s, remote, job.dry_run, kept) }}
         </li>
       </ol>
       <SyncProgress v-if="running && forgeStep === 'running'" :job="job" :bridges="forgeStatus?.bridges ?? []" :starting="job.dry_run ? 'Checking the forges…' : 'Syncing the forges…'" />
@@ -208,7 +210,7 @@
       </div>
     </section>
 
-    <StartOver @done="afterStartOver" />
+    <StartOver :why="noGit('Starting over')" @done="afterStartOver" />
 
     <q-dialog v-model="confirming">
       <section class="gb-dialog" role="dialog" aria-modal="true" aria-labelledby="sy-confirm-title">
@@ -219,10 +221,12 @@
         <div class="gb-dialog-body">
           <p>From the check of {{ job ? when(job.started, true) : '' }}. If anything changed since, the sync does what is true then.</p>
           <ul class="gb-plain-list">
-            <li v-if="st?.remote"><span><b>git pull from {{ remote }}</b>: {{ plural(st.remote.issues.receive, 'issue') }}</span></li>
+            <li v-if="kept"><span><b>git pull</b>: skipped, {{ kept }}</span></li>
+            <li v-else-if="st?.remote"><span><b>git pull from {{ remote }}</b>: {{ plural(st.remote.issues.receive, 'issue') }}</span></li>
             <li v-for="b in bridgeRows" :key="b.name"><span><b>{{ b.label }}</b>: {{ b.tally ? runWords(b.tally) : 'nothing to do' }}</span></li>
             <li v-if="st?.project.project"><span><b>The GitHub Project</b>: {{ (st.project.last && pendingWords(st.project.last)) || 'nothing to do' }}{{ st.project.write ? '' : ', nothing written to the Project' }}</span></li>
-            <li v-if="st?.remote"><span><b>git push to {{ remote }}</b>: {{ plural(st.remote.issues.send, 'issue') }}, and what the steps before bring</span></li>
+            <li v-if="kept"><span><b>git push</b>: nothing to push, {{ kept }}</span></li>
+            <li v-else-if="st?.remote"><span><b>git push to {{ remote }}</b>: {{ plural(st.remote.issues.send, 'issue') }}, and what the steps before bring</span></li>
           </ul>
           <div v-for="b in bigRows" :key="b.name" class="epfl-alert epfl-alert-danger">
             <b>This creates {{ b.tally!.held.toLocaleString() }} issues on {{ b.label }}, which may email everyone watching it.</b>
@@ -266,6 +270,8 @@ import { when } from '@/me';
 import { loadRemotes } from '@/remotes';
 import { aheadWords, checkWords, cutWords, pendingWords, plural, readProject, runWords, stepLine } from '@/ways';
 import { configModel, loadConfigModel } from '@/configmodel';
+import { keptIn, needsGit } from '@/datastore';
+import { datastore, loadDatastore } from '@/kept';
 import { placesSummary } from '@/fieldplaces';
 import AddForgeDialog from '@/components/AddForgeDialog.vue';
 import ForgesGuide from '@/components/ForgesGuide.vue';
@@ -313,16 +319,21 @@ const reportTitle = computed(() => {
 // the step a run stopped at, in words; its error is on its line
 const failedAt = computed(() => {
   const s = job.value?.steps?.find((x) => x.state === 'failed');
-  return s ? stepLine({ ...s, note: '' }, remote, job.value!.dry_run).replace(/: failed$/, '') : '';
+  return s ? stepLine({ ...s, note: '' }, remote, job.value!.dry_run, kept.value).replace(/: failed$/, '') : '';
 });
 const stepIcon = { waiting: 'clock', running: 'sync', done: 'check', failed: 'error', skipped: 'forward' } as const;
 
 // each side's actions, one side alone: their commands are their titles
+// needs: what the server's refusal names on a board kept elsewhere
 const remoteActs = [
-  { action: 'fetch', label: 'Fetch', command: 'git board fetch' },
-  { action: 'pull', label: 'Pull', command: 'git board pull' },
-  { action: 'push', label: 'Push', command: 'git board push' },
+  { action: 'fetch', label: 'Fetch', command: 'git board fetch', needs: 'fetching the board from a remote' },
+  { action: 'pull', label: 'Pull', command: 'git board pull', needs: 'git board pull' },
+  { action: 'push', label: 'Push', command: 'git board push', needs: 'git board push' },
 ] as const;
+// a board kept elsewhere than git: what needs git is disabled, the
+// server's sentence its title (datastore.ts, issue #82)
+const noGit = (what: string) => needsGit(datastore.value, what);
+const kept = computed(() => keptIn(datastore.value));
 const forgeActs = [
   { mode: 'get', label: 'Pull', command: 'git board forge pull' },
   { mode: 'send', label: 'Push', command: 'git board forge push' },
@@ -569,6 +580,7 @@ onBeforeUnmount(offLive);
 onMounted(() => {
   void reload();
   void loadForges();
+  void loadDatastore();
 });
 
 // where a forge's fields live, in a line: edited on each field, in Fields
@@ -590,6 +602,7 @@ function placesLine(forge: string): string {
 .sy-lead { max-width: 44rem; color: var(--fg-muted); }
 .sy-actions, .sy-run { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; }
 .sy-note { font-size: .8125rem; color: var(--fg-muted); }
+.sy-off { color: var(--fg-muted); }
 .sy-kind { margin-left: .25rem; font-size: .8125rem; color: var(--fg-muted); }
 .sy-wrap { overflow-wrap: anywhere; }
 .sy-sub td { border-top: 0; font-size: .875rem; }

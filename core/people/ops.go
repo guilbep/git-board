@@ -54,9 +54,14 @@ func Create(ctx context.Context, s oplog.Datastore, ops ...oplog.Op) (*Person, e
 	return Apply(l)
 }
 
-// Load reads a person.
+// Load reads a person: LoadContext with no deadline.
 func Load(s oplog.Datastore, id string) (*Person, error) {
-	l, err := oplog.Load(s, "person", id)
+	return LoadContext(context.Background(), s, id)
+}
+
+// LoadContext reads a person; ctx bounds the datastore's read.
+func LoadContext(ctx context.Context, s oplog.Datastore, id string) (*Person, error) {
+	l, err := oplog.LoadContext(ctx, s, "person", id)
 	if err != nil {
 		return nil, err
 	}
@@ -66,9 +71,14 @@ func Load(s oplog.Datastore, id string) (*Person, error) {
 // List returns the ids of the persons, sorted.
 func List(s oplog.Datastore) ([]string, error) { return oplog.List(s, "person") }
 
+// ListContext is List; ctx bounds the datastore's read.
+func ListContext(ctx context.Context, s oplog.Datastore) ([]string, error) {
+	return oplog.ListContext(ctx, s, "person")
+}
+
 // Do appends ops to a person and returns its new state.
 func Do(ctx context.Context, s oplog.Datastore, id string, ops ...oplog.Op) (*Person, error) {
-	l, err := oplog.Load(s, "person", id)
+	l, err := oplog.LoadContext(ctx, s, "person", id)
 	if err != nil {
 		return nil, err
 	}

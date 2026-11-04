@@ -100,8 +100,8 @@ func parse(name, value string) (Assignment, error) {
 	return a, nil
 }
 
-// Resolve replaces the value's aliases: @me (me, else the login of the
-// person you write as, from b when it can tell), @current/@next/@previous
+// Resolve replaces the value's aliases: @me (me, else the forge login of
+// the person you write as, else their name, from b when it can tell), @current/@next/@previous
 // (the sprint), and a configured alias (could → couldhave). The sign
 // stays: +@me adds you.
 func (a Assignment) Resolve(b any, cfg *config.Config, me string, today time.Time) (Assignment, error) {
@@ -109,8 +109,8 @@ func (a Assignment) Resolve(b any, cfg *config.Config, me string, today time.Tim
 		return a, nil
 	}
 	if me == "" && a.Value == "@me" {
-		if l, ok := b.(interface{ MyLogin() string }); ok {
-			me = l.MyLogin() // @me without --me: the identity's login
+		if l, ok := b.(interface{ MyName() string }); ok {
+			me = l.MyName() // @me without --me: your login, else your name
 		}
 	}
 	v, err := resolveAssignedValue(cfg, a.Value, me, today)
@@ -362,7 +362,7 @@ func resolveAssignedValue(cfg *config.Config, value, me string, today time.Time)
 		return sprint.Slug, nil
 	case value == "@me":
 		if me == "" {
-			return "", fmt.Errorf("@me needs your forge login: write as the person a forge sync made of your account (Settings › You), or pass --me / set GIT_BOARD_ME")
+			return "", fmt.Errorf("@me is the person you write as: choose one (git board me --new, Settings › You), or pass --me / set GIT_BOARD_ME")
 		}
 		return me, nil
 	default:

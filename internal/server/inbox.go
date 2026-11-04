@@ -48,18 +48,19 @@ func (s *apiServer) inboxMe(w http.ResponseWriter) (inbox.Me, bool) {
 	}
 	login := s.viewer()
 	if login == "" {
-		writeCoded(w, http.StatusConflict, "no-login", errors.New("your person has no forge login, so no field and no mention can name you: write as the person a forge sync made of your account, or start the server with --me"))
+		writeCoded(w, http.StatusConflict, "no-login", errors.New("your person has neither a name nor a forge login, so no field and no mention can name you: give them a name, or start the server with --me"))
 		return inbox.Me{}, false
 	}
 	return inbox.Me{ID: p.ID, Login: login}, true
 }
 
-// viewer is who uses git-board: --me, else the identity's forge login.
+// viewer is who uses git-board: --me, else the identity's forge login,
+// else its name.
 func (s *apiServer) viewer() string {
 	if s.me != "" {
 		return s.me
 	}
-	return s.b.MyLogin()
+	return s.b.MyName()
 }
 
 func (s *apiServer) loadInbox(id string) (inbox.State, error) {

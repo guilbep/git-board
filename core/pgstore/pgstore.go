@@ -9,17 +9,21 @@
 //	packs    (kind, id, hash, data)    its packs, byte for byte
 //	counter  (value, version)          the project numbers, one row
 //
-// and the index's (core/index) in git_board_index.
+// and the index's (core/index) in git_board_index_v<its version>.
 package pgstore
 
 import (
 	"cmp"
 	"context"
 	"database/sql"
+	"database/sql/driver"
 	"errors"
 	"fmt"
+	"hash/fnv"
+	"regexp"
 	"slices"
 	"strconv"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -29,11 +33,13 @@ import (
 	"github.com/guilbep/git-board/core/oplog"
 )
 
-// Schema is where the datastore's tables are; IndexSchema the index's.
-const (
-	Schema      = "git_board"
-	IndexSchema = "git_board_index"
-)
+// Schema is where the datastore's tables are. The index's are in a schema
+// of their own, one per version (core/index.PGSchema).
+const Schema = "git_board"
+
+// indexSchema is a schema IndexDB makes: a lowercase SQL identifier, as
+// it is written into the statement.
+var indexSchema = regexp.MustCompile(`^[a-z_][a-z0-9_]{0,62}$`)
 
 // version is the schema's, in git_board.meta.
 const version = 1
@@ -62,6 +68,7 @@ type Store struct {
 var (
 	_ datastore.Datastore = (*Store)(nil)
 	_ datastore.Counter   = (*Store)(nil)
+	_ datastore.Locker    = (*Store)(nil)
 )
 
 // Open connects to the database dsn names (a postgres:// URL or key=value
@@ -157,20 +164,22 @@ func (s *Store) Where() string {
 }
 
 // IndexDB is a connection pool whose tables are the index's: the same
-// database, with the schema git_board_index first on its search path, made
-// when it isn't there. The index (core/index) keeps its tables in it, so
-// every machine reads one index, kept up to the datastore by whoever reads
-// it.
-func (s *Store) IndexDB(ctx context.Context) (*sql.DB, error) {
+// database, with schema first on its search path, made when it isn't
+// there. The index (core/index) keeps its tables in it, so every machine
+// reads one index, kept up to the datastore by whoever reads it.
+func (s *Store) IndexDB(ctx context.Context, schema string) (*sql.DB, error) {
+	if !indexSchema.MatchString(schema) || schema == Schema {
+		return nil, fmt.Errorf("pgstore: %q can't be the index's schema", schema)
+	}
 	// under setup's lock: two CREATE SCHEMA IF NOT EXISTS at once fail one
-	if err := s.locked(ctx, "CREATE SCHEMA IF NOT EXISTS "+IndexSchema); err != nil {
+	if err := s.locked(ctx, "CREATE SCHEMA IF NOT EXISTS "+schema); err != nil {
 		return nil, fmt.Errorf("pgstore: %w", err)
 	}
 	cfg := s.cfg.Copy()
 	if cfg.RuntimeParams == nil {
 		cfg.RuntimeParams = map[string]string{}
 	}
-	cfg.RuntimeParams["search_path"] = IndexSchema
+	cfg.RuntimeParams["search_path"] = schema
 	return stdlib.OpenDB(*cfg), nil
 }
 
@@ -283,6 +292,40 @@ func serialization(err error) bool {
 
 // Folder is this machine's folder.
 func (s *Store) Folder() string { return s.folder }
+
+// Lock takes the board's lock named name: a session advisory lock, on a
+// connection held until unlock. Its key is name's hash; advisory locks are
+// the database's, and one database is one board. The server lets it go
+// when the session ends, so a process killed holding it keeps no one out.
+func (s *Store) Lock(ctx context.Context, name string) (func(), error) {
+	h := fnv.New64a()
+	h.Write([]byte("git-board/" + name))
+	key := int64(h.Sum64())
+	conn, err := s.db.Conn(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("pgstore: lock %s: %w", name, err)
+	}
+	var got bool
+	if err := conn.QueryRowContext(ctx, "SELECT pg_try_advisory_lock($1)", key).Scan(&got); err != nil {
+		conn.Close()
+		return nil, fmt.Errorf("pgstore: lock %s: %w", name, err)
+	}
+	if !got {
+		conn.Close()
+		return nil, fmt.Errorf("%w: %s, on %s", datastore.ErrHeld, name, s.Where())
+	}
+	return func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		var freed bool
+		if err := conn.QueryRowContext(ctx, "SELECT pg_advisory_unlock($1)", key).Scan(&freed); err != nil || !freed {
+			// the session may still hold it: it isn't given back to the
+			// pool, its end lets the lock go
+			_ = conn.Raw(func(any) error { return driver.ErrBadConn })
+		}
+		conn.Close()
+	}, nil
+}
 
 // Count reads the counter: nil when none was started.
 func (s *Store) Count(ctx context.Context) ([]byte, string, error) {

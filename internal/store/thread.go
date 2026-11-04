@@ -296,7 +296,8 @@ func pending(th *Thread, is *issue.Issue, r syncer.Record, from map[int]*oplog.O
 
 func isAssigneeLabel(l string) bool { return strings.HasPrefix(strings.ToLower(l), "assignee:") }
 
-// forgesOf is where an issue is, from its links: each forge by its URL.
+// forgesOf is where an issue is, from its links: each forge by its URL,
+// an http(s) one alone (webURL).
 func forgesOf(links []syncer.Record) []Forge {
 	var res []Forge
 	for _, l := range links {
@@ -304,9 +305,20 @@ func forgesOf(links []syncer.Record) []Forge {
 		if n == "" {
 			n = lastNumber(l.URL)
 		}
-		res = append(res, Forge{Name: forgeName(l.URL), URL: l.URL, Number: n})
+		res = append(res, Forge{Name: forgeName(l.URL), URL: webURL(l.URL), Number: n})
 	}
 	return res
+}
+
+// webURL is u when it is an absolute http(s) URL, else "": a record's URL
+// travels through git, anyone who can push the board's refs writes it, and
+// a client would make it a link (a javascript: one runs in the page).
+func webURL(u string) string {
+	p, err := url.Parse(u)
+	if err != nil || p.Host == "" || (!strings.EqualFold(p.Scheme, "https") && !strings.EqualFold(p.Scheme, "http")) {
+		return ""
+	}
+	return u
 }
 
 func forgeName(u string) string {
@@ -374,7 +386,11 @@ func (b *Backend) Me() (Person, bool, error) {
 
 // NewIssue creates an issue as you, with labels, and returns its id.
 func (b *Backend) NewIssue(title, body string, labels []string) (string, error) {
-	b.readMarkdown()
+	done, err := b.markdownWrite()
+	if err != nil {
+		return "", err
+	}
+	defer done()
 	me, err := b.me()
 	if err != nil {
 		return "", err

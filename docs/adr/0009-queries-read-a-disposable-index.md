@@ -43,8 +43,9 @@ It holds nothing the entities don't, and can be deleted at any time.**
 - **Only issues and persons** are indexed; sync and release entities are
   read from their logs.
 - **PostgreSQL boards** (ADR 0002): when the datastore implements
-  `index.SQL`, the same tables live in the schema `git_board_index` on the
-  server, shared by every machine (`core/index/index.go:58-64`, `:73-75`).
+  `index.SQL`, the same tables live on the server, shared by every
+  machine, in a schema of their version, `git_board_index_v<version>`
+  (`index.PGSchema`; amended 2026-11-04, issue #92).
 
 ## Alternatives considered
 
@@ -76,6 +77,22 @@ Bad, and accepted:
   runs the index tests on PostgreSQL, outside `make ci`.
 - A process holding an old, unlinked index file keeps answering from it
   until it reopens (`core/index/index.go:84-85`, a `ponytail:` note).
+
+## Amendment: one PostgreSQL schema per index version (2026-11-04)
+
+The index on PostgreSQL first lived in one schema, `git_board_index`, and
+a git-board of another index version dropped its tables and built them
+again. Two git-board versions sharing a database then rebuilt the index
+in turn at every open, and one could drop the tables under the other's
+queries. Each version now has its schema, `git_board_index_v<version>`:
+each keeps its own index up to the same datastore, which is all an index
+is. An older version's schema is kept, not dropped: a git-board of that
+version may still be reading it, and dropping it would fail its queries
+until it opens again. It costs only space, and `DROP SCHEMA … CASCADE`
+by hand once no git-board of that version is left. The schema
+`git_board_index`, of builds before this, is kept for the same reason.
+The sqlite file keeps one name: it is a machine's, and one machine
+rarely runs two versions on one clone.
 
 ## Left open
 

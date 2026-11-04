@@ -71,7 +71,7 @@
     </template>
 
     <div class="ic-head">
-      <h2 class="ic-title">The code<template v-if="ev?.branch"> · <span class="gb-mono">{{ ev.branch }}</span></template><template v-if="ev?.pr"> · <a :href="ev.pr.url" target="_blank" rel="noopener noreferrer">PR #{{ ev.pr.number }}<span class="gb-sr">(opens in a new tab)</span></a>, {{ ev.pr.draft ? 'draft' : ev.pr.state.toLowerCase() }}</template></h2>
+      <h2 class="ic-title">The code<template v-if="ev?.branch"> · <span class="gb-mono">{{ ev.branch }}</span></template><template v-if="ev?.pr"> · <a :href="safeHref(ev.pr.url)" target="_blank" rel="noopener noreferrer">PR #{{ ev.pr.number }}<span class="gb-sr">(opens in a new tab)</span></a>, {{ ev.pr.draft ? 'draft' : ev.pr.state.toLowerCase() }}</template></h2>
       <span v-if="changes" class="ic-muted">{{ plural(changes.commits.length, 'commit') }} · {{ plural(changes.files.length, 'file') }} · +{{ sum('added') }} −{{ sum('deleted') }}</span>
     </div>
     <p v-if="!ev?.branch" class="ic-muted">No branch yet.</p>
@@ -100,6 +100,7 @@
 </template>
 
 <script setup lang="ts">
+import { safeHref } from '@/links';
 import { computed, reactive, ref, watch } from 'vue';
 import { getChanges, renderMarkdown, type Changes, type Cycle, type Thread } from '@/api/board';
 import { message } from '@/issue';

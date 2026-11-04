@@ -15,7 +15,13 @@ func newNumbersCmd() *cobra.Command {
 		Long: `Number the issues origin has that have no project number yet,
 through the counter on origin (refs/board/seq). An issue only in this
 clone waits for its push: git board sync, or Settings › Sync, push it
-and number it. A project that doesn't number its issues: nothing.`,
+and number it. A project that doesn't number its issues: nothing.
+
+A board kept in PostgreSQL numbers every issue through its database's
+counter. One kept in Markdown files numbers them through
+<folder>/.board/numbers, on the default branch alone (origin's HEAD, else
+main, else master): on another branch this says why it waits, and the
+branch's issues take their numbers once merged.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			b, err := store.OpenCwd()
@@ -62,7 +68,11 @@ issue or pull request number:
 			if err := b.InitNumbers(store.NumbersRemote, prefix, start); err != nil {
 				return err
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "numbering as %s-N from %d, on %s\n", prefix, start, store.NumbersRemote)
+			where := "on " + store.NumbersRemote
+			if c := b.Capabilities(); !c.Replica {
+				where = "in " + c.Datastore
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "numbering as %s-N from %d, %s\n", prefix, start, where)
 			return nil
 		},
 	}

@@ -13,6 +13,7 @@
       <template v-else>The counter is kept in git, on origin, where every clone reads it.</template>
     </p>
     <p v-if="n?.missing" class="epfl-alert epfl-alert-info" role="note">{{ n.missing }}. <router-link to="/settings/datastore">Datastore</router-link></p>
+    <p v-if="n?.waits" class="epfl-alert epfl-alert-info" role="note">{{ n.waits }}.</p>
     <p v-if="error" class="epfl-alert epfl-alert-danger" role="alert">{{ error }}</p>
     <p v-if="result" class="epfl-alert epfl-alert-success" role="status">{{ result }}</p>
 
@@ -39,7 +40,7 @@
             <button type="button" class="epfl-btn epfl-btn-secondary" :disabled="busy" @click="confirming = false">Cancel</button>
           </div>
         </div>
-        <button v-else type="button" class="epfl-btn epfl-btn-primary nb-start-btn" @click="confirming = true">Number them now</button>
+        <button v-else type="button" class="epfl-btn epfl-btn-primary nb-start-btn" :disabled="!!n.waits" :title="n.waits || undefined" @click="confirming = true">Number them now</button>
       </section>
       <p v-if="n.unpushed">
         {{ issues(n.unpushed) }} not on origin yet: pushed and numbered with the next <router-link to="/settings/sync">Sync</router-link>.
@@ -96,7 +97,7 @@
             <button type="button" class="epfl-btn epfl-btn-secondary" :disabled="busy" @click="confirming = false">Back</button>
           </div>
         </div>
-        <button v-else type="submit" class="epfl-btn epfl-btn-primary nb-start-btn" :disabled="!ready">Start numbering…</button>
+        <button v-else type="submit" class="epfl-btn epfl-btn-primary nb-start-btn" :disabled="!ready || !!n.waits" :title="n.waits || undefined">Start numbering…</button>
       </form>
 
       <aside class="nb-help" aria-labelledby="nb-help-title">

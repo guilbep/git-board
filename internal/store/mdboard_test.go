@@ -1,9 +1,13 @@
 package store_test
 
 import (
+	"encoding/json"
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/guilbep/git-board/core/datastore"
@@ -39,7 +43,7 @@ func TestMarkdownBoard(t *testing.T) {
 
 	storetest.Git(t, dir, "config", store.DatastoreKey, "markdown:issues")
 	b := storetest.Open(t, dir)
-	if c := b.Capabilities(); c.Datastore != "Markdown files" || c.Replica || c.Counter {
+	if c := b.Capabilities(); c.Datastore != "Markdown files" || c.Replica || !c.Counter {
 		t.Fatalf("capabilities %+v", c)
 	}
 	if _, err := b.GetIssue(first); err != nil {
@@ -170,5 +174,182 @@ func TestMarkdownBoardFollowsAForgeSync(t *testing.T) {
 		if got := th.Events[0].Body; got != "pulled body, by hand" {
 			t.Errorf("body %q, want the hand edit", got)
 		}
+	}
+}
+
+// Two processes on one Markdown board (a server and a command) read the
+// hand edits in, write and render one at a time: every write lands, every
+// file stays whole, and no hand edit is read in twice (issue #85).
+func TestMarkdownBoardTwoProcesses(t *testing.T) {
+	t.Parallel()
+	dir := storetest.Repo(t, false)
+	storetest.Git(t, dir, "config", store.DatastoreKey, "markdown:issues")
+	storetest.Init(t, dir)
+	one, two := storetest.Open(t, dir), storetest.Open(t, dir) // a backend each, as two processes have
+	folder := filepath.Join(dir, "issues")
+	var ids [3]string
+	for i, title := range []string{"One's", "Two's", "Edited by hand"} {
+		id, err := one.NewIssue(title, "", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids[i] = id
+	}
+	const rounds = 15
+	for r := range rounds {
+		// by hand, while neither writes: a new comment, and a new issue
+		files, _ := filepath.Glob(filepath.Join(folder, "*edited-by-hand.md"))
+		if len(files) != 1 {
+			t.Fatalf("round %d: files %v", r, files)
+		}
+		data, err := os.ReadFile(files[0])
+		if err != nil {
+			t.Fatal(err)
+		}
+		hand := fmt.Sprintf("\n### dev · 2026-11-04T10:00:00Z\n\nby hand %d\n", r)
+		if err := os.WriteFile(files[0], append(data, hand...), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		file := fmt.Sprintf("---\ntitle: Hand %d\nstate: open\npeople:\n  author: dev\n---\n\nnew by hand\n", r)
+		if err := os.WriteFile(filepath.Join(folder, fmt.Sprintf("hand-%d.md", r)), []byte(file), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		// then both write at once, each reading the edits in first
+		var wg sync.WaitGroup
+		for i, b := range []*store.Backend{one, two} {
+			wg.Go(func() {
+				if _, err := b.AddComment(ids[i], fmt.Sprintf("write %d", r)); err != nil {
+					t.Error(err)
+				}
+			})
+		}
+		wg.Wait()
+	}
+
+	for i := range 2 {
+		if got := bodies(eventsOf(t, one, ids[i]), "comment"); len(got) != rounds {
+			t.Errorf("issue %d has %d comments, want each of the %d writes: %q", i, len(got), rounds, got)
+		}
+	}
+	got := bodies(eventsOf(t, one, ids[2]), "comment")
+	for r := range rounds {
+		if n := count(got, fmt.Sprintf("by hand %d", r)); n != 1 {
+			t.Errorf("the comment by hand %d read in %d times, want once", r, n)
+		}
+	}
+	list, err := one.ListIssues()
+	if err != nil {
+		t.Fatal(err)
+	}
+	titles := map[string]int{}
+	for _, is := range list {
+		titles[is.Title]++
+	}
+	for r := range rounds {
+		if n := titles[fmt.Sprintf("Hand %d", r)]; n != 1 {
+			t.Errorf("issue Hand %d made %d times, want once", r, n)
+		}
+	}
+
+	// every pack line is whole, and every file reads as the board has it
+	packs, _ := filepath.Glob(filepath.Join(folder, mdstore.Board, "*", "*.jsonl"))
+	for _, p := range packs {
+		data, _ := os.ReadFile(p)
+		for _, line := range strings.Split(strings.TrimSpace(string(data)), "\n") {
+			if !json.Valid([]byte(line)) {
+				t.Errorf("%s: a torn line %q", p, line)
+			}
+		}
+	}
+	rep, err := one.ImportMarkdown(folder)
+	if err != nil || len(rep.Skipped)+len(rep.Created)+len(rep.Updated)+len(rep.Conflicts) > 0 {
+		t.Errorf("the files read again: %+v, %v; want them all as the board has them", rep, err)
+	}
+}
+
+func count(list []string, s string) int {
+	n := 0
+	for _, x := range list {
+		if x == s {
+			n++
+		}
+	}
+	return n
+}
+
+// Issue #84: a Markdown board numbers its issues on the default branch,
+// through .board/numbers; on another branch the counter is read, and
+// numbering says why it waits, without failing the sync.
+func TestMarkdownBoardNumbers(t *testing.T) {
+	t.Parallel()
+	dir := storetest.Repo(t, false)
+	storetest.Git(t, dir, "switch", "-q", "-c", "main") // an unborn main, whatever git's default
+	storetest.Git(t, dir, "config", store.DatastoreKey, "markdown:issues")
+	storetest.Init(t, dir)
+	b := storetest.Open(t, dir)
+	if c := b.Capabilities(); !c.Counter {
+		t.Fatalf("capabilities %+v: a Markdown board counts", c)
+	}
+	if err := b.InitNumbers(store.NumbersRemote, "GB", 1); err != nil {
+		t.Fatalf("start the numbers on main: %v", err)
+	}
+	first, err := b.NewIssue("Made on main", "", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n, err := b.NumberIssues(store.NumbersRemote); err != nil || n != 1 {
+		t.Fatalf("numbering on main: %d, %v", n, err)
+	}
+	c, ok, err := b.Counter()
+	if err != nil || !ok || c.ByID[first] != 1 {
+		t.Fatalf("counter %+v, %v, %v; want %s as GB-1", c, ok, err, first)
+	}
+	data, err := os.ReadFile(filepath.Join(dir, "issues", mdstore.Board, "numbers"))
+	if err != nil || string(data) != "prefix GB\nstart 1\n1 "+first+"\n" {
+		t.Fatalf(".board/numbers = %q, %v: refs/board/seq's format", data, err)
+	}
+	if files, _ := filepath.Glob(filepath.Join(dir, "issues", "*made-on-main.md")); len(files) != 1 || filepath.Base(files[0]) != "1-made-on-main.md" {
+		t.Errorf("the issue's file, named by its number: %v", files)
+	}
+	if w := b.NumbersWait(); w != "" {
+		t.Errorf("on main, NumbersWait = %q", w)
+	}
+
+	storetest.Git(t, dir, "add", "-A")
+	storetest.Git(t, dir, "commit", "-q", "-m", "the board")
+	storetest.Git(t, dir, "switch", "-q", "-c", "feat/csv")
+	second, err := b.NewIssue("Made on a branch", "", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = b.NumberIssues(store.NumbersRemote)
+	if !errors.Is(err, datastore.ErrMissing) || !strings.Contains(err.Error(), "feat/csv") {
+		t.Fatalf("numbering on feat/csv: %v; want why it waits", err)
+	}
+	if w := b.NumbersWait(); !strings.Contains(w, "main") || !strings.Contains(w, "feat/csv") {
+		t.Errorf("NumbersWait = %q", w)
+	}
+	if c, _, _ := b.Counter(); c.ByID[first] != 1 || c.ByID[second] != 0 {
+		t.Errorf("on the branch, the counter reads %+v", c)
+	}
+	var heard []string
+	w := store.Whole{Remote: "origin", Step: func(name, state, note string) {
+		if name == store.StepPush {
+			heard = append(heard, state+": "+note)
+		}
+	}}
+	if err := b.SyncWhole(t.Context(), w); err != nil || len(heard) != 2 || !strings.HasPrefix(heard[1], "skipped: ") || !strings.Contains(heard[1], "feat/csv") {
+		t.Fatalf("sync on the branch: %v, the push step %q", err, heard)
+	}
+
+	storetest.Git(t, dir, "add", "-A")
+	storetest.Git(t, dir, "commit", "-q", "-m", "on the branch")
+	storetest.Git(t, dir, "switch", "-q", "main")
+	storetest.Git(t, dir, "merge", "-q", "--no-edit", "feat/csv")
+	if n, err := b.NumberIssues(store.NumbersRemote); err != nil || n != 1 {
+		t.Fatalf("numbering on main after the merge: %d, %v", n, err)
+	}
+	if c, _, _ := b.Counter(); c.ByID[second] != 2 {
+		t.Errorf("after the merge, %+v; want %s as GB-2", c, second)
 	}
 }

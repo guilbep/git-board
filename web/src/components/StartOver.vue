@@ -5,10 +5,12 @@
      name; what it found is read when the section opens. done: the page
      reloads its rows after an action. -->
 <template>
+  <!-- why: what keeps it from working here (a board kept elsewhere than
+       git, datastore.ts needsGit): it doesn't open, and says so -->
   <details class="so" @toggle="onToggle">
-    <summary class="so-summary">
+    <summary class="so-summary" :aria-disabled="why ? 'true' : undefined" :title="why || undefined" @click="why && $event.preventDefault()">
       <span class="so-heading">Start over</span>
-      <span class="sy-note">Empty the board, here and on origin, and refill it from the forges</span>
+      <span class="sy-note">{{ why || 'Empty the board, here and on origin, and refill it from the forges' }}</span>
     </summary>
     <div class="so-body">
       <p class="so-lead">On the git side alone: no forge and no GitHub Project is touched. To start over everywhere:</p>
@@ -31,7 +33,7 @@
           <form class="so-confirm" @submit.prevent="run(c)">
             <label :for="`so-${c.id}`">Type <b>{{ repo || '…' }}</b> to confirm</label>
             <input :id="`so-${c.id}`" v-model="typed[c.id]" class="epfl-input" autocomplete="off" spellcheck="false" data-1p-ignore />
-            <button type="submit" class="epfl-btn epfl-btn-primary epfl-btn-sm" :disabled="busy !== '' || !canConfirm(typed[c.id] ?? '', repo)">
+            <button type="submit" class="epfl-btn epfl-btn-primary epfl-btn-sm" :title="why || undefined" :disabled="!!why || busy !== '' || !canConfirm(typed[c.id] ?? '', repo)">
               {{ busy === c.id ? 'Working…' : c.button }}
             </button>
           </form>
@@ -50,6 +52,7 @@ import { loadRemotes, remotes, repo } from '@/remotes';
 import { canConfirm, cardsFor, notes, resultLine, steps, type Card, type CardId } from '@/startover';
 import GbIcon from '@/components/GbIcon.vue';
 
+defineProps<{ why?: string }>();
 const emit = defineEmits<{ done: [] }>();
 
 const st = ref<StartOverStatus | null>(null);
@@ -100,6 +103,8 @@ async function run(c: Card) {
 /* flex hides the browser's marker: draw one, so that it reads as opening */
 .so-summary::-webkit-details-marker { display: none; }
 .so-summary::before { content: '▸'; color: var(--fg-muted); }
+.so-summary[aria-disabled='true'] { cursor: not-allowed; }
+.so-summary[aria-disabled='true'] .so-heading { color: var(--fg-muted); }
 .so[open] > .so-summary::before { content: '▾'; }
 .so-heading { font-size: 1.125rem; font-weight: 700; }
 .so-body { display: grid; gap: 1rem; margin-top: 1rem; }

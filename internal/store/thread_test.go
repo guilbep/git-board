@@ -155,20 +155,37 @@ func TestEditingAChangedCommentIsRefused(t *testing.T) {
 	}
 }
 
-// @me is the forge login of the person git-board writes as: their
-// account's, none without one.
-func TestMyLogin(t *testing.T) {
+// @me is the person git-board writes as: their forge login, else their
+// name (issue #87); a label may name them by either.
+func TestMyName(t *testing.T) {
 	t.Parallel()
+	if got := storetest.NewEmpty(t).MyName(); got != "" {
+		t.Errorf("MyName = %q with no one chosen, want empty", got)
+	}
 	b := storetest.New(t)
-	if got := b.MyLogin(); got != "" {
-		t.Errorf("MyLogin = %q without an account, want empty", got)
+	me, _, err := b.Me()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := b.MyName(); got != me.Name {
+		t.Errorf("MyName = %q without an account, want the name %q", got, me.Name)
+	}
+	if got := b.MyNames(); !slices.Equal(got, []string{me.Name}) {
+		t.Errorf("MyNames = %q without an account", got)
+	}
+	storetest.SetMyLogin(t, b, "dev-gh")
+	if got := b.MyName(); got != "dev-gh" {
+		t.Errorf("MyName = %q, want dev-gh", got)
+	}
+	if got := b.MyNames(); !slices.Equal(got, []string{"dev-gh", me.Name}) {
+		t.Errorf("MyNames = %q, want the login, then the name", got)
 	}
 	alice := storetest.NewPerson(t, b, "Alice", "alice")
 	if err := b.Adopt(alice.ID[:10]); err != nil {
 		t.Fatal(err)
 	}
-	if got := b.MyLogin(); got != "alice" {
-		t.Errorf("MyLogin = %q, want alice", got)
+	if got := b.MyName(); got != "alice" {
+		t.Errorf("MyName = %q, want alice", got)
 	}
 }
 

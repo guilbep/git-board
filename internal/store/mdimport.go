@@ -147,8 +147,25 @@ func (f mdFile) labels() []string {
 	return slices.Compact(out)
 }
 
-// ImportMarkdown reads every *.md file in dir into the board.
+// ImportMarkdown reads every *.md file in dir into the board. On a
+// Markdown board it holds the board's lock, and its files follow.
 func (b *Backend) ImportMarkdown(dir string) (ImportReport, error) {
+	m, unlock, err := b.mdLock()
+	if err != nil {
+		return ImportReport{}, fmt.Errorf("markdown: %w", err)
+	}
+	defer unlock()
+	rep, err := b.importMarkdown(dir)
+	if m != nil {
+		if _, rerr := b.ExportMarkdown(m.Dir(), nil); err == nil {
+			err = rerr
+		}
+	}
+	return rep, err
+}
+
+// importMarkdown is ImportMarkdown, a Markdown board's lock held.
+func (b *Backend) importMarkdown(dir string) (ImportReport, error) {
 	rep := ImportReport{Created: []string{}, Updated: []string{}, Conflicts: []string{}, Skipped: []string{}}
 	paths, err := filepath.Glob(filepath.Join(dir, "*.md"))
 	if err != nil {
@@ -297,7 +314,7 @@ func (b *Backend) importInto(f mdFile, names map[string]string) (changed bool, c
 		}
 		return !moved
 	}
-	_, err = b.do(f.front.ID, func(me string, is *issue.Issue, _ *oplog.Log) ([]oplog.Op, error) {
+	_, err = b.write(f.front.ID, func(me string, is *issue.Issue, _ *oplog.Log) ([]oplog.Op, error) {
 		var ops []oplog.Op
 		if f.front.Title != is.Title && may("title") {
 			ops = append(ops, issue.SetTitle(me, f.front.Title))

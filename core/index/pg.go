@@ -30,12 +30,14 @@ CREATE INDEX IF NOT EXISTS texts_doc ON texts USING gin (doc);
 `
 
 // pgTables are the index's tables, dropped when their version isn't this
-// one: the index is never the source of truth, so it is built again.
+// one: the index is never the source of truth, so it is built again. Its
+// schema is its version's (PGSchema), so only one made before the meta
+// table said so, by hand or by a build of this version, is.
 const pgTables = "meta, entities, issues, labels, persons, accounts, texts"
 
 // openPG opens the index on the datastore's server.
 func openPG(ctx context.Context, s oplog.Datastore, q SQL) (*Index, error) {
-	db, err := q.IndexDB(ctx)
+	db, err := q.IndexDB(ctx, PGSchema)
 	if err != nil {
 		return nil, fmt.Errorf("index: %w", err)
 	}

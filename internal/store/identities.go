@@ -3,6 +3,7 @@ package store
 import (
 	"cmp"
 	"slices"
+	"strings"
 
 	"github.com/guilbep/git-board/core/people"
 )
@@ -67,17 +68,39 @@ func (b *Backend) NewIdentity(name, email string) (Person, error) {
 	return personOf(p.ID, p, m), nil
 }
 
-// MyLogin is the forge login of the person git-board writes as: what @me
-// means (assignee:@me), since assignee labels hold forge logins. "" when
-// they have no account.
+// MyName is what @me means (assignee:@me, assignee=+@me): the forge
+// login of the person git-board writes as, else their name, as an
+// assignee label names a person with no account (Logins). "" when no one
+// is chosen.
 // ponytail: their first account's login; the posting forge's when
 // sync is wired (M5's second phase)
-func (b *Backend) MyLogin() string {
+func (b *Backend) MyName() string {
 	me, ok, err := b.Me()
 	if err != nil || !ok {
 		return ""
 	}
-	return me.Login
+	return cmp.Or(me.Login, me.Name)
+}
+
+// MyNames are every name a label may name you by: each of your forge
+// logins, then your name. A label written as your name before you had an
+// account still names you once you have one: sync sends it as that
+// account (docs/spec/sync.md, Assignees). None when no one is chosen.
+func (b *Backend) MyNames() []string {
+	id, err := b.me()
+	if err != nil {
+		return nil
+	}
+	persons, err := b.allPersons()
+	if err != nil || persons[id] == nil {
+		return nil
+	}
+	p := persons[id]
+	names := logins(p)
+	if p.Name != "" && !slices.ContainsFunc(names, func(l string) bool { return strings.EqualFold(l, p.Name) }) {
+		names = append(names, p.Name)
+	}
+	return names
 }
 
 // Logins are what each person is assigned as: their forge login, else

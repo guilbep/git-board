@@ -45,9 +45,10 @@ Pushing the counter is the lock.**
 - Below `start`, an issue keeps its GitHub number: `#2518` is `CO2-2518`
   (`:112` `NumberOf`).
 - On another datastore the counter is a capability, `datastore.Counter`
-  (`core/datastore/datastore.go:49-50`): a row in PostgreSQL, absent for
-  Markdown and forge-only boards, which then say "project numbers need a
-  datastore that counts" (`internal/store/numbers.go:550-556`).
+  (`core/datastore/datastore.go:49-50`): a row in PostgreSQL,
+  `.board/numbers` in a Markdown folder (see the note below), absent for
+  forge-only boards, which then say "project numbers need a datastore
+  that counts" (`internal/store/numbers.go`, `initDatastoreNumbers`).
 
 ## Alternatives considered
 
@@ -82,7 +83,40 @@ Bad, and accepted:
 - `#N` is always a forge's number, `PREFIX-N` the project's: two notations
   to learn.
 
+## Note: a Markdown board's numbers (issue #84, 2026-11-04)
+
+A Markdown board's files merge across branches, and a counter can't: two
+branches numbering at once give one number twice. Of the three options
+(number on the default branch only; take the forge's numbers; no
+numbers), the first is built:
+
+- `core/mdstore` implements `datastore.Counter` over `<dir>/.board/numbers`,
+  the same file format as `refs/board/seq`'s `numbers`. `Count` reads it on
+  any branch; `SetCount` writes it only when the checkout is on the
+  default branch (origin's `HEAD`, else `main`, else `master`), and
+  otherwise refuses with a `datastore.Missing` sentence naming both
+  branches (`CountWaits`). A folder outside any git checkout has no branch
+  and writes.
+- `internal/store` numbers through it as for PostgreSQL. Settings ›
+  Numbers shows the sentence (`waits`) and disables its buttons; `git
+  board numbers` fails with it; a whole sync skips its numbering step with
+  it.
+- `.board/.gitattributes` gives `/numbers` git's binary merge driver, not
+  the union driver of the pack files: a merge from a branch, which never
+  wrote it, takes the default branch's; a merge where both sides wrote it
+  stops on a conflict and keeps ours whole, where union would keep one
+  number twice and a text merge would leave conflict markers. Pushing
+  isn't the lock here: two clones that numbered on the default branch at
+  once find out at the pull, as that conflict.
+
+Issues made on a branch wait for the merge, and for a numbering on the
+default branch after it.
+
 ## Left open
+
+- On a Markdown board, two clones numbering on the default branch at
+  once is caught at the next pull, as a conflict on `.board/numbers`, not
+  prevented: the one who pulls takes theirs and numbers again.
 
 - `NumbersRemote` is hard-coded to `origin`: "a setting when a project's
   isn't" (`internal/store/numbers.go:33-35`, a `ponytail:` note).

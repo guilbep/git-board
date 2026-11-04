@@ -33,6 +33,30 @@ export interface EnhanceOptions {
   mediaURL: (path: string) => string; // /api/media?… → the API's origin
 }
 
+// RefLink is a token as enhance writes it: text, or a link with its
+// attributes. A #ref stays in the page (the board's own handler opens it),
+// a mention opens the forge in a new tab.
+export type RefLink =
+  | { text: string; href?: undefined }
+  | { text: string; href: string; className: 'issue-ref'; ref: string }
+  | { text: string; href: string; className: 'mention'; target: '_blank'; rel: 'noopener noreferrer' };
+
+// refLinks is enhance's pure part: a text's tokens, each a link only with
+// an http(s) href, whatever the caller built it from (links.ts). null when
+// the text has no ref and no mention: the node stays as it is. Tested in
+// node without a DOM (richtext.test.ts), so no DOM library is needed
+// (ADR 0017).
+export function refLinks(text: string, opts: Pick<EnhanceOptions, 'refHref' | 'mentionHref'>): RefLink[] | null {
+  const tokens = refTokens(text);
+  if (tokens.length === 1 && !tokens[0]!.ref && !tokens[0]!.mention) return null;
+  return tokens.map((t): RefLink => {
+    const href = safeHref(t.ref ? opts.refHref(t.ref) : t.mention ? opts.mentionHref(t.mention) : undefined);
+    if (!href) return { text: t.text };
+    if (t.ref) return { text: t.text, href, className: 'issue-ref', ref: t.ref };
+    return { text: t.text, href, className: 'mention', target: '_blank', rel: 'noopener noreferrer' };
+  });
+}
+
 const skipped = new Set(['A', 'CODE', 'PRE']);
 
 // enhance links the refs and mentions in el's text, and fixes image sources.
@@ -53,26 +77,22 @@ export function enhance(el: HTMLElement, opts: EnhanceOptions): void {
   const nodes: Text[] = [];
   while (walker.nextNode()) nodes.push(walker.currentNode as Text);
   for (const node of nodes) {
-    const tokens = refTokens(node.nodeValue ?? '');
-    if (tokens.length === 1 && !tokens[0]!.ref && !tokens[0]!.mention) continue;
+    const links = refLinks(node.nodeValue ?? '', opts);
+    if (!links) continue;
     const frag = document.createDocumentFragment();
-    for (const t of tokens) {
-      // only an http(s) href, whatever the caller built it from (links.ts)
-      const href = safeHref(t.ref ? opts.refHref(t.ref) : t.mention ? opts.mentionHref(t.mention) : undefined);
-      if (!href) {
-        frag.append(t.text);
+    for (const l of links) {
+      if (!l.href) {
+        frag.append(l.text);
         continue;
       }
       const a = document.createElement('a');
-      a.href = href;
-      a.textContent = t.text;
-      if (t.ref) {
-        a.className = 'issue-ref';
-        a.dataset.ref = t.ref;
-      } else {
-        a.className = 'mention';
-        a.target = '_blank';
-        a.rel = 'noopener noreferrer';
+      a.href = l.href;
+      a.textContent = l.text;
+      a.className = l.className;
+      if (l.className === 'issue-ref') a.dataset.ref = l.ref;
+      else {
+        a.target = l.target;
+        a.rel = l.rel;
       }
       frag.append(a);
     }

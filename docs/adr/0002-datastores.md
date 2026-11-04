@@ -141,7 +141,7 @@ datastore's name.
 | Capability | What needs it | git | PostgreSQL | Markdown folder | Forge only |
 |---|---|---|---|---|---|
 | **Replica**: fetch, push, merge with remotes; the reset and switched marks guard it | offline work with several writers; Sync's git part; Start over; `git board remote` | yes | no: one shared server. Offline only when the server is local | no | no |
-| **Counter**: a shared counter with compare-and-swap | project numbers (`CO2-3075`) | `refs/board/seq` | a row | no | the forge's numbers only |
+| **Counter**: a shared counter with compare-and-swap | project numbers (`CO2-3075`) | `refs/board/seq` | a row | `.board/numbers`, written on the default branch alone (issue #84, ADR 0016) | the forge's numbers only |
 | **git log of the board** | debugging, nothing in the product | yes | no | no | no |
 | **A code clone** (not the datastore's: the deployment's) | signed check notes and proof refs (ADR 0001), branches, diffs, the cycle, releases' tags, `verify` | with a clone | with a clone | with a clone | with a clone |
 
@@ -376,9 +376,18 @@ Markdown, as built, differs from section 5:
   `board.datastore markdown:<dir>`): packs as JSON lines in
   `<dir>/.board/<kind>/<id>.jsonl`, merged by git's union driver; a
   version is the file's hash (two branches' files of as many packs are two
-  versions), a write takes the file's lock. After
-  each write, the backend reads the folder's hand edits in, then renders
-  the files.
+  versions), a write takes the file's lock. Before
+  each write the backend reads the folder's hand edits in, and after it
+  renders the files, holding `.board/board.lock` (an OS lock) from the
+  read-in to the render: a server and a command never read one hand edit
+  in twice, nor render over each other (issue #85). A forge sync takes it
+  to read in and to render, not across the run.
+- **One forge sync at a time per board** on a datastore every machine
+  shares: `datastore.Locker`, which PostgreSQL holds as a session
+  advisory lock (`pg_try_advisory_lock`) on one connection for the run;
+  the server lets it go when the session ends (issue #83). git, Markdown
+  files and the forges alone keep the machine's lock, `sync.lock`; the
+  journal stays the machine's everywhere.
 
 ## Left open
 
@@ -395,9 +404,28 @@ Markdown, as built, differs from section 5:
 - The pages don't yet disable a control a datastore can't run (pull, push,
   start over): the server refuses it, 409 `missing`, with the sentence
   (issue #82).
-- One forge sync at a time per machine, not per board: two machines on one
-  PostgreSQL board can sync at once and create the same forge issue twice
-  (issue #83).
+- **No stat cache in the Markdown folder's `Heads`** (issue #92, decided
+  2026-11-04). `Heads` reads and hashes every pack file on every call, so
+  each poll of the change events and each index refresh costs them all:
+  measured, 1,000 files of 8 KB take 52 ms on a 2-CPU machine. A cache of
+  (size, mtime, inode) → version would skip unchanged files, but a version
+  must change whenever the file does, and these can stay equal through a
+  rewrite: `git checkout` and `git merge` write files at the time of the
+  checkout, and Linux usually stamps them with a coarse clock that ticks every few
+  milliseconds (FAT every 2 s), so two branches' files of one size,
+  written in one tick, maybe on a just-freed inode, look the same; and the
+  folder may be on a shared disk, whose server's clock isn't this
+  machine's. Git's own answer, "racy git" (an entry stamped within a tick
+  of the index's own write is hashed again), needs a file written on the
+  same disk as the reference, which a read-only poll doesn't write, and
+  Windows gives no inode or change time to add. An issue missed this way
+  is a page showing an old state and an index answering with it until the
+  file changes again, with nothing to tell; the cost saved is tens of
+  milliseconds a poll. So it hashes every file: correct before cheap. If
+  a board ever makes it slow, a cache that only trusts a file whose mtime
+  and ctime are both older than a few seconds, by a clock read from that
+  disk, is the way, and a missed change must stay impossible on a local
+  disk.
 
 ## Evidence
 
