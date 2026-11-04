@@ -144,15 +144,19 @@ func tsquery(text string) string {
 // search alike: lower case, without diacritics, each run of token
 // characters a word, joined by spaces.
 func tokens(text string) string {
-	folded, _, err := transform.String(fold, text)
+	folded, _, err := transform.String(fold(), text)
 	if err != nil {
 		folded = text
 	}
 	return strings.Join(strings.FieldsFunc(strings.ToLower(folded), func(r rune) bool { return !isToken(r) }), " ")
 }
 
-// fold takes the diacritics off, as unicode61's remove_diacritics does.
-var fold = transform.Chain(norm.NFD, runes.Remove(runes.In(unicode.Mn)), norm.NFC)
+// fold takes the diacritics off, as unicode61's remove_diacritics does. A
+// chain keeps state between calls: one per call, never shared between
+// goroutines (two refreshes at once tore a shared one).
+func fold() transform.Transformer {
+	return transform.Chain(norm.NFD, runes.Remove(runes.In(unicode.Mn)), norm.NFC)
+}
 
 // ForAccount answers the person that owns an account: of the persons
 // holding it, the one whose id sorts first. It refreshes first.

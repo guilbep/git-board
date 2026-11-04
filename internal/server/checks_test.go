@@ -217,8 +217,9 @@ func TestRunTestsIsLocalOnly(t *testing.T) {
 	t.Parallel()
 	b := storetest.New(t)
 	id := storetest.NewIssue(t, b, "x")
-	local := &apiServer{cfg: &config.Config{}, b: b}
-	exposed := &apiServer{cfg: &config.Config{}, b: b, exposed: []string{"*"}}
+	// the cycle on: off, its routes answer 404 before the local check
+	local := &apiServer{cfg: &config.Config{Features: allFeatures}, b: b}
+	exposed := &apiServer{cfg: &config.Config{Features: allFeatures}, b: b, exposed: []string{"*"}}
 	body := map[string]any{"names": []string{"unit"}}
 	for _, c := range []struct {
 		s      *apiServer
