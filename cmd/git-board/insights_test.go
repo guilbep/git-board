@@ -30,6 +30,9 @@ func TestInsights(t *testing.T) {
 	if rep.Field != "status" || len(rep.Days) != 8 || rep.Open["ready"][7] != 1 {
 		t.Errorf("report = %+v", rep)
 	}
+	if out, err := execute(t, []string{"insights", "--days", "7", "--jq", ".field"}); err != nil || out != "status\n" {
+		t.Errorf("insights --jq .field = %v\n%s", err, out)
+	}
 	if _, err := execute(t, []string{"insights", "--days", "0"}); exitCode(err) != exitUsage {
 		t.Errorf("--days 0 = %v, want exit %d", err, exitUsage)
 	}

@@ -19,7 +19,7 @@ import (
 func newInsightsCmd() *cobra.Command {
 	var field, view, me string
 	var days, weeks int
-	var asJSON bool
+	var js *jsonOut
 	cmd := &cobra.Command{
 		Use:   "insights",
 		Short: "The Insights page in the terminal: flow, throughput, cycle time, burn-up",
@@ -81,8 +81,8 @@ the page reads (GET /api/insights).`,
 			o := insights.Options{Field: field, Workflow: cfg.Fields[field].Options, From: now.AddDate(0, 0, -days), To: now}
 			o.Sprint = server.BurnupSprint(cfg, now, values)
 			rep := insights.Compute(history, o)
-			if asJSON {
-				return writeJSON(cmd.OutOrStdout(), rep)
+			if js.on() {
+				return js.write(cmd.OutOrStdout(), rep)
 			}
 			printInsights(cmd.OutOrStdout(), rep, weeks)
 			return nil
@@ -92,7 +92,7 @@ the page reads (GET /api/insights).`,
 	cmd.Flags().IntVar(&days, "days", 90, "how many days back")
 	cmd.Flags().IntVar(&weeks, "weeks", 8, "how many weeks the throughput lists")
 	cmd.Flags().StringVar(&view, "view", "", "a view's issues alone (.git-board.toml [views])")
-	cmd.Flags().BoolVar(&asJSON, "json", false, "print the report as JSON, as the page reads it")
+	js = addJSON(cmd, "print the report as JSON, as the page reads it", jsonFields(insights.Report{}), true)
 	meFlag(cmd, &me)
 	return cmd
 }

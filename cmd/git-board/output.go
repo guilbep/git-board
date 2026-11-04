@@ -38,7 +38,10 @@ const jsonFieldsKey = "json-fields"
 // runs, so a wrong one writes nothing.
 func addJSON(cmd *cobra.Command, usage string, fields []string, withTemplate bool) *jsonOut {
 	o := &jsonOut{valid: fields}
-	f := cmd.Flags().VarPF(jsonFlag{&o.fields}, "json", "", usage+"; --json id,title keeps only those fields")
+	if len(fields) > 1 {
+		usage += "; --json " + fields[0] + "," + fields[1] + " keeps only those fields"
+	}
+	f := cmd.Flags().VarPF(jsonFlag{&o.fields}, "json", "", usage)
 	f.NoOptDefVal = "true"
 	cmd.Flags().StringVar(&o.jq, "jq", "", "filter the JSON with a jq `expression`")
 	if withTemplate {

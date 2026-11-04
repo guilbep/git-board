@@ -24,6 +24,12 @@ func TestLabels(t *testing.T) {
 	if len(got) != 2 || got[0] != want[0] || got[1] != want[1] {
 		t.Errorf("labels = %+v, want %+v", got, want)
 	}
+	if out, err := execute(t, []string{"labels", "--json", "label,open", "--jq", `.[] | "\(.label) \(.open)"`}); err != nil || out != "bug 1\nstatus:ready 1\n" {
+		t.Errorf("labels --json label,open --jq = %v\n%s", err, out)
+	}
+	if _, err := execute(t, []string{"labels", "--json", "label,nope"}); exitCode(err) != exitUsage {
+		t.Errorf("labels --json label,nope = %v, want exit %d", err, exitUsage)
+	}
 	if out, _ := execute(t, []string{"labels", "--plain"}); strings.Contains(out, "status") || !strings.Contains(out, "bug") {
 		t.Errorf("labels --plain:\n%s", out)
 	}

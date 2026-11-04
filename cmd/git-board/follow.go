@@ -20,7 +20,8 @@ import (
 
 func newFollowCmd() *cobra.Command {
 	var me string
-	var auto, asJSON bool
+	var auto bool
+	var js *jsonOut
 	cmd := &cobra.Command{
 		Use:   "follow <id>",
 		Short: "Follow an issue: every change to it reaches your inbox",
@@ -43,18 +44,18 @@ web UI's do. It prints whether you follow the issue now, and why.`,
 			if auto {
 				set = nil
 			}
-			return runFollow(cmd.OutOrStdout(), args[0], set, resolveMe(me), asJSON)
+			return runFollow(cmd.OutOrStdout(), args[0], set, resolveMe(me), js)
 		},
 	}
 	cmd.Flags().BoolVar(&auto, "auto", false, "back to automatic: follow it while you are in it")
-	cmd.Flags().BoolVar(&asJSON, "json", false, `print {"following", "reasons", "set"}`)
+	js = addJSON(cmd, `print {"following", "reasons", "set"}`, jsonFields(followState{}), true)
 	meFlag(cmd, &me)
 	return cmd
 }
 
 func newUnfollowCmd() *cobra.Command {
 	var me string
-	var asJSON bool
+	var js *jsonOut
 	cmd := &cobra.Command{
 		Use:   "unfollow <id>",
 		Short: "Stop following an issue: only what is addressed to you reaches your inbox",
@@ -65,10 +66,10 @@ follows it again, "follow --auto" goes back to the automatic choice.`,
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			no := false
-			return runFollow(cmd.OutOrStdout(), args[0], &no, resolveMe(me), asJSON)
+			return runFollow(cmd.OutOrStdout(), args[0], &no, resolveMe(me), js)
 		},
 	}
-	cmd.Flags().BoolVar(&asJSON, "json", false, `print {"following", "reasons", "set"}`)
+	js = addJSON(cmd, `print {"following", "reasons", "set"}`, jsonFields(followState{}), true)
 	meFlag(cmd, &me)
 	return cmd
 }
@@ -81,7 +82,7 @@ type followState struct {
 	Set       *bool    `json:"set"` // what you chose; null: automatic
 }
 
-func runFollow(out io.Writer, idPrefix string, set *bool, me string, asJSON bool) error {
+func runFollow(out io.Writer, idPrefix string, set *bool, me string, js *jsonOut) error {
 	cfg, err := loadConfig()
 	if err != nil {
 		return err
@@ -111,8 +112,8 @@ func runFollow(out io.Writer, idPrefix string, set *bool, me string, asJSON bool
 	if err != nil {
 		return err
 	}
-	if asJSON {
-		return writeJSON(out, fs)
+	if js.on() {
+		return js.write(out, fs)
 	}
 	fmt.Fprintf(out, "%s: %s\n", shortID(th.ID), fs.String())
 	return nil

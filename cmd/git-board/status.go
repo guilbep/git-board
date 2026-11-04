@@ -18,7 +18,8 @@ import (
 
 func newStatusCmd() *cobra.Command {
 	var me string
-	var asJSON, markRead bool
+	var markRead bool
+	var js *jsonOut
 	cmd := &cobra.Command{
 		Use:   "status",
 		Short: "What needs you: your issues, and what changed in what you follow",
@@ -41,10 +42,10 @@ each {"issue", "reasons", "news", "who", "latest", "first"}.`,
   git board status --json | jq '.follows[].issue.title'`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runNeedsYou(cmd.OutOrStdout(), resolveMe(me), asJSON, markRead, time.Now())
+			return runNeedsYou(cmd.OutOrStdout(), resolveMe(me), js, markRead, time.Now())
 		},
 	}
-	cmd.Flags().BoolVar(&asJSON, "json", false, "render as JSON")
+	js = addJSON(cmd, "render as JSON", jsonFields(statusReport{}), true)
 	cmd.Flags().BoolVar(&markRead, "mark-read", false, "mark what it shows from your inbox read")
 	meFlag(cmd, &me)
 	return cmd
@@ -58,7 +59,7 @@ type statusReport struct {
 	Follows  []inbox.Row   `json:"follows"`
 }
 
-func runNeedsYou(out io.Writer, me string, asJSON, markRead bool, now time.Time) error {
+func runNeedsYou(out io.Writer, me string, js *jsonOut, markRead bool, now time.Time) error {
 	cfg, err := loadConfig()
 	if err != nil {
 		return err
@@ -119,8 +120,8 @@ func runNeedsYou(out io.Writer, me string, asJSON, markRead bool, now time.Time)
 		}
 	}
 
-	if asJSON {
-		err = writeJSON(out, rep)
+	if js.on() {
+		err = js.write(out, rep)
 	} else {
 		writeStatus(out, rep)
 	}

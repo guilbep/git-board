@@ -100,16 +100,16 @@ level git does. A datastore URL is printed without its password.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error { return cmd.Help() },
 	}
-	var asJSON bool
+	var js *jsonOut
 	list := &cobra.Command{
 		Use:   "list",
 		Short: "List the keys set: the file's, then this clone's",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return runConfigList(cmd.OutOrStdout(), asJSON)
+			return runConfigList(cmd.OutOrStdout(), js)
 		},
 	}
-	list.Flags().BoolVar(&asJSON, "json", false, `print [{"key", "value", "source"}]`)
+	js = addJSON(list, `print [{"key", "value", "source"}]`, jsonFields(configEntry{}), true)
 	cmd.AddCommand(list,
 		&cobra.Command{
 			Use:   "get <key>",
@@ -243,20 +243,22 @@ func configSet(key, value string, unset bool) error {
 	return os.WriteFile(path, []byte(out), info.Mode().Perm())
 }
 
-func runConfigList(out io.Writer, asJSON bool) error {
-	type entry struct {
-		Key    string `json:"key"`
-		Value  string `json:"value"`
-		Source string `json:"source"` // .git-board.toml, or git config's scope: local, global, system
-	}
-	var entries []entry
+// configEntry is a key config list prints.
+type configEntry struct {
+	Key    string `json:"key"`
+	Value  string `json:"value"`
+	Source string `json:"source"` // .git-board.toml, or git config's scope: local, global, system
+}
+
+func runConfigList(out io.Writer, js *jsonOut) error {
+	var entries []configEntry
 	if data, err := os.ReadFile(config.Path()); err == nil {
 		kvs, err := config.ListKeys(string(data))
 		if err != nil {
 			return fmt.Errorf("parsing %s: %w", config.FileName, err)
 		}
 		for _, kv := range kvs {
-			entries = append(entries, entry{kv.Key, kv.Value, config.FileName})
+			entries = append(entries, configEntry{kv.Key, kv.Value, config.FileName})
 		}
 	} else if !errors.Is(err, fs.ErrNotExist) {
 		return err
@@ -269,14 +271,14 @@ func runConfigList(out io.Writer, asJSON bool) error {
 		}
 		key, v, _ := strings.Cut(rest, " ")
 		if _, known := gitKeys[key]; known {
-			entries = append(entries, entry{key, shownValue(key, v), scope})
+			entries = append(entries, configEntry{key, shownValue(key, v), scope})
 		}
 	}
-	if asJSON {
+	if js.on() {
 		if entries == nil {
-			entries = []entry{}
+			entries = []configEntry{}
 		}
-		return writeJSON(out, entries)
+		return js.write(out, entries)
 	}
 	for _, e := range entries {
 		src := ""

@@ -10,7 +10,8 @@ import (
 )
 
 func newUndoCmd() *cobra.Command {
-	var force, asJSON bool
+	var force bool
+	var js *jsonOut
 	cmd := &cobra.Command{
 		Use:   "undo [<id>]",
 		Short: "Undo your last change to an issue",
@@ -48,8 +49,8 @@ pulled into it: --force undoes yours anyway, over theirs.`,
 			if err != nil {
 				return err
 			}
-			if asJSON {
-				return writeJSON(cmd.OutOrStdout(), u)
+			if js.on() {
+				return js.write(cmd.OutOrStdout(), u)
 			}
 			out := cmd.OutOrStdout()
 			fmt.Fprintf(out, "undone on %s %s:\n", shortID(u.Issue), u.Title)
@@ -60,6 +61,6 @@ pulled into it: --force undoes yours anyway, over theirs.`,
 		},
 	}
 	cmd.Flags().BoolVar(&force, "force", false, "undo though someone else wrote to the issue after you")
-	cmd.Flags().BoolVar(&asJSON, "json", false, `print {"issue", "title", "undone", "what"}`)
+	js = addJSON(cmd, `print {"issue", "title", "undone", "what"}`, jsonFields(store.Undone{}), true)
 	return cmd
 }

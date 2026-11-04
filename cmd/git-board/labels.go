@@ -24,7 +24,8 @@ type labelCount struct {
 }
 
 func newLabelsCmd() *cobra.Command {
-	var asJSON, plain bool
+	var plain bool
+	var js *jsonOut
 	cmd := &cobra.Command{
 		Use:   "labels",
 		Short: "List the labels and field values in use, with counts",
@@ -57,13 +58,13 @@ has it, one change each.`,
 			if plain {
 				counts = slices.DeleteFunc(counts, func(c labelCount) bool { return c.Field != "" })
 			}
-			if asJSON {
-				return writeJSON(cmd.OutOrStdout(), counts)
+			if js.on() {
+				return js.write(cmd.OutOrStdout(), counts)
 			}
 			return printLabels(cmd.OutOrStdout(), counts)
 		},
 	}
-	cmd.Flags().BoolVar(&asJSON, "json", false, "print the labels as JSON")
+	js = addJSON(cmd, "print the labels as JSON", jsonFields(labelCount{}), true)
 	cmd.Flags().BoolVar(&plain, "plain", false, "only the plain labels, no field values")
 	cmd.AddCommand(newLabelsRenameCmd())
 	return cmd

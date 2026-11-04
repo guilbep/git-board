@@ -526,7 +526,9 @@ git board ls --template '{{range .}}{{.title}} ({{timeago .updated_at}}){{"\n"}}
 git board show a1b2c3d --jq '.events[] | select(.kind == "comment") | .body'
 ```
 
-`ls`, `view`, `show`, `log`, `me`, `comment` and `new` take `--json`.
+Every command that prints JSON takes the same `--json`: `ls`, `view`,
+`show`, `log`, `diff`, `status`, `me`, `new`, `comment`, `follow`,
+`unfollow`, `undo`, `labels`, `insights`, `config list`, `forge status`.
 Alone, it prints every field. With a list, `--json id,title`, it keeps
 those: in a list, of each item. A field an item lacks is `null`. A name
 the command doesn't print is refused (exit code 2), with the list of

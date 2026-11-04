@@ -50,7 +50,8 @@ type forgeStatus struct {
 }
 
 func newForgeStatusCmd() *cobra.Command {
-	var check, asJSON bool
+	var check bool
+	var js *jsonOut
 	cmd := &cobra.Command{
 		Use:   "status",
 		Short: "Which forges the board syncs with, and whether a token is found for each",
@@ -81,15 +82,15 @@ each token is, and says so.`,
 				return err
 			}
 			list := forgeStatuses(cmd.Context(), b, forges, check)
-			if asJSON {
-				return writeJSON(cmd.OutOrStdout(), list)
+			if js.on() {
+				return js.write(cmd.OutOrStdout(), list)
 			}
 			printForgeStatus(cmd.OutOrStdout(), list)
 			return nil
 		},
 	}
 	cmd.Flags().BoolVar(&check, "check", false, "ask each forge whose each token is (the network)")
-	cmd.Flags().BoolVar(&asJSON, "json", false, "print the forges as JSON")
+	js = addJSON(cmd, "print the forges as JSON", jsonFields(forgeStatus{}), true)
 	return cmd
 }
 

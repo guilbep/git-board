@@ -60,6 +60,9 @@ func TestFollowUnfollow(t *testing.T) {
 	if err != nil || json.Unmarshal([]byte(out), &st) != nil || !st.Following || st.Set != nil || !slices.Equal(st.Reasons, []string{"author"}) {
 		t.Errorf("follow --auto --json: %v\n%s", err, out)
 	}
+	if out, err := execute(t, []string{"follow", mine[:8], "--auto", "--json", "following,set"}); err != nil || strings.TrimSpace(out) != "{\n  \"following\": true,\n  \"set\": null\n}" {
+		t.Errorf("follow --auto --json following,set: %v\n%s", err, out)
+	}
 	if _, err := execute(t, []string{"follow", "0000000"}); exitCode(err) != exitNotFound {
 		t.Errorf("follow 0000000 = %v, want exit %d", err, exitNotFound)
 	}

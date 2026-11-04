@@ -188,3 +188,23 @@ func TestJSONFieldsOf(t *testing.T) {
 		t.Errorf("jsonFields(meRow) = %q, want %q", got, want)
 	}
 }
+
+// Every --json takes fields, --jq and --template: none is a plain bool.
+func TestEveryJSONFlagSelects(t *testing.T) {
+	t.Parallel()
+	var walk func(*cobra.Command)
+	walk = func(c *cobra.Command) {
+		if c.Flags().Lookup("json") != nil {
+			if c.Annotations[jsonFieldsKey] == "" || c.Flags().Lookup("jq") == nil {
+				t.Errorf("%s: --json without addJSON", c.CommandPath())
+			}
+			if c.Flags().Lookup("template") == nil && c.Name() != "new" {
+				t.Errorf("%s: --json without --template", c.CommandPath())
+			}
+		}
+		for _, sub := range c.Commands() {
+			walk(sub)
+		}
+	}
+	walk(newRootCmd())
+}

@@ -65,7 +65,7 @@ func parseAt(s string, now time.Time) (time.Time, error) {
 
 func newDiffCmd() *cobra.Command {
 	var since string
-	var asJSON bool
+	var js *jsonOut
 	cmd := &cobra.Command{
 		Use:   "diff <id> --since <when>",
 		Short: "What changed on an issue since a date",
@@ -93,11 +93,11 @@ changed, description with its "diff".`,
 			if err != nil {
 				return usageError{fmt.Errorf("--since %w", err)}
 			}
-			return runDiff(cmd.OutOrStdout(), args[0], from, asJSON)
+			return runDiff(cmd.OutOrStdout(), args[0], from, js)
 		},
 	}
 	cmd.Flags().StringVar(&since, "since", "", "from when: a date (2026-10-01), a time (2026-10-01T14:30) or a while ago (36h, 7d)")
-	cmd.Flags().BoolVar(&asJSON, "json", false, "render as JSON")
+	js = addJSON(cmd, "render as JSON", jsonFields(issueDiff{}), true)
 	return cmd
 }
 
@@ -133,7 +133,7 @@ type issueDiff struct {
 	shown, number string
 }
 
-func runDiff(out io.Writer, idPrefix string, since time.Time, asJSON bool) error {
+func runDiff(out io.Writer, idPrefix string, since time.Time, js *jsonOut) error {
 	b, err := store.OpenCwd()
 	if err != nil {
 		return err
@@ -156,8 +156,8 @@ func runDiff(out io.Writer, idPrefix string, since time.Time, asJSON bool) error
 	}
 	d := diffThreads(then, now)
 	d.Since, d.Created = since, created
-	if asJSON {
-		return writeJSON(out, d)
+	if js.on() {
+		return js.write(out, d)
 	}
 	writeDiff(out, d)
 	return nil
