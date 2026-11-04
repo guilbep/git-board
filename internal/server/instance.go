@@ -93,6 +93,13 @@ func (s *apiServer) handleRepository(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, repositoryResponse{GitDir: s.gitDir})
 }
 
+// handleDatastore answers where the board is kept and what that datastore
+// can do: the page shows a control that needs a capability the datastore
+// lacks as disabled, saying why.
+func (s *apiServer) handleDatastore(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, s.b.Capabilities())
+}
+
 // firstPort is where "git board" looks for a free port: a var for the
 // tests.
 var firstPort = 8080

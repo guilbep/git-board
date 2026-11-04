@@ -191,11 +191,16 @@ func Open(path string) (*Backend, error) {
 	if err != nil {
 		return nil, fmt.Errorf("opening the repository: %w", err)
 	}
-	ix, err := index.Open(context.Background(), s)
+	ds, err := openDatastore(context.Background(), s)
 	if err != nil {
+		return nil, err
+	}
+	ix, err := index.Open(context.Background(), ds)
+	if err != nil {
+		closeDatastore(ds, s)
 		return nil, fmt.Errorf("opening the index: %w", err)
 	}
-	b := &Backend{s: s, ds: s, ix: ix, dir: dir, issues: map[string]*issue.Issue{}, persons: map[string]*people.Person{}, heads: map[string]string{}}
+	b := &Backend{s: s, ds: ds, ix: ix, dir: dir, issues: map[string]*issue.Issue{}, persons: map[string]*people.Person{}, heads: map[string]string{}}
 	// the kind form and the held labels; a config that doesn't parse is the
 	// command's to report
 	if cfg, err := config.Load(config.PathIn(path)); err == nil {
@@ -214,8 +219,8 @@ func OpenCwd() (*Backend, error) {
 	return Open(cwd)
 }
 
-// Close closes the index.
-func (b *Backend) Close() error { return b.ix.Close() }
+// Close closes the index, and the datastore's connections.
+func (b *Backend) Close() error { return errors.Join(b.ix.Close(), closeDatastore(b.ds, b.s)) }
 
 // Store is the git repository: the code's, and the board's when it is kept
 // in git.

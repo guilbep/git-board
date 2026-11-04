@@ -47,10 +47,20 @@ var kinds = []string{"issue", "person"}
 // errRebuild says the file must be built again.
 var errRebuild = errors.New("index: not an index of this version")
 
-// Index is the sqlite index of one board.
+// Index is the index of one board: a sqlite file in the datastore's
+// folder, or the datastore's own server when it keeps one (SQL).
 type Index struct {
 	s  oplog.Datastore
 	db *sql.DB
+	pg bool // PostgreSQL's SQL, not sqlite's
+}
+
+// SQL is a datastore whose server keeps the index too: PostgreSQL. Every
+// machine then reads one index, which replaces the sqlite file.
+type SQL interface {
+	// IndexDB is a pool on the server, whose search path holds the index's
+	// tables.
+	IndexDB(ctx context.Context) (*sql.DB, error)
 }
 
 // Broken is an entity that failed to load.
@@ -60,6 +70,9 @@ type Broken struct{ Kind, ID, Error string }
 // <common dir>/board). A file that is missing, that sqlite can't read, or
 // of another version is built again.
 func Open(ctx context.Context, s oplog.Datastore) (*Index, error) {
+	if q, ok := s.(SQL); ok {
+		return openPG(ctx, s, q)
+	}
 	dir := s.Folder()
 	if err := os.MkdirAll(dir, 0o777); err != nil {
 		return nil, fmt.Errorf("index: %w", err)
@@ -228,13 +241,18 @@ func (ix *Index) write(ctx context.Context, stored map[key]string, gone []key, c
 		return err
 	}
 	defer tx.Rollback()
+	if ix.pg { // one refresh at a time, as sqlite's immediate transaction
+		if _, err := tx.ExecContext(ctx, "LOCK TABLE entities IN SHARE ROW EXCLUSIVE MODE"); err != nil {
+			return err
+		}
+	}
 	exec := func(query string, args ...any) error {
-		_, err := tx.ExecContext(ctx, query, args...)
+		_, err := tx.ExecContext(ctx, ix.sql(query), args...)
 		return err
 	}
 	moved := func(k key) (bool, error) {
 		var head string
-		err := tx.QueryRowContext(ctx, "SELECT head FROM entities WHERE kind = ? AND id = ?", k.kind, k.id).Scan(&head)
+		err := tx.QueryRowContext(ctx, ix.sql("SELECT head FROM entities WHERE kind = ? AND id = ?"), k.kind, k.id).Scan(&head)
 		if errors.Is(err, sql.ErrNoRows) {
 			err = nil
 		}
@@ -243,8 +261,12 @@ func (ix *Index) write(ctx context.Context, stored map[key]string, gone []key, c
 	drop := func(k key) error {
 		var stmts []string
 		if k.kind == "issue" {
+			texts := "DELETE FROM texts WHERE rowid = (SELECT n FROM issues WHERE id = ?1)"
+			if ix.pg {
+				texts = "DELETE FROM texts WHERE n = (SELECT n FROM issues WHERE id = ?1)"
+			}
 			stmts = []string{
-				"DELETE FROM texts WHERE rowid = (SELECT n FROM issues WHERE id = ?1)",
+				texts,
 				"DELETE FROM labels WHERE issue = ?1",
 				"DELETE FROM issues WHERE id = ?1",
 			}
@@ -282,9 +304,9 @@ func (ix *Index) write(ctx context.Context, stored map[key]string, gone []key, c
 		case l.err != nil:
 			msg = l.err.Error()
 		case l.issue != nil:
-			err = insertIssue(ctx, tx, l.issue)
+			err = ix.insertIssue(ctx, tx, l.issue)
 		default:
-			err = insertPerson(ctx, tx, l.person)
+			err = ix.insertPerson(ctx, tx, l.person)
 		}
 		if err != nil {
 			return err
@@ -296,17 +318,24 @@ func (ix *Index) write(ctx context.Context, stored map[key]string, gone []key, c
 	return tx.Commit()
 }
 
-func insertIssue(ctx context.Context, tx *sql.Tx, is *issue.Issue) error {
+func (ix *Index) insertIssue(ctx context.Context, tx *sql.Tx, is *issue.Issue) error {
 	// Labels never hold a line feed (issue.Apply refuses one), so it joins them.
-	res, err := tx.ExecContext(ctx, `INSERT INTO issues (id, title, status, author, created, updated, comments, labels)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		is.ID, is.Title, string(is.Status), is.Author, is.Created, is.Updated, len(is.Comments), strings.Join(is.Labels, "\n"))
-	if err != nil {
-		return err
-	}
-	n, err := res.LastInsertId()
-	if err != nil {
-		return err
+	insert := `INSERT INTO issues (id, title, status, author, created, updated, comments, labels)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+	args := []any{is.ID, is.Title, string(is.Status), is.Author, is.Created, is.Updated, len(is.Comments), strings.Join(is.Labels, "\n")}
+	var n int64
+	if ix.pg {
+		if err := tx.QueryRowContext(ctx, ix.sql(insert+" RETURNING n"), args...).Scan(&n); err != nil {
+			return err
+		}
+	} else {
+		res, err := tx.ExecContext(ctx, insert, args...)
+		if err != nil {
+			return err
+		}
+		if n, err = res.LastInsertId(); err != nil {
+			return err
+		}
 	}
 	var comments []string
 	for _, c := range is.Comments {
@@ -314,24 +343,31 @@ func insertIssue(ctx context.Context, tx *sql.Tx, is *issue.Issue) error {
 	}
 	// ponytail: the comments are one column, so a word of several tokens can
 	// match across two comments; a row per text if that ever matters.
-	if _, err := tx.ExecContext(ctx, "INSERT INTO texts (rowid, title, body, comments) VALUES (?, ?, ?, ?)",
-		n, is.Title, is.Body, strings.Join(comments, "\n")); err != nil {
+	texts := "INSERT INTO texts (rowid, title, body, comments) VALUES (?, ?, ?, ?)"
+	if ix.pg {
+		texts = "INSERT INTO texts (n, doc) VALUES (?, to_tsvector('simple', ?))"
+	}
+	args = []any{n, is.Title, is.Body, strings.Join(comments, "\n")}
+	if ix.pg { // one text, tokenized here as sqlite's unicode61 does
+		args = []any{n, tokens(is.Title) + " " + tokens(is.Body) + " " + tokens(strings.Join(comments, "\n"))}
+	}
+	if _, err := tx.ExecContext(ctx, ix.sql(texts), args...); err != nil {
 		return err
 	}
 	for _, label := range is.Labels {
-		if _, err := tx.ExecContext(ctx, "INSERT INTO labels (issue, label) VALUES (?, ?)", is.ID, label); err != nil {
+		if _, err := tx.ExecContext(ctx, ix.sql("INSERT INTO labels (issue, label) VALUES (?, ?)"), is.ID, label); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func insertPerson(ctx context.Context, tx *sql.Tx, p *people.Person) error {
-	if _, err := tx.ExecContext(ctx, "INSERT INTO persons (id, name) VALUES (?, ?)", p.ID, p.Name); err != nil {
+func (ix *Index) insertPerson(ctx context.Context, tx *sql.Tx, p *people.Person) error {
+	if _, err := tx.ExecContext(ctx, ix.sql("INSERT INTO persons (id, name) VALUES (?, ?)"), p.ID, p.Name); err != nil {
 		return err
 	}
 	for _, a := range p.Accounts {
-		if _, err := tx.ExecContext(ctx, "INSERT INTO accounts (server, id, person, login) VALUES (?, ?, ?, ?)",
+		if _, err := tx.ExecContext(ctx, ix.sql("INSERT INTO accounts (server, id, person, login) VALUES (?, ?, ?, ?)"),
 			a.Server, a.ID, p.ID, a.Login); err != nil {
 			return err
 		}

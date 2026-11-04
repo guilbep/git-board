@@ -49,7 +49,7 @@ func seal() (string, error) {
 		return "", err
 	}
 	for _, k := range []string{"GH_TOKEN", "GITHUB_TOKEN", "GH_ENTERPRISE_TOKEN", "GITHUB_ENTERPRISE_TOKEN", "GH_HOST",
-		"GITLAB_TOKEN", "GITLAB_HOST", "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy"} {
+		"GITLAB_TOKEN", "GITLAB_HOST", "GIT_BOARD_DATASTORE", "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy"} {
 		os.Unsetenv(k)
 	}
 	for k, v := range map[string]string{
