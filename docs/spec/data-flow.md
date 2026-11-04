@@ -57,7 +57,7 @@ flowchart TB
   ds --> copy
   store -. "renders NNN-slug.md, reads hand edits" .-> md
   index -. "sqlite, for git and forge only" .-> folder
-  index -. "git_board_index, on PostgreSQL" .-> pg
+  index -. "git_board_index_v1, on PostgreSQL" .-> pg
   syncer -. "sync.lock, journal" .-> folder
 ```
 
@@ -140,7 +140,7 @@ machine.
 |---|---|---|---|---|
 | issues, people, sync and release records | `refs/board/<kind>/<id>` | `git_board.packs`, `git_board.entities` | `<dir>/.board/<kind>/<id>.jsonl`, one pack a line, and `<dir>/NNN-slug.md` rendered | a git copy in `.git/board/forge-copy.git`, filled by sync |
 | project numbers | `refs/board/seq` | `git_board.counter` | the forges' own numbers only | the forges' own numbers only |
-| the index | `.git/board/index.db` (sqlite) | `git_board_index.*`, shared | `.git/board/index.db` | `.git/board/index.db` |
+| the index | `.git/board/index.db` (sqlite) | `git_board_index_v<version>.*`, shared | `.git/board/index.db` | `.git/board/index.db` |
 | who you write as | git config `board.me` | git config `board.me` | git config `board.me` | git config `board.me` |
 | sync lock and journal, caches | `.git/board/` | `.git/board/` | `.git/board/` | `.git/board/` |
 | branches, diffs, tags, check notes | the code repository | the code repository | the code repository | the code repository |

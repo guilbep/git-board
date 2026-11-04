@@ -9,7 +9,7 @@
 //	packs    (kind, id, hash, data)    its packs, byte for byte
 //	counter  (value, version)          the project numbers, one row
 //
-// and the index's (core/index) in git_board_index.
+// and the index's (core/index) in git_board_index_v<its version>.
 package pgstore
 
 import (
@@ -18,6 +18,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"regexp"
 	"slices"
 	"strconv"
 
@@ -29,11 +30,13 @@ import (
 	"github.com/guilbep/git-board/core/oplog"
 )
 
-// Schema is where the datastore's tables are; IndexSchema the index's.
-const (
-	Schema      = "git_board"
-	IndexSchema = "git_board_index"
-)
+// Schema is where the datastore's tables are. The index's are in a schema
+// of their own, one per version (core/index.PGSchema).
+const Schema = "git_board"
+
+// indexSchema is a schema IndexDB makes: a lowercase SQL identifier, as
+// it is written into the statement.
+var indexSchema = regexp.MustCompile(`^[a-z_][a-z0-9_]{0,62}$`)
 
 // version is the schema's, in git_board.meta.
 const version = 1
@@ -157,20 +160,22 @@ func (s *Store) Where() string {
 }
 
 // IndexDB is a connection pool whose tables are the index's: the same
-// database, with the schema git_board_index first on its search path, made
-// when it isn't there. The index (core/index) keeps its tables in it, so
-// every machine reads one index, kept up to the datastore by whoever reads
-// it.
-func (s *Store) IndexDB(ctx context.Context) (*sql.DB, error) {
+// database, with schema first on its search path, made when it isn't
+// there. The index (core/index) keeps its tables in it, so every machine
+// reads one index, kept up to the datastore by whoever reads it.
+func (s *Store) IndexDB(ctx context.Context, schema string) (*sql.DB, error) {
+	if !indexSchema.MatchString(schema) || schema == Schema {
+		return nil, fmt.Errorf("pgstore: %q can't be the index's schema", schema)
+	}
 	// under setup's lock: two CREATE SCHEMA IF NOT EXISTS at once fail one
-	if err := s.locked(ctx, "CREATE SCHEMA IF NOT EXISTS "+IndexSchema); err != nil {
+	if err := s.locked(ctx, "CREATE SCHEMA IF NOT EXISTS "+schema); err != nil {
 		return nil, fmt.Errorf("pgstore: %w", err)
 	}
 	cfg := s.cfg.Copy()
 	if cfg.RuntimeParams == nil {
 		cfg.RuntimeParams = map[string]string{}
 	}
-	cfg.RuntimeParams["search_path"] = IndexSchema
+	cfg.RuntimeParams["search_path"] = schema
 	return stdlib.OpenDB(*cfg), nil
 }
 
