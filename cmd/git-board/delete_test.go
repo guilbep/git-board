@@ -82,3 +82,26 @@ func TestCommentDelete(t *testing.T) {
 		t.Errorf("deleting it again = %v, want exit %d", err, exitNotFound)
 	}
 }
+
+func TestUndoCmd(t *testing.T) {
+	newTestRepo(t)
+	id := openIssueID(t)
+	if _, err := execute(t, []string{"set", id, "label=+regression"}); err != nil {
+		t.Fatal(err)
+	}
+	out, err := execute(t, []string{"undo", id})
+	if err != nil || !strings.Contains(out, "labels -regression") {
+		t.Fatalf("undo = %q, %v", out, err)
+	}
+	if out, _ := execute(t, []string{"get", id}); strings.Contains(out, "regression") {
+		t.Errorf("labels after undo:\n%s", out)
+	}
+	out, err = execute(t, []string{"new", "Fresh", "-b", "", "--json"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	fresh := out[strings.Index(out, `"id": "`)+7:][:40]
+	if _, err := execute(t, []string{"undo", fresh}); exitCode(err) != exitUsage {
+		t.Errorf("undo of a create = %v, want exit %d", err, exitUsage)
+	}
+}

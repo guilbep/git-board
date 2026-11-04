@@ -151,6 +151,32 @@ On a terminal it asks first. `--yes` doesn't ask, and is needed when no
 one is at a terminal (a script, CI): without it, exit code 2. Deleting is
 in the command line only, not yet in the web UI.
 
+## `undo`: your last change
+
+```bash
+git board undo a1b2c3d              # your last change to it
+git board undo                      # your last change, on any issue
+git board undo a1b2c3d --force      # though someone wrote after you
+```
+
+It writes the inverse of your last change: a label added is removed and
+one removed added back; a status, a title or a text goes back to what it
+was; a new comment is deleted. A change is what one command wrote, so
+`edit -e`'s title and description go back together. Undoing twice redoes.
+Nothing is erased: the change and its undo are both in `git board log`.
+
+Refused, exit code 2, with the reason:
+
+- creating an issue: `git board delete` deletes it;
+- a delete: never undone;
+- a change of metadata (a review thread resolved, a Project field);
+- someone else wrote to the issue after you, or a sync pulled into it:
+  `--force` undoes yours anyway, over theirs.
+
+Changes a sync pulled are not yours to undo here. `--json` prints
+`{"issue", "title", "undone", "what"}`: the operations undone and a line
+for each thing put back.
+
 ## `edit`: title and description
 
 ```bash
@@ -328,6 +354,7 @@ Errors go to stderr, prefixed `error:`.
 | `gh issue reopen N` | `glab issue reopen N` | `git board reopen N` |
 | `gh issue delete N --yes` | `glab issue delete N` | `git board delete N --yes` (hidden, kept in history) |
 | `gh issue comment N --delete-last` | `glab issue note delete` | `git board comment N --delete <ref>` |
+| | | `git board undo N` (your last change, inverted) |
 | `gh issue status` | | `git board ls "involves:@me is:open"` |
 | `gh issue develop N` | `glab mr create --related-issue N` | `git board branch N` (prints the branch and the command) |
 | | `glab issue view N -s` (system notes) | `git board log N` (every change, text edits too) |
