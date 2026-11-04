@@ -27,8 +27,9 @@ func cycleConfig(roles map[string]string, c config.Cycle) *config.Config {
 			"status": {Single: true, Options: co2Statuses},
 			"risk":   {Single: true, Options: []string{"low", "normal", "structural"}},
 		},
-		Roles: roles,
-		Cycle: c,
+		Roles:    roles,
+		Cycle:    c,
+		Features: allFeatures, // the cycle's tests: every experimental feature on
 	}
 }
 
@@ -411,7 +412,7 @@ func TestCycleSignoffClosesFromReview(t *testing.T) {
 	s.cfg = &config.Config{Fields: map[string]config.Field{
 		"status": {Single: true, Options: []string{"backlog", "ready", "in-progress", "in-review", "done"}},
 		"risk":   {Single: true, Options: []string{"low", "normal", "structural"}},
-	}}
+	}, Features: allFeatures}
 	s.pulls.put("fix/2518-x", &ghpr.PR{Number: 3082, State: "MERGED", MergeCommit: "deadbee0"}, nil)
 	url := serve(t, s).URL + "/api/issues/" + id[:8] + "/cycle"
 	var c cycleAnswer

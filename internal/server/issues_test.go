@@ -333,6 +333,7 @@ func TestMarkdownPreview(t *testing.T) {
 func TestCommentOnAStep(t *testing.T) {
 	t.Parallel()
 	ts, s := newIssueServer(t)
+	s.cfg.Features = allFeatures // a comment's step is the cycle's
 	id, err := s.b.NewIssue("Export CSV", "", nil)
 	if err != nil {
 		t.Fatal(err)
@@ -358,7 +359,7 @@ func TestCommentOnAStep(t *testing.T) {
 func TestCommentStepIsTheLists(t *testing.T) {
 	t.Parallel()
 	ts, s := newIssueServer(t)
-	s.cfg = &config.Config{Cycle: config.Cycle{Steps: []string{"code", "review"}}}
+	s.cfg = &config.Config{Cycle: config.Cycle{Steps: []string{"code", "review"}}, Features: allFeatures}
 	id, err := s.b.NewIssue("Export CSV", "", nil)
 	if err != nil {
 		t.Fatal(err)
@@ -432,6 +433,7 @@ func TestMeSaysUnswitched(t *testing.T) {
 func TestThreadComments(t *testing.T) {
 	t.Parallel()
 	ts, s := newIssueServer(t)
+	s.cfg.Features = allFeatures // a comment's step is the cycle's
 	id, err := s.b.NewIssue("Releases", "## Expected\n\n- a", nil)
 	if err != nil {
 		t.Fatal(err)
@@ -559,7 +561,7 @@ func TestResolveView(t *testing.T) {
 func TestSetViewFromSettings(t *testing.T) {
 	t.Parallel()
 	ts, s := newIssueServer(t)
-	s.setConfig(&config.Config{Cycle: config.Cycle{On: true}})
+	s.setConfig(&config.Config{Cycle: config.Cycle{On: true}, Features: allFeatures})
 	var me meResponse
 	if code := call(t, "PUT", ts.URL+"/api/me/view", map[string]string{"view": "classic"}, &me); code != 200 ||
 		me.View != "classic" || me.ViewFrom != "board.view" || me.ViewScope != "local" {
@@ -580,6 +582,7 @@ func TestSetViewFromSettings(t *testing.T) {
 func TestMeSaysTheView(t *testing.T) {
 	t.Parallel()
 	ts, s := newIssueServer(t)
+	s.cfg.Features = allFeatures // the cycle's page is the cycle's
 	var me meResponse
 	if call(t, "GET", ts.URL+"/api/me", nil, &me); me.View != "classic" || me.ViewFrom != "default" {
 		t.Errorf("by default: %q from %q", me.View, me.ViewFrom)
@@ -589,7 +592,7 @@ func TestMeSaysTheView(t *testing.T) {
 		t.Errorf("board.view cycle: %q from %q", me.View, me.ViewFrom)
 	}
 	storetest.Git(t, s.b.GitDir(), "config", "--unset", "board.view")
-	s.setConfig(&config.Config{Cycle: config.Cycle{On: true}})
+	s.setConfig(&config.Config{Cycle: config.Cycle{On: true}, Features: allFeatures})
 	if call(t, "GET", ts.URL+"/api/me", nil, &me); me.View != "cycle" || me.ViewFrom != ".git-board.toml" {
 		t.Errorf("a [cycle] table: %q from %q", me.View, me.ViewFrom)
 	}

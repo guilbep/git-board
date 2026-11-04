@@ -143,7 +143,7 @@ func (s *apiServer) cycleOf(ctx context.Context, th store.Thread) (cycleResponse
 	if err != nil {
 		return cycleResponse{}, err
 	}
-	return cycleResponse{Cycle: cycle.Compute(in), Stages: stages, PRCheckedAt: in.PRAt, AI: ai.FromEnv() != nil}, nil
+	return cycleResponse{Cycle: cycle.Compute(in), Stages: stages, PRCheckedAt: in.PRAt, AI: cfg.Experimental(config.FeatureAgents) && ai.FromEnv() != nil}, nil
 }
 
 func (s *apiServer) handleCycle(w http.ResponseWriter, r *http.Request) {
@@ -424,6 +424,10 @@ func (s *apiServer) suggestRisk(w http.ResponseWriter, r *http.Request) {
 	}
 	if cur.Step != 2 || cur.Done {
 		writeError(w, http.StatusBadRequest, errors.New("not at Risk"))
+		return
+	}
+	if !s.config().Experimental(config.FeatureAgents) {
+		writeCoded(w, http.StatusNotFound, "experimental", config.ExperimentalOff(config.FeatureAgents))
 		return
 	}
 	c := ai.FromEnv()
