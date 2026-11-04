@@ -82,13 +82,27 @@ func (s *Store) Packs(_ context.Context, kind, id string) ([][]byte, string, err
 }
 
 // Add writes pack in a commit on prev, and moves the entity's ref there if
-// it is still at prev.
+// it is still at prev. A pack whose clock isn't 1 + prev's (1 with no prev)
+// is refused: Walk would refuse the entity after it.
 func (s *Store) Add(ctx context.Context, kind, id string, pack []byte, prev string) (string, error) {
 	var parents []Hash
 	old := ZeroHash
+	want := uint64(1)
 	if prev != "" {
 		old = NewHash(prev)
 		parents = []Hash{old}
+		n, err := s.ReadNode(old)
+		if err != nil {
+			return "", err
+		}
+		want = n.Clock + 1
+	}
+	var hd header
+	if err := json.Unmarshal(pack, &hd); err != nil {
+		return "", fmt.Errorf("gitstore: %s %s: pack: %w", kind, id, err)
+	}
+	if hd.Clock != want {
+		return "", fmt.Errorf("gitstore: %s %s: a pack of clock %d on one of clock %d: copying a board into git with packs written apart isn't done yet (ADR 0002)", kind, id, hd.Clock, want-1)
 	}
 	c, _, err := s.WritePack(pack, parents...)
 	if err != nil {

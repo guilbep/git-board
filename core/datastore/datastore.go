@@ -2,16 +2,20 @@
 // core writes through, and the errors it answers (ADR 0002).
 //
 // A datastore keeps packs, the JSON blobs an entity's operations are written
-// in, byte for byte. It never reads them: core/oplog encodes, hashes and
-// orders them. So an entity's id, its operations' ids and every reference to
+// in, byte for byte. It never reads them, but for git, which chains them by
+// their clock: core/oplog encodes, hashes and orders them. So an entity's id, its operations' ids and every reference to
 // them are the same in every datastore.
 //
 // git (core/gitstore) and PostgreSQL (core/pgstore) are the datastores.
 package datastore
 
 import (
+	"bytes"
+	"cmp"
 	"context"
+	"encoding/json"
 	"errors"
+	"slices"
 )
 
 // Kinds are the entity kinds a datastore keeps.
@@ -65,7 +69,8 @@ func (m *missing) Error() string { return m.sentence }
 func (m *missing) Unwrap() error { return ErrMissing }
 
 // Copy copies every entity of from into to: the packs to hasn't, a whole
-// entity or the rest of one a copy cut short. It copies from's counter
+// entity or the rest of one a copy cut short, oldest first, by (clock,
+// bytes), as git chains them in that order. It copies from's counter
 // when to keeps one and has none. A board moving between datastores keeps
 // its ids, as its packs copy as they are. It answers how many entities it
 // wrote to.
@@ -81,6 +86,7 @@ func Copy(ctx context.Context, from, to Datastore) (int, error) {
 			if err != nil {
 				return n, err
 			}
+			byClock(packs)
 			mine, v, err := to.Packs(ctx, kind, id)
 			if err != nil && !errors.Is(err, ErrNotFound) {
 				return n, err
@@ -118,4 +124,19 @@ func Copy(ctx context.Context, from, to Datastore) (int, error) {
 	}
 	_, err = tc.SetCount(ctx, value, "")
 	return n, err
+}
+
+// byClock sorts packs by their clock, then their bytes. This is all Copy
+// reads of a pack: its "clock". One it can't read sorts first.
+func byClock(packs [][]byte) {
+	clock := func(p []byte) uint64 {
+		var hd struct {
+			Clock uint64 `json:"clock"`
+		}
+		_ = json.Unmarshal(p, &hd)
+		return hd.Clock
+	}
+	slices.SortStableFunc(packs, func(a, b []byte) int {
+		return cmp.Or(cmp.Compare(clock(a), clock(b)), bytes.Compare(a, b))
+	})
 }
