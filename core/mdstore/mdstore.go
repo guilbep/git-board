@@ -215,13 +215,34 @@ func lock(path string) (func(), error) {
 			return nil, fmt.Errorf("mdstore: %w", err)
 		}
 		if fi, err := os.Stat(path); err == nil && time.Since(fi.ModTime()) > staleLock {
-			os.Remove(path)
+			takeOver(path)
 			continue
 		}
 		if time.Since(start) > staleLock {
 			return nil, fmt.Errorf("%w: %s is held", datastore.ErrMoved, path)
 		}
 		time.Sleep(5 * time.Millisecond)
+	}
+}
+
+// takeOver removes a stale lock file. Waiters take over one at a time,
+// under path.takeover, and look again under it: one that found the lock
+// stale never deletes the fresh lock another took over meanwhile. A
+// takeover lock is held for an instant; one left staleLock ago is removed.
+func takeOver(path string) {
+	guard := path + ".takeover"
+	f, err := os.OpenFile(guard, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+	if err != nil {
+		if fi, err := os.Stat(guard); err == nil && time.Since(fi.ModTime()) > staleLock {
+			os.Remove(guard)
+		}
+		time.Sleep(time.Millisecond)
+		return
+	}
+	f.Close()
+	defer os.Remove(guard)
+	if fi, err := os.Stat(path); err == nil && time.Since(fi.ModTime()) > staleLock {
+		os.Remove(path)
 	}
 }
 
