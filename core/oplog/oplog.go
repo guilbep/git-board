@@ -13,7 +13,6 @@ import (
 	"errors"
 	"fmt"
 	"maps"
-	"regexp"
 	"slices"
 	"strings"
 
@@ -92,9 +91,19 @@ func Hash(data []byte) string {
 func RefName(kind, id string) string { return "refs/board/" + kind + "/" + id }
 
 // IsID says whether id is an entity id: 40 lowercase hex digits.
-func IsID(id string) bool { return idPattern.MatchString(id) }
-
-var idPattern = regexp.MustCompile(`^[0-9a-f]{40}$`)
+// A listing asks it of every ref, so it reads the bytes rather than run a
+// regexp.
+func IsID(id string) bool {
+	if len(id) != 40 {
+		return false
+	}
+	for i := 0; i < len(id); i++ {
+		if c := id[i]; (c < '0' || c > '9') && (c < 'a' || c > 'f') {
+			return false
+		}
+	}
+	return true
+}
 
 // checkKind refuses a kind that isn't one of datastore.Kinds.
 func checkKind(kind string) error {

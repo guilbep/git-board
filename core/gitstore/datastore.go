@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
-	"regexp"
 	"strings"
 
 	"github.com/go-git/go-git/v5/plumbing"
@@ -28,7 +27,18 @@ var (
 // EntityRef is an entity's ref.
 func EntityRef(kind, id string) string { return "refs/board/" + kind + "/" + id }
 
-var entityID = regexp.MustCompile(`^[0-9a-f]{40}$`)
+// isID says id is an entity id: 40 lowercase hex digits (oplog.IsID).
+func isID(id string) bool {
+	if len(id) != 40 {
+		return false
+	}
+	for i := 0; i < len(id); i++ {
+		if c := id[i]; (c < '0' || c > '9') && (c < 'a' || c > 'f') {
+			return false
+		}
+	}
+	return true
+}
 
 // Node is one entity commit: its parents, its pack's blob and bytes, and the
 // pack's clock.
@@ -56,7 +66,7 @@ func (s *Store) Heads(_ context.Context, kind string) (map[string]string, error)
 	}
 	out := make(map[string]string, len(refs))
 	for name, h := range refs {
-		if id := strings.TrimPrefix(name, prefix); entityID.MatchString(id) {
+		if id := strings.TrimPrefix(name, prefix); isID(id) {
 			out[id] = h.String()
 		}
 	}
@@ -81,7 +91,7 @@ func (s *Store) Packs(_ context.Context, kind, id string) ([][]byte, string, err
 // held then. Its ref isn't read.
 func (s *Store) PacksAt(_ context.Context, kind, id, version string) ([][]byte, error) {
 	h := NewHash(version)
-	if !entityID.MatchString(id) || h == ZeroHash || h.String() != version {
+	if !isID(id) || h == ZeroHash || h.String() != version {
 		return nil, fmt.Errorf("%w: %s at %q", datastore.ErrNotFound, EntityRef(kind, id), version)
 	}
 	return s.packsAt(h)
