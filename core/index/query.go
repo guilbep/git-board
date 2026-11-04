@@ -3,11 +3,14 @@ package index
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"regexp"
+	"runtime"
 	"slices"
 	"strings"
+	"sync"
 	"unicode"
 
 	"golang.org/x/text/runes"
@@ -117,6 +120,111 @@ func (ix *Index) Issues(ctx context.Context, q Query) ([]Summary, error) {
 		out = append(out, s)
 	}
 	return out, rows.Err()
+}
+
+// State is an issue as the index keeps it: issue.Apply's fold at a head.
+type State struct {
+	Head  string
+	Issue *issue.Issue
+}
+
+// States answers every issue the index holds, by id, folded at the head it
+// read, and the broken issues it keeps out: deleted ones are neither. For
+// each, cached gives the issue already folded at that head, or nil: the
+// index then reads the state it keeps, so a caller that has most of them
+// reads few. It refreshes first.
+func (ix *Index) States(ctx context.Context, cached func(id, head string) *issue.Issue) (map[string]State, []Broken, error) {
+	if err := ix.Refresh(ctx); err != nil {
+		return nil, nil, err
+	}
+	const join = " FROM issues i JOIN entities e ON e.kind = 'issue' AND e.id = i.id"
+	rows, err := ix.db.QueryContext(ctx, `SELECT id, head, error FROM entities
+		WHERE kind = 'issue' AND (error IS NOT NULL OR id IN (SELECT id FROM issues))`)
+	if err != nil {
+		return nil, nil, fmt.Errorf("index: states: %w", err)
+	}
+	out := map[string]State{}
+	var missing []string
+	var broken []Broken
+	for rows.Next() {
+		var id, head string
+		var msg sql.NullString
+		if err := rows.Scan(&id, &head, &msg); err != nil {
+			rows.Close()
+			return nil, nil, err
+		}
+		if msg.Valid {
+			broken = append(broken, Broken{"issue", id, msg.String})
+			continue
+		}
+		if is := cached(id, head); is != nil {
+			out[id] = State{head, is}
+		} else {
+			missing = append(missing, id)
+		}
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, nil, err
+	}
+	// A state comes with its head, in one statement: an issue that moved
+	// since the heads were read comes as it is now, and one that went,
+	// not at all.
+	type row struct {
+		id, head string
+		state    []byte
+	}
+	var read []row
+	scan := func(where string, args ...any) error {
+		rows, err := ix.db.QueryContext(ctx, ix.sql("SELECT i.id, e.head, i.state"+join+where), args...)
+		if err != nil {
+			return fmt.Errorf("index: states: %w", err)
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var r row
+			if err := rows.Scan(&r.id, &r.head, &r.state); err != nil {
+				return err
+			}
+			if _, ok := out[r.id]; !ok {
+				read = append(read, r)
+			}
+		}
+		return rows.Err()
+	}
+	if len(missing) > len(out) { // most of them: one read of all
+		err = scan("")
+	} else {
+		for _, id := range missing {
+			if err = scan(" WHERE i.id = ?", id); err != nil {
+				break
+			}
+		}
+	}
+	if err != nil {
+		return nil, nil, err
+	}
+	// decoding is most of a cold read: on every CPU
+	issues := make([]issue.Issue, len(read))
+	errs := make([]error, len(read))
+	var wg sync.WaitGroup
+	workers := min(runtime.GOMAXPROCS(0), len(read))
+	for w := range workers {
+		wg.Go(func() {
+			for i := w; i < len(read); i += workers {
+				errs[i] = json.Unmarshal(read[i].state, &issues[i])
+			}
+		})
+	}
+	wg.Wait()
+	for i, r := range read {
+		if errs[i] != nil {
+			return nil, nil, fmt.Errorf("index: issue %s: %w", r.id, errs[i])
+		}
+		out[r.id] = State{r.head, &issues[i]}
+	}
+	slices.SortFunc(broken, func(a, b Broken) int { return strings.Compare(a.ID, b.ID) })
+	return out, broken, nil
 }
 
 // match is the FTS5 query for a search text. Each word is quoted, so FTS5's

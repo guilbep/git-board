@@ -6,6 +6,7 @@ package index
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/url"
@@ -23,18 +24,20 @@ import (
 )
 
 // version is the schema's, in PRAGMA user_version. 2: PostgreSQL's texts
-// weigh the title, body and comments apart, for Query.In.
-const version = 2
+// weigh the title, body and comments apart, for Query.In. 3: each issue's
+// state, for Folded.
+const version = 3
 
 // schema is the index's tables. entities holds every indexed entity's head;
-// error is NULL when it loaded, and its error when it is broken. texts'
-// rowid is its issue's n.
+// error is NULL when it loaded, and its error when it is broken. An issue's
+// state is the JSON of what issue.Apply folded at that head. texts' rowid
+// is its issue's n.
 const schema = `
 CREATE TABLE entities (kind TEXT NOT NULL, id TEXT NOT NULL, head TEXT NOT NULL, error TEXT,
 	PRIMARY KEY (kind, id));
 CREATE TABLE issues (n INTEGER PRIMARY KEY, id TEXT NOT NULL UNIQUE, title TEXT NOT NULL,
 	status TEXT NOT NULL, author TEXT NOT NULL, created INTEGER NOT NULL, updated INTEGER NOT NULL,
-	comments INTEGER NOT NULL, labels TEXT NOT NULL);
+	comments INTEGER NOT NULL, labels TEXT NOT NULL, state TEXT NOT NULL);
 CREATE TABLE labels (issue TEXT NOT NULL, label TEXT NOT NULL, PRIMARY KEY (label, issue));
 CREATE TABLE persons (id TEXT PRIMARY KEY, name TEXT NOT NULL);
 CREATE TABLE accounts (server TEXT NOT NULL, id TEXT NOT NULL, person TEXT NOT NULL, login TEXT NOT NULL,
@@ -334,9 +337,14 @@ func (ix *Index) write(ctx context.Context, stored map[key]string, gone []key, c
 
 func (ix *Index) insertIssue(ctx context.Context, tx *sql.Tx, is *issue.Issue) error {
 	// Labels never hold a line feed (issue.Apply refuses one), so it joins them.
-	insert := `INSERT INTO issues (id, title, status, author, created, updated, comments, labels)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-	args := []any{is.ID, is.Title, string(is.Status), is.Author, is.Created, is.Updated, len(is.Comments), strings.Join(is.Labels, "\n")}
+	state, err := json.Marshal(is)
+	if err != nil {
+		return err
+	}
+	insert := `INSERT INTO issues (id, title, status, author, created, updated, comments, labels, state)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+	args := []any{is.ID, is.Title, string(is.Status), is.Author, is.Created, is.Updated, len(is.Comments),
+		strings.Join(is.Labels, "\n"), string(state)}
 	var n int64
 	if ix.pg {
 		if err := tx.QueryRowContext(ctx, ix.sql(insert+" RETURNING n"), args...).Scan(&n); err != nil {

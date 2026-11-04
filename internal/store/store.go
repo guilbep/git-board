@@ -67,8 +67,8 @@ type Backend struct {
 	// cfg says which labels the forges' sync holds (SetHeld)
 	cfg atomic.Pointer[config.Config]
 
-	// ponytail: issues and persons loaded once per head, in memory; the
-	// index's summaries when a cold listing of thousands gets slow
+	// issues and persons folded once per head, in memory; a listing's
+	// issues come from the index's states (allIssues)
 	mu      sync.Mutex
 	issues  map[string]*issue.Issue
 	persons map[string]*people.Person
@@ -322,11 +322,33 @@ func all[T any](b *Backend, kind string, cache map[string]T, load func(id, head 
 	return out, nil
 }
 
-// allIssues is every issue a view shows: a deleted one is left out.
+// allIssues is every issue a view shows: a deleted one is left out. They
+// come from the index, which keeps each issue folded (index.States), and
+// through the cache: a process folds or reads only what it doesn't hold
+// at its head. A broken one is left out and logged.
 func (b *Backend) allIssues() (map[string]*issue.Issue, error) {
-	issues, err := all(b, "issue", b.issues, b.issueAt)
-	maps.DeleteFunc(issues, func(_ string, is *issue.Issue) bool { return is.Deleted })
-	return issues, err
+	states, broken, err := b.ix.States(ctx, func(id, head string) *issue.Issue {
+		b.mu.Lock()
+		defer b.mu.Unlock()
+		if b.heads[oplog.RefName("issue", id)] == head {
+			return b.issues[id]
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	for _, e := range broken {
+		log.Printf("issue %s: %s", e.ID, e.Error)
+	}
+	issues := make(map[string]*issue.Issue, len(states))
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	for id, st := range states {
+		issues[id] = st.Issue
+		b.issues[id], b.heads[oplog.RefName("issue", id)] = st.Issue, st.Head
+	}
+	return issues, nil
 }
 
 func (b *Backend) allPersons() (map[string]*people.Person, error) {

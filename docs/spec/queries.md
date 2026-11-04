@@ -23,7 +23,7 @@ directory when it is missing.
 
 For a board kept in PostgreSQL, the index is the same tables in the
 schema `git_board_index_v<version>` of the board's database (today
-`git_board_index_v2`), shared by every machine. Each version of the
+`git_board_index_v3`), shared by every machine. Each version of the
 index's tables has its own schema, so two git-board versions sharing a
 database each keep their index; neither drops the other's. A schema no
 git-board reads any more stays until it is dropped by hand
@@ -48,7 +48,9 @@ Issues and persons. Sync entities aren't indexed.
 
 - **For each issue:** its id, title, status, author, `created`, `updated`,
   labels and number of comments, from its [state](data-model.md#issue-state).
-  For search, the text of its title, body and comments.
+  For search, the text of its title, body and comments. For lists, the
+  whole state, as JSON: a listing reads it instead of every issue's
+  packs, and decodes only the issues it doesn't hold at that head.
 - **For each person:** its id, name and accounts (`server`, `id`,
   `login`), from its [state](data-model.md#person-state).
 - **For each entity:** its head, the commit its ref points at.

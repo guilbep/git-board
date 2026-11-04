@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/guilbep/git-board/core/issue"
+	"github.com/guilbep/git-board/core/oplog"
 	"github.com/guilbep/git-board/core/people"
 	"github.com/guilbep/git-board/core/pgstore"
 	"github.com/guilbep/git-board/core/pgstore/pgtest"
@@ -308,4 +309,59 @@ func texts(is *issue.Issue, in []string) []string {
 		res = append(res, byName[n])
 	}
 	return res
+}
+
+// States answers each issue as issue.Apply folds it, at the head it was
+// indexed at, and the broken ones apart; cached ones aren't read.
+func TestStatesAreTheFolds(t *testing.T) {
+	t.Parallel()
+	ctx := t.Context()
+	_, s := newRepo(t)
+	a := mkIssue(t, s, issue.NewCreate("ann", "Crash on save", "It crashes."), issue.ChangeLabels("ann", []string{"status:ready"}, nil))
+	c := issue.NewCommentMeta("bob", "Seen too", map[string]string{"k": "v"})
+	c.Origin = &oplog.Origin{Forge: "github.com/o/r", Event: "comment:1"}
+	if _, err := issue.Do(ctx, s, a.ID, c, issue.SetStatus("bob", issue.Closed)); err != nil {
+		t.Fatal(err)
+	}
+	b := mkIssue(t, s, issue.NewCreate("bob", "Gone", ""))
+	if _, err := issue.Do(ctx, s, b.ID, issue.Delete("bob", b.BodyOp)); err != nil {
+		t.Fatal(err)
+	}
+	bad, err := oplog.Create(ctx, s, "issue", "", []oplog.Op{{Kind: "bogus", Author: "ann", Time: 1}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ix := openIndex(t, s)
+	none := func(string, string) *issue.Issue { return nil }
+	states, broken, err := ix.States(ctx, none)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(broken) != 1 || broken[0].ID != bad.ID {
+		t.Fatalf("broken = %+v, want %s", broken, bad.ID)
+	}
+	if len(states) != 1 {
+		t.Fatalf("states = %v, want %s alone", states, a.ID)
+	}
+	head, err := s.Ref(oplog.RefName("issue", a.ID))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, err := issue.Load(s, a.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := states[a.ID]; got.Head != head.String() || !reflect.DeepEqual(got.Issue, want) {
+		t.Fatalf("state = %s %+v\nwant %s %+v", got.Head, got.Issue, head, want)
+	}
+	mine := &issue.Issue{ID: a.ID}
+	states, _, err = ix.States(ctx, func(id, h string) *issue.Issue {
+		if id == a.ID && h == head.String() {
+			return mine
+		}
+		return nil
+	})
+	if err != nil || states[a.ID].Issue != mine {
+		t.Fatalf("cached: %+v, %v; want the caller's", states[a.ID], err)
+	}
 }
