@@ -9,7 +9,9 @@ import (
 
 func TestRefsFingerprintFollowsWrites(t *testing.T) {
 	t.Parallel()
-	b := storetest.New(t)
+	dir := storetest.Repo(t, false)
+	storetest.Init(t, dir)
+	b := storetest.Open(t, dir)
 	before := b.RefsFingerprint()
 	id := storetest.NewIssue(t, b, "one")
 	created := b.RefsFingerprint()
@@ -29,7 +31,8 @@ func TestRefsFingerprintFollowsWrites(t *testing.T) {
 	if b.RefsFingerprint() == labelled {
 		t.Error("a new release left the fingerprint as it was")
 	}
-	if b.RefsFingerprint() != b.RefsFingerprint() {
-		t.Error("the fingerprint isn't stable")
+	// stable: another backend on the unchanged repository reads the same
+	if again := storetest.Open(t, dir).RefsFingerprint(); again != b.RefsFingerprint() {
+		t.Error("the fingerprint isn't stable across a reopen")
 	}
 }
