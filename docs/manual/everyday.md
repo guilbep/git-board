@@ -34,6 +34,8 @@ git board move 624a ready           # straight to a status
 git board move 624a --next          # backlog → ready → in progress → …
 git board move 624a --prev
 git board close 624a -c "Fixed in 4e5f6a7"   # the last status, closed, with a comment
+git board close 624a -r not-planned          # closed-as:not-planned
+git board close 624a --duplicate-of 5f1e     # closed-as:duplicate, linked, commented
 git board reopen 624a                        # open again
 ```
 

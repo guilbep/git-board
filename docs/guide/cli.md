@@ -185,6 +185,8 @@ until `--apply`.
 
 ```bash
 git board close a1b2c3d -c "Fixed in 4e5f6a7"
+git board close a1b2c3d --reason not-planned -c "Out of scope"
+git board close a1b2c3d --duplicate-of "#2518"
 git board reopen a1b2c3d -c "Still fails on Safari"
 git board move a1b2c3d in-progress
 git board move a1b2c3d --next
@@ -194,7 +196,20 @@ git board move a1b2c3d --prev
 `close` sets the status to its last option and closes the issue.
 `reopen` opens it and, when its status is that last option or none, sets
 the first option; another status stays. Both take `-c, --comment`, added
-first. `move <id> <status>` is `set <id> status=<status>`, checked the
+first.
+
+`close -r, --reason` says why it closed, as GitHub does: `completed`
+(the default), `not-planned` or `duplicate`. The reason is a field like
+any other, the label `closed-as:not-planned`, so `ls
+"closed-as:not-planned"` finds them; `completed` writes none.
+`--duplicate-of <id>` closes as `duplicate`, sets the issue field
+`duplicate-of` to the other issue (its forge number `#2518` when both
+are on that forge, else its id), and comments `Duplicate of #2518`,
+which GitHub reads as well. `reopen` takes `closed-as` away and leaves
+`duplicate-of`. The forges get `closed-as` as a label, not as their own
+close reason.
+
+`move <id> <status>` is `set <id> status=<status>`, checked the
 same way. `move --next` and `--prev` step the status through its
 options. Onto the last one the issue closes; back from it, it reopens.
 
@@ -352,6 +367,7 @@ Errors go to stderr, prefixed `error:`.
 | `gh issue edit N -m v1` | `glab issue update N -m v1` | `git board set N milestone=v1` (a field), or `sprint=@next` |
 | `gh issue edit 1 2 3 --add-label x` | | `git board set --filter "<filter>" label=+x --apply` |
 | `gh issue close N -c C` | `glab issue close N` | `git board close N -c C` |
+| `gh issue close N -r "not planned"`, `--duplicate-of M` | | `git board close N -r not-planned`, `--duplicate-of M` |
 | `gh issue reopen N` | `glab issue reopen N` | `git board reopen N` |
 | `gh status`, `gh issue status` | | `git board status`, or `git board ls "involves:@me is:open"` |
 | | `glab issue subscribe N`, `unsubscribe N` | `git board follow N`, `git board unfollow N` |
