@@ -232,9 +232,8 @@ func TestNoConfigServesEmptyObjects(t *testing.T) {
 // fix, the other as git-board's.
 func TestListIssuesErrorStatus(t *testing.T) {
 	t.Parallel()
-	b := storetest.New(t)
-	storetest.NewIssue(t, b, "open one")
-	s := &apiServer{cfg: mustLoadConfig(t), b: b} // no --me, and no forge login
+	b := storetest.NewEmpty(t)
+	s := &apiServer{cfg: mustLoadConfig(t), b: b} // no --me, and no one chosen to write as
 	ts := httptest.NewServer(withCORS(newMux(s, http.NotFoundHandler())))
 	t.Cleanup(ts.Close)
 	for _, path := range []string{"/api/issues", "/api/facets"} {
