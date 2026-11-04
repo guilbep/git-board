@@ -375,7 +375,8 @@ Markdown, as built, differs from section 5:
 - **The Markdown folder is a datastore** (`core/mdstore`,
   `board.datastore markdown:<dir>`): packs as JSON lines in
   `<dir>/.board/<kind>/<id>.jsonl`, merged by git's union driver; a
-  version is the count of lines, a write takes the file's lock. After
+  version is the file's hash (two branches' files of as many packs are two
+  versions), a write takes the file's lock. After
   each write, the backend reads the folder's hand edits in, then renders
   the files.
 
@@ -385,10 +386,18 @@ Markdown, as built, differs from section 5:
   git-board).
 - Whether `Heads` should return the versions of every kind in one call: the
   index reads two kinds and the change events three.
-- Copying a board into git: its packs must be chained into commits again,
-  clock by clock, and packs of one clock need a merge each.
+- Copying a board into git: `datastore.Copy` chains an entity's packs into
+  commits clock by clock, and `gitstore.Add` refuses a pack whose clock
+  isn't 1 + its parent's (since 2026-11-04). An entity with two packs of
+  one clock (a merge in git, or two writers on PostgreSQL) needs a merge
+  commit, which Copy doesn't write: such a copy fails loudly, it never
+  writes a broken entity.
 - The pages don't yet disable a control a datastore can't run (pull, push,
-  start over): the server refuses it, 409 `missing`, with the sentence.
+  start over): the server refuses it, 409 `missing`, with the sentence
+  (issue #82).
+- One forge sync at a time per machine, not per board: two machines on one
+  PostgreSQL board can sync at once and create the same forge issue twice
+  (issue #83).
 
 ## Evidence
 
