@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/guilbep/git-board/core/fields"
+	"github.com/guilbep/git-board/core/forge"
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/ghpr"
 )
 
 var co2Options = []string{"backlog", "comite", "ready", "in-progress", "in-review", "ready-for-validation", "qa", "tests-metier", "validated"}
@@ -71,10 +71,10 @@ func TestWalk(t *testing.T) {
 		{name: "ready, normal, plan accepted", in: input("ready", func(in *Input) { in.Risk = "normal"; in.Plan = &Plan{Path: "p.md", Status: "accepted"} }), step: 3, login: "erin", what: "move the status to in-progress", note: "plan approved, waits for the status in-progress"},
 		{name: "ready, low, the assignee", in: input("ready", func(in *Input) { in.Risk = "low"; in.Me = "erin" }), step: 3, login: "erin", what: "move the status to in-progress", mine: true, note: "low risk, waits for the status in-progress", skipped: []int{3}, actions: []string{"start"}},
 		{name: "ready, low", in: input("ready", risk("low")), step: 3, login: "erin", what: "move the status to in-progress", note: "low risk, waits for the status in-progress", gate: "Skipped, low risk", skipped: []int{3}},
-		{name: "ready, structural, PR approved", in: input("ready", func(in *Input) { in.Risk = "structural"; in.PlanPR = &ghpr.PR{Decision: "APPROVED"} }), step: 3, login: "erin", what: "move the status to in-progress", note: "plan approved, waits for the status in-progress", gate: "Structural: the plan’s gate approved first"},
+		{name: "ready, structural, PR approved", in: input("ready", func(in *Input) { in.Risk = "structural"; in.PlanPR = &forge.PR{Decision: "APPROVED"} }), step: 3, login: "erin", what: "move the status to in-progress", note: "plan approved, waits for the status in-progress", gate: "Structural: the plan’s gate approved first"},
 		{name: "ready, structural, PR waiting", in: input("ready", func(in *Input) {
 			in.Risk = "structural"
-			in.PlanPR = &ghpr.PR{Decision: "REVIEW_REQUIRED"}
+			in.PlanPR = &forge.PR{Decision: "REVIEW_REQUIRED"}
 			in.Me = "bob"
 		}), step: 3, login: "bob", what: "approve the plan’s gate on GitHub", mine: true},
 		{name: "in-progress, no tests", in: input("in-progress", approved("normal")), step: 4, login: "erin", what: "write the tests", gate: "The touched suites green, each criterion names its test"},
@@ -87,21 +87,21 @@ func TestWalk(t *testing.T) {
 		{name: "in-progress, PR open", in: input("in-progress", func(in *Input) {
 			approved("normal")(in)
 			in.Tests = []TestFile{{Path: "a_test.go"}}
-			in.PR = &ghpr.PR{Number: 3082, State: "OPEN"}
+			in.PR = &forge.PR{Number: 3082, State: "OPEN"}
 		}), step: 5, login: "erin", what: "commit and ask for review", note: "GitHub #3082 open, waits for the status in-review"},
 		{name: "in-progress, draft PR", in: input("in-progress", func(in *Input) {
 			approved("normal")(in)
 			in.Tests = []TestFile{{Path: "a_test.go"}}
-			in.PR = &ghpr.PR{Number: 41, State: "OPEN", Draft: true}
+			in.PR = &forge.PR{Number: 41, State: "OPEN", Draft: true}
 			in.Me = "erin"
 		}), step: 5, login: "erin", what: "commit and ask for review", mine: true, note: "GitHub #41, a draft, waits for it to be marked ready for review"},
 		{name: "in-progress, draft PR, no test yet", in: input("in-progress", func(in *Input) {
 			approved("normal")(in)
-			in.PR = &ghpr.PR{Number: 41, State: "OPEN", Draft: true}
+			in.PR = &forge.PR{Number: 41, State: "OPEN", Draft: true}
 		}), step: 4, login: "erin", what: "write the tests"},
 		{name: "in-review, draft PR", in: input("in-review", func(in *Input) {
 			approved("normal")(in)
-			in.PR = &ghpr.PR{Number: 41, State: "OPEN", Draft: true}
+			in.PR = &forge.PR{Number: 41, State: "OPEN", Draft: true}
 			in.Me = "carol"
 		}), step: 6, login: "carol", what: "review the branch", mine: true, note: "GitHub #41 is still a draft"},
 		{name: "in-progress, tests, the assignee", in: input("in-progress", func(in *Input) { approved("normal")(in); in.Tests = []TestFile{{Path: "a_test.go"}}; in.Me = "erin" }), step: 5, login: "erin", what: "commit and ask for review", mine: true, actions: []string{"ready-for-review"}},
@@ -109,18 +109,18 @@ func TestWalk(t *testing.T) {
 		{name: "in-review, structural", in: input("in-review", func(in *Input) { in.Risk = "structural"; in.Me = "carol" }), step: 6, login: "carol", what: "review the branch", mine: true, gate: "Structural: a second human", actions: []string{"review"}},
 		{name: "in-review, merged", in: input("in-review", func(in *Input) {
 			approved("normal")(in)
-			in.PR = &ghpr.PR{Number: 3082, State: "MERGED"}
+			in.PR = &forge.PR{Number: 3082, State: "MERGED"}
 			in.Me = "erin"
 		}), step: 6, login: "erin", what: "move the status to ready-for-validation", mine: true, note: "merged, waits for the status ready-for-validation", actions: []string{"to-validation"}},
 		{name: "in-review, merged, no validation status", in: input("in-review", func(in *Input) {
 			approved("normal")(in)
 			in.Stages = noValidation
-			in.PR = &ghpr.PR{Number: 3082, State: "MERGED"}
+			in.PR = &forge.PR{Number: 3082, State: "MERGED"}
 		}), step: 7, what: "sign off in-review", mine: true, note: "no plan file", gate: "Green codes are not proof", actions: []string{"verify", "check", "signoff"}},
 		{name: "in-review, open, no validation status", in: input("in-review", func(in *Input) {
 			approved("normal")(in)
 			in.Stages = noValidation
-			in.PR = &ghpr.PR{Number: 3082, State: "OPEN"}
+			in.PR = &forge.PR{Number: 3082, State: "OPEN"}
 		}), step: 6, login: "carol", what: "review the branch"},
 		{name: "qa", in: input("qa", risk("normal")), step: 7, login: "alice", what: "sign off qa", mine: true, note: "no plan file", gate: "Green codes are not proof", actions: []string{"verify", "check", "signoff"}},
 		{name: "qa, plan not delivered", in: input("qa", func(in *Input) { in.Risk = "normal"; in.Plan = &Plan{Path: "p.md", Status: "accepted"} }), step: 7, login: "alice", what: "sign off qa", mine: true, note: "plan not marked delivered", actions: []string{"verify", "check", "signoff"}},
@@ -299,7 +299,7 @@ func TestComputeAt(t *testing.T) {
 		{"in-progress, tests", "in-progress", func(in *Input) { approved("normal")(in); in.Tests = []TestFile{{Path: "a_test.go"}} }, "code"},
 		{"in-review", "in-review", nil, "review"},
 		{"qa", "qa", nil, "verify"},
-		{"merged, no validation status", "in-review", func(in *Input) { in.Stages = noValidation; in.PR = &ghpr.PR{State: "MERGED"} }, "verify"},
+		{"merged, no validation status", "in-review", func(in *Input) { in.Stages = noValidation; in.PR = &forge.PR{State: "MERGED"} }, "verify"},
 		{"sign-offs, ready-for-validation", "ready-for-validation", signoffs, "ready-for-validation"},
 		{"sign-offs, qa", "qa", signoffs, "qa"},
 		{"sign-offs, tests-metier", "tests-metier", signoffs, "tests-metier"},
@@ -365,7 +365,7 @@ func TestComputeOfAndName(t *testing.T) {
 }
 
 // lane is a branch of the issue: its last commit at day, tests or not, a PR or not.
-func lane(name string, day int, tests bool, pr *ghpr.PR) Lane {
+func lane(name string, day int, tests bool, pr *forge.PR) Lane {
 	l := Lane{Branch: name, Head: name + "-head", At: time.Date(2026, 10, day, 10, 0, 0, 0, time.UTC), PR: pr}
 	if tests {
 		l.Files = []TestFile{{Path: "x_test.go"}}
@@ -373,8 +373,8 @@ func lane(name string, day int, tests bool, pr *ghpr.PR) Lane {
 	return l
 }
 
-func pr(n int, state string, draft bool) *ghpr.PR {
-	return &ghpr.PR{Number: n, State: state, Draft: draft}
+func pr(n int, state string, draft bool) *forge.PR {
+	return &forge.PR{Number: n, State: state, Draft: draft}
 }
 
 // Branched out (docs/design/issue-head, open point 6): each branch its own

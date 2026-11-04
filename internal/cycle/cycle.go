@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/guilbep/git-board/core/forge"
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/ghpr"
 )
 
 // Steps names the seven steps, 1 to 7.
@@ -92,9 +92,9 @@ type Input struct {
 	PlanHead     string     `json:"plan_head,omitempty"`
 	Plan         *Plan      `json:"plan,omitempty"`
 	PlanApproval *Approval  `json:"plan_approval,omitempty"` // by the plan gate's person
-	PlanPR       *ghpr.PR   `json:"plan_pr,omitempty"`       // the plan branch's PR, structural
+	PlanPR       *forge.PR  `json:"plan_pr,omitempty"`       // the plan branch's PR, structural
 	Tests        []TestFile `json:"tests,omitempty"`
-	PR           *ghpr.PR   `json:"pr,omitempty"`
+	PR           *forge.PR  `json:"pr,omitempty"`
 	PRAt         time.Time  `json:"-"`
 	Signoffs     []Signoff  `json:"signoffs,omitempty"`
 	Runs         []Run      `json:"runs,omitempty"`
@@ -121,7 +121,7 @@ type Lane struct {
 
 	InBase bool       `json:"-"` // its work is in the base (branches.Branch's)
 	Files  []TestFile `json:"-"`
-	PR     *ghpr.PR   `json:"-"`
+	PR     *forge.PR  `json:"-"`
 	PRAt   time.Time  `json:"-"`
 	Ref    string     `json:"-"` // where git reads it: origin/<name> or <name>
 }

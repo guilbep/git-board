@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/guilbep/git-board/core/forge"
 	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/branches"
 	"github.com/guilbep/git-board/internal/config"
@@ -23,8 +24,8 @@ import (
 
 // branchPull is a branch on origin and its pull request, nil for none.
 type branchPull struct {
-	Branch string   `json:"branch"`
-	PR     *ghpr.PR `json:"pr"`
+	Branch string    `json:"branch"`
+	PR     *forge.PR `json:"pr"`
 }
 
 // pullsResponse is an issue's gate. Repo is "" when origin isn't on GitHub.

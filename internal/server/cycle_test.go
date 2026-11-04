@@ -13,9 +13,9 @@ import (
 	"time"
 
 	"github.com/guilbep/git-board/core/fields"
+	"github.com/guilbep/git-board/core/forge"
 	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/ghpr"
 	"github.com/guilbep/git-board/internal/store"
 	"github.com/guilbep/git-board/internal/store/storetest"
 )
@@ -288,7 +288,7 @@ func TestCycleSignoffNeedsARun(t *testing.T) {
 // branch's head: the sign-off's check accepts that commit too.
 func TestCycleSignoffAtTheMergedHead(t *testing.T) {
 	s, _, id := prRepo(t, "qa")
-	s.pulls.put("fix/2518-x", &ghpr.PR{Number: 3082, State: "MERGED", Head: "0000000", MergeCommit: "deadbee0"}, nil)
+	s.pulls.put("fix/2518-x", &forge.PR{Number: 3082, State: "MERGED", Head: "0000000", MergeCommit: "deadbee0"}, nil)
 	url := serve(t, s).URL + "/api/issues/" + id[:8] + "/cycle/"
 	if code, body := post(t, url+"verify", map[string]string{"output": "ok", "commit": "deadbee0"}); code != http.StatusOK {
 		t.Fatalf("verify: %d %s", code, body)
@@ -424,7 +424,7 @@ func TestCycleSignoffClosesFromReview(t *testing.T) {
 			"risk":   {Single: true, Options: []string{"low", "normal", "structural"}},
 		}},
 	}
-	s.pulls.put("fix/2518-x", &ghpr.PR{Number: 3082, State: "MERGED", MergeCommit: "deadbee0"}, nil)
+	s.pulls.put("fix/2518-x", &forge.PR{Number: 3082, State: "MERGED", MergeCommit: "deadbee0"}, nil)
 	url := serve(t, s).URL + "/api/issues/" + id[:8] + "/cycle"
 	var c cycleAnswer
 	if getJSON(t, url, &c); c.Step != 7 || !slices.Contains(c.Actions, "signoff") {

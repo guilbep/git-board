@@ -1,5 +1,6 @@
 // Package forge is what sync needs of a forge project: its issues as they
-// are now, and the writes a push makes.
+// are now, and the writes a push makes; and a pull request as its gate
+// shows it (PR), which the cycle reads.
 package forge
 
 import (

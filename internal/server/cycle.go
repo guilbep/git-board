@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/guilbep/git-board/core/fields"
+	"github.com/guilbep/git-board/core/forge"
 	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/core/proof"
 	"github.com/guilbep/git-board/internal/ai"
@@ -32,7 +33,7 @@ const pullsEvery = 5 * time.Minute
 // cachedPull is a branch's PR as last read (at, zero: never), and when
 // GitHub was last asked.
 type cachedPull struct {
-	pr        *ghpr.PR
+	pr        *forge.PR
 	at, tried time.Time
 }
 
@@ -43,7 +44,7 @@ type pullCache struct {
 	m  map[string]cachedPull
 }
 
-func (c *pullCache) PR(branch string) (*ghpr.PR, time.Time) {
+func (c *pullCache) PR(branch string) (*forge.PR, time.Time) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	e := c.m[branch]
@@ -57,7 +58,7 @@ func (c *pullCache) stale(branch string) bool {
 }
 
 // put records an answer; err keeps the last PR.
-func (c *pullCache) put(branch string, pr *ghpr.PR, err error) {
+func (c *pullCache) put(branch string, pr *forge.PR, err error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.m == nil {

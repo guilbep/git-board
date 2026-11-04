@@ -13,9 +13,9 @@ import (
 	"time"
 
 	"github.com/guilbep/git-board/core/fields"
+	"github.com/guilbep/git-board/core/forge"
 	"github.com/guilbep/git-board/core/proof"
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/ghpr"
 	"github.com/guilbep/git-board/internal/store/storetest"
 )
 
@@ -290,7 +290,7 @@ func TestCycleSignoffNotProvenAtMerge(t *testing.T) {
 	}
 	merged := func() {
 		head := strings.TrimSpace(git(t, s.root, "rev-parse", "fix/2518-x"))
-		s.pulls.put("fix/2518-x", &ghpr.PR{Number: 3082, State: "MERGED", MergeCommit: head}, nil)
+		s.pulls.put("fix/2518-x", &forge.PR{Number: 3082, State: "MERGED", MergeCommit: head}, nil)
 	}
 	merged()
 	url := serve(t, s).URL + "/api/issues/" + id[:8]
@@ -311,7 +311,7 @@ func TestCycleSignoffNotProvenAtMerge(t *testing.T) {
 	}
 
 	// the merge commit not fetched yet: vet listed, not proven, the same refusal
-	s.pulls.put("fix/2518-x", &ghpr.PR{Number: 3082, State: "MERGED", MergeCommit: "deadbee0deadbee0deadbee0deadbee0deadbee0"}, nil)
+	s.pulls.put("fix/2518-x", &forge.PR{Number: 3082, State: "MERGED", MergeCommit: "deadbee0deadbee0deadbee0deadbee0deadbee0"}, nil)
 	if getJSON(t, url+"/tests", &a); a.Merged == nil || a.Merged.Proven || len(a.Merged.Checks) != 1 || a.Merged.Checks[0].Name != "vet" {
 		t.Fatalf("the gate at an unfetched merge: %+v", a.Merged)
 	}

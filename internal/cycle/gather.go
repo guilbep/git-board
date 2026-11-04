@@ -8,11 +8,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/guilbep/git-board/core/forge"
 	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/board"
 	"github.com/guilbep/git-board/internal/branches"
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/ghpr"
 	"github.com/guilbep/git-board/internal/markdown"
 	"github.com/guilbep/git-board/internal/store"
 )
@@ -21,7 +21,7 @@ import (
 type Pulls interface {
 	// PR is the cached PR whose head is branch, and when it was read; nil
 	// when none or never read.
-	PR(branch string) (*ghpr.PR, time.Time)
+	PR(branch string) (*forge.PR, time.Time)
 }
 
 // Gather fills an Input for the issue from git-bug, git and the PR cache

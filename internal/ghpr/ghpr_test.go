@@ -11,6 +11,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/guilbep/git-board/core/forge"
 )
 
 // fake is GitHub's API answering with h, as the token "tok".
@@ -41,7 +43,7 @@ var six = []string{"Backend Lint/Type Check", "Frontent Lint/Type Check", "Backe
 
 // co2-calculator's PR #3082 as GitHub answered it on 2026-10-17
 // (testdata/pr.json, its repository renamed o/r).
-func co2PR(t *testing.T) *PR {
+func co2PR(t *testing.T) *forge.PR {
 	t.Helper()
 	c := fake(t, func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
@@ -83,7 +85,7 @@ func TestFind(t *testing.T) {
 	if len(p.Checks) != 13 || len(p.Requested) != 0 {
 		t.Errorf("%d checks, requested %v", len(p.Checks), p.Requested)
 	}
-	i := slices.IndexFunc(p.Checks, func(c Check) bool { return c.Name == "Frontend Tests" })
+	i := slices.IndexFunc(p.Checks, func(c forge.Check) bool { return c.Name == "Frontend Tests" })
 	if i < 0 || p.Checks[i].State != "failure" || !strings.HasPrefix(p.Checks[i].URL, "https://github.com/o/r/actions/") {
 		t.Errorf("Frontend Tests %+v", p.Checks)
 	}
@@ -113,7 +115,7 @@ func TestFindKeepsTheApproval(t *testing.T) {
 	if err != nil || p == nil {
 		t.Fatalf("Find: %v, %v", p, err)
 	}
-	if want := []Review{{Login: "gbtest", State: "APPROVED", Commit: "01b3cf8"}}; !slices.Equal(p.Reviews, want) {
+	if want := []forge.Review{{Login: "gbtest", State: "APPROVED", Commit: "01b3cf8"}}; !slices.Equal(p.Reviews, want) {
 		t.Errorf("reviews %+v, want %+v", p.Reviews, want)
 	}
 }
@@ -171,7 +173,7 @@ func TestRequired(t *testing.T) {
 	}
 }
 
-func names(checks []Check) []string {
+func names(checks []forge.Check) []string {
 	var res []string
 	for _, c := range checks {
 		res = append(res, c.Name)
@@ -201,8 +203,8 @@ func TestGate(t *testing.T) {
 // A required check that never reported isn't in GitHub's rollup: it
 // still shows, expected, and the merge waits for it.
 func TestGateMissingRequired(t *testing.T) {
-	p := &PR{State: "OPEN", Base: "dev", Mergeable: "MERGEABLE", MergeState: "BLOCKED",
-		Checks: []Check{{Name: "Lint", State: "success"}, {Name: "Docs Build", State: "success"}}}
+	p := &forge.PR{State: "OPEN", Base: "dev", Mergeable: "MERGEABLE", MergeState: "BLOCKED",
+		Checks: []forge.Check{{Name: "Lint", State: "success"}, {Name: "Docs Build", State: "success"}}}
 	Gate(p, []string{"Docs Build", "E2E"})
 	if got := names(p.Checks); !slices.Equal(got, []string{"Docs Build", "E2E", "Lint"}) {
 		t.Errorf("checks %q", got)
@@ -217,21 +219,21 @@ func TestGateMissingRequired(t *testing.T) {
 
 func TestGateClean(t *testing.T) {
 	for _, state := range []string{"CLEAN", "HAS_HOOKS", "UNSTABLE"} {
-		p := &PR{State: "OPEN", Base: "dev", Mergeable: "MERGEABLE", MergeState: state, Decision: "APPROVED",
-			Checks: []Check{{Name: "Tests", State: "success"}, {Name: "Audit", State: "failure"}}}
+		p := &forge.PR{State: "OPEN", Base: "dev", Mergeable: "MERGEABLE", MergeState: state, Decision: "APPROVED",
+			Checks: []forge.Check{{Name: "Tests", State: "success"}, {Name: "Audit", State: "failure"}}}
 		Gate(p, []string{"Tests"})
 		if !p.CanMerge || len(p.Waits) != 0 {
 			t.Errorf("%s: can merge %v, waits %q", state, p.CanMerge, p.Waits)
 		}
 	}
-	merged := &PR{State: "MERGED", Mergeable: "UNKNOWN", MergeState: "UNKNOWN"}
+	merged := &forge.PR{State: "MERGED", Mergeable: "UNKNOWN", MergeState: "UNKNOWN"}
 	if Gate(merged, nil); merged.CanMerge || merged.Checking || len(merged.Waits) != 0 {
 		t.Errorf("a merged PR %+v", merged)
 	}
 }
 
 func TestGateChecking(t *testing.T) {
-	p := &PR{State: "OPEN", Base: "dev", Mergeable: "UNKNOWN", MergeState: "UNKNOWN"}
+	p := &forge.PR{State: "OPEN", Base: "dev", Mergeable: "UNKNOWN", MergeState: "UNKNOWN"}
 	Gate(p, nil)
 	if !p.Checking || p.CanMerge {
 		t.Errorf("checking %v, can merge %v", p.Checking, p.CanMerge)
@@ -240,16 +242,16 @@ func TestGateChecking(t *testing.T) {
 
 func TestGateWords(t *testing.T) {
 	for _, tc := range []struct {
-		pr   PR
+		pr   forge.PR
 		want string
 	}{
-		{PR{Decision: "CHANGES_REQUESTED", MergeState: "BLOCKED", Reviews: []Review{{Login: "alice", State: "APPROVED"}, {Login: "bob", State: "CHANGES_REQUESTED"}}}, "changes bob requested"},
-		{PR{Mergeable: "CONFLICTING", MergeState: "DIRTY"}, "conflicts with dev resolved"},
-		{PR{MergeState: "BEHIND"}, "an update from dev"},
-		{PR{Draft: true, MergeState: "DRAFT"}, "ready for review (a draft)"},
-		{PR{MergeState: "BLOCKED"}, "GitHub's rules"},
-		{PR{Decision: "REVIEW_REQUIRED", MergeState: "BLOCKED"}, "an approval"},
-		{PR{Decision: "REVIEW_REQUIRED", MergeState: "BLOCKED", Requested: []string{"alice", "bob"}}, "an approval from alice or bob"},
+		{forge.PR{Decision: "CHANGES_REQUESTED", MergeState: "BLOCKED", Reviews: []forge.Review{{Login: "alice", State: "APPROVED"}, {Login: "bob", State: "CHANGES_REQUESTED"}}}, "changes bob requested"},
+		{forge.PR{Mergeable: "CONFLICTING", MergeState: "DIRTY"}, "conflicts with dev resolved"},
+		{forge.PR{MergeState: "BEHIND"}, "an update from dev"},
+		{forge.PR{Draft: true, MergeState: "DRAFT"}, "ready for review (a draft)"},
+		{forge.PR{MergeState: "BLOCKED"}, "GitHub's rules"},
+		{forge.PR{Decision: "REVIEW_REQUIRED", MergeState: "BLOCKED"}, "an approval"},
+		{forge.PR{Decision: "REVIEW_REQUIRED", MergeState: "BLOCKED", Requested: []string{"alice", "bob"}}, "an approval from alice or bob"},
 	} {
 		p := tc.pr
 		p.State, p.Base = "OPEN", "dev"
