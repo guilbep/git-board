@@ -1,5 +1,9 @@
 # Storage
 
+This page is the git datastore's format. A board may be kept elsewhere
+(PostgreSQL, the forges alone): the packs are the same bytes there, and
+[How the data flows](data-flow.md) shows where each datastore sits.
+
 An entity lives in git as a chain of commits under one ref. Each commit
 holds one pack of operations and a clock. This page gives the exact format,
 the order of the operations, and how heads merge, refs move, and clones

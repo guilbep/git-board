@@ -18,8 +18,10 @@ nav = [
   { "Guide" = [
     { "Configuration" = "guide/configuration.md" },
     { "Forges" = "guide/forges.md" },
+    { "Where the board is kept" = "guide/datastores.md" },
   ] },
   { "Spec" = [
+    { "How the data flows" = "spec/data-flow.md" },
     { "Data model" = "spec/data-model.md" },
     { "Storage" = "spec/storage.md" },
     { "Queries and search" = "spec/queries.md" },

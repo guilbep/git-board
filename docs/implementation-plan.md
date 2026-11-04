@@ -1062,3 +1062,12 @@ nothing is stored.
 
 - ADR 0002 (`docs/adr/0002-datastores.md`, accepted): the core will write through a `Datastore` that keeps packs, so ids stay the same in every datastore; optional capabilities (replica, counter) say what a datastore lacks; Markdown export, then import as a forge adapter, then the cut, then PostgreSQL.
 - `git board export --md <dir>` (`internal/store/markdown.go`): one `NNN-slug.md` per issue, YAML front matter, the description, the comments with the marker sync writes. A file is written only when its bytes change; a retitled issue's old file goes, any other file stays. Test: `TestExportMarkdownReadsBack`. Import is the next issue.
+
+### Status 2026-11-04: the cut, PostgreSQL, forge only (#76, ADR 0002 steps 3 to 5)
+
+- The cut: `core/datastore` (Heads, Packs, Add, Folder; ErrNotFound, ErrMoved, ErrMissing); `*gitstore.Store` is the git datastore, unchanged on disk; issue, people, syncer, index and watch take a Datastore; `internal/store` holds one beside the git repository and refuses what only git does on another. `memstore` is the dry run's copy and the reference `dstest` holds every datastore to.
+- PostgreSQL (`core/pgstore`): `git_board.entities`, `packs`, `counter`; the index in `git_board_index`, replacing sqlite. `board.datastore` in git config, `git board datastore [copy]`. Tests: `make test-pg` (`GIT_BOARD_TEST_POSTGRES`), `GIT_BOARD_TEST_INDEX=pg` for every index test.
+- Forge only (`board.datastore forge`): a copy in `.git/board/forge-copy.git`; `git board serve` sends each write at once (`internal/server/forgeonly.go`); `git board datastore drop`; `syncer.Options.ForgeOnly`.
+- Settings › Datastore (`DatastoreSettings.vue`): choose, test, copy, save; `/api/datastore`. Numbers work without origin on PostgreSQL.
+- Docs: `docs/guide/datastores.md`, `docs/spec/data-flow.md`; ADR 0002's As built.
+- Not done: Markdown import (its own issue); the pages don't yet disable pull, push and start over on a datastore that can't run them (the server refuses them with the sentence).

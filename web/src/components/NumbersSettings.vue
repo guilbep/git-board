@@ -8,8 +8,11 @@
   <div class="set-panel nb">
     <h2 class="h4">Numbers</h2>
     <p class="nb-lead">
-      One number per issue, the same on every forge: <b>{{ numberExample(n) }}</b>. The counter is kept in git, on origin, where every clone reads it.
+      One number per issue, the same on every forge: <b>{{ numberExample(n) }}</b>.
+      <template v-if="n?.kept">The counter is kept in {{ n.kept }}, beside the board, where every writer reads it.</template>
+      <template v-else>The counter is kept in git, on origin, where every clone reads it.</template>
     </p>
+    <p v-if="n?.missing" class="epfl-alert epfl-alert-info" role="note">{{ n.missing }}. <router-link to="/settings/datastore">Datastore</router-link></p>
     <p v-if="error" class="epfl-alert epfl-alert-danger" role="alert">{{ error }}</p>
     <p v-if="result" class="epfl-alert epfl-alert-success" role="status">{{ result }}</p>
 
@@ -27,9 +30,10 @@
         <div class="gb-value gb-value-agreed"><span class="gb-value-label">Numbered</span><span class="gb-value-val">{{ issues(n.numbered) }}</span></div>
       </div>
       <section v-if="n.waiting" class="nb-wait" aria-labelledby="nb-wait">
-        <p id="nb-wait"><b>{{ issues(n.waiting) }} on origin without a number.</b> {{ n.waiting === 1 ? 'It takes' : 'They take' }} {{ span(n.prefix!, n.next!, n.waiting) }}.</p>
+        <p id="nb-wait"><b>{{ issues(n.waiting) }}{{ n.kept ? "" : " on origin" }} without a number.</b> {{ n.waiting === 1 ? 'It takes' : 'They take' }} {{ span(n.prefix!, n.next!, n.waiting) }}.</p>
         <div v-if="confirming" class="nb-confirm" role="alert">
-          <p><b>This pushes refs/board/seq to origin ({{ where }}).</b> Nothing else goes anywhere.</p>
+          <p v-if="n.kept"><b>This writes the counter in {{ n.kept }}.</b> Nothing else goes anywhere.</p>
+          <p v-else><b>This pushes refs/board/seq to origin ({{ where }}).</b> Nothing else goes anywhere.</p>
           <div class="nb-actions">
             <button type="button" class="epfl-btn epfl-btn-primary" :disabled="busy" @click="run">{{ busy ? 'Numbering…' : `Number ${n.waiting === 1 ? 'it' : 'them'}` }}</button>
             <button type="button" class="epfl-btn epfl-btn-secondary" :disabled="busy" @click="confirming = false">Cancel</button>
@@ -43,13 +47,13 @@
       <p v-if="!n.waiting && !n.unpushed" class="nb-muted">Every issue has its number.</p>
     </template>
 
-    <div v-else-if="n" class="nb-setup">
+    <div v-else-if="n && !n.missing" class="nb-setup">
       <form class="nb-form" @submit.prevent="confirming = true">
         <p>
           Today your issues go by their forge numbers. GitHub's stay the issues' own below the start (#41 is {{ prefixErr ? 'ABC' : prefix }}-41); every other issue, made here or
           imported later, takes the next number.
         </p>
-        <p v-if="!n.origin" class="epfl-alert epfl-alert-warning" role="alert">
+        <p v-if="!reachable" class="epfl-alert epfl-alert-warning" role="alert">
           No origin remote: the counter lives on origin. Add one (<code>git remote add origin &lt;url&gt;</code>), push your issues with a
           <router-link to="/settings/sync">Sync</router-link>, then come back.
         </p>
@@ -60,7 +64,7 @@
             v-model.trim="prefix"
             class="epfl-input nb-prefix"
             autocomplete="off" data-1p-ignore data-lpignore="true" spellcheck="false"
-            :disabled="!n.origin || confirming"
+            :disabled="!reachable || confirming"
             :aria-invalid="!!prefixErr"
             aria-describedby="nb-prefix-hint"
           />
@@ -73,7 +77,7 @@
             v-model.number="start"
             class="epfl-input nb-start"
             type="number" min="1" step="1"
-            :disabled="!n.origin || confirming"
+            :disabled="!reachable || confirming"
             :aria-invalid="!!startErr"
             aria-describedby="nb-start-hint"
           />
@@ -83,9 +87,10 @@
             <a :href="n.github.issues" target="_blank" rel="noopener noreferrer">See the repository's issues</a>
           </p>
         </div>
-        <p v-if="n.origin && !prefixErr && !startErr" class="nb-preview" role="status">{{ preview }}</p>
+        <p v-if="reachable && !prefixErr && !startErr" class="nb-preview" role="status">{{ preview }}</p>
         <div v-if="confirming" class="nb-confirm" role="alert">
-          <p><b>This pushes refs/board/seq to origin ({{ where }}).</b> Then it numbers what origin has, with a second push of it. Nothing else goes anywhere: no issue, no forge.</p>
+          <p v-if="n.kept"><b>This writes the counter in {{ n.kept }}.</b> Then it numbers every issue there. Nothing else goes anywhere: no issue, no forge.</p>
+          <p v-else><b>This pushes refs/board/seq to origin ({{ where }}).</b> Then it numbers what origin has, with a second push of it. Nothing else goes anywhere: no issue, no forge.</p>
           <div class="nb-actions">
             <button type="button" class="epfl-btn epfl-btn-primary" :disabled="busy" @click="init">{{ busy ? 'Starting…' : 'Start numbering' }}</button>
             <button type="button" class="epfl-btn epfl-btn-secondary" :disabled="busy" @click="confirming = false">Back</button>
@@ -133,7 +138,9 @@ const span = (p: string, from: number, count: number) => (count === 1 ? `${p}-${
 const above = computed(() => Math.max(n.value?.highest ?? 0, n.value?.github?.highest ?? 0));
 const prefixErr = computed(() => prefixProblem(prefix.value));
 const startErr = computed(() => startProblem(start.value, above.value));
-const ready = computed(() => !!n.value?.origin && !prefixErr.value && !startErr.value);
+// the counter's home is there: origin, or the shared datastore
+const reachable = computed(() => !!n.value?.origin || !!n.value?.kept);
+const ready = computed(() => reachable.value && !prefixErr.value && !startErr.value);
 const where = computed(() => n.value?.origin?.push_urls.join(', ') ?? '');
 const preview = computed(() => numbersPreview(prefix.value, start.value, n.value?.github_numbers ?? [], n.value?.unpushed ?? 0));
 const startHint = computed(() => {

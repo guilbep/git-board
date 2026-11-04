@@ -534,6 +534,8 @@ export interface Numbers {
   name: string; // the repository's, for a prefix
   github?: { issues: string; highest: number; error?: string } | undefined; // asked with github: GitHub's answer
   ahead: boolean; // this clone's counter holds numbers origin hasn't: the next sync sends them first
+  kept?: string; // where the counter is kept when not on origin: the datastore's name (PostgreSQL)
+  missing?: string; // the datastore keeps no counter: why
   done: number; // a write: how many issues it numbered
   error?: string; // started, but the issues not numbered yet
 }
