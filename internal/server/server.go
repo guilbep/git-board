@@ -468,8 +468,15 @@ func filterOf(q url.Values) string {
 
 func (s *apiServer) handleGetIssue(w http.ResponseWriter, r *http.Request) {
 	issue, err := s.b.GetIssue(r.PathValue("id"))
-	if err != nil {
+	switch {
+	case errors.Is(err, store.ErrNotFound):
 		writeError(w, http.StatusNotFound, err)
+		return
+	case errors.Is(err, store.ErrAmbiguous):
+		writeError(w, http.StatusBadRequest, err)
+		return
+	case err != nil: // the board failed to read: the issue isn't gone
+		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, issue)

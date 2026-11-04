@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"github.com/guilbep/git-board/core/forge/fake"
+	"github.com/guilbep/git-board/core/oplog"
+	"github.com/guilbep/git-board/core/syncer"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/store"
 	"github.com/guilbep/git-board/internal/store/storetest"
@@ -613,5 +615,23 @@ func TestCommentWithABadStatusWritesNothing(t *testing.T) {
 		if e.Body == "hello" {
 			t.Fatal("the comment was written")
 		}
+	}
+}
+
+// GET /api/issues/{id} answers 404 for an issue that isn't there, and 500
+// when the board fails to read: the page mustn't take the issue for gone.
+func TestGetIssueErrors(t *testing.T) {
+	t.Parallel()
+	ts, s := newIssueServer(t)
+	id := storetest.NewIssue(t, s.b, "x")
+	if code := call(t, "GET", ts.URL+"/api/issues/"+strings.Repeat("0", 40), nil, nil); code != http.StatusNotFound {
+		t.Errorf("no such issue: %d, want 404", code)
+	}
+	// a sync entity the links can't be read from
+	if _, err := oplog.Create(t.Context(), s.b.Datastore(), "sync", syncer.StateID("github.com/o/r"), []oplog.Op{{Kind: "bogus", Author: "a", Time: 1}}); err != nil {
+		t.Fatal(err)
+	}
+	if code := call(t, "GET", ts.URL+"/api/issues/"+id, nil, nil); code != http.StatusInternalServerError {
+		t.Errorf("a board that fails to read: %d, want 500", code)
 	}
 }
