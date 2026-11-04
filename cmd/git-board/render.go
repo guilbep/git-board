@@ -17,7 +17,7 @@ import (
 
 // render prints issues as a table, markdown, or JSON, optionally sorted and
 // grouped. JSON output ignores grouping and prints the flat sorted list.
-func render(out io.Writer, issues []store.Issue, group, sortSpec string, limit int, md, asJSON bool, cfg *config.Config) error {
+func render(out io.Writer, issues []store.Issue, group, sortSpec string, limit int, md bool, js *jsonOut, cfg *config.Config) error {
 	if err := sortIssues(issues, sortSpec, cfg); err != nil {
 		return err
 	}
@@ -25,10 +25,8 @@ func render(out io.Writer, issues []store.Issue, group, sortSpec string, limit i
 		issues = issues[:limit]
 	}
 
-	if asJSON {
-		enc := json.NewEncoder(out)
-		enc.SetIndent("", "  ")
-		return enc.Encode(issues)
+	if js.on() {
+		return js.write(out, issues)
 	}
 
 	// One column per field (sorted, same order tui.ParseLabels/FieldNames

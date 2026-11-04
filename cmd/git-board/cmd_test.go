@@ -59,8 +59,7 @@ func execute(t *testing.T, args []string) (string, error) {
 	buf := &bytes.Buffer{}
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)
-	cmd.SetArgs(args)
-	err := cmd.Execute()
+	err := runRoot(cmd, args)
 	return buf.String(), err
 }
 

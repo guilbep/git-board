@@ -94,8 +94,9 @@ docs/guide/configuration.md, Filters):
 
 func newLsCmd() *cobra.Command {
 	var group, sort, me string
-	var md, asJSON bool
+	var md bool
 	var limit int
+	var js *jsonOut
 
 	cmd := &cobra.Command{
 		Use:   "ls [filter]",
@@ -117,21 +118,22 @@ func newLsCmd() *cobra.Command {
 			if limit < 0 {
 				return usageError{fmt.Errorf("--limit %d: a count, 0 for all", limit)}
 			}
-			return runLs(cmd.OutOrStdout(), filterStr, group, sort, limit, md, asJSON, resolveMe(me))
+			return runLs(cmd.OutOrStdout(), filterStr, group, sort, limit, md, js, resolveMe(me))
 		},
 	}
 	cmd.Flags().StringVar(&group, "group", "", "group results by field")
 	cmd.Flags().StringVar(&sort, "sort", "", `sort by created, updated, title or a field, then asc or desc: "prio asc", "updated desc"`)
 	cmd.Flags().IntVarP(&limit, "limit", "L", 0, "list this many at most, after sorting (0: all)")
 	cmd.Flags().BoolVar(&md, "md", false, "render as markdown")
-	cmd.Flags().BoolVar(&asJSON, "json", false, "render as JSON")
+	js = addJSON(cmd, "render as JSON", jsonFields(store.Issue{}), true)
 	meFlag(cmd, &me)
 	return cmd
 }
 
 func newViewCmd() *cobra.Command {
 	var me string
-	var md, asJSON bool
+	var md bool
+	var js *jsonOut
 
 	cmd := &cobra.Command{
 		Use:   "view <name>",
@@ -141,11 +143,11 @@ func newViewCmd() *cobra.Command {
   git-board view mine --me guilbep --json`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runView(cmd.OutOrStdout(), args[0], md, asJSON, resolveMe(me))
+			return runView(cmd.OutOrStdout(), args[0], md, js, resolveMe(me))
 		},
 	}
 	cmd.Flags().BoolVar(&md, "md", false, "render as markdown")
-	cmd.Flags().BoolVar(&asJSON, "json", false, "render as JSON")
+	js = addJSON(cmd, "render as JSON", jsonFields(store.Issue{}), true)
 	meFlag(cmd, &me)
 	return cmd
 }
@@ -272,15 +274,15 @@ func loadConfig() (*config.Config, error) {
 	return config.Load(config.Path())
 }
 
-func runLs(out io.Writer, filterStr, group, sort string, limit int, md, asJSON bool, me string) error {
+func runLs(out io.Writer, filterStr, group, sort string, limit int, md bool, js *jsonOut, me string) error {
 	cfg, err := loadConfig()
 	if err != nil {
 		return err
 	}
-	return listAndRender(out, cfg, filterStr, group, sort, limit, md, asJSON, me)
+	return listAndRender(out, cfg, filterStr, group, sort, limit, md, js, me)
 }
 
-func runView(out io.Writer, name string, md, asJSON bool, me string) error {
+func runView(out io.Writer, name string, md bool, js *jsonOut, me string) error {
 	cfg, err := loadConfig()
 	if err != nil {
 		return err
@@ -289,15 +291,15 @@ func runView(out io.Writer, name string, md, asJSON bool, me string) error {
 	if !ok {
 		return fmt.Errorf("unknown view %q", name)
 	}
-	return listAndRender(out, cfg, view.Filter, view.Group, view.Sort, 0, md, asJSON, me)
+	return listAndRender(out, cfg, view.Filter, view.Group, view.Sort, 0, md, js, me)
 }
 
-func listAndRender(out io.Writer, cfg *config.Config, filterStr, group, sort string, limit int, md, asJSON bool, me string) error {
+func listAndRender(out io.Writer, cfg *config.Config, filterStr, group, sort string, limit int, md bool, js *jsonOut, me string) error {
 	matched, err := loadMatchingIssues(cfg, filterStr, me)
 	if err != nil {
 		return err
 	}
-	return render(out, matched, group, sort, limit, md, asJSON, cfg)
+	return render(out, matched, group, sort, limit, md, js, cfg)
 }
 
 func runTui(filterStr, me string) error {

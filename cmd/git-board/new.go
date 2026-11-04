@@ -13,7 +13,8 @@ import (
 func newNewCmd() *cobra.Command {
 	var text textFlags
 	var title, me string
-	var asJSON, force bool
+	var force bool
+	var js *jsonOut
 
 	cmd := &cobra.Command{
 		Use:   "new [title] [field=value...]",
@@ -48,18 +49,19 @@ sync, nowhere before.`,
 			if title == "" && !text.editor {
 				return usageError{fmt.Errorf("a title: git board new <title>, or --editor")}
 			}
-			return runNew(cmd, title, args, &text, resolveMe(me), force, asJSON)
+			return runNew(cmd, title, args, &text, resolveMe(me), force, js)
 		},
 	}
 	cmd.Flags().StringVarP(&title, "title", "t", "", "the title")
 	text.add(cmd, "description")
-	cmd.Flags().BoolVar(&asJSON, "json", false, "print the new issue as JSON")
+	// no --template: new --template is for an issue template, as gh's
+	js = addJSON(cmd, "print the new issue as JSON", jsonFields(store.Issue{}), false)
 	cmd.Flags().BoolVar(&force, "force", false, "write field values .git-board.toml doesn't allow")
 	meFlag(cmd, &me)
 	return cmd
 }
 
-func runNew(cmd *cobra.Command, title string, args []string, text *textFlags, me string, force, asJSON bool) error {
+func runNew(cmd *cobra.Command, title string, args []string, text *textFlags, me string, force bool, js *jsonOut) error {
 	out := cmd.OutOrStdout()
 	cfg, err := loadConfig()
 	if err != nil {
@@ -106,13 +108,13 @@ func runNew(cmd *cobra.Command, title string, args []string, text *textFlags, me
 	if _, err := statusInStep(b, cfg, id, assignments, labels); err != nil {
 		return err
 	}
-	return printIssue(out, b, id, asJSON)
+	return printIssue(out, b, id, js)
 }
 
 // printIssue prints an issue's id, or the issue as JSON, as ls --json
 // prints each one.
-func printIssue(out io.Writer, b *store.Backend, id string, asJSON bool) error {
-	if !asJSON {
+func printIssue(out io.Writer, b *store.Backend, id string, js *jsonOut) error {
+	if !js.on() {
 		fmt.Fprintln(out, id)
 		return nil
 	}
@@ -120,7 +122,7 @@ func printIssue(out io.Writer, b *store.Backend, id string, asJSON bool) error {
 	if err != nil {
 		return err
 	}
-	return writeJSON(out, is)
+	return js.write(out, is)
 }
 
 // needMe fails a write before it starts, before an editor opens, when no

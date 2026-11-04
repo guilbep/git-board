@@ -13,7 +13,8 @@ import (
 func newCommentCmd() *cobra.Command {
 	var text textFlags
 	var edit string
-	var editLast, asJSON bool
+	var editLast bool
+	var js *jsonOut
 
 	cmd := &cobra.Command{
 		Use:   "comment <id>",
@@ -43,17 +44,17 @@ ref, and the issue's id.`,
 			if edit != "" && editLast {
 				return usageError{fmt.Errorf("--edit or --edit-last, not both")}
 			}
-			return runComment(cmd, args[0], &text, edit, editLast, asJSON)
+			return runComment(cmd, args[0], &text, edit, editLast, js)
 		},
 	}
 	text.add(cmd, "comment")
 	cmd.Flags().StringVar(&edit, "edit", "", "edit the comment with this ref (as show prints it)")
 	cmd.Flags().BoolVar(&editLast, "edit-last", false, "edit your last comment on the issue")
-	cmd.Flags().BoolVar(&asJSON, "json", false, "print the comment's id as JSON")
+	js = addJSON(cmd, "print the comment's id as JSON", []string{"id", "ref", "issue"}, true)
 	return cmd
 }
 
-func runComment(cmd *cobra.Command, idPrefix string, text *textFlags, edit string, editLast, asJSON bool) error {
+func runComment(cmd *cobra.Command, idPrefix string, text *textFlags, edit string, editLast bool, js *jsonOut) error {
 	out := cmd.OutOrStdout()
 	b, err := store.OpenCwd()
 	if err != nil {
@@ -98,8 +99,8 @@ func runComment(cmd *cobra.Command, idPrefix string, text *textFlags, edit strin
 			return keptErr(err, "comment", body)
 		}
 	}
-	if asJSON {
-		return writeJSON(out, map[string]string{"id": id, "ref": commentRef(id), "issue": th.ID})
+	if js.on() {
+		return js.write(out, map[string]string{"id": id, "ref": commentRef(id), "issue": th.ID})
 	}
 	fmt.Fprintln(out, commentRef(id))
 	return nil

@@ -14,7 +14,8 @@ import (
 )
 
 func newShowCmd() *cobra.Command {
-	var md, asJSON, noComments bool
+	var md, noComments bool
+	var js *jsonOut
 
 	cmd := &cobra.Command{
 		Use:   "show <id>",
@@ -37,19 +38,19 @@ earlier versions under "history").`,
   git board show a1b2c3d --no-comments`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if md && asJSON {
+			if md && js.on() {
 				return usageError{fmt.Errorf("--md or --json, not both")}
 			}
-			return runShow(cmd.OutOrStdout(), args[0], md, asJSON, !noComments)
+			return runShow(cmd.OutOrStdout(), args[0], md, js, !noComments)
 		},
 	}
 	cmd.Flags().BoolVar(&md, "md", false, "render as Markdown")
-	cmd.Flags().BoolVar(&asJSON, "json", false, "render as JSON")
+	js = addJSON(cmd, "render as JSON", jsonFields(store.Thread{}), true)
 	cmd.Flags().BoolVar(&noComments, "no-comments", false, "leave the comments out")
 	return cmd
 }
 
-func runShow(out io.Writer, idPrefix string, md, asJSON, comments bool) error {
+func runShow(out io.Writer, idPrefix string, md bool, js *jsonOut, comments bool) error {
 	cfg, err := loadConfig()
 	if err != nil {
 		return err
@@ -63,14 +64,14 @@ func runShow(out io.Writer, idPrefix string, md, asJSON, comments bool) error {
 	if err != nil {
 		return err
 	}
-	if asJSON {
+	if js.on() {
 		if th.Participants == nil {
 			th.Participants = []store.Person{}
 		}
 		if th.Events == nil {
 			th.Events = []store.Event{}
 		}
-		return writeJSON(out, th)
+		return js.write(out, th)
 	}
 	if md {
 		writeThreadMarkdown(out, th, cfg, comments)
