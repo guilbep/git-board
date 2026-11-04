@@ -148,8 +148,11 @@ func OpenCwd() (*Backend, error) {
 	return Open(cwd)
 }
 
-// Close closes the index, and the datastore's connections.
-func (b *Backend) Close() error { return errors.Join(b.ix.Close(), closeDatastore(b.ds, b.s)) }
+// Close closes the index, the datastore's connections and the repository's
+// open files.
+func (b *Backend) Close() error {
+	return errors.Join(b.ix.Close(), closeDatastore(b.ds, b.s), b.s.Close())
+}
 
 // Store is the git repository: the code's, and the board's when it is kept
 // in git.
