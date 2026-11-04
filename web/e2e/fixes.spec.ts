@@ -29,8 +29,12 @@ test('a new issue with a refused field is created once, and the dialog says whic
   const errs = errors(page);
   await identity(request);
   await page.goto('/#/');
-  await page.keyboard.press('c');
   const dialog = page.getByRole('dialog', { name: /New issue/ });
+  // c works once the board has mounted its keys: a press before is lost
+  await expect(async () => {
+    await page.keyboard.press('c');
+    await expect(dialog).toBeVisible({ timeout: 1000 });
+  }).toPass();
   await dialog.getByLabel('Title (required)').fill('E2E refused field');
   await dialog.getByLabel('Size', { exact: true }).fill('m');
   // the server refuses the field once the issue exists (a value it can't
