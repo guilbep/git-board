@@ -565,6 +565,10 @@ func SetGithubProject(path, owner string, number int) error {
 		return fmt.Errorf("reading %s: %w", path, err)
 	}
 	updated := WithGithubProject(string(data), GithubProject{Owner: owner, Number: number})
+	// a file every command would fail on isn't written: the old one stays
+	if _, _, err := parse([]byte(updated)); err != nil {
+		return fmt.Errorf("%s with [github-project] owner = %q, number = %d wouldn't parse, left as it was: %w", path, owner, number, err)
+	}
 	if err := os.WriteFile(path, []byte(updated), 0o644); err != nil {
 		return fmt.Errorf("writing %s: %w", path, err)
 	}
@@ -648,7 +652,7 @@ func upsertTable(content, header, block string) string {
 	end := len(lines)
 	for i, line := range lines {
 		if start < 0 {
-			if strings.TrimSpace(line) == header {
+			if sameHeader(line, header) {
 				start = i
 			}
 			continue
@@ -688,6 +692,50 @@ func upsertTable(content, header, block string) string {
 		b.WriteString(after)
 	}
 	return b.String()
+}
+
+// tableHeader matches a table's header line: the spaces TOML allows
+// inside the brackets, and a comment after them.
+var tableHeader = regexp.MustCompile(`^\s*\[\s*([^\[\]]*?)\s*\]\s*(#.*)?$`)
+
+// sameHeader is whether line is header's table: [ a . b ]  # c is [a.b].
+// A quoted key's own spaces count, the ones around the dots don't.
+func sameHeader(line, header string) bool {
+	norm := func(l string) (string, bool) {
+		m := tableHeader.FindStringSubmatch(l)
+		if m == nil {
+			return "", false
+		}
+		var parts []string
+		for _, p := range splitDotted(m[1]) {
+			parts = append(parts, strings.TrimSpace(p))
+		}
+		return strings.Join(parts, "."), true
+	}
+	got, ok := norm(line)
+	want, _ := norm(header)
+	return ok && got == want
+}
+
+// splitDotted splits a dotted key at the dots outside quotes.
+func splitDotted(key string) []string {
+	var parts []string
+	var quote rune
+	start := 0
+	for i, r := range key {
+		switch {
+		case quote != 0:
+			if r == quote {
+				quote = 0
+			}
+		case r == '"' || r == '\'':
+			quote = r
+		case r == '.':
+			parts = append(parts, key[start:i])
+			start = i + 1
+		}
+	}
+	return append(parts, key[start:])
 }
 
 // dateOnly strips time-of-day/location so sprint boundaries compare by

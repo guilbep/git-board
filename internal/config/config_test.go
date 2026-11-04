@@ -585,3 +585,42 @@ func TestLabelsRefused(t *testing.T) {
 		}
 	}
 }
+
+// A header is the table whatever its spacing and a trailing comment: the
+// table is replaced, not appended a second time, which no parse accepts.
+func TestWithGithubProjectFindsAHeaderWithACommentOrSpaces(t *testing.T) {
+	t.Parallel()
+	for _, header := range []string{"[github-project]  # the board", "[ github-project ]", "  [github-project]\t"} {
+		src := "[repos]\nassignees = \"native\"\n\n" + header + "\nowner = \"a\"\nnumber = 1\n"
+		text := WithGithubProject(src, GithubProject{Owner: "b", Number: 2})
+		cfg, _, err := parse([]byte(text))
+		if err != nil {
+			t.Errorf("%q: %v\n%s", header, err, text)
+			continue
+		}
+		if cfg.GithubProject.Owner != "b" || cfg.GithubProject.Number != 2 {
+			t.Errorf("%q: %+v", header, cfg.GithubProject)
+		}
+	}
+}
+
+// SetGithubProject writes nothing the parse refuses: a file left as it
+// was beats one every command fails on. A dotted key defines the table
+// without a header, so the table appended defines it twice.
+func TestSetGithubProjectRefusesToWriteAnUnparsableFile(t *testing.T) {
+	t.Parallel()
+	path := filepath.Join(t.TempDir(), "git-board.toml")
+	src := "github-project.owner = \"a\"\n"
+	if _, _, err := parse([]byte(src)); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(src), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := SetGithubProject(path, "b", 2); err == nil {
+		t.Error("no error")
+	}
+	if got, _ := os.ReadFile(path); string(got) != src {
+		t.Errorf("the file changed:\n%s", got)
+	}
+}
