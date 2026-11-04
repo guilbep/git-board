@@ -526,11 +526,13 @@ git-board sprint report <slug>         # issues in that sprint, aggregated by st
 ```
 
 - **`ls`**'s end date is computed, not stored: a sprint's end is the next
-  sprint's start, or `start + [sprints].length_days` for the last one.
+  sprint's start, or `start + [sprints].length_days` for the last one
+  (without `length_days`, as long as the sprint before it, else 14 days).
   `current`/`next`/`previous` print the same computed range for the sprint
-  they resolve to.
-- **No sprint resolves** (before the first configured sprint has started, or
-  nothing configured at all) is a normal outcome, not an error: `current`
+  they resolve to. Once the last sprint has ended there is no current one
+  (`@current` matches nothing), and `previous` is the one that ended.
+- **No sprint resolves** (before the first configured sprint has started,
+  after the last one has ended, or nothing configured at all) is a normal outcome, not an error: `current`
   prints `no sprint currently active` and exits 0, same idea for
   `next`/`previous`. Matches `ResolveSprint`'s own `(nil, nil)` return for
   "nothing resolves" — it's not a `%!s(<nil>)` crash waiting to happen.

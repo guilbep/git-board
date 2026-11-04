@@ -789,7 +789,9 @@ func sortedSprints(list []Sprint) []Sprint {
 
 // ResolveSprint resolves "current" / "next" / "previous" against the sprint
 // calendar. The "current" sprint is the last one whose start date is on or
-// before today; next/previous are its neighbours in start-date order.
+// before today, unless that is the last sprint and it has ended
+// (SprintWindows' end): then there is none, and "previous" is it.
+// next/previous are its neighbours in start-date order.
 func ResolveSprint(sprints SprintsConfig, which string, today time.Time) (*Sprint, error) {
 	today = dateOnly(today)
 	ordered := sortedSprints(sprints.List)
@@ -800,6 +802,17 @@ func ResolveSprint(sprints SprintsConfig, which string, today time.Time) (*Sprin
 			idx = i
 		} else {
 			break
+		}
+	}
+
+	// the last sprint ends: past it there is no current one, and the
+	// previous is the one that ended
+	if idx >= 0 && idx == len(ordered)-1 && !today.Before(dateOnly(ordered[idx].Start).AddDate(0, 0, lastSprintDays(sprints, ordered))) {
+		if which == "previous" {
+			return &ordered[idx], nil
+		}
+		if which == "current" {
+			return nil, nil
 		}
 	}
 
@@ -825,6 +838,24 @@ func ResolveSprint(sprints SprintsConfig, which string, today time.Time) (*Sprin
 	}
 }
 
+// defaultSprintDays is the default file's length_days.
+const defaultSprintDays = 14
+
+// lastSprintDays is how long the last sprint of ordered lasts: length_days,
+// else as long as the one before it, else defaultSprintDays. Never 0: a
+// sprint that ended the day it started stayed @current for ever.
+func lastSprintDays(sprints SprintsConfig, ordered []Sprint) int {
+	if sprints.LengthDays > 0 {
+		return sprints.LengthDays
+	}
+	if n := len(ordered); n >= 2 {
+		if d := int(dateOnly(ordered[n-1].Start).Sub(dateOnly(ordered[n-2].Start)).Hours() / 24); d > 0 {
+			return d
+		}
+	}
+	return defaultSprintDays
+}
+
 // SprintWindow is a configured sprint plus its computed end date.
 type SprintWindow struct {
 	Sprint
@@ -833,7 +864,8 @@ type SprintWindow struct {
 
 // SprintWindows returns every configured sprint, ordered by start date (the
 // same ordering ResolveSprint uses — see sortedSprints), with End computed
-// as the next sprint's start date, or Start+LengthDays for the last one.
+// as the next sprint's start date, or Start+LengthDays for the last one
+// (lastSprintDays without it).
 // This window math isn't in ResolveSprint itself (which only needs
 // start-date ordering to resolve @current/@next/@previous), so it's new
 // here rather than duplicated from anywhere.
@@ -841,7 +873,7 @@ func SprintWindows(sprints SprintsConfig) []SprintWindow {
 	ordered := sortedSprints(sprints.List)
 	windows := make([]SprintWindow, len(ordered))
 	for i, s := range ordered {
-		end := dateOnly(s.Start).AddDate(0, 0, sprints.LengthDays)
+		end := dateOnly(s.Start).AddDate(0, 0, lastSprintDays(sprints, ordered))
 		if i+1 < len(ordered) {
 			end = dateOnly(ordered[i+1].Start)
 		}

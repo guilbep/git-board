@@ -297,7 +297,7 @@ start = 2026-10-19
 
 | Key | Type | What it does |
 | --- | --- | --- |
-| `length_days` | number | The length of the last sprint, whose end has no next start. Also what **+ Sprint** adds to the last start. |
+| `length_days` | number | The length of the last sprint, whose end has no next start; without it, as long as the sprint before it, else 14 days. Once the last sprint has ended, `@current` is no sprint. Also what **+ Sprint** adds to the last start. |
 | `slug` | string | The label's value: `sprint:s12`. |
 | `title` | string | The name shown. |
 | `start` | date, `YYYY-MM-DD`, no quotes | First day. A sprint lasts until the next one starts. |
