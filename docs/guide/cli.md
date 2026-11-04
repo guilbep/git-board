@@ -220,6 +220,36 @@ made. A forge shows label events at best, and keeps no earlier text.
 
 `history` is the same command.
 
+## `status`, `follow`, `unfollow`: what needs you
+
+```bash
+git board status                        # assigned to you, then your inbox
+git board status --mark-read            # and mark that inbox read
+git board status --json
+git board follow a1b2c3d                # every change reaches your inbox
+git board unfollow a1b2c3d              # only what is addressed to you
+git board follow a1b2c3d --auto         # back to automatic
+```
+
+`status` prints three parts. The open issues assigned to you. Then your
+inbox, as the web UI's Inbox has it: what someone else changed since you
+last looked, in the last 14 days. It is split in two: the issues you
+opened, and the others you follow or are mentioned in. Each line says
+what is new (`2 comments`, `closed`, `mentioned you`), by whom, and when.
+
+Nothing is marked read: the Inbox still shows the same. `--mark-read`
+marks what `status` printed read. `--json` prints `{"me", "assigned",
+"opened", "follows"}`: `assigned` holds issues, the others inbox rows
+(below).
+
+You follow an issue automatically while you are in it: you opened it,
+are assigned, commented, are mentioned, or hold a role. `follow` and
+`unfollow` override that, as the web UI's bell does; `follow --auto`
+goes back to it. Each prints whether you follow the issue now, and why;
+`--json` prints `{"following", "reasons", "set"}`. Your follows stay in
+this clone, as the web UI's do. `ls "follows:@me"` lists what you
+follow.
+
 ## `ls` and `view`
 
 ```bash
@@ -270,6 +300,12 @@ edit's text: the `created` entry's id for the description), `title` and
 `was`, `state` (`open`, `closed`), `added` and `removed`, `body` (the text
 written).
 
+**An inbox row** (`status --json`): `issue` (an issue), `reasons` (why
+you follow it: `author`, `assignee`, `followed`, `view: <name>`; none when
+it is only addressed to you), `news` (`2 comments`, `closed`, `mentioned
+you`, `added you as reviewer`), `who` (people), `latest` and `first` (the
+oldest new event's id).
+
 ## Exit codes
 
 | Code | |
@@ -303,7 +339,8 @@ Errors go to stderr, prefixed `error:`.
 | `gh issue edit 1 2 3 --add-label x` | | `git board set --filter "<filter>" label=+x --apply` |
 | `gh issue close N -c C` | `glab issue close N` | `git board close N -c C` |
 | `gh issue reopen N` | `glab issue reopen N` | `git board reopen N` |
-| `gh issue status` | | `git board ls "involves:@me is:open"` |
+| `gh status`, `gh issue status` | | `git board status`, or `git board ls "involves:@me is:open"` |
+| | `glab issue subscribe N`, `unsubscribe N` | `git board follow N`, `git board unfollow N` |
 | `gh issue develop N` | `glab mr create --related-issue N` | `git board branch N` (prints the branch and the command) |
 | | `glab issue view N -s` (system notes) | `git board log N` (every change, text edits too) |
 | `gh project item-edit …` | `glab issue board …` | `git board move N in-progress`, `move N --next`, `git board project` |

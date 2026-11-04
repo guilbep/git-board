@@ -107,3 +107,10 @@ Sprints are `[sprints]` in `.git-board.toml`
 In the web UI, **Inbox** lists what changed in the issues you are in (you
 opened them, are assigned, commented, are mentioned) and the ones you
 follow. Follow an issue or a view from its menu.
+
+```sh
+git board status                  # assigned to you, and what changed for you
+git board follow 624a             # every change to it reaches your inbox
+git board unfollow 624a           # only a mention of you does
+git board follow 624a --auto      # back to automatic
+```
