@@ -743,7 +743,10 @@ check's. Keeping git-board's value needs `write = true`, like the CLI.
 browser's `Origin`, or a body that isn't JSON). Anyone who can reach the
 port can read and write every issue, and through the forge sync post to
 GitHub and GitLab with your tokens: only pass an `--addr` other machines
-can reach on a network you trust. Upgrade path when that stops being fine: a reverse proxy doing auth
+can reach on a network you trust. On every interface (`--addr
+0.0.0.0:8080`), it answers a request for an IP address or this machine's
+own name, never for another name: a website pointing its own domain at
+your machine (DNS rebinding) gets a 403. Upgrade path when that stops being fine: a reverse proxy doing auth
 in front of it (simplest), or a token check in `withCORS`/a new middleware
 in `internal/server` (more work, still small).
 

@@ -2,6 +2,8 @@ package server
 
 import (
 	"net/http"
+	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 
@@ -91,5 +93,50 @@ func TestRequestsForAnotherHostAreRefused(t *testing.T) {
 	_ = resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("Host localhost: %d, want 200", resp.StatusCode)
+	}
+}
+
+// Listening on every interface (--addr 0.0.0.0:…), the server answers an
+// IP address and this machine's name, but not another domain: a page
+// rebinding its own name to this machine can neither read nor write.
+func TestExposedEverywhereRefusesAnotherName(t *testing.T) {
+	t.Parallel()
+	b := storetest.New(t)
+	id := storetest.NewIssue(t, b, "x")
+	s := &apiServer{cfg: mustLoadConfig(t), b: b, me: "guilbep", exposed: []string{"*"}}
+	ts := httptest.NewServer(withCORS(newMux(s, http.NotFoundHandler())))
+	t.Cleanup(ts.Close)
+	do := func(method, path, host, body string) int {
+		t.Helper()
+		req, err := http.NewRequest(method, ts.URL+path, strings.NewReader(body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Host = host
+		if method != http.MethodGet {
+			req.Header.Set("Origin", "http://"+host)
+			req.Header.Set("Content-Type", "application/json")
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = resp.Body.Close()
+		return resp.StatusCode
+	}
+	for _, method := range []string{http.MethodGet, http.MethodPost} {
+		if code := do(method, "/api/issues", "evil.example:8080", `{"title":"from evil.example"}`); code != http.StatusForbidden {
+			t.Errorf("%s with Host evil.example: %d, want 403", method, code)
+		}
+	}
+	for _, host := range []string{"192.168.1.20:8080", "[fe80::1]:8080"} {
+		if code := do(http.MethodGet, "/api/issues/"+id, host, ""); code != http.StatusOK {
+			t.Errorf("GET with Host %s: %d, want 200", host, code)
+		}
+	}
+	if name, err := os.Hostname(); err == nil && name != "" {
+		if code := do(http.MethodGet, "/api/issues/"+id, name+":8080", ""); code != http.StatusOK {
+			t.Errorf("GET with this machine's name %s: %d, want 200", name, code)
+		}
 	}
 }

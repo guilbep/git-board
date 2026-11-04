@@ -5,7 +5,9 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
+	"sync"
 )
 
 // devOrigins are the Quasar/Vite dev server's default origin (see
@@ -49,7 +51,9 @@ func withCORS(next http.Handler) http.Handler {
 // Every request, a read too, must name this machine: a page can point its
 // own domain at 127.0.0.1 ("DNS rebinding"), and its requests then carry
 // Host and Origin of that domain, which agree. extraHosts are the names
-// --addr exposes beyond the loopback ones; "*" serves any.
+// --addr exposes beyond the loopback ones; "*" (every interface) serves an
+// IP address and this machine's own name, never another name: a page's
+// domain, rebound, is one.
 func withGuard(next http.Handler, extraHosts []string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !servedHost(r.Host, extraHosts) {
@@ -99,9 +103,27 @@ func servedHost(hostport string, extra []string) bool {
 		return true
 	}
 	for _, h := range extra {
-		if h == "*" || h == host {
+		if h == host || h == "*" && (net.ParseIP(host) != nil || machineName(host)) {
 			return true
 		}
 	}
 	return false
+}
+
+// hostname is this machine's name, as the system gives it.
+var hostname = sync.OnceValue(func() string {
+	h, _ := os.Hostname()
+	return strings.ToLower(h)
+})
+
+// machineName says whether host is this machine's name: the system's,
+// its first label, or that with .local (mDNS).
+func machineName(host string) bool {
+	name := hostname()
+	if name == "" {
+		return false
+	}
+	short, _, _ := strings.Cut(name, ".")
+	host = strings.TrimSuffix(strings.ToLower(host), ".")
+	return host == name || host == short || host == short+".local"
 }
