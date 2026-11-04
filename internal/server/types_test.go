@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/guilbep/git-board/internal/config"
+	"github.com/guilbep/git-board/core/fields"
 	"github.com/guilbep/git-board/internal/store/storetest"
 )
 
@@ -13,7 +13,7 @@ import (
 func TestFieldsSayTheirType(t *testing.T) {
 	t.Parallel()
 	ts, s := newIssueServer(t)
-	s.cfg.Fields = map[string]config.Field{"est": {Single: true, Numeric: true}, "status": {Options: []string{"todo", "done"}}}
+	s.cfg.Fields = map[string]fields.Field{"est": {Single: true, Numeric: true}, "status": {Options: []string{"todo", "done"}}}
 	day := func(d int) string { return time.Now().AddDate(0, 0, d).Format("2006-01-02") }
 	a := storetest.NewIssue(t, s.b, "late")
 	b := storetest.NewIssue(t, s.b, "soon")
@@ -28,28 +28,28 @@ func TestFieldsSayTheirType(t *testing.T) {
 		}
 	}
 
-	var fields map[string]struct {
+	var byName map[string]struct {
 		Type, Unit string
 		Single     bool
 	}
-	call(t, "GET", ts.URL+"/api/config/fields", nil, &fields)
+	call(t, "GET", ts.URL+"/api/config/fields", nil, &byName)
 	for name, want := range map[string]struct {
 		typ, unit string
 		single    bool
 	}{
-		"est":        {config.TypeNumber, "h", true},
-		"status":     {config.TypeSelect, "", false},
-		"due":        {config.TypeDate, "", true},
-		"parent":     {config.TypeIssue, "", true},
-		"blocked-by": {config.TypeIssue, "", false},
-		"assignee":   {config.TypePerson, "", false},
+		"est":        {fields.TypeNumber, "h", true},
+		"status":     {fields.TypeSelect, "", false},
+		"due":        {fields.TypeDate, "", true},
+		"parent":     {fields.TypeIssue, "", true},
+		"blocked-by": {fields.TypeIssue, "", false},
+		"assignee":   {fields.TypePerson, "", false},
 	} {
-		got := fields[name]
+		got := byName[name]
 		if got.Type != want.typ || got.Unit != want.unit || got.Single != want.single {
 			t.Errorf("%s: %+v, want %+v", name, got, want)
 		}
 	}
-	if _, listed := fields["cat"]; listed {
+	if _, listed := byName["cat"]; listed {
 		t.Error("an undeclared select is listed: the page guesses those itself")
 	}
 

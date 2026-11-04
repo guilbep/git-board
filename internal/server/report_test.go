@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/guilbep/git-board/internal/config"
+	"github.com/guilbep/git-board/core/fields"
 	"github.com/guilbep/git-board/internal/store/storetest"
 )
 
@@ -15,7 +15,7 @@ func TestSprintReportOfTheCurrentSprint(t *testing.T) {
 	t.Parallel()
 	ts, s := newIssueServer(t)
 	today := time.Now().UTC().Truncate(24 * time.Hour)
-	s.cfg.Sprints = config.SprintsConfig{LengthDays: 14, List: []config.Sprint{
+	s.cfg.Sprints = fields.Sprints{LengthDays: 14, List: []fields.Sprint{
 		{Slug: "s1", Title: "Sprint 1", Start: today.AddDate(0, 0, -3)},
 	}}
 	a := storetest.NewImportedIssue(t, s.b, "Login", "https://github.com/o/r/issues/7")

@@ -14,11 +14,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/guilbep/git-board/core/fields"
 	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/branches"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/cycle"
-	"github.com/guilbep/git-board/internal/fields"
 	"github.com/guilbep/git-board/internal/store"
 	"github.com/guilbep/git-board/internal/wtx"
 )
@@ -404,7 +404,7 @@ func (s *apiServer) handleIssueAgentAction(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	if start {
-		if _, err := fields.Apply(s.b, s.config(), th.ID, "status", cyc.Stages.InProgress[0], s.me, time.Now()); err != nil {
+		if _, err := fields.Apply(s.b, &s.config().Schema, th.ID, "status", cyc.Stages.InProgress[0], s.me, time.Now()); err != nil {
 			writeError(w, http.StatusInternalServerError, err)
 			return
 		}

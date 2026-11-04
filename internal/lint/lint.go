@@ -157,7 +157,7 @@ func checkSingleCardinality(issues []model.Issue, cfg *config.Config) []Finding 
 	return findings
 }
 
-// checkUnknownValues reuses config.Field.KnownValue — the exact
+// checkUnknownValues reuses fields.Field.KnownValue — the exact
 // value-against-Options check internal/ghbridge already applies (and warns
 // about) when a `bridge pull` value doesn't map to a configured option.
 // KnownValue treats an unconfigured field, or a configured one with no

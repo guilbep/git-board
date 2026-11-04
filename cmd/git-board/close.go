@@ -9,8 +9,8 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/guilbep/git-board/core/fields"
 	"github.com/guilbep/git-board/core/model"
-	"github.com/guilbep/git-board/internal/fields"
 	"github.com/guilbep/git-board/internal/store"
 )
 
@@ -132,7 +132,7 @@ func runClose(out io.Writer, idPrefix, comment, reason, duplicateOf string) erro
 	if err := addComment(b, is.ID, dupNote); err != nil {
 		return err
 	}
-	label, err := fields.Apply(b, cfg, is.ID, "status", terminal, "", time.Now())
+	label, err := fields.Apply(b, &cfg.Schema, is.ID, "status", terminal, "", time.Now())
 	if err != nil {
 		return err
 	}
@@ -216,7 +216,7 @@ func runReopen(out io.Writer, idPrefix, comment string) error {
 	if options := cfg.Fields["status"].Options; len(options) > 0 {
 		status := currentStatusValue(labels)
 		if status == "" || status == options[len(options)-1] {
-			label, err := fields.Apply(b, cfg, idPrefix, "status", options[0], "", time.Now())
+			label, err := fields.Apply(b, &cfg.Schema, idPrefix, "status", options[0], "", time.Now())
 			if err != nil {
 				return err
 			}

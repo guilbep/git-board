@@ -4,6 +4,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/guilbep/git-board/core/fields"
 	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/config"
 )
@@ -38,7 +39,7 @@ func TestSortByFieldNumericOrdersByValueNotLexically(t *testing.T) {
 		{Title: "two", Labels: []string{"est:2"}},
 		{Title: "one", Labels: []string{"est:1"}},
 	}
-	cfg := &config.Config{Fields: map[string]config.Field{"est": {Numeric: true}}}
+	cfg := &config.Config{Schema: fields.Schema{Fields: map[string]fields.Field{"est": {Numeric: true}}}}
 
 	SortByField(issues, "est", cfg)
 	if got := titles(issues); !slices.Equal(got, []string{"one", "two", "sixteen"}) {
@@ -58,7 +59,7 @@ func TestSortByFieldNumericMissingValueSortsLastBothDirections(t *testing.T) {
 		{Title: "two", Labels: []string{"est:2"}},
 		{Title: "one", Labels: []string{"est:1"}},
 	}
-	cfg := &config.Config{Fields: map[string]config.Field{"est": {Numeric: true}}}
+	cfg := &config.Config{Schema: fields.Schema{Fields: map[string]fields.Field{"est": {Numeric: true}}}}
 
 	SortByField(issues, "est", cfg)
 	if got := titles(issues); got[len(got)-1] != "unset" {
@@ -98,9 +99,11 @@ func TestSortByFieldNilConfigDoesNotPanic(t *testing.T) {
 // not the alphabet); values outside them after, missing values last.
 func TestSortByFieldFollowsOptionOrder(t *testing.T) {
 	t.Parallel()
-	cfg := &config.Config{Fields: map[string]config.Field{
-		"status": {Single: true, Options: []string{"backlog", "ready", "in-progress"}},
-	}}
+	cfg := &config.Config{
+		Schema: fields.Schema{Fields: map[string]fields.Field{
+			"status": {Single: true, Options: []string{"backlog", "ready", "in-progress"}},
+		}},
+	}
 	issues := func() []model.Issue {
 		return []model.Issue{
 			{Title: "none"},

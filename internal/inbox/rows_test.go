@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/guilbep/git-board/core/fields"
 	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/inbox"
@@ -18,7 +19,7 @@ var (
 	meP   = model.Person{ID: "me1", Name: "Guilbert Pierre", Login: "guilbep"}
 	me2   = model.Person{ID: "me2", Name: "Guilbert (GitHub)", Login: "GuilBep"} // a second identity of yours
 	ann   = model.Person{ID: "ann", Name: "Ann", Login: "ann"}
-	cfg   = &config.Config{Fields: map[string]config.Field{"pm": {Type: config.TypePerson}, "lead-dev": {Type: config.TypePerson}}}
+	cfg   = &config.Config{Schema: fields.Schema{Fields: map[string]fields.Field{"pm": {Type: fields.TypePerson}, "lead-dev": {Type: fields.TypePerson}}}}
 )
 
 // fresh makes th's creation fall in the window: a new issue.

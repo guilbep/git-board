@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/guilbep/git-board/core/fields"
 	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/board"
 	"github.com/guilbep/git-board/internal/config"
@@ -170,7 +171,7 @@ func TestConfigFieldsReturnsConfiguredOptions(t *testing.T) {
 	b := storetest.New(t)
 	ts := newTestServer(t, b, cfg)
 
-	var got map[string]config.Field
+	var got map[string]fields.Field
 	resp := getJSON(t, ts.URL+"/api/config/fields", &got)
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status = %d, want 200", resp.StatusCode)

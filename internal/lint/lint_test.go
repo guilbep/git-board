@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/guilbep/git-board/core/fields"
 	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/lint"
@@ -49,12 +50,11 @@ func labelIssue(t *testing.T, b *store.Backend, id string, labels ...string) {
 func TestCleanRepoReportsNothing(t *testing.T) {
 	t.Parallel()
 	cfg := &config.Config{
-		Fields: map[string]config.Field{
+		Schema: fields.Schema{Fields: map[string]fields.Field{
 			"status": {Single: true, Options: []string{"ready"}},
 			"prio":   {Single: true, Options: []string{"p1"}},
 			"cat":    {Single: true, Options: []string{"bug"}},
-		},
-		Sprints: config.SprintsConfig{List: []config.Sprint{{Slug: "delivery", Title: "Delivery"}}},
+		}, Sprints: fields.Sprints{List: []fields.Sprint{{Slug: "delivery", Title: "Delivery"}}}},
 	}
 	b := storetest.New(t)
 	id := storetest.NewIssue(t, b, "clean issue")
@@ -300,7 +300,7 @@ func TestKindChecks(t *testing.T) {
 
 	// the kind a declared single field: told once, by the kind checks; no
 	// hold is not a missing value
-	cfg.Fields = map[string]config.Field{"kind": {Single: true, Options: []string{"bug", "feat"}}, "hold": {Single: true, Options: []string{"blocked", "paused"}}}
+	cfg.Fields = map[string]fields.Field{"kind": {Single: true, Options: []string{"bug", "feat"}}, "hold": {Single: true, Options: []string{"blocked", "paused"}}}
 	got = countChecks(lint.Run(issues, cfg))
 	if got[lint.CheckTwoKinds] != 2 || got[lint.CheckDoubleSingle]+got[lint.CheckMissingRequired] != 0 {
 		t.Errorf("kind field: %v, want 2 two-kinds and no double-single or missing-value", got)
@@ -319,7 +319,7 @@ func TestLabelsOutsideTheList(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cfg := &config.Config{Branches: config.Branches{Kinds: map[string]string{"bug": "fix"}}, Labels: config.Labels{List: []string{"needs-design"}, Defined: true}}
+	cfg := &config.Config{Branches: config.Branches{Kinds: map[string]string{"bug": "fix"}}, Schema: fields.Schema{Labels: fields.Labels{List: []string{"needs-design"}, Defined: true}}}
 	var got []string
 	for _, f := range lint.Run(issues, cfg) {
 		if f.Check == lint.CheckLabelOutside {
@@ -329,7 +329,7 @@ func TestLabelsOutsideTheList(t *testing.T) {
 	if len(got) != 1 || got[0] != `label "wontfix" isn't in [labels] list: add it there, or remove it` {
 		t.Errorf("findings %q", got)
 	}
-	cfg.Labels = config.Labels{}
+	cfg.Labels = fields.Labels{}
 	if n := countChecks(lint.Run(issues, cfg))[lint.CheckLabelOutside]; n != 0 {
 		t.Errorf("without [labels]: %d findings", n)
 	}
@@ -340,7 +340,7 @@ func TestLabelsOutsideTheList(t *testing.T) {
 // none it names the spelling most issues use.
 func TestNearValuesSayWhatWasMeant(t *testing.T) {
 	t.Parallel()
-	cfg := &config.Config{Fields: map[string]config.Field{"prio": {Options: []string{"p1", "p2"}}}}
+	cfg := &config.Config{Schema: fields.Schema{Fields: map[string]fields.Field{"prio": {Options: []string{"p1", "p2"}}}}}
 	issues := []model.Issue{
 		{ID: "a", Title: "A", Status: "open", Labels: []string{"risk:normal", "prio:p1"}},
 		{ID: "b", Title: "B", Status: "open", Labels: []string{"risk:normal"}},

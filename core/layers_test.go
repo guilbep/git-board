@@ -35,6 +35,7 @@ var layerOf = map[string]int{
 	"core/forge/conformance": issues, // the issue sync's suite, run per forge
 	"core/issue":             issues,
 	"core/index":             issues,
+	"core/fields":            issues,
 	"core/model":             issues,
 	"core/syncer":            issues,
 }

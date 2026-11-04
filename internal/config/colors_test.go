@@ -6,10 +6,12 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/guilbep/git-board/core/fields"
 )
 
 func TestColorConfigBeatsKeywordBeatsTurns(t *testing.T) {
-	cfg := &Config{Fields: map[string]Field{"status": {Colors: map[string]string{"validated": "pink", "In Review": "yellow"}}}}
+	cfg := &Config{Schema: fields.Schema{Fields: map[string]fields.Field{"status": {Colors: map[string]string{"validated": "pink", "In Review": "yellow"}}}}}
 	for _, c := range []struct{ field, value, want string }{
 		{"status", "validated", "pink"},            // config wins over the keyword's green
 		{"status", "in review", "amber"},           // keys match case-insensitively; yellow is amber

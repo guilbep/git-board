@@ -13,12 +13,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/guilbep/git-board/core/fields"
 	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/ai"
 	"github.com/guilbep/git-board/internal/board"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/cycle"
-	"github.com/guilbep/git-board/internal/fields"
 	"github.com/guilbep/git-board/internal/ghpr"
 	"github.com/guilbep/git-board/internal/proof"
 )
@@ -372,13 +372,13 @@ func (s *apiServer) handleCycleAction(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if action == "approve-plan" && cur.Stage == "ready" && len(cur.Stages.InProgress) > 0 {
-		if _, err := fields.Apply(s.b, cfg, id, "status", cur.Stages.InProgress[0], s.me, time.Now()); err != nil {
+		if _, err := fields.Apply(s.b, &cfg.Schema, id, "status", cur.Stages.InProgress[0], s.me, time.Now()); err != nil {
 			writeError(w, http.StatusInternalServerError, err)
 			return
 		}
 	}
 	if action == "spec-verdict" && req.Verdict == "approve" && cur.Step == 1 && cur.Stages.Ready != "" {
-		if _, err := fields.Apply(s.b, cfg, id, "status", cur.Stages.Ready, s.me, time.Now()); err != nil {
+		if _, err := fields.Apply(s.b, &cfg.Schema, id, "status", cur.Stages.Ready, s.me, time.Now()); err != nil {
 			writeError(w, http.StatusInternalServerError, err)
 			return
 		}
@@ -495,7 +495,7 @@ func (s *apiServer) signedOff(id string, stages config.Stages, status string) er
 	if next == "" {
 		return nil
 	}
-	if _, err := fields.Apply(s.b, s.config(), id, "status", next, s.me, time.Now()); err != nil {
+	if _, err := fields.Apply(s.b, &s.config().Schema, id, "status", next, s.me, time.Now()); err != nil {
 		return err
 	}
 	if next == stages.Closing {

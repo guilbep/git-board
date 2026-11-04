@@ -12,8 +12,8 @@ import (
 	"slices"
 	"time"
 
+	"github.com/guilbep/git-board/core/fields"
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/fields"
 	"github.com/guilbep/git-board/internal/proof"
 )
 
@@ -316,7 +316,7 @@ func (s *apiServer) readyForReview(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if _, err := fields.Apply(s.b, s.config(), id, "status", cur.Stages.InReview[0], s.me, time.Now()); err != nil {
+	if _, err := fields.Apply(s.b, &s.config().Schema, id, "status", cur.Stages.InReview[0], s.me, time.Now()); err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}

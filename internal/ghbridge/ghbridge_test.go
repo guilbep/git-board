@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/guilbep/git-board/core/fields"
 	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/ghbridge"
@@ -88,13 +89,13 @@ func TestParseItemsMatchesRealShape(t *testing.T) {
 func TestMappingSendsAnyFieldToTheProject(t *testing.T) {
 	t.Parallel()
 	cfg := &config.Config{
-		Fields: map[string]config.Field{
-			"risk": {Single: true, Options: []string{"normal", "structural"}},
-		},
 		Forges: []config.Forge{{Name: "gh", Kind: "github", Host: "github.com",
 			Fields: map[string]config.FieldMapping{
 				"risk": {To: "project", Field: "Risk", Values: map[string]string{"structural": "Structural"}},
 			}}},
+		Schema: fields.Schema{Fields: map[string]fields.Field{
+			"risk": {Single: true, Options: []string{"normal", "structural"}},
+		}},
 	}
 	meta := ghbridge.ProjectMeta{ID: "P",
 		Fields: map[string]ghbridge.ProjectField{"Risk": {ID: "F-risk", Options: map[string]string{"Structural": "o-structural", "Normal": "o-normal"}}}}

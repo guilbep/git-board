@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"unicode"
+
+	"github.com/guilbep/git-board/core/fields"
 )
 
 // Palette is the colors a field value can take ([fields.<name>.colors]);
@@ -69,7 +71,7 @@ var spread = []string{"blue", "purple", "teal", "pink"}
 // after it. Pin one in [fields.<name>.colors] to keep it.
 func (c *Config) Colors(field string, values []string) map[string]string {
 	res := map[string]string{}
-	if t := c.TypeOf(field, values); t != TypeSelect && t != TypeIteration {
+	if t := c.TypeOf(field, values); t != fields.TypeSelect && t != fields.TypeIteration {
 		for _, v := range values {
 			if color := c.configured(field, v); color != "" {
 				res[v] = color
@@ -125,8 +127,8 @@ func (c *Config) color(field, value string) string {
 // checkColors puts each field's colors in Palette's words, or a #rrggbb
 // (a GitHub label's: the web paints the dot with it, not the text), or says
 // which isn't one.
-func checkColors(fields map[string]Field) error {
-	for name, f := range fields {
+func checkColors(defs map[string]fields.Field) error {
+	for name, f := range defs {
 		for v, color := range f.Colors {
 			c := normColor(color)
 			if !slices.Contains(Palette, c) && !isHex(c) {

@@ -6,13 +6,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/guilbep/git-board/core/fields"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/ghpr"
 )
 
 var co2Options = []string{"backlog", "comite", "ready", "in-progress", "in-review", "ready-for-validation", "qa", "tests-metier", "validated"}
 
-var co2 = (&config.Config{Fields: map[string]config.Field{"status": {Options: co2Options}}}).Stages()
+var co2 = (&config.Config{Schema: fields.Schema{Fields: map[string]fields.Field{"status": {Options: co2Options}}}}).Stages()
 
 var people = map[string]string{
 	"risk": "alice", "plan": "bob", "review": "carol",
@@ -20,7 +21,7 @@ var people = map[string]string{
 }
 
 // noValidation is git-board's own board: Verify happens in in-review.
-var noValidation = (&config.Config{Fields: map[string]config.Field{"status": {Options: []string{"draft", "backlog", "ready", "in-progress", "in-review", "done"}}}}).Stages()
+var noValidation = (&config.Config{Schema: fields.Schema{Fields: map[string]fields.Field{"status": {Options: []string{"draft", "backlog", "ready", "in-progress", "in-review", "done"}}}}}).Stages()
 
 var two = []string{"Exports a CSV", "Keeps the filters"}
 

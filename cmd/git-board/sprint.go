@@ -50,7 +50,7 @@ func newSprintLsCmd() *cobra.Command {
 }
 
 func runSprintLs(out io.Writer, cfg *config.Config) error {
-	windows := config.SprintWindows(cfg.Sprints)
+	windows := cfg.Sprints.Windows()
 	if len(windows) == 0 {
 		fmt.Fprintln(out, "no sprints configured")
 		return nil
@@ -63,7 +63,7 @@ func runSprintLs(out io.Writer, cfg *config.Config) error {
 	return tw.Flush()
 }
 
-// noSprintMessage is what each resolve alias prints when config.ResolveSprint
+// noSprintMessage is what each resolve alias prints when Sprints.Resolve
 // returns no match — not an error, a normal, expected outcome (e.g. no
 // sprint has started yet, or there's nothing configured after the last one).
 var noSprintMessage = map[string]string{
@@ -89,7 +89,7 @@ func newSprintResolveCmd(which string) *cobra.Command {
 }
 
 func runSprintResolve(out io.Writer, cfg *config.Config, which string, today time.Time) error {
-	sprint, err := config.ResolveSprint(cfg.Sprints, which, today)
+	sprint, err := cfg.Sprints.Resolve(which, today)
 	if err != nil {
 		return err
 	}
@@ -97,14 +97,14 @@ func runSprintResolve(out io.Writer, cfg *config.Config, which string, today tim
 		fmt.Fprintln(out, noSprintMessage[which])
 		return nil
 	}
-	for _, w := range config.SprintWindows(cfg.Sprints) {
+	for _, w := range cfg.Sprints.Windows() {
 		if w.Slug == sprint.Slug {
 			fmt.Fprintf(out, "%s: %s (%s .. %s)\n", w.Slug, w.Title, dateStr(w.Start), dateStr(w.End))
 			return nil
 		}
 	}
-	// ponytail: unreachable under normal operation — SprintWindows and
-	// ResolveSprint both order the same cfg.Sprints.List the same way
+	// ponytail: unreachable under normal operation — Sprints.Windows and
+	// Resolve both order the same cfg.Sprints.List the same way
 	// (sortedSprints), so a resolved slug always has a matching window.
 	// Only a hand-edited config with a duplicate slug could land here;
 	// degrade to the bare slug/title rather than a scary "internal error".

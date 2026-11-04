@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/guilbep/git-board/core/fields"
 	"github.com/guilbep/git-board/internal/board"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/filter"
@@ -69,7 +70,7 @@ func burnupSprint(cfg *config.Config, now time.Time, values map[string][]string)
 	for _, v := range values[field] {
 		used[v] = true
 	}
-	windows := config.SprintWindows(cfg.Sprints)
+	windows := cfg.Sprints.Windows()
 	for i := len(windows) - 1; i >= 0; i-- {
 		if w := windows[i]; !w.Start.After(now) && used[w.Slug] {
 			return &insights.Sprint{Field: field, Slug: w.Slug, Title: or(w.Title, w.Slug), Start: w.Start, End: w.End}
@@ -82,12 +83,12 @@ func burnupSprint(cfg *config.Config, now time.Time, values map[string][]string)
 // field of type iteration.
 func iterationField(cfg *config.Config) string {
 	for _, name := range []string{"sprint", "iteration"} {
-		if cfg.TypeOf(name, nil) == config.TypeIteration {
+		if cfg.TypeOf(name, nil) == fields.TypeIteration {
 			return name
 		}
 	}
 	for name := range cfg.Fields {
-		if cfg.TypeOf(name, nil) == config.TypeIteration {
+		if cfg.TypeOf(name, nil) == fields.TypeIteration {
 			return name
 		}
 	}
@@ -111,7 +112,7 @@ func (s *apiServer) handleSprints(w http.ResponseWriter, r *http.Request) {
 		End   string `json:"end"`
 	}
 	res := []sprint{}
-	for _, w := range config.SprintWindows(s.config().Sprints) {
+	for _, w := range s.config().Sprints.Windows() {
 		res = append(res, sprint{Slug: w.Slug, Title: or(w.Title, w.Slug), Start: w.Start.Format("2006-01-02"), End: w.End.Format("2006-01-02")})
 	}
 	writeJSON(w, http.StatusOK, res)

@@ -9,8 +9,8 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/guilbep/git-board/core/fields"
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/fields"
 	"github.com/guilbep/git-board/internal/store"
 )
 
@@ -75,7 +75,7 @@ func runMove(out io.Writer, idPrefix string, back bool) error {
 		return err
 	}
 
-	label, err := fields.Apply(b, cfg, idPrefix, "status", next, "", time.Now())
+	label, err := fields.Apply(b, &cfg.Schema, idPrefix, "status", next, "", time.Now())
 	if err != nil {
 		return err
 	}

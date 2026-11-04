@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/guilbep/git-board/core/fields"
 	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/ghpr"
@@ -24,13 +25,12 @@ var co2Statuses = []string{"backlog", "comite", "ready", "in-progress", "in-revi
 // cycleConfig is co2's statuses, the risk field, and roles.
 func cycleConfig(roles map[string]string, c config.Cycle) *config.Config {
 	return &config.Config{
-		Fields: map[string]config.Field{
+		Cycle:    c,
+		Features: allFeatures,
+		Schema: fields.Schema{Fields: map[string]fields.Field{
 			"status": {Single: true, Options: co2Statuses},
 			"risk":   {Single: true, Options: []string{"low", "normal", "structural"}},
-		},
-		Roles:    roles,
-		Cycle:    c,
-		Features: allFeatures, // the cycle's tests: every experimental feature on
+		}, Roles: roles},
 	}
 }
 
@@ -417,10 +417,13 @@ func TestCycleSignoffAtTheHead(t *testing.T) {
 // merged, and the sign-off closes the issue.
 func TestCycleSignoffClosesFromReview(t *testing.T) {
 	s, _, id := prRepo(t, "in-review")
-	s.cfg = &config.Config{Fields: map[string]config.Field{
-		"status": {Single: true, Options: []string{"backlog", "ready", "in-progress", "in-review", "done"}},
-		"risk":   {Single: true, Options: []string{"low", "normal", "structural"}},
-	}, Features: allFeatures}
+	s.cfg = &config.Config{
+		Features: allFeatures,
+		Schema: fields.Schema{Fields: map[string]fields.Field{
+			"status": {Single: true, Options: []string{"backlog", "ready", "in-progress", "in-review", "done"}},
+			"risk":   {Single: true, Options: []string{"low", "normal", "structural"}},
+		}},
+	}
 	s.pulls.put("fix/2518-x", &ghpr.PR{Number: 3082, State: "MERGED", MergeCommit: "deadbee0"}, nil)
 	url := serve(t, s).URL + "/api/issues/" + id[:8] + "/cycle"
 	var c cycleAnswer

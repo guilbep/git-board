@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/guilbep/git-board/core/fields"
 	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/store/storetest"
@@ -154,7 +155,7 @@ func TestCatFieldFoundWhenConfigured(t *testing.T) {
 
 func TestCatFieldMissingWhenNotConfigured(t *testing.T) {
 	t.Parallel()
-	cfg := &config.Config{Fields: map[string]config.Field{"status": {Single: true}}}
+	cfg := &config.Config{Schema: fields.Schema{Fields: map[string]fields.Field{"status": {Single: true}}}}
 	if _, ok := catField(cfg); ok {
 		t.Error("catField() ok = true, want false when cat isn't configured")
 	}

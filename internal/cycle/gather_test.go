@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/guilbep/git-board/core/fields"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/store"
 	"github.com/guilbep/git-board/internal/store/storetest"
@@ -61,8 +62,8 @@ func repo(t *testing.T) (string, *store.Backend) {
 
 func co2Config() *config.Config {
 	return &config.Config{
-		Fields:   map[string]config.Field{"status": {Options: co2Options}},
 		Branches: config.Branches{Base: "dev"},
+		Schema:   fields.Schema{Fields: map[string]fields.Field{"status": {Options: co2Options}}},
 	}
 }
 

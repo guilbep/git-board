@@ -12,6 +12,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/guilbep/git-board/core/fields"
 	"github.com/guilbep/git-board/internal/config"
 )
 
@@ -25,15 +26,14 @@ func names(labels []Label) []string {
 
 func TestDesiredCoversFieldOptionsAndSprints(t *testing.T) {
 	cfg := &config.Config{
-		Fields: map[string]config.Field{
+		Branches: config.Branches{Kinds: map[string]string{"bug": "fix"}},
+		Schema: fields.Schema{Fields: map[string]fields.Field{
 			"status":   {Single: true, Options: []string{"ready", "backlog"}, Colors: map[string]string{"ready": "#0E8A16"}},
 			"prio":     {Single: true, Options: []string{"p0"}, Descriptions: map[string]string{"p0": "Now"}},
 			"assignee": {Single: false}, // no Options -- free-form, no label to create
-		},
-		Sprints: config.SprintsConfig{
-			List: []config.Sprint{{Slug: "delivery"}, {Slug: "post-delivery"}},
-		},
-		Branches: config.Branches{Kinds: map[string]string{"bug": "fix"}},
+		}, Sprints: fields.Sprints{
+			List: []fields.Sprint{{Slug: "delivery"}, {Slug: "post-delivery"}},
+		}},
 	}
 
 	got := Desired(cfg)
@@ -55,7 +55,7 @@ func TestDesiredCoversFieldOptionsAndSprints(t *testing.T) {
 	}
 
 	// flat kinds are the kind field, stored as the plain label
-	cfg.Fields["kind"] = config.Field{Single: true, Options: []string{"bug"}, Flat: true}
+	cfg.Fields["kind"] = fields.Field{Single: true, Options: []string{"bug"}, Flat: true}
 	if got := names(Desired(cfg)); !slices.Contains(got, "bug") || slices.Contains(got, "kind:bug") {
 		t.Errorf("flat kinds: Desired = %v, want bug", got)
 	}
@@ -99,7 +99,7 @@ func TestPlanChangesOnlyWhatTheFileSets(t *testing.T) {
 			t.Errorf("State(%s) = %s, want %s", desired[i].Name, got, want)
 		}
 	}
-	cfg := &config.Config{Fields: map[string]config.Field{"assignee": {}}}
+	cfg := &config.Config{Schema: fields.Schema{Fields: map[string]fields.Field{"assignee": {}}}}
 	existing = append(existing, Label{Name: "assignee:alice"}, Label{Name: "kind:bug"})
 	// a namespaced label is a field's value, declared or not: never stray
 	if got := names(Stray(cfg, desired, existing)); !slices.Equal(got, []string{"wontfix"}) {
@@ -200,7 +200,7 @@ func TestTemplatesReadsEveryLabelsShape(t *testing.T) {
 // and described by the file; no longer stray on GitHub.
 func TestDesiredHoldsTheLabelsList(t *testing.T) {
 	t.Parallel()
-	cfg := &config.Config{Labels: config.Labels{List: []string{"needs-design", "regression"}, Colors: map[string]string{"regression": "red"}, Descriptions: map[string]string{"needs-design": "waits for a design decision"}, Defined: true}}
+	cfg := &config.Config{Schema: fields.Schema{Labels: fields.Labels{List: []string{"needs-design", "regression"}, Colors: map[string]string{"regression": "red"}, Descriptions: map[string]string{"needs-design": "waits for a design decision"}, Defined: true}}}
 	got := Desired(cfg)
 	if !slices.Equal(names(got), []string{"needs-design", "regression"}) {
 		t.Fatalf("Desired %v", names(got))

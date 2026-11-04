@@ -225,7 +225,7 @@ func sendWhat(e model.Event) string {
 // retroOf counts the correction comments since the current sprint's start.
 // ponytail: open issues only; M7 reads closed ones too.
 func retroOf(cfg *config.Config, threads []model.Thread, now time.Time) retroSummary {
-	sp, err := config.ResolveSprint(cfg.Sprints, "current", now)
+	sp, err := cfg.Sprints.Resolve("current", now)
 	if err != nil || sp == nil {
 		return retroSummary{}
 	}

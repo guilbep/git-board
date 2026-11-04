@@ -1,32 +1,79 @@
 package fields_test
 
 import (
+	"context"
 	"errors"
 	"slices"
 	"testing"
 	"time"
 
-	"github.com/guilbep/git-board/internal/board"
-	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/fields"
-	"github.com/guilbep/git-board/internal/store/storetest"
+	"github.com/guilbep/git-board/core/datastore/memstore"
+	"github.com/guilbep/git-board/core/fields"
+	"github.com/guilbep/git-board/core/issue"
 )
 
 var today = time.Date(2026, 8, 31, 0, 0, 0, 0, time.UTC)
 
-func mustLoadConfig(t *testing.T) *config.Config {
-	t.Helper()
-	cfg, err := config.Load("../config/testdata/git-board.toml")
+// co2 is internal/config/testdata/git-board.toml's schema.
+var co2 = &fields.Schema{
+	Fields: map[string]fields.Field{
+		"status":   {Single: true, Options: []string{"backlog", "comite", "ready", "in-progress", "in-review", "ready-for-validation", "qa", "tests-metier", "validated"}},
+		"prio":     {Single: true, Options: []string{"p0", "p1", "p2", "p3"}},
+		"est":      {Single: true, Options: []string{"0.5", "1", "2", "3", "4", "6", "8", "16"}, Numeric: true},
+		"assignee": {Single: false},
+		"cat":      {Single: true, Options: []string{"bug", "feature", "chore"}},
+	},
+	Order: []string{"status", "prio", "est", "assignee", "cat"},
+	Sprints: fields.Sprints{LengthDays: 14, StartWeekday: "monday", List: []fields.Sprint{
+		{Slug: "delivery", Title: "Delivery", Start: time.Date(2026, 8, 24, 0, 0, 0, 0, time.UTC)},
+		{Slug: "post-delivery", Title: "Post-delivery", Start: time.Date(2026, 9, 7, 0, 0, 0, 0, time.UTC)},
+	}},
+}
+
+// issues is a Backend on the core's own issues, kept in memory.
+type issues struct{ ds *memstore.Store }
+
+func (b issues) GetLabels(id string) ([]string, error) {
+	is, err := issue.Load(b.ds, id)
 	if err != nil {
-		t.Fatalf("config.Load: %v", err)
+		return nil, err
 	}
-	return cfg
+	return is.Labels, nil
+}
+
+// ApplyLabelChange writes what changes, as internal/store's does.
+func (b issues) ApplyLabelChange(id string, added, removed []string) ([]string, error) {
+	is, err := issue.Load(b.ds, id)
+	if err != nil {
+		return nil, err
+	}
+	added = slices.DeleteFunc(slices.Clone(added), func(l string) bool { return slices.Contains(is.Labels, l) })
+	removed = slices.DeleteFunc(slices.Clone(removed), func(l string) bool { return !slices.Contains(is.Labels, l) })
+	if len(added) == 0 && len(removed) == 0 {
+		return is.Labels, nil
+	}
+	if is, err = issue.Do(context.Background(), b.ds, id, issue.ChangeLabels(author, added, removed)); err != nil {
+		return nil, err
+	}
+	return is.Labels, nil
+}
+
+const author = "0123456789abcdef0123456789abcdef01234567"
+
+// newIssue is an issue titled x on a board of its own.
+func newIssue(t *testing.T) (issues, string) {
+	t.Helper()
+	b := issues{memstore.New("")}
+	is, err := issue.Create(context.Background(), b.ds, issue.NewCreate(author, "x", ""))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return b, is.ID
 }
 
 func TestApplySingleCardinalitySwapsLabel(t *testing.T) {
-	cfg := mustLoadConfig(t)
-	b := storetest.New(t)
-	id := storetest.NewIssue(t, b, "x")
+	cfg := co2
+	b, id := newIssue(t)
 	if _, err := b.ApplyLabelChange(id, []string{"status:backlog", "prio:p1"}, nil); err != nil {
 		t.Fatalf("seed labels: %v", err)
 	}
@@ -58,9 +105,8 @@ func TestApplySingleCardinalitySwapsLabel(t *testing.T) {
 // label that's already set, so Apply must short-circuit instead of blindly
 // calling ChangeLabels with the target already in the "added" list.
 func TestApplySingleCardinalityNoOpWhenAlreadySet(t *testing.T) {
-	cfg := mustLoadConfig(t)
-	b := storetest.New(t)
-	id := storetest.NewIssue(t, b, "x")
+	cfg := co2
+	b, id := newIssue(t)
 	if _, err := b.ApplyLabelChange(id, []string{"status:ready"}, nil); err != nil {
 		t.Fatalf("seed labels: %v", err)
 	}
@@ -83,9 +129,8 @@ func TestApplySingleCardinalityNoOpWhenAlreadySet(t *testing.T) {
 }
 
 func TestApplyMultiCardinalityAddsWithoutRemoving(t *testing.T) {
-	cfg := mustLoadConfig(t)
-	b := storetest.New(t)
-	id := storetest.NewIssue(t, b, "x")
+	cfg := co2
+	b, id := newIssue(t)
 	if _, err := b.ApplyLabelChange(id, []string{"assignee:alice"}, nil); err != nil {
 		t.Fatalf("seed labels: %v", err)
 	}
@@ -114,9 +159,8 @@ func TestApplyMultiCardinalityAddsWithoutRemoving(t *testing.T) {
 }
 
 func TestApplyMultiCardinalityRemove(t *testing.T) {
-	cfg := mustLoadConfig(t)
-	b := storetest.New(t)
-	id := storetest.NewIssue(t, b, "x")
+	cfg := co2
+	b, id := newIssue(t)
 	if _, err := b.ApplyLabelChange(id, []string{"assignee:alice", "assignee:bob"}, nil); err != nil {
 		t.Fatalf("seed labels: %v", err)
 	}
@@ -139,9 +183,8 @@ func TestApplyMultiCardinalityRemove(t *testing.T) {
 }
 
 func TestApplyResolvesSprintAlias(t *testing.T) {
-	cfg := mustLoadConfig(t)
-	b := storetest.New(t)
-	id := storetest.NewIssue(t, b, "x")
+	cfg := co2
+	b, id := newIssue(t)
 
 	label, err := fields.Apply(b, cfg, id, "sprint", "@next", "", today)
 	if err != nil {
@@ -153,9 +196,8 @@ func TestApplyResolvesSprintAlias(t *testing.T) {
 }
 
 func TestApplyResolvesMe(t *testing.T) {
-	cfg := mustLoadConfig(t)
-	b := storetest.New(t)
-	id := storetest.NewIssue(t, b, "x")
+	cfg := co2
+	b, id := newIssue(t)
 
 	label, err := fields.Apply(b, cfg, id, "assignee", "@me", "guilbep", today)
 	if err != nil {
@@ -166,29 +208,14 @@ func TestApplyResolvesMe(t *testing.T) {
 	}
 }
 
-// @me with no --me and no one chosen to write as means nobody.
-func TestApplyMeWithoutMeConfiguredErrors(t *testing.T) {
-	cfg := mustLoadConfig(t)
-	dir := storetest.Repo(t, false)
-	storetest.Init(t, dir)
-	b := storetest.Open(t, dir)
-	id := storetest.NewIssue(t, b, "x")
-	storetest.Git(t, dir, "config", "--unset", "board.me")
-
-	if _, err := fields.Apply(b, cfg, id, "assignee", "@me", "", today); err == nil {
-		t.Error("expected error when @me used without a configured user")
-	}
-}
-
 // Without a config, assignee still holds several people, and a field that
 // already holds several values keeps them.
 func TestApplyUnconfiguredMultiValuedFields(t *testing.T) {
-	b := storetest.New(t)
-	id := storetest.NewIssue(t, b, "x")
+	b, id := newIssue(t)
 	if _, err := b.ApplyLabelChange(id, []string{"assignee:alice", "team:web", "team:api", "sprint:s1"}, nil); err != nil {
 		t.Fatalf("seed labels: %v", err)
 	}
-	cfg := &config.Config{}
+	cfg := &fields.Schema{}
 	for _, set := range [][2]string{{"assignee", "bob"}, {"team", "data"}, {"sprint", "s2"}} {
 		if _, err := fields.Apply(b, cfg, id, set[0], set[1], "", today); err != nil {
 			t.Fatalf("Apply %v: %v", set, err)
@@ -202,43 +229,6 @@ func TestApplyUnconfiguredMultiValuedFields(t *testing.T) {
 	want := []string{"assignee:alice", "assignee:bob", "sprint:s2", "team:api", "team:data", "team:web"}
 	if !slices.Equal(got, want) {
 		t.Errorf("labels = %v, want %v", got, want)
-	}
-}
-
-// Without --me, @me is the person you write as: their name while they
-// have no forge account (issue #87), their login once they have one.
-func TestApplyMeFallsBackToTheIdentitysName(t *testing.T) {
-	cfg := mustLoadConfig(t)
-	b := storetest.New(t)
-	id := storetest.NewIssue(t, b, "x")
-	me, _, err := b.Me()
-	if err != nil {
-		t.Fatal(err)
-	}
-	label, err := fields.Apply(b, cfg, id, "assignee", "@me", "", today)
-	if err != nil || label != "assignee:"+me.Name {
-		t.Errorf("Apply @me = %q, %v; want assignee:%s", label, err, me.Name)
-	}
-	for _, f := range []string{"assignee:@me", "involves:@me"} {
-		if issues, err := board.LoadMatching(b, cfg, f, ""); err != nil || len(issues) != 1 {
-			t.Errorf("LoadMatching %s = %d issues, %v; want the one", f, len(issues), err)
-		}
-	}
-}
-
-// Without --me, @me is the forge login of the person you write as.
-func TestApplyMeFallsBackToTheIdentitysLogin(t *testing.T) {
-	cfg := mustLoadConfig(t)
-	b := storetest.New(t)
-	id := storetest.NewIssue(t, b, "x")
-	storetest.SetMyLogin(t, b, "guilbep")
-	label, err := fields.Apply(b, cfg, id, "assignee", "@me", "", today)
-	if err != nil || label != "assignee:guilbep" {
-		t.Errorf("Apply @me = %q, %v; want assignee:guilbep", label, err)
-	}
-	issues, err := board.LoadMatching(b, cfg, "assignee:@me", "")
-	if err != nil || len(issues) != 1 {
-		t.Errorf("LoadMatching assignee:@me = %d issues, %v; want the one", len(issues), err)
 	}
 }
 
@@ -263,32 +253,12 @@ func TestParseRefusesMalformedAssignments(t *testing.T) {
 	}
 }
 
-// assignee=+@me adds you, -@me removes you: the sign is split off before
-// @me resolves (review: fields.go:108).
-func TestApplySignedMeResolves(t *testing.T) {
-	t.Parallel()
-	cfg := mustLoadConfig(t)
-	b := storetest.New(t)
-	id := storetest.NewIssue(t, b, "x")
-	storetest.SetMyLogin(t, b, "guilbep")
-	if label, err := fields.Apply(b, cfg, id, "assignee", "+@me", "", today); err != nil || label != "assignee:guilbep" {
-		t.Fatalf("Apply +@me = %q, %v; want assignee:guilbep", label, err)
-	}
-	if _, err := fields.Apply(b, cfg, id, "assignee", "-@me", "", today); err != nil {
-		t.Fatalf("Apply -@me: %v", err)
-	}
-	if got, _ := b.GetLabels(id); len(got) != 0 {
-		t.Errorf("labels = %v, want none after -@me", got)
-	}
-}
-
 // status= clears the field instead of writing "status:"; -value drops a
 // single field's value; +value on a single field is refused.
 func TestApplyClearsAndRemovesSingleFields(t *testing.T) {
 	t.Parallel()
-	cfg := mustLoadConfig(t)
-	b := storetest.New(t)
-	id := storetest.NewIssue(t, b, "x")
+	cfg := co2
+	b, id := newIssue(t)
 	if _, err := b.ApplyLabelChange(id, []string{"status:ready", "prio:p1", "assignee:a", "assignee:b"}, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -315,9 +285,8 @@ func TestApplyClearsAndRemovesSingleFields(t *testing.T) {
 // label=+name and label=-name add and remove a plain label.
 func TestApplyPlainLabels(t *testing.T) {
 	t.Parallel()
-	cfg := mustLoadConfig(t)
-	b := storetest.New(t)
-	id := storetest.NewIssue(t, b, "x")
+	cfg := co2
+	b, id := newIssue(t)
 	if _, err := fields.Apply(b, cfg, id, "label", "+urgent", "", today); err != nil {
 		t.Fatal(err)
 	}
@@ -337,7 +306,7 @@ func TestApplyPlainLabels(t *testing.T) {
 
 func TestCheckHoldsToTheConfig(t *testing.T) {
 	t.Parallel()
-	cfg := mustLoadConfig(t)
+	cfg := co2
 	inUse := []string{"team:web"}
 	for _, s := range []string{"prio=p9", "milestone=v1", "est=lots", "sprint=nope", "status=Ready"} {
 		a, _ := fields.Parse(s)

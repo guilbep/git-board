@@ -6,6 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/guilbep/git-board/core/fields"
 	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/store"
@@ -175,13 +176,13 @@ func fieldValues(cfg *config.Config, name string) []string {
 		return opts
 	}
 	switch cfg.TypeOf(name, nil) {
-	case config.TypeIteration:
+	case fields.TypeIteration:
 		vals := []string{"@current", "@next", "@previous"}
 		for _, s := range cfg.Sprints.List {
 			vals = append(vals, s.Slug)
 		}
 		return vals
-	case config.TypePerson:
+	case fields.TypePerson:
 		return append([]string{"@me"}, labelValues(name)...)
 	}
 	return labelValues(name)

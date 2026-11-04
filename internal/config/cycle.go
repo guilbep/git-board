@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
+	"github.com/guilbep/git-board/core/fields"
 )
 
 // Cycle is the [cycle] table: the project's statuses as the loop's stages,
@@ -400,7 +401,7 @@ func (s Stages) StageOf(status string) string {
 
 // checkCycleTable reads [cycle.kinds] into c and checks the table: what
 // parse refuses while the cycle is on.
-func checkCycleTable(md toml.MetaData, c *Cycle, fields map[string]Field) error {
+func checkCycleTable(md toml.MetaData, c *Cycle, defs map[string]fields.Field) error {
 	// M1's test-file globs were [cycle] tests; the name is the suites' now,
 	// and the decoder would drop a list there without a word
 	if md.Type("cycle", "tests") == "Array" {
@@ -412,7 +413,7 @@ func checkCycleTable(md toml.MetaData, c *Cycle, fields map[string]Field) error 
 	if err := checkCycle(*c); err != nil {
 		return err
 	}
-	return checkSteps(*c, (&Config{Fields: fields, Cycle: *c}).Stages().Validation)
+	return checkSteps(*c, (&Config{Cycle: *c, Schema: fields.Schema{Fields: defs}}).Stages().Validation)
 }
 
 // checkCycle refuses a gate's role that couldn't be a role name. One that

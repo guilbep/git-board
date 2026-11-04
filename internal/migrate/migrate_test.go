@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/guilbep/git-board/core/fields"
 	"github.com/guilbep/git-board/core/forge"
 	"github.com/guilbep/git-board/core/forge/fake"
 	"github.com/guilbep/git-board/core/model"
@@ -15,15 +16,15 @@ import (
 
 func migrateConfig() *config.Config {
 	return &config.Config{
-		Fields: map[string]config.Field{
-			"assignee": {Type: config.TypePerson},
-			"moscow":   {Single: true, Options: []string{"musthave", "couldhave", "wonthave"}, Aliases: map[string]string{"could": "couldhave"}},
-		},
 		Forges: []config.Forge{
 			{Name: "gh", Kind: "github", Host: "github.com", Project: "o/r",
 				Fields: map[string]config.FieldMapping{"moscow": {To: config.TargetLabel}}},
 			{Name: "gl", Kind: "gitlab", Host: "gitlab.epfl.ch", Project: "7"},
 		},
+		Schema: fields.Schema{Fields: map[string]fields.Field{
+			"assignee": {Type: fields.TypePerson},
+			"moscow":   {Single: true, Options: []string{"musthave", "couldhave", "wonthave"}, Aliases: map[string]string{"could": "couldhave"}},
+		}},
 	}
 }
 

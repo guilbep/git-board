@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/guilbep/git-board/core/fields"
 	"github.com/guilbep/git-board/core/forge/fake"
 	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/config"
@@ -194,7 +195,7 @@ func TestWorkWithoutSprints(t *testing.T) {
 	if res := getWork(t, ts, "me"); res.Retro.Sprint != "" || res.Retro.Corrections != 0 {
 		t.Errorf("without sprints: %+v", res.Retro)
 	}
-	cfg.Sprints = config.SprintsConfig{LengthDays: 14, List: []config.Sprint{{Slug: "s1", Title: "Sprint 1", Start: time.Now().AddDate(0, 0, -3)}}}
+	cfg.Sprints = fields.Sprints{LengthDays: 14, List: []fields.Sprint{{Slug: "s1", Title: "Sprint 1", Start: time.Now().AddDate(0, 0, -3)}}}
 	if res := getWork(t, ts, "me"); res.Retro.Sprint != "s1" || res.Retro.Corrections != 1 || res.Retro.Since.IsZero() {
 		t.Errorf("in sprint 1: %+v", res.Retro)
 	}

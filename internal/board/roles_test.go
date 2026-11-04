@@ -4,6 +4,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/guilbep/git-board/core/fields"
 	"github.com/guilbep/git-board/internal/board"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/store/storetest"
@@ -16,7 +17,7 @@ func TestRolesInherit(t *testing.T) {
 	b := storetest.New(t)
 	b.NewIssue("inherits", "", nil)
 	b.NewIssue("overrides", "", []string{"lead-dev:dan"})
-	cfg := &config.Config{Roles: map[string]string{"lead-dev": "bob", "pm": "claire"}}
+	cfg := &config.Config{Schema: fields.Schema{Roles: map[string]string{"lead-dev": "bob", "pm": "claire"}}}
 	titles := func(filter, me string) []string {
 		t.Helper()
 		issues, err := board.LoadMatching(b, cfg, filter, me)

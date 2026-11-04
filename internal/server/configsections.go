@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/guilbep/git-board/core/fields"
 	"github.com/guilbep/git-board/internal/config"
 )
 
@@ -30,17 +31,17 @@ type configModel struct {
 	Hash   string                  `json:"hash"`
 	Exists bool                    `json:"exists"`
 	Error  string                  `json:"error,omitempty"` // the file doesn't parse: the forms show it, Advanced fixes it
-	Fields map[string]config.Field `json:"fields"`
-	Labels config.Labels           `json:"labels"`
+	Fields map[string]fields.Field `json:"fields"`
+	Labels fields.Labels           `json:"labels"`
 	Views  map[string]config.View  `json:"views"`
 	// ViewOrder is the file's order: the tabs', the first the landing one.
 	// The map above is sorted, this is the file's.
 	ViewOrder []string `json:"view_order"`
 	// FieldOrder is the file's order likewise: the fields page's list, the
 	// order an issue's fields line takes.
-	FieldOrder []string             `json:"field_order"`
-	Sprints    config.SprintsConfig `json:"sprints"`
-	Roles      map[string]string    `json:"roles"`
+	FieldOrder []string          `json:"field_order"`
+	Sprints    fields.Sprints    `json:"sprints"`
+	Roles      map[string]string `json:"roles"`
 	// Branches, Cycle (its On says the file has the table), Repos, Uploads
 	// and Release, as the file holds them
 	Branches config.Branches `json:"branches"`
@@ -76,7 +77,7 @@ func (s *apiServer) configModel() (configModel, error) {
 		return configModel{}, err
 	}
 	m := configModel{Hash: hash, Exists: exists}
-	m.Fields = map[string]config.Field{}
+	m.Fields = map[string]fields.Field{}
 	m.Views = map[string]config.View{}
 	m.Roles = map[string]string{}
 	m.Forges = []config.Forge{}
@@ -154,9 +155,9 @@ func orEmptyStringMap(m map[string]string) map[string]string {
 	return m
 }
 
-func orSprints(list []config.Sprint) []config.Sprint {
+func orSprints(list []fields.Sprint) []fields.Sprint {
 	if list == nil {
-		return []config.Sprint{}
+		return []fields.Sprint{}
 	}
 	return list
 }
@@ -235,7 +236,7 @@ func (s *apiServer) sectionWriter(section string, r *http.Request, w http.Respon
 		// (docs/prd/fields-one-editor.md): Forges is each forge's
 		// mappings to set and remove, as the forge-fields section takes
 		var req struct {
-			Set    map[string]config.Field `json:"set"`
+			Set    map[string]fields.Field `json:"set"`
 			Remove []string                `json:"remove"`
 			Order  []string                `json:"order"` // the list's: each field moved above the one before it
 			Forges map[string]struct {
@@ -332,7 +333,7 @@ func (s *apiServer) sectionWriter(section string, r *http.Request, w http.Respon
 		}
 		return func(text string) (string, error) { return config.SetExperimentalText(text, req.Features), nil }, nil
 	case "labels":
-		var req config.Labels
+		var req fields.Labels
 		if !decode(w, r, &req) {
 			return nil, nil
 		}
@@ -372,7 +373,7 @@ func (s *apiServer) sectionWriter(section string, r *http.Request, w http.Respon
 			return text, nil
 		}, nil
 	case "sprints":
-		var req config.SprintsConfig
+		var req fields.Sprints
 		if !decode(w, r, &req) {
 			return nil, nil
 		}

@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/guilbep/git-board/core/fields"
 	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/filter"
@@ -98,7 +99,7 @@ func TestFollowsTerm(t *testing.T) {
 // involvement: the project's lead-dev isn't in every issue's discussion.
 // pm:@me still finds it, as a field.
 func TestInvolvesLeavesOutProjectRoles(t *testing.T) {
-	cfg, now := &config.Config{Fields: map[string]config.Field{"pm": {Type: config.TypePerson}}}, time.Now()
+	cfg, now := &config.Config{Schema: fields.Schema{Fields: map[string]fields.Field{"pm": {Type: fields.TypePerson}}}}, time.Now()
 	inherited := model.Issue{ID: "a1", Inherited: []string{"pm:guilbep"}}
 	if filter.Matches(inherited, filter.Parse("involves:@me"), cfg, "guilbep", now) {
 		t.Error("involves:@me took a project role for involvement")

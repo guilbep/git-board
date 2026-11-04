@@ -1,5 +1,7 @@
-// Package fields applies field=value assignments as namespaced labels,
-// via internal/store. Single-cardinality fields (the default) swap: any
+// Package fields is the issue domain's fields (ADR 0007): what they are
+// (Schema: their definitions, types, sprints, roles; schema.go), and
+// field=value assignments, applied as namespaced labels through a
+// Backend. Single-cardinality fields (the default) swap: any
 // existing "field:*" label is removed before the new one is added.
 // Multi-cardinality fields (assignee) add by default; a leading "-"
 // removes instead (e.g. assignee=-guilbep). An empty value (status=)
@@ -15,18 +17,14 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/store"
 )
 
-// Backend is the subset of store.Backend that field application needs.
+// Backend is where Apply reads and writes an issue's labels
+// (internal/store's Backend is one).
 type Backend interface {
 	GetLabels(idPrefix string) ([]string, error)
 	ApplyLabelChange(idPrefix string, added, removed []string) ([]string, error)
 }
-
-var _ Backend = (*store.Backend)(nil)
 
 // PlainLabel is the field name that writes a plain label (bug, not
 // kind:bug): label=+bug, label=-bug, as the filter's label:bug.
@@ -104,7 +102,7 @@ func parse(name, value string) (Assignment, error) {
 // the person you write as, else their name, from b when it can tell), @current/@next/@previous
 // (the sprint), and a configured alias (could → couldhave). The sign
 // stays: +@me adds you.
-func (a Assignment) Resolve(b any, cfg *config.Config, me string, today time.Time) (Assignment, error) {
+func (a Assignment) Resolve(b any, s *Schema, me string, today time.Time) (Assignment, error) {
 	if a.Value == "" {
 		return a, nil
 	}
@@ -113,11 +111,11 @@ func (a Assignment) Resolve(b any, cfg *config.Config, me string, today time.Tim
 			me = l.MyName() // @me without --me: your login, else your name
 		}
 	}
-	v, err := resolveAssignedValue(cfg, a.Value, me, today)
+	v, err := resolveAssignedValue(s, a.Value, me, today)
 	if err != nil {
 		return a, err
 	}
-	if f, ok := cfg.Fields[a.Field]; ok {
+	if f, ok := s.Fields[a.Field]; ok {
 		v = f.AliasOf(v)
 	}
 	a.Value = v
@@ -129,72 +127,68 @@ func (a Assignment) Resolve(b any, cfg *config.Config, me string, today time.Tim
 // --force.
 var ErrUnchecked = errors.New("not allowed by .git-board.toml")
 
-var dateValue = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`)
-
 // Check holds a resolved assignment to the config: a field it knows (one
 // configured, one its type names, or one in use on some issue: inUse are
 // the labels in use), a value among the field's options, a number for a
 // number, a date for a date, a sprint's slug for a sprint, a plain label
 // from [labels] when the project lists them. A removal or a clear is never
 // held back: it's how a wrong value goes.
-func Check(cfg *config.Config, a Assignment, inUse []string) error {
+func Check(s *Schema, a Assignment, inUse []string) error {
 	if a.Op == '-' || a.Clears() {
 		return nil
 	}
-	if a.Field == PlainLabel && !configured(cfg, PlainLabel) {
-		if cfg.Labels.Defined && !slices.Contains(cfg.Labels.List, a.Value) {
-			return fmt.Errorf("%w: label %q isn't in [labels] list (%s)", ErrUnchecked, a.Value, orNone(cfg.Labels.List))
+	if a.Field == PlainLabel && !configured(s, PlainLabel) {
+		if s.Labels.Defined && !slices.Contains(s.Labels.List, a.Value) {
+			return fmt.Errorf("%w: label %q isn't in [labels] list (%s)", ErrUnchecked, a.Value, orNone(s.Labels.List))
 		}
 		return nil
 	}
-	if !known(cfg, a.Field, inUse) {
-		return fmt.Errorf("%w: unknown field %q, not configured and on no issue (fields: %s)", ErrUnchecked, a.Field, orNone(cfg.FieldOrder()))
+	if !known(s, a.Field, inUse) {
+		return fmt.Errorf("%w: unknown field %q, not configured and on no issue (fields: %s)", ErrUnchecked, a.Field, orNone(s.FieldOrder()))
 	}
-	f := cfg.Fields[a.Field]
+	f := s.Fields[a.Field]
 	if len(f.Options) > 0 {
 		if !f.KnownValue(a.Value) {
 			return fmt.Errorf("%w: %s %q isn't one of its options (%s)", ErrUnchecked, a.Field, a.Value, strings.Join(f.Options, ", "))
 		}
 		return nil
 	}
-	switch cfg.TypeOf(a.Field, nil) {
-	case config.TypeNumber:
+	switch s.TypeOf(a.Field, nil) {
+	case TypeNumber:
 		if _, err := strconv.ParseFloat(a.Value, 64); err != nil {
 			return fmt.Errorf("%w: %s is a number, not %q", ErrUnchecked, a.Field, a.Value)
 		}
-	case config.TypeDate:
+	case TypeDate:
 		if _, err := time.Parse(time.DateOnly, a.Value); err != nil || !dateValue.MatchString(a.Value) {
 			return fmt.Errorf("%w: %s is a date (YYYY-MM-DD), not %q", ErrUnchecked, a.Field, a.Value)
 		}
-	case config.TypeIteration:
-		if slugs := sprintSlugs(cfg); len(slugs) > 0 && !slices.Contains(slugs, a.Value) {
+	case TypeIteration:
+		if slugs := sprintSlugs(s); len(slugs) > 0 && !slices.Contains(slugs, a.Value) {
 			return fmt.Errorf("%w: %s %q isn't a sprint (%s)", ErrUnchecked, a.Field, a.Value, strings.Join(slugs, ", "))
 		}
 	}
 	return nil
 }
 
-func configured(cfg *config.Config, name string) bool {
-	_, ok := cfg.Fields[name]
+func configured(s *Schema, name string) bool {
+	_, ok := s.Fields[name]
 	return ok
 }
 
-// known: configured, a role, a name whose type is known (sprint,
-// assignee, due…), the flat kinds, or a namespace some issue uses.
-func known(cfg *config.Config, name string, inUse []string) bool {
-	if configured(cfg, name) || cfg.Roles[name] != "" || cfg.TypeOf(name, nil) != config.TypeSelect {
-		return true
-	}
-	if name == "kind" && cfg.FlatKinds() {
+// known: configured (the flat kinds are, as a Flat kind field), a role, a
+// name whose type is known (sprint, assignee, due…), or a namespace some
+// issue uses.
+func known(s *Schema, name string, inUse []string) bool {
+	if configured(s, name) || s.Roles[name] != "" || s.TypeOf(name, nil) != TypeSelect {
 		return true
 	}
 	return slices.ContainsFunc(inUse, func(l string) bool { return strings.HasPrefix(l, name+":") })
 }
 
-func sprintSlugs(cfg *config.Config) []string {
+func sprintSlugs(s *Schema) []string {
 	var res []string
-	for _, s := range cfg.Sprints.List {
-		res = append(res, s.Slug)
+	for _, sp := range s.Sprints.List {
+		res = append(res, sp.Slug)
 	}
 	return res
 }
@@ -211,8 +205,8 @@ func orNone(list []string) string {
 // its value with -value (+value is refused: it holds one); a multi field
 // adds (value, +value) or removes (-value), and clears with an empty value;
 // label=±name adds or removes a plain label.
-func Change(cfg *config.Config, current []string, a Assignment) (Result, error) {
-	if a.Field == PlainLabel && !configured(cfg, PlainLabel) {
+func Change(s *Schema, current []string, a Assignment) (Result, error) {
+	if a.Field == PlainLabel && !configured(s, PlainLabel) {
 		switch {
 		case a.Value == "":
 			return Result{}, fmt.Errorf("%w %q: name the label, label=+name or label=-name", ErrInvalid, a)
@@ -238,7 +232,7 @@ func Change(cfg *config.Config, current []string, a Assignment) (Result, error) 
 		}
 		return r, nil
 	}
-	single := Single(cfg, a.Field, current)
+	single := Single(s, a.Field, current)
 	if single && a.Op == '+' {
 		return Result{}, fmt.Errorf("%w %q: %s holds one value, write %s=%s", ErrInvalid, a, a.Field, a.Field, a.Value)
 	}
@@ -274,19 +268,19 @@ func Fold(labels []string, r Result) []string {
 // empty: the field is cleared). The form is checked (Parse); the options
 // are not: the web and the TUI pick among them, and the command line
 // calls Check first.
-func Apply(b Backend, cfg *config.Config, idPrefix, fieldName, value, me string, today time.Time) (string, error) {
+func Apply(b Backend, s *Schema, idPrefix, fieldName, value, me string, today time.Time) (string, error) {
 	a, err := parse(fieldName, value)
 	if err != nil {
 		return "", err
 	}
-	if a, err = a.Resolve(b, cfg, me, today); err != nil {
+	if a, err = a.Resolve(b, s, me, today); err != nil {
 		return "", err
 	}
 	current, err := b.GetLabels(idPrefix)
 	if err != nil {
 		return "", err
 	}
-	r, err := Change(cfg, current, a)
+	r, err := Change(s, current, a)
 	if err != nil {
 		return "", err
 	}
@@ -300,8 +294,8 @@ func Apply(b Backend, cfg *config.Config, idPrefix, fieldName, value, me string,
 // current: as configured; else, not configured, one value, but for
 // assignee (people) and a field the issue already holds several values of.
 // The web side panel decides the same way (web/src/components/IssueDetail.vue).
-func Single(cfg *config.Config, fieldName string, current []string) bool {
-	if f, known := cfg.Fields[fieldName]; known {
+func Single(s *Schema, fieldName string, current []string) bool {
+	if f, known := s.Fields[fieldName]; known {
 		return f.Single
 	}
 	n := 0
@@ -310,7 +304,7 @@ func Single(cfg *config.Config, fieldName string, current []string) bool {
 			n++
 		}
 	}
-	return cfg.TypeOf(fieldName, nil) != config.TypePerson && n < 2
+	return s.TypeOf(fieldName, nil) != TypePerson && n < 2
 }
 
 // Diff computes the label add/remove needed to set fieldName to a resolved
@@ -349,10 +343,10 @@ func Diff(current []string, fieldName, resolved string, single bool) (label stri
 	return newLabel, added, removed
 }
 
-func resolveAssignedValue(cfg *config.Config, value, me string, today time.Time) (string, error) {
+func resolveAssignedValue(s *Schema, value, me string, today time.Time) (string, error) {
 	switch {
 	case value == "@current" || value == "@next" || value == "@previous":
-		sprint, err := config.ResolveSprint(cfg.Sprints, value[1:], today)
+		sprint, err := s.Sprints.Resolve(value[1:], today)
 		if err != nil {
 			return "", err
 		}

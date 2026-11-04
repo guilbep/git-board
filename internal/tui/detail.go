@@ -9,9 +9,9 @@ import (
 
 	"github.com/charmbracelet/bubbles/list"
 
+	"github.com/guilbep/git-board/core/fields"
 	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/fields"
 )
 
 // catFieldName is the field namespace the quick category filter (kbd "c")
@@ -156,14 +156,14 @@ func valuePickerItems(cfg *config.Config, fieldName string) []list.Item {
 
 // catField reports the field driving the quick category filter, and whether
 // one is configured at all.
-func catField(cfg *config.Config) (config.Field, bool) {
+func catField(cfg *config.Config) (fields.Field, bool) {
 	f, ok := cfg.Fields[catFieldName]
 	return f, ok && f.Single
 }
 
 // catFilterItems builds the category picker's items: a leading "(all)" entry
 // that clears the filter, then f's configured options.
-func catFilterItems(f config.Field) []list.Item {
+func catFilterItems(f fields.Field) []list.Item {
 	items := make([]list.Item, 0, len(f.Options)+1)
 	items = append(items, valueItem{value: "(all)", desc: "clear filter"})
 	for _, o := range f.Options {
@@ -195,7 +195,7 @@ func FilterByField(issues []model.Issue, fieldName, value string) []model.Issue 
 // call, same as fields.Apply itself, so it's covered by the same
 // storetest-fixture style as fields_test.go.
 func ApplyField(b fields.Backend, cfg *config.Config, issueID, fieldName, value, me string, today time.Time) (labels []string, applied string, err error) {
-	applied, err = fields.Apply(b, cfg, issueID, fieldName, value, me, today)
+	applied, err = fields.Apply(b, &cfg.Schema, issueID, fieldName, value, me, today)
 	if err != nil {
 		return nil, "", err
 	}

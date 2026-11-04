@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/guilbep/git-board/core/fields"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/ghpr"
 	"github.com/guilbep/git-board/internal/proof"
@@ -277,10 +278,13 @@ func TestChecksSetup(t *testing.T) {
 // it close the issue.
 func TestCycleSignoffNotProvenAtMerge(t *testing.T) {
 	s, id, keyFile := checksRepo(t)
-	s.cfg = &config.Config{Features: allFeatures, Fields: map[string]config.Field{
-		"status": {Single: true, Options: []string{"backlog", "ready", "in-progress", "in-review", "done"}},
-		"risk":   {Single: true, Options: []string{"low", "normal", "structural"}},
-	}}
+	s.cfg = &config.Config{
+		Features: allFeatures,
+		Schema: fields.Schema{Fields: map[string]fields.Field{
+			"status": {Single: true, Options: []string{"backlog", "ready", "in-progress", "in-review", "done"}},
+			"risk":   {Single: true, Options: []string{"low", "normal", "structural"}},
+		}},
+	}
 	if _, err := s.b.ApplyLabelChange(id, []string{"status:in-review"}, []string{"status:in-progress"}); err != nil {
 		t.Fatal(err)
 	}

@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/BurntSushi/toml"
+	"github.com/guilbep/git-board/core/fields"
 )
 
 var co2Statuses = []string{"backlog", "comite", "ready", "in-progress", "in-review", "ready-for-validation", "qa", "tests-metier", "validated"}
@@ -98,7 +99,7 @@ func TestCycleFromFile(t *testing.T) {
 }
 
 func TestStagesGuessed(t *testing.T) {
-	cfg := &Config{Fields: map[string]Field{"status": {Options: co2Statuses}}}
+	cfg := &Config{Schema: fields.Schema{Fields: map[string]fields.Field{"status": {Options: co2Statuses}}}}
 	s := cfg.Stages()
 	if !s.Guessed || s.Ready != "ready" || s.Plans != "docs/src/implementation-plans" || len(s.TestFiles) != 5 {
 		t.Errorf("Stages() = %+v", s)
@@ -114,7 +115,7 @@ func TestStagesGuessed(t *testing.T) {
 	}
 	// no file, or no validation status: lists, never null (the settings
 	// page joins them)
-	for _, c := range []*Config{{}, {Fields: map[string]Field{"status": {Options: []string{"todo", "done"}}}}} {
+	for _, c := range []*Config{{}, {Schema: fields.Schema{Fields: map[string]fields.Field{"status": {Options: []string{"todo", "done"}}}}}} {
 		if b, _ := json.Marshal(c.Stages()); strings.Contains(string(b), "null") {
 			t.Errorf("Stages() = %s", b)
 		}

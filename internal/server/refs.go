@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/guilbep/git-board/core/fields"
 	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/branches"
-	"github.com/guilbep/git-board/internal/config"
 )
 
 // issueRef is an issue an issue field names: its value as written (#12,
@@ -54,7 +54,7 @@ func (s *apiServer) handleRefs(w http.ResponseWriter, r *http.Request) {
 	cfg := s.config()
 	isRef := map[string]bool{}
 	for name, vs := range s.labelValues() {
-		isRef[name] = cfg.TypeOf(name, vs) == config.TypeIssue
+		isRef[name] = cfg.TypeOf(name, vs) == fields.TypeIssue
 	}
 	out, in := map[string][]issueRef{}, map[string][]issueRef{}
 	for _, l := range me.Labels {

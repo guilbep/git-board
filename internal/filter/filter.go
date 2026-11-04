@@ -21,6 +21,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/guilbep/git-board/core/fields"
 	"github.com/guilbep/git-board/core/index"
 	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/config"
@@ -191,7 +192,7 @@ func Resolve(value string, cfg *config.Config, me string, today time.Time) strin
 		return me
 	}
 	if sprintAliases[value] {
-		sprint, err := config.ResolveSprint(cfg.Sprints, value[1:], today)
+		sprint, err := cfg.Sprints.Resolve(value[1:], today)
 		if err != nil || sprint == nil {
 			return "\x00no-such-sprint"
 		}
@@ -392,7 +393,7 @@ func PersonField(label, login string, cfg *config.Config) (string, bool) {
 		cfg = &config.Config{}
 	}
 	f, v, ok := strings.Cut(label, ":")
-	if !ok || login == "" || !strings.EqualFold(v, login) || cfg.TypeOf(f, nil) != config.TypePerson {
+	if !ok || login == "" || !strings.EqualFold(v, login) || cfg.TypeOf(f, nil) != fields.TypePerson {
 		return "", false
 	}
 	return f, true

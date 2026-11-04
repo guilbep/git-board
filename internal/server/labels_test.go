@@ -12,6 +12,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/guilbep/git-board/core/fields"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/ghlabels"
 	"github.com/guilbep/git-board/internal/lint"
@@ -237,7 +238,7 @@ func TestLabelsListForThePicker(t *testing.T) {
 		Colors       map[string]string `json:"colors"`
 		Descriptions map[string]string `json:"descriptions"`
 	}
-	ts := newTestServer(t, b, &config.Config{Labels: config.Labels{Defined: true, List: []string{"needs-design", "regression"}, Colors: map[string]string{"regression": "red"}}})
+	ts := newTestServer(t, b, &config.Config{Schema: fields.Schema{Labels: fields.Labels{Defined: true, List: []string{"needs-design", "regression"}, Colors: map[string]string{"regression": "red"}}}})
 	if resp := getJSON(t, ts.URL+"/api/config/labels", &res); resp.StatusCode != http.StatusOK {
 		t.Fatalf("status %d", resp.StatusCode)
 	}

@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/guilbep/git-board/core/fields"
 	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/ghbridge"
@@ -43,16 +44,15 @@ const testURL = "https://github.com/o/r/issues/"
 
 func syncConfig() *config.Config {
 	return &config.Config{
-		Fields: map[string]config.Field{
+		GithubProject: config.GithubProject{Owner: "o", Number: 1, Write: true},
+		Schema: fields.Schema{Fields: map[string]fields.Field{
 			"status": {Single: true, Options: []string{"backlog", "comite", "ready", "in-review", "qa"},
 				Project: map[string]string{"qa": "QA Validation"}},
 			"prio": {Single: true, Options: []string{"p0", "p1", "p2"}},
 			"est":  {Single: true, Options: []string{"1", "2", "4"}, Numeric: true},
-		},
-		Sprints: config.SprintsConfig{List: []config.Sprint{
+		}, Sprints: fields.Sprints{List: []fields.Sprint{
 			{Slug: "sprint-4", Title: "Sprint 4", Start: time.Date(2026, 10, 5, 0, 0, 0, 0, time.UTC)},
-		}},
-		GithubProject: config.GithubProject{Owner: "o", Number: 1, Write: true},
+		}}},
 	}
 }
 
@@ -107,7 +107,7 @@ func TestSyncCategoryFillsAMissingKind(t *testing.T) {
 		t.Errorf("added = %v, want feat and no FEAT", got)
 	}
 	// with [fields.kind] options the kinds are kind:* labels
-	cfg.Fields["kind"] = config.Field{Single: true, Options: []string{"bug", "feat"}}
+	cfg.Fields["kind"] = fields.Field{Single: true, Options: []string{"bug", "feat"}}
 	p = ghbridge.BuildSyncPlan([]ghbridge.Item{it}, oneBug(), nil, syncMeta(), cfg)
 	if got := p.Changes[0].Added; !slices.Contains(got, "kind:feat") || slices.Contains(got, "feat") {
 		t.Errorf("kind:* form: added = %v, want kind:feat", got)
@@ -225,7 +225,7 @@ func TestSyncNumbersAndSprints(t *testing.T) {
 
 func TestSlugTransliteratesAccents(t *testing.T) {
 	cfg := syncConfig()
-	cfg.Fields["status"] = config.Field{Single: true, Options: []string{"comite-specialise"}}
+	cfg.Fields["status"] = fields.Field{Single: true, Options: []string{"comite-specialise"}}
 	p := ghbridge.BuildSyncPlan([]ghbridge.Item{item(1, "Comité Spécialisé")}, oneBug(), nil, syncMeta(), cfg)
 	if !slices.Contains(p.Changes[0].Added, "status:comite-specialise") {
 		t.Errorf("added %v warnings %v", p.Changes[0].Added, p.Changes[0].Warnings)
@@ -478,7 +478,7 @@ func TestSyncCategoryRemovesItsBareLabel(t *testing.T) {
 func TestSyncMoSCoW(t *testing.T) {
 	t.Parallel()
 	cfg := syncConfig()
-	cfg.Fields["moscow"] = config.Field{Single: true, Options: []string{"must", "should", "could", "wont"}, Project: map[string]string{"wont": "Won't"}}
+	cfg.Fields["moscow"] = fields.Field{Single: true, Options: []string{"must", "should", "could", "wont"}, Project: map[string]string{"wont": "Won't"}}
 	meta := syncMeta()
 	meta.Fields["MoSCoW"] = ghbridge.ProjectField{ID: "F-moscow", Options: map[string]string{"Must": "o-must", "Should": "o-should", "Could": "o-could", "Won't": "o-wont"}}
 	it := item(1, "Ready")

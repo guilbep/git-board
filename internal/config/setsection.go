@@ -6,6 +6,8 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+
+	"github.com/guilbep/git-board/core/fields"
 )
 
 // The settings' forms write one section of the file at a time: each writer
@@ -166,7 +168,7 @@ func lastTableHeader(text, prefix string) string {
 // the map doesn't name keeps its lines, comments included. A field's
 // subtables ([fields.<name>.project|colors|descriptions]) follow the
 // field's value, as SetFieldTable writes them.
-func SetFieldsText(text string, set map[string]Field, remove []string) (string, error) {
+func SetFieldsText(text string, set map[string]fields.Field, remove []string) (string, error) {
 	for _, name := range remove {
 		text = deleteTable(text, "fields."+name)
 	}
@@ -236,7 +238,7 @@ func tomlArrayAlways(list []string) string {
 // the colors and descriptions as SetLabelsTable writes them. Without a
 // table and nothing to hold, the file is untouched; with one, the list
 // stays explicit even when empty (an empty list allows none).
-func SetLabelsText(text string, l Labels) (string, error) {
+func SetLabelsText(text string, l fields.Labels) (string, error) {
 	start, _ := tableSpanOf(text, "[labels]")
 	hasTable := start >= 0
 	if !hasTable && len(l.List) == 0 && len(l.Colors) == 0 && len(l.Descriptions) == 0 {
@@ -252,7 +254,7 @@ func SetLabelsText(text string, l Labels) (string, error) {
 // rewritten in place, the [[sprints.list]] entries the form's list (they
 // are data: slug, title, start, three lines each), written after the
 // table, else at the end.
-func SetSprintsText(text string, s SprintsConfig) (string, error) {
+func SetSprintsText(text string, s fields.Sprints) (string, error) {
 	// the old entries go first: they are replaced, not edited in place
 	for {
 		lines := strings.Split(text, "\n")
