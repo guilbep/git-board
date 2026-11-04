@@ -67,6 +67,9 @@ FILTER GRAMMAR (used by ls/view/tui):
   git-board ls "sprint:@current is:open" --group status
   git-board view backlog --md
   git-board set a1b2c3 status=ready prio=p1
+  git-board new "Login fails on Safari" prio=p1 -e
+  git-board show a1b2c3
+  git-board comment a1b2c3 -b "Fixed in 4e5f6a7"
   git-board tui "assignee:@me is:open" --me guilbep`,
 		Version:       buildVersion(),
 		SilenceUsage:  true,
