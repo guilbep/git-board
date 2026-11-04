@@ -9,6 +9,10 @@ sync touches the network.
 `git board X` and `git-board X` are the same command: the binary is a git
 subcommand.
 
+`-C <dir>` runs any command as if started in `<dir>`, as `git -C` does:
+`git-board -C ~/src/co2-calculator ls`. `git -C <dir> board ls` is the
+same.
+
 ## Naming an issue
 
 Every command taking `<id>` takes any of:
@@ -399,6 +403,7 @@ Errors go to stderr, prefixed `error:`.
 | `gh issue comment N --delete-last` | `glab issue note delete` | `git board comment N --delete <ref>` |
 | | | `git board undo N` (your last change, inverted) |
 | `gh issue status` | | `git board ls "involves:@me is:open"` |
+| `gh -R owner/repo issue list` | `glab -R owner/repo issue list` | `git board -C <dir> ls` (a clone: the board is in it) |
 | `gh config get/set` | `glab config get/set` | `git board config get/set/list` |
 | `gh label list` | `glab label list` | `git board labels` (with counts) |
 | `gh label edit old --name new` | `glab label edit` | `git board labels rename old new` (on every issue) |

@@ -66,3 +66,20 @@ func TestConfigCmd(t *testing.T) {
 	}
 	execute(t, []string{"config", "unset", "board.datastore"})
 }
+
+// -C runs a command in another repository, as git -C does.
+func TestDirectoryFlag(t *testing.T) {
+	newTestRepo(t)
+	repo, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(t.TempDir())
+	out, err := execute(t, []string{"-C", repo, "ls"})
+	if err != nil || !strings.Contains(out, "Fix invoice bug") {
+		t.Fatalf("ls -C = %q, %v", out, err)
+	}
+	if _, err := execute(t, []string{"ls", "-C", "/nonexistent/dir"}); exitCode(err) != exitUsage {
+		t.Errorf("-C on no directory = %v, want exit %d", err, exitUsage)
+	}
+}
