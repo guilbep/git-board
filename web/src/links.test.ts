@@ -1,5 +1,7 @@
 // Run with: node --test web/src/links.test.ts
 import assert from 'node:assert/strict';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { test } from 'node:test';
 import { forgeBase, safeHref } from './links.ts';
 
@@ -48,4 +50,23 @@ test('no #123 base from a URL whose path does not end with the number, @name sti
   assert.deepEqual(forgeBase('https://github.com/o/r/issues/12?x=1'), { refs: null, people: 'https://github.com/' });
   assert.deepEqual(forgeBase('https://github.com/o/r/issues/12#c3'), { refs: null, people: 'https://github.com/' });
   assert.deepEqual(forgeBase('https://github.com/o/r'), { refs: null, people: 'https://github.com/' });
+});
+
+// every link to a URL from forge data (a pull request's, an issue's
+// forges[].url, a conflict's) goes through safeHref: a template binding an
+// href to some .url as it is would let a javascript: URL through (#89)
+test('the pages bind no forge .url to an href without safeHref', () => {
+  const bare: string[] = [];
+  const walk = (dir: string) => {
+    for (const e of readdirSync(dir, { withFileTypes: true })) {
+      const p = join(dir, e.name);
+      if (e.isDirectory()) walk(p);
+      else if (p.endsWith('.vue'))
+        for (const [, expr] of readFileSync(p, 'utf8').matchAll(/:href="([^"]*)"/g))
+          if (/\.url\b/.test(expr!) && !expr!.startsWith('safeHref(')) bare.push(`${p}: ${expr}`);
+    }
+  };
+  walk(join(import.meta.dirname, 'components'));
+  walk(join(import.meta.dirname, 'pages'));
+  assert.deepEqual(bare, []);
 });

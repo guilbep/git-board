@@ -125,7 +125,7 @@
 
       <SyncSettings v-if="tab === 'sync'" @changed="whole = $event" />
 
-      <DatastoreSettings v-if="tab === 'datastore'" @changed="datastore = $event" />
+      <DatastoreSettings v-if="tab === 'datastore'" @changed="onDatastore" />
       <NumbersSettings v-if="tab === 'numbers'" @changed="numbers = $event" />
       <WorktreesSettings v-if="tab === 'worktrees'" @changed="worktrees = $event" />
     </main>
@@ -138,7 +138,7 @@ import { debounced, onLive } from '@/live';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router';
 import { resetTips, setTipsOff, tipsOff } from '@/tips';
-import { getDatastore, getNumbers, getSettings, getViews, getWhole, getWorktrees, setAvatars, setView, type AvatarsMode, type Datastore, type Labels, type Numbers, type Settings, type WholeStatus, type Worktrees } from '@/api/board';
+import { getNumbers, getSettings, getViews, getWhole, getWorktrees, setAvatars, setView, type AvatarsMode, type Datastore, type Labels, type Numbers, type Settings, type WholeStatus, type Worktrees } from '@/api/board';
 import { message } from '@/issue';
 import { classicPeek, cycleOn, cycleView, loadMe, me, worktreesOn } from '@/me';
 import { featureOn, type Feature } from '@/experimental';
@@ -161,6 +161,7 @@ import SyncSettings from '@/components/SyncSettings.vue';
 import NumbersSettings from '@/components/NumbersSettings.vue';
 import DatastoreSettings from '@/components/DatastoreSettings.vue';
 import { datastoreSummary } from '@/datastore';
+import { datastore, loadDatastore } from '@/kept';
 import RolesSettings from '@/components/RolesSettings.vue';
 import SprintsSettings from '@/components/SprintsSettings.vue';
 import ViewsSettings from '@/components/ViewsSettings.vue';
@@ -183,7 +184,6 @@ const settings = ref<Settings | null>(null);
 const worktrees = ref<Worktrees | null>(null);
 const whole = ref<WholeStatus | null>(null);
 const numbers = ref<Numbers | null>(null);
-const datastore = ref<Datastore | null>(null);
 const labels = ref<Labels | null>(null);
 
 // where each part stands, under its name in the menu (what the Overview's
@@ -297,7 +297,8 @@ onBeforeRouteLeave(() => {
 // the menu's numbers line: started, or an issue numbered, from anywhere
 const loadNumbers = () => void getNumbers().then((n) => (numbers.value = n), () => {});
 // the menu's datastore line
-void getDatastore().then((d) => (datastore.value = d), () => {});
+void loadDatastore();
+const onDatastore = (d: Datastore) => void (datastore.value = d);
 const reloadNumbers = debounced(loadNumbers);
 const offLive = onLive((e) => {
   if (e.kind === 'settings' || e.kind === 'config') void reload();

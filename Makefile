@@ -30,8 +30,8 @@ lint: vet fmt ## vet, then fmt
 licences: ## Check every licence, Go modules and the web app's packages
 	go test -count=1 -run TestLicences -v ./cmd/git-board/
 
-# Everything CI runs: .github/workflows/ci.yml only sets up Go and Node, then
-# runs this. The web checks and build come first, in prerequisite order,
+# Everything CI's test job runs: .github/workflows/ci.yml only sets up Go and
+# Node, then runs this (its e2e job runs web-e2e). The web checks and build come first, in prerequisite order,
 # because the binary embeds web/dist.
 ci: web-check web-build build vet test ## Everything CI runs
 	@test -z "$$(gofmt -l .)" || (echo "gofmt needs to be run on:"; gofmt -l .; exit 1)

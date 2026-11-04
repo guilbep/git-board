@@ -7,6 +7,9 @@
 // first look fails at once, as an unreachable origin's does. Beside it, on
 // E2E_PORT + 2, the clone board: a fresh clone of a local origin that holds
 // two issues, whose first open pulls them (docs/prd/clone-shows-board.md).
+// On E2E_PORT + 4 the ENAC board (below); on E2E_PORT + 5 the Markdown
+// board: board.datastore = markdown:issues, kept elsewhere than git, with
+// an origin all the same (datastore.spec.ts).
 // Playwright's webServer runs this; it lives until killed.
 // E2E_SKIP_BUILD=1 reuses web/dist and the binary.
 import { execFileSync, spawn } from 'node:child_process';
@@ -186,9 +189,21 @@ sh('git', ['add', '.'], enac);
 sh('git', ['commit', '-q', '-m', 'the ENAC board'], enac);
 const enacBoard = await serve(enac, Number(port) + 4);
 
-console.log(`e2e board: ${repo} on :${port}, GitHub at ${api}; clone board: ${clone} on :${Number(port) + 2}; ENAC board: ${enac} on :${Number(port) + 4}`);
+// the Markdown board: a board kept in issues/, not in git's refs
+const md = join(work, 'markdown');
+mkdirSync(md, { recursive: true });
+sh('git', ['init', '-q', '-b', 'main'], md);
+sh('git', ['config', 'commit.gpgsign', 'false'], md);
+sh('git', ['config', 'board.datastore', 'markdown:issues'], md);
+sh('git', ['remote', 'add', 'origin', 'git@github.com:o/md.git'], md);
+writeFileSync(join(md, '.git-board.toml'), '[fields.status]\nsingle = true\noptions = ["todo", "done"]\n');
+sh('git', ['add', '.'], md);
+sh('git', ['commit', '-q', '-m', 'the Markdown board'], md);
+const mdBoard = await serve(md, Number(port) + 5);
+
+console.log(`e2e board: ${repo} on :${port}, GitHub at ${api}; clone board: ${clone} on :${Number(port) + 2}; ENAC board: ${enac} on :${Number(port) + 4}; Markdown board: ${md} on :${Number(port) + 5}`);
 const board = await serve(repo, port);
 // one board gone, or a signal: both go
-process.on('exit', () => [board, cloneBoard, enacBoard].forEach((b) => b.kill()));
-for (const b of [board, cloneBoard, enacBoard]) b.on('exit', (code) => process.exit(code ?? 1));
+process.on('exit', () => [board, cloneBoard, enacBoard, mdBoard].forEach((b) => b.kill()));
+for (const b of [board, cloneBoard, enacBoard, mdBoard]) b.on('exit', (code) => process.exit(code ?? 1));
 for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => process.exit(0));

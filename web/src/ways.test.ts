@@ -30,6 +30,14 @@ test('stepLine says a step of the whole sync and how it went', () => {
   assert.equal(stepLine({ name: 'push', state: 'done', note: 'numbered 2 issues' }, 'origin', false), 'git push to origin: done, numbered 2 issues');
 });
 
+test('stepLine on a board kept elsewhere: the git steps say where it is kept, not origin', () => {
+  const kept = 'the board is kept in PostgreSQL';
+  assert.equal(stepLine({ name: 'pull', state: 'skipped', note: 'no git remote origin' }, 'origin', false, kept), 'git pull: skipped, the board is kept in PostgreSQL');
+  assert.equal(stepLine({ name: 'pull', state: 'skipped', note: 'the board is kept in PostgreSQL: nothing to pull from git' }, 'origin', true, kept), 'git fetch: skipped, the board is kept in PostgreSQL: nothing to pull from git');
+  assert.equal(stepLine({ name: 'push', state: 'done', note: 'numbered 2 issues' }, 'origin', false, kept), 'git push: done, numbered 2 issues');
+  assert.equal(stepLine({ name: 'forges', state: 'done' }, 'origin', false, kept), 'the forges: done');
+});
+
 test('pendingWords leaves out what is zero', () => {
   const r = { checked_at: '', title: '', conflicts: [], label_changes: 2, project_writes: 0, warnings: 0, unmatched: 0 };
   assert.equal(pendingWords(r), 'update the labels of 2 issues');
