@@ -3,6 +3,7 @@ package ghbridge
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/store"
@@ -122,15 +123,33 @@ func (s State) Plan(cfg *config.Config) SyncPlan {
 
 // ResolveConflict keeps one side of a conflict, decided again from what
 // both sides hold in s: git-board's value written to the Project (ours), or
-// the Project's set on the label. It returns the value both now hold.
+// the Project's set on the label. It returns the value both now hold. A
+// number two repositories of the Project have in conflict is refused:
+// ResolveConflictIn names the repository.
 func ResolveConflict(repo Repo, p Project, cfg *config.Config, s State, number int, field string, ours bool) (string, error) {
+	return ResolveConflictIn(repo, p, cfg, s, "", number, field, ours)
+}
+
+// ResolveConflictIn is ResolveConflict for the issue number of one
+// repository, owner/name; "" is any, when only one has it in conflict.
+func ResolveConflictIn(repo Repo, p Project, cfg *config.Config, s State, repoName string, number int, field string, ours bool) (string, error) {
 	if ours && !cfg.GithubProject.Write {
 		return "", ErrNoWrite
 	}
+	var found []Conflict
 	for _, c := range s.Plan(cfg).Conflicts {
-		if c.Number != number || c.Field != field {
-			continue
+		if c.Number == number && c.Field == field && (repoName == "" || strings.EqualFold(repoOf(c.URL), repoName)) {
+			found = append(found, c)
 		}
+	}
+	if len(found) > 1 {
+		var in []string
+		for _, c := range found {
+			in = append(in, fmt.Sprintf("%s#%d", repoOf(c.URL), number))
+		}
+		return "", fmt.Errorf("#%d %s is a conflict in more than one repository, name it: %s", number, field, strings.Join(in, ", "))
+	}
+	for _, c := range found {
 		var item Item
 		for _, it := range s.Items {
 			if it.Content.Number == number && it.Content.URL == c.URL {
@@ -154,6 +173,9 @@ func ResolveConflict(repo Repo, p Project, cfg *config.Config, s State, number i
 			return c.Local, nil
 		}
 		return c.Project, nil
+	}
+	if repoName != "" {
+		return "", fmt.Errorf("%s#%d %s %w", repoName, number, field, ErrNotConflict)
 	}
 	return "", fmt.Errorf("#%d %s %w", number, field, ErrNotConflict)
 }

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -125,5 +126,24 @@ func TestBridgeSyncNeverWritesProjectUnlessEnabled(t *testing.T) {
 	}
 	if _, err := execute(t, []string{"bridge", "resolve", "2605", "status", "--ours"}); err == nil {
 		t.Error("resolve --ours wrote without write = true")
+	}
+}
+
+func TestParseIssueRef(t *testing.T) {
+	t.Parallel()
+	for ref, want := range map[string]string{
+		"2605":                             "#2605",
+		"EPFL-ENAC/co2#2605":               "EPFL-ENAC/co2#2605",
+		"https://github.com/o/r/issues/12": "o/r#12",
+	} {
+		repo, n, err := parseIssueRef(ref)
+		if got := repo + "#" + strconv.Itoa(n); err != nil || got != want {
+			t.Errorf("%q: %q, %v; want %q", ref, got, err, want)
+		}
+	}
+	for _, bad := range []string{"x", "o#1", "https://github.com/o/r/pull/1", "o/r#x"} {
+		if _, _, err := parseIssueRef(bad); err == nil {
+			t.Errorf("%q: no error", bad)
+		}
 	}
 }

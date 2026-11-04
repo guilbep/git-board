@@ -399,7 +399,11 @@ verb still sends it.
 git board project sync --check                 # what would change, on each side
 git board project sync
 git board project resolve 2605 status --theirs # or --ours
+git board project resolve EPFL-ENAC/co2-calculator#2605 status --ours
 ```
+
+A number two repositories of the Project both have in conflict is refused:
+name the repository, `owner/repo#number` (or the issue's URL).
 
 Writing to the Project is off unless the config says so, and needs a `gh`
 token with the `project` scope (`gh auth refresh -s project`):
