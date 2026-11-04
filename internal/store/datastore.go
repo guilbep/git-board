@@ -499,15 +499,21 @@ func (b *Backend) Unredact(v string) string {
 	return v
 }
 
-// Redact hides a datastore value's password: a URL's, in its user part or
-// its query, or a key=value string's.
+// Redact hides a datastore value's passwords: a URL's, in its user part or
+// its query (password, sslpassword), or a key=value string's.
 func Redact(v string) string {
 	if u, err := url.Parse(v); err == nil && u.Scheme != "" {
 		if _, has := u.User.Password(); u.User != nil && has {
 			u.User = url.UserPassword(u.User.Username(), "xxxxx")
 		}
-		if q := u.Query(); q.Has("password") {
-			q.Set("password", "xxxxx")
+		q, hidden := u.Query(), false
+		for k := range q { // password, sslpassword, in any case
+			if strings.HasSuffix(strings.ToLower(k), "password") {
+				q.Set(k, "xxxxx")
+				hidden = true
+			}
+		}
+		if hidden {
 			u.RawQuery = q.Encode()
 		}
 		return u.String()
@@ -516,7 +522,7 @@ func Redact(v string) string {
 }
 
 // kvPassword is a key=value string's password, quoted or not.
-var kvPassword = regexp.MustCompile(`(password\s*=\s*)('(?:[^'\\]|\\.)*'|\S+)`)
+var kvPassword = regexp.MustCompile(`(?i)(password\s*=\s*)('(?:[^'\\]|\\.)*'|\S+)`)
 
 // CheckDatastore refuses a board.datastore value git-board can't open.
 func CheckDatastore(v string) error {
