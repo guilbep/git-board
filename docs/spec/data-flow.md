@@ -129,9 +129,10 @@ else: the issues it pulls into, and the `sync` entities that keep its
 links and last seen values. It doesn't know where they are kept, so a
 board in PostgreSQL syncs with GitHub exactly as one in git does. Its lock
 and journal are in the machine's folder: two runs on one machine never
-overlap. Two machines on one shared PostgreSQL board aren't kept apart yet,
-and may create the same forge issue twice (issue #83): sync from one
-machine.
+overlap. On PostgreSQL a run also holds the board's lock in the database
+(an advisory lock, `datastore.Locker`), so two machines on one board
+never sync at once; the server lets it go when a killed run's session
+ends.
 
 ## What lives where
 
@@ -141,6 +142,7 @@ machine.
 | project numbers | `refs/board/seq` | `git_board.counter` | the forges' own numbers only | the forges' own numbers only |
 | the index | `.git/board/index.db` (sqlite) | `git_board_index.*`, shared | `.git/board/index.db` | `.git/board/index.db` |
 | who you write as | git config `board.me` | git config `board.me` | git config `board.me` | git config `board.me` |
-| sync lock and journal, caches | `.git/board/` | `.git/board/` | `.git/board/` | `.git/board/` |
+| sync lock and journal, caches | `.git/board/` | `.git/board/`, and the board's sync lock in the database | `.git/board/` | `.git/board/` |
+| the files' lock (read-in, write, render) | | | `<dir>/.board/board.lock` | |
 | branches, diffs, tags, check notes | the code repository | the code repository | the code repository | the code repository |
 | `.git-board.toml` | the code checkout | the code checkout | the code checkout | the code checkout |

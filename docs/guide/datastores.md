@@ -76,9 +76,9 @@ by hand only if you need it (see *Left open* in ADR 0002).
 - **Numbers.** Settings › Numbers starts them as on a git board; the
   counter is a row in the database, so numbering needs no push, and a sync
   numbers what has no number yet.
-- **Sync from one machine.** Two machines running a forge sync on one
-  PostgreSQL board at the same time can create the same forge issue twice
-  (issue #83): leave the forge sync to one server.
+- **One sync at a time.** A forge sync holds the board's lock in the
+  database: a second one, from any machine, is refused while it runs
+  ("another sync runs"), and a sync killed midway holds nothing.
 - **Backups** are the database's: `pg_dump` the two schemas.
 - **Tests.** `make test-pg` runs the PostgreSQL tests against
   `GIT_BOARD_TEST_POSTGRES`, a DSN whose user may create databases.
@@ -114,6 +114,9 @@ refused.
   issue both stay, in the order every clone agrees on. A conflict in a
   `.md` file needs no care: take either side, the next write renders it
   again.
+- **A server and a command at once** take turns: each write reads the
+  hand edits in, writes and renders under `.board/board.lock`, so no edit
+  is read in twice. `.board/.gitignore` keeps the lock files out of git.
 - **No project numbers**: files are named by the forges' number, else by
   the id's first 7 digits.
 

@@ -376,9 +376,18 @@ Markdown, as built, differs from section 5:
   `board.datastore markdown:<dir>`): packs as JSON lines in
   `<dir>/.board/<kind>/<id>.jsonl`, merged by git's union driver; a
   version is the file's hash (two branches' files of as many packs are two
-  versions), a write takes the file's lock. After
-  each write, the backend reads the folder's hand edits in, then renders
-  the files.
+  versions), a write takes the file's lock. Before
+  each write the backend reads the folder's hand edits in, and after it
+  renders the files, holding `.board/board.lock` (an OS lock) from the
+  read-in to the render: a server and a command never read one hand edit
+  in twice, nor render over each other (issue #85). A forge sync takes it
+  to read in and to render, not across the run.
+- **One forge sync at a time per board** on a datastore every machine
+  shares: `datastore.Locker`, which PostgreSQL holds as a session
+  advisory lock (`pg_try_advisory_lock`) on one connection for the run;
+  the server lets it go when the session ends (issue #83). git, Markdown
+  files and the forges alone keep the machine's lock, `sync.lock`; the
+  journal stays the machine's everywhere.
 
 ## Left open
 
@@ -395,9 +404,6 @@ Markdown, as built, differs from section 5:
 - The pages don't yet disable a control a datastore can't run (pull, push,
   start over): the server refuses it, 409 `missing`, with the sentence
   (issue #82).
-- One forge sync at a time per machine, not per board: two machines on one
-  PostgreSQL board can sync at once and create the same forge issue twice
-  (issue #83).
 
 ## Evidence
 
