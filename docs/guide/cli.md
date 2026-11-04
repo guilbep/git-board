@@ -232,6 +232,24 @@ one: the state and the status never disagree.
 (`ls`'s grammar). It prints what each issue would get and writes nothing
 until `--apply`.
 
+## `labels`: what is in use
+
+```bash
+git board labels                         # every label, with counts
+git board labels --plain --json
+git board labels rename regresion regression
+git board labels rename prio:p0 prio:p1
+```
+
+`labels` lists every label on the board's issues, with how many open and
+closed issues have it: the plain labels first, then each field's values,
+by field. Deleted issues don't count. `--json` prints `[{"label",
+"field", "value", "open", "closed"}]`.
+
+`labels rename <old> <new>` renames a label on every issue that has it,
+one change each. A field's value is a label too. It doesn't check the new
+name against `.git-board.toml`: `git board lint` does.
+
 ## `close`, `reopen`, `move`
 
 ```bash
@@ -356,6 +374,8 @@ Errors go to stderr, prefixed `error:`.
 | `gh issue comment N --delete-last` | `glab issue note delete` | `git board comment N --delete <ref>` |
 | | | `git board undo N` (your last change, inverted) |
 | `gh issue status` | | `git board ls "involves:@me is:open"` |
+| `gh label list` | `glab label list` | `git board labels` (with counts) |
+| `gh label edit old --name new` | `glab label edit` | `git board labels rename old new` (on every issue) |
 | `gh issue develop N` | `glab mr create --related-issue N` | `git board branch N` (prints the branch and the command) |
 | | `glab issue view N -s` (system notes) | `git board log N` (every change, text edits too) |
 | `gh project item-edit …` | `glab issue board …` | `git board move N --next`, `git board project` |
