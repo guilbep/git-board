@@ -77,7 +77,7 @@ FILTER GRAMMAR (used by ls/view/tui):
 	}
 	root.Flags().BoolVar(&noOpen, "no-open", false, "don't open the browser")
 	root.AddCommand(newInitCmd(), newViewCmd(), newNumbersCmd(), newLsCmd(), newSetCmd(), newGetCmd(), newTuiCmd(), newBridgeCmd(), newLintCmd(), newMoveCmd(), newCloseCmd(), newSyncCmd(), newSprintCmd(), newHtmlCmd(), newExportCmd(), newImportCmd(), newDatastoreCmd(), newBranchCmd(), newServeCmd(), newReleaseCmd(), newDeployCmd(), newVerifyCmd(), newSwitchCmd(), newPruneCmd(), newFetchCmd(), newPullCmd(), newPushCmd(), newForgeCmd(), newProjectCmd(), newResetCmd(),
-		newMeCmd(), newNewCmd(), newShowCmd(), newCommentCmd(), newEditCmd(), newReopenCmd())
+		newMeCmd(), newNewCmd(), newShowCmd(), newCommentCmd(), newEditCmd(), newReopenCmd(), newLogCmd())
 	usageErrors(root)
 	return root
 }
