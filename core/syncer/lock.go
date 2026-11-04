@@ -1,6 +1,7 @@
 package syncer
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -8,6 +9,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/guilbep/git-board/core/datastore"
 	"github.com/guilbep/git-board/core/internal/filelock"
 	"github.com/guilbep/git-board/core/oplog"
 )
@@ -27,7 +29,51 @@ func unlockFile(f *os.File) { filelock.Unlock(f) }
 // out. The file is never removed: a run that opened it just before would
 // lock a file no other run sees. It holds the journal (journal.go), which
 // the run started at started goes on from.
+//
+// A datastore every machine shares (a datastore.Locker: PostgreSQL) holds
+// the board's lock first, for every machine: two runs on one board would
+// each create the same forge issue. The journal stays the machine's.
 func lock(s oplog.Datastore, started int64) (*journal, error) {
+	release := func() {}
+	if l, ok := s.(datastore.Locker); ok {
+		var err error
+		if release, err = takeShared(l); err != nil {
+			return nil, err
+		}
+	}
+	j, err := lockFile(s, started)
+	if err != nil {
+		release()
+		return nil, err
+	}
+	j.release = release
+	return j, nil
+}
+
+// lockName is the board's lock a run takes in a datastore.Locker.
+const lockName = "sync"
+
+// takeShared takes the board's lock in l, waiting out a look at it
+// (Running's) as takeLock does.
+func takeShared(l datastore.Locker) (func(), error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	unlock, err := l.Lock(ctx, lockName)
+	for i := 0; i < 10 && errors.Is(err, datastore.ErrHeld); i++ {
+		time.Sleep(10 * time.Millisecond)
+		unlock, err = l.Lock(ctx, lockName)
+	}
+	if errors.Is(err, datastore.ErrHeld) {
+		return nil, fmt.Errorf("%w (on another machine, or in another process): %w", ErrLocked, err)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("syncer: locking the board: %w", err)
+	}
+	return unlock, nil
+}
+
+// lockFile takes the machine's lock, and opens its journal.
+func lockFile(s oplog.Datastore, started int64) (*journal, error) {
 	dir := s.Folder()
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, err
@@ -74,8 +120,20 @@ func holder(path string) string {
 	return "?"
 }
 
-// Running says a run holds the lock now, in this process or another.
+// Running says a run holds the lock now, in this process or another; on a
+// datastore every machine shares, on any machine.
 func Running(s oplog.Datastore) bool {
+	if l, ok := s.(datastore.Locker); ok {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		unlock, err := l.Lock(ctx, lockName)
+		if err == nil {
+			unlock() // it was free: a look isn't a run
+		}
+		if errors.Is(err, datastore.ErrHeld) {
+			return true
+		}
+	}
 	f, err := os.OpenFile(filepath.Join(s.Folder(), "sync.lock"), os.O_RDWR, 0)
 	if err != nil {
 		return false // no run ever took it
