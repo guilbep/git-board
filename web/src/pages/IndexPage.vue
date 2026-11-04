@@ -282,6 +282,7 @@ import FilterHelp from '@/components/FilterHelp.vue';
 import { keyContext, noteUse } from '@/keys';
 import SprintReportDialog from '@/components/SprintReportDialog.vue';
 import { debounced, onLive } from '@/live';
+import { boardReload } from '@/livereload';
 import { panelMode } from '@/panelsize';
 import { filtersHidden, newIssueRequested, recordRecent } from '@/commands';
 import { numberName } from '@/palette';
@@ -290,7 +291,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { me } from '@/me';
 import { useRoute, useRouter } from 'vue-router';
 import {
-  changeLabels, filterValues, getFacets, getFields, getIssues, getViews, saveView,
+  changeLabels, clientId, filterValues, getFacets, getFields, getIssues, getViews, saveView,
   type Bucket, type FieldConfig, type Issue, type ViewConfig,
 } from '@/api/board';
 import {
@@ -859,7 +860,13 @@ const reloadConfig = debounced(async () => {
   await loadConfig();
   void load();
 });
-const offLive = onLive((e) => (e.kind === 'config' ? reloadConfig() : e.kind !== 'settings' && e.kind !== 'releases' && reloadLive()));
+// what an event reloads (livereload.ts): this tab's own writes to the
+// issues too, so a panel closed before its write answered still shows
+const offLive = onLive((e) => {
+  const what = boardReload(e, clientId);
+  if (what === 'config') reloadConfig();
+  else if (what === 'issues') reloadLive();
+}, { own: true });
 onBeforeUnmount(offLive);
 </script>
 
