@@ -261,7 +261,7 @@ One syntax everywhere: a view's `filter`, the board's **Filter** box, ⌘K, and 
 | `sprint:@current`, `@next`, `@previous` | the sprint of today, the next or the previous one, from `[[sprints.list]]` |
 | `assignee:@me` | you: your git-bug identity's GitHub or GitLab login |
 | `is:open`, `is:closed` | open or closed issues |
-| `title:*spec*` | a title matching the pattern |
+| `title:*spec*` | a title matching the pattern, without case: `*` any text, `/` included, `?` one character, `[a-z]` and `[!a-z]` a class (a `[` that closes none is a `[`) |
 | `author:guilbep`, `author:@me` | who opened the issue |
 | `involves:guilbep`, `involves:@me` | issues someone is in: the author, a person field (assignee, reviewer…), a comment, an @mention |
 | `follows:@me` | what your inbox follows: `involves:@me`, the issues you followed and the views you follow, without those you unfollowed |
@@ -297,7 +297,7 @@ start = 2026-10-19
 
 | Key | Type | What it does |
 | --- | --- | --- |
-| `length_days` | number | The length of the last sprint, whose end has no next start. Also what **+ Sprint** adds to the last start. |
+| `length_days` | number | The length of the last sprint, whose end has no next start; without it, as long as the sprint before it, else 14 days. Once the last sprint has ended, `@current` is no sprint. Also what **+ Sprint** adds to the last start. |
 | `slug` | string | The label's value: `sprint:s12`. |
 | `title` | string | The name shown. |
 | `start` | date, `YYYY-MM-DD`, no quotes | First day. A sprint lasts until the next one starts. |
@@ -374,9 +374,9 @@ prefix = "git-board/app"
 
 | Key | Default | What it does |
 | --- | --- | --- |
-| `endpoint` | `https://s3.epfl.ch` | The S3 service. |
+| `endpoint` | `https://s3.epfl.ch` | The S3 service. The keys are the server's, so is where they go: it must be the server's `UPLOADS_ENDPOINT` (else `https://s3.epfl.ch`), or attaching is off. |
 | `public_url` | `https://enacit4r-cdn.epfl.ch` | Where the bucket is served. |
-| `prefix` | `git-board/<repository>` | The folder in the bucket. |
+| `prefix` | `git-board/<repository>` | The folder in the bucket; a `..` in it turns attaching off. |
 | `region` | `us-east-1` | The S3 region. |
 
 Files are public to anyone with the link, even for a private repository, and stay cached on the CDN for up to a year after a delete.

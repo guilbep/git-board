@@ -399,7 +399,11 @@ verb still sends it.
 git board project sync --check                 # what would change, on each side
 git board project sync
 git board project resolve 2605 status --theirs # or --ours
+git board project resolve EPFL-ENAC/co2-calculator#2605 status --ours
 ```
+
+A number two repositories of the Project both have in conflict is refused:
+name the repository, `owner/repo#number` (or the issue's URL).
 
 Writing to the Project is off unless the config says so, and needs a `gh`
 token with the `project` scope (`gh auth refresh -s project`):
@@ -430,6 +434,10 @@ qualifier: [Filters in docs/guide/configuration.md](docs/guide/configuration.md#
 everything else in this CLI. It checks every `is:open` issue in the current
 repository against `.git-board.toml`:
 
+- **unknown keys** — a key in `.git-board.toml` git-board doesn't read, a
+  misspelled one above all (`[github-project] wirte = true`, `[view.x]` for
+  `[views.x]`): it would be its zero value without a word. Every command also
+  warns of it on stderr, once, and runs on.
 - **double singles** — more than one `ns:*` label for a `[fields.<ns>]` entry
   with `single = true` (e.g. two `status:*` labels). Structurally rare going
   forward (`fields.Apply`'s swap logic prevents it), but concurrent
@@ -522,11 +530,13 @@ git-board sprint report <slug>         # issues in that sprint, aggregated by st
 ```
 
 - **`ls`**'s end date is computed, not stored: a sprint's end is the next
-  sprint's start, or `start + [sprints].length_days` for the last one.
+  sprint's start, or `start + [sprints].length_days` for the last one
+  (without `length_days`, as long as the sprint before it, else 14 days).
   `current`/`next`/`previous` print the same computed range for the sprint
-  they resolve to.
-- **No sprint resolves** (before the first configured sprint has started, or
-  nothing configured at all) is a normal outcome, not an error: `current`
+  they resolve to. Once the last sprint has ended there is no current one
+  (`@current` matches nothing), and `previous` is the one that ended.
+- **No sprint resolves** (before the first configured sprint has started,
+  after the last one has ended, or nothing configured at all) is a normal outcome, not an error: `current`
   prints `no sprint currently active` and exits 0, same idea for
   `next`/`previous`. Matches `ResolveSprint`'s own `(nil, nil)` return for
   "nothing resolves" — it's not a `%!s(<nil>)` crash waiting to happen.
@@ -557,8 +567,8 @@ git-board tui "is:open prio:p1"
 | `c` | list | quick-filter by the configured `cat` field's options (`(all)` clears it); coexists with `/` search. The shipped example config doesn't define `[fields.cat]` (Category fills the kind label now — see the bridge field mapping below), so `c` shows "no cat field configured" unless a project opts into one. |
 | `f` | list | structured filter — the same `field:value`/`-field:value`/`is:open`/`title:*glob*` grammar and matcher as `ls`/`view`/the launch argument and the web UI (words look in descriptions and comments too), not the fuzzy `/` search. Empty input + enter clears it. |
 | `s` | list | sort by field, e.g. `prio` (ascending) or `prio desc` — same syntax as `ls --sort`. Persists across a later `f`/`c` filter change. Empty input + enter clears it back to natural order. |
-| `i` | list | preview the GitHub Project's fields as labels (a dry run). Requires `git board project configure` to have been run first. Runs in the background; the TUI stays responsive while it fetches. |
-| `o` | list | apply the plan `i` just previewed. Refuses to run before an `i` (no blind apply); the plan is cleared after applying so `o` can't silently re-apply stale data. |
+| `i` | list | preview `git board project pull` (a dry run): the Project's changes into the labels. Requires `git board project configure` to have been run first. Runs in the background; the TUI stays responsive while it fetches. |
+| `o` | list | apply the pull `i` just previewed, decided again from the issues as they are now: an edit made in between stays. Refuses to run before an `i` (no blind apply); the preview is cleared after applying so `o` can't silently re-apply stale data. |
 | `e` | detail | edit a field: pick the field, then a value from its configured options, or type free text if it has none (e.g. `assignee`, using the same `+value`/`-value` syntax as `git-board set`) |
 | `esc`/`q` | detail, pickers | back |
 | `q`/`ctrl+c` | list | quit |
@@ -568,10 +578,12 @@ for "I remember a word in the title." `f` is precise and composable —
 `assignee:guilbep -status:validated` narrows exactly like it would on the
 CLI, because it's the exact same `internal/filter` grammar and code path.
 
-`i`/`o` show a one-line summary (matched/changed/unmatched/field/warning
+`i`/`o` show a one-line summary (matched/changed/unmatched/conflict/warning
 counts), not the full per-issue diff — that's what `git board project pull --check`
-on the CLI is still for. Note these are bound to git-board's GitHub Project bridge
-instead, since that's the sync a git-board session actually needs.
+on the CLI is still for. They are `git board project pull`, the sync's
+git-board side: only what changed on the Project since both sides last agreed
+is taken, a change made in git-board and not yet pushed stays, and someone
+assigned in git-board stays assigned.
 
 The TUI shows an issue's fields (labels), not its body and comments: the
 web UI (`git board`) shows those.
@@ -657,12 +669,15 @@ S3 bucket a CDN serves — EPFL ENAC's `enacit4r-cdn.epfl.ch` (bucket on
 `s3.epfl.ch`) by default — and the comment gets their Markdown (an image
 shows, other files link), so they show in git-board, on GitHub and on
 GitLab alike. Set where the git-board server runs:
-`ACCESS_KEY_ID`, `ACCESS_KEY_SECRET`, `BUCKET_NAME`; optionally in
-`.git-board.toml`:
+`ACCESS_KEY_ID`, `ACCESS_KEY_SECRET`, `BUCKET_NAME`, and `UPLOADS_ENDPOINT`
+for an S3 service other than `https://s3.epfl.ch`: the keys go only where
+the server's environment says, so an `[uploads] endpoint` in the committed
+file that differs turns attaching off, as does a `prefix` with a `..`.
+Optionally in `.git-board.toml`:
 
 ```toml
 [uploads]
-endpoint = "https://s3.epfl.ch"              # S3
+endpoint = "https://s3.epfl.ch"              # S3: must be UPLOADS_ENDPOINT's
 public_url = "https://enacit4r-cdn.epfl.ch"  # where the bucket is served
 prefix = "git-board/co2-calculator"          # default git-board/<repository>
 ```
@@ -772,7 +787,9 @@ cd .. && go build -o git-board ./cmd/git-board
 ## Static site (`git-board html`)
 
 Generates a static HTML site, one page per configured `[views.*]`, plus an
-`index.html` linking to all of them — for PM/non-dev users who don't want a
+`index.html` linking to all of them (a view's name is its page's file name:
+one with a path in it, or named `index` or `releases`, is refused before
+anything is written) — for PM/non-dev users who don't want a
 CLI and shouldn't need the (also-unauthenticated) live web UI above. Reuses
 `internal/board`'s `LoadMatching`/`SortByField`/`BucketBy` — the exact same
 filter/sort/group semantics as `ls`/`view`/the web API — and the TUI's

@@ -292,3 +292,31 @@ func TestMatchesProjectNumbers(t *testing.T) {
 		}
 	}
 }
+
+// A title glob's * crosses /, and a [ that closes no class is a [: the
+// README's -title:*spec* excludes "update ci/cd spec", and -title:*[wip*
+// excludes "[wip" titles instead of every title failing a broken pattern.
+func TestTitleGlobCrossesSlashesAndReadsALoneBracket(t *testing.T) {
+	t.Parallel()
+	cfg := &config.Config{}
+	for _, tt := range []struct {
+		title, glob string
+		want        bool
+	}{
+		{"update ci/cd spec", "*spec*", true},
+		{"update ci/cd spec", "update*spec", true},
+		{"[WIP draft", "*[wip*", true},
+		{"done", "*[wip*", false},
+		{"Fix bug 7", "fix*?", true},
+		{"Fix bug 7", "*[0-9]", true},
+		{"Fix bug x", "*[!a-w]", true},
+		{"Fix bug b", "*[!a-w]", false},
+		{"a.b", "a?b", true},
+		{"axb", "a.b", false},
+	} {
+		got := Matches(store.Issue{Title: tt.title}, Parse("title:"+tt.glob), cfg, "", today)
+		if got != tt.want {
+			t.Errorf("title:%s on %q = %v, want %v", tt.glob, tt.title, got, tt.want)
+		}
+	}
+}

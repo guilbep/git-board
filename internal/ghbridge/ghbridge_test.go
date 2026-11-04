@@ -4,7 +4,6 @@ import (
 	"os"
 	"slices"
 	"strconv"
-	"strings"
 	"testing"
 
 	"github.com/guilbep/git-board/internal/config"
@@ -69,307 +68,19 @@ func TestParseItemsMatchesRealShape(t *testing.T) {
 	}
 }
 
-func changeFor(t *testing.T, plan ghbridge.Plan, number int) ghbridge.IssueChange {
-	t.Helper()
-	for _, c := range plan.Changes {
-		if c.Number == number {
-			return c
-		}
-	}
-	t.Fatalf("no change for issue #%d in plan (matched: %d)", number, len(plan.Changes))
-	return ghbridge.IssueChange{}
-}
-
-func TestBuildPlanMapsFields(t *testing.T) {
-	items := mustParseFixture(t)
-	cfg := mustLoadConfig(t)
-	bugs := []store.Issue{bug("bug2605", 2605)}
-
-	plan := ghbridge.BuildPlan(items, bugs, cfg)
-	change := changeFor(t, plan, 2605)
-
-	wantAdded := map[string]bool{
-		"prio:p0":            true,
-		"est:2":              true,
-		"assignee:BenBotros": true,
-		"assignee:guilbep":   true,
-	}
-	got := map[string]bool{}
-	for _, l := range change.Added {
-		got[l] = true
-	}
-	for l := range wantAdded {
-		if !got[l] {
-			t.Errorf("missing expected label %q in Added = %v", l, change.Added)
-		}
-	}
-	// status "QA Validation" slugifies to "qa-validation", not a configured
-	// [fields.status] option in the sample config, so it should warn+skip
-	// rather than silently write an unconfigured label.
-	if len(change.Warnings) != 1 {
-		t.Fatalf("Warnings = %v, want exactly 1 (status)", change.Warnings)
-	}
-	// module isn't configured with Options in the sample config, so it
-	// passes through unvalidated.
-	if !got["mod:backoffice"] {
-		t.Errorf("mod:backoffice missing from Added = %v", change.Added)
-	}
-	// Category FEAT on an issue GitHub labels bug: the label wins, even
-	// one git-bug doesn't have yet
-	if got["feat"] || got["FEAT"] {
-		t.Errorf("Added = %v, want no feat: GitHub says bug", change.Added)
-	}
-}
-
 // The assignees live where their field's mapping says: with the assignee
 // field on a label, the Project's assignees move nothing — default (no
 // mapping) they merge as ever.
-func TestBuildPlanLeavesTheAssigneesWhenTheirHomeIsALabel(t *testing.T) {
-	cfg := &config.Config{
-		Fields: map[string]config.Field{
-			"assignee": {Type: config.TypePerson},
-			"status":   {Single: true, Options: []string{"qa"}, Project: map[string]string{"qa": "QA Validation"}},
-		},
-		GithubProject: config.GithubProject{Owner: "o", Number: 1},
-	}
-	item := ghbridge.Item{Status: "QA Validation", Assignees: []string{"guilbep"},
-		Content: ghbridge.Content{Number: 7, Type: "Issue", URL: bug("b7", 7).GithubURL}}
-	bugs := []store.Issue{bug("b7", 7)}
-
-	// the default target is the native assignees: they merge as before
-	change := changeFor(t, ghbridge.BuildPlan([]ghbridge.Item{item}, bugs, cfg), 7)
-	if got := slices.ContainsFunc(change.Fields, func(f ghbridge.FieldResult) bool {
-		return f.Field == "assignee" && slices.Contains(f.Added, "assignee:guilbep")
-	}); !got {
-		t.Errorf("Fields = %+v, want the Project's assignee merged in", change.Fields)
-	}
-
-	// mapped to a label: the Project's assignees move nothing
-	cfg.Fields["assignee"] = config.Field{Type: config.TypePerson}
-	cfg.Forges = append(cfg.Forges, config.Forge{Name: "gh", Kind: "github", Host: "github.com",
-		Fields: map[string]config.FieldMapping{"assignee": {To: config.TargetLabel}}})
-	change = changeFor(t, ghbridge.BuildPlan([]ghbridge.Item{item}, bugs, cfg), 7)
-	if slices.ContainsFunc(change.Fields, func(f ghbridge.FieldResult) bool { return f.Field == "assignee" }) {
-		t.Errorf("Fields = %+v, want no assignee: their home is a label", change.Fields)
-	}
-	if slices.ContainsFunc(change.Added, func(l string) bool { return strings.HasPrefix(l, "assignee:") }) {
-		t.Errorf("Added = %v, want no assignee label", change.Added)
-	}
-}
-
-func TestBuildPlanCategoryLeavesAKindAlone(t *testing.T) {
-	plan := ghbridge.BuildPlan(mustParseFixture(t), []store.Issue{bug("bug2605", 2605, "bug")}, mustLoadConfig(t))
-	change := changeFor(t, plan, 2605)
-	for _, l := range change.Added {
-		if l == "feat" {
-			t.Errorf("Added = %v: Category overrode the label bug", change.Added)
-		}
-	}
-}
-
-func TestBuildPlanCategoryNotAKindWarns(t *testing.T) {
-	items := mustParseFixture(t)
-	for i := range items {
-		if items[i].Category != "" {
-			items[i].Category = "FIX"
-			items[i].Labels = nil // GitHub has no kind
-		}
-	}
-	plan := ghbridge.BuildPlan(items, []store.Issue{bug("bug2605", 2605)}, mustLoadConfig(t))
-	change := changeFor(t, plan, 2605)
-	for _, l := range change.Added {
-		if strings.EqualFold(l, "fix") {
-			t.Errorf("Added = %v, want no fix: it isn't one of the kinds", change.Added)
-		}
-	}
-	if len(change.Warnings) != 2 {
-		t.Errorf("Warnings = %v, want status's and category's", change.Warnings)
-	}
-}
-
-func TestBuildPlanMergesDuplicateGenericModuleOptions(t *testing.T) {
-	items := mustParseFixture(t)
-	cfg := mustLoadConfig(t)
-	bugs := []store.Issue{
-		bug("bugGeneric1", 2610),
-		bug("bugGeneric2", 2611),
-	}
-
-	plan := ghbridge.BuildPlan(items, bugs, cfg)
-
-	for _, number := range []int{2610, 2611} {
-		change := changeFor(t, plan, number)
-		found := false
-		for _, l := range change.Added {
-			if l == "mod:generic" {
-				found = true
-			}
-		}
-		if !found {
-			t.Errorf("issue #%d: want mod:generic in Added, got %v", number, change.Added)
-		}
-	}
-}
-
-func TestBuildPlanSkipsEmptyFieldsWithoutWarning(t *testing.T) {
-	items := mustParseFixture(t)
-	cfg := mustLoadConfig(t)
-	bugs := []store.Issue{bug("bugEmpty", 2620)}
-
-	plan := ghbridge.BuildPlan(items, bugs, cfg)
-	change := changeFor(t, plan, 2620)
-
-	if len(change.Added) != 1 || change.Added[0] != "assignee:BenBotros" {
-		t.Errorf("Added = %v, want just [assignee:BenBotros] (status/prio empty)", change.Added)
-	}
-	if len(change.Warnings) != 0 {
-		t.Errorf("Warnings = %v, want none for empty (not invalid) values", change.Warnings)
-	}
-}
-
-func TestBuildPlanWarnsOnUnmatchedConfiguredOptionValue(t *testing.T) {
-	items := mustParseFixture(t)
-	cfg := mustLoadConfig(t)
-	bugs := []store.Issue{bug("bugWeird", 2621)}
-
-	plan := ghbridge.BuildPlan(items, bugs, cfg)
-	change := changeFor(t, plan, 2621)
-
-	if len(change.Warnings) != 2 {
-		t.Fatalf("Warnings = %v, want 2 (status P9-alike + priority)", change.Warnings)
-	}
-	for _, l := range change.Added {
-		if l == "status:some-new-status" || l == "prio:p9" {
-			t.Errorf("unconfigured value %q should have been skipped, not written", l)
-		}
-	}
-}
-
-func TestBuildPlanReportsUnmatchedIssueAndExcludesPRs(t *testing.T) {
-	items := mustParseFixture(t)
-	cfg := mustLoadConfig(t)
-	// No bug for #2650 (not bridged) and none for the PR (#2633, excluded
-	// before matching is even attempted).
-	bugs := []store.Issue{bug("bug2605", 2605)}
-
-	plan := ghbridge.BuildPlan(items, bugs, cfg)
-
-	reasons := map[int]string{}
-	for _, u := range plan.Unmatched {
-		reasons[u.Number] = u.Reason
-	}
-	if _, ok := reasons[2650]; !ok {
-		t.Errorf("expected #2650 (not bridged) in Unmatched, got %+v", plan.Unmatched)
-	}
-	if _, ok := reasons[2633]; !ok {
-		t.Errorf("expected #2633 (PullRequest content type) in Unmatched, got %+v", plan.Unmatched)
-	}
-}
-
-func TestBuildPlanIsPureNoMutationOfInputs(t *testing.T) {
-	items := mustParseFixture(t)
-	cfg := mustLoadConfig(t)
-	b := bug("bug2605", 2605)
-	bugsBefore := append([]string(nil), b.Labels...)
-
-	_ = ghbridge.BuildPlan(items, []store.Issue{b}, cfg)
-
-	if len(b.Labels) != len(bugsBefore) {
-		t.Errorf("BuildPlan mutated the input Issue's Labels: %v vs %v", b.Labels, bugsBefore)
-	}
-}
-
 // bridge pull reads the Project the way bridge sync does: option aliases,
 // any number for a numeric field, sprints outside the list by their title.
-func TestBuildPlanUsesTheSyncMapping(t *testing.T) {
-	cfg := &config.Config{
-		Fields: map[string]config.Field{
-			"status": {Single: true, Options: []string{"qa"}, Project: map[string]string{"qa": "QA Validation"}},
-			"est":    {Single: true, Options: []string{"1", "2"}, Numeric: true},
-		},
-		// the pull runs against the configured Project: these fields live there
-		GithubProject: config.GithubProject{Owner: "o", Number: 1},
-	}
-	est := 3.5
-	items := []ghbridge.Item{{Status: "QA Validation", EstHours: &est, Sprint: &ghbridge.Sprint{Title: "Hypercare"},
-		Content: ghbridge.Content{Number: 7, Type: "Issue", URL: bug("b7", 7).GithubURL}}}
-
-	change := changeFor(t, ghbridge.BuildPlan(items, []store.Issue{bug("b7", 7)}, cfg), 7)
-	got := map[string]bool{}
-	for _, l := range change.Added {
-		got[l] = true
-	}
-	for _, want := range []string{"status:qa", "est:3.5", "sprint:hypercare"} {
-		if !got[want] {
-			t.Errorf("%s missing from Added = %v", want, change.Added)
-		}
-	}
-	if len(change.Warnings) != 0 {
-		t.Errorf("Warnings = %v, want none", change.Warnings)
-	}
-}
-
 // An earlier bridge wrote Category verbatim (FEAT): a sync would send it
 // as feat, beside a bug label, or create FEAT on the forge. It goes, and
 // the kind is filled only where there is none.
-func TestBuildPlanCategoryRemovesItsBareLabel(t *testing.T) {
-	cfg := mustLoadConfig(t)
-	for _, tt := range []struct {
-		labels         []string
-		added, removed []string
-	}{
-		{[]string{"FEAT"}, []string{"feat"}, []string{"FEAT"}},
-		{[]string{"FEAT", "bug"}, nil, []string{"FEAT"}},
-		{[]string{"feat"}, nil, nil},
-	} {
-		items := mustParseFixture(t)
-		for i := range items {
-			items[i].Labels = nil // GitHub has no kind
-		}
-		plan := ghbridge.BuildPlan(items, []store.Issue{bug("bug2605", 2605, tt.labels...)}, cfg)
-		var kind ghbridge.FieldResult
-		for _, f := range changeFor(t, plan, 2605).Fields {
-			if f.Field == "kind" {
-				kind = f
-			}
-		}
-		if !slices.Equal(kind.Added, tt.added) || !slices.Equal(kind.Removed, tt.removed) {
-			t.Errorf("labels %v: kind added %v removed %v, want %v and %v", tt.labels, kind.Added, kind.Removed, tt.added, tt.removed)
-		}
-	}
-}
-
-func TestBuildPlanCategoryNotAKindStillRemovesItsBareLabel(t *testing.T) {
-	items := mustParseFixture(t)
-	for i := range items {
-		if items[i].Category != "" {
-			items[i].Category = "SPECS"
-			items[i].Labels = nil // GitHub has no kind
-		}
-	}
-	change := changeFor(t, ghbridge.BuildPlan(items, []store.Issue{bug("bug2605", 2605, "SPECS")}, mustLoadConfig(t)), 2605)
-	if !slices.Contains(change.Removed, "SPECS") {
-		t.Errorf("Removed = %v, want SPECS", change.Removed)
-	}
-	if len(change.Warnings) != 2 {
-		t.Errorf("Warnings = %v, want status's and category's", change.Warnings)
-	}
-}
-
 // A label GitHub has stays, whatever its case: the forge resolves FEAT to
 // its feat, and a sync sends the whole set.
-func TestBuildPlanCategoryKeepsALabelGitHubHas(t *testing.T) {
-	items := mustParseFixture(t)
-	for i := range items {
-		if items[i].Category != "" {
-			items[i].Labels = []string{"feat"}
-		}
-	}
-	change := changeFor(t, ghbridge.BuildPlan(items, []store.Issue{bug("bug2605", 2605, "FEAT")}, mustLoadConfig(t)), 2605)
-	if slices.Contains(change.Removed, "FEAT") {
-		t.Errorf("Removed = %v: FEAT is GitHub's feat", change.Removed)
-	}
-}
+// A field the mappings send to the Project syncs there by the mapping's
+// column and value names, extractor or no: risk is nobody's known field,
+// the item's raw value comes as gh lists it, by column name.
 
 // A field the mappings send to the Project syncs there by the mapping's
 // column and value names, extractor or no: risk is nobody's known field,
@@ -385,20 +96,22 @@ func TestMappingSendsAnyFieldToTheProject(t *testing.T) {
 				"risk": {To: "project", Field: "Risk", Values: map[string]string{"structural": "Structural"}},
 			}}},
 	}
-	items := []ghbridge.Item{{Extra: map[string]string{"Risk": "Structural"},
-		Content: ghbridge.Content{Number: 9, Type: "Issue", URL: bug("b9", 9).GithubURL}}}
+	meta := ghbridge.ProjectMeta{ID: "P",
+		Fields: map[string]ghbridge.ProjectField{"Risk": {ID: "F-risk", Options: map[string]string{"Structural": "o-structural", "Normal": "o-normal"}}}}
+	item := func(risk string) []ghbridge.Item {
+		return []ghbridge.Item{{Extra: map[string]string{"Risk": risk},
+			Content: ghbridge.Content{Number: 9, Type: "Issue", URL: bug("b9", 9).GithubURL}}}
+	}
 
-	change := changeFor(t, ghbridge.BuildPlan(items, []store.Issue{bug("b9", 9)}, cfg), 9)
-	if !slices.Contains(change.Added, "risk:structural") {
-		t.Errorf("added = %v, want risk:structural — the Project's Structural read back", change.Added)
+	plan := ghbridge.BuildSyncPlan(item("Structural"), []store.Issue{bug("b9", 9)}, nil, meta, cfg)
+	if len(plan.Changes) != 1 || !slices.Contains(plan.Changes[0].Added, "risk:structural") {
+		t.Errorf("changes = %+v, want risk:structural — the Project's Structural read back", plan.Changes)
 	}
 	// and the other way: git-board's value written by the mapping's names.
 	// The Project still reads Normal, the base agrees, the issue moved to
 	// structural: the edit takes the mapping's rename and option id.
-	plan := ghbridge.BuildSyncPlan([]ghbridge.Item{{Extra: map[string]string{"Risk": "Normal"},
-		Content: ghbridge.Content{Number: 9, Type: "Issue", URL: bug("b9", 9).GithubURL}}},
-		[]store.Issue{bug("b9", 9, "risk:structural")}, map[string]map[string]string{"b9": {"risk": "normal"}}, ghbridge.ProjectMeta{ID: "P",
-			Fields: map[string]ghbridge.ProjectField{"Risk": {ID: "F-risk", Options: map[string]string{"Structural": "o-structural", "Normal": "o-normal"}}}}, cfg)
+	plan = ghbridge.BuildSyncPlan(item("Normal"),
+		[]store.Issue{bug("b9", 9, "risk:structural")}, map[string]map[string]string{"b9": {"risk": "normal"}}, meta, cfg)
 	if len(plan.Edits) != 1 || plan.Edits[0].Kind != ghbridge.EditOption || plan.Edits[0].Arg != "o-structural" {
 		t.Errorf("edits = %+v, want risk:normal → Structural", plan.Edits)
 	}

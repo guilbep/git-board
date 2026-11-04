@@ -547,3 +547,40 @@ func TestPlanOneSide(t *testing.T) {
 		t.Errorf("the plan changed: %+v", plan)
 	}
 }
+
+// fakeRepo is fakeSide as the repository a resolve reads and writes.
+type fakeRepo struct{ fakeSide }
+
+func (*fakeRepo) ListIssues() ([]store.Issue, error)                     { return nil, nil }
+func (*fakeRepo) ProjectBases(string, string) (map[string]string, error) { return nil, nil }
+
+// Two repositories of one Project can both have an issue #1 in conflict:
+// the number alone is refused, owner/repo#1 picks one.
+func TestResolveConflictRefusesAnAmbiguousNumber(t *testing.T) {
+	t.Parallel()
+	in := func(repo, bugID string) (ghbridge.Item, store.Issue) {
+		u := "https://github.com/" + repo + "/issues/1"
+		return ghbridge.Item{ID: "item-" + repo, Status: "QA Validation", Content: ghbridge.Content{Number: 1, Type: "Issue", URL: u}},
+			store.Issue{ID: bugID, GithubURL: u, Labels: []string{"status:in-review"}}
+	}
+	i1, b1 := in("o/r", "bug1")
+	i2, b2 := in("o/s", "bug2")
+	s := ghbridge.State{Items: []ghbridge.Item{i1, i2}, Issues: []store.Issue{b1, b2}, Meta: syncMeta(),
+		Bases: map[string]map[string]string{"bug1": {"status": "ready"}, "bug2": {"status": "ready"}}}
+	cfg := syncConfig()
+	p := ghbridge.Project{Writer: &fakeSide{}}
+
+	var repo fakeRepo
+	if _, err := ghbridge.ResolveConflict(&repo, p, cfg, s, 1, "status", false); err == nil || !strings.Contains(err.Error(), "o/s#1") {
+		t.Fatalf("err = %v, want the two to choose from", err)
+	}
+	if len(repo.calls) != 0 {
+		t.Fatalf("wrote %v", repo.calls)
+	}
+	if _, err := ghbridge.ResolveConflictIn(&repo, p, cfg, s, "o/s", 1, "status", false); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := repo.bases["bug2"]; !ok || len(repo.bases) != 1 {
+		t.Errorf("bases written %v, want bug2's alone", repo.bases)
+	}
+}

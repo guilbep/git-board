@@ -177,3 +177,16 @@ func TestBareTakesNoArguments(t *testing.T) {
 		t.Errorf("git board is:open ran:\n%s", out)
 	}
 }
+
+// set checks every assignment's form before it writes one: a bad one
+// last leaves the issue as it was, not half set.
+func TestSetWritesNothingWhenAnAssignmentIsMalformed(t *testing.T) {
+	newBridgeTestRepo(t)
+	id, _ := onlyIssue(t)
+	if _, err := execute(t, []string{"set", id, "status=ready", "prio"}); err == nil {
+		t.Fatal("no error")
+	}
+	if _, labels := onlyIssue(t); len(labels) != 0 {
+		t.Errorf("written before the error: %v", labels)
+	}
+}

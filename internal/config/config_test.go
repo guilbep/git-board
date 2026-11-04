@@ -585,3 +585,115 @@ func TestLabelsRefused(t *testing.T) {
 		}
 	}
 }
+
+// A header is the table whatever its spacing and a trailing comment: the
+// table is replaced, not appended a second time, which no parse accepts.
+func TestWithGithubProjectFindsAHeaderWithACommentOrSpaces(t *testing.T) {
+	t.Parallel()
+	for _, header := range []string{"[github-project]  # the board", "[ github-project ]", "  [github-project]\t"} {
+		src := "[repos]\nassignees = \"native\"\n\n" + header + "\nowner = \"a\"\nnumber = 1\n"
+		text := WithGithubProject(src, GithubProject{Owner: "b", Number: 2})
+		cfg, _, err := parse([]byte(text))
+		if err != nil {
+			t.Errorf("%q: %v\n%s", header, err, text)
+			continue
+		}
+		if cfg.GithubProject.Owner != "b" || cfg.GithubProject.Number != 2 {
+			t.Errorf("%q: %+v", header, cfg.GithubProject)
+		}
+	}
+}
+
+// SetGithubProject writes nothing the parse refuses: a file left as it
+// was beats one every command fails on. A dotted key defines the table
+// without a header, so the table appended defines it twice.
+func TestSetGithubProjectRefusesToWriteAnUnparsableFile(t *testing.T) {
+	t.Parallel()
+	path := filepath.Join(t.TempDir(), "git-board.toml")
+	src := "github-project.owner = \"a\"\n"
+	if _, _, err := parse([]byte(src)); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(src), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := SetGithubProject(path, "b", 2); err == nil {
+		t.Error("no error")
+	}
+	if got, _ := os.ReadFile(path); string(got) != src {
+		t.Errorf("the file changed:\n%s", got)
+	}
+}
+
+// A misspelled key decodes to nothing: Load names it, on Warnings, once a
+// file however many times it's loaded, and keeps it in Unknown for lint.
+// Serial: it swaps Warnings.
+func TestLoadWarnsOfTheKeysItDoesntKnow(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "git-board.toml")
+	src := "[github-project]\nowner = \"o\"\nnumber = 1\nwirte = true\n\n[fields.status]\nsingel = true\n\n[view.backlog]\nfilter = \"is:open\"\n"
+	if err := os.WriteFile(path, []byte(src), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var buf strings.Builder
+	orig := Warnings
+	Warnings = &buf
+	t.Cleanup(func() { Warnings = orig })
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Load(path); err != nil {
+		t.Fatal(err)
+	}
+	for _, k := range []string{"github-project.wirte", "fields.status.singel", "view.backlog"} {
+		if !slices.Contains(cfg.Unknown, k) {
+			t.Errorf("Unknown = %v, want %s", cfg.Unknown, k)
+		}
+		if n := strings.Count(buf.String(), k+":"); n != 1 {
+			t.Errorf("%s warned %d times:\n%s", k, n, buf.String())
+		}
+	}
+	if cfg.GithubProject.Write {
+		t.Error("wirte read as write")
+	}
+
+	// a file every key of which git-board reads warns of nothing
+	buf.Reset()
+	if cfg := mustLoad(t); len(cfg.Unknown) > 0 || buf.Len() > 0 {
+		t.Errorf("the fixture: Unknown = %v, warned %q", cfg.Unknown, buf.String())
+	}
+}
+
+// The last sprint ends: past its end there is no current sprint, and the
+// previous is the one that ended. Its length without length_days is the
+// one before it's, else the default file's 14 days, never none.
+func TestTheLastSprintEnds(t *testing.T) {
+	t.Parallel()
+	day := func(y int, m time.Month, d int) time.Time { return time.Date(y, m, d, 0, 0, 0, 0, time.UTC) }
+	a := Sprint{Slug: "a", Start: day(2020, 1, 6)}
+	b := Sprint{Slug: "b", Start: day(2020, 1, 13)}
+	for _, tt := range []struct {
+		sprints SprintsConfig
+		end     time.Time
+	}{
+		{SprintsConfig{List: []Sprint{a}}, day(2020, 1, 20)},
+		{SprintsConfig{List: []Sprint{a}, LengthDays: 10}, day(2020, 1, 16)},
+		{SprintsConfig{List: []Sprint{a, b}}, day(2020, 1, 20)},
+	} {
+		w := SprintWindows(tt.sprints)
+		if got := w[len(w)-1].End; !got.Equal(tt.end) {
+			t.Errorf("%+v: end %s, want %s", tt.sprints, got.Format("2006-01-02"), tt.end.Format("2006-01-02"))
+		}
+		last := tt.sprints.List[len(tt.sprints.List)-1].Slug
+		if cur, _ := ResolveSprint(tt.sprints, "current", tt.end.AddDate(0, 0, -1)); cur == nil || cur.Slug != last {
+			t.Errorf("%+v: current on its last day = %+v", tt.sprints, cur)
+		}
+		if cur, _ := ResolveSprint(tt.sprints, "current", day(2026, 11, 4)); cur != nil {
+			t.Errorf("%+v: current six years on = %+v, want none", tt.sprints, cur)
+		}
+		if prev, _ := ResolveSprint(tt.sprints, "previous", day(2026, 11, 4)); prev == nil || prev.Slug != last {
+			t.Errorf("%+v: previous six years on = %+v, want %s", tt.sprints, prev, last)
+		}
+	}
+}

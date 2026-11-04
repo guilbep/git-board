@@ -543,25 +543,74 @@ func TestIKeyStartsPullWhenConfigured(t *testing.T) {
 	}
 }
 
-func TestBridgePullFinishedStoresPlanForO(t *testing.T) {
-	t.Parallel()
+const projectIssueURL = "https://github.com/o/r/issues/1"
+
+// fakeProject is a Project of one item, issue 1, saying status and
+// assignees.
+func fakeProject(status string, assignees ...string) ghbridge.Project {
+	it := ghbridge.Item{ID: "item-1", Status: status, Assignees: assignees,
+		Content: ghbridge.Content{Number: 1, Type: "Issue", URL: projectIssueURL}}
+	meta := ghbridge.ProjectMeta{ID: "P", Fields: map[string]ghbridge.ProjectField{
+		"Status": {ID: "F-status", Options: map[string]string{"Ready": "o-ready", "In review": "o-review"}}}}
+	return ghbridge.Project{
+		Items: func(string, int, int) ([]ghbridge.Item, error) { return []ghbridge.Item{it}, nil },
+		Meta:  func(string, int) (ghbridge.ProjectMeta, error) { return meta, nil },
+	}
+}
+
+// projectModel is a model over one issue linked to fakeProject's item.
+func projectModel(t *testing.T, p ghbridge.Project) (Model, *store.Backend, string) {
+	t.Helper()
 	cfg := mustLoadConfig(t)
+	cfg.GithubProject = config.GithubProject{Owner: "o", Number: 1}
 	b := storetest.New(t)
-	m := New(nil, "is:open", b, cfg, "", today)
+	id := storetest.NewIssue(t, b, "widget")
+	storetest.Link(t, b, id, projectIssueURL)
+	issues, err := b.ListIssues()
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := New(issues, "is:open", b, cfg, "", today)
+	m.project = p
+	return m, b, id
+}
+
+// pressI presses i and runs the read it starts, returning its message.
+func pressI(t *testing.T, m Model) (Model, tea.Msg) {
+	t.Helper()
+	next, cmd := m.Update(key('i'))
+	if cmd == nil {
+		t.Fatalf("i started nothing: %q", next.(Model).status)
+	}
+	return next.(Model), cmd()
+}
+
+func labelsOf(t *testing.T, b *store.Backend, id string) []string {
+	t.Helper()
+	got, err := b.GetLabels(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return got
+}
+
+func TestBridgePullFinishedStoresTheProjectForO(t *testing.T) {
+	t.Parallel()
+	m, _, _ := projectModel(t, fakeProject("Ready"))
 	m.bridgeBusy = true
 
 	t.Run("success", func(t *testing.T) {
-		plan := ghbridge.Plan{Changes: []ghbridge.IssueChange{{BugID: "x", Added: []string{"prio:p1"}}}}
-		got := send(m, bridgePullFinishedMsg{plan: plan})
+		_, msg := pressI(t, func() Model { m := m; m.bridgeBusy = false; return m }())
+		got := send(m, msg)
 
 		if got.bridgeBusy {
 			t.Error("bridgeBusy still true after the pull finished")
 		}
-		if got.bridgePlan == nil {
-			t.Fatal("bridgePlan not stored after a successful pull")
+		if got.bridgeRemote == nil {
+			t.Fatal("the Project read not stored after a successful pull")
 		}
-		if !strings.Contains(got.status, "press o to apply") {
-			t.Errorf("status = %q, want it to prompt for o", got.status)
+		if !strings.Contains(got.status, "1 matched (1 changed)") || !strings.Contains(got.status, "press o to apply") {
+			t.Errorf("status = %q, want the plan's summary and a prompt for o", got.status)
 		}
 	})
 
@@ -571,8 +620,8 @@ func TestBridgePullFinishedStoresPlanForO(t *testing.T) {
 		if got.bridgeBusy {
 			t.Error("bridgeBusy still true after a failed pull")
 		}
-		if got.bridgePlan != nil {
-			t.Error("bridgePlan set despite the fetch failing")
+		if got.bridgeRemote != nil {
+			t.Error("the Project read stored despite the fetch failing")
 		}
 		if !strings.Contains(got.status, "rate limited") {
 			t.Errorf("status = %q, want it to surface the fetch error", got.status)
@@ -593,64 +642,78 @@ func TestOKeyRequiresAPreviewFirst(t *testing.T) {
 	}
 }
 
-// TestOKeyAppliesThePreviewedPlan is the real end-to-end check: a plan
-// naming a real seeded issue, applied via a real backend (no mocks) --
-// the write must land for real (old label gone, new one present, same
-// standard as every other write in this test file), the in-memory list
-// must reflect it without a re-list, and the plan must be cleared so o
-// can't be pressed twice on stale data.
-func TestOKeyAppliesThePreviewedPlan(t *testing.T) {
+// TestOKeyAppliesThePreviewedPull is the end-to-end check: i then o on a
+// real backend writes the Project's value, the list shows it without a
+// re-list, and o can't be pressed twice on stale data.
+func TestOKeyAppliesThePreviewedPull(t *testing.T) {
 	t.Parallel()
-	cfg := mustLoadConfig(t)
-	b := storetest.New(t)
-	id := storetest.NewIssue(t, b, "widget")
-	if _, err := b.ApplyLabelChange(id, []string{"status:backlog"}, nil); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
-	issues, err := b.ListIssues()
-	if err != nil {
-		t.Fatalf("ListIssues: %v", err)
-	}
+	m, b, id := projectModel(t, fakeProject("Ready"))
 
-	m := New(issues, "is:open", b, cfg, "", today)
-	m.bridgePlan = &ghbridge.Plan{
-		Changes: []ghbridge.IssueChange{
-			{BugID: id, Added: []string{"status:ready"}, Removed: []string{"status:backlog"}},
-		},
-	}
-
+	m, msg := pressI(t, m)
+	m = send(m, msg)
 	m = send(m, key('o'))
 
-	if m.bridgePlan != nil {
-		t.Error("bridgePlan not cleared after applying — a second o would silently re-apply stale data")
+	if m.bridgeRemote != nil {
+		t.Error("the Project read not cleared after applying — a second o would silently re-apply stale data")
 	}
 	if !strings.Contains(m.status, "1 issue(s) updated") {
 		t.Errorf("status = %q, want an applied-count confirmation", m.status)
 	}
-
-	got, err := b.GetLabels(id)
-	if err != nil {
-		t.Fatalf("GetLabels: %v", err)
-	}
-	if !containsLabel(got, "status:ready") {
+	if got := labelsOf(t, b, id); !containsLabel(got, "status:ready") {
 		t.Errorf("backend labels = %v, want status:ready (the real write)", got)
 	}
-	if containsLabel(got, "status:backlog") {
-		t.Errorf("backend labels = %v, want status:backlog gone", got)
-	}
-
 	found := false
 	for _, li := range m.list.Items() {
-		it, ok := li.(item)
-		if !ok || it.issue.ID != id {
-			continue
-		}
-		found = true
-		if !containsLabel(it.issue.Labels, "status:ready") || containsLabel(it.issue.Labels, "status:backlog") {
-			t.Errorf("re-rendered list item labels = %v, want status:ready without a re-list from the backend", it.issue.Labels)
+		if it, ok := li.(item); ok && it.issue.ID == id {
+			found = true
+			if !containsLabel(it.issue.Labels, "status:ready") {
+				t.Errorf("re-rendered list item labels = %v, want status:ready without a re-list from the backend", it.issue.Labels)
+			}
 		}
 	}
 	if !found {
-		t.Fatalf("issue %q not found in list items after applying the bridge plan", id)
+		t.Fatalf("issue %q not found in list items after applying the pull", id)
+	}
+
+	// nothing changed since: a second pull updates nothing
+	m, msg = pressI(t, m)
+	m = send(send(m, msg), key('o'))
+	if !strings.Contains(m.status, "0 issue(s) updated") {
+		t.Errorf("second pull: status = %q, want 0 issue(s) updated", m.status)
+	}
+}
+
+// i and o are git board project pull: a field changed here since both
+// sides agreed stays, even when changed between i and o, and someone
+// assigned here stays assigned.
+func TestPullKeepsWhatChangedHere(t *testing.T) {
+	t.Parallel()
+	m, b, id := projectModel(t, fakeProject("Ready", "alice"))
+
+	m, msg := pressI(t, m)
+	m = send(send(m, msg), key('o'))
+	if got := labelsOf(t, b, id); !containsLabel(got, "status:ready") || !containsLabel(got, "assignee:alice") {
+		t.Fatalf("first pull: labels %v", got)
+	}
+
+	if _, err := b.ApplyLabelChange(id, []string{"assignee:bob"}, nil); err != nil {
+		t.Fatal(err)
+	}
+	m, msg = pressI(t, m)
+	m = send(m, msg)
+	// edited after the preview, before o
+	m.selected, m.editField = store.Issue{ID: id}, "status"
+	m = m.applyEdit("in-review")
+	m = send(send(m, tea.KeyMsg{Type: tea.KeyEsc}), key('o'))
+	if !strings.Contains(m.status, "bridge applied") {
+		t.Fatalf("o didn't apply: %q", m.status)
+	}
+
+	got := labelsOf(t, b, id)
+	if !containsLabel(got, "status:in-review") || containsLabel(got, "status:ready") {
+		t.Errorf("labels %v: the pull overwrote the status set here", got)
+	}
+	if !containsLabel(got, "assignee:bob") || !containsLabel(got, "assignee:alice") {
+		t.Errorf("labels %v: the pull dropped an assignee", got)
 	}
 }

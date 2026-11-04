@@ -8,6 +8,7 @@ import (
 
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/store"
+	"github.com/guilbep/git-board/internal/store/storetest"
 )
 
 const id = "abc1234def5678abc1234def5678abc1234def5678abc1234def5678abcd1234"
@@ -224,5 +225,29 @@ func TestValid(t *testing.T) {
 		if got := Valid(name); got != want {
 			t.Errorf("Valid(%q) = %v, want %v", name, got, want)
 		}
+	}
+}
+
+// The command to copy quotes where it starts: a committed [branches] base
+// is the file's, and a shell runs what's copied.
+func TestSuggestQuotesTheBaseInTheCommand(t *testing.T) {
+	t.Parallel()
+	b := storetest.New(t)
+	s, err := Suggest(b, config.Branches{Base: "main; touch pwned"}, store.Issue{ID: id, Title: "a fix"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := " 'origin/main; touch pwned'"; !strings.HasSuffix(s.Command, want) {
+		t.Errorf("command %q, want it to end with %q", s.Command, want)
+	}
+	s, err = Suggest(b, config.Branches{Base: "it's"}, store.Issue{ID: id, Title: "a fix"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := ` 'origin/it'\''s'`; !strings.HasSuffix(s.Command, want) {
+		t.Errorf("command %q, want it to end with %q", s.Command, want)
+	}
+	if s, _ = Suggest(b, config.Branches{Base: "release/1.2"}, store.Issue{ID: id, Title: "a fix"}); !strings.HasSuffix(s.Command, " origin/release/1.2") {
+		t.Errorf("a plain base quoted: %q", s.Command)
 	}
 }

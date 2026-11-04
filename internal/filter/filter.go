@@ -13,9 +13,10 @@
 package filter
 
 import (
-	"path"
+	"regexp"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/guilbep/git-board/internal/config"
@@ -230,10 +231,7 @@ func matchOne(issue store.Issue, labels map[string]bool, c Condition, value stri
 	case KindIs:
 		ok = issue.Status == value
 	case KindTitle:
-		// ponytail: path.Match's "*" doesn't cross "/" like Python's
-		// fnmatch does; titles containing "/" may not glob-match as
-		// expected. Switch to a manual glob if that bites.
-		ok, _ = path.Match(strings.ToLower(value), strings.ToLower(issue.Title))
+		ok = titleGlob(value).MatchString(issue.Title)
 	case KindText:
 		if c.Hits != nil {
 			ok = c.Hits[issue.ID]
@@ -354,4 +352,67 @@ func PersonField(label, login string, cfg *config.Config) (string, bool) {
 		return "", false
 	}
 	return f, true
+}
+
+// globs is titleGlob's cache: a filter runs over every issue.
+var globs sync.Map
+
+// titleGlob is a title: pattern as a regexp, case-insensitive and whole:
+// * is any text, / included (fnmatch's, not path.Match's), ? one
+// character, [a-z] [!a-z] [^a-z] a class. A [ that closes no class is a
+// [, so no pattern is invalid: *[wip* finds "[WIP" titles, where a
+// syntax error would have matched nothing.
+func titleGlob(glob string) *regexp.Regexp {
+	if re, ok := globs.Load(glob); ok {
+		return re.(*regexp.Regexp)
+	}
+	var b strings.Builder
+	b.WriteString(`(?is)^`)
+	rs := []rune(glob)
+	for i := 0; i < len(rs); i++ {
+		switch r := rs[i]; r {
+		case '*':
+			b.WriteString(".*")
+		case '?':
+			b.WriteString(".")
+		case '[':
+			end := i + 1
+			if end < len(rs) && (rs[end] == '!' || rs[end] == '^') {
+				end++
+			}
+			if end < len(rs) && rs[end] == ']' { // a ] first is in the class
+				end++
+			}
+			for end < len(rs) && rs[end] != ']' {
+				end++
+			}
+			if end >= len(rs) {
+				b.WriteString(regexp.QuoteMeta("["))
+				continue
+			}
+			class := rs[i+1 : end]
+			b.WriteString("[")
+			if class[0] == '!' || class[0] == '^' {
+				b.WriteString("^")
+				class = class[1:]
+			}
+			for _, c := range class {
+				if c == '\\' || c == '[' || c == ']' {
+					b.WriteRune('\\')
+				}
+				b.WriteRune(c)
+			}
+			b.WriteString("]")
+			i = end
+		default:
+			b.WriteString(regexp.QuoteMeta(string(r)))
+		}
+	}
+	b.WriteString("$")
+	re, err := regexp.Compile(b.String())
+	if err != nil { // a class the regexp refuses ([z-a]): the glob as text
+		re = regexp.MustCompile(`(?is)^` + regexp.QuoteMeta(glob) + `$`)
+	}
+	globs.Store(glob, re)
+	return re
 }

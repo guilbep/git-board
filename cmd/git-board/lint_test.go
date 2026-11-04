@@ -328,3 +328,21 @@ func TestLintRefusesStepsOutOfOrder(t *testing.T) {
 		t.Errorf("err = %v, want the order refused\noutput:\n%s", err, out)
 	}
 }
+
+// A misspelled key in .git-board.toml is a lint finding; every command
+// still runs (it is only warned of, on stderr).
+func TestLintReportsAMisspelledConfigKey(t *testing.T) {
+	newTestRepo(t)
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(configPath, append(data, "\n[github-project]\nowner = \"o\"\nnumber = 1\nwirte = true\n"...), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	mustExecute(t, "ls")
+	out := mustExecute(t, "lint")
+	if !strings.Contains(out, "unknown-key:") || !strings.Contains(out, "github-project.wirte") {
+		t.Errorf("no unknown-key finding:\n%s", out)
+	}
+}

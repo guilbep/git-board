@@ -298,11 +298,15 @@ func runSet(out io.Writer, idPrefix string, assignments []string, me string) err
 	defer b.Close()
 
 	today := time.Now()
+	// every assignment's form before the first write: a bad one last
+	// doesn't leave the issue half set
 	for _, assignment := range assignments {
-		fieldName, value, ok := strings.Cut(assignment, "=")
-		if !ok {
-			return fmt.Errorf("invalid assignment %q, expected field=value", assignment)
+		if !strings.Contains(assignment, "=") {
+			return fmt.Errorf("invalid assignment %q, expected field=value: nothing written", assignment)
 		}
+	}
+	for _, assignment := range assignments {
+		fieldName, value, _ := strings.Cut(assignment, "=")
 		label, err := fields.Apply(b, cfg, idPrefix, fieldName, value, me, today)
 		if err != nil {
 			return err

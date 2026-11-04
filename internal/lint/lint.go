@@ -37,11 +37,12 @@ const (
 	CheckProjectKey      = "project-key"
 	CheckKindPrefix      = "kind-prefix"
 	CheckTemplate        = "template"
+	CheckUnknownKey      = "unknown-key"
 )
 
 // CheckOrder is every check name in the order Run reports them, for a
 // stable CLI summary grouping.
-var CheckOrder = []string{CheckDoubleSingle, CheckUnknownValue, CheckNearValue, CheckMissingRequired, CheckOrphanSprint, CheckDeadOption,
+var CheckOrder = []string{CheckUnknownKey, CheckDoubleSingle, CheckUnknownValue, CheckNearValue, CheckMissingRequired, CheckOrphanSprint, CheckDeadOption,
 	CheckProjectKey, CheckKindPrefix, CheckTemplate, CheckTwoKinds, CheckKindTitle, CheckNoKind, CheckLabelOutside}
 
 // Finding is one drift report. IssueID/Title are "" for CheckDeadOption,
@@ -70,6 +71,7 @@ func Run(issues []store.Issue, cfg *config.Config) []Finding {
 	}
 
 	var findings []Finding
+	findings = append(findings, checkUnknownKeys(cfg)...)
 	findings = append(findings, checkSingleCardinality(open, cfg)...)
 	findings = append(findings, checkUnknownValues(open, cfg)...)
 	findings = append(findings, checkNearValues(open, cfg)...)
@@ -330,6 +332,18 @@ func checkKindPrefixes(cfg *config.Config) []Finding {
 }
 
 var titleKind = regexp.MustCompile(`^\s*\[([^\]]+)\]`) // [BUG](Equipment)
+
+// checkUnknownKeys names the keys of .git-board.toml git-board doesn't
+// read (config.Load): a misspelled one ([github-project] wirte) is its
+// zero value, and nothing else says so but a warning on stderr.
+func checkUnknownKeys(cfg *config.Config) []Finding {
+	var findings []Finding
+	for _, k := range cfg.Unknown {
+		findings = append(findings, Finding{Check: CheckUnknownKey,
+			Message: fmt.Sprintf("%s: git-board doesn't know this key, it is ignored (misspelled?)", k)})
+	}
+	return findings
+}
 
 // checkProjectKeys suggests the forge field mappings for the fields still
 // renaming values the old way: [fields.X] project is read as
