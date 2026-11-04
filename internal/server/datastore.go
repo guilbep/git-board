@@ -88,7 +88,7 @@ func (s *apiServer) handleCopyDatastore(w http.ResponseWriter, r *http.Request) 
 	}
 	res := s.b.TestDatastore(r.Context(), url)
 	res.Copied = n
-	res.Line = fmt.Sprintf("%d copied, every id kept. %s", n, res.Line)
+	res.Line = fmt.Sprintf("%d copied, every id kept; %s", n, res.Line)
 	writeJSON(w, http.StatusOK, res)
 }
 

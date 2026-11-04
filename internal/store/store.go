@@ -12,6 +12,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
@@ -147,8 +148,13 @@ type Backend struct {
 	ds oplog.Datastore
 	// openedAs is the board.datastore it opened with: "git" when unset
 	openedAs string
-	ix       *index.Index
-	dir      string // the git directory, for what only git does
+	// root is the checkout's top, where markdown:<dir> starts
+	root string
+	// mdBusy and mdDirty keep a Markdown board's files rendered one at a
+	// time, again while writes come in meanwhile
+	mdBusy, mdDirty atomic.Bool
+	ix              *index.Index
+	dir             string // the git directory, for what only git does
 	// flat are the kinds stored as plain labels, by label (SetFlatKinds)
 	flat atomic.Pointer[map[string]bool]
 	// cfg says which labels the forges' sync holds (SetHeld)
@@ -198,7 +204,8 @@ func Open(path string) (*Backend, error) {
 	if err != nil {
 		return nil, fmt.Errorf("opening the repository: %w", err)
 	}
-	ds, openedAs, err := openDatastore(context.Background(), s)
+	root := topOf(path)
+	ds, openedAs, err := openDatastore(context.Background(), s, root)
 	if err != nil {
 		return nil, err
 	}
@@ -207,7 +214,7 @@ func Open(path string) (*Backend, error) {
 		closeDatastore(ds, s)
 		return nil, fmt.Errorf("opening the index: %w", err)
 	}
-	b := &Backend{s: s, ds: ds, openedAs: openedAs, ix: ix, dir: dir, issues: map[string]*issue.Issue{}, persons: map[string]*people.Person{}, heads: map[string]string{}}
+	b := &Backend{s: s, ds: ds, root: root, openedAs: openedAs, ix: ix, dir: dir, issues: map[string]*issue.Issue{}, persons: map[string]*people.Person{}, heads: map[string]string{}}
 	// the kind form and the held labels; a config that doesn't parse is the
 	// command's to report
 	if cfg, err := config.Load(config.PathIn(path)); err == nil {
@@ -298,7 +305,7 @@ func (b *Backend) numbered(name string) (string, error) {
 
 // me is the person id git-board writes as.
 func (b *Backend) me() (string, error) {
-	id, err := people.Me(ctx, b.ds)
+	id, err := people.Me(ctx, b.whoStore())
 	if err == nil && id == "" {
 		err = ErrNoMe
 	}
@@ -737,4 +744,15 @@ func (b *Backend) checkRemote(remote string) error {
 		err = fmt.Errorf("no remote %q", remote)
 	}
 	return err
+}
+
+// topOf is the checkout's top for path, as git finds it; path itself for
+// a bare repository.
+func topOf(path string) string {
+	out, err := exec.Command("git", "-C", path, "rev-parse", "--show-toplevel").Output()
+	if err != nil || strings.TrimSpace(string(out)) == "" {
+		abs, _ := filepath.Abs(path)
+		return abs
+	}
+	return strings.TrimSpace(string(out))
 }

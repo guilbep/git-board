@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { datastoreSummary, kindOf, urlProblem, valueOf } from './datastore.ts';
+import { datastoreSummary, folderOf, folderProblem, kindOf, urlProblem, valueOf } from './datastore.ts';
 
 test('kindOf reads board.datastore', () => {
   assert.equal(kindOf('git'), 'git');
@@ -21,6 +21,17 @@ test('urlProblem asks for a postgres:// URL naming its database', () => {
   assert.notEqual(urlProblem('mysql://db/x'), '');
   assert.notEqual(urlProblem('postgres://db'), '');
   assert.equal(urlProblem('postgres://me@db:5432/board?sslmode=require'), '');
+});
+
+test('a Markdown folder is markdown:<dir>, inside the checkout', () => {
+  assert.equal(kindOf('markdown:issues'), 'markdown');
+  assert.equal(valueOf('markdown', ' docs/issues '), 'markdown:docs/issues');
+  assert.equal(folderOf('markdown:docs/issues'), 'docs/issues');
+  assert.equal(folderOf('git'), '');
+  assert.equal(folderProblem('issues'), '');
+  assert.notEqual(folderProblem(''), '');
+  assert.notEqual(folderProblem('/tmp/x'), '');
+  assert.notEqual(folderProblem('../x'), '');
 });
 
 test('the menu says when a change waits for a restart', () => {

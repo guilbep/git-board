@@ -2,8 +2,6 @@ package store_test
 
 import (
 	"errors"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -87,10 +85,9 @@ func TestPostgresBoard(t *testing.T) {
 		t.Fatalf("start over: %v, want ErrMissing", err)
 	}
 
-	// who I am is this machine's, in its folder, not in git config
-	gitDir := strings.TrimSpace(storetest.Git(t, dir, "rev-parse", "--absolute-git-dir"))
-	if _, err := os.Stat(filepath.Join(gitDir, "board", "me")); err != nil {
-		t.Fatalf("board/me: %v", err)
+	// who I am is this clone's, in its git config
+	if me := strings.TrimSpace(storetest.Git(t, dir, "config", "board.me")); me == "" {
+		t.Fatal("board.me unset")
 	}
 }
 

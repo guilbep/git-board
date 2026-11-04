@@ -1070,4 +1070,6 @@ nothing is stored.
 - Forge only (`board.datastore forge`): a copy in `.git/board/forge-copy.git`; `git board serve` sends each write at once (`internal/server/forgeonly.go`); `git board datastore drop`; `syncer.Options.ForgeOnly`.
 - Settings › Datastore (`DatastoreSettings.vue`): choose, test, copy, save; `/api/datastore`. Numbers work without origin on PostgreSQL.
 - Docs: `docs/guide/datastores.md`, `docs/spec/data-flow.md`; ADR 0002's As built.
-- Not done: Markdown import (its own issue); the pages don't yet disable pull, push and start over on a datastore that can't run them (the server refuses them with the sentence).
+- Markdown: `git board import --md` (`internal/store/mdimport.go`, tests `TestImportMarkdown*`); the Markdown folder datastore (`core/mdstore`, `board.datastore markdown:<dir>`, `TestMarkdownBoard`), its files rendered after each write, hand edits read in first.
+- Who you write as stays `board.me` in the clone's git config on every datastore (`Backend.whoStore`).
+- Not done: the pages don't yet disable pull, push and start over on a datastore that can't run them (the server refuses them with the sentence).

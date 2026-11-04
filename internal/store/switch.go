@@ -365,7 +365,7 @@ func (b *Backend) Switch(ctx context.Context, run SwitchRun) (SwitchReport, erro
 		return rep, fmt.Errorf("applying the switch: %w", err)
 	}
 	if rep.YouID != "" {
-		if err := people.SetMe(ctx, b.ds, rep.YouID); err != nil {
+		if err := people.SetMe(ctx, b.whoStore(), rep.YouID); err != nil {
 			return rep, fmt.Errorf("applying the switch: %w", err)
 		}
 	}
@@ -692,7 +692,7 @@ var forkIdentity = regexp.MustCompile(`^[0-9a-f]{64}$`)
 // you is the person the switch made of this clone's git-bug identity, when
 // board.me isn't set: the fork's user of that id, as person finds it.
 func (b *Backend) you(s *gitstore.Store, users []ForkUser, person func(forkID string) (string, error), rep *SwitchReport) error {
-	if me, err := people.Me(ctx, b.ds); err != nil || me != "" {
+	if me, err := people.Me(ctx, b.whoStore()); err != nil || me != "" {
 		return err
 	}
 	out, _ := b.git("config", "--get", "git-bug.identity") // unset: exit 1, no one

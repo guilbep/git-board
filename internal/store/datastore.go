@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/url"
 	"os"
 	"os/exec"
@@ -16,7 +17,9 @@ import (
 
 	"github.com/guilbep/git-board/core/datastore"
 	"github.com/guilbep/git-board/core/gitstore"
+	"github.com/guilbep/git-board/core/index"
 	"github.com/guilbep/git-board/core/issue"
+	"github.com/guilbep/git-board/core/mdstore"
 	"github.com/guilbep/git-board/core/oplog"
 	"github.com/guilbep/git-board/core/people"
 	"github.com/guilbep/git-board/core/pgstore"
@@ -24,8 +27,9 @@ import (
 )
 
 // DatastoreEnv names the board's datastore, over git config's
-// board.datastore: "git" (the default), a postgres:// URL, or "forge"
-// (the forges alone, ForgeOnly). Neither is
+// board.datastore: "git" (the default), a postgres:// URL, "forge" (the
+// forges alone, ForgeOnly), or "markdown:<dir>" (a folder of Markdown
+// files in the checkout, Markdown). Neither is
 // shared: a URL may hold a password, so it never goes in .git-board.toml.
 const DatastoreEnv = "GIT_BOARD_DATASTORE"
 
@@ -52,12 +56,12 @@ func IsPostgres(url string) bool {
 
 // openDatastore opens the datastore the clone names: s itself for git.
 // The machine's folder stays <common dir>/board.
-func openDatastore(ctx context.Context, s *gitstore.Store) (oplog.Datastore, string, error) {
-	ds, url, err := openNamed(ctx, s)
+func openDatastore(ctx context.Context, s *gitstore.Store, root string) (oplog.Datastore, string, error) {
+	ds, url, err := openNamed(ctx, s, root)
 	return ds, cmp.Or(url, "git"), err
 }
 
-func openNamed(ctx context.Context, s *gitstore.Store) (oplog.Datastore, string, error) {
+func openNamed(ctx context.Context, s *gitstore.Store, root string) (oplog.Datastore, string, error) {
 	url, err := DatastoreURL(ctx, s)
 	switch {
 	case err != nil:
@@ -67,6 +71,9 @@ func openNamed(ctx context.Context, s *gitstore.Store) (oplog.Datastore, string,
 	case url == ForgeOnly:
 		ds, err := openForgeOnly(s)
 		return ds, url, err
+	case IsMarkdown(url):
+		ds, err := mdstore.Open(markdownDir(root, url), s.Folder())
+		return ds, url, err
 	case IsPostgres(url):
 		p, err := pgstore.Open(ctx, url, s.Folder())
 		if err != nil {
@@ -74,7 +81,7 @@ func openNamed(ctx context.Context, s *gitstore.Store) (oplog.Datastore, string,
 		}
 		return p, url, nil
 	}
-	return nil, url, fmt.Errorf("%s %q: git, forge, or a postgres:// URL", DatastoreKey, Redact(url))
+	return nil, url, fmt.Errorf("%s %q: git, forge, markdown:<dir>, or a postgres:// URL", DatastoreKey, Redact(url))
 }
 
 // closeDatastore closes ds when it isn't the git repository.
@@ -116,6 +123,13 @@ func (b *Backend) Capabilities() Capabilities {
 // none: a board leaving git keeps its ids. It answers how many entities it
 // copied. The git refs stay as they are.
 func (b *Backend) CopyFromGit(ctx context.Context) (int, error) {
+	if m, ok := b.ds.(*mdstore.Store); ok {
+		n, err := datastore.Copy(ctx, gitCounter{b.s}, m)
+		if err == nil {
+			err = b.renderMarkdown()
+		}
+		return n, err
+	}
 	p, ok := b.ds.(*pgstore.Store)
 	if !ok {
 		return 0, errors.New("the board is kept in git: name a datastore first (git config " + DatastoreKey + " postgres://…)")
@@ -303,9 +317,110 @@ func (b *Backend) notOnForge() ([]string, error) {
 
 // wrote tells OnWrite an issue changed.
 func (b *Backend) wrote(id string) {
+	if _, ok := b.ds.(*mdstore.Store); ok {
+		if err := b.renderMarkdown(); err != nil {
+			log.Printf("markdown: %v", err)
+		}
+	}
 	if f := b.OnWrite; f != nil {
 		f(id)
 	}
+}
+
+// Markdown is board.datastore's prefix for a board kept in a folder of
+// Markdown files, relative to the checkout's top: markdown:issues.
+const Markdown = "markdown:"
+
+// IsMarkdown says a board.datastore value names a Markdown folder.
+func IsMarkdown(v string) bool { return strings.HasPrefix(v, Markdown) }
+
+// markdownDir is the folder a markdown:<dir> value names, from the
+// checkout's top.
+func markdownDir(root, v string) string {
+	dir := strings.TrimSpace(strings.TrimPrefix(v, Markdown))
+	if filepath.IsAbs(dir) {
+		return dir
+	}
+	return filepath.Join(root, dir)
+}
+
+// renderMarkdown brings a Markdown board's files up to its packs: first
+// the files' hand edits read in (ImportMarkdown), then each issue's file
+// written where it changed. A hand edit to an issue changed here since its
+// file was written is a conflict, logged, and the file takes the board's.
+// ponytail: reads and writes every file on each write; per issue when
+// boards in a folder grow past a few hundred issues
+func (b *Backend) renderMarkdown() error {
+	b.mdDirty.Store(true)
+	if !b.mdBusy.CompareAndSwap(false, true) {
+		return nil // a render runs, the import's own writes included: it goes round again
+	}
+	defer b.mdBusy.Store(false)
+	m := b.ds.(*mdstore.Store)
+	for b.mdDirty.Swap(false) {
+		if _, err := b.me(); err == nil {
+			rep, err := b.ImportMarkdown(m.Dir())
+			if err != nil {
+				return err
+			}
+			for _, c := range rep.Conflicts {
+				log.Printf("markdown: %s", c)
+			}
+		}
+		if _, err := b.ExportMarkdown(m.Dir(), nil); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// MarkdownDir is the folder a Markdown board is kept in, "" for another.
+func (b *Backend) MarkdownDir() string {
+	if m, ok := b.ds.(*mdstore.Store); ok {
+		return m.Dir()
+	}
+	return ""
+}
+
+// renderTo writes a Markdown folder's files from its packs, read through
+// a backend of their own: a copy's, before the clone names it.
+func (b *Backend) renderTo(m *mdstore.Store) error {
+	o := &Backend{s: b.s, ds: m, root: b.root, issues: map[string]*issue.Issue{}, persons: map[string]*people.Person{}, heads: map[string]string{}}
+	ix, err := index.Open(context.Background(), memIndexFolder{m, b.s.Folder()})
+	if err != nil {
+		return err
+	}
+	o.ix = ix
+	defer ix.Close()
+	_, err = o.ExportMarkdown(m.Dir(), nil)
+	return err
+}
+
+// memIndexFolder keeps a throwaway index beside a copy, not over the
+// clone's own.
+type memIndexFolder struct {
+	*mdstore.Store
+	parent string
+}
+
+func (m memIndexFolder) Folder() string { return filepath.Join(m.parent, "copy-index") }
+
+// testMarkdown says what a Markdown folder holds, writing nothing.
+func (b *Backend) testMarkdown(ctx context.Context, v string) TestResult {
+	dir := markdownDir(b.root, v)
+	rel, _ := filepath.Rel(b.root, dir)
+	if strings.HasPrefix(rel, "..") {
+		return TestResult{Line: dir + " is outside the checkout: the board wouldn't go with the code"}
+	}
+	n := 0
+	for _, kind := range datastore.Kinds {
+		entries, _ := os.ReadDir(filepath.Join(dir, mdstore.Board, kind))
+		n += len(entries)
+	}
+	if n == 0 {
+		return TestResult{OK: true, Line: "the folder " + rel + ": no board there yet; git-board makes " + rel + "/" + mdstore.Board + " when it opens it"}
+	}
+	return TestResult{OK: true, Line: fmt.Sprintf("the folder %s: a board of %d entities", rel, n)}
 }
 
 // DatastoreSetting is this clone's board.datastore as a page may show it,
@@ -345,11 +460,16 @@ func CheckDatastore(v string) error {
 	switch {
 	case v == "git", v == ForgeOnly:
 		return nil
+	case IsMarkdown(v):
+		if strings.TrimSpace(strings.TrimPrefix(v, Markdown)) == "" {
+			return fmt.Errorf("%q: name the folder, markdown:issues", v)
+		}
+		return nil
 	case IsPostgres(v):
 		_, err := pgx.ParseConfig(v)
 		return err
 	}
-	return fmt.Errorf("%q: git, forge, or a postgres:// URL", v)
+	return fmt.Errorf("%q: git, forge, markdown:<dir>, or a postgres:// URL", v)
 }
 
 // SetDatastore writes board.datastore in this clone's git config ("git"
@@ -387,6 +507,8 @@ func (b *Backend) TestDatastore(ctx context.Context, v string) TestResult {
 		return TestResult{OK: true, Line: "the board in this repository's refs/board/*"}
 	case v == ForgeOnly:
 		return TestResult{OK: true, Line: "a copy in .git/board, filled from the forges with sync on"}
+	case IsMarkdown(v):
+		return b.testMarkdown(ctx, v)
 	}
 	p, err := pgstore.Try(ctx, v)
 	if err != nil {
@@ -404,11 +526,22 @@ func (b *Backend) TestDatastore(ctx context.Context, v string) TestResult {
 	return TestResult{OK: true, Line: line, Probe: &p}
 }
 
-// CopyGitTo copies the board in git into the PostgreSQL database v names,
-// as git board datastore copy does: what is there already is left alone.
+// CopyGitTo copies the board in git into the datastore v names, as git
+// board datastore copy does: what is there already is left alone.
 func (b *Backend) CopyGitTo(ctx context.Context, v string) (int, error) {
+	if IsMarkdown(v) {
+		m, err := mdstore.Open(markdownDir(b.root, v), b.s.Folder())
+		if err != nil {
+			return 0, err
+		}
+		n, err := datastore.Copy(ctx, gitCounter{b.s}, m)
+		if err == nil {
+			err = b.renderTo(m)
+		}
+		return n, err
+	}
 	if !IsPostgres(v) {
-		return 0, errors.New("a copy goes to a postgres:// URL")
+		return 0, errors.New("a copy goes to a postgres:// URL or a markdown:<dir> folder")
 	}
 	p, err := pgstore.Open(ctx, v, b.s.Folder())
 	if err != nil {
@@ -416,4 +549,23 @@ func (b *Backend) CopyGitTo(ctx context.Context, v string) (int, error) {
 	}
 	defer p.Close()
 	return p.Copy(ctx, gitCounter{b.s})
+}
+
+// whoStore is where who you write as is kept: this clone's git config
+// (board.me), whatever keeps the board, for it is yours, not the board's.
+// A datastore with no clone keeps it in its folder (people.Me).
+func (b *Backend) whoStore() oplog.Datastore { return withConfig{b.ds, b.s} }
+
+// withConfig is a datastore with the clone's git config.
+type withConfig struct {
+	oplog.Datastore
+	clone *gitstore.Store
+}
+
+func (w withConfig) Config(ctx context.Context, key string) (string, error) {
+	return w.clone.Config(ctx, key)
+}
+
+func (w withConfig) SetConfig(ctx context.Context, key, value string) error {
+	return w.clone.SetConfig(ctx, key, value)
 }

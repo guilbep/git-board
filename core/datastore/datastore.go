@@ -63,3 +63,51 @@ type missing struct{ sentence string }
 
 func (m *missing) Error() string { return m.sentence }
 func (m *missing) Unwrap() error { return ErrMissing }
+
+// Copy copies every entity of from that to hasn't, pack by pack, and
+// from's counter when to keeps one and has none: a board moving between
+// datastores keeps its ids, as its packs copy as they are. It answers how
+// many entities it copied.
+func Copy(ctx context.Context, from, to Datastore) (int, error) {
+	n := 0
+	for _, kind := range Kinds {
+		theirs, err := from.Heads(ctx, kind)
+		if err != nil {
+			return n, err
+		}
+		ours, err := to.Heads(ctx, kind)
+		if err != nil {
+			return n, err
+		}
+		for id := range theirs {
+			if _, ok := ours[id]; ok {
+				continue
+			}
+			packs, _, err := from.Packs(ctx, kind, id)
+			if err != nil {
+				return n, err
+			}
+			v := ""
+			for _, p := range packs {
+				if v, err = to.Add(ctx, kind, id, p, v); err != nil {
+					return n, err
+				}
+			}
+			n++
+		}
+	}
+	fc, ok1 := from.(Counter)
+	tc, ok2 := to.(Counter)
+	if !ok1 || !ok2 {
+		return n, nil
+	}
+	value, _, err := fc.Count(ctx)
+	if err != nil || value == nil {
+		return n, err
+	}
+	if mine, _, err := tc.Count(ctx); err != nil || mine != nil {
+		return n, err
+	}
+	_, err = tc.SetCount(ctx, value, "")
+	return n, err
+}

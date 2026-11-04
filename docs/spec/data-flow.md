@@ -30,6 +30,7 @@ flowchart TB
   subgraph stores["Where the board is kept: board.datastore"]
     git[("git<br/>refs/board/*<br/>core/gitstore")]
     pg[("PostgreSQL<br/>git_board.*<br/>core/pgstore")]
+    md[("Markdown files<br/>&lt;dir&gt;/.board/*.jsonl<br/>core/mdstore")]
     copy[("the forges alone<br/>.git/board/forge-copy.git")]
   end
 
@@ -52,7 +53,9 @@ flowchart TB
   oplog --> ds
   ds --> git
   ds --> pg
+  ds --> md
   ds --> copy
+  store -. "renders NNN-slug.md, reads hand edits" .-> md
   index -. "sqlite, for git and forge only" .-> folder
   index -. "git_board_index, on PostgreSQL" .-> pg
   syncer -. "sync.lock, journal" .-> folder
@@ -67,7 +70,7 @@ flowchart TB
 | `core/index` | lists, search and lookups, a cache brought up to the datastore before each query | the truth: it is never the source |
 | `core/oplog` | packs: their bytes, their id (the git blob id of the bytes), their order (clock, then id) | where the packs are kept |
 | `core/datastore` | the interface, and its errors: `ErrNotFound`, `ErrMoved`, `ErrMissing` | the packs' content |
-| `core/gitstore`, `core/pgstore` | the bytes, a version per entity, the compare-and-swap | operations |
+| `core/gitstore`, `core/pgstore`, `core/mdstore` | the bytes, a version per entity, the compare-and-swap | operations |
 
 ## A write
 
@@ -129,12 +132,12 @@ overlap.
 
 ## What lives where
 
-| What | git | PostgreSQL | the forges alone |
-|---|---|---|---|
-| issues, people, sync and release records | `refs/board/<kind>/<id>` | `git_board.packs`, `git_board.entities` | a git copy in `.git/board/forge-copy.git`, filled by sync |
-| project numbers | `refs/board/seq` | `git_board.counter` | the forges' own numbers only |
-| the index | `.git/board/index.db` (sqlite) | `git_board_index.*`, shared | `.git/board/index.db` |
-| who you write as | git config `board.me` | `.git/board/me` | git config `board.me` |
-| sync lock and journal, caches | `.git/board/` | `.git/board/` | `.git/board/` |
-| branches, diffs, tags, check notes | the code repository | the code repository | the code repository |
-| `.git-board.toml` | the code checkout | the code checkout | the code checkout |
+| What | git | PostgreSQL | Markdown files | the forges alone |
+|---|---|---|---|---|
+| issues, people, sync and release records | `refs/board/<kind>/<id>` | `git_board.packs`, `git_board.entities` | `<dir>/.board/<kind>/<id>.jsonl`, one pack a line, and `<dir>/NNN-slug.md` rendered | a git copy in `.git/board/forge-copy.git`, filled by sync |
+| project numbers | `refs/board/seq` | `git_board.counter` | the forges' own numbers only | the forges' own numbers only |
+| the index | `.git/board/index.db` (sqlite) | `git_board_index.*`, shared | `.git/board/index.db` | `.git/board/index.db` |
+| who you write as | git config `board.me` | git config `board.me` | git config `board.me` | git config `board.me` |
+| sync lock and journal, caches | `.git/board/` | `.git/board/` | `.git/board/` | `.git/board/` |
+| branches, diffs, tags, check notes | the code repository | the code repository | the code repository | the code repository |
+| `.git-board.toml` | the code checkout | the code checkout | the code checkout | the code checkout |

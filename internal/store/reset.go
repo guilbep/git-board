@@ -219,7 +219,7 @@ func (b *Backend) ResetHard(remote string) (ResetReport, error) {
 			}
 		}
 	}
-	id, err := people.Me(ctx, b.ds)
+	id, err := people.Me(ctx, b.whoStore())
 	if err != nil || id == "" {
 		return rep, err
 	}

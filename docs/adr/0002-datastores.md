@@ -322,8 +322,9 @@ Unchanged:
 
 ## As built
 
-Steps 3 (the cut), 4 (PostgreSQL) and 5 (forge only) landed on
-2026-11-04; step 2, Markdown import, waits for its own issue. Where the
+Steps 2 (Markdown import), 3 (the cut), 4 (PostgreSQL) and 5 (forge
+only) landed on 2026-11-04, and the Markdown folder as a datastore with
+them. Where the
 build differs from the decision above, and why:
 
 - **The interface is `core/datastore`, not `core/oplog`.** `*gitstore.Store`
@@ -351,8 +352,9 @@ What this ADR left open is settled:
 - **The PostgreSQL index replaces sqlite**: the same tables, in the schema
   `git_board_index`, shared by every machine; its search tokenizes as
   unicode61 does, and every index test runs on it (`make test-pg`).
-- **Who I am** on PostgreSQL is `<folder>/me`; a forge-only board keeps
-  `board.me` in git config.
+- **Who I am** stays `board.me` in the clone's git config, whatever keeps
+  the board: it is the clone's, not the board's. `<folder>/me` is only for
+  a datastore with no clone.
 - **`core/watch`** reads `Heads`; the server's change events compare the
   datastore's heads.
 - **Copying a board out of git** is `git board datastore copy` (and the
@@ -361,6 +363,21 @@ What this ADR left open is settled:
 - **Forge only** sends each write from `git board serve` at once; a
   write from the command line goes with the next sync. Its re-pulled texts
   keep the header sync posted them with, as anyone's text does.
+
+Markdown, as built, differs from section 5:
+
+- **Import is not a forge adapter.** `git board import --md` reads the
+  files straight into operations: a file's `updated` against the issue's
+  is the last seen (a field changed on both sides is a conflict, the
+  board's kept), names find the people, and a new file's id is written
+  back. A folder adapter for sync would have taken every author as sync's
+  account and every pulled text with sync's header; this keeps them.
+- **The Markdown folder is a datastore** (`core/mdstore`,
+  `board.datastore markdown:<dir>`): packs as JSON lines in
+  `<dir>/.board/<kind>/<id>.jsonl`, merged by git's union driver; a
+  version is the count of lines, a write takes the file's lock. After
+  each write, the backend reads the folder's hand edits in, then renders
+  the files.
 
 ## Left open
 

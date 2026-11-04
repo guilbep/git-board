@@ -67,13 +67,42 @@
             </p>
           </div>
 
+          <div v-if="kind === 'markdown'" class="ds-url">
+            <label class="ds-label" for="ds-dir">Folder, from the checkout's top</label>
+            <input
+              id="ds-dir"
+              v-model="dir"
+              class="epfl-input"
+              placeholder="issues"
+              autocomplete="off" spellcheck="false"
+              :disabled="d.env || busy !== ''"
+              :aria-invalid="!!dirErr && dir !== ''"
+              aria-describedby="ds-dir-hint"
+            />
+            <p id="ds-dir-hint" class="gb-hint">
+              {{ dirErr && dir ? dirErr : 'One NNN-slug.md per issue, rendered after each write; the packs in .board beside them. Commit the folder with the code.' }}
+              Edit a file by hand: the next write reads it in, or <code>git board import</code>.
+            </p>
+            <div class="ds-actions">
+              <button type="button" class="epfl-btn epfl-btn-secondary" :disabled="!!dirErr || busy !== ''" @click="test">{{ busy === 'test' ? 'Looking…' : 'Look in the folder' }}</button>
+              <button
+                type="button"
+                class="epfl-btn epfl-btn-secondary"
+                :disabled="!!dirErr || busy !== '' || !d.replica"
+                :title="d.replica ? 'Copies every issue, person and record kept in git, and writes their files' : 'The board isn’t kept in git here: there is nothing in git to copy'"
+                @click="copy"
+              >{{ busy === 'copy' ? 'Copying…' : 'Copy the board from git' }}</button>
+            </div>
+            <p v-if="tested" class="epfl-alert" :class="tested.ok ? 'epfl-alert-success' : 'epfl-alert-danger'" role="status">{{ tested.line }}</p>
+          </div>
+
           <p v-if="kind === 'forge'" class="gb-hint">
             Needs a forge with its sync on (<router-link to="/settings/sync">Sync</router-link>). Writes from the command line go with the next sync;
             <code>git board datastore drop</code> throws the copy away, and the next sync pulls it back.
           </p>
 
           <div class="ds-actions">
-            <button type="submit" class="epfl-btn epfl-btn-primary" :disabled="d.env || !changed || (kind === 'postgres' && !!urlErr) || busy !== ''">{{ busy === 'save' ? 'Saving…' : 'Save' }}</button>
+            <button type="submit" class="epfl-btn epfl-btn-primary" :disabled="d.env || !changed || (kind === 'postgres' && !!urlErr) || (kind === 'markdown' && !!dirErr) || busy !== ''">{{ busy === 'save' ? 'Saving…' : 'Save' }}</button>
             <span v-if="!changed" class="ds-muted">Nothing to save.</span>
           </div>
         </form>
@@ -97,7 +126,7 @@
 import { computed, onMounted, ref } from 'vue';
 import { copyToDatastore, getDatastore, setDatastore, testDatastore, type Datastore, type DatastoreTest } from '@/api/board';
 import { message } from '@/issue';
-import { kindOf, kinds, urlProblem, valueOf, type StoreKind } from '@/datastore';
+import { folderOf, folderProblem, kindOf, kinds, urlProblem, valueOf, type StoreKind } from '@/datastore';
 
 // changed: the datastore as saved, for the menu's line
 const emit = defineEmits<{ changed: [d: Datastore] }>();
@@ -108,15 +137,23 @@ const busy = ref<'' | 'test' | 'copy' | 'save'>('');
 const error = ref('');
 const tested = ref<DatastoreTest | null>(null);
 
+const dir = ref('');
 const urlErr = computed(() => urlProblem(url.value));
+const dirErr = computed(() => folderProblem(dir.value));
+// what the form names: the URL or the folder, as the kind takes it
+const named = computed(() => (kind.value === 'markdown' ? dir.value : url.value));
 // the kind the server opened with, which a save changes only at a restart
-const openKind = computed<StoreKind>(() => (!d.value ? 'git' : d.value.forge_only ? 'forge' : d.value.replica ? 'git' : 'postgres'));
-const changed = computed(() => !!d.value && valueOf(kind.value, url.value) !== d.value.setting);
+const openKind = computed<StoreKind>(() => {
+  const n = d.value?.datastore ?? 'git';
+  return n === 'PostgreSQL' ? 'postgres' : n === 'Markdown files' ? 'markdown' : d.value?.forge_only ? 'forge' : 'git';
+});
+const changed = computed(() => !!d.value && valueOf(kind.value, named.value) !== d.value.setting);
 
 function take(fresh: Datastore) {
   d.value = fresh;
   kind.value = kindOf(fresh.setting);
   url.value = kind.value === 'postgres' ? fresh.setting : '';
+  dir.value = folderOf(fresh.setting);
   emit('changed', fresh);
 }
 
@@ -132,9 +169,10 @@ async function act(what: typeof busy.value, f: () => Promise<void>) {
   }
 }
 
-const test = () => act('test', async () => void (tested.value = await testDatastore(url.value)));
-const copy = () => act('copy', async () => void (tested.value = await copyToDatastore(url.value)));
-const save = () => act('save', async () => take(await setDatastore(valueOf(kind.value, url.value))));
+const target = () => (kind.value === 'markdown' ? valueOf('markdown', dir.value) : url.value);
+const test = () => act('test', async () => void (tested.value = await testDatastore(target())));
+const copy = () => act('copy', async () => void (tested.value = await copyToDatastore(target())));
+const save = () => act('save', async () => take(await setDatastore(valueOf(kind.value, named.value))));
 
 onMounted(() => act('', async () => take(await getDatastore())));
 </script>

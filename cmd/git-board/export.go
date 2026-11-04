@@ -69,15 +69,14 @@ conflict: the board's value stays, and it is listed.
 
 A file with no id, or one this board doesn't have, is a new issue, with the
 author, comments and times it names; its new id is written back into it.
-A Markdown file that isn't an issue file is skipped.`,
+A Markdown file that isn't an issue file is skipped. On a board kept in
+Markdown files (board.datastore markdown:<dir>), --md is that folder, and
+the next write reads it in anyway.`,
 		Example: `  git board export --md issues
   $EDITOR issues/0042-*.md
   git board import --md issues`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if md == "" {
-				return fmt.Errorf("import needs --md <dir>")
-			}
 			return runImport(cmd.OutOrStdout(), md)
 		},
 	}
@@ -91,6 +90,12 @@ func runImport(out io.Writer, dir string) error {
 		return err
 	}
 	defer b.Close()
+	if dir == "" {
+		dir = b.MarkdownDir()
+	}
+	if dir == "" {
+		return fmt.Errorf("import needs --md <dir>")
+	}
 	rep, err := b.ImportMarkdown(dir)
 	if err != nil {
 		return err

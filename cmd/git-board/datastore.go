@@ -13,7 +13,7 @@ import (
 func newDatastoreCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "datastore",
-		Short: "Say where the board is kept: git, or PostgreSQL",
+		Short: "Say where the board is kept: git, PostgreSQL, Markdown files, or the forges",
 		Long: `Say where this clone keeps its board, and what that datastore can do.
 
 The board is kept in git (refs/board/*) unless this clone names another:
@@ -23,7 +23,19 @@ The board is kept in git (refs/board/*) unless this clone names another:
 or GIT_BOARD_DATASTORE, which wins. The URL stays in this clone's git
 config, never in .git-board.toml: it may hold a password. On PostgreSQL the
 board is shared at once, so pull, push and start over don't apply; the
-index is kept there too, for every machine.`,
+index is kept there too, for every machine.
+
+  git config board.datastore markdown:issues
+
+keeps it in the checkout's folder issues: a file per issue, rendered after
+each write, and the packs in issues/.board, committed with the code. Edit a
+file by hand: the next write reads it in, or git board import.
+
+  git config board.datastore forge
+
+keeps it on the forges alone: a copy in .git/board that sync fills, each
+write the server takes sent to the forges at once. Writes from the command
+line go with the next git board sync.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runDatastore(cmd.OutOrStdout())
@@ -31,10 +43,11 @@ index is kept there too, for every machine.`,
 	}
 	cmd.AddCommand(&cobra.Command{
 		Use:   "copy",
-		Short: "Copy the board in git into the datastore this clone names",
+		Short: "Copy the board in git into the datastore this clone names (PostgreSQL, Markdown)",
 		Long: `Copy every issue, person, sync record and release record kept in git
-(refs/board/*) into the datastore board.datastore names, with the project's
-numbers. Their packs copy as they are, so every id stays the same, and so
+(refs/board/*) into the datastore board.datastore names (PostgreSQL, or a
+Markdown folder, whose files it writes), with the project's numbers where
+the datastore keeps them. Their packs copy as they are, so every id stays the same, and so
 do the markers sync left on the forges. What the datastore has already is
 left alone, so a second run copies nothing. The git refs aren't touched.`,
 		Example: `  git config board.datastore postgres://me@db.example.org/board
