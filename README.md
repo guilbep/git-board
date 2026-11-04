@@ -2,7 +2,15 @@
 
 Issues, fields, sprints and views kept in git, next to your code — a
 lightweight, config-as-code replacement for GitHub Projects, synced with
-GitHub and GitLab.
+GitHub and GitLab. Your issues are yours: independent of any forge, every
+change kept.
+
+**Documentation: <https://guilbep.github.io/git-board/>** — the
+[user manual](https://guilbep.github.io/git-board/manual/) (install, first
+steps, everyday work, teams, owning your issues), the
+[CLI reference](https://guilbep.github.io/git-board/guide/cli/), the
+configuration guide, the core's spec and the architecture decisions. The
+same pages are in [docs/](docs/index.md).
 
 Each issue is a log of operations under `refs/board/` in the repository:
 it travels with `git push` and `git pull`, works offline, and needs no
@@ -45,7 +53,7 @@ and only for that feature:
 
 | For | Install (macOS) |
 |---|---|
-| `lint --create-labels`, `project` (GitHub Projects) | `brew install gh`, then `gh auth login` |
+| `project` (GitHub Projects), and `lint`'s issue-template check | `brew install gh`, then `gh auth login` (`lint --create-labels` itself goes through the forge token: `GITHUB_TOKEN`, else git's credential helper) |
 | Start an agent (Cycle, Work; experimental) | [wtx](https://github.com/EPFL-ENAC/wtx) |
 | Run step 4's tests and checks, `verify` | `ssh-keygen` (macOS has it), `git config user.signingkey` naming your SSH key |
 | `release` and `deploy`, with `[release] images` | Docker Desktop (buildx), `brew install crane trivy` |
@@ -388,9 +396,10 @@ Field mapping:
 | Est. hours | `est:<value>` | single |
 | Sprint | `sprint:<slug>` | single — the `[[sprints.list]]` slug of the iteration's title, else the title as a slug (`Hypercare` → `sprint:hypercare`); list the iterations for `@current` to find them |
 | Assignees | `assignee:<user>` | multi — one label per assignee, merged person by person (below) |
+| MoSCoW | `moscow:<value>` | single |
+| Milestone | `milestone:<slug>` | single, **read only**: the issue's GitHub milestone, which a Project edit can't set; the Project's value always wins |
 
-`Milestone` and `Size` are **not** imported — the PRD calls them dead/unused
-fields.
+`Size` is **not** imported — the PRD calls it a dead/unused field.
 
 Category says the same thing as the kind labels (`bug`, `feat`, `perf`…),
 and the labels win: Category only fills a kind the issue doesn't have,
@@ -542,7 +551,7 @@ git-board lint --create-labels --apply   # create the missing labels on GitHub
 
 Free-form fields (no `options` configured — `assignee`, `est`) have no
 fixed value set, so nothing to create labels for; Category isn't a
-configured field at all anymore (see "Bridging GitHub Projects" above),
+configured field at all anymore (see the Project's field mapping above),
 so it's not part of this check either.
 
 It also reads the labels each issue template applies
@@ -841,8 +850,10 @@ CLI and shouldn't need the (also-unauthenticated) live web UI above. Reuses
 filter/sort/group semantics as `ls`/`view`/the web API — and the TUI's
 `tui.ParseLabels`/`tui.DisplayFieldName` to render known fields under their
 display name (`Status: ready`) instead of raw `status:ready` label text.
-**Read-only** — writes nothing to the issues, unlike everything else in this
-CLI except `ls`/`view`/`get`/`lint`.
+It writes no issue. On a fresh clone it first pulls origin's board, as
+`ls`, `view` and `tui` do. A view with no `filter` lists every issue,
+closed ones included, here and in `git-board view`; the web UI shows such
+a view's open issues (`is:open`).
 
 When the project has a `[release]` table, the export also writes
 `releases.html`: the environment strip, the releases table and each

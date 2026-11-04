@@ -5,15 +5,24 @@ views, a kanban, sprints, insights, releases. The issues themselves live in
 the repository, under `refs/board/`: they travel with git like the code,
 work offline, and need no database. GitHub, GitLab and the GitHub Project
 are mirrors, for the people who work there, and one sync moves the issues
-everywhere.
+everywhere. The issues are yours: independent of any forge, every change
+kept, in the store you choose (git, PostgreSQL or Markdown files).
 
 ## How to read this site
 
+- **The [user manual](manual/index.md)** is for everyone who uses a board:
+  [install](manual/install.md), [first steps](manual/first-steps.md),
+  [everyday work](manual/everyday.md), [working as a team](manual/together.md),
+  [owning your issues](manual/ownership.md) and [questions](manual/faq.md).
 - **The guide** is for who runs a board.
     - [Configuration](guide/configuration.md): `.git-board.toml`, its
       fields, views, sprints, numbers, labels, releases and the rest.
     - [Forges](guide/forges.md): where your issues go, the sync with GitHub,
       GitLab and the GitHub Project, the tokens.
+    - [Issues from the command line](guide/cli.md): every issue command,
+      its flags, JSON output and exit codes, and coming from `gh` or `glab`.
+    - [Where the board is kept](guide/datastores.md): git, PostgreSQL,
+      Markdown files or the forges alone.
 - **The spec** states the core's format: git-board's data model and its
   sync with forges, as a Go library, `github.com/guilbep/git-board/core/...`.
   It keeps issues, people and their links to forges in a git repository.
@@ -29,8 +38,14 @@ everywhere.
     - [Sync](spec/sync.md) and [Forges](spec/forges.md): how the core syncs
       with GitHub and GitLab, and what each forge needs.
 - **The decisions**: [the spec's](spec/decisions.md), the choices it
-  starts from, each linked to the PRD; and the
-  [ADRs](adr/0001-check-results-are-signed-git-notes.md).
+  starts from, each linked to the PRD; and the architecture decision
+  records, from [ADR 0001](adr/0001-check-results-are-signed-git-notes.md)
+  to [ADR 0018](adr/0018-own-your-issues-work-in-progress-is-opt-in.md):
+  why git-board has its own core ([0003](adr/0003-own-core-instead-of-git-bug.md)),
+  keeps issues as operation logs ([0004](adr/0004-entities-are-operation-logs.md)),
+  syncs forges as mirrors ([0008](adr/0008-sync-state-in-the-data-model.md)),
+  lets you choose where the board is kept ([0002](adr/0002-datastores.md)),
+  and what it is for ([0018](adr/0018-own-your-issues-work-in-progress-is-opt-in.md)).
 
 ## The core
 
