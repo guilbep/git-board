@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path"
@@ -231,36 +232,24 @@ func (s *Store) Ref(name string) (Hash, error) {
 // Refs returns the refs whose names start with prefix, loose or packed. The
 // prefix starts with refs/. A lock file isn't a ref, and an empty ref file is
 // one being written: both are left out, where go-git's own listing fails.
+//
+// A ref git moves or packs meanwhile is listed all the same: the
+// directories are read without a stat of each entry, as a <ref>.lock
+// renamed away between the two would fail the read, and the loose refs
+// are read before packed-refs, which pack-refs writes before it removes
+// them.
 func (s *Store) Refs(prefix string) (map[string]Hash, error) {
 	dir := path.Dir(prefix + "x")
 	if dir != "refs" && !strings.HasPrefix(dir, "refs/") {
 		return nil, fmt.Errorf("gitstore: refs prefix %q is not under refs/", prefix)
 	}
-	// The filesystem sends refs/ and packed-refs to the common dir, as git does.
-	fs := s.fs.Filesystem()
+	// refs/ and packed-refs are in the common dir, as for git.
+	abs := func(name string) string { return filepath.Join(s.commonDir, filepath.FromSlash(name)) }
 	out := map[string]Hash{}
-	read := func(name string) ([]byte, error) {
-		f, err := fs.Open(name)
-		if err != nil {
-			return nil, err
-		}
-		defer f.Close()
-		return io.ReadAll(f)
-	}
-	packed, err := read("packed-refs")
-	if err != nil && !os.IsNotExist(err) {
-		return nil, err
-	}
-	for _, line := range strings.Split(string(packed), "\n") {
-		// Header and peeled lines ("# ...", "^<hash>") don't parse.
-		if h, name, _ := strings.Cut(line, " "); plumbing.IsHash(h) && strings.HasPrefix(name, prefix) {
-			out[name] = plumbing.NewHash(h)
-		}
-	}
 	var walk func(dir string) error
 	walk = func(dir string) error {
-		entries, err := fs.ReadDir(dir)
-		if os.IsNotExist(err) { // never made, or just removed
+		entries, err := os.ReadDir(abs(dir)) // an entry gone since is skipped, not an error
+		if errors.Is(err, fs.ErrNotExist) {  // never made, or just removed
 			return nil
 		}
 		if err != nil {
@@ -277,8 +266,8 @@ func (s *Store) Refs(prefix string) (map[string]Hash, error) {
 			if strings.HasSuffix(name, ".lock") || !strings.HasPrefix(name, prefix) {
 				continue
 			}
-			b, err := read(name)
-			if os.IsNotExist(err) {
+			b, err := os.ReadFile(abs(name))
+			if errors.Is(err, fs.ErrNotExist) { // deleted, or packed: then in packed-refs
 				continue
 			}
 			if err != nil {
@@ -286,13 +275,25 @@ func (s *Store) Refs(prefix string) (map[string]Hash, error) {
 			}
 			// A symbolic ref ("ref: ...") or an empty file isn't listed.
 			if h := strings.TrimSpace(string(b)); plumbing.IsHash(h) {
-				out[name] = plumbing.NewHash(h) // a loose ref wins over its packed copy
+				out[name] = plumbing.NewHash(h)
 			}
 		}
 		return nil
 	}
 	if err := walk(dir); err != nil {
 		return nil, err
+	}
+	packed, err := os.ReadFile(abs("packed-refs"))
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return nil, err
+	}
+	for _, line := range strings.Split(string(packed), "\n") {
+		// Header and peeled lines ("# ...", "^<hash>") don't parse.
+		if h, name, _ := strings.Cut(line, " "); plumbing.IsHash(h) && strings.HasPrefix(name, prefix) {
+			if _, loose := out[name]; !loose { // a loose ref wins over its packed copy
+				out[name] = plumbing.NewHash(h)
+			}
+		}
 	}
 	return out, nil
 }
