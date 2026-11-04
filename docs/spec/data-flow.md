@@ -115,9 +115,10 @@ sequenceDiagram
   datastore's `Heads` (one version per entity), loads again only the
   entities whose version moved, and then answers from its tables.
 - **One issue** is its packs, read from the datastore, sorted by oplog
-  and folded by `core/issue`. A listing keeps the folded issues per
-  version, so an unchanged issue isn't folded twice there; reading one
-  issue (its page, a write) folds it again each time.
+  and folded by `core/issue`. `internal/store` keeps the folded issues
+  per version, for a listing and for one issue alike (its page, its
+  thread, a write): its packs are read each time, but an unchanged issue
+  isn't folded twice.
 - **The pages' change events** compare the datastore's heads every few
   seconds: a write from another clone, another machine or the command line
   reaches every open page.
