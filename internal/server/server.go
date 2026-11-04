@@ -56,10 +56,10 @@ type apiServer struct {
 	// the forge sync of forges, or one way of it (mode get, send), its
 	// events told to see: nil, forgeRun
 	runSync func(ctx context.Context, mode string, forges []config.Forge, o runOpts, see func(store.SyncEvent)) error
-	// one issue's sync (issuesync.go): nil, issueRun; issueDry is when
-	// each issue's last clean dry run ended
+	// one issue's sync (issuesync.go): nil, issueRun; issueDry is each
+	// issue's last clean dry run: when it ended, and the forges it read
 	runIssueSync func(ctx context.Context, forges []config.Forge, dryRun bool, id string, see func(store.SyncEvent)) error
-	issueDry     map[string]time.Time
+	issueDry     map[string]issueCheck
 	// openForges opens the adapters of a run: nil, store.OpenForges
 	openForges func(ctx context.Context, forges []config.Forge) ([]store.NamedForge, error)
 	// checked is when each git remote was last fetched, pulled or pushed

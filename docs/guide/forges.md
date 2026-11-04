@@ -65,7 +65,7 @@ Off (`sync = false`), the forge is kept but stays out of it, until you switch it
 
 In an issue's panel, On the forges lists each forge it is on, and its timeline marks what hasn't reached each forge yet:
 
-- **Send now** sends its waiting changes, **Refresh from forges** gets the forges' own. Both check first, and ask before writing to a forge.
+- **Send now** sends its waiting changes, **Refresh from forges** gets the forges' own. Both check first, and ask before writing to a forge; the run then syncs only the forges that check read.
 
 An issue is linked to a forge issue once, by the sync, and stays so: linking by hand, unlinking and taking a forge's version are out of git-board's first version.
 

@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -55,5 +56,38 @@ func TestIssueSync(t *testing.T) {
 	s.syncing.Store(true)
 	if code := call(t, "POST", ts.URL+"/api/issues/"+id+"/sync", map[string]bool{"dry_run": true}, nil); code != http.StatusConflict {
 		t.Errorf("during a full sync: %d, want 409", code)
+	}
+}
+
+// An issue's real run syncs only the forges its check read: one the check
+// left out (unreachable, its token refused) is told, not synced unseen.
+func TestIssueSyncTakesOnlyTheCheckedForges(t *testing.T) {
+	t.Parallel()
+	ts, s := forgeServer(t, ghForge, glForge)
+	id := storetest.NewIssue(t, s.b, "one issue")
+	var runs [][]string
+	s.runIssueSync = func(_ context.Context, forges []config.Forge, dryRun bool, _ string, see func(store.SyncEvent)) error {
+		var names []string
+		for _, f := range forges {
+			names = append(names, f.Name)
+		}
+		runs = append(runs, names)
+		if dryRun {
+			see(store.SyncEvent{Forge: "gl", What: "left", Line: "gitlab: 401"})
+		}
+		return nil
+	}
+	if code := call(t, "POST", ts.URL+"/api/issues/"+id+"/sync", map[string]bool{"dry_run": true}, nil); code != http.StatusOK {
+		t.Fatalf("dry run: %d", code)
+	}
+	var res issueSyncResult
+	if code := call(t, "POST", ts.URL+"/api/issues/"+id+"/sync", map[string]bool{"dry_run": false}, &res); code != http.StatusOK {
+		t.Fatalf("real run: %d", code)
+	}
+	if len(runs) != 2 || len(runs[1]) != 1 || runs[1][0] != "gh" {
+		t.Errorf("runs %v, want the real one on gh alone", runs)
+	}
+	if lines := res.Bridges["gl"].Lines; len(lines) == 0 || !strings.Contains(lines[0], "not in the check") {
+		t.Errorf("gl's lines %v, want it told as not in the check", lines)
 	}
 }
