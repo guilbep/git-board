@@ -1,6 +1,10 @@
 package board
 
 import (
+	"errors"
+	"io/fs"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/guilbep/git-board/core/issue/boardgen"
@@ -132,6 +136,27 @@ func BenchmarkCLINewSet(b *testing.B) {
 			b.Fatal(err)
 		}
 		if _, err := be.GetIssue(id[:10]); err != nil {
+			b.Fatal(err)
+		}
+		be.Close()
+	}
+}
+
+// A command's first ls on a clone: the index built from nothing.
+func BenchmarkCLIColdLs(b *testing.B) {
+	dir, cfg := benchRepo(b)
+	be := open(b, dir)
+	folder := be.Datastore().Folder()
+	be.Close()
+	b.ReportAllocs()
+	for b.Loop() {
+		for _, f := range []string{"index.db", "index.db-wal", "index.db-shm"} {
+			if err := os.Remove(filepath.Join(folder, f)); err != nil && !errors.Is(err, fs.ErrNotExist) {
+				b.Fatal(err)
+			}
+		}
+		be := open(b, dir)
+		if _, err := LoadMatching(be, cfg, "is:open", "dev3"); err != nil {
 			b.Fatal(err)
 		}
 		be.Close()

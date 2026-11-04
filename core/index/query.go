@@ -127,7 +127,8 @@ type State struct {
 // index then reads the state it keeps, so a caller that has most of them
 // reads few. It refreshes first.
 func (ix *Index) States(ctx context.Context, cached func(id, head string) *issue.Issue) (map[string]State, []Broken, error) {
-	if err := ix.Refresh(ctx); err != nil {
+	fresh, err := ix.refresh(ctx) // what it folds, it needn't read back
+	if err != nil {
 		return nil, nil, err
 	}
 	const join = " FROM issues i JOIN entities e ON e.kind = 'issue' AND e.id = i.id"
@@ -150,7 +151,9 @@ func (ix *Index) States(ctx context.Context, cached func(id, head string) *issue
 			broken = append(broken, Broken{"issue", id, msg.String})
 			continue
 		}
-		if is := cached(id, head); is != nil {
+		if f, ok := fresh[id]; ok && f.Head == head {
+			out[id] = f
+		} else if is := cached(id, head); is != nil {
 			out[id] = State{head, is}
 		} else {
 			missing = append(missing, id)

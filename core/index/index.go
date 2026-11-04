@@ -12,8 +12,10 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 
 	"modernc.org/sqlite"
 	sqlite3 "modernc.org/sqlite/lib"
@@ -39,6 +41,7 @@ CREATE TABLE issues (n INTEGER PRIMARY KEY, id TEXT NOT NULL UNIQUE, title TEXT 
 	status TEXT NOT NULL, author TEXT NOT NULL, created INTEGER NOT NULL, updated INTEGER NOT NULL,
 	comments INTEGER NOT NULL, labels TEXT NOT NULL, state TEXT NOT NULL);
 CREATE TABLE labels (issue TEXT NOT NULL, label TEXT NOT NULL, PRIMARY KEY (label, issue));
+CREATE INDEX labels_issue ON labels (issue);
 CREATE TABLE persons (id TEXT PRIMARY KEY, name TEXT NOT NULL);
 CREATE TABLE accounts (server TEXT NOT NULL, id TEXT NOT NULL, person TEXT NOT NULL, login TEXT NOT NULL,
 	PRIMARY KEY (server, id, person));
@@ -173,11 +176,17 @@ type loaded struct {
 // whose version moved, is loaded again; one that is gone is dropped. One
 // that fails to load is kept as broken. The writes are one transaction.
 func (ix *Index) Refresh(ctx context.Context) error {
+	_, err := ix.refresh(ctx)
+	return err
+}
+
+// refresh is Refresh, and the issues it folded and wrote, at their heads.
+func (ix *Index) refresh(ctx context.Context) (map[string]State, error) {
 	refs := map[key]string{}
 	for _, kind := range kinds {
 		m, err := ix.s.Heads(ctx, kind)
 		if err != nil {
-			return fmt.Errorf("index: heads: %w", err)
+			return nil, fmt.Errorf("index: heads: %w", err)
 		}
 		for id, v := range m {
 			if oplog.IsID(id) {
@@ -187,7 +196,7 @@ func (ix *Index) Refresh(ctx context.Context) error {
 	}
 	stored, err := ix.heads(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	var gone []key
 	for k := range stored {
@@ -197,33 +206,60 @@ func (ix *Index) Refresh(ctx context.Context) error {
 	}
 	// Loading happens before the write lock is taken, so a long rebuild
 	// doesn't keep another process waiting.
-	var changed []loaded
+	var todo []loaded
 	for k, head := range refs {
-		if stored[k] == head {
-			continue
+		if stored[k] != head {
+			todo = append(todo, loaded{key: k, head: head})
 		}
-		l := loaded{key: k, head: head}
-		if k.kind == "issue" {
-			l.issue, l.err = issue.LoadAt(ctx, ix.s, k.id, head)
-		} else {
-			l.person, l.err = people.LoadAt(ctx, ix.s, k.id, head)
-		}
-		if err := ctx.Err(); err != nil { // a load cut short isn't a broken entity
-			return err
-		}
+	}
+	ix.load(ctx, todo)
+	if err := ctx.Err(); err != nil { // a load cut short isn't a broken entity
+		return nil, err
+	}
+	var changed []loaded
+	for _, l := range todo {
 		if errors.Is(l.err, oplog.ErrNotFound) { // its ref went since the listing
-			gone = append(gone, k)
+			gone = append(gone, l.key)
 			continue
 		}
 		changed = append(changed, l)
 	}
 	if len(gone)+len(changed) == 0 {
-		return nil
+		return nil, nil
 	}
-	if err := ix.write(ctx, stored, gone, changed); err != nil {
-		return fmt.Errorf("index: refresh: %w", err)
+	wrote := map[string]State{}
+	if err := ix.write(ctx, stored, gone, changed, wrote); err != nil {
+		return nil, fmt.Errorf("index: refresh: %w", err)
 	}
-	return nil
+	return wrote, nil
+}
+
+// loaders are how many entities a refresh loads at once: a fold is CPU,
+// a read from PostgreSQL is a round trip.
+var loaders = max(runtime.GOMAXPROCS(0), 4)
+
+// load loads each entity at its head, several at once.
+func (ix *Index) load(ctx context.Context, todo []loaded) {
+	next := make(chan *loaded)
+	var wg sync.WaitGroup
+	for range min(loaders, len(todo)) {
+		wg.Go(func() {
+			for l := range next {
+				switch {
+				case ctx.Err() != nil: // cut short: Refresh returns
+				case l.kind == "issue":
+					l.issue, l.err = issue.LoadAt(ctx, ix.s, l.id, l.head)
+				default:
+					l.person, l.err = people.LoadAt(ctx, ix.s, l.id, l.head)
+				}
+			}
+		})
+	}
+	for i := range todo {
+		next <- &todo[i]
+	}
+	close(next)
+	wg.Wait()
 }
 
 // heads are the stored heads, broken entities' included.
@@ -246,11 +282,11 @@ func (ix *Index) heads(ctx context.Context) (map[key]string, error) {
 }
 
 // write drops the gone entities and replaces the changed ones' rows, in one
-// transaction. Another refresh may have written some since stored, the
-// heads this one read: those are skipped, as that one's head may be newer
-// than what this one loaded. A head left behind is loaded again by the
-// next refresh.
-func (ix *Index) write(ctx context.Context, stored map[key]string, gone []key, changed []loaded) error {
+// transaction, and puts the issues it wrote in wrote. Another refresh may
+// have written some since stored, the heads this one read: those are
+// skipped, as that one's head may be newer than what this one loaded. A
+// head left behind is loaded again by the next refresh.
+func (ix *Index) write(ctx context.Context, stored map[key]string, gone []key, changed []loaded, wrote map[string]State) error {
 	tx, err := ix.db.BeginTx(ctx, nil) // immediate (_txlock): the check and the write are one
 	if err != nil {
 		return err
@@ -261,13 +297,11 @@ func (ix *Index) write(ctx context.Context, stored map[key]string, gone []key, c
 			return err
 		}
 	}
-	exec := func(query string, args ...any) error {
-		_, err := tx.ExecContext(ctx, ix.sql(query), args...)
-		return err
-	}
+	st := &stmts{ix: ix, tx: tx, ctx: ctx}
+	exec := st.exec
 	moved := func(k key) (bool, error) {
 		var head string
-		err := tx.QueryRowContext(ctx, ix.sql("SELECT head FROM entities WHERE kind = ? AND id = ?"), k.kind, k.id).Scan(&head)
+		err := st.queryRow("SELECT head FROM entities WHERE kind = ? AND id = ?", k.kind, k.id).Scan(&head)
 		if errors.Is(err, sql.ErrNoRows) {
 			err = nil
 		}
@@ -311,8 +345,10 @@ func (ix *Index) write(ctx context.Context, stored map[key]string, gone []key, c
 		} else if m {
 			continue
 		}
-		if err := drop(l.key); err != nil {
-			return err
+		if _, ok := stored[l.key]; ok { // a new one has no rows yet
+			if err := drop(l.key); err != nil {
+				return err
+			}
 		}
 		var msg any // NULL: it loaded
 		switch {
@@ -321,9 +357,9 @@ func (ix *Index) write(ctx context.Context, stored map[key]string, gone []key, c
 		case l.issue != nil && l.issue.Deleted:
 			// a deleted issue is indexed by its head alone: no query finds it
 		case l.issue != nil:
-			err = ix.insertIssue(ctx, tx, l.issue)
+			err = insertIssue(st, l.issue)
 		default:
-			err = ix.insertPerson(ctx, tx, l.person)
+			err = insertPerson(st, l.person)
 		}
 		if err != nil {
 			return err
@@ -331,11 +367,63 @@ func (ix *Index) write(ctx context.Context, stored map[key]string, gone []key, c
 		if err := exec("INSERT INTO entities (kind, id, head, error) VALUES (?, ?, ?, ?)", l.kind, l.id, l.head, msg); err != nil {
 			return err
 		}
+		if msg == nil && l.issue != nil && !l.issue.Deleted {
+			wrote[l.id] = State{l.head, l.issue}
+		}
 	}
 	return tx.Commit()
 }
 
-func (ix *Index) insertIssue(ctx context.Context, tx *sql.Tx, is *issue.Issue) error {
+// stmts are a write's statements, each prepared once in its transaction:
+// a rebuild runs each thousands of times.
+type stmts struct {
+	ix  *Index
+	tx  *sql.Tx
+	ctx context.Context
+	m   map[string]*sql.Stmt
+}
+
+// stmt is query, for the index's server (Index.sql), prepared.
+func (st *stmts) stmt(query string) (*sql.Stmt, error) {
+	if s, ok := st.m[query]; ok {
+		return s, nil
+	}
+	s, err := st.tx.PrepareContext(st.ctx, st.ix.sql(query))
+	if err != nil {
+		return nil, err
+	}
+	if st.m == nil {
+		st.m = map[string]*sql.Stmt{}
+	}
+	st.m[query] = s
+	return s, nil
+}
+
+func (st *stmts) exec(query string, args ...any) error {
+	_, err := st.result(query, args...)
+	return err
+}
+
+func (st *stmts) result(query string, args ...any) (sql.Result, error) {
+	s, err := st.stmt(query)
+	if err != nil {
+		return nil, err
+	}
+	return s.ExecContext(st.ctx, args...)
+}
+
+// queryRow is QueryRowContext on query, prepared; a failed prepare is
+// the row's error.
+func (st *stmts) queryRow(query string, args ...any) *sql.Row {
+	s, err := st.stmt(query)
+	if err != nil {
+		return st.tx.QueryRowContext(st.ctx, st.ix.sql(query), args...) // answers the same error
+	}
+	return s.QueryRowContext(st.ctx, args...)
+}
+
+func insertIssue(st *stmts, is *issue.Issue) error {
+	ix := st.ix
 	// Labels never hold a line feed (issue.Apply refuses one), so it joins them.
 	state, err := json.Marshal(is)
 	if err != nil {
@@ -347,11 +435,11 @@ func (ix *Index) insertIssue(ctx context.Context, tx *sql.Tx, is *issue.Issue) e
 		strings.Join(is.Labels, "\n"), string(state)}
 	var n int64
 	if ix.pg {
-		if err := tx.QueryRowContext(ctx, ix.sql(insert+" RETURNING n"), args...).Scan(&n); err != nil {
+		if err := st.queryRow(insert+" RETURNING n", args...).Scan(&n); err != nil {
 			return err
 		}
 	} else {
-		res, err := tx.ExecContext(ctx, insert, args...)
+		res, err := st.result(insert, args...)
 		if err != nil {
 			return err
 		}
@@ -379,11 +467,11 @@ func (ix *Index) insertIssue(ctx context.Context, tx *sql.Tx, is *issue.Issue) e
 			args[i+1] = toks
 		}
 	}
-	if _, err := tx.ExecContext(ctx, ix.sql(texts), args...); err != nil {
+	if err := st.exec(texts, args...); err != nil {
 		return err
 	}
 	for _, label := range is.Labels {
-		if _, err := tx.ExecContext(ctx, ix.sql("INSERT INTO labels (issue, label) VALUES (?, ?)"), is.ID, label); err != nil {
+		if err := st.exec("INSERT INTO labels (issue, label) VALUES (?, ?)", is.ID, label); err != nil {
 			return err
 		}
 	}
@@ -412,12 +500,12 @@ func capTokens(toks string, n int) string {
 	return ""
 }
 
-func (ix *Index) insertPerson(ctx context.Context, tx *sql.Tx, p *people.Person) error {
-	if _, err := tx.ExecContext(ctx, ix.sql("INSERT INTO persons (id, name) VALUES (?, ?)"), p.ID, p.Name); err != nil {
+func insertPerson(st *stmts, p *people.Person) error {
+	if err := st.exec("INSERT INTO persons (id, name) VALUES (?, ?)", p.ID, p.Name); err != nil {
 		return err
 	}
 	for _, a := range p.Accounts {
-		if _, err := tx.ExecContext(ctx, ix.sql("INSERT INTO accounts (server, id, person, login) VALUES (?, ?, ?, ?)"),
+		if err := st.exec("INSERT INTO accounts (server, id, person, login) VALUES (?, ?, ?, ?)",
 			a.Server, a.ID, p.ID, a.Login); err != nil {
 			return err
 		}

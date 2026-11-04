@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS issues (n bigserial PRIMARY KEY, id text NOT NULL UNI
 	status text NOT NULL, author text NOT NULL, created bigint NOT NULL, updated bigint NOT NULL,
 	comments integer NOT NULL, labels text NOT NULL, state text NOT NULL);
 CREATE TABLE IF NOT EXISTS labels (issue text NOT NULL, label text NOT NULL, PRIMARY KEY (label, issue));
+CREATE INDEX IF NOT EXISTS labels_issue ON labels (issue);
 CREATE TABLE IF NOT EXISTS persons (id text PRIMARY KEY, name text NOT NULL);
 CREATE TABLE IF NOT EXISTS accounts (server text NOT NULL, id text NOT NULL, person text NOT NULL, login text NOT NULL,
 	PRIMARY KEY (server, id, person));
