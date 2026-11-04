@@ -594,3 +594,24 @@ func TestMeSaysTheView(t *testing.T) {
 		t.Errorf("a [cycle] table: %q from %q", me.View, me.ViewFrom)
 	}
 }
+
+// "Comment and close" with a status that isn't one writes nothing: a 400
+// after the comment landed would leave it unannounced, and posted twice
+// by a client that tries again.
+func TestCommentWithABadStatusWritesNothing(t *testing.T) {
+	t.Parallel()
+	ts, s := newIssueServer(t)
+	id := storetest.NewIssue(t, s.b, "x")
+	if code := call(t, "POST", ts.URL+"/api/issues/"+id+"/comments", map[string]any{"body": "hello", "status": "done"}, nil); code != http.StatusBadRequest {
+		t.Fatalf("answer %d, want 400", code)
+	}
+	th, err := s.b.Thread(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range th.Events {
+		if e.Body == "hello" {
+			t.Fatal("the comment was written")
+		}
+	}
+}

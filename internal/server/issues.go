@@ -172,6 +172,10 @@ func (s *apiServer) handleComment(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, errors.New("an empty comment"))
 		return
 	}
+	if req.Status != "" && req.Status != "open" && req.Status != "closed" { // before the comment is written
+		writeError(w, http.StatusBadRequest, fmt.Errorf("status %q: want open or closed", req.Status))
+		return
+	}
 	step, err := s.stepOf(req.Step)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err)
