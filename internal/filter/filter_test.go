@@ -13,7 +13,7 @@ const fixture = "../config/testdata/git-board.toml"
 
 var today = time.Date(2026, 8, 31, 0, 0, 0, 0, time.UTC) // "delivery" is current, "post-delivery" is next
 
-func mustLoad(t *testing.T) *config.Config {
+func mustLoad(t testing.TB) *config.Config {
 	t.Helper()
 	cfg, err := config.Load(fixture)
 	if err != nil {
