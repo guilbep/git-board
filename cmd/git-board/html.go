@@ -15,7 +15,7 @@ import (
 
 	"github.com/guilbep/git-board/internal/board"
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/release"
+	"github.com/guilbep/git-board/internal/ship"
 	"github.com/guilbep/git-board/internal/store"
 	"github.com/guilbep/git-board/internal/tui"
 	boardweb "github.com/guilbep/git-board/web"
@@ -215,7 +215,7 @@ func writeIndexPage(outputDir string, viewNames []string, generated time.Time, r
 }
 
 // releasesHTMLData is the releases.html page: the environment strip and one
-// row per release, then the release notes (internal/release Runner.Notes).
+// row per release, then the release notes (internal/ship Runner.Notes).
 type releasesHTMLData struct {
 	ViewName  string // "Releases", so the header marks it active
 	Views     []string
@@ -247,7 +247,7 @@ func writeReleasesPage(outputDir string, views []string, b *store.Backend, cfg *
 	if err != nil {
 		return err
 	}
-	run, err := release.New(cfg, dir, b)
+	run, err := ship.New(cfg, dir, b)
 	if err != nil {
 		return err
 	}

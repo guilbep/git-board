@@ -1,4 +1,4 @@
-package release_test
+package ship_test
 
 import (
 	"archive/tar"
@@ -15,25 +15,25 @@ import (
 	"testing"
 
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/release"
-	"github.com/guilbep/git-board/internal/release/releasetest"
+	"github.com/guilbep/git-board/internal/ship"
+	"github.com/guilbep/git-board/internal/ship/shiptest"
 )
 
 // binariesApp is a binaries-only app: no environments, a Go main package
 // at cmd/app, the authority on GitHub as acme/app (through the Runner's
 // seam: origin stays the local bare, for the push).
-func binariesApp(t *testing.T) (*release.Runner, *releasetest.Tools, *releasetest.Fixture, string) {
+func binariesApp(t *testing.T) (*ship.Runner, *shiptest.Tools, *shiptest.Fixture, string) {
 	t.Helper()
-	r, tools, fx := releasetest.NewRunner(t)
+	r, tools, fx := shiptest.NewRunner(t)
 	r.Cfg = config.Release{Binaries: []string{"./cmd/app"}, Platforms: []string{runtime.GOOS + "/" + runtime.GOARCH}} // ponytail: the host only, a cross-compile per platform is slow
 	r.Repo = "acme/app"
 	return r, tools, fx, fx.GoMain(t, "cmd/app")
 }
 
 // stepNames collects the names of the steps r reports as done.
-func stepNames(r *release.Runner) *[]string {
+func stepNames(r *ship.Runner) *[]string {
 	var names []string
-	r.Step = func(s release.Step) {
+	r.Step = func(s ship.Step) {
 		if s.State == "done" {
 			names = append(names, s.Name)
 		}
@@ -59,7 +59,7 @@ func base(files []string) []string {
 func TestBinariesCutBuildsPublishesRecords(t *testing.T) {
 	r, tools, _, c := binariesApp(t)
 	names := stepNames(r)
-	tg := cut(t, r, release.Cut{Version: release.Version{Major: 1}, Final: true, Deploy: true})
+	tg := cut(t, r, ship.Cut{Version: ship.Version{Major: 1}, Final: true, Deploy: true})
 	if tg.Commit != c || tg.Version.RC != 0 {
 		t.Fatalf("cut %s on %.7s, want a final on %.7s", tg.Name, tg.Commit, c)
 	}
@@ -85,7 +85,7 @@ func TestBinariesArchiveLayout(t *testing.T) {
 	}
 	r, tools, _, _ := binariesApp(t)
 	tools.CopyPublished = t.TempDir()
-	cut(t, r, release.Cut{Version: release.Version{Major: 1}, Final: true})
+	cut(t, r, ship.Cut{Version: ship.Version{Major: 1}, Final: true})
 	name := "app_v1.0.0_" + runtime.GOOS + "_" + runtime.GOARCH
 	f, err := os.Open(filepath.Join(tools.CopyPublished, name+".tar.gz"))
 	if err != nil {
@@ -124,7 +124,7 @@ func TestBinariesBuildCommand(t *testing.T) {
 	r, tools, _, c := binariesApp(t)
 	r.Cfg.Build = `mkdir -p dist && echo "$VERSION" > dist/app.txt`
 	tools.CopyPublished = t.TempDir()
-	cut(t, r, release.Cut{Version: release.Version{Major: 1}, Final: true})
+	cut(t, r, ship.Cut{Version: ship.Version{Major: 1}, Final: true})
 	if got := base(tools.Published[0].Files); !slices.Equal(got, []string{"app.txt", "checksums.txt"}) {
 		t.Errorf("files %v", got)
 	}
@@ -139,23 +139,23 @@ func TestBinariesBuildCommand(t *testing.T) {
 func TestBuildCommandMustFillDist(t *testing.T) {
 	r, tools, _, _ := binariesApp(t)
 	r.Cfg.Build = "true"
-	_, err := r.Cut(context.Background(), release.Cut{Version: release.Version{Major: 1}, Final: true})
+	_, err := r.Cut(context.Background(), ship.Cut{Version: ship.Version{Major: 1}, Final: true})
 	if err == nil || !strings.Contains(err.Error(), "dist/") || len(tools.Published) != 0 {
 		t.Errorf("err %v, published %v", err, tools.Published)
 	}
 }
 
 func TestInfer(t *testing.T) {
-	_, _, fx := releasetest.NewRunner(t)
+	_, _, fx := shiptest.NewRunner(t)
 	fx.GoMain(t, "cmd/app")
-	releasetest.Git(t, fx.App, "remote", "set-url", "origin", "git@github.com:acme/app.git") // after the push
+	shiptest.Git(t, fx.App, "remote", "set-url", "origin", "git@github.com:acme/app.git") // after the push
 	for p, c := range map[string]string{"cmd/zed/main.go": "package main\n\nfunc main() {}\n", "Makefile": "all:\n\techo\n\ndist: all\n\techo\n"} {
 		os.MkdirAll(filepath.Dir(filepath.Join(fx.App, p)), 0o755)
 		if err := os.WriteFile(filepath.Join(fx.App, p), []byte(c), 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}
-	s, err := release.Infer(context.Background(), fx.App)
+	s, err := ship.Infer(context.Background(), fx.App)
 	// cmd/app is the program (the repo is acme/app): cmd/zed is one of its tools
 	if err != nil || !slices.Equal(s.Binaries, []string{"./cmd/app"}) || s.Build != "make dist" ||
 		!slices.Equal(s.Platforms, config.DefaultPlatforms) || s.Remote != "origin" || s.Forge != "github" || s.Repo != "acme/app" || s.Note != "" {
@@ -164,18 +164,18 @@ func TestInfer(t *testing.T) {
 }
 
 func TestInferNonGitHubRemote(t *testing.T) {
-	_, _, fx := releasetest.NewRunner(t)
+	_, _, fx := shiptest.NewRunner(t)
 	fx.GoMain(t, "cmd/app")
-	releasetest.Git(t, fx.App, "remote", "set-url", "origin", "https://gitlab.com/acme/app.git")
-	s, _ := release.Infer(context.Background(), fx.App)
+	shiptest.Git(t, fx.App, "remote", "set-url", "origin", "https://gitlab.com/acme/app.git")
+	s, _ := ship.Infer(context.Background(), fx.App)
 	if s.Forge != "" || s.Note != "https://gitlab.com/acme/app.git isn't on github.com: git-board publishes GitHub releases only, for now." {
 		t.Errorf("%+v", s)
 	}
 }
 
 func TestInferNoMain(t *testing.T) {
-	_, _, fx := releasetest.NewRunner(t)
-	s, _ := release.Infer(context.Background(), fx.App)
+	_, _, fx := shiptest.NewRunner(t)
+	s, _ := ship.Infer(context.Background(), fx.App)
 	if len(s.Binaries) != 0 || s.Note != "No main package found: no cmd/*/main.go and no main.go." {
 		t.Errorf("%+v", s)
 	}
@@ -183,7 +183,7 @@ func TestInferNoMain(t *testing.T) {
 
 // git-board's own repo infers its own release: the Done-when of GB-19.
 func TestInferGitBoard(t *testing.T) {
-	s, err := release.Infer(context.Background(), "../..") // cmd/smoketui is a tool: the repo's name picks cmd/git-board
+	s, err := ship.Infer(context.Background(), "../..") // cmd/smoketui is a tool: the repo's name picks cmd/git-board
 	if err != nil || !slices.Equal(s.Binaries, []string{"./cmd/git-board"}) || s.Build != "make dist" {
 		t.Errorf("%+v, %v", s, err)
 	}
@@ -192,7 +192,7 @@ func TestInferGitBoard(t *testing.T) {
 // With no [branches] base, the trunk is the remote's default branch, the
 // way branches.Suggest reads it: a program on main releases from main.
 func TestBaseIsTheRemoteDefaultBranch(t *testing.T) {
-	r, _, fx := releasetest.NewRunner(t)
+	r, _, fx := shiptest.NewRunner(t)
 	r.Base, r.Branches.Base = "", ""
 	if got := r.BaseBranch(); got != "dev" {
 		t.Errorf("no remote HEAD: %q, want dev", got)

@@ -1,4 +1,4 @@
-package release_test
+package ship_test
 
 import (
 	"testing"

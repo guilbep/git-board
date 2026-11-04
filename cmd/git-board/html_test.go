@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/guilbep/git-board/internal/release"
-	"github.com/guilbep/git-board/internal/release/releasetest"
+	"github.com/guilbep/git-board/internal/ship"
+	"github.com/guilbep/git-board/internal/ship/shiptest"
 	"github.com/guilbep/git-board/internal/store"
 )
 
@@ -286,10 +286,10 @@ func TestHTMLInlinesEPFLDesignSystem(t *testing.T) {
 // environment strip, the releases table and each release's notes inline —
 // and without it, no such file is written.
 func TestHTMLWritesReleases(t *testing.T) {
-	r, _, fx := releasetest.NewRunner(t)
+	r, _, fx := shiptest.NewRunner(t)
 	t.Chdir(fx.App)
 
-	c := releasetest.Git(t, fx.App, "rev-list", "--max-parents=0", "HEAD")
+	c := shiptest.Git(t, fx.App, "rev-list", "--max-parents=0", "HEAD")
 	fx.Tag(t, c, "v1.0.1-rc.1")
 	rec, err := r.B.CreateRelease(store.ReleaseRecord{Commit: c})
 	if err != nil {
@@ -299,7 +299,7 @@ func TestHTMLWritesReleases(t *testing.T) {
 		t.Fatalf("SetReleaseNotes: %v", err)
 	}
 	for i := range fx.ConfigBare {
-		fx.SetOverlay(t, i, "stage", release.Deployed{Commit: c, Version: "v1.0.1-rc.1"})
+		fx.SetOverlay(t, i, "stage", ship.Deployed{Commit: c, Version: "v1.0.1-rc.1"})
 	}
 	if err := os.WriteFile(filepath.Join(fx.App, configPath), []byte(fx.Config(t)), 0o644); err != nil {
 		t.Fatalf("write config: %v", err)

@@ -1,6 +1,4 @@
-// Package release holds the pure version logic for client-side releases:
-// tags, the next version, candidate numbering and the dev version.
-package release
+package ship
 
 import (
 	"fmt"

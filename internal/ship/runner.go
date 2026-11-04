@@ -1,4 +1,9 @@
-package release
+// Package ship is how git-board ships an app's releases: it cuts them,
+// promotes, deploys and rolls them back, adopts the overlays, and reads
+// what runs where. It drives git remotes, the GitOps config repos, the
+// image and chart tools and the forge (Tools), and keeps what it ships in
+// the release records (internal/store, over the core's release kind).
+package ship
 
 import (
 	"cmp"

@@ -1,5 +1,5 @@
-// Package releasetest builds local git repositories for tests: no network, no forge.
-package releasetest
+// Package shiptest builds local git repositories for tests: no network, no forge.
+package shiptest
 
 import (
 	"os"

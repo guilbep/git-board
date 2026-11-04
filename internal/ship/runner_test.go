@@ -1,4 +1,4 @@
-package release_test
+package ship_test
 
 import (
 	"path/filepath"
@@ -6,13 +6,13 @@ import (
 	"testing"
 
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/release"
-	"github.com/guilbep/git-board/internal/release/releasetest"
+	"github.com/guilbep/git-board/internal/ship"
+	"github.com/guilbep/git-board/internal/ship/shiptest"
 )
 
 func TestNewRunner(t *testing.T) {
-	src, _, fx := releasetest.NewRunner(t)
-	r, err := release.New(&config.Config{Release: src.Cfg}, fx.App, src.B)
+	src, _, fx := shiptest.NewRunner(t)
+	r, err := ship.New(&config.Config{Release: src.Cfg}, fx.App, src.B)
 	if err != nil {
 		t.Fatal(err)
 	}

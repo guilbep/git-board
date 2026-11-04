@@ -1,4 +1,4 @@
-package releasetest
+package shiptest
 
 import (
 	"bytes"
@@ -11,7 +11,7 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/release"
+	"github.com/guilbep/git-board/internal/ship"
 	"github.com/guilbep/git-board/internal/store"
 )
 
@@ -38,7 +38,7 @@ type Fixture struct {
 //
 // It sets the git environment for the test (no user or system config, a
 // fixed identity), so tests using it can't be parallel.
-func NewRunner(t *testing.T, environments ...string) (*release.Runner, *Tools, *Fixture) {
+func NewRunner(t *testing.T, environments ...string) (*ship.Runner, *Tools, *Fixture) {
 	t.Helper()
 	if len(environments) == 0 {
 		environments = []string{"dev", "stage", "prod"}
@@ -78,7 +78,7 @@ func NewRunner(t *testing.T, environments ...string) (*release.Runner, *Tools, *
 		t.Fatalf("NewIdentity: %v", err)
 	}
 	tools := NewTools()
-	r := &release.Runner{Cfg: fx.cfg, Base: "dev", Dir: app, B: b, Tools: tools, CacheDir: t.TempDir(), Who: "dev"}
+	r := &ship.Runner{Cfg: fx.cfg, Base: "dev", Dir: app, B: b, Tools: tools, CacheDir: t.TempDir(), Who: "dev"}
 	return r, tools, fx
 }
 
@@ -109,10 +109,10 @@ helmCharts:
 // <registry>/<image>; the chart and version values are written only when
 // d.Version is set, the chart's version being d.Chart, else d.Version; the
 // commit's subject names d.Version, for History.
-func (fx *Fixture) SetOverlay(t *testing.T, target int, env string, d release.Deployed) {
+func (fx *Fixture) SetOverlay(t *testing.T, target int, env string, d ship.Deployed) {
 	t.Helper()
 	ctx := context.Background()
-	c, err := release.OpenConfigRepo(ctx, t.TempDir(), fx.ConfigBare[target])
+	c, err := ship.OpenConfigRepo(ctx, t.TempDir(), fx.ConfigBare[target])
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -124,8 +124,8 @@ func (fx *Fixture) SetOverlay(t *testing.T, target int, env string, d release.De
 		}
 	}
 	path := strings.ReplaceAll(fx.cfg.Deploy[target].Path, "{env}", env)
-	msg := fmt.Sprintf("chore(manifest): update app (%s) %s [by fixture via releasetest]", env, d.Version)
-	if _, err := c.Update(ctx, path, msg, func(o *release.Overlay) (bool, error) {
+	msg := fmt.Sprintf("chore(manifest): update app (%s) %s [by fixture via shiptest]", env, d.Version)
+	if _, err := c.Update(ctx, path, msg, func(o *ship.Overlay) (bool, error) {
 		return o.Set(d, chart, fx.cfg.VersionValues)
 	}); err != nil {
 		t.Fatalf("SetOverlay %d %s: %v", target, env, err)

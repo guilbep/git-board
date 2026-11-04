@@ -14,10 +14,10 @@ import (
 	"time"
 
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/release"
+	"github.com/guilbep/git-board/internal/ship"
 )
 
-// Releases (internal/release): what runs where and the releases, an
+// Releases (internal/ship): what runs where and the releases, an
 // issue's environments, the quick writes on a release's record, and the
 // jobs that move releases (deploy, cut, promote, rollback), which run in
 // the background like the forge sync, one at a time.
@@ -34,40 +34,40 @@ var (
 )
 
 type releasesResponse struct {
-	Enabled      bool                 `json:"enabled"`
-	Remote       string               `json:"remote"` // the authority, [release] remote
-	Trunk        string               `json:"trunk"`  // the trunk branch, e.g. dev
-	Environments []release.EnvState   `json:"environments"`
-	Binaries     []string             `json:"binaries"` // [release] binaries: a cut builds and publishes their archives
-	Releases     []release.ReleaseRow `json:"releases"`
-	Job          *releaseJob          `json:"job,omitempty"`
+	Enabled      bool              `json:"enabled"`
+	Remote       string            `json:"remote"` // the authority, [release] remote
+	Trunk        string            `json:"trunk"`  // the trunk branch, e.g. dev
+	Environments []ship.EnvState   `json:"environments"`
+	Binaries     []string          `json:"binaries"` // [release] binaries: a cut builds and publishes their archives
+	Releases     []ship.ReleaseRow `json:"releases"`
+	Job          *releaseJob       `json:"job,omitempty"`
 }
 
 // releaseDetail is a release's page.
 type releaseDetail struct {
-	Row        release.ReleaseRow        `json:"row"`
-	Issues     []release.DraftIssue      `json:"issues"`
-	Candidates []release.ReleaseRow      `json:"candidates"` // the rc rows of its final, but itself
+	Row        ship.ReleaseRow           `json:"row"`
+	Issues     []ship.DraftIssue         `json:"issues"`
+	Candidates []ship.ReleaseRow         `json:"candidates"` // the rc rows of its final, but itself
 	History    map[string][]historyEntry `json:"history"`    // env → its overlays' changes naming this version
 }
 
 // historyEntry is an overlay change and the deploy target it is of.
 type historyEntry struct {
-	release.Change
-	Target string `json:"target"` // release.TargetState.Name
+	ship.Change
+	Target string `json:"target"` // ship.TargetState.Name
 }
 
 // releaseJob is the job running, or the last one.
 type releaseJob struct {
-	Kind    string         `json:"kind"`    // deploy, cut, promote, rollback
-	Subject string         `json:"subject"` // dev, v1.0.1-rc.1 to stage, prod to v1.0.0, the rc promoted; a cut's version, then its tag
-	State   string         `json:"state"`   // running, done, failed
-	Error   string         `json:"error"`
-	Code    string         `json:"code"`  // a failed job's: taken, older, not-adopted; "" otherwise
-	Tag     string         `json:"tag"`   // the tag a cut or promote pushed or tried, once known
-	Steps   []release.Step `json:"steps"` // each step once, as last reported
-	Started time.Time      `json:"started"`
-	Ended   *time.Time     `json:"ended"`
+	Kind    string      `json:"kind"`    // deploy, cut, promote, rollback
+	Subject string      `json:"subject"` // dev, v1.0.1-rc.1 to stage, prod to v1.0.0, the rc promoted; a cut's version, then its tag
+	State   string      `json:"state"`   // running, done, failed
+	Error   string      `json:"error"`
+	Code    string      `json:"code"`  // a failed job's: taken, older, not-adopted; "" otherwise
+	Tag     string      `json:"tag"`   // the tag a cut or promote pushed or tried, once known
+	Steps   []ship.Step `json:"steps"` // each step once, as last reported
+	Started time.Time   `json:"started"`
+	Ended   *time.Time  `json:"ended"`
 }
 
 // issueEnvironment tells whether an environment runs an issue's merged
@@ -79,7 +79,7 @@ type issueEnvironment struct {
 }
 
 // runner is the Runner of the repository served, the working directory's.
-func (s *apiServer) runner() (*release.Runner, error) {
+func (s *apiServer) runner() (*ship.Runner, error) {
 	cfg := s.config()
 	if !cfg.Release.Enabled() {
 		return nil, errNoRelease
@@ -88,7 +88,7 @@ func (s *apiServer) runner() (*release.Runner, error) {
 	if err != nil {
 		return nil, err
 	}
-	r, err := release.New(cfg, dir, s.b)
+	r, err := ship.New(cfg, dir, s.b)
 	if err != nil {
 		return nil, err
 	}
@@ -112,7 +112,7 @@ func writeRunnerError(w http.ResponseWriter, err error) {
 // reader is a Runner for a read and the func that ends it, which the
 // caller defers and may call earlier: online when the runner is free, else
 // Offline, beside the job or write holding it.
-func (s *apiServer) reader(w http.ResponseWriter) (*release.Runner, func(), bool) {
+func (s *apiServer) reader(w http.ResponseWriter) (*ship.Runner, func(), bool) {
 	r, err := s.runner()
 	if err != nil {
 		writeRunnerError(w, err)
@@ -146,9 +146,9 @@ func (s *apiServer) quickWrite(w http.ResponseWriter, write func(ctx context.Con
 		return write(context.Background())
 	}()
 	switch {
-	case errors.Is(err, release.ErrNoTag) || errors.Is(err, release.ErrNoRecord):
+	case errors.Is(err, ship.ErrNoTag) || errors.Is(err, ship.ErrNoRecord):
 		writeError(w, http.StatusNotFound, err)
-	case errors.Is(err, release.ErrBadProposal):
+	case errors.Is(err, ship.ErrBadProposal):
 		writeError(w, http.StatusBadRequest, err)
 	case err != nil: // a fetch or a push
 		writeError(w, http.StatusInternalServerError, err)
@@ -159,14 +159,14 @@ func (s *apiServer) quickWrite(w http.ResponseWriter, write func(ctx context.Con
 
 // startJob runs f in the background as the job, answering 202 and the job,
 // or 409 releasing while one runs. A tag f returns becomes the subject.
-func (s *apiServer) startJob(w http.ResponseWriter, r *release.Runner, kind, subject string, f func(ctx context.Context, r *release.Runner) (string, error)) {
+func (s *apiServer) startJob(w http.ResponseWriter, r *ship.Runner, kind, subject string, f func(ctx context.Context, r *ship.Runner) (string, error)) {
 	s.releaseMu.Lock()
 	if s.releaseRun != nil && s.releaseRun.State == "running" {
 		s.releaseMu.Unlock()
 		writeCoded(w, http.StatusConflict, "releasing", errReleasing)
 		return
 	}
-	job := &releaseJob{Kind: kind, Subject: subject, State: "running", Steps: []release.Step{}, Started: time.Now()}
+	job := &releaseJob{Kind: kind, Subject: subject, State: "running", Steps: []ship.Step{}, Started: time.Now()}
 	s.releaseRun = job
 	started := *job
 	s.releaseMu.Unlock()
@@ -174,10 +174,10 @@ func (s *apiServer) startJob(w http.ResponseWriter, r *release.Runner, kind, sub
 	writeJSON(w, http.StatusAccepted, started)
 }
 
-func (s *apiServer) runJob(job *releaseJob, r *release.Runner, f func(ctx context.Context, r *release.Runner) (string, error)) {
+func (s *apiServer) runJob(job *releaseJob, r *ship.Runner, f func(ctx context.Context, r *ship.Runner) (string, error)) {
 	s.runnerMu.Lock()
 	defer s.runnerMu.Unlock()
-	r.Step = func(st release.Step) {
+	r.Step = func(st ship.Step) {
 		s.releaseMu.Lock()
 		if n := len(job.Steps); n > 0 && job.Steps[n-1].Name == st.Name && job.Steps[n-1].State == "running" {
 			job.Steps[n-1] = st
@@ -217,11 +217,11 @@ func (s *apiServer) runJob(job *releaseJob, r *release.Runner, f func(ctx contex
 // jobCode is what the page acts on in a job's error.
 func jobCode(err error) string {
 	switch {
-	case errors.Is(err, release.ErrTaken):
+	case errors.Is(err, ship.ErrTaken):
 		return "taken"
-	case errors.Is(err, release.ErrOlder):
+	case errors.Is(err, ship.ErrOlder):
 		return "older"
-	case errors.Is(err, release.ErrNotAdopted):
+	case errors.Is(err, ship.ErrNotAdopted):
 		return "not-adopted"
 	}
 	return ""
@@ -250,7 +250,7 @@ func orEmpty[T any](s []T) []T {
 func (s *apiServer) handleReleases(w http.ResponseWriter, r *http.Request) {
 	if !s.config().Release.Enabled() {
 		// the page's shape still, its lists empty: the page reads them
-		writeJSON(w, http.StatusOK, releasesResponse{Environments: []release.EnvState{}, Binaries: []string{}, Releases: []release.ReleaseRow{}})
+		writeJSON(w, http.StatusOK, releasesResponse{Environments: []ship.EnvState{}, Binaries: []string{}, Releases: []ship.ReleaseRow{}})
 		return
 	}
 	run, done, ok := s.reader(w)
@@ -331,14 +331,14 @@ func (s *apiServer) handleRelease(w http.ResponseWriter, r *http.Request) {
 // found is false when no release tag has the name.
 // ponytail: reopens the config repos Status opened (a stat each); Status
 // returning them is the upgrade if it ever shows
-func detail(ctx context.Context, run *release.Runner, st release.Status, name string) (d releaseDetail, found bool, err error) {
-	i := slices.IndexFunc(st.Releases, func(row release.ReleaseRow) bool { return row.Tag.Name == name })
+func detail(ctx context.Context, run *ship.Runner, st ship.Status, name string) (d releaseDetail, found bool, err error) {
+	i := slices.IndexFunc(st.Releases, func(row ship.ReleaseRow) bool { return row.Tag.Name == name })
 	if i < 0 {
 		return d, false, nil
 	}
 	d.Row = st.Releases[i]
 	final := d.Row.Tag.Version.Final()
-	d.Candidates = []release.ReleaseRow{}
+	d.Candidates = []ship.ReleaseRow{}
 	for _, row := range st.Releases {
 		if v := row.Tag.Version; v.RC != 0 && v.Final() == final && row.Tag.Name != name {
 			d.Candidates = append(d.Candidates, row)
@@ -351,7 +351,7 @@ func detail(ctx context.Context, run *release.Runner, st release.Status, name st
 	d.History = map[string][]historyEntry{}
 	for _, e := range st.Envs {
 		for _, t := range e.Targets {
-			c, err := release.OpenConfigRepo(ctx, run.CacheDir, t.Repo)
+			c, err := ship.OpenConfigRepo(ctx, run.CacheDir, t.Repo)
 			if err != nil {
 				return d, true, err
 			}
@@ -407,7 +407,7 @@ func (s *apiServer) handleIssueEnvironments(w http.ResponseWriter, r *http.Reque
 			if !l.Merged || e.Commit == "" || env.In {
 				continue
 			}
-			if env.In, err = release.IsAncestor(r.Context(), run.Dir, l.LastCommit.SHA, e.Commit); err != nil {
+			if env.In, err = ship.IsAncestor(r.Context(), run.Dir, l.LastCommit.SHA, e.Commit); err != nil {
 				writeError(w, http.StatusInternalServerError, err)
 				return
 			}
@@ -481,7 +481,7 @@ func (s *apiServer) handleAdopt(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		Proposals []release.Proposal `json:"proposals"`
+		Proposals []ship.Proposal `json:"proposals"`
 	}
 	if !decode(w, r, &req) {
 		return
@@ -506,10 +506,10 @@ func (s *apiServer) handleCut(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &req) {
 		return
 	}
-	c := release.Cut{Final: req.Final, Hotfix: req.Hotfix, Deploy: req.Deploy, Commit: req.Commit, Notes: req.Notes}
+	c := ship.Cut{Final: req.Final, Hotfix: req.Hotfix, Deploy: req.Deploy, Commit: req.Commit, Notes: req.Notes}
 	subject := ""
 	if req.Version != "" {
-		v, ok := release.ParseTag("v" + strings.TrimPrefix(req.Version, "v"))
+		v, ok := ship.ParseTag("v" + strings.TrimPrefix(req.Version, "v"))
 		if !ok || v.RC != 0 {
 			writeError(w, http.StatusBadRequest, fmt.Errorf("version %q: want a final version like 1.4.20; the rc number is chosen for you", req.Version))
 			return
@@ -518,7 +518,7 @@ func (s *apiServer) handleCut(w http.ResponseWriter, r *http.Request) {
 	}
 	// a cut would push the one made offline instead, without these notes
 	// or the deploy
-	if p, err := release.Pending(r.Context(), run.Dir); err != nil || len(p) > 0 {
+	if p, err := ship.Pending(r.Context(), run.Dir); err != nil || len(p) > 0 {
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, err)
 			return
@@ -526,7 +526,7 @@ func (s *apiServer) handleCut(w http.ResponseWriter, r *http.Request) {
 		writeCoded(w, http.StatusConflict, "pending", fmt.Errorf("%s, cut offline, isn't pushed yet: a deploy, or git-board release cut, pushes it first", p[0].Name))
 		return
 	}
-	s.startJob(w, run, "cut", subject, func(ctx context.Context, run *release.Runner) (string, error) {
+	s.startJob(w, run, "cut", subject, func(ctx context.Context, run *ship.Runner) (string, error) {
 		t, err := run.Cut(ctx, c)
 		return t.Name, err // pushed, even when a later step failed
 	})
@@ -539,7 +539,7 @@ func (s *apiServer) handlePromote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	tag := r.PathValue("tag")
-	s.startJob(w, run, "promote", tag, func(ctx context.Context, run *release.Runner) (string, error) {
+	s.startJob(w, run, "promote", tag, func(ctx context.Context, run *ship.Runner) (string, error) {
 		_, err := run.Promote(ctx, tag)
 		return "", err
 	})
@@ -547,7 +547,7 @@ func (s *apiServer) handlePromote(w http.ResponseWriter, r *http.Request) {
 
 // environment is the environment a request names, false (answered 404)
 // when [release] has no such.
-func environment(w http.ResponseWriter, r *http.Request, run *release.Runner) (string, bool) {
+func environment(w http.ResponseWriter, r *http.Request, run *ship.Runner) (string, bool) {
 	env := r.PathValue("env")
 	if !slices.Contains(run.Cfg.Environments, env) {
 		writeError(w, http.StatusNotFound, fmt.Errorf("no environment %s in [release]", env))
@@ -559,21 +559,21 @@ func environment(w http.ResponseWriter, r *http.Request, run *release.Runner) (s
 // releaseTag is the release tag a request names, false when it names none:
 // answered 400 when the name isn't a release tag's, 404 when no such tag
 // has been fetched.
-func releaseTag(w http.ResponseWriter, r *http.Request, run *release.Runner, name string) (release.Tag, bool) {
-	if _, ok := release.ParseTag(name); !ok {
+func releaseTag(w http.ResponseWriter, r *http.Request, run *ship.Runner, name string) (ship.Tag, bool) {
+	if _, ok := ship.ParseTag(name); !ok {
 		writeError(w, http.StatusBadRequest, fmt.Errorf("%q isn't a release tag", name))
-		return release.Tag{}, false
+		return ship.Tag{}, false
 	}
-	tags, err := release.ReleaseTags(r.Context(), run.Dir)
+	tags, err := ship.ReleaseTags(r.Context(), run.Dir)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
-		return release.Tag{}, false
+		return ship.Tag{}, false
 	}
-	if i := slices.IndexFunc(tags, func(t release.Tag) bool { return t.Name == name }); i >= 0 {
+	if i := slices.IndexFunc(tags, func(t ship.Tag) bool { return t.Name == name }); i >= 0 {
 		return tags[i], true
 	}
 	writeError(w, http.StatusNotFound, fmt.Errorf("no release tag %q", name))
-	return release.Tag{}, false
+	return ship.Tag{}, false
 }
 
 func (s *apiServer) handleDeploy(w http.ResponseWriter, r *http.Request) {
@@ -598,7 +598,7 @@ func (s *apiServer) handleDeploy(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, fmt.Errorf("%s doesn't follow the trunk: deploy it a release tag", env))
 			return
 		}
-		s.startJob(w, run, "deploy", env, func(ctx context.Context, run *release.Runner) (string, error) {
+		s.startJob(w, run, "deploy", env, func(ctx context.Context, run *ship.Runner) (string, error) {
 			return "", run.DeployFollowed(ctx)
 		})
 		return
@@ -607,8 +607,8 @@ func (s *apiServer) handleDeploy(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	s.startJob(w, run, "deploy", t.Name+" to "+env, func(ctx context.Context, run *release.Runner) (string, error) {
-		return "", run.Deploy(ctx, env, release.Target{Commit: t.Commit, Version: t.Name})
+	s.startJob(w, run, "deploy", t.Name+" to "+env, func(ctx context.Context, run *ship.Runner) (string, error) {
+		return "", run.Deploy(ctx, env, ship.Target{Commit: t.Commit, Version: t.Name})
 	})
 }
 
@@ -636,7 +636,7 @@ func (s *apiServer) handleRollback(w http.ResponseWriter, r *http.Request) {
 	if _, ok := releaseTag(w, r, run, req.Tag); !ok {
 		return
 	}
-	s.startJob(w, run, "rollback", env+" to "+req.Tag, func(ctx context.Context, run *release.Runner) (string, error) {
+	s.startJob(w, run, "rollback", env+" to "+req.Tag, func(ctx context.Context, run *ship.Runner) (string, error) {
 		return "", run.Rollback(ctx, env, req.Tag, req.Reason)
 	})
 }
@@ -648,7 +648,7 @@ func (s *apiServer) handleSetup(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
-	setup, err := release.Infer(r.Context(), dir)
+	setup, err := ship.Infer(r.Context(), dir)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
@@ -660,7 +660,7 @@ func (s *apiServer) handleSetup(w http.ResponseWriter, r *http.Request) {
 // handleEnable writes the [release] table of a binary release into
 // .git-board.toml and runs it: Enable binary release.
 func (s *apiServer) handleEnable(w http.ResponseWriter, r *http.Request) {
-	var req release.Setup
+	var req ship.Setup
 	if !decode(w, r, &req) {
 		return
 	}
@@ -673,7 +673,7 @@ func (s *apiServer) handleEnable(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
-	if setup, err := release.Infer(r.Context(), dir); err != nil {
+	if setup, err := ship.Infer(r.Context(), dir); err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	} else if setup.Note != "" {

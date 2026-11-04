@@ -1,4 +1,4 @@
-package release_test
+package ship_test
 
 import (
 	"context"
@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/guilbep/git-board/internal/release"
-	"github.com/guilbep/git-board/internal/release/releasetest"
+	"github.com/guilbep/git-board/internal/ship"
+	"github.com/guilbep/git-board/internal/ship/shiptest"
 )
 
 // fakeBin puts an executable shell script called name first on PATH.
@@ -24,15 +24,15 @@ func fakeBin(t *testing.T, name, script string) {
 
 func TestExecRevisionNoImage(t *testing.T) {
 	fakeBin(t, "crane", `echo "MANIFEST_UNKNOWN: manifest unknown" >&2; exit 1`)
-	_, _, err := release.Exec().Revision(context.Background(), "reg/img:abc")
-	if !errors.Is(err, release.ErrNoImage) {
+	_, _, err := ship.Exec().Revision(context.Background(), "reg/img:abc")
+	if !errors.Is(err, ship.ErrNoImage) {
 		t.Fatalf("err = %v, want ErrNoImage", err)
 	}
 }
 
 func TestExecRevisionReadsLabel(t *testing.T) {
 	fakeBin(t, "crane", `case "$1" in digest) echo sha256:abc;; config) echo '{"config":{"Labels":{"org.opencontainers.image.revision":"deadbeef"}}}';; esac`)
-	d, r, err := release.Exec().Revision(context.Background(), "reg/img:abc")
+	d, r, err := ship.Exec().Revision(context.Background(), "reg/img:abc")
 	if err != nil || d != "sha256:abc" || r != "deadbeef" {
 		t.Fatalf("got %q %q %v", d, r, err)
 	}
@@ -40,7 +40,7 @@ func TestExecRevisionReadsLabel(t *testing.T) {
 
 func TestExecBuildReadsMetadata(t *testing.T) {
 	fakeBin(t, "docker", `while [ $# -gt 0 ]; do [ "$1" = --metadata-file ] && echo '{"containerimage.digest":"sha256:abc"}' > "$2"; shift; done`)
-	d, err := release.Exec().Build(context.Background(), release.Build{Context: ".", Ref: "reg/img:abc", Revision: "abc"})
+	d, err := ship.Exec().Build(context.Background(), ship.Build{Context: ".", Ref: "reg/img:abc", Revision: "abc"})
 	if err != nil || d != "sha256:abc" {
 		t.Fatalf("got %q %v", d, err)
 	}
@@ -48,7 +48,7 @@ func TestExecBuildReadsMetadata(t *testing.T) {
 
 func TestExecPushChartDigest(t *testing.T) {
 	fakeBin(t, "helm", `printf 'Pushed: reg/chart:1.0.0\nDigest: sha256:def\n' >&2`) // as helm 4 does
-	d, err := release.Exec().PushChart(context.Background(), "chart-1.0.0.tgz", "oci://reg")
+	d, err := ship.Exec().PushChart(context.Background(), "chart-1.0.0.tgz", "oci://reg")
 	if err != nil || d != "sha256:def" {
 		t.Fatalf("got %q %v", d, err)
 	}
@@ -56,7 +56,7 @@ func TestExecPushChartDigest(t *testing.T) {
 
 func TestExecPackageChartFile(t *testing.T) {
 	fakeBin(t, "helm", `echo "Successfully packaged chart and saved it to: /out/chart-1.0.0.tgz"`)
-	f, err := release.Exec().PackageChart(context.Background(), "chart", "1.0.0", "/out")
+	f, err := ship.Exec().PackageChart(context.Background(), "chart", "1.0.0", "/out")
 	if err != nil || f != "/out/chart-1.0.0.tgz" {
 		t.Fatalf("got %q %v", f, err)
 	}
@@ -64,7 +64,7 @@ func TestExecPackageChartFile(t *testing.T) {
 
 func TestExecScanFails(t *testing.T) {
 	fakeBin(t, "trivy", `echo "CVE-1 HIGH" >&2; exit 1`)
-	err := release.Exec().Scan(context.Background(), "reg/img:abc")
+	err := ship.Exec().Scan(context.Background(), "reg/img:abc")
 	if err == nil || !strings.Contains(err.Error(), "reg/img:abc") {
 		t.Fatalf("err = %v, want it to name the ref", err)
 	}
@@ -72,7 +72,7 @@ func TestExecScanFails(t *testing.T) {
 
 func TestExecSaysHowToInstall(t *testing.T) {
 	t.Setenv("PATH", t.TempDir())
-	err := release.Exec().Scan(context.Background(), "reg/img:abc")
+	err := ship.Exec().Scan(context.Background(), "reg/img:abc")
 	if err == nil || !strings.Contains(err.Error(), "trivy isn't installed") || !strings.Contains(err.Error(), "brew install trivy") {
 		t.Fatalf("err = %v, want it to say how to install trivy", err)
 	}
@@ -80,8 +80,8 @@ func TestExecSaysHowToInstall(t *testing.T) {
 
 func TestFakeToolsDigestRefsAndTags(t *testing.T) {
 	ctx := context.Background()
-	f := releasetest.NewTools()
-	d, _ := f.Build(ctx, release.Build{Ref: "reg/img:abc", Revision: "abc"})
+	f := shiptest.NewTools()
+	d, _ := f.Build(ctx, ship.Build{Ref: "reg/img:abc", Revision: "abc"})
 	if err := f.Tag(ctx, "reg/img:abc", "1.0.0"); err != nil {
 		t.Fatal(err)
 	}
@@ -90,7 +90,7 @@ func TestFakeToolsDigestRefsAndTags(t *testing.T) {
 			t.Fatalf("%s: %q %q %v", ref, got, rev, err)
 		}
 	}
-	if err := f.Copy(ctx, "reg/none:x", "o/none:x"); !errors.Is(err, release.ErrNoImage) {
+	if err := f.Copy(ctx, "reg/none:x", "o/none:x"); !errors.Is(err, ship.ErrNoImage) {
 		t.Fatalf("err = %v", err)
 	}
 }
@@ -99,7 +99,7 @@ func TestExecPublish(t *testing.T) {
 	out := filepath.Join(t.TempDir(), "out")
 	t.Setenv("FAKE_OUT", out)
 	fakeBin(t, "gh", `echo "$@" > "$FAKE_OUT"; cat "${10}" >> "$FAKE_OUT"`)
-	err := release.Exec().Publish(context.Background(), "acme/app", "v1.0.0", "notes\n", []string{"a.tar.gz", "checksums.txt"})
+	err := ship.Exec().Publish(context.Background(), "acme/app", "v1.0.0", "notes\n", []string{"a.tar.gz", "checksums.txt"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -113,7 +113,7 @@ func TestExecPublish(t *testing.T) {
 
 func TestExecPublishMissingGh(t *testing.T) {
 	t.Setenv("PATH", t.TempDir())
-	err := release.Exec().Publish(context.Background(), "acme/app", "v1.0.0", "", nil)
+	err := ship.Exec().Publish(context.Background(), "acme/app", "v1.0.0", "", nil)
 	if err == nil || !strings.Contains(err.Error(), "gh isn't installed: brew install gh, then gh auth login (README.md, Install)") {
 		t.Errorf("err %v", err)
 	}

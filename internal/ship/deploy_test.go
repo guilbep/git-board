@@ -1,4 +1,4 @@
-package release_test
+package ship_test
 
 import (
 	"errors"
@@ -8,20 +8,20 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/guilbep/git-board/internal/release"
-	"github.com/guilbep/git-board/internal/release/releasetest"
+	"github.com/guilbep/git-board/internal/ship"
+	"github.com/guilbep/git-board/internal/ship/shiptest"
 	"github.com/guilbep/git-board/internal/store"
 )
 
 // adopt makes env's overlays run the app's first commit and returns it.
-func adopt(t *testing.T, fx *releasetest.Fixture, env string) string {
+func adopt(t *testing.T, fx *shiptest.Fixture, env string) string {
 	t.Helper()
-	first := releasetest.Git(t, fx.App, "rev-list", "--max-parents=0", "HEAD")
-	both(t, fx, env, release.Deployed{Commit: first, Version: "v0.1.0"})
+	first := shiptest.Git(t, fx.App, "rev-list", "--max-parents=0", "HEAD")
+	both(t, fx, env, ship.Deployed{Commit: first, Version: "v0.1.0"})
 	return first
 }
 
-func deploy(t *testing.T, r *release.Runner, env string, tg release.Target) {
+func deploy(t *testing.T, r *ship.Runner, env string, tg ship.Target) {
 	t.Helper()
 	if err := r.Deploy(ctx, env, tg); err != nil {
 		t.Fatalf("Deploy %s: %v", env, err)
@@ -29,18 +29,18 @@ func deploy(t *testing.T, r *release.Runner, env string, tg release.Target) {
 }
 
 // heads is each config repo's main.
-func heads(t *testing.T, fx *releasetest.Fixture) []string {
+func heads(t *testing.T, fx *shiptest.Fixture) []string {
 	t.Helper()
 	var hs []string
 	for _, b := range fx.ConfigBare {
-		hs = append(hs, releasetest.Git(t, b, "rev-parse", "main"))
+		hs = append(hs, shiptest.Git(t, b, "rev-parse", "main"))
 	}
 	return hs
 }
 
 // dropImage removes the images[] entry name from target's overlay of env,
 // as the fixture wrote it.
-func dropImage(t *testing.T, fx *releasetest.Fixture, target int, env, name string) {
+func dropImage(t *testing.T, fx *shiptest.Fixture, target int, env, name string) {
 	t.Helper()
 	dir := cloneOf(t, fx.ConfigBare[target])
 	file := filepath.Join(dir, "app/overlays", env, "kustomization.yaml")
@@ -55,19 +55,19 @@ func dropImage(t *testing.T, fx *releasetest.Fixture, target int, env, name stri
 	if err := os.WriteFile(file, []byte(strings.Replace(string(data), entry, "", 1)), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	releasetest.Git(t, dir, "commit", "-qam", "drop "+name)
-	releasetest.Git(t, dir, "push", "-q", "origin", "HEAD:main")
+	shiptest.Git(t, dir, "commit", "-qam", "drop "+name)
+	shiptest.Git(t, dir, "push", "-q", "origin", "HEAD:main")
 }
 
 func TestDeployBuildsOnceAndCopies(t *testing.T) {
-	r, tools, fx := releasetest.NewRunner(t)
+	r, tools, fx := shiptest.NewRunner(t)
 	adopt(t, fx, "dev")
 	adopt(t, fx, "stage")
 	c := fx.Commit(t, "feat")
-	var steps []release.Step
-	r.Step = func(s release.Step) { steps = append(steps, s) }
+	var steps []ship.Step
+	r.Step = func(s ship.Step) { steps = append(steps, s) }
 	dev := "1.0.1-dev.1.g" + c[:7]
-	deploy(t, r, "dev", release.Target{Commit: c, Version: dev})
+	deploy(t, r, "dev", ship.Target{Commit: c, Version: dev})
 
 	if len(tools.Built) != 2 {
 		t.Fatalf("built %+v, want frontend and backend once each", tools.Built)
@@ -76,7 +76,7 @@ func TestDeployBuildsOnceAndCopies(t *testing.T) {
 	if b.Ref != "ghcr.test/app/frontend:scan-"+c || b.Revision != c || filepath.Base(b.Context) != "frontend" || strings.HasPrefix(b.Context, fx.App) {
 		t.Errorf("build = %+v, want ghcr.test/app/frontend:scan-<sha> from a checkout of the commit", b)
 	}
-	if got := releasetest.Git(t, fx.App, "worktree", "list"); strings.Count(got, "\n") != 0 {
+	if got := shiptest.Git(t, fx.App, "worktree", "list"); strings.Count(got, "\n") != 0 {
 		t.Errorf("the build checkout is left behind: %s", got)
 	}
 	fe, be := tools.Images["ghcr.test/app/frontend:"+c].Digest, tools.Images["ghcr.test/app/backend:"+c].Digest
@@ -109,7 +109,7 @@ func TestDeployBuildsOnceAndCopies(t *testing.T) {
 	for i, reg := range []string{"ghcr.test/app", "quay.test/app"} {
 		d := e.Targets[i].Deployed
 		for _, img := range []string{"frontend", "backend"} {
-			want := release.Image{Tag: dev, Digest: tools.Images["ghcr.test/app/"+img+":"+c].Digest}
+			want := ship.Image{Tag: dev, Digest: tools.Images["ghcr.test/app/"+img+":"+c].Digest}
 			if d.Images[reg+"/"+img] != want {
 				t.Errorf("dev on %s: %s = %+v, want %+v", reg, img, d.Images[reg+"/"+img], want)
 			}
@@ -118,15 +118,15 @@ func TestDeployBuildsOnceAndCopies(t *testing.T) {
 			t.Errorf("dev on %s: chart %s", reg, d.Chart)
 		}
 		msg := "chore(manifest): update app (dev) " + dev + " [by dev via git-board]"
-		if got := releasetest.Git(t, fx.ConfigBare[i], "log", "-1", "--format=%s", "main"); got != msg {
+		if got := shiptest.Git(t, fx.ConfigBare[i], "log", "-1", "--format=%s", "main"); got != msg {
 			t.Errorf("config commit %q, want %q", got, msg)
 		}
 	}
-	if raw := releasetest.Git(t, fx.ConfigBare[0], "show", "main:app/overlays/dev/kustomization.yaml"); !strings.Contains(raw, `APP_VERSION: "`+dev+`"`) {
+	if raw := shiptest.Git(t, fx.ConfigBare[0], "show", "main:app/overlays/dev/kustomization.yaml"); !strings.Contains(raw, `APP_VERSION: "`+dev+`"`) {
 		t.Errorf("APP_VERSION not written:\n%s", raw)
 	}
 
-	deploy(t, r, "stage", release.Target{Commit: c[:7], Version: "v1.0.1-rc.1"}) // a short sha is resolved
+	deploy(t, r, "stage", ship.Target{Commit: c[:7], Version: "v1.0.1-rc.1"}) // a short sha is resolved
 	if len(tools.Built) != 2 || len(tools.Copied) != 2 {
 		t.Errorf("stage built %d, copied %d; want the dev images reused", len(tools.Built), len(tools.Copied))
 	}
@@ -144,22 +144,22 @@ func TestDeployBuildsOnceAndCopies(t *testing.T) {
 	}
 
 	before := heads(t, fx)
-	deploy(t, r, "stage", release.Target{Commit: c, Version: "v1.0.1-rc.1"})
+	deploy(t, r, "stage", ship.Target{Commit: c, Version: "v1.0.1-rc.1"})
 	if after := heads(t, fx); !slices.Equal(after, before) {
 		t.Errorf("deploying what runs wrote to the config repos")
 	}
 }
 
 func TestEnsureImageRebuildsOnWrongRevision(t *testing.T) {
-	r, tools, fx := releasetest.NewRunner(t)
+	r, tools, fx := shiptest.NewRunner(t)
 	adopt(t, fx, "dev")
 	c := fx.Commit(t, "feat")
 	// a :<sha> tag left on an older build (reuse_unchanged_images)
-	tools.Images["ghcr.test/app/frontend:"+c] = releasetest.FakeImage{Digest: "sha256:old", Revision: "another"}
+	tools.Images["ghcr.test/app/frontend:"+c] = shiptest.FakeImage{Digest: "sha256:old", Revision: "another"}
 	// built for c, but its copy to quay never happened
-	be := releasetest.FakeImage{Digest: "sha256:be", Revision: c}
+	be := shiptest.FakeImage{Digest: "sha256:be", Revision: c}
 	tools.Images["ghcr.test/app/backend:"+c], tools.Images["ghcr.test/app/backend@sha256:be"] = be, be
-	deploy(t, r, "dev", release.Target{Commit: c, Version: "1.0.1-dev.1.g" + c[:7]})
+	deploy(t, r, "dev", ship.Target{Commit: c, Version: "1.0.1-dev.1.g" + c[:7]})
 	if len(tools.Built) != 1 || tools.Built[0].Ref != "ghcr.test/app/frontend:scan-"+c {
 		t.Errorf("built %+v, want frontend only", tools.Built)
 	}
@@ -176,19 +176,19 @@ func TestEnsureImageRebuildsOnWrongRevision(t *testing.T) {
 }
 
 func TestDeployRefusesOlder(t *testing.T) {
-	r, tools, fx := releasetest.NewRunner(t)
+	r, tools, fx := shiptest.NewRunner(t)
 	c1 := fx.Commit(t, "one")
 	c2 := fx.Commit(t, "two")
-	both(t, fx, "dev", release.Deployed{Commit: c2, Version: "v1.0.2"})
+	both(t, fx, "dev", ship.Deployed{Commit: c2, Version: "v1.0.2"})
 	before := heads(t, fx)
-	err := r.Deploy(ctx, "dev", release.Target{Commit: c1, Version: "v1.0.1"})
-	if !errors.Is(err, release.ErrOlder) || !strings.Contains(err.Error(), "dev on "+fx.ConfigBare[0]) {
+	err := r.Deploy(ctx, "dev", ship.Target{Commit: c1, Version: "v1.0.1"})
+	if !errors.Is(err, ship.ErrOlder) || !strings.Contains(err.Error(), "dev on "+fx.ConfigBare[0]) {
 		t.Fatalf("err = %v, want ErrOlder naming dev and the config repo", err)
 	}
 	if len(tools.Built) != 0 || !slices.Equal(heads(t, fx), before) {
 		t.Errorf("a refused deploy built %d images or wrote an overlay", len(tools.Built))
 	}
-	deploy(t, r, "dev", release.Target{Commit: c1, Version: "v1.0.1", Rollback: true})
+	deploy(t, r, "dev", ship.Target{Commit: c1, Version: "v1.0.1", Rollback: true})
 	if e := envOf(t, status(t, r), "dev"); e.Commit != c1 || e.Version != "v1.0.1" {
 		t.Errorf("after rollback dev = %+v", e)
 	}
@@ -196,30 +196,30 @@ func TestDeployRefusesOlder(t *testing.T) {
 
 // A hotfix may leave the line an environment runs, except the last one's.
 func TestDeployHotfixOnlyBeforeLast(t *testing.T) {
-	r, _, fx := releasetest.NewRunner(t)
+	r, _, fx := shiptest.NewRunner(t)
 	c1 := fx.Commit(t, "one")
 	c2 := fx.Commit(t, "two")
-	both(t, fx, "stage", release.Deployed{Commit: c2, Version: "v1.1.0-rc.1"})
-	both(t, fx, "prod", release.Deployed{Commit: c2, Version: "v1.1.0"})
-	releasetest.Git(t, fx.App, "checkout", "-q", "-b", "hotfix/1.0.2", c1)
-	h := releasetest.Commit(t, fx.App, "hotfix")
-	releasetest.Git(t, fx.App, "checkout", "-q", "dev")
-	if err := r.Deploy(ctx, "prod", release.Target{Commit: h, Version: "v1.0.2", Hotfix: true}); !errors.Is(err, release.ErrOlder) {
+	both(t, fx, "stage", ship.Deployed{Commit: c2, Version: "v1.1.0-rc.1"})
+	both(t, fx, "prod", ship.Deployed{Commit: c2, Version: "v1.1.0"})
+	shiptest.Git(t, fx.App, "checkout", "-q", "-b", "hotfix/1.0.2", c1)
+	h := shiptest.Commit(t, fx.App, "hotfix")
+	shiptest.Git(t, fx.App, "checkout", "-q", "dev")
+	if err := r.Deploy(ctx, "prod", ship.Target{Commit: h, Version: "v1.0.2", Hotfix: true}); !errors.Is(err, ship.ErrOlder) {
 		t.Errorf("hotfix into prod: err = %v, want ErrOlder", err)
 	}
-	deploy(t, r, "stage", release.Target{Commit: h, Version: "v1.0.2-rc.1", Hotfix: true})
+	deploy(t, r, "stage", ship.Target{Commit: h, Version: "v1.0.2-rc.1", Hotfix: true})
 	if e := envOf(t, status(t, r), "stage"); e.Commit != h {
 		t.Errorf("stage = %+v", e)
 	}
 }
 
 func TestDeployRefusesNotAdopted(t *testing.T) {
-	r, tools, fx := releasetest.NewRunner(t)
-	first := releasetest.Git(t, fx.App, "rev-parse", "HEAD")
-	fx.SetOverlay(t, 0, "dev", release.Deployed{Commit: first, Version: "v0.1.0"})
+	r, tools, fx := shiptest.NewRunner(t)
+	first := shiptest.Git(t, fx.App, "rev-parse", "HEAD")
+	fx.SetOverlay(t, 0, "dev", ship.Deployed{Commit: first, Version: "v0.1.0"})
 	c := fx.Commit(t, "feat")
-	err := r.Deploy(ctx, "dev", release.Target{Commit: c, Version: "1.0.1-dev.1.g" + c[:7]})
-	if !errors.Is(err, release.ErrNotAdopted) || !strings.Contains(err.Error(), fx.ConfigBare[1]) {
+	err := r.Deploy(ctx, "dev", ship.Target{Commit: c, Version: "1.0.1-dev.1.g" + c[:7]})
+	if !errors.Is(err, ship.ErrNotAdopted) || !strings.Contains(err.Error(), fx.ConfigBare[1]) {
 		t.Fatalf("err = %v, want ErrNotAdopted naming the second config repo", err)
 	}
 	if len(tools.Built) != 0 {
@@ -231,14 +231,14 @@ func TestDeployRefusesNotAdopted(t *testing.T) {
 }
 
 func TestDeployFinishesSplitEnvironment(t *testing.T) {
-	r, _, fx := releasetest.NewRunner(t)
+	r, _, fx := shiptest.NewRunner(t)
 	adopt(t, fx, "prod")
 	c := fx.Commit(t, "fix")
 	hook := filepath.Join(fx.ConfigBare[1], "hooks", "pre-receive")
 	if err := os.WriteFile(hook, []byte("#!/bin/sh\nexit 1\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	tg := release.Target{Commit: c, Version: "v1.0.0"}
+	tg := ship.Target{Commit: c, Version: "v1.0.0"}
 	if err := r.Deploy(ctx, "prod", tg); err == nil {
 		t.Fatal("Deploy succeeded with the second config repo refusing pushes")
 	}
@@ -255,12 +255,12 @@ func TestDeployFinishesSplitEnvironment(t *testing.T) {
 }
 
 func TestScanStopsDeploy(t *testing.T) {
-	r, tools, fx := releasetest.NewRunner(t)
+	r, tools, fx := shiptest.NewRunner(t)
 	first := adopt(t, fx, "dev")
 	c := fx.Commit(t, "feat")
 	tools.FailScan["ghcr.test/app/backend:scan-"+c] = true
 	before := heads(t, fx)
-	tg := release.Target{Commit: c, Version: "1.0.1-dev.1.g" + c[:7]}
+	tg := ship.Target{Commit: c, Version: "1.0.1-dev.1.g" + c[:7]}
 	err := r.Deploy(ctx, "dev", tg)
 	if err == nil || !strings.HasPrefix(err.Error(), "backend: ") {
 		t.Fatalf("err = %v, want the scan failure naming backend", err)
@@ -289,7 +289,7 @@ func TestScanStopsDeploy(t *testing.T) {
 // goes only to the registries whose overlays list it (built on the first);
 // an image no target of the environment lists is an error.
 func TestDeployOnlyImagesInTheOverlay(t *testing.T) {
-	r, tools, fx := releasetest.NewRunner(t)
+	r, tools, fx := shiptest.NewRunner(t)
 	dropImage(t, fx, 1, "dev", "quay.test/app/frontend")
 	dropImage(t, fx, 0, "dev", "ghcr.test/app/backend")
 	dropImage(t, fx, 0, "stage", "ghcr.test/app/frontend")
@@ -298,7 +298,7 @@ func TestDeployOnlyImagesInTheOverlay(t *testing.T) {
 	adopt(t, fx, "stage")
 	c := fx.Commit(t, "feat")
 	dev := "1.0.1-dev.1.g" + c[:7]
-	deploy(t, r, "dev", release.Target{Commit: c, Version: dev})
+	deploy(t, r, "dev", ship.Target{Commit: c, Version: dev})
 	var built []string
 	for _, b := range tools.Built {
 		built = append(built, b.Ref)
@@ -314,7 +314,7 @@ func TestDeployOnlyImagesInTheOverlay(t *testing.T) {
 		t.Errorf("dev on quay = %+v, want backend only", imgs)
 	}
 	n := len(tools.Built)
-	err := r.Deploy(ctx, "stage", release.Target{Commit: c, Version: "v1.0.1-rc.1"})
+	err := r.Deploy(ctx, "stage", ship.Target{Commit: c, Version: "v1.0.1-rc.1"})
 	if err == nil || err.Error() != "image frontend is in no overlay of stage" {
 		t.Errorf("err = %v", err)
 	}
@@ -325,7 +325,7 @@ func TestDeployOnlyImagesInTheOverlay(t *testing.T) {
 
 // record makes c's release record, with a digest per image and registry
 // that the fake registry holds, and returns the digests by <registry>/<image>.
-func record(t *testing.T, r *release.Runner, tools *releasetest.Tools, c string, chart store.ChartArtifact) map[string]string {
+func record(t *testing.T, r *ship.Runner, tools *shiptest.Tools, c string, chart store.ChartArtifact) map[string]string {
 	t.Helper()
 	rec, digests := store.ReleaseRecord{Commit: c, Chart: chart}, map[string]string{}
 	for _, img := range []string{"frontend", "backend"} {
@@ -333,7 +333,7 @@ func record(t *testing.T, r *release.Runner, tools *releasetest.Tools, c string,
 			d := "sha256:" + c[:6] + reg[:4] + img
 			digests[reg+"/"+img] = d
 			rec.Artifacts = append(rec.Artifacts, store.Artifact{Image: img, Registry: reg, Digest: d})
-			tools.Images[reg+"/"+img+"@"+d] = releasetest.FakeImage{Digest: d, Revision: "built by the old action"}
+			tools.Images[reg+"/"+img+"@"+d] = shiptest.FakeImage{Digest: d, Revision: "built by the old action"}
 		}
 	}
 	if _, err := r.B.CreateRelease(rec); err != nil {
@@ -345,14 +345,14 @@ func record(t *testing.T, r *release.Runner, tools *releasetest.Tools, c string,
 // R15: a commit's release record has its digests; a record without a chart
 // (a release from before git-board) leaves the chart as it is.
 func TestDeployUsesRecordedDigests(t *testing.T) {
-	r, tools, fx := releasetest.NewRunner(t)
+	r, tools, fx := shiptest.NewRunner(t)
 	adopt(t, fx, "stage")
 	adopt(t, fx, "prod")
 	legacy := fx.Commit(t, "legacy")
 	// reuse_unchanged_images left :<sha> on another commit's build
-	tools.Images["ghcr.test/app/frontend:"+legacy] = releasetest.FakeImage{Digest: "sha256:wrong", Revision: "another"}
+	tools.Images["ghcr.test/app/frontend:"+legacy] = shiptest.FakeImage{Digest: "sha256:wrong", Revision: "another"}
 	digests := record(t, r, tools, legacy, store.ChartArtifact{})
-	deploy(t, r, "prod", release.Target{Commit: legacy, Version: "v1.4.19"})
+	deploy(t, r, "prod", ship.Target{Commit: legacy, Version: "v1.4.19"})
 	if len(tools.Built) != 0 || len(tools.Copied) != 0 || len(tools.Charts) != 0 {
 		t.Errorf("built %+v, copied %q, charts %v; want the record's digests only", tools.Built, tools.Copied, tools.Charts)
 	}
@@ -368,7 +368,7 @@ func TestDeployUsesRecordedDigests(t *testing.T) {
 		}
 	}
 	for _, b := range fx.ConfigBare { // R17: the version values follow every deploy
-		if raw := releasetest.Git(t, b, "show", "main:app/overlays/prod/kustomization.yaml"); !strings.Contains(raw, `APP_VERSION: "v1.4.19"`) {
+		if raw := shiptest.Git(t, b, "show", "main:app/overlays/prod/kustomization.yaml"); !strings.Contains(raw, `APP_VERSION: "v1.4.19"`) {
 			t.Errorf("APP_VERSION not moved to v1.4.19:\n%s", raw)
 		}
 	}
@@ -378,7 +378,7 @@ func TestDeployUsesRecordedDigests(t *testing.T) {
 
 	cut := fx.Commit(t, "cut")
 	record(t, r, tools, cut, store.ChartArtifact{Version: "v1.5.0-rc.1", Digest: "sha256:chart"})
-	deploy(t, r, "stage", release.Target{Commit: cut, Version: "v1.5.0-rc.1"})
+	deploy(t, r, "stage", ship.Target{Commit: cut, Version: "v1.5.0-rc.1"})
 	if len(tools.Built) != 0 || len(tools.Charts) != 0 {
 		t.Errorf("built %+v, charts %v; want the recorded chart not pushed again", tools.Built, tools.Charts)
 	}
@@ -388,7 +388,7 @@ func TestDeployUsesRecordedDigests(t *testing.T) {
 }
 
 func TestDeployFollowed(t *testing.T) {
-	r, _, fx := releasetest.NewRunner(t)
+	r, _, fx := shiptest.NewRunner(t)
 	first := adopt(t, fx, "dev")
 	fx.Tag(t, first, "v1.0.0")
 	fx.Commit(t, "a")
@@ -410,7 +410,7 @@ func TestDeployFollowed(t *testing.T) {
 }
 
 func TestDeployFollowedNeedsAFollowedEnv(t *testing.T) {
-	r, _, _ := releasetest.NewRunner(t, "stage", "prod")
+	r, _, _ := shiptest.NewRunner(t, "stage", "prod")
 	if err := r.DeployFollowed(ctx); err == nil {
 		t.Error("DeployFollowed succeeded with no environment following the trunk")
 	}

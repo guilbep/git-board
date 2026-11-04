@@ -18,7 +18,7 @@ import (
 	"github.com/guilbep/git-board/internal/board"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/ghbridge"
-	"github.com/guilbep/git-board/internal/release"
+	"github.com/guilbep/git-board/internal/ship"
 	"github.com/guilbep/git-board/internal/store"
 	"github.com/guilbep/git-board/internal/uploads"
 )
@@ -104,9 +104,9 @@ type apiServer struct {
 
 	// releases (releases.go): releaseMu guards releaseRun, the current or
 	// last job; runnerMu serializes the Runner's fetches and writes, a job
-	// holding it for its whole run. releaseTools: nil, release.Exec();
+	// holding it for its whole run. releaseTools: nil, ship.Exec();
 	// releaseCache: "", the Runner's own (tests: a temp dir)
-	releaseTools release.Tools
+	releaseTools ship.Tools
 	releaseCache string
 	releaseMu    sync.Mutex
 	releaseRun   *releaseJob

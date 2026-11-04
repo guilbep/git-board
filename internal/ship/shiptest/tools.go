@@ -1,4 +1,4 @@
-package releasetest
+package shiptest
 
 import (
 	"context"
@@ -9,19 +9,19 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/guilbep/git-board/internal/release"
+	"github.com/guilbep/git-board/internal/ship"
 )
 
 // FakeImage is an image the fake registry holds.
 type FakeImage struct{ Digest, Revision string }
 
-// Tools is an in-memory release.Tools. Images is keyed by ref, and every
+// Tools is an in-memory ship.Tools. Images is keyed by ref, and every
 // registered image also answers under <repo>@<digest>. Copied and Scanned
 // hold "src → dst" / ref; Tagged holds "ref → tag".
 type Tools struct {
 	mu            sync.Mutex
 	Images        map[string]FakeImage
-	Built         []release.Build
+	Built         []ship.Build
 	Scanned       []string
 	Copied        []string
 	Tagged        []string
@@ -41,7 +41,7 @@ func NewTools() *Tools {
 	return &Tools{Images: map[string]FakeImage{}, FailScan: map[string]bool{}, Charts: map[string]string{}}
 }
 
-var _ release.Tools = (*Tools)(nil)
+var _ ship.Tools = (*Tools)(nil)
 
 // repo is ref without its :tag or @digest.
 func repo(ref string) string {
@@ -65,12 +65,12 @@ func (f *Tools) Revision(_ context.Context, ref string) (string, string, error) 
 	defer f.mu.Unlock()
 	img, ok := f.Images[ref]
 	if !ok {
-		return "", "", fmt.Errorf("%s: %w", ref, release.ErrNoImage)
+		return "", "", fmt.Errorf("%s: %w", ref, ship.ErrNoImage)
 	}
 	return img.Digest, img.Revision, nil
 }
 
-func (f *Tools) Build(_ context.Context, b release.Build) (string, error) {
+func (f *Tools) Build(_ context.Context, b ship.Build) (string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.Built = append(f.Built, b)
@@ -94,7 +94,7 @@ func (f *Tools) Copy(_ context.Context, src, dst string) error {
 	defer f.mu.Unlock()
 	img, ok := f.Images[src]
 	if !ok {
-		return fmt.Errorf("%s: %w", src, release.ErrNoImage)
+		return fmt.Errorf("%s: %w", src, ship.ErrNoImage)
 	}
 	f.Copied = append(f.Copied, src+" → "+dst)
 	f.put(dst, img)
@@ -106,7 +106,7 @@ func (f *Tools) Tag(_ context.Context, ref, tag string) error {
 	defer f.mu.Unlock()
 	img, ok := f.Images[ref]
 	if !ok {
-		return fmt.Errorf("%s: %w", ref, release.ErrNoImage)
+		return fmt.Errorf("%s: %w", ref, ship.ErrNoImage)
 	}
 	f.Tagged = append(f.Tagged, ref+" → "+tag)
 	f.put(repo(ref)+":"+tag, img)

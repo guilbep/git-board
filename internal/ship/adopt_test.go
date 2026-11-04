@@ -1,38 +1,38 @@
-package release_test
+package ship_test
 
 import (
 	"strings"
 	"testing"
 
-	"github.com/guilbep/git-board/internal/release"
-	"github.com/guilbep/git-board/internal/release/releasetest"
+	"github.com/guilbep/git-board/internal/ship"
+	"github.com/guilbep/git-board/internal/ship/shiptest"
 )
 
 // runs makes target's overlay of env run tag (a first image tagged tag at digest "").
-func runs(t *testing.T, fx *releasetest.Fixture, target int, env, tag, digest string) {
+func runs(t *testing.T, fx *shiptest.Fixture, target int, env, tag, digest string) {
 	t.Helper()
 	reg := []string{"ghcr.test/app", "quay.test/app"}[target]
-	fx.SetOverlay(t, target, env, release.Deployed{Version: tag, Images: map[string]release.Image{reg + "/frontend": {Tag: tag, Digest: digest}}})
+	fx.SetOverlay(t, target, env, ship.Deployed{Version: tag, Images: map[string]ship.Image{reg + "/frontend": {Tag: tag, Digest: digest}}})
 }
 
 func TestProposalsFromTagAndLabel(t *testing.T) {
-	r, tools, fx := releasetest.NewRunner(t)
+	r, tools, fx := shiptest.NewRunner(t)
 	c := fx.Commit(t, "feat")
 	fx.Tag(t, c, "v1.0.0")
 	runs(t, fx, 0, "prod", "v1.0.0", "")
 	runs(t, fx, 1, "prod", "v1.0.0", "")
 	d := "sha256:aaaaaaaaaaaaaaaaaaaa"
-	tools.Images["ghcr.test/app/frontend@"+d] = releasetest.FakeImage{Digest: d, Revision: c}
+	tools.Images["ghcr.test/app/frontend@"+d] = shiptest.FakeImage{Digest: d, Revision: c}
 	runs(t, fx, 0, "dev", "dev", d)
 	runs(t, fx, 1, "dev", "dev", "sha256:bbbbbbbbbbbbbbbbbbbb") // not in the registry
 	runs(t, fx, 0, "stage", "stage", "")
-	both(t, fx, "stage", release.Deployed{Commit: c, Version: "v1.0.0"}) // adopted: left out
+	both(t, fx, "stage", ship.Deployed{Commit: c, Version: "v1.0.0"}) // adopted: left out
 
 	ps, err := r.Proposals(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	got := map[string]release.Proposal{}
+	got := map[string]ship.Proposal{}
 	for _, p := range ps {
 		got[p.Env+" "+p.Path+" "+p.Repo] = p
 	}
@@ -54,7 +54,7 @@ func TestProposalsFromTagAndLabel(t *testing.T) {
 }
 
 func TestAdoptWritesOnlyAnnotations(t *testing.T) {
-	r, _, fx := releasetest.NewRunner(t)
+	r, _, fx := shiptest.NewRunner(t)
 	c := fx.Commit(t, "feat")
 	fx.Tag(t, c, "v1.0.0")
 	runs(t, fx, 0, "prod", "v1.0.0", "")
@@ -63,7 +63,7 @@ func TestAdoptWritesOnlyAnnotations(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var mine []release.Proposal
+	var mine []ship.Proposal
 	for _, p := range ps {
 		if p.Env == "prod" && p.Repo == fx.ConfigBare[0] {
 			mine = append(mine, p)
@@ -73,10 +73,10 @@ func TestAdoptWritesOnlyAnnotations(t *testing.T) {
 		t.Fatal(err)
 	}
 	after := cloneOf(t, fx.ConfigBare[0])
-	if releasetest.Git(t, after, "log", "-1", "--format=%s") != "chore(manifest): adopt app (prod) [by dev via git-board]" {
-		t.Errorf("message = %s", releasetest.Git(t, after, "log", "-1", "--format=%s"))
+	if shiptest.Git(t, after, "log", "-1", "--format=%s") != "chore(manifest): adopt app (prod) [by dev via git-board]" {
+		t.Errorf("message = %s", shiptest.Git(t, after, "log", "-1", "--format=%s"))
 	}
-	diff := releasetest.Git(t, after, "diff", "-U0", releasetest.Git(t, before, "rev-parse", "HEAD"), "HEAD")
+	diff := shiptest.Git(t, after, "diff", "-U0", shiptest.Git(t, before, "rev-parse", "HEAD"), "HEAD")
 	var changed []string
 	for _, l := range strings.Split(diff, "\n") {
 		if (strings.HasPrefix(l, "+") || strings.HasPrefix(l, "-")) && !strings.HasPrefix(l, "+++") && !strings.HasPrefix(l, "---") {
@@ -93,11 +93,11 @@ func TestAdoptWritesOnlyAnnotations(t *testing.T) {
 }
 
 func TestAdoptRefusesUnknownCommit(t *testing.T) {
-	r, _, fx := releasetest.NewRunner(t)
+	r, _, fx := shiptest.NewRunner(t)
 	c := fx.Commit(t, "feat")
 	runs(t, fx, 0, "prod", "v1.0.0", "")
 	before := heads(t, fx)
-	ps := []release.Proposal{
+	ps := []ship.Proposal{
 		{Env: "prod", Repo: fx.ConfigBare[0], Path: "app/overlays/prod", Commit: c},
 		{Env: "prod", Repo: fx.ConfigBare[1], Path: "app/overlays/prod", Commit: "deadbeef"},
 	}
@@ -110,16 +110,16 @@ func TestAdoptRefusesUnknownCommit(t *testing.T) {
 }
 
 func TestAdoptValidatesBeforeWriting(t *testing.T) {
-	r, _, fx := releasetest.NewRunner(t)
+	r, _, fx := shiptest.NewRunner(t)
 	c := fx.Commit(t, "feat")
 	before := heads(t, fx)
-	good := release.Proposal{Env: "prod", Repo: fx.ConfigBare[0], Path: "app/overlays/prod", Commit: c}
-	for name, bad := range map[string]release.Proposal{
+	good := ship.Proposal{Env: "prod", Repo: fx.ConfigBare[0], Path: "app/overlays/prod", Commit: c}
+	for name, bad := range map[string]ship.Proposal{
 		"unknown repo": {Env: "prod", Repo: "/nowhere", Path: "app/overlays/prod", Commit: c},
 		"unknown path": {Env: "prod", Repo: fx.ConfigBare[1], Path: "other/overlays/prod", Commit: c},
 		"empty commit": {Env: "prod", Repo: fx.ConfigBare[1], Path: "app/overlays/prod"},
 	} {
-		if err := r.Adopt(ctx, []release.Proposal{good, bad}); err == nil {
+		if err := r.Adopt(ctx, []ship.Proposal{good, bad}); err == nil {
 			t.Errorf("%s: Adopt succeeded", name)
 		}
 		if got := heads(t, fx); got[0] != before[0] || got[1] != before[1] {
@@ -127,7 +127,7 @@ func TestAdoptValidatesBeforeWriting(t *testing.T) {
 		}
 	}
 	r.Offline = true
-	if err := r.Adopt(ctx, []release.Proposal{good}); err == nil || !strings.Contains(err.Error(), "offline") {
+	if err := r.Adopt(ctx, []ship.Proposal{good}); err == nil || !strings.Contains(err.Error(), "offline") {
 		t.Errorf("offline Adopt = %v", err)
 	}
 }

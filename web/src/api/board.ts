@@ -1429,7 +1429,7 @@ export function syncIssue(id: string, dryRun: boolean): Promise<IssueSyncResult>
   return request(`${issuePath(id)}/sync`, json('POST', { dry_run: dryRun }));
 }
 
-// Releases (internal/server/releases.go, internal/release): what runs where,
+// Releases (internal/server/releases.go, internal/ship): what runs where,
 // the releases, and the jobs that move them, one at a time in the
 // background. Go sends a nil list as null, and {enabled: false} alone
 // without [release]: normalized here, so components never see a null list.

@@ -19,17 +19,17 @@ import (
 	"github.com/guilbep/git-board/core/issue"
 	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/release"
-	"github.com/guilbep/git-board/internal/release/releasetest"
+	"github.com/guilbep/git-board/internal/ship"
+	"github.com/guilbep/git-board/internal/ship/shiptest"
 	"github.com/guilbep/git-board/internal/store"
 	"github.com/guilbep/git-board/internal/store/storetest"
 )
 
-// releaseServer serves a releasetest fixture's app repo, the working
+// releaseServer serves a shiptest fixture's app repo, the working
 // directory, with its [release] table, its fake tools and its backend.
-func releaseServer(t *testing.T) (*apiServer, *httptest.Server, *releasetest.Fixture) {
+func releaseServer(t *testing.T) (*apiServer, *httptest.Server, *shiptest.Fixture) {
 	t.Helper()
-	r, tools, fx := releasetest.NewRunner(t)
+	r, tools, fx := shiptest.NewRunner(t)
 	t.Chdir(fx.App)
 	// the trunk named: the fixture's clone of an empty remote has no origin/HEAD
 	cfg := &config.Config{Release: r.Cfg, Branches: config.Branches{Base: "dev"}}
@@ -40,25 +40,25 @@ func releaseServer(t *testing.T) (*apiServer, *httptest.Server, *releasetest.Fix
 }
 
 // runs makes both targets' overlays of env run commit as version.
-func runs(t *testing.T, fx *releasetest.Fixture, env, commit, version string) {
+func runs(t *testing.T, fx *shiptest.Fixture, env, commit, version string) {
 	t.Helper()
 	for i := range fx.ConfigBare {
-		fx.SetOverlay(t, i, env, release.Deployed{Commit: commit, Version: version})
+		fx.SetOverlay(t, i, env, ship.Deployed{Commit: commit, Version: version})
 	}
 }
 
-func firstCommit(t *testing.T, fx *releasetest.Fixture) string {
-	return releasetest.Git(t, fx.App, "rev-list", "--max-parents=0", "HEAD")
+func firstCommit(t *testing.T, fx *shiptest.Fixture) string {
+	return shiptest.Git(t, fx.App, "rev-list", "--max-parents=0", "HEAD")
 }
 
 // otherClone is another clone of the app, pushing tag on commit to the
 // authority remote: this one hasn't fetched it.
-func otherClone(t *testing.T, fx *releasetest.Fixture, commit, tag string) {
+func otherClone(t *testing.T, fx *shiptest.Fixture, commit, tag string) {
 	t.Helper()
 	dir := filepath.Join(t.TempDir(), "other")
-	releasetest.Git(t, filepath.Dir(dir), "clone", "-q", fx.AppBare, dir)
-	releasetest.Git(t, dir, "tag", "-a", tag, "-m", tag, commit)
-	releasetest.Git(t, dir, "push", "-q", "origin", "refs/tags/"+tag)
+	shiptest.Git(t, filepath.Dir(dir), "clone", "-q", fx.AppBare, dir)
+	shiptest.Git(t, dir, "tag", "-a", tag, "-m", tag, commit)
+	shiptest.Git(t, dir, "push", "-q", "origin", "refs/tags/"+tag)
 }
 
 // coded sends a JSON request and returns the status and the error's code
@@ -95,7 +95,7 @@ func waitRelease(t *testing.T, ts *httptest.Server) releaseJob {
 	}
 }
 
-func envNames(es []release.EnvState) []string {
+func envNames(es []ship.EnvState) []string {
 	var names []string
 	for _, e := range es {
 		names = append(names, e.Name)
@@ -247,7 +247,7 @@ func TestDeployJobRunsAndPublishes(t *testing.T) {
 func TestSecondJobConflicts(t *testing.T) {
 	s, ts, fx := releaseServer(t)
 	fx.Tag(t, firstCommit(t, fx), "v1.0.0")
-	s.releaseRun = &releaseJob{Kind: "deploy", Subject: "dev", State: "running", Steps: []release.Step{}, Started: time.Now()}
+	s.releaseRun = &releaseJob{Kind: "deploy", Subject: "dev", State: "running", Steps: []ship.Step{}, Started: time.Now()}
 	for _, w := range []struct {
 		method, path string
 		body         any
@@ -271,7 +271,7 @@ func TestSecondJobConflicts(t *testing.T) {
 // would push that one instead, without the page's notes or deploy.
 func TestCutRefusedWhileOneWaits(t *testing.T) {
 	_, ts, fx := releaseServer(t)
-	releasetest.Git(t, fx.App, "update-ref", "refs/git-board/cuts/v1.0.0", firstCommit(t, fx))
+	shiptest.Git(t, fx.App, "update-ref", "refs/git-board/cuts/v1.0.0", firstCommit(t, fx))
 	if status, code, msg := coded(t, "POST", ts.URL+"/api/releases", map[string]any{"deploy": true}); status != http.StatusConflict || code != "pending" || !strings.Contains(msg, "v1.0.0") {
 		t.Errorf("POST cut = %d %q %q, want 409 pending naming v1.0.0", status, code, msg)
 	}
@@ -391,7 +391,7 @@ func TestReleasesNotesAndComments(t *testing.T) {
 }
 
 // panicky is the fake tools, but a registry lookup panics.
-type panicky struct{ release.Tools }
+type panicky struct{ ship.Tools }
 
 func (panicky) Revision(context.Context, string) (string, string, error) { panic("registry exploded") }
 
@@ -429,8 +429,8 @@ func TestReleaseJobPanicFailsIt(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	job := &releaseJob{Kind: "cut", State: "running", Steps: []release.Step{}, Started: time.Now()}
-	s.runJob(job, run, func(context.Context, *release.Runner) (string, error) { panic("engine exploded") })
+	job := &releaseJob{Kind: "cut", State: "running", Steps: []ship.Step{}, Started: time.Now()}
+	s.runJob(job, run, func(context.Context, *ship.Runner) (string, error) { panic("engine exploded") })
 	if job.State != "failed" || job.Error != "panic: engine exploded" {
 		t.Errorf("job %s %q, want it failed with the panic", job.State, job.Error)
 	}
@@ -568,7 +568,7 @@ func setupServer(t *testing.T, remote string) (*apiServer, *httptest.Server) {
 		t.Fatal(err)
 	}
 	fx.GoMain(t, "cmd/app")
-	releasetest.Git(t, fx.App, "remote", "set-url", "origin", remote) // after the push: Infer only reads it
+	shiptest.Git(t, fx.App, "remote", "set-url", "origin", remote) // after the push: Infer only reads it
 	return s, ts
 }
 
@@ -587,7 +587,7 @@ func TestReleasesNamesBinaries(t *testing.T) {
 
 func TestSetupInfersAndEnables(t *testing.T) {
 	s, ts := setupServer(t, "git@github.com:acme/app.git")
-	var setup release.Setup
+	var setup ship.Setup
 	if code := getJSON(t, ts.URL+"/api/releases/setup", &setup).StatusCode; code != 200 || !slices.Equal(setup.Binaries, []string{"./cmd/app"}) || setup.Forge != "github" || setup.Repo != "acme/app" || setup.Note != "" {
 		t.Fatalf("%d %+v", code, setup)
 	}
@@ -612,7 +612,7 @@ func TestEnableSwitchesTheKindForm(t *testing.T) {
 	if err := os.WriteFile(s.cfgPath, []byte("[branches]\nkinds = { bug = \"bug\" }\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if code, body := post(t, ts.URL+"/api/releases/setup", release.Setup{Binaries: []string{"./cmd/app"}}); code != 200 {
+	if code, body := post(t, ts.URL+"/api/releases/setup", ship.Setup{Binaries: []string{"./cmd/app"}}); code != 200 {
 		t.Fatalf("%d %s", code, body)
 	}
 	id, err := s.b.NewIssue("x", "", []string{"kind:bug"})
@@ -630,7 +630,7 @@ func TestEnableSwitchesTheKindForm(t *testing.T) {
 
 func TestEnableRefusesWithoutForge(t *testing.T) {
 	s, ts := setupServer(t, "https://gitlab.com/acme/app.git")
-	code, body := post(t, ts.URL+"/api/releases/setup", release.Setup{Binaries: []string{"./cmd/app"}})
+	code, body := post(t, ts.URL+"/api/releases/setup", ship.Setup{Binaries: []string{"./cmd/app"}})
 	raw, _ := os.ReadFile(s.cfgPath)
 	if code != 400 || !strings.Contains(body, `"forge"`) || !strings.Contains(body, "isn't on github.com") || strings.Contains(string(raw), "[release]") {
 		t.Errorf("%d %s\n%s", code, body, raw)
@@ -639,7 +639,7 @@ func TestEnableRefusesWithoutForge(t *testing.T) {
 
 func TestEnableRefusesBadConfig(t *testing.T) {
 	s, ts := setupServer(t, "git@github.com:acme/app.git")
-	code, body := post(t, ts.URL+"/api/releases/setup", release.Setup{Binaries: []string{"./cmd/app"}, Platforms: []string{"linux"}})
+	code, body := post(t, ts.URL+"/api/releases/setup", ship.Setup{Binaries: []string{"./cmd/app"}, Platforms: []string{"linux"}})
 	raw, _ := os.ReadFile(s.cfgPath)
 	if code != 400 || !strings.Contains(body, `"check"`) || !strings.Contains(body, `platform \"linux\" isn't os/arch`) || strings.Contains(string(raw), "[release]") || s.config().Release.Enabled() {
 		t.Errorf("%d %s\n%s", code, body, raw)

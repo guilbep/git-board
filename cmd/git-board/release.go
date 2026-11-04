@@ -15,17 +15,17 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/release"
+	"github.com/guilbep/git-board/internal/ship"
 	"github.com/guilbep/git-board/internal/store"
 )
 
 // releaseTools builds the registry, builder and chart tools: a var for the
-// tests, which swap in releasetest.NewTools.
-var releaseTools = release.Exec
+// tests, which swap in shiptest.NewTools.
+var releaseTools = ship.Exec
 
 // newRunner is the Runner of the repository in the working directory; the
 // func closes its git-bug backend.
-func newRunner() (*release.Runner, func(), error) {
+func newRunner() (*ship.Runner, func(), error) {
 	cfg, err := loadConfig()
 	if err != nil {
 		return nil, nil, err
@@ -42,7 +42,7 @@ func newRunner() (*release.Runner, func(), error) {
 		_ = b.Close()
 		return nil, nil, err
 	}
-	r, err := release.New(cfg, dir, b)
+	r, err := ship.New(cfg, dir, b)
 	if err != nil {
 		_ = b.Close()
 		return nil, nil, err
@@ -52,14 +52,14 @@ func newRunner() (*release.Runner, func(), error) {
 }
 
 // withRunner runs f with a Runner that prints its steps to cmd's output.
-func withRunner(cmd *cobra.Command, f func(ctx context.Context, r *release.Runner, out io.Writer) error) error {
+func withRunner(cmd *cobra.Command, f func(ctx context.Context, r *ship.Runner, out io.Writer) error) error {
 	r, closeB, err := newRunner()
 	if err != nil {
 		return err
 	}
 	defer closeB()
 	out := cmd.OutOrStdout()
-	r.Step = func(s release.Step) {
+	r.Step = func(s ship.Step) {
 		if s.State == "done" {
 			fmt.Fprintln(out, strings.TrimRight("  "+s.Name+"  "+s.Detail, " "))
 		}
@@ -89,7 +89,7 @@ didn't cut.`,
 }
 
 func runStatus(cmd *cobra.Command) error {
-	return withRunner(cmd, func(ctx context.Context, r *release.Runner, out io.Writer) error {
+	return withRunner(cmd, func(ctx context.Context, r *ship.Runner, out io.Writer) error {
 		st, err := r.Status(ctx)
 		if err != nil {
 			return err
@@ -101,7 +101,7 @@ func runStatus(cmd *cobra.Command) error {
 		if err := tw.Flush(); err != nil {
 			return err
 		}
-		pending, err := release.Pending(ctx, r.Dir)
+		pending, err := ship.Pending(ctx, r.Dir)
 		for _, p := range pending {
 			fmt.Fprintf(out, "pending %s on %s: cut offline; the next cut, promote, rollback or deploy pushes it\n", p.Name, short(p.Commit))
 		}
@@ -110,14 +110,14 @@ func runStatus(cmd *cobra.Command) error {
 }
 
 // envCommit is the commit shown: the targets' when they agree, else the first target's.
-func envCommit(e release.EnvState) string {
+func envCommit(e ship.EnvState) string {
 	if e.Commit != "" || len(e.Targets) == 0 {
 		return e.Commit
 	}
 	return e.Targets[0].Deployed.Commit
 }
 
-func envVersion(e release.EnvState) string {
+func envVersion(e ship.EnvState) string {
 	if e.Version != "" || len(e.Targets) == 0 {
 		return e.Version
 	}
@@ -127,7 +127,7 @@ func envVersion(e release.EnvState) string {
 func short(c string) string { return c[:min(7, len(c))] }
 
 // envNote is what is notable about e: unadopted, split, or behind the trunk.
-func envNote(e release.EnvState, base string) string {
+func envNote(e ship.EnvState, base string) string {
 	switch {
 	case len(e.Targets) == 0:
 		return ""
@@ -163,9 +163,9 @@ func newCutCmd() *cobra.Command {
   git-board release cut --offline --no-deploy`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			c := release.Cut{Final: final, Hotfix: hotfix, Deploy: !noDeploy, Commit: commit}
+			c := ship.Cut{Final: final, Hotfix: hotfix, Deploy: !noDeploy, Commit: commit}
 			if version != "" {
-				v, ok := release.ParseTag("v" + strings.TrimPrefix(version, "v"))
+				v, ok := ship.ParseTag("v" + strings.TrimPrefix(version, "v"))
 				switch {
 				case !ok:
 					return fmt.Errorf("--version %q: want 1.4.20", version)
@@ -181,13 +181,13 @@ func newCutCmd() *cobra.Command {
 				}
 				c.Notes = string(b)
 			}
-			return withRunner(cmd, func(ctx context.Context, r *release.Runner, out io.Writer) error {
+			return withRunner(cmd, func(ctx context.Context, r *ship.Runner, out io.Writer) error {
 				r.Offline = offline
 				t, err := r.Cut(ctx, c)
 				if t.Name != "" { // pushed, even when a later step failed
 					fmt.Fprintf(out, "cut %s\n", t.Name)
 				}
-				if errors.Is(err, release.ErrFetch) {
+				if errors.Is(err, ship.ErrFetch) {
 					err = fmt.Errorf("%w\nno network? git-board release cut --offline --no-deploy tags locally; the next online cut or deploy pushes it", err)
 				}
 				return err
@@ -211,7 +211,7 @@ func newPromoteCmd() *cobra.Command {
 		Short: "Cut the final of a candidate and deploy it to the last environment",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return withRunner(cmd, func(ctx context.Context, r *release.Runner, out io.Writer) error {
+			return withRunner(cmd, func(ctx context.Context, r *ship.Runner, out io.Writer) error {
 				t, err := r.Promote(ctx, args[0])
 				if t.Name != "" {
 					fmt.Fprintf(out, "cut %s\n", t.Name)
@@ -232,7 +232,7 @@ func newRollbackCmd() *cobra.Command {
 			if reason == "" {
 				return errors.New("--reason is required")
 			}
-			return withRunner(cmd, func(ctx context.Context, r *release.Runner, out io.Writer) error {
+			return withRunner(cmd, func(ctx context.Context, r *ship.Runner, out io.Writer) error {
 				return r.Rollback(ctx, args[0], args[1], reason)
 			})
 		},
@@ -252,7 +252,7 @@ run. --yes writes them. --set <env>/<n>=<sha> fills one that is unknown,
 n being the target's place in [release] deploy, from 1.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return withRunner(cmd, func(ctx context.Context, r *release.Runner, out io.Writer) error {
+			return withRunner(cmd, func(ctx context.Context, r *ship.Runner, out io.Writer) error {
 				ps, err := r.Proposals(ctx)
 				if err != nil {
 					return err
@@ -262,7 +262,7 @@ n being the target's place in [release] deploy, from 1.`,
 						return err
 					}
 				}
-				var known []release.Proposal
+				var known []ship.Proposal
 				for _, p := range ps {
 					n := targetNo(r, p)
 					fmt.Fprintf(out, "%s/%d  runs %s  %s (%s)\n", p.Env, n, p.Runs, cmp.Or(short(p.Commit), "-"), cmp.Or(p.From, "unknown"))
@@ -293,14 +293,14 @@ n being the target's place in [release] deploy, from 1.`,
 }
 
 // targetNo is p's place in [release] deploy, from 1.
-func targetNo(r *release.Runner, p release.Proposal) int {
+func targetNo(r *ship.Runner, p ship.Proposal) int {
 	return 1 + slices.IndexFunc(r.Cfg.Deploy, func(d config.Target) bool {
 		return d.Repo == p.Repo && strings.ReplaceAll(d.Path, "{env}", p.Env) == p.Path
 	})
 }
 
 // applySet fills in ps the proposal "<env>/<n>=<sha>" names.
-func applySet(r *release.Runner, ps []release.Proposal, s string) error {
+func applySet(r *ship.Runner, ps []ship.Proposal, s string) error {
 	key, sha, ok := strings.Cut(s, "=")
 	env, n, ok2 := strings.Cut(key, "/")
 	i, err := strconv.Atoi(n)
@@ -323,7 +323,7 @@ func newNotesCmd() *cobra.Command {
 		Short: "Print the release notes, newest first",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return withRunner(cmd, func(ctx context.Context, r *release.Runner, out io.Writer) error {
+			return withRunner(cmd, func(ctx context.Context, r *ship.Runner, out io.Writer) error {
 				md, err := r.Notes(ctx, all)
 				fmt.Fprint(out, md)
 				return err
@@ -344,7 +344,7 @@ func newYankCmd() *cobra.Command {
 			if reason == "" {
 				return errors.New("--reason is required")
 			}
-			return withRunner(cmd, func(ctx context.Context, r *release.Runner, out io.Writer) error {
+			return withRunner(cmd, func(ctx context.Context, r *ship.Runner, out io.Writer) error {
 				return r.Yank(ctx, args[0], reason)
 			})
 		},

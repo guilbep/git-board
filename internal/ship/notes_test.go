@@ -1,18 +1,18 @@
-package release_test
+package ship_test
 
 import (
 	"slices"
 	"strings"
 	"testing"
 
-	"github.com/guilbep/git-board/internal/release"
-	"github.com/guilbep/git-board/internal/release/releasetest"
+	"github.com/guilbep/git-board/internal/ship"
+	"github.com/guilbep/git-board/internal/ship/shiptest"
 )
 
 func TestNotesFinalsNewestFirst(t *testing.T) {
-	r, _, fx := releasetest.NewRunner(t)
+	r, _, fx := shiptest.NewRunner(t)
 	shipped(t, r, fx)
-	rc := cut(t, r, release.Cut{Deploy: true})
+	rc := cut(t, r, ship.Cut{Deploy: true})
 	if _, err := r.Promote(ctx, rc.Name); err != nil {
 		t.Fatal(err)
 	}
@@ -30,9 +30,9 @@ func TestNotesFinalsNewestFirst(t *testing.T) {
 }
 
 func TestYankPushes(t *testing.T) {
-	r, _, fx := releasetest.NewRunner(t)
+	r, _, fx := shiptest.NewRunner(t)
 	shipped(t, r, fx)
-	rc := cut(t, r, release.Cut{Deploy: true})
+	rc := cut(t, r, ship.Cut{Deploy: true})
 	before := records(t, fx.AppBare)
 	if err := r.Yank(ctx, rc.Name, "bad"); err != nil {
 		t.Fatal(err)
@@ -53,9 +53,9 @@ func TestYankPushes(t *testing.T) {
 }
 
 func TestSetNotesPushes(t *testing.T) {
-	r, _, fx := releasetest.NewRunner(t)
+	r, _, fx := shiptest.NewRunner(t)
 	shipped(t, r, fx)
-	rc := cut(t, r, release.Cut{Deploy: true})
+	rc := cut(t, r, ship.Cut{Deploy: true})
 	before := records(t, fx.AppBare)
 	if err := r.SetNotes(ctx, rc.Name, "### fix\n\n- #12 better"); err != nil {
 		t.Fatal(err)
@@ -72,9 +72,9 @@ func TestSetNotesPushes(t *testing.T) {
 }
 
 func TestCommentPushes(t *testing.T) {
-	r, _, fx := releasetest.NewRunner(t)
+	r, _, fx := shiptest.NewRunner(t)
 	shipped(t, r, fx)
-	rc := cut(t, r, release.Cut{Deploy: true})
+	rc := cut(t, r, ship.Cut{Deploy: true})
 	before := records(t, fx.AppBare)
 	if err := r.Comment(ctx, rc.Name, "looks good in stage"); err != nil {
 		t.Fatal(err)
