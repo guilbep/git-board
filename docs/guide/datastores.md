@@ -67,7 +67,10 @@ by hand only if you need it (see *Left open* in ADR 0002).
 
 - **The tables** are made on first use, in two schemas:
   `git_board` (the board: `entities`, `packs`, `counter`) and
-  `git_board_index` (lists and search). The user needs the right to create
+  `git_board_index_v<version>` (lists and search, one schema per version
+  of its tables, so two git-board versions can share the database; an
+  older one's is left for you to drop once nothing reads it, as is
+  `git_board_index`, older builds'). The user needs the right to create
   schemas in that database the first time, and to read and write them
   after.
 - **One database is one board.** Give each project its own database.

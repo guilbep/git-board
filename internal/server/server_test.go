@@ -226,3 +226,29 @@ func TestNoConfigServesEmptyObjects(t *testing.T) {
 		}
 	}
 }
+
+// GET /api/issues answers 400 for a filter that can't be answered, 500
+// when the board can't be read: the page shows the one as the user's to
+// fix, the other as git-board's.
+func TestListIssuesErrorStatus(t *testing.T) {
+	t.Parallel()
+	b := storetest.New(t)
+	storetest.NewIssue(t, b, "open one")
+	s := &apiServer{cfg: mustLoadConfig(t), b: b} // no --me, and no forge login
+	ts := httptest.NewServer(withCORS(newMux(s, http.NotFoundHandler())))
+	t.Cleanup(ts.Close)
+	for _, path := range []string{"/api/issues", "/api/facets"} {
+		if code, msg := callError(t, "GET", ts.URL+path+"?filter=assignee:@me", nil); code != http.StatusBadRequest || msg == "" {
+			t.Errorf("%s, @me meaning nobody: %d %q, want 400", path, code, msg)
+		}
+	}
+	// the index closed under it: the free text's search fails
+	if err := b.Close(); err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{"/api/issues", "/api/facets"} {
+		if code, msg := callError(t, "GET", ts.URL+path+"?filter=invoice", nil); code != http.StatusInternalServerError {
+			t.Errorf("%s, the board failing: %d %q, want 500", path, code, msg)
+		}
+	}
+}

@@ -140,7 +140,7 @@ func TestIndexDBAtOnce(t *testing.T) {
 		errs := make([]error, len(stores))
 		for i, s := range stores {
 			wg.Go(func() {
-				db, err := s.IndexDB(t.Context())
+				db, err := s.IndexDB(t.Context(), "git_board_index_v1")
 				if err == nil {
 					db.Close()
 				}

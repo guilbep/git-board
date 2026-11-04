@@ -22,8 +22,13 @@ directory when it is missing.
   a write waits up to 5 seconds for another (sqlite's `busy_timeout`).
 
 For a board kept in PostgreSQL, the index is the same tables in the
-schema `git_board_index` of the board's database, shared by every machine.
-What differs from sqlite:
+schema `git_board_index_v<version>` of the board's database (today
+`git_board_index_v1`), shared by every machine. Each version of the
+index's tables has its own schema, so two git-board versions sharing a
+database each keep their index; neither drops the other's. A schema no
+git-board reads any more stays until it is dropped by hand
+(`DROP SCHEMA git_board_index_v1 CASCADE`; `git_board_index`, before
+versions had their own). What differs from sqlite:
 
 - **A different rebuild:** an index of another version is dropped and made
   again (`DROP TABLE`) under an advisory lock, not deleted as a file.

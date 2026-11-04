@@ -33,7 +33,7 @@ func (s *apiServer) handleInsights(w http.ResponseWriter, r *http.Request) {
 		noIs := filter.Without(v.Filter, func(c filter.Condition) bool { return c.Kind == filter.KindIs })
 		issues, err := board.LoadMatching(s.b, cfg, noIs, s.me)
 		if err != nil {
-			writeError(w, http.StatusBadRequest, err)
+			writeError(w, filterStatus(err), err)
 			return
 		}
 		ids = map[string]bool{}

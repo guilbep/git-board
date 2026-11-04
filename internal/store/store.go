@@ -167,6 +167,8 @@ type Backend struct {
 	issues  map[string]*issue.Issue
 	persons map[string]*people.Person
 	heads   map[string]string // ref -> version of what's loaded
+	// issueFolds is how many times an issue was folded, for the tests
+	issueFolds atomic.Int64
 	// recs are the forges' links (syncer.Records) as of the sync
 	// entities' heads recHeads: folded again only when one moved
 	recMu    sync.Mutex
@@ -319,21 +321,35 @@ func (b *Backend) me() (string, error) {
 	return id, err
 }
 
-// loadIssue is an issue and its log, loaded again only when its head moved.
+// loadIssue is an issue and its log. The log is read each time; the issue
+// is folded again only when the log's version moved, as all keeps it for
+// listings. The issue is shared with every other reader: read it, never
+// write it. The log is the caller's own.
 func (b *Backend) loadIssue(id string) (*issue.Issue, *oplog.Log, error) {
-	l, err := oplog.Load(b.ds, "issue", id)
+	l, err := oplog.LoadContext(ctx, b.ds, "issue", id)
 	if errors.Is(err, oplog.ErrNotFound) {
 		return nil, nil, fmt.Errorf("%w: issue %s", ErrNotFound, id)
 	}
 	if err != nil {
 		return nil, nil, err
 	}
-	is, err := issue.Apply(l)
-	if err != nil {
+	name := oplog.RefName("issue", id)
+	b.mu.Lock()
+	is, ok := b.issues[id]
+	ok = ok && b.heads[name] == l.Version
+	b.mu.Unlock()
+	if ok {
+		return is, l, nil
+	}
+	if is, err = issue.Apply(l); err != nil {
 		return nil, nil, err
 	}
+	b.issueFolds.Add(1)
+	// the issue and its version are set together, so a slower reader of an
+	// older version leaves an older pair, folded again on the next read,
+	// never an issue under another's version
 	b.mu.Lock()
-	b.issues[id], b.heads[oplog.RefName("issue", id)] = is, l.Version
+	b.issues[id], b.heads[name] = is, l.Version
 	b.mu.Unlock()
 	return is, l, nil
 }
@@ -376,7 +392,7 @@ func (b *Backend) allIssues() (map[string]*issue.Issue, error) {
 
 func (b *Backend) allPersons() (map[string]*people.Person, error) {
 	return all(b, "person", b.persons, func(id string) (*people.Person, error) {
-		l, err := oplog.Load(b.ds, "person", id)
+		l, err := oplog.LoadContext(ctx, b.ds, "person", id)
 		if err != nil {
 			return nil, err
 		}

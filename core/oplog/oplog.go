@@ -158,12 +158,19 @@ func Create(ctx context.Context, ds Datastore, kind, id string, ops []Op) (*Log,
 	return &Log{Kind: kind, ID: id, Version: v, Entries: n.entries(), clock: 1}, nil
 }
 
-// Load reads an entity and orders its operations.
+// Load reads an entity and orders its operations: LoadContext with no
+// deadline.
 func Load(ds Datastore, kind, id string) (*Log, error) {
+	return LoadContext(context.Background(), ds, kind, id)
+}
+
+// LoadContext reads an entity and orders its operations; ctx bounds the
+// datastore's read.
+func LoadContext(ctx context.Context, ds Datastore, kind, id string) (*Log, error) {
 	if err := checkName(kind, id); err != nil {
 		return nil, err
 	}
-	packs, v, err := ds.Packs(context.Background(), kind, id)
+	packs, v, err := ds.Packs(ctx, kind, id)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
 			return nil, err
@@ -206,7 +213,7 @@ func (l *Log) Append(ctx context.Context, ds Datastore, ops []Op) error {
 	}
 	name := RefName(l.Kind, l.ID)
 	if l.clock == 0 { // a log not read here: its clock is unknown
-		fresh, err := Load(ds, l.Kind, l.ID)
+		fresh, err := LoadContext(ctx, ds, l.Kind, l.ID)
 		if err != nil {
 			return err
 		}
@@ -225,7 +232,7 @@ func (l *Log) Append(ctx context.Context, ds Datastore, ops []Op) error {
 		if !errors.Is(err, datastore.ErrMoved) || try == tries {
 			return fmt.Errorf("oplog: append %s: %w", name, err)
 		}
-		fresh, err := Load(ds, l.Kind, l.ID)
+		fresh, err := LoadContext(ctx, ds, l.Kind, l.ID)
 		if err != nil {
 			return err
 		}
@@ -234,12 +241,17 @@ func (l *Log) Append(ctx context.Context, ds Datastore, ops []Op) error {
 }
 
 // List returns the ids of a kind's entities, sorted. A name that isn't an
-// id isn't an entity, and is left out.
+// id isn't an entity, and is left out. It is ListContext with no deadline.
 func List(ds Datastore, kind string) ([]string, error) {
+	return ListContext(context.Background(), ds, kind)
+}
+
+// ListContext is List; ctx bounds the datastore's read.
+func ListContext(ctx context.Context, ds Datastore, kind string) ([]string, error) {
 	if err := checkKind(kind); err != nil {
 		return nil, err
 	}
-	heads, err := ds.Heads(context.Background(), kind)
+	heads, err := ds.Heads(ctx, kind)
 	if err != nil {
 		return nil, err
 	}

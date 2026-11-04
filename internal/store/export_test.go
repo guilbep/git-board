@@ -120,3 +120,6 @@ func RecordsFolds(b *Backend) int {
 	defer b.recMu.Unlock()
 	return b.recFolds
 }
+
+// IssueFolds is how many times b folded an issue's log into its state.
+func IssueFolds(b *Backend) int { return int(b.issueFolds.Load()) }

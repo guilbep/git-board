@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"modernc.org/sqlite"
@@ -58,10 +59,17 @@ type Index struct {
 // SQL is a datastore whose server keeps the index too: PostgreSQL. Every
 // machine then reads one index, which replaces the sqlite file.
 type SQL interface {
-	// IndexDB is a pool on the server, whose search path holds the index's
-	// tables.
-	IndexDB(ctx context.Context) (*sql.DB, error)
+	// IndexDB is a pool on the server whose search path is schema, made
+	// when it isn't there: the index's tables (PGSchema).
+	IndexDB(ctx context.Context, schema string) (*sql.DB, error)
 }
+
+// PGSchema is the index's schema on PostgreSQL, one per version of its
+// tables: two git-board versions sharing a database each keep their own
+// index, instead of dropping the other's at every open. An older one's is
+// left as it is, as a git-board of that version may still read it; it is
+// dropped by hand (docs/adr/0009).
+var PGSchema = "git_board_index_v" + strconv.Itoa(version)
 
 // Broken is an entity that failed to load.
 type Broken struct{ Kind, ID, Error string }
@@ -192,9 +200,12 @@ func (ix *Index) Refresh(ctx context.Context) error {
 		}
 		l := loaded{key: k, head: head}
 		if k.kind == "issue" {
-			l.issue, l.err = issue.Load(ix.s, k.id)
+			l.issue, l.err = issue.LoadContext(ctx, ix.s, k.id)
 		} else {
-			l.person, l.err = people.Load(ix.s, k.id)
+			l.person, l.err = people.LoadContext(ctx, ix.s, k.id)
+		}
+		if err := ctx.Err(); err != nil { // a load cut short isn't a broken entity
+			return err
 		}
 		if errors.Is(l.err, oplog.ErrNotFound) { // its ref went since the listing
 			gone = append(gone, k)

@@ -333,7 +333,9 @@ type gitIndexedOnPG struct {
 	pg *pgstore.Store
 }
 
-func (g gitIndexedOnPG) IndexDB(ctx context.Context) (*sql.DB, error) { return g.pg.IndexDB(ctx) }
+func (g gitIndexedOnPG) IndexDB(ctx context.Context, schema string) (*sql.DB, error) {
+	return g.pg.IndexDB(ctx, schema)
+}
 
 // sqliteOnly skips a test of the sqlite file when the index runs on
 // PostgreSQL.
@@ -341,5 +343,56 @@ func sqliteOnly(t *testing.T) {
 	t.Helper()
 	if os.Getenv("GIT_BOARD_TEST_INDEX") == "pg" {
 		t.Skip("the sqlite file's: the index runs on PostgreSQL")
+	}
+}
+
+// On PostgreSQL the index is in its version's schema: another version's,
+// a git-board of that version sharing the database, is left as it is,
+// and so is the schema older builds kept every version in.
+func TestPGIndexIsItsVersions(t *testing.T) {
+	t.Parallel()
+	dsn := pgtest.DSN(t)
+	p, err := pgstore.Open(t.Context(), dsn, t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { p.Close() })
+	other, err := p.IndexDB(t.Context(), "git_board_index")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer other.Close()
+	// what another version made: its meta says so, its issues are its own
+	if _, err := other.ExecContext(t.Context(), `CREATE TABLE meta (key text PRIMARY KEY, value text NOT NULL);
+		INSERT INTO meta VALUES ('version', '0');
+		CREATE TABLE issues (id text); INSERT INTO issues VALUES ('theirs')`); err != nil {
+		t.Fatal(err)
+	}
+	_, s := newRepo(t)
+	is, err := issue.Create(t.Context(), s, issue.NewCreate("ann", "Fix invoice bug", ""))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ix, err := Open(t.Context(), gitIndexedOnPG{s, p})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ix.Close()
+	if got, err := ix.Issues(t.Context(), Query{}); err != nil || len(got) != 1 || got[0].ID != is.ID {
+		t.Fatalf("issues %+v, %v", got, err)
+	}
+	var v, theirs string
+	if err := other.QueryRowContext(t.Context(), "SELECT value FROM meta WHERE key = 'version'").Scan(&v); err != nil || v != "0" {
+		t.Errorf("the other version's meta: %q, %v; want it kept", v, err)
+	}
+	if err := other.QueryRowContext(t.Context(), "SELECT id FROM issues").Scan(&theirs); err != nil || theirs != "theirs" {
+		t.Errorf("the other version's issues: %q, %v; want them kept", theirs, err)
+	}
+	var n int
+	if err := other.QueryRowContext(t.Context(), "SELECT count(*) FROM "+PGSchema+".issues").Scan(&n); err != nil || n != 1 {
+		t.Errorf("%s.issues: %d, %v; want this version's one issue", PGSchema, n, err)
+	}
+	if _, err := p.IndexDB(t.Context(), "git_board"); err == nil {
+		t.Error("the datastore's own schema is no index's")
 	}
 }

@@ -11,6 +11,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/store"
@@ -257,11 +258,50 @@ type Branch struct {
 	LastCommit store.Commit `json:"last_commit"`
 }
 
+// Ancestry is commits' ancestors, each commit's read once: the Work page
+// lists many issues' branches against one base, whose whole history was
+// read again for each issue. One is a request's: a commit's ancestors
+// don't change, but a later request's branches may have moved. Safe for
+// concurrent use; the sets it gives are shared, to read only.
+type Ancestry struct {
+	b     *store.Backend
+	mu    sync.Mutex
+	sets  map[string]map[string]bool
+	reads int // histories read, for the tests
+}
+
+// NewAncestry is an Ancestry of b's commits, empty.
+func NewAncestry(b *store.Backend) *Ancestry {
+	return &Ancestry{b: b, sets: map[string]map[string]bool{}}
+}
+
+// Of is the commit hash and every commit before it.
+func (a *Ancestry) Of(hash string) (map[string]bool, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if set, ok := a.sets[hash]; ok {
+		return set, nil
+	}
+	set, err := a.b.Ancestors(hash)
+	if err != nil {
+		return nil, err
+	}
+	a.sets[hash], a.reads = set, a.reads+1
+	return set, nil
+}
+
 // Linked lists the branches naming the issue, local then the remotes',
 // against start (Suggestion.Start); without start, all at zero.
 // ponytail: a branch's whole history, read per branch: fine for the few
 // naming an issue; git's commit-graph if a big repository makes it slow
 func Linked(b *store.Backend, is store.Issue, start string) ([]Branch, error) {
+	return LinkedIn(NewAncestry(b), is, start)
+}
+
+// LinkedIn is Linked, reading the histories through anc: one Ancestry for
+// many issues reads their base's once.
+func LinkedIn(anc *Ancestry, is store.Issue, start string) ([]Branch, error) {
+	b := anc.b
 	all, err := b.Branches()
 	if err != nil {
 		return nil, err
@@ -282,7 +322,7 @@ func Linked(b *store.Backend, is store.Issue, start string) ([]Branch, error) {
 		if base == nil {
 			base = map[string]bool{}
 			if startHash != "" {
-				if base, err = b.Ancestors(startHash); err != nil {
+				if base, err = anc.Of(startHash); err != nil {
 					return nil, err
 				}
 			}
@@ -293,7 +333,7 @@ func Linked(b *store.Backend, is store.Issue, start string) ([]Branch, error) {
 		}
 		l := Branch{Name: br.Name, Remote: br.Remote, Merged: base[br.Hash], LastCommit: last}
 		if len(base) > 0 {
-			mine, err := b.Ancestors(br.Hash)
+			mine, err := anc.Of(br.Hash)
 			if err != nil {
 				return nil, err
 			}

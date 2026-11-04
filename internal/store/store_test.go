@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"maps"
 	"path/filepath"
+	"slices"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/guilbep/git-board/internal/store"
@@ -291,5 +293,97 @@ func TestGetIssueFoldsTheLinksOnce(t *testing.T) {
 	}
 	if got.BareNumber() != "4" || store.RecordsFolds(b) != 2 {
 		t.Fatalf("after a link: number %q, folds %d", got.BareNumber(), store.RecordsFolds(b))
+	}
+}
+
+// Reading one issue folds its log only when its version moved: its page,
+// its thread and a write read it again and again.
+func TestGetIssueFoldsAnUnchangedIssueOnce(t *testing.T) {
+	t.Parallel()
+	b := storetest.New(t)
+	id := storetest.NewIssue(t, b, "Fix invoice bug")
+	if _, err := b.GetIssue(id); err != nil {
+		t.Fatal(err)
+	}
+	before := store.IssueFolds(b)
+	for range 5 {
+		if _, err := b.GetIssue(id); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := b.Thread(id); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := b.ProjectBases(id, "github-project:"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if n := store.IssueFolds(b) - before; n != 0 {
+		t.Fatalf("folded an unchanged issue %d times for 15 reads, want 0", n)
+	}
+	// a write moves it: the next read folds it again, once, and sees it
+	if _, err := b.ApplyLabelChange(id, []string{"status:ready"}, nil); err != nil {
+		t.Fatal(err)
+	}
+	before = store.IssueFolds(b)
+	for range 3 {
+		got, err := b.GetIssue(id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !slices.Contains(got.Labels, "status:ready") {
+			t.Fatalf("after a write: labels %v", got.Labels)
+		}
+	}
+	if n := store.IssueFolds(b) - before; n != 1 {
+		t.Fatalf("folded a moved issue %d times for 3 reads, want 1", n)
+	}
+}
+
+// The server shares one Backend: readers and writers of one issue at once
+// never see a write lost, and never race (go test -race).
+func TestGetIssueCacheConcurrent(t *testing.T) {
+	t.Parallel()
+	b := storetest.New(t)
+	id := storetest.NewIssue(t, b, "Fix invoice bug")
+	var wg sync.WaitGroup
+	for i := range 4 {
+		wg.Go(func() {
+			if _, err := b.ApplyLabelChange(id, []string{fmt.Sprint("area:", i)}, nil); err != nil {
+				t.Error(err)
+			}
+		})
+		wg.Go(func() {
+			for range 5 {
+				if _, err := b.GetIssue(id); err != nil {
+					t.Error(err)
+				}
+			}
+		})
+	}
+	wg.Wait()
+	got, err := b.GetIssue(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := range 4 {
+		if !slices.Contains(got.Labels, fmt.Sprint("area:", i)) {
+			t.Errorf("labels %v lack area:%d", got.Labels, i)
+		}
+	}
+}
+
+func BenchmarkGetIssue(b *testing.B) {
+	bk := storetest.New(b)
+	id := storetest.NewIssue(b, bk, "Fix invoice bug")
+	for i := range 50 {
+		if _, err := bk.ApplyLabelChange(id, []string{fmt.Sprint("area:", i)}, nil); err != nil {
+			b.Fatal(err)
+		}
+	}
+	b.ResetTimer()
+	for b.Loop() {
+		if _, err := bk.GetIssue(id); err != nil {
+			b.Fatal(err)
+		}
 	}
 }

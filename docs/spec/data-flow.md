@@ -57,7 +57,7 @@ flowchart TB
   ds --> copy
   store -. "renders NNN-slug.md, reads hand edits" .-> md
   index -. "sqlite, for git and forge only" .-> folder
-  index -. "git_board_index, on PostgreSQL" .-> pg
+  index -. "git_board_index_v1, on PostgreSQL" .-> pg
   syncer -. "sync.lock, journal" .-> folder
 ```
 
@@ -115,9 +115,10 @@ sequenceDiagram
   datastore's `Heads` (one version per entity), loads again only the
   entities whose version moved, and then answers from its tables.
 - **One issue** is its packs, read from the datastore, sorted by oplog
-  and folded by `core/issue`. A listing keeps the folded issues per
-  version, so an unchanged issue isn't folded twice there; reading one
-  issue (its page, a write) folds it again each time.
+  and folded by `core/issue`. `internal/store` keeps the folded issues
+  per version, for a listing and for one issue alike (its page, its
+  thread, a write): its packs are read each time, but an unchanged issue
+  isn't folded twice.
 - **The pages' change events** compare the datastore's heads every few
   seconds: a write from another clone, another machine or the command line
   reaches every open page.
@@ -140,7 +141,7 @@ ends.
 |---|---|---|---|---|
 | issues, people, sync and release records | `refs/board/<kind>/<id>` | `git_board.packs`, `git_board.entities` | `<dir>/.board/<kind>/<id>.jsonl`, one pack a line, and `<dir>/NNN-slug.md` rendered | a git copy in `.git/board/forge-copy.git`, filled by sync |
 | project numbers | `refs/board/seq` | `git_board.counter` | the forges' own numbers only | the forges' own numbers only |
-| the index | `.git/board/index.db` (sqlite) | `git_board_index.*`, shared | `.git/board/index.db` | `.git/board/index.db` |
+| the index | `.git/board/index.db` (sqlite) | `git_board_index_v<version>.*`, shared | `.git/board/index.db` | `.git/board/index.db` |
 | who you write as | git config `board.me` | git config `board.me` | git config `board.me` | git config `board.me` |
 | sync lock and journal, caches | `.git/board/` | `.git/board/`, and the board's sync lock in the database | `.git/board/` | `.git/board/` |
 | the files' lock (read-in, write, render) | | | `<dir>/.board/board.lock` | |
