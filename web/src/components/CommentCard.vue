@@ -33,7 +33,7 @@
           <span v-for="f in forges" :key="f.url" class="gb-fstate" :class="{ 'gb-fstate-local': event.pending?.includes(f.name) || event.edit_pending?.includes(f.name) }">
             <template v-if="event.pending?.includes(f.name)"><GbIcon name="clock" small /> not on {{ f.name }} yet, next sync</template>
             <template v-else-if="event.edit_pending?.includes(f.name)"><GbIcon name="clock" small /> latest edit not on {{ f.name }} yet, next sync</template>
-            <template v-else><a :href="f.url" target="_blank" rel="noopener noreferrer">on {{ f.name }}{{ f.number ? ` #${f.number}` : '' }}</a><GbIcon name="check" small /></template>
+            <template v-else><a :href="safeHref(f.url)" target="_blank" rel="noopener noreferrer">on {{ f.name }}{{ f.number ? ` #${f.number}` : '' }}</a><GbIcon name="check" small /></template>
           </span>
         </template>
       </template>
@@ -73,6 +73,7 @@
 </template>
 
 <script setup lang="ts">
+import { safeHref } from '@/links';
 import GbAvatar from '@/components/GbAvatar.vue';
 import { computed, ref, useId } from 'vue';
 import { ApiError, type Forge, type IssueEvent, type StageStep } from '@/api/board';

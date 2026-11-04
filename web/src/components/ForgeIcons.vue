@@ -22,7 +22,7 @@
       </template>
       <ul class="gb-pop-list">
         <li v-for="g in states" :key="g.forge.url" class="gb-pop-forge">
-          <a :href="g.forge.url" target="_blank" rel="noopener noreferrer">{{ g.forge.name }}{{ g.forge.number ? ` #${g.forge.number}` : '' }}<GbIcon name="external" small /><span class="gb-sr">(opens in a new tab)</span></a>
+          <a :href="safeHref(g.forge.url)" target="_blank" rel="noopener noreferrer">{{ g.forge.name }}{{ g.forge.number ? ` #${g.forge.number}` : '' }}<GbIcon name="external" small /><span class="gb-sr">(opens in a new tab)</span></a>
           <span class="gb-pop-muted">{{ g.state.label.slice(g.state.label.indexOf(': ') + 2) }}</span>
         </li>
       </ul>
@@ -45,6 +45,7 @@
 </template>
 
 <script setup lang="ts">
+import { safeHref } from '@/links';
 import { computed, ref } from 'vue';
 import type { Forge, IssueEvent, IssueSyncResult } from '@/api/board';
 import { forgeStatus, issueChecks, noteCheck } from '@/forges';
