@@ -398,6 +398,28 @@ Markdown, as built, differs from section 5:
 - One forge sync at a time per machine, not per board: two machines on one
   PostgreSQL board can sync at once and create the same forge issue twice
   (issue #83).
+- **No stat cache in the Markdown folder's `Heads`** (issue #92, decided
+  2026-11-04). `Heads` reads and hashes every pack file on every call, so
+  each poll of the change events and each index refresh costs them all:
+  measured, 1,000 files of 8 KB take 52 ms on a 2-CPU machine. A cache of
+  (size, mtime, inode) → version would skip unchanged files, but a version
+  must change whenever the file does, and these can stay equal through a
+  rewrite: `git checkout` and `git merge` write files at the time of the
+  checkout, and Linux usually stamps them with a coarse clock that ticks every few
+  milliseconds (FAT every 2 s), so two branches' files of one size,
+  written in one tick, maybe on a just-freed inode, look the same; and the
+  folder may be on a shared disk, whose server's clock isn't this
+  machine's. Git's own answer, "racy git" (an entry stamped within a tick
+  of the index's own write is hashed again), needs a file written on the
+  same disk as the reference, which a read-only poll doesn't write, and
+  Windows gives no inode or change time to add. An issue missed this way
+  is a page showing an old state and an index answering with it until the
+  file changes again, with nothing to tell; the cost saved is tens of
+  milliseconds a poll. So it hashes every file: correct before cheap. If
+  a board ever makes it slow, a cache that only trusts a file whose mtime
+  and ctime are both older than a few seconds, by a clock read from that
+  disk, is the way, and a missed change must stay impossible on a local
+  disk.
 
 ## Evidence
 
