@@ -75,6 +75,10 @@ type Backend struct {
 	heads   map[string]string // ref -> version of what's loaded
 	// issueFolds is how many times an issue was folded, for the tests
 	issueFolds atomic.Int64
+	// listed is allIssues' last answer from the index, and its issues
+	listMu       sync.Mutex
+	listed       index.Listing
+	listedIssues map[string]*issue.Issue
 	// recs are the forges' links (syncer.Records) as of the sync
 	// entities' heads recHeads: folded again only when one moved
 	recMu    sync.Mutex
@@ -325,30 +329,47 @@ func all[T any](b *Backend, kind string, cache map[string]T, load func(id, head 
 // allIssues is every issue a view shows: a deleted one is left out. They
 // come from the index, which keeps each issue folded (index.States), and
 // through the cache: a process folds or reads only what it doesn't hold
-// at its head. A broken one is left out and logged.
+// at its head. A broken one is left out and logged. The map is shared:
+// read it, never write it.
+//
+// While the issues' heads are those of the last answer, it is that answer
+// again, as records' is: a server lists again and again, and the index
+// would read every head twice more each time.
 func (b *Backend) allIssues() (map[string]*issue.Issue, error) {
-	states, broken, err := b.ix.States(ctx, func(id, head string) *issue.Issue {
-		b.mu.Lock()
-		defer b.mu.Unlock()
-		if b.heads[oplog.RefName("issue", id)] == head {
-			return b.issues[id]
-		}
-		return nil
-	})
+	heads, err := b.ds.Heads(ctx, "issue")
 	if err != nil {
 		return nil, err
 	}
-	for _, e := range broken {
+	b.listMu.Lock()
+	defer b.listMu.Unlock()
+	if b.listed.Issues == nil || !maps.Equal(heads, b.listed.Heads) {
+		if b.listed, err = b.ix.States(ctx, b.cachedAt); err != nil {
+			return nil, err
+		}
+		b.mu.Lock()
+		for id, st := range b.listed.Issues {
+			b.issues[id], b.heads[oplog.RefName("issue", id)] = st.Issue, st.Head
+		}
+		b.mu.Unlock()
+		b.listedIssues = make(map[string]*issue.Issue, len(b.listed.Issues))
+		for id, st := range b.listed.Issues {
+			b.listedIssues[id] = st.Issue
+		}
+	}
+	for _, e := range b.listed.Broken {
 		log.Printf("issue %s: %s", e.ID, e.Error)
 	}
-	issues := make(map[string]*issue.Issue, len(states))
+	return b.listedIssues, nil
+}
+
+// cachedAt is the issue folded at head, when the cache holds it.
+func (b *Backend) cachedAt(id, head string) *issue.Issue {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	for id, st := range states {
-		issues[id] = st.Issue
-		b.issues[id], b.heads[oplog.RefName("issue", id)] = st.Issue, st.Head
+	if b.heads[oplog.RefName("issue", id)] == head {
+		return b.issues[id]
 	}
-	return issues, nil
+	return nil
 }
 
 func (b *Backend) allPersons() (map[string]*people.Person, error) {

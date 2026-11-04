@@ -3,6 +3,7 @@ package index
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"reflect"
 	"slices"
 	"strings"
@@ -334,15 +335,19 @@ func TestStatesAreTheFolds(t *testing.T) {
 	}
 	ix := openIndex(t, s)
 	none := func(string, string) *issue.Issue { return nil }
-	states, broken, err := ix.States(ctx, none)
+	l, err := ix.States(ctx, none)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(broken) != 1 || broken[0].ID != bad.ID {
-		t.Fatalf("broken = %+v, want %s", broken, bad.ID)
+	if len(l.Broken) != 1 || l.Broken[0].ID != bad.ID {
+		t.Fatalf("broken = %+v, want %s", l.Broken, bad.ID)
 	}
-	if len(states) != 1 {
-		t.Fatalf("states = %v, want %s alone", states, a.ID)
+	if len(l.Issues) != 1 {
+		t.Fatalf("states = %v, want %s alone", l.Issues, a.ID)
+	}
+	heads, err := s.Heads(ctx, "issue")
+	if err != nil || !maps.Equal(l.Heads, heads) {
+		t.Fatalf("heads = %v, %v; want the deleted and broken ones' too, %v", l.Heads, err, heads)
 	}
 	head, err := s.Ref(oplog.RefName("issue", a.ID))
 	if err != nil {
@@ -352,17 +357,17 @@ func TestStatesAreTheFolds(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := states[a.ID]; got.Head != head.String() || !reflect.DeepEqual(got.Issue, want) {
+	if got := l.Issues[a.ID]; got.Head != head.String() || !reflect.DeepEqual(got.Issue, want) {
 		t.Fatalf("state = %s %+v\nwant %s %+v", got.Head, got.Issue, head, want)
 	}
 	mine := &issue.Issue{ID: a.ID}
-	states, _, err = ix.States(ctx, func(id, h string) *issue.Issue {
+	l, err = ix.States(ctx, func(id, h string) *issue.Issue {
 		if id == a.ID && h == head.String() {
 			return mine
 		}
 		return nil
 	})
-	if err != nil || states[a.ID].Issue != mine {
-		t.Fatalf("cached: %+v, %v; want the caller's", states[a.ID], err)
+	if err != nil || l.Issues[a.ID].Issue != mine {
+		t.Fatalf("cached: %+v, %v; want the caller's", l.Issues[a.ID], err)
 	}
 }
