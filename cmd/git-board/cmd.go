@@ -4,14 +4,12 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/guilbep/git-board/internal/board"
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/fields"
 	"github.com/guilbep/git-board/internal/store"
 	"github.com/guilbep/git-board/internal/tui"
 )
@@ -135,20 +133,48 @@ func newViewCmd() *cobra.Command {
 
 func newSetCmd() *cobra.Command {
 	var me string
+	var force bool
 
 	cmd := &cobra.Command{
 		Use:   "set <id> field=value [field=value...]",
 		Short: "Set one or more fields on an issue",
+		Long: `Set one or more fields on an issue, in one change.
+
+  field=value     a single field (status, prio) swaps to value; a multi
+                  field (assignee) adds it
+  field=+value    a multi field adds value
+  field=-value    removes value, from a single field or a multi one
+  field=          clears the field: every value it holds goes
+  label=+name     adds the plain label name (bug, not kind:bug)
+  label=-name     removes it
+
+Values resolve first: @me is --me, GIT_BOARD_ME, else the forge login of
+the person you write as (git board me); @current, @next and @previous are
+sprints; a configured alias is its current name.
+
+Each value is held to .git-board.toml before anything is written: one of
+the field's options, a number for a number field, a YYYY-MM-DD date for a
+date field, a sprint for a sprint field, a [labels] label when the project
+lists them, and a field that is configured or already on some issue. One
+that isn't is refused, and nothing is written; --force writes it anyway.
+Removing and clearing are never refused: they are how a wrong value goes.
+
+Setting status to its last option closes the issue, as "git board close"
+does; setting it to another option on a closed issue reopens it.`,
 		Example: `  git-board set a1b2c3 status=ready prio=p1
   git-board set a1b2c3 sprint=@next --me guilbep
-  git-board set a1b2c3 assignee=+guilbep     # multi-cardinality: add
-  git-board set a1b2c3 assignee=-guilbep     # multi-cardinality: remove`,
+  git-board set a1b2c3 assignee=+@me         # multi-cardinality: add yourself
+  git-board set a1b2c3 assignee=-guilbep     # multi-cardinality: remove
+  git-board set a1b2c3 prio=                 # clear the field
+  git-board set a1b2c3 label=+regression     # a plain label
+  git-board set a1b2c3 milestone=v1 --force  # a field nothing configures yet`,
 		Args: cobra.MinimumNArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runSet(cmd.OutOrStdout(), args[0], args[1:], resolveMe(me))
+			return runSet(cmd.OutOrStdout(), args[0], args[1:], resolveMe(me), force)
 		},
 	}
 	meFlag(cmd, &me)
+	cmd.Flags().BoolVar(&force, "force", false, "write values .git-board.toml doesn't allow (an unknown field, a value outside the options)")
 	return cmd
 }
 
@@ -285,7 +311,7 @@ func firstPull(out io.Writer, b *store.Backend) {
 	}
 }
 
-func runSet(out io.Writer, idPrefix string, assignments []string, me string) error {
+func runSet(out io.Writer, idPrefix string, args []string, me string, force bool) error {
 	cfg, err := loadConfig()
 	if err != nil {
 		return err
@@ -297,17 +323,34 @@ func runSet(out io.Writer, idPrefix string, assignments []string, me string) err
 	}
 	defer b.Close()
 
-	today := time.Now()
-	for _, assignment := range assignments {
-		fieldName, value, ok := strings.Cut(assignment, "=")
-		if !ok {
-			return fmt.Errorf("invalid assignment %q, expected field=value", assignment)
-		}
-		label, err := fields.Apply(b, cfg, idPrefix, fieldName, value, me, today)
-		if err != nil {
+	assignments, err := parseAssignments(b, cfg, args, me, force)
+	if err != nil {
+		return err
+	}
+	current, err := b.GetLabels(idPrefix)
+	if err != nil {
+		return err
+	}
+	labels, results, err := foldAssignments(cfg, current, assignments)
+	if err != nil {
+		return err
+	}
+	added, removed := labelDelta(current, labels)
+	if len(added) > 0 || len(removed) > 0 {
+		if _, err := b.ApplyLabelChange(idPrefix, added, removed); err != nil {
 			return err
 		}
-		fmt.Fprintf(out, "%s: %s\n", idPrefix, label)
+	}
+	state, err := statusInStep(b, cfg, idPrefix, assignments, labels)
+	if err != nil {
+		return err
+	}
+	for i, a := range assignments {
+		line := idPrefix + ": " + describe(a, results[i])
+		if i == len(assignments)-1 {
+			line += state
+		}
+		fmt.Fprintln(out, line)
 	}
 	return nil
 }
