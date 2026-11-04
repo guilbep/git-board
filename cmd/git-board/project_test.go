@@ -72,3 +72,15 @@ func TestProjectConflictNamesProjectResolve(t *testing.T) {
 		t.Fatalf("no project resolve in:\n%s", out)
 	}
 }
+
+// A read that fills --limit may have left items out: it says so.
+func TestProjectSaysWhenTheLimitCutTheRead(t *testing.T) {
+	newBridgeTestRepo(t)
+	withFakeProject(t, false)
+	if out := mustExecute(t, "project", "pull", "--check"); strings.Contains(out, "--limit") {
+		t.Errorf("warned under the limit:\n%s", out)
+	}
+	if out := mustExecute(t, "project", "pull", "--check", "--limit", "8"); !strings.Contains(out, "read 8 items, the --limit") {
+		t.Errorf("no warning at the limit:\n%s", out)
+	}
+}

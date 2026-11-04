@@ -52,6 +52,8 @@ type State struct {
 	Items  []Item
 	Meta   ProjectMeta
 	Bases  map[string]map[string]string
+	// Truncated is Remote's: the read filled its limit.
+	Truncated bool
 }
 
 // LoadState reads the issues, the Project's items and fields, and the
@@ -70,6 +72,9 @@ func LoadState(repo Repo, p Project, cfg *config.Config, limit int) (State, erro
 type Remote struct {
 	Items []Item
 	Meta  ProjectMeta
+	// Truncated is whether the read filled its limit: gh stops there, so
+	// the Project may have more items, which this sync leaves out.
+	Truncated bool
 }
 
 // FetchRemote reads the Project's items and fields.
@@ -83,6 +88,7 @@ func FetchRemote(p Project, cfg *config.Config, limit int) (Remote, error) {
 	if r.Items, err = p.Items(gp.Owner, gp.Number, limit); err != nil {
 		return Remote{}, err
 	}
+	r.Truncated = limit > 0 && len(r.Items) >= limit
 	if r.Meta, err = p.Meta(gp.Owner, gp.Number); err != nil {
 		return Remote{}, err
 	}
@@ -105,7 +111,7 @@ func FetchRemote(p Project, cfg *config.Config, limit int) (Remote, error) {
 // State adds the repository's side to r: the issues as they are now, and
 // the values both sides last agreed on.
 func (r Remote) State(repo Repo, cfg *config.Config) (State, error) {
-	s := State{Items: r.Items, Meta: r.Meta}
+	s := State{Items: r.Items, Meta: r.Meta, Truncated: r.Truncated}
 	var err error
 	if s.Issues, err = repo.ListIssues(); err != nil {
 		return State{}, err

@@ -142,6 +142,9 @@ func projectRun(out io.Writer, cfg *config.Config, b *store.Backend, limit int, 
 		plan = plan.ProjectOnly()
 	}
 	printSyncPlan(out, plan)
+	if s.Truncated {
+		fmt.Fprintf(out, "warning: read %d items, the --limit: the Project may have more, which this run leaves out; raise --limit\n", len(s.Items))
+	}
 
 	if !apply {
 		if len(plan.Edits) > 0 && !cfg.GithubProject.Write {

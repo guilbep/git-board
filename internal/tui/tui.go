@@ -267,6 +267,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		remote := msg.remote
 		m.bridgeRemote = &remote
 		m.status = summarizeBridgePlan(plan) + " — press o to apply"
+		if remote.Truncated {
+			m.status += fmt.Sprintf(" (read %d items, the limit: the Project may have more; git board project pull --limit reads them)", len(remote.Items))
+		}
 		return m, nil
 
 	case tea.WindowSizeMsg:
