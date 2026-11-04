@@ -68,6 +68,8 @@ git board new "Login fails on Safari" prio=p1 assignee=+@me sprint=@current
 git board new "Export to CSV" -b "As ls --md, but CSV."
 git board new "Crash report" -F crash.md label=+bug
 git board new -e prio=p2
+git board new "Login fails" --template "Bug report"
+git board new                                   # on a terminal: asks
 id=$(git board new "Follow-up")
 ```
 
@@ -79,6 +81,36 @@ in the same change as the issue. A first argument that reads as
 It prints the new issue's id alone on its line. `--json` prints the issue
 as `ls --json` prints each one. `--force` writes values the config
 doesn't allow; `--me` is `@me`.
+
+### Templates
+
+`-T, --template <name>` starts from one of the repository's issue
+templates, by its name or its file's, without case:
+
+| Where | Read |
+|---|---|
+| `.github/ISSUE_TEMPLATE/*.md` | the front matter's `name`, `title`, `labels`, `assignees`; the text below it |
+| `.github/ISSUE_TEMPLATE/*.yml` | an issue form: `name`, `title`, `labels`, `assignees`, and a `### label` heading per field, as GitHub writes the issue; markdown elements, dropdown choices and validations are left out |
+| `.gitlab/issue_templates/*.md` | named by the file; `/label ~x` and `/assign @x` lines are labels and assignees, the rest the text |
+
+The template's text is the description, unless `-b` or `-F` gives one.
+Its labels and assignees (`assignee:<login>`) are set first, without
+the config's check; the `field=value` arguments go over them. Its title
+starts the title you are asked for, or the editor's first line; a title
+you give wins. A name no template has is exit code 2, and the error
+lists the names. `config.yml` is GitHub's chooser, not a template.
+
+### Prompts
+
+With no title on a terminal, `new` asks. A template first, when the
+repository has some; then the title, after the template's title; then
+whether to write the description in your editor. Questions go to
+stderr: the id still prints alone on stdout. `-e` asks nothing: the
+editor holds the title.
+
+It never asks when stdin is not a terminal, with `--no-prompt`, or when
+`GIT_BOARD_NO_PROMPT` is set. No title is exit code 2 then, as in a
+script.
 
 ## `show`: an issue, with its comments
 
@@ -364,6 +396,8 @@ Errors go to stderr, prefixed `error:`.
 | `gh auth status` | `glab auth status` | `git board me` (who you write as; forge tokens only matter to `sync`) |
 | `gh issue create -t T -b B -l bug -a @me` | `glab issue create -t T -d B -l bug -a @me` | `git board new T -b B label=+bug assignee=+@me` |
 | `gh issue create -e` | `glab issue create` | `git board new -e` |
+| `gh issue create` (asks) | `glab issue create` (asks) | `git board new` (asks on a terminal; `--no-prompt`) |
+| `gh issue create -T name` | `glab issue create --template name` | `git board new -T name` |
 | `gh issue list -a @me -l bug -S text` | `glab issue list -a @me -l bug --search text` | `git board ls "assignee:@me label:bug text"` |
 | `gh issue list -L 10 --json …` | `glab issue list -P 10 -O json` | `git board ls -L 10 --json` |
 | `gh issue view N -c` | `glab issue view N -c` | `git board show N` |

@@ -57,6 +57,17 @@ git board view backlog --md                   # a named view from .git-board.tom
 The same filter works in the web UI's Filter box, the filters panel and
 ⌘K. The whole grammar is in [Configuration › Filters](../guide/configuration.md#filters).
 
+## Creating issues
+
+```sh
+git board new "Login fails on Safari" prio=p1   # prints its id
+git board new "Login fails" -T "Bug report"     # from .github/ISSUE_TEMPLATE
+git board new                                   # asks: template, title, description
+git board new -e                                # title and description in your editor
+```
+
+`new` asks only on a terminal, never in a script.
+
 ## Reading and discussing
 
 ```sh
