@@ -31,6 +31,7 @@
     <div v-if="tab === 'preview'" class="gb-preview">
       <p v-if="previewing" class="gb-hint">Rendering…</p>
       <p v-else-if="!text.trim()" class="gb-hint">Nothing to preview.</p>
+      <p v-else-if="previewError" class="gb-attach-error" role="alert">{{ previewError }}</p>
       <MarkdownBody v-else :html="preview" :forges="forges" />
     </div>
   </div>
@@ -42,6 +43,7 @@ import { onMounted, ref } from 'vue';
 import { renderMarkdown, uploadFile, type Forge } from '@/api/board';
 import { message } from '@/issue';
 import { fillPlaceholder, insertAt, placeholderFor } from '@/attachtext';
+import { latestOnly } from '@/latest';
 import { loadUploadStatus, uploadStatus } from '@/uploads';
 import MarkdownBody from '@/components/MarkdownBody.vue';
 
@@ -62,16 +64,24 @@ const preview = ref('');
 const previewing = ref(false);
 const area = ref<HTMLTextAreaElement | null>(null);
 
+// the text last asked for: an answer for an older one is dropped
+const previews = latestOnly();
+const previewError = ref('');
 async function showPreview() {
   tab.value = 'preview';
   if (!text.value.trim()) return;
+  const current = previews.start();
   previewing.value = true;
+  previewError.value = '';
   try {
-    preview.value = (await renderMarkdown(text.value)).html;
-  } catch {
+    const html = (await renderMarkdown(text.value)).html;
+    if (current()) preview.value = html;
+  } catch (e) {
+    if (!current()) return;
     preview.value = '';
+    previewError.value = `No preview: ${message(e)}`;
   } finally {
-    previewing.value = false;
+    if (current()) previewing.value = false;
   }
 }
 
