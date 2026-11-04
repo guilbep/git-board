@@ -533,6 +533,42 @@ func (b *Backend) ListIssues() ([]Issue, error) {
 	return res, nil
 }
 
+// ListIssuesAt is ListIssues as the board stood at a time: the issues
+// created by then, each folded from the operations made by then, by their
+// own times (issue.At).
+func (b *Backend) ListIssuesAt(at time.Time) ([]Issue, error) {
+	heads, err := b.ds.Heads(ctx, "issue")
+	if err != nil {
+		return nil, fmt.Errorf("listing the issues: %w", err)
+	}
+	v, err := b.view()
+	if err != nil {
+		return nil, err
+	}
+	var res []Issue
+	for id := range heads {
+		if !oplog.IsID(id) {
+			continue
+		}
+		_, l, err := b.loadIssue(id)
+		if err != nil { // broken: left out, as ListIssues leaves it
+			log.Printf("issue %s: %v", id, err)
+			continue
+		}
+		is, _, err := foldAt(l, at)
+		if errors.Is(err, ErrNotFound) {
+			continue
+		}
+		if err != nil {
+			log.Printf("issue %s on %s: %v", id, at.Format(time.DateOnly), err)
+			continue
+		}
+		res = append(res, b.issueFrom(is, v))
+	}
+	slices.SortFunc(res, func(x, y Issue) int { return cmp.Or(x.CreatedAt.Compare(y.CreatedAt), cmp.Compare(x.ID, y.ID)) })
+	return res, nil
+}
+
 // Labels is every label in use, on any issue.
 func (b *Backend) Labels() []string {
 	labels, err := b.ix.Labels(ctx)
