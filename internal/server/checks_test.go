@@ -277,7 +277,7 @@ func TestChecksSetup(t *testing.T) {
 // it close the issue.
 func TestCycleSignoffNotProvenAtMerge(t *testing.T) {
 	s, id, keyFile := checksRepo(t)
-	s.cfg = &config.Config{Fields: map[string]config.Field{
+	s.cfg = &config.Config{Features: allFeatures, Fields: map[string]config.Field{
 		"status": {Single: true, Options: []string{"backlog", "ready", "in-progress", "in-review", "done"}},
 		"risk":   {Single: true, Options: []string{"low", "normal", "structural"}},
 	}}
