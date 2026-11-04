@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -56,9 +57,24 @@ func (s *apiServer) handleSetDatastore(w http.ResponseWriter, r *http.Request) {
 	s.handleDatastore(w, r)
 }
 
+// refuseExposed answers 403 exposed on a server listening beyond this
+// machine: a test or a copy connects to whatever host:port it is given,
+// a probe of the network from here for anyone who reaches the server, and
+// a copy sends the whole board there.
+func (s *apiServer) refuseExposed(w http.ResponseWriter) bool {
+	if len(s.exposed) == 0 {
+		return false
+	}
+	writeCoded(w, http.StatusForbidden, "exposed", errors.New("The server listens beyond this machine: a datastore is tested and copied to only from a server on localhost."))
+	return true
+}
+
 // handleTestDatastore connects to the datastore a URL names, writing
 // nothing, and says what is there.
 func (s *apiServer) handleTestDatastore(w http.ResponseWriter, r *http.Request) {
+	if s.refuseExposed(w) {
+		return
+	}
 	var req datastoreRequest
 	if !decode(w, r, &req) {
 		return
@@ -71,6 +87,9 @@ func (s *apiServer) handleTestDatastore(w http.ResponseWriter, r *http.Request) 
 // handleCopyDatastore copies the board in git into the PostgreSQL database
 // a URL names, every id kept; what is there already is left alone.
 func (s *apiServer) handleCopyDatastore(w http.ResponseWriter, r *http.Request) {
+	if s.refuseExposed(w) {
+		return
+	}
 	var req datastoreRequest
 	if !decode(w, r, &req) {
 		return

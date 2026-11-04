@@ -80,3 +80,17 @@ func TestMarkdownFolderOutsideTheCheckout(t *testing.T) {
 		t.Errorf("PUT markdown:issues: %d", code)
 	}
 }
+
+// On a server listening beyond this machine, testing or copying to a
+// datastore, which connects to any host:port named, is refused.
+func TestDatastoreProbeIsLocalOnly(t *testing.T) {
+	t.Parallel()
+	s := &apiServer{cfg: mustLoadConfig(t), b: storetest.New(t), exposed: []string{"*"}}
+	ts := serve(t, s)
+	for _, path := range []string{"/api/datastore/test", "/api/datastore/copy"} {
+		code, got, out := sendFrom(t, "POST", ts.URL+path, "", datastoreRequest{URL: "postgres://u@10.0.0.1:5432/b?connect_timeout=1"})
+		if code != http.StatusForbidden || got != "exposed" {
+			t.Errorf("%s: %d %s, want 403 exposed", path, code, out)
+		}
+	}
+}
