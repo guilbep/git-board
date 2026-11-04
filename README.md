@@ -669,12 +669,15 @@ S3 bucket a CDN serves — EPFL ENAC's `enacit4r-cdn.epfl.ch` (bucket on
 `s3.epfl.ch`) by default — and the comment gets their Markdown (an image
 shows, other files link), so they show in git-board, on GitHub and on
 GitLab alike. Set where the git-board server runs:
-`ACCESS_KEY_ID`, `ACCESS_KEY_SECRET`, `BUCKET_NAME`; optionally in
-`.git-board.toml`:
+`ACCESS_KEY_ID`, `ACCESS_KEY_SECRET`, `BUCKET_NAME`, and `UPLOADS_ENDPOINT`
+for an S3 service other than `https://s3.epfl.ch`: the keys go only where
+the server's environment says, so an `[uploads] endpoint` in the committed
+file that differs turns attaching off, as does a `prefix` with a `..`.
+Optionally in `.git-board.toml`:
 
 ```toml
 [uploads]
-endpoint = "https://s3.epfl.ch"              # S3
+endpoint = "https://s3.epfl.ch"              # S3: must be UPLOADS_ENDPOINT's
 public_url = "https://enacit4r-cdn.epfl.ch"  # where the bucket is served
 prefix = "git-board/co2-calculator"          # default git-board/<repository>
 ```

@@ -374,9 +374,9 @@ prefix = "git-board/app"
 
 | Key | Default | What it does |
 | --- | --- | --- |
-| `endpoint` | `https://s3.epfl.ch` | The S3 service. |
+| `endpoint` | `https://s3.epfl.ch` | The S3 service. The keys are the server's, so is where they go: it must be the server's `UPLOADS_ENDPOINT` (else `https://s3.epfl.ch`), or attaching is off. |
 | `public_url` | `https://enacit4r-cdn.epfl.ch` | Where the bucket is served. |
-| `prefix` | `git-board/<repository>` | The folder in the bucket. |
+| `prefix` | `git-board/<repository>` | The folder in the bucket; a `..` in it turns attaching off. |
 | `region` | `us-east-1` | The S3 region. |
 
 Files are public to anyone with the link, even for a private repository, and stay cached on the CDN for up to a year after a delete.

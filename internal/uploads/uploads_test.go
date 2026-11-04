@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/guilbep/git-board/internal/config"
 )
 
 // AWS's own example of a signed S3 request ("Example: GET Object",
@@ -84,5 +86,36 @@ func TestPutOnARealS3(t *testing.T) {
 	_, _ = got.ReadFrom(resp.Body)
 	if resp.StatusCode != http.StatusOK || got.String() != string(data) {
 		t.Errorf("GET %s: %d %q", url, resp.StatusCode, got.String())
+	}
+}
+
+// The keys are the server's, from its environment: so is where they go. A
+// committed [uploads] endpoint elsewhere, or a prefix out of the board's
+// folder, turns uploads off rather than sign requests to it.
+// Serial: it sets the environment.
+func TestFromEnvSendsTheKeysOnlyWhereTheEnvironmentSays(t *testing.T) {
+	t.Setenv("ACCESS_KEY_ID", "id")
+	t.Setenv("ACCESS_KEY_SECRET", "secret")
+	t.Setenv("BUCKET_NAME", "bucket")
+	t.Setenv("UPLOADS_ENDPOINT", "")
+	for _, tt := range []struct {
+		s    config.Uploads
+		env  string
+		want string // the endpoint, "" for off
+	}{
+		{config.Uploads{}, "", "https://s3.epfl.ch"},
+		{config.Uploads{Endpoint: "https://s3.epfl.ch"}, "", "https://s3.epfl.ch"},
+		{config.Uploads{Endpoint: "https://attacker.example"}, "", ""},
+		{config.Uploads{}, "https://s3.example.org", "https://s3.example.org"},
+		{config.Uploads{Endpoint: "https://s3.example.org"}, "https://s3.example.org", "https://s3.example.org"},
+		{config.Uploads{Endpoint: "https://attacker.example"}, "https://s3.example.org", ""},
+		{config.Uploads{Prefix: "../../other"}, "", ""},
+		{config.Uploads{Prefix: "git-board/x/../../y"}, "", ""},
+	} {
+		t.Setenv("UPLOADS_ENDPOINT", tt.env)
+		st, ok := FromEnv(tt.s, "o/r")
+		if got := map[bool]string{true: st.Endpoint}[ok]; got != tt.want {
+			t.Errorf("%+v, env %q: endpoint %q (on %v), want %q", tt.s, tt.env, st.Endpoint, ok, tt.want)
+		}
 	}
 }
