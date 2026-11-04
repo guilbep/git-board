@@ -160,7 +160,8 @@ func (s *Store) Where() string {
 // every machine reads one index, kept up to the datastore by whoever reads
 // it.
 func (s *Store) IndexDB(ctx context.Context) (*sql.DB, error) {
-	if _, err := s.db.ExecContext(ctx, "CREATE SCHEMA IF NOT EXISTS "+IndexSchema); err != nil {
+	// under setup's lock: two CREATE SCHEMA IF NOT EXISTS at once fail one
+	if err := s.locked(ctx, "CREATE SCHEMA IF NOT EXISTS "+IndexSchema); err != nil {
 		return nil, fmt.Errorf("pgstore: %w", err)
 	}
 	cfg := s.cfg.Copy()
@@ -169,6 +170,22 @@ func (s *Store) IndexDB(ctx context.Context) (*sql.DB, error) {
 	}
 	cfg.RuntimeParams["search_path"] = IndexSchema
 	return stdlib.OpenDB(*cfg), nil
+}
+
+// locked runs statement in a transaction holding setup's lock.
+func (s *Store) locked(ctx context.Context, statement string) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.ExecContext(ctx, "SELECT pg_advisory_xact_lock(7340176)"); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, statement); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 // Heads are a kind's entities and their versions.

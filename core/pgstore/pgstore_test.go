@@ -2,6 +2,8 @@ package pgstore_test
 
 import (
 	"context"
+	"errors"
+	"sync"
 	"testing"
 
 	"github.com/guilbep/git-board/core/datastore"
@@ -87,5 +89,38 @@ func TestCopyKeepsIDs(t *testing.T) {
 	// it goes on from there: a write lands on the copied version
 	if err := got.Append(ctx, s, []oplog.Op{{Kind: "comment", Author: "a", Time: 3}}); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// Several processes opening a fresh database's index at once, as the
+// server, a command and the TUI starting together do, all get it.
+func TestIndexDBAtOnce(t *testing.T) {
+	t.Parallel()
+	for range 4 {
+		dsn := pgtest.DSN(t)
+		var stores []*pgstore.Store
+		for range 8 {
+			s, err := pgstore.Open(t.Context(), dsn, t.TempDir())
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { s.Close() })
+			stores = append(stores, s)
+		}
+		var wg sync.WaitGroup
+		errs := make([]error, len(stores))
+		for i, s := range stores {
+			wg.Go(func() {
+				db, err := s.IndexDB(t.Context())
+				if err == nil {
+					db.Close()
+				}
+				errs[i] = err
+			})
+		}
+		wg.Wait()
+		if err := errors.Join(errs...); err != nil {
+			t.Fatal(err)
+		}
 	}
 }
