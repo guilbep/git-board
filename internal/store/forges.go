@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -16,6 +17,7 @@ import (
 	"github.com/guilbep/git-board/core/forge/github"
 	"github.com/guilbep/git-board/core/forge/gitlab"
 	"github.com/guilbep/git-board/core/gitstore"
+	"github.com/guilbep/git-board/core/mdstore"
 	"github.com/guilbep/git-board/core/oplog"
 	"github.com/guilbep/git-board/core/syncer"
 	"github.com/guilbep/git-board/internal/config"
@@ -198,6 +200,17 @@ func (b *Backend) forgeSync(ctx context.Context, run ForgeRun, way syncWay, issu
 		}
 		defer done()
 		s = scratch
+	default:
+		// the sync writes past do: a Markdown board's hand edits are read
+		// in first, and its files follow what the sync wrote
+		if _, md := b.ds.(*mdstore.Store); md {
+			b.readMarkdown()
+			defer func() {
+				if err := b.renderMarkdown(); err != nil {
+					log.Printf("markdown: %v", err)
+				}
+			}()
+		}
 	}
 	names := map[string]string{} // forge key -> name
 	ids := new(int)

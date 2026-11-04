@@ -94,8 +94,8 @@ line per write, in `<kind>/<id>.jsonl`. Commit both with the code. A
 folder outside the checkout (an absolute path, or one up with `..`) is
 refused.
 
-- **The files follow the board.** After each write here, every file whose
-  issue changed is written again.
+- **The files follow the board.** After each write here, a forge sync's
+  too, every file whose issue changed is written again.
 - **Edit a file by hand**: the title, the description, `state`, the fields,
   labels and assignees, a comment's text; or add a comment under a heading
   `### Your name · 2026-11-04T10:00:00Z`. The next write reads your edits
