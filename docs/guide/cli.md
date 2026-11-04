@@ -99,6 +99,7 @@ each comment, headed by its author, date, `(edited)` and its ref
 | `--md` | as Markdown: a heading, a fields table, a section per comment |
 | `--json` | the whole thread (below) |
 | `--no-comments` | leave the comments out |
+| `--at <when>` | as it was then (see [The board as it was](#the-board-as-it-was)) |
 
 `get <id>` stays what it was: the issue's labels, one per line, for
 scripts.
@@ -218,6 +219,47 @@ made. A forge shows label events at best, and keeps no earlier text.
 
 `history` is the same command.
 
+## The board as it was
+
+```bash
+git board show a1b2c3d --at 2026-10-01          # the issue at the end of that day
+git board ls "sprint:@current" --at 2026-10-01  # the board that day
+git board diff a1b2c3d --since 2026-10-01       # what changed since
+git board diff CO2-3075 --since 7d --json
+```
+
+The board keeps every operation with its time, so it can show what it
+was. `show --at` and `ls --at` fold only the operations made by then.
+
+- **Each operation counts at its own time**, its writer's clock, to the
+  second. The log still applies them in its own order (by clock), so the
+  past is what the people writing saw. When clocks disagree, an edit of a
+  comment made "before" the comment waits for it.
+- **`<when>`** is a date, a time (`2026-10-01T14:30`, or with seconds, or
+  RFC 3339 with a zone), or a while ago (`36h`, `7d`, `2w`). For `--at`, a
+  date or a minute means its end: `--at 2026-10-01` is that evening.
+- **`ls --at`** lists the issues created by then, each as it was. `@today`
+  and `@current` mean that day and that day's sprint. Free text looks in
+  the texts as they were. Who you are, what you follow and who is
+  mentioned are as now.
+- **An issue not created yet** is not found (exit code 3).
+- **What waits for a forge** isn't marked: that is now's.
+
+`diff <id> --since <when>` compares the issue before `--since` (a date
+from its start) with now: the title, the state, the labels added and
+removed, the description as a line diff (`- ` removed, `+ ` added), the
+comments written, the comments edited. An issue created since says so,
+and shows everything as new. `--json` prints:
+
+| Field | |
+|---|---|
+| `id`, `since` | the issue, and from when |
+| `created` | true when the issue is newer than `since` |
+| `title`, `status`, `description` | `{"was", "now"}` when they changed; `description` with its `diff` |
+| `added`, `removed` | labels |
+| `comments` | the comments written since: `{"id", "author", "at", "body"}` |
+| `edited_comments` | the comments edited since, with `was`, their text before |
+
 ## `ls` and `view`
 
 ```bash
@@ -228,7 +270,9 @@ git board view backlog --md
 ```
 
 `ls [filter]` lists the issues a filter matches; the grammar is in
-[Configuration › Filters](configuration.md#filters). `--sort` takes `created`,
+[Configuration › Filters](configuration.md#filters): fields, people,
+words (`in:title`), dates (`created:>=@today-7d`, `closed:2026-10-01..2026-10-31`)
+and counts (`comments:>5`). `--at <when>` lists the board as it was. `--sort` takes `created`,
 `updated`, `title` or a field, then `asc` or `desc`; any other key or
 direction is refused (exit code 2). `-L, --limit` keeps the first N after
 sorting. `--group <field>` groups, `--md` and `--json` render. `view
@@ -253,6 +297,8 @@ names and meanings. Times are RFC 3339.
 | `forges` | `[{"name", "url", "number"}]`, where it is on forges (when any) |
 | `github_url` | its GitHub issue (when any) |
 | `created_at`, `updated_at` | |
+| `closed_at` | when it was last closed (closed issues only) |
+| `comments` | how many comments it has |
 
 **A thread** (`show --json`) is the issue plus `author` (a person),
 `edited_at`, `participants` (people) and `events`. Each event has `kind`
@@ -290,6 +336,8 @@ Errors go to stderr, prefixed `error:`.
 | `gh issue create -e` | `glab issue create` | `git board new -e` |
 | `gh issue list -a @me -l bug -S text` | `glab issue list -a @me -l bug --search text` | `git board ls "assignee:@me label:bug text"` |
 | `gh issue list -L 10 --json …` | `glab issue list -P 10 -O json` | `git board ls -L 10 --json` |
+| `gh issue list -S "created:>2026-10-01 comments:>5"` | | `git board ls "created:>2026-10-01 comments:>5"` |
+| `gh issue list -S "crash in:title"` | | `git board ls "crash in:title"` |
 | `gh issue view N -c` | `glab issue view N -c` | `git board show N` |
 | `gh issue view N --json …` | `glab issue view N -F json` | `git board show N --json` |
 | `gh issue comment N -b B` | `glab issue note N -m B` | `git board comment N -b B` |
@@ -304,6 +352,8 @@ Errors go to stderr, prefixed `error:`.
 | `gh issue status` | | `git board ls "involves:@me is:open"` |
 | `gh issue develop N` | `glab mr create --related-issue N` | `git board branch N` (prints the branch and the command) |
 | | `glab issue view N -s` (system notes) | `git board log N` (every change, text edits too) |
+| | | `git board show N --at 2026-10-01`, `git board ls --at 2026-10-01` (the board as it was) |
+| | | `git board diff N --since 7d` (what changed: fields, a text diff, new comments) |
 | `gh project item-edit …` | `glab issue board …` | `git board move N --next`, `git board project` |
 
 `N` is any [name of an issue](#naming-an-issue). Not there yet: deleting

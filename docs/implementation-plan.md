@@ -1073,3 +1073,11 @@ nothing is stored.
 - Markdown: `git board import --md` (`internal/store/mdimport.go`, tests `TestImportMarkdown*`); the Markdown folder datastore (`core/mdstore`, `board.datastore markdown:<dir>`, `TestMarkdownBoard`), its files rendered after each write, hand edits read in first.
 - Who you write as stays `board.me` in the clone's git config on every datastore (`Backend.whoStore`).
 - Not done: the pages don't yet disable pull, push and start over on a datastore that can't run them (the server refuses them with the sentence).
+
+### Status 2026-11-04: search qualifiers and the board as it was (#88 P1, P2)
+
+- Filters (`internal/filter/ranges.go`): `created:`, `updated:`, `closed:` (a day, a time, `>`, `>=`, `<`, `<=`, `a..b` with `*`, `@today-7d`), `comments:` (the same on the count), `in:title,body,comments`. A value that isn't one is a `FilterError` (400). `@today` is the filter's today, so `ls --at` reads it as that day.
+- The index answers `in:` (`index.Query.In`: FTS5 column filters; PostgreSQL weights A, B, C, so the index is version 2). Without the index, `index.MatchText` searches an issue's own texts the same way: `TestSearchInAgreesWithMatchText`, `TestQualifiersWithAndWithoutTheIndex`.
+- `store.Issue` has `closed_at` and `comments`.
+- The board as it was: `issue.At` keeps the operations made by a time, by their own times, in the log's order; `Backend.ThreadAt`, `ListIssuesAt`; `git board show --at`, `ls --at`, `diff --since` (`cmd/git-board/diff.go`). Tests: `TestAtFoldsWhatWasMadeByThen`, `TestShowAndLsAt`, `TestDiffSince`.
+- Not done: `view`, `tui` and the web page have no `--at`; under `--at`, mentions and follows are as now.

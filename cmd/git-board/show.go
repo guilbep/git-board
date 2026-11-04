@@ -15,6 +15,7 @@ import (
 
 func newShowCmd() *cobra.Command {
 	var md, asJSON, noComments bool
+	var at string
 
 	cmd := &cobra.Command{
 		Use:   "show <id>",
@@ -30,26 +31,41 @@ description and comments, each comment with its ref (abc1234:1) for
 in docs/guide/cli.md: the issue's fields as ls --json prints them, plus
 "author", "edited_at", "participants" and "events" (created, comment,
 labels, status, title, each with its "id", "author" and "at"; a text's
-earlier versions under "history").`,
+earlier versions under "history").
+
+--at shows it as it was then, folded from the operations made by then:
+a date (as it stood at its end), a time (2026-10-01T14:30) or a while
+ago (36h, 7d). Each operation counts at its own time, its writer's
+clock.`,
 		Example: `  git board show a1b2c3d
   git board show CO2-3075 --md
   git board show "#2528" --json
-  git board show a1b2c3d --no-comments`,
+  git board show a1b2c3d --no-comments
+  git board show a1b2c3d --at 2026-10-01`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if md && asJSON {
 				return usageError{fmt.Errorf("--md or --json, not both")}
 			}
-			return runShow(cmd.OutOrStdout(), args[0], md, asJSON, !noComments)
+			var when time.Time
+			if at != "" {
+				var err error
+				if when, err = parseAt(at, time.Now()); err != nil {
+					return usageError{err}
+				}
+			}
+			return runShow(cmd.OutOrStdout(), args[0], md, asJSON, !noComments, when)
 		},
 	}
+	cmd.Flags().StringVar(&at, "at", "", "as it was then: a date (its end), a time (2026-10-01T14:30) or a while ago (36h, 7d)")
 	cmd.Flags().BoolVar(&md, "md", false, "render as Markdown")
 	cmd.Flags().BoolVar(&asJSON, "json", false, "render as JSON")
 	cmd.Flags().BoolVar(&noComments, "no-comments", false, "leave the comments out")
 	return cmd
 }
 
-func runShow(out io.Writer, idPrefix string, md, asJSON, comments bool) error {
+// runShow is show; at, when set, is the time to show the issue as it was.
+func runShow(out io.Writer, idPrefix string, md, asJSON, comments bool, at time.Time) error {
 	cfg, err := loadConfig()
 	if err != nil {
 		return err
@@ -60,6 +76,9 @@ func runShow(out io.Writer, idPrefix string, md, asJSON, comments bool) error {
 	}
 	defer b.Close()
 	th, err := b.Thread(idPrefix)
+	if !at.IsZero() {
+		th, err = b.ThreadAt(idPrefix, at)
+	}
 	if err != nil {
 		return err
 	}
@@ -71,6 +90,9 @@ func runShow(out io.Writer, idPrefix string, md, asJSON, comments bool) error {
 			th.Events = []store.Event{}
 		}
 		return writeJSON(out, th)
+	}
+	if !at.IsZero() {
+		fmt.Fprintf(out, "As it was on %s.\n\n", when(at))
 	}
 	if md {
 		writeThreadMarkdown(out, th, cfg, comments)
