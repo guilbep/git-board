@@ -38,10 +38,14 @@ export function runWords(t: BridgeTally): string {
 const stepNames = { pull: 'git pull', forges: 'the forges', project: 'the GitHub Project', push: 'git push' } as const;
 const stateWords = { waiting: 'waits', running: 'running…', done: 'done', failed: 'failed', skipped: 'skipped' } as const;
 
-export function stepLine(s: JobStep, remote: string, dryRun: boolean): string {
+// kept: on a board kept elsewhere than git (datastore.ts keptIn), the git
+// steps name no remote, and a skipped one says where the board is kept
+export function stepLine(s: JobStep, remote: string, dryRun: boolean, kept = ''): string {
+  const git = s.name === 'pull' || s.name === 'push';
   const name = s.name === 'pull' && dryRun ? 'git fetch' : stepNames[s.name];
-  const where = s.name === 'pull' || s.name === 'push' ? `${name} ${s.name === 'push' ? 'to' : 'from'} ${remote}` : name;
-  return `${where}: ${stateWords[s.state]}${s.note ? `, ${s.note}` : ''}`;
+  const where = git && !kept ? `${name} ${s.name === 'push' ? 'to' : 'from'} ${remote}` : name;
+  const note = git && kept && s.state === 'skipped' && !s.note?.includes(kept) ? kept : s.note;
+  return `${where}: ${stateWords[s.state]}${note ? `, ${note}` : ''}`;
 }
 
 // where a run is: "GitHub (gh) · pulling 12 of 40 · #43 import: users
