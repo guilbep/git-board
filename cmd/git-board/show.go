@@ -8,6 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/store"
 	"github.com/guilbep/git-board/internal/tui"
@@ -79,7 +80,7 @@ clock.`,
 	}
 	cmd.Flags().StringVar(&at, "at", "", "as it was then: a date (its end), a time (2026-10-01T14:30) or a while ago (36h, 7d)")
 	cmd.Flags().BoolVar(&md, "md", false, "render as Markdown")
-	js = addJSON(cmd, "render as JSON", jsonFields(store.Thread{}), true)
+	js = addJSON(cmd, "render as JSON", jsonFields(model.Thread{}), true)
 	cmd.Flags().BoolVar(&noComments, "no-comments", false, "leave the comments out")
 	cmd.Flags().BoolVarP(&web, "web", "w", false, "open it in this repository's web UI")
 	cmd.Flags().BoolVar(&forge, "forge", false, "open it on its forge")
@@ -106,10 +107,10 @@ func runShow(out io.Writer, idPrefix string, md bool, js *jsonOut, comments bool
 	}
 	if js.on() {
 		if th.Participants == nil {
-			th.Participants = []store.Person{}
+			th.Participants = []model.Person{}
 		}
 		if th.Events == nil {
-			th.Events = []store.Event{}
+			th.Events = []model.Event{}
 		}
 		return js.write(out, th)
 	}
@@ -154,7 +155,7 @@ func when(t time.Time) string { return t.Local().Format("2006-01-02 15:04") }
 
 // headerLine is the line under the title: number, id, state, author,
 // comments.
-func headerLine(th store.Thread) string {
+func headerLine(th model.Thread) string {
 	parts := []string{}
 	if th.Number != "" {
 		parts = append(parts, th.Number)
@@ -172,7 +173,7 @@ func headerLine(th store.Thread) string {
 
 // fieldLines are an issue's fields, one "name: values" each, then its
 // plain labels and those it inherits.
-func fieldLines(is store.Issue, cfg *config.Config) [][2]string {
+func fieldLines(is model.Issue, cfg *config.Config) [][2]string {
 	known, other := tui.ParseLabels(is.Labels)
 	var res [][2]string
 	for _, f := range known {
@@ -194,7 +195,7 @@ func fieldLines(is store.Issue, cfg *config.Config) [][2]string {
 	return res
 }
 
-func commentHead(e store.Event) string {
+func commentHead(e model.Event) string {
 	s := e.Author.Name + ", " + when(e.At)
 	if e.Edited {
 		s += " (edited)"
@@ -202,7 +203,7 @@ func commentHead(e store.Event) string {
 	return s + " [" + commentRef(e.ID) + "]"
 }
 
-func writeThread(out io.Writer, th store.Thread, cfg *config.Config, comments bool) {
+func writeThread(out io.Writer, th model.Thread, cfg *config.Config, comments bool) {
 	fmt.Fprintln(out, th.ShownTitle())
 	fmt.Fprintln(out, headerLine(th))
 	if lines := fieldLines(th.Issue, cfg); len(lines) > 0 {
@@ -230,7 +231,7 @@ func writeThread(out io.Writer, th store.Thread, cfg *config.Config, comments bo
 	}
 }
 
-func writeThreadMarkdown(out io.Writer, th store.Thread, cfg *config.Config, comments bool) {
+func writeThreadMarkdown(out io.Writer, th model.Thread, cfg *config.Config, comments bool) {
 	title := th.ShownTitle()
 	if th.Number != "" {
 		title += " (" + th.Number + ")"

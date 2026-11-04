@@ -8,9 +8,9 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/board"
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/store"
 )
 
 func newSprintCmd() *cobra.Command {
@@ -176,7 +176,7 @@ func hasSprintSlug(cfg *config.Config, slug string) bool {
 	return false
 }
 
-func runSprintReport(out io.Writer, issues []store.Issue) error {
+func runSprintReport(out io.Writer, issues []model.Issue) error {
 	tw := tabwriter.NewWriter(out, 0, 2, 2, ' ', 0)
 	fmt.Fprintln(tw, "status\tcount")
 	for _, b := range board.BucketBy(issues, "status") {

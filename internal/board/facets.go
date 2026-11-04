@@ -6,9 +6,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/filter"
-	"github.com/guilbep/git-board/internal/store"
 )
 
 // None is the value of an issue without the field, as BucketBy names it.
@@ -105,7 +105,7 @@ func Facets(b issueBackend, cfg *config.Config, filterStr, me string) ([]Facet, 
 
 // facetKeys: is, the configured fields, the other label namespaces found
 // on the issues (sprint, mod…), then plain labels.
-func facetKeys(cfg *config.Config, issues []store.Issue) []string {
+func facetKeys(cfg *config.Config, issues []model.Issue) []string {
 	var configured []string
 	if cfg != nil {
 		for name := range cfg.Fields {
@@ -140,7 +140,7 @@ func owns(key string, c filter.Condition) bool {
 	return false
 }
 
-func valuesOf(issue store.Issue, key string) []string {
+func valuesOf(issue model.Issue, key string) []string {
 	if key == "is" {
 		return []string{issue.Status}
 	}
@@ -161,14 +161,14 @@ func valuesOf(issue store.Issue, key string) []string {
 }
 
 // only is an issue with just value for key.
-func only(key, value string) store.Issue {
+func only(key, value string) model.Issue {
 	switch {
 	case key == "is":
-		return store.Issue{Status: value}
+		return model.Issue{Status: value}
 	case value == None:
-		return store.Issue{}
+		return model.Issue{}
 	case key == "label":
-		return store.Issue{Labels: []string{value}}
+		return model.Issue{Labels: []string{value}}
 	}
-	return store.Issue{Labels: []string{key + ":" + value}}
+	return model.Issue{Labels: []string{key + ":" + value}}
 }

@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/avatar"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/markdown"
@@ -348,8 +349,8 @@ func (s *apiServer) handleMarkdown(w http.ResponseWriter, r *http.Request) {
 
 // meResponse is who git-board writes as, and who it could.
 type meResponse struct {
-	Me         *store.Person  `json:"me"`
-	Identities []store.Person `json:"identities"`
+	Me         *model.Person  `json:"me"`
+	Identities []model.Person `json:"identities"`
 	// Unswitched: the issues are still git-bug's, in refs/bugs, and no
 	// switch marked the repository: the board shows none of them
 	Unswitched bool `json:"unswitched,omitempty"`

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/board"
 	"github.com/guilbep/git-board/internal/branches"
 	"github.com/guilbep/git-board/internal/config"
@@ -25,14 +26,14 @@ type Pulls interface {
 
 // Gather fills an Input for the issue from git-bug, git and the PR cache
 // (nil: none). me is the viewer's login.
-func Gather(b *store.Backend, cfg *config.Config, th store.Thread, me string, pulls Pulls) (Input, error) {
+func Gather(b *store.Backend, cfg *config.Config, th model.Thread, me string, pulls Pulls) (Input, error) {
 	return GatherIn(branches.NewAncestry(b), b, cfg, th, me, pulls)
 }
 
 // GatherIn is Gather, reading the branches' histories through anc: the
 // Work page gathers every open issue with one, so their base's history is
 // read once a request, not once an issue.
-func GatherIn(anc *branches.Ancestry, b *store.Backend, cfg *config.Config, th store.Thread, me string, pulls Pulls) (Input, error) {
+func GatherIn(anc *branches.Ancestry, b *store.Backend, cfg *config.Config, th model.Thread, me string, pulls Pulls) (Input, error) {
 	th.Inherited = cfg.RolesFor(th.Labels)
 	stages := cfg.Stages()
 	in := Input{
@@ -55,7 +56,7 @@ func GatherIn(anc *branches.Ancestry, b *store.Backend, cfg *config.Config, th s
 	if p, ok, err := b.Me(); err == nil && ok {
 		myID = p.ID
 	}
-	login := func(p store.Person) string {
+	login := func(p model.Person) string {
 		if me != "" && p.ID != "" && p.ID == myID {
 			return me
 		}
@@ -116,7 +117,7 @@ func GatherIn(anc *branches.Ancestry, b *store.Backend, cfg *config.Config, th s
 // gatherCode reads the branches naming the issue, each a lane with the
 // tests its diff changed, and the plan file. PickLane, once the PRs are
 // in, makes one the evidence.
-func gatherCode(anc *branches.Ancestry, b *store.Backend, cfg *config.Config, is store.Issue, stages config.Stages, in *Input) error {
+func gatherCode(anc *branches.Ancestry, b *store.Backend, cfg *config.Config, is model.Issue, stages config.Stages, in *Input) error {
 	sug, err := branches.Suggest(b, cfg.Branches, is)
 	if err != nil {
 		return err
@@ -204,7 +205,7 @@ func gatherCode(anc *branches.Ancestry, b *store.Backend, cfg *config.Config, is
 // PlanIssue is what a plan file's front matter writes as issue: for
 // gatherCode to find it: the issue's bare number, else its git-bug id's
 // first 7 characters. The agent's prompt names it.
-func PlanIssue(is store.Issue) string {
+func PlanIssue(is model.Issue) string {
 	if n := is.BareNumber(); n != "" {
 		return n
 	}

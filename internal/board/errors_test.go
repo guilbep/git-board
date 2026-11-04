@@ -4,17 +4,17 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/store"
 )
 
 type failing struct{ err error }
 
-func (f failing) ListIssues() ([]store.Issue, error) { return nil, f.err }
+func (f failing) ListIssues() ([]model.Issue, error) { return nil, f.err }
 
-type listed []store.Issue
+type listed []model.Issue
 
-func (l listed) ListIssues() ([]store.Issue, error) { return l, nil }
+func (l listed) ListIssues() ([]model.Issue, error) { return l, nil }
 
 // A filter that can't be answered is a FilterError; reading the board
 // failing is not one.

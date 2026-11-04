@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/filter"
-	"github.com/guilbep/git-board/internal/store"
 )
 
 func TestInvolvement(t *testing.T) {
@@ -40,14 +40,14 @@ func TestInvolvement(t *testing.T) {
 
 func TestInvolvesTerm(t *testing.T) {
 	cfg, now := &config.Config{}, time.Now()
-	assigned := store.Issue{ID: "a1", Labels: []string{"assignee:guilbep"}}
-	mentioned := store.Issue{ID: "b2"}
-	other := store.Issue{ID: "c3", AuthorLogins: []string{"srossi"}}
+	assigned := model.Issue{ID: "a1", Labels: []string{"assignee:guilbep"}}
+	mentioned := model.Issue{ID: "b2"}
+	other := model.Issue{ID: "c3", AuthorLogins: []string{"srossi"}}
 
 	conds := filter.Parse("involves:@me")
 	conds[0].Mentions = map[string]bool{"b2": true}
 	for _, tc := range []struct {
-		issue store.Issue
+		issue model.Issue
 		want  bool
 	}{{assigned, true}, {mentioned, true}, {other, false}} {
 		if got := filter.Matches(tc.issue, conds, cfg, "guilbep", now); got != tc.want {
@@ -66,11 +66,11 @@ func TestInvolvesTerm(t *testing.T) {
 }
 func TestFollowsTerm(t *testing.T) {
 	cfg, now := &config.Config{}, time.Now()
-	assigned := store.Issue{ID: "a1", Labels: []string{"assignee:guilbep"}}
-	unfollowed := store.Issue{ID: "b2", Labels: []string{"assignee:guilbep"}}
-	followed := store.Issue{ID: "c3"}
-	inView := store.Issue{ID: "d4"}
-	nothing := store.Issue{ID: "e5"}
+	assigned := model.Issue{ID: "a1", Labels: []string{"assignee:guilbep"}}
+	unfollowed := model.Issue{ID: "b2", Labels: []string{"assignee:guilbep"}}
+	followed := model.Issue{ID: "c3"}
+	inView := model.Issue{ID: "d4"}
+	nothing := model.Issue{ID: "e5"}
 
 	conds := filter.Parse("follows:@me")
 	conds[0].Followed = &filter.Followed{
@@ -79,7 +79,7 @@ func TestFollowsTerm(t *testing.T) {
 		InViews:  map[string]bool{"d4": true},
 	}
 	for _, tc := range []struct {
-		issue store.Issue
+		issue model.Issue
 		want  bool
 	}{{assigned, true}, {unfollowed, false}, {followed, true}, {inView, true}, {nothing, false}} {
 		if got := filter.Matches(tc.issue, conds, cfg, "guilbep", now); got != tc.want {
@@ -99,14 +99,14 @@ func TestFollowsTerm(t *testing.T) {
 // pm:@me still finds it, as a field.
 func TestInvolvesLeavesOutProjectRoles(t *testing.T) {
 	cfg, now := &config.Config{Fields: map[string]config.Field{"pm": {Type: config.TypePerson}}}, time.Now()
-	inherited := store.Issue{ID: "a1", Inherited: []string{"pm:guilbep"}}
+	inherited := model.Issue{ID: "a1", Inherited: []string{"pm:guilbep"}}
 	if filter.Matches(inherited, filter.Parse("involves:@me"), cfg, "guilbep", now) {
 		t.Error("involves:@me took a project role for involvement")
 	}
 	if !filter.Matches(inherited, filter.Parse("pm:@me"), cfg, "guilbep", now) {
 		t.Error("pm:@me misses the project's pm")
 	}
-	own := store.Issue{ID: "b2", Labels: []string{"pm:guilbep"}}
+	own := model.Issue{ID: "b2", Labels: []string{"pm:guilbep"}}
 	if !filter.Matches(own, filter.Parse("involves:@me"), cfg, "guilbep", now) {
 		t.Error("involves:@me misses a pm set on the issue itself")
 	}

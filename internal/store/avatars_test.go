@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/core/people"
 	"github.com/guilbep/git-board/internal/avatar"
 	"github.com/guilbep/git-board/internal/store"
@@ -42,7 +43,7 @@ func TestAvatarsSetting(t *testing.T) {
 
 // withGitHub gives a person a github.com account with GitHub's numeric id,
 // as the sync records them (the test store's accounts use the login).
-func withGitHub(t *testing.T, b *store.Backend, p store.Person, id string) {
+func withGitHub(t *testing.T, b *store.Backend, p model.Person, id string) {
 	t.Helper()
 	if _, err := people.Do(t.Context(), b.Store(), p.ID, people.AddAccount(p.ID, people.Account{Server: "github.com", ID: id, Login: p.Login})); err != nil {
 		t.Fatal(err)

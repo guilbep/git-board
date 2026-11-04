@@ -18,8 +18,8 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/store"
 )
 
 // Check names, used to group Findings for CLI output.
@@ -62,8 +62,8 @@ type Finding struct {
 // asking whether a configured option is used *anywhere* in the repo, and an
 // option that only appears on closed issues (e.g. a terminal "validated"
 // status) is exactly the "used" case, not the "dead" one.
-func Run(issues []store.Issue, cfg *config.Config) []Finding {
-	open := make([]store.Issue, 0, len(issues))
+func Run(issues []model.Issue, cfg *config.Config) []Finding {
+	open := make([]model.Issue, 0, len(issues))
 	for _, issue := range issues {
 		if issue.Status == "open" {
 			open = append(open, issue)
@@ -88,7 +88,7 @@ func Run(issues []store.Issue, cfg *config.Config) []Finding {
 // checkLabels: with a [labels] table, an open issue's plain labels that
 // aren't in its list (a kind, in the flat form, is the kind field's),
 // each with what to do.
-func checkLabels(issues []store.Issue, cfg *config.Config) []Finding {
+func checkLabels(issues []model.Issue, cfg *config.Config) []Finding {
 	if !cfg.Labels.Defined {
 		return nil
 	}
@@ -126,7 +126,7 @@ func sortedSingleFields(cfg *config.Config) []string {
 // and the PRD's own drift numbers show empty status alongside empty
 // priority, not just one field). With [branches] kinds the kind is
 // checkKinds', in either form; no hold is the usual, not on hold.
-func checkSingleCardinality(issues []store.Issue, cfg *config.Config) []Finding {
+func checkSingleCardinality(issues []model.Issue, cfg *config.Config) []Finding {
 	fieldNames := slices.DeleteFunc(sortedSingleFields(cfg), func(name string) bool {
 		return name == "kind" && len(cfg.Branches.Kinds) > 0
 	})
@@ -164,7 +164,7 @@ func checkSingleCardinality(issues []store.Issue, cfg *config.Config) []Finding 
 // Options, as "known" (nothing to validate against) — that's how a sprint
 // label (validated separately, against [[sprints.list]]) or a free-form
 // field like assignee falls through here untouched.
-func checkUnknownValues(issues []store.Issue, cfg *config.Config) []Finding {
+func checkUnknownValues(issues []model.Issue, cfg *config.Config) []Finding {
 	var findings []Finding
 	for _, issue := range issues {
 		for _, l := range issue.Labels {
@@ -200,7 +200,7 @@ func fold(v string) string {
 // without a list), two spellings of one value are a typo. The spelling
 // most open issues carry is the meant one; each issue carrying another is
 // told so. A field with options is checkUnknownValues'.
-func checkNearValues(issues []store.Issue, cfg *config.Config) []Finding {
+func checkNearValues(issues []model.Issue, cfg *config.Config) []Finding {
 	uses := map[string]map[string]int{} // field+fold -> spelling -> issues
 	for _, issue := range issues {
 		for _, l := range issue.Labels {
@@ -247,7 +247,7 @@ func checkNearValues(issues []store.Issue, cfg *config.Config) []Finding {
 	return findings
 }
 
-func checkOrphanSprints(issues []store.Issue, cfg *config.Config) []Finding {
+func checkOrphanSprints(issues []model.Issue, cfg *config.Config) []Finding {
 	known := make(map[string]bool, len(cfg.Sprints.List))
 	for _, s := range cfg.Sprints.List {
 		known[s.Slug] = true
@@ -273,7 +273,7 @@ func checkOrphanSprints(issues []store.Issue, cfg *config.Config) []Finding {
 // configured *options* against the issue *labels* actually in use, not the
 // other way around, so it takes every issue (including closed ones — see
 // Run's doc comment) rather than the open-only slice the other checks share.
-func checkDeadOptions(issues []store.Issue, cfg *config.Config) []Finding {
+func checkDeadOptions(issues []model.Issue, cfg *config.Config) []Finding {
 	used := make(map[string]bool)
 	for _, issue := range issues {
 		for _, l := range issue.Labels {
@@ -366,7 +366,7 @@ func checkProjectKeys(cfg *config.Config) []Finding {
 // label winning when they disagree; and the issues with no kind, as one
 // count, a missing kind being the issue template's to fix rather than each
 // issue's.
-func checkKinds(issues []store.Issue, cfg *config.Config) []Finding {
+func checkKinds(issues []model.Issue, cfg *config.Config) []Finding {
 	kinds := cfg.Branches.Kinds
 	if len(kinds) == 0 {
 		return nil

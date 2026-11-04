@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/guilbep/git-board/core/issue"
+	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/store"
 	"github.com/guilbep/git-board/internal/store/storetest"
 )
@@ -85,7 +86,7 @@ func TestUndo(t *testing.T) {
 	}
 	undo()
 	th, _ := b.Thread(id)
-	if slices.ContainsFunc(th.Events, func(e store.Event) bool { return e.ID == c2 }) {
+	if slices.ContainsFunc(th.Events, func(e model.Event) bool { return e.ID == c2 }) {
 		t.Errorf("the comment undone is still there")
 	}
 	if _, err := b.Undo(id, false); !errors.Is(err, store.ErrCantUndo) {
@@ -144,7 +145,7 @@ func TestUndoAnywhere(t *testing.T) {
 	}
 }
 
-func is(t *testing.T, b *store.Backend, id string) store.Issue {
+func is(t *testing.T, b *store.Backend, id string) model.Issue {
 	t.Helper()
 	got, err := b.GetIssue(id)
 	if err != nil {

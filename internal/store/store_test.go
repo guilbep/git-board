@@ -10,6 +10,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/store"
 	"github.com/guilbep/git-board/internal/store/storetest"
 )
@@ -33,7 +34,7 @@ func TestListIssuesAndGetLabels(t *testing.T) {
 		t.Fatalf("len(issues) = %d, want 2", len(issues))
 	}
 
-	byTitle := map[string]store.Issue{}
+	byTitle := map[string]model.Issue{}
 	for _, i := range issues {
 		byTitle[i.Title] = i
 	}
@@ -108,7 +109,7 @@ func TestListIssuesExposesGithubURL(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListIssues: %v", err)
 	}
-	byTitle := map[string]store.Issue{}
+	byTitle := map[string]model.Issue{}
 	for _, i := range issues {
 		byTitle[i.Title] = i
 	}
@@ -166,10 +167,10 @@ func TestProjectBasesRoundTrip(t *testing.T) {
 
 func TestShownTitle(t *testing.T) {
 	t.Parallel()
-	gh := []store.Forge{{Name: "GitHub", Number: "2518"}}
+	gh := []model.Forge{{Name: "GitHub", Number: "2518"}}
 	tests := []struct {
 		title  string
-		forges []store.Forge
+		forges []model.Forge
 		want   string
 	}{
 		{"[BUG](Equipment) Wrong example (#2518)", gh, "[BUG](Equipment) Wrong example"},
@@ -179,7 +180,7 @@ func TestShownTitle(t *testing.T) {
 		{"Wrong example (#2518)", nil, "Wrong example (#2518)"}, // no forge number to tell
 	}
 	for _, tt := range tests {
-		is := store.Issue{Title: tt.title, Forges: tt.forges}
+		is := model.Issue{Title: tt.title, Forges: tt.forges}
 		if got := is.ShownTitle(); got != tt.want {
 			t.Errorf("ShownTitle(%q) = %q, want %q", tt.title, got, tt.want)
 		}

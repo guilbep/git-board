@@ -22,8 +22,8 @@ import (
 	"time"
 
 	"github.com/guilbep/git-board/core/index"
+	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/store"
 )
 
 // Kind identifies what a Condition matches against.
@@ -163,7 +163,7 @@ func digits(s string) bool {
 // the project numbers its issues, else a forge's), its project number as
 // written (CO2-2528), or the start of its git-bug id, 7 characters at least
 // as git-bug shows it, finds that issue too.
-func itself(issue store.Issue, word string) bool {
+func itself(issue model.Issue, word string) bool {
 	if digits(word) {
 		return issue.HasNumber(word)
 	}
@@ -216,7 +216,7 @@ func RequiresMe(conditions []Condition) bool {
 }
 
 // Matches reports whether issue satisfies every condition.
-func Matches(issue store.Issue, conditions []Condition, cfg *config.Config, me string, today time.Time) bool {
+func Matches(issue model.Issue, conditions []Condition, cfg *config.Config, me string, today time.Time) bool {
 	labels := map[string]bool{}
 	for _, l := range issue.AllLabels() {
 		labels[l] = true
@@ -252,7 +252,7 @@ var noList = map[Kind]bool{KindText: true, KindNo: true, KindTitle: true, KindNu
 
 // matchOne is one condition with one value; in is where free text looks
 // (In).
-func matchOne(issue store.Issue, labels map[string]bool, c Condition, value string, in []string, cfg *config.Config, me string, today time.Time) bool {
+func matchOne(issue model.Issue, labels map[string]bool, c Condition, value string, in []string, cfg *config.Config, me string, today time.Time) bool {
 	if value == "@me" && len(c.Mine) > 0 {
 		mine := c.Mine
 		c.Mine = nil
@@ -347,7 +347,7 @@ type Involved struct {
 // involvedOf reads the issue's own labels: a role it takes from the project
 // isn't involvement (the inbox shows the project's new and closed issues to
 // its holder, not their discussions); pm:@me still finds it, as a field.
-func involvedOf(issue store.Issue, c Condition) Involved {
+func involvedOf(issue model.Issue, c Condition) Involved {
 	return Involved{AuthorLogins: issue.AuthorLogins, AuthorID: issue.AuthorID, Labels: issue.Labels,
 		CommenterLogins: issue.CommenterLogins, CommenterIDs: issue.CommenterIDs, Mentioned: c.Mentions[issue.ID]}
 }

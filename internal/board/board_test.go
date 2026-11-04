@@ -4,11 +4,11 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/store"
 )
 
-func titles(issues []store.Issue) []string {
+func titles(issues []model.Issue) []string {
 	out := make([]string, len(issues))
 	for i, issue := range issues {
 		out[i] = issue.Title
@@ -18,7 +18,7 @@ func titles(issues []store.Issue) []string {
 
 func TestSortByFieldLexicalByDefault(t *testing.T) {
 	t.Parallel()
-	issues := []store.Issue{
+	issues := []model.Issue{
 		{Title: "p2", Labels: []string{"prio:p2"}},
 		{Title: "p0", Labels: []string{"prio:p0"}},
 		{Title: "p1", Labels: []string{"prio:p1"}},
@@ -33,7 +33,7 @@ func TestSortByFieldNumericOrdersByValueNotLexically(t *testing.T) {
 	t.Parallel()
 	// Lexical order of these est values would be "1", "16", "2" -- the
 	// whole reason a numeric field needs different handling.
-	issues := []store.Issue{
+	issues := []model.Issue{
 		{Title: "sixteen", Labels: []string{"est:16"}},
 		{Title: "two", Labels: []string{"est:2"}},
 		{Title: "one", Labels: []string{"est:1"}},
@@ -53,7 +53,7 @@ func TestSortByFieldNumericOrdersByValueNotLexically(t *testing.T) {
 
 func TestSortByFieldNumericMissingValueSortsLastBothDirections(t *testing.T) {
 	t.Parallel()
-	issues := []store.Issue{
+	issues := []model.Issue{
 		{Title: "unset"},
 		{Title: "two", Labels: []string{"est:2"}},
 		{Title: "one", Labels: []string{"est:1"}},
@@ -73,7 +73,7 @@ func TestSortByFieldNumericMissingValueSortsLastBothDirections(t *testing.T) {
 
 func TestSortByFieldEmptySpecIsNoOp(t *testing.T) {
 	t.Parallel()
-	issues := []store.Issue{
+	issues := []model.Issue{
 		{Title: "b", Labels: []string{"prio:p2"}},
 		{Title: "a", Labels: []string{"prio:p1"}},
 	}
@@ -85,7 +85,7 @@ func TestSortByFieldEmptySpecIsNoOp(t *testing.T) {
 
 func TestSortByFieldNilConfigDoesNotPanic(t *testing.T) {
 	t.Parallel()
-	issues := []store.Issue{{Title: "x", Labels: []string{"est:2"}}}
+	issues := []model.Issue{{Title: "x", Labels: []string{"est:2"}}}
 	defer func() {
 		if r := recover(); r != nil {
 			t.Fatalf("SortByField with a nil config panicked: %v", r)
@@ -101,8 +101,8 @@ func TestSortByFieldFollowsOptionOrder(t *testing.T) {
 	cfg := &config.Config{Fields: map[string]config.Field{
 		"status": {Single: true, Options: []string{"backlog", "ready", "in-progress"}},
 	}}
-	issues := func() []store.Issue {
-		return []store.Issue{
+	issues := func() []model.Issue {
+		return []model.Issue{
 			{Title: "none"},
 			{Title: "in-progress", Labels: []string{"status:in-progress"}},
 			{Title: "zzz", Labels: []string{"status:zzz"}},

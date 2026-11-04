@@ -12,6 +12,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/store"
 )
 
@@ -64,7 +65,7 @@ text).`,
 // logEntry is one change, as log prints it.
 type logEntry struct {
 	At      time.Time    `json:"at"`
-	Author  store.Person `json:"author"`
+	Author  model.Person `json:"author"`
 	Kind    string       `json:"kind"` // created, comment, edit, title, state, labels
 	ID      string       `json:"id"`
 	Target  string       `json:"target,omitempty"`
@@ -95,7 +96,7 @@ func parseSince(s string, now time.Time) (time.Time, error) {
 
 // historyOf is a thread's changes, in the order the log applied them
 // (order, Backend.OpOrder), else in time.
-func historyOf(th store.Thread, order map[string]int) []logEntry {
+func historyOf(th model.Thread, order map[string]int) []logEntry {
 	var res []logEntry
 	for _, e := range th.Events {
 		le := logEntry{At: e.At, Author: e.Author, Kind: e.Kind, ID: e.ID}
@@ -128,7 +129,7 @@ func historyOf(th store.Thread, order map[string]int) []logEntry {
 }
 
 // firstBody is a text as it was written, before any edit.
-func firstBody(e store.Event) string {
+func firstBody(e model.Event) string {
 	if len(e.History) > 0 {
 		return e.History[0].Body
 	}
@@ -137,7 +138,7 @@ func firstBody(e store.Event) string {
 
 // firstTitle is the title the issue was created with: the first title
 // change's was, else the title.
-func firstTitle(th store.Thread) string {
+func firstTitle(th model.Thread) string {
 	for _, e := range th.Events {
 		if e.Kind == "title" {
 			return e.Was
@@ -198,7 +199,7 @@ func runLog(out io.Writer, idPrefix, field string, since time.Time, js *jsonOut)
 }
 
 // describeEntry is what a change did, in a line.
-func describeEntry(e logEntry, th store.Thread) string {
+func describeEntry(e logEntry, th model.Thread) string {
 	switch e.Kind {
 	case "created":
 		return fmt.Sprintf("created %q", e.Title)

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/guilbep/git-board/core/datastore"
+	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/core/pgstore/pgtest"
 	"github.com/guilbep/git-board/internal/store"
 	"github.com/guilbep/git-board/internal/store/storetest"
@@ -125,7 +126,7 @@ func TestCopyFromGit(t *testing.T) {
 }
 
 // comments counts a thread's comments.
-func comments(th store.Thread) int {
+func comments(th model.Thread) int {
 	n := 0
 	for _, e := range th.Events {
 		if e.Kind == "comment" {

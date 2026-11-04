@@ -9,12 +9,13 @@ import (
 	"testing"
 
 	"github.com/guilbep/git-board/core/forge/fake"
+	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/store"
 	"github.com/guilbep/git-board/internal/store/storetest"
 )
 
-func kinds(th store.Thread) []string {
+func kinds(th model.Thread) []string {
 	var res []string
 	for _, e := range th.Events {
 		res = append(res, e.Kind)
@@ -100,7 +101,7 @@ func TestThreadForgeLinks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []store.Forge{
+	want := []model.Forge{
 		{Name: "GitHub", URL: "https://github.com/o/r/issues/7", Number: "7"},
 		{Name: "GitLab", URL: "https://gitlab.example.com/g/r/-/work_items/3", Number: "3"},
 	}

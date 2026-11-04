@@ -10,6 +10,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/core/syncer"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/store"
@@ -132,7 +133,7 @@ func names(e store.SyncEvent) bool {
 // stepName labels an issue in a step: its project number, else its forge
 // number, else its short id, and its title. One a dry run would pull is
 // only in the dry run's copy: its short id.
-func stepName(get func(string) (store.Issue, error), id string) string {
+func stepName(get func(string) (model.Issue, error), id string) string {
 	short := id[:min(7, len(id))]
 	i, err := get(id)
 	if err != nil {

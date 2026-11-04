@@ -9,6 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/board"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/inbox"
@@ -153,9 +154,9 @@ func inboxMe(b *store.Backend, me string) (inbox.Me, error) {
 
 // followOf is whether m follows th with st, and why, as the server's
 // follow answers it.
-func followOf(b *store.Backend, cfg *config.Config, m inbox.Me, st inbox.State, th store.Thread) (followState, error) {
+func followOf(b *store.Backend, cfg *config.Config, m inbox.Me, st inbox.State, th model.Thread) (followState, error) {
 	th.Inherited = cfg.RolesFor(th.Labels)
-	inViews, _, err := board.FollowedViews(b, cfg, st.Views, m.Login, []store.Issue{th.Issue}, time.Now())
+	inViews, _, err := board.FollowedViews(b, cfg, st.Views, m.Login, []model.Issue{th.Issue}, time.Now())
 	if err != nil {
 		return followState{}, err
 	}

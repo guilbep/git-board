@@ -7,10 +7,10 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/ghlabels"
 	"github.com/guilbep/git-board/internal/lint"
-	"github.com/guilbep/git-board/internal/store"
 )
 
 // Settings › Labels: the labels the project defines, their issues, and how
@@ -55,7 +55,7 @@ func githubLabels(repos []string) (map[string][]ghlabels.Label, []repoError) {
 // labelCounts is how many issues carry each label, as the board reads it
 // (a flat kind as kind:bug); open ones only when open. The issues come
 // back too, the read is the callers': the undeclared rows group them.
-func (s *apiServer) labelCounts(open bool) (map[string]int, []store.Issue, error) {
+func (s *apiServer) labelCounts(open bool) (map[string]int, []model.Issue, error) {
 	issues, err := s.b.ListIssues()
 	if err != nil {
 		return nil, nil, err
@@ -130,7 +130,7 @@ func (s *apiServer) handleLabelList(w http.ResponseWriter, r *http.Request) {
 // sprint:13, risk:structural and assignee:guilbep land here, under their
 // field, instead of "outside the project". Namespace-less labels stay
 // stray (handleLint). Rows in field, then value, order.
-func (s *apiServer) undeclaredRows(cfg *config.Config, repos []string, existing map[string][]ghlabels.Label, counts map[string]int, issues []store.Issue) []labelRow {
+func (s *apiServer) undeclaredRows(cfg *config.Config, repos []string, existing map[string][]ghlabels.Label, counts map[string]int, issues []model.Issue) []labelRow {
 	known := map[string]bool{}
 	for _, l := range ghlabels.Desired(cfg) {
 		known[strings.ToLower(l.Name)] = true

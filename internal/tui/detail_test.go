@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/store"
 	"github.com/guilbep/git-board/internal/store/storetest"
 )
 
@@ -85,7 +85,7 @@ func TestParseLabelsNoLabelsYieldsNothingKnown(t *testing.T) {
 func TestRenderDetailShowsKnownFieldsAndOtherLabels(t *testing.T) {
 	t.Parallel()
 	cfg := mustLoadConfig(t)
-	iss := store.Issue{
+	iss := model.Issue{
 		ID: "abcdef1234", Title: "widget", Status: "open",
 		Labels: []string{"status:ready", "assignee:alice", "assignee:bob", "random-flag", "unconfigured:value"},
 	}
@@ -99,7 +99,7 @@ func TestRenderDetailShowsKnownFieldsAndOtherLabels(t *testing.T) {
 	// The dogfood case that motivated this: a real issue with no
 	// board-relevant labels yet must not show a stray "Other labels:"
 	// heading over nothing.
-	bare := renderDetail(store.Issue{ID: "x", Title: "y", Status: "open"}, cfg, "")
+	bare := renderDetail(model.Issue{ID: "x", Title: "y", Status: "open"}, cfg, "")
 	if strings.Contains(bare, "Other labels:") {
 		t.Errorf("bare issue view has an empty Other labels section:\n%s", bare)
 	}
@@ -111,7 +111,7 @@ func TestRenderDetailShowsKnownFieldsAndOtherLabels(t *testing.T) {
 func TestFieldNamesAreConfiguredPlusFoundSorted(t *testing.T) {
 	t.Parallel()
 	cfg := mustLoadConfig(t)
-	issues := []store.Issue{{Labels: []string{"sprint:s1", "status:ready", "plain"}}, {Labels: []string{"mod:travel"}}}
+	issues := []model.Issue{{Labels: []string{"sprint:s1", "status:ready", "plain"}}, {Labels: []string{"mod:travel"}}}
 	got := FieldNames(cfg, issues)
 	want := []string{"assignee", "cat", "est", "mod", "prio", "sprint", "status"}
 	if !slices.Equal(got, want) {

@@ -6,6 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/store"
 )
@@ -78,7 +79,7 @@ func issueCompletions(prefix string) []cobra.Completion {
 		return nil
 	}
 	// the open ones first
-	slices.SortStableFunc(issues, func(x, y store.Issue) int {
+	slices.SortStableFunc(issues, func(x, y model.Issue) int {
 		return strings.Compare(y.Status, x.Status)
 	})
 	var res []cobra.Completion

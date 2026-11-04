@@ -9,6 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/board"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/store"
@@ -142,7 +143,7 @@ func newLsCmd() *cobra.Command {
 	cmd.Flags().StringVar(&sort, "sort", "", `sort by created, updated, title or a field, then asc or desc: "prio asc", "updated desc"`)
 	cmd.Flags().IntVarP(&limit, "limit", "L", 0, "list this many at most, after sorting (0: all)")
 	cmd.Flags().BoolVar(&md, "md", false, "render as markdown")
-	js = addJSON(cmd, "render as JSON", jsonFields(store.Issue{}), true)
+	js = addJSON(cmd, "render as JSON", jsonFields(model.Issue{}), true)
 	meFlag(cmd, &me)
 	return cmd
 }
@@ -164,7 +165,7 @@ func newViewCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVar(&md, "md", false, "render as markdown")
-	js = addJSON(cmd, "render as JSON", jsonFields(store.Issue{}), true)
+	js = addJSON(cmd, "render as JSON", jsonFields(model.Issue{}), true)
 	meFlag(cmd, &me)
 	return cmd
 }
@@ -357,7 +358,7 @@ func runTui(filterStr, me string) error {
 // matching filterStr — the shared core behind ls/view's table render and the
 // tui's interactive list. The actual matching logic lives in internal/board
 // so the server (internal/server) can reuse it too.
-func loadMatchingIssues(cfg *config.Config, filterStr, me string) ([]store.Issue, error) {
+func loadMatchingIssues(cfg *config.Config, filterStr, me string) ([]model.Issue, error) {
 	b, err := store.OpenCwd()
 	if err != nil {
 		return nil, err

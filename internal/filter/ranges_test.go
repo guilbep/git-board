@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/guilbep/git-board/internal/store"
+	"github.com/guilbep/git-board/core/model"
 )
 
 func TestParseQualifiers(t *testing.T) {
@@ -96,7 +96,7 @@ func TestInNarrowsFreeText(t *testing.T) {
 			t.Errorf("In(%q) = %#v, want %#v", text, got, want)
 		}
 	}
-	is := store.Issue{Title: "Docs", Body: "a café", CommentBodies: []string{"crash here", "and there"}}
+	is := model.Issue{Title: "Docs", Body: "a café", CommentBodies: []string{"crash here", "and there"}}
 	for text, want := range map[string]bool{
 		"cafe": true, "cafe in:title": false, "cafe in:body": true, "crash-here": true, "here and": true, "there-crash": false,
 		"cras in:comments": true, "rash": false, "docs -in:title": false,

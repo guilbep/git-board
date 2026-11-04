@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/guilbep/git-board/core/issue"
+	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/release"
 	"github.com/guilbep/git-board/internal/release/releasetest"
@@ -129,7 +130,7 @@ func TestReleasesDisabled(t *testing.T) {
 		}
 	}
 	// an issue's environments, asked on every issue page: none, no error
-	var th store.Thread
+	var th model.Thread
 	call(t, "POST", ts.URL+"/api/issues", map[string]any{"title": "x"}, &th)
 	var envs []issueEnvironment
 	if code := call(t, "GET", ts.URL+"/api/issues/"+th.ID+"/environments", nil, &envs); code != http.StatusOK || envs == nil || len(envs) != 0 {

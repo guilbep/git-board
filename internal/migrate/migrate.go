@@ -13,9 +13,9 @@ import (
 	"strings"
 
 	"github.com/guilbep/git-board/core/forge"
+	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/core/people"
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/store"
 )
 
 // Plan is what migrating one field on one forge would do, or did.
@@ -33,7 +33,7 @@ type Plan struct {
 // Issue is one issue's stake in a migration: its forge ref, and the
 // field's values here.
 type stake struct {
-	is     store.Issue
+	is     model.Issue
 	ref    forge.Ref
 	values []string
 }
@@ -72,7 +72,7 @@ func urlOn(f config.Forge, url string) bool {
 
 // stakes is, per forge, the issues carrying the field, with their values
 // as the storage has them (namespaced labels; aliases folded).
-func stakes(cfg *config.Config, f config.Forge, field string, issues []store.Issue) []stake {
+func stakes(cfg *config.Config, f config.Forge, field string, issues []model.Issue) []stake {
 	var out []stake
 	for _, is := range issues {
 		values := []string{}
@@ -99,7 +99,7 @@ func stakes(cfg *config.Config, f config.Forge, field string, issues []store.Iss
 // Preview counts, per declared forge, what Migrate would do to field.
 // No forge declares the field's home away from labels: nothing to
 // migrate, the note says the sync carries the values.
-func Preview(cfg *config.Config, field string, issues []store.Issue) []Plan {
+func Preview(cfg *config.Config, field string, issues []model.Issue) []Plan {
 	var plans []Plan
 	for _, f := range cfg.Forges {
 		target := cfg.FieldTarget(f, field)
@@ -148,7 +148,7 @@ func account(persons []people.Person, server, value string) (forge.Account, bool
 // off the issue. say reports each forge. A forge that refuses keeps its
 // note and the others go on; the error is the first refusal, the plans
 // carry what landed.
-func Migrate(ctx context.Context, cfg *config.Config, field string, issues []store.Issue, persons []people.Person, open func(config.Forge) (forge.Forge, error), say func(string)) ([]Plan, error) {
+func Migrate(ctx context.Context, cfg *config.Config, field string, issues []model.Issue, persons []people.Person, open func(config.Forge) (forge.Forge, error), say func(string)) ([]Plan, error) {
 	var plans []Plan
 	var firstErr error
 	for _, f := range cfg.Forges {

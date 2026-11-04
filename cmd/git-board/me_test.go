@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/store"
 	"github.com/guilbep/git-board/internal/store/storetest"
 )
@@ -30,7 +31,7 @@ func TestMeShowsChoosesAndCreatesWhoYouWriteAs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("me --new --name Bob: %v\n%s", err, out)
 	}
-	var bob store.Person
+	var bob model.Person
 	if err := json.Unmarshal([]byte(out), &bob); err != nil || bob.Name != "Bob" {
 		t.Fatalf("me --new --json = %s, %v", out, err)
 	}
@@ -40,7 +41,7 @@ func TestMeShowsChoosesAndCreatesWhoYouWriteAs(t *testing.T) {
 		t.Fatalf("me --ls: %v", err)
 	}
 	var everyone []struct {
-		store.Person
+		model.Person
 		Me bool `json:"me"`
 	}
 	if err := json.Unmarshal([]byte(out), &everyone); err != nil || len(everyone) != 2 {

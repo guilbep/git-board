@@ -6,12 +6,13 @@ import (
 	"testing"
 
 	"github.com/guilbep/git-board/core/forge/fake"
+	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/store"
 	"github.com/guilbep/git-board/internal/store/storetest"
 )
 
 // eventByID is the thread's event with that id.
-func eventByID(t *testing.T, b *store.Backend, issue, id string) store.Event {
+func eventByID(t *testing.T, b *store.Backend, issue, id string) model.Event {
 	t.Helper()
 	th, err := b.Thread(issue)
 	if err != nil {
@@ -23,7 +24,7 @@ func eventByID(t *testing.T, b *store.Backend, issue, id string) store.Event {
 		}
 	}
 	t.Fatalf("no event %s in %+v", id, th.Events)
-	return store.Event{}
+	return model.Event{}
 }
 
 func TestReviewComments(t *testing.T) {

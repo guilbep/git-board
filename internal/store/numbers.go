@@ -17,6 +17,7 @@ import (
 	"github.com/guilbep/git-board/core/gitstore"
 	"github.com/guilbep/git-board/core/issue"
 	"github.com/guilbep/git-board/core/mdstore"
+	"github.com/guilbep/git-board/core/model"
 )
 
 // The project's own numbers (CO2-3075): refs/board/seq, a chain of commits
@@ -111,7 +112,7 @@ func (c Counter) Next() int {
 
 // NumberOf is an issue's number, 0 for none yet: its line, else its GitHub
 // number below Start.
-func (c Counter) NumberOf(id string, forges []Forge) int {
+func (c Counter) NumberOf(id string, forges []model.Forge) int {
 	if n, ok := c.ByID[id]; ok {
 		return n
 	}

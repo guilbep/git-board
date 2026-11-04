@@ -9,15 +9,15 @@ import (
 	"strings"
 	"text/tabwriter"
 
+	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/board"
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/store"
 	"github.com/guilbep/git-board/internal/tui"
 )
 
 // render prints issues as a table, markdown, or JSON, optionally sorted and
 // grouped. JSON output ignores grouping and prints the flat sorted list.
-func render(out io.Writer, issues []store.Issue, group, sortSpec string, limit int, md bool, js *jsonOut, cfg *config.Config) error {
+func render(out io.Writer, issues []model.Issue, group, sortSpec string, limit int, md bool, js *jsonOut, cfg *config.Config) error {
 	if err := sortIssues(issues, sortSpec, cfg); err != nil {
 		return err
 	}
@@ -55,10 +55,10 @@ func render(out io.Writer, issues []store.Issue, group, sortSpec string, limit i
 
 // sortKeys are the keys --sort takes besides the fields: what every issue
 // has.
-var sortKeys = map[string]func(x, y store.Issue) int{
-	"created": func(x, y store.Issue) int { return x.CreatedAt.Compare(y.CreatedAt) },
-	"updated": func(x, y store.Issue) int { return x.UpdatedAt.Compare(y.UpdatedAt) },
-	"title": func(x, y store.Issue) int {
+var sortKeys = map[string]func(x, y model.Issue) int{
+	"created": func(x, y model.Issue) int { return x.CreatedAt.Compare(y.CreatedAt) },
+	"updated": func(x, y model.Issue) int { return x.UpdatedAt.Compare(y.UpdatedAt) },
+	"title": func(x, y model.Issue) int {
 		return cmp.Compare(strings.ToLower(x.ShownTitle()), strings.ToLower(y.ShownTitle()))
 	},
 }
@@ -66,7 +66,7 @@ var sortKeys = map[string]func(x, y store.Issue) int{
 // sortIssues sorts by spec, "key [asc|desc]": created, updated, title, or
 // a field (board.SortByField). A key that is none of them, or another
 // direction, is an error: a sort that does nothing says so.
-func sortIssues(issues []store.Issue, spec string, cfg *config.Config) error {
+func sortIssues(issues []model.Issue, spec string, cfg *config.Config) error {
 	if spec == "" {
 		return nil
 	}
@@ -76,7 +76,7 @@ func sortIssues(issues []store.Issue, spec string, cfg *config.Config) error {
 		return usageError{fmt.Errorf("--sort %q: the direction is asc or desc", spec)}
 	}
 	if by, ok := sortKeys[key]; ok {
-		slices.SortStableFunc(issues, func(x, y store.Issue) int {
+		slices.SortStableFunc(issues, func(x, y model.Issue) int {
 			if dir == "desc" {
 				return by(y, x)
 			}
@@ -98,7 +98,7 @@ func sortIssues(issues []store.Issue, spec string, cfg *config.Config) error {
 // fieldColumns renders issue's fields as fieldNames-ordered cell values
 // (blank if unset) plus a joined "other" cell for labels without a
 // namespace.
-func fieldColumns(issue store.Issue, cfg *config.Config, fieldNames []string) (cells []string, other string) {
+func fieldColumns(issue model.Issue, cfg *config.Config, fieldNames []string) (cells []string, other string) {
 	known, otherLabels := tui.ParseLabels(issue.Labels)
 	byName := make(map[string][]string, len(known))
 	for _, f := range known {
@@ -124,7 +124,7 @@ func formatFieldValues(name string, values []string, cfg *config.Config) string 
 	return strings.Join(values, ", ")
 }
 
-func writeTable(out io.Writer, issues []store.Issue, cfg *config.Config, fieldNames []string) {
+func writeTable(out io.Writer, issues []model.Issue, cfg *config.Config, fieldNames []string) {
 	tw := tabwriter.NewWriter(out, 0, 2, 2, ' ', 0)
 	header := []string{"id", "title", "state"}
 	for _, name := range fieldNames {
@@ -142,7 +142,7 @@ func writeTable(out io.Writer, issues []store.Issue, cfg *config.Config, fieldNa
 	tw.Flush()
 }
 
-func writeMarkdownTable(out io.Writer, issues []store.Issue, cfg *config.Config, fieldNames []string) {
+func writeMarkdownTable(out io.Writer, issues []model.Issue, cfg *config.Config, fieldNames []string) {
 	header := []string{"id", "title", "state"}
 	for _, name := range fieldNames {
 		header = append(header, tui.DisplayFieldName(name))

@@ -7,11 +7,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/branches"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/cycle"
 	"github.com/guilbep/git-board/internal/inbox"
-	"github.com/guilbep/git-board/internal/store"
 	"github.com/guilbep/git-board/internal/work"
 	"github.com/guilbep/git-board/internal/wtx"
 )
@@ -37,7 +37,7 @@ type workResponse struct {
 type workAgent struct {
 	Path    string       `json:"path"`
 	Branch  string       `json:"branch"` // the head's short sha when detached
-	Issue   *store.Issue `json:"issue,omitempty"`
+	Issue   *model.Issue `json:"issue,omitempty"`
 	Step    int          `json:"step,omitempty"`
 	Name    string       `json:"name,omitempty"`
 	State   string       `json:"state"` // "Waits for you", "Waits for bob to review the branch", "No issue"
@@ -47,7 +47,7 @@ type workAgent struct {
 
 // sendLine is a change the forges wait for (Event.Pending).
 type sendLine struct {
-	Issue store.Issue `json:"issue"`
+	Issue model.Issue `json:"issue"`
 	What  string      `json:"what"` // "a comment", "the status", "the risk", "the title", "closed", "reopened", "a new issue"
 	At    time.Time   `json:"at"`
 }
@@ -173,7 +173,7 @@ func agentState(r work.Row) string {
 
 // pendingLines lists the changes the forges wait for, newest first, and counts
 // them all.
-func pendingLines(threads []store.Thread) ([]sendLine, int) {
+func pendingLines(threads []model.Thread) ([]sendLine, int) {
 	all := []sendLine{}
 	for _, th := range threads {
 		for _, e := range th.Events {
@@ -191,7 +191,7 @@ func pendingLines(threads []store.Thread) ([]sendLine, int) {
 	return all, n
 }
 
-func sendWhat(e store.Event) string {
+func sendWhat(e model.Event) string {
 	edit := len(e.Pending) == 0
 	switch e.Kind {
 	case "created":
@@ -224,7 +224,7 @@ func sendWhat(e store.Event) string {
 
 // retroOf counts the correction comments since the current sprint's start.
 // ponytail: open issues only; M7 reads closed ones too.
-func retroOf(cfg *config.Config, threads []store.Thread, now time.Time) retroSummary {
+func retroOf(cfg *config.Config, threads []model.Thread, now time.Time) retroSummary {
 	sp, err := config.ResolveSprint(cfg.Sprints, "current", now)
 	if err != nil || sp == nil {
 		return retroSummary{}

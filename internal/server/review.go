@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/branches"
 	"github.com/guilbep/git-board/internal/store"
 )
@@ -34,7 +35,7 @@ type changeRange struct {
 // issueRefs are the issue's branches, in order, and each one's ref:
 // origin's copy, what the pull request shows and what others can review,
 // else the local one.
-func issueRefs(b *store.Backend, is store.Issue) ([]string, map[string]string, error) {
+func issueRefs(b *store.Backend, is model.Issue) ([]string, map[string]string, error) {
 	all, err := b.Branches()
 	if err != nil {
 		return nil, nil, err
@@ -57,7 +58,7 @@ func issueRefs(b *store.Backend, is store.Issue) ([]string, map[string]string, e
 
 // reviewHead picks the issue's branch to review, want or else the first
 // origin has, and its head ref. want must name the issue.
-func reviewHead(b *store.Backend, is store.Issue, want string) (name, ref string, err error) {
+func reviewHead(b *store.Backend, is model.Issue, want string) (name, ref string, err error) {
 	names, refs, err := issueRefs(b, is)
 	if err != nil {
 		return "", "", err
@@ -108,7 +109,7 @@ func (s *apiServer) changeRangeOf(w http.ResponseWriter, r *http.Request) (chang
 }
 
 // rangeOf is a branch of the issue from its merge base to its head.
-func (s *apiServer) rangeOf(is store.Issue, want string) (changeRange, error) {
+func (s *apiServer) rangeOf(is model.Issue, want string) (changeRange, error) {
 	name, ref, err := reviewHead(s.b, is, want)
 	if err != nil {
 		return changeRange{}, err
@@ -380,7 +381,7 @@ func (s *apiServer) handleThreadMeta(w http.ResponseWriter, r *http.Request) {
 // now: merging the base into the branch moves it, and the quote with it.
 // One merge-base per (commit, branch), one git diff per comment, one git
 // show per (commit, path); group them if threads with many comments are slow.
-func (s *apiServer) annotate(th *store.Thread) {
+func (s *apiServer) annotate(th *model.Thread) {
 	var (
 		loaded bool
 		names  []string

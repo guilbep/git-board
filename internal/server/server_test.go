@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/board"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/store"
@@ -151,7 +152,7 @@ func TestPatchIssueSwapsSingleCardinalityField(t *testing.T) {
 		t.Fatalf("status = %d, want 200", resp.StatusCode)
 	}
 
-	var issue store.Issue
+	var issue model.Issue
 	if err := json.NewDecoder(resp.Body).Decode(&issue); err != nil {
 		t.Fatalf("decode: %v", err)
 	}

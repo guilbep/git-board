@@ -7,6 +7,7 @@ import (
 
 	"github.com/guilbep/git-board/core/forge/fake"
 	"github.com/guilbep/git-board/core/issue"
+	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/store"
 	"github.com/guilbep/git-board/internal/store/storetest"
 )
@@ -17,7 +18,7 @@ const sixA = "Seen in the clone of the git-bug fork.\n\n## Releases page\n\n- Th
 	"- [ ] A missing identity sends the user to Settings › identity, not to a CLI command.\n- [ ] The header names the repository.\n\n" +
 	"## Workaround\n\nNot tried yet."
 
-func sixAIssue(t *testing.T) (*store.Backend, string, store.Person) {
+func sixAIssue(t *testing.T) (*store.Backend, string, model.Person) {
 	t.Helper()
 	b := storetest.New(t)
 	alice := storetest.NewPerson(t, b, "Person A", "alice")

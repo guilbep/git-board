@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/guilbep/git-board/internal/store"
+	"github.com/guilbep/git-board/core/model"
 )
 
 func TestCommentAddsAndEdits(t *testing.T) {
@@ -38,7 +38,7 @@ func TestCommentAddsAndEdits(t *testing.T) {
 	if got := comments(th); !slices.Equal(got, []string{"one, edited", "two, edited"}) {
 		t.Errorf("comments = %q", got)
 	}
-	if i := slices.IndexFunc(th.Events, func(e store.Event) bool { return e.Kind == "comment" }); !th.Events[i].Edited {
+	if i := slices.IndexFunc(th.Events, func(e model.Event) bool { return e.Kind == "comment" }); !th.Events[i].Edited {
 		t.Errorf("the edited comment isn't marked edited: %+v", th.Events[i])
 	}
 	if _, err := execute(t, []string{"comment", id, "--edit", "fffffff:9", "-b", "x"}); exitCode(err) != exitNotFound {

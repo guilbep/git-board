@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/ghpr"
 	"github.com/guilbep/git-board/internal/store"
@@ -204,7 +205,7 @@ func issueAt(t *testing.T, b *store.Backend, status string, labels ...string) st
 	return id
 }
 
-func lastEvent(t *testing.T, b *store.Backend, id string) (store.Thread, store.Event) {
+func lastEvent(t *testing.T, b *store.Backend, id string) (model.Thread, model.Event) {
 	t.Helper()
 	th, err := b.Thread(id)
 	if err != nil {

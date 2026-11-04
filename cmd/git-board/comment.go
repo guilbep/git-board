@@ -7,6 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/store"
 )
 
@@ -126,7 +127,7 @@ func runComment(cmd *cobra.Command, idPrefix string, text *textFlags, edit strin
 		return err
 	}
 
-	var target *store.Event
+	var target *model.Event
 	if edit != "" || editLast {
 		if target, err = findComment(th, edit, me.ID); err != nil {
 			return err
@@ -179,7 +180,7 @@ func commentText(cmd *cobra.Command, text *textFlags, initial string) (string, e
 
 // findComment is the comment ref names on th (show's abc1234:1, a prefix of
 // its hash, or its whole id), or, ref empty, the last one meID wrote.
-func findComment(th store.Thread, ref, meID string) (*store.Event, error) {
+func findComment(th model.Thread, ref, meID string) (*model.Event, error) {
 	var found []int
 	for i, e := range th.Events {
 		if e.Kind != "comment" {

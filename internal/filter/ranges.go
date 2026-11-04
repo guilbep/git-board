@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/guilbep/git-board/core/index"
-	"github.com/guilbep/git-board/internal/store"
+	"github.com/guilbep/git-board/core/model"
 )
 
 // Range is [From, Until): a nil bound is open.
@@ -136,7 +136,7 @@ func CountRange(v string) (Range, error) {
 
 // dateOf is the time a date qualifier reads, and false when the issue has
 // none (closed: of an open issue).
-func dateOf(issue store.Issue, field string) (time.Time, bool) {
+func dateOf(issue model.Issue, field string) (time.Time, bool) {
 	switch field {
 	case "created":
 		return issue.CreatedAt, true
@@ -175,7 +175,7 @@ func In(conditions []Condition) []string {
 }
 
 // texts are an issue's texts in names, as index.MatchText takes them.
-func texts(issue store.Issue, in []string) []string {
+func texts(issue model.Issue, in []string) []string {
 	if in == nil {
 		in = index.Texts
 	}

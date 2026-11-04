@@ -4,16 +4,16 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/guilbep/git-board/internal/store"
+	"github.com/guilbep/git-board/core/model"
 )
 
 // benchIssues are n issues as a big board lists them: a status, a prio,
 // a sprint, people, a few comments.
-func benchIssues(n int) []store.Issue {
+func benchIssues(n int) []model.Issue {
 	statuses := []string{"backlog", "ready", "in-progress", "in-review", "qa"}
-	issues := make([]store.Issue, n)
+	issues := make([]model.Issue, n)
 	for i := range issues {
-		issues[i] = store.Issue{
+		issues[i] = model.Issue{
 			ID: fmt.Sprintf("%040x", i), Title: fmt.Sprintf("Fix the invoice export %d", i), Status: "open",
 			Labels: []string{"status:" + statuses[i%len(statuses)], fmt.Sprintf("prio:p%d", i%4),
 				"sprint:delivery", fmt.Sprintf("assignee:dev%d", i%7)},

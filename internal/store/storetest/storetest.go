@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/guilbep/git-board/core/issue"
+	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/core/oplog"
 	"github.com/guilbep/git-board/core/people"
 	"github.com/guilbep/git-board/core/syncer"
@@ -204,7 +205,7 @@ func CloseIssue(t testing.TB, b *store.Backend, idPrefix string) {
 
 // NewPerson creates another person with a GitHub account of that login:
 // a colleague, or a second person for you. An empty login is no account.
-func NewPerson(t testing.TB, b *store.Backend, name, login string) store.Person {
+func NewPerson(t testing.TB, b *store.Backend, name, login string) model.Person {
 	t.Helper()
 	ops := []oplog.Op{people.NewCreate(me(t, b), name, "")}
 	if login != "" {
@@ -214,12 +215,12 @@ func NewPerson(t testing.TB, b *store.Backend, name, login string) store.Person 
 	if err != nil {
 		t.Fatalf("people.Create: %v", err)
 	}
-	return store.Person{ID: p.ID, Name: p.Name, Login: login}
+	return model.Person{ID: p.ID, Name: p.Name, Login: login}
 }
 
 // CommentAs comments on the issue as who, at unix time, and returns the
 // comment's id as the thread gives it (Event.ID).
-func CommentAs(t testing.TB, b *store.Backend, idPrefix string, who store.Person, unix int64, body string) string {
+func CommentAs(t testing.TB, b *store.Backend, idPrefix string, who model.Person, unix int64, body string) string {
 	t.Helper()
 	is, err := b.GetIssue(idPrefix)
 	if err != nil {
@@ -255,7 +256,7 @@ func RawLabels(t testing.TB, b *store.Backend, id string, labels ...string) {
 
 // IssueAs creates an issue as who, at unix time, with labels, and returns
 // its id.
-func IssueAs(t testing.TB, b *store.Backend, who store.Person, unix int64, title, body string, labels ...string) string {
+func IssueAs(t testing.TB, b *store.Backend, who model.Person, unix int64, title, body string, labels ...string) string {
 	t.Helper()
 	ops := []oplog.Op{issue.NewCreate(who.ID, title, body)}
 	if len(labels) > 0 {

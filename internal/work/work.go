@@ -8,14 +8,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/cycle"
 	"github.com/guilbep/git-board/internal/inbox"
-	"github.com/guilbep/git-board/internal/store"
 )
 
 // Row is one open issue's cycle, slimmed for a list.
 type Row struct {
-	Issue    store.Issue `json:"issue"`
+	Issue    model.Issue `json:"issue"`
 	Step     int         `json:"step"`
 	Of       int         `json:"of"`
 	Name     string      `json:"name"`
@@ -36,7 +36,7 @@ type Row struct {
 type Question struct {
 	ID   string       `json:"id"`
 	Body string       `json:"body"`
-	By   store.Person `json:"by"`
+	By   model.Person `json:"by"`
 	At   time.Time    `json:"at"`
 }
 
@@ -47,7 +47,7 @@ type Groups struct {
 }
 
 // RowOf is the thread's row, from its computed cycle.
-func RowOf(th store.Thread, c cycle.Cycle, me inbox.Me) Row {
+func RowOf(th model.Thread, c cycle.Cycle, me inbox.Me) Row {
 	r := Row{Issue: th.Issue, Step: c.Position(), Of: c.Of, Name: c.Name, Risk: c.Risk, Done: c.Done, Waits: c.Waits, Mine: c.Mine,
 		Actions: c.Actions, Involved: Involved(th, me), Question: QuestionOf(th, me), Branch: c.Evidence.Branch}
 	r.Since = Since(th)
@@ -87,7 +87,7 @@ func Group(rows []Row, me string, team bool) Groups {
 // approval, a run or a check), the creation otherwise.
 // ponytail: the last state change, not the gate's own start; the step
 // history (replaying the events through Compute) would give that.
-func Since(th store.Thread) time.Time {
+func Since(th model.Thread) time.Time {
 	var at time.Time
 	for _, e := range th.Events {
 		if e.Kind != "comment" || len(e.Meta) > 0 {
@@ -99,7 +99,7 @@ func Since(th store.Thread) time.Time {
 
 // Involved tells whether the issue is the viewer's: its author, or a
 // field naming the login (assignee, pm, reviewer…).
-func Involved(th store.Thread, me inbox.Me) bool {
+func Involved(th model.Thread, me inbox.Me) bool {
 	if me.Is(th.Author) {
 		return true
 	}
@@ -116,7 +116,7 @@ func Involved(th store.Thread, me inbox.Me) bool {
 // metadata, else one ending in ?; nil once the viewer commented after it.
 // ponytail: nothing marks an identity as an agent yet, so any other
 // person's question counts; M5 names the agent on the worktree.
-func QuestionOf(th store.Thread, me inbox.Me) *Question {
+func QuestionOf(th model.Thread, me inbox.Me) *Question {
 	var ask, mark *Question
 	for _, e := range th.Events {
 		if e.Kind != "comment" {

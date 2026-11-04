@@ -10,6 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/fields"
 	"github.com/guilbep/git-board/internal/store"
 )
@@ -87,7 +88,7 @@ sync, nowhere before.`,
 	in.text.add(cmd, "description")
 	cmd.Flags().StringVarP(&in.template, "template", "T", "", "start from this issue template (.github/ISSUE_TEMPLATE, .gitlab/issue_templates)")
 	cmd.Flags().BoolVar(&noPrompt, "no-prompt", false, "never ask, even on a terminal (env GIT_BOARD_NO_PROMPT)")
-	js = addJSON(cmd, "print the new issue as JSON", jsonFields(store.Issue{}), false)
+	js = addJSON(cmd, "print the new issue as JSON", jsonFields(model.Issue{}), false)
 	cmd.Flags().BoolVar(&force, "force", false, "write field values .git-board.toml doesn't allow")
 	meFlag(cmd, &me)
 	return cmd

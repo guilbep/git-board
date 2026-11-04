@@ -9,6 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/store"
 )
 
@@ -93,12 +94,12 @@ func runMe(out io.Writer, b *store.Backend, js *jsonOut) error {
 
 // meRow is a person as me --ls --json prints them.
 type meRow struct {
-	store.Person
+	model.Person
 	Me bool `json:"me,omitempty"`
 }
 
 // personLine is a person as me prints them: name, short id, login.
-func personLine(p store.Person) string {
+func personLine(p model.Person) string {
 	s := p.Name + " (" + shortID(p.ID)
 	if p.Login != "" {
 		s += ", @" + p.Login

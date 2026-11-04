@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/guilbep/git-board/core/issue"
+	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/core/oplog"
 	"github.com/guilbep/git-board/core/people"
 	"github.com/guilbep/git-board/core/syncer"
@@ -26,99 +27,22 @@ var ErrNoSuchComment = errors.New("no such comment on this issue")
 // started: saving would silently replace someone else's text.
 var ErrChangedMeanwhile = errors.New("someone changed this comment meanwhile")
 
-// Person is a person, as the page shows them.
-type Person struct {
-	ID        string `json:"id"`
-	Name      string `json:"name"`
-	Login     string `json:"login,omitempty"`
-	AvatarURL string `json:"avatar_url,omitempty"`
-}
-
-// Forge is where an issue is on a forge.
-type Forge struct {
-	Name   string `json:"name"` // GitHub, GitLab, or the host
-	URL    string `json:"url"`
-	Number string `json:"number,omitempty"`
-}
-
-// Version is one text of an edited comment, oldest first.
-type Version struct {
-	ID     string    `json:"id"` // the text's own, then each edit-text's
-	Author Person    `json:"author"`
-	At     time.Time `json:"at"`
-	Body   string    `json:"body"`
-	HTML   string    `json:"html,omitempty"` // rendered by the server, the description's
-}
-
-// MetaSet is one set-meta operation on a text, oldest first.
-type MetaSet struct {
-	ID     string            `json:"id"`
-	Author Person            `json:"author"`
-	At     time.Time         `json:"at"`
-	Meta   map[string]string `json:"meta"`
-}
-
-// Event is one item of an issue's history: created (with the description),
-// comment, labels, status or title.
-type Event struct {
-	Kind   string    `json:"kind"`
-	ID     string    `json:"id"` // created, comment: what EditComment takes
-	Author Person    `json:"author"`
-	At     time.Time `json:"at"`
-
-	Body    string    `json:"body,omitempty"` // created, comment: Markdown
-	HTML    string    `json:"html,omitempty"` // filled by the server
-	Edited  bool      `json:"edited,omitempty"`
-	History []Version `json:"history,omitempty"`
-	// Pending are the forges the issue is on that this change hasn't
-	// reached yet: the next forge sync takes it there. EditPending, for a
-	// comment already there: its latest edit hasn't. EditWas, with
-	// EditPending, is the text the forges have. All three need the sync's
-	// records: empty until M5's second phase.
-	Pending     []string `json:"pending,omitempty"`
-	EditPending []string `json:"edit_pending,omitempty"`
-	EditWas     string   `json:"edit_was,omitempty"`
-	// Meta is a comment's metadata: what the cycle's sign-offs, approvals
-	// and runs are, and a review comment's anchor.
-	Meta map[string]string `json:"meta,omitempty"`
-	// MetaHistory is each set-meta on the text, merged into Meta: who
-	// resolved a thread, when, and that "" reopened it.
-	MetaHistory []MetaSet `json:"meta_history,omitempty"`
-
-	Added   []string `json:"added,omitempty"` // labels
-	Removed []string `json:"removed,omitempty"`
-	Status  string   `json:"status,omitempty"` // status: open or closed
-	Title   string   `json:"title,omitempty"`  // title: the new one
-	Was     string   `json:"was,omitempty"`    // title: the old one
-
-	Review *Review `json:"review,omitempty"` // comment: a line comment, a reply or a review
-}
-
-// Thread is an issue with its whole history.
-type Thread struct {
-	Issue
-	Author       Person    `json:"author"`
-	EditedAt     time.Time `json:"edited_at"`
-	Participants []Person  `json:"participants"`
-	Events       []Event   `json:"events"`
-}
-
 // Thread returns an issue and its history, by id prefix.
-func (b *Backend) Thread(idPrefix string) (Thread, error) {
+func (b *Backend) Thread(idPrefix string) (model.Thread, error) {
 	th, err := b.Threads([]string{idPrefix})
 	if err != nil {
-		return Thread{}, err
+		return model.Thread{}, err
 	}
 	return th[0], nil
 }
 
 // Threads is Thread for each id prefix, reading once what they all need.
-func (b *Backend) Threads(idPrefixes []string) ([]Thread, error) {
+func (b *Backend) Threads(idPrefixes []string) ([]model.Thread, error) {
 	v, err := b.view()
 	if err != nil {
 		return nil, err
 	}
-	res := make([]Thread, 0, len(idPrefixes))
+	res := make([]model.Thread, 0, len(idPrefixes))
 	for _, p := range idPrefixes {
 		is, l, err := b.issue(p)
 		if err != nil {
@@ -132,18 +56,18 @@ func (b *Backend) Threads(idPrefixes []string) ([]Thread, error) {
 // ThreadAt is Thread as the issue stood at a time: only the operations
 // made by then, by their own times (issue.At). What waits for a forge
 // isn't marked: that is now's. ErrNotFound when it wasn't created yet.
-func (b *Backend) ThreadAt(idPrefix string, at time.Time) (Thread, error) {
+func (b *Backend) ThreadAt(idPrefix string, at time.Time) (model.Thread, error) {
 	v, err := b.view()
 	if err != nil {
-		return Thread{}, err
+		return model.Thread{}, err
 	}
 	_, l, err := b.issue(idPrefix)
 	if err != nil {
-		return Thread{}, err
+		return model.Thread{}, err
 	}
 	is, l, err := foldAt(l, at)
 	if err != nil {
-		return Thread{}, err
+		return model.Thread{}, err
 	}
 	return b.thread(is, l, v, false), nil
 }
@@ -164,12 +88,12 @@ func foldAt(whole *oplog.Log, at time.Time) (*issue.Issue, *oplog.Log, error) {
 
 // thread replays an issue's log into its history, as issue.Apply folds it;
 // marking what hasn't reached the forges yet when now.
-func (b *Backend) thread(is *issue.Issue, l *oplog.Log, v view, now bool) Thread {
-	who := func(id string) Person { return personOf(id, v.persons[id], v.avatars) }
-	th := Thread{Issue: b.issueFrom(is, v), Author: who(is.Author), EditedAt: time.Unix(is.Updated, 0)}
+func (b *Backend) thread(is *issue.Issue, l *oplog.Log, v view, now bool) model.Thread {
+	who := func(id string) model.Person { return personOf(id, v.persons[id], v.avatars) }
+	th := model.Thread{Issue: b.issueFrom(is, v), Author: who(is.Author), EditedAt: time.Unix(is.Updated, 0)}
 	th.Participants = append(th.Participants, th.Author)
 	for _, c := range is.Comments {
-		if !slices.ContainsFunc(th.Participants, func(p Person) bool { return p.ID == c.Author }) {
+		if !slices.ContainsFunc(th.Participants, func(p model.Person) bool { return p.ID == c.Author }) {
 			th.Participants = append(th.Participants, who(c.Author))
 		}
 	}
@@ -187,7 +111,7 @@ func (b *Backend) thread(is *issue.Issue, l *oplog.Log, v view, now bool) Thread
 			Meta                map[string]string
 		}
 		_ = json.Unmarshal(e.Data, &d) // Apply read it already
-		ev := Event{ID: e.ID, Author: who(e.Author), At: time.Unix(e.Time, 0)}
+		ev := model.Event{ID: e.ID, Author: who(e.Author), At: time.Unix(e.Time, 0)}
 		switch e.Kind {
 		case "create", "comment":
 			if e.Origin != nil {
@@ -202,13 +126,13 @@ func (b *Backend) thread(is *issue.Issue, l *oplog.Log, v view, now bool) Thread
 			if e.Kind == "create" {
 				ev.Kind, title = "created", d.Title
 			}
-			ev.History = []Version{{ID: e.ID, Author: ev.Author, At: ev.At, Body: d.Body}}
+			ev.History = []model.Version{{ID: e.ID, Author: ev.Author, At: ev.At, Body: d.Body}}
 			texts[e.ID] = len(th.Events)
 		case "edit-text":
 			if i, ok := texts[d.Target]; ok {
 				t := &th.Events[i]
 				t.Body = d.Body
-				t.History = append(t.History, Version{ID: e.ID, Author: ev.Author, At: ev.At, Body: d.Body})
+				t.History = append(t.History, model.Version{ID: e.ID, Author: ev.Author, At: ev.At, Body: d.Body})
 			}
 			continue
 		case "set-meta":
@@ -218,7 +142,7 @@ func (b *Backend) thread(is *issue.Issue, l *oplog.Log, v view, now bool) Thread
 					t.Meta = map[string]string{}
 				}
 				maps.Copy(t.Meta, d.Meta)
-				t.MetaHistory = append(t.MetaHistory, MetaSet{ID: e.ID, Author: ev.Author, At: ev.At, Meta: maps.Clone(d.Meta)})
+				t.MetaHistory = append(t.MetaHistory, model.MetaSet{ID: e.ID, Author: ev.Author, At: ev.At, Meta: maps.Clone(d.Meta)})
 			}
 			continue
 		case "set-title":
@@ -257,7 +181,7 @@ func (b *Backend) thread(is *issue.Issue, l *oplog.Log, v view, now bool) Thread
 		}
 	}
 	if len(is.Removed) > 0 { // deleted comments: no event, no text
-		th.Events = slices.DeleteFunc(th.Events, func(e Event) bool { return e.Kind == "comment" && is.IsRemoved(e.ID) })
+		th.Events = slices.DeleteFunc(th.Events, func(e model.Event) bool { return e.Kind == "comment" && is.IsRemoved(e.ID) })
 	}
 	return th
 }
@@ -271,14 +195,14 @@ func (b *Backend) thread(is *issue.Issue, l *oplog.Log, v view, now bool) Thread
 // ponytail: compares git-board's texts with the forge's as they are; one
 // that came from another forge, whose #n and @ sync rewrites, shows as an
 // edit waiting.
-func pending(th *Thread, is *issue.Issue, r syncer.Record, from map[int]*oplog.Origin, changed map[int][2][]string, held func(string) bool) {
+func pending(th *model.Thread, is *issue.Issue, r syncer.Record, from map[int]*oplog.Origin, changed map[int][2][]string, held func(string) bool) {
 	name := forgeName(r.URL)
 	mark := func(i int) {
 		if e := &th.Events[i]; !slices.Contains(e.Pending, name) {
 			e.Pending = append(e.Pending, name)
 		}
 	}
-	edit := func(e *Event, was string) {
+	edit := func(e *model.Event, was string) {
 		e.EditPending = append(e.EditPending, name)
 		if e.EditWas == "" {
 			e.EditWas = was
@@ -337,14 +261,14 @@ func isAssigneeLabel(l string) bool { return strings.HasPrefix(strings.ToLower(l
 
 // forgesOf is where an issue is, from its links: each forge by its URL,
 // an http(s) one alone (webURL).
-func forgesOf(links []syncer.Record) []Forge {
-	var res []Forge
+func forgesOf(links []syncer.Record) []model.Forge {
+	var res []model.Forge
 	for _, l := range links {
 		n := l.Number
 		if n == "" {
 			n = lastNumber(l.URL)
 		}
-		res = append(res, Forge{Name: forgeName(l.URL), URL: webURL(l.URL), Number: n})
+		res = append(res, model.Forge{Name: forgeName(l.URL), URL: webURL(l.URL), Number: n})
 	}
 	return res
 }
@@ -387,11 +311,11 @@ func lastNumber(u string) string {
 // personOf is a person as the page shows them: their first forge login,
 // and their picture as m allows (internal/avatar). One not fetched yet
 // shows by id. The email stays here: the page never gets it.
-func personOf(id string, p *people.Person, m avatar.Mode) Person {
+func personOf(id string, p *people.Person, m avatar.Mode) model.Person {
 	if p == nil {
-		return Person{ID: id, Name: id[:min(7, len(id))]}
+		return model.Person{ID: id, Name: id[:min(7, len(id))]}
 	}
-	res := Person{ID: p.ID, Name: p.Name, AvatarURL: avatar.URL(*p, m)}
+	res := model.Person{ID: p.ID, Name: p.Name, AvatarURL: avatar.URL(*p, m)}
 	if ls := logins(p); len(ls) > 0 {
 		res.Login = ls[0]
 	}
@@ -400,25 +324,25 @@ func personOf(id string, p *people.Person, m avatar.Mode) Person {
 
 // Me returns who writes from git-board: the person board.me names. false
 // when none is chosen yet.
-func (b *Backend) Me() (Person, bool, error) {
+func (b *Backend) Me() (model.Person, bool, error) {
 	id, err := b.me()
 	if errors.Is(err, ErrNoMe) {
-		return Person{}, false, nil
+		return model.Person{}, false, nil
 	}
 	if err != nil {
-		return Person{}, false, err
+		return model.Person{}, false, err
 	}
 	persons, err := b.allPersons()
 	if err != nil {
-		return Person{}, false, err
+		return model.Person{}, false, err
 	}
 	p, ok := persons[id]
 	if !ok {
-		return Person{}, false, fmt.Errorf("%w: you, person %s", ErrNotFound, id)
+		return model.Person{}, false, fmt.Errorf("%w: you, person %s", ErrNotFound, id)
 	}
 	m, err := b.avatarMode()
 	if err != nil {
-		return Person{}, false, err
+		return model.Person{}, false, err
 	}
 	return personOf(id, p, m), true, nil
 }

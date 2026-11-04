@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/guilbep/git-board/internal/store"
+	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/store/storetest"
 )
 
@@ -27,7 +27,7 @@ func TestLinkedInSharesTheBase(t *testing.T) {
 	b := storetest.Open(t, dir)
 
 	anc := NewAncestry(b)
-	for _, is := range []store.Issue{issue("A", "2518"), issue("B", "2519"), issue("C", "2520")} {
+	for _, is := range []model.Issue{issue("A", "2518"), issue("B", "2519"), issue("C", "2520")} {
 		shared, err := LinkedIn(anc, is, "main")
 		if err != nil {
 			t.Fatal(err)

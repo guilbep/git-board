@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/store"
 	"github.com/guilbep/git-board/internal/store/storetest"
@@ -153,7 +154,7 @@ func TestChangesWithoutBranch(t *testing.T) {
 }
 
 // eventOf is the thread event with that id.
-func eventOf(t *testing.T, th store.Thread, id string) store.Event {
+func eventOf(t *testing.T, th model.Thread, id string) model.Event {
 	t.Helper()
 	for _, e := range th.Events {
 		if e.ID == id {
@@ -161,16 +162,16 @@ func eventOf(t *testing.T, th store.Thread, id string) store.Event {
 		}
 	}
 	t.Fatalf("no event %s", id)
-	return store.Event{}
+	return model.Event{}
 }
 
 // last is the thread's newest event.
-func last(th store.Thread) store.Event { return th.Events[len(th.Events)-1] }
+func last(th model.Thread) model.Event { return th.Events[len(th.Events)-1] }
 
 func TestReviewWrites(t *testing.T) {
 	t.Parallel()
 	r := newReviewRepo(t)
-	var th store.Thread
+	var th model.Thread
 	if code := call(t, "POST", r.url("/review", nil), map[string]any{"body": "why?", "path": "a.txt", "line": 3, "side": "new", "commit": r.c1[:7]}, &th); code != http.StatusCreated {
 		t.Fatalf("line comment: %d", code)
 	}
@@ -198,7 +199,7 @@ func TestReviewWrites(t *testing.T) {
 		t.Fatalf("approve = %+v", rv)
 	}
 
-	var plain store.Thread
+	var plain model.Thread
 	if code := call(t, "POST", r.url("/comments", nil), map[string]any{"body": "plain"}, &plain); code != http.StatusOK {
 		t.Fatal(code)
 	}
@@ -226,7 +227,7 @@ func TestReviewWrites(t *testing.T) {
 	if code := call(t, "POST", r.url("/review/"+line.ID+"/resolve", nil), map[string]any{"resolved": true}, &th); code != http.StatusOK || !eventOf(t, th, line.ID).Review.Resolved {
 		t.Fatalf("resolve: %d", code)
 	}
-	th = store.Thread{} // resolved: false is left out, keeping a decoded true
+	th = model.Thread{} // resolved: false is left out, keeping a decoded true
 	if code := call(t, "POST", r.url("/review/"+line.ID+"/resolve", nil), map[string]any{"resolved": false}, &th); code != http.StatusOK || eventOf(t, th, line.ID).Review.Resolved {
 		t.Fatalf("unresolve: %d", code)
 	}
@@ -255,7 +256,7 @@ func TestReviewWrites(t *testing.T) {
 func TestAnnotateFollowsHead(t *testing.T) {
 	t.Parallel()
 	r := newReviewRepo(t)
-	var th store.Thread
+	var th model.Thread
 	call(t, "POST", r.url("/review", nil), map[string]any{"body": "on 3", "path": "a.txt", "line": 3, "side": "new", "commit": r.c1}, &th)
 	on3 := last(th).ID
 	call(t, "POST", r.url("/review", nil), map[string]any{"body": "on 5", "path": "a.txt", "line": 5, "side": "new", "commit": r.c1}, &th)
@@ -293,7 +294,7 @@ func TestAnnotateSkipsInMemory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var th store.Thread
+	var th model.Thread
 	if code := call(t, "GET", ts.URL+"/api/issues/"+id[:8]+"/thread", nil, &th); code != http.StatusOK {
 		t.Fatal(code)
 	}
@@ -316,7 +317,7 @@ func TestAnnotateOwnBranch(t *testing.T) {
 	o1 := git(t, r.dir, "rev-parse", "HEAD")
 	git(t, r.dir, "switch", "-q", "dev")
 
-	var th store.Thread
+	var th model.Thread
 	call(t, "POST", r.url("/review", nil), map[string]any{"body": "on five", "path": "a.txt", "line": 5, "side": "new", "commit": o1}, &th)
 	other := last(th).ID
 	call(t, "POST", r.url("/review", nil), map[string]any{"body": "on three", "path": "a.txt", "line": 3, "side": "new", "commit": r.c1}, &th)
@@ -343,7 +344,7 @@ func TestAnnotateOwnBranch(t *testing.T) {
 	git(t, r.dir, "update-ref", "refs/remotes/origin/dev", r.c1)
 	git(t, r.dir, "update-ref", "-d", "refs/remotes/origin/fix/2518-x")
 	git(t, r.dir, "branch", "-q", "-D", "fix/2518-x")
-	th = store.Thread{} // fields left out would keep the decoded ones
+	th = model.Thread{} // fields left out would keep the decoded ones
 	if code := call(t, "GET", r.url("/thread", nil), nil, &th); code != http.StatusOK {
 		t.Fatal(code)
 	}

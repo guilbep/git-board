@@ -9,6 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/fields"
 	"github.com/guilbep/git-board/internal/store"
 )
@@ -153,9 +154,9 @@ func runClose(out io.Writer, idPrefix, comment, reason, duplicateOf string) erro
 
 // issueRefFrom is how is names other in an issue field: other's number
 // on a forge both are on (#12), else its id's first 8 characters.
-func issueRefFrom(is, other store.Issue) string {
+func issueRefFrom(is, other model.Issue) string {
 	for _, f := range other.Forges {
-		if f.Number != "" && slices.ContainsFunc(is.Forges, func(g store.Forge) bool { return g.Name == f.Name }) {
+		if f.Number != "" && slices.ContainsFunc(is.Forges, func(g model.Forge) bool { return g.Name == f.Name }) {
 			return "#" + f.Number
 		}
 	}

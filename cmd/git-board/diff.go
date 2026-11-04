@@ -12,6 +12,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/store"
 )
 
@@ -111,7 +112,7 @@ type change struct {
 // diffComment is a comment written or edited since.
 type diffComment struct {
 	ID     string       `json:"id"`
-	Author store.Person `json:"author"`
+	Author model.Person `json:"author"`
 	At     time.Time    `json:"at"`
 	Was    string       `json:"was,omitempty"` // edited: the text then
 	Body   string       `json:"body"`
@@ -149,9 +150,9 @@ func runDiff(out io.Writer, idPrefix string, since time.Time, js *jsonOut) error
 		return err
 	}
 	if created {
-		then = store.Thread{Issue: store.Issue{Status: "open"}}
+		then = model.Thread{Issue: model.Issue{Status: "open"}}
 		if len(now.Events) > 0 { // what it was created with is new
-			then.Events = []store.Event{{Kind: "created", ID: now.Events[0].ID}}
+			then.Events = []model.Event{{Kind: "created", ID: now.Events[0].ID}}
 		}
 	}
 	d := diffThreads(then, now)
@@ -164,7 +165,7 @@ func runDiff(out io.Writer, idPrefix string, since time.Time, js *jsonOut) error
 }
 
 // diffThreads is what changed from then to now.
-func diffThreads(then, now store.Thread) issueDiff {
+func diffThreads(then, now model.Thread) issueDiff {
 	d := issueDiff{ID: now.ID, Added: []string{}, Removed: []string{}, Comments: []diffComment{}, EditedComments: []diffComment{},
 		shown: now.ShownTitle(), number: now.Number}
 	if then.Title != now.Title {
@@ -183,7 +184,7 @@ func diffThreads(then, now store.Thread) issueDiff {
 			d.Removed = append(d.Removed, l)
 		}
 	}
-	texts := map[string]store.Event{}
+	texts := map[string]model.Event{}
 	for _, e := range then.Events {
 		if e.Kind == "created" || e.Kind == "comment" {
 			texts[e.ID] = e

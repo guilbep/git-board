@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/lint"
 	"github.com/guilbep/git-board/internal/store"
@@ -252,10 +253,10 @@ func TestDeadOptionSeesClosedIssues(t *testing.T) {
 func TestKindChecks(t *testing.T) {
 	t.Parallel()
 	cfg := &config.Config{Branches: config.Branches{Kinds: map[string]string{"bug": "fix", "feat": "feat"}}}
-	open := func(id, title string, labels ...string) store.Issue {
-		return store.Issue{ID: id, Title: title, Status: "open", Labels: labels}
+	open := func(id, title string, labels ...string) model.Issue {
+		return model.Issue{ID: id, Title: title, Status: "open", Labels: labels}
 	}
-	issues := []store.Issue{
+	issues := []model.Issue{
 		open("a", "[BUG](Equipment) Wrong example", "bug"),  // agrees
 		open("b", "[Bug](Equipment) Wrong example", "feat"), // the title disagrees
 		open("c", "Export", "bug", "feat"),                  // two kinds
@@ -340,7 +341,7 @@ func TestLabelsOutsideTheList(t *testing.T) {
 func TestNearValuesSayWhatWasMeant(t *testing.T) {
 	t.Parallel()
 	cfg := &config.Config{Fields: map[string]config.Field{"prio": {Options: []string{"p1", "p2"}}}}
-	issues := []store.Issue{
+	issues := []model.Issue{
 		{ID: "a", Title: "A", Status: "open", Labels: []string{"risk:normal", "prio:p1"}},
 		{ID: "b", Title: "B", Status: "open", Labels: []string{"risk:normal"}},
 		{ID: "c", Title: "C", Status: "open", Labels: []string{"risk:-normal", "prio:P-2"}},

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/guilbep/git-board/core/forge/fake"
+	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/store"
 	"github.com/guilbep/git-board/internal/store/storetest"
@@ -41,7 +42,7 @@ func waiting(res workResponse) []string {
 
 // issueBy opens an issue as who, with labels, since NewIssue writes as the
 // test identity.
-func issueBy(t *testing.T, b *store.Backend, who store.Person, title string, labels ...string) string {
+func issueBy(t *testing.T, b *store.Backend, who model.Person, title string, labels ...string) string {
 	t.Helper()
 	id := storetest.IssueAs(t, b, who, time.Now().Unix(), title, twoCriteria)
 	if _, err := b.ApplyLabelChange(id, labels, nil); err != nil {

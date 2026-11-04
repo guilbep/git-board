@@ -12,6 +12,7 @@ import (
 
 	"go.yaml.in/yaml/v3"
 
+	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/core/oplog"
 )
 
@@ -115,7 +116,7 @@ func (b *Backend) isDeleted(id string) bool {
 
 // mdName is NNN-slug.md: the bare number, else the id's first 7 digits;
 // the title's slug, 50 characters at most.
-func mdName(is Issue) string {
+func mdName(is model.Issue) string {
 	n := is.BareNumber()
 	if n == "" {
 		n = is.ID[:7]
@@ -130,7 +131,7 @@ func mdName(is Issue) string {
 	return n + "-" + slug + ".md"
 }
 
-func renderMarkdown(th Thread, flat func(string) bool) ([]byte, error) {
+func renderMarkdown(th model.Thread, flat func(string) bool) ([]byte, error) {
 	f := Front{ID: th.ID, Number: th.Number, Title: th.Title, State: th.Status,
 		Created: th.CreatedAt.UTC().Truncate(time.Second), Updated: th.UpdatedAt.UTC().Truncate(time.Second)}
 	if f.Number == "" {
@@ -184,7 +185,7 @@ func renderMarkdown(th Thread, flat func(string) bool) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func nameOfPerson(p Person) string {
+func nameOfPerson(p model.Person) string {
 	switch {
 	case p.Name != "":
 		return p.Name

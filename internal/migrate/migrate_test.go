@@ -8,9 +8,9 @@ import (
 
 	"github.com/guilbep/git-board/core/forge"
 	"github.com/guilbep/git-board/core/forge/fake"
+	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/core/people"
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/store"
 )
 
 func migrateConfig() *config.Config {
@@ -37,8 +37,8 @@ var persons = []people.Person{
 	{ID: "p2", Name: "carol", Accounts: []people.Account{{Server: "gitlab.epfl.ch", ID: "9", Login: "carol"}}},
 }
 
-func issue(id, url string, labels ...string) store.Issue {
-	return store.Issue{ID: id, GithubURL: url, Labels: labels}
+func issue(id, url string, labels ...string) model.Issue {
+	return model.Issue{ID: id, GithubURL: url, Labels: labels}
 }
 
 func openFakes(t *testing.T, fakes map[string]*fake.Forge) func(config.Forge) (forge.Forge, error) {
@@ -68,7 +68,7 @@ func writes(f *fake.Forge, op string) [][]string {
 func TestPreviewCountsTheIssues(t *testing.T) {
 	t.Parallel()
 	cfg := migrateConfig()
-	issues := []store.Issue{issue("a", "https://github.com/o/r/issues/1", "assignee:guilbep", "moscow:could")}
+	issues := []model.Issue{issue("a", "https://github.com/o/r/issues/1", "assignee:guilbep", "moscow:could")}
 	plans := Preview(cfg, "assignee", issues)
 	if len(plans) != 2 {
 		t.Fatalf("plans = %+v", plans)
@@ -99,7 +99,7 @@ func TestRunSetsTheAssigneesAndTakesTheLabelsOff(t *testing.T) {
 	gh, gl := fake.New("github.com/o/r"), fake.New("gitlab.epfl.ch/7")
 	gh.Add(forge.Issue{Number: "1"})
 	gl.Add(forge.Issue{Number: "2"})
-	issues := []store.Issue{
+	issues := []model.Issue{
 		issue("a", "https://github.com/o/r/issues/1", "assignee:guilbep", "moscow:could"),
 		issue("b", "https://gitlab.epfl.ch/7/-/issues/2", "assignee:carol"),
 		issue("c", "", "assignee:nolink"),
@@ -163,7 +163,7 @@ func TestRunSaysWhatDidntMove(t *testing.T) {
 	gh := fake.New("github.com/o/r")
 	gh.RefuseLabels("assignee:guilbep")
 	gh.Add(forge.Issue{Number: "1"})
-	issues := []store.Issue{issue("a", "https://github.com/o/r/issues/1", "assignee:guilbep")}
+	issues := []model.Issue{issue("a", "https://github.com/o/r/issues/1", "assignee:guilbep")}
 	plans, err := Migrate(context.Background(), cfg, "assignee", issues, persons, openFakes(t, map[string]*fake.Forge{"gh": gh}), func(string) {})
 	if err == nil {
 		t.Fatalf("migrate = %+v, want the refusal", plans)
@@ -182,7 +182,7 @@ func TestRunReadsTheAliases(t *testing.T) {
 	cfg.Forges[0].Fields["moscow"] = config.FieldMapping{To: config.TargetProject, Field: "MoSCoW"}
 	gh := fake.New("github.com/o/r")
 	gh.Add(forge.Issue{Number: "1"})
-	issues := []store.Issue{issue("a", "https://github.com/o/r/issues/1", "moscow:could")}
+	issues := []model.Issue{issue("a", "https://github.com/o/r/issues/1", "moscow:could")}
 	plans, err := Migrate(context.Background(), cfg, "moscow", issues, persons, openFakes(t, map[string]*fake.Forge{"gh": gh}), func(string) {})
 	if err != nil {
 		t.Fatalf("migrate: %v", err)

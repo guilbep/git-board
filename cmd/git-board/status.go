@@ -11,6 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/board"
 	"github.com/guilbep/git-board/internal/inbox"
 	"github.com/guilbep/git-board/internal/store"
@@ -54,7 +55,7 @@ each {"issue", "reasons", "news", "who", "latest", "first"}.`,
 // statusReport is what status prints.
 type statusReport struct {
 	Me       inbox.Me      `json:"me"`
-	Assigned []store.Issue `json:"assigned"`
+	Assigned []model.Issue `json:"assigned"`
 	Opened   []inbox.Row   `json:"opened"`
 	Follows  []inbox.Row   `json:"follows"`
 }
@@ -85,7 +86,7 @@ func runNeedsYou(out io.Writer, me string, js *jsonOut, markRead bool, now time.
 	if err != nil {
 		return err
 	}
-	rep := statusReport{Me: m, Assigned: []store.Issue{}, Opened: []inbox.Row{}, Follows: []inbox.Row{}}
+	rep := statusReport{Me: m, Assigned: []model.Issue{}, Opened: []inbox.Row{}, Follows: []inbox.Row{}}
 	assigned, err := board.Match(b, cfg, "assignee:@me is:open", m.Login, slices.Clone(all), now)
 	if err != nil {
 		return err
@@ -133,7 +134,7 @@ func runNeedsYou(out io.Writer, me string, js *jsonOut, markRead bool, now time.
 
 // markSeen marks every event of the rows' issues seen, as the Inbox's
 // Mark all read, and forgets the issues out of the window.
-func markSeen(b *store.Backend, meID string, threads []store.Thread, rows []inbox.Row, since time.Time) error {
+func markSeen(b *store.Backend, meID string, threads []model.Thread, rows []inbox.Row, since time.Time) error {
 	st, err := inbox.Load(b.Storage(), meID)
 	if err != nil {
 		return err
@@ -175,7 +176,7 @@ func writeStatus(out io.Writer, rep statusReport) {
 }
 
 // statusIssue is an issue on its line: id, number, title, status field.
-func statusIssue(is store.Issue) string {
+func statusIssue(is model.Issue) string {
 	parts := []string{shortID(is.ID)}
 	if is.Number != "" {
 		parts = append(parts, is.Number)

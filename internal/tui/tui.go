@@ -15,11 +15,11 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/board"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/fields"
 	"github.com/guilbep/git-board/internal/ghbridge"
-	"github.com/guilbep/git-board/internal/store"
 )
 
 // Backend is what the TUI needs from the repository: everything
@@ -30,9 +30,9 @@ type Backend interface {
 	Close() error
 }
 
-// item adapts a store.Issue to bubbles/list's DefaultItem interface.
+// item adapts a model.Issue to bubbles/list's DefaultItem interface.
 type item struct {
-	issue store.Issue
+	issue model.Issue
 }
 
 func (i item) Title() string { return i.issue.ShownTitle() }
@@ -43,7 +43,7 @@ func (i item) Description() string {
 
 // ref is the issue's number (CO2-3075, else #2518), which its shown title
 // leaves out, and its short id.
-func ref(is store.Issue) string {
+func ref(is model.Issue) string {
 	if is.Number != "" {
 		return is.Number + "  " + shortID(is.ID)
 	}
@@ -70,7 +70,7 @@ func shortID(id string) string {
 
 // ToItems converts issues to list.Items, preserving order. Pure — no
 // bubbletea involved, so it's unit tested directly.
-func ToItems(issues []store.Issue) []list.Item {
+func ToItems(issues []model.Issue) []list.Item {
 	items := make([]list.Item, len(issues))
 	for i, issue := range issues {
 		items[i] = item{issue: issue}
@@ -98,7 +98,7 @@ const (
 type Model struct {
 	list     list.Model
 	mode     mode
-	selected store.Issue
+	selected model.Issue
 
 	backend Backend
 	cfg     *config.Config
@@ -134,7 +134,7 @@ type Model struct {
 	// structured filter can both be cleared back to it (and so applying
 	// one after the other narrows from the full set, not compounds off
 	// whatever the other left in m.list).
-	allIssues []store.Issue
+	allIssues []model.Issue
 
 	// baseIssues is the currently narrowed set *before* sorting — set by
 	// applyCatFilter/applyStructuredFilter (== allIssues when nothing's
@@ -143,7 +143,7 @@ type Model struct {
 	// natural order of whatever's currently narrowed, instead of "no-op
 	// sorting" an already-sorted list — sortedItems copies before sorting,
 	// it never mutates baseIssues itself.
-	baseIssues []store.Issue
+	baseIssues []model.Issue
 
 	// bridgeRemote is the Project as the last "i" read it, which "o"
 	// pulls into the labels: git board project pull, both bound the way
@@ -161,7 +161,7 @@ type Model struct {
 // New builds a Model over issues. title is shown as the list header (the
 // filter expression the caller ran, e.g. "is:open"). backend/cfg/me/today
 // are what field edits need to write through fields.Apply.
-func New(issues []store.Issue, title string, backend Backend, cfg *config.Config, me string, today time.Time) Model {
+func New(issues []model.Issue, title string, backend Backend, cfg *config.Config, me string, today time.Time) Model {
 	l := list.New(ToItems(issues), list.NewDefaultDelegate(), 0, 0)
 	l.Title = title
 	l.SetFilteringEnabled(true)
@@ -560,8 +560,8 @@ func (m Model) applyCatFilter(value string) Model {
 // (re)builds the visible list (filter, category filter, sort itself) so a
 // sort persists across a later filter/category-filter change instead of
 // being silently lost.
-func (m Model) sortedItems(issues []store.Issue) []list.Item {
-	sorted := append([]store.Issue(nil), issues...)
+func (m Model) sortedItems(issues []model.Issue) []list.Item {
+	sorted := append([]model.Issue(nil), issues...)
 	board.SortByField(sorted, m.sortSpec, m.cfg)
 	return ToItems(sorted)
 }
@@ -693,7 +693,7 @@ func (m Model) View() string {
 // Run launches the interactive TUI over issues until the user quits. It
 // owns backend for the duration of the run and closes it when it
 // returns; callers should not also close the one they passed in.
-func Run(issues []store.Issue, title string, backend Backend, cfg *config.Config, me string, today time.Time) error {
+func Run(issues []model.Issue, title string, backend Backend, cfg *config.Config, me string, today time.Time) error {
 	final, err := tea.NewProgram(New(issues, title, backend, cfg, me, today), tea.WithAltScreen()).Run()
 	if fm, ok := final.(Model); ok && fm.backend != nil {
 		_ = fm.backend.Close()

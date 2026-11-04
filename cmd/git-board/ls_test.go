@@ -5,12 +5,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/guilbep/git-board/internal/store"
+	"github.com/guilbep/git-board/core/model"
 )
 
 func titlesOf(t *testing.T, out string) []string {
 	t.Helper()
-	var issues []store.Issue
+	var issues []model.Issue
 	if err := json.Unmarshal([]byte(out), &issues); err != nil {
 		t.Fatalf("ls --json: %v\n%s", err, out)
 	}

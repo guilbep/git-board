@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/ai"
 	"github.com/guilbep/git-board/internal/board"
 	"github.com/guilbep/git-board/internal/config"
@@ -20,7 +21,6 @@ import (
 	"github.com/guilbep/git-board/internal/fields"
 	"github.com/guilbep/git-board/internal/ghpr"
 	"github.com/guilbep/git-board/internal/proof"
-	"github.com/guilbep/git-board/internal/store"
 )
 
 // The development cycle (docs/prd/dev-cycle.md, M1): an issue's step,
@@ -113,7 +113,7 @@ type cycleResponse struct {
 // issue's from in-review on, and from ready on when plans-in-pr (the
 // draft PR holding the plan), its plan branches when structural, none
 // before (the Work page asks for every issue's at once).
-func (s *apiServer) pullNames(th store.Thread, stages config.Stages) ([]string, error) {
+func (s *apiServer) pullNames(th model.Thread, stages config.Stages) ([]string, error) {
 	names, err := onOrigin(s.b, th.Issue)
 	if err != nil {
 		return nil, err
@@ -131,7 +131,7 @@ func (s *apiServer) pullNames(th store.Thread, stages config.Stages) ([]string, 
 
 // cycleOf is the issue's step for the viewer. GitHub is asked for the PR
 // only where the step reads it: from review on, and a structural plan's PR.
-func (s *apiServer) cycleOf(ctx context.Context, th store.Thread) (cycleResponse, error) {
+func (s *apiServer) cycleOf(ctx context.Context, th model.Thread) (cycleResponse, error) {
 	cfg := s.config()
 	stages := cfg.Stages()
 	names, err := s.pullNames(th, stages)
@@ -517,7 +517,7 @@ var unticked = regexp.MustCompile(`(?m)^(\s*[-*+]\s+)\[[ xX]\]`)
 
 // bodyVersion is the description's version, as web/src/sections.ts
 // counts it: 1 + each edit that changes the text past its ticks.
-func bodyVersion(th store.Thread) int {
+func bodyVersion(th model.Thread) int {
 	v := 1
 	if len(th.Events) == 0 || th.Events[0].Kind != "created" {
 		return v

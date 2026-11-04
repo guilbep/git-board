@@ -28,115 +28,13 @@ import (
 	"github.com/guilbep/git-board/core/gitstore"
 	"github.com/guilbep/git-board/core/index"
 	"github.com/guilbep/git-board/core/issue"
+	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/core/oplog"
 	"github.com/guilbep/git-board/core/people"
 	"github.com/guilbep/git-board/core/syncer"
 	"github.com/guilbep/git-board/internal/avatar"
 	"github.com/guilbep/git-board/internal/config"
 )
-
-// Issue is an issue as git-board's fields and filters read it.
-type Issue struct {
-	ID     string   `json:"id"`
-	Title  string   `json:"title"`
-	Status string   `json:"status"` // "open" or "closed"
-	Labels []string `json:"labels"`
-	// Inherited are the labels it takes from its project ([roles]) for the
-	// roles it doesn't set itself; internal/board sets them.
-	Inherited []string `json:"inherited,omitempty"`
-	GithubURL string   `json:"github_url,omitempty"` // "" if not linked to a GitHub issue
-	Forges    []Forge  `json:"forges,omitempty"`     // where it is on forges
-	// Shown is the title as the board shows it (ShownTitle).
-	Shown string `json:"shown_title"`
-	// Number is its project number, CO2-3075: "" until the counter hands it
-	// one, and while the project doesn't number its issues (numbers.go).
-	Number string `json:"number,omitempty"`
-	// Counted tells the project numbers its issues: a bare number (3075,
-	// fix/3075-…) then means a project number; #3075 is still a forge's.
-	Counted bool `json:"counted,omitempty"`
-	// UpdatedAt is its last change, for "changed since your last visit".
-	UpdatedAt time.Time `json:"updated_at"`
-	// CreatedAt is when it was opened: it breaks a tie between issues one
-	// sync stamped at once.
-	CreatedAt time.Time `json:"created_at"`
-	// ClosedAt is when it was last closed, while it is: zero when open.
-	ClosedAt time.Time `json:"closed_at,omitzero"`
-	// Comments is how many comments it has, for comments:.
-	Comments int `json:"comments"`
-	// Body and CommentBodies are its texts, for free text without the
-	// index (an issue as it was: ls --at).
-	Body          string   `json:"-"`
-	CommentBodies []string `json:"-"`
-	// AuthorLogins are who opened it, for author:: name, login, forge
-	// logins.
-	AuthorLogins []string `json:"-"`
-	// CommenterLogins are the logins of who commented, the author
-	// excepted, for involves:.
-	CommenterLogins []string `json:"-"`
-	// AuthorID and CommenterIDs are the same people by identity: you are
-	// your identity, with or without a login.
-	AuthorID     string   `json:"-"`
-	CommenterIDs []string `json:"-"`
-}
-
-// BareNumber is the number a bare mention names it by (3075, fix/3075-…):
-// its project number once the project numbers its issues, else its first
-// forge number; "" for none. With HasNumber and HasForgeNumber, the one
-// place a number is told to name an issue, for search, branch names and
-// titles.
-func (is Issue) BareNumber() string {
-	if is.Counted {
-		return is.Number[strings.LastIndexByte(is.Number, '-')+1:]
-	}
-	for _, f := range is.Forges {
-		if f.Number != "" {
-			return f.Number
-		}
-	}
-	return ""
-}
-
-// HasNumber tells whether a bare number names the issue: its project
-// number once the project numbers its issues, else any of its forge
-// numbers.
-func (is Issue) HasNumber(n string) bool {
-	if is.Counted {
-		return n != "" && is.BareNumber() == n
-	}
-	return is.HasForgeNumber(n)
-}
-
-// HasForgeNumber tells whether #n, a forge's own way to name an issue,
-// names it.
-func (is Issue) HasForgeNumber(n string) bool {
-	return n != "" && slices.ContainsFunc(is.Forges, func(f Forge) bool { return f.Number == n })
-}
-
-// AllLabels are its own labels and those it inherits: what filters,
-// groups and facets see. Edits change its own labels only.
-func (is Issue) AllLabels() []string { return append(slices.Clip(is.Labels), is.Inherited...) }
-
-// Headline is its shown title after its project number, as lists show it:
-// "CO2-3075 Restarting Postgres empties the bouncer pool"; its title
-// before it has one.
-func (is Issue) Headline() string {
-	if is.Number == "" {
-		return is.Title
-	}
-	return is.Number + " " + is.ShownTitle()
-}
-
-var ownNumber = regexp.MustCompile(`\s*\(#(\d+)\)\s*$`) // (#2518)
-
-// ShownTitle is the title without a trailing (#2518) that is one of the
-// issue's own forge numbers: the forge links show it already. The title
-// itself keeps it, and editing starts from the title.
-func (is Issue) ShownTitle() string {
-	if m := ownNumber.FindStringSubmatchIndex(is.Title); m != nil && is.HasForgeNumber(is.Title[m[2]:m[3]]) {
-		return is.Title[:m[0]]
-	}
-	return is.Title
-}
 
 // Errors an id can answer.
 var (
@@ -481,9 +379,9 @@ func (b *Backend) records() (map[string][]syncer.Record, error) {
 // issueFrom is a core issue as git-board reads it: its labels shown, its
 // forges, who opened it and who commented, and its project number when
 // the project numbers its issues.
-func (b *Backend) issueFrom(is *issue.Issue, v view) Issue {
+func (b *Backend) issueFrom(is *issue.Issue, v view) model.Issue {
 	forges := forgesOf(v.records[is.ID])
-	out := Issue{ID: is.ID, Title: is.Title, Status: string(is.Status), Labels: b.shown(slices.Clone(is.Labels)), Forges: forges,
+	out := model.Issue{ID: is.ID, Title: is.Title, Status: string(is.Status), Labels: b.shown(slices.Clone(is.Labels)), Forges: forges,
 		UpdatedAt: time.Unix(is.Updated, 0), CreatedAt: time.Unix(is.Created, 0), AuthorID: is.Author,
 		Comments: len(is.Comments), Body: is.Body}
 	if is.Status == issue.Closed {
@@ -532,7 +430,7 @@ func logins(p *people.Person) []string {
 
 // ListIssues returns every issue, oldest first. Filtering is done
 // client-side via internal/filter.
-func (b *Backend) ListIssues() ([]Issue, error) {
+func (b *Backend) ListIssues() ([]model.Issue, error) {
 	issues, err := b.allIssues()
 	if err != nil {
 		return nil, fmt.Errorf("listing the issues: %w", err)
@@ -541,18 +439,18 @@ func (b *Backend) ListIssues() ([]Issue, error) {
 	if err != nil {
 		return nil, err
 	}
-	res := make([]Issue, 0, len(issues))
+	res := make([]model.Issue, 0, len(issues))
 	for _, is := range issues {
 		res = append(res, b.issueFrom(is, v))
 	}
-	slices.SortFunc(res, func(x, y Issue) int { return cmp.Or(x.CreatedAt.Compare(y.CreatedAt), cmp.Compare(x.ID, y.ID)) })
+	slices.SortFunc(res, func(x, y model.Issue) int { return cmp.Or(x.CreatedAt.Compare(y.CreatedAt), cmp.Compare(x.ID, y.ID)) })
 	return res, nil
 }
 
 // ListIssuesAt is ListIssues as the board stood at a time: the issues
 // created by then, each folded from the operations made by then, by their
 // own times (issue.At).
-func (b *Backend) ListIssuesAt(at time.Time) ([]Issue, error) {
+func (b *Backend) ListIssuesAt(at time.Time) ([]model.Issue, error) {
 	heads, err := b.ds.Heads(ctx, "issue")
 	if err != nil {
 		return nil, fmt.Errorf("listing the issues: %w", err)
@@ -561,7 +459,7 @@ func (b *Backend) ListIssuesAt(at time.Time) ([]Issue, error) {
 	if err != nil {
 		return nil, err
 	}
-	var res []Issue
+	var res []model.Issue
 	for id := range heads {
 		if !oplog.IsID(id) {
 			continue
@@ -581,7 +479,7 @@ func (b *Backend) ListIssuesAt(at time.Time) ([]Issue, error) {
 		}
 		res = append(res, b.issueFrom(is, v))
 	}
-	slices.SortFunc(res, func(x, y Issue) int { return cmp.Or(x.CreatedAt.Compare(y.CreatedAt), cmp.Compare(x.ID, y.ID)) })
+	slices.SortFunc(res, func(x, y model.Issue) int { return cmp.Or(x.CreatedAt.Compare(y.CreatedAt), cmp.Compare(x.ID, y.ID)) })
 	return res, nil
 }
 
@@ -595,14 +493,14 @@ func (b *Backend) Labels() []string {
 }
 
 // GetIssue resolves an issue by id prefix.
-func (b *Backend) GetIssue(idPrefix string) (Issue, error) {
+func (b *Backend) GetIssue(idPrefix string) (model.Issue, error) {
 	is, _, err := b.issue(idPrefix)
 	if err != nil {
-		return Issue{}, err
+		return model.Issue{}, err
 	}
 	v, err := b.view()
 	if err != nil {
-		return Issue{}, err
+		return model.Issue{}, err
 	}
 	return b.issueFrom(is, v), nil
 }
@@ -611,20 +509,20 @@ func (b *Backend) GetIssue(idPrefix string) (Issue, error) {
 // sync run's events): the forges' links and the persons are read again at
 // most every fresh, not on each call. An issue linked since shows its
 // forge number from the next read on.
-func (b *Backend) IssueNamer(fresh time.Duration) func(idPrefix string) (Issue, error) {
+func (b *Backend) IssueNamer(fresh time.Duration) func(idPrefix string) (model.Issue, error) {
 	var mu sync.Mutex
 	var v view
 	var at time.Time
-	return func(idPrefix string) (Issue, error) {
+	return func(idPrefix string) (model.Issue, error) {
 		is, _, err := b.issue(idPrefix)
 		if err != nil {
-			return Issue{}, err
+			return model.Issue{}, err
 		}
 		mu.Lock()
 		defer mu.Unlock()
 		if at.IsZero() || time.Since(at) >= fresh {
 			if v, err = b.view(); err != nil {
-				return Issue{}, err
+				return model.Issue{}, err
 			}
 			at = time.Now()
 		}

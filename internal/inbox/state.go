@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"slices"
 
+	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/store"
 )
 
@@ -67,7 +68,7 @@ func Save(fs store.Storage, identityID string, s State) error {
 }
 
 // MarkSeen takes every event th has now as seen, counted or not.
-func (s *State) MarkSeen(th store.Thread) {
+func (s *State) MarkSeen(th model.Thread) {
 	if s.Seen == nil {
 		s.Seen = map[string][]string{}
 	}

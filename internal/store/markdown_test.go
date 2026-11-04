@@ -9,13 +9,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/store"
 	"github.com/guilbep/git-board/internal/store/storetest"
 )
 
 var mdComment = regexp.MustCompile(`(?s)### (.+?) · (\S+)\n\n(.*?)\n*<!-- git-board comment (\S+) -->\n`)
 
-func who(p store.Person) string {
+func who(p model.Person) string {
 	for _, s := range []string{p.Name, p.Login} {
 		if s != "" {
 			return s
@@ -74,7 +75,7 @@ func TestExportMarkdownReadsBack(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s: %v", name, err)
 		}
-		i := slices.IndexFunc(issues, func(is store.Issue) bool { return is.ID == f.ID })
+		i := slices.IndexFunc(issues, func(is model.Issue) bool { return is.ID == f.ID })
 		if i < 0 {
 			t.Fatalf("%s: id %s isn't an issue", name, f.ID)
 		}
@@ -112,7 +113,7 @@ func TestExportMarkdownReadsBack(t *testing.T) {
 		t.Errorf("description %q", desc)
 	}
 	got := mdComment.FindAllStringSubmatch(read[a], -1)
-	var comments []store.Event
+	var comments []model.Event
 	for _, e := range th.Events {
 		if e.Kind == "comment" {
 			comments = append(comments, e)

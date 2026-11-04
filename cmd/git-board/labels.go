@@ -11,6 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/store"
 )
 
@@ -72,7 +73,7 @@ has it, one change each.`,
 
 // countLabels counts each label over the issues: plain ones first, then by
 // field and value.
-func countLabels(issues []store.Issue) []labelCount {
+func countLabels(issues []model.Issue) []labelCount {
 	byLabel := map[string]*labelCount{}
 	for _, is := range issues {
 		for _, l := range is.Labels {

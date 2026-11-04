@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/filter"
-	"github.com/guilbep/git-board/internal/store"
 )
 
 // Window is how far back the inbox looks: issues updated since, events
@@ -27,16 +27,16 @@ type Me struct {
 
 // Is reports whether p is you: your identity, or any carrying your login
 // (old bridges and the sync can leave several for one person).
-func (m Me) Is(p store.Person) bool {
+func (m Me) Is(p model.Person) bool {
 	return p.ID == m.ID || (m.Login != "" && strings.EqualFold(p.Login, m.Login))
 }
 
 // Row is one issue with something new for you.
 type Row struct {
-	Issue   store.Issue    `json:"issue"`
+	Issue   model.Issue    `json:"issue"`
 	Reasons []string       `json:"reasons"` // why you follow it; none: addressed to you only
 	News    []string       `json:"news"`    // "2 comments", "closed", "added you as reviewer"…
-	Who     []store.Person `json:"who"`
+	Who     []model.Person `json:"who"`
 	Latest  time.Time      `json:"latest"`
 	First   string         `json:"first"` // the oldest of those events: the panel scrolls there
 }
@@ -45,7 +45,7 @@ type Row struct {
 // automatic). views are the followed views th is in. Not followed but a
 // role you hold for the whole project (lead-dev, pm…): its reasons are
 // that role, "lead-dev (project)", and only its creation and closing show.
-func Follows(me Me, st State, th store.Thread, views []string, cfg *config.Config) (bool, []string, *bool) {
+func Follows(me Me, st State, th model.Thread, views []string, cfg *config.Config) (bool, []string, *bool) {
 	reasons := filter.Involvement(involved(me, th), me.Login, me.ID, cfg)
 	set := st.Set(th.ID)
 	if set != nil && *set {
@@ -70,8 +70,8 @@ const projectRole = " (project)"
 
 // involved reads th as filter.Involvement reads a listed issue; you, by
 // identity or by login, count as your login.
-func involved(me Me, th store.Thread) filter.Involved {
-	login := func(p store.Person) string {
+func involved(me Me, th model.Thread) filter.Involved {
+	login := func(p model.Person) string {
 		if me.Is(p) {
 			return me.Login
 		}
@@ -83,7 +83,7 @@ func involved(me Me, th store.Thread) filter.Involved {
 			in.CommenterLogins = append(in.CommenterLogins, login(e.Author))
 			in.CommenterIDs = append(in.CommenterIDs, e.Author.ID)
 		}
-		if (e.Kind == "created" || e.Kind == "comment") && store.Mentions(e.Body, me.Login) {
+		if (e.Kind == "created" || e.Kind == "comment") && model.Mentions(e.Body, me.Login) {
 			in.Mentioned = true
 		}
 	}
@@ -93,7 +93,7 @@ func involved(me Me, th store.Thread) filter.Involved {
 // Rows is what happened that concerns you on threads, newest first:
 // events dated since, unseen, not yours. inViews are the followed views
 // each issue is in, by id.
-func Rows(me Me, st State, threads []store.Thread, inViews map[string][]string, cfg *config.Config, since time.Time) []Row {
+func Rows(me Me, st State, threads []model.Thread, inViews map[string][]string, cfg *config.Config, since time.Time) []Row {
 	var rows []Row
 	for _, th := range threads {
 		if r, ok := rowOf(me, st, th, inViews[th.ID], cfg, since); ok {
@@ -104,7 +104,7 @@ func Rows(me Me, st State, threads []store.Thread, inViews map[string][]string, 
 	return rows
 }
 
-func rowOf(me Me, st State, th store.Thread, views []string, cfg *config.Config, since time.Time) (Row, bool) {
+func rowOf(me Me, st State, th model.Thread, views []string, cfg *config.Config, since time.Time) (Row, bool) {
 	following, reasons, _ := Follows(me, st, th, views, cfg)
 	watching := !following && slices.ContainsFunc(reasons, func(r string) bool { return strings.HasSuffix(r, projectRole) })
 	inField := slices.ContainsFunc(th.Labels, func(l string) bool {
@@ -142,7 +142,7 @@ func rowOf(me Me, st State, th store.Thread, views []string, cfg *config.Config,
 				addressed = true
 			}
 		}
-		if (e.Kind == "created" || e.Kind == "comment") && store.Mentions(e.Body, me.Login) {
+		if (e.Kind == "created" || e.Kind == "comment") && model.Mentions(e.Body, me.Login) {
 			note("mentioned you")
 			addressed = true
 		}
@@ -184,7 +184,7 @@ func rowOf(me Me, st State, th store.Thread, views []string, cfg *config.Config,
 		if e.At.After(row.Latest) {
 			row.Latest = e.At
 		}
-		if !slices.ContainsFunc(row.Who, func(p store.Person) bool { return p.ID == e.Author.ID }) {
+		if !slices.ContainsFunc(row.Who, func(p model.Person) bool { return p.ID == e.Author.ID }) {
 			row.Who = append(row.Who, e.Author)
 		}
 	}
