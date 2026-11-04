@@ -85,6 +85,7 @@ FILTER GRAMMAR (used by ls/view/tui):
 func newLsCmd() *cobra.Command {
 	var group, sort, me string
 	var md, asJSON bool
+	var limit int
 
 	cmd := &cobra.Command{
 		Use:   "ls [filter]",
@@ -94,18 +95,24 @@ func newLsCmd() *cobra.Command {
   git-board ls "sprint:delivery is:open" --group status --sort "prio asc"
   git-board ls "assignee:@me is:open" --me guilbep
   git-board ls "title:*login*" --json
-  git-board ls "#2528"                                  # quoted: # starts a shell comment`,
+  git-board ls "#2528"                                  # quoted: # starts a shell comment
+  git-board ls --sort "updated desc" --limit 10         # the ten last changed
+  git-board ls "login is:closed" --sort created`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			filterStr := defaultFilter
 			if len(args) > 0 {
 				filterStr = args[0]
 			}
-			return runLs(cmd.OutOrStdout(), filterStr, group, sort, md, asJSON, resolveMe(me))
+			if limit < 0 {
+				return usageError{fmt.Errorf("--limit %d: a count, 0 for all", limit)}
+			}
+			return runLs(cmd.OutOrStdout(), filterStr, group, sort, limit, md, asJSON, resolveMe(me))
 		},
 	}
 	cmd.Flags().StringVar(&group, "group", "", "group results by field")
-	cmd.Flags().StringVar(&sort, "sort", "", `sort results, e.g. "prio asc"`)
+	cmd.Flags().StringVar(&sort, "sort", "", `sort by created, updated, title or a field, then asc or desc: "prio asc", "updated desc"`)
+	cmd.Flags().IntVarP(&limit, "limit", "L", 0, "list this many at most, after sorting (0: all)")
 	cmd.Flags().BoolVar(&md, "md", false, "render as markdown")
 	cmd.Flags().BoolVar(&asJSON, "json", false, "render as JSON")
 	meFlag(cmd, &me)
@@ -236,12 +243,12 @@ func loadConfig() (*config.Config, error) {
 	return config.Load(config.Path())
 }
 
-func runLs(out io.Writer, filterStr, group, sort string, md, asJSON bool, me string) error {
+func runLs(out io.Writer, filterStr, group, sort string, limit int, md, asJSON bool, me string) error {
 	cfg, err := loadConfig()
 	if err != nil {
 		return err
 	}
-	return listAndRender(out, cfg, filterStr, group, sort, md, asJSON, me)
+	return listAndRender(out, cfg, filterStr, group, sort, limit, md, asJSON, me)
 }
 
 func runView(out io.Writer, name string, md, asJSON bool, me string) error {
@@ -253,15 +260,15 @@ func runView(out io.Writer, name string, md, asJSON bool, me string) error {
 	if !ok {
 		return fmt.Errorf("unknown view %q", name)
 	}
-	return listAndRender(out, cfg, view.Filter, view.Group, view.Sort, md, asJSON, me)
+	return listAndRender(out, cfg, view.Filter, view.Group, view.Sort, 0, md, asJSON, me)
 }
 
-func listAndRender(out io.Writer, cfg *config.Config, filterStr, group, sort string, md, asJSON bool, me string) error {
+func listAndRender(out io.Writer, cfg *config.Config, filterStr, group, sort string, limit int, md, asJSON bool, me string) error {
 	matched, err := loadMatchingIssues(cfg, filterStr, me)
 	if err != nil {
 		return err
 	}
-	return render(out, matched, group, sort, md, asJSON, cfg)
+	return render(out, matched, group, sort, limit, md, asJSON, cfg)
 }
 
 func runTui(filterStr, me string) error {
