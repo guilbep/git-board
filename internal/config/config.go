@@ -7,6 +7,7 @@ import (
 	"cmp"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"maps"
 	"os"
@@ -16,6 +17,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 	"unicode/utf8"
@@ -297,6 +299,9 @@ type Config struct {
 	// Template is the [template] table: the template the file came from,
 	// for lint to list the drift.
 	Template TemplateRef
+	// Unknown is the file's keys git-board doesn't read, a misspelled one
+	// above all (Load): each is its zero value, so lint names them.
+	Unknown []string
 }
 
 // TemplateRef names a built-in template and its version (templates/).
@@ -349,11 +354,38 @@ func Load(path string) (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	cfg, _, err := parse(data)
+	cfg, md, err := parse(data)
 	if err != nil {
 		return nil, fmt.Errorf("parsing %s: %w", path, err)
 	}
+	for _, k := range md.Undecoded() {
+		cfg.Unknown = append(cfg.Unknown, k.String())
+	}
+	warnUnknown(path, cfg.Unknown)
 	return cfg, nil
+}
+
+// Warnings is where Load names the keys it doesn't know: stderr, every
+// command's.
+var Warnings io.Writer = os.Stderr
+
+// warned is the keys Load has named, by file: a command loads its config
+// more than once.
+var warned sync.Map
+
+// warnUnknown names each unknown key on Warnings, once a file and key: a
+// misspelled key isn't an error (an older git-board reads a newer file),
+// but it shouldn't be silently nothing.
+func warnUnknown(path string, keys []string) {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		abs = path
+	}
+	for _, k := range keys {
+		if _, done := warned.LoadOrStore(abs+"\x00"+k, true); !done {
+			fmt.Fprintf(Warnings, "warning: %s: %s: git-board doesn't know this key, ignored (git board lint)\n", path, k)
+		}
+	}
 }
 
 func parse(data []byte) (*Config, toml.MetaData, error) {

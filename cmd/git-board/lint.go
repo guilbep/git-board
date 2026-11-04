@@ -38,8 +38,10 @@ func newLintCmd() *cobra.Command {
 		Use:   "lint",
 		Short: "Report label/config drift, read-only",
 		Long: `Report drift between issue labels and .git-board.toml, read-only —
-writes nothing, unlike everything else in this CLI. Checks every open
-issue (is:open) in the current git-bug repo: double singles (more than
+writes nothing, unlike everything else in this CLI. Names the keys of
+.git-board.toml git-board doesn't read (a misspelled one is otherwise
+its zero value; every command warns of them on stderr too), then checks
+every open issue (is:open) in the current repository: double singles (more than
 one label for a single-cardinality field), unknown option values,
 missing values on a configured single-cardinality field, orphan sprint
 labels (no matching [[sprints.list]] entry), and configured options no
@@ -58,7 +60,7 @@ with the forge sync's token (GITHUB_TOKEN, else git's credential helper
 for github.com) — so they're visible
 and colored in the GitHub Issues UI, not just inside git-bug's own
 label store. A missing label is created with its color and description;
-an existing one is updated (--force) only where .git-board.toml sets its
+an existing one is updated only where .git-board.toml sets its
 color or description. Preview only by default; --apply carries it out. It
 also reports the labels an issue template (.github/ISSUE_TEMPLATE) applies
 that this checkout's GitHub repository doesn't have: GitHub drops them

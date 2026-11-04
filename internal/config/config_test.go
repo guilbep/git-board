@@ -624,3 +624,43 @@ func TestSetGithubProjectRefusesToWriteAnUnparsableFile(t *testing.T) {
 		t.Errorf("the file changed:\n%s", got)
 	}
 }
+
+// A misspelled key decodes to nothing: Load names it, on Warnings, once a
+// file however many times it's loaded, and keeps it in Unknown for lint.
+// Serial: it swaps Warnings.
+func TestLoadWarnsOfTheKeysItDoesntKnow(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "git-board.toml")
+	src := "[github-project]\nowner = \"o\"\nnumber = 1\nwirte = true\n\n[fields.status]\nsingel = true\n\n[view.backlog]\nfilter = \"is:open\"\n"
+	if err := os.WriteFile(path, []byte(src), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var buf strings.Builder
+	orig := Warnings
+	Warnings = &buf
+	t.Cleanup(func() { Warnings = orig })
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Load(path); err != nil {
+		t.Fatal(err)
+	}
+	for _, k := range []string{"github-project.wirte", "fields.status.singel", "view.backlog"} {
+		if !slices.Contains(cfg.Unknown, k) {
+			t.Errorf("Unknown = %v, want %s", cfg.Unknown, k)
+		}
+		if n := strings.Count(buf.String(), k+":"); n != 1 {
+			t.Errorf("%s warned %d times:\n%s", k, n, buf.String())
+		}
+	}
+	if cfg.GithubProject.Write {
+		t.Error("wirte read as write")
+	}
+
+	// a file every key of which git-board reads warns of nothing
+	buf.Reset()
+	if cfg := mustLoad(t); len(cfg.Unknown) > 0 || buf.Len() > 0 {
+		t.Errorf("the fixture: Unknown = %v, warned %q", cfg.Unknown, buf.String())
+	}
+}

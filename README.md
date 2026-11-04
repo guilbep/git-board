@@ -430,6 +430,10 @@ qualifier: [Filters in docs/guide/configuration.md](docs/guide/configuration.md#
 everything else in this CLI. It checks every `is:open` issue in the current
 repository against `.git-board.toml`:
 
+- **unknown keys** — a key in `.git-board.toml` git-board doesn't read, a
+  misspelled one above all (`[github-project] wirte = true`, `[view.x]` for
+  `[views.x]`): it would be its zero value without a word. Every command also
+  warns of it on stderr, once, and runs on.
 - **double singles** — more than one `ns:*` label for a `[fields.<ns>]` entry
   with `single = true` (e.g. two `status:*` labels). Structurally rare going
   forward (`fields.Apply`'s swap logic prevents it), but concurrent
