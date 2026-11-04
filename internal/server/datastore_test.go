@@ -1,7 +1,10 @@
 package server
 
 import (
+	"errors"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -51,5 +54,29 @@ func TestDatastoreSettings(t *testing.T) {
 	}
 	if code := call(t, "PUT", ts.URL+"/api/datastore", datastoreRequest{URL: "git"}, &got); code != http.StatusOK || got.Restart {
 		t.Fatalf("back to git: %d %+v", code, got)
+	}
+}
+
+// A Markdown folder is one of the checkout's: a copy or a setting naming
+// one elsewhere (absolute, or up with ..) is refused, and writes nothing.
+func TestMarkdownFolderOutsideTheCheckout(t *testing.T) {
+	t.Parallel()
+	b := storetest.New(t)
+	storetest.NewIssue(t, b, "secret plan")
+	ts := newTestServer(t, b, nil)
+	out := filepath.Join(t.TempDir(), "elsewhere")
+	for _, v := range []string{"markdown:" + out, "markdown:../elsewhere"} {
+		if code := call(t, "POST", ts.URL+"/api/datastore/copy", datastoreRequest{URL: v}, nil); code != http.StatusBadRequest {
+			t.Errorf("copy to %s: %d, want 400", v, code)
+		}
+		if code := call(t, "PUT", ts.URL+"/api/datastore", datastoreRequest{URL: v}, nil); code != http.StatusBadRequest {
+			t.Errorf("PUT %s: %d, want 400", v, code)
+		}
+	}
+	if _, err := os.Stat(out); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("the copy wrote %s: %v", out, err)
+	}
+	if code := call(t, "PUT", ts.URL+"/api/datastore", datastoreRequest{URL: "markdown:issues"}, nil); code != http.StatusOK {
+		t.Errorf("PUT markdown:issues: %d", code)
 	}
 }

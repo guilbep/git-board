@@ -524,8 +524,12 @@ func CheckDatastore(v string) error {
 	case v == "git", v == ForgeOnly:
 		return nil
 	case IsMarkdown(v):
-		if strings.TrimSpace(strings.TrimPrefix(v, Markdown)) == "" {
+		dir := strings.TrimSpace(strings.TrimPrefix(v, Markdown))
+		if dir == "" {
 			return fmt.Errorf("%q: name the folder, markdown:issues", v)
+		}
+		if !filepath.IsLocal(dir) {
+			return fmt.Errorf("%q: a folder of the checkout, from its top, like markdown:issues: the board goes with the code", v)
 		}
 		return nil
 	case IsPostgres(v):
@@ -592,6 +596,9 @@ func (b *Backend) TestDatastore(ctx context.Context, v string) TestResult {
 // CopyGitTo copies the board in git into the datastore v names, as git
 // board datastore copy does: only what isn't there yet is written.
 func (b *Backend) CopyGitTo(ctx context.Context, v string) (int, error) {
+	if err := CheckDatastore(v); err != nil {
+		return 0, err
+	}
 	if IsMarkdown(v) {
 		m, err := mdstore.Open(markdownDir(b.root, v), b.s.Folder())
 		if err != nil {

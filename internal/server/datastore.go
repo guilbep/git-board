@@ -81,6 +81,10 @@ func (s *apiServer) handleCopyDatastore(w http.ResponseWriter, r *http.Request) 
 	}
 	defer done()
 	url := s.b.Unredact(req.URL)
+	if err := store.CheckDatastore(url); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
 	n, err := s.b.CopyGitTo(r.Context(), url)
 	if err != nil {
 		writeError(w, http.StatusBadGateway, err)
