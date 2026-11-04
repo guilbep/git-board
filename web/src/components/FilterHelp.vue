@@ -7,7 +7,7 @@
   <!-- the panel floats on its own layer (q-menu, teleported): the filters
        panel scrolls, and would cut it -->
   <button ref="btn" type="button" :class="buttonClass ?? 'filters-help'" aria-label="How filtering works" title="How filtering works" aria-haspopup="dialog" :aria-expanded="open" @click="open = !open">?</button>
-  <q-menu v-model="open" :target="btn ?? undefined" no-parent-event :anchor="align === 'right' ? 'bottom right' : 'bottom left'" :self="align === 'right' ? 'top right' : 'top left'" :offset="[0, 6]" class="fh-menu" @show="focusTab">
+  <q-menu v-model="open" :target="btn ?? undefined" no-parent-event :anchor="align === 'right' ? 'bottom right' : 'bottom left'" :self="align === 'right' ? 'top right' : 'top left'" :offset="[0, 6]" class="fh-menu" @show="focusTab" @hide="tryPending">
     <div class="fh" role="dialog" aria-label="How filtering works">
         <p class="fh-title">How filtering works</p>
         <p class="fh-lead">Each tick in the filters panel writes words into the Filter box: both say the same thing.</p>
@@ -19,7 +19,7 @@
             <li v-for="w in col" :key="w.term">
               <code>{{ w.term }}</code>
               <span>{{ w.means }}</span>
-              <button type="button" class="gb-linkbtn" :aria-label="`Try ${w.example}`" @click="emit('try', w.example), close()">Try</button>
+              <button type="button" class="gb-linkbtn" :aria-label="`Try ${w.example}`" @click="tryWord(w.example)">Try</button>
             </li>
           </ul>
         </div>
@@ -59,6 +59,20 @@ const close = () => (open.value = false);
 // the focus goes to the selected tab, so the arrows and Tab go on from there
 function focusTab() {
   document.querySelector<HTMLElement>('.fh-menu [role=tab][aria-selected=true]')?.focus();
+}
+// Try closes the menu first and writes the word once it has hidden: the
+// menu gives the focus back to its ? as it hides, and the page focuses the
+// Filter box on try, so that focus must come last (issue #91)
+let pending: string | null = null;
+function tryWord(term: string) {
+  pending = term;
+  close();
+}
+function tryPending() {
+  if (pending === null) return;
+  const term = pending;
+  pending = null;
+  emit('try', term);
 }
 defineExpose({ show: () => (open.value = true) });
 </script>
