@@ -1154,3 +1154,19 @@ without `internal/`. The four steps of ADR 0020 are done.
   the GitHub client and `Gate`.
 - `internal/branches` and `internal/markdown` stay (ADR 0020, Step 4);
   the experimental switch stays the application's (ADR 0018).
+
+### Status 2026-11-05: a reader never loses an issue to a write
+
+`TestGetIssueCacheConcurrent` failed about 10 times in 400 runs, a reader
+(once a writer) finding no issue: the index had dropped it.
+
+- `gitstore.Refs` read a directory with go-billy's `ReadDir`, which
+  lstats each entry and fails when `git update-ref` renames `<ref>.lock`
+  away meanwhile; the walk took that for no directory, so `Heads` listed
+  none of the kind and the index's refresh dropped them all. It reads
+  with `os.ReadDir` now, and the loose refs before `packed-refs`, as git
+  does. Tests: `TestRefsWhileGitMovesARef`, `TestRefsWhileGitPacksRefs`.
+- `mdstore`: a reader could see an append cut at a page, a pack cut
+  short; a last line without its line feed that isn't JSON is left out.
+  Test: `TestPackBeingAppendedIsLeftOut`.
+- `dstest`, "read while written": every datastore, PostgreSQL included.
