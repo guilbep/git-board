@@ -47,11 +47,12 @@ var layerOf = map[string]int{
 const module = "github.com/guilbep/git-board/"
 
 // layer is pkg's layer, by the longest prefix in layerOf; ok is false when
-// none names it.
+// none names it. "core" names the root package alone: as a prefix it
+// would name every package, and a new one would never lack a layer.
 func layer(pkg string) (l int, ok bool) {
 	best := ""
 	for p, pl := range layerOf {
-		if (pkg == p || strings.HasPrefix(pkg, p+"/")) && len(p) > len(best) {
+		if (pkg == p || p != "core" && strings.HasPrefix(pkg, p+"/")) && len(p) > len(best) {
 			best, l = p, pl
 		}
 	}
@@ -116,6 +117,16 @@ func TestLayersImportOnlyBelow(t *testing.T) {
 	t.Parallel()
 	if bad := violations(imports(t)); len(bad) > 0 {
 		t.Fatalf("a layer imports one above it (ADR 0020):\n%s", strings.Join(bad, "\n"))
+	}
+}
+
+func TestGuardSeesAPackageWithoutALayer(t *testing.T) {
+	t.Parallel()
+	if _, ok := layer("core/shiny"); ok {
+		t.Error("core/shiny has a layer, and layerOf doesn't list it")
+	}
+	if l, ok := layer("core/forge/github"); !ok || l != kernel {
+		t.Errorf("core/forge/github: %v, %v; want the kernel, by core/forge", l, ok)
 	}
 }
 

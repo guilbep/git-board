@@ -206,7 +206,8 @@ type Config struct {
 	// Cycle is the [cycle] table: the development cycle's stages and
 	// gates (cycle.go).
 	Cycle Cycle
-	// Release is the [release] table (release.go).
+	// Release is the [release] table, the release domain's (core/release),
+	// checked in release.go.
 	Release release.Config
 	// Forges are the [forges.<name>] tables, by name (forges.go).
 	Forges []Forge
