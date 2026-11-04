@@ -41,6 +41,11 @@
         </div>
       </div>
       <p v-if="error" class="gb-save-error" role="alert"><GbIcon name="error" small /> {{ error }}</p>
+      <div v-if="created" class="gb-save-error gb-created" role="alert">
+        <p><GbIcon name="error" small /> Created <b>{{ created.title }}</b>, without these fields:</p>
+        <ul><li v-for="f in created.failed" :key="f">{{ f }}</li></ul>
+        <p><button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" @click="emit('created', created.id, false)">Open it to set them</button></p>
+      </div>
     </form>
 
     <footer v-if="!(me && !me.me)" class="gb-dialog-foot">
@@ -53,9 +58,11 @@
 
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue';
-import { createIssue, patchIssue } from '@/api/board';
+import { createIssue } from '@/api/board';
 import { displayName, formatValue, type Fields } from '@/fields';
+import { patchField } from '@/fieldwrite';
 import { message } from '@/issue';
+import { fieldWrites } from '@/newissue';
 import { me } from '@/me';
 import GbIcon from '@/components/GbIcon.vue';
 import IdentityChooser from '@/components/IdentityChooser.vue';
@@ -70,6 +77,8 @@ const plain = ref('');
 const busy = ref(false);
 const error = ref('');
 const titleInput = ref<HTMLInputElement | null>(null);
+// an issue created with fields the server refused: said, and opened from here
+const created = ref<{ id: string; title: string; failed: string[] } | null>(null);
 
 // the fields the board's filter picks one value of (the server's facets)
 const from = props.prefill ?? {};
@@ -99,30 +108,40 @@ async function create(another: boolean) {
   if (!title.value.trim() || busy.value) return;
   busy.value = true;
   error.value = '';
+  created.value = null;
+  let issue: { id: string; title: string };
   try {
     const labels = plain.value.split(',').map((l) => l.trim()).filter(Boolean);
-    const issue = await createIssue(title.value, body.value, labels);
-    // the fields as the panel sets them: aliases resolve, single/multi apply
-    const sets: Record<string, string> = {};
-    for (const [name, v] of Object.entries(values)) {
-      if (!v.trim()) continue;
-      if (isMulti(name)) {
-        for (const one of v.split(',').map((s) => s.trim()).filter(Boolean)) {
-          await patchIssue(issue.id, { [name]: one });
-        }
-      } else sets[name] = v.trim();
-    }
-    if (Object.keys(sets).length) await patchIssue(issue.id, sets);
-    emit('created', issue.id, another);
-    if (another) {
-      title.value = '';
-      body.value = '';
-      titleInput.value?.focus();
-    }
+    issue = await createIssue(title.value, body.value, labels);
   } catch (e) {
-    error.value = `Not created, or created without all its fields: ${message(e)}`;
-  } finally {
+    error.value = `Not created: ${message(e)}`;
     busy.value = false;
+    return;
+  }
+  // The issue exists from here: whatever a field write says, the board
+  // gets it, and the form starts over, so a second Create is a new issue
+  // on purpose, never the same one again. The fields as the panel sets
+  // them (aliases resolve, single/multi apply), each on its own: a
+  // refused one names itself, the others still go in, and a forge sync
+  // running makes them wait for its end (fieldwrite.ts).
+  const failed: string[] = [];
+  for (const w of fieldWrites(values, isMulti)) {
+    try {
+      await patchField(issue.id, w.name, w.value);
+    } catch (e) {
+      failed.push(`${displayName(w.name)} ${w.value}: ${message(e)}`);
+    }
+  }
+  busy.value = false;
+  if (failed.length) {
+    // stay open on what went wrong, the board reloaded behind
+    emit('created', issue.id, true);
+    created.value = { id: issue.id, title: issue.title, failed };
+  } else emit('created', issue.id, another);
+  if (another || failed.length) {
+    title.value = '';
+    body.value = '';
+    titleInput.value?.focus();
   }
 }
 
@@ -134,5 +153,9 @@ onMounted(() => titleInput.value?.focus());
 .gb-dialog-body { display: grid; gap: .375rem; }
 .gb-gap { margin-top: 1rem; }
 .gb-save-error { display: flex; gap: .375rem; align-items: center; margin: .75rem 0 0; padding: .5rem .75rem; color: var(--danger-fg); background: var(--danger-bg); font-size: .875rem; }
+.gb-created { display: block; }
+.gb-created p, .gb-created ul { margin: 0; }
+.gb-created ul { padding-left: 1.25rem; }
+.gb-created p + ul, .gb-created ul + p { margin-top: .375rem; }
 @media (max-width: 47.99rem) { .gb-fieldgrid { grid-template-columns: minmax(0, 1fr); } }
 </style>
