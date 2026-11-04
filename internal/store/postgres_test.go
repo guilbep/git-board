@@ -134,3 +134,21 @@ func comments(th store.Thread) int {
 	}
 	return n
 }
+
+// No password reaches a page or a message, in any form pgx takes.
+func TestRedact(t *testing.T) {
+	t.Parallel()
+	for _, v := range []string{
+		"postgres://u:s3cret@db/b",
+		"postgres://u@db/b?password=s3cret&sslmode=disable",
+		"host=db user=u password=s3cret dbname=b",
+		"host=db password='s 3cret' dbname=b",
+	} {
+		if got := store.Redact(v); strings.Contains(got, "s3cret") || strings.Contains(got, "3cret") {
+			t.Errorf("Redact(%q) = %q", v, got)
+		}
+	}
+	if got := store.Redact("markdown:issues"); got != "markdown:issues" {
+		t.Errorf("Redact(markdown:issues) = %q", got)
+	}
+}

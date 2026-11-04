@@ -374,6 +374,7 @@ func (b *Backend) Me() (Person, bool, error) {
 
 // NewIssue creates an issue as you, with labels, and returns its id.
 func (b *Backend) NewIssue(title, body string, labels []string) (string, error) {
+	b.readMarkdown()
 	me, err := b.me()
 	if err != nil {
 		return "", err

@@ -56,6 +56,9 @@ type mdComment struct {
 	body    string
 }
 
+// commentsMark is the line between the description and the comments.
+const commentsMark = "<!-- git-board comments -->"
+
 // commentHead is a comment's heading; commentMark its marker.
 var (
 	commentHead = regexp.MustCompile(`(?m)^### (.+?) · (\S+)[ \t]*$`)
@@ -80,25 +83,48 @@ func parseMD(data []byte) (mdFile, error) {
 		return f, fmt.Errorf("no title")
 	}
 	s := string(text)
-	heads := commentHead.FindAllStringSubmatchIndex(s, -1)
-	end := len(s)
-	if len(heads) > 0 {
-		end = heads[0][0]
+	// the description ends at the comments' line; a file without it (an
+	// older export, or one written by hand) at its first comment heading
+	var tail string
+	if strings.HasPrefix(s, commentsMark) {
+		tail = s[len(commentsMark):]
+	} else if i := strings.Index(s, "\n"+commentsMark); i >= 0 {
+		f.body, tail = strings.TrimSpace(s[:i]), s[i+1+len(commentsMark):]
+	} else {
+		end := len(s)
+		if h := commentHead.FindStringIndex(s); h != nil {
+			end = h[0]
+		}
+		f.body, tail = strings.TrimSpace(s[:end]), s[end:]
 	}
-	f.body = strings.TrimSpace(s[:end])
+	left := tail
+	// each exported comment ends at its marker, so a "### " line in its
+	// text stays its text; what follows the last marker is new comments
+	for {
+		m := commentMark.FindStringSubmatchIndex(left)
+		if m == nil {
+			break
+		}
+		chunk := left[:m[0]]
+		c := mdComment{id: left[m[2]:m[3]]}
+		if h := commentHead.FindStringSubmatchIndex(chunk); h != nil && strings.TrimSpace(chunk[:h[0]]) == "" {
+			c.who = chunk[h[2]:h[3]]
+			c.at, _ = time.Parse(time.RFC3339, chunk[h[4]:h[5]])
+			chunk = chunk[h[1]:]
+		}
+		c.body = strings.TrimSpace(chunk)
+		f.comments = append(f.comments, c)
+		left = left[m[1]:]
+	}
+	heads := commentHead.FindAllStringSubmatchIndex(left, -1)
 	for i, h := range heads {
-		stop := len(s)
+		stop := len(left)
 		if i+1 < len(heads) {
 			stop = heads[i+1][0]
 		}
-		c := mdComment{who: s[h[2]:h[3]]}
-		c.at, _ = time.Parse(time.RFC3339, s[h[4]:h[5]])
-		text := s[h[1]:stop]
-		if m := commentMark.FindStringSubmatchIndex(text); m != nil {
-			c.id = text[m[2]:m[3]]
-			text = text[:m[0]]
-		}
-		c.body = strings.TrimSpace(text)
+		c := mdComment{who: left[h[2]:h[3]]}
+		c.at, _ = time.Parse(time.RFC3339, left[h[4]:h[5]])
+		c.body = strings.TrimSpace(left[h[1]:stop])
 		f.comments = append(f.comments, c)
 	}
 	return f, nil

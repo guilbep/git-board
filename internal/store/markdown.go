@@ -161,6 +161,9 @@ func renderMarkdown(th Thread, flat func(string) bool) ([]byte, error) {
 			if body := strings.TrimSpace(e.Body); body != "" {
 				fmt.Fprintf(&buf, "\n%s\n", body)
 			}
+			// where the comments start: a "### " line above it is the
+			// description's own (mdimport.go)
+			buf.WriteString("\n" + commentsMark + "\n")
 		case "comment":
 			fmt.Fprintf(&buf, "\n### %s · %s\n\n", nameOfPerson(e.Author), e.At.UTC().Format(time.RFC3339))
 			if body := strings.TrimSpace(e.Body); body != "" {

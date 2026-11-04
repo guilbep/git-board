@@ -88,3 +88,42 @@ func isMissing(err error) bool {
 	}
 	return false
 }
+
+// Two writes to one issue in one second both stay: the files are read in
+// before a write, while they still say what the board held. A hand edit is
+// read in by the next write to its own issue.
+func TestMarkdownBoardWritesInARow(t *testing.T) {
+	t.Parallel()
+	dir := storetest.Repo(t, false)
+	storetest.Git(t, dir, "config", store.DatastoreKey, "markdown:issues")
+	storetest.Init(t, dir)
+	b := storetest.Open(t, dir)
+	id, err := b.NewIssue("Title", "body", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := b.ApplyLabelChange(id, []string{"prio:p1"}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.SetTitle(id, "Title 2"); err != nil {
+		t.Fatal(err)
+	}
+	is, err := b.GetIssue(id)
+	if err != nil || is.Title != "Title 2" || len(is.Labels) != 1 {
+		t.Fatalf("issue %+v, %v; want both writes", is, err)
+	}
+	files, _ := filepath.Glob(filepath.Join(dir, "issues", "*.md"))
+	if len(files) != 1 {
+		t.Fatalf("files %v", files)
+	}
+	edit(t, files[0], "body", "body, by hand")
+	if _, err := b.AddComment(id, "a write to it"); err != nil {
+		t.Fatal(err)
+	}
+	if evs := eventsOf(t, b, id); evs[0].Body != "body, by hand" {
+		t.Fatalf("description %q, want the hand edit", evs[0].Body)
+	}
+	if data, _ := os.ReadFile(files[0]); !strings.Contains(string(data), "a write to it") || !strings.Contains(string(data), "body, by hand") {
+		t.Fatalf("the file after:\n%s", data)
+	}
+}

@@ -25,6 +25,9 @@ const BoardRemote = "origin"
 // board stays empty, no fetch on every open), or no such remote
 // (docs/prd/clone-shows-board.md).
 func (b *Backend) PullIfEmpty(remote string) (int, error) {
+	if !b.inGit() {
+		return 0, nil // the board isn't in git: origin holds none of it
+	}
 	has, err := b.hasRemote(remote)
 	if err != nil || !has {
 		return 0, err

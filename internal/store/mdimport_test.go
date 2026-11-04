@@ -209,3 +209,30 @@ A first comment.
 		t.Fatalf("other board: %+v, %v", rep, err)
 	}
 }
+
+// A "### who · when" line in a description or a comment is its text, not a
+// comment: the comments' line and the markers say where each ends.
+func TestImportMarkdownKeepsHeadingsInText(t *testing.T) {
+	t.Parallel()
+	b := storetest.New(t)
+	body := "intro\n\n### Alice · notes\n\nmore"
+	id, err := b.NewIssue("Title", body, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := b.AddComment(id, "a comment\n\n### Bob · later\n\nstill it"); err != nil {
+		t.Fatal(err)
+	}
+	dir, _ := exported(t, b)
+	rep, err := b.ImportMarkdown(dir)
+	if err != nil || rep.Unchanged != 1 || len(rep.Updated) != 0 {
+		t.Fatalf("import: %+v, %v", rep, err)
+	}
+	evs := eventsOf(t, b, id)
+	if got := bodies(evs, "created"); got[0] != body {
+		t.Fatalf("description %q", got[0])
+	}
+	if got := bodies(evs, "comment"); len(got) != 1 {
+		t.Fatalf("comments %q, want the one", got)
+	}
+}

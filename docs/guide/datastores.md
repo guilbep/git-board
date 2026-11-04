@@ -101,6 +101,9 @@ line per write, in `<kind>/<id>.jsonl`. Commit both with the code.
   no `id` is a new issue. An issue changed here after the file's `updated`
   keeps its own values: the edit is reported as a conflict, and the file
   is written again from the board.
+- **A heading in your text is safe.** The line `<!-- git-board comments -->`
+  ends the description, and each comment ends at its marker, so a
+  `### …` line inside either stays text.
 - **Branches merge their boards.** `.board/.gitattributes` merges the
   `.jsonl` files with git's union driver: two branches' writes to one
   issue both stay, in the order every clone agrees on. A conflict in a
@@ -139,9 +142,11 @@ nothing under `refs/board/*`.
   issue's change as soon as you make it, and tries again every 30 seconds
   while a forge doesn't answer. Writes from the command line go with the
   next `git board sync`.
-- **The copy is disposable.** `git board datastore drop` throws it away,
-  and the next sync pulls the board back. It refuses while an issue isn't
-  on a forge yet; `--force` throws those away too.
+- **The copy is disposable.** `git board datastore drop` throws its
+  issues away, and the next sync pulls them back; the people and the
+  release records, which no forge keeps, stay. It refuses while an issue
+  has a write made here since the last whole sync (`git board sync`);
+  `--force` throws those away too.
 - **What comes back** is what the forges show: an issue or a comment
   git-board posted comes back with the line it was posted with
   (*From Pierre, 2026-11-04, in git-board.*), as anyone's text is.

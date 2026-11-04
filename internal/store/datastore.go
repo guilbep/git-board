@@ -11,11 +11,14 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
 
 	"github.com/guilbep/git-board/core/datastore"
+	"github.com/guilbep/git-board/core/datastore/memstore"
 	"github.com/guilbep/git-board/core/gitstore"
 	"github.com/guilbep/git-board/core/index"
 	"github.com/guilbep/git-board/core/issue"
@@ -262,11 +265,13 @@ func (b *Backend) forgeOnly() bool { _, ok := b.ds.(*forgeCopy); return ok }
 
 // ErrNotOnForge: a forge-only copy holds writes the forges haven't got:
 // throwing it away would lose them.
-var ErrNotOnForge = errors.New("issues the forges haven't got yet")
+var ErrNotOnForge = errors.New("issues with writes the forges may not have yet")
 
-// DropCopy throws a forge-only board's copy away, and its sync journal: the
-// next sync pulls the board again. It refuses while an issue isn't on a
-// forge yet, unless force.
+// DropCopy throws a forge-only board's issues and sync records away, and
+// the sync journal: the next sync pulls them again. The persons and the
+// release records, which no forge keeps, stay, so who you write as still
+// names someone. It refuses while an issue has a write made here since the
+// last whole sync, unless force; it answers how many have.
 func (b *Backend) DropCopy(force bool) (int, error) {
 	f, ok := b.ds.(*forgeCopy)
 	if !ok {
@@ -282,6 +287,26 @@ func (b *Backend) DropCopy(force bool) (int, error) {
 	if err := syncer.Forget(b.ds); err != nil {
 		return len(waiting), err
 	}
+	// what no forge keeps goes to the new copy first: persons, releases
+	keep := memstore.New("")
+	for _, kind := range []string{"person", "release"} {
+		heads, err := f.copy.Heads(ctx, kind)
+		if err != nil {
+			return len(waiting), err
+		}
+		for id := range heads {
+			packs, _, err := f.copy.Packs(ctx, kind, id)
+			if err != nil {
+				return len(waiting), err
+			}
+			v := ""
+			for _, p := range packs {
+				if v, err = keep.Add(ctx, kind, id, p, v); err != nil {
+					return len(waiting), err
+				}
+			}
+		}
+	}
 	if err := os.RemoveAll(forgeCopyDir(f.clone)); err != nil {
 		return len(waiting), err
 	}
@@ -290,13 +315,19 @@ func (b *Backend) DropCopy(force bool) (int, error) {
 		return len(waiting), err
 	}
 	f.copy = c.(*forgeCopy).copy
+	if _, err := datastore.Copy(ctx, keep, f.copy); err != nil {
+		return len(waiting), err
+	}
 	b.mu.Lock()
 	b.issues, b.persons, b.heads = map[string]*issue.Issue{}, map[string]*people.Person{}, map[string]string{}
 	b.mu.Unlock()
 	return len(waiting), nil
 }
 
-// notOnForge are the issues linked to no forge yet.
+// notOnForge are the issues the forges may lack something of: linked to
+// none, or with a write made here (no forge its origin) since the last
+// whole sync. A write the server sent at once counts until a whole sync
+// runs: it errs on keeping.
 func (b *Backend) notOnForge() ([]string, error) {
 	ids, err := issue.List(b.ds)
 	if err != nil {
@@ -306,9 +337,21 @@ func (b *Backend) notOnForge() ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
+	last, err := syncer.LastRun(b.ds)
+	if err != nil {
+		return nil, err
+	}
 	var out []string
 	for _, id := range ids {
 		if len(records[id]) == 0 {
+			out = append(out, id)
+			continue
+		}
+		l, err := oplog.Load(b.ds, "issue", id)
+		if err != nil {
+			return nil, err
+		}
+		if slices.ContainsFunc(l.Entries, func(e oplog.Entry) bool { return e.Origin == nil && e.Time >= last }) {
 			out = append(out, id)
 		}
 	}
@@ -344,34 +387,45 @@ func markdownDir(root, v string) string {
 	return filepath.Join(root, dir)
 }
 
-// renderMarkdown brings a Markdown board's files up to its packs: first
-// the files' hand edits read in (ImportMarkdown), then each issue's file
-// written where it changed. A hand edit to an issue changed here since its
-// file was written is a conflict, logged, and the file takes the board's.
+// readMarkdown reads a Markdown board's hand edits in before a write
+// (ImportMarkdown), while the files still say what the board held when
+// they were written: a write then never takes its own issue's file, older
+// than itself, for a hand edit. The import's own writes skip it. A hand
+// edit to an issue changed here since its file was written is a conflict,
+// logged; the file takes the board's at the render after the write.
+func (b *Backend) readMarkdown() {
+	m, ok := b.ds.(*mdstore.Store)
+	if !ok || !b.mdImporting.CompareAndSwap(false, true) {
+		return
+	}
+	defer b.mdImporting.Store(false)
+	b.mdMu.Lock()
+	defer b.mdMu.Unlock()
+	rep, err := b.ImportMarkdown(m.Dir())
+	if err != nil {
+		log.Printf("markdown: reading %s: %v", m.Dir(), err)
+	}
+	for _, c := range rep.Conflicts {
+		log.Printf("markdown: %s", c)
+	}
+	if len(rep.Created)+len(rep.Updated) > 0 {
+		if _, err := b.ExportMarkdown(m.Dir(), nil); err != nil {
+			log.Printf("markdown: %v", err)
+		}
+	}
+}
+
+// renderMarkdown writes a Markdown board's files where an issue changed.
 // ponytail: reads and writes every file on each write; per issue when
 // boards in a folder grow past a few hundred issues
 func (b *Backend) renderMarkdown() error {
-	b.mdDirty.Store(true)
-	if !b.mdBusy.CompareAndSwap(false, true) {
-		return nil // a render runs, the import's own writes included: it goes round again
+	if b.mdImporting.Load() {
+		return nil // the import renders once it is done
 	}
-	defer b.mdBusy.Store(false)
-	m := b.ds.(*mdstore.Store)
-	for b.mdDirty.Swap(false) {
-		if _, err := b.me(); err == nil {
-			rep, err := b.ImportMarkdown(m.Dir())
-			if err != nil {
-				return err
-			}
-			for _, c := range rep.Conflicts {
-				log.Printf("markdown: %s", c)
-			}
-		}
-		if _, err := b.ExportMarkdown(m.Dir(), nil); err != nil {
-			return err
-		}
-	}
-	return nil
+	b.mdMu.Lock()
+	defer b.mdMu.Unlock()
+	_, err := b.ExportMarkdown(b.ds.(*mdstore.Store).Dir(), nil)
+	return err
 }
 
 // MarkdownDir is the folder a Markdown board is kept in, "" for another.
@@ -445,15 +499,24 @@ func (b *Backend) Unredact(v string) string {
 	return v
 }
 
-// Redact hides a URL's password.
+// Redact hides a datastore value's password: a URL's, in its user part or
+// its query, or a key=value string's.
 func Redact(v string) string {
-	if u, err := url.Parse(v); err == nil && u.User != nil {
-		if _, has := u.User.Password(); has {
-			return u.Redacted()
+	if u, err := url.Parse(v); err == nil && u.Scheme != "" {
+		if _, has := u.User.Password(); u.User != nil && has {
+			u.User = url.UserPassword(u.User.Username(), "xxxxx")
 		}
+		if q := u.Query(); q.Has("password") {
+			q.Set("password", "xxxxx")
+			u.RawQuery = q.Encode()
+		}
+		return u.String()
 	}
-	return v
+	return kvPassword.ReplaceAllString(v, "${1}xxxxx")
 }
+
+// kvPassword is a key=value string's password, quoted or not.
+var kvPassword = regexp.MustCompile(`(password\s*=\s*)('(?:[^'\\]|\\.)*'|\S+)`)
 
 // CheckDatastore refuses a board.datastore value git-board can't open.
 func CheckDatastore(v string) error {

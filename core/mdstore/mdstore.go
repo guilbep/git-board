@@ -9,21 +9,24 @@
 // union driver, so two branches that both wrote an issue merge with both
 // packs kept: oplog orders them, as it orders packs from two clones.
 //
-// A version is how many packs the file holds. A write takes the entity's
-// lock file (<id>.jsonl.lock), checks the count and appends: one writer at
-// a time, on this machine and on a shared disk.
+// A version is the file's hash: it changes whenever the file does, a
+// branch switched to included, though two branches' files may hold as many
+// packs. A write takes the entity's lock file (<id>.jsonl.lock), checks the
+// hash and appends: one writer at a time, on this machine and on a shared
+// disk.
 package mdstore
 
 import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
-	"strconv"
 	"strings"
 	"time"
 
@@ -97,12 +100,12 @@ func (s *Store) Heads(_ context.Context, kind string) (map[string]string, error)
 		if !ok || !entityID.MatchString(id) {
 			continue
 		}
-		packs, err := read(s.path(kind, id))
+		data, err := readFile(s.path(kind, id))
 		if err != nil {
 			return nil, err
 		}
-		if len(packs) > 0 {
-			out[id] = strconv.Itoa(len(packs))
+		if len(bytes.TrimSpace(data)) > 0 {
+			out[id] = version(data)
 		}
 	}
 	return out, nil
@@ -110,19 +113,31 @@ func (s *Store) Heads(_ context.Context, kind string) (map[string]string, error)
 
 // Packs are an entity's packs, and how many.
 func (s *Store) Packs(_ context.Context, kind, id string) ([][]byte, string, error) {
-	packs, err := read(s.path(kind, id))
+	data, err := readFile(s.path(kind, id))
+	if err != nil {
+		return nil, "", err
+	}
+	packs, err := lines(data)
 	if err != nil {
 		return nil, "", err
 	}
 	if len(packs) == 0 {
 		return nil, "", fmt.Errorf("%w: %s %s", datastore.ErrNotFound, kind, id)
 	}
-	return packs, strconv.Itoa(len(packs)), nil
+	return packs, version(data), nil
 }
 
-// read is a pack file's lines; none for a file that isn't there. A merge
-// may leave a line twice: it is one pack, as oplog counts it.
-func read(path string) ([][]byte, error) {
+// version is a file's hash, "" for none.
+func version(data []byte) string {
+	if len(bytes.TrimSpace(data)) == 0 {
+		return ""
+	}
+	h := sha256.Sum256(data)
+	return hex.EncodeToString(h[:16])
+}
+
+// readFile is a pack file's bytes; none for a file that isn't there.
+func readFile(path string) ([]byte, error) {
 	data, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil
@@ -130,6 +145,12 @@ func read(path string) ([][]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("mdstore: %w", err)
 	}
+	return data, nil
+}
+
+// lines are a pack file's packs. A merge may leave a line twice: it is
+// one pack, as oplog counts it.
+func lines(data []byte) ([][]byte, error) {
 	var out [][]byte
 	sc := bufio.NewScanner(bytes.NewReader(data))
 	sc.Buffer(nil, 64<<20)
@@ -141,7 +162,7 @@ func read(path string) ([][]byte, error) {
 	return out, sc.Err()
 }
 
-// Add appends a pack if the file still holds prev packs ("" or 0 for one
+// Add appends a pack if the file is still at version prev ("" for one
 // that must not exist yet).
 func (s *Store) Add(_ context.Context, kind, id string, pack []byte, prev string) (string, error) {
 	if bytes.ContainsAny(pack, "\n\r") {
@@ -156,31 +177,29 @@ func (s *Store) Add(_ context.Context, kind, id string, pack []byte, prev string
 		return "", err
 	}
 	defer unlock()
-	packs, err := read(path)
+	data, err := readFile(path)
 	if err != nil {
 		return "", err
 	}
-	want := 0
-	if prev != "" {
-		if want, err = strconv.Atoi(prev); err != nil {
-			return "", fmt.Errorf("%w: %s %s: version %q", datastore.ErrMoved, kind, id, prev)
-		}
-	}
-	if len(packs) != want || (prev != "" && want == 0) {
+	if version(data) != prev {
 		return "", fmt.Errorf("%w: %s %s", datastore.ErrMoved, kind, id)
+	}
+	line := append(bytes.Clone(pack), '\n')
+	if len(data) > 0 && data[len(data)-1] != '\n' { // a hand edit took the last line feed
+		line = append([]byte{'\n'}, line...)
 	}
 	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0o644)
 	if err != nil {
 		return "", fmt.Errorf("mdstore: %w", err)
 	}
-	_, err = f.Write(append(bytes.Clone(pack), '\n'))
+	_, err = f.Write(line)
 	if cerr := f.Close(); err == nil {
 		err = cerr
 	}
 	if err != nil {
 		return "", fmt.Errorf("mdstore: %w", err)
 	}
-	return strconv.Itoa(len(packs) + 1), nil
+	return version(append(data, line...)), nil
 }
 
 // lock takes a lock file, waiting while another writer holds it; one left

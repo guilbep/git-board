@@ -150,11 +150,12 @@ type Backend struct {
 	openedAs string
 	// root is the checkout's top, where markdown:<dir> starts
 	root string
-	// mdBusy and mdDirty keep a Markdown board's files rendered one at a
-	// time, again while writes come in meanwhile
-	mdBusy, mdDirty atomic.Bool
-	ix              *index.Index
-	dir             string // the git directory, for what only git does
+	// mdMu keeps a Markdown board's files read and written one at a time;
+	// mdImporting skips the import's own writes
+	mdMu        sync.Mutex
+	mdImporting atomic.Bool
+	ix          *index.Index
+	dir         string // the git directory, for what only git does
 	// flat are the kinds stored as plain labels, by label (SetFlatKinds)
 	flat atomic.Pointer[map[string]bool]
 	// cfg says which labels the forges' sync holds (SetHeld)
@@ -518,6 +519,7 @@ func (b *Backend) GetLabels(idPrefix string) ([]string, error) {
 // do writes ops, made by whoever git-board writes as, to an issue by id
 // prefix: ops gets the author and the issue as it is.
 func (b *Backend) do(idPrefix string, ops func(me string, is *issue.Issue, l *oplog.Log) ([]oplog.Op, error)) (*issue.Issue, error) {
+	b.readMarkdown()
 	me, err := b.me()
 	if err != nil {
 		return nil, err

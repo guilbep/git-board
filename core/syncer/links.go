@@ -2,6 +2,7 @@ package syncer
 
 import (
 	"cmp"
+	"encoding/json"
 	"maps"
 	"slices"
 	"strings"
@@ -82,4 +83,36 @@ func Records(s oplog.Datastore) (map[string][]Record, error) {
 		slices.SortFunc(rs, func(a, b Record) int { return cmp.Compare(a.URL, b.URL) })
 	}
 	return out, nil
+}
+
+// LastRun is when the last whole sync that wrote started, the oldest of
+// the forges': a write here made before it went with it. 0 when a forge
+// has none recorded yet.
+func LastRun(s oplog.Datastore) (int64, error) {
+	ids, err := oplog.List(s, "sync")
+	if err != nil {
+		return 0, err
+	}
+	var oldest int64 = -1
+	for _, id := range ids {
+		l, err := oplog.Load(s, "sync", id)
+		if err != nil {
+			return 0, err
+		}
+		var last int64
+		for _, e := range l.Entries {
+			if e.Kind != "run" {
+				continue
+			}
+			var d runData
+			if err := json.Unmarshal(e.Data, &d); err != nil {
+				return 0, err
+			}
+			last = max(last, d.Started)
+		}
+		if oldest < 0 || last < oldest {
+			oldest = last
+		}
+	}
+	return max(oldest, 0), nil
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/guilbep/git-board/core/datastore"
@@ -73,5 +74,47 @@ func TestUnionMergedPacks(t *testing.T) {
 	}
 	if err := got.Append(ctx, s, []oplog.Op{{Kind: "after", Time: 3}}); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// Two branches' files of as many packs are two versions: a switch shows.
+// A file a hand edit left without its last line feed takes the next pack
+// on a line of its own.
+func TestVersionIsTheFile(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dir := t.TempDir()
+	s := open(t, dir)
+	l, err := oplog.Create(ctx, s, "issue", "", []oplog.Op{{Kind: "create", Time: 1}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := l.Append(ctx, s, []oplog.Op{{Kind: "on-a", Time: 2}}); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, mdstore.Board, "issue", l.ID+".jsonl")
+	onA, _ := os.ReadFile(path)
+	heads, _ := s.Heads(ctx, "issue")
+	a := heads[l.ID]
+	other := strings.Replace(string(onA), `"on-a"`, `"on-b"`, 1) // branch b, as many packs
+	if err := os.WriteFile(path, []byte(strings.TrimSuffix(other, "\n")), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	heads, _ = s.Heads(ctx, "issue")
+	if heads[l.ID] == a {
+		t.Fatal("another file, the same version")
+	}
+	if _, err := s.Add(ctx, "issue", l.ID, []byte(`{"clock":3,"ops":[{"kind":"x","time":3}]}`), a); err == nil {
+		t.Fatal("a write on the other branch's version landed")
+	}
+	got, err := oplog.Load(s, "issue", l.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := got.Append(ctx, s, []oplog.Op{{Kind: "after", Time: 3}}); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := oplog.Load(s, "issue", l.ID); err != nil || len(got.Entries) != 3 || got.Entries[1].Kind != "on-b" {
+		t.Fatalf("%+v, %v", got, err)
 	}
 }

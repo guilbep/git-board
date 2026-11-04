@@ -64,10 +64,11 @@ type missing struct{ sentence string }
 func (m *missing) Error() string { return m.sentence }
 func (m *missing) Unwrap() error { return ErrMissing }
 
-// Copy copies every entity of from that to hasn't, pack by pack, and
-// from's counter when to keeps one and has none: a board moving between
-// datastores keeps its ids, as its packs copy as they are. It answers how
-// many entities it copied.
+// Copy copies every entity of from into to: the packs to hasn't, a whole
+// entity or the rest of one a copy cut short. It copies from's counter
+// when to keeps one and has none. A board moving between datastores keeps
+// its ids, as its packs copy as they are. It answers how many entities it
+// wrote to.
 func Copy(ctx context.Context, from, to Datastore) (int, error) {
 	n := 0
 	for _, kind := range Kinds {
@@ -75,25 +76,32 @@ func Copy(ctx context.Context, from, to Datastore) (int, error) {
 		if err != nil {
 			return n, err
 		}
-		ours, err := to.Heads(ctx, kind)
-		if err != nil {
-			return n, err
-		}
 		for id := range theirs {
-			if _, ok := ours[id]; ok {
-				continue
-			}
 			packs, _, err := from.Packs(ctx, kind, id)
 			if err != nil {
 				return n, err
 			}
-			v := ""
+			mine, v, err := to.Packs(ctx, kind, id)
+			if err != nil && !errors.Is(err, ErrNotFound) {
+				return n, err
+			}
+			have := map[string]bool{}
+			for _, p := range mine {
+				have[string(p)] = true
+			}
+			wrote := false
 			for _, p := range packs {
+				if have[string(p)] {
+					continue
+				}
 				if v, err = to.Add(ctx, kind, id, p, v); err != nil {
 					return n, err
 				}
+				have[string(p)], wrote = true, true
 			}
-			n++
+			if wrote {
+				n++
+			}
 		}
 	}
 	fc, ok1 := from.(Counter)

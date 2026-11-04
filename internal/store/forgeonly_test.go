@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/guilbep/git-board/core/datastore"
 	"github.com/guilbep/git-board/core/forge/fake"
@@ -53,14 +54,30 @@ func TestForgeOnlyBoard(t *testing.T) {
 		t.Fatalf("drop with a write waiting: %v, want ErrNotOnForge", err)
 	}
 	f := fake.New("example.com/p")
+	time.Sleep(1100 * time.Millisecond) // a run's start is in seconds: the writes before it
+	if _, err := b.SyncForges(t.Context(), run(f)); err != nil {
+		t.Fatal(err)
+	}
+	// a comment on the linked issue, not sent yet: still not thrown away
+	if _, err := b.AddComment(id, "not sent yet"); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := b.DropCopy(false); !errors.Is(err, store.ErrNotOnForge) || n != 1 {
+		t.Fatalf("drop with a comment waiting: %d, %v", n, err)
+	}
+	time.Sleep(1100 * time.Millisecond)
 	if _, err := b.SyncForges(t.Context(), run(f)); err != nil {
 		t.Fatal(err)
 	}
 	if n, err := b.DropCopy(false); err != nil || n != 0 {
 		t.Fatalf("drop: %d, %v", n, err)
 	}
-	if issues, err := b.ListIssues(); err != nil || len(issues) != 0 {
-		t.Fatalf("after the drop %d issues, %v; want none", len(issues), err)
+	// who you write as is still someone
+	if _, err := b.NewIssue("after the drop", "", nil); err != nil {
+		t.Fatalf("a write after the drop: %v", err)
+	}
+	if ids, err := b.Identities(); err != nil || len(ids) == 0 {
+		t.Fatalf("persons after the drop: %v, %v", ids, err)
 	}
 	for range 2 {
 		if _, err := b.SyncForges(t.Context(), run(f)); err != nil {
@@ -68,10 +85,10 @@ func TestForgeOnlyBoard(t *testing.T) {
 		}
 	}
 	issues, err := b.ListIssues()
-	if err != nil || len(issues) != 1 || issues[0].Title != "kept on the forge" {
-		t.Fatalf("pulled back %+v, %v; want the one issue", issues, err)
+	if err != nil || len(issues) != 2 {
+		t.Fatalf("pulled back %+v, %v; want the issue, and the one made after the drop", issues, err)
 	}
-	if all := f.All(); len(all) != 1 || len(all[0].Comments) != 1 {
-		t.Fatalf("forge %+v; want one issue, one comment", all)
+	if all := f.All(); len(all) != 2 || len(all[0].Comments)+len(all[1].Comments) != 2 {
+		t.Fatalf("forge %+v; want both comments, the late one too", all)
 	}
 }
