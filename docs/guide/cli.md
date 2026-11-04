@@ -186,6 +186,7 @@ until `--apply`.
 ```bash
 git board close a1b2c3d -c "Fixed in 4e5f6a7"
 git board reopen a1b2c3d -c "Still fails on Safari"
+git board move a1b2c3d in-progress
 git board move a1b2c3d --next
 git board move a1b2c3d --prev
 ```
@@ -193,8 +194,9 @@ git board move a1b2c3d --prev
 `close` sets the status to its last option and closes the issue.
 `reopen` opens it and, when its status is that last option or none, sets
 the first option; another status stays. Both take `-c, --comment`, added
-first. `move --next` and `--prev` step the status through its options;
-onto the last one it closes the issue, back from it it reopens.
+first. `move <id> <status>` is `set <id> status=<status>`, checked the
+same way. `move --next` and `--prev` step the status through its
+options. Onto the last one the issue closes; back from it, it reopens.
 
 ## `log`: everything that happened to an issue
 
@@ -304,7 +306,7 @@ Errors go to stderr, prefixed `error:`.
 | `gh issue status` | | `git board ls "involves:@me is:open"` |
 | `gh issue develop N` | `glab mr create --related-issue N` | `git board branch N` (prints the branch and the command) |
 | | `glab issue view N -s` (system notes) | `git board log N` (every change, text edits too) |
-| `gh project item-edit …` | `glab issue board …` | `git board move N --next`, `git board project` |
+| `gh project item-edit …` | `glab issue board …` | `git board move N in-progress`, `move N --next`, `git board project` |
 
 `N` is any [name of an issue](#naming-an-issue). Not there yet: deleting
 an issue or a comment, templates, pinning, locking (no permissions in a

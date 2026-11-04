@@ -30,6 +30,7 @@ you (or with `--me ada`). On a board with no forge, assign by name:
 ## Statuses
 
 ```sh
+git board move 624a ready           # straight to a status
 git board move 624a --next          # backlog → ready → in progress → …
 git board move 624a --prev
 git board close 624a -c "Fixed in 4e5f6a7"   # the last status, closed, with a comment
