@@ -239,4 +239,3 @@ func (p prompter) ask(question string) (string, error) {
 	}
 	return strings.TrimSpace(line), err
 }
-
