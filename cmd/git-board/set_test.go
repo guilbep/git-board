@@ -127,3 +127,37 @@ func TestSetStatusKeepsTheStateInStep(t *testing.T) {
 		t.Errorf("state = %s, want open", state)
 	}
 }
+
+// set --filter shows what it would do, and writes it with --apply only.
+func TestSetFilterPreviewsThenApplies(t *testing.T) {
+	newTestRepo(t)
+	writeConfig(t, fieldsConfig)
+	id := openIssueID(t)
+	if _, err := execute(t, []string{"new", "Second", "status=ready", "prio=p2"}); err != nil {
+		t.Fatal(err)
+	}
+
+	out, err := execute(t, []string{"set", "--filter", "status:ready", "prio=p0"})
+	if err != nil || !strings.Contains(out, "2 issues would change; --apply") || !strings.Contains(out, "+prio:p0 -prio:p2") {
+		t.Fatalf("set --filter: %v\n%s", err, out)
+	}
+	if labels, _ := labelsOf(t, id); slices.Contains(labels, "prio:p0") {
+		t.Fatalf("set --filter wrote without --apply: %v", labels)
+	}
+	out, err = execute(t, []string{"set", "--filter", "status:ready", "prio=p0", "--apply"})
+	if err != nil || !strings.Contains(out, "2 issues changed") {
+		t.Fatalf("set --filter --apply: %v\n%s", err, out)
+	}
+	if labels, _ := labelsOf(t, id); !slices.Contains(labels, "prio:p0") {
+		t.Errorf("labels = %v, want prio:p0", labels)
+	}
+	if out, err := execute(t, []string{"set", "--filter", "status:ready", "prio=p0"}); err != nil || !strings.Contains(out, "nothing to change on the 2 issues") {
+		t.Errorf("set --filter again: %v\n%s", err, out)
+	}
+	if _, err := execute(t, []string{"set", "--filter", "status:ready", "prio=p9", "--apply"}); exitCode(err) != exitUsage {
+		t.Errorf("set --filter prio=p9 = %v, want exit %d", err, exitUsage)
+	}
+	if _, err := execute(t, []string{"set", id, "prio=p1", "--apply"}); exitCode(err) != exitUsage {
+		t.Errorf("set <id> --apply = %v, want exit %d", err, exitUsage)
+	}
+}

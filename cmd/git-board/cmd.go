@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -141,11 +142,11 @@ func newViewCmd() *cobra.Command {
 }
 
 func newSetCmd() *cobra.Command {
-	var me string
-	var force bool
+	var me, filterStr string
+	var force, apply bool
 
 	cmd := &cobra.Command{
-		Use:   "set <id> field=value [field=value...]",
+		Use:   "set <id> field=value [field=value...] | set --filter <filter> field=value... [--apply]",
 		Short: "Set one or more fields on an issue",
 		Long: `Set one or more fields on an issue, in one change.
 
@@ -169,20 +170,39 @@ that isn't is refused, and nothing is written; --force writes it anyway.
 Removing and clearing are never refused: they are how a wrong value goes.
 
 Setting status to its last option closes the issue, as "git board close"
-does; setting it to another option on a closed issue reopens it.`,
+does; setting it to another option on a closed issue reopens it.
+
+--filter sets the fields on every issue the filter matches (ls's
+grammar), each in one change. It only shows what each would change
+until --apply writes it.`,
 		Example: `  git-board set a1b2c3 status=ready prio=p1
   git-board set a1b2c3 sprint=@next --me guilbep
   git-board set a1b2c3 assignee=+@me         # multi-cardinality: add yourself
   git-board set a1b2c3 assignee=-guilbep     # multi-cardinality: remove
   git-board set a1b2c3 prio=                 # clear the field
   git-board set a1b2c3 label=+regression     # a plain label
-  git-board set a1b2c3 milestone=v1 --force  # a field nothing configures yet`,
-		Args: cobra.MinimumNArgs(2),
+  git-board set a1b2c3 milestone=v1 --force  # a field nothing configures yet
+  git-board set --filter "sprint:@current status:ready no:assignee" assignee=+@me          # what it would do
+  git-board set --filter "sprint:@current status:ready no:assignee" assignee=+@me --apply  # do it`,
+		Args: func(cmd *cobra.Command, args []string) error {
+			if cmd.Flags().Changed("filter") {
+				return cobra.MinimumNArgs(1)(cmd, args)
+			}
+			return cobra.MinimumNArgs(2)(cmd, args)
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if cmd.Flags().Changed("filter") {
+				return runSetMatching(cmd.OutOrStdout(), filterStr, args, resolveMe(me), force, apply)
+			}
+			if apply {
+				return usageError{fmt.Errorf("--apply goes with --filter: set <id> writes at once")}
+			}
 			return runSet(cmd.OutOrStdout(), args[0], args[1:], resolveMe(me), force)
 		},
 	}
 	meFlag(cmd, &me)
+	cmd.Flags().StringVar(&filterStr, "filter", "", "set the fields on every issue this filter matches (ls's grammar)")
+	cmd.Flags().BoolVar(&apply, "apply", false, "with --filter: write the changes, not only show them")
 	cmd.Flags().BoolVar(&force, "force", false, "write values .git-board.toml doesn't allow (an unknown field, a value outside the options)")
 	return cmd
 }
@@ -362,6 +382,81 @@ func runSet(out io.Writer, idPrefix string, args []string, me string, force bool
 		fmt.Fprintln(out, line)
 	}
 	return nil
+}
+
+// runSetMatching is set on every issue filterStr matches: what each would
+// change, written with apply.
+func runSetMatching(out io.Writer, filterStr string, args []string, me string, force, apply bool) error {
+	cfg, err := loadConfig()
+	if err != nil {
+		return err
+	}
+	b, err := store.OpenCwd()
+	if err != nil {
+		return err
+	}
+	defer b.Close()
+
+	assignments, err := parseAssignments(b, cfg, args, me, force)
+	if err != nil {
+		return err
+	}
+	issues, err := board.LoadMatching(b, cfg, filterStr, me)
+	if err != nil {
+		return err
+	}
+	if apply {
+		if err := needMe(b); err != nil {
+			return err
+		}
+	}
+	changed := 0
+	for _, is := range issues {
+		labels, _, err := foldAssignments(cfg, is.Labels, assignments)
+		if err != nil {
+			return fmt.Errorf("%s: %w", shortID(is.ID), err)
+		}
+		added, removed := labelDelta(is.Labels, labels)
+		if len(added)+len(removed) == 0 {
+			continue
+		}
+		changed++
+		var parts []string
+		for _, l := range added {
+			parts = append(parts, "+"+l)
+		}
+		for _, l := range removed {
+			parts = append(parts, "-"+l)
+		}
+		line := shortID(is.ID) + " " + is.Headline() + ": " + strings.Join(parts, " ")
+		if apply {
+			if _, err := b.ApplyLabelChange(is.ID, added, removed); err != nil {
+				return fmt.Errorf("%s: %w (%d written before it)", shortID(is.ID), err, changed-1)
+			}
+			state, err := statusInStep(b, cfg, is.ID, assignments, labels)
+			if err != nil {
+				return fmt.Errorf("%s: %w", shortID(is.ID), err)
+			}
+			line += state
+		}
+		fmt.Fprintln(out, line)
+	}
+	switch {
+	case changed == 0:
+		fmt.Fprintf(out, "nothing to change on the %d issue%s matching\n", len(issues), plural(len(issues)))
+	case apply:
+		fmt.Fprintf(out, "%d issue%s changed\n", changed, plural(changed))
+	default:
+		fmt.Fprintf(out, "%d issue%s would change; --apply writes it\n", changed, plural(changed))
+	}
+	return nil
+}
+
+func plural(n int) string {
+	if n == 1 {
+		return ""
+	}
+	return "s"
 }
 
 func runGet(out io.Writer, idPrefix string) error {
