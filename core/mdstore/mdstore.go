@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"github.com/guilbep/git-board/core/datastore"
+	"github.com/guilbep/git-board/core/internal/filelock"
 )
 
 // Board is the folder of a dir that holds the packs.
@@ -38,6 +39,9 @@ const Board = ".board"
 
 // gitattributes merges the pack files line by line.
 const gitattributes = "*.jsonl merge=union\n"
+
+// gitignore keeps the lock files out of git: the packs' and the board's.
+const gitignore = "*.lock\n*.takeover\n"
 
 // staleLock is how old a lock file is when its writer is taken for dead.
 const staleLock = 30 * time.Second
@@ -52,8 +56,9 @@ type Store struct {
 
 var _ datastore.Datastore = (*Store)(nil)
 
-// Open keeps the board in dir, making dir/.board and its .gitattributes
-// when they aren't there. folder is the machine's own folder.
+// Open keeps the board in dir, making dir/.board, its .gitattributes and
+// its .gitignore when they aren't there. folder is the machine's own
+// folder.
 func Open(dir, folder string) (*Store, error) {
 	abs, err := filepath.Abs(dir)
 	if err != nil {
@@ -63,10 +68,12 @@ func Open(dir, folder string) (*Store, error) {
 	if err := os.MkdirAll(s.root(), 0o755); err != nil {
 		return nil, fmt.Errorf("mdstore: %w", err)
 	}
-	ga := filepath.Join(s.root(), ".gitattributes")
-	if _, err := os.Stat(ga); errors.Is(err, os.ErrNotExist) {
-		if err := os.WriteFile(ga, []byte(gitattributes), 0o644); err != nil {
-			return nil, fmt.Errorf("mdstore: %w", err)
+	for name, text := range map[string]string{".gitattributes": gitattributes, ".gitignore": gitignore} {
+		path := filepath.Join(s.root(), name)
+		if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
+			if err := os.WriteFile(path, []byte(text), 0o644); err != nil {
+				return nil, fmt.Errorf("mdstore: %w", err)
+			}
 		}
 	}
 	return s, nil
@@ -226,21 +233,23 @@ func lock(path string) (func(), error) {
 }
 
 // takeOver removes a stale lock file. Waiters take over one at a time,
-// under path.takeover, and look again under it: one that found the lock
-// stale never deletes the fresh lock another took over meanwhile. A
-// takeover lock is held for an instant; one left staleLock ago is removed.
+// holding the OS lock on path.takeover, and look again under it: one that
+// found the lock stale never deletes the fresh lock another took over
+// meanwhile. The OS lets that lock go when its holder dies, so a takeover
+// cut short keeps no one out; the file stays, as a lock file in use is
+// never removed.
 func takeOver(path string) {
-	guard := path + ".takeover"
-	f, err := os.OpenFile(guard, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+	f, err := os.OpenFile(path+".takeover", os.O_RDWR|os.O_CREATE, 0o644)
 	if err != nil {
-		if fi, err := os.Stat(guard); err == nil && time.Since(fi.ModTime()) > staleLock {
-			os.Remove(guard)
-		}
 		time.Sleep(time.Millisecond)
 		return
 	}
-	f.Close()
-	defer os.Remove(guard)
+	defer f.Close()
+	if err := filelock.TryLock(f); err != nil {
+		time.Sleep(time.Millisecond) // another takes over: look again
+		return
+	}
+	defer filelock.Unlock(f)
 	if fi, err := os.Stat(path); err == nil && time.Since(fi.ModTime()) > staleLock {
 		os.Remove(path)
 	}

@@ -40,6 +40,9 @@ func TestUnionMergedPacks(t *testing.T) {
 	if data, err := os.ReadFile(filepath.Join(dir, mdstore.Board, ".gitattributes")); err != nil || string(data) != "*.jsonl merge=union\n" {
 		t.Fatalf(".gitattributes %q, %v", data, err)
 	}
+	if data, err := os.ReadFile(filepath.Join(dir, mdstore.Board, ".gitignore")); err != nil || string(data) != "*.lock\n*.takeover\n" {
+		t.Fatalf(".gitignore %q, %v: the lock files aren't kept out of git", data, err)
+	}
 	l, err := oplog.Create(ctx, s, "issue", "", []oplog.Op{{Kind: "create", Time: 1}})
 	if err != nil {
 		t.Fatal(err)
