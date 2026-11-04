@@ -11,6 +11,7 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode"
 )
 
 // Issue is an issue as every surface lists it, and as fields and filters
@@ -118,6 +119,9 @@ var ownNumber = regexp.MustCompile(`\s*\(#(\d+)\)\s*$`) // (#2518)
 // issue's own forge numbers: the forge links show it already. The title
 // itself keeps it, and editing starts from the title.
 func (is Issue) ShownTitle() string {
+	if !strings.HasSuffix(strings.TrimRightFunc(is.Title, unicode.IsSpace), ")") { // most titles: no regexp
+		return is.Title
+	}
 	if m := ownNumber.FindStringSubmatchIndex(is.Title); m != nil && is.HasForgeNumber(is.Title[m[2]:m[3]]) {
 		return is.Title[:m[0]]
 	}

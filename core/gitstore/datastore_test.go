@@ -102,3 +102,38 @@ func TestCopyIntoGitChainsByClock(t *testing.T) {
 		t.Errorf("name %q, want d", got.Name)
 	}
 }
+
+// A store keeps its packs open between reads: a repack that replaces
+// them, under it, still leaves every object readable, and so does Close.
+func TestReadsThroughARepackAndAClose(t *testing.T) {
+	t.Parallel()
+	ctx, s := t.Context(), gitRepo(t)
+	repack := func() {
+		t.Helper()
+		if out, err := exec.Command("git", "--git-dir", s.CommonDir(), "repack", "-adq").CombinedOutput(); err != nil {
+			t.Fatalf("git repack: %v: %s", err, out)
+		}
+	}
+	id := strings.Repeat("b", 40)
+	v, err := s.Add(ctx, "person", id, []byte(`{"clock":1,"ops":[{"kind":"x"}]}`), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	repack()
+	if packs, _, err := s.Packs(ctx, "person", id); err != nil || len(packs) != 1 {
+		t.Fatalf("packs = %d, %v; want 1", len(packs), err)
+	}
+	if v, err = s.Add(ctx, "person", id, []byte(`{"clock":2,"ops":[{"kind":"y"}]}`), v); err != nil {
+		t.Fatal(err)
+	}
+	repack() // the first pack goes, its objects in a new one
+	if packs, _, err := s.Packs(ctx, "person", id); err != nil || len(packs) != 2 {
+		t.Fatalf("after a repack: packs = %d, %v; want 2", len(packs), err)
+	}
+	if err := s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if packs, err := s.PacksAt(ctx, "person", id, v); err != nil || len(packs) != 2 {
+		t.Fatalf("after Close: packs = %d, %v; want 2", len(packs), err)
+	}
+}

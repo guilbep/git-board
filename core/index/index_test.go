@@ -299,7 +299,7 @@ func TestIndexRacingRefreshes(t *testing.T) {
 	if err := second.Refresh(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	if err := first.write(t.Context(), stored, nil, []loaded{older}); err != nil {
+	if err := first.write(t.Context(), stored, nil, []loaded{older}, map[string]State{}); err != nil {
 		t.Fatal(err)
 	}
 	if got, _ := first.heads(t.Context()); got[k] != head() {

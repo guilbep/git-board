@@ -524,3 +524,36 @@ type hooked struct {
 func (h hooked) Add(ctx context.Context, kind, id string, pack []byte, prev string) (string, error) {
 	return h.add(ctx, kind, id, pack, prev)
 }
+
+// LoadAt reads an entity as it was at a version git gave, though it moved
+// since; a datastore that can't answers it as it is.
+func TestLoadAtReadsTheVersionGiven(t *testing.T) {
+	t.Parallel()
+	ctx := t.Context()
+	s := newStore(t)
+	l := create(t, s, "issue", "", op("create"))
+	then := l.Version
+	if err := l.Append(ctx, s, []Op{op("comment")}); err != nil {
+		t.Fatal(err)
+	}
+	at, err := LoadAt(ctx, s, "issue", l.ID, then)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if at.Version != then || len(at.Entries) != 1 {
+		t.Fatalf("at %s: version %s, %d entries; want 1", then, at.Version, len(at.Entries))
+	}
+	now, err := LoadAt(ctx, unversioned{s}, "issue", l.ID, then)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if now.Version != l.Version || len(now.Entries) != 2 {
+		t.Fatalf("unversioned: version %s, %d entries; want %s, 2", now.Version, len(now.Entries), l.Version)
+	}
+	if _, err := LoadAt(ctx, s, "issue", l.ID, strings.Repeat("0", 40)); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("at no version: %v, want ErrNotFound", err)
+	}
+}
+
+// unversioned is a datastore without PacksAt.
+type unversioned struct{ Datastore }

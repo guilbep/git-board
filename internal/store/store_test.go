@@ -388,3 +388,41 @@ func BenchmarkGetIssue(b *testing.B) {
 		}
 	}
 }
+
+// A listing is answered again while no issue's head moved, and sees at
+// once what another process wrote, made or deleted.
+func TestListIssuesSeesAnotherProcesssWrites(t *testing.T) {
+	t.Parallel()
+	b := storetest.New(t)
+	first := storetest.NewIssue(t, b, "first")
+	other := storetest.Open(t, filepath.Dir(b.GitDir()))
+	titles := func() map[string]string {
+		t.Helper()
+		issues, err := b.ListIssues()
+		if err != nil {
+			t.Fatal(err)
+		}
+		res := map[string]string{}
+		for _, is := range issues {
+			res[is.ID] = is.Title
+		}
+		return res
+	}
+	if got := titles(); !maps.Equal(got, map[string]string{first: "first"}) {
+		t.Fatalf("listed %v", got)
+	}
+	titles() // answered again
+	second := storetest.NewIssue(t, other, "second")
+	if err := other.SetTitle(first, "first, renamed"); err != nil {
+		t.Fatal(err)
+	}
+	if got := titles(); !maps.Equal(got, map[string]string{first: "first, renamed", second: "second"}) {
+		t.Fatalf("after the other's writes: %v", got)
+	}
+	if _, err := other.DeleteIssue(first); err != nil {
+		t.Fatal(err)
+	}
+	if got := titles(); !maps.Equal(got, map[string]string{second: "second"}) {
+		t.Fatalf("after the other's delete: %v", got)
+	}
+}

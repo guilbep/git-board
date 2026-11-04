@@ -81,10 +81,7 @@ func (b *Backend) Undo(idPrefix string, force bool) (Undone, error) {
 // delete is a change, and undo says it can't undo it rather than undo an
 // older one elsewhere.
 func (b *Backend) lastWritten(me string) (string, error) {
-	issues, err := all(b, "issue", b.issues, func(id string) (*issue.Issue, error) {
-		is, _, err := b.loadAny(id)
-		return is, err
-	})
+	issues, err := all(b, "issue", b.issues, b.issueAt)
 	if err != nil {
 		return "", err
 	}

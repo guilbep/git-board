@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
-	"regexp"
 	"strings"
 
 	"github.com/go-git/go-git/v5/plumbing"
@@ -20,12 +19,26 @@ import (
 // read them are made here: a pack's clock is 1 + its parents' highest, and a
 // pack with no operation is a merge.
 
-var _ datastore.Datastore = (*Store)(nil)
+var (
+	_ datastore.Datastore = (*Store)(nil)
+	_ datastore.Versioned = (*Store)(nil)
+)
 
 // EntityRef is an entity's ref.
 func EntityRef(kind, id string) string { return "refs/board/" + kind + "/" + id }
 
-var entityID = regexp.MustCompile(`^[0-9a-f]{40}$`)
+// isID says id is an entity id: 40 lowercase hex digits (oplog.IsID).
+func isID(id string) bool {
+	if len(id) != 40 {
+		return false
+	}
+	for i := 0; i < len(id); i++ {
+		if c := id[i]; (c < '0' || c > '9') && (c < 'a' || c > 'f') {
+			return false
+		}
+	}
+	return true
+}
 
 // Node is one entity commit: its parents, its pack's blob and bytes, and the
 // pack's clock.
@@ -53,7 +66,7 @@ func (s *Store) Heads(_ context.Context, kind string) (map[string]string, error)
 	}
 	out := make(map[string]string, len(refs))
 	for name, h := range refs {
-		if id := strings.TrimPrefix(name, prefix); entityID.MatchString(id) {
+		if id := strings.TrimPrefix(name, prefix); isID(id) {
 			out[id] = h.String()
 		}
 	}
@@ -70,15 +83,30 @@ func (s *Store) Packs(_ context.Context, kind, id string) ([][]byte, string, err
 	if head == ZeroHash {
 		return nil, "", fmt.Errorf("%w: %s", datastore.ErrNotFound, name)
 	}
+	packs, err := s.packsAt(head)
+	return packs, head.String(), err
+}
+
+// PacksAt are every pack reachable from version, a commit: what the entity
+// held then. Its ref isn't read.
+func (s *Store) PacksAt(_ context.Context, kind, id, version string) ([][]byte, error) {
+	h := NewHash(version)
+	if !isID(id) || h == ZeroHash || h.String() != version {
+		return nil, fmt.Errorf("%w: %s at %q", datastore.ErrNotFound, EntityRef(kind, id), version)
+	}
+	return s.packsAt(h)
+}
+
+func (s *Store) packsAt(head Hash) ([][]byte, error) {
 	nodes, err := s.Walk(head)
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 	packs := make([][]byte, 0, len(nodes))
 	for _, n := range nodes {
 		packs = append(packs, n.Pack)
 	}
-	return packs, head.String(), nil
+	return packs, nil
 }
 
 // Add writes pack in a commit on prev, and moves the entity's ref there if

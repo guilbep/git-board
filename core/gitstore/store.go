@@ -18,6 +18,7 @@ import (
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/go-git/go-git/v5/plumbing/cache"
 	"github.com/go-git/go-git/v5/plumbing/filemode"
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/go-git/go-git/v5/storage/filesystem"
@@ -39,7 +40,6 @@ var ErrRefMoved = datastore.ErrMoved
 type Store struct {
 	// ponytail: one lock serializes go-git access per Store; per-object locking if it ever shows in a profile
 	mu     sync.Mutex
-	repo   *git.Repository
 	fs     *filesystem.Storage
 	gitDir string
 	// commonDir is the absolute git common dir.
@@ -74,11 +74,14 @@ func Open(path string) (*Store, error) {
 	if err != nil {
 		return nil, fmt.Errorf("gitstore: open %s: %w", path, err)
 	}
-	fs, ok := repo.Storer.(*filesystem.Storage)
+	found, ok := repo.Storer.(*filesystem.Storage)
 	if !ok {
 		return nil, fmt.Errorf("gitstore: open %s: not a filesystem repository", path)
 	}
-	s := &Store{repo: repo, fs: fs, gitDir: fs.Filesystem().Root()}
+	// the git directory go-git found, in a storage that keeps its packs open
+	fs := filesystem.NewStorageWithOptions(found.Filesystem(), cache.NewObjectLRUDefault(),
+		filesystem.Options{MaxOpenDescriptors: openPacks})
+	s := &Store{fs: fs, gitDir: fs.Filesystem().Root()}
 	cmd := s.command(context.Background(), "rev-parse", "--git-common-dir")
 	cmd.Dir = s.gitDir // a relative answer is relative to this
 	var stderr bytes.Buffer
@@ -94,15 +97,23 @@ func Open(path string) (*Store, error) {
 	return s, nil
 }
 
+// Close lets go of the pack files kept open. The Store reads on after it,
+// opening them again.
+func (s *Store) Close() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.fs.ObjectStorage.Close()
+}
+
 func (s *Store) put(o plumbing.EncodedObject) (Hash, error) {
-	return s.repo.Storer.SetEncodedObject(o)
+	return s.fs.SetEncodedObject(o)
 }
 
 // WriteBlob stores data as a blob.
 func (s *Store) WriteBlob(data []byte) (Hash, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	o := s.repo.Storer.NewEncodedObject()
+	o := s.fs.NewEncodedObject()
 	o.SetType(plumbing.BlobObject)
 	w, err := o.Writer()
 	if err != nil {
@@ -121,7 +132,7 @@ func (s *Store) WriteBlob(data []byte) (Hash, error) {
 func (s *Store) ReadBlob(h Hash) ([]byte, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	b, err := retry(s, func() (*object.Blob, error) { return s.repo.BlobObject(h) })
+	b, err := retry(s, func() (*object.Blob, error) { return object.GetBlob(s.fs, h) })
 	if err != nil {
 		return nil, fmt.Errorf("gitstore: blob %s: %w", h, err)
 	}
@@ -143,7 +154,7 @@ func (s *Store) WriteTree(entries []TreeEntry) (Hash, error) {
 	}
 	// ponytail: sorted by plain name; right for blobs, not for subtrees.
 	sort.Slice(t.Entries, func(i, j int) bool { return t.Entries[i].Name < t.Entries[j].Name })
-	o := s.repo.Storer.NewEncodedObject()
+	o := s.fs.NewEncodedObject()
 	if err := t.Encode(o); err != nil {
 		return ZeroHash, err
 	}
@@ -154,7 +165,7 @@ func (s *Store) WriteTree(entries []TreeEntry) (Hash, error) {
 func (s *Store) ReadTree(h Hash) ([]TreeEntry, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	t, err := retry(s, func() (*object.Tree, error) { return s.repo.TreeObject(h) })
+	t, err := retry(s, func() (*object.Tree, error) { return object.GetTree(s.fs, h) })
 	if err != nil {
 		return nil, fmt.Errorf("gitstore: tree %s: %w", h, err)
 	}
@@ -173,7 +184,7 @@ func (s *Store) WriteCommit(c Commit) (Hash, error) {
 	// on --author=' <>' hides entity commits from both.
 	sig := object.Signature{When: time.Now()}
 	obj := object.Commit{Author: sig, Committer: sig, TreeHash: c.Tree, ParentHashes: c.Parents}
-	o := s.repo.Storer.NewEncodedObject()
+	o := s.fs.NewEncodedObject()
 	if err := obj.Encode(o); err != nil {
 		return ZeroHash, err
 	}
@@ -184,7 +195,7 @@ func (s *Store) WriteCommit(c Commit) (Hash, error) {
 func (s *Store) ReadCommit(h Hash) (Commit, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	c, err := retry(s, func() (*object.Commit, error) { return s.repo.CommitObject(h) })
+	c, err := retry(s, func() (*object.Commit, error) { return object.GetCommit(s.fs, h) })
 	if err != nil {
 		return Commit{}, fmt.Errorf("gitstore: commit %s: %w", h, err)
 	}
@@ -207,7 +218,7 @@ func retry[T any](s *Store, read func() (T, error)) (T, error) {
 func (s *Store) Ref(name string) (Hash, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	r, err := s.repo.Reference(plumbing.ReferenceName(name), false)
+	r, err := s.fs.Reference(plumbing.ReferenceName(name))
 	if errors.Is(err, plumbing.ErrReferenceNotFound) {
 		return ZeroHash, nil
 	}

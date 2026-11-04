@@ -35,7 +35,7 @@ enforces it.**
 | Layer | Packages (target) | What it owns |
 |---|---|---|
 | **Kernel** | `core/oplog`, `core/datastore` and the stores, `core/people`, `core/watch`, `core/forge` | operations, where they are kept, who wrote them, the forges' adapters |
-| **Issues** | `core/issue`, `core/index`, `core/syncer`, `core/model` (the read model, from `internal/store`), `core/fields` (the schema, from `internal/config`, and the assignments, from `internal/fields`), `core/filter`, `core/inbox` (from `internal/filter`, `internal/inbox`) | issues, comments, fields as labels (ADR 0007), queries, the inbox, their sync with forges |
+| **Issues** | `core/issue`, `core/index`, `core/syncer`, `core/model` (the read model, from `internal/store`), `core/fields` (the schema, from `internal/config`, and the assignments, from `internal/fields`), `core/filter`, `core/inbox` (from `internal/filter`, `internal/inbox`), `core/search` (free text's tokens and match, which the index and the filter share) | issues, comments, fields as labels (ADR 0007), queries, the inbox, their sync with forges |
 | **Releases** | `core/release` (the record, from `internal/store/releases.go`; versions and the overlay, from `internal/release`; the `[release]` table, from `internal/config`), `core/proof` (from `internal/proof`) | versions, what each shipped (which issues), deploys, signed check results (ADR 0001) |
 | **Cycle** | `core/cycle` (from `internal/cycle`, `internal/work`) | an issue's steps from intent to verified; experimental (ADR 0018) |
 

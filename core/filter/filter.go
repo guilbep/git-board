@@ -22,8 +22,8 @@ import (
 	"time"
 
 	"github.com/guilbep/git-board/core/fields"
-	"github.com/guilbep/git-board/core/index"
 	"github.com/guilbep/git-board/core/model"
+	"github.com/guilbep/git-board/core/search"
 )
 
 // Kind identifies what a Condition matches against.
@@ -53,7 +53,7 @@ type Condition struct {
 	Negated bool
 	// Hits are, for free text, the issues the full-text index (title,
 	// description, comments, or where in: says) matches, by id; nil: the
-	// issue's own texts are searched (index.MatchText), as the index would.
+	// issue's own texts are searched (search.Match), as the index would.
 	Hits map[string]bool
 	// Mentions are, for involves: and follows:, the issues whose text
 	// mentions the login, by id (board fills it); nil: none.
@@ -273,7 +273,7 @@ func matchOne(issue model.Issue, labels map[string]bool, c Condition, value stri
 		if c.Hits != nil {
 			ok = c.Hits[issue.ID]
 		} else {
-			ok = index.MatchText(value, texts(issue, in)...)
+			ok = search.Match(value, texts(issue, in)...)
 		}
 		ok = ok || itself(issue, value)
 	case KindDate:
@@ -410,9 +410,16 @@ func titleGlob(glob string) *regexp.Regexp {
 	if re, ok := globs.Load(glob); ok {
 		return re.(*regexp.Regexp)
 	}
+	// A * at either end is any text there: the regexp then isn't anchored
+	// on that side, rather than backtrack through a .* (a glob ending in
+	// * isn't in a class: a class ends in ]).
+	core := strings.TrimLeft(glob, "*")
+	head := map[bool]string{true: "^", false: ""}[core == glob]
+	trimmed := strings.TrimRight(core, "*")
+	tail := map[bool]string{true: "$", false: ""}[trimmed == core]
 	var b strings.Builder
-	b.WriteString(`(?is)^`)
-	rs := []rune(glob)
+	b.WriteString(`(?is)` + head)
+	rs := []rune(trimmed)
 	for i := 0; i < len(rs); i++ {
 		switch r := rs[i]; r {
 		case '*':
@@ -452,7 +459,7 @@ func titleGlob(glob string) *regexp.Regexp {
 			b.WriteString(regexp.QuoteMeta(string(r)))
 		}
 	}
-	b.WriteString("$")
+	b.WriteString(tail)
 	re, err := regexp.Compile(b.String())
 	if err != nil { // a class the regexp refuses ([z-a]): the glob as text
 		re = regexp.MustCompile(`(?is)^` + regexp.QuoteMeta(glob) + `$`)

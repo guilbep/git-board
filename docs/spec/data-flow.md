@@ -69,7 +69,7 @@ flowchart TB
   ds --> copy
   store -. "renders NNN-slug.md, reads hand edits" .-> md
   index -. "sqlite, for git and forge only" .-> folder
-  index -. "git_board_index_v2, on PostgreSQL" .-> pg
+  index -. "git_board_index_v3, on PostgreSQL" .-> pg
   syncer -. "sync.lock, journal" .-> folder
 ```
 
@@ -128,12 +128,14 @@ sequenceDiagram
 
 - **A list or a search** asks the index. The index first reads the
   datastore's `Heads` (one version per entity), loads again only the
-  entities whose version moved, and then answers from its tables.
+  entities whose version moved, and then answers from its tables. A
+  listing's issues are the states the index keeps, each folded once at
+  its version.
 - **One issue** is its packs, read from the datastore, sorted by oplog
   and folded by `core/issue`. `internal/store` keeps the folded issues
   per version, for a listing and for one issue alike (its page, its
   thread, a write): its packs are read each time, but an unchanged issue
-  isn't folded twice.
+  isn't folded twice, nor read again from the index.
 - **The pages' change events** compare the datastore's heads every few
   seconds: a write from another clone, another machine or the command line
   reaches every open page.

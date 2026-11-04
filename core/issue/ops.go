@@ -95,6 +95,16 @@ func LoadContext(ctx context.Context, s oplog.Datastore, id string) (*Issue, err
 	return Apply(l)
 }
 
+// LoadAt reads an issue at version, one its datastore's Heads gave
+// (oplog.LoadAt).
+func LoadAt(ctx context.Context, s oplog.Datastore, id, version string) (*Issue, error) {
+	l, err := oplog.LoadAt(ctx, s, "issue", id, version)
+	if err != nil {
+		return nil, err
+	}
+	return Apply(l)
+}
+
 // List returns the ids of the issues, sorted.
 func List(s oplog.Datastore) ([]string, error) { return oplog.List(s, "issue") }
 

@@ -896,6 +896,7 @@ generation time against `--me`/`GIT_BOARD_ME`, the same single shared
 core/model/            the read model: Issue, Thread, Event, Person — as every surface reads them.
 core/fields/           the field schema (types, sprints, roles) and field=value assignments as labels.
 core/filter/           grammar parser, Matches(issue, conditions, schema, me).
+core/search/           free text's tokens and Match, as the index searches: the filter's, without it.
 core/inbox/            what a person follows and has seen, and what's new for them.
 core/release/          release records, versions and tags, the [release] table, GitOps overlays.
 core/proof/            check results as signed git notes, keyed by content, and the gate (ADR 0001).

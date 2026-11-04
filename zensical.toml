@@ -29,6 +29,7 @@ nav = [
     { "Configuration" = "guide/configuration.md" },
     { "Forges" = "guide/forges.md" },
     { "Where the board is kept" = "guide/datastores.md" },
+    { "Performance" = "guide/performance.md" },
   ] },
   { "Spec" = [
     { "How the data flows" = "spec/data-flow.md" },
