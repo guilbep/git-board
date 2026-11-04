@@ -418,7 +418,7 @@ func (s *apiServer) handleListIssues(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	issues, err := board.LoadMatching(s.b, s.config(), filterOf(q), s.me)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err)
+		writeError(w, filterStatus(err), err)
 		return
 	}
 	board.SortByField(issues, q.Get("sort"), s.config())
@@ -430,7 +430,7 @@ func (s *apiServer) handleListIssues(w http.ResponseWriter, r *http.Request) {
 func (s *apiServer) handleFacets(w http.ResponseWriter, r *http.Request) {
 	facets, err := board.Facets(s.b, s.config(), filterOf(r.URL.Query()), s.me)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err)
+		writeError(w, filterStatus(err), err)
 		return
 	}
 	writeJSON(w, http.StatusOK, facets)
@@ -457,6 +457,16 @@ func (s *apiServer) handleFieldUsage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	writeJSON(w, http.StatusOK, usage)
+}
+
+// filterStatus is the status of a filtered read's error: 400 for a filter
+// that can't be answered as written (board.FilterError), 500 for the board
+// failing to be read.
+func filterStatus(err error) int {
+	if board.IsFilterError(err) {
+		return http.StatusBadRequest
+	}
+	return http.StatusInternalServerError
 }
 
 func filterOf(q url.Values) string {
