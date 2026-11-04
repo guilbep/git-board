@@ -61,11 +61,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { filterValues, getIssues, type Issue } from '@/api/board';
 import { filtersHidden, helpAfterPalette, newIssueRequested, openShortcuts, paletteOpen, recentIssues, recordRecent } from '@/commands';
 import { message } from '@/issue';
+import { onLive } from '@/live';
 import { when } from '@/me';
 import { forgeNumbers } from '@/issuesync';
 import { example, jumps, latest, numberName, rank, recentName } from '@/palette';
@@ -127,12 +128,23 @@ async function onShow() {
   active.value = 0;
   await nextTick();
   input.value?.focus();
+  if (!stale) return;
+  stale = false;
   try {
     all.value = (await getIssues('is:open,closed')).flatMap((b) => b.issues);
   } catch {
     all.value = [];
+    stale = true;
   }
 }
+
+// every issue is asked once, and again only after they changed (a write
+// here or elsewhere, a sync): not on every ⌘K, a large board's whole list
+let stale = true;
+const offLive = onLive((e) => {
+  if (e.kind === 'issues') stale = true;
+}, { own: true });
+onBeforeUnmount(offLive);
 
 // The filter runs on the server once typing pauses, on every issue (no
 // is:open added: the board shows the same issues for it); only the latest
