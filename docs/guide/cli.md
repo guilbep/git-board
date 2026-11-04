@@ -198,6 +198,20 @@ first. `move <id> <status>` is `set <id> status=<status>`, checked the
 same way. `move --next` and `--prev` step the status through its
 options. Onto the last one the issue closes; back from it, it reopens.
 
+## `branch`: the issue's branch
+
+```bash
+git board branch a1b2c3d                # the name, and the command
+git board branch a1b2c3d --create       # create it from the base, switch to it
+```
+
+The name comes from `[branches]` in `.git-board.toml`: by default the
+issue's folder, then the branch's place in it and the title,
+`2518/1-login-fails-on-safari`. `branch` prints it and the `git switch`
+command creating it from the base, and creates nothing. `--create` runs
+that command. A second `--create` makes the issue's next branch,
+`2518/2-…`.
+
 ## `log`: everything that happened to an issue
 
 ```bash
@@ -341,7 +355,7 @@ Errors go to stderr, prefixed `error:`.
 | `gh issue reopen N` | `glab issue reopen N` | `git board reopen N` |
 | `gh status`, `gh issue status` | | `git board status`, or `git board ls "involves:@me is:open"` |
 | | `glab issue subscribe N`, `unsubscribe N` | `git board follow N`, `git board unfollow N` |
-| `gh issue develop N` | `glab mr create --related-issue N` | `git board branch N` (prints the branch and the command) |
+| `gh issue develop N -c` | `glab mr create --related-issue N` | `git board branch N --create` (`branch N` prints the branch and the command) |
 | | `glab issue view N -s` (system notes) | `git board log N` (every change, text edits too) |
 | `gh project item-edit …` | `glab issue board …` | `git board move N in-progress`, `move N --next`, `git board project` |
 
