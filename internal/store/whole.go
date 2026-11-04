@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+
+	"github.com/guilbep/git-board/core/datastore"
 )
 
 // Whole is the whole sync, as git-board sync and Settings › Sync run it:
@@ -212,6 +214,8 @@ func (b *Backend) syncShared(ctx context.Context, w Whole, step func(string, str
 	step(StepPush, "running", "")
 	n, err := b.NumberIssues(NumbersRemote)
 	switch {
+	case errors.Is(err, datastore.ErrMissing): // a Markdown board off its default branch: numbering waits
+		step(StepPush, "skipped", err.Error())
 	case err != nil:
 		step(StepPush, "failed", err.Error())
 		errs = append(errs, fmt.Errorf("%s: %w", StepPush, err))

@@ -152,6 +152,35 @@ the issue's assignees, a user of that forge. Sync never sends an
 - **GitLab's free edition takes one assignee per issue.** The others stay
   in git-board, with one warning (see [GitLab](forges.md#gitlab)).
 
+### A person with no forge account
+
+Issue #87, 2026-11-04. On a board that never synced with a forge, nobody
+has a login, yet `assignee=+@me` and `involves:@me` must work.
+
+**Decision: an assignee label names such a person by their name, as it
+is written (`assignee:Ada Lovelace`).** `@me` is the person you write as:
+their forge login, else their name (`MyName`). In a filter, `@me` matches
+a label naming you by any of your logins or by your name (`MyNames`), so a
+label written before you had an account stays yours after. A sync sends
+that label as your account where you have one, by the rule above ("failing
+that, by a name"); the label itself stays as written, and a second sync
+sends nothing.
+
+Why the name and not a handle derived from it (`ada-lovelace`):
+
+- The rule above already maps a name to an account: a handle would need a
+  third rule, here and in the import (`import --md` finds people by name
+  or login).
+- The fields already offer a person with no login by name (`Logins`), so
+  labels made in the web UI are names today.
+- A handle collides and changes with the name, and nobody reads it
+  anywhere else.
+
+What it costs: a name with a space is quoted in a typed filter
+(`"assignee:Ada Lovelace"`); `@me` needs no quotes. A person never gets a
+forge account by a sync alone: a pull makes a person of each forge user
+it meets, and joining that person to yours is not built.
+
 ## The four cases
 
 For each field of a linked issue, sync compares git-board's value (G) and

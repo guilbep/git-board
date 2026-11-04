@@ -45,8 +45,11 @@ type numbersResponse struct {
 	Kept string `json:"kept,omitempty"`
 	// Missing: the datastore keeps no counter, the sentence why
 	Missing string `json:"missing,omitempty"`
-	Done    int    `json:"done"`            // a write: how many issues it numbered
-	Error   string `json:"error,omitempty"` // started, but the issues not numbered yet
+	// Waits: the counter can't be written here, the sentence why: a
+	// Markdown board numbers on its default branch alone (issue #84)
+	Waits string `json:"waits,omitempty"`
+	Done  int    `json:"done"`            // a write: how many issues it numbered
+	Error string `json:"error,omitempty"` // started, but the issues not numbered yet
 }
 
 // githubNumbers is what GitHub says, asked with ?github=1 before the
@@ -64,6 +67,7 @@ func (s *apiServer) numbers() (numbersResponse, error) {
 		if !c.Counter {
 			res.Missing = "project numbers need a datastore that counts; this board is kept in " + c.Datastore + ": its issues go by the forges' numbers"
 		}
+		res.Waits = s.b.NumbersWait()
 	}
 	c, on, err := s.b.Counter()
 	if err != nil {

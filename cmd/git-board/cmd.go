@@ -57,8 +57,8 @@ docs/guide/configuration.md, Filters):
   field:value             issue has the label field:value; field:a,b either
   -<condition>            negates any condition
   field:@current/@next/@previous   resolves against [sprints] in .git-board.toml
-  field:@me               you: --me / GIT_BOARD_ME, else the forge login of
-                          the person you write as (git board me)
+  field:@me               you: --me / GIT_BOARD_ME, else the person you
+                          write as (git board me), by login or by name
   is:open / is:closed     issue state
   author:x  involves:x  follows:@me   who opened it, is in it, what you follow
   label:x                 a plain label (or a full one: label:status:ready)
@@ -167,9 +167,9 @@ func newSetCmd() *cobra.Command {
   label=+name     adds the plain label name (bug, not kind:bug)
   label=-name     removes it
 
-Values resolve first: @me is --me, GIT_BOARD_ME, else the forge login of
-the person you write as (git board me); @current, @next and @previous are
-sprints; a configured alias is its current name.
+Values resolve first: @me is --me, GIT_BOARD_ME, else the person you
+write as (git board me): their forge login, else their name; @current,
+@next and @previous are sprints; a configured alias is its current name.
 
 Each value is held to .git-board.toml before anything is written: one of
 the field's options, a number for a number field, a YYYY-MM-DD date for a

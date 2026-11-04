@@ -243,8 +243,11 @@ func TestUpdateStructuredFilterEscCancelsWithoutApplying(t *testing.T) {
 func TestUpdateStructuredFilterRequiresMeDoesNotCrash(t *testing.T) {
 	t.Parallel()
 	cfg := mustLoadConfig(t)
-	b := storetest.New(t)
+	dir := storetest.Repo(t, false)
+	storetest.Init(t, dir)
+	b := storetest.Open(t, dir)
 	storetest.NewIssue(t, b, "widget")
+	storetest.Git(t, dir, "config", "--unset", "board.me") // no one to write as
 	issues, err := b.ListIssues()
 	if err != nil {
 		t.Fatalf("ListIssues: %v", err)

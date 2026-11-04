@@ -13,7 +13,7 @@ choose. [How the data flows](../spec/data-flow.md) shows the layers.
 | Who sees a write | a clone, until it pushes | everyone, at once | whoever has the commit | everyone, once it reaches the forge |
 | Offline work | yes | only with a local server | yes | no |
 | `git board pull`, `push`, start over | yes | no: nothing to move | no: commit and push the folder | no |
-| Project numbers (`CO2-3075`) | yes, `refs/board/seq` on origin | yes, a row in the database | the forges' numbers only | the forges' numbers only |
+| Project numbers (`CO2-3075`) | yes, `refs/board/seq` on origin | yes, a row in the database | yes, `.board/numbers`, on the default branch | the forges' numbers only |
 | Forge sync | yes | yes, the same | yes, the same | yes: it is the store |
 | Lists and search | a sqlite file per clone | one index on the server | a sqlite file per clone | a sqlite file per clone |
 | Read and edit by hand | no | no | yes, a file per issue | on the forge |
@@ -117,8 +117,24 @@ refused.
 - **A server and a command at once** take turns: each write reads the
   hand edits in, writes and renders under `.board/board.lock`, so no edit
   is read in twice. `.board/.gitignore` keeps the lock files out of git.
-- **No project numbers**: files are named by the forges' number, else by
-  the id's first 7 digits.
+- **Numbers are handed out on the default branch.** Settings › Numbers
+  (or `git board numbers init`) starts them as on a git board; the counter
+  is `issues/.board/numbers`, the file `refs/board/seq` holds, committed
+  with the rest. Numbering (Number them now, a sync, `git board numbers`)
+  writes it only while the checkout is on the default branch: origin's
+  `HEAD`, else `main`, else `master`. On another branch the counter is
+  read, and numbering says why it waits; the branch's issues take their
+  numbers once it is merged and someone numbers on the default branch. A
+  file is named by its issue's number, else by the forges' number, else
+  by the id's first 7 digits.
+- **The counter never merges line by line.** `.board/.gitattributes` gives
+  `/numbers` git's binary driver: only the default branch writes it, so a
+  merge from a branch takes the default branch's. Two clones that numbered
+  on the default branch at once conflict on it when one pulls: take
+  theirs (`git checkout --theirs issues/.board/numbers`), commit, and
+  number again; your issues take the next numbers. The union driver would
+  keep one number twice, and a text merge would write conflict markers in
+  the file.
 
 ## Importing Markdown
 

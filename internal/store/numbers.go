@@ -2,6 +2,7 @@ package store
 
 import (
 	"cmp"
+	"context"
 	"errors"
 	"fmt"
 	"log"
@@ -15,6 +16,7 @@ import (
 	"github.com/guilbep/git-board/core/datastore"
 	"github.com/guilbep/git-board/core/gitstore"
 	"github.com/guilbep/git-board/core/issue"
+	"github.com/guilbep/git-board/core/mdstore"
 )
 
 // The project's own numbers (CO2-3075): refs/board/seq, a chain of commits
@@ -557,7 +559,19 @@ func (b *Backend) initDatastoreNumbers(prefix string, start int) error {
 		c, _, cerr := b.Counter()
 		return cmp.Or(cerr, fmt.Errorf("%w: %s, from %d", ErrNumbered, c.Prefix, c.Start))
 	}
-	return err
+	if err != nil {
+		return err
+	}
+	return b.renderNumbers() // GitHub numbers below start are the project's now
+}
+
+// renderNumbers writes a Markdown board's files again once its numbers
+// moved: a file is named by its issue's number.
+func (b *Backend) renderNumbers() error {
+	if _, ok := b.ds.(*mdstore.Store); !ok {
+		return nil
+	}
+	return b.renderMarkdown()
 }
 
 // numberInDatastore numbers every issue without a number, oldest first,
@@ -565,6 +579,9 @@ func (b *Backend) initDatastoreNumbers(prefix string, start int) error {
 // first, five tries.
 func (b *Backend) numberInDatastore() (int, error) {
 	dc := b.ds.(datastore.Counter) // Counter answered ok: it counts
+	if err := b.numbersWait(); err != nil {
+		return 0, err
+	}
 	var last error
 	for range 5 {
 		data, version, err := dc.Count(ctx)
@@ -585,7 +602,7 @@ func (b *Backend) numberInDatastore() (int, error) {
 		}
 		_, err = dc.SetCount(ctx, c.Bytes(), version)
 		if err == nil {
-			return len(todo), nil
+			return len(todo), b.renderNumbers()
 		}
 		if !errors.Is(err, datastore.ErrMoved) {
 			return 0, err
@@ -593,4 +610,29 @@ func (b *Backend) numberInDatastore() (int, error) {
 		last = err
 	}
 	return 0, fmt.Errorf("%w, sync again: %w", ErrNumbersMoved, last)
+}
+
+// countWaiter is a datastore whose counter can't always be written here:
+// a Markdown board's, on the default branch alone (issue #84).
+type countWaiter interface {
+	CountWaits(ctx context.Context) error
+}
+
+// NumbersWait is why numbering waits here, "" when it can number: a
+// Markdown board's counter is written on the default branch alone, and
+// this checkout is on another.
+func (b *Backend) NumbersWait() string {
+	if err := b.numbersWait(); err != nil {
+		return err.Error()
+	}
+	return ""
+}
+
+// numbersWait is NumbersWait as an error, datastore.ErrMissing with its
+// sentence.
+func (b *Backend) numbersWait() error {
+	if w, ok := b.ds.(countWaiter); ok {
+		return w.CountWaits(ctx)
+	}
+	return nil
 }

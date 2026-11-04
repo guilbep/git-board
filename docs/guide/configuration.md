@@ -259,7 +259,7 @@ One syntax everywhere: a view's `filter`, the board's **Filter** box, ⌘K, and 
 | `-status:ready` | issues without it |
 | `status:ready,qa` | either value, as in GitHub's search; works with `is:`, `label:` and `author:` too |
 | `sprint:@current`, `@next`, `@previous` | the sprint of today, the next or the previous one, from `[[sprints.list]]` |
-| `assignee:@me` | you: the GitHub or GitLab login of the person you write as (`git board me`) |
+| `assignee:@me` | you: the person you write as (`git board me`), by their GitHub or GitLab login or by their name. Without a forge account, `assignee=+@me` writes the name (`assignee:Ada Lovelace`); a sync sends it as their login where they have an account |
 | `is:open`, `is:closed` | open or closed issues |
 | `title:*spec*` | a title matching the pattern, without case: `*` any text, `/` included, `?` one character, `[a-z]` and `[!a-z]` a class (a `[` that closes none is a `[`) |
 | `author:guilbep`, `author:@me` | who opened the issue |
@@ -706,7 +706,7 @@ wtx runs only when the server listens on loopback alone (not `--addr 0.0.0.0:…
 
 ## Numbers
 
-A project can number its issues itself, `CO2-3075`, instead of leaning on a forge's numbers. The counter is in git, `refs/board/seq` on `origin` (never a mirror): no key here. Start it once, for everyone, from **Settings › Numbers** (`#/settings/numbers`): it suggests a prefix from the repository's name (`git-board` → `GB`, `co2-calculator` → `CO2`) and a start above every number it knows (your issues' forge numbers, and GitHub's newest issue or pull request when a GitHub forge answers through `gh`), shows what your issues become, and names what it pushes and where before **Start numbering**. Once started, it says how many issues wait for a number, and **Number them now** numbers those origin has. Or from a terminal:
+A project can number its issues itself, `CO2-3075`, instead of leaning on a forge's numbers. The counter is in git, `refs/board/seq` on `origin` (never a mirror): no key here. A board kept elsewhere ([Where the board is kept](datastores.md)) keeps it there: a row in PostgreSQL, `<folder>/.board/numbers` in a Markdown folder, which numbers on the default branch alone (on another, Settings › Numbers says why numbering waits). Start it once, for everyone, from **Settings › Numbers** (`#/settings/numbers`): it suggests a prefix from the repository's name (`git-board` → `GB`, `co2-calculator` → `CO2`) and a start above every number it knows (your issues' forge numbers, and GitHub's newest issue or pull request when a GitHub forge answers through `gh`), shows what your issues become, and names what it pushes and where before **Start numbering**. Once started, it says how many issues wait for a number, and **Number them now** numbers those origin has. Or from a terminal:
 
 ```bash
 git board numbers init --prefix CO2 --start 3052

@@ -58,7 +58,9 @@ git board numbers               # number what origin has that has none yet
 With numbers on (Settings › Numbers), each issue gets `PREFIX-n`
 (`CO2-3075`), the same on every forge and in branches and commits.
 [Configuration › Numbers](../guide/configuration.md) explains choosing the
-prefix and the start.
+prefix and the start. A board kept in Markdown files numbers on its
+default branch alone: on another branch, `git board numbers` says why it
+waits, and the branch's issues take their numbers once merged.
 
 ## Who's who
 

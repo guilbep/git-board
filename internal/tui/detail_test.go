@@ -249,8 +249,11 @@ func TestApplyFieldMultiCardinalityAddsWithoutRemoving(t *testing.T) {
 func TestApplyFieldErrorsWithoutWritingOnUnknownSprintAlias(t *testing.T) {
 	t.Parallel()
 	cfg := mustLoadConfig(t)
-	b := storetest.New(t)
+	dir := storetest.Repo(t, false)
+	storetest.Init(t, dir)
+	b := storetest.Open(t, dir)
 	id := storetest.NewIssue(t, b, "x")
+	storetest.Git(t, dir, "config", "--unset", "board.me") // no one to write as
 
 	if _, _, err := ApplyField(b, cfg, id, "assignee", "@me", "", today); err == nil {
 		t.Fatal("expected error when @me used without a configured user")

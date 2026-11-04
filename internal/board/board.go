@@ -161,7 +161,13 @@ func setOf(ids []string) map[string]bool {
 func prepare(b any, filterStr, me string) ([]filter.Condition, string, error) {
 	conditions := filter.Parse(filterStr)
 	if filter.RequiresMe(conditions) && me == "" {
-		me = MyLogin(b)
+		me = MyName(b)
+		if n, ok := b.(interface{ MyNames() []string }); ok {
+			mine := n.MyNames()
+			for i := range conditions {
+				conditions[i].Mine = mine
+			}
+		}
 	}
 	if filter.RequiresMe(conditions) && me == "" {
 		return nil, "", ErrNoMe
@@ -218,15 +224,16 @@ func withRoles(cfg *config.Config, issues []store.Issue) {
 	}
 }
 
-// ErrNoMe is returned when @me means nobody: no --me, and no forge login on
-// the git-bug identity.
-var ErrNoMe = fmt.Errorf("@me needs your forge login: write as the person a forge sync made of your account (Settings › You), or pass --me / set GIT_BOARD_ME")
+// ErrNoMe is returned when @me means nobody: no --me, and no one chosen
+// to write as.
+var ErrNoMe = fmt.Errorf("@me is the person you write as: choose one (git board me --new, Settings › You), or pass --me / set GIT_BOARD_ME")
 
-// MyLogin is what @me means without --me: the forge login of the git-bug
-// identity git-board writes as, when b knows it (store.Backend does).
-func MyLogin(b any) string {
-	if l, ok := b.(interface{ MyLogin() string }); ok {
-		return l.MyLogin()
+// MyName is what @me means without --me: the forge login of the person
+// git-board writes as, else their name, when b knows them (store.Backend
+// does).
+func MyName(b any) string {
+	if l, ok := b.(interface{ MyName() string }); ok {
+		return l.MyName()
 	}
 	return ""
 }

@@ -158,9 +158,10 @@ git board set --filter "sprint:@current status:ready no:assignee" assignee=+@me 
 | `field=` | clears the field: every value it holds goes |
 | `label=+name`, `label=-name` | adds or removes the plain label `name` |
 
-Values resolve first: `@me` (`--me`, `GIT_BOARD_ME`, else the forge login
-of who you write as), `@current`, `@next`, `@previous` (sprints), and a
-configured alias.
+Values resolve first: `@me` (`--me`, `GIT_BOARD_ME`, else who you write
+as: their forge login, else their name, so `assignee=+@me` works on a
+board that never met a forge), `@current`, `@next`, `@previous`
+(sprints), and a configured alias.
 
 Every assignment is read before anything is written. One that is
 malformed (`=x`, `status=-`, a space around the value) is refused. One the
