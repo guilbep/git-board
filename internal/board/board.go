@@ -45,7 +45,7 @@ func Match(b any, cfg *config.Config, filterStr, me string, issues []store.Issue
 // MatchFollowing is Match with what follows:@me follows already known
 // (Following), as the inbox has it; nil reads it.
 func MatchFollowing(b any, cfg *config.Config, filterStr, me string, issues []store.Issue, today time.Time, followed *filter.Followed) ([]store.Issue, error) {
-	conditions, me, err := prepare(b, filterStr, me)
+	conditions, me, err := prepare(b, filterStr, me, today)
 	if err != nil {
 		return nil, err
 	}
@@ -155,11 +155,16 @@ func setOf(ids []string) map[string]bool {
 	return res
 }
 
-// prepare parses filterStr and finds who @me is. Free text looks in titles,
-// descriptions and comments when b has a full-text index (store.Backend
-// has git-bug's); else Matches looks at titles.
-func prepare(b any, filterStr, me string) ([]filter.Condition, string, error) {
+// prepare parses filterStr, refuses what can't be answered as written
+// (filter.Check), and finds who @me is. Free text looks in titles,
+// descriptions and comments (or where in: says) through b's full-text index
+// when it has one (store.Backend does); else Matches looks in the issues'
+// own texts, as the index would.
+func prepare(b any, filterStr, me string, today time.Time) ([]filter.Condition, string, error) {
 	conditions := filter.Parse(filterStr)
+	if err := filter.Check(conditions, today); err != nil {
+		return nil, "", &FilterError{err}
+	}
 	if filter.RequiresMe(conditions) && me == "" {
 		me = MyName(b)
 		if n, ok := b.(interface{ MyNames() []string }); ok {
@@ -173,12 +178,17 @@ func prepare(b any, filterStr, me string) ([]filter.Condition, string, error) {
 		return nil, "", &FilterError{ErrNoMe}
 	}
 	if s, ok := b.(interface {
-		SearchText(string) (map[string]bool, error)
+		SearchText(string, ...string) (map[string]bool, error)
 	}); ok {
+		in := filter.In(conditions)
 		for i, c := range conditions {
-			if c.Kind == filter.KindText {
+			switch {
+			case c.Kind != filter.KindText:
+			case in != nil && len(in) == 0: // -in: of every text: nowhere
+				conditions[i].Hits = map[string]bool{}
+			default:
 				var err error
-				if conditions[i].Hits, err = s.SearchText(c.Value); err != nil {
+				if conditions[i].Hits, err = s.SearchText(c.Value, in...); err != nil {
 					return nil, "", err
 				}
 			}

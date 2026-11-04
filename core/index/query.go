@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 	"unicode"
 
@@ -16,17 +17,26 @@ import (
 	"github.com/guilbep/git-board/core/issue"
 )
 
-// Query asks for issues. An empty field filters nothing. Sort is "created"
-// or "updated", the default; Desc sorts newest first; a Limit of 0 answers
-// all.
+// Query asks for issues. An empty field filters nothing. In names the
+// texts Text is looked for in (Texts: title, body, comments); none: all
+// of them. Sort is "created" or "updated", the default; Desc sorts newest
+// first; a Limit of 0 answers all.
 type Query struct {
 	Status       issue.Status
 	Labels       []string
 	Author, Text string
+	In           []string
 	Sort         string
 	Desc         bool
 	Limit        int
 }
+
+// Texts are an issue's texts a search can look in, in the order of the
+// sqlite index's columns, and their weights in PostgreSQL's.
+var Texts = []string{"title", "body", "comments"}
+
+// weights are each text's weight in PostgreSQL's tsvector.
+var weights = map[string]string{"title": "A", "body": "B", "comments": "C"}
 
 // Summary is what the index holds for an issue.
 type Summary struct {
@@ -53,6 +63,11 @@ func (ix *Index) Issues(ctx context.Context, q Query) ([]Summary, error) {
 	if q.Limit < 0 {
 		return nil, fmt.Errorf("index: negative limit %d", q.Limit)
 	}
+	for _, in := range q.In {
+		if !slices.Contains(Texts, in) {
+			return nil, fmt.Errorf("index: unknown text %q", in)
+		}
+	}
 	if err := ix.Refresh(ctx); err != nil {
 		return nil, err
 	}
@@ -66,9 +81,9 @@ func (ix *Index) Issues(ctx context.Context, q Query) ([]Summary, error) {
 	if q.Author != "" {
 		where, args = append(where, "author = ?"), append(args, q.Author)
 	}
-	switch m := match(q.Text); {
+	switch m := match(q.Text, q.In); {
 	case ix.pg:
-		if m := tsquery(q.Text); m != "" {
+		if m := tsquery(q.Text, q.In); m != "" {
 			where, args = append(where, "n IN (SELECT n FROM texts WHERE doc @@ to_tsquery('simple', ?))"), append(args, m)
 		}
 	case m != "":
@@ -107,15 +122,53 @@ func (ix *Index) Issues(ctx context.Context, q Query) ([]Summary, error) {
 // match is the FTS5 query for a search text. Each word is quoted, so FTS5's
 // syntax is plain text, and marked as a prefix; FTS5 ANDs them. A word with
 // no token (unicode61's: letters, numbers, private use) is left out. It is
-// "" when no word is left, which matches every issue.
-func match(text string) string {
+// "" when no word is left, which matches every issue. in, when given,
+// are the columns each word is looked for in.
+func match(text string, in []string) string {
+	cols := ""
+	if len(in) > 0 {
+		cols = "{" + strings.Join(in, " ") + "} : "
+	}
 	var words []string
 	for _, w := range strings.Fields(text) {
 		if strings.IndexFunc(w, isToken) >= 0 {
-			words = append(words, `"`+strings.ReplaceAll(w, `"`, `""`)+`"*`)
+			words = append(words, cols+`"`+strings.ReplaceAll(w, `"`, `""`)+`"*`)
 		}
 	}
 	return strings.Join(words, " ")
+}
+
+// MatchText reports whether an issue's texts hold text as Issues finds it:
+// each word's tokens in a row in one of them, the last as a prefix, every
+// word somewhere. texts are those Query.In names, the comments joined by a
+// line feed as the index keeps them. What a caller without the index (an
+// issue as it was, git board ls --at) searches with, so the two agree.
+func MatchText(text string, texts ...string) bool {
+	docs := make([][]string, len(texts))
+	for i, t := range texts {
+		docs[i] = strings.Fields(tokens(t))
+	}
+	for _, w := range strings.Fields(text) {
+		toks := strings.Fields(tokens(w))
+		if len(toks) == 0 {
+			continue
+		}
+		if !slices.ContainsFunc(docs, func(doc []string) bool { return holds(doc, toks) }) {
+			return false
+		}
+	}
+	return true
+}
+
+// holds tells doc has toks in a row, the last as a prefix.
+func holds(doc, toks []string) bool {
+	last := len(toks) - 1
+	for i := 0; i+last < len(doc); i++ {
+		if slices.Equal(doc[i:i+last], toks[:last]) && strings.HasPrefix(doc[i+last], toks[last]) {
+			return true
+		}
+	}
+	return false
 }
 
 func isToken(r rune) bool { return unicode.In(r, unicode.L, unicode.N, unicode.Co) }
@@ -123,9 +176,14 @@ func isToken(r rune) bool { return unicode.In(r, unicode.L, unicode.N, unicode.C
 // tsquery is match for PostgreSQL, as FTS5 reads match's: each word's
 // tokens in a row (<->), the last a prefix, the words ANDed; in
 // to_tsquery's syntax with the 'simple' configuration, over the tokens
-// that tokens gives. It is "" when no token is left, which matches every
-// issue.
-func tsquery(text string) string {
+// that tokens gives. in, when given, are the texts each token is looked
+// for in, by their weights. It is "" when no token is left, which matches
+// every issue.
+func tsquery(text string, in []string) string {
+	w8 := ""
+	for _, t := range in {
+		w8 += weights[t]
+	}
 	var words []string
 	for _, w := range strings.Fields(text) {
 		toks := strings.Fields(tokens(w))
@@ -134,8 +192,11 @@ func tsquery(text string) string {
 		}
 		for i, tok := range toks {
 			toks[i] = "'" + tok + "'"
+			if i < len(toks)-1 && w8 != "" {
+				toks[i] += ":" + w8
+			}
 		}
-		words = append(words, strings.Join(toks, " <-> ")+":*")
+		words = append(words, strings.Join(toks, " <-> ")+":*"+w8)
 	}
 	return strings.Join(words, " & ")
 }

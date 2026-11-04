@@ -19,4 +19,8 @@ test('nextTrick: the trick for the word being typed', () => {
   assert.match(nextTrick('car')!, /quotes/);
   assert.equal(nextTrick(''), null);
   assert.equal(nextTrick('is:cl'), null);
+  assert.match(nextTrick('created:')!, /@today-7d/);
+  assert.match(nextTrick('-closed:>2')!, /\.\./);
+  assert.match(nextTrick('comments:')!, /2\.\.5/);
+  assert.match(nextTrick('crash in:')!, /title,body/);
 });

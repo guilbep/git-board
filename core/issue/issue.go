@@ -185,3 +185,34 @@ func Apply(l *oplog.Log) (*Issue, error) {
 	slices.Sort(is.Labels)
 	return is, nil
 }
+
+// ErrNotYet is At's for an issue whose create was made after the time.
+var ErrNotYet = errors.New("issue: not created yet")
+
+// At is the log as it stood at a time, by each operation's own time
+// (Unix seconds, its writer's clock): the operations made at or before at,
+// in the log's order. An edit or a set-meta of a text made later goes
+// with it, as it has nothing to change yet (writers' clocks disagree). It
+// is ErrNotYet when the create was made later. Apply folds what it
+// answers: the issue as it was then.
+func At(l *oplog.Log, at int64) (*oplog.Log, error) {
+	if len(l.Entries) == 0 || l.Entries[0].Time > at {
+		return nil, ErrNotYet
+	}
+	kept := map[string]bool{}
+	out := &oplog.Log{Kind: l.Kind, ID: l.ID, Version: l.Version}
+	for _, e := range l.Entries {
+		if e.Time > at {
+			continue
+		}
+		if e.Kind == "edit-text" || e.Kind == "set-meta" {
+			var d struct{ Target string }
+			if json.Unmarshal(e.Data, &d) == nil && !kept[d.Target] {
+				continue
+			}
+		}
+		kept[e.ID] = true
+		out.Entries = append(out.Entries, e)
+	}
+	return out, nil
+}

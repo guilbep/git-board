@@ -22,8 +22,9 @@ import (
 	"github.com/guilbep/git-board/core/people"
 )
 
-// version is the schema's, in PRAGMA user_version.
-const version = 1
+// version is the schema's, in PRAGMA user_version. 2: PostgreSQL's texts
+// weigh the title, body and comments apart, for Query.In.
+const version = 2
 
 // schema is the index's tables. entities holds every indexed entity's head;
 // error is NULL when it loaded, and its error when it is broken. texts'
@@ -356,11 +357,17 @@ func (ix *Index) insertIssue(ctx context.Context, tx *sql.Tx, is *issue.Issue) e
 	// match across two comments; a row per text if that ever matters.
 	texts := "INSERT INTO texts (rowid, title, body, comments) VALUES (?, ?, ?, ?)"
 	if ix.pg {
-		texts = "INSERT INTO texts (n, doc) VALUES (?, to_tsvector('simple', ?))"
+		texts = `INSERT INTO texts (n, doc) VALUES (?, setweight(to_tsvector('simple', ?), 'A')
+			|| setweight(to_tsvector('simple', ?), 'B') || setweight(to_tsvector('simple', ?), 'C'))`
 	}
 	args = []any{n, is.Title, is.Body, strings.Join(comments, "\n")}
-	if ix.pg { // one text, tokenized here as sqlite's unicode61 does
-		args = []any{n, capTokens(tokens(is.Title) + " " + tokens(is.Body) + " " + tokens(strings.Join(comments, "\n")))}
+	if ix.pg { // one text, tokenized here as sqlite's unicode61 does, each part weighed
+		left := maxTokens
+		for i, t := range []string{is.Title, is.Body, strings.Join(comments, "\n")} {
+			toks := capTokens(tokens(t), left)
+			left -= len(toks) + 1
+			args[i+1] = toks
+		}
 	}
 	if _, err := tx.ExecContext(ctx, ix.sql(texts), args...); err != nil {
 		return err
@@ -379,12 +386,16 @@ func (ix *Index) insertIssue(ctx context.Context, tx *sql.Tx, is *issue.Issue) e
 // refresh, and with it every query (queries.md).
 const maxTokens = 300_000
 
-// capTokens is toks cut, at a token's end, to maxTokens bytes.
-func capTokens(toks string) string {
-	if len(toks) <= maxTokens {
+// capTokens is toks cut, at a token's end, to n bytes (maxTokens for one
+// issue's texts together).
+func capTokens(toks string, n int) string {
+	if n <= 0 {
+		return ""
+	}
+	if len(toks) <= n {
 		return toks
 	}
-	toks = toks[:maxTokens+1]
+	toks = toks[:n+1]
 	if i := strings.LastIndexByte(toks, ' '); i >= 0 {
 		return toks[:i]
 	}

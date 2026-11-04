@@ -1087,3 +1087,11 @@ nothing is stored.
 - `branch --create` runs the suggested `git switch -c`; `show --web` (the running board, else one started here; `runningBoard`/`serveBoard` are vars) and `show --forge`; `move <id> <status>` is `set status=`.
 - `close --reason`: the core and the forge sync carry no close reason (GitHub's `state_reason` is dropped on pull), so it is a field, `closed-as:not-planned|duplicate` (ADR 0007); `completed` writes none, `reopen` removes it. `--duplicate-of` sets `duplicate-of` and comments "Duplicate of #n". ponytail: map `closed-as` to GitHub's `state_reason` and GitLab's duplicate link in the forge sync.
 - `new --template` reads `.github/ISSUE_TEMPLATE` (Markdown and issue forms) and `.gitlab/issue_templates`; `new` asks on a terminal (never with `--no-prompt`, `GIT_BOARD_NO_PROMPT`, or stdin not a terminal). No new dependency.
+
+### Status 2026-11-04: search qualifiers and the board as it was (#88 P1, P2)
+
+- Filters (`internal/filter/ranges.go`): `created:`, `updated:`, `closed:` (a day, a time, `>`, `>=`, `<`, `<=`, `a..b` with `*`, `@today-7d`), `comments:` (the same on the count), `in:title,body,comments`. A value that isn't one is a `FilterError` (400). `@today` is the filter's today, so `ls --at` reads it as that day.
+- The index answers `in:` (`index.Query.In`: FTS5 column filters; PostgreSQL weights A, B, C, so the index is version 2). Without the index, `index.MatchText` searches an issue's own texts the same way: `TestSearchInAgreesWithMatchText`, `TestQualifiersWithAndWithoutTheIndex`.
+- `store.Issue` has `closed_at` and `comments`.
+- The board as it was: `issue.At` keeps the operations made by a time, by their own times, in the log's order; `Backend.ThreadAt`, `ListIssuesAt`; `git board show --at`, `ls --at`, `diff --since` (`cmd/git-board/diff.go`). Tests: `TestAtFoldsWhatWasMadeByThen`, `TestShowAndLsAt`, `TestDiffSince`.
+- Not done: `view`, `tui` and the web page have no `--at`; under `--at`, mentions and follows are as now.

@@ -15,6 +15,7 @@ import (
 
 func newShowCmd() *cobra.Command {
 	var md, noComments, web, forge bool
+	var at string
 	var js *jsonOut
 
 	cmd := &cobra.Command{
@@ -36,13 +37,19 @@ earlier versions under "history").
 --web opens the issue in this repository's web UI: where its server
 already runs, else it starts one here, as a bare "git board" does, until
 Ctrl-C. --forge opens it on its forge, the first one it is on; an issue
-on none is exit code 3. Both print the URL they open.`,
+on none is exit code 3. Both print the URL they open.
+
+--at shows it as it was then, folded from the operations made by then:
+a date (as it stood at its end), a time (2026-10-01T14:30) or a while
+ago (36h, 7d). Each operation counts at its own time, its writer's
+clock.`,
 		Example: `  git board show a1b2c3d
   git board show CO2-3075 --md
   git board show "#2528" --json
   git board show a1b2c3d --no-comments
   git board show a1b2c3d --web
-  git board show a1b2c3d --forge`,
+  git board show a1b2c3d --forge
+  git board show a1b2c3d --at 2026-10-01`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			n := 0
@@ -55,11 +62,22 @@ on none is exit code 3. Both print the URL they open.`,
 				return usageError{fmt.Errorf("one of --md, --json, --web and --forge")}
 			}
 			if web || forge {
+				if at != "" {
+					return usageError{fmt.Errorf("--at shows the issue here: not with --web or --forge")}
+				}
 				return runShowOpen(cmd, args[0], forge)
 			}
-			return runShow(cmd.OutOrStdout(), args[0], md, js, !noComments)
+			var when time.Time
+			if at != "" {
+				var err error
+				if when, err = parseAt(at, time.Now()); err != nil {
+					return usageError{err}
+				}
+			}
+			return runShow(cmd.OutOrStdout(), args[0], md, js, !noComments, when)
 		},
 	}
+	cmd.Flags().StringVar(&at, "at", "", "as it was then: a date (its end), a time (2026-10-01T14:30) or a while ago (36h, 7d)")
 	cmd.Flags().BoolVar(&md, "md", false, "render as Markdown")
 	js = addJSON(cmd, "render as JSON", jsonFields(store.Thread{}), true)
 	cmd.Flags().BoolVar(&noComments, "no-comments", false, "leave the comments out")
@@ -68,7 +86,8 @@ on none is exit code 3. Both print the URL they open.`,
 	return cmd
 }
 
-func runShow(out io.Writer, idPrefix string, md bool, js *jsonOut, comments bool) error {
+// runShow is show; at, when set, is the time to show the issue as it was.
+func runShow(out io.Writer, idPrefix string, md bool, js *jsonOut, comments bool, at time.Time) error {
 	cfg, err := loadConfig()
 	if err != nil {
 		return err
@@ -79,6 +98,9 @@ func runShow(out io.Writer, idPrefix string, md bool, js *jsonOut, comments bool
 	}
 	defer b.Close()
 	th, err := b.Thread(idPrefix)
+	if !at.IsZero() {
+		th, err = b.ThreadAt(idPrefix, at)
+	}
 	if err != nil {
 		return err
 	}
@@ -90,6 +112,9 @@ func runShow(out io.Writer, idPrefix string, md bool, js *jsonOut, comments bool
 			th.Events = []store.Event{}
 		}
 		return js.write(out, th)
+	}
+	if !at.IsZero() {
+		fmt.Fprintf(out, "As it was on %s.\n\n", when(at))
 	}
 	if md {
 		writeThreadMarkdown(out, th, cfg, comments)

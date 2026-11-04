@@ -23,7 +23,7 @@ directory when it is missing.
 
 For a board kept in PostgreSQL, the index is the same tables in the
 schema `git_board_index_v<version>` of the board's database (today
-`git_board_index_v1`), shared by every machine. Each version of the
+`git_board_index_v2`), shared by every machine. Each version of the
 index's tables has its own schema, so two git-board versions sharing a
 database each keep their index; neither drops the other's. A schema no
 git-board reads any more stays until it is dropped by hand
@@ -35,7 +35,8 @@ versions had their own). What differs from sqlite:
 - **A different text search:** a `tsvector` with the `simple`
   configuration, the text tokenized as sqlite's `unicode61` does, so a
   query finds the same issues; one issue's indexed text is cut at 300,000
-  bytes.
+  bytes. The title, body and comments have their own weight (`A`, `B`,
+  `C`), for `in`.
 - **The same order:** `Labels` sorts byte for byte (`COLLATE "C"`),
   whatever the database's collation.
 - **Several writers:** a refresh takes a table lock, so two machines
@@ -106,6 +107,7 @@ nothing.
 | `labels` | issues that have every label listed, compared byte for byte |
 | `author` | issues whose author is that person id |
 | `text` | issues whose text matches (see [Text](#text)) |
+| `in` | the texts `text` is looked for in: any of `title`, `body`, `comments`; empty for all three |
 
 An issue must match every field given. The answer is ordered and cut by
 three more:
@@ -117,7 +119,7 @@ three more:
 | `limit` | the most issues answered; 0, the default, answers all |
 
 - Issues with the same time go by id, in the same direction.
-- Another `status` or `sort`, or a negative `limit`, is an error.
+- Another `status`, `sort` or text in `in`, or a negative `limit`, is an error.
 - Each issue comes as its summary: what the index holds for it.
 
 ## Text
@@ -138,6 +140,9 @@ last edits left them.
   matches every issue.
 - **FTS5's own syntax is never read.** Each word is quoted, so `"`, `*`,
   `-`, `:`, `AND`, `OR`, `NOT` and parentheses are plain text.
+- **`in` narrows where.** Each word must then match in one of the texts
+  it names. Without the index, `MatchText` answers the same over an
+  issue's texts: what `git board ls --at` searches with.
 - **On PostgreSQL** (a board kept there, ADR 0002), an issue's text is
   indexed up to its first 300,000 bytes of tokens: a `tsvector` holds at
   most 1 MB, and one issue's text never fails a query. A word past that
