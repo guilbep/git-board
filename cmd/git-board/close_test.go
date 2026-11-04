@@ -105,3 +105,67 @@ func TestCloseWithCommentAndReopen(t *testing.T) {
 		t.Errorf("after reopen: %s %v, want in-progress kept", state, labels)
 	}
 }
+
+// --reason is a closed-as label (completed none); --duplicate-of also
+// links and comments; reopen takes closed-as away.
+func TestCloseReasons(t *testing.T) {
+	newTestRepo(t)
+	writeStatusOptionsConfig(t)
+	id := openIssueID(t)
+	other := listIDs(t)
+	var dup string
+	for _, o := range other {
+		if o != id {
+			dup = o
+		}
+	}
+
+	if out, err := execute(t, []string{"close", id, "--reason", "not planned"}); err != nil || !strings.Contains(out, "closed-as:not-planned") {
+		t.Fatalf("close --reason 'not planned': %v\n%s", err, out)
+	}
+	if labels, state := labelsOf(t, id); state != "closed" || !containsLabel(labels, "closed-as:not-planned") {
+		t.Errorf("after not-planned: %v %s", labels, state)
+	}
+	if out, err := execute(t, []string{"ls", "closed-as:not-planned is:closed"}); err != nil || !strings.Contains(out, "Fix invoice bug") {
+		t.Errorf("ls closed-as:not-planned: %v\n%s", err, out)
+	}
+
+	// completed, again: the earlier reason goes
+	if _, err := execute(t, []string{"close", id}); err != nil {
+		t.Fatal(err)
+	}
+	if labels, _ := labelsOf(t, id); slices.ContainsFunc(labels, func(l string) bool { return strings.HasPrefix(l, "closed-as:") }) {
+		t.Errorf("closed as completed keeps %v", labels)
+	}
+
+	if out, err := execute(t, []string{"close", id, "--duplicate-of", dup[:7]}); err != nil {
+		t.Fatalf("close --duplicate-of: %v\n%s", err, out)
+	}
+	th := threadOf(t, id)
+	if !containsLabel(th.Labels, "closed-as:duplicate") || !containsLabel(th.Labels, "duplicate-of:"+dup[:8]) {
+		t.Errorf("duplicate labels = %v", th.Labels)
+	}
+	if c := comments(th); len(c) != 1 || c[0] != "Duplicate of "+dup[:8] {
+		t.Errorf("comments = %q", c)
+	}
+
+	for _, args := range [][]string{
+		{"close", id, "--reason", "wontfix"},
+		{"close", id, "--reason", "completed", "--duplicate-of", dup[:7]},
+		{"close", id, "--duplicate-of", id[:7]},
+	} {
+		if _, err := execute(t, args); exitCode(err) != exitUsage {
+			t.Errorf("%v = %v, want exit %d", args, err, exitUsage)
+		}
+	}
+	if _, err := execute(t, []string{"close", id, "--duplicate-of", "0000000"}); exitCode(err) != exitNotFound {
+		t.Errorf("--duplicate-of nothing = %v, want exit %d", err, exitNotFound)
+	}
+
+	if _, err := execute(t, []string{"reopen", id}); err != nil {
+		t.Fatal(err)
+	}
+	if labels, state := labelsOf(t, id); state != "open" || containsLabel(labels, "closed-as:duplicate") || !containsLabel(labels, "duplicate-of:"+dup[:8]) {
+		t.Errorf("after reopen: %v %s", labels, state)
+	}
+}

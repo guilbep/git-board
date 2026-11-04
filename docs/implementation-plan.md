@@ -1080,3 +1080,10 @@ nothing is stored.
 - `--jq` with `github.com/itchyny/gojq` (MIT, and its `timefmt-go`, MIT; it moved `go-runewidth` to v0.0.31): the one new dependency, a jq in pure Go, as gh uses. `--template`, `text/template` with gh's `join`, `pluck`, `timeago`, `timefmt`, `truncate`. `new` has no `--template`: kept for an issue template (#88), as gh's.
 - Shell completion (`completion.go`, `addCompletions`): ids and project numbers with titles, `field=value` and options, status for `move`'s second argument (for `move <id> <status>`, #88), filter qualifiers and values, views, people, `--group`/`--sort`/`--field`/`--json=`. On any error it offers nothing. `git board completion` is cobra's.
 - Tests: `TestJSONFields`, `TestJSONFieldsCheckedFirst`, `TestJQAndTemplate`, `TestJSONFieldArgs`, `TestCompletion`, `TestCompletionCommand`.
+
+### Status 2026-11-04: what needs you, from the command line (#88 P1)
+
+- `git board status` (`cmd/git-board/status.go`): the open issues `assignee:@me`, then the inbox as the server computes it (`inbox.Rows`), split into what you opened (reason `author`) and the rest. Marks nothing read unless `--mark-read`. `follow`/`unfollow`/`follow --auto` write the same inbox file as the web bell.
+- `branch --create` runs the suggested `git switch -c`; `show --web` (the running board, else one started here; `runningBoard`/`serveBoard` are vars) and `show --forge`; `move <id> <status>` is `set status=`.
+- `close --reason`: the core and the forge sync carry no close reason (GitHub's `state_reason` is dropped on pull), so it is a field, `closed-as:not-planned|duplicate` (ADR 0007); `completed` writes none, `reopen` removes it. `--duplicate-of` sets `duplicate-of` and comments "Duplicate of #n". ponytail: map `closed-as` to GitHub's `state_reason` and GitLab's duplicate link in the forge sync.
+- `new --template` reads `.github/ISSUE_TEMPLATE` (Markdown and issue forms) and `.gitlab/issue_templates`; `new` asks on a terminal (never with `--no-prompt`, `GIT_BOARD_NO_PROMPT`, or stdin not a terminal). No new dependency.

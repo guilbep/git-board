@@ -68,6 +68,8 @@ git board new "Login fails on Safari" prio=p1 assignee=+@me sprint=@current
 git board new "Export to CSV" -b "As ls --md, but CSV."
 git board new "Crash report" -F crash.md label=+bug
 git board new -e prio=p2
+git board new "Login fails" --template "Bug report"
+git board new                                   # on a terminal: asks
 id=$(git board new "Follow-up")
 ```
 
@@ -80,6 +82,36 @@ It prints the new issue's id alone on its line. `--json` prints the issue
 as `ls --json` prints each one. `--force` writes values the config
 doesn't allow; `--me` is `@me`.
 
+### Templates
+
+`-T, --template <name>` starts from one of the repository's issue
+templates, by its name or its file's, without case:
+
+| Where | Read |
+|---|---|
+| `.github/ISSUE_TEMPLATE/*.md` | the front matter's `name`, `title`, `labels`, `assignees`; the text below it |
+| `.github/ISSUE_TEMPLATE/*.yml` | an issue form: `name`, `title`, `labels`, `assignees`, and a `### label` heading per field, as GitHub writes the issue; markdown elements, dropdown choices and validations are left out |
+| `.gitlab/issue_templates/*.md` | named by the file; `/label ~x` and `/assign @x` lines are labels and assignees, the rest the text |
+
+The template's text is the description, unless `-b` or `-F` gives one.
+Its labels and assignees (`assignee:<login>`) are set first, without
+the config's check; the `field=value` arguments go over them. Its title
+starts the title you are asked for, or the editor's first line; a title
+you give wins. A name no template has is exit code 2, and the error
+lists the names. `config.yml` is GitHub's chooser, not a template.
+
+### Prompts
+
+With no title on a terminal, `new` asks. A template first, when the
+repository has some; then the title, after the template's title; then
+whether to write the description in your editor. Questions go to
+stderr: the id still prints alone on stdout. `-e` asks nothing: the
+editor holds the title.
+
+It never asks when stdin is not a terminal, with `--no-prompt`, or when
+`GIT_BOARD_NO_PROMPT` is set. No title is exit code 2 then, as in a
+script.
+
 ## `show`: an issue, with its comments
 
 ```bash
@@ -87,6 +119,8 @@ git board show a1b2c3d
 git board show CO2-3075 --md
 git board show "#2528" --json
 git board show a1b2c3d --no-comments
+git board show a1b2c3d --web                    # in the web UI
+git board show a1b2c3d --forge                  # on GitHub or GitLab
 ```
 
 Title; number, id, state, author, date and comment count; the fields, the
@@ -99,6 +133,13 @@ each comment, headed by its author, date, `(edited)` and its ref
 | `--md` | as Markdown: a heading, a fields table, a section per comment |
 | `--json` | the whole thread (below) |
 | `--no-comments` | leave the comments out |
+| `-w, --web` | open it in this repository's web UI |
+| `--forge` | open it on its forge |
+
+`--web` opens the issue's page where the repository's board already
+runs; with none running, it starts one here, as a bare `git board` does,
+until Ctrl-C. `--forge` opens it on the first forge it is on; an issue on
+no forge yet is exit code 3. Both print the URL.
 
 `get <id>` stays what it was: the issue's labels, one per line, for
 scripts.
@@ -185,7 +226,10 @@ until `--apply`.
 
 ```bash
 git board close a1b2c3d -c "Fixed in 4e5f6a7"
+git board close a1b2c3d --reason not-planned -c "Out of scope"
+git board close a1b2c3d --duplicate-of "#2518"
 git board reopen a1b2c3d -c "Still fails on Safari"
+git board move a1b2c3d in-progress
 git board move a1b2c3d --next
 git board move a1b2c3d --prev
 ```
@@ -193,8 +237,36 @@ git board move a1b2c3d --prev
 `close` sets the status to its last option and closes the issue.
 `reopen` opens it and, when its status is that last option or none, sets
 the first option; another status stays. Both take `-c, --comment`, added
-first. `move --next` and `--prev` step the status through its options;
-onto the last one it closes the issue, back from it it reopens.
+first.
+
+`close -r, --reason` says why it closed, as GitHub does: `completed`
+(the default), `not-planned` or `duplicate`. The reason is a field like
+any other, the label `closed-as:not-planned`, so `ls
+"closed-as:not-planned"` finds them; `completed` writes none.
+`--duplicate-of <id>` closes as `duplicate`, sets the issue field
+`duplicate-of` to the other issue (its forge number `#2518` when both
+are on that forge, else its id), and comments `Duplicate of #2518`,
+which GitHub reads as well. `reopen` takes `closed-as` away and leaves
+`duplicate-of`. The forges get `closed-as` as a label, not as their own
+close reason.
+
+`move <id> <status>` is `set <id> status=<status>`, checked the
+same way. `move --next` and `--prev` step the status through its
+options. Onto the last one the issue closes; back from it, it reopens.
+
+## `branch`: the issue's branch
+
+```bash
+git board branch a1b2c3d                # the name, and the command
+git board branch a1b2c3d --create       # create it from the base, switch to it
+```
+
+The name comes from `[branches]` in `.git-board.toml`: by default the
+issue's folder, then the branch's place in it and the title,
+`2518/1-login-fails-on-safari`. `branch` prints it and the `git switch`
+command creating it from the base, and creates nothing. `--create` runs
+that command. A second `--create` makes the issue's next branch,
+`2518/2-…`.
 
 ## `log`: everything that happened to an issue
 
@@ -217,6 +289,36 @@ made. A forge shows label events at best, and keeps no earlier text.
 | `--json` | the entries (below) |
 
 `history` is the same command.
+
+## `status`, `follow`, `unfollow`: what needs you
+
+```bash
+git board status                        # assigned to you, then your inbox
+git board status --mark-read            # and mark that inbox read
+git board status --json
+git board follow a1b2c3d                # every change reaches your inbox
+git board unfollow a1b2c3d              # only what is addressed to you
+git board follow a1b2c3d --auto         # back to automatic
+```
+
+`status` prints three parts. The open issues assigned to you. Then your
+inbox, as the web UI's Inbox has it: what someone else changed since you
+last looked, in the last 14 days. It is split in two: the issues you
+opened, and the others you follow or are mentioned in. Each line says
+what is new (`2 comments`, `closed`, `mentioned you`), by whom, and when.
+
+Nothing is marked read: the Inbox still shows the same. `--mark-read`
+marks what `status` printed read. `--json` prints `{"me", "assigned",
+"opened", "follows"}`: `assigned` holds issues, the others inbox rows
+(below).
+
+You follow an issue automatically while you are in it: you opened it,
+are assigned, commented, are mentioned, or hold a role. `follow` and
+`unfollow` override that, as the web UI's bell does; `follow --auto`
+goes back to it. Each prints whether you follow the issue now, and why;
+`--json` prints `{"following", "reasons", "set"}`. Your follows stay in
+this clone, as the web UI's do. `ls "follows:@me"` lists what you
+follow.
 
 ## `ls` and `view`
 
@@ -296,6 +398,12 @@ edit's text: the `created` entry's id for the description), `title` and
 `was`, `state` (`open`, `closed`), `added` and `removed`, `body` (the text
 written).
 
+**An inbox row** (`status --json`): `issue` (an issue), `reasons` (why
+you follow it: `author`, `assignee`, `followed`, `view: <name>`; none when
+it is only addressed to you), `news` (`2 comments`, `closed`, `mentioned
+you`, `added you as reviewer`), `who` (people), `latest` and `first` (the
+oldest new event's id).
+
 ## Shell completion
 
 ```bash
@@ -342,6 +450,8 @@ Errors go to stderr, prefixed `error:`.
 | `gh auth status` | `glab auth status` | `git board me` (who you write as; forge tokens only matter to `sync`) |
 | `gh issue create -t T -b B -l bug -a @me` | `glab issue create -t T -d B -l bug -a @me` | `git board new T -b B label=+bug assignee=+@me` |
 | `gh issue create -e` | `glab issue create` | `git board new -e` |
+| `gh issue create` (asks) | `glab issue create` (asks) | `git board new` (asks on a terminal; `--no-prompt`) |
+| `gh issue create -T name` | `glab issue create --template name` | `git board new -T name` |
 | `gh issue list -a @me -l bug -S text` | `glab issue list -a @me -l bug --search text` | `git board ls "assignee:@me label:bug text"` |
 | `gh issue list -L 10 --json …` | `glab issue list -P 10 -O json` | `git board ls -L 10 --json` |
 | `gh issue list --json number,title` | | `git board ls --json number,title` |
@@ -349,6 +459,7 @@ Errors go to stderr, prefixed `error:`.
 | `gh issue list --json title -t '{{range .}}…'` | | `git board ls --template '{{range .}}…'` |
 | `gh issue view N -c` | `glab issue view N -c` | `git board show N` |
 | `gh issue view N --json …` | `glab issue view N -F json` | `git board show N --json` |
+| `gh issue view N -w` | `glab issue view N -w` | `git board show N -w` (the web UI), `show N --forge` (the forge) |
 | `gh issue comment N -b B` | `glab issue note N -m B` | `git board comment N -b B` |
 | `gh issue comment N --edit-last` | | `git board comment N --edit-last` |
 | `gh issue edit N -t T -b B` | `glab issue update N -t T -d B` | `git board edit N --title T -b B` |
@@ -357,13 +468,15 @@ Errors go to stderr, prefixed `error:`.
 | `gh issue edit N -m v1` | `glab issue update N -m v1` | `git board set N milestone=v1` (a field), or `sprint=@next` |
 | `gh issue edit 1 2 3 --add-label x` | | `git board set --filter "<filter>" label=+x --apply` |
 | `gh issue close N -c C` | `glab issue close N` | `git board close N -c C` |
+| `gh issue close N -r "not planned"`, `--duplicate-of M` | | `git board close N -r not-planned`, `--duplicate-of M` |
 | `gh issue reopen N` | `glab issue reopen N` | `git board reopen N` |
-| `gh issue status` | | `git board ls "involves:@me is:open"` |
-| `gh issue develop N` | `glab mr create --related-issue N` | `git board branch N` (prints the branch and the command) |
+| `gh status`, `gh issue status` | | `git board status`, or `git board ls "involves:@me is:open"` |
+| | `glab issue subscribe N`, `unsubscribe N` | `git board follow N`, `git board unfollow N` |
+| `gh issue develop N -c` | `glab mr create --related-issue N` | `git board branch N --create` (`branch N` prints the branch and the command) |
 | | `glab issue view N -s` (system notes) | `git board log N` (every change, text edits too) |
-| `gh project item-edit …` | `glab issue board …` | `git board move N --next`, `git board project` |
+| `gh project item-edit …` | `glab issue board …` | `git board move N in-progress`, `move N --next`, `git board project` |
 | `gh completion -s zsh` | `glab completion -s zsh` | `git board completion zsh` |
 
 `N` is any [name of an issue](#naming-an-issue). Not there yet: deleting
-an issue or a comment, templates, pinning, locking (no permissions in a
-board kept in git), `--web`.
+an issue or a comment, pinning, locking (no permissions in a board kept
+in git).
