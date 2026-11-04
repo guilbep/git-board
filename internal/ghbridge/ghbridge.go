@@ -40,7 +40,6 @@ import (
 	"strings"
 
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/fields"
 	"github.com/guilbep/git-board/internal/store"
 )
 
@@ -165,7 +164,7 @@ type IssueChange struct {
 	Number    int
 	Title     string
 	Fields    []FieldResult
-	Added     []string // union of every field's Added, for ApplyPlan/summary
+	Added     []string // union of every field's Added
 	Removed   []string // union of every field's Removed
 	Warnings  []string // e.g. a status value with no matching [fields.status] option
 }
@@ -179,113 +178,6 @@ type UnmatchedItem struct {
 	Title      string
 	Reason     string
 	NotAnIssue bool // true for a PR/draft excluded outright; false for an Issue with no matching bug
-}
-
-// Plan is the full result of BuildPlan: what would change (or, once
-// applied via ApplyPlan, did change) for every matched issue, plus what
-// couldn't be matched at all.
-type Plan struct {
-	Changes   []IssueChange
-	Unmatched []UnmatchedItem
-}
-
-// BuildPlan maps each project item's fields onto git-bug labels for the
-// matching bug (matched by GitHub issue URL — see store.Issue.GithubURL)
-// and computes the add/remove label diff, without writing anything. Pure
-// and side-effect-free: safe to call for a --dry-run preview, and ApplyPlan
-// reuses its output for the real write.
-func BuildPlan(items []Item, bugs []store.Issue, cfg *config.Config) Plan {
-	byURL := make(map[string]store.Issue, len(bugs))
-	for _, b := range bugs {
-		if b.GithubURL != "" {
-			byURL[b.GithubURL] = b
-		}
-	}
-
-	var plan Plan
-	for _, item := range items {
-		if item.Content.Type != "Issue" {
-			plan.Unmatched = append(plan.Unmatched, UnmatchedItem{
-				Number:     item.Content.Number,
-				URL:        item.Content.URL,
-				Title:      item.Title,
-				Reason:     fmt.Sprintf("not an issue (content type %s), excluded", item.Content.Type),
-				NotAnIssue: true,
-			})
-			continue
-		}
-
-		bug, ok := byURL[item.Content.URL]
-		if !ok {
-			plan.Unmatched = append(plan.Unmatched, UnmatchedItem{
-				Number: item.Content.Number,
-				URL:    item.Content.URL,
-				Title:  item.Title,
-				Reason: "no matching git-bug bug (not bridged in via `git-bug bridge pull` yet?)",
-			})
-			continue
-		}
-
-		plan.Changes = append(plan.Changes, planIssue(item, bug, cfg))
-	}
-	return plan
-}
-
-func planIssue(item Item, bug store.Issue, cfg *config.Config) IssueChange {
-	change := IssueChange{
-		BugID:     bug.ID,
-		GithubURL: bug.GithubURL,
-		Number:    item.Content.Number,
-		Title:     item.Title,
-	}
-
-	add := func(res FieldResult, warning string) {
-		if warning != "" {
-			change.Warnings = append(change.Warnings, warning)
-		}
-		if res.Field != "" {
-			change.Fields = append(change.Fields, res)
-			change.Added = append(change.Added, res.Added...)
-			change.Removed = append(change.Removed, res.Removed...)
-		}
-		// res.Field == "" && warning == "": source value was empty, field
-		// left untouched — expected GitHub Project drift, not an error.
-	}
-
-	for _, f := range syncedFields(cfg) {
-		add(planField(cfg, bug.Labels, f.name, f.value(item)))
-	}
-	add(planKind(cfg, bug.Labels, item.Labels, item.Category))
-
-	// the assignees merge where their field's home is the native
-	// assignees: a mapping moving them to a label, or nowhere, leaves both
-	// sides alone — a field is read from its home alone
-	if cfg.FieldTarget(cfg.GitHubForge(), "assignee") == config.TargetAssignees {
-		assigneeRes := planAssignees(bug.Labels, item.Assignees)
-		if len(assigneeRes.Added) > 0 || len(assigneeRes.Removed) > 0 {
-			change.Fields = append(change.Fields, assigneeRes)
-			change.Added = append(change.Added, assigneeRes.Added...)
-			change.Removed = append(change.Removed, assigneeRes.Removed...)
-		}
-	}
-
-	return change
-}
-
-// planField reads the Project's raw value of a field as bridge sync does
-// (toLabel: option aliases, slugs, sprints by title). An empty value leaves
-// the field untouched: Project drift, not an error. A value with no
-// configured option warns instead of writing a label.
-func planField(cfg *config.Config, current []string, name, raw string) (FieldResult, string) {
-	value, ok := toLabel(cfg, name, raw)
-	switch {
-	case !ok:
-		return FieldResult{}, fmt.Sprintf("%s value %q has no matching [fields.%s] option, skipped", name, raw, name)
-	case value == "":
-		return FieldResult{}, ""
-	}
-	_, added, removed := fields.Diff(current, name, value, true)
-	return FieldResult{Field: name, Value: value, Added: added, Removed: removed}, ""
 }
 
 // planKind fills an issue's kind from the Project's Category, which is
@@ -332,39 +224,6 @@ func sprintTitle(item Item) string {
 	return item.Sprint.Title
 }
 
-// planAssignees reconciles the full "assignee:*" label set against the
-// item's current GitHub assignees — unlike the other (single-cardinality)
-// fields this adds AND removes so a re-run stays accurate if someone is
-// unassigned on GitHub, not just additive.
-func planAssignees(current, assignees []string) FieldResult {
-	target := make(map[string]bool, len(assignees))
-	for _, a := range assignees {
-		target["assignee:"+a] = true
-	}
-
-	res := FieldResult{Field: "assignee"}
-	haveCurrent := make(map[string]bool)
-	for _, l := range current {
-		if !strings.HasPrefix(l, "assignee:") {
-			continue
-		}
-		haveCurrent[l] = true
-		if !target[l] {
-			res.Removed = append(res.Removed, l)
-		}
-	}
-	for label := range target {
-		if !haveCurrent[label] {
-			res.Added = append(res.Added, label)
-		}
-	}
-	// Added is built by ranging a map, so its order is otherwise random
-	// across identical runs — sort for a stable dry-run preview/diff.
-	slices.Sort(res.Added)
-	slices.Sort(res.Removed)
-	return res
-}
-
 func formatEstHours(v *float64) string {
 	if v == nil {
 		return ""
@@ -387,26 +246,9 @@ func normalizeModule(value string) string {
 	return strings.TrimSpace(value)
 }
 
-// LabelWriter is the subset of store.Backend ApplyPlan needs.
+// LabelWriter is the subset of store.Backend a sync writes labels with.
 type LabelWriter interface {
 	ApplyLabelChange(idPrefix string, added, removed []string) ([]string, error)
 }
 
 var _ LabelWriter = (*store.Backend)(nil)
-
-// ApplyPlan writes every changed issue in the plan via ApplyLabelChange —
-// the exact same call `fields.Apply`/`git-board set` makes, so a bridge
-// pull commits like `set` would. No-op changes (nothing added or removed)
-// are skipped rather than making a no-op ChangeLabels call, which git-bug
-// itself rejects.
-func ApplyPlan(w LabelWriter, plan Plan) error {
-	for _, change := range plan.Changes {
-		if len(change.Added) == 0 && len(change.Removed) == 0 {
-			continue
-		}
-		if _, err := w.ApplyLabelChange(change.BugID, change.Added, change.Removed); err != nil {
-			return fmt.Errorf("applying changes to %s (#%d): %w", change.BugID, change.Number, err)
-		}
-	}
-	return nil
-}

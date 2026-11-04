@@ -557,8 +557,8 @@ git-board tui "is:open prio:p1"
 | `c` | list | quick-filter by the configured `cat` field's options (`(all)` clears it); coexists with `/` search. The shipped example config doesn't define `[fields.cat]` (Category fills the kind label now — see the bridge field mapping below), so `c` shows "no cat field configured" unless a project opts into one. |
 | `f` | list | structured filter — the same `field:value`/`-field:value`/`is:open`/`title:*glob*` grammar and matcher as `ls`/`view`/the launch argument and the web UI (words look in descriptions and comments too), not the fuzzy `/` search. Empty input + enter clears it. |
 | `s` | list | sort by field, e.g. `prio` (ascending) or `prio desc` — same syntax as `ls --sort`. Persists across a later `f`/`c` filter change. Empty input + enter clears it back to natural order. |
-| `i` | list | preview the GitHub Project's fields as labels (a dry run). Requires `git board project configure` to have been run first. Runs in the background; the TUI stays responsive while it fetches. |
-| `o` | list | apply the plan `i` just previewed. Refuses to run before an `i` (no blind apply); the plan is cleared after applying so `o` can't silently re-apply stale data. |
+| `i` | list | preview `git board project pull` (a dry run): the Project's changes into the labels. Requires `git board project configure` to have been run first. Runs in the background; the TUI stays responsive while it fetches. |
+| `o` | list | apply the pull `i` just previewed, decided again from the issues as they are now: an edit made in between stays. Refuses to run before an `i` (no blind apply); the preview is cleared after applying so `o` can't silently re-apply stale data. |
 | `e` | detail | edit a field: pick the field, then a value from its configured options, or type free text if it has none (e.g. `assignee`, using the same `+value`/`-value` syntax as `git-board set`) |
 | `esc`/`q` | detail, pickers | back |
 | `q`/`ctrl+c` | list | quit |
@@ -568,10 +568,12 @@ for "I remember a word in the title." `f` is precise and composable —
 `assignee:guilbep -status:validated` narrows exactly like it would on the
 CLI, because it's the exact same `internal/filter` grammar and code path.
 
-`i`/`o` show a one-line summary (matched/changed/unmatched/field/warning
+`i`/`o` show a one-line summary (matched/changed/unmatched/conflict/warning
 counts), not the full per-issue diff — that's what `git board project pull --check`
-on the CLI is still for. Note these are bound to git-board's GitHub Project bridge
-instead, since that's the sync a git-board session actually needs.
+on the CLI is still for. They are `git board project pull`, the sync's
+git-board side: only what changed on the Project since both sides last agreed
+is taken, a change made in git-board and not yet pushed stays, and someone
+assigned in git-board stays assigned.
 
 The TUI shows an issue's fields (labels), not its body and comments: the
 web UI (`git board`) shows those.

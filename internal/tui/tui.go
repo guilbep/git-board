@@ -145,15 +145,17 @@ type Model struct {
 	// it never mutates baseIssues itself.
 	baseIssues []store.Issue
 
-	// bridgePlan is the last "i" (pull-preview)'s result, applied for
-	// real by "o" — mirrors git-bug's own termui i=Pull/o=Push
-	// convention, bound to "git-board bridge pull"/"...--apply" instead
-	// of git-bug's own ref sync. nil means no plan loaded (o refuses to
-	// apply blind — dry-run-first is the pattern every other write path
-	// here already follows). bridgeBusy guards against a second "i"
-	// firing while a fetch is already in flight.
-	bridgePlan *ghbridge.Plan
-	bridgeBusy bool
+	// bridgeRemote is the Project as the last "i" read it, which "o"
+	// pulls into the labels: git board project pull, both bound the way
+	// git-bug's own termui binds i=Pull/o=Push. nil means nothing read
+	// yet (o refuses to apply blind: dry-run first, as every other write
+	// path here). "o" decides the plan again from the issues as they are
+	// then, so an edit made between the two isn't undone. bridgeBusy
+	// guards against a second "i" while a read is in flight.
+	bridgeRemote *ghbridge.Remote
+	bridgeBusy   bool
+	// project is how "i" reads the Project: ghbridge.Gh, a fake in tests.
+	project ghbridge.Project
 }
 
 // New builds a Model over issues. title is shown as the list header (the
@@ -202,38 +204,51 @@ func New(issues []store.Issue, title string, backend Backend, cfg *config.Config
 		defaultTitle: title,
 		allIssues:    issues,
 		baseIssues:   issues,
+		project:      ghbridge.Gh,
 	}
 }
 
 func (m Model) Init() tea.Cmd { return nil }
 
 // bridgePullFinishedMsg is what bridgePullCmd sends back once the GitHub
-// Project fetch (and the resulting plan) is ready.
+// Project's items and fields are read.
 type bridgePullFinishedMsg struct {
-	plan ghbridge.Plan
-	err  error
+	remote ghbridge.Remote
+	err    error
 }
 
 // bridgePullLimit mirrors cmd/git-board/bridge.go's defaultBridgePullLimit
 // — same default, no flag to override it from the TUI (use the CLI for
 // that; "i" is the quick common case).
-const bridgePullLimit = 2000
+const bridgePullLimit = ghbridge.DefaultItemLimit
 
-// bridgePullCmd fetches the GitHub Project's items (network — shells out
-// to `gh`, not `git`/`git-bug`, so it never touches git-bug's repo lock)
-// and builds a plan against issues (the model's already-loaded m.allIssues
-// — no second ListIssues() call, and no second Backend, needed). Runs as
-// an ordinary async tea.Cmd (not ExecProcess): it doesn't need the
-// terminal, so the TUI stays responsive and rendering "pulling…" while
-// this is in flight.
-func bridgePullCmd(owner string, project int, issues []store.Issue, cfg *config.Config) tea.Cmd {
+// bridgePullCmd reads the GitHub Project's items and fields (network:
+// shells out to `gh`, not git, so it never touches the repository's lock).
+// It reads nothing of the model: the issues and the agreed values are read
+// on the UI goroutine once it's back, so an edit made meanwhile neither
+// races with it nor is planned from stale labels. An ordinary async
+// tea.Cmd (not ExecProcess): it doesn't need the terminal, so the TUI
+// stays responsive while it runs.
+func bridgePullCmd(p ghbridge.Project, gp config.GithubProject) tea.Cmd {
+	cfg := &config.Config{GithubProject: gp}
 	return func() tea.Msg {
-		items, err := ghbridge.FetchItems(owner, project, bridgePullLimit)
-		if err != nil {
-			return bridgePullFinishedMsg{err: err}
-		}
-		return bridgePullFinishedMsg{plan: ghbridge.BuildPlan(items, issues, cfg)}
+		r, err := ghbridge.FetchRemote(p, cfg, bridgePullLimit)
+		return bridgePullFinishedMsg{remote: r, err: err}
 	}
+}
+
+// bridgePlan is the pull of r into the labels, decided from the issues and
+// agreed values as they are now: git board project pull's plan.
+func (m Model) bridgePlan(r ghbridge.Remote) (ghbridge.Repo, ghbridge.SyncPlan, error) {
+	repo, ok := m.backend.(ghbridge.Repo)
+	if !ok {
+		return nil, ghbridge.SyncPlan{}, fmt.Errorf("this repository can't sync with a Project")
+	}
+	st, err := r.State(repo, m.cfg)
+	if err != nil {
+		return nil, ghbridge.SyncPlan{}, err
+	}
+	return repo, st.Plan(m.cfg).LabelsOnly(), nil
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -244,8 +259,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.status = fmt.Sprintf("bridge pull failed: %v", msg.err)
 			return m, nil
 		}
-		plan := msg.plan
-		m.bridgePlan = &plan
+		_, plan, err := m.bridgePlan(msg.remote)
+		if err != nil {
+			m.status = fmt.Sprintf("bridge pull failed: %v", err)
+			return m, nil
+		}
+		remote := msg.remote
+		m.bridgeRemote = &remote
 		m.status = summarizeBridgePlan(plan) + " — press o to apply"
 		return m, nil
 
@@ -322,9 +342,8 @@ func (m Model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, textinput.Blink
 		case "i":
 			// Mirrors git-bug's own termui: i=Pull, o=Push (bug_table.go).
-			// Here: preview the GitHub Project bridge (dry-run — same
-			// pattern "git-board bridge pull" defaults to), "o" applies
-			// it. It reads the Project with `gh`, never the repository.
+			// Here: preview git board project pull (a dry run, as the
+			// command defaults to), "o" applies it.
 			if m.bridgeBusy {
 				return m, nil
 			}
@@ -335,20 +354,23 @@ func (m Model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			m.bridgeBusy = true
 			m.status = fmt.Sprintf("pulling GitHub Project %s/%d…", owner, project)
-			return m, bridgePullCmd(owner, project, m.allIssues, m.cfg)
+			return m, bridgePullCmd(m.project, m.cfg.GithubProject)
 		case "o":
-			if m.bridgePlan == nil {
+			if m.bridgeRemote == nil {
 				m.status = "no bridge preview loaded — press i first, then o to apply it"
 				return m, nil
 			}
-			plan := *m.bridgePlan
-			if err := ghbridge.ApplyPlan(m.backend, plan); err != nil {
+			repo, plan, err := m.bridgePlan(*m.bridgeRemote)
+			if err == nil {
+				_, err = ghbridge.ApplySync(repo, m.project.Writer, repo, plan, m.cfg, m.bridgeRemote.Meta)
+			}
+			if err != nil {
 				m.status = fmt.Sprintf("bridge apply failed: %v", err)
 				return m, nil
 			}
-			m.applyBridgePlanLocally(plan)
-			m.bridgePlan = nil
-			m.status = fmt.Sprintf("bridge applied: %d issue(s) updated", len(plan.Changes))
+			updated := m.refreshChanged(plan.Changes)
+			m.bridgeRemote = nil
+			m.status = fmt.Sprintf("bridge applied: %d issue(s) updated", updated)
 			return m, nil
 		case "q", "ctrl+c":
 			return m, tea.Quit
@@ -558,73 +580,37 @@ func (m Model) applySort(spec string) Model {
 	return m
 }
 
-// summarizeBridgePlan is the one-line version of cmd/git-board/bridge.go's
-// printBridgePlan — a status line, not the full per-issue diff dump
-// (which can run to hundreds of lines; that's what `git-board bridge
-// pull` on the CLI is still for).
-func summarizeBridgePlan(plan ghbridge.Plan) string {
-	changed, fieldsSet, warnings := 0, 0, 0
+// summarizeBridgePlan is the one-line version of cmd/git-board's
+// printSyncPlan — a status line, not the full per-issue diff dump (which
+// can run to hundreds of lines; that's what `git board project pull` on
+// the CLI is still for).
+func summarizeBridgePlan(plan ghbridge.SyncPlan) string {
+	changed, warnings := 0, 0
 	for _, c := range plan.Changes {
-		if len(c.Added) == 0 && len(c.Removed) == 0 && len(c.Warnings) == 0 {
-			continue
-		}
-		changed++
-		for _, f := range c.Fields {
-			if len(f.Added) > 0 || len(f.Removed) > 0 {
-				fieldsSet++
-			}
+		if len(c.Added) > 0 || len(c.Removed) > 0 {
+			changed++
 		}
 		warnings += len(c.Warnings)
 	}
-	return fmt.Sprintf("%d matched (%d changed), %d unmatched, %d field(s) to set, %d warning(s)",
-		len(plan.Changes), changed, len(plan.Unmatched), fieldsSet, warnings)
+	return fmt.Sprintf("%d matched (%d changed), %d unmatched, %d conflict(s), %d warning(s)",
+		len(plan.Changes), changed, len(plan.Unmatched), len(plan.Conflicts), warnings)
 }
 
-// applyBridgePlanLocally patches m.allIssues/m.baseIssues/m.list with each
-// changed issue's new label set (existing - Removed + Added), the same
-// "patch in place by ID, don't re-list from the backend" approach
-// syncIssueLabels already uses for a single-field edit — here just looped
-// over every issue the plan actually changed.
-func (m *Model) applyBridgePlanLocally(plan ghbridge.Plan) {
-	for _, c := range plan.Changes {
+// refreshChanged reads back the labels of every issue a pull changed and
+// patches them in, as syncIssueLabels does for a single-field edit. It
+// returns how many it changed.
+func (m *Model) refreshChanged(changes []ghbridge.IssueChange) int {
+	n := 0
+	for _, c := range changes {
 		if len(c.Added) == 0 && len(c.Removed) == 0 {
 			continue
 		}
-		newLabels := diffLabels(m.lookupLabels(c.BugID), c.Added, c.Removed)
-		m.syncIssueLabels(c.BugID, newLabels)
-	}
-}
-
-// lookupLabels finds issueID's current labels in m.allIssues.
-func (m Model) lookupLabels(issueID string) []string {
-	for _, i := range m.allIssues {
-		if i.ID == issueID {
-			return i.Labels
+		n++
+		if labels, err := m.backend.GetLabels(c.BugID); err == nil {
+			m.syncIssueLabels(c.BugID, labels)
 		}
 	}
-	return nil
-}
-
-// diffLabels applies added/removed to current, de-duplicating adds and
-// dropping removes — the same net effect ApplyLabelChange has on the
-// backend, computed locally so the TUI doesn't need to re-read every
-// changed issue back from it.
-func diffLabels(current, added, removed []string) []string {
-	set := make(map[string]bool, len(current)+len(added))
-	for _, l := range current {
-		set[l] = true
-	}
-	for _, l := range removed {
-		delete(set, l)
-	}
-	for _, l := range added {
-		set[l] = true
-	}
-	out := make([]string, 0, len(set))
-	for l := range set {
-		out = append(out, l)
-	}
-	return out
+	return n
 }
 
 // applyStructuredFilter re-filters the full issue set (m.allIssues, not

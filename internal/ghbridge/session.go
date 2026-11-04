@@ -56,35 +56,60 @@ type State struct {
 // LoadState reads the issues, the Project's items and fields, and the
 // recorded bases.
 func LoadState(repo Repo, p Project, cfg *config.Config, limit int) (State, error) {
+	r, err := FetchRemote(p, cfg, limit)
+	if err != nil {
+		return State{}, err
+	}
+	return r.State(repo, cfg)
+}
+
+// Remote is the Project's side of a State: its items and fields, read
+// over the network and nothing from the repository, so it can be read
+// off the goroutine that holds the repository.
+type Remote struct {
+	Items []Item
+	Meta  ProjectMeta
+}
+
+// FetchRemote reads the Project's items and fields.
+func FetchRemote(p Project, cfg *config.Config, limit int) (Remote, error) {
 	gp := cfg.GithubProject
 	if gp.Owner == "" || gp.Number == 0 {
-		return State{}, ErrNoProject
+		return Remote{}, ErrNoProject
 	}
-	var s State
+	var r Remote
+	var err error
+	if r.Items, err = p.Items(gp.Owner, gp.Number, limit); err != nil {
+		return Remote{}, err
+	}
+	if r.Meta, err = p.Meta(gp.Owner, gp.Number); err != nil {
+		return Remote{}, err
+	}
+	// Only a sync allowed to write assigns anyone.
+	if p.Assignable != nil && gp.Write {
+		r.Meta.Assignable = map[string][]string{}
+		for _, it := range r.Items {
+			repo := repoOf(it.Content.URL)
+			if _, done := r.Meta.Assignable[repo]; done || it.Content.Type != "Issue" {
+				continue
+			}
+			if r.Meta.Assignable[repo], err = p.Assignable(repo); err != nil {
+				return Remote{}, err
+			}
+		}
+	}
+	return r, nil
+}
+
+// State adds the repository's side to r: the issues as they are now, and
+// the values both sides last agreed on.
+func (r Remote) State(repo Repo, cfg *config.Config) (State, error) {
+	s := State{Items: r.Items, Meta: r.Meta}
 	var err error
 	if s.Issues, err = repo.ListIssues(); err != nil {
 		return State{}, err
 	}
-	if s.Items, err = p.Items(gp.Owner, gp.Number, limit); err != nil {
-		return State{}, err
-	}
-	if s.Meta, err = p.Meta(gp.Owner, gp.Number); err != nil {
-		return State{}, err
-	}
-	// Only a sync allowed to write assigns anyone.
-	if p.Assignable != nil && gp.Write {
-		s.Meta.Assignable = map[string][]string{}
-		for _, it := range s.Items {
-			repo := repoOf(it.Content.URL)
-			if _, done := s.Meta.Assignable[repo]; done || it.Content.Type != "Issue" {
-				continue
-			}
-			if s.Meta.Assignable[repo], err = p.Assignable(repo); err != nil {
-				return State{}, err
-			}
-		}
-	}
-	if s.Bases, err = LoadBases(repo, BasePrefix(gp), s.Items, s.Issues); err != nil {
+	if s.Bases, err = LoadBases(repo, BasePrefix(cfg.GithubProject), s.Items, s.Issues); err != nil {
 		return State{}, err
 	}
 	return s, nil

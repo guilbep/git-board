@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -76,7 +77,7 @@ func TestBridgeConfigureWritesConfig(t *testing.T) {
 
 func TestBridgePullDryRunWritesNothing(t *testing.T) {
 	newBridgeTestRepo(t)
-	withFixtureFetch(t)
+	withFakeProject(t, false)
 
 	out, err := execute(t, []string{"bridge", "pull", "--owner", "EPFL-ENAC", "--project", "40"})
 	if err != nil {
@@ -95,14 +96,14 @@ func TestBridgePullDryRunWritesNothing(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ls: %v", err)
 	}
-	if strings.Contains(getOut, "prio:p0") {
-		t.Errorf("dry-run must not write labels, but found prio:p0:\n%s", getOut)
+	if strings.Contains(getOut, "status:qa-validation") {
+		t.Errorf("dry-run must not write labels, but found status:qa-validation:\n%s", getOut)
 	}
 }
 
 func TestBridgePullApplyWritesLabelsAndIsIdempotent(t *testing.T) {
 	newBridgeTestRepo(t)
-	withFixtureFetch(t)
+	withFakeProject(t, false)
 
 	out, err := execute(t, []string{"bridge", "pull", "--owner", "EPFL-ENAC", "--project", "40", "--apply"})
 	if err != nil {
@@ -116,21 +117,19 @@ func TestBridgePullApplyWritesLabelsAndIsIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ls: %v", err)
 	}
-	if !strings.Contains(lsOut, `"prio:p0"`) {
-		t.Errorf("expected prio:p0 written after --apply:\n%s", lsOut)
+	if !strings.Contains(lsOut, `"status:qa-validation"`) {
+		t.Errorf("expected status:qa-validation written after --apply:\n%s\n%s", out, lsOut)
 	}
 
 	// Re-running must not error (git-bug's ChangeLabels rejects an all-no-op
-	// call) and must leave the same labels in place. The summary must also
-	// report 0 fields set the second time — the fixture bug still carries a
-	// status warning (persists every run since it's never written), which
-	// must not be miscounted as a "field set" once its diff is empty.
+	// call) and must leave the same labels in place, with no label change
+	// reported the second time.
 	rerunOut, err := execute(t, []string{"bridge", "pull", "--owner", "EPFL-ENAC", "--project", "40", "--apply"})
 	if err != nil {
 		t.Fatalf("second (idempotent) execute: %v\noutput:\n%s", err, rerunOut)
 	}
-	if !strings.Contains(rerunOut, "0 field(s) set") {
-		t.Errorf("expected 0 field(s) set on idempotent re-run, got:\n%s", rerunOut)
+	if !strings.Contains(rerunOut, "0 with label changes") {
+		t.Errorf("expected no label change on idempotent re-run, got:\n%s", rerunOut)
 	}
 	lsOut2, err := execute(t, []string{"ls", "is:open", "--json"})
 	if err != nil {
@@ -158,5 +157,23 @@ func TestBridgePullRequiresProjectConfigured(t *testing.T) {
 	_, err := execute(t, []string{"bridge", "pull"})
 	if err == nil {
 		t.Fatal("expected error when no --owner/--project and no [github-project] configured")
+	}
+}
+
+// bridge pull --apply is project pull: a value changed in git-board since
+// both sides agreed stays, the Project's older value doesn't overwrite it.
+func TestBridgePullApplyKeepsAChangeMadeHere(t *testing.T) {
+	newBridgeTestRepo(t)
+	withFakeProject(t, false)
+
+	mustExecute(t, "bridge", "pull", "--apply")
+	id, labels := onlyIssue(t)
+	if !slices.Contains(labels, "status:qa-validation") {
+		t.Fatalf("first pull: labels %v", labels)
+	}
+	mustExecute(t, "set", id, "status=in-review")
+	mustExecute(t, "bridge", "pull", "--apply")
+	if _, labels := onlyIssue(t); !slices.Contains(labels, "status:in-review") || slices.Contains(labels, "status:qa-validation") {
+		t.Errorf("pull overwrote the change made here: %v", labels)
 	}
 }
