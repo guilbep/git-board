@@ -87,6 +87,8 @@ git board show a1b2c3d
 git board show CO2-3075 --md
 git board show "#2528" --json
 git board show a1b2c3d --no-comments
+git board show a1b2c3d --web                    # in the web UI
+git board show a1b2c3d --forge                  # on GitHub or GitLab
 ```
 
 Title; number, id, state, author, date and comment count; the fields, the
@@ -99,6 +101,13 @@ each comment, headed by its author, date, `(edited)` and its ref
 | `--md` | as Markdown: a heading, a fields table, a section per comment |
 | `--json` | the whole thread (below) |
 | `--no-comments` | leave the comments out |
+| `-w, --web` | open it in this repository's web UI |
+| `--forge` | open it on its forge |
+
+`--web` opens the issue's page where the repository's board already
+runs; with none running, it starts one here, as a bare `git board` does,
+until Ctrl-C. `--forge` opens it on the first forge it is on; an issue on
+no forge yet is exit code 3. Both print the URL.
 
 `get <id>` stays what it was: the issue's labels, one per line, for
 scripts.
@@ -359,6 +368,7 @@ Errors go to stderr, prefixed `error:`.
 | `gh issue list -L 10 --json …` | `glab issue list -P 10 -O json` | `git board ls -L 10 --json` |
 | `gh issue view N -c` | `glab issue view N -c` | `git board show N` |
 | `gh issue view N --json …` | `glab issue view N -F json` | `git board show N --json` |
+| `gh issue view N -w` | `glab issue view N -w` | `git board show N -w` (the web UI), `show N --forge` (the forge) |
 | `gh issue comment N -b B` | `glab issue note N -m B` | `git board comment N -b B` |
 | `gh issue comment N --edit-last` | | `git board comment N --edit-last` |
 | `gh issue edit N -t T -b B` | `glab issue update N -t T -d B` | `git board edit N --title T -b B` |

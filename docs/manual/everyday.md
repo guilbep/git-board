@@ -62,6 +62,8 @@ The same filter works in the web UI's Filter box, the filters panel and
 ```sh
 git board show 624a                     # fields, description, comments
 git board show 624a --json | jq .title
+git board show 624a --web               # its page in the web UI
+git board show 624a --forge             # its page on GitHub or GitLab
 git board comment 624a -b "Reproduced on 17.2 too."
 git board comment 624a -e               # in your editor
 git board comment 624a --edit-last      # fix your last comment

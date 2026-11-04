@@ -16,6 +16,12 @@ import (
 // runBoard is a bare "git board": this repository's board in the browser,
 // where it already runs, else started here until Ctrl-C.
 func runBoard(ctx context.Context, out io.Writer, open bool) error {
+	return runBoardAt(ctx, out, open, "")
+}
+
+// runBoardAt is runBoard opening page, a path after the board's URL
+// ("/#/issues/<id>"; "" the board).
+func runBoardAt(ctx context.Context, out io.Writer, open bool, page string) error {
 	gitDir, err := store.FindGitDir(".")
 	if err != nil {
 		return err
@@ -24,20 +30,30 @@ func runBoard(ctx context.Context, out io.Writer, open bool) error {
 		if !open {
 			return
 		}
-		if err := openURL(url); err != nil {
+		if err := openURL(url + page); err != nil {
 			fmt.Fprintf(out, "opening the browser: %v\n", err)
 		}
 	}
-	if inst, ok := server.Running(gitDir); ok {
-		fmt.Fprintf(out, "git-board: this repository's board runs at %s (pid %d)\n", inst.URL, inst.PID)
-		show(inst.URL)
+	if url, pid, ok := runningBoard(gitDir); ok {
+		fmt.Fprintf(out, "git-board: this repository's board runs at %s (pid %d)\n", url, pid)
+		show(url)
 		return nil
 	}
-	return server.Serve(ctx, "", "", func(url string) {
+	return serveBoard(ctx, "", "", func(url string) {
 		fmt.Fprintf(out, "git-board: this repository's board is at %s (Ctrl-C stops it)\n", url)
 		show(url)
 	})
 }
+
+// runningBoard is the board's server running for gitDir, if one does: a
+// var for the tests.
+var runningBoard = func(gitDir string) (url string, pid int, ok bool) {
+	inst, ok := server.Running(gitDir)
+	return inst.URL, inst.PID, ok
+}
+
+// serveBoard serves the board until ctx ends: a var for the tests.
+var serveBoard = server.Serve
 
 // openURL opens url in the browser: a var for the tests.
 var openURL = func(url string) error {
