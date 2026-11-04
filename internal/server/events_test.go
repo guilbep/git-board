@@ -231,3 +231,60 @@ func TestABurstOfStepsKeepsTheStream(t *testing.T) {
 		t.Fatalf("the last step seen: %+v, want 1000 of 1000", last)
 	}
 }
+
+// events are what s publishes until now, decoded.
+func drained(ch <-chan []byte) []event {
+	var out []event
+	for {
+		select {
+		case data := <-ch:
+			var e event
+			_ = json.Unmarshal(data, &e)
+			out = append(out, e)
+		default:
+			return out
+		}
+	}
+}
+
+// A PATCH whose second field fails answers 400, but its first field
+// landed: the pages hear the issues changed.
+func TestAPartialWriteIsAnnounced(t *testing.T) {
+	t.Parallel()
+	b := storetest.New(t)
+	id := storetest.NewIssue(t, b, "x")
+	s := &apiServer{cfg: mustLoadConfig(t), b: b, me: ""}
+	ts := serve(t, s)
+	ch, stop := s.events.subscribe()
+	defer stop()
+	if code := call(t, "PATCH", ts.URL+"/api/issues/"+id, map[string]string{"cat": "bug", "owner": "@me"}, nil); code != http.StatusBadRequest {
+		t.Fatalf("PATCH: %d, want 400", code)
+	}
+	if is, _ := b.GetIssue(id); !slices.Contains(is.Labels, "cat:bug") {
+		t.Skipf("the first field didn't land (%v): nothing to announce", is.Labels)
+	}
+	if got := drained(ch); len(got) != 1 || got[0].Kind != "issues" {
+		t.Errorf("events %+v, want one issues event", got)
+	}
+}
+
+// A change made outside the API (the CLI, a fetch) just before an API
+// write is announced with it, not taken for the API's own.
+func TestAnOutsideChangeBeforeAWriteIsAnnounced(t *testing.T) {
+	t.Parallel()
+	b := storetest.New(t)
+	id := storetest.NewIssue(t, b, "x")
+	s := &apiServer{cfg: mustLoadConfig(t), b: b, me: "guilbep"}
+	ts := serve(t, s)
+	s.seeRefs() // as watchRefs' last tick
+	storetest.NewIssue(t, b, "from the CLI")
+	ch, stop := s.events.subscribe()
+	defer stop()
+	if code := call(t, "POST", ts.URL+"/api/issues/"+id+"/comments", map[string]any{"body": "hello"}, nil); code != http.StatusOK {
+		t.Fatalf("comment: %d", code)
+	}
+	got := drained(ch)
+	if !slices.ContainsFunc(got, func(e event) bool { return e.Kind == "issues" && e.ID == "" }) {
+		t.Errorf("events %+v, want an issues event for every issue", got)
+	}
+}

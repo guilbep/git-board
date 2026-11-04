@@ -113,11 +113,31 @@ func (s *apiServer) withEvents(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
+		// an outside change since the last tick (a CLI write, a fetch) would
+		// be taken as ours below: announced here; and a write that failed
+		// partway (a PATCH's second field) announces what landed
+		var before string
+		outside := false
+		if s.b != nil {
+			before = s.b.RefsFingerprint()
+			s.refsMu.Lock()
+			outside = s.refs != "" && before != s.refs
+			s.refsMu.Unlock()
+		}
 		rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
 		next.ServeHTTP(rec, r)
-		if rec.status < 400 {
-			s.seeRefs() // ours: not an outside change
+		landed := rec.status < 400
+		if !landed && s.b != nil && s.b.RefsFingerprint() != before {
+			outside = true
+		}
+		if landed || outside {
+			s.seeRefs() // ours, or announced now: not again by watchRefs
+		}
+		if landed {
 			s.events.publish(eventFor(r))
+		}
+		if outside {
+			s.events.publish(event{Kind: "issues"})
 		}
 	})
 }
