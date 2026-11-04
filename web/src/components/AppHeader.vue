@@ -104,6 +104,7 @@ import GbAvatar from '@/components/GbAvatar.vue';
 import AccountCard from '@/components/AccountCard.vue';
 import { inbox, loadInbox } from '@/inbox';
 import { debounced, onLive } from '@/live';
+import { clientId } from '@/api/board';
 
 // the saved views, for the palette's jumps
 defineProps<{ views: string[] }>();
@@ -210,10 +211,12 @@ onMounted(() => {
   void checkOrigin(); // what waits to get, fetched once in five minutes
   if (!me.value) void loadMe();
   if (!inbox.value) void loadInbox();
+  // this tab's own writes too: an issue written here waits to send
   stopLive = onLive((e) => {
-    if (e.kind === 'issues' || e.kind === 'inbox') reloadInbox();
+    const own = e.by === clientId;
+    if (!own && (e.kind === 'issues' || e.kind === 'inbox')) reloadInbox();
     if (e.kind === 'issues' || e.kind === 'sync') reloadWaiting();
-  });
+  }, { own: true });
 });
 </script>
 

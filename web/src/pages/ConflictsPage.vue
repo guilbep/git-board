@@ -47,7 +47,7 @@
     <ul v-if="last?.conflicts.length" class="conflicts">
       <li v-for="c in last.conflicts" :key="`${c.number} ${c.field}`" class="conflict">
         <div class="conflict-head">
-          <a class="conflict-number" :href="c.url" target="_blank" rel="noopener noreferrer">#{{ c.number }}</a>
+          <a class="conflict-number" :href="safeHref(c.url)" target="_blank" rel="noopener noreferrer">#{{ c.number }}</a>
           <span class="conflict-title">{{ c.title }}</span>
           <span class="conflict-field">Field <b>{{ displayName(c.field) }}</b></span>
         </div>
@@ -84,6 +84,7 @@
 </template>
 
 <script setup lang="ts">
+import { safeHref } from '@/links';
 import { computed, onMounted, ref } from 'vue';
 import { applySync, checkSync, getViews, resolveConflict, type Conflict, type SyncStatus } from '@/api/board';
 import { displayName } from '@/fields';

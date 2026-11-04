@@ -7,6 +7,7 @@ import {
   type ReviewRequest, type Thread, type ThreadOn,
 } from '@/api/board';
 import { untilSyncEnds } from '@/forges';
+import { latestOnly } from '@/latest';
 
 export function message(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
@@ -21,19 +22,28 @@ export function useIssue(id: Ref<string>, onChange: (t: Thread) => void = () => 
   const saveError = ref(''); // the last write failed
   const saveCode = ref(''); // its code: changed (someone edited meanwhile)
 
-  let latest = 0;
+  const loads = latestOnly();
   async function load() {
-    const mine = ++latest;
+    const current = loads.start();
     loading.value = true;
     error.value = '';
     try {
       const t = await getThread(id.value);
-      if (mine === latest) thread.value = t;
+      if (current()) thread.value = t;
     } catch (e) {
-      if (mine === latest) error.value = message(e);
+      if (current()) error.value = message(e);
     } finally {
-      if (mine === latest) loading.value = false;
+      if (current()) loading.value = false;
     }
+  }
+
+  // a write's answer: the history after it, fresher than a load asked
+  // before it answered, which is dropped
+  function written(t: Thread) {
+    loads.skip();
+    loading.value = false;
+    error.value = '';
+    thread.value = t;
   }
 
   // run a write; true when it went through. Refused because a forge sync
@@ -45,8 +55,8 @@ export function useIssue(id: Ref<string>, onChange: (t: Thread) => void = () => 
     try {
       for (;;) {
         try {
-          thread.value = await fn();
-          onChange(thread.value);
+          written(await fn());
+          onChange(thread.value!);
           return true;
         } catch (e) {
           if (!(e instanceof ApiError && e.code === 'syncing')) throw e;

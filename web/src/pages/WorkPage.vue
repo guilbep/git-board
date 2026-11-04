@@ -162,6 +162,7 @@ import type { Fields } from '@/fields';
 import { forgeStatus, loadForges, onStep } from '@/forges';
 import { forgeNumbers } from '@/issuesync';
 import { debounced, onLive } from '@/live';
+import { latestOnly } from '@/latest';
 import { checkWords, doneWords } from '@/ways';
 import { me } from '@/me';
 import { panelMode } from '@/panelsize';
@@ -189,11 +190,17 @@ const label = (r: WorkRow) => {
   return a.kind === 'open' ? a.label : '';
 };
 
+// Me then Team quickly: the one asked last shows, whichever answers last
+const reloads = latestOnly();
 async function reload() {
+  const current = reloads.start();
   try {
-    data.value = await getWork(who.value);
+    const got = await getWork(who.value);
+    if (!current()) return;
+    data.value = got;
     error.value = null;
   } catch (e) {
+    if (!current()) return;
     if (e instanceof ApiError) error.value = e;
     else error.value = new ApiError(e instanceof Error ? e.message : String(e), 0, '');
   }

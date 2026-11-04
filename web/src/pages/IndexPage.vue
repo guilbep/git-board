@@ -261,8 +261,8 @@
       :title="detailTitle"
       :crumb="activeView || 'All open issues'"
       :position="position"
-      :has-prev="index > 0"
-      :has-next="index >= 0 && index < flat.length - 1"
+      :has-prev="!!near.prev"
+      :has-next="!!near.next"
       :find-ref="findRef"
       @close="detailOpen = false"
       @prev="step(-1)"
@@ -282,6 +282,8 @@ import FilterHelp from '@/components/FilterHelp.vue';
 import { keyContext, noteUse } from '@/keys';
 import SprintReportDialog from '@/components/SprintReportDialog.vue';
 import { debounced, onLive } from '@/live';
+import { boardReload } from '@/livereload';
+import { neighbours } from '@/panelnav';
 import { panelMode } from '@/panelsize';
 import { filtersHidden, newIssueRequested, recordRecent } from '@/commands';
 import { numberName } from '@/palette';
@@ -290,7 +292,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { me } from '@/me';
 import { useRoute, useRouter } from 'vue-router';
 import {
-  changeLabels, filterValues, getFacets, getFields, getIssues, getViews, saveView,
+  changeLabels, clientId, filterValues, getFacets, getFields, getIssues, getViews, saveView,
   type Bucket, type FieldConfig, type Issue, type ViewConfig,
 } from '@/api/board';
 import {
@@ -779,6 +781,12 @@ onBeforeUnmount(() => (keyContext.value = []));
 const detailId = ref('');
 const flat = computed(() => shown.value.flatMap((b) => b.issues));
 const index = computed(() => flat.value.findIndex((i) => i.id === detailId.value));
+// where the open issue last was in the list: closed or moved out of the
+// view from the panel, j/k go on from there (panelnav.ts)
+const lastAt = ref(-1);
+watch(detailId, () => (lastAt.value = index.value));
+watch(index, (i) => i >= 0 && (lastAt.value = i));
+const near = computed(() => neighbours(flat.value.map((i) => i.id), detailId.value, lastAt.value));
 const detailTitle = computed(() => all.value.find((i) => i.id === detailId.value)?.title ?? '');
 const position = computed(() => {
   if (index.value < 0) return '';
@@ -797,8 +805,8 @@ function openId(id: string) {
   void setQuery({ issue: id });
 }
 function step(delta: number) {
-  const next = flat.value[index.value + delta];
-  if (next) openId(next.id);
+  const next = delta < 0 ? near.value.prev : near.value.next;
+  if (next) openId(next);
 }
 function closePanel() {
   if (route.query.issue) void setQuery({ issue: undefined });
@@ -859,7 +867,13 @@ const reloadConfig = debounced(async () => {
   await loadConfig();
   void load();
 });
-const offLive = onLive((e) => (e.kind === 'config' ? reloadConfig() : e.kind !== 'settings' && e.kind !== 'releases' && reloadLive()));
+// what an event reloads (livereload.ts): this tab's own writes to the
+// issues too, so a panel closed before its write answered still shows
+const offLive = onLive((e) => {
+  const what = boardReload(e, clientId);
+  if (what === 'config') reloadConfig();
+  else if (what === 'issues') reloadLive();
+}, { own: true });
 onBeforeUnmount(offLive);
 </script>
 

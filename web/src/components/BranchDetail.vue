@@ -15,7 +15,7 @@
     </p>
     <template v-if="pr">
       <p class="gb-bdetail-line">
-        The gate: <a :href="pr.url" target="_blank" rel="noopener noreferrer">GitHub #{{ pr.number }}<span class="gb-sr">(opens in a new tab)</span></a>,
+        The gate: <a :href="safeHref(pr.url)" target="_blank" rel="noopener noreferrer">GitHub #{{ pr.number }}<span class="gb-sr">(opens in a new tab)</span></a>,
         {{ prState }}<template v-if="pr.author">, by {{ pr.author }}</template>.
       </p>
       <template v-if="pr.state === 'OPEN'">
@@ -23,7 +23,7 @@
           <li v-for="c in pr.checks" :key="c.name" :class="`is-${c.state}`">
             <GbIcon :name="mark(c.state).icon" small />
             <span class="gb-sr">{{ mark(c.state).word }}:</span>
-            <a v-if="c.url" :href="c.url" target="_blank" rel="noopener noreferrer">{{ c.name }}</a>
+            <a v-if="c.url" :href="safeHref(c.url)" target="_blank" rel="noopener noreferrer">{{ c.name }}</a>
             <template v-else>{{ c.name }}</template>
             <span v-if="c.required" class="gb-bdetail-req">required</span>
           </li>
@@ -52,6 +52,7 @@
 </template>
 
 <script setup lang="ts">
+import { safeHref } from '@/links';
 import { computed, ref } from 'vue';
 import type { GateCheck, GatePR, IssueBranches, IssuePulls } from '@/api/board';
 import type { BranchItem } from '@/branchstate';

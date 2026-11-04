@@ -10,6 +10,7 @@
 import { nextTick, onMounted, ref, watch } from 'vue';
 import { apiURL, type Forge } from '@/api/board';
 import { enhance } from '@/richtext';
+import { forgeBase } from '@/links';
 import ImageLightbox, { type LightboxImage } from '@/components/ImageLightbox.vue';
 
 // two roots (the text, its lightbox): a class given goes to the text
@@ -19,19 +20,16 @@ const emit = defineEmits<{ ref: [n: string, event: MouseEvent] }>();
 const el = ref<HTMLElement | null>(null);
 
 // #123 points at the issue's own forge (the first: where it came from),
-// @name at that forge's profile.
+// @name at that forge's profile. Only from an http(s) URL (links.ts).
 function base() {
-  const f = props.forges?.[0];
-  if (!f) return null;
-  const u = new URL(f.url);
-  return { refs: f.url.replace(/\d+$/, ''), people: `${u.origin}/` };
+  return forgeBase(props.forges?.[0]?.url);
 }
 
 function apply() {
   if (!el.value) return;
   const b = base();
   enhance(el.value, {
-    refHref: (n) => (b ? b.refs + n : undefined),
+    refHref: (n) => (b?.refs ? b.refs + n : undefined),
     mentionHref: (login) => (b ? b.people + login : undefined),
     mediaURL: apiURL,
   });

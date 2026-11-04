@@ -17,10 +17,10 @@
         <MarkdownBody v-if="e.html" :html="e.html" />
       </article>
       <div v-if="replying" class="gb-rt-reply">
-        <MarkdownEditor v-model="draft" label="Reply" :disabled="busy" @submit="send" />
+        <MarkdownEditor v-model="draft" v-model:uploading="uploading" label="Reply" :disabled="busy" @submit="send" />
         <div class="gb-composer-foot">
           <button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" :disabled="busy" @click="replying = false">Cancel</button>
-          <button type="button" class="epfl-btn epfl-btn-primary epfl-btn-sm" :disabled="busy || !draft.trim()" @click="send">Reply</button>
+          <button type="button" class="epfl-btn epfl-btn-primary epfl-btn-sm" :disabled="busy || uploading || !draft.trim()" @click="send">Reply</button>
         </div>
       </div>
       <div v-else class="gb-rt-acts">
@@ -58,6 +58,7 @@ const r = computed(() => props.thread.root.review!);
 const shown = ref(false); // a resolved thread, unfolded
 const replying = ref(false);
 const draft = ref('');
+const uploading = ref(false); // a file uploads in the editor: sending waits for it (MarkdownEditor)
 const sending = ref(false);
 const sent = ref('');
 async function toAgent() {
@@ -66,7 +67,7 @@ async function toAgent() {
   sending.value = false;
 }
 async function send() {
-  if (draft.value.trim() && (await props.reply(props.thread.root.id, draft.value))) {
+  if (!uploading.value && draft.value.trim() && (await props.reply(props.thread.root.id, draft.value))) {
     draft.value = '';
     replying.value = false;
   }

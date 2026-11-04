@@ -2,8 +2,11 @@
 // tells what changed elsewhere — issues, the configuration, a sync,
 // settings — and each part of the page reloads what it shows. A change
 // this page made itself (clientId) comes back too and is skipped: the page
-// already shows it. The browser reconnects by itself; after a break,
-// listeners hear an "issues" event, since some may have been missed.
+// already shows it, unless the listener asks for its own ({ own: true }):
+// the board, for a write from a panel closed since, whose changed never
+// came; the header, for what now waits to send. The browser reconnects by
+// itself; after a break, listeners hear an "issues" event, since some may
+// have been missed.
 import { ref } from 'vue';
 import { API_BASE, clientId, type SyncStep } from '@/api/board';
 
@@ -15,7 +18,7 @@ export interface LiveEvent {
 }
 
 type Listener = (e: LiveEvent) => void;
-const listeners = new Set<Listener>();
+const listeners = new Map<Listener, boolean>(); // → hears this page's own changes
 
 // when a change from elsewhere last arrived (the header's notice); a run's
 // progress is no change, and a long sync's would keep the notice on
@@ -25,12 +28,13 @@ let source: EventSource | null = null;
 let broken = false;
 
 function tell(e: LiveEvent) {
-  if (e.kind !== 'progress') lastLive.value = Date.now();
-  for (const l of listeners) l(e);
+  const own = e.by === clientId;
+  if (e.kind !== 'progress' && !own) lastLive.value = Date.now();
+  for (const [l, hearsOwn] of [...listeners]) if (!own || hearsOwn) l(e);
 }
 
-export function onLive(fn: Listener): () => void {
-  listeners.add(fn);
+export function onLive(fn: Listener, opts: { own?: boolean } = {}): () => void {
+  listeners.set(fn, !!opts.own);
   if (!source && typeof EventSource !== 'undefined') {
     source = new EventSource(API_BASE + '/api/events');
     source.onmessage = (m) => {
@@ -40,7 +44,7 @@ export function onLive(fn: Listener): () => void {
       } catch {
         return;
       }
-      if (e.by !== clientId) tell(e);
+      tell(e);
     };
     source.onerror = () => (broken = true);
     source.onopen = () => {
