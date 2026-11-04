@@ -41,7 +41,7 @@ func Check(data []byte) (*Config, []string, error) {
 		}
 		return nil, nil, err
 	}
-	var warnings []string
+	warnings := cfg.experimentalWarnings()
 	for _, k := range md.Undecoded() {
 		warnings = append(warnings, fmt.Sprintf("%s: git-board doesn't know this key", k))
 	}
