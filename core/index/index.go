@@ -314,6 +314,8 @@ func (ix *Index) write(ctx context.Context, stored map[key]string, gone []key, c
 		switch {
 		case l.err != nil:
 			msg = l.err.Error()
+		case l.issue != nil && l.issue.Deleted:
+			// a deleted issue is indexed by its head alone: no query finds it
 		case l.issue != nil:
 			err = ix.insertIssue(ctx, tx, l.issue)
 		default:

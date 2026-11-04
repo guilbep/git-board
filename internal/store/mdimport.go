@@ -187,6 +187,10 @@ func (b *Backend) importMarkdown(dir string) (ImportReport, error) {
 			rep.Skipped = append(rep.Skipped, name+": "+err.Error())
 			continue
 		}
+		if b.isDeleted(f.front.ID) { // its file came back, from a branch: it stays deleted
+			rep.Skipped = append(rep.Skipped, name+": its issue was deleted")
+			continue
+		}
 		if f.front.ID != "" && oplog.IsID(f.front.ID) {
 			if _, _, err := b.loadIssue(f.front.ID); err == nil {
 				changed, conflicts, err := b.importInto(f, persons)
