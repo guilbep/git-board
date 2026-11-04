@@ -16,9 +16,23 @@ import (
 	"slices"
 	"sort"
 	"strings"
-
-	"github.com/guilbep/git-board/internal/config"
 )
+
+// Suite is a check or a test suite: what runs, and what it reads. The
+// application declares them, as [cycle.tests.<name>] and
+// [cycle.checks.<name>] in .git-board.toml.
+type Suite struct {
+	Run []string `toml:"run" json:"run"` // an argv, never a shell line
+	// Files are the git glob pathspecs of everything it reads (its content
+	// key); none is the whole tree.
+	Files []string `toml:"files" json:"files,omitempty"`
+	Where string   `toml:"where" json:"where,omitempty"` // "worktree" (default) or "ci"
+	Dir   string   `toml:"dir" json:"dir,omitempty"`     // where it runs, from the checkout's root
+	// Env is every variable it runs with beside PATH, HOME and the tool caches.
+	Env map[string]string `toml:"env" json:"env,omitempty"`
+	// Tools are version commands: their output names the toolchain.
+	Tools [][]string `toml:"tools" json:"tools,omitempty"`
+}
 
 // git runs git in dir, stdin on its input, and returns its output; the
 // error carries git's own message.
@@ -94,7 +108,7 @@ func Touched(ctx context.Context, dir, base, head string, globs []string) ([]str
 // check.
 // ponytail: a path holding a newline would break a line; git allows it, no
 // project does.
-func KeyText(ctx context.Context, dir, commit, name string, s config.Suite) ([]byte, error) {
+func KeyText(ctx context.Context, dir, commit, name string, s Suite) ([]byte, error) {
 	files, err := Files(ctx, dir, commit, s.Files)
 	if err != nil {
 		return nil, err
@@ -115,7 +129,7 @@ func KeyText(ctx context.Context, dir, commit, name string, s config.Suite) ([]b
 
 // Key is the content key of a check at a commit: `git hash-object --stdin`
 // over KeyText, in the repository's own hash format.
-func Key(ctx context.Context, dir, commit, name string, s config.Suite) (string, error) {
+func Key(ctx context.Context, dir, commit, name string, s Suite) (string, error) {
 	text, err := KeyText(ctx, dir, commit, name, s)
 	if err != nil {
 		return "", err

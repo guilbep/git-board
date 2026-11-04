@@ -11,16 +11,14 @@ import (
 	"strings"
 
 	"go.yaml.in/yaml/v3"
-
-	"github.com/guilbep/git-board/internal/config"
 )
 
 // Proposal is the [cycle.checks.*] a repository's own hooks and scripts
 // suggest: what "Propose checks" shows before it writes them.
 type Proposal struct {
-	Source  string                  `json:"source"` // the file read: lefthook.yml, Makefile, package.json; "" for none
-	Checks  map[string]config.Suite `json:"checks"`
-	Skipped []Skip                  `json:"skipped"`
+	Source  string           `json:"source"` // the file read: lefthook.yml, Makefile, package.json; "" for none
+	Checks  map[string]Suite `json:"checks"`
+	Skipped []Skip           `json:"skipped"`
 }
 
 // Skip is a command not proposed, and why.
@@ -61,7 +59,7 @@ func Propose(dir string) (Proposal, error) {
 			return p, nil
 		}
 	}
-	return Proposal{Checks: map[string]config.Suite{}, Skipped: []Skip{}}, nil
+	return Proposal{Checks: map[string]Suite{}, Skipped: []Skip{}}, nil
 }
 
 var (
@@ -75,7 +73,7 @@ func fromLefthook(file string, data []byte) (Proposal, error) {
 	if err := yaml.Unmarshal(data, &top); err != nil {
 		return Proposal{}, fmt.Errorf("%s: %w", file, err)
 	}
-	p := Proposal{Source: file, Checks: map[string]config.Suite{}, Skipped: []Skip{}}
+	p := Proposal{Source: file, Checks: map[string]Suite{}, Skipped: []Skip{}}
 	for _, hook := range slices.Sorted(maps.Keys(top)) {
 		var h struct {
 			Commands map[string]struct {
@@ -107,7 +105,7 @@ func fromLefthook(file string, data []byte) (Proposal, error) {
 			case !checkName.MatchString(name):
 				skip("a name of letters, digits, '.', '_' and '-' only")
 			default:
-				s := config.Suite{Run: argv}
+				s := Suite{Run: argv}
 				if root := strings.Trim(c.Root, "/"); root != "" {
 					s.Dir, s.Files = root, []string{root + "/**"}
 				}
@@ -123,11 +121,11 @@ func fromLefthook(file string, data []byte) (Proposal, error) {
 var makeTargets = []string{"lint", "vet", "typecheck", "type-check"}
 
 func fromMakefile(data []byte) Proposal {
-	p := Proposal{Source: "Makefile", Checks: map[string]config.Suite{}, Skipped: []Skip{}}
+	p := Proposal{Source: "Makefile", Checks: map[string]Suite{}, Skipped: []Skip{}}
 	for _, l := range strings.Split(string(data), "\n") {
 		target, _, ok := strings.Cut(l, ":")
 		if ok && slices.Contains(makeTargets, target) && !strings.HasPrefix(l[len(target)+1:], "=") {
-			p.Checks[target] = config.Suite{Run: []string{"make", target}}
+			p.Checks[target] = Suite{Run: []string{"make", target}}
 		}
 	}
 	return p
@@ -138,7 +136,7 @@ func fromPackageJSON(dir string, data []byte) Proposal {
 		Scripts map[string]string `json:"scripts"`
 	}
 	file := filepath.ToSlash(filepath.Join(dir, "package.json"))
-	p := Proposal{Source: file, Checks: map[string]config.Suite{}, Skipped: []Skip{}}
+	p := Proposal{Source: file, Checks: map[string]Suite{}, Skipped: []Skip{}}
 	if json.Unmarshal(data, &pkg) != nil {
 		return p
 	}
@@ -146,7 +144,7 @@ func fromPackageJSON(dir string, data []byte) Proposal {
 		if _, ok := pkg.Scripts[script]; !ok {
 			continue
 		}
-		s := config.Suite{Run: []string{"npm", "run", script}}
+		s := Suite{Run: []string{"npm", "run", script}}
 		if dir != "." {
 			s.Dir, s.Files = dir, []string{dir + "/**"}
 		}

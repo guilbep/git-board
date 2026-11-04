@@ -15,12 +15,12 @@ import (
 
 	"github.com/guilbep/git-board/core/fields"
 	"github.com/guilbep/git-board/core/model"
+	"github.com/guilbep/git-board/core/proof"
 	"github.com/guilbep/git-board/internal/ai"
 	"github.com/guilbep/git-board/internal/board"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/cycle"
 	"github.com/guilbep/git-board/internal/ghpr"
-	"github.com/guilbep/git-board/internal/proof"
 )
 
 // The development cycle (docs/prd/dev-cycle.md, M1): an issue's step,
@@ -331,7 +331,7 @@ func (s *apiServer) handleCycleAction(w http.ResponseWriter, r *http.Request) {
 		// run (ADR 0001 §9), a pasted one no longer counts. The merge
 		// commit not fetched yet is not proven either.
 		if merged != "" {
-			g, err := proof.Gate(r.Context(), s.root, ev.Base, merged)
+			g, err := gate(r.Context(), s.root, ev.Base, merged)
 			if err != nil {
 				g = proof.GateResult{Checks: []proof.CheckStatus{{}}, Reason: err.Error()}
 			}

@@ -25,6 +25,7 @@ import (
 	"golang.org/x/text/unicode/norm"
 
 	"github.com/guilbep/git-board/core/fields"
+	"github.com/guilbep/git-board/core/proof"
 )
 
 // View is one [views.<name>] table.
@@ -578,7 +579,7 @@ func WithRelease(content string, r Release) string {
 
 // WithChecks is content with a [cycle.checks.<name>] table per check,
 // replaced or appended: what Propose checks writes. Pure, as WithRelease.
-func WithChecks(content string, checks map[string]Suite) string {
+func WithChecks(content string, checks map[string]proof.Suite) string {
 	list := func(ss []string) string {
 		q := make([]string, len(ss))
 		for i, s := range ss {

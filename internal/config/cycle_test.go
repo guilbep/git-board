@@ -1,7 +1,11 @@
 package config
 
 import (
+	"context"
 	"encoding/json"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"reflect"
 	"slices"
 	"strings"
@@ -9,6 +13,7 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/guilbep/git-board/core/fields"
+	"github.com/guilbep/git-board/core/proof"
 )
 
 var co2Statuses = []string{"backlog", "comite", "ready", "in-progress", "in-review", "ready-for-validation", "qa", "tests-metier", "validated"}
@@ -235,7 +240,7 @@ run = ["go", "vet", "./..."]
 		t.Errorf("undecoded keys: %v", u)
 	}
 	c := cfg.Cycle
-	want := Suite{Run: []string{"go", "test", "./..."}, Files: []string{"**/*.go", "go.mod"}, Where: "worktree", Tools: [][]string{{"go", "version"}}, Env: map[string]string{"CGO_ENABLED": "0"}}
+	want := proof.Suite{Run: []string{"go", "test", "./..."}, Files: []string{"**/*.go", "go.mod"}, Where: "worktree", Tools: [][]string{{"go", "version"}}, Env: map[string]string{"CGO_ENABLED": "0"}}
 	if !reflect.DeepEqual(c.Tests["go"], want) || c.Tests["e2e"].Dir != "web" || c.Checks["vet"].Run[1] != "vet" {
 		t.Errorf("Cycle = %+v", c)
 	}
@@ -420,4 +425,71 @@ func parseOn(data []byte) (*Config, toml.MetaData, error) {
 
 func checkOn(data []byte) (*Config, []string, error) {
 	return Check(append([]byte(cycleOn), data...))
+}
+
+// The proposal written into a toml parses back to the same checks, and
+// writing it twice changes nothing.
+func TestWithChecksRoundTrip(t *testing.T) {
+	t.Parallel()
+	checks := map[string]proof.Suite{
+		"vet":       {Run: []string{"go", "vet", "./..."}},
+		"typecheck": {Run: []string{"npm", "run", "typecheck"}, Dir: "web", Files: []string{"web/**"}},
+	}
+	before := "# board\n[cycle]\nstart = \"ready\"\n"
+	text := WithChecks(before, checks)
+	if WithChecks(text, checks) != text || !strings.HasPrefix(text, before) {
+		t.Errorf("not idempotent, or the file's head moved:\n%s", text)
+	}
+	cfg, _, err := Check([]byte(text))
+	if err != nil {
+		t.Fatalf("%v\n%s", err, text)
+	}
+	if !reflect.DeepEqual(cfg.Cycle.Checks, checks) {
+		t.Errorf("read back %+v\n%s", cfg.Cycle.Checks, text)
+	}
+}
+
+// AtBase reads the rules the base commits, never a branch's: a check the
+// branch adds is not there, nor a signers file the base lacks.
+func TestAtBase(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	git := func(args ...string) string {
+		t.Helper()
+		cmd := exec.Command("git", append([]string{"-C", dir, "-c", "user.name=dev", "-c", "user.email=dev@example.com", "-c", "commit.gpgsign=false"}, args...)...)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+		return strings.TrimSpace(string(out))
+	}
+	commit := func(file, body string) {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(dir, file), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		git("add", "-A")
+		git("commit", "-q", "-m", file)
+	}
+	ctx := context.Background()
+	git("init", "-q", "-b", "main")
+	commit("README", "r")
+	if b, err := AtBase(ctx, dir, "main"); err != nil || len(b.Checks) != 0 || b.Signers != nil || b.SignersFile != ".allowed_signers" || b.Branch != "main" {
+		t.Errorf("no toml: %+v, %v", b, err)
+	}
+	toml := "[cycle.checks.vet]\nrun = [\"go\", \"vet\"]\n\n[cycle.tests.unit]\nrun = [\"go\", \"test\"]\n"
+	commit(".git-board.toml", toml)
+	git("checkout", "-q", "-b", "feat")
+	commit(".git-board.toml", toml+"[cycle.checks.evil]\nrun = [\"false\"]\n")
+	commit(".allowed_signers", "alice ssh-ed25519 AAAA\n")
+	b, err := AtBase(ctx, dir, "main")
+	if err != nil || len(b.Checks) != 1 || b.Checks["vet"].Run[1] != "vet" || len(b.Tests) != 1 || b.Signers != nil {
+		t.Errorf("the base's rules: %+v, %v", b, err)
+	}
+	if b, err := AtBase(ctx, dir, "feat"); err != nil || len(b.Checks) != 2 || string(b.Signers) != "alice ssh-ed25519 AAAA\n" {
+		t.Errorf("feat's rules: %+v, %v", b, err)
+	}
+	if _, err := AtBase(ctx, dir, "nope"); err == nil {
+		t.Error("an unknown base read as no config")
+	}
 }

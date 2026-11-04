@@ -3,15 +3,13 @@ package proof
 import (
 	"strings"
 	"testing"
-
-	"github.com/guilbep/git-board/internal/config"
 )
 
 func TestKey(t *testing.T) {
 	t.Parallel()
 	dir := repo(t)
 	c1 := commit(t, dir, map[string]string{"c.go": "package c", "a/b/d.go": "package b", "c.gox": "x", "README": "r"})
-	go1 := config.Suite{Run: []string{"go", "test", "./..."}, Files: []string{"**/*.go"}}
+	go1 := Suite{Run: []string{"go", "test", "./..."}, Files: []string{"**/*.go"}}
 	k1, err := Key(ctx(t), dir, c1, "go", go1)
 	if err != nil {
 		t.Fatal(err)
@@ -20,7 +18,7 @@ func TestKey(t *testing.T) {
 		t.Errorf("same inputs: %s then %s", k1, again)
 	}
 
-	text, _ := KeyText(ctx(t), dir, c1, "go", config.Suite{Run: []string{"sh", "-c", "a<b&&c"}, Dir: "web", Files: []string{"**/*.go"}, Env: map[string]string{"B": "2", "A": "1"}})
+	text, _ := KeyText(ctx(t), dir, c1, "go", Suite{Run: []string{"sh", "-c", "a<b&&c"}, Dir: "web", Files: []string{"**/*.go"}, Env: map[string]string{"B": "2", "A": "1"}})
 	blob := func(p string) string { return run(t, dir, "rev-parse", c1+":"+p) }
 	want := "git-board-ci/key/v1\ncheck go\nrun [\"sh\",\"-c\",\"a<b&&c\"]\ndir web\nenv A=1\nenv B=2\n" +
 		"file 100644 " + blob("a/b/d.go") + " a/b/d.go\nfile 100644 " + blob("c.go") + " c.go\n"
@@ -36,7 +34,7 @@ func TestKey(t *testing.T) {
 	if k, _ := Key(ctx(t), dir, inside, "go", go1); k == k1 {
 		t.Error("a change under files kept the key")
 	}
-	for name, s := range map[string]config.Suite{
+	for name, s := range map[string]Suite{
 		"env": {Run: go1.Run, Files: go1.Files, Env: map[string]string{"CGO_ENABLED": "0"}},
 		"dir": {Run: go1.Run, Files: go1.Files, Dir: "web"},
 		"run": {Run: []string{"go", "test", "-race", "./..."}, Files: go1.Files},

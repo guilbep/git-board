@@ -3,7 +3,7 @@ package proof
 import (
 	"testing"
 
-	"github.com/guilbep/git-board/internal/hermetic"
+	"github.com/guilbep/git-board/core/internal/hermetic"
 )
 
 // TestMain keeps the tests off the network and the user's tokens.

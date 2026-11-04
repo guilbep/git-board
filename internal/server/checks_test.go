@@ -13,9 +13,9 @@ import (
 	"time"
 
 	"github.com/guilbep/git-board/core/fields"
+	"github.com/guilbep/git-board/core/proof"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/ghpr"
-	"github.com/guilbep/git-board/internal/proof"
 	"github.com/guilbep/git-board/internal/store/storetest"
 )
 
@@ -253,7 +253,7 @@ func TestChecksSetup(t *testing.T) {
 	url := serve(t, s).URL + "/api/checks/setup"
 	var got struct {
 		Source  string
-		Checks  map[string]config.Suite
+		Checks  map[string]proof.Suite
 		Skipped []struct{ Name, Why string }
 		TOML    string
 	}
@@ -330,7 +330,7 @@ func TestCycleSignoffNotProvenAtMerge(t *testing.T) {
 	merged()
 	// at step 7 the check runs from the CLI (git board verify), not the page
 	ctx := context.Background()
-	cfg, _, err := proof.AtBase(ctx, s.root, "dev")
+	base, err := config.AtBase(ctx, s.root, "dev")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -338,7 +338,7 @@ func TestCycleSignoffNotProvenAtMerge(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := proof.Run(ctx, s.root, strings.TrimSpace(git(t, s.root, "rev-parse", "fix/2518-x")), "vet", cfg.Cycle.Checks["vet"], keyFile, writer); err != nil {
+	if _, err := proof.Run(ctx, s.root, strings.TrimSpace(git(t, s.root, "rev-parse", "fix/2518-x")), "vet", base.Checks["vet"], keyFile, writer); err != nil {
 		t.Fatal(err)
 	}
 	if code, body := post(t, url+"/cycle/signoff", struct{}{}); code != http.StatusOK {

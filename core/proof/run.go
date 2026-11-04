@@ -13,8 +13,6 @@ import (
 	"runtime"
 	"strings"
 	"time"
-
-	"github.com/guilbep/git-board/internal/config"
 )
 
 // Timeout bounds a run; one that outlives it is FAILED.
@@ -31,7 +29,7 @@ var passEnv = []string{"PATH", "HOME", "TMPDIR", "GOCACHE", "GOMODCACHE", "GOPAT
 // check's key. Exit 0 is PASSED, any other exit or the timeout FAILED; a
 // check that can't start (no checkout, no binary) is an error and records
 // nothing.
-func Run(ctx context.Context, dir, commit, name string, s config.Suite, keyFile, writer string) (Result, error) {
+func Run(ctx context.Context, dir, commit, name string, s Suite, keyFile, writer string) (Result, error) {
 	if s.Where == "ci" {
 		return Result{}, fmt.Errorf("%s runs on the forge (where = \"ci\")", name)
 	}

@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/guilbep/git-board/core/fields"
+	"github.com/guilbep/git-board/core/proof"
 	"github.com/guilbep/git-board/internal/config"
 )
 
@@ -117,10 +118,10 @@ func (s *apiServer) configModel() (configModel, error) {
 	m.Cycle.Kinds = orEmptyStringMap(cfg.Cycle.Kinds)
 	m.Cycle.Signoffs = orEmptyStringMap(cfg.Cycle.Signoffs)
 	if m.Cycle.Tests == nil {
-		m.Cycle.Tests = map[string]config.Suite{}
+		m.Cycle.Tests = map[string]proof.Suite{}
 	}
 	if m.Cycle.Checks == nil {
-		m.Cycle.Checks = map[string]config.Suite{}
+		m.Cycle.Checks = map[string]proof.Suite{}
 	}
 	m.Experimental.Features = orEmpty(cfg.Features)
 	m.Repos.List = orEmpty(cfg.Repos)

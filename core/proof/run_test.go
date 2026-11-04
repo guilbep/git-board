@@ -6,8 +6,6 @@ import (
 	"slices"
 	"strings"
 	"testing"
-
-	"github.com/guilbep/git-board/internal/config"
 )
 
 func TestRun(t *testing.T) {
@@ -21,7 +19,7 @@ func TestRun(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "marker"), []byte("leak"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	s := config.Suite{Run: []string{"sh", "-c", `echo "foo=$FOO"; env; test -f marker`}, Env: map[string]string{"FOO": "bar"}}
+	s := Suite{Run: []string{"sh", "-c", `echo "foo=$FOO"; env; test -f marker`}, Env: map[string]string{"FOO": "bar"}}
 
 	r, err := Run(ctx(t), dir, before, "marker", s, keyFile, "alice-a-0001")
 	if err != nil || r.Verdict != Failed || r.Commit != before {
@@ -55,10 +53,10 @@ func TestRun(t *testing.T) {
 		t.Errorf("checkout left behind:\n%s", left)
 	}
 
-	if _, err := Run(ctx(t), dir, after, "nope", config.Suite{Run: []string{"no-such-binary-gb"}}, keyFile, "alice-a-0001"); err == nil {
+	if _, err := Run(ctx(t), dir, after, "nope", Suite{Run: []string{"no-such-binary-gb"}}, keyFile, "alice-a-0001"); err == nil {
 		t.Error("a missing binary is a verdict")
 	}
-	if _, err := Run(ctx(t), dir, after, "forge", config.Suite{Run: []string{"true"}, Where: "ci"}, keyFile, "alice-a-0001"); err == nil {
+	if _, err := Run(ctx(t), dir, after, "forge", Suite{Run: []string{"true"}, Where: "ci"}, keyFile, "alice-a-0001"); err == nil {
 		t.Error("where = ci ran")
 	}
 }

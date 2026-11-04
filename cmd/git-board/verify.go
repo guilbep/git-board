@@ -11,7 +11,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/proof"
 	"github.com/guilbep/git-board/internal/release"
 )
 
@@ -60,7 +59,11 @@ func runVerify(ctx context.Context, out io.Writer, dir, base, commit string) err
 		}
 		base = baseRef(ctx, dir, cfg.Branches.Base)
 	}
-	g, err := proof.Gate(ctx, dir, base, sha)
+	b, err := config.AtBase(ctx, dir, base)
+	if err != nil {
+		return err
+	}
+	g, err := b.Gate(ctx, dir, sha)
 	if err != nil {
 		return err
 	}

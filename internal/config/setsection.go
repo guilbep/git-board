@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/guilbep/git-board/core/fields"
+	"github.com/guilbep/git-board/core/proof"
 )
 
 // The settings' forms write one section of the file at a time: each writer
@@ -413,7 +414,7 @@ func SetCycleText(text string, on bool, c Cycle) (string, error) {
 // run, files, where, dir, tools, and env as the subtable. A suite the file
 // has that suites doesn't is deleted; a new one joins its family, after
 // the family's last table.
-func setSuites(text, parent string, suites map[string]Suite) string {
+func setSuites(text, parent string, suites map[string]proof.Suite) string {
 	for _, name := range subTables(text, parent) {
 		if _, keep := suites[name]; !keep {
 			text = deleteTable(text, parent+"."+name)

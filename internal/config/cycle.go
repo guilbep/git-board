@@ -1,6 +1,7 @@
 package config
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"maps"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/guilbep/git-board/core/fields"
+	"github.com/guilbep/git-board/core/proof"
 )
 
 // Cycle is the [cycle] table: the project's statuses as the loop's stages,
@@ -53,26 +55,30 @@ type Cycle struct {
 	Signoffs map[string]string `toml:"signoffs" json:"signoffs"`
 	// Tests are the suites step 4 runs, Checks the checks that gate Mark
 	// ready for review (docs/adr/0001-check-results-are-signed-git-notes.md).
-	Tests  map[string]Suite `toml:"tests" json:"tests"`
-	Checks map[string]Suite `toml:"checks" json:"checks"`
+	Tests  map[string]proof.Suite `toml:"tests" json:"tests"`
+	Checks map[string]proof.Suite `toml:"checks" json:"checks"`
 	// Signers is the OpenSSH allowed_signers file a result's signature is
 	// verified against, read from the base branch; default ".allowed_signers".
 	Signers string `toml:"signers" json:"signers"`
 }
 
-// Suite is a [cycle.tests.<name>] or [cycle.checks.<name>] table: what runs,
-// and what it reads.
-type Suite struct {
-	Run []string `toml:"run" json:"run"` // an argv, never a shell line
-	// Files are the git glob pathspecs of everything it reads (its content
-	// key); none is the whole tree.
-	Files []string `toml:"files" json:"files,omitempty"`
-	Where string   `toml:"where" json:"where,omitempty"` // "worktree" (default) or "ci"
-	Dir   string   `toml:"dir" json:"dir,omitempty"`     // where it runs, from the checkout's root
-	// Env is every variable it runs with beside PATH, HOME and the tool caches.
-	Env map[string]string `toml:"env" json:"env,omitempty"`
-	// Tools are version commands: their output names the toolchain.
-	Tools [][]string `toml:"tools" json:"tools,omitempty"`
+// AtBase is the proof rules as the base branch has them committed: its
+// [cycle] tests and checks, and its signers file (ADR 0001, section 5).
+// No .git-board.toml there is no checks; no signers file, nil signers.
+func AtBase(ctx context.Context, dir, base string) (proof.Base, error) {
+	data, err := proof.Show(ctx, dir, base, ".git-board.toml")
+	if err != nil {
+		return proof.Base{}, err
+	}
+	cfg := &Config{}
+	if data != nil {
+		if cfg, _, err = Check(data); err != nil {
+			return proof.Base{}, fmt.Errorf(".git-board.toml on %s: %w", base, err)
+		}
+	}
+	b := proof.Base{Branch: base, Tests: cfg.Cycle.Tests, Checks: cfg.Cycle.Checks, SignersFile: cfg.Cycle.SignersFile()}
+	b.Signers, err = proof.Show(ctx, dir, base, b.SignersFile)
+	return b, err
 }
 
 // SignersFile is the signers file's path, its default filled.
@@ -441,7 +447,7 @@ func checkCycle(c Cycle) error {
 	}
 	for _, t := range []struct {
 		table  string
-		suites map[string]Suite
+		suites map[string]proof.Suite
 	}{{"tests", c.Tests}, {"checks", c.Checks}} {
 		for _, name := range slices.Sorted(maps.Keys(t.suites)) {
 			if err := checkSuite(t.suites[name]); err != nil {
@@ -464,7 +470,7 @@ var suiteName = regexp.MustCompile(`^[A-Za-z0-9_.-]+$`)
 var envName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
 // checkSuite refuses a suite that couldn't run as the toml says.
-func checkSuite(s Suite) error {
+func checkSuite(s proof.Suite) error {
 	if len(s.Run) == 0 || s.Run[0] == "" {
 		return errors.New("run: a command, as a list of words")
 	}

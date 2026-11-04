@@ -40,6 +40,7 @@ var layerOf = map[string]int{
 	"core/inbox":             issues,
 	"core/model":             issues,
 	"core/syncer":            issues,
+	"core/proof":             releases,
 }
 
 const module = "github.com/guilbep/git-board/"

@@ -9,8 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/proof"
+	"github.com/guilbep/git-board/core/proof"
 )
 
 func TestVerify(t *testing.T) {
@@ -59,7 +58,7 @@ func TestVerify(t *testing.T) {
 	if out, err := verify("fix"); err == nil || !strings.Contains(err.Error(), "ok not run at") {
 		t.Errorf("not run: %q %v", out, err)
 	}
-	ok := config.Suite{Run: []string{"sh", "-c", "test -f fixed"}}
+	ok := proof.Suite{Run: []string{"sh", "-c", "test -f fixed"}}
 	if _, err := proof.Run(ctx, dir, git("rev-parse", "HEAD"), "ok", ok, key, "alice-a-0001"); err != nil {
 		t.Fatal(err)
 	}

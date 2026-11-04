@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/guilbep/git-board/core/fields"
+	"github.com/guilbep/git-board/core/proof"
 )
 
 // saveTwice is text saved twice through save: the second save changes
@@ -261,7 +262,7 @@ func TestSetCycle(t *testing.T) {
 		t.Errorf("check: %v, on %v", err, cfg != nil && cfg.Cycle.On)
 	}
 	// a suite with its env and tools, byte-stable
-	suite := Cycle{Tests: map[string]Suite{"unit": {
+	suite := Cycle{Tests: map[string]proof.Suite{"unit": {
 		Run:   []string{"go", "test", "./..."},
 		Files: []string{"**/*.go"},
 		Env:   map[string]string{"CGO": "0"},
