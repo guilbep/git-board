@@ -30,6 +30,8 @@ var (
 	// ErrMissing: the datastore lacks a capability a feature needs. It is
 	// wrapped with the sentence the user reads.
 	ErrMissing = errors.New("datastore: capability missing")
+	// ErrHeld: another holds the lock a Locker was asked for.
+	ErrHeld = errors.New("datastore: lock held")
 )
 
 // Datastore keeps entities as packs.
@@ -58,6 +60,18 @@ type Counter interface {
 	// SetCount writes the counter if its version is still prev ("" for one
 	// that must not exist yet): ErrMoved otherwise.
 	SetCount(ctx context.Context, value []byte, prev string) (version string, err error)
+}
+
+// Locker is a datastore that every machine on the board shares, and that
+// holds locks for them all: a forge sync, one at a time per board, takes
+// its lock there. A datastore each machine keeps a copy of (git, the
+// Markdown files) is no Locker: a machine's own file lock is the board's.
+type Locker interface {
+	// Lock takes the lock named name without waiting: ErrHeld when
+	// another holds it, on this machine or another. unlock lets it go. A
+	// holder that ends without unlocking, however it ends, keeps no one
+	// out.
+	Lock(ctx context.Context, name string) (unlock func(), err error)
 }
 
 // Missing is ErrMissing with the sentence a user reads.

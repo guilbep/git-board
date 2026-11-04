@@ -14,6 +14,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -360,11 +361,6 @@ func (b *Backend) notOnForge() ([]string, error) {
 
 // wrote tells OnWrite an issue changed.
 func (b *Backend) wrote(id string) {
-	if _, ok := b.ds.(*mdstore.Store); ok {
-		if err := b.renderMarkdown(); err != nil {
-			log.Printf("markdown: %v", err)
-		}
-	}
 	if f := b.OnWrite; f != nil {
 		f(id)
 	}
@@ -387,21 +383,72 @@ func markdownDir(root, v string) string {
 	return filepath.Join(root, dir)
 }
 
-// readMarkdown reads a Markdown board's hand edits in before a write
-// (ImportMarkdown), while the files still say what the board held when
-// they were written: a write then never takes its own issue's file, older
-// than itself, for a hand edit. The import's own writes skip it. A hand
-// edit to an issue changed here since its file was written is a conflict,
-// logged; the file takes the board's at the render after the write.
-func (b *Backend) readMarkdown() {
+// mdWait is how long a Markdown board's write waits for another
+// process's to end.
+const mdWait = time.Minute
+
+// mdLock takes a Markdown board's lock: mdMu in this process, and the
+// folder's lock file across processes (mdstore's LockFiles), so that a
+// server and a command never read a hand edit in twice, nor render over
+// each other. It answers the board, nil for another, and the func that
+// lets the lock go.
+func (b *Backend) mdLock() (*mdstore.Store, func(), error) {
 	m, ok := b.ds.(*mdstore.Store)
-	if !ok || !b.mdImporting.CompareAndSwap(false, true) {
-		return
+	if !ok {
+		return nil, func() {}, nil
 	}
-	defer b.mdImporting.Store(false)
 	b.mdMu.Lock()
-	defer b.mdMu.Unlock()
-	rep, err := b.ImportMarkdown(m.Dir())
+	ctx, cancel := context.WithTimeout(context.Background(), mdWait)
+	defer cancel()
+	unlock, err := m.LockFiles(ctx)
+	if err != nil {
+		b.mdMu.Unlock()
+		return nil, nil, err
+	}
+	return m, func() { unlock(); b.mdMu.Unlock() }, nil
+}
+
+// markdownWrite begins a write on a Markdown board: under its lock, held
+// until done, the hand edits are read in (readHandEdits), and done renders
+// the files and lets the lock go. On another board it does nothing.
+func (b *Backend) markdownWrite() (done func(), err error) {
+	m, unlock, err := b.mdLock()
+	if err != nil {
+		return nil, fmt.Errorf("markdown: %w", err)
+	}
+	if m == nil {
+		return unlock, nil
+	}
+	b.readHandEdits(m)
+	return func() {
+		defer unlock()
+		if _, err := b.ExportMarkdown(m.Dir(), nil); err != nil {
+			log.Printf("markdown: %v", err)
+		}
+	}, nil
+}
+
+// readMarkdown reads a Markdown board's hand edits in, under its lock.
+func (b *Backend) readMarkdown() error {
+	m, unlock, err := b.mdLock()
+	if err != nil {
+		return fmt.Errorf("markdown: %w", err)
+	}
+	defer unlock()
+	if m != nil {
+		b.readHandEdits(m)
+	}
+	return nil
+}
+
+// readHandEdits reads a Markdown board's hand edits in before a write
+// (importMarkdown), while the files still say what the board held when
+// they were written: a write then never takes its own issue's file, older
+// than itself, for a hand edit. A hand edit to an issue changed here since
+// its file was written is a conflict, logged; the file takes the board's
+// at the render after the write. The board's lock is held (mdLock).
+func (b *Backend) readHandEdits(m *mdstore.Store) {
+	rep, err := b.importMarkdown(m.Dir())
 	if err != nil {
 		log.Printf("markdown: reading %s: %v", m.Dir(), err)
 	}
@@ -415,16 +462,20 @@ func (b *Backend) readMarkdown() {
 	}
 }
 
-// renderMarkdown writes a Markdown board's files where an issue changed.
+// renderMarkdown writes a Markdown board's files where an issue changed,
+// under its lock.
 // ponytail: reads and writes every file on each write; per issue when
 // boards in a folder grow past a few hundred issues
 func (b *Backend) renderMarkdown() error {
-	if b.mdImporting.Load() {
-		return nil // the import renders once it is done
+	m, unlock, err := b.mdLock()
+	if err != nil {
+		return fmt.Errorf("markdown: %w", err)
 	}
-	b.mdMu.Lock()
-	defer b.mdMu.Unlock()
-	_, err := b.ExportMarkdown(b.ds.(*mdstore.Store).Dir(), nil)
+	defer unlock()
+	if m == nil {
+		return nil
+	}
+	_, err = b.ExportMarkdown(m.Dir(), nil)
 	return err
 }
 

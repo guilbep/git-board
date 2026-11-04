@@ -202,9 +202,13 @@ func (b *Backend) forgeSync(ctx context.Context, run ForgeRun, way syncWay, issu
 		s = scratch
 	default:
 		// the sync writes past do: a Markdown board's hand edits are read
-		// in first, and its files follow what the sync wrote
+		// in first, and its files follow what the sync wrote, each under
+		// the board's lock; not across the run, which waits on the forges
+		// and would hold every other write back meanwhile
 		if _, md := b.ds.(*mdstore.Store); md {
-			b.readMarkdown()
+			if err := b.readMarkdown(); err != nil {
+				return syncer.Report{}, err
+			}
 			defer func() {
 				if err := b.renderMarkdown(); err != nil {
 					log.Printf("markdown: %v", err)

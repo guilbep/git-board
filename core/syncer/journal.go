@@ -27,10 +27,11 @@ const goOnMargin = 5 * 60
 // listing, its total. It is a shortcut: a line it fails to write costs a
 // read next time, nothing more.
 type journal struct {
-	f      *os.File
-	head   journalLine
-	read   map[[2]string]int64 // (forge key, forge issue id) -> the start of the run that read it
-	totals map[string]listing  // forge key -> its last listing
+	f       *os.File
+	release func() // lets the board's lock go, in a datastore.Locker
+	head    journalLine
+	read    map[[2]string]int64 // (forge key, forge issue id) -> the start of the run that read it
+	totals  map[string]listing  // forge key -> its last listing
 }
 
 // listing is a project's last listing: how many issues it held, and
@@ -191,6 +192,9 @@ func (j *journal) keep(keys []string) {
 func (j *journal) unlock() {
 	unlockFile(j.f) // first: a process forking as it closes shares the open file, and with it the lock
 	j.f.Close()
+	if j.release != nil {
+		j.release()
+	}
 }
 
 // CutRun is what the journal says of runs that recorded no run: when it

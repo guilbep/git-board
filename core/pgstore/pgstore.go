@@ -16,10 +16,13 @@ import (
 	"cmp"
 	"context"
 	"database/sql"
+	"database/sql/driver"
 	"errors"
 	"fmt"
+	"hash/fnv"
 	"slices"
 	"strconv"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -62,6 +65,7 @@ type Store struct {
 var (
 	_ datastore.Datastore = (*Store)(nil)
 	_ datastore.Counter   = (*Store)(nil)
+	_ datastore.Locker    = (*Store)(nil)
 )
 
 // Open connects to the database dsn names (a postgres:// URL or key=value
@@ -283,6 +287,40 @@ func serialization(err error) bool {
 
 // Folder is this machine's folder.
 func (s *Store) Folder() string { return s.folder }
+
+// Lock takes the board's lock named name: a session advisory lock, on a
+// connection held until unlock. Its key is name's hash; advisory locks are
+// the database's, and one database is one board. The server lets it go
+// when the session ends, so a process killed holding it keeps no one out.
+func (s *Store) Lock(ctx context.Context, name string) (func(), error) {
+	h := fnv.New64a()
+	h.Write([]byte("git-board/" + name))
+	key := int64(h.Sum64())
+	conn, err := s.db.Conn(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("pgstore: lock %s: %w", name, err)
+	}
+	var got bool
+	if err := conn.QueryRowContext(ctx, "SELECT pg_try_advisory_lock($1)", key).Scan(&got); err != nil {
+		conn.Close()
+		return nil, fmt.Errorf("pgstore: lock %s: %w", name, err)
+	}
+	if !got {
+		conn.Close()
+		return nil, fmt.Errorf("%w: %s, on %s", datastore.ErrHeld, name, s.Where())
+	}
+	return func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		var freed bool
+		if err := conn.QueryRowContext(ctx, "SELECT pg_advisory_unlock($1)", key).Scan(&freed); err != nil || !freed {
+			// the session may still hold it: it isn't given back to the
+			// pool, its end lets the lock go
+			_ = conn.Raw(func(any) error { return driver.ErrBadConn })
+		}
+		conn.Close()
+	}, nil
+}
 
 // Count reads the counter: nil when none was started.
 func (s *Store) Count(ctx context.Context) ([]byte, string, error) {

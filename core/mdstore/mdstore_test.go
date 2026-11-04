@@ -2,10 +2,12 @@ package mdstore_test
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/guilbep/git-board/core/datastore"
 	"github.com/guilbep/git-board/core/datastore/dstest"
@@ -39,6 +41,9 @@ func TestUnionMergedPacks(t *testing.T) {
 	s := open(t, dir)
 	if data, err := os.ReadFile(filepath.Join(dir, mdstore.Board, ".gitattributes")); err != nil || string(data) != "*.jsonl merge=union\n" {
 		t.Fatalf(".gitattributes %q, %v", data, err)
+	}
+	if data, err := os.ReadFile(filepath.Join(dir, mdstore.Board, ".gitignore")); err != nil || string(data) != "*.lock\n*.takeover\n" {
+		t.Fatalf(".gitignore %q, %v: the lock files aren't kept out of git", data, err)
 	}
 	l, err := oplog.Create(ctx, s, "issue", "", []oplog.Op{{Kind: "create", Time: 1}})
 	if err != nil {
@@ -117,4 +122,27 @@ func TestVersionIsTheFile(t *testing.T) {
 	if got, err := oplog.Load(s, "issue", l.ID); err != nil || len(got.Entries) != 3 || got.Entries[1].Kind != "on-b" {
 		t.Fatalf("%+v, %v", got, err)
 	}
+}
+
+// The board's lock keeps a second holder waiting, on another Store of the
+// folder as in another process, until the first lets it go.
+func TestLockFilesOneAtATime(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	a, b := open(t, dir), open(t, dir)
+	unlock, err := a.LockFiles(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), 50*time.Millisecond)
+	defer cancel()
+	if _, err := b.LockFiles(ctx); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("a second holder: %v, want it kept waiting", err)
+	}
+	unlock()
+	unlock, err = b.LockFiles(t.Context())
+	if err != nil {
+		t.Fatalf("once the first let go: %v", err)
+	}
+	unlock()
 }
