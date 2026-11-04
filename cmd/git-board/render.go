@@ -118,3 +118,10 @@ func shortID(id string) string {
 	}
 	return id
 }
+
+// writeJSON prints v as indented JSON, as ls --json does.
+func writeJSON(out io.Writer, v any) error {
+	enc := json.NewEncoder(out)
+	enc.SetIndent("", "  ")
+	return enc.Encode(v)
+}
