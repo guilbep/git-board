@@ -65,7 +65,12 @@ docs/guide/configuration.md, Filters):
   no:field                no value for that field
   title:*glob*            the title, without case
   #2528, CO2-3075         an issue by its forge or project number
+  created:>2026-10-01     when it was opened; updated:, closed: alike. A
+                          date is that day; >, >=, <, <=, a..b, * open;
+                          a time 2026-10-01T14:30; @today, @today-7d (d w m y)
+  comments:>5             how many comments: 5, >=5, <5, 2..5
   free text, "a phrase"   words in the title, the description or a comment
+  in:title,body,comments  where free text looks
   Conditions are AND'd together — combine as many as you like.`,
 		Example: `  git-board                                    # this repository's web UI
   git-board ls                                 # open issues

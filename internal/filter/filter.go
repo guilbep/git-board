@@ -4,7 +4,9 @@
 // author:login, involves:login|@me (the author, a person field, a comment, a
 // mention), follows:@me (what your inbox follows), label:name, no:field
 // (no:label: no plain label), #2528 (an issue's number on a forge), CO2-2528
-// (its project number), free text and "quoted phrases". Conditions
+// (its project number), created:, updated:, closed: (>2026-10-01, a..b,
+// @today-7d), comments:>5, in:title,body,comments (where free text looks),
+// free text and "quoted phrases". Conditions
 // are AND'd; a,b is either value (status:ready,qa), as in GitHub's search.
 // Pure logic, and the only parser of the grammar: the CLI, the TUI, the
 // web API and so the web page all go through it. The page explains it in
@@ -19,6 +21,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/guilbep/git-board/core/index"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/store"
 )
@@ -37,6 +40,9 @@ const (
 	KindNumber   Kind = "number" // #2528
 	KindInvolves Kind = "involves"
 	KindFollows  Kind = "follows"
+	KindDate     Kind = "date"     // created:, updated:, closed: (Field)
+	KindComments Kind = "comments" // comments:>5
+	KindIn       Kind = "in"       // in:title,body,comments: where free text looks
 )
 
 // Condition is one AND'd term of a parsed filter expression.
@@ -46,7 +52,8 @@ type Condition struct {
 	Value   string
 	Negated bool
 	// Hits are, for free text, the issues the full-text index (title,
-	// description, comments) matches, by id; nil: the title only.
+	// description, comments, or where in: says) matches, by id; nil: the
+	// issue's own texts are searched (index.MatchText), as the index would.
 	Hits map[string]bool
 	// Mentions are, for involves: and follows:, the issues whose text
 	// mentions the login, by id (board fills it); nil: none.
@@ -94,6 +101,12 @@ func Parse(text string) []Condition {
 			conditions = append(conditions, Condition{Kind: KindFollows, Value: value, Negated: negated})
 		case fieldName == "no":
 			conditions = append(conditions, Condition{Kind: KindNo, Value: value, Negated: negated})
+		case fieldName == "created" || fieldName == "updated" || fieldName == "closed":
+			conditions = append(conditions, Condition{Kind: KindDate, Field: fieldName, Value: value, Negated: negated})
+		case fieldName == "comments":
+			conditions = append(conditions, Condition{Kind: KindComments, Field: fieldName, Value: value, Negated: negated})
+		case fieldName == "in":
+			conditions = append(conditions, Condition{Kind: KindIn, Field: fieldName, Value: value, Negated: negated})
 		default:
 			conditions = append(conditions, Condition{Kind: KindField, Field: fieldName, Value: value, Negated: negated})
 		}
@@ -208,16 +221,20 @@ func Matches(issue store.Issue, conditions []Condition, cfg *config.Config, me s
 	for _, l := range issue.AllLabels() {
 		labels[l] = true
 	}
+	in := In(conditions)
 
 	for _, c := range conditions {
+		if c.Kind == KindIn { // where free text looks, not a condition
+			continue
+		}
 		ok := false
-		// a,b: either value matches (no:, #n and free text take no list)
+		// a,b: either value matches (no:, #n, free text, dates and counts take no list)
 		values := []string{c.Value}
-		if c.Kind != KindText && c.Kind != KindNo && c.Kind != KindTitle && c.Kind != KindNumber && c.Kind != KindInvolves && c.Kind != KindFollows {
+		if !noList[c.Kind] {
 			values = strings.Split(c.Value, ",")
 		}
 		for _, v := range values {
-			ok = ok || matchOne(issue, labels, c, v, cfg, me, today)
+			ok = ok || matchOne(issue, labels, c, v, in, cfg, me, today)
 		}
 		if c.Negated {
 			ok = !ok
@@ -229,13 +246,18 @@ func Matches(issue store.Issue, conditions []Condition, cfg *config.Config, me s
 	return true
 }
 
-// matchOne is one condition with one value.
-func matchOne(issue store.Issue, labels map[string]bool, c Condition, value string, cfg *config.Config, me string, today time.Time) bool {
+// noList are the kinds whose value is one, commas and all.
+var noList = map[Kind]bool{KindText: true, KindNo: true, KindTitle: true, KindNumber: true, KindInvolves: true,
+	KindFollows: true, KindDate: true, KindComments: true}
+
+// matchOne is one condition with one value; in is where free text looks
+// (In).
+func matchOne(issue store.Issue, labels map[string]bool, c Condition, value string, in []string, cfg *config.Config, me string, today time.Time) bool {
 	if value == "@me" && len(c.Mine) > 0 {
 		mine := c.Mine
 		c.Mine = nil
 		for _, name := range mine {
-			if matchOne(issue, labels, c, value, cfg, name, today) {
+			if matchOne(issue, labels, c, value, in, cfg, name, today) {
 				return true
 			}
 		}
@@ -251,9 +273,16 @@ func matchOne(issue store.Issue, labels map[string]bool, c Condition, value stri
 		if c.Hits != nil {
 			ok = c.Hits[issue.ID]
 		} else {
-			ok = strings.Contains(strings.ToLower(issue.Title), strings.ToLower(value))
+			ok = index.MatchText(value, texts(issue, in)...)
 		}
 		ok = ok || itself(issue, value)
+	case KindDate:
+		t, has := dateOf(issue, c.Field)
+		r, err := DateRange(value, today)
+		ok = has && err == nil && r.Has(t.Unix())
+	case KindComments:
+		r, err := CountRange(value)
+		ok = err == nil && r.Has(int64(issue.Comments))
 	case KindNumber:
 		ok = issue.HasForgeNumber(value)
 	case KindAuthor:

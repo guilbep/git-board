@@ -59,6 +59,14 @@ type Issue struct {
 	// CreatedAt is when it was opened: it breaks a tie between issues one
 	// sync stamped at once.
 	CreatedAt time.Time `json:"created_at"`
+	// ClosedAt is when it was last closed, while it is: zero when open.
+	ClosedAt time.Time `json:"closed_at,omitzero"`
+	// Comments is how many comments it has, for comments:.
+	Comments int `json:"comments"`
+	// Body and CommentBodies are its texts, for free text without the
+	// index (an issue as it was: ls --at).
+	Body          string   `json:"-"`
+	CommentBodies []string `json:"-"`
 	// AuthorLogins are who opened it, for author:: name, login, forge
 	// logins.
 	AuthorLogins []string `json:"-"`
@@ -460,7 +468,14 @@ func (b *Backend) records() (map[string][]syncer.Record, error) {
 func (b *Backend) issueFrom(is *issue.Issue, v view) Issue {
 	forges := forgesOf(v.records[is.ID])
 	out := Issue{ID: is.ID, Title: is.Title, Status: string(is.Status), Labels: b.shown(slices.Clone(is.Labels)), Forges: forges,
-		UpdatedAt: time.Unix(is.Updated, 0), CreatedAt: time.Unix(is.Created, 0), AuthorID: is.Author}
+		UpdatedAt: time.Unix(is.Updated, 0), CreatedAt: time.Unix(is.Created, 0), AuthorID: is.Author,
+		Comments: len(is.Comments), Body: is.Body}
+	if is.Status == issue.Closed {
+		out.ClosedAt = time.Unix(is.Changes["status"].Time, 0)
+	}
+	for _, c := range is.Comments {
+		out.CommentBodies = append(out.CommentBodies, c.Body)
+	}
 	for _, f := range forges {
 		if f.Name == "GitHub" && out.GithubURL == "" {
 			out.GithubURL = f.URL
@@ -676,9 +691,10 @@ func (b *Backend) SetProjectBases(idPrefix, prefix string, values map[string]str
 func (b *Backend) CloseBug(idPrefix string) error { return b.SetStatus(idPrefix, "closed") }
 
 // SearchText returns the issues whose title, description or a comment
-// hold text (the index's search), by id.
-func (b *Backend) SearchText(text string) (map[string]bool, error) {
-	found, err := b.ix.Issues(ctx, index.Query{Text: text})
+// hold text (the index's search), by id; in, when given, names where to
+// look (index.Texts: title, body, comments).
+func (b *Backend) SearchText(text string, in ...string) (map[string]bool, error) {
+	found, err := b.ix.Issues(ctx, index.Query{Text: text, In: in})
 	if err != nil {
 		return nil, err
 	}
