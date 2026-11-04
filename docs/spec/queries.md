@@ -120,7 +120,8 @@ last edits left them.
 ## Labels
 
 `Labels` answers every label in use: each label at least one issue has,
-sorted byte for byte, each once. A label no issue has anymore isn't one.
+sorted byte for byte, each once, whatever a PostgreSQL database's
+collation. A label no issue has anymore isn't one.
 
 ## Prefixes
 

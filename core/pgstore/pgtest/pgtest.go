@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"os"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/jackc/pgx/v5"
@@ -33,6 +34,18 @@ func DSN(t testing.TB) string {
 	return dsn
 }
 
+// DSNCollated is DSN with a database whose collation isn't C: ICU's
+// English, as many servers default to. It skips t on a server without ICU.
+func DSNCollated(t testing.TB) string {
+	t.Helper()
+	cfg, name := create(t, "TEMPLATE template0 LOCALE_PROVIDER icu ICU_LOCALE 'en'")
+	dsn := fmt.Sprintf("host=%s port=%d user=%s dbname=%s sslmode=disable", cfg.Host, cfg.Port, cfg.User, name)
+	if cfg.Password != "" {
+		dsn += " password=" + cfg.Password
+	}
+	return dsn
+}
+
 // URL is DSN as a postgres:// URL.
 func URL(t testing.TB) string {
 	t.Helper()
@@ -46,7 +59,7 @@ func URL(t testing.TB) string {
 }
 
 // create makes the database, and answers the server's config and its name.
-func create(t testing.TB) (*pgx.ConnConfig, string) {
+func create(t testing.TB, with ...string) (*pgx.ConnConfig, string) {
 	t.Helper()
 	admin := os.Getenv(Env)
 	if admin == "" {
@@ -61,7 +74,10 @@ func create(t testing.TB) (*pgx.ConnConfig, string) {
 	b := make([]byte, 6)
 	rand.Read(b)
 	name := "git_board_test_" + hex.EncodeToString(b)
-	if _, err := db.ExecContext(context.Background(), "CREATE DATABASE "+name); err != nil {
+	if _, err := db.ExecContext(context.Background(), "CREATE DATABASE "+name+" "+strings.Join(with, " ")); err != nil {
+		if len(with) > 0 {
+			t.Skipf("creating a test database %s: %v", strings.Join(with, " "), err)
+		}
 		t.Fatalf("creating a test database: %v", err)
 	}
 	t.Cleanup(func() { drop(db, name) })

@@ -173,7 +173,11 @@ func (ix *Index) Labels(ctx context.Context) ([]string, error) {
 	if err := ix.Refresh(ctx); err != nil {
 		return nil, err
 	}
-	rows, err := ix.db.QueryContext(ctx, "SELECT DISTINCT label FROM labels ORDER BY label")
+	query := "SELECT DISTINCT label FROM labels ORDER BY label"
+	if ix.pg { // byte for byte, whatever the database's collation
+		query = `SELECT DISTINCT label COLLATE "C" FROM labels ORDER BY 1`
+	}
+	rows, err := ix.db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("index: labels: %w", err)
 	}

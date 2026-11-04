@@ -2,6 +2,7 @@ package index
 
 import (
 	"errors"
+
 	"reflect"
 	"slices"
 	"strings"
@@ -9,6 +10,8 @@ import (
 
 	"github.com/guilbep/git-board/core/issue"
 	"github.com/guilbep/git-board/core/people"
+	"github.com/guilbep/git-board/core/pgstore"
+	"github.com/guilbep/git-board/core/pgstore/pgtest"
 )
 
 func TestIndexQueries(t *testing.T) {
@@ -188,4 +191,32 @@ func TestLabelsAndResolve(t *testing.T) {
 	if _, err := ix.Resolve(t.Context(), "sync", "ab"); err == nil {
 		t.Fatal("kind sync: want an error")
 	}
+}
+
+// Labels sorts byte for byte (queries.md), on a PostgreSQL database whose
+// collation isn't C too.
+func TestLabelsByteOrder(t *testing.T) {
+	t.Parallel()
+	_, s := newRepo(t)
+	mkIssue(t, s, issue.NewCreate("p", "A", ""), issue.ChangeLabels("p", []string{"b", "B", "_z", "a-b", "ab", "Z"}, nil))
+	want := []string{"B", "Z", "_z", "a-b", "ab", "b"}
+	if got, err := openIndex(t, s).Labels(t.Context()); err != nil || !slices.Equal(got, want) {
+		t.Errorf("labels = %q, %v, want %q", got, err, want)
+	}
+	t.Run("pg collated", func(t *testing.T) {
+		t.Parallel()
+		p, err := pgstore.Open(t.Context(), pgtest.DSNCollated(t), t.TempDir())
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { p.Close() })
+		ix, err := Open(t.Context(), gitIndexedOnPG{s, p})
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { ix.Close() })
+		if got, err := ix.Labels(t.Context()); err != nil || !slices.Equal(got, want) {
+			t.Errorf("labels = %q, %v, want %q", got, err, want)
+		}
+	})
 }
