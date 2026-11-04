@@ -8,7 +8,7 @@
       Commenting as <b>{{ me?.me?.name }}</b>
     </p>
     <div class="gb-composer">
-      <MarkdownEditor v-model="text" :forges="forges" label="Comment" placeholder="Leave a comment" :disabled="busy" @submit="post()" />
+      <MarkdownEditor v-model="text" v-model:uploading="uploading" :forges="forges" label="Comment" placeholder="Leave a comment" :disabled="busy" @submit="post()" />
       <p v-if="waiting" class="gb-wait" role="status"><GbIcon name="clock" small /> Syncing with the forges… your comment is saved after it.</p>
       <p v-else-if="error" class="gb-save-error" role="alert"><GbIcon name="error" small /> <b>Your comment was not posted.</b> {{ error }} Your text is still here.</p>
       <div class="gb-composer-foot">
@@ -16,12 +16,12 @@
           Saved in git-board now, on {{ forgeNames }} at the next sync.<template v-if="carries?.length"> Carries<template v-for="c in carries" :key="c"> <span class="gb-carries">{{ c }}</span></template></template>
         </p>
         <button v-if="cancel" type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" @click="cancel">Cancel</button>
-        <button v-else type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" :disabled="busy" @click="post(status === 'open' ? 'closed' : 'open')">
+        <button v-else type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" :disabled="busy || uploading" @click="post(status === 'open' ? 'closed' : 'open')">
           <GbIcon :name="status === 'open' ? 'closed' : 'open'" small />
           {{ status === 'open' ? (text.trim() ? 'Close with comment' : 'Close issue') : (text.trim() ? 'Reopen with comment' : 'Reopen issue') }}
         </button>
         <label v-if="send" class="gb-composer-send"><input v-model="toAgent" type="checkbox" :disabled="busy" /> Send to {{ send }}</label>
-        <button type="button" class="epfl-btn epfl-btn-primary epfl-btn-sm" :disabled="busy || !text.trim()" @click="post()">Comment</button>
+        <button type="button" class="epfl-btn epfl-btn-primary epfl-btn-sm" :disabled="busy || uploading || !text.trim()" @click="post()">Comment</button>
       </div>
     </div>
   </template>
@@ -51,13 +51,14 @@ const props = defineProps<{
 
 const text = ref('');
 const toAgent = ref(false);
+const uploading = ref(false); // a file uploads in the editor: sending waits for it (MarkdownEditor)
 const forgeNames = computed(() => {
   const names = [...new Set((props.forges ?? []).map((f) => f.name))];
   return names.length ? names.join(' and ') : 'the forges';
 });
 
 async function post(status?: 'open' | 'closed') {
-  if (!status && !text.value.trim()) return;
+  if (uploading.value || (!status && !text.value.trim())) return;
   if (await props.comment(text.value, status, !!props.send && toAgent.value)) {
     text.value = '';
     toAgent.value = false;

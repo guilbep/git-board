@@ -47,12 +47,12 @@
             </div>
             <template v-if="editing">
               <div class="gb-composer">
-                <MarkdownEditor ref="editor" v-model="notesText" label="Release notes" :disabled="busy" @submit="saveNotes" />
+                <MarkdownEditor ref="editor" v-model="notesText" v-model:uploading="notesUploading" label="Release notes" :disabled="busy" @submit="saveNotes" />
               </div>
               <p v-if="errors.notes" class="gb-save-error gb-rel-after" role="alert"><GbIcon name="error" small /> <b>Not saved.</b> {{ errors.notes }} Your text is still here.</p>
               <div class="gb-actions gb-rel-edit">
                 <button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" @click="editing = false">Cancel</button>
-                <button type="button" class="epfl-btn epfl-btn-primary epfl-btn-sm" :disabled="busy" @click="saveNotes">Save notes</button>
+                <button type="button" class="epfl-btn epfl-btn-primary epfl-btn-sm" :disabled="busy || notesUploading" @click="saveNotes">Save notes</button>
               </div>
             </template>
             <article v-else-if="record?.notes" class="gb-comment">
@@ -114,11 +114,11 @@
               </article>
             </div>
             <div class="gb-composer gb-rel-composer">
-              <MarkdownEditor v-model="commentText" label="Comment" placeholder="Leave a comment" :disabled="busy" @submit="sendComment" />
+              <MarkdownEditor v-model="commentText" v-model:uploading="commentUploading" label="Comment" placeholder="Leave a comment" :disabled="busy" @submit="sendComment" />
               <p v-if="errors.comment" class="gb-save-error" role="alert"><GbIcon name="error" small /> <b>Your comment was not posted.</b> {{ errors.comment }} Your text is still here.</p>
               <div class="gb-composer-foot">
                 <p class="gb-hint">Kept on the release's record in git, and pushed at once.</p>
-                <button type="button" class="epfl-btn epfl-btn-primary epfl-btn-sm" :disabled="busy || !commentText.trim()" @click="sendComment">Comment</button>
+                <button type="button" class="epfl-btn epfl-btn-primary epfl-btn-sm" :disabled="busy || commentUploading || !commentText.trim()" @click="sendComment">Comment</button>
               </div>
             </div>
           </section>
@@ -238,6 +238,9 @@ const editing = ref(false);
 const notesText = ref('');
 const editor = ref<InstanceType<typeof MarkdownEditor> | null>(null);
 const commentText = ref('');
+// a file uploads in an editor: saving waits for it (MarkdownEditor)
+const notesUploading = ref(false);
+const commentUploading = ref(false);
 const yanking = ref(false);
 const yankReason = ref('');
 
@@ -390,7 +393,7 @@ async function editNotes() {
 }
 
 async function saveNotes() {
-  if (busy.value) return;
+  if (busy.value || notesUploading.value) return;
   if (await act('notes', () => setReleaseNotes(tag.value, notesText.value))) {
     editing.value = false;
     await loadDetail();
@@ -398,7 +401,7 @@ async function saveNotes() {
 }
 
 async function sendComment() {
-  if (busy.value || !commentText.value.trim()) return;
+  if (busy.value || commentUploading.value || !commentText.value.trim()) return;
   if (await act('comment', () => commentRelease(tag.value, commentText.value))) {
     commentText.value = '';
     await loadDetail();

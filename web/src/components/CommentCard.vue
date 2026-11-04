@@ -45,7 +45,7 @@
     </header>
 
     <div v-if="editing">
-      <MarkdownEditor v-model="draft" :forges="forges" label="Edit the text" :disabled="busy" @submit="saveEdit" />
+      <MarkdownEditor v-model="draft" v-model:uploading="uploading" :forges="forges" label="Edit the text" :disabled="busy" @submit="saveEdit" />
       <div v-if="changed" class="epfl-alert epfl-alert-warning gb-alert-row" role="alert">
         <GbIcon name="warn" small />
         <span><b>Someone changed this text meanwhile.</b> Saving yours replaces it; theirs stays in the edit history.</span>
@@ -54,8 +54,8 @@
       <div class="gb-composer-foot">
         <span class="gb-hint">{{ busy ? 'Saving…' : 'Saved in git-board, on the forges at the next sync.' }}</span>
         <button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" :disabled="busy" @click="editing = false">Cancel</button>
-        <button v-if="changed" type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" :disabled="busy" @click="saveEdit(true)">Save mine anyway</button>
-        <button v-else type="button" class="epfl-btn epfl-btn-primary epfl-btn-sm" :disabled="busy || draft === event.body" @click="saveEdit()">Save</button>
+        <button v-if="changed" type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" :disabled="busy || uploading" @click="saveEdit(true)">Save mine anyway</button>
+        <button v-else type="button" class="epfl-btn epfl-btn-primary epfl-btn-sm" :disabled="busy || uploading || draft === event.body" @click="saveEdit()">Save</button>
       </div>
     </div>
     <template v-else>
@@ -103,6 +103,7 @@ const editing = ref(false);
 const draft = ref('');
 const base = ref('');
 const busy = ref(false);
+const uploading = ref(false); // a file uploads in the editor: sending waits for it (MarkdownEditor)
 const error = ref('');
 const changed = ref(false);
 const shown = ref(0);
@@ -134,6 +135,7 @@ function startEdit() {
 }
 
 async function saveEdit(anyway = false) {
+  if (uploading.value) return;
   busy.value = true;
   error.value = '';
   try {

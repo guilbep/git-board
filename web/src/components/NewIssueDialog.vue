@@ -18,7 +18,7 @@
 
       <span class="epfl-label gb-gap">Description</span>
       <div class="gb-composer">
-        <MarkdownEditor v-model="body" label="Description" @submit="create(false)" />
+        <MarkdownEditor v-model="body" v-model:uploading="uploading" label="Description" @submit="create(false)" />
       </div>
 
       <h3 class="gb-section-title gb-gap">Fields</h3>
@@ -50,8 +50,8 @@
 
     <footer v-if="!(me && !me.me)" class="gb-dialog-foot">
       <p class="gb-hint gb-grow">Created as <b>{{ me?.me?.name }}</b>, saved in git-board at once. The forges get it at the next sync. <kbd>Ctrl</kbd> <kbd>Enter</kbd> creates.</p>
-      <button type="button" class="epfl-btn epfl-btn-secondary" :disabled="busy || !title.trim()" @click="create(true)">Create and open another</button>
-      <button type="button" class="epfl-btn epfl-btn-primary" :disabled="busy || !title.trim()" @click="create(false)">{{ busy ? 'Creating…' : 'Create' }}</button>
+      <button type="button" class="epfl-btn epfl-btn-secondary" :disabled="busy || uploading || !title.trim()" @click="create(true)">Create and open another</button>
+      <button type="button" class="epfl-btn epfl-btn-primary" :disabled="busy || uploading || !title.trim()" @click="create(false)">{{ busy ? 'Creating…' : 'Create' }}</button>
     </footer>
   </section>
 </template>
@@ -75,6 +75,7 @@ const title = ref('');
 const body = ref('');
 const plain = ref('');
 const busy = ref(false);
+const uploading = ref(false); // a file uploads in the editor: sending waits for it (MarkdownEditor)
 const error = ref('');
 const titleInput = ref<HTMLInputElement | null>(null);
 // an issue created with fields the server refused: said, and opened from here
@@ -105,7 +106,7 @@ function hint(name: string): string {
 }
 
 async function create(another: boolean) {
-  if (!title.value.trim() || busy.value) return;
+  if (!title.value.trim() || busy.value || uploading.value) return;
   busy.value = true;
   error.value = '';
   created.value = null;

@@ -1,5 +1,6 @@
 <!-- Write / Preview, as on GitHub. The preview is the server's rendering, the
-     same a saved comment gets. Ctrl+Enter (⌘+Enter) submits. -->
+     same a saved comment gets. Ctrl+Enter (⌘+Enter) submits, once no file
+     is uploading: v-model:uploading tells the parent, to hold its Send. -->
 <template>
   <div>
     <div class="gb-tabs" role="tablist">
@@ -19,13 +20,13 @@
       :aria-label="label"
       :placeholder="placeholder"
       :disabled="disabled"
-      @keydown.enter.ctrl.exact.prevent="noteUse('send'), emit('submit')"
-      @keydown.enter.meta.exact.prevent="noteUse('send'), emit('submit')"
+      @keydown.enter.ctrl.exact.prevent="submit"
+      @keydown.enter.meta.exact.prevent="submit"
       @paste="onPaste"
       @dragover="onDragOver"
       @drop="onDropFiles"
     />
-    <p v-if="uploading" class="gb-attach-state" role="status">Uploading {{ uploading }}…</p>
+    <p v-if="uploadingName" class="gb-attach-state" role="status">Uploading {{ uploadingName }}… Sending waits for it.</p>
     <p v-if="uploadError" class="gb-attach-state gb-attach-error" role="alert">{{ uploadError }}</p>
     <div v-if="tab === 'preview'" class="gb-preview">
       <p v-if="previewing" class="gb-hint">Rendering…</p>
@@ -40,12 +41,21 @@ import { noteUse } from '@/keys';
 import { onMounted, ref } from 'vue';
 import { renderMarkdown, uploadFile, type Forge } from '@/api/board';
 import { message } from '@/issue';
+import { fillPlaceholder, insertAt, placeholderFor } from '@/attachtext';
 import { loadUploadStatus, uploadStatus } from '@/uploads';
 import MarkdownBody from '@/components/MarkdownBody.vue';
 
 defineProps<{ label: string; placeholder?: string; disabled?: boolean; forges?: Forge[] | null | undefined }>();
 const text = defineModel<string>({ required: true });
+// true while a file uploads: the text holds its placeholder, not its link
+const uploading = defineModel<boolean>('uploading', { default: false });
 const emit = defineEmits<{ submit: [] }>();
+
+function submit() {
+  if (uploading.value) return;
+  noteUse('send');
+  emit('submit');
+}
 
 const tab = ref<'write' | 'preview'>('write');
 const preview = ref('');
@@ -68,8 +78,10 @@ async function showPreview() {
 // Attachments: picked, pasted or dropped files go to the CDN; each leaves
 // a placeholder at the cursor that its Markdown replaces.
 const picker = ref<HTMLInputElement | null>(null);
-const uploading = ref('');
+const uploadingName = ref('');
 const uploadError = ref('');
+let pending = 0; // uploads under way, from every attach at once
+let uploads = 0; // placeholders made, for their names to differ
 onMounted(loadUploadStatus);
 
 async function attach(files: File[]) {
@@ -79,27 +91,27 @@ async function attach(files: File[]) {
     return;
   }
   uploadError.value = '';
-  for (const file of files) {
-    const placeholder = `[Uploading ${file.name}…]()`;
-    insertAtCursor(placeholder);
-    uploading.value = file.name;
-    try {
-      const up = await uploadFile(file);
-      text.value = text.value.replace(placeholder, up.markdown);
-    } catch (e) {
-      text.value = text.value.replace(placeholder, '');
-      uploadError.value = `${file.name} wasn't attached: ${message(e)}`;
+  pending++;
+  uploading.value = true;
+  try {
+    for (const file of files) {
+      const placeholder = placeholderFor(file.name, ++uploads);
+      text.value = insertAt(text.value, area.value?.selectionStart ?? text.value.length, placeholder);
+      uploadingName.value = file.name;
+      try {
+        const up = await uploadFile(file);
+        text.value = fillPlaceholder(text.value, placeholder, up.markdown);
+      } catch (e) {
+        text.value = text.value.replace(placeholder, '');
+        uploadError.value = `${file.name} wasn't attached: ${message(e)}`;
+      }
+    }
+  } finally {
+    if (--pending === 0) {
+      uploading.value = false;
+      uploadingName.value = '';
     }
   }
-  uploading.value = '';
-}
-
-function insertAtCursor(s: string) {
-  const el = area.value;
-  const at = el ? el.selectionStart : text.value.length;
-  const before = text.value.slice(0, at);
-  const sep = before && !before.endsWith('\n') ? '\n' : '';
-  text.value = before + sep + s + '\n' + text.value.slice(at);
 }
 
 function onPick() {
