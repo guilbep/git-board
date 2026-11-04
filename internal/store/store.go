@@ -681,7 +681,7 @@ func (b *Backend) CloseBug(idPrefix string) error { return b.SetStatus(idPrefix,
 
 // SearchText returns the issues whose title, description or a comment
 // hold text (the index's search), by id; in, when given, names where to
-// look (index.Texts: title, body, comments).
+// look (search.Texts: title, body, comments).
 func (b *Backend) SearchText(text string, in ...string) (map[string]bool, error) {
 	found, err := b.ix.Issues(ctx, index.Query{Text: text, In: in})
 	if err != nil {

@@ -11,17 +11,13 @@ import (
 	"slices"
 	"strings"
 	"sync"
-	"unicode"
-
-	"golang.org/x/text/runes"
-	"golang.org/x/text/transform"
-	"golang.org/x/text/unicode/norm"
 
 	"github.com/guilbep/git-board/core/issue"
+	"github.com/guilbep/git-board/core/search"
 )
 
 // Query asks for issues. An empty field filters nothing. In names the
-// texts Text is looked for in (Texts: title, body, comments); none: all
+// texts Text is looked for in (search.Texts: title, body, comments); none: all
 // of them. Sort is "created" or "updated", the default; Desc sorts newest
 // first; a Limit of 0 answers all.
 type Query struct {
@@ -34,11 +30,8 @@ type Query struct {
 	Limit        int
 }
 
-// Texts are an issue's texts a search can look in, in the order of the
-// sqlite index's columns, and their weights in PostgreSQL's.
-var Texts = []string{"title", "body", "comments"}
-
-// weights are each text's weight in PostgreSQL's tsvector.
+// weights are each text's weight in PostgreSQL's tsvector (search.Texts,
+// the sqlite index's columns in order).
 var weights = map[string]string{"title": "A", "body": "B", "comments": "C"}
 
 // Summary is what the index holds for an issue.
@@ -67,7 +60,7 @@ func (ix *Index) Issues(ctx context.Context, q Query) ([]Summary, error) {
 		return nil, fmt.Errorf("index: negative limit %d", q.Limit)
 	}
 	for _, in := range q.In {
-		if !slices.Contains(Texts, in) {
+		if !slices.Contains(search.Texts, in) {
 			return nil, fmt.Errorf("index: unknown text %q", in)
 		}
 	}
@@ -239,47 +232,12 @@ func match(text string, in []string) string {
 	}
 	var words []string
 	for _, w := range strings.Fields(text) {
-		if strings.IndexFunc(w, isToken) >= 0 {
+		if strings.IndexFunc(w, search.IsToken) >= 0 {
 			words = append(words, cols+`"`+strings.ReplaceAll(w, `"`, `""`)+`"*`)
 		}
 	}
 	return strings.Join(words, " ")
 }
-
-// MatchText reports whether an issue's texts hold text as Issues finds it:
-// each word's tokens in a row in one of them, the last as a prefix, every
-// word somewhere. texts are those Query.In names, the comments joined by a
-// line feed as the index keeps them. What a caller without the index (an
-// issue as it was, git board ls --at) searches with, so the two agree.
-func MatchText(text string, texts ...string) bool {
-	docs := make([][]string, len(texts))
-	for i, t := range texts {
-		docs[i] = strings.Fields(tokens(t))
-	}
-	for _, w := range strings.Fields(text) {
-		toks := strings.Fields(tokens(w))
-		if len(toks) == 0 {
-			continue
-		}
-		if !slices.ContainsFunc(docs, func(doc []string) bool { return holds(doc, toks) }) {
-			return false
-		}
-	}
-	return true
-}
-
-// holds tells doc has toks in a row, the last as a prefix.
-func holds(doc, toks []string) bool {
-	last := len(toks) - 1
-	for i := 0; i+last < len(doc); i++ {
-		if slices.Equal(doc[i:i+last], toks[:last]) && strings.HasPrefix(doc[i+last], toks[last]) {
-			return true
-		}
-	}
-	return false
-}
-
-func isToken(r rune) bool { return unicode.In(r, unicode.L, unicode.N, unicode.Co) }
 
 // tsquery is match for PostgreSQL, as FTS5 reads match's: each word's
 // tokens in a row (<->), the last a prefix, the words ANDed; in
@@ -294,7 +252,7 @@ func tsquery(text string, in []string) string {
 	}
 	var words []string
 	for _, w := range strings.Fields(text) {
-		toks := strings.Fields(tokens(w))
+		toks := search.Tokens(w)
 		if len(toks) == 0 {
 			continue
 		}
@@ -309,23 +267,9 @@ func tsquery(text string, in []string) string {
 	return strings.Join(words, " & ")
 }
 
-// tokens is text as unicode61 tokenizes it, for PostgreSQL to index and
-// search alike: lower case, without diacritics, each run of token
-// characters a word, joined by spaces.
-func tokens(text string) string {
-	folded, _, err := transform.String(fold(), text)
-	if err != nil {
-		folded = text
-	}
-	return strings.Join(strings.FieldsFunc(strings.ToLower(folded), func(r rune) bool { return !isToken(r) }), " ")
-}
-
-// fold takes the diacritics off, as unicode61's remove_diacritics does. A
-// chain keeps state between calls: one per call, never shared between
-// goroutines (two refreshes at once tore a shared one).
-func fold() transform.Transformer {
-	return transform.Chain(norm.NFD, runes.Remove(runes.In(unicode.Mn)), norm.NFC)
-}
+// tokens is text as unicode61 tokenizes it (search.Tokens), joined by
+// spaces, for PostgreSQL to index and search alike.
+func tokens(text string) string { return strings.Join(search.Tokens(text), " ") }
 
 // ForAccount answers the person that owns an account: of the persons
 // holding it, the one whose id sorts first. It refreshes first.

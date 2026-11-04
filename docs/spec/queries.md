@@ -143,7 +143,7 @@ last edits left them.
 - **FTS5's own syntax is never read.** Each word is quoted, so `"`, `*`,
   `-`, `:`, `AND`, `OR`, `NOT` and parentheses are plain text.
 - **`in` narrows where.** Each word must then match in one of the texts
-  it names. Without the index, `MatchText` answers the same over an
+  it names. Without the index, `search.Match` answers the same over an
   issue's texts: what `git board ls --at` searches with.
 - **On PostgreSQL** (a board kept there, ADR 0002), an issue's text is
   indexed up to its first 300,000 bytes of tokens: a `tsvector` holds at

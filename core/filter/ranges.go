@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/guilbep/git-board/core/index"
 	"github.com/guilbep/git-board/core/model"
+	"github.com/guilbep/git-board/core/search"
 )
 
 // Range is [From, Until): a nil bound is open.
@@ -146,7 +146,7 @@ func dateOf(issue model.Issue, field string) (time.Time, bool) {
 	return issue.ClosedAt, !issue.ClosedAt.IsZero()
 }
 
-// In is where free text looks, from the in: conditions (index.Texts:
+// In is where free text looks, from the in: conditions (search.Texts:
 // title, body, comments): nil for everywhere. Several in: add up; -in:x
 // is everywhere but x.
 func In(conditions []Condition) []string {
@@ -158,7 +158,7 @@ func In(conditions []Condition) []string {
 		}
 		seen = true
 		names := strings.Split(c.Value, ",")
-		for _, t := range index.Texts {
+		for _, t := range search.Texts {
 			if slices.Contains(names, t) != c.Negated && !slices.Contains(in, t) {
 				in = append(in, t)
 			}
@@ -170,14 +170,14 @@ func In(conditions []Condition) []string {
 	if in == nil {
 		return []string{} // nowhere: free text matches nothing
 	}
-	slices.SortFunc(in, func(a, b string) int { return slices.Index(index.Texts, a) - slices.Index(index.Texts, b) })
+	slices.SortFunc(in, func(a, b string) int { return slices.Index(search.Texts, a) - slices.Index(search.Texts, b) })
 	return in
 }
 
-// texts are an issue's texts in names, as index.MatchText takes them.
+// texts are an issue's texts in names, as search.Match takes them.
 func texts(issue model.Issue, in []string) []string {
 	if in == nil {
-		in = index.Texts
+		in = search.Texts
 	}
 	res := make([]string, 0, len(in))
 	for _, t := range in {
@@ -205,7 +205,7 @@ func Check(conditions []Condition, today time.Time) error {
 			_, err = CountRange(c.Value)
 		case KindIn:
 			for _, v := range strings.Split(c.Value, ",") {
-				if !slices.Contains(index.Texts, v) {
+				if !slices.Contains(search.Texts, v) {
 					err = fmt.Errorf("%q: title, body or comments", v)
 				}
 			}

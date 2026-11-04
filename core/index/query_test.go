@@ -13,6 +13,7 @@ import (
 	"github.com/guilbep/git-board/core/people"
 	"github.com/guilbep/git-board/core/pgstore"
 	"github.com/guilbep/git-board/core/pgstore/pgtest"
+	"github.com/guilbep/git-board/core/search"
 )
 
 func TestIndexQueries(t *testing.T) {
@@ -243,9 +244,9 @@ func TestHugeTextFailsNoQuery(t *testing.T) {
 	}
 }
 
-// in: narrows where each word is looked for, and MatchText, the search
+// in: narrows where each word is looked for, and search.Match, the search
 // without the index, answers what the index answers.
-func TestSearchInAgreesWithMatchText(t *testing.T) {
+func TestSearchInAgreesWithMatch(t *testing.T) {
 	t.Parallel()
 	_, s := newRepo(t)
 	all := []*issue.Issue{
@@ -281,12 +282,12 @@ func TestSearchInAgreesWithMatchText(t *testing.T) {
 		}
 		var mem []string
 		for _, is := range all {
-			if MatchText(tc.text, texts(is, tc.in)...) {
+			if search.Match(tc.text, texts(is, tc.in)...) {
 				mem = append(mem, is.ID)
 			}
 		}
 		if mem = sorted(mem...); !slices.Equal(mem, got) {
-			t.Errorf("%q in %v: MatchText %v, the index %v", tc.text, tc.in, mem, got)
+			t.Errorf("%q in %v: search.Match %v, the index %v", tc.text, tc.in, mem, got)
 		}
 	}
 	if _, err := ix.Issues(t.Context(), Query{Text: "x", In: []string{"labels"}}); err == nil {
@@ -294,10 +295,10 @@ func TestSearchInAgreesWithMatchText(t *testing.T) {
 	}
 }
 
-// texts are an issue's texts in names (all with none), as MatchText takes them.
+// texts are an issue's texts in names (all with none), as search.Match takes them.
 func texts(is *issue.Issue, in []string) []string {
 	if len(in) == 0 {
-		in = Texts
+		in = search.Texts
 	}
 	var comments []string
 	for _, c := range is.Comments {
