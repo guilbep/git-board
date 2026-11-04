@@ -897,7 +897,10 @@ core/model/            the read model: Issue, Thread, Event, Person — as every
 core/fields/           the field schema (types, sprints, roles) and field=value assignments as labels.
 core/filter/           grammar parser, Matches(issue, conditions, schema, me).
 core/inbox/            what a person follows and has seen, and what's new for them.
-internal/config/       TOML parsing and checks; embeds core/fields' Schema — pure, no I/O beyond reading the file.
+core/release/          release records, versions and tags, the [release] table, GitOps overlays.
+core/proof/            check results as signed git notes, keyed by content, and the gate (ADR 0001).
+internal/config/       TOML parsing and checks; embeds core/fields' Schema, holds core/release's Config.
+internal/ship/         the release runner: cut, promote, deploy, rollback, adopt — drives git, registries, gh.
 internal/store/        git-board's store over the core (core/): issues, people, releases, forges.
 internal/board/        load/sort/group issues — shared by the CLI, the TUI and the web API.
 internal/ghbridge/     `gh project item-list` parsing + field-mapping/diff logic for `git board project`.
@@ -910,8 +913,8 @@ web/                    Quasar/Vue frontend — one board page, api/board.ts is 
 
 Split this way so the TUI and the web frontend both reuse `core/*` and
 `internal/*` without touching the CLI; `core/` never imports `internal/`
-(ADR 0005), so another tool can read issues, filter them and set fields
-without git-board's application.
+(ADR 0005), so another tool can read issues, filter them, set fields
+and read what shipped without git-board's application.
 
 ## Development
 

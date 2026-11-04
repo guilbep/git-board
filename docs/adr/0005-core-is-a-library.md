@@ -42,7 +42,7 @@ What sits where:
 
 | `core/` | `internal/` |
 | --- | --- |
-| `datastore`, `gitstore`, `pgstore`, `mdstore`, `oplog`, `issue`, `people`, `index`, `watch`, `syncer`, `forge` and its adapters, `forge/conformance`; since ADR 0020's step 2, `model`, `fields`, `filter`, `inbox` | `store` (the `Backend` the server, TUI and CLI use), `config`, `server`, `tui`, `board`, `cycle`, `proof`, `release`, `ghbridge`, `uploads`, … |
+| `datastore`, `gitstore`, `pgstore`, `mdstore`, `oplog`, `issue`, `people`, `index`, `watch`, `syncer`, `forge` and its adapters, `forge/conformance`; since ADR 0020's step 2, `model`, `fields`, `filter`, `inbox`; since its step 3, `release`, `proof` | `store` (the `Backend` the server, TUI and CLI use), `config`, `server`, `tui`, `board`, `cycle`, `ship` (cuts and deploys releases), `ghbridge`, `uploads`, … |
 
 ## Alternatives considered
 

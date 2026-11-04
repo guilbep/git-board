@@ -1116,3 +1116,21 @@ in the issue layer, importable without `internal/`.
   `Config.IssueSchema()`.
 - `BenchmarkMatches` (`core/filter`) times the filter over 5,000 issues:
   unchanged by the move.
+
+### Status 2026-11-04: the release domain in the core (ADR 0020 step 3, branch `kernel/releases`)
+
+Releases and proofs are core packages in the releases layer, importable
+without `internal/`.
+
+- `core/release`: the record (`Record`, was `store.ReleaseRecord`) with
+  its fold and rules, from `internal/store/releases.go`; versions, tags
+  and the GitOps overlay, from `internal/release`; the `[release]` table
+  (`Config`, was `config.Release`), from `internal/config`. JSON tags
+  unchanged.
+- `core/proof`, from `internal/proof`; `Suite` was `config.Suite`.
+  `config.AtBase` reads the base's checks and signers into a
+  `proof.Base`; `Base.Gate` judges a commit.
+- `internal/ship` (was `internal/release`): the Runner, which drives git
+  remotes, config repos, docker, crane, trivy, helm, go and gh.
+- The layer guard's `"core"` entry named every package; it names the root
+  alone now, so a package without a layer fails.

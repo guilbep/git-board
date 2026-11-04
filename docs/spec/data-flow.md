@@ -18,12 +18,14 @@ flowchart TB
 
   server["internal/server<br/>HTTP API, change events,<br/>forge-only sender"]
   store["internal/store · Backend<br/>issues as the board shows them,<br/>numbers, releases, what only git does"]
+  ship["internal/ship · Runner<br/>cuts, deploys: tags, config repos,<br/>registries, the forge's releases"]
 
   subgraph core["core: never imports internal/"]
     domain["core/issue · core/people<br/>Apply: operations → state"]
     syncer["core/syncer<br/>forge sync: plan, pull, push,<br/>sync entities"]
     index["core/index<br/>lists, search, lookups"]
     read["core/model · fields · filter · inbox<br/>issues as surfaces read them,<br/>fields, filters, the inbox"]
+    rel["core/release · core/proof<br/>release records, versions, overlays,<br/>signed check results"]
     oplog["core/oplog<br/>packs: encode, hash, order"]
     ds{{"core/datastore.Datastore<br/>Heads · Packs · Add · Folder"}}
   end
@@ -43,10 +45,18 @@ flowchart TB
   cli --> store
   tui --> store
   server --> store
+  server --> ship
+  cli --> ship
+  ship --> store
+  ship --> rel
+  ship --> code
   store --> domain
   store --> syncer
   store --> index
   store --> read
+  store --> rel
+  rel --> oplog
+  rel -. "check notes, refs/notes/ci/*" .-> code
   store --> code
   domain --> oplog
   syncer --> oplog
@@ -66,11 +76,13 @@ flowchart TB
 | Layer | Owns | Knows nothing of |
 |---|---|---|
 | `internal/server` | the API, the pages' change events, the forge-only sender | how the board is stored |
+| `internal/ship` | a release's cut, promotion, deploy and rollback: tags pushed, overlays written, images built and copied, charts and binaries published (`Tools`) | the record's format: it goes through the store |
 | `internal/store` | the board as the pages show it: issues with their numbers and forges, releases, the counter; what only git does (pull, push, start over), refused elsewhere | the format of a pack |
 | `core/issue`, `core/people` | an entity's state, folded from its operations (`Apply`) | where the operations are kept |
 | `core/syncer` | forge sync; its bookkeeping (links, last seen, posted) is operations in `sync` entities | git: a forge sync runs the same on every datastore |
 | `core/index` | lists, search and lookups, a cache brought up to the datastore before each query | the truth: it is never the source |
 | `core/model`, `core/fields`, `core/filter`, `core/inbox` | the issue as every surface reads it (`model.Issue`, `model.Thread`), the fields' schema and assignments, the filter grammar, what a person follows | the config file: `internal/config` reads it into a `fields.Schema` |
+| `core/release`, `core/proof` | a release's record and its rules (one per commit), versions and tags, the `[release]` table's environments, what a GitOps overlay says runs; check results as signed lines in git notes, and the gate | the config file (`internal/config` reads `[release]` and, at the base, `[cycle]`'s checks); registries, config repos and the forge, which `internal/ship` drives |
 | `core/oplog` | packs: their bytes, their id (the git blob id of the bytes), their order (clock, then id) | where the packs are kept |
 | `core/datastore` | the interface, and its errors: `ErrNotFound`, `ErrMoved`, `ErrMissing` | the packs' content |
 | `core/gitstore`, `core/pgstore`, `core/mdstore` | the bytes, a version per entity, the compare-and-swap | operations |

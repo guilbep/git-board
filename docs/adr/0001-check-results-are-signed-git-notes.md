@@ -128,7 +128,7 @@ the diff touches" reads the same field.
 
 - git-board runs a check for the record in a fresh
   `git worktree add --detach <commit>`, as the release build does
-  (`internal/release/deploy.go`).
+  (`internal/ship/deploy.go`).
 - Only the command from the base branch's toml runs, as an argv.
 - The environment is cleared to the variables the check declares, plus the
   tool caches (Go's, npm's), which are content-addressed by their own
@@ -211,8 +211,13 @@ a reviewer sees which one proved what.
 
 ### 8. git-board writes the notes; anyone can verify them
 
+The record, its key, its signature, the run and the gate are `core/proof`,
+a library since ADR 0020's step 3. The core reads no `.git-board.toml`:
+`internal/config`'s `AtBase` reads the base branch's checks and signers
+file into a `proof.Base`, whose `Gate` judges a commit.
+
 - git-board shells out to git for every write, fetch and push of these
-  refs, as `internal/release/git.go` does. go-git has no notes API, and its
+  refs, as `internal/ship/git.go` does. go-git has no notes API, and its
   ref locks don't exclude git's.
 - Every write is a compare-and-swap:
   1. copy the ref to a private ref;
