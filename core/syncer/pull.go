@@ -25,19 +25,18 @@ type authors struct {
 // loadAuthors reads every person. One that fails to load stops the run:
 // ownership can't be decided without every person.
 func loadAuthors(s oplog.Datastore) (*authors, error) {
-	dir, err := people.LoadDirectory(s)
-	if err != nil {
-		return nil, fmt.Errorf("syncer: people: %w", err)
-	}
 	ids, err := people.List(s)
 	if err != nil {
 		return nil, err
 	}
-	au := &authors{s: s, dir: dir, persons: map[string]*people.Person{}}
+	au := &authors{s: s, dir: people.NewDirectory(), persons: map[string]*people.Person{}}
 	for _, id := range ids {
-		if au.persons[id], err = people.Load(s, id); err != nil {
+		p, err := people.Load(s, id)
+		if err != nil {
 			return nil, fmt.Errorf("syncer: people: %w", err)
 		}
+		au.persons[id] = p
+		au.dir.Put(p)
 	}
 	return au, nil
 }

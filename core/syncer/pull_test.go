@@ -632,3 +632,32 @@ func TestPulledAssigneeWithoutPersonStaysAssigned(t *testing.T) {
 		t.Errorf("warnings: %q", warns)
 	}
 }
+
+// countingPacks counts the reads of each kind's packs.
+type countingPacks struct {
+	*gitstore.Store
+	reads map[string]int
+}
+
+func (c countingPacks) Packs(ctx context.Context, kind, id string) ([][]byte, string, error) {
+	c.reads[kind]++
+	return c.Store.Packs(ctx, kind, id)
+}
+
+// A run reads each person once.
+func TestAuthorsReadEachPersonOnce(t *testing.T) {
+	t.Parallel()
+	s := newStore(t)
+	for _, name := range []string{"ann", "bob", "carol"} {
+		if _, err := people.Create(t.Context(), s, people.NewCreate("", name, "")); err != nil {
+			t.Fatal(err)
+		}
+	}
+	c := countingPacks{s, map[string]int{}}
+	if _, err := loadAuthors(c); err != nil {
+		t.Fatal(err)
+	}
+	if got := c.reads["person"]; got != 3 {
+		t.Errorf("read persons %d times, want 3", got)
+	}
+}
