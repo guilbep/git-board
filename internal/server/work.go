@@ -103,10 +103,12 @@ func (s *apiServer) work(ctx context.Context, me inbox.Me, team bool, now time.T
 	}
 	s.refreshPulls(ctx, names)
 	// ponytail: Gather lists the branches once per issue; cache Branches()
-	// per request when a board with hundreds of open issues shows it.
+	// per request when a board with hundreds of open issues shows it. The
+	// commits' histories are read once for the page.
+	anc := branches.NewAncestry(s.b)
 	rows := make([]work.Row, 0, len(threads))
 	for _, th := range threads {
-		in, err := cycle.Gather(s.b, cfg, th, me.Login, &s.pulls)
+		in, err := cycle.GatherIn(anc, s.b, cfg, th, me.Login, &s.pulls)
 		if err != nil {
 			return workResponse{}, err
 		}
