@@ -13,7 +13,7 @@
     <p v-else-if="!changes" class="gb-hint" role="status">Reading the changes…</p>
     <template v-else>
       <div class="gb-ch-bar">
-        <a v-if="cycle.evidence.pr" :href="cycle.evidence.pr.url" target="_blank" rel="noopener noreferrer" class="gb-ch-branch">
+        <a v-if="cycle.evidence.pr" :href="safeHref(cycle.evidence.pr.url)" target="_blank" rel="noopener noreferrer" class="gb-ch-branch">
           GitHub #{{ cycle.evidence.pr.number }}<span class="gb-sr">(opens in a new tab)</span>
         </a>
         <select v-if="branchNames.length > 1" v-model="branch" class="epfl-select" aria-label="Branch">
@@ -103,6 +103,7 @@
 </template>
 
 <script setup lang="ts">
+import { safeHref } from '@/links';
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { agentAction, ApiError, getBranches, getChanges, getPulls, type Changes, type Cycle, type FileStat, type ReviewRequest, type Thread } from '@/api/board';
 import { turn } from '@/cycle';

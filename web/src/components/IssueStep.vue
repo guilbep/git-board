@@ -38,7 +38,7 @@
         <span class="gb-lane-end">
           <template v-if="l.closed">closed</template>
           <template v-else-if="l.done">merged</template>
-          <a v-else-if="l.pr" :href="l.pr.url" target="_blank" rel="noopener noreferrer">GitHub #{{ l.pr.number }}{{ l.pr.draft ? ', draft' : '' }}<span class="gb-sr">(opens in a new tab)</span></a>
+          <a v-else-if="l.pr" :href="safeHref(l.pr.url)" target="_blank" rel="noopener noreferrer">GitHub #{{ l.pr.number }}{{ l.pr.draft ? ', draft' : '' }}<span class="gb-sr">(opens in a new tab)</span></a>
           <template v-else-if="l.step === 4">no test yet</template>
         </span>
       </li>
@@ -117,7 +117,7 @@
               <p class="gb-note">{{ cap(turn(cycle)) }}.</p>
               <div v-if="card" class="gb-cycle-actions">
                 <template v-for="b in card.buttons" :key="b.label">
-                  <a v-if="b.action === 'review' && cycle.evidence.pr?.url" :href="cycle.evidence.pr.url" target="_blank" rel="noopener noreferrer" class="epfl-btn epfl-btn-primary epfl-btn-sm">
+                  <a v-if="b.action === 'review' && cycle.evidence.pr?.url" :href="safeHref(cycle.evidence.pr.url)" target="_blank" rel="noopener noreferrer" class="epfl-btn epfl-btn-primary epfl-btn-sm">
                     {{ b.label }} #{{ cycle.evidence.pr.number }}<span class="gb-sr">(opens in a new tab)</span>
                   </a>
                   <button v-else-if="b.action !== 'review'" type="button" :class="['epfl-btn', 'epfl-btn-sm', b.action === 'set-risk' ? 'epfl-btn-secondary' : 'epfl-btn-primary']" :disabled="busy" @click="pressed(b)">
@@ -166,6 +166,7 @@
 </template>
 
 <script setup lang="ts">
+import { safeHref } from '@/links';
 import { computed, ref, watch } from 'vue';
 import { agentAction, editPull, getIssueAgent, openPull, type Forge, type IssueAgent, type IssueEvent } from '@/api/board';
 import { cardFor, steps, statusBar, turn, withCriteria, type CardButton } from '@/cycle';
