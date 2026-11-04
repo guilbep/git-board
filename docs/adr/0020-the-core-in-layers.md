@@ -1,6 +1,6 @@
 # ADR 0020: The core in layers: a kernel, then issues, releases and the cycle
 
-- Status: proposed (2026-11-04). Nothing moves until it is accepted.
+- Status: accepted (2026-11-04, Pierre: "we should have a kernel").
 - Date: 2026-11-04
 - Builds on [ADR 0005](0005-core-is-a-library.md) (core/ is a library),
   [ADR 0018](0018-own-your-issues-work-in-progress-is-opt-in.md) (what the
@@ -24,7 +24,7 @@ every surface needs, are in `internal/` too.
 So three domains sit on one base, and only one of them, issues, is in
 `core/`.
 
-## Decision (proposed)
+## Decision
 
 **The core has a kernel and three domains on it. Each layer imports only
 the layers below; the import guard test (`core/importguard_test.go`)
@@ -32,8 +32,8 @@ enforces it.**
 
 | Layer | Packages (target) | What it owns |
 |---|---|---|
-| **Kernel** | `core/oplog`, `core/datastore` and the stores, `core/people`, `core/syncer`, `core/forge` | operations, where they are kept, who wrote them, moving them between datastores and forges |
-| **Issues** | `core/issue`, plus fields, filters, the index, the inbox (from `internal/fields`, `internal/filter`, `core/index`, `internal/inbox`) | issues, comments, fields as labels (ADR 0007), queries |
+| **Kernel** | `core/oplog`, `core/datastore` and the stores, `core/people`, `core/watch`, `core/forge` | operations, where they are kept, who wrote them, the forges' adapters |
+| **Issues** | `core/issue`, `core/index`, `core/syncer`, plus fields, filters, the inbox (from `internal/fields`, `internal/filter`, `internal/inbox`) | issues, comments, fields as labels (ADR 0007), queries, their sync with forges |
 | **Releases** | `core/release` (from `internal/store/releases.go`, `internal/release`), `core/proof` (from `internal/proof`) | versions, what each shipped (which issues), deploys, signed check results (ADR 0001) |
 | **Cycle** | `core/cycle` (from `internal/cycle`, `internal/work`) | an issue's steps from intent to verified; experimental (ADR 0018) |
 
@@ -63,6 +63,16 @@ ADR 0015).
    issues again (the bug ADR 0018 fixed by hand).
 6. **The read model.** The index and the inbox are derived and
    disposable (ADR 0009); they belong with the domain they answer for.
+
+### The guard
+
+`core/layers_test.go` gives every core package a layer and fails when one
+imports a layer above its own. A new core package without a layer fails
+too. Tests may reach up (a release test builds issues to ship).
+
+`core/syncer` is in the issue layer, not the kernel: it syncs issues, and
+nothing else. When releases go to forges through it, its generic half
+(journal, lock, forge plans) moves down to the kernel.
 
 ## Consequences
 

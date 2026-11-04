@@ -46,7 +46,7 @@ kept, in the store you choose (git, PostgreSQL or Markdown files).
   syncs forges as mirrors ([0008](adr/0008-sync-state-in-the-data-model.md)),
   lets you choose where the board is kept ([0002](adr/0002-datastores.md)),
   what it is for ([0018](adr/0018-own-your-issues-work-in-progress-is-opt-in.md)),
-  and how the core is split, proposed ([0020](adr/0020-the-core-in-layers.md)).
+  and how the core is layered ([0020](adr/0020-the-core-in-layers.md)).
 
 ## The core
 
