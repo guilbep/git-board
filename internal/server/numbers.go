@@ -245,5 +245,5 @@ func writeNumbersError(w http.ResponseWriter, err error) {
 	if errors.Is(err, store.ErrNumbered) || errors.Is(err, store.ErrNumbersMoved) {
 		code = http.StatusConflict
 	}
-	writeError(w, code, errors.New(store.NoCredentials(err.Error())))
+	writeError(w, code, noCredentials(err.Error(), err))
 }

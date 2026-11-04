@@ -530,6 +530,21 @@ func writeError(w http.ResponseWriter, status int, err error) {
 	writeJSON(w, status, map[string]string{"error": err.Error()})
 }
 
+// noCredentials is err with any URL's credentials taken out of its text
+// (store.NoCredentials), its chain kept: a datastore.ErrMissing in it is
+// still answered 409 missing.
+func noCredentials(msg string, err error) error {
+	return redacted{store.NoCredentials(msg), err}
+}
+
+type redacted struct {
+	msg string
+	err error
+}
+
+func (r redacted) Error() string { return r.msg }
+func (r redacted) Unwrap() error { return r.err }
+
 // writeCoded is writeError with a code the page acts on: syncing (retry
 // when the forge sync ends), changed (someone edited meanwhile).
 func writeCoded(w http.ResponseWriter, status int, code string, err error) {

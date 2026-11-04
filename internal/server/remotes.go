@@ -1,7 +1,6 @@
 package server
 
 import (
-	"errors"
 	"fmt"
 	"net/http"
 	"slices"
@@ -93,7 +92,7 @@ func (s *apiServer) handleRemote(w http.ResponseWriter, r *http.Request) {
 	}
 	defer done()
 	if err = do(name); err != nil {
-		writeError(w, http.StatusBadGateway, errors.New(store.NoCredentials(fmt.Sprintf("%s %s: %v", action, name, err))))
+		writeError(w, http.StatusBadGateway, noCredentials(fmt.Sprintf("%s %s: %v", action, name, err), err))
 		return
 	}
 	s.forgeMu.Lock()
