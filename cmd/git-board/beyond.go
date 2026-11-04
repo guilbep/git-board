@@ -11,6 +11,7 @@ import (
 // labels, config, forge status and login, insights, and -C.
 func addBeyond(root *cobra.Command) {
 	root.AddCommand(newDeleteCmd(), newUndoCmd(), newLabelsCmd(), newConfigCmd())
+	forgeAuth(root)
 	var dir string
 	root.PersistentFlags().StringVarP(&dir, "directory", "C", "", "run as if started in this directory, as git -C does")
 	root.PersistentPreRunE = func(*cobra.Command, []string) error {

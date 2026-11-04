@@ -279,6 +279,28 @@ which `git board me` sets. `set` writes it with `--local`; `get` reads it
 at every level git does. A datastore URL is printed without its password.
 `get` of a key not set exits with code 3.
 
+## `forge status`, `forge login`: tokens
+
+```bash
+git board forge status                 # each forge, and whether a token is found
+git board forge status --check         # and whose each token is, asking the forge
+git board forge login github           # a hidden prompt
+gh auth token | git board forge login github --login guilbep
+```
+
+`forge status` lists the forges (those of `.git-board.toml`, else those
+found in the git remotes) and, for each, whether a token is found for its
+posting account and for your own account on that host, and where: an
+environment variable or git's credential helper. No token is printed.
+It doesn't touch the network, unless `--check`. `--json` prints it.
+
+`forge login <forge>` stores a token in git's credential helper (`git
+credential approve`), as Settings › Sync does: git-board keeps no token
+of its own ([ADR 0010](../adr/0010-tokens-from-env-or-git-credential-helper.md)).
+The token is read at a hidden prompt on a terminal, else from the first
+line of stdin; never from the command line. It is for `--login`, by
+default your own account on that host, else the forge's posting account.
+
 ## `close`, `reopen`, `move`
 
 ```bash
@@ -383,7 +405,8 @@ Errors go to stderr, prefixed `error:`.
 
 | gh | glab | git board |
 |---|---|---|
-| `gh auth status` | `glab auth status` | `git board me` (who you write as; forge tokens only matter to `sync`) |
+| `gh auth status` | `glab auth status` | `git board me` (who you write as), `git board forge status` (the forges' tokens) |
+| `gh auth login --with-token` | `glab auth login --stdin` | `git board forge login <forge>` (into git's credential helper) |
 | `gh issue create -t T -b B -l bug -a @me` | `glab issue create -t T -d B -l bug -a @me` | `git board new T -b B label=+bug assignee=+@me` |
 | `gh issue create -e` | `glab issue create` | `git board new -e` |
 | `gh issue list -a @me -l bug -S text` | `glab issue list -a @me -l bug --search text` | `git board ls "assignee:@me label:bug text"` |
