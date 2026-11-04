@@ -12,6 +12,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/guilbep/git-board/core/cycle"
 	"github.com/guilbep/git-board/core/fields"
 	"github.com/guilbep/git-board/core/proof"
 	"github.com/guilbep/git-board/internal/config"
@@ -71,7 +72,7 @@ func (s *apiServer) handleStepTests(w http.ResponseWriter, r *http.Request) {
 	}
 	ev := cur.Evidence
 	res := stepTests{Rule: cur.Stages.KindRule(ev.Kind), Base: ev.Base, Head: ev.Head, Suites: []suiteRow{}, Checks: []suiteRow{}, Running: []string{}, Gate: proof.GateResult{Checks: []proof.CheckStatus{}}}
-	if res.Rule == config.FailingTest && len(ev.Tests) > 0 {
+	if res.Rule == cycle.FailingTest && len(ev.Tests) > 0 {
 		res.TestCommit = ev.Tests[0].Commit
 	}
 	if ev.Base == "" {

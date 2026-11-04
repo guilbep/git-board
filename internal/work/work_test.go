@@ -5,10 +5,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/guilbep/git-board/core/cycle"
 	"github.com/guilbep/git-board/core/inbox"
 	"github.com/guilbep/git-board/core/model"
-	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/cycle"
 )
 
 var (
@@ -150,8 +149,8 @@ func TestRowOf(t *testing.T) {
 // The row counts in the project's list, not in the seven.
 func TestRowStepIsTheListsOrdinal(t *testing.T) {
 	t.Parallel()
-	in := cycle.Input{Status: "in-review", Stages: config.Stages{InReview: []string{"in-review"},
-		Steps: []config.Step{config.DefaultSteps[4], config.DefaultSteps[5]}}}
+	in := cycle.Input{Status: "in-review", Stages: cycle.Stages{InReview: []string{"in-review"},
+		Steps: []cycle.Step{cycle.DefaultSteps[4], cycle.DefaultSteps[5]}}}
 	r := RowOf(thread("i", bob, nil), cycle.Compute(in), alice)
 	if r.Step != 2 || r.Of != 2 || r.Name != "Review" {
 		t.Errorf("row: step %d of %d, %q", r.Step, r.Of, r.Name)

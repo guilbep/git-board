@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/guilbep/git-board/core/cycle"
 	"github.com/guilbep/git-board/core/fields"
 	"github.com/guilbep/git-board/core/forge"
 	"github.com/guilbep/git-board/core/model"
@@ -20,7 +21,7 @@ import (
 	"github.com/guilbep/git-board/internal/ai"
 	"github.com/guilbep/git-board/internal/board"
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/cycle"
+	"github.com/guilbep/git-board/internal/evidence"
 	"github.com/guilbep/git-board/internal/ghpr"
 )
 
@@ -104,8 +105,8 @@ func (s *apiServer) refreshPulls(ctx context.Context, names []string) {
 // the PR was last read from GitHub.
 type cycleResponse struct {
 	cycle.Cycle
-	Stages      config.Stages `json:"stages"`
-	PRCheckedAt time.Time     `json:"pr_checked_at,omitzero"`
+	Stages      cycle.Stages `json:"stages"`
+	PRCheckedAt time.Time    `json:"pr_checked_at,omitzero"`
 	// AI is on: step 2 can ask it for a class (suggest-risk)
 	AI bool `json:"ai,omitempty"`
 }
@@ -114,7 +115,7 @@ type cycleResponse struct {
 // issue's from in-review on, and from ready on when plans-in-pr (the
 // draft PR holding the plan), its plan branches when structural, none
 // before (the Work page asks for every issue's at once).
-func (s *apiServer) pullNames(th model.Thread, stages config.Stages) ([]string, error) {
+func (s *apiServer) pullNames(th model.Thread, stages cycle.Stages) ([]string, error) {
 	names, err := onOrigin(s.b, th.Issue)
 	if err != nil {
 		return nil, err
@@ -140,7 +141,7 @@ func (s *apiServer) cycleOf(ctx context.Context, th model.Thread) (cycleResponse
 		return cycleResponse{}, err
 	}
 	s.refreshPulls(ctx, names)
-	in, err := cycle.Gather(s.b, cfg, th, s.viewer(), &s.pulls)
+	in, err := evidence.Gather(s.b, cfg, th, s.viewer(), &s.pulls)
 	if err != nil {
 		return cycleResponse{}, err
 	}
@@ -487,7 +488,7 @@ func riskOf(answer string) (class, why string) {
 
 // signedOff moves the status to the next validation status, or after the
 // last one to the closing status, and closes the issue.
-func (s *apiServer) signedOff(id string, stages config.Stages, status string) error {
+func (s *apiServer) signedOff(id string, stages cycle.Stages, status string) error {
 	i := slices.Index(stages.Validation, status)
 	next := stages.Closing
 	if i+1 < len(stages.Validation) {

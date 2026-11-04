@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/guilbep/git-board/core/cycle"
 	"github.com/guilbep/git-board/core/fields"
 	"github.com/guilbep/git-board/internal/config"
 )
@@ -43,7 +44,7 @@ type settingsBody struct {
 	} `json:"uploads"`
 	GithubProject config.GithubProject `json:"github_project"`
 	ConfigPath    string               `json:"config_path"`
-	Cycle         config.Stages        `json:"cycle"`
+	Cycle         cycle.Stages         `json:"cycle"`
 }
 
 func TestSettingsListAndToggleBridgeSync(t *testing.T) {

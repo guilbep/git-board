@@ -1,4 +1,4 @@
-package cycle
+package evidence
 
 import (
 	"os"
@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/guilbep/git-board/core/cycle"
 	"github.com/guilbep/git-board/core/fields"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/store"
@@ -60,6 +61,9 @@ func repo(t *testing.T) (string, *store.Backend) {
 	return dir, b
 }
 
+// co2Options are co2-calculator's statuses.
+var co2Options = []string{"backlog", "comite", "ready", "in-progress", "in-review", "ready-for-validation", "qa", "tests-metier", "validated"}
+
 func co2Config() *config.Config {
 	return &config.Config{
 		Branches: config.Branches{Base: "dev"},
@@ -106,7 +110,7 @@ func TestGatherFromRepo(t *testing.T) {
 
 	cfg := co2Config()
 	cfg.Roles = map[string]string{"lead-dev": "bob"}
-	cfg.Cycle = config.Cycle{Plan: "lead-dev"}
+	cfg.Cycle = cycle.Config{Plan: "lead-dev"}
 	in, err := Gather(b, cfg, th, "bob", nil)
 	if err != nil {
 		t.Fatal(err)
@@ -117,7 +121,7 @@ func TestGatherFromRepo(t *testing.T) {
 	if in.Branch != "fix/2518-x" || in.PlanBranch != "plan/2518-x" || in.Base != "dev" || in.Head != git(t, dir, "rev-parse", "fix/2518-x") || in.PlanHead != git(t, dir, "rev-parse", "plan/2518-x") {
 		t.Errorf("branches: branch %q plan %q base %q head %q plan head %q", in.Branch, in.PlanBranch, in.Base, in.Head, in.PlanHead)
 	}
-	if !slices.Equal(in.Tests, []TestFile{{Path: "api/a_test.go", Commit: first}}) {
+	if !slices.Equal(in.Tests, []cycle.TestFile{{Path: "api/a_test.go", Commit: first}}) {
 		t.Errorf("Tests = %+v", in.Tests)
 	}
 	if in.Plan == nil || in.Plan.Path != plan || in.Plan.Ref != "fix/2518-x" || in.Plan.Status != "accepted" || in.Plan.Issue != "2518" {
@@ -174,22 +178,6 @@ func TestEvidenceBranch(t *testing.T) {
 	}
 }
 
-func TestMatchTest(t *testing.T) {
-	t.Parallel()
-	for path, want := range map[string]bool{
-		"internal/x/y_test.go": true, "web/src/a.test.ts": true, "tests/unit/t.py": true,
-		"test_x.py": true, "src/tests.ts": false, "web/src/a.ts": false,
-	} {
-		matched := false
-		for _, pat := range (&config.Config{}).Stages().TestFiles {
-			matched = matched || matchTest(pat, path)
-		}
-		if matched != want {
-			t.Errorf("%s: matched %v, want %v", path, matched, want)
-		}
-	}
-}
-
 // A plan drafted on its plan branch says who first committed it there.
 func TestGatherPlanDraftedBy(t *testing.T) {
 	t.Parallel()
@@ -223,7 +211,7 @@ func TestGatherPlanIssue(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		key := PlanIssue(th.Issue)
+		key := cycle.PlanIssue(th.Issue)
 		git(t, dir, "switch", "-q", "-c", "plan/"+key+"-x", "dev")
 		commitFile(t, dir, "docs/src/implementation-plans/"+key+"-x.md", "---\nissue: "+key+"\nstatus: draft\n---\n# Plan\n")
 		git(t, dir, "switch", "-q", "dev")
@@ -232,8 +220,8 @@ func TestGatherPlanIssue(t *testing.T) {
 			t.Errorf("issue: %s: Plan = %+v, %v", key, in.Plan, err)
 		}
 	}
-	if th, _ := b.Thread(numbered); PlanIssue(th.Issue) != "2518" {
-		t.Errorf("PlanIssue = %q, want 2518", PlanIssue(th.Issue))
+	if th, _ := b.Thread(numbered); cycle.PlanIssue(th.Issue) != "2518" {
+		t.Errorf("PlanIssue = %q, want 2518", cycle.PlanIssue(th.Issue))
 	}
 }
 

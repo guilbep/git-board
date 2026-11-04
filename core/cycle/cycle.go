@@ -1,7 +1,10 @@
 // Package cycle is an issue's step in the development cycle, computed from
 // its status (the floor) and the evidence: the risk field, the plan file,
 // the tests in the branch's diff, the PR, and comments with metadata. The
-// step is never stored (docs/prd/dev-cycle.md).
+// step is never stored (docs/prd/dev-cycle.md). The [cycle] table is its
+// Config; Gather makes the evidence from what the app reads (Sources:
+// git through Repo, the PRs through Pulls), and fetches nothing itself.
+// Experimental (ADR 0018): the app turns it on.
 package cycle
 
 import (
@@ -12,7 +15,6 @@ import (
 	"time"
 
 	"github.com/guilbep/git-board/core/forge"
-	"github.com/guilbep/git-board/internal/config"
 )
 
 // Steps names the seven steps, 1 to 7.
@@ -67,10 +69,10 @@ type Check struct {
 
 // Input is everything Compute needs, gathered once per issue.
 type Input struct {
-	Stages   config.Stages `json:"stages"`
-	Status   string        `json:"status"` // the status field's value
-	Closed   bool          `json:"closed"` // git-bug's closed
-	Criteria []string      `json:"criteria,omitempty"`
+	Stages   Stages   `json:"stages"`
+	Status   string   `json:"status"` // the status field's value
+	Closed   bool     `json:"closed"` // git-bug's closed
+	Criteria []string `json:"criteria,omitempty"`
 	// CriteriaProblems are the description's warnings (Criteria)
 	CriteriaProblems []string `json:"criteria_problems,omitempty"`
 	// NoCriteria: an intent:criteria=none comment accepted the issue as
@@ -143,7 +145,7 @@ func laneStep(l Lane, rule string) int {
 		return 7
 	case l.PR != nil && l.PR.State == "OPEN" && !l.PR.Draft:
 		return 6
-	case len(l.Files) > 0 || rule == config.NoTests:
+	case len(l.Files) > 0 || rule == NoTests:
 		return 5
 	}
 	return 4
@@ -159,8 +161,8 @@ func PickLane(in Input) Input {
 		return in
 	}
 	rule := in.Stages.KindRule(in.Kind)
-	if !slices.ContainsFunc(list(in.Stages), func(s config.Step) bool { return s.Kind == "tests" }) {
-		rule = config.NoTests
+	if !slices.ContainsFunc(list(in.Stages), func(s Step) bool { return s.Kind == "tests" }) {
+		rule = NoTests
 	}
 	lanes := slices.Clone(in.Lanes)
 	pick := -1
@@ -261,9 +263,9 @@ func gate(step int, risk, rule string) string {
 		return "Structural: the plan’s gate approved first"
 	case step == 3 && risk == "low":
 		return "Skipped, low risk"
-	case step == 4 && rule == config.NoTests:
+	case step == 4 && rule == NoTests:
 		return "Skipped: no tests for this kind"
-	case step == 4 && rule == config.FailingTest:
+	case step == 4 && rule == FailingTest:
 		return "A test that fails before the fix"
 	case step == 4:
 		return "The touched suites green, each criterion names its test"
@@ -279,7 +281,7 @@ func gate(step int, risk, rule string) string {
 // no plan in the project's list, no approval is asked.
 func ApprovedPlan(in Input) bool {
 	switch {
-	case !slices.ContainsFunc(list(in.Stages), func(s config.Step) bool { return s.Kind == "plan" }):
+	case !slices.ContainsFunc(list(in.Stages), func(s Step) bool { return s.Kind == "plan" }):
 		return true
 	case in.Plan != nil && slices.Contains([]string{"accepted", "in-progress", "delivered"}, in.Plan.Status):
 		return true
@@ -298,9 +300,9 @@ func first(statuses []string, fallback string) string {
 
 // list is the project's steps, the default seven when the stages have
 // none (an Input built by hand).
-func list(s config.Stages) []config.Step {
+func list(s Stages) []Step {
 	if len(s.Steps) == 0 {
-		return config.DefaultSteps
+		return DefaultSteps
 	}
 	return s.Steps
 }
@@ -308,29 +310,29 @@ func list(s config.Stages) []config.Step {
 // Position is At's place in the list, from 1; 0 when At is "". The
 // ordinal, computed, never stored.
 func (c Cycle) Position() int {
-	return slices.IndexFunc(list(c.Evidence.Stages), func(s config.Step) bool { return s.ID == c.At }) + 1
+	return slices.IndexFunc(list(c.Evidence.Stages), func(s Step) bool { return s.ID == c.At }) + 1
 }
 
 // at is the list's entry the issue has reached, the first rule that gives
 // one: closed, the last entry; at a validation status, its sign-off, else
 // verify; else the last entry whose rank is at most the issue's. A status
 // no listed step opens at falls to the last one before it.
-func at(steps []config.Step, c Cycle, in Input) string {
+func at(steps []Step, c Cycle, in Input) string {
 	if c.Done {
 		return steps[len(steps)-1].ID
 	}
 	if slices.Contains(in.Stages.Validation, in.Status) {
-		if i := slices.IndexFunc(steps, func(s config.Step) bool { return s.Kind == "signoff" && s.Status == in.Status }); i >= 0 {
+		if i := slices.IndexFunc(steps, func(s Step) bool { return s.Kind == "signoff" && s.Status == in.Status }); i >= 0 {
 			return steps[i].ID
 		}
-		if slices.ContainsFunc(steps, func(s config.Step) bool { return s.ID == "verify" }) {
+		if slices.ContainsFunc(steps, func(s Step) bool { return s.ID == "verify" }) {
 			return "verify"
 		}
 	}
 	// a rank is the kind's index, then a sign-off's place in validation
-	rank := func(s config.Step) [2]int {
+	rank := func(s Step) [2]int {
 		if s.Kind != "signoff" {
-			return [2]int{slices.IndexFunc(config.DefaultSteps, func(d config.Step) bool { return d.Kind == s.Kind }) + 1, 0}
+			return [2]int{slices.IndexFunc(DefaultSteps, func(d Step) bool { return d.Kind == s.Kind }) + 1, 0}
 		}
 		if s.ID == "verify" {
 			return [2]int{7, 0}
@@ -353,18 +355,18 @@ func at(steps []config.Step, c Cycle, in Input) string {
 func Compute(in Input) Cycle {
 	steps := list(in.Stages)
 	listed := func(kind string) bool {
-		return slices.ContainsFunc(steps, func(s config.Step) bool { return s.Kind == kind })
+		return slices.ContainsFunc(steps, func(s Step) bool { return s.Kind == kind })
 	}
 	rule := in.Stages.KindRule(in.Kind)
 	c := Cycle{Of: len(steps), Risk: in.Risk, Stage: in.Stages.StageOf(in.Status), Evidence: in}
 	if in.Risk == "low" && listed("plan") {
 		c.Skipped = append(c.Skipped, 3)
 	}
-	if rule == config.NoTests && listed("tests") {
+	if rule == NoTests && listed("tests") {
 		c.Skipped = append(c.Skipped, 4)
 	}
 	if !listed("tests") {
-		rule = config.NoTests
+		rule = NoTests
 	}
 	if in.Closed || c.Stage == "done" {
 		c.Step, c.Name, c.Done, c.Gate = 7, "Done", true, gate(7, in.Risk, rule)
@@ -412,10 +414,10 @@ func Compute(in Input) Cycle {
 		}
 	case "in-progress":
 		c.Step, w = 4, Waits{Role: "assignee", Login: assignee, What: "write the tests"}
-		if rule == config.FailingTest {
+		if rule == FailingTest {
 			w.What = "write the failing test"
 		}
-		if len(in.Tests) > 0 || rule == config.NoTests {
+		if len(in.Tests) > 0 || rule == NoTests {
 			c.Step, w.What, act = 5, "commit and ask for review", "ready-for-review"
 		}
 		switch {

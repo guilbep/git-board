@@ -2,7 +2,6 @@ package config
 
 import (
 	"context"
-	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -12,42 +11,9 @@ import (
 	"testing"
 
 	"github.com/BurntSushi/toml"
-	"github.com/guilbep/git-board/core/fields"
+	"github.com/guilbep/git-board/core/cycle"
 	"github.com/guilbep/git-board/core/proof"
 )
-
-var co2Statuses = []string{"backlog", "comite", "ready", "in-progress", "in-review", "ready-for-validation", "qa", "tests-metier", "validated"}
-
-func TestGuessStages(t *testing.T) {
-	for _, tc := range []struct {
-		name    string
-		options []string
-		want    Stages
-	}{
-		{"co2", co2Statuses, Stages{
-			Before: []string{"backlog", "comite"}, Ready: "ready",
-			InProgress: []string{"in-progress"}, InReview: []string{"in-review"},
-			Validation: []string{"ready-for-validation", "qa", "tests-metier"}, Closing: "validated",
-		}},
-		{"git-board", []string{"draft", "backlog", "ready", "in-progress", "in-review", "done"}, Stages{
-			Before: []string{"draft", "backlog"}, Ready: "ready",
-			InProgress: []string{"in-progress"}, InReview: []string{"in-review"}, Closing: "done",
-		}},
-		{"short words", []string{"todo", "doing", "review", "done"}, Stages{
-			Ready: "todo", InProgress: []string{"doing"}, InReview: []string{"review"}, Closing: "done",
-		}},
-		{"two readies", []string{"ready", "ready-to-start", "done"}, Stages{
-			Before: []string{"ready-to-start"}, Ready: "ready", Closing: "done",
-		}},
-		{"none", nil, Stages{}},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := guessStages(tc.options); !reflect.DeepEqual(got, tc.want) {
-				t.Errorf("guessStages(%v)\n got %+v\nwant %+v", tc.options, got, tc.want)
-			}
-		})
-	}
-}
 
 const co2Cycle = `
 [fields.status]
@@ -82,7 +48,7 @@ func TestCycleFromFile(t *testing.T) {
 		t.Errorf("undecoded keys: %v", u)
 	}
 	s := cfg.Stages()
-	want := Stages{
+	want := cycle.Stages{
 		Before: []string{"backlog", "comite"}, Ready: "ready",
 		InProgress: []string{"in-progress"}, InReview: []string{"in-review"},
 		Validation: []string{"ready-for-validation", "qa", "tests-metier"}, Closing: "validated",
@@ -93,7 +59,7 @@ func TestCycleFromFile(t *testing.T) {
 		Roles: map[string]string{"risk": "pm", "plan": "lead-dev", "review": "reviewer",
 			"signoff:ready-for-validation": "lead-dev", "signoff:qa": "pm", "signoff:tests-metier": "metier"},
 		// read 2: a cell per validation status, verify dropped
-		Steps: append(slices.Clone(DefaultSteps[:6]), stepOf("ready-for-validation"), stepOf("qa"), stepOf("tests-metier")),
+		Steps: append(slices.Clone(cycle.DefaultSteps[:6]), signoff("ready-for-validation"), signoff("qa"), signoff("tests-metier")),
 	}
 	if !reflect.DeepEqual(s, want) {
 		t.Errorf("Stages()\n got %+v\nwant %+v", s, want)
@@ -103,43 +69,9 @@ func TestCycleFromFile(t *testing.T) {
 	}
 }
 
-func TestStagesGuessed(t *testing.T) {
-	cfg := &Config{Schema: fields.Schema{Fields: map[string]fields.Field{"status": {Options: co2Statuses}}}}
-	s := cfg.Stages()
-	if !s.Guessed || s.Ready != "ready" || s.Plans != "docs/src/implementation-plans" || len(s.TestFiles) != 5 {
-		t.Errorf("Stages() = %+v", s)
-	}
-	// one key set: it replaces that part of the guess, the rest is guessed
-	cfg.Cycle.Validation = []string{"qa"}
-	s = cfg.Stages()
-	if !s.Guessed || !reflect.DeepEqual(s.Validation, []string{"qa"}) || !reflect.DeepEqual(s.Before, []string{"backlog", "comite", "ready-for-validation", "tests-metier"}) {
-		t.Errorf("Stages() with validation set = %+v", s)
-	}
-	if (&Config{}).Stages().Closing != "" {
-		t.Error("no options, no closing status")
-	}
-	// no file, or no validation status: lists, never null (the settings
-	// page joins them)
-	for _, c := range []*Config{{}, {Schema: fields.Schema{Fields: map[string]fields.Field{"status": {Options: []string{"todo", "done"}}}}}} {
-		if b, _ := json.Marshal(c.Stages()); strings.Contains(string(b), "null") {
-			t.Errorf("Stages() = %s", b)
-		}
-	}
-}
-
-func TestStageOf(t *testing.T) {
-	s := guessStages(co2Statuses)
-	for status, want := range map[string]string{
-		"qa": "validation", "validated": "done", "comite": "before", "ready": "ready",
-		"in-progress": "in-progress", "in-review": "in-review", "nope": "", "": "",
-	} {
-		if got := s.StageOf(status); got != want {
-			t.Errorf("StageOf(%q) = %q, want %q", status, got, want)
-		}
-	}
-	if got := (Stages{}).StageOf(""); got != "" {
-		t.Errorf("no statuses: StageOf(\"\") = %q", got)
-	}
+// signoff is the step a sign-off's status names.
+func signoff(status string) cycle.Step {
+	return cycle.Step{ID: status, Kind: "signoff", Name: status, Status: status}
 }
 
 func TestCycleRolesChecked(t *testing.T) {
@@ -244,7 +176,7 @@ run = ["go", "vet", "./..."]
 	if !reflect.DeepEqual(c.Tests["go"], want) || c.Tests["e2e"].Dir != "web" || c.Checks["vet"].Run[1] != "vet" {
 		t.Errorf("Cycle = %+v", c)
 	}
-	if c.SignersFile() != "ci/signers" || (Cycle{}).SignersFile() != ".allowed_signers" {
+	if c.SignersFile() != "ci/signers" || (cycle.Config{}).SignersFile() != ".allowed_signers" {
 		t.Errorf("SignersFile = %q", c.SignersFile())
 	}
 	if s := cfg.Stages(); !reflect.DeepEqual(s.TestFiles, []string{"*_test.go"}) {
@@ -278,7 +210,7 @@ func TestCycleSuitesChecked(t *testing.T) {
 // co2Status is co2-calculator's status field: the stages are guessed from it.
 const co2Status = "[fields.status]\noptions = [\"backlog\", \"comite\", \"ready\", \"in-progress\", \"in-review\", \"ready-for-validation\", \"qa\", \"tests-metier\", \"validated\"]\nsingle = true\n\n"
 
-func stepIDs(steps []Step) []string {
+func stepIDs(steps []cycle.Step) []string {
 	ids := []string{}
 	for _, s := range steps {
 		ids = append(ids, s.ID)
@@ -315,7 +247,7 @@ func TestCycleSteps(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []Step{{ID: "review", Kind: "review", Name: "Review"}, {ID: "qa", Kind: "signoff", Name: "qa", Status: "qa"}, {ID: "verify", Kind: "signoff", Name: "Verify"}}
+	want := []cycle.Step{{ID: "review", Kind: "review", Name: "Review"}, {ID: "qa", Kind: "signoff", Name: "qa", Status: "qa"}, {ID: "verify", Kind: "signoff", Name: "Verify"}}
 	if got := cfg.Stages().Steps; !reflect.DeepEqual(got, want) {
 		t.Errorf("Steps = %+v, want %+v", got, want)
 	}

@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/guilbep/git-board/core/cycle"
 	"github.com/guilbep/git-board/core/inbox"
 	"github.com/guilbep/git-board/core/model"
-	"github.com/guilbep/git-board/internal/cycle"
 )
 
 // Row is one open issue's cycle, slimmed for a list.

@@ -7,11 +7,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/guilbep/git-board/core/cycle"
 	"github.com/guilbep/git-board/core/inbox"
 	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/branches"
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/cycle"
+	"github.com/guilbep/git-board/internal/evidence"
 	"github.com/guilbep/git-board/internal/work"
 	"github.com/guilbep/git-board/internal/wtx"
 )
@@ -108,7 +109,7 @@ func (s *apiServer) work(ctx context.Context, me inbox.Me, team bool, now time.T
 	anc := branches.NewAncestry(s.b)
 	rows := make([]work.Row, 0, len(threads))
 	for _, th := range threads {
-		in, err := cycle.GatherIn(anc, s.b, cfg, th, me.Login, &s.pulls)
+		in, err := evidence.GatherIn(anc, s.b, cfg, th, me.Login, &s.pulls)
 		if err != nil {
 			return workResponse{}, err
 		}

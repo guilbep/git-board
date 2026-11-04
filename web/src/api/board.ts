@@ -1014,7 +1014,7 @@ export interface IssuePulls {
   pulls: { branch: string; pr: GatePR | null }[];
 }
 
-// The issue's step in the development cycle (internal/cycle,
+// The issue's step in the development cycle (core/cycle,
 // internal/server/cycle.go), computed from the status and the evidence.
 export interface CycleWaits {
   role?: string; // risk, plan, review, assignee, author, signoff
@@ -1037,7 +1037,7 @@ export interface CycleSignoff {
   why?: string;
   at: string;
 }
-// What the server gathered (internal/cycle Input): the thread's fields and
+// What the server gathered (core/cycle Input): the thread's fields and
 // comments, the branches, the PRs.
 export interface CycleEvidence {
   kind?: string; // [branches]' kind, for step 4's rule
@@ -1061,7 +1061,7 @@ export interface CycleEvidence {
   signoffs?: CycleSignoff[];
   runs?: { by: string; commit?: string; at: string }[];
   checks?: { index: number; by: string; commit?: string; at: string }[];
-  lanes?: CycleLane[]; // the issue's branches, branched out (internal/cycle, PickLane)
+  lanes?: CycleLane[]; // the issue's branches, branched out (core/cycle, PickLane)
 }
 // One branch of the issue in the cycle: its own Tests (4), Code (5) and
 // Review (6) between the issue's Plan and Verify; 7 once merged. The

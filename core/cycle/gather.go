@@ -9,39 +9,72 @@ import (
 	"time"
 
 	"github.com/guilbep/git-board/core/forge"
+	"github.com/guilbep/git-board/core/inbox"
 	"github.com/guilbep/git-board/core/model"
-	"github.com/guilbep/git-board/internal/board"
-	"github.com/guilbep/git-board/internal/branches"
-	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/markdown"
-	"github.com/guilbep/git-board/internal/store"
 )
 
-// Pulls is the server's PR cache, read-only here.
+// Sources is what Gather reads besides the thread: each is the app's to
+// read (internal/evidence), the cycle computes from it and fetches none.
+type Sources struct {
+	Stages Stages
+	Kind   string   // the issue's kind ([branches] kinds): step 4's rule
+	Me     inbox.Me // the viewer: what its identity wrote is its login's, with or without a login
+	// Base is where the issue's branches start: origin/<base>, or <base>
+	// when only that exists.
+	Base     string
+	Branches []Branch // the branches naming the issue, against Base
+	Repo     Repo     // their files and the plan file; nil reads none
+	Pulls    Pulls    // nil: no PRs
+	// Render is the plan's Markdown as HTML (Plan.HTML); nil leaves it "".
+	Render func(markdown string) string
+}
+
+// Branch is one of the issue's branches against its base, as git has it.
+type Branch struct {
+	Name   string
+	Remote string    // "" for a local branch
+	Head   string    // its last commit
+	At     time.Time // its last commit's date
+	Ahead  int       // its commits the base hasn't
+	Behind int       // the base's commits it hasn't
+	Merged bool      // its head is in the base
+	InBase bool      // its changes are in the base, merged or squashed or rebased in
+}
+
+// Repo is the git the evidence reads, beyond the branches: the files a
+// branch changed since the base, the commit that first added one there,
+// the files under a directory with a line matching a pattern, a file at
+// a ref, and who wrote a commit.
+type Repo interface {
+	ChangedFiles(base, ref string) ([]string, error)
+	FirstCommitAdding(base, ref, path string) string
+	GrepFiles(ref, dir, pattern string) ([]string, error)
+	ReadFile(ref, path string) ([]byte, error)
+	Author(sha string) (string, error)
+}
+
+// Pulls is the forge's PRs by head branch, as the app keeps them (the
+// server's cache), read-only here.
 type Pulls interface {
-	// PR is the cached PR whose head is branch, and when it was read; nil
-	// when none or never read.
+	// PR is the PR whose head is branch, and when it was read; nil when
+	// none or never read.
 	PR(branch string) (*forge.PR, time.Time)
 }
 
-// Gather fills an Input for the issue from git-bug, git and the PR cache
-// (nil: none). me is the viewer's login.
-func Gather(b *store.Backend, cfg *config.Config, th model.Thread, me string, pulls Pulls) (Input, error) {
-	return GatherIn(branches.NewAncestry(b), b, cfg, th, me, pulls)
-}
-
-// GatherIn is Gather, reading the branches' histories through anc: the
-// Work page gathers every open issue with one, so their base's history is
-// read once a request, not once an issue.
-func GatherIn(anc *branches.Ancestry, b *store.Backend, cfg *config.Config, th model.Thread, me string, pulls Pulls) (Input, error) {
-	th.Inherited = cfg.RolesFor(th.Labels)
-	stages := cfg.Stages()
+// Gather is the issue's Input: what its thread says (its fields, its
+// people, its criteria, its comments' metadata), its branches as lanes
+// with the tests their diffs changed, its plan file, and its PRs.
+// PickLane makes one lane the evidence. th.Inherited is the roles it
+// inherits, the app's to fill.
+func Gather(th model.Thread, src Sources) (Input, error) {
+	stages := src.Stages
+	me := src.Me.Login
 	in := Input{
 		Stages: stages,
-		Status: board.FieldValue(th.Issue, "status"),
+		Status: field(th.Issue, "status"),
 		Closed: th.Status == "closed",
-		Risk:   board.FieldValue(th.Issue, "risk"),
-		Kind:   cfg.Branches.Kind(th.AllLabels()),
+		Risk:   field(th.Issue, "risk"),
+		Kind:   src.Kind,
 		Me:     me,
 		People: map[string]string{},
 	}
@@ -50,14 +83,8 @@ func GatherIn(anc *branches.Ancestry, b *store.Backend, cfg *config.Config, th m
 			in.Assignees = append(in.Assignees, a)
 		}
 	}
-	// What the identity git-board writes as wrote is the viewer's, with or
-	// without a login (--me names the viewer).
-	myID := ""
-	if p, ok, err := b.Me(); err == nil && ok {
-		myID = p.ID
-	}
 	login := func(p model.Person) string {
-		if me != "" && p.ID != "" && p.ID == myID {
+		if me != "" && p.ID != "" && p.ID == src.Me.ID {
 			return me
 		}
 		return p.Login
@@ -66,19 +93,23 @@ func GatherIn(anc *branches.Ancestry, b *store.Backend, cfg *config.Config, th m
 	if len(th.Events) > 0 && th.Events[0].Kind == "created" {
 		in.Criteria, in.CriteriaProblems = Criteria(th.Events[0].Body, stages.Criteria)
 	}
+	// each gate's person: the issue's value of the field its role names
 	holder := func(role string) string {
 		if role == "" {
 			return ""
 		}
-		return board.FieldValue(th.Issue, role)
+		return field(th.Issue, role)
 	}
-	in.People["risk"], in.People["plan"], in.People["review"] = holder(cfg.Cycle.Risk), holder(cfg.Cycle.Plan), holder(cfg.Cycle.Review)
-	in.People["spec"] = holder(cfg.Cycle.Spec)
-	for status, role := range cfg.Cycle.Signoffs {
-		in.People["signoff:"+status] = holder(role)
+	for _, gate := range []string{"risk", "plan", "review", "spec"} {
+		in.People[gate] = holder(stages.Roles[gate])
+	}
+	for gate, role := range stages.Roles {
+		if strings.HasPrefix(gate, "signoff:") {
+			in.People[gate] = holder(role)
+		}
 	}
 
-	if err := gatherCode(anc, b, cfg, th.Issue, stages, &in); err != nil {
+	if err := gatherCode(src, th.Issue, &in); err != nil {
 		return in, err
 	}
 
@@ -103,38 +134,41 @@ func GatherIn(anc *branches.Ancestry, b *store.Backend, cfg *config.Config, th m
 		}
 	}
 
-	if pulls != nil {
+	if src.Pulls != nil {
 		for i := range in.Lanes {
-			in.Lanes[i].PR, in.Lanes[i].PRAt = pulls.PR(in.Lanes[i].Branch)
+			in.Lanes[i].PR, in.Lanes[i].PRAt = src.Pulls.PR(in.Lanes[i].Branch)
 		}
 		if in.PlanBranch != "" {
-			in.PlanPR, _ = pulls.PR(in.PlanBranch)
+			in.PlanPR, _ = src.Pulls.PR(in.PlanBranch)
 		}
 	}
 	return PickLane(in), nil
 }
 
-// gatherCode reads the branches naming the issue, each a lane with the
-// tests its diff changed, and the plan file. PickLane, once the PRs are
-// in, makes one the evidence.
-func gatherCode(anc *branches.Ancestry, b *store.Backend, cfg *config.Config, is model.Issue, stages config.Stages, in *Input) error {
-	sug, err := branches.Suggest(b, cfg.Branches, is)
-	if err != nil {
-		return err
+// field is the issue's value of a field: its first name:value label, its
+// own or inherited; "" for none.
+func field(is model.Issue, name string) string {
+	for _, l := range is.AllLabels() {
+		if v, ok := strings.CutPrefix(l, name+":"); ok {
+			return v
+		}
 	}
-	linked, err := branches.LinkedIn(anc, is, sug.Start)
-	if err != nil {
-		return err
-	}
-	in.Base = sug.Start
-	ref := func(br branches.Branch) string { return strings.TrimPrefix(br.Remote+"/"+br.Name, "/") }
+	return ""
+}
+
+// gatherCode makes the branches naming the issue lanes, each with the
+// tests its diff changed, and finds the plan file. PickLane, once the PRs
+// are in, makes one the evidence.
+func gatherCode(src Sources, is model.Issue, in *Input) error {
+	in.Base = src.Base
+	ref := func(br Branch) string { return strings.TrimPrefix(br.Remote+"/"+br.Name, "/") }
 	var plan string
 	seen := map[string]int{} // a branch's local and remote copies are one lane: the newer, local on a tie
 	shared, work := map[string]bool{}, map[string]bool{}
-	for _, br := range linked {
+	for _, br := range src.Branches {
 		if strings.HasPrefix(br.Name, "plan/") {
 			if in.PlanBranch == "" {
-				in.PlanBranch, in.PlanHead, plan = br.Name, br.LastCommit.SHA, ref(br)
+				in.PlanBranch, in.PlanHead, plan = br.Name, br.Head, ref(br)
 			}
 			continue
 		}
@@ -142,7 +176,7 @@ func gatherCode(anc *branches.Ancestry, b *store.Backend, cfg *config.Config, is
 		work[br.Name] = work[br.Name] || br.Ahead > 0
 		// in the base: merged and the base moved on, or squashed in (a
 		// branch still at the base's commit is a new one, not merged work)
-		l := Lane{Branch: br.Name, Head: br.LastCommit.SHA, At: br.LastCommit.Date, Ref: ref(br), InBase: br.Merged && br.Behind > 0 || br.InBase && !br.Merged}
+		l := Lane{Branch: br.Name, Head: br.Head, At: br.At, Ref: ref(br), InBase: br.Merged && br.Behind > 0 || br.InBase && !br.Merged}
 		if i, ok := seen[br.Name]; ok {
 			if l.At.After(in.Lanes[i].At) {
 				in.Lanes[i] = l
@@ -159,15 +193,19 @@ func gatherCode(anc *branches.Ancestry, b *store.Backend, cfg *config.Config, is
 	// newest first: the plan file is looked for in the newest lane first
 	slices.SortStableFunc(in.Lanes, func(a, b Lane) int { return b.At.Compare(a.At) })
 
+	r := src.Repo
+	if r == nil {
+		return nil
+	}
 	for i := range in.Lanes {
 		l := &in.Lanes[i]
-		files, err := b.ChangedFiles(in.Base, l.Ref)
+		files, err := r.ChangedFiles(in.Base, l.Ref)
 		if err != nil {
 			return err
 		}
 		for _, f := range files {
-			if slices.ContainsFunc(stages.TestFiles, func(p string) bool { return matchTest(p, f) }) {
-				l.Files = append(l.Files, TestFile{Path: f, Commit: b.FirstCommitAdding(in.Base, l.Ref, f)})
+			if slices.ContainsFunc(in.Stages.TestFiles, func(p string) bool { return matchTest(p, f) }) {
+				l.Files = append(l.Files, TestFile{Path: f, Commit: r.FirstCommitAdding(in.Base, l.Ref, f)})
 			}
 		}
 	}
@@ -180,21 +218,23 @@ func gatherCode(anc *branches.Ancestry, b *store.Backend, cfg *config.Config, is
 	for _, l := range in.Lanes {
 		refs = append(refs, l.Ref)
 	}
-	for _, r := range append(refs, plan, in.Base) {
-		if r == "" {
+	for _, at := range append(refs, plan, in.Base) {
+		if at == "" {
 			continue
 		}
 		// a ref git can't read (no plans directory) is no plan there
-		files, _ := b.GrepFiles(r, stages.Plans, re)
+		files, _ := r.GrepFiles(at, in.Stages.Plans, re)
 		if len(files) == 0 {
 			continue
 		}
-		data, _ := b.ReadFile(r, files[0])
-		// ponytail: links as the file writes them, plan files carry no uploads
-		in.Plan = &Plan{Path: files[0], Ref: r, Status: frontMatter(string(data), "status"), Issue: frontMatter(string(data), "issue"), HTML: markdown.Render(body(string(data)), func(u string) string { return u })}
-		if sha := b.FirstCommitAdding(in.Base, r, files[0]); sha != "" {
-			if c, err := b.ReadCommit(sha); err == nil {
-				in.Plan.By = c.Author
+		data, _ := r.ReadFile(at, files[0])
+		in.Plan = &Plan{Path: files[0], Ref: at, Status: frontMatter(string(data), "status"), Issue: frontMatter(string(data), "issue")}
+		if src.Render != nil {
+			in.Plan.HTML = src.Render(body(string(data)))
+		}
+		if sha := r.FirstCommitAdding(in.Base, at, files[0]); sha != "" {
+			if by, err := r.Author(sha); err == nil {
+				in.Plan.By = by
 			}
 		}
 		break

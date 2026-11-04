@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/guilbep/git-board/core/cycle"
 	"github.com/guilbep/git-board/core/fields"
 	"github.com/guilbep/git-board/core/proof"
 	"github.com/guilbep/git-board/core/release"
@@ -47,7 +48,7 @@ type configModel struct {
 	// Branches, Cycle (its On says the file has the table), Repos, Uploads
 	// and Release, as the file holds them
 	Branches config.Branches `json:"branches"`
-	Cycle    config.Cycle    `json:"cycle"`
+	Cycle    cycle.Config    `json:"cycle"`
 	Repos    struct {
 		List      []string `json:"list"`
 		Assignees string   `json:"assignees"` // how the forges hold assignees: native, labels; preserved
@@ -395,7 +396,7 @@ func (s *apiServer) sectionWriter(section string, r *http.Request, w http.Respon
 	case "cycle":
 		var req struct {
 			On    bool         `json:"on"`
-			Cycle config.Cycle `json:"cycle"`
+			Cycle cycle.Config `json:"cycle"`
 		}
 		if !decode(w, r, &req) {
 			return nil, nil

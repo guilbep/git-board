@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/guilbep/git-board/core/cycle"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/store"
 )
@@ -40,7 +41,7 @@ type settingsResponse struct {
 	} `json:"uploads"`
 	GithubProject config.GithubProject `json:"github_project"`
 	ConfigPath    string               `json:"config_path"`
-	Cycle         config.Stages        `json:"cycle"`
+	Cycle         cycle.Stages         `json:"cycle"`
 }
 
 func (s *apiServer) handleSettings(w http.ResponseWriter, r *http.Request) {

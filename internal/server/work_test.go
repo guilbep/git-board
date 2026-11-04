@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/guilbep/git-board/core/cycle"
 	"github.com/guilbep/git-board/core/fields"
 	"github.com/guilbep/git-board/core/forge/fake"
 	"github.com/guilbep/git-board/core/model"
@@ -55,7 +56,7 @@ func issueBy(t *testing.T, b *store.Backend, who model.Person, title string, lab
 func TestWorkGroups(t *testing.T) {
 	t.Parallel()
 	b := storetest.New(t)
-	cfg := cycleConfig(map[string]string{"pm": "guilbep", "lead-dev": "ann"}, config.Cycle{Risk: "pm", Plan: "lead-dev"})
+	cfg := cycleConfig(map[string]string{"pm": "guilbep", "lead-dev": "ann"}, cycle.Config{Risk: "pm", Plan: "lead-dev"})
 	ts := newTestServer(t, b, cfg)
 	ann := storetest.NewPerson(t, b, "Ann", "ann")
 	risk, _ := b.NewIssue("Needs a risk", twoCriteria, []string{"status:ready"})                // step 2, waits for the pm: me
@@ -84,7 +85,7 @@ func TestWorkGroups(t *testing.T) {
 func TestWorkAnyonesGate(t *testing.T) {
 	t.Parallel()
 	b := storetest.New(t)
-	ts := newTestServer(t, b, cycleConfig(nil, config.Cycle{}))
+	ts := newTestServer(t, b, cycleConfig(nil, cycle.Config{}))
 	id, _ := b.NewIssue("Unassigned", twoCriteria, []string{"status:in-progress", "risk:low"}) // step 4, no assignee: anyone
 	if res := getWork(t, ts, "me"); len(res.Needs) != 0 || !slices.Equal(waiting(res), []string{id}) {
 		t.Errorf("me: needs %v, waiting %v", needs(res), waiting(res))
@@ -97,7 +98,7 @@ func TestWorkAnyonesGate(t *testing.T) {
 func TestWorkQuestion(t *testing.T) {
 	t.Parallel()
 	b := storetest.New(t)
-	ts := newTestServer(t, b, cycleConfig(map[string]string{"lead-dev": "ann"}, config.Cycle{Plan: "lead-dev"}))
+	ts := newTestServer(t, b, cycleConfig(map[string]string{"lead-dev": "ann"}, cycle.Config{Plan: "lead-dev"}))
 	ann := storetest.NewPerson(t, b, "Ann", "ann")
 	id, _ := b.NewIssue("Asked", twoCriteria, []string{"status:ready", "risk:normal"}) // waits for ann
 	cid := storetest.CommentAs(t, b, id, ann, time.Now().Unix(), "Which tolerance?")
@@ -133,7 +134,7 @@ func TestWorkNeedsWhoYouAre(t *testing.T) {
 // unmatched, it is a row with no issue.
 func TestWorkAgents(t *testing.T) {
 	s, _, id := gateRepo(t, "https://github.com/o/r.git", false)
-	s.cfg = cycleConfig(nil, config.Cycle{})
+	s.cfg = cycleConfig(nil, cycle.Config{})
 	if _, err := s.b.ApplyLabelChange(id, []string{"status:in-progress", "risk:low"}, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -160,7 +161,7 @@ func TestWorkAgents(t *testing.T) {
 func TestWorkToSend(t *testing.T) {
 	t.Parallel()
 	b := storetest.New(t)
-	ts := newTestServer(t, b, cycleConfig(nil, config.Cycle{}))
+	ts := newTestServer(t, b, cycleConfig(nil, cycle.Config{}))
 	id := storetest.NewIssue(t, b, "synced")
 	run := store.ForgeRun{Forges: []store.NamedForge{{Name: "gh", Forge: fake.New("github.com/o/r")}}, AllowCreate: true}
 	if _, err := b.SyncForges(t.Context(), run); err != nil {
@@ -186,7 +187,7 @@ func TestWorkToSend(t *testing.T) {
 func TestWorkWithoutSprints(t *testing.T) {
 	t.Parallel()
 	b := storetest.New(t)
-	cfg := cycleConfig(nil, config.Cycle{})
+	cfg := cycleConfig(nil, cycle.Config{})
 	ts := newTestServer(t, b, cfg)
 	id, _ := b.NewIssue("Corrected", twoCriteria, []string{"status:ready"})
 	if _, err := b.AddCommentMeta(id, "The agent dropped the filter", map[string]string{"correction": "1"}); err != nil {

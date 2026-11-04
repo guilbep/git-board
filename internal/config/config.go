@@ -24,6 +24,7 @@ import (
 	"github.com/BurntSushi/toml"
 	"golang.org/x/text/unicode/norm"
 
+	"github.com/guilbep/git-board/core/cycle"
 	"github.com/guilbep/git-board/core/fields"
 	"github.com/guilbep/git-board/core/proof"
 	"github.com/guilbep/git-board/core/release"
@@ -72,7 +73,7 @@ type raw struct {
 	Uploads       Uploads                 `toml:"uploads"`
 	Branches      Branches                `toml:"branches"`
 	Roles         map[string]string       `toml:"roles"`
-	Cycle         Cycle                   `toml:"cycle"`
+	Cycle         cycleTable              `toml:"cycle"`
 	Template      TemplateRef             `toml:"template"`
 	Release       release.Config          `toml:"release"`
 	Labels        fields.Labels           `toml:"labels"`
@@ -203,9 +204,9 @@ type Config struct {
 	GithubProject GithubProject
 	Uploads       Uploads
 	Branches      Branches
-	// Cycle is the [cycle] table: the development cycle's stages and
-	// gates (cycle.go).
-	Cycle Cycle
+	// Cycle is the [cycle] table, the cycle's (core/cycle), checked in
+	// cycle.go.
+	Cycle cycle.Config
 	// Release is the [release] table, the release domain's (core/release),
 	// checked in release.go.
 	Release release.Config
@@ -231,6 +232,8 @@ type Config struct {
 	// (UseLocal); cycleErr what [cycle] fails, kept while the cycle is off
 	local    *[]string
 	cycleErr error
+	// shortKinds are the [cycle.kinds] the file gave as a string (Reads)
+	shortKinds []string
 }
 
 // IssueSchema is the schema the core's issue domain reads (core/fields:
@@ -403,7 +406,8 @@ func parse(data []byte) (*Config, toml.MetaData, error) {
 		GithubProject:  r.GithubProject,
 		Uploads:        r.Uploads,
 		Branches:       r.Branches,
-		Cycle:          r.Cycle,
+		Cycle:          r.Cycle.Config,
+		shortKinds:     r.Cycle.shortKinds,
 		Release:        r.Release,
 		Template:       r.Template,
 		Forges:         forges,

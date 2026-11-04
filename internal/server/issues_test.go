@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/guilbep/git-board/core/cycle"
 	"github.com/guilbep/git-board/core/forge/fake"
 	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/core/oplog"
@@ -362,7 +363,7 @@ func TestCommentOnAStep(t *testing.T) {
 func TestCommentStepIsTheLists(t *testing.T) {
 	t.Parallel()
 	ts, s := newIssueServer(t)
-	s.cfg = &config.Config{Cycle: config.Cycle{Steps: []string{"code", "review"}}, Features: allFeatures}
+	s.cfg = &config.Config{Cycle: cycle.Config{Steps: []string{"code", "review"}}, Features: allFeatures}
 	id, err := s.b.NewIssue("Export CSV", "", nil)
 	if err != nil {
 		t.Fatal(err)
@@ -564,7 +565,7 @@ func TestResolveView(t *testing.T) {
 func TestSetViewFromSettings(t *testing.T) {
 	t.Parallel()
 	ts, s := newIssueServer(t)
-	s.setConfig(&config.Config{Cycle: config.Cycle{On: true}, Features: allFeatures})
+	s.setConfig(&config.Config{Cycle: cycle.Config{On: true}, Features: allFeatures})
 	var me meResponse
 	if code := call(t, "PUT", ts.URL+"/api/me/view", map[string]string{"view": "classic"}, &me); code != 200 ||
 		me.View != "classic" || me.ViewFrom != "board.view" || me.ViewScope != "local" {
@@ -595,7 +596,7 @@ func TestMeSaysTheView(t *testing.T) {
 		t.Errorf("board.view cycle: %q from %q", me.View, me.ViewFrom)
 	}
 	storetest.Git(t, s.b.GitDir(), "config", "--unset", "board.view")
-	s.setConfig(&config.Config{Cycle: config.Cycle{On: true}, Features: allFeatures})
+	s.setConfig(&config.Config{Cycle: cycle.Config{On: true}, Features: allFeatures})
 	if call(t, "GET", ts.URL+"/api/me", nil, &me); me.View != "cycle" || me.ViewFrom != ".git-board.toml" {
 		t.Errorf("a [cycle] table: %q from %q", me.View, me.ViewFrom)
 	}

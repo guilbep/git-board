@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/guilbep/git-board/core/cycle"
 	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/avatar"
 	"github.com/guilbep/git-board/internal/config"
@@ -142,12 +143,12 @@ func (s *apiServer) stepOf(raw json.RawMessage) (string, error) {
 	}
 	var id string
 	if n, err := strconv.Atoi(string(raw)); err == nil && n >= 1 && n <= 7 {
-		id = config.DefaultSteps[n-1].ID
+		id = cycle.DefaultSteps[n-1].ID
 	} else if len(raw) > 0 && string(raw) != "null" && json.Unmarshal(raw, &id) != nil {
 		id = string(raw)
 	}
 	steps := s.config().Stages().Steps
-	if id == "" || slices.ContainsFunc(steps, func(st config.Step) bool { return st.ID == id }) {
+	if id == "" || slices.ContainsFunc(steps, func(st cycle.Step) bool { return st.ID == id }) {
 		return id, nil
 	}
 	ids := make([]string, len(steps))

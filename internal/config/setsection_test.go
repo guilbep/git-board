@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/guilbep/git-board/core/cycle"
 	"github.com/guilbep/git-board/core/fields"
 	"github.com/guilbep/git-board/core/proof"
 	"github.com/guilbep/git-board/core/release"
@@ -244,14 +245,14 @@ func TestSetBranches(t *testing.T) {
 func TestSetCycle(t *testing.T) {
 	t.Parallel()
 	before := "[fields.status]\noptions = [\"backlog\"]\n"
-	off, err := SetCycleText(before, false, Cycle{})
+	off, err := SetCycleText(before, false, cycle.Config{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if off != before {
 		t.Errorf("off changed the file:\n%s", off)
 	}
-	on, err := SetCycleText(before, true, Cycle{Ready: "ready", InProgress: []string{"in-progress"}, Risk: "pm", Kinds: map[string]string{"bug": FailingTest}})
+	on, err := SetCycleText(before, true, cycle.Config{Ready: "ready", InProgress: []string{"in-progress"}, Risk: "pm", Kinds: map[string]string{"bug": cycle.FailingTest}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -263,7 +264,7 @@ func TestSetCycle(t *testing.T) {
 		t.Errorf("check: %v, on %v", err, cfg != nil && cfg.Cycle.On)
 	}
 	// a suite with its env and tools, byte-stable
-	suite := Cycle{Tests: map[string]proof.Suite{"unit": {
+	suite := cycle.Config{Tests: map[string]proof.Suite{"unit": {
 		Run:   []string{"go", "test", "./..."},
 		Files: []string{"**/*.go"},
 		Env:   map[string]string{"CGO": "0"},
@@ -287,7 +288,7 @@ func TestSetCycle(t *testing.T) {
 		t.Errorf("not byte-stable:\nfirst\n%s\nsecond\n%s", withSuite, twice)
 	}
 	// a suite dropped from the map goes from the file
-	gone, err := SetCycleText(withSuite, true, Cycle{})
+	gone, err := SetCycleText(withSuite, true, cycle.Config{})
 	if err != nil {
 		t.Fatal(err)
 	}

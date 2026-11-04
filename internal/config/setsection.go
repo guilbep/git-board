@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/guilbep/git-board/core/cycle"
 	"github.com/guilbep/git-board/core/fields"
 	"github.com/guilbep/git-board/core/proof"
 	"github.com/guilbep/git-board/core/release"
@@ -376,7 +377,7 @@ func SetBranchesText(text string, b Branches) (string, error) {
 // table form holds the same rule, tests — a string writes it back as
 // one), and the suites as [cycle.tests.<name>] and [cycle.checks.<name>]
 // with their [cycle.tests.<name>.env]. Off, every [cycle.*] table goes.
-func SetCycleText(text string, on bool, c Cycle) (string, error) {
+func SetCycleText(text string, on bool, c cycle.Config) (string, error) {
 	if !on {
 		return deleteTable(text, "cycle"), nil
 	}

@@ -14,11 +14,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/guilbep/git-board/core/cycle"
 	"github.com/guilbep/git-board/core/fields"
 	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/branches"
-	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/cycle"
 	"github.com/guilbep/git-board/internal/store"
 	"github.com/guilbep/git-board/internal/wtx"
 )
@@ -429,7 +428,7 @@ func withStatus(th model.Thread, status string) model.Thread {
 // it in the pane, where plan mode ends: commit it where gather finds it,
 // push, and open the draft PR that holds it, unless plans-in-pr = false.
 // The plan is approved on the board, not by the agent.
-func planThen(stages config.Stages, is model.Issue, branch string) string {
+func planThen(stages cycle.Stages, is model.Issue, branch string) string {
 	key := cycle.PlanIssue(is)
 	file := path.Join(stages.Plans, path.Base(branch)+".md")
 	pr := "open a draft PR that holds only the plan (`gh pr create --draft`)"

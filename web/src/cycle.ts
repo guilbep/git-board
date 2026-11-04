@@ -50,7 +50,7 @@ export const STEPS = ['', 'Intent', 'Risk', 'Plan', 'Tests', 'Code', 'Review', '
 // the default list's ids by number: "6" is review
 export const DEFAULT_IDS: readonly string[] = ['', 'intent', 'risk', 'plan', 'tests', 'code', 'review', 'verify'];
 // listOf is the project's list ([cycle] steps), the default seven when the
-// server sends none (internal/cycle's list)
+// server sends none (core/cycle's list)
 export const listOf = (s: CycleStages | undefined): StageStep[] =>
   s?.steps?.length ? s.steps : DEFAULT_IDS.slice(1).map((id, i) => ({ id, kind: id === 'verify' ? 'signoff' : id, name: STEPS[i + 1]! }));
 // kindOf is an entry's kind as the step's number, 1 to 7: what its gate,
@@ -58,7 +58,7 @@ export const listOf = (s: CycleStages | undefined): StageStep[] =>
 export const kindOf = (s: StageStep): number => (s.kind === 'signoff' ? 7 : DEFAULT_IDS.indexOf(s.kind));
 const LOCKS = ['', '', 'opens at ready', 'opens once the risk is set', 'opens when work starts', 'opens with the test', 'opens when the branch is in review', 'opens when the branch is merged'];
 
-// gate is the step's rule, as internal/cycle/cycle.go words it: the server
+// gate is the step's rule, as core/cycle/cycle.go words it: the server
 // only sends the current step's. rule is step 4's, by kind ([cycle.kinds]).
 export function gate(step: number, risk?: string, rule?: string): string {
   if (step === 3 && risk === 'structural') return 'Structural: the plan’s gate approved first';
@@ -161,7 +161,7 @@ export function suggestion(events: IssueEvent[]): { risk: string; why: string } 
 // riskWords is what a class does next, for step 2's gate (C2)
 export const riskWords = (risk: string) => (risk === 'low' ? 'low skips step 3, Start work opens step 4' : `${risk} opens step 3`);
 
-// The headings and items internal/cycle/cycle.go's Criteria reads.
+// The headings and items core/cycle/cycle.go's Criteria reads.
 const marker = /^\s*([-*+]|\d+[.)])\s+/;
 const box = /^\[([ xX])\]\s*/;
 const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

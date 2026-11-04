@@ -6,14 +6,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/guilbep/git-board/core/fields"
 	"github.com/guilbep/git-board/core/forge"
-	"github.com/guilbep/git-board/internal/config"
 )
 
 var co2Options = []string{"backlog", "comite", "ready", "in-progress", "in-review", "ready-for-validation", "qa", "tests-metier", "validated"}
 
-var co2 = (&config.Config{Schema: fields.Schema{Fields: map[string]fields.Field{"status": {Options: co2Options}}}}).Stages()
+var co2 = Config{}.Stages(co2Options)
 
 var people = map[string]string{
 	"risk": "alice", "plan": "bob", "review": "carol",
@@ -21,7 +19,7 @@ var people = map[string]string{
 }
 
 // noValidation is git-board's own board: Verify happens in in-review.
-var noValidation = (&config.Config{Schema: fields.Schema{Fields: map[string]fields.Field{"status": {Options: []string{"draft", "backlog", "ready", "in-progress", "in-review", "done"}}}}}).Stages()
+var noValidation = Config{}.Stages([]string{"draft", "backlog", "ready", "in-progress", "in-review", "done"})
 
 var two = []string{"Exports a CSV", "Keeps the filters"}
 
@@ -272,12 +270,12 @@ func listed(ids ...string) func(*Input) {
 	return func(in *Input) {
 		in.Stages.Steps = nil
 		for _, id := range ids {
-			i := slices.IndexFunc(config.DefaultSteps, func(s config.Step) bool { return s.ID == id })
+			i := slices.IndexFunc(DefaultSteps, func(s Step) bool { return s.ID == id })
 			if i < 0 {
-				in.Stages.Steps = append(in.Stages.Steps, config.Step{ID: id, Kind: "signoff", Name: id, Status: id})
+				in.Stages.Steps = append(in.Stages.Steps, Step{ID: id, Kind: "signoff", Name: id, Status: id})
 				continue
 			}
-			in.Stages.Steps = append(in.Stages.Steps, config.DefaultSteps[i])
+			in.Stages.Steps = append(in.Stages.Steps, DefaultSteps[i])
 		}
 	}
 }
@@ -421,7 +419,7 @@ func TestPickLane(t *testing.T) {
 func TestPickLaneNoTests(t *testing.T) {
 	t.Parallel()
 	in := PickLane(input("in-progress", func(in *Input) {
-		in.Stages.Kinds = map[string]string{"docs": config.NoTests}
+		in.Stages.Kinds = map[string]string{"docs": NoTests}
 		in.Kind = "docs"
 		in.Lanes = []Lane{lane("docs/2518/1-a", 1, false, nil)}
 	}))
