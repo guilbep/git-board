@@ -17,7 +17,7 @@ import (
 
 func newLogCmd() *cobra.Command {
 	var field, since string
-	var asJSON bool
+	var js *jsonOut
 
 	cmd := &cobra.Command{
 		Use:     "log <id>",
@@ -52,12 +52,12 @@ text).`,
 					return usageError{err}
 				}
 			}
-			return runLog(cmd.OutOrStdout(), args[0], field, from, asJSON)
+			return runLog(cmd.OutOrStdout(), args[0], field, from, js)
 		},
 	}
 	cmd.Flags().StringVar(&field, "field", "", "only the changes of this field")
 	cmd.Flags().StringVar(&since, "since", "", "only the changes from this date (YYYY-MM-DD) or this long ago (36h, 7d)")
-	cmd.Flags().BoolVar(&asJSON, "json", false, "render as JSON")
+	js = addJSON(cmd, "render as JSON", jsonFields(logEntry{}), true)
 	return cmd
 }
 
@@ -165,7 +165,7 @@ func keepField(entries []logEntry, field string) []logEntry {
 	return res
 }
 
-func runLog(out io.Writer, idPrefix, field string, since time.Time, asJSON bool) error {
+func runLog(out io.Writer, idPrefix, field string, since time.Time, js *jsonOut) error {
 	b, err := store.OpenCwd()
 	if err != nil {
 		return err
@@ -184,11 +184,11 @@ func runLog(out io.Writer, idPrefix, field string, since time.Time, asJSON bool)
 		entries = keepField(entries, field)
 	}
 	entries = slices.DeleteFunc(entries, func(e logEntry) bool { return e.At.Before(since) })
-	if asJSON {
+	if js.on() {
 		if entries == nil {
 			entries = []logEntry{}
 		}
-		return writeJSON(out, entries)
+		return js.write(out, entries)
 	}
 	tw := tabwriter.NewWriter(out, 0, 2, 2, ' ', 0)
 	for _, e := range entries {

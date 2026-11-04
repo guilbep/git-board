@@ -65,7 +65,12 @@ docs/guide/configuration.md, Filters):
   no:field                no value for that field
   title:*glob*            the title, without case
   #2528, CO2-3075         an issue by its forge or project number
+  created:>2026-10-01     when it was opened; updated:, closed: alike. A
+                          date is that day; >, >=, <, <=, a..b, * open;
+                          a time 2026-10-01T14:30; @today, @today-7d (d w m y)
+  comments:>5             how many comments: 5, >=5, <5, 2..5
   free text, "a phrase"   words in the title, the description or a comment
+  in:title,body,comments  where free text looks
   Conditions are AND'd together — combine as many as you like.`,
 		Example: `  git-board                                    # this repository's web UI
   git-board ls                                 # open issues
@@ -86,16 +91,20 @@ docs/guide/configuration.md, Filters):
 		},
 	}
 	root.Flags().BoolVar(&noOpen, "no-open", false, "don't open the browser")
-	root.AddCommand(newInitCmd(), newViewCmd(), newNumbersCmd(), newLsCmd(), newSetCmd(), newGetCmd(), newTuiCmd(), newBridgeCmd(), newLintCmd(), newMoveCmd(), newCloseCmd(), newSyncCmd(), newSprintCmd(), newHtmlCmd(), newExportCmd(), newImportCmd(), newDatastoreCmd(), newBranchCmd(), newServeCmd(), newReleaseCmd(), newDeployCmd(), newVerifyCmd(), newSwitchCmd(), newPruneCmd(), newFetchCmd(), newPullCmd(), newPushCmd(), newForgeCmd(), newProjectCmd(), newResetCmd(),
+	root.AddCommand(newDiffCmd(), newInitCmd(), newViewCmd(), newNumbersCmd(), newLsCmd(), newSetCmd(), newGetCmd(), newTuiCmd(), newBridgeCmd(), newLintCmd(), newMoveCmd(), newCloseCmd(), newSyncCmd(), newSprintCmd(), newHtmlCmd(), newExportCmd(), newImportCmd(), newDatastoreCmd(), newBranchCmd(), newServeCmd(), newReleaseCmd(), newDeployCmd(), newVerifyCmd(), newSwitchCmd(), newPruneCmd(), newFetchCmd(), newPullCmd(), newPushCmd(), newForgeCmd(), newProjectCmd(), newResetCmd(),
 		newMeCmd(), newNewCmd(), newShowCmd(), newCommentCmd(), newEditCmd(), newReopenCmd(), newLogCmd())
+	root.AddCommand(newFollowCmd(), newUnfollowCmd(), newStatusCmd())
+	addBeyond(root)
 	usageErrors(root)
+	addCompletions(root)
 	return root
 }
 
 func newLsCmd() *cobra.Command {
-	var group, sort, me string
-	var md, asJSON bool
+	var group, sort, me, at string
+	var md bool
 	var limit int
+	var js *jsonOut
 
 	cmd := &cobra.Command{
 		Use:   "ls [filter]",
@@ -107,7 +116,8 @@ func newLsCmd() *cobra.Command {
   git-board ls "title:*login*" --json
   git-board ls "#2528"                                  # quoted: # starts a shell comment
   git-board ls --sort "updated desc" --limit 10         # the ten last changed
-  git-board ls "login is:closed" --sort created`,
+  git-board ls "login is:closed" --sort created
+  git-board ls "sprint:@current" --at 2026-10-01         # the board as it was that day`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			filterStr := defaultFilter
@@ -117,21 +127,30 @@ func newLsCmd() *cobra.Command {
 			if limit < 0 {
 				return usageError{fmt.Errorf("--limit %d: a count, 0 for all", limit)}
 			}
-			return runLs(cmd.OutOrStdout(), filterStr, group, sort, limit, md, asJSON, resolveMe(me))
+			var when time.Time
+			if at != "" {
+				var err error
+				if when, err = parseAt(at, time.Now()); err != nil {
+					return usageError{err}
+				}
+			}
+			return runLs(cmd.OutOrStdout(), filterStr, group, sort, limit, md, js, resolveMe(me), when)
 		},
 	}
+	cmd.Flags().StringVar(&at, "at", "", "the board as it was then: a date (its end), a time (2026-10-01T14:30) or a while ago (36h, 7d)")
 	cmd.Flags().StringVar(&group, "group", "", "group results by field")
 	cmd.Flags().StringVar(&sort, "sort", "", `sort by created, updated, title or a field, then asc or desc: "prio asc", "updated desc"`)
 	cmd.Flags().IntVarP(&limit, "limit", "L", 0, "list this many at most, after sorting (0: all)")
 	cmd.Flags().BoolVar(&md, "md", false, "render as markdown")
-	cmd.Flags().BoolVar(&asJSON, "json", false, "render as JSON")
+	js = addJSON(cmd, "render as JSON", jsonFields(store.Issue{}), true)
 	meFlag(cmd, &me)
 	return cmd
 }
 
 func newViewCmd() *cobra.Command {
 	var me string
-	var md, asJSON bool
+	var md bool
+	var js *jsonOut
 
 	cmd := &cobra.Command{
 		Use:   "view <name>",
@@ -141,11 +160,11 @@ func newViewCmd() *cobra.Command {
   git-board view mine --me guilbep --json`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runView(cmd.OutOrStdout(), args[0], md, asJSON, resolveMe(me))
+			return runView(cmd.OutOrStdout(), args[0], md, js, resolveMe(me))
 		},
 	}
 	cmd.Flags().BoolVar(&md, "md", false, "render as markdown")
-	cmd.Flags().BoolVar(&asJSON, "json", false, "render as JSON")
+	js = addJSON(cmd, "render as JSON", jsonFields(store.Issue{}), true)
 	meFlag(cmd, &me)
 	return cmd
 }
@@ -272,15 +291,28 @@ func loadConfig() (*config.Config, error) {
 	return config.Load(config.Path())
 }
 
-func runLs(out io.Writer, filterStr, group, sort string, limit int, md, asJSON bool, me string) error {
+// runLs is ls; at, when set, is the time to list the board as it was.
+func runLs(out io.Writer, filterStr, group, sort string, limit int, md bool, js *jsonOut, me string, at time.Time) error {
 	cfg, err := loadConfig()
 	if err != nil {
 		return err
 	}
-	return listAndRender(out, cfg, filterStr, group, sort, limit, md, asJSON, me)
+	if at.IsZero() {
+		return listAndRender(out, cfg, filterStr, group, sort, limit, md, js, me)
+	}
+	b, err := store.OpenCwd()
+	if err != nil {
+		return err
+	}
+	defer b.Close()
+	matched, err := board.LoadMatchingAt(b, cfg, filterStr, me, at)
+	if err != nil {
+		return err
+	}
+	return render(out, matched, group, sort, limit, md, js, cfg)
 }
 
-func runView(out io.Writer, name string, md, asJSON bool, me string) error {
+func runView(out io.Writer, name string, md bool, js *jsonOut, me string) error {
 	cfg, err := loadConfig()
 	if err != nil {
 		return err
@@ -289,15 +321,15 @@ func runView(out io.Writer, name string, md, asJSON bool, me string) error {
 	if !ok {
 		return fmt.Errorf("unknown view %q", name)
 	}
-	return listAndRender(out, cfg, view.Filter, view.Group, view.Sort, 0, md, asJSON, me)
+	return listAndRender(out, cfg, view.Filter, view.Group, view.Sort, 0, md, js, me)
 }
 
-func listAndRender(out io.Writer, cfg *config.Config, filterStr, group, sort string, limit int, md, asJSON bool, me string) error {
+func listAndRender(out io.Writer, cfg *config.Config, filterStr, group, sort string, limit int, md bool, js *jsonOut, me string) error {
 	matched, err := loadMatchingIssues(cfg, filterStr, me)
 	if err != nil {
 		return err
 	}
-	return render(out, matched, group, sort, limit, md, asJSON, cfg)
+	return render(out, matched, group, sort, limit, md, js, cfg)
 }
 
 func runTui(filterStr, me string) error {

@@ -17,7 +17,7 @@ import (
 )
 
 func main() {
-	if err := newRootCmd().Execute(); err != nil {
+	if err := runRoot(newRootCmd(), os.Args[1:]); err != nil {
 		os.Exit(report(os.Stderr, err))
 	}
 }

@@ -82,7 +82,7 @@ func (b *Backend) ExportMarkdown(dir string, flat func(label string) bool) ([]st
 		if err != nil {
 			continue // not ours
 		}
-		if name, ok := nameOf[f.ID]; ok && name != filepath.Base(p) {
+		if name, ok := nameOf[f.ID]; ok && name != filepath.Base(p) || !ok && b.isDeleted(f.ID) {
 			if err := os.Remove(p); err != nil {
 				return nil, err
 			}
@@ -102,6 +102,15 @@ func (b *Backend) ExportMarkdown(dir string, flat func(label string) bool) ([]st
 		written = append(written, name)
 	}
 	return written, nil
+}
+
+// isDeleted says id names an issue a delete hid.
+func (b *Backend) isDeleted(id string) bool {
+	if !oplog.IsID(id) {
+		return false
+	}
+	is, _, err := b.loadAny(id)
+	return err == nil && is.Deleted
 }
 
 // mdName is NNN-slug.md: the bare number, else the id's first 7 digits;

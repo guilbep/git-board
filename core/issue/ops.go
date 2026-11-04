@@ -55,6 +55,17 @@ func ChangeLabels(author string, add, remove []string) oplog.Op {
 	return newOp("change-labels", author, m{"add": add, "remove": remove})
 }
 
+// Delete hides the issue (target its create operation) or a comment. It
+// is a tombstone: the text stays in the log (docs/adr/0019).
+func Delete(author, target string) oplog.Op {
+	return newOp("delete", author, m{"target": target})
+}
+
+// IsRemoved says a delete hid the comment with this id.
+func (is *Issue) IsRemoved(id string) bool {
+	return slices.ContainsFunc(is.Removed, func(c Comment) bool { return c.ID == id })
+}
+
 // Create writes a new issue. The first operation must be a create.
 func Create(ctx context.Context, s oplog.Datastore, ops ...oplog.Op) (*Issue, error) {
 	if len(ops) == 0 || ops[0].Kind != "create" {

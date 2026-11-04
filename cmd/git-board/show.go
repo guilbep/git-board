@@ -14,7 +14,9 @@ import (
 )
 
 func newShowCmd() *cobra.Command {
-	var md, asJSON, noComments bool
+	var md, noComments, web, forge bool
+	var at string
+	var js *jsonOut
 
 	cmd := &cobra.Command{
 		Use:   "show <id>",
@@ -30,26 +32,62 @@ description and comments, each comment with its ref (abc1234:1) for
 in docs/guide/cli.md: the issue's fields as ls --json prints them, plus
 "author", "edited_at", "participants" and "events" (created, comment,
 labels, status, title, each with its "id", "author" and "at"; a text's
-earlier versions under "history").`,
+earlier versions under "history").
+
+--web opens the issue in this repository's web UI: where its server
+already runs, else it starts one here, as a bare "git board" does, until
+Ctrl-C. --forge opens it on its forge, the first one it is on; an issue
+on none is exit code 3. Both print the URL they open.
+
+--at shows it as it was then, folded from the operations made by then:
+a date (as it stood at its end), a time (2026-10-01T14:30) or a while
+ago (36h, 7d). Each operation counts at its own time, its writer's
+clock.`,
 		Example: `  git board show a1b2c3d
   git board show CO2-3075 --md
   git board show "#2528" --json
-  git board show a1b2c3d --no-comments`,
+  git board show a1b2c3d --no-comments
+  git board show a1b2c3d --web
+  git board show a1b2c3d --forge
+  git board show a1b2c3d --at 2026-10-01`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if md && asJSON {
-				return usageError{fmt.Errorf("--md or --json, not both")}
+			n := 0
+			for _, on := range []bool{md, js.on(), web, forge} {
+				if on {
+					n++
+				}
 			}
-			return runShow(cmd.OutOrStdout(), args[0], md, asJSON, !noComments)
+			if n > 1 {
+				return usageError{fmt.Errorf("one of --md, --json, --web and --forge")}
+			}
+			if web || forge {
+				if at != "" {
+					return usageError{fmt.Errorf("--at shows the issue here: not with --web or --forge")}
+				}
+				return runShowOpen(cmd, args[0], forge)
+			}
+			var when time.Time
+			if at != "" {
+				var err error
+				if when, err = parseAt(at, time.Now()); err != nil {
+					return usageError{err}
+				}
+			}
+			return runShow(cmd.OutOrStdout(), args[0], md, js, !noComments, when)
 		},
 	}
+	cmd.Flags().StringVar(&at, "at", "", "as it was then: a date (its end), a time (2026-10-01T14:30) or a while ago (36h, 7d)")
 	cmd.Flags().BoolVar(&md, "md", false, "render as Markdown")
-	cmd.Flags().BoolVar(&asJSON, "json", false, "render as JSON")
+	js = addJSON(cmd, "render as JSON", jsonFields(store.Thread{}), true)
 	cmd.Flags().BoolVar(&noComments, "no-comments", false, "leave the comments out")
+	cmd.Flags().BoolVarP(&web, "web", "w", false, "open it in this repository's web UI")
+	cmd.Flags().BoolVar(&forge, "forge", false, "open it on its forge")
 	return cmd
 }
 
-func runShow(out io.Writer, idPrefix string, md, asJSON, comments bool) error {
+// runShow is show; at, when set, is the time to show the issue as it was.
+func runShow(out io.Writer, idPrefix string, md bool, js *jsonOut, comments bool, at time.Time) error {
 	cfg, err := loadConfig()
 	if err != nil {
 		return err
@@ -60,17 +98,23 @@ func runShow(out io.Writer, idPrefix string, md, asJSON, comments bool) error {
 	}
 	defer b.Close()
 	th, err := b.Thread(idPrefix)
+	if !at.IsZero() {
+		th, err = b.ThreadAt(idPrefix, at)
+	}
 	if err != nil {
 		return err
 	}
-	if asJSON {
+	if js.on() {
 		if th.Participants == nil {
 			th.Participants = []store.Person{}
 		}
 		if th.Events == nil {
 			th.Events = []store.Event{}
 		}
-		return writeJSON(out, th)
+		return js.write(out, th)
+	}
+	if !at.IsZero() {
+		fmt.Fprintf(out, "As it was on %s.\n\n", when(at))
 	}
 	if md {
 		writeThreadMarkdown(out, th, cfg, comments)
@@ -78,6 +122,31 @@ func runShow(out io.Writer, idPrefix string, md, asJSON, comments bool) error {
 		writeThread(out, th, cfg, comments)
 	}
 	return nil
+}
+
+// runShowOpen opens the issue in the browser: on its forge, or in the
+// web UI.
+func runShowOpen(cmd *cobra.Command, idPrefix string, forge bool) error {
+	out := cmd.OutOrStdout()
+	b, err := store.OpenCwd()
+	if err != nil {
+		return err
+	}
+	is, err := b.GetIssue(idPrefix)
+	b.Close() // before a server opens the board
+	if err != nil {
+		return err
+	}
+	if !forge {
+		return runBoardAt(cmd.Context(), out, true, "/#/issues/"+is.ID)
+	}
+	for _, f := range is.Forges {
+		if f.URL != "" {
+			fmt.Fprintln(out, f.URL)
+			return openURL(f.URL)
+		}
+	}
+	return fmt.Errorf("%w: %s is on no forge yet (git board sync sends it)", store.ErrNotFound, shortID(is.ID))
 }
 
 // when is a time as the commands print it, in local time.

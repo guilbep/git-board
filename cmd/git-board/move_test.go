@@ -160,3 +160,36 @@ func TestMovePrevGoesBackAndKeepsTheState(t *testing.T) {
 		t.Errorf("move --next --prev = %v, want exit %d", err, exitUsage)
 	}
 }
+
+// move <id> <status> is set status=<status>: checked, and in step with
+// the state; --next and --prev still work beside it.
+func TestMoveToAStatus(t *testing.T) {
+	newTestRepo(t)
+	writeStatusOptionsConfig(t)
+	id := openIssueID(t)
+
+	if out, err := execute(t, []string{"move", id, "in-progress"}); err != nil || !strings.Contains(out, "status:in-progress") {
+		t.Fatalf("move in-progress: %v\n%s", err, out)
+	}
+	if out, err := execute(t, []string{"move", id, "validated"}); err != nil || !strings.Contains(out, "closed") {
+		t.Fatalf("move validated: %v\n%s", err, out)
+	}
+	if _, state := labelsOf(t, id); state != "closed" {
+		t.Errorf("state = %s, want closed", state)
+	}
+	if out, err := execute(t, []string{"move", id, "backlog"}); err != nil || !strings.Contains(out, "reopened") {
+		t.Fatalf("move backlog: %v\n%s", err, out)
+	}
+	if _, err := execute(t, []string{"move", id, "nowhere"}); exitCode(err) != exitUsage {
+		t.Errorf("move nowhere = %v, want exit %d", err, exitUsage)
+	}
+	if _, err := execute(t, []string{"move", id, "ready", "--next"}); exitCode(err) != exitUsage {
+		t.Errorf("move ready --next = %v, want exit %d", err, exitUsage)
+	}
+	if labels, _ := labelsOf(t, id); !containsLabel(labels, "status:backlog") {
+		t.Errorf("labels = %v, want status:backlog", labels)
+	}
+	if out, err := execute(t, []string{"move", id, "--next"}); err != nil || !strings.Contains(out, "status:ready") {
+		t.Errorf("move --next: %v\n%s", err, out)
+	}
+}

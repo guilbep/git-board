@@ -12,8 +12,9 @@ import (
 
 func newCommentCmd() *cobra.Command {
 	var text textFlags
-	var edit string
-	var editLast, asJSON bool
+	var edit, del string
+	var editLast, yes bool
+	var js *jsonOut
 
 	cmd := &cobra.Command{
 		Use:   "comment <id>",
@@ -30,6 +31,11 @@ comment's text. The edit is refused, exit code 5, if someone changed the
 comment since you read it: your text is kept in a file the error names,
 nothing is lost.
 
+--delete <ref> deletes a comment: no view, search, export or sync shows
+it again. Its text stays in the board's history, and on a forge it was
+synced to (docs/adr/0019): revoke a leaked secret. On a terminal it asks
+first; --yes doesn't ask, and is needed when no one is at a terminal.
+
 --json prints {"id", "ref", "issue"}: the comment's whole id, its short
 ref, and the issue's id.`,
 		Example: `  git board comment a1b2c3d -b "Fixed in 4e5f6a7"
@@ -37,23 +43,71 @@ ref, and the issue's id.`,
   git board comment a1b2c3d -F notes.md
   git log -1 --format=%B | git board comment a1b2c3d -F -
   git board comment a1b2c3d --edit-last
-  git board comment a1b2c3d --edit 9c8b7a6:1 -b "Fixed in 4e5f6a7, released in v1.2"`,
+  git board comment a1b2c3d --edit 9c8b7a6:1 -b "Fixed in 4e5f6a7, released in v1.2"
+  git board comment a1b2c3d --delete 9c8b7a6:1 --yes`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if edit != "" && editLast {
 				return usageError{fmt.Errorf("--edit or --edit-last, not both")}
 			}
-			return runComment(cmd, args[0], &text, edit, editLast, asJSON)
+			if del != "" {
+				if edit != "" || editLast || text.given(cmd) {
+					return usageError{fmt.Errorf("--delete takes no text, nor --edit")}
+				}
+				return runCommentDelete(cmd, args[0], del, yes, js)
+			}
+			if yes {
+				return usageError{fmt.Errorf("--yes goes with --delete")}
+			}
+			return runComment(cmd, args[0], &text, edit, editLast, js)
 		},
 	}
 	text.add(cmd, "comment")
 	cmd.Flags().StringVar(&edit, "edit", "", "edit the comment with this ref (as show prints it)")
 	cmd.Flags().BoolVar(&editLast, "edit-last", false, "edit your last comment on the issue")
-	cmd.Flags().BoolVar(&asJSON, "json", false, "print the comment's id as JSON")
+	cmd.Flags().StringVar(&del, "delete", "", "delete the comment with this ref (as show prints it)")
+	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "with --delete: don't ask")
+	js = addJSON(cmd, "print the comment's id as JSON", []string{"id", "ref", "issue", "deleted"}, true)
 	return cmd
 }
 
-func runComment(cmd *cobra.Command, idPrefix string, text *textFlags, edit string, editLast, asJSON bool) error {
+// runCommentDelete deletes the comment ref names on the issue.
+func runCommentDelete(cmd *cobra.Command, idPrefix, ref string, yes bool, js *jsonOut) error {
+	b, err := store.OpenCwd()
+	if err != nil {
+		return err
+	}
+	defer b.Close()
+	if err := needMe(b); err != nil {
+		return err
+	}
+	th, err := b.Thread(idPrefix)
+	if err != nil {
+		return err
+	}
+	target, err := findComment(th, ref, "")
+	if err != nil {
+		return err
+	}
+	line, _, _ := strings.Cut(target.Body, "\n")
+	if r := []rune(line); len(r) > 50 {
+		line = string(r[:50]) + "…"
+	}
+	if err := confirm(cmd, yes, fmt.Sprintf("delete %s's comment %s %q?", target.Author.Name, commentRef(target.ID), line)); err != nil {
+		return err
+	}
+	if err := b.DeleteComment(th.ID, target.ID); err != nil {
+		return err
+	}
+	fmt.Fprintln(cmd.ErrOrStderr(), "note: "+keptInHistory)
+	if js.on() {
+		return js.write(cmd.OutOrStdout(), map[string]any{"id": target.ID, "ref": commentRef(target.ID), "issue": th.ID, "deleted": true})
+	}
+	fmt.Fprintf(cmd.OutOrStdout(), "deleted %s\n", commentRef(target.ID))
+	return nil
+}
+
+func runComment(cmd *cobra.Command, idPrefix string, text *textFlags, edit string, editLast bool, js *jsonOut) error {
 	out := cmd.OutOrStdout()
 	b, err := store.OpenCwd()
 	if err != nil {
@@ -98,8 +152,8 @@ func runComment(cmd *cobra.Command, idPrefix string, text *textFlags, edit strin
 			return keptErr(err, "comment", body)
 		}
 	}
-	if asJSON {
-		return writeJSON(out, map[string]string{"id": id, "ref": commentRef(id), "issue": th.ID})
+	if js.on() {
+		return js.write(out, map[string]string{"id": id, "ref": commentRef(id), "issue": th.ID})
 	}
 	fmt.Fprintln(out, commentRef(id))
 	return nil

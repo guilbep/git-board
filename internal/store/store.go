@@ -59,6 +59,14 @@ type Issue struct {
 	// CreatedAt is when it was opened: it breaks a tie between issues one
 	// sync stamped at once.
 	CreatedAt time.Time `json:"created_at"`
+	// ClosedAt is when it was last closed, while it is: zero when open.
+	ClosedAt time.Time `json:"closed_at,omitzero"`
+	// Comments is how many comments it has, for comments:.
+	Comments int `json:"comments"`
+	// Body and CommentBodies are its texts, for free text without the
+	// index (an issue as it was: ls --at).
+	Body          string   `json:"-"`
+	CommentBodies []string `json:"-"`
 	// AuthorLogins are who opened it, for author:: name, login, forge
 	// logins.
 	AuthorLogins []string `json:"-"`
@@ -321,11 +329,24 @@ func (b *Backend) me() (string, error) {
 	return id, err
 }
 
-// loadIssue is an issue and its log. The log is read each time; the issue
-// is folded again only when the log's version moved, as all keeps it for
-// listings. The issue is shared with every other reader: read it, never
-// write it. The log is the caller's own.
+// ErrDeleted: the issue was deleted (docs/adr/0019). It is a not found.
+var ErrDeleted = fmt.Errorf("%w: deleted", ErrNotFound)
+
+// loadIssue is an issue and its log, as loadAny, and not found when a
+// delete hid it: every view goes through it, so none shows it.
 func (b *Backend) loadIssue(id string) (*issue.Issue, *oplog.Log, error) {
+	is, l, err := b.loadAny(id)
+	if err == nil && is.Deleted {
+		return nil, nil, fmt.Errorf("issue %s: %w", id, ErrDeleted)
+	}
+	return is, l, err
+}
+
+// loadAny is an issue and its log, deleted or not. The log is read each
+// time; the issue is folded again only when the log's version moved, as
+// all keeps it for listings. The issue is shared with every other reader:
+// read it, never write it. The log is the caller's own.
+func (b *Backend) loadAny(id string) (*issue.Issue, *oplog.Log, error) {
 	l, err := oplog.LoadContext(ctx, b.ds, "issue", id)
 	if errors.Is(err, oplog.ErrNotFound) {
 		return nil, nil, fmt.Errorf("%w: issue %s", ErrNotFound, id)
@@ -383,11 +404,14 @@ func all[T any](b *Backend, kind string, cache map[string]T, load func(id string
 	return out, nil
 }
 
+// allIssues is every issue a view shows: a deleted one is left out.
 func (b *Backend) allIssues() (map[string]*issue.Issue, error) {
-	return all(b, "issue", b.issues, func(id string) (*issue.Issue, error) {
-		is, _, err := b.loadIssue(id)
+	issues, err := all(b, "issue", b.issues, func(id string) (*issue.Issue, error) {
+		is, _, err := b.loadAny(id)
 		return is, err
 	})
+	maps.DeleteFunc(issues, func(_ string, is *issue.Issue) bool { return is.Deleted })
+	return issues, err
 }
 
 func (b *Backend) allPersons() (map[string]*people.Person, error) {
@@ -460,7 +484,14 @@ func (b *Backend) records() (map[string][]syncer.Record, error) {
 func (b *Backend) issueFrom(is *issue.Issue, v view) Issue {
 	forges := forgesOf(v.records[is.ID])
 	out := Issue{ID: is.ID, Title: is.Title, Status: string(is.Status), Labels: b.shown(slices.Clone(is.Labels)), Forges: forges,
-		UpdatedAt: time.Unix(is.Updated, 0), CreatedAt: time.Unix(is.Created, 0), AuthorID: is.Author}
+		UpdatedAt: time.Unix(is.Updated, 0), CreatedAt: time.Unix(is.Created, 0), AuthorID: is.Author,
+		Comments: len(is.Comments), Body: is.Body}
+	if is.Status == issue.Closed {
+		out.ClosedAt = time.Unix(is.Changes["status"].Time, 0)
+	}
+	for _, c := range is.Comments {
+		out.CommentBodies = append(out.CommentBodies, c.Body)
+	}
 	for _, f := range forges {
 		if f.Name == "GitHub" && out.GithubURL == "" {
 			out.GithubURL = f.URL
@@ -512,6 +543,42 @@ func (b *Backend) ListIssues() ([]Issue, error) {
 	}
 	res := make([]Issue, 0, len(issues))
 	for _, is := range issues {
+		res = append(res, b.issueFrom(is, v))
+	}
+	slices.SortFunc(res, func(x, y Issue) int { return cmp.Or(x.CreatedAt.Compare(y.CreatedAt), cmp.Compare(x.ID, y.ID)) })
+	return res, nil
+}
+
+// ListIssuesAt is ListIssues as the board stood at a time: the issues
+// created by then, each folded from the operations made by then, by their
+// own times (issue.At).
+func (b *Backend) ListIssuesAt(at time.Time) ([]Issue, error) {
+	heads, err := b.ds.Heads(ctx, "issue")
+	if err != nil {
+		return nil, fmt.Errorf("listing the issues: %w", err)
+	}
+	v, err := b.view()
+	if err != nil {
+		return nil, err
+	}
+	var res []Issue
+	for id := range heads {
+		if !oplog.IsID(id) {
+			continue
+		}
+		_, l, err := b.loadIssue(id)
+		if err != nil { // broken: left out, as ListIssues leaves it
+			log.Printf("issue %s: %v", id, err)
+			continue
+		}
+		is, _, err := foldAt(l, at)
+		if errors.Is(err, ErrNotFound) {
+			continue
+		}
+		if err != nil {
+			log.Printf("issue %s on %s: %v", id, at.Format(time.DateOnly), err)
+			continue
+		}
 		res = append(res, b.issueFrom(is, v))
 	}
 	slices.SortFunc(res, func(x, y Issue) int { return cmp.Or(x.CreatedAt.Compare(y.CreatedAt), cmp.Compare(x.ID, y.ID)) })
@@ -676,9 +743,10 @@ func (b *Backend) SetProjectBases(idPrefix, prefix string, values map[string]str
 func (b *Backend) CloseBug(idPrefix string) error { return b.SetStatus(idPrefix, "closed") }
 
 // SearchText returns the issues whose title, description or a comment
-// hold text (the index's search), by id.
-func (b *Backend) SearchText(text string) (map[string]bool, error) {
-	found, err := b.ix.Issues(ctx, index.Query{Text: text})
+// hold text (the index's search), by id; in, when given, names where to
+// look (index.Texts: title, body, comments).
+func (b *Backend) SearchText(text string, in ...string) (map[string]bool, error) {
+	found, err := b.ix.Issues(ctx, index.Query{Text: text, In: in})
 	if err != nil {
 		return nil, err
 	}

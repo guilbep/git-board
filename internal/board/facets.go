@@ -40,7 +40,8 @@ type Option struct {
 // matches an issue itself. A facet with a single value says nothing and is
 // left out, unless the filter picks values in it.
 func Facets(b issueBackend, cfg *config.Config, filterStr, me string) ([]Facet, error) {
-	conditions, me, err := prepare(b, filterStr, me)
+	today := time.Now()
+	conditions, me, err := prepare(b, filterStr, me, today)
 	if err != nil {
 		return nil, err
 	}
@@ -49,7 +50,6 @@ func Facets(b issueBackend, cfg *config.Config, filterStr, me string) ([]Facet, 
 		return nil, err
 	}
 	withRoles(cfg, issues)
-	today := time.Now()
 	if err := fillFollows(b, cfg, conditions, me, issues, today, nil); err != nil {
 		return nil, err
 	}

@@ -107,9 +107,11 @@ Bad, and accepted:
 
 ## Left open
 
-- Releases and deploys (`[release]`) stay on: they are used and
-  documented, though they aren't about issues. Whether they belong in the
-  core is open.
+- Releases and deploys (`[release]`) stay on, and belong in the core:
+  decided 2026-11-04 (Pierre). A release is what the issues ship in; which
+  issue went out in which version, and where it is deployed, is part of
+  owning them. How the core is split so this holds is
+  [ADR 0020](0020-the-core-in-layers.md), proposed.
 - The GitHub Project bridge (`git board project`, `internal/ghbridge`)
   depends on `gh` and on GitHub's Project model: a forge-specific feature
   in the core. It stays, as GitHub Projects are where many teams come from.

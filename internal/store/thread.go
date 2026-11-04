@@ -124,13 +124,47 @@ func (b *Backend) Threads(idPrefixes []string) ([]Thread, error) {
 		if err != nil {
 			return nil, err
 		}
-		res = append(res, b.thread(is, l, v))
+		res = append(res, b.thread(is, l, v, true))
 	}
 	return res, nil
 }
 
-// thread replays an issue's log into its history, as issue.Apply folds it.
-func (b *Backend) thread(is *issue.Issue, l *oplog.Log, v view) Thread {
+// ThreadAt is Thread as the issue stood at a time: only the operations
+// made by then, by their own times (issue.At). What waits for a forge
+// isn't marked: that is now's. ErrNotFound when it wasn't created yet.
+func (b *Backend) ThreadAt(idPrefix string, at time.Time) (Thread, error) {
+	v, err := b.view()
+	if err != nil {
+		return Thread{}, err
+	}
+	_, l, err := b.issue(idPrefix)
+	if err != nil {
+		return Thread{}, err
+	}
+	is, l, err := foldAt(l, at)
+	if err != nil {
+		return Thread{}, err
+	}
+	return b.thread(is, l, v, false), nil
+}
+
+// foldAt is an issue's log at a time (issue.At), and the issue it folds
+// into.
+func foldAt(whole *oplog.Log, at time.Time) (*issue.Issue, *oplog.Log, error) {
+	l, err := issue.At(whole, at.Unix())
+	if errors.Is(err, issue.ErrNotYet) {
+		return nil, nil, fmt.Errorf("%w: issue %.7s was not created yet on %s", ErrNotFound, whole.ID, at.Local().Format("2006-01-02 15:04"))
+	}
+	if err != nil {
+		return nil, nil, err
+	}
+	is, err := issue.Apply(l)
+	return is, l, err
+}
+
+// thread replays an issue's log into its history, as issue.Apply folds it;
+// marking what hasn't reached the forges yet when now.
+func (b *Backend) thread(is *issue.Issue, l *oplog.Log, v view, now bool) Thread {
 	who := func(id string) Person { return personOf(id, v.persons[id], v.avatars) }
 	th := Thread{Issue: b.issueFrom(is, v), Author: who(is.Author), EditedAt: time.Unix(is.Updated, 0)}
 	th.Participants = append(th.Participants, th.Author)
@@ -218,7 +252,12 @@ func (b *Backend) thread(is *issue.Issue, l *oplog.Log, v view) Thread {
 		}
 	}
 	for _, r := range v.records[is.ID] {
-		pending(&th, is, r, from, changed, b.heldOn(r.URL))
+		if now {
+			pending(&th, is, r, from, changed, b.heldOn(r.URL))
+		}
+	}
+	if len(is.Removed) > 0 { // deleted comments: no event, no text
+		th.Events = slices.DeleteFunc(th.Events, func(e Event) bool { return e.Kind == "comment" && is.IsRemoved(e.ID) })
 	}
 	return th
 }
@@ -476,6 +515,36 @@ func (b *Backend) EditComment(idPrefix, commentID, body, base string) error {
 		return []oplog.Op{issue.EditText(me, target, body)}, nil
 	})
 	return err
+}
+
+// DeleteComment hides one of an issue's comments, by its id (another id
+// of it too): no view shows it again. Its text stays in the issue's
+// history (docs/adr/0019). The description isn't a comment: DeleteIssue.
+func (b *Backend) DeleteComment(idPrefix, commentID string) error {
+	_, err := b.do(idPrefix, func(me string, is *issue.Issue, l *oplog.Log) ([]oplog.Op, error) {
+		target, _, _, err := text(is, l, commentID)
+		if err != nil {
+			return nil, err
+		}
+		if target == is.BodyOp {
+			return nil, fmt.Errorf("%w: that is the description, not a comment", ErrNoSuchComment)
+		}
+		return []oplog.Op{issue.Delete(me, target)}, nil
+	})
+	return err
+}
+
+// DeleteIssue hides an issue, by id prefix: no view, query or sync shows
+// it again, and its forge issues stay linked to it, so no pull brings it
+// back. It answers the issue's whole id.
+func (b *Backend) DeleteIssue(idPrefix string) (string, error) {
+	is, err := b.do(idPrefix, func(me string, is *issue.Issue, _ *oplog.Log) ([]oplog.Op, error) {
+		return []oplog.Op{issue.Delete(me, is.BodyOp)}, nil
+	})
+	if err != nil {
+		return "", err
+	}
+	return is.ID, nil
 }
 
 // SetTitle renames an issue.

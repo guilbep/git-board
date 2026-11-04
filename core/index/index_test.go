@@ -165,7 +165,7 @@ func TestIndexRebuilds(t *testing.T) {
 				t.Fatalf("after: %v, want %v and %v", got, x.ID, y.ID)
 			}
 			var v int
-			if err := ix.db.QueryRow("PRAGMA user_version").Scan(&v); err != nil || v != 1 {
+			if err := ix.db.QueryRow("PRAGMA user_version").Scan(&v); err != nil || v != version {
 				t.Fatalf("user_version = %d, %v", v, err)
 			}
 		})
@@ -394,5 +394,36 @@ func TestPGIndexIsItsVersions(t *testing.T) {
 	}
 	if _, err := p.IndexDB(t.Context(), "git_board"); err == nil {
 		t.Error("the datastore's own schema is no index's")
+	}
+}
+
+// A deleted issue leaves every query, its prefix and its labels with it;
+// a deleted comment's text is no longer found.
+func TestIndexHidesDeleted(t *testing.T) {
+	t.Parallel()
+	_, s := newRepo(t)
+	ix := openIndex(t, s)
+	kept := mkIssue(t, s, issue.NewCreate("ann", "Kept", ""), issue.NewComment("ann", "hunter2"))
+	gone := mkIssue(t, s, issue.NewCreate("ann", "Gone", ""), issue.ChangeLabels("ann", []string{"only-here"}, nil))
+	if got := ids(t, ix, Query{Text: "hunter2"}); len(got) != 1 {
+		t.Fatalf("before: %v", got)
+	}
+	if _, err := issue.Do(t.Context(), s, kept.ID, issue.Delete("ann", kept.Comments[0].ID)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := issue.Do(t.Context(), s, gone.ID, issue.Delete("ann", gone.BodyOp)); err != nil {
+		t.Fatal(err)
+	}
+	if got := ids(t, ix, Query{}); !slices.Equal(got, []string{kept.ID}) {
+		t.Errorf("issues = %v, want the kept one", got)
+	}
+	if got := ids(t, ix, Query{Text: "hunter2"}); len(got) != 0 {
+		t.Errorf("the deleted comment's text is found: %v", got)
+	}
+	if labels, err := ix.Labels(t.Context()); err != nil || slices.Contains(labels, "only-here") {
+		t.Errorf("labels = %v, %v", labels, err)
+	}
+	if _, err := ix.Resolve(t.Context(), "issue", gone.ID[:8]); err == nil {
+		t.Errorf("the deleted issue resolves")
 	}
 }

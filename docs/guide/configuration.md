@@ -269,6 +269,19 @@ One syntax everywhere: a view's `filter`, the board's **Filter** box, ⌘K, and 
 | `no:assignee` | no value for that field; `no:label`: no plain label (a plain kind is the kind field, not one) |
 | `#2528` | the issue with that number on a forge |
 | `travel`, `"car sharing"` | words in the title, the description or a comment; a number (`2528`), or the first 7 characters or more of an id, also finds that issue |
+| `in:title`, `in:body`, `in:comments` | where the words are looked for: `crash in:title`; `in:title,body` either; `-in:comments` anywhere but there |
+| `created:2026-10-01` | opened that day, in local time (of the machine that answers: yours on the command line) |
+| `created:>2026-10-01`, `>=`, `<`, `<=` | opened after that day, from it, before it, up to its end |
+| `created:2026-10-01..2026-10-31` | opened in that span, both days in; `2026-10-01..*` from that day on |
+| `created:>=@today-7d` | relative to today: `@today`, then `-` or `+` a count of `d` days, `w` weeks, `m` months or `y` years |
+| `created:>2026-10-01T14:30` | a time: that minute; with seconds, or a zone (`2026-10-01T14:30:00Z`), that second |
+| `updated:<@today-30d`, `closed:2026-10-01..*` | the last change; the last close (an open issue has none) |
+| `comments:>5` | how many comments: `5`, `>5`, `>=5`, `<5`, `<=5`, `2..5` |
+
+Words match the start of words, without case or accents: `crash` finds
+"Crashes". A date, a count or an `in:` that isn't one is an error, not
+an empty list. `@today` is the day of the board you look at: with `git
+board ls --at`, the day you went back to.
 
 An empty filter is every issue, open or closed. A view without one shows the open issues (`is:open`), as `git-board ls` does without one.
 
