@@ -15,7 +15,7 @@ import (
 	"github.com/guilbep/git-board/internal/ship/shiptest"
 )
 
-func cut(t *testing.T, r *ship.Runner, c ship.Cut) ship.Tag {
+func cut(t *testing.T, r *ship.Runner, c ship.Cut) release.Tag {
 	t.Helper()
 	tg, err := r.Cut(ctx, c)
 	if err != nil {
@@ -212,8 +212,8 @@ func TestHotfixRules(t *testing.T) {
 	r, tools, fx := shiptest.NewRunner(t)
 	p := fx.Commit(t, "p")
 	fx.Tag(t, p, "v1.0.1")
-	both(t, fx, "stage", ship.Deployed{Commit: p, Version: "v1.0.1"})
-	both(t, fx, "prod", ship.Deployed{Commit: p, Version: "v1.0.1"})
+	both(t, fx, "stage", release.Deployed{Commit: p, Version: "v1.0.1"})
+	both(t, fx, "prod", release.Deployed{Commit: p, Version: "v1.0.1"})
 	issue(t, r, 12, "a", "kind:feat")
 	onDev(t, fx, fx.Merge(t, "fix/12-a", ""))
 	shiptest.Git(t, fx.App, "checkout", "-q", "-b", "hotfix/1.0.2", p)
@@ -251,7 +251,7 @@ func TestHotfixRules(t *testing.T) {
 	if d.Previous == nil || d.Previous.Name != "v1.0.2" {
 		t.Fatalf("after the merge back: previous %+v, want v1.0.2", d.Previous)
 	}
-	if len(d.Issues) != 1 || d.Issues[0].Number != "#12" || d.Proposed != (ship.Version{Major: 1, Minor: 1}) {
+	if len(d.Issues) != 1 || d.Issues[0].Number != "#12" || d.Proposed != (release.Version{Major: 1, Minor: 1}) {
 		t.Errorf("after the merge back: issues %+v, proposed %v", d.Issues, d.Proposed)
 	}
 	if tg := cut(t, r, ship.Cut{}); tg.Name != "v1.1.0-rc.1" {
@@ -265,7 +265,7 @@ func TestRollbackComments(t *testing.T) {
 	m := fx.Commit(t, "fix")
 	fx.Tag(t, m, "v1.0.1")
 	record(t, r, tools, m, release.ChartArtifact{Version: "v1.0.1", Digest: "sha256:chart"})
-	both(t, fx, "prod", ship.Deployed{Commit: m, Version: "v1.0.1"})
+	both(t, fx, "prod", release.Deployed{Commit: m, Version: "v1.0.1"})
 	before := heads(t, fx)
 	err := r.Rollback(ctx, "prod", "v1.0.0", "login broken")
 	if want := "frontend for " + first[:7] + " is in no registry: rollback ships what ran, it doesn't build"; err == nil || err.Error() != want {
@@ -309,8 +309,8 @@ func TestRollbackSplit(t *testing.T) {
 	fx.Tag(t, m2, "v1.0.2")
 	record(t, r, tools, m1, release.ChartArtifact{})
 	record(t, r, tools, m2, release.ChartArtifact{})
-	fx.SetOverlay(t, 0, "prod", ship.Deployed{Commit: m2, Version: "v1.0.2"})
-	fx.SetOverlay(t, 1, "prod", ship.Deployed{Commit: m1, Version: "v1.0.1"})
+	fx.SetOverlay(t, 0, "prod", release.Deployed{Commit: m2, Version: "v1.0.2"})
+	fx.SetOverlay(t, 1, "prod", release.Deployed{Commit: m1, Version: "v1.0.1"})
 	if err := r.Rollback(ctx, "prod", "v1.0.0", "both broken"); err != nil {
 		t.Fatalf("Rollback: %v", err)
 	}
@@ -330,7 +330,7 @@ func TestPromoteNeverBuilds(t *testing.T) {
 	r, tools, fx := shiptest.NewRunner(t)
 	m := shipped(t, r, fx)
 	fx.Tag(t, m, "v1.0.1-rc.1")
-	both(t, fx, "stage", ship.Deployed{Commit: m, Version: "v1.0.1-rc.1"})
+	both(t, fx, "stage", release.Deployed{Commit: m, Version: "v1.0.1-rc.1"})
 	pushed(tools, "ghcr.test/app/frontend", m, "sha256:fe")
 	_, err := r.Promote(ctx, "v1.0.1-rc.1") // backend was deleted from every registry
 	if want := "backend for " + m[:7] + " is in no registry: promote ships what ran, it doesn't build"; err == nil || err.Error() != want {
@@ -396,7 +396,7 @@ func unplug(t *testing.T, fx *shiptest.Fixture) func() {
 
 // cutOffline cuts as release cut --offline --no-deploy, unplugged, once an
 // online status has left the config repos' caches.
-func cutOffline(t *testing.T, r *ship.Runner, fx *shiptest.Fixture) ship.Tag {
+func cutOffline(t *testing.T, r *ship.Runner, fx *shiptest.Fixture) release.Tag {
 	t.Helper()
 	status(t, r)
 	plug := unplug(t, fx)
@@ -602,7 +602,7 @@ func TestOfflineCutCheckedAgainOnline(t *testing.T) {
 	shiptest.Git(t, other, "checkout", "-q", "-b", "hotfix/1.0.1", first)
 	h := shiptest.Commit(t, other, "hotfix")
 	shiptest.Git(t, other, "push", "-q", "origin", "hotfix/1.0.1")
-	both(t, fx, "prod", ship.Deployed{Commit: h, Version: "v1.0.1"})
+	both(t, fx, "prod", release.Deployed{Commit: h, Version: "v1.0.1"})
 	said := saidBy(r)
 	if err := r.Reconcile(ctx); err != nil {
 		t.Fatalf("Reconcile: %v", err)
@@ -628,7 +628,7 @@ func singleEnv(t *testing.T) (*ship.Runner, *shiptest.Fixture, string) {
 	prod := "prod"
 	r.Cfg.Follow = &prod
 	c := fx.Commit(t, "fix")
-	both(t, fx, "prod", ship.Deployed{Commit: c, Version: "0.0.1-dev.2.g" + c[:7]})
+	both(t, fx, "prod", release.Deployed{Commit: c, Version: "0.0.1-dev.2.g" + c[:7]})
 	return r, fx, c
 }
 
@@ -715,7 +715,7 @@ func TestCutPrechecksDeploy(t *testing.T) {
 	r, tools, fx := shiptest.NewRunner(t)
 	first := shiptest.Git(t, fx.App, "rev-list", "--max-parents=0", "HEAD")
 	fx.Tag(t, first, "v1.0.0")
-	both(t, fx, "prod", ship.Deployed{Commit: first, Version: "v1.0.0"})
+	both(t, fx, "prod", release.Deployed{Commit: first, Version: "v1.0.0"})
 	m := fx.Commit(t, "fix")
 	onDev(t, fx, m)
 	_, err := r.Cut(ctx, ship.Cut{Deploy: true}) // stage not adopted
@@ -723,7 +723,7 @@ func TestCutPrechecksDeploy(t *testing.T) {
 		t.Errorf("err = %v, want ErrNotAdopted", err)
 	}
 	n := fx.Commit(t, "newer")
-	both(t, fx, "stage", ship.Deployed{Commit: n, Version: "v1.0.1-rc.1"})
+	both(t, fx, "stage", release.Deployed{Commit: n, Version: "v1.0.1-rc.1"})
 	if _, err := r.Cut(ctx, ship.Cut{Deploy: true}); !errors.Is(err, ship.ErrOlder) || !strings.Contains(err.Error(), "stage") {
 		t.Errorf("err = %v, want ErrOlder naming stage", err)
 	}

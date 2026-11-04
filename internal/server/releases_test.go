@@ -43,7 +43,7 @@ func releaseServer(t *testing.T) (*apiServer, *httptest.Server, *shiptest.Fixtur
 func runs(t *testing.T, fx *shiptest.Fixture, env, commit, version string) {
 	t.Helper()
 	for i := range fx.ConfigBare {
-		fx.SetOverlay(t, i, env, ship.Deployed{Commit: commit, Version: version})
+		fx.SetOverlay(t, i, env, release.Deployed{Commit: commit, Version: version})
 	}
 }
 
@@ -574,7 +574,7 @@ func setupServer(t *testing.T, remote string) (*apiServer, *httptest.Server) {
 
 func TestReleasesNamesBinaries(t *testing.T) {
 	s, ts, _ := releaseServer(t)
-	s.cfg.Release = config.Release{Binaries: []string{"./cmd/app"}}
+	s.cfg.Release = release.Config{Binaries: []string{"./cmd/app"}}
 	var res struct {
 		Enabled      bool
 		Binaries     []string

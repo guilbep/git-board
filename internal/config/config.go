@@ -26,6 +26,7 @@ import (
 
 	"github.com/guilbep/git-board/core/fields"
 	"github.com/guilbep/git-board/core/proof"
+	"github.com/guilbep/git-board/core/release"
 )
 
 // View is one [views.<name>] table.
@@ -73,7 +74,7 @@ type raw struct {
 	Roles         map[string]string       `toml:"roles"`
 	Cycle         Cycle                   `toml:"cycle"`
 	Template      TemplateRef             `toml:"template"`
-	Release       Release                 `toml:"release"`
+	Release       release.Config          `toml:"release"`
 	Labels        fields.Labels           `toml:"labels"`
 	Experimental  experimentalTable       `toml:"experimental"`
 	// Forges holds publish-private, discover and a table per forge
@@ -206,7 +207,7 @@ type Config struct {
 	// gates (cycle.go).
 	Cycle Cycle
 	// Release is the [release] table (release.go).
-	Release Release
+	Release release.Config
 	// Forges are the [forges.<name>] tables, by name (forges.go).
 	Forges []Forge
 	// PublishPrivate lets what was pulled from a forge project that isn't
@@ -554,7 +555,7 @@ func WithoutGithubProject(content string) string {
 // by one of binaries, platforms, build (when set) and remote (when not
 // origin): what Enable binary release writes. The file's other tables and
 // comments stay. Pure: the server checks the result before saving it.
-func WithRelease(content string, r Release) string {
+func WithRelease(content string, r release.Config) string {
 	quoted := func(ss []string) string {
 		q := make([]string, len(ss))
 		for i, s := range ss {

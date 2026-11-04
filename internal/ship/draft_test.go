@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/guilbep/git-board/core/release"
 	"github.com/guilbep/git-board/internal/ship"
 	"github.com/guilbep/git-board/internal/ship/shiptest"
 	"github.com/guilbep/git-board/internal/store/storetest"
@@ -29,15 +30,15 @@ func released(t *testing.T, fx *shiptest.Fixture) string {
 	t.Helper()
 	first := shiptest.Git(t, fx.App, "rev-list", "--max-parents=0", "HEAD")
 	fx.Tag(t, first, "v1.0.0")
-	both(t, fx, "stage", ship.Deployed{Commit: first, Version: "v1.0.0"})
-	both(t, fx, "prod", ship.Deployed{Commit: first, Version: "v1.0.0"})
+	both(t, fx, "stage", release.Deployed{Commit: first, Version: "v1.0.0"})
+	both(t, fx, "prod", release.Deployed{Commit: first, Version: "v1.0.0"})
 	return first
 }
 
 // onDev makes dev run c.
 func onDev(t *testing.T, fx *shiptest.Fixture, c string) {
 	t.Helper()
-	both(t, fx, "dev", ship.Deployed{Commit: c, Version: "1.0.1-dev.1.g" + c[:7]})
+	both(t, fx, "dev", release.Deployed{Commit: c, Version: "1.0.1-dev.1.g" + c[:7]})
 }
 
 func draft(t *testing.T, r *ship.Runner, final bool) ship.Draft {
@@ -68,7 +69,7 @@ func TestDraftProposesPatchAndRC(t *testing.T) {
 	if d.Previous == nil || d.Previous.Name != "v1.0.0" {
 		t.Errorf("previous = %+v", d.Previous)
 	}
-	if d.Proposed != (ship.Version{Major: 1, Minor: 0, Patch: 1}) || d.Tag != "v1.0.1-rc.1" {
+	if d.Proposed != (release.Version{Major: 1, Minor: 0, Patch: 1}) || d.Tag != "v1.0.1-rc.1" {
 		t.Errorf("proposed %v, tag %s; want 1.0.1, v1.0.1-rc.1", d.Proposed, d.Tag)
 	}
 	want := []ship.DraftIssue{{Number: "#12", Title: "a", Kind: "fix", Merge: m1}, {Number: "#13", Title: "b", Kind: "chore", Merge: m2}}
@@ -105,7 +106,7 @@ func TestDraftFeatIsMinor(t *testing.T) {
 	fx.Merge(t, "fix/12-a", "")
 	m := fx.Merge(t, "feat/14-c", "")
 	onDev(t, fx, m)
-	if d := draft(t, r, false); d.Proposed != (ship.Version{Major: 1, Minor: 1}) || d.Tag != "v1.1.0-rc.1" {
+	if d := draft(t, r, false); d.Proposed != (release.Version{Major: 1, Minor: 1}) || d.Tag != "v1.1.0-rc.1" {
 		t.Errorf("proposed %v, tag %s; want 1.1.0, v1.1.0-rc.1", d.Proposed, d.Tag)
 	} else if !strings.HasPrefix(d.Notes, "### enhancement\n\n- #14 c") {
 		t.Errorf("notes = %q, want the feature first", d.Notes)
@@ -125,7 +126,7 @@ func TestDraftFeatIsMinor(t *testing.T) {
 	}
 	issue(t, r, 15, "d", "breaking")
 	onDev(t, fx, fx.Merge(t, "15-d", ""))
-	if d := draft(t, r, false); d.Proposed != (ship.Version{Major: 2}) {
+	if d := draft(t, r, false); d.Proposed != (release.Version{Major: 2}) {
 		t.Errorf("breaking: proposed %v, want 2.0.0", d.Proposed)
 	}
 }
@@ -135,7 +136,7 @@ func TestDraftWithoutCandidatesIsFinal(t *testing.T) {
 	r, _, fx := shiptest.NewRunner(t, "dev", "prod")
 	first := shiptest.Git(t, fx.App, "rev-list", "--max-parents=0", "HEAD")
 	fx.Tag(t, first, "v1.0.0")
-	both(t, fx, "prod", ship.Deployed{Commit: first, Version: "v1.0.0"})
+	both(t, fx, "prod", release.Deployed{Commit: first, Version: "v1.0.0"})
 	onDev(t, fx, fx.Commit(t, "fix"))
 	if d := draft(t, r, false); d.Tag != "v1.0.1" || d.Checks[2].Text != "prod moves forward" {
 		t.Errorf("tag %s, checks %+v; want the final, for prod", d.Tag, d.Checks)
@@ -153,13 +154,13 @@ func TestIssuesOfARelease(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := []ship.DraftIssue{{Number: "#12", Title: "a", Kind: "fix", Merge: m}}
-	for _, tag := range []ship.Tag{rc, final} {
+	for _, tag := range []release.Tag{rc, final} {
 		if got, err := r.Issues(ctx, tag); err != nil || !slices.Equal(got, want) {
 			t.Errorf("%s: %+v, %v; want %+v", tag.Name, got, err, want)
 		}
 	}
 	first := shiptest.Git(t, fx.App, "rev-list", "--max-parents=0", "HEAD")
-	if got, err := r.Issues(ctx, ship.Tag{Name: "v1.0.0", Commit: first, Version: ship.Version{Major: 1}}); err != nil || len(got) != 0 {
+	if got, err := r.Issues(ctx, release.Tag{Name: "v1.0.0", Commit: first, Version: release.Version{Major: 1}}); err != nil || len(got) != 0 {
 		t.Errorf("v1.0.0: %+v, %v; want none", got, err)
 	}
 }

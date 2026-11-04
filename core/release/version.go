@@ -1,10 +1,11 @@
-package ship
+package release
 
 import (
 	"fmt"
 	"regexp"
 	"slices"
 	"strconv"
+	"time"
 )
 
 // Version is a SemVer version. RC 0 means a final release.
@@ -111,4 +112,37 @@ func DevVersion(lastFinal Version, since int, sha string) string {
 	next := lastFinal.Final()
 	next.Patch++
 	return fmt.Sprintf("%s-dev.%d.g%s", next.String(), since, sha)
+}
+
+// Tag is a release tag.
+type Tag struct {
+	Name    string    `json:"name"`
+	Commit  string    `json:"commit"`
+	Message string    `json:"message"`
+	Version Version   `json:"version"`
+	Date    time.Time `json:"date"`
+}
+
+// TagsAt returns the tags pointing at commit.
+func TagsAt(tags []Tag, commit string) []Tag {
+	var at []Tag
+	for _, t := range tags {
+		if t.Commit == commit {
+			at = append(at, t)
+		}
+	}
+	return at
+}
+
+// NextTag is what a cut of v pushes: its final, or its next candidate
+// past the tags taken.
+func NextTag(v Version, final bool, tags []Tag) Version {
+	if final {
+		return v.Final()
+	}
+	var taken []Version
+	for _, t := range tags {
+		taken = append(taken, t.Version)
+	}
+	return NextRC(v, taken)
 }

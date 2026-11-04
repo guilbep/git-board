@@ -14,7 +14,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/guilbep/git-board/internal/config"
+	"github.com/guilbep/git-board/core/release"
 	"github.com/guilbep/git-board/internal/ship"
 	"github.com/guilbep/git-board/internal/ship/shiptest"
 )
@@ -25,7 +25,7 @@ import (
 func binariesApp(t *testing.T) (*ship.Runner, *shiptest.Tools, *shiptest.Fixture, string) {
 	t.Helper()
 	r, tools, fx := shiptest.NewRunner(t)
-	r.Cfg = config.Release{Binaries: []string{"./cmd/app"}, Platforms: []string{runtime.GOOS + "/" + runtime.GOARCH}} // ponytail: the host only, a cross-compile per platform is slow
+	r.Cfg = release.Config{Binaries: []string{"./cmd/app"}, Platforms: []string{runtime.GOOS + "/" + runtime.GOARCH}} // ponytail: the host only, a cross-compile per platform is slow
 	r.Repo = "acme/app"
 	return r, tools, fx, fx.GoMain(t, "cmd/app")
 }
@@ -59,7 +59,7 @@ func base(files []string) []string {
 func TestBinariesCutBuildsPublishesRecords(t *testing.T) {
 	r, tools, _, c := binariesApp(t)
 	names := stepNames(r)
-	tg := cut(t, r, ship.Cut{Version: ship.Version{Major: 1}, Final: true, Deploy: true})
+	tg := cut(t, r, ship.Cut{Version: release.Version{Major: 1}, Final: true, Deploy: true})
 	if tg.Commit != c || tg.Version.RC != 0 {
 		t.Fatalf("cut %s on %.7s, want a final on %.7s", tg.Name, tg.Commit, c)
 	}
@@ -85,7 +85,7 @@ func TestBinariesArchiveLayout(t *testing.T) {
 	}
 	r, tools, _, _ := binariesApp(t)
 	tools.CopyPublished = t.TempDir()
-	cut(t, r, ship.Cut{Version: ship.Version{Major: 1}, Final: true})
+	cut(t, r, ship.Cut{Version: release.Version{Major: 1}, Final: true})
 	name := "app_v1.0.0_" + runtime.GOOS + "_" + runtime.GOARCH
 	f, err := os.Open(filepath.Join(tools.CopyPublished, name+".tar.gz"))
 	if err != nil {
@@ -124,7 +124,7 @@ func TestBinariesBuildCommand(t *testing.T) {
 	r, tools, _, c := binariesApp(t)
 	r.Cfg.Build = `mkdir -p dist && echo "$VERSION" > dist/app.txt`
 	tools.CopyPublished = t.TempDir()
-	cut(t, r, ship.Cut{Version: ship.Version{Major: 1}, Final: true})
+	cut(t, r, ship.Cut{Version: release.Version{Major: 1}, Final: true})
 	if got := base(tools.Published[0].Files); !slices.Equal(got, []string{"app.txt", "checksums.txt"}) {
 		t.Errorf("files %v", got)
 	}
@@ -139,7 +139,7 @@ func TestBinariesBuildCommand(t *testing.T) {
 func TestBuildCommandMustFillDist(t *testing.T) {
 	r, tools, _, _ := binariesApp(t)
 	r.Cfg.Build = "true"
-	_, err := r.Cut(context.Background(), ship.Cut{Version: ship.Version{Major: 1}, Final: true})
+	_, err := r.Cut(context.Background(), ship.Cut{Version: release.Version{Major: 1}, Final: true})
 	if err == nil || !strings.Contains(err.Error(), "dist/") || len(tools.Published) != 0 {
 		t.Errorf("err %v, published %v", err, tools.Published)
 	}
@@ -158,7 +158,7 @@ func TestInfer(t *testing.T) {
 	s, err := ship.Infer(context.Background(), fx.App)
 	// cmd/app is the program (the repo is acme/app): cmd/zed is one of its tools
 	if err != nil || !slices.Equal(s.Binaries, []string{"./cmd/app"}) || s.Build != "make dist" ||
-		!slices.Equal(s.Platforms, config.DefaultPlatforms) || s.Remote != "origin" || s.Forge != "github" || s.Repo != "acme/app" || s.Note != "" {
+		!slices.Equal(s.Platforms, release.DefaultPlatforms) || s.Remote != "origin" || s.Forge != "github" || s.Repo != "acme/app" || s.Note != "" {
 		t.Errorf("%+v, %v", s, err)
 	}
 }

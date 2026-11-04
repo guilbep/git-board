@@ -1,4 +1,4 @@
-package ship
+package release
 
 import (
 	"bytes"
@@ -11,14 +11,15 @@ import (
 
 // Deployed is what an overlay says is deployed.
 type Deployed struct {
-	Commit  string           `json:"commit"`  // git-board/commit, "" when not adopted
-	Version string           `json:"version"` // git-board/version
-	Images  map[string]Image `json:"images"`  // key: the images[] entry's name
-	Chart   string           `json:"chart"`   // the chart entry's version, "" when none (Set: leave it)
+	Commit  string         `json:"commit"`  // git-board/commit, "" when not adopted
+	Version string         `json:"version"` // git-board/version
+	Images  map[string]Pin `json:"images"`  // key: the images[] entry's name
+	Chart   string         `json:"chart"`   // the chart entry's version, "" when none (Set: leave it)
 }
 
-// Image is one images[] entry's tag and digest.
-type Image struct {
+// Pin is one images[] entry's tag and digest: what the overlay pins an
+// image to.
+type Pin struct {
 	Tag    string `json:"tag"`
 	Digest string `json:"digest"`
 }
@@ -125,9 +126,9 @@ func items(n *yaml.Node) []*yaml.Node {
 
 // Deployed reads what the overlay says is deployed; chartRepo selects the chart entry.
 func (o *Overlay) Deployed(chartRepo string) Deployed {
-	d := Deployed{Images: map[string]Image{}}
+	d := Deployed{Images: map[string]Pin{}}
 	for _, e := range items(get(o.root(), "images")) {
-		d.Images[scalar(e, "name")] = Image{Tag: scalar(e, "newTag"), Digest: scalar(e, "digest")}
+		d.Images[scalar(e, "name")] = Pin{Tag: scalar(e, "newTag"), Digest: scalar(e, "digest")}
 	}
 	ann := get(o.root(), "commonAnnotations")
 	d.Commit, d.Version = scalar(ann, commitAnnotation), scalar(ann, versionAnnotation)
@@ -179,4 +180,12 @@ func (o *Overlay) Set(d Deployed, chartRepo string, versionValues []string) (boo
 		changed = setStr(ann, versionAnnotation, d.Version, 0) || changed
 	}
 	return changed, nil
+}
+
+// FirstImage is the overlay's first images[] entry: its name, newTag, digest.
+func (o *Overlay) FirstImage() (name, tag, digest string) {
+	if imgs := items(get(o.root(), "images")); len(imgs) > 0 {
+		return scalar(imgs[0], "name"), scalar(imgs[0], "newTag"), scalar(imgs[0], "digest")
+	}
+	return "", "", ""
 }

@@ -12,6 +12,7 @@ import (
 
 	"github.com/guilbep/git-board/core/fields"
 	"github.com/guilbep/git-board/core/proof"
+	"github.com/guilbep/git-board/core/release"
 	"github.com/guilbep/git-board/internal/config"
 )
 
@@ -52,7 +53,7 @@ type configModel struct {
 		Assignees string   `json:"assignees"` // how the forges hold assignees: native, labels; preserved
 	} `json:"repos"`
 	Uploads config.Uploads `json:"uploads"`
-	Release config.Release `json:"release"`
+	Release release.Config `json:"release"`
 	// Forges are the [forges.<name>] tables, their field mappings with
 	// them, or with none the forges found in the remotes (Discovered): the Forges page's Fields table resolves where each field
 	// lives (config.FieldTarget's rules, mirrored client-side).
@@ -130,10 +131,10 @@ func (s *apiServer) configModel() (configModel, error) {
 	m.Uploads = cfg.Uploads
 	m.Release = cfg.Release
 	if m.Release.Images == nil {
-		m.Release.Images = []config.Image{}
+		m.Release.Images = []release.Image{}
 	}
 	if m.Release.Deploy == nil {
-		m.Release.Deploy = []config.Target{}
+		m.Release.Deploy = []release.Target{}
 	}
 	// with no table, the forges are those found in the remotes, as the
 	// Sync page lists them: a mapping saved on one writes its table first
@@ -416,7 +417,7 @@ func (s *apiServer) sectionWriter(section string, r *http.Request, w http.Respon
 		}
 		return func(text string) (string, error) { return config.SetUploadsText(text, req) }, nil
 	case "release":
-		var req config.Release
+		var req release.Config
 		if !decode(w, r, &req) {
 			return nil, nil
 		}

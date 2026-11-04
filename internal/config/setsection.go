@@ -9,6 +9,7 @@ import (
 
 	"github.com/guilbep/git-board/core/fields"
 	"github.com/guilbep/git-board/core/proof"
+	"github.com/guilbep/git-board/core/release"
 )
 
 // The settings' forms write one section of the file at a time: each writer
@@ -501,7 +502,7 @@ func SetUploadsText(text string, u Uploads) (string, error) {
 // keys, the chart as [release.chart], the deploy targets as
 // [[release.deploy]] (replaced whole, in the form's order). Nothing of
 // release in it, every [release.*] table goes.
-func SetReleaseText(text string, r Release) (string, error) {
+func SetReleaseText(text string, r release.Config) (string, error) {
 	vals := map[string]string{
 		"remote":         tomlString(r.Remote),
 		"environments":   tomlArray(r.Environments),
@@ -547,7 +548,7 @@ func SetReleaseText(text string, r Release) (string, error) {
 }
 
 // tomlImages is the images as an inline array of inline tables.
-func tomlImages(images []Image) string {
+func tomlImages(images []release.Image) string {
 	if len(images) == 0 {
 		return ""
 	}
@@ -561,7 +562,7 @@ func tomlImages(images []Image) string {
 // setDeploy replaces the [[release.deploy]] tables with targets, in order:
 // the old ones go whole, the new ones follow the [release] table, else the
 // file's end. No targets, none stay.
-func setDeploy(text string, targets []Target) string {
+func setDeploy(text string, targets []release.Target) string {
 	lines := strings.Split(text, "\n")
 	for {
 		start := slices.IndexFunc(lines, func(l string) bool { return strings.TrimSpace(l) == "[[release.deploy]]" })

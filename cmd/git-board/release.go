@@ -14,7 +14,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/guilbep/git-board/internal/config"
+	"github.com/guilbep/git-board/core/release"
 	"github.com/guilbep/git-board/internal/ship"
 	"github.com/guilbep/git-board/internal/store"
 )
@@ -165,7 +165,7 @@ func newCutCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			c := ship.Cut{Final: final, Hotfix: hotfix, Deploy: !noDeploy, Commit: commit}
 			if version != "" {
-				v, ok := ship.ParseTag("v" + strings.TrimPrefix(version, "v"))
+				v, ok := release.ParseTag("v" + strings.TrimPrefix(version, "v"))
 				switch {
 				case !ok:
 					return fmt.Errorf("--version %q: want 1.4.20", version)
@@ -294,7 +294,7 @@ n being the target's place in [release] deploy, from 1.`,
 
 // targetNo is p's place in [release] deploy, from 1.
 func targetNo(r *ship.Runner, p ship.Proposal) int {
-	return 1 + slices.IndexFunc(r.Cfg.Deploy, func(d config.Target) bool {
+	return 1 + slices.IndexFunc(r.Cfg.Deploy, func(d release.Target) bool {
 		return d.Repo == p.Repo && strings.ReplaceAll(d.Path, "{env}", p.Env) == p.Path
 	})
 }

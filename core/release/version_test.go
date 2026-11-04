@@ -1,4 +1,4 @@
-package ship
+package release
 
 import "testing"
 
@@ -63,5 +63,19 @@ func TestDevVersion(t *testing.T) {
 	}
 	if got := DevVersion(Version{1, 4, 19, 0}, 7, "abc"); got != "1.4.20-dev.7.gabc" {
 		t.Errorf("short sha DevVersion = %q", got)
+	}
+}
+
+func TestNextTag(t *testing.T) {
+	v := Version{Major: 1, Minor: 4, Patch: 20}
+	tags := []Tag{{Name: "v1.4.20-rc.1", Version: Version{1, 4, 20, 1}}, {Name: "v1.4.19", Version: Version{1, 4, 19, 0}}}
+	if got := NextTag(v, false, tags).Tag(); got != "v1.4.20-rc.2" {
+		t.Errorf("the next candidate = %s", got)
+	}
+	if got := NextTag(Version{1, 4, 20, 3}, true, tags).Tag(); got != "v1.4.20" {
+		t.Errorf("the final = %s", got)
+	}
+	if at := TagsAt(append(tags, Tag{Name: "v1.4.20", Commit: "c"}), "c"); len(at) != 1 || at[0].Name != "v1.4.20" {
+		t.Errorf("TagsAt = %+v", at)
 	}
 }

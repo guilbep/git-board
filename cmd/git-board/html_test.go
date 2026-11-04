@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/guilbep/git-board/core/release"
-	"github.com/guilbep/git-board/internal/ship"
 	"github.com/guilbep/git-board/internal/ship/shiptest"
 )
 
@@ -299,7 +298,7 @@ func TestHTMLWritesReleases(t *testing.T) {
 		t.Fatalf("SetReleaseNotes: %v", err)
 	}
 	for i := range fx.ConfigBare {
-		fx.SetOverlay(t, i, "stage", ship.Deployed{Commit: c, Version: "v1.0.1-rc.1"})
+		fx.SetOverlay(t, i, "stage", release.Deployed{Commit: c, Version: "v1.0.1-rc.1"})
 	}
 	if err := os.WriteFile(filepath.Join(fx.App, configPath), []byte(fx.Config(t)), 0o644); err != nil {
 		t.Fatalf("write config: %v", err)

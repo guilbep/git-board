@@ -14,6 +14,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/guilbep/git-board/core/release"
 )
 
 // Git runs git in dir and returns trimmed stdout; the error carries stderr.
@@ -40,28 +42,19 @@ func IsAncestor(ctx context.Context, dir, a, b string) (bool, error) {
 	return false, fmt.Errorf("git merge-base --is-ancestor %s %s: %w", a, b, err)
 }
 
-// Tag is a release tag.
-type Tag struct {
-	Name    string    `json:"name"`
-	Commit  string    `json:"commit"`
-	Message string    `json:"message"`
-	Version Version   `json:"version"`
-	Date    time.Time `json:"date"`
-}
-
 // ReleaseTags lists the tags ParseTag accepts, newest version first.
-func ReleaseTags(ctx context.Context, dir string) ([]Tag, error) {
+func ReleaseTags(ctx context.Context, dir string) ([]release.Tag, error) {
 	out, err := Git(ctx, dir, "for-each-ref", "--format=%(refname:short)%09%(objectname)%09%(*objectname)%09%(creatordate:iso-strict)%09%(contents:subject)", "refs/tags")
 	if err != nil {
 		return nil, err
 	}
-	var tags []Tag
+	var tags []release.Tag
 	for _, l := range strings.Split(out, "\n") {
 		f := strings.SplitN(l, "\t", 5)
 		if len(f) < 5 {
 			continue
 		}
-		v, ok := ParseTag(f[0])
+		v, ok := release.ParseTag(f[0])
 		if !ok {
 			continue
 		}
@@ -70,27 +63,16 @@ func ReleaseTags(ctx context.Context, dir string) ([]Tag, error) {
 			commit = f[2]
 		}
 		date, _ := time.Parse(time.RFC3339, f[3])
-		tags = append(tags, Tag{Name: f[0], Commit: commit, Message: f[4], Version: v, Date: date})
+		tags = append(tags, release.Tag{Name: f[0], Commit: commit, Message: f[4], Version: v, Date: date})
 	}
 	sort.Slice(tags, func(i, j int) bool { return tags[j].Version.Less(tags[i].Version) })
 	return tags, nil
 }
 
-// TagsAt returns the tags pointing at commit.
-func TagsAt(tags []Tag, commit string) []Tag {
-	var at []Tag
-	for _, t := range tags {
-		if t.Commit == commit {
-			at = append(at, t)
-		}
-	}
-	return at
-}
-
 // PushTag creates the annotated tag locally and pushes it. A remote that
 // already has the name refuses: the local tag is dropped and taken is true.
 // Nothing is ever moved or deleted on the remote.
-func PushTag(ctx context.Context, dir, remote string, t Tag) (taken bool, err error) {
+func PushTag(ctx context.Context, dir, remote string, t release.Tag) (taken bool, err error) {
 	if _, err := Git(ctx, dir, "tag", "-a", t.Name, "-m", t.Message, t.Commit); err != nil {
 		return false, err
 	}
@@ -115,16 +97,16 @@ const pendingRefs = "refs/git-board/cuts/"
 
 // Pending lists the cuts made offline that no online command has pushed
 // yet, as the tags they push.
-func Pending(ctx context.Context, dir string) ([]Tag, error) {
+func Pending(ctx context.Context, dir string) ([]release.Tag, error) {
 	out, err := Git(ctx, dir, "for-each-ref", "--format=%(refname:lstrip=3) %(objectname)", pendingRefs)
 	if err != nil || out == "" {
 		return nil, err
 	}
-	var tags []Tag
+	var tags []release.Tag
 	for _, line := range strings.Split(out, "\n") {
 		name, commit, _ := strings.Cut(line, " ")
-		if v, ok := ParseTag(name); ok {
-			tags = append(tags, Tag{Name: name, Commit: commit, Message: name + gitBoardMark, Version: v})
+		if v, ok := release.ParseTag(name); ok {
+			tags = append(tags, release.Tag{Name: name, Commit: commit, Message: name + gitBoardMark, Version: v})
 		}
 	}
 	return tags, nil
@@ -191,7 +173,7 @@ func overlayFile(path string) string {
 }
 
 // Read returns the overlay in directory path as of the last Fetch; it does not fetch.
-func (c *ConfigRepo) Read(ctx context.Context, path string) (*Overlay, error) {
+func (c *ConfigRepo) Read(ctx context.Context, path string) (*release.Overlay, error) {
 	branch, err := c.defaultBranch(ctx)
 	if err != nil {
 		return nil, err
@@ -200,21 +182,21 @@ func (c *ConfigRepo) Read(ctx context.Context, path string) (*Overlay, error) {
 	if err != nil {
 		return nil, err
 	}
-	return ParseOverlay([]byte(data + "\n"))
+	return release.ParseOverlay([]byte(data + "\n"))
 }
 
-func (c *ConfigRepo) load(path string) (*Overlay, error) {
+func (c *ConfigRepo) load(path string) (*release.Overlay, error) {
 	data, err := os.ReadFile(filepath.Join(c.Dir, overlayFile(path)))
 	if err != nil {
 		return nil, err
 	}
-	return ParseOverlay(data)
+	return release.ParseOverlay(data)
 }
 
 // Update applies change to the overlay in directory path and pushes one
 // commit to the default branch. change returns false when there is nothing to
 // write (Update returns ""). A refused push starts over, up to 3 tries.
-func (c *ConfigRepo) Update(ctx context.Context, path, message string, change func(*Overlay) (bool, error)) (commit string, err error) {
+func (c *ConfigRepo) Update(ctx context.Context, path, message string, change func(*release.Overlay) (bool, error)) (commit string, err error) {
 	for range 3 {
 		if err := c.Fetch(ctx); err != nil {
 			return "", err

@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/guilbep/git-board/core/model"
+	"github.com/guilbep/git-board/core/release"
 	"github.com/guilbep/git-board/internal/branches"
 )
 
@@ -28,15 +29,15 @@ type Check struct {
 
 // Draft is what a cut would make, before it is made.
 type Draft struct {
-	From        string       `json:"from"`        // the followed env's commit, else the trunk head
-	FromVersion string       `json:"fromVersion"` // what From runs as, else its dev version
-	Undeployed  []string     `json:"undeployed"`  // trunk merges after From (follow only)
-	Previous    *Tag         `json:"previous"`    // newest final reachable from From
-	Proposed    Version      `json:"proposed"`    // Bump of Previous, final form
-	Tag         string       `json:"tag"`         // what Cut would push: NextRC(...) or the final
-	Issues      []DraftIssue `json:"issues"`
-	Notes       string       `json:"notes"` // markdown, grouped by kind
-	Checks      []Check      `json:"checks"`
+	From        string          `json:"from"`        // the followed env's commit, else the trunk head
+	FromVersion string          `json:"fromVersion"` // what From runs as, else its dev version
+	Undeployed  []string        `json:"undeployed"`  // trunk merges after From (follow only)
+	Previous    *release.Tag    `json:"previous"`    // newest final reachable from From
+	Proposed    release.Version `json:"proposed"`    // Bump of Previous, final form
+	Tag         string          `json:"tag"`         // what Cut would push: NextRC(...) or the final
+	Issues      []DraftIssue    `json:"issues"`
+	Notes       string          `json:"notes"` // markdown, grouped by kind
+	Checks      []Check         `json:"checks"`
 }
 
 // Draft drafts a cut of what the followed environment runs, else of the
@@ -53,10 +54,10 @@ func (r *Runner) Draft(ctx context.Context, final bool) (Draft, error) {
 	if err != nil {
 		return Draft{}, err
 	}
-	if d, err = r.draft(ctx, st, d, r.final(final)); err != nil {
+	if d, err = r.draft(ctx, st, d, r.Cfg.CutsFinal(final)); err != nil {
 		return Draft{}, err
 	}
-	d.Checks, err = r.checks(ctx, st, d.From, r.final(final))
+	d.Checks, err = r.checks(ctx, st, d.From, r.Cfg.CutsFinal(final))
 	return d, err
 }
 
@@ -86,7 +87,7 @@ func (r *Runner) draft(ctx context.Context, st Status, d Draft, final bool) (Dra
 			break
 		}
 	}
-	since, last := "", Version{}
+	since, last := "", release.Version{}
 	if d.Previous != nil {
 		since, last = d.Previous.Commit, d.Previous.Version
 	}
@@ -95,15 +96,15 @@ func (r *Runner) draft(ctx context.Context, st Status, d Draft, final bool) (Dra
 		return d, err
 	}
 	d.Issues, d.Notes = issues, notes(issues, r.Branches.Kinds)
-	d.Proposed = Bump(last, kinds, breaking)
-	d.Tag = tagFor(d.Proposed, final, tags).Tag()
+	d.Proposed = release.Bump(last, kinds, breaking)
+	d.Tag = release.NextTag(d.Proposed, final, tags).Tag()
 	return d, nil
 }
 
 // Issues are the issues release tag t carries: those merged since the
 // newest final of a lower version that t's commit contains, so a final
 // carries its candidates'. It reads the local tags; it doesn't fetch.
-func (r *Runner) Issues(ctx context.Context, t Tag) ([]DraftIssue, error) {
+func (r *Runner) Issues(ctx context.Context, t release.Tag) ([]DraftIssue, error) {
 	tags, err := ReleaseTags(ctx, r.Dir)
 	if err != nil {
 		return nil, err
@@ -207,7 +208,7 @@ func (r *Runner) checks(ctx context.Context, st Status, from string, final bool)
 	if len(r.Cfg.Environments) == 0 {
 		return nil, nil // binaries only: nothing runs anywhere, no images
 	}
-	last, to := envNamed(st, r.Cfg.Last()), envNamed(st, r.deployTo(final))
+	last, to := envNamed(st, r.Cfg.Last()), envNamed(st, r.Cfg.DeployTo(final))
 	runs := "It contains what runs in " + last.Name
 	if last.Adopted {
 		d := last.Targets[0].Deployed
@@ -297,41 +298,8 @@ func (r *Runner) contains(ctx context.Context, e EnvState, from string) (string,
 	return "", nil
 }
 
-// followsLast tells whether the last environment follows the trunk: a
-// single-environment app, whose cut tags what it runs and deploys nowhere.
-// An app with no environment (binaries only) deploys nowhere too.
-func (r *Runner) followsLast() bool {
-	f := r.Cfg.Followed()
-	return r.Cfg.Last() == "" || f != "" && f == r.Cfg.Last()
-}
-
-// final tells whether a cut is a final: asked for, or the app has no
-// candidate environment.
-func (r *Runner) final(asked bool) bool { return asked || len(r.Cfg.Candidates()) == 0 }
-
-// deployTo is the environment a cut goes to: the first candidate one, the
-// last for a final.
-func (r *Runner) deployTo(final bool) string {
-	if final {
-		return r.Cfg.Last()
-	}
-	return r.Cfg.Candidates()[0]
-}
-
-// tagFor is what a cut of v pushes: its final, or its next candidate.
-func tagFor(v Version, final bool, tags []Tag) Version {
-	if final {
-		return v.Final()
-	}
-	var taken []Version
-	for _, t := range tags {
-		taken = append(taken, t.Version)
-	}
-	return NextRC(v, taken)
-}
-
-func tagsOf(st Status) []Tag {
-	tags := make([]Tag, len(st.Releases))
+func tagsOf(st Status) []release.Tag {
+	tags := make([]release.Tag, len(st.Releases))
 	for i, row := range st.Releases {
 		tags[i] = row.Tag
 	}

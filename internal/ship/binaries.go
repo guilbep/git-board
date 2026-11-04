@@ -20,7 +20,6 @@ import (
 	"strings"
 
 	"github.com/guilbep/git-board/core/release"
-	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/store"
 )
 
@@ -40,7 +39,7 @@ type Setup struct {
 // else the root), "make dist" when the Makefile has a dist target, the
 // default platforms, origin (else the first remote) and its forge.
 func Infer(ctx context.Context, dir string) (Setup, error) {
-	s := Setup{Platforms: config.DefaultPlatforms}
+	s := Setup{Platforms: release.DefaultPlatforms}
 	mains, _ := filepath.Glob(filepath.Join(dir, "cmd", "*", "main.go"))
 	sort.Strings(mains)
 	for _, m := range mains {
@@ -99,7 +98,7 @@ func Infer(ctx context.Context, dir string) (Setup, error) {
 // binaries builds the archives of t in a clean checkout of it and
 // publishes them on the forge's release with notes: the build and
 // publish steps. Nothing when the table lists no binaries.
-func (r *Runner) binaries(ctx context.Context, t Tag, notes string) ([]release.Asset, error) {
+func (r *Runner) binaries(ctx context.Context, t release.Tag, notes string) ([]release.Asset, error) {
 	if len(r.Cfg.Binaries) == 0 {
 		return nil, nil
 	}

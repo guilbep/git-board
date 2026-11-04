@@ -13,6 +13,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/guilbep/git-board/core/release"
 	"github.com/guilbep/git-board/internal/ship"
 )
 
@@ -93,7 +94,7 @@ func deployOnce(ctx context.Context, r *ship.Runner, out io.Writer, env, tag str
 		if err != nil {
 			return err
 		}
-		i := slices.IndexFunc(tags, func(t ship.Tag) bool { return t.Name == tag })
+		i := slices.IndexFunc(tags, func(t release.Tag) bool { return t.Name == tag })
 		if i < 0 {
 			return fmt.Errorf("no release tag %q", tag)
 		}

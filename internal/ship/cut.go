@@ -20,7 +20,7 @@ var ErrNoTag = errors.New("no release tag")
 
 // Cut is what to cut.
 type Cut struct {
-	Version Version // final form; zero: the draft's proposal
+	Version release.Version // final form; zero: the draft's proposal
 	// Final cuts the final rather than the next candidate; Hotfix may leave
 	// the line the last environment runs; Deploy deploys once cut.
 	Final, Hotfix, Deploy bool
@@ -51,10 +51,10 @@ type Cut struct {
 // take notes, drafted once it is pushed. The next online Reconcile pushes
 // and finishes it, and an online Cut that does stops there: it was that
 // cut.
-func (r *Runner) Cut(ctx context.Context, c Cut) (Tag, error) {
+func (r *Runner) Cut(ctx context.Context, c Cut) (release.Tag, error) {
 	if r.Offline {
 		if err := r.offlineCut(ctx, c); err != nil {
-			return Tag{}, err
+			return release.Tag{}, err
 		}
 		return r.cut(ctx, c, false)
 	}
@@ -63,9 +63,9 @@ func (r *Runner) Cut(ctx context.Context, c Cut) (Tag, error) {
 	case len(pushed) > 0:
 		return pushed[0], cmp.Or(pendErr, err)
 	case pendErr != nil:
-		return Tag{}, pendErr
+		return release.Tag{}, pendErr
 	case err != nil:
-		return Tag{}, err
+		return release.Tag{}, err
 	}
 	return r.cut(ctx, c, false)
 }
@@ -74,7 +74,7 @@ func (r *Runner) Cut(ctx context.Context, c Cut) (Tag, error) {
 // offline before the first is pushed.
 func (r *Runner) offlineCut(ctx context.Context, c Cut) error {
 	switch {
-	case c.Deploy && !r.followsLast():
+	case c.Deploy && !r.Cfg.FollowsLast():
 		return errors.New("offline, a cut deploys nowhere: --no-deploy")
 	case c.Hotfix: // ponytail: the pending ref doesn't say hotfix, so the online check would refuse it
 		return errors.New("offline: cut a hotfix online")
@@ -92,22 +92,22 @@ func (r *Runner) offlineCut(ctx context.Context, c Cut) error {
 // the last environment. It ships what ran: an image no registry has for
 // the commit is refused before the tag, never built. An app whose last
 // environment follows the trunk has nothing to promote.
-func (r *Runner) Promote(ctx context.Context, rcTag string) (Tag, error) {
-	if r.followsLast() {
-		return Tag{}, fmt.Errorf("%s follows %s and is the last environment: nothing to promote; release cut tags what it runs", r.Cfg.Last(), r.base())
+func (r *Runner) Promote(ctx context.Context, rcTag string) (release.Tag, error) {
+	if r.Cfg.FollowsLast() {
+		return release.Tag{}, fmt.Errorf("%s follows %s and is the last environment: nothing to promote; release cut tags what it runs", r.Cfg.Last(), r.base())
 	}
 	if err := r.online("a promote"); err != nil {
-		return Tag{}, err
+		return release.Tag{}, err
 	}
 	if err := r.Reconcile(ctx); err != nil {
-		return Tag{}, err
+		return release.Tag{}, err
 	}
 	rc, err := r.tagNamed(ctx, rcTag)
 	if err != nil {
-		return Tag{}, err
+		return release.Tag{}, err
 	}
 	if rc.Version.RC == 0 {
-		return Tag{}, fmt.Errorf("%s isn't a candidate", rcTag)
+		return release.Tag{}, fmt.Errorf("%s isn't a candidate", rcTag)
 	}
 	return r.cut(ctx, Cut{Final: true, Commit: rc.Commit, Version: rc.Version.Final(), Deploy: true}, true)
 }
@@ -178,48 +178,48 @@ func (r *Runner) online(what string) error {
 	return nil
 }
 
-func (r *Runner) tagNamed(ctx context.Context, name string) (Tag, error) {
+func (r *Runner) tagNamed(ctx context.Context, name string) (release.Tag, error) {
 	tags, err := ReleaseTags(ctx, r.Dir)
 	if err != nil {
-		return Tag{}, err
+		return release.Tag{}, err
 	}
-	if i := slices.IndexFunc(tags, func(t Tag) bool { return t.Name == name }); i >= 0 {
+	if i := slices.IndexFunc(tags, func(t release.Tag) bool { return t.Name == name }); i >= 0 {
 		return tags[i], nil
 	}
-	return Tag{}, fmt.Errorf("%w %s", ErrNoTag, name)
+	return release.Tag{}, fmt.Errorf("%w %s", ErrNoTag, name)
 }
 
 // cut is Cut after Reconcile; a promote never builds. Offline, it keeps
 // the tag pending.
-func (r *Runner) cut(ctx context.Context, c Cut, promote bool) (Tag, error) {
+func (r *Runner) cut(ctx context.Context, c Cut, promote bool) (release.Tag, error) {
 	st, repos, err := r.status(ctx)
 	if err != nil {
-		return Tag{}, err
+		return release.Tag{}, err
 	}
 	d, err := r.from(ctx, st)
 	if err != nil {
-		return Tag{}, err
+		return release.Tag{}, err
 	}
 	if c.Commit != "" {
 		full, err := Git(ctx, r.Dir, "rev-parse", "--verify", c.Commit+"^{commit}")
 		if err != nil {
-			return Tag{}, err
+			return release.Tag{}, err
 		}
 		d = Draft{From: full}
 	}
-	final := r.final(c.Final)
+	final := r.Cfg.CutsFinal(c.Final)
 	if d, err = r.draft(ctx, st, d, final); err != nil {
-		return Tag{}, err
+		return release.Tag{}, err
 	}
 	commit := d.From
-	v := tagFor(cmp.Or(c.Version, d.Proposed).Final(), final, tagsOf(st))
-	t := Tag{Name: v.Tag(), Commit: commit, Message: v.Tag() + gitBoardMark, Version: v}
+	v := release.NextTag(cmp.Or(c.Version, d.Proposed).Final(), final, tagsOf(st))
+	t := release.Tag{Name: v.Tag(), Commit: commit, Message: v.Tag() + gitBoardMark, Version: v}
 	if r.OnTag != nil {
 		r.OnTag(t.Name)
 	}
 	where, err := r.check(ctx, st, repos, c, t, promote)
 	if err != nil {
-		return Tag{}, err
+		return release.Tag{}, err
 	}
 	if r.Offline {
 		err := r.do("tag", func() (string, error) {
@@ -227,18 +227,18 @@ func (r *Runner) cut(ctx context.Context, c Cut, promote bool) (Tag, error) {
 			return "kept " + t.Name + ": the next online cut, promote, rollback or deploy pushes it", err
 		})
 		if err != nil {
-			return Tag{}, err
+			return release.Tag{}, err
 		}
 		return t, nil
 	}
 	if err := r.push(ctx, t, ""); err != nil {
-		return Tag{}, err
+		return release.Tag{}, err
 	}
 	if err := r.finish(ctx, t, d, where, c.Notes); err != nil {
 		return t, err
 	}
-	if c.Deploy && !r.followsLast() {
-		return t, r.deploy(ctx, r.deployTo(final), Target{Commit: commit, Version: t.Name, Hotfix: c.Hotfix})
+	if c.Deploy && !r.Cfg.FollowsLast() {
+		return t, r.deploy(ctx, r.Cfg.DeployTo(final), Target{Commit: commit, Version: t.Name, Hotfix: c.Hotfix})
 	}
 	return t, nil
 }
@@ -247,9 +247,9 @@ func (r *Runner) cut(ctx context.Context, c Cut, promote bool) (Tag, error) {
 // taken (ErrTaken), refuse's reasons, a yanked commit, an image a promote
 // would have to build, and with c.Deploy an environment that wouldn't
 // take it (see takes). It returns where the images go.
-func (r *Runner) check(ctx context.Context, st Status, repos map[string]*ConfigRepo, c Cut, t Tag, promote bool) (map[string][]string, error) {
+func (r *Runner) check(ctx context.Context, st Status, repos map[string]*ConfigRepo, c Cut, t release.Tag, promote bool) (map[string][]string, error) {
 	tags := tagsOf(st)
-	if slices.ContainsFunc(tags, func(o Tag) bool { return o.Name == t.Name }) {
+	if slices.ContainsFunc(tags, func(o release.Tag) bool { return o.Name == t.Name }) {
 		return nil, fmt.Errorf("%s: %w", t.Name, ErrTaken)
 	}
 	if err := r.refuse(ctx, st, repos, c, t, tags); err != nil {
@@ -271,8 +271,8 @@ func (r *Runner) check(ctx context.Context, st Status, repos map[string]*ConfigR
 			return nil, err
 		}
 	}
-	if c.Deploy && !r.followsLast() {
-		if err := r.takes(ctx, envNamed(st, r.deployTo(t.Version.RC == 0)), t.Commit, c.Hotfix); err != nil {
+	if c.Deploy && !r.Cfg.FollowsLast() {
+		if err := r.takes(ctx, envNamed(st, r.Cfg.DeployTo(t.Version.RC == 0)), t.Commit, c.Hotfix); err != nil {
 			return nil, err
 		}
 	}
@@ -281,7 +281,7 @@ func (r *Runner) check(ctx context.Context, st Status, repos map[string]*ConfigR
 
 // push pushes t's tag to the authority remote, saying so with how: ErrTaken
 // when another clone has the name.
-func (r *Runner) push(ctx context.Context, t Tag, how string) error {
+func (r *Runner) push(ctx context.Context, t release.Tag, how string) error {
 	return r.do("tag", func() (string, error) {
 		taken, err := PushTag(ctx, r.Dir, r.Cfg.RemoteName(), t)
 		if taken {
@@ -294,7 +294,7 @@ func (r *Runner) push(ctx context.Context, t Tag, how string) error {
 // finish makes the release of t once its tag is pushed: the images
 // ensured and tagged t, the chart at t, and the record, made with d's
 // previous final and notes, or kept; notes, unless "", are the record's.
-func (r *Runner) finish(ctx context.Context, t Tag, d Draft, where map[string][]string, notes string) error {
+func (r *Runner) finish(ctx context.Context, t release.Tag, d Draft, where map[string][]string, notes string) error {
 	rec, recorded, err := r.B.ReleaseFor(t.Commit)
 	if err != nil {
 		return err
@@ -342,7 +342,7 @@ func (r *Runner) finish(ctx context.Context, t Tag, d Draft, where map[string][]
 // contain what the last environment runs, or it is a final and no
 // candidate on its commit ran in the environment before last, by the
 // history of its overlays in repos.
-func (r *Runner) refuse(ctx context.Context, st Status, repos map[string]*ConfigRepo, c Cut, t Tag, tags []Tag) error {
+func (r *Runner) refuse(ctx context.Context, st Status, repos map[string]*ConfigRepo, c Cut, t release.Tag, tags []release.Tag) error {
 	if c.Hotfix {
 		return nil
 	}
@@ -359,7 +359,7 @@ func (r *Runner) refuse(ctx context.Context, st Status, repos map[string]*Config
 	}
 	env := cands[len(cands)-1]
 	var names []string
-	for _, at := range TagsAt(tags, t.Commit) {
+	for _, at := range release.TagsAt(tags, t.Commit) {
 		if at.Version.RC > 0 {
 			names = append(names, at.Name)
 		}

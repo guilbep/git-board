@@ -8,6 +8,7 @@ import (
 
 	"github.com/guilbep/git-board/core/fields"
 	"github.com/guilbep/git-board/core/proof"
+	"github.com/guilbep/git-board/core/release"
 )
 
 // saveTwice is text saved twice through save: the second save changes
@@ -347,12 +348,12 @@ func TestSetReposUploads(t *testing.T) {
 func TestSetRelease(t *testing.T) {
 	t.Parallel()
 	before := "[fields.status]\noptions = [\"backlog\"]\n"
-	r := Release{
+	r := release.Config{
 		Environments: []string{"dev", "stage", "prod"},
 		Checks:       "make ci",
-		Images:       []Image{{Name: "board", Context: "."}},
-		Chart:        &Chart{Path: "chart", Registry: "registry.epfl.ch/x"},
-		Deploy: []Target{
+		Images:       []release.Image{{Name: "board", Context: "."}},
+		Chart:        &release.Chart{Path: "chart", Registry: "registry.epfl.ch/x"},
+		Deploy: []release.Target{
 			{Repo: "epfl-enac/app-deploy", Path: "apps/app/{env}", Registry: "registry.epfl.ch/x"},
 			{Repo: "epfl-enac/app-deploy", Path: "apps/app/{env}", Registry: "registry.epfl.ch/y"},
 		},
@@ -388,7 +389,7 @@ func TestSetRelease(t *testing.T) {
 	if strings.Count(only, "[[release.deploy]]") != 1 {
 		t.Errorf("the dropped target stayed:\n%s", only)
 	}
-	none, err := SetReleaseText(after, Release{})
+	none, err := SetReleaseText(after, release.Config{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -484,7 +485,7 @@ func TestDeleteTableKeepsTheNextComment(t *testing.T) {
 func TestSetReleaseTextKeepsAnEmptyFollow(t *testing.T) {
 	t.Parallel()
 	none := ""
-	got, err := SetReleaseText("", Release{Environments: []string{"dev", "prod"}, Follow: &none})
+	got, err := SetReleaseText("", release.Config{Environments: []string{"dev", "prod"}, Follow: &none})
 	if err != nil {
 		t.Fatal(err)
 	}

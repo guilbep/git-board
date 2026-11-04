@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/guilbep/git-board/core/release"
 	"github.com/guilbep/git-board/internal/ship"
 	"github.com/guilbep/git-board/internal/ship/shiptest"
 )
@@ -12,7 +13,7 @@ import (
 func runs(t *testing.T, fx *shiptest.Fixture, target int, env, tag, digest string) {
 	t.Helper()
 	reg := []string{"ghcr.test/app", "quay.test/app"}[target]
-	fx.SetOverlay(t, target, env, ship.Deployed{Version: tag, Images: map[string]ship.Image{reg + "/frontend": {Tag: tag, Digest: digest}}})
+	fx.SetOverlay(t, target, env, release.Deployed{Version: tag, Images: map[string]release.Pin{reg + "/frontend": {Tag: tag, Digest: digest}}})
 }
 
 func TestProposalsFromTagAndLabel(t *testing.T) {
@@ -26,7 +27,7 @@ func TestProposalsFromTagAndLabel(t *testing.T) {
 	runs(t, fx, 0, "dev", "dev", d)
 	runs(t, fx, 1, "dev", "dev", "sha256:bbbbbbbbbbbbbbbbbbbb") // not in the registry
 	runs(t, fx, 0, "stage", "stage", "")
-	both(t, fx, "stage", ship.Deployed{Commit: c, Version: "v1.0.0"}) // adopted: left out
+	both(t, fx, "stage", release.Deployed{Commit: c, Version: "v1.0.0"}) // adopted: left out
 
 	ps, err := r.Proposals(ctx)
 	if err != nil {

@@ -17,7 +17,7 @@ import (
 func adopt(t *testing.T, fx *shiptest.Fixture, env string) string {
 	t.Helper()
 	first := shiptest.Git(t, fx.App, "rev-list", "--max-parents=0", "HEAD")
-	both(t, fx, env, ship.Deployed{Commit: first, Version: "v0.1.0"})
+	both(t, fx, env, release.Deployed{Commit: first, Version: "v0.1.0"})
 	return first
 }
 
@@ -109,7 +109,7 @@ func TestDeployBuildsOnceAndCopies(t *testing.T) {
 	for i, reg := range []string{"ghcr.test/app", "quay.test/app"} {
 		d := e.Targets[i].Deployed
 		for _, img := range []string{"frontend", "backend"} {
-			want := ship.Image{Tag: dev, Digest: tools.Images["ghcr.test/app/"+img+":"+c].Digest}
+			want := release.Pin{Tag: dev, Digest: tools.Images["ghcr.test/app/"+img+":"+c].Digest}
 			if d.Images[reg+"/"+img] != want {
 				t.Errorf("dev on %s: %s = %+v, want %+v", reg, img, d.Images[reg+"/"+img], want)
 			}
@@ -179,7 +179,7 @@ func TestDeployRefusesOlder(t *testing.T) {
 	r, tools, fx := shiptest.NewRunner(t)
 	c1 := fx.Commit(t, "one")
 	c2 := fx.Commit(t, "two")
-	both(t, fx, "dev", ship.Deployed{Commit: c2, Version: "v1.0.2"})
+	both(t, fx, "dev", release.Deployed{Commit: c2, Version: "v1.0.2"})
 	before := heads(t, fx)
 	err := r.Deploy(ctx, "dev", ship.Target{Commit: c1, Version: "v1.0.1"})
 	if !errors.Is(err, ship.ErrOlder) || !strings.Contains(err.Error(), "dev on "+fx.ConfigBare[0]) {
@@ -199,8 +199,8 @@ func TestDeployHotfixOnlyBeforeLast(t *testing.T) {
 	r, _, fx := shiptest.NewRunner(t)
 	c1 := fx.Commit(t, "one")
 	c2 := fx.Commit(t, "two")
-	both(t, fx, "stage", ship.Deployed{Commit: c2, Version: "v1.1.0-rc.1"})
-	both(t, fx, "prod", ship.Deployed{Commit: c2, Version: "v1.1.0"})
+	both(t, fx, "stage", release.Deployed{Commit: c2, Version: "v1.1.0-rc.1"})
+	both(t, fx, "prod", release.Deployed{Commit: c2, Version: "v1.1.0"})
 	shiptest.Git(t, fx.App, "checkout", "-q", "-b", "hotfix/1.0.2", c1)
 	h := shiptest.Commit(t, fx.App, "hotfix")
 	shiptest.Git(t, fx.App, "checkout", "-q", "dev")
@@ -216,7 +216,7 @@ func TestDeployHotfixOnlyBeforeLast(t *testing.T) {
 func TestDeployRefusesNotAdopted(t *testing.T) {
 	r, tools, fx := shiptest.NewRunner(t)
 	first := shiptest.Git(t, fx.App, "rev-parse", "HEAD")
-	fx.SetOverlay(t, 0, "dev", ship.Deployed{Commit: first, Version: "v0.1.0"})
+	fx.SetOverlay(t, 0, "dev", release.Deployed{Commit: first, Version: "v0.1.0"})
 	c := fx.Commit(t, "feat")
 	err := r.Deploy(ctx, "dev", ship.Target{Commit: c, Version: "1.0.1-dev.1.g" + c[:7]})
 	if !errors.Is(err, ship.ErrNotAdopted) || !strings.Contains(err.Error(), fx.ConfigBare[1]) {

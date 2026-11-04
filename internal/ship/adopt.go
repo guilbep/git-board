@@ -7,7 +7,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/guilbep/git-board/internal/config"
+	"github.com/guilbep/git-board/core/release"
 )
 
 // ErrBadProposal means a proposal given to Adopt names no deploy target, or
@@ -22,14 +22,6 @@ type Proposal struct {
 	Runs   string `json:"runs"`   // newTag, plus the first image's digest prefix when newTag isn't a release tag
 	Commit string `json:"commit"` // "" when unknown
 	From   string `json:"from"`   // "tag", "label", ""
-}
-
-// firstImage is the overlay's first images[] entry: its name, newTag, digest.
-func (o *Overlay) firstImage() (name, tag, digest string) {
-	if imgs := items(get(o.root(), "images")); len(imgs) > 0 {
-		return scalar(imgs[0], "name"), scalar(imgs[0], "newTag"), scalar(imgs[0], "digest")
-	}
-	return "", "", ""
 }
 
 // Proposals proposes, for each deploy target's overlay of each environment
@@ -59,9 +51,9 @@ func (r *Runner) Proposals(ctx context.Context) ([]Proposal, error) {
 			if o.Deployed("").Commit != "" {
 				continue
 			}
-			name, tag, digest := o.firstImage()
+			name, tag, digest := o.FirstImage()
 			p := Proposal{Env: env, Repo: d.Repo, Path: path, Runs: tag}
-			if _, isTag := ParseTag(tag); !isTag && digest != "" {
+			if _, isTag := release.ParseTag(tag); !isTag && digest != "" {
 				hex := strings.TrimPrefix(digest, "sha256:")
 				p.Runs += " · sha256:" + hex[:min(6, len(hex))]
 			}
@@ -101,7 +93,7 @@ func (r *Runner) Adopt(ctx context.Context, ps []Proposal) error {
 	}
 	fulls := make([]string, len(ps))
 	for i, p := range ps {
-		if !slices.ContainsFunc(r.Cfg.Deploy, func(d config.Target) bool {
+		if !slices.ContainsFunc(r.Cfg.Deploy, func(d release.Target) bool {
 			return d.Repo == p.Repo && strings.ReplaceAll(d.Path, "{env}", p.Env) == p.Path
 		}) || !slices.Contains(r.Cfg.Environments, p.Env) {
 			return fmt.Errorf("%s on %s: %w: %s is not a deploy target", p.Env, p.Repo, ErrBadProposal, p.Path)
@@ -120,12 +112,12 @@ func (r *Runner) Adopt(ctx context.Context, ps []Proposal) error {
 		c := repos[p.Repo]
 		msg := fmt.Sprintf("chore(manifest): adopt %s (%s) [by %s via git-board]", appOf(p.Path, p.Env), p.Env, r.Who)
 		err := r.do(p.Env+" on "+p.Repo, func() (string, error) {
-			commit, err := c.Update(ctx, p.Path, msg, func(o *Overlay) (bool, error) {
+			commit, err := c.Update(ctx, p.Path, msg, func(o *release.Overlay) (bool, error) {
 				if o.Deployed("").Commit != "" {
 					return false, nil
 				}
-				_, tag, _ := o.firstImage()
-				return o.Set(Deployed{Commit: fulls[i], Version: tag}, "", nil)
+				_, tag, _ := o.FirstImage()
+				return o.Set(release.Deployed{Commit: fulls[i], Version: tag}, "", nil)
 			})
 			switch {
 			case err != nil:

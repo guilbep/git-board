@@ -10,7 +10,7 @@ import (
 	"testing"
 
 	"github.com/BurntSushi/toml"
-	"github.com/guilbep/git-board/internal/config"
+	"github.com/guilbep/git-board/core/release"
 	"github.com/guilbep/git-board/internal/ship"
 	"github.com/guilbep/git-board/internal/store"
 )
@@ -20,7 +20,7 @@ type Fixture struct {
 	App        string   // the app's work tree, on dev: the Runner's Dir and B
 	AppBare    string   // App's origin, the authority: tags and release records go there
 	ConfigBare []string // one bare config repo per Runner.Cfg.Deploy target, default branch main
-	cfg        config.Release
+	cfg        release.Config
 }
 
 // NewRunner returns a Runner for a co2-like app, the fake tools it runs and
@@ -54,10 +54,10 @@ func NewRunner(t *testing.T, environments ...string) (*ship.Runner, *Tools, *Fix
 	// git-bug's identity comes from the repo's config, not the environment
 	Git(t, app, "config", "user.name", "dev")
 	Git(t, app, "config", "user.email", "dev@example.com")
-	fx := &Fixture{App: app, AppBare: bare, cfg: config.Release{
+	fx := &Fixture{App: app, AppBare: bare, cfg: release.Config{
 		Environments:  environments,
-		Images:        []config.Image{{Name: "frontend", Context: "./frontend"}, {Name: "backend", Context: "./backend"}},
-		Chart:         &config.Chart{Path: "./helm", Registry: "oci://ghcr.test/app/helm"},
+		Images:        []release.Image{{Name: "frontend", Context: "./frontend"}, {Name: "backend", Context: "./backend"}},
+		Chart:         &release.Chart{Path: "./helm", Registry: "oci://ghcr.test/app/helm"},
 		VersionValues: []string{"backend.env.APP_VERSION"},
 	}}
 	for _, reg := range []string{"ghcr.test/app", "quay.test/app"} {
@@ -67,7 +67,7 @@ func NewRunner(t *testing.T, environments ...string) (*ship.Runner, *Tools, *Fix
 		}
 		b := NewConfigRepo(t, files)
 		fx.ConfigBare = append(fx.ConfigBare, b)
-		fx.cfg.Deploy = append(fx.cfg.Deploy, config.Target{Repo: b, Path: "app/overlays/{env}", Registry: reg})
+		fx.cfg.Deploy = append(fx.cfg.Deploy, release.Target{Repo: b, Path: "app/overlays/{env}", Registry: reg})
 	}
 	b, err := store.Open(app)
 	if err != nil {
@@ -109,7 +109,7 @@ helmCharts:
 // <registry>/<image>; the chart and version values are written only when
 // d.Version is set, the chart's version being d.Chart, else d.Version; the
 // commit's subject names d.Version, for History.
-func (fx *Fixture) SetOverlay(t *testing.T, target int, env string, d ship.Deployed) {
+func (fx *Fixture) SetOverlay(t *testing.T, target int, env string, d release.Deployed) {
 	t.Helper()
 	ctx := context.Background()
 	c, err := ship.OpenConfigRepo(ctx, t.TempDir(), fx.ConfigBare[target])
@@ -125,7 +125,7 @@ func (fx *Fixture) SetOverlay(t *testing.T, target int, env string, d ship.Deplo
 	}
 	path := strings.ReplaceAll(fx.cfg.Deploy[target].Path, "{env}", env)
 	msg := fmt.Sprintf("chore(manifest): update app (%s) %s [by fixture via shiptest]", env, d.Version)
-	if _, err := c.Update(ctx, path, msg, func(o *ship.Overlay) (bool, error) {
+	if _, err := c.Update(ctx, path, msg, func(o *release.Overlay) (bool, error) {
 		return o.Set(d, chart, fx.cfg.VersionValues)
 	}); err != nil {
 		t.Fatalf("SetOverlay %d %s: %v", target, env, err)

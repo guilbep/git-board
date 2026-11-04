@@ -33,7 +33,7 @@ func envOf(t *testing.T, st ship.Status, name string) ship.EnvState {
 }
 
 // both writes d into every target's overlay of env.
-func both(t *testing.T, fx *shiptest.Fixture, env string, d ship.Deployed) {
+func both(t *testing.T, fx *shiptest.Fixture, env string, d release.Deployed) {
 	t.Helper()
 	for i := range fx.ConfigBare {
 		fx.SetOverlay(t, i, env, d)
@@ -43,7 +43,7 @@ func both(t *testing.T, fx *shiptest.Fixture, env string, d ship.Deployed) {
 func TestStatusAgreeingTargets(t *testing.T) {
 	r, _, fx := shiptest.NewRunner(t, "preview", "dev", "stage", "prod")
 	c := fx.Commit(t, "feat")
-	both(t, fx, "stage", ship.Deployed{Commit: c, Version: "v1.0.0-rc.1"})
+	both(t, fx, "stage", release.Deployed{Commit: c, Version: "v1.0.0-rc.1"})
 	st := status(t, r)
 	e := envOf(t, st, "stage")
 	if e.Commit != c || e.Version != "v1.0.0-rc.1" || e.Split || !e.Adopted {
@@ -73,8 +73,8 @@ func TestStatusSplit(t *testing.T) {
 	r, _, fx := shiptest.NewRunner(t)
 	c1 := fx.Commit(t, "one")
 	c2 := fx.Commit(t, "two")
-	fx.SetOverlay(t, 0, "prod", ship.Deployed{Commit: c2, Version: "v1.0.1"})
-	fx.SetOverlay(t, 1, "prod", ship.Deployed{Commit: c1, Version: "v1.0.0"})
+	fx.SetOverlay(t, 0, "prod", release.Deployed{Commit: c2, Version: "v1.0.1"})
+	fx.SetOverlay(t, 1, "prod", release.Deployed{Commit: c1, Version: "v1.0.0"})
 	e := envOf(t, status(t, r), "prod")
 	if !e.Split || e.Commit != "" || e.Version != "" || !e.Adopted {
 		t.Errorf("prod = %+v", e)
@@ -87,8 +87,8 @@ func TestStatusSplit(t *testing.T) {
 func TestStatusBehind(t *testing.T) {
 	r, _, fx := shiptest.NewRunner(t)
 	c1 := fx.Commit(t, "deployed")
-	both(t, fx, "dev", ship.Deployed{Commit: c1, Version: "1.0.1-dev.1.g" + c1[:7]})
-	both(t, fx, "stage", ship.Deployed{Commit: c1, Version: "v1.0.1-rc.1"})
+	both(t, fx, "dev", release.Deployed{Commit: c1, Version: "1.0.1-dev.1.g" + c1[:7]})
+	both(t, fx, "stage", release.Deployed{Commit: c1, Version: "v1.0.1-rc.1"})
 	fx.Merge(t, "fix/1-a", "")
 	head := fx.Merge(t, "feat/2-b", "Merge pull request #9 from org/feat/2-b")
 	st := status(t, r)
@@ -106,7 +106,7 @@ func TestStatusBehind(t *testing.T) {
 
 func TestStatusNotAdopted(t *testing.T) {
 	r, _, fx := shiptest.NewRunner(t)
-	fx.SetOverlay(t, 0, "prod", ship.Deployed{Commit: fx.Commit(t, "x"), Version: "v1.0.0"})
+	fx.SetOverlay(t, 0, "prod", release.Deployed{Commit: fx.Commit(t, "x"), Version: "v1.0.0"})
 	st := status(t, r)
 	if e := envOf(t, st, "dev"); e.Adopted || e.Commit != "" || e.Split || e.Behind != nil {
 		t.Errorf("dev = %+v", e)
@@ -124,7 +124,7 @@ func TestStatusFetchesUnlessOffline(t *testing.T) {
 	other := cloneOf(t, fx.AppBare)
 	theirs := shiptest.Commit(t, other, "theirs")
 	shiptest.Git(t, other, "push", "-q", "origin", "dev")
-	fx.SetOverlay(t, 0, "dev", ship.Deployed{Commit: theirs, Version: "1.0.1-dev.1.g" + theirs[:7]})
+	fx.SetOverlay(t, 0, "dev", release.Deployed{Commit: theirs, Version: "1.0.1-dev.1.g" + theirs[:7]})
 	r.Offline = true
 	st := status(t, r)
 	if d := envOf(t, st, "dev").Targets[0].Deployed; st.Head == theirs || d.Commit != "" {
@@ -142,7 +142,7 @@ func TestReleaseRowsRunsIn(t *testing.T) {
 	fx.Tag(t, shiptest.Git(t, fx.App, "rev-parse", "HEAD"), "v0.9.0")
 	c := fx.Commit(t, "fix")
 	fx.Tag(t, c, "v1.0.0-rc.2", "v1.0.0")
-	both(t, fx, "prod", ship.Deployed{Commit: c, Version: "v1.0.0"})
+	both(t, fx, "prod", release.Deployed{Commit: c, Version: "v1.0.0"})
 	st := status(t, r)
 	var tags []string
 	for _, row := range st.Releases {
@@ -288,7 +288,7 @@ func TestReconcilePushesOnlineOnly(t *testing.T) {
 func TestStatusNamesSharedTargets(t *testing.T) {
 	r, _, fx := shiptest.NewRunner(t)
 	c := fx.Commit(t, "feat")
-	both(t, fx, "stage", ship.Deployed{Commit: c, Version: "v1.0.0-rc.1"})
+	both(t, fx, "stage", release.Deployed{Commit: c, Version: "v1.0.0-rc.1"})
 	e := envOf(t, status(t, r), "stage")
 	// both config repos are called config.git: the registry tells them apart
 	if e.Targets[0].Name != "config (ghcr.test)" || e.Targets[1].Name != "config (quay.test)" {

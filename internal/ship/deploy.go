@@ -11,7 +11,6 @@ import (
 	"strings"
 
 	"github.com/guilbep/git-board/core/release"
-	"github.com/guilbep/git-board/internal/config"
 )
 
 var (
@@ -72,7 +71,7 @@ func (r *Runner) devVersion(ctx context.Context, commit string) (string, error) 
 	if err != nil {
 		return "", err
 	}
-	var final Version
+	var final release.Version
 	revs := commit // the commits counted: all of them, until a release tag is found
 	// tags are newest first
 	for _, t := range tags {
@@ -99,7 +98,7 @@ func (r *Runner) devVersion(ctx context.Context, commit string) (string, error) 
 	if err != nil {
 		return "", err
 	}
-	return DevVersion(final, since, commit), nil
+	return release.DevVersion(final, since, commit), nil
 }
 
 func (r *Runner) deploy(ctx context.Context, env string, t Target) error {
@@ -113,7 +112,7 @@ func (r *Runner) deploy(ctx context.Context, env string, t Target) error {
 		return err
 	}
 	path := func(pattern string) string { return strings.ReplaceAll(pattern, "{env}", env) }
-	moving, deps := 0, []Deployed{}
+	moving, deps := 0, []release.Deployed{}
 	for _, d := range r.Cfg.Deploy {
 		o, err := repos[d.Repo].Read(ctx, path(d.Path))
 		if err != nil {
@@ -163,16 +162,16 @@ func (r *Runner) deploy(ctx context.Context, env string, t Target) error {
 		msg := fmt.Sprintf("chore(manifest): update %s (%s) %s [by %s via git-board]", appOf(p, env), env, t.Version, r.Who)
 		err := r.do(env+" on "+d.Repo, func() (string, error) {
 			// Update re-runs this on a fresh fetch: the checks hold for what it writes on.
-			commit, err := repos[d.Repo].Update(ctx, p, msg, func(o *Overlay) (bool, error) {
+			commit, err := repos[d.Repo].Update(ctx, p, msg, func(o *release.Overlay) (bool, error) {
 				dep := o.Deployed("")
 				if move, err := r.moves(ctx, env, d.Repo, dep, t); err != nil || !move {
 					return false, err
 				}
-				want := Deployed{Commit: t.Commit, Version: t.Version, Chart: chartVersion, Images: map[string]Image{}}
+				want := release.Deployed{Commit: t.Commit, Version: t.Version, Chart: chartVersion, Images: map[string]release.Pin{}}
 				for _, a := range arts {
 					name := a.Registry + "/" + a.Image
 					if _, ok := dep.Images[name]; ok && a.Registry == d.Registry {
-						want.Images[name] = Image{Tag: t.Version, Digest: a.Digest}
+						want.Images[name] = release.Pin{Tag: t.Version, Digest: a.Digest}
 					}
 				}
 				return o.Set(want, chart, r.Cfg.VersionValues)
@@ -198,7 +197,7 @@ func appOf(path, env string) string { return strings.TrimSuffix(path, "/overlays
 
 // moves reports whether an overlay running dep is to move to t, refusing
 // one not adopted and, unless t allows it, a move back.
-func (r *Runner) moves(ctx context.Context, env, repo string, dep Deployed, t Target) (bool, error) {
+func (r *Runner) moves(ctx context.Context, env, repo string, dep release.Deployed, t Target) (bool, error) {
 	switch {
 	case dep.Commit == "":
 		return false, fmt.Errorf("%s on %s: %w", env, repo, ErrNotAdopted)
@@ -220,7 +219,7 @@ func (r *Runner) moves(ctx context.Context, env, repo string, dep Deployed, t Ta
 // where is, per image, the registries whose overlays list it, in [release]
 // deploy order. Each of overlays is an environment's, one Deployed per
 // deploy target. An image none lists is an error naming in.
-func (r *Runner) where(in string, overlays ...[]Deployed) (map[string][]string, error) {
+func (r *Runner) where(in string, overlays ...[]release.Deployed) (map[string][]string, error) {
 	w := map[string][]string{}
 	for i, d := range r.Cfg.Deploy {
 		for _, deps := range overlays {
@@ -240,10 +239,10 @@ func (r *Runner) where(in string, overlays ...[]Deployed) (map[string][]string, 
 }
 
 // deployedOf is each environment's overlays, for where.
-func deployedOf(envs ...EnvState) [][]Deployed {
-	var all [][]Deployed
+func deployedOf(envs ...EnvState) [][]release.Deployed {
+	var all [][]release.Deployed
 	for _, e := range envs {
-		deps := make([]Deployed, len(e.Targets))
+		deps := make([]release.Deployed, len(e.Targets))
 		for i, t := range e.Targets {
 			deps[i] = t.Deployed
 		}
@@ -334,7 +333,7 @@ func (r *Runner) existing(ctx context.Context, recorded []release.Artifact, img,
 // build builds img from tree on reg under the scratch tag scan-<commit>,
 // scans it, and only when the scan passes tags it <commit>: an image that
 // failed its scan is never found as built.
-func (r *Runner) build(ctx context.Context, img config.Image, reg, commit, tree string) (string, error) {
+func (r *Runner) build(ctx context.Context, img release.Image, reg, commit, tree string) (string, error) {
 	scratch := reg + "/" + img.Name + ":scan-" + commit
 	digest, err := r.Tools.Build(ctx, Build{Context: filepath.Join(tree, img.Context), Ref: scratch, Revision: commit, Builder: r.Cfg.Builder})
 	if err != nil {

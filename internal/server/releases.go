@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/guilbep/git-board/core/release"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/ship"
 )
@@ -509,7 +510,7 @@ func (s *apiServer) handleCut(w http.ResponseWriter, r *http.Request) {
 	c := ship.Cut{Final: req.Final, Hotfix: req.Hotfix, Deploy: req.Deploy, Commit: req.Commit, Notes: req.Notes}
 	subject := ""
 	if req.Version != "" {
-		v, ok := ship.ParseTag("v" + strings.TrimPrefix(req.Version, "v"))
+		v, ok := release.ParseTag("v" + strings.TrimPrefix(req.Version, "v"))
 		if !ok || v.RC != 0 {
 			writeError(w, http.StatusBadRequest, fmt.Errorf("version %q: want a final version like 1.4.20; the rc number is chosen for you", req.Version))
 			return
@@ -559,21 +560,21 @@ func environment(w http.ResponseWriter, r *http.Request, run *ship.Runner) (stri
 // releaseTag is the release tag a request names, false when it names none:
 // answered 400 when the name isn't a release tag's, 404 when no such tag
 // has been fetched.
-func releaseTag(w http.ResponseWriter, r *http.Request, run *ship.Runner, name string) (ship.Tag, bool) {
-	if _, ok := ship.ParseTag(name); !ok {
+func releaseTag(w http.ResponseWriter, r *http.Request, run *ship.Runner, name string) (release.Tag, bool) {
+	if _, ok := release.ParseTag(name); !ok {
 		writeError(w, http.StatusBadRequest, fmt.Errorf("%q isn't a release tag", name))
-		return ship.Tag{}, false
+		return release.Tag{}, false
 	}
 	tags, err := ship.ReleaseTags(r.Context(), run.Dir)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
-		return ship.Tag{}, false
+		return release.Tag{}, false
 	}
-	if i := slices.IndexFunc(tags, func(t ship.Tag) bool { return t.Name == name }); i >= 0 {
+	if i := slices.IndexFunc(tags, func(t release.Tag) bool { return t.Name == name }); i >= 0 {
 		return tags[i], true
 	}
 	writeError(w, http.StatusNotFound, fmt.Errorf("no release tag %q", name))
-	return ship.Tag{}, false
+	return release.Tag{}, false
 }
 
 func (s *apiServer) handleDeploy(w http.ResponseWriter, r *http.Request) {
@@ -690,7 +691,7 @@ func (s *apiServer) handleEnable(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
-	text = config.WithRelease(text, config.Release{Binaries: req.Binaries, Platforms: req.Platforms, Build: req.Build, Remote: req.Remote})
+	text = config.WithRelease(text, release.Config{Binaries: req.Binaries, Platforms: req.Platforms, Build: req.Build, Remote: req.Remote})
 	cfg, res := checkConfig(text)
 	if !res.OK {
 		msg := res.Message

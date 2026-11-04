@@ -12,11 +12,11 @@ import (
 // TargetState is what one deploy target's overlay says runs in an
 // environment.
 type TargetState struct {
-	Name     string   `json:"name"` // its config repo's, e.g. enack8s; with the registry's host when two targets share one
-	Repo     string   `json:"repo"`
-	Path     string   `json:"path"` // the overlay's directory, {env} filled in
-	Deployed Deployed `json:"deployed"`
-	Since    *Change  `json:"since"` // the overlay's newest commit, nil when unknown
+	Name     string           `json:"name"` // its config repo's, e.g. enack8s; with the registry's host when two targets share one
+	Repo     string           `json:"repo"`
+	Path     string           `json:"path"` // the overlay's directory, {env} filled in
+	Deployed release.Deployed `json:"deployed"`
+	Since    *Change          `json:"since"` // the overlay's newest commit, nil when unknown
 }
 
 // EnvState is what runs in an environment, across its targets.
@@ -34,7 +34,7 @@ type EnvState struct {
 // ReleaseRow is a release tag, its commit's record and where that commit
 // runs.
 type ReleaseRow struct {
-	Tag            Tag             `json:"tag"`
+	Tag            release.Tag     `json:"tag"`
 	Names          []string        `json:"names"`          // every release tag on its commit, newest first
 	Record         *release.Record `json:"record"`         // nil until Reconcile makes it
 	RunsIn         []string        `json:"runsIn"`         // environments whose commit is its commit
@@ -95,7 +95,7 @@ func (r *Runner) status(ctx context.Context) (Status, map[string]*ConfigRepo, er
 	}
 	for _, t := range tags {
 		row := ReleaseRow{Tag: t, Record: records[t.Commit], BeforeGitBoard: !strings.HasSuffix(t.Message, gitBoardMark)}
-		for _, at := range TagsAt(tags, t.Commit) {
+		for _, at := range release.TagsAt(tags, t.Commit) {
 			row.Names = append(row.Names, at.Name)
 		}
 		for _, e := range st.Envs {

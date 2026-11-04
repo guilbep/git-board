@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/guilbep/git-board/core/release"
 )
 
 const fixture = "testdata/git-board.toml"
@@ -447,7 +449,7 @@ func TestSetFieldTable(t *testing.T) {
 func TestWithRelease(t *testing.T) {
 	t.Parallel()
 	in := "# the board\n[board]\nname = \"x\"\n\n[release]\nenvironments = []\n\n[branches]\nbase = \"main\"\n"
-	r := Release{Binaries: []string{"./cmd/git-board"}, Platforms: []string{"linux/amd64", "darwin/arm64"}, Build: "make dist", Remote: "origin"}
+	r := release.Config{Binaries: []string{"./cmd/git-board"}, Platforms: []string{"linux/amd64", "darwin/arm64"}, Build: "make dist", Remote: "origin"}
 	got := WithRelease(in, r)
 	want := "# the board\n[board]\nname = \"x\"\n\n[release]\nbinaries = [\"./cmd/git-board\"]\nplatforms = [\"linux/amd64\", \"darwin/arm64\"]\nbuild = \"make dist\"\n\n[branches]\nbase = \"main\"\n"
 	if got != want {
@@ -457,7 +459,7 @@ func TestWithRelease(t *testing.T) {
 	if err != nil || !cfg.Release.Enabled() || cfg.Release.Build != "make dist" {
 		t.Errorf("check: %v, %+v", err, cfg.Release)
 	}
-	if got := WithRelease("", Release{Binaries: []string{"."}, Remote: "upstream"}); got != "[release]\nbinaries = [\".\"]\nremote = \"upstream\"\n" {
+	if got := WithRelease("", release.Config{Binaries: []string{"."}, Remote: "upstream"}); got != "[release]\nbinaries = [\".\"]\nremote = \"upstream\"\n" {
 		t.Errorf("empty file: %q", got)
 	}
 }

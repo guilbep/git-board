@@ -1,4 +1,4 @@
-package ship
+package release
 
 import (
 	"os"
@@ -84,7 +84,7 @@ func TestSetKeepsEverythingElse(t *testing.T) {
 	commit := "5e09a71" + strings.Repeat("0", 33)
 	changed, err := o.Set(Deployed{
 		Commit: commit, Version: "v1.4.20", Chart: "v1.4.20",
-		Images: map[string]Image{
+		Images: map[string]Pin{
 			"ghcr.io/epfl-enac/epfl/co2-calculator/frontend": {Tag: "v1.4.20", Digest: "sha256:aaaa"},
 			"ghcr.io/epfl-enac/epfl/co2-calculator/backend":  {Tag: "v1.4.20", Digest: "sha256:bbbb"},
 		},
@@ -130,7 +130,7 @@ func TestSetWithoutChartVersion(t *testing.T) {
 
 func TestSetUnknownImage(t *testing.T) {
 	o := mustParse(t, "testdata/co2-prod.yaml")
-	_, err := o.Set(Deployed{Images: map[string]Image{"ghcr.io/x/docs": {Tag: "v1"}}}, "", nil)
+	_, err := o.Set(Deployed{Images: map[string]Pin{"ghcr.io/x/docs": {Tag: "v1"}}}, "", nil)
 	if err == nil || err.Error() != "overlay has no image ghcr.io/x/docs" {
 		t.Fatalf("err = %v", err)
 	}
@@ -145,7 +145,7 @@ func TestSetUnknownChart(t *testing.T) {
 
 func TestSetTwiceIsNoChange(t *testing.T) {
 	o := mustParse(t, "testdata/co2-prod.yaml")
-	d := Deployed{Commit: strings.Repeat("a", 40), Version: "v1.4.20", Images: map[string]Image{
+	d := Deployed{Commit: strings.Repeat("a", 40), Version: "v1.4.20", Images: map[string]Pin{
 		"ghcr.io/epfl-enac/epfl/co2-calculator/frontend": {Tag: "v1.4.20", Digest: "sha256:aaaa"},
 	}}
 	vv := []string{"backend.env.APP_VERSION"}

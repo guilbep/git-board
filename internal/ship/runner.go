@@ -28,7 +28,7 @@ type Step struct {
 
 // Runner reads and moves an app's releases.
 type Runner struct {
-	Cfg      config.Release
+	Cfg      release.Config
 	Branches config.Branches
 	Base     string         // the trunk branch; "": Branches.Base, else the remote's default branch, else dev
 	Dir      string         // the app repo's work tree
@@ -123,7 +123,7 @@ func (r *Runner) Reconcile(ctx context.Context) error {
 
 // reconcile is Reconcile, returning apart the cut made offline it pushed
 // and that cut's failure (see pushPending), which Reconcile only says.
-func (r *Runner) reconcile(ctx context.Context) (pushed []Tag, pendErr, err error) {
+func (r *Runner) reconcile(ctx context.Context) (pushed []release.Tag, pendErr, err error) {
 	if r.Offline {
 		return nil, nil, nil
 	}
@@ -186,7 +186,7 @@ func (r *Runner) reconcile(ctx context.Context) (pushed []Tag, pendErr, err erro
 // which builds, and a Reconcile past the grace, which records, as for a
 // cut. Each is said in a step, and the first failure is returned for an
 // online Cut, which was that cut: nothing else stops on it.
-func (r *Runner) pushPending(ctx context.Context) ([]Tag, error) {
+func (r *Runner) pushPending(ctx context.Context) ([]release.Tag, error) {
 	pending, err := Pending(ctx, r.Dir)
 	if err != nil || len(pending) == 0 {
 		return nil, err
@@ -195,7 +195,7 @@ func (r *Runner) pushPending(ctx context.Context) ([]Tag, error) {
 	if err != nil {
 		return nil, err
 	}
-	var pushed []Tag
+	var pushed []release.Tag
 	var failed error
 	say := func(f string, a ...any) { _ = r.do("tag", func() (string, error) { return fmt.Sprintf(f, a...), nil }) }
 	for _, t := range pending {
@@ -238,7 +238,7 @@ func (r *Runner) pushPending(ctx context.Context) ([]Tag, error) {
 // legacy tag can name an older build), else under t's commit when its
 // revision label is that commit (a cut's tag is pushed before the images
 // are tagged). ok is false when neither has it.
-func (r *Runner) artifact(ctx context.Context, image string, t Tag) (digest string, ok bool, err error) {
+func (r *Runner) artifact(ctx context.Context, image string, t release.Tag) (digest string, ok bool, err error) {
 	digest, _, err = r.Tools.Revision(ctx, image+":"+t.Name)
 	if !errors.Is(err, ErrNoImage) {
 		return digest, err == nil, err

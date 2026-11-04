@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/guilbep/git-board/core/release"
 	"github.com/guilbep/git-board/internal/ship"
 	"github.com/guilbep/git-board/internal/ship/shiptest"
 )
@@ -51,11 +52,11 @@ func TestPushTagTaken(t *testing.T) {
 	c := shiptest.Commit(t, work, "a")
 	shiptest.Git(t, work, "push", "origin", "HEAD:dev")
 	shiptest.Git(t, other, "fetch", "origin")
-	taken, err := ship.PushTag(ctx, other, "origin", ship.Tag{Name: "v1.0.0-rc.1", Commit: c, Message: "x"})
+	taken, err := ship.PushTag(ctx, other, "origin", release.Tag{Name: "v1.0.0-rc.1", Commit: c, Message: "x"})
 	if err != nil || taken {
 		t.Fatalf("first push: taken=%v err=%v", taken, err)
 	}
-	taken, err = ship.PushTag(ctx, work, "origin", ship.Tag{Name: "v1.0.0-rc.1", Commit: c, Message: "y"})
+	taken, err = ship.PushTag(ctx, work, "origin", release.Tag{Name: "v1.0.0-rc.1", Commit: c, Message: "y"})
 	if err != nil || !taken {
 		t.Fatalf("second push: taken=%v err=%v", taken, err)
 	}
@@ -101,12 +102,12 @@ func TestUpdateReplaysOnRejectedPush(t *testing.T) {
 		t.Fatal(err)
 	}
 	calls := 0
-	commit, err := c.Update(ctx, "epfl/app/overlays/dev", "msg", func(o *ship.Overlay) (bool, error) {
+	commit, err := c.Update(ctx, "epfl/app/overlays/dev", "msg", func(o *release.Overlay) (bool, error) {
 		calls++
 		if calls == 1 {
 			pushOtherCommit(t, bare, "epfl/other/README")
 		}
-		return o.Set(ship.Deployed{Commit: "abc", Version: "1.0.0"}, "", nil)
+		return o.Set(release.Deployed{Commit: "abc", Version: "1.0.0"}, "", nil)
 	})
 	if err != nil || commit == "" || calls != 2 {
 		t.Fatalf("commit=%q calls=%d err=%v", commit, calls, err)
@@ -123,7 +124,7 @@ func TestUpdateNothingToCommit(t *testing.T) {
 	identity(t)
 	bare := shiptest.NewConfigRepo(t, map[string]string{"a/kustomization.yaml": devOverlay})
 	c, _ := ship.OpenConfigRepo(ctx, t.TempDir(), bare)
-	commit, err := c.Update(ctx, "a", "msg", func(*ship.Overlay) (bool, error) { return false, nil })
+	commit, err := c.Update(ctx, "a", "msg", func(*release.Overlay) (bool, error) { return false, nil })
 	if err != nil || commit != "" {
 		t.Fatalf("commit=%q err=%v", commit, err)
 	}
@@ -133,8 +134,8 @@ func TestHistory(t *testing.T) {
 	identity(t)
 	bare := shiptest.NewConfigRepo(t, map[string]string{"a/kustomization.yaml": devOverlay})
 	c, _ := ship.OpenConfigRepo(ctx, t.TempDir(), bare)
-	_, err := c.Update(ctx, "a", "chore(manifest): update app (dev) v1.2.3 [by me]", func(o *ship.Overlay) (bool, error) {
-		return o.Set(ship.Deployed{Commit: "abc", Version: "1.2.3"}, "", nil)
+	_, err := c.Update(ctx, "a", "chore(manifest): update app (dev) v1.2.3 [by me]", func(o *release.Overlay) (bool, error) {
+		return o.Set(release.Deployed{Commit: "abc", Version: "1.2.3"}, "", nil)
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -177,7 +178,7 @@ func TestReleaseTagsSkipsOthers(t *testing.T) {
 	if tags[0].Commit != c || tags[0].Message != "m v1.1.0-rc.1" || tags[0].Date.IsZero() {
 		t.Errorf("tag = %+v", tags[0])
 	}
-	if at := ship.TagsAt(tags, c); len(at) != 2 {
+	if at := release.TagsAt(tags, c); len(at) != 2 {
 		t.Errorf("TagsAt = %+v", at)
 	}
 }
@@ -187,8 +188,8 @@ func TestReadSeesRemoteOnlyAfterFetch(t *testing.T) {
 	bare := shiptest.NewConfigRepo(t, map[string]string{"a/kustomization.yaml": devOverlay})
 	c1, _ := ship.OpenConfigRepo(ctx, t.TempDir(), bare)
 	c2, _ := ship.OpenConfigRepo(ctx, t.TempDir(), bare)
-	if _, err := c2.Update(ctx, "a", "msg", func(o *ship.Overlay) (bool, error) {
-		return o.Set(ship.Deployed{Commit: "abc", Version: "9.9.9"}, "", nil)
+	if _, err := c2.Update(ctx, "a", "msg", func(o *release.Overlay) (bool, error) {
+		return o.Set(release.Deployed{Commit: "abc", Version: "9.9.9"}, "", nil)
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -212,7 +213,7 @@ func TestPushTagFailureLeavesNoLocalTag(t *testing.T) {
 	identity(t)
 	work, _ := shiptest.NewRemote(t)
 	c := shiptest.Git(t, work, "rev-parse", "HEAD")
-	taken, err := ship.PushTag(ctx, work, filepath.Join(t.TempDir(), "nope.git"), ship.Tag{Name: "v1.0.0", Commit: c, Message: "x"})
+	taken, err := ship.PushTag(ctx, work, filepath.Join(t.TempDir(), "nope.git"), release.Tag{Name: "v1.0.0", Commit: c, Message: "x"})
 	if err == nil || taken {
 		t.Fatalf("taken=%v err=%v", taken, err)
 	}

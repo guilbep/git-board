@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/guilbep/git-board/core/release"
 	"github.com/guilbep/git-board/internal/ship"
 	"github.com/guilbep/git-board/internal/ship/shiptest"
 )
@@ -30,7 +31,7 @@ func releaseRepo(t *testing.T) (*shiptest.Tools, *shiptest.Fixture) {
 	return tools, fx
 }
 
-func both(t *testing.T, fx *shiptest.Fixture, env string, d ship.Deployed) {
+func both(t *testing.T, fx *shiptest.Fixture, env string, d release.Deployed) {
 	t.Helper()
 	for i := range fx.ConfigBare {
 		fx.SetOverlay(t, i, env, d)
@@ -65,10 +66,10 @@ func TestReleaseStatusPrints(t *testing.T) {
 	_, fx := releaseRepo(t)
 	c := first(t, fx)
 	fx.Tag(t, c, "v1.0.0")
-	both(t, fx, "stage", ship.Deployed{Commit: c, Version: "v1.0.0-rc.2"})
-	fx.SetOverlay(t, 0, "prod", ship.Deployed{Commit: c, Version: "v1.0.0"})
-	fx.SetOverlay(t, 1, "prod", ship.Deployed{Commit: fx.Commit(t, "older"), Version: "v0.9.0"})
-	both(t, fx, "dev", ship.Deployed{Commit: c, Version: "1.0.0-dev.0.g" + c[:7]})
+	both(t, fx, "stage", release.Deployed{Commit: c, Version: "v1.0.0-rc.2"})
+	fx.SetOverlay(t, 0, "prod", release.Deployed{Commit: c, Version: "v1.0.0"})
+	fx.SetOverlay(t, 1, "prod", release.Deployed{Commit: fx.Commit(t, "older"), Version: "v0.9.0"})
+	both(t, fx, "dev", release.Deployed{Commit: c, Version: "1.0.0-dev.0.g" + c[:7]})
 	fx.Merge(t, "a", "")
 	fx.Merge(t, "b", "")
 
@@ -91,7 +92,7 @@ func TestDeployDev(t *testing.T) {
 	_, fx := releaseRepo(t)
 	c := first(t, fx)
 	fx.Tag(t, c, "v1.0.0")
-	both(t, fx, "dev", ship.Deployed{Commit: c, Version: "v1.0.0"})
+	both(t, fx, "dev", release.Deployed{Commit: c, Version: "v1.0.0"})
 	head := fx.Commit(t, "feat")
 
 	out := run(t, "deploy", "dev")
@@ -111,10 +112,10 @@ func TestCutNoDeploy(t *testing.T) {
 	_, fx := releaseRepo(t)
 	c := first(t, fx)
 	fx.Tag(t, c, "v1.0.0")
-	both(t, fx, "stage", ship.Deployed{Commit: c, Version: "v1.0.0"})
-	both(t, fx, "prod", ship.Deployed{Commit: c, Version: "v1.0.0"})
+	both(t, fx, "stage", release.Deployed{Commit: c, Version: "v1.0.0"})
+	both(t, fx, "prod", release.Deployed{Commit: c, Version: "v1.0.0"})
 	m := fx.Merge(t, "fix/12-a", "")
-	both(t, fx, "dev", ship.Deployed{Commit: m, Version: "1.0.1-dev.1.g" + m[:7]})
+	both(t, fx, "dev", release.Deployed{Commit: m, Version: "1.0.1-dev.1.g" + m[:7]})
 	before := heads(t, fx)
 
 	out := run(t, "release", "cut", "--no-deploy")
@@ -135,10 +136,10 @@ func TestCutOffline(t *testing.T) {
 	_, fx := releaseRepo(t)
 	c := first(t, fx)
 	fx.Tag(t, c, "v1.0.0")
-	both(t, fx, "stage", ship.Deployed{Commit: c, Version: "v1.0.0"})
-	both(t, fx, "prod", ship.Deployed{Commit: c, Version: "v1.0.0"})
+	both(t, fx, "stage", release.Deployed{Commit: c, Version: "v1.0.0"})
+	both(t, fx, "prod", release.Deployed{Commit: c, Version: "v1.0.0"})
 	m := fx.Merge(t, "fix/12-a", "")
-	both(t, fx, "dev", ship.Deployed{Commit: m, Version: "1.0.1-dev.1.g" + m[:7]})
+	both(t, fx, "dev", release.Deployed{Commit: m, Version: "1.0.1-dev.1.g" + m[:7]})
 	run(t, "release", "status") // the config repos' caches
 	away := append([]string{fx.AppBare}, fx.ConfigBare...)
 	for _, d := range away {
@@ -192,7 +193,7 @@ func TestAdoptNeedsYes(t *testing.T) {
 	c := first(t, fx)
 	fx.Tag(t, c, "v1.0.0")
 	for i, reg := range []string{"ghcr.test/app", "quay.test/app"} { // runs v1.0.0, not adopted
-		fx.SetOverlay(t, i, "prod", ship.Deployed{Version: "v1.0.0", Images: map[string]ship.Image{reg + "/frontend": {Tag: "v1.0.0"}}})
+		fx.SetOverlay(t, i, "prod", release.Deployed{Version: "v1.0.0", Images: map[string]release.Pin{reg + "/frontend": {Tag: "v1.0.0"}}})
 	}
 	before := heads(t, fx)
 
@@ -216,10 +217,10 @@ func TestReleaseNotesAll(t *testing.T) {
 	_, fx := releaseRepo(t)
 	c := first(t, fx)
 	fx.Tag(t, c, "v1.0.0")
-	both(t, fx, "stage", ship.Deployed{Commit: c, Version: "v1.0.0"})
-	both(t, fx, "prod", ship.Deployed{Commit: c, Version: "v1.0.0"})
+	both(t, fx, "stage", release.Deployed{Commit: c, Version: "v1.0.0"})
+	both(t, fx, "prod", release.Deployed{Commit: c, Version: "v1.0.0"})
 	m := fx.Merge(t, "fix/12-a", "")
-	both(t, fx, "dev", ship.Deployed{Commit: m, Version: "1.0.1-dev.1.g" + m[:7]})
+	both(t, fx, "dev", release.Deployed{Commit: m, Version: "1.0.1-dev.1.g" + m[:7]})
 	run(t, "release", "cut", "--no-deploy")
 	if out := run(t, "release", "notes"); strings.Contains(out, "rc.1") {
 		t.Errorf("notes without --all lists a candidate:\n%s", out)
