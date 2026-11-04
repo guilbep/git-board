@@ -24,7 +24,6 @@ import (
 	"github.com/guilbep/git-board/core/fields"
 	"github.com/guilbep/git-board/core/index"
 	"github.com/guilbep/git-board/core/model"
-	"github.com/guilbep/git-board/internal/config"
 )
 
 // Kind identifies what a Condition matches against.
@@ -187,12 +186,12 @@ var sprintAliases = map[string]bool{"@current": true, "@next": true, "@previous"
 // Resolve is what a value means: @me your login, @current/@next/@previous
 // a sprint's slug (one no label has, when there's no such sprint), else
 // itself.
-func Resolve(value string, cfg *config.Config, me string, today time.Time) string {
+func Resolve(value string, s *fields.Schema, me string, today time.Time) string {
 	if value == "@me" {
 		return me
 	}
 	if sprintAliases[value] {
-		sprint, err := cfg.Sprints.Resolve(value[1:], today)
+		sprint, err := s.Sprints.Resolve(value[1:], today)
 		if err != nil || sprint == nil {
 			return "\x00no-such-sprint"
 		}
@@ -217,7 +216,7 @@ func RequiresMe(conditions []Condition) bool {
 }
 
 // Matches reports whether issue satisfies every condition.
-func Matches(issue model.Issue, conditions []Condition, cfg *config.Config, me string, today time.Time) bool {
+func Matches(issue model.Issue, conditions []Condition, s *fields.Schema, me string, today time.Time) bool {
 	labels := map[string]bool{}
 	for _, l := range issue.AllLabels() {
 		labels[l] = true
@@ -235,7 +234,7 @@ func Matches(issue model.Issue, conditions []Condition, cfg *config.Config, me s
 			values = strings.Split(c.Value, ",")
 		}
 		for _, v := range values {
-			ok = ok || matchOne(issue, labels, c, v, in, cfg, me, today)
+			ok = ok || matchOne(issue, labels, c, v, in, s, me, today)
 		}
 		if c.Negated {
 			ok = !ok
@@ -253,12 +252,12 @@ var noList = map[Kind]bool{KindText: true, KindNo: true, KindTitle: true, KindNu
 
 // matchOne is one condition with one value; in is where free text looks
 // (In).
-func matchOne(issue model.Issue, labels map[string]bool, c Condition, value string, in []string, cfg *config.Config, me string, today time.Time) bool {
+func matchOne(issue model.Issue, labels map[string]bool, c Condition, value string, in []string, s *fields.Schema, me string, today time.Time) bool {
 	if value == "@me" && len(c.Mine) > 0 {
 		mine := c.Mine
 		c.Mine = nil
 		for _, name := range mine {
-			if matchOne(issue, labels, c, value, in, cfg, name, today) {
+			if matchOne(issue, labels, c, value, in, s, name, today) {
 				return true
 			}
 		}
@@ -297,8 +296,8 @@ func matchOne(issue model.Issue, labels map[string]bool, c Condition, value stri
 	case KindLabel:
 		// a flat kind is stored bug and read kind:bug: label:bug finds it
 		kind := "\x00"
-		if cfg != nil && cfg.FlatKinds() {
-			for k := range cfg.Branches.Kinds {
+		if s != nil && s.Fields["kind"].Flat {
+			for _, k := range s.Fields["kind"].Options {
 				if strings.EqualFold(k, value) {
 					kind = "kind:" + k
 				}
@@ -320,16 +319,16 @@ func matchOne(issue model.Issue, labels map[string]bool, c Condition, value stri
 		if value == "@me" {
 			id = c.MeID
 		}
-		ok = len(Involvement(involvedOf(issue, c), Resolve(value, cfg, me, today), id, cfg)) > 0
+		ok = len(Involvement(involvedOf(issue, c), Resolve(value, s, me, today), id, s)) > 0
 	case KindFollows: // yours only: follows:someone matches nothing
 		f := c.Followed
 		if f == nil {
 			f = &Followed{}
 		}
 		ok = value == "@me" && !f.Unfollow[issue.ID] &&
-			(f.Follow[issue.ID] || f.InViews[issue.ID] || len(Involvement(involvedOf(issue, c), me, c.MeID, cfg)) > 0)
+			(f.Follow[issue.ID] || f.InViews[issue.ID] || len(Involvement(involvedOf(issue, c), me, c.MeID, s)) > 0)
 	case KindField:
-		ok = labels[c.Field+":"+Resolve(value, cfg, me, today)]
+		ok = labels[c.Field+":"+Resolve(value, s, me, today)]
 	}
 	return ok
 }
@@ -363,7 +362,7 @@ type Followed struct {
 // when given (yours: you are your identity with or without a login), as
 // reasons: author, a person field's name (assignee, reviewer…),
 // commented, mentioned. None: they aren't.
-func Involvement(in Involved, login, id string, cfg *config.Config) []string {
+func Involvement(in Involved, login, id string, s *fields.Schema) []string {
 	if login == "" && id == "" {
 		return nil
 	}
@@ -373,7 +372,7 @@ func Involvement(in Involved, login, id string, cfg *config.Config) []string {
 		res = append(res, "author")
 	}
 	for _, l := range in.Labels {
-		if f, ok := PersonField(l, login, cfg); ok && !slices.Contains(res, f) {
+		if f, ok := PersonField(l, login, s); ok && !slices.Contains(res, f) {
 			res = append(res, f)
 		}
 	}
@@ -388,12 +387,12 @@ func Involvement(in Involved, login, id string, cfg *config.Config) []string {
 
 // PersonField is the field a label names login in (assignee for
 // assignee:guilbep), when that field holds people.
-func PersonField(label, login string, cfg *config.Config) (string, bool) {
-	if cfg == nil {
-		cfg = &config.Config{}
+func PersonField(label, login string, s *fields.Schema) (string, bool) {
+	if s == nil {
+		s = &fields.Schema{}
 	}
 	f, v, ok := strings.Cut(label, ":")
-	if !ok || login == "" || !strings.EqualFold(v, login) || cfg.TypeOf(f, nil) != fields.TypePerson {
+	if !ok || login == "" || !strings.EqualFold(v, login) || s.TypeOf(f, nil) != fields.TypePerson {
 		return "", false
 	}
 	return f, true

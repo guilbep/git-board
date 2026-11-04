@@ -9,8 +9,8 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/guilbep/git-board/core/filter"
 	"github.com/guilbep/git-board/internal/board"
-	"github.com/guilbep/git-board/internal/filter"
 	"github.com/guilbep/git-board/internal/insights"
 	"github.com/guilbep/git-board/internal/server"
 	"github.com/guilbep/git-board/internal/store"

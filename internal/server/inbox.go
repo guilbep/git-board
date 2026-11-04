@@ -7,9 +7,9 @@ import (
 	"slices"
 	"time"
 
+	"github.com/guilbep/git-board/core/filter"
 	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/board"
-	"github.com/guilbep/git-board/internal/filter"
 	"github.com/guilbep/git-board/internal/inbox"
 )
 
@@ -149,7 +149,7 @@ func (s *apiServer) inbox(me inbox.Me, now time.Time) (inboxResponse, error) {
 	}
 	res.Roles = []string{}
 	for _, role := range slices.Sorted(maps.Keys(cfg.Roles)) {
-		if _, ok := filter.PersonField(role+":"+cfg.Roles[role], me.Login, cfg); ok {
+		if _, ok := filter.PersonField(role+":"+cfg.Roles[role], me.Login, &cfg.Schema); ok {
 			res.Roles = append(res.Roles, role)
 		}
 	}

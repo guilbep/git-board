@@ -32,7 +32,7 @@ func benchIssues(n int) []model.Issue {
 // Matches over a board of 5,000 issues: field terms, and free text
 // without the index (an issue as it was, ls --at).
 func BenchmarkMatches(b *testing.B) {
-	cfg := mustLoad(b)
+	cfg := co2
 	issues := benchIssues(5000)
 	for name, f := range map[string]string{
 		"fields": "is:open status:ready,in-progress assignee:@me sprint:@current -label:wip",

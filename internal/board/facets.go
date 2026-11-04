@@ -6,9 +6,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/guilbep/git-board/core/filter"
 	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/filter"
 )
 
 // None is the value of an issue without the field, as BucketBy names it.
@@ -53,6 +53,7 @@ func Facets(b issueBackend, cfg *config.Config, filterStr, me string) ([]Facet, 
 	if err := fillFollows(b, cfg, conditions, me, issues, today, nil); err != nil {
 		return nil, err
 	}
+	schema := schemaOf(cfg)
 	out := []Facet{} // the page maps over it: none is [], not null
 	for _, key := range facetKeys(cfg, issues) {
 		var own, rest []filter.Condition
@@ -65,7 +66,7 @@ func Facets(b issueBackend, cfg *config.Config, filterStr, me string) ([]Facet, 
 		}
 		counts := map[string]int{}
 		for _, issue := range issues {
-			if filter.Matches(issue, rest, cfg, me, today) {
+			if filter.Matches(issue, rest, schema, me, today) {
 				for _, v := range valuesOf(issue, key) {
 					counts[v]++
 				}
@@ -76,7 +77,7 @@ func Facets(b issueBackend, cfg *config.Config, filterStr, me string) ([]Facet, 
 				continue
 			}
 			for _, v := range strings.Split(c.Value, ",") {
-				v = filter.Resolve(v, cfg, me, today) // @current: today's sprint
+				v = filter.Resolve(v, schema, me, today) // @current: today's sprint
 				if _, ok := counts[v]; !ok && v != "" && !strings.HasPrefix(v, "\x00") {
 					counts[v] = 0
 				}
@@ -92,7 +93,7 @@ func Facets(b issueBackend, cfg *config.Config, filterStr, me string) ([]Facet, 
 		})
 		// a value is picked when an issue with only it would get through
 		for _, o := range f.Options {
-			if len(own) > 0 && filter.Matches(only(key, o.Value), own, cfg, me, today) {
+			if len(own) > 0 && filter.Matches(only(key, o.Value), own, schema, me, today) {
 				f.Selected = append(f.Selected, o.Value)
 			}
 		}

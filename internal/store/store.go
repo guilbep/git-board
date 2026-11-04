@@ -429,7 +429,7 @@ func logins(p *people.Person) []string {
 }
 
 // ListIssues returns every issue, oldest first. Filtering is done
-// client-side via internal/filter.
+// client-side via core/filter.
 func (b *Backend) ListIssues() ([]model.Issue, error) {
 	issues, err := b.allIssues()
 	if err != nil {

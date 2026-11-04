@@ -36,6 +36,7 @@ var layerOf = map[string]int{
 	"core/issue":             issues,
 	"core/index":             issues,
 	"core/fields":            issues,
+	"core/filter":            issues,
 	"core/model":             issues,
 	"core/syncer":            issues,
 }

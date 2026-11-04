@@ -13,9 +13,9 @@ import (
 	"time"
 
 	"github.com/guilbep/git-board/core/fields"
+	"github.com/guilbep/git-board/core/filter"
 	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/filter"
 	"github.com/guilbep/git-board/internal/inbox"
 	"github.com/guilbep/git-board/internal/store"
 )
@@ -56,13 +56,23 @@ func MatchFollowing(b any, cfg *config.Config, filterStr, me string, issues []mo
 	if err := fillFollows(b, cfg, conditions, me, issues, today, followed); err != nil {
 		return nil, err
 	}
+	schema := schemaOf(cfg)
 	matched := make([]model.Issue, 0, len(issues))
 	for _, issue := range issues {
-		if filter.Matches(issue, conditions, cfg, me, today) {
+		if filter.Matches(issue, conditions, schema, me, today) {
 			matched = append(matched, issue)
 		}
 	}
 	return matched, nil
+}
+
+// schemaOf is cfg's issue schema, as the filter reads it: nil for no
+// config.
+func schemaOf(cfg *config.Config) *fields.Schema {
+	if cfg == nil {
+		return nil
+	}
+	return &cfg.Schema
 }
 
 // fillFollows gives follows:@me your inbox's file (internal/inbox): what

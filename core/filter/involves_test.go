@@ -6,13 +6,12 @@ import (
 	"time"
 
 	"github.com/guilbep/git-board/core/fields"
+	"github.com/guilbep/git-board/core/filter"
 	"github.com/guilbep/git-board/core/model"
-	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/filter"
 )
 
 func TestInvolvement(t *testing.T) {
-	cfg := &config.Config{}
+	cfg := &fields.Schema{}
 	in := filter.Involved{
 		AuthorLogins:    []string{"Ann Example", "ann"},
 		Labels:          []string{"assignee:guilbep", "reviewer:GUILBEP", "status:guilbep", "bug"},
@@ -40,7 +39,7 @@ func TestInvolvement(t *testing.T) {
 }
 
 func TestInvolvesTerm(t *testing.T) {
-	cfg, now := &config.Config{}, time.Now()
+	cfg, now := &fields.Schema{}, time.Now()
 	assigned := model.Issue{ID: "a1", Labels: []string{"assignee:guilbep"}}
 	mentioned := model.Issue{ID: "b2"}
 	other := model.Issue{ID: "c3", AuthorLogins: []string{"srossi"}}
@@ -66,7 +65,7 @@ func TestInvolvesTerm(t *testing.T) {
 	}
 }
 func TestFollowsTerm(t *testing.T) {
-	cfg, now := &config.Config{}, time.Now()
+	cfg, now := &fields.Schema{}, time.Now()
 	assigned := model.Issue{ID: "a1", Labels: []string{"assignee:guilbep"}}
 	unfollowed := model.Issue{ID: "b2", Labels: []string{"assignee:guilbep"}}
 	followed := model.Issue{ID: "c3"}
@@ -99,7 +98,7 @@ func TestFollowsTerm(t *testing.T) {
 // involvement: the project's lead-dev isn't in every issue's discussion.
 // pm:@me still finds it, as a field.
 func TestInvolvesLeavesOutProjectRoles(t *testing.T) {
-	cfg, now := &config.Config{Schema: fields.Schema{Fields: map[string]fields.Field{"pm": {Type: fields.TypePerson}}}}, time.Now()
+	cfg, now := &fields.Schema{Fields: map[string]fields.Field{"pm": {Type: fields.TypePerson}}}, time.Now()
 	inherited := model.Issue{ID: "a1", Inherited: []string{"pm:guilbep"}}
 	if filter.Matches(inherited, filter.Parse("involves:@me"), cfg, "guilbep", now) {
 		t.Error("involves:@me took a project role for involvement")

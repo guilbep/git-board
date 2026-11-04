@@ -5,21 +5,26 @@ import (
 	"testing"
 	"time"
 
+	"github.com/guilbep/git-board/core/fields"
 	"github.com/guilbep/git-board/core/model"
-	"github.com/guilbep/git-board/internal/config"
 )
-
-const fixture = "../config/testdata/git-board.toml"
 
 var today = time.Date(2026, 8, 31, 0, 0, 0, 0, time.UTC) // "delivery" is current, "post-delivery" is next
 
-func mustLoad(t testing.TB) *config.Config {
-	t.Helper()
-	cfg, err := config.Load(fixture)
-	if err != nil {
-		t.Fatalf("config.Load: %v", err)
-	}
-	return cfg
+// co2 is internal/config/testdata/git-board.toml's schema.
+var co2 = &fields.Schema{
+	Fields: map[string]fields.Field{
+		"status":   {Single: true, Options: []string{"backlog", "comite", "ready", "in-progress", "in-review", "ready-for-validation", "qa", "tests-metier", "validated"}},
+		"prio":     {Single: true, Options: []string{"p0", "p1", "p2", "p3"}},
+		"est":      {Single: true, Options: []string{"0.5", "1", "2", "3", "4", "6", "8", "16"}, Numeric: true},
+		"assignee": {Single: false},
+		"cat":      {Single: true, Options: []string{"bug", "feature", "chore"}},
+	},
+	Order: []string{"status", "prio", "est", "assignee", "cat"},
+	Sprints: fields.Sprints{LengthDays: 14, StartWeekday: "monday", List: []fields.Sprint{
+		{Slug: "delivery", Title: "Delivery", Start: time.Date(2026, 8, 24, 0, 0, 0, 0, time.UTC)},
+		{Slug: "post-delivery", Title: "Post-delivery", Start: time.Date(2026, 9, 7, 0, 0, 0, 0, time.UTC)},
+	}},
 }
 
 func TestParseFieldCondition(t *testing.T) {
@@ -69,7 +74,7 @@ func TestParseMultipleConditionsAreAnded(t *testing.T) {
 }
 
 func TestMatchesFieldIsAndTitleGlob(t *testing.T) {
-	cfg := mustLoad(t)
+	cfg := co2
 	issue := model.Issue{ID: "abc123", Title: "Fix invoice spec", Status: "open", Labels: []string{"status:ready"}}
 
 	if !Matches(issue, Parse("status:ready is:open title:*spec*"), cfg, "", today) {
@@ -81,7 +86,7 @@ func TestMatchesFieldIsAndTitleGlob(t *testing.T) {
 }
 
 func TestMatchesNegatedTitleGlobExcludes(t *testing.T) {
-	cfg := mustLoad(t)
+	cfg := co2
 	issue := model.Issue{ID: "abc123", Title: "Fix invoice spec", Status: "open"}
 
 	if Matches(issue, Parse("-title:*spec*"), cfg, "", today) {
@@ -90,7 +95,7 @@ func TestMatchesNegatedTitleGlobExcludes(t *testing.T) {
 }
 
 func TestMatchesFreeTextSubstring(t *testing.T) {
-	cfg := mustLoad(t)
+	cfg := co2
 	issue := model.Issue{ID: "abc123", Title: "Fix invoice bug", Status: "open"}
 
 	if !Matches(issue, Parse("invoice"), cfg, "", today) {
@@ -102,7 +107,7 @@ func TestMatchesFreeTextSubstring(t *testing.T) {
 }
 
 func TestMatchesAtMe(t *testing.T) {
-	cfg := mustLoad(t)
+	cfg := co2
 	issue := model.Issue{ID: "abc123", Title: "x", Status: "open", Labels: []string{"assignee:guilbep"}}
 	conditions := Parse("assignee:@me")
 
@@ -115,7 +120,7 @@ func TestMatchesAtMe(t *testing.T) {
 }
 
 func TestMatchesSprintCurrentAndNext(t *testing.T) {
-	cfg := mustLoad(t)
+	cfg := co2
 	current := model.Issue{ID: "1", Title: "x", Status: "open", Labels: []string{"sprint:delivery"}}
 	next := model.Issue{ID: "2", Title: "x", Status: "open", Labels: []string{"sprint:post-delivery"}}
 
@@ -145,7 +150,7 @@ func TestRequiresMe(t *testing.T) {
 // GitHub-style search: quoted phrases, author:, label:, no:, free text
 // matched through the full-text hits a caller fills in.
 func TestGitHubStyleSearch(t *testing.T) {
-	cfg := mustLoad(t)
+	cfg := co2
 	today := time.Date(2026, 10, 15, 0, 0, 0, 0, time.UTC)
 	issue := model.Issue{ID: "abc", Title: "Train distances", Status: "open",
 		Labels: []string{"assignee:guilbep", "status:ready", "bug"}, AuthorLogins: []string{"guilbep", "Pierre Guilbert"}}
@@ -187,7 +192,7 @@ func TestGitHubStyleSearch(t *testing.T) {
 // a,b is either, as in GitHub's search (label:bug,wip): what a facet with
 // several values ticked saves into a view.
 func TestMatchesCommaIsEither(t *testing.T) {
-	cfg := mustLoad(t)
+	cfg := co2
 	qa := model.Issue{ID: "a", Status: "open", Labels: []string{"status:qa", "bug", "assignee:guilbep"}}
 	backlog := model.Issue{ID: "b", Status: "closed", Labels: []string{"status:backlog"}}
 	for _, c := range []struct {
@@ -218,7 +223,7 @@ func TestMatchesCommaIsEither(t *testing.T) {
 // palette jumps to it: #2528 is the number only; a bare number or 7 and
 // more hex characters also look in the text.
 func TestMatchesNumberAndIDPrefix(t *testing.T) {
-	cfg := mustLoad(t)
+	cfg := co2
 	n2528 := model.Issue{ID: "b9de9e14aa", Title: "Fix CSV upload", Status: "open", Forges: []model.Forge{{Number: "2528"}}}
 	mentions := model.Issue{ID: "5a3b1c22bb", Title: "Follow-up of 2528", Status: "open", Forges: []model.Forge{{Number: "2115"}}}
 	if c := Parse("#2528"); len(c) != 1 || c[0].Kind != KindNumber || c[0].Value != "2528" {
@@ -274,7 +279,7 @@ func TestWithoutKeepsTheOtherTermsAsTyped(t *testing.T) {
 // project's number, #3060 GitHub's: X is CO2-3060 (GitHub #3071), Y is
 // GitHub #3060 imported after the switch (CO2-3075).
 func TestMatchesProjectNumbers(t *testing.T) {
-	cfg := mustLoad(t)
+	cfg := co2
 	x := model.Issue{ID: "aaaaaaaaaa", Title: "Bouncer pool", Status: "open", Number: "CO2-3060", Counted: true, Forges: []model.Forge{{Name: "GitHub", Number: "3071"}}}
 	y := model.Issue{ID: "bbbbbbbbbb", Title: "CSV export", Status: "open", Number: "CO2-3075", Counted: true, Forges: []model.Forge{{Name: "GitHub", Number: "3060"}}}
 	for expr, want := range map[string][2]bool{ // [x, y]
@@ -298,7 +303,7 @@ func TestMatchesProjectNumbers(t *testing.T) {
 // excludes "[wip" titles instead of every title failing a broken pattern.
 func TestTitleGlobCrossesSlashesAndReadsALoneBracket(t *testing.T) {
 	t.Parallel()
-	cfg := &config.Config{}
+	cfg := &fields.Schema{}
 	for _, tt := range []struct {
 		title, glob string
 		want        bool

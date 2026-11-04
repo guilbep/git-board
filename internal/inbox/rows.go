@@ -7,9 +7,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/guilbep/git-board/core/fields"
+	"github.com/guilbep/git-board/core/filter"
 	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/filter"
 )
 
 // Window is how far back the inbox looks: issues updated since, events
@@ -46,7 +47,7 @@ type Row struct {
 // role you hold for the whole project (lead-dev, pm…): its reasons are
 // that role, "lead-dev (project)", and only its creation and closing show.
 func Follows(me Me, st State, th model.Thread, views []string, cfg *config.Config) (bool, []string, *bool) {
-	reasons := filter.Involvement(involved(me, th), me.Login, me.ID, cfg)
+	reasons := filter.Involvement(involved(me, th), me.Login, me.ID, schemaOf(cfg))
 	set := st.Set(th.ID)
 	if set != nil && *set {
 		reasons = append(reasons, "followed")
@@ -57,7 +58,7 @@ func Follows(me Me, st State, th model.Thread, views []string, cfg *config.Confi
 	following := len(reasons) > 0 && (set == nil || *set)
 	if !following && set == nil {
 		for _, l := range th.Inherited {
-			if f, ok := filter.PersonField(l, me.Login, cfg); ok {
+			if f, ok := filter.PersonField(l, me.Login, schemaOf(cfg)); ok {
 				reasons = append(reasons, f+projectRole)
 			}
 		}
@@ -108,7 +109,7 @@ func rowOf(me Me, st State, th model.Thread, views []string, cfg *config.Config,
 	following, reasons, _ := Follows(me, st, th, views, cfg)
 	watching := !following && slices.ContainsFunc(reasons, func(r string) bool { return strings.HasSuffix(r, projectRole) })
 	inField := slices.ContainsFunc(th.Labels, func(l string) bool {
-		_, ok := filter.PersonField(l, me.Login, cfg)
+		_, ok := filter.PersonField(l, me.Login, schemaOf(cfg))
 		return ok
 	})
 	seen := map[string]bool{}
@@ -131,13 +132,13 @@ func rowOf(me Me, st State, th model.Thread, views []string, cfg *config.Config,
 		}
 		addressed := false // to you: shows followed or not, unfollowed included
 		for _, l := range e.Added {
-			if f, ok := filter.PersonField(l, me.Login, cfg); ok {
+			if f, ok := filter.PersonField(l, me.Login, schemaOf(cfg)); ok {
 				note("added you as " + f)
 				addressed = true
 			}
 		}
 		for _, l := range e.Removed {
-			if f, ok := filter.PersonField(l, me.Login, cfg); ok {
+			if f, ok := filter.PersonField(l, me.Login, schemaOf(cfg)); ok {
 				note("removed you as " + f)
 				addressed = true
 			}
@@ -212,4 +213,12 @@ func plural(n int, what string) string {
 		return "1 " + what
 	}
 	return fmt.Sprintf("%d %ss", n, what)
+}
+
+// schemaOf is cfg's schema, nil for none.
+func schemaOf(cfg *config.Config) *fields.Schema {
+	if cfg == nil {
+		return nil
+	}
+	return &cfg.Schema
 }
