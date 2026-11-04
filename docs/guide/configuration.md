@@ -259,7 +259,7 @@ One syntax everywhere: a view's `filter`, the board's **Filter** box, ⌘K, and 
 | `-status:ready` | issues without it |
 | `status:ready,qa` | either value, as in GitHub's search; works with `is:`, `label:` and `author:` too |
 | `sprint:@current`, `@next`, `@previous` | the sprint of today, the next or the previous one, from `[[sprints.list]]` |
-| `assignee:@me` | you: the GitHub or GitLab login of the person you write as (`git board me`) |
+| `assignee:@me` | you: the person you write as (`git board me`), by their GitHub or GitLab login or by their name. Without a forge account, `assignee=+@me` writes the name (`assignee:Ada Lovelace`); a sync sends it as their login where they have an account |
 | `is:open`, `is:closed` | open or closed issues |
 | `title:*spec*` | a title matching the pattern, without case: `*` any text, `/` included, `?` one character, `[a-z]` and `[!a-z]` a class (a `[` that closes none is a `[`) |
 | `author:guilbep`, `author:@me` | who opened the issue |

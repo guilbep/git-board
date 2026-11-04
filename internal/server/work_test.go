@@ -116,8 +116,8 @@ func TestWorkNeedsWhoYouAre(t *testing.T) {
 	noLogin := &apiServer{cfg: &config.Config{Features: allFeatures}, b: storetest.New(t)}
 	ts := httptest.NewServer(withCORS(newMux(noLogin, http.NotFoundHandler())))
 	t.Cleanup(ts.Close)
-	if code, c := codeOf(t, ts.URL+"/api/work"); code != http.StatusConflict || c != "no-login" {
-		t.Errorf("no login: %d %q", code, c)
+	if code, c := codeOf(t, ts.URL+"/api/work"); code != http.StatusOK {
+		t.Errorf("no login, by name (issue #87): %d %q", code, c)
 	}
 	b := storetest.NewEmpty(t)
 	ts2 := httptest.NewServer(withCORS(newMux(&apiServer{cfg: &config.Config{Features: allFeatures}, b: b, me: "guilbep"}, http.NotFoundHandler())))

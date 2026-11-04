@@ -86,8 +86,8 @@ func TestInboxNeedsWhoYouAre(t *testing.T) {
 	noLogin := &apiServer{cfg: &config.Config{}, b: storetest.New(t)} // its identity has no login, no --me
 	ts := httptest.NewServer(withCORS(newMux(noLogin, http.NotFoundHandler())))
 	t.Cleanup(ts.Close)
-	if code, c := codeOf(t, ts.URL+"/api/inbox"); code != http.StatusConflict || c != "no-login" {
-		t.Errorf("no login: %d %q", code, c)
+	if code, c := codeOf(t, ts.URL+"/api/inbox"); code != http.StatusOK {
+		t.Errorf("no login, by name (issue #87): %d %q", code, c)
 	}
 
 	b := storetest.NewEmpty(t) // no one chosen

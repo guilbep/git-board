@@ -257,7 +257,7 @@ func TestAPartialWriteIsAnnounced(t *testing.T) {
 	ts := serve(t, s)
 	ch, stop := s.events.subscribe()
 	defer stop()
-	if code := call(t, "PATCH", ts.URL+"/api/issues/"+id, map[string]string{"cat": "bug", "owner": "@me"}, nil); code != http.StatusBadRequest {
+	if code := call(t, "PATCH", ts.URL+"/api/issues/"+id, map[string]string{"cat": "bug", "prio": "p1\tp2"}, nil); code != http.StatusBadRequest {
 		t.Fatalf("PATCH: %d, want 400", code)
 	}
 	if is, _ := b.GetIssue(id); !slices.Contains(is.Labels, "cat:bug") {
