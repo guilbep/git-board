@@ -6,14 +6,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/guilbep/git-board/core/oplog"
 	"io"
 	"maps"
 	"os"
 	"path/filepath"
 	"slices"
 	"time"
-
-	"github.com/guilbep/git-board/core/gitstore"
 )
 
 // goOnMargin is how long before the start of the run that read it a forge
@@ -210,8 +209,8 @@ type CutForge struct {
 
 // Cut is the run cut before it went through, from its journal: nil when
 // there is none, or while a run holds the lock.
-func Cut(s *gitstore.Store) (*CutRun, error) {
-	f, err := os.OpenFile(filepath.Join(s.CommonDir(), "board", "sync.lock"), os.O_RDWR, 0)
+func Cut(s oplog.Datastore) (*CutRun, error) {
+	f, err := os.OpenFile(filepath.Join(s.Folder(), "sync.lock"), os.O_RDWR, 0)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil
 	}
@@ -257,8 +256,8 @@ func Cut(s *gitstore.Store) (*CutRun, error) {
 
 // Forget empties the journal, as a reset of the board's refs must: what it
 // says was pulled went with them. ErrLocked while a run holds the lock.
-func Forget(s *gitstore.Store) error {
-	path := filepath.Join(s.CommonDir(), "board", "sync.lock")
+func Forget(s oplog.Datastore) error {
+	path := filepath.Join(s.Folder(), "sync.lock")
 	f, err := os.OpenFile(path, os.O_RDWR, 0)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil

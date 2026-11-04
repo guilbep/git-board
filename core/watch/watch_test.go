@@ -68,7 +68,7 @@ func TestWatchSeesOtherStore(t *testing.T) {
 	dir := newRepo(t)
 	ch := Watch(t.Context(), open(t, dir), every)
 	l := create(t, open(t, dir), "issue")
-	if got, want := next(t, ch), []Change{{"issue", l.ID, l.Head}}; !reflect.DeepEqual(got, want) {
+	if got, want := next(t, ch), []Change{{"issue", l.ID, l.Version}}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("changes = %v, want %v", got, want)
 	}
 	quiet(t, ch)
@@ -90,7 +90,7 @@ func TestWatchRemoval(t *testing.T) {
 	if out, err := exec.Command("git", "-C", dir, "update-ref", "-d", oplog.RefName("person", l.ID)).CombinedOutput(); err != nil {
 		t.Fatalf("git update-ref -d: %v\n%s", err, out)
 	}
-	if got, want := next(t, ch), []Change{{"person", l.ID, gitstore.ZeroHash}}; !reflect.DeepEqual(got, want) {
+	if got, want := next(t, ch), []Change{{"person", l.ID, ""}}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("changes = %v, want %v", got, want)
 	}
 }
@@ -119,17 +119,18 @@ type world struct {
 // worlds lists each world in turn, one per poll, then the last one again.
 func worlds(ws ...world) lister {
 	n := -1
-	return func(prefix string) (map[string]gitstore.Hash, error) {
-		if prefix == oplog.RefName(gitstore.Kinds[0], "") && n < len(ws)-1 {
+	return func(kind string) (map[string]string, error) {
+		prefix := oplog.RefName(kind, "")
+		if kind == gitstore.Kinds[0] && n < len(ws)-1 {
 			n++ // a new poll
 		}
 		if prefix == ws[n].fail {
 			return nil, errors.New("listing failed")
 		}
-		out := map[string]gitstore.Hash{}
+		out := map[string]string{}
 		for name, h := range ws[n].refs {
-			if strings.HasPrefix(name, prefix) {
-				out[name] = h
+			if id, ok := strings.CutPrefix(name, prefix); ok {
+				out[id] = h.String()
 			}
 		}
 		return out, nil
@@ -156,7 +157,7 @@ func TestWatchSkipsFailedPolls(t *testing.T) {
 		world{refs: now},
 	)
 	ch := watch(t.Context(), list, time.Millisecond)
-	want := []Change{{"issue", a, h2}, {"issue", b, h1}, {"person", c, h1}, {"sync", c, gitstore.ZeroHash}}
+	want := []Change{{"issue", a, h2.String()}, {"issue", b, h1.String()}, {"person", c, h1.String()}, {"sync", c, ""}}
 	if got := next(t, ch); !reflect.DeepEqual(got, want) {
 		t.Fatalf("changes = %v, want %v", got, want)
 	}

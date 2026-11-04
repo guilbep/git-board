@@ -382,7 +382,7 @@ func (b *Backend) NewIssue(title, body string, labels []string) (string, error) 
 	if labels, _ = b.stored(labels, nil, nil); len(labels) > 0 {
 		ops = append(ops, issue.ChangeLabels(me, labels, nil))
 	}
-	is, err := issue.Create(ctx, b.s, ops...)
+	is, err := issue.Create(ctx, b.ds, ops...)
 	if err != nil {
 		return "", fmt.Errorf("creating the issue: %w", err)
 	}

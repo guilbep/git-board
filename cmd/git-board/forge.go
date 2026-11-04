@@ -108,7 +108,7 @@ func runForgeWay(ctx context.Context, b *store.Backend, cfg *config.Config, on [
 	if err != nil {
 		return err
 	}
-	if c, err := syncer.Cut(b.Store()); err == nil && c != nil {
+	if c, err := syncer.Cut(b.Datastore()); err == nil && c != nil {
 		for _, f := range c.Forges {
 			say("  the sync cut %s read %s issues of %s: a pull goes on from there",
 				c.At.Format("Jan 2 15:04"), english.Sprintf("%d of %d", f.Read, f.Total), f.Key)

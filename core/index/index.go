@@ -1,6 +1,6 @@
-// Package index keeps a local sqlite index of the issues and persons, for
-// lists, search and lookups by account. It is never the source of truth:
-// every query first brings it up to the refs.
+// Package index keeps an index of the issues and persons, for lists, search
+// and lookups by account. It is never the source of truth: every query
+// first brings it up to the datastore.
 package index
 
 import (
@@ -16,7 +16,6 @@ import (
 	"modernc.org/sqlite"
 	sqlite3 "modernc.org/sqlite/lib"
 
-	"github.com/guilbep/git-board/core/gitstore"
 	"github.com/guilbep/git-board/core/issue"
 	"github.com/guilbep/git-board/core/oplog"
 	"github.com/guilbep/git-board/core/people"
@@ -48,19 +47,20 @@ var kinds = []string{"issue", "person"}
 // errRebuild says the file must be built again.
 var errRebuild = errors.New("index: not an index of this version")
 
-// Index is the sqlite index of one repository.
+// Index is the sqlite index of one board.
 type Index struct {
-	s  *gitstore.Store
+	s  oplog.Datastore
 	db *sql.DB
 }
 
 // Broken is an entity that failed to load.
 type Broken struct{ Kind, ID, Error string }
 
-// Open opens the index at <common dir>/board/index.db. A file that is
-// missing, that sqlite can't read, or of another version is built again.
-func Open(ctx context.Context, s *gitstore.Store) (*Index, error) {
-	dir := filepath.Join(s.CommonDir(), "board")
+// Open opens the index at index.db in the datastore's folder (for git,
+// <common dir>/board). A file that is missing, that sqlite can't read, or
+// of another version is built again.
+func Open(ctx context.Context, s oplog.Datastore) (*Index, error) {
+	dir := s.Folder()
 	if err := os.MkdirAll(dir, 0o777); err != nil {
 		return nil, fmt.Errorf("index: %w", err)
 	}
@@ -144,20 +144,19 @@ type loaded struct {
 	err    error
 }
 
-// Refresh brings the index up to the refs. An entity that is new, or whose
-// head moved, is loaded again; one whose ref is gone is dropped. One that
-// fails to load is kept as broken. The writes are one transaction.
+// Refresh brings the index up to the datastore. An entity that is new, or
+// whose version moved, is loaded again; one that is gone is dropped. One
+// that fails to load is kept as broken. The writes are one transaction.
 func (ix *Index) Refresh(ctx context.Context) error {
 	refs := map[key]string{}
 	for _, kind := range kinds {
-		prefix := oplog.RefName(kind, "")
-		m, err := ix.s.Refs(prefix)
+		m, err := ix.s.Heads(ctx, kind)
 		if err != nil {
-			return fmt.Errorf("index: refs: %w", err)
+			return fmt.Errorf("index: heads: %w", err)
 		}
-		for name, h := range m {
-			if id := strings.TrimPrefix(name, prefix); oplog.IsID(id) {
-				refs[key{kind, id}] = h.String()
+		for id, v := range m {
+			if oplog.IsID(id) {
+				refs[key{kind, id}] = v
 			}
 		}
 	}

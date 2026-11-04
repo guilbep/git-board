@@ -6,7 +6,6 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/guilbep/git-board/core/gitstore"
 	"github.com/guilbep/git-board/core/oplog"
 )
 
@@ -28,7 +27,7 @@ type Record struct {
 
 // Links answers every sync entity's links, as their state rules hold them,
 // by issue, each issue's sorted by URL.
-func Links(s *gitstore.Store) (map[string][]Link, error) {
+func Links(s oplog.Datastore) (map[string][]Link, error) {
 	recs, err := Records(s)
 	if err != nil {
 		return nil, err
@@ -45,7 +44,7 @@ func Links(s *gitstore.Store) (map[string][]Link, error) {
 // Records is Links with each link's record.
 // ponytail: folds every sync entity whole, as a run does; a snapshot of
 // the state would serve this too.
-func Records(s *gitstore.Store) (map[string][]Record, error) {
+func Records(s oplog.Datastore) (map[string][]Record, error) {
 	ids, err := oplog.List(s, "sync")
 	if err != nil {
 		return nil, err

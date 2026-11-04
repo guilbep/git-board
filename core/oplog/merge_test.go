@@ -16,13 +16,13 @@ func TestMergeFastForward(t *testing.T) {
 	t.Parallel()
 	s := newStore(t)
 	l := create(t, s, "issue", "", op("create"))
-	next := commitOf(t, s, map[string]string{"pack": `{"clock":2,"ops":[{"kind":"comment","time":1}]}`}, l.Head)
+	next := commitOf(t, s, map[string]string{"pack": `{"clock":2,"ops":[{"kind":"comment","time":1}]}`}, l.head())
 	got, err := Merge(t.Context(), s, "issue", l.ID, next)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if h, _ := s.Ref(RefName("issue", l.ID)); got.Head != next || h != next {
-		t.Fatalf("head = %v, ref %v, want %v", got.Head, h, next)
+	if h, _ := s.Ref(RefName("issue", l.ID)); got.head() != next || h != next {
+		t.Fatalf("head = %v, ref %v, want %v", got.head(), h, next)
 	}
 	if !slices.Equal(opKinds(got), []string{"create", "comment"}) {
 		t.Fatalf("kinds = %v", opKinds(got))
@@ -33,12 +33,12 @@ func TestMergeContained(t *testing.T) {
 	t.Parallel()
 	s := newStore(t)
 	l := create(t, s, "issue", "", op("create"))
-	first := l.Head
+	first := l.head()
 	appendOps(t, s, l, op("comment"))
-	for _, other := range []gitstore.Hash{first, l.Head} {
+	for _, other := range []gitstore.Hash{first, l.head()} {
 		got, err := Merge(t.Context(), s, "issue", l.ID, other)
-		if err != nil || got.Head != l.Head {
-			t.Fatalf("merge of %v: head %v, %v; want %v", other, got.Head, err, l.Head)
+		if err != nil || got.head() != l.head() {
+			t.Fatalf("merge of %v: head %v, %v; want %v", other, got.head(), err, l.head())
 		}
 	}
 }
@@ -47,27 +47,27 @@ func TestMergeDiverged(t *testing.T) {
 	t.Parallel()
 	s := newStore(t)
 	l := create(t, s, "issue", "", op("create"))
-	first := l.Head
+	first := l.head()
 	// Ours: two appends, at clocks 2 and 3. Theirs: one commit at clock 2.
 	appendOps(t, s, l, op("ours1"))
-	ours1 := l.Head
+	ours1 := l.head()
 	appendOps(t, s, l, op("ours2"))
-	ours := l.Head
+	ours := l.head()
 	theirs := commitOf(t, s, map[string]string{"pack": `{"clock":2,"ops":[{"kind":"theirs","time":1}]}`}, first)
 
 	got, err := Merge(t.Context(), s, "issue", l.ID, theirs)
 	if err != nil {
 		t.Fatal(err)
 	}
-	c, err := s.ReadCommit(got.Head)
+	c, err := s.ReadCommit(got.head())
 	if err != nil || !slices.Equal(c.Parents, []gitstore.Hash{ours, theirs}) {
 		t.Fatalf("merge parents = %v, %v; want %v", c.Parents, err, []gitstore.Hash{ours, theirs})
 	}
-	if p := readPack(t, s, got.Head); p != `{"clock":4,"ops":[]}` {
+	if p := readPack(t, s, got.head()); p != `{"clock":4,"ops":[]}` {
 		t.Fatalf("merge pack = %s", p)
 	}
-	if h, _ := s.Ref(RefName("issue", l.ID)); h != got.Head {
-		t.Fatalf("ref = %v, want %v", h, got.Head)
+	if h, _ := s.Ref(RefName("issue", l.ID)); h != got.head() {
+		t.Fatalf("ref = %v, want %v", h, got.head())
 	}
 	// At clock 2, the lower pack hash comes first.
 	want := []string{"create", "ours1", "theirs", "ours2"}
@@ -93,12 +93,12 @@ func TestMergeRejectsBadHead(t *testing.T) {
 	t.Parallel()
 	s := newStore(t)
 	l := create(t, s, "issue", "", op("create"))
-	bad := commitOf(t, s, map[string]string{"pack": `{"clock":5,"ops":[{"kind":"comment","time":1}]}`}, l.Head)
+	bad := commitOf(t, s, map[string]string{"pack": `{"clock":5,"ops":[{"kind":"comment","time":1}]}`}, l.head())
 	if _, err := Merge(t.Context(), s, "issue", l.ID, bad); err == nil {
 		t.Fatal("merge of a bad head: no error")
 	}
-	if h, _ := s.Ref(RefName("issue", l.ID)); h != l.Head {
-		t.Fatalf("ref = %v, want %v", h, l.Head)
+	if h, _ := s.Ref(RefName("issue", l.ID)); h != l.head() {
+		t.Fatalf("ref = %v, want %v", h, l.head())
 	}
 }
 
@@ -143,9 +143,9 @@ func TestMergeFetched(t *testing.T) {
 		t.Fatal(err)
 	}
 	// git-board's own refs under refs/board/ are not entities.
-	setRef(t, b, "refs/board/seq", sb.Head, gitstore.ZeroHash)
-	setRef(t, b, "refs/board-remotes/origin/seq", iss.Head, gitstore.ZeroHash)
-	setRef(t, b, "refs/board-remotes/origin/other/x", iss.Head, gitstore.ZeroHash)
+	setRef(t, b, "refs/board/seq", sb.head(), gitstore.ZeroHash)
+	setRef(t, b, "refs/board-remotes/origin/seq", iss.head(), gitstore.ZeroHash)
+	setRef(t, b, "refs/board-remotes/origin/other/x", iss.head(), gitstore.ZeroHash)
 	// Nor are refs whose names aren't ids, even at a head that won't load.
 	corrupt := commitOf(t, b, map[string]string{"notes": "x"})
 	for _, name := range badRefs {
@@ -156,16 +156,16 @@ func TestMergeFetched(t *testing.T) {
 	if err != nil || n != 2 {
 		t.Fatalf("moved = %d, %v; want 2", n, err)
 	}
-	if h, _ := b.Ref(RefName("issue", iss.ID)); h != iss.Head {
-		t.Fatalf("issue ref = %v, want %v", h, iss.Head)
+	if h, _ := b.Ref(RefName("issue", iss.ID)); h != iss.head() {
+		t.Fatalf("issue ref = %v, want %v", h, iss.head())
 	}
 	got := load(t, b, "sync", id)
-	c, err := b.ReadCommit(got.Head)
-	if err != nil || !slices.Equal(c.Parents, []gitstore.Hash{sb.Head, sa.Head}) {
+	c, err := b.ReadCommit(got.head())
+	if err != nil || !slices.Equal(c.Parents, []gitstore.Hash{sb.head(), sa.head()}) {
 		t.Fatalf("merge parents = %v, %v", c.Parents, err)
 	}
 	want := []string{"link-a", "link-b"}
-	if packOf(t, b, sb.Head) < packOf(t, b, sa.Head) {
+	if packOf(t, b, sb.head()) < packOf(t, b, sa.head()) {
 		want = []string{"link-b", "link-a"}
 	}
 	if !slices.Equal(opKinds(got), want) || !slices.Equal(clocks(got), []uint64{1, 1}) {
@@ -175,8 +175,8 @@ func TestMergeFetched(t *testing.T) {
 	if n, err := MergeFetched(t.Context(), b, "origin"); err != nil || n != 0 {
 		t.Fatalf("second merge moved %d, %v", n, err)
 	}
-	if h, _ := b.Ref("refs/board/seq"); h != sb.Head {
-		t.Fatalf("seq = %v, want %v", h, sb.Head)
+	if h, _ := b.Ref("refs/board/seq"); h != sb.head() {
+		t.Fatalf("seq = %v, want %v", h, sb.head())
 	}
 	if h, _ := b.Ref("refs/board/other/x"); h != gitstore.ZeroHash {
 		t.Fatalf("refs/board/other/x = %v", h)
@@ -214,11 +214,11 @@ func TestMergeFetchedGoesOnPastFailure(t *testing.T) {
 func TestMergeRetries(t *testing.T) {
 	s := newStore(t)
 	l := create(t, s, "issue", "", op("create"))
-	first := l.Head
+	first := l.head()
 	appendOps(t, s, l, op("ours"))
 	theirs := commitOf(t, s, map[string]string{"pack": `{"clock":2,"ops":[{"kind":"theirs","time":1}]}`}, first)
 	// Another writer appends between Merge's read and its write.
-	moved := commitOf(t, s, map[string]string{"pack": `{"clock":3,"ops":[{"kind":"other","time":1}]}`}, l.Head)
+	moved := commitOf(t, s, map[string]string{"pack": `{"clock":3,"ops":[{"kind":"other","time":1}]}`}, l.head())
 	calls := 0
 	swapUpdateRef(t, func(s *gitstore.Store, ctx context.Context, name string, next, prev gitstore.Hash) error {
 		calls++
@@ -231,11 +231,11 @@ func TestMergeRetries(t *testing.T) {
 	if err != nil || calls != 2 {
 		t.Fatalf("merge: %v, %d calls; want 2", err, calls)
 	}
-	c, err := s.ReadCommit(got.Head)
+	c, err := s.ReadCommit(got.head())
 	if err != nil || !slices.Equal(c.Parents, []gitstore.Hash{moved, theirs}) {
 		t.Fatalf("merge parents = %v, %v; want %v", c.Parents, err, []gitstore.Hash{moved, theirs})
 	}
-	if p := readPack(t, s, got.Head); p != `{"clock":4,"ops":[]}` {
+	if p := readPack(t, s, got.head()); p != `{"clock":4,"ops":[]}` {
 		t.Fatalf("merge pack = %s", p)
 	}
 	if want := load(t, s, "issue", l.ID); !reflect.DeepEqual(got, want) {
@@ -248,7 +248,7 @@ func TestMergeRetries(t *testing.T) {
 func TestMergeFetchedCountsMoveOfFailedMerge(t *testing.T) {
 	s := newStore(t)
 	l := create(t, s, "issue", "", op("create"))
-	theirs := commitOf(t, s, map[string]string{"pack": `{"clock":2,"ops":[{"kind":"theirs","time":1}]}`}, l.Head)
+	theirs := commitOf(t, s, map[string]string{"pack": `{"clock":2,"ops":[{"kind":"theirs","time":1}]}`}, l.head())
 	setRef(t, s, "refs/board-remotes/origin/issue/"+l.ID, theirs, gitstore.ZeroHash)
 	corrupt := commitOf(t, s, map[string]string{"notes": "x"})
 	swapUpdateRef(t, func(s *gitstore.Store, ctx context.Context, name string, next, prev gitstore.Hash) error {

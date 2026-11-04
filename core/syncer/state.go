@@ -10,7 +10,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/guilbep/git-board/core/gitstore"
+	"github.com/guilbep/git-board/core/datastore"
 	"github.com/guilbep/git-board/core/oplog"
 )
 
@@ -75,7 +75,7 @@ func emptyState() *state {
 		postedBy: map[string]string{}, refused: map[[3]string]bool{}}
 }
 
-func loadState(s *gitstore.Store, key string) (*state, error) {
+func loadState(s oplog.Datastore, key string) (*state, error) {
 	st := emptyState()
 	l, err := oplog.Load(s, "sync", StateID(key))
 	if errors.Is(err, oplog.ErrNotFound) {
@@ -197,7 +197,7 @@ func runOp(author string, now, started int64) oplog.Op {
 // write appends ops to the entity, creating it if needed, and folds them
 // into st. It refuses an op with no author, which would break the entity.
 // When another write landed in between, it reloads st whole.
-func (st *state) write(ctx context.Context, s *gitstore.Store, key string, ops []oplog.Op) error {
+func (st *state) write(ctx context.Context, s oplog.Datastore, key string, ops []oplog.Op) error {
 	if len(ops) == 0 {
 		return nil
 	}
@@ -236,7 +236,7 @@ func (st *state) write(ctx context.Context, s *gitstore.Store, key string, ops [
 // is nil. A create that finds the entity made by another write since then
 // appends to it instead; not there yet, the other write still holds the
 // ref's lock, so it creates again. It tries 5 times, as oplog's writes do.
-func writeOps(ctx context.Context, s *gitstore.Store, id string, l *oplog.Log, ops []oplog.Op) (*oplog.Log, error) {
+func writeOps(ctx context.Context, s oplog.Datastore, id string, l *oplog.Log, ops []oplog.Op) (*oplog.Log, error) {
 	for try := 1; ; try++ {
 		if l != nil {
 			return l, l.Append(ctx, s, ops)
@@ -245,7 +245,7 @@ func writeOps(ctx context.Context, s *gitstore.Store, id string, l *oplog.Log, o
 		if err == nil {
 			return created, nil
 		}
-		if !errors.Is(err, gitstore.ErrRefMoved) || try == 5 {
+		if !errors.Is(err, datastore.ErrMoved) || try == 5 {
 			return nil, err
 		}
 		if l, err = oplog.Load(s, "sync", id); err != nil && !errors.Is(err, oplog.ErrNotFound) {

@@ -32,6 +32,9 @@ type PruneReport struct {
 // and removes nothing.
 func (b *Backend) Prune(remote string, dryRun bool) (PruneReport, error) {
 	rep := PruneReport{Refs: map[string]int{}}
+	if err := b.needGit("pruning git-bug's refs"); err != nil {
+		return rep, err
+	}
 	if err := b.Switched(); err != nil {
 		return rep, err
 	}

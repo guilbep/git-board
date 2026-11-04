@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/guilbep/git-board/core/datastore/memstore"
 	"github.com/guilbep/git-board/core/forge"
 	"github.com/guilbep/git-board/core/forge/github"
 	"github.com/guilbep/git-board/core/forge/gitlab"
@@ -164,7 +165,7 @@ func (b *Backend) SyncIssue(ctx context.Context, run ForgeRun, idPrefix string) 
 	return b.forgeSync(ctx, run, syncer.Sync, id)
 }
 
-type syncWay func(context.Context, *gitstore.Store, syncer.Options, ...forge.Forge) (syncer.Report, error)
+type syncWay func(context.Context, oplog.Datastore, syncer.Options, ...forge.Forge) (syncer.Report, error)
 
 func (b *Backend) forgeSync(ctx context.Context, run ForgeRun, way syncWay, issueID string) (syncer.Report, error) {
 	if err := b.Switched(); err != nil {
@@ -174,8 +175,9 @@ func (b *Backend) forgeSync(ctx context.Context, run ForgeRun, way syncWay, issu
 	if see == nil {
 		see = func(SyncEvent) {}
 	}
-	s := b.s
-	if run.DryRun {
+	s := b.ds
+	switch {
+	case run.DryRun && b.inGit():
 		scratch, done, err := b.scratch(ctx)
 		if err != nil {
 			return syncer.Report{}, err
@@ -183,10 +185,20 @@ func (b *Backend) forgeSync(ctx context.Context, run ForgeRun, way syncWay, issu
 		defer done()
 		s = scratch
 		if run.Merge != "" {
-			if _, err := oplog.MergeFetched(ctx, s, run.Merge); err != nil {
+			if _, err := oplog.MergeFetched(ctx, scratch, run.Merge); err != nil {
 				return syncer.Report{}, fmt.Errorf("the check's copy of what %s has: %w", run.Merge, err)
 			}
 		}
+	case run.DryRun:
+		if run.Merge != "" {
+			return syncer.Report{}, b.missing("merging what " + run.Merge + " has")
+		}
+		scratch, done, err := b.memScratch(ctx)
+		if err != nil {
+			return syncer.Report{}, err
+		}
+		defer done()
+		s = scratch
 	}
 	names := map[string]string{} // forge key -> name
 	ids := new(int)
@@ -265,6 +277,9 @@ const switchedRef = "refs/board/switched"
 // wasn't switched: a forge sync would pull the fork's mirrors without the
 // fork's links, as issues of their own, and push them back as duplicates.
 func (b *Backend) Switched() error {
+	if !b.inGit() {
+		return nil // git-bug's issues are in git: a board kept elsewhere has none
+	}
 	bugs, err := b.s.Refs("refs/bugs/")
 	if err != nil || len(bugs) == 0 {
 		return err
@@ -347,6 +362,31 @@ func isLocal(meta map[string]string) bool {
 // those.)
 func (b *Backend) scratch(ctx context.Context) (*gitstore.Store, func(), error) {
 	return scratchOf(ctx, b.s.CommonDir(), b.s.CommonDir())
+}
+
+// memScratch is a copy in memory of a board kept elsewhere than git, for a
+// dry run to write to, with the sync journal in a folder of its own; done
+// removes that folder.
+func (b *Backend) memScratch(ctx context.Context) (oplog.Datastore, func(), error) {
+	parent := b.ds.Folder()
+	if err := os.MkdirAll(parent, 0o755); err != nil {
+		return nil, nil, err
+	}
+	dir, err := os.MkdirTemp(parent, "check-")
+	if err != nil {
+		return nil, nil, err
+	}
+	done := func() { _ = os.RemoveAll(dir) }
+	if err := copyJournal(filepath.Join(parent, "sync.lock"), filepath.Join(dir, "sync.lock")); err != nil {
+		done()
+		return nil, nil, err
+	}
+	s, err := memstore.Copy(ctx, b.ds, dir)
+	if err != nil {
+		done()
+		return nil, nil, fmt.Errorf("copying the board for a check: %w", err)
+	}
+	return s, done, nil
 }
 
 // scratchOf is a mirror of the repository at from, in home's board folder,

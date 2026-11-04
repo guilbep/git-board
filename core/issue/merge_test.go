@@ -17,7 +17,7 @@ func packHash(t *testing.T, s *gitstore.Store, id string) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	c, err := s.ReadCommit(l.Head)
+	c, err := s.ReadCommit(gitstore.NewHash(l.Version))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -84,12 +84,12 @@ func TestMergeConverges(t *testing.T) {
 	for _, s := range []*gitstore.Store{a, b} {
 		l, err := oplog.Load(s, "issue", c.ID)
 		check(err)
-		mc, err := s.ReadCommit(l.Head)
+		mc, err := s.ReadCommit(gitstore.NewHash(l.Version))
 		check(err)
 		if len(mc.Parents) != 2 {
-			t.Fatalf("head %v has %d parents, want 2", l.Head, len(mc.Parents))
+			t.Fatalf("head %v has %d parents, want 2", l.Version, len(mc.Parents))
 		}
-		merges = append(merges, l.Head)
+		merges = append(merges, gitstore.NewHash(l.Version))
 	}
 	if merges[0] == merges[1] {
 		t.Fatalf("both sides have the same merge commit %v", merges[0])

@@ -173,16 +173,16 @@ func TestCreateLoad(t *testing.T) {
 		{Kind: "comment", Author: "forge:octocat", Time: 1792836300, Origin: &Origin{Forge: "github.com/o/r", Event: "comment:1"}},
 	}
 	l := create(t, s, "issue", "", ops...)
-	h := packOf(t, s, l.Head)
+	h := packOf(t, s, l.head())
 	if l.ID != h {
 		t.Fatalf("id = %s, want the pack's hash %s", l.ID, h)
 	}
 	got := load(t, s, "issue", l.ID)
 	want := []Entry{{ops[0], h + ":0", 1}, {ops[1], h + ":1", 1}}
-	if got.Kind != "issue" || got.ID != l.ID || got.Head != l.Head || !reflect.DeepEqual(got.Entries, want) {
+	if got.Kind != "issue" || got.ID != l.ID || got.head() != l.head() || !reflect.DeepEqual(got.Entries, want) {
 		t.Fatalf("log = %+v\nwant entries %+v", got, want)
 	}
-	if p := readPack(t, s, l.Head); !strings.HasPrefix(p, `{"clock":1,"nonce":"`) {
+	if p := readPack(t, s, l.head()); !strings.HasPrefix(p, `{"clock":1,"nonce":"`) {
 		t.Fatalf("pack = %s", p)
 	}
 }
@@ -200,10 +200,10 @@ func TestCreateIDs(t *testing.T) {
 	if c.ID != id || RefName("sync", id) != "refs/board/sync/"+id {
 		t.Fatalf("id = %s, ref %s", c.ID, RefName("sync", id))
 	}
-	if h, _ := s.Ref("refs/board/sync/" + id); h != c.Head {
-		t.Fatalf("ref = %v, want %v", h, c.Head)
+	if h, _ := s.Ref("refs/board/sync/" + id); h != c.head() {
+		t.Fatalf("ref = %v, want %v", h, c.head())
 	}
-	if c.Entries[0].ID != packOf(t, s, c.Head)+":0" {
+	if c.Entries[0].ID != packOf(t, s, c.head())+":0" {
 		t.Fatalf("op id = %s", c.Entries[0].ID)
 	}
 	if _, err := Create(t.Context(), s, "sync", id, []Op{op("link")}); err == nil {
@@ -218,7 +218,7 @@ func TestList(t *testing.T) {
 	var head gitstore.Hash
 	for range 3 {
 		l := create(t, s, "issue", "", op("create"))
-		want, head = append(want, l.ID), l.Head
+		want, head = append(want, l.ID), l.head()
 	}
 	slices.Sort(want)
 	create(t, s, "sync", "56f7a8e819f90e968812bac54ae4b06142d8e735", op("link"))
@@ -240,15 +240,15 @@ func TestAppendOrder(t *testing.T) {
 	s := newStore(t)
 	l := create(t, s, "issue", "", op("create"))
 	for _, k := range []string{"a", "b", "c"} {
-		head := l.Head
+		head := l.head()
 		appendOps(t, s, l, op(k))
-		if l.Head == head {
+		if l.head() == head {
 			t.Fatalf("append %s: head unchanged", k)
 		}
 	}
-	head := l.Head
+	head := l.head()
 	appendOps(t, s, l)
-	if l.Head != head {
+	if l.head() != head {
 		t.Fatal("appending nothing wrote a commit")
 	}
 	got := load(t, s, "issue", l.ID)
@@ -343,10 +343,10 @@ func TestIdenticalPacksCountOnce(t *testing.T) {
 	// write. The trees differ by an entry the reader ignores, and the pack
 	// holds fields it doesn't know.
 	p := `{"clock":2,"later":true,"ops":[{"kind":"comment","time":1,"later":1}]}`
-	x := commitOf(t, s, map[string]string{"pack": p}, l.Head)
-	y := commitOf(t, s, map[string]string{"pack": p, "notes": "ignored"}, l.Head)
+	x := commitOf(t, s, map[string]string{"pack": p}, l.head())
+	y := commitOf(t, s, map[string]string{"pack": p, "notes": "ignored"}, l.head())
 	m := commitOf(t, s, map[string]string{"pack": `{"clock":3,"ops":[]}`}, x, y)
-	setRef(t, s, RefName("issue", l.ID), m, l.Head)
+	setRef(t, s, RefName("issue", l.ID), m, l.head())
 	if got := opKinds(load(t, s, "issue", l.ID)); !slices.Equal(got, []string{"create", "comment"}) {
 		t.Fatalf("kinds = %v", got)
 	}
@@ -374,9 +374,9 @@ func TestBadKindOrID(t *testing.T) {
 		is("load "+kind, err)
 		_, err = List(s, kind)
 		is("list "+kind, err)
-		_, err = Merge(t.Context(), s, kind, good.ID, good.Head)
+		_, err = Merge(t.Context(), s, kind, good.ID, good.head())
 		is("merge "+kind, err)
-		is("append "+kind, (&Log{Kind: kind, ID: good.ID, Head: good.Head}).Append(t.Context(), s, ops))
+		is("append "+kind, (&Log{Kind: kind, ID: good.ID, Version: good.Version}).Append(t.Context(), s, ops))
 	}
 	for _, id := range badIDs {
 		if id != "" { // Create with no id takes the pack's hash
@@ -385,9 +385,9 @@ func TestBadKindOrID(t *testing.T) {
 		}
 		_, err := Load(s, "issue", id)
 		is(fmt.Sprintf("load %q", id), err)
-		_, err = Merge(t.Context(), s, "issue", id, good.Head)
+		_, err = Merge(t.Context(), s, "issue", id, good.head())
 		is(fmt.Sprintf("merge %q", id), err)
-		is(fmt.Sprintf("append %q", id), (&Log{Kind: "issue", ID: id, Head: good.Head}).Append(t.Context(), s, ops))
+		is(fmt.Sprintf("append %q", id), (&Log{Kind: "issue", ID: id, Version: good.Version}).Append(t.Context(), s, ops))
 	}
 	if refs, err := s.Refs("refs/"); err != nil || len(refs) != 1 {
 		t.Fatalf("refs = %v, %v; want only the good entity's", refs, err)
@@ -406,11 +406,13 @@ func TestOpMissingFieldIsRejected(t *testing.T) {
 		`[{"kind":"create","author":"a","time":0}]`,
 		`[{"kind":"create","author":"a","time":1},{"kind":"comment","author":"a"}]`,
 	} {
-		bad := commitOf(t, s, map[string]string{"pack": `{"clock":1,"ops":` + ops + `}`})
+		p := `{"clock":1,"ops":` + ops + `}`
+		c := commitOf(t, s, map[string]string{"pack": p})
 		id := fmt.Sprintf("%040x", i)
-		setRef(t, s, RefName("issue", id), bad, gitstore.ZeroHash)
+		setRef(t, s, RefName("issue", id), c, gitstore.ZeroHash)
 		_, err := Load(s, "issue", id)
-		if err == nil || errors.Is(err, ErrNotFound) || !strings.Contains(err.Error(), bad.String()) {
+		// the pack is named by its hash, the same in every datastore
+		if bad := Hash([]byte(p)); err == nil || errors.Is(err, ErrNotFound) || !strings.Contains(err.Error(), bad) {
 			t.Errorf("ops %s: err = %v, want one naming %s", ops, err, bad)
 		}
 	}
@@ -433,9 +435,9 @@ func TestOpMissingFieldIsRejected(t *testing.T) {
 		}
 	}
 	l := create(t, s, "issue", "", op("create"))
-	head := l.Head
-	if err := l.Append(t.Context(), s, []Op{op("comment"), {Kind: "comment"}}); err == nil || l.Head != head {
-		t.Errorf("append with no time: %v, head %v; want an error and %v", err, l.Head, head)
+	head := l.head()
+	if err := l.Append(t.Context(), s, []Op{op("comment"), {Kind: "comment"}}); err == nil || l.head() != head {
+		t.Errorf("append with no time: %v, head %v; want an error and %v", err, l.head(), head)
 	}
 	after, err := s.Refs("refs/")
 	if err != nil || len(after) != len(before)+1 || after[RefName("issue", l.ID)] != head {
@@ -451,7 +453,7 @@ func TestAppendEntriesMatchLoad(t *testing.T) {
 	if got := load(t, s, "issue", l.ID); !reflect.DeepEqual(l, got) {
 		t.Fatalf("created %+v\nloaded %+v", l, got)
 	}
-	first := l.Head
+	first := l.head()
 	appendOps(t, s, l, op("ours"))
 	theirs := commitOf(t, s, map[string]string{"pack": `{"clock":2,"ops":[{"kind":"theirs","time":1}]}`}, first)
 	l, err := Merge(t.Context(), s, "issue", l.ID, theirs)
@@ -467,16 +469,19 @@ func TestAppendEntriesMatchLoad(t *testing.T) {
 	name := RefName("issue", l.ID)
 	corrupt := commitOf(t, s, map[string]string{"notes": "x"})
 	var wrote gitstore.Hash
-	swapUpdateRef(t, func(s *gitstore.Store, ctx context.Context, name string, next, prev gitstore.Hash) error {
-		if err := s.UpdateRef(ctx, name, next, prev); err != nil {
-			return err
+	ds := hooked{s, func(ctx context.Context, kind, id string, pack []byte, prev string) (string, error) {
+		v, err := s.Add(ctx, kind, id, pack, prev)
+		if err != nil {
+			return "", err
 		}
-		wrote = next
-		return s.UpdateRef(ctx, name, corrupt, next)
-	})
-	appendOps(t, s, l, Op{Kind: "comment", Time: 1, Data: json.RawMessage(`{"body": "a & b"}`)}, op("last"))
-	if l.Head != wrote {
-		t.Fatalf("head = %v, want the commit written, %v", l.Head, wrote)
+		wrote = gitstore.NewHash(v)
+		return v, s.UpdateRef(ctx, name, corrupt, wrote)
+	}}
+	if err := l.Append(t.Context(), ds, []Op{{Kind: "comment", Time: 1, Data: json.RawMessage(`{"body": "a & b"}`)}, op("last")}); err != nil {
+		t.Fatal(err)
+	}
+	if l.head() != wrote {
+		t.Fatalf("head = %v, want the commit written, %v", l.head(), wrote)
 	}
 	setRef(t, s, name, wrote, corrupt)
 	got := load(t, s, "issue", l.ID)
@@ -492,17 +497,30 @@ func TestAppendEntriesMatchLoad(t *testing.T) {
 func TestAppendGivesUpAfterFive(t *testing.T) {
 	s := newStore(t)
 	l := create(t, s, "issue", "", op("create"))
-	head := l.Head
+	head := l.head()
 	calls := 0
-	swapUpdateRef(t, func(*gitstore.Store, context.Context, string, gitstore.Hash, gitstore.Hash) error {
+	ds := hooked{s, func(context.Context, string, string, []byte, string) (string, error) {
 		calls++
-		return fmt.Errorf("%w: always", gitstore.ErrRefMoved)
-	})
-	err := l.Append(t.Context(), s, []Op{op("comment")})
+		return "", fmt.Errorf("%w: always", gitstore.ErrRefMoved)
+	}}
+	err := l.Append(t.Context(), ds, []Op{op("comment")})
 	if !errors.Is(err, gitstore.ErrRefMoved) || calls != 5 {
 		t.Fatalf("err = %v after %d attempts; want ErrRefMoved after 5", err, calls)
 	}
-	if h, _ := s.Ref(RefName("issue", l.ID)); h != head || l.Head != head {
-		t.Fatalf("ref %v, log head %v; want %v", h, l.Head, head)
+	if h, _ := s.Ref(RefName("issue", l.ID)); h != head || l.head() != head {
+		t.Fatalf("ref %v, log head %v; want %v", h, l.head(), head)
 	}
+}
+
+// head is the log's version as the git commit it is.
+func (l *Log) head() gitstore.Hash { return gitstore.NewHash(l.Version) }
+
+// hooked is a git datastore whose Add is add.
+type hooked struct {
+	*gitstore.Store
+	add func(ctx context.Context, kind, id string, pack []byte, prev string) (string, error)
+}
+
+func (h hooked) Add(ctx context.Context, kind, id string, pack []byte, prev string) (string, error) {
+	return h.add(ctx, kind, id, pack, prev)
 }

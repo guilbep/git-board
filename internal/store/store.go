@@ -12,7 +12,6 @@ import (
 	"log"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
@@ -139,9 +138,13 @@ var (
 	ErrNoMe = errors.New("choose who you write as first")
 )
 
-// Backend is an open repository: its store and its index.
+// Backend is an open repository: its datastore and its index.
 type Backend struct {
+	// s is the git repository: the code, and the board when it is kept in
+	// git. ds is where the board is kept (ADR 0002): s itself, or another
+	// datastore. What only git does checks b.git first.
 	s   *gitstore.Store
+	ds  oplog.Datastore
 	ix  *index.Index
 	dir string // the git directory, for what only git does
 	// flat are the kinds stored as plain labels, by label (SetFlatKinds)
@@ -154,7 +157,7 @@ type Backend struct {
 	mu      sync.Mutex
 	issues  map[string]*issue.Issue
 	persons map[string]*people.Person
-	heads   map[string]gitstore.Hash // ref -> head of what's loaded
+	heads   map[string]string // ref -> version of what's loaded
 
 	// Tokens finds a forge account's token, Approve stores one: nil, the
 	// environment and git's credential helper (tokens.go). Tests set
@@ -192,7 +195,7 @@ func Open(path string) (*Backend, error) {
 	if err != nil {
 		return nil, fmt.Errorf("opening the index: %w", err)
 	}
-	b := &Backend{s: s, ix: ix, dir: dir, issues: map[string]*issue.Issue{}, persons: map[string]*people.Person{}, heads: map[string]gitstore.Hash{}}
+	b := &Backend{s: s, ds: s, ix: ix, dir: dir, issues: map[string]*issue.Issue{}, persons: map[string]*people.Person{}, heads: map[string]string{}}
 	// the kind form and the held labels; a config that doesn't parse is the
 	// command's to report
 	if cfg, err := config.Load(config.PathIn(path)); err == nil {
@@ -214,8 +217,12 @@ func OpenCwd() (*Backend, error) {
 // Close closes the index.
 func (b *Backend) Close() error { return b.ix.Close() }
 
-// Store is the core's store of this repository.
+// Store is the git repository: the code's, and the board's when it is kept
+// in git.
 func (b *Backend) Store() *gitstore.Store { return b.s }
+
+// Datastore is where the board is kept.
+func (b *Backend) Datastore() oplog.Datastore { return b.ds }
 
 // GitDir is the repository's git directory.
 func (b *Backend) GitDir() string { return b.dir }
@@ -224,8 +231,9 @@ func (b *Backend) GitDir() string { return b.dir }
 // the inbox's files, the assignable people, the media.
 type Storage = billy.Filesystem
 
-// Storage is git-board's folder for its caches, in the git common dir.
-func (b *Backend) Storage() Storage { return osfs.New(filepath.Join(b.s.CommonDir(), "board")) }
+// Storage is git-board's folder for its caches: the datastore's folder, for
+// git the common dir's board.
+func (b *Backend) Storage() Storage { return osfs.New(b.ds.Folder()) }
 
 var ctx = context.Background()
 
@@ -278,7 +286,7 @@ func (b *Backend) numbered(name string) (string, error) {
 
 // me is the person id git-board writes as.
 func (b *Backend) me() (string, error) {
-	id, err := people.Me(ctx, b.s)
+	id, err := people.Me(ctx, b.ds)
 	if err == nil && id == "" {
 		err = ErrNoMe
 	}
@@ -287,7 +295,7 @@ func (b *Backend) me() (string, error) {
 
 // loadIssue is an issue and its log, loaded again only when its head moved.
 func (b *Backend) loadIssue(id string) (*issue.Issue, *oplog.Log, error) {
-	l, err := oplog.Load(b.s, "issue", id)
+	l, err := oplog.Load(b.ds, "issue", id)
 	if errors.Is(err, oplog.ErrNotFound) {
 		return nil, nil, fmt.Errorf("%w: issue %s", ErrNotFound, id)
 	}
@@ -299,7 +307,7 @@ func (b *Backend) loadIssue(id string) (*issue.Issue, *oplog.Log, error) {
 		return nil, nil, err
 	}
 	b.mu.Lock()
-	b.issues[id], b.heads[oplog.RefName("issue", id)] = is, l.Head
+	b.issues[id], b.heads[oplog.RefName("issue", id)] = is, l.Version
 	b.mu.Unlock()
 	return is, l, nil
 }
@@ -308,17 +316,16 @@ func (b *Backend) loadIssue(id string) (*issue.Issue, *oplog.Log, error) {
 // the cache: load reads one again. One that fails to load is left out and
 // logged, as the index keeps a broken entity out.
 func all[T any](b *Backend, kind string, cache map[string]T, load func(id string) (T, error)) (map[string]T, error) {
-	prefix := oplog.RefName(kind, "")
-	refs, err := b.s.Refs(prefix)
+	heads, err := b.ds.Heads(ctx, kind)
 	if err != nil {
 		return nil, err
 	}
 	out := map[string]T{}
-	for name, head := range refs {
-		id := strings.TrimPrefix(name, prefix)
+	for id, head := range heads {
 		if !oplog.IsID(id) {
 			continue
 		}
+		name := oplog.RefName(kind, id)
 		b.mu.Lock()
 		v, ok := cache[id]
 		ok = ok && b.heads[name] == head
@@ -343,7 +350,7 @@ func (b *Backend) allIssues() (map[string]*issue.Issue, error) {
 
 func (b *Backend) allPersons() (map[string]*people.Person, error) {
 	return all(b, "person", b.persons, func(id string) (*people.Person, error) {
-		l, err := oplog.Load(b.s, "person", id)
+		l, err := oplog.Load(b.ds, "person", id)
 		if err != nil {
 			return nil, err
 		}
@@ -352,7 +359,7 @@ func (b *Backend) allPersons() (map[string]*people.Person, error) {
 			return nil, err
 		}
 		b.mu.Lock()
-		b.persons[id], b.heads[oplog.RefName("person", id)] = p, l.Head
+		b.persons[id], b.heads[oplog.RefName("person", id)] = p, l.Version
 		b.mu.Unlock()
 		return p, nil
 	})
@@ -370,7 +377,7 @@ type view struct {
 // ponytail: folds every sync entity on each call, cheap while they are
 // small; cache by the sync refs' heads once real projects fill them (M6).
 func (b *Backend) view() (view, error) {
-	records, err := syncer.Records(b.s)
+	records, err := syncer.Records(b.ds)
 	if err != nil {
 		return view{}, err
 	}
@@ -504,7 +511,7 @@ func (b *Backend) do(idPrefix string, ops func(me string, is *issue.Issue, l *op
 	if err != nil || len(list) == 0 {
 		return is, err
 	}
-	return issue.Do(ctx, b.s, is.ID, list...)
+	return issue.Do(ctx, b.ds, is.ID, list...)
 }
 
 // ApplyLabelChange adds and removes labels on an issue in one operation,
@@ -646,6 +653,9 @@ func (b *Backend) SetView(view string) error {
 
 // Pull fetches remote's entities and merges them into this clone's.
 func (b *Backend) Pull(remote string) error {
+	if err := b.needGit("git board pull"); err != nil {
+		return err
+	}
 	if err := b.Fetch(remote); err != nil {
 		return err
 	}
@@ -661,6 +671,9 @@ func (b *Backend) Pull(remote string) error {
 // ponytail: a fetch after each push; the remote's refs set from ours when
 // that fetch costs.
 func (b *Backend) Push(remote string) (string, error) {
+	if err := b.needGit("git board push"); err != nil {
+		return "", err
+	}
 	if err := b.checkRemote(remote); err != nil {
 		return "", err
 	}
@@ -675,6 +688,9 @@ func (b *Backend) Push(remote string) (string, error) {
 // Fetch brings a remote's entities in as its copies here
 // (refs/board-remotes/<remote>/): nothing local changes.
 func (b *Backend) Fetch(remote string) error {
+	if err := b.needGit("fetching the board from a remote"); err != nil {
+		return err
+	}
 	if err := b.checkRemote(remote); err != nil {
 		return err
 	}

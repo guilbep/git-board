@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/guilbep/git-board/core/datastore"
 	"github.com/guilbep/git-board/core/gitstore"
 	"github.com/guilbep/git-board/core/issue"
 )
@@ -125,7 +126,21 @@ func (c Counter) Format(n int) string { return fmt.Sprintf("%s-%d", c.Prefix, n)
 
 // Counter is the project's numbers as this clone last fetched them; ok is
 // false while the project doesn't number its issues.
-func (b *Backend) Counter() (c Counter, ok bool, err error) { return readCounter(b.s) }
+func (b *Backend) Counter() (c Counter, ok bool, err error) {
+	if b.inGit() {
+		return readCounter(b.s)
+	}
+	dc, has := b.ds.(datastore.Counter)
+	if !has {
+		return Counter{}, false, nil
+	}
+	data, _, err := dc.Count(ctx)
+	if err != nil || data == nil {
+		return Counter{}, false, err
+	}
+	c, err = ParseCounter(data)
+	return c, err == nil, err
+}
 
 func readCounter(s *gitstore.Store) (c Counter, ok bool, err error) {
 	h, err := s.Ref(seqRef)
@@ -178,6 +193,9 @@ var ErrNumbersAhead = errors.New("refs/board/seq has numbers the remote hasn't")
 // refuses one ahead, or apart (ErrNumbersAhead). A remote without one is no
 // error: the project doesn't number its issues.
 func (b *Backend) FetchNumbers(remote string) error {
+	if !b.inGit() {
+		return nil // the datastore's counter is the one, shared
+	}
 	theirs, err := b.numbersOf(remote)
 	if err != nil || theirs == gitstore.ZeroHash {
 		return err
@@ -188,6 +206,9 @@ func (b *Backend) FetchNumbers(remote string) error {
 // numbersBehind is FetchNumbers' refusal alone, for a check: the remote's
 // counter fetched to its copy here, this clone's left as it is.
 func (b *Backend) numbersBehind(remote string) error {
+	if !b.inGit() {
+		return nil
+	}
 	_, err := b.numbersOf(remote)
 	return err
 }
@@ -214,6 +235,9 @@ func (b *Backend) numbersOf(remote string) (gitstore.Hash, error) {
 // (ErrNumbersAhead's case): its push waits, and syncing and numbering
 // refuse. It asks the remote only when its copy here says so.
 func (b *Backend) NumbersAhead(remote string) (bool, error) {
+	if !b.inGit() {
+		return false, nil
+	}
 	ours, err := b.s.Ref(seqRef)
 	if err != nil || ours == gitstore.ZeroHash {
 		return false, err
@@ -302,6 +326,9 @@ func (b *Backend) InitNumbers(remote, prefix string, start int) error {
 	if err := CheckNumbers(prefix, start); err != nil {
 		return err
 	}
+	if !b.inGit() {
+		return b.initDatastoreNumbers(prefix, start)
+	}
 	if err := b.FetchNumbers(remote); err != nil {
 		return err
 	}
@@ -331,6 +358,9 @@ func (b *Backend) InitNumbers(remote, prefix string, start int) error {
 func (b *Backend) NumberIssues(remote string) (int, error) {
 	if _, ok, err := b.Counter(); !ok {
 		return 0, err
+	}
+	if !b.inGit() {
+		return b.numberInDatastore()
 	}
 	// ponytail: five tries; more people numbering in the same second is
 	// beyond a team of ten
@@ -404,9 +434,11 @@ func (b *Backend) survey(remote string, c Counter) (todo []*issue.Issue, n Numbe
 		return nil, n, err
 	}
 	prefix := "refs/board-remotes/" + remote + "/issue/"
-	onRemote, err := b.s.Refs(prefix)
-	if err != nil {
-		return nil, n, err
+	onRemote := map[string]gitstore.Hash{}
+	if b.inGit() {
+		if onRemote, err = b.s.Refs(prefix); err != nil {
+			return nil, n, err
+		}
 	}
 	issues, err := b.allIssues()
 	if err != nil {
@@ -428,6 +460,7 @@ func (b *Backend) survey(remote string, c Counter) (todo []*issue.Issue, n Numbe
 			}
 		}
 		_, there := onRemote[prefix+id]
+		there = there || !b.inGit() // a shared datastore: every issue is everyone's
 		switch {
 		case c.NumberOf(id, forges) > 0:
 			n.Numbered++
@@ -498,6 +531,9 @@ func commitCounter(s *gitstore.Store, c Counter, parent gitstore.Hash) (gitstore
 // the remote's: the remote's is one of its ancestors, so sending ours
 // drops nothing there. A remote without a counter numbers nothing.
 func (b *Backend) numbersToSend(remote string) (bool, error) {
+	if !b.inGit() {
+		return false, nil
+	}
 	theirs, err := b.remoteSeq(remote)
 	if err != nil || theirs == gitstore.ZeroHash {
 		return false, err
@@ -507,4 +543,54 @@ func (b *Backend) numbersToSend(remote string) (bool, error) {
 		return false, err
 	}
 	return b.behind(theirs, ours)
+}
+
+// initDatastoreNumbers starts the counter of a datastore that keeps one;
+// ErrNumbered when another started it first.
+func (b *Backend) initDatastoreNumbers(prefix string, start int) error {
+	dc, ok := b.ds.(datastore.Counter)
+	if !ok {
+		return datastore.Missing("project numbers need a datastore that counts; this board is kept in " + b.kind() + " without one")
+	}
+	_, err := dc.SetCount(ctx, Counter{Prefix: prefix, Start: start, ByID: map[string]int{}}.Bytes(), "")
+	if errors.Is(err, datastore.ErrMoved) {
+		c, _, cerr := b.Counter()
+		return cmp.Or(cerr, fmt.Errorf("%w: %s, from %d", ErrNumbered, c.Prefix, c.Start))
+	}
+	return err
+}
+
+// numberInDatastore numbers every issue without a number, oldest first,
+// on a datastore's counter: one write that lands only if no one else wrote
+// first, five tries.
+func (b *Backend) numberInDatastore() (int, error) {
+	dc := b.ds.(datastore.Counter) // Counter answered ok: it counts
+	var last error
+	for range 5 {
+		data, version, err := dc.Count(ctx)
+		if err != nil {
+			return 0, err
+		}
+		c, err := ParseCounter(data)
+		if err != nil {
+			return 0, err
+		}
+		todo, _, err := b.survey(NumbersRemote, c)
+		if err != nil || len(todo) == 0 {
+			return 0, err
+		}
+		next := c.Next()
+		for i, is := range todo {
+			c.ByID[is.ID] = next + i
+		}
+		_, err = dc.SetCount(ctx, c.Bytes(), version)
+		if err == nil {
+			return len(todo), nil
+		}
+		if !errors.Is(err, datastore.ErrMoved) {
+			return 0, err
+		}
+		last = err
+	}
+	return 0, fmt.Errorf("%w, sync again: %w", ErrNumbersMoved, last)
 }

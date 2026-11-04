@@ -181,12 +181,12 @@ func Link(t testing.TB, b *store.Backend, id, u string) {
 	data, _ := json.Marshal(map[string]string{"issue": id, "forge_id": u, "number": path.Base(u), "url": u})
 	op := oplog.Op{Kind: "link", Author: me(t, b), Time: time.Now().Unix(), Data: data}
 	sid := syncer.StateID(key)
-	l, err := oplog.Load(b.Store(), "sync", sid)
+	l, err := oplog.Load(b.Datastore(), "sync", sid)
 	switch {
 	case errors.Is(err, oplog.ErrNotFound):
-		_, err = oplog.Create(t.Context(), b.Store(), "sync", sid, []oplog.Op{op})
+		_, err = oplog.Create(t.Context(), b.Datastore(), "sync", sid, []oplog.Op{op})
 	case err == nil:
-		err = l.Append(t.Context(), b.Store(), []oplog.Op{op})
+		err = l.Append(t.Context(), b.Datastore(), []oplog.Op{op})
 	}
 	if err != nil {
 		t.Fatalf("link %s: %v", u, err)
@@ -210,7 +210,7 @@ func NewPerson(t testing.TB, b *store.Backend, name, login string) store.Person 
 	if login != "" {
 		ops = append(ops, people.AddAccount(me(t, b), people.Account{Server: "github.com", ID: login, Login: login}))
 	}
-	p, err := people.Create(t.Context(), b.Store(), ops...)
+	p, err := people.Create(t.Context(), b.Datastore(), ops...)
 	if err != nil {
 		t.Fatalf("people.Create: %v", err)
 	}
@@ -227,7 +227,7 @@ func CommentAs(t testing.TB, b *store.Backend, idPrefix string, who store.Person
 	}
 	op := issue.NewComment(who.ID, body)
 	op.Time = unix
-	got, err := issue.Do(t.Context(), b.Store(), is.ID, op)
+	got, err := issue.Do(t.Context(), b.Datastore(), is.ID, op)
 	if err != nil {
 		t.Fatalf("comment: %v", err)
 	}
@@ -239,7 +239,7 @@ func CommentAs(t testing.TB, b *store.Backend, idPrefix string, who store.Person
 func SetMyLogin(t testing.TB, b *store.Backend, login string) {
 	t.Helper()
 	id := me(t, b)
-	if _, err := people.Do(t.Context(), b.Store(), id, people.AddAccount(id, people.Account{Server: "github.com", ID: login, Login: login})); err != nil {
+	if _, err := people.Do(t.Context(), b.Datastore(), id, people.AddAccount(id, people.Account{Server: "github.com", ID: login, Login: login})); err != nil {
 		t.Fatalf("add account: %v", err)
 	}
 }
@@ -248,7 +248,7 @@ func SetMyLogin(t testing.TB, b *store.Backend, login string) {
 // forge has them.
 func RawLabels(t testing.TB, b *store.Backend, id string, labels ...string) {
 	t.Helper()
-	if _, err := issue.Do(t.Context(), b.Store(), id, issue.ChangeLabels(me(t, b), labels, nil)); err != nil {
+	if _, err := issue.Do(t.Context(), b.Datastore(), id, issue.ChangeLabels(me(t, b), labels, nil)); err != nil {
 		t.Fatalf("labels: %v", err)
 	}
 }
@@ -264,7 +264,7 @@ func IssueAs(t testing.TB, b *store.Backend, who store.Person, unix int64, title
 	for i := range ops {
 		ops[i].Time = unix
 	}
-	is, err := issue.Create(t.Context(), b.Store(), ops...)
+	is, err := issue.Create(t.Context(), b.Datastore(), ops...)
 	if err != nil {
 		t.Fatalf("issue.Create: %v", err)
 	}
@@ -275,7 +275,7 @@ func IssueAs(t testing.TB, b *store.Backend, who store.Person, unix int64, title
 // person's, or at another time.
 func Do(t testing.TB, b *store.Backend, id string, ops ...oplog.Op) {
 	t.Helper()
-	if _, err := issue.Do(t.Context(), b.Store(), id, ops...); err != nil {
+	if _, err := issue.Do(t.Context(), b.Datastore(), id, ops...); err != nil {
 		t.Fatalf("issue.Do: %v", err)
 	}
 }

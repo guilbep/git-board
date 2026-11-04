@@ -213,7 +213,7 @@ func TestIndexSkipsBroken(t *testing.T) {
 		t.Fatal(err)
 	}
 	// A ref whose name isn't an id isn't an entity.
-	gitRun(t, dir, "update-ref", "refs/board/issue/not-an-id", bad.Head.String())
+	gitRun(t, dir, "update-ref", "refs/board/issue/not-an-id", bad.Version)
 	ix := openIndex(t, s)
 	if got := ids(t, ix, Query{}); !slices.Equal(got, []string{good.ID}) {
 		t.Fatalf("issues = %v, want %v", got, good.ID)
@@ -227,7 +227,7 @@ func TestIndexSkipsBroken(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := s.UpdateRef(t.Context(), oplog.RefName("issue", bad.ID), head, bad.Head); err != nil {
+	if err := s.UpdateRef(t.Context(), oplog.RefName("issue", bad.ID), head, gitstore.NewHash(bad.Version)); err != nil {
 		t.Fatal(err)
 	}
 	if br, err := ix.Broken(t.Context()); err != nil || len(br) != 0 {
