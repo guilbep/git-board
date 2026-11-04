@@ -651,11 +651,47 @@ func (r *run) byMarker(p *project, fi forge.Issue) (id string, ok bool, err erro
 	if !here || p.st.anyLink[w.id] {
 		return "", true, nil
 	}
-	_, direct := r.writer(p, is.Author)
-	title, body := r.sent(p, is, direct)
+	title, body, err := r.sentBefore(p, is, fi)
+	if err != nil {
+		return "", true, err
+	}
 	ops := append([]oplog.Op{linkOp(is.Author, r.now, is.ID, fi.ID, fi.Number, fi.URL)}, createdSeen(is.Author, r.now, is.ID, title, body)...)
 	r.did(p.key, "linked", is.ID, 0)
 	return is.ID, true, p.st.write(r.ctx, r.s, p.key, ops)
+}
+
+// sentBefore is the title and body the create of fi sent, for a push
+// stopped before its link. The issue may have changed here since, so each
+// is the forge's when some earlier state of the issue sends it (the forge
+// still shows what the create sent), else what the issue sends now (the
+// forge changed it since).
+func (r *run) sentBefore(p *project, is *issue.Issue, fi forge.Issue) (title, body string, err error) {
+	_, direct := r.writer(p, is.Author)
+	title, body = r.sent(p, is, direct)
+	if title == fi.Title && body == fi.Body {
+		return title, body, nil
+	}
+	l, err := oplog.Load(r.s, "issue", is.ID)
+	if err != nil {
+		return "", "", err
+	}
+	var sentTitle, sentBody bool
+	for k := len(l.Entries) - 1; k > 0 && !(sentTitle && sentBody); k-- {
+		was, err := issue.Apply(&oplog.Log{Kind: l.Kind, ID: l.ID, Entries: l.Entries[:k]})
+		if err != nil {
+			return "", "", err
+		}
+		t, b := r.sent(p, was, direct)
+		sentTitle = sentTitle || t == fi.Title
+		sentBody = sentBody || b == fi.Body
+	}
+	if sentTitle {
+		title = fi.Title
+	}
+	if sentBody {
+		body = fi.Body
+	}
+	return title, body, nil
 }
 
 // relink is a push alone's first step: it links, by their marker, the

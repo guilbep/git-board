@@ -734,6 +734,40 @@ func TestMarkerLinkSeesWhatWasSent(t *testing.T) {
 	}
 }
 
+// A push that stopped before its link, then a title and a body edited
+// here: the marker link's last seen is what the create sent, not the
+// issue as it is now, so the edits are pushed instead of overwritten.
+func TestMarkerLinkKeepsALocalEdit(t *testing.T) {
+	t.Parallel()
+	s, f := newStore(t), fake.New("github.com/p")
+	is, err := issue.Create(t.Context(), s, issue.NewCreate("a", "T", "B"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.After(func(w fake.Write) error {
+		if w.Op == "create-issue" {
+			f.After(nil)
+			return fake.ErrCrash
+		}
+		return nil
+	})
+	if _, err := Push(t.Context(), s, Options{}, f); err == nil {
+		t.Fatal("no crash")
+	}
+	if _, err := issue.Do(t.Context(), s, is.ID, issue.SetTitle("a", "Edited here"), issue.EditText("a", is.BodyOp, "B2")); err != nil {
+		t.Fatal(err)
+	}
+	syncAll(t, s, f)
+	got, _ := issue.Load(s, is.ID)
+	if got.Title != "Edited here" || got.Body != "B2" {
+		t.Errorf("git-board has %q, %q, want the local edits", got.Title, got.Body)
+	}
+	fi := f.All()[0]
+	if fi.Title != "Edited here" || !strings.Contains(fi.Body, "B2") {
+		t.Errorf("forge has %q, %q, want the local edits pushed", fi.Title, fi.Body)
+	}
+}
+
 type rereadFails struct {
 	*fake.Forge
 	fail *bool

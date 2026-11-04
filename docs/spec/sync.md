@@ -515,7 +515,10 @@ forge, and never makes a thing twice.
   forge issue with a marker from sync's accounts, and links the issue the
   marker names, with the `seen` a new forge issue gets: the title and body
   as the create sent them, header and marker included, so that a forge
-  edit made since is the forge's change. The push then sends the rest.
+  edit made since is the forge's change. The issue may have changed here
+  since the create, so each of the two is the forge's when an earlier
+  state of the issue sends it, else what the issue sends now: an edit made
+  here since is git-board's change. The push then sends the rest.
 - **A comment posted but not recorded.** The next pull finds the forge
   comment's marker, and records it with a `posted` and a `seen`. It isn't
   posted again.
