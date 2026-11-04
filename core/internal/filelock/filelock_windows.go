@@ -1,4 +1,4 @@
-package syncer
+package filelock
 
 import (
 	"errors"
@@ -7,19 +7,19 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-// tryLock locks one byte of f, far past its end, without waiting: errHeld
+// TryLock locks one byte of f, far past its end, without waiting: ErrHeld
 // when another holds it. The text stays readable, as Windows keeps other
 // processes from reading a locked range.
-func tryLock(f *os.File) error {
+func TryLock(f *os.File) error {
 	err := windows.LockFileEx(windows.Handle(f.Fd()), windows.LOCKFILE_EXCLUSIVE_LOCK|windows.LOCKFILE_FAIL_IMMEDIATELY, 0, 1, 0,
 		&windows.Overlapped{Offset: 0, OffsetHigh: 0x7fffffff})
 	if errors.Is(err, windows.ERROR_LOCK_VIOLATION) {
-		return errHeld
+		return ErrHeld
 	}
 	return err
 }
 
-// unlockFile drops tryLock's lock.
-func unlockFile(f *os.File) {
+// Unlock drops TryLock's lock.
+func Unlock(f *os.File) {
 	_ = windows.UnlockFileEx(windows.Handle(f.Fd()), 0, 1, 0, &windows.Overlapped{Offset: 0, OffsetHigh: 0x7fffffff})
 }

@@ -3,15 +3,23 @@ package syncer
 import (
 	"errors"
 	"fmt"
-	"github.com/guilbep/git-board/core/oplog"
 	"os"
 	"path/filepath"
 	"strconv"
 	"time"
+
+	"github.com/guilbep/git-board/core/internal/filelock"
+	"github.com/guilbep/git-board/core/oplog"
 )
 
 // errHeld: another open file holds the OS lock.
-var errHeld = errors.New("held")
+var errHeld = filelock.ErrHeld
+
+// tryLock takes f's OS lock without waiting: errHeld when another holds it.
+func tryLock(f *os.File) error { return filelock.TryLock(f) }
+
+// unlockFile drops f's OS lock, for every process sharing the open file.
+func unlockFile(f *os.File) { filelock.Unlock(f) }
 
 // lock takes the run's lock: an OS lock on board/sync.lock, in git's
 // common directory, held while the file is open. The OS drops it when the
