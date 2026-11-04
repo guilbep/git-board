@@ -39,12 +39,12 @@ func TestSealed(t *testing.T) {
 	}
 }
 
-// Every test binary of cmd/ and internal/ is sealed: a package whose
+// Every test binary of cmd/, internal/ and core/ is sealed: a package whose
 // tests don't call Run from TestMain reaches the network with the user's
 // credential helper.
 func TestEveryPackageIsSealed(t *testing.T) {
 	t.Parallel()
-	for _, root := range []string{"../../cmd", "../../internal"} {
+	for _, root := range []string{"../../cmd", "../../internal", "../../core"} {
 		err := filepath.WalkDir(root, func(dir string, d fs.DirEntry, err error) error {
 			switch {
 			case err != nil || !d.IsDir():
