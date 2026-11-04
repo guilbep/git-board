@@ -13,10 +13,12 @@
 package pgstore
 
 import (
+	"cmp"
 	"context"
 	"database/sql"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 
 	"github.com/jackc/pgx/v5"
@@ -320,9 +322,11 @@ func (s *Store) SetCount(ctx context.Context, value []byte, prev string) (string
 	return strconv.FormatInt(v, 10), nil
 }
 
-// Copy copies every entity of from that isn't here yet, and from's counter
-// when it keeps one and this has none: a board leaving git keeps its ids,
-// as its packs copy as they are. It answers how many entities it copied.
+// Copy copies every entity of from into this, as datastore.Copy does: the
+// packs this hasn't, a whole entity or the ones written in from since a
+// copy, each entity in one transaction. It copies from's counter when it
+// keeps one and this has none: a board leaving git keeps its ids, as its
+// packs copy as they are. It answers how many entities it wrote to.
 func (s *Store) Copy(ctx context.Context, from datastore.Datastore) (int, error) {
 	n := 0
 	for _, kind := range datastore.Kinds {
@@ -335,14 +339,27 @@ func (s *Store) Copy(ctx context.Context, from datastore.Datastore) (int, error)
 			return n, err
 		}
 		for id := range theirs {
-			if _, ok := ours[id]; ok {
-				continue
-			}
 			packs, _, err := from.Packs(ctx, kind, id)
 			if err != nil {
 				return n, fmt.Errorf("pgstore: copying %s %s: %w", kind, id, err)
 			}
-			if err := s.put(ctx, kind, id, packs); err != nil {
+			prev := ""
+			if _, ok := ours[id]; ok {
+				mine, v, err := s.Packs(ctx, kind, id)
+				if err != nil {
+					return n, fmt.Errorf("pgstore: copying %s %s: %w", kind, id, err)
+				}
+				have := map[string]bool{}
+				for _, p := range mine {
+					have[string(p)] = true
+				}
+				packs = slices.DeleteFunc(packs, func(p []byte) bool { return have[string(p)] })
+				if len(packs) == 0 {
+					continue
+				}
+				prev = v
+			}
+			if err := s.put(ctx, kind, id, packs, prev); err != nil {
 				return n, err
 			}
 			n++
@@ -364,15 +381,27 @@ func (s *Store) Copy(ctx context.Context, from datastore.Datastore) (int, error)
 	return n, nil
 }
 
-// put writes a new entity with all its packs, in one transaction.
-func (s *Store) put(ctx context.Context, kind, id string, packs [][]byte) error {
+// put writes packs on an entity whose version is still prev ("" for a new
+// one), in one transaction.
+func (s *Store) put(ctx context.Context, kind, id string, packs [][]byte, prev string) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
-	if _, err := tx.ExecContext(ctx, "INSERT INTO git_board.entities (kind, id, version) VALUES ($1, $2, 1)", kind, id); err != nil {
-		return fmt.Errorf("pgstore: copying %s %s: %w", kind, id, err)
+	if prev == "" {
+		if _, err := tx.ExecContext(ctx, "INSERT INTO git_board.entities (kind, id, version) VALUES ($1, $2, 1)", kind, id); err != nil {
+			return fmt.Errorf("pgstore: copying %s %s: %w", kind, id, err)
+		}
+	} else {
+		res, err := tx.ExecContext(ctx, `UPDATE git_board.entities SET version = version + 1
+			WHERE kind = $1 AND id = $2 AND version::text = $3`, kind, id, prev)
+		if err != nil {
+			return fmt.Errorf("pgstore: copying %s %s: %w", kind, id, err)
+		}
+		if n, err := res.RowsAffected(); err != nil || n != 1 {
+			return fmt.Errorf("pgstore: copying %s %s: %w", kind, id, cmp.Or(err, datastore.ErrMoved))
+		}
 	}
 	for _, p := range packs {
 		if _, err := tx.ExecContext(ctx, `INSERT INTO git_board.packs (kind, id, hash, data) VALUES ($1, $2, $3, $4)

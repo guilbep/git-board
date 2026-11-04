@@ -122,7 +122,7 @@ func (b *Backend) Capabilities() Capabilities {
 }
 
 // CopyFromGit copies the git repository's board into the datastore this
-// clone names, entities that aren't there yet and the counter if it has
+// clone names, the packs that aren't there yet and the counter if it has
 // none: a board leaving git keeps its ids. It answers how many entities it
 // copied. The git refs stay as they are.
 func (b *Backend) CopyFromGit(ctx context.Context) (int, error) {
@@ -590,7 +590,7 @@ func (b *Backend) TestDatastore(ctx context.Context, v string) TestResult {
 }
 
 // CopyGitTo copies the board in git into the datastore v names, as git
-// board datastore copy does: what is there already is left alone.
+// board datastore copy does: only what isn't there yet is written.
 func (b *Backend) CopyGitTo(ctx context.Context, v string) (int, error) {
 	if IsMarkdown(v) {
 		m, err := mdstore.Open(markdownDir(b.root, v), b.s.Folder())
