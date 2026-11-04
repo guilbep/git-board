@@ -769,7 +769,9 @@ cd .. && go build -o git-board ./cmd/git-board
 ## Static site (`git-board html`)
 
 Generates a static HTML site, one page per configured `[views.*]`, plus an
-`index.html` linking to all of them — for PM/non-dev users who don't want a
+`index.html` linking to all of them (a view's name is its page's file name:
+one with a path in it, or named `index` or `releases`, is refused before
+anything is written) — for PM/non-dev users who don't want a
 CLI and shouldn't need the (also-unauthenticated) live web UI above. Reuses
 `internal/board`'s `LoadMatching`/`SortByField`/`BucketBy` — the exact same
 filter/sort/group semantics as `ls`/`view`/the web API — and the TUI's
