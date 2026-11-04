@@ -133,3 +133,30 @@ func TestMoveWithNoStatusSetGoesToFirstOption(t *testing.T) {
 		t.Errorf("output = %q, want status:backlog (first option, issue had no status)", out)
 	}
 }
+
+// --prev goes back one option; from the last one, it reopens the issue,
+// as --next onto it closes it.
+func TestMovePrevGoesBackAndKeepsTheState(t *testing.T) {
+	newTestRepo(t)
+	writeStatusOptionsConfig(t)
+	id := openIssueID(t) // status:ready
+
+	if out, err := execute(t, []string{"move", id, "--prev"}); err != nil || !strings.Contains(out, "status:backlog") {
+		t.Fatalf("move --prev: %v\n%s", err, out)
+	}
+	if _, err := execute(t, []string{"move", id, "--prev"}); err == nil {
+		t.Error("move --prev from the first option: want an error")
+	}
+	if _, err := execute(t, []string{"set", id, "status=in-progress"}); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := execute(t, []string{"move", id, "--next"}); err != nil || !strings.Contains(out, "status:validated, closed") {
+		t.Fatalf("move --next onto the last option: %v\n%s", err, out)
+	}
+	if out, err := execute(t, []string{"move", id, "--prev"}); err != nil || !strings.Contains(out, "status:in-progress, reopened") {
+		t.Fatalf("move --prev from the last option: %v\n%s", err, out)
+	}
+	if _, err := execute(t, []string{"move", id, "--next", "--prev"}); exitCode(err) != exitUsage {
+		t.Errorf("move --next --prev = %v, want exit %d", err, exitUsage)
+	}
+}
