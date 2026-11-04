@@ -900,7 +900,9 @@ core/search/           free text's tokens and Match, as the index searches: the 
 core/inbox/            what a person follows and has seen, and what's new for them.
 core/release/          release records, versions and tags, the [release] table, GitOps overlays.
 core/proof/            check results as signed git notes, keyed by content, and the gate (ADR 0001).
-internal/config/       TOML parsing and checks; embeds core/fields' Schema, holds core/release's Config.
+core/cycle/            an issue's step in the development cycle, the [cycle] table; work/: the Work page's rows.
+internal/config/       TOML parsing and checks; embeds core/fields' Schema, holds core/release's and core/cycle's Config.
+internal/evidence/     reads the cycle's evidence: branches, test files, plan files, the PR cache.
 internal/ship/         the release runner: cut, promote, deploy, rollback, adopt — drives git, registries, gh.
 internal/store/        git-board's store over the core (core/): issues, people, releases, forges.
 internal/board/        load/sort/group issues — shared by the CLI, the TUI and the web API.
@@ -914,8 +916,9 @@ web/                    Quasar/Vue frontend — one board page, api/board.ts is 
 
 Split this way so the TUI and the web frontend both reuse `core/*` and
 `internal/*` without touching the CLI; `core/` never imports `internal/`
-(ADR 0005), so another tool can read issues, filter them, set fields
-and read what shipped without git-board's application.
+(ADR 0005), so another tool can read issues, filter them, set fields,
+read what shipped and compute an issue's step without git-board's
+application.
 
 ## Development
 

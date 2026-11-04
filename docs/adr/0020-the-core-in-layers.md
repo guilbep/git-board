@@ -1,8 +1,9 @@
 # ADR 0020: The core in layers: a kernel, then issues, releases and the cycle
 
-- Status: accepted (2026-11-04, Pierre: "we should have a kernel"). Step
-  1, the guard, step 2, the issue domain's satellites, and step 3, the
-  release domain, are done (2026-11-04; see Step 2 and Step 3 below).
+- Status: accepted (2026-11-04, Pierre: "we should have a kernel"). All
+  four steps are done (2026-11-04): step 1, the guard; step 2, the issue
+  domain's satellites; step 3, the release domain; step 4, the cycle (see
+  Step 2, Step 3 and Step 4 below).
 - Date: 2026-11-04
 - Builds on [ADR 0005](0005-core-is-a-library.md) (core/ is a library),
   [ADR 0018](0018-own-your-issues-work-in-progress-is-opt-in.md) (what the
@@ -37,7 +38,7 @@ enforces it.**
 | **Kernel** | `core/oplog`, `core/datastore` and the stores, `core/people`, `core/watch`, `core/forge` | operations, where they are kept, who wrote them, the forges' adapters |
 | **Issues** | `core/issue`, `core/index`, `core/syncer`, `core/model` (the read model, from `internal/store`), `core/fields` (the schema, from `internal/config`, and the assignments, from `internal/fields`), `core/filter`, `core/inbox` (from `internal/filter`, `internal/inbox`), `core/search` (free text's tokens and match, which the index and the filter share) | issues, comments, fields as labels (ADR 0007), queries, the inbox, their sync with forges |
 | **Releases** | `core/release` (the record, from `internal/store/releases.go`; versions and the overlay, from `internal/release`; the `[release]` table, from `internal/config`), `core/proof` (from `internal/proof`) | versions, what each shipped (which issues), deploys, signed check results (ADR 0001) |
-| **Cycle** | `core/cycle` (from `internal/cycle`, `internal/work`) | an issue's steps from intent to verified; experimental (ADR 0018) |
+| **Cycle** | `core/cycle` (the computation, from `internal/cycle`; the `[cycle]` table, from `internal/config`), `core/cycle/work` (from `internal/work`) | an issue's steps from intent to verified; experimental (ADR 0018) |
 
 Issues know nothing of releases; releases read issues (what shipped); the
 cycle reads both. Proof sits with releases because a deploy gate and the
@@ -47,8 +48,10 @@ cycle's signoff both read it, and releases are below the cycle.
 server and the web app; insights (a report over issues); agents and
 `wtx` (they drive tools, they keep no data); the GitHub Project bridge
 (`internal/ghbridge`, GitHub-only, ADR 0018); attachments (an S3 adapter,
-ADR 0015); and, since step 3, the release runner (`internal/ship`: it
-cuts and deploys, driving git remotes, registries and the forge).
+ADR 0015); since step 3, the release runner (`internal/ship`: it
+cuts and deploys, driving git remotes, registries and the forge); and,
+since step 4, what reads the cycle's evidence (`internal/evidence`: git's
+branches and histories, GitHub's PRs).
 
 ### What the three-way split misses
 
@@ -169,9 +172,86 @@ and its history says since when. The record keeps what was built
 on the records it rolled back from. The config repo is the deploy log,
 as GitOps means it, and the board stores none.
 
+## Step 4: the cycle
+
+Done 2026-11-04. What moved, and what it settles:
+
+- **`core/cycle`**: the computation, from `internal/cycle`: `Input`,
+  `Compute`, `PickLane`, `ApprovedPlan`, the acceptance criteria
+  (`Criteria`, `TickCriterion`), `PlanIssue`. The `[cycle]` table,
+  `Config` (was `config.Cycle`), with `Stages`, `Step`, `DefaultSteps`
+  and the kinds' rules, from `internal/config`: `Config.Stages(options)`
+  fills the defaults and guesses the stages from the status field's
+  options. `internal/config` reads and checks the table (`[cycle.kinds]`'s
+  two forms, the steps' order, the suites) and keeps `Config.Stages()`
+  for its callers. JSON unchanged.
+- **`Gather` fetches nothing.** It computes the evidence from the thread
+  and `Sources`: the stages, the issue's kind, the viewer (`inbox.Me`),
+  the base and the issue's branches as plain `Branch` values, and three
+  small seams: `Repo`, the five reads of git the evidence needs (the
+  files a branch changed, the commit that added one, the files matching
+  a pattern, a file, a commit's author); `Pulls`, a branch's PR, as
+  before; `Render`, the plan's HTML.
+- **`core/cycle/work`**, from `internal/work`: the Work page's rows and
+  their groups, pure over the model, the inbox's `Me` and the cycle.
+- **`core/forge.PR`**, with `Check` and `Review`, from `internal/ghpr`:
+  the evidence carries the PR, and a PR is a forge's, not the cycle's.
+  `internal/ghpr` keeps the GitHub client and `Gate`.
+- **`internal/evidence`** is the app's side, Gather's caller: it reads
+  the branches (`internal/branches`), hands the store in as `Repo` and the
+  server's PR cache as `Pulls`, and renders the plan with
+  `internal/markdown`.
+
+**The switch stays the app's.** The core has no `[experimental]`:
+`core/cycle` computes when it is asked, and the application decides
+whether anyone asks: the server's routes, the CLI's commands, and
+`config.Load`, which refuses a broken `[cycle]` only when the cycle is on
+(ADR 0018). A board sees no difference.
+
+**`internal/branches` stays.** Half of it names branches (`Name`,
+`Folder`, `Next`, `Slug`, `Valid`, `Names`), pure over the `[branches]`
+table; half reads git: `Suggest` picks the base from the remote's
+branches and counts the folder's merge commits, `Linked` counts ahead
+and behind through the histories. The cycle needs neither: it takes the
+branches as values. The naming half's callers are all applications (the
+CLI's `branch --create`, the server, the release draft), and moving it
+would bring the `[branches]` table and `config.Slug` into the core for no
+core caller. When a core package needs `Names` (the release draft, if it
+moves), the naming half goes to the issue domain, with its table.
+
+**`internal/markdown` stays.** The cycle needs nothing of it but the
+plan's HTML; the criteria were already the cycle's own parser. Turning
+untrusted text into HTML is where a page's safety is (goldmark,
+bluemonday), the surfaces' concern: the app hands it in as
+`Sources.Render`.
+
+### What's left in internal/, and why
+
+The four steps done, `internal/` holds the applications and what they
+need of the outside world; no domain rule is left there.
+
+| Package | Why it's the application's |
+|---|---|
+| `store` | the wiring: opens a board on its datastore, writes as you, names authors, pushes and pulls with git, folds the core's operations into `core/model` |
+| `config` | reads `.git-board.toml`, a file the core never reads (ADR 0005), and checks each table into the core's types |
+| `server`, `tui`, `board` (and `cmd/git-board`) | the surfaces, and their loading, sorting and grouping |
+| `evidence`, `branches`, `ghpr` | the cycle's outside world: git's branches and histories, GitHub's pull requests |
+| `ship` | the release runner (step 3) |
+| `wtx`, `ai` | agents, their worktrees, a chat client: they drive tools and keep no data |
+| `ghbridge`, `ghlabels`, `fromforge`, `migrate`, `lint` | tools over a board: the GitHub Project bridge, GitHub's labels, a board started from its forge, a field's values moved, drift reported |
+| `uploads`, `avatar`, `markdown`, `insights` | attachments on S3 (ADR 0015), people's pictures, HTML, a report over issues |
+| `hermetic` | the tests' seal |
+
 ## Left open
 
-- The cycle, the step left: `internal/cycle` and `internal/work` to
-  `core/cycle`.
 - Releases reach GitHub alone (`internal/ship/binaries.go`); through the
   kernel's forge layer they would reach GitLab too.
+- Pull requests too: `forge.PR` speaks GitHub's words, and only
+  `internal/ghpr` reads one. A GitLab merge request maps to it when the
+  cycle runs on GitLab.
+- Each domain checks its own table, the split's fifth point: the
+  `[release]` and `[cycle]` checks are still in `internal/config`, which
+  reads the TOML. They move to `core/release` and `core/cycle` when a
+  third-party tool writes those tables.
+- `internal/branches`' naming half goes to the issue domain when a core
+  package needs `Names` (Step 4).

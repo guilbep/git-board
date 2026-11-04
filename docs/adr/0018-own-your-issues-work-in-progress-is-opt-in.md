@@ -66,7 +66,10 @@ Off, a feature is absent, not broken:
   error for every command.
 
 On, everything works as before. The switch is
-`internal/config/experimental.go`; what it holds back is listed in
+`internal/config/experimental.go`, the application's: the cycle itself is
+`core/cycle` since [ADR 0020](0020-the-core-in-layers.md)'s step 4, and
+computes whenever it is asked; the switch decides whether anything asks.
+What it holds back is listed in
 [Configuration › Experimental features](../guide/configuration.md#experimental-features).
 
 ### 3. Leaving experimental
@@ -111,7 +114,8 @@ Bad, and accepted:
   decided 2026-11-04 (Pierre). A release is what the issues ship in; which
   issue went out in which version, and where it is deployed, is part of
   owning them. How the core is split so this holds is
-  [ADR 0020](0020-the-core-in-layers.md), proposed.
+  [ADR 0020](0020-the-core-in-layers.md), accepted and done: the
+  releases are `core/release`, the cycle `core/cycle`, each its own layer.
 - The GitHub Project bridge (`git board project`, `internal/ghbridge`)
   depends on `gh` and on GitHub's Project model: a forge-specific feature
   in the core. It stays, as GitHub Projects are where many teams come from.

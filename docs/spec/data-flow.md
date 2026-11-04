@@ -19,6 +19,7 @@ flowchart TB
   server["internal/server<br/>HTTP API, change events,<br/>forge-only sender"]
   store["internal/store · Backend<br/>issues as the board shows them,<br/>numbers, releases, what only git does"]
   ship["internal/ship · Runner<br/>cuts, deploys: tags, config repos,<br/>registries, the forge's releases"]
+  evidence["internal/evidence<br/>the cycle's evidence: branches,<br/>files, plans, the PR cache"]
 
   subgraph core["core: never imports internal/"]
     domain["core/issue · core/people<br/>Apply: operations → state"]
@@ -26,6 +27,7 @@ flowchart TB
     index["core/index<br/>lists, search, lookups"]
     read["core/model · fields · filter · inbox<br/>issues as surfaces read them,<br/>fields, filters, the inbox"]
     rel["core/release · core/proof<br/>release records, versions, overlays,<br/>signed check results"]
+    cyc["core/cycle · cycle/work<br/>an issue's step, from the evidence<br/>it is given; the Work page"]
     oplog["core/oplog<br/>packs: encode, hash, order"]
     ds{{"core/datastore.Datastore<br/>Heads · Packs · Add · Folder"}}
   end
@@ -50,6 +52,13 @@ flowchart TB
   ship --> store
   ship --> rel
   ship --> code
+  server --> evidence
+  server --> cyc
+  evidence --> store
+  evidence --> code
+  evidence --> cyc
+  cyc --> read
+  cyc --> rel
   store --> domain
   store --> syncer
   store --> index
@@ -77,12 +86,14 @@ flowchart TB
 |---|---|---|
 | `internal/server` | the API, the pages' change events, the forge-only sender | how the board is stored |
 | `internal/ship` | a release's cut, promotion, deploy and rollback: tags pushed, overlays written, images built and copied, charts and binaries published (`Tools`) | the record's format: it goes through the store |
+| `internal/evidence` | what the cycle computes from: the issue's branches against the base (`internal/branches`), their files and the plan file through the store (`cycle.Repo`), the PRs from the server's cache (`cycle.Pulls`) | the cycle's rules: `core/cycle` applies them |
 | `internal/store` | the board as the pages show it: issues with their numbers and forges, releases, the counter; what only git does (pull, push, start over), refused elsewhere | the format of a pack |
 | `core/issue`, `core/people` | an entity's state, folded from its operations (`Apply`) | where the operations are kept |
 | `core/syncer` | forge sync; its bookkeeping (links, last seen, posted) is operations in `sync` entities | git: a forge sync runs the same on every datastore |
 | `core/index` | lists, search and lookups, a cache brought up to the datastore before each query | the truth: it is never the source |
 | `core/model`, `core/fields`, `core/filter`, `core/inbox` | the issue as every surface reads it (`model.Issue`, `model.Thread`), the fields' schema and assignments, the filter grammar, what a person follows | the config file: `internal/config` reads it into a `fields.Schema` |
 | `core/release`, `core/proof` | a release's record and its rules (one per commit), versions and tags, the `[release]` table's environments, what a GitOps overlay says runs; check results as signed lines in git notes, and the gate | the config file (`internal/config` reads `[release]` and, at the base, `[cycle]`'s checks); registries, config repos and the forge, which `internal/ship` drives |
+| `core/cycle`, `core/cycle/work` | an issue's step from intent to verified, never stored: the `[cycle]` table's stages and gates, the evidence gathered from the values and reads it is given (`Gather`, `Sources`), the step and whose turn (`Compute`); the Work page's rows | git, the forges and the config file, which `internal/evidence` and `internal/config` read; the experimental switch, the application's (ADR 0018) |
 | `core/oplog` | packs: their bytes, their id (the git blob id of the bytes), their order (clock, then id) | where the packs are kept |
 | `core/datastore` | the interface, and its errors: `ErrNotFound`, `ErrMoved`, `ErrMissing` | the packs' content |
 | `core/gitstore`, `core/pgstore`, `core/mdstore` | the bytes, a version per entity, the compare-and-swap | operations |

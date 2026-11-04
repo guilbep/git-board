@@ -1134,3 +1134,23 @@ without `internal/`.
   remotes, config repos, docker, crane, trivy, helm, go and gh.
 - The layer guard's `"core"` entry named every package; it names the root
   alone now, so a package without a layer fails.
+
+### Status 2026-11-04: the cycle in the core (ADR 0020 step 4, branch `kernel/cycle`)
+
+The cycle is a core package in its own layer, above releases, importable
+without `internal/`. The four steps of ADR 0020 are done.
+
+- `core/cycle`: the computation (`Input`, `Compute`, `PickLane`, the
+  criteria), from `internal/cycle`; the `[cycle]` table (`Config`, was
+  `config.Cycle`; `Stages`, `Step`, the kinds' rules), from
+  `internal/config`, which reads and checks it and keeps
+  `Config.Stages()`. JSON unchanged.
+- `cycle.Gather` fetches nothing: the thread and `Sources` (the issue's
+  branches as values, `Repo` for five git reads, `Pulls` for the PRs,
+  `Render` for the plan's HTML). `internal/evidence` reads them and calls
+  it; the server's `cycle.Gather` calls are `evidence.Gather`.
+- `core/cycle/work`, from `internal/work`.
+- `core/forge.PR`, `Check`, `Review`, from `internal/ghpr`, which keeps
+  the GitHub client and `Gate`.
+- `internal/branches` and `internal/markdown` stay (ADR 0020, Step 4);
+  the experimental switch stays the application's (ADR 0018).

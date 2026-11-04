@@ -106,7 +106,7 @@ Which package sits where:
 | Above the interface: reads operations, never storage | `core/issue`, `core/people` (their `Apply` and state rules), `core/syncer` (plan, state, pull, push), `core/forge` and its adapters, `core/index` (it reads `Heads` instead of refs), `internal/*` except the parts below |
 | The interface | `core/oplog`: `Op`, `Entry`, `Log`, hashing, order, `Create`/`Load`/`Append`/`List`, which take a `Datastore` instead of a `*gitstore.Store` |
 | The git datastore | `core/gitstore`, and oplog's git half (`writePack`, `readNode`, `walk`, `Merge`, `MergeFetched`) in one file, the only one in oplog that imports gitstore |
-| Not a datastore at all | the code repository: `internal/store`'s `code.go` and `diff.go`, `core/proof`, `internal/ship`, `internal/cycle`, `internal/branches` |
+| Not a datastore at all | the code repository: `internal/store`'s `code.go` and `diff.go`, `core/proof`, `internal/ship`, `core/cycle` (through `internal/evidence`), `internal/branches` |
 
 `core` imports nothing of `internal` (`core/importguard_test.go`), so the
 interface lives in core, and a PostgreSQL datastore would be a core
@@ -510,8 +510,8 @@ out.
   `:94` `Lines` (ADR 0001).
 - `internal/ship/git.go`: `:47` tags, `:75` `PushTag`, `:129` the config
   repository.
-- `internal/cycle/gather.go:188`, `internal/branches/branches.go:280`,
-  `internal/server/work.go:137`: commits read.
+- `internal/evidence/evidence.go:64`, `internal/branches/branches.go:331`,
+  `internal/server/work.go:144`: commits read.
 - `cmd/git-board/verify.go:80`: `refs/remotes/origin/HEAD`.
 
 ### The machine's own state: a local folder
