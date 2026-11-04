@@ -126,6 +126,31 @@ error names.
 It prints the comment's ref; `--json` prints `{"id", "ref", "issue"}`.
 The description is not a comment: `edit` changes it.
 
+`--delete <ref>` deletes a comment: see [Deleting](#delete-an-issue-or-a-comment).
+
+## `delete`: an issue or a comment
+
+```bash
+git board delete a1b2c3d                        # asks first
+git board delete a1b2c3d --yes
+git board comment a1b2c3d --delete 9c8b7a6:1 --yes
+```
+
+A deleted issue leaves every list, search, page, export and sync; its id
+answers not found (exit code 3). A deleted comment leaves its issue's
+page, its log and search.
+
+A delete hides; it doesn't erase. The text stays in the board's history,
+in every clone that fetched it, and on the forges it was synced to: a
+forge keeps its copy. **A secret pasted into an issue is leaked: revoke
+it.** Deleting it keeps it from being shown, searched or synced again. A
+pull never brings a deleted issue or comment back.
+[ADR 0019](../adr/0019-deleting-is-a-tombstone.md) says why.
+
+On a terminal it asks first. `--yes` doesn't ask, and is needed when no
+one is at a terminal (a script, CI): without it, exit code 2. Deleting is
+in the command line only, not yet in the web UI.
+
 ## `edit`: title and description
 
 ```bash
@@ -301,12 +326,13 @@ Errors go to stderr, prefixed `error:`.
 | `gh issue edit 1 2 3 --add-label x` | | `git board set --filter "<filter>" label=+x --apply` |
 | `gh issue close N -c C` | `glab issue close N` | `git board close N -c C` |
 | `gh issue reopen N` | `glab issue reopen N` | `git board reopen N` |
+| `gh issue delete N --yes` | `glab issue delete N` | `git board delete N --yes` (hidden, kept in history) |
+| `gh issue comment N --delete-last` | `glab issue note delete` | `git board comment N --delete <ref>` |
 | `gh issue status` | | `git board ls "involves:@me is:open"` |
 | `gh issue develop N` | `glab mr create --related-issue N` | `git board branch N` (prints the branch and the command) |
 | | `glab issue view N -s` (system notes) | `git board log N` (every change, text edits too) |
 | `gh project item-edit …` | `glab issue board …` | `git board move N --next`, `git board project` |
 
-`N` is any [name of an issue](#naming-an-issue). Not there yet: deleting
-an issue or a comment, templates, pinning, locking (no permissions in a
+`N` is any [name of an issue](#naming-an-issue). Not there yet: templates, pinning, locking (no permissions in a
 board kept in git), `--web`, `--jq` and `--template`, shell completion of
 ids and values.
