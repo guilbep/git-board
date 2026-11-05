@@ -9,9 +9,9 @@ import (
 
 	"github.com/charmbracelet/bubbles/list"
 
+	"github.com/guilbep/git-board/core/fields"
+	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/fields"
-	"github.com/guilbep/git-board/internal/store"
 )
 
 // catFieldName is the field namespace the quick category filter (kbd "c")
@@ -69,7 +69,7 @@ func DisplayFieldName(name string) string {
 // renderDetail is the pure text body of the detail view: title, id/status,
 // recognized fields, unrecognized labels, and a trailing status line (write
 // confirmation or error) when one is set.
-func renderDetail(issue store.Issue, cfg *config.Config, status string) string {
+func renderDetail(issue model.Issue, cfg *config.Config, status string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s\n\n%s  (%s)\n\n", issue.ShownTitle(), ref(issue), issue.Status)
 
@@ -114,7 +114,7 @@ func (v valueItem) FilterValue() string { return v.value }
 // FieldNames returns the fields shown and editable, sorted: cfg's
 // configured ones plus every label namespace found on issues, so a new
 // "ns:value" label needs no config to get its column.
-func FieldNames(cfg *config.Config, issues []store.Issue) []string {
+func FieldNames(cfg *config.Config, issues []model.Issue) []string {
 	seen := make(map[string]bool, len(cfg.Fields))
 	for n := range cfg.Fields {
 		seen[n] = true
@@ -134,7 +134,7 @@ func FieldNames(cfg *config.Config, issues []store.Issue) []string {
 	return names
 }
 
-func fieldPickerItems(cfg *config.Config, issues []store.Issue) []list.Item {
+func fieldPickerItems(cfg *config.Config, issues []model.Issue) []list.Item {
 	names := FieldNames(cfg, issues)
 	items := make([]list.Item, len(names))
 	for i, n := range names {
@@ -156,14 +156,14 @@ func valuePickerItems(cfg *config.Config, fieldName string) []list.Item {
 
 // catField reports the field driving the quick category filter, and whether
 // one is configured at all.
-func catField(cfg *config.Config) (config.Field, bool) {
+func catField(cfg *config.Config) (fields.Field, bool) {
 	f, ok := cfg.Fields[catFieldName]
 	return f, ok && f.Single
 }
 
 // catFilterItems builds the category picker's items: a leading "(all)" entry
 // that clears the filter, then f's configured options.
-func catFilterItems(f config.Field) []list.Item {
+func catFilterItems(f fields.Field) []list.Item {
 	items := make([]list.Item, 0, len(f.Options)+1)
 	items = append(items, valueItem{value: "(all)", desc: "clear filter"})
 	for _, o := range f.Options {
@@ -174,9 +174,9 @@ func catFilterItems(f config.Field) []list.Item {
 
 // FilterByField narrows issues to those carrying "fieldName:value" as a
 // label — the pure logic behind the quick category filter.
-func FilterByField(issues []store.Issue, fieldName, value string) []store.Issue {
+func FilterByField(issues []model.Issue, fieldName, value string) []model.Issue {
 	label := fieldName + ":" + value
-	out := make([]store.Issue, 0, len(issues))
+	out := make([]model.Issue, 0, len(issues))
 	for _, iss := range issues {
 		for _, l := range iss.Labels {
 			if l == label {
@@ -195,7 +195,7 @@ func FilterByField(issues []store.Issue, fieldName, value string) []store.Issue 
 // call, same as fields.Apply itself, so it's covered by the same
 // storetest-fixture style as fields_test.go.
 func ApplyField(b fields.Backend, cfg *config.Config, issueID, fieldName, value, me string, today time.Time) (labels []string, applied string, err error) {
-	applied, err = fields.Apply(b, cfg, issueID, fieldName, value, me, today)
+	applied, err = fields.Apply(b, cfg.IssueSchema(), issueID, fieldName, value, me, today)
 	if err != nil {
 		return nil, "", err
 	}

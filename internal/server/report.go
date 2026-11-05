@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/guilbep/git-board/core/fields"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/insights"
 )
@@ -34,7 +35,7 @@ func (s *apiServer) handleReport(w http.ResponseWriter, r *http.Request) {
 	}
 	persons := []string{}
 	for name, vs := range values {
-		if cfg.TypeOf(name, vs) == config.TypePerson {
+		if cfg.TypeOf(name, vs) == fields.TypePerson {
 			persons = append(persons, name)
 		}
 	}
@@ -104,7 +105,7 @@ func namedSprint(cfg *config.Config, slug string) *insights.Sprint {
 	if field == "" {
 		return nil
 	}
-	for _, w := range config.SprintWindows(cfg.Sprints) {
+	for _, w := range cfg.Sprints.Windows() {
 		if w.Slug == slug {
 			return &insights.Sprint{Field: field, Slug: w.Slug, Title: or(w.Title, w.Slug), Start: w.Start, End: w.End}
 		}

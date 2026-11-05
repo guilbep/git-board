@@ -36,7 +36,7 @@ keeps its board, which writer signs proof notes.
 - The core never reads it: git-board passes what sync needs as options
   (ADR 0005).
 - A gate reads it from the base branch, never from the branch under review
-  (`internal/proof/gate.go:14-23`, ADR 0001 § 5).
+  (`internal/config/cycle.go:65-82`, `AtBase`, ADR 0001 § 5).
 - It never holds a secret: no token (ADR 0010), no S3 key (ADR 0015), no
   datastore URL (ADR 0002).
 
@@ -47,7 +47,7 @@ keeps its board, which writer signs proof notes.
 | `board.me` | who writes, a person's id | `core/people/ops.go:105-121` |
 | `board.view` | classic page or the cycle's | `internal/store/store.go:619`, `:669` |
 | `board.datastore` | `git`, `forge`, `markdown:<dir>`, a `postgres://` URL; `GIT_BOARD_DATASTORE` wins | `internal/server/datastore.go:13-20` |
-| `git-board.writer` | this clone's proof-notes writer | `internal/proof/notes.go:19-24` |
+| `git-board.writer` | this clone's proof-notes writer | `core/proof/notes.go:19-24` |
 
 - Never shared, never the board. For a datastore with no clone, `board.me`
   is the file `<folder>/me` (ADR 0002).

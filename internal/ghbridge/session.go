@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/store"
 )
@@ -38,7 +39,7 @@ var Gh = Project{Items: FetchItems, Meta: FetchProjectMeta, Writer: GhWriter{}, 
 
 // Repo is the git-bug side of a sync.
 type Repo interface {
-	ListIssues() ([]store.Issue, error)
+	ListIssues() ([]model.Issue, error)
 	ProjectBases(idPrefix, prefix string) (map[string]string, error)
 	LabelWriter
 	BaseWriter
@@ -48,7 +49,7 @@ var _ Repo = (*store.Backend)(nil)
 
 // State is what a sync decides from, read from both sides.
 type State struct {
-	Issues []store.Issue
+	Issues []model.Issue
 	Items  []Item
 	Meta   ProjectMeta
 	Bases  map[string]map[string]string
@@ -162,7 +163,7 @@ func ResolveConflictIn(repo Repo, p Project, cfg *config.Config, s State, repoNa
 				item = it
 			}
 		}
-		var bug store.Issue
+		var bug model.Issue
 		for _, b := range s.Issues {
 			if b.ID == c.BugID {
 				bug = b

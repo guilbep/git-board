@@ -10,9 +10,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/guilbep/git-board/core/fields"
+	"github.com/guilbep/git-board/core/inbox"
 	"github.com/guilbep/git-board/core/issue"
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/inbox"
 	"github.com/guilbep/git-board/internal/store/storetest"
 )
 
@@ -184,7 +185,7 @@ func TestInboxTakesPrefixes(t *testing.T) {
 func TestInboxProjectRole(t *testing.T) {
 	t.Parallel()
 	ts, s := newIssueServer(t)
-	s.cfg = &config.Config{Roles: map[string]string{"lead-dev": "guilbep"}, Fields: map[string]config.Field{"lead-dev": {Type: config.TypePerson}}}
+	s.cfg = &config.Config{Schema: fields.Schema{Roles: map[string]string{"lead-dev": "guilbep"}, Fields: map[string]fields.Field{"lead-dev": {Type: fields.TypePerson}}}}
 	ann := storetest.NewPerson(t, s.b, "Ann", "ann")
 	id := storetest.IssueAs(t, s.b, ann, time.Now().Unix(), "Hers", "")
 	res := getInbox(t, ts)

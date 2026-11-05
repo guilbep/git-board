@@ -3,6 +3,8 @@ package store
 import (
 	"reflect"
 	"testing"
+
+	"github.com/guilbep/git-board/core/model"
 )
 
 // The vectors of web/src/sections.test.ts: one rule on both sides.
@@ -45,7 +47,7 @@ func TestItem(t *testing.T) {
 
 func TestATickIsNotAVersion(t *testing.T) {
 	t.Parallel()
-	h := []Version{{ID: "a", Body: "- [ ] x\n- [ ] y"}, {ID: "b", Body: "- [x] x\n- [ ] y"}, {ID: "c", Body: "- [x] x\n- [ ] z"}, {ID: "d", Body: "- [x] x\n- [x] z"}}
+	h := []model.Version{{ID: "a", Body: "- [ ] x\n- [ ] y"}, {ID: "b", Body: "- [x] x\n- [ ] y"}, {ID: "c", Body: "- [x] x\n- [ ] z"}, {ID: "d", Body: "- [x] x\n- [x] z"}}
 	vs := versions(h)
 	if len(vs) != 2 || vs[0].ID != "a" || vs[0].Body != h[1].Body || vs[1].ID != "c" || vs[1].Body != h[3].Body {
 		t.Errorf("versions %+v", vs)

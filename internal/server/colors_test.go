@@ -3,14 +3,14 @@ package server
 import (
 	"testing"
 
-	"github.com/guilbep/git-board/internal/config"
+	"github.com/guilbep/git-board/core/fields"
 	"github.com/guilbep/git-board/internal/store/storetest"
 )
 
 func TestColorsCoverLabelsAndOptions(t *testing.T) {
 	t.Parallel()
 	ts, s := newIssueServer(t)
-	s.cfg.Fields = map[string]config.Field{"status": {Options: []string{"backlog", "in-review"}, Colors: map[string]string{"in-review": "pink"}}}
+	s.cfg.Fields = map[string]fields.Field{"status": {Options: []string{"backlog", "in-review"}, Colors: map[string]string{"in-review": "pink"}}}
 	id := storetest.NewIssue(t, s.b, "one")
 	if _, err := s.b.ApplyLabelChange(id, []string{"status:validated", "mod:travel", "plain", "est:3"}, nil); err != nil {
 		t.Fatal(err)

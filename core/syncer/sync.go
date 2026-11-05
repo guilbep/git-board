@@ -558,6 +558,12 @@ func (r *run) pullOne(p *project, fi forge.Issue, final bool) (reached bool, _ e
 		r.report.Created++
 		return true, nil
 	}
+	if r.issues[id].Deleted {
+		// deleted here: its forge issue stays linked to it, so that no pull
+		// brings it back, and nothing goes either way (docs/adr/0019)
+		r.report.Unchanged++
+		return true, nil
+	}
 	wrote, _, pulled, err := r.reconcile(p, id, fi, true, false)
 	if err != nil {
 		return false, err
@@ -816,7 +822,7 @@ func (r *run) pushTo(p *project) error {
 			r.progress(p.key, "push", done, total, p.st.link[id].Number, is.Title)
 		}
 		l, ok := p.st.link[id]
-		if _, here := r.issues[id]; !ok || !here {
+		if is, here := r.issues[id]; !ok || !here || is.Deleted {
 			continue
 		}
 		fi, listed := p.listed[l.ForgeID]
@@ -872,7 +878,7 @@ func (r *run) virtual(p *project, id string) forge.Issue {
 // "A new forge issue" says. Its title and body go with it, so their
 // origins count as its create's.
 func (r *run) mayCreate(p *project, is *issue.Issue) bool {
-	if p.st.anyLink[is.ID] || p.st.refused[[3]string{is.ID, "issue", ""}] {
+	if is.Deleted || p.st.anyLink[is.ID] || p.st.refused[[3]string{is.ID, "issue", ""}] {
 		return false
 	}
 	if o := is.Origin; o != nil {

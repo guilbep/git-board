@@ -110,6 +110,62 @@ func Run(t *testing.T, open func(t *testing.T) datastore.Datastore) {
 		}
 	})
 
+	// A reader never sees an entity that exists gone, nor a pack half
+	// written, while another writes it: the git datastore's listing once
+	// lost a whole kind to the lock file of a ref being moved.
+	t.Run("read while written", func(t *testing.T) {
+		ds := open(t)
+		ctx := t.Context()
+		const writes = 20
+		written := map[string]bool{}
+		for c := 1; c <= writes+1; c++ {
+			written[string(pack(c, "w"))] = true
+		}
+		v, err := ds.Add(ctx, "issue", id(4), pack(1, "w"), "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := ds.Add(ctx, "issue", id(5), pack(1, "w"), ""); err != nil {
+			t.Fatal(err)
+		}
+		done := make(chan error, 1)
+		go func() {
+			var err error
+			for c := 2; c <= writes+1 && err == nil; c++ {
+				v, err = ds.Add(ctx, "issue", id(4), pack(c, "w"), v)
+			}
+			done <- err
+		}()
+		var wg sync.WaitGroup
+		stop := make(chan struct{})
+		errs := make(chan error, 4)
+		for range 4 {
+			wg.Go(func() {
+				for {
+					select {
+					case <-stop:
+						return
+					default:
+					}
+					if err := readBoth(ctx, ds, written); err != nil {
+						errs <- err
+						return
+					}
+				}
+			})
+		}
+		werr := <-done
+		close(stop)
+		wg.Wait()
+		close(errs)
+		if werr != nil {
+			t.Fatalf("write: %v", werr)
+		}
+		for err := range errs {
+			t.Fatal(err)
+		}
+	})
+
 	if _, ok := open(t).(datastore.Counter); !ok {
 		return
 	}
@@ -137,4 +193,28 @@ func Run(t *testing.T, open func(t *testing.T) datastore.Datastore) {
 			t.Fatalf("count = %q, %q, %v; want c at %q", v, ver, err, v2)
 		}
 	})
+}
+
+// readBoth lists the issues and reads id(4) and id(5): both must be there,
+// with packs that are all whole ones of written.
+func readBoth(ctx context.Context, ds datastore.Datastore, written map[string]bool) error {
+	heads, err := ds.Heads(ctx, "issue")
+	if err != nil {
+		return fmt.Errorf("heads: %w", err)
+	}
+	for _, n := range []int{4, 5} {
+		if _, ok := heads[id(n)]; !ok {
+			return fmt.Errorf("heads lack %s, which exists: %v", id(n), heads)
+		}
+		packs, _, err := ds.Packs(ctx, "issue", id(n))
+		if err != nil {
+			return fmt.Errorf("packs of %s: %w", id(n), err)
+		}
+		for _, p := range packs {
+			if !written[string(p)] {
+				return fmt.Errorf("packs of %s: %q was never written", id(n), p)
+			}
+		}
+	}
+	return nil
 }

@@ -1073,3 +1073,100 @@ nothing is stored.
 - Markdown: `git board import --md` (`internal/store/mdimport.go`, tests `TestImportMarkdown*`); the Markdown folder datastore (`core/mdstore`, `board.datastore markdown:<dir>`, `TestMarkdownBoard`), its files rendered after each write, hand edits read in first.
 - Who you write as stays `board.me` in the clone's git config on every datastore (`Backend.whoStore`).
 - Not done: the pages don't yet disable pull, push and start over on a datastore that can't run them (the server refuses them with the sentence).
+
+### Status 2026-11-04: JSON fields, --jq, --template, completion (#88 P1)
+
+- `--json [fields]` (`cmd/git-board/output.go`, `addJSON`): alone, every field as before; `--json id,title` keeps those, an unknown one is refused (exit 2) with the list, in `PreRunE`, before a write. `jsonFieldArgs` reads `--json id,title` as `--json=id,title`; the flag reads as a bool's, so `--json` alone needs no value. On `ls`, `view`, `show`, `log`, `me`, `comment`, `new`, and since the CLI branches merged `follow`, `unfollow`, `insights`, `labels`, `config list`, `diff`, `forge status`, `status`, `undo`; `TestEveryJSONFlagSelects` fails on a plain `--json` bool.
+- `--jq` with `github.com/itchyny/gojq` (MIT, and its `timefmt-go`, MIT; it moved `go-runewidth` to v0.0.31): the one new dependency, a jq in pure Go, as gh uses. `--template`, `text/template` with gh's `join`, `pluck`, `timeago`, `timefmt`, `truncate`. `new` has no `--template`: kept for an issue template (#88), as gh's.
+- Shell completion (`completion.go`, `addCompletions`): ids and project numbers with titles, `field=value` and options, status for `move`'s second argument (for `move <id> <status>`, #88), filter qualifiers and values, views, people, `--group`/`--sort`/`--field`/`--json=`. On any error it offers nothing. `git board completion` is cobra's.
+- Tests: `TestJSONFields`, `TestJSONFieldsCheckedFirst`, `TestJQAndTemplate`, `TestJSONFieldArgs`, `TestCompletion`, `TestCompletionCommand`.
+
+### Status 2026-11-04: what needs you, from the command line (#88 P1)
+
+- `git board status` (`cmd/git-board/status.go`): the open issues `assignee:@me`, then the inbox as the server computes it (`inbox.Rows`), split into what you opened (reason `author`) and the rest. Marks nothing read unless `--mark-read`. `follow`/`unfollow`/`follow --auto` write the same inbox file as the web bell.
+- `branch --create` runs the suggested `git switch -c`; `show --web` (the running board, else one started here; `runningBoard`/`serveBoard` are vars) and `show --forge`; `move <id> <status>` is `set status=`.
+- `close --reason`: the core and the forge sync carry no close reason (GitHub's `state_reason` is dropped on pull), so it is a field, `closed-as:not-planned|duplicate` (ADR 0007); `completed` writes none, `reopen` removes it. `--duplicate-of` sets `duplicate-of` and comments "Duplicate of #n". ponytail: map `closed-as` to GitHub's `state_reason` and GitLab's duplicate link in the forge sync.
+- `new --template` reads `.github/ISSUE_TEMPLATE` (Markdown and issue forms) and `.gitlab/issue_templates`; `new` asks on a terminal (never with `--no-prompt`, `GIT_BOARD_NO_PROMPT`, or stdin not a terminal). No new dependency.
+
+### Status 2026-11-04: search qualifiers and the board as it was (#88 P1, P2)
+
+- Filters (`internal/filter/ranges.go`): `created:`, `updated:`, `closed:` (a day, a time, `>`, `>=`, `<`, `<=`, `a..b` with `*`, `@today-7d`), `comments:` (the same on the count), `in:title,body,comments`. A value that isn't one is a `FilterError` (400). `@today` is the filter's today, so `ls --at` reads it as that day.
+- The index answers `in:` (`index.Query.In`: FTS5 column filters; PostgreSQL weights A, B, C, so the index is version 2). Without the index, `index.MatchText` searches an issue's own texts the same way: `TestSearchInAgreesWithMatchText`, `TestQualifiersWithAndWithoutTheIndex`.
+- `store.Issue` has `closed_at` and `comments`.
+- The board as it was: `issue.At` keeps the operations made by a time, by their own times, in the log's order; `Backend.ThreadAt`, `ListIssuesAt`; `git board show --at`, `ls --at`, `diff --since` (`cmd/git-board/diff.go`). Tests: `TestAtFoldsWhatWasMadeByThen`, `TestShowAndLsAt`, `TestDiffSince`.
+- Not done: `view`, `tui` and the web page have no `--at`; under `--at`, mentions and follows are as now.
+
+### Status 2026-11-04: beyond gh (#88 P2, branch `cli/beyond`)
+
+- Deleting (ADR 0019, `docs/adr/0019-deleting-is-a-tombstone.md`): a `delete` issue operation whose target is the create (the issue) or a comment. A tombstone: the text stays in the log. `issue.Issue.Deleted` and `Removed`; the index leaves a deleted issue out of every query and a deleted comment out of search; `internal/store` answers not found (`ErrDeleted`) and leaves it out of lists, threads, exports and insights; a Markdown board removes the file and skips it when it comes back; sync keeps a deleted issue linked and skips it both ways, and never pulls a deleted comment again. CLI: `git board delete <id>`, `comment --delete <ref>`, a confirmation on a terminal, `--yes`. Not in the web UI yet.
+- `git board undo [<id>] [--force]` (`internal/store/undo.go`): the inverse of your last pack on an issue, or anywhere by time. Refuses a create, a delete, a set-meta, and another's write after yours.
+- `git board labels [rename]`, `git board config get|set|unset|list` (`internal/config/keys.go`: one key's line rewritten, an unknown key refused through the decoder's undecoded keys), `-C <dir>`, `git board forge status [--check]` and `forge login <forge>`, `git board insights [--json]`.
+
+### Status 2026-11-04: the issue domain's satellites in the core (ADR 0020 step 2, branch `feat/kernel`)
+
+The read model, the fields, the filters and the inbox are core packages
+in the issue layer, importable without `internal/`.
+
+- `core/model`: `Issue`, `Thread`, `Event`, `Person`, `Forge`, `Review`,
+  `Mentions`, from `internal/store`; JSON tags unchanged.
+- `core/fields`: the schema (`Schema`: fields, types, sprints, roles,
+  plain labels), from `internal/config`, which embeds it in `Config`, and
+  the assignments, from `internal/fields`.
+- `core/filter`, `core/inbox`, from `internal/`; they take
+  `Config.IssueSchema()`.
+- `BenchmarkMatches` (`core/filter`) times the filter over 5,000 issues:
+  unchanged by the move.
+
+### Status 2026-11-04: the release domain in the core (ADR 0020 step 3, branch `kernel/releases`)
+
+Releases and proofs are core packages in the releases layer, importable
+without `internal/`.
+
+- `core/release`: the record (`Record`, was `store.ReleaseRecord`) with
+  its fold and rules, from `internal/store/releases.go`; versions, tags
+  and the GitOps overlay, from `internal/release`; the `[release]` table
+  (`Config`, was `config.Release`), from `internal/config`. JSON tags
+  unchanged.
+- `core/proof`, from `internal/proof`; `Suite` was `config.Suite`.
+  `config.AtBase` reads the base's checks and signers into a
+  `proof.Base`; `Base.Gate` judges a commit.
+- `internal/ship` (was `internal/release`): the Runner, which drives git
+  remotes, config repos, docker, crane, trivy, helm, go and gh.
+- The layer guard's `"core"` entry named every package; it names the root
+  alone now, so a package without a layer fails.
+
+### Status 2026-11-04: the cycle in the core (ADR 0020 step 4, branch `kernel/cycle`)
+
+The cycle is a core package in its own layer, above releases, importable
+without `internal/`. The four steps of ADR 0020 are done.
+
+- `core/cycle`: the computation (`Input`, `Compute`, `PickLane`, the
+  criteria), from `internal/cycle`; the `[cycle]` table (`Config`, was
+  `config.Cycle`; `Stages`, `Step`, the kinds' rules), from
+  `internal/config`, which reads and checks it and keeps
+  `Config.Stages()`. JSON unchanged.
+- `cycle.Gather` fetches nothing: the thread and `Sources` (the issue's
+  branches as values, `Repo` for five git reads, `Pulls` for the PRs,
+  `Render` for the plan's HTML). `internal/evidence` reads them and calls
+  it; the server's `cycle.Gather` calls are `evidence.Gather`.
+- `core/cycle/work`, from `internal/work`.
+- `core/forge.PR`, `Check`, `Review`, from `internal/ghpr`, which keeps
+  the GitHub client and `Gate`.
+- `internal/branches` and `internal/markdown` stay (ADR 0020, Step 4);
+  the experimental switch stays the application's (ADR 0018).
+
+### Status 2026-11-05: a reader never loses an issue to a write
+
+`TestGetIssueCacheConcurrent` failed about 10 times in 400 runs, a reader
+(once a writer) finding no issue: the index had dropped it.
+
+- `gitstore.Refs` read a directory with go-billy's `ReadDir`, which
+  lstats each entry and fails when `git update-ref` renames `<ref>.lock`
+  away meanwhile; the walk took that for no directory, so `Heads` listed
+  none of the kind and the index's refresh dropped them all. It reads
+  with `os.ReadDir` now, and the loose refs before `packed-refs`, as git
+  does. Tests: `TestRefsWhileGitMovesARef`, `TestRefsWhileGitPacksRefs`.
+- `mdstore`: a reader could see an append cut at a page, a pack cut
+  short; a last line without its line feed that isn't JSON is left out.
+  Test: `TestPackBeingAppendedIsLeftOut`.
+- `dstest`, "read while written": every datastore, PostgreSQL included.

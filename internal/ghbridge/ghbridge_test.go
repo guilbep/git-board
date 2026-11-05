@@ -6,9 +6,10 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/guilbep/git-board/core/fields"
+	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/ghbridge"
-	"github.com/guilbep/git-board/internal/store"
 )
 
 const fixture = "testdata/project-items.json"
@@ -35,10 +36,10 @@ func mustLoadConfig(t *testing.T) *config.Config {
 	return cfg
 }
 
-// bug is a small helper to build a store.Issue fixture keyed by the
+// bug is a small helper to build a model.Issue fixture keyed by the
 // GitHub issue number, mirroring the fixture's real content.url shape.
-func bug(id string, number int, labels ...string) store.Issue {
-	return store.Issue{
+func bug(id string, number int, labels ...string) model.Issue {
+	return model.Issue{
 		ID:        id,
 		GithubURL: "https://github.com/EPFL-ENAC/co2-calculator/issues/" + strconv.Itoa(number),
 		Labels:    labels,
@@ -88,13 +89,13 @@ func TestParseItemsMatchesRealShape(t *testing.T) {
 func TestMappingSendsAnyFieldToTheProject(t *testing.T) {
 	t.Parallel()
 	cfg := &config.Config{
-		Fields: map[string]config.Field{
-			"risk": {Single: true, Options: []string{"normal", "structural"}},
-		},
 		Forges: []config.Forge{{Name: "gh", Kind: "github", Host: "github.com",
 			Fields: map[string]config.FieldMapping{
 				"risk": {To: "project", Field: "Risk", Values: map[string]string{"structural": "Structural"}},
 			}}},
+		Schema: fields.Schema{Fields: map[string]fields.Field{
+			"risk": {Single: true, Options: []string{"normal", "structural"}},
+		}},
 	}
 	meta := ghbridge.ProjectMeta{ID: "P",
 		Fields: map[string]ghbridge.ProjectField{"Risk": {ID: "F-risk", Options: map[string]string{"Structural": "o-structural", "Normal": "o-normal"}}}}
@@ -103,7 +104,7 @@ func TestMappingSendsAnyFieldToTheProject(t *testing.T) {
 			Content: ghbridge.Content{Number: 9, Type: "Issue", URL: bug("b9", 9).GithubURL}}}
 	}
 
-	plan := ghbridge.BuildSyncPlan(item("Structural"), []store.Issue{bug("b9", 9)}, nil, meta, cfg)
+	plan := ghbridge.BuildSyncPlan(item("Structural"), []model.Issue{bug("b9", 9)}, nil, meta, cfg)
 	if len(plan.Changes) != 1 || !slices.Contains(plan.Changes[0].Added, "risk:structural") {
 		t.Errorf("changes = %+v, want risk:structural — the Project's Structural read back", plan.Changes)
 	}
@@ -111,7 +112,7 @@ func TestMappingSendsAnyFieldToTheProject(t *testing.T) {
 	// The Project still reads Normal, the base agrees, the issue moved to
 	// structural: the edit takes the mapping's rename and option id.
 	plan = ghbridge.BuildSyncPlan(item("Normal"),
-		[]store.Issue{bug("b9", 9, "risk:structural")}, map[string]map[string]string{"b9": {"risk": "normal"}}, meta, cfg)
+		[]model.Issue{bug("b9", 9, "risk:structural")}, map[string]map[string]string{"b9": {"risk": "normal"}}, meta, cfg)
 	if len(plan.Edits) != 1 || plan.Edits[0].Kind != ghbridge.EditOption || plan.Edits[0].Arg != "o-structural" {
 		t.Errorf("edits = %+v, want risk:normal → Structural", plan.Edits)
 	}

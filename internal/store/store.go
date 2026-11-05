@@ -28,107 +28,13 @@ import (
 	"github.com/guilbep/git-board/core/gitstore"
 	"github.com/guilbep/git-board/core/index"
 	"github.com/guilbep/git-board/core/issue"
+	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/core/oplog"
 	"github.com/guilbep/git-board/core/people"
 	"github.com/guilbep/git-board/core/syncer"
 	"github.com/guilbep/git-board/internal/avatar"
 	"github.com/guilbep/git-board/internal/config"
 )
-
-// Issue is an issue as git-board's fields and filters read it.
-type Issue struct {
-	ID     string   `json:"id"`
-	Title  string   `json:"title"`
-	Status string   `json:"status"` // "open" or "closed"
-	Labels []string `json:"labels"`
-	// Inherited are the labels it takes from its project ([roles]) for the
-	// roles it doesn't set itself; internal/board sets them.
-	Inherited []string `json:"inherited,omitempty"`
-	GithubURL string   `json:"github_url,omitempty"` // "" if not linked to a GitHub issue
-	Forges    []Forge  `json:"forges,omitempty"`     // where it is on forges
-	// Shown is the title as the board shows it (ShownTitle).
-	Shown string `json:"shown_title"`
-	// Number is its project number, CO2-3075: "" until the counter hands it
-	// one, and while the project doesn't number its issues (numbers.go).
-	Number string `json:"number,omitempty"`
-	// Counted tells the project numbers its issues: a bare number (3075,
-	// fix/3075-…) then means a project number; #3075 is still a forge's.
-	Counted bool `json:"counted,omitempty"`
-	// UpdatedAt is its last change, for "changed since your last visit".
-	UpdatedAt time.Time `json:"updated_at"`
-	// CreatedAt is when it was opened: it breaks a tie between issues one
-	// sync stamped at once.
-	CreatedAt time.Time `json:"created_at"`
-	// AuthorLogins are who opened it, for author:: name, login, forge
-	// logins.
-	AuthorLogins []string `json:"-"`
-	// CommenterLogins are the logins of who commented, the author
-	// excepted, for involves:.
-	CommenterLogins []string `json:"-"`
-	// AuthorID and CommenterIDs are the same people by identity: you are
-	// your identity, with or without a login.
-	AuthorID     string   `json:"-"`
-	CommenterIDs []string `json:"-"`
-}
-
-// BareNumber is the number a bare mention names it by (3075, fix/3075-…):
-// its project number once the project numbers its issues, else its first
-// forge number; "" for none. With HasNumber and HasForgeNumber, the one
-// place a number is told to name an issue, for search, branch names and
-// titles.
-func (is Issue) BareNumber() string {
-	if is.Counted {
-		return is.Number[strings.LastIndexByte(is.Number, '-')+1:]
-	}
-	for _, f := range is.Forges {
-		if f.Number != "" {
-			return f.Number
-		}
-	}
-	return ""
-}
-
-// HasNumber tells whether a bare number names the issue: its project
-// number once the project numbers its issues, else any of its forge
-// numbers.
-func (is Issue) HasNumber(n string) bool {
-	if is.Counted {
-		return n != "" && is.BareNumber() == n
-	}
-	return is.HasForgeNumber(n)
-}
-
-// HasForgeNumber tells whether #n, a forge's own way to name an issue,
-// names it.
-func (is Issue) HasForgeNumber(n string) bool {
-	return n != "" && slices.ContainsFunc(is.Forges, func(f Forge) bool { return f.Number == n })
-}
-
-// AllLabels are its own labels and those it inherits: what filters,
-// groups and facets see. Edits change its own labels only.
-func (is Issue) AllLabels() []string { return append(slices.Clip(is.Labels), is.Inherited...) }
-
-// Headline is its shown title after its project number, as lists show it:
-// "CO2-3075 Restarting Postgres empties the bouncer pool"; its title
-// before it has one.
-func (is Issue) Headline() string {
-	if is.Number == "" {
-		return is.Title
-	}
-	return is.Number + " " + is.ShownTitle()
-}
-
-var ownNumber = regexp.MustCompile(`\s*\(#(\d+)\)\s*$`) // (#2518)
-
-// ShownTitle is the title without a trailing (#2518) that is one of the
-// issue's own forge numbers: the forge links show it already. The title
-// itself keeps it, and editing starts from the title.
-func (is Issue) ShownTitle() string {
-	if m := ownNumber.FindStringSubmatchIndex(is.Title); m != nil && is.HasForgeNumber(is.Title[m[2]:m[3]]) {
-		return is.Title[:m[0]]
-	}
-	return is.Title
-}
 
 // Errors an id can answer.
 var (
@@ -161,14 +67,18 @@ type Backend struct {
 	// cfg says which labels the forges' sync holds (SetHeld)
 	cfg atomic.Pointer[config.Config]
 
-	// ponytail: issues and persons loaded once per head, in memory; the
-	// index's summaries when a cold listing of thousands gets slow
+	// issues and persons folded once per head, in memory; a listing's
+	// issues come from the index's states (allIssues)
 	mu      sync.Mutex
 	issues  map[string]*issue.Issue
 	persons map[string]*people.Person
 	heads   map[string]string // ref -> version of what's loaded
 	// issueFolds is how many times an issue was folded, for the tests
 	issueFolds atomic.Int64
+	// listed is allIssues' last answer from the index, and its issues
+	listMu       sync.Mutex
+	listed       index.Listing
+	listedIssues map[string]*issue.Issue
 	// recs are the forges' links (syncer.Records) as of the sync
 	// entities' heads recHeads: folded again only when one moved
 	recMu    sync.Mutex
@@ -242,8 +152,11 @@ func OpenCwd() (*Backend, error) {
 	return Open(cwd)
 }
 
-// Close closes the index, and the datastore's connections.
-func (b *Backend) Close() error { return errors.Join(b.ix.Close(), closeDatastore(b.ds, b.s)) }
+// Close closes the index, the datastore's connections and the repository's
+// open files.
+func (b *Backend) Close() error {
+	return errors.Join(b.ix.Close(), closeDatastore(b.ds, b.s), b.s.Close())
+}
 
 // Store is the git repository: the code's, and the board's when it is kept
 // in git.
@@ -321,11 +234,24 @@ func (b *Backend) me() (string, error) {
 	return id, err
 }
 
-// loadIssue is an issue and its log. The log is read each time; the issue
-// is folded again only when the log's version moved, as all keeps it for
-// listings. The issue is shared with every other reader: read it, never
-// write it. The log is the caller's own.
+// ErrDeleted: the issue was deleted (docs/adr/0019). It is a not found.
+var ErrDeleted = fmt.Errorf("%w: deleted", ErrNotFound)
+
+// loadIssue is an issue and its log, as loadAny, and not found when a
+// delete hid it: every view goes through it, so none shows it.
 func (b *Backend) loadIssue(id string) (*issue.Issue, *oplog.Log, error) {
+	is, l, err := b.loadAny(id)
+	if err == nil && is.Deleted {
+		return nil, nil, fmt.Errorf("issue %s: %w", id, ErrDeleted)
+	}
+	return is, l, err
+}
+
+// loadAny is an issue and its log, deleted or not. The log is read each
+// time; the issue is folded again only when the log's version moved, as
+// all keeps it for listings. The issue is shared with every other reader:
+// read it, never write it. The log is the caller's own.
+func (b *Backend) loadAny(id string) (*issue.Issue, *oplog.Log, error) {
 	l, err := oplog.LoadContext(ctx, b.ds, "issue", id)
 	if errors.Is(err, oplog.ErrNotFound) {
 		return nil, nil, fmt.Errorf("%w: issue %s", ErrNotFound, id)
@@ -333,31 +259,48 @@ func (b *Backend) loadIssue(id string) (*issue.Issue, *oplog.Log, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	name := oplog.RefName("issue", id)
+	is, err := b.fold(l)
+	return is, l, err
+}
+
+// fold is the issue l folds to, from the cache when it holds l's version.
+func (b *Backend) fold(l *oplog.Log) (*issue.Issue, error) {
+	name := oplog.RefName("issue", l.ID)
 	b.mu.Lock()
-	is, ok := b.issues[id]
+	is, ok := b.issues[l.ID]
 	ok = ok && b.heads[name] == l.Version
 	b.mu.Unlock()
 	if ok {
-		return is, l, nil
+		return is, nil
 	}
-	if is, err = issue.Apply(l); err != nil {
-		return nil, nil, err
+	is, err := issue.Apply(l)
+	if err != nil {
+		return nil, err
 	}
 	b.issueFolds.Add(1)
 	// the issue and its version are set together, so a slower reader of an
 	// older version leaves an older pair, folded again on the next read,
 	// never an issue under another's version
 	b.mu.Lock()
-	b.issues[id], b.heads[name] = is, l.Version
+	b.issues[l.ID], b.heads[name] = is, l.Version
 	b.mu.Unlock()
-	return is, l, nil
+	return is, nil
+}
+
+// issueAt is an issue at a head Heads gave, deleted or not, through the
+// cache.
+func (b *Backend) issueAt(id, head string) (*issue.Issue, error) {
+	l, err := oplog.LoadAt(ctx, b.ds, "issue", id, head)
+	if err != nil {
+		return nil, err
+	}
+	return b.fold(l)
 }
 
 // all is every entity of a kind ("issue", "person") at its head, through
-// the cache: load reads one again. One that fails to load is left out and
-// logged, as the index keeps a broken entity out.
-func all[T any](b *Backend, kind string, cache map[string]T, load func(id string) (T, error)) (map[string]T, error) {
+// the cache: load reads one again, at the head Heads gave. One that fails
+// to load is left out and logged, as the index keeps a broken entity out.
+func all[T any](b *Backend, kind string, cache map[string]T, load func(id, head string) (T, error)) (map[string]T, error) {
 	heads, err := b.ds.Heads(ctx, kind)
 	if err != nil {
 		return nil, err
@@ -373,7 +316,7 @@ func all[T any](b *Backend, kind string, cache map[string]T, load func(id string
 		ok = ok && b.heads[name] == head
 		b.mu.Unlock()
 		if !ok {
-			if v, err = load(id); err != nil {
+			if v, err = load(id, head); err != nil {
 				log.Printf("%s %s: %v", kind, id, err)
 				continue
 			}
@@ -383,16 +326,55 @@ func all[T any](b *Backend, kind string, cache map[string]T, load func(id string
 	return out, nil
 }
 
+// allIssues is every issue a view shows: a deleted one is left out. They
+// come from the index, which keeps each issue folded (index.States), and
+// through the cache: a process folds or reads only what it doesn't hold
+// at its head. A broken one is left out and logged. The map is shared:
+// read it, never write it.
+//
+// While the issues' heads are those of the last answer, it is that answer
+// again, as records' is: a server lists again and again, and the index
+// would read every head twice more each time.
 func (b *Backend) allIssues() (map[string]*issue.Issue, error) {
-	return all(b, "issue", b.issues, func(id string) (*issue.Issue, error) {
-		is, _, err := b.loadIssue(id)
-		return is, err
-	})
+	heads, err := b.ds.Heads(ctx, "issue")
+	if err != nil {
+		return nil, err
+	}
+	b.listMu.Lock()
+	defer b.listMu.Unlock()
+	if b.listed.Issues == nil || !maps.Equal(heads, b.listed.Heads) {
+		if b.listed, err = b.ix.States(ctx, b.cachedAt); err != nil {
+			return nil, err
+		}
+		b.mu.Lock()
+		for id, st := range b.listed.Issues {
+			b.issues[id], b.heads[oplog.RefName("issue", id)] = st.Issue, st.Head
+		}
+		b.mu.Unlock()
+		b.listedIssues = make(map[string]*issue.Issue, len(b.listed.Issues))
+		for id, st := range b.listed.Issues {
+			b.listedIssues[id] = st.Issue
+		}
+	}
+	for _, e := range b.listed.Broken {
+		log.Printf("issue %s: %s", e.ID, e.Error)
+	}
+	return b.listedIssues, nil
+}
+
+// cachedAt is the issue folded at head, when the cache holds it.
+func (b *Backend) cachedAt(id, head string) *issue.Issue {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.heads[oplog.RefName("issue", id)] == head {
+		return b.issues[id]
+	}
+	return nil
 }
 
 func (b *Backend) allPersons() (map[string]*people.Person, error) {
-	return all(b, "person", b.persons, func(id string) (*people.Person, error) {
-		l, err := oplog.LoadContext(ctx, b.ds, "person", id)
+	return all(b, "person", b.persons, func(id, head string) (*people.Person, error) {
+		l, err := oplog.LoadAt(ctx, b.ds, "person", id, head)
 		if err != nil {
 			return nil, err
 		}
@@ -457,10 +439,17 @@ func (b *Backend) records() (map[string][]syncer.Record, error) {
 // issueFrom is a core issue as git-board reads it: its labels shown, its
 // forges, who opened it and who commented, and its project number when
 // the project numbers its issues.
-func (b *Backend) issueFrom(is *issue.Issue, v view) Issue {
+func (b *Backend) issueFrom(is *issue.Issue, v view) model.Issue {
 	forges := forgesOf(v.records[is.ID])
-	out := Issue{ID: is.ID, Title: is.Title, Status: string(is.Status), Labels: b.shown(slices.Clone(is.Labels)), Forges: forges,
-		UpdatedAt: time.Unix(is.Updated, 0), CreatedAt: time.Unix(is.Created, 0), AuthorID: is.Author}
+	out := model.Issue{ID: is.ID, Title: is.Title, Status: string(is.Status), Labels: b.shown(slices.Clone(is.Labels)), Forges: forges,
+		UpdatedAt: time.Unix(is.Updated, 0), CreatedAt: time.Unix(is.Created, 0), AuthorID: is.Author,
+		Comments: len(is.Comments), Body: is.Body}
+	if is.Status == issue.Closed {
+		out.ClosedAt = time.Unix(is.Changes["status"].Time, 0)
+	}
+	for _, c := range is.Comments {
+		out.CommentBodies = append(out.CommentBodies, c.Body)
+	}
 	for _, f := range forges {
 		if f.Name == "GitHub" && out.GithubURL == "" {
 			out.GithubURL = f.URL
@@ -500,8 +489,8 @@ func logins(p *people.Person) []string {
 }
 
 // ListIssues returns every issue, oldest first. Filtering is done
-// client-side via internal/filter.
-func (b *Backend) ListIssues() ([]Issue, error) {
+// client-side via core/filter.
+func (b *Backend) ListIssues() ([]model.Issue, error) {
 	issues, err := b.allIssues()
 	if err != nil {
 		return nil, fmt.Errorf("listing the issues: %w", err)
@@ -510,11 +499,47 @@ func (b *Backend) ListIssues() ([]Issue, error) {
 	if err != nil {
 		return nil, err
 	}
-	res := make([]Issue, 0, len(issues))
+	res := make([]model.Issue, 0, len(issues))
 	for _, is := range issues {
 		res = append(res, b.issueFrom(is, v))
 	}
-	slices.SortFunc(res, func(x, y Issue) int { return cmp.Or(x.CreatedAt.Compare(y.CreatedAt), cmp.Compare(x.ID, y.ID)) })
+	slices.SortFunc(res, func(x, y model.Issue) int { return cmp.Or(x.CreatedAt.Compare(y.CreatedAt), cmp.Compare(x.ID, y.ID)) })
+	return res, nil
+}
+
+// ListIssuesAt is ListIssues as the board stood at a time: the issues
+// created by then, each folded from the operations made by then, by their
+// own times (issue.At).
+func (b *Backend) ListIssuesAt(at time.Time) ([]model.Issue, error) {
+	heads, err := b.ds.Heads(ctx, "issue")
+	if err != nil {
+		return nil, fmt.Errorf("listing the issues: %w", err)
+	}
+	v, err := b.view()
+	if err != nil {
+		return nil, err
+	}
+	var res []model.Issue
+	for id := range heads {
+		if !oplog.IsID(id) {
+			continue
+		}
+		_, l, err := b.loadIssue(id)
+		if err != nil { // broken: left out, as ListIssues leaves it
+			log.Printf("issue %s: %v", id, err)
+			continue
+		}
+		is, _, err := foldAt(l, at)
+		if errors.Is(err, ErrNotFound) {
+			continue
+		}
+		if err != nil {
+			log.Printf("issue %s on %s: %v", id, at.Format(time.DateOnly), err)
+			continue
+		}
+		res = append(res, b.issueFrom(is, v))
+	}
+	slices.SortFunc(res, func(x, y model.Issue) int { return cmp.Or(x.CreatedAt.Compare(y.CreatedAt), cmp.Compare(x.ID, y.ID)) })
 	return res, nil
 }
 
@@ -528,14 +553,14 @@ func (b *Backend) Labels() []string {
 }
 
 // GetIssue resolves an issue by id prefix.
-func (b *Backend) GetIssue(idPrefix string) (Issue, error) {
+func (b *Backend) GetIssue(idPrefix string) (model.Issue, error) {
 	is, _, err := b.issue(idPrefix)
 	if err != nil {
-		return Issue{}, err
+		return model.Issue{}, err
 	}
 	v, err := b.view()
 	if err != nil {
-		return Issue{}, err
+		return model.Issue{}, err
 	}
 	return b.issueFrom(is, v), nil
 }
@@ -544,20 +569,20 @@ func (b *Backend) GetIssue(idPrefix string) (Issue, error) {
 // sync run's events): the forges' links and the persons are read again at
 // most every fresh, not on each call. An issue linked since shows its
 // forge number from the next read on.
-func (b *Backend) IssueNamer(fresh time.Duration) func(idPrefix string) (Issue, error) {
+func (b *Backend) IssueNamer(fresh time.Duration) func(idPrefix string) (model.Issue, error) {
 	var mu sync.Mutex
 	var v view
 	var at time.Time
-	return func(idPrefix string) (Issue, error) {
+	return func(idPrefix string) (model.Issue, error) {
 		is, _, err := b.issue(idPrefix)
 		if err != nil {
-			return Issue{}, err
+			return model.Issue{}, err
 		}
 		mu.Lock()
 		defer mu.Unlock()
 		if at.IsZero() || time.Since(at) >= fresh {
 			if v, err = b.view(); err != nil {
-				return Issue{}, err
+				return model.Issue{}, err
 			}
 			at = time.Now()
 		}
@@ -676,9 +701,10 @@ func (b *Backend) SetProjectBases(idPrefix, prefix string, values map[string]str
 func (b *Backend) CloseBug(idPrefix string) error { return b.SetStatus(idPrefix, "closed") }
 
 // SearchText returns the issues whose title, description or a comment
-// hold text (the index's search), by id.
-func (b *Backend) SearchText(text string) (map[string]bool, error) {
-	found, err := b.ix.Issues(ctx, index.Query{Text: text})
+// hold text (the index's search), by id; in, when given, names where to
+// look (search.Texts: title, body, comments).
+func (b *Backend) SearchText(text string, in ...string) (map[string]bool, error) {
+	found, err := b.ix.Issues(ctx, index.Query{Text: text, In: in})
 	if err != nil {
 		return nil, err
 	}

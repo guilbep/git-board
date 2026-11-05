@@ -30,9 +30,12 @@ you (or with `--me ada`). On a board with no forge, assign by name:
 ## Statuses
 
 ```sh
+git board move 624a ready           # straight to a status
 git board move 624a --next          # backlog → ready → in progress → …
 git board move 624a --prev
 git board close 624a -c "Fixed in 4e5f6a7"   # the last status, closed, with a comment
+git board close 624a -r not-planned          # closed-as:not-planned
+git board close 624a --duplicate-of 5f1e     # closed-as:duplicate, linked, commented
 git board reopen 624a                        # open again
 ```
 
@@ -54,11 +57,24 @@ git board view backlog --md                   # a named view from .git-board.tom
 The same filter works in the web UI's Filter box, the filters panel and
 ⌘K. The whole grammar is in [Configuration › Filters](../guide/configuration.md#filters).
 
+## Creating issues
+
+```sh
+git board new "Login fails on Safari" prio=p1   # prints its id
+git board new "Login fails" -T "Bug report"     # from .github/ISSUE_TEMPLATE
+git board new                                   # asks: template, title, description
+git board new -e                                # title and description in your editor
+```
+
+`new` asks only on a terminal, never in a script.
+
 ## Reading and discussing
 
 ```sh
 git board show 624a                     # fields, description, comments
 git board show 624a --json | jq .title
+git board show 624a --web               # its page in the web UI
+git board show 624a --forge             # its page on GitHub or GitLab
 git board comment 624a -b "Reproduced on 17.2 too."
 git board comment 624a -e               # in your editor
 git board comment 624a --edit-last      # fix your last comment
@@ -106,3 +122,10 @@ Sprints are `[sprints]` in `.git-board.toml`
 In the web UI, **Inbox** lists what changed in the issues you are in (you
 opened them, are assigned, commented, are mentioned) and the ones you
 follow. Follow an issue or a view from its menu.
+
+```sh
+git board status                  # assigned to you, and what changed for you
+git board follow 624a             # every change to it reaches your inbox
+git board unfollow 624a           # only a mention of you does
+git board follow 624a --auto      # back to automatic
+```

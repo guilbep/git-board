@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/guilbep/git-board/core/fields"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/store/storetest"
 )
@@ -11,9 +12,9 @@ import (
 func TestInsightsReplayTheRepository(t *testing.T) {
 	t.Parallel()
 	ts, s := newIssueServer(t)
-	s.cfg.Fields = map[string]config.Field{"status": {Single: true, Options: []string{"backlog", "in-progress", "done"}}}
+	s.cfg.Fields = map[string]fields.Field{"status": {Single: true, Options: []string{"backlog", "in-progress", "done"}}}
 	start := time.Now().AddDate(0, 0, -3)
-	s.cfg.Sprints = config.SprintsConfig{LengthDays: 14, List: []config.Sprint{{Slug: "s1", Title: "Sprint 1", Start: start}}}
+	s.cfg.Sprints = fields.Sprints{LengthDays: 14, List: []fields.Sprint{{Slug: "s1", Title: "Sprint 1", Start: start}}}
 	a := storetest.NewIssue(t, s.b, "a")
 	b := storetest.NewIssue(t, s.b, "b")
 	for id, labels := range map[string][]string{a: {"status:in-progress", "sprint:s1"}, b: {"status:backlog", "sprint:s1"}} {

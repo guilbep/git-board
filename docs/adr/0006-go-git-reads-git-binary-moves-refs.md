@@ -39,7 +39,7 @@ the C locale.**
   (`core/gitstore/store.go:338-343`; Windows has no SIGINT: killed).
 - The code repository side does the same split: `internal/store/code.go`
   reads branches with go-git; `internal/store/diff.go` and
-  `internal/release/git.go` shell out to `git`. ADR 0001 § 8 shells out
+  `internal/ship/git.go` shell out to `git`. ADR 0001 § 8 shells out
   for notes, "go-git has no notes API, and its ref locks don't exclude
   git's".
 

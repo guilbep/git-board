@@ -3,7 +3,7 @@ package store_test
 import (
 	"testing"
 
-	"github.com/guilbep/git-board/internal/store"
+	"github.com/guilbep/git-board/core/release"
 	"github.com/guilbep/git-board/internal/store/storetest"
 )
 
@@ -25,7 +25,7 @@ func TestRefsFingerprintFollowsWrites(t *testing.T) {
 		t.Error("a label change left the fingerprint as it was")
 	}
 	labelled := b.RefsFingerprint()
-	if _, err := b.CreateRelease(store.ReleaseRecord{Commit: "5e09a71"}); err != nil {
+	if _, err := b.CreateRelease(release.Record{Commit: "5e09a71"}); err != nil {
 		t.Fatal(err)
 	}
 	if b.RefsFingerprint() == labelled {

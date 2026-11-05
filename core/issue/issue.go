@@ -39,8 +39,16 @@ type Issue struct {
 	Origin                          *oplog.Origin
 	Meta                            map[string]string // the create operation's, as set-meta left it; nil if none
 	// Changes holds, for each field, the operation that last changed it:
-	// title, body, status, label:<label> and comment:<comment id>.
+	// title, body, status, label:<label> and comment:<comment id>; and
+	// deleted, once a delete hid the issue.
 	Changes map[string]Change
+	// Deleted says a delete hid the issue: it is still read, so that sync
+	// and the index know it, but no view shows it.
+	Deleted bool
+	// Removed are the comments a delete hid, in the order they were added,
+	// without their text or metadata: sync knows them by their id and
+	// origin, so that a pull doesn't bring one back.
+	Removed []Comment
 }
 
 // Change is who last changed a field, when, and from where.
@@ -55,7 +63,7 @@ var (
 	ErrBadTarget = errors.New("issue: edit of an unknown text")
 )
 
-var kinds = []string{"create", "comment", "edit-text", "set-title", "set-status", "change-labels", "set-meta"}
+var kinds = []string{"create", "comment", "edit-text", "set-title", "set-status", "change-labels", "set-meta", "delete"}
 
 // data is the union of the fields of every operation's data.
 type data struct {
@@ -74,6 +82,7 @@ func Apply(l *oplog.Log) (*Issue, error) {
 	labels := map[string]bool{}
 	comments := map[string]int{}      // comment id -> index in is.Comments
 	origins := map[oplog.Origin]int{} // a comment's origin -> its index
+	removed := map[int]bool{}         // a comment's index -> a delete hid it
 	for _, e := range l.Entries {
 		if e.Author == "" {
 			return nil, fmt.Errorf("issue: operation %s has no author", e.ID)
@@ -125,6 +134,9 @@ func Apply(l *oplog.Log) (*Issue, error) {
 				is.Body = d.Body
 				is.Changes["body"] = ch
 			} else if i, ok := comments[d.Target]; ok {
+				if removed[i] {
+					break // an edit of a hidden comment, from a clone that hadn't its delete yet
+				}
 				is.Comments[i].Body = d.Body
 				is.Comments[i].Edited = e.Time
 				is.Changes["comment:"+is.Comments[i].ID] = ch
@@ -141,12 +153,34 @@ func Apply(l *oplog.Log) (*Issue, error) {
 				if !ok {
 					return nil, fmt.Errorf("%w: %q, operation %s", ErrBadTarget, d.Target, e.ID)
 				}
+				if removed[i] {
+					break
+				}
 				meta = &is.Comments[i].Meta
 			}
 			if *meta == nil {
 				*meta = map[string]string{}
 			}
 			maps.Copy(*meta, d.Meta)
+		case "delete":
+			if strings.HasPrefix(d.Target, "pending:") {
+				return nil, fmt.Errorf("%w: %q, operation %s", ErrBadTarget, d.Target, e.ID)
+			}
+			if d.Target == is.BodyOp {
+				is.Deleted = true
+				is.Changes["deleted"] = ch
+				break
+			}
+			i, ok := comments[d.Target]
+			if !ok {
+				return nil, fmt.Errorf("%w: %q, operation %s", ErrBadTarget, d.Target, e.ID)
+			}
+			if !removed[i] {
+				removed[i] = true
+				c := &is.Comments[i]
+				c.Body, c.Meta, c.Edited = "", nil, 0
+				delete(is.Changes, "comment:"+c.ID)
+			}
 		case "set-title":
 			is.Title = d.Title
 			is.Changes["title"] = ch
@@ -178,10 +212,52 @@ func Apply(l *oplog.Log) (*Issue, error) {
 	if is == nil {
 		return nil, errors.New("issue: no operation")
 	}
+	if len(removed) > 0 {
+		kept := make([]Comment, 0, len(is.Comments)-len(removed))
+		for i, c := range is.Comments {
+			if removed[i] {
+				is.Removed = append(is.Removed, c)
+			} else {
+				kept = append(kept, c)
+			}
+		}
+		is.Comments = kept
+	}
 	is.Labels = []string{}
 	for k := range labels {
 		is.Labels = append(is.Labels, k)
 	}
 	slices.Sort(is.Labels)
 	return is, nil
+}
+
+// ErrNotYet is At's for an issue whose create was made after the time.
+var ErrNotYet = errors.New("issue: not created yet")
+
+// At is the log as it stood at a time, by each operation's own time
+// (Unix seconds, its writer's clock): the operations made at or before at,
+// in the log's order. An edit or a set-meta of a text made later goes
+// with it, as it has nothing to change yet (writers' clocks disagree). It
+// is ErrNotYet when the create was made later. Apply folds what it
+// answers: the issue as it was then.
+func At(l *oplog.Log, at int64) (*oplog.Log, error) {
+	if len(l.Entries) == 0 || l.Entries[0].Time > at {
+		return nil, ErrNotYet
+	}
+	kept := map[string]bool{}
+	out := &oplog.Log{Kind: l.Kind, ID: l.ID, Version: l.Version}
+	for _, e := range l.Entries {
+		if e.Time > at {
+			continue
+		}
+		if e.Kind == "edit-text" || e.Kind == "set-meta" {
+			var d struct{ Target string }
+			if json.Unmarshal(e.Data, &d) == nil && !kept[d.Target] {
+				continue
+			}
+		}
+		kept[e.ID] = true
+		out.Entries = append(out.Entries, e)
+	}
+	return out, nil
 }

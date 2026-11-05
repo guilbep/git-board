@@ -55,6 +55,17 @@ func ChangeLabels(author string, add, remove []string) oplog.Op {
 	return newOp("change-labels", author, m{"add": add, "remove": remove})
 }
 
+// Delete hides the issue (target its create operation) or a comment. It
+// is a tombstone: the text stays in the log (docs/adr/0019).
+func Delete(author, target string) oplog.Op {
+	return newOp("delete", author, m{"target": target})
+}
+
+// IsRemoved says a delete hid the comment with this id.
+func (is *Issue) IsRemoved(id string) bool {
+	return slices.ContainsFunc(is.Removed, func(c Comment) bool { return c.ID == id })
+}
+
 // Create writes a new issue. The first operation must be a create.
 func Create(ctx context.Context, s oplog.Datastore, ops ...oplog.Op) (*Issue, error) {
 	if len(ops) == 0 || ops[0].Kind != "create" {
@@ -78,6 +89,16 @@ func Load(s oplog.Datastore, id string) (*Issue, error) {
 // LoadContext reads an issue; ctx bounds the datastore's read.
 func LoadContext(ctx context.Context, s oplog.Datastore, id string) (*Issue, error) {
 	l, err := oplog.LoadContext(ctx, s, "issue", id)
+	if err != nil {
+		return nil, err
+	}
+	return Apply(l)
+}
+
+// LoadAt reads an issue at version, one its datastore's Heads gave
+// (oplog.LoadAt).
+func LoadAt(ctx context.Context, s oplog.Datastore, id, version string) (*Issue, error) {
+	l, err := oplog.LoadAt(ctx, s, "issue", id, version)
 	if err != nil {
 		return nil, err
 	}

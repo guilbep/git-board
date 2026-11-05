@@ -4,6 +4,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/guilbep/git-board/core/fields"
 )
 
 // A project names its people by role; an issue takes each role it doesn't
@@ -19,7 +21,7 @@ func TestRoles(t *testing.T) {
 	if got := cfg.RolesFor(nil); !slices.Equal(got, []string{"lead-dev:bob", "pm:claire"}) {
 		t.Errorf("RolesFor(nil) = %v", got)
 	}
-	if cfg.TypeOf("pm", nil) != TypePerson {
+	if cfg.TypeOf("pm", nil) != fields.TypePerson {
 		t.Errorf("pm is a %s", cfg.TypeOf("pm", nil))
 	}
 	var none *Config

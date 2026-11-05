@@ -43,7 +43,10 @@ ship inside one binary, the web app's npm packages included.
 - New dependencies are named in the plans, with their licence and why:
   `modernc.org/sqlite` "the one new dependency" of M2, pure Go
   (`docs/prd/core-m2-plan.md:28`); `pgx`, "the standard library has no
-  PostgreSQL driver" (ADR 0002 § 6).
+  PostgreSQL driver" (ADR 0002 § 6); `github.com/itchyny/gojq` (MIT, with
+  `itchyny/timefmt-go`, MIT) for `--jq`, a jq in pure Go: the standard
+  library has none, and `gh` uses it too (`docs/guide/cli.md` › JSON
+  output).
 - Development tools are pinned with go.mod's `tool` line (lefthook), not
   installed separately (`CONTRIBUTING.md:65`).
 

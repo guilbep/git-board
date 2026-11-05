@@ -9,8 +9,8 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/guilbep/git-board/core/fields"
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/fields"
 	"github.com/guilbep/git-board/internal/store"
 )
 
@@ -18,14 +18,28 @@ func newMoveCmd() *cobra.Command {
 	var next, prev bool
 
 	cmd := &cobra.Command{
-		Use:   "move <id> --next|--prev",
-		Short: "Move an issue's status to the next or the previous configured option",
-		Example: `  git-board move a1b2c3 --next
+		Use:   "move <id> <status> | move <id> --next|--prev",
+		Short: "Move an issue's status: to a status, or to the next or the previous option",
+		Long: `Move an issue's status. "move <id> <status>" is "set <id> status=<status>":
+the status is checked against [fields.status] options. --next and --prev
+step through those options instead. As set does, the last option closes
+the issue and another one reopens it.`,
+		Example: `  git-board move a1b2c3 in-progress
+  git-board move a1b2c3 --next
   git-board move a1b2c3 --prev`,
-		Args: cobra.ExactArgs(1),
+		Args: cobra.RangeArgs(1, 2),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) == 2 {
+				if next || prev {
+					return usageError{fmt.Errorf("a status, or --next or --prev: one of them")}
+				}
+				if strings.ContainsAny(args[1], "=") || args[1] == "" {
+					return usageError{fmt.Errorf("move %s %q: a status option, as [fields.status] lists them", args[0], args[1])}
+				}
+				return runSet(cmd.OutOrStdout(), args[0], []string{"status=" + args[1]}, "", false)
+			}
 			if next == prev {
-				return usageError{fmt.Errorf("specify --next or --prev")}
+				return usageError{fmt.Errorf("a status, or --next or --prev")}
 			}
 			return runMove(cmd.OutOrStdout(), args[0], prev)
 		},
@@ -61,7 +75,7 @@ func runMove(out io.Writer, idPrefix string, back bool) error {
 		return err
 	}
 
-	label, err := fields.Apply(b, cfg, idPrefix, "status", next, "", time.Now())
+	label, err := fields.Apply(b, cfg.IssueSchema(), idPrefix, "status", next, "", time.Now())
 	if err != nil {
 		return err
 	}

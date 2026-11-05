@@ -3,6 +3,8 @@ package mdstore_test
 import (
 	"context"
 	"errors"
+	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"strings"
@@ -145,4 +147,50 @@ func TestLockFilesOneAtATime(t *testing.T) {
 		t.Fatalf("once the first let go: %v", err)
 	}
 	unlock()
+}
+
+// A pack being appended is read as not there yet: a reader sees an append
+// that crosses a page in parts (measured: a file cut at a multiple of 4096
+// bytes, about once in 3000 appends), which is the file here.
+func TestPackBeingAppendedIsLeftOut(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dir := t.TempDir()
+	s := open(t, dir)
+	id, other := strings.Repeat("a", 40), strings.Repeat("b", 40)
+	pack := func(c int) []byte {
+		return fmt.Appendf(nil, `{"clock":%d,"ops":[{"kind":"comment","time":%d}]}`, c, c)
+	}
+	v1, err := s.Add(ctx, "issue", id, pack(1), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	v2, err := s.Add(ctx, "issue", id, pack(2), v1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cut := func(id string, p []byte) {
+		path := filepath.Join(dir, mdstore.Board, "issue", id+".jsonl")
+		f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0o644)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer f.Close()
+		if _, err := f.Write(p[:len(p)/2]); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cut(id, pack(3))
+	cut(other, pack(1)) // an entity's first pack, half there
+	heads, err := s.Heads(ctx, "issue")
+	if want := map[string]string{id: v2}; err != nil || !maps.Equal(heads, want) {
+		t.Fatalf("heads = %v, %v; want %v", heads, err, want)
+	}
+	packs, v, err := s.Packs(ctx, "issue", id)
+	if err != nil || v != v2 || len(packs) != 2 {
+		t.Fatalf("packs = %q at %q, %v; want 2 at %q", packs, v, err, v2)
+	}
+	if _, _, err := s.Packs(ctx, "issue", other); !errors.Is(err, datastore.ErrNotFound) {
+		t.Fatalf("packs of an entity half written: %v, want ErrNotFound", err)
+	}
 }

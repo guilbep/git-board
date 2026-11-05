@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/guilbep/git-board/core/cycle"
+	"github.com/guilbep/git-board/core/fields"
 	"github.com/guilbep/git-board/internal/config"
 )
 
@@ -42,7 +44,7 @@ type settingsBody struct {
 	} `json:"uploads"`
 	GithubProject config.GithubProject `json:"github_project"`
 	ConfigPath    string               `json:"config_path"`
-	Cycle         config.Stages        `json:"cycle"`
+	Cycle         cycle.Stages         `json:"cycle"`
 }
 
 func TestSettingsListAndToggleBridgeSync(t *testing.T) {
@@ -51,7 +53,7 @@ func TestSettingsListAndToggleBridgeSync(t *testing.T) {
 	gl.Sync = false
 	ts, s := forgeServer(t, ghForge, gl)
 	s.cfg.GithubProject = config.GithubProject{Owner: "guilbep", Number: 1}
-	s.cfg.Fields = map[string]config.Field{"status": {Options: []string{"backlog", "ready", "in-progress", "qa", "done"}}}
+	s.cfg.Fields = map[string]fields.Field{"status": {Options: []string{"backlog", "ready", "in-progress", "qa", "done"}}}
 
 	var got settingsBody
 	if code := call(t, "GET", ts.URL+"/api/settings", nil, &got); code != http.StatusOK {

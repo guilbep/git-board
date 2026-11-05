@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/guilbep/git-board/internal/store"
+	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/store/storetest"
 )
 
@@ -21,11 +21,11 @@ func TestMentions(t *testing.T) {
 		"a/b/@guilbep":                false, // a path
 		"no one":                      false,
 	} {
-		if got := store.Mentions(text, "guilbep"); got != want {
+		if got := model.Mentions(text, "guilbep"); got != want {
 			t.Errorf("Mentions(%q) = %v, want %v", text, got, want)
 		}
 	}
-	if store.Mentions("@x", "") {
+	if model.Mentions("@x", "") {
 		t.Error("an empty login is mentioned by nothing")
 	}
 }

@@ -52,7 +52,7 @@ the exact needs.
 - Branches: `internal/branches/branches.go` (`Name`, `Slug`, `Suggest`, `Names`, `Linked`), `internal/config/config.go` (`Branches`), `internal/config/default.git-board.toml` (`[branches]`).
 - The gate: `internal/ghpr/ghpr.go` (`Find`, the waits in `Gate`, `Open`, `Merge`), `internal/server/pulls.go`, `web/src/gate.ts`.
 - Participants: `internal/store/thread.go` (`Participants`: the author, then each commenter).
-- The cycle's branch: `internal/cycle/gather.go` (`gatherCode`: the newest branch not under `plan/`).
+- The cycle's branch: `core/cycle/gather.go` (`gatherCode`: the newest branch not under `plan/`).
 - Colors: `web/src/css/gitboard.css` (`--gb-<color>-*`), `web/src/colors.ts`; the EPFL tokens: `web/epfl-design/` (`web/README.md` says how it is vendored and linted).
 - The canvas: "git-board · one issue, one plane?", rows 8 to 19 (private to guilbep; ask for access).
 

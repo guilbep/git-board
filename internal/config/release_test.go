@@ -4,9 +4,11 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/guilbep/git-board/core/release"
 )
 
-func loadRelease(t *testing.T, src string) Release {
+func loadRelease(t *testing.T, src string) release.Config {
 	t.Helper()
 	cfg, _, err := parse([]byte(src))
 	if err != nil {
@@ -77,11 +79,11 @@ images = [{ name = "", context = "." }]`, "image needs a name"},
 
 func TestBinariesOnlyHasNoEnvironments(t *testing.T) {
 	t.Parallel()
-	r := Release{Binaries: []string{"./cmd/git-board"}}
+	r := release.Config{Binaries: []string{"./cmd/git-board"}}
 	if !r.Enabled() || r.Last() != "" || r.Followed() != "" || len(r.Candidates()) != 0 {
 		t.Errorf("enabled %v last %q followed %q candidates %v", r.Enabled(), r.Last(), r.Followed(), r.Candidates())
 	}
-	if got := r.BuildPlatforms(); !slices.Equal(got, DefaultPlatforms) {
+	if got := r.BuildPlatforms(); !slices.Equal(got, release.DefaultPlatforms) {
 		t.Errorf("platforms %v", got)
 	}
 	if err := checkRelease(r); err != nil {
@@ -92,13 +94,13 @@ func TestBinariesOnlyHasNoEnvironments(t *testing.T) {
 func TestCheckReleaseBinaries(t *testing.T) {
 	t.Parallel()
 	for _, c := range []struct {
-		r    Release
+		r    release.Config
 		want string
 	}{
-		{Release{Binaries: []string{" "}}, "release: a binary needs a package path"},
-		{Release{Binaries: []string{"./cmd/x"}, Platforms: []string{"linux"}}, `release: platform "linux" isn't os/arch`},
-		{Release{Build: "make dist"}, "release: build needs binaries"},
-		{Release{Platforms: []string{"linux/amd64"}}, "release: platforms needs binaries"},
+		{release.Config{Binaries: []string{" "}}, "release: a binary needs a package path"},
+		{release.Config{Binaries: []string{"./cmd/x"}, Platforms: []string{"linux"}}, `release: platform "linux" isn't os/arch`},
+		{release.Config{Build: "make dist"}, "release: build needs binaries"},
+		{release.Config{Platforms: []string{"linux/amd64"}}, "release: platforms needs binaries"},
 	} {
 		if err := checkRelease(c.r); err == nil || err.Error() != c.want {
 			t.Errorf("%+v: %v, want %s", c.r, err, c.want)

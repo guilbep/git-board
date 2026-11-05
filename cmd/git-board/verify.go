@@ -11,8 +11,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/proof"
-	"github.com/guilbep/git-board/internal/release"
+	"github.com/guilbep/git-board/internal/ship"
 )
 
 func newVerifyCmd() *cobra.Command {
@@ -49,7 +48,7 @@ func runVerify(ctx context.Context, out io.Writer, dir, base, commit string) err
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	sha, err := release.Git(ctx, dir, "rev-parse", "--verify", "--end-of-options", commit+"^{commit}")
+	sha, err := ship.Git(ctx, dir, "rev-parse", "--verify", "--end-of-options", commit+"^{commit}")
 	if err != nil {
 		return err
 	}
@@ -60,7 +59,11 @@ func runVerify(ctx context.Context, out io.Writer, dir, base, commit string) err
 		}
 		base = baseRef(ctx, dir, cfg.Branches.Base)
 	}
-	g, err := proof.Gate(ctx, dir, base, sha)
+	b, err := config.AtBase(ctx, dir, base)
+	if err != nil {
+		return err
+	}
+	g, err := b.Gate(ctx, dir, sha)
 	if err != nil {
 		return err
 	}
@@ -83,7 +86,7 @@ func runVerify(ctx context.Context, out io.Writer, dir, base, commit string) err
 // git CLI: a linked worktree and a held git-bug lock don't stop it.
 func baseRef(ctx context.Context, dir, name string) string {
 	if name == "" {
-		head, _ := release.Git(ctx, dir, "symbolic-ref", "-q", "--short", "refs/remotes/origin/HEAD")
+		head, _ := ship.Git(ctx, dir, "symbolic-ref", "-q", "--short", "refs/remotes/origin/HEAD")
 		name, _ = strings.CutPrefix(head, "origin/")
 	}
 	if name == "" {
@@ -102,6 +105,6 @@ func baseRef(ctx context.Context, dir, name string) string {
 }
 
 func has(ctx context.Context, dir, ref string) bool {
-	_, err := release.Git(ctx, dir, "rev-parse", "--verify", "-q", ref)
+	_, err := ship.Git(ctx, dir, "rev-parse", "--verify", "-q", ref)
 	return err == nil
 }

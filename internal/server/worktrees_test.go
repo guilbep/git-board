@@ -14,8 +14,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/guilbep/git-board/core/cycle"
 	"github.com/guilbep/git-board/internal/board"
-	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/store/storetest"
 )
 
@@ -741,7 +741,7 @@ func TestAgentApprove(t *testing.T) {
 func workRepo(t *testing.T) *apiServer {
 	t.Helper()
 	s, _, id := gateRepo(t, "https://github.com/o/r.git", false)
-	s.cfg = cycleConfig(nil, config.Cycle{})
+	s.cfg = cycleConfig(nil, cycle.Config{})
 	if _, err := s.b.ApplyLabelChange(id, []string{"status:in-progress", "risk:low"}, nil); err != nil {
 		t.Fatal(err)
 	}

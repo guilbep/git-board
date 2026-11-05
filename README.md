@@ -631,7 +631,7 @@ git-board tui "is:open prio:p1"
 `f` and `/` are two different tools: `/` is a quick fuzzy text match, useful
 for "I remember a word in the title." `f` is precise and composable —
 `assignee:guilbep -status:validated` narrows exactly like it would on the
-CLI, because it's the exact same `internal/filter` grammar and code path.
+CLI, because it's the exact same `core/filter` grammar and code path.
 
 `i`/`o` show a one-line summary (matched/changed/unmatched/conflict/warning
 counts), not the full per-issue diff — that's what `git board project pull --check`
@@ -654,7 +654,7 @@ repo/network issue) is shown inline and the TUI stays open.
 
 A one-page board, backed by a Go HTTP API in the same module — no Python,
 no separate service. `internal/server` reuses `internal/config`,
-`internal/store`, `internal/fields` and `internal/board` directly, so
+`internal/store`, `core/fields` and `internal/board` directly, so
 `ls`/`view`/`set` and the API apply the exact same filter/group and
 field-write logic.
 
@@ -893,10 +893,18 @@ generation time against `--me`/`GIT_BOARD_ME`, the same single shared
 ## Layout
 
 ```
-internal/config/       TOML parsing, sprint resolution — pure, no I/O beyond reading the file.
+core/model/            the read model: Issue, Thread, Event, Person — as every surface reads them.
+core/fields/           the field schema (types, sprints, roles) and field=value assignments as labels.
+core/filter/           grammar parser, Matches(issue, conditions, schema, me).
+core/search/           free text's tokens and Match, as the index searches: the filter's, without it.
+core/inbox/            what a person follows and has seen, and what's new for them.
+core/release/          release records, versions and tags, the [release] table, GitOps overlays.
+core/proof/            check results as signed git notes, keyed by content, and the gate (ADR 0001).
+core/cycle/            an issue's step in the development cycle, the [cycle] table; work/: the Work page's rows.
+internal/config/       TOML parsing and checks; embeds core/fields' Schema, holds core/release's and core/cycle's Config.
+internal/evidence/     reads the cycle's evidence: branches, test files, plan files, the PR cache.
+internal/ship/         the release runner: cut, promote, deploy, rollback, adopt — drives git, registries, gh.
 internal/store/        git-board's store over the core (core/): issues, people, releases, forges.
-internal/fields/       ApplyField single/multi-cardinality logic and alias resolution.
-internal/filter/       grammar parser, Matches(issue, conditions, config, me).
 internal/board/        load/sort/group issues — shared by the CLI, the TUI and the web API.
 internal/ghbridge/     `gh project item-list` parsing + field-mapping/diff logic for `git board project`.
 internal/lint/          read-only drift checks (labels vs. .git-board.toml) — internal/lint.Run.
@@ -906,8 +914,11 @@ cmd/git-board/          main.go + cobra commands, thin rendering (incl. html.go,
 web/                    Quasar/Vue frontend — one board page, api/board.ts is the only HTTP client.
 ```
 
-Split this way so the TUI and the web frontend both reuse `internal/*`
-without touching the CLI.
+Split this way so the TUI and the web frontend both reuse `core/*` and
+`internal/*` without touching the CLI; `core/` never imports `internal/`
+(ADR 0005), so another tool can read issues, filter them, set fields,
+read what shipped and compute an issue's step without git-board's
+application.
 
 ## Development
 
@@ -923,8 +934,8 @@ make ci    # what CI runs: web checks and build, then go build + vet + test + go
 Run one package or one test by name:
 
 ```bash
-go test ./internal/filter/...
-go test ./internal/fields/... -run TestApplySingleCardinalitySwapsLabel -v
+go test ./core/filter/...
+go test ./core/fields/... -run TestApplySingleCardinalitySwapsLabel -v
 ```
 
 Tests run against real git repositories in `t.TempDir()` rather than a

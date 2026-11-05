@@ -13,7 +13,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/guilbep/git-board/internal/release"
+	"github.com/guilbep/git-board/core/release"
+	"github.com/guilbep/git-board/internal/ship"
 )
 
 // watchInterval is how often deploy --watch fetches: a var for the tests.
@@ -38,7 +39,7 @@ behind, until interrupted.`,
 			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
 			cmd.SetContext(ctx)
-			return withRunner(cmd, func(ctx context.Context, r *release.Runner, out io.Writer) error {
+			return withRunner(cmd, func(ctx context.Context, r *ship.Runner, out io.Writer) error {
 				followed := env == r.Cfg.Followed()
 				switch {
 				case watch && (!followed || tag != ""):
@@ -69,7 +70,7 @@ behind, until interrupted.`,
 }
 
 // redeployIfBehind deploys the trunk's head to env when it runs less.
-func redeployIfBehind(ctx context.Context, r *release.Runner, out io.Writer, env string) error {
+func redeployIfBehind(ctx context.Context, r *ship.Runner, out io.Writer, env string) error {
 	st, err := r.Status(ctx)
 	if err != nil {
 		return err
@@ -83,13 +84,13 @@ func redeployIfBehind(ctx context.Context, r *release.Runner, out io.Writer, env
 }
 
 // deployOnce deploys tag (else the trunk's head) to env and prints what it runs.
-func deployOnce(ctx context.Context, r *release.Runner, out io.Writer, env, tag string) error {
+func deployOnce(ctx context.Context, r *ship.Runner, out io.Writer, env, tag string) error {
 	if tag == "" {
 		if err := r.DeployFollowed(ctx); err != nil {
 			return err
 		}
 	} else {
-		tags, err := release.ReleaseTags(ctx, r.Dir)
+		tags, err := ship.ReleaseTags(ctx, r.Dir)
 		if err != nil {
 			return err
 		}
@@ -97,7 +98,7 @@ func deployOnce(ctx context.Context, r *release.Runner, out io.Writer, env, tag 
 		if i < 0 {
 			return fmt.Errorf("no release tag %q", tag)
 		}
-		if err := r.Deploy(ctx, env, release.Target{Commit: tags[i].Commit, Version: tags[i].Name}); err != nil {
+		if err := r.Deploy(ctx, env, ship.Target{Commit: tags[i].Commit, Version: tags[i].Name}); err != nil {
 			return err
 		}
 	}

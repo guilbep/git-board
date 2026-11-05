@@ -11,6 +11,7 @@ import (
 	"unicode"
 
 	"github.com/guilbep/git-board/core/issue"
+	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/core/oplog"
 	"github.com/guilbep/git-board/core/syncer"
 	"github.com/guilbep/git-board/internal/markdown"
@@ -133,17 +134,17 @@ func isTick(before, after string) bool {
 
 // bodyHistory is the description's texts, oldest first, from its log: the
 // create's, then each edit-text of it.
-func bodyHistory(l *oplog.Log) []Version {
-	var h []Version
+func bodyHistory(l *oplog.Log) []model.Version {
+	var h []model.Version
 	for _, e := range l.Entries {
 		var d struct{ Body, Target string }
 		switch e.Kind {
 		case "create":
 			_ = json.Unmarshal(e.Data, &d)
-			h = append(h, Version{ID: e.ID, Body: d.Body})
+			h = append(h, model.Version{ID: e.ID, Body: d.Body})
 		case "edit-text":
 			if _ = json.Unmarshal(e.Data, &d); len(h) > 0 && d.Target == h[0].ID {
-				h = append(h, Version{ID: e.ID, Body: d.Body})
+				h = append(h, model.Version{ID: e.ID, Body: d.Body})
 			}
 		}
 	}
@@ -152,8 +153,8 @@ func bodyHistory(l *oplog.Log) []Version {
 
 // versions groups a body's history by version, v1 first: each its
 // opening entry's id and its last text, ticks included.
-func versions(h []Version) []Version {
-	var out []Version
+func versions(h []model.Version) []model.Version {
+	var out []model.Version
 	for i, x := range h {
 		if i > 0 && (x.Body == h[i-1].Body || isTick(h[i-1].Body, x.Body)) {
 			out[len(out)-1].Body = x.Body
@@ -219,7 +220,7 @@ func meanings(s oplog.Datastore, opt *syncer.Options) {
 		return out
 	}
 	opt.ReplyTo = func(meta map[string]string) string { return meta["thread:reply-to"] }
-	history := func(id string) []Version {
+	history := func(id string) []model.Version {
 		l, err := oplog.Load(s, "issue", id)
 		if err != nil {
 			return nil

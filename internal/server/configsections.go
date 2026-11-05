@@ -10,6 +10,10 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/guilbep/git-board/core/cycle"
+	"github.com/guilbep/git-board/core/fields"
+	"github.com/guilbep/git-board/core/proof"
+	"github.com/guilbep/git-board/core/release"
 	"github.com/guilbep/git-board/internal/config"
 )
 
@@ -30,27 +34,27 @@ type configModel struct {
 	Hash   string                  `json:"hash"`
 	Exists bool                    `json:"exists"`
 	Error  string                  `json:"error,omitempty"` // the file doesn't parse: the forms show it, Advanced fixes it
-	Fields map[string]config.Field `json:"fields"`
-	Labels config.Labels           `json:"labels"`
+	Fields map[string]fields.Field `json:"fields"`
+	Labels fields.Labels           `json:"labels"`
 	Views  map[string]config.View  `json:"views"`
 	// ViewOrder is the file's order: the tabs', the first the landing one.
 	// The map above is sorted, this is the file's.
 	ViewOrder []string `json:"view_order"`
 	// FieldOrder is the file's order likewise: the fields page's list, the
 	// order an issue's fields line takes.
-	FieldOrder []string             `json:"field_order"`
-	Sprints    config.SprintsConfig `json:"sprints"`
-	Roles      map[string]string    `json:"roles"`
+	FieldOrder []string          `json:"field_order"`
+	Sprints    fields.Sprints    `json:"sprints"`
+	Roles      map[string]string `json:"roles"`
 	// Branches, Cycle (its On says the file has the table), Repos, Uploads
 	// and Release, as the file holds them
 	Branches config.Branches `json:"branches"`
-	Cycle    config.Cycle    `json:"cycle"`
+	Cycle    cycle.Config    `json:"cycle"`
 	Repos    struct {
 		List      []string `json:"list"`
 		Assignees string   `json:"assignees"` // how the forges hold assignees: native, labels; preserved
 	} `json:"repos"`
 	Uploads config.Uploads `json:"uploads"`
-	Release config.Release `json:"release"`
+	Release release.Config `json:"release"`
 	// Forges are the [forges.<name>] tables, their field mappings with
 	// them, or with none the forges found in the remotes (Discovered): the Forges page's Fields table resolves where each field
 	// lives (config.FieldTarget's rules, mirrored client-side).
@@ -76,7 +80,7 @@ func (s *apiServer) configModel() (configModel, error) {
 		return configModel{}, err
 	}
 	m := configModel{Hash: hash, Exists: exists}
-	m.Fields = map[string]config.Field{}
+	m.Fields = map[string]fields.Field{}
 	m.Views = map[string]config.View{}
 	m.Roles = map[string]string{}
 	m.Forges = []config.Forge{}
@@ -116,10 +120,10 @@ func (s *apiServer) configModel() (configModel, error) {
 	m.Cycle.Kinds = orEmptyStringMap(cfg.Cycle.Kinds)
 	m.Cycle.Signoffs = orEmptyStringMap(cfg.Cycle.Signoffs)
 	if m.Cycle.Tests == nil {
-		m.Cycle.Tests = map[string]config.Suite{}
+		m.Cycle.Tests = map[string]proof.Suite{}
 	}
 	if m.Cycle.Checks == nil {
-		m.Cycle.Checks = map[string]config.Suite{}
+		m.Cycle.Checks = map[string]proof.Suite{}
 	}
 	m.Experimental.Features = orEmpty(cfg.Features)
 	m.Repos.List = orEmpty(cfg.Repos)
@@ -128,10 +132,10 @@ func (s *apiServer) configModel() (configModel, error) {
 	m.Uploads = cfg.Uploads
 	m.Release = cfg.Release
 	if m.Release.Images == nil {
-		m.Release.Images = []config.Image{}
+		m.Release.Images = []release.Image{}
 	}
 	if m.Release.Deploy == nil {
-		m.Release.Deploy = []config.Target{}
+		m.Release.Deploy = []release.Target{}
 	}
 	// with no table, the forges are those found in the remotes, as the
 	// Sync page lists them: a mapping saved on one writes its table first
@@ -154,9 +158,9 @@ func orEmptyStringMap(m map[string]string) map[string]string {
 	return m
 }
 
-func orSprints(list []config.Sprint) []config.Sprint {
+func orSprints(list []fields.Sprint) []fields.Sprint {
 	if list == nil {
-		return []config.Sprint{}
+		return []fields.Sprint{}
 	}
 	return list
 }
@@ -235,7 +239,7 @@ func (s *apiServer) sectionWriter(section string, r *http.Request, w http.Respon
 		// (docs/prd/fields-one-editor.md): Forges is each forge's
 		// mappings to set and remove, as the forge-fields section takes
 		var req struct {
-			Set    map[string]config.Field `json:"set"`
+			Set    map[string]fields.Field `json:"set"`
 			Remove []string                `json:"remove"`
 			Order  []string                `json:"order"` // the list's: each field moved above the one before it
 			Forges map[string]struct {
@@ -332,7 +336,7 @@ func (s *apiServer) sectionWriter(section string, r *http.Request, w http.Respon
 		}
 		return func(text string) (string, error) { return config.SetExperimentalText(text, req.Features), nil }, nil
 	case "labels":
-		var req config.Labels
+		var req fields.Labels
 		if !decode(w, r, &req) {
 			return nil, nil
 		}
@@ -372,7 +376,7 @@ func (s *apiServer) sectionWriter(section string, r *http.Request, w http.Respon
 			return text, nil
 		}, nil
 	case "sprints":
-		var req config.SprintsConfig
+		var req fields.Sprints
 		if !decode(w, r, &req) {
 			return nil, nil
 		}
@@ -392,7 +396,7 @@ func (s *apiServer) sectionWriter(section string, r *http.Request, w http.Respon
 	case "cycle":
 		var req struct {
 			On    bool         `json:"on"`
-			Cycle config.Cycle `json:"cycle"`
+			Cycle cycle.Config `json:"cycle"`
 		}
 		if !decode(w, r, &req) {
 			return nil, nil
@@ -414,7 +418,7 @@ func (s *apiServer) sectionWriter(section string, r *http.Request, w http.Respon
 		}
 		return func(text string) (string, error) { return config.SetUploadsText(text, req) }, nil
 	case "release":
-		var req config.Release
+		var req release.Config
 		if !decode(w, r, &req) {
 			return nil, nil
 		}

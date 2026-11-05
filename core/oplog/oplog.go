@@ -13,7 +13,6 @@ import (
 	"errors"
 	"fmt"
 	"maps"
-	"regexp"
 	"slices"
 	"strings"
 
@@ -92,9 +91,19 @@ func Hash(data []byte) string {
 func RefName(kind, id string) string { return "refs/board/" + kind + "/" + id }
 
 // IsID says whether id is an entity id: 40 lowercase hex digits.
-func IsID(id string) bool { return idPattern.MatchString(id) }
-
-var idPattern = regexp.MustCompile(`^[0-9a-f]{40}$`)
+// A listing asks it of every ref, so it reads the bytes rather than run a
+// regexp.
+func IsID(id string) bool {
+	if len(id) != 40 {
+		return false
+	}
+	for i := 0; i < len(id); i++ {
+		if c := id[i]; (c < '0' || c > '9') && (c < 'a' || c > 'f') {
+			return false
+		}
+	}
+	return true
+}
 
 // checkKind refuses a kind that isn't one of datastore.Kinds.
 func checkKind(kind string) error {
@@ -177,6 +186,33 @@ func LoadContext(ctx context.Context, ds Datastore, kind, id string) (*Log, erro
 		}
 		return nil, fmt.Errorf("oplog: %s: %w", RefName(kind, id), err)
 	}
+	return fromPacks(kind, id, v, packs)
+}
+
+// LoadAt reads an entity at version, one its datastore's Heads gave.
+// A datastore.Versioned reads the entity as it was then, without asking for
+// its version again; another reads it as it is now, maybe newer, and the
+// log's Version says which.
+func LoadAt(ctx context.Context, ds Datastore, kind, id, version string) (*Log, error) {
+	v, ok := ds.(datastore.Versioned)
+	if !ok {
+		return LoadContext(ctx, ds, kind, id)
+	}
+	if err := checkName(kind, id); err != nil {
+		return nil, err
+	}
+	packs, err := v.PacksAt(ctx, kind, id, version)
+	if err != nil {
+		if errors.Is(err, ErrNotFound) {
+			return nil, err
+		}
+		return nil, fmt.Errorf("oplog: %s: %w", RefName(kind, id), err)
+	}
+	return fromPacks(kind, id, version, packs)
+}
+
+// fromPacks is the log of an entity's packs, read at version.
+func fromPacks(kind, id, version string, packs [][]byte) (*Log, error) {
 	nodes := make([]node, 0, len(packs))
 	for _, data := range packs {
 		n, err := decode(data)
@@ -185,7 +221,7 @@ func LoadContext(ctx context.Context, ds Datastore, kind, id string) (*Log, erro
 		}
 		nodes = append(nodes, n)
 	}
-	return build(kind, id, v, nodes), nil
+	return build(kind, id, version, nodes), nil
 }
 
 // build is the log of an entity's packs.

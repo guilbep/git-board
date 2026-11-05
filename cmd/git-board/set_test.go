@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/guilbep/git-board/internal/fields"
+	"github.com/guilbep/git-board/core/fields"
 	"github.com/guilbep/git-board/internal/store"
 )
 

@@ -6,6 +6,11 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+
+	"github.com/guilbep/git-board/core/cycle"
+	"github.com/guilbep/git-board/core/fields"
+	"github.com/guilbep/git-board/core/proof"
+	"github.com/guilbep/git-board/core/release"
 )
 
 // The settings' forms write one section of the file at a time: each writer
@@ -166,7 +171,7 @@ func lastTableHeader(text, prefix string) string {
 // the map doesn't name keeps its lines, comments included. A field's
 // subtables ([fields.<name>.project|colors|descriptions]) follow the
 // field's value, as SetFieldTable writes them.
-func SetFieldsText(text string, set map[string]Field, remove []string) (string, error) {
+func SetFieldsText(text string, set map[string]fields.Field, remove []string) (string, error) {
 	for _, name := range remove {
 		text = deleteTable(text, "fields."+name)
 	}
@@ -236,7 +241,7 @@ func tomlArrayAlways(list []string) string {
 // the colors and descriptions as SetLabelsTable writes them. Without a
 // table and nothing to hold, the file is untouched; with one, the list
 // stays explicit even when empty (an empty list allows none).
-func SetLabelsText(text string, l Labels) (string, error) {
+func SetLabelsText(text string, l fields.Labels) (string, error) {
 	start, _ := tableSpanOf(text, "[labels]")
 	hasTable := start >= 0
 	if !hasTable && len(l.List) == 0 && len(l.Colors) == 0 && len(l.Descriptions) == 0 {
@@ -252,7 +257,7 @@ func SetLabelsText(text string, l Labels) (string, error) {
 // rewritten in place, the [[sprints.list]] entries the form's list (they
 // are data: slug, title, start, three lines each), written after the
 // table, else at the end.
-func SetSprintsText(text string, s SprintsConfig) (string, error) {
+func SetSprintsText(text string, s fields.Sprints) (string, error) {
 	// the old entries go first: they are replaced, not edited in place
 	for {
 		lines := strings.Split(text, "\n")
@@ -372,7 +377,7 @@ func SetBranchesText(text string, b Branches) (string, error) {
 // table form holds the same rule, tests — a string writes it back as
 // one), and the suites as [cycle.tests.<name>] and [cycle.checks.<name>]
 // with their [cycle.tests.<name>.env]. Off, every [cycle.*] table goes.
-func SetCycleText(text string, on bool, c Cycle) (string, error) {
+func SetCycleText(text string, on bool, c cycle.Config) (string, error) {
 	if !on {
 		return deleteTable(text, "cycle"), nil
 	}
@@ -411,7 +416,7 @@ func SetCycleText(text string, on bool, c Cycle) (string, error) {
 // run, files, where, dir, tools, and env as the subtable. A suite the file
 // has that suites doesn't is deleted; a new one joins its family, after
 // the family's last table.
-func setSuites(text, parent string, suites map[string]Suite) string {
+func setSuites(text, parent string, suites map[string]proof.Suite) string {
 	for _, name := range subTables(text, parent) {
 		if _, keep := suites[name]; !keep {
 			text = deleteTable(text, parent+"."+name)
@@ -498,7 +503,7 @@ func SetUploadsText(text string, u Uploads) (string, error) {
 // keys, the chart as [release.chart], the deploy targets as
 // [[release.deploy]] (replaced whole, in the form's order). Nothing of
 // release in it, every [release.*] table goes.
-func SetReleaseText(text string, r Release) (string, error) {
+func SetReleaseText(text string, r release.Config) (string, error) {
 	vals := map[string]string{
 		"remote":         tomlString(r.Remote),
 		"environments":   tomlArray(r.Environments),
@@ -544,7 +549,7 @@ func SetReleaseText(text string, r Release) (string, error) {
 }
 
 // tomlImages is the images as an inline array of inline tables.
-func tomlImages(images []Image) string {
+func tomlImages(images []release.Image) string {
 	if len(images) == 0 {
 		return ""
 	}
@@ -558,7 +563,7 @@ func tomlImages(images []Image) string {
 // setDeploy replaces the [[release.deploy]] tables with targets, in order:
 // the old ones go whole, the new ones follow the [release] table, else the
 // file's end. No targets, none stay.
-func setDeploy(text string, targets []Target) string {
+func setDeploy(text string, targets []release.Target) string {
 	lines := strings.Split(text, "\n")
 	for {
 		start := slices.IndexFunc(lines, func(l string) bool { return strings.TrimSpace(l) == "[[release.deploy]]" })

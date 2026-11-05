@@ -7,16 +7,17 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/guilbep/git-board/internal/release"
-	"github.com/guilbep/git-board/internal/release/releasetest"
+	"github.com/guilbep/git-board/core/release"
+	"github.com/guilbep/git-board/internal/ship"
+	"github.com/guilbep/git-board/internal/ship/shiptest"
 )
 
-// releaseRepo points the CLI at a releasetest fixture: its app repo as the
+// releaseRepo points the CLI at a shiptest fixture: its app repo as the
 // working directory, its config as .git-board.toml, its fake tools. The
 // fixture's own backend is closed, git-bug's lock being the CLI's to take.
-func releaseRepo(t *testing.T) (*releasetest.Tools, *releasetest.Fixture) {
+func releaseRepo(t *testing.T) (*shiptest.Tools, *shiptest.Fixture) {
 	t.Helper()
-	r, tools, fx := releasetest.NewRunner(t)
+	r, tools, fx := shiptest.NewRunner(t)
 	if err := r.B.Close(); err != nil {
 		t.Fatal(err)
 	}
@@ -25,20 +26,20 @@ func releaseRepo(t *testing.T) (*releasetest.Tools, *releasetest.Fixture) {
 	}
 	t.Chdir(fx.App)
 	old := releaseTools
-	releaseTools = func() release.Tools { return tools }
+	releaseTools = func() ship.Tools { return tools }
 	t.Cleanup(func() { releaseTools = old })
 	return tools, fx
 }
 
-func both(t *testing.T, fx *releasetest.Fixture, env string, d release.Deployed) {
+func both(t *testing.T, fx *shiptest.Fixture, env string, d release.Deployed) {
 	t.Helper()
 	for i := range fx.ConfigBare {
 		fx.SetOverlay(t, i, env, d)
 	}
 }
 
-func first(t *testing.T, fx *releasetest.Fixture) string {
-	return releasetest.Git(t, fx.App, "rev-list", "--max-parents=0", "HEAD")
+func first(t *testing.T, fx *shiptest.Fixture) string {
+	return shiptest.Git(t, fx.App, "rev-list", "--max-parents=0", "HEAD")
 }
 
 // squash collapses runs of spaces, so a layout isn't what a test pins.
@@ -53,10 +54,10 @@ func run(t *testing.T, args ...string) string {
 	return out
 }
 
-func heads(t *testing.T, fx *releasetest.Fixture) []string {
+func heads(t *testing.T, fx *shiptest.Fixture) []string {
 	var hs []string
 	for _, b := range fx.ConfigBare {
-		hs = append(hs, releasetest.Git(t, b, "rev-parse", "main"))
+		hs = append(hs, shiptest.Git(t, b, "rev-parse", "main"))
 	}
 	return hs
 }
@@ -124,7 +125,7 @@ func TestCutNoDeploy(t *testing.T) {
 	if !slices.Equal(heads(t, fx), before) {
 		t.Error("an overlay moved with --no-deploy")
 	}
-	if got := releasetest.Git(t, fx.AppBare, "tag", "-l", "v1.0.1-rc.1"); got == "" {
+	if got := shiptest.Git(t, fx.AppBare, "tag", "-l", "v1.0.1-rc.1"); got == "" {
 		t.Error("tag not pushed")
 	}
 }
@@ -167,7 +168,7 @@ func TestCutOffline(t *testing.T) {
 	if out := run(t, "release", "cut", "--no-deploy"); !strings.Contains(out, "pushed v1.0.1-rc.1, cut offline") || !strings.Contains(out, "cut v1.0.1-rc.1") {
 		t.Errorf("online cut said:\n%s", out)
 	}
-	if got := releasetest.Git(t, fx.AppBare, "tag", "-l"); got != "v1.0.0\nv1.0.1-rc.1" {
+	if got := shiptest.Git(t, fx.AppBare, "tag", "-l"); got != "v1.0.0\nv1.0.1-rc.1" {
 		t.Errorf("tags %q", got)
 	}
 	if out := run(t, "release", "status"); strings.Contains(out, "pending") {
@@ -192,7 +193,7 @@ func TestAdoptNeedsYes(t *testing.T) {
 	c := first(t, fx)
 	fx.Tag(t, c, "v1.0.0")
 	for i, reg := range []string{"ghcr.test/app", "quay.test/app"} { // runs v1.0.0, not adopted
-		fx.SetOverlay(t, i, "prod", release.Deployed{Version: "v1.0.0", Images: map[string]release.Image{reg + "/frontend": {Tag: "v1.0.0"}}})
+		fx.SetOverlay(t, i, "prod", release.Deployed{Version: "v1.0.0", Images: map[string]release.Pin{reg + "/frontend": {Tag: "v1.0.0"}}})
 	}
 	before := heads(t, fx)
 

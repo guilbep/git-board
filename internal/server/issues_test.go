@@ -12,7 +12,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/guilbep/git-board/core/cycle"
 	"github.com/guilbep/git-board/core/forge/fake"
+	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/core/oplog"
 	"github.com/guilbep/git-board/core/syncer"
 	"github.com/guilbep/git-board/internal/config"
@@ -55,7 +57,7 @@ func call(t *testing.T, method, url string, body, out any) int {
 func TestIssueLifecycle(t *testing.T) {
 	t.Parallel()
 	ts, _ := newIssueServer(t)
-	var th store.Thread
+	var th model.Thread
 	if code := call(t, "POST", ts.URL+"/api/issues", map[string]any{
 		"title": "Export CSV", "body": "see ![shot](https://github.com/user-attachments/assets/a)", "labels": []string{"status:ready"},
 	}, &th); code != http.StatusCreated {
@@ -91,7 +93,7 @@ func TestIssueLifecycle(t *testing.T) {
 	if code := call(t, "POST", base+"/comments", map[string]any{"body": "done", "status": "closed"}, &th); code != http.StatusOK || th.Status != "closed" {
 		t.Errorf("close with comment: %d %s", code, th.Status)
 	}
-	var again store.Thread
+	var again model.Thread
 	if code := call(t, "GET", base+"/thread", nil, &again); code != http.StatusOK || len(again.Events) != len(th.Events) {
 		t.Errorf("thread: %d, %d events, want %d", code, len(again.Events), len(th.Events))
 	}
@@ -100,7 +102,7 @@ func TestIssueLifecycle(t *testing.T) {
 func TestIssueWritesAreChecked(t *testing.T) {
 	t.Parallel()
 	ts, _ := newIssueServer(t)
-	var one, two store.Thread
+	var one, two model.Thread
 	call(t, "POST", ts.URL+"/api/issues", map[string]any{"title": "one"}, &one)
 	call(t, "POST", ts.URL+"/api/issues", map[string]any{"title": "two"}, &two)
 	call(t, "POST", ts.URL+"/api/issues/"+one.ID+"/comments", map[string]any{"body": "hi"}, &one)
@@ -189,7 +191,7 @@ func TestForgeSyncRunsADryRunFirst(t *testing.T) {
 		t.Fatalf("dry run: %d", code)
 	}
 	// edits wait for the sync
-	var th store.Thread
+	var th model.Thread
 	if code := call(t, "POST", ts.URL+"/api/issues", map[string]any{"title": "during"}, &th); code != http.StatusConflict {
 		t.Errorf("a write during a sync: %d, want 409", code)
 	}
@@ -341,7 +343,7 @@ func TestCommentOnAStep(t *testing.T) {
 		t.Fatal(err)
 	}
 	base := ts.URL + "/api/issues/" + id[:8] + "/comments"
-	var th store.Thread
+	var th model.Thread
 	if code := call(t, "POST", base, map[string]any{"body": "plan looks fine", "step": "plan"}, &th); code != http.StatusOK {
 		t.Fatalf("comment on plan: %d", code)
 	}
@@ -361,13 +363,13 @@ func TestCommentOnAStep(t *testing.T) {
 func TestCommentStepIsTheLists(t *testing.T) {
 	t.Parallel()
 	ts, s := newIssueServer(t)
-	s.cfg = &config.Config{Cycle: config.Cycle{Steps: []string{"code", "review"}}, Features: allFeatures}
+	s.cfg = &config.Config{Cycle: cycle.Config{Steps: []string{"code", "review"}}, Features: allFeatures}
 	id, err := s.b.NewIssue("Export CSV", "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	base := ts.URL + "/api/issues/" + id[:8] + "/comments"
-	var th store.Thread
+	var th model.Thread
 	for _, step := range []any{"review", 6} {
 		if code := call(t, "POST", base, map[string]any{"body": "x", "step": step}, &th); code != http.StatusOK {
 			t.Errorf("step %v: %d", step, code)
@@ -441,8 +443,8 @@ func TestThreadComments(t *testing.T) {
 		t.Fatal(err)
 	}
 	base := ts.URL + "/api/issues/" + id[:8] + "/comments"
-	var th store.Thread
-	last := func() store.Event { return th.Events[len(th.Events)-1] }
+	var th model.Thread
+	last := func() model.Event { return th.Events[len(th.Events)-1] }
 	if code := call(t, "POST", base, map[string]any{"body": "Is this one?", "anchor": "body@v1/expected#3", "step": "intent"}, &th); code != http.StatusOK {
 		t.Fatalf("anchored: %d", code)
 	}
@@ -489,14 +491,14 @@ func TestThreadMeta(t *testing.T) {
 	meta := func(comment string) string {
 		return ts.URL + "/api/issues/" + id[:8] + "/comments/" + comment + "/meta"
 	}
-	var th store.Thread
-	byID := func(cid string) store.Event {
+	var th model.Thread
+	byID := func(cid string) model.Event {
 		for _, e := range th.Events {
 			if e.ID == cid {
 				return e
 			}
 		}
-		return store.Event{}
+		return model.Event{}
 	}
 	if code := call(t, "POST", meta(root), map[string]string{"thread:resolved": "v2", "thread:applied": "abc:1"}, &th); code != http.StatusOK {
 		t.Fatalf("resolve: %d", code)
@@ -563,7 +565,7 @@ func TestResolveView(t *testing.T) {
 func TestSetViewFromSettings(t *testing.T) {
 	t.Parallel()
 	ts, s := newIssueServer(t)
-	s.setConfig(&config.Config{Cycle: config.Cycle{On: true}, Features: allFeatures})
+	s.setConfig(&config.Config{Cycle: cycle.Config{On: true}, Features: allFeatures})
 	var me meResponse
 	if code := call(t, "PUT", ts.URL+"/api/me/view", map[string]string{"view": "classic"}, &me); code != 200 ||
 		me.View != "classic" || me.ViewFrom != "board.view" || me.ViewScope != "local" {
@@ -594,7 +596,7 @@ func TestMeSaysTheView(t *testing.T) {
 		t.Errorf("board.view cycle: %q from %q", me.View, me.ViewFrom)
 	}
 	storetest.Git(t, s.b.GitDir(), "config", "--unset", "board.view")
-	s.setConfig(&config.Config{Cycle: config.Cycle{On: true}, Features: allFeatures})
+	s.setConfig(&config.Config{Cycle: cycle.Config{On: true}, Features: allFeatures})
 	if call(t, "GET", ts.URL+"/api/me", nil, &me); me.View != "cycle" || me.ViewFrom != ".git-board.toml" {
 		t.Errorf("a [cycle] table: %q from %q", me.View, me.ViewFrom)
 	}

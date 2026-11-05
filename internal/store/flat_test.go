@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/guilbep/git-board/core/fields"
 	"github.com/guilbep/git-board/core/issue"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/store/storetest"
@@ -91,8 +92,10 @@ func TestFlatKindsAreTheKindField(t *testing.T) {
 	}
 
 	// kind:* labels: nothing translated
-	b.SetFlatKinds(&config.Config{Fields: map[string]config.Field{"kind": {Options: []string{"bug", "feat"}}},
-		Branches: config.Branches{Kinds: map[string]string{"bug": "fix", "feat": "feat"}}})
+	b.SetFlatKinds(&config.Config{
+		Branches: config.Branches{Kinds: map[string]string{"bug": "fix", "feat": "feat"}},
+		Schema:   fields.Schema{Fields: map[string]fields.Field{"kind": {Options: []string{"bug", "feat"}}}},
+	})
 	if got := sorted(b.GetLabels(id)); !slices.Equal(got, []string{"feat", "status:ready"}) {
 		t.Errorf("kind:* form read %q, want feat as is", got)
 	}

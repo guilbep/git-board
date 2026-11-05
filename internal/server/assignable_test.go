@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/guilbep/git-board/internal/config"
+	"github.com/guilbep/git-board/core/fields"
 	"github.com/guilbep/git-board/internal/store/storetest"
 )
 
@@ -40,7 +40,7 @@ func TestForgeSyncFetchesWhoCanBeAssigned(t *testing.T) {
 		t.Fatalf("add a bridge: %d", code)
 	}
 	cfg := *s.config()
-	cfg.Fields = map[string]config.Field{"assignee": {}, "status": {Single: true, Options: []string{"ready"}}}
+	cfg.Fields = map[string]fields.Field{"assignee": {}, "status": {Single: true, Options: []string{"ready"}}}
 	s.setConfig(&cfg)
 	done := make(chan struct{})
 	close(done)
@@ -58,9 +58,9 @@ func TestForgeSyncFetchesWhoCanBeAssigned(t *testing.T) {
 		t.Errorf("lines %q: want the count", tally.Lines)
 	}
 
-	var fields map[string]fieldResponse
-	getJSON(t, ts.URL+"/api/config/fields", &fields)
-	a := fields["assignee"]
+	var byName map[string]fieldResponse
+	getJSON(t, ts.URL+"/api/config/fields", &byName)
+	a := byName["assignee"]
 	if !slices.Contains(a.People, "alice") || !slices.Contains(a.People, "bob") || len(a.Options) != 0 {
 		t.Errorf("assignee %+v: want alice and bob as people, no options", a)
 	}
@@ -70,8 +70,8 @@ func TestForgeSyncFetchesWhoCanBeAssigned(t *testing.T) {
 	if !slices.IsSortedFunc(a.People, func(x, y string) int { return strings.Compare(strings.ToLower(x), strings.ToLower(y)) }) {
 		t.Errorf("people %q: want sorted", a.People)
 	}
-	if len(fields["status"].People) != 0 {
-		t.Errorf("status %+v: people only on person fields", fields["status"])
+	if len(byName["status"].People) != 0 {
+		t.Errorf("status %+v: people only on person fields", byName["status"])
 	}
 	glf, _ := s.config().Forge("gl")
 	if saved, err := loadAssignable(s.b.Storage()); err != nil || len(saved[assignKey(glf)]) != 2 {

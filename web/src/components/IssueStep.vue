@@ -1,7 +1,7 @@
 <!-- The issue's frame under its title (docs/prd/time-flow.md): the step
      bar, then one column; the fields are the head's (IssueHead). The column is the tabs,
      the shown step's workspace when head (the Conversation tab), then the
-     flow. The step shown is the issue's (internal/cycle), or a done one
+     flow. The step shown is the issue's (core/cycle), or a done one
      picked on the bar; a later step is locked and says why. The panel
      fills the slots: tabs, intent (the description, folded off Intent),
      review (the Changes view, Review's on the page), flow. The bar

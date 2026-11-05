@@ -9,6 +9,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/store"
 	"github.com/guilbep/git-board/internal/store/storetest"
 )
@@ -35,18 +36,18 @@ func TestCounter(t *testing.T) {
 		t.Errorf("Next() of an empty counter = %d, want its start", empty.Next())
 	}
 
-	github := func(n string) []store.Forge { return []store.Forge{{Name: "GitHub", Number: n}} }
+	github := func(n string) []model.Forge { return []model.Forge{{Name: "GitHub", Number: n}} }
 	for _, tc := range []struct {
 		name   string
 		id     string
-		forges []store.Forge
+		forges []model.Forge
 		want   int
 	}{
 		{"its line", "aaa", nil, 3052},
 		{"its line over its GitHub number", "bbb", github("2518"), 3053},
 		{"GitHub, below start", "ccc", github("2518"), 2518},
 		{"GitHub, at start: not yet", "ddd", github("3052"), 0},
-		{"GitLab's never counts", "eee", []store.Forge{{Name: "GitLab", Number: "34"}}, 0},
+		{"GitLab's never counts", "eee", []model.Forge{{Name: "GitLab", Number: "34"}}, 0},
 		{"nowhere", "fff", nil, 0},
 	} {
 		if got := c.NumberOf(tc.id, tc.forges); got != tc.want {

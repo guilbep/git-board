@@ -156,7 +156,7 @@ Every key has a default: the stages are guessed from the status names, the
 plans directory is the kit's, the roles are unset (anyone's turn). A
 project writes only what the guess got wrong.
 
-- **The computation** (`internal/cycle`): status to stage, then the
+- **The computation** (`core/cycle`): status to stage, then the
   evidence for that stage: the risk field; the plan file's front matter
   from the evidence branch, the plan branch or the base; `git diff
   base...branch --name-only` against the test patterns; the cached PR;

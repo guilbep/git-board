@@ -12,12 +12,13 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/store"
 )
 
 func newLogCmd() *cobra.Command {
 	var field, since string
-	var asJSON bool
+	var js *jsonOut
 
 	cmd := &cobra.Command{
 		Use:     "log <id>",
@@ -52,19 +53,19 @@ text).`,
 					return usageError{err}
 				}
 			}
-			return runLog(cmd.OutOrStdout(), args[0], field, from, asJSON)
+			return runLog(cmd.OutOrStdout(), args[0], field, from, js)
 		},
 	}
 	cmd.Flags().StringVar(&field, "field", "", "only the changes of this field")
 	cmd.Flags().StringVar(&since, "since", "", "only the changes from this date (YYYY-MM-DD) or this long ago (36h, 7d)")
-	cmd.Flags().BoolVar(&asJSON, "json", false, "render as JSON")
+	js = addJSON(cmd, "render as JSON", jsonFields(logEntry{}), true)
 	return cmd
 }
 
 // logEntry is one change, as log prints it.
 type logEntry struct {
 	At      time.Time    `json:"at"`
-	Author  store.Person `json:"author"`
+	Author  model.Person `json:"author"`
 	Kind    string       `json:"kind"` // created, comment, edit, title, state, labels
 	ID      string       `json:"id"`
 	Target  string       `json:"target,omitempty"`
@@ -95,7 +96,7 @@ func parseSince(s string, now time.Time) (time.Time, error) {
 
 // historyOf is a thread's changes, in the order the log applied them
 // (order, Backend.OpOrder), else in time.
-func historyOf(th store.Thread, order map[string]int) []logEntry {
+func historyOf(th model.Thread, order map[string]int) []logEntry {
 	var res []logEntry
 	for _, e := range th.Events {
 		le := logEntry{At: e.At, Author: e.Author, Kind: e.Kind, ID: e.ID}
@@ -128,7 +129,7 @@ func historyOf(th store.Thread, order map[string]int) []logEntry {
 }
 
 // firstBody is a text as it was written, before any edit.
-func firstBody(e store.Event) string {
+func firstBody(e model.Event) string {
 	if len(e.History) > 0 {
 		return e.History[0].Body
 	}
@@ -137,7 +138,7 @@ func firstBody(e store.Event) string {
 
 // firstTitle is the title the issue was created with: the first title
 // change's was, else the title.
-func firstTitle(th store.Thread) string {
+func firstTitle(th model.Thread) string {
 	for _, e := range th.Events {
 		if e.Kind == "title" {
 			return e.Was
@@ -165,7 +166,7 @@ func keepField(entries []logEntry, field string) []logEntry {
 	return res
 }
 
-func runLog(out io.Writer, idPrefix, field string, since time.Time, asJSON bool) error {
+func runLog(out io.Writer, idPrefix, field string, since time.Time, js *jsonOut) error {
 	b, err := store.OpenCwd()
 	if err != nil {
 		return err
@@ -184,11 +185,11 @@ func runLog(out io.Writer, idPrefix, field string, since time.Time, asJSON bool)
 		entries = keepField(entries, field)
 	}
 	entries = slices.DeleteFunc(entries, func(e logEntry) bool { return e.At.Before(since) })
-	if asJSON {
+	if js.on() {
 		if entries == nil {
 			entries = []logEntry{}
 		}
-		return writeJSON(out, entries)
+		return js.write(out, entries)
 	}
 	tw := tabwriter.NewWriter(out, 0, 2, 2, ' ', 0)
 	for _, e := range entries {
@@ -198,7 +199,7 @@ func runLog(out io.Writer, idPrefix, field string, since time.Time, asJSON bool)
 }
 
 // describeEntry is what a change did, in a line.
-func describeEntry(e logEntry, th store.Thread) string {
+func describeEntry(e logEntry, th model.Thread) string {
 	switch e.Kind {
 	case "created":
 		return fmt.Sprintf("created %q", e.Title)

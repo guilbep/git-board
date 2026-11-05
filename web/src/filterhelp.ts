@@ -26,6 +26,10 @@ export const GRAMMAR: Word[] = [
   { term: 'title:*sync*', means: 'a pattern in the title', example: 'title:*sync*' },
   { term: '#2528', means: 'an issue by its number on a forge', example: '#2528' },
   { term: '"car sharing"', means: 'words in the title, the text, a comment', example: '"car sharing"' },
+  { term: 'in:title', means: 'where the words are looked for; in:body, in:comments', example: 'crash in:title' },
+  { term: 'created:>=@today-7d', means: 'opened this last week; updated:, closed: alike', example: 'created:>=@today-7d' },
+  { term: 'closed:2026-10-01..2026-10-31', means: 'a span of days; >, >=, <, <= a day', example: 'closed:2026-10-01..2026-10-31' },
+  { term: 'comments:>5', means: 'how many comments; 5, <5, 2..5', example: 'comments:>5' },
 ];
 
 // the panel's ticks, as the shortcut list says them (keys.ts: Alt is ⌥ on a Mac)
@@ -54,10 +58,21 @@ export function examples(fields: Record<string, FieldConfig>, myLogin: string): 
   return res.slice(0, 5);
 }
 
+// the tricks of the words that aren't a field (internal/filter)
+const DATES = '>2026-10-01, >=@today-7d, 2026-10-01..2026-10-31';
+const QUALIFIERS: Record<string, string> = {
+  created: DATES,
+  updated: DATES,
+  closed: DATES,
+  comments: '>5, <=2, 2..5',
+  in: 'title, body, comments; title,body for either',
+};
+
 // the next trick for the word being typed: field:… → not, either, none
 export function nextTrick(text: string): string | null {
   const last = text.split(/\s+/).at(-1) ?? '';
   const m = /^(-?)([\w-]+):/.exec(last);
+  if (m && QUALIFIERS[m[2]!]) return QUALIFIERS[m[2]!]!;
   if (m && m[2] !== 'is' && m[2] !== 'no') {
     return m[1] ? `no:${m[2]} for no value at all` : `-${m[2]}: for “not”, ${m[2]}:a,b for either`;
   }

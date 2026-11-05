@@ -68,6 +68,16 @@ func LoadContext(ctx context.Context, s oplog.Datastore, id string) (*Person, er
 	return Apply(l)
 }
 
+// LoadAt reads a person at version, one its datastore's Heads gave
+// (oplog.LoadAt).
+func LoadAt(ctx context.Context, s oplog.Datastore, id, version string) (*Person, error) {
+	l, err := oplog.LoadAt(ctx, s, "person", id, version)
+	if err != nil {
+		return nil, err
+	}
+	return Apply(l)
+}
+
 // List returns the ids of the persons, sorted.
 func List(s oplog.Datastore) ([]string, error) { return oplog.List(s, "person") }
 

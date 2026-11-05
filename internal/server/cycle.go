@@ -13,14 +13,16 @@ import (
 	"sync"
 	"time"
 
+	"github.com/guilbep/git-board/core/cycle"
+	"github.com/guilbep/git-board/core/fields"
+	"github.com/guilbep/git-board/core/forge"
+	"github.com/guilbep/git-board/core/model"
+	"github.com/guilbep/git-board/core/proof"
 	"github.com/guilbep/git-board/internal/ai"
 	"github.com/guilbep/git-board/internal/board"
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/cycle"
-	"github.com/guilbep/git-board/internal/fields"
+	"github.com/guilbep/git-board/internal/evidence"
 	"github.com/guilbep/git-board/internal/ghpr"
-	"github.com/guilbep/git-board/internal/proof"
-	"github.com/guilbep/git-board/internal/store"
 )
 
 // The development cycle (docs/prd/dev-cycle.md, M1): an issue's step,
@@ -32,7 +34,7 @@ const pullsEvery = 5 * time.Minute
 // cachedPull is a branch's PR as last read (at, zero: never), and when
 // GitHub was last asked.
 type cachedPull struct {
-	pr        *ghpr.PR
+	pr        *forge.PR
 	at, tried time.Time
 }
 
@@ -43,7 +45,7 @@ type pullCache struct {
 	m  map[string]cachedPull
 }
 
-func (c *pullCache) PR(branch string) (*ghpr.PR, time.Time) {
+func (c *pullCache) PR(branch string) (*forge.PR, time.Time) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	e := c.m[branch]
@@ -57,7 +59,7 @@ func (c *pullCache) stale(branch string) bool {
 }
 
 // put records an answer; err keeps the last PR.
-func (c *pullCache) put(branch string, pr *ghpr.PR, err error) {
+func (c *pullCache) put(branch string, pr *forge.PR, err error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.m == nil {
@@ -103,8 +105,8 @@ func (s *apiServer) refreshPulls(ctx context.Context, names []string) {
 // the PR was last read from GitHub.
 type cycleResponse struct {
 	cycle.Cycle
-	Stages      config.Stages `json:"stages"`
-	PRCheckedAt time.Time     `json:"pr_checked_at,omitzero"`
+	Stages      cycle.Stages `json:"stages"`
+	PRCheckedAt time.Time    `json:"pr_checked_at,omitzero"`
 	// AI is on: step 2 can ask it for a class (suggest-risk)
 	AI bool `json:"ai,omitempty"`
 }
@@ -113,7 +115,7 @@ type cycleResponse struct {
 // issue's from in-review on, and from ready on when plans-in-pr (the
 // draft PR holding the plan), its plan branches when structural, none
 // before (the Work page asks for every issue's at once).
-func (s *apiServer) pullNames(th store.Thread, stages config.Stages) ([]string, error) {
+func (s *apiServer) pullNames(th model.Thread, stages cycle.Stages) ([]string, error) {
 	names, err := onOrigin(s.b, th.Issue)
 	if err != nil {
 		return nil, err
@@ -131,7 +133,7 @@ func (s *apiServer) pullNames(th store.Thread, stages config.Stages) ([]string, 
 
 // cycleOf is the issue's step for the viewer. GitHub is asked for the PR
 // only where the step reads it: from review on, and a structural plan's PR.
-func (s *apiServer) cycleOf(ctx context.Context, th store.Thread) (cycleResponse, error) {
+func (s *apiServer) cycleOf(ctx context.Context, th model.Thread) (cycleResponse, error) {
 	cfg := s.config()
 	stages := cfg.Stages()
 	names, err := s.pullNames(th, stages)
@@ -139,7 +141,7 @@ func (s *apiServer) cycleOf(ctx context.Context, th store.Thread) (cycleResponse
 		return cycleResponse{}, err
 	}
 	s.refreshPulls(ctx, names)
-	in, err := cycle.Gather(s.b, cfg, th, s.viewer(), &s.pulls)
+	in, err := evidence.Gather(s.b, cfg, th, s.viewer(), &s.pulls)
 	if err != nil {
 		return cycleResponse{}, err
 	}
@@ -331,7 +333,7 @@ func (s *apiServer) handleCycleAction(w http.ResponseWriter, r *http.Request) {
 		// run (ADR 0001 §9), a pasted one no longer counts. The merge
 		// commit not fetched yet is not proven either.
 		if merged != "" {
-			g, err := proof.Gate(r.Context(), s.root, ev.Base, merged)
+			g, err := gate(r.Context(), s.root, ev.Base, merged)
 			if err != nil {
 				g = proof.GateResult{Checks: []proof.CheckStatus{{}}, Reason: err.Error()}
 			}
@@ -372,13 +374,13 @@ func (s *apiServer) handleCycleAction(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if action == "approve-plan" && cur.Stage == "ready" && len(cur.Stages.InProgress) > 0 {
-		if _, err := fields.Apply(s.b, cfg, id, "status", cur.Stages.InProgress[0], s.me, time.Now()); err != nil {
+		if _, err := fields.Apply(s.b, cfg.IssueSchema(), id, "status", cur.Stages.InProgress[0], s.me, time.Now()); err != nil {
 			writeError(w, http.StatusInternalServerError, err)
 			return
 		}
 	}
 	if action == "spec-verdict" && req.Verdict == "approve" && cur.Step == 1 && cur.Stages.Ready != "" {
-		if _, err := fields.Apply(s.b, cfg, id, "status", cur.Stages.Ready, s.me, time.Now()); err != nil {
+		if _, err := fields.Apply(s.b, cfg.IssueSchema(), id, "status", cur.Stages.Ready, s.me, time.Now()); err != nil {
 			writeError(w, http.StatusInternalServerError, err)
 			return
 		}
@@ -486,7 +488,7 @@ func riskOf(answer string) (class, why string) {
 
 // signedOff moves the status to the next validation status, or after the
 // last one to the closing status, and closes the issue.
-func (s *apiServer) signedOff(id string, stages config.Stages, status string) error {
+func (s *apiServer) signedOff(id string, stages cycle.Stages, status string) error {
 	i := slices.Index(stages.Validation, status)
 	next := stages.Closing
 	if i+1 < len(stages.Validation) {
@@ -495,7 +497,7 @@ func (s *apiServer) signedOff(id string, stages config.Stages, status string) er
 	if next == "" {
 		return nil
 	}
-	if _, err := fields.Apply(s.b, s.config(), id, "status", next, s.me, time.Now()); err != nil {
+	if _, err := fields.Apply(s.b, s.config().IssueSchema(), id, "status", next, s.me, time.Now()); err != nil {
 		return err
 	}
 	if next == stages.Closing {
@@ -517,7 +519,7 @@ var unticked = regexp.MustCompile(`(?m)^(\s*[-*+]\s+)\[[ xX]\]`)
 
 // bodyVersion is the description's version, as web/src/sections.ts
 // counts it: 1 + each edit that changes the text past its ticks.
-func bodyVersion(th store.Thread) int {
+func bodyVersion(th model.Thread) int {
 	v := 1
 	if len(th.Events) == 0 || th.Events[0].Kind != "created" {
 		return v

@@ -5,6 +5,8 @@ import (
 	"maps"
 	"slices"
 	"strings"
+
+	"github.com/guilbep/git-board/core/fields"
 )
 
 // A field's per-forge mapping: where it is written and read on one forge
@@ -79,21 +81,21 @@ func DefaultTarget(kind, field, fieldType string) string {
 	switch kind {
 	case "gitlab":
 		switch {
-		case field == "assignee" && fieldType == TypePerson:
+		case field == "assignee" && fieldType == fields.TypePerson:
 			return TargetAssignees
-		case fieldType == TypeIteration:
+		case fieldType == fields.TypeIteration:
 			return TargetMilestone
-		case fieldType == TypeDate:
+		case fieldType == fields.TypeDate:
 			return TargetDueDate
 		}
 		return TargetLabel
 	default: // github, and the shape any Gitea/Forgejo adapter would take
 		switch {
-		case field == "assignee" && fieldType == TypePerson:
+		case field == "assignee" && fieldType == fields.TypePerson:
 			return TargetAssignees
-		case fieldType == TypeIssue:
+		case fieldType == fields.TypeIssue:
 			return TargetSubIssues
-		case fieldType == TypeText:
+		case fieldType == fields.TypeText:
 			return TargetNone
 		}
 		return TargetLabel
@@ -215,47 +217,47 @@ func checkTarget(where, to, fieldType, kind string) error {
 			return fmt.Errorf("%s to: project is GitHub's, not a %s's", where, kind)
 		}
 		switch fieldType {
-		case TypePerson, TypeIssue:
+		case fields.TypePerson, fields.TypeIssue:
 			return fmt.Errorf("%s to: a %s field doesn't live in a Project column", where, fieldType)
 		}
 	case TargetScopedLabel:
 		if kind != "gitlab" {
 			return fmt.Errorf("%s to: scoped-label is GitLab's, not a %s's", where, kind)
 		}
-		if fieldType != TypeSelect {
+		if fieldType != fields.TypeSelect {
 			return fmt.Errorf("%s to: a %s field doesn't live in a scoped label", where, fieldType)
 		}
 	case TargetAssignees:
-		if fieldType != TypePerson {
+		if fieldType != fields.TypePerson {
 			return fmt.Errorf("%s to: assignees hold a person, not a %s", where, fieldType)
 		}
 	case TargetMilestone:
-		if fieldType != TypeIteration {
+		if fieldType != fields.TypeIteration {
 			return fmt.Errorf("%s to: a milestone holds a sprint, not a %s", where, fieldType)
 		}
 	case TargetIteration:
 		if kind != "gitlab" {
 			return fmt.Errorf("%s to: iteration is GitLab's, not a %s's", where, kind)
 		}
-		if fieldType != TypeIteration {
+		if fieldType != fields.TypeIteration {
 			return fmt.Errorf("%s to: an iteration holds a sprint, not a %s", where, fieldType)
 		}
 	case TargetWeight:
 		if kind != "gitlab" {
 			return fmt.Errorf("%s to: weight is GitLab's, not a %s's", where, kind)
 		}
-		if fieldType != TypeNumber {
+		if fieldType != fields.TypeNumber {
 			return fmt.Errorf("%s to: weight holds a number, not a %s", where, fieldType)
 		}
 	case TargetDueDate:
-		if fieldType != TypeDate {
+		if fieldType != fields.TypeDate {
 			return fmt.Errorf("%s to: a due date holds a date, not a %s", where, fieldType)
 		}
 	case TargetSubIssues:
 		if kind != "github" {
 			return fmt.Errorf("%s to: sub-issues are GitHub's, not a %s's", where, kind)
 		}
-		if fieldType != TypeIssue {
+		if fieldType != fields.TypeIssue {
 			return fmt.Errorf("%s to: sub-issues hold an issue reference, not a %s", where, fieldType)
 		}
 	default:
@@ -267,8 +269,8 @@ func checkTarget(where, to, fieldType, kind string) error {
 // checkAliases refuses an alias that shadows an option or folds into
 // nothing: could = "couldhave" reads moscow:could as couldhave, so
 // couldhave must be an option and could must not be one.
-func checkAliases(fields map[string]Field) error {
-	for name, f := range fields {
+func checkAliases(defs map[string]fields.Field) error {
+	for name, f := range defs {
 		for old, cur := range f.Aliases {
 			if strings.TrimSpace(old) == "" || strings.TrimSpace(cur) == "" {
 				return fmt.Errorf("fields.%s.aliases: an empty name", name)

@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/guilbep/git-board/internal/store"
+	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/store/storetest"
 )
 
@@ -46,7 +46,7 @@ func TestIssueKnowsWhenItWasOpened(t *testing.T) {
 	if err != nil || len(list) != 1 {
 		t.Fatalf("listed %+v %v", list, err)
 	}
-	for _, is := range []store.Issue{issue, list[0]} {
+	for _, is := range []model.Issue{issue, list[0]} {
 		if is.CreatedAt.Before(before) || is.CreatedAt.After(after) {
 			t.Errorf("CreatedAt %v, want about now", is.CreatedAt)
 		}

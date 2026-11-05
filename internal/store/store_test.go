@@ -10,6 +10,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/store"
 	"github.com/guilbep/git-board/internal/store/storetest"
 )
@@ -33,7 +34,7 @@ func TestListIssuesAndGetLabels(t *testing.T) {
 		t.Fatalf("len(issues) = %d, want 2", len(issues))
 	}
 
-	byTitle := map[string]store.Issue{}
+	byTitle := map[string]model.Issue{}
 	for _, i := range issues {
 		byTitle[i.Title] = i
 	}
@@ -108,7 +109,7 @@ func TestListIssuesExposesGithubURL(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListIssues: %v", err)
 	}
-	byTitle := map[string]store.Issue{}
+	byTitle := map[string]model.Issue{}
 	for _, i := range issues {
 		byTitle[i.Title] = i
 	}
@@ -166,10 +167,10 @@ func TestProjectBasesRoundTrip(t *testing.T) {
 
 func TestShownTitle(t *testing.T) {
 	t.Parallel()
-	gh := []store.Forge{{Name: "GitHub", Number: "2518"}}
+	gh := []model.Forge{{Name: "GitHub", Number: "2518"}}
 	tests := []struct {
 		title  string
-		forges []store.Forge
+		forges []model.Forge
 		want   string
 	}{
 		{"[BUG](Equipment) Wrong example (#2518)", gh, "[BUG](Equipment) Wrong example"},
@@ -179,7 +180,7 @@ func TestShownTitle(t *testing.T) {
 		{"Wrong example (#2518)", nil, "Wrong example (#2518)"}, // no forge number to tell
 	}
 	for _, tt := range tests {
-		is := store.Issue{Title: tt.title, Forges: tt.forges}
+		is := model.Issue{Title: tt.title, Forges: tt.forges}
 		if got := is.ShownTitle(); got != tt.want {
 			t.Errorf("ShownTitle(%q) = %q, want %q", tt.title, got, tt.want)
 		}
@@ -385,5 +386,43 @@ func BenchmarkGetIssue(b *testing.B) {
 		if _, err := bk.GetIssue(id); err != nil {
 			b.Fatal(err)
 		}
+	}
+}
+
+// A listing is answered again while no issue's head moved, and sees at
+// once what another process wrote, made or deleted.
+func TestListIssuesSeesAnotherProcesssWrites(t *testing.T) {
+	t.Parallel()
+	b := storetest.New(t)
+	first := storetest.NewIssue(t, b, "first")
+	other := storetest.Open(t, filepath.Dir(b.GitDir()))
+	titles := func() map[string]string {
+		t.Helper()
+		issues, err := b.ListIssues()
+		if err != nil {
+			t.Fatal(err)
+		}
+		res := map[string]string{}
+		for _, is := range issues {
+			res[is.ID] = is.Title
+		}
+		return res
+	}
+	if got := titles(); !maps.Equal(got, map[string]string{first: "first"}) {
+		t.Fatalf("listed %v", got)
+	}
+	titles() // answered again
+	second := storetest.NewIssue(t, other, "second")
+	if err := other.SetTitle(first, "first, renamed"); err != nil {
+		t.Fatal(err)
+	}
+	if got := titles(); !maps.Equal(got, map[string]string{first: "first, renamed", second: "second"}) {
+		t.Fatalf("after the other's writes: %v", got)
+	}
+	if _, err := other.DeleteIssue(first); err != nil {
+		t.Fatal(err)
+	}
+	if got := titles(); !maps.Equal(got, map[string]string{second: "second"}) {
+		t.Fatalf("after the other's delete: %v", got)
 	}
 }

@@ -12,12 +12,12 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/guilbep/git-board/internal/fields"
+	"github.com/guilbep/git-board/core/fields"
 	"github.com/guilbep/git-board/internal/store"
 )
 
 func main() {
-	if err := newRootCmd().Execute(); err != nil {
+	if err := runRoot(newRootCmd(), os.Args[1:]); err != nil {
 		os.Exit(report(os.Stderr, err))
 	}
 }

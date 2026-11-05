@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/store"
 )
 
@@ -22,7 +23,7 @@ func editorWrites(t *testing.T, text string) *string {
 }
 
 // threadOf reads an issue's thread afresh.
-func threadOf(t *testing.T, id string) store.Thread {
+func threadOf(t *testing.T, id string) model.Thread {
 	t.Helper()
 	b, err := store.OpenCwd()
 	if err != nil {
@@ -36,7 +37,7 @@ func threadOf(t *testing.T, id string) store.Thread {
 	return th
 }
 
-func comments(th store.Thread) []string {
+func comments(th model.Thread) []string {
 	var res []string
 	for _, e := range th.Events {
 		if e.Kind == "comment" {
@@ -60,7 +61,7 @@ func TestNewCreatesWithBodyAndFields(t *testing.T) {
 	if th.Title != "Login fails" || th.Events[0].Body != "On Safari." || !slices.Equal(th.Labels, []string{"assignee:ada", "prio:p1"}) {
 		t.Errorf("new issue = %q %q %v", th.Title, th.Events[0].Body, th.Labels)
 	}
-	if n := slices.IndexFunc(th.Events, func(e store.Event) bool { return e.Kind == "labels" }); n < 0 {
+	if n := slices.IndexFunc(th.Events, func(e model.Event) bool { return e.Kind == "labels" }); n < 0 {
 		t.Errorf("events = %+v, want the labels", th.Events)
 	}
 
@@ -69,7 +70,7 @@ func TestNewCreatesWithBodyAndFields(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new --json: %v\n%s", err, out)
 	}
-	var is store.Issue
+	var is model.Issue
 	if err := json.Unmarshal([]byte(out), &is); err != nil || is.Title != "a=b" || is.Status != "open" || len(is.ID) != 40 {
 		t.Errorf("new --json = %s, %v", out, err)
 	}

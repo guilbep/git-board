@@ -5,6 +5,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/core/people"
 )
 
@@ -24,7 +25,7 @@ func (b *Backend) Persons() ([]people.Person, error) {
 }
 
 // Identities lists the persons, by name.
-func (b *Backend) Identities() ([]Person, error) {
+func (b *Backend) Identities() ([]model.Person, error) {
 	persons, err := b.allPersons()
 	if err != nil {
 		return nil, err
@@ -33,11 +34,11 @@ func (b *Backend) Identities() ([]Person, error) {
 	if err != nil {
 		return nil, err
 	}
-	res := []Person{}
+	res := []model.Person{}
 	for id, p := range persons {
 		res = append(res, personOf(id, p, m))
 	}
-	slices.SortFunc(res, func(x, y Person) int { return cmp.Or(cmp.Compare(x.Name, y.Name), cmp.Compare(x.ID, y.ID)) })
+	slices.SortFunc(res, func(x, y model.Person) int { return cmp.Or(cmp.Compare(x.Name, y.Name), cmp.Compare(x.ID, y.ID)) })
 	return res, nil
 }
 
@@ -52,18 +53,18 @@ func (b *Backend) Adopt(idPrefix string) error {
 
 // NewIdentity creates a person and adopts them. You create them, or no one
 // when no one is chosen yet.
-func (b *Backend) NewIdentity(name, email string) (Person, error) {
+func (b *Backend) NewIdentity(name, email string) (model.Person, error) {
 	author, _ := people.Me(ctx, b.whoStore())
 	p, err := people.Create(ctx, b.ds, people.NewCreate(author, name, email))
 	if err != nil {
-		return Person{}, err
+		return model.Person{}, err
 	}
 	if err := people.SetMe(ctx, b.whoStore(), p.ID); err != nil {
-		return Person{}, err
+		return model.Person{}, err
 	}
 	m, err := b.avatarMode()
 	if err != nil {
-		return Person{}, err
+		return model.Person{}, err
 	}
 	return personOf(p.ID, p, m), nil
 }

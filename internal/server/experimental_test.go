@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/guilbep/git-board/core/cycle"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/store/storetest"
 )
@@ -28,7 +29,7 @@ func TestExperimentalRoutesOff(t *testing.T) {
 		t.Fatal(err)
 	}
 	// a [cycle] table alone doesn't turn the cycle on
-	ts := newTestServer(t, b, &config.Config{Cycle: config.Cycle{On: true}})
+	ts := newTestServer(t, b, &config.Config{Cycle: cycle.Config{On: true}})
 	for _, route := range []struct{ method, path, feature string }{
 		{"GET", "/api/issues/" + id[:8] + "/cycle", "cycle"},
 		{"POST", "/api/issues/" + id[:8] + "/cycle/approve-plan", "cycle"},
@@ -71,7 +72,7 @@ func TestExperimentalRoutesOn(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cfg := cycleConfig(nil, config.Cycle{On: true})
+	cfg := cycleConfig(nil, cycle.Config{On: true})
 	cfg.Features = []string{config.FeatureCycle}
 	ts := newTestServer(t, b, cfg)
 	var c cycleAnswer

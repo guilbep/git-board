@@ -7,13 +7,13 @@ import (
 	"slices"
 	"time"
 
+	"github.com/guilbep/git-board/core/filter"
+	"github.com/guilbep/git-board/core/inbox"
+	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/board"
-	"github.com/guilbep/git-board/internal/filter"
-	"github.com/guilbep/git-board/internal/inbox"
-	"github.com/guilbep/git-board/internal/store"
 )
 
-// The inbox (internal/inbox): what happened that concerns you on the
+// The inbox (core/inbox): what happened that concerns you on the
 // issues of the last 14 days. Your file is yours, not the repository's:
 // it takes inboxMu, never writeMu, and answers during a forge sync.
 
@@ -83,8 +83,8 @@ func (s *apiServer) changeInbox(id string, change func(*inbox.State)) error {
 }
 
 // recent is the issues updated within the window.
-func recent(all []store.Issue, since time.Time) []store.Issue {
-	var res []store.Issue
+func recent(all []model.Issue, since time.Time) []model.Issue {
+	var res []model.Issue
 	for _, i := range all {
 		if !i.UpdatedAt.Before(since) {
 			res = append(res, i)
@@ -142,14 +142,14 @@ func (s *apiServer) inbox(me inbox.Me, now time.Time) (inboxResponse, error) {
 	if err != nil {
 		return inboxResponse{}, err
 	}
-	res := inboxResponse{Me: me, Rows: inbox.Rows(me, st, threads, inViews, cfg, since), Fields: st.Fields,
+	res := inboxResponse{Me: me, Rows: inbox.Rows(me, st, threads, inViews, cfg.IssueSchema(), since), Fields: st.Fields,
 		Views: st.Views, ViewsMissing: missing, Following: len(following)}
 	if res.Rows == nil {
 		res.Rows = []inbox.Row{}
 	}
 	res.Roles = []string{}
 	for _, role := range slices.Sorted(maps.Keys(cfg.Roles)) {
-		if _, ok := filter.PersonField(role+":"+cfg.Roles[role], me.Login, cfg); ok {
+		if _, ok := filter.PersonField(role+":"+cfg.Roles[role], me.Login, cfg.IssueSchema()); ok {
 			res.Roles = append(res.Roles, role)
 		}
 	}
@@ -203,18 +203,18 @@ func (s *apiServer) handleInboxSeen(w http.ResponseWriter, r *http.Request) {
 }
 
 // follow is whether you follow the issue (an id or a prefix), and why.
-func (s *apiServer) follow(me inbox.Me, th store.Thread) (followResponse, error) {
+func (s *apiServer) follow(me inbox.Me, th model.Thread) (followResponse, error) {
 	st, err := s.loadInbox(me.ID)
 	if err != nil {
 		return followResponse{}, err
 	}
 	cfg := s.config()
 	th.Inherited = cfg.RolesFor(th.Labels) // the project's roles, as on the board
-	inViews, _, err := board.FollowedViews(s.b, cfg, st.Views, me.Login, []store.Issue{th.Issue}, time.Now())
+	inViews, _, err := board.FollowedViews(s.b, cfg, st.Views, me.Login, []model.Issue{th.Issue}, time.Now())
 	if err != nil {
 		return followResponse{}, err
 	}
-	following, reasons, set := inbox.Follows(me, st, th, inViews[th.ID], cfg)
+	following, reasons, set := inbox.Follows(me, st, th, inViews[th.ID], cfg.IssueSchema())
 	if reasons == nil {
 		reasons = []string{}
 	}

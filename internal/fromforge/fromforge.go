@@ -14,6 +14,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/guilbep/git-board/core/fields"
 	"github.com/guilbep/git-board/core/forge/github"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/ghbridge"
@@ -68,7 +69,7 @@ func Merge(template string, f Forge) (string, []string, error) {
 		return "", nil, fmt.Errorf("the template: %w", err)
 	}
 	text, notes := template, []string(nil)
-	set := map[string]config.Field{}
+	set := map[string]fields.Field{}
 	fromProject := map[string]bool{}
 	if p := f.Project; p != nil {
 		cfg.GithubProject = config.GithubProject{Owner: p.Owner, Number: p.Number}
@@ -87,7 +88,7 @@ func Merge(template string, f Forge) (string, []string, error) {
 				if known {
 					continue
 				}
-				fl = config.Field{Single: true, Numeric: true}
+				fl = fields.Field{Single: true, Numeric: true}
 			case "ITERATION":
 				fl.Single, fl.Type, fl.Options = true, "iteration", nil
 				if pf.Duration > 0 && cfg.Sprints.LengthDays != pf.Duration {
@@ -103,7 +104,7 @@ func Merge(template string, f Forge) (string, []string, error) {
 				if known {
 					continue
 				}
-				fl = config.Field{Single: true, Type: "date"}
+				fl = fields.Field{Single: true, Type: "date"}
 			default: // GitHub's own: title, assignees, labels, sub-issues…
 				continue
 			}
@@ -112,7 +113,7 @@ func Merge(template string, f Forge) (string, []string, error) {
 		}
 	}
 
-	kinds := config.Field{Colors: map[string]string{}, Descriptions: map[string]string{}}
+	kinds := fields.Field{Colors: map[string]string{}, Descriptions: map[string]string{}}
 	plain := cfg.Labels
 	for _, l := range f.Labels {
 		color := "#" + strings.ToLower(l.Color)
@@ -165,8 +166,8 @@ func Merge(template string, f Forge) (string, []string, error) {
 // (Wont for Won't); a new one is the forge's name, slugged when it can't
 // be a value as it is (In progress is in-progress). The forge's colors
 // and descriptions win; an option the Project lacks goes.
-func selectFrom(fl config.Field, pf github.ProjectField) config.Field {
-	out := config.Field{Single: true, Aliases: fl.Aliases, Colors: map[string]string{}, Descriptions: map[string]string{}}
+func selectFrom(fl fields.Field, pf github.ProjectField) fields.Field {
+	out := fields.Field{Single: true, Aliases: fl.Aliases, Colors: map[string]string{}, Descriptions: map[string]string{}}
 	for _, o := range pf.Options {
 		opt := ""
 		for _, have := range fl.Options {

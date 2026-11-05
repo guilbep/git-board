@@ -12,9 +12,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/guilbep/git-board/core/fields"
+	"github.com/guilbep/git-board/core/filter"
+	"github.com/guilbep/git-board/core/inbox"
+	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/filter"
-	"github.com/guilbep/git-board/internal/inbox"
 	"github.com/guilbep/git-board/internal/store"
 )
 
@@ -23,12 +25,12 @@ const DefaultFilter = "is:open"
 
 // issueBackend is the subset of store.Backend that loading needs.
 type issueBackend interface {
-	ListIssues() ([]store.Issue, error)
+	ListIssues() ([]model.Issue, error)
 }
 
 // LoadMatching lists issues in b matching filterStr, using cfg for @me/sprint
 // alias resolution.
-func LoadMatching(b issueBackend, cfg *config.Config, filterStr, me string) ([]store.Issue, error) {
+func LoadMatching(b issueBackend, cfg *config.Config, filterStr, me string) ([]model.Issue, error) {
 	issues, err := b.ListIssues()
 	if err != nil {
 		return nil, err
@@ -38,14 +40,14 @@ func LoadMatching(b issueBackend, cfg *config.Config, filterStr, me string) ([]s
 
 // Match narrows issues already loaded to filterStr, as LoadMatching does:
 // the TUI's f, on what it loaded.
-func Match(b any, cfg *config.Config, filterStr, me string, issues []store.Issue, today time.Time) ([]store.Issue, error) {
+func Match(b any, cfg *config.Config, filterStr, me string, issues []model.Issue, today time.Time) ([]model.Issue, error) {
 	return MatchFollowing(b, cfg, filterStr, me, issues, today, nil)
 }
 
 // MatchFollowing is Match with what follows:@me follows already known
 // (Following), as the inbox has it; nil reads it.
-func MatchFollowing(b any, cfg *config.Config, filterStr, me string, issues []store.Issue, today time.Time, followed *filter.Followed) ([]store.Issue, error) {
-	conditions, me, err := prepare(b, filterStr, me)
+func MatchFollowing(b any, cfg *config.Config, filterStr, me string, issues []model.Issue, today time.Time, followed *filter.Followed) ([]model.Issue, error) {
+	conditions, me, err := prepare(b, filterStr, me, today)
 	if err != nil {
 		return nil, err
 	}
@@ -54,19 +56,20 @@ func MatchFollowing(b any, cfg *config.Config, filterStr, me string, issues []st
 	if err := fillFollows(b, cfg, conditions, me, issues, today, followed); err != nil {
 		return nil, err
 	}
-	matched := make([]store.Issue, 0, len(issues))
+	schema := cfg.IssueSchema()
+	matched := make([]model.Issue, 0, len(issues))
 	for _, issue := range issues {
-		if filter.Matches(issue, conditions, cfg, me, today) {
+		if filter.Matches(issue, conditions, schema, me, today) {
 			matched = append(matched, issue)
 		}
 	}
 	return matched, nil
 }
 
-// fillFollows gives follows:@me your inbox's file (internal/inbox): what
+// fillFollows gives follows:@me your inbox's file (core/inbox): what
 // you followed and unfollowed, and the issues of the views you follow; f
 // when known.
-func fillFollows(b any, cfg *config.Config, conditions []filter.Condition, me string, issues []store.Issue, today time.Time, f *filter.Followed) error {
+func fillFollows(b any, cfg *config.Config, conditions []filter.Condition, me string, issues []model.Issue, today time.Time, f *filter.Followed) error {
 	if !slices.ContainsFunc(conditions, func(c filter.Condition) bool { return c.Kind == filter.KindFollows }) {
 		return nil
 	}
@@ -85,9 +88,9 @@ func fillFollows(b any, cfg *config.Config, conditions []filter.Condition, me st
 }
 
 // readFollowing is Following from your inbox's file.
-func readFollowing(b any, cfg *config.Config, me string, issues []store.Issue, today time.Time) (*filter.Followed, error) {
+func readFollowing(b any, cfg *config.Config, me string, issues []model.Issue, today time.Time) (*filter.Followed, error) {
 	repo, ok := b.(interface {
-		Me() (store.Person, bool, error)
+		Me() (model.Person, bool, error)
 		Storage() store.Storage
 	})
 	if !ok {
@@ -126,7 +129,7 @@ func Following(st inbox.State, inViews map[string][]string) *filter.Followed {
 // in, and the followed views no longer in the config. A view matches
 // without its is: (a close still shows) and its follows: (it can't follow
 // itself).
-func FollowedViews(b any, cfg *config.Config, views []string, me string, issues []store.Issue, today time.Time) (map[string][]string, []string, error) {
+func FollowedViews(b any, cfg *config.Config, views []string, me string, issues []model.Issue, today time.Time) (map[string][]string, []string, error) {
 	inViews := map[string][]string{}
 	var missing []string
 	for _, name := range views {
@@ -155,11 +158,16 @@ func setOf(ids []string) map[string]bool {
 	return res
 }
 
-// prepare parses filterStr and finds who @me is. Free text looks in titles,
-// descriptions and comments when b has a full-text index (store.Backend
-// has git-bug's); else Matches looks at titles.
-func prepare(b any, filterStr, me string) ([]filter.Condition, string, error) {
+// prepare parses filterStr, refuses what can't be answered as written
+// (filter.Check), and finds who @me is. Free text looks in titles,
+// descriptions and comments (or where in: says) through b's full-text index
+// when it has one (store.Backend does); else Matches looks in the issues'
+// own texts, as the index would.
+func prepare(b any, filterStr, me string, today time.Time) ([]filter.Condition, string, error) {
 	conditions := filter.Parse(filterStr)
+	if err := filter.Check(conditions, today); err != nil {
+		return nil, "", &FilterError{err}
+	}
 	if filter.RequiresMe(conditions) && me == "" {
 		me = MyName(b)
 		if n, ok := b.(interface{ MyNames() []string }); ok {
@@ -173,19 +181,24 @@ func prepare(b any, filterStr, me string) ([]filter.Condition, string, error) {
 		return nil, "", &FilterError{ErrNoMe}
 	}
 	if s, ok := b.(interface {
-		SearchText(string) (map[string]bool, error)
+		SearchText(string, ...string) (map[string]bool, error)
 	}); ok {
+		in := filter.In(conditions)
 		for i, c := range conditions {
-			if c.Kind == filter.KindText {
+			switch {
+			case c.Kind != filter.KindText:
+			case in != nil && len(in) == 0: // -in: of every text: nowhere
+				conditions[i].Hits = map[string]bool{}
+			default:
 				var err error
-				if conditions[i].Hits, err = s.SearchText(c.Value); err != nil {
+				if conditions[i].Hits, err = s.SearchText(c.Value, in...); err != nil {
 					return nil, "", err
 				}
 			}
 		}
 	}
 	if r, ok := b.(interface {
-		Me() (store.Person, bool, error)
+		Me() (model.Person, bool, error)
 	}); ok {
 		for i, c := range conditions {
 			if c.Kind == filter.KindFollows || (c.Kind == filter.KindInvolves && c.Value == "@me") {
@@ -218,7 +231,7 @@ func prepare(b any, filterStr, me string) ([]filter.Condition, string, error) {
 }
 
 // withRoles gives each issue the roles it takes from the project.
-func withRoles(cfg *config.Config, issues []store.Issue) {
+func withRoles(cfg *config.Config, issues []model.Issue) {
 	for i := range issues {
 		issues[i].Inherited = cfg.RolesFor(issues[i].Labels)
 	}
@@ -255,7 +268,7 @@ func MyName(b any) string {
 
 // FieldValue returns the value of a namespaced label (e.g. "prio" from
 // "prio:p1"), or "" if the issue has no such label.
-func FieldValue(issue store.Issue, fieldName string) string {
+func FieldValue(issue model.Issue, fieldName string) string {
 	prefix := fieldName + ":"
 	for _, l := range issue.AllLabels() {
 		if strings.HasPrefix(l, prefix) {
@@ -271,13 +284,13 @@ func FieldValue(issue store.Issue, fieldName string) string {
 // its configured options (status follows the workflow), values outside
 // them after, lexically. Issues without the field sort last either way —
 // the web page sorts the same way (web/src/facets.ts).
-func SortByField(issues []store.Issue, spec string, cfg *config.Config) {
+func SortByField(issues []model.Issue, spec string, cfg *config.Config) {
 	if spec == "" {
 		return
 	}
 	key, direction, _ := strings.Cut(spec, " ")
 	desc := strings.TrimSpace(direction) == "desc"
-	var field config.Field
+	var field fields.Field
 	if cfg != nil {
 		field = cfg.Fields[key]
 	}
@@ -290,7 +303,7 @@ func SortByField(issues []store.Issue, spec string, cfg *config.Config) {
 	sort.SliceStable(issues, func(i, j int) bool {
 		vi, vj := FieldValue(issues[i], key), FieldValue(issues[j], key)
 		switch {
-		case field.Numeric || field.Type == config.TypeNumber:
+		case field.Numeric || field.Type == fields.TypeNumber:
 			return lessNumeric(vi, vj, desc)
 		case vi == "" || vj == "":
 			return vi != "" // a value before none, either way
@@ -329,14 +342,14 @@ func lessNumeric(a, b string, desc bool) bool {
 // Bucket is one named group of issues, in first-seen order.
 type Bucket struct {
 	Group  string        `json:"group"`
-	Issues []store.Issue `json:"issues"`
+	Issues []model.Issue `json:"issues"`
 }
 
 // BucketBy groups issues by the value of a field-derived label. group == ""
 // yields a single bucket (Group: "") containing every issue, matching an
 // ungrouped view.
-func BucketBy(issues []store.Issue, group string) []Bucket {
-	buckets := map[string][]store.Issue{}
+func BucketBy(issues []model.Issue, group string) []Bucket {
+	buckets := map[string][]model.Issue{}
 	var order []string
 	for _, issue := range issues {
 		key := ""

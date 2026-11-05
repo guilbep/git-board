@@ -8,9 +8,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/guilbep/git-board/core/fields"
+	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/ghbridge"
-	"github.com/guilbep/git-board/internal/store"
 )
 
 func TestDecide(t *testing.T) {
@@ -43,16 +44,15 @@ const testURL = "https://github.com/o/r/issues/"
 
 func syncConfig() *config.Config {
 	return &config.Config{
-		Fields: map[string]config.Field{
+		GithubProject: config.GithubProject{Owner: "o", Number: 1, Write: true},
+		Schema: fields.Schema{Fields: map[string]fields.Field{
 			"status": {Single: true, Options: []string{"backlog", "comite", "ready", "in-review", "qa"},
 				Project: map[string]string{"qa": "QA Validation"}},
 			"prio": {Single: true, Options: []string{"p0", "p1", "p2"}},
 			"est":  {Single: true, Options: []string{"1", "2", "4"}, Numeric: true},
-		},
-		Sprints: config.SprintsConfig{List: []config.Sprint{
+		}, Sprints: fields.Sprints{List: []fields.Sprint{
 			{Slug: "sprint-4", Title: "Sprint 4", Start: time.Date(2026, 10, 5, 0, 0, 0, 0, time.UTC)},
-		}},
-		GithubProject: config.GithubProject{Owner: "o", Number: 1, Write: true},
+		}}},
 	}
 }
 
@@ -72,11 +72,11 @@ func item(n int, status string) ghbridge.Item {
 		Content: ghbridge.Content{Number: n, Type: "Issue", URL: testURL + "1"}}
 }
 
-func oneBug(labels ...string) []store.Issue {
-	return []store.Issue{{ID: "bug1", GithubURL: testURL + "1", Labels: labels}}
+func oneBug(labels ...string) []model.Issue {
+	return []model.Issue{{ID: "bug1", GithubURL: testURL + "1", Labels: labels}}
 }
 
-func plan(it ghbridge.Item, bugs []store.Issue, bases map[string]string) ghbridge.SyncPlan {
+func plan(it ghbridge.Item, bugs []model.Issue, bases map[string]string) ghbridge.SyncPlan {
 	all := map[string]map[string]string{}
 	if bases != nil {
 		all["bug1"] = bases
@@ -107,7 +107,7 @@ func TestSyncCategoryFillsAMissingKind(t *testing.T) {
 		t.Errorf("added = %v, want feat and no FEAT", got)
 	}
 	// with [fields.kind] options the kinds are kind:* labels
-	cfg.Fields["kind"] = config.Field{Single: true, Options: []string{"bug", "feat"}}
+	cfg.Fields["kind"] = fields.Field{Single: true, Options: []string{"bug", "feat"}}
 	p = ghbridge.BuildSyncPlan([]ghbridge.Item{it}, oneBug(), nil, syncMeta(), cfg)
 	if got := p.Changes[0].Added; !slices.Contains(got, "kind:feat") || slices.Contains(got, "feat") {
 		t.Errorf("kind:* form: added = %v, want kind:feat", got)
@@ -225,7 +225,7 @@ func TestSyncNumbersAndSprints(t *testing.T) {
 
 func TestSlugTransliteratesAccents(t *testing.T) {
 	cfg := syncConfig()
-	cfg.Fields["status"] = config.Field{Single: true, Options: []string{"comite-specialise"}}
+	cfg.Fields["status"] = fields.Field{Single: true, Options: []string{"comite-specialise"}}
 	p := ghbridge.BuildSyncPlan([]ghbridge.Item{item(1, "Comité Spécialisé")}, oneBug(), nil, syncMeta(), cfg)
 	if !slices.Contains(p.Changes[0].Added, "status:comite-specialise") {
 		t.Errorf("added %v warnings %v", p.Changes[0].Added, p.Changes[0].Warnings)
@@ -478,7 +478,7 @@ func TestSyncCategoryRemovesItsBareLabel(t *testing.T) {
 func TestSyncMoSCoW(t *testing.T) {
 	t.Parallel()
 	cfg := syncConfig()
-	cfg.Fields["moscow"] = config.Field{Single: true, Options: []string{"must", "should", "could", "wont"}, Project: map[string]string{"wont": "Won't"}}
+	cfg.Fields["moscow"] = fields.Field{Single: true, Options: []string{"must", "should", "could", "wont"}, Project: map[string]string{"wont": "Won't"}}
 	meta := syncMeta()
 	meta.Fields["MoSCoW"] = ghbridge.ProjectField{ID: "F-moscow", Options: map[string]string{"Must": "o-must", "Should": "o-should", "Could": "o-could", "Won't": "o-wont"}}
 	it := item(1, "Ready")
@@ -551,21 +551,21 @@ func TestPlanOneSide(t *testing.T) {
 // fakeRepo is fakeSide as the repository a resolve reads and writes.
 type fakeRepo struct{ fakeSide }
 
-func (*fakeRepo) ListIssues() ([]store.Issue, error)                     { return nil, nil }
+func (*fakeRepo) ListIssues() ([]model.Issue, error)                     { return nil, nil }
 func (*fakeRepo) ProjectBases(string, string) (map[string]string, error) { return nil, nil }
 
 // Two repositories of one Project can both have an issue #1 in conflict:
 // the number alone is refused, owner/repo#1 picks one.
 func TestResolveConflictRefusesAnAmbiguousNumber(t *testing.T) {
 	t.Parallel()
-	in := func(repo, bugID string) (ghbridge.Item, store.Issue) {
+	in := func(repo, bugID string) (ghbridge.Item, model.Issue) {
 		u := "https://github.com/" + repo + "/issues/1"
 		return ghbridge.Item{ID: "item-" + repo, Status: "QA Validation", Content: ghbridge.Content{Number: 1, Type: "Issue", URL: u}},
-			store.Issue{ID: bugID, GithubURL: u, Labels: []string{"status:in-review"}}
+			model.Issue{ID: bugID, GithubURL: u, Labels: []string{"status:in-review"}}
 	}
 	i1, b1 := in("o/r", "bug1")
 	i2, b2 := in("o/s", "bug2")
-	s := ghbridge.State{Items: []ghbridge.Item{i1, i2}, Issues: []store.Issue{b1, b2}, Meta: syncMeta(),
+	s := ghbridge.State{Items: []ghbridge.Item{i1, i2}, Issues: []model.Issue{b1, b2}, Meta: syncMeta(),
 		Bases: map[string]map[string]string{"bug1": {"status": "ready"}, "bug2": {"status": "ready"}}}
 	cfg := syncConfig()
 	p := ghbridge.Project{Writer: &fakeSide{}}

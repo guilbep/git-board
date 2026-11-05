@@ -12,9 +12,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/guilbep/git-board/core/fields"
+	"github.com/guilbep/git-board/core/forge"
+	"github.com/guilbep/git-board/core/proof"
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/ghpr"
-	"github.com/guilbep/git-board/internal/proof"
 	"github.com/guilbep/git-board/internal/store/storetest"
 )
 
@@ -252,7 +253,7 @@ func TestChecksSetup(t *testing.T) {
 	url := serve(t, s).URL + "/api/checks/setup"
 	var got struct {
 		Source  string
-		Checks  map[string]config.Suite
+		Checks  map[string]proof.Suite
 		Skipped []struct{ Name, Why string }
 		TOML    string
 	}
@@ -277,16 +278,19 @@ func TestChecksSetup(t *testing.T) {
 // it close the issue.
 func TestCycleSignoffNotProvenAtMerge(t *testing.T) {
 	s, id, keyFile := checksRepo(t)
-	s.cfg = &config.Config{Features: allFeatures, Fields: map[string]config.Field{
-		"status": {Single: true, Options: []string{"backlog", "ready", "in-progress", "in-review", "done"}},
-		"risk":   {Single: true, Options: []string{"low", "normal", "structural"}},
-	}}
+	s.cfg = &config.Config{
+		Features: allFeatures,
+		Schema: fields.Schema{Fields: map[string]fields.Field{
+			"status": {Single: true, Options: []string{"backlog", "ready", "in-progress", "in-review", "done"}},
+			"risk":   {Single: true, Options: []string{"low", "normal", "structural"}},
+		}},
+	}
 	if _, err := s.b.ApplyLabelChange(id, []string{"status:in-review"}, []string{"status:in-progress"}); err != nil {
 		t.Fatal(err)
 	}
 	merged := func() {
 		head := strings.TrimSpace(git(t, s.root, "rev-parse", "fix/2518-x"))
-		s.pulls.put("fix/2518-x", &ghpr.PR{Number: 3082, State: "MERGED", MergeCommit: head}, nil)
+		s.pulls.put("fix/2518-x", &forge.PR{Number: 3082, State: "MERGED", MergeCommit: head}, nil)
 	}
 	merged()
 	url := serve(t, s).URL + "/api/issues/" + id[:8]
@@ -307,7 +311,7 @@ func TestCycleSignoffNotProvenAtMerge(t *testing.T) {
 	}
 
 	// the merge commit not fetched yet: vet listed, not proven, the same refusal
-	s.pulls.put("fix/2518-x", &ghpr.PR{Number: 3082, State: "MERGED", MergeCommit: "deadbee0deadbee0deadbee0deadbee0deadbee0"}, nil)
+	s.pulls.put("fix/2518-x", &forge.PR{Number: 3082, State: "MERGED", MergeCommit: "deadbee0deadbee0deadbee0deadbee0deadbee0"}, nil)
 	if getJSON(t, url+"/tests", &a); a.Merged == nil || a.Merged.Proven || len(a.Merged.Checks) != 1 || a.Merged.Checks[0].Name != "vet" {
 		t.Fatalf("the gate at an unfetched merge: %+v", a.Merged)
 	}
@@ -326,7 +330,7 @@ func TestCycleSignoffNotProvenAtMerge(t *testing.T) {
 	merged()
 	// at step 7 the check runs from the CLI (git board verify), not the page
 	ctx := context.Background()
-	cfg, _, err := proof.AtBase(ctx, s.root, "dev")
+	base, err := config.AtBase(ctx, s.root, "dev")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -334,7 +338,7 @@ func TestCycleSignoffNotProvenAtMerge(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := proof.Run(ctx, s.root, strings.TrimSpace(git(t, s.root, "rev-parse", "fix/2518-x")), "vet", cfg.Cycle.Checks["vet"], keyFile, writer); err != nil {
+	if _, err := proof.Run(ctx, s.root, strings.TrimSpace(git(t, s.root, "rev-parse", "fix/2518-x")), "vet", base.Checks["vet"], keyFile, writer); err != nil {
 		t.Fatal(err)
 	}
 	if code, body := post(t, url+"/cycle/signoff", struct{}{}); code != http.StatusOK {

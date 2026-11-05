@@ -3,30 +3,36 @@ package index
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"regexp"
+	"runtime"
+	"slices"
 	"strings"
-	"unicode"
-
-	"golang.org/x/text/runes"
-	"golang.org/x/text/transform"
-	"golang.org/x/text/unicode/norm"
+	"sync"
 
 	"github.com/guilbep/git-board/core/issue"
+	"github.com/guilbep/git-board/core/search"
 )
 
-// Query asks for issues. An empty field filters nothing. Sort is "created"
-// or "updated", the default; Desc sorts newest first; a Limit of 0 answers
-// all.
+// Query asks for issues. An empty field filters nothing. In names the
+// texts Text is looked for in (search.Texts: title, body, comments); none: all
+// of them. Sort is "created" or "updated", the default; Desc sorts newest
+// first; a Limit of 0 answers all.
 type Query struct {
 	Status       issue.Status
 	Labels       []string
 	Author, Text string
+	In           []string
 	Sort         string
 	Desc         bool
 	Limit        int
 }
+
+// weights are each text's weight in PostgreSQL's tsvector (search.Texts,
+// the sqlite index's columns in order).
+var weights = map[string]string{"title": "A", "body": "B", "comments": "C"}
 
 // Summary is what the index holds for an issue.
 type Summary struct {
@@ -53,6 +59,11 @@ func (ix *Index) Issues(ctx context.Context, q Query) ([]Summary, error) {
 	if q.Limit < 0 {
 		return nil, fmt.Errorf("index: negative limit %d", q.Limit)
 	}
+	for _, in := range q.In {
+		if !slices.Contains(search.Texts, in) {
+			return nil, fmt.Errorf("index: unknown text %q", in)
+		}
+	}
 	if err := ix.Refresh(ctx); err != nil {
 		return nil, err
 	}
@@ -66,9 +77,9 @@ func (ix *Index) Issues(ctx context.Context, q Query) ([]Summary, error) {
 	if q.Author != "" {
 		where, args = append(where, "author = ?"), append(args, q.Author)
 	}
-	switch m := match(q.Text); {
+	switch m := match(q.Text, q.In); {
 	case ix.pg:
-		if m := tsquery(q.Text); m != "" {
+		if m := tsquery(q.Text, q.In); m != "" {
 			where, args = append(where, "n IN (SELECT n FROM texts WHERE doc @@ to_tsquery('simple', ?))"), append(args, m)
 		}
 	case m != "":
@@ -104,59 +115,179 @@ func (ix *Index) Issues(ctx context.Context, q Query) ([]Summary, error) {
 	return out, rows.Err()
 }
 
+// State is an issue as the index keeps it: issue.Apply's fold at a head.
+type State struct {
+	Head  string
+	Issue *issue.Issue
+}
+
+// Listing is what States answers.
+type Listing struct {
+	// Issues are the issues a list shows, by id, each at its head.
+	Issues map[string]State
+	// Broken are the broken issues, kept out.
+	Broken []Broken
+	// Heads are the heads of every issue the listing is of, shown, deleted
+	// or broken: at those heads it would be the same.
+	Heads map[string]string
+}
+
+// States answers every issue the index holds, folded at the head it read,
+// and the broken issues it keeps out: a deleted one is neither. For each,
+// cached gives the issue already folded at that head, or nil: the index
+// then reads the state it keeps, so a caller that has most of them reads
+// few. It refreshes first.
+func (ix *Index) States(ctx context.Context, cached func(id, head string) *issue.Issue) (Listing, error) {
+	fresh, err := ix.refresh(ctx) // what it folds, it needn't read back
+	if err != nil {
+		return Listing{}, err
+	}
+	const join = " FROM issues i JOIN entities e ON e.kind = 'issue' AND e.id = i.id"
+	rows, err := ix.db.QueryContext(ctx, `SELECT e.id, e.head, e.error, i.id IS NOT NULL
+		FROM entities e LEFT JOIN issues i ON i.id = e.id WHERE e.kind = 'issue'`)
+	if err != nil {
+		return Listing{}, fmt.Errorf("index: states: %w", err)
+	}
+	out := Listing{Issues: map[string]State{}, Heads: map[string]string{}}
+	var missing []string
+	for rows.Next() {
+		var id, head string
+		var msg sql.NullString
+		var shown bool
+		if err := rows.Scan(&id, &head, &msg, &shown); err != nil {
+			rows.Close()
+			return Listing{}, err
+		}
+		out.Heads[id] = head
+		switch f, ok := fresh[id]; {
+		case msg.Valid:
+			out.Broken = append(out.Broken, Broken{"issue", id, msg.String})
+		case !shown: // deleted
+		case ok && f.Head == head:
+			out.Issues[id] = f
+		default:
+			if is := cached(id, head); is != nil {
+				out.Issues[id] = State{head, is}
+			} else {
+				missing = append(missing, id)
+			}
+		}
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return Listing{}, err
+	}
+	// A state comes with its head, in one statement: an issue that moved
+	// since the heads were read comes as it is now, and one that went,
+	// not at all.
+	type row struct {
+		id, head string
+		state    []byte
+	}
+	var read []row
+	scan := func(where string, args ...any) error {
+		rows, err := ix.db.QueryContext(ctx, ix.sql("SELECT i.id, e.head, i.state"+join+where), args...)
+		if err != nil {
+			return fmt.Errorf("index: states: %w", err)
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var r row
+			if err := rows.Scan(&r.id, &r.head, &r.state); err != nil {
+				return err
+			}
+			if _, ok := out.Issues[r.id]; !ok {
+				read = append(read, r)
+			}
+		}
+		return rows.Err()
+	}
+	if len(missing) > len(out.Issues) { // most of them: one read of all
+		err = scan("")
+	} else {
+		for _, id := range missing {
+			if err = scan(" WHERE i.id = ?", id); err != nil {
+				break
+			}
+		}
+	}
+	if err != nil {
+		return Listing{}, err
+	}
+	// decoding is most of a cold read: on every CPU
+	issues := make([]issue.Issue, len(read))
+	errs := make([]error, len(read))
+	var wg sync.WaitGroup
+	workers := min(runtime.GOMAXPROCS(0), len(read))
+	for w := range workers {
+		wg.Go(func() {
+			for i := w; i < len(read); i += workers {
+				errs[i] = json.Unmarshal(read[i].state, &issues[i])
+			}
+		})
+	}
+	wg.Wait()
+	for i, r := range read {
+		if errs[i] != nil {
+			return Listing{}, fmt.Errorf("index: issue %s: %w", r.id, errs[i])
+		}
+		out.Issues[r.id] = State{r.head, &issues[i]}
+		out.Heads[r.id] = r.head // it may have moved since the first read
+	}
+	slices.SortFunc(out.Broken, func(a, b Broken) int { return strings.Compare(a.ID, b.ID) })
+	return out, nil
+}
+
 // match is the FTS5 query for a search text. Each word is quoted, so FTS5's
 // syntax is plain text, and marked as a prefix; FTS5 ANDs them. A word with
 // no token (unicode61's: letters, numbers, private use) is left out. It is
-// "" when no word is left, which matches every issue.
-func match(text string) string {
+// "" when no word is left, which matches every issue. in, when given,
+// are the columns each word is looked for in.
+func match(text string, in []string) string {
+	cols := ""
+	if len(in) > 0 {
+		cols = "{" + strings.Join(in, " ") + "} : "
+	}
 	var words []string
 	for _, w := range strings.Fields(text) {
-		if strings.IndexFunc(w, isToken) >= 0 {
-			words = append(words, `"`+strings.ReplaceAll(w, `"`, `""`)+`"*`)
+		if strings.IndexFunc(w, search.IsToken) >= 0 {
+			words = append(words, cols+`"`+strings.ReplaceAll(w, `"`, `""`)+`"*`)
 		}
 	}
 	return strings.Join(words, " ")
 }
 
-func isToken(r rune) bool { return unicode.In(r, unicode.L, unicode.N, unicode.Co) }
-
 // tsquery is match for PostgreSQL, as FTS5 reads match's: each word's
 // tokens in a row (<->), the last a prefix, the words ANDed; in
 // to_tsquery's syntax with the 'simple' configuration, over the tokens
-// that tokens gives. It is "" when no token is left, which matches every
-// issue.
-func tsquery(text string) string {
+// that tokens gives. in, when given, are the texts each token is looked
+// for in, by their weights. It is "" when no token is left, which matches
+// every issue.
+func tsquery(text string, in []string) string {
+	w8 := ""
+	for _, t := range in {
+		w8 += weights[t]
+	}
 	var words []string
 	for _, w := range strings.Fields(text) {
-		toks := strings.Fields(tokens(w))
+		toks := search.Tokens(w)
 		if len(toks) == 0 {
 			continue
 		}
 		for i, tok := range toks {
 			toks[i] = "'" + tok + "'"
+			if i < len(toks)-1 && w8 != "" {
+				toks[i] += ":" + w8
+			}
 		}
-		words = append(words, strings.Join(toks, " <-> ")+":*")
+		words = append(words, strings.Join(toks, " <-> ")+":*"+w8)
 	}
 	return strings.Join(words, " & ")
 }
 
-// tokens is text as unicode61 tokenizes it, for PostgreSQL to index and
-// search alike: lower case, without diacritics, each run of token
-// characters a word, joined by spaces.
-func tokens(text string) string {
-	folded, _, err := transform.String(fold(), text)
-	if err != nil {
-		folded = text
-	}
-	return strings.Join(strings.FieldsFunc(strings.ToLower(folded), func(r rune) bool { return !isToken(r) }), " ")
-}
-
-// fold takes the diacritics off, as unicode61's remove_diacritics does. A
-// chain keeps state between calls: one per call, never shared between
-// goroutines (two refreshes at once tore a shared one).
-func fold() transform.Transformer {
-	return transform.Chain(norm.NFD, runes.Remove(runes.In(unicode.Mn)), norm.NFC)
-}
+// tokens is text as unicode61 tokenizes it (search.Tokens), joined by
+// spaces, for PostgreSQL to index and search alike.
+func tokens(text string) string { return strings.Join(search.Tokens(text), " ") }
 
 // ForAccount answers the person that owns an account: of the persons
 // holding it, the one whose id sorts first. It refreshes first.

@@ -37,7 +37,7 @@ scoped labels, several of them paid.
   file only adds what labels can't say (`docs/guide/configuration.md` ›
   Fields).
 - A single-value field swaps: setting it removes the namespace's other
-  labels (`internal/fields/fields.go:1-5`).
+  labels (`core/fields/fields.go:1-9`).
 - The workflow status (`status:in-progress`) is a field like any other. The
   issue's own `set-status` is open or closed; `git board close` sets the
   last option and closes (`docs/guide/configuration.md` › Fields).

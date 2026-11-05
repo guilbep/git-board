@@ -6,9 +6,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/guilbep/git-board/core/fields"
+	"github.com/guilbep/git-board/core/inbox"
 	"github.com/guilbep/git-board/internal/board"
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/inbox"
 	"github.com/guilbep/git-board/internal/store/storetest"
 )
 
@@ -24,8 +25,10 @@ func TestFacetsCountAgainstTheRestOfTheFilter(t *testing.T) {
 	storetest.CloseIssue(t, b, closed)
 	b.NewIssue("d", "", nil)
 	cfg := &config.Config{
-		Fields:  map[string]config.Field{"status": {Options: []string{"ready", "qa", "validated"}}},
-		Sprints: config.SprintsConfig{LengthDays: 14, List: []config.Sprint{{Slug: "s1", Start: time.Now().AddDate(0, 0, -20)}, {Slug: "s2", Start: time.Now().AddDate(0, 0, -6)}}},
+		Schema: fields.Schema{
+			Fields:  map[string]fields.Field{"status": {Options: []string{"ready", "qa", "validated"}}},
+			Sprints: fields.Sprints{LengthDays: 14, List: []fields.Sprint{{Slug: "s1", Start: time.Now().AddDate(0, 0, -20)}, {Slug: "s2", Start: time.Now().AddDate(0, 0, -6)}}},
+		},
 	}
 
 	facets := func(filter string) map[string]board.Facet {

@@ -10,6 +10,7 @@ import (
 
 	"github.com/guilbep/git-board/core/forge"
 	"github.com/guilbep/git-board/core/forge/fake"
+	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/store"
 	"github.com/guilbep/git-board/internal/store/storetest"
@@ -124,7 +125,7 @@ func TestDryRunThroughAPersonsToken(t *testing.T) {
 	issues, _ := b.ListIssues()
 	p := issues[0].AuthorID
 	for _, is := range []string{storetest.NewIssue(t, b, "two"), storetest.NewIssue(t, b, "three")} {
-		storetest.CommentAs(t, b, is, store.Person{ID: p}, 1, "by alice")
+		storetest.CommentAs(t, b, is, model.Person{ID: p}, 1, "by alice")
 	}
 	var dry []store.SyncEvent
 	r := run(gh)

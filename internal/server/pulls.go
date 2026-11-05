@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/guilbep/git-board/core/forge"
+	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/branches"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/ghpr"
@@ -22,8 +24,8 @@ import (
 
 // branchPull is a branch on origin and its pull request, nil for none.
 type branchPull struct {
-	Branch string   `json:"branch"`
-	PR     *ghpr.PR `json:"pr"`
+	Branch string    `json:"branch"`
+	PR     *forge.PR `json:"pr"`
 }
 
 // pullsResponse is an issue's gate. Repo is "" when origin isn't on GitHub.
@@ -48,7 +50,7 @@ func (s *apiServer) github() (*ghpr.Client, string, error) {
 }
 
 // onOrigin are the issue's branches origin has, by name.
-func onOrigin(b *store.Backend, is store.Issue) ([]string, error) {
+func onOrigin(b *store.Backend, is model.Issue) ([]string, error) {
 	all, err := b.Branches()
 	if err != nil {
 		return nil, err
@@ -168,7 +170,7 @@ func (s *apiServer) handleOpenPull(w http.ResponseWriter, r *http.Request) {
 }
 
 // prTitle is the issue as lists show it: CO2-3075 and its shown title.
-func prTitle(is store.Issue) string {
+func prTitle(is model.Issue) string {
 	return strings.TrimSpace(is.Number + " " + is.ShownTitle())
 }
 
@@ -177,7 +179,7 @@ func prTitle(is store.Issue) string {
 // repository, else by its git-bug id's first 7 characters. Never a closing
 // keyword: merging doesn't finish the issue, its criteria do (the IT4R
 // issue conventions). The developer adds the criteria's letters.
-func prBody(is store.Issue, repo string) string {
+func prBody(is model.Issue, repo string) string {
 	ref := cmp.Or(is.Number, is.ID[:min(7, len(is.ID))])
 	for _, f := range is.Forges {
 		if is.Number == "" && f.Number != "" && strings.EqualFold(f.URL, "https://github.com/"+repo+"/issues/"+f.Number) {

@@ -59,7 +59,7 @@ Taken with the user on 2026-10-26. Not reopened here.
 - Versions and thread states are computed when the page renders, never
   stored.
 - The step is never typed: it comes from the status and the evidence
-  (`internal/cycle`), as today.
+  (`core/cycle`), as today.
 - GitHub #37 stays readable without git-board.
 - `review:*` comments stay local, as `docs/spec/sync.md` says.
 - History's scrubber keeps today's behaviour.
@@ -127,7 +127,7 @@ calls 2, 5, 6 and 9 need the user's eye.
    fails, the flow is one list in time order with no dividers. The
    ceiling: a step opened by evidence alone (criteria written, a test
    committed, a PR opened) shows only through the comments that carry it.
-   The upgrade is the server replaying `internal/cycle` over the issue's
+   The upgrade is the server replaying `core/cycle` over the issue's
    operations.
 4. **The step rail's entries are links.** A done or current step is an
    `<a href="#/issues/<id>?step=N">`; a click opens that step at the head

@@ -12,14 +12,15 @@ import (
 	"slices"
 	"time"
 
+	"github.com/guilbep/git-board/core/cycle"
+	"github.com/guilbep/git-board/core/fields"
+	"github.com/guilbep/git-board/core/proof"
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/fields"
-	"github.com/guilbep/git-board/internal/proof"
 )
 
 // Step 4 (docs/prd/cycle-protocol.md, M4): the suites and checks the base
 // branch's .git-board.toml declares, run in a clean checkout, each result
-// a signed line in this clone's notes (internal/proof, ADR 0001). Only
+// a signed line in this clone's notes (core/proof, ADR 0001). Only
 // argv from the base branch's toml runs: the page names suites, nothing
 // it sends reaches a command line.
 
@@ -36,7 +37,7 @@ type proofJob struct {
 // for a bug, at the test's commit.
 type suiteRow struct {
 	Name string `json:"name"`
-	config.Suite
+	proof.Suite
 	Touched []string           `json:"touched"`
 	Head    *proof.CheckStatus `json:"head,omitempty"`
 	AtTest  *proof.CheckStatus `json:"at_test,omitempty"`
@@ -71,19 +72,19 @@ func (s *apiServer) handleStepTests(w http.ResponseWriter, r *http.Request) {
 	}
 	ev := cur.Evidence
 	res := stepTests{Rule: cur.Stages.KindRule(ev.Kind), Base: ev.Base, Head: ev.Head, Suites: []suiteRow{}, Checks: []suiteRow{}, Running: []string{}, Gate: proof.GateResult{Checks: []proof.CheckStatus{}}}
-	if res.Rule == config.FailingTest && len(ev.Tests) > 0 {
+	if res.Rule == cycle.FailingTest && len(ev.Tests) > 0 {
 		res.TestCommit = ev.Tests[0].Commit
 	}
 	if ev.Base == "" {
 		writeJSON(w, http.StatusOK, res)
 		return
 	}
-	cfg, signers, err := proof.AtBase(r.Context(), s.root, ev.Base)
+	base, err := config.AtBase(r.Context(), s.root, ev.Base)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
-	rows := func(suites map[string]config.Suite) ([]suiteRow, error) {
+	rows := func(suites map[string]proof.Suite) ([]suiteRow, error) {
 		out := []suiteRow{}
 		for _, name := range slices.Sorted(maps.Keys(suites)) {
 			row := suiteRow{Name: name, Suite: suites[name], Touched: []string{}}
@@ -91,14 +92,14 @@ func (s *apiServer) handleStepTests(w http.ResponseWriter, r *http.Request) {
 				if row.Touched, err = proof.Touched(r.Context(), s.root, ev.Base, ev.Head, row.Files); err != nil {
 					return nil, err
 				}
-				st, err := proof.StatusAt(r.Context(), s.root, ev.Head, name, row.Suite, signers)
+				st, err := proof.StatusAt(r.Context(), s.root, ev.Head, name, row.Suite, base.Signers)
 				if err != nil {
 					return nil, err
 				}
 				row.Head = &st
 			}
 			if res.TestCommit != "" {
-				st, err := proof.StatusAt(r.Context(), s.root, res.TestCommit, name, row.Suite, signers)
+				st, err := proof.StatusAt(r.Context(), s.root, res.TestCommit, name, row.Suite, base.Signers)
 				if err != nil {
 					return nil, err
 				}
@@ -108,17 +109,17 @@ func (s *apiServer) handleStepTests(w http.ResponseWriter, r *http.Request) {
 		}
 		return out, nil
 	}
-	if res.Suites, err = rows(cfg.Cycle.Tests); err == nil {
-		res.Checks, err = rows(cfg.Cycle.Checks)
+	if res.Suites, err = rows(base.Tests); err == nil {
+		res.Checks, err = rows(base.Checks)
 	}
 	if err == nil && ev.Head != "" {
-		res.Gate, err = proof.Gate(r.Context(), s.root, ev.Base, ev.Head)
+		res.Gate, err = base.Gate(r.Context(), s.root, ev.Head)
 	}
 	if err == nil && ev.PR != nil && ev.PR.State == "MERGED" && ev.PR.MergeCommit != "" {
 		// the merge commit not fetched yet: the declared checks not proven,
 		// the reason says why (Gate errs only with checks declared; the
 		// sign-off reads it the same way)
-		g, gerr := proof.Gate(r.Context(), s.root, ev.Base, ev.PR.MergeCommit)
+		g, gerr := base.Gate(r.Context(), s.root, ev.PR.MergeCommit)
 		if gerr != nil {
 			g = proof.GateResult{Checks: []proof.CheckStatus{}, Reason: gerr.Error()}
 			for _, c := range res.Checks {
@@ -192,15 +193,15 @@ func (s *apiServer) handleRunTests(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, errors.New("names: the suites to run"))
 		return
 	}
-	cfg, _, err := proof.AtBase(r.Context(), s.root, ev.Base)
+	base, err := config.AtBase(r.Context(), s.root, ev.Base)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
-	suites := map[string]config.Suite{}
+	suites := map[string]proof.Suite{}
 	for _, name := range req.Names {
-		suite, ok := cfg.Cycle.Tests[name]
-		if c, isCheck := cfg.Cycle.Checks[name]; isCheck {
+		suite, ok := base.Tests[name]
+		if c, isCheck := base.Checks[name]; isCheck {
 			suite, ok = c, true
 		}
 		switch {
@@ -306,7 +307,7 @@ func (s *apiServer) readyForReview(w http.ResponseWriter, r *http.Request) {
 	// ponytail: no branch is no code to prove (a doc issue with nothing
 	// committed): the gate is open
 	if ev.Head != "" {
-		g, err := proof.Gate(r.Context(), s.root, ev.Base, ev.Head)
+		g, err := gate(r.Context(), s.root, ev.Base, ev.Head)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, err)
 			return
@@ -316,7 +317,7 @@ func (s *apiServer) readyForReview(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if _, err := fields.Apply(s.b, s.config(), id, "status", cur.Stages.InReview[0], s.me, time.Now()); err != nil {
+	if _, err := fields.Apply(s.b, s.config().IssueSchema(), id, "status", cur.Stages.InReview[0], s.me, time.Now()); err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
@@ -402,4 +403,14 @@ func (s *apiServer) handleWriteChecks(w http.ResponseWriter, r *http.Request) {
 	}
 	s.setConfig(cfg)
 	writeJSON(w, http.StatusOK, res)
+}
+
+// gate is the base's gate at commit (proof.Base.Gate, the base read by
+// config.AtBase).
+func gate(ctx context.Context, dir, base, commit string) (proof.GateResult, error) {
+	b, err := config.AtBase(ctx, dir, base)
+	if err != nil {
+		return proof.GateResult{}, err
+	}
+	return b.Gate(ctx, dir, commit)
 }

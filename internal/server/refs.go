@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/guilbep/git-board/core/fields"
+	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/branches"
-	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/store"
 )
 
 // issueRef is an issue an issue field names: its value as written (#12,
@@ -25,7 +25,7 @@ type issueRef struct {
 
 // refersTo: #12 names an issue with that number on one of its forges; a
 // hex prefix of 7 or more, its git-bug id.
-func refersTo(value string, issue store.Issue) bool {
+func refersTo(value string, issue model.Issue) bool {
 	if n, ok := strings.CutPrefix(value, "#"); ok {
 		for _, f := range issue.Forges {
 			if f.Number == n {
@@ -54,7 +54,7 @@ func (s *apiServer) handleRefs(w http.ResponseWriter, r *http.Request) {
 	cfg := s.config()
 	isRef := map[string]bool{}
 	for name, vs := range s.labelValues() {
-		isRef[name] = cfg.TypeOf(name, vs) == config.TypeIssue
+		isRef[name] = cfg.TypeOf(name, vs) == fields.TypeIssue
 	}
 	out, in := map[string][]issueRef{}, map[string][]issueRef{}
 	for _, l := range me.Labels {
@@ -105,7 +105,7 @@ func (s *apiServer) handleBranches(w http.ResponseWriter, r *http.Request) {
 
 // branchesOf is the branch to create for an issue and the branches naming
 // it, against the base.
-func (s *apiServer) branchesOf(is store.Issue) (branches.Suggestion, []branches.Branch, error) {
+func (s *apiServer) branchesOf(is model.Issue) (branches.Suggestion, []branches.Branch, error) {
 	sug, err := branches.Suggest(s.b, s.config().Branches, is)
 	if err != nil {
 		return sug, nil, err

@@ -434,3 +434,96 @@ func TestRefused(t *testing.T) {
 		}
 	}
 }
+
+// refsWhile lists prefix until write returns, and fails on a listing that
+// lacks a ref of want: refs that exist all along, which write may move but
+// never deletes.
+func refsWhile(t *testing.T, s *Store, prefix string, want []string, write func() error) {
+	t.Helper()
+	done := make(chan error)
+	go func() { done <- write() }()
+	for lists := 0; ; lists++ {
+		select {
+		case err := <-done:
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Logf("%d listings", lists)
+			return
+		default:
+		}
+		refs, err := s.Refs(prefix)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, name := range want {
+			if _, ok := refs[name]; !ok {
+				t.Fatalf("listing %d lacks %s, which exists: %v", lists, name, refs)
+			}
+		}
+	}
+}
+
+// A ref git moves is listed throughout: git writes <ref>.lock and renames
+// it over the ref, and the lock file going between the directory's read
+// and its entries' must not hide the directory's refs.
+func TestRefsWhileGitMovesARef(t *testing.T) {
+	t.Parallel()
+	s := newStore(t)
+	c1 := commitOf(t, s)
+	c2 := commitOf(t, s, c1)
+	var names []string
+	for _, c := range "abcd" {
+		name := "refs/board/issue/" + strings.Repeat(string(c), 40)
+		if err := s.UpdateRef(ctx, name, c1, ZeroHash); err != nil {
+			t.Fatal(err)
+		}
+		names = append(names, name)
+	}
+	refsWhile(t, s, "refs/board/issue/", names, func() error {
+		// one git, a transaction per move: a lock file made and renamed each
+		var in strings.Builder
+		for i := range 100 {
+			from, to := c1, c2
+			if i/len(names)%2 == 1 { // each ref's second move takes it back
+				from, to = c2, c1
+			}
+			fmt.Fprintf(&in, "start\nupdate %s %s %s\ncommit\n", names[i%len(names)], to, from)
+		}
+		cmd := s.command(ctx, "update-ref", "--stdin")
+		cmd.Stdin = strings.NewReader(in.String())
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("update-ref: %w: %s", err, out)
+		}
+		return nil
+	})
+}
+
+// A ref git packs is listed throughout: pack-refs writes packed-refs, then
+// removes the loose file, so the loose refs are read before packed-refs.
+func TestRefsWhileGitPacksRefs(t *testing.T) {
+	t.Parallel()
+	s := newStore(t)
+	c1 := commitOf(t, s)
+	c2 := commitOf(t, s, c1)
+	name := "refs/board/issue/" + strings.Repeat("a", 40)
+	if err := s.UpdateRef(ctx, name, c1, ZeroHash); err != nil {
+		t.Fatal(err)
+	}
+	refsWhile(t, s, "refs/board/issue/", []string{name}, func() error {
+		for i := range 30 {
+			from, to := c1, c2
+			if i%2 == 1 {
+				from, to = c2, c1
+			}
+			if err := s.UpdateRef(ctx, name, to, from); err != nil { // loose again
+				return err
+			}
+			if _, err := s.git(ctx, "pack-refs", "--all"); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}

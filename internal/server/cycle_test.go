@@ -12,8 +12,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/guilbep/git-board/core/cycle"
+	"github.com/guilbep/git-board/core/fields"
+	"github.com/guilbep/git-board/core/forge"
+	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/ghpr"
 	"github.com/guilbep/git-board/internal/store"
 	"github.com/guilbep/git-board/internal/store/storetest"
 )
@@ -21,15 +24,14 @@ import (
 var co2Statuses = []string{"backlog", "comite", "ready", "in-progress", "in-review", "ready-for-validation", "qa", "tests-metier", "validated"}
 
 // cycleConfig is co2's statuses, the risk field, and roles.
-func cycleConfig(roles map[string]string, c config.Cycle) *config.Config {
+func cycleConfig(roles map[string]string, c cycle.Config) *config.Config {
 	return &config.Config{
-		Fields: map[string]config.Field{
+		Cycle:    c,
+		Features: allFeatures,
+		Schema: fields.Schema{Fields: map[string]fields.Field{
 			"status": {Single: true, Options: co2Statuses},
 			"risk":   {Single: true, Options: []string{"low", "normal", "structural"}},
-		},
-		Roles:    roles,
-		Cycle:    c,
-		Features: allFeatures, // the cycle's tests: every experimental feature on
+		}, Roles: roles},
 	}
 }
 
@@ -66,7 +68,7 @@ func TestCycleOfAnIssue(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ts := newTestServer(t, b, cycleConfig(map[string]string{"pm": "guilbep"}, config.Cycle{Risk: "pm"}))
+	ts := newTestServer(t, b, cycleConfig(map[string]string{"pm": "guilbep"}, cycle.Config{Risk: "pm"}))
 	var c cycleAnswer
 	if resp := getJSON(t, ts.URL+"/api/issues/"+id[:8]+"/cycle", &c); resp.StatusCode != http.StatusOK {
 		t.Fatalf("status %d", resp.StatusCode)
@@ -99,7 +101,7 @@ func prRepo(t *testing.T, status string) (*apiServer, *fakeGitHub, string) {
 	git(t, dir, "commit", "-q", "--allow-empty", "-m", "Fix")
 	git(t, dir, "switch", "-q", "dev")
 	git(t, dir, "update-ref", "refs/remotes/origin/fix/2518-x", "fix/2518-x")
-	s.cfg = cycleConfig(nil, config.Cycle{})
+	s.cfg = cycleConfig(nil, cycle.Config{})
 	if _, err := s.b.ApplyLabelChange(id, []string{"status:" + status, "risk:normal"}, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -204,7 +206,7 @@ func issueAt(t *testing.T, b *store.Backend, status string, labels ...string) st
 	return id
 }
 
-func lastEvent(t *testing.T, b *store.Backend, id string) (store.Thread, store.Event) {
+func lastEvent(t *testing.T, b *store.Backend, id string) (model.Thread, model.Event) {
 	t.Helper()
 	th, err := b.Thread(id)
 	if err != nil {
@@ -217,7 +219,7 @@ func TestCycleApprovePlan(t *testing.T) {
 	t.Parallel()
 	b := storetest.New(t)
 	id := issueAt(t, b, "ready", "risk:normal")
-	cfg := cycleConfig(map[string]string{"lead-dev": "guilbep"}, config.Cycle{Plan: "lead-dev"})
+	cfg := cycleConfig(map[string]string{"lead-dev": "guilbep"}, cycle.Config{Plan: "lead-dev"})
 	url := newTestServer(t, b, cfg).URL + "/api/issues/" + id[:8] + "/cycle/"
 
 	var bob cycleAnswer
@@ -253,7 +255,7 @@ func TestCycleSignoffRefused(t *testing.T) {
 	t.Parallel()
 	b := storetest.New(t)
 	id := issueAt(t, b, "qa", "risk:low")
-	cfg := cycleConfig(map[string]string{"pm": "alice"}, config.Cycle{Signoffs: map[string]string{"qa": "pm"}})
+	cfg := cycleConfig(map[string]string{"pm": "alice"}, cycle.Config{Signoffs: map[string]string{"qa": "pm"}})
 	before, _ := lastEvent(t, b, id)
 	code, body := post(t, newTestServer(t, b, cfg).URL+"/api/issues/"+id[:8]+"/cycle/signoff", map[string]string{"why": "by hand"})
 	if code != http.StatusForbidden || !strings.Contains(body, "waits for the pm role: alice") {
@@ -268,7 +270,7 @@ func TestCycleSignoffNeedsARun(t *testing.T) {
 	t.Parallel()
 	b := storetest.New(t)
 	id := issueAt(t, b, "qa", "risk:low")
-	cfg := cycleConfig(map[string]string{"pm": "guilbep"}, config.Cycle{Signoffs: map[string]string{"qa": "pm"}})
+	cfg := cycleConfig(map[string]string{"pm": "guilbep"}, cycle.Config{Signoffs: map[string]string{"qa": "pm"}})
 	url := newTestServer(t, b, cfg).URL + "/api/issues/" + id[:8] + "/cycle/signoff"
 	if code, body := post(t, url, struct{}{}); code != http.StatusBadRequest || !strings.Contains(body, "no run; sign off with a reason") {
 		t.Errorf("no run: %d %s", code, body)
@@ -287,7 +289,7 @@ func TestCycleSignoffNeedsARun(t *testing.T) {
 // branch's head: the sign-off's check accepts that commit too.
 func TestCycleSignoffAtTheMergedHead(t *testing.T) {
 	s, _, id := prRepo(t, "qa")
-	s.pulls.put("fix/2518-x", &ghpr.PR{Number: 3082, State: "MERGED", Head: "0000000", MergeCommit: "deadbee0"}, nil)
+	s.pulls.put("fix/2518-x", &forge.PR{Number: 3082, State: "MERGED", Head: "0000000", MergeCommit: "deadbee0"}, nil)
 	url := serve(t, s).URL + "/api/issues/" + id[:8] + "/cycle/"
 	if code, body := post(t, url+"verify", map[string]string{"output": "ok", "commit": "deadbee0"}); code != http.StatusOK {
 		t.Fatalf("verify: %d %s", code, body)
@@ -304,7 +306,7 @@ func TestCycleVerifyThenSignoff(t *testing.T) {
 	t.Parallel()
 	b := storetest.New(t)
 	id := issueAt(t, b, "qa", "risk:low")
-	url := newTestServer(t, b, cycleConfig(nil, config.Cycle{})).URL + "/api/issues/" + id[:8] + "/cycle/"
+	url := newTestServer(t, b, cycleConfig(nil, cycle.Config{})).URL + "/api/issues/" + id[:8] + "/cycle/"
 	if code, _ := post(t, url+"verify", map[string]string{"output": ""}); code != http.StatusBadRequest {
 		t.Errorf("an empty run: %d", code)
 	}
@@ -349,7 +351,7 @@ func TestCycleVerifyThenSignoff(t *testing.T) {
 	}
 
 	ready := issueAt(t, b, "ready")
-	if code, body := post(t, newTestServer(t, b, cycleConfig(nil, config.Cycle{})).URL+"/api/issues/"+ready[:8]+"/cycle/verify", map[string]string{"output": "ok"}); code != http.StatusBadRequest || !strings.Contains(body, "not at Verify") {
+	if code, body := post(t, newTestServer(t, b, cycleConfig(nil, cycle.Config{})).URL+"/api/issues/"+ready[:8]+"/cycle/verify", map[string]string{"output": "ok"}); code != http.StatusBadRequest || !strings.Contains(body, "not at Verify") {
 		t.Errorf("verify at ready: %d %s", code, body)
 	}
 }
@@ -358,7 +360,7 @@ func TestCycleSignoffCloses(t *testing.T) {
 	t.Parallel()
 	b := storetest.New(t)
 	id := issueAt(t, b, "tests-metier", "risk:low")
-	url := newTestServer(t, b, cycleConfig(nil, config.Cycle{})).URL + "/api/issues/" + id[:8] + "/cycle/"
+	url := newTestServer(t, b, cycleConfig(nil, cycle.Config{})).URL + "/api/issues/" + id[:8] + "/cycle/"
 	if code, body := post(t, url+"verify", map[string]string{"output": "ok"}); code != http.StatusOK {
 		t.Fatalf("verify: %d %s", code, body)
 	}
@@ -375,7 +377,7 @@ func TestCycleBadAction(t *testing.T) {
 	t.Parallel()
 	b := storetest.New(t)
 	id := issueAt(t, b, "qa")
-	url := newTestServer(t, b, cycleConfig(nil, config.Cycle{})).URL + "/api/issues/" + id[:8] + "/cycle/"
+	url := newTestServer(t, b, cycleConfig(nil, cycle.Config{})).URL + "/api/issues/" + id[:8] + "/cycle/"
 	if code, _ := post(t, url+"dance", struct{}{}); code != http.StatusNotFound {
 		t.Errorf("dance: %d", code)
 	}
@@ -416,11 +418,14 @@ func TestCycleSignoffAtTheHead(t *testing.T) {
 // merged, and the sign-off closes the issue.
 func TestCycleSignoffClosesFromReview(t *testing.T) {
 	s, _, id := prRepo(t, "in-review")
-	s.cfg = &config.Config{Fields: map[string]config.Field{
-		"status": {Single: true, Options: []string{"backlog", "ready", "in-progress", "in-review", "done"}},
-		"risk":   {Single: true, Options: []string{"low", "normal", "structural"}},
-	}, Features: allFeatures}
-	s.pulls.put("fix/2518-x", &ghpr.PR{Number: 3082, State: "MERGED", MergeCommit: "deadbee0"}, nil)
+	s.cfg = &config.Config{
+		Features: allFeatures,
+		Schema: fields.Schema{Fields: map[string]fields.Field{
+			"status": {Single: true, Options: []string{"backlog", "ready", "in-progress", "in-review", "done"}},
+			"risk":   {Single: true, Options: []string{"low", "normal", "structural"}},
+		}},
+	}
+	s.pulls.put("fix/2518-x", &forge.PR{Number: 3082, State: "MERGED", MergeCommit: "deadbee0"}, nil)
 	url := serve(t, s).URL + "/api/issues/" + id[:8] + "/cycle"
 	var c cycleAnswer
 	if getJSON(t, url, &c); c.Step != 7 || !slices.Contains(c.Actions, "signoff") {
@@ -462,7 +467,7 @@ func TestCycleSuggestRisk(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	url := newTestServer(t, b, cycleConfig(nil, config.Cycle{})).URL + "/api/issues/" + id[:8]
+	url := newTestServer(t, b, cycleConfig(nil, cycle.Config{})).URL + "/api/issues/" + id[:8]
 	var c struct {
 		cycleAnswer
 		AI bool `json:"ai"`
@@ -499,7 +504,7 @@ func TestCycleSuggestRiskRefused(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	url := newTestServer(t, b, cycleConfig(nil, config.Cycle{})).URL + "/api/issues/" + id[:8] + "/cycle/suggest-risk"
+	url := newTestServer(t, b, cycleConfig(nil, cycle.Config{})).URL + "/api/issues/" + id[:8] + "/cycle/suggest-risk"
 	before, _ := lastEvent(t, b, id)
 	if code, out := post(t, url, map[string]any{}); code != http.StatusBadGateway || !strings.Contains(out, "no class") {
 		t.Errorf("an answer without a class: %d %s", code, out)
@@ -532,8 +537,8 @@ func TestRiskOf(t *testing.T) {
 func TestSpecVerdict(t *testing.T) {
 	t.Parallel()
 	b := storetest.New(t)
-	open := cycleConfig(nil, config.Cycle{})
-	pm := cycleConfig(map[string]string{"pm": "bob"}, config.Cycle{Spec: "pm"})
+	open := cycleConfig(nil, cycle.Config{})
+	pm := cycleConfig(map[string]string{"pm": "bob"}, cycle.Config{Spec: "pm"})
 	as := func(cfg *config.Config, me, id, verdict, on, body string) (int, string) {
 		return post(t, serve(t, &apiServer{cfg: cfg, b: b, me: me}).URL+"/api/issues/"+id[:8]+"/cycle/spec-verdict",
 			map[string]string{"verdict": verdict, "on": on, "body": body})
@@ -613,8 +618,8 @@ func TestSpecVerdict(t *testing.T) {
 func TestNoCriteria(t *testing.T) {
 	t.Parallel()
 	b := storetest.New(t)
-	open := cycleConfig(nil, config.Cycle{})
-	pm := cycleConfig(map[string]string{"pm": "bob"}, config.Cycle{Spec: "pm"})
+	open := cycleConfig(nil, cycle.Config{})
+	pm := cycleConfig(map[string]string{"pm": "bob"}, cycle.Config{Spec: "pm"})
 	as := func(cfg *config.Config, me, id string) (int, string) {
 		return post(t, serve(t, &apiServer{cfg: cfg, b: b, me: me}).URL+"/api/issues/"+id[:8]+"/cycle/no-criteria", map[string]string{})
 	}

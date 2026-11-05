@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/guilbep/git-board/core/fields"
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/fields"
 	"github.com/guilbep/git-board/internal/store"
 )
 
@@ -25,10 +25,10 @@ func parseAssignments(b *store.Backend, cfg *config.Config, args []string, me st
 	for _, arg := range args {
 		a, err := fields.Parse(arg)
 		if err == nil {
-			a, err = a.Resolve(b, cfg, me, today)
+			a, err = a.Resolve(b, cfg.IssueSchema(), me, today)
 		}
 		if err == nil && !force {
-			err = fields.Check(cfg, a, inUse)
+			err = fields.Check(cfg.IssueSchema(), a, inUse)
 		}
 		if err != nil {
 			errs = append(errs, err)
@@ -51,7 +51,7 @@ func foldAssignments(cfg *config.Config, current []string, as []fields.Assignmen
 	labels := slices.Clone(current)
 	results := make([]fields.Result, 0, len(as))
 	for _, a := range as {
-		r, err := fields.Change(cfg, labels, a)
+		r, err := fields.Change(cfg.IssueSchema(), labels, a)
 		if err != nil {
 			return nil, nil, err
 		}

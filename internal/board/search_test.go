@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/guilbep/git-board/core/inbox"
 	"github.com/guilbep/git-board/internal/board"
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/inbox"
 	"github.com/guilbep/git-board/internal/store/storetest"
 )
 

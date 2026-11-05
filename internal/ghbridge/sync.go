@@ -19,8 +19,9 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/guilbep/git-board/core/fields"
+	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/fields"
 	"github.com/guilbep/git-board/internal/store"
 )
 
@@ -253,8 +254,8 @@ func BasePrefix(p config.GithubProject) string {
 
 // BuildSyncPlan decides every synced field of every matched issue, without
 // writing anything. bases are the recorded bases, by bug id then field.
-func BuildSyncPlan(items []Item, bugs []store.Issue, bases map[string]map[string]string, meta ProjectMeta, cfg *config.Config) SyncPlan {
-	byURL := make(map[string]store.Issue, len(bugs))
+func BuildSyncPlan(items []Item, bugs []model.Issue, bases map[string]map[string]string, meta ProjectMeta, cfg *config.Config) SyncPlan {
+	byURL := make(map[string]model.Issue, len(bugs))
 	for _, b := range bugs {
 		if b.GithubURL != "" {
 			byURL[b.GithubURL] = b
@@ -279,7 +280,7 @@ func BuildSyncPlan(items []Item, bugs []store.Issue, bases map[string]map[string
 	return plan
 }
 
-func syncIssue(plan *SyncPlan, item Item, bug store.Issue, bases map[string]string, meta ProjectMeta, cfg *config.Config) {
+func syncIssue(plan *SyncPlan, item Item, bug model.Issue, bases map[string]string, meta ProjectMeta, cfg *config.Config) {
 	change := IssueChange{BugID: bug.ID, GithubURL: bug.GithubURL, Number: item.Content.Number, Title: item.Title}
 	newBases := map[string]string{}
 	record := func(field, value string) {
@@ -404,7 +405,7 @@ func labelChange(labels []string, field, value string) FieldResult {
 // Resolve turns a held conflict into a plan keeping one side: git-board's
 // value written to the Project (ours), or the Project's set on the label
 // (theirs). Both then agree on it.
-func Resolve(c Conflict, ours bool, item Item, bug store.Issue, meta ProjectMeta, cfg *config.Config) (SyncPlan, error) {
+func Resolve(c Conflict, ours bool, item Item, bug model.Issue, meta ProjectMeta, cfg *config.Config) (SyncPlan, error) {
 	change := IssueChange{BugID: bug.ID, GithubURL: bug.GithubURL, Number: c.Number, Title: c.Title}
 	plan := SyncPlan{Bases: map[string]map[string]string{}}
 	value := c.Project
@@ -680,7 +681,7 @@ func without(m map[string]string, key string) map[string]string {
 // LoadBases reads the recorded bases of the bugs a Project's items match.
 func LoadBases(b interface {
 	ProjectBases(idPrefix, prefix string) (map[string]string, error)
-}, prefix string, items []Item, bugs []store.Issue) (map[string]map[string]string, error) {
+}, prefix string, items []Item, bugs []model.Issue) (map[string]map[string]string, error) {
 	urls := map[string]bool{}
 	for _, it := range items {
 		urls[it.Content.URL] = true

@@ -8,10 +8,6 @@ import (
 	"github.com/guilbep/git-board/core/syncer"
 )
 
-// EditRelease is editRelease for the tests: an operation a later
-// git-board might add.
-func EditRelease(b *Backend, id, kind string) error { return b.editRelease(id, kind, releaseData{}) }
-
 // NumberOnce is numberOnce for the tests: one try, on the counter as fetched.
 var NumberOnce = (*Backend).numberOnce
 

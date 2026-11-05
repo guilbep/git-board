@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/ghbridge"
 	"github.com/guilbep/git-board/internal/store"
@@ -310,7 +311,7 @@ func (errBackend) Close() error { return nil }
 func TestUpdateEditWriteErrorShowsStatusAndDoesNotCrash(t *testing.T) {
 	t.Parallel()
 	cfg := mustLoadConfig(t)
-	issues := []store.Issue{
+	issues := []model.Issue{
 		{ID: "deadbeef", Title: "x", Status: "open", Labels: []string{"status:backlog"}},
 	}
 	m := New(issues, "is:open", errBackend{}, cfg, "", today)
@@ -705,7 +706,7 @@ func TestPullKeepsWhatChangedHere(t *testing.T) {
 	m, msg = pressI(t, m)
 	m = send(m, msg)
 	// edited after the preview, before o
-	m.selected, m.editField = store.Issue{ID: id}, "status"
+	m.selected, m.editField = model.Issue{ID: id}, "status"
 	m = m.applyEdit("in-review")
 	m = send(send(m, tea.KeyMsg{Type: tea.KeyEsc}), key('o'))
 	if !strings.Contains(m.status, "bridge applied") {

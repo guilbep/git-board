@@ -3,6 +3,7 @@ package store
 import (
 	"testing"
 
+	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/core/syncer"
 )
 
@@ -20,7 +21,7 @@ func TestForgesOfKeepsOnlyWebURLs(t *testing.T) {
 		rec("JavaScript:alert(1)//15"),
 		rec("data:text/html,x/16"),
 	})
-	want := []Forge{
+	want := []model.Forge{
 		{Name: "GitHub", URL: "https://github.com/o/r/issues/12", Number: "12"},
 		{Name: "GitLab", URL: "http://gitlab.example.org/g/p/-/issues/3", Number: "3"},
 		{Name: "GitHub", URL: "", Number: "14"},

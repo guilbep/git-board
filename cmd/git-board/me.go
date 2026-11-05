@@ -9,11 +9,13 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/store"
 )
 
 func newMeCmd() *cobra.Command {
-	var asJSON, ls, create bool
+	var ls, create bool
+	var js *jsonOut
 	var name, email string
 
 	cmd := &cobra.Command{
@@ -56,18 +58,18 @@ for you.`,
 			defer b.Close()
 			switch {
 			case create:
-				return runMeNew(out, b, name, email, asJSON)
+				return runMeNew(out, b, name, email, js)
 			case ls:
-				return runMeLs(out, b, asJSON)
+				return runMeLs(out, b, js)
 			case len(args) == 1:
 				if err := b.Adopt(args[0]); err != nil {
 					return err
 				}
 			}
-			return runMe(out, b, asJSON)
+			return runMe(out, b, js)
 		},
 	}
-	cmd.Flags().BoolVar(&asJSON, "json", false, "render as JSON")
+	js = addJSON(cmd, "render as JSON", jsonFields(meRow{}), true)
 	cmd.Flags().BoolVar(&ls, "ls", false, "list everyone on the board")
 	cmd.Flags().BoolVar(&create, "new", false, "create a person and write as them")
 	cmd.Flags().StringVar(&name, "name", "", "with --new: the name (default: git config user.name)")
@@ -75,7 +77,7 @@ for you.`,
 	return cmd
 }
 
-func runMe(out io.Writer, b *store.Backend, asJSON bool) error {
+func runMe(out io.Writer, b *store.Backend, js *jsonOut) error {
 	p, ok, err := b.Me()
 	if err != nil {
 		return err
@@ -83,15 +85,21 @@ func runMe(out io.Writer, b *store.Backend, asJSON bool) error {
 	if !ok {
 		return store.ErrNoMe
 	}
-	if asJSON {
-		return writeJSON(out, p)
+	if js.on() {
+		return js.write(out, p)
 	}
 	fmt.Fprintln(out, personLine(p))
 	return nil
 }
 
+// meRow is a person as me --ls --json prints them.
+type meRow struct {
+	model.Person
+	Me bool `json:"me,omitempty"`
+}
+
 // personLine is a person as me prints them: name, short id, login.
-func personLine(p store.Person) string {
+func personLine(p model.Person) string {
 	s := p.Name + " (" + shortID(p.ID)
 	if p.Login != "" {
 		s += ", @" + p.Login
@@ -99,7 +107,7 @@ func personLine(p store.Person) string {
 	return s + ")"
 }
 
-func runMeNew(out io.Writer, b *store.Backend, name, email string, asJSON bool) error {
+func runMeNew(out io.Writer, b *store.Backend, name, email string, js *jsonOut) error {
 	if name == "" {
 		name = gitConfig("user.name")
 	}
@@ -122,14 +130,14 @@ func runMeNew(out io.Writer, b *store.Backend, name, email string, asJSON bool) 
 	if err != nil {
 		return err
 	}
-	if asJSON {
-		return writeJSON(out, p)
+	if js.on() {
+		return js.write(out, p)
 	}
 	fmt.Fprintln(out, "you write as", personLine(p))
 	return nil
 }
 
-func runMeLs(out io.Writer, b *store.Backend, asJSON bool) error {
+func runMeLs(out io.Writer, b *store.Backend, js *jsonOut) error {
 	persons, err := b.Identities()
 	if err != nil {
 		return err
@@ -138,16 +146,12 @@ func runMeLs(out io.Writer, b *store.Backend, asJSON bool) error {
 	if err != nil {
 		return err
 	}
-	if asJSON {
-		type row struct {
-			store.Person
-			Me bool `json:"me,omitempty"`
-		}
-		rows := make([]row, 0, len(persons))
+	if js.on() {
+		rows := make([]meRow, 0, len(persons))
 		for _, p := range persons {
-			rows = append(rows, row{p, p.ID == me.ID})
+			rows = append(rows, meRow{p, p.ID == me.ID})
 		}
-		return writeJSON(out, rows)
+		return js.write(out, rows)
 	}
 	tw := tabwriter.NewWriter(out, 0, 2, 2, ' ', 0)
 	fmt.Fprintln(tw, "\tid\tname\tlogin")

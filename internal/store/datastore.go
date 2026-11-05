@@ -249,6 +249,9 @@ func (f *forgeCopy) Add(ctx context.Context, kind, id string, pack []byte, prev 
 
 func (f *forgeCopy) Folder() string { return f.clone.Folder() }
 
+// Close lets go of the copy's open files.
+func (f *forgeCopy) Close() error { return f.copy.Close() }
+
 // Config and SetConfig are the clone's: board.me stays where it was.
 func (f *forgeCopy) Config(ctx context.Context, key string) (string, error) {
 	return f.clone.Config(ctx, key)

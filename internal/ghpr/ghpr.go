@@ -15,6 +15,8 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/guilbep/git-board/core/forge"
 )
 
 // Client is GitHub's API as one person: their token.
@@ -25,46 +27,6 @@ type Client struct {
 }
 
 var defaultHTTP = &http.Client{Timeout: 30 * time.Second}
-
-// Check is one of a PR's checks: a check run or a commit status.
-type Check struct {
-	Name     string `json:"name"`
-	State    string `json:"state"` // success, failure, pending, expected (required, never reported)
-	Required bool   `json:"required"`
-	URL      string `json:"url,omitempty"`
-}
-
-// Review is a person's latest approval or request for changes, or a
-// review GitHub dismissed.
-type Review struct {
-	Login  string `json:"login"`
-	State  string `json:"state"`  // APPROVED, CHANGES_REQUESTED, DISMISSED
-	Commit string `json:"commit"` // the commit it was made at
-}
-
-// PR is a pull request as the gate shows it.
-type PR struct {
-	Number      int      `json:"number"`
-	URL         string   `json:"url"`
-	State       string   `json:"state"` // OPEN, MERGED, CLOSED
-	Draft       bool     `json:"draft"`
-	Title       string   `json:"title"`
-	Body        string   `json:"body"` // the description, Markdown
-	Base        string   `json:"base"`
-	Head        string   `json:"head"`                   // its head commit
-	MergeCommit string   `json:"merge_commit,omitempty"` // on the base, once merged
-	Author      string   `json:"author"`
-	Decision    string   `json:"decision"`    // reviewDecision: APPROVED, REVIEW_REQUIRED, CHANGES_REQUESTED, "" (no review rule)
-	Mergeable   string   `json:"mergeable"`   // MERGEABLE, CONFLICTING, UNKNOWN
-	MergeState  string   `json:"merge_state"` // mergeStateStatus
-	Checks      []Check  `json:"checks"`
-	Reviews     []Review `json:"reviews"`   // latestOpinionatedReviews: a COMMENTED review hides no approval
-	Requested   []string `json:"requested"` // the people asked to review
-	// set by Gate
-	CanMerge bool     `json:"can_merge"`
-	Checking bool     `json:"checking"` // GitHub is still computing mergeability
-	Waits    []string `json:"waits"`
-}
 
 // findQuery is a branch's pull requests, newest first. Verified against
 // GitHub 2026-10-17, without preview headers, with a token of the repo
@@ -142,7 +104,7 @@ type contextNode struct {
 // Find is the pull request whose head is branch in repo ("owner/name"):
 // the open one, else the newest. A fork's branch of the same name is
 // another PR. nil when there's none.
-func (c *Client) Find(ctx context.Context, repo, branch string) (*PR, error) {
+func (c *Client) Find(ctx context.Context, repo, branch string) (*forge.PR, error) {
 	owner, name, _ := strings.Cut(repo, "/")
 	var res struct {
 		Data struct {
@@ -178,10 +140,10 @@ func (c *Client) Find(ctx context.Context, repo, branch string) (*PR, error) {
 	return found.pr(), nil
 }
 
-func (n *prNode) pr() *PR {
-	p := &PR{Number: n.Number, URL: n.URL, State: n.State, Draft: n.IsDraft, Title: n.Title, Body: n.Body, Base: n.BaseRefName,
+func (n *prNode) pr() *forge.PR {
+	p := &forge.PR{Number: n.Number, URL: n.URL, State: n.State, Draft: n.IsDraft, Title: n.Title, Body: n.Body, Base: n.BaseRefName,
 		Head: n.HeadRefOid, Decision: n.ReviewDecision, Mergeable: n.Mergeable, MergeState: n.MergeStateStatus,
-		Checks: []Check{}, Reviews: []Review{}, Requested: []string{}}
+		Checks: []forge.Check{}, Reviews: []forge.Review{}, Requested: []string{}}
 	if n.Author != nil {
 		p.Author = n.Author.Login
 	}
@@ -189,7 +151,7 @@ func (n *prNode) pr() *PR {
 		p.MergeCommit = n.MergeCommit.Oid
 	}
 	for _, r := range n.LatestOpinionatedReviews.Nodes {
-		rv := Review{State: r.State}
+		rv := forge.Review{State: r.State}
 		if r.Author != nil {
 			rv.Login = r.Author.Login
 		}
@@ -216,7 +178,7 @@ func (n *prNode) pr() *PR {
 
 // check is a context as the gate says it. GitHub lets a neutral or
 // skipped run pass a required check.
-func (n contextNode) check() Check {
+func (n contextNode) check() forge.Check {
 	if n.Typename == "StatusContext" {
 		state := "failure"
 		switch n.State {
@@ -225,7 +187,7 @@ func (n contextNode) check() Check {
 		case "PENDING", "EXPECTED":
 			state = "pending"
 		}
-		return Check{Name: n.Context, State: state, URL: n.TargetURL}
+		return forge.Check{Name: n.Context, State: state, URL: n.TargetURL}
 	}
 	state := "failure"
 	switch {
@@ -234,7 +196,7 @@ func (n contextNode) check() Check {
 	case n.Conclusion == "SUCCESS" || n.Conclusion == "NEUTRAL" || n.Conclusion == "SKIPPED":
 		state = "success"
 	}
-	return Check{Name: n.Name, State: state, URL: n.DetailsURL}
+	return forge.Check{Name: n.Name, State: state, URL: n.DetailsURL}
 }
 
 // Required names the checks the base's rules require, in their order:
@@ -261,7 +223,7 @@ func (c *Client) Required(ctx context.Context, repo, base string) ([]string, err
 }
 
 // Open opens a pull request from head into base.
-func (c *Client) Open(ctx context.Context, repo, head, base, title, body string) (*PR, error) {
+func (c *Client) Open(ctx context.Context, repo, head, base, title, body string) (*forge.PR, error) {
 	in := struct {
 		Title string `json:"title"`
 		Head  string `json:"head"`
@@ -275,7 +237,7 @@ func (c *Client) Open(ctx context.Context, repo, head, base, title, body string)
 	if err := c.do(ctx, http.MethodPost, "/repos/"+repo+"/pulls", in, &res); err != nil {
 		return nil, err
 	}
-	return &PR{Number: res.Number, URL: res.HTMLURL, State: "OPEN", Title: title, Base: base}, nil
+	return &forge.PR{Number: res.Number, URL: res.HTMLURL, State: "OPEN", Title: title, Base: base}, nil
 }
 
 // Edit sets a pull request's title and description.
@@ -352,11 +314,11 @@ func (c *Client) do(ctx context.Context, method, path string, in, out any) error
 // Gate puts the base's required checks first, in the rules' order,
 // adding those that never reported as expected, then says whether the PR
 // can merge (as GitHub says it) and, if not, what it waits for.
-func Gate(p *PR, required []string) {
-	var checks []Check
+func Gate(p *forge.PR, required []string) {
+	var checks []forge.Check
 	for _, name := range required {
-		c := Check{Name: name, State: "expected"}
-		if i := slices.IndexFunc(p.Checks, func(c Check) bool { return c.Name == name }); i >= 0 {
+		c := forge.Check{Name: name, State: "expected"}
+		if i := slices.IndexFunc(p.Checks, func(c forge.Check) bool { return c.Name == name }); i >= 0 {
 			c = p.Checks[i]
 		}
 		c.Required = true

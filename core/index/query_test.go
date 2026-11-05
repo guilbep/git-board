@@ -3,15 +3,18 @@ package index
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"reflect"
 	"slices"
 	"strings"
 	"testing"
 
 	"github.com/guilbep/git-board/core/issue"
+	"github.com/guilbep/git-board/core/oplog"
 	"github.com/guilbep/git-board/core/people"
 	"github.com/guilbep/git-board/core/pgstore"
 	"github.com/guilbep/git-board/core/pgstore/pgtest"
+	"github.com/guilbep/git-board/core/search"
 )
 
 func TestIndexQueries(t *testing.T) {
@@ -239,5 +242,132 @@ func TestHugeTextFailsNoQuery(t *testing.T) {
 	}
 	if got, err := ix.Issues(t.Context(), Query{Text: "needle"}); err != nil || len(got) != 1 || got[0].Title != "log dump" {
 		t.Fatalf("search = %+v, %v", got, err)
+	}
+}
+
+// in: narrows where each word is looked for, and search.Match, the search
+// without the index, answers what the index answers.
+func TestSearchInAgreesWithMatch(t *testing.T) {
+	t.Parallel()
+	_, s := newRepo(t)
+	all := []*issue.Issue{
+		mkIssue(t, s, issue.NewCreate("ann", "Crash on save", "the editor dies"), issue.NewComment("bob", "slow too")),
+		mkIssue(t, s, issue.NewCreate("bob", "Slow startup", "a crash in the logs"), issue.NewComment("ann", "Café closed")),
+		mkIssue(t, s, issue.NewCreate("ann", "Docs", ""), issue.NewComment("bob", "crash here"), issue.NewComment("bob", "save me")),
+	}
+	a, b, c := all[0].ID, all[1].ID, all[2].ID
+	ix := openIndex(t, s)
+	for _, tc := range []struct {
+		text string
+		in   []string
+		want []string
+	}{
+		{"crash", nil, sorted(a, b, c)},
+		{"crash", []string{"title"}, []string{a}},
+		{"crash", []string{"body"}, []string{b}},
+		{"crash", []string{"comments"}, []string{c}},
+		{"crash", []string{"title", "comments"}, sorted(a, c)},
+		{"crash save", []string{"title"}, []string{a}},
+		{"crash save", []string{"comments"}, []string{c}}, // each word in one comment or another
+		{"slow", []string{"body", "comments"}, []string{a}},
+		{"cafe", []string{"comments"}, []string{b}},
+		{"in the", []string{"body"}, []string{b}},
+		{"the logs", []string{"title"}, nil},
+		{"crash-here", []string{"comments"}, []string{c}}, // tokens in a row
+		{"crash-here", []string{"title", "body"}, nil},
+		{"-", []string{"title"}, sorted(a, b, c)},
+	} {
+		got := sorted(ids(t, ix, Query{Text: tc.text, In: tc.in})...)
+		if !slices.Equal(got, tc.want) {
+			t.Errorf("%q in %v: %v, want %v", tc.text, tc.in, got, tc.want)
+		}
+		var mem []string
+		for _, is := range all {
+			if search.Match(tc.text, texts(is, tc.in)...) {
+				mem = append(mem, is.ID)
+			}
+		}
+		if mem = sorted(mem...); !slices.Equal(mem, got) {
+			t.Errorf("%q in %v: search.Match %v, the index %v", tc.text, tc.in, mem, got)
+		}
+	}
+	if _, err := ix.Issues(t.Context(), Query{Text: "x", In: []string{"labels"}}); err == nil {
+		t.Error("in labels: no error")
+	}
+}
+
+// texts are an issue's texts in names (all with none), as search.Match takes them.
+func texts(is *issue.Issue, in []string) []string {
+	if len(in) == 0 {
+		in = search.Texts
+	}
+	var comments []string
+	for _, c := range is.Comments {
+		comments = append(comments, c.Body)
+	}
+	byName := map[string]string{"title": is.Title, "body": is.Body, "comments": strings.Join(comments, "\n")}
+	var res []string
+	for _, n := range in {
+		res = append(res, byName[n])
+	}
+	return res
+}
+
+// States answers each issue as issue.Apply folds it, at the head it was
+// indexed at, and the broken ones apart; cached ones aren't read.
+func TestStatesAreTheFolds(t *testing.T) {
+	t.Parallel()
+	ctx := t.Context()
+	_, s := newRepo(t)
+	a := mkIssue(t, s, issue.NewCreate("ann", "Crash on save", "It crashes."), issue.ChangeLabels("ann", []string{"status:ready"}, nil))
+	c := issue.NewCommentMeta("bob", "Seen too", map[string]string{"k": "v"})
+	c.Origin = &oplog.Origin{Forge: "github.com/o/r", Event: "comment:1"}
+	if _, err := issue.Do(ctx, s, a.ID, c, issue.SetStatus("bob", issue.Closed)); err != nil {
+		t.Fatal(err)
+	}
+	b := mkIssue(t, s, issue.NewCreate("bob", "Gone", ""))
+	if _, err := issue.Do(ctx, s, b.ID, issue.Delete("bob", b.BodyOp)); err != nil {
+		t.Fatal(err)
+	}
+	bad, err := oplog.Create(ctx, s, "issue", "", []oplog.Op{{Kind: "bogus", Author: "ann", Time: 1}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ix := openIndex(t, s)
+	none := func(string, string) *issue.Issue { return nil }
+	l, err := ix.States(ctx, none)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(l.Broken) != 1 || l.Broken[0].ID != bad.ID {
+		t.Fatalf("broken = %+v, want %s", l.Broken, bad.ID)
+	}
+	if len(l.Issues) != 1 {
+		t.Fatalf("states = %v, want %s alone", l.Issues, a.ID)
+	}
+	heads, err := s.Heads(ctx, "issue")
+	if err != nil || !maps.Equal(l.Heads, heads) {
+		t.Fatalf("heads = %v, %v; want the deleted and broken ones' too, %v", l.Heads, err, heads)
+	}
+	head, err := s.Ref(oplog.RefName("issue", a.ID))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, err := issue.Load(s, a.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := l.Issues[a.ID]; got.Head != head.String() || !reflect.DeepEqual(got.Issue, want) {
+		t.Fatalf("state = %s %+v\nwant %s %+v", got.Head, got.Issue, head, want)
+	}
+	mine := &issue.Issue{ID: a.ID}
+	l, err = ix.States(ctx, func(id, h string) *issue.Issue {
+		if id == a.ID && h == head.String() {
+			return mine
+		}
+		return nil
+	})
+	if err != nil || l.Issues[a.ID].Issue != mine {
+		t.Fatalf("cached: %+v, %v; want the caller's", l.Issues[a.ID], err)
 	}
 }

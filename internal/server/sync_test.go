@@ -7,6 +7,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/guilbep/git-board/core/fields"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/ghbridge"
 	"github.com/guilbep/git-board/internal/store"
@@ -27,9 +28,9 @@ func (r *recordedEdits) Edit(_ string, e ghbridge.ProjectEdit) error {
 func syncFixture(t *testing.T, write bool) (*httptest.Server, *store.Backend, string, *recordedEdits) {
 	t.Helper()
 	cfg := &config.Config{
-		Fields: map[string]config.Field{"status": {Single: true,
-			Options: []string{"ready", "in-review", "qa"}, Project: map[string]string{"qa": "QA Validation"}}},
 		GithubProject: config.GithubProject{Owner: "o", Number: 1, Write: write},
+		Schema: fields.Schema{Fields: map[string]fields.Field{"status": {Single: true,
+			Options: []string{"ready", "in-review", "qa"}, Project: map[string]string{"qa": "QA Validation"}}}},
 	}
 	b := storetest.New(t)
 	id := storetest.NewImportedIssue(t, b, "Results page", issueURL)

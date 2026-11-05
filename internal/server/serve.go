@@ -1,5 +1,5 @@
 // Package server serves the git-board web UI (git board serve): a JSON API over
-// internal/config + internal/store + internal/fields + internal/board
+// internal/config + internal/store + core/fields + internal/board
 // (the same packages the CLI and TUI use), plus the built frontend
 // (web/dist, embedded via web/embed.go) as static assets.
 //

@@ -5,6 +5,11 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/guilbep/git-board/core/cycle"
+	"github.com/guilbep/git-board/core/fields"
+	"github.com/guilbep/git-board/core/proof"
+	"github.com/guilbep/git-board/core/release"
 )
 
 // saveTwice is text saved twice through save: the second save changes
@@ -28,7 +33,7 @@ func saveTwice(t *testing.T, save func(string) (string, error)) string {
 func TestSetFieldsKeepsTheOtherLines(t *testing.T) {
 	t.Parallel()
 	before := "# the workflow, in order\n[fields.status]\nsingle = true # one at a time\noptions = [\"backlog\", \"ready\"]\n\n[fields.est]\nnumeric = true\noptions = [\"1\", \"2\"]\n\n[views.open]\nlayout = \"table\"\n"
-	after, err := SetFieldsText(before, map[string]Field{"status": {Single: true, Options: []string{"backlog", "ready", "done"}}}, nil)
+	after, err := SetFieldsText(before, map[string]fields.Field{"status": {Single: true, Options: []string{"backlog", "ready", "done"}}}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -42,7 +47,7 @@ func TestSetFieldsWritesWholeAndRemoves(t *testing.T) {
 	t.Parallel()
 	before := "# the workflow\n[fields.status]\nsingle = true\noptions = [\"backlog\"]\n\n[fields.status.colors]\nbacklog = \"grey\"\n\n[fields.kind.descriptions]\nbug = \"broken\"\n\n[views.open]\nlayout = \"table\"\n"
 	// kind goes: its table, its comment-adjacent subtables, nothing else
-	after, err := SetFieldsText(before, map[string]Field{
+	after, err := SetFieldsText(before, map[string]fields.Field{
 		"status": {Single: true, Options: []string{"backlog", "ready"}, Colors: map[string]string{"ready": "teal"}, Project: map[string]string{"wont": "Won't"}},
 	}, []string{"kind"})
 	if err != nil {
@@ -100,7 +105,7 @@ func TestParseFieldOrderIsTheFileOrder(t *testing.T) {
 func TestSetFieldsAddsAFieldAtTheEnd(t *testing.T) {
 	t.Parallel()
 	before := "[views.open]\nlayout = \"table\"\n"
-	after, err := SetFieldsText(before, map[string]Field{"prio": {Single: true, Options: []string{"p0", "p1"}, Descriptions: map[string]string{"p0": "now"}}}, nil)
+	after, err := SetFieldsText(before, map[string]fields.Field{"prio": {Single: true, Options: []string{"p0", "p1"}, Descriptions: map[string]string{"p0": "now"}}}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -113,7 +118,7 @@ func TestSetFieldsAddsAFieldAtTheEnd(t *testing.T) {
 func TestSetFieldsOnTheDefaultFile(t *testing.T) {
 	t.Parallel()
 	after := saveTwice(t, func(text string) (string, error) {
-		return SetFieldsText(text, map[string]Field{
+		return SetFieldsText(text, map[string]fields.Field{
 			"hold": {Single: true, Options: []string{"blocked", "paused"}, Descriptions: map[string]string{
 				"blocked": "waiting for something outside the team, or for another issue",
 				"paused":  "deprioritized, or its developer away for a while",
@@ -157,7 +162,7 @@ func TestSetRoles(t *testing.T) {
 func TestSetLabels(t *testing.T) {
 	t.Parallel()
 	before := "[labels]\nlist = [\"needs-design\"]\n\n[labels.colors]\nneeds-design = \"amber\"\n\n[views.open]\nlayout = \"table\"\n"
-	after, err := SetLabelsText(before, Labels{List: []string{"regression", "security"}, Descriptions: map[string]string{"regression": "came back"}})
+	after, err := SetLabelsText(before, fields.Labels{List: []string{"regression", "security"}, Descriptions: map[string]string{"regression": "came back"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -166,7 +171,7 @@ func TestSetLabels(t *testing.T) {
 		t.Errorf("got\n%s\nwant\n%s", after, want)
 	}
 	// an empty list stays explicit when the table is there
-	empty, err := SetLabelsText(before, Labels{})
+	empty, err := SetLabelsText(before, fields.Labels{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -174,7 +179,7 @@ func TestSetLabels(t *testing.T) {
 		t.Errorf("an empty list went quiet:\n%s", empty)
 	}
 	// no table, nothing to hold: untouched
-	untouched, err := SetLabelsText("[views.open]\nlayout = \"table\"\n", Labels{})
+	untouched, err := SetLabelsText("[views.open]\nlayout = \"table\"\n", fields.Labels{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -187,7 +192,7 @@ func TestSetSprints(t *testing.T) {
 	t.Parallel()
 	d := func(s string) time.Time { t2, _ := time.Parse("2006-01-02", s); return t2 }
 	before := "# sprints are sprint: labels\n[sprints]\nlength_days = 14\n\n[[sprints.list]]\nslug = \"s11\"\ntitle = \"Sprint 11\"\nstart = 2026-09-21\n\n[views.open]\nlayout = \"table\"\n"
-	after, err := SetSprintsText(before, SprintsConfig{LengthDays: 14, List: []Sprint{
+	after, err := SetSprintsText(before, fields.Sprints{LengthDays: 14, List: []fields.Sprint{
 		{Slug: "s12", Title: "Sprint 12", Start: d("2026-10-05")},
 		{Slug: "s13", Title: "Sprint 13", Start: d("2026-10-19")},
 	}})
@@ -202,7 +207,7 @@ func TestSetSprints(t *testing.T) {
 	if err != nil || len(cfg.Sprints.List) != 2 {
 		t.Errorf("check: %v, %d sprints", err, len(cfg.Sprints.List))
 	}
-	none, err := SetSprintsText(before, SprintsConfig{LengthDays: 14})
+	none, err := SetSprintsText(before, fields.Sprints{LengthDays: 14})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -240,14 +245,14 @@ func TestSetBranches(t *testing.T) {
 func TestSetCycle(t *testing.T) {
 	t.Parallel()
 	before := "[fields.status]\noptions = [\"backlog\"]\n"
-	off, err := SetCycleText(before, false, Cycle{})
+	off, err := SetCycleText(before, false, cycle.Config{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if off != before {
 		t.Errorf("off changed the file:\n%s", off)
 	}
-	on, err := SetCycleText(before, true, Cycle{Ready: "ready", InProgress: []string{"in-progress"}, Risk: "pm", Kinds: map[string]string{"bug": FailingTest}})
+	on, err := SetCycleText(before, true, cycle.Config{Ready: "ready", InProgress: []string{"in-progress"}, Risk: "pm", Kinds: map[string]string{"bug": cycle.FailingTest}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -259,7 +264,7 @@ func TestSetCycle(t *testing.T) {
 		t.Errorf("check: %v, on %v", err, cfg != nil && cfg.Cycle.On)
 	}
 	// a suite with its env and tools, byte-stable
-	suite := Cycle{Tests: map[string]Suite{"unit": {
+	suite := cycle.Config{Tests: map[string]proof.Suite{"unit": {
 		Run:   []string{"go", "test", "./..."},
 		Files: []string{"**/*.go"},
 		Env:   map[string]string{"CGO": "0"},
@@ -283,7 +288,7 @@ func TestSetCycle(t *testing.T) {
 		t.Errorf("not byte-stable:\nfirst\n%s\nsecond\n%s", withSuite, twice)
 	}
 	// a suite dropped from the map goes from the file
-	gone, err := SetCycleText(withSuite, true, Cycle{})
+	gone, err := SetCycleText(withSuite, true, cycle.Config{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -344,12 +349,12 @@ func TestSetReposUploads(t *testing.T) {
 func TestSetRelease(t *testing.T) {
 	t.Parallel()
 	before := "[fields.status]\noptions = [\"backlog\"]\n"
-	r := Release{
+	r := release.Config{
 		Environments: []string{"dev", "stage", "prod"},
 		Checks:       "make ci",
-		Images:       []Image{{Name: "board", Context: "."}},
-		Chart:        &Chart{Path: "chart", Registry: "registry.epfl.ch/x"},
-		Deploy: []Target{
+		Images:       []release.Image{{Name: "board", Context: "."}},
+		Chart:        &release.Chart{Path: "chart", Registry: "registry.epfl.ch/x"},
+		Deploy: []release.Target{
 			{Repo: "epfl-enac/app-deploy", Path: "apps/app/{env}", Registry: "registry.epfl.ch/x"},
 			{Repo: "epfl-enac/app-deploy", Path: "apps/app/{env}", Registry: "registry.epfl.ch/y"},
 		},
@@ -385,7 +390,7 @@ func TestSetRelease(t *testing.T) {
 	if strings.Count(only, "[[release.deploy]]") != 1 {
 		t.Errorf("the dropped target stayed:\n%s", only)
 	}
-	none, err := SetReleaseText(after, Release{})
+	none, err := SetReleaseText(after, release.Config{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -437,7 +442,7 @@ func TestDeleteAndMoveViews(t *testing.T) {
 func TestSectionWritersClearKeys(t *testing.T) {
 	t.Parallel()
 	text := "[fields.a]\nsingle = true\noptions = [\"x\"]\ntype = \"select\"\n# kept\n"
-	got, err := SetFieldsText(text, map[string]Field{"a": {}}, nil)
+	got, err := SetFieldsText(text, map[string]fields.Field{"a": {}}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -445,13 +450,13 @@ func TestSectionWritersClearKeys(t *testing.T) {
 		t.Errorf("fields:\n%q", got)
 	}
 	text = "[sprints]\nlength_days = 7\nstart_weekday = \"monday\"\n"
-	if got, err = SetSprintsText(text, SprintsConfig{}); err != nil {
+	if got, err = SetSprintsText(text, fields.Sprints{}); err != nil {
 		t.Fatal(err)
 	}
 	if strings.Contains(got, "length_days") || strings.Contains(got, "start_weekday") {
 		t.Errorf("sprints:\n%q", got)
 	}
-	if got, _ = SetSprintsText("", SprintsConfig{}); strings.Contains(got, "[sprints]") {
+	if got, _ = SetSprintsText("", fields.Sprints{}); strings.Contains(got, "[sprints]") {
 		t.Errorf("an empty table made:\n%q", got)
 	}
 }
@@ -481,7 +486,7 @@ func TestDeleteTableKeepsTheNextComment(t *testing.T) {
 func TestSetReleaseTextKeepsAnEmptyFollow(t *testing.T) {
 	t.Parallel()
 	none := ""
-	got, err := SetReleaseText("", Release{Environments: []string{"dev", "prod"}, Follow: &none})
+	got, err := SetReleaseText("", release.Config{Environments: []string{"dev", "prod"}, Follow: &none})
 	if err != nil {
 		t.Fatal(err)
 	}

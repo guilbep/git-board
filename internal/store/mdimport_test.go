@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/store"
 	"github.com/guilbep/git-board/internal/store/storetest"
 )
@@ -41,7 +42,7 @@ func edit(t *testing.T, path string, pairs ...string) {
 	}
 }
 
-func eventsOf(t *testing.T, b *store.Backend, id string) []store.Event {
+func eventsOf(t *testing.T, b *store.Backend, id string) []model.Event {
 	t.Helper()
 	th, err := b.Thread(id)
 	if err != nil {
@@ -50,7 +51,7 @@ func eventsOf(t *testing.T, b *store.Backend, id string) []store.Event {
 	return th.Events
 }
 
-func bodies(evs []store.Event, kind string) []string {
+func bodies(evs []model.Event, kind string) []string {
 	var out []string
 	for _, e := range evs {
 		if e.Kind == kind {

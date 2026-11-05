@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/guilbep/git-board/core/model"
 	"github.com/guilbep/git-board/internal/config"
 	"github.com/guilbep/git-board/internal/store"
 )
@@ -30,7 +31,7 @@ const remote = "origin"
 const slugMax = 50
 
 // Name is the issue's first branch: NameAt with {n} at 1.
-func Name(cfg config.Branches, is store.Issue) string {
+func Name(cfg config.Branches, is model.Issue) string {
 	return NameAt(cfg, is, 1)
 }
 
@@ -41,7 +42,7 @@ func Name(cfg config.Branches, is store.Issue) string {
 // before the project numbers its issues, else its git-bug id's first 7
 // characters), {n} (the branch's place in the issue's folder) and {slug}
 // (its title), made a branch name git takes.
-func NameAt(cfg config.Branches, is store.Issue, n int) string {
+func NameAt(cfg config.Branches, is model.Issue, n int) string {
 	tmpl := cmp.Or(cfg.Name, defaultName)
 	kind := kindOf(cfg, is.Labels)
 	if kind == "" {
@@ -55,7 +56,7 @@ const nSentinel = 987654321
 
 // Folder is what the issue's branches share before {n}: "fix/2518/" for
 // "{kind}/{number}/{n}-{slug}"; "" when the template has no {n}.
-func Folder(cfg config.Branches, is store.Issue) string {
+func Folder(cfg config.Branches, is model.Issue) string {
 	name := NameAt(cfg, is, nSentinel)
 	i := strings.Index(name, strconv.Itoa(nSentinel))
 	if i < 0 || !strings.Contains(cmp.Or(cfg.Name, defaultName), "{n}") {
@@ -103,7 +104,7 @@ func kindOf(cfg config.Branches, labels []string) string {
 	return cmp.Or(cfg.Kinds[k], k)
 }
 
-func number(is store.Issue) string {
+func number(is model.Issue) string {
 	return cmp.Or(strings.ToLower(is.Number), is.BareNumber(), is.ID[:min(7, len(is.ID))])
 }
 
@@ -158,7 +159,7 @@ func refSafe(name string) string {
 // ponytail: the first number only, so a number in a slug (#12's
 // fix/12-upgrade-node-24) names no other issue; a template putting a
 // number before {number} (a year) links nothing
-func Names(branch string, is store.Issue) bool {
+func Names(branch string, is model.Issue) bool {
 	first := true
 	for _, w := range strings.FieldsFunc(branch, func(r rune) bool { return !isAlnum(r) }) {
 		if len(w) >= 7 && strings.HasPrefix(is.ID, w) {
@@ -199,7 +200,7 @@ type Suggestion struct {
 // Suggest names the issue's branch, from the base: cfg.Base, else the
 // remote's default branch, else the first of main, master and trunk there
 // is, else main.
-func Suggest(b *store.Backend, cfg config.Branches, is store.Issue) (Suggestion, error) {
+func Suggest(b *store.Backend, cfg config.Branches, is model.Issue) (Suggestion, error) {
 	all, err := b.Branches()
 	if err != nil {
 		return Suggestion{}, err
@@ -294,13 +295,13 @@ func (a *Ancestry) Of(hash string) (map[string]bool, error) {
 // against start (Suggestion.Start); without start, all at zero.
 // ponytail: a branch's whole history, read per branch: fine for the few
 // naming an issue; git's commit-graph if a big repository makes it slow
-func Linked(b *store.Backend, is store.Issue, start string) ([]Branch, error) {
+func Linked(b *store.Backend, is model.Issue, start string) ([]Branch, error) {
 	return LinkedIn(NewAncestry(b), is, start)
 }
 
 // LinkedIn is Linked, reading the histories through anc: one Ancestry for
 // many issues reads their base's once.
-func LinkedIn(anc *Ancestry, is store.Issue, start string) ([]Branch, error) {
+func LinkedIn(anc *Ancestry, is model.Issue, start string) ([]Branch, error) {
 	b := anc.b
 	all, err := b.Branches()
 	if err != nil {

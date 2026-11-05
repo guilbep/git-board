@@ -14,11 +14,11 @@ import (
 	"time"
 
 	"github.com/guilbep/git-board/core/datastore"
+	"github.com/guilbep/git-board/core/fields"
 	"github.com/guilbep/git-board/internal/board"
 	"github.com/guilbep/git-board/internal/config"
-	"github.com/guilbep/git-board/internal/fields"
 	"github.com/guilbep/git-board/internal/ghbridge"
-	"github.com/guilbep/git-board/internal/release"
+	"github.com/guilbep/git-board/internal/ship"
 	"github.com/guilbep/git-board/internal/store"
 	"github.com/guilbep/git-board/internal/uploads"
 )
@@ -104,9 +104,9 @@ type apiServer struct {
 
 	// releases (releases.go): releaseMu guards releaseRun, the current or
 	// last job; runnerMu serializes the Runner's fetches and writes, a job
-	// holding it for its whole run. releaseTools: nil, release.Exec();
+	// holding it for its whole run. releaseTools: nil, ship.Exec();
 	// releaseCache: "", the Runner's own (tests: a temp dir)
-	releaseTools release.Tools
+	releaseTools ship.Tools
 	releaseCache string
 	releaseMu    sync.Mutex
 	releaseRun   *releaseJob
@@ -276,9 +276,9 @@ func (s *apiServer) handleViews(w http.ResponseWriter, r *http.Request) {
 }
 
 // fieldResponse is a field as the page gets it: the config's, its type
-// and unit resolved (config.TypeOf), and for an iteration the current one.
+// and unit resolved (fields.Schema.TypeOf), and for an iteration the current one.
 type fieldResponse struct {
-	config.Field
+	fields.Field
 	Current  string `json:"current,omitempty"`
 	Inherits string `json:"inherits,omitempty"` // a role's project value ([roles])
 	// People are who a person field offers to pick (assignable.go), apart
@@ -319,21 +319,21 @@ func (s *apiServer) handleFields(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		t := cfg.TypeOf(name, vs)
-		if t == config.TypeSelect {
+		if t == fields.TypeSelect {
 			continue
 		}
-		single := t != config.TypePerson && !(t == config.TypeIssue && multiByName[name])
-		res[name] = fieldResponse{Field: config.Field{Type: t, Unit: cfg.UnitOf(name), Single: single, Numeric: t == config.TypeNumber}}
+		single := t != fields.TypePerson && !(t == fields.TypeIssue && multiByName[name])
+		res[name] = fieldResponse{Field: fields.Field{Type: t, Unit: cfg.UnitOf(name), Single: single, Numeric: t == fields.TypeNumber}}
 	}
-	if windows := config.SprintWindows(cfg.Sprints); len(windows) > 0 {
+	if windows := cfg.Sprints.Windows(); len(windows) > 0 {
 		current := ""
-		if cur, err := config.ResolveSprint(cfg.Sprints, "current", time.Now()); err == nil && cur != nil {
+		if cur, err := cfg.Sprints.Resolve("current", time.Now()); err == nil && cur != nil {
 			current = cur.Slug
 		}
 		for _, name := range iterationFields(cfg, res) {
 			f := res[name]
 			if f.Type == "" {
-				f.Type, f.Single = config.TypeIteration, true // the sprint field, no label yet
+				f.Type, f.Single = fields.TypeIteration, true // the sprint field, no label yet
 			}
 			if len(f.Options) == 0 {
 				for _, w := range windows {
@@ -347,12 +347,12 @@ func (s *apiServer) handleFields(w http.ResponseWriter, r *http.Request) {
 	// a role is a person field with the project's value, even unused yet
 	for role, who := range cfg.Roles {
 		f := res[role]
-		f.Type, f.Single, f.Inherits = config.TypePerson, false, who
+		f.Type, f.Single, f.Inherits = fields.TypePerson, false, who
 		res[role] = f
 	}
 	if people := s.people(); len(people) > 0 {
 		for name, f := range res {
-			if f.Type == config.TypePerson {
+			if f.Type == fields.TypePerson {
 				f.People = people
 				res[name] = f
 			}
@@ -366,11 +366,11 @@ func (s *apiServer) handleFields(w http.ResponseWriter, r *http.Request) {
 func iterationFields(cfg *config.Config, res map[string]fieldResponse) []string {
 	names := []string{}
 	for name, f := range res {
-		if f.Type == config.TypeIteration {
+		if f.Type == fields.TypeIteration {
 			names = append(names, name)
 		}
 	}
-	if _, ok := res["sprint"]; !ok && cfg.TypeOf("sprint", nil) == config.TypeIteration {
+	if _, ok := res["sprint"]; !ok && cfg.TypeOf("sprint", nil) == fields.TypeIteration {
 		names = append(names, "sprint")
 	}
 	return names
@@ -393,7 +393,7 @@ func (s *apiServer) handleColors(w http.ResponseWriter, r *http.Request) {
 	res := map[string]map[string]string{}
 	for field, vs := range values {
 		colors := cfg.Colors(field, vs)
-		if cfg.TypeOf(field, vs) == config.TypeDate {
+		if cfg.TypeOf(field, vs) == fields.TypeDate {
 			for _, v := range vs {
 				switch {
 				case colors[v] != "":
@@ -518,7 +518,7 @@ func (s *apiServer) handlePatchIssue(w http.ResponseWriter, r *http.Request) {
 
 	today := time.Now()
 	for _, name := range names {
-		if _, err := fields.Apply(s.b, s.config(), id, name, assignments[name], s.me, today); err != nil {
+		if _, err := fields.Apply(s.b, s.config().IssueSchema(), id, name, assignments[name], s.me, today); err != nil {
 			writeError(w, http.StatusBadRequest, err)
 			return
 		}

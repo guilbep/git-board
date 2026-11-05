@@ -1,5 +1,6 @@
-// Package config parses .git-board.toml and resolves sprint aliases.
-// Pure logic only — no I/O beyond reading the file, no printing.
+// Package config parses .git-board.toml: the issue domain's schema
+// (core/fields, which resolves the sprint aliases) and the application's
+// tables. Pure logic only — no I/O beyond reading the file, no printing.
 package config
 
 import (
@@ -14,8 +15,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
-	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -24,72 +23,12 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"golang.org/x/text/unicode/norm"
+
+	"github.com/guilbep/git-board/core/cycle"
+	"github.com/guilbep/git-board/core/fields"
+	"github.com/guilbep/git-board/core/proof"
+	"github.com/guilbep/git-board/core/release"
 )
-
-// Field describes one namespaced-label field (e.g. "status", "prio").
-type Field struct {
-	Single  bool     `toml:"single" json:"single"`
-	Options []string `toml:"options" json:"options"`
-	Numeric bool     `toml:"numeric" json:"numeric"`
-	// Project names the GitHub Project's option for a value, where the
-	// slug of the Project's name isn't the value: comite = "Comité
-	// Spécialisé".
-	Project map[string]string `toml:"project" json:"project,omitempty"`
-	// Colors picks a value's color from Palette, or a #rrggbb: "in review"
-	// = "purple". Values without one get a default (Config.Color).
-	Colors map[string]string `toml:"colors" json:"colors,omitempty"`
-	// Descriptions say what a value means, as its GitHub label's
-	// description: 100 characters at most, GitHub's limit.
-	Descriptions map[string]string `toml:"descriptions" json:"descriptions,omitempty"`
-	// Type is what the values are (types.go); empty: guessed (TypeOf).
-	Type string `toml:"type" json:"type,omitempty"`
-	// Unit follows a number field's values: "h" for hours.
-	Unit string `toml:"unit" json:"unit,omitempty"`
-	// Aliases fold a value's old names into the current one:
-	// could = "couldhave" reads moscow:could as moscow:couldhave, and
-	// Adopt rewrites the labels. The keys are not options.
-	Aliases map[string]string `toml:"aliases" json:"aliases,omitempty"`
-	// Flat: the kind field of plain labels, [branches] kinds (bug, not
-	// kind:bug); parse sets it.
-	Flat bool `toml:"-" json:"-"`
-}
-
-// AliasOf is value's current name on the field: couldhave for could,
-// value itself when no alias (or option) holds it. Reading a forge or an
-// issue goes through here, so an old label shows as its current value.
-func (f Field) AliasOf(value string) string {
-	if cur, ok := f.Aliases[value]; ok {
-		return cur
-	}
-	return value
-}
-
-// KnownValue reports whether value is one of Options — or true if Options is
-// empty (a free-form field, nothing configured to validate against), or the
-// field is numeric and value a number (its options are then the usual
-// picks, est 3.5 is still an estimate). Shared by internal/ghbridge (warns
-// on a bridge pull) and internal/lint (the same check, run over the local
-// repo instead of an incoming GitHub value).
-func (f Field) KnownValue(value string) bool {
-	if _, err := strconv.ParseFloat(value, 64); err == nil && (f.Numeric || f.Type == TypeNumber) {
-		return true
-	}
-	return len(f.Options) == 0 || slices.Contains(f.Options, value)
-}
-
-// Sprint is one entry in [[sprints.list]].
-type Sprint struct {
-	Slug  string    `toml:"slug" json:"slug"`
-	Title string    `toml:"title" json:"title"`
-	Start time.Time `toml:"start" json:"start"`
-}
-
-// SprintsConfig is the [sprints] table.
-type SprintsConfig struct {
-	LengthDays   int      `toml:"length_days" json:"length_days"`
-	StartWeekday string   `toml:"start_weekday" json:"start_weekday"`
-	List         []Sprint `toml:"list" json:"list"`
-}
 
 // View is one [views.<name>] table.
 type View struct {
@@ -126,42 +65,27 @@ type GithubProject struct {
 
 // raw mirrors the on-disk TOML shape for decoding.
 type raw struct {
-	Repos         reposTable        `toml:"repos"`
-	Fields        map[string]Field  `toml:"fields"`
-	Sprints       SprintsConfig     `toml:"sprints"`
-	Views         map[string]View   `toml:"views"`
-	GithubProject GithubProject     `toml:"github-project"`
-	Uploads       Uploads           `toml:"uploads"`
-	Branches      Branches          `toml:"branches"`
-	Roles         map[string]string `toml:"roles"`
-	Cycle         Cycle             `toml:"cycle"`
-	Template      TemplateRef       `toml:"template"`
-	Release       Release           `toml:"release"`
-	Labels        Labels            `toml:"labels"`
-	Experimental  experimentalTable `toml:"experimental"`
+	Repos         reposTable              `toml:"repos"`
+	Fields        map[string]fields.Field `toml:"fields"`
+	Sprints       fields.Sprints          `toml:"sprints"`
+	Views         map[string]View         `toml:"views"`
+	GithubProject GithubProject           `toml:"github-project"`
+	Uploads       Uploads                 `toml:"uploads"`
+	Branches      Branches                `toml:"branches"`
+	Roles         map[string]string       `toml:"roles"`
+	Cycle         cycleTable              `toml:"cycle"`
+	Template      TemplateRef             `toml:"template"`
+	Release       release.Config          `toml:"release"`
+	Labels        fields.Labels           `toml:"labels"`
+	Experimental  experimentalTable       `toml:"experimental"`
 	// Forges holds publish-private, discover and a table per forge
 	// (forges.go).
 	Forges map[string]toml.Primitive `toml:"forges"`
 }
 
-// Labels is the [labels] table: the plain labels the project allows
-// besides its fields (docs/design/issue-head, open point 7), yes-or-no
-// flags that can stack and that no field holds (needs-design, regression).
-// The issue's head offers them as checkboxes, never free text; Settings ›
-// Labels sends them to GitHub with their colors and descriptions; lint
-// reports the plain labels outside them. No table, no labels to pick.
-type Labels struct {
-	List         []string          `toml:"list" json:"list"`
-	Colors       map[string]string `toml:"colors" json:"colors"`             // a palette name or #rrggbb; else the palette in turn
-	Descriptions map[string]string `toml:"descriptions" json:"descriptions"` // GitHub's, 100 characters at most
-	// Defined: the file has a [labels] table, an empty list too (no
-	// label allowed), which lint then holds the issues to
-	Defined bool `toml:"-" json:"-"`
-}
-
 // checkLabels: a listed label is plain (prio:p1 is a field's value), not
 // a kind, and the colors and descriptions are the list's own.
-func checkLabels(l Labels, kinds map[string]string) error {
+func checkLabels(l fields.Labels, kinds map[string]string) error {
 	for _, name := range l.List {
 		switch {
 		case strings.TrimSpace(name) == "":
@@ -271,22 +195,21 @@ type Config struct {
 	// Assignees is how the forges hold assignees: "native" (their
 	// assignees, the default) or "labels" (assignee:<login> labels). Every
 	// clone must agree, so it lives here, not in a clone's git config.
-	Assignees     string
-	Fields        map[string]Field
-	Sprints       SprintsConfig
+	Assignees string
+	// Schema is the issue domain's part of the file: [fields], [sprints],
+	// [roles] (roles.go) and [labels].
+	fields.Schema
 	Views         map[string]View
 	viewOrder     []string // ViewNames
-	fieldOrder    []string // FieldOrder
 	GithubProject GithubProject
 	Uploads       Uploads
 	Branches      Branches
-	// Roles is the [roles] table: the project's people by role (roles.go).
-	Roles map[string]string
-	// Cycle is the [cycle] table: the development cycle's stages and
-	// gates (cycle.go).
-	Cycle Cycle
-	// Release is the [release] table (release.go).
-	Release Release
+	// Cycle is the [cycle] table, the cycle's (core/cycle), checked in
+	// cycle.go.
+	Cycle cycle.Config
+	// Release is the [release] table, the release domain's (core/release),
+	// checked in release.go.
+	Release release.Config
 	// Forges are the [forges.<name>] tables, by name (forges.go).
 	Forges []Forge
 	// PublishPrivate lets what was pulled from a forge project that isn't
@@ -295,8 +218,6 @@ type Config struct {
 	// Discover finds the forges in the git remotes: no [forges.<name>]
 	// table, and no [forges] discover = false.
 	Discover bool
-	// Labels is the [labels] table: the plain labels the project allows.
-	Labels Labels
 	// Template is the [template] table: the template the file came from,
 	// for lint to list the drift.
 	Template TemplateRef
@@ -311,6 +232,17 @@ type Config struct {
 	// (UseLocal); cycleErr what [cycle] fails, kept while the cycle is off
 	local    *[]string
 	cycleErr error
+	// shortKinds are the [cycle.kinds] the file gave as a string (Reads)
+	shortKinds []string
+}
+
+// IssueSchema is the schema the core's issue domain reads (core/fields:
+// assignments, filters, the inbox): the file's, nil for no config.
+func (c *Config) IssueSchema() *fields.Schema {
+	if c == nil {
+		return nil
+	}
+	return &c.Schema
 }
 
 // TemplateRef names a built-in template and its version (templates/).
@@ -450,33 +382,33 @@ func parse(data []byte) (*Config, toml.MetaData, error) {
 	if err := checkAliases(r.Fields); err != nil {
 		return nil, md, err
 	}
-	if err := checkFieldMappings(&Config{Fields: r.Fields, Roles: r.Roles, Sprints: r.Sprints, Forges: forges}); err != nil {
+	if err := checkFieldMappings(&Config{Forges: forges, Schema: fields.Schema{Fields: r.Fields, Roles: r.Roles, Sprints: r.Sprints}}); err != nil {
 		return nil, md, err
 	}
 	// the kinds are plain labels unless [fields.kind] has options of its own
 	if kinds := keysInOrder(md, r.Branches.Kinds, "branches", "kinds"); len(kinds) > 0 && len(r.Fields["kind"].Options) == 0 {
 		if r.Fields == nil {
-			r.Fields = map[string]Field{}
+			r.Fields = map[string]fields.Field{}
 		}
 		f := r.Fields["kind"]
 		f.Single, f.Options, f.Flat = true, kinds, true
 		r.Fields["kind"] = f
 	}
 	return &Config{
-		Repos:          r.Repos.List,
-		Assignees:      cmp.Or(r.Repos.Assignees, "native"),
-		Fields:         r.Fields,
-		Sprints:        r.Sprints,
+		Repos:     r.Repos.List,
+		Assignees: cmp.Or(r.Repos.Assignees, "native"),
+		Schema: fields.Schema{
+			Fields: r.Fields, Sprints: r.Sprints, Roles: r.Roles, Labels: r.Labels,
+			Order: keysInOrder(md, r.Fields, "fields"),
+		},
 		Views:          r.Views,
 		viewOrder:      keysInOrder(md, r.Views, "views"),
-		fieldOrder:     keysInOrder(md, r.Fields, "fields"),
 		GithubProject:  r.GithubProject,
 		Uploads:        r.Uploads,
 		Branches:       r.Branches,
-		Roles:          r.Roles,
-		Cycle:          r.Cycle,
+		Cycle:          r.Cycle.Config,
+		shortKinds:     r.Cycle.shortKinds,
 		Release:        r.Release,
-		Labels:         r.Labels,
 		Template:       r.Template,
 		Forges:         forges,
 		PublishPrivate: publishPrivate,
@@ -515,20 +447,10 @@ func (c *Config) ViewNames() []string {
 	return slices.Sorted(maps.Keys(c.Views))
 }
 
-// FieldOrder is the fields' names as the file lists them: the fields
-// page's list order, the order an issue's fields line takes. A Config not
-// parsed from a file: sorted.
-func (c *Config) FieldOrder() []string {
-	if len(c.fieldOrder) == len(c.Fields) {
-		return c.fieldOrder
-	}
-	return slices.Sorted(maps.Keys(c.Fields))
-}
-
 // checkDescriptions keeps each value's description to GitHub's 100
 // characters, or says which is longer.
-func checkDescriptions(fields map[string]Field) error {
-	for name, f := range fields {
+func checkDescriptions(defs map[string]fields.Field) error {
+	for name, f := range defs {
 		for v, d := range f.Descriptions {
 			if n := utf8.RuneCountInString(d); n > 100 {
 				return fmt.Errorf("fields.%s.descriptions: %q's is %d characters, GitHub takes 100 at most", name, v, n)
@@ -638,7 +560,7 @@ func WithoutGithubProject(content string) string {
 // by one of binaries, platforms, build (when set) and remote (when not
 // origin): what Enable binary release writes. The file's other tables and
 // comments stay. Pure: the server checks the result before saving it.
-func WithRelease(content string, r Release) string {
+func WithRelease(content string, r release.Config) string {
 	quoted := func(ss []string) string {
 		q := make([]string, len(ss))
 		for i, s := range ss {
@@ -663,7 +585,7 @@ func WithRelease(content string, r Release) string {
 
 // WithChecks is content with a [cycle.checks.<name>] table per check,
 // replaced or appended: what Propose checks writes. Pure, as WithRelease.
-func WithChecks(content string, checks map[string]Suite) string {
+func WithChecks(content string, checks map[string]proof.Suite) string {
 	list := func(ss []string) string {
 		q := make([]string, len(ss))
 		for i, s := range ss {
@@ -779,118 +701,6 @@ func splitDotted(key string) []string {
 		}
 	}
 	return append(parts, key[start:])
-}
-
-// dateOnly strips time-of-day/location so sprint boundaries compare by
-// calendar day regardless of the TOML decoder's local timezone.
-func dateOnly(t time.Time) time.Time {
-	y, m, d := t.Date()
-	return time.Date(y, m, d, 0, 0, 0, 0, time.UTC)
-}
-
-// sortedSprints returns a copy of list ordered by start date — shared by
-// ResolveSprint (current/next/previous neighbour lookup) and SprintWindows
-// (end-date computation), so the ordering rule lives in one place.
-func sortedSprints(list []Sprint) []Sprint {
-	ordered := make([]Sprint, len(list))
-	copy(ordered, list)
-	sort.Slice(ordered, func(i, j int) bool { return ordered[i].Start.Before(ordered[j].Start) })
-	return ordered
-}
-
-// ResolveSprint resolves "current" / "next" / "previous" against the sprint
-// calendar. The "current" sprint is the last one whose start date is on or
-// before today, unless that is the last sprint and it has ended
-// (SprintWindows' end): then there is none, and "previous" is it.
-// next/previous are its neighbours in start-date order.
-func ResolveSprint(sprints SprintsConfig, which string, today time.Time) (*Sprint, error) {
-	today = dateOnly(today)
-	ordered := sortedSprints(sprints.List)
-
-	idx := -1
-	for i, s := range ordered {
-		if !dateOnly(s.Start).After(today) {
-			idx = i
-		} else {
-			break
-		}
-	}
-
-	// the last sprint ends: past it there is no current one, and the
-	// previous is the one that ended
-	if idx >= 0 && idx == len(ordered)-1 && !today.Before(dateOnly(ordered[idx].Start).AddDate(0, 0, lastSprintDays(sprints, ordered))) {
-		if which == "previous" {
-			return &ordered[idx], nil
-		}
-		if which == "current" {
-			return nil, nil
-		}
-	}
-
-	switch which {
-	case "current":
-		if idx < 0 {
-			return nil, nil
-		}
-		return &ordered[idx], nil
-	case "next":
-		nxt := idx + 1
-		if nxt >= len(ordered) {
-			return nil, nil
-		}
-		return &ordered[nxt], nil
-	case "previous":
-		if idx <= 0 {
-			return nil, nil
-		}
-		return &ordered[idx-1], nil
-	default:
-		return nil, fmt.Errorf("unknown sprint alias: %q", which)
-	}
-}
-
-// defaultSprintDays is the default file's length_days.
-const defaultSprintDays = 14
-
-// lastSprintDays is how long the last sprint of ordered lasts: length_days,
-// else as long as the one before it, else defaultSprintDays. Never 0: a
-// sprint that ended the day it started stayed @current for ever.
-func lastSprintDays(sprints SprintsConfig, ordered []Sprint) int {
-	if sprints.LengthDays > 0 {
-		return sprints.LengthDays
-	}
-	if n := len(ordered); n >= 2 {
-		if d := int(dateOnly(ordered[n-1].Start).Sub(dateOnly(ordered[n-2].Start)).Hours() / 24); d > 0 {
-			return d
-		}
-	}
-	return defaultSprintDays
-}
-
-// SprintWindow is a configured sprint plus its computed end date.
-type SprintWindow struct {
-	Sprint
-	End time.Time
-}
-
-// SprintWindows returns every configured sprint, ordered by start date (the
-// same ordering ResolveSprint uses — see sortedSprints), with End computed
-// as the next sprint's start date, or Start+LengthDays for the last one
-// (lastSprintDays without it).
-// This window math isn't in ResolveSprint itself (which only needs
-// start-date ordering to resolve @current/@next/@previous), so it's new
-// here rather than duplicated from anywhere.
-func SprintWindows(sprints SprintsConfig) []SprintWindow {
-	ordered := sortedSprints(sprints.List)
-	windows := make([]SprintWindow, len(ordered))
-	for i, s := range ordered {
-		end := dateOnly(s.Start).AddDate(0, 0, lastSprintDays(sprints, ordered))
-		if i+1 < len(ordered) {
-			end = dateOnly(ordered[i+1].Start)
-		}
-		windows[i] = SprintWindow{Sprint: s, End: end}
-	}
-	return windows
 }
 
 // AppendSprint appends a new [[sprints.list]] entry to the .git-board.toml
