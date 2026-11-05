@@ -321,7 +321,7 @@ func (b *Board) SyncForges(ctx context.Context, way Way, run ForgeRun) (issuesyn
 	var fs []forge.Forge
 	for _, f := range run.Forges {
 		names[f.Key()] = f.Name
-		fs = append(fs, &counted{f: f.Forge, name: f.Name, dry: run.DryRun, ids: ids, see: see})
+		fs = append(fs, (&counted{f: f.Forge, name: f.Name, dry: run.DryRun, ids: ids, see: see}).wrap())
 	}
 	_, forgeOnly := b.Kernel.Store().(*forgecopy.Store)
 	cfg := b.Config

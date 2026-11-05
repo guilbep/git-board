@@ -172,3 +172,58 @@ func TestSyncForgesCheck(t *testing.T) {
 		t.Errorf("lines %q lack the pull", lines)
 	}
 }
+
+// A reply reaches a forge with threads as a reply, through the wrapper
+// that hears the run's writes (ADR 0021: v1 posted it as a top-level
+// comment); a forge without threads, a counted one, gets none.
+func TestSyncForgesReplies(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	if out, err := exec.Command("git", "-C", dir, "init", "-q").CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v\n%s", err, out)
+	}
+	b, err := Open(t.Context(), dir, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer b.Close()
+	me, err := issuesync.CreatePerson(t.Context(), b.Kernel, issuesync.NewPerson("", "me", ""))
+	if err != nil {
+		t.Fatal(err)
+	}
+	is, err := issuesync.CreateIssue(t.Context(), b.Kernel, issuesync.NewCreate(me.ID, "Here", "made here"), issuesync.NewComment(me.ID, "root"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	root := is.Comments[0].ID
+	if _, err := issuesync.DoIssue(t.Context(), b.Kernel, is.ID, issuesync.NewCommentMeta(me.ID, "answer", map[string]string{"thread:reply-to": root})); err != nil {
+		t.Fatal(err)
+	}
+	f := fake.New("example.com/p")
+	var events []string
+	run := ForgeRun{Forges: []NamedForge{{"p", f}}, AllowCreate: true, See: func(e SyncEvent) { events = append(events, e.What) }}
+	if _, err := b.SyncForges(t.Context(), WayPush, run); err != nil {
+		t.Fatal(err)
+	}
+	var ops []string
+	for _, w := range f.Writes() {
+		if w.Op == "reply" || w.Op == "create-comment" {
+			ops = append(ops, w.Op)
+		}
+	}
+	if strings.Join(ops, ",") != "create-comment,reply" {
+		t.Errorf("writes %v, want a comment then a reply", ops)
+	}
+	if n := strings.Count(strings.Join(events, ","), "comment"); n != 2 {
+		t.Errorf("events %q: want both comments heard", events)
+	}
+	if _, ok := (&counted{f: flat{f}}).wrap().(forge.Replier); ok {
+		t.Error("a forge without threads is offered Reply")
+	}
+	if _, ok := (&counted{f: f}).wrap().(forge.Replier); !ok {
+		t.Error("a forge with threads is not offered Reply")
+	}
+}
+
+// flat is a forge without threads: Reply hidden.
+type flat struct{ forge.Forge }
