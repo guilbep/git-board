@@ -1,6 +1,9 @@
 # ADR 0021: git-board v2: new code, the same data
 
-- Status: accepted (2026-11-05, Pierre)
+- Status: accepted (2026-11-05, Pierre); done: the switch (milestone M7,
+  2026-11-05) moved `next/` to the root and deleted v1, and v2 ships as
+  git-board v0.12.0. It supersedes [ADR 0020](0020-the-core-in-layers.md)'s
+  package layout.
 - Date: 2026-11-05
 - Builds on the design, [docs/rewrite/design.md](../rewrite/design.md),
   and [ADR 0020](0020-the-core-in-layers.md) (the layers).
@@ -57,15 +60,23 @@ sync engine, after the release mapper.
 - **The server logs.** `git board` (the server and its web UI) writes
   error, warning and info lines, with a level the user chooses.
 
+**Amended 2026-11-05, the switch:** Pierre dropped v1 entirely, without
+waiting for the deletion's criteria (the design, section 5): no fixes to
+v0.11 and no v0.11.7. v2 replaces it now, as v0.12.0, and the dogfooding
+job runs after the release, against v1 built from its last commit on
+main (`7a546cc`) rather than a release. `next/` is the root,
+`cmd/git-board` is v2's binary, and `make compat` holds it to v1's
+recorded outputs ([compat.md](../rewrite/compat.md)).
+
 **Amended 2026-11-05:** v2 does not port `switch` and `prune` (git-bug
 repositories). git-board v0.11 migrates them: a repository that still holds
 git-bug data is refused, with a message that names v0.11's `git board switch`.
 
 ## Consequences
 
-- v1 is deleted in the pull request that ships v0.12. Until then a v1
-  fix is also made in `next/`, or proven not needed there by `make
-  compat`.
+- v1 is deleted in the pull request that ships v0.12 (done: the switch,
+  2026-11-05). Until then a v1 fix was also made in `next/`, or proven not
+  needed there by `make compat`.
 - The web app is rewritten against the new API. Its browser tests are
   the acceptance.
 - A board kept by v0.11 opens in v0.12 unchanged. A `.git-board.toml`

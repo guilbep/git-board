@@ -1,6 +1,6 @@
 # v2: the HTTP API
 
-- Status: built in milestone M5 (2026-11-05), in `next/surface/http`.
+- Status: built in milestone M5 (2026-11-05), in `surface/http`.
   A route marked *later* waits for the command it mirrors (`datastore
   set`, `numbers status`); one marked *M6* comes with
   its domain. Both answer 404 `not-found` until then.
@@ -15,8 +15,8 @@ v1's API grew one route per button: 117 routes, 18,000 lines with their
 tests. v2's is designed from what the web app reads and writes, in
 nouns the CLI already prints. It has 54 routes.
 
-The server is `next/surface/http`. Each route decodes a request, calls
-one method of `next/app`, and encodes the answer. No rule lives in the
+The server is `surface/http`. Each route decodes a request, calls
+one method of `app`, and encodes the answer. No rule lives in the
 server.
 
 ## The rules every route follows
@@ -74,7 +74,7 @@ is the same.
 
 `message` is a sentence for a person. `field` names the request's field
 the error is about, when there is one. `code` is one of a fixed list,
-decided by the error's class in `next/app` (`app.Error`): the same class
+decided by the error's class in `app` (`app.Error`): the same class
 that gives the CLI its exit code.
 
 | `code` | HTTP | Class | CLI exit code | When |
@@ -142,7 +142,7 @@ is (never a password). `experimental` lists the features on.
 `first_pull`, there only when the server's first open of a fresh clone
 pulled origin's board or couldn't, is `{remote, issues, error}`: how many
 issues came, or why none did ([A clone shows its
-board](../prd/clone-shows-board.md)). The pull runs once the server
+board](https://github.com/guilbep/git-board/blob/main/docs/prd/clone-shows-board.md)). The pull runs once the server
 serves; a page already open hears it as a `me` event, and an `issue`
 event for each issue pulled.
 
@@ -374,7 +374,7 @@ many.
 | 42 | `GET /api/media` | `url` | the picture, through this server (built): a forge's alone, with its token, kept in the board's folder |
 
 `POST /api/markdown` previews a text as the thread renders it, cleaned.
-Uploads are `[uploads]`'s, a tool's (`next/tools/uploads`, v1's, ADR
+Uploads are `[uploads]`'s, a tool's (`tools/uploads`, v1's, ADR
 0015): the keys from the server's environment. Media (42) are the
 forges' pictures of issue text (GitHub's attachments, GitLab's uploads),
 which a private repository's page can't load without the forge's token:
@@ -389,7 +389,7 @@ recently used.
 ### Domains that come with M6
 
 These routes keep v1's meaning in v2's shapes, and are built with their
-domain (`next/domain/releases`, `next/domain/cycle`, `next/tools`).
+domain (`domain/releases`, `domain/cycle`, `tools`).
 Until then they answer 404 `not-found`.
 
 | | Route | What |
@@ -407,7 +407,7 @@ Until then they answer 404 `not-found`.
 | 53 | `POST /api/github-project/{action}` | `check`, `apply` (`side`), `resolve`; its table is `PATCH /api/config`'s (*built*) |
 
 **The GitHub Project (52, 53)**, built with the bridge
-(`next/tools/ghproject`). Only an action reads the Project: a read
+(`tools/ghproject`). Only an action reads the Project: a read
 answers the last run, which the server keeps. Both answer `{project,
 write, last, places, problem}`: `project` is `owner/number`, `""` when
 `[github-project]` names none (and `problem` when the table doesn't
@@ -444,8 +444,8 @@ action at a time: another is `busy`.
 ### The cycle (49, 50)
 
 Experimental (ADR 0018): off, both answer 404 `experimental`. Built in
-`next/app` (`cycle.go`, `cycleact.go`, `pulls.go`) on
-`next/domain/cycle`.
+`app` (`cycle.go`, `cycleact.go`, `pulls.go`) on
+`domain/cycle`.
 
 **The read (49)** is `{step, at, of, name, stage, done, gate, risk,
 skipped, note, waits, mine, actions, evidence, id, version,
@@ -717,9 +717,9 @@ What the table drops, in short:
 
 ## Serving
 
-`git-board-next serve` serves the API and the web app, embedded in the
-binary (ADR 0012: `next/web`'s build, [the web app](web.md)), until
-Ctrl-C. A bare `git-board-next` opens the board in the browser: the one
+`git board serve` serves the API and the web app, embedded in the
+binary (ADR 0012: `web`'s build, [the web app](web.md)), until
+Ctrl-C. A bare `git board` opens the board in the browser: the one
 already running for this repository if there is one, else it starts one
 here. It listens on `localhost`, port 8080 or the next one free on both
 loopback addresses; `--addr` chooses (an address other machines reach
@@ -727,5 +727,5 @@ exposes the board and the forges' tokens to them). The running board is
 found by `<git dir>/git-board/server.json` (its URL and pid), checked
 against the `git_dir` its `/api/board` answers.
 
-The web app is `next/web` ([the web app](web.md)); v1's `web/` stays
-v1's, until the switch.
+The web app is `web/` ([the web app](web.md)); v1's was deleted at the
+switch (M7).

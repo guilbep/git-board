@@ -24,7 +24,7 @@ A forge is read and written with a token, never kept in git-board's files: `.git
 
 Someone else with a token of their own on the forge, in their own credential helper, has their comments posted as themselves when they sync; the others' are posted by the posting account, under a line naming them.
 
-The GitHub Project isn't read with a forge's token but with the `gh` command, logged in on its own (`gh auth login`): the `read:project` scope to read it, `project` to write it.
+The GitHub Project is read and written through GitHub's GraphQL API with the GitHub forge's token, found as above: it needs the `read:project` scope to read the Project, `project` to write it.
 
 ## Adding a forge
 
@@ -34,7 +34,7 @@ Only `origin` is read: a fork's `upstream`, or a colleague's remote, isn't where
 
 - `github.com` is GitHub, its project `owner/repo` as GitHub spells it: each run reads the repository's `full_name` once, as a URL's case is only your typing and the sync keys its links on the name (`git@github.com:epfl-enac/wiki.git` is `EPFL-ENAC/wiki`, as a table naming it). One GitHub doesn't answer for is left out of that run, with why.
 - `gitlab.com`, or a host whose first label holds `gitlab`, is GitLab. The web host drops a first label `ssh`, or a first label's `-ssh`: `git@gitlab-ssh.epfl.ch:EPFL-ENAC/wiki.git` is `gitlab.epfl.ch`, project `EPFL-ENAC/wiki`. Each run reads the project's numeric id once, as its links are keyed on it; a project whose id can't be read is left out of that run, with why, and the others go on.
-- Any other host is skipped, and Settings › Sync, `git board switch` and `git board sync` say which URL.
+- Any other host is skipped, and Settings › Sync and `git board sync` say which URL.
 
 They are named by their kind, `github`, `gitlab`, then `github-2`… when a kind repeats. One table or more turns this off, and so does `discover = false` in `[forges]`.
 
@@ -81,7 +81,7 @@ A sync moves your issues to three places, and each has its own commands with git
 
 Each acts at once and takes `--check`, which says what it would do and writes nothing. `pull` takes the other side's changes, `push` sends this clone's, `sync` does both.
 
-`git board sync` runs the whole sync, as Settings › Sync does, each step in a line; `--check` is its dry run, and `--git` syncs with git alone: a pull, then a push. It has no check to wait for: `--check` first is yours to run. Creations wait for consent all the same: on a forge never synced with, or 50 or more on one in a run, none is made without `--allow-create`, and the sync says how many wait. It and `git board switch` print the forges found in the remotes, one line each: name, host and project, a GitLab one's with its id, and each URL they skip.
+`git board sync` runs the whole sync, as Settings › Sync does, each step in a line; `--check` is its dry run, and `--git` syncs with git alone: a pull, then a push. It has no check to wait for: `--check` first is yours to run. Creations wait for consent all the same: on a forge never synced with, or 50 or more on one in a run, none is made without `--allow-create`, and the sync says how many wait. It prints the forges found in the remotes, one line each: name, host and project, a GitLab one's with its id, and each URL they skip.
 
 Otherwise the forges are `.git-board.toml`'s, edited in Settings or by hand:
 
@@ -103,23 +103,12 @@ sync = true
 
 ## Leaving git-bug
 
-A repository whose issues were git-bug's moves to git-board in this order:
-
-1. Stop git-bug's bridge sync wherever it runs: CI, cron, other clones.
-2. `git board switch`, read its report, then `git board switch --apply`.
-3. `git board sync`. It pushes `refs/board` and the switch's mark to
-   origin.
-4. Every other clone runs `git board sync`, which switches it too. No one
-   else runs the switch.
-5. Once no clone or automation uses git-bug, `git board prune` removes
-   git-bug's data from the clone: its refs (`refs/bugs`, `refs/identities`
-   and the old release records in `refs/releases`), its cache
-   `.git/git-bug` and its `git-bug.*` config keys. `-n` says what it would
-   remove. The refs go to a bundle in the git directory first, which it
-   names: `git fetch <bundle> 'refs/*:refs/*'` brings them back.
-6. Last, `git board prune --remote origin` deletes git-bug's refs on
-   origin too. Nothing backs those up: a clone still on git-bug loses its
-   shared issues.
+git-board v0.12 and later don't read git-bug's data, nor migrate it. A
+repository whose issues are still git-bug's (`refs/bugs`) is refused, with
+a message naming the migration: migrate it with git-board v0.11 first,
+its `git board switch` then `git board prune`, as [v0.11's
+guide](https://github.com/guilbep/git-board/blob/v0.11.6/docs/guide/forges.md#leaving-git-bug)
+says, then use v0.12 on the repository.
 
 ## Starting over
 

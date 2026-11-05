@@ -48,7 +48,7 @@ git-board upgrades and downgrades: [The file's schema version](config-schema.md)
 | `[branches]` | the branch an issue suggests: its base and its name |
 | `[cycle]`, `[cycle.signoffs]` | the development cycle: which statuses are which stage, where plans live, which files are tests, who holds each gate |
 | `[template]` | the template the file came from, and its version, for lint's drift |
-| `[repos]` | the GitHub repositories whose labels Settings › Labels and `git board lint --create-labels` keep, and how the forges hold assignees |
+| `[repos]` | the GitHub repositories the project spans, and how the forges hold assignees |
 
 ## Fields
 
@@ -139,7 +139,6 @@ A value's description is what its label says on GitHub, 100 characters at most (
 bug = "Something isn't working"
 ```
 
-Settings › Labels shows each label's color and description beside GitHub's, and writes GitHub's into these tables (see Repos).
 
 ## Labels
 
@@ -164,7 +163,7 @@ needs-design = "waits for a design decision"
 | `colors` | the palette, in turn | A label's color: a palette name or `#rrggbb`, as in `[fields.<name>.colors]`. |
 | `descriptions` | none | A label's description on GitHub, 100 characters at most. |
 
-Settings › Labels sends them to GitHub with the fields' labels and no longer counts them among the labels outside the project's. With the table, `git board lint` reports an open issue's plain labels outside the list (`label-outside`); an empty list allows none. Without it, lint says nothing about labels and the issue's head has nothing to pick: a label already on an issue shows with a warning.
+With the table, `git board lint` reports an open issue's plain labels outside the list (`label-outside`); an empty list allows none. Without it, lint says nothing about labels and the issue's head has nothing to pick: a label already on an issue shows with a warning.
 
 ## Views
 
@@ -341,7 +340,7 @@ write = true
 | `number` | number | none | The Project's number, as in its address. |
 | `write` | true / false | false | Lets a sync write git-board's changes to the Project. Off, the Project is only read. |
 
-The token needs the `project` scope: `gh auth refresh -s project`.
+git-board reads and writes the Project through GitHub's GraphQL API with the GitHub forge's token ([Forges › Tokens](forges.md#tokens)): it needs the `read:project` scope to read the Project, `project` to write it.
 
 ## Forges
 
@@ -430,48 +429,39 @@ A branch names an issue when its first number is the issue's number, with or wit
 
 *These are the toggles of Settings › Experimental; this section is the reference.*
 
-Three features are still being built, and stay off unless the team turns them on. git-board's core, your issues kept in git and synced with whatever forge, works without them.
+Some features are still being built, and stay off unless the team turns them on. git-board's core, your issues kept in git and synced with whatever forge, works without them.
 
 ```toml
 [experimental]
-features = ["cycle", "agents", "worktrees"]
+features = ["cycle"]
 ```
 
 | Feature | What it turns on |
 |---|---|
-| `cycle` | The development cycle: the cycle's issue page, its steps and gates, step 4's tests and checks, the Work page, Settings › Cycle, the issue page choice in Settings › You, and `git board verify`. |
-| `agents` | Coding agents: Start an agent and Brief the agent on an issue, Send to the agent from the composer and a review thread, the Work page's Agents, and the AI's risk suggestion (`LLM_BASE_URL`). |
-| `worktrees` | Settings › Worktrees, which writes `wtx.toml` ([Worktrees](#worktrees)). |
+| `cycle` | The development cycle: the cycle on the issue page, its steps and gates, step 4's tests and checks, the Work page, Settings › Cycle, and `git board verify`. |
+| `agents`, `worktrees` | Nothing, since v0.12: they were v0.11's coding agents and Settings › Worktrees. git-board knows the names, so a file that lists them gets no warning; the agents are `git-board-agents` now, which needs no switch ([Worktrees](#worktrees)). |
 
 The file's list is the team's. One person trying a feature alone sets it in their clone's git config, a comma list that replaces the file's list in that clone (empty turns them all off there):
 
 ```sh
-git config board.experimental cycle,agents   # this clone
+git config board.experimental cycle          # this clone
 git config --unset board.experimental        # back to the file's list
 ```
 
 While a feature is off:
 
 - its commands are hidden from `git board --help` and refuse with a sentence naming the switch (`git board verify` is the cycle's);
-- its API routes answer 404 with `{"code": "experimental", "error": "…"}`, the error naming the switch: `/api/issues/{id}/cycle…`, `/api/issues/{id}/tests…`, `/api/checks/setup`, `/api/work` and `PUT /api/me/view` (the cycle); `/api/issues/{id}/agent…` (the agents); `/api/worktrees…` (the worktrees);
+- its API routes answer 404 with `{"code": "experimental", "error": "…"}`, the error naming the switch: the cycle's, `/api/issues/{id}/cycle…` and `/api/cycle` ([the HTTP API](../rewrite/api.md#the-cycle-49-50));
 - the web UI hides its pages, tabs, menu entries and controls: `GET /api/me` lists the features on as `experimental`;
-- with the cycle off, an issue opens on the classic page whatever `board.view` says, a comment carries no step, and `[cycle]` is not checked: what a broken table fails is a warning in Settings › The file, not an error that stops every command. With the cycle on, it is refused as before.
+- with the cycle off, a comment carries no step, and `[cycle]` is not checked: what a broken table fails is a warning in Settings › The file, not an error that stops every command. With the cycle on, it is refused as before.
 
 A name the list doesn't know is a warning, and ignored.
 
 ## Cycle
 
-**On or off.** The cycle is experimental: with `"cycle"` in [`[experimental] features`](#experimental-features), a board with a `[cycle]` table walks the cycle. Any of its keys, or a subtable such as `[cycle.signoffs]` alone, is enough, even an empty `[cycle]`. A board without one opens its issues on the **classic page**: the title and its meta line; the Conversation tab with the description, every comment and change in order, and the composer; the History tab; and the fields aside. Each person can choose for themselves, and that wins over the file: in Settings › You (As the board says, Classic, or The cycle's), which sets `board.view` in this repository's git config, or with git config directly:
+**On or off.** The cycle is experimental: with `"cycle"` in [`[experimental] features`](#experimental-features), a board with a `[cycle]` table walks the cycle. Any of its keys, or a subtable such as `[cycle.signoffs]` alone, is enough, even an empty `[cycle]`. Turning the cycle off loses nothing: the cycle's comments, verdicts and sign-offs stay comments, and come back as the cycle's when it is on again.
 
-```sh
-git config board.view cycle             # this repository: the cycle's page
-git config --global board.view classic  # every repository: the classic page
-git config --unset board.view           # back to what the file says
-```
-
-A choice in Settings › You, or a `[cycle]` table saved in Settings › Cycle, shows at once; a `git config` run from a terminal shows when you reload the page. An issue already open keeps its page until you open the next one. Settings › You says which page your issues open on, and why. On the cycle's page, the issue's meta line ends with a **Cycle | Classic** switch: Classic shows the issue as someone on the classic page sees it, and the next issues too, in that tab, until you switch back or reload. It saves nothing. With something unsent in a comment box, it asks first, since the two pages have their own. With the classic page the header has no Work. Turning the cycle off loses nothing: the cycle's comments, verdicts and sign-offs stay comments, and come back as the cycle's when it is on again (docs/prd/classic-view.md).
-
-With the cycle on, an issue's page is its **step** in the development cycle (docs/prd/cycle-protocol.md). Under the title, the step bar runs through the project's steps, a cell each, numbered in order: by default the seven, Intent, Risk, Plan, Tests, Code, Review and Verify (`steps`, below). A done step reopens when clicked, a later one is locked and says why ("opens when the PR is ready for review"), and a skipped one says so. The current step is the page's main section: at Intent the description, its criteria and Move to ready; at Risk the three classes; at Plan the plan file, who drafted it, Approve the plan or Ask the agent to revise; at Code Mark ready for review; at Review the PR and its changes; at Verify the full run, the criteria to tick, the sign-off tiles, Sign off or Send back to in-progress. A status bar under it gives the branch and its head, the PR and its checks, and what waits for the forges. The right column is the discussion: **This step** (the comments posted on that step), **All** (every comment and event in order) and **History**, with the fields under it. Each step's button moves the status, as the next table says. Under 900px the step bar shows numbers only, with the current step's name, and the discussion goes under the step. The step is never stored: the server computes it on every read from the status and the evidence. The status is the floor (its stage gives the first step it can be at), and the evidence moves the step within that stage, never below it. Evidence that disagrees with the status shows after the line ("plan not approved"), it never makes another step.
+With the cycle on, an issue's page shows its **step** in the development cycle (docs/prd/cycle-protocol.md) above the description, in one box: the project's steps, a cell each, numbered in order (by default the seven, Intent, Risk, Plan, Tests, Code, Review and Verify: `steps`, below), the current step with its gate and whose turn it is, the issue's branches, the pull request with its checks (Open, Edit, Merge, Check again), the environments, and the controls the server offers the viewer now: Accept without criteria, the description's verdict, the risk class, the status moves, Approve the plan, Mark ready for review, the review, and at Verify the criteria's checks, a pasted run and the sign-off ([the web app](../rewrite/web.md)). The step is never stored: the server computes it on every read from the status and the evidence. The status is the floor (its stage gives the first step it can be at), and the evidence moves the step within that stage, never below it. Evidence that disagrees with the status shows after the line ("plan not approved"), it never makes another step.
 
 ```toml
 [fields]
@@ -702,27 +692,28 @@ error: not proven: typecheck not run at 4c1e2a0
 
 ### The Work page
 
-**Work** (`/work`, first in the header) is what needs a person, computed from every open issue's step. **Mine** is the viewer's: **Needs you** lists the issues whose gate waits for the viewer, or where another person asked them something, oldest wait first, with the step, what it waits for, since when, and the action (the three risk buttons, Answer, Read the plan, Review, Sign off, or Open); **Waiting on others** lists the issues the viewer is involved in (author, or named by a field such as `pm:alice`, on the issue or inherited from `[roles]`) whose gate waits for someone else. **Team** is every open issue: anyone's gates join Needs you, and the rest join Waiting on others. An issue is in one group at most. **Agents** is one row per linked git worktree (`git worktree list`): its branch, its last commit, and the issue whose evidence branch it is, with that issue's step and state. **To send** counts what waits for the forges, as Settings › Sync does, with Send all (to the forges alone) and Check first. **Since the last retro** counts the comments with `correction` metadata on open issues since the current sprint's start (`[sprints]` is the clock; without one it says so).
+**Work** (`/work`, first in the header) is what needs a person, computed from every open issue's step. **Mine** is the viewer's: **Needs you** lists the issues whose gate waits for the viewer, or where another person asked them something, oldest wait first, with the step, what it waits for, since when, and the action (the three risk buttons, Answer, Read the plan, Review, Sign off, or Open); **Waiting on others** lists the issues the viewer is involved in (author, or named by a field such as `pm:alice`, on the issue or inherited from `[roles]`) whose gate waits for someone else. **Team** is every open issue: anyone's gates join Needs you, and the rest join Waiting on others. An issue is in one group at most. What waits for the forges is Settings › Sync's.
 
-A question is a comment by someone else than the viewer with `ask` metadata, or, failing that, whose text ends in a question mark; the viewer's next comment answers it. Since is the issue's last state change (a status, label, title or card comment), not a plain comment. `GET /api/work?who=me|team` returns the groups; it needs an identity with a login, as the Inbox does.
+A question is a comment by someone else than the viewer with `ask` metadata, or, failing that, whose text ends in a question mark; the viewer's next comment answers it. Since is the issue's last state change (a status, label, title or card comment), not a plain comment. `GET /api/cycle?who=me|team` returns the groups, paged as the lists are; it needs an identity with a login, as the Inbox does.
 
 ## Worktrees
 
-*These are the forms of Settings › Worktrees; this section is the reference.*
+git-board starts no coding agent and makes no worktree: v0.12 moved them
+to a program of their own, `git-board-agents` (`git board-agents`, in
+`contrib/board-agents` until it has its own repository; [ADR
+0021](../adr/0021-git-board-v2-same-data-new-code.md)). It runs
+[wtx](https://github.com/EPFL-ENAC/wtx), one agent, one worktree, one
+branch, one PR, and speaks to the board through git-board's command line
+and HTTP API alone. Its README says how to install it, what it needs, and
+its commands: `start`, `brief`, `approve`, `status`, `stop`, `done`,
+`risk`.
 
-Experimental: Settings › Worktrees needs `"worktrees"`, and starting or briefing an agent `"agents"`, in [`[experimental] features`](#experimental-features).
-
-git-board starts agents with [wtx](https://github.com/EPFL-ENAC/wtx): one agent, one worktree, one branch, one PR. wtx, `wt` and `tmux` run on the machine where `git board serve` runs, and git-board calls wtx there, with an argument list, never a shell line.
-
-**Settings › Worktrees** says whether wtx, wt and tmux are on that machine (`wtx doctor --json`), then **Set up wtx**: what wtx read in the repository (`wtx init --edit --no-notes`, the existing `wtx.toml` merged with a fresh scan), to correct before writing. The base branch, the protected branches, the agent and its plan and build models are edited; the ports and panes are shown as wtx read them. **Who commits** is a deny rule in `[permissions] deny`: *A person commits and opens the PR* denies `Bash(git commit *)`, `Bash(git push *)` and `Bash(gh pr create *)`; *The agent may commit; a person pushes* denies `Bash(git push *)` alone. **Never allowed** is the other deny rules, added to wtx's own (force pushes, pushes to the protected branches, changing the remote). **Preview the files** runs `wtx init --from-json` in a scratch repository and shows `wtx.toml` and `.wt.toml`; **Write wtx.toml** runs the same command in the main checkout with `--force`, so the written files are the preview byte for byte; wtx also adds its lines to `.gitignore`. A missing who-commits rule is written as *A person commits*, the radio's default. They are left uncommitted: you commit them. git-board writes no TOML itself.
-
-**Start an agent**, under an issue's step and on the Work page for an issue without a worktree, writes a prompt file and runs `wtx go <branch> --prompt <file> --no-attach`. The branch is the issue's evidence branch, else the `[branches]` name for it. **Brief the agent**, once the worktree exists, runs `wtx brief <branch> --prompt <file>`; on the plan step, **Ask the agent to revise** posts its comment and sends it as a brief too, and the planner starts over in plan mode. **Approve the plan**, and any brief past the plan step, add `--build`: the agent carries on its own conversation in its build phase, so it keeps what it read and isn't asked to accept the plan again (wtx with `brief --build`, EPFL-ENAC/wtx 631df3f or later). The prompt file holds git-board's words first (the issue, its step, the gate, what is asked now, the branch, the plan file, and what you typed), then the issue's title and description under the heading "The issue, as the forge holds it", every line quoted with `> `: anyone who can write an issue on the forge writes them, so they are data for the agent, not instructions. The agent's permissions come from `wtx.toml` alone; git-board passes no agent, model or permission flag.
-
-wtx runs only when the server listens on loopback alone (not `--addr 0.0.0.0:…`), `wtx` is on its `PATH`, and, for a write (Preview, Write, Start, Brief), the request carries this board's own Origin. Otherwise the page says why: `exposed`, `no-wtx`, `origin`; without a `wtx.toml` the page says "No wtx.toml in this repository yet". On the Work page, **Agents** adds each worktree's session from one `wtx status --json`: running, asks permission, waits for a brief, done, or down. `GET /api/worktrees`, `POST /api/worktrees/preview` and `/init`, `GET /api/issues/{id}/agent` and `POST /api/issues/{id}/agent/go|brief` are the endpoints.
+Settings › Worktrees, the issue page's agent panel and the Work page's
+Agents were v0.11's; they are not in git-board's web app.
 
 ## Numbers
 
-A project can number its issues itself, `CO2-3075`, instead of leaning on a forge's numbers. The counter is in git, `refs/board/seq` on `origin` (never a mirror): no key here. A board kept elsewhere ([Where the board is kept](datastores.md)) keeps it there: a row in PostgreSQL, `<folder>/.board/numbers` in a Markdown folder, which numbers on the default branch alone (on another, Settings › Numbers says why numbering waits). Start it once, for everyone, from **Settings › Numbers** (`#/settings/numbers`): it suggests a prefix from the repository's name (`git-board` → `GB`, `co2-calculator` → `CO2`) and a start above every number it knows (your issues' forge numbers, and GitHub's newest issue or pull request when a GitHub forge answers through `gh`), shows what your issues become, and names what it pushes and where before **Start numbering**. Once started, it says how many issues wait for a number, and **Number them now** numbers those origin has. Or from a terminal:
+A project can number its issues itself, `CO2-3075`, instead of leaning on a forge's numbers. The counter is in git, `refs/board/seq` on `origin` (never a mirror): no key here. A board kept elsewhere ([Where the board is kept](datastores.md)) keeps it there: a row in PostgreSQL, `<folder>/.board/numbers` in a Markdown folder, which numbers on the default branch alone (on another, Settings › Numbers says why numbering waits). Start it once, for everyone, from **Settings › Numbers** (`#/settings/numbers`): it suggests a prefix from the repository's name (`git-board` → `GB`, `co2-calculator` → `CO2`), takes the start (above every number an issue has on a forge, below), and names what it pushes and where before **Start numbering**. Once started, **Number them now** numbers the issues origin has without one; `git board numbers` also says how many wait. Or from a terminal:
 
 ```bash
 git board numbers init --prefix CO2 --start 3052
@@ -794,15 +785,8 @@ A deploy edits the overlay's `kustomization.yaml` and nothing else (comments, ke
 list = ["acme/app"]
 ```
 
-`list` is the GitHub repositories whose labels the project keeps; without `[repos]`, origin's when it is on GitHub. They are reached through GitHub's API with the forge sync's token: `GITHUB_TOKEN` when set, else git's credential helper for github.com ([Forges](forges.md#tokens)). Not `gh`'s, which may be another token. When a repository can't be read, the tab says why and offers no Send to GitHub.
+`list` is the GitHub repositories the project spans, the first one numbering the issues; without `[repos]`, origin's when it is on GitHub.
 
-**Settings › Labels** lists each label the project defines (every field's `options`, the sprints, the kinds) with its color, description and open issues, and its state on each repository: *same*, *color differs*, *description differs* or *missing*.
-
-- **Adopt** writes GitHub's color and description of a label into `[fields.<name>.colors]` and `[fields.<name>.descriptions]`, and opens the Project file tab to review and save. An organization's labels keep their colors this way.
-- **Send to GitHub** first lists, per repository, each label it creates and each change, then creates the missing labels and updates those whose color or description the file sets. A label outside the project's is never touched, and one the file gives no color or description of its own keeps GitHub's.
-- **On GitHub** also lists the GitHub labels outside the project's (a `bug` beside `kind:bug`, GitHub's old defaults) with their issues. **Delete** removes one from its repository, after a confirmation that says how many issues lose it.
-- **Lint** shows `git board lint`'s findings on the open issues, a missing value counted per field with the issues a link away.
-
-`git board lint --create-labels` prints the same plan, and `--apply` carries it out.
+Comparing the project's labels with each repository's on GitHub, and creating the missing ones there (v0.11's Settings › Labels and `git board lint --create-labels`), aren't in v0.12 yet: `lint --create-labels` says so.
 
 An issue's `assignee:<login>` labels are always the forge's own assignees, on every forge (GitLab's free edition takes one; the others stay in git-board).

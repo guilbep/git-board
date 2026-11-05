@@ -5,7 +5,7 @@ GitHub and GitLab need, as checked live for the git-bug fork that came
 before the core. [Sync](sync.md) gives the rules they serve.
 
 An adapter implements the core's `forge.Forge` and passes its conformance
-suite, `core/forge/conformance`, over a fake forge served as that forge's
+suite, `forge/forgetest`, over a fake forge served as that forge's
 API. The adapter, not the engine, applies its listing margin, paces its
 writes and retries a rate limit. It maps the forge's answers to the core's
 errors: refused for good, not found, confidential, and no token.
@@ -58,7 +58,7 @@ git-board's settings, and the people who have a token of their own there
 
 ## GitHub
 
-The adapter is `core/forge/github`: a project `owner/repo` on github.com
+The adapter is `forge/github`: a project `owner/repo` on github.com
 or a GitHub Enterprise host. It speaks GitHub's REST API,
 `https://api.github.com` or `https://<host>/api/v3`, plus one GraphQL
 query for the times REST doesn't give.
@@ -132,7 +132,7 @@ query for the times REST doesn't give.
 
 ## GitLab
 
-`core/forge/gitlab` is the adapter, over GitLab's REST API v4.
+`forge/gitlab` is the adapter, over GitLab's REST API v4.
 
 - **A project** is named by its numeric id or its path, on a base URL like
   `https://gitlab.epfl.ch`. Its key is the host and the project as named:

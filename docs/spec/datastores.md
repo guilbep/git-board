@@ -5,10 +5,12 @@ elsewhere: in PostgreSQL, or in a folder of Markdown files
 ([Where the board is kept](../guide/datastores.md)). This page is their
 formats, and the format of the project numbers' counter, which every
 datastore that counts keeps as the same bytes. It is precise enough to
-reimplement them from: the code that wrote them (`core/pgstore`,
-`core/mdstore`, `internal/store/numbers.go`, `internal/store/markdown.go`)
+reimplement them from: the code that wrote them (v0.11's `core/pgstore`,
+`core/mdstore`, `internal/store/numbers.go` and `internal/store/markdown.go`,
+whose boards are the golden boards git-board is held to, [compat](../rewrite/compat.md))
 decides what this page should have said, and this page decides for any
-code written after.
+code written after, as v0.12's `store/pg`, `store/md`, `app/origin.go`
+and `domain/issues/mdfiles` were.
 
 ## What every datastore keeps
 

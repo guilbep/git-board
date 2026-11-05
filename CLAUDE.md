@@ -8,7 +8,7 @@ web typecheck); a failing hook is a fix to make, not one to skip.
 ## Tests
 
 - While developing, and for each commit on the way, run the package's own
-  tests: `go test ./internal/server/ -run TestName`. The full `make ci` takes
+  tests: `go test ./surface/http/ -run TestName`. The full `make ci` takes
   minutes: run it once, at the end.
 - A new test calls `t.Parallel()` first, unless it chdirs, sets an
   environment variable, or swaps a package-level variable: then it stays

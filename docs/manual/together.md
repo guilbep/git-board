@@ -74,4 +74,6 @@ account's person after the first sync.
 
 A team that keeps a GitHub Project (v2) can sync its fields with the
 labels: `git board project configure`, then `git board project pull` or
-`sync`. It needs `gh`. See the README's *The GitHub Project* section.
+`sync`. It reads and writes the Project with the GitHub forge's token,
+which needs the `project` scope: see [Configuration › GitHub
+Project](../guide/configuration.md#github-project).

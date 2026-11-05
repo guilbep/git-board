@@ -23,9 +23,13 @@ the [PRD][prd] where it was decided.
 - Clean room: the spec is in our own words. Implementers read it, the PRD
   and the milestone plans, never git-bug's code or its spec. ([PRD][rules])
 - `core/` never imports `github.com/git-bug/git-bug`, and a test fails if
-  it does. ([PRD][rules])
+  it does. ([PRD][rules]) Since v0.12 nothing does: git-bug isn't in
+  `go.mod`.
 - The library is a library: `github.com/guilbep/git-board/core/...` is
   importable, and never imports git-board's `internal/`. ([PRD][rules])
+  Since v0.12 ([ADR 0021](../adr/0021-git-board-v2-same-data-new-code.md))
+  the module is the library, in layers: `layers_test.go` lets each package
+  import only the ones below it.
 - Version 1 is what the problem forces, for GitHub and GitLab. The rest
   waits until someone asks. ([PRD][rules])
 - The fork stays frozen at v0.11.1-sync.10 until the core passes the

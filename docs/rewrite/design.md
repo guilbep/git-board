@@ -1,6 +1,8 @@
 # git-board v2: the design of a rewrite
 
-- Status: proposed (2026-11-05), for Pierre to decide.
+- Status: accepted ([ADR 0021](../adr/0021-git-board-v2-same-data-new-code.md),
+  2026-11-05), and built: milestones M0 to M7 (section 5). v2 is
+  git-board since the switch, v0.12.0.
 - Asked: "start on a complete rewrite from scratch knowing what you
   learned this night, with elegance/modularity and speed in mind".
 - Builds on every ADR, most of all [ADR 0002](../adr/0002-datastores.md)
@@ -220,28 +222,29 @@ conformance suite (`core/forge/conformance`).
 
 ### Packages
 
-v2 lives in `next/` (section 5). Each layer imports only the layers above
-it in this table; a test enforces it from day one.
+v2 grew in `next/` (section 5), and is the module's root since the switch
+(M7): the paths below are the root's. Each layer imports only the layers
+above it in this table; a test enforces it from day one (`layers_test.go`).
 
 | Package | Purpose |
 |---|---|
-| `next/kernel` | entities, operations, ids, the order, kinds, the board: open, read, write, watch |
-| `next/kernel/pack` | the format's bytes: encode a pack, hash it as a git blob, sort by (clock, hash) |
-| `next/store` | the `Datastore` interface, its capabilities and errors |
-| `next/store/git`, `pg`, `md`, `forgecopy`, `mem` | the datastores; `mem` for tests |
-| `next/store/storetest` | the conformance suite every datastore runs |
-| `next/view` | the materialized state: rows, terms, text, heads; sqlite and PostgreSQL |
-| `next/conf` | `.git-board.toml`: tables registered by domains, read once, written table by table |
-| `next/forge`, `forge/github`, `forge/gitlab`, `forge/fake`, `forge/forgetest` | the forges' adapters and their conformance suite |
-| `next/sync` | the sync engine, generic over kinds: plan, pull, push, records, journal, lock |
-| `next/domain/people` | the `person` kind; who owns an account; me |
-| `next/domain/issues` | the `issue` kind; fields (ADR 0007), filters, search, the inbox, numbers |
-| `next/domain/releases` | the `release` kind; versions, overlays, proof (ADR 0001) |
-| `next/domain/cycle` | an issue's steps; experimental (ADR 0018) |
-| `next/app` | opens a board, wires the domains, the one API every surface calls, errors |
-| `next/surface/cli`, `http`, `tui` | adapters over `app`; `http` serves the web app |
-| `next/tools/…` | the GitHub Project bridge, the release runner: apps over `app` (agents left: section 5) |
-| `next/cmd/git-board` | `main`: the binary |
+| `kernel` | entities, operations, ids, the order, kinds, the board: open, read, write, watch |
+| `kernel/pack` | the format's bytes: encode a pack, hash it as a git blob, sort by (clock, hash) |
+| `store` | the `Datastore` interface, its capabilities and errors |
+| `store/git`, `pg`, `md`, `forgecopy`, `mem` | the datastores; `mem` for tests |
+| `store/storetest` | the conformance suite every datastore runs |
+| `view` | the materialized state: rows, terms, text, heads; sqlite and PostgreSQL |
+| `conf` | `.git-board.toml`: tables registered by domains, read once, written table by table |
+| `forge`, `forge/github`, `forge/gitlab`, `forge/fake`, `forge/forgetest` | the forges' adapters and their conformance suite |
+| `sync` | the sync engine, generic over kinds: plan, pull, push, records, journal, lock |
+| `domain/people` | the `person` kind; who owns an account; me |
+| `domain/issues` | the `issue` kind; fields (ADR 0007), filters, search, the inbox, numbers |
+| `domain/releases` | the `release` kind; versions, overlays, proof (ADR 0001) |
+| `domain/cycle` | an issue's steps; experimental (ADR 0018) |
+| `app` | opens a board, wires the domains, the one API every surface calls, errors |
+| `surface/cli`, `http`, `tui` | adapters over `app`; `http` serves the web app |
+| `tools/…` | the GitHub Project bridge, the release runner: apps over `app` (agents left: section 5) |
+| `cmd/git-board` | `main`: the binary |
 
 `domain/*` never imports another domain upward: releases read issues,
 the cycle reads both, issues read people. A domain imports `kernel`,
@@ -563,7 +566,7 @@ compare-and-swap; a sync is a writer like the others.
 
 ### Sync: one engine, kinds and forges as plug-ins
 
-`next/sync` runs the [Sync](../spec/sync.md) algorithm once, for any kind
+`sync` runs the [Sync](../spec/sync.md) algorithm once, for any kind
 that has a mapper and any forge that carries that kind. The records stay
 operations in `sync` entities, the journal and the lock stay as the spec
 says.
@@ -652,7 +655,7 @@ with their table. One `Set` replaces the 751 lines of `setsection.go`.
 
 ### The application: one API
 
-`next/app` opens a board and exposes each domain as a service. Every
+`app` opens a board and exposes each domain as a service. Every
 surface calls it; none holds a rule.
 
 ```go
@@ -758,7 +761,7 @@ One table, in `app`, read by both adapters. Errors go to stderr prefixed
 - **The spec's examples are fixtures.** Every JSON block of
   `docs/spec/*.md` is parsed by a test and folded; a spec edit that
   breaks the code fails the build, and the other way round.
-- **Golden boards.** `next/testdata/boards/` holds git bundles: v1's
+- **Golden boards.** `testdata/golden/boards/` holds git bundles: v1's
   `boardgen` boards, and hand-made edge cases (a merge, two first commits
   of one sync entity, a tombstone, a broken entity, an unknown field, a
   `refs/board/issue/notes` ref). For each, the output v1 gives for `ls
@@ -767,14 +770,14 @@ One table, in `app`, read by both adapters. Errors go to stderr prefixed
 - **Cross-writes.** `make compat` builds both binaries and runs scripts
   that alternate them on one board: v2 writes, v1 reads, and the other
   way round, on git, PostgreSQL and Markdown. On Markdown the rendered
-  files too (`next/golden/mdfiles_test.go`): after one version's writes
+  files too (`golden/mdfiles_test.go`): after one version's writes
   the folder is what the other renders from no file; the same hand edits
   are read in the same (operations, conflicts, files); a `datastore
   copy` into a folder renders the same files.
 - **Budgets.** The benchmarks of section 4 run on a 20,000-issue board in
   CI (nightly), and fail above budget.
 - **The web app's e2e tests** (`web/e2e`) run against `git-board-next
-  serve` from M5 on.
+  serve` (`git board serve` since M7) from M5 on.
 
 ## 4. Speed budget
 
@@ -878,6 +881,9 @@ question (section 6).
 
 ### v2 grows in `next/`, in the same module
 
+As planned, and as built until M7: the switch moved `next/` to the root
+(below).
+
 - `next/` is a tree of this repository and of its Go module,
   `github.com/guilbep/git-board`. One `go.mod`, one `make ci`, one set of
   dependencies (ADR 0017).
@@ -900,7 +906,7 @@ too, so both live in one tree.
 
 - `make compat` (in `make ci` from M1): both binaries, the golden boards
   of section 3, every recorded output compared. Allowed differences are
-  listed in one file, `next/testdata/compat/allowed.txt`, each with its
+  listed in one file, `testdata/compat/allowed.txt`, each with its
   reason (an internal error that was 400 and is 500).
 - Nightly, the same on the 20,000-issue board, with the budgets.
 - From M2, dogfooding: Pierre's boards (git-board's own, co2-calculator)
@@ -908,7 +914,7 @@ too, so both live in one tree.
   --json` and `show --json` of every issue, and reports any difference.
 
 **Dogfooding, as built (2026-11-05).** `make dogfood DIR=<repository>`
-runs `next/golden`'s `TestDogfood`: each binary reads its own copy of the
+runs `golden`'s `TestDogfood`: each binary reads its own copy of the
 board (a clone of the repository's commit, its working tree's
 `.git-board.toml`, its `refs/board/*`, no remote; the repository is never
 written, nothing is fetched or pushed), and `ls --json`, `ls is:closed
@@ -931,10 +937,11 @@ Its baseline is a release, and **v0.11.6 can't be one**: it has no `show`
 command, and its `ls --json` has neither `closed_at` nor `comments`
 (added on main since). Against it every case differs (git-board's own
 board, 2026-11-05: 42 of 42). v1 built from this tree and v2 agree on that
-board, every case. So the job needs a last v1 release cut from main before
-the switch (v0.11.7, by a human: `git board release cut`); until then its
-daily run fails, or runs by hand with `old_ref` a commit of v1. At the
-switch (M7), the Makefile's `./next/golden/` becomes `./golden/`.
+board, every case. So the job needed a last v1 release cut from main
+before the switch (v0.11.7). Pierre decided otherwise (M7, below): no
+v0.11.7 is cut, and the baseline is v1 built from its last commit,
+`7a546cc` (the merge base of the switch with main), named in the
+Makefile's `V1_REF` and the job's.
 
 ### Milestones
 
@@ -949,16 +956,16 @@ Sizes are lines of Go, without tests; tests are about as many again.
 | **M4** | `forge` (ported), `sync` engine, issue and release mappers; `fetch`, `pull`, `push`, `sync` | `forgetest`; sync's tests from v1 ported and green; v1 and v2 sync one board alternately | 5,000 |
 | **M5** | `surface/http` on `app`, every route; change events | every transcript matches; `web/e2e` green on v2 | 4,000 |
 | **M6** | `domain/releases`, proof, `domain/cycle`, the TUI, the tools (the release runner, the GitHub Project bridge, insights, lint, export and import; agents left, [below](#agents-and-wtx-their-own-binary)) | every command of v1 exists in v2, or is dropped by a decision | 6,000 |
-| **M7** | The switch: `next/` becomes the root, `cmd/git-board` is v2, v1 is deleted | below | 0 |
+| **M7** | The switch: `next/` becomes the root, `cmd/git-board` is v2, v1 is deleted | done, 2026-11-05 (below) | 0 |
 
 **M4, as built (2026-11-05).** `ls` and `show` read the sync records
-(`next/sync`): `pending.txt` is empty. The adapters, the conformance
-suite (`next/forge/forgetest`, green over the fake, GitHub and GitLab)
+(`sync`): `pending.txt` is empty. The adapters, the conformance
+suite (`forge/forgetest`, green over the fake, GitHub and GitLab)
 and v1's syncer are ported: the kind-free parts (records, texts' forms,
-lock, journal) in `next/sync`, the issue mapper and the run in
-`next/domain/issues/issuesync`, v1's 85 sync tests green there. v1 and
+lock, journal) in `sync`, the issue mapper and the run in
+`domain/issues/issuesync`, v1's 85 sync tests green there. v1 and
 v2 sync one board alternately against one fake forge, and pull, merge
-and push one board between two clones (`next/golden/v1gen`). `forge
+and push one board between two clones (`golden/v1gen`, deleted at M7). `forge
 pull|push|sync`, `fetch`, `pull`, `push`, `sync` and numbering through
 origin's counter run. Left: the `Mapper` interface (with releases, the
 second kind; the run is the issue mapper today), the release mapper, the
@@ -970,17 +977,17 @@ step (built in M6, below).
 
 **M6, as built (2026-11-05, partial).** GitLab replies are posted as
 replies (ADR 0021): the wrapper that hears a run's writes forwards
-`forge.Replier`. `next/domain/releases` is the release kind, its records
+`forge.Replier`. `domain/releases` is the release kind, its records
 read whole from the datastore, v1's versions, tags and overlays, and
 `proof` (ADR 0001). The sync engine has its `Mapper` interface
-(`next/sync`), as a run-level plug-in rather than the field-level shape
+(`sync`), as a run-level plug-in rather than the field-level shape
 above: the issues' run is one mapper (`issuesync.Mapper`), the releases'
 the second (`releasesync`, publish only, to GitHub and GitLab through
 `forge.Releaser`, run by a forge push on a board that publishes
-binaries). The release runner is `next/tools/ship` over `app.Book`; the
+binaries). The release runner is `tools/ship` over `app.Book`; the
 forge's token stays in `app`, which publishes (`ship.Publisher`). The
-cycle is `next/domain/cycle` (+ `work`), its evidence read in `app`;
-`next/tools/code` reads git, `next/tools/branches` names branches. The
+cycle is `domain/cycle` (+ `work`), its evidence read in `app`;
+`tools/code` reads git, `tools/branches` names branches. The
 commands `release`, `deploy`, `verify`, `branch`, `sprint` and `tui` are
 v1's; a golden board, `releases`, holds the release reads, and basic the
 sprint, branch and verify cases. Left: agents, insights, and
@@ -991,12 +998,12 @@ not yet the start from origin's GitHub labels and Project), `lint`
 (its cycle `read:` lines too; not yet `--create-labels`), `export --md` and `import --md` (the
 Markdown datastore's files, `mdfiles`), `reset --hard`, `push --prune`
 and the reset guards on pull and push, and `datastore drop` are v1's,
-each held to v1 by a cross test in `next/golden` (`TestCrossInit`,
+each held to v1 by a cross test in `golden` (`TestCrossInit`,
 `TestCrossLint`, `TestCrossExport`, `TestCrossReset`, `TestCrossDrop`).
 git-bug's `switch` and `prune` are not ported: v0.11 migrates (ADR
 0021).
 
-**The GitHub Project bridge, as built (2026-11-05).** `next/tools/ghproject`
+**The GitHub Project bridge, as built (2026-11-05).** `tools/ghproject`
 is v1's `internal/ghbridge`, copied and owned, the sync engine's third
 mapper (`ghproject.Mapper`): a Project's fields (single select,
 iteration, number, date, text) and the labels, decided field by field
@@ -1014,9 +1021,9 @@ its last run and where each field lives (`places`); the web app has a
 Settings tab for it, its conflicts with their two sides, and Fields'
 places mark a column the Project hasn't. v1's ghbridge tests are
 ported; `projectfake` is a Project served by httptest; and
-`next/golden/v1gen`'s `TestProjectCross` has v1's bridge and v2's take
-turns on one board and one Project: they plan the same at every turn,
-and neither has anything left after the other ran.
+`golden/v1gen`'s `TestProjectCross` (deleted at M7) had v1's bridge and v2's take
+turns on one board and one Project: they planned the same at every turn,
+and neither had anything left after the other ran.
 
 About 31,000 lines of Go where v1 has 55,000. One engineer with agents:
 M0 a week; M1 and M2 three weeks; M3 to M5 four; M6 three; with
@@ -1028,6 +1035,39 @@ reported no difference for two weeks on real boards; the web e2e tests
 pass on v2; and a release of v2 as `git-board` (still `v0.x`) has run a
 week on Pierre's machines. Then one pull request moves `next/` to the
 root and deletes `core/`, `internal/` and the old `cmd/`.
+
+**M7, as built (2026-11-05).** Pierre waived the waiting criteria above
+(ADR 0021): v1 is dropped entirely, with no v0.11 support, and v2 ships
+as v0.12 now; the dogfooding job runs after. One branch,
+`rewrite/switch`, did the switch:
+
+- **v1 deleted**: `core/`, `internal/`, v1's `cmd/git-board`,
+  `cmd/boardgen` and `cmd/smoketui`, `web/` (v1's web app),
+  `golden/v1gen`, v1's API transcripts, the guard between `next/` and
+  v1, and `docs/embed.go`.
+- **`next/` moved to the root**, each package keeping its path under it
+  (`next/kernel` is `kernel`, `next/web` is `web`), and
+  `next/cmd/git-board-next` is `cmd/git-board`: the binary is
+  `git-board`, `--version` says `git-board version <v>`.
+  `cmd/boardgen` is `tools/boardgen`'s, for `make perf`.
+- **The layers**: `layers_test.go` at the root, the table at the new
+  paths; it also checks the table has no cycle and that nothing imports
+  `contrib/`.
+- **Compatibility without v1**: the golden boards and v1's outputs stay,
+  and `make compat` runs git-board against them. The cross tests' v1 side
+  was recorded before the deletion (`testdata/golden/cross/`), and
+  `make golden` now records from git-board, a change of the contract
+  reviewed as one ([compat.md](compat.md#running-it)). `pending.txt`
+  went: it was empty.
+- **Dogfooding** compares git-board with v1 built from `V1_REF`
+  (`7a546cc`), not with a v0.11 tag.
+- `contrib/board-agents` builds `./cmd/git-board` for its test against
+  the server (`GIT_BOARD_BIN` names another).
+- **The docs** describe v0.12 alone: the README (what git-board is, its
+  install, a quick start, related work), CONTRIBUTING (the layout, no v1
+  freeze), the guide and the manual (no v1-only behaviour; git-bug's
+  `switch` and `prune` are v0.11's, to migrate with first), the spec's
+  paths, ADR 0020 (its layout superseded) and ADR 0021 (done).
 
 ### Agents and wtx: their own binary
 
@@ -1041,7 +1081,7 @@ imports nothing of git-board's: it reads and writes the board through the
 one file (`internal/board/board.go`). Its routes are v2's since
 2026-11-05 (`/api/board`, `/api/issues/{id}`, `/api/issues/{id}/cycle`,
 `/api/cycle?who=team`, comments with `If-Match`); a test runs it against
-`git-board-next serve`. v2 lacks three things it used from v1, and it
+`git-board serve`. v2 lacks three things it used from v1, and it
 says so where they're missing: a comment's `cycle:step` (comment `meta`,
 M6), line comments located on the branch's head, and worktrees' paths on
 the Work page (it matches rows by branch). Its README says how it leaves this

@@ -6,8 +6,8 @@
 site_name = "git-board"
 docs_dir = "docs"
 site_dir = "site"
-# docs/embed.go embeds the guide in the binary: not a page, and a copy in
-# site/ would be a Go package of the module
+# no Go file is a page: a copy in site/ would be a package of the module
+# (v0.11's docs/embed.go was one)
 exclude_docs = """
 *.go
 prd/

@@ -105,9 +105,9 @@ this table's last column.
 A change to the file's format is a new version. The checklist:
 
 1. **Code.** Append a `Migration` to `Migrations` in
-   `next/conf/schema.go`, `From` the current version, `To` the next, a
+   `conf/schema.go`, `From` the current version, `To` the next, a
    one-line `Desc`, and raise `Current`. Build `Up` and `Down` from the
-   edits in `next/conf/migrate.go`: `RenameKey`, `MoveKey`,
+   edits in `conf/migrate.go`: `RenameKey`, `MoveKey`,
    `RenameTable`, `MapValue`, `CommentKey` and `UncommentKey`, `DropKey`,
    joined with `Chain`. Each takes a value over several lines (an array,
    a `"""` string) whole: `CommentKey` comments every line of it and
@@ -123,19 +123,19 @@ A change to the file's format is a new version. The checklist:
    in memory, and an error message names a line.
 4. **A changed meaning renames the key.** An older git-board then warns
    of a key it doesn't know, instead of reading a value wrongly.
-5. **Tests.** Add a file to `next/conf/testdata/schema/<name>.v1.toml`
+5. **Tests.** Add a file to `conf/testdata/schema/<name>.v1.toml`
    that has the old form, run
-   `GIT_BOARD_GOLDEN_UPDATE=1 go test ./next/conf -run TestMigrateBothWays`,
+   `GIT_BOARD_GOLDEN_UPDATE=1 go test ./conf -run TestMigrateBothWays`,
    and review the `<name>.v<N>.toml` it writes: `TestMigrateBothWays`
    then checks every fixture up to each version and back, byte for byte
    when no step is lossy. Test the forms the edit refuses beside it.
 6. **This page.** A line in the table of versions, and the form in
    [Configuration](configuration.md).
-7. **Compatibility.** `make compat`, and `make compat BIN=<git-board-next>`.
+7. **Compatibility.** `make compat`.
 
 ## For Settings and the HTTP API
 
-`next/app` gives the versions: `Config.SchemaVersion` is the file's (0
+`app` gives the versions: `Config.SchemaVersion` is the file's (0
 without a file), `app.CurrentSchema` git-board's, `app.ConfigSchema` both
 and the pending steps, `app.MigrateConfig` an upgrade or a downgrade,
 and `conf.ForWrite` the text a write starts from (upgraded, or refused

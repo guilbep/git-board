@@ -1,18 +1,18 @@
 # v2: the web app
 
-- Status: built 2026-11-05, in `next/web`, served by `git-board-next`.
-  v1's `web/` stays, served by v1, until the switch; it is deleted with
-  v1 ([ADR 0021](../adr/0021-git-board-v2-same-data-new-code.md)).
+- Status: built 2026-11-05 in `next/web`, served by `git-board-next`;
+  `web/`, served by `git-board`, since the switch (M7), when v1's `web/`
+  was deleted with v1 ([ADR 0021](../adr/0021-git-board-v2-same-data-new-code.md)).
 - Builds on [the HTTP API](api.md) and [ADR 0012](../adr/0012-one-go-binary-web-app-embedded.md)
   (one binary, the web app inside).
 
-`next/web` started as a copy of `web/`: the pages look and work as they
+v2's web app started as a copy of v1's: the pages look and work as they
 did. What changed is underneath, where v1's app worked around v1's API,
 and what v2 dropped.
 
 ## One client, the API's shape
 
-`next/web/src/api` is the one typed client, a module per part of
+`web/src/api` is the one typed client, a module per part of
 [api.md](api.md): the board and its events, issues, labels and people,
 the inbox, the file, sync, texts. No component calls `fetch()`.
 
@@ -103,8 +103,8 @@ sync engine takes one issue), Labels' comparison with GitHub and lint
 (a tool).
 
 Insights is v1's page on route 51 (`GET /api/insights`, the replay in
-`next/tools/insights`, v1's, and `insights` on the CLI). Releases and a
-release's page are v1's on routes 43 to 48 (`next/tools/ship`): the
+`tools/insights`, v1's, and `insights` on the CLI). Releases and a
+release's page are v1's on routes 43 to 48 (`tools/ship`): the
 adoption's proposals come with the list, a job's steps as `release`
 events; Enable binary release (v1's `/api/releases/setup`) is Settings ›
 Release now, a table of the file. The Work page (experimental: its link
@@ -128,14 +128,14 @@ plan, Mark ready for review, the review, and at Verify the criteria's
 checks, a pasted run and the sign-off. The Work page's Review and Sign
 off open it. v1's line comments on the diff and the tests' run wait for
 the changes' and the runs' reads. Waiting for their routes (M6, api.md
-routes 51 to 53): the GitHub Project and its conflicts. Their v1 pages stay in `web/` until then; the cycle's
+routes 51 to 53): the GitHub Project and its conflicts. Their v1 pages stayed in v1's web app until then; the cycle's
 settings form (a table of the file) and the experimental switch stay.
 
 ## Tests
 
-- `npm test` (`make next-web-check`): the pure modules, Node's runner.
-- `make next-web-e2e`: 86 browser tests on `git-board-next serve` over a
-  git board and a Markdown board (`next/web/e2e/serve.mjs`, with a fake
+- `npm test` (`make web-check`): the pure modules, Node's runner.
+- `make web-e2e`: 86 browser tests on `git board serve` over a
+  git board and a Markdown board (`web/e2e/serve.mjs`, with a fake
   GitHub and, for the Markdown board, a fake S3), ported from v1's;
   `stale.spec.ts` (Reload, Overwrite, a form's), `live.spec.ts` (the
   change events), `markdown.spec.ts` (an issue's life on the Markdown
