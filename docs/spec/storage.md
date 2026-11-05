@@ -1,8 +1,10 @@
 # Storage
 
 This page is the git datastore's format. A board may be kept elsewhere
-(PostgreSQL, the forges alone): the packs are the same bytes there, and
-[How the data flows](data-flow.md) shows where each datastore sits.
+(PostgreSQL, a Markdown folder, the forges alone): the packs are the same
+bytes there, [Other datastores and the counter](datastores.md) gives
+those formats and the project numbers' counter, and [How the data
+flows](data-flow.md) shows where each datastore sits.
 
 An entity lives in git as a chain of commits under one ref. Each commit
 holds one pack of operations and a clock. This page gives the exact format,
@@ -33,8 +35,9 @@ refs/board/sync/56f7a8e819f90e968812bac54ae4b06142d8e735
 - The kinds, `issue`, `person`, `sync` and `release`, are one list in the
   core. The name check, fetch, push, the merge after a fetch and change
   events all read it.
-- `refs/board/seq` is git-board's own counter of project numbers. It isn't
-  an entity, and the core leaves it as it is.
+- `refs/board/seq` is git-board's own counter of project numbers
+  ([The counter](datastores.md#the-counter)). It isn't an entity, and the
+  core leaves it as it is.
 
 ## Commits
 

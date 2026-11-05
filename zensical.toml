@@ -35,6 +35,7 @@ nav = [
     { "How the data flows" = "spec/data-flow.md" },
     { "Data model" = "spec/data-model.md" },
     { "Storage" = "spec/storage.md" },
+    { "Other datastores and the counter" = "spec/datastores.md" },
     { "Queries and search" = "spec/queries.md" },
     { "Sync" = "spec/sync.md" },
     { "Forges" = "spec/forges.md" },
