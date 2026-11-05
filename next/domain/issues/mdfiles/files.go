@@ -2,16 +2,17 @@ package mdfiles
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -118,29 +119,62 @@ type stat struct {
 // holds ("" for a file that isn't one), and the version it was rendered
 // at ("" when it wasn't, or was read since).
 type entry struct {
-	Stat    stat           `json:"stat"`
-	Seen    int64          `json:"seen"`
-	Hash    string         `json:"hash"`
-	ID      kernel.ID      `json:"id,omitempty"`
-	Version kernel.Version `json:"version,omitempty"`
+	Stat    stat
+	Seen    int64
+	Hash    string
+	ID      kernel.ID
+	Version kernel.Version
 }
 
 // known is what is known of the folder's files: by name, and the sum
 // they were rendered under (issues.Heads).
 type known struct {
-	Sum   string           `json:"sum"`
-	Files map[string]entry `json:"files"`
+	Sum   string
+	Files map[string]entry
 }
 
-const knownFormat = "git-board md files 1\n"
+// The file of what is known: its format's line, the sum's, then a line a
+// file: name, id, version, size, mtime, ctime, inode, seen, hash; each
+// field after a tab, "-" for none. A name holding a tab or a line feed
+// isn't kept: such a file is read each time.
+const knownFormat = "git-board md files 1"
 
 func (f *Folder) load() *known {
 	k := &known{Files: map[string]entry{}}
 	data, err := os.ReadFile(f.known)
-	if rest, ok := bytes.CutPrefix(data, []byte(knownFormat)); err == nil && ok {
-		if json.Unmarshal(rest, k) != nil || k.Files == nil {
-			k = &known{Files: map[string]entry{}}
+	if err != nil {
+		return k
+	}
+	lines := strings.Split(string(data), "\n")
+	if len(lines) < 2 || lines[0] != knownFormat {
+		return k
+	}
+	k.Sum = lines[1]
+	for _, l := range lines[2:] {
+		p := strings.Split(l, "\t")
+		if len(p) != 9 {
+			continue
 		}
+		var e entry
+		var n [5]int64
+		ok := true
+		for i := range n {
+			v, err := strconv.ParseInt(p[3+i], 10, 64)
+			ok = ok && err == nil
+			n[i] = v
+		}
+		if !ok {
+			continue
+		}
+		e.Stat = stat{Size: n[0], Mtime: n[1], Ctime: n[2], Ino: uint64(n[3])}
+		e.Seen, e.Hash = n[4], p[8]
+		if p[1] != "-" {
+			e.ID = kernel.ID(p[1])
+		}
+		if p[2] != "-" {
+			e.Version = kernel.Version(p[2])
+		}
+		k.Files[p[0]] = e
 	}
 	return k
 }
@@ -148,9 +182,14 @@ func (f *Folder) load() *known {
 // save writes what is known, for the next process: a reader sees the
 // old file or the new one.
 func (f *Folder) save(k *known) {
-	data, err := json.Marshal(k)
-	if err != nil {
-		return
+	var b strings.Builder
+	b.WriteString(knownFormat + "\n" + k.Sum + "\n")
+	for name, e := range k.Files {
+		if strings.ContainsAny(name, "\t\n") {
+			continue
+		}
+		fmt.Fprintf(&b, "%s\t%s\t%s\t%d\t%d\t%d\t%d\t%d\t%s\n", name, cmp.Or(string(e.ID), "-"), cmp.Or(string(e.Version), "-"),
+			e.Stat.Size, e.Stat.Mtime, e.Stat.Ctime, int64(e.Stat.Ino), e.Seen, e.Hash)
 	}
 	if err := os.MkdirAll(filepath.Dir(f.known), 0o755); err != nil {
 		return
@@ -159,7 +198,7 @@ func (f *Folder) save(k *known) {
 	if err != nil {
 		return
 	}
-	_, err = tmp.Write(append([]byte(knownFormat), data...))
+	_, err = tmp.WriteString(b.String())
 	if cerr := tmp.Close(); err == nil {
 		err = cerr
 	}
