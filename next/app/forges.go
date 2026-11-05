@@ -16,14 +16,16 @@ import (
 	"github.com/guilbep/git-board/next/forge/github"
 	"github.com/guilbep/git-board/next/forge/gitlab"
 	"github.com/guilbep/git-board/next/store/forgecopy"
+	"github.com/guilbep/git-board/next/store/git"
 )
 
 // The forges' sync (docs/spec/sync.md): issuesync's run, with the forges
 // of .git-board.toml, or those found in origin's URLs, whose sync is on, each opened fresh for its run, and
 // the settings the run reads from the board's config, as v1's
 // internal/store gives them.
-// ponytail: v1's dry run (--check), and its Quote and Published, which
-// read the body's sections (issuesync/meanings.go), are v1's still.
+// ponytail: v1's Quote and Published, which read the body's sections
+// (issuesync/meanings.go), and a check of a board kept outside git, are
+// v1's still.
 
 // NamedForge is a forge project opened for a run, by its name in the
 // settings.
@@ -194,7 +196,11 @@ type ForgeRun struct {
 	// never synced with, and MaxCreate or more on one in a run. Without
 	// it, the run creates none there, and tells it (held).
 	AllowCreate bool
-	See         func(SyncEvent) // nil hears nothing
+	// DryRun is a check: the run on a copy of the repository's refs,
+	// every write to a forge counted and answered without being made.
+	// Nothing changes, here or on a forge.
+	DryRun bool
+	See    func(SyncEvent) // nil hears nothing
 }
 
 // MaxCreate is how many creations on one forge, in one run, need consent:
@@ -213,27 +219,37 @@ type SyncEvent struct {
 	Done, Total             int
 }
 
-// Text says the event in words, its issue by name; "" for progress.
-func (e SyncEvent) Text(name string) string {
+// Text says the event in words, its issue by name ("would create CO2-3
+// Export CSV" in a dry run); "" for a write, which a run counts.
+func (e SyncEvent) Text(dry bool, name string) string {
+	var l string
 	switch e.What {
 	case "created":
-		return fmt.Sprintf("pull a new issue, %s (%d changes)", name, e.Ops)
+		l = fmt.Sprintf("pull a new issue, %s (%d changes)", name, e.Ops)
 	case "updated":
-		return fmt.Sprintf("pull %d changes into %s", e.Ops, name)
+		l = fmt.Sprintf("pull %d changes into %s", e.Ops, name)
 	case "linked":
-		return "link " + name + ", found by its marker"
+		l = "link " + name + ", found by its marker"
 	case "posted":
-		return "create " + name
+		l = "create " + name
 	case "pushed":
-		return "send the changes of " + name
+		l = "send the changes of " + name
 	case "warning", "waiting":
 		return e.Line
 	case "left":
 		return "left out of the run: " + e.Line
 	case "held":
+		if dry {
+			return fmt.Sprintf("%d issues to create need consent: %s", e.Ops, e.Line)
+		}
 		return fmt.Sprintf("%d issues not created: they need consent, %s", e.Ops, e.Line)
+	default:
+		return ""
 	}
-	return ""
+	if dry {
+		return "would " + l
+	}
+	return l
 }
 
 // ErrNotSwitched: the repository's issues are still the git-bug fork's.
@@ -269,11 +285,22 @@ func (b *Board) SyncForges(ctx context.Context, way Way, run ForgeRun) (issuesyn
 	if err := b.switched(ctx); err != nil {
 		return issuesync.Report{}, err
 	}
-	// a Markdown folder's hand edits are read in first, and its files
-	// follow what the sync wrote, each under the folder's lock; not across
-	// the run, which waits on the forges and would hold every other write
-	// back meanwhile
-	if b.Files != nil {
+	kb := b.Kernel
+	switch g, ok := kb.Store().(*git.Store); {
+	case run.DryRun && !ok:
+		return issuesync.Report{}, missing("a check needs a board kept in git; this board is kept in " + b.DatastoreName())
+	case run.DryRun:
+		scratch, done, err := b.scratch(ctx, g)
+		if err != nil {
+			return issuesync.Report{}, err
+		}
+		defer done()
+		kb = scratch
+	case b.Files != nil:
+		// a Markdown folder's hand edits are read in first, and its files
+		// follow what the sync wrote, each under the folder's lock; not
+		// across the run, which waits on the forges and would hold every
+		// other write back meanwhile
 		_, end, err := b.Files.Writing(ctx)
 		if err != nil {
 			return issuesync.Report{}, err
@@ -290,10 +317,11 @@ func (b *Board) SyncForges(ctx context.Context, way Way, run ForgeRun) (issuesyn
 		see = func(SyncEvent) {}
 	}
 	names := map[string]string{} // forge key -> name
+	ids := new(int)
 	var fs []forge.Forge
 	for _, f := range run.Forges {
 		names[f.Key()] = f.Name
-		fs = append(fs, f.Forge)
+		fs = append(fs, &counted{f: f.Forge, name: f.Name, dry: run.DryRun, ids: ids, see: see})
 	}
 	_, forgeOnly := b.Kernel.Store().(*forgecopy.Store)
 	cfg := b.Config
@@ -346,7 +374,7 @@ func (b *Board) SyncForges(ctx context.Context, way Way, run ForgeRun) (issuesyn
 				why = fmt.Sprintf("%d or more in one run", MaxCreate)
 			}
 			see(SyncEvent{Forge: names[key], Way: "push", What: "held", Ops: n, Line: why})
-			return false
+			return run.DryRun // counted as with consent, which the run asks for
 		},
 	}
 	ctx = forge.WithWaits(ctx, func(w forge.Wait) {
@@ -354,11 +382,11 @@ func (b *Board) SyncForges(ctx context.Context, way Way, run ForgeRun) (issuesyn
 	})
 	switch way {
 	case WayPull:
-		return issuesync.Pull(ctx, b.Kernel, opt, fs...)
+		return issuesync.Pull(ctx, kb, opt, fs...)
 	case WayPush:
-		return issuesync.Push(ctx, b.Kernel, opt, fs...)
+		return issuesync.Push(ctx, kb, opt, fs...)
 	}
-	return issuesync.Sync(ctx, b.Kernel, opt, fs...)
+	return issuesync.Sync(ctx, kb, opt, fs...)
 }
 
 // waitWords says a forge's wait: "GitHub doesn't answer: trying again in

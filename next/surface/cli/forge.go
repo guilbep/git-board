@@ -36,7 +36,7 @@ board sync, alone. Creations wait for consent as push says.`),
 }
 
 func newForgeWay(way app.Way, short, long string) *cobra.Command {
-	var allowCreate bool
+	var check, allowCreate bool
 	cmd := &cobra.Command{
 		Use:   string(way),
 		Short: short,
@@ -58,13 +58,18 @@ func newForgeWay(way app.Way, short, long string) *cobra.Command {
 				return err
 			}
 			say := func(format string, a ...any) { fmt.Fprintf(out, format+"\n", a...) }
-			if err := forgeWay(cmd, b.Board, way, app.ForgeRun{Forges: fs, AllowCreate: allowCreate}, say); err != nil {
+			if err := forgeWay(cmd, b.Board, way, app.ForgeRun{Forges: fs, AllowCreate: allowCreate, DryRun: check}, say); err != nil {
 				return err
 			}
-			say("done")
+			if check {
+				say("checked: nothing written")
+			} else {
+				say("done")
+			}
 			return nil
 		},
 	}
+	cmd.Flags().BoolVar(&check, "check", false, "the dry run: say what it would do, write nothing")
 	cmd.Flags().BoolVar(&allowCreate, "allow-create", false, "create issues on a forge never synced with, or 50 or more on one")
 	return cmd
 }
@@ -79,7 +84,7 @@ func forgeWay(cmd *cobra.Command, b *app.Board, way app.Way, run app.ForgeRun, s
 		if e.Issue != "" {
 			name = b.EventIssue(cmd.Context(), e.Issue)
 		}
-		line := e.Text(name)
+		line := e.Text(run.DryRun, name)
 		if e.What == "held" {
 			line += " (--allow-create)"
 		}

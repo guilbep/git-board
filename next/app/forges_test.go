@@ -121,3 +121,54 @@ func TestSyncForgesRendersMarkdown(t *testing.T) {
 		t.Errorf("no file holds the pulled issue: %v", files)
 	}
 }
+
+// A check runs on a copy: it says what it would do, and writes nothing,
+// here or on the forge.
+func TestSyncForgesCheck(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	if out, err := exec.Command("git", "-C", dir, "init", "-q").CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v\n%s", err, out)
+	}
+	b, err := Open(t.Context(), dir, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer b.Close()
+	me, err := issuesync.CreatePerson(t.Context(), b.Kernel, issuesync.NewPerson("", "me", ""))
+	if err != nil {
+		t.Fatal(err)
+	}
+	here, err := issuesync.CreateIssue(t.Context(), b.Kernel, issuesync.NewCreate(me.ID, "Here", "made here"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := fake.New("example.com/p")
+	f.Add(forge.Issue{Author: forge.Account{ID: "7", Login: "ann"}, Title: "There", Body: "made there"})
+	before, err := gitRun(t.Context(), dir, "for-each-ref", "refs/board/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var lines []string
+	run := ForgeRun{Forges: []NamedForge{{"p", f}}, DryRun: true, See: func(e SyncEvent) {
+		if l := e.Text(true, e.Issue[:min(7, len(e.Issue))]); l != "" {
+			lines = append(lines, l)
+		}
+	}}
+	if _, err := b.SyncForges(t.Context(), WaySync, run); err != nil {
+		t.Fatal(err)
+	}
+	after, _ := gitRun(t.Context(), dir, "for-each-ref", "refs/board/")
+	if before != after || len(f.All()) != 1 || len(f.Writes()) != 0 {
+		t.Fatalf("a check wrote: refs moved %t, %d forge issues, writes %v", before != after, len(f.All()), f.Writes())
+	}
+	want := []string{"1 issues to create need consent: the first sync with this forge", "would create " + here.ID[:7]}
+	for _, w := range want {
+		if !slices.Contains(lines, w) {
+			t.Errorf("lines %q lack %q", lines, w)
+		}
+	}
+	if !slices.ContainsFunc(lines, func(l string) bool { return strings.HasPrefix(l, "would pull a new issue, ") }) {
+		t.Errorf("lines %q lack the pull", lines)
+	}
+}

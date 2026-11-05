@@ -932,11 +932,12 @@ v2 sync one board alternately against one fake forge, and pull, merge
 and push one board between two clones (`next/golden/v1gen`). `forge
 pull|push|sync`, `fetch`, `pull`, `push`, `sync` and numbering through
 origin's counter run. Left: the `Mapper` interface (with releases, the
-second kind; the run is the issue mapper today), the release mapper,
-v1's dry run (`--check`), reset guards and switch marks on pull and
-push, the quote over a thread comment and the note after a published
-body (v1's `Quote` and `Published`, which read the body's sections), and
-the GitHub Project step.
+second kind; the run is the issue mapper today), the release mapper, the
+whole sync's dry run (`sync --check`; `forge … --check` runs), reset
+guards and switch marks on pull and push, the quote over a thread
+comment and the note after a published body (v1's `Quote` and
+`Published`, which read the body's sections), and the GitHub Project
+step.
 
 About 31,000 lines of Go where v1 has 55,000. One engineer with agents:
 M0 a week; M1 and M2 three weeks; M3 to M5 four; M6 three; with

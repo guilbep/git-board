@@ -13,7 +13,9 @@ import (
 // sync, then a git push to the remote, which numbers what origin has, as
 // v1's internal/store SyncWhole. A failed pull stops the steps after it;
 // a failed forge step is told, and the push still runs.
-// ponytail: the GitHub Project's step and the dry run are v1's still.
+// ponytail: the GitHub Project's step and the whole sync's dry run
+// (sync --check: a fetch, the forges' check over the fetched copies) are
+// v1's still; forge … --check runs.
 
 // The steps.
 const (
