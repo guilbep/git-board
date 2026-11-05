@@ -54,7 +54,8 @@ var mayImport = map[string][]string{
 	"next/tools/ship":                  {"next/domain/releases", "next/domain/issues", "next/forge", "next/tools/branches", "next/tools/code", "next/domain/releases/proof"},
 	"next/tools/ship/shiptest":         {"next/app", "next/domain/releases", "next/domain/issues/issuesync", "next/kernel", "next/sync", "next/tools/ship"},
 	"next/app":                         {"next/kernel", "next/kernel/pack", "next/conf", "next/domain/issues", "next/domain/issues/mdfiles", "next/domain/people", "next/domain/releases", "next/domain/cycle", "next/forge", "next/forge/github", "next/forge/gitlab", "next/domain/issues/issuesync", "next/tools", "next/store", "next/store/git", "next/store/md", "next/store/pg", "next/store/forgecopy", "next/view", "next/sync", "next/domain/releases/releasesync", "next/tools/ship", "next/tools/branches", "next/tools/code", "next/domain/releases/proof"},
-	"next/surface/cli":                 {"next/app", "next/conf", "next/kernel", "next/domain/issues", "next/domain/people", "next/forge", "next/domain/releases", "next/tools/ship", "next/tools/branches"},
+	"next/surface/cli":                 {"next/app", "next/conf", "next/kernel", "next/domain/issues", "next/domain/people", "next/forge", "next/domain/releases", "next/tools/ship", "next/tools/branches", "next/surface/tui"},
+	"next/surface/tui":                 {"next/app", "next/domain/issues"},
 	"next/cmd/git-board-next":          {"next/surface/cli"},
 	"next/golden":                      {},
 	"next/golden/v1gen":                {"next/domain/issues", "next/domain/issues/issuesync", "next/domain/people", "next/forge"}, // its tests: the sync cross test
