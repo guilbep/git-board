@@ -31,7 +31,13 @@ var mayImport = map[string][]string{
 	"next/domain/issues":      {"next/kernel", "next/kernel/pack", "next/kernel/search", "next/conf", "next/domain/people"},
 	"next/surface/cli":        {"next/kernel", "next/conf", "next/domain/issues", "next/domain/people", "next/store/git", "next/view"},
 	"next/cmd/git-board-next": {"next/surface/cli"},
+	"next/golden":             {},
+	"next/golden/v1gen":       {},
 }
+
+// v1gen writes the golden boards with v1's code (guard_test.go): the one
+// package of next/ that imports v1, deleted with it.
+const v1gen = "next/golden/v1gen"
 
 // testsMayImport is what a package's tests may import besides: the
 // datastores and the view, to run on real ones, and the conformance suite.
@@ -71,8 +77,9 @@ func TestLayers(t *testing.T) {
 			switch {
 			case !inNext && toNext:
 				t.Errorf("%s imports %s: v1 never imports next/", rel, p)
-			case inNext && !toNext:
+			case inNext && !toNext && pkg != v1gen:
 				t.Errorf("%s imports %s: next/ copies what it needs from v1 and owns it", rel, p)
+			case inNext && !toNext: // v1gen, the exception above
 			case inNext && pkg != "next" && dep != pkg:
 				allowed, known := mayImport[pkg]
 				if !known {
