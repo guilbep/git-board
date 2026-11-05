@@ -84,6 +84,8 @@ var writes = []string{
 	`config get github-project.number`,
 	`config get sprints.length_days`,
 	`view mine`,
+	`numbers`,
+	`numbers init --prefix GB --start 1`,
 }
 
 // mdWrites are the writes the cross-write test runs on the Markdown
@@ -105,6 +107,9 @@ var mdWrites = []string{
 	`undo c82cfa3`,
 	`delete fe82974 --yes`,
 	`labels`,
+	`numbers`,
+	`numbers init --prefix GB --start 1`,
+	`numbers init --prefix 1x --start 1`,
 }
 
 var shortIDHex = regexp.MustCompile(`\b[0-9a-f]{7,64}\b`)

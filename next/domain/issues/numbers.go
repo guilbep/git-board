@@ -3,12 +3,15 @@ package issues
 import (
 	"cmp"
 	"context"
+	"errors"
 	"fmt"
 	"maps"
 	"regexp"
 	"slices"
 	"strconv"
 	"strings"
+
+	"github.com/guilbep/git-board/next/kernel"
 )
 
 // Counter is the project numbers' counter (ADR 0016; datastores.md, The
@@ -125,4 +128,131 @@ func (is *Issue) numbered(c *Counter) {
 	if n := c.NumberOf(is.ID, is.Forges); n > 0 {
 		is.Number = c.Format(n)
 	}
+}
+
+// ErrNumbered: the project numbers its issues already; it starts once.
+var ErrNumbered = errors.New("the project already numbers its issues")
+
+// ErrNumbersMoved: other writers kept numbering first, try after try.
+var ErrNumbersMoved = errors.New("the numbers kept moving")
+
+// ErrNoCounter: the datastore keeps no counter.
+var ErrNoCounter = errors.New("project numbers need a datastore that counts")
+
+// CheckNumbers says what's wrong with a prefix and a start.
+func CheckNumbers(prefix string, start int) error {
+	if !prefixRe.MatchString(prefix) {
+		return fmt.Errorf("a prefix is a letter, then letters or digits, like CO2; not %q", prefix)
+	}
+	if start < 1 {
+		return fmt.Errorf("numbers start from 1 at least, not %d", start)
+	}
+	return nil
+}
+
+// countWaiter is a datastore whose counter can't always be written here:
+// a Markdown folder's, on the default branch alone.
+type countWaiter interface {
+	CountWaits(ctx context.Context) error
+}
+
+// InitNumbers starts the counter of a datastore that keeps one, shared
+// by every writer (PostgreSQL, a Markdown folder): prefix-N from start.
+// ErrNumbered when one was started, by someone else first too.
+func (s *Service) InitNumbers(ctx context.Context, prefix string, start int) error {
+	if err := CheckNumbers(prefix, start); err != nil {
+		return err
+	}
+	c := s.Board.Store().Caps().Counter
+	if c == nil {
+		return ErrNoCounter
+	}
+	_, err := c.SetCount(ctx, Counter{Prefix: prefix, Start: start, ByID: map[string]int{}}.Bytes(), "")
+	if errors.Is(err, kernel.ErrMoved) {
+		data, _, cerr := c.Count(ctx)
+		if cerr != nil {
+			return cerr
+		}
+		was, cerr := ParseCounter(data)
+		if cerr != nil {
+			return cerr
+		}
+		return fmt.Errorf("%w: %s, from %d", ErrNumbered, was.Prefix, was.Start)
+	}
+	return err
+}
+
+// Number gives every issue without a number the next ones, oldest
+// first, on the datastore's counter: one write that lands only if no one
+// wrote first, five tries. forges are the issues' forge issues, a GitHub
+// number below the start being the issue's own. It says how many it
+// numbered; a project that doesn't number its issues numbers none.
+func (s *Service) Number(ctx context.Context, forges map[string][]Forge) (int, error) {
+	ctx = s.Board.Snapshot(ctx)
+	ds := s.Board.Store()
+	c := ds.Caps().Counter
+	if c == nil {
+		return 0, nil
+	}
+	if data, _, err := c.Count(ctx); err != nil || data == nil {
+		return 0, err
+	}
+	if w, ok := ds.(countWaiter); ok {
+		if err := w.CountWaits(ctx); err != nil {
+			return 0, err
+		}
+	}
+	var last error
+	for range 5 {
+		data, version, err := c.Count(ctx)
+		if err != nil {
+			return 0, err
+		}
+		cnt, err := ParseCounter(data)
+		if err != nil {
+			return 0, err
+		}
+		todo, err := s.unnumbered(ctx, cnt, forges)
+		if err != nil || len(todo) == 0 {
+			return 0, err
+		}
+		next := cnt.Next()
+		for i, id := range todo {
+			cnt.ByID[id] = next + i
+		}
+		_, err = c.SetCount(ctx, cnt.Bytes(), version)
+		if err == nil {
+			return len(todo), nil
+		}
+		if !errors.Is(err, kernel.ErrMoved) {
+			return 0, err
+		}
+		last = err
+	}
+	return 0, fmt.Errorf("%w, sync again: %w", ErrNumbersMoved, last)
+}
+
+// unnumbered are the issues c gives no number, oldest first; a deleted
+// one is none.
+func (s *Service) unnumbered(ctx context.Context, c Counter, forges map[string][]Forge) ([]string, error) {
+	rows, err := Kind.List(ctx, s.Board, kernel.Query{Sort: "created"})
+	if err != nil {
+		return nil, err
+	}
+	type issue struct {
+		id      string
+		created int64
+	}
+	var todo []issue
+	for _, r := range rows {
+		if c.NumberOf(string(r.ID), forges[string(r.ID)]) == 0 {
+			todo = append(todo, issue{string(r.ID), r.Row.Created})
+		}
+	}
+	slices.SortFunc(todo, func(x, y issue) int { return cmp.Or(cmp.Compare(x.created, y.created), cmp.Compare(x.id, y.id)) })
+	ids := make([]string, len(todo))
+	for i, t := range todo {
+		ids[i] = t.id
+	}
+	return ids, nil
 }
