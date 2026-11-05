@@ -284,8 +284,8 @@ func patchIssue(ctx context.Context, r patchReq) (Reply, error) {
 		}
 	}
 	switch r.Status {
-	case "closed":
-		if _, err := is.Close(ctx, issues.CloseReq{Name: id, Comment: r.Comment, Reason: r.Reason, DuplicateOf: r.DuplicateOf}); err != nil {
+	case "closed": // no reason is completed, as close's
+		if _, err := is.Close(ctx, issues.CloseReq{Name: id, Comment: r.Comment, Reason: cmpString(r.Reason, "completed"), DuplicateOf: r.DuplicateOf}); err != nil {
 			return Reply{}, on("status", err)
 		}
 	case "open":

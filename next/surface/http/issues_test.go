@@ -81,6 +81,11 @@ func TestIssues(t *testing.T) {
 	if th := want[threadBody](t, a.do("PATCH", "/api/issues/"+id, map[string]any{"status": "open"}), 200); th.Status != "open" {
 		t.Fatalf("reopen = %s", th.Status)
 	}
+	// no reason is completed, as close's: no closed-as label
+	if th := want[threadBody](t, a.do("PATCH", "/api/issues/"+id, map[string]any{"status": "closed"}), 200); slices.ContainsFunc(th.Labels, func(l string) bool { return strings.HasPrefix(l, "closed-as:") }) {
+		t.Fatalf("closed without a reason: %v", th.Labels)
+	}
+	want[threadBody](t, a.do("PATCH", "/api/issues/"+id, map[string]any{"status": "open"}), 200)
 	if e := want[apiError](t, a.do("PATCH", "/api/issues/"+id, map[string]any{"status": "done"}), 400); e.Field != "status" || e.Code != "invalid" {
 		t.Fatalf("a status that isn't = %+v", e)
 	}
