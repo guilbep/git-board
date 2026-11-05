@@ -1,6 +1,8 @@
 package git
 
 import (
+	"bytes"
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -49,16 +51,24 @@ func (s *Store) Fetch(ctx context.Context, remote string, kinds ...string) ([]st
 	return s.copies(ctx, remote, kinds)
 }
 
-// copies are the heads of the remote's copies here, entities alone.
+// copies are the heads of the remote's copies here, entities alone, in
+// one git process.
 func (s *Store) copies(ctx context.Context, remote string, kinds []string) ([]store.Head, error) {
+	if len(kinds) == 0 {
+		return nil, nil
+	}
+	prefixes := make([]string, len(kinds))
+	for i, k := range kinds {
+		prefixes[i] = copyPrefix(remote, k)
+	}
+	refs, err := s.refs(ctx, prefixes...)
+	if err != nil {
+		return nil, err
+	}
 	var out []store.Head
 	for _, k := range kinds {
-		refs, err := s.refs(ctx, copyPrefix(remote, k))
-		if err != nil {
-			return nil, err
-		}
 		for _, name := range slices.Sorted(maps.Keys(refs)) {
-			if id := strings.TrimPrefix(name, copyPrefix(remote, k)); store.IsID(id) {
+			if id, ok := strings.CutPrefix(name, copyPrefix(remote, k)); ok && store.IsID(id) {
 				out = append(out, store.Head{Kind: k, ID: id, Version: refs[name]})
 			}
 		}
@@ -66,9 +76,9 @@ func (s *Store) copies(ctx context.Context, remote string, kinds []string) ([]st
 	return out, nil
 }
 
-// refs are the refs under prefix and their commits.
-func (s *Store) refs(ctx context.Context, prefix string) (map[string]string, error) {
-	out, err := s.git(ctx, nil, "for-each-ref", "--format=%(objectname) %(refname)", prefix)
+// refs are the refs under the prefixes and their commits.
+func (s *Store) refs(ctx context.Context, prefixes ...string) (map[string]string, error) {
+	out, err := s.git(ctx, nil, append([]string{"for-each-ref", "--format=%(objectname) %(refname)"}, prefixes...)...)
 	if err != nil {
 		return nil, err
 	}
@@ -83,18 +93,84 @@ func (s *Store) refs(ctx context.Context, prefix string) (map[string]string, err
 
 // Merge merges each of the remote's copies of kinds into its local ref,
 // created when absent, and answers how many local refs moved. An entity
-// that fails to merge doesn't stop the others.
+// that fails to merge doesn't stop the others. It costs a few git
+// processes, however many entities: the copies and the local heads are
+// listed once, an unchanged one is skipped, the histories of the others
+// are read by one cat-file, and every ref moves in one `git update-ref
+// --stdin` (design.md, The git datastore). When a ref moved meanwhile, the
+// transaction moves none, and each is merged on its own.
 func (s *Store) Merge(ctx context.Context, remote string, kinds ...string) (int, error) {
 	if err := checkRemote(remote); err != nil {
 		return 0, err
 	}
-	heads, err := s.copies(ctx, remote, kinds)
+	theirs, err := s.copies(ctx, remote, kinds)
 	if err != nil {
 		return 0, err
 	}
+	ours, err := s.Heads(ctx, kinds...)
+	if err != nil {
+		return 0, err
+	}
+	local := make(map[store.Ref]string, len(ours))
+	for _, h := range ours {
+		local[store.Ref{Kind: h.Kind, ID: h.ID}] = h.Version
+	}
+	var todo []store.Head
+	var refs []store.Ref
+	for _, h := range theirs {
+		head := local[store.Ref{Kind: h.Kind, ID: h.ID}]
+		if head == h.Version {
+			continue
+		}
+		todo = append(todo, h)
+		refs = append(refs, store.Ref(h))
+		if head != "" {
+			refs = append(refs, store.Ref{Kind: h.Kind, ID: h.ID, Version: head})
+		}
+	}
+	if len(todo) == 0 {
+		return 0, nil
+	}
+	hist, err := s.histories(ctx, refs)
+	if err != nil {
+		return 0, err
+	}
+	var tx bytes.Buffer
+	var moving, alone []store.Head // in the transaction; merged on their own
+	for _, h := range todo {
+		head, other := local[store.Ref{Kind: h.Kind, ID: h.ID}], h.Version
+		next := other
+		if head != "" {
+			ours, theirs := hist[head], hist[other]
+			switch {
+			case ours == nil || theirs == nil: // a history that didn't read
+				alone = append(alone, h)
+				continue
+			case ours.reach[other]:
+				continue
+			case !theirs.reach[head]:
+				data, err := pack.Encode(pack.Pack{Clock: 1 + max(ours.clock, theirs.clock), Ops: []pack.Op{}})
+				if err != nil {
+					return 0, err
+				}
+				if next, err = s.writePack(data, []string{head, other}); err != nil {
+					return 0, err
+				}
+			}
+		}
+		fmt.Fprintf(&tx, "update %s %s %s\n", refName(h.Kind, h.ID), next, cmp.Or(head, zero))
+		moving = append(moving, h)
+	}
 	moved := 0
+	if len(moving) > 0 {
+		if _, err := s.git(ctx, tx.Bytes(), "update-ref", "--stdin"); err != nil {
+			alone = append(alone, moving...)
+		} else {
+			moved = len(moving)
+		}
+	}
 	var errs []error
-	for _, h := range heads {
+	for _, h := range alone {
 		if err := ctx.Err(); err != nil {
 			return moved, errors.Join(append(errs, err)...)
 		}
@@ -107,6 +183,39 @@ func (s *Store) Merge(ctx context.Context, remote string, kinds ...string) (int,
 		}
 	}
 	return moved, errors.Join(errs...)
+}
+
+// history is what a merge reads of a head: every commit it reaches, and
+// its clock.
+type history struct {
+	reach map[string]bool
+	clock uint64
+}
+
+// histories reads the history of each ref's version, in one cat-file. A
+// version whose history doesn't read (a broken entity) is left out.
+func (s *Store) histories(ctx context.Context, refs []store.Ref) (map[string]*history, error) {
+	w, err := s.walker(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string]*history, len(refs))
+	err = w.walk(refs, func(r store.Ref, nodes []node, err error) error {
+		if err == nil && len(nodes) > 0 {
+			h := &history{reach: make(map[string]bool, len(nodes)), clock: nodes[0].clock}
+			for _, n := range nodes {
+				h.reach[n.commit] = true
+			}
+			out[r.Version] = h
+		}
+		return nil
+	})
+	if err != nil {
+		w.close()
+		return nil, err
+	}
+	s.done(w)
+	return out, nil
 }
 
 // merge joins the entity's local head with other: other when there is no

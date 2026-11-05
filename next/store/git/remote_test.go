@@ -1,6 +1,8 @@
 package git
 
 import (
+	"bytes"
+	"fmt"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -117,4 +119,59 @@ func TestRemote(t *testing.T) {
 	if _, err := a.Fetch(ctx, "--upload-pack=x", "issue"); err == nil {
 		t.Fatal("a remote that is an option")
 	}
+}
+
+// The merge after a fetch costs a few git processes, however many
+// entities (design.md: a fetch's merges go in one git update-ref
+// --stdin): none per entity unchanged, none per entity moved. It counts
+// processes, not time.
+func TestMergeCost(t *testing.T) {
+	t.Parallel()
+	const n = 300
+	s := clone(t, initBare(t))
+	var old, copies bytes.Buffer
+	for i := range n {
+		id := storetest.ID(i + 1)
+		v1, err := s.Add(ctx, "issue", id, packAt(t, 1, "create"), "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		v2, err := s.Add(ctx, "issue", id, packAt(t, 2, "comment"), v1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		fmt.Fprintf(&old, "update refs/board/issue/%s %s\n", id, v1)
+		fmt.Fprintf(&copies, "create refs/board-remotes/origin/issue/%s %s\n", id, v2)
+	}
+	if _, err := s.git(ctx, copies.Bytes(), "update-ref", "--stdin"); err != nil {
+		t.Fatal(err)
+	}
+	merge := func(what string, want int, most int64) {
+		t.Helper()
+		var c store.Counts
+		moved, err := s.Merge(store.WithCounts(ctx, &c), "origin", "issue", "person")
+		if err != nil || moved != want {
+			t.Fatalf("%s: moved %d, %v; want %d", what, moved, err, want)
+		}
+		if p := c.Processes.Load(); p > most {
+			t.Fatalf("%s: %d git processes for %d entities, want at most %d", what, p, n, most)
+		}
+	}
+	merge("nothing new", 0, 2)
+	if _, err := s.git(ctx, old.Bytes(), "update-ref", "--stdin"); err != nil {
+		t.Fatal(err)
+	}
+	merge("every entity a fast-forward", n, 4)
+	if got := ops(t, s, storetest.ID(n)); len(got) != 2 {
+		t.Fatalf("after the fast-forwards: %v", got)
+	}
+}
+
+func initBare(t *testing.T) string {
+	t.Helper()
+	origin := filepath.Join(t.TempDir(), "origin.git")
+	if out, err := exec.Command("git", "init", "-q", "--bare", origin).CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v: %s", err, out)
+	}
+	return origin
 }
