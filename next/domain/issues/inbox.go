@@ -313,6 +313,12 @@ func plural(n int, what string) string {
 
 // inboxMe is who an inbox is for: the person who writes, and @me's login
 // (login given, else their forge login or name).
+// InboxMe is who reads: the person who writes, and their login (login,
+// else their name). people.ErrNoMe when no one writes.
+func (s *Service) InboxMe(ctx context.Context, login string) (InboxMe, error) {
+	return s.inboxMe(ctx, login)
+}
+
 func (s *Service) inboxMe(ctx context.Context, login string) (InboxMe, error) {
 	me, err := s.writer()
 	if err != nil {

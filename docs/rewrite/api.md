@@ -342,7 +342,7 @@ Until then they answer 404 `not-found`.
 | 46 | `PATCH /api/releases/{tag}` | `{notes}`, `{state: "yanked", reason}`, `{adopt: [proposal]}`: `{}`; `{state: "promoted"}`: 202, the job (built) |
 | 47 | `POST /api/releases/{tag}/comments` | `{body}`: a comment on its record (built) |
 | 48 | `POST /api/environments/{env}/deploy` | `{tag}` (none: the trunk's head, to the followed environment); a rollback is a deploy of an older tag with `reason`; 202, the job (built) |
-| 49 | `GET /api/issues/{id}/cycle` | the cycle (experimental): steps, branches, pulls, tests, environments, as one read |
+| 49 | `GET /api/issues/{id}/cycle` | the cycle (experimental): its step, gate and evidence (branches, plan, tests), as one read (built; the PRs and environments later); its list, `GET /api/cycle` (`who`: `me`, `team`), is the Work page's `{needs, waiting}` (built) |
 | 50 | `POST /api/issues/{id}/cycle/{action}` | a step's action: sign off, open or merge a pull, run the tests, review, resolve |
 | 51 | `GET /api/insights` | `field`, `days`, `view`: flow, throughput, cycle time, burn-up, as `insights --json` (built); `sprint` (`@current` or a slug): `{sprint, title, markdown}`, its report |
 | 52 | `GET /api/github-project` | the GitHub Project bridge: its last check |
@@ -473,7 +473,7 @@ M5, 7 *later* and 14 with their domain in M6.
 | `PUT /api/me/view` | dropped: the classic and cycle pages are one in the new web app; `board.view` is the cycle's (*M6*) |
 | `PUT /api/me/avatars` | `PUT /api/me` with `avatars` |
 | `GET /api/inbox` | `GET /api/inbox` |
-| `GET /api/work` | `GET /api/issues?filter=assignee:@me` and the cycle's (*M6*) |
+| `GET /api/work` | `GET /api/cycle` (`who`): the cycle's rows; its agents dropped, the forges' pending its Sync |
 | `POST /api/inbox/seen` | `POST /api/inbox/seen` |
 | `GET /api/inbox/follow/{id}` | `GET /api/issues/{id}/follow` |
 | `PUT /api/inbox/follow/{id}` | `PUT /api/issues/{id}/follow` |

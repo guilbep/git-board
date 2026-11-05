@@ -95,9 +95,13 @@ Insights is v1's page on route 51 (`GET /api/insights`, the replay in
 release's page are v1's on routes 43 to 48 (`next/tools/ship`): the
 adoption's proposals come with the list, a job's steps as `release`
 events; Enable binary release (v1's `/api/releases/setup`) is Settings ›
-Release now, a table of the file. Waiting for their routes (M6, api.md
-routes 49 to 53): the Work page and the cycle's page, the GitHub Project
-and its conflicts, uploads. Their v1 pages stay in `web/` until then; the cycle's
+Release now, a table of the file. The Work page (experimental: its link
+shows with the cycle on) is v1's on `GET /api/cycle`, without v1's
+agents and its aside (what waits for the forges is Sync's); an issue's
+History draws the cycle's step bars from `GET /api/issues/{id}/cycle`.
+Waiting for their routes (M6, api.md routes 50 to 53): the cycle's
+actions and v1's cycle panels on an issue, the GitHub Project and its
+conflicts, uploads. Their v1 pages stay in `web/` until then; the cycle's
 settings form (a table of the file) and the experimental switch stay.
 
 ## Tests

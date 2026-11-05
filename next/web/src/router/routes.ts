@@ -7,6 +7,8 @@ const routes: RouteRecordRaw[] = [
   // the Sync page's old address, and its parts': one Sync, in Settings
   { path: '/sync', redirect: { path: '/settings/sync', hash: '' } },
   { path: '/inbox', component: () => import('@/pages/InboxPage.vue') },
+  // the cycle's (experimental): off, the page says how to turn it on
+  { path: '/work', component: () => import('@/pages/WorkPage.vue') },
   { path: '/insights', component: () => import('@/pages/InsightsPage.vue') },
   { path: '/releases', component: () => import('@/pages/ReleasesPage.vue') },
   { path: '/releases/:tag', component: () => import('@/pages/ReleasePage.vue') },

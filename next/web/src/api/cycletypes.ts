@@ -1,8 +1,8 @@
-// The cycle's shapes (experimental), as v1's server answered them: what
-// GET /api/issues/{id}/cycle will answer when M6 builds it (api.md, 49).
-// Until then no route answers them; the thread's rendering (flow.ts,
-// cycle.ts, review.ts) reads them when given, and works without.
-import type { Person } from './types.ts';
+// The cycle's shapes (experimental), as v1's server answered them, and
+// GET /api/issues/{id}/cycle and GET /api/cycle now (api.md, 49): the
+// thread's rendering (flow.ts, cycle.ts, review.ts) reads them when
+// given, and works without.
+import type { Issue, Person } from './types.ts';
 
 export interface GatePR {
   number: number;
@@ -154,4 +154,27 @@ export interface CyclePlan {
   issue?: string; // the front matter's issue: line, what found the file
   html?: string; // the file rendered, below its front matter
   by?: string; // who first committed it on the plan branch
+}
+
+// A row of the Work page (GET /api/cycle): an open issue's step, slimmed.
+export interface WorkRow {
+  issue: Issue;
+  step: number;
+  of: number;
+  name: string;
+  risk?: string;
+  done: boolean;
+  waits: CycleWaits;
+  mine: boolean;
+  actions?: string[];
+  since: string; // when the gate started waiting
+  involved: boolean;
+  question?: { id: string; body: string; by: Person; at: string };
+  branch?: string;
+}
+
+// Needs you, and Waiting on others, oldest wait first.
+export interface WorkGroups {
+  needs: WorkRow[];
+  waiting: WorkRow[];
 }

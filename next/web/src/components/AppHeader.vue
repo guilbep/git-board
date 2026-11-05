@@ -17,6 +17,8 @@
       <!-- an issue's page (/issues/:id) is under Issues too -->
       <router-link to="/" :class="{ active: issuesHere }" :aria-current="issuesHere ? 'page' : undefined">Issues</router-link>
       <router-link to="/inbox" active-class="active">Inbox<span v-if="inboxCount" class="nav-count" :aria-label="`, ${inboxCount} new`">{{ inboxCount }}</span></router-link>
+      <!-- the cycle's work units: with the cycle on alone (experimental) -->
+      <router-link v-if="cycleOn" to="/work" active-class="active">Work</router-link>
       <router-link to="/insights" active-class="active">Insights</router-link>
       <!-- a release's page (/releases/:tag) is under Releases too -->
       <router-link to="/releases" active-class="active" :class="{ active: releasesHere }" :aria-current="releasesHere ? 'page' : undefined">Releases</router-link>
@@ -74,7 +76,7 @@ import TipLine from '@/components/TipLine.vue';
 import { noteUse } from '@/keys';
 import CommandPalette from '@/components/CommandPalette.vue';
 import { openShortcuts, paletteOpen } from '@/commands';
-import { board, loadMe, me } from '@/me';
+import { board, cycleOn, loadMe, me } from '@/me';
 import { loadSync, onStep, syncStatus } from '@/sync';
 import { runWords } from '@/ways';
 import { setFavicon } from '@/favicon';
