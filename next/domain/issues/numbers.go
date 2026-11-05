@@ -259,3 +259,10 @@ func (s *Service) unnumbered(ctx context.Context, c Counter, recs map[string][]b
 	}
 	return ids, nil
 }
+
+// Unnumbered are the issues c gives no number, oldest first, a GitHub
+// number below the start being an issue's own: what a counter kept
+// elsewhere (origin's) numbers next.
+func (s *Service) Unnumbered(ctx context.Context, c Counter) ([]string, error) {
+	return s.unnumbered(ctx, c, s.reading(ctx, s.notice, false).recs)
+}

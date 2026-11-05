@@ -39,8 +39,8 @@ func (b *Board) inGit() bool {
 	return ok
 }
 
-// viaOrigin is numbering on git: origin's counter, fetched and pushed,
-// which is the sync's (M4). Without origin, v1's refusal.
+// viaOrigin refuses numbering on git without origin, whose counter hands
+// the numbers out.
 func (b *Board) viaOrigin(ctx context.Context) error {
 	out, err := gitRun(ctx, b.Dir, "remote")
 	if err != nil {
@@ -49,7 +49,7 @@ func (b *Board) viaOrigin(ctx context.Context) error {
 	if !slices.Contains(strings.Fields(out), NumbersRemote) {
 		return fmt.Errorf("no remote %q", NumbersRemote)
 	}
-	return missing(fmt.Sprintf("numbering through %s's counter comes with the sync (M4)", NumbersRemote))
+	return nil
 }
 
 // InitNumbers makes the project number its issues, prefix-N from start:
@@ -59,7 +59,10 @@ func (b *Board) InitNumbers(ctx context.Context, prefix string, start int) (stri
 		return "", err
 	}
 	if b.inGit() {
-		return "", b.viaOrigin(ctx)
+		if err := b.viaOrigin(ctx); err != nil {
+			return "", err
+		}
+		return "on " + NumbersRemote, b.initOrigin(ctx, prefix, start)
 	}
 	err := b.Issues.InitNumbers(ctx, prefix, start)
 	if errors.Is(err, issues.ErrNoCounter) {
@@ -72,7 +75,10 @@ func (b *Board) InitNumbers(ctx context.Context, prefix string, start int) (stri
 // many.
 func (b *Board) Number(ctx context.Context) (int, error) {
 	if b.inGit() {
-		return 0, b.viaOrigin(ctx)
+		if err := b.viaOrigin(ctx); err != nil {
+			return 0, err
+		}
+		return b.numberIssues(ctx, NumbersRemote)
 	}
 	n, err := b.Issues.Number(ctx)
 	return n, sentence(err)

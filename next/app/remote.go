@@ -11,9 +11,10 @@ import (
 
 // A git remote's board: fetch, pull and push (storage.md, Fetch and
 // push), as v1's git board fetch, pull and push.
-// ponytail: origin's counter (refs/board/seq) isn't taken by a pull nor
-// numbered by a push yet, nor are v1's reset guards and switch marks
-// moved: v1's git board pull and push do those.
+// From origin, a pull takes the numbers and a push numbers what origin
+// then has (origin.go).
+// ponytail: v1's reset guards and switch marks aren't moved: v1's git
+// board pull and push do those.
 
 // remoteOf is the board's git store, refusing another datastore and a
 // remote the repository doesn't have.
@@ -54,19 +55,23 @@ func (b *Board) Fetch(ctx context.Context, remote string) (issues, people Ahead,
 }
 
 // Pull fetches the remote's board, then merges it into this clone's,
-// every clone's operations kept.
-func (b *Board) Pull(ctx context.Context, remote string) error {
+// every clone's operations kept; from origin, it takes the numbers too.
+// It answers a note: the numbers it sent.
+func (b *Board) Pull(ctx context.Context, remote string) (string, error) {
 	g, err := b.remoteOf(ctx, "git board pull", remote)
 	if err != nil {
-		return err
+		return "", err
 	}
 	if _, err := g.Fetch(ctx, remote, Kinds...); err != nil {
-		return err
+		return "", err
 	}
 	if _, err := g.Merge(ctx, remote, Kinds...); err != nil {
-		return err
+		return "", err
 	}
-	return b.switched(ctx)
+	if err := b.switched(ctx); err != nil {
+		return "", err
+	}
+	return b.pullNumbers(ctx, remote)
 }
 
 // Push pushes this clone's board to the remote, not forced: a remote that
@@ -82,5 +87,9 @@ func (b *Board) Push(ctx context.Context, remote string) error {
 		}
 		return err
 	}
-	return nil
+	if remote != NumbersRemote {
+		return nil
+	}
+	_, err = b.numberIssues(ctx, remote)
+	return err
 }

@@ -47,8 +47,9 @@ func newPull() *cobra.Command {
 		Use:   "pull [remote]",
 		Short: "Pull the remote's board: fetch, then merge",
 		Long: `Pull the remote's issues and people (origin by default): fetch them,
-then merge them into this clone's, every clone's operations kept. It is
-git board sync's first step, alone: no forge.`,
+then merge them into this clone's, every clone's operations kept. From
+origin it also takes the project's numbers. It is git board sync's first
+step, alone: no forge.`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			b, err := open(cmd, false)
@@ -57,10 +58,14 @@ git board sync's first step, alone: no forge.`,
 			}
 			defer b.Close()
 			remote := remoteArg(args)
-			if err := b.Pull(cmd.Context(), remote); err != nil {
+			note, err := b.Pull(cmd.Context(), remote)
+			if err != nil {
 				return err
 			}
 			fmt.Fprintln(cmd.OutOrStdout(), "pulled from "+remote)
+			if note != "" {
+				fmt.Fprintln(cmd.OutOrStdout(), note)
+			}
 			return nil
 		},
 	}
@@ -70,8 +75,8 @@ func newPush() *cobra.Command {
 	return &cobra.Command{
 		Use:   "push [remote]",
 		Short: "Push this clone's board to the remote",
-		Long: `Push this clone's issues and people to the remote (origin by default).
-The push isn't forced: when the remote holds changes this clone doesn't
+		Long: `Push this clone's issues and people to the remote (origin by default),
+then, on origin, number the issues it now has. The push isn't forced: when the remote holds changes this clone doesn't
 have, it refuses, and git board pull merges them first. It is git board
 sync's last step, alone.`,
 		Args: cobra.MaximumNArgs(1),
