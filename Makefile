@@ -1,4 +1,4 @@
-.PHONY: help build test test-pg perf web-e2e lint fmt vet licences ci compat golden golden-boards agents install install-latest web-dev web-check web-lint web-build next-web-dev next-web-check next-web-build next-web-e2e dist docs docs-serve clean
+.PHONY: help build test test-pg perf web-e2e lint fmt vet licences ci compat dogfood golden golden-boards agents install install-latest web-dev web-check web-lint web-build next-web-dev next-web-check next-web-build next-web-e2e dist docs docs-serve clean
 
 # The public targets, each with its ## line: a bare make prints them.
 help: ## List the make targets
@@ -51,6 +51,34 @@ BIN ?=
 compat: ## Run a binary over the golden boards and compare with v1's outputs (BIN=path, default v1)
 	@set -e; bin="$(BIN)"; if [ -z "$$bin" ]; then d=$$(mktemp -d); trap 'rm -rf "$$d"' EXIT; bin=$$d/git-board; go build -o $$bin ./cmd/git-board; fi; \
 	GIT_BOARD_COMPAT_PENDING=$(if $(BIN),1,) GIT_BOARD_COMPAT_BIN=$$(cd $$(dirname $$bin) && pwd)/$$(basename $$bin) go test -count=1 -run 'TestCompat|TestGoldensComplete' ./next/golden/
+
+# The dogfooding job (design.md, section 5; .github/workflows/dogfood.yml
+# runs it daily on this repository's board): a real board read by two
+# binaries, ls --json and show --json of every issue compared with
+# make compat's normalisations (next/golden TestDogfood). DIR is the
+# repository, never written (each binary reads its own copy). OLD is
+# v1's binary, else v1 built from OLD_REF's ./cmd/git-board (default:
+# the newest v0.11.* tag); NEW is v2's, else built now (next/'s, or the
+# root's once next/ moved there). The differing cases' outputs go to
+# DOGFOOD_OUT, with their diff in DOGFOOD_OUT/dogfood.diff.
+DIR ?=
+OLD ?=
+NEW ?=
+OLD_REF ?= $(shell git tag -l 'v0.11.*' --sort=-v:refname | head -1)
+DOGFOOD_OUT ?= dogfood-out
+dogfood: ## Diff ls/show --json of every issue of a real board, v1 vs v2 (DIR=repo, OLD=bin or OLD_REF=tag, NEW=bin)
+	@set -e; test -n "$(DIR)" || { echo "make dogfood DIR=<repository> [OLD=<binary> | OLD_REF=<ref>] [NEW=<binary>]" >&2; exit 2; }; \
+	d=$$(mktemp -d); trap 'rm -rf "$$d"' EXIT; old="$(OLD)"; new="$(NEW)"; \
+	if [ -z "$$old" ]; then test -n "$(OLD_REF)" || { echo "dogfood: no v0.11 tag here (git fetch --tags), pass OLD_REF or OLD" >&2; exit 2; }; \
+		echo "dogfood: OLD is v1 built from $(OLD_REF)"; mkdir "$$d/src"; git archive "$(OLD_REF)" | tar -x -C "$$d/src"; \
+		(cd "$$d/src" && go build -o "$$d/old" ./cmd/git-board); old="$$d/old"; fi; \
+	if [ -z "$$new" ]; then pkg=./cmd/git-board; if [ -d next/cmd/git-board-next ]; then pkg=./next/cmd/git-board-next; fi; \
+		echo "dogfood: NEW is $$pkg, built now"; go build -o "$$d/new" $$pkg; new="$$d/new"; fi; \
+	rm -rf "$(DOGFOOD_OUT)"; mkdir -p "$(DOGFOOD_OUT)"; out=$$(cd "$(DOGFOOD_OUT)" && pwd); \
+	status=0; GIT_BOARD_DOGFOOD_DIR="$$(cd "$(DIR)" && pwd)" GIT_BOARD_DOGFOOD_OLD="$$old" GIT_BOARD_DOGFOOD_NEW="$$new" \
+		GIT_BOARD_DOGFOOD_OUT="$$out" go test -count=1 -timeout 180m -run '^TestDogfood$$' ./next/golden/ || status=$$?; \
+	if [ -d "$$out/old" ]; then (cd "$$out" && diff -ru old new > dogfood.diff || true); echo "dogfood: the differences are in $$out/dogfood.diff"; fi; \
+	exit $$status
 
 # The timed budgets (docs/guide/performance.md, v2): boardgen's boards of
 # 5,000 and 20,000 issues, made once for a seed in PERF_CACHE, each run on
