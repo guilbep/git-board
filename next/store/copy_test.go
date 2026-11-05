@@ -1,11 +1,13 @@
 package store_test
 
 import (
+	"bytes"
 	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/guilbep/git-board/next/kernel/pack"
@@ -137,5 +139,105 @@ func TestCopy(t *testing.T) {
 	}
 	if a, b := order(t, src, "issue", two), order(t, g, "issue", two); !slices.Equal(a, b) {
 		t.Fatalf("after one more pack: %v, want %v", b, a)
+	}
+}
+
+// uneven writes an issue in git as two clones make it: c1, then A and A2
+// on one clone and B on the other, then a merge of A2 and B, at clock 4,
+// whose level below holds A2 alone. It gives the entity's id.
+func uneven(t *testing.T, s *git.Store) string {
+	t.Helper()
+	git := func(stdin []byte, args ...string) string {
+		t.Helper()
+		cmd := exec.Command("git", append([]string{"--git-dir", s.GitDir()}, args...)...)
+		cmd.Env = append(os.Environ(), "GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@t", "GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@t")
+		if stdin != nil {
+			cmd.Stdin = bytes.NewReader(stdin)
+		}
+		out, err := cmd.Output()
+		if err != nil {
+			t.Fatalf("git %v: %v", args, err)
+		}
+		return strings.TrimSpace(string(out))
+	}
+	commit := func(p []byte, parents ...string) string {
+		blob := git(p, "hash-object", "-w", "--stdin")
+		tree := git([]byte("100644 blob "+blob+"\tpack\n"), "mktree")
+		args := []string{"commit-tree", tree, "-m", ""}
+		for _, q := range parents {
+			args = append(args, "-p", q)
+		}
+		return git(nil, args...)
+	}
+	c1 := commit(op(1, "first"))
+	a := commit(op(2, "a"), c1)
+	a2 := commit(op(3, "a2"), a)
+	b := commit(op(2, "b"), c1)
+	m := commit([]byte(`{"clock":4,"ops":[]}`), a2, b)
+	top := commit(op(5, "after"), m)
+	id := storetest.ID(7)
+	git(nil, "update-ref", "refs/board/issue/"+id, top)
+	return id
+}
+
+// A copy of an uneven merge (one side wrote twice, the other once) reads
+// back the same in every datastore, and back in git, whatever the way:
+// git, then pg, md or git, then git again. A second copy writes nothing.
+func TestCopyUnevenMerge(t *testing.T) {
+	t.Parallel()
+	src := gitStore(t)
+	id := uneven(t, src)
+	want := order(t, src, "issue", id)
+	if len(want) != 5 {
+		t.Fatalf("the source reads %v", want)
+	}
+	via := map[string]func(t *testing.T) store.Datastore{
+		"git": func(t *testing.T) store.Datastore { return gitStore(t) },
+		"md":  func(t *testing.T) store.Datastore { return mdStore(t) },
+	}
+	if os.Getenv(pgtest.Env) != "" {
+		via["pg"] = func(t *testing.T) store.Datastore {
+			p, err := pg.Open(ctx, pgtest.DSN(t), t.TempDir())
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { p.Close() })
+			return p
+		}
+	}
+	for name, open := range via {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			chain := []store.Datastore{src, open(t), gitStore(t)}
+			for i := 1; i < len(chain); i++ {
+				from, to := chain[i-1], chain[i]
+				if c, err := store.Copy(ctx, from, to, "issue"); err != nil || c.Entities != 1 {
+					t.Fatalf("copy %d: %+v, %v", i, c, err)
+				}
+				if got := order(t, to, "issue", id); !slices.Equal(got, want) {
+					t.Fatalf("copy %d reads %v, want %v", i, got, want)
+				}
+				if c, err := store.Copy(ctx, from, to, "issue"); err != nil || c.Entities != 0 {
+					t.Fatalf("copy %d again: %+v, %v; want nothing", i, c, err)
+				}
+			}
+		})
+	}
+}
+
+// A merge put on a head git already has, whose level below is that head
+// alone, joins the head and a commit under it.
+func TestPutMergeOnAHead(t *testing.T) {
+	t.Parallel()
+	g, id := gitStore(t), storetest.ID(8)
+	v, err := g.Put(ctx, "issue", id, [][]byte{op(1, "first"), op(2, "a"), op(2, "b"), op(3, "a2")}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := g.Put(ctx, "issue", id, [][]byte{[]byte(`{"clock":4,"ops":[]}`), op(5, "after")}, v); err != nil {
+		t.Fatal(err)
+	}
+	if got := order(t, g, "issue", id); len(got) != 5 {
+		t.Fatalf("reads %v", got)
 	}
 }

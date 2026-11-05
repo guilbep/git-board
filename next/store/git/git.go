@@ -472,7 +472,8 @@ func (s *Store) command(ctx context.Context, args ...string) *exec.Cmd {
 // a merge on them. On an entity git has at prev, the packs it lacks must
 // all sort after its head, the first a clock above it: they are chained
 // on it. Else git's history would have to be written again, and Put
-// refuses.
+// refuses. A merge's pack (no operation) whose level below holds one
+// commit is also put on a commit under it: a merge keeps two parents.
 func (s *Store) Put(ctx context.Context, kind, id string, packs [][]byte, prev string) (string, error) {
 	if !store.IsID(id) || kind == "" || strings.ContainsAny(kind, "/.") {
 		return "", fmt.Errorf("git: bad name %s", refName(kind, id))
@@ -514,7 +515,7 @@ func (s *Store) Put(ctx context.Context, kind, id string, packs [][]byte, prev s
 	if top == 0 {
 		return prev, nil
 	}
-	var below []string
+	var below, older []string // the level below, and every commit under it
 	if prev != "" {
 		below = []string{prev}
 	}
@@ -524,12 +525,31 @@ func (s *Store) Put(ctx context.Context, kind, id string, packs [][]byte, prev s
 		}
 		var level []string
 		for _, p := range levels[c] {
-			commit, err := s.writePack(p, below)
+			parents := below
+			if _, empty, _ := pack.Header(p); empty && len(below) < 2 {
+				// A merge whose level below holds one commit: one side
+				// wrote more than the other. It joins that commit and
+				// one under it, as where it was made: a merge has two
+				// parents (storage.md, Clock).
+				if len(older) == 0 && prev != "" {
+					out, err := s.git(ctx, nil, "rev-parse", prev+"^@")
+					if err != nil {
+						return "", err
+					}
+					older = strings.Fields(string(out))
+				}
+				if len(older) == 0 {
+					return "", fmt.Errorf("git: %s: pack %s: %w, and nothing under clock %d to join", refName(kind, id), pack.Hash(p), pack.ErrEmpty, c)
+				}
+				parents = append(slices.Clone(below), older[0])
+			}
+			commit, err := s.writePack(p, parents)
 			if err != nil {
 				return "", err
 			}
 			level = append(level, commit)
 		}
+		older = append(slices.Clone(below), older...)
 		below = level
 	}
 	head := below[0]
