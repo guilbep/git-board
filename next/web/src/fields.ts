@@ -66,3 +66,6 @@ export function orderBuckets(buckets: Bucket[], group: string, fields: Fields): 
   // Array.prototype.sort is stable, so equal ranks keep the server's order.
   return [...buckets].sort((a, b) => rank(a) - rank(b));
 }
+
+// a view's tab words: current-sprint → Current sprint
+export const viewLabel = (name: string) => displayName(name.replaceAll('-', ' '));

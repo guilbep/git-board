@@ -72,56 +72,9 @@
       <div class="toolbar">
         <div class="toolbar-field toolbar-search">
           <label class="epfl-label" for="filter">Filter</label>
-          <!-- a combobox (docs/prd/header-help.md, 5): examples from this
-               board when empty, completions with their counts as you type,
-               the filters' ? at its end -->
-          <div class="fbox" @focusout="onBoxLeave">
-            <input
-              id="filter"
-              ref="filterInput"
-              class="epfl-input"
-              type="search"
-              role="combobox"
-              aria-autocomplete="list"
-              :aria-expanded="boxOpen && boxOptions.length > 0"
-              aria-controls="filter-list"
-              :aria-activedescendant="boxActive >= 0 ? `filter-opt-${boxActive}` : undefined"
-              title="Words in titles, descriptions, comments; #number; field:value"
-              spellcheck="false"
-              placeholder="Words, #12, status:ready, assignee:@me, is:closed…"
-              autocomplete="off"
-              :value="filter"
-              @focus="boxOpen = true"
-              @click="boxOpen = true"
-              @input="onBoxInput"
-              @keydown="onBoxKey"
-            />
-            <FilterHelp ref="boxHelp" button-class="filters-help fbox-help" align="right" @try="tryWord" />
-            <div v-if="boxOpen && boxOptions.length" class="fbox-pop" @mousedown.prevent>
-              <p v-if="!completing" class="fbox-head">{{ filter.trim() ? 'Add' : 'Try' }}</p>
-              <ul id="filter-list" role="listbox" aria-label="Filter suggestions">
-                <li
-                  v-for="(o, i) in boxOptions"
-                  :id="`filter-opt-${i}`"
-                  :key="o.value"
-                  role="option"
-                  :aria-selected="i === boxActive"
-                  :class="{ on: i === boxActive }"
-                  @mousemove="boxActive = i"
-                  @click="takeOption(i)"
-                >
-                  <code>{{ o.label }}</code>
-                  <span>{{ o.note }}</span>
-                </li>
-              </ul>
-              <p class="fbox-foot">
-                <span><kbd>↑</kbd><kbd>↓</kbd> choose</span>
-                <span v-if="completing"><kbd>Tab</kbd> complete</span>
-                <span v-if="trick" class="fbox-trick">{{ trick }}</span>
-                <button type="button" class="gb-linkbtn fbox-how" @click="boxOpen = false, boxHelp?.show()">How filtering works</button>
-              </p>
-            </div>
-          </div>
+          <!-- a combobox (FilterBox): examples from this board when empty,
+               completions with their counts as you type -->
+          <FilterBox ref="filterBox" :model-value="filter" :fields="fields" :values="values" :facets="facetList" @update:model-value="setFilter" />
         </div>
         <div class="toolbar-field">
           <label class="epfl-label" for="group">Group by</label>
@@ -147,31 +100,9 @@
         </div>
       </div>
 
-      <!-- What differs from the saved view, as GitHub Projects shows it:
-           saved into .git-board.toml for everyone, or dropped. -->
-      <div v-if="viewDirty" class="viewbar" role="region" aria-label="Unsaved changes to the view">
-        <span class="viewbar-what">
-          <b>{{ activeView ? `Unsaved changes to ${viewLabel(activeView)}` : 'Not a saved view' }}</b>
-          <code v-if="draft.filter" class="viewbar-filter">{{ draft.filter }}</code>
-          <span v-else class="viewbar-meta">every issue</span>
-          <span v-if="draft.layout !== viewLayout" class="viewbar-meta">as a {{ draft.layout }}</span>
-          <span v-if="draft.group" class="viewbar-meta">grouped by {{ draft.group }}</span>
-          <span v-if="draft.sort" class="viewbar-meta">sorted by {{ draft.sort }}</span>
-          <span v-if="!sameColumns(draft.columns, view?.columns)" class="viewbar-meta">{{ draft.columns ? 'columns of its own' : 'default columns' }}</span>
-          <span v-if="lanesChanged" class="viewbar-meta">{{ draft.lanes ? `lanes: ${draft.lanes.join(', ')}` : 'every lane' }}{{ draft.limits ? ' · limits' : '' }}</span>
-        </span>
-        <form v-if="naming" class="viewbar-name" @submit.prevent="saveAs">
-          <input id="viewname" aria-label="New view name" ref="nameInput" v-model="newName" class="epfl-input" placeholder="new-view-name" pattern="[A-Za-z0-9_\-]+" title="Letters, digits, - and _" required @keydown.esc.stop="naming = false" />
-          <button type="submit" class="epfl-btn epfl-btn-primary epfl-btn-sm" :disabled="savingView">Save</button>
-          <button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" @click="naming = false">Cancel</button>
-        </form>
-        <template v-else>
-          <button v-if="activeView" type="button" class="epfl-btn epfl-btn-primary epfl-btn-sm" :disabled="savingView" @click="save(activeView)">Save view</button>
-          <button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" @click="startNaming">Save as new view…</button>
-          <button type="button" class="viewbar-discard" @click="resetAll">Discard</button>
-        </template>
-        <p v-if="viewError" class="viewbar-note viewbar-error" role="alert">Not saved: {{ viewError }}</p>
-      </div>
+      <!-- What differs from the saved view (ViewBar): saved into
+           .git-board.toml for everyone, or dropped. -->
+      <ViewBar :draft="draft" :view="view" :active-view="activeView" :view-layout="viewLayout" @saved="onViewSaved" @discard="resetAll" />
 
       <div v-if="buckets" class="status" role="status">
         <span><b>{{ count }}</b>{{ count === total ? '' : ` of ${total}` }} {{ total === 1 ? 'issue' : 'issues' }}</span>
@@ -278,6 +209,8 @@
 </template>
 
 <script setup lang="ts">
+import FilterBox from '@/components/FilterBox.vue';
+import ViewBar from '@/components/ViewBar.vue';
 import FilterHelp from '@/components/FilterHelp.vue';
 import { keyContext, noteUse } from '@/keys';
 import { debounced, onLive } from '@/live';
@@ -288,19 +221,16 @@ import { filtersHidden, newIssueRequested, recordRecent } from '@/commands';
 import { numberName } from '@/palette';
 import { changedSince, loadVisit, saveVisit, visit } from '@/lastvisit';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { me } from '@/me';
 import { useRoute, useRouter } from 'vue-router';
-import { clientId, getFields, isStale, message, patchConfig, patchIssue, type FieldConfig, type Issue } from '@/api';
+import { clientId, getFields, isStale, message, patchIssue, type FieldConfig, type Issue } from '@/api';
 import type { Bucket } from '@/bucket';
 import { apiSort, useBoardLists } from '@/boardlists';
-import { configModel, loadConfigModel, takeFile } from '@/configmodel';
+import { configModel, loadConfigModel } from '@/configmodel';
 import type { ViewConfig } from '@/configparse';
 import { namespaces, parseSelection, parseSort, prefillFrom } from '@/facets';
 import { loadColors, values } from '@/colors';
-import { completeTerms, composeFilter, suggest, withFacet } from '@/viewfilter';
-import { clean } from '@/sectionpatch';
-import { examples, nextTrick } from '@/filterhelp';
-import { displayName, orderBuckets } from '@/fields';
+import { completeTerms, composeFilter, withFacet } from '@/viewfilter';
+import { displayName, orderBuckets, viewLabel } from '@/fields';
 import AppHeader from '@/components/AppHeader.vue';
 import FilterSidebar from '@/components/FilterSidebar.vue';
 import IssueBoard from '@/components/IssueBoard.vue';
@@ -334,8 +264,6 @@ const loading = lists.loading;
 const listError = lists.error;
 
 const viewNames = computed(() => configModel.value?.view_order ?? []); // the file's order
-// a tab's words: current-sprint → Current sprint
-const viewLabel = (name: string) => displayName(name.replaceAll('-', ' '));
 const requestedView = computed(() => (typeof route.query.view === 'string' ? route.query.view : ''));
 // The view in the URL, or the first one when none is asked for.
 const activeView = computed(() =>
@@ -374,81 +302,12 @@ const sort = computed(() =>
 );
 const sortValue = computed(() => (typeof route.query.sort === 'string' ? route.query.sort : ''));
 
-// status: → status:ready, … (the values in use: colors.ts)
-const suggestions = computed(() => suggest(filter.value, values.value));
-
-// the Filter box's list: examples from this board when it's empty, else
-// the completions of its last word, each with its count from the facets
-const filterInput = ref<HTMLInputElement | null>(null);
-const boxHelp = ref<InstanceType<typeof FilterHelp> | null>(null);
-const boxOpen = ref(false);
-const boxActive = ref(-1);
-// completing: the last word's values; else examples from this board, the
-// ones the box doesn't hold yet, added after what it holds
-const completing = computed(() => suggestions.value.length > 0);
-const boxOptions = computed<{ value: string; label: string; note: string }[]>(() => {
-  if (!completing.value) {
-    const f = filter.value.trim();
-    const held = f.split(/\s+/);
-    return examples(fields.value, me.value?.me?.login ?? '')
-      .filter((e) => !held.includes(e.term))
-      .map((e) => ({ value: f ? `${f} ${e.term}` : e.term, label: e.term, note: e.means }));
-  }
-  return suggestions.value.slice(0, 8).map((full) => {
-    const word = full.split(/\s+/).at(-1) ?? full;
-    const [key, v] = [word.slice(0, word.indexOf(':')), word.slice(word.indexOf(':') + 1).split(',').at(-1) ?? ''];
-    const n = facetList.value.find((f) => f.key === key)?.options.find(([o]) => o === v)?.[1];
-    return { value: full, label: word, note: n === undefined ? '' : `${n} ${n === 1 ? 'issue' : 'issues'}` };
-  });
-});
-const trick = computed(() => (completing.value ? nextTrick(filter.value) : null));
-watch(boxOptions, () => (boxActive.value = -1));
-function onBoxInput(e: Event) {
-  boxOpen.value = true;
-  void setFilter((e.target as HTMLInputElement).value);
-}
-function takeOption(i: number) {
-  const o = boxOptions.value[i];
-  if (!o) return;
-  void setFilter(o.value);
-  boxActive.value = -1;
-  filterInput.value?.focus();
-}
-// ↑↓ choose; Tab and Enter take the chosen one (Tab the first completion
-// when none is chosen); Esc closes the list first; else the keys do what
-// they did
-function onBoxKey(e: KeyboardEvent) {
-  const n = boxOptions.value.length;
-  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-    if (!n) return;
-    e.preventDefault();
-    boxOpen.value = true;
-    boxActive.value = e.key === 'ArrowDown' ? (boxActive.value + 1) % n : (boxActive.value - 1 + n) % n;
-    return;
-  }
-  if (!boxOpen.value || !n) return;
-  if (e.key === 'Enter' && boxActive.value >= 0) {
-    e.preventDefault();
-    takeOption(boxActive.value);
-  } else if (e.key === 'Tab' && !e.shiftKey && (boxActive.value >= 0 || completing.value)) {
-    e.preventDefault();
-    takeOption(Math.max(boxActive.value, 0));
-  } else if (e.key === 'Escape') {
-    e.preventDefault();
-    e.stopPropagation();
-    boxOpen.value = false;
-  }
-}
-function onBoxLeave(e: FocusEvent) {
-  const box = e.currentTarget as HTMLElement;
-  if (!(e.relatedTarget instanceof Node && box.contains(e.relatedTarget))) boxOpen.value = false;
-}
 // Try, in "How filtering works": the word joins what the box holds
+const filterBox = ref<InstanceType<typeof FilterBox> | null>(null);
 function tryWord(term: string) {
   const f = filter.value.trim();
   void setFilter(f ? `${f} ${term}` : term);
-  boxOpen.value = false;
-  void nextTick(() => filterInput.value?.focus());
+  void nextTick(() => filterBox.value?.focus());
 }
 
 // the facets, the server's for the filter: the ticks are the values it
@@ -635,48 +494,12 @@ const draft = computed<ViewConfig>(() => ({
   lanes: lanes.value,
   limits: limits.value,
 }));
-const sameColumns = (a?: string[], b?: string[]) => (a ?? []).join(',') === (b ?? []).join(',');
-const sameLimits = (a?: Record<string, number>, b?: Record<string, number>) =>
-  JSON.stringify(Object.entries(a ?? {}).sort()) === JSON.stringify(Object.entries(b ?? {}).sort());
-const lanesChanged = computed(() => !sameColumns(lanes.value, view.value?.lanes) || !sameLimits(limits.value, view.value?.limits));
-const viewDirty = computed(() => {
-  const v = view.value;
-  const d = draft.value;
-  if (!v) return d.layout !== 'table' || d.filter !== 'is:open' || d.group !== '' || d.sort !== '' || !!d.columns || !!d.lanes || !!d.limits;
-  return d.layout !== viewLayout.value || d.filter !== v.filter || d.group !== (v.group ?? '') || d.sort !== (v.sort ?? '') || !sameColumns(d.columns, v.columns) || lanesChanged.value;
-});
-const naming = ref(false);
-const newName = ref('');
-const nameInput = ref<HTMLInputElement | null>(null);
-const savingView = ref(false);
-const viewError = ref('');
-
-function startNaming() {
-  newName.value = activeView.value ? `${activeView.value}-copy` : '';
-  naming.value = true;
-  void Promise.resolve().then(() => nameInput.value?.select());
+// a view saved from the bar: it, without the URL's filter and sort it
+// now holds
+async function onViewSaved(name: string) {
+  await router.replace({ query: { view: name } });
+  resetView();
 }
-
-async function save(name: string) {
-  savingView.value = true;
-  viewError.value = '';
-  try {
-    await loadConfigModel();
-    const d = draft.value;
-    const v = { layout: d.layout, filter: d.filter, group: d.group, sort: d.sort, columns: d.columns, lanes: d.lanes, limits: d.limits };
-    takeFile(await patchConfig({ [`views.${name}`]: clean(v) }, configModel.value?.hash ?? ''));
-    naming.value = false;
-    // the saved view, without the URL's filter and sort it now holds
-    await router.replace({ query: { view: name } });
-    resetView();
-  } catch (e) {
-    viewError.value = message(e);
-  } finally {
-    savingView.value = false;
-  }
-}
-
-const saveAs = () => save(newName.value.trim());
 
 // The file first (the views): the list waits for nothing else. The fields
 // come beside the first list, the values' colors and suggestions after it.
@@ -869,17 +692,8 @@ onBeforeUnmount(offLive);
 .changed-toggle { display: inline-flex; align-items: center; gap: .375rem; padding: .125rem .5rem; border: 1px solid var(--border); background: var(--bg); color: var(--fg); font: inherit; font-size: var(--fs-sm); cursor: pointer; }
 .changed-toggle[aria-pressed="true"] { border-color: var(--fg); background: var(--fg); color: var(--bg); }
 .changed-seen { padding: 0; border: 0; background: none; color: var(--fg-muted); font: inherit; font-size: var(--fs-sm); text-decoration: underline; cursor: pointer; }
-.viewbar { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem .75rem; margin: 0 0 1rem; padding: .625rem .875rem; border: 1px solid var(--warning-border); border-left: 4px solid var(--warning); background: var(--warning-bg); }
-.viewbar-what { display: flex; flex-wrap: wrap; align-items: baseline; gap: .25rem .625rem; flex: 1 1 22rem; min-width: 0; }
-.viewbar-filter { padding: .05em .4em; background: var(--bg); border: 1px solid var(--border-subtle); font-size: .8125rem; overflow-wrap: anywhere; }
-.viewbar-meta { font-size: .875rem; color: var(--fg-muted); }
-.viewbar-name { display: flex; align-items: center; gap: .5rem; }
-.viewbar-name .epfl-input { width: 14rem; min-height: 2rem; padding: .25rem .5rem; }
-.viewbar-discard { padding: 0; border: 0; background: none; color: var(--fg); text-decoration: underline; cursor: pointer; font: inherit; }
 .lanes-note { margin: 0 0 var(--space-3); color: var(--fg-muted); font-size: var(--fs-sm); }
 .lanes-note-btn { padding: 0; border: 0; background: none; color: var(--fg); font: inherit; text-decoration: underline; cursor: pointer; }
-.viewbar-note { flex-basis: 100%; margin: 0; font-size: .8125rem; color: var(--fg-muted); }
-.viewbar-error { color: var(--danger-fg); }
 /* The masonry-walls database layout: a 17rem filter sidebar, a fluid main
    column; the sidebar goes on top on narrower screens. */
 .page {
@@ -926,20 +740,6 @@ onBeforeUnmount(offLive);
 }
 .toolbar-field { flex: 0 1 13rem; min-width: 0; }
 .toolbar-search { flex: 1 1 20rem; max-width: 32rem; }
-.fbox { position: relative; }
-.fbox > .epfl-input { width: 100%; padding-right: 2.5rem; }
-.fbox > :deep(.fbox-help) { position: absolute; top: 50%; right: .625rem; transform: translateY(-50%); }
-.fbox-pop { position: absolute; z-index: 25; top: calc(100% + .25rem); left: 0; width: max(100%, 30rem); border: var(--border-w) solid var(--border-strong); background: var(--bg); box-shadow: var(--shadow); font-size: .875rem; }
-.fbox-head { margin: 0; padding: .625rem 1rem .25rem; color: var(--fg-muted); font-size: .75rem; font-weight: var(--w-bold); letter-spacing: .06em; text-transform: uppercase; }
-.fbox-pop ul { margin: 0; padding: .25rem 0; list-style: none; }
-.fbox-pop li { display: flex; align-items: center; gap: .75rem; padding: .4375rem 1rem; cursor: pointer; }
-.fbox-pop li.on { background: var(--bg-muted); box-shadow: inset 3px 0 0 var(--primary); }
-.fbox-pop li > span { margin-left: auto; color: var(--fg-muted); font-size: .8125rem; text-align: right; }
-.fbox-pop code { padding: .0625rem .3125rem; border: var(--border-w) solid var(--border-subtle); background: var(--bg-subtle); font-size: .8125rem; }
-.fbox-foot { display: flex; flex-wrap: wrap; align-items: center; gap: .375rem 1rem; margin: 0; padding: .5rem 1rem; border-top: var(--border-w) solid var(--border-subtle); color: var(--fg-muted); font-size: .78125rem; }
-.fbox-foot > span { display: inline-flex; align-items: center; gap: .1875rem; }
-.fbox-how { margin-left: auto; }
-.fbox-pop kbd { min-width: .75rem; padding: 0 .3125rem; border: var(--border-w) solid var(--border-strong); border-bottom-width: .125rem; border-radius: var(--radius); background: var(--bg); color: var(--fg); font-family: var(--font-sans); font-size: .71875rem; line-height: 1.35; text-align: center; }
 .toolbar-lanes { flex: 0 0 auto; }
 .toolbar-new { display: flex; align-items: center; gap: .5rem; margin-left: auto; }
 /* as high as the fields beside it */

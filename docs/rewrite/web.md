@@ -96,10 +96,11 @@ settings form (a table of the file) and the experimental switch stay.
 ## Tests
 
 - `npm test` (`make next-web-check`): the pure modules, Node's runner.
-- `make next-web-e2e`: 75 browser tests on `git-board-next serve` over a
+- `make next-web-e2e`: 76 browser tests on `git-board-next serve` over a
   git board and a Markdown board (`next/web/e2e/serve.mjs`), ported from
   v1's; `stale.spec.ts` (Reload, Overwrite, a form's), `live.spec.ts`
-  (the change events) and `markdown.spec.ts` (an issue's life on the
-  Markdown board, in its file) are new. Dropped with their features: the clone's
+  (the change events), `markdown.spec.ts` (an issue's life on the
+  Markdown board, in its file) and `views.spec.ts` (a view saved from the
+  board) are new. Dropped with their features: the clone's
   first pull, the ENAC template's labels, Labels' lint, a field's GitHub
   Project column, Start over.
