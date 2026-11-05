@@ -558,7 +558,7 @@ What the table drops, in short:
 ## Serving
 
 `git-board-next serve` serves the API and the web app, embedded in the
-binary (ADR 0012: today's `web/` build, until the new one lands), until
+binary (ADR 0012: `next/web`'s build, [the web app](web.md)), until
 Ctrl-C. A bare `git-board-next` opens the board in the browser: the one
 already running for this repository if there is one, else it starts one
 here. It listens on `localhost`, port 8080 or the next one free on both
@@ -567,6 +567,5 @@ exposes the board and the forges' tokens to them). The running board is
 found by `<git dir>/git-board/server.json` (its URL and pid), checked
 against the `git_dir` its `/api/board` answers.
 
-The old web app reads v1's routes. Served by v2, the pages that use a
-route v2 renamed fail until the new web app lands; the board's list, the
-issue's thread and the settings' text are the first rewritten.
+The web app is `next/web` ([the web app](web.md)); v1's `web/` stays
+v1's, until the switch.

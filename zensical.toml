@@ -69,6 +69,7 @@ nav = [
     { "v2: the design of a rewrite" = "rewrite/design.md" },
     { "v2: the golden boards and make compat" = "rewrite/compat.md" },
     { "v2: the HTTP API" = "rewrite/api.md" },
+    { "v2: the web app" = "rewrite/web.md" },
   ] },
 ]
 
