@@ -679,5 +679,13 @@ func basic(ctx context.Context, dir string) (meta, error) {
 		`log ` + eid + ` --field prio --json`,
 		`labels --json`,
 		`me --ls --json`,
+		`sprint ls`,
+		`sprint report s1`,
+		`sprint report nope`,
+		`sprint new s9`,
+		`branch ` + sid,
+		`branch ` + eid,
+		`branch 0000000`,
+		`verify`,
 	}}, nil
 }

@@ -15,13 +15,18 @@ import (
 	"github.com/BurntSushi/toml"
 
 	"github.com/guilbep/git-board/next/conf"
+	"github.com/guilbep/git-board/next/domain/releases/proof"
 )
 
 // Feature is the cycle's name in [experimental] features.
 const Feature = "cycle"
 
-// Config is the [cycle] table.
+// Config is the [cycle] table: the project's statuses as the loop's
+// stages, where plans live, which files are tests, and who holds each
+// gate. Every key has a default (Stages).
 type Config struct {
+	// On says the file has a [cycle] table: the board walks the cycle.
+	On         bool     `toml:"-" json:"on"`
 	Ready      string   `toml:"ready"`
 	InProgress []string `toml:"in-progress"`
 	InReview   []string `toml:"in-review"`
@@ -46,21 +51,8 @@ type Config struct {
 	KindsFile map[string]toml.Primitive `toml:"kinds"`
 }
 
-// Suite is a [cycle.tests.<name>] or [cycle.checks.<name>].
-type Suite struct {
-	Run   []string          `toml:"run"`
-	Files []string          `toml:"files"`
-	Where string            `toml:"where"`
-	Dir   string            `toml:"dir"`
-	Env   map[string]string `toml:"env"`
-	Tools [][]string        `toml:"tools"`
-}
-
-// The rules [cycle.kinds] takes, and the built-in steps in their order.
-var (
-	KindRules = []string{"failing-test", "per-criterion", "none"}
-	Builtins  = []string{"intent", "risk", "plan", "tests", "code", "review"}
-)
+// Suite is a [cycle.tests.<name>] or [cycle.checks.<name>]: proof's.
+type Suite = proof.Suite
 
 // Table is the cycle's table on a file.
 type Table struct {
@@ -80,6 +72,7 @@ func (t Table) Get(statuses []string) (Config, error) {
 	if len(probs) > 0 {
 		return c, probs[0]
 	}
+	c.On = t.h.Defined()
 	// M1's test-file globs were [cycle] tests; the decoder would drop a
 	// list there without a word
 	if t.f.Type("cycle", "tests") == "Array" {

@@ -363,3 +363,25 @@ func lastSprintDays(sp Sprints, ordered []Sprint) int {
 	}
 	return 14
 }
+
+// SprintWindow is a sprint and its end: the next one's start, or the
+// last one's start and its length (lastSprintDays).
+type SprintWindow struct {
+	Sprint
+	End time.Time
+}
+
+// Windows are the sprints in start order, each with its end.
+func (sp Sprints) Windows() []SprintWindow {
+	ordered := slices.Clone(sp.List)
+	sort.Slice(ordered, func(i, j int) bool { return ordered[i].Start.Before(ordered[j].Start) })
+	out := make([]SprintWindow, len(ordered))
+	for i, s := range ordered {
+		end := dateOnly(s.Start).AddDate(0, 0, lastSprintDays(sp, ordered))
+		if i+1 < len(ordered) {
+			end = dateOnly(ordered[i+1].Start)
+		}
+		out[i] = SprintWindow{Sprint: s, End: end}
+	}
+	return out
+}

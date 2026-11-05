@@ -1,0 +1,1 @@
+error: unknown sprint "nope" (run `git-board sprint ls` to see configured slugs)
