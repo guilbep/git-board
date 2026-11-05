@@ -1,6 +1,6 @@
 // The description's verdicts (docs/design/time-flow/protocol.md, spec:*):
 // one comment per verdict, on a version. Pure: read from the thread.
-import type { IssueEvent } from './api/board.ts';
+import type { IssueEvent } from './api/types.ts';
 import { bodyThreads } from './flow.ts';
 import type { BodyVersion } from './sections.ts';
 

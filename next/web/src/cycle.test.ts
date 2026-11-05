@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import type { Cycle, GatePR, IssueEvent } from './api/board.ts';
+import type { IssueEvent } from './api/types.ts';
+import type { Cycle, GatePR } from './api/cycletypes.ts';
 import { cardFor, criteriaLeft, criterionOf, DEFAULT_IDS, mergedRun, riskWords, signoffLine, steps, statusBar, suggestion, tiles, turn, withCriteria } from './cycle.ts';
 import { on } from './when.ts';
 

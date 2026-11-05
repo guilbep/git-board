@@ -1,6 +1,7 @@
 // The words for an issue's step (api/board.ts Cycle): the step bar, the
 // step's buttons, the criteria written into the description.
-import type { Cycle, CycleStages, IssueEvent, StageStep } from './api/board.ts';
+import type { IssueEvent } from './api/types.ts';
+import type { Cycle, CycleStages, StageStep } from './api/cycletypes.ts';
 import { approvers, reviewLine } from './review.ts';
 import { versions } from './sections.ts';
 import { verdicts } from './spec.ts';

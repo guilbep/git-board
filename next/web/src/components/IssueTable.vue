@@ -108,7 +108,8 @@
 <script setup lang="ts">
 import { safeHref } from '@/links';
 import { computed, reactive, ref } from 'vue';
-import { changeLabels, patchIssue, setStatus, type Bucket, type Issue } from '@/api/board';
+import { patchIssue, type Issue, type IssueChange } from '@/api';
+import type { Bucket } from '@/bucket';
 import type { Sort } from '@/facets';
 import { displayName, formatValue, otherLabels, typeOf, type Fields } from '@/fields';
 import { message } from '@/issue';
@@ -202,10 +203,10 @@ function bulkSet(field: string, e: Event) {
   if (v === '(none)') {
     void runBulk(`Clearing ${displayName(field)}`, (i) => {
       const old = i.labels.filter((l) => l.startsWith(`${field}:`));
-      return old.length ? changeLabels(i.id, [], old) : Promise.resolve();
+      return old.length ? write(i, { labels: { remove: old } }) : Promise.resolve();
     });
   } else {
-    void runBulk(`Setting ${displayName(field)}`, (i) => patchIssue(i.id, { [field]: v }));
+    void runBulk(`Setting ${displayName(field)}`, (i) => write(i, { set: [`${field}=${v}`] }));
   }
 }
 
@@ -213,11 +214,19 @@ function bulkAssign(field: string) {
   const v = (assign[field] ?? '').trim();
   if (!v) return;
   assign[field] = '';
-  void runBulk(`Adding to ${displayName(field)}`, (i) => patchIssue(i.id, { [field]: v }));
+  void runBulk(`Adding to ${displayName(field)}`, (i) => write(i, { set: [`${field}=+${v}`] }));
 }
 
 function bulkClose() {
-  void runBulk('Closing', (i) => (i.status === 'closed' ? Promise.resolve() : setStatus(i.id, 'closed')));
+  void runBulk('Closing', (i) => (i.status === 'closed' ? Promise.resolve() : write(i, { status: 'closed' })));
+}
+
+// one issue's write, from the version the row was read at
+async function write(i: Issue, change: IssueChange) {
+  const t = await patchIssue(i.id, i.version, change);
+  i.version = t.version;
+  i.labels = t.labels;
+  i.status = t.status;
 }
 </script>
 

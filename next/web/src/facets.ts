@@ -1,16 +1,13 @@
-// The sidebar's filters and the table's sort. The facets are the server's
-// (GET /api/facets): counted against the rest of the filter, the values it
-// picks, the filter without them; a tick writes a new filter
-// (viewfilter.ts), the page matches no issue itself. Pure logic, no "@/"
-// imports: node runs facets.test.ts on it directly.
-import type { Issue } from './api/board';
+// The sidebar's filters and the table's sort. A facet's counts are the
+// server's (GET /api/labels for the rest of the filter: facetsOf below);
+// the values it picks and the rest of the filter are read here
+// (filterterms.ts); a tick writes a new filter (viewfilter.ts). Pure logic,
+// no "@/" imports: node runs facets.test.ts on it directly.
+import type { Issue, LabelCount } from './api/types.ts';
 import { displayName, fieldNames, fieldValues, formatValue, type Fields } from './fields.ts';
+import { NONE, PLAIN, STATE, facetKeys, picked, rest } from './filterterms.ts';
 
-/** The value of an issue without the field, as board.BucketBy names it. */
-export const NONE = '(none)';
-/** Facet keys besides label namespaces: git-bug's open/closed, and labels without a namespace. */
-export const STATE = 'is';
-export const PLAIN = 'label';
+export { NONE, PLAIN, STATE };
 
 /** Facet key -> the values wanted, any of which matches. */
 export type Selection = Record<string, string[]>;
@@ -159,4 +156,39 @@ export function facetLabel(key: string): string {
 
 export function valueLabel(key: string, value: string, fields: Fields): string {
   return value === NONE ? 'Not set' : formatValue(key, value, fields);
+}
+
+// Counted is what the server counted for a filter: the labels in use
+// among the issues it matches, and how many it matches (open, closed).
+export interface Counted {
+  labels: LabelCount[];
+  open: number;
+  closed: number;
+}
+
+// countsOf: a facet's values among counted, each with its count; NONE
+// for a single field (or the plain labels' none can't be told: left out)
+function countsOf(key: string, c: Counted, single: boolean): [string, number][] {
+  if (key === STATE) return ([['open', c.open], ['closed', c.closed]] as [string, number][]).filter(([, n]) => n > 0);
+  const own = c.labels.filter((l) => (key === PLAIN ? !l.field : l.field === key)).map((l): [string, number] => [l.value, l.open + l.closed]);
+  const none = c.open + c.closed - own.reduce((n, [, k]) => n + k, 0);
+  return single && none > 0 ? [...own, [NONE, none]] : own;
+}
+
+// facetsOf is the filters panel for filter: each facet counted against the
+// rest of the filter (counted.get(key), the shared one when the filter has
+// no term on it), the values it picks, the rest. A facet with one value
+// says nothing and is left out, unless the filter picks values in it.
+export function facetsOf(filter: string, fields: Fields, shared: Counted, own: Map<string, Counted>): Facet[] {
+  const inUse = [...new Set(shared.labels.flatMap((l) => (l.field ? [l.field] : [])))];
+  const out: Facet[] = [];
+  for (const key of facetKeys(fieldNames(fields), inUse)) {
+    const single = key === STATE || !!fields[key]?.single;
+    const counts = countsOf(key, own.get(key) ?? shared, single);
+    const selected = picked(filter, key, counts.map(([v]) => v));
+    for (const v of selected) if (!counts.some(([o]) => o === v)) counts.push([v, 0]);
+    counts.sort(([a, na], [b, nb]) => nb - na || a.localeCompare(b));
+    if (counts.length > 1 || selected.length) out.push({ key, options: counts, selected, rest: rest(filter, key) });
+  }
+  return out;
 }

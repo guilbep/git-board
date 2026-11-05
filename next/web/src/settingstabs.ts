@@ -3,14 +3,12 @@
 // runs settingstabs.test.ts on it.
 
 // the tabs by where they are kept (each menu item says where it stands:
-// no Overview repeating them): the project
-// file (.git-board.toml) first, the Sync with it, for the forges and the
-// GitHub Project are its tables, the raw file last; then what lives
-// elsewhere, each saying where: where the board is kept, in git config;
-// the numbers in git, the worktrees in
-// wtx.toml, you in git config and this browser
+// no Overview repeating them): the project file (.git-board.toml) first,
+// the Sync with it, for the forges are its tables, the raw file last;
+// then what lives elsewhere, each saying where: where the board is kept,
+// in git config; the numbers in git; you in git config and this browser
 export const settingsTabs = [
-  { id: 'sync', label: 'Sync', group: 'The project file', via: 'forges, Project' },
+  { id: 'sync', label: 'Sync', group: 'The project file', via: 'remotes, forges' },
   { id: 'fields', label: 'Fields', group: 'The project file' },
   { id: 'labels', label: 'Labels', group: 'The project file' },
   { id: 'views', label: 'Views', group: 'The project file' },
@@ -25,7 +23,6 @@ export const settingsTabs = [
   { id: 'advanced', label: 'The file', group: 'The project file', via: '.git-board.toml' },
   { id: 'datastore', label: 'Datastore', group: 'Kept elsewhere', via: 'git config board.datastore' },
   { id: 'numbers', label: 'Numbers', group: 'Kept elsewhere', via: 'refs/board/seq' },
-  { id: 'worktrees', label: 'Worktrees', group: 'Kept elsewhere', via: 'wtx.toml', feature: 'worktrees' },
   { id: 'you', label: 'You', group: 'Kept elsewhere', via: 'git config, this browser' },
 ] as const;
 
@@ -69,13 +66,11 @@ export function settingsGroups(on: FeatureOn = allOn): { group: string; tabs: { 
 }
 
 // syncSummary is the Sync's line in the menu: "origin, 2 forges with
-// sync on, the GitHub Project EPFL-ENAC/40."
-export function syncSummary(s: { remote: { name: string } | null; forges: { sync: boolean }[]; project: { project: string } }): string {
+// sync on."
+export function syncSummary(s: { remotes: string[]; forges: { sync: boolean }[] }): string {
   const on = s.forges.filter((f) => f.sync).length;
-  const parts = [
-    s.remote ? s.remote.name : 'No origin: the issues are only on this computer',
+  return `${[
+    s.remotes.includes('origin') ? 'origin' : s.remotes[0] ?? 'No remote: the issues are only on this computer',
     on ? `${on} forge${on === 1 ? '' : 's'} with sync on` : 'no forge with sync on',
-  ];
-  if (s.project.project) parts.push(`the GitHub Project ${s.project.project}`);
-  return `${parts.join(', ')}.`;
+  ].join(', ')}.`;
 }

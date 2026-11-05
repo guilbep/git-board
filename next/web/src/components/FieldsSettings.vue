@@ -17,20 +17,12 @@
       <div class="set-forms">
         <p v-if="modelError" class="epfl-alert epfl-alert-danger" role="alert">{{ modelError }}</p>
 
-        <!-- no file yet: start from the default, one whole-file save (the raw
-             route, exactly what it is for), then the form reads it -->
+        <!-- no file yet: git board init writes the default -->
         <div v-else-if="configModel && !configModel.exists" class="fs-start">
           <p class="fs-lead">
-            No project file yet: every <code>ns:value</code> label is a field, in no order. The default declares the statuses,
-            priorities, kinds and estimates, the branch names and four views, each explained in a comment.
+            No project file yet: every <code>ns:value</code> label is a field, in no order. In a terminal, <code>git board init</code> writes
+            the default one: the statuses, priorities, kinds and estimates, the branch names and four views, each explained in a comment.
           </p>
-          <p class="fs-startrow">
-            <button type="button" class="epfl-btn epfl-btn-primary epfl-btn-sm" :disabled="starting" @click="startFromDefault">
-              {{ starting ? 'Writing the default…' : 'Start from the default' }}
-            </button>
-            <span class="gb-hint">or, in a terminal, <code>git board init</code></span>
-          </p>
-          <p v-if="startError" class="epfl-alert epfl-alert-danger" role="alert">{{ startError }}</p>
         </div>
 
         <p v-else-if="!draft.value.value" class="fs-muted">Loading…</p>
@@ -303,17 +295,6 @@
                   />
                 </div>
               </ConfigCard>
-              <!-- a place changed and saved: the issues move when you say so -->
-              <section v-if="migrating.length" class="fs-migrate" aria-labelledby="fs-mig">
-                <h3 id="fs-mig" class="h5">Move the issues to their new place</h3>
-                <ul>
-                  <li v-for="m in migrating" :key="m.field">
-                    <code>{{ m.field }}</code>: <template v-if="m.plans">{{ m.plans.map((p) => `${p.forge}, ${p.issues} issue${p.issues === 1 ? '' : 's'}${p.labels ? ` (${p.labels} labels come off)` : ''}`).join(' · ') || 'nothing to move' }}</template><template v-else>counting…</template>
-                    <button type="button" class="epfl-btn epfl-btn-primary epfl-btn-sm" :disabled="!!migrateBusy" @click="runMigration(m.field)">{{ migrateBusy === m.field ? 'Migrating…' : 'Run the migration' }}</button>
-                  </li>
-                </ul>
-                <p class="fs-muted">Nothing on the forges changes until you run it. Same as <code>git board sync --migrate &lt;field&gt;</code>. <button type="button" class="gb-linkbtn" @click="migrating = []">Not now</button></p>
-              </section>
             </div>
             <p v-else class="fs-muted">No field — add one below the list.</p>
           </div>
@@ -343,7 +324,8 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { onLive } from '@/live';
-import { getConfigFile, saveConfig, getFieldUsage, previewFieldMigration, runFieldMigration, type ConfigField, type MigratePlan } from '@/api/board';
+import { getLabels } from '@/api';
+import type { ConfigField } from '@/configparse';
 import { fieldPresets, takeUnique } from '@/configpresets';
 import { allNumbers, inferType, type FieldType } from '@/fieldinfer';
 import { fieldToToml, tomlToField, type FieldToml } from '@/fieldtoml';
@@ -976,56 +958,18 @@ function reset() {
   if (configModel.value) draft.reset(configModel.value);
 }
 
-// startFromDefault writes the whole default file through the raw route —
-// the one whole-file save the forms make — then reads it back
-const starting = ref(false);
-const startError = ref('');
-
-async function startFromDefault() {
-  starting.value = true;
-  startError.value = '';
-  try {
-    const file = await getConfigFile();
-    if (!file.default) throw new Error('The default project file is not available.');
-    await saveConfig(file.default, file.hash);
-    await loadConfigModel();
-    if (configModel.value) draft.reset(configModel.value);
-  } catch (e) {
-    startError.value = message(e);
-  } finally {
-    starting.value = false;
-  }
-}
-
-// the places a save moved: their migration, counted, run when asked
-const migrating = ref<{ field: string; plans: MigratePlan[] | null }[]>([]);
-const migrateBusy = ref('');
-async function save() {
-  const before = configModel.value;
-  const moved = before && draft.value.value ? Object.values(placesBody(before.forges, draft.value.value.places) ?? {}).flatMap((p) => [...Object.keys(p.set), ...p.remove]) : [];
-  await draft.save();
-  if (draft.dirty.value || draft.saveError.value) return;
-  migrating.value = [...new Set(moved)].map((field) => ({ field, plans: null }));
-  for (const m of migrating.value)
-    previewFieldMigration(m.field)
-      .then((r) => (m.plans = r.plans ?? []))
-      .catch(() => (m.plans = []));
-}
-function runMigration(field: string) {
-  migrateBusy.value = field;
-  runFieldMigration(field)
-    .then((r) => {
-      if (r.error) draft.saveError.value = r.error;
-      else migrating.value = migrating.value.filter((m) => m.field !== field);
-    })
-    .catch((e) => (draft.saveError.value = message(e)))
-    .finally(() => (migrateBusy.value = ''));
-}
+const save = () => draft.save();
 
 onMounted(() => {
   void draft.load();
-  getFieldUsage()
-    .then((u) => (usage.value = u))
+  // how many issues carry each field's values (GET /api/labels): a value
+  // counted once each, so an issue with two of a field's counts twice
+  getLabels('')
+    .then((ls) => {
+      const u: Record<string, number> = {};
+      for (const l of ls) if (l.field) u[l.field] = (u[l.field] ?? 0) + l.open + l.closed;
+      usage.value = u;
+    })
     .catch(() => {}); // the confirm says "No issue uses it yet" without it
 });
 </script>
@@ -1040,7 +984,6 @@ h2, p { margin: 0; }
 .fs-lead { max-width: 42rem; color: var(--fg-muted); }
 .fs-muted { color: var(--fg-muted); }
 .fs-start { display: grid; gap: .75rem; padding: 1.25rem; border: 1px solid var(--border); border-left: 3px solid var(--primary); background: var(--bg); }
-.fs-startrow { display: flex; align-items: center; gap: .75rem; }
 /* the work area: the list a fixed column, the editor the rest */
 .fl-work { display: grid; grid-template-columns: 17rem minmax(0, 1fr); gap: .75rem; align-items: start; }
 /* a phone (under ~640px): the list and the editor are separate screens —
@@ -1136,7 +1079,4 @@ h2, p { margin: 0; }
 .fl-place { display: inline-flex; align-items: center; gap: .25rem; padding: 0 .375rem; border: var(--border-w) solid var(--border-subtle); color: var(--fg-muted); font-size: .75rem; }
 .fl-place-own { border-color: var(--fg); color: var(--fg); }
 .fs-places-toml { margin: 0; padding: .5rem .75rem; background: var(--bg-subtle); font-size: .75rem; white-space: pre-wrap; }
-.fs-migrate { display: grid; gap: .5rem; padding: .75rem 1rem; border: var(--border-w) solid var(--border); border-left: .1875rem solid var(--warning); background: var(--warning-bg); }
-.fs-migrate ul { display: grid; gap: .5rem; margin: 0; padding-left: 1.125rem; }
-.fs-migrate li { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
 </style>

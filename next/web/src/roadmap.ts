@@ -1,8 +1,27 @@
 // layout = "roadmap": each issue on a time line, a bar over the dates of
 // its sprint (an iteration field, [[sprints.list]]) and a diamond on each
 // date field (due). Pure: RoadmapView.vue draws it.
-import type { SprintWindow } from './api/board';
 import type { Fields } from './fields.ts';
+
+// a sprint's days: from its start to the day before the next one's, the
+// last one length_days long ([sprints], docs/guide/configuration.md)
+export interface SprintWindow {
+  slug: string;
+  title: string;
+  start: string; // YYYY-MM-DD
+  end: string; // its last day
+}
+
+export function sprintWindows(s: { length_days: number; list: { slug: string; title: string; start: string }[] }): SprintWindow[] {
+  const sorted = [...s.list].filter((x) => /^\d{4}-\d{2}-\d{2}/.test(x.start)).sort((a, b) => a.start.localeCompare(b.start));
+  const iso = (t: number) => new Date(t).toISOString().slice(0, 10);
+  return sorted.map((x, i) => {
+    const start = Date.parse(`${x.start.slice(0, 10)}T00:00:00Z`);
+    const next = sorted[i + 1];
+    const end = next ? Date.parse(`${next.start.slice(0, 10)}T00:00:00Z`) - 864e5 : start + (s.length_days || 14) * 864e5 - 864e5;
+    return { slug: x.slug, title: x.title || x.slug, start: iso(start), end: iso(end) };
+  });
+}
 
 export interface Mark {
   kind: 'span' | 'point';

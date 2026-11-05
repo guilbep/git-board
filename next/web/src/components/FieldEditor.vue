@@ -26,7 +26,7 @@
         <button type="button" role="menuitemcheckbox" class="gb-pop-item" :aria-checked="values.includes(o)" :disabled="busy" @click="toggle(o)">
           <span class="gb-fe-box" :class="{ 'is-on': values.includes(o) }" aria-hidden="true"><GbIcon v-if="values.includes(o)" name="check" small /></span>
           <template v-if="kind === 'many' && type === 'person'">
-            <GbAvatar :name="nameOf(o)" :src="personByLogin(me?.identities, o)?.avatar_url" small :dark="o === myLogin" />
+            <GbAvatar :name="nameOf(o)" :src="personByLogin(people, o)?.avatar_url" small :dark="o === myLogin" />
             <span>{{ nameOf(o) }}<span v-if="o === myLogin" class="gb-pop-muted"> · you</span></span>
           </template>
           <template v-else>
@@ -69,11 +69,6 @@
     </form>
 
     <p v-if="due" class="gb-fe-note" :class="{ 'is-error': due.endsWith('late') }">{{ due }}</p>
-    <p v-if="held" class="gb-fe-note is-held">
-      The Project says <b>{{ held.project || 'nothing' }}</b>; both values stay until someone picks one.
-      <router-link to="/conflicts">Resolve in Conflicts</router-link>
-    </p>
-    <p v-if="waiting" class="gb-fe-note" role="status">Waits for the sync with the forges…</p>
     <p v-if="error" class="gb-fe-note is-error" role="alert">Not saved. {{ error }}</p>
   </div>
 </template>
@@ -82,13 +77,13 @@
 import GbAvatar from '@/components/GbAvatar.vue';
 import { personByLogin } from '@/people';
 import { computed, ref, watch } from 'vue';
-import type { IssueRef } from '@/api/board';
+import type { IssueRef } from '@/api/cycletypes';
 import { displayName, fieldValues, formatValue, typeOf, type Fields } from '@/fields';
 import { dueNote } from '@/headfields';
-import { patchField } from '@/fieldwrite';
+import { inject } from 'vue';
+import { issueWriter } from '@/issuewrite';
 import { message } from '@/issue';
-import { me } from '@/me';
-import { syncStatus } from '@/sync';
+import { me, people } from '@/me';
 import GbIcon from '@/components/GbIcon.vue';
 import ValueMark from '@/components/ValueMark.vue';
 
@@ -104,7 +99,7 @@ const values = computed(() => fieldValues(props.labels, props.name));
 // issue already holds several values of, as the server decides (fields.Single)
 const single = computed(() => (f.value ? f.value.single : type.value !== 'person' && values.value.length < 2));
 const myLogin = computed(() => me.value?.me?.login ?? '');
-const nameOf = (login: string) => personByLogin(me.value?.identities, login)?.name ?? login;
+const nameOf = (login: string) => personByLogin(people.value, login)?.name ?? login;
 
 // one: a menu of options; many: checkboxes (options, or the people to
 // pick); refs: the issues it names, and one to add; value: one input
@@ -139,7 +134,6 @@ const entry = computed(() => {
 });
 const inputType = computed(() => (type.value === 'date' ? 'date' : type.value === 'number' ? 'number' : 'search'));
 const inherited = computed(() => (!values.value.length && f.value?.inherits ? f.value.inherits : ''));
-const held = computed(() => syncStatus.value?.last?.conflicts.find((c) => c.bug_id === props.id && c.field === props.name));
 // a date: late, today, in n days (the old side column's note)
 const due = computed(() => (type.value === 'date' && values.value[0] ? dueNote(values.value[0], new Date()) : ''));
 
@@ -152,22 +146,22 @@ watch(
   { immediate: true },
 );
 
+const writer = inject(issueWriter, null);
 const busy = ref(false);
-const waiting = ref(false);
 const error = ref('');
 async function write(value: string, close = false) {
   if (busy.value) return; // a double click writes once
   busy.value = true;
   error.value = '';
   try {
-    await patchField(props.id, props.name, value, (w) => (waiting.value = w));
+    const why = (await writer?.set([`${props.name}=${value}`])) ?? 'no issue open to write to';
+    if (why) throw new Error(why);
     emit('changed');
     if (close) emit('done');
   } catch (e) {
     error.value = message(e);
   } finally {
     busy.value = false;
-    waiting.value = false;
   }
 }
 const setOne = (v: string) => (v === values.value[0] ? emit('done') : write(v, true));

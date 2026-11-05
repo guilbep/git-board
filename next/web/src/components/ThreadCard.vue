@@ -59,7 +59,8 @@
 
 <script setup lang="ts">
 import { computed, nextTick, ref, useId, useTemplateRef } from 'vue';
-import { ApiError, type Forge, type IssueEvent, type StageStep } from '@/api/board';
+import { ApiError, type Forge, type IssueEvent } from '@/api';
+import type { StageStep } from '@/api/cycletypes';
 import type { Fields } from '@/fields';
 import { resolvedBy, roleOf, type Item } from '@/flow';
 import { anchorLabel, anchorOf, applySuggestion, lineAt, stateOf, suggestionOf, versions, type Section } from '@/sections';

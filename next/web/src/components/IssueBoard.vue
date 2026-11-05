@@ -80,9 +80,10 @@
 import { bottomBarShown } from '@/keys';
 import ValueMark from '@/components/ValueMark.vue';
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { idLabel } from '@/forges';
+import { idLabel } from '@/idlabel';
 import { limitState, pickCards } from '@/lanes';
-import type { Bucket, Issue } from '@/api/board';
+import type { Issue } from '@/api';
+import type { Bucket } from '@/bucket';
 import { colorClass } from '@/colors';
 import { displayName, fieldValues, formatValue, otherLabels, type Fields } from '@/fields';
 

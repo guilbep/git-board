@@ -1,32 +1,26 @@
 // Who writes from git-board, shared by the header, the composer and the
-// new-issue dialog; and whether the repository still waits for its switch.
+// new-issue dialog; and the board this page shows (GET /api/board): where
+// it is kept, the experimental features on.
 import { computed, ref } from 'vue';
-import { getMe, type MeResponse } from '@/api/board';
+import { getBoard, getMe, getPeople, type BoardInfo, type MeResponse, type Person } from '@/api';
 import { featureOn } from '@/experimental';
 
 export const me = ref<MeResponse | null>(null);
-// meLoaded: /api/me answered, or failed; until then the issue page doesn't
-// know which layout to draw
+export const board = ref<BoardInfo | null>(null);
+// the board's people (GET /api/people): whom a person field names
+export const people = ref<Person[]>([]);
+// meLoaded: /api/me answered, or failed
 export const meLoaded = ref(false);
-// the cycle's page, not the classic one: a failed /api/me is classic
-export const cycleView = computed(() => me.value?.view === 'cycle');
-// the work-in-progress features on (experimental.ts): off, their tabs,
-// pages and controls stay hidden; a failed /api/me has none
-export const cycleOn = computed(() => featureOn(me.value?.experimental, 'cycle'));
-export const agentsOn = computed(() => featureOn(me.value?.experimental, 'agents'));
-export const worktreesOn = computed(() => featureOn(me.value?.experimental, 'worktrees'));
-// classicPeek: someone on the cycle's page looks at issues as the classic
-// page shows them, from the issue's switch: in this tab, until switched back
-export const classicPeek = ref(false);
+// the work-in-progress features on (experimental.ts): off, their tabs and
+// controls stay hidden; a failed /api/board has none
+export const cycleOn = computed(() => featureOn(board.value?.experimental, 'cycle'));
 
 export async function loadMe(): Promise<void> {
-  try {
-    me.value = await getMe();
-  } catch {
-    me.value = null;
-  } finally {
-    meLoaded.value = true;
-  }
+  const [m, b, p] = await Promise.allSettled([getMe(), getBoard(), getPeople()]);
+  me.value = m.status === 'fulfilled' ? m.value : null;
+  if (b.status === 'fulfilled') board.value = b.value;
+  if (p.status === 'fulfilled') people.value = p.value;
+  meLoaded.value = true;
 }
 
 export { initials } from '@/initials';

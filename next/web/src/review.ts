@@ -1,7 +1,8 @@
 // The Changes tab's logic (docs/prd/work-unit.md, M4), kept out of the
 // components so node --test reaches it: which files open, the unified diff
 // as rows, line comments as threads, viewed marks.
-import type { Cycle, FileStat, GatePR, IssueEvent, Review } from './api/board.ts';
+import type { IssueEvent, Review } from './api/types.ts';
+import type { Cycle, FileStat, GatePR } from './api/cycletypes.ts';
 
 export type Group = 'review' | 'large' | 'generated';
 

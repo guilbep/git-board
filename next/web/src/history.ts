@@ -1,6 +1,6 @@
 // An issue's history in words: a label change is, field by field, what
 // people did ("set Status to qa", "added assignee bob").
-import type { IssueEvent, Person } from './api/board';
+import type { IssueEvent, Person } from './api/types.ts';
 
 export interface LabelChange {
   verb: 'set' | 'cleared' | 'added' | 'removed';

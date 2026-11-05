@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import type { CycleStages, IssueEvent } from './api/board.ts';
+import type { IssueEvent } from './api/types.ts';
+import type { CycleStages } from './api/cycletypes.ts';
 import { STEPS } from './cycle.ts';
 import { bodyThreads, carries, resolvedBy, divider, firstNew, fold, idOf, isResolved, isRoot, items, pick, READING, readingOf, roleOf, rootOf, segments, stepOf, type Segment } from './flow.ts';
 

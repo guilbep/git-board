@@ -1,7 +1,7 @@
 // The conversation's people, at the end of the tab row (README 16f): the
 // author, then each commenter by their latest comment, newest first; the
 // viewer marked. Pure: PeopleButton draws them.
-import type { IssueEvent, Person } from './api/board';
+import type { IssueEvent, Person } from './api/types.ts';
 
 export interface PersonRow {
   person: Person;

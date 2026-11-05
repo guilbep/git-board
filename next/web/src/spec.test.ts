@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import type { IssueEvent } from './api/board.ts';
+import type { IssueEvent } from './api/types.ts';
 import type { BodyVersion } from './sections.ts';
 import { cardFor } from './cycle.ts';
 import { mayGive, specOf, verdicts } from './spec.ts';

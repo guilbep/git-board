@@ -1,7 +1,7 @@
 // The inbox, shared by the header (its count) and the inbox page. Loading
 // never checks the remotes: the page does that (inboxcheck.ts).
 import { ref } from 'vue';
-import { ApiError, getInbox, type InboxResponse } from '@/api/board';
+import { ApiError, getInbox, type InboxResponse } from '@/api';
 import { latestOnly } from '@/latest';
 
 export const inbox = ref<InboxResponse | null>(null);

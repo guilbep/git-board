@@ -120,7 +120,8 @@
 
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue';
-import type { Cycle, Thread } from '@/api/board';
+import type { Thread } from '@/api';
+import type { Cycle } from '@/api/cycletypes';
 import { colorClass } from '@/colors';
 import { displayName, formatValue, type Fields } from '@/fields';
 import { describeLabels } from '@/history';

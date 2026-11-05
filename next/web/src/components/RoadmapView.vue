@@ -50,23 +50,20 @@
 <script setup lang="ts">
 import ValueMark from '@/components/ValueMark.vue';
 import { computed, onMounted, ref } from 'vue';
-import { getSprints, type Bucket, type Issue, type SprintWindow } from '@/api/board';
+import type { Issue } from '@/api';
+import type { Bucket } from '@/bucket';
+import { configModel, loadConfigModel } from '@/configmodel';
 import { colorClass } from '@/colors';
 import { displayName, fieldValues, type Fields } from '@/fields';
-import { idLabel } from '@/forges';
-import { marksOf, span, ticks, type Mark } from '@/roadmap';
+import { idLabel } from '@/idlabel';
+import { marksOf, span, sprintWindows, ticks, type Mark, type SprintWindow } from '@/roadmap';
 
 const props = defineProps<{ buckets: Bucket[]; group: string; fields: Fields }>();
 const emit = defineEmits<{ open: [issue: Issue] }>();
 
-const sprints = ref<SprintWindow[]>([]);
-onMounted(async () => {
-  try {
-    sprints.value = await getSprints();
-  } catch {
-    sprints.value = [];
-  }
-});
+// the sprints' days, from the file's [sprints]
+const sprints = computed<SprintWindow[]>(() => (configModel.value ? sprintWindows(configModel.value.sprints) : []));
+onMounted(() => void loadConfigModel());
 
 const today = Date.now();
 const placed = computed(() =>

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import type { IssueEvent } from './api/board.ts';
+import type { IssueEvent } from './api/types.ts';
 import {
   anchorLabel, anchorOf, anchorString, applySuggestion, changeOf, criteriaOf, ticksOf, diffMarkdown, isTick, lineAt, mdSections, sectionsOf, slugs, stateOf, suggestionOf, version, versions,
 } from './sections.ts';

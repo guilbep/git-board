@@ -18,7 +18,8 @@ import {
   verbOf,
   viewedCount,
 } from './review.ts';
-import type { Cycle, FileStat, GatePR, IssueEvent, Review } from './api/board.ts';
+import type { IssueEvent, Review } from './api/types.ts';
+import type { Cycle, FileStat, GatePR } from './api/cycletypes.ts';
 
 const file = (path: string, added: number, deleted = 0, extra: Partial<FileStat> = {}): FileStat => ({
   path,

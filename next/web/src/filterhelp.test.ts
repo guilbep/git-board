@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import type { FieldConfig } from './api/board';
+import type { FieldConfig } from './api/types.ts';
 import { examples, nextTrick } from './filterhelp.ts';
 
 const f = (type?: string): FieldConfig => ({ single: true, options: null, numeric: false, ...(type ? { type } : {}) });

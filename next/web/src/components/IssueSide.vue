@@ -32,7 +32,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
-import type { IssueRef } from '@/api/board';
+import type { IssueRef } from '@/api/cycletypes';
 import { displayName } from '@/fields';
 import { when } from '@/me';
 import type { SpecState } from '@/spec';

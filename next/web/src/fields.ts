@@ -2,7 +2,8 @@
 // "ns:value" label shows under the field "ns", configured or not; labels
 // without a namespace show under "Other labels". No component re-derives
 // this.
-import type { Bucket, FieldConfig } from './api/board';
+import type { FieldConfig } from './api/types.ts';
+import type { Bucket } from './bucket.ts';
 
 export type Fields = Record<string, FieldConfig>;
 

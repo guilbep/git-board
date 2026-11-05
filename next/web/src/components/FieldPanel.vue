@@ -26,9 +26,9 @@
 <script setup lang="ts">
 import { personByLogin } from '@/people';
 import { ref, watch } from 'vue';
-import type { IssueRef } from '@/api/board';
+import type { IssueRef } from '@/api/cycletypes';
 import { displayName, fieldValues, formatValue, typeOf, type Fields } from '@/fields';
-import { me } from '@/me';
+import { me, people } from '@/me';
 import FieldEditor from '@/components/FieldEditor.vue';
 import GbIcon from '@/components/GbIcon.vue';
 import ValueMark from '@/components/ValueMark.vue';
@@ -41,7 +41,7 @@ const open = ref('');
 watch(() => props.names.join(' '), () => (open.value = props.names.length === 1 ? props.names[0]! : ''), { immediate: true });
 
 const valuesOf = (n: string) => fieldValues(props.labels, n);
-const nameOf = (login: string) => personByLogin(me.value?.identities, login)?.name ?? login;
+const nameOf = (login: string) => personByLogin(people.value, login)?.name ?? login;
 const said = (n: string) => valuesOf(n).map((v) => (typeOf(n, props.fields) === 'person' ? nameOf(v) : formatValue(n, v, props.fields))).join(', ');
 const inheritedOf = (n: string) => (props.fields[n]?.inherits ? `${nameOf(props.fields[n]!.inherits!)} · project` : '');
 </script>

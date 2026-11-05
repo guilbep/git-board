@@ -59,12 +59,10 @@
         </nav>
         <p class="view-meta">
           <span v-if="loading && buckets">Updating…</span>
-          <button v-if="sprintView" type="button" class="page-report" @click="reportOpen = true">Sprint report</button>
         </p>
         <div class="layout-switch" role="group" aria-label="Layout">
           <button v-for="l in layouts" :key="l" type="button" :aria-pressed="layout === l" @click="setLayout(l)">{{ displayName(l) }}</button>
         </div>
-        <SprintReportDialog v-if="sprintView" v-model="reportOpen" />
       </div>
 
       <!-- toolbar, unsaved-view bar and count stick under the header
@@ -280,7 +278,6 @@
 <script setup lang="ts">
 import FilterHelp from '@/components/FilterHelp.vue';
 import { keyContext, noteUse } from '@/keys';
-import SprintReportDialog from '@/components/SprintReportDialog.vue';
 import { debounced, onLive } from '@/live';
 import { boardReload } from '@/livereload';
 import { neighbours } from '@/panelnav';
@@ -291,15 +288,15 @@ import { changedSince, loadVisit, saveVisit, visit } from '@/lastvisit';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { me } from '@/me';
 import { useRoute, useRouter } from 'vue-router';
-import {
-  changeLabels, clientId, filterValues, getFacets, getFields, getIssues, getViews, saveView,
-  type Bucket, type FieldConfig, type Issue, type ViewConfig,
-} from '@/api/board';
-import {
-  NONE, PLAIN, STATE, namespaces, parseSelection, parseSort, prefillFrom, sortIssues, type Facet,
-} from '@/facets';
-import { loadColors } from '@/colors';
+import { clientId, getFields, isStale, message, patchConfig, patchIssue, type FieldConfig, type Issue } from '@/api';
+import type { Bucket } from '@/bucket';
+import { apiSort, useBoardLists } from '@/boardlists';
+import { configModel, loadConfigModel, takeFile } from '@/configmodel';
+import type { ViewConfig } from '@/configparse';
+import { namespaces, parseSelection, parseSort, prefillFrom } from '@/facets';
+import { loadColors, values } from '@/colors';
 import { completeTerms, composeFilter, suggest, withFacet } from '@/viewfilter';
+import { clean } from '@/sectionpatch';
 import { examples, nextTrick } from '@/filterhelp';
 import { displayName, orderBuckets } from '@/fields';
 import AppHeader from '@/components/AppHeader.vue';
@@ -316,8 +313,9 @@ import NewIssueDialog from '@/components/NewIssueDialog.vue';
 const route = useRoute();
 const router = useRouter();
 
-const views = ref<Record<string, ViewConfig>>({});
+const views = computed<Record<string, ViewConfig>>(() => configModel.value?.views ?? {});
 const fields = ref<Record<string, FieldConfig>>({});
+const lists = useBoardLists(fields);
 const configError = ref('');
 
 // The filter (the Filter box, ?filter= in the URL once it differs from the
@@ -329,11 +327,11 @@ const lanes = ref<string[] | undefined>(); // the board's, the view's until chan
 const limits = ref<Record<string, number> | undefined>();
 const showAllLanes = ref(false);
 
-const buckets = ref<Bucket[] | null>(null); // null until a load lands
-const loading = ref(false);
-const listError = ref('');
+const buckets = lists.buckets; // null until a load lands
+const loading = lists.loading;
+const listError = lists.error;
 
-const viewNames = computed(() => Object.keys(views.value)); // the file's order (the server keeps it)
+const viewNames = computed(() => configModel.value?.view_order ?? []); // the file's order
 // a tab's words: current-sprint → Current sprint
 const viewLabel = (name: string) => displayName(name.replaceAll('-', ' '));
 const requestedView = computed(() => (typeof route.query.view === 'string' ? route.query.view : ''));
@@ -374,9 +372,7 @@ const sort = computed(() =>
 );
 const sortValue = computed(() => (typeof route.query.sort === 'string' ? route.query.sort : ''));
 
-// status: → status:ready, …
-const values = ref<Record<string, string[]>>({});
-void filterValues().then((v) => (values.value = v));
+// status: → status:ready, … (the values in use: colors.ts)
 const suggestions = computed(() => suggest(filter.value, values.value));
 
 // the Filter box's list: examples from this board when it's empty, else
@@ -455,7 +451,7 @@ function tryWord(term: string) {
 
 // the facets, the server's for the filter: the ticks are the values it
 // lets through, a tick writes a new filter
-const facetList = ref<Facet[]>([]);
+const facetList = lists.facets;
 const sel = computed(() => Object.fromEntries(facetList.value.map((f) => [f.key, f.selected])));
 function setFacet(key: string, values: string[]) {
   const f = facetList.value.find((x) => x.key === key);
@@ -509,22 +505,18 @@ onBeforeUnmount(() => {
   document.documentElement.style.removeProperty('--gb-tools-h');
 });
 const names = computed(() => namespaces(all.value, fields.value));
-const shown = computed(() =>
-  orderBuckets(buckets.value ?? [], groupField.value, fields.value).map((b) => ({
-    group: b.group,
-    issues: sortIssues(
-      b.issues.filter((i) => !onlyChanged.value || changed.value.has(i.id)),
-      sort.value,
-      fields.value,
-    ),
-  })),
+// the server sorts each list; the page only leaves out what didn't change
+const shown = computed<Bucket[]>(() =>
+  orderBuckets(buckets.value ?? [], groupField.value, fields.value).map((b) =>
+    onlyChanged.value ? { ...b, issues: b.issues.filter((i) => changed.value.has(i.id)), total: undefined, next: undefined } : b,
+  ),
 );
 // A kanban shows every option of the field it's grouped by, empty or not,
 // so a card can be dropped there.
 const boardBuckets = computed(() => {
   const options = fields.value[groupField.value]?.options ?? [];
   const present = new Set(shown.value.map((b) => b.group));
-  const empty = options.filter((o) => !present.has(o)).map((o) => ({ group: o, issues: [] as Issue[] }));
+  const empty = options.filter((o) => !present.has(o)).map((o): Bucket => ({ group: o, issues: [], total: 0 }));
   return noneFirst(orderBuckets([...shown.value, ...empty], groupField.value, fields.value));
 });
 
@@ -543,50 +535,45 @@ const laneValues = computed(() => {
   return vs.includes('(none)') ? vs : [...vs, '(none)'];
 });
 
-// Picked cards dropped in another lane, or a lane's "Move all to…": one
-// label change each, in turn; the first refusal stops and says which.
+// A card dropped in another lane takes its value: moved at once, saved in
+// one label change from the version the card was read at (the old value
+// out, the new in). Picked cards, or a lane's "Move all to…": one change
+// each, in turn; the first refusal stops and says which. A card someone
+// changed meanwhile (412) isn't moved: the board reloads to show it.
+const moveError = ref('');
+const labelsFor = (from: string, to: string) => ({
+  add: to === '(none)' ? [] : [`${groupField.value}:${to}`],
+  remove: from === '(none)' ? [] : [`${groupField.value}:${from}`],
+});
 async function onMoveMany(moves: { issue: Issue; from: string }[], to: string) {
-  const field = groupField.value;
   moveError.value = '';
-  for (const b of buckets.value ?? []) b.issues = b.issues.filter((i) => !moves.some((m) => m.issue.id === i.id));
-  const target = (buckets.value ?? []).find((b) => b.group === to);
-  if (target) target.issues.push(...moves.map((m) => m.issue));
-  else buckets.value?.push({ group: to, issues: moves.map((m) => m.issue) });
+  for (const { issue, from } of moves) lists.moved(issue, from, to);
   for (const [n, { issue, from }] of moves.entries()) {
     try {
-      await changeLabels(issue.id, to === '(none)' ? [] : [`${field}:${to}`], from === '(none)' ? [] : [`${field}:${from}`]);
+      await patchIssue(issue.id, issue.version, { labels: labelsFor(from, to) });
     } catch (e: unknown) {
       // after the alert's "Not moved."
-      moveError.value = `“${issue.shown_title}”: ${message(e)}. ${n} of ${moves.length} moved before it, the rest not tried.`;
+      moveError.value = `“${issue.shown_title}”: ${moveWhy(e)} ${n} of ${moves.length} moved before it, the rest not tried.`;
       break;
     }
   }
   void load();
 }
-
-// A card dropped in another column takes its value: moved at once, saved
-// in one label change (the old value out, the new in), the board reloaded.
-const moveError = ref('');
+const moveWhy = (e: unknown) => (isStale(e) ? 'it changed meanwhile; the board shows it as it is now, move it again.' : `${message(e)}.`);
 async function onMove(issue: Issue, from: string, to: string) {
-  const field = groupField.value;
   moveError.value = '';
-  for (const b of buckets.value ?? []) b.issues = b.issues.filter((i) => i.id !== issue.id);
-  const target = (buckets.value ?? []).find((b) => b.group === to);
-  if (target) target.issues.push(issue);
-  else buckets.value?.push({ group: to, issues: [issue] });
+  lists.moved(issue, from, to);
   try {
-    await changeLabels(issue.id, to === '(none)' ? [] : [`${field}:${to}`], from === '(none)' ? [] : [`${field}:${from}`]);
+    await patchIssue(issue.id, issue.version, { labels: labelsFor(from, to) });
   } catch (e: unknown) {
-    moveError.value = message(e);
+    moveError.value = moveWhy(e);
   }
   void load();
 }
 
-const total = computed(() => all.value.length);
-const count = computed(() => shown.value.reduce((n, b) => n + b.issues.length, 0));
+const total = computed(() => lists.total.value);
+const count = computed(() => (onlyChanged.value ? changed.value.size : total.value));
 
-// a sprint's board: its filter picks today's sprint
-const sprintView = computed(() => facetList.value.some((f) => f.selected.length === 1 && f.selected[0] === fields.value[f.key]?.current));
 
 // New issue starts with the fields the filter picks one value of
 const prefill = computed(() => prefillFrom(facetList.value, fields.value));
@@ -600,7 +587,8 @@ function sortBy(key: string) {
 const sortChoices = computed(() =>
   [
     { key: 'title', label: 'Title' },
-    { key: 'id', label: 'ID' },
+    { key: 'created', label: 'Created' },
+    { key: 'updated', label: 'Updated' },
     ...names.value.map((n) => ({ key: n, label: displayName(n) })),
   ].flatMap(({ key, label }) => [
     { value: key, label: `${label}, ascending` },
@@ -633,10 +621,6 @@ const groupChoices = computed(() => {
   const g = view.value?.group;
   return g && !names.value.includes(g) ? [...names.value, g] : names.value;
 });
-
-function message(e: unknown): string {
-  return e instanceof Error ? e.message : String(e);
-}
 
 // The view as the page shows it now, and whether that differs from the
 // saved one: the bar offers to save it into .git-board.toml.
@@ -675,7 +659,10 @@ async function save(name: string) {
   savingView.value = true;
   viewError.value = '';
   try {
-    views.value = await saveView(name, draft.value);
+    await loadConfigModel();
+    const d = draft.value;
+    const v = { layout: d.layout, filter: d.filter, group: d.group, sort: d.sort, columns: d.columns, lanes: d.lanes, limits: d.limits };
+    takeFile(await patchConfig({ [`views.${name}`]: clean(v) }, configModel.value?.hash ?? ''));
     naming.value = false;
     // the saved view, without the URL's filter and sort it now holds
     await router.replace({ query: { view: name } });
@@ -692,7 +679,7 @@ const saveAs = () => save(newName.value.trim());
 async function loadConfig() {
   configError.value = '';
   try {
-    [views.value, fields.value] = await Promise.all([getViews(), getFields()]);
+    [, fields.value] = await Promise.all([loadConfigModel(), getFields(), loadColors()]);
   } catch (e: unknown) {
     configError.value = message(e);
   }
@@ -715,30 +702,12 @@ async function resetAll() {
   resetView();
 }
 
-// Only the latest request may write: switching views quickly must not let a
-// slow earlier response overwrite a newer one.
-let latest = 0;
 let loaded = ''; // the filter last asked for
-async function load() {
-  const mine = ++latest;
-  loading.value = true;
-  listError.value = '';
+function load() {
   loaded = applied.value;
-  try {
-    const [result, fs] = await Promise.all([getIssues(applied.value, groupField.value), getFacets(applied.value), loadColors()]);
-    if (mine === latest) {
-      buckets.value = result;
-      facetList.value = fs;
-    }
-  } catch (e: unknown) {
-    if (mine === latest) {
-      listError.value = message(e);
-      buckets.value = null;
-    }
-  } finally {
-    if (mine === latest) loading.value = false;
-  }
+  return lists.load({ filter: applied.value, group: groupField.value, sort: apiSort(sort.value, fields.value) });
 }
+watch(sort, () => void load());
 
 watch(activeView, resetView);
 
@@ -747,7 +716,7 @@ watch(activeView, resetView);
 let filterTimer: ReturnType<typeof setTimeout> | undefined;
 watch(applied, () => {
   clearTimeout(filterTimer);
-  filterTimer = setTimeout(() => applied.value !== loaded && void load(), 300);
+  filterTimer = setTimeout(() => applied.value !== loaded && void load(), 120);
 });
 
 // An older link (?q=words&f.status=ready): its filter, in the box.
@@ -861,8 +830,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
 
 // live updates (live.ts): another page or a sync changed the issues or the
 // configuration; reload once a burst is over (the board keeps its scroll)
-const reportOpen = ref(false);
-const reloadLive = debounced(() => void load());
+const reloadLive = debounced(() => void Promise.all([load(), loadColors()]));
 const reloadConfig = debounced(async () => {
   await loadConfig();
   void load();

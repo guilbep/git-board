@@ -64,7 +64,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
-import type { ConfigSprint } from '@/api/board';
+import type { ConfigSprint } from '@/configparse';
 import { nextSprint, sprintsPreset, toSprintStart, fromSprintStart } from '@/configpresets';
 import { SectionDraft, configModel, configModelError } from '@/configmodel';
 import ConfigRefPanel from '@/components/configforms/ConfigRefPanel.vue';

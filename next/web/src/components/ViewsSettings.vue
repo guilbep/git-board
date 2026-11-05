@@ -86,7 +86,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
-import type { ViewConfig } from '@/api/board';
+import type { ViewConfig } from '@/configparse';
 import { takeUnique, viewPresets } from '@/configpresets';
 import { SectionDraft, configModel, configModelError } from '@/configmodel';
 import ConfigCard from '@/components/configforms/ConfigCard.vue';

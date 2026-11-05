@@ -26,7 +26,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
-import { getConfigDocs, type DocSection } from '@/api/board';
+import { getDocs, type DocSection } from '@/api';
 import { tomlTokens } from '@/toml';
 
 const props = defineProps<{
@@ -42,7 +42,7 @@ const mine = computed(() => props.sections.flatMap((s) => docs.value.filter((d) 
 const doc = computed(() => mine.value.find((d) => d.id === id.value) ?? mine.value[0]);
 
 onMounted(() => {
-  getConfigDocs().then(
+  getDocs('configuration').then(
     (d) => (docs.value = d),
     () => (docs.value = []),
   );

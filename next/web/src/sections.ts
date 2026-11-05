@@ -2,7 +2,7 @@
 // rendered text cut at its headings, the slugs anchors name, the anchor
 // grammar, the version count, and a suggestion applied to the Markdown.
 // Pure: built from the thread the server already sends.
-import type { IssueEvent, Person } from './api/board.ts';
+import type { IssueEvent, Person } from './api/types.ts';
 import { lineDiff } from './linediff.ts';
 
 export interface Section { n: number; slug: string; heading: string; html: string }

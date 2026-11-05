@@ -56,7 +56,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, reactive, ref, useTemplateRef, watch } from 'vue';
-import { renderMarkdown, type Forge, type IssueEvent } from '@/api/board';
+import { renderMarkdown, type Forge, type IssueEvent } from '@/api';
 import { bodyThreads, resolvedBy, type Item } from '@/flow';
 import { anchorLabel, anchorOf, changeOf, diffMarkdown, sectionsOf, stateOf, type BodyVersion, type Section } from '@/sections';
 import type { Fields } from '@/fields';

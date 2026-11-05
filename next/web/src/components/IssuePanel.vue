@@ -48,7 +48,6 @@
             <div class="gb-pop-menu" role="menu" aria-label="This issue">
               <button type="button" role="menuitem" class="gb-pop-item" @click="close(false), startRename()"><GbIcon name="edit" small /> Edit the title</button>
               <button type="button" role="menuitem" class="gb-pop-item" @click="copyId"><GbIcon :name="idCopied ? 'check' : 'copy'" small /> {{ idCopied ? 'Copied' : `Copy the id, ${thread.id.slice(0, 7)}` }}</button>
-              <button v-if="cycleView" type="button" role="menuitem" class="gb-pop-item" @click="(e: MouseEvent) => (close(), switchLayout(layout === 'cycle' ? 'classic' : 'cycle', e))"><GbIcon name="title" small /> {{ layout === 'cycle' ? 'The classic page' : 'The cycle’s page' }}</button>
               <button type="button" role="menuitem" class="gb-pop-item gb-narrow-only" @click="copyLink"><GbIcon :name="copied ? 'check' : 'link'" small /> {{ copied ? 'Link copied' : 'Copy link to this issue' }}</button>
               <router-link v-if="!page" role="menuitem" class="gb-pop-item gb-narrow-only" :to="`/issues/${id}`"><GbIcon name="external" small /> Open as a page of its own</router-link>
               <button type="button" role="menuitemcheckbox" class="gb-pop-item gb-mid-only" :aria-checked="fill" @click="close(), setWidth(fill ? 'fit' : 'fill')"><GbIcon name="maximize" small /> Fill the panel<GbIcon v-if="fill" name="check" small class="gb-pop-check" /></button>
@@ -103,8 +102,6 @@
           :title-id="`title-${uid}`"
           :renaming="renaming"
           :set-status="setStatus"
-          :spec="headSpec"
-          :reviewer="holder(stepCycle?.evidence.people?.spec)"
           @changed="fieldsChanged"
           @labels="labels"
           @open="(other: string) => emit('open', other)"
@@ -117,133 +114,19 @@
             </form>
           </template>
         </IssueHead>
-        <p v-if="saveError && !renaming" class="gb-save-error" role="alert"><GbIcon name="error" small /> <b>Not saved.</b> {{ saveError }}</p>
-        <p v-if="waiting" class="gb-wait" role="status"><GbIcon name="clock" small /> Syncing with the forges… your change is saved after it.</p>
+        <p v-if="saveError && !renaming && !conflict" class="gb-save-error" role="alert"><GbIcon name="error" small /> <b>Not saved.</b> {{ saveError }}</p>
+        <!-- a write refused as stale (412): someone wrote in between -->
+        <p v-if="conflict" class="gb-stale" role="alert">
+          <GbIcon name="warn" small /> <b>This issue changed meanwhile:</b> your change isn’t saved.
+          <button type="button" class="gb-stale-btn" :disabled="saving" @click="reload">Reload</button>
+          <button type="button" class="gb-stale-btn" :disabled="saving" @click="overwrite">Overwrite</button>
+        </p>
       </div>
 
-      <IssueStep v-if="layout === 'cycle'" ref="step" :id="thread.id" :status="statusValue" :labels="thread.labels" :events="thread.events" :forges="thread.forges" :head="reading.tab === 'conversation'" @open="openStep" @changed="load" @comment="(b, id) => comment(b, undefined, id)">
-        <template #tabs>
-          <div class="gb-tabrow">
-          <div class="gb-tabs gb-issue-tabs" role="tablist" aria-label="Issue">
-            <button type="button" class="gb-tab" role="tab" :aria-selected="reading.tab === 'conversation'" @click="reading.tab = 'conversation'">Conversation</button>
-            <button type="button" class="gb-tab" role="tab" :aria-selected="reading.tab === 'history'" @click="reading.tab = 'history'">History <span class="gb-modes-count">{{ changeCount }}</span></button>
-            <button v-if="created" type="button" class="gb-tab" role="tab" :aria-selected="reading.tab === 'changes'" @click="reading.tab = 'changes'">Changes <span class="gb-modes-count">{{ bodyVersions.length + ticksOf(created).length }}</span></button>
-          </div>
-          <span class="gb-tabs-people"><PeopleButton :author="thread.author" :events="thread.events" /></span>
-          </div>
-        </template>
-        <template #intent="{ folded, cycle }">
-          <div v-if="created && folded && !reading.description" class="gb-desc-folded">
-            <span>
-              <b>{{ created.author.name }}</b> · the description<template v-if="cycle?.evidence.criteria?.length"> · {{ cycle.evidence.criteria.length }} {{ cycle.evidence.criteria.length === 1 ? 'criterion' : 'criteria' }}</template><template v-if="created.history?.length"> · edited {{ when(created.history.at(-1)!.at) }}</template>
-            </span>
-            <button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" aria-expanded="false" @click="reading.description = true">Read the description</button>
-          </div>
-          <template v-else-if="created">
-            <CommentCard :data-event="created.id" :event="created" :forges="thread.forges" :mine="created.author.id === meId" :save="edit" :role="roleOf(fields, created.author.login)" @ref="onRef">
-              <template v-if="bodyVersions.length > 1" #head>
-                <span class="gb-seg gb-seg-sm" role="group" aria-label="Version">
-                  <button v-for="bv in bodyVersions" :key="bv.n" type="button" :aria-pressed="bv.n === shownV" @click="shownV = bv.n">v{{ bv.n }}</button>
-                </span>
-                <label v-if="shownV > 1" class="gb-since"><input v-model="changesSince" type="checkbox" /> Changes since v{{ shownV - 1 }}</label>
-              </template>
-              <IssueSections
-                ref="sections"
-                :html="created.html!"
-                :versions="bodyVersions"
-                :shown="shownV"
-                :since="changesSince"
-                :events="thread.events"
-                :forges="thread.forges"
-                :status="thread.status"
-                :busy="saving"
-                :waiting="waiting"
-                :error="saveError"
-                :carried="carries(here(cycle))"
-                :comment="(anchor: string, b: string) => comment(b, undefined, cycle?.at ?? '', { anchor })"
-                :me-id="meId"
-                :fields="fields"
-                :save="edit"
-                :reply="(root: string, b: string) => comment(b, undefined, cycle?.at ?? '', { reply_to: root })"
-                :resolve="resolveThread"
-                :apply="apply"
-                :in-flow="reading.where === 'flow'"
-                @ref="onRef"
-                @flow="reveal"
-              />
-            </CommentCard>
-            <VerdictBar
-              v-if="cycle && (cycle.at === 'intent' || spec.on || spec.before)"
-              :state="spec"
-              :reviewer="reviewer(cycle.evidence.people?.spec)"
-              :may="mayGive(cycle.evidence.people, cycle.evidence.author, me?.me?.login)"
-              :moves="cycle.at === 'intent' && !!cycle.stages.ready"
-              :criteria="!!cycle.evidence.criteria?.length"
-              :busy="giving"
-              :give="give"
-            />
-            <p v-if="verdictError" class="gb-save-error" role="alert"><GbIcon name="error" small /> {{ verdictError }}</p>
-            <p v-if="folded"><button type="button" class="gb-linkbtn" aria-expanded="true" @click="reading.description = false">Fold the description</button></p>
-          </template>
-        </template>
-        <template v-if="page" #review="r">
-          <CycleReview :id="thread.id" :thread="thread" :me-id="meId" :busy="saving" :focus="focus" :review="review" :resolve="resolve" v-bind="r" />
-        </template>
-        <template #flow="{ cycle, failed, send }">
-          <HistoryView v-if="reading.tab === 'history'" :thread="thread" :fields="fields" :cycle="cycle" />
-          <IssueChanges
-            v-else-if="reading.tab === 'changes'"
-            :thread="thread"
-            :cycle="cycle"
-            :me-id="meId"
-            :fields="fields"
-            :busy="saving"
-            :save="edit"
-            :reply="(root: string, b: string) => comment(b, undefined, cycle?.at ?? '', { reply_to: root })"
-            :resolve="resolveThread"
-            :apply="apply"
-          />
-          <template v-else>
-            <IssueFlow
-              ref="flow"
-              :events="thread.events"
-              :cycle="cycle"
-              :failed="failed"
-              :me-id="meId"
-              :since="since"
-              :forges="thread.forges"
-              :fields="fields"
-              :save="edit"
-              :reading="reading"
-              :shown-v="shownV"
-              :pointers="pointers"
-              :busy="saving"
-              :reply="(root: string, b: string) => comment(b, undefined, cycle?.at ?? '', { reply_to: root })"
-              :resolve="resolveThread"
-              :apply="apply"
-              @ref="onRef"
-              @line="showLine"
-              @open="openStep"
-              @thread="toSection"
-              @compare="compare"
-            />
-            <IssueComposer
-              :status="thread.status"
-              :forges="thread.forges"
-              :busy="saving"
-              :waiting="waiting"
-              :error="saveError"
-              :carries="[carries(here(cycle)), created ? `v${version(created)}` : ''].filter(Boolean)"
-              :send="send?.name"
-              :comment="(b: string, st?: 'open' | 'closed', toAgent?: boolean) => post(b, st, cycle?.at ?? '', toAgent ? send : undefined)"
-            />
-          </template>
-        </template>
-      </IssueStep>
       <!-- the classic page (docs/prd/classic-view.md): the description, then
            every comment and change in order, the composer; the fields are
            the head's -->
-      <div v-else class="gb-cols">
+      <div class="gb-cols">
         <div class="gb-maincol">
           <div class="gb-tabrow">
           <div class="gb-tabs gb-issue-tabs" role="tablist" aria-label="Issue">
@@ -267,9 +150,8 @@
               :status="thread.status"
               :forges="thread.forges"
               :busy="saving"
-              :waiting="waiting"
               :error="saveError"
-              :comment="(b: string, st?: 'open' | 'closed') => post(b, st, '')"
+              :comment="(b: string, st?: 'open' | 'closed') => comment(b, st)"
             />
           </template>
         </div>
@@ -282,37 +164,28 @@
 import { noteUse } from '@/keys';
 import { onLive } from '@/live';
 import { clampWidth, panelMode, panelWidth, togglePanelMode } from '@/panelsize';
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, toRef, useId, watch } from 'vue';
-import { markSeen, type Cycle, type Thread } from '@/api/board';
-import { listOf } from '@/cycle';
+import { computed, nextTick, onBeforeUnmount, onMounted, provide, reactive, ref, toRef, useId, watch } from 'vue';
+import { markSeen, type Thread } from '@/api';
 import { inbox, inboxError, loadInbox } from '@/inbox';
+import { issueWriter } from '@/issuewrite';
 import { loadVisit, saveVisit, visit } from '@/lastvisit';
-import { fieldValues, type Fields } from '@/fields';
+import type { Fields } from '@/fields';
 import { useIssue } from '@/issue';
-import { classicPeek, cycleView, loadMe, me, meLoaded, when } from '@/me';
-import CycleReview from '@/components/CycleReview.vue';
+import { loadMe, me, meLoaded } from '@/me';
 import CommentCard from '@/components/CommentCard.vue';
 import HistoryView from '@/components/HistoryView.vue';
-import IssueChanges from '@/components/IssueChanges.vue';
-import { carries, loadReading, roleOf, rootOf, saveReading } from '@/flow';
-import { ticksOf, version, versions } from '@/sections';
+import { loadReading, roleOf, saveReading } from '@/flow';
 import { steps } from '@/replay';
 import GbIcon from '@/components/GbIcon.vue';
 import IssueComposer from '@/components/IssueComposer.vue';
-import IssueFlow from '@/components/IssueFlow.vue';
-import IssueSections from '@/components/IssueSections.vue';
-import IssueStep from '@/components/IssueStep.vue';
 import ForgeIcons from '@/components/ForgeIcons.vue';
 import GbPopover from '@/components/GbPopover.vue';
 import InboxBell from '@/components/InboxBell.vue';
 import IssueHead from '@/components/IssueHead.vue';
 import PeopleButton from '@/components/PeopleButton.vue';
-import { idLabel } from '@/forges';
+import { idLabel } from '@/idlabel';
 import { headDensity, headWidth } from '@/headswitch';
 import TimelineEvent from '@/components/TimelineEvent.vue';
-import VerdictBar from '@/components/VerdictBar.vue';
-import { mayGive, specOf } from '@/spec';
-import { specVerdict } from '@/api/board';
 
 const props = defineProps<{
   id: string;
@@ -326,44 +199,20 @@ const props = defineProps<{
   hasNext?: boolean;
   findRef?: (n: string) => string | undefined; // #n → a local issue's id
   at?: string | undefined; // an event to scroll to once loaded: the inbox's first new one
-  step?: string | undefined; // a step's id to open once loaded: a rail link's ?step=
 }>();
 const emit = defineEmits<{ close: []; prev: []; next: []; changed: [thread: Thread]; open: [id: string] }>();
 
 const uid = useId();
-const { thread, error, saving, waiting, saveError, load, comment, edit, rename, setStatus, labels, review, resolve, resolveThread, apply } =
+const { thread, error, saving, saveError, conflict, load, reload, overwrite, comment, edit, rename, setStatus, labels, set } =
   useIssue(toRef(props, 'id'), (t) => emit('changed', t));
-// the inbox opens an issue at its first new event
-// the layout, chosen once the issue and /api/me are both in, and kept
-// while the issue is open: a [cycle] saved or a board.view changed
-// meanwhile takes effect at the next issue opened, never under a draft
-const layout = ref<'' | 'cycle' | 'classic'>('');
+// the head's editors write through the panel (issuewrite.ts)
+provide(issueWriter, { set: async (a: string[]) => ((await set(a)) ? '' : saveError.value || 'not saved') });
+// once the issue is in: the inbox opens it at its first new event
+const layout = computed(() => (thread.value ? 'classic' : ''));
 watch(
-  () => (meLoaded.value ? thread.value?.id : undefined),
-  (id) => {
-    if (id) layout.value = cycleView.value && !classicPeek.value ? 'cycle' : 'classic';
-  },
-  { immediate: true },
-);
-// the header's switch, on the cycle's page: the classic one, this issue and
-// the next, until switched back. The two pages have their own composers,
-// so an unsent comment or edit is asked about first.
-function switchLayout(to: 'cycle' | 'classic', e: Event) {
-  if (to === layout.value) return;
-  const panel = (e.currentTarget as HTMLElement).closest('.gb-panel');
-  const draft = [...(panel?.querySelectorAll('textarea') ?? [])].some((t) => t.value.trim());
-  if (draft && !window.confirm('What you’re writing here would be lost. Switch anyway?')) return;
-  classicPeek.value = to === 'classic';
-  layout.value = to;
-}
-// once laid out, an issue opens at the inbox's event or the rail's step:
-// before, the skeleton has neither (the visit and the inbox's read wait
-// with them, harmlessly)
-watch(
-  () => (layout.value ? thread.value?.id : undefined),
+  () => thread.value?.id,
   async (id) => {
     if (id && props.at) void nextTick(() => reveal(props.at!));
-    if (id && props.step) void nextTick(() => openStep(props.step!));
     // the last visit, for the flow's "new since" line: once per issue
     if (id) {
       const v = visit(loadVisit(`issue:${id}`), Date.now());
@@ -376,7 +225,8 @@ watch(
     // which shows.
     if (!id) return;
     if (!inbox.value && !inboxError.value) await loadInbox();
-    if (inbox.value?.rows.some((r) => r.issue.id === id)) void markSeen([id]).then(loadInbox, () => {});
+    const listed = [...(inbox.value?.follows ?? []), ...(inbox.value?.opened ?? [])].some((r) => r.issue.id === id);
+    if (listed) void markSeen([id]).then(loadInbox, () => {});
   },
 );
 const meId = computed(() => me.value?.me?.id ?? '');
@@ -385,69 +235,12 @@ const created = computed(() => thread.value?.events.find((e) => e.kind === 'crea
 // the classic page's conversation: the comments and the changes, in order,
 // as before the cycle (a description's published versions are the flow's)
 const rest = computed(() => thread.value?.events.filter((e) => ['comment', 'labels', 'status', 'title'].includes(e.kind)) ?? []);
-// the description's versions, the one shown (the current one on each
-// issue and each new version: not remembered) and Changes since
-const bodyVersions = computed(() => (created.value ? versions(created.value) : []));
-// the description's verdict (VerdictBar): on the current version, from the thread
-const spec = computed(() => specOf(thread.value?.events ?? [], bodyVersions.value));
-// the spec role's holder, its name and project role; "Person B, PM" for
-// the verdict bar, anyone but the author without one
-function holder(login: string | undefined) {
-  if (!login) return undefined;
-  const name = me.value?.identities?.find((p) => p.login?.toLowerCase() === login.toLowerCase())?.name ?? login;
-  return { name, role: roleOf(props.fields, login) };
-}
-function reviewer(login: string | undefined): string {
-  const h = holder(login);
-  if (!h) return `Anyone but ${created.value?.author.name ?? 'the author'}`;
-  return h.role ? `${h.name}, ${h.role.toUpperCase()}` : h.name;
-}
-const giving = ref(false);
-const verdictError = ref('');
-async function give(verdict: 'approve' | 'request-changes', body: string) {
-  giving.value = true;
-  verdictError.value = '';
-  try {
-    await specVerdict(props.id, verdict, `body@v${spec.value.v}`, body);
-    await fieldsChanged(); // the status may have moved: the board's row too
-    return true;
-  } catch (e) {
-    verdictError.value = e instanceof Error ? e.message : String(e);
-    return false;
-  } finally {
-    giving.value = false;
-  }
-}
-const shownV = ref(0);
-const changesSince = ref(false);
-watch([() => thread.value?.id, () => bodyVersions.value.length], () => ((shownV.value = bodyVersions.value.length), (changesSince.value = false)), { immediate: true });
-
 // the person's reading: the tab (Conversation, or every change in order
 // with the issue as it was), the flow's filters, order and grouping; kept
 // in the browser, one for every issue
 const reading = reactive(loadReading());
 watch(reading, saveReading, { deep: true });
-const step = ref<InstanceType<typeof IssueStep> | null>(null);
-const flow = ref<InstanceType<typeof IssueFlow> | null>(null);
-// the description's threads show under its sections when it is rendered
-// and the seg says so; else in the flow (ponytail: while the description
-// is being edited its sections are gone, so are the threads, to the flow)
-const sections = ref<InstanceType<typeof IssueSections> | null>(null);
-const pointers = computed(() => reading.where === 'section' && !!sections.value);
-// a body thread's anchor in the flow: its place in the description
-async function toSection(root: string) {
-  reading.description = true;
-  await nextTick();
-  await sections.value?.unfold(root);
-}
-const focus = ref<string>(); // the file a comment's path:line opens in Changes, step 6 on the page
-function showLine(path: string) {
-  if (!props.page) return;
-  focus.value = path;
-  step.value?.show('review');
-}
 const changeCount = computed(() => (thread.value ? steps(thread.value.events).length : 0));
-const statusValue = computed(() => fieldValues(thread.value?.labels ?? [], 'status')[0] ?? '');
 // the board's fields, and any namespace this issue has besides
 const sideNames = computed(() => {
   const own = (thread.value?.labels ?? []).filter((l) => l.includes(':')).map((l) => l.slice(0, l.indexOf(':')));
@@ -475,12 +268,6 @@ const compact = computed(() => headDensity.value === 'compact');
 const setDensity = (d: 'comfortable' | 'compact') => (headDensity.value = d);
 // the bar's number: the project's (CO2-3075), else the first forge's (#2518), else the id
 const barNumber = computed(() => (thread.value ? idLabel(thread.value).split(' · ')[0]! : ''));
-// the spec's verdict under the branch line, on the cycle's page, when the side column said it
-const stepCycle = computed(() => step.value?.cycle ?? null);
-const headSpec = computed(() => {
-  const c = stepCycle.value;
-  return c && created.value && (c.at === 'intent' || spec.value.on || spec.value.before) ? spec.value : undefined;
-});
 const idCopied = ref(false);
 async function copyId() {
   const id = thread.value?.id ?? '';
@@ -511,44 +298,10 @@ async function copyLink() {
   }
 }
 
-// #123 of a local issue opens it here, else the link goes to the forge
-// a comment carries the issue's step (cycle:step); ticked, it goes to the
-// agent too, as a brief
-async function post(body: string, status: 'open' | 'closed' | undefined, at: string, send?: { brief: (body: string) => void }) {
-  const ok = await comment(body, status, at);
-  if (ok && send && body.trim()) send.brief(body);
-  return ok;
-}
-
-// the issue's step as its segment's divider names it, for the composer
-function here(c: Cycle | null | undefined) {
-  const list = listOf(c?.stages);
-  const n = list.findIndex((s) => s.id === c?.at) + 1;
-  return n ? { n, name: list[n - 1]!.name } : undefined;
-}
-
-// the rail, a divider's Open step, ?step=: that step heads the column
-async function openStep(id: string) {
-  reading.tab = 'conversation';
-  step.value?.show(id);
-  await nextTick();
-  const head = rootEl()?.querySelector<HTMLElement>('.gb-column-body > .gb-eyebrow');
-  head?.scrollIntoView({ block: 'start', behavior: 'smooth' });
-  head?.focus({ preventScroll: true });
-}
-
 // reveal scrolls to a history item and flashes it (a waiting change's
 // row), on the Conversation tab with the flow settled and unfolded first.
 async function reveal(id: string) {
   reading.tab = 'conversation';
-  const e = thread.value?.events.find((x) => x.id === id);
-  // a comment on the description under its section: the section unfolded
-  const under = !!e?.meta?.['thread:anchor'] && reading.where === 'section';
-  if (id === created.value?.id || under) reading.description = true;
-  await nextTick();
-  await flow.value?.settled();
-  flow.value?.unfold(id);
-  if (under) await sections.value?.unfold(rootOf(e!) ?? id);
   await nextTick();
   const el = document.querySelector<HTMLElement>(`[data-event="${CSS.escape(id)}"]`);
   if (!el) return;
@@ -557,16 +310,6 @@ async function reveal(id: string) {
   void el.offsetWidth; // restart the animation on a second click
   el.classList.add('gb-flash');
   setTimeout(() => el.classList.remove('gb-flash'), 1800);
-}
-
-// a milestone's Compare: the description open on that version, its
-// changes since the one before marked
-async function compare(v: number) {
-  Object.assign(reading, { description: true });
-  shownV.value = v;
-  changesSince.value = true;
-  await nextTick();
-  document.querySelector(`[data-event="${CSS.escape(created.value?.id ?? '')}"]`)?.scrollIntoView({ block: 'start', behavior: 'smooth' });
 }
 
 function onRef(n: string, e: MouseEvent) {
@@ -633,7 +376,7 @@ function leaveField(e: KeyboardEvent) {
   rootEl()?.focus({ preventScroll: true });
 }
 onMounted(() => {
-  if (!meLoaded.value) void loadMe(); // which layout: the header may not have asked yet
+  if (!meLoaded.value) void loadMe(); // who writes: the header may not have asked yet
   window.addEventListener('keydown', onKey);
   if (!props.page) void nextTick(() => rootEl()?.focus({ preventScroll: true }));
 });
@@ -652,8 +395,9 @@ function writing(): boolean {
   return [...el.querySelectorAll('textarea')].some((t) => t.value.trim() !== '');
 }
 const offLive = onLive((e) => {
-  if (e.kind !== 'issues' && e.kind !== 'sync') return;
+  if (e.kind !== 'issue' && e.kind !== 'resync') return;
   if (e.id && !props.id.startsWith(e.id) && !e.id.startsWith(props.id)) return;
+  if (e.version && e.version === thread.value?.version) return; // what this page shows
   if (writing()) stale.value = true;
   else void load();
 });

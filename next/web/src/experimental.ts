@@ -1,12 +1,18 @@
 // The work-in-progress features, behind a switch (docs/guide/configuration.md,
-// Experimental features): the cycle, the coding agents, the worktrees. Off,
-// the page hides their tabs, pages and controls; /api/me lists those on.
-// Pure, no "@/" imports: node runs experimental.test.ts on it.
+// Experimental features): the cycle. Off, the page hides its tabs and
+// controls; GET /api/board lists those on. (v1's agents and worktrees went
+// to their own binary, ADR 0021.) Pure, no "@/" imports: node runs
+// experimental.test.ts on it.
 
-export const features = ['cycle', 'agents', 'worktrees'] as const;
+export const features = ['cycle'] as const;
 export type Feature = (typeof features)[number];
 
-// featureOn: the feature is in the list /api/me answered (none: off)
+// every feature, as Settings › Experimental lists them
+export const known = [
+  { name: 'cycle', title: 'The development cycle', description: 'An issue’s steps from intent to release: the plan, the code, the review, the tests, the verification.' },
+] as const;
+
+// featureOn: the feature is in the list /api/board answered (none: off)
 export function featureOn(on: readonly string[] | null | undefined, f: Feature): boolean {
   return !!on?.includes(f);
 }

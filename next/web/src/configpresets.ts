@@ -3,7 +3,7 @@
 // examples, each with its one-line why. A preset menu adds and selects; it
 // never overwrites silently — a name the section already has comes back
 // with -2, as the board's "Save as new view" does.
-import type { ConfigField, ConfigLabels, ConfigSprint, ViewConfig } from '@/api/board';
+import type { ConfigField, ConfigLabels, ConfigSprint, ViewConfig } from '@/configparse';
 
 export type Preset<T> = { label: string; why: string; value: T };
 

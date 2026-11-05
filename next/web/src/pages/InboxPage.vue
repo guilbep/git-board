@@ -1,8 +1,8 @@
-<!-- The inbox: what happened that concerns you on the issues of the last
-     14 days (internal/server/inbox.go), newest first. Opening it
-     checks the git remotes (a fetch: nothing local changes) and offers
-     Pull; opening a row opens the issue and marks it read. Read rows stay,
-     dimmed, until Refresh, so the list doesn't jump while you read. -->
+<!-- The inbox (GET /api/inbox, as git board status): what happened that
+     concerns you on the issues you follow, then on those you opened,
+     newest first. Refresh also fetches origin (nothing local changes) and
+     offers Pull; opening a row opens the issue and marks it read. Read
+     rows stay, dimmed, until Refresh, so the list doesn't jump. -->
 <template>
   <AppHeader :views="viewNames" />
   <main class="gb-page gb-inbox">
@@ -12,50 +12,26 @@
 
     <div class="gb-inbox-bar">
       <div class="gb-inbox-status" role="status">
-        <span v-for="c in checks" :key="c.name" :class="{ 'gb-inbox-fail': c.failure }">
-          <template v-if="c.failure">{{ c.failure }}</template>
-          <template v-else-if="!c.when"><strong>{{ c.name }}</strong> not checked yet</template>
+        <span v-if="check" :class="{ 'gb-inbox-fail': check.failure }">
+          <template v-if="check.failure">{{ check.failure }}</template>
           <template v-else>
-            Checked <strong>{{ c.name }}</strong> {{ c.when }}
-            <template v-if="c.incoming">
-              · {{ c.incoming }} {{ c.incoming === 1 ? 'issue' : 'issues' }} new ·
-              <button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm gb-inbox-pull" :disabled="busy" @click="pull(c.name)">Pull</button>
+            Checked <strong>{{ check.name }}</strong>: {{ check.line }}
+            <template v-if="check.incoming">
+              · <button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm gb-inbox-pull" :disabled="busy" @click="pull(check.name)">Pull</button>
             </template>
           </template>
         </span>
+        <span v-else>{{ remote ? `${remote}: not checked from here yet` : 'No remote to check' }}</span>
       </div>
       <div class="gb-inbox-actions">
-        <button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" :disabled="busy" @click="refresh(true)">Refresh</button>
+        <button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" :disabled="busy" @click="refresh()">Refresh</button>
         <button v-if="unread.length" type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" @click="markAll">Mark all read</button>
-        <button type="button" class="gb-icon-btn" aria-label="Inbox settings" :aria-expanded="menuOpen" @click="menuOpen = !menuOpen">
-          <GbIcon name="settings" small />
-        </button>
-      </div>
-      <div v-if="menuOpen && data" class="gb-inbox-menu" role="group" aria-label="Inbox settings">
-        <label class="gb-inbox-check">
-          <input type="checkbox" :checked="data.fields" @change="saveSettings(data.views, !data.fields, $event)" />
-          <span><strong>Also field changes on issues I'm in</strong><br /><span class="gb-hint">Sprint, priority, status… where you're assignee, reviewer, pm…</span></span>
-        </label>
-        <fieldset class="gb-inbox-views">
-          <legend><strong>Follow views</strong></legend>
-          <span v-if="!viewNames.length" class="gb-hint">No saved views yet: <code>[views]</code> in <code>.git-board.toml</code>.</span>
-          <label v-for="v in viewNames" :key="v" class="gb-inbox-check">
-            <input type="checkbox" :checked="data.views.includes(v)" @change="toggleView(v, $event)" /> {{ v }}
-          </label>
-          <span v-for="v in data.views_missing" :key="v" class="gb-inbox-check gb-hint">
-            {{ v }} (no longer exists)
-            <button type="button" class="gb-inbox-x" :aria-label="`Stop following ${v}`" @click="toggleView(v)">×</button>
-          </span>
-        </fieldset>
       </div>
     </div>
 
     <p v-if="error?.code === 'no-identity'" class="gb-inbox-need">
       The inbox shows what concerns the identity you write as, and none is chosen here yet.
       <router-link to="/settings/you">Choose who you write as</router-link>
-    </p>
-    <p v-else-if="error?.code === 'no-login'" class="gb-inbox-need">
-      Tell git-board your forge login: without it, no field and no mention can name you. Start the server with <code>--me your-login</code>, or set <code>GIT_BOARD_ME</code>.
     </p>
     <p v-else-if="error" class="gb-error">{{ error.message }}</p>
     <p v-if="writeError" class="gb-error" role="alert">{{ writeError }}</p>
@@ -82,7 +58,7 @@
     </ul>
     <div v-else-if="loaded && !error" class="gb-inbox-empty">
       <h2 class="h4">Nothing new for you</h2>
-      <p class="gb-hint">{{ following || 'Issues you open, comment on or are named in show here when they change.' }}</p>
+      <p class="gb-hint">Issues you open, comment on or are named in show here when they change.</p>
     </div>
   </main>
 
@@ -123,23 +99,25 @@ import { useRoute, useRouter } from 'vue-router';
 import AppHeader from '@/components/AppHeader.vue';
 import GbIcon from '@/components/GbIcon.vue';
 import IssuePanel from '@/components/IssuePanel.vue';
-import { ApiError, getFields, getRemotes, getViews, markSeen, remoteAction, setInboxSettings, type InboxRow, type Remote } from '@/api/board';
+import { getFields, markSeen, remoteAction, type InboxRow } from '@/api';
+import { configModel, loadConfigModel } from '@/configmodel';
 import { namespaces } from '@/facets';
 import type { Fields } from '@/fields';
+import { forgeNumbers } from '@/idlabel';
 import { inbox, inboxError, loadInbox } from '@/inbox';
-import { forgeNumbers } from '@/issuesync';
-import { checkFailure, followingLine, mergeRows, toCheck, toPull } from '@/inboxcheck';
+import { mergeRows } from '@/inboxcheck';
 import { debounced, onLive } from '@/live';
 import { me, when } from '@/me';
 import { message } from '@/issue';
 import { panelMode } from '@/panelsize';
+import { loadSync, syncStatus } from '@/sync';
+import { remoteWords } from '@/ways';
 
 const route = useRoute();
 const router = useRouter();
 
-const viewNames = ref<string[]>([]);
+const viewNames = computed(() => configModel.value?.view_order ?? []);
 const fields = ref<Fields>({});
-const data = computed(() => inbox.value);
 const error = computed(() => inboxError.value);
 const rows = ref<InboxRow[]>([]);
 // read: the rows opened here, by the latest they had then (mergeRows)
@@ -147,31 +125,26 @@ const read = ref(new Map<string, string>());
 const loaded = ref(false); // the first rows are in: before, no "Nothing new"
 const unread = computed(() => rows.value.filter((r) => !read.value.has(r.issue.id)).map((r) => r.issue.id));
 const names = computed(() => namespaces(rows.value.map((r) => r.issue), fields.value));
-const menuOpen = ref(false);
 const busy = ref(false);
 
-const remotes = ref<Remote[]>([]);
-const failures = ref<Record<string, string>>({});
-const checks = computed(() => {
-  const incoming = new Map(toPull(remotes.value).map((p) => [p.name, p.issues]));
-  return remotes.value.map((r) => ({
-    name: r.name,
-    when: r.checked ? when(r.checked, true) : '',
-    incoming: incoming.get(r.name) ?? 0,
-    failure: failures.value[r.name] ?? '',
-  }));
+// origin, else the first remote: what Refresh fetches
+const remote = computed(() => {
+  const rs = syncStatus.value?.remotes ?? [];
+  return rs.includes('origin') ? 'origin' : (rs[0] ?? '');
 });
+const check = ref<{ name: string; line: string; incoming: number; failure: string } | null>(null);
 
 // numberOf: the issue's number on a forge it's still on
 const numberOf = (r: InboxRow) => forgeNumbers(r.issue)[0] ?? '';
 
-const following = computed(() => (data.value ? followingLine(data.value.following, data.value.views, data.value.roles) : ''));
+// the rows: what you follow, then what you opened, newest first
+const rowsOf = () => [...(inbox.value?.follows ?? []), ...(inbox.value?.opened ?? [])].sort((a, b) => Date.parse(b.latest) - Date.parse(a.latest));
 
 // reload: the server's rows; dropRead (Refresh) forgets the rows read
 // since, else they stay, dimmed, where they were.
 async function reload(dropRead: boolean) {
   await loadInbox();
-  const fresh = inbox.value?.rows ?? [];
+  const fresh = rowsOf();
   loaded.value = true;
   if (dropRead) {
     read.value = new Map();
@@ -183,31 +156,22 @@ async function reload(dropRead: boolean) {
   read.value = m.read;
 }
 
-// refresh: the rows, and the remotes checked beside them (all of them when
-// force: Refresh). A check changes nothing local: the rows don't wait for
-// a remote that's slow to answer.
-async function refresh(force: boolean) {
-  await Promise.all([check(force), reload(force)]);
+// refresh: the rows, and origin fetched beside them (nothing local
+// changes): the rows don't wait for a remote that's slow to answer
+async function refresh() {
+  await Promise.all([fetchRemote(), reload(true)]);
 }
 
-async function check(force: boolean) {
+async function fetchRemote() {
+  if (!syncStatus.value) await loadSync();
+  const name = remote.value;
+  if (!name) return;
   busy.value = true;
   try {
-    remotes.value = (await getRemotes()).remotes;
-    const toFetch = toCheck(remotes.value, Date.now(), force);
-    const results = await Promise.allSettled(toFetch.map((n) => remoteAction(n, 'fetch')));
-    const failed: Record<string, string> = {};
-    results.forEach((res, i) => {
-      const name = toFetch[i]!;
-      if (res.status === 'rejected') {
-        const e = res.reason as unknown;
-        failed[name] = checkFailure(name, e instanceof ApiError ? e.code : '', e instanceof Error ? e.message : String(e));
-      }
-    });
-    failures.value = failed;
-    remotes.value = (await getRemotes()).remotes;
-  } catch {
-    // no remotes listed: the rows still show
+    const r = await remoteAction(name, 'fetch');
+    check.value = { name, line: remoteWords(r), incoming: r.issues?.receive ?? 0, failure: '' };
+  } catch (e) {
+    check.value = { name, line: '', incoming: 0, failure: `${name}: couldn't check: ${message(e)}` };
   } finally {
     busy.value = false;
   }
@@ -216,10 +180,10 @@ async function check(force: boolean) {
 async function pull(name: string) {
   busy.value = true;
   try {
-    remotes.value = (await remoteAction(name, 'pull')).remotes;
-    delete failures.value[name];
+    const r = await remoteAction(name, 'pull');
+    check.value = { name, line: remoteWords(r), incoming: 0, failure: '' };
   } catch (e) {
-    failures.value = { ...failures.value, [name]: e instanceof Error ? `${name}: couldn't pull: ${e.message}` : String(e) };
+    check.value = { name, line: '', incoming: 0, failure: `${name}: couldn't pull: ${message(e)}` };
   } finally {
     busy.value = false;
   }
@@ -251,26 +215,6 @@ async function markAll() {
     return;
   }
   await loadInbox(); // the header's count: this tab's own write comes back skipped (live.ts)
-}
-
-async function saveSettings(views: string[], f: boolean, ev?: Event) {
-  writeError.value = '';
-  try {
-    await setInboxSettings(views, f);
-  } catch (e) {
-    // the box back as it was: its value didn't change, so Vue won't
-    if (ev?.target instanceof HTMLInputElement) ev.target.checked = !ev.target.checked;
-    writeError.value = `Not saved: ${message(e)}`;
-    return;
-  }
-  await reload(false);
-}
-
-function toggleView(v: string, ev?: Event) {
-  const d = data.value;
-  if (!d) return;
-  const views = d.views.includes(v) ? d.views.filter((x) => x !== v) : [...d.views, v];
-  void saveSettings(views, d.fields, ev);
 }
 
 // The issue panel: ?issue=<id>, as on the board; j / k go through the rows.
@@ -307,15 +251,14 @@ watch(
 let stopLive = () => {};
 onMounted(async () => {
   stopLive = onLive((e) => {
-    if (e.kind === 'issues' || e.kind === 'inbox') reloadSoon();
+    if (e.kind === 'issue' || e.kind === 'inbox' || e.kind === 'resync') reloadSoon();
   });
   try {
-    viewNames.value = Object.keys(await getViews());
-    fields.value = await getFields();
+    [, fields.value] = await Promise.all([loadConfigModel(), getFields()]);
   } catch {
-    // no config: no views to follow, fields shown as labels
+    // no config: fields shown as labels
   }
-  await refresh(false);
+  await reload(true);
 });
 onBeforeUnmount(() => stopLive());
 </script>

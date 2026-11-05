@@ -75,21 +75,21 @@ export const kinds: { kind: StoreKind; label: string; gives: string; givesUp: st
 // ahead/behind, start over. The server refuses them with 409 missing and
 // the sentence internal/store/datastore.go's missing writes; the page
 // disables them up front, that sentence their title.
-export type Kept = { datastore: string; replica: boolean };
+export type Kept = { name: string; replica: boolean }; // GET /api/datastore
 
 // needsGit is that sentence for what, '' on a board kept in git or while
 // GET /api/datastore hasn't answered: the control stays as it was.
 export function needsGit(d: Kept | null | undefined, what: string): string {
   if (!d || d.replica) return '';
-  return `${what} needs a board kept in git; this board is kept in ${d.datastore}`;
+  return `${what} needs a board kept in git; this board is kept in ${d.name}`;
 }
 
 // keptIn is "the board is kept in PostgreSQL", '' on a board kept in git.
 export function keptIn(d: Kept | null | undefined): string {
-  return !d || d.replica ? '' : `the board is kept in ${d.datastore}`;
+  return !d || d.replica ? '' : `the board is kept in ${d.name}`;
 }
 
 // datastoreSummary is the tab's line in the menu.
-export function datastoreSummary(d: { datastore: string; restart: boolean }): string {
-  return d.restart ? `${d.datastore}; a change waits for a restart` : d.datastore;
+export function datastoreSummary(d: { name: string; where: string }): string {
+  return d.where && d.where !== d.name ? `${d.name}, ${d.where}` : d.name;
 }

@@ -8,7 +8,7 @@
     <p class="as-lead">Files attached to comments upload to an S3 bucket, served by a CDN.</p>
     <!-- the switch that decides comes first: the server's keys, not the file -->
     <p v-if="status" class="as-status" :class="status.enabled ? 'as-on' : 'as-off'" role="status">
-      <template v-if="status.enabled"><b>On</b>, served at {{ status.public_url }}.</template>
+      <template v-if="status.enabled"><b>On</b>{{ status.where ? `, served at ${status.where}` : '' }}.</template>
       <template v-else><b>Off on this server</b>: set <code>ACCESS_KEY_ID</code>, <code>ACCESS_KEY_SECRET</code> and <code>BUCKET_NAME</code> where git-board runs, then restart it.</template>
     </p>
     <h3 class="as-h">Where the files go, once on</h3>
@@ -52,7 +52,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
-import { getUploadStatus, type UploadStatus } from '@/api/board';
+import { getUploads, type UploadStatus } from '@/api';
 import { SectionDraft, configModel, configModelError } from '@/configmodel';
 import ConfigRefPanel from '@/components/configforms/ConfigRefPanel.vue';
 import ConfigSaveBar from '@/components/configforms/ConfigSaveBar.vue';
@@ -103,7 +103,7 @@ const status = ref<UploadStatus | null>(null);
 
 onMounted(() => {
   void draft.load();
-  getUploadStatus()
+  getUploads()
     .then((s) => (status.value = s))
     .catch(() => {}); // no status line without it
 });

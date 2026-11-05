@@ -1,7 +1,8 @@
 // The issue's flow (docs/prd/time-flow.md): its whole life as one column,
 // cut into a segment per step, and the readings a person picks of it.
 // Pure: built from the thread the server already sends.
-import type { CycleStages, IssueEvent } from './api/board.ts';
+import type { IssueEvent } from './api/types.ts';
+import type { CycleStages } from './api/cycletypes.ts';
 import { DEFAULT_IDS, kindOf, listOf } from './cycle.ts';
 import type { Fields } from './fields.ts';
 import { threadsOf } from './review.ts';

@@ -3,7 +3,7 @@
 // mapping's `to`, else the old homes the file implies, else the type's
 // default. The Forges page's Fields table is this, made visible.
 import { inferType, type FieldType } from './fieldinfer.ts';
-import type { ConfigField } from './api/board.ts';
+import type { ConfigField } from './configparse.ts';
 
 // ForgeModel is one [forges.<name>] table, as the config model carries it.
 export interface ForgeModel {

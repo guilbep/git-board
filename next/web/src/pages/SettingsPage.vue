@@ -50,21 +50,6 @@
           </template>
         </section>
 
-        <section v-if="me?.view && cycleOn" aria-labelledby="set-view">
-          <h3 id="set-view" class="h5">Your issue page</h3>
-          <p>{{ viewWords(me) }}</p>
-          <div class="gb-opts" role="radiogroup" aria-labelledby="set-view">
-            <label v-for="o in viewOptions" :key="o.value" class="gb-opt" :class="{ on: viewChoice === o.value }">
-              <input type="radio" name="view" :value="o.value" :checked="viewChoice === o.value" :disabled="viewSaving" @change="pickView(o.value)" />
-              <span><b>{{ o.label }}</b><br /><span class="gb-hint">{{ o.hint }}</span></span>
-            </label>
-          </div>
-          <p v-if="viewError" class="gb-save-error" role="alert"><b>Not saved.</b> {{ viewError }}</p>
-          <p class="gb-hint">
-            This sets <code>board.view</code> in this repository’s git config, for you alone. For the whole team: a <code>[cycle]</code> table in <code>.git-board.toml</code>.
-            From a terminal, <code>git config --global board.view classic</code> or <code>cycle</code> sets it for every repository; a change made there shows when you reload the page.
-          </p>
-        </section>
 
         <section aria-labelledby="set-look">
           <h3 id="set-look" class="h5">Appearance</h3>
@@ -90,7 +75,6 @@
               <span><b>{{ o.label }}</b><br /><span class="gb-hint">{{ o.hint }}</span></span>
             </label>
           </div>
-          <p v-if="me.avatars_ignored" class="gb-hint">Your git config says <code>board.avatars = {{ me.avatars_ignored }}</code>, which is none of these: read as forge accounts.</p>
           <p v-if="avatarError" class="gb-save-error" role="alert"><b>Not saved.</b> {{ avatarError }}</p>
           <p class="gb-hint">
             This sets <code>board.avatars</code> in this repository’s git config, for you alone. A picture that can’t load shows the initials.
@@ -103,7 +87,7 @@
            section and saves it alone, the file's other lines untouched.
            v-show: switching tabs keeps an unsaved draft. -->
       <div v-show="tab === 'fields'" class="set-wrap set-wrap-wide"><FieldsSettings /></div>
-      <div v-show="tab === 'labels'" class="set-wrap set-wrap-wide"><LabelsSettings @changed="labels = $event" /></div>
+      <div v-show="tab === 'labels'" class="set-wrap set-wrap-wide"><LabelsSettings /></div>
       <div v-show="tab === 'views'" class="set-wrap set-wrap-wide"><ViewsSettings /></div>
       <div v-show="tab === 'sprints'" class="set-wrap set-wrap-wide"><SprintsSettings /></div>
       <div v-show="tab === 'roles'" class="set-wrap set-wrap-wide"><RolesSettings /></div>
@@ -115,37 +99,28 @@
       <div v-show="tab === 'experimental'" class="set-wrap set-wrap-wide"><ExperimentalSettings /></div>
       <!-- Advanced: the file itself, for what the forms don't cover -->
       <div v-show="tab === 'advanced'" class="set-wrap set-wrap-wide">
-        <p v-if="cycleView && settings?.cycle.guessed && settings.cycle.closing" class="gb-hint">
-          The cycle's stages are guessed from the status names: ready <code>{{ settings.cycle.ready || '—' }}</code>, in progress <code>{{ settings.cycle.in_progress.join(', ') || '—' }}</code>,
-          in review <code>{{ settings.cycle.in_review.join(', ') || '—' }}</code>, validation <code>{{ settings.cycle.validation.join(', ') || '—' }}</code>, closing <code>{{ settings.cycle.closing || '—' }}</code>.
-          Set them in <router-link to="/settings/cycle">Cycle</router-link>, or edit the file below.
-        </p>
         <ConfigEditor @saved="reload" />
       </div>
 
-      <SyncSettings v-if="tab === 'sync'" @changed="whole = $event" />
+      <SyncSettings v-if="tab === 'sync'" />
 
-      <DatastoreSettings v-if="tab === 'datastore'" @changed="onDatastore" />
-      <NumbersSettings v-if="tab === 'numbers'" @changed="numbers = $event" />
-      <WorktreesSettings v-if="tab === 'worktrees'" @changed="worktrees = $event" />
+      <DatastoreSettings v-if="tab === 'datastore'" />
+      <NumbersSettings v-if="tab === 'numbers'" />
     </main>
   </div>
 </template>
 
 <script setup lang="ts">
 import { themePref } from '@/theme';
-import { debounced, onLive } from '@/live';
+import { onLive } from '@/live';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router';
 import { resetTips, setTipsOff, tipsOff } from '@/tips';
-import { getNumbers, getSettings, getViews, getWhole, getWorktrees, setAvatars, setView, type AvatarsMode, type Datastore, type Labels, type Numbers, type Settings, type WholeStatus, type Worktrees } from '@/api/board';
-import { message } from '@/issue';
-import { classicPeek, cycleOn, cycleView, loadMe, me, worktreesOn } from '@/me';
+import { message, setMe, type AvatarsMode } from '@/api';
+import { board, cycleOn, loadMe, me } from '@/me';
 import { featureOn, type Feature } from '@/experimental';
-import { viewWords } from '@/view';
-import { dirtySections, loadConfigModel } from '@/configmodel';
+import { configModel, dirtySections, loadConfigModel } from '@/configmodel';
 import { settingsGroups, settingsTab, syncSummary, visibleTabs } from '@/settingstabs';
-import { numbersSummary } from '@/numbers';
 import AppHeader from '@/components/AppHeader.vue';
 import IdentityChooser from '@/components/IdentityChooser.vue';
 import AttachmentsSettings from '@/components/AttachmentsSettings.vue';
@@ -162,15 +137,16 @@ import NumbersSettings from '@/components/NumbersSettings.vue';
 import DatastoreSettings from '@/components/DatastoreSettings.vue';
 import { datastoreSummary } from '@/datastore';
 import { datastore, loadDatastore } from '@/kept';
+import { loadSync, syncStatus } from '@/sync';
+import { loadUploadStatus, uploadStatus } from '@/uploads';
 import RolesSettings from '@/components/RolesSettings.vue';
 import SprintsSettings from '@/components/SprintsSettings.vue';
 import ViewsSettings from '@/components/ViewsSettings.vue';
-import WorktreesSettings from '@/components/WorktreesSettings.vue';
 
 const route = useRoute();
 const router = useRouter();
-// an experimental feature's tab shows while it is on (/api/me)
-const isOn = (f: string) => featureOn(me.value?.experimental, f as Feature);
+// an experimental feature's tab shows while it is on (GET /api/board)
+const isOn = (f: string) => featureOn(board.value?.experimental, f as Feature);
 const tab = computed(() => settingsTab(route.params.tab, isOn));
 const groups = computed(() => settingsGroups(isOn));
 const tabs = computed(() => visibleTabs(isOn));
@@ -180,23 +156,15 @@ function goTab(id: string) {
   if (id !== tab.value) void router.push({ path: `/settings/${id}` });
 }
 
-const settings = ref<Settings | null>(null);
-const worktrees = ref<Worktrees | null>(null);
-const whole = ref<WholeStatus | null>(null);
-const numbers = ref<Numbers | null>(null);
-const labels = ref<Labels | null>(null);
-
-// where each part stands, under its name in the menu (what the Overview's
-// cards said, without repeating the menu)
+// where each part stands, under its name in the menu
 const menuState = computed<Record<string, string>>(() => {
-  const s = settings.value;
+  const labels = configModel.value?.labels.list.length;
   return {
-    sync: whole.value ? syncSummary(whole.value) : '',
-    labels: labels.value ? `${labels.value.rows.length} label${labels.value.rows.length === 1 ? '' : 's'}` : '',
-    numbers: numbers.value ? numbersSummary(numbers.value) : '',
+    sync: syncStatus.value ? syncSummary(syncStatus.value) : '',
+    labels: labels === undefined ? '' : `${labels} label${labels === 1 ? '' : 's'}`,
+    numbers: datastore.value ? (datastore.value.counter ? 'handed out here' : 'the forges’ alone') : '',
     datastore: datastore.value ? datastoreSummary(datastore.value) : '',
-    attachments: !s ? '' : s.uploads.enabled ? 'on' : 'off on this server',
-    worktrees: !worktrees.value ? '' : worktrees.value.config ? 'wtx.toml written' : worktrees.value.code === 'no-config' ? 'no wtx.toml yet' : (worktrees.value.reason ?? ''),
+    attachments: !uploadStatus.value ? '' : uploadStatus.value.enabled ? 'on' : 'off on this server',
     you: me.value?.me ? `as ${me.value.me.name}` : 'not chosen yet',
   };
 });
@@ -205,27 +173,6 @@ const themeOptions = [
   { value: 'light', label: 'Light', hint: 'always' },
   { value: 'dark', label: 'Dark', hint: 'always' },
 ] as const;
-// the issue page: '' follows the board, unless a global board.view says otherwise
-const viewOptions = [
-  { value: '', label: 'As the board says', hint: 'the cycle’s page if .git-board.toml has a [cycle] table, else the classic one; a board.view in your global git config comes first' },
-  { value: 'classic', label: 'Classic', hint: 'the description, then the comments and changes in order; the fields aside' },
-  { value: 'cycle', label: 'The cycle’s', hint: 'each issue’s steps, its review, and its changes' },
-] as const;
-const viewChoice = computed(() => (me.value?.view_from === 'board.view' && me.value.view_scope === 'local' ? me.value.view : ''));
-const viewSaving = ref(false);
-const viewError = ref('');
-async function pickView(v: '' | 'classic' | 'cycle') {
-  viewSaving.value = true;
-  viewError.value = '';
-  try {
-    me.value = await setView(v);
-    classicPeek.value = false; // the page picked here, not the issue switch's
-  } catch (e) {
-    viewError.value = message(e);
-  } finally {
-    viewSaving.value = false;
-  }
-}
 // where pictures come from (docs/prd/avatars.md): each says what the browser asks, and whom
 const avatarOptions = [
   { value: 'forge', label: 'Forge accounts', hint: 'GitHub pictures, by account: GitHub learns which of its users this page shows' },
@@ -239,50 +186,33 @@ async function pickAvatars(v: AvatarsMode) {
   avatarSaving.value = true;
   avatarError.value = '';
   try {
-    me.value = await setAvatars(v);
+    me.value = await setMe({ avatars: v });
   } catch (e) {
     avatarError.value = message(e);
   } finally {
     avatarSaving.value = false;
   }
 }
-const viewNames = ref<string[]>([]);
+const viewNames = computed(() => configModel.value?.view_order ?? []);
 const error = ref('');
 const choosing = ref(false);
 
 // back to the sentence once an identity is picked
 watch(() => me.value?.me?.id, () => (choosing.value = false));
 
-// after a save of .git-board.toml: the header's views, the Project's line
-async function reload() {
-  void loadMe(); // the issue page's view follows a [cycle] table saved here
-  try {
-    settings.value = await getSettings();
-  } catch (e) {
-    error.value = message(e);
-  }
-  try {
-    viewNames.value = Object.keys(await getViews());
-  } catch {
-    // the header shows no views
-  }
+// after a save of .git-board.toml: the header's views, the features on
+function reload() {
+  void loadMe();
+  loadConfigModel().catch((e: unknown) => (error.value = message(e)));
 }
 
 onMounted(() => {
   if (!me.value) void loadMe();
   void loadConfigModel();
-  void reload();
-  getWhole().then((w) => (whole.value = w), () => {});
-  loadNumbers();
+  void loadSync();
+  void loadDatastore();
+  loadUploadStatus();
 });
-// the menu's worktrees line, while the worktrees are on
-watch(
-  worktreesOn,
-  (on) => {
-    if (on) getWorktrees().then((w) => (worktrees.value = w), () => {});
-  },
-  { immediate: true },
-);
 // a form tab with a draft: say so before the page goes — the browser's
 // beforeunload for a reload or a close, the router's guard for a link
 const beforeUnload = (e: BeforeUnloadEvent) => {
@@ -294,15 +224,10 @@ onBeforeRouteLeave(() => {
   if (!Object.values(dirtySections.value).some(Boolean)) return true;
   return window.confirm('A project-file form has unsaved changes. Leave anyway?');
 });
-// the menu's numbers line: started, or an issue numbered, from anywhere
-const loadNumbers = () => void getNumbers().then((n) => (numbers.value = n), () => {});
-// the menu's datastore line
-void loadDatastore();
-const onDatastore = (d: Datastore) => void (datastore.value = d);
-const reloadNumbers = debounced(loadNumbers);
+// another page, a command or a hand edit changed the file or who writes
 const offLive = onLive((e) => {
-  if (e.kind === 'settings' || e.kind === 'config') void reload();
-  if (e.kind === 'issues' || e.kind === 'sync') reloadNumbers();
+  if (e.kind === 'config' || e.kind === 'me') reload();
+  if (e.kind === 'sync') void loadSync();
 });
 onBeforeUnmount(offLive);
 </script>

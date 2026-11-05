@@ -1,6 +1,7 @@
 // Whether files can be attached here (a bucket is set up), asked once.
+// Uploads come with their tool (M6): until then they are off.
 import { ref } from 'vue';
-import { getUploadStatus, type UploadStatus } from '@/api/board';
+import { getUploads, type UploadStatus } from '@/api';
 
 export const uploadStatus = ref<UploadStatus | null>(null);
 let asked = false;
@@ -8,8 +9,8 @@ let asked = false;
 export function loadUploadStatus(): void {
   if (asked) return;
   asked = true;
-  getUploadStatus().then(
+  getUploads().then(
     (s) => (uploadStatus.value = s),
-    () => (uploadStatus.value = { enabled: false, max_bytes: 0 }),
+    () => (uploadStatus.value = { enabled: false }),
   );
 }

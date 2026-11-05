@@ -29,7 +29,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
-import type { Forge } from '@/api/board';
+import type { Forge } from '@/api';
 import type { WaitingChange } from '@/history';
 import { lineDiff } from '@/linediff';
 import { when } from '@/me';

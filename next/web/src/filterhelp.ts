@@ -3,7 +3,7 @@
 // Filter box's list read it. The grammar is internal/filter's (its package
 // comment, and docs/guide/configuration.md's Filters table): change one,
 // change the others. Pure: node --test imports it.
-import type { FieldConfig } from './api/board';
+import type { FieldConfig } from './api/types.ts';
 
 export interface Word {
   term: string; // as the help shows it

@@ -34,16 +34,16 @@ test('a Markdown folder is markdown:<dir>, inside the checkout', () => {
   assert.notEqual(folderProblem('../x'), '');
 });
 
-test('the menu says when a change waits for a restart', () => {
-  assert.equal(datastoreSummary({ datastore: 'git', restart: false }), 'git');
-  assert.equal(datastoreSummary({ datastore: 'git', restart: true }), 'git; a change waits for a restart');
+test('the menu says the datastore, and where when that says more', () => {
+  assert.equal(datastoreSummary({ name: 'git', where: 'git' }), 'git');
+  assert.equal(datastoreSummary({ name: 'Markdown files', where: 'issues' }), 'Markdown files, issues');
 });
 
 test('needsGit is the server’s sentence on a board kept elsewhere, nothing on git', () => {
-  const pg = { datastore: 'PostgreSQL', replica: false };
+  const pg = { name: 'PostgreSQL', replica: false };
   assert.equal(needsGit(pg, 'git board pull'), 'git board pull needs a board kept in git; this board is kept in PostgreSQL');
-  assert.equal(needsGit({ datastore: 'git', replica: true }, 'git board pull'), '');
+  assert.equal(needsGit({ name: 'git', replica: true }, 'git board pull'), '');
   assert.equal(needsGit(null, 'git board pull'), ''); // not known yet: as on git
-  assert.equal(keptIn({ datastore: 'Markdown files', replica: false }), 'the board is kept in Markdown files');
-  assert.equal(keptIn({ datastore: 'git', replica: true }), '');
+  assert.equal(keptIn({ name: 'Markdown files', replica: false }), 'the board is kept in Markdown files');
+  assert.equal(keptIn({ name: 'git', replica: true }), '');
 });
