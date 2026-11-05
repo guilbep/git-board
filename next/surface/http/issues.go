@@ -2,11 +2,9 @@ package httpapi
 
 import (
 	"context"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
@@ -85,10 +83,14 @@ func listIssues(ctx context.Context, r listReq) (page[issueJSON], error) {
 	if err := b.Issues.Schema.Sort(found, r.Sort); err != nil {
 		return page[issueJSON]{}, on("sort", err)
 	}
-	start, err := after(found, r.Cursor)
+	c, err := parseCursor(r.Cursor)
 	if err != nil {
 		return page[issueJSON]{}, err
 	}
+	if c != nil && c.Sort != r.Sort {
+		return page[issueJSON]{}, invalid("cursor", errBadCursor)
+	}
+	start := resume(found, c, issueAfter(b.Issues.Schema, r.Sort, c))
 	end := len(found)
 	if limit > 0 {
 		end = min(end, start+limit)
@@ -98,41 +100,9 @@ func listIssues(ctx context.Context, r listReq) (page[issueJSON], error) {
 		p.Items = append(p.Items, issueJSON{Issue: is, Version: string(is.Version)})
 	}
 	if end < len(found) {
-		p.Next = cursor(end, found[end-1].ID)
+		p.Next = issueCursor(r.Sort, found[end-1])
 	}
 	return p, nil
-}
-
-// cursor names the last item of a page: its place and its id.
-func cursor(n int, id string) string {
-	return base64.RawURLEncoding.EncodeToString([]byte(strconv.Itoa(n) + ":" + id))
-}
-
-// after is where the page after a cursor starts: after its item, found
-// where the list has it now, else at its place.
-func after(list []issues.Issue, c string) (int, error) {
-	if c == "" {
-		return 0, nil
-	}
-	raw, err := base64.RawURLEncoding.DecodeString(c)
-	bad := invalid("cursor", errors.New("not a cursor this server gave"))
-	if err != nil {
-		return 0, bad
-	}
-	ns, id, ok := strings.Cut(string(raw), ":")
-	n, err := strconv.Atoi(ns)
-	if !ok || err != nil || n < 0 {
-		return 0, bad
-	}
-	if n <= len(list) && n > 0 && list[n-1].ID == id {
-		return n, nil
-	}
-	for i, is := range list {
-		if is.ID == id {
-			return i + 1, nil
-		}
-	}
-	return min(n, len(list)), nil
 }
 
 // parseAt is a time an `at` names: RFC 3339, or a date, its end.
@@ -271,7 +241,13 @@ func patchIssue(ctx context.Context, r patchReq) (Reply, error) {
 			base.Events[0].Body = *r.Base
 		}
 		if _, err := is.Edit(ctx, id, r.Title, r.Body, base); err != nil {
-			return Reply{}, on("body", err)
+			// the field the error is about: the description's base moved,
+			// else the first field written (the title, then the body)
+			field := "title"
+			if r.Title == nil || app.Classify(err) == app.Changed {
+				field = "body"
+			}
+			return Reply{}, on(field, err)
 		}
 	}
 	if r.Labels != nil {

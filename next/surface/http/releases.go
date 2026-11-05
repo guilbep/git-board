@@ -224,6 +224,9 @@ func (s *Server) patchRelease(ctx context.Context, q patchReleaseReq) (any, erro
 	switch q.State {
 	case "", "yanked":
 	case "promoted":
+		if err := runsCode(ctx, "releases are promoted"); err != nil {
+			return nil, err
+		}
 		if _, err := runner(ctx); err != nil {
 			return nil, err
 		}
@@ -239,6 +242,12 @@ func (s *Server) patchRelease(ctx context.Context, q patchReleaseReq) (any, erro
 	}
 	if q.Notes == nil && q.State == "" && q.Adopt == nil {
 		return nil, invalid("", errors.New("nothing to change: notes, state or adopt"))
+	}
+	if q.Adopt != nil {
+		// adopting writes the overlays' config repos, which say what runs
+		if err := runsCode(ctx, "overlays are adopted"); err != nil {
+			return nil, err
+		}
 	}
 	return s.quickWrite(ctx, q.Tag, func(r *ship.Runner) error {
 		if q.Adopt != nil {
@@ -282,6 +291,9 @@ type cutReq struct {
 
 // cut is route 44: a job, 202.
 func (s *Server) cut(ctx context.Context, q cutReq) (Reply, error) {
+	if err := runsCode(ctx, "releases are cut"); err != nil {
+		return Reply{}, err
+	}
 	r, err := runner(ctx)
 	if err != nil {
 		return Reply{}, err
@@ -316,6 +328,9 @@ type deployReq struct {
 
 // deploy is route 48: a deploy, or with reason a rollback; a job, 202.
 func (s *Server) deploy(ctx context.Context, q deployReq) (Reply, error) {
+	if err := runsCode(ctx, "environments are deployed"); err != nil {
+		return Reply{}, err
+	}
 	r, err := runner(ctx)
 	if err != nil {
 		return Reply{}, err

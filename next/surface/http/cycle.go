@@ -1,12 +1,13 @@
 package httpapi
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/guilbep/git-board/next/app"
-	"github.com/guilbep/git-board/next/domain/issues"
 )
 
 // The development cycle (experimental; docs/rewrite/api.md, routes 49
@@ -21,8 +22,15 @@ func cycleReply(v app.CycleView) Reply {
 	return Reply{ETag: v.Version, Body: v}
 }
 
+// withPlanRender renders a cycle's plan as a thread's texts: cleaned,
+// its pictures through the server.
+func withPlanRender(ctx context.Context) context.Context {
+	media := board(ctx).MediaURL(ctx)
+	return app.WithRender(ctx, func(src string) string { return render(src, media) })
+}
+
 func issueCycle(ctx context.Context, r cycleReq) (Reply, error) {
-	v, err := board(ctx).Cycle(ctx, r.ID, "")
+	v, err := board(ctx).Cycle(withPlanRender(ctx), r.ID, "")
 	return cycleReply(v), err
 }
 
@@ -62,7 +70,7 @@ func cycleAct(ctx context.Context, r actReq) (Reply, error) {
 	if err != nil {
 		return Reply{}, err
 	}
-	v, err := board(ctx).Act(ctx, app.CycleAct{Name: id, Action: r.Action, Risk: r.Risk, Verdict: r.Verdict, On: r.On, Body: r.Body,
+	v, err := board(ctx).Act(withPlanRender(ctx), app.CycleAct{Name: id, Action: r.Action, Risk: r.Risk, Verdict: r.Verdict, On: r.On, Body: r.Body,
 		Output: r.Output, Commit: r.Commit, Index: r.Index, Why: r.Why, State: r.State, Path: r.Path, Line: r.Line, Side: r.Side,
 		ReplyTo: r.ReplyTo, Comment: r.Comment, Resolved: r.Resolved, Branch: r.Branch, Number: r.Number, Title: r.Title, SHA: r.SHA})
 	if err != nil {
@@ -117,17 +125,18 @@ func workRows(ctx context.Context, r workReq) (workPage, error) {
 	pageOf := func(rows []app.WorkRow, total **int, next *string) ([]app.WorkRow, error) {
 		n := len(rows)
 		*total = &n
-		list := make([]issues.Issue, len(rows))
-		for i, row := range rows {
-			list[i] = row.Issue
-		}
-		start, err := after(list, r.Cursor)
+		c, err := parseCursor(r.Cursor)
 		if err != nil {
 			return nil, err
 		}
+		// the rows are oldest wait first, then by id (work.Group)
+		start := resume(rows, c, func(row app.WorkRow) bool {
+			return cmp.Or(row.Since.Compare(c.Since), strings.Compare(row.Issue.ID, c.ID)) > 0
+		})
 		end := min(len(rows), start+*r.Limit)
 		if end < len(rows) {
-			*next = cursor(end, rows[end-1].Issue.ID)
+			last := rows[end-1]
+			*next = cursorAt{Since: last.Since, ID: last.Issue.ID}.String()
 		}
 		return rows[start:end], nil
 	}

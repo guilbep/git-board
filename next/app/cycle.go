@@ -67,6 +67,21 @@ func (b *Board) Cycle(ctx context.Context, name, me string) (CycleView, error) {
 	return b.cycleRead(ctx, name, me, false)
 }
 
+type renderKey struct{}
+
+// WithRender is ctx with what a cycle's read renders its plan's Markdown
+// with (Plan.HTML): a renderer that cleans it, as a thread's texts are
+// (surface/http/markdown.go), since a plan comes from any branch and a
+// page shows it as HTML. Without one, the plan's HTML stays "".
+func WithRender(ctx context.Context, render func(markdown string) string) context.Context {
+	return context.WithValue(ctx, renderKey{}, render)
+}
+
+func renderOf(ctx context.Context) func(string) string {
+	r, _ := ctx.Value(renderKey{}).(func(string) string)
+	return r
+}
+
 // cycleRead is Cycle; force asks the forge for each PR now.
 func (b *Board) cycleRead(ctx context.Context, name, me string, force bool) (CycleView, error) {
 	if !b.CycleOn() {
@@ -84,7 +99,7 @@ func (b *Board) cycleRead(ctx context.Context, name, me string, force bool) (Cyc
 	if b.PRs != nil {
 		pulls = refreshing{ctx, b, b.PRs, force}
 	}
-	in, err := b.Evidence(ctx, th, m.Login, pulls, nil)
+	in, err := b.Evidence(ctx, th, m.Login, pulls, renderOf(ctx))
 	if err != nil {
 		return CycleView{}, err
 	}

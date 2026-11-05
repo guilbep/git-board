@@ -30,9 +30,24 @@ import (
 // maxMedia caps a picture the server fetches.
 const maxMedia = 20 << 20
 
+// The kept pictures are bounded: a picture unused for mediaMaxAge goes,
+// then the least recently used, until they weigh mediaKeep at most. Issue
+// text anyone writes on a public repository names them.
+const (
+	mediaKeep   = 256 << 20
+	mediaMaxAge = 30 * 24 * time.Hour
+)
+
+// githubAssetBucket is the S3 bucket GitHub's attachments
+// (github.com/user-attachments/assets/…) redirect to: that one bucket by
+// its exact name, never a prefix, since anyone can name an S3 bucket.
+const githubAssetBucket = "github-production-user-asset-6210df.s3.amazonaws.com"
+
 // ForgeMedia tells whether u is where a forge keeps the pictures of
 // issues: GitHub's attachments and their S3, GitLab's uploads on
-// gitlab.com or one of gitlabHosts.
+// gitlab.com or one of gitlabHosts. *.githubusercontent.com is GitHub's
+// own domain (private-user-images, user-images, raw…); its S3 is one
+// bucket, githubAssetBucket.
 func ForgeMedia(u *url.URL, gitlabHosts []string) bool {
 	if u.Scheme != "https" {
 		return false
@@ -43,7 +58,7 @@ func ForgeMedia(u *url.URL, gitlabHosts []string) bool {
 		return strings.HasPrefix(p, "/user-attachments/") || strings.Contains(p, "/assets/")
 	case strings.HasSuffix(host, ".githubusercontent.com"):
 		return true
-	case strings.HasPrefix(host, "github-production-user-asset-") && strings.HasSuffix(host, ".s3.amazonaws.com"):
+	case host == githubAssetBucket:
 		return true
 	case host == "gitlab.com" || slices.Contains(gitlabHosts, host):
 		return strings.Contains(p, "/uploads/")
@@ -119,6 +134,7 @@ func (b *Board) Media(ctx context.Context, raw string) (contentType string, data
 		sum := sha256.Sum256([]byte(raw))
 		file = filepath.Join(b.Kernel.Store().Folder(), "v2", "media", hex.EncodeToString(sum[:]))
 		if contentType, data, err := cachedMedia(file); err == nil {
+			touchMedia(file, time.Now())
 			return contentType, data, nil
 		}
 	}
@@ -141,6 +157,7 @@ func (b *Board) Media(ctx context.Context, raw string) (contentType string, data
 	if file != "" { // a failure costs a fetch next time
 		if os.MkdirAll(filepath.Dir(file), 0o755) == nil {
 			_ = os.WriteFile(file, append([]byte(contentType+"\n"), data...), 0o644)
+			trimMedia(filepath.Dir(file), mediaKeep, time.Now())
 		}
 	}
 	return contentType, data, nil
@@ -199,4 +216,46 @@ func cachedMedia(file string) (string, []byte, error) {
 		return "", nil, errors.New("a kept picture without its type")
 	}
 	return contentType, []byte(data), nil
+}
+
+// touchMedia marks a kept picture used now: its modification time.
+func touchMedia(file string, now time.Time) { _ = os.Chtimes(file, now, now) }
+
+// trimMedia bounds the kept pictures of dir: those unused for
+// mediaMaxAge go, then the least recently used until the rest weigh max
+// bytes at most. A file it can't read or remove stays.
+func trimMedia(dir string, max int64, now time.Time) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return
+	}
+	type kept struct {
+		path string
+		size int64
+		used time.Time
+	}
+	var files []kept
+	var total int64
+	for _, e := range entries {
+		info, err := e.Info()
+		if err != nil || !info.Mode().IsRegular() {
+			continue
+		}
+		f := kept{filepath.Join(dir, e.Name()), info.Size(), info.ModTime()}
+		if now.Sub(f.used) > mediaMaxAge {
+			_ = os.Remove(f.path)
+			continue
+		}
+		files = append(files, f)
+		total += f.size
+	}
+	slices.SortFunc(files, func(a, b kept) int { return a.used.Compare(b.used) })
+	for _, f := range files {
+		if total <= max {
+			return
+		}
+		if os.Remove(f.path) == nil {
+			total -= f.size
+		}
+	}
 }

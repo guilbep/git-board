@@ -40,8 +40,12 @@ The API adds one field to an issue and a thread: `version`, below.
 
 `limit` is the page's size: 100 by default, 1,000 at most, `0` for every
 item. `cursor` is the `next` of the page before; `next` is absent on the
-last page. A cursor is opaque: it names the last item seen, so a page
-starts after it even when issues were added before it meanwhile. `total`
+last page. A cursor is opaque: it names the place of the last item seen
+in the list's order (what the list sorts by, as that item was, and its
+id), and the next page starts at the first item after that place. Issues
+added before it meanwhile don't come again, and the item leaving the list
+(closed, moved to another lane) or moving skips nothing after it. A
+cursor is the sort's it was given with: another `sort` is `invalid`. `total`
 counts every item the request matches.
 
 **Filters are the CLI's grammar.** `filter` is what `ls` takes
@@ -99,6 +103,25 @@ machine (`localhost`, `127.0.0.1`, `[::1]`, or what `--addr` exposes).
 A write's `Origin`, when sent, must be this server's own (or the dev
 server's, `localhost:9000`). Both answer 403 `forbidden`, and are logged
 as warnings. Clients without an `Origin` (curl, scripts) are the user's.
+
+**The code gate** (ADR 0013, Amendment 2026-11-05). Reaching the port
+writes the board; it must not run code as the user. A request that makes
+this machine run code, or changes what code a later run runs, is refused
+(403 `forbidden`) when the server listens beyond loopback (`--addr`), and
+otherwise asks a same-host `Origin`, the board's own page (or the dev
+server's): a script without an `Origin` is refused too. It gates:
+
+- a cut (44), a promotion and an adoption (46: `{state: "promoted"}`,
+  `{adopt}`), a deploy and a rollback (48): they build (`sh -c` of
+  `release.build`, `go build`, `docker build`, `helm`) and push the
+  overlays that say what runs;
+- a config write (24, 25) whose file changes a key that holds a command
+  or says what a run builds, deploys or trusts: `[release]` (any key),
+  `[cycle.tests]`, `[cycle.checks]` and `cycle.signers`. The same write
+  without such a change, and every dry run, pass.
+
+Notes, yanks and comments on a release are records, and pass. The
+datastore's copy (29) answers on loopback alone, as before.
 
 ## Routes
 
@@ -356,7 +379,12 @@ Uploads are `[uploads]`'s, a tool's (`next/tools/uploads`, v1's, ADR
 forges' pictures of issue text (GitHub's attachments, GitLab's uploads),
 which a private repository's page can't load without the forge's token:
 a thread's and a preview's HTML point them at this route, which fetches
-them with the token, from a forge's picture addresses alone.
+them with the token, from a forge's picture addresses alone: GitHub's
+(`github.com`'s attachments, `*.githubusercontent.com`, and the one S3
+bucket its attachments redirect to, by its exact name), and GitLab's
+uploads on the board's GitLab hosts. They are kept in the board's folder,
+256 MB at most: a picture unused for 30 days goes, then the least
+recently used.
 
 ### Domains that come with M6
 
@@ -424,7 +452,8 @@ skipped, note, waits, mine, actions, evidence, id, version,
 body_version, pr_checked_at, environments}`, with the issue's `version` as `ETag`: an
 action's `If-Match`. `evidence` is `cycle.Input`: the status, the
 criteria, the people holding each gate, the lanes (each branch's step,
-tests and PR chip), the plan, the runs, checks and sign-offs, and `pr`,
+tests and PR chip), the plan (its `html` rendered and cleaned as a
+thread's texts: a plan comes from any branch), the runs, checks and sign-offs, and `pr`,
 the evidence branch's pull request as the forge gates it (`{number, url,
 state, draft, title, body, base, head, merge_commit, author, decision,
 mergeable, merge_state, checks, reviews, requested, can_merge, checking,
@@ -514,7 +543,9 @@ the datastore's heads every second for the others, which it tells a
 second later (an API write lands in the datastore just before its
 observer runs: the wait lets the observer tell it, with its `by`).
 `.git-board.toml` written by hand is seen the same way: the board opens
-again on it, and `config` is told. A page that falls 64 events behind is dropped: its stream closes,
+again on it, and `config` is told. A write of it through the API (24,
+25, 33 to 35) opens the board once and is told once, with its `by`: the
+watcher knows the server's own write. A page that falls 64 events behind is dropped: its stream closes,
 it reconnects (`retry`) and reloads. A comment line every 25 seconds
 keeps proxies from closing the stream.
 

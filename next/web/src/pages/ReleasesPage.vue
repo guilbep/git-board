@@ -289,7 +289,8 @@ async function adopt(ps: Proposal[]) {
 // a job's steps; resync: live.ts says it after a reconnect, when a step
 // may have been missed; config: [release] changed
 const reloadSoon = debounced(() => void reload());
-const offLive = onLive((e) => (e.kind === 'release' || e.kind === 'config' || e.kind === 'resync') && reloadSoon());
+// own: a job this page started tells its steps by this page
+const offLive = onLive((e) => (e.kind === 'release' || e.kind === 'config' || e.kind === 'resync') && reloadSoon(), { own: true });
 onBeforeUnmount(offLive);
 
 onMounted(async () => {

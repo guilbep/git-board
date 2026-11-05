@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -107,5 +108,48 @@ func TestCycleActions(t *testing.T) {
 	}
 	if v = want[view](t, a.do("POST", "/api/issues/"+id+"/cycle/start", nil, "If-Match", after), 200); v.Step != 4 {
 		t.Fatalf("start: %+v", v)
+	}
+}
+
+// The cycle's plan is shown, rendered as a thread's texts are: cleaned
+// of what runs in the page (review finding 6). A plan comes from any
+// branch, and the panel shows it as HTML.
+func TestCyclePlanRendered(t *testing.T) {
+	t.Parallel()
+	dir, ids := newBoard(t)
+	id := string(ids[1])
+	on := boardToml + "\n[experimental]\nfeatures = [\"cycle\"]\n"
+	if err := os.WriteFile(filepath.Join(dir, ".git-board.toml"), []byte(on), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	plans := filepath.Join(dir, "docs", "src", "implementation-plans")
+	if err := os.MkdirAll(plans, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	plan := "---\nissue: " + id[:7] + "\nstatus: proposed\n---\n# The **plan**\n\n<script>alert(1)</script>\n<img src=x onerror=\"alert(2)\">\n[go](javascript:alert(3))\n"
+	if err := os.WriteFile(filepath.Join(plans, "plan.md"), []byte(plan), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	gitRun(t, dir, "checkout", "-q", "-b", "main")
+	gitRun(t, dir, "add", "docs")
+	gitRun(t, dir, "-c", "user.name=t", "-c", "user.email=t@e", "commit", "-q", "-m", "the plan")
+	a := newAPI(t, dir)
+	type view struct {
+		Evidence struct {
+			Plan *struct{ Path, HTML string }
+		}
+	}
+	v := want[view](t, a.do("GET", "/api/issues/"+id+"/cycle", nil), 200)
+	if v.Evidence.Plan == nil {
+		t.Fatal("no plan found")
+	}
+	h := v.Evidence.Plan.HTML
+	if !strings.Contains(h, "<strong>plan</strong>") {
+		t.Fatalf("the plan isn't rendered: %q", h)
+	}
+	for _, bad := range []string{"<script", "onerror", `href="javascript`, "alert(1)"} {
+		if strings.Contains(h, bad) {
+			t.Errorf("the plan's HTML keeps %s: %q", bad, h)
+		}
 	}
 }

@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"slices"
 	"sync"
 	"time"
 
@@ -125,9 +126,15 @@ type seen struct {
 	pending map[string]string // found by the watcher, told next tick
 }
 
-// observe tells the pages of each change a request wrote, as it lands.
+// observe tells the pages of each change a request wrote, as it lands:
+// of the kinds the watcher reads. The others (a release record, a forge's
+// sync state) the server tells itself, by their tag or run, and the
+// watcher would tell them gone a tick later.
 func (s *Server) observe(ctx context.Context, cs []kernel.Change) {
 	for _, c := range cs {
+		if !slices.Contains(watchedKinds, c.Kind) {
+			continue
+		}
 		k := c.Kind + "/" + string(c.ID)
 		s.seen.mu.Lock()
 		tell := s.seen.at[k] != string(c.Version)
@@ -148,7 +155,9 @@ var watchedKinds = []string{"issue", "person"}
 // changed file opens the board again: its config, its schema.
 func (s *Server) watch(ctx context.Context, interval time.Duration) {
 	s.heads(ctx, false)
-	file := s.fileSum()
+	s.own.mu.Lock()
+	s.own.sum = s.fileSum()
+	s.own.mu.Unlock()
 	t := time.NewTicker(interval)
 	defer t.Stop()
 	for {
@@ -157,8 +166,7 @@ func (s *Server) watch(ctx context.Context, interval time.Duration) {
 			return
 		case <-t.C:
 		}
-		if f := s.fileSum(); f != file {
-			file = f
+		if s.configMoved() {
 			if err := s.boards.reopen(ctx); err != nil {
 				s.log.Warn(".git-board.toml changed, and the board can't be opened again", "error", err)
 			} else {
@@ -218,6 +226,54 @@ func (s *Server) heads(ctx context.Context, tell bool) {
 		kind, id, _ := cut(k, "/")
 		s.publish(ctx, Event{Kind: kind, ID: id})
 	}
+}
+
+// ownConfig is the server's own writes of .git-board.toml: the watcher
+// takes the file they leave as known, so a write through the API opens
+// the board and is told once, by its page.
+type ownConfig struct {
+	mu  sync.Mutex // held while the server writes the file
+	sum string     // the file's version as last known
+}
+
+// configMoved says whether .git-board.toml moved since the server last
+// knew it; while the server writes it, not yet.
+func (s *Server) configMoved() bool {
+	if !s.own.mu.TryLock() {
+		return false
+	}
+	defer s.own.mu.Unlock()
+	f := s.fileSum()
+	moved := f != s.own.sum
+	s.own.sum = f
+	return moved
+}
+
+// writeConfig runs write, the server's write of .git-board.toml, then
+// opens the board again on it and tells the pages, once, by the page
+// that wrote. The board opens again even when write failed, in case it
+// wrote before it did.
+func (s *Server) writeConfig(ctx context.Context, write func() error) error {
+	s.own.mu.Lock()
+	before := s.fileSum()
+	err := write()
+	s.own.sum = s.fileSum()
+	s.own.mu.Unlock()
+	if s.own.sum == before && err != nil {
+		return err
+	}
+	if rerr := s.boards.reopen(ctx); rerr != nil {
+		return cmpErr(err, rerr)
+	}
+	s.publish(ctx, Event{Kind: "config", By: clientOf(ctx)})
+	return err
+}
+
+func cmpErr(a, b error) error {
+	if a != nil {
+		return a
+	}
+	return b
 }
 
 // fileSum is .git-board.toml's version: a hash of its text, "" for none.
