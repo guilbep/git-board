@@ -45,8 +45,7 @@ const cols = 4
 type View struct {
 	db    *sql.DB // its writes take the lock at once (BEGIN IMMEDIATE)
 	ro    *sql.DB // reads in one snapshot
-	dir   string
-	cache rowsCache
+	files *rowFiles
 }
 
 var _ kernel.View = (*View)(nil)
@@ -80,7 +79,7 @@ func open(ctx context.Context, path string) (*View, error) {
 		db.Close()
 		return nil, err
 	}
-	v := &View{db: db, ro: ro, dir: filepath.Dir(path), cache: rowsCache{at: map[string]kernel.Mark{}, rows: map[string][]row{}}}
+	v := &View{db: db, ro: ro, files: newRowFiles(filepath.Dir(path))}
 	var have int
 	if err := db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&have); err != nil {
 		v.Close()
@@ -186,7 +185,7 @@ func (v *View) Write(ctx context.Context, kind string, w kernel.Write) (err erro
 	if err != nil {
 		return err
 	}
-	emptied := false // the kind has no rows: a lookup finds nothing
+	emptied := false               // the kind has no rows: a lookup finds nothing
 	if w.Reset && m.Rev != w.Rev { // another process may have started over meanwhile: then its rows stand
 		for _, q := range []string{
 			"DELETE FROM terms WHERE n IN (SELECT n FROM rows WHERE kind = ?1)",
@@ -272,7 +271,7 @@ func (v *View) Write(ctx context.Context, kind string, w kernel.Write) (err erro
 		return err
 	}
 	if !w.Reset {
-		v.patchRows(kind, m, next, changed)
+		v.files.patchRows(kind, m, next, changed)
 	}
 	return nil
 }
@@ -478,7 +477,11 @@ func (v *View) Rows(ctx context.Context, kind string, q kernel.Query) ([]kernel.
 	if err != nil {
 		return nil, err
 	}
-	all, err := v.all(ctx, kind)
+	m, err := mark(ctx, v.db, kind)
+	if err != nil {
+		return nil, err
+	}
+	all, err := v.files.all(ctx, kind, m, v.readRows)
 	if err != nil {
 		return nil, err
 	}

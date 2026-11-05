@@ -3,18 +3,16 @@ package view_test
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
-	"sync"
 	"testing"
-	"time"
 
 	"github.com/guilbep/git-board/next/kernel"
-	"github.com/guilbep/git-board/next/kernel/pack"
 	"github.com/guilbep/git-board/next/store/mem"
+	"github.com/guilbep/git-board/next/store/pg/pgtest"
 	"github.com/guilbep/git-board/next/view"
+	"github.com/guilbep/git-board/next/view/viewtest"
 )
 
 var ctx = context.Background()
@@ -49,80 +47,36 @@ func op(n int) kernel.Op {
 	return kernel.Op{Kind: "tick", Author: "a", Time: int64(n), Data: json.RawMessage(`{}`)}
 }
 
-// Two processes refresh one view file while a third writes: no refresh
-// loses a row or takes one back to an older version, and once the writes
-// end every row is its entity's fold at its head.
-func TestRefreshesRacingWrites(t *testing.T) {
+// The suite every view runs, on sqlite: each open of one file is
+// another process's.
+func TestSQLite(t *testing.T) {
 	t.Parallel()
-	ds := mem.New(t.TempDir())
-	path := filepath.Join(t.TempDir(), "view.db")
-	const n = 8
-	ids := make([]string, n)
-	versions := make([]string, n)
-	for i := range n {
-		ids[i] = fmt.Sprintf("%040x", i+1)
-		data, _ := pack.Encode(pack.Pack{Clock: 1, Ops: []kernel.Op{op(1)}})
-		v, err := ds.Add(ctx, "counter", ids[i], data, "")
-		if err != nil {
-			t.Fatal(err)
-		}
-		versions[i] = v
-	}
-	readers := []*kernel.Board{openBoard(t, ds, path), openBoard(t, ds, path)}
-	ctx, cancel := context.WithTimeout(ctx, time.Second)
-	defer cancel()
-	var wg sync.WaitGroup
-	wg.Go(func() {
-		for c := uint64(2); ctx.Err() == nil; c++ {
-			for i := range n {
-				data, _ := pack.Encode(pack.Pack{Clock: c, Ops: []kernel.Op{op(int(c))}})
-				v, err := ds.Add(context.Background(), "counter", ids[i], data, versions[i])
-				if err != nil {
-					t.Error(err)
-					return
-				}
-				versions[i] = v
+	viewtest.Run(t, viewtest.Options{Open: func(t *testing.T) func(t *testing.T) kernel.View {
+		path := filepath.Join(t.TempDir(), "view.db")
+		return func(t *testing.T) kernel.View {
+			v, err := view.Open(ctx, path)
+			if err != nil {
+				t.Fatal(err)
 			}
+			return v
 		}
-	})
-	for _, b := range readers {
-		wg.Go(func() {
-			last := map[kernel.ID]int{}
-			for ctx.Err() == nil {
-				ls, err := counter.List(context.Background(), b, kernel.Query{})
-				if err != nil {
-					t.Error(err)
-					return
-				}
-				if len(ls) != n {
-					t.Errorf("a list of %d rows, want %d", len(ls), n)
-					return
-				}
-				for _, l := range ls {
-					if v, _ := strconv.Atoi(string(l.Version)); l.Row.N != v {
-						t.Errorf("%s at %s holds %d operations: a row isn't its version's fold", l.ID, l.Version, l.Row.N)
-					}
-					if l.Row.N < last[l.ID] {
-						t.Errorf("%s went back from %d to %d", l.ID, last[l.ID], l.Row.N)
-					}
-					last[l.ID] = l.Row.N
-				}
+	}})
+}
+
+// The suite on PostgreSQL: each open of one database is another
+// machine's, its rows files in a folder of its own.
+func TestPostgreSQL(t *testing.T) {
+	t.Parallel()
+	viewtest.Run(t, viewtest.Options{Open: func(t *testing.T) func(t *testing.T) kernel.View {
+		dsn := pgtest.DSN(t)
+		return func(t *testing.T) kernel.View {
+			v, err := view.OpenPG(ctx, dsn, t.TempDir())
+			if err != nil {
+				t.Fatal(err)
 			}
-		})
-	}
-	wg.Wait()
-	ls, err := counter.List(context.Background(), readers[0], kernel.Query{All: []string{"n:" + versions[0]}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, l := range ls {
-		if string(l.Version) != versions[0] {
-			t.Fatalf("after the writes, %s is at %s, want %s", l.ID, l.Version, versions[0])
+			return v
 		}
-	}
-	if len(ls) == 0 {
-		t.Fatal("after the writes, no row has its head's count")
-	}
+	}})
 }
 
 // A file of another version, or not a database at all, is built again.

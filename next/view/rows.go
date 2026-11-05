@@ -33,26 +33,30 @@ type row struct {
 	row              []byte
 }
 
-// rowsCache is what a View read of its files last, by kind: a process
-// listing again at the same mark reads nothing.
-type rowsCache struct {
+// rowFiles are a view's rows files, in dir, and what this process read
+// of them last, by kind: a process listing again at the same mark reads
+// nothing.
+type rowFiles struct {
+	dir  string
 	mu   sync.Mutex
 	at   map[string]kernel.Mark
 	rows map[string][]row
 }
 
-func (v *View) rowsPath(kind string) string { return filepath.Join(v.dir, "rows-"+kind) }
+func newRowFiles(dir string) *rowFiles {
+	return &rowFiles{dir: dir, at: map[string]kernel.Mark{}, rows: map[string][]row{}}
+}
 
-// all is every row of a kind at its current mark, by (created, id).
-func (v *View) all(ctx context.Context, kind string) ([]row, error) {
-	m, err := mark(ctx, v.db, kind)
-	if err != nil {
-		return nil, err
-	}
-	v.cache.mu.Lock()
-	defer v.cache.mu.Unlock()
-	if at, ok := v.cache.at[kind]; ok && at == m {
-		return v.cache.rows[kind], nil
+func (v *rowFiles) rowsPath(kind string) string { return filepath.Join(v.dir, "rows-"+kind) }
+
+// all is every row of a kind at mark m, by (created, id): from this
+// process's copy, else the files, else the table (read: a kind's mark and
+// rows in one snapshot), written to the files for the next.
+func (v *rowFiles) all(ctx context.Context, kind string, m kernel.Mark, read func(context.Context, string) (kernel.Mark, []row, error)) ([]row, error) {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	if at, ok := v.at[kind]; ok && at == m {
+		return v.rows[kind], nil
 	}
 	rows, records, ok := v.readFiles(kind, m)
 	if ok && records > maxRecords { // the patches grew: one file again
@@ -61,7 +65,8 @@ func (v *View) all(ctx context.Context, kind string) ([]row, error) {
 		}
 	}
 	if !ok {
-		if m, rows, err = v.readRows(ctx, kind); err != nil {
+		var err error
+		if m, rows, err = read(ctx, kind); err != nil {
 			return nil, err
 		}
 		if err := writeRows(v.rowsPath(kind), m, rows); err != nil {
@@ -69,7 +74,7 @@ func (v *View) all(ctx context.Context, kind string) ([]row, error) {
 		}
 		os.Remove(v.patchPath(kind))
 	}
-	v.cache.at[kind], v.cache.rows[kind] = m, rows
+	v.at[kind], v.rows[kind] = m, rows
 	return rows, nil
 }
 
@@ -82,11 +87,11 @@ func (v *View) all(ctx context.Context, kind string) ([]row, error) {
 // the table, as a stale file does.
 const maxRecords = 32
 
-func (v *View) patchPath(kind string) string { return v.rowsPath(kind) + ".patch" }
+func (v *rowFiles) patchPath(kind string) string { return v.rowsPath(kind) + ".patch" }
 
 // readFiles reads a kind's rows file and its patches, ok when they come
 // to mark m; records is how many patches it took.
-func (v *View) readFiles(kind string, m kernel.Mark) (rows []row, records int, ok bool) {
+func (v *rowFiles) readFiles(kind string, m kernel.Mark) (rows []row, records int, ok bool) {
 	data, err := os.ReadFile(v.rowsPath(kind))
 	if err != nil {
 		return nil, 0, false
@@ -142,13 +147,13 @@ func applied(rows []row, changed map[kernel.ID]*row) []row {
 // patchRows records that a write took a kind's rows from mark before to
 // mark after, with the rows it changed (nil: gone): appended to the
 // patch file in one write, so a reader sees a record whole or cut short.
-func (v *View) patchRows(kind string, before, after kernel.Mark, changed map[kernel.ID]*row) {
-	v.cache.mu.Lock()
-	defer v.cache.mu.Unlock()
-	if v.cache.at[kind] == before {
-		v.cache.at[kind], v.cache.rows[kind] = after, applied(v.cache.rows[kind], changed)
+func (v *rowFiles) patchRows(kind string, before, after kernel.Mark, changed map[kernel.ID]*row) {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	if v.at[kind] == before {
+		v.at[kind], v.rows[kind] = after, applied(v.rows[kind], changed)
 	} else {
-		delete(v.cache.at, kind)
+		delete(v.at, kind)
 	}
 	if _, err := os.Stat(v.rowsPath(kind)); err != nil {
 		return // no file: the next list writes it

@@ -271,12 +271,16 @@ func (b *Board) searchable(ctx context.Context, k kindSpec) error {
 		return err
 	}
 	refs := make([]store.Ref, len(heads))
+	bases := make(map[ID]Version, len(heads))
 	for i, h := range heads {
 		refs[i] = store.Ref{Kind: k.name, ID: string(h.ID), Version: string(h.Version)}
+		bases[h.ID] = h.Version
 	}
+	// a datastore that isn't Pinned loads the current version, which may
+	// have moved from the row's: the row is replaced where it is still at
+	// its base
 	return b.stream(ctx, k, Write{Rev: k.rev, Search: true}, refs, func(r store.Ref, packs [][]byte, err error) (Put, *Head) {
-		v := Version(r.Version)
-		return b.put(k, ID(r.ID), v, v, packs, err, true), nil
+		return b.put(k, ID(r.ID), bases[ID(r.ID)], Version(r.Version), packs, err, true), nil
 	})
 }
 
