@@ -94,7 +94,12 @@ const boxOptions = computed<{ value: string; label: string; note: string }[]>(()
   });
 });
 const trick = computed(() => (completing.value ? nextTrick(props.modelValue) : null));
-watch(boxOptions, () => (boxActive.value = -1));
+// a new list drops the choice; the same options with new counts (the
+// facets answering after a key) keep it: Tab takes what ↓ chose
+watch(
+  () => boxOptions.value.map((o) => o.value).join('\n'),
+  () => (boxActive.value = -1),
+);
 function onBoxInput(e: Event) {
   boxOpen.value = true;
   emit('update:modelValue', (e.target as HTMLInputElement).value);

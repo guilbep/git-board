@@ -71,6 +71,9 @@ export function useBoardLists(fields: Ref<Fields>) {
         labels = getLabels(p.filter, signal);
         const all = listIssues({ filter: p.filter, limit: 1 }, signal);
         const known = Promise.all(options.map(lane));
+        // awaited below, after labels: a new load aborting them meanwhile
+        // is this load's to catch, not an unhandled rejection of the page's
+        for (const p of [all, known]) p.catch(() => {});
         const extra = (await labels).filter((l) => l.field === p.group && !options.includes(l.value)).map((l) => l.value);
         next = [...(await known), ...(await Promise.all([...new Set(extra)].map(lane)))];
         total.value = (await all).total;
@@ -110,6 +113,7 @@ export function useBoardLists(fields: Ref<Fields>) {
       // one, else this list's total for a field's "not set"
       const sharedStates = !keys.has(STATE);
       const shared = counted(filter, labels, sharedStates).then((c) => (sharedStates ? c : { ...c, open: total.value, closed: 0 }));
+      shared.catch(() => {}); // awaited after the own counts: an abort meanwhile is caught below
       const own = new Map(await Promise.all([...keys].map(async (k) => [k, await counted(rest(filter, k), k === STATE ? null : getLabels(rest(filter, k), signal), true)] as const)));
       const fs = facetsOf(filter, fields.value, await shared, own);
       if (!signal.aborted) facets.value = fs;

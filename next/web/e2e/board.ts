@@ -5,6 +5,10 @@ import { expect, type APIRequestContext, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+// markdownBoard is serve.mjs's Markdown board, on E2E_PORT + 5: the port
+// playwright.config.ts serves on, one default for every spec
+export const markdownBoard = `http://127.0.0.1:${Number(process.env.E2E_PORT ?? '18421') + 5}`;
+
 export const boardFile = (): string => readFileSync(join(process.env.E2E_DIR ?? '', 'repo', '.git-board.toml'), 'utf8');
 
 // errors collects the page's uncaught errors: a page that throws is broken
