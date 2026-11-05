@@ -13,7 +13,7 @@ import (
 )
 
 func newSync() *cobra.Command {
-	var remote string
+	var remote, migrate string
 	var check, gitOnly, allowCreate bool
 	cmd := &cobra.Command{
 		Use:   "sync [path...]",
@@ -28,6 +28,10 @@ alone: git board pull, then git board push. --check runs the same steps
 and writes nothing: a fetch and compare, the forges' dry run, the
 Project's check.
 
+--migrate <field> moves a field's values to the home its forge mappings
+now name, once a mapping changed and a sync ran: the old labels off the
+forge's issues, and the assignees set when they are the new home.
+
 A forge this repository never synced with, or 50 creations or more on
 one, gets no issue created without --allow-create.
 
@@ -41,7 +45,11 @@ none given), synced in turn: a failure on one doesn't stop the others.`,
 			out := cmd.OutOrStdout()
 			var failed []string
 			for _, path := range paths {
-				if err := syncOne(cmd, out, path, remote, check, allowCreate, gitOnly); err != nil {
+				one := func() error { return syncOne(cmd, out, path, remote, check, allowCreate, gitOnly) }
+				if migrate != "" {
+					one = func() error { return migrateOne(cmd, out, path, migrate) }
+				}
+				if err := one(); err != nil {
 					fmt.Fprintf(out, "%s: %s\n", path, app.NoCredentials(err.Error()))
 					failed = append(failed, path)
 				}
@@ -55,6 +63,7 @@ none given), synced in turn: a failure on one doesn't stop the others.`,
 	cmd.Flags().StringVar(&remote, "remote", "origin", "git remote to pull from / push to")
 	cmd.Flags().BoolVar(&check, "check", false, "the dry run: say what a sync would do, write nothing")
 	cmd.Flags().BoolVar(&gitOnly, "git", false, "sync with git alone: pull, then push")
+	cmd.Flags().StringVar(&migrate, "migrate", "", "move one field's values to the home its forge mappings name: the old labels off the forge, the assignees set")
 	cmd.Flags().BoolVar(&allowCreate, "allow-create", false, "create issues on a forge never synced with, or 50 or more on one")
 	return cmd
 }
@@ -111,6 +120,19 @@ func syncOne(cmd *cobra.Command, out io.Writer, path, remote string, check, allo
 		say("synced")
 	}
 	return nil
+}
+
+// migrateOne is sync --migrate: the migration a forge mapping's change
+// needs after its first sync run (app.MigrateField), each forge told.
+func migrateOne(cmd *cobra.Command, out io.Writer, path, field string) error {
+	b, err := app.Open(cmd.Context(), path, app.Options{Who: true,
+		Notice: func(format string, args ...any) { fmt.Fprintf(os.Stderr, format+"\n", args...) }})
+	if err != nil {
+		return fmt.Errorf("opening: %w", err)
+	}
+	defer b.Close()
+	_, err = b.MigrateField(cmd.Context(), app.MigrateReq{Field: field, Say: func(line string) { fmt.Fprintln(out, path+": "+line) }})
+	return err
 }
 
 func hasSyncOn(tables []forge.Table) bool {

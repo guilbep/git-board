@@ -90,7 +90,7 @@ until `GET /api/docs` answers.
 Dropped, as [ADR 0021](../adr/0021-git-board-v2-same-data-new-code.md)
 and [api.md](api.md#v1s-routes-and-where-they-went) say: agents and
 worktrees (their own binary), the HTML export, Start over (the CLI's
-`git board reset`), the field migration (`set --filter`), the classic
+`git board reset`), the classic
 and cycle pages as a choice (one page), v1's per-issue sync (until the
 sync engine takes one issue), Labels' comparison with GitHub and lint
 (a tool), the clone's first-pull note (until v2 pulls on a first open).

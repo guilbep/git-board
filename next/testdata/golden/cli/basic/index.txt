@@ -109,3 +109,5 @@ cmd88-complete-ls-json-id-t	0	__complete ls --json=id,t
 cmd89-complete-log-26a4ba8-field	0	__complete log 26a4ba8 --field ""
 cmd90-complete-view	0	__complete view ""
 cmd91-complete-me	0	__complete me ""
+cmd92-sync-migrate-nosuch	1	sync --migrate nosuch
+cmd93-sync-migrate-prio	0	sync --migrate prio

@@ -38,6 +38,7 @@ func (s *Server) routes(mux *http.ServeMux) {
 
 	Route(mux, "GET /api/labels", labels)
 	Route(mux, "GET /api/fields", fields)
+	Route(mux, "POST /api/fields/{name}/migrate", migrateField)
 	Route(mux, "GET /api/people", listPeople)
 	Route(mux, "GET /api/me", me)
 	Route(mux, "PUT /api/me", s.setMe)
@@ -117,6 +118,33 @@ func labels(ctx context.Context, r labelsReq) (items[issues.LabelCount], error) 
 
 func fields(ctx context.Context, _ none) (map[string]issues.Described, error) {
 	return board(ctx).Issues.Fields(ctx, time.Now())
+}
+
+type migrateReq struct {
+	Name   string `path:"name"`
+	DryRun bool   `query:"dry_run"`
+}
+
+type migrateRes struct {
+	Plans []app.MigratePlan `json:"plans"`
+	Error string            `json:"error,omitempty"` // the first forge's refusal; the plans say what landed
+}
+
+// migrateField is the forge-mapping migration (sync --migrate): with
+// dry_run=1 its preview, per declared forge.
+func migrateField(ctx context.Context, r migrateReq) (migrateRes, error) {
+	plans, err := board(ctx).MigrateField(ctx, app.MigrateReq{Field: r.Name, DryRun: r.DryRun})
+	if plans == nil {
+		plans = []app.MigratePlan{}
+	}
+	if err != nil && app.Classify(err) == app.Usage {
+		return migrateRes{}, err
+	}
+	res := migrateRes{Plans: plans}
+	if err != nil {
+		res.Error = app.NoCredentials(err.Error())
+	}
+	return res, nil
 }
 
 func listPeople(ctx context.Context, _ none) (items[people.Who], error) {

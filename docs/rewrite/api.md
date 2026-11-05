@@ -13,7 +13,7 @@
 
 v1's API grew one route per button: 117 routes, 18,000 lines with their
 tests. v2's is designed from what the web app reads and writes, in
-nouns the CLI already prints. It has 53 routes.
+nouns the CLI already prints. It has 54 routes.
 
 The server is `next/surface/http`. Each route decodes a request, calls
 one method of `next/app`, and encodes the answer. No rule lives in the
@@ -192,10 +192,21 @@ opened it, you are assigned).
 | 17 | `GET /api/people` | | `{"items": [person]}`, as `me --ls --json` |
 | 18 | `GET /api/me` | | `{me, avatars}` |
 | 19 | `PUT /api/me` | `{id}`, or `{name, email}`, or `{avatars}` | the same as 18 |
+| 54 | `POST /api/fields/{name}/migrate` | `dry_run` | `{plans, error}`, as `sync --migrate` |
 
 **Labels (15)** are the labels in use, each with its open and closed
 count, among the issues `filter` matches (every issue when absent): the
 filter panel's counts, and every value a filter box suggests.
+
+**A field's migration (54)** is the forge-mapping migration (`sync
+--migrate <field>`): once a field's home on a forge changes (its
+`[forges.<name>.fields.<field>]` mapping) and a sync ran, it takes the
+old labels off the forge's issues, and sets the assignees when they are
+the new home. With `dry_run=1` it is the preview Settings › Fields shows
+after a mapping changed, and writes nothing. A plan per declared forge:
+`{forge, repo, target, issues, labels, note}`. A forge that refuses
+keeps its note and the others go on: `error` is the first refusal, and
+the plans say what landed. A field nothing configures is `invalid`.
 
 **Fields (16)** are the fields with their types: the configured ones and
 those the labels show (`date`, `person`, `issue`…). Each is `{type,
@@ -520,9 +531,9 @@ credentials of a URL.
 
 ## v1's routes, and where they went
 
-117 routes in v1 (`internal/server/server.go`); 53 in v2: 32 built in
+117 routes in v1 (`internal/server/server.go`); 54 in v2: 32 built in
 M5, 7 *later* and 14 with their domain in M6 (the GitHub Project's two
-built).
+built), and the forge-mapping migration (54), ported for v0.12.
 
 | v1 | v2 |
 |---|---|
@@ -594,8 +605,8 @@ built).
 | `GET /api/config/docs` | `GET /api/docs/configuration` (*later*) |
 | `GET /api/config/model` | `GET /api/config`: `keys` |
 | `GET /api/fields/usage` | `GET /api/labels`: each value's count |
-| `GET /api/fields/migrate` | dropped: renaming a field's values is `set --filter` on the CLI, and a `PATCH` per issue here |
-| `POST /api/fields/migrate` | dropped: the same |
+| `GET /api/fields/migrate` | `POST /api/fields/{name}/migrate?dry_run=1`: the forge-mapping migration's preview |
+| `POST /api/fields/migrate` | `POST /api/fields/{name}/migrate`: the forge-mapping migration (`sync --migrate`), not a renaming of values (that is `set --filter`) |
 | `PUT /api/config/section/{section}` | `PATCH /api/config` |
 | `PUT /api/config` | `PUT /api/config` |
 | `PUT /api/bridges/{name}/sync` | `PATCH /api/forges/{name}` (*later*); meanwhile `PATCH /api/config` |
