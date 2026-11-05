@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/guilbep/git-board/next/app"
+	"github.com/guilbep/git-board/next/forge"
 )
 
 func newSync() *cobra.Command {
@@ -80,9 +81,15 @@ func syncOne(cmd *cobra.Command, out io.Writer, path, remote string, allowCreate
 			say("%s: %s", labels[name], note)
 		}
 	}}
-	if !gitOnly && hasSyncOn(b) {
+	var tables []forge.Table
+	if !gitOnly {
+		if tables, err = b.Forges(ctx, func(s string) { fmt.Fprintln(out, s) }); err != nil {
+			return err
+		}
+	}
+	if hasSyncOn(tables) {
 		w.Forges = func(ctx context.Context) error {
-			fs, err := b.OpenForges(ctx)
+			fs, err := b.OpenForges(ctx, tables)
 			if err != nil {
 				return err
 			}
@@ -96,8 +103,8 @@ func syncOne(cmd *cobra.Command, out io.Writer, path, remote string, allowCreate
 	return nil
 }
 
-func hasSyncOn(b *app.Board) bool {
-	for _, f := range b.Config.Forges.List {
+func hasSyncOn(tables []forge.Table) bool {
+	for _, f := range tables {
 		if f.Sync {
 			return true
 		}

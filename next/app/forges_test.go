@@ -58,3 +58,29 @@ func TestSyncForges(t *testing.T) {
 		t.Fatalf("ls = %+v", list)
 	}
 }
+
+// With no [forges] table, the forges are origin's: a local path is none,
+// and a URL naming none is told, with why. None is read on the network.
+func TestForgesFromRemotes(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	for _, args := range [][]string{{"init", "-q"}, {"remote", "add", "origin", "/elsewhere/repo.git"},
+		{"remote", "set-url", "--add", "--push", "origin", "https://user:secret@example.com/x/y.git"}} {
+		if out, err := exec.Command("git", append([]string{"-C", dir}, args...)...).CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	b, err := Open(t.Context(), dir, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer b.Close()
+	var said []string
+	fs, err := b.Forges(t.Context(), func(s string) { said = append(said, s) })
+	if err != nil || len(fs) != 0 {
+		t.Fatalf("forges %+v, %v", fs, err)
+	}
+	if want := []string{"skipped https://example.com/x/y.git: not github.com, nor a GitLab host"}; !slices.Equal(said, want) {
+		t.Errorf("said %q, want %q", said, want)
+	}
+}

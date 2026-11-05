@@ -17,7 +17,8 @@ func newForge() *cobra.Command {
 		Short: "The forges alone: pull, push or sync their issues, with no git step",
 		Long: `The forges alone: the issues on GitHub and GitLab, which git board sync
 moves between its git pull and its git push. These run that step on its
-own, one way or both, with the forges of .git-board.toml whose sync is on.`,
+own, one way or both, with the forges of .git-board.toml, or those found
+in the git remotes, whose sync is on.`,
 	}
 	cmd.AddCommand(
 		newForgeWay(app.WayPull, "Take the forges' changes, and send nothing",
@@ -48,7 +49,11 @@ func newForgeWay(way app.Way, short, long string) *cobra.Command {
 				return err
 			}
 			defer b.Close()
-			fs, err := b.OpenForges(cmd.Context())
+			tables, err := b.Forges(cmd.Context(), func(s string) { fmt.Fprintln(out, s) })
+			if err != nil {
+				return err
+			}
+			fs, err := b.OpenForges(cmd.Context(), tables)
 			if err != nil {
 				return err
 			}

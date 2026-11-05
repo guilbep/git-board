@@ -1,6 +1,7 @@
 package app
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -18,12 +19,12 @@ import (
 )
 
 // The forges' sync (docs/spec/sync.md): issuesync's run, with the forges
-// of .git-board.toml whose sync is on, each opened fresh for its run, and
+// of .git-board.toml, or those found in origin's URLs, whose sync is on, each opened fresh for its run, and
 // the settings the run reads from the board's config, as v1's
 // internal/store gives them.
-// ponytail: v1's dry run (--check), the forges found in the git remotes,
-// a Markdown folder's files around the run and the cycle's comment keys
-// (Quote, Carry, Restore, Published, ReplyTo) are v1's still.
+// ponytail: v1's dry run (--check), a Markdown folder's files around the
+// run and the cycle's comment keys (Quote, Carry, Restore, Published,
+// ReplyTo) are v1's still.
 
 // NamedForge is a forge project opened for a run, by its name in the
 // settings.
@@ -48,11 +49,97 @@ func baseURL(f forge.Table) string {
 	return "https://" + f.Host
 }
 
-// OpenForges opens the adapters of the forges whose sync is on, each with
-// its posting account's token.
-func (b *Board) OpenForges(ctx context.Context) ([]NamedForge, error) {
+// Forges are the forges a sync runs with: the settings' [forges.<name>]
+// tables, or with none, those found in origin's URLs and push URLs, as
+// written and as git resolves them (insteadOf). Origin alone: a fork's
+// upstream isn't where this team's issues go. Without origin, none. A
+// local path is no forge, and isn't told; say hears each other URL that
+// names none, each forge found, and each left out, as v1 says them.
+func (b *Board) Forges(ctx context.Context, say func(string)) ([]forge.Table, error) {
+	if !b.Config.Forges.Discover {
+		return b.Config.Forges.List, nil
+	}
+	if has, err := b.hasRemote(ctx, NumbersRemote); err != nil || !has {
+		return nil, err
+	}
+	urls := func(args ...string) []string {
+		out, _ := gitRun(ctx, b.Dir, args...) // no pushurl is no error of the run's
+		var us []string
+		for _, u := range strings.Split(strings.TrimSpace(out), "\n") {
+			if u = NoCredentials(u); u != "" && !localPath(u) {
+				us = append(us, u)
+			}
+		}
+		return us
+	}
+	resolved := append(urls("remote", "get-url", "--all", NumbersRemote), urls("remote", "get-url", "--push", "--all", NumbersRemote)...)
+	written := append(urls("config", "--get-all", "remote."+NumbersRemote+".url"), urls("config", "--get-all", "remote."+NumbersRemote+".pushurl")...)
+	_, skips := forge.Discover(resolved) // an alias as written isn't told: its resolved URL is
+	found, _ := forge.Discover(append(resolved, written...))
+	for _, s := range skips {
+		say("skipped " + s)
+	}
+	var out []forge.Table
+	seen := map[string]string{} // key -> forge name
+	for _, f := range found {
+		project, err := resolveProject(ctx, f)
+		if err != nil {
+			say(fmt.Sprintf("forge %s, found in the remotes, is left out: %s %s: %v", f.Name, f.Host, cmp.Or(f.Path, f.Project), err))
+			continue
+		}
+		f.Project = project
+		key := strings.ToLower(f.Host + "/" + f.Project)
+		if other, ok := seen[key]; ok { // two paths of one project: a rename's old one
+			say(fmt.Sprintf("forge %s, found in the remotes, is left out: %s %s: the same project as %s", f.Name, f.Host, cmp.Or(f.Path, f.Project), other))
+			continue
+		}
+		seen[key] = f.Name
+		where := f.Project
+		if f.Path != "" {
+			where = f.Path + " (id " + f.Project + ")"
+		}
+		say(fmt.Sprintf("forge %s, found in the remotes: %s %s", f.Name, f.Host, where))
+		out = append(out, f)
+	}
+	return out, nil
+}
+
+// resolveProject is a found forge's project as a table names it, read
+// through the adapter: GitLab's numeric id, as links are keyed on it;
+// GitHub's owner/repo as GitHub spells it, as a URL's case is the user's.
+func resolveProject(ctx context.Context, f forge.Table) (string, error) {
+	switch f.Kind {
+	case "gitlab":
+		g, err := gitlab.New(ctx, baseURL(f), f.Project, f.Login)
+		if err != nil {
+			return "", err
+		}
+		return g.ProjectID(ctx)
+	case "github":
+		api := ""
+		if f.Host == "github.com" {
+			api = GitHubAPI
+		}
+		g, err := github.New(ctx, github.Options{Project: f.Project, Host: f.Host, Login: f.Login, API: api})
+		if err != nil {
+			return "", err
+		}
+		return g.FullName(ctx)
+	}
+	return f.Project, nil
+}
+
+// localPath says a remote URL is a directory here, never a forge.
+func localPath(u string) bool {
+	return strings.HasPrefix(u, "/") || strings.HasPrefix(u, ".") || strings.HasPrefix(u, "file://") ||
+		(len(u) > 2 && u[1] == ':' && (u[2] == '\\' || u[2] == '/')) // C:\ on Windows
+}
+
+// OpenForges opens the adapters of the forges (Forges) whose sync is on,
+// each with its posting account's token.
+func (b *Board) OpenForges(ctx context.Context, tables []forge.Table) ([]NamedForge, error) {
 	var out []NamedForge
-	for _, f := range b.Config.Forges.List {
+	for _, f := range tables {
 		if !f.Sync {
 			continue
 		}

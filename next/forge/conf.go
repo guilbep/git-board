@@ -28,6 +28,10 @@ type Table struct {
 	// Fields maps a field to where it lives on this forge: only the
 	// overrides of its type's default.
 	Fields map[string]FieldMapping `toml:"fields"`
+	// Discovered: found in the git remotes, with no table. A GitLab one's
+	// Project is its path until the run reads its id; Path keeps the path.
+	Discovered bool   `toml:"-"`
+	Path       string `toml:"-"`
 }
 
 // FieldMapping is one [forges.<name>.fields.<field>].
