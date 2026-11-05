@@ -297,3 +297,8 @@ func (b *Board) Remotes(ctx context.Context) ([]string, error) {
 	}
 	return strings.Fields(out), nil
 }
+
+// IndexTexts builds the issues' free-text index now: a server does it in
+// the background once it serves, so that its first search is fast; the
+// CLI leaves it to the first query that searches.
+func (b *Board) IndexTexts(ctx context.Context) error { return b.Kernel.Index(ctx, issues.Kind) }

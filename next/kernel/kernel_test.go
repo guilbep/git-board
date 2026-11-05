@@ -429,3 +429,59 @@ func TestExpect(t *testing.T) {
 		t.Fatalf("a write that raced another = %v, want ErrStale", err)
 	}
 }
+
+// counted counts the entities a datastore loads.
+type counted struct {
+	store.Datastore
+	mu     sync.Mutex
+	loaded int
+}
+
+func (c *counted) Load(ctx context.Context, refs []store.Ref, each func(r store.Ref, packs [][]byte, err error) error) error {
+	c.mu.Lock()
+	c.loaded += len(refs)
+	c.mu.Unlock()
+	return c.Datastore.Load(ctx, refs, each)
+}
+
+// Index builds the rows, then the search index, while a list and a
+// search run beside it: each entity is loaded once for its row and once
+// for its texts at most (once for both when the search builds the rows),
+// whoever asks first, and every read agrees.
+func TestIndex(t *testing.T) {
+	t.Parallel()
+	ds := &counted{Datastore: mem.New(t.TempDir())}
+	for i := range 50 {
+		add(t, ds, "", 1, "", line(fmt.Sprintf("note %d", i)), line("crash"))
+	}
+	b := open(t, ds, t.TempDir())
+	var wg sync.WaitGroup
+	errs := make(chan error, 3)
+	wg.Go(func() { errs <- b.Index(ctx, notes) })
+	wg.Go(func() {
+		if m := lines(t, b, kernel.Query{}); len(m) != 50 {
+			errs <- fmt.Errorf("a list beside Index: %d entities", len(m))
+		}
+	})
+	wg.Go(func() {
+		got, err := notes.Match(ctx, b, kernel.Query{Text: "crash"})
+		if err == nil && len(got) != 50 {
+			err = fmt.Errorf("a search beside Index: %d", len(got))
+		}
+		errs <- err
+	})
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	loaded := ds.loaded
+	if loaded < 50 || loaded > 100 {
+		t.Fatalf("loaded %d entities, want 50 to 100: rows and texts, each once", loaded)
+	}
+	if err := b.Index(ctx, notes); err != nil || ds.loaded != loaded {
+		t.Fatalf("Index again: %v, loaded %d more: want nothing to do", err, ds.loaded-loaded)
+	}
+}

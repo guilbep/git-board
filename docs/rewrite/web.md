@@ -56,8 +56,13 @@ on the same machine): the first rows 280 ms after navigation (median of
 five; 260 ms as a board by status); typing a field term, the list 200 to
 230 ms after the last key, each key handled in under 40 ms; scrolled
 100,000 px, 5,300 issues loaded and 25 rows in the DOM, frames at 17 ms
-(p95 33 ms). The first free-text filter on a fresh server waits for the
-words' index (5.5 s here); the next ones take 290 ms.
+(p95 33 ms). The server builds the words' index in the background once
+it serves, after the rows (`app.IndexTexts`; the CLI still builds it on
+the first query that searches): on a fresh copy of the 20,000-issue
+board the first rows come 3.0 s after the start, as before, the index is
+built 8.8 s after it, and a first free-text filter then takes 0.12 s
+(6.4 s before); one asked earlier waits for what is left of the index,
+never for a second build of it.
 
 ## Settings, as keys of the file
 
