@@ -58,6 +58,12 @@
     </div>
   </header>
   <div v-if="tipWhere === 'strip'" class="app-tipstrip"><TipLine /></div>
+  <!-- a fresh clone's first open: what the server pulled from origin, or why it couldn't -->
+  <p v-if="firstPull && !firstPullHidden" class="epfl-alert app-firstpull" :class="firstPull.error ? 'epfl-alert-warning' : 'epfl-alert-success'" role="status">
+    <template v-if="firstPull.error"><b>This clone has no board yet.</b> {{ firstPull.error }}. Pull it from Sync once {{ firstPull.remote }} answers.</template>
+    <template v-else><b>This clone had no board:</b> {{ firstPull.issues }} issue{{ firstPull.issues === 1 ? '' : 's' }} pulled from {{ firstPull.remote }}.</template>
+    <button type="button" class="gb-linkbtn" @click="firstPullHidden = true">Hide</button>
+  </p>
   <KeyboardHelp />
   <KeyLine />
   <CommandPalette :views="views" />
@@ -98,6 +104,8 @@ const run = computed(() => syncStatus.value?.run ?? null);
 // the tab's dot: red when the last sync failed
 watch(() => (run.value?.state === 'failed' ? 'send' : null), setFavicon, { immediate: true });
 const syncWords = computed(() => runWords(run.value));
+const firstPull = computed(() => board.value?.first_pull);
+const firstPullHidden = ref(false);
 // Releases, or one release's page
 const releasesHere = computed(() => route.path === '/releases' || route.path.startsWith('/releases/'));
 // the palette's key, as this keyboard writes it
@@ -203,7 +211,7 @@ onMounted(() => {
 
 /* the header stays on top while the page scrolls */
 .app-header { position: sticky; top: 0; z-index: 30; }
-.app-unswitched { margin: 0; border-radius: 0; }
+.app-unswitched, .app-firstpull { margin: 0; border-radius: 0; }
 /* the nav takes what's left, on one line */
 .app-header .epfl-nav { flex: 0 1 auto; min-width: 0; align-items: center; }
 .app-header .epfl-nav > a { flex: none; white-space: nowrap; }

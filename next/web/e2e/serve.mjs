@@ -7,6 +7,8 @@
 // fails at once. On E2E_PORT + 5, the Markdown board: board.datastore =
 // markdown:issues, kept elsewhere than git, an origin all the same, and
 // attachments on, to a fake S3 (E2E_PORT + 2) that keeps what it is put.
+// On E2E_PORT + 3, the clone board: a fresh clone of a local origin that
+// holds two issues, whose first open pulls them (clone.spec.ts).
 // Playwright's webServer runs this; it lives until killed. E2E_SKIP_BUILD=1
 // reuses next/web/dist and the binary.
 import { execFileSync, spawn } from 'node:child_process';
@@ -137,6 +139,22 @@ mkdirSync(env.HOME, { recursive: true });
 repo(join(work, 'repo'), 'git@github.com:o/r.git', process.env.E2E_TOML ? readFileSync(process.env.E2E_TOML, 'utf8') : readFileSync(join(import.meta.dirname, 'board.toml'), 'utf8'));
 repo(join(work, 'markdown'), 'git@github.com:o/md.git', '[fields.status]\nsingle = true\noptions = ["todo", "done"]\n', { 'board.datastore': 'markdown:issues' });
 
+// the clone board's origin: two issues, written and pushed by a seed
+// clone, then a fresh clone of it, which git clone gives no board
+const origin = join(work, 'origin.git');
+const seed = join(work, 'seed');
+sh('git', ['init', '-q', '--bare', '-b', 'main', origin], work);
+mkdirSync(seed);
+sh('git', ['init', '-q', '-b', 'main'], seed);
+for (const [k, v] of [['commit.gpgsign', 'false'], ['user.name', 'Seed'], ['user.email', 'seed@example.com']]) sh('git', ['config', k, v], seed);
+sh('git', ['remote', 'add', 'origin', origin], seed);
+sh('git', ['commit', '-q', '--allow-empty', '-m', 'the clone board'], seed);
+sh('git', ['push', '-q', 'origin', 'main'], seed);
+sh(bin, ['me', '--new'], seed);
+for (const title of ['Seeded alpha', 'Seeded beta']) sh(bin, ['new', title], seed);
+sh(bin, ['push'], seed);
+sh('git', ['clone', '-q', origin, join(work, 'clone')], work);
+
 // a board served on p, once it answers
 const boards = [];
 async function serve(dir, p, more = {}) {
@@ -151,8 +169,9 @@ async function serve(dir, p, more = {}) {
 await serve(join(work, 'markdown'), port + 5, {
   ACCESS_KEY_ID: 'e2e', ACCESS_KEY_SECRET: 'e2e-secret', BUCKET_NAME: 'e2e', UPLOADS_ENDPOINT: `http://127.0.0.1:${port + 2}`,
 });
+await serve(join(work, 'clone'), port + 3);
 await serve(join(work, 'repo'), port);
-console.log(`e2e board: ${join(work, 'repo')} on :${port}, GitHub at ${api}; Markdown board on :${port + 5}`);
+console.log(`e2e board: ${join(work, 'repo')} on :${port}, GitHub at ${api}; clone board on :${port + 3}; Markdown board on :${port + 5}`);
 // one board gone, or a signal: both go
 process.on('exit', () => boards.forEach((b) => b.kill()));
 for (const b of boards) b.on('exit', (code) => process.exit(code ?? 1));

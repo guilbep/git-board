@@ -37,6 +37,7 @@ narrows what's loaded before you start browsing.`,
 			if err != nil {
 				return err
 			}
+			firstPull(cmd, b)
 			me := resolveMe(me)
 			list, err := b.issues.List(cmd.Context(), issues.ListReq{Filter: filter, Me: me})
 			if err != nil {

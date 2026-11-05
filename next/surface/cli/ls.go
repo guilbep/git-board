@@ -63,6 +63,7 @@ func list(cmd *cobra.Command, req issues.ListReq, at time.Time, group, sort stri
 		return err
 	}
 	defer b.Close()
+	firstPull(cmd, b)
 
 	var found []issues.Issue
 	if at.IsZero() {
@@ -219,4 +220,13 @@ func shortID(id string) string {
 		return id[:8]
 	}
 	return id
+}
+
+// firstPull brings a fresh clone origin's board (app.PullIfEmpty) and
+// says so on stderr; an origin it can't read is said, not an error: the
+// board opens empty, with the reason.
+func firstPull(cmd *cobra.Command, b *board) {
+	if line := b.PullIfEmpty(cmd.Context()).Line(); line != "" {
+		fmt.Fprintln(cmd.ErrOrStderr(), line)
+	}
 }

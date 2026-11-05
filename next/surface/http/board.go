@@ -89,6 +89,9 @@ type boardRes struct {
 	Version      string   `json:"version"`
 	Datastore    storeRes `json:"datastore"`
 	Experimental []string `json:"experimental"`
+	// FirstPull: this clone opened with no board, and the server pulled
+	// origin's, or couldn't (docs/prd/clone-shows-board.md)
+	FirstPull *app.FirstPull `json:"first_pull,omitempty"`
 }
 
 type storeRes struct {
@@ -102,7 +105,7 @@ func (s *Server) boardInfo(ctx context.Context, _ none) (boardRes, error) {
 	if exp == nil {
 		exp = []string{}
 	}
-	return boardRes{GitDir: s.gitDir, Dir: b.Dir, Version: s.version, Experimental: exp,
+	return boardRes{GitDir: s.gitDir, Dir: b.Dir, Version: s.version, Experimental: exp, FirstPull: s.firstPulled(),
 		Datastore: storeRes{Name: b.DatastoreName(), Where: app.Where(b.Kernel.Store())}}, nil
 }
 

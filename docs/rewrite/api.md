@@ -109,15 +109,19 @@ or its project number (`CO2-3075`).
 
 | | Route | Request | Response |
 |---|---|---|---|
-| 1 | `GET /api/board` | | `{git_dir, dir, version, datastore, experimental}` |
+| 1 | `GET /api/board` | | `{git_dir, dir, version, datastore, experimental, first_pull}` |
 | 2 | `GET /api/events` | | the change events, Server-Sent Events (below) |
 
 `/api/board` is what a `git board` reads to find the board running for
 its repository (`git_dir`), and what a page reads first. `datastore` is
 `{name, where}`: `git`, `Markdown files` or `PostgreSQL`, and where it
-is (never a password). `experimental` lists the features on. v1's
-`first_pull`, what the first open of a fresh clone pulled, comes when v2
-pulls on a first open (*later*).
+is (never a password). `experimental` lists the features on.
+`first_pull`, there only when the server's first open of a fresh clone
+pulled origin's board or couldn't, is `{remote, issues, error}`: how many
+issues came, or why none did ([A clone shows its
+board](../prd/clone-shows-board.md)). The pull runs once the server
+serves; a page already open hears it as a `me` event, and an `issue`
+event for each issue pulled.
 
 ### Issues
 
