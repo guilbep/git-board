@@ -76,7 +76,7 @@ func (b *Board) SyncWhole(ctx context.Context, w Whole) error {
 	}
 	if has {
 		steps[0].do = func(ctx context.Context) (string, error) { return b.Pull(ctx, w.Remote) }
-		steps[3].do = func(ctx context.Context) (string, error) { return "", b.Push(ctx, w.Remote) }
+		steps[3].do = func(ctx context.Context) (string, error) { return b.Push(ctx, w.Remote) }
 	}
 	if w.Forges != nil {
 		steps[1].do = func(ctx context.Context) (string, error) { return "", w.Forges(ctx) }

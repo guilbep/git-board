@@ -87,10 +87,14 @@ sync's last step, alone.`,
 			}
 			defer b.Close()
 			remote := remoteArg(args)
-			if err := b.Push(cmd.Context(), remote); err != nil {
+			note, err := b.Push(cmd.Context(), remote)
+			if err != nil {
 				return err
 			}
 			fmt.Fprintln(cmd.OutOrStdout(), "pushed to "+remote)
+			if note != "" {
+				fmt.Fprintln(cmd.OutOrStdout(), note)
+			}
 			return nil
 		},
 	}

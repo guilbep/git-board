@@ -54,7 +54,7 @@ func TestNumbersThroughOrigin(t *testing.T) {
 	if got := numbers(a)["One"]; got != "" {
 		t.Fatalf("numbered before its push: %q", got)
 	}
-	if err := a.Push(t.Context(), "origin"); err != nil {
+	if _, err := a.Push(t.Context(), "origin"); err != nil {
 		t.Fatal(err)
 	}
 	if got := numbers(a)["One"]; got != "GB-10" {
@@ -66,7 +66,7 @@ func TestNumbersThroughOrigin(t *testing.T) {
 	if _, err := issuesync.CreateIssue(t.Context(), b.Kernel, issuesync.NewCreate("b", "Two", "")); err != nil {
 		t.Fatal(err)
 	}
-	if err := b.Push(t.Context(), "origin"); err != nil {
+	if _, err := b.Push(t.Context(), "origin"); err != nil {
 		t.Fatal(err)
 	}
 	if got := numbers(b); got["One"] != "GB-10" || got["Two"] != "GB-11" {

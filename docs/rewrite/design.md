@@ -922,6 +922,21 @@ Sizes are lines of Go, without tests; tests are about as many again.
 | **M6** | `domain/releases`, proof, `domain/cycle`, the TUI, the tools (the release runner, the GitHub Project bridge, agents, insights, lint, export and import) | every command of v1 exists in v2, or is dropped by a decision | 6,000 |
 | **M7** | The switch: `next/` becomes the root, `cmd/git-board` is v2, v1 is deleted | below | 0 |
 
+**M4, as built (2026-11-05).** `ls` and `show` read the sync records
+(`next/sync`): `pending.txt` is empty. The adapters, the conformance
+suite (`next/forge/forgetest`, green over the fake, GitHub and GitLab)
+and v1's syncer are ported: the kind-free parts (records, texts' forms,
+lock, journal) in `next/sync`, the issue mapper and the run in
+`next/domain/issues/issuesync`, v1's 85 sync tests green there. v1 and v2
+sync one board alternately against one fake forge, and pull, merge and
+push one board between two clones (`next/golden/v1gen`). `forge
+pull|push|sync`, `fetch`, `pull`, `push`, `sync` and numbering through
+origin's counter run. Left: the `Mapper` interface (with releases, the
+second kind; the run is the issue mapper today), the release mapper,
+v1's dry run (`--check`), forges found in the git remotes, reset guards
+and switch marks on pull and push, the cycle's comment keys, a Markdown
+folder's files around a sync, and the GitHub Project step.
+
 About 31,000 lines of Go where v1 has 55,000. One engineer with agents:
 M0 a week; M1 and M2 three weeks; M3 to M5 four; M6 three; with
 dogfooding, two to three months.

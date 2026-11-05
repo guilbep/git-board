@@ -75,21 +75,28 @@ func (b *Board) Pull(ctx context.Context, remote string) (string, error) {
 }
 
 // Push pushes this clone's board to the remote, not forced: a remote that
-// holds changes this clone doesn't have refuses it.
-func (b *Board) Push(ctx context.Context, remote string) error {
+// holds changes this clone doesn't have refuses it. On origin, it then
+// numbers the issues origin has, and its note says how many.
+func (b *Board) Push(ctx context.Context, remote string) (string, error) {
 	g, err := b.remoteOf(ctx, "git board push", remote)
 	if err != nil {
-		return err
+		return "", err
 	}
 	if err := g.Push(ctx, remote, Kinds...); err != nil {
 		if msg := err.Error(); strings.Contains(msg, "non-fast-forward") || strings.Contains(msg, "fetch first") {
-			return fmt.Errorf("%s has changes this repository doesn't have: git board pull first", remote)
+			return "", fmt.Errorf("%s has changes this repository doesn't have: git board pull first", remote)
 		}
-		return err
+		return "", err
 	}
 	if remote != NumbersRemote {
-		return nil
+		return "", nil
 	}
-	_, err = b.numberIssues(ctx, remote)
-	return err
+	n, err := b.numberIssues(ctx, remote)
+	switch {
+	case err != nil || n == 0:
+		return "", err
+	case n == 1:
+		return "numbered 1 issue", nil
+	}
+	return fmt.Sprintf("numbered %d issues", n), nil
 }

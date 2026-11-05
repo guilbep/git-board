@@ -67,7 +67,7 @@ func newRoot() *cobra.Command {
 	var dir string
 	root := &cobra.Command{
 		Use:           "git-board-next",
-		Short:         "git-board v2, read-only for now: ls, show, log",
+		Short:         "git-board v2, growing beside v1 (docs/rewrite/design.md)",
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		PersistentPreRunE: func(*cobra.Command, []string) error {
