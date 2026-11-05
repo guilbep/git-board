@@ -6,7 +6,7 @@ import "strings"
 // whose host starts the key. No table for the host: a synthetic one, the
 // kind from the host's first label, so that the type defaults hold for a
 // project the file never named, as for one it did.
-func (fs Forges) ForgeOf(key string) Forge {
+func (fs Forges) ForgeOf(key string) Table {
 	for _, f := range fs.List {
 		if strings.HasPrefix(strings.ToLower(key), strings.ToLower(f.Host)+"/") {
 			return f
@@ -16,13 +16,13 @@ func (fs Forges) ForgeOf(key string) Forge {
 	if !strings.HasPrefix(strings.ToLower(key), "github.com/") {
 		kind = "gitlab"
 	}
-	return Forge{Kind: kind, Host: strings.SplitN(key, "/", 2)[0]}
+	return Table{Kind: kind, Host: strings.SplitN(key, "/", 2)[0]}
 }
 
 // Target is where a field lives on forge f: its mapping's target, else,
 // on GitHub, the Project when inProject says the field is there, else the
 // default for its type.
-func Target(fields Fields, inProject func(field string) bool, f Forge, field string) string {
+func Target(fields Fields, inProject func(field string) bool, f Table, field string) string {
 	if m, ok := f.Fields[field]; ok && m.To != "" {
 		return m.To
 	}

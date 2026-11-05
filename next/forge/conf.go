@@ -1,6 +1,6 @@
-// Package forge is the forges a board syncs with. M2 reads their tables
-// of .git-board.toml, [forges] and [repos], with v1's rules; the
-// adapters come with M4.
+// The forges' tables of .git-board.toml, [forges] and [repos], with
+// v1's rules.
+
 package forge
 
 import (
@@ -16,9 +16,9 @@ import (
 	"github.com/guilbep/git-board/next/conf"
 )
 
-// Forge is a [forges.<name>] table: a forge project the issues sync with.
+// Table is a [forges.<name>] table: a forge project the issues sync with.
 // Its token is never here.
-type Forge struct {
+type Table struct {
 	Name    string `toml:"-"`
 	Kind    string `toml:"kind"`    // github, gitlab
 	Project string `toml:"project"` // owner/repo; GitLab's numeric id
@@ -54,7 +54,7 @@ const (
 
 // Forges is the [forges] table read.
 type Forges struct {
-	List           []Forge
+	List           []Table
 	PublishPrivate bool // [forges] publish-private
 	Discover       bool // no table and no discover = false: from the git remotes
 }
@@ -135,7 +135,7 @@ func (t Tables) parse(tables map[string]toml.Primitive) (Forges, error) {
 		if !forgeName.MatchString(name) {
 			return res, fmt.Errorf("[forges.%s]: a forge's name is letters, digits, - and _", name)
 		}
-		f := Forge{Name: name}
+		f := Table{Name: name}
 		if err := t.forges.Decode(tables[name], &f); err != nil {
 			return res, fmt.Errorf("[forges.%s]: %w", name, err)
 		}
@@ -150,7 +150,7 @@ func (t Tables) parse(tables map[string]toml.Primitive) (Forges, error) {
 
 // checkForge fills the host's default, and refuses a table git-board
 // can't sync with.
-func checkForge(f *Forge) error {
+func checkForge(f *Table) error {
 	where := "[forges." + f.Name + "]"
 	switch f.Kind {
 	case "github":
@@ -177,7 +177,7 @@ func checkForge(f *Forge) error {
 
 // checkMappings refuses a mapping the field's type or the forge can't
 // carry, naming its table.
-func checkMappings(forges []Forge, fields Fields) error {
+func checkMappings(forges []Table, fields Fields) error {
 	assignees := map[string]string{} // forge → the field in its one slot
 	for _, f := range forges {
 		for _, name := range slices.Sorted(maps.Keys(f.Fields)) {
