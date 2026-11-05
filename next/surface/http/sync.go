@@ -156,6 +156,7 @@ func (s *Server) startSync(ctx context.Context, r syncReq) (Reply, error) {
 			run.State, run.Error = "failed", app.NoCredentials(err.Error())
 		}
 		s.runMu.Unlock()
+		s.pulls.Stale() // the branches and the forge moved: each PR is read again
 		if err != nil {
 			s.log.Error("sync failed", "run", run.ID, "code", app.Code(err), "error", run.Error)
 		} else {
@@ -270,6 +271,9 @@ func remote(ctx context.Context, r remoteReq) (remoteRes, error) {
 		res.Note, err = b.Push(ctx, r.Name)
 	default:
 		return res, invalid("action", fmt.Errorf("%q: fetch, pull or push", r.Action))
+	}
+	if b.PRs != nil && r.Action != "push" {
+		b.PRs.Stale() // the branches moved: each PR is read again
 	}
 	return res, err
 }

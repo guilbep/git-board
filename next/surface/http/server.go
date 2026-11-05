@@ -33,8 +33,9 @@ type Server struct {
 	runs  int
 	base  context.Context // the server's: a run outlives its request
 
-	project projectState // the GitHub Project bridge's last run
-	relMu   sync.Mutex   // the release runner's fetches and writes (releases.go)
+	pulls   *app.PullCache // the cycle's PRs, for the server's life
+	project projectState   // the GitHub Project bridge's last run
+	relMu   sync.Mutex     // the release runner's fetches and writes (releases.go)
 	jobMu   sync.Mutex
 	job     *Job // the release job running, or the last one
 }
@@ -48,6 +49,8 @@ type Options struct {
 	Static  fs.FS // the web app's files; nil serves none
 	// Open opens the board; nil is app.Open with who writes.
 	Open func(ctx context.Context, dir string) (*app.Board, error)
+	// Pulls is the cycle's PR cache; nil is a new one, on origin's forge.
+	Pulls *app.PullCache
 }
 
 // New opens the board at o.Dir and makes its server. Close lets it go.
@@ -64,6 +67,18 @@ func New(ctx context.Context, o Options) (*Server, error) {
 				s.log.Warn(strings.TrimPrefix(sprintf(format, args...), "warning: "))
 			}})
 		}
+	}
+	s.pulls = o.Pulls
+	if s.pulls == nil {
+		s.pulls = app.NewPullCache()
+	}
+	opener := open
+	open = func(ctx context.Context, dir string) (*app.Board, error) {
+		b, err := opener(ctx, dir)
+		if err == nil {
+			b.PRs = s.pulls
+		}
+		return b, err
 	}
 	bs, err := openBoards(ctx, o.Dir, open, s.observe)
 	if err != nil {

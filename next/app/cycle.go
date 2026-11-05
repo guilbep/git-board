@@ -5,12 +5,14 @@ import (
 	"errors"
 	"runtime"
 	"sync"
+	"time"
 
 	"github.com/guilbep/git-board/next/domain/cycle"
 	"github.com/guilbep/git-board/next/domain/cycle/work"
 	"github.com/guilbep/git-board/next/domain/issues"
 	"github.com/guilbep/git-board/next/tools/branches"
 	"github.com/guilbep/git-board/next/tools/code"
+	"github.com/guilbep/git-board/next/tools/ship"
 )
 
 // The development cycle's reads (experimental): an issue's step from its
@@ -25,7 +27,7 @@ var ErrNoLogin = &Error{Class: NoMe, Code: "no-login", Err: errors.New("your per
 
 // IssueCycle is an issue's step; WorkGroups the Work page's rows.
 type (
-	IssueCycle = cycle.Cycle
+	IssueCycle = CycleView
 	WorkGroups = work.Groups
 )
 
@@ -41,26 +43,92 @@ func (b *Board) viewer(ctx context.Context, me string) (issues.InboxMe, error) {
 	return m, err
 }
 
+// CycleView is an issue's step with what the page shows beside its
+// evidence: when its PR was last read from the forge, and the release
+// environments its merged work runs in.
+type CycleView struct {
+	cycle.Cycle
+	ID           string     `json:"id"`      // the issue's whole id
+	Version      string     `json:"version"` // the issue's version: an action's If-Match
+	PRCheckedAt  time.Time  `json:"pr_checked_at,omitzero"`
+	Environments []IssueEnv `json:"environments"`
+}
+
+// IssueEnv is a release environment ([release] environments), the
+// version it runs, and whether it runs this issue's merged work.
+type IssueEnv struct {
+	Name    string `json:"name"`
+	Version string `json:"version,omitempty"`
+	In      bool   `json:"in"`
+}
+
 // Cycle is the issue's step, as the viewer (me, "" for the person who
-// writes) sees it, with its evidence. PRs are not read: the forge's
-// cache is the server's, later.
-func (b *Board) Cycle(ctx context.Context, name, me string) (cycle.Cycle, error) {
+// writes) sees it, with its evidence: its PRs from the server's cache
+// (b.PRs), each asked again of the forge once stale, and the
+// environments.
+func (b *Board) Cycle(ctx context.Context, name, me string) (CycleView, error) {
+	return b.cycleRead(ctx, name, me, false)
+}
+
+// cycleRead is Cycle; force asks the forge for each PR now.
+func (b *Board) cycleRead(ctx context.Context, name, me string, force bool) (CycleView, error) {
 	if !b.CycleOn() {
-		return cycle.Cycle{}, ErrCycleOff
+		return CycleView{}, ErrCycleOff
 	}
 	th, err := b.Issues.Show(ctx, name)
 	if err != nil {
-		return cycle.Cycle{}, err
+		return CycleView{}, err
 	}
 	m, err := b.viewer(ctx, me)
 	if err != nil {
-		return cycle.Cycle{}, err
+		return CycleView{}, err
 	}
-	in, err := b.Evidence(ctx, th, m.Login, nil, nil)
+	var pulls cycle.Pulls
+	if b.PRs != nil {
+		pulls = refreshing{ctx, b, b.PRs, force}
+	}
+	in, err := b.Evidence(ctx, th, m.Login, pulls, nil)
 	if err != nil {
-		return cycle.Cycle{}, err
+		return CycleView{}, err
 	}
-	return cycle.Compute(in), nil
+	v := CycleView{Cycle: cycle.Compute(in), ID: string(th.ID), Version: string(th.Version), PRCheckedAt: in.PRAt}
+	v.Environments, err = b.issueEnvs(ctx, in)
+	return v, err
+}
+
+// issueEnvs are the release environments, each with whether it runs one
+// of the issue's merged lanes, as the trunk's records say (no fetch):
+// none without [release] environments.
+func (b *Board) issueEnvs(ctx context.Context, in cycle.Input) ([]IssueEnv, error) {
+	out := []IssueEnv{}
+	if len(b.Config.Release.Environments) == 0 {
+		return out, nil
+	}
+	run, err := b.Runner(ctx)
+	if errors.Is(err, ErrNoRelease) {
+		return out, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	run.Offline = true
+	st, err := run.Status(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, e := range st.Envs {
+		env := IssueEnv{Name: e.Name, Version: e.Version}
+		for _, l := range in.Lanes {
+			if env.In || !l.Done || e.Commit == "" || l.Head == "" {
+				continue
+			}
+			if env.In, err = ship.IsAncestor(ctx, b.Dir, l.Head, e.Commit); err != nil {
+				return nil, err
+			}
+		}
+		out = append(out, env)
+	}
+	return out, nil
 }
 
 // Work is the Work page: every open issue's step, what needs the viewer
@@ -94,7 +162,7 @@ func (b *Board) Work(ctx context.Context, me string, team bool) (work.Groups, er
 				th, err := b.Issues.Show(ctx, list[i].ID)
 				var in cycle.Input
 				if err == nil {
-					in, err = b.EvidenceIn(ctx, anc, th, m.Login, nil, nil)
+					in, err = b.EvidenceIn(ctx, anc, th, m.Login, b.cachedPRs(), nil)
 				}
 				if errs[i] = err; err == nil {
 					rows[i] = work.RowOf(th, cycle.Compute(in), m)
@@ -111,4 +179,13 @@ func (b *Board) Work(ctx context.Context, me string, team bool) (work.Groups, er
 		return work.Groups{}, err
 	}
 	return work.Group(rows, m.Login, team), nil
+}
+
+// cachedPRs are the PRs as last read, asking the forge nothing: the Work
+// page's, for every open issue at once; nil without a cache.
+func (b *Board) cachedPRs() cycle.Pulls {
+	if b.PRs == nil {
+		return nil
+	}
+	return b.PRs
 }

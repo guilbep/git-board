@@ -39,6 +39,9 @@ type Board struct {
 	// Files are a Markdown folder's rendered files; nil on another
 	// datastore.
 	Files *mdfiles.Folder
+	// PRs are the pull requests the cycle reads, the server's cache for
+	// its life; nil reads none (the CLI).
+	PRs   *PullCache
 	clone *clone
 }
 

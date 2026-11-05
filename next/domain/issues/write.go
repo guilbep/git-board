@@ -146,6 +146,79 @@ func (s *Service) Comment(ctx context.Context, name, body string) (kernel.OpID, 
 	return st.Comments[len(st.Comments)-1].ID, st.ID, nil
 }
 
+// CommentMeta adds a comment with metadata, as v1's AddCommentMeta: what
+// the cycle's sign-offs, approvals and runs are, and a review comment's
+// anchor. No metadata is a plain Comment.
+func (s *Service) CommentMeta(ctx context.Context, name, body string, meta map[string]string) (kernel.OpID, kernel.ID, error) {
+	if len(meta) == 0 {
+		return s.Comment(ctx, name, body)
+	}
+	ctx, done, werr := s.writing(ctx)
+	if werr != nil {
+		return "", "", werr
+	}
+	defer done()
+	st, err := s.do(ctx, name, func(me kernel.ID, _ *State) ([]kernel.Op, error) {
+		return []kernel.Op{op("comment", me, map[string]any{"body": body, "meta": meta})}, nil
+	})
+	if err != nil {
+		return "", "", err
+	}
+	return st.Comments[len(st.Comments)-1].ID, st.ID, nil
+}
+
+// CommentMetaOf is a text's metadata, the body's or a comment's, by id.
+func (s *Service) CommentMetaOf(ctx context.Context, name string, id kernel.OpID) (map[string]string, error) {
+	rid, err := s.Resolve(ctx, name)
+	if err != nil {
+		return nil, err
+	}
+	e, err := Kind.Get(ctx, s.Board, rid)
+	if err != nil {
+		return nil, err
+	}
+	st := &e.State
+	target, _, err := text(st, id)
+	if err != nil {
+		return nil, err
+	}
+	if target == st.BodyOp {
+		return st.Meta, nil
+	}
+	return st.all[st.comments[target]].Meta, nil
+}
+
+// SetTextMeta sets keys of a text's metadata, the body's or a comment's,
+// by id: a review thread resolved. Keys at their value write nothing.
+func (s *Service) SetTextMeta(ctx context.Context, name string, id kernel.OpID, meta map[string]string) error {
+	ctx, done, werr := s.writing(ctx)
+	if werr != nil {
+		return werr
+	}
+	defer done()
+	_, err := s.do(ctx, name, func(me kernel.ID, st *State) ([]kernel.Op, error) {
+		target, _, err := text(st, id)
+		if err != nil {
+			return nil, err
+		}
+		now := st.Meta
+		if target != st.BodyOp {
+			now = st.all[st.comments[target]].Meta
+		}
+		changed := map[string]string{}
+		for k, v := range meta {
+			if was, ok := now[k]; !ok || was != v {
+				changed[k] = v
+			}
+		}
+		if len(changed) == 0 {
+			return nil, nil
+		}
+		return []kernel.Op{op("set-meta", me, map[string]any{"target": target, "meta": changed})}, nil
+	})
+	return err
+}
+
 // text finds one of an issue's texts by id: its body (the create's id)
 // or a comment, by any of its ids.
 func text(st *State, id kernel.OpID) (target kernel.OpID, body string, err error) {
