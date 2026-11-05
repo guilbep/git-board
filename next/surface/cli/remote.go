@@ -72,13 +72,23 @@ step, alone: no forge.`,
 }
 
 func newPush() *cobra.Command {
-	return &cobra.Command{
+	var prune bool
+	cmd := &cobra.Command{
 		Use:   "push [remote]",
 		Short: "Push this clone's board to the remote",
 		Long: `Push this clone's issues and people to the remote (origin by default),
-then, on origin, number the issues it now has. The push isn't forced: when the remote holds changes this clone doesn't
-have, it refuses, and git board pull merges them first. It is git board
-sync's last step, alone.`,
+then, on origin, number the issues it now has. The push isn't forced: when
+the remote holds changes this clone doesn't have, it refuses, and git
+board pull merges them first. It is git board sync's last step, alone.
+
+--prune makes the remote's board this clone's: what the remote has and
+this clone doesn't is deleted there, and a ref the remote moved is
+overwritten, but for a numbers' counter the remote moved on, which is
+taken, so that no number is handed out twice. The remote's board is first
+written to a bundle in the git directory, which it names. It is how a
+board started over with git board reset --hard reaches origin, and it
+refuses on a clone that didn't start over, or whose start-over the remote
+has already. Every other clone then runs git board reset --hard origin.`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			b, err := open(cmd, false)
@@ -87,15 +97,29 @@ sync's last step, alone.`,
 			}
 			defer b.Close()
 			remote := remoteArg(args)
+			out := cmd.OutOrStdout()
+			if prune {
+				rep, err := b.PushPrune(cmd.Context(), remote)
+				if err != nil {
+					return err
+				}
+				fmt.Fprintf(out, "pushed to %s, and deleted there %d refs this clone doesn't have\n", remote, rep.Deleted)
+				if rep.Backup != "" {
+					fmt.Fprintf(out, "  %s's board as it was: %s; git fetch %s 'refs/board-pruned/*:refs/board/*' brings it here\n", remote, rep.Backup, rep.Backup)
+				}
+				return nil
+			}
 			note, err := b.Push(cmd.Context(), remote)
 			if err != nil {
 				return err
 			}
-			fmt.Fprintln(cmd.OutOrStdout(), "pushed to "+remote)
+			fmt.Fprintln(out, "pushed to "+remote)
 			if note != "" {
-				fmt.Fprintln(cmd.OutOrStdout(), note)
+				fmt.Fprintln(out, note)
 			}
 			return nil
 		},
 	}
+	cmd.Flags().BoolVar(&prune, "prune", false, "make the remote's board this clone's, deleting there what isn't here")
+	return cmd
 }
