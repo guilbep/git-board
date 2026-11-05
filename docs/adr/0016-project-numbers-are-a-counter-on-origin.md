@@ -43,7 +43,11 @@ Pushing the counter is the lock.**
   pushes the counter; `git board sync`, `git board numbers` or Settings ›
   Numbers do.
 - Below `start`, an issue keeps its GitHub number: `#2518` is `CO2-2518`
-  (`:112` `NumberOf`).
+  (`:112` `NumberOf`). The number is the project's one GitHub
+  repository's, the one `start` was counted from (v2, 2026-11-05: the
+  counter's `github` line, else the board's github.com forge, else the
+  one repository linked; two and none named, none counts;
+  `docs/spec/datastores.md` › The counter).
 - On another datastore the counter is a capability, `datastore.Counter`
   (`core/datastore/datastore.go:49-50`): a row in PostgreSQL,
   `.board/numbers` in a Markdown folder (see the note below), absent for

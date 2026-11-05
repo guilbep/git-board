@@ -21,9 +21,18 @@ type Counter struct {
 	Prefix string
 	Start  int
 	ByID   map[string]int
+	// GitHub is the github.com repository, owner/repo, whose numbers
+	// below Start are its issues' own: the `github` line, which v1 skips
+	// as a later version's. "" when the counter doesn't say: the board's
+	// GitHub forge, else the one repository its links are on
+	// (Service.withRepo).
+	GitHub string
 }
 
-var prefixRe = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9]*$`)
+var (
+	prefixRe = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9]*$`)
+	repoRe   = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9._-]+$`)
+)
 
 // ParseCounter reads a numbers file, as v1 reads it: blank lines, and
 // keys a later version may write, are skipped; a number twice is refused.
@@ -43,6 +52,10 @@ func ParseCounter(data []byte) (Counter, error) {
 				return Counter{}, fmt.Errorf("numbers, line %d: start %q is not a number", i+1, value)
 			}
 			c.Start = s
+		case key == "github":
+			if repoRe.MatchString(value) && !strings.Contains(value, "..") {
+				c.GitHub = value
+			}
 		case notNumber != nil: // a later version's
 		case value == "":
 			return Counter{}, fmt.Errorf("numbers, line %d: %d names no issue", i+1, n)
@@ -63,6 +76,9 @@ func ParseCounter(data []byte) (Counter, error) {
 func (c Counter) Bytes() []byte {
 	var b strings.Builder
 	fmt.Fprintf(&b, "prefix %s\nstart %d\n", c.Prefix, c.Start)
+	if c.GitHub != "" {
+		fmt.Fprintf(&b, "github %s\n", c.GitHub)
+	}
 	for _, id := range slices.SortedFunc(maps.Keys(c.ByID), func(x, y string) int { return cmp.Compare(c.ByID[x], c.ByID[y]) }) {
 		fmt.Fprintf(&b, "%d %s\n", c.ByID[id], id)
 	}
@@ -79,17 +95,64 @@ func (c Counter) Next() int {
 }
 
 // NumberOf is an issue's number, 0 for none yet: its line, else its
-// GitHub number below Start.
+// number on c.GitHub, the project's GitHub repository, below Start. Its
+// numbers on any other repository aren't the project's: two repositories
+// each have a #5. No repository named, none counts.
 func (c Counter) NumberOf(id string, forges []Forge) int {
 	if n, ok := c.ByID[id]; ok {
 		return n
 	}
+	if c.GitHub == "" {
+		return 0
+	}
 	for _, f := range forges {
-		if n, err := strconv.Atoi(f.Number); f.Name == "GitHub" && err == nil && n < c.Start {
+		if n, err := strconv.Atoi(f.Number); f.Name == "GitHub" && err == nil && n < c.Start && strings.EqualFold(gitHubRepo(f.URL), c.GitHub) {
 			return n
 		}
 	}
 	return 0
+}
+
+// gitHubRepo is the owner/repo of a github.com issue URL, "" for none.
+func gitHubRepo(u string) string {
+	rest, ok := strings.CutPrefix(strings.ToLower(u), "https://github.com/")
+	if !ok {
+		return ""
+	}
+	parts := strings.SplitN(rest, "/", 3)
+	if len(parts) < 3 || parts[0] == "" || parts[1] == "" {
+		return ""
+	}
+	return parts[0] + "/" + parts[1]
+}
+
+// withRepo is c with the GitHub repository its numbers below Start come
+// from, when its own line doesn't name one: the board's GitHub forge
+// (s.GitHub), else the one github.com repository the sync records link
+// to. Links to two, and none named: none, rather than one number on two
+// issues, or an issue's number that moves when it is linked again.
+func (s *Service) withRepo(c Counter, recs map[string][]bsync.Record) Counter {
+	if c.GitHub != "" {
+		return c
+	}
+	if s.GitHub != "" {
+		c.GitHub = s.GitHub
+		return c
+	}
+	for _, rs := range recs {
+		for _, r := range rs {
+			repo := gitHubRepo(r.URL)
+			switch {
+			case repo == "" || repo == c.GitHub:
+			case c.GitHub == "":
+				c.GitHub = repo
+			default:
+				c.GitHub = ""
+				return c
+			}
+		}
+	}
+	return c
 }
 
 // Format is a number as people write it: CO2-3075.
@@ -168,7 +231,7 @@ func (s *Service) InitNumbers(ctx context.Context, prefix string, start int) err
 	if c == nil {
 		return ErrNoCounter
 	}
-	_, err := c.SetCount(ctx, Counter{Prefix: prefix, Start: start, ByID: map[string]int{}}.Bytes(), "")
+	_, err := c.SetCount(ctx, Counter{Prefix: prefix, Start: start, ByID: map[string]int{}, GitHub: s.GitHub}.Bytes(), "")
 	if errors.Is(err, kernel.ErrMoved) {
 		data, _, cerr := c.Count(ctx)
 		if cerr != nil {
@@ -213,7 +276,8 @@ func (s *Service) Number(ctx context.Context) (int, error) {
 		if err != nil {
 			return 0, err
 		}
-		todo, err := s.unnumbered(ctx, cnt, s.reading(ctx, s.notice, false).recs)
+		recs := s.reading(ctx, s.notice, false).recs
+		todo, err := s.unnumbered(ctx, s.withRepo(cnt, recs), recs)
 		if err != nil || len(todo) == 0 {
 			return 0, err
 		}
@@ -264,5 +328,6 @@ func (s *Service) unnumbered(ctx context.Context, c Counter, recs map[string][]b
 // number below the start being an issue's own: what a counter kept
 // elsewhere (origin's) numbers next.
 func (s *Service) Unnumbered(ctx context.Context, c Counter) ([]string, error) {
-	return s.unnumbered(ctx, c, s.reading(ctx, s.notice, false).recs)
+	recs := s.reading(ctx, s.notice, false).recs
+	return s.unnumbered(ctx, s.withRepo(c, recs), recs)
 }

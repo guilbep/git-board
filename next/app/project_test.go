@@ -198,3 +198,29 @@ func TestConfigureProject(t *testing.T) {
 		t.Errorf("a bad owner: %v", err)
 	}
 }
+
+// The board's GitHub repository, for the numbers below the counter's
+// start: the one github.com table's; two, or a GitHub Enterprise one
+// alone, name none.
+func TestGitHubRepoOneTable(t *testing.T) {
+	t.Parallel()
+	gh := func(host, project string) forge.Table {
+		return forge.Table{Kind: "github", Host: host, Project: project}
+	}
+	for _, c := range []struct {
+		list []forge.Table
+		want string
+	}{
+		{nil, ""},
+		{[]forge.Table{gh("github.com", "o/a"), {Kind: "gitlab", Host: "gitlab.com", Project: "9"}}, "o/a"},
+		{[]forge.Table{gh("github.com", "o/a"), gh("github.com", "O/A")}, "o/a"},
+		{[]forge.Table{gh("github.com", "o/a"), gh("github.com", "o/b")}, ""},
+		{[]forge.Table{gh("ghe.example.com", "o/a")}, ""},
+	} {
+		var cfg Config
+		cfg.Forges.List = c.list
+		if got := cfg.gitHubRepo(); got != c.want {
+			t.Errorf("%+v: %q, want %q", c.list, got, c.want)
+		}
+	}
+}

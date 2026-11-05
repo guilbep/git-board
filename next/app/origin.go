@@ -244,7 +244,7 @@ func (b *Board) initOrigin(ctx context.Context, prefix string, start int) error 
 	if err := numbered(); err != nil {
 		return err
 	}
-	rejected, err := b.pushCounter(ctx, NumbersRemote, issues.Counter{Prefix: prefix, Start: start, ByID: map[string]int{}}, "")
+	rejected, err := b.pushCounter(ctx, NumbersRemote, issues.Counter{Prefix: prefix, Start: start, ByID: map[string]int{}, GitHub: b.Issues.GitHub}, "")
 	if rejected {
 		if e := numbered(); e != nil {
 			return e
