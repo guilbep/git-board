@@ -59,6 +59,10 @@ func (s *Server) routes(mux *http.ServeMux) {
 	Route(mux, "POST /api/sync", s.startSync)
 	Route(mux, "POST /api/remotes/{name}/{action}", remote)
 	Route(mux, "POST /api/numbers", numbers)
+	Route(mux, "POST /api/forges", s.addForge)
+	Route(mux, "PATCH /api/forges/{name}", s.patchForge)
+	Route(mux, "DELETE /api/forges/{name}", s.removeForge)
+	Route(mux, "GET /api/forges/credentials", credentials)
 
 	Route(mux, "GET /api/github-project", s.projectStatus)
 	Route(mux, "POST /api/github-project/{action}", s.projectAction)

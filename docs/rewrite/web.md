@@ -79,6 +79,13 @@ text, its version and its keys:
   (`tomlorder.ts`);
 - the file's editor checks the TOML here, with its line, then asks the
   server's dry run (`PUT /api/config?dry_run=1`).
+- Sync's Add a forge sends the forge, its project's address and a token
+  to `POST /api/forges` (route 33), which writes the table and gives the
+  token to git's credential helper, as v1's dialog did; the page never
+  keeps the token.
+
+v1's `#/conflicts` (the GitHub Project's conflicts) opens Settings ›
+GitHub Project, as `#/sync` opens Settings › Sync.
 
 v1's value colors (`/api/colors`) are the page's (`valuecolors.ts`), as
 api.md says: the file's, a word's (done green, blocked red), then a

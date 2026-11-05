@@ -38,3 +38,18 @@ export function remoteAction(name: string, action: 'fetch' | 'pull' | 'push'): P
 export function numbers(start?: { prefix: string; start: number }): Promise<Numbered> {
   return send('POST', '/api/numbers', { body: start ?? {} });
 }
+
+// a forge's [forges.<name>] table, its token to git's credential helper:
+// the name written (gh, gh2… when none is given)
+export interface NewForge {
+  kind: string;
+  url: string;
+  name?: string;
+  login?: string;
+  token?: string;
+  sync?: boolean;
+}
+
+export function addForge(f: NewForge): Promise<{ name: string }> {
+  return send('POST', '/api/forges', { body: f });
+}

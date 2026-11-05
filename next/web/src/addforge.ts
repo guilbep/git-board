@@ -1,7 +1,7 @@
-// Add a forge no git remote names: the forge, then the project, written as
-// its [forges.<name>] table (PATCH /api/config). The token stays out of
-// the file: git's credential helper, or GH_TOKEN and GITLAB_TOKEN (ADR
-// 0010); v2's API takes one with POST /api/forges (later: api.md, 33).
+// Add a forge no git remote names: the forge, then the project and a
+// token, sent to POST /api/forges (api.md, 33), which writes its
+// [forges.<name>] table and gives the token to git's credential helper,
+// never the file (ADR 0010).
 // Pure, no "@/" imports: node runs addforge.test.ts on it.
 
 // the two forges the sync supports (token: what docs/guide/forges.md says
@@ -17,6 +17,7 @@ export interface ForgeDraft {
   target: string;
   url: string;
   name: string; // empty: gh, gh2… the first free
+  token: string; // empty: none stored
 }
 
 function parse(u: string): URL | null {
@@ -47,18 +48,4 @@ export function canGoOn(step: number, d: ForgeDraft): boolean {
   const u = parse(d.url);
   const project = u && /^https?:$/.test(u.protocol) && u.pathname.split('/').filter(Boolean).length >= 2;
   return !!project && (!d.name.trim() || forgeName.test(d.name.trim()));
-}
-
-// tableOf is the draft as its table: its name (the draft's, else the
-// forge's short one, then 2, 3… past those taken), kind, project, host
-// when not the forge's own
-export function tableOf(d: ForgeDraft, taken: string[], sync: boolean): { name: string; table: Record<string, unknown> } {
-  const f = forges.find((x) => x.target === d.target)!;
-  let name = d.name.trim();
-  for (let i = 1; !name || (taken.includes(name) && !d.name.trim()); i++) name = i === 1 ? f.short : `${f.short}${i}`;
-  const u = parse(d.url)!;
-  const project = u.pathname.replace(/\.git$/, '').replace(/\/-\/.*$/, '').split('/').filter(Boolean).join('/');
-  const table: Record<string, unknown> = { kind: d.target, project, sync };
-  if (u.host !== (d.target === 'github' ? 'github.com' : 'gitlab.com')) table.host = u.host;
-  return { name, table };
 }

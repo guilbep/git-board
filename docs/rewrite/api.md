@@ -1,8 +1,8 @@
 # v2: the HTTP API
 
 - Status: built in milestone M5 (2026-11-05), in `next/surface/http`.
-  A route marked *later* waits for the command it mirrors (`forge
-  login`, `datastore set`, `numbers status`); one marked *M6* comes with
+  A route marked *later* waits for the command it mirrors (`datastore
+  set`, `numbers status`); one marked *M6* comes with
   its domain. Both answer 404 `not-found` until then.
 - Decided: [ADR 0021](../adr/0021-git-board-v2-same-data-new-code.md),
   "The HTTP API: reshaped, with the web UI". Builds on [the
@@ -276,10 +276,10 @@ datastore the clone names) and `PUT` answer only on loopback (ADR 0013).
 | 30 | `GET /api/sync` | | `{forges, remotes, run}` |
 | 31 | `POST /api/sync` | `{scope, way, forges, remote, dry_run, allow_create}` | 202, the run |
 | 32 | `POST /api/remotes/{name}/{action}` | `action`: `fetch`, `pull`, `push` | `{remote, action, note, issues, people}` |
-| 33 | `POST /api/forges` (*later*) | `{kind, url, name, login, token, sync}` | `{name}` |
-| 34 | `PATCH /api/forges/{name}` (*later*) | `{sync}` | `{name, sync}` |
-| 35 | `DELETE /api/forges/{name}` (*later*) | | 204 |
-| 36 | `GET /api/forges/credentials` (*later*) | | `{"items": [{host, login, source}]}` |
+| 33 | `POST /api/forges` | `{kind, url, name, login, token, sync}` | 201, `{name}` |
+| 34 | `PATCH /api/forges/{name}` | `{sync}` | `{name, sync}` |
+| 35 | `DELETE /api/forges/{name}` | | 204 |
+| 36 | `GET /api/forges/credentials` | | `{"items": [{host, login, source}]}` |
 | 37 | `GET /api/numbers` (*later*) | | `{prefix, next, unnumbered}` |
 | 38 | `POST /api/numbers` | `{prefix, start}` or `{}` | `{where, numbered}` |
 
@@ -310,9 +310,20 @@ run did, `{created, updated, unchanged, posted, pushed}`.
 receive and a push would send, of `issues` and `people`
 (`{receive, send}`); a pull and a push answer their `note` (the numbers
 handed out). **Forges (33 to 36)** are `[forges]` tables, written as
-`PATCH /api/config` writes them meanwhile; the token goes to git's
-credential helper, never the file (ADR 0010), and is never answered nor
-logged.
+`PATCH /api/config` writes a key: the board opens again and the pages
+hear a `config` event. The token goes to git's credential helper (`git
+credential approve`, as `forge login`), never the file (ADR 0010), and is
+never answered nor logged. Adding one (33): `kind` is `github` or
+`gitlab`, `url` the project's address (`https://github.com/o/r`, `.git`
+and GitLab's `/-/…` taken off); `name` defaults to `gh`, `gl`, then
+`gh2`… the first free; `sync` to on; the token is for `login`, else
+your own account on the host. A GitLab project is written by its id, read
+from the forge with that token. With no table yet, the forges found in
+the remotes get theirs first (a table turns the finding off), read once
+through the forge as a sync reads them; one that already names the
+project refuses it, 400 `invalid`. 34 and 35 change a table the file has:
+a forge found in the remotes has none, 404. 36 lists the tokens
+`forge status` finds, with nothing asked of a forge; never one's value.
 
 **Numbers (38)** are the project's numbers (ADR 0016). `{prefix, start}`
 starts numbering, and answers where the counter is (`on origin`, `in
@@ -602,10 +613,10 @@ built).
 | `POST /api/fields/migrate` | dropped: the same |
 | `PUT /api/config/section/{section}` | `PATCH /api/config` |
 | `PUT /api/config` | `PUT /api/config` |
-| `PUT /api/bridges/{name}/sync` | `PATCH /api/forges/{name}` (*later*); meanwhile `PATCH /api/config` |
-| `GET /api/credentials` | `GET /api/forges/credentials` (*later*) |
-| `POST /api/bridges` | `POST /api/forges` (*later*) |
-| `DELETE /api/bridges/{name}` | `DELETE /api/forges/{name}` (*later*) |
+| `PUT /api/bridges/{name}/sync` | `PATCH /api/forges/{name}` |
+| `GET /api/credentials` | `GET /api/forges/credentials` |
+| `POST /api/bridges` | `POST /api/forges` |
+| `DELETE /api/bridges/{name}` | `DELETE /api/forges/{name}` |
 | `GET /api/forges` | `GET /api/sync`: `forges` and `run` |
 | `GET /api/forges/docs` | `GET /api/docs/forges` (*later*) |
 | `POST /api/forges/sync` | `POST /api/sync` with `scope: forges` |
