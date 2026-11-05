@@ -40,10 +40,12 @@ data decides what the document should have said.
 | Markdown folder | [Where the board is kept](../guide/datastores.md), `core/mdstore`, `internal/store/markdown.go` and `mdimport.go` | `<dir>/.board/<kind>/<id>.jsonl`, one pack a line; `.gitattributes` (union, `numbers` binary); `board.lock`; the rendered `NNN-slug.md` |
 | Settings | [Configuration](../guide/configuration.md); `board.me`, `board.datastore`, `GIT_BOARD_DATASTORE` | `.git-board.toml`, each table; the clone's git config |
 
-Three of these are only code today: the PostgreSQL tables, the Markdown
-folder and the counter's file. Milestone M0 writes them into
-`docs/spec/storage.md` before any v2 code reads them, so the contract is
-a document and not a reading of v1.
+Three of these were only code: the PostgreSQL tables, the Markdown
+folder and the counter's file. Milestone M0 wrote them into [Other
+datastores and the counter](../spec/datastores.md) before any v2 code
+reads them, so the contract is a document and not a reading of v1. The
+golden boards and v1's outputs on them are in [v2: the golden boards and
+make compat](compat.md).
 
 Two local files would fight if v1 and v2 shared them, so v2 does not:
 
