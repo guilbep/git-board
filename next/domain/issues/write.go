@@ -72,7 +72,11 @@ type NewReq struct {
 // New creates an issue as who writes, with its fields in the same pack,
 // and keeps its state in step with its status.
 func (s *Service) New(ctx context.Context, r NewReq) (Issue, error) {
-	ctx = s.Board.Snapshot(ctx)
+	ctx, done, werr := s.writing(ctx)
+	if werr != nil {
+		return Issue{}, werr
+	}
+	defer done()
 	me, err := s.writer()
 	if err != nil {
 		return Issue{}, err
@@ -128,7 +132,11 @@ func (s *Service) current(ctx context.Context, name string) (Issue, error) {
 // Comment adds a comment as who writes, and answers its id and the
 // issue's.
 func (s *Service) Comment(ctx context.Context, name, body string) (kernel.OpID, kernel.ID, error) {
-	ctx = s.Board.Snapshot(ctx)
+	ctx, done, werr := s.writing(ctx)
+	if werr != nil {
+		return "", "", werr
+	}
+	defer done()
 	st, err := s.do(ctx, name, func(me kernel.ID, _ *State) ([]kernel.Op, error) {
 		return []kernel.Op{op("comment", me, map[string]any{"body": body})}, nil
 	})
@@ -155,7 +163,11 @@ func text(st *State, id kernel.OpID) (target kernel.OpID, body string, err error
 // the text the edit started from: another one there now refuses it
 // (ErrChanged); "" skips the check.
 func (s *Service) EditText(ctx context.Context, name string, id kernel.OpID, body, base string) error {
-	ctx = s.Board.Snapshot(ctx)
+	ctx, done, werr := s.writing(ctx)
+	if werr != nil {
+		return werr
+	}
+	defer done()
 	_, err := s.do(ctx, name, func(me kernel.ID, st *State) ([]kernel.Op, error) {
 		target, now, err := text(st, id)
 		switch {
@@ -173,7 +185,11 @@ func (s *Service) EditText(ctx context.Context, name string, id kernel.OpID, bod
 
 // DeleteComment hides a comment (ADR 0019); the description isn't one.
 func (s *Service) DeleteComment(ctx context.Context, name string, id kernel.OpID) error {
-	ctx = s.Board.Snapshot(ctx)
+	ctx, done, werr := s.writing(ctx)
+	if werr != nil {
+		return werr
+	}
+	defer done()
 	_, err := s.do(ctx, name, func(me kernel.ID, st *State) ([]kernel.Op, error) {
 		target, _, err := text(st, id)
 		if err != nil {
@@ -189,7 +205,11 @@ func (s *Service) DeleteComment(ctx context.Context, name string, id kernel.OpID
 
 // Delete hides an issue (ADR 0019): no view shows it again.
 func (s *Service) Delete(ctx context.Context, name string) (kernel.ID, error) {
-	ctx = s.Board.Snapshot(ctx)
+	ctx, done, werr := s.writing(ctx)
+	if werr != nil {
+		return "", werr
+	}
+	defer done()
 	st, err := s.do(ctx, name, func(me kernel.ID, st *State) ([]kernel.Op, error) {
 		return []kernel.Op{op("delete", me, map[string]any{"target": string(st.BodyOp)})}, nil
 	})
@@ -200,7 +220,11 @@ func (s *Service) Delete(ctx context.Context, name string) (kernel.ID, error) {
 // than now; base is what they were when the edit started (ErrChanged
 // when another writer changed one since).
 func (s *Service) Edit(ctx context.Context, name string, title, body *string, base Thread) ([]string, error) {
-	ctx = s.Board.Snapshot(ctx)
+	ctx, done, werr := s.writing(ctx)
+	if werr != nil {
+		return nil, werr
+	}
+	defer done()
 	var changed []string
 	_, err := s.do(ctx, name, func(me kernel.ID, st *State) ([]kernel.Op, error) {
 		changed = nil
@@ -226,7 +250,11 @@ func (s *Service) Edit(ctx context.Context, name string, title, body *string, ba
 
 // SetStatus opens or closes an issue.
 func (s *Service) SetStatus(ctx context.Context, name string, status Status) error {
-	ctx = s.Board.Snapshot(ctx)
+	ctx, done, werr := s.writing(ctx)
+	if werr != nil {
+		return werr
+	}
+	defer done()
 	if status != Open && status != Closed {
 		return fmt.Errorf("status %q: want open or closed", status)
 	}
@@ -243,7 +271,11 @@ func (s *Service) SetStatus(ctx context.Context, name string, status Status) err
 // kind is written as its plain label, an assignee in any case once. It
 // answers the labels after.
 func (s *Service) ChangeLabels(ctx context.Context, name string, added, removed []string) ([]string, error) {
-	ctx = s.Board.Snapshot(ctx)
+	ctx, done, werr := s.writing(ctx)
+	if werr != nil {
+		return nil, werr
+	}
+	defer done()
 	st, err := s.do(ctx, name, func(me kernel.ID, st *State) ([]kernel.Op, error) {
 		add, rm := s.stored(added, removed, st.Labels)
 		add = slices.DeleteFunc(slices.Clone(add), func(l string) bool { return slices.Contains(st.Labels, l) })
@@ -401,7 +433,11 @@ type SetReq struct {
 // step with its status. It answers a line per assignment, as set prints
 // them: what it did, the last one with what the state did.
 func (s *Service) Set(ctx context.Context, r SetReq) ([]string, error) {
-	ctx = s.Board.Snapshot(ctx)
+	ctx, done, werr := s.writing(ctx)
+	if werr != nil {
+		return nil, werr
+	}
+	defer done()
 	as, err := s.assignments(ctx, r.Assign, r.MeName, r.Force)
 	if err != nil {
 		return nil, err
@@ -572,7 +608,11 @@ type CloseReq struct {
 // why (closed-as, duplicate-of, and a "Duplicate of" comment), then its
 // state. It answers what close prints.
 func (s *Service) Close(ctx context.Context, r CloseReq) (string, error) {
-	ctx = s.Board.Snapshot(ctx)
+	ctx, done, werr := s.writing(ctx)
+	if werr != nil {
+		return "", werr
+	}
+	defer done()
 	field := s.Schema.Fields["status"]
 	if len(field.Options) == 0 {
 		return "", fmt.Errorf("no [fields.status] options configured in .git-board.toml")
@@ -660,7 +700,11 @@ func refFrom(is, other Issue) string {
 // when it was the terminal one or none; its closed-as goes (a
 // duplicate-of stays). It answers what reopen prints.
 func (s *Service) Reopen(ctx context.Context, name, comment string) (string, error) {
-	ctx = s.Board.Snapshot(ctx)
+	ctx, done, werr := s.writing(ctx)
+	if werr != nil {
+		return "", werr
+	}
+	defer done()
 	is, err := s.current(ctx, name)
 	if err != nil {
 		return "", err
@@ -701,4 +745,19 @@ func (s *Service) Reopen(ctx context.Context, name, comment string) (string, err
 		}
 	}
 	return name + ": " + said + "open", nil
+}
+
+// Writing brackets a write: a Markdown folder's hand edits are read in
+// before it, its files rendered after (next/domain/issues/mdfiles). It
+// answers the context the write goes on, and what ends the write. A
+// write within one (Reopen's comment) is within it.
+type Writing func(ctx context.Context) (context.Context, func(), error)
+
+// writing begins a write: ctx made a snapshot, within s.Writing if set.
+func (s *Service) writing(ctx context.Context) (context.Context, func(), error) {
+	ctx = s.Board.Snapshot(ctx)
+	if s.Writing == nil {
+		return ctx, func() {}, nil
+	}
+	return s.Writing(ctx)
 }

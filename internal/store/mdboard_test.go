@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/guilbep/git-board/core/datastore"
 	"github.com/guilbep/git-board/core/forge"
@@ -351,5 +353,38 @@ func TestMarkdownBoardNumbers(t *testing.T) {
 	}
 	if c, _, _ := b.Counter(); c.ByID[second] != 2 {
 		t.Errorf("after the merge, %+v; want %s as GB-2", c, second)
+	}
+}
+
+// A hand edit of a file's labels is read in by the next write: under the
+// lock the write holds, not waiting on it.
+func TestMarkdownBoardLabelsByHand(t *testing.T) {
+	t.Parallel()
+	dir := storetest.Repo(t, false)
+	storetest.Git(t, dir, "config", store.DatastoreKey, "markdown:issues")
+	storetest.Init(t, dir)
+	b := storetest.Open(t, dir)
+	id, err := b.NewIssue("Title", "body", []string{"prio:p1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	files, _ := filepath.Glob(filepath.Join(dir, "issues", "*.md"))
+	if len(files) != 1 {
+		t.Fatalf("files %v", files)
+	}
+	edit(t, files[0], "    - p1", "    - p2")
+	done := make(chan error, 1)
+	go func() { _, err := b.AddComment(id, "a write to it"); done <- err }()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(30 * time.Second):
+		t.Fatal("the write waits on its own lock")
+	}
+	is, err := b.GetIssue(id)
+	if err != nil || !slices.Equal(is.Labels, []string{"prio:p2"}) {
+		t.Fatalf("labels %v, %v; want the hand edit's", is.Labels, err)
 	}
 }

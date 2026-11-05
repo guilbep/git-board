@@ -17,6 +17,7 @@ import (
 
 	"github.com/guilbep/git-board/next/conf"
 	"github.com/guilbep/git-board/next/domain/issues"
+	"github.com/guilbep/git-board/next/domain/issues/mdfiles"
 	"github.com/guilbep/git-board/next/domain/people"
 	"github.com/guilbep/git-board/next/kernel"
 	"github.com/guilbep/git-board/next/store"
@@ -35,7 +36,10 @@ type Board struct {
 	Views  map[string]issues.View
 	Kernel *kernel.Board
 	Dir    string // the repository's working directory, or the folder opened
-	clone  *clone
+	// Files are a Markdown folder's rendered files; nil on another
+	// datastore.
+	Files *mdfiles.Folder
+	clone *clone
 }
 
 // Options say how to open a board.
@@ -110,6 +114,13 @@ func Open(ctx context.Context, dir string, o Options) (*Board, error) {
 	if o.Who {
 		b.Issues.Me, b.Issues.Avatars = kernel.ID(set.me), people.ParseAvatars(set.avatars)
 		b.People.Me, b.People.Avatars = b.Issues.Me, b.Issues.Avatars
+	}
+	if m, ok := ds.(*md.Store); ok { // its files: read in before each write, rendered after
+		notice := o.Notice
+		if notice == nil {
+			notice = func(string, ...any) {}
+		}
+		b.Files = mdfiles.Open(m.Dir(), ds.Folder(), m.LockFiles, b.Issues, notice)
 	}
 	return b, nil
 }

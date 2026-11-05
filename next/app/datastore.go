@@ -4,6 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
+
+	"github.com/guilbep/git-board/next/conf"
+	"github.com/guilbep/git-board/next/domain/issues"
+	"github.com/guilbep/git-board/next/domain/issues/mdfiles"
+	"github.com/guilbep/git-board/next/domain/people"
+	"github.com/guilbep/git-board/next/kernel"
+	"github.com/guilbep/git-board/next/view"
 
 	"github.com/guilbep/git-board/next/store"
 	"github.com/guilbep/git-board/next/store/forgecopy"
@@ -106,5 +115,42 @@ func CopyDatastore(ctx context.Context, dir, from, to string) (Copied, error) {
 	if errors.Is(err, store.ErrMissing) {
 		err = &Error{Class: Missing, Code: "missing", Err: err}
 	}
+	if m, ok := dst.(*md.Store); ok && err == nil {
+		err = renderFiles(ctx, dir, m)
+	}
 	return Copied{Copied: c, To: Where(dst)}, err
+}
+
+// renderFiles renders a Markdown folder's files from its packs, a board
+// just copied in, through a view of its own: the clone's stays its
+// datastore's.
+func renderFiles(ctx context.Context, dir string, m *md.Store) error {
+	f, err := conf.Load(configPath(dir))
+	if err != nil {
+		return err
+	}
+	schema, probs := issues.Declare(f).Schema()
+	if len(probs) > 0 {
+		return fmt.Errorf("%s: %w", conf.FileName, probs[0])
+	}
+	if err := os.MkdirAll(m.Folder(), 0o755); err != nil {
+		return err
+	}
+	tmp, err := os.MkdirTemp(m.Folder(), "copy-view")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(tmp)
+	v, err := view.Open(ctx, filepath.Join(tmp, "view.db"))
+	if err != nil {
+		return err
+	}
+	kb, err := kernel.Open(ctx, m, v, issues.Kind, people.Kind)
+	if err != nil {
+		v.Close()
+		return err
+	}
+	defer v.Close()
+	svc := &issues.Service{Board: kb, Schema: schema, Avatars: people.Forge, Folder: m.Folder()}
+	return mdfiles.Open(m.Dir(), m.Folder(), m.LockFiles, svc, func(string, ...any) {}).Render(ctx)
 }
