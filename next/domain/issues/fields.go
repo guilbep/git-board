@@ -299,11 +299,11 @@ type Sprint struct {
 	Start time.Time `toml:"start"`
 }
 
-// Sprints is the sprint calendar, [sprints].
+// Sprints is the sprint calendar, [sprints]. Its start_weekday, which no
+// git-board read, schema 2 sets aside (docs/guide/config-schema.md).
 type Sprints struct {
-	LengthDays   int      `toml:"length_days"`
-	StartWeekday string   `toml:"start_weekday"`
-	List         []Sprint `toml:"list"`
+	LengthDays int      `toml:"length_days"`
+	List       []Sprint `toml:"list"`
 }
 
 func dateOnly(t time.Time) time.Time {

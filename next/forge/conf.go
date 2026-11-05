@@ -63,10 +63,10 @@ type Forges struct {
 	Discover       bool // no table and no discover = false: from the git remotes
 }
 
-// Repos is [repos].
+// Repos is [repos]. Its assignees, which no git-board read, schema 2
+// sets aside (docs/guide/config-schema.md).
 type Repos struct {
-	List      []string `toml:"list"`
-	Assignees string   `toml:"assignees"` // native (the default) or labels
+	List []string `toml:"list"`
 }
 
 // Fields is what a mapping's check asks of the issue domain's fields.
@@ -86,21 +86,12 @@ type Tables struct {
 func Declare(f *conf.File) Tables {
 	return Tables{
 		forges: conf.Declare(f, conf.Table[map[string]toml.Primitive]{Name: "forges"}),
-		repos: conf.Declare(f, conf.Table[Repos]{Name: "repos", Check: func(r *Repos) error {
-			if a := r.Assignees; a != "" && a != "native" && a != "labels" {
-				return fmt.Errorf("[repos] assignees: native or labels, not %q", a)
-			}
-			return nil
-		}}),
+		repos:  conf.Declare(f, conf.Table[Repos]{Name: "repos"}),
 	}
 }
 
-// Repos is [repos], its assignees native by default.
-func (t Tables) Repos() (Repos, []conf.Problem) {
-	r, probs := t.repos.Get()
-	r.Assignees = cmp.Or(r.Assignees, "native")
-	return r, probs
-}
+// Repos is [repos].
+func (t Tables) Repos() (Repos, []conf.Problem) { return t.repos.Get() }
 
 var (
 	forgeName  = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)

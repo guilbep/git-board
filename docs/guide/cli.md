@@ -305,6 +305,9 @@ git board config set views.backlog.filter "is:open prio:p1"
 git board config set sprints.length_days 14
 git board config unset github-project.write
 git board config set board.view classic             # this clone's git config
+git board config schema                             # the file's schema version, and git-board's
+git board config upgrade --dry-run                  # the diff an upgrade writes
+git board config downgrade --to 1                   # for an older git-board
 ```
 
 A dotted key, like `github-project.owner` or `views.backlog.filter`, is
@@ -320,6 +323,10 @@ A key `board.<name>` is this clone's own, in git config: `board.view`,
 which `git board me` sets. `set` writes it with `--local`; `get` reads it
 at every level git does. A datastore URL is printed without its password.
 `get` of a key not set exits with code 3.
+
+`schema`, `upgrade` and `downgrade` (v0.12) move the file between the
+versions of its format: [The file's schema version](config-schema.md).
+`set` and `unset` write an older file upgraded, and say so.
 
 ## `forge status`, `forge login`: tokens
 

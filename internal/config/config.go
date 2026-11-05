@@ -65,6 +65,11 @@ type GithubProject struct {
 
 // raw mirrors the on-disk TOML shape for decoding.
 type raw struct {
+	// Schema is the file's schema version, which v2 writes
+	// (docs/guide/config-schema.md): known, so a file v2 wrote reads
+	// without a warning. v2 refuses to write a file newer than it knows;
+	// v1 reads every version's tables as it always did.
+	Schema        int                     `toml:"schema"`
 	Repos         reposTable              `toml:"repos"`
 	Fields        map[string]fields.Field `toml:"fields"`
 	Sprints       fields.Sprints          `toml:"sprints"`

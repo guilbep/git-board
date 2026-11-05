@@ -656,3 +656,13 @@ func TestLoadWarnsOfTheKeysItDoesntKnow(t *testing.T) {
 		t.Errorf("the fixture: Unknown = %v, warned %q", cfg.Unknown, buf.String())
 	}
 }
+
+// A file v2 wrote says its schema version (docs/guide/config-schema.md):
+// v1 knows the key, and reads the file without a warning.
+func TestReadsTheSchemaKey(t *testing.T) {
+	t.Parallel()
+	cfg, warnings, err := Check([]byte("# the board\n\nschema = 2\n\n[sprints]\nlength_days = 14\n# start_weekday = \"monday\"  # schema 2: git-board doesn't read this key\n"))
+	if err != nil || len(warnings) > 0 || cfg.Sprints.LengthDays != 14 {
+		t.Errorf("Check: %v, warnings %v", err, warnings)
+	}
+}

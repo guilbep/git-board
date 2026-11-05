@@ -54,6 +54,17 @@ keeps its board, which writer signs proof notes.
 - `board.view` may also be set `--global`, for every repository
   (`docs/guide/configuration.md:419`).
 
+### Amendment (2026-11-05): the file has a schema version
+
+[ADR 0021](0021-git-board-v2-same-data-new-code.md) asked for it: the
+file says its format's version in a top-level `schema = N`, none being
+version 1 (v0.11's), and git-board migrates it between versions, up and
+down, editing only the lines that change. An older file is read
+migrated in memory and written upgraded on the next explicit write; a
+newer one is read for what git-board knows, and never written. The
+versions, the commands and how a migration is added are in
+[The file's schema version](../guide/config-schema.md).
+
 ## Alternatives considered
 
 Reconstructed. Scored on: reviewed and versioned with the code (35), no

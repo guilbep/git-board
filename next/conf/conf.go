@@ -1,7 +1,9 @@
 // Package conf is .git-board.toml: read once, each table declared by the
 // domain that reads it (docs/rewrite/design.md, Config). A table is its
 // domain's: one that doesn't decode is that domain's problem, and the
-// others still answer. M1 reads; writing a table back comes with M2.
+// others still answer. The file has a schema version, and migrations
+// between versions (schema.go): a domain reads the current version
+// alone, an older file migrated in memory.
 package conf
 
 import (
@@ -19,11 +21,13 @@ const FileName = ".git-board.toml"
 
 // File is one .git-board.toml, read.
 type File struct {
-	path   string
-	text   []byte
-	tables map[string]toml.Primitive
-	md     toml.MetaData
-	names  []string // declared
+	path    string
+	source  []byte // the file's bytes
+	text    []byte // what the domains read: source at Current
+	version int
+	tables  map[string]toml.Primitive
+	md      toml.MetaData
+	names   []string // declared
 }
 
 // Load reads the file at path once; a missing one is an empty file. A
@@ -44,12 +48,29 @@ func Load(path string) (*File, error) {
 }
 
 // Parse reads text as the file at path would be: what a write checks
-// before it lands.
+// before it lands. An older schema is read migrated to Current, in
+// memory; a newer one as it is, for what this git-board knows of it.
 func Parse(path string, text []byte) (*File, error) {
-	f := &File{path: path, text: text, tables: map[string]toml.Primitive{}}
+	f := &File{path: path, source: text, text: text, tables: map[string]toml.Primitive{}}
 	var err error
 	if f.md, err = toml.Decode(string(text), &f.tables); err != nil {
 		return nil, err
+	}
+	var v any
+	if p, ok := f.tables[SchemaKey]; ok {
+		if err := f.md.PrimitiveDecode(p, &v); err != nil {
+			return nil, err
+		}
+	}
+	if f.version, err = version(v); err != nil {
+		return nil, err
+	}
+	// a migration that fails leaves the file as it is: a write says why
+	if read, _ := readText(string(text), f.version); read != string(text) {
+		tables := map[string]toml.Primitive{}
+		if md, err := toml.Decode(read, &tables); err == nil {
+			f.text, f.tables, f.md = []byte(read), tables, md
+		}
 	}
 	return f, nil
 }
@@ -57,11 +78,19 @@ func Parse(path string, text []byte) (*File, error) {
 // Path is where the file is, or goes.
 func (f *File) Path() string { return f.path }
 
-// Text is the file's bytes, nil when there is none.
+// Text is the file as the domains read it, at Current: its bytes, an
+// older schema's migrated; nil when there is none.
 func (f *File) Text() []byte { return f.text }
 
+// Source is the file's bytes as they are, nil when there is none.
+func (f *File) Source() []byte { return f.source }
+
 // Exists says there is a file.
-func (f *File) Exists() bool { return f.text != nil }
+func (f *File) Exists() bool { return f.source != nil }
+
+// Version is the file's schema version: its schema key, 1 without one
+// (v0.11's file), 0 when there is no file.
+func (f *File) Version() int { return f.version }
 
 // Unknown are the file's keys no declared table read, in the file's
 // order: a misspelled key above all. Ask once every table was read.
@@ -72,6 +101,9 @@ func (f *File) Unknown() []string {
 	}
 	var res []string
 	for _, k := range f.md.Keys() {
+		if k.String() == SchemaKey {
+			continue
+		}
 		// a table no domain declares is unknown itself, not its keys
 		if undecoded[k.String()] || len(k) == 1 && !slices.Contains(f.names, k[0]) {
 			res = append(res, k.String())
