@@ -206,6 +206,9 @@ func (s *apiServer) handleConfigSection(w http.ResponseWriter, r *http.Request) 
 		writeJSON(w, http.StatusBadRequest, res)
 		return
 	}
+	if s.refuseCodeWrite(w, r, text, updated) {
+		return
+	}
 	if hash != r.FormValue("base") {
 		writeCoded(w, http.StatusConflict, "changed", fmt.Errorf("the file changed since you opened it: reload to see the new version"))
 		return

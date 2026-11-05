@@ -145,9 +145,12 @@ func (s *apiServer) handleConfigSave(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer done()
-	_, _, hash, err := s.readConfigFile()
+	cur, _, hash, err := s.readConfigFile()
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	if s.refuseCodeWrite(w, r, cur, req.Text) {
 		return
 	}
 	if hash != req.Base {

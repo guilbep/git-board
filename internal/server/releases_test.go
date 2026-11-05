@@ -61,13 +61,14 @@ func otherClone(t *testing.T, fx *shiptest.Fixture, commit, tag string) {
 	shiptest.Git(t, dir, "push", "-q", "origin", "refs/tags/"+tag)
 }
 
-// coded sends a JSON request and returns the status and the error's code
-// and text.
+// coded sends a JSON request from the board's own page and returns the
+// status and the error's code and text.
 func coded(t *testing.T, method, url string, body any) (status int, code, msg string) {
 	t.Helper()
 	data, _ := json.Marshal(body)
 	req, _ := http.NewRequest(method, url, bytes.NewReader(data))
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Origin", "http://"+req.URL.Host) // the page's: the code gate
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
@@ -208,6 +209,7 @@ func TestDeployJobRunsAndPublishes(t *testing.T) {
 	// {tag?}: an empty body is the trunk's head
 	req, _ := http.NewRequest("POST", ts.URL+"/api/environments/dev/deploy", nil)
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Origin", ts.URL) // the page's: the code gate
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)

@@ -74,6 +74,23 @@ Bad, and accepted:
 - `git-board html` publishes a static, unauthenticated view in the same
   spirit (`README.md`).
 
+## Amendment (2026-11-05): no code runs from beyond loopback
+
+A review found that `PUT /api/config` (or `PUT /api/config/section/release`,
+or `POST /api/releases/setup`) could set `[release] build`, and `POST
+/api/releases` then ran it with `sh -c`, from any client of a server
+started with `--addr` beyond loopback. "Anyone who can reach the port can
+write every issue" was accepted above; running code as the user never was.
+
+**The rule:** a request that runs code, or changes what code a later run
+runs, passes `localWrite` (`internal/server/refs.go`), the gate the tests'
+run, the checks' setup and a branch made already passed: refused when the
+server listens beyond loopback, and asking a same-host `Origin`, the
+board's own page, otherwise. Since v0.11.7 (`internal/server/codegate.go`)
+it also gates the releases' cut, promotion, adoption, deploy, rollback and
+setup, and a write of `.git-board.toml` that changes `[release]`,
+`[cycle.tests]`, `[cycle.checks]` or `cycle.signers`.
+
 ## Left open
 
 - **A hosted git-board** (ADR 0002 › Context: "a hosted git-board", "people

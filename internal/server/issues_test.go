@@ -41,6 +41,7 @@ func call(t *testing.T, method, url string, body, out any) int {
 		t.Fatal(err)
 	}
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Origin", "http://"+req.URL.Host) // a browser's, from the page
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)

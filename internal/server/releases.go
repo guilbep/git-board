@@ -476,6 +476,9 @@ func (s *apiServer) handleYank(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *apiServer) handleAdopt(w http.ResponseWriter, r *http.Request) {
+	if s.refuseCode(w, r, "overlays are adopted") {
+		return
+	}
 	run, err := s.runner()
 	if err != nil {
 		writeRunnerError(w, err)
@@ -491,6 +494,9 @@ func (s *apiServer) handleAdopt(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *apiServer) handleCut(w http.ResponseWriter, r *http.Request) {
+	if s.refuseCode(w, r, "releases are cut") {
+		return
+	}
 	run, err := s.runner()
 	if err != nil {
 		writeRunnerError(w, err)
@@ -534,6 +540,9 @@ func (s *apiServer) handleCut(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *apiServer) handlePromote(w http.ResponseWriter, r *http.Request) {
+	if s.refuseCode(w, r, "releases are promoted") {
+		return
+	}
 	run, err := s.runner()
 	if err != nil {
 		writeRunnerError(w, err)
@@ -578,6 +587,9 @@ func releaseTag(w http.ResponseWriter, r *http.Request, run *ship.Runner, name s
 }
 
 func (s *apiServer) handleDeploy(w http.ResponseWriter, r *http.Request) {
+	if s.refuseCode(w, r, "environments are deployed") {
+		return
+	}
 	run, err := s.runner()
 	if err != nil {
 		writeRunnerError(w, err)
@@ -614,6 +626,9 @@ func (s *apiServer) handleDeploy(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *apiServer) handleRollback(w http.ResponseWriter, r *http.Request) {
+	if s.refuseCode(w, r, "environments are rolled back") {
+		return
+	}
 	run, err := s.runner()
 	if err != nil {
 		writeRunnerError(w, err)
@@ -661,6 +676,9 @@ func (s *apiServer) handleSetup(w http.ResponseWriter, r *http.Request) {
 // handleEnable writes the [release] table of a binary release into
 // .git-board.toml and runs it: Enable binary release.
 func (s *apiServer) handleEnable(w http.ResponseWriter, r *http.Request) {
+	if s.refuseCode(w, r, "releases are set up") {
+		return
+	}
 	var req ship.Setup
 	if !decode(w, r, &req) {
 		return
