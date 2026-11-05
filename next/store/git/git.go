@@ -42,7 +42,7 @@ var _ store.Datastore = (*Store)(nil)
 // finds it. A linked worktree reads its main repository's board.
 func Open(ctx context.Context, dir string) (*Store, error) {
 	if s, ok := find(dir); ok {
-		return s, nil
+		return s, s.supported()
 	}
 	cmd := exec.CommandContext(ctx, "git", "-C", dir, "rev-parse", "--path-format=absolute", "--git-dir", "--git-common-dir")
 	cmd.Env = append(os.Environ(), "LC_ALL=C")
@@ -56,7 +56,8 @@ func Open(ctx context.Context, dir string) (*Store, error) {
 	if len(lines) != 2 {
 		return nil, fmt.Errorf("%s: git rev-parse said %q", dir, out)
 	}
-	return &Store{gitDir: lines[0], commonDir: lines[1], warmed: make(chan warmed, 1), idle: make(chan *walker, idleWalkers)}, nil
+	s := &Store{gitDir: lines[0], commonDir: lines[1], warmed: make(chan warmed, 1), idle: make(chan *walker, idleWalkers)}
+	return s, s.supported()
 }
 
 // OpenGitDir opens the board of the git directory gitDir itself (a bare
@@ -70,7 +71,41 @@ func OpenGitDir(gitDir string) (*Store, error) {
 	if !ok {
 		return nil, fmt.Errorf("%s: not a git directory", gitDir)
 	}
-	return s, nil
+	return s, s.supported()
+}
+
+// supported refuses a repository whose refs or objects git-board doesn't
+// read: SHA-256 objects (storage.md: ids and versions are SHA-1), and
+// refs in a reftable (git 2.45+), where Heads, which reads the loose refs
+// and packed-refs, would list none of what git writes. Their marks are
+// the extensions of the repository's config.
+func (s *Store) supported() error {
+	data, err := os.ReadFile(filepath.Join(s.commonDir, "config"))
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	section := ""
+	for line := range strings.Lines(string(data)) {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "[") {
+			name, _, _ := strings.Cut(strings.Trim(line, "[]"), " ")
+			section = strings.ToLower(strings.TrimSpace(name))
+			continue
+		}
+		key, value, _ := strings.Cut(line, "=")
+		key, value = strings.ToLower(strings.TrimSpace(key)), strings.ToLower(strings.Trim(strings.TrimSpace(value), `"`))
+		switch {
+		case section != "extensions":
+		case key == "objectformat" && value != "sha1":
+			return fmt.Errorf("%s: a SHA-256 repository (extensions.objectFormat = %s): git-board reads SHA-1 repositories only", s.commonDir, value)
+		case key == "refstorage" && value != "files":
+			return fmt.Errorf("%s: a repository whose refs are in a %s (extensions.refStorage): git-board reads loose refs and packed-refs only; `git refs migrate --ref-format=files` (git 2.46+) converts it", s.commonDir, value)
+		}
+	}
+	return nil
 }
 
 // find is the repository holding dir, found as git finds it in the

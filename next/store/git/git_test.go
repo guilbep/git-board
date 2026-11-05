@@ -264,3 +264,36 @@ func real(t *testing.T, p string) string {
 	}
 	return r
 }
+
+// A repository git-board can't read the refs or objects of is refused at
+// open, with a sentence: a SHA-256 one, and one whose refs are a reftable
+// (git 2.45+), whose ref writes would land where no listing sees them.
+func TestRefusesAnotherFormat(t *testing.T) {
+	t.Parallel()
+	sha256 := t.TempDir()
+	if out, err := exec.Command("git", "init", "-q", "--object-format=sha256", sha256).CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v: %s", err, out)
+	}
+	reftable := t.TempDir()
+	if out, err := exec.Command("git", "init", "-q", reftable).CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v: %s", err, out)
+	}
+	// as git 2.45's init --ref-format=reftable writes it (git 2.43 has none)
+	f, err := os.OpenFile(filepath.Join(reftable, ".git", "config"), os.O_APPEND|os.O_WRONLY, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.WriteString("[Extensions]\n\tRefStorage = reftable\n")
+	f.Close()
+	for dir, want := range map[string]string{sha256: "SHA-256", reftable: "reftable"} {
+		if _, err := Open(ctx, dir); err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("Open(%s repository) = %v; want it refused", want, err)
+		}
+		if _, err := Open(ctx, filepath.Join(dir, "sub")); err == nil {
+			t.Errorf("Open(%s repository, from a folder under it) = nil; want it refused", want)
+		}
+		if _, err := OpenGitDir(filepath.Join(dir, ".git")); err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("OpenGitDir(%s repository) = %v; want it refused", want, err)
+		}
+	}
+}
