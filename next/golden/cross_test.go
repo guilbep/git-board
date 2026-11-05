@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -71,6 +72,27 @@ var writes = []string{
 	`me`,
 }
 
+// mdWrites are the writes the cross-write test runs on the Markdown
+// board, whose issues are its own.
+var mdWrites = []string{
+	`new "Cross write on a folder" prio=p1 -b "a body"`,
+	`comment c82cfa3 -b "a comment from the cross test"`,
+	`comment fe82974 -b "another, ünicode"`,
+	`comment fe82974 --edit-last -b "another, edited"`,
+	`edit c82cfa3 --title "Retitled by the cross test"`,
+	`edit fe82974 -b "a new body"`,
+	`set c82cfa3 prio=p0 est=3`,
+	`set c82cfa3 prio=p9`,
+	`move c82cfa3 in-review`,
+	`close fe82974 -c "closing it"`,
+	`reopen fe82974`,
+	`set fe82974 assignee=+@me`,
+	`comment 703c174 -b "on a deleted issue"`,
+	`undo c82cfa3`,
+	`delete fe82974 --yes`,
+	`labels`,
+}
+
 var shortIDHex = regexp.MustCompile(`\b[0-9a-f]{7,64}\b`)
 
 // binaries builds v1's git-board and git-board-next.
@@ -108,28 +130,41 @@ func binaries(t *testing.T) (v1, v2 string) {
 	return v1, v2
 }
 
-// TestCrossWrites: what one version writes, the other reads the same. On
-// a checkout of the basic board, v2 runs the writes, then v1 and v2 read
-// the board (ls, and show and log of every issue) and agree; then the
+// TestCrossWrites: what one version writes, the other reads the same, on
+// each datastore: git (basic), a Markdown folder (markdown) and
+// PostgreSQL (postgres, basic copied in; skipped without a server). On a
+// checkout of the board, v2 runs the writes, then v1 and v2 read the
+// board (ls, and show and log of every issue) and agree; then the
 // reverse, v1 writing. Each write prints the same, exits the same, on
 // both, its new ids aside.
 func TestCrossWrites(t *testing.T) {
 	t.Parallel()
 	one, two := binaries(t)
-	var basic Board
+	byName := map[string]Board{}
 	for _, b := range boards(t) {
-		if b.Name == "basic" {
-			basic = b
+		byName[b.Name] = b
+	}
+	for _, c := range []struct {
+		board  string
+		writes []string
+	}{{"basic", writes}, {"markdown", mdWrites}, {"postgres", writes}} {
+		b, ok := byName[c.board]
+		if !ok {
+			t.Fatalf("no %s golden board", c.board)
 		}
+		t.Run(c.board, func(t *testing.T) {
+			t.Parallel()
+			crossWrites(t, one, two, b, c.writes)
+		})
 	}
-	if basic.Name == "" {
-		t.Fatal("no basic golden board")
-	}
+}
+
+func crossWrites(t *testing.T, one, two string, board Board, writes []string) {
 	said := map[string][]Result{}
 	for _, writer := range []struct{ name, bin string }{{"v2", two}, {"v1", one}} {
 		t.Run(writer.name+" writes", func(t *testing.T) {
 			ctx := context.Background()
-			dir, home, _ := checkout(t, basic)
+			dir, home, _ := checkout(t, board)
 			for _, line := range writes {
 				r, err := Run(ctx, writer.bin, dir, home, Case{Line: line})
 				if err != nil {
@@ -137,9 +172,22 @@ func TestCrossWrites(t *testing.T) {
 				}
 				said[writer.name] = append(said[writer.name], r)
 			}
-			ids, err := basic.IssueIDs(ctx, dir)
+			ids, err := board.IssueIDs(ctx, dir)
 			if err != nil {
 				t.Fatal(err)
+			}
+			if board.Datastore == postgres { // the issues written meanwhile too
+				r, err := Run(ctx, one, dir, home, Case{Line: `ls "is:open,closed" --json id`})
+				if err != nil {
+					t.Fatal(err)
+				}
+				var listed []struct{ ID string }
+				json.Unmarshal(r.Stdout, &listed)
+				for _, l := range listed {
+					if !slices.Contains(ids, l.ID) {
+						ids = append(ids, l.ID)
+					}
+				}
 			}
 			cases := []Case{{"ls", `ls "is:open,closed" --json`}, {"labels", "labels --json"},
 				{"follows", `ls "follows:@me is:open,closed" --json`}, {"status", "status"}, {"status json", "status --json"}}
