@@ -35,7 +35,11 @@ type Undone struct {
 // forge isn't theirs to undo here. It is refused when someone else wrote
 // to the issue after it, unless force. Undoing twice redoes.
 func (s *Service) Undo(ctx context.Context, name string, force bool) (Undone, error) {
-	ctx = s.Board.Snapshot(ctx)
+	ctx, done, werr := s.writing(ctx)
+	if werr != nil {
+		return Undone{}, werr
+	}
+	defer done()
 	me, err := s.writer()
 	if err != nil {
 		return Undone{}, err

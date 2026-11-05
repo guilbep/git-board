@@ -27,6 +27,8 @@ type Service struct {
 	Folder string
 	// Views are .git-board.toml's, which an inbox follows by name.
 	Views map[string]View
+	// Writing, when set, brackets each write (a Markdown folder's).
+	Writing Writing
 }
 
 // notice tells s.Notice, if any.
