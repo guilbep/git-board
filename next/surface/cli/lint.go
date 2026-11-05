@@ -29,7 +29,8 @@ missing values on a configured single-cardinality field, orphan sprint
 labels (no matching [[sprints.list]] entry), and configured options no
 issue in the repo actually carries. With [branches] kinds: an issue with
 two kinds, a title whose [PREFIX] names another kind than its label (the
-label wins), and how many have no kind.
+label wins), and how many have no kind. With the cycle on, it first says
+how [cycle]'s keys were read.
 
 Exits 0 even with findings — this is a report, not a build gate — unless
 --strict is given.
@@ -55,6 +56,9 @@ yet in this version.`,
 			all, err := b.issues.List(cmd.Context(), issues.ListReq{})
 			if err != nil {
 				return err
+			}
+			if reads := app.LintReads(b.Config); len(reads) > 0 {
+				fmt.Fprintf(cmd.OutOrStdout(), "read:\n  %s\n", strings.Join(reads, "\n  "))
 			}
 			findings := app.Lint(all, b.Config)
 			printLint(cmd.OutOrStdout(), findings)

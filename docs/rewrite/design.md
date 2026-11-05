@@ -959,7 +959,7 @@ the plan's HTML in the cycle's evidence (the caller renders).
 
 **v1's CLI, closed for v0.12 (2026-11-05).** `init` (its templates;
 not yet the start from origin's GitHub labels and Project), `lint`
-(not yet `--create-labels`), `export --md` and `import --md` (the
+(its cycle `read:` lines too; not yet `--create-labels`), `export --md` and `import --md` (the
 Markdown datastore's files, `mdfiles`), `reset --hard`, `push --prune`
 and the reset guards on pull and push, and `datastore drop` are v1's,
 each held to v1 by a cross test in `next/golden` (`TestCrossInit`,

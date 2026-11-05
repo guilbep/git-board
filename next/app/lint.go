@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/guilbep/git-board/next/conf"
+	"github.com/guilbep/git-board/next/domain/cycle"
 	"github.com/guilbep/git-board/next/domain/issues"
 	"github.com/guilbep/git-board/next/forge"
 	"github.com/guilbep/git-board/next/tools/ghproject"
@@ -495,4 +496,37 @@ func labelOf(s *issues.Schema, field, value string) string {
 		return value
 	}
 	return field + ":" + value
+}
+
+// LintReads is how today's forms of [cycle] were read, so a project can
+// write the new ones when it wants to: with the cycle on, else none.
+func LintReads(cfg *Config) []string {
+	if !cfg.On(cycle.Feature) {
+		return nil
+	}
+	c := cfg.Cycle
+	var out []string
+	if c.Steps == nil {
+		with := ""
+		if len(c.Signoffs) > 0 {
+			with = " with a sign-off per validation status"
+		}
+		var ids []string
+		for _, s := range c.Stages(cfg.Schema.Fields["status"].Options).Steps {
+			ids = append(ids, s.ID)
+		}
+		out = append(out, fmt.Sprintf("steps: none, so the default list%s: %s", with, strings.Join(ids, ", ")))
+	}
+	for _, id := range slices.Sorted(maps.Keys(c.Signoffs)) {
+		role := c.Signoffs[id]
+		out = append(out, fmt.Sprintf("[cycle.signoffs] %s = %q: the sign-off step %s, at status %s, held by the role %s", id, role, id, id, role))
+	}
+	for _, kind := range slices.Sorted(maps.Keys(c.KindsFile)) {
+		if cfg.File.Type("cycle", "kinds", kind) != "String" {
+			continue
+		}
+		r := c.Kinds[kind]
+		out = append(out, fmt.Sprintf("[cycle.kinds] %s = %q: [cycle.kinds.%s] tests = %q", kind, r, kind, r))
+	}
+	return out
 }
