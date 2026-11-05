@@ -517,3 +517,59 @@ func newDelete() *cobra.Command {
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "don't ask")
 	return cmd
 }
+
+func newUndo() *cobra.Command {
+	var force bool
+	var js *jsonOut
+	cmd := &cobra.Command{
+		Use:   "undo [<id>]",
+		Short: "Undo your last change to an issue",
+		Long: `Undo the last change you made to an issue, by writing its inverse: a
+label added is removed and one removed added back, a status, a title or
+a text goes back to what it was, a new comment is deleted. With no id,
+your last change to any issue, by its time.
+
+A change is what one command wrote: git board edit -e changes the title
+and the description at once, and undo puts both back. Undoing twice
+redoes. Changes a sync pulled from a forge aren't yours to undo here.
+
+It refuses, exit code 2, what it can't undo, and says why: creating an
+issue (git board delete deletes it), a delete, a change of metadata. It
+refuses too when someone else wrote to the issue after you, or a sync
+pulled into it: --force undoes yours anyway, over theirs.`,
+		Example: `  git board undo a1b2c3d
+  git board undo                     # your last change, on any issue
+  git board undo a1b2c3d --force     # though someone wrote after you`,
+		Args: cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			b, err := open(cmd, true)
+			if err != nil {
+				return err
+			}
+			defer b.Close()
+			name := ""
+			if len(args) == 1 {
+				name = args[0]
+			}
+			u, err := b.issues.Undo(cmd.Context(), name, force)
+			if errors.Is(err, issues.ErrCantUndo) || errors.Is(err, issues.ErrWroteAfter) {
+				return usageError{err}
+			}
+			if err != nil {
+				return err
+			}
+			out := cmd.OutOrStdout()
+			if js.on() {
+				return js.write(out, u)
+			}
+			fmt.Fprintf(out, "undone on %s %s:\n", shortID(u.Issue), u.Title)
+			for _, w := range u.What {
+				fmt.Fprintln(out, "  "+w)
+			}
+			return nil
+		},
+	}
+	cmd.Flags().BoolVar(&force, "force", false, "undo though someone else wrote to the issue after you")
+	js = addJSON(cmd, `print {"issue", "title", "undone", "what"}`, jsonFields(issues.Undone{}), true)
+	return cmd
+}
