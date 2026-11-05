@@ -148,6 +148,10 @@ func TestBoardRoutes(t *testing.T) {
 	if m.Me == nil || m.Me.Name != "Bob" {
 		t.Fatalf("a new me = %+v", m)
 	}
+	// Bob again: the request's mistake, not the server's
+	if e := want[apiError](t, a.do("PUT", "/api/me", map[string]any{"name": "Bob", "email": "bob@example.com"}), 400); e.Code != "invalid" || e.Field != "name" {
+		t.Errorf("Bob made twice: %+v", e)
+	}
 	// Bob writes now
 	th := want[threadBody](t, a.do("POST", "/api/issues/"+string(ids[1])+"/comments", map[string]any{"body": "me too"}), 201)
 	_ = th

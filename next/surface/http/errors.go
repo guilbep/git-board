@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -77,7 +78,11 @@ func writeError(w http.ResponseWriter, r *http.Request, log *slog.Logger, err er
 	if errors.As(err, &fe) {
 		body.Field = fe.field
 	}
-	if status >= 500 && log != nil {
+	switch {
+	case log == nil:
+	case r.Context().Err() != nil: // the client went (a page left): its work was cut, nothing failed
+		log.LogAttrs(context.Background(), slog.LevelDebug, "request canceled", slog.String("method", r.Method), slog.String("path", r.URL.Path))
+	case status >= 500:
 		log.LogAttrs(r.Context(), slog.LevelError, "request failed", slog.String("method", r.Method),
 			slog.String("path", r.URL.Path), slog.String("code", code), slog.String("error", body.Message))
 	}

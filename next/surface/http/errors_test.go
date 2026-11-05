@@ -2,7 +2,11 @@ package httpapi
 
 import (
 	"bytes"
+	"context"
+	"fmt"
+	"log/slog"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 )
@@ -161,5 +165,20 @@ func TestServedHost(t *testing.T) {
 		if got := servedHost(c.host, c.exposed); got != c.ok {
 			t.Errorf("servedHost(%q, %v) = %t", c.host, c.exposed, got)
 		}
+	}
+}
+
+// A request its client left (a page navigating away) cuts the work under
+// it: that is no server error, and isn't logged as one.
+func TestCanceledIsNoError(t *testing.T) {
+	t.Parallel()
+	var buf bytes.Buffer
+	log := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	r := httptest.NewRequest("GET", "/api/sync", nil).WithContext(ctx)
+	writeError(httptest.NewRecorder(), r, log, fmt.Errorf("git remote: signal: killed"))
+	if strings.Contains(buf.String(), "level=ERROR") || !strings.Contains(buf.String(), "request canceled") {
+		t.Errorf("logged:\n%s", buf.String())
 	}
 }

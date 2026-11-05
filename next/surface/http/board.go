@@ -146,7 +146,10 @@ func (s *Server) setMe(ctx context.Context, r setMeReq) (meRes, error) {
 	case r.ID != "":
 		err = b.People.Adopt(ctx, r.ID)
 	case r.Name != "":
-		_, err = b.People.New(ctx, r.Name, r.Email)
+		// a person the board has already is the request's: write as them ({id})
+		if _, err = b.People.New(ctx, r.Name, r.Email); errors.Is(err, people.ErrExists) {
+			return meRes{}, invalid("name", err)
+		}
 	case r.Avatars == nil:
 		return meRes{}, invalid("id", errors.New("an id, a name and an email, or avatars"))
 	}
