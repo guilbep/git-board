@@ -158,7 +158,9 @@ func (k *K[S, R]) Create(ctx context.Context, b *Board, id ID, ops ...Op) (Entit
 		return Entity[S]{}, err
 	}
 	e := Entity[S]{ID: id, Version: v, Clock: 1, State: st}
-	return e, k.through(ctx, b, e, "")
+	err = k.through(ctx, b, e, "")
+	b.landed(ctx, Change{Kind: k.s.Name, ID: id, Version: v})
+	return e, err
 }
 
 // Do reads the entity, asks decide for the operations, and writes them in
@@ -198,7 +200,9 @@ func (k *K[S, R]) Do(ctx context.Context, b *Board, id ID, decide func(cur Entit
 			}
 		}
 		next := Entity[S]{ID: id, Version: nv, Clock: clock + 1, State: st}
-		return next, k.through(ctx, b, next, v)
+		err = k.through(ctx, b, next, v)
+		b.landed(ctx, Change{Kind: k.s.Name, ID: id, Version: nv})
+		return next, err
 	}
 }
 

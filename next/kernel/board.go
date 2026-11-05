@@ -17,6 +17,9 @@ type Board struct {
 	ds    store.Datastore
 	view  View
 	kinds map[string]kindSpec
+
+	mu        sync.Mutex
+	observers []func(ctx context.Context, c []Change)
 }
 
 // Open opens a board on ds, its view v, with its kinds.
@@ -30,6 +33,26 @@ func Open(ctx context.Context, ds store.Datastore, v View, kinds ...Kind) (*Boar
 		b.kinds[s.name] = s
 	}
 	return b, nil
+}
+
+// Observe registers f, told of each change this process wrote, once it
+// landed: the Markdown render, the forge-only sender (design.md, The
+// write path, 6). f runs on the writer's goroutine, after the view took
+// the change.
+func (b *Board) Observe(f func(ctx context.Context, c []Change)) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.observers = append(b.observers, f)
+}
+
+// landed tells the observers of a change written.
+func (b *Board) landed(ctx context.Context, c ...Change) {
+	b.mu.Lock()
+	fs := slices.Clip(b.observers)
+	b.mu.Unlock()
+	for _, f := range fs {
+		f(ctx, c)
+	}
 }
 
 // Store is the board's datastore.

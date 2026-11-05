@@ -350,3 +350,29 @@ func TestQueries(t *testing.T) {
 		}
 	}
 }
+
+// An observer is told of each write this process made, once it landed:
+// a write that writes nothing, and another process's, tell it nothing.
+func TestObserve(t *testing.T) {
+	t.Parallel()
+	ds := mem.New(t.TempDir())
+	b := open(t, ds, t.TempDir())
+	var got []kernel.Change
+	b.Observe(func(_ context.Context, c []kernel.Change) { got = append(got, c...) })
+	e, err := notes.Create(ctx, b, "", line("one"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	e2, err := notes.Do(ctx, b, e.ID, func(kernel.Entity[note]) ([]kernel.Op, error) { return []kernel.Op{line("two")}, nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := notes.Do(ctx, b, e.ID, func(kernel.Entity[note]) ([]kernel.Op, error) { return nil, nil }); err != nil {
+		t.Fatal(err)
+	}
+	add(t, ds, string(e.ID), 3, string(e2.Version), line("theirs"))
+	want := []kernel.Change{{Kind: "note", ID: e.ID, Version: e.Version}, {Kind: "note", ID: e.ID, Version: e2.Version}}
+	if !slices.Equal(got, want) {
+		t.Fatalf("observed %v, want %v", got, want)
+	}
+}
