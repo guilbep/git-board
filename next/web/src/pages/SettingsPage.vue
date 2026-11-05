@@ -103,6 +103,7 @@
       </div>
 
       <SyncSettings v-if="tab === 'sync'" />
+      <ProjectSettings v-if="tab === 'project'" />
 
       <DatastoreSettings v-if="tab === 'datastore'" />
       <NumbersSettings v-if="tab === 'numbers'" />
@@ -133,6 +134,7 @@ import LabelsSettings from '@/components/LabelsSettings.vue';
 import ReleaseSettings from '@/components/ReleaseSettings.vue';
 import ReposSettings from '@/components/ReposSettings.vue';
 import SyncSettings from '@/components/SyncSettings.vue';
+import ProjectSettings from '@/components/ProjectSettings.vue';
 import NumbersSettings from '@/components/NumbersSettings.vue';
 import DatastoreSettings from '@/components/DatastoreSettings.vue';
 import { datastoreSummary } from '@/datastore';

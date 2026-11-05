@@ -78,8 +78,8 @@
                       <span class="fl-sum">{{ summary(f) }}</span>
                     </span>
                     <span class="fl-values">{{ valueless(f) ? '' : f.options.join(' → ') }}</span>
-                    <span v-if="configModel?.forges.length && f.name.trim()" class="fl-places">
-                      <span v-for="pl in placeChips(f)" :key="pl.forge" class="fl-place" :class="{ 'fl-place-own': pl.own }" :title="`On ${pl.title}: ${pl.text}`">
+                    <span v-if="(configModel?.forges.length || project?.project) && f.name.trim()" class="fl-places">
+                      <span v-for="pl in placeChips(f)" :key="pl.forge" class="fl-place" :class="{ 'fl-place-own': pl.own, 'fl-place-missing': pl.missing }" :title="`On ${pl.title}: ${pl.text}${pl.missing ? ' — the GitHub Project has no such column (its last check)' : ''}`">
                         <GbIcon :name="pl.kind === 'gitlab' ? 'gitlab' : 'github'" small />{{ pl.text }}
                       </span>
                     </span>
@@ -325,15 +325,16 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { onLive } from '@/live';
-import { getLabels } from '@/api';
+import { getLabels, getProject, type ProjectStatus } from '@/api';
 import type { ConfigField } from '@/configparse';
 import { fieldPresets, takeUnique } from '@/configpresets';
 import { allNumbers, inferType, type FieldType } from '@/fieldinfer';
 import { fieldToToml, tomlToField, type FieldToml } from '@/fieldtoml';
 import { SectionDraft, configModel, configModelError, loadConfigModel, inputValue } from '@/configmodel';
 import { fieldTarget, targetLabels, type ForgeMapping } from '@/fieldtargets';
-import { placesBody, placesOf, placesToml, samePlaces, type Places } from '@/fieldplaces';
+import { columnFor, placesBody, placesOf, placesToml, samePlaces, type Places } from '@/fieldplaces';
 import FieldPlaces from '@/components/FieldPlaces.vue';
+import { projectMark } from '@/projectview';
 import GbIcon from '@/components/GbIcon.vue';
 import { message } from '@/issue';
 import ConfigCard from '@/components/configforms/ConfigCard.vue';
@@ -535,21 +536,29 @@ function numbers(f: FieldRow): boolean {
 }
 
 // where a field lives on each forge, as the draft has it: a chip each in
-// the list, outlined when it isn't the type's default
-function placeChips(f: FieldRow): { forge: string; kind: string; title: string; text: string; own: boolean }[] {
+// the list, outlined when it isn't the type's default, marked when the
+// GitHub Project's last check found no such column. Without [forges]
+// tables, the server's places say the Project's columns (GET
+// /api/github-project).
+function placeChips(f: FieldRow): { forge: string; kind: string; title: string; text: string; own: boolean; missing: boolean }[] {
   const m = configModel.value;
   const v = draft.value.value;
   if (!m || !v) return [];
+  const name = f.name.trim();
+  const places = project.value?.places ?? [];
+  if (!m.forges.length) {
+    return places.filter((p) => p.field === name && p.to === 'project').map((p) => ({ forge: p.forge, kind: p.kind, title: 'GitHub', text: `Project › ${p.column ?? name}`, own: p.to !== p.default, missing: p.on_project === false }));
+  }
   const roles = Object.keys(m.roles ?? {});
   const projectNumber = m.github_project?.number ?? 0;
   const fields = fieldsWith(f);
-  const name = f.name.trim();
   return m.forges.map((forge) => {
     const to = fieldTarget({ ...forge, fields: v.places[forge.name] ?? {} }, fields, name, roles, projectNumber);
     const def = fieldTarget({ ...forge, fields: {} }, fields, name, roles, projectNumber);
     const column = v.places[forge.name]?.[name]?.field;
-    const text = to === 'project' ? `Project › ${column ?? name}` : (targetLabels[to] ?? to);
-    return { forge: forge.name, kind: forge.kind, title: forge.kind === 'gitlab' ? 'GitLab' : 'GitHub', text, own: to !== def };
+    const mark = to === 'project' ? projectMark(places, forge.name, name) : null;
+    const text = to === 'project' ? `Project › ${column ?? mark?.column ?? columnFor(name)}` : (targetLabels[to] ?? to);
+    return { forge: forge.name, kind: forge.kind, title: forge.kind === 'gitlab' ? 'GitLab' : 'GitHub', text, own: to !== def, missing: !!mark?.missing && (column ?? mark.column) === mark.column };
   });
 }
 // the model's fields with this one as drafted: its type decides its places
@@ -961,7 +970,15 @@ function reset() {
 
 const save = () => draft.save();
 
+// the GitHub Project's last check, where the fields it holds are found:
+// the server's, read again each time the tab shows (the page keeps the
+// tabs mounted); a failure just marks nothing
+const project = ref<ProjectStatus | null>(null);
+const loadProject = () => getProject().then((p) => (project.value = p)).catch(() => {});
+watch(() => route.params.tab, (tab) => tab === 'fields' && void loadProject());
+
 onMounted(() => {
+  void loadProject();
   void draft.load();
   // how many issues carry each field's values (GET /api/labels): a value
   // counted once each, so an issue with two of a field's counts twice
@@ -1076,6 +1093,7 @@ h2, p { margin: 0; }
 .fs-tvalue { font-family: var(--font-mono); font-weight: 700; }
 .fs-cell { width: 100%; box-sizing: border-box; min-height: 1.75rem; padding: .25rem .5rem; border: 1px solid var(--border); background: var(--bg); color: var(--fg); font: inherit; font-size: .8125rem; }
 .fs-cell:focus { outline: 2px solid var(--fg); outline-offset: 2px; }
+.fl-place-missing { border-color: var(--warning); color: var(--warning-fg, var(--fg)); }
 .fl-places { display: flex; flex-wrap: wrap; gap: .25rem; margin-top: .25rem; }
 .fl-place { display: inline-flex; align-items: center; gap: .25rem; padding: 0 .375rem; border: var(--border-w) solid var(--border-subtle); color: var(--fg-muted); font-size: .75rem; }
 .fl-place-own { border-color: var(--fg); color: var(--fg); }

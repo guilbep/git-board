@@ -21,10 +21,28 @@ const work = process.env.E2E_DIR ?? mkdtempSync(join(tmpdir(), 'git-board-next-e
 rmSync(work, { recursive: true, force: true });
 const bin = join(root, 'next/web/e2e/.bin/git-board-next');
 
-// the fake GitHub: GET /repos/<owner>/<repo> is the repository, as named
+// the fake GitHub: GET /repos/<owner>/<repo> is the repository, as named;
+// POST /graphql, o's Project 1 (project.spec.ts): a Status field, and one
+// item, an issue no board here has
+const project = {
+  id: 'PVT_o', title: 'The e2e Project',
+  fields: { nodes: [{ id: 'F-status', name: 'Status', dataType: 'SINGLE_SELECT', options: [{ id: 'o-ready', name: 'Ready' }, { id: 'o-done', name: 'Done' }] }] },
+  items: { pageInfo: { hasNextPage: false, endCursor: '1' }, nodes: [{ id: 'PVTI_1', content: { __typename: 'Issue', number: 77, url: 'https://github.com/o/elsewhere/issues/77', title: 'Elsewhere' },
+    fieldValues: { nodes: [{ __typename: 'ProjectV2ItemFieldSingleSelectValue', name: 'Ready', field: { name: 'Status' } }] } }] },
+};
 const github = createServer((req, res) => {
   const url = (req.url ?? '').split('?')[0];
   res.setHeader('Content-Type', 'application/json');
+  if (req.method === 'POST' && url === '/graphql') {
+    let body = '';
+    req.on('data', (c) => (body += c));
+    req.on('end', () => {
+      const { variables } = JSON.parse(body);
+      const p = variables.owner === 'o' && variables.n === 1 ? project : null;
+      res.end(JSON.stringify({ data: { repositoryOwner: { projectV2: p } } }));
+    });
+    return;
+  }
   const m = /^\/repos\/([^/]+)\/([^/]+)$/.exec(url);
   if (!m) return res.writeHead(404).end('{"message":"Not Found"}');
   res.end(JSON.stringify({ id: 1, full_name: `${m[1]}/${m[2]}`, private: false }));
