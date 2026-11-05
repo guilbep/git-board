@@ -34,6 +34,9 @@ const (
 // with a note.
 type Whole struct {
 	Remote string
+	// DryRun is the check: a fetch and compare, the forges' dry run (the
+	// caller's Forges) and the Project's check; nothing written.
+	DryRun bool
 	Forges func(context.Context) error
 	// NoProject skips the GitHub Project's step (sync --git).
 	NoProject bool
@@ -82,13 +85,17 @@ func (b *Board) SyncWhole(ctx context.Context, w Whole) error {
 	}
 	if gp, _ := b.Config.Tools.GithubProject.Get(); gp.Owner != "" && gp.Number != 0 && !w.NoProject {
 		steps[2].do = func(ctx context.Context) (string, error) {
-			r, err := b.ProjectRun(ctx, ghproject.Both, true, 0)
+			r, err := b.ProjectRun(ctx, ghproject.Both, !w.DryRun, 0)
 			return ProjectNote(r), err
 		}
 	}
 	if has {
 		steps[0].do = func(ctx context.Context) (string, error) { return b.Pull(ctx, w.Remote) }
 		steps[3].do = func(ctx context.Context) (string, error) { return b.Push(ctx, w.Remote) }
+		if w.DryRun {
+			steps[0].do = func(ctx context.Context) (string, error) { return b.pullCheck(ctx, w.Remote) }
+			steps[3].do, steps[3].skip = nil, "a check pushes nothing: the fetch compared"
+		}
 	}
 	if w.Forges != nil {
 		steps[1].do = func(ctx context.Context) (string, error) { return "", w.Forges(ctx) }

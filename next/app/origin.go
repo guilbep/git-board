@@ -107,6 +107,32 @@ func (b *Board) pullNumbers(ctx context.Context, remote string) (string, error) 
 	return "", b.fetchNumbers(ctx, remote)
 }
 
+// pullCheck is Pull's check: a fetch, which merges nothing, and what it
+// would do with the numbers.
+func (b *Board) pullCheck(ctx context.Context, remote string) (string, error) {
+	if _, _, err := b.Fetch(ctx, remote); err != nil {
+		return "", err
+	}
+	if err := b.switched(ctx); err != nil {
+		return "", err
+	}
+	if remote != NumbersRemote {
+		return "", nil
+	}
+	theirs, err := b.remoteSeq(ctx, remote)
+	if err != nil || theirs == "" {
+		return "", err
+	}
+	ours, err := b.ref(ctx, seqRef)
+	if err != nil {
+		return "", err
+	}
+	if ours != "" && ours != theirs && b.behind(ctx, theirs, ours) {
+		return "would send refs/board/seq: numbers " + remote + " hasn't", nil
+	}
+	return "", nil
+}
+
 // counterAt is this clone's counter and where it is; ok false for none.
 func (b *Board) counterAt(ctx context.Context) (c issues.Counter, at string, ok bool, err error) {
 	data, at, err := b.Kernel.Store().Caps().Counter.Count(ctx)
