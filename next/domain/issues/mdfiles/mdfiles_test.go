@@ -17,7 +17,6 @@ import (
 	"github.com/guilbep/git-board/next/domain/people"
 	"github.com/guilbep/git-board/next/kernel"
 	"github.com/guilbep/git-board/next/store/md"
-	bsync "github.com/guilbep/git-board/next/sync"
 	"github.com/guilbep/git-board/next/view"
 )
 
@@ -43,7 +42,7 @@ func open(t *testing.T, dir, folder string, me kernel.ID) *board {
 	if err != nil {
 		t.Fatal(err)
 	}
-	kb, err := kernel.Open(ctx, ds, v, issues.Kind, people.Kind, bsync.Kind)
+	kb, err := kernel.Open(ctx, ds, v, issues.Kind, people.Kind)
 	if err != nil {
 		t.Fatal(err)
 	}

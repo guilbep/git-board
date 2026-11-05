@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/guilbep/git-board/next/domain/issues"
 	"github.com/guilbep/git-board/next/domain/people"
@@ -266,8 +267,12 @@ func TestUndoRefuses(t *testing.T) {
 		t.Fatalf("undone already: %v", err)
 	}
 
-	// no name: the latest change, on any issue
-	if err := s.SetStatus(ctx, two.ID, "closed"); err != nil {
+	// no name: the latest change by its time, on any issue (a later
+	// second than the others, which all share this one)
+	raw, _ = json.Marshal(map[string]any{"status": "closed"})
+	if _, err := issues.Kind.Do(ctx, s.Board, kernel.ID(two.ID), func(kernel.Entity[issues.State]) ([]kernel.Op, error) {
+		return []kernel.Op{{Kind: "set-status", Author: string(s.Me), Time: time.Now().Unix() + 60, Data: raw}}, nil
+	}); err != nil {
 		t.Fatal(err)
 	}
 	if u, err := s.Undo(ctx, "", false); err != nil || u.Issue != two.ID {
