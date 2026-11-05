@@ -57,8 +57,6 @@ export function anchorOf(s: string | undefined): Anchor | undefined {
   return { text: 'body', v: Number(m[1]), slug: m[2]!, ...(m[3] ? { item: Number(m[3]) } : {}) };
 }
 
-export const anchorString = (a: Anchor): string => `${a.text}@v${a.v}/${a.slug}${a.item ? `#${a.item}` : ''}`;
-
 // anchorLabel is "§3 › 3", "§3"; a slug no section has keeps its name.
 export function anchorLabel(a: Anchor, sections: Section[]): string {
   const s = sections.find((x) => x.slug === a.slug);

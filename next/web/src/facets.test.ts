@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { Issue } from './api/types.ts';
 import type { Fields } from './fields.ts';
-import { NONE, parseSelection, parseSort, pick, prefillFrom, sortIssues, sortOptions } from './facets.ts';
+import { NONE, parseSelection, parseSort, pick, prefillFrom, sortOptions } from './facets.ts';
 
 const issue = (id: string, title: string, labels: string[], status = 'open'): Issue => ({ id, title, shown_title: title, status, labels, updated_at: '', created_at: '', comments: 0, version: '' });
 
@@ -20,21 +20,6 @@ const issues = [
   issue('d4', 'Docs', ['est:1']),
 ];
 const ids = (list: Issue[]) => list.map((i) => i.id).join(' ');
-
-test('numeric fields sort as numbers, missing last both ways', () => {
-  assert.equal(ids(sortIssues(issues, { key: 'est', desc: false }, fields)), 'd4 b2 a1 c3');
-  assert.equal(ids(sortIssues(issues, { key: 'est', desc: true }, fields)), 'a1 b2 d4 c3');
-});
-
-test('option fields sort by their configured order, missing last both ways', () => {
-  assert.equal(ids(sortIssues(issues, { key: 'status', desc: false }, fields)), 'b2 a1 c3 d4');
-  assert.equal(ids(sortIssues(issues, { key: 'status', desc: true }, fields)), 'c3 a1 b2 d4');
-});
-
-test('title, id and state sort too', () => {
-  assert.equal(ids(sortIssues(issues, { key: 'title', desc: false }, fields)), 'd4 b2 c3 a1');
-  assert.equal(ids(sortIssues(issues, { key: 'is', desc: true }, fields)), 'a1 b2 d4 c3');
-});
 
 test('sort specs: the URL form and the view form', () => {
   assert.deepEqual(parseSort('-prio'), { key: 'prio', desc: true });
@@ -69,23 +54,6 @@ test('pick: a click toggles, Alt keeps only one then all but it, Shift a range',
   assert.deepEqual(pick(['a'], 'd', order, { shift: true, anchor: 'b' }), ['a', 'b', 'c', 'd']);
   assert.deepEqual(pick(['a', 'b', 'c', 'd'], 'c', order, { shift: true, anchor: 'a' }), ['d']);
   assert.deepEqual(pick([], 'c', order, { shift: true }), ['c']); // no anchor: a plain toggle
-});
-
-test('sortIssues sorts by forge number, issues without one last', () => {
-  const withForge = (id: string, n?: string): Issue => ({ ...issue(id, id, []), forges: n ? [{ name: 'GitHub', url: `https://github.com/o/r/issues/${n}`, number: n }] : [] });
-  const sorted = sortIssues([withForge('a', '1436'), withForge('b'), withForge('c', '87'), withForge('d', '2528')], { key: 'links', desc: false }, {});
-  assert.deepEqual(sorted.map((i) => i.id), ['c', 'a', 'd', 'b']);
-  const desc = sortIssues([withForge('a', '1436'), withForge('b'), withForge('c', '87')], { key: 'links', desc: true }, {});
-  assert.deepEqual(desc.map((i) => i.id), ['a', 'c', 'b']);
-});
-
-test('sortIssues: a role an issue takes from the project sorts as its value', () => {
-  const people = [
-    { ...issue('c', 'c', ['lead-dev:carol']) },
-    { ...issue('b', 'b', []), inherited: ['lead-dev:bob'] },
-    { ...issue('a', 'a', ['lead-dev:alice']) },
-  ];
-  assert.equal(sortIssues(people, { key: 'lead-dev', desc: false }, {}).map((i) => i.id).join(' '), 'a b c');
 });
 
 test('prefillFrom: a new issue starts with the values the filter picks, not a role the project gives it', () => {

@@ -2,9 +2,8 @@
      19): the title alone, on one line where it can; the fields line, the
      status and its next step first, "by #N" for what blocks it, the top
      fields (a person's as faces, an empty one to fill), "+N more" or
-     "More fields", the one way to the others; the branch line; then Spec
-     and Linked
-     issues while they have something to say. The identity (number,
+     "More fields", the one way to the others. (The branch line, the
+     spec's verdict and the linked issues are the cycle's, M6.) The identity (number,
      forges, bell) is the bar's. A value opens its own editor, dense
      (FieldEditor); "+N more" lists every field (FieldPanel). -->
 <template>
@@ -50,7 +49,6 @@
       </GbPopover>
     </div>
 
-    <IssueSide class="gb-head-extra" :linked="refs.in" :spec="spec" :reviewer="reviewer" @open="(id) => emit('open', id)" />
   </div>
 </template>
 
@@ -63,12 +61,10 @@ import { displayName, fieldValues, formatValue, typeOf, type Fields } from '@/fi
 import { fieldLine, labelLine } from '@/headfields';
 import { labelList, loadLabelList } from '@/labellist';
 import { me, people } from '@/me';
-import type { SpecState } from '@/spec';
 import FieldPanel from '@/components/FieldPanel.vue';
 import LabelPicker from '@/components/LabelPicker.vue';
 import GbIcon from '@/components/GbIcon.vue';
 import GbPopover from '@/components/GbPopover.vue';
-import IssueSide from '@/components/IssueSide.vue';
 import StatusStepper from '@/components/StatusStepper.vue';
 import ValueMark from '@/components/ValueMark.vue';
 
@@ -80,8 +76,6 @@ const props = defineProps<{
   titleId: string;
   renaming: boolean;
   setStatus: (s: 'open' | 'closed') => Promise<boolean>;
-  spec?: SpecState | undefined;
-  reviewer?: { name: string; role?: string | undefined } | undefined;
 }>();
 const emit = defineEmits<{ changed: []; labels: [add: string[], remove: string[]]; open: [id: string] }>();
 

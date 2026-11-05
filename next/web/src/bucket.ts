@@ -10,6 +10,3 @@ export interface Bucket {
   next?: string | undefined;
   loading?: boolean | undefined;
 }
-
-// how many issues a bucket holds: its total once known
-export const sizeOf = (b: Bucket) => b.total ?? b.issues.length;

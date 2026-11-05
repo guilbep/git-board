@@ -108,37 +108,6 @@ export function prefillFrom(facets: Facet[], fields: Fields): Record<string, str
   );
 }
 
-/**
- * Numeric fields as numbers (est 3.5 between 3 and 4), fields with options
- * in their configured order, the rest alphabetically; issues without the
- * value last either way, as the server's numeric sort does.
- */
-export function sortIssues(issues: Issue[], sort: Sort | null, fields: Fields): Issue[] {
-  if (!sort) return issues;
-  const { key, desc } = sort;
-  const field = fields[key];
-  // links: the number on the issue's first forge
-  const numeric = key === 'links' || field?.numeric || field?.type === 'number';
-  const value = (i: Issue) => {
-    if (key === 'links') return i.forges?.find((f) => f.number)?.number ?? null;
-    const v = key === 'id' ? i.id : key === 'title' ? i.title : valuesOf(i, key)[0]!;
-    return v === NONE || ((field?.numeric || field?.type === 'number') && Number.isNaN(Number(v))) ? null : v;
-  };
-  const options = field?.options ?? [];
-  const rank = (v: string) => (options.includes(v) ? options.indexOf(v) : options.length);
-  const compare = (a: string, b: string) =>
-    numeric
-      ? Number(a) - Number(b)
-      : rank(a) - rank(b) || a.localeCompare(b, undefined, { numeric: true });
-
-  return [...issues].sort((x, y) => {
-    const a = value(x);
-    const b = value(y);
-    if (a === null || b === null) return a === null ? (b === null ? 0 : 1) : -1;
-    return desc ? compare(b, a) : compare(a, b);
-  });
-}
-
 /** An older link's ticks: one f.<facet> key per facet, one entry per value. */
 export function parseSelection(query: Record<string, unknown>): Selection {
   const sel: Selection = {};

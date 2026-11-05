@@ -1,6 +1,5 @@
 <!-- Settings › Experimental: the [experimental] table, the work-in-progress
-     features (experimental.ts): the development cycle, the coding agents,
-     the worktrees. Off by default; a toggle writes the table at once, for
+     features (experimental.ts): the development cycle. Off by default; a toggle writes the table at once, for
      the whole team. A clone's git config board.experimental wins over it
      there, and the page says so. -->
 <template>

@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { IssueEvent } from './api/types.ts';
 import {
-  anchorLabel, anchorOf, anchorString, applySuggestion, changeOf, criteriaOf, ticksOf, diffMarkdown, isTick, lineAt, mdSections, sectionsOf, slugs, stateOf, suggestionOf, version, versions,
+  anchorLabel, anchorOf, applySuggestion, changeOf, criteriaOf, ticksOf, diffMarkdown, isTick, lineAt, mdSections, sectionsOf, slugs, stateOf, suggestionOf, version, versions,
 } from './sections.ts';
 
 // 6a's description, as Markdown and as the server renders it
@@ -54,8 +54,6 @@ test('anchorOf parses the grammar', () => {
   assert.equal(anchorOf('plan@a1f0/steps#4'), undefined);
   assert.equal(anchorOf('body@v0/x'), undefined);
   assert.equal(anchorOf(undefined), undefined);
-  assert.equal(anchorString(at('body@v1/expected#3')), 'body@v1/expected#3');
-  assert.equal(anchorString(at('body@v2/intro')), 'body@v2/intro');
 });
 
 test('anchorLabel', () => {

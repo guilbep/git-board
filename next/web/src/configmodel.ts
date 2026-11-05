@@ -13,7 +13,6 @@ import { reorderTables } from '@/tomlorder';
 
 export const configModel = ref<ConfigModel | null>(null);
 export const configModelError = ref('');
-const loaded = ref(false);
 let pending: Promise<void> | null = null;
 
 // loadConfigModel reads the file's sections once; a save refreshes. The
@@ -25,7 +24,6 @@ export function loadConfigModel(): Promise<void> {
       forges = sync?.forges ?? [];
       on = board?.experimental ?? [];
       takeFile(file);
-      loaded.value = true;
       pending = null;
     },
     (e) => {
@@ -36,7 +34,6 @@ export function loadConfigModel(): Promise<void> {
   return pending;
 }
 
-export const configModelReady = computed(() => loaded.value);
 
 let forges: NonNullable<Parameters<typeof modelOf>[0]['forges']> = [];
 let on: string[] = [];
