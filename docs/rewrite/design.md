@@ -766,7 +766,11 @@ One table, in `app`, read by both adapters. Errors go to stderr prefixed
   routes is recorded. v2 must give the same, field by field.
 - **Cross-writes.** `make compat` builds both binaries and runs scripts
   that alternate them on one board: v2 writes, v1 reads, and the other
-  way round, on git, PostgreSQL and Markdown.
+  way round, on git, PostgreSQL and Markdown. On Markdown the rendered
+  files too (`next/golden/mdfiles_test.go`): after one version's writes
+  the folder is what the other renders from no file; the same hand edits
+  are read in the same (operations, conflicts, files); a `datastore
+  copy` into a folder renders the same files.
 - **Budgets.** The benchmarks of section 4 run on a 20,000-issue board in
   CI (nightly), and fail above budget.
 - **The web app's e2e tests** (`web/e2e`) run against `git-board-next
