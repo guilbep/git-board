@@ -934,7 +934,9 @@ pull|push|sync`, `fetch`, `pull`, `push`, `sync` and numbering through
 origin's counter run. Left: the `Mapper` interface (with releases, the
 second kind; the run is the issue mapper today), the release mapper,
 v1's dry run (`--check`), reset guards and switch marks on pull and
-push, the cycle's comment keys, and the GitHub Project step.
+push, the quote over a thread comment and the note after a published
+body (v1's `Quote` and `Published`, which read the body's sections), and
+the GitHub Project step.
 
 About 31,000 lines of Go where v1 has 55,000. One engineer with agents:
 M0 a week; M1 and M2 three weeks; M3 to M5 four; M6 three; with

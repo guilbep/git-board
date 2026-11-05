@@ -22,8 +22,8 @@ import (
 // of .git-board.toml, or those found in origin's URLs, whose sync is on, each opened fresh for its run, and
 // the settings the run reads from the board's config, as v1's
 // internal/store gives them.
-// ponytail: v1's dry run (--check) and the cycle's comment keys (Quote,
-// Carry, Restore, Published, ReplyTo) are v1's still.
+// ponytail: v1's dry run (--check), and its Quote and Published, which
+// read the body's sections (issuesync/meanings.go), are v1's still.
 
 // NamedForge is a forge project opened for a run, by its name in the
 // settings.
@@ -310,6 +310,9 @@ func (b *Board) SyncForges(ctx context.Context, way Way, run ForgeRun) (issuesyn
 		},
 		Held:      cfg.Held,
 		Assignees: cfg.SyncsAssignees,
+		Carry:     issuesync.Carry,
+		Restore:   issuesync.Restore,
+		ReplyTo:   issuesync.ReplyTo,
 		Warn: func(msg string) {
 			ev := SyncEvent{What: "warning", Line: msg}
 			for key, name := range names {
