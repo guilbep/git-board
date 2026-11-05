@@ -30,6 +30,7 @@ type Run struct {
 	Steps     []Step    `json:"steps"`
 	Report    *report   `json:"report,omitempty"`
 	Error     string    `json:"error,omitempty"`
+	told      time.Time // the last count told
 }
 
 // Step is one thing a run did: a whole sync's step (pull, forges,
@@ -166,10 +167,22 @@ func (s *Server) startSync(ctx context.Context, r syncReq) (Reply, error) {
 	return Reply{Status: http.StatusAccepted, Body: run}, nil
 }
 
-// step records a run's step, and tells the pages.
+// progressEvery is how often a run's counts are told: a page falls
+// behind on one event an issue.
+var progressEvery = 250 * time.Millisecond
+
+// step records a run's step, and tells the pages; a count (progress),
+// at most every progressEvery, and its last.
 func (s *Server) step(ctx context.Context, run *Run, st Step) {
 	s.runMu.Lock()
-	if len(run.Steps) < maxSteps && st.What != "progress" { // a count: the events carry it
+	if st.What == "progress" {
+		now := time.Now()
+		if now.Sub(run.told) < progressEvery && st.Done < st.Total {
+			s.runMu.Unlock()
+			return
+		}
+		run.told = now
+	} else if len(run.Steps) < maxSteps {
 		run.Steps = append(run.Steps, st)
 	}
 	s.runMu.Unlock()

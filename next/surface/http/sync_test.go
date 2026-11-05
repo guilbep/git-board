@@ -84,3 +84,22 @@ func TestSyncBusy(t *testing.T) {
 		t.Fatalf("a second run = %+v", e)
 	}
 }
+
+// A copy into another datastore, on loopback: a Markdown folder.
+func TestDatastoreCopy(t *testing.T) {
+	t.Parallel()
+	dir, _ := newBoard(t)
+	a := newAPI(t, dir)
+	k := want[keptRes](t, a.do("GET", "/api/datastore", nil), 200)
+	if k.Name != "git" || !k.Replica {
+		t.Fatalf("GET /api/datastore = %+v", k)
+	}
+	folder := filepath.Join(t.TempDir(), "board")
+	c := want[copiedRes](t, a.do("POST", "/api/datastore/copy", map[string]any{"to": "markdown:" + folder}), 200)
+	if c.Entities != 4 { // Ada and three issues, the deleted one too: history keeps it
+		t.Fatalf("copy = %+v", c)
+	}
+	if e := want[apiError](t, a.do("POST", "/api/datastore/copy", map[string]any{}), 400); e.Field != "to" {
+		t.Fatalf("a copy into git, from git = %+v", e)
+	}
+}
