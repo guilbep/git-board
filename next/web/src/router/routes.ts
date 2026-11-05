@@ -6,6 +6,8 @@ const routes: RouteRecordRaw[] = [
   { path: '/issues/:id', component: () => import('@/pages/IssuePage.vue') },
   // the Sync page's old address, and its parts': one Sync, in Settings
   { path: '/sync', redirect: { path: '/settings/sync', hash: '' } },
+  // v1's GitHub Project conflicts page: Settings › Project now
+  { path: '/conflicts', redirect: { path: '/settings/project', hash: '' } },
   { path: '/inbox', component: () => import('@/pages/InboxPage.vue') },
   // the cycle's (experimental): off, the page says how to turn it on
   { path: '/work', component: () => import('@/pages/WorkPage.vue') },

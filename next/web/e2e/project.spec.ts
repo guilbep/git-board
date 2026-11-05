@@ -36,3 +36,9 @@ test('the GitHub Project: a check, and the fields it holds', async ({ page, requ
   }
   expect(errs).toEqual([]);
 });
+
+test('v1’s /conflicts address opens Settings › GitHub Project', async ({ page }) => {
+  await page.goto('/#/conflicts');
+  await expect(page).toHaveURL(/#\/settings\/project$/);
+  await expect(page.getByText('No GitHub Project is configured')).toBeVisible();
+});
