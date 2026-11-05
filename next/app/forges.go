@@ -15,8 +15,10 @@ import (
 	"github.com/guilbep/git-board/next/forge"
 	"github.com/guilbep/git-board/next/forge/github"
 	"github.com/guilbep/git-board/next/forge/gitlab"
+	"github.com/guilbep/git-board/next/kernel"
 	"github.com/guilbep/git-board/next/store/forgecopy"
 	"github.com/guilbep/git-board/next/store/git"
+	bsync "github.com/guilbep/git-board/next/sync"
 )
 
 // The forges' sync (docs/spec/sync.md): issuesync's run, with the forges
@@ -238,6 +240,8 @@ func (e SyncEvent) Text(dry bool, name string) string {
 		return e.Line
 	case "left":
 		return "left out of the run: " + e.Line
+	case "release":
+		l = map[string]string{"created": "publish the release ", "edited": "update the release ", "attached": "attach a file to the release "}[e.Line] + e.Issue
 	case "held":
 		if dry {
 			return fmt.Sprintf("%d issues to create need consent: %s", e.Ops, e.Line)
@@ -380,13 +384,41 @@ func (b *Board) SyncForges(ctx context.Context, way Way, run ForgeRun) (issuesyn
 	ctx = forge.WithWaits(ctx, func(w forge.Wait) {
 		see(SyncEvent{Forge: names[w.Forge], What: "waiting", Line: waitWords(w.Why, w.For)})
 	})
-	switch way {
-	case WayPull:
-		return issuesync.Pull(ctx, kb, opt, fs...)
-	case WayPush:
-		return issuesync.Push(ctx, kb, opt, fs...)
+	im := &issuesync.Mapper{Options: opt}
+	ms := []bsync.Mapper{im}
+	if len(cfg.Release.Binaries) > 0 && !forgeOnly { // v1 publishes the releases of binaries alone
+		raw := make([]forge.Forge, len(run.Forges))
+		for i, f := range run.Forges {
+			raw[i] = f.Forge
+		}
+		rm := b.releaseMapper(run.DryRun, func(key, what, tag string) {
+			see(SyncEvent{Forge: names[key], Way: "push", What: "release", Issue: tag, Line: what})
+		})
+		ms = append(ms, onForges{rm, raw})
 	}
-	return issuesync.Sync(ctx, kb, opt, fs...)
+	err := bsync.Run(ctx, kb, bsync.Way(way), fs, ms...)
+	return im.Report, err
+}
+
+// onForges is a mapper run over forges of its own: the release mapper
+// over the forges as opened, as counted ones carry no releases.
+type onForges struct {
+	bsync.Mapper
+	fs []forge.Forge
+}
+
+func (o onForges) Carries(forge.Forge) bool { return true }
+func (o onForges) Run(ctx context.Context, b *kernel.Board, way bsync.Way, _ []forge.Forge) error {
+	var fs []forge.Forge
+	for _, f := range o.fs {
+		if o.Mapper.Carries(f) {
+			fs = append(fs, f)
+		}
+	}
+	if len(fs) == 0 {
+		return nil
+	}
+	return o.Mapper.Run(ctx, b, way, fs)
 }
 
 // waitWords says a forge's wait: "GitHub doesn't answer: trying again in

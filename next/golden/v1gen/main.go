@@ -58,6 +58,7 @@ func main() {
 		{"generated", generated},
 		{"markdown", markdown},
 		{"postgres", postgres},
+		{"releases", releasesBoard},
 	}
 	for _, b := range boards {
 		if *only != "" && *only != b.name {
@@ -76,6 +77,34 @@ func main() {
 	}
 }
 
+// releasesBoard is basic, with a [release] table that publishes
+// binaries, its trunk main, and itself as origin: the release commands'
+// reads (two releases on tagged commits, notes, a comment, a yank).
+func releasesBoard(ctx context.Context, dir string) (meta, error) {
+	m, err := basic(ctx, dir)
+	if err != nil {
+		return meta{}, err
+	}
+	m.toml = strings.Replace(m.toml, "[branches]\n", "[branches]\nbase = \"main\"\n", 1) + "\n[release]\nbinaries = [\"./cmd/widgets\"]\n"
+	m.origin = true
+	m.commands = []string{
+		"release",
+		"release status",
+		"release notes",
+		"release notes --all",
+		"release yank v0.1.0",
+		"release rollback prod v0.1.0",
+		"release cut --version 1.0.1-rc.2",
+		"release cut --version nope",
+		"release promote",
+		"deploy",
+		"deploy prod",
+		"deploy prod --watch",
+		"deploy prod --release v9.9.9",
+	}
+	return m, nil
+}
+
 // meta is what a board's folder holds beside the board.
 type meta struct {
 	toml      string
@@ -84,6 +113,7 @@ type meta struct {
 	commands  []string // recorded beyond the automatic ones
 	files     string   // the folder the Markdown board's files are copied from, else ""
 	tables    string   // the PostgreSQL board's tables, dumped, else ""
+	origin    bool     // the checkout is its own origin (golden.Board's Origin)
 }
 
 // build makes a board in a temporary repository and stores it at dir.
@@ -121,6 +151,9 @@ func build(ctx context.Context, dir string, mk func(context.Context, string) (me
 	write := map[string]string{"git-board.toml": m.toml, "me": m.me + "\n"}
 	if m.datastore != "" {
 		write["datastore"] = m.datastore + "\n"
+	}
+	if m.origin {
+		write["origin"] = "the checkout is its own origin: the release commands fetch it\n"
 	}
 	if len(m.commands) > 0 {
 		write["commands"] = strings.Join(m.commands, "\n") + "\n"

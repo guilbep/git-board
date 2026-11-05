@@ -34,6 +34,10 @@ type Board struct {
 	Me        string   // board.me
 	Datastore string   // board.datastore; "" for git
 	Commands  []string // the cases beyond the automatic ones, one command line each
+	// Origin: the checkout has itself as origin, fetched, its default
+	// branch main: what the release commands fetch and read (a file
+	// "origin" in the board's folder).
+	Origin bool
 }
 
 // Boards are the boards under root, by name.
@@ -60,6 +64,7 @@ func Boards(root string) ([]Board, error) {
 		if ds, err := os.ReadFile(filepath.Join(b.Dir, "datastore")); err == nil {
 			b.Datastore = strings.TrimSpace(string(ds))
 		}
+		b.Origin = exists(filepath.Join(b.Dir, "origin"))
 		if cmds, err := os.ReadFile(filepath.Join(b.Dir, "commands")); err == nil {
 			for _, line := range strings.Split(string(cmds), "\n") {
 				if line = strings.TrimSpace(line); line != "" && !strings.HasPrefix(line, "#") {
@@ -77,7 +82,8 @@ func Boards(root string) ([]Board, error) {
 // Markdown folder committed, or with its own database loaded with the
 // PostgreSQL board's tables (Drop drops it; ErrNoPostgres without a
 // server); its .git-board.toml, and board.me (and board.datastore) in
-// its git config. No remote: nothing is fetched.
+// its git config. No remote, unless the board says Origin: then origin is
+// the checkout itself, and nothing beyond it is fetched.
 func (b Board) Checkout(ctx context.Context, dir string) error {
 	toml, err := os.ReadFile(filepath.Join(b.Dir, "git-board.toml"))
 	if err != nil {
@@ -113,6 +119,13 @@ func (b Board) Checkout(ctx context.Context, dir string) error {
 	}
 	if err := Git(ctx, dir, "config", "board.me", b.Me); err != nil {
 		return err
+	}
+	if b.Origin {
+		for _, args := range [][]string{{"remote", "add", "origin", dir}, {"fetch", "-q", "origin"}, {"remote", "set-head", "origin", "main"}} {
+			if err := Git(ctx, dir, args...); err != nil {
+				return err
+			}
+		}
 	}
 	ds := b.Datastore
 	if ds == postgres {

@@ -53,6 +53,11 @@ func newHub(t *testing.T, f *fake.Forge) *hub {
 		"POST /repos/{o}/{r}/issues/{n}/labels":          h.addLabels,
 		"DELETE /repos/{o}/{r}/issues/{n}/labels/{name}": h.removeLabel,
 		"POST /graphql":                                  h.graphql,
+		"GET /repos/{o}/{r}/releases":                    h.releases,
+		"POST /repos/{o}/{r}/releases":                   h.createRelease,
+		"GET /repos/{o}/{r}/releases/{id}":               h.release,
+		"PATCH /repos/{o}/{r}/releases/{id}":             h.editRelease,
+		"POST /upload/{id}":                              h.attach,
 	} {
 		mux.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
 			ff, ok := h.auth(r)

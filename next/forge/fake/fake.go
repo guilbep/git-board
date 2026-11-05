@@ -23,7 +23,7 @@ var ErrCrash = errors.New("fake: the write landed, then the connection broke")
 // Write is one write the forge was asked for, by the account As. Issue is
 // the issue's id, empty for create-issue.
 type Write struct {
-	Op    string // create-issue, create-comment, reply, edit-comment, set-title, set-body, set-status, change-labels, set-assignees
+	Op    string // create-issue, create-comment, reply, edit-comment, set-title, set-body, set-status, change-labels, set-assignees, create-release, edit-release, attach
 	As    forge.Account
 	Issue string
 	Args  []string
@@ -47,6 +47,13 @@ type project struct {
 	refuseLabels  []string
 	before, after func(Write) error
 	writes        []Write
+	releases      []*release
+}
+
+// release is a forge release, and its files' bytes.
+type release struct {
+	forge.Release
+	files map[string][]byte
 }
 
 // Forge is a forge in memory, seen through one account. Its issues stay in
@@ -495,4 +502,86 @@ func clone(is forge.Issue) forge.Issue {
 	is.Comments = slices.Clone(is.Comments)
 	is.Changed = maps.Clone(is.Changed)
 	return is
+}
+
+var _ forge.Releaser = (*Forge)(nil)
+
+// Releases lists the releases, newest first.
+func (f *Forge) Releases(context.Context) ([]forge.Release, error) {
+	f.p.mu.Lock()
+	defer f.p.mu.Unlock()
+	out := make([]forge.Release, 0, len(f.p.releases))
+	for i := len(f.p.releases) - 1; i >= 0; i-- {
+		r := f.p.releases[i].Release
+		r.Assets = slices.Clone(r.Assets)
+		out = append(out, r)
+	}
+	return out, nil
+}
+
+// CreateRelease makes the release of r.Tag; a second one of a tag is
+// refused, as GitHub's and GitLab's are.
+func (f *Forge) CreateRelease(_ context.Context, r forge.Release) (forge.Release, error) {
+	var out forge.Release
+	err := f.write(Write{Op: "create-release", Args: []string{r.Tag, r.Name, r.Body, strconv.FormatBool(r.Prerelease)}}, func(p *project, _ int64) error {
+		if slices.ContainsFunc(p.releases, func(x *release) bool { return x.Tag == r.Tag }) {
+			return &forge.Refused{Values: []string{r.Tag}, Why: "a release of this tag exists"}
+		}
+		r.ID, r.Assets = p.id(3_000_000), nil
+		r.URL = "https://" + p.key + "/releases/" + r.Tag
+		p.releases = append(p.releases, &release{Release: r, files: map[string][]byte{}})
+		out = r
+		return nil
+	})
+	return out, err
+}
+
+// EditRelease sets a release's name, body and prerelease.
+func (f *Forge) EditRelease(_ context.Context, id string, r forge.Release) error {
+	return f.write(Write{Op: "edit-release", Issue: id, Args: []string{r.Name, r.Body, strconv.FormatBool(r.Prerelease)}}, func(p *project, _ int64) error {
+		x := p.release(id)
+		if x == nil {
+			return forge.ErrNotFound
+		}
+		x.Name, x.Body, x.Prerelease = r.Name, r.Body, r.Prerelease
+		return nil
+	})
+}
+
+// Attach adds a file to a release.
+func (f *Forge) Attach(_ context.Context, id, name string, data []byte) error {
+	return f.write(Write{Op: "attach", Issue: id, Args: []string{name}}, func(p *project, _ int64) error {
+		x := p.release(id)
+		switch {
+		case x == nil:
+			return forge.ErrNotFound
+		case x.files[name] != nil:
+			return &forge.Refused{Values: []string{name}, Why: "a file of this name is attached"}
+		}
+		x.files[name] = slices.Clone(data)
+		x.Assets = append(x.Assets, name)
+		return nil
+	})
+}
+
+// File is a release's file, as attached: for tests to read.
+func (f *Forge) File(tag, name string) ([]byte, bool) {
+	f.p.mu.Lock()
+	defer f.p.mu.Unlock()
+	for _, x := range f.p.releases {
+		if x.Tag == tag {
+			b, ok := x.files[name]
+			return b, ok
+		}
+	}
+	return nil, false
+}
+
+func (p *project) release(id string) *release {
+	for _, x := range p.releases {
+		if x.ID == id {
+			return x
+		}
+	}
+	return nil
 }

@@ -32,6 +32,7 @@ type server struct {
 	mu      sync.Mutex
 	tokens  map[string]forge.Account
 	threads map[string]string // a reply's note id: its thread's first note's
+	uploads map[string][]byte // the project's uploads, by full path
 }
 
 // serve gives the adapter over f, served by a new server for the project at
@@ -89,6 +90,11 @@ func (s *server) routes() http.Handler {
 	s.handle(m, "GET "+p+"/issues/{iid}/resource_state_events", s.states)
 	s.handle(m, "GET "+p+"/issues/{iid}/discussions", s.discussions)
 	s.handle(m, "POST "+p+"/issues/{iid}/discussions/{d}/notes", s.reply)
+	s.handle(m, "GET "+p+"/releases", s.releases)
+	s.handle(m, "POST "+p+"/releases", s.createRelease)
+	s.handle(m, "PUT "+p+"/releases/{tag}", s.editRelease)
+	s.handle(m, "POST "+p+"/uploads", s.upload)
+	s.handle(m, "POST "+p+"/releases/{tag}/assets/links", s.link)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if s.before == nil || !s.before(w, r) {
 			m.ServeHTTP(w, r)
