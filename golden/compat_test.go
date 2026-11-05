@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"testing"
@@ -153,6 +154,39 @@ func TestGoldensComplete(t *testing.T) {
 				t.Fatalf("the cases recorded aren't the board's: make golden")
 			}
 		})
+	}
+}
+
+// A fetch in Env starts no maintenance: one detached would write into
+// the checkout after the test returned, and fail its folder's removal
+// (TestGoldensComplete/generated, on git 2.56). git's trace names every
+// process the fetch starts.
+func TestEnvStartsNoMaintenance(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	tmp := t.TempDir()
+	repo, trace := filepath.Join(tmp, "repo"), filepath.Join(tmp, "trace")
+	bundle, err := filepath.Abs(filepath.Join(root, "boards", "generated", "board.bundle"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := Git(ctx, "", "init", "-q", "-b", "main", repo); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.CommandContext(ctx, "git", "fetch", "-q", bundle, "+refs/*:refs/*")
+	cmd.Dir = repo
+	cmd.Env = append(Env(tmp), "GIT_TRACE2_EVENT="+trace)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git fetch: %v: %s", err, out)
+	}
+	events, err := os.ReadFile(trace)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, line := range bytes.Split(events, []byte("\n")) {
+		if bytes.Contains(line, []byte(`"event":"child_start"`)) && (bytes.Contains(line, []byte(`"maintenance"`)) || bytes.Contains(line, []byte(`"gc"`))) {
+			t.Errorf("the fetch started maintenance: %s", line)
+		}
 	}
 }
 

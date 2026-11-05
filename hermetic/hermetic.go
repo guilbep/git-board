@@ -50,7 +50,12 @@ func seal() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if _, err := f.WriteString("[user]\n\tname = Test\n\temail = test@example.com\n"); err != nil {
+	// No automatic maintenance: a fetch or a push would start one,
+	// detached, that writes into a test's repository after it returned
+	// and fails its temporary folder's removal (golden's noMaintenance).
+	const config = "[user]\n\tname = Test\n\temail = test@example.com\n" +
+		"[maintenance]\n\tauto = false\n\tautoDetach = false\n[gc]\n\tauto = 0\n\tautoDetach = false\n"
+	if _, err := f.WriteString(config); err != nil {
 		return "", err
 	}
 	if err := f.Close(); err != nil {
