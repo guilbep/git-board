@@ -1,4 +1,4 @@
-.PHONY: help build test test-pg perf web-e2e lint fmt vet licences ci compat dogfood golden agents install install-latest web-dev web-check web-lint web-build dist docs docs-serve clean
+.PHONY: help build test flow test-pg perf web-e2e lint fmt vet licences ci compat dogfood golden agents install install-latest web-dev web-check web-lint web-build dist docs docs-serve clean
 
 # The public targets, each with its ## line: a bare make prints them.
 help: ## List the make targets
@@ -179,6 +179,9 @@ dist: web-build ## Build the release archives and checksums.txt into dist/
 # The docs site (zensical.toml: docs/, the guide, the core's spec, the
 # decisions) in site/. Strict: a broken link or a missing page fails the
 # build.
+flow: ## Draw docs/spec/data-flow.html again, from the code and docs/spec/flows.json (go test fails while it is stale)
+	go run ./tools/flowgen
+
 docs: ## Build the docs site (guide, spec, decisions) into site/ (strict)
 	uvx --from zensical==0.0.72 zensical build --strict
 

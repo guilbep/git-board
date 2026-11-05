@@ -1,0 +1,157 @@
+{
+  "binary": "cmd/git-board",
+  "hide": ["web"],
+  "externals": [
+    { "id": "browser", "title": "Web UI", "sub": "web/ · Vue", "side": "left", "near": "surface/http", "links": ["surface/http"],
+      "doc": "The pages, served by surface/http from web/. They call the HTTP API and listen to GET /api/events." },
+    { "id": "forges", "title": "GitHub · GitLab", "sub": "REST · GraphQL", "side": "right", "near": "forge/github", "links": ["forge/github", "forge/gitlab"],
+      "doc": "Optional hosting. The adapters read and write their issues, releases and Projects; the board never needs them." }
+  ],
+  "params": [
+    { "id": "store", "label": "board.datastore", "options": [
+      { "id": "git", "name": "git", "pkg": "store/git", "type": "Store" },
+      { "id": "pg", "name": "PostgreSQL", "pkg": "store/pg", "type": "Store" },
+      { "id": "md", "name": "Markdown", "pkg": "store/md", "type": "Store" },
+      { "id": "forgecopy", "name": "forges alone", "pkg": "store/forgecopy", "type": "Store" }
+    ]},
+    { "id": "forge", "label": "forge", "options": [
+      { "id": "github", "name": "GitHub", "pkg": "forge/github", "type": "Forge" },
+      { "id": "gitlab", "name": "GitLab", "pkg": "forge/gitlab", "type": "Forge" }
+    ]}
+  ],
+  "where": {
+    "file": "docs/spec/data-flow.md",
+    "section": "What lives where",
+    "param": "store",
+    "columns": { "git": 1, "pg": 2, "md": 3, "forgecopy": 4 }
+  },
+  "stories": [
+    {
+      "id": "write", "tab": "A write",
+      "title": "A write: one comment, from the page to the bytes",
+      "intro": "One write is one pack, added only if the issue is still at the version it was read at. No lock: the compare-and-swap is the only guard, a sync included.",
+      "toggles": [ { "id": "moved", "label": "the issue moves meanwhile", "tag": "ErrMoved, read and decide again, 5 tries" } ],
+      "steps": [
+        { "hops": "browser -> surface/http", "routes": ["surface/http:POST /api/issues/{id}/comments"],
+          "label": "POST /api/issues/{id}/comments", "text": "The page sends the comment, with the version it showed in If-Match." },
+        { "node": "surface/http", "calls": ["surface/http.addComment", "surface/http.Route"],
+          "label": "addComment", "text": "An adapter: the route decodes the request into a struct, checks the body isn't empty, and calls the application. No rule lives here." },
+        { "hops": "surface/http -> domain/issues", "calls": ["domain/issues.Service.Comment", "domain/issues.Service.writing"],
+          "label": "Issues.Comment(ctx, id, body)", "text": "The issue domain owns the rules. writing gives the request one snapshot of the board." },
+        { "hops": "domain/issues -> kernel", "calls": ["domain/issues.Service.do", "kernel.K.Do"],
+          "label": "Kind.Do(ctx, board, id, decide)", "text": "The kernel reads the entity, asks the domain what to write, and writes it." },
+        { "hops": "kernel -> store -> $store", "calls": ["kernel.Board.entity", "store.Datastore.Load", "$store.$storeType.Load"],
+          "label": "Load(issue/id) → packs, version v", "text": "Every pack of the issue, and the version they were read at.",
+          "by": { "store=git": "From refs/board/issue/<id>: the objects read in process, through go-git's storage.", "store=pg": "From git_board.packs, the version from git_board.entities.", "store=md": "From <dir>/.board/issue/<id>.jsonl, one pack a line.", "store=forgecopy": "From the git copy in .git/board/forge-copy.git: the git datastore, in the clone's own folder." } },
+        { "node": "kernel", "calls": ["kernel.K.fold", "kernel.pending"],
+          "label": "fold · decide · fold(pending)", "text": "The state is folded, decide returns the comment operation, and the state is folded again with it: an operation that wouldn't apply is refused before anything is written." },
+        { "hops": "kernel -> kernel/pack", "calls": ["kernel.Board.write", "kernel/pack.Encode", "kernel/pack.Hash"],
+          "label": "pack{clock: head + 1, ops}", "text": "One pack, its clock one above the head's. Its id is the git blob hash of its bytes, so an operation's id is the same in every datastore." },
+        { "hops": "kernel -> store -> $store", "calls": ["store.Datastore.Add", "$store.$storeType.Add"],
+          "label": "Add(issue, id, pack, prev = v)", "text": "Compare-and-swap: stored only if the issue is still at v.",
+          "by": { "store=git": "A commit on refs/board/issue/<id>, moved by git update-ref from v.", "store=pg": "A row in git_board.packs, the version in git_board.entities moved from v, in one transaction.", "store=md": "One more line in .board/issue/<id>.jsonl, under the folder's board.lock.", "store=forgecopy": "A commit in the forge copy. The forges hear of it at the next sync." } },
+        { "when": "moved", "warn": true, "hops": "$store -> store -> kernel", "calls": ["store.ErrMoved"],
+          "label": "ErrMoved", "text": "Someone wrote first: another clone, the command line, a sync. The datastore refuses the pack." },
+        { "when": "moved", "hops": "kernel -> store -> $store", "calls": ["kernel.tries"],
+          "label": "Load again, decide again, Add", "text": "Do starts over on the new head, so the decision always sees the head it is written on. Up to five tries." },
+        { "hops": "kernel -> view", "calls": ["kernel.K.through", "kernel.View.Write", "view.View.Write", "view.PG.Write"],
+          "label": "through: the row, where still at v", "text": "Write-through: the new pack sorts last, so the new state is the old one with the new operations applied, never a fold from the start. The view's row is replaced where it is still at v: this process reads its own write without a listing.",
+          "by": { "store=pg": "Write-through: the new state is the old one with the new operations applied. On PostgreSQL the view is in the database too, in git_board_view_v1, shared by every machine." } },
+        { "node": "kernel", "calls": ["kernel.Board.landed", "kernel.Board.Observe"],
+          "label": "landed: tell the observers", "text": "The observers registered on the board hear of the change, once it is in the datastore." },
+        { "when": "store=md", "hops": "kernel -> domain/issues/mdfiles", "calls": ["domain/issues/mdfiles.Folder.observe"],
+          "label": "render NNN-slug.md", "text": "On a Markdown board, the folder's observer renders the issue's file." },
+        { "hops": "kernel -> surface/http", "calls": ["surface/http.Server.observe", "surface/http.Server.publish"],
+          "label": "Server.observe → an event", "text": "The server's observer publishes the change as it lands, without waiting for the next tick." },
+        { "hops": "kernel -> domain/issues -> surface/http", "label": "the new state", "text": "Back up through the domain." },
+        { "hops": "surface/http -> browser", "fan": true, "calls": ["surface/http.thread"],
+          "label": "201 · the thread · an event to every page", "text": "The page gets the thread with its comment; every open page gets the event." }
+      ]
+    },
+    {
+      "id": "list", "tab": "ls",
+      "title": "A read: git board ls",
+      "intro": "Every list reads the view, a disposable read model kept up to date by the entities that moved, never rebuilt. A fresh view costs one listing of the heads.",
+      "toggles": [ { "id": "moved", "label": "another clone moved some issues", "tag": "load what moved" } ],
+      "steps": [
+        { "hops": "cmd/git-board -> surface/cli", "calls": ["surface/cli.list"],
+          "label": "git board ls [filter]", "text": "The binary is the CLI. ls and view share one function." },
+        { "hops": "surface/cli -> app", "calls": ["surface/cli.open", "app.Open"],
+          "label": "app.Open", "text": "Opens the repository, its datastore (board.datastore), the view, .git-board.toml and who writes (board.me).",
+          "by": { "store=pg": "Opens the repository, the PostgreSQL datastore and, because it is shared and speaks SQL, the view in the same database (view.OpenPG).", "store=md": "Opens the repository, the Markdown folder, the view in .git/board/v2/view.db and the folder's renderer." } },
+        { "hops": "surface/cli -> domain/issues", "calls": ["domain/issues.Service.List"],
+          "label": "Issues.List(ctx, req)", "text": "The same call the HTTP API makes for GET /api/issues." },
+        { "hops": "domain/issues -> domain/people", "calls": ["domain/people.Read"],
+          "label": "people.Read", "text": "Who is who, for the filter's @me and the authors." },
+        { "hops": "domain/issues -> kernel", "calls": ["kernel.K.List", "kernel.Board.Snapshot"],
+          "label": "Kind.List(query)", "text": "The kernel brings the view to the datastore's heads first, once per kind and per snapshot." },
+        { "hops": "kernel -> store -> $store", "calls": ["kernel.Board.fresh", "store.Datastore.Heads", "$store.$storeType.Heads"],
+          "label": "Heads(issue)", "text": "One version per entity.",
+          "by": { "store=git": "One version per entity: the loose refs, then packed-refs, parsed once. About 5 ms on 20,000 issues.", "store=pg": "One version per entity: one query on git_board.entities.", "store=md": "One version per entity: each .jsonl file hashed, so a Markdown board is for a few thousand issues." } },
+        { "hops": "kernel -> view", "calls": ["kernel.Board.freshKind", "kernel.View.Mark", "kernel.Sum"],
+          "label": "Mark: compare Sum(listing)", "text": "The listing's sum against the one the view stored. Equal: the view is fresh, the common case." },
+        { "when": "moved", "hops": "kernel -> store -> $store", "calls": ["kernel.Board.load", "store.Datastore.Load"],
+          "label": "Load(the refs that moved)", "text": "Only the entities new or moved, read on every CPU while they fold. One missing from the listing is read too before it is dropped: a listing that missed an issue costs a read, never an issue." },
+        { "when": "moved", "hops": "kernel -> view", "calls": ["kernel.Board.stream", "kernel.batch", "kernel.View.Write"],
+          "label": "Write, in batches of 2,048", "text": "Each batch one transaction, each row only where the stored version is still the base: a row another process wrote meanwhile is left to it." },
+        { "hops": "kernel -> view", "calls": ["kernel.View.Rows", "view.View.Rows", "view.PG.Rows"],
+          "label": "Rows(query)", "text": "The rows hold what a list shows and no text: the terms table narrows a filter first." },
+        { "hops": "view -> kernel -> domain/issues -> surface/cli", "label": "[]issues.Issue", "text": "Printed as a table, --json, --jq, --template or --md. No issue was folded." }
+      ]
+    },
+    {
+      "id": "events", "tab": "Events",
+      "title": "Change events: a write the server didn't make",
+      "intro": "A write through the API is told as it lands (A write). One from another clone, another machine or the command line is found by the server's watcher, which compares the datastore's heads every interval.",
+      "steps": [
+        { "hops": "cmd/git-board -> surface/cli -> domain/issues -> kernel -> store -> $store", "calls": ["kernel.K.Do", "store.Datastore.Add"],
+          "label": "git board comment … (another process)", "text": "A write lands in the datastore without going through the server." },
+        { "node": "surface/http", "calls": ["surface/http.Server.watch"],
+          "label": "watch: a tick", "text": "Every interval the watcher also checks .git-board.toml, and opens the board again when it changed." },
+        { "hops": "surface/http -> kernel -> store -> $store", "calls": ["surface/http.Server.heads", "kernel.Board.Store", "store.Datastore.Heads", "surface/http.watchedKinds"],
+          "label": "Store().Heads(issue, person)", "text": "The server reads the heads through the board's datastore." },
+        { "hops": "$store -> store -> kernel -> surface/http", "label": "a version moved", "text": "It differs from the one last told: the change is pending, told next tick, so a write the API made meanwhile is told once, by its own observer." },
+        { "node": "surface/http", "calls": ["surface/http.Server.publish"],
+          "label": "the next tick: publish", "text": "What is still pending is published." },
+        { "hops": "surface/http -> browser", "fan": true, "routes": ["surface/http:GET /api/events"],
+          "label": "GET /api/events → every page", "text": "Every open page hears it, whoever wrote and from wherever." }
+      ]
+    },
+    {
+      "id": "sync", "tab": "Forge sync",
+      "title": "A forge sync: one engine, mappers as plug-ins",
+      "intro": "The engine runs each mapper over the forges that carry its kind: issues first, then releases, then a GitHub Project. Each is a reader and writer of the datastore like any other, so a board in PostgreSQL syncs as one in git does.",
+      "toggles": [
+        { "id": "releases", "label": "[release] publishes binaries", "tag": "the release mapper" },
+        { "id": "project", "label": "[github-project] names a Project", "tag": "the Project mapper" }
+      ],
+      "steps": [
+        { "hops": "cmd/git-board -> surface/cli -> app", "calls": ["app.Board.SyncForges"],
+          "label": "git board sync", "text": "app opens the forges of the board, with their tokens, and builds the mappers." },
+        { "hops": "app -> sync", "calls": ["sync.Run", "sync.Mapper"],
+          "label": "sync.Run(board, way, forges, mappers…)", "text": "The engine. A mapper no forge carries is skipped; the first error stops the run." },
+        { "hops": "sync -> domain/issues/issuesync", "calls": ["sync.Mapper.Run", "domain/issues/issuesync.Mapper.Run", "domain/issues/issuesync.Sync"],
+          "label": "issuesync.Mapper.Run", "text": "The issues' mapper: v1's syncer, ported, its 85 tests green." },
+        { "hops": "domain/issues/issuesync -> sync -> store", "calls": ["sync.Lock", "store.Locker"],
+          "label": "sync.Lock: sync.lock, the journal", "text": "In .git/board on this machine: two runs on one machine never overlap, and v1 and v2 share the lock.",
+          "by": { "store=pg": "In .git/board on this machine, and the board's advisory lock in the database (store.Locker): two machines never sync one board at once." } },
+        { "hops": "domain/issues/issuesync -> kernel -> store -> $store", "calls": ["sync.Kind"],
+          "label": "the sync records", "text": "Links, last seen values and what was posted are operations in sync entities, read like any issue." },
+        { "hops": "domain/issues/issuesync -> forge -> $forge -> forges", "calls": ["forge.Forge.Issues", "$forge.$forgeType.Issues"],
+          "label": "Issues(since the last run)", "text": "What the forge changed since the last run started." },
+        { "node": "domain/issues/issuesync", "calls": ["domain/issues/issuesync.run.plan"],
+          "label": "plan", "text": "Each field compared with its last seen value, on both sides: pull theirs, push ours, or a conflict." },
+        { "hops": "domain/issues/issuesync -> kernel -> store -> $store", "calls": ["kernel.K.Do", "store.Datastore.Add"],
+          "label": "pull: Do(issue …), Do(sync …)", "text": "Their changes become packs, through the same compare-and-swap as a write from the page: a write made during the sync is safe, and the page never sees v1's 409 syncing." },
+        { "hops": "domain/issues/issuesync -> forge -> $forge -> forges", "calls": ["forge.Forge.CreateComment", "forge.Forge.SetTitle", "forge.Forge.SetStatus"],
+          "label": "push: comments, titles, status…", "text": "Our changes, as the forge's writes, and the sync records note what was posted." },
+        { "when": "releases", "hops": "app -> domain/releases/releasesync", "calls": ["app.Board.releaseMapper", "domain/releases/releasesync.Mapper.Run"],
+          "label": "the release mapper", "text": "The second mapper, publish only: the board's releases to the forge." },
+        { "when": "releases", "hops": "domain/releases/releasesync -> forge -> $forge -> forges", "calls": ["forge.Releaser"],
+          "label": "publish the releases", "text": "Through forge.Releaser, to GitHub and GitLab alike." },
+        { "when": "project", "hops": "sync -> tools/ghproject -> forge/github -> forges", "calls": ["tools/ghproject.Mapper.Run", "forge/github.ProjectV2"],
+          "label": "the GitHub Project mapper", "text": "The third mapper: a Project's fields, decided field by field against the base both last agreed on, through GitHub's GraphQL API." }
+      ]
+    }
+  ]
+}
