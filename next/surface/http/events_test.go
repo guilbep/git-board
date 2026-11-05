@@ -1,0 +1,120 @@
+package httpapi
+
+import (
+	"bufio"
+	"context"
+	"encoding/json"
+	"net/http"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/guilbep/git-board/next/domain/issues"
+	"github.com/guilbep/git-board/next/kernel"
+)
+
+// stream is a page's change events.
+func stream(t *testing.T, a *api) <-chan Event {
+	t.Helper()
+	ctx, cancel := context.WithCancel(ctx)
+	t.Cleanup(cancel)
+	req, _ := http.NewRequestWithContext(ctx, "GET", a.srv.URL+"/api/events", nil)
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ct := res.Header.Get("Content-Type"); ct != "text/event-stream" {
+		t.Fatalf("Content-Type %q", ct)
+	}
+	ch := make(chan Event, 64)
+	go func() {
+		defer res.Body.Close()
+		sc := bufio.NewScanner(res.Body)
+		for sc.Scan() {
+			if data, ok := strings.CutPrefix(sc.Text(), "data: "); ok {
+				var e Event
+				if json.Unmarshal([]byte(data), &e) == nil {
+					ch <- e
+				}
+			}
+		}
+		close(ch)
+	}()
+	return ch
+}
+
+// next is the first event kind names, within a few seconds.
+func next(t *testing.T, ch <-chan Event, kind string) Event {
+	t.Helper()
+	deadline := time.After(5 * time.Second)
+	for {
+		select {
+		case e, ok := <-ch:
+			if !ok {
+				t.Fatalf("the stream ended before a %s event", kind)
+			}
+			if e.Kind == kind {
+				return e
+			}
+		case <-deadline:
+			t.Fatalf("no %s event", kind)
+		}
+	}
+}
+
+// A write through the API is told at once, with the page that made it;
+// one made outside, by another process, once the watcher sees it.
+func TestEvents(t *testing.T) {
+	t.Parallel()
+	dir, ids := newBoard(t)
+	a := newAPI(t, dir)
+	wctx, stop := context.WithCancel(ctx)
+	defer stop()
+	go a.s.Watch(wctx, 50*time.Millisecond)
+	ch := stream(t, a)
+	time.Sleep(100 * time.Millisecond) // subscribed, and the watcher's first look taken
+
+	th := want[threadBody](t, a.do("POST", "/api/issues/"+string(ids[1])+"/comments", map[string]any{"body": "hi"}, "X-Git-Board-Client", "page-1"), 201)
+	e := next(t, ch, "issue")
+	if e.ID != string(ids[1]) || e.By != "page-1" || e.Version != th.Version {
+		t.Fatalf("the API's write = %+v, want issue %s by page-1 at %s", e, ids[1], th.Version)
+	}
+
+	// another process writes: the watcher tells it, by no page
+	b := openKernel(t, dir)
+	defer b.Close()
+	ada := strings.TrimSpace(gitRun(t, dir, "config", "board.me"))
+	moved, err := issues.Kind.Do(ctx, b, ids[0], func(kernel.Entity[issues.State]) ([]kernel.Op, error) {
+		return []kernel.Op{op("comment", 1700000900, kernel.ID(ada), `{"body":"from the CLI"}`)}, nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	e = next(t, ch, "issue")
+	if e.ID != string(ids[0]) || e.By != "" || e.Version != string(moved.Version) {
+		t.Fatalf("an outside write = %+v", e)
+	}
+
+	// .git-board.toml written by hand: the board opens again, config told
+	want[configRes](t, a.do("PATCH", "/api/config", map[string]any{"set": map[string]any{"views.mine.sort": "updated"}}), 200)
+	if e := next(t, ch, "config"); e.Kind != "config" {
+		t.Fatal(e)
+	}
+}
+
+func TestBrokerDropsTheSlow(t *testing.T) {
+	t.Parallel()
+	var b broker
+	ch, cancel := b.subscribe()
+	defer cancel()
+	for range subBuffer + 1 {
+		b.publish(Event{Kind: "issue"})
+	}
+	n := 0
+	for range ch {
+		n++
+	}
+	if n != subBuffer {
+		t.Fatalf("%d events before the stream closed, want %d", n, subBuffer)
+	}
+}
