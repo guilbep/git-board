@@ -68,6 +68,8 @@ func (s *Server) routes(mux *http.ServeMux) {
 	Route(mux, "PATCH /api/releases/{tag}", s.patchRelease)
 	Route(mux, "POST /api/releases/{tag}/comments", s.releaseComment)
 	Route(mux, "POST /api/environments/{env}/deploy", s.deploy)
+	Route(mux, "GET /api/uploads", uploadStatus)
+	mux.HandleFunc("POST /api/uploads", s.upload)
 	Route(mux, "GET /api/issues/{id}/cycle", issueCycle)
 	Route(mux, "GET /api/cycle", workRows)
 	Route(mux, "GET /api/insights", insights)

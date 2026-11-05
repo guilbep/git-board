@@ -320,13 +320,14 @@ many.
 | | Route | Request | Response |
 |---|---|---|---|
 | 39 | `POST /api/markdown` | `{body}` | `{html}` |
-| 40 | `GET /api/uploads` | | `{enabled, where}` |
-| 41 | `POST /api/uploads` | multipart, `X-Git-Board-Upload: 1` | `{url, name, markdown}` |
+| 40 | `GET /api/uploads` | | `{enabled, where, max_bytes}` (built) |
+| 41 | `POST /api/uploads` | multipart, `X-Git-Board-Upload: 1`, the file in `file` | `{url, name, type, markdown}` (built); `missing` without a bucket |
 | 42 | `GET /api/media` | `url` | the picture, through this server |
 
 `POST /api/markdown` previews a text as the thread renders it, cleaned.
-Uploads and media are `[uploads]`'s, a tool's (*M6*): they are the
-first three of the 14 routes M6 builds.
+Uploads are `[uploads]`'s, a tool's (`next/tools/uploads`, v1's, ADR
+0015): the keys from the server's environment. Media (42), the forges'
+pictures through this server, is *M6*.
 
 ### Domains that come with M6
 

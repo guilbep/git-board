@@ -6,8 +6,8 @@ export function renderMarkdown(body: string): Promise<{ html: string }> {
   return send('POST', '/api/markdown', { body: { body } });
 }
 
-// uploads come with their tool (M6): until then the route is not-found,
-// and uploads are off
+// whether files can be attached (ADR 0015); a server without the route
+// (an older one) has them off
 export async function getUploads(): Promise<UploadStatus> {
   try {
     return await get<UploadStatus>('/api/uploads');

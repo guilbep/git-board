@@ -5,7 +5,8 @@
 // GitHub (E2E_PORT + 1) answers what the server asks of it, so nothing
 // leaves this machine: git never reaches origin either, its first look
 // fails at once. On E2E_PORT + 5, the Markdown board: board.datastore =
-// markdown:issues, kept elsewhere than git, an origin all the same.
+// markdown:issues, kept elsewhere than git, an origin all the same, and
+// attachments on, to a fake S3 (E2E_PORT + 2) that keeps what it is put.
 // Playwright's webServer runs this; it lives until killed. E2E_SKIP_BUILD=1
 // reuses next/web/dist and the binary.
 import { execFileSync, spawn } from 'node:child_process';
@@ -31,6 +32,24 @@ const github = createServer((req, res) => {
 });
 const api = `http://127.0.0.1:${port + 1}`;
 await new Promise((ok) => github.listen(port + 1, '127.0.0.1', ok));
+
+// the fake S3: a signed PUT is kept, by its path; a GET answers it
+const s3Objects = new Map();
+const s3 = createServer((req, res) => {
+  if (req.method === 'PUT' && req.headers.authorization) {
+    const chunks = [];
+    req.on('data', (c) => chunks.push(c));
+    req.on('end', () => {
+      s3Objects.set(req.url, Buffer.concat(chunks));
+      res.end();
+    });
+    return;
+  }
+  const kept = s3Objects.get(req.url ?? '');
+  if (req.method === 'GET' && kept) return res.end(kept);
+  res.writeHead(403).end('<Error><Code>AccessDenied</Code></Error>');
+});
+await new Promise((ok) => s3.listen(port + 2, '127.0.0.1', ok));
 
 const sh = (cmd, args, cwd, e = env) => execFileSync(cmd, args, { cwd, stdio: 'inherit', env: e });
 const env = {
@@ -67,8 +86,8 @@ repo(join(work, 'markdown'), 'git@github.com:o/md.git', '[fields.status]\nsingle
 
 // a board served on p, once it answers
 const boards = [];
-async function serve(dir, p) {
-  const b = spawn(bin, ['serve', '--addr', `127.0.0.1:${p}`, '--log-level', 'warn'], { cwd: dir, env, stdio: 'inherit' });
+async function serve(dir, p, more = {}) {
+  const b = spawn(bin, ['serve', '--addr', `127.0.0.1:${p}`, '--log-level', 'warn'], { cwd: dir, env: { ...env, ...more }, stdio: 'inherit' });
   boards.push(b);
   for (let i = 0; i < 100; i++) {
     if (await fetch(`http://127.0.0.1:${p}/api/board`).then((r) => r.ok, () => false)) return b;
@@ -76,7 +95,9 @@ async function serve(dir, p) {
   }
   throw new Error(`the board on :${p} didn't answer`);
 }
-await serve(join(work, 'markdown'), port + 5);
+await serve(join(work, 'markdown'), port + 5, {
+  ACCESS_KEY_ID: 'e2e', ACCESS_KEY_SECRET: 'e2e-secret', BUCKET_NAME: 'e2e', UPLOADS_ENDPOINT: `http://127.0.0.1:${port + 2}`,
+});
 await serve(join(work, 'repo'), port);
 console.log(`e2e board: ${join(work, 'repo')} on :${port}, GitHub at ${api}; Markdown board on :${port + 5}`);
 // one board gone, or a signal: both go

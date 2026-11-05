@@ -1,5 +1,5 @@
-// Whether files can be attached here (a bucket is set up), asked once.
-// Uploads come with their tool (M6): until then they are off.
+// Whether files can be attached here (a bucket is set up: GET
+// /api/uploads), asked once.
 import { ref } from 'vue';
 import { getUploads, type UploadStatus } from '@/api';
 

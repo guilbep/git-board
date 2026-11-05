@@ -99,9 +99,10 @@ Release now, a table of the file. The Work page (experimental: its link
 shows with the cycle on) is v1's on `GET /api/cycle`, without v1's
 agents and its aside (what waits for the forges is Sync's); an issue's
 History draws the cycle's step bars from `GET /api/issues/{id}/cycle`.
-Waiting for their routes (M6, api.md routes 50 to 53): the cycle's
-actions and v1's cycle panels on an issue, the GitHub Project and its
-conflicts, uploads. Their v1 pages stay in `web/` until then; the cycle's
+Attaching files (paste, drop, pick in a text, as v1) works on routes 40
+and 41. Waiting for their routes (M6, api.md routes 42 and 50 to 53): the
+forges' pictures through the server, the cycle's actions and v1's cycle
+panels on an issue, the GitHub Project and its conflicts. Their v1 pages stay in `web/` until then; the cycle's
 settings form (a table of the file) and the experimental switch stay.
 
 ## Tests
