@@ -1,0 +1,8 @@
+# name	exit	command (git-board <command>): <name>.out is its stdout, <name>.err its stderr
+01-release-yank-v0-1-0-reason-found-a-bug	0	release yank v0.1.0 --reason "found a bug"
+02-release-yank-v0-2-0-rc-1-reason-still-br	0	release yank v0.2.0-rc.1 --reason "still broken"
+03-release-yank-v9-9-9-reason-no-such-tag	1	release yank v9.9.9 --reason "no such tag"
+04-release	0	release
+05-release-notes	0	release notes
+06-release-notes-all	0	release notes --all
+07-ls-is-open-closed-json	0	ls "is:open,closed" --json

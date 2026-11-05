@@ -1,0 +1,22 @@
+missing-value:
+  29649619 A good issue: no est value
+  29649619 A good issue: no prio value
+  29649619 A good issue: no reviewer value
+  29649619 A good issue: no sprint value
+  29649619 A good issue: no status value
+dead-option:
+  kind:bug: no issue carries it
+  kind:feature: no issue carries it
+  prio:p0: no issue carries it
+  prio:p1: no issue carries it
+  prio:p2: no issue carries it
+  prio:p3: no issue carries it
+  status:backlog: no issue carries it
+  status:ready: no issue carries it
+  status:in-progress: no issue carries it
+  status:in-review: no issue carries it
+  status:done: no issue carries it
+no-kind:
+  1 open issue has none of [branches] kinds (bug, feature)
+
+summary: 17 finding(s) (missing-value: 5, dead-option: 11, no-kind: 1)

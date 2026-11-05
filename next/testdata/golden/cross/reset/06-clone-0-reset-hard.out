@@ -1,0 +1,4 @@
+reset: 19 refs deleted, backed up in <bundle>
+  git fetch <bundle> 'refs/*:refs/*' brings them back
+this clone's board is empty. git board push --prune empties origin's; every other clone then runs git board reset --hard origin
+board.me is unset: its person is gone

@@ -1,0 +1,34 @@
+---
+id: ID
+number: GB-102
+title: "Ünïcödé: 日本語のタイトル \U0001F680 — שלום & <b> (renamed)"
+state: open
+fields:
+  area:
+    - données
+  status:
+    - backlog
+labels:
+  - étiquette
+people:
+  author: Chloé Dubois-Ångström
+  assignees:
+    - chloe
+created: 2025-03-03T20:00:00Z
+updated: 2025-03-03T21:00:00Z
+---
+
+Combining: é vs é. ZWJ: 👩‍👩‍👧. Tabs:	end.
+CRLF line, trailing spaces   
+
+```go
+fmt.Println("<>&")
+```
+
+<!-- git-board comments -->
+
+### Ada King · 2025-03-03T20:30:00Z
+
+مرحبا بالعالم — RTL text, and a NUL-free \u0000 escape.
+
+<!-- git-board comment ID:0 -->

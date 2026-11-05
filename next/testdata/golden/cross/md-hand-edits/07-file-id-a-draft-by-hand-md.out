@@ -1,0 +1,26 @@
+---
+id: ID
+title: A draft, by hand
+state: open
+fields:
+  prio:
+    - p2
+labels:
+  - plain
+people:
+  author: Bob
+  assignees:
+    - ada
+created: 2025-04-03T08:00:00Z
+updated: 2025-04-03T09:00:00Z
+---
+
+Its body.
+
+<!-- git-board comments -->
+
+### Chloé Dubois-Ångström · 2025-04-03T09:00:00Z
+
+Its comment.
+
+<!-- git-board comment ID:2 -->

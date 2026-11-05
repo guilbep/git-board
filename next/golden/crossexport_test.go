@@ -3,6 +3,7 @@ package golden
 import (
 	"bytes"
 	"context"
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -48,12 +49,12 @@ func write(t *testing.T, path, data string) {
 	}
 }
 
-// TestCrossExport: v1 and v2 export a board to Markdown files and import
-// them back the same: each step prints the same and exits the same, new
-// ids aside, and the files end the same, ids and times of now aside.
+// TestCrossExport: a board exports to Markdown files and imports them
+// back as v1 did: each step prints and exits as it did, new ids aside,
+// and the files end as they did, ids and times of now aside.
 func TestCrossExport(t *testing.T) {
 	t.Parallel()
-	one, two := binaries(t)
+	bin := binary(t)
 	byName := map[string]Board{}
 	for _, b := range boards(t) {
 		byName[b.Name] = b
@@ -65,7 +66,7 @@ func TestCrossExport(t *testing.T) {
 	}{{"basic", "md", exportSteps}, {"markdown", "issues", mdImportSteps}} {
 		t.Run(c.board, func(t *testing.T) {
 			t.Parallel()
-			crossExport(t, one, two, byName[c.board], c.md, c.steps)
+			crossExport(t, bin, byName[c.board], c.md, c.steps)
 		})
 	}
 }
@@ -82,66 +83,37 @@ var mdImportSteps = []any{
 	"export --md out",
 }
 
-func crossExport(t *testing.T, one, two string, board Board, mdDir string, exportSteps []any) {
-	said := map[string][]Result{}
-	files := map[string]map[string]string{}
-	for _, writer := range []struct{ name, bin string }{{"v2", two}, {"v1", one}} {
-		t.Run(writer.name, func(t *testing.T) {
-			ctx := context.Background()
-			dir, home, _ := checkout(t, board)
-			md := filepath.Join(dir, mdDir)
-			for _, s := range exportSteps {
-				line, ok := s.(string)
-				if !ok {
-					s.(func(*testing.T, string))(t, md)
-					continue
-				}
-				r, err := Run(ctx, writer.bin, dir, home, Case{Line: line})
-				if err != nil {
-					t.Fatalf("%s %s: %v", writer.name, line, err)
-				}
-				r.Stdout = shortIDHex.ReplaceAll(r.Stdout, []byte("ID"))
-				said[writer.name] = append(said[writer.name], r)
-			}
-			files[writer.name] = map[string]string{}
-			paths, _ := filepath.Glob(filepath.Join(md, "*.md"))
-			for _, p := range paths {
-				data, _ := os.ReadFile(p)
-				files[writer.name][strings.Replace(filepath.Base(p), filepath.Base(p), shortIDHex.ReplaceAllString(filepath.Base(p), "ID"), 1)] = nowish.ReplaceAllString(shortIDHex.ReplaceAllString(string(data), "ID"), "NOW")
-			}
-		})
-	}
-	if t.Failed() {
-		return
-	}
-	i := 0
+func crossExport(t *testing.T, bin string, board Board, mdDir string, exportSteps []any) {
+	ctx := context.Background()
+	dir, home, _ := checkout(t, board)
+	md := filepath.Join(dir, mdDir)
+	var tr transcript
 	for _, s := range exportSteps {
 		line, ok := s.(string)
 		if !ok {
+			s.(func(*testing.T, string))(t, md)
 			continue
 		}
-		a, b := said["v1"][i], said["v2"][i]
-		i++
+		r, err := Run(ctx, bin, dir, home, Case{Line: line})
+		if err != nil {
+			t.Fatalf("%s: %v", line, err)
+		}
+		r.Stdout = shortIDHex.ReplaceAll(r.Stdout, []byte("ID"))
 		if strings.HasPrefix(line, "export") { // by id, and new ids differ
-			a.Stdout, b.Stdout = sortLines(a.Stdout), sortLines(b.Stdout)
+			r.Stdout = sortLines(r.Stdout)
 		}
-		if a.Exit != b.Exit || !bytes.Equal(a.Stdout, b.Stdout) || !bytes.Equal(a.Stderr, b.Stderr) {
-			t.Errorf("%s: v1 and v2 differ\nexit %d / %d\nstderr:\n%s\nstdout:\n%s",
-				line, a.Exit, b.Exit, Diff(a.Stderr, b.Stderr), Diff(a.Stdout, b.Stdout))
-		}
+		tr.add(line, r)
 	}
-	for name, a := range files["v1"] {
-		if b, ok := files["v2"][name]; !ok {
-			t.Errorf("%s: v1 has it, v2 hasn't", name)
-		} else if a != b {
-			t.Errorf("%s: v1 and v2 differ\n%s", name, Diff([]byte(a), []byte(b)))
-		}
+	files := map[string]string{}
+	paths, _ := filepath.Glob(filepath.Join(md, "*.md"))
+	for _, p := range paths {
+		data, _ := os.ReadFile(p)
+		files[shortIDHex.ReplaceAllString(filepath.Base(p), "ID")] = nowish.ReplaceAllString(shortIDHex.ReplaceAllString(string(data), "ID"), "NOW")
 	}
-	for name := range files["v2"] {
-		if _, ok := files["v1"][name]; !ok {
-			t.Errorf("%s: v2 has it, v1 hasn't", name)
-		}
+	for _, name := range slices.Sorted(maps.Keys(files)) {
+		tr.file(name, []byte(files[name]))
 	}
+	tr.check(t, "export-"+board.Name)
 }
 
 // nowish is a time of today's, as an import stamps a write.

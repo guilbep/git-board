@@ -1,0 +1,39 @@
+[
+  {
+    "comments": 3,
+    "counted": true,
+    "created_at": "2025-03-03T09:00:00Z",
+    "id": "ID",
+    "inherited": [
+      "reviewer:chloe"
+    ],
+    "labels": [
+      "assignee:ada",
+      "kind:bug",
+      "est:3",
+      "plain",
+      "prio:p0",
+      "status:ready"
+    ],
+    "number": "MD-1",
+    "status": "open",
+    "title": "Retitled by the cross test",
+    "updated_at": "NOW"
+  },
+  {
+    "comments": 0,
+    "counted": true,
+    "created_at": "NOW",
+    "id": "ID",
+    "inherited": [
+      "reviewer:chloe"
+    ],
+    "labels": [
+      "prio:p1"
+    ],
+    "number": "MD-3",
+    "status": "open",
+    "title": "Cross write on a folder",
+    "updated_at": "NOW"
+  }
+]

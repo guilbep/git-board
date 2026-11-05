@@ -1,0 +1,3 @@
+reset: 20 refs deleted, backed up in <bundle>
+  git fetch <bundle> 'refs/*:refs/*' brings them back
+board.me is unset: its person is gone

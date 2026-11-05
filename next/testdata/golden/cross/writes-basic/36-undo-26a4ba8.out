@@ -1,0 +1,2 @@
+undone on ID Search hides closed issues by default:
+  labels +status:in-review -status:in-progress

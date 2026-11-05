@@ -1,0 +1,8 @@
+issue 09fc881e52ad971508e4baae8380bc8a81ce0ea2: issue: the first operation is "comment", want create
+issue 0e8c81a31ba9e1bd5f3bf35bf34b77bc6b735d51: issue: operation 2ef6e9d9520860ca1e6004fa8946776e1d280147:0: bad status "wontfix"
+issue 2f0e85905d422ad69bb55a8f6555c5b7b693bb7b: issue: unknown operation: "set-priority", operation fa8a0cdb0105376c7cb20371d64d207f6523a884:0
+issue 7f8fb537377ddd980a2ddb95b4824bcdef1b2b1f: issue: edit of an unknown text: "0000000000000000000000000000000000000000:0", operation 2e924379728fe30c86cc17734a6c118ca4f8fdd0:0
+issue 8d6836eb9b9fbaabfeb043336e8a20c5d0a90ae3: oplog: refs/board/issue/8d6836eb9b9fbaabfeb043336e8a20c5d0a90ae3: commit 2aec3d97e1840b6484f9159cf82072ae976bd976: clock 5, want 2
+issue 9acb10f12b6cfdcb9a1c0064de0858fb1c8d57bb: oplog: refs/board/issue/9acb10f12b6cfdcb9a1c0064de0858fb1c8d57bb: commit dc0ba3380ab7770f6e479ffc031bba4fdd4e441e: pack: invalid character 'h' in literal true (expecting 'r')
+issue b80349c12caa96e5452f18c36a1265950f68b234: issue: operation 8e88bbd31227df22f2d68b0421966f90f28ae51e:0 has no author
+error: 17 lint finding(s)

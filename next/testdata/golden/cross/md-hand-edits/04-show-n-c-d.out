@@ -1,0 +1,83 @@
+{
+  "author": {
+    "avatar_url": "https://avatars.githubusercontent.com/u/1004?s=88",
+    "id": "ID",
+    "login": "chloe",
+    "name": "Chloé Dubois-Ångström"
+  },
+  "closed_at": "2025-03-03T11:05:00Z",
+  "comments": 2,
+  "counted": true,
+  "created_at": "2025-03-03T11:00:00Z",
+  "edited_at": "NOW",
+  "events": [
+    {
+      "at": "2025-03-03T11:00:00Z",
+      "author": {
+        "avatar_url": "https://avatars.githubusercontent.com/u/1004?s=88",
+        "id": "ID",
+        "login": "chloe",
+        "name": "Chloé Dubois-Ångström"
+      },
+      "body": "é é",
+      "id": "ID:0",
+      "kind": "created"
+    },
+    {
+      "at": "2025-03-03T11:05:00Z",
+      "author": {
+        "avatar_url": "https://avatars.githubusercontent.com/u/1004?s=88",
+        "id": "ID",
+        "login": "chloe",
+        "name": "Chloé Dubois-Ångström"
+      },
+      "id": "ID:0",
+      "kind": "status",
+      "status": "closed"
+    },
+    {
+      "at": "2025-04-02T08:00:00Z",
+      "author": {
+        "avatar_url": "https://avatars.githubusercontent.com/u/1001?s=88",
+        "id": "ID",
+        "login": "ada-l",
+        "name": "Ada King"
+      },
+      "body": "Read in, in a conflict too.",
+      "id": "ID:0",
+      "kind": "comment"
+    },
+    {
+      "at": "NOW",
+      "author": {
+        "avatar_url": "https://avatars.githubusercontent.com/u/1001?s=88",
+        "id": "ID",
+        "login": "ada-l",
+        "name": "Ada King"
+      },
+      "body": "after the hand edits",
+      "id": "ID:0",
+      "kind": "comment"
+    }
+  ],
+  "id": "ID",
+  "labels": [],
+  "number": "MD-2",
+  "participants": [
+    {
+      "avatar_url": "https://avatars.githubusercontent.com/u/1004?s=88",
+      "id": "ID",
+      "login": "chloe",
+      "name": "Chloé Dubois-Ångström"
+    },
+    {
+      "avatar_url": "https://avatars.githubusercontent.com/u/1001?s=88",
+      "id": "ID",
+      "login": "ada-l",
+      "name": "Ada King"
+    }
+  ],
+  "status": "closed",
+  "title": "Ünïcödé 日本語 🚀",
+  "updated_at": "NOW"
+}

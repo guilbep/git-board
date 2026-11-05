@@ -1,8 +1,8 @@
 package golden
 
 import (
-	"bytes"
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -46,58 +46,45 @@ var (
 	markTime   = regexp.MustCompile(`\d{4}-\d\d-\d\d \d\d:\d\d`)
 )
 
-// TestCrossReset: v1 and v2 start a board over the same, on two clones
-// of basic with one origin: each step prints the same and exits the
-// same, the bundles' paths and the marks' times aside. No ls on the
-// emptied clone: v1's first pull of an empty board speaks there.
+// TestCrossReset: a board starts over as v1 started it over, on two
+// clones of basic with one origin: each step prints and exits as it did,
+// the bundles' paths and the marks' times aside. No ls on the emptied
+// clone: v1's first pull of an empty board spoke there.
 func TestCrossReset(t *testing.T) {
 	t.Parallel()
-	one, two := binaries(t)
+	bin := binary(t)
 	var board Board
 	for _, b := range boards(t) {
 		if b.Name == "basic" {
 			board = b
 		}
 	}
-	said := map[string][]Result{}
-	for _, writer := range []struct{ name, bin string }{{"v2", two}, {"v1", one}} {
-		t.Run(writer.name, func(t *testing.T) {
-			ctx := context.Background()
-			origin := filepath.Join(t.TempDir(), "origin.git")
-			if err := Git(ctx, ".", "init", "-q", "--bare", origin); err != nil {
-				t.Fatal(err)
-			}
-			var dirs, homes [2]string
-			for i := range dirs {
-				dirs[i], homes[i], _ = checkout(t, board)
-				if err := Git(ctx, dirs[i], "remote", "add", "origin", origin); err != nil {
-					t.Fatal(err)
-				}
-			}
-			for _, s := range resetSteps {
-				r, err := Run(ctx, writer.bin, dirs[s.clone], homes[s.clone], Case{Line: s.line})
-				if err != nil {
-					t.Fatalf("%s %s: %v", writer.name, s.line, err)
-				}
-				for _, out := range []*[]byte{&r.Stdout, &r.Stderr} {
-					*out = bundlePath.ReplaceAll(*out, []byte("<bundle>"))
-					*out = markTime.ReplaceAll(*out, []byte("<when>"))
-					*out = shortIDHex.ReplaceAll(*out, []byte("ID"))
-				}
-				said[writer.name] = append(said[writer.name], r)
-			}
-		})
+	ctx := context.Background()
+	origin := filepath.Join(t.TempDir(), "origin.git")
+	if err := Git(ctx, ".", "init", "-q", "--bare", origin); err != nil {
+		t.Fatal(err)
 	}
-	if t.Failed() {
-		return
-	}
-	for i, s := range resetSteps {
-		a, b := said["v1"][i], said["v2"][i]
-		if a.Exit != b.Exit || !bytes.Equal(a.Stdout, b.Stdout) || !bytes.Equal(a.Stderr, b.Stderr) {
-			t.Errorf("clone %d, %s: v1 and v2 differ\nexit %d / %d\nstderr:\n%s\nstdout:\n%s",
-				s.clone, s.line, a.Exit, b.Exit, Diff(a.Stderr, b.Stderr), Diff(a.Stdout, b.Stdout))
+	var dirs, homes [2]string
+	for i := range dirs {
+		dirs[i], homes[i], _ = checkout(t, board)
+		if err := Git(ctx, dirs[i], "remote", "add", "origin", origin); err != nil {
+			t.Fatal(err)
 		}
 	}
+	var tr transcript
+	for _, s := range resetSteps {
+		r, err := Run(ctx, bin, dirs[s.clone], homes[s.clone], Case{Line: s.line})
+		if err != nil {
+			t.Fatalf("%s: %v", s.line, err)
+		}
+		for _, out := range []*[]byte{&r.Stdout, &r.Stderr} {
+			*out = bundlePath.ReplaceAll(*out, []byte("<bundle>"))
+			*out = markTime.ReplaceAll(*out, []byte("<when>"))
+			*out = shortIDHex.ReplaceAll(*out, []byte("ID"))
+		}
+		tr.add(fmt.Sprintf("clone %d: %s", s.clone, s.line), r)
+	}
+	tr.check(t, "reset")
 }
 
 // dropSteps throw a forge-only board's copy away, refused while an issue
@@ -114,38 +101,30 @@ var dropSteps = []string{
 	`ls "is:open,closed" --json id`,
 }
 
-// TestCrossDrop: v1 and v2 drop a forge-only board's copy the same.
+// TestCrossDrop: a forge-only board's copy drops as v1 dropped it.
 func TestCrossDrop(t *testing.T) {
 	t.Parallel()
-	one, two := binaries(t)
-	said := map[string][]Result{}
-	for _, writer := range []struct{ name, bin string }{{"v2", two}, {"v1", one}} {
-		ctx := context.Background()
-		tmp := t.TempDir()
-		dir, home := filepath.Join(tmp, "repo"), filepath.Join(tmp, "home")
-		for _, args := range [][]string{{"init", "-q", dir}, {"-C", dir, "config", "user.name", "Ann"},
-			{"-C", dir, "config", "user.email", "ann@example.org"}, {"-C", dir, "config", "board.datastore", "forge"}} {
-			if err := Git(ctx, ".", args...); err != nil {
-				t.Fatal(err)
-			}
-		}
-		if err := os.MkdirAll(home, 0o755); err != nil {
+	bin := binary(t)
+	ctx := context.Background()
+	tmp := t.TempDir()
+	dir, home := filepath.Join(tmp, "repo"), filepath.Join(tmp, "home")
+	for _, args := range [][]string{{"init", "-q", dir}, {"-C", dir, "config", "user.name", "Ann"},
+		{"-C", dir, "config", "user.email", "ann@example.org"}, {"-C", dir, "config", "board.datastore", "forge"}} {
+		if err := Git(ctx, ".", args...); err != nil {
 			t.Fatal(err)
 		}
-		for _, line := range dropSteps {
-			r, err := Run(ctx, writer.bin, dir, home, Case{Line: line})
-			if err != nil {
-				t.Fatalf("%s %s: %v", writer.name, line, err)
-			}
-			r.Stdout = shortIDHex.ReplaceAll(r.Stdout, []byte("ID"))
-			said[writer.name] = append(said[writer.name], r)
-		}
 	}
-	for i, line := range dropSteps {
-		a, b := said["v1"][i], said["v2"][i]
-		if a.Exit != b.Exit || !bytes.Equal(a.Stdout, b.Stdout) || !bytes.Equal(a.Stderr, b.Stderr) {
-			t.Errorf("%s: v1 and v2 differ\nexit %d / %d\nstderr:\n%s\nstdout:\n%s",
-				line, a.Exit, b.Exit, Diff(a.Stderr, b.Stderr), Diff(a.Stdout, b.Stdout))
-		}
+	if err := os.MkdirAll(home, 0o755); err != nil {
+		t.Fatal(err)
 	}
+	var tr transcript
+	for _, line := range dropSteps {
+		r, err := Run(ctx, bin, dir, home, Case{Line: line})
+		if err != nil {
+			t.Fatalf("%s: %v", line, err)
+		}
+		r.Stdout = shortIDHex.ReplaceAll(r.Stdout, []byte("ID"))
+		tr.add(line, r)
+	}
+	tr.check(t, "drop")
 }

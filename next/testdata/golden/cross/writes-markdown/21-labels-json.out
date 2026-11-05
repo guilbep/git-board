@@ -1,0 +1,50 @@
+[
+  {
+    "closed": 0,
+    "label": "plain",
+    "open": 1,
+    "value": "plain"
+  },
+  {
+    "closed": 0,
+    "field": "assignee",
+    "label": "assignee:ada",
+    "open": 1,
+    "value": "ada"
+  },
+  {
+    "closed": 0,
+    "field": "est",
+    "label": "est:3",
+    "open": 1,
+    "value": "3"
+  },
+  {
+    "closed": 0,
+    "field": "kind",
+    "label": "kind:bug",
+    "open": 1,
+    "value": "bug"
+  },
+  {
+    "closed": 0,
+    "field": "prio",
+    "label": "prio:p0",
+    "open": 1,
+    "value": "p0"
+  },
+  {
+    "closed": 0,
+    "field": "prio",
+    "label": "prio:p1",
+    "open": 1,
+    "value": "p1"
+  },
+  {
+    "closed": 0,
+    "field": "status",
+    "label": "status:ready",
+    "open": 1,
+    "value": "ready"
+  }
+]

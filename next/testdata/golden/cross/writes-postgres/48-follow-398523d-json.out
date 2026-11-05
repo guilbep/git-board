@@ -1,0 +1,9 @@
+{
+  "following": true,
+  "reasons": [
+    "assignee",
+    "commented",
+    "followed"
+  ],
+  "set": true
+}

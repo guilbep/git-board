@@ -1,0 +1,26 @@
+---
+id: ID
+number: GB-103
+title: Label churn
+state: open
+fields:
+  est:
+    - "8"
+  sprint:
+    - s2
+  status:
+    - in-review
+labels:
+  - a
+  - d
+people:
+  author: Ada King
+  assignees:
+    - chloe
+created: 2025-03-04T01:00:00Z
+updated: 2025-03-04T03:00:00Z
+---
+
+Labels come and go.
+
+<!-- git-board comments -->

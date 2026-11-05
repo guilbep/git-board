@@ -1,0 +1,132 @@
+[
+  {
+    "closed": 1,
+    "label": "a",
+    "open": 0,
+    "value": "a"
+  },
+  {
+    "closed": 1,
+    "label": "d",
+    "open": 0,
+    "value": "d"
+  },
+  {
+    "closed": 1,
+    "label": "étiquette",
+    "open": 0,
+    "value": "étiquette"
+  },
+  {
+    "closed": 1,
+    "field": "area",
+    "label": "area:données",
+    "open": 0,
+    "value": "données"
+  },
+  {
+    "closed": 1,
+    "field": "assignee",
+    "label": "assignee:ada",
+    "open": 0,
+    "value": "ada"
+  },
+  {
+    "closed": 2,
+    "field": "assignee",
+    "label": "assignee:ada-l",
+    "open": 0,
+    "value": "ada-l"
+  },
+  {
+    "closed": 1,
+    "field": "assignee",
+    "label": "assignee:bobby",
+    "open": 0,
+    "value": "bobby"
+  },
+  {
+    "closed": 2,
+    "field": "assignee",
+    "label": "assignee:chloe",
+    "open": 0,
+    "value": "chloe"
+  },
+  {
+    "closed": 1,
+    "field": "closed-as",
+    "label": "closed-as:duplicate",
+    "open": 0,
+    "value": "duplicate"
+  },
+  {
+    "closed": 1,
+    "field": "duplicate-of",
+    "label": "duplicate-of:ID",
+    "open": 0,
+    "value": "ID"
+  },
+  {
+    "closed": 1,
+    "field": "est",
+    "label": "est:0.5",
+    "open": 0,
+    "value": "0.5"
+  },
+  {
+    "closed": 1,
+    "field": "est",
+    "label": "est:3",
+    "open": 0,
+    "value": "3"
+  },
+  {
+    "closed": 2,
+    "field": "kind",
+    "label": "kind:bug",
+    "open": 0,
+    "value": "bug"
+  },
+  {
+    "closed": 1,
+    "field": "kind",
+    "label": "kind:feature",
+    "open": 0,
+    "value": "feature"
+  },
+  {
+    "closed": 1,
+    "field": "prio",
+    "label": "prio:p1",
+    "open": 0,
+    "value": "p1"
+  },
+  {
+    "closed": 2,
+    "field": "prio",
+    "label": "prio:p3",
+    "open": 0,
+    "value": "p3"
+  },
+  {
+    "closed": 1,
+    "field": "sprint",
+    "label": "sprint:s1",
+    "open": 0,
+    "value": "s1"
+  },
+  {
+    "closed": 1,
+    "field": "sprint",
+    "label": "sprint:s2",
+    "open": 0,
+    "value": "s2"
+  },
+  {
+    "closed": 8,
+    "field": "status",
+    "label": "status:done",
+    "open": 0,
+    "value": "done"
+  }
+]

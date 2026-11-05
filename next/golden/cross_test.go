@@ -4,16 +4,16 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io/fs"
-	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"reflect"
 	"regexp"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
 // writes are the commands the cross-write test runs on the basic board,
@@ -129,59 +129,155 @@ var mdWrites = []string{
 var shortIDHex = regexp.MustCompile(`\b[0-9a-f]{7,64}\b`)
 
 // upgraded is the line v2 says on the write that upgrades the file's
-// schema (docs/guide/config-schema.md), which v1 doesn't: the one
-// difference of a write's output.
+// schema (docs/guide/config-schema.md), which v1 didn't: taken out of
+// what a write says.
 var upgraded = regexp.MustCompile(`(?m)^\.git-board\.toml upgraded from schema \d+ to \d+ .*\n`)
 
 // tomlLine is the line a TOML error names: in the file v2 upgraded, the
 // schema key's lines over the tables put it lower than in v1's.
 var tomlLine = regexp.MustCompile(`toml: line \d+`)
 
-// binaries builds v1's git-board and git-board-next.
-func binaries(t *testing.T) (v1, v2 string) {
+// The cross tests ran v1 and v2 side by side until the switch (v0.12,
+// ADR 0021). v1's side is recorded since, as make compat's outputs are:
+// each test's transcript is in testdata/golden/cross/<test>/, in Write's
+// form, every step's output normalised as the test says, and the binary
+// is held to it. make golden records them again from the binary it
+// builds: review the diff, as it changes the contract.
+const crossRoot = root + "/cross"
+
+// CrossBinEnv names the binary the cross tests run instead of the one
+// they build (make golden sets it).
+const CrossBinEnv = "GIT_BOARD_CROSS_BIN"
+
+// moduleRoot is the module's root, from this package.
+const moduleRoot = "../.."
+
+// binary is the git-board the cross tests run: CrossBinEnv's, else
+// ./cmd/git-board-next built now.
+func binary(t *testing.T) string {
 	t.Helper()
 	if testing.Short() {
-		t.Skip("builds both binaries: not with -short")
+		t.Skip("builds the binary: not with -short")
 	}
-	// go test caches a result by the files the test reads: stat every
-	// source both binaries build from, so an edit runs the test again.
-	for _, root := range []string{"../..", ".."} {
-		err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
-			if err != nil {
-				return err
-			}
-			if d.IsDir() && (d.Name() == "testdata" || d.Name() == "node_modules" || strings.HasPrefix(d.Name(), ".")) && path != root {
-				return filepath.SkipDir
-			}
-			if !d.IsDir() && (strings.HasSuffix(path, ".go") || d.Name() == "go.mod" || d.Name() == "go.sum") {
-				_, err = os.Stat(path)
-			}
-			return err
-		})
+	if bin := os.Getenv(CrossBinEnv); bin != "" {
+		abs, err := filepath.Abs(bin)
 		if err != nil {
 			t.Fatal(err)
 		}
+		return abs
 	}
-	dir := t.TempDir()
-	v1, v2 = filepath.Join(dir, "git-board"), filepath.Join(dir, "git-board-next")
-	for bin, pkg := range map[string]string{v1: "../../cmd/git-board", v2: "../cmd/git-board-next"} {
-		if out, err := exec.Command("go", "build", "-o", bin, pkg).CombinedOutput(); err != nil {
-			t.Fatalf("go build %s: %v\n%s", pkg, err, out)
+	// go test caches a result by the files the test reads: stat every
+	// source the binary builds from, so an edit runs the test again.
+	err := filepath.WalkDir(moduleRoot, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
 		}
+		if d.IsDir() && (d.Name() == "testdata" || d.Name() == "node_modules" || strings.HasPrefix(d.Name(), ".")) && path != moduleRoot {
+			return filepath.SkipDir
+		}
+		if !d.IsDir() && (strings.HasSuffix(path, ".go") || d.Name() == "go.mod" || d.Name() == "go.sum") {
+			_, err = os.Stat(path)
+		}
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
-	return v1, v2
+	bin := filepath.Join(t.TempDir(), "git-board")
+	if out, err := exec.Command("go", "build", "-o", bin, "../cmd/git-board-next").CombinedOutput(); err != nil {
+		t.Fatalf("go build: %v\n%s", err, out)
+	}
+	return bin
 }
 
-// TestCrossWrites: what one version writes, the other reads the same, on
-// each datastore: git (basic), a Markdown folder (markdown) and
-// PostgreSQL (postgres, basic copied in; skipped without a server). On a
-// checkout of the board, v2 runs the writes, then v1 and v2 read the
-// board (ls, and show and log of every issue) and agree; then the
-// reverse, v1 writing. Each write prints the same, exits the same, on
-// both, its new ids aside.
+// transcript is what a cross test saw, step by step, to hold against
+// its recording.
+type transcript struct {
+	cases   []Case
+	results map[string]Result
+}
+
+// add records a step: its command line and its result, normalised.
+func (tr *transcript) add(line string, r Result) {
+	if tr.results == nil {
+		tr.results = map[string]Result{}
+	}
+	name := fmt.Sprintf("%02d-%s", len(tr.cases)+1, slug(line))
+	tr.cases = append(tr.cases, Case{name, line})
+	tr.results[name] = r
+}
+
+// file records a file's bytes, as a step whose stdout they are.
+func (tr *transcript) file(name string, data []byte) {
+	tr.add("file "+name, Result{Stdout: data})
+}
+
+// check holds the transcript to the recording at testdata/golden/cross/
+// <name>, or records it there with GIT_BOARD_GOLDEN_UPDATE=1.
+func (tr *transcript) check(t *testing.T, name string) {
+	t.Helper()
+	dir := filepath.Join(crossRoot, name)
+	if os.Getenv(UpdateEnv) == "1" {
+		if err := Write(dir, tr.cases, tr.results); err != nil {
+			t.Fatal(err)
+		}
+		return
+	}
+	rec, err := Read(dir)
+	if err != nil {
+		t.Fatalf("%v: make golden", err)
+	}
+	if !slices.Equal(rec.Cases, tr.cases) {
+		t.Fatalf("the steps recorded aren't the test's: make golden\nrecorded:\n%v\nnow:\n%v", rec.Cases, tr.cases)
+	}
+	for _, c := range tr.cases {
+		want, got := rec.Results[c.Name], tr.results[c.Name]
+		if want.Exit != got.Exit || !bytes.Equal(want.Stdout, got.Stdout) || !bytes.Equal(want.Stderr, got.Stderr) {
+			t.Errorf("%s (%s): differs from the recording\nexit %d, want %d\nstderr:\n%s\nstdout:\n%s",
+				c.Name, c.Line, got.Exit, want.Exit, Diff(want.Stderr, got.Stderr), Diff(want.Stdout, got.Stdout))
+		}
+	}
+}
+
+// today is the date of today, as a write stamps it in a line.
+var today = regexp.MustCompile(time.Now().UTC().Format("2006-01-02"))
+
+// dsn is a PostgreSQL board's database, which each checkout has its own
+// of, on the server the machine has.
+var dsn = regexp.MustCompile(`postgres(ql)?://[^"\s]*`)
+
+// readNorm is a read's output after writes, as recorded: JSON as canon
+// has it, the times of now, new ids and a database's URL out.
+func readNorm(r Result) Result {
+	if json.Valid(r.Stdout) && len(bytes.TrimSpace(r.Stdout)) > 0 {
+		r.Stdout = append(canon(decode(r.Stdout)), '\n')
+	}
+	for _, p := range []*[]byte{&r.Stdout, &r.Stderr} {
+		*p = dsn.ReplaceAll(today.ReplaceAll(unstamped(*p), []byte("TODAY")), []byte("$POSTGRES"))
+	}
+	return r
+}
+
+// noSchema is config list --json without the file's schema key, which
+// v2 writes on its first write (docs/guide/config-schema.md) and v1
+// never did.
+func noSchema(out []byte) []byte {
+	var keys []map[string]any
+	if json.Unmarshal(out, &keys) != nil {
+		return out
+	}
+	keys = slices.DeleteFunc(keys, func(k map[string]any) bool { return k["key"] == "schema" })
+	b, _ := json.Marshal(keys)
+	return b
+}
+
+// TestCrossWrites: the writes print what v1 printed, on each datastore:
+// git (basic), a Markdown folder (markdown) and PostgreSQL (postgres,
+// basic copied in; skipped without a server); and the board they leave
+// reads as v1 read the board its own writes left.
 func TestCrossWrites(t *testing.T) {
 	t.Parallel()
-	one, two := binaries(t)
+	bin := binary(t)
 	byName := map[string]Board{}
 	for _, b := range boards(t) {
 		byName[b.Name] = b
@@ -196,136 +292,43 @@ func TestCrossWrites(t *testing.T) {
 		}
 		t.Run(c.board, func(t *testing.T) {
 			t.Parallel()
-			crossWrites(t, one, two, b, c.writes)
+			crossWrites(t, bin, b, c.writes)
 		})
 	}
 }
 
-func crossWrites(t *testing.T, one, two string, board Board, writes []string) {
+func crossWrites(t *testing.T, bin string, board Board, writes []string) {
 	if board.Datastore == postgres && os.Getenv(PostgresEnv) == "" {
 		t.Skipf("%s: %v", board.Name, ErrNoPostgres)
 	}
-	said := map[string][]Result{}
-	for _, writer := range []struct{ name, bin string }{{"v2", two}, {"v1", one}} {
-		t.Run(writer.name+" writes", func(t *testing.T) {
-			ctx := context.Background()
-			dir, home, _ := checkout(t, board)
-			for _, line := range writes {
-				r, err := Run(ctx, writer.bin, dir, home, Case{Line: line})
-				if err != nil {
-					t.Fatalf("%s %s: %v", writer.name, line, err)
-				}
-				said[writer.name] = append(said[writer.name], r)
-			}
-			ids, err := board.IssueIDs(ctx, dir)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if board.Datastore == postgres { // the issues written meanwhile too
-				r, err := Run(ctx, one, dir, home, Case{Line: `ls "is:open,closed" --json id`})
-				if err != nil {
-					t.Fatal(err)
-				}
-				var listed []struct{ ID string }
-				json.Unmarshal(r.Stdout, &listed)
-				for _, l := range listed {
-					if !slices.Contains(ids, l.ID) {
-						ids = append(ids, l.ID)
-					}
-				}
-			}
-			cases := []Case{{"ls", `ls "is:open,closed" --json`}, {"labels", "labels --json"},
-				{"follows", `ls "follows:@me is:open,closed" --json`}, {"status", "status"}, {"status json", "status --json"},
-				{"config", "config list --json"}, {"view", "view ready --json"}}
-			for _, id := range ids {
-				cases = append(cases, Case{"show " + id[:7], "show " + id + " --json"}, Case{"log " + id[:7], "log " + id + " --json"})
-			}
-			for _, c := range cases {
-				a, err := Run(ctx, one, dir, home, c)
-				if err != nil {
-					t.Fatal(err)
-				}
-				b, err := Run(ctx, two, dir, home, c)
-				if err != nil {
-					t.Fatal(err)
-				}
-				if a.Exit != b.Exit || !bytes.Equal(a.Stderr, b.Stderr) || !jsonEqual(a.Stdout, b.Stdout) {
-					a.Stdout, b.Stdout = canon(decode(a.Stdout)), canon(decode(b.Stdout))
-					t.Errorf("after %s's writes, %s: v1 and v2 differ\nexit %d / %d\nstderr:\n%s\nstdout:\n%s",
-						writer.name, c.Line, a.Exit, b.Exit, Diff(a.Stderr, b.Stderr), Diff(a.Stdout, b.Stdout))
-				}
-			}
-		})
-	}
-	if t.Failed() {
-		return
-	}
-	for i, line := range writes {
-		a, b := said["v1"][i], said["v2"][i]
-		a.Stdout, b.Stdout = shortIDHex.ReplaceAll(a.Stdout, []byte("ID")), shortIDHex.ReplaceAll(b.Stdout, []byte("ID"))
-		b.Stderr = upgraded.ReplaceAll(b.Stderr, nil)
-		a.Stderr, b.Stderr = tomlLine.ReplaceAll(a.Stderr, []byte("toml: line N")), tomlLine.ReplaceAll(b.Stderr, []byte("toml: line N"))
-		if a.Exit != b.Exit || !bytes.Equal(a.Stdout, b.Stdout) || !bytes.Equal(a.Stderr, b.Stderr) {
-			t.Errorf("%s: v1 and v2 differ\nexit %d / %d\nstderr:\n%s\nstdout:\n%s",
-				line, a.Exit, b.Exit, Diff(a.Stderr, b.Stderr), Diff(a.Stdout, b.Stdout))
+	ctx := context.Background()
+	dir, home, _ := checkout(t, board)
+	var tr transcript
+	for _, line := range writes {
+		r, err := Run(ctx, bin, dir, home, Case{Line: line})
+		if err != nil {
+			t.Fatalf("%s: %v", line, err)
 		}
+		r.Stdout = shortIDHex.ReplaceAll(r.Stdout, []byte("ID"))
+		r.Stderr = tomlLine.ReplaceAll(upgraded.ReplaceAll(r.Stderr, nil), []byte("toml: line N"))
+		tr.add(line, r)
 	}
+	for _, line := range []string{`ls "is:open,closed" --json`, "labels --json", `ls "follows:@me is:open,closed" --json`, "config list --json", "view ready --json"} {
+		r, err := Run(ctx, bin, dir, home, Case{Line: line})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if line == "config list --json" {
+			r.Stdout = noSchema(r.Stdout)
+		}
+		tr.add(line, readNorm(r))
+	}
+	tr.check(t, "writes-"+board.Name)
 }
 
-// forged are the keys v2 has from sync records, M4 (pending.txt): left
-// out of the comparison until then.
+// forged are the keys v1 lacked until M4 (sync records): left out of
+// what readNorm records.
 var forged = []string{"forges", "github_url", "pending", "shown_title"}
-
-// jsonEqual compares v1's output and v2's as JSON when both are, as
-// bytes else: key order and the forged keys aside, and the number v1
-// takes from a forge (below the counter's start, M4) that v2 lacks.
-func jsonEqual(one, two []byte) bool {
-	var x, y any
-	if json.Unmarshal(one, &x) != nil || json.Unmarshal(two, &y) != nil {
-		return bytes.Equal(one, two)
-	}
-	return same(x, y)
-}
-
-func same(x, y any) bool {
-	switch x := x.(type) {
-	case map[string]any:
-		y, ok := y.(map[string]any)
-		if !ok {
-			return false
-		}
-		x, y = maps.Clone(x), maps.Clone(y)
-		if f, _ := x["forges"].([]any); len(f) > 0 && y["number"] == nil {
-			delete(x, "number")
-		}
-		for _, k := range forged {
-			delete(x, k)
-			delete(y, k)
-		}
-		if len(x) != len(y) {
-			return false
-		}
-		for k, v := range x {
-			w, ok := y[k]
-			if !ok || !same(v, w) {
-				return false
-			}
-		}
-		return true
-	case []any:
-		y, ok := y.([]any)
-		if !ok || len(x) != len(y) {
-			return false
-		}
-		for i := range x {
-			if !same(x[i], y[i]) {
-				return false
-			}
-		}
-		return true
-	}
-	return reflect.DeepEqual(x, y)
-}
 
 // canon is v as JSON with the forged keys out, to show a difference.
 func canon(v any) []byte {

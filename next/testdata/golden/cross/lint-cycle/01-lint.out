@@ -1,0 +1,12 @@
+read:
+  steps: none, so the default list with a sign-off per validation status: intent, risk, plan, tests, code, review, validated
+  [cycle.signoffs] validated = "lead": the sign-off step validated, at status validated, held by the role lead
+  [cycle.kinds] bug = "failing-test": [cycle.kinds.bug] tests = "failing-test"
+dead-option:
+  status:todo: no issue carries it
+  status:in-progress: no issue carries it
+  status:in-review: no issue carries it
+  status:validated: no issue carries it
+  status:done: no issue carries it
+
+summary: 5 finding(s) (dead-option: 5)

@@ -1,0 +1,12 @@
+double-single:
+  27861ea2 A long history (150): multiple prio labels: prio:p0, prio:p2, prio:p3
+missing-value:
+  0107f196 Dialog error slowly token response token index form (1): no est value
+  56f15a41 Crashes could login validation deploy backend file (8): no est value
+  0cb9eabc Missing chart csv calculation endpoint energy the crashes (13): no est value
+  27861ea2 A long history (150): no est value
+dead-option:
+  status:in-progress: no issue carries it
+  status:tests-metier: no issue carries it
+
+summary: 7 finding(s) (double-single: 1, missing-value: 4, dead-option: 2)

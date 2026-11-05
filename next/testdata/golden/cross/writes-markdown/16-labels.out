@@ -1,0 +1,8 @@
+LABEL         OPEN  CLOSED
+plain         1     0
+assignee:ada  1     0
+est:3         1     0
+kind:bug      1     0
+prio:p0       1     0
+prio:p1       1     0
+status:ready  1     0

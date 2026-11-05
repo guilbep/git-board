@@ -1,0 +1,142 @@
+[
+  {
+    "comments": 3,
+    "counted": true,
+    "created_at": "2025-03-03T09:00:00Z",
+    "id": "ID",
+    "inherited": [
+      "reviewer:chloe"
+    ],
+    "labels": [
+      "assignee:ada",
+      "assignee:bobby",
+      "kind:bug",
+      "est:3",
+      "prio:p0",
+      "sprint:s1",
+      "status:in-progress"
+    ],
+    "number": "GB-100",
+    "status": "open",
+    "title": "Search hides closed issues by default",
+    "updated_at": "2025-03-03T15:00:00Z"
+  },
+  {
+    "closed_at": "2025-03-03T17:01:00Z",
+    "comments": 1,
+    "counted": true,
+    "created_at": "2025-03-03T16:00:00Z",
+    "id": "ID",
+    "inherited": [
+      "reviewer:chloe"
+    ],
+    "labels": [
+      "est:0.5",
+      "kind:feature",
+      "prio:p2",
+      "status:done"
+    ],
+    "number": "GB-101",
+    "status": "closed",
+    "title": "Export CSV (#13)",
+    "updated_at": "2025-03-03T17:01:00Z"
+  },
+  {
+    "comments": 2,
+    "counted": true,
+    "created_at": "2025-03-03T19:00:00Z",
+    "id": "ID",
+    "inherited": [
+      "reviewer:chloe"
+    ],
+    "labels": [],
+    "status": "open",
+    "title": "Thread with a deleted comment",
+    "updated_at": "2025-03-03T19:13:00Z"
+  },
+  {
+    "comments": 1,
+    "counted": true,
+    "created_at": "2025-03-03T20:00:00Z",
+    "id": "ID",
+    "inherited": [
+      "reviewer:chloe"
+    ],
+    "labels": [
+      "area:données",
+      "assignee:chloe",
+      "status:backlog",
+      "étiquette"
+    ],
+    "number": "GB-102",
+    "status": "open",
+    "title": "Ünïcödé: 日本語のタイトル 🚀 — שלום \u0026 \u003cb\u003e (renamed)",
+    "updated_at": "2025-03-03T21:00:00Z"
+  },
+  {
+    "comments": 2,
+    "counted": true,
+    "created_at": "2025-03-03T21:30:00Z",
+    "id": "ID",
+    "inherited": [
+      "reviewer:chloe"
+    ],
+    "labels": [
+      "kind:bug",
+      "status:backlog"
+    ],
+    "number": "GB-7",
+    "status": "open",
+    "title": "Crash on empty report",
+    "updated_at": "2025-03-03T22:10:00Z"
+  },
+  {
+    "comments": 1,
+    "counted": true,
+    "created_at": "2025-03-03T23:00:00Z",
+    "id": "ID",
+    "inherited": [
+      "reviewer:chloe"
+    ],
+    "labels": [
+      "prio:p3"
+    ],
+    "status": "open",
+    "title": "Lenient packs: the second title wins",
+    "updated_at": "2025-03-03T23:15:00Z"
+  },
+  {
+    "comments": 0,
+    "counted": true,
+    "created_at": "2025-03-04T00:00:00Z",
+    "id": "ID",
+    "inherited": [
+      "reviewer:chloe"
+    ],
+    "labels": [],
+    "status": "open",
+    "title": "Bare",
+    "updated_at": "2025-03-04T00:00:00Z"
+  },
+  {
+    "comments": 0,
+    "counted": true,
+    "created_at": "2025-03-04T01:00:00Z",
+    "id": "ID",
+    "inherited": [
+      "reviewer:chloe"
+    ],
+    "labels": [
+      "a",
+      "assignee:chloe",
+      "d",
+      "est:8",
+      "sprint:s2",
+      "status:in-review"
+    ],
+    "number": "GB-103",
+    "status": "open",
+    "title": "Label churn",
+    "updated_at": "2025-03-04T03:00:00Z"
+  }
+]

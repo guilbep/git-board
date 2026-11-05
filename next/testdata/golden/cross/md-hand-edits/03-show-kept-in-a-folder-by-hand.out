@@ -1,0 +1,221 @@
+{
+  "author": {
+    "avatar_url": "https://avatars.githubusercontent.com/u/1001?s=88",
+    "id": "ID",
+    "login": "ada-l",
+    "name": "Ada King"
+  },
+  "comments": 4,
+  "counted": true,
+  "created_at": "2025-03-03T09:00:00Z",
+  "edited_at": "NOW",
+  "events": [
+    {
+      "at": "2025-03-03T09:00:00Z",
+      "author": {
+        "avatar_url": "https://avatars.githubusercontent.com/u/1001?s=88",
+        "id": "ID",
+        "login": "ada-l",
+        "name": "Ada King"
+      },
+      "body": "A body with a heading:\n\n### not a comment · 2025-01-01T00:00:00Z\n\nstill the body, by hand.",
+      "edited": true,
+      "history": [
+        {
+          "at": "2025-03-03T09:00:00Z",
+          "author": {
+            "avatar_url": "https://avatars.githubusercontent.com/u/1001?s=88",
+            "id": "ID",
+            "login": "ada-l",
+            "name": "Ada King"
+          },
+          "body": "A body with a heading:\n\n### not a comment · 2025-01-01T00:00:00Z\n\nstill the body.",
+          "id": "ID:0"
+        },
+        {
+          "at": "NOW",
+          "author": {
+            "avatar_url": "https://avatars.githubusercontent.com/u/1001?s=88",
+            "id": "ID",
+            "login": "ada-l",
+            "name": "Ada King"
+          },
+          "body": "A body with a heading:\n\n### not a comment · 2025-01-01T00:00:00Z\n\nstill the body, by hand.",
+          "id": "ID:1"
+        }
+      ],
+      "id": "ID:0",
+      "kind": "created"
+    },
+    {
+      "added": [
+        "status:ready",
+        "prio:p1",
+        "assignee:ada",
+        "kind:bug",
+        "plain"
+      ],
+      "at": "2025-03-03T09:00:00Z",
+      "author": {
+        "avatar_url": "https://avatars.githubusercontent.com/u/1001?s=88",
+        "id": "ID",
+        "login": "ada-l",
+        "name": "Ada King"
+      },
+      "id": "ID:1",
+      "kind": "labels"
+    },
+    {
+      "at": "2025-03-03T10:00:00Z",
+      "author": {
+        "avatar_url": "https://avatars.githubusercontent.com/u/1003?s=88",
+        "id": "ID",
+        "login": "bobby",
+        "name": "Bob"
+      },
+      "body": "A comment, by hand.",
+      "edited": true,
+      "history": [
+        {
+          "at": "2025-03-03T10:00:00Z",
+          "author": {
+            "avatar_url": "https://avatars.githubusercontent.com/u/1003?s=88",
+            "id": "ID",
+            "login": "bobby",
+            "name": "Bob"
+          },
+          "body": "A comment.",
+          "id": "ID:0"
+        },
+        {
+          "at": "NOW",
+          "author": {
+            "avatar_url": "https://avatars.githubusercontent.com/u/1001?s=88",
+            "id": "ID",
+            "login": "ada-l",
+            "name": "Ada King"
+          },
+          "body": "A comment, by hand.",
+          "id": "ID:2"
+        }
+      ],
+      "id": "ID:0",
+      "kind": "comment"
+    },
+    {
+      "at": "2025-03-03T14:01:00Z",
+      "author": {
+        "avatar_url": "https://avatars.githubusercontent.com/u/1001?s=88",
+        "id": "ID",
+        "login": "ada-l",
+        "name": "Ada King"
+      },
+      "id": "ID:0",
+      "kind": "title",
+      "title": "Kept in a folder, merged by union",
+      "was": "Kept in a folder"
+    },
+    {
+      "at": "2025-03-03T14:00:00Z",
+      "author": {
+        "avatar_url": "https://avatars.githubusercontent.com/u/1004?s=88",
+        "id": "ID",
+        "login": "chloe",
+        "name": "Chloé Dubois-Ångström"
+      },
+      "body": "Written on the branch side.",
+      "id": "ID:0",
+      "kind": "comment"
+    },
+    {
+      "at": "NOW",
+      "author": {
+        "avatar_url": "https://avatars.githubusercontent.com/u/1001?s=88",
+        "id": "ID",
+        "login": "ada-l",
+        "name": "Ada King"
+      },
+      "id": "ID:0",
+      "kind": "title",
+      "title": "Kept in a folder, by hand",
+      "was": "Kept in a folder, merged by union"
+    },
+    {
+      "at": "2025-04-01T08:00:00Z",
+      "author": {
+        "id": "ID",
+        "name": "Dana"
+      },
+      "body": "A new comment, by a new person.",
+      "id": "ID:3",
+      "kind": "comment"
+    },
+    {
+      "at": "2025-04-01T09:00:00Z",
+      "author": {
+        "avatar_url": "https://avatars.githubusercontent.com/u/1003?s=88",
+        "id": "ID",
+        "login": "bobby",
+        "name": "Bob"
+      },
+      "body": "And one by Bob.",
+      "id": "ID:4",
+      "kind": "comment"
+    },
+    {
+      "added": [
+        "extra",
+        "prio:p0"
+      ],
+      "at": "NOW",
+      "author": {
+        "avatar_url": "https://avatars.githubusercontent.com/u/1001?s=88",
+        "id": "ID",
+        "login": "ada-l",
+        "name": "Ada King"
+      },
+      "id": "ID:0",
+      "kind": "labels",
+      "removed": [
+        "prio:p1"
+      ]
+    }
+  ],
+  "id": "ID",
+  "labels": [
+    "assignee:ada",
+    "kind:bug",
+    "extra",
+    "plain",
+    "prio:p0",
+    "status:ready"
+  ],
+  "number": "MD-1",
+  "participants": [
+    {
+      "avatar_url": "https://avatars.githubusercontent.com/u/1001?s=88",
+      "id": "ID",
+      "login": "ada-l",
+      "name": "Ada King"
+    },
+    {
+      "avatar_url": "https://avatars.githubusercontent.com/u/1003?s=88",
+      "id": "ID",
+      "login": "bobby",
+      "name": "Bob"
+    },
+    {
+      "avatar_url": "https://avatars.githubusercontent.com/u/1004?s=88",
+      "id": "ID",
+      "login": "chloe",
+      "name": "Chloé Dubois-Ångström"
+    },
+    {
+      "id": "ID",
+      "name": "Dana"
+    }
+  ],
+  "status": "open",
+  "title": "Kept in a folder, by hand",
+  "updated_at": "NOW"
+}

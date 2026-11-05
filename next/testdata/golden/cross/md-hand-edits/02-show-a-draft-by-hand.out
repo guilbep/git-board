@@ -1,0 +1,77 @@
+{
+  "author": {
+    "avatar_url": "https://avatars.githubusercontent.com/u/1003?s=88",
+    "id": "ID",
+    "login": "bobby",
+    "name": "Bob"
+  },
+  "comments": 1,
+  "counted": true,
+  "created_at": "2025-04-03T08:00:00Z",
+  "edited_at": "2025-04-03T09:00:00Z",
+  "events": [
+    {
+      "at": "2025-04-03T08:00:00Z",
+      "author": {
+        "avatar_url": "https://avatars.githubusercontent.com/u/1003?s=88",
+        "id": "ID",
+        "login": "bobby",
+        "name": "Bob"
+      },
+      "body": "Its body.",
+      "id": "ID:0",
+      "kind": "created"
+    },
+    {
+      "added": [
+        "assignee:ada",
+        "plain",
+        "prio:p2"
+      ],
+      "at": "2025-04-03T08:00:00Z",
+      "author": {
+        "avatar_url": "https://avatars.githubusercontent.com/u/1003?s=88",
+        "id": "ID",
+        "login": "bobby",
+        "name": "Bob"
+      },
+      "id": "ID:1",
+      "kind": "labels"
+    },
+    {
+      "at": "2025-04-03T09:00:00Z",
+      "author": {
+        "avatar_url": "https://avatars.githubusercontent.com/u/1004?s=88",
+        "id": "ID",
+        "login": "chloe",
+        "name": "Chloé Dubois-Ångström"
+      },
+      "body": "Its comment.",
+      "id": "ID:2",
+      "kind": "comment"
+    }
+  ],
+  "id": "ID",
+  "labels": [
+    "assignee:ada",
+    "plain",
+    "prio:p2"
+  ],
+  "participants": [
+    {
+      "avatar_url": "https://avatars.githubusercontent.com/u/1003?s=88",
+      "id": "ID",
+      "login": "bobby",
+      "name": "Bob"
+    },
+    {
+      "avatar_url": "https://avatars.githubusercontent.com/u/1004?s=88",
+      "id": "ID",
+      "login": "chloe",
+      "name": "Chloé Dubois-Ångström"
+    }
+  ],
+  "status": "open",
+  "title": "A draft, by hand",
+  "updated_at": "2025-04-03T09:00:00Z"
+}
