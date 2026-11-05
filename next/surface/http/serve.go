@@ -41,6 +41,7 @@ type ServeOptions struct {
 	Addr    string // "": localhost, FirstPort or the next free
 	Log     *slog.Logger
 	Version string
+	Me      string // what @me means: --me, GIT_BOARD_ME; "" for who writes
 	// Ready is told the board's URL once it listens.
 	Ready func(url string)
 	// Watch is how often the changes made outside the API are looked
@@ -73,7 +74,7 @@ func Serve(ctx context.Context, o ServeOptions) error {
 			l.Close()
 		}
 	}()
-	s, err := New(ctx, Options{Dir: o.Dir, Log: log, Version: o.Version, Exposed: exposed, Static: WebApp()})
+	s, err := New(ctx, Options{Dir: o.Dir, Me: o.Me, Log: log, Version: o.Version, Exposed: exposed, Static: WebApp()})
 	if err != nil {
 		return err
 	}

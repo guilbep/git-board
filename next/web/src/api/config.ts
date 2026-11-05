@@ -18,3 +18,21 @@ export function putConfig(text: string, version: string, dryRun = false): Promis
 export function patchConfig(set: Record<string, unknown>, version: string, dryRun = false): Promise<ConfigFile> {
   return send('PATCH', '/api/config', { body: { set }, ifMatch: version, query: { dry_run: dryRun ? 1 : undefined } });
 }
+
+// MigratePlan is what a field's forge-mapping migration does on one forge
+// (docs/rewrite/api.md, route 54).
+export interface MigratePlan {
+  forge: string;
+  repo: string;
+  target: string;
+  issues: number;
+  labels: number;
+  note?: string;
+}
+
+// migrateField moves a field's values to the home its forge mappings now
+// name: the old labels off the forges' issues, the assignees set
+// (sync --migrate). dryRun counts, and writes nothing.
+export function migrateField(field: string, dryRun = false): Promise<{ plans: MigratePlan[]; error?: string }> {
+  return send('POST', `/api/fields/${encodeURIComponent(field)}/migrate`, { body: {}, query: { dry_run: dryRun ? 1 : undefined } });
+}

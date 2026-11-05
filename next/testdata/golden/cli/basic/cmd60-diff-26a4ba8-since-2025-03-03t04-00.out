@@ -1,0 +1,16 @@
+Search hides closed issues by default (GB-100), since 2025-03-03 04:00
+created since
+title: "" → "Search hides closed issues by default"
+labels: +assignee:ada +assignee:bobby +kind:bug +est:3 +prio:p0 +sprint:s1 +status:in-progress
+
+description:
++ Searching for a closed issue finds nothing, unless the query says is:closed.
+
++++ Bob, 2025-03-03 10:00 [f4bffc6:0]
+It finds them with `is:closed`, and `-is:open`.
+
++++ Chloé Dubois-Ångström, 2025-03-03 10:30 [f537d38:0]
+This line looks wrong.
+
++++ Ada King, 2025-03-03 15:00 [ad8a8ee:0]
+@bobby can you check the inbox counts too?

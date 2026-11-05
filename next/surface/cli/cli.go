@@ -70,6 +70,7 @@ func newRoot() *cobra.Command {
 		Short:         "git-board v2, growing beside v1 (docs/rewrite/design.md)",
 		SilenceUsage:  true,
 		SilenceErrors: true,
+		Version:       version(),
 		PersistentPreRunE: func(*cobra.Command, []string) error {
 			if dir == "" {
 				return nil
@@ -92,6 +93,9 @@ func newRoot() *cobra.Command {
 	root.AddCommand(newLs(), newView(), newShow(), newLog(), newLabels(), newMe(),
 		newNew(), newComment(), newEdit(), newSet(), newMove(), newClose(), newReopen(), newDelete(), newUndo(), newFollow(), newUnfollow(), newStatus(), newDatastore(), newConfig(), newNumbers(), newForge(), newProject(), newFetch(), newPull(), newPush(), newSync(), newRelease(), newDeploy(), newVerify(), newBranch(), newSprint(), newTui(), newServe(), newInsights())
 	root.AddCommand(newReset(), newExport(), newImport(), newInit(), newLint())
+	root.SetVersionTemplate("git-board version {{.Version}}\n") // v1's, as the binary it replaces
+	root.AddCommand(newGet(), newDiff())
+	addCompletions(root)
 	var walk func(*cobra.Command)
 	walk = func(c *cobra.Command) {
 		if args := c.Args; args != nil {

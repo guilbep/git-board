@@ -21,7 +21,7 @@ import (
 
 // logFlags are the server's logs' level and format: flags over
 // GIT_BOARD_LOG_LEVEL and GIT_BOARD_LOG_FORMAT.
-type logFlags struct{ level, format string }
+type logFlags struct{ level, format, me string } // me: serve's --me
 
 func (l *logFlags) add(cmd *cobra.Command) {
 	cmd.Flags().StringVar(&l.level, "log-level", "", "the server's logs: debug, info, warn or error (env "+httpapi.LogEnv+"; default info)")
@@ -40,7 +40,7 @@ func (l *logFlags) options(stderr io.Writer, dir, addr string, ready func(string
 	if err != nil {
 		return httpapi.ServeOptions{}, usageError{err}
 	}
-	return httpapi.ServeOptions{Dir: dir, Addr: addr, Log: log, Version: version(), Ready: ready}, nil
+	return httpapi.ServeOptions{Dir: dir, Addr: addr, Me: resolveMe(l.me), Log: log, Version: version(), Ready: ready}, nil
 }
 
 func newServe() *cobra.Command {
@@ -75,6 +75,7 @@ could make a browser send (ADR 0013). Its logs go to stderr.`,
 	}
 	// this machine only by default: the server writes to git, and to the
 	// forges with the user's tokens; anyone who can reach it can
+	meFlag(cmd, &logs.me)
 	cmd.Flags().StringVar(&addr, "addr", "localhost:8080", "listen address; localhost is both loopback addresses (an address other machines reach exposes your board and forge tokens to them)")
 	logs.add(cmd)
 	return cmd
@@ -83,6 +84,12 @@ could make a browser send (ADR 0013). Its logs go to stderr.`,
 // runBoard is a bare git-board-next: this repository's board in the
 // browser, where it already runs, else started here until Ctrl-C.
 func runBoard(cmd *cobra.Command, logs *logFlags, open bool) error {
+	return runBoardAt(cmd, logs, open, "")
+}
+
+// runBoardAt is runBoard opening page, a path after the board's URL
+// ("/#/issues/<id>"; "" the board).
+func runBoardAt(cmd *cobra.Command, logs *logFlags, open bool, page string) error {
 	cwd, err := os.Getwd()
 	if err != nil {
 		return err
@@ -92,7 +99,7 @@ func runBoard(cmd *cobra.Command, logs *logFlags, open bool) error {
 		if !open {
 			return
 		}
-		if err := openURL(url); err != nil {
+		if err := openURL(url + page); err != nil {
 			fmt.Fprintf(out, "opening the browser: %v\n", err)
 		}
 	}

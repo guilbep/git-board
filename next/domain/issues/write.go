@@ -1,6 +1,7 @@
 package issues
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -462,6 +463,7 @@ func (s *Service) stored(added, removed, raw []string) (a, r []string) {
 // assignments reads field=value arguments: parsed, resolved (@me,
 // sprints, aliases) and, unless force, held to the config.
 func (s *Service) assignments(ctx context.Context, args []string, meName string, force bool) ([]Assignment, error) {
+	meName = cmp.Or(meName, s.MeName)
 	var inUse []string // the labels in use, read when a field isn't configured: a list
 	read := false
 	if meName == "" && slices.ContainsFunc(args, func(a string) bool { return strings.HasSuffix(a, "@me") }) {
@@ -880,4 +882,111 @@ func (s *Service) writing(ctx context.Context) (context.Context, func(), error) 
 		return ctx, func() {}, nil
 	}
 	return s.Writing(ctx)
+}
+
+// SetMatchingReq asks set --filter to assign fields on every issue a
+// filter matches.
+type SetMatchingReq struct {
+	Filter string
+	Assign []string
+	Force  bool
+	MeName string
+	Apply  bool // write; else only say what each would change
+}
+
+// SetMatching assigns fields on every issue r.Filter matches, each in
+// one change, as v1's set --filter: a line per issue that would change,
+// "<id> <headline>: +label -label", then the count. Without r.Apply it
+// writes nothing.
+func (s *Service) SetMatching(ctx context.Context, r SetMatchingReq) ([]string, error) {
+	ctx, done, werr := s.writing(ctx)
+	if werr != nil {
+		return nil, werr
+	}
+	defer done()
+	as, err := s.assignments(ctx, r.Assign, r.MeName, r.Force)
+	if err != nil {
+		return nil, err
+	}
+	matched, err := s.List(ctx, ListReq{Filter: r.Filter, Me: r.MeName})
+	if err != nil {
+		return nil, err
+	}
+	var lines []string
+	changed := 0
+	for _, is := range matched {
+		labels, _, err := s.fold(is.Labels, as)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", is.ID[:7], err)
+		}
+		added, removed := delta(is.Labels, labels)
+		if len(added)+len(removed) == 0 {
+			continue
+		}
+		changed++
+		parts := make([]string, 0, len(added)+len(removed))
+		for _, l := range added {
+			parts = append(parts, "+"+l)
+		}
+		for _, l := range removed {
+			parts = append(parts, "-"+l)
+		}
+		line := is.ID[:7] + " " + is.Headline() + ": " + strings.Join(parts, " ")
+		if r.Apply {
+			if _, err := s.ChangeLabels(ctx, is.ID, added, removed); err != nil {
+				return lines, fmt.Errorf("%s: %w (%d written before it)", is.ID[:7], err, changed-1)
+			}
+			state, err := s.inStep(ctx, is.ID, as, labels)
+			if err != nil {
+				return lines, fmt.Errorf("%s: %w", is.ID[:7], err)
+			}
+			line += state
+		}
+		lines = append(lines, line)
+	}
+	switch {
+	case changed == 0:
+		lines = append(lines, fmt.Sprintf("nothing to change on the %d issue%s matching", len(matched), plurals(len(matched))))
+	case r.Apply:
+		lines = append(lines, fmt.Sprintf("%d issue%s changed", changed, plurals(changed)))
+	default:
+		lines = append(lines, fmt.Sprintf("%d issue%s would change; --apply writes it", changed, plurals(changed)))
+	}
+	return lines, nil
+}
+
+// RenameLabel renames a label on every issue that has it, one change
+// each, as v1's labels rename: an issue that has both keeps new. It
+// answers how many it renamed; none is ErrNotFound.
+func (s *Service) RenameLabel(ctx context.Context, old, new string) (int, error) {
+	ctx, done, werr := s.writing(ctx)
+	if werr != nil {
+		return 0, werr
+	}
+	defer done()
+	all, err := s.List(ctx, ListReq{Filter: "is:open,closed"})
+	if err != nil {
+		return 0, err
+	}
+	n := 0
+	for _, is := range all {
+		if !slices.Contains(is.Labels, old) {
+			continue
+		}
+		if _, err := s.ChangeLabels(ctx, is.ID, []string{new}, []string{old}); err != nil {
+			return n, fmt.Errorf("%s: %w (%d renamed before it)", is.ID[:7], err, n)
+		}
+		n++
+	}
+	if n == 0 {
+		return 0, fmt.Errorf("%w: no issue has the label %q", ErrNotFound, old)
+	}
+	return n, nil
+}
+
+func plurals(n int) string {
+	if n == 1 {
+		return ""
+	}
+	return "s"
 }

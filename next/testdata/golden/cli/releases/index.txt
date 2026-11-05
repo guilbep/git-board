@@ -31,3 +31,6 @@ cmd10-deploy	2	deploy
 cmd11-deploy-prod	1	deploy prod
 cmd12-deploy-prod-watch	1	deploy prod --watch
 cmd13-deploy-prod-release-v9-9-9	1	deploy prod --release v9.9.9
+cmd14-sync-check	0	sync --check
+cmd15-sync-check-git	0	sync --check --git
+cmd16-sync-check-remote-nosuch	1	sync --check --remote nosuch

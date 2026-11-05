@@ -349,7 +349,7 @@ func newComment() *cobra.Command {
 	cmd.Flags().BoolVar(&editLast, "edit-last", false, "edit your last comment on the issue")
 	cmd.Flags().StringVar(&del, "delete", "", "delete the comment with this ref (as show prints it)")
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "with --delete: don't ask")
-	js = addJSON(cmd, "print the comment's id as JSON", []string{"id", "ref", "issue"}, false)
+	js = addJSON(cmd, "print the comment's id as JSON", []string{"id", "ref", "issue", "deleted"}, true)
 	return cmd
 }
 
@@ -425,32 +425,50 @@ func newEdit() *cobra.Command {
 }
 
 func newSet() *cobra.Command {
-	var me string
-	var force bool
+	var me, filter string
+	var force, apply bool
 	cmd := &cobra.Command{
-		Use:   "set <id> field=value [field=value...]",
+		Use:   "set <id> field=value [field=value...] | set --filter <filter> field=value... [--apply]",
 		Short: "Set one or more fields on an issue",
-		Args:  cobra.MinimumNArgs(2),
+		Args: func(cmd *cobra.Command, args []string) error {
+			if cmd.Flags().Changed("filter") {
+				return cobra.MinimumNArgs(1)(cmd, args)
+			}
+			return cobra.MinimumNArgs(2)(cmd, args)
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
+			byFilter := cmd.Flags().Changed("filter")
+			if apply && !byFilter {
+				return usageError{fmt.Errorf("--apply goes with --filter: set <id> writes at once")}
+			}
 			b, err := open(cmd, true)
 			if err != nil {
 				return err
 			}
 			defer b.Close()
-			if _, err := b.People.Whom(); err != nil {
-				return err
-			}
-			lines, err := b.issues.Set(cmd.Context(), issues.SetReq{Name: args[0], Assign: args[1:], Force: force, MeName: resolveMe(me)})
-			if err != nil {
-				return err
+			var lines []string
+			if byFilter {
+				if apply {
+					if _, err := b.People.Whom(); err != nil {
+						return err
+					}
+				}
+				lines, err = b.issues.SetMatching(cmd.Context(), issues.SetMatchingReq{Filter: filter, Assign: args, Force: force, MeName: resolveMe(me), Apply: apply})
+			} else {
+				if _, err := b.People.Whom(); err != nil {
+					return err
+				}
+				lines, err = b.issues.Set(cmd.Context(), issues.SetReq{Name: args[0], Assign: args[1:], Force: force, MeName: resolveMe(me)})
 			}
 			for _, l := range lines {
 				fmt.Fprintln(cmd.OutOrStdout(), l)
 			}
-			return nil
+			return err
 		},
 	}
 	meFlag(cmd, &me)
+	cmd.Flags().StringVar(&filter, "filter", "", "set the fields on every issue this filter matches (ls's grammar)")
+	cmd.Flags().BoolVar(&apply, "apply", false, "with --filter: write the changes, not only show them")
 	cmd.Flags().BoolVar(&force, "force", false, "write values .git-board.toml doesn't allow (an unknown field, a value outside the options)")
 	return cmd
 }

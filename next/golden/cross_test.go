@@ -86,6 +86,20 @@ var writes = []string{
 	`view mine`,
 	`numbers`,
 	`numbers init --prefix GB --start 1`,
+	`set --filter "prio:p0" prio=p2`,
+	`set --filter "prio:p0 is:open,closed" prio=p2 assignee=+@me --apply`,
+	`set --filter "is:open" nosuch=x`,
+	`set --filter "status:nope" prio=p1`,
+	`set 26a4ba8 prio=p1 --apply`,
+	`set --filter "is:open" status=done --apply`,
+	`labels rename prio:p2 prio:p3`,
+	`labels rename nosuch other`,
+	`labels rename same same`,
+	`labels rename prio:p3 " spaced"`,
+	`comment 9062b9a --delete 6a8541a --yes --json id,deleted`,
+	`comment 9062b9a --delete d3ad24b --yes --template "{{.ref}} {{.deleted}}"`,
+	`get 26a4ba8`,
+	`get 0000000`,
 }
 
 // mdWrites are the writes the cross-write test runs on the Markdown

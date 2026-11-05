@@ -69,3 +69,18 @@ func read(t *testing.T, path string) string {
 	}
 	return string(data)
 }
+
+// The forge-mapping migration's route: its preview per declared forge
+// (none here), a field nothing configures refused.
+func TestMigrateFieldRoute(t *testing.T) {
+	t.Parallel()
+	dir, _ := newBoard(t)
+	a := newAPI(t, dir)
+	m := want[migrateRes](t, a.do("POST", "/api/fields/status/migrate?dry_run=1", map[string]any{}), 200)
+	if m.Plans == nil || len(m.Plans) != 0 || m.Error != "" {
+		t.Fatalf("preview = %+v", m)
+	}
+	if e := want[apiError](t, a.do("POST", "/api/fields/nosuch/migrate?dry_run=1", map[string]any{}), 400); e.Code != "invalid" {
+		t.Fatalf("no such field = %+v", e)
+	}
+}
