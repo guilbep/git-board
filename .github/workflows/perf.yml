@@ -1,7 +1,7 @@
 # The timed budgets (docs/guide/performance.md, v2): `make perf` makes
 # boardgen's boards of 5,000 and 20,000 issues (kept in a cache), times
 # the CLI and the server on them, and fails when a median is over its
-# budget (next/testdata/perf/budgets.txt). Nightly, and on a pull request
+# budget (testdata/perf/budgets.txt). Nightly, and on a pull request
 # labelled perf: not on every push, where a shared runner's noise would
 # be read as a regression. The complexity guards, which count work, run
 # in every `go test` (ci.yml).
@@ -38,11 +38,11 @@ jobs:
           git config --global user.name ci
           git config --global user.email ci@example.com
 
-      # the boards, by what makes them: boardgen and the core it writes with
+      # the boards, by what makes them: cmd/boardgen and tools/boardgen
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/git-board/perf
-          key: perf-boards-${{ runner.os }}-${{ hashFiles('cmd/boardgen/**', 'core/issue/boardgen/**') }}
+          key: perf-boards-v2-${{ runner.os }}-${{ hashFiles('cmd/boardgen/**', 'tools/boardgen/**') }}
 
       - run: make perf
 

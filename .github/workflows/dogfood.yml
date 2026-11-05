@@ -1,11 +1,11 @@
 # The dogfooding job (docs/rewrite/design.md, section 5): this
-# repository's own board, read by v1 and by v2. It fetches the board's
-# refs (refs/board/*, docs/spec/storage.md), builds v1 from the release tag
-# (OLD_REF: the newest v0.11.* tag, or the old_ref input) and v2 from this
-# commit, and `make dogfood` diffs ls --json and show --json of every
-# issue, with make compat's normalisations. Any difference fails the job;
-# the differing outputs and their diff are uploaded. Daily, and by hand.
-# It writes nothing: no push, no tag, nothing fetched but the board.
+# repository's own board, read by v1 and by this commit's git-board. It
+# fetches the board's refs (refs/board/*, docs/spec/storage.md), builds v1
+# from V1_REF (or the old_ref input) and git-board from this commit, and
+# `make dogfood` diffs ls --json and show --json of every issue, with make
+# compat's normalisations. Any difference fails the job; the differing
+# outputs and their diff are uploaded. Daily, and by hand. It writes
+# nothing: no push, no tag, nothing fetched but the board.
 name: dogfood
 
 on:
@@ -14,12 +14,19 @@ on:
   workflow_dispatch:
     inputs:
       old_ref:
-        description: "v1's ref to build OLD from (default: the newest v0.11.* tag)"
+        description: "v1's ref to build OLD from (default: V1_REF, v1's last commit)"
         required: false
         default: ""
 
 permissions:
   contents: read
+
+env:
+  # v1 as it was last: the merge base of the switch to v2 (v0.12, ADR 0021)
+  # with main, "Merge pull request #95 from guilbep/feat/kernel". No v0.11
+  # release can be the baseline: none has show, nor ls --json's closed_at
+  # and comments. Keep it in step with the Makefile's V1_REF.
+  V1_REF: 7a546ccef5bc8003d51f5655e8f2a5f6211ce6f7
 
 concurrency:
   group: dogfood
@@ -32,7 +39,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 0 # the tags: OLD is built from one
+          fetch-depth: 0 # the history: OLD is built from V1_REF
 
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
@@ -47,7 +54,7 @@ jobs:
         env:
           OLD_REF_INPUT: ${{ inputs.old_ref }}
         run: |
-          ref="${OLD_REF_INPUT:-$(git tag -l 'v0.11.*' --sort=-v:refname | head -1)}"
+          ref="${OLD_REF_INPUT:-$V1_REF}"
           make dogfood DIR=. OLD_REF="$ref" DOGFOOD_OUT=dogfood-out
 
       - if: failure()
@@ -60,5 +67,5 @@ jobs:
       - if: failure()
         run: |
           if [ -f dogfood-out/dogfood.diff ]; then
-            { echo '## dogfood: v1 and v2 differ'; echo '```diff'; head -c 60000 dogfood-out/dogfood.diff; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+            { echo '## dogfood: v1 and git-board differ'; echo '```diff'; head -c 60000 dogfood-out/dogfood.diff; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
           fi

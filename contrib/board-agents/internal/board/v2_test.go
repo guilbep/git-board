@@ -12,38 +12,39 @@ import (
 	"time"
 )
 
-// gitBoardNext is git-board v2's binary: GIT_BOARD_NEXT, else built from
-// the git-board checkout this module sits in (contrib/board-agents), else
-// the test is skipped (the module on its own, or -short).
-func gitBoardNext(t *testing.T) string {
+// gitBoard is git-board's binary (v0.12 on, v2): GIT_BOARD_BIN, else
+// built from the git-board checkout this module sits in
+// (contrib/board-agents), else the test is skipped (the module on its
+// own, or -short).
+func gitBoard(t *testing.T) string {
 	t.Helper()
-	if bin := os.Getenv("GIT_BOARD_NEXT"); bin != "" {
+	if bin := os.Getenv("GIT_BOARD_BIN"); bin != "" {
 		return bin
 	}
 	if testing.Short() {
-		t.Skip("-short: no git-board-next built")
+		t.Skip("-short: no git-board built")
 	}
 	root, err := filepath.Abs(filepath.Join("..", "..", "..", ".."))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := os.Stat(filepath.Join(root, "next", "cmd", "git-board-next")); err != nil {
-		t.Skip("no git-board checkout around this module, and no GIT_BOARD_NEXT")
+	if _, err := os.Stat(filepath.Join(root, "surface", "cli")); err != nil {
+		t.Skip("no git-board checkout around this module, and no GIT_BOARD_BIN")
 	}
-	bin := filepath.Join(t.TempDir(), "git-board-next")
-	cmd := exec.Command("go", "build", "-o", bin, "./next/cmd/git-board-next")
+	bin := filepath.Join(t.TempDir(), "git-board")
+	cmd := exec.Command("go", "build", "-o", bin, "./cmd/git-board")
 	cmd.Dir = root
 	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("building git-board-next: %v\n%s", err, out)
+		t.Fatalf("building git-board: %v\n%s", err, out)
 	}
 	return bin
 }
 
-// TestV2 runs the client against git-board-next serve, on a throwaway
+// TestV2 runs the client against git-board serve, on a throwaway
 // board with the cycle on: one issue in progress on its branch.
 func TestV2(t *testing.T) {
 	t.Parallel()
-	bin := gitBoardNext(t)
+	bin := gitBoard(t)
 	ctx := context.Background()
 	dir := t.TempDir()
 	run := func(name string, args ...string) string {
@@ -103,7 +104,7 @@ func TestV2(t *testing.T) {
 	case u := <-listening:
 		c.URL = u
 	case <-time.After(30 * time.Second):
-		t.Fatal("git-board-next serve: not listening after 30s")
+		t.Fatal("git-board serve: not listening after 30s")
 	}
 
 	if u := Discover(ctx, dir); u != c.URL {

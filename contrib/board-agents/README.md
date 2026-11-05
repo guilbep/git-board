@@ -177,9 +177,9 @@ The tests are hermetic (`internal/hermetic`): no network but loopback, no
 token, no git config but the test's. wtx, git-board and the LLM are fakes:
 shell scripts on `PATH` and `httptest` servers; the board's server is an
 `httptest` server answering v2's routes in v2's shapes. `TestV2` runs the
-client against a real `git-board-next serve` on a throwaway board, on a
-free loopback port: the binary `GIT_BOARD_NEXT` names, else one built from
-the git-board checkout around this module; skipped with `-short` or
+client against a real `git board serve` on a throwaway board, on a
+free loopback port: the binary `GIT_BOARD_BIN` names, else one built from
+the git-board checkout around this module (`./cmd/git-board`); skipped with `-short` or
 outside one.
 
 The module requires nothing outside the standard library, and must not

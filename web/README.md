@@ -1,11 +1,11 @@
-# git-board v2's web UI
+# git-board's web UI
 
-The web app `git-board-next` serves (ADR 0012, ADR 0021), over v2's HTTP
-API ([docs/rewrite/api.md](../../docs/rewrite/api.md)): the board page
+The web app `git board` serves (ADR 0012, ADR 0021), over its HTTP API
+([docs/rewrite/api.md](../docs/rewrite/api.md)): the board page
 (the saved views as tabs, a filter, group and sort bar, each view in its
 `layout`: `table`, `board`, `roadmap`), the issue panel, the inbox and
-Settings. What changed from v1's `web/`, and why:
-[docs/rewrite/web.md](../../docs/rewrite/web.md).
+Settings. What changed from v1's web app, and why:
+[docs/rewrite/web.md](../docs/rewrite/web.md).
 
 `src/api` is the one typed client: a module per part of api.md, every
 write from the version read (`If-Match`), one error shape. No component
@@ -36,7 +36,7 @@ offset. The skill's adherence linter checks the CSS:
 ```bash
 # from the repo root, with the skill cloned next to this repo
 npx --package=stylelint@16 --package=postcss-html -- \
-  stylelint "next/web/src/**/*.{css,vue}" \
+  stylelint "web/src/**/*.{css,vue}" \
   --config ../epfl-design-skill/adherence/.stylelintrc.json
 ```
 
@@ -47,18 +47,18 @@ npm install
 npm run dev       # Quasar dev server, http://localhost:9000
 ```
 
-The dev server needs `git-board-next serve` running separately on `:8080`
-(`go run ./next/cmd/git-board-next serve` from the repo root, on a
+The dev server needs `git board serve` running separately on `:8080`
+(`go run ./cmd/git-board serve` from the repo root, on a
 throwaway board): `src/api/http.ts` points there when `import.meta.env.DEV`
 is true; the server takes the dev server's origin (ADR 0013).
 
 ## Production build
 
 ```bash
-npm run build      # writes next/web/dist/spa
+npm run build      # writes web/dist/spa
 ```
 
-Then `go build ./next/cmd/git-board-next` embeds `next/web/dist`
+Then `go build ./cmd/git-board` embeds `web/dist`
 (`embed.go`) and serves `dist/spa` from it.
 
 ## Type-check and test
@@ -66,10 +66,10 @@ Then `go build ./next/cmd/git-board-next` embeds `next/web/dist`
 ```bash
 npm run typecheck   # vue-tsc --noEmit
 npm test            # node --test 'src/**/*.test.ts'
-npm run e2e         # Playwright, e2e/: make next-web-e2e from the root
+npm run e2e         # Playwright, e2e/: make web-e2e from the root
 ```
 
 The pure modules (no `@/` imports) are tested with Node's own runner, which
-strips the types. The browser tests (`e2e/`) run on `git-board-next serve`
+strips the types. The browser tests (`e2e/`) run on `git board serve`
 over throwaway boards that `e2e/serve.mjs` makes: a git board with a GitHub
 origin and a fake GitHub, and a Markdown board.

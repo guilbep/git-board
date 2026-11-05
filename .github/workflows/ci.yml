@@ -1,8 +1,8 @@
 # Every pull request, and every push to main: set up Go and Node, then
-# `make ci`, the same run as on a developer's machine (web checks and build,
-# v1's and v2's, then Go build, vet, test, gofmt). Beside it, the e2e jobs:
-# `make web-e2e` and `make next-web-e2e`, the browser tests of v1 and v2,
-# with Playwright's Chromium kept in a cache.
+# `make ci`, the same run as on a developer's machine (the web app's checks
+# and build, then Go build, vet, test, compat, gofmt). Beside it, the e2e
+# job: `make web-e2e`, the browser tests, with Playwright's Chromium kept
+# in a cache.
 name: ci
 
 on:
@@ -27,9 +27,7 @@ jobs:
         with:
           node-version: 24 # runs web/src/facets.test.ts as is (type stripping)
           cache: npm
-          cache-dependency-path: |
-            web/package-lock.json
-            next/web/package-lock.json
+          cache-dependency-path: web/package-lock.json
 
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
@@ -43,7 +41,7 @@ jobs:
       - run: make ci
 
   # The browser tests (web/e2e): web/e2e/serve.mjs builds the web app and
-  # the binary itself, so this job needs Go and Node, and the headless
+  # the binary itself, and serves throwaway boards, so this job needs Go and Node, and the headless
   # Chromium of the Playwright version web/package-lock.json pins.
   e2e:
     runs-on: ubuntu-latest
@@ -88,49 +86,4 @@ jobs:
         with:
           name: e2e-results
           path: web/test-results/
-          retention-days: 7
-
-  # v2's browser tests (next/web/e2e) on git-board-next: the same steps,
-  # next/web's dependencies and Playwright.
-  e2e-next:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: 24
-          cache: npm
-          cache-dependency-path: next/web/package-lock.json
-
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: go.mod
-
-      - run: make next/web/node_modules
-
-      - name: Playwright's version, the browser cache's key
-        id: pw
-        run: echo "version=$(node -p "require('./next/web/node_modules/@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
-
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        id: pw-cache
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}
-
-      - if: steps.pw-cache.outputs.cache-hit != 'true'
-        working-directory: next/web
-        run: npx playwright install --with-deps --only-shell chromium
-      - if: steps.pw-cache.outputs.cache-hit == 'true'
-        working-directory: next/web
-        run: npx playwright install-deps chromium
-
-      - run: make next-web-e2e
-
-      - if: failure()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: e2e-next-results
-          path: next/web/test-results/
           retention-days: 7

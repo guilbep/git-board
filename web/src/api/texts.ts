@@ -59,7 +59,7 @@ async function readDocs(page: 'configuration' | 'forges'): Promise<DocSection[]>
   } catch (e) {
     if (!(e instanceof ApiError && e.code === 'not-found')) throw e;
   }
-  const text = (page === 'configuration' ? await import('../../../../docs/guide/configuration.md?raw') : await import('../../../../docs/guide/forges.md?raw')).default;
+  const text = (page === 'configuration' ? await import('../../../docs/guide/configuration.md?raw') : await import('../../../docs/guide/forges.md?raw')).default;
   const sections = text.split(/^## /m).slice(1).map((s) => {
     const nl = s.indexOf('\n');
     return { title: s.slice(0, nl).trim(), body: s.slice(nl + 1) };

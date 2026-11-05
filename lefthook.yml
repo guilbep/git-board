@@ -23,7 +23,3 @@ pre-commit:
       root: web/
       glob: "*.{ts,vue}"
       run: npm run typecheck
-    next-web-typecheck:
-      root: next/web/
-      glob: "*.{ts,vue}"
-      run: npm run typecheck
