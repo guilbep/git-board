@@ -89,3 +89,23 @@ cmd68-diff-0000000-since-2025-03-03	3	diff 0000000 --since 2025-03-03
 cmd69-get-26a4ba8	0	get 26a4ba8
 cmd70-get-gb-100	0	get GB-100
 cmd71-get-0000000	3	get 0000000
+cmd72-complete-show	0	__complete show ""
+cmd73-complete-show-gb-10	0	__complete show GB-10
+cmd74-complete-show-26	0	__complete show 26
+cmd75-complete-set-26a4ba8	0	__complete set 26a4ba8 ""
+cmd76-complete-set-26a4ba8-prio	0	__complete set 26a4ba8 prio=
+cmd77-complete-set-26a4ba8-assignee	0	__complete set 26a4ba8 assignee=+
+cmd78-complete-set-26a4ba8-label	0	__complete set 26a4ba8 label=
+cmd79-complete-set-26a4ba8-sprint	0	__complete set 26a4ba8 sprint=
+cmd80-complete-set-filter-is-open-st	0	__complete set --filter "is:open st"
+cmd81-complete-move-26a4ba8	0	__complete move 26a4ba8 ""
+cmd82-complete-new-a-title-k	0	__complete new "A title" k
+cmd83-complete-ls	0	__complete ls ""
+cmd84-complete-ls-is-open-prio	0	__complete ls "is:open -prio:"
+cmd85-complete-ls-no	0	__complete ls "no:"
+cmd86-complete-ls-group	0	__complete ls --group ""
+cmd87-complete-ls-sort	0	__complete ls --sort ""
+cmd88-complete-ls-json-id-t	0	__complete ls --json=id,t
+cmd89-complete-log-26a4ba8-field	0	__complete log 26a4ba8 --field ""
+cmd90-complete-view	0	__complete view ""
+cmd91-complete-me	0	__complete me ""

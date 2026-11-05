@@ -69,3 +69,23 @@ diff 0000000 --since 2025-03-03
 get 26a4ba8
 get GB-100
 get 0000000
+__complete show ""
+__complete show GB-10
+__complete show 26
+__complete set 26a4ba8 ""
+__complete set 26a4ba8 prio=
+__complete set 26a4ba8 assignee=+
+__complete set 26a4ba8 label=
+__complete set 26a4ba8 sprint=
+__complete set --filter "is:open st"
+__complete move 26a4ba8 ""
+__complete new "A title" k
+__complete ls ""
+__complete ls "is:open -prio:"
+__complete ls "no:"
+__complete ls --group ""
+__complete ls --sort ""
+__complete ls --json=id,t
+__complete log 26a4ba8 --field ""
+__complete view ""
+__complete me ""
