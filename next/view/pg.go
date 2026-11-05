@@ -98,7 +98,9 @@ type pgQuerier interface {
 }
 
 // Mark is what the view holds of a kind; a kind it never held has rev 0.
-func (v *PG) Mark(ctx context.Context, kind string) (kernel.Mark, error) { return pgMark(ctx, v.pool, kind) }
+func (v *PG) Mark(ctx context.Context, kind string) (kernel.Mark, error) {
+	return pgMark(ctx, v.pool, kind)
+}
 
 func pgMark(ctx context.Context, q pgQuerier, kind string) (kernel.Mark, error) {
 	var m kernel.Mark
