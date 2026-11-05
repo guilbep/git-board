@@ -1,0 +1,8 @@
+[fields.prio]
+options = ["a"]
+[forges.gh]
+kind = "gitlab"
+project = "12"
+[forges.gh.fields.prio]
+to = "scoped-label"
+values = { b = "B" }

@@ -1,0 +1,1 @@
+error: parsing .git-board.toml: [forges.gh.fields.prio]: no [fields.prio] table declares it

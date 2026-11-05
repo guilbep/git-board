@@ -31,7 +31,7 @@ import (
 type Board struct {
 	Issues *issues.Service
 	People *people.Service
-	Config *conf.File
+	Config *Config
 	Views  map[string]issues.View
 	Kernel *kernel.Board
 	Dir    string // the repository's working directory, or the folder opened
@@ -67,19 +67,20 @@ func Open(ctx context.Context, dir string, o Options) (*Board, error) {
 	if err != nil {
 		return nil, err
 	}
-	tables := issues.Declare(f)
-	schema, probs := tables.Schema()
-	if len(probs) > 0 {
-		return nil, fmt.Errorf("%s: %w", conf.FileName, probs[0])
-	}
-	views, probs := tables.Views()
-	if len(probs) > 0 {
-		return nil, fmt.Errorf("%s: %w", conf.FileName, probs[0])
-	}
 	set := <-settled
 	if set.err != nil {
 		return nil, set.err
 	}
+	cfg, err := ReadConfig(f, set.experimental)
+	if err != nil {
+		return nil, err
+	}
+	if o.Notice != nil {
+		for _, k := range f.Unknown() {
+			o.Notice("warning: %s: %s: git-board doesn't know this key, ignored (git board lint)", f.Path(), k)
+		}
+	}
+	schema, views := cfg.Schema, cfg.Views
 	ds, err := OpenDatastore(ctx, g, dir, set.datastore)
 	if err != nil {
 		return nil, err
@@ -103,7 +104,7 @@ func Open(ctx context.Context, dir string, o Options) (*Board, error) {
 		return nil, err
 	}
 	c := &clone{dir: dir}
-	b := &Board{Kernel: kb, Config: f, Views: views, Dir: dir, clone: c,
+	b := &Board{Kernel: kb, Config: cfg, Views: views, Dir: dir, clone: c,
 		Issues: &issues.Service{Board: kb, Schema: schema, Avatars: people.Forge, Notice: o.Notice, Folder: ds.Folder(), Views: views},
 		People: &people.Service{Board: kb, Avatars: people.Forge, SetMe: c.setMe}}
 	if o.Who {
@@ -173,6 +174,7 @@ func configPath(dir string) string {
 // set is the clone's settings.
 type set struct {
 	me, avatars, datastore string
+	experimental           []string // nil: unset
 	err                    error
 }
 
@@ -186,7 +188,7 @@ func settings(ctx context.Context, dir string) (s set) {
 			s.datastore = v
 		}
 	}()
-	out, err := gitRun(ctx, dir, "config", "--show-scope", "--get-regexp", `^board\.(me|avatars|datastore)$`)
+	out, err := gitRun(ctx, dir, "config", "--show-scope", "--get-regexp", `^board\.(me|avatars|datastore|experimental)$`)
 	if ee := (*exec.ExitError)(nil); errors.As(err, &ee) && ee.ExitCode() == 1 {
 		return s // none is set
 	}
@@ -203,6 +205,8 @@ func settings(ctx context.Context, dir string) (s set) {
 			s.datastore = v
 		case k == "board.avatars":
 			s.avatars = v // the last level wins, as git's --get
+		case k == LocalExperimental:
+			s.experimental = SplitFeatures(v)
 		}
 	}
 	return s

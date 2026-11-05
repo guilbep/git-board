@@ -1,0 +1,1 @@
+error: parsing .git-board.toml: [forges.gh] project: owner/repo, not "x"

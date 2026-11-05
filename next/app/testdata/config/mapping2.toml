@@ -1,0 +1,7 @@
+[fields.prio]
+options = ["a"]
+[forges.gh]
+kind = "github"
+project = "o/r"
+[forges.gh.fields.prio]
+to = "weight"

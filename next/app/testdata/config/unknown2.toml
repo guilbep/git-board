@@ -1,0 +1,5 @@
+top = 1
+[foo.bar]
+x=1
+[[baz]]
+y=2

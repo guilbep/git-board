@@ -1,0 +1,1 @@
+error: parsing .git-board.toml: [cycle] steps: "nope" is no step: intent, risk, plan, tests, code, review, verify, a validation status or a [cycle.signoffs] key

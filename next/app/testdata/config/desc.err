@@ -1,0 +1,1 @@
+error: parsing .git-board.toml: fields.s.descriptions: "a"'s is 101 characters, GitHub takes 100 at most

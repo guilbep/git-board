@@ -20,6 +20,12 @@ type Field struct {
 	Type    string            `toml:"type"` // Type*; empty: guessed (TypeOf)
 	Unit    string            `toml:"unit"` // after a number field's values: "h"
 	Aliases map[string]string `toml:"aliases"`
+	// Project names the GitHub Project's option of a value; Colors a
+	// value's color (Palette, or #rrggbb); Descriptions what a value
+	// means, 100 characters at most, GitHub's.
+	Project      map[string]string `toml:"project"`
+	Colors       map[string]string `toml:"colors"`
+	Descriptions map[string]string `toml:"descriptions"`
 	// Flat: the kind field of plain labels (bug, not kind:bug), from
 	// [branches] kinds.
 	Flat bool `toml:"-"`
@@ -66,8 +72,10 @@ type Schema struct {
 
 // Labels is the [labels] table.
 type Labels struct {
-	List    []string `toml:"list"`
-	Defined bool     `toml:"-"` // the file has the table, an empty list too
+	List         []string          `toml:"list"`
+	Colors       map[string]string `toml:"colors"`       // a palette name or #rrggbb
+	Descriptions map[string]string `toml:"descriptions"` // GitHub's, 100 characters at most
+	Defined      bool              `toml:"-"`            // the file has the table, an empty list too
 }
 
 // FieldOrder is the fields' names as the file lists them; sorted
@@ -98,10 +106,11 @@ func (f Field) KnownValue(value string) bool {
 
 // Tables are the issue domain's tables on a file.
 type Tables struct {
+	file     *conf.File
 	fields   *conf.Handle[map[string]Field]
 	sprints  *conf.Handle[Sprints]
 	roles    *conf.Handle[map[string]string]
-	branches *conf.Handle[branches]
+	branches *conf.Handle[Branches]
 	views    *conf.Handle[map[string]View]
 	labels   *conf.Handle[Labels]
 }
@@ -114,22 +123,32 @@ type View struct {
 	Sort    string   `toml:"sort"`
 	Columns []string `toml:"columns"`
 	Lanes   []string `toml:"lanes"`
+	// Limits caps a lane's cards (work in progress): in-progress = 5.
+	Limits map[string]int `toml:"limits"`
 }
 
 // Views are [views], by name.
 func (t Tables) Views() (map[string]View, []conf.Problem) { return t.views.Get() }
 
-type branches struct {
+// Branches is [branches]: the kinds are the issue domain's; the base and
+// the name, the branch an issue suggests, the tools'.
+type Branches struct {
+	Base  string            `toml:"base"`
+	Name  string            `toml:"name"`
 	Kinds map[string]string `toml:"kinds"`
 }
+
+// Branches is [branches], for the tools.
+func (t Tables) Branches() (Branches, []conf.Problem) { return t.branches.Get() }
 
 // Declare declares the issue domain's tables on f.
 func Declare(f *conf.File) Tables {
 	return Tables{
+		file:     f,
 		fields:   conf.Declare(f, conf.Table[map[string]Field]{Name: "fields"}),
 		sprints:  conf.Declare(f, conf.Table[Sprints]{Name: "sprints"}),
 		roles:    conf.Declare(f, conf.Table[map[string]string]{Name: "roles"}),
-		branches: conf.Declare(f, conf.Table[branches]{Name: "branches"}),
+		branches: conf.Declare(f, conf.Table[Branches]{Name: "branches"}),
 		views:    conf.Declare(f, conf.Table[map[string]View]{Name: "views"}),
 		labels:   conf.Declare(f, conf.Table[Labels]{Name: "labels"}),
 	}
@@ -154,6 +173,9 @@ func (t Tables) Schema() (*Schema, []conf.Problem) {
 	probs = append(probs, p...)
 	s.Labels.Defined = t.labels.Defined()
 	s.Order = t.fields.Keys()
+	if len(probs) == 0 {
+		probs = s.check(t.file.Text())
+	}
 	// the kinds are plain labels unless [fields.kind] has options of its own
 	if len(s.Kinds) > 0 && len(s.Fields["kind"].Options) == 0 {
 		if s.Fields == nil {

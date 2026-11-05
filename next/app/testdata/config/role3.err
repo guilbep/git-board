@@ -1,0 +1,1 @@
+error: parsing .git-board.toml: roles.lead: fields.lead is a number; a role is a person

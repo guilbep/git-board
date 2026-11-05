@@ -1,0 +1,1 @@
+error: parsing .git-board.toml: fields.status.colors: "mauve" for "a" isn't a color: grey, blue, purple, amber, orange, green, red, teal, pink, or #rrggbb

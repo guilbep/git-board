@@ -1,0 +1,5 @@
+warning: .git-board.toml: top: git-board doesn't know this key, ignored (git board lint)
+warning: .git-board.toml: foo.bar: git-board doesn't know this key, ignored (git board lint)
+warning: .git-board.toml: foo.bar.x: git-board doesn't know this key, ignored (git board lint)
+warning: .git-board.toml: baz: git-board doesn't know this key, ignored (git board lint)
+warning: .git-board.toml: baz.y: git-board doesn't know this key, ignored (git board lint)

@@ -1,0 +1,1 @@
+error: parsing .git-board.toml: [labels] list: "a:b" is a field's value (name:value): give that field the option instead

@@ -1,0 +1,1 @@
+error: parsing .git-board.toml: [cycle] tests: the test-file globs are test-files now; [cycle.tests.<name>] tables are the suites step 4 runs

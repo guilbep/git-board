@@ -1,0 +1,3 @@
+[fields.m]
+options = ["a"]
+aliases = { b = "c" }

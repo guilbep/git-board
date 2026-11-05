@@ -1,0 +1,1 @@
+error: parsing .git-board.toml: fields.status: type "enum" isn't one of select, iteration, person, number, date, issue, text

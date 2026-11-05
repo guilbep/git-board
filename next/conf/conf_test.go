@@ -33,7 +33,7 @@ func TestTables(t *testing.T) {
 		t.Errorf("Keys = %v, want the file's order", got)
 	}
 	// a broken table is its own problem: the others answer
-	if _, probs := sprints.Get(); len(probs) != 1 || !strings.Contains(probs[0].Error(), "[sprints]") {
+	if _, probs := sprints.Get(); len(probs) != 1 || !strings.Contains(probs[0].Error(), "sprints.length_days") {
 		t.Errorf("[sprints] problems = %v", probs)
 	}
 	if v, probs := roles.Get(); len(probs) != 0 || v["pm"] != "x" {
