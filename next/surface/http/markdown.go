@@ -3,6 +3,7 @@ package httpapi
 import (
 	"bytes"
 	"regexp"
+	"strings"
 
 	"github.com/microcosm-cc/bluemonday"
 	"github.com/yuin/goldmark"
@@ -14,8 +15,8 @@ import (
 // An issue's text as GitHub shows it: GitHub-flavored Markdown, line
 // breaks kept, then cleaned to what GitHub allows. Issue text is
 // untrusted (anyone can comment on a public repository): this is the one
-// place it becomes HTML. v1's internal/markdown, copied and owned; its
-// media proxy comes with [uploads] (M6), and images keep their URL.
+// place it becomes HTML. v1's internal/markdown, copied and owned: a
+// forge's pictures go through the server (route 42, app.Media).
 
 var md = goldmark.New(
 	goldmark.WithExtensions(extension.GFM), // tables, task lists, strikethrough, autolinks
@@ -36,11 +37,40 @@ var policy = func() *bluemonday.Policy {
 	return p
 }()
 
-// render turns Markdown into clean HTML.
-func render(src string) string {
+// render turns Markdown into clean HTML; media, when set, is where a
+// picture's address points the page (app.MediaURL).
+func render(src string, media func(string) string) string {
 	var buf bytes.Buffer
 	if err := md.Convert([]byte(src), &buf); err != nil {
 		return xhtml.EscapeString(src)
 	}
-	return policy.Sanitize(buf.String())
+	clean := policy.Sanitize(buf.String())
+	if media == nil || !strings.Contains(clean, "<img") {
+		return clean
+	}
+	return rewriteImages(clean, media)
+}
+
+// rewriteImages points every <img> of clean HTML at media(src).
+func rewriteImages(clean string, media func(string) string) string {
+	var out strings.Builder
+	z := xhtml.NewTokenizer(strings.NewReader(clean))
+	for {
+		switch z.Next() {
+		case xhtml.ErrorToken:
+			return out.String()
+		case xhtml.StartTagToken, xhtml.SelfClosingTagToken:
+			tok := z.Token()
+			if tok.Data == "img" {
+				for i, a := range tok.Attr {
+					if a.Key == "src" {
+						tok.Attr[i].Val = media(a.Val)
+					}
+				}
+			}
+			out.WriteString(tok.String())
+		default:
+			out.Write(z.Raw())
+		}
+	}
 }

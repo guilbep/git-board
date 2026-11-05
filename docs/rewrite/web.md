@@ -108,8 +108,8 @@ once: 71 s for the 12,000 open issues of the 20,000-issue board (224 s
 one at a time with each issue's git reads; v1 took over 400 s). An issue's
 History draws the cycle's step bars from `GET /api/issues/{id}/cycle`.
 Attaching files (paste, drop, pick in a text, as v1) works on routes 40
-and 41. Waiting for their routes (M6, api.md routes 42 and 50 to 53): the
-forges' pictures through the server, the cycle's actions and v1's cycle
+and 41; a forge's pictures load through route 42. Waiting for their
+routes (M6, api.md routes 50 to 53): the cycle's actions and v1's cycle
 panels on an issue, the GitHub Project and its conflicts. Their v1 pages stay in `web/` until then; the cycle's
 settings form (a table of the file) and the experimental switch stay.
 

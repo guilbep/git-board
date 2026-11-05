@@ -2,9 +2,15 @@ package httpapi
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
+	"io"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -80,5 +86,45 @@ func TestUploads(t *testing.T) {
 	// without the page's header, a form from another site: refused
 	if res := a.post("shot.png", png, false); res.StatusCode < 400 {
 		t.Fatalf("an upload without X-Git-Board-Upload: %d", res.StatusCode)
+	}
+}
+
+// A forge's picture in issue text goes through the server: the thread's
+// HTML points at /api/media, which answers a kept picture without the
+// network, and refuses an address that isn't a forge's.
+func TestMedia(t *testing.T) {
+	t.Parallel()
+	dir, ids := newBoard(t)
+	a := newAPI(t, dir)
+	pic := "https://github.com/user-attachments/assets/1234"
+	th := want[threadBody](t, a.do("PATCH", "/api/issues/"+string(ids[1]), map[string]any{"comment": "![shot](" + pic + ") and ![elsewhere](https://example.com/a.png)", "status": "closed"}), 200)
+	html := ""
+	for _, e := range th.Events {
+		html += e.HTML
+	}
+	proxied := "/api/media?url=" + url.QueryEscape(pic)
+	if !strings.Contains(html, `src="`+strings.ReplaceAll(proxied, "&", "&amp;")+`"`) || !strings.Contains(html, `src="https://example.com/a.png"`) {
+		t.Fatalf("the thread's HTML: %s", html)
+	}
+	// kept beside the board: answered from there
+	gitDir := strings.TrimSpace(gitRun(t, dir, "rev-parse", "--git-common-dir"))
+	if !filepath.IsAbs(gitDir) {
+		gitDir = filepath.Join(dir, gitDir)
+	}
+	sum := sha256.Sum256([]byte(pic))
+	kept := filepath.Join(gitDir, "board", "v2", "media", hex.EncodeToString(sum[:]))
+	if err := os.MkdirAll(filepath.Dir(kept), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(kept, []byte("image/png\n\x89PNG"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	res := a.do("GET", proxied, nil)
+	body, _ := io.ReadAll(res.Body)
+	if res.StatusCode != 200 || res.Header.Get("Content-Type") != "image/png" || string(body) != "\x89PNG" || res.Header.Get("Content-Security-Policy") == "" {
+		t.Fatalf("GET %s: %d %s %q", proxied, res.StatusCode, res.Header.Get("Content-Type"), body)
+	}
+	if e := want[apiError](t, a.do("GET", "/api/media?url="+url.QueryEscape("https://example.com/a.png"), nil), 400); e.Field != "url" {
+		t.Fatalf("a picture not a forge's = %+v", e)
 	}
 }

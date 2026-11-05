@@ -47,3 +47,20 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, up)
 }
+
+// media is route 42: a forge's picture of issue text, through this
+// server, which has the forge's token (app.Media).
+func media(w http.ResponseWriter, r *http.Request) {
+	contentType, data, err := board(r.Context()).Media(r.Context(), r.URL.Query().Get("url"))
+	if err != nil {
+		writeError(w, r, logOf(r.Context()), on("url", err))
+		return
+	}
+	h := w.Header()
+	h.Set("Content-Type", contentType)
+	h.Set("Cache-Control", "private, max-age=86400")
+	h.Set("X-Content-Type-Options", "nosniff")
+	// an SVG opened on its own can't run its scripts
+	h.Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'")
+	_, _ = w.Write(data)
+}

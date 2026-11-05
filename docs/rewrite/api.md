@@ -322,12 +322,15 @@ many.
 | 39 | `POST /api/markdown` | `{body}` | `{html}` |
 | 40 | `GET /api/uploads` | | `{enabled, where, max_bytes}` (built) |
 | 41 | `POST /api/uploads` | multipart, `X-Git-Board-Upload: 1`, the file in `file` | `{url, name, type, markdown}` (built); `missing` without a bucket |
-| 42 | `GET /api/media` | `url` | the picture, through this server |
+| 42 | `GET /api/media` | `url` | the picture, through this server (built): a forge's alone, with its token, kept in the board's folder |
 
 `POST /api/markdown` previews a text as the thread renders it, cleaned.
 Uploads are `[uploads]`'s, a tool's (`next/tools/uploads`, v1's, ADR
-0015): the keys from the server's environment. Media (42), the forges'
-pictures through this server, is *M6*.
+0015): the keys from the server's environment. Media (42) are the
+forges' pictures of issue text (GitHub's attachments, GitLab's uploads),
+which a private repository's page can't load without the forge's token:
+a thread's and a preview's HTML point them at this route, which fetches
+them with the token, from a forge's picture addresses alone.
 
 ### Domains that come with M6
 
