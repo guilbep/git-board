@@ -61,6 +61,8 @@ func (s *Server) routes(mux *http.ServeMux) {
 	Route(mux, "POST /api/numbers", numbers)
 
 	Route(mux, "POST /api/markdown", markdown)
+
+	Route(mux, "GET /api/insights", insights)
 }
 
 // none is a request with nothing to read.

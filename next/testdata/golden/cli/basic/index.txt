@@ -75,3 +75,5 @@ cmd54-branch-26a4ba8	0	branch 26a4ba8
 cmd55-branch-398523d	0	branch 398523d
 cmd56-branch-0000000	3	branch 0000000
 cmd57-verify	1	verify
+cmd58-insights-days-0	2	insights --days 0
+cmd59-insights-view-nope	2	insights --view nope

@@ -90,9 +90,10 @@ and cycle pages as a choice (one page), v1's per-issue sync (until the
 sync engine takes one issue), Labels' comparison with GitHub and lint
 (a tool), the clone's first-pull note (until v2 pulls on a first open).
 
-Waiting for their routes (M6, api.md routes 43 to 53): Releases,
-Insights, the Work page and the cycle's page, the GitHub Project and its
-conflicts, uploads. Their v1 pages stay in `web/` until then; the cycle's
+Insights is v1's page on route 51 (`GET /api/insights`, the replay in
+`next/tools/insights`, v1's, and `insights` on the CLI). Waiting for
+their routes (M6, api.md routes 43 to 53): Releases, the Work page and
+the cycle's page, the GitHub Project and its conflicts, uploads. Their v1 pages stay in `web/` until then; the cycle's
 settings form (a table of the file) and the experimental switch stay.
 
 ## Tests

@@ -344,7 +344,7 @@ Until then they answer 404 `not-found`.
 | 48 | `POST /api/environments/{env}/deploy` | `{tag}`; a rollback is a deploy of an older tag with `reason` |
 | 49 | `GET /api/issues/{id}/cycle` | the cycle (experimental): steps, branches, pulls, tests, environments, as one read |
 | 50 | `POST /api/issues/{id}/cycle/{action}` | a step's action: sign off, open or merge a pull, run the tests, review, resolve |
-| 51 | `GET /api/insights` | `field`, `days`, `view`, `sprint`: flow, throughput, and a sprint's report |
+| 51 | `GET /api/insights` | `field`, `days`, `view`: flow, throughput, cycle time, burn-up, as `insights --json` (built); `sprint` (`@current` or a slug): `{sprint, title, markdown}`, its report |
 | 52 | `GET /api/github-project` | the GitHub Project bridge: its last check |
 | 53 | `POST /api/github-project/{action}` | `check`, `apply` (`side`), `resolve`; its table is `PATCH /api/config`'s |
 

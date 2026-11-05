@@ -7,6 +7,7 @@ const routes: RouteRecordRaw[] = [
   // the Sync page's old address, and its parts': one Sync, in Settings
   { path: '/sync', redirect: { path: '/settings/sync', hash: '' } },
   { path: '/inbox', component: () => import('@/pages/InboxPage.vue') },
+  { path: '/insights', component: () => import('@/pages/InsightsPage.vue') },
   // a tab per address, #/settings/sync…; none: the Overview (settingstabs.ts);
   // a field of Fields has one too, #/settings/fields/est
   { path: '/settings/:tab?/:name?', component: () => import('@/pages/SettingsPage.vue') },

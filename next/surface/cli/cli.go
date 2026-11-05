@@ -90,7 +90,7 @@ func newRoot() *cobra.Command {
 	root.Flags().BoolVar(&noOpen, "no-open", false, "serve the board, or say where it runs, without opening a browser")
 	root.SetFlagErrorFunc(func(_ *cobra.Command, err error) error { return usageError{err} })
 	root.AddCommand(newLs(), newView(), newShow(), newLog(), newLabels(), newMe(),
-		newNew(), newComment(), newEdit(), newSet(), newMove(), newClose(), newReopen(), newDelete(), newUndo(), newFollow(), newUnfollow(), newStatus(), newDatastore(), newConfig(), newNumbers(), newForge(), newFetch(), newPull(), newPush(), newSync(), newRelease(), newDeploy(), newVerify(), newBranch(), newSprint(), newTui(), newServe())
+		newNew(), newComment(), newEdit(), newSet(), newMove(), newClose(), newReopen(), newDelete(), newUndo(), newFollow(), newUnfollow(), newStatus(), newDatastore(), newConfig(), newNumbers(), newForge(), newFetch(), newPull(), newPush(), newSync(), newRelease(), newDeploy(), newVerify(), newBranch(), newSprint(), newInsights(), newTui(), newServe())
 	var walk func(*cobra.Command)
 	walk = func(c *cobra.Command) {
 		if args := c.Args; args != nil {

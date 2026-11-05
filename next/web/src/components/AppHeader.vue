@@ -17,6 +17,7 @@
       <!-- an issue's page (/issues/:id) is under Issues too -->
       <router-link to="/" :class="{ active: issuesHere }" :aria-current="issuesHere ? 'page' : undefined">Issues</router-link>
       <router-link to="/inbox" active-class="active">Inbox<span v-if="inboxCount" class="nav-count" :aria-label="`, ${inboxCount} new`">{{ inboxCount }}</span></router-link>
+      <router-link to="/insights" active-class="active">Insights</router-link>
       <!-- Settings, as a cog: every /settings page is under it -->
       <router-link to="/settings" class="nav-cog" :class="{ active: settingsHere }" :aria-current="settingsHere ? 'page' : undefined" aria-label="Settings" title="Settings"><GbIcon name="settings" /></router-link>
     </nav>

@@ -8,3 +8,4 @@ export * from './inbox.ts';
 export * from './config.ts';
 export * from './sync.ts';
 export * from './texts.ts';
+export * from './insights.ts';

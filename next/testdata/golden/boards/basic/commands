@@ -55,3 +55,5 @@ branch 26a4ba8
 branch 398523d
 branch 0000000
 verify
+insights --days 0
+insights --view nope
