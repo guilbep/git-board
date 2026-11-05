@@ -93,7 +93,7 @@ func newRoot() *cobra.Command {
 	root.AddCommand(newLs(), newView(), newShow(), newLog(), newLabels(), newMe(),
 		newNew(), newComment(), newEdit(), newSet(), newMove(), newClose(), newReopen(), newDelete(), newUndo(), newFollow(), newUnfollow(), newStatus(), newDatastore(), newConfig(), newNumbers(), newForge(), newProject(), newFetch(), newPull(), newPush(), newSync(), newRelease(), newDeploy(), newVerify(), newBranch(), newSprint(), newTui(), newServe(), newInsights())
 	root.SetVersionTemplate("git-board version {{.Version}}\n") // v1's, as the binary it replaces
-	root.AddCommand(newGet())
+	root.AddCommand(newGet(), newDiff())
 	var walk func(*cobra.Command)
 	walk = func(c *cobra.Command) {
 		if args := c.Args; args != nil {

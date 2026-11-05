@@ -77,3 +77,15 @@ cmd56-branch-0000000	3	branch 0000000
 cmd57-verify	1	verify
 cmd58-insights-days-0	2	insights --days 0
 cmd59-insights-view-nope	2	insights --view nope
+cmd60-diff-26a4ba8-since-2025-03-03t04-00	0	diff 26a4ba8 --since 2025-03-03T04:00
+cmd61-diff-26a4ba8-since-2025-03-03-json	0	diff 26a4ba8 --since 2025-03-03 --json
+cmd62-diff-9062b9a-since-2020-01-01-json	0	diff 9062b9a --since 2020-01-01 --json
+cmd63-diff-9062b9a-since-2020-01-01	0	diff 9062b9a --since 2020-01-01
+cmd64-diff-999eab2-since-2025-03-04	0	diff 999eab2 --since 2025-03-04
+cmd65-diff-999eab2-since-2030-01-01-json-id-cr	0	diff 999eab2 --since 2030-01-01 --json id,created,added
+cmd66-diff-26a4ba8	2	diff 26a4ba8
+cmd67-diff-26a4ba8-since-nope	2	diff 26a4ba8 --since nope
+cmd68-diff-0000000-since-2025-03-03	3	diff 0000000 --since 2025-03-03
+cmd69-get-26a4ba8	0	get 26a4ba8
+cmd70-get-gb-100	0	get GB-100
+cmd71-get-0000000	3	get 0000000

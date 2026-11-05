@@ -57,3 +57,15 @@ branch 0000000
 verify
 insights --days 0
 insights --view nope
+diff 26a4ba8 --since 2025-03-03T04:00
+diff 26a4ba8 --since 2025-03-03 --json
+diff 9062b9a --since 2020-01-01 --json
+diff 9062b9a --since 2020-01-01
+diff 999eab2 --since 2025-03-04
+diff 999eab2 --since 2030-01-01 --json id,created,added
+diff 26a4ba8
+diff 26a4ba8 --since nope
+diff 0000000 --since 2025-03-03
+get 26a4ba8
+get GB-100
+get 0000000
