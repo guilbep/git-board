@@ -241,7 +241,13 @@ func patchIssue(ctx context.Context, r patchReq) (Reply, error) {
 			base.Events[0].Body = *r.Base
 		}
 		if _, err := is.Edit(ctx, id, r.Title, r.Body, base); err != nil {
-			return Reply{}, on("body", err)
+			// the field the error is about: the description's base moved,
+			// else the first field written (the title, then the body)
+			field := "title"
+			if r.Title == nil || app.Classify(err) == app.Changed {
+				field = "body"
+			}
+			return Reply{}, on(field, err)
 		}
 	}
 	if r.Labels != nil {

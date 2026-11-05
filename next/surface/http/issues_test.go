@@ -177,3 +177,29 @@ func TestBoardRoutes(t *testing.T) {
 		t.Fatalf("board = %+v", b)
 	}
 }
+
+// A stale edit names the field it was about (review finding 7): the
+// title alone, the body alone, and both (the title is written first).
+func TestStaleEditNamesItsField(t *testing.T) {
+	t.Parallel()
+	dir, ids := newBoard(t)
+	a := newAPI(t, dir)
+	old := etag(a.do("GET", "/api/issues/"+string(ids[1]), nil))
+	want[threadBody](t, a.do("PATCH", "/api/issues/"+string(ids[1]), map[string]any{"title": "t2"}), 200)
+	for _, c := range []struct {
+		body  map[string]any
+		field string
+	}{
+		{map[string]any{"title": "t3"}, "title"},
+		{map[string]any{"body": "b3"}, "body"},
+		{map[string]any{"title": "t3", "body": "b3"}, "title"},
+	} {
+		if e := want[apiError](t, a.do("PATCH", "/api/issues/"+string(ids[1]), c.body, "If-Match", old), 412); e.Code != "stale" || e.Field != c.field {
+			t.Errorf("a stale %v = %+v, want stale on %s", c.body, e, c.field)
+		}
+	}
+	// the description moved since its base: the body's
+	if e := want[apiError](t, a.do("PATCH", "/api/issues/"+string(ids[1]), map[string]any{"title": "t4", "body": "b4", "base": "not it"}), 409); e.Code != "changed" || e.Field != "body" {
+		t.Errorf("a moved base = %+v", e)
+	}
+}
