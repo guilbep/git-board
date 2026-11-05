@@ -20,6 +20,16 @@ type Service struct {
 	Schema  *Schema        // never nil: an empty one without a config
 	Avatars people.Avatars // board.avatars
 	Me      kernel.ID      // who writes: board.me; "" for no one
+	// Notice, when set, is told what a read leaves aside (an entity
+	// broken, a counter that doesn't read), as v1 logs it.
+	Notice Notice
+}
+
+// notice tells s.Notice, if any.
+func (s *Service) notice(format string, args ...any) {
+	if s.Notice != nil {
+		s.Notice(format, args...)
+	}
 }
 
 // DefaultFilter is ls's filter when none is given.
@@ -40,9 +50,6 @@ type ListReq struct {
 	Filter string    // ls's grammar; "" matches every issue
 	Me     string    // what @me means: --me, GIT_BOARD_ME; "" for the person who writes
 	Today  time.Time // what @today and sprints mean; zero is now
-	// Notice, when set, is told of each entity a list leaves out,
-	// broken, as v1 logs it.
-	Notice Notice
 }
 
 // List answers the issues r.Filter matches, oldest first (by creation,
@@ -65,18 +72,17 @@ func (s *Service) List(ctx context.Context, r ListReq) ([]Issue, error) {
 	if err != nil {
 		return nil, fmt.Errorf("listing the issues: %w", err)
 	}
+	broken, err := s.Board.Broken(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, b := range broken {
+		s.notice("%s %s: %v", b.Kind, b.ID, b.Err)
+	}
+	cnt := s.counter(ctx, s.notice)
 	list := make([]Issue, 0, len(rows))
 	for _, l := range rows {
-		list = append(list, s.issue(l.ID, &l.Row, dir))
-	}
-	if r.Notice != nil {
-		broken, err := s.Board.Broken(ctx)
-		if err != nil {
-			return nil, err
-		}
-		for _, b := range broken {
-			r.Notice("%s %s: %v", b.Kind, b.ID, b.Err)
-		}
+		list = append(list, s.issue(l.ID, &l.Row, dir, cnt))
 	}
 	return s.keep(list, conds, me, r.Today), nil
 }
@@ -201,7 +207,7 @@ func idSet(ids []kernel.ID) map[string]bool {
 // issue is a row as every surface lists it: its labels as git-board reads
 // them, who opened it and who commented. A list adds what it inherits.
 // M1: no forges (sync records come with M4) and no project numbers (M2).
-func (s *Service) issue(id kernel.ID, r *Row, dir people.Directory) Issue {
+func (s *Service) issue(id kernel.ID, r *Row, dir people.Directory, cnt *Counter) Issue {
 	is := Issue{ID: string(id), Title: r.Title, Status: string(r.Status), Labels: s.Schema.Shown(r.Labels),
 		UpdatedAt: time.Unix(r.Updated, 0), CreatedAt: time.Unix(r.Created, 0), AuthorID: string(r.Author),
 		Comments: r.Comments}
@@ -212,6 +218,7 @@ func (s *Service) issue(id kernel.ID, r *Row, dir people.Directory) Issue {
 		is.ClosedAt = time.Unix(r.Closed, 0)
 	}
 	is.Shown = is.ShownTitle()
+	is.numbered(cnt)
 	is.AuthorLogins = dir.Names(r.Author)
 	if len(r.Commenters) > 0 {
 		is.CommenterIDs = make([]string, 0, len(r.Commenters))
@@ -234,13 +241,27 @@ var ErrNotFound = kernel.ErrNotFound
 // ErrDeleted is an issue a delete hid (ADR 0019): a not found.
 var ErrDeleted = fmt.Errorf("%w: deleted", kernel.ErrNotFound)
 
-// Resolve is the whole id an issue's name gives: a prefix of its id, or
-// a number.
-// M1: an issue has no number yet (no forges, no project numbers): a
-// number names none.
+// Resolve is the whole id an issue's name gives: a prefix of its id, its
+// project number (CO2-3075) or a forge's (#2518).
 func (s *Service) Resolve(ctx context.Context, name string) (kernel.ID, error) {
-	if numberName.MatchString(name) {
-		return "", fmt.Errorf("%w: issue %s", ErrNotFound, name)
+	if !numberName.MatchString(name) {
+		return Kind.Resolve(ctx, s.Board, name)
 	}
-	return Kind.Resolve(ctx, s.Board, name)
+	all, err := s.List(ctx, ListReq{})
+	if err != nil {
+		return "", err
+	}
+	var ids []kernel.ID
+	for _, is := range all {
+		if forge, ok := strings.CutPrefix(name, "#"); ok && is.HasForgeNumber(forge) || strings.EqualFold(is.Number, name) {
+			ids = append(ids, kernel.ID(is.ID))
+		}
+	}
+	switch len(ids) {
+	case 0:
+		return "", fmt.Errorf("%w: issue %s", ErrNotFound, name)
+	case 1:
+		return ids[0], nil
+	}
+	return "", fmt.Errorf("%w: issue %s, on %d issues", kernel.ErrAmbiguous, name, len(ids))
 }

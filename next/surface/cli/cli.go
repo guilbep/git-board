@@ -5,24 +5,16 @@ package cli
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
-	"path/filepath"
-	"strings"
 
 	"github.com/spf13/cobra"
 
-	"github.com/guilbep/git-board/next/conf"
+	"github.com/guilbep/git-board/next/app"
 	"github.com/guilbep/git-board/next/domain/issues"
-	"github.com/guilbep/git-board/next/domain/people"
-	"github.com/guilbep/git-board/next/kernel"
-	"github.com/guilbep/git-board/next/store/git"
-	"github.com/guilbep/git-board/next/view"
 )
 
 // The exit codes (docs/guide/cli.md, Exit codes).
@@ -30,6 +22,7 @@ const (
 	exitError    = 1
 	exitUsage    = 2
 	exitNotFound = 3
+	exitNoMe     = 4
 )
 
 // usageError is a command line the command can't run: a flag, an
@@ -55,18 +48,19 @@ func Main(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	}
 	out.Flush() // what was printed before the error
 	fmt.Fprintln(stderr, "error:", err)
-	return exitCode(err)
+	code := exitCode(err)
+	if code == exitNoMe {
+		fmt.Fprintln(stderr, "hint: git board me --new writes as you (git user.name and user.email); git board me --ls lists who is on the board, git board me <id> writes as one of them")
+	}
+	return code
 }
 
 func exitCode(err error) int {
 	var u usageError
-	switch {
-	case errors.Is(err, kernel.ErrNotFound), errors.Is(err, kernel.ErrAmbiguous):
-		return exitNotFound
-	case errors.As(err, &u), errors.Is(err, issues.ErrUsage), strings.HasPrefix(err.Error(), "unknown command"):
+	if errors.As(err, &u) || errors.Is(err, issues.ErrInvalid) || errors.Is(err, issues.ErrUnchecked) {
 		return exitUsage
 	}
-	return exitError
+	return app.ExitCode(err)
 }
 
 func newRoot() *cobra.Command {
@@ -88,7 +82,8 @@ func newRoot() *cobra.Command {
 	}
 	root.PersistentFlags().StringVarP(&dir, "directory", "C", "", "run as if started in this directory, as git -C does")
 	root.SetFlagErrorFunc(func(_ *cobra.Command, err error) error { return usageError{err} })
-	root.AddCommand(newLs(), newView(), newShow(), newLog())
+	root.AddCommand(newLs(), newView(), newShow(), newLog(), newLabels(), newMe(),
+		newNew(), newComment(), newEdit(), newSet(), newMove(), newClose(), newReopen(), newDelete())
 	var walk func(*cobra.Command)
 	walk = func(c *cobra.Command) {
 		if args := c.Args; args != nil {
@@ -107,130 +102,25 @@ func newRoot() *cobra.Command {
 	return root
 }
 
-// board is an open board and the issue domain on it.
+// board is an open board, through app.
 type board struct {
-	kb     *kernel.Board
+	*app.Board
 	issues *issues.Service
 }
 
-func (b *board) Close() error { return b.kb.Close() }
-
-// open opens the board of the repository holding the current directory:
-// the git datastore, its view in <common dir>/board/v2/view.db (v1's
-// index.db is v1's), .git-board.toml, and the clone's board.me and
-// board.avatars. who: read board.me and board.avatars (show, log, @me).
-func open(ctx context.Context, who bool) (*board, error) {
+// open opens the board of the repository holding the current directory
+// (app.Open). who: read who writes; what a read leaves aside goes to the
+// command's stderr, as v1 logs it.
+func open(cmd *cobra.Command, who bool) (*board, error) {
 	cwd, err := os.Getwd()
 	if err != nil {
 		return nil, err
 	}
-	type set struct {
-		me, avatars string
-		err         error
-	}
-	settled := make(chan set, 1)
-	if who { // git config runs while the rest opens
-		go func() {
-			var s set
-			s.me, s.avatars, s.err = settings(ctx, cwd)
-			settled <- s
-		}()
-	}
-	ds, err := git.Open(ctx, cwd)
+	stderr := cmd.ErrOrStderr()
+	b, err := app.Open(cmd.Context(), cwd, app.Options{Who: who, Warm: who,
+		Notice: func(format string, args ...any) { fmt.Fprintf(stderr, format+"\n", args...) }})
 	if err != nil {
 		return nil, err
 	}
-	if who { // show and log read one issue's packs: their cat-file starts now
-		go ds.Warm(ctx)
-	}
-	f, err := conf.Load(configPath(cwd))
-	if err != nil {
-		return nil, err
-	}
-	schema, probs := issues.Declare(f).Schema()
-	if len(probs) > 0 {
-		return nil, fmt.Errorf("%s: %w", conf.FileName, probs[0])
-	}
-	v, err := view.Open(ctx, filepath.Join(ds.Folder(), "v2", "view.db"))
-	if err != nil {
-		return nil, fmt.Errorf("opening the view: %w", err)
-	}
-	kb, err := kernel.Open(ctx, ds, v, issues.Kind, people.Kind)
-	if err != nil {
-		v.Close()
-		return nil, err
-	}
-	s := &issues.Service{Board: kb, Schema: schema, Avatars: people.Forge}
-	if who {
-		set := <-settled
-		if set.err != nil {
-			kb.Close()
-			return nil, set.err
-		}
-		s.Me, s.Avatars = kernel.ID(set.me), people.ParseAvatars(set.avatars)
-	}
-	return &board{kb: kb, issues: s}, nil
-}
-
-// readViews are .git-board.toml's [views].
-func readViews() (map[string]issues.View, error) {
-	cwd, err := os.Getwd()
-	if err != nil {
-		return nil, err
-	}
-	f, err := conf.Load(configPath(cwd))
-	if err != nil {
-		return nil, err
-	}
-	t := issues.Declare(f)
-	views, probs := t.Views()
-	if len(probs) > 0 {
-		return nil, fmt.Errorf("%s: %w", conf.FileName, probs[0])
-	}
-	return views, nil
-}
-
-// configPath is the nearest .git-board.toml up to the repository's root,
-// else where it goes at that root.
-func configPath(dir string) string {
-	for {
-		p := filepath.Join(dir, conf.FileName)
-		if _, err := os.Stat(p); err == nil {
-			return p
-		}
-		if _, err := os.Stat(filepath.Join(dir, ".git")); err == nil {
-			return p
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			return conf.FileName
-		}
-		dir = parent
-	}
-}
-
-// settings are the clone's board.me, from its own config only
-// (data-model.md, Me), and board.avatars, from any level: one git.
-func settings(ctx context.Context, dir string) (me, avatars string, err error) {
-	cmd := exec.CommandContext(ctx, "git", "-C", dir, "config", "--show-scope", "--get-regexp", `^board\.(me|avatars)$`)
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-	out, err := cmd.Output()
-	if ee := (*exec.ExitError)(nil); errors.As(err, &ee) && ee.ExitCode() == 1 {
-		return "", "", nil // neither is set
-	}
-	if err != nil {
-		return "", "", fmt.Errorf("git config: %w: %s", err, strings.TrimSpace(stderr.String()))
-	}
-	for line := range strings.SplitSeq(strings.TrimSpace(string(out)), "\n") {
-		scope, kv, _ := strings.Cut(line, "\t")
-		k, v, _ := strings.Cut(kv, " ")
-		switch {
-		case k == "board.me" && scope == "local":
-			me = v
-		case k == "board.avatars":
-			avatars = v // the last level wins, as git's --get
-		}
-	}
-	return me, avatars, nil
+	return &board{Board: b, issues: b.Issues}, nil
 }

@@ -121,7 +121,7 @@ func asSpec(t *testing.T, st State) map[string]any {
 	return m
 }
 
-func op(kind, data string) kernel.Op {
+func testOp(kind, data string) kernel.Op {
 	return kernel.Op{Kind: kind, Author: "a", Time: 1, Data: json.RawMessage(data)}
 }
 
@@ -133,26 +133,26 @@ func TestFold(t *testing.T) {
 	at := func(n int, o kernel.Op) kernel.Entry {
 		return kernel.Entry{ID: kernel.OpID(strings.Repeat(string(rune('a'+n)), 40) + ":0"), Op: o}
 	}
-	create := at(0, op("create", `{"title":"t","body":"b"}`))
-	comment := at(1, op("comment", `{"body":"c"}`))
+	create := at(0, testOp("create", `{"title":"t","body":"b"}`))
+	comment := at(1, testOp("comment", `{"body":"c"}`))
 	cid := string(comment.ID)
 	for name, c := range map[string]struct {
 		log  []kernel.Entry
 		want error
 	}{
 		"no create first":       {[]kernel.Entry{comment}, errors.New("want create")},
-		"a second create":       {[]kernel.Entry{create, at(1, op("create", `{}`))}, errors.New("second create")},
-		"an unknown kind":       {[]kernel.Entry{create, at(1, op("frob", `{}`))}, ErrUnknownOp},
+		"a second create":       {[]kernel.Entry{create, at(1, testOp("create", `{}`))}, errors.New("second create")},
+		"an unknown kind":       {[]kernel.Entry{create, at(1, testOp("frob", `{}`))}, ErrUnknownOp},
 		"no author":             {[]kernel.Entry{create, at(1, kernel.Op{Kind: "comment", Time: 1})}, errors.New("no author")},
-		"a bad status":          {[]kernel.Entry{create, at(1, op("set-status", `{"status":"done"}`))}, errors.New("bad status")},
-		"an empty label":        {[]kernel.Entry{create, at(1, op("change-labels", `{"add":[""]}`))}, errors.New("bad label")},
-		"a label with a line":   {[]kernel.Entry{create, at(1, op("change-labels", `{"remove":["a\nb"]}`))}, errors.New("bad label")},
-		"an edit of nothing":    {[]kernel.Entry{create, at(1, op("edit-text", `{"target":"x:0","body":"y"}`))}, ErrBadTarget},
-		"a pending target":      {[]kernel.Entry{create, at(1, op("set-meta", `{"target":"pending:0"}`))}, ErrBadTarget},
-		"a delete of nothing":   {[]kernel.Entry{create, at(1, op("delete", `{"target":"x:0"}`))}, ErrBadTarget},
-		"data that isn't data":  {[]kernel.Entry{create, at(1, op("set-title", `{"title":1}`))}, errors.New("cannot unmarshal")},
-		"an edit of a deleted":  {[]kernel.Entry{create, comment, at(2, op("delete", `{"target":"`+cid+`"}`)), at(3, op("edit-text", `{"target":"`+cid+`","body":"z"}`)), at(4, op("set-meta", `{"target":"`+cid+`","meta":{"k":"v"}}`)), at(5, op("delete", `{"target":"`+cid+`"}`))}, nil},
-		"labels apply in order": {[]kernel.Entry{create, at(1, op("change-labels", `{"add":["b","a"],"remove":["a"]}`)), at(2, op("change-labels", `{"add":["a"]}`))}, nil},
+		"a bad status":          {[]kernel.Entry{create, at(1, testOp("set-status", `{"status":"done"}`))}, errors.New("bad status")},
+		"an empty label":        {[]kernel.Entry{create, at(1, testOp("change-labels", `{"add":[""]}`))}, errors.New("bad label")},
+		"a label with a line":   {[]kernel.Entry{create, at(1, testOp("change-labels", `{"remove":["a\nb"]}`))}, errors.New("bad label")},
+		"an edit of nothing":    {[]kernel.Entry{create, at(1, testOp("edit-text", `{"target":"x:0","body":"y"}`))}, ErrBadTarget},
+		"a pending target":      {[]kernel.Entry{create, at(1, testOp("set-meta", `{"target":"pending:0"}`))}, ErrBadTarget},
+		"a delete of nothing":   {[]kernel.Entry{create, at(1, testOp("delete", `{"target":"x:0"}`))}, ErrBadTarget},
+		"data that isn't data":  {[]kernel.Entry{create, at(1, testOp("set-title", `{"title":1}`))}, errors.New("cannot unmarshal")},
+		"an edit of a deleted":  {[]kernel.Entry{create, comment, at(2, testOp("delete", `{"target":"`+cid+`"}`)), at(3, testOp("edit-text", `{"target":"`+cid+`","body":"z"}`)), at(4, testOp("set-meta", `{"target":"`+cid+`","meta":{"k":"v"}}`)), at(5, testOp("delete", `{"target":"`+cid+`"}`))}, nil},
+		"labels apply in order": {[]kernel.Entry{create, at(1, testOp("change-labels", `{"add":["b","a"],"remove":["a"]}`)), at(2, testOp("change-labels", `{"add":["a"]}`))}, nil},
 	} {
 		st, err := Kind.Fold(id, c.log)
 		switch {
@@ -174,7 +174,7 @@ func TestDuplicateOriginAndDelete(t *testing.T) {
 	t.Parallel()
 	o := &kernel.Origin{Forge: "github.com/o/r", Event: "comment:5"}
 	e := func(id string, kind, data string) kernel.Entry {
-		x := op(kind, data)
+		x := testOp(kind, data)
 		if kind == "comment" {
 			x.Origin = o
 		}
@@ -248,7 +248,7 @@ func FuzzDecodeData(f *testing.F) {
 func TestAt(t *testing.T) {
 	t.Parallel()
 	e := func(id string, kind string, time int64, data string) kernel.Entry {
-		o := op(kind, data)
+		o := testOp(kind, data)
 		o.Time = time
 		return kernel.Entry{ID: kernel.OpID(id), Op: o}
 	}

@@ -118,8 +118,9 @@ func gitDirAt(gitDir string) (*Store, bool) {
 	return &Store{gitDir: gitDir, commonDir: common, warmed: make(chan warmed, 1)}, true
 }
 
-// Caps: a version is a commit, which names its packs for good.
-func (s *Store) Caps() store.Caps { return store.Caps{Pinned: true} }
+// Caps: a version is a commit, which names its packs for good; the
+// counter is refs/board/seq.
+func (s *Store) Caps() store.Caps { return store.Caps{Pinned: true, Counter: s} }
 
 // Folder is <common dir>/board, shared by every worktree.
 func (s *Store) Folder() string { return filepath.Join(s.commonDir, "board") }
@@ -358,6 +359,12 @@ func (s *Store) writePack(data []byte, parents []string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	return s.writeCommit(tree, parents)
+}
+
+// writeCommit writes a commit of tree on parents, with an empty identity
+// and no message, as v1 writes the board's.
+func (s *Store) writeCommit(tree string, parents []string) (string, error) {
 	now := time.Now()
 	when := fmt.Sprintf("%d %s", now.Unix(), now.Format("-0700"))
 	var c bytes.Buffer

@@ -1,6 +1,7 @@
 package kernel
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -141,6 +142,10 @@ func (k *K[S, R]) Create(ctx context.Context, b *Board, id ID, ops ...Op) (Entit
 	if len(ops) == 0 {
 		return Entity[S]{}, errors.New("kernel: an entity starts with an operation")
 	}
+	// the first pack's ids name its entity: "pending" stands for both
+	if _, err := k.fold(cmp.Or(id, "pending"), pending(nil, ops)); err != nil {
+		return Entity[S]{}, err // refused before anything is written
+	}
 	v, es, err := b.write(ctx, k.s.Name, id, "", 1, ops)
 	if err != nil {
 		return Entity[S]{}, fmt.Errorf("creating a %s: %w", k.s.Name, err)
@@ -175,6 +180,9 @@ func (k *K[S, R]) Do(ctx context.Context, b *Board, id ID, decide func(cur Entit
 		if err != nil || len(ops) == 0 {
 			return cur, err
 		}
+		if _, err := k.fold(id, pending(es, ops)); err != nil {
+			return cur, err // refused before anything is written
+		}
 		nv, added, err := b.write(ctx, k.s.Name, id, v, clock+1, ops)
 		if errors.Is(err, store.ErrMoved) && try < tries {
 			continue
@@ -192,6 +200,18 @@ func (k *K[S, R]) Do(ctx context.Context, b *Board, id ID, decide func(cur Entit
 		next := Entity[S]{ID: id, Version: nv, Clock: clock + 1, State: st}
 		return next, k.through(ctx, b, next, v)
 	}
+}
+
+// pending is entries followed by ops not written yet, with ids that name
+// no operation ("pending:<n>"): a fold of it says whether they apply. A
+// fold that refused one once it was written would leave the entity
+// unreadable on every clone (ADR 0004).
+func pending(entries []Entry, ops []Op) []Entry {
+	out := append(make([]Entry, 0, len(entries)+len(ops)), entries...)
+	for i, op := range ops {
+		out = append(out, Entry{ID: OpID(fmt.Sprintf("pending:%d", i)), Op: op})
+	}
+	return out
 }
 
 // through replaces the entity's row in the view, where it is still at

@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -57,6 +58,42 @@ type Schema struct {
 	// Kinds are [branches] kinds: plain labels read as kind:<label> while
 	// [fields.kind] has no options of its own.
 	Kinds map[string]string
+	// Labels is [labels]: the plain labels the project allows.
+	Labels Labels
+	// Order is [fields]' names as the file writes them.
+	Order []string
+}
+
+// Labels is the [labels] table.
+type Labels struct {
+	List    []string `toml:"list"`
+	Defined bool     `toml:"-"` // the file has the table, an empty list too
+}
+
+// FieldOrder is the fields' names as the file lists them; sorted
+// without an order.
+func (s *Schema) FieldOrder() []string {
+	if len(s.Order) == len(s.Fields) {
+		return s.Order
+	}
+	return slices.Sorted(maps.Keys(s.Fields))
+}
+
+// AliasOf is a value's current name on the field.
+func (f Field) AliasOf(value string) string {
+	if cur, ok := f.Aliases[value]; ok {
+		return cur
+	}
+	return value
+}
+
+// KnownValue says value is one of the options, or any with none; a
+// number field takes any number.
+func (f Field) KnownValue(value string) bool {
+	if _, err := strconv.ParseFloat(value, 64); err == nil && (f.Numeric || f.Type == TypeNumber) {
+		return true
+	}
+	return len(f.Options) == 0 || slices.Contains(f.Options, value)
 }
 
 // Tables are the issue domain's tables on a file.
@@ -66,6 +103,7 @@ type Tables struct {
 	roles    *conf.Handle[map[string]string]
 	branches *conf.Handle[branches]
 	views    *conf.Handle[map[string]View]
+	labels   *conf.Handle[Labels]
 }
 
 // View is a named list of [views]: its filter, grouping and sort.
@@ -93,6 +131,7 @@ func Declare(f *conf.File) Tables {
 		roles:    conf.Declare(f, conf.Table[map[string]string]{Name: "roles"}),
 		branches: conf.Declare(f, conf.Table[branches]{Name: "branches"}),
 		views:    conf.Declare(f, conf.Table[map[string]View]{Name: "views"}),
+		labels:   conf.Declare(f, conf.Table[Labels]{Name: "labels"}),
 	}
 }
 
@@ -111,6 +150,10 @@ func (t Tables) Schema() (*Schema, []conf.Problem) {
 	b, p := t.branches.Get()
 	probs = append(probs, p...)
 	s.Kinds = b.Kinds
+	s.Labels, p = t.labels.Get()
+	probs = append(probs, p...)
+	s.Labels.Defined = t.labels.Defined()
+	s.Order = t.fields.Keys()
 	// the kinds are plain labels unless [fields.kind] has options of its own
 	if len(s.Kinds) > 0 && len(s.Fields["kind"].Options) == 0 {
 		if s.Fields == nil {
@@ -125,6 +168,13 @@ func (t Tables) Schema() (*Schema, []conf.Problem) {
 		f := s.Fields["kind"]
 		f.Single, f.Options, f.Flat = true, order, true
 		s.Fields["kind"] = f
+	}
+	// the fields the file has no table for (the flat kinds') after the
+	// file's, by name
+	for _, k := range slices.Sorted(maps.Keys(s.Fields)) {
+		if !slices.Contains(s.Order, k) {
+			s.Order = append(s.Order, k)
+		}
 	}
 	return s, probs
 }

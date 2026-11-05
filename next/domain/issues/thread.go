@@ -46,13 +46,13 @@ func (s *Service) read(ctx context.Context, name string) (Thread, []kernel.Entry
 		return Thread{}, nil, err
 	}
 	d := index(&st)
-	return s.thread(&st, &d.Row, log, dir), log, nil
+	return s.thread(&st, &d.Row, log, dir, s.counter(ctx, s.notice)), log, nil
 }
 
 // thread replays an issue's log into its history, as the fold applies it.
 // M1: nothing is marked pending for a forge (sync records come with M4).
-func (s *Service) thread(st *State, r *Row, log []kernel.Entry, dir people.Directory) Thread {
-	th := Thread{Issue: s.issue(st.ID, r, dir), Author: dir.Who(st.Author), EditedAt: time.Unix(st.Updated, 0)}
+func (s *Service) thread(st *State, r *Row, log []kernel.Entry, dir people.Directory, cnt *Counter) Thread {
+	th := Thread{Issue: s.issue(st.ID, r, dir, cnt), Author: dir.Who(st.Author), EditedAt: time.Unix(st.Updated, 0)}
 	th.Participants = append(th.Participants, th.Author)
 	for _, c := range st.Comments {
 		if !slices.ContainsFunc(th.Participants, func(p people.Who) bool { return p.ID == c.Author }) {

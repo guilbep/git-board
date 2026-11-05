@@ -10,6 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/guilbep/git-board/next/app"
 	"github.com/guilbep/git-board/next/domain/issues"
 )
 
@@ -57,13 +58,12 @@ func newLs() *cobra.Command {
 // rendered. What a list leaves out goes to stderr, as v1 logs it.
 func list(cmd *cobra.Command, req issues.ListReq, at time.Time, group, sort string, limit int, md bool, js *jsonOut) error {
 	ctx := cmd.Context()
-	b, err := open(ctx, needsMe(req.Filter))
+	b, err := open(cmd, needsMe(req.Filter))
 	if err != nil {
 		return err
 	}
 	defer b.Close()
-	stderr := cmd.ErrOrStderr()
-	req.Notice = func(format string, args ...any) { fmt.Fprintf(stderr, format+"\n", args...) }
+
 	var found []issues.Issue
 	if at.IsZero() {
 		found, err = b.issues.List(ctx, req)
@@ -85,7 +85,11 @@ func newView() *cobra.Command {
 		Short: "Render a named view from .git-board.toml",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			views, err := readViews()
+			cwd, err := os.Getwd()
+			if err != nil {
+				return err
+			}
+			views, err := app.Views(cwd)
 			if err != nil {
 				return err
 			}

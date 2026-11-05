@@ -96,6 +96,12 @@ func (h *Handle[T]) Get() (T, []Problem) {
 	return v, probs
 }
 
+// Defined says the file has the table.
+func (h *Handle[T]) Defined() bool {
+	_, ok := h.f.tables[h.t.Name]
+	return ok
+}
+
 // Keys are the keys right under table (a dotted path: "branches",
 // "kinds"), in the order the file writes them.
 func (h *Handle[T]) Keys(path ...string) []string {
