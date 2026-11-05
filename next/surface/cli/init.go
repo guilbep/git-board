@@ -29,9 +29,12 @@ It never overwrites one.
 			if err != nil {
 				return err
 			}
-			path, err := app.InitConfig(cwd, template)
+			path, notes, err := app.InitConfig(cwd, template)
 			if err != nil {
 				return err
+			}
+			for _, n := range notes {
+				fmt.Fprintln(cmd.OutOrStdout(), n)
 			}
 			fmt.Fprintf(cmd.OutOrStdout(), "wrote %s: edit it in Settings › Project file (git board), or by hand\n", path)
 			return nil

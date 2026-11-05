@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"embed"
 	"errors"
 	"fmt"
@@ -15,6 +16,7 @@ import (
 	"github.com/BurntSushi/toml"
 
 	"github.com/guilbep/git-board/next/conf"
+	"github.com/guilbep/git-board/next/forge"
 )
 
 // git board init, as v1's: the project file a repository starts from.
@@ -124,8 +126,26 @@ func fetchTemplate(url string) (string, error) {
 
 // InitConfig writes the project file at the root of the repository
 // holding dir, from the template spec names (StartConfig), and answers
-// its path. It never overwrites one.
-func InitConfig(dir, spec string) (string, error) {
+// its path, and notes: with origin on GitHub, that its labels and
+// Project weren't read (v1 starts the file from them). It never
+// overwrites one.
+// ponytail: v1's fromforge (origin's GitHub labels and first Project
+// written over the template) isn't ported: the template, and the note.
+func InitConfig(dir, spec string) (string, []string, error) {
+	path, err := initConfig(dir, spec)
+	if err != nil {
+		return "", nil, err
+	}
+	var notes []string
+	if url, err := gitRun(context.Background(), filepath.Dir(path), "remote", "get-url", "origin"); err == nil {
+		if f, _ := forge.FromRemote(strings.TrimSpace(url)); f.Kind == "github" && f.Host == "github.com" {
+			notes = append(notes, fmt.Sprintf("%s not read: this git-board doesn't start the file from a forge's labels and Project yet: the template's (git-board v0.11's init does)", f.Project))
+		}
+	}
+	return path, notes, nil
+}
+
+func initConfig(dir, spec string) (string, error) {
 	path := configPath(dir)
 	if path == conf.FileName {
 		return "", errors.New("not in a git repository")
