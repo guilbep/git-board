@@ -34,7 +34,10 @@ func (b *Board) remoteOf(ctx context.Context, what, remote string) (*git.Store, 
 }
 
 // Ahead is what a pull would receive and a push would send, of one kind.
-type Ahead struct{ Receive, Send int }
+type Ahead struct {
+	Receive int `json:"receive"`
+	Send    int `json:"send"`
+}
 
 // Fetch brings the remote's board to its copies here, and says what a
 // pull would receive and a push would send, of issues and of people.

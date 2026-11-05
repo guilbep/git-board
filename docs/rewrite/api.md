@@ -1,7 +1,9 @@
 # v2: the HTTP API
 
-- Status: built in milestone M5 (2026-11-05). The routes marked *M6*
-  come with their domain.
+- Status: built in milestone M5 (2026-11-05), in `next/surface/http`.
+  A route marked *later* waits for the command it mirrors (`forge
+  login`, `datastore set`, `numbers status`); one marked *M6* comes with
+  its domain. Both answer 404 `not-found` until then.
 - Decided: [ADR 0021](../adr/0021-git-board-v2-same-data-new-code.md),
   "The HTTP API: reshaped, with the web UI". Builds on [the
   design](design.md) (section 3: the application, errors, change events),
@@ -107,15 +109,15 @@ or its project number (`CO2-3075`).
 
 | | Route | Request | Response |
 |---|---|---|---|
-| 1 | `GET /api/board` | | `{git_dir, dir, version, datastore, experimental, first_pull?}` |
+| 1 | `GET /api/board` | | `{git_dir, dir, version, datastore, experimental}` |
 | 2 | `GET /api/events` | | the change events, Server-Sent Events (below) |
 
 `/api/board` is what a `git board` reads to find the board running for
 its repository (`git_dir`), and what a page reads first. `datastore` is
-`{name, where}`: `git`, `markdown:<dir>` or `postgres` (never a
-password), and where it is. `experimental` lists the features on.
-`first_pull` is what the first open of a fresh clone pulled:
-`{remote, issues, error?}`.
+`{name, where}`: `git`, `Markdown files` or `PostgreSQL`, and where it
+is (never a password). `experimental` lists the features on. v1's
+`first_pull`, what the first open of a fresh clone pulled, comes when v2
+pulls on a first open (*later*).
 
 ### Issues
 
@@ -134,8 +136,9 @@ password), and where it is. `experimental` lists the features on.
 | 13 | `GET /api/issues/{id}/follow` | | `{following, reasons, set}`, as `follow --json` |
 | 14 | `PUT /api/issues/{id}/follow` | `{follow: true, false or null}` | the same |
 
-**List (3).** `sort` is `ls --sort`'s: a field, `created`, `updated`,
-`-` before it for descending; absent, oldest first. `at` (RFC 3339 or a
+**List (3).** `sort` is `ls --sort`'s: `created`, `updated`,
+`title` or a field, then `asc` or `desc` (`prio desc`); absent, oldest
+first. `at` (RFC 3339 or a
 date) lists the board as it was then, as `ls --at`. An item is an issue
 plus its `version`. No `group`: a board's column is its own list
 (`filter=<the view's filter> status:ready`), each paged on its own, and
@@ -198,8 +201,10 @@ filter panel's counts, and every value a filter box suggests.
 those the labels show (`date`, `person`, `issue`…). Each is `{type,
 single, numeric, options, unit, current, inherits, people, colors}`:
 `current` an iteration's sprint today, `inherits` a role's project
-value, `people` who a person field offers, `colors` each value's color.
-v1's `/api/colors` and `/api/sprints` are in it.
+value, `people` who a person field offers, `colors` each value's color
+as `.git-board.toml` sets it. v1's `/api/colors` and `/api/sprints` are
+in it. v1 also gave a color to every value the file doesn't color, and
+dates red once past: the new web app colors those itself.
 
 **Me (18, 19).** `me` is the person who writes, or `null`. `{id}` writes
 as that person (`me <id>`), `{name, email}` makes one and writes as
@@ -221,7 +226,7 @@ them (`me --new`), `{avatars}` sets `board.avatars` (`forge`,
 | 23 | `GET /api/config` | | `{schema_version, path, version, text, keys, problems}` |
 | 24 | `PUT /api/config` | `If-Match`; `dry_run`; `{text}` | the same as 23 |
 | 25 | `PATCH /api/config` | `If-Match`; `dry_run`; `{set: {key: value}}` | the same as 23 |
-| 26 | `GET /api/docs/{page}` | | `{"items": [{title, html}]}` |
+| 26 | `GET /api/docs/{page}` (*later*) | | `{"items": [{title, html}]}` |
 
 `schema_version` is the file's schema (1 for a file without one; the
 versioned schema and its upgrades are built beside this). `keys` are
@@ -245,49 +250,66 @@ answer the file they would write, and write nothing: v1's
 
 | | Route | Request | Response |
 |---|---|---|---|
-| 27 | `GET /api/datastore` | | `{name, where, kept}`, as `datastore --json` |
-| 28 | `PUT /api/datastore` | `dry_run`; `{url}` | the same as 27 |
-| 29 | `POST /api/datastore/copy` | `{to}` | `{from, to, entities, …}`, as `datastore copy --json` |
+| 27 | `GET /api/datastore` | | `{name, where, replica, counter}` |
+| 28 | `PUT /api/datastore` (*later*) | `dry_run`; `{url}` | the same as 27 |
+| 29 | `POST /api/datastore/copy` | `{from, to}` | `{to, entities, counter}` |
 
-`PUT` points the clone at another datastore (`board.datastore`); with
-`dry_run=1` it opens it and says what it holds, and changes nothing
-(v1's `/api/datastore/test`). Both answer only on loopback (ADR 0013).
+`replica` says the board can be pulled and pushed (git), `counter` that
+it hands out project numbers. `PUT` points the clone at another
+datastore (`board.datastore`); with `dry_run=1` it opens it and says
+what it holds, and changes nothing (v1's `/api/datastore/test`). A copy
+(`from` and `to` are `board.datastore` values: `""` is git, and the
+datastore the clone names) and `PUT` answer only on loopback (ADR 0013).
 
 ### Sync: forges and remotes
 
 | | Route | Request | Response |
 |---|---|---|---|
 | 30 | `GET /api/sync` | | `{forges, remotes, run}` |
-| 31 | `POST /api/sync` | `{scope, way, forges, issue, dry_run, allow_create}` | 202, the run |
-| 32 | `POST /api/remotes/{name}/{action}` | `action`: `fetch`, `pull`, `push` | `{remotes}` |
-| 33 | `POST /api/forges` | `{kind, url, name, login, sync}` | `{name}` |
-| 34 | `PATCH /api/forges/{name}` | `{sync}` | `{name, sync}` |
-| 35 | `DELETE /api/forges/{name}` | | 204 |
-| 36 | `GET /api/forges/credentials` | | `{"items": [{host, login, source}]}` |
-| 37 | `GET /api/numbers` | | `{prefix, next, unnumbered, datastore}` |
-| 38 | `POST /api/numbers` | `{prefix, start}` or `{}` | the same as 37 |
+| 31 | `POST /api/sync` | `{scope, way, forges, remote, dry_run, allow_create}` | 202, the run |
+| 32 | `POST /api/remotes/{name}/{action}` | `action`: `fetch`, `pull`, `push` | `{remote, action, note, issues, people}` |
+| 33 | `POST /api/forges` (*later*) | `{kind, url, name, login, token, sync}` | `{name}` |
+| 34 | `PATCH /api/forges/{name}` (*later*) | `{sync}` | `{name, sync}` |
+| 35 | `DELETE /api/forges/{name}` (*later*) | | 204 |
+| 36 | `GET /api/forges/credentials` (*later*) | | `{"items": [{host, login, source}]}` |
+| 37 | `GET /api/numbers` (*later*) | | `{prefix, next, unnumbered}` |
+| 38 | `POST /api/numbers` | `{prefix, start}` or `{}` | `{where, numbered}` |
 
-**Status (30).** `forges` are the forges the board syncs with (`forge
-status --json`), `remotes` the git remotes with what each is ahead and
-behind, `run` the run in progress or the last one (`null` before any).
+**Status (30).** `forges` are the forges the board syncs with: its
+`[forges]` tables, or those found in origin's URLs (`discovered`), each
+`{name, kind, project, host, login, sync}`. `remotes` are the git
+remotes' names; `run` the run in progress or the last one (`null` before
+any).
 
 **A run (31)** is one sync, in the background; its steps come as
 `progress` events, and `GET /api/sync` answers it at any time. `scope`
 is `forges` (`forge sync`), or `all` (fetch, the forges, push: `sync`).
 `way` is `sync`, `pull` or `push` (`forge pull|push|sync`); `forges`
-limits it to those named; `issue` to one issue (v1's
-`/api/issues/{id}/sync`); `dry_run` says what it would do (`--check`).
-A run while another runs answers 409 `busy`. A run is `{id, scope, way,
-dry_run, started_at, ended_at, state, steps, report, error}`, `state`
-one of `running`, `done`, `failed`.
+limits it to those named; `remote` is the whole sync's git remote
+(`origin`); `dry_run` says what a forge run would do (`--check`); a
+whole sync goes both ways and has none. One issue's run (v1's
+`/api/issues/{id}/sync`, an `issue` here) waits for the sync engine to
+take one issue (*later*). A run while another runs answers 409 `busy`.
+A run is `{id, scope, way, dry_run, started_at, ended_at, state, steps,
+report, error}`: `state` is `running`, `done` or `failed`; a step is a
+whole sync's (`{name, state, line}`: `pull`, `forges`, `project`,
+`push`) or a forge's event (`{forge, way, what, issue, line}`, `what`
+one of `created`, `updated`, `linked`, `posted`, `pushed`, `warning`,
+`waiting`, `left`, `held`, `note`); `report` counts what the forges'
+run did, `{created, updated, unchanged, posted, pushed}`.
 
-**Remotes (32)** run at once and answer the remotes again. **Forges
-(33 to 36)** are `[forges]` tables, written as `PATCH /api/config`
-writes; the token goes to git's credential helper, never the file (ADR
-0010), and is never answered nor logged.
+**Remotes (32)** run at once. A fetch answers what a pull would
+receive and a push would send, of `issues` and `people`
+(`{receive, send}`); a pull and a push answer their `note` (the numbers
+handed out). **Forges (33 to 36)** are `[forges]` tables, written as
+`PATCH /api/config` writes them meanwhile; the token goes to git's
+credential helper, never the file (ADR 0010), and is never answered nor
+logged.
 
-**Numbers (37, 38)** are the project's numbers (ADR 0016). `{prefix,
-start}` starts numbering; `{}` numbers the issues that have none.
+**Numbers (38)** are the project's numbers (ADR 0016). `{prefix, start}`
+starts numbering, and answers where the counter is (`on origin`, `in
+PostgreSQL`); `{}` numbers the issues that have none, and answers how
+many.
 
 ### Texts and files
 
@@ -344,7 +366,7 @@ data: {"kind":"issue","id":"a9f3…","version":"5c1e…","by":"k3j2h1"}
 
 | `kind` | When | `id` |
 |---|---|---|
-| `issue` | an issue was written, here or by anyone else (a command, a fetch, a sync) | the issue, with its `version` (`""` when deleted) |
+| `issue` | an issue was written (a delete too: a tombstone is a version), here or by anyone else (a command, a fetch, a sync) | the issue, with its `version`; none when its ref is gone |
 | `person` | a person was written | the person |
 | `config` | `.git-board.toml` changed | |
 | `me` | who writes, or `board.avatars`, changed | |
@@ -354,9 +376,13 @@ data: {"kind":"issue","id":"a9f3…","version":"5c1e…","by":"k3j2h1"}
 | `release` | *M6* | the tag |
 
 `by` is the `X-Git-Board-Client` of the request that wrote it, when one
-did. The server sees every change, whoever made it: it compares the
-datastore's heads every second, and a write through the API is told at
-once. A page that falls 64 events behind is dropped: its stream closes,
+did. The server sees every change, whoever made it: a write through the
+API is told at once, by the kernel's observer, and the server compares
+the datastore's heads every second for the others, which it tells a
+second later (an API write lands in the datastore just before its
+observer runs: the wait lets the observer tell it, with its `by`).
+`.git-board.toml` written by hand is seen the same way: the board opens
+again on it, and `config` is told. A page that falls 64 events behind is dropped: its stream closes,
 it reconnects (`retry`) and reloads. A comment line every 25 seconds
 keeps proxies from closing the stream.
 
@@ -374,28 +400,30 @@ The flag wins over the variable.
 
 | Level | What |
 |---|---|
-| `info` | the start: the version, the board, its datastore, the address; one line a request: `method`, `path`, `status`, `duration`, `bytes`; a run's start and end |
-| `warn` | a request refused by the host or origin checks; a request slower than a second; a sync's conflict; a run that ended with errors |
-| `error` | a request that failed on the server's side (500), with its `code` and message; a run that failed |
-| `debug` | the query string of a request; each change event sent |
+| `info` | the start: `version`, `board`, `datastore`, `where`, `url`; one line a request: `method`, `path`, `status`, `duration`, `bytes`, and `code` when it failed; a run's start and end |
+| `warn` | a request refused by the host or origin checks (`host` or `origin`, `why`); a request slower than a second; a sync's warnings (a conflict, a forge left out, creations held), and a whole sync's step that failed; what a read leaves aside (an entity broken), as the CLI tells it |
+| `error` | a request that failed on the server's side (500), with its `code` and message; a run that failed, with its `code` |
+| `debug` | a request's query string, redacted; each change event sent; each port tried taken |
 
-A request's line never holds a header, a cookie, a token or a body. The
-path is the route's path, without its query; at `debug`, the query is
-logged with any `token`, `key`, `secret` or `password` value replaced by
-`REDACTED`. A datastore's URL is logged without its password.
+A request's line never holds a header, a cookie, a token or a body: the
+path is logged without its query. At `debug` the query is logged, every
+value whose key holds `token`, `key`, `secret`, `password`, `pass`,
+`auth` or `credential` replaced by `REDACTED`. A datastore's URL is
+logged without its password, and a forge's error without the
+credentials of a URL.
 
 ## v1's routes, and where they went
 
-117 routes in v1 (`internal/server/server.go`); 53 in v2, of which 39
-are built in M5 and 14 come with their domain in M6.
+117 routes in v1 (`internal/server/server.go`); 53 in v2: 32 built in
+M5, 7 *later* and 14 with their domain in M6.
 
 | v1 | v2 |
 |---|---|
 | `GET /api/events` | `GET /api/events` |
 | `GET /api/repository` | `GET /api/board` |
 | `GET /api/datastore` | `GET /api/datastore` |
-| `PUT /api/datastore` | `PUT /api/datastore` |
-| `POST /api/datastore/test` | `PUT /api/datastore?dry_run=1` |
+| `PUT /api/datastore` | `PUT /api/datastore` (*later*) |
+| `POST /api/datastore/test` | `PUT /api/datastore?dry_run=1` (*later*) |
 | `POST /api/datastore/copy` | `POST /api/datastore/copy` |
 | `GET /api/views` | `GET /api/config`: views are `[views]` keys |
 | `PUT /api/views/{name}` | `PATCH /api/config` |
@@ -408,7 +436,7 @@ are built in M5 and 14 come with their domain in M6.
 | `PATCH /api/issues/{id}` | `PATCH /api/issues/{id}` |
 | `POST /api/issues` | `POST /api/issues` |
 | `GET /api/issues/{id}/thread` | `GET /api/issues/{id}`: an issue is its thread |
-| `POST /api/issues/{id}/sync` | `POST /api/sync` with `issue` |
+| `POST /api/issues/{id}/sync` | `POST /api/sync` with `issue` (*later*) |
 | `GET /api/issues/{id}/refs` | `GET /api/issues/{id}/cycle` (*M6*) |
 | `GET /api/issues/{id}/branches` | `GET /api/issues/{id}/cycle` (*M6*) |
 | `POST /api/issues/{id}/branches` | `POST /api/issues/{id}/cycle/branch` (*M6*) |
@@ -456,23 +484,23 @@ are built in M5 and 14 come with their domain in M6.
 | `GET /api/settings` | `GET /api/config`, `GET /api/sync` |
 | `GET /api/config` | `GET /api/config` |
 | `POST /api/config/check` | `PUT /api/config?dry_run=1` |
-| `GET /api/config/docs` | `GET /api/docs/configuration` |
+| `GET /api/config/docs` | `GET /api/docs/configuration` (*later*) |
 | `GET /api/config/model` | `GET /api/config`: `keys` |
 | `GET /api/fields/usage` | `GET /api/labels`: each value's count |
 | `GET /api/fields/migrate` | dropped: renaming a field's values is `set --filter` on the CLI, and a `PATCH` per issue here |
 | `POST /api/fields/migrate` | dropped: the same |
 | `PUT /api/config/section/{section}` | `PATCH /api/config` |
 | `PUT /api/config` | `PUT /api/config` |
-| `PUT /api/bridges/{name}/sync` | `PATCH /api/forges/{name}` |
-| `GET /api/credentials` | `GET /api/forges/credentials` |
-| `POST /api/bridges` | `POST /api/forges` |
-| `DELETE /api/bridges/{name}` | `DELETE /api/forges/{name}` |
+| `PUT /api/bridges/{name}/sync` | `PATCH /api/forges/{name}` (*later*); meanwhile `PATCH /api/config` |
+| `GET /api/credentials` | `GET /api/forges/credentials` (*later*) |
+| `POST /api/bridges` | `POST /api/forges` (*later*) |
+| `DELETE /api/bridges/{name}` | `DELETE /api/forges/{name}` (*later*) |
 | `GET /api/forges` | `GET /api/sync`: `forges` and `run` |
-| `GET /api/forges/docs` | `GET /api/docs/forges` |
+| `GET /api/forges/docs` | `GET /api/docs/forges` (*later*) |
 | `POST /api/forges/sync` | `POST /api/sync` with `scope: forges` |
 | `GET /api/remotes` | `GET /api/sync`: `remotes` |
 | `POST /api/remotes/{name}/{action}` | `POST /api/remotes/{name}/{action}` |
-| `GET /api/numbers` | `GET /api/numbers` |
+| `GET /api/numbers` | `GET /api/numbers` (*later*) |
 | `POST /api/numbers/init` | `POST /api/numbers` with `{prefix, start}` |
 | `POST /api/numbers/run` | `POST /api/numbers` with `{}` |
 | `GET /api/labels` | dropped from the core: GitHub's labels against the fields is `lint`'s, a tool (*M6*); `/api/labels` now counts the board's |

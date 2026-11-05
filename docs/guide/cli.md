@@ -613,6 +613,30 @@ completion, which doesn't know this command's words. Tab then completes:
 A completion reads the board and `.git-board.toml`, writes nothing, and
 offers nothing when it can't read them.
 
+## Logs
+
+The server behind the web app (`git board`, `git board serve`) writes its
+logs to stderr: one line an event, its start, each request, what went
+wrong. v2 writes them (`git-board-next`, [the HTTP API](../rewrite/api.md#logs));
+v1 writes a few lines with no level.
+
+```bash
+git board serve --log-level debug                     # the queries, each change event
+git board serve --log-format json 2> board.log        # one JSON object a line
+GIT_BOARD_LOG_LEVEL=warn git board                    # only what went wrong
+```
+
+| Level | What |
+|---|---|
+| `error` | a request that failed on the server's side, with its code; a sync that failed |
+| `warn` | a request refused (another site's page, a name that isn't this machine's); a request slower than a second; a sync's warnings; an issue that can't be read |
+| `info` (the default) | the start (version, board, datastore, address); a line a request (method, path, status, duration, bytes); a sync's start and end |
+| `debug` | a request's query, its secrets redacted; each change event |
+
+`--log-level` and `--log-format` (`text`, the default, or `json`) win
+over `GIT_BOARD_LOG_LEVEL` and `GIT_BOARD_LOG_FORMAT`. A line never holds
+a token, a cookie, a header or a request's body.
+
 ## Exit codes
 
 | Code | |
