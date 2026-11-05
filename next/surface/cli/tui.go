@@ -51,5 +51,11 @@ narrows what's loaded before you start browsing.`,
 	return cmd
 }
 
-// bridge is the TUI's GitHub Project bridge: none yet.
-func bridge(*cobra.Command, *board) tui.Bridge { return nil }
+// bridge is the TUI's GitHub Project bridge: nil when .git-board.toml
+// names no Project.
+func bridge(cmd *cobra.Command, b *board) tui.Bridge {
+	if c, err := b.Config.Project(); err != nil || !c.Configured() {
+		return nil
+	}
+	return projectBridge{cmd.Context(), b.Board}
+}

@@ -7,15 +7,19 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+
+	"github.com/guilbep/git-board/next/tools/ghproject"
 )
 
 // The whole sync (git board sync): a git pull from the remote, the forges'
 // sync, then a git push to the remote, which numbers what origin has, as
 // v1's internal/store SyncWhole. A failed pull stops the steps after it;
 // a failed forge step is told, and the push still runs.
-// ponytail: the GitHub Project's step and the whole sync's dry run
-// (sync --check: a fetch, the forges' check over the fetched copies) are
-// v1's still; forge … --check runs.
+// The GitHub Project's step runs the bridge both ways when
+// [github-project] names one (ghproject).
+// ponytail: the whole sync's dry run (sync --check: a fetch, the forges'
+// check over the fetched copies) is v1's still; forge … --check and
+// project … --check run.
 
 // The steps.
 const (
@@ -31,7 +35,9 @@ const (
 type Whole struct {
 	Remote string
 	Forges func(context.Context) error
-	Step   func(name, state, note string)
+	// NoProject skips the GitHub Project's step (sync --git).
+	NoProject bool
+	Step      func(name, state, note string)
 }
 
 // hasRemote says the repository has the remote.
@@ -55,7 +61,8 @@ func (b *Board) SyncWhole(ctx context.Context, w Whole) error {
 		if has, err = b.hasRemote(ctx, w.Remote); err != nil {
 			return err
 		}
-		if !has && w.Forges == nil {
+		gp, _ := b.Config.Tools.GithubProject.Get()
+		if !has && w.Forges == nil && (gp.Number == 0 || w.NoProject) {
 			return fmt.Errorf("nothing to sync: no git remote %s, no forge with its sync on, no [github-project]", w.Remote)
 		}
 	}
@@ -73,8 +80,11 @@ func (b *Board) SyncWhole(ctx context.Context, w Whole) error {
 		{StepProject, "no [github-project] in .git-board.toml", nil},
 		{StepPush, noRemote, nil},
 	}
-	if gp, _ := b.Config.Tools.GithubProject.Get(); gp.Owner != "" && gp.Number != 0 {
-		steps[2].skip = "git-board-next doesn't sync the GitHub Project yet: git board project sync does"
+	if gp, _ := b.Config.Tools.GithubProject.Get(); gp.Owner != "" && gp.Number != 0 && !w.NoProject {
+		steps[2].do = func(ctx context.Context) (string, error) {
+			r, err := b.ProjectRun(ctx, ghproject.Both, true, 0)
+			return ProjectNote(r), err
+		}
 	}
 	if has {
 		steps[0].do = func(ctx context.Context) (string, error) { return b.Pull(ctx, w.Remote) }

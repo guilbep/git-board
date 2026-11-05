@@ -68,7 +68,7 @@ func syncOne(cmd *cobra.Command, out io.Writer, path, remote string, allowCreate
 	say := func(format string, a ...any) { fmt.Fprintf(out, path+": "+format+"\n", a...) }
 	labels := map[string]string{app.StepPull: "git pull from " + remote, app.StepForges: "the forges",
 		app.StepProject: "the GitHub Project", app.StepPush: "git push to " + remote}
-	w := app.Whole{Remote: remote, Step: func(name, state, note string) {
+	w := app.Whole{Remote: remote, NoProject: gitOnly, Step: func(name, state, note string) {
 		switch {
 		case state == "running":
 			say("%s...", labels[name])

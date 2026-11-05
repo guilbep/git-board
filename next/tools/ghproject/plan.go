@@ -633,7 +633,7 @@ func Resolve(k Conflict, ours bool, it Item, is Issue, meta Meta, c *Config) (Pl
 		}
 		kind, arg, ok := c.toProject(pf, k.Field, k.Local)
 		if !ok {
-			return Plan{}, fmt.Errorf("%s value %q has no option on the Project", k.Field, k.Local)
+			return Plan{}, fmt.Errorf("%s value %q %w", k.Field, k.Local, ErrNoOption)
 		}
 		plan.Edits = []Edit{{IssueID: is.ID, ItemID: it.ID, Number: k.Number, Field: k.Field,
 			Value: k.Local, FieldID: pf.ID, Kind: kind, Arg: arg}}

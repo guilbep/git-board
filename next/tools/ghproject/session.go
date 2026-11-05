@@ -24,6 +24,12 @@ var (
 	// ErrNoWrite is keeping git-board's value, which writes to a Project
 	// the file doesn't allow writing to.
 	ErrNoWrite = errors.New("keeping git-board's value writes to the Project: set write = true under [github-project] in .git-board.toml")
+	// ErrNoOption is keeping git-board's value, which the Project's field
+	// has no option for.
+	ErrNoOption = errors.New("has no option on the Project")
+	// ErrAmbiguous is a number two repositories of the Project have in
+	// conflict.
+	ErrAmbiguous = errors.New("is a conflict in more than one repository")
 	// ErrNotConflict is resolving a field that isn't a conflict.
 	ErrNotConflict = errors.New("isn't a conflict now")
 )
@@ -250,7 +256,7 @@ func ResolveIn(ctx context.Context, b Board, p Project, c *Config, s State, repo
 		for _, k := range found {
 			in = append(in, fmt.Sprintf("%s#%d", repoOf(k.URL), number))
 		}
-		return "", fmt.Errorf("#%d %s is a conflict in more than one repository, name it: %s", number, field, strings.Join(in, ", "))
+		return "", fmt.Errorf("#%d %s %w, name it: %s", number, field, ErrAmbiguous, strings.Join(in, ", "))
 	}
 	for _, k := range found {
 		var it Item
@@ -312,6 +318,7 @@ type Report struct {
 	CheckedAt time.Time `json:"checked_at"`
 	Side      Side      `json:"side"`
 	Applied   bool      `json:"applied"`
+	Write     bool      `json:"write"` // write = true: a sync may write to the Project
 	Truncated bool      `json:"truncated"`
 	Plan      Plan      `json:"-"`
 	Items     int       `json:"items"`
@@ -357,7 +364,7 @@ func Run(ctx context.Context, p Project, b Board, c *Config, limit int, side Sid
 	case OnGH:
 		plan = plan.ProjectOnly()
 	}
-	r := Report{Project: c.Name(), Title: s.Meta.Title, CheckedAt: time.Now().UTC(), Side: side, Truncated: s.Truncated,
+	r := Report{Project: c.Name(), Title: s.Meta.Title, CheckedAt: time.Now().UTC(), Side: side, Write: c.Write, Truncated: s.Truncated,
 		Plan: plan, Items: len(s.Items), Columns: map[string]string{}}
 	for name, f := range s.Meta.Fields {
 		r.Columns[name] = f.Type
