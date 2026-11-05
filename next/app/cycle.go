@@ -3,14 +3,10 @@ package app
 import (
 	"context"
 	"errors"
-	"runtime"
-	"sync"
 
 	"github.com/guilbep/git-board/next/domain/cycle"
 	"github.com/guilbep/git-board/next/domain/cycle/work"
 	"github.com/guilbep/git-board/next/domain/issues"
-	"github.com/guilbep/git-board/next/tools/branches"
-	"github.com/guilbep/git-board/next/tools/code"
 )
 
 // The development cycle's reads (experimental): an issue's step from its
@@ -70,6 +66,7 @@ func (b *Board) Work(ctx context.Context, me string, team bool) (work.Groups, er
 	if !b.CycleOn() {
 		return work.Groups{}, ErrCycleOff
 	}
+	ctx = b.Kernel.Snapshot(ctx) // one listing for the page
 	m, err := b.viewer(ctx, me)
 	if err != nil {
 		return work.Groups{}, err
@@ -78,36 +75,8 @@ func (b *Board) Work(ctx context.Context, me string, team bool) (work.Groups, er
 	if err != nil {
 		return work.Groups{}, err
 	}
-	// the branches and the base's history, read once for the page
-	c := b.Code()
-	c.Kept = code.NewKept()
-	anc := branches.NewAncestry(c)
-	// each issue's thread and evidence, a few at once: most of the time
-	// is git's, in its own processes
-	rows := make([]work.Row, len(list))
-	errs := make([]error, len(list))
-	next := make(chan int)
-	var wg sync.WaitGroup
-	for range max(2, runtime.GOMAXPROCS(0)) {
-		wg.Go(func() {
-			for i := range next {
-				th, err := b.Issues.Show(ctx, list[i].ID)
-				var in cycle.Input
-				if err == nil {
-					in, err = b.EvidenceIn(ctx, anc, th, m.Login, nil, nil)
-				}
-				if errs[i] = err; err == nil {
-					rows[i] = work.RowOf(th, cycle.Compute(in), m)
-				}
-			}
-		})
-	}
-	for i := range list {
-		next <- i
-	}
-	close(next)
-	wg.Wait()
-	if err := errors.Join(errs...); err != nil {
+	rows, err := b.workRows(ctx, list, m)
+	if err != nil {
 		return work.Groups{}, err
 	}
 	return work.Group(rows, m.Login, team), nil

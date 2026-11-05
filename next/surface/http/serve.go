@@ -118,7 +118,7 @@ func Serve(ctx context.Context, o ServeOptions) error {
 
 // index builds the free-text index in the background once the server
 // serves (design.md, 4): the first search then finds it built, or waits
-// for what is left of it.
+// for what is left of it. With the cycle on, the Work page's rows next.
 func (s *Server) index(ctx context.Context) {
 	h := s.boards.get()
 	defer s.boards.release(h)
@@ -130,6 +130,15 @@ func (s *Server) index(ctx context.Context) {
 		return
 	}
 	s.log.Info("search index built", "took", time.Since(start).Round(time.Millisecond))
+	if !h.b.CycleOn() {
+		return
+	}
+	// then the Work page's rows, every open issue's thread read once: its
+	// first request finds them (a viewer without a login has none)
+	start = time.Now()
+	if _, err := h.b.Work(ctx, "", true); err == nil {
+		s.log.Info("work page read", "took", time.Since(start).Round(time.Millisecond))
+	}
 }
 
 func cmpDuration(a, b time.Duration) time.Duration {

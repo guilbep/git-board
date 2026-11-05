@@ -28,11 +28,11 @@ func (b *Board) Evidence(ctx context.Context, th issues.Thread, me string, pulls
 func (b *Board) EvidenceIn(ctx context.Context, anc *branches.Ancestry, th issues.Thread, me string, pulls cycle.Pulls, render func(string) string) (cycle.Input, error) {
 	cfg := b.Config
 	th.Inherited = cfg.Schema.RolesFor(th.Labels)
-	sug, err := branches.Suggest(ctx, anc.Repo(), cfg.Branches, th.Issue)
+	start, err := branches.Start(ctx, anc.Repo(), cfg.Branches)
 	if err != nil {
 		return cycle.Input{}, err
 	}
-	linked, err := branches.LinkedIn(ctx, anc, th.Issue, sug.Start)
+	linked, err := branches.LinkedIn(ctx, anc, th.Issue, start)
 	if err != nil {
 		return cycle.Input{}, err
 	}
@@ -47,8 +47,8 @@ func (b *Board) EvidenceIn(ctx context.Context, anc *branches.Ancestry, th issue
 		Stages: cfg.Cycle.Stages(options),
 		Kind:   branches.Kind(cfg.Branches, th.AllLabels()),
 		Me:     v,
-		Base:   sug.Start,
-		Repo:   repo{ctx, b.Code()},
+		Base:   start,
+		Repo:   repo{ctx, anc.Repo()}, // its reads kept with the branches'
 		Pulls:  pulls,
 		Render: render,
 	}

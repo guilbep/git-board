@@ -208,23 +208,7 @@ func Suggest(ctx context.Context, b code.Repo, cfg issues.Branches, is issues.Is
 	if err != nil {
 		return Suggestion{}, err
 	}
-	has := func(r, name string) bool {
-		return slices.ContainsFunc(all, func(br code.Branch) bool { return br.Remote == r && br.Name == name })
-	}
-	base := cmp.Or(cfg.Base, b.RemoteHead(ctx, remote))
-	if base == "" {
-		base = "main"
-		for _, c := range []string{"main", "master", "trunk"} {
-			if has("", c) || has(remote, c) {
-				base = c
-				break
-			}
-		}
-	}
-	start := remote + "/" + base
-	if !has(remote, base) && has("", base) {
-		start = base
-	}
+	base, start := baseOf(ctx, b, cfg, all)
 	n := 1
 	if folder := Folder(cfg, is); folder != "" {
 		names := make([]string, 0, len(all))
@@ -235,6 +219,40 @@ func Suggest(ctx context.Context, b code.Repo, cfg issues.Branches, is issues.Is
 	}
 	name := NameAt(cfg, is, n)
 	return Suggestion{Suggested: name, Base: base, Start: start, Command: "git switch -c " + shellWord(name) + " " + shellWord(start)}, nil
+}
+
+// Start is where an issue's branch starts, Suggest's Start without the
+// name: the same for every issue, what the cycle reads their branches
+// against.
+func Start(ctx context.Context, b code.Repo, cfg issues.Branches) (string, error) {
+	all, err := b.Branches(ctx)
+	if err != nil {
+		return "", err
+	}
+	_, start := baseOf(ctx, b, cfg, all)
+	return start, nil
+}
+
+// baseOf is the base and where a branch starts on it.
+func baseOf(ctx context.Context, b code.Repo, cfg issues.Branches, all []code.Branch) (base, start string) {
+	has := func(r, name string) bool {
+		return slices.ContainsFunc(all, func(br code.Branch) bool { return br.Remote == r && br.Name == name })
+	}
+	base = cmp.Or(cfg.Base, b.RemoteHead(ctx, remote))
+	if base == "" {
+		base = "main"
+		for _, c := range []string{"main", "master", "trunk"} {
+			if has("", c) || has(remote, c) {
+				base = c
+				break
+			}
+		}
+	}
+	start = remote + "/" + base
+	if !has(remote, base) && has("", base) {
+		start = base
+	}
+	return base, start
 }
 
 // shellWord is s as one shell word: as is when it's plain, else single

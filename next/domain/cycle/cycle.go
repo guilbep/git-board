@@ -532,7 +532,7 @@ func criteria(description string, headings []string) (items []string, at []int, 
 	for i, h := range headings {
 		q[i] = regexp.QuoteMeta(strings.TrimSpace(h))
 	}
-	heading := regexp.MustCompile(`(?i)^\s*(#{1,6}\s*|\*\*)(` + strings.Join(q, "|") + `):?(\*\*)?:?\s*$`)
+	heading := compiled(`(?i)^\s*(#{1,6}\s*|\*\*)(` + strings.Join(q, "|") + `):?(\*\*)?:?\s*$`)
 	lines := strings.Split(description, "\n")
 	head, ended, indent := -1, false, -1
 	for i, l := range lines {

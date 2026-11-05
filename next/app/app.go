@@ -40,6 +40,7 @@ type Board struct {
 	// datastore.
 	Files *mdfiles.Folder
 	clone *clone
+	work  workKept // what the Work page computed (work.go)
 }
 
 // Options say how to open a board.

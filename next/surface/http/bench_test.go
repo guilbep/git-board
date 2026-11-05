@@ -73,3 +73,26 @@ func BenchmarkThread(b *testing.B) {
 	}
 	benchGet(b, "/api/issues/"+strings.TrimSpace(string(out)))
 }
+
+// The Work page, every open issue's step, unpaged (the cycle on in the
+// board's .git-board.toml), on a server that answered it once.
+func BenchmarkWorkTeam(b *testing.B) { benchGet(b, "/api/cycle?who=team") }
+
+// The Work page's first page, each group's first 100 rows: budget 300 ms
+// at 20,000 issues.
+func BenchmarkWorkTeamPage(b *testing.B) { benchGet(b, "/api/cycle?who=team&limit=100") }
+
+// The Work page's first request on a server just opened, its rows
+// fresh: every open issue's thread read once.
+func BenchmarkWorkTeamFirst(b *testing.B) {
+	for b.Loop() {
+		b.StopTimer()
+		s, h, _ := benchAPI(b)
+		get(b, h, "/api/issues")
+		b.StartTimer()
+		get(b, h, "/api/cycle?who=team")
+		b.StopTimer()
+		s.Close()
+		b.StartTimer()
+	}
+}

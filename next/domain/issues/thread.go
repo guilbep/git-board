@@ -2,6 +2,8 @@ package issues
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"maps"
 	"slices"
@@ -11,6 +13,7 @@ import (
 
 	"github.com/guilbep/git-board/next/domain/people"
 	"github.com/guilbep/git-board/next/kernel"
+	bsync "github.com/guilbep/git-board/next/sync"
 )
 
 // Show is an issue with its whole history, by name; not found once a
@@ -18,6 +21,75 @@ import (
 func (s *Service) Show(ctx context.Context, name string) (Thread, error) {
 	th, _, err := s.read(ctx, name)
 	return th, err
+}
+
+// ThreadsOf is Show for many issues of a list, each at the version listed:
+// the listing, the people and the forges' records are read once for all,
+// and the logs in one load, where Show reads them for each. each is
+// called once per issue, i its place in list, from several goroutines at
+// once.
+func (s *Service) ThreadsOf(ctx context.Context, list []Issue, each func(i int, th Thread, err error)) error {
+	ctx = s.Board.Snapshot(ctx)
+	if err := s.Board.Fresh(ctx, Kind, people.Kind); err != nil {
+		return err
+	}
+	dir, err := people.Read(ctx, s.Board, s.Avatars)
+	if err != nil {
+		return err
+	}
+	rd := s.reading(ctx, s.notice, true)
+	heads := make([]kernel.Head, len(list))
+	place := make(map[kernel.ID]int, len(list))
+	for i, is := range list {
+		heads[i] = kernel.Head{ID: kernel.ID(is.ID), Version: is.Version}
+		place[kernel.ID(is.ID)] = i
+	}
+	return Kind.LogsOf(ctx, s.Board, heads, func(id kernel.ID, v kernel.Version, log []kernel.Entry, err error) {
+		var th Thread
+		if err == nil {
+			th, err = s.threadOf(id, v, log, dir, rd)
+		}
+		each(place[id], th, err)
+	})
+}
+
+// ThreadsMark is what every thread shows besides its own log, as
+// versions: the people's (names, logins), the forges' records (where an
+// issue is, what is pending) and the counter's (its number). A thread
+// kept with its issue's version and this mark is the thread Show reads
+// while both stay.
+func (s *Service) ThreadsMark(ctx context.Context) (string, error) {
+	heads, err := s.Board.Store().Heads(ctx, people.Kind.Name(), bsync.Kind.Name())
+	if err != nil {
+		return "", err
+	}
+	h := sha256.New()
+	for _, x := range heads {
+		fmt.Fprintf(h, "%s %s %s\n", x.Kind, x.ID, x.Version)
+	}
+	if c := s.Board.Store().Caps().Counter; c != nil {
+		_, v, err := c.Count(ctx)
+		if err != nil {
+			return "", err
+		}
+		fmt.Fprintf(h, "counter %s\n", v)
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
+}
+
+// threadOf is an issue's thread from its log, read at v.
+func (s *Service) threadOf(id kernel.ID, v kernel.Version, log []kernel.Entry, dir people.Directory, rd reading) (Thread, error) {
+	st, err := Kind.Fold(id, log)
+	if err != nil {
+		return Thread{}, err
+	}
+	if st.Deleted {
+		return Thread{}, fmt.Errorf("issue %s: %w", id, ErrDeleted)
+	}
+	d := index(&st)
+	th := s.thread(&st, &d.Row, log, dir, rd)
+	th.Version = v
+	return th, nil
 }
 
 // read is an issue's thread and its log.
@@ -34,20 +106,14 @@ func (s *Service) read(ctx context.Context, name string) (Thread, []kernel.Entry
 	if err != nil {
 		return Thread{}, nil, err
 	}
-	st, err := Kind.Fold(id, log)
-	if err != nil {
-		return Thread{}, nil, err
-	}
-	if st.Deleted {
-		return Thread{}, nil, fmt.Errorf("issue %s: %w", id, ErrDeleted)
-	}
 	dir, err := people.Read(ctx, s.Board, s.Avatars)
 	if err != nil {
 		return Thread{}, nil, err
 	}
-	d := index(&st)
-	th := s.thread(&st, &d.Row, log, dir, s.reading(ctx, s.notice, true))
-	th.Version = v
+	th, err := s.threadOf(id, v, log, dir, s.reading(ctx, s.notice, true))
+	if err != nil {
+		return Thread{}, nil, err
+	}
 	return th, log, nil
 }
 

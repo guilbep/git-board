@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"regexp/syntax"
 	"slices"
 	"sort"
 	"strconv"
@@ -236,8 +237,23 @@ func (r Repo) FirstCommitAdding(ctx context.Context, base, branch, path string) 
 }
 
 // GrepFiles lists the files under dir at ref whose content matches the
-// extended regexp, paths from the root: `git grep -l -E`.
-func (r Repo) GrepFiles(ctx context.Context, ref, dir, regexp string) ([]string, error) {
+// extended regexp, paths from the root: `git grep -l -E`. A Repo that
+// keeps its reads, given a regexp anchored on a literal (^issue: …),
+// greps ref's dir for that literal once and matches each regexp against
+// the lines it found: a page asking for many issues' plan files starts
+// one git, not one each.
+func (r Repo) GrepFiles(ctx context.Context, ref, dir, re string) ([]string, error) {
+	if r.Kept != nil {
+		if lead := anchored(re); lead != "" {
+			if m, err := regexp.Compile(re); err == nil {
+				return r.grepKept(ctx, ref, dir, lead, m)
+			}
+		}
+	}
+	return r.grepFiles(ctx, ref, dir, re)
+}
+
+func (r Repo) grepFiles(ctx context.Context, ref, dir, regexp string) ([]string, error) {
 	out, err := r.git(ctx, "grep", "-l", "-E", "-e", regexp, ref, "--", dir)
 	if ee := (*exec.ExitError)(nil); errors.As(err, &ee) && ee.ExitCode() == 1 {
 		return nil, nil // no match
@@ -247,6 +263,70 @@ func (r Repo) GrepFiles(ctx context.Context, ref, dir, regexp string) ([]string,
 		res = append(res, strings.TrimPrefix(l, ref+":"))
 	}
 	return res, err
+}
+
+// grepped is the lines under a dir at a ref that start with a literal:
+// each file's, in git's order.
+type grepped struct {
+	files []string
+	lines [][]string
+	err   error
+}
+
+// grepKept is GrepFiles from the lines starting with lead, read once.
+func (r Repo) grepKept(ctx context.Context, ref, dir, lead string, re *regexp.Regexp) ([]string, error) {
+	g, _ := kept(r, "grep\x00"+ref+"\x00"+dir+"\x00"+lead, func() (grepped, error) {
+		var g grepped
+		out, err := r.git(ctx, "grep", "-z", "-E", "-e", "^"+regexp.QuoteMeta(lead), ref, "--", dir)
+		if ee := (*exec.ExitError)(nil); errors.As(err, &ee) && ee.ExitCode() == 1 {
+			return g, nil // no line
+		}
+		if err != nil {
+			g.err = err // kept too: a ref git can't read stays unread
+			return g, nil
+		}
+		// "<ref>:<path>\x00<line>\n" each
+		for _, l := range lines(out) {
+			name, line, ok := strings.Cut(l, "\x00")
+			if !ok {
+				continue
+			}
+			name = strings.TrimPrefix(name, ref+":")
+			if n := len(g.files); n == 0 || g.files[n-1] != name {
+				g.files, g.lines = append(g.files, name), append(g.lines, nil)
+			}
+			g.lines[len(g.lines)-1] = append(g.lines[len(g.lines)-1], line)
+		}
+		return g, nil
+	})
+	if g.err != nil {
+		return nil, g.err
+	}
+	var res []string
+	for i, f := range g.files {
+		if slices.ContainsFunc(g.lines[i], re.MatchString) {
+			res = append(res, f)
+		}
+	}
+	return res, nil
+}
+
+// anchored is the literal a regexp's every match starts a line with
+// (^issue: *… gives "issue:"), "" when it has none: then only git can
+// tell.
+func anchored(re string) string {
+	p, err := syntax.Parse(re, syntax.Perl)
+	if err != nil {
+		return ""
+	}
+	p = p.Simplify()
+	if p.Op != syntax.OpConcat || len(p.Sub) < 2 || p.Sub[0].Op != syntax.OpBeginText && p.Sub[0].Op != syntax.OpBeginLine {
+		return ""
+	}
+	if lit := p.Sub[1]; lit.Op == syntax.OpLiteral && lit.Flags&syntax.FoldCase == 0 {
+		return string(lit.Rune)
+	}
+	return ""
 }
 
 // ReadFile is `git show ref:path`.

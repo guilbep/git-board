@@ -50,6 +50,27 @@ func (k *K[S, R]) Logs(ctx context.Context, b *Board, each func(id ID, log []Ent
 	})
 }
 
+// LogsOf reads the entities at the versions given, in one load (a
+// datastore that isn't Pinned reads each at its current one), and gives
+// each its log and the version read, from several goroutines at once:
+// what a page about many entities reads, where Log reads one.
+func (k *K[S, R]) LogsOf(ctx context.Context, b *Board, heads []Head, each func(id ID, v Version, log []Entry, err error)) error {
+	refs := make([]store.Ref, len(heads))
+	for i, h := range heads {
+		refs[i] = store.Ref{Kind: k.s.Name, ID: string(h.ID), Version: string(h.Version)}
+	}
+	return b.load(ctx, refs, func(r store.Ref, packs [][]byte, err error) {
+		var es []Entry
+		if errors.Is(err, store.ErrNotFound) {
+			err = fmt.Errorf("%w: %s %s", ErrNotFound, k.s.Name, r.ID)
+		} else if err == nil {
+			es, _, err = order(packs)
+			err = named(k.s.Name, ID(r.ID), err)
+		}
+		each(ID(r.ID), Version(r.Version), es, err)
+	})
+}
+
 // Fold is the state entries add up to: a log read with Log, or part of
 // one (a domain's "as it was then").
 func (k *K[S, R]) Fold(id ID, entries []Entry) (S, error) { return k.fold(id, entries) }
