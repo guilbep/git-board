@@ -7,6 +7,7 @@ import (
 	"github.com/guilbep/git-board/next/domain/issues"
 	"github.com/guilbep/git-board/next/domain/people"
 	"github.com/guilbep/git-board/next/kernel"
+	"github.com/guilbep/git-board/next/store"
 )
 
 // Class is what kind of failure an error is: one table gives each its
@@ -23,6 +24,7 @@ const (
 	Missing         // the datastore can't (ADR 0002 §3)
 	Forbidden       // the server's host and origin checks (ADR 0013)
 	Off             // an experimental feature is off
+	Stale           // a write from a version the entity moved from (If-Match)
 )
 
 // Error is an error with its class and the API's stable code.
@@ -49,8 +51,14 @@ func Classify(err error) Class {
 		return NoMe
 	case errors.Is(err, issues.ErrChanged):
 		return Changed
-	case errors.Is(err, issues.ErrUsage), strings.HasPrefix(err.Error(), "unknown command"):
+	case errors.Is(err, kernel.ErrStale):
+		return Stale
+	case errors.Is(err, issues.ErrUsage), errors.Is(err, issues.ErrInvalid), errors.Is(err, issues.ErrUnchecked), strings.HasPrefix(err.Error(), "unknown command"):
 		return Usage
+	case errors.Is(err, store.ErrMissing):
+		return Missing
+	case errors.Is(err, store.ErrHeld):
+		return Busy
 	}
 	return Internal
 }
@@ -65,7 +73,7 @@ func ExitCode(err error) int {
 		return 3
 	case NoMe:
 		return 4
-	case Changed:
+	case Changed, Stale:
 		return 5
 	}
 	return 1
@@ -82,6 +90,20 @@ func HTTPStatus(err error) int {
 		return 409
 	case Forbidden:
 		return 403
+	case Stale:
+		return 412
 	}
 	return 500
+}
+
+// Code is the API's stable code of err's class (docs/rewrite/api.md, One
+// error shape): one of a fixed list, whatever the error says.
+func Code(err error) string {
+	return codes[Classify(err)]
+}
+
+var codes = map[Class]string{
+	Internal: "internal", Usage: "invalid", NotFound: "not-found", NoMe: "no-identity",
+	Changed: "changed", Busy: "busy", Missing: "missing", Forbidden: "forbidden",
+	Off: "experimental", Stale: "stale",
 }

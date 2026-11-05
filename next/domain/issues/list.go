@@ -92,6 +92,7 @@ func (s *Service) List(ctx context.Context, r ListReq) ([]Issue, error) {
 	list := make([]Issue, 0, len(rows))
 	for _, l := range rows {
 		is := s.issue(l.ID, &l.Row, dir, rd)
+		is.Version = l.Version
 		is.Inherited = s.Schema.RolesFor(is.Labels) // a list's alone, as v1's
 		list = append(list, is)
 	}

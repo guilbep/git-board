@@ -178,6 +178,9 @@ func (k *K[S, R]) Do(ctx context.Context, b *Board, id ID, decide func(cur Entit
 			return Entity[S]{}, err
 		}
 		cur := Entity[S]{ID: id, Version: v, Clock: clock, State: st}
+		if err := check(ctx, k.s.Name, id, v); err != nil {
+			return cur, err
+		}
 		ops, err := decide(cur)
 		if err != nil || len(ops) == 0 {
 			return cur, err
@@ -200,6 +203,7 @@ func (k *K[S, R]) Do(ctx context.Context, b *Board, id ID, decide func(cur Entit
 			}
 		}
 		next := Entity[S]{ID: id, Version: nv, Clock: clock + 1, State: st}
+		moved(ctx, id, nv)
 		err = k.through(ctx, b, next, v)
 		b.landed(ctx, Change{Kind: k.s.Name, ID: id, Version: nv})
 		return next, err

@@ -265,3 +265,32 @@ func Views(dir string) (map[string]issues.View, error) {
 	}
 	return views, nil
 }
+
+// AvatarsKey is the git config key saying where pictures come from.
+const AvatarsKey = "board.avatars"
+
+// SetAvatars writes board.avatars in the clone's own config: forge,
+// gravatar or none; "" unsets it, back to forge.
+func (b *Board) SetAvatars(ctx context.Context, mode string) error {
+	switch mode {
+	case "":
+		_, err := gitRun(ctx, b.Dir, "config", "--local", "--unset-all", AvatarsKey)
+		if ee := (*exec.ExitError)(nil); errors.As(err, &ee) && ee.ExitCode() == 5 {
+			return nil // it wasn't set
+		}
+		return err
+	case string(people.Forge), string(people.Gravatar), string(people.None):
+		_, err := gitRun(ctx, b.Dir, "config", "--local", AvatarsKey, mode)
+		return err
+	}
+	return &Error{Class: Usage, Err: fmt.Errorf("%s %q: forge, gravatar or none", AvatarsKey, mode)}
+}
+
+// Remotes are the repository's git remotes, by name.
+func (b *Board) Remotes(ctx context.Context) ([]string, error) {
+	out, err := gitRun(ctx, b.Dir, "remote")
+	if err != nil {
+		return nil, err
+	}
+	return strings.Fields(out), nil
+}

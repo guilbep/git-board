@@ -376,3 +376,56 @@ func TestObserve(t *testing.T) {
 		t.Fatalf("observed %v, want %v", got, want)
 	}
 }
+
+// Expect makes writes compare-and-swap from the version a reader saw:
+// one at another version writes nothing, and a request's writes chain,
+// each checked against the one before.
+func TestExpect(t *testing.T) {
+	t.Parallel()
+	ds := mem.New(t.TempDir())
+	b := open(t, ds, t.TempDir())
+	e, err := notes.Create(ctx, b, "", line("one"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	write := func(ctx context.Context, text string) (kernel.Entity[note], error) {
+		return notes.Do(ctx, b, e.ID, func(kernel.Entity[note]) ([]kernel.Op, error) { return []kernel.Op{line(text)}, nil })
+	}
+	x := kernel.Expect(ctx, e.ID, e.Version)
+	two, err := write(x, "two")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := write(x, "three"); err != nil { // the expectation moved with the write
+		t.Fatalf("a second write of the same request = %v", err)
+	}
+	// someone else wrote since two was read
+	if _, err := write(kernel.Expect(ctx, e.ID, two.Version), "late"); !errors.Is(err, kernel.ErrStale) {
+		t.Fatalf("a write from an old version = %v, want ErrStale", err)
+	}
+	// another entity is not held to it
+	other, err := notes.Create(ctx, b, "", line("other"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := notes.Do(kernel.Expect(ctx, e.ID, "nope"), b, other.ID, func(kernel.Entity[note]) ([]kernel.Op, error) { return []kernel.Op{line("x")}, nil }); err != nil {
+		t.Fatalf("another entity's write = %v", err)
+	}
+	got, _ := notes.Get(ctx, b, e.ID)
+	if want := []string{"one", "two", "three"}; !slices.Equal(got.State.Lines, want) {
+		t.Fatalf("lines = %v, want %v: the stale write wrote", got.State.Lines, want)
+	}
+	// moved between the read and the write: the retry sees another version
+	stale := kernel.Expect(ctx, e.ID, got.Version)
+	once := true
+	_, err = notes.Do(stale, b, e.ID, func(cur kernel.Entity[note]) ([]kernel.Op, error) {
+		if once {
+			once = false
+			add(t, ds, string(e.ID), cur.Clock+1, string(cur.Version), line("theirs"))
+		}
+		return []kernel.Op{line("mine")}, nil
+	})
+	if !errors.Is(err, kernel.ErrStale) {
+		t.Fatalf("a write that raced another = %v, want ErrStale", err)
+	}
+}

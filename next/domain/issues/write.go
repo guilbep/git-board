@@ -530,9 +530,15 @@ type LabelCount struct {
 // Labels are the labels in use: the plain ones first, then each field's
 // values, by field. A deleted issue doesn't count.
 func (s *Service) Labels(ctx context.Context) ([]LabelCount, error) {
+	return s.LabelsIn(ctx, ListReq{})
+}
+
+// LabelsIn are the labels in use among the issues r matches, as Labels
+// counts them: a filter panel's counts.
+func (s *Service) LabelsIn(ctx context.Context, r ListReq) ([]LabelCount, error) {
 	quiet := *s // counting tells nothing aside: the list it serves does
 	quiet.Notice = nil
-	all, err := quiet.List(ctx, ListReq{})
+	all, err := quiet.List(ctx, r)
 	if err != nil {
 		return nil, err
 	}

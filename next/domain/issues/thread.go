@@ -30,7 +30,7 @@ func (s *Service) read(ctx context.Context, name string) (Thread, []kernel.Entry
 	if err != nil {
 		return Thread{}, nil, err
 	}
-	log, _, err := Kind.Log(ctx, s.Board, id)
+	log, v, err := Kind.Log(ctx, s.Board, id)
 	if err != nil {
 		return Thread{}, nil, err
 	}
@@ -46,7 +46,9 @@ func (s *Service) read(ctx context.Context, name string) (Thread, []kernel.Entry
 		return Thread{}, nil, err
 	}
 	d := index(&st)
-	return s.thread(&st, &d.Row, log, dir, s.reading(ctx, s.notice, true)), log, nil
+	th := s.thread(&st, &d.Row, log, dir, s.reading(ctx, s.notice, true))
+	th.Version = v
+	return th, log, nil
 }
 
 // thread replays an issue's log into its history, as the fold applies it.

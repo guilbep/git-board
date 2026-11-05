@@ -405,6 +405,17 @@ func (f FollowState) String() string {
 // their inbox's file, and answers whether they follow it now, and why.
 // login is @me's: "" for their forge login or name.
 func (s *Service) Follow(ctx context.Context, name string, set *bool, login string) (string, FollowState, error) {
+	return s.follow(ctx, name, true, set, login)
+}
+
+// Following is whether who writes follows an issue, and why: Follow
+// without a change.
+func (s *Service) Following(ctx context.Context, name, login string) (FollowState, error) {
+	_, f, err := s.follow(ctx, name, false, nil, login)
+	return f, err
+}
+
+func (s *Service) follow(ctx context.Context, name string, write bool, set *bool, login string) (string, FollowState, error) {
 	ctx = s.Board.Snapshot(ctx)
 	m, err := s.inboxMe(ctx, login)
 	if err != nil {
@@ -418,9 +429,11 @@ func (s *Service) Follow(ctx context.Context, name string, set *bool, login stri
 	if err != nil {
 		return "", FollowState{}, err
 	}
-	in.SetFollow(th.ID, set)
-	if err := SaveInbox(s.Folder, kernel.ID(m.ID), in); err != nil {
-		return "", FollowState{}, err
+	if write {
+		in.SetFollow(th.ID, set)
+		if err := SaveInbox(s.Folder, kernel.ID(m.ID), in); err != nil {
+			return "", FollowState{}, err
+		}
 	}
 	dir, err := people.Read(ctx, s.Board, s.Avatars)
 	if err != nil {
@@ -520,4 +533,47 @@ func (s *Service) Status(ctx context.Context, login string, markRead bool, now t
 	}
 	in.Prune(keep)
 	return rep, SaveInbox(s.Folder, kernel.ID(m.ID), in)
+}
+
+// Seen takes every event of the issues names give as seen by who writes,
+// in their inbox's file. login is @me's: "" for their forge login or name.
+func (s *Service) Seen(ctx context.Context, names []string, login string) error {
+	ctx = s.Board.Snapshot(ctx)
+	m, err := s.inboxMe(ctx, login)
+	if err != nil {
+		return err
+	}
+	in, err := LoadInbox(s.Folder, kernel.ID(m.ID))
+	if err != nil {
+		return err
+	}
+	for _, name := range names {
+		th, err := s.Show(ctx, name)
+		if err != nil {
+			return err
+		}
+		in.MarkSeen(th)
+	}
+	return SaveInbox(s.Folder, kernel.ID(m.ID), in)
+}
+
+// FollowViews sets what who writes follows beyond their issues: views by
+// name, and the field changes on the issues they are in. A view
+// .git-board.toml doesn't name is refused.
+func (s *Service) FollowViews(ctx context.Context, views []string, fields bool, login string) error {
+	for _, v := range views {
+		if _, ok := s.Views[v]; !ok {
+			return usage{fmt.Errorf("no view %q in .git-board.toml", v)}
+		}
+	}
+	m, err := s.inboxMe(s.Board.Snapshot(ctx), login)
+	if err != nil {
+		return err
+	}
+	in, err := LoadInbox(s.Folder, kernel.ID(m.ID))
+	if err != nil {
+		return err
+	}
+	in.Views, in.Fields = slices.Clone(views), fields
+	return SaveInbox(s.Folder, kernel.ID(m.ID), in)
 }

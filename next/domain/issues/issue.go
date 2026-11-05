@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/guilbep/git-board/next/domain/people"
+	"github.com/guilbep/git-board/next/kernel"
 )
 
 // Issue is an issue as every surface lists it, and as fields and filters
@@ -52,6 +53,9 @@ type Issue struct {
 	// your identity, with or without a login.
 	AuthorID     string   `json:"-"`
 	CommenterIDs []string `json:"-"`
+	// Version is its entity's version, as read: what a write may expect
+	// it at (kernel.Expect). Not in the CLI's JSON: the API adds it.
+	Version kernel.Version `json:"-"`
 }
 
 // Forge is where an issue is on a forge.
