@@ -278,3 +278,43 @@ func TestCounter(t *testing.T) {
 		t.Fatalf("back on main: %v", err)
 	}
 }
+
+// A listing keeps the versions it hashed, with their files' stat, for
+// the next process; a file written again since, its size and its mtime
+// as they were, is hashed again.
+func TestVersionsKept(t *testing.T) {
+	t.Parallel()
+	dir, folder := filepath.Join(t.TempDir(), "issues"), t.TempDir()
+	s, err := Open(dir, folder)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := storetest.ID(1)
+	if _, err := s.Add(ctx, "issue", id, op(1, "aaaa"), ""); err != nil {
+		t.Fatal(err)
+	}
+	path := s.path("issue", id)
+	old := time.Now().Add(-time.Minute)
+	os.Chtimes(path, old, old)
+	first, _ := s.Heads(ctx, "issue")
+	if _, err := os.Stat(s.versionsPath()); err != nil {
+		t.Fatalf("no versions kept: %v", err)
+	}
+	again, err := Open(dir, folder) // another process
+	if err != nil {
+		t.Fatal(err)
+	}
+	if h, _ := again.Heads(ctx, "issue"); len(h) != 1 || h[0] != first[0] {
+		t.Fatalf("Heads = %v, want %v", h, first)
+	}
+	data, _ := os.ReadFile(path)
+	edited := []byte(strings.Replace(string(data), "aaaa", "bbbb", 1)) // by hand: the same size
+	os.WriteFile(path, edited, 0o644)
+	os.Chtimes(path, old, old)
+	for _, st := range []*Store{s, again} {
+		h, _ := st.Heads(ctx, "issue")
+		if len(h) != 1 || h[0].Version != version(edited) {
+			t.Fatalf("after a hand edit, Heads = %v, want version %s", h, version(edited))
+		}
+	}
+}

@@ -50,6 +50,7 @@ const staleLock = 30 * time.Second
 type Store struct {
 	dir    string // the Markdown files'; the packs are in dir/.board
 	folder string // this machine's own
+	vers   versions
 }
 
 var (
@@ -114,15 +115,23 @@ func (s *Store) Heads(_ context.Context, kinds ...string) ([]store.Head, error) 
 			if !ok || !store.IsID(id) || e.IsDir() {
 				continue
 			}
-			data, err := readPacks(s.path(kind, id))
+			info, err := e.Info()
+			if errors.Is(err, fs.ErrNotExist) {
+				continue // a branch switched to took it
+			}
+			if err != nil {
+				return nil, fmt.Errorf("md: %w", err)
+			}
+			v, gone, err := s.cached(kind+"/"+id, s.path(kind, id), info)
 			if err != nil {
 				return nil, err
 			}
-			if v := version(data); v != "" {
+			if !gone && v != "" {
 				out = append(out, store.Head{Kind: kind, ID: id, Version: v})
 			}
 		}
 	}
+	s.saveVersions()
 	return out, nil
 }
 
