@@ -279,11 +279,32 @@ func TestUndoRefuses(t *testing.T) {
 		t.Fatalf("undo with no name: %+v, %v", u, err)
 	}
 
-	// a deleted issue
-	if _, err := s.Delete(ctx, two.ID); err != nil {
+	// a deleted issue: by name, and with no name when its delete is your
+	// latest change. lastWritten dates a change by its time, to the
+	// second, and breaks a tie by id: a delete written now ties with
+	// the first issue's changes, written this second too, and the tie
+	// went to either issue (the first one's refusal is its pull). So the
+	// delete is dated two minutes on, after the set-status above.
+	raw, _ = json.Marshal(map[string]any{"target": string(mustGet(t, s, two.ID).State.BodyOp)})
+	if _, err := issues.Kind.Do(ctx, s.Board, kernel.ID(two.ID), func(kernel.Entity[issues.State]) ([]kernel.Op, error) {
+		return []kernel.Op{{Kind: "delete", Author: string(s.Me), Time: time.Now().Unix() + 120, Data: raw}}, nil
+	}); err != nil {
 		t.Fatal(err)
+	}
+	// by name it isn't found, as every lookup (ADR 0019)
+	if _, err := s.Undo(ctx, two.ID, false); !errors.Is(err, issues.ErrNotFound) {
+		t.Fatalf("a deleted issue, by name: %v", err)
 	}
 	if _, err := s.Undo(ctx, "", false); !errors.Is(err, issues.ErrCantUndo) || !strings.Contains(err.Error(), "deleted") {
 		t.Fatalf("a deleted issue: %v", err)
 	}
+}
+
+func mustGet(t *testing.T, s *issues.Service, id string) kernel.Entity[issues.State] {
+	t.Helper()
+	e, err := issues.Kind.Get(context.Background(), s.Board, kernel.ID(id))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return e
 }
