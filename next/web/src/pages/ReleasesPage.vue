@@ -300,9 +300,6 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.gb-rel-toml { margin: 0.75rem 0; }
-.gb-rel-toml summary { cursor: pointer; }
-.gb-rel-toml pre { margin: 0.5rem 0 0; padding: 0.75rem; background: var(--gb-surface-2, #f5f5f5); border-radius: 4px; }
 .gb-rel-setup { margin: .75rem 0 1.5rem; }
 .gb-env-link { text-decoration: none; }
 .gb-rel-all { margin-top: 2.5rem; }

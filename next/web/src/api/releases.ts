@@ -134,12 +134,6 @@ export interface Proposal {
   from: 'tag' | 'label' | '';
 }
 
-export interface IssueEnvironment {
-  name: string;
-  version: string;
-  in: boolean;
-}
-
 const tagPath = (tag: string) => `/api/releases/${enc(tag)}`;
 const envPath = (env: string) => `/api/environments/${enc(env)}/deploy`;
 
@@ -213,7 +207,8 @@ export async function rollbackEnvironment(env: string, tag: string, reason: stri
 }
 
 
-// the overlays adopt the commits they run: a PATCH of a release, any
+// the overlays adopt the commits they run: a PATCH of the release they
+// run (the first's, as the server takes every proposal sent)
 export function adoptOverlays(proposals: Proposal[]): Promise<object> {
   return send('PATCH', tagPath(proposals[0]?.runs || 'next'), { body: { adopt: proposals } });
 }
