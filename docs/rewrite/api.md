@@ -345,8 +345,43 @@ Until then they answer 404 `not-found`.
 | 49 | `GET /api/issues/{id}/cycle` | the cycle (experimental): steps, branches, pulls, tests, environments, as one read |
 | 50 | `POST /api/issues/{id}/cycle/{action}` | a step's action: sign off, open or merge a pull, run the tests, review, resolve |
 | 51 | `GET /api/insights` | `field`, `days`, `view`, `sprint`: flow, throughput, and a sprint's report |
-| 52 | `GET /api/github-project` | the GitHub Project bridge: its last check |
-| 53 | `POST /api/github-project/{action}` | `check`, `apply` (`side`), `resolve`; its table is `PATCH /api/config`'s |
+| 52 | `GET /api/github-project` | the GitHub Project bridge: its last check, and where each field lives (*built*) |
+| 53 | `POST /api/github-project/{action}` | `check`, `apply` (`side`), `resolve`; its table is `PATCH /api/config`'s (*built*) |
+
+**The GitHub Project (52, 53)**, built with the bridge
+(`next/tools/ghproject`). Only an action reads the Project: a read
+answers the last run, which the server keeps. Both answer `{project,
+write, last, places, problem}`: `project` is `owner/number`, `""` when
+`[github-project]` names none (and `problem` when the table doesn't
+read); `last` the last run, `null` before any, `{project, title,
+checked_at, side, applied, write, truncated, items, skipped, columns,
+counts, conflicts, unmatched, changes}`. `columns` are the Project's
+fields by name, with their type (`SINGLE_SELECT`, `ITERATION`,
+`NUMBER`, `DATE`, `TEXT`, GitHub's own). `counts` is `{matched,
+label_changes, project_writes, conflicts, warnings, unmatched}`. A
+conflict is `{issue, number, url, title, field, base, has_base, local,
+project}`: `local` git-board's value, `project` the Project's, `""`
+unset. A change is `{issue, number, url, title, added, removed, writes,
+warnings}`.
+
+`places` say **where each field lives**, on each forge of the board
+(its `[forges]` tables, else GitHub's): `[{field, forge, kind, to,
+default, column, on_project}]`. `to` is the field's target (its
+mapping's, else the Project's own columns once `[github-project]` names
+one, else its type's `default`); `column` the Project's column of a
+field that lives there, and `on_project` whether the last run found it
+there (absent before any). Settings › Fields shows them.
+
+`check` plans a sync both ways, and writes nothing. `apply` runs one:
+`side` is `labels` (`project pull`), `project` (`project push`) or
+`both` (`project sync`, the default); writing to the Project needs
+`write = true`. `resolve` is `{issue, field, keep}`: `issue` is its
+number on GitHub, `owner/repo#n` or its URL; `keep` is `git-board`
+(written to the Project, with `write`) or `project` (set on the label);
+it answers `kept`, the value both now hold, after checking again. A
+field in no conflict is `not-found`; a value the Project has no option
+for, or a number two repositories have in conflict, `invalid`. One
+action at a time: another is `busy`.
 
 The release setup, the overlays' adoption, the checks' setup, the
 changes and the diff of an issue's branch, the review, the label sync
@@ -419,7 +454,8 @@ credentials of a URL.
 ## v1's routes, and where they went
 
 117 routes in v1 (`internal/server/server.go`); 53 in v2: 32 built in
-M5, 7 *later* and 14 with their domain in M6.
+M5, 7 *later* and 14 with their domain in M6 (the GitHub Project's two
+built).
 
 | v1 | v2 |
 |---|---|
@@ -515,10 +551,10 @@ M5, 7 *later* and 14 with their domain in M6.
 | `GET /api/worktrees` | dropped: `wtx` moves to its own binary (ADR 0021) |
 | `POST /api/worktrees/preview` | dropped: the same |
 | `POST /api/worktrees/init` | dropped: the same |
-| `GET /api/sync` | `GET /api/github-project` (*M6*): v1's `/api/sync` was the Project's |
-| `POST /api/sync/check` | `POST /api/github-project/check` (*M6*) |
-| `POST /api/sync/apply` | `POST /api/github-project/apply` (*M6*) |
-| `POST /api/sync/resolve` | `POST /api/github-project/resolve` (*M6*) |
+| `GET /api/sync` | `GET /api/github-project`: v1's `/api/sync` was the Project's |
+| `POST /api/sync/check` | `POST /api/github-project/check` |
+| `POST /api/sync/apply` | `POST /api/github-project/apply` |
+| `POST /api/sync/resolve` | `POST /api/github-project/resolve`: `keep` the same, `issue` for `number` |
 | `PUT /api/github-project` | `PATCH /api/config`: `[github-project]` |
 | `DELETE /api/github-project` | `PATCH /api/config` with `null` |
 | `GET /api/start-over` | dropped: starting over is the CLI's (`git board reset`), a rare and destructive act |

@@ -60,6 +60,9 @@ func (s *Server) routes(mux *http.ServeMux) {
 	Route(mux, "POST /api/remotes/{name}/{action}", remote)
 	Route(mux, "POST /api/numbers", numbers)
 
+	Route(mux, "GET /api/github-project", s.projectStatus)
+	Route(mux, "POST /api/github-project/{action}", s.projectAction)
+
 	Route(mux, "POST /api/markdown", markdown)
 }
 

@@ -32,6 +32,8 @@ type Server struct {
 	run   *Run // the sync running, or the last one
 	runs  int
 	base  context.Context // the server's: a run outlives its request
+
+	project projectState // the GitHub Project bridge's last run
 }
 
 // Options say what a Server serves.
