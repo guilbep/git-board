@@ -106,11 +106,11 @@ beside the code:
 Other distributed trackers and related tools:
 
 - [bug](https://github.com/driusan/bug): an issue tracker in Go that keeps issues as plain-text files in an `issues/` directory, versioned with git or Mercurial.
-- [Bugs Everywhere](http://www.bugseverywhere.org/): a distributed bug tracker in Python that keeps bugs in the repository, for several version control systems.
+- [Bugs Everywhere](https://github.com/kalkin/be): a distributed bug tracker in Python that keeps bugs in the repository, for several version control systems. Its repository is read-only since 2020.
 - [deft](https://github.com/npryce/deft): a lightweight feature and issue tracker that keeps its database as plain-text files in the project's repository.
 - [Fossil](https://fossil-scm.org/): a distributed version control system with tickets, a wiki and a web interface built in, in one executable.
 - [git-appraise](https://github.com/google/git-appraise): distributed code review for git, its reviews and comments kept in git notes.
-- [git-dit](https://github.com/neithernut/git-dit): a distributed issue tracker for git that records each issue and comment as a commit.
+- [git-dit](https://github.com/git-dit/git-dit): a distributed issue tracker for git that records each issue and comment as a commit.
 - [Perceval](https://github.com/chaoss/grimoirelab-perceval): part of CHAOSS's GrimoireLab, it retrieves data from git, GitHub, GitLab, issue trackers and mailing lists.
 - [SD, Simple Defects](https://syncwith.us/sd/): a peer-to-peer bug tracker for online and offline use, which syncs with other SD replicas and with trackers such as RT, Trac and GitHub.
 - [Distributed bug tracking](https://lwn.net/Articles/281849/), Jonathan Corbet, LWN.net, May 2008: an article on how bug tracking can work alongside distributed version control.
