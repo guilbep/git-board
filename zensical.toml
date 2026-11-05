@@ -71,6 +71,7 @@ nav = [
     { "v2: the HTTP API" = "rewrite/api.md" },
     { "v2: the web app" = "rewrite/web.md" },
   ] },
+  { "Related work" = "related-work.md" },
 ]
 
 # The theme and the Markdown extensions are `zensical new`'s defaults.
