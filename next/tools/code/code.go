@@ -19,6 +19,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -336,7 +337,19 @@ func (r Repo) ReadFile(ctx context.Context, ref, path string) ([]byte, error) {
 
 // git runs git in the repository.
 func (r Repo) git(ctx context.Context, args ...string) ([]byte, error) {
+	if n, _ := ctx.Value(countingKey{}).(*atomic.Int64); n != nil {
+		n.Add(1)
+	}
 	return exec.CommandContext(ctx, "git", append([]string{"-C", r.Dir}, args...)...).Output()
+}
+
+type countingKey struct{}
+
+// Counting is ctx counting into n the git processes a Repo starts to
+// read: what the complexity guards read (a page about many issues starts
+// a few, not one each).
+func Counting(ctx context.Context, n *atomic.Int64) context.Context {
+	return context.WithValue(ctx, countingKey{}, n)
 }
 
 func lines(out []byte) []string {

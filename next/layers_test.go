@@ -60,6 +60,7 @@ var mayImport = map[string][]string{
 	"next/surface/http":                {"next/web", "next/app", "next/conf", "next/kernel", "next/domain/issues", "next/domain/people", "next/forge", "next/tools/ghproject", "next/domain/releases", "next/tools/ship"},
 	"next/surface/cli":                 {"next/app", "next/conf", "next/kernel", "next/domain/issues", "next/domain/people", "next/forge", "next/domain/releases", "next/tools/ship", "next/tools/branches", "next/surface/tui", "next/surface/http", "next/tools/ghproject"},
 	"next/tools/insights":              {},
+	"next/tools/boardgen":              {"next/kernel", "next/kernel/pack"},
 	"next/tools/uploads":               {"next/tools"},
 	"next/surface/tui":                 {"next/app", "next/domain/issues"},
 	"next/cmd/git-board-next":          {"next/surface/cli"},
@@ -73,7 +74,7 @@ const v1gen = "next/golden/v1gen"
 
 // testsMayImport is what a package's tests may import besides: the
 // datastores and the view, to run on real ones, and the conformance suite.
-var testsMayImport = []string{"next/store", "next/store/git", "next/store/mem", "next/store/md", "next/store/pg", "next/store/pg/pgtest", "next/store/storetest", "next/view", "next/view/viewtest", "next/kernel", "next/kernel/pack", "next/hermetic", "next/forge/fake", "next/forge/forgetest", "next/tools/ship/shiptest", "next/tools/ghproject/projectfake"}
+var testsMayImport = []string{"next/tools/boardgen", "next/store", "next/store/git", "next/store/mem", "next/store/md", "next/store/pg", "next/store/pg/pgtest", "next/store/storetest", "next/view", "next/view/viewtest", "next/kernel", "next/kernel/pack", "next/hermetic", "next/forge/fake", "next/forge/forgetest", "next/tools/ship/shiptest", "next/tools/ghproject/projectfake"}
 
 // The layers hold, and next/ and v1 never import each other: deleting v1
 // is one git rm (design.md, section 5).

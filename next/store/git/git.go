@@ -171,6 +171,9 @@ func refName(kind, id string) string { return "refs/board/" + kind + "/" + id }
 // without a stat of each entry: a <ref>.lock renamed over its ref between
 // the two would fail it (fbda0b3, which once listed no issue at all).
 func (s *Store) Heads(ctx context.Context, kinds ...string) ([]store.Head, error) {
+	if c := store.CountsOf(ctx); c != nil {
+		c.Listings.Add(1)
+	}
 	kinds = slices.Sorted(slices.Values(kinds))
 	loose := make([]map[string]string, len(kinds))
 	for i, kind := range kinds {
@@ -317,6 +320,9 @@ func isHash(h string) bool { return store.IsID(h) }
 // still at prev. A pack whose clock isn't 1 + prev's (1 with no prev) is
 // refused: a reader would refuse the entity after it.
 func (s *Store) Add(ctx context.Context, kind, id string, data []byte, prev string) (string, error) {
+	if c := store.CountsOf(ctx); c != nil {
+		c.Adds.Add(1)
+	}
 	if !store.IsID(id) || kind == "" || strings.ContainsAny(kind, "/.") {
 		return "", fmt.Errorf("git: bad name %s", refName(kind, id))
 	}
@@ -450,6 +456,9 @@ func (s *Store) git(ctx context.Context, stdin []byte, args ...string) ([]byte, 
 }
 
 func (s *Store) command(ctx context.Context, args ...string) *exec.Cmd {
+	if c := store.CountsOf(ctx); c != nil {
+		c.Processes.Add(1)
+	}
 	cmd := exec.CommandContext(ctx, "git", append([]string{"--git-dir", s.gitDir}, args...)...)
 	cmd.Env = append(os.Environ(), "LC_ALL=C")
 	cmd.Cancel = func() error { return interrupt(cmd.Process) }

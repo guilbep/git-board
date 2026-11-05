@@ -29,7 +29,7 @@ type Board struct {
 
 // Open opens a board on ds, its view v, with its kinds.
 func Open(ctx context.Context, ds store.Datastore, v View, kinds ...Kind) (*Board, error) {
-	b := &Board{ds: ds, view: v, kinds: map[string]kindSpec{}}
+	b := &Board{ds: ds, view: counted{v}, kinds: map[string]kindSpec{}}
 	for _, k := range kinds {
 		s := k.spec()
 		if _, twice := b.kinds[s.name]; twice {

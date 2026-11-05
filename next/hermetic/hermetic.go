@@ -19,9 +19,18 @@ import (
 //   - no token in the environment, and no git config but the
 //     repository's, so no credential helper answers;
 //   - git reaches local repositories alone: no ssh, no https.
-func Run(m *testing.M) {
+//
+// after run once the tests ended, before the exit: a package's shared
+// fixtures are removed there.
+func Run(m *testing.M, after ...func()) {
+	done := func(code int) {
+		for _, f := range after {
+			f()
+		}
+		os.Exit(code)
+	}
 	if os.Getenv("BOARD_LIVE") != "" {
-		os.Exit(m.Run())
+		done(m.Run())
 	}
 	global, err := seal()
 	if err != nil {
@@ -30,7 +39,7 @@ func Run(m *testing.M) {
 	}
 	code := m.Run()
 	os.Remove(global)
-	os.Exit(code)
+	done(code)
 }
 
 // seal cuts the way out, and answers the global git config it made: the

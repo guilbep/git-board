@@ -19,6 +19,10 @@ import (
 // few, one per CPU for many, each walking its share. each is called from
 // those processes' goroutines, so it may run on several at once.
 func (s *Store) Load(ctx context.Context, refs []store.Ref, each func(store.Ref, [][]byte, error) error) error {
+	if c := store.CountsOf(ctx); c != nil {
+		c.Loads.Add(1)
+		c.Entities.Add(int64(len(refs)))
+	}
 	n := min(runtime.GOMAXPROCS(0), 1+len(refs)/256)
 	if n <= 1 {
 		return s.loadShare(ctx, refs, each)
@@ -49,6 +53,8 @@ func (s *Store) loadShare(ctx context.Context, refs []store.Ref, each func(store
 	if err != nil {
 		return err
 	}
+	w.counts = store.CountsOf(ctx)
+	defer func() { w.counts = nil }()
 	err = w.walk(refs, func(r store.Ref, nodes []node, err error) error {
 		var packs [][]byte
 		if err == nil {
@@ -92,9 +98,10 @@ type node struct {
 // walker is one `git cat-file --batch-command --buffer`: requests go in
 // rounds, each ended by a flush, its answers read in order.
 type walker struct {
-	in   *bufio.Writer
-	out  *bufio.Reader
-	wait func() error
+	in     *bufio.Writer
+	out    *bufio.Reader
+	wait   func() error
+	counts *store.Counts // the load's, while it walks
 }
 
 func (s *Store) startWalker(ctx context.Context) (*walker, error) {
@@ -285,6 +292,9 @@ func (w *walker) read() (oid, typ string, body []byte, err error) {
 		return "", "", nil, fmt.Errorf("git cat-file said %q", line)
 	}
 	oid, typ = string(f[0]), string(f[1])
+	if w.counts != nil {
+		w.counts.Objects.Add(1)
+	}
 	size, err := strconv.Atoi(string(f[2]))
 	if err != nil {
 		return "", "", nil, fmt.Errorf("git cat-file said %q", line)
