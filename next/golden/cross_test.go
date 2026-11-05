@@ -160,6 +160,9 @@ func TestCrossWrites(t *testing.T) {
 }
 
 func crossWrites(t *testing.T, one, two string, board Board, writes []string) {
+	if board.Datastore == postgres && os.Getenv(PostgresEnv) == "" {
+		t.Skipf("%s: %v", board.Name, ErrNoPostgres)
+	}
 	said := map[string][]Result{}
 	for _, writer := range []struct{ name, bin string }{{"v2", two}, {"v1", one}} {
 		t.Run(writer.name+" writes", func(t *testing.T) {
