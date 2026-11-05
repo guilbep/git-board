@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -220,3 +221,46 @@ func TestSeek(t *testing.T) {
 }
 
 func writeFile(path, s string) error { return os.WriteFile(path, []byte(s), 0o644) }
+
+// Open finds a repository as git rev-parse does: from a subdirectory,
+// and from a linked worktree, whose board is its main repository's.
+func TestOpenFindsAsGit(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	main := filepath.Join(dir, "main")
+	for _, args := range [][]string{
+		{"init", "-q", main},
+		{"-C", main, "-c", "user.name=a", "-c", "user.email=a@b", "commit", "-q", "--allow-empty", "-m", "x"},
+		{"-C", main, "worktree", "add", "-q", filepath.Join(dir, "wt")},
+	} {
+		if out, err := exec.Command("git", args...).CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v: %s", args, err, out)
+		}
+	}
+	if err := os.MkdirAll(filepath.Join(main, "a", "b"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, from := range []string{main, filepath.Join(main, "a", "b"), filepath.Join(dir, "wt")} {
+		found, ok := find(from)
+		out, err := exec.Command("git", "-C", from, "rev-parse", "--path-format=absolute", "--git-dir", "--git-common-dir").Output()
+		if err != nil || !ok {
+			t.Fatalf("%s: found %v, rev-parse %v", from, ok, err)
+		}
+		want := strings.Fields(string(out))
+		if real(t, found.gitDir) != real(t, want[0]) || real(t, found.commonDir) != real(t, want[1]) {
+			t.Errorf("%s: found %s and %s; git says %v", from, found.gitDir, found.commonDir, want)
+		}
+	}
+	if _, ok := find(t.TempDir()); ok {
+		t.Error("a directory in no repository is found")
+	}
+}
+
+func real(t *testing.T, p string) string {
+	t.Helper()
+	r, err := filepath.EvalSymlinks(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return r
+}

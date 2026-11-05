@@ -11,7 +11,7 @@ import (
 // Get is the entity's state at its current version. A hidden one too:
 // what a tombstone hides is its domain's to say.
 func (k *K[S, R]) Get(ctx context.Context, b *Board, id ID) (Entity[S], error) {
-	es, v, clock, err := b.load(ctx, k.s.Name, id)
+	es, v, clock, err := b.entity(ctx, k.s.Name, id)
 	if err != nil {
 		return Entity[S]{}, err
 	}
@@ -22,7 +22,7 @@ func (k *K[S, R]) Get(ctx context.Context, b *Board, id ID) (Entity[S], error) {
 // Log is every operation in order, and the version they are at: log,
 // show, undo, diff.
 func (k *K[S, R]) Log(ctx context.Context, b *Board, id ID) ([]Entry, Version, error) {
-	es, v, _, err := b.load(ctx, k.s.Name, id)
+	es, v, _, err := b.entity(ctx, k.s.Name, id)
 	return es, v, err
 }
 
@@ -64,11 +64,12 @@ func (k *K[S, R]) rows(ctx context.Context, b *Board, q Query) ([]Row, error) {
 	if q.Limit < 0 {
 		return nil, fmt.Errorf("a limit of %d: a count, 0 for all", q.Limit)
 	}
-	if err := b.fresh(ctx, k.s.Name); err != nil {
+	search := q.Text != "" || len(q.All)+len(q.Any)+len(q.Not) > 0
+	if err := b.fresh(ctx, search, k.s.Name); err != nil {
 		return nil, err
 	}
-	if q.Text != "" {
-		if err := b.texts(ctx, b.kinds[k.s.Name]); err != nil {
+	if search {
+		if err := b.searchable(ctx, b.kinds[k.s.Name]); err != nil {
 			return nil, err
 		}
 	}
@@ -81,7 +82,7 @@ func (k *K[S, R]) Resolve(ctx context.Context, b *Board, prefix string) (ID, err
 	if !isPrefix(prefix) {
 		return "", fmt.Errorf("%w: %s %s: an id is 1 to 40 lowercase hex digits", ErrNotFound, k.s.Name, prefix)
 	}
-	if err := b.fresh(ctx, k.s.Name); err != nil {
+	if err := b.fresh(ctx, false, k.s.Name); err != nil {
 		return "", err
 	}
 	ids, err := b.view.Resolve(ctx, k.s.Name, prefix)
@@ -138,7 +139,7 @@ func (k *K[S, R]) Create(ctx context.Context, b *Board, id ID, ops ...Op) (Entit
 // operation writes nothing.
 func (k *K[S, R]) Do(ctx context.Context, b *Board, id ID, decide func(cur Entity[S]) ([]Op, error)) (Entity[S], error) {
 	for try := 1; ; try++ {
-		es, v, clock, err := b.load(ctx, k.s.Name, id)
+		es, v, clock, err := b.entity(ctx, k.s.Name, id)
 		if err != nil {
 			return Entity[S]{}, err
 		}
@@ -174,7 +175,7 @@ func (k *K[S, R]) Do(ctx context.Context, b *Board, id ID, decide func(cur Entit
 // base: a process reads its own writes without a listing.
 func (k *K[S, R]) through(ctx context.Context, b *Board, e Entity[S], base Version) error {
 	d := k.s.Index(&e.State)
-	p := Put{ID: e.ID, Base: base, Version: e.Version, Texted: true, Doc: Indexed{
+	p := Put{ID: e.ID, Base: base, Version: e.Version, Search: true, Doc: Indexed{
 		Row: k.codec.Append(nil, &d.Row), Terms: d.Terms, Texts: d.Texts,
 		Created: d.Created, Updated: d.Updated, Hidden: d.Hidden}}
 	return b.view.Write(ctx, k.s.Name, Write{Rev: k.s.Rev, Put: []Put{p}})

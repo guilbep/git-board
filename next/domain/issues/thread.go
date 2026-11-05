@@ -2,7 +2,6 @@ package issues
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"maps"
 	"slices"
@@ -24,6 +23,9 @@ func (s *Service) Show(ctx context.Context, name string) (Thread, error) {
 // read is an issue's thread and its log.
 func (s *Service) read(ctx context.Context, name string) (Thread, []kernel.Entry, error) {
 	ctx = s.Board.Snapshot(ctx)
+	if err := s.Board.Fresh(ctx, Kind, people.Kind); err != nil { // one listing for both
+		return Thread{}, nil, err
+	}
 	id, err := s.Resolve(ctx, name)
 	if err != nil {
 		return Thread{}, nil, err
@@ -62,8 +64,7 @@ func (s *Service) thread(st *State, r *Row, log []kernel.Entry, dir people.Direc
 	labels := map[string]bool{}
 	title := ""
 	for _, e := range log {
-		var d data
-		_ = json.Unmarshal(e.Data, &d) // the fold read it already
+		d, _ := decode(e.Data) // the fold read it already
 		ev := Event{ID: string(e.ID), Author: dir.Who(kernel.ID(e.Author)), At: time.Unix(e.Time, 0)}
 		switch e.Kind {
 		case "create", "comment":

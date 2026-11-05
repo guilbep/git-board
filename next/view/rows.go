@@ -70,6 +70,44 @@ func (v *View) all(ctx context.Context, kind string) ([]row, error) {
 	return rows, nil
 }
 
+// patchRows brings a kind's rows file from mark before to mark after,
+// with the rows a write changed (nil: gone), when the file is at before:
+// a write of a few rows doesn't leave the next list to read 20,000 from
+// the table. Another writer between the two leaves the file behind, and
+// the next list reads the table: it is never wrong, at worst slower.
+func (v *View) patchRows(kind string, before, after kernel.Mark, changed map[kernel.ID]*row) {
+	v.cache.mu.Lock()
+	defer v.cache.mu.Unlock()
+	rows, ok := v.cache.rows[kind], v.cache.at[kind] == before
+	if !ok {
+		data, err := os.ReadFile(v.rowsPath(kind))
+		if err != nil {
+			return
+		}
+		if rows, ok = parseRows(data, before); !ok {
+			return
+		}
+	}
+	next := make([]row, 0, len(rows)+len(changed))
+	for _, r := range rows {
+		if _, moved := changed[r.id]; !moved {
+			next = append(next, r)
+		}
+	}
+	for _, r := range changed {
+		if r != nil {
+			next = append(next, *r)
+		}
+	}
+	slices.SortFunc(next, func(a, b row) int {
+		return cmp.Or(cmp.Compare(a.created, b.created), strings.Compare(string(a.id), string(b.id)))
+	})
+	if err := writeRows(v.rowsPath(kind), after, next); err != nil {
+		return
+	}
+	v.cache.at[kind], v.cache.rows[kind] = after, next
+}
+
 // readRows reads a kind's mark and rows from the table, in one snapshot.
 func (v *View) readRows(ctx context.Context, kind string) (kernel.Mark, []row, error) {
 	tx, err := v.ro.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
@@ -101,7 +139,11 @@ func (v *View) readRows(ctx context.Context, kind string) (kernel.Mark, []row, e
 var magic = fmt.Appendf(nil, "git-board view rows %d\n", version)
 
 func writeRows(path string, m kernel.Mark, rows []row) error {
-	b := slices.Clone(magic)
+	size := len(magic) + 64
+	for _, r := range rows {
+		size += len(r.id) + len(r.version) + len(r.row) + 32
+	}
+	b := append(make([]byte, 0, size), magic...)
 	b = binary.AppendUvarint(b, uint64(m.Rev))
 	b = append(b, m.Sum[:]...)
 	b = binary.AppendUvarint(b, uint64(len(rows)))

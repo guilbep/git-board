@@ -27,21 +27,22 @@ type View interface {
 	// Resolve answers up to two visible ids starting with prefix, a
 	// valid one (1 to 40 lowercase hex digits).
 	Resolve(ctx context.Context, kind, prefix string) ([]ID, error)
-	// Untexted are the rows whose texts aren't kept yet.
-	Untexted(ctx context.Context, kind string) ([]Head, error)
+	// Unsearchable are the rows whose terms and texts aren't kept yet.
+	Unsearchable(ctx context.Context, kind string) ([]Head, error)
 	// Broken are the entities that failed to load, every kind's.
 	Broken(ctx context.Context) ([]Broken, error)
 	Close() error
 }
 
 // Mark is what a view holds of a kind: the rev its rows were folded by,
-// the sum of the listing they are at (Sum), and whether texts are kept,
-// from the first query that asked for text on. Comparing a listing's sum
-// with it is the whole of a fresh query's check.
+// the sum of the listing they are at (Sum), and whether it keeps the
+// search index, terms and texts: from the first query that searches on.
+// A first build writes rows alone. Comparing a listing's sum with Sum is
+// the whole of a fresh query's check.
 type Mark struct {
-	Rev   int
-	Sum   [32]byte
-	Texts bool
+	Rev    int
+	Sum    [32]byte
+	Search bool
 }
 
 // Head is an entity at a version.
@@ -52,11 +53,11 @@ type Head struct {
 
 // Write is one transaction's changes to a kind.
 type Write struct {
-	Rev   int  // the rev the puts were folded by
-	Reset bool // drop the kind's rows first, if they are still of another rev
-	Texts bool // keep texts from now on
-	Put   []Put
-	Drop  []Head // each at its Version, the base
+	Rev    int  // the rev the puts were folded by
+	Reset  bool // drop the kind's rows first, if they are still of another rev
+	Search bool // keep terms and texts from now on
+	Put    []Put
+	Drop   []Head // each at its Version, the base
 }
 
 // Put is one entity's new row, or its error, at Version, replacing the
@@ -66,7 +67,7 @@ type Put struct {
 	Base, Version Version
 	Doc           Indexed
 	Err           string // broken: no row, the error kept
-	Texted        bool   // Doc.Texts are given, every one of the entity's
+	Search        bool   // Doc.Terms and Doc.Texts are given, to keep
 }
 
 // Row is a row as the view answers it.

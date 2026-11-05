@@ -45,7 +45,7 @@ func (s *Store) Load(ctx context.Context, refs []store.Ref, each func(store.Ref,
 }
 
 func (s *Store) loadShare(ctx context.Context, refs []store.Ref, each func(store.Ref, [][]byte, error) error) error {
-	w, err := s.startWalker(ctx)
+	w, err := s.walker(ctx)
 	if err != nil {
 		return err
 	}
@@ -108,6 +108,31 @@ func (s *Store) startWalker(ctx context.Context) (*walker, error) {
 }
 
 func (w *walker) close() error { return w.wait() }
+
+// Warm starts a cat-file for the next load, which then waits for no
+// process to start: show's, while it checks the view meanwhile. A
+// walker is used once: the next load after takes its own.
+func (s *Store) Warm(ctx context.Context) {
+	s.warm.Do(func() {
+		w, err := s.startWalker(ctx)
+		s.warmed <- warmed{w, err}
+	})
+}
+
+type warmed struct {
+	w   *walker
+	err error
+}
+
+// walker is the warm one when there is one, else a new one.
+func (s *Store) walker(ctx context.Context) (*walker, error) {
+	select {
+	case w := <-s.warmed:
+		return w.w, w.err
+	default:
+		return s.startWalker(ctx)
+	}
+}
 
 // window is how many entities a walker reads at once: enough for rounds
 // of a few thousand objects, few enough to keep their packs small.

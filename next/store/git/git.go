@@ -20,6 +20,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/guilbep/git-board/next/kernel/pack"
@@ -30,6 +31,8 @@ import (
 type Store struct {
 	gitDir    string // this worktree's
 	commonDir string // every worktree's: refs, objects, the board's folder
+	warm      sync.Once
+	warmed    chan warmed // a cat-file Warm started, for the next load
 }
 
 var _ store.Datastore = (*Store)(nil)
@@ -37,6 +40,9 @@ var _ store.Datastore = (*Store)(nil)
 // Open opens the board of the repository at dir, or above it, as git
 // finds it. A linked worktree reads its main repository's board.
 func Open(ctx context.Context, dir string) (*Store, error) {
+	if s, ok := find(dir); ok {
+		return s, nil
+	}
 	cmd := exec.CommandContext(ctx, "git", "-C", dir, "rev-parse", "--path-format=absolute", "--git-dir", "--git-common-dir")
 	cmd.Env = append(os.Environ(), "LC_ALL=C")
 	var stderr bytes.Buffer
@@ -49,11 +55,67 @@ func Open(ctx context.Context, dir string) (*Store, error) {
 	if len(lines) != 2 {
 		return nil, fmt.Errorf("%s: git rev-parse said %q", dir, out)
 	}
-	s := &Store{gitDir: lines[0], commonDir: lines[1]}
-	if !filepath.IsAbs(s.commonDir) {
-		s.commonDir = filepath.Join(s.gitDir, s.commonDir)
+	return &Store{gitDir: lines[0], commonDir: lines[1], warmed: make(chan warmed, 1)}, nil
+}
+
+// find is the repository holding dir, found as git finds it in the
+// common case, without starting git: a .git directory, or a .git file
+// naming a worktree's, up from dir. Anything else (GIT_DIR and its
+// kind, a bare repository) is git rev-parse's to answer.
+func find(dir string) (*Store, bool) {
+	for _, env := range []string{"GIT_DIR", "GIT_COMMON_DIR", "GIT_WORK_TREE", "GIT_CEILING_DIRECTORIES", "GIT_DISCOVERY_ACROSS_FILESYSTEM"} {
+		if _, set := os.LookupEnv(env); set {
+			return nil, false
+		}
 	}
-	return s, nil
+	dir, err := filepath.Abs(dir)
+	if err != nil {
+		return nil, false
+	}
+	for {
+		dot := filepath.Join(dir, ".git")
+		fi, err := os.Stat(dot)
+		switch {
+		case err == nil && fi.IsDir():
+			return gitDirAt(dot)
+		case err == nil:
+			b, err := os.ReadFile(dot)
+			gd, ok := strings.CutPrefix(strings.TrimSpace(string(b)), "gitdir: ")
+			if err != nil || !ok {
+				return nil, false
+			}
+			if !filepath.IsAbs(gd) {
+				gd = filepath.Join(dir, gd)
+			}
+			return gitDirAt(filepath.Clean(gd))
+		case !errors.Is(err, fs.ErrNotExist):
+			return nil, false
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return nil, false
+		}
+		dir = parent
+	}
+}
+
+// gitDirAt is the store of a git directory: its common one is itself, or
+// what its commondir file names (a linked worktree's).
+func gitDirAt(gitDir string) (*Store, bool) {
+	if _, err := os.Stat(filepath.Join(gitDir, "HEAD")); err != nil {
+		return nil, false
+	}
+	common := gitDir
+	if b, err := os.ReadFile(filepath.Join(gitDir, "commondir")); err == nil {
+		common = strings.TrimSpace(string(b))
+		if !filepath.IsAbs(common) {
+			common = filepath.Join(gitDir, common)
+		}
+		common = filepath.Clean(common)
+	} else if !errors.Is(err, fs.ErrNotExist) {
+		return nil, false
+	}
+	return &Store{gitDir: gitDir, commonDir: common, warmed: make(chan warmed, 1)}, true
 }
 
 // Caps: a version is a commit, which names its packs for good.
@@ -62,8 +124,17 @@ func (s *Store) Caps() store.Caps { return store.Caps{Pinned: true} }
 // Folder is <common dir>/board, shared by every worktree.
 func (s *Store) Folder() string { return filepath.Join(s.commonDir, "board") }
 
-// Close lets nothing go: no process outlives a call.
-func (s *Store) Close() error { return nil }
+// Close ends a walker Warm started and no load took.
+func (s *Store) Close() error {
+	select {
+	case w := <-s.warmed:
+		if w.err == nil {
+			return w.w.close()
+		}
+	default:
+	}
+	return nil
+}
 
 // GitDir is this worktree's git directory: its config.
 func (s *Store) GitDir() string { return s.gitDir }

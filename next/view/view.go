@@ -27,13 +27,11 @@ import (
 const version = 1
 
 const schema = `
-CREATE TABLE marks (kind TEXT PRIMARY KEY, rev INTEGER NOT NULL, sum BLOB NOT NULL, heads BLOB NOT NULL, texts INTEGER NOT NULL);
+CREATE TABLE marks (kind TEXT PRIMARY KEY, rev INTEGER NOT NULL, sum BLOB NOT NULL, heads BLOB NOT NULL, search INTEGER NOT NULL);
 CREATE TABLE rows (n INTEGER PRIMARY KEY, kind TEXT NOT NULL, id TEXT NOT NULL, version TEXT NOT NULL,
-	created INTEGER NOT NULL, updated INTEGER NOT NULL, hidden INTEGER NOT NULL, texted INTEGER NOT NULL,
+	created INTEGER NOT NULL, updated INTEGER NOT NULL, hidden INTEGER NOT NULL, search INTEGER NOT NULL,
 	row BLOB NOT NULL, UNIQUE (kind, id));
-CREATE INDEX rows_created ON rows (kind, created, id);
-CREATE INDEX rows_updated ON rows (kind, updated, id);
-CREATE INDEX rows_texted ON rows (kind, texted);
+CREATE INDEX rows_unsearchable ON rows (kind) WHERE search = 0;
 CREATE TABLE terms (term TEXT NOT NULL, n INTEGER NOT NULL, PRIMARY KEY (term, n)) WITHOUT ROWID;
 CREATE INDEX terms_n ON terms (n);
 CREATE TABLE fields (kind TEXT NOT NULL, field TEXT NOT NULL, col INTEGER NOT NULL, PRIMARY KEY (kind, field));
@@ -133,14 +131,14 @@ type querier interface {
 
 func mark(ctx context.Context, q querier, kind string) (kernel.Mark, error) {
 	var m kernel.Mark
-	var texts int
+	var search int
 	var sum []byte
-	err := q.QueryRowContext(ctx, "SELECT rev, sum, texts FROM marks WHERE kind = ?", kind).Scan(&m.Rev, &sum, &texts)
+	err := q.QueryRowContext(ctx, "SELECT rev, sum, search FROM marks WHERE kind = ?", kind).Scan(&m.Rev, &sum, &search)
 	if errors.Is(err, sql.ErrNoRows) {
 		return kernel.Mark{}, nil
 	}
 	copy(m.Sum[:], sum)
-	m.Texts = texts == 1
+	m.Search = search == 1
 	return m, err
 }
 
@@ -206,24 +204,17 @@ func (v *View) Write(ctx context.Context, kind string, w kernel.Write) (err erro
 	for _, h := range base {
 		at[h.ID] = h.Version
 	}
+	changed := map[kernel.ID]*row{} // what the rows file takes: nil a row gone
 	for _, p := range w.Put {
 		cur, there := at[p.ID]
 		if cur != p.Base || there == (p.Base == "") {
 			continue // another process moved it meanwhile
 		}
-		if there {
-			if err := st.remove(ctx, p.ID); err != nil {
-				return err
-			}
-		}
-		if p.Err != "" {
-			_, err = st.broken.ExecContext(ctx, kind, p.ID, p.Version, p.Err)
-		} else {
-			err = st.insert(ctx, p)
-		}
+		r, err := st.put(ctx, p, there)
 		if err != nil {
 			return err
 		}
+		changed[p.ID] = r
 		at[p.ID] = p.Version
 	}
 	for _, d := range w.Drop {
@@ -233,6 +224,7 @@ func (v *View) Write(ctx context.Context, kind string, w kernel.Write) (err erro
 		if err := st.remove(ctx, d.ID); err != nil {
 			return err
 		}
+		changed[d.ID] = nil
 		delete(at, d.ID)
 	}
 	list := make([]kernel.Head, 0, len(at))
@@ -240,26 +232,32 @@ func (v *View) Write(ctx context.Context, kind string, w kernel.Write) (err erro
 		list = append(list, kernel.Head{ID: id, Version: ver})
 	}
 	slices.SortFunc(list, func(a, b kernel.Head) int { return strings.Compare(string(a.ID), string(b.ID)) })
-	texts := 0
-	if m.Texts || w.Texts {
-		texts = 1
+	search := 0
+	if m.Search || w.Search {
+		search = 1
 	}
-	sum := kernel.Sum(list)
-	if _, err := tx.ExecContext(ctx, "INSERT OR REPLACE INTO marks (kind, rev, sum, heads, texts) VALUES (?, ?, ?, ?, ?)",
-		kind, m.Rev, sum[:], kernel.Listing(list), texts); err != nil {
+	next := kernel.Mark{Rev: m.Rev, Sum: kernel.Sum(list), Search: search == 1}
+	if _, err := tx.ExecContext(ctx, "INSERT OR REPLACE INTO marks (kind, rev, sum, heads, search) VALUES (?, ?, ?, ?, ?)",
+		kind, next.Rev, next.Sum[:], kernel.Listing(list), search); err != nil {
 		return err
 	}
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	if !w.Reset {
+		v.patchRows(kind, m, next, changed)
+	}
+	return nil
 }
 
 // stmts are one write's statements, each prepared once: a first build
 // runs each thousands of times.
 type stmts struct {
-	kind                                   string
-	tx                                     *sql.Tx
-	row, term, text, broken, find, unbreak *sql.Stmt
-	drop                                   []*sql.Stmt
-	fields                                 map[string]int
+	kind                                             string
+	tx                                               *sql.Tx
+	insertRow, updateRow, deleteRow, find            *sql.Stmt
+	term, dropTerms, text, dropText, broken, unbreak *sql.Stmt
+	fields                                           map[string]int
 }
 
 func prepare(ctx context.Context, tx *sql.Tx, kind string) (*stmts, error) {
@@ -273,15 +271,16 @@ func prepare(ctx context.Context, tx *sql.Tx, kind string) (*stmts, error) {
 		s, err = tx.PrepareContext(ctx, q)
 		return s
 	}
-	st.row = prep(`INSERT INTO rows (kind, id, version, created, updated, hidden, texted, row) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
+	st.insertRow = prep(`INSERT INTO rows (kind, id, version, created, updated, hidden, search, row) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
+	st.updateRow = prep(`UPDATE rows SET version = ?, created = ?, updated = ?, hidden = ?, search = ?, row = ? WHERE n = ?`)
+	st.deleteRow = prep(`DELETE FROM rows WHERE n = ?`)
+	st.find = prep(`SELECT n, search FROM rows WHERE kind = ? AND id = ?`)
 	st.term = prep(`INSERT OR IGNORE INTO terms (term, n) VALUES (?, ?)`)
+	st.dropTerms = prep(`DELETE FROM terms WHERE n = ?`)
 	st.text = prep(`INSERT INTO texts (rowid, t0, t1, t2, t3) VALUES (?, ?, ?, ?, ?)`)
+	st.dropText = prep(`DELETE FROM texts WHERE rowid = ?`)
 	st.broken = prep(`INSERT INTO broken (kind, id, version, error) VALUES (?, ?, ?, ?)`)
-	st.find = prep(`SELECT n FROM rows WHERE kind = ? AND id = ?`)
 	st.unbreak = prep(`DELETE FROM broken WHERE kind = ? AND id = ?`)
-	for _, q := range []string{"DELETE FROM terms WHERE n = ?", "DELETE FROM texts WHERE rowid = ?", "DELETE FROM rows WHERE n = ?"} {
-		st.drop = append(st.drop, prep(q))
-	}
 	if err != nil {
 		st.close()
 		return nil, err
@@ -305,50 +304,109 @@ func prepare(ctx context.Context, tx *sql.Tx, kind string) (*stmts, error) {
 }
 
 func (st *stmts) close() {
-	for _, s := range append([]*sql.Stmt{st.row, st.term, st.text, st.broken, st.find, st.unbreak}, st.drop...) {
+	for _, s := range []*sql.Stmt{st.insertRow, st.updateRow, st.deleteRow, st.find, st.term, st.dropTerms, st.text, st.dropText, st.broken, st.unbreak} {
 		if s != nil {
 			s.Close()
 		}
 	}
 }
 
-// remove takes an entity's row, terms, texts and error out.
+// existing is an entity's row: its number, and whether it has terms and
+// texts. 0 for none.
+func (st *stmts) existing(ctx context.Context, id kernel.ID) (int64, bool, error) {
+	var n int64
+	var search bool
+	err := st.find.QueryRowContext(ctx, st.kind, id).Scan(&n, &search)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, false, nil
+	}
+	return n, search, err
+}
+
+// unsearch takes a row's terms and texts out.
+func (st *stmts) unsearch(ctx context.Context, n int64) error {
+	if _, err := st.dropTerms.ExecContext(ctx, n); err != nil {
+		return err
+	}
+	_, err := st.dropText.ExecContext(ctx, n)
+	return err
+}
+
+// remove takes an entity's row, its terms, texts and error out.
 func (st *stmts) remove(ctx context.Context, id kernel.ID) error {
 	if _, err := st.unbreak.ExecContext(ctx, st.kind, id); err != nil {
 		return err
 	}
-	var n int64
-	err := st.find.QueryRowContext(ctx, st.kind, id).Scan(&n)
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil
-	}
-	if err != nil {
+	n, search, err := st.existing(ctx, id)
+	if err != nil || n == 0 {
 		return err
 	}
-	for _, s := range st.drop {
-		if _, err := s.ExecContext(ctx, n); err != nil {
+	if search {
+		if err := st.unsearch(ctx, n); err != nil {
 			return err
 		}
 	}
-	return nil
+	_, err = st.deleteRow.ExecContext(ctx, n)
+	return err
 }
 
-func (st *stmts) insert(ctx context.Context, p kernel.Put) error {
+// put writes an entity's row, in place of the one there (there), or its
+// error; the row as the rows file takes it, nil for an error.
+func (st *stmts) put(ctx context.Context, p kernel.Put, there bool) (*row, error) {
+	var n int64
+	var search bool
+	if there {
+		if _, err := st.unbreak.ExecContext(ctx, st.kind, p.ID); err != nil {
+			return nil, err
+		}
+		var err error
+		if n, search, err = st.existing(ctx, p.ID); err != nil {
+			return nil, err
+		}
+	}
+	if p.Err != "" {
+		if n != 0 {
+			if err := st.remove(ctx, p.ID); err != nil {
+				return nil, err
+			}
+		}
+		_, err := st.broken.ExecContext(ctx, st.kind, p.ID, p.Version, p.Err)
+		return nil, err
+	}
 	d := p.Doc
-	res, err := st.row.ExecContext(ctx, st.kind, p.ID, p.Version, d.Created, d.Updated, d.Hidden, p.Texted, d.Row)
-	if err != nil {
-		return err
+	if n != 0 {
+		if search {
+			if err := st.unsearch(ctx, n); err != nil {
+				return nil, err
+			}
+		}
+		if _, err := st.updateRow.ExecContext(ctx, p.Version, d.Created, d.Updated, d.Hidden, p.Search, d.Row, n); err != nil {
+			return nil, err
+		}
+	} else {
+		res, err := st.insertRow.ExecContext(ctx, st.kind, p.ID, p.Version, d.Created, d.Updated, d.Hidden, p.Search, d.Row)
+		if err != nil {
+			return nil, err
+		}
+		if n, err = res.LastInsertId(); err != nil {
+			return nil, err
+		}
 	}
-	n, err := res.LastInsertId()
-	if err != nil {
-		return err
+	r := &row{id: p.ID, version: p.Version, created: d.Created, updated: d.Updated, hidden: d.Hidden, row: d.Row}
+	if !p.Search {
+		return r, nil
 	}
+	return r, st.search(ctx, n, d)
+}
+
+// search writes a row's terms and texts.
+func (st *stmts) search(ctx context.Context, n int64, d kernel.Indexed) error {
 	for _, t := range d.Terms {
 		if _, err := st.term.ExecContext(ctx, t, n); err != nil {
 			return err
 		}
 	}
-	if !p.Texted || len(d.Texts) == 0 {
+	if len(d.Texts) == 0 {
 		return nil
 	}
 	var texts [cols]string
@@ -365,7 +423,7 @@ func (st *stmts) insert(ctx context.Context, p kernel.Put) error {
 		}
 		texts[c] = t.Body
 	}
-	_, err = st.text.ExecContext(ctx, n, texts[0], texts[1], texts[2], texts[3])
+	_, err := st.text.ExecContext(ctx, n, texts[0], texts[1], texts[2], texts[3])
 	return err
 }
 
@@ -502,9 +560,10 @@ func (v *View) Resolve(ctx context.Context, kind, prefix string) ([]kernel.ID, e
 	return out, rows.Err()
 }
 
-// Untexted are the rows whose texts aren't kept yet, hidden ones too.
-func (v *View) Untexted(ctx context.Context, kind string) ([]kernel.Head, error) {
-	rows, err := v.db.QueryContext(ctx, "SELECT id, version FROM rows WHERE kind = ? AND texted = 0", kind)
+// Unsearchable are the rows whose terms and texts aren't kept yet,
+// hidden ones too.
+func (v *View) Unsearchable(ctx context.Context, kind string) ([]kernel.Head, error) {
+	rows, err := v.db.QueryContext(ctx, "SELECT id, version FROM rows WHERE kind = ? AND search = 0", kind)
 	if err != nil {
 		return nil, err
 	}

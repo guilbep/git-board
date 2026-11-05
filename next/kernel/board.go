@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"runtime"
 	"slices"
 	"sync"
 
@@ -68,10 +69,12 @@ func (b *Board) Fresh(ctx context.Context, kinds ...Kind) error {
 		}
 		slices.Sort(names)
 	}
-	return b.fresh(ctx, names...)
+	return b.fresh(ctx, false, names...)
 }
 
-func (b *Board) fresh(ctx context.Context, names ...string) error {
+// fresh brings the named kinds to the heads; search: the query asks for
+// the search index, so entities read now are indexed as they are read.
+func (b *Board) fresh(ctx context.Context, search bool, names ...string) error {
 	snap, _ := ctx.Value(snapshotKey{b}).(*snapshot)
 	if snap != nil {
 		snap.mu.Lock()
@@ -97,7 +100,7 @@ func (b *Board) fresh(ctx context.Context, names ...string) error {
 				listing = append(listing, Head{ID(h.ID), Version(h.Version)})
 			}
 		}
-		if err := b.freshKind(ctx, b.kinds[n], listing); err != nil {
+		if err := b.freshKind(ctx, b.kinds[n], listing, search); err != nil {
 			return err
 		}
 		if snap != nil {
@@ -111,7 +114,7 @@ func (b *Board) fresh(ctx context.Context, names ...string) error {
 // to do; else the entities new or moved are loaded and folded, and one
 // missing from the listing is dropped only once a point read says it is
 // gone (a listing that missed it costs a read, never a lost issue).
-func (b *Board) freshKind(ctx context.Context, k kindSpec, listing []Head) error {
+func (b *Board) freshKind(ctx context.Context, k kindSpec, listing []Head, search bool) error {
 	mark, err := b.view.Mark(ctx, k.name)
 	if err != nil {
 		return err
@@ -143,31 +146,101 @@ func (b *Board) freshKind(ctx context.Context, k kindSpec, listing []Head) error
 			refs = append(refs, store.Ref{Kind: k.name, ID: string(h.ID)}) // gone, or missed: read it
 		}
 	}
-	w := Write{Rev: k.rev, Reset: reset, Texts: mark.Texts && !reset}
-	var mu sync.Mutex
-	err = b.ds.Load(ctx, refs, func(r store.Ref, packs [][]byte, err error) error {
+	search = search || mark.Search && !reset
+	return b.stream(ctx, k, Write{Rev: k.rev, Reset: reset, Search: search}, refs, func(r store.Ref, packs [][]byte, err error) (Put, *Head) {
 		id, base := ID(r.ID), bases[ID(r.ID)]
 		if errors.Is(err, store.ErrNotFound) && !listed[id] {
-			mu.Lock()
-			w.Drop = append(w.Drop, Head{id, base})
-			mu.Unlock()
-			return nil
+			return Put{}, &Head{id, base}
 		}
-		p := b.put(k, id, base, Version(r.Version), packs, err, w.Texts)
-		mu.Lock()
-		w.Put = append(w.Put, p)
-		mu.Unlock()
-		return nil
+		return b.put(k, id, base, Version(r.Version), packs, err, search), nil
 	})
+}
+
+// batch is how many entities a transaction of a refresh writes: a first
+// build writes while it reads.
+const batch = 2048
+
+// stream loads refs, makes each a put or a drop, and writes them in
+// batches of w's kind as they come, the first batch with w's reset: the
+// view is written while the datastore is read. Each batch is a
+// transaction, each row conditional on its base: a refresh cut short
+// leaves rows another refresh completes.
+func (b *Board) stream(ctx context.Context, k kindSpec, w Write, refs []store.Ref, each func(store.Ref, [][]byte, error) (Put, *Head)) error {
+	type change struct {
+		put  Put
+		drop *Head
+	}
+	changes := make(chan change, batch)
+	written := make(chan error, 1)
+	go func() {
+		var err error
+		cur := w
+		flush := func() {
+			if err == nil {
+				err = b.view.Write(ctx, k.name, cur)
+			}
+			cur = Write{Rev: w.Rev, Search: w.Search}
+		}
+		for c := range changes {
+			if c.drop != nil {
+				cur.Drop = append(cur.Drop, *c.drop)
+			} else {
+				cur.Put = append(cur.Put, c.put)
+			}
+			if len(cur.Put)+len(cur.Drop) == batch {
+				flush()
+			}
+		}
+		if len(cur.Put)+len(cur.Drop) > 0 || cur.Reset || len(refs) == 0 {
+			flush()
+		}
+		written <- err
+	}()
+	err := b.load(ctx, refs, func(r store.Ref, packs [][]byte, err error) {
+		p, d := each(r, packs, err)
+		changes <- change{p, d}
+	})
+	close(changes)
+	if werr := <-written; err == nil && werr != nil {
+		return werr
+	}
 	if err != nil {
 		return fmt.Errorf("loading the %s entities: %w", k.name, err)
 	}
-	return b.view.Write(ctx, k.name, w)
+	return nil
 }
 
-// put folds one entity's packs into its row, or records its error.
-func (b *Board) put(k kindSpec, id ID, base, v Version, packs [][]byte, err error, texts bool) Put {
-	p := Put{ID: id, Base: base, Version: v, Texted: texts}
+// load reads refs and hands each to fold on a pool of its own: the
+// datastore reads on while entities fold (git's cat-file waits for no
+// fold), on every CPU.
+func (b *Board) load(ctx context.Context, refs []store.Ref, fold func(store.Ref, [][]byte, error)) error {
+	type loaded struct {
+		r     store.Ref
+		packs [][]byte
+		err   error
+	}
+	ch := make(chan loaded, 256)
+	var wg sync.WaitGroup
+	for range runtime.GOMAXPROCS(0) {
+		wg.Go(func() {
+			for l := range ch {
+				fold(l.r, l.packs, l.err)
+			}
+		})
+	}
+	err := b.ds.Load(ctx, refs, func(r store.Ref, packs [][]byte, err error) error {
+		ch <- loaded{r, packs, err}
+		return nil
+	})
+	close(ch)
+	wg.Wait()
+	return err
+}
+
+// put folds one entity's packs into its row, or records its error; with
+// search, its terms and texts too.
+func (b *Board) put(k kindSpec, id ID, base, v Version, packs [][]byte, err error, search bool) Put {
+	p := Put{ID: id, Base: base, Version: v, Search: search}
 	if err == nil {
 		var es []Entry
 		if es, _, err = order(packs); err == nil {
@@ -175,18 +248,18 @@ func (b *Board) put(k kindSpec, id ID, base, v Version, packs [][]byte, err erro
 		}
 	}
 	if err != nil {
-		p.Err, p.Doc, p.Texted = err.Error(), Indexed{}, false
-	} else if !texts {
-		p.Doc.Texts = nil
+		p.Err, p.Doc, p.Search = err.Error(), Indexed{}, false
+	} else if !search {
+		p.Doc.Terms, p.Doc.Texts = nil, nil
 	}
 	return p
 }
 
-// texts brings a kind's texts in: from the first query that asks for
-// text, every row keeps them (design.md: the free-text index is built by
-// the first query that needs it, not by a first build).
-func (b *Board) texts(ctx context.Context, k kindSpec) error {
-	heads, err := b.view.Untexted(ctx, k.name)
+// searchable brings in a kind's search index, its terms and texts: the
+// first query that searches builds it, not a first build (design.md:
+// the free-text index is indexed by the first query that asks for it).
+func (b *Board) searchable(ctx context.Context, k kindSpec) error {
+	heads, err := b.view.Unsearchable(ctx, k.name)
 	if err != nil || len(heads) == 0 {
 		return err
 	}
@@ -194,20 +267,10 @@ func (b *Board) texts(ctx context.Context, k kindSpec) error {
 	for i, h := range heads {
 		refs[i] = store.Ref{Kind: k.name, ID: string(h.ID), Version: string(h.Version)}
 	}
-	w := Write{Rev: k.rev, Texts: true}
-	var mu sync.Mutex
-	err = b.ds.Load(ctx, refs, func(r store.Ref, packs [][]byte, err error) error {
+	return b.stream(ctx, k, Write{Rev: k.rev, Search: true}, refs, func(r store.Ref, packs [][]byte, err error) (Put, *Head) {
 		v := Version(r.Version)
-		p := b.put(k, ID(r.ID), v, v, packs, err, true)
-		mu.Lock()
-		w.Put = append(w.Put, p)
-		mu.Unlock()
-		return nil
+		return b.put(k, ID(r.ID), v, v, packs, err, true), nil
 	})
-	if err != nil {
-		return fmt.Errorf("loading the %s entities' texts: %w", k.name, err)
-	}
-	return b.view.Write(ctx, k.name, w)
 }
 
 // Broken are the entities that fail to load, after bringing every kind
@@ -219,8 +282,8 @@ func (b *Board) Broken(ctx context.Context) ([]Broken, error) {
 	return b.view.Broken(ctx)
 }
 
-// load reads one entity at its current version, and orders it.
-func (b *Board) load(ctx context.Context, kind string, id ID) ([]Entry, Version, uint64, error) {
+// entity reads one entity at its current version, and orders it.
+func (b *Board) entity(ctx context.Context, kind string, id ID) ([]Entry, Version, uint64, error) {
 	if !store.IsID(string(id)) {
 		return nil, "", 0, fmt.Errorf("%w: %s %s", ErrNotFound, kind, id)
 	}

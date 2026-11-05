@@ -124,9 +124,24 @@ func open(ctx context.Context, who bool) (*board, error) {
 	if err != nil {
 		return nil, err
 	}
+	type set struct {
+		me, avatars string
+		err         error
+	}
+	settled := make(chan set, 1)
+	if who { // git config runs while the rest opens
+		go func() {
+			var s set
+			s.me, s.avatars, s.err = settings(ctx, cwd)
+			settled <- s
+		}()
+	}
 	ds, err := git.Open(ctx, cwd)
 	if err != nil {
 		return nil, err
+	}
+	if who { // show and log read one issue's packs: their cat-file starts now
+		go ds.Warm(ctx)
 	}
 	f, err := conf.Load(configPath(cwd))
 	if err != nil {
@@ -147,12 +162,12 @@ func open(ctx context.Context, who bool) (*board, error) {
 	}
 	s := &issues.Service{Board: kb, Schema: schema, Avatars: people.Forge}
 	if who {
-		me, avatars, err := settings(ctx, cwd)
-		if err != nil {
+		set := <-settled
+		if set.err != nil {
 			kb.Close()
-			return nil, err
+			return nil, set.err
 		}
-		s.Me, s.Avatars = kernel.ID(me), people.ParseAvatars(avatars)
+		s.Me, s.Avatars = kernel.ID(set.me), people.ParseAvatars(set.avatars)
 	}
 	return &board{kb: kb, issues: s}, nil
 }
