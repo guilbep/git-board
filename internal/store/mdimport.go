@@ -366,8 +366,19 @@ func (b *Backend) importInto(f mdFile, names map[string]string) (changed bool, c
 		}
 	}
 	if (len(add) > 0 || len(remove) > 0) && may("labels") {
-		if _, err := b.ApplyLabelChange(f.front.ID, add, remove); err != nil {
-			return changed, conflicts, err
+		// as ApplyLabelChange, under the lock the import holds already: its
+		// do would wait on it for ever
+		_, err := b.write(f.front.ID, func(me string, is *issue.Issue, _ *oplog.Log) ([]oplog.Op, error) {
+			added, removed := b.stored(add, remove, is.Labels)
+			added = slices.DeleteFunc(slices.Clone(added), func(l string) bool { return slices.Contains(is.Labels, l) })
+			removed = slices.DeleteFunc(slices.Clone(removed), func(l string) bool { return !slices.Contains(is.Labels, l) })
+			if len(added) == 0 && len(removed) == 0 {
+				return nil, nil
+			}
+			return []oplog.Op{issue.ChangeLabels(me, added, removed)}, nil
+		})
+		if err != nil {
+			return changed, conflicts, fmt.Errorf("changing labels on %s: %w", f.front.ID, err)
 		}
 		changed = true
 	}
