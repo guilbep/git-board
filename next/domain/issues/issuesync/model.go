@@ -318,20 +318,35 @@ func (st *state) write(ctx context.Context, b *kernel.Board, key string, ops []k
 		}
 	}
 	id := bsync.StateID(key)
-	var e kernel.Entity[bsync.State]
-	var err error
-	if !st.exists {
-		e, err = bsync.Kind.Create(ctx, b, id, ops...)
-	}
-	if st.exists || errors.Is(err, kernel.ErrMoved) { // made by another write meanwhile: appended to
-		e, err = bsync.Kind.Do(ctx, b, id, func(kernel.Entity[bsync.State]) ([]kernel.Op, error) { return ops, nil })
-	}
+	e, err := writeOps(ctx, b, id, st.exists, ops)
 	if err != nil {
 		return err
 	}
 	st.set(e.State)
 	st.exists, st.wrote = true, true
 	return nil
+}
+
+// writeOps appends ops to the sync entity id, or creates it with them
+// when it doesn't exist. A create that finds the entity made by another
+// write since appends to it instead; not there yet, the other write still
+// holds the ref's lock, so it creates again. It tries 5 times, as the
+// kernel's writes do.
+func writeOps(ctx context.Context, b *kernel.Board, id kernel.ID, exists bool, ops []kernel.Op) (kernel.Entity[bsync.State], error) {
+	for try := 1; ; try++ {
+		if exists {
+			return bsync.Kind.Do(ctx, b, id, func(kernel.Entity[bsync.State]) ([]kernel.Op, error) { return ops, nil })
+		}
+		e, err := bsync.Kind.Create(ctx, b, id, ops...)
+		if err == nil || !errors.Is(err, kernel.ErrMoved) || try == 5 {
+			return e, err
+		}
+		_, err = bsync.Kind.Get(ctx, b, id)
+		if err != nil && !errors.Is(err, kernel.ErrNotFound) {
+			return e, err
+		}
+		exists = err == nil
+	}
 }
 
 func syncOp(kind, author string, now int64, d any) kernel.Op {
