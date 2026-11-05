@@ -109,9 +109,12 @@ A change to the file's format is a new version. The checklist:
    one-line `Desc`, and raise `Current`. Build `Up` and `Down` from the
    edits in `next/conf/migrate.go`: `RenameKey`, `MoveKey`,
    `RenameTable`, `MapValue`, `CommentKey` and `UncommentKey`, `DropKey`,
-   joined with `Chain`. Each checks the file it gives back, so a key in
-   a form it doesn't edit (an inline table, a dotted key) is an error the
-   user reads, never a key left behind.
+   joined with `Chain`. Each takes a value over several lines (an array,
+   a `"""` string) whole: `CommentKey` comments every line of it and
+   `UncommentKey` gives them all back; `MapValue` refuses one. Each checks
+   the file it gives back, so a key in a form it doesn't edit (an inline
+   table, a dotted key) is an error the user reads, never a key left
+   behind.
 2. **The domain.** The table's domain reads the new form alone: an older
    file reaches it migrated. Don't keep a reader for the old form.
 3. **Both directions.** `Down` undoes `Up`. When it can't, keep what it
