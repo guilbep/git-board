@@ -1,0 +1,46 @@
+# name	exit	command (git-board <command>): <name>.out is its stdout, <name>.err its stderr
+ls	0	ls --json
+show-0107f196788a	0	show 0107f196788a1a8dbdf321082759e1e15b9d75f8 --json
+log-0107f196788a	0	log 0107f196788a1a8dbdf321082759e1e15b9d75f8 --json
+show-0cb9eabc4ae6	0	show 0cb9eabc4ae6fe1450f6bbee0679dc42d6cc57ea --json
+log-0cb9eabc4ae6	0	log 0cb9eabc4ae6fe1450f6bbee0679dc42d6cc57ea --json
+show-148260ed2bae	0	show 148260ed2baedb4826397c3c714f79e91333ce84 --json
+log-148260ed2bae	0	log 148260ed2baedb4826397c3c714f79e91333ce84 --json
+show-27861ea29d96	0	show 27861ea29d96fefd95fb6148da6ec9856ae3878f --json
+log-27861ea29d96	0	log 27861ea29d96fefd95fb6148da6ec9856ae3878f --json
+show-36e726f10807	0	show 36e726f1080730baa263bfc2521c4fac22ec3a34 --json
+log-36e726f10807	0	log 36e726f1080730baa263bfc2521c4fac22ec3a34 --json
+show-526050c6b9e2	0	show 526050c6b9e21d587a0f533fe9e21afb13f19909 --json
+log-526050c6b9e2	0	log 526050c6b9e21d587a0f533fe9e21afb13f19909 --json
+show-56f15a415f78	0	show 56f15a415f78f30e7f864a6b0eaeb2eb5b93fd97 --json
+log-56f15a415f78	0	log 56f15a415f78f30e7f864a6b0eaeb2eb5b93fd97 --json
+show-5d51e7e7cdac	0	show 5d51e7e7cdace4c67cfc51588818db705d7c2258 --json
+log-5d51e7e7cdac	0	log 5d51e7e7cdace4c67cfc51588818db705d7c2258 --json
+show-6944b2e490aa	0	show 6944b2e490aabf8029615a13e2046abd898ab057 --json
+log-6944b2e490aa	0	log 6944b2e490aabf8029615a13e2046abd898ab057 --json
+show-74712f7d5887	0	show 74712f7d588741052d79ff3da89ad01452f53099 --json
+log-74712f7d5887	0	log 74712f7d588741052d79ff3da89ad01452f53099 --json
+show-7b7ec1ecccda	0	show 7b7ec1ecccdad70b9d68c0bf80b33fe8fa9a210d --json
+log-7b7ec1ecccda	0	log 7b7ec1ecccdad70b9d68c0bf80b33fe8fa9a210d --json
+show-a46e35c405f0	0	show a46e35c405f05ff9434c27d938ebf37ff3680b15 --json
+log-a46e35c405f0	0	log a46e35c405f05ff9434c27d938ebf37ff3680b15 --json
+show-b356cc0eef84	0	show b356cc0eef844ecc34cf586e7b30bd9d1e2df87a --json
+log-b356cc0eef84	0	log b356cc0eef844ecc34cf586e7b30bd9d1e2df87a --json
+show-b3afbab63190	0	show b3afbab6319050dfe48566bbeb25fc2985fd9ea2 --json
+log-b3afbab63190	0	log b3afbab6319050dfe48566bbeb25fc2985fd9ea2 --json
+show-b3f04960100a	0	show b3f04960100a7a01b0bfa2c1633473c0285717b3 --json
+log-b3f04960100a	0	log b3f04960100a7a01b0bfa2c1633473c0285717b3 --json
+show-c3f415f2e41e	0	show c3f415f2e41e1fadc763eefbf9ac656426d04b53 --json
+log-c3f415f2e41e	0	log c3f415f2e41e1fadc763eefbf9ac656426d04b53 --json
+cmd01-ls-is-open-closed-json	0	ls "is:open,closed" --json
+cmd02-ls-status-ready-json	0	ls "status:ready" --json
+cmd03-ls-prio-p0-is-closed-json	0	ls "prio:p0 is:closed" --json
+cmd04-ls-sprint-delivery-sort-est-desc-json	0	ls "sprint:delivery" --sort "est desc" --json
+cmd05-ls-cat-bug-area-backend-json	2	ls -- "-cat:bug area:backend" --json
+cmd06-ls-export-invoice-json	0	ls "export invoice" --json
+cmd07-ls-in-title-calculation-json	0	ls "in:title calculation" --json
+cmd08-ls-comments-0-json	0	ls "comments:0" --json
+cmd09-ls-assignee-dev1-dev2-sort-updated-asc-j	0	ls "assignee:dev1,dev2" --sort "updated asc" --json
+cmd10-ls-is-open-closed-sort-title-limit-5-jso	0	ls "is:open,closed" --sort title --limit 5 --json id,title
+cmd11-ls-updated-2024-01-05-json-id	0	ls "updated:>=2024-01-05" --json id
+cmd12-ls-is-open-closed-at-2024-01-02-json	0	ls "is:open,closed" --at 2024-01-02 --json

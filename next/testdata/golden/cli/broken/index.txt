@@ -1,0 +1,19 @@
+# name	exit	command (git-board <command>): <name>.out is its stdout, <name>.err its stderr
+ls	0	ls --json
+show-09fc881e52ad	3	show 09fc881e52ad971508e4baae8380bc8a81ce0ea2 --json
+log-09fc881e52ad	3	log 09fc881e52ad971508e4baae8380bc8a81ce0ea2 --json
+show-0e8c81a31ba9	3	show 0e8c81a31ba9e1bd5f3bf35bf34b77bc6b735d51 --json
+log-0e8c81a31ba9	3	log 0e8c81a31ba9e1bd5f3bf35bf34b77bc6b735d51 --json
+show-29649619b3ac	0	show 29649619b3ac73ac63909ad8337db2684e472bd5 --json
+log-29649619b3ac	0	log 29649619b3ac73ac63909ad8337db2684e472bd5 --json
+show-2f0e85905d42	3	show 2f0e85905d422ad69bb55a8f6555c5b7b693bb7b --json
+log-2f0e85905d42	3	log 2f0e85905d422ad69bb55a8f6555c5b7b693bb7b --json
+show-7f8fb537377d	3	show 7f8fb537377ddd980a2ddb95b4824bcdef1b2b1f --json
+log-7f8fb537377d	3	log 7f8fb537377ddd980a2ddb95b4824bcdef1b2b1f --json
+show-8d6836eb9b9f	3	show 8d6836eb9b9fbaabfeb043336e8a20c5d0a90ae3 --json
+log-8d6836eb9b9f	3	log 8d6836eb9b9fbaabfeb043336e8a20c5d0a90ae3 --json
+show-9acb10f12b6c	3	show 9acb10f12b6cfdcb9a1c0064de0858fb1c8d57bb --json
+log-9acb10f12b6c	3	log 9acb10f12b6cfdcb9a1c0064de0858fb1c8d57bb --json
+show-b80349c12caa	3	show b80349c12caa96e5452f18c36a1265950f68b234 --json
+log-b80349c12caa	3	log b80349c12caa96e5452f18c36a1265950f68b234 --json
+cmd01-ls-is-open-closed-json	0	ls "is:open,closed" --json

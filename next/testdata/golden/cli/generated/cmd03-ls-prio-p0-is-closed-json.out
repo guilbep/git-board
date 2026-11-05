@@ -1,0 +1,38 @@
+[
+  {
+    "id": "b3afbab6319050dfe48566bbeb25fc2985fd9ea2",
+    "title": "Value for calculation date production admin file (10)",
+    "status": "closed",
+    "labels": [
+      "area:infra",
+      "assignee:dev1",
+      "cat:bug",
+      "prio:p0",
+      "sprint:post-delivery",
+      "status:backlog"
+    ],
+    "shown_title": "Value for calculation date production admin file (10)",
+    "updated_at": "2024-01-08T23:47:31Z",
+    "created_at": "2024-01-01T18:01:00Z",
+    "closed_at": "2024-01-08T23:47:31Z",
+    "comments": 4
+  },
+  {
+    "id": "36e726f1080730baa263bfc2521c4fac22ec3a34",
+    "title": "Message module spinner when could error total slowly when (11)",
+    "status": "closed",
+    "labels": [
+      "area:frontend",
+      "assignee:dev0",
+      "cat:chore",
+      "est:4",
+      "prio:p0",
+      "status:ready"
+    ],
+    "shown_title": "Message module spinner when could error total slowly when (11)",
+    "updated_at": "2024-01-05T00:55:04Z",
+    "created_at": "2024-01-01T18:43:00Z",
+    "closed_at": "2024-01-05T00:55:04Z",
+    "comments": 1
+  }
+]

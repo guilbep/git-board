@@ -1,4 +1,4 @@
-.PHONY: help build test test-pg web-e2e lint fmt vet licences ci install install-latest web-dev web-check web-lint web-build dist docs docs-serve clean
+.PHONY: help build test test-pg web-e2e lint fmt vet licences ci compat golden golden-boards install install-latest web-dev web-check web-lint web-build dist docs docs-serve clean
 
 # The public targets, each with its ## line: a bare make prints them.
 help: ## List the make targets
@@ -33,8 +33,32 @@ licences: ## Check every licence, Go modules and the web app's packages
 # Everything CI's test job runs: .github/workflows/ci.yml only sets up Go and
 # Node, then runs this (its e2e job runs web-e2e). The web checks and build come first, in prerequisite order,
 # because the binary embeds web/dist.
-ci: web-check web-build build vet test ## Everything CI runs
+ci: web-check web-build build vet test compat ## Everything CI runs
 	@test -z "$$(gofmt -l .)" || (echo "gofmt needs to be run on:"; gofmt -l .; exit 1)
+
+# v2's contract with v1 (docs/rewrite/compat.md): the golden boards in
+# next/testdata/golden, v1's outputs on them, and the HTTP API's
+# transcripts. compat runs a binary over the boards and compares, allowing
+# only next/testdata/compat/allowed.txt's differences: v1's git-board,
+# built now, unless BIN names another (BIN=$$(go env GOPATH)/bin/git-board-next).
+BIN ?=
+compat: ## Run a binary over the golden boards and compare with v1's outputs (BIN=path, default v1)
+	@set -e; bin="$(BIN)"; if [ -z "$$bin" ]; then d=$$(mktemp -d); trap 'rm -rf "$$d"' EXIT; bin=$$d/git-board; go build -o $$bin ./cmd/git-board; fi; \
+	GIT_BOARD_COMPAT_BIN=$$(cd $$(dirname $$bin) && pwd)/$$(basename $$bin) go test -count=1 -run 'TestCompat|TestGoldensComplete' ./next/golden/
+
+# Records what v1 prints on the golden boards, and what its API answers:
+# run it when a board or a command changes, and review the diff. v1 must
+# then pass make compat, byte for byte.
+golden: ## Record v1's outputs on the golden boards and the API's transcripts
+	@set -e; d=$$(mktemp -d); trap 'rm -rf "$$d"' EXIT; go build -o $$d/git-board ./cmd/git-board; \
+	GIT_BOARD_COMPAT_BIN=$$d/git-board GIT_BOARD_GOLDEN_UPDATE=1 go test -count=1 -run TestCompat ./next/golden/; \
+	GIT_BOARD_GOLDEN_UPDATE=1 go test -count=1 -run TestAPITranscripts ./internal/server/
+
+# Makes the golden boards again with v1's code, then make golden. Their
+# ids stay but the generated board's, whose nonces are random.
+golden-boards: ## Make the golden boards again (next/golden/v1gen), then record their outputs
+	go run ./next/golden/v1gen
+	$(MAKE) golden
 
 # The web app first: the binary embeds whatever web/dist holds.
 install: web-build ## Build the web app, then install git-board in GOBIN

@@ -1,0 +1,212 @@
+{
+  "id": "7b7ec1ecccdad70b9d68c0bf80b33fe8fa9a210d",
+  "title": "Slowly would request spinner filter (3)",
+  "status": "open",
+  "labels": [
+    "area:backend",
+    "assignee:dev1",
+    "cat:feature",
+    "est:1",
+    "prio:p1",
+    "sprint:delivery",
+    "status:comite"
+  ],
+  "shown_title": "Slowly would request spinner filter (3)",
+  "updated_at": "2024-01-14T17:20:13Z",
+  "created_at": "2024-01-01T12:25:00Z",
+  "comments": 6,
+  "author": {
+    "id": "4b550974d0ad9105c63342f4a91258ba5cbf5f67",
+    "name": "Developer 0",
+    "login": "dev0",
+    "avatar_url": "https://avatars.githubusercontent.com/u/1000?s=88"
+  },
+  "edited_at": "2024-01-14T17:20:13Z",
+  "participants": [
+    {
+      "id": "4b550974d0ad9105c63342f4a91258ba5cbf5f67",
+      "name": "Developer 0",
+      "login": "dev0",
+      "avatar_url": "https://avatars.githubusercontent.com/u/1000?s=88"
+    },
+    {
+      "id": "4b625572e0e604a42cbee5c7249d3db3ff3e4e24",
+      "name": "Developer 1",
+      "login": "dev1",
+      "avatar_url": "https://avatars.githubusercontent.com/u/1001?s=88"
+    },
+    {
+      "id": "050271a9b6912b576dc52678f3b072f43c5e3959",
+      "name": "Developer 4",
+      "login": "dev4",
+      "avatar_url": "https://avatars.githubusercontent.com/u/1004?s=88"
+    },
+    {
+      "id": "5d5ebbabe94f7f73f67409484d111bebc7b5773d",
+      "name": "Developer 3",
+      "login": "dev3",
+      "avatar_url": "https://avatars.githubusercontent.com/u/1003?s=88"
+    }
+  ],
+  "events": [
+    {
+      "kind": "created",
+      "id": "7b7ec1ecccdad70b9d68c0bf80b33fe8fa9a210d:0",
+      "author": {
+        "id": "4b550974d0ad9105c63342f4a91258ba5cbf5f67",
+        "name": "Developer 0",
+        "login": "dev0",
+        "avatar_url": "https://avatars.githubusercontent.com/u/1000?s=88"
+      },
+      "at": "2024-01-01T12:25:00Z",
+      "body": "Factor should api index update button could request page has button. Timeout for calculation for button lines deploy for after missing import column session unit column query button translation. Deploy english save role french admin.\n\nUser production invoice travel to sort fix dialog response refactor modal wrong. Energy scope module value year export factor fix field error fix table date french should backend. Backend endpoint the after chart for module form deploy for refactor retry need role production would factor building lines. After page update migration validation csv test wrong login chart would timeout update.\n\nForm slowly loads login csv validation query date fix import unit refactor retry french retry. Missing response energy index report emissions chart field after test fix no emissions should message response unit english test. Migration module token lines cache validation could missing emissions on french to building upload date shows. Import retry csv unit french check report update to english test should filter french backend.\n\nLogin login on api purchase travel production unit endpoint. Building report button has the token sort to sort column lines date role. Would to response table timeout table response total slowly factor import migration response we would calculation value report missing.",
+      "edited": true,
+      "history": [
+        {
+          "id": "7b7ec1ecccdad70b9d68c0bf80b33fe8fa9a210d:0",
+          "author": {
+            "id": "4b550974d0ad9105c63342f4a91258ba5cbf5f67",
+            "name": "Developer 0",
+            "login": "dev0",
+            "avatar_url": "https://avatars.githubusercontent.com/u/1000?s=88"
+          },
+          "at": "2024-01-01T12:25:00Z",
+          "body": "Need user spinner has invoice login crashes translation lines test fix user permission admin dialog report. Button role error has button missing unit staging production permission unit staging missing date migration timeout french. Index response crashes export cache query permission the cache fix export shows energy button building form report travel. Migration admin french returns the endpoint permission test building cache slowly.\n\nEmissions would login backend no export timeout query to missing user building token slowly missing admin test translation. Login module validation module query staging production date export update for table. Validation translation check need module session session need could scope slowly update validation sort for refactor sort backend laboratory.\n\nCsv user building check invoice laboratory laboratory production. Spinner check staging error returns no shows validation invoice no production dialog retry the role. Wrong refactor database after purchase sort spinner calculation form building travel validation unit retry loads message form english. Factor translation filter filter production translation. Test save backend error export table request crashes.\n\nDialog filter request emissions date csv validation session would report translation slowly no backend after. Migration save timeout calculation error production error wrong after refactor save timeout.\n\nColumn calculation loads shows could cache upload would user. Column for unit should returns test the travel page report need permission. Deploy laboratory slowly fix cache spinner chart import error. Column fix spinner translation cache table user request role fix admin emissions purchase crashes check api. Wrong building factor session login login we."
+        },
+        {
+          "id": "293f70066a281074d4234ced1ebf41e2ab1f069d:0",
+          "author": {
+            "id": "b5d85ae6ceb6b8626b9a4813d3d565f0a0790d2c",
+            "name": "Developer 2",
+            "login": "dev2",
+            "avatar_url": "https://avatars.githubusercontent.com/u/1002?s=88"
+          },
+          "at": "2024-01-09T15:26:00Z",
+          "body": "Factor should api index update button could request page has button. Timeout for calculation for button lines deploy for after missing import column session unit column query button translation. Deploy english save role french admin.\n\nUser production invoice travel to sort fix dialog response refactor modal wrong. Energy scope module value year export factor fix field error fix table date french should backend. Backend endpoint the after chart for module form deploy for refactor retry need role production would factor building lines. After page update migration validation csv test wrong login chart would timeout update.\n\nForm slowly loads login csv validation query date fix import unit refactor retry french retry. Missing response energy index report emissions chart field after test fix no emissions should message response unit english test. Migration module token lines cache validation could missing emissions on french to building upload date shows. Import retry csv unit french check report update to english test should filter french backend.\n\nLogin login on api purchase travel production unit endpoint. Building report button has the token sort to sort column lines date role. Would to response table timeout table response total slowly factor import migration response we would calculation value report missing."
+        }
+      ]
+    },
+    {
+      "kind": "labels",
+      "id": "7b7ec1ecccdad70b9d68c0bf80b33fe8fa9a210d:1",
+      "author": {
+        "id": "4b550974d0ad9105c63342f4a91258ba5cbf5f67",
+        "name": "Developer 0",
+        "login": "dev0",
+        "avatar_url": "https://avatars.githubusercontent.com/u/1000?s=88"
+      },
+      "at": "2024-01-01T12:25:00Z",
+      "added": [
+        "status:validated",
+        "prio:p1",
+        "cat:feature",
+        "assignee:dev1",
+        "area:backend",
+        "est:1",
+        "sprint:delivery"
+      ]
+    },
+    {
+      "kind": "comment",
+      "id": "20886381197e5ec1e83dfd5cf060e9c4cd74a281:0",
+      "author": {
+        "id": "4b625572e0e604a42cbee5c7249d3db3ff3e4e24",
+        "name": "Developer 1",
+        "login": "dev1",
+        "avatar_url": "https://avatars.githubusercontent.com/u/1001?s=88"
+      },
+      "at": "2024-01-03T11:00:52Z",
+      "body": "Validation spinner button calculation building module unit check translation index migration. Sort export save test filter when lines wrong calculation emissions calculation page retry after factor csv table value. No returns translation french import fix french. Field backend csv year factor year migration.\n\nFrench import request no retry translation purchase filter login. English purchase spinner api emissions when. Building upload refactor on travel message production index slowly api missing import token. Cache could database laboratory energy table for column chart upload."
+    },
+    {
+      "kind": "comment",
+      "id": "1827fafc0a2c1e5e42468c83b7ec5fa2f57c6f1c:0",
+      "author": {
+        "id": "050271a9b6912b576dc52678f3b072f43c5e3959",
+        "name": "Developer 4",
+        "login": "dev4",
+        "avatar_url": "https://avatars.githubusercontent.com/u/1004?s=88"
+      },
+      "at": "2024-01-06T05:59:02Z",
+      "body": "Emissions unit lines user test scope spinner wrong unit crashes could save wrong. Module field fix english we migration production translation field.\n\nStaging database scope database lines report login. Retry could value button purchase emissions energy request shows date dialog check sort slowly lines update deploy emissions. After english modal should file building crashes index translation no factor filter user unit has purchase staging."
+    },
+    {
+      "kind": "comment",
+      "id": "7225d6408eb34d6347045b6f8ab2d25a98bb0326:0",
+      "author": {
+        "id": "4b625572e0e604a42cbee5c7249d3db3ff3e4e24",
+        "name": "Developer 1",
+        "login": "dev1",
+        "avatar_url": "https://avatars.githubusercontent.com/u/1001?s=88"
+      },
+      "at": "2024-01-06T15:00:03Z",
+      "body": "Loads crashes date migration on report factor import modal on export on token role lines retry slowly missing. Retry field csv migration dialog upload user the after validation would when. Export energy session production fix column factor api calculation lines loads total."
+    },
+    {
+      "kind": "comment",
+      "id": "4437f6a0fb5a838973f77a6d3747ec3097d1a0f9:0",
+      "author": {
+        "id": "050271a9b6912b576dc52678f3b072f43c5e3959",
+        "name": "Developer 4",
+        "login": "dev4",
+        "avatar_url": "https://avatars.githubusercontent.com/u/1004?s=88"
+      },
+      "at": "2024-01-06T15:05:57Z",
+      "body": "Modal csv building role index export we. Crashes retry module emissions shows api table the response check we api sort when. Button import backend form backend test test test session.\n\nToken validation role lines page need. English filter returns translation query the returns crashes form check import report purchase. Token to page permission unit modal update production to field response to filter total dialog. After file unit page update after table slowly button on translation english wrong form missing."
+    },
+    {
+      "kind": "comment",
+      "id": "d1353371d2c7a6fb57b9e5cd39d129dd98f88d43:0",
+      "author": {
+        "id": "5d5ebbabe94f7f73f67409484d111bebc7b5773d",
+        "name": "Developer 3",
+        "login": "dev3",
+        "avatar_url": "https://avatars.githubusercontent.com/u/1003?s=88"
+      },
+      "at": "2024-01-08T18:39:21Z",
+      "body": "Retry filter export for dialog the upload. Wrong cache refactor loads sort unit retry.\n\nTo returns csv on calculation form refactor user on message admin error for filter we on validation. Emissions user field import report backend button migration permission building sort we lines spinner. The fix unit query request could field backend migration unit unit permission user date date loads invoice missing. Total production lines to sort cache page validation page should sort dialog import form.\n\nMessage login request report timeout missing would admin index save update laboratory year. Response when refactor fix permission field wrong."
+    },
+    {
+      "kind": "comment",
+      "id": "f9d3a743798f79c90ccdd348b5b2d1659d058530:0",
+      "author": {
+        "id": "4b550974d0ad9105c63342f4a91258ba5cbf5f67",
+        "name": "Developer 0",
+        "login": "dev0",
+        "avatar_url": "https://avatars.githubusercontent.com/u/1000?s=88"
+      },
+      "at": "2024-01-09T08:34:10Z",
+      "body": "Sort save request refactor retry value when no year loads migration refactor report missing. Backend endpoint wrong english staging error button. Translation for admin file has chart purchase lines could scope energy staging backend year french unit validation request csv."
+    },
+    {
+      "kind": "labels",
+      "id": "7594da261f07aa4586d883af6a3c16fcd5c4102c:0",
+      "author": {
+        "id": "5d5ebbabe94f7f73f67409484d111bebc7b5773d",
+        "name": "Developer 3",
+        "login": "dev3",
+        "avatar_url": "https://avatars.githubusercontent.com/u/1003?s=88"
+      },
+      "at": "2024-01-12T08:33:15Z",
+      "added": [
+        "status:comite"
+      ],
+      "removed": [
+        "status:validated"
+      ]
+    },
+    {
+      "kind": "title",
+      "id": "3209f087aae49b6e11850268c91f099f6b0ee298:0",
+      "author": {
+        "id": "050271a9b6912b576dc52678f3b072f43c5e3959",
+        "name": "Developer 4",
+        "login": "dev4",
+        "avatar_url": "https://avatars.githubusercontent.com/u/1004?s=88"
+      },
+      "at": "2024-01-14T17:20:13Z",
+      "title": "Slowly would request spinner filter (3)",
+      "was": "Role staging upload column after to validation save (3)"
+    }
+  ]
+}

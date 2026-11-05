@@ -1,0 +1,39 @@
+{
+  "id": "6f03dc499fcb0452a97d6e24ced0267dfd068db0",
+  "title": "Made on b alone",
+  "status": "open",
+  "labels": [],
+  "shown_title": "Made on b alone",
+  "updated_at": "2025-03-03T10:30:00Z",
+  "created_at": "2025-03-03T10:30:00Z",
+  "comments": 0,
+  "author": {
+    "id": "9b787ae15fe85e31754d154f1d95eb962c91bbcf",
+    "name": "Bob",
+    "login": "bobby",
+    "avatar_url": "https://avatars.githubusercontent.com/u/1003?s=88"
+  },
+  "edited_at": "2025-03-03T10:30:00Z",
+  "participants": [
+    {
+      "id": "9b787ae15fe85e31754d154f1d95eb962c91bbcf",
+      "name": "Bob",
+      "login": "bobby",
+      "avatar_url": "https://avatars.githubusercontent.com/u/1003?s=88"
+    }
+  ],
+  "events": [
+    {
+      "kind": "created",
+      "id": "6f03dc499fcb0452a97d6e24ced0267dfd068db0:0",
+      "author": {
+        "id": "9b787ae15fe85e31754d154f1d95eb962c91bbcf",
+        "name": "Bob",
+        "login": "bobby",
+        "avatar_url": "https://avatars.githubusercontent.com/u/1003?s=88"
+      },
+      "at": "2025-03-03T10:30:00Z",
+      "body": "a creates its ref at b's head."
+    }
+  ]
+}

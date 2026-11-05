@@ -1,0 +1,33 @@
+[
+  {
+    "id": "2070bfafe7adfed74d38940e023d8d0f756bb6db",
+    "name": "Ada King",
+    "login": "ada-l",
+    "avatar_url": "https://avatars.githubusercontent.com/u/1001?s=88",
+    "me": true
+  },
+  {
+    "id": "9b787ae15fe85e31754d154f1d95eb962c91bbcf",
+    "name": "Bob",
+    "login": "bobby",
+    "avatar_url": "https://avatars.githubusercontent.com/u/1003?s=88"
+  },
+  {
+    "id": "c2c767e89eb76626f8a9d76bdec5ec1acef93f53",
+    "name": "Chloé Dubois-Ångström",
+    "login": "chloe",
+    "avatar_url": "https://avatars.githubusercontent.com/u/1004?s=88"
+  },
+  {
+    "id": "b94b00c096b436f88250e6c2045a9f724fe497a9",
+    "name": "ada (pulled twice)",
+    "login": "ada",
+    "avatar_url": "https://avatars.githubusercontent.com/u/1001?s=88"
+  },
+  {
+    "id": "cc95ba8767d57b185ceed564f2994c827dc4911f",
+    "name": "octocat",
+    "login": "octocat",
+    "avatar_url": "https://avatars.githubusercontent.com/u/583231?s=88"
+  }
+]

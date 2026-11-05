@@ -1,0 +1,97 @@
+[
+  {
+    "id": "26a4ba85e9ef4a8ff1b61f228dd598c8b3667905",
+    "title": "Search hides closed issues by default",
+    "status": "open",
+    "labels": [
+      "assignee:ada",
+      "assignee:bobby",
+      "kind:bug",
+      "est:3",
+      "prio:p0",
+      "sprint:s1",
+      "status:in-progress"
+    ],
+    "inherited": [
+      "reviewer:chloe"
+    ],
+    "github_url": "https://github.com/acme/widgets/issues/12",
+    "forges": [
+      {
+        "name": "GitHub",
+        "url": "https://github.com/acme/widgets/issues/12",
+        "number": "12"
+      },
+      {
+        "name": "GitLab",
+        "url": "https://gitlab.epfl.ch/acme/widgets/-/issues/3",
+        "number": "3"
+      }
+    ],
+    "shown_title": "Search hides closed issues by default",
+    "number": "GB-100",
+    "counted": true,
+    "updated_at": "2025-03-03T15:00:00Z",
+    "created_at": "2025-03-03T09:00:00Z",
+    "comments": 3
+  },
+  {
+    "id": "398523d66eaebdebff64257a35e73c84d5c31f47",
+    "title": "Export CSV (#13)",
+    "status": "closed",
+    "labels": [
+      "est:0.5",
+      "kind:feature",
+      "prio:p2",
+      "status:done"
+    ],
+    "inherited": [
+      "reviewer:chloe"
+    ],
+    "github_url": "https://github.com/acme/widgets/issues/13",
+    "forges": [
+      {
+        "name": "GitHub",
+        "url": "https://github.com/acme/widgets/issues/13",
+        "number": "13"
+      }
+    ],
+    "shown_title": "Export CSV",
+    "number": "GB-101",
+    "counted": true,
+    "updated_at": "2025-03-03T17:01:00Z",
+    "created_at": "2025-03-03T16:00:00Z",
+    "closed_at": "2025-03-03T17:01:00Z",
+    "comments": 1
+  },
+  {
+    "id": "9062b9a381ed0075abb7c2b22261a9be88f7a685",
+    "title": "Thread with a deleted comment",
+    "status": "open",
+    "labels": [],
+    "inherited": [
+      "reviewer:chloe"
+    ],
+    "shown_title": "Thread with a deleted comment",
+    "counted": true,
+    "updated_at": "2025-03-03T19:13:00Z",
+    "created_at": "2025-03-03T19:00:00Z",
+    "comments": 2
+  },
+  {
+    "id": "427cb1bd1c4a7deee3c0bf6ff0b3b4ea24f7dc42",
+    "title": "Lenient packs: the second title wins",
+    "status": "open",
+    "labels": [
+      "prio:p3"
+    ],
+    "inherited": [
+      "reviewer:chloe"
+    ],
+    "shown_title": "Lenient packs: the second title wins",
+    "counted": true,
+    "updated_at": "2025-03-03T23:15:00Z",
+    "created_at": "2025-03-03T23:00:00Z",
+    "comments": 1
+  }
+]

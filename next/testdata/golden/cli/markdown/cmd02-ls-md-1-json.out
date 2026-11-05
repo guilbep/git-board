@@ -1,0 +1,23 @@
+[
+  {
+    "id": "c82cfa32f1daaec8c30ddf695bdce9ce34259cd1",
+    "title": "Kept in a folder, merged by union",
+    "status": "open",
+    "labels": [
+      "assignee:ada",
+      "kind:bug",
+      "plain",
+      "prio:p1",
+      "status:ready"
+    ],
+    "inherited": [
+      "reviewer:chloe"
+    ],
+    "shown_title": "Kept in a folder, merged by union",
+    "number": "MD-1",
+    "counted": true,
+    "updated_at": "2025-03-03T14:00:00Z",
+    "created_at": "2025-03-03T09:00:00Z",
+    "comments": 2
+  }
+]

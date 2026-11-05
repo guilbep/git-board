@@ -1,0 +1,61 @@
+[
+  {
+    "id": "22c49b4cb2f9ebf5dc7e81d5b5476ec584fb5c71",
+    "title": "Label churn",
+    "status": "open",
+    "labels": [
+      "a",
+      "assignee:chloe",
+      "d",
+      "est:8",
+      "sprint:s2",
+      "status:in-review"
+    ],
+    "inherited": [
+      "reviewer:chloe"
+    ],
+    "shown_title": "Label churn",
+    "number": "GB-103",
+    "counted": true,
+    "updated_at": "2025-03-04T03:00:00Z",
+    "created_at": "2025-03-04T01:00:00Z",
+    "comments": 0
+  },
+  {
+    "id": "e9584910eb0517fe61a9a45e4cfaa53dff219957",
+    "title": "Bare",
+    "status": "open",
+    "labels": [],
+    "inherited": [
+      "reviewer:chloe"
+    ],
+    "forges": [
+      {
+        "name": "GitLab",
+        "url": "https://gitlab.epfl.ch/acme/widgets/-/issues/31",
+        "number": "31"
+      }
+    ],
+    "shown_title": "Bare",
+    "counted": true,
+    "updated_at": "2025-03-04T00:00:00Z",
+    "created_at": "2025-03-04T00:00:00Z",
+    "comments": 0
+  },
+  {
+    "id": "427cb1bd1c4a7deee3c0bf6ff0b3b4ea24f7dc42",
+    "title": "Lenient packs: the second title wins",
+    "status": "open",
+    "labels": [
+      "prio:p3"
+    ],
+    "inherited": [
+      "reviewer:chloe"
+    ],
+    "shown_title": "Lenient packs: the second title wins",
+    "counted": true,
+    "updated_at": "2025-03-03T23:15:00Z",
+    "created_at": "2025-03-03T23:00:00Z",
+    "comments": 1
+  }
+]

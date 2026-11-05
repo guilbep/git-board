@@ -1,0 +1,53 @@
+[
+  {
+    "id": "b3afbab6319050dfe48566bbeb25fc2985fd9ea2",
+    "title": "Value for calculation date production admin file (10)",
+    "status": "closed",
+    "labels": [
+      "area:infra",
+      "assignee:dev1",
+      "cat:bug",
+      "prio:p0",
+      "sprint:post-delivery",
+      "status:backlog"
+    ],
+    "shown_title": "Value for calculation date production admin file (10)",
+    "updated_at": "2024-01-08T23:47:31Z",
+    "created_at": "2024-01-01T18:01:00Z",
+    "closed_at": "2024-01-08T23:47:31Z",
+    "comments": 4
+  },
+  {
+    "id": "b356cc0eef844ecc34cf586e7b30bd9d1e2df87a",
+    "title": "Calculation migration form translation (12)",
+    "status": "closed",
+    "labels": [
+      "area:backend",
+      "assignee:dev2",
+      "cat:bug",
+      "prio:p1",
+      "status:in-review"
+    ],
+    "shown_title": "Calculation migration form translation (12)",
+    "updated_at": "2024-01-10T17:07:53Z",
+    "created_at": "2024-01-01T19:59:00Z",
+    "closed_at": "2024-01-10T17:07:53Z",
+    "comments": 4
+  },
+  {
+    "id": "0cb9eabc4ae6fe1450f6bbee0679dc42d6cc57ea",
+    "title": "Missing chart csv calculation endpoint energy the crashes (13)",
+    "status": "open",
+    "labels": [
+      "area:docs",
+      "assignee:dev2",
+      "cat:feature",
+      "prio:p2",
+      "status:validated"
+    ],
+    "shown_title": "Missing chart csv calculation endpoint energy the crashes (13)",
+    "updated_at": "2024-01-06T02:52:52Z",
+    "created_at": "2024-01-01T21:02:00Z",
+    "comments": 2
+  }
+]

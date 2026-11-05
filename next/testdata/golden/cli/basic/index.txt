@@ -1,0 +1,69 @@
+# name	exit	command (git-board <command>): <name>.out is its stdout, <name>.err its stderr
+ls	0	ls --json
+show-22c49b4cb2f9	0	show 22c49b4cb2f9ebf5dc7e81d5b5476ec584fb5c71 --json
+log-22c49b4cb2f9	0	log 22c49b4cb2f9ebf5dc7e81d5b5476ec584fb5c71 --json
+show-22d74e739794	0	show 22d74e73979498ba69c554da1bf1cc1014cb013d --json
+log-22d74e739794	0	log 22d74e73979498ba69c554da1bf1cc1014cb013d --json
+show-26a4ba85e9ef	0	show 26a4ba85e9ef4a8ff1b61f228dd598c8b3667905 --json
+log-26a4ba85e9ef	0	log 26a4ba85e9ef4a8ff1b61f228dd598c8b3667905 --json
+show-398523d66eae	0	show 398523d66eaebdebff64257a35e73c84d5c31f47 --json
+log-398523d66eae	0	log 398523d66eaebdebff64257a35e73c84d5c31f47 --json
+show-427cb1bd1c4a	0	show 427cb1bd1c4a7deee3c0bf6ff0b3b4ea24f7dc42 --json
+log-427cb1bd1c4a	0	log 427cb1bd1c4a7deee3c0bf6ff0b3b4ea24f7dc42 --json
+show-4f38a4b0d275	3	show 4f38a4b0d2759be1e6acd8594134ab29f542de51 --json
+log-4f38a4b0d275	3	log 4f38a4b0d2759be1e6acd8594134ab29f542de51 --json
+show-9062b9a381ed	0	show 9062b9a381ed0075abb7c2b22261a9be88f7a685 --json
+log-9062b9a381ed	0	log 9062b9a381ed0075abb7c2b22261a9be88f7a685 --json
+show-999eab2e4a22	0	show 999eab2e4a22d1af3d62abffe7e62e79db7d12ac --json
+log-999eab2e4a22	0	log 999eab2e4a22d1af3d62abffe7e62e79db7d12ac --json
+show-e9584910eb05	0	show e9584910eb0517fe61a9a45e4cfaa53dff219957 --json
+log-e9584910eb05	0	log e9584910eb0517fe61a9a45e4cfaa53dff219957 --json
+cmd01-ls-is-closed-json	0	ls is:closed --json
+cmd02-ls-is-open-closed-json	0	ls "is:open,closed" --json
+cmd03-ls-status-ready-in-review-json	0	ls "status:ready,in-review" --json
+cmd04-ls-status-in-progress-is-open-json	2	ls "-status:in-progress is:open" --json
+cmd05-ls-status-in-progress-is-open-json	2	ls -- "-status:in-progress is:open" --json
+cmd06-ls-assignee-chloe-json	0	ls "assignee:chloe" --json
+cmd07-ls-assignee-me-json	0	ls "assignee:@me" --json
+cmd08-ls-author-bob-json	0	ls "author:bob" --json
+cmd09-ls-involves-bobby-json	0	ls "involves:bobby" --json
+cmd10-ls-label-tiquette-json	0	ls "label:étiquette" --json
+cmd11-ls-no-prio-json	0	ls "no:prio" --json
+cmd12-ls-prio-p0-p2-is-closed-json	0	ls "prio:p0,p2 is:closed" --json
+cmd13-ls-kind-bug-json	0	ls "kind:bug" --json
+cmd14-ls-title-search-json	0	ls "title:*search*" --json
+cmd15-ls-closed-json	0	ls closed --json
+cmd16-ls-unless-the-query-json	0	ls "\"unless the query\"" --json
+cmd17-ls-inbox-in-comments-json	0	ls "inbox in:comments" --json
+cmd18-ls-json	0	ls "日本語" --json
+cmd19-ls-12-json	0	ls "#12" --json
+cmd20-ls-gb-7-json	0	ls "GB-7" --json
+cmd21-ls-comments-2-json	0	ls "comments:>=2" --json
+cmd22-ls-est-1-json	0	ls "est:>1" --json
+cmd23-ls-created-2025-03-03-json	0	ls "created:2025-03-03" --json
+cmd24-ls-created-2025-03-03t12-00-created-2025	0	ls "created:>=2025-03-03T12:00 created:<2025-03-04" --json
+cmd25-ls-updated-2025-03-03-2025-03-03-json	0	ls "updated:2025-03-03..2025-03-03" --json
+cmd26-ls-closed-2025-03-03-json	0	ls "closed:2025-03-03" --json
+cmd27-ls-created-today-1d-at-2025-03-04-json	0	ls "created:>=@today-1d" --at 2025-03-04 --json
+cmd28-ls-sprint-current-at-2025-03-05-json	0	ls "sprint:@current" --at 2025-03-05 --json
+cmd29-ls-at-2025-03-03t10-00-json	0	ls --at 2025-03-03T10:00 --json
+cmd30-ls-sort-prio-asc-json	0	ls --sort "prio asc" --json
+cmd31-ls-is-open-closed-sort-updated-desc-limi	0	ls "is:open,closed" --sort "updated desc" --limit 3 --json
+cmd32-ls-json-id-title-number-forges	0	ls --json id,title,number,forges
+cmd33-ls-is-open-closed-json-number-jq-number	0	ls "is:open,closed" --json number --jq ".[].number"
+cmd34-ls-nosuchfield-x-json	0	ls "nosuchfield:x" --json
+cmd35-ls-created-yesterday-json	1	ls "created:yesterday" --json
+cmd36-view-ready-json	0	view ready --json
+cmd37-show-26a4ba8-at-2025-03-03t03-15-json	3	show 26a4ba8 --at 2025-03-03T03:15 --json
+cmd38-show-26a4ba8-at-2025-03-03t11-15-json	0	show 26a4ba8 --at 2025-03-03T11:15 --json
+cmd39-show-gb-100-json	0	show GB-100 --json
+cmd40-show-7-json	0	show "#7" --json
+cmd41-show-22d74e7-no-comments-json	0	show 22d74e7 --no-comments --json
+cmd42-show-999eab2-md	0	show 999eab2 --md
+cmd43-show-0000000-json	3	show 0000000 --json
+cmd44-log-26a4ba8-field-status-json	0	log 26a4ba8 --field status --json
+cmd45-log-26a4ba8-since-2025-03-03t04-00-json	2	log 26a4ba8 --since 2025-03-03T04:00 --json
+cmd46-log-26a4ba8-since-2025-03-04-json	0	log 26a4ba8 --since 2025-03-04 --json
+cmd47-log-398523d-field-prio-json	0	log 398523d --field prio --json
+cmd48-labels-json	0	labels --json
+cmd49-me-ls-json	0	me --ls --json

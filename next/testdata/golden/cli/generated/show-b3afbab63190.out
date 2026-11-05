@@ -1,0 +1,180 @@
+{
+  "id": "b3afbab6319050dfe48566bbeb25fc2985fd9ea2",
+  "title": "Value for calculation date production admin file (10)",
+  "status": "closed",
+  "labels": [
+    "area:infra",
+    "assignee:dev1",
+    "cat:bug",
+    "prio:p0",
+    "sprint:post-delivery",
+    "status:backlog"
+  ],
+  "shown_title": "Value for calculation date production admin file (10)",
+  "updated_at": "2024-01-08T23:47:31Z",
+  "created_at": "2024-01-01T18:01:00Z",
+  "closed_at": "2024-01-08T23:47:31Z",
+  "comments": 4,
+  "author": {
+    "id": "4b625572e0e604a42cbee5c7249d3db3ff3e4e24",
+    "name": "Developer 1",
+    "login": "dev1",
+    "avatar_url": "https://avatars.githubusercontent.com/u/1001?s=88"
+  },
+  "edited_at": "2024-01-08T23:47:31Z",
+  "participants": [
+    {
+      "id": "4b625572e0e604a42cbee5c7249d3db3ff3e4e24",
+      "name": "Developer 1",
+      "login": "dev1",
+      "avatar_url": "https://avatars.githubusercontent.com/u/1001?s=88"
+    },
+    {
+      "id": "5d5ebbabe94f7f73f67409484d111bebc7b5773d",
+      "name": "Developer 3",
+      "login": "dev3",
+      "avatar_url": "https://avatars.githubusercontent.com/u/1003?s=88"
+    },
+    {
+      "id": "050271a9b6912b576dc52678f3b072f43c5e3959",
+      "name": "Developer 4",
+      "login": "dev4",
+      "avatar_url": "https://avatars.githubusercontent.com/u/1004?s=88"
+    }
+  ],
+  "events": [
+    {
+      "kind": "created",
+      "id": "b3afbab6319050dfe48566bbeb25fc2985fd9ea2:0",
+      "author": {
+        "id": "4b625572e0e604a42cbee5c7249d3db3ff3e4e24",
+        "name": "Developer 1",
+        "login": "dev1",
+        "avatar_url": "https://avatars.githubusercontent.com/u/1001?s=88"
+      },
+      "at": "2024-01-01T18:01:00Z",
+      "body": "Permission login field unit report import validation after when request should error sort. Translation backend lines table page wrong table sort production after api. Would on french migration purchase unit test returns migration travel module total backend admin cache wrong filter.\n\nTable returns module invoice migration table production french total import. Test filter timeout cache for we total."
+    },
+    {
+      "kind": "labels",
+      "id": "b3afbab6319050dfe48566bbeb25fc2985fd9ea2:1",
+      "author": {
+        "id": "4b625572e0e604a42cbee5c7249d3db3ff3e4e24",
+        "name": "Developer 1",
+        "login": "dev1",
+        "avatar_url": "https://avatars.githubusercontent.com/u/1001?s=88"
+      },
+      "at": "2024-01-01T18:01:00Z",
+      "added": [
+        "status:in-review",
+        "prio:p0",
+        "cat:bug",
+        "assignee:dev1",
+        "area:infra",
+        "sprint:post-delivery"
+      ]
+    },
+    {
+      "kind": "comment",
+      "id": "ce8b687b43de8743b4dc03fc9044880ea4c4b655:0",
+      "author": {
+        "id": "5d5ebbabe94f7f73f67409484d111bebc7b5773d",
+        "name": "Developer 3",
+        "login": "dev3",
+        "avatar_url": "https://avatars.githubusercontent.com/u/1003?s=88"
+      },
+      "at": "2024-01-01T19:36:07Z",
+      "body": "Migration fix when production timeout after report table returns total on crashes. Shows returns has deploy session migration deploy column endpoint staging csv filter. Date calculation emissions laboratory csv loads filter. Travel report user would english production calculation filter.\n\nRetry need scope file dialog laboratory shows. Emissions endpoint table dialog api api fix staging deploy. No french cache retry scope scope. Session admin validation modal has date crashes lines validation scope request response after calculation export translation report button user. Index table chart admin endpoint laboratory the backend scope staging export on table crashes csv field.\n\nRole fix token column login would we spinner should api for total after would endpoint could. Api loads table invoice has should migration to csv fix value missing translation role energy field backend request. Chart would english year test production would upload shows could request sort upload invoice csv field calculation login button. Slowly token index loads french page update building french english permission deploy translation update need fix.\n\nAfter unit after value english shows sort index. Field chart endpoint migration validation dialog total we database spinner we purchase date test travel permission production calculation. Wrong travel invoice to upload form endpoint upload retry chart token update date unit year filter loads modal. Role test building french on emissions backend fix laboratory.",
+      "edited": true,
+      "history": [
+        {
+          "id": "ce8b687b43de8743b4dc03fc9044880ea4c4b655:0",
+          "author": {
+            "id": "5d5ebbabe94f7f73f67409484d111bebc7b5773d",
+            "name": "Developer 3",
+            "login": "dev3",
+            "avatar_url": "https://avatars.githubusercontent.com/u/1003?s=88"
+          },
+          "at": "2024-01-01T19:36:07Z",
+          "body": "Button form unit total date admin should staging. Module test file laboratory update invoice button production value calculation value report unit field permission database invoice. English factor no response the database filter column building building. Could translation date value form invoice need export returns.\n\nDeploy role scope login sort query to test value french export for validation report file. Value check refactor migration returns travel button no calculation export when shows building cache. Scope request unit validation upload translation missing the date the should invoice french. Unit report to factor missing retry field permission backend check factor to value.\n\nUser check permission invoice unit filter slowly invoice value we. Slowly user english role emissions we emissions travel for. Filter value year login to update fix refactor the sort file spinner export year invoice permission."
+        },
+        {
+          "id": "1c1b461df89a7be8e670d9b47be2c0dfc4cce7cd:0",
+          "author": {
+            "id": "b5d85ae6ceb6b8626b9a4813d3d565f0a0790d2c",
+            "name": "Developer 2",
+            "login": "dev2",
+            "avatar_url": "https://avatars.githubusercontent.com/u/1002?s=88"
+          },
+          "at": "2024-01-07T16:55:28Z",
+          "body": "Migration fix when production timeout after report table returns total on crashes. Shows returns has deploy session migration deploy column endpoint staging csv filter. Date calculation emissions laboratory csv loads filter. Travel report user would english production calculation filter.\n\nRetry need scope file dialog laboratory shows. Emissions endpoint table dialog api api fix staging deploy. No french cache retry scope scope. Session admin validation modal has date crashes lines validation scope request response after calculation export translation report button user. Index table chart admin endpoint laboratory the backend scope staging export on table crashes csv field.\n\nRole fix token column login would we spinner should api for total after would endpoint could. Api loads table invoice has should migration to csv fix value missing translation role energy field backend request. Chart would english year test production would upload shows could request sort upload invoice csv field calculation login button. Slowly token index loads french page update building french english permission deploy translation update need fix.\n\nAfter unit after value english shows sort index. Field chart endpoint migration validation dialog total we database spinner we purchase date test travel permission production calculation. Wrong travel invoice to upload form endpoint upload retry chart token update date unit year filter loads modal. Role test building french on emissions backend fix laboratory."
+        }
+      ]
+    },
+    {
+      "kind": "comment",
+      "id": "49ba8e55b0182629b430a649e3625c71a9be579f:0",
+      "author": {
+        "id": "5d5ebbabe94f7f73f67409484d111bebc7b5773d",
+        "name": "Developer 3",
+        "login": "dev3",
+        "avatar_url": "https://avatars.githubusercontent.com/u/1003?s=88"
+      },
+      "at": "2024-01-03T12:25:26Z",
+      "body": "Report response refactor message slowly error we shows button to returns returns laboratory french we staging laboratory no. Migration invoice french should session cache table. Should response message table field import fix need sort column shows modal api total shows csv we travel to. Migration we export test unit the token energy export file form travel csv table filter. Could csv index validation retry slowly the travel filter field database role check unit error factor.\n\nUpload database session we refactor wrong error production check file button spinner admin french. User backend invoice no request english request update calculation form translation. Test on request unit role button csv spinner after import permission login api table field deploy production."
+    },
+    {
+      "kind": "comment",
+      "id": "25c5192635abe7484094247389b5c0f685b54d5c:0",
+      "author": {
+        "id": "050271a9b6912b576dc52678f3b072f43c5e3959",
+        "name": "Developer 4",
+        "login": "dev4",
+        "avatar_url": "https://avatars.githubusercontent.com/u/1004?s=88"
+      },
+      "at": "2024-01-06T10:06:00Z",
+      "body": "Slowly login report module report date table api. Index after invoice cache could table lines total modal translation error csv endpoint.\n\nPage travel purchase button when endpoint fix the chart need save refactor validation. Permission after page emissions sort permission request response role sort. Date to no translation laboratory role update cache travel when query.\n\nTo filter on laboratory crashes crashes date translation field french import missing returns error endpoint. Report retry shows would form we csv crashes total backend export validation endpoint admin lines upload file. On validation module unit value modal laboratory on column wrong filter backend session table laboratory has date. Need unit message database role index endpoint csv database error field. Sort test migration backend energy backend modal scope invoice migration table production export has."
+    },
+    {
+      "kind": "comment",
+      "id": "bf46684f8431760d3da99e4ae65b9e431cdbceb5:0",
+      "author": {
+        "id": "5d5ebbabe94f7f73f67409484d111bebc7b5773d",
+        "name": "Developer 3",
+        "login": "dev3",
+        "avatar_url": "https://avatars.githubusercontent.com/u/1003?s=88"
+      },
+      "at": "2024-01-07T09:23:39Z",
+      "body": "Token returns api migration french lines spinner database field has page value spinner would date laboratory laboratory slowly. Column calculation wrong csv sort production. Validation chart loads page token role missing table staging year csv session date index dialog."
+    },
+    {
+      "kind": "labels",
+      "id": "fed6096b94361774feb4556e289aeeb139f7b20f:0",
+      "author": {
+        "id": "5d5ebbabe94f7f73f67409484d111bebc7b5773d",
+        "name": "Developer 3",
+        "login": "dev3",
+        "avatar_url": "https://avatars.githubusercontent.com/u/1003?s=88"
+      },
+      "at": "2024-01-08T02:35:14Z",
+      "added": [
+        "status:backlog"
+      ],
+      "removed": [
+        "status:in-review"
+      ]
+    },
+    {
+      "kind": "status",
+      "id": "f5413a62f59d0040fc1e96c9ab71e1c75d88cfb7:0",
+      "author": {
+        "id": "5d5ebbabe94f7f73f67409484d111bebc7b5773d",
+        "name": "Developer 3",
+        "login": "dev3",
+        "avatar_url": "https://avatars.githubusercontent.com/u/1003?s=88"
+      },
+      "at": "2024-01-08T23:47:31Z",
+      "status": "closed"
+    }
+  ]
+}
