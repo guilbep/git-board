@@ -41,17 +41,18 @@ func (s *Service) Heads(ctx context.Context) ([]Head, string, error) {
 	if err != nil {
 		return nil, "", err
 	}
-	cnt := s.counter(ctx, s.notice)
+	rd := s.reading(ctx, s.notice, true)
 	h := sha256.New()
 	for _, p := range ps {
 		h.Write([]byte(string(p.ID) + " " + string(p.Version) + "\n"))
 	}
-	if cnt != nil {
-		h.Write(cnt.Bytes())
+	if rd.cnt != nil {
+		h.Write(rd.cnt.Bytes())
 	}
+	h.Write([]byte(rd.sum))
 	out := make([]Head, len(ls))
 	for i, l := range ls {
-		out[i] = Head{Issue: s.issue(l.ID, &l.Row, dir, cnt), Version: l.Version}
+		out[i] = Head{Issue: s.issue(l.ID, &l.Row, dir, rd), Version: l.Version}
 	}
 	slices.SortFunc(out, func(x, y Head) int { return compare(x.ID, y.ID) })
 	return out, hex.EncodeToString(h.Sum(nil)[:16]), nil
@@ -74,7 +75,7 @@ func (s *Service) Threads(ctx context.Context, ids []kernel.ID) ([]Thread, error
 	if err != nil {
 		return nil, err
 	}
-	cnt := s.counter(ctx, s.notice)
+	rd := s.reading(ctx, s.notice, true)
 	out := make([]Thread, len(ids))
 	at := make(map[kernel.ID]int, len(ids))
 	for i, id := range ids {
@@ -86,7 +87,7 @@ func (s *Service) Threads(ctx context.Context, ids []kernel.ID) ([]Thread, error
 			return err
 		}
 		d := index(&st)
-		out[i] = s.thread(&st, &d.Row, log, dir, cnt)
+		out[i] = s.thread(&st, &d.Row, log, dir, rd)
 		return nil
 	}
 	if len(ids) < 64 {

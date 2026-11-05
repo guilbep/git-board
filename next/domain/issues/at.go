@@ -73,7 +73,7 @@ func (s *Service) ListAt(ctx context.Context, r ListReq, at time.Time) ([]Issue,
 		return nil, fmt.Errorf("listing the issues: %w", err)
 	}
 	slices.SortFunc(reads, func(a, b read) int { return strings.Compare(string(a.id), string(b.id)) })
-	cnt := s.counter(ctx, notice)
+	rdg := s.reading(ctx, notice, false)
 	var list []Issue
 	for _, rd := range reads {
 		err := rd.err
@@ -96,7 +96,7 @@ func (s *Service) ListAt(ctx context.Context, r ListReq, at time.Time) ([]Issue,
 			notice("issue %s on %s: %v", rd.id, at.Format(time.DateOnly), err)
 			continue
 		}
-		list = append(list, s.texted(&st, dir, cnt))
+		list = append(list, s.texted(&st, dir, rdg))
 	}
 	slices.SortFunc(list, func(x, y Issue) int { return cmp.Or(x.CreatedAt.Compare(y.CreatedAt), strings.Compare(x.ID, y.ID)) })
 	r.Today = at
@@ -109,9 +109,9 @@ func (s *Service) ListAt(ctx context.Context, r ListReq, at time.Time) ([]Issue,
 
 // texted is a state as a list shows it, with its texts, for a free text
 // looked for without the view.
-func (s *Service) texted(st *State, dir people.Directory, cnt *Counter) Issue {
+func (s *Service) texted(st *State, dir people.Directory, rd reading) Issue {
 	d := index(st)
-	is := s.issue(st.ID, &d.Row, dir, cnt)
+	is := s.issue(st.ID, &d.Row, dir, rd)
 	is.Body = st.Body
 	for _, c := range st.Comments {
 		is.CommentBodies = append(is.CommentBodies, c.Body)
@@ -152,5 +152,5 @@ func (s *Service) ShowAt(ctx context.Context, name string, at time.Time) (Thread
 		return Thread{}, err
 	}
 	d := index(&st)
-	return s.thread(&st, &d.Row, then, dir, s.counter(ctx, s.notice)), nil
+	return s.thread(&st, &d.Row, then, dir, s.reading(ctx, s.notice, false)), nil
 }

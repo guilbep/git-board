@@ -46,13 +46,14 @@ func (s *Service) read(ctx context.Context, name string) (Thread, []kernel.Entry
 		return Thread{}, nil, err
 	}
 	d := index(&st)
-	return s.thread(&st, &d.Row, log, dir, s.counter(ctx, s.notice)), log, nil
+	return s.thread(&st, &d.Row, log, dir, s.reading(ctx, s.notice, true)), log, nil
 }
 
 // thread replays an issue's log into its history, as the fold applies it.
-// M1: nothing is marked pending for a forge (sync records come with M4).
-func (s *Service) thread(st *State, r *Row, log []kernel.Entry, dir people.Directory, cnt *Counter) Thread {
-	th := Thread{Issue: s.issue(st.ID, r, dir, cnt), Author: dir.Who(st.Author), EditedAt: time.Unix(st.Updated, 0)}
+// Marked pending for a forge is what hasn't reached it yet, when rd
+// reads now.
+func (s *Service) thread(st *State, r *Row, log []kernel.Entry, dir people.Directory, rd reading) Thread {
+	th := Thread{Issue: s.issue(st.ID, r, dir, rd), Author: dir.Who(st.Author), EditedAt: time.Unix(st.Updated, 0)}
 	th.Participants = append(th.Participants, th.Author)
 	for _, c := range st.Comments {
 		if !slices.ContainsFunc(th.Participants, func(p people.Who) bool { return p.ID == c.Author }) {
@@ -61,6 +62,8 @@ func (s *Service) thread(st *State, r *Row, log []kernel.Entry, dir people.Direc
 	}
 	texts := map[kernel.OpID]int{}     // a text's operation id -> its event
 	origins := map[kernel.Origin]int{} // a comment's origin -> its event
+	from := map[int]*kernel.Origin{}   // an event -> where it was pulled from
+	changed := map[int][2][]string{}   // a labels event -> the labels it added and removed
 	labels := map[string]bool{}
 	title := ""
 	for _, e := range log {
@@ -74,6 +77,7 @@ func (s *Service) thread(st *State, r *Row, log []kernel.Entry, dir people.Direc
 					continue
 				}
 				origins[*e.Origin] = len(th.Events)
+				from[len(th.Events)] = e.Origin
 			}
 			ev.Kind, ev.Body, ev.Meta = "comment", d.Body, maps.Clone(d.Meta)
 			if e.Kind == "create" {
@@ -107,6 +111,7 @@ func (s *Service) thread(st *State, r *Row, log []kernel.Entry, dir people.Direc
 			if len(ev.Added) == 0 && len(ev.Removed) == 0 {
 				continue
 			}
+			changed[len(th.Events)] = [2][]string{ev.Added, ev.Removed}
 			ev.Kind, ev.Added, ev.Removed = "labels", s.Schema.Shown(slices.Clone(ev.Added)), s.Schema.Shown(slices.Clone(ev.Removed))
 		default:
 			continue
@@ -125,6 +130,11 @@ func (s *Service) thread(st *State, r *Row, log []kernel.Entry, dir people.Direc
 		e.Review = reviewOf(e.Meta)
 		if len(e.Meta) == 0 {
 			e.Meta = nil
+		}
+	}
+	if rd.now {
+		for _, r := range rd.recs[string(st.ID)] {
+			s.pending(&th, st, r, from, changed)
 		}
 	}
 	if len(st.Removed) > 0 { // deleted comments: no event, no text

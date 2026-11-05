@@ -29,6 +29,9 @@ type Service struct {
 	Views map[string]View
 	// Writing, when set, brackets each write (a Markdown folder's).
 	Writing Writing
+	// Held, when set, says which labels the sync keeps off the forge of
+	// a key (forge.Forges.Held): none of them waits for that forge.
+	Held func(key, label string) bool
 }
 
 // notice tells s.Notice, if any.
@@ -85,10 +88,10 @@ func (s *Service) List(ctx context.Context, r ListReq) ([]Issue, error) {
 	for _, b := range broken {
 		s.notice("%s %s: %v", b.Kind, b.ID, b.Err)
 	}
-	cnt := s.counter(ctx, s.notice)
+	rd := s.reading(ctx, s.notice, true)
 	list := make([]Issue, 0, len(rows))
 	for _, l := range rows {
-		is := s.issue(l.ID, &l.Row, dir, cnt)
+		is := s.issue(l.ID, &l.Row, dir, rd)
 		is.Inherited = s.Schema.RolesFor(is.Labels) // a list's alone, as v1's
 		list = append(list, is)
 	}
@@ -225,8 +228,7 @@ func idSet(ids []kernel.ID) map[string]bool {
 
 // issue is a row as every surface lists it: its labels as git-board reads
 // them, who opened it and who commented. A list adds what it inherits.
-// M1: no forges (sync records come with M4) and no project numbers (M2).
-func (s *Service) issue(id kernel.ID, r *Row, dir people.Directory, cnt *Counter) Issue {
+func (s *Service) issue(id kernel.ID, r *Row, dir people.Directory, rd reading) Issue {
 	is := Issue{ID: string(id), Title: r.Title, Status: string(r.Status), Labels: s.Schema.Shown(r.Labels),
 		UpdatedAt: time.Unix(r.Updated, 0), CreatedAt: time.Unix(r.Created, 0), AuthorID: string(r.Author),
 		Comments: r.Comments}
@@ -236,8 +238,9 @@ func (s *Service) issue(id kernel.ID, r *Row, dir people.Directory, cnt *Counter
 	if r.Status == Closed {
 		is.ClosedAt = time.Unix(r.Closed, 0)
 	}
+	is.forged(rd.recs[string(id)])
 	is.Shown = is.ShownTitle()
-	is.numbered(cnt)
+	is.numbered(rd.cnt)
 	is.AuthorLogins = dir.Names(r.Author)
 	if len(r.Commenters) > 0 {
 		is.CommenterIDs = make([]string, 0, len(r.Commenters))

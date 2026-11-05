@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/guilbep/git-board/next/kernel"
+	bsync "github.com/guilbep/git-board/next/sync"
 )
 
 // Counter is the project numbers' counter (ADR 0016; datastores.md, The
@@ -184,10 +185,10 @@ func (s *Service) InitNumbers(ctx context.Context, prefix string, start int) err
 
 // Number gives every issue without a number the next ones, oldest
 // first, on the datastore's counter: one write that lands only if no one
-// wrote first, five tries. forges are the issues' forge issues, a GitHub
-// number below the start being the issue's own. It says how many it
-// numbered; a project that doesn't number its issues numbers none.
-func (s *Service) Number(ctx context.Context, forges map[string][]Forge) (int, error) {
+// wrote first, five tries. A GitHub number below the start, from the
+// sync records, is the issue's own. It says how many it numbered; a
+// project that doesn't number its issues numbers none.
+func (s *Service) Number(ctx context.Context) (int, error) {
 	ctx = s.Board.Snapshot(ctx)
 	ds := s.Board.Store()
 	c := ds.Caps().Counter
@@ -212,7 +213,7 @@ func (s *Service) Number(ctx context.Context, forges map[string][]Forge) (int, e
 		if err != nil {
 			return 0, err
 		}
-		todo, err := s.unnumbered(ctx, cnt, forges)
+		todo, err := s.unnumbered(ctx, cnt, s.reading(ctx, s.notice, false).recs)
 		if err != nil || len(todo) == 0 {
 			return 0, err
 		}
@@ -234,7 +235,7 @@ func (s *Service) Number(ctx context.Context, forges map[string][]Forge) (int, e
 
 // unnumbered are the issues c gives no number, oldest first; a deleted
 // one is none.
-func (s *Service) unnumbered(ctx context.Context, c Counter, forges map[string][]Forge) ([]string, error) {
+func (s *Service) unnumbered(ctx context.Context, c Counter, recs map[string][]bsync.Record) ([]string, error) {
 	rows, err := Kind.List(ctx, s.Board, kernel.Query{Sort: "created"})
 	if err != nil {
 		return nil, err
@@ -245,7 +246,9 @@ func (s *Service) unnumbered(ctx context.Context, c Counter, forges map[string][
 	}
 	var todo []issue
 	for _, r := range rows {
-		if c.NumberOf(string(r.ID), forges[string(r.ID)]) == 0 {
+		var is Issue
+		is.forged(recs[string(r.ID)])
+		if c.NumberOf(string(r.ID), is.Forges) == 0 {
 			todo = append(todo, issue{string(r.ID), r.Row.Created})
 		}
 	}

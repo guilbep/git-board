@@ -126,7 +126,7 @@ func (s *Service) current(ctx context.Context, name string) (Issue, error) {
 		return Issue{}, fmt.Errorf("issue %s: %w", id, ErrDeleted)
 	}
 	d := index(&e.State)
-	return s.issue(id, &d.Row, people.Directory{}, nil), nil
+	return s.issue(id, &d.Row, people.Directory{}, reading{}), nil
 }
 
 // Comment adds a comment as who writes, and answers its id and the

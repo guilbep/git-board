@@ -156,8 +156,8 @@ type Event struct {
 	// Pending are the forges the issue is on that this change hasn't
 	// reached yet: the next forge sync takes it there. EditPending, for a
 	// comment already there: its latest edit hasn't. EditWas, with
-	// EditPending, is the text the forges have. All three need the sync's
-	// records: empty until M5's second phase.
+	// EditPending, is the text the forges have. All three are read from
+	// the sync's records.
 	Pending     []string `json:"pending,omitempty"`
 	EditPending []string `json:"edit_pending,omitempty"`
 	EditWas     string   `json:"edit_was,omitempty"`

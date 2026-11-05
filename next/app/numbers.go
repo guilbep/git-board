@@ -74,11 +74,7 @@ func (b *Board) Number(ctx context.Context) (int, error) {
 	if b.inGit() {
 		return 0, b.viaOrigin(ctx)
 	}
-	linked, err := forges(ctx, b.Kernel.Store())
-	if err != nil {
-		return 0, err
-	}
-	n, err := b.Issues.Number(ctx, linked)
+	n, err := b.Issues.Number(ctx)
 	return n, sentence(err)
 }
 

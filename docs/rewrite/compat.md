@@ -143,9 +143,9 @@ v1 against itself is the same, byte for byte.
 ```
 
 The differences `git-board-next` has for now, each closed by a later
-milestone (design.md, section 5): forges from sync records (M4), project
-numbers and the commands that write (M2), the Markdown datastore (M3,
-closed).
+milestone (design.md, section 5): project numbers and the commands that
+write (M2), the Markdown datastore (M3), forges from sync records (M4),
+all closed: the list is empty.
 `make compat BIN=<git-board-next>` holds the binary to them as well as
 to `allowed.txt` (it sets `GIT_BOARD_COMPAT_PENDING=1`; v1, with no
 `BIN`, has none). Unlike an allowed difference, a pending one is to go:
