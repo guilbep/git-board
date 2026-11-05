@@ -59,28 +59,9 @@ func baseURL(f forge.Table) string {
 // local path is no forge, and isn't told; say hears each other URL that
 // names none, each forge found, and each left out, as v1 says them.
 func (b *Board) Forges(ctx context.Context, say func(string)) ([]forge.Table, error) {
-	if !b.Config.Forges.Discover {
-		return b.Config.Forges.List, nil
-	}
-	if has, err := b.hasRemote(ctx, NumbersRemote); err != nil || !has {
-		return nil, err
-	}
-	urls := func(args ...string) []string {
-		out, _ := gitRun(ctx, b.Dir, args...) // no pushurl is no error of the run's
-		var us []string
-		for _, u := range strings.Split(strings.TrimSpace(out), "\n") {
-			if u = NoCredentials(u); u != "" && !localPath(u) {
-				us = append(us, u)
-			}
-		}
-		return us
-	}
-	resolved := append(urls("remote", "get-url", "--all", NumbersRemote), urls("remote", "get-url", "--push", "--all", NumbersRemote)...)
-	written := append(urls("config", "--get-all", "remote."+NumbersRemote+".url"), urls("config", "--get-all", "remote."+NumbersRemote+".pushurl")...)
-	_, skips := forge.Discover(resolved) // an alias as written isn't told: its resolved URL is
-	found, _ := forge.Discover(append(resolved, written...))
-	for _, s := range skips {
-		say("skipped " + s)
+	found, err := b.FoundForges(ctx, say)
+	if err != nil || !b.Config.Forges.Discover {
+		return found, err
 	}
 	var out []forge.Table
 	seen := map[string]string{} // key -> forge name
@@ -105,6 +86,36 @@ func (b *Board) Forges(ctx context.Context, say func(string)) ([]forge.Table, er
 		out = append(out, f)
 	}
 	return out, nil
+}
+
+// FoundForges are Forges' forges as the settings and the remotes name
+// them, with nothing asked of a forge: a found one's project is its path,
+// as written in the URL.
+func (b *Board) FoundForges(ctx context.Context, say func(string)) ([]forge.Table, error) {
+	if !b.Config.Forges.Discover {
+		return b.Config.Forges.List, nil
+	}
+	if has, err := b.hasRemote(ctx, NumbersRemote); err != nil || !has {
+		return nil, err
+	}
+	urls := func(args ...string) []string {
+		out, _ := gitRun(ctx, b.Dir, args...) // no pushurl is no error of the run's
+		var us []string
+		for _, u := range strings.Split(strings.TrimSpace(out), "\n") {
+			if u = NoCredentials(u); u != "" && !localPath(u) {
+				us = append(us, u)
+			}
+		}
+		return us
+	}
+	resolved := append(urls("remote", "get-url", "--all", NumbersRemote), urls("remote", "get-url", "--push", "--all", NumbersRemote)...)
+	written := append(urls("config", "--get-all", "remote."+NumbersRemote+".url"), urls("config", "--get-all", "remote."+NumbersRemote+".pushurl")...)
+	_, skips := forge.Discover(resolved) // an alias as written isn't told: its resolved URL is
+	found, _ := forge.Discover(append(resolved, written...))
+	for _, s := range skips {
+		say("skipped " + s)
+	}
+	return found, nil
 }
 
 // resolveProject is a found forge's project as a table names it, read
