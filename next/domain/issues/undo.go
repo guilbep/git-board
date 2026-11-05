@@ -33,7 +33,9 @@ type Undone struct {
 // latest time. A change is what one write wrote: one pack, as edit -e
 // writes a title and a description at once. A change that came from a
 // forge isn't theirs to undo here. It is refused when someone else wrote
-// to the issue after it, unless force. Undoing twice redoes.
+// to the issue after it, unless force. Undoing twice redoes, but for a
+// new comment: its undo is a delete, and a delete is final (ADR 0019),
+// so the second undo refuses and says to post the text again.
 func (s *Service) Undo(ctx context.Context, name string, force bool) (Undone, error) {
 	ctx, done, werr := s.writing(ctx)
 	if werr != nil {
@@ -182,6 +184,13 @@ func inverse(me, id kernel.ID, log []kernel.Entry, force bool, whom func(kernel.
 		_ = json.Unmarshal(e.Data, &d)
 		switch e.Kind {
 		case "delete":
+			// a tombstone is final (ADR 0019), also the one undoing a
+			// comment wrote: it doesn't restore, nor post a copy that
+			// a sync would post to the forge beside the first
+			if t := kernel.OpID(d.Target); t != before.BodyOp {
+				return nil, u, fmt.Errorf("%w: your last change here deleted comment %s, and a delete is never undone (docs/adr/0019): post it again with git board comment %s",
+					ErrCantUndo, shortRef(d.Target), id[:8])
+			}
 			return nil, u, fmt.Errorf("%w: a delete is never undone (docs/adr/0019)", ErrCantUndo)
 		case "set-meta":
 			return nil, u, fmt.Errorf("%w: a change of metadata (a review thread resolved, a Project field) has no undo", ErrCantUndo)

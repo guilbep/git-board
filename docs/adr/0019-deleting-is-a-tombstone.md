@@ -105,7 +105,11 @@ Bad, and accepted:
 
 - **Undelete.** The text is there, so a `restore` operation would be
   cheap. Not added: `undo` refuses to undo a delete, and nothing asked for
-  it yet.
+  it yet. That includes the delete `undo` writes for a new comment
+  (2026-11-05): undoing twice redoes everything else, not a comment; a
+  second undo refuses and says to post the text again. A copy posted by
+  undo would be a new comment, which a sync posts to the forge beside
+  the first.
 - **Purging.** A real erase of one issue (a new log under a new id, the
   old refs deleted on every clone and remote, the sync records moved) is
   `git board reset --hard` for one issue. Not planned.
