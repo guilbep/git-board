@@ -61,6 +61,7 @@ func Run(t *testing.T, newForge NewForge) {
 		{"AssigneesAreTheForges", assigneesAreTheForges},
 		{"AnAssigneeWhoWroteNothing", assigneeWhoWroteNothing},
 		{"ACrashThenALocalEdit", crashThenLocalEdit},
+		{"TheProjectsLabels", projectsLabels},
 	} {
 		t.Run(sc.name, func(t *testing.T) {
 			t.Parallel()
@@ -814,4 +815,39 @@ func crashThenLocalEdit(e *env) {
 		e.t.Fatalf("forge = %v, want one L2", got)
 	}
 	e.stable(map[*fake.Forge]forge.Forge{f: a})
+}
+
+// The project's labels, for git board lint --create-labels: listed with
+// their colors, hex without #, made, and edited. Every adapter is a
+// forge.Labeler.
+func projectsLabels(e *env) {
+	f, a := e.forge("example.com/p")
+	l, ok := a.(forge.Labeler)
+	if !ok {
+		e.t.Fatalf("%T is no forge.Labeler", a)
+	}
+	f.AddLabel(forge.Label{Name: "bug", Color: "d73a4a", Description: "Broken"})
+	f.AddLabel(forge.Label{Name: "status:ready", Color: "00897f"})
+	f.AddLabel(forge.Label{Name: "wontfix", Color: "ffffff"})
+	got, err := l.Labels(e.ctx)
+	if err != nil || len(got) != 3 || got[0] != (forge.Label{Name: "bug", Color: "d73a4a", Description: "Broken"}) {
+		e.t.Fatalf("labels %+v, %v", got, err)
+	}
+	if err := l.SetLabel(e.ctx, forge.Label{Name: "prio:p0", Color: "e00000", Description: "Now"}, false); err != nil {
+		e.t.Fatal(err)
+	}
+	if err := l.SetLabel(e.ctx, forge.Label{Name: "bug", Color: "b60205", Description: "It breaks"}, true); err != nil {
+		e.t.Fatal(err)
+	}
+	if err := l.SetLabel(e.ctx, forge.Label{Name: "status:ready", Description: "Go"}, true); err != nil { // no color: kept
+		e.t.Fatal(err)
+	}
+	want := []forge.Label{{Name: "bug", Color: "b60205", Description: "It breaks"}, {Name: "status:ready", Color: "00897f", Description: "Go"},
+		{Name: "wontfix", Color: "ffffff"}, {Name: "prio:p0", Color: "e00000", Description: "Now"}}
+	if got, err := f.Labels(e.ctx); err != nil || !slices.Equal(got, want) {
+		e.t.Fatalf("labels after\n%+v\nwant\n%+v (%v)", got, want, err)
+	}
+	if err := l.SetLabel(e.ctx, forge.Label{Name: "Bug", Color: "000000"}, false); !errors.Is(err, forge.ErrRefused) {
+		e.t.Fatalf("making a label the project has: %v, want refused", err)
+	}
 }

@@ -128,6 +128,24 @@ type Forge interface {
 	SetAssignees(ctx context.Context, issue Ref, users []Account) ([]Account, error)
 }
 
+// Label is one of a project's labels. Color is hex without #, as GitHub
+// writes it; "" for none.
+type Label struct {
+	Name        string `json:"name"`
+	Color       string `json:"color"`
+	Description string `json:"description"`
+}
+
+// Labeler is a forge whose project's labels git-board lists and sets
+// (git board lint --create-labels): GitHub's and GitLab's.
+type Labeler interface {
+	// Labels lists the project's labels.
+	Labels(ctx context.Context) ([]Label, error)
+	// SetLabel creates the label, or with update edits the one of its
+	// name: its color and description.
+	SetLabel(ctx context.Context, l Label, update bool) error
+}
+
 // Replier is a forge whose comments form threads (GitLab's discussions):
 // Reply posts a comment in the thread holding toCommentID, ErrNotFound when
 // that comment is gone. GitHub's comments are flat; it has none.

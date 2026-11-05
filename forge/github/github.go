@@ -406,11 +406,9 @@ func (f *Forge) label(ctx context.Context, name string) error {
 
 // Label is one of the repository's labels, its color hex without #, as
 // GitHub has it.
-type Label struct {
-	Name        string `json:"name"`
-	Color       string `json:"color"`
-	Description string `json:"description"`
-}
+type Label = forge.Label
+
+var _ forge.Labeler = (*Forge)(nil)
 
 // Labels lists the repository's labels.
 func (f *Forge) Labels(ctx context.Context) ([]Label, error) {
