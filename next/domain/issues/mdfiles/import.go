@@ -29,8 +29,28 @@ import (
 // importer reads files into the board, as one write's prelude.
 type importer struct {
 	f         *Folder
-	names     map[string]kernel.ID // people by id, name and login; read at the first need
-	conflicts []string             // "file: field", the board's value kept
+	names     map[string]kernel.ID       // people by id, name and login; read at the first need
+	conflicts []string                   // "file: field", the board's value kept
+	heads     map[kernel.ID]issues.Issue // the issues as listed, read at the first need; one written since is out
+}
+
+// issue is an issue as a list shows it: from the listing, unless it was
+// written since.
+func (im *importer) issue(ctx context.Context, id kernel.ID) (issues.Issue, error) {
+	if im.heads == nil {
+		hs, _, err := im.f.Issues.Heads(ctx)
+		if err != nil {
+			return issues.Issue{}, err
+		}
+		im.heads = make(map[kernel.ID]issues.Issue, len(hs))
+		for _, h := range hs {
+			im.heads[kernel.ID(h.ID)] = h.Issue
+		}
+	}
+	if is, ok := im.heads[id]; ok {
+		return is, nil
+	}
+	return im.f.Issues.Get(ctx, string(id))
 }
 
 // op is an operation by who, now; its data as v1 writes it, keys sorted.
@@ -164,10 +184,11 @@ func (im *importer) into(ctx context.Context, f file) (conflicts []string, err e
 	if me == "" {
 		return nil, people.ErrNoMe
 	}
-	cur, err := svc.Get(ctx, string(id))
+	cur, err := im.issue(ctx, id)
 	if err != nil {
 		return nil, err
 	}
+	defer delete(im.heads, id) // written, maybe: read again
 	moved := cur.UpdatedAt.UTC().Truncate(time.Second).After(f.front.Updated.UTC())
 	may := func(field string) bool {
 		if moved {
