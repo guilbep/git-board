@@ -271,3 +271,35 @@ func mapKeys[V any](m map[string]V) []string {
 	slices.Sort(out)
 	return out
 }
+
+// TestMarkdownCopy: a board copied from git into a Markdown folder
+// renders the same files, byte for byte, by v1 and v2: the generated
+// board (basic holds a pack a folder refuses, as v1 does).
+func TestMarkdownCopy(t *testing.T) {
+	t.Parallel()
+	one, two := binaries(t)
+	var from Board
+	for _, b := range boards(t) {
+		if b.Name == "generated" {
+			from = b
+		}
+	}
+	ctx := context.Background()
+	dir, home, _ := checkout(t, from)
+	if err := Git(ctx, dir, "config", "board.datastore", "markdown:issues"); err != nil {
+		t.Fatal(err)
+	}
+	var files [2]map[string][]byte
+	for i, bin := range []string{one, two} {
+		at := copyCheckout(t, dir)
+		r, err := Run(ctx, bin, at, home, Case{Line: "datastore copy"})
+		if err != nil || r.Exit != 0 {
+			t.Fatalf("%s datastore copy: exit %d, %v\n%s", bin, r.Exit, err, r.Stderr)
+		}
+		files[i] = mdFiles(t, at)
+	}
+	if len(files[0]) < 10 {
+		t.Fatalf("v1 rendered %d files: want the generated board's", len(files[0]))
+	}
+	sameFiles(t, files[0], files[1], func(b []byte) []byte { return b })
+}

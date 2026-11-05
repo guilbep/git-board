@@ -91,15 +91,19 @@ func (f *Folder) Writing(ctx context.Context) (context.Context, func(), error) {
 	}, nil
 }
 
-// Sync reads the hand edits in and renders the files, as a write does
-// writing nothing.
-func (f *Folder) Sync(ctx context.Context) error {
-	_, end, err := f.Writing(ctx)
+// Render renders the files, under the folder's lock, reading nothing
+// in: a board copied into the folder (v1's renderTo).
+func (f *Folder) Render(ctx context.Context) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	unlock, err := f.lock(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("markdown: %w", err)
 	}
-	end()
-	return nil
+	defer unlock()
+	k := f.load()
+	defer f.save(k)
+	return f.render(ctx, k)
 }
 
 // stat is what tells a file changed: a write changes its size, or its
