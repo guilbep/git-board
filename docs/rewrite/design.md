@@ -952,6 +952,8 @@ root and deletes `core/`, `internal/` and the old `cmd/`.
 
 ## 6. Risks and open questions
 
+**Answered on 2026-11-05: see [ADR 0021](../adr/0021-git-board-v2-same-data-new-code.md).**
+
 **For Pierre to decide:**
 
 1. **Freeze v1?** Fixes only, from the start of M1, or until M2? Each

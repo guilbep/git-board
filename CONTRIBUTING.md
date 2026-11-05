@@ -1,5 +1,13 @@
 # Contributing
 
+## v1 is frozen
+
+git-board v2 is being built in `next/` ([ADR
+0021](docs/adr/0021-git-board-v2-same-data-new-code.md)). v1 (`core/`,
+`internal/`, `cmd/git-board`) takes fixes only. A fix to v1 is also made
+in `next/`, unless `make compat` shows v2 doesn't need it. New features go
+to `next/`.
+
 ## Setup
 
 - Go 1.26.6+ (`GOTOOLCHAIN=auto` will fetch a newer one automatically if
