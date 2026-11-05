@@ -20,7 +20,7 @@ import (
 func (b *Board) remoteOf(ctx context.Context, what, remote string) (*git.Store, error) {
 	g, ok := b.Kernel.Store().(*git.Store)
 	if !ok {
-		return nil, missing(what + " needs a board kept in git; this board is kept in " + b.DatastoreName())
+		return nil, missing(what + " needs a board kept in git; this board is kept in " + b.keptIn())
 	}
 	out, err := gitRun(ctx, b.Dir, "remote")
 	if err != nil {

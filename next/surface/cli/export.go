@@ -3,11 +3,8 @@ package cli
 import (
 	"errors"
 	"fmt"
-	"path/filepath"
 
 	"github.com/spf13/cobra"
-
-	"github.com/guilbep/git-board/next/domain/issues/mdfiles"
 )
 
 // git board export --md and import --md, as v1's: the Markdown folder's
@@ -34,9 +31,7 @@ got a new title is removed; any other file in dir is left alone.`,
 				return err
 			}
 			defer b.Close()
-			s := b.issues.Schema
-			flat := func(l string) bool { _, ok := s.Kinds[l]; return ok && s.FlatKinds() }
-			written, err := mdfiles.Export(cmd.Context(), b.issues, md, flat)
+			written, err := b.ExportMarkdown(cmd.Context(), md)
 			if err != nil {
 				return err
 			}
@@ -80,14 +75,9 @@ the next write reads it in anyway.`,
 				return err
 			}
 			defer b.Close()
-			var rep mdfiles.Report
-			switch {
-			case b.Files != nil && (md == "" || sameDir(md, b.Files.Dir())):
-				rep, err = b.Files.Import(cmd.Context())
-			case md == "":
+			rep, ok, err := b.ImportMarkdown(cmd.Context(), md)
+			if !ok {
 				return errors.New("import needs --md <dir>")
-			default:
-				rep, err = mdfiles.Import(cmd.Context(), b.issues, md)
 			}
 			if err != nil {
 				return err
@@ -111,16 +101,4 @@ the next write reads it in anyway.`,
 	}
 	cmd.Flags().StringVar(&md, "md", "", "the folder to read the Markdown files from")
 	return cmd
-}
-
-// sameDir says a and b are one folder, links resolved.
-func sameDir(a, b string) bool {
-	abs := func(p string) string {
-		p, _ = filepath.Abs(p)
-		if r, err := filepath.EvalSymlinks(p); err == nil {
-			return r
-		}
-		return p
-	}
-	return abs(a) == abs(b)
 }
