@@ -108,9 +108,18 @@ once: 71 s for the 12,000 open issues of the 20,000-issue board (224 s
 one at a time with each issue's git reads; v1 took over 400 s). An issue's
 History draws the cycle's step bars from `GET /api/issues/{id}/cycle`.
 Attaching files (paste, drop, pick in a text, as v1) works on routes 40
-and 41; a forge's pictures load through route 42. Waiting for their
-routes (M6, api.md routes 50 to 53): the cycle's actions and v1's cycle
-panels on an issue, the GitHub Project and its conflicts. Their v1 pages stay in `web/` until then; the cycle's
+and 41; a forge's pictures load through route 42. An issue with the
+cycle on shows its cycle above the description (`CyclePanel.vue`, the
+controls from `cycleact.ts`): the steps, the gate and whose turn it is,
+the branches, the pull request with its checks (Open, Edit, Merge, Check
+again), the environments, and the controls the server offers the viewer,
+each one action of route 50 sent from the version read: Accept without
+criteria, the spec's verdict, the risk, the status moves, Approve the
+plan, Mark ready for review, the review, and at Verify the criteria's
+checks, a pasted run and the sign-off. The Work page's Review and Sign
+off open it. v1's line comments on the diff and the tests' run wait for
+the changes' and the runs' reads. Waiting for their routes (M6, api.md
+routes 51 to 53): the GitHub Project and its conflicts. Their v1 pages stay in `web/` until then; the cycle's
 settings form (a table of the file) and the experimental switch stay.
 
 ## Tests
@@ -124,7 +133,7 @@ settings form (a table of the file) and the experimental switch stay.
   board, in its file), `views.spec.ts` (a view saved from the board),
   `lanes.spec.ts` (a lane's and a table's pages), `insights.spec.ts`,
   `releases.spec.ts` (a cut to a bare authority, its record's writes),
-  `work.spec.ts` (the cycle on and off) and `uploads.spec.ts` (pick and
+  `work.spec.ts` (the cycle on and off), `cycle.spec.ts` (the panel's actions, a pull request opened and merged on the fake GitHub, Work's Review and Sign off) and `uploads.spec.ts` (pick and
   drop in a comment) are new. Dropped with their features: the clone's
   first pull, the ENAC template's labels, Labels' lint, a field's GitHub
   Project column, Start over.

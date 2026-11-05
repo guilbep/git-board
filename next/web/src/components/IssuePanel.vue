@@ -137,6 +137,8 @@
           </div>
           <HistoryView v-if="reading.tab === 'history'" :thread="thread" :fields="fields" :cycle="cycle" />
           <template v-else>
+            <!-- the cycle (experimental): the step, its gate and its controls -->
+            <CyclePanel v-if="cycle" :id="thread.id" :cycle="cycle" @changed="cycleChanged" @reload="reload" />
             <CommentCard v-if="created" :data-event="created.id" :event="created" :forges="thread.forges" :mine="created.author.id === meId" :save="edit" :role="roleOf(fields, created.author.login)" plain @ref="onRef" />
             <ol class="gb-tl" aria-label="Conversation">
               <template v-for="e in rest" :key="e.id">
@@ -175,6 +177,7 @@ import { cycleOn, loadMe, me, meLoaded } from '@/me';
 import { getCycle } from '@/api';
 import type { Cycle } from '@/api/cycletypes';
 import CommentCard from '@/components/CommentCard.vue';
+import CyclePanel from '@/components/CyclePanel.vue';
 import HistoryView from '@/components/HistoryView.vue';
 import { loadReading, roleOf, saveReading } from '@/flow';
 import { steps } from '@/replay';
@@ -242,18 +245,26 @@ const rest = computed(() => thread.value?.events.filter((e) => ['comment', 'labe
 // in the browser, one for every issue
 const reading = reactive(loadReading());
 watch(reading, saveReading, { deep: true });
-// the cycle's step bars in History (experimental): read with the tab, and
-// again as the issue changes; none when the cycle is off or doesn't answer
+// the cycle (experimental): its panel on the conversation, its step bars
+// in History; read again as the issue changes; none when the cycle is
+// off or doesn't answer
 const cycle = ref<Cycle | null>(null);
 watch(
-  () => [cycleOn.value && reading.tab === 'history', thread.value?.version] as const,
-  async ([want]) => {
-    if (!want) return;
+  () => [cycleOn.value, thread.value?.version] as const,
+  async ([want, version]) => {
+    if (!want || !version) return;
+    if (cycle.value?.version === version) return; // the action's answer is this version's
     const id = props.id;
     const c = await getCycle(id).catch(() => null);
     if (id === props.id) cycle.value = c;
   },
+  { immediate: true },
 );
+// an action answers the cycle after it; the issue reloads its comments and fields
+function cycleChanged(c: Cycle) {
+  cycle.value = c;
+  void reload();
+}
 const changeCount = computed(() => (thread.value ? steps(thread.value.events).length : 0));
 // the board's fields, and any namespace this issue has besides
 const sideNames = computed(() => {

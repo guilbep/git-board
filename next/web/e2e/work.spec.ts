@@ -25,12 +25,13 @@ test('Work lists the open issues by their step, Mine and Team', async ({ page, r
   for (const more of await page.getByRole('button', { name: /^Show \d+ more$/ }).all()) await more.click();
   const row = page.locator('main tr', { hasText: 'E2E work waiting' });
   await expect(row).toBeVisible();
-  // its issue opens in the panel, its History with the cycle's steps
+  // its issue opens with its cycle, read at once; History draws its steps
+  const read = page.waitForResponse((r) => r.url().endsWith(`/api/issues/${made.id}/cycle`) && r.ok());
   await row.getByRole('link', { name: /E2E work waiting/ }).click();
   await expect(page).toHaveURL(new RegExp(`/issues/${made.id}`));
-  const read = page.waitForResponse((r) => r.url().endsWith(`/api/issues/${made.id}/cycle`) && r.ok());
-  await page.getByRole('tab', { name: /^History/ }).click();
   await read;
+  await expect(page.getByRole('region', { name: 'The cycle' })).toBeVisible();
+  await page.getByRole('tab', { name: /^History/ }).click();
   expect(errs).toEqual([]);
 });
 

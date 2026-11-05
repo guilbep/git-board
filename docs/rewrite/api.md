@@ -395,7 +395,7 @@ Experimental (ADR 0018): off, both answer 404 `experimental`. Built in
 
 **The read (49)** is `{step, at, of, name, stage, done, gate, risk,
 skipped, note, waits, mine, actions, evidence, id, version,
-pr_checked_at, environments}`, with the issue's `version` as `ETag`: an
+body_version, pr_checked_at, environments}`, with the issue's `version` as `ETag`: an
 action's `If-Match`. `evidence` is `cycle.Input`: the status, the
 criteria, the people holding each gate, the lanes (each branch's step,
 tests and PR chip), the plan, the runs, checks and sign-offs, and `pr`,
@@ -403,7 +403,8 @@ the evidence branch's pull request as the forge gates it (`{number, url,
 state, draft, title, body, base, head, merge_commit, author, decision,
 mergeable, merge_state, checks, reviews, requested, can_merge, checking,
 waits}`, GitHub's words; a GitLab merge request in them). `actions` are
-what the viewer can press now. `pr_checked_at` is when the PR was last
+what the viewer can press now. `body_version` is the description's
+version, what `spec-verdict`'s `on` names. `pr_checked_at` is when the PR was last
 read from the forge. `environments` are `[release]`'s, `[{name, version,
 in}]`: `in` when the environment runs one of the issue's merged
 branches (the trunk's records, no fetch); `[]` without `[release]`.
@@ -429,7 +430,7 @@ action reads. It answers the read (49) after it, and its `ETag`.
 | `move-ready`, `start`, `to-validation` | | the status to `ready`, the first in-progress, the first validation status, when `actions` has it |
 | `approve-plan` | | `plan:approve` at the head; at `ready`, the status to in-progress. A structural plan is approved on the forge |
 | `ready-for-review` | | the status to in-review, when the signed check results at the head prove it (ADR 0001; `invalid` with the reason when not) |
-| `review` | `{state: APPROVE, REQUEST_CHANGES or COMMENT, body}`, or a line comment `{path, line, side: old or new, body}`, or a reply `{reply_to, body}`; `commit` (the head by default) | a comment with `review:*` metadata, `review:pr` the PR's, which the sync mirrors |
+| `review` | `{state: APPROVE, REQUEST_CHANGES or COMMENT, body}`, or a line comment `{path, line, side: old or new, body}`, or a reply `{reply_to, body}`; `commit` (the head by default; none without a branch) | a comment with `review:*` metadata, `review:pr` the PR's, which the sync mirrors |
 | `resolve` | `{comment, resolved}` | `review:resolved` on a thread's first line comment |
 | `open-pull` | `{branch}` | a pull request from one of the issue's branches on origin into its base, titled from the issue, `Refs: <number>` |
 | `edit-pull` | `{number, title, body}` | one of the issue's PRs' title and description |

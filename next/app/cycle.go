@@ -48,8 +48,9 @@ func (b *Board) viewer(ctx context.Context, me string) (issues.InboxMe, error) {
 // environments its merged work runs in.
 type CycleView struct {
 	cycle.Cycle
-	ID           string     `json:"id"`      // the issue's whole id
-	Version      string     `json:"version"` // the issue's version: an action's If-Match
+	ID           string     `json:"id"`           // the issue's whole id
+	Version      string     `json:"version"`      // the issue's version: an action's If-Match
+	BodyVersion  int        `json:"body_version"` // the description's: spec-verdict's on
 	PRCheckedAt  time.Time  `json:"pr_checked_at,omitzero"`
 	Environments []IssueEnv `json:"environments"`
 }
@@ -91,14 +92,14 @@ func (b *Board) cycleRead(ctx context.Context, name, me string, force bool) (Cyc
 	if err != nil {
 		return CycleView{}, err
 	}
-	v := CycleView{Cycle: cycle.Compute(in), ID: string(th.ID), Version: string(th.Version), PRCheckedAt: in.PRAt}
+	v := CycleView{Cycle: cycle.Compute(in), ID: string(th.ID), Version: string(th.Version), BodyVersion: BodyVersion(th), PRCheckedAt: in.PRAt}
 	v.Environments, err = b.issueEnvs(ctx, in)
 	return v, err
 }
 
 // issueEnvs are the release environments, each with whether it runs one
 // of the issue's merged lanes, as the trunk's records say (no fetch):
-// none without [release] environments.
+// none without [release] environments, or when the trunk isn't there.
 func (b *Board) issueEnvs(ctx context.Context, in cycle.Input) ([]IssueEnv, error) {
 	out := []IssueEnv{}
 	if len(b.Config.Release.Environments) == 0 {
@@ -114,7 +115,9 @@ func (b *Board) issueEnvs(ctx context.Context, in cycle.Input) ([]IssueEnv, erro
 	run.Offline = true
 	st, err := run.Status(ctx)
 	if err != nil {
-		return nil, err
+		// a release state that doesn't read (no trunk fetched yet) is no
+		// environment to tell: the cycle reads all the same
+		return out, nil
 	}
 	for _, e := range st.Envs {
 		env := IssueEnv{Name: e.Name, Version: e.Version}

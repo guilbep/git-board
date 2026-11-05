@@ -31,23 +31,58 @@ const project = {
   items: { pageInfo: { hasNextPage: false, endCursor: '1' }, nodes: [{ id: 'PVTI_1', content: { __typename: 'Issue', number: 77, url: 'https://github.com/o/elsewhere/issues/77', title: 'Elsewhere' },
     fieldValues: { nodes: [{ __typename: 'ProjectV2ItemFieldSingleSelectValue', name: 'Ready', field: { name: 'Status' } }] } }] },
 };
+// and o/r's pull requests (cycle.spec.ts): opened, edited and merged
+// here, found by their head branch; the base's rules require none
+const pulls = [];
+const prNode = (p) => ({
+  number: p.number, url: `https://github.com/o/r/pull/${p.number}`, state: p.state, isDraft: false, title: p.title, body: p.body,
+  baseRefName: p.base, headRefOid: p.sha, mergeCommit: p.state === 'MERGED' ? { oid: p.sha } : null, headRepository: { nameWithOwner: 'o/r' },
+  author: { login: 'e2e' }, reviewDecision: '', mergeable: 'MERGEABLE', mergeStateStatus: 'CLEAN',
+  latestOpinionatedReviews: { nodes: [] }, reviewRequests: { nodes: [] }, commits: { nodes: [] },
+});
 const github = createServer((req, res) => {
   const url = (req.url ?? '').split('?')[0];
   res.setHeader('Content-Type', 'application/json');
-  if (req.method === 'POST' && url === '/graphql') {
-    let body = '';
-    req.on('data', (c) => (body += c));
-    req.on('end', () => {
-      const { variables } = JSON.parse(body);
+  let body = '';
+  req.on('data', (c) => (body += c));
+  req.on('end', () => {
+    const json = body ? JSON.parse(body) : {};
+    if (req.method === 'POST' && url === '/graphql') {
+      const { variables } = json;
+      if (variables.head !== undefined) {
+        const nodes = pulls.filter((p) => p.head === variables.head).reverse().map(prNode);
+        return res.end(JSON.stringify({ data: { repository: { pullRequests: { nodes } } } }));
+      }
       const p = variables.owner === 'o' && variables.n === 1 ? project : null;
-      res.end(JSON.stringify({ data: { repositoryOwner: { projectV2: p } } }));
-    });
-    return;
-  }
+      return res.end(JSON.stringify({ data: { repositoryOwner: { projectV2: p } } }));
+    }
+    if (url.startsWith('/repos/o/r/rules/branches/')) return res.end('[]');
+    if (req.method === 'POST' && url === '/repos/o/r/pulls') {
+      // the head's commit: the branch's, as git has it in the e2e repository
+      const sha = execFileSync('git', ['rev-parse', `refs/remotes/origin/${json.head}`], { cwd: join(work, 'repo'), env }).toString().trim();
+      const p = { number: pulls.length + 1, state: 'OPEN', title: json.title, body: json.body, base: json.base, head: json.head, sha };
+      pulls.push(p);
+      return res.end(JSON.stringify({ number: p.number, html_url: `https://github.com/o/r/pull/${p.number}` }));
+    }
+    const pm = /^\/repos\/o\/r\/pulls\/(\d+)(\/merge)?$/.exec(url);
+    const pull = pm ? pulls[Number(pm[1]) - 1] : undefined;
+    if (pull && req.method === 'PATCH') {
+      Object.assign(pull, { title: json.title, body: json.body });
+      return res.end('{}');
+    }
+    if (pull && pm[2] && req.method === 'PUT') {
+      if (json.sha !== pull.sha) return res.writeHead(409).end('{"message":"Head branch was modified"}');
+      pull.state = 'MERGED';
+      return res.end('{"merged":true}');
+    }
+    route(url, res);
+  });
+});
+function route(url, res) {
   const m = /^\/repos\/([^/]+)\/([^/]+)$/.exec(url);
   if (!m) return res.writeHead(404).end('{"message":"Not Found"}');
   res.end(JSON.stringify({ id: 1, full_name: `${m[1]}/${m[2]}`, private: false }));
-});
+}
 const api = `http://127.0.0.1:${port + 1}`;
 await new Promise((ok) => github.listen(port + 1, '127.0.0.1', ok));
 

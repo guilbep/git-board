@@ -116,7 +116,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import AppHeader from '@/components/AppHeader.vue';
 import IssuePanel from '@/components/IssuePanel.vue';
-import { ApiError, getFields, getWork, patchIssue, type Issue } from '@/api';
+import { ApiError, cycleAct, getFields, getWork, type Issue } from '@/api';
 import type { WorkGroups, WorkRow } from '@/api/cycletypes';
 import { configModel, loadConfigModel } from '@/configmodel';
 import { namespaces } from '@/facets';
@@ -169,11 +169,11 @@ function setWho(w: 'me' | 'team') {
 }
 watch(who, () => void reload());
 
-// the risk class: a field of the issue, set as any other
+// the risk class: the cycle's action, by the risk role when one holds it
 async function setRisk(r: WorkRow, risk: string) {
   busy.value = true;
   try {
-    await patchIssue(r.issue.id, '', { set: [`risk=${risk}`] }); // one field: the last writer wins it
+    await cycleAct(r.issue.id, 'set-risk', undefined, { risk }); // one field: the last writer wins it
     await reload();
   } catch (e) {
     error.value = asError(e);

@@ -403,9 +403,7 @@ func (b *Board) review(ctx context.Context, cur CycleView, a CycleAct) error {
 			return usagef("commit %q: %v", commit, err)
 		}
 		meta["review:commit"] = sha
-	} else if meta["review:commit"] == "" {
-		return usagef("which commit? no branch names this issue yet")
-	}
+	} // no branch: a review of what the issue says, at no commit
 	if pr := cur.Evidence.PR; pr != nil && pr.URL != "" && meta["review:pr"] == "" {
 		meta["review:pr"] = prKey(pr.URL)
 	}
