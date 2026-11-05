@@ -2,10 +2,12 @@ package view_test
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/guilbep/git-board/next/kernel"
@@ -92,6 +94,52 @@ func TestRebuiltWhenUnreadable(t *testing.T) {
 	}
 	if m, err := v.Mark(ctx, "counter"); err != nil || m.Rev != 0 {
 		t.Fatalf("Mark = %+v, %v", m, err)
+	}
+	v.Close()
+}
+
+// A view that opens but fails for another reason is kept: a cancelled
+// open, a busy one (a server has it), or a newer binary's file, which is
+// refused with a sentence. One of an older version is built again.
+func TestKeptWhenNotUnreadable(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "view.db")
+	v, err := view.Open(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	v.Close()
+	cancelled, cancel := context.WithCancel(ctx)
+	cancel()
+	if _, err := view.Open(cancelled, path); err == nil {
+		t.Fatal("Open(cancelled) = nil")
+	}
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("after a cancelled open: %v", err)
+	}
+	setVersion := func(n int) {
+		t.Helper()
+		db, err := sql.Open("sqlite", path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer db.Close()
+		if _, err := db.Exec("PRAGMA user_version = " + strconv.Itoa(n)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	setVersion(99)
+	if _, err := view.Open(ctx, path); err == nil || !strings.Contains(err.Error(), "newer") {
+		t.Fatalf("a newer binary's view: %v; want it refused", err)
+	}
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("after a newer binary's view: %v", err)
+	}
+	setVersion(1)
+	v, err = view.Open(ctx, path)
+	if err != nil {
+		t.Fatalf("an older view: %v; want it built again", err)
 	}
 	v.Close()
 }

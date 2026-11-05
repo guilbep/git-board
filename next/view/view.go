@@ -1,8 +1,8 @@
 // Package view keeps the board's read model in sqlite: every kind's rows,
 // terms and texts, keyed by the version each was folded at, and per kind
 // the listing they are at (docs/rewrite/design.md, The read path). It is
-// disposable: a file of another version, or one sqlite can't read, is
-// deleted and built again. The kernel decides what goes in; the view
+// disposable: a file of an older version, or one sqlite can't read, is
+// deleted and built again; a newer binary's is refused. The kernel decides what goes in; the view
 // stores it and answers queries.
 package view
 
@@ -16,7 +16,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	_ "modernc.org/sqlite" // database/sql's "sqlite", FTS5 included
+	"modernc.org/sqlite" // database/sql's "sqlite", FTS5 included
+	sqlite3 "modernc.org/sqlite/lib"
 
 	"github.com/guilbep/git-board/next/kernel"
 	"github.com/guilbep/git-board/next/kernel/search"
@@ -51,14 +52,16 @@ type View struct {
 var _ kernel.View = (*View)(nil)
 
 // Open opens the view at path, building its schema when the file is
-// missing, unreadable or of another version.
+// missing, not a database sqlite reads, or of an older version. Any other
+// error leaves the file: a cancelled or busy open (a server may have it),
+// and a newer binary's view, refused.
 func Open(ctx context.Context, path string) (*View, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return nil, err
 	}
 	v, err := open(ctx, path)
-	if err == nil {
-		return v, nil
+	if err == nil || !unreadable(err) {
+		return v, err
 	}
 	for _, f := range []string{path, path + "-wal", path + "-shm"} {
 		if err := os.Remove(f); err != nil && !errors.Is(err, fs.ErrNotExist) {
@@ -112,7 +115,30 @@ func open(ctx context.Context, path string) (*View, error) {
 		return v, nil
 	}
 	v.Close()
-	return nil, fmt.Errorf("view: version %d, not %d", have, version)
+	if have > version {
+		return nil, fmt.Errorf("view: %s is of version %d, made by a newer git-board; this one reads version %d: run the newer one, or delete the file to build it again", path, have, version)
+	}
+	return nil, fmt.Errorf("view: %s is of version %d, not %d: %w", path, have, version, errOlder)
+}
+
+// errOlder is a view an older binary made: built again.
+var errOlder = errors.New("an older version")
+
+// unreadable says err means the file isn't a view this binary reads, and
+// only that: one of an older version, or not a database (sqlite's NOTADB,
+// CORRUPT).
+func unreadable(err error) bool {
+	if errors.Is(err, errOlder) {
+		return true
+	}
+	var e *sqlite.Error
+	if errors.As(err, &e) {
+		switch e.Code() & 0xff {
+		case sqlite3.SQLITE_NOTADB, sqlite3.SQLITE_CORRUPT:
+			return true
+		}
+	}
+	return false
 }
 
 // Close closes the file.
