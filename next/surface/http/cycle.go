@@ -1,12 +1,13 @@
 package httpapi
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/guilbep/git-board/next/app"
-	"github.com/guilbep/git-board/next/domain/issues"
 )
 
 // The development cycle (experimental; docs/rewrite/api.md, routes 49
@@ -117,17 +118,18 @@ func workRows(ctx context.Context, r workReq) (workPage, error) {
 	pageOf := func(rows []app.WorkRow, total **int, next *string) ([]app.WorkRow, error) {
 		n := len(rows)
 		*total = &n
-		list := make([]issues.Issue, len(rows))
-		for i, row := range rows {
-			list[i] = row.Issue
-		}
-		start, err := after(list, r.Cursor)
+		c, err := parseCursor(r.Cursor)
 		if err != nil {
 			return nil, err
 		}
+		// the rows are oldest wait first, then by id (work.Group)
+		start := resume(rows, c, func(row app.WorkRow) bool {
+			return cmp.Or(row.Since.Compare(c.Since), strings.Compare(row.Issue.ID, c.ID)) > 0
+		})
 		end := min(len(rows), start+*r.Limit)
 		if end < len(rows) {
-			*next = cursor(end, rows[end-1].Issue.ID)
+			last := rows[end-1]
+			*next = cursorAt{Since: last.Since, ID: last.Issue.ID}.String()
 		}
 		return rows[start:end], nil
 	}

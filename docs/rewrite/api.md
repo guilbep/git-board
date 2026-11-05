@@ -40,8 +40,12 @@ The API adds one field to an issue and a thread: `version`, below.
 
 `limit` is the page's size: 100 by default, 1,000 at most, `0` for every
 item. `cursor` is the `next` of the page before; `next` is absent on the
-last page. A cursor is opaque: it names the last item seen, so a page
-starts after it even when issues were added before it meanwhile. `total`
+last page. A cursor is opaque: it names the place of the last item seen
+in the list's order (what the list sorts by, as that item was, and its
+id), and the next page starts at the first item after that place. Issues
+added before it meanwhile don't come again, and the item leaving the list
+(closed, moved to another lane) or moving skips nothing after it. A
+cursor is the sort's it was given with: another `sort` is `invalid`. `total`
 counts every item the request matches.
 
 **Filters are the CLI's grammar.** `filter` is what `ls` takes
