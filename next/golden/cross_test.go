@@ -62,6 +62,11 @@ var writes = []string{
 	`undo --json`,
 	`undo`,
 	`undo e958491`,
+	`follow 9062b9a`,
+	`unfollow 26a4ba8`,
+	`follow 22c49b4 --auto`,
+	`follow 0000000`,
+	`follow 398523d --json`,
 	`labels`,
 	`me`,
 }
@@ -136,7 +141,8 @@ func TestCrossWrites(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			cases := []Case{{"ls", `ls "is:open,closed" --json`}, {"labels", "labels --json"}}
+			cases := []Case{{"ls", `ls "is:open,closed" --json`}, {"labels", "labels --json"},
+				{"follows", `ls "follows:@me is:open,closed" --json`}, {"status", "status"}, {"status json", "status --json"}}
 			for _, id := range ids {
 				cases = append(cases, Case{"show " + id[:7], "show " + id + " --json"}, Case{"log " + id[:7], "log " + id + " --json"})
 			}

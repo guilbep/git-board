@@ -94,7 +94,7 @@ func Open(ctx context.Context, dir string, o Options) (*Board, error) {
 	}
 	c := &clone{dir: dir}
 	b := &Board{Kernel: kb, Config: f, Views: views, Dir: dir, clone: c,
-		Issues: &issues.Service{Board: kb, Schema: schema, Avatars: people.Forge, Notice: o.Notice},
+		Issues: &issues.Service{Board: kb, Schema: schema, Avatars: people.Forge, Notice: o.Notice, Folder: ds.Folder(), Views: views},
 		People: &people.Service{Board: kb, Avatars: people.Forge, SetMe: c.setMe}}
 	if o.Who {
 		set := <-settled

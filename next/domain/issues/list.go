@@ -23,6 +23,10 @@ type Service struct {
 	// Notice, when set, is told what a read leaves aside (an entity
 	// broken, a counter that doesn't read), as v1 logs it.
 	Notice Notice
+	// Folder is the clone's own folder, the inbox's files' (v1's).
+	Folder string
+	// Views are .git-board.toml's, which an inbox follows by name.
+	Views map[string]View
 }
 
 // notice tells s.Notice, if any.
@@ -82,7 +86,20 @@ func (s *Service) List(ctx context.Context, r ListReq) ([]Issue, error) {
 	cnt := s.counter(ctx, s.notice)
 	list := make([]Issue, 0, len(rows))
 	for _, l := range rows {
-		list = append(list, s.issue(l.ID, &l.Row, dir, cnt))
+		is := s.issue(l.ID, &l.Row, dir, cnt)
+		is.Inherited = s.Schema.RolesFor(is.Labels) // a list's alone, as v1's
+		list = append(list, is)
+	}
+	if slices.ContainsFunc(conds, func(c Condition) bool { return c.Kind == QFollows }) {
+		f, err := s.following(ctx, dir, me, list, r.Today)
+		if err != nil {
+			return nil, err
+		}
+		for i := range conds {
+			if conds[i].Kind == QFollows {
+				conds[i].Followed = f
+			}
+		}
 	}
 	return s.keep(list, conds, me, r.Today), nil
 }
