@@ -63,9 +63,17 @@ func (b *Board) AddForge(ctx context.Context, n NewForge) (string, error) {
 	set := map[string]any{}
 	var taken []string
 	if b.Config.Forges.Discover {
-		found, err := b.Forges(ctx, func(string) {})
+		var left []string // one that can't be read would be turned off unsaid
+		found, err := b.Forges(ctx, func(line string) {
+			if strings.Contains(line, " is left out: ") {
+				left = append(left, line)
+			}
+		})
 		if err != nil {
 			return "", err
+		}
+		if len(left) > 0 {
+			return "", invalidForge("the forges found in the remotes would be dropped, and one can't be written: %s", strings.Join(left, "; "))
 		}
 		for _, g := range found {
 			if strings.EqualFold(g.Host+"/"+g.Project, f.Host+"/"+f.Project) || strings.EqualFold(g.Host+"/"+g.Path, f.Host+"/"+f.Project) {
