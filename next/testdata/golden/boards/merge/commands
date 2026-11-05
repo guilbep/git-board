@@ -1,0 +1,3 @@
+ls "is:open,closed" --json
+ls "#1" --json
+ls "#2" --json

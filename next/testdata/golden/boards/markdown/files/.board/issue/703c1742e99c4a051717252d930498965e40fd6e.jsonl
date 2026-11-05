@@ -1,0 +1,2 @@
+{"clock":1,"nonce":"d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2","ops":[{"kind":"create","author":"9b787ae15fe85e31754d154f1d95eb962c91bbcf","time":1741003200,"data":{"body":"","title":"Deleted"}}]}
+{"clock":2,"ops":[{"kind":"delete","author":"2070bfafe7adfed74d38940e023d8d0f756bb6db","time":1741003260,"data":{"target":"703c1742e99c4a051717252d930498965e40fd6e:0"}}]}

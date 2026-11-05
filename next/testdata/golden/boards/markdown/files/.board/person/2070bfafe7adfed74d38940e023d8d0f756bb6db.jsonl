@@ -1,0 +1,3 @@
+{"clock":1,"nonce":"0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a","ops":[{"kind":"create","author":"","time":1740819600,"data":{"email":"ada@example.com","name":"Ada Lovelace"}},{"kind":"add-account","author":"","time":1740819600,"data":{"id":"1001","login":"ada","server":"github.com"}}]}
+{"clock":2,"ops":[{"kind":"set-name","author":"2070bfafe7adfed74d38940e023d8d0f756bb6db","time":1740823200,"data":{"name":"Ada King"}}]}
+{"clock":3,"ops":[{"kind":"add-account","author":"2070bfafe7adfed74d38940e023d8d0f756bb6db","time":1740823500,"data":{"id":"77","login":"aking","server":"gitlab.epfl.ch"}},{"kind":"add-account","author":"2070bfafe7adfed74d38940e023d8d0f756bb6db","time":1740823500,"data":{"id":"1001","login":"ada-l","server":"github.com"}}]}

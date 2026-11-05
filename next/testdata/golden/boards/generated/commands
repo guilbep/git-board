@@ -1,0 +1,12 @@
+ls "is:open,closed" --json
+ls "status:ready" --json
+ls "prio:p0 is:closed" --json
+ls "sprint:delivery" --sort "est desc" --json
+ls -- "-cat:bug area:backend" --json
+ls "export invoice" --json
+ls "in:title calculation" --json
+ls "comments:0" --json
+ls "assignee:dev1,dev2" --sort "updated asc" --json
+ls "is:open,closed" --sort title --limit 5 --json id,title
+ls "updated:>=2024-01-05" --json id
+ls "is:open,closed" --at 2024-01-02 --json

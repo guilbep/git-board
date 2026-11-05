@@ -1,0 +1,33 @@
+[fields.status]
+single = true
+options = ["backlog", "comite", "ready", "in-progress", "in-review", "ready-for-validation", "qa", "tests-metier", "validated"]
+
+[fields.prio]
+single = true
+options = ["p0", "p1", "p2", "p3"]
+
+[fields.est]
+single = true
+options = ["0.5", "1", "2", "3", "4", "6", "8", "16"]
+numeric = true
+
+[fields.assignee]
+single = false
+
+[fields.cat]
+single = true
+options = ["bug", "feature", "chore"]
+
+[sprints]
+length_days = 14
+start_weekday = "monday"
+
+[[sprints.list]]
+slug = "delivery"
+title = "Delivery"
+start = 2026-08-24
+
+[[sprints.list]]
+slug = "post-delivery"
+title = "Post-delivery"
+start = 2026-09-07

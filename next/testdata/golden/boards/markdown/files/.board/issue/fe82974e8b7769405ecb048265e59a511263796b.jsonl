@@ -1,0 +1,2 @@
+{"clock":1,"nonce":"d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1","ops":[{"kind":"create","author":"c2c767e89eb76626f8a9d76bdec5ec1acef93f53","time":1740999600,"data":{"body":"é é","title":"Ünïcödé 日本語 🚀"}}]}
+{"clock":2,"ops":[{"kind":"set-status","author":"c2c767e89eb76626f8a9d76bdec5ec1acef93f53","time":1740999900,"data":{"status":"closed"}}]}

@@ -1,0 +1,49 @@
+ls is:closed --json
+ls "is:open,closed" --json
+ls "status:ready,in-review" --json
+ls "-status:in-progress is:open" --json
+ls -- "-status:in-progress is:open" --json
+ls "assignee:chloe" --json
+ls "assignee:@me" --json
+ls "author:bob" --json
+ls "involves:bobby" --json
+ls "label:étiquette" --json
+ls "no:prio" --json
+ls "prio:p0,p2 is:closed" --json
+ls "kind:bug" --json
+ls "title:*search*" --json
+ls closed --json
+ls "\"unless the query\"" --json
+ls "inbox in:comments" --json
+ls "日本語" --json
+ls "#12" --json
+ls "GB-7" --json
+ls "comments:>=2" --json
+ls "est:>1" --json
+ls "created:2025-03-03" --json
+ls "created:>=2025-03-03T12:00 created:<2025-03-04" --json
+ls "updated:2025-03-03..2025-03-03" --json
+ls "closed:2025-03-03" --json
+ls "created:>=@today-1d" --at 2025-03-04 --json
+ls "sprint:@current" --at 2025-03-05 --json
+ls --at 2025-03-03T10:00 --json
+ls --sort "prio asc" --json
+ls "is:open,closed" --sort "updated desc" --limit 3 --json
+ls --json id,title,number,forges
+ls "is:open,closed" --json number --jq ".[].number"
+ls "nosuchfield:x" --json
+ls "created:yesterday" --json
+view ready --json
+show 26a4ba8 --at 2025-03-03T03:15 --json
+show 26a4ba8 --at 2025-03-03T11:15 --json
+show GB-100 --json
+show "#7" --json
+show 22d74e7 --no-comments --json
+show 999eab2 --md
+show 0000000 --json
+log 26a4ba8 --field status --json
+log 26a4ba8 --since 2025-03-03T04:00 --json
+log 26a4ba8 --since 2025-03-04 --json
+log 398523d --field prio --json
+labels --json
+me --ls --json
