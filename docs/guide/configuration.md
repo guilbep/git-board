@@ -787,6 +787,6 @@ list = ["acme/app"]
 
 `list` is the GitHub repositories the project spans, the first one numbering the issues; without `[repos]`, origin's when it is on GitHub.
 
-Comparing the project's labels with each repository's on GitHub, and creating the missing ones there (v0.11's Settings › Labels and `git board lint --create-labels`), aren't in v0.12 yet: `lint --create-labels` says so.
+`git board lint --create-labels` compares the labels the file implies with each repository's, and each `[forges]` table's, and `--apply` makes the missing ones there with their colors and descriptions ([lint](cli.md#lint-drift-between-the-issues-and-the-file)). Settings › Labels doesn't compare them.
 
 An issue's `assignee:<login>` labels are always the forge's own assignees, on every forge (GitLab's free edition takes one; the others stay in git-board).
