@@ -27,6 +27,7 @@ nav = [
   { "Guide" = [
     { "Issues from the command line" = "guide/cli.md" },
     { "Configuration" = "guide/configuration.md" },
+    { "The file's schema version" = "guide/config-schema.md" },
     { "Forges" = "guide/forges.md" },
     { "Where the board is kept" = "guide/datastores.md" },
     { "Performance" = "guide/performance.md" },

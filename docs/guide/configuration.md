@@ -33,6 +33,9 @@ version = 1
 
 `git board lint` then lists the drift (`template`): what the built-in template has that the file lacks (a field, a value) and a newer version. What the file has more, or spells or colors as its forge does, is the project's, and so are the values of a field its `[github-project]` holds. A file or URL template isn't compared.
 
+The file's first key, `schema = 2`, is the version of its format, which
+git-board upgrades and downgrades: [The file's schema version](config-schema.md).
+
 | Table | What it sets |
 | --- | --- |
 | `[fields.<name>]` | a field's type, values, order, single or multiple: together, the project's ontology |
