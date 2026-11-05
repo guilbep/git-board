@@ -101,7 +101,6 @@
 import { noteUse } from '@/keys';
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { getConfig, getDocs, isStale, putConfig, type ConfigFile, type DocSection } from '@/api';
-import { configText } from '@/configdraft';
 import { takeFile } from '@/configmodel';
 import { checkOf, type ConfigCheck } from '@/configcheck';
 import { docSectionAt } from '@/configsnippets';
@@ -112,7 +111,7 @@ import { tomlTokens } from '@/toml';
 const emit = defineEmits<{ saved: [] }>();
 
 const file = ref<ConfigFile | null>(null);
-const text = configText; // Settings › Labels writes in it too
+const text = ref(''); // the file as edited here
 const check = ref<ConfigCheck | null>(null);
 const reviewing = ref(false);
 const saving = ref(false);
