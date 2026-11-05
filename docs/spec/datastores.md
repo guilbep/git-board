@@ -196,9 +196,14 @@ packs of two clones. Their clocks may be equal: neither saw the other.
    the file removed. After 30 seconds of waiting, the write fails as moved.
 2. Read the file. Its version (as read above) must still be the one the
    writer read; else the write fails as moved.
-3. Append the pack and a `\n`, with one `\n` before them when the file
+3. When the bytes after the file's last `\n` aren't a valid JSON value (a
+   last line being appended, as reading leaves it out), cut the file to
+   its last `\n`, or to nothing when it holds none: under the lock no
+   append is half done, so they are a dead writer's. Appended after them,
+   the pack would join their line.
+4. Append the pack and a `\n`, with one `\n` before them when the file
    doesn't end with one (a hand edit took it).
-4. Remove the lock file. The new version is the file's, appended.
+5. Remove the lock file. The new version is the file's, appended.
 
 **The folder's files.** `.board/.gitattributes` and `.board/.gitignore`
 are written when the folder is opened, if absent:

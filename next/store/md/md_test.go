@@ -98,6 +98,39 @@ func TestPackBeingAppendedIsLeftOut(t *testing.T) {
 	}
 }
 
+// A writer that died mid-append leaves its last line cut short: the
+// next Add or Put, under the lock, cuts it off before it appends, so its
+// pack is a line of its own, and the version it answers is the file's.
+func TestWriteAfterADeadWritersLine(t *testing.T) {
+	t.Parallel()
+	for _, put := range []bool{false, true} {
+		s, one := open(t), storetest.Pack(1)
+		v, err := s.Add(ctx, "issue", storetest.ID(1), one, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		path := s.path("issue", storetest.ID(1))
+		if err := appendFile(path, []byte(`{"clock":2,"ops":[{"kind":"comm`)); err != nil {
+			t.Fatal(err)
+		}
+		if put {
+			v, err = s.Put(ctx, "issue", storetest.ID(1), [][]byte{storetest.Pack(2)}, v)
+		} else {
+			v, err = s.Add(ctx, "issue", storetest.ID(1), storetest.Pack(2), v)
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		data, _ := os.ReadFile(path)
+		if want := string(one) + "\n" + string(storetest.Pack(2)) + "\n"; string(data) != want {
+			t.Fatalf("put %t: file = %q, want %q", put, data, want)
+		}
+		if version(data) != v {
+			t.Fatalf("put %t: answered %s, the file is at %s", put, v, version(data))
+		}
+	}
+}
+
 // A hand edit that took the last line feed leaves a whole pack, read; the
 // next append puts a line feed before its own.
 func TestHandEditWithoutLastLineFeed(t *testing.T) {

@@ -188,15 +188,19 @@ func (s *Store) Add(_ context.Context, kind, id string, data []byte, prev string
 		return "", err
 	}
 	defer unlock()
-	cur, err := readFile(path)
+	raw, err := readFile(path)
 	if err != nil {
 		return "", err
 	}
-	if cur = whole(cur); version(cur) != prev { // under the lock, no append is half done
+	cur := whole(raw)
+	if version(cur) != prev {
 		return "", fmt.Errorf("%w: %s %s", store.ErrMoved, kind, id)
 	}
 	if want := highest(lines(cur)) + 1; clock != want {
 		return "", fmt.Errorf("md: %s %s: a pack of clock %d on one of clock %d", kind, id, clock, want-1)
+	}
+	if err := cut(path, raw); err != nil {
+		return "", err
 	}
 	line := append(slices.Clip(data), '\n')
 	if len(cur) > 0 && cur[len(cur)-1] != '\n' { // a hand edit took the last line feed
@@ -225,11 +229,12 @@ func (s *Store) Put(_ context.Context, kind, id string, packs [][]byte, prev str
 		return "", err
 	}
 	defer unlock()
-	cur, err := readFile(path)
+	raw, err := readFile(path)
 	if err != nil {
 		return "", err
 	}
-	if cur = whole(cur); version(cur) != prev {
+	cur := whole(raw)
+	if version(cur) != prev {
 		return "", fmt.Errorf("%w: %s %s", store.ErrMoved, kind, id)
 	}
 	have := map[string]bool{}
@@ -250,6 +255,9 @@ func (s *Store) Put(_ context.Context, kind, id string, packs [][]byte, prev str
 	if len(add) == 0 {
 		return prev, nil
 	}
+	if err := cut(path, raw); err != nil {
+		return "", err
+	}
 	if len(cur) > 0 && cur[len(cur)-1] != '\n' {
 		add = append([]byte{'\n'}, add...)
 	}
@@ -257,6 +265,20 @@ func (s *Store) Put(_ context.Context, kind, id string, packs [][]byte, prev str
 		return "", err
 	}
 	return version(append(cur, add...)), nil
+}
+
+// cut cuts the file at path, whose bytes are raw, to its whole lines
+// (whole). Under the entity's lock no append is half
+// done: bytes after the last line feed that aren't a valid JSON value
+// are a dead writer's, and an append after them would join its line to
+// theirs.
+func cut(path string, raw []byte) error {
+	if n := len(whole(raw)); n < len(raw) {
+		if err := os.Truncate(path, int64(n)); err != nil {
+			return fmt.Errorf("md: %w", err)
+		}
+	}
+	return nil
 }
 
 // appendFile appends b to the file at path, in one write.
