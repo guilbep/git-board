@@ -1,0 +1,181 @@
+[
+  {
+    "at": "2025-03-03T09:00:00Z",
+    "author": {
+      "id": "2070bfafe7adfed74d38940e023d8d0f756bb6db",
+      "name": "Ada King",
+      "login": "ada-l",
+      "avatar_url": "https://avatars.githubusercontent.com/u/1001?s=88"
+    },
+    "kind": "created",
+    "id": "26a4ba85e9ef4a8ff1b61f228dd598c8b3667905:0",
+    "title": "Search ignores closed issues",
+    "body": "Searching for a closed issue finds nothing."
+  },
+  {
+    "at": "2025-03-03T09:00:00Z",
+    "author": {
+      "id": "2070bfafe7adfed74d38940e023d8d0f756bb6db",
+      "name": "Ada King",
+      "login": "ada-l",
+      "avatar_url": "https://avatars.githubusercontent.com/u/1001?s=88"
+    },
+    "kind": "labels",
+    "id": "26a4ba85e9ef4a8ff1b61f228dd598c8b3667905:1",
+    "added": [
+      "status:ready",
+      "prio:p1",
+      "assignee:ada",
+      "kind:bug",
+      "sprint:s1"
+    ]
+  },
+  {
+    "at": "2025-03-03T10:00:00Z",
+    "author": {
+      "id": "9b787ae15fe85e31754d154f1d95eb962c91bbcf",
+      "name": "Bob",
+      "login": "bobby",
+      "avatar_url": "https://avatars.githubusercontent.com/u/1003?s=88"
+    },
+    "kind": "comment",
+    "id": "f4bffc64076f2db2d60ec131d27eb5d19861eb75:0",
+    "body": "It finds them with is:closed."
+  },
+  {
+    "at": "2025-03-03T10:30:00Z",
+    "author": {
+      "id": "c2c767e89eb76626f8a9d76bdec5ec1acef93f53",
+      "name": "Chloé Dubois-Ångström",
+      "login": "chloe",
+      "avatar_url": "https://avatars.githubusercontent.com/u/1004?s=88"
+    },
+    "kind": "comment",
+    "id": "f537d3862ad141fb3657f7789be7193a313eebde:0",
+    "body": "This line looks wrong."
+  },
+  {
+    "at": "2025-03-03T11:00:00Z",
+    "author": {
+      "id": "2070bfafe7adfed74d38940e023d8d0f756bb6db",
+      "name": "Ada King",
+      "login": "ada-l",
+      "avatar_url": "https://avatars.githubusercontent.com/u/1001?s=88"
+    },
+    "kind": "edit",
+    "id": "0db1d6b7eb4843272208e1cdbf43602fa743aba2:0",
+    "target": "26a4ba85e9ef4a8ff1b61f228dd598c8b3667905:0",
+    "body": "Searching for a closed issue finds nothing, unless the query says is:closed."
+  },
+  {
+    "at": "2025-03-03T11:10:00Z",
+    "author": {
+      "id": "9b787ae15fe85e31754d154f1d95eb962c91bbcf",
+      "name": "Bob",
+      "login": "bobby",
+      "avatar_url": "https://avatars.githubusercontent.com/u/1003?s=88"
+    },
+    "kind": "edit",
+    "id": "a1b47a9bc0247278a64ddfdd9b26334f5c459abd:0",
+    "target": "f4bffc64076f2db2d60ec131d27eb5d19861eb75:0",
+    "body": "It finds them with `is:closed`."
+  },
+  {
+    "at": "2025-03-03T11:20:00Z",
+    "author": {
+      "id": "9b787ae15fe85e31754d154f1d95eb962c91bbcf",
+      "name": "Bob",
+      "login": "bobby",
+      "avatar_url": "https://avatars.githubusercontent.com/u/1003?s=88"
+    },
+    "kind": "edit",
+    "id": "51e91621d6572ae0dbe6a366941bba4bc6aa707f:0",
+    "target": "f4bffc64076f2db2d60ec131d27eb5d19861eb75:0",
+    "body": "It finds them with `is:closed`, and `-is:open`."
+  },
+  {
+    "at": "2025-03-03T12:00:00Z",
+    "author": {
+      "id": "2070bfafe7adfed74d38940e023d8d0f756bb6db",
+      "name": "Ada King",
+      "login": "ada-l",
+      "avatar_url": "https://avatars.githubusercontent.com/u/1001?s=88"
+    },
+    "kind": "title",
+    "id": "2b0917fce7509d0cc125428a1d10662927459c1c:0",
+    "title": "Search hides closed issues by default",
+    "was": "Search ignores closed issues"
+  },
+  {
+    "at": "2025-03-03T12:30:00Z",
+    "author": {
+      "id": "9b787ae15fe85e31754d154f1d95eb962c91bbcf",
+      "name": "Bob",
+      "login": "bobby",
+      "avatar_url": "https://avatars.githubusercontent.com/u/1003?s=88"
+    },
+    "kind": "labels",
+    "id": "ded2634ad4a8ae77229036d8d744c05d8d98f3aa:0",
+    "added": [
+      "status:in-progress",
+      "assignee:bobby"
+    ],
+    "removed": [
+      "status:ready"
+    ]
+  },
+  {
+    "at": "2025-03-03T13:00:00Z",
+    "author": {
+      "id": "2070bfafe7adfed74d38940e023d8d0f756bb6db",
+      "name": "Ada King",
+      "login": "ada-l",
+      "avatar_url": "https://avatars.githubusercontent.com/u/1001?s=88"
+    },
+    "kind": "state",
+    "id": "d1ef940323c57540a541b68b46b0bd76126a3c15:0",
+    "state": "closed"
+  },
+  {
+    "at": "2025-03-03T14:00:00Z",
+    "author": {
+      "id": "9b787ae15fe85e31754d154f1d95eb962c91bbcf",
+      "name": "Bob",
+      "login": "bobby",
+      "avatar_url": "https://avatars.githubusercontent.com/u/1003?s=88"
+    },
+    "kind": "state",
+    "id": "72a21e8761b4ffe63050693878293533986f0c53:0",
+    "state": "open"
+  },
+  {
+    "at": "2025-03-03T15:00:00Z",
+    "author": {
+      "id": "2070bfafe7adfed74d38940e023d8d0f756bb6db",
+      "name": "Ada King",
+      "login": "ada-l",
+      "avatar_url": "https://avatars.githubusercontent.com/u/1001?s=88"
+    },
+    "kind": "comment",
+    "id": "ad8a8ee2c114303911a3506ecc7504e9786f0074:0",
+    "body": "@bobby can you check the inbox counts too?"
+  },
+  {
+    "at": "2025-03-03T15:00:00Z",
+    "author": {
+      "id": "2070bfafe7adfed74d38940e023d8d0f756bb6db",
+      "name": "Ada King",
+      "login": "ada-l",
+      "avatar_url": "https://avatars.githubusercontent.com/u/1001?s=88"
+    },
+    "kind": "labels",
+    "id": "ad8a8ee2c114303911a3506ecc7504e9786f0074:1",
+    "added": [
+      "est:3",
+      "prio:p0"
+    ],
+    "removed": [
+      "prio:p1"
+    ]
+  }
+]

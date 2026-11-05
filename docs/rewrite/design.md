@@ -939,6 +939,26 @@ comment and the note after a published body (v1's `Quote` and
 `Published`, which read the body's sections), and the GitHub Project
 step.
 
+**M6, as built (2026-11-05, partial).** GitLab replies are posted as
+replies (ADR 0021): the wrapper that hears a run's writes forwards
+`forge.Replier`. `next/domain/releases` is the release kind, its records
+read whole from the datastore, v1's versions, tags and overlays, and
+`proof` (ADR 0001). The sync engine has its `Mapper` interface
+(`next/sync`), as a run-level plug-in rather than the field-level shape
+above: the issues' run is one mapper (`issuesync.Mapper`), the releases'
+the second (`releasesync`, publish only, to GitHub and GitLab through
+`forge.Releaser`, run by a forge push on a board that publishes
+binaries). The release runner is `next/tools/ship` over `app.Book`; the
+forge's token stays in `app`, which publishes (`ship.Publisher`). The
+cycle is `next/domain/cycle` (+ `work`), its evidence read in `app`;
+`next/tools/code` reads git, `next/tools/branches` names branches. The
+commands `release`, `deploy`, `verify`, `branch`, `sprint` and `tui` are
+v1's; a golden board, `releases`, holds the release reads, and basic the
+sprint, branch and verify cases. Left: the GitHub Project bridge (the
+third mapper, `project pull|push|sync`, the TUI's i/o keys: the TUI takes
+a `Bridge`, none yet), agents, insights, lint, export and import, and
+the plan's HTML in the cycle's evidence (the caller renders).
+
 About 31,000 lines of Go where v1 has 55,000. One engineer with agents:
 M0 a week; M1 and M2 three weeks; M3 to M5 four; M6 three; with
 dogfooding, two to three months.

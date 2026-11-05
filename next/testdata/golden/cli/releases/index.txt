@@ -1,0 +1,33 @@
+# name	exit	command (git-board <command>): <name>.out is its stdout, <name>.err its stderr
+ls	0	ls --json
+show-22c49b4cb2f9	0	show 22c49b4cb2f9ebf5dc7e81d5b5476ec584fb5c71 --json
+log-22c49b4cb2f9	0	log 22c49b4cb2f9ebf5dc7e81d5b5476ec584fb5c71 --json
+show-22d74e739794	0	show 22d74e73979498ba69c554da1bf1cc1014cb013d --json
+log-22d74e739794	0	log 22d74e73979498ba69c554da1bf1cc1014cb013d --json
+show-26a4ba85e9ef	0	show 26a4ba85e9ef4a8ff1b61f228dd598c8b3667905 --json
+log-26a4ba85e9ef	0	log 26a4ba85e9ef4a8ff1b61f228dd598c8b3667905 --json
+show-398523d66eae	0	show 398523d66eaebdebff64257a35e73c84d5c31f47 --json
+log-398523d66eae	0	log 398523d66eaebdebff64257a35e73c84d5c31f47 --json
+show-427cb1bd1c4a	0	show 427cb1bd1c4a7deee3c0bf6ff0b3b4ea24f7dc42 --json
+log-427cb1bd1c4a	0	log 427cb1bd1c4a7deee3c0bf6ff0b3b4ea24f7dc42 --json
+show-4f38a4b0d275	3	show 4f38a4b0d2759be1e6acd8594134ab29f542de51 --json
+log-4f38a4b0d275	3	log 4f38a4b0d2759be1e6acd8594134ab29f542de51 --json
+show-9062b9a381ed	0	show 9062b9a381ed0075abb7c2b22261a9be88f7a685 --json
+log-9062b9a381ed	0	log 9062b9a381ed0075abb7c2b22261a9be88f7a685 --json
+show-999eab2e4a22	0	show 999eab2e4a22d1af3d62abffe7e62e79db7d12ac --json
+log-999eab2e4a22	0	log 999eab2e4a22d1af3d62abffe7e62e79db7d12ac --json
+show-e9584910eb05	0	show e9584910eb0517fe61a9a45e4cfaa53dff219957 --json
+log-e9584910eb05	0	log e9584910eb0517fe61a9a45e4cfaa53dff219957 --json
+cmd01-release	0	release
+cmd02-release-status	0	release status
+cmd03-release-notes	0	release notes
+cmd04-release-notes-all	0	release notes --all
+cmd05-release-yank-v0-1-0	1	release yank v0.1.0
+cmd06-release-rollback-prod-v0-1-0	1	release rollback prod v0.1.0
+cmd07-release-cut-version-1-0-1-rc-2	1	release cut --version 1.0.1-rc.2
+cmd08-release-cut-version-nope	1	release cut --version nope
+cmd09-release-promote	2	release promote
+cmd10-deploy	2	deploy
+cmd11-deploy-prod	1	deploy prod
+cmd12-deploy-prod-watch	1	deploy prod --watch
+cmd13-deploy-prod-release-v9-9-9	1	deploy prod --release v9.9.9

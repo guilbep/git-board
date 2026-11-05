@@ -10,6 +10,7 @@ import (
 
 	"github.com/guilbep/git-board/next/domain/issues"
 	"github.com/guilbep/git-board/next/domain/issues/issuesync"
+	"github.com/guilbep/git-board/next/domain/releases"
 	"github.com/guilbep/git-board/next/forge"
 	"github.com/guilbep/git-board/next/forge/fake"
 )
@@ -170,5 +171,114 @@ func TestSyncForgesCheck(t *testing.T) {
 	}
 	if !slices.ContainsFunc(lines, func(l string) bool { return strings.HasPrefix(l, "would pull a new issue, ") }) {
 		t.Errorf("lines %q lack the pull", lines)
+	}
+}
+
+// A reply reaches a forge with threads as a reply, through the wrapper
+// that hears the run's writes (ADR 0021: v1 posted it as a top-level
+// comment); a forge without threads, a counted one, gets none.
+func TestSyncForgesReplies(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	if out, err := exec.Command("git", "-C", dir, "init", "-q").CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v\n%s", err, out)
+	}
+	b, err := Open(t.Context(), dir, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer b.Close()
+	me, err := issuesync.CreatePerson(t.Context(), b.Kernel, issuesync.NewPerson("", "me", ""))
+	if err != nil {
+		t.Fatal(err)
+	}
+	is, err := issuesync.CreateIssue(t.Context(), b.Kernel, issuesync.NewCreate(me.ID, "Here", "made here"), issuesync.NewComment(me.ID, "root"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	root := is.Comments[0].ID
+	if _, err := issuesync.DoIssue(t.Context(), b.Kernel, is.ID, issuesync.NewCommentMeta(me.ID, "answer", map[string]string{"thread:reply-to": root})); err != nil {
+		t.Fatal(err)
+	}
+	f := fake.New("example.com/p")
+	var events []string
+	run := ForgeRun{Forges: []NamedForge{{"p", f}}, AllowCreate: true, See: func(e SyncEvent) { events = append(events, e.What) }}
+	if _, err := b.SyncForges(t.Context(), WayPush, run); err != nil {
+		t.Fatal(err)
+	}
+	var ops []string
+	for _, w := range f.Writes() {
+		if w.Op == "reply" || w.Op == "create-comment" {
+			ops = append(ops, w.Op)
+		}
+	}
+	if strings.Join(ops, ",") != "create-comment,reply" {
+		t.Errorf("writes %v, want a comment then a reply", ops)
+	}
+	if n := strings.Count(strings.Join(events, ","), "comment"); n != 2 {
+		t.Errorf("events %q: want both comments heard", events)
+	}
+	if _, ok := (&counted{f: flat{f}}).wrap().(forge.Replier); ok {
+		t.Error("a forge without threads is offered Reply")
+	}
+	if _, ok := (&counted{f: f}).wrap().(forge.Replier); !ok {
+		t.Error("a forge with threads is not offered Reply")
+	}
+}
+
+// flat is a forge without threads: Reply hidden.
+type flat struct{ forge.Forge }
+
+// A board that publishes binaries publishes its records on a forge push,
+// as releases of their tags; a dry run hears it and writes none.
+func TestSyncForgesPublishesReleases(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	for _, args := range [][]string{{"init", "-q", "-b", "main"}, {"-c", "user.name=a", "-c", "user.email=a@x", "commit", "-q", "--allow-empty", "-m", "start"}, {"tag", "v1.0.0"}} {
+		if out, err := exec.Command("git", append([]string{"-C", dir}, args...)...).CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(dir, ".git-board.toml"), []byte("[release]\nbinaries = [\"./cmd/x\"]\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	b, err := Open(t.Context(), dir, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer b.Close()
+	me, err := b.People.New(t.Context(), "me", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	b.Issues.Me = me.ID
+	commit, _ := gitRun(t.Context(), dir, "rev-parse", "HEAD")
+	book := b.Book()
+	r, err := book.Create(t.Context(), releases.Record{Commit: strings.TrimSpace(commit)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := book.SetNotes(t.Context(), r.ID, "The first."); err != nil {
+		t.Fatal(err)
+	}
+	f := fake.New("example.com/p")
+	var events []string
+	run := ForgeRun{Forges: []NamedForge{{"p", f}}, DryRun: true, See: func(e SyncEvent) {
+		if e.What == "release" {
+			events = append(events, e.Text(true, ""))
+		}
+	}}
+	if _, err := b.SyncForges(t.Context(), WayPush, run); err != nil {
+		t.Fatal(err)
+	}
+	if rs, _ := f.Releases(t.Context()); len(rs) != 0 || strings.Join(events, ",") != "would publish the release v1.0.0" {
+		t.Fatalf("dry run: releases %+v, events %q", rs, events)
+	}
+	run.DryRun = false
+	if _, err := b.SyncForges(t.Context(), WayPush, run); err != nil {
+		t.Fatal(err)
+	}
+	if rs, _ := f.Releases(t.Context()); len(rs) != 1 || rs[0].Tag != "v1.0.0" || rs[0].Body != "The first." {
+		t.Errorf("releases %+v", rs)
 	}
 }

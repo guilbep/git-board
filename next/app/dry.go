@@ -37,6 +37,37 @@ type counted struct {
 
 var _ forge.Forge = (*counted)(nil)
 
+// replying is a counted forge whose comments form threads: it forwards
+// forge.Replier, which counted alone would hide, so a reply lands as a
+// reply (ADR 0021: v1 posted it as a top-level comment).
+type replying struct{ *counted }
+
+var _ forge.Replier = replying{}
+
+// wrap is c as the run sees it: with the optional capabilities of the
+// forge it wraps, and no more.
+func (c *counted) wrap() forge.Forge {
+	if _, ok := c.f.(forge.Replier); ok {
+		return replying{c}
+	}
+	return c
+}
+
+// Reply posts body in the thread holding toCommentID, heard as a comment.
+func (r replying) Reply(ctx context.Context, issue forge.Ref, toCommentID, body string) (forge.Comment, error) {
+	c := r.counted
+	out := forge.Comment{Body: body}
+	err := c.write("comment", "create-comment", issue.ID, func() (err error) {
+		out, err = c.f.(forge.Replier).Reply(ctx, issue, toCommentID, body)
+		return err
+	})
+	if c.dry && err == nil {
+		out.ID, out.Time = c.madeUp(), time.Now().Unix()
+		out.Author, err = c.f.Me(ctx)
+	}
+	return out, err
+}
+
 func (c *counted) Key() string                                   { return c.f.Key() }
 func (c *counted) Server() string                                { return c.f.Server() }
 func (c *counted) Me(ctx context.Context) (forge.Account, error) { return c.f.Me(ctx) }
@@ -51,7 +82,7 @@ func (c *counted) As(ctx context.Context, a forge.Account) (forge.Forge, error) 
 	}
 	view := *c
 	view.f = g
-	return &view, nil
+	return view.wrap(), nil
 }
 
 func (c *counted) Issues(ctx context.Context, since int64) ([]forge.Issue, error) {

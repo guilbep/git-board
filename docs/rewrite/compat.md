@@ -54,6 +54,7 @@ line each.
 | `broken` | One good issue, and issues no reader folds: an edit of an operation that isn't there, an unknown operation, a pack that isn't JSON, a wrong clock, a log that doesn't start with `create`, an operation with no author, a status that isn't one |
 | `generated` | `boardgen`'s board (15 issues, 5 persons, seed 7), as v1 writes a board of its own, and an issue with a long history: 160 packs of comments, edits, label changes, titles, closes and deletes |
 | `markdown` | A Markdown folder board (`markdown:issues`), copied from git by v1's `datastore copy` with its counter, then one issue written on two branches and merged by git's union driver, then rendered by v1: a description holding a `### ` line, a deleted issue, Unicode |
+| `releases` | `basic`, with a `[release]` table that publishes binaries, `[branches] base = "main"`, and an `origin` file: its checkout is its own origin, fetched, so the release commands read its two releases (notes, a comment, a yank) as they do on a clone. Its commands are the release commands' reads and their refusals |
 | `postgres` | `basic`, copied into PostgreSQL by v1's `datastore copy` with its counter, kept as its tables' rows (`tables.txt`, bytes in hex). Each checkout loads them into a database of its own on the server `GIT_BOARD_TEST_POSTGRES` names, and drops it after; without one, the board is skipped (`make golden-boards` leaves it as it is). v1 prints on it what it prints on `basic`, file for file |
 
 ## The cases
@@ -79,7 +80,7 @@ index and compares the three.
 Each command runs with: `HOME` a folder of its own, no system git
 config, `TZ=UTC`, `LC_ALL=C`, `TERM=dumb`, `NO_COLOR=1`,
 `GIT_BOARD_NO_PROMPT=1`, no stdin, no `GIT_*`, `XDG_*` or forge token
-from the caller's environment; the checkout has no remote.
+from the caller's environment; the checkout has no remote, but on a board whose folder holds `origin`.
 
 ## Normalisations
 

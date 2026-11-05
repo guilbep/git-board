@@ -67,3 +67,11 @@ cmd46-log-26a4ba8-since-2025-03-04-json	0	log 26a4ba8 --since 2025-03-04 --json
 cmd47-log-398523d-field-prio-json	0	log 398523d --field prio --json
 cmd48-labels-json	0	labels --json
 cmd49-me-ls-json	0	me --ls --json
+cmd50-sprint-ls	0	sprint ls
+cmd51-sprint-report-s1	0	sprint report s1
+cmd52-sprint-report-nope	1	sprint report nope
+cmd53-sprint-new-s9	1	sprint new s9
+cmd54-branch-26a4ba8	0	branch 26a4ba8
+cmd55-branch-398523d	0	branch 398523d
+cmd56-branch-0000000	3	branch 0000000
+cmd57-verify	1	verify

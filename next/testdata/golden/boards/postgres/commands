@@ -47,3 +47,11 @@ log 26a4ba8 --since 2025-03-04 --json
 log 398523d --field prio --json
 labels --json
 me --ls --json
+sprint ls
+sprint report s1
+sprint report nope
+sprint new s9
+branch 26a4ba8
+branch 398523d
+branch 0000000
+verify

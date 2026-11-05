@@ -1,0 +1,1 @@
+error: prod doesn't follow the trunk: deploy it a release with --release <tag>

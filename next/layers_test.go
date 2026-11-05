@@ -18,40 +18,48 @@ const module = "github.com/guilbep/git-board/"
 // code grows on them. A package missing here fails the test: a new one
 // takes its place in the table first.
 var mayImport = map[string][]string{
-	"next/store":                   {},
-	"next/kernel/pack":             {},
-	"next/kernel/search":           {},
-	"next/kernel":                  {"next/store", "next/kernel/pack"},
-	"next/store/git":               {"next/store", "next/kernel/pack"},
-	"next/store/mem":               {"next/store", "next/kernel/pack"},
-	"next/store/md":                {"next/store", "next/kernel/pack"},
-	"next/store/forgecopy":         {"next/store", "next/store/git"},
-	"next/store/pg":                {"next/store", "next/kernel/pack"},
-	"next/store/pg/pgtest":         {},
-	"next/store/storetest":         {"next/store", "next/kernel/pack"},
-	"next/view":                    {"next/kernel", "next/kernel/search"},
-	"next/view/viewtest":           {"next/kernel", "next/kernel/pack", "next/kernel/search", "next/store", "next/store/mem"},
-	"next/conf":                    {},
-	"next/domain/people":           {"next/kernel", "next/kernel/pack"},
-	"next/sync":                    {"next/kernel", "next/kernel/pack", "next/store"},
-	"next/domain/issues":           {"next/kernel", "next/kernel/pack", "next/kernel/search", "next/conf", "next/domain/people", "next/sync"},
-	"next/domain/issues/issuesync": {"next/kernel", "next/domain/issues", "next/domain/people", "next/sync", "next/forge"},
-	"next/domain/issues/mdfiles":   {"next/kernel", "next/domain/issues", "next/domain/people"},
-	"next/domain/releases":         {"next/conf"},
-	"next/domain/cycle":            {"next/conf"},
-	"next/forge":                   {"next/conf"},
-	"next/forge/fake":              {"next/forge"},
-	"next/forge/forgetest":         {"next/forge", "next/forge/fake", "next/kernel", "next/domain/issues", "next/domain/issues/issuesync", "next/domain/people", "next/store/git", "next/view"},
-	"next/forge/github":            {"next/forge"},
-	"next/forge/gitlab":            {"next/forge"},
-	"next/hermetic":                {},
-	"next/tools":                   {"next/conf"},
-	"next/app":                     {"next/kernel", "next/kernel/pack", "next/conf", "next/domain/issues", "next/domain/issues/mdfiles", "next/domain/people", "next/domain/releases", "next/domain/cycle", "next/forge", "next/forge/github", "next/forge/gitlab", "next/domain/issues/issuesync", "next/tools", "next/store", "next/store/git", "next/store/md", "next/store/pg", "next/store/forgecopy", "next/view"},
-	"next/surface/http":            {"next/app", "next/conf", "next/kernel", "next/domain/issues", "next/domain/people", "next/forge"},
-	"next/surface/cli":             {"next/app", "next/conf", "next/kernel", "next/domain/issues", "next/domain/people", "next/forge", "next/surface/http"},
-	"next/cmd/git-board-next":      {"next/surface/cli"},
-	"next/golden":                  {},
-	"next/golden/v1gen":            {"next/domain/issues", "next/domain/issues/issuesync", "next/domain/people", "next/forge"}, // its tests: the sync cross test
+	"next/store":                       {},
+	"next/kernel/pack":                 {},
+	"next/kernel/search":               {},
+	"next/kernel":                      {"next/store", "next/kernel/pack"},
+	"next/store/git":                   {"next/store", "next/kernel/pack"},
+	"next/store/mem":                   {"next/store", "next/kernel/pack"},
+	"next/store/md":                    {"next/store", "next/kernel/pack"},
+	"next/store/forgecopy":             {"next/store", "next/store/git"},
+	"next/store/pg":                    {"next/store", "next/kernel/pack"},
+	"next/store/pg/pgtest":             {},
+	"next/store/storetest":             {"next/store", "next/kernel/pack"},
+	"next/view":                        {"next/kernel", "next/kernel/search"},
+	"next/view/viewtest":               {"next/kernel", "next/kernel/pack", "next/kernel/search", "next/store", "next/store/mem"},
+	"next/conf":                        {},
+	"next/domain/people":               {"next/kernel", "next/kernel/pack"},
+	"next/sync":                        {"next/kernel", "next/kernel/pack", "next/store", "next/forge"},
+	"next/domain/issues":               {"next/kernel", "next/kernel/pack", "next/kernel/search", "next/conf", "next/domain/people", "next/sync"},
+	"next/domain/issues/issuesync":     {"next/kernel", "next/domain/issues", "next/domain/people", "next/sync", "next/forge"},
+	"next/domain/issues/mdfiles":       {"next/kernel", "next/domain/issues", "next/domain/people"},
+	"next/domain/releases":             {"next/kernel", "next/conf", "next/domain/people"},
+	"next/domain/releases/proof":       {},
+	"next/domain/releases/releasesync": {"next/domain/releases", "next/forge", "next/kernel", "next/sync"},
+	"next/domain/cycle":                {"next/conf", "next/domain/issues", "next/domain/people", "next/domain/releases/proof", "next/forge"},
+	"next/domain/cycle/work":           {"next/domain/cycle", "next/domain/issues", "next/domain/people"},
+	"next/forge":                       {"next/conf"},
+	"next/forge/fake":                  {"next/forge"},
+	"next/forge/forgetest":             {"next/forge", "next/forge/fake", "next/kernel", "next/domain/issues", "next/domain/issues/issuesync", "next/domain/people", "next/store/git", "next/view"},
+	"next/forge/github":                {"next/forge"},
+	"next/forge/gitlab":                {"next/forge"},
+	"next/hermetic":                    {},
+	"next/tools":                       {"next/conf"},
+	"next/tools/code":                  {},
+	"next/tools/branches":              {"next/domain/issues", "next/tools/code"},
+	"next/tools/ship":                  {"next/domain/releases", "next/domain/issues", "next/forge", "next/tools/branches", "next/tools/code", "next/domain/releases/proof"},
+	"next/tools/ship/shiptest":         {"next/app", "next/domain/releases", "next/domain/issues/issuesync", "next/kernel", "next/sync", "next/tools/ship"},
+	"next/app":                         {"next/kernel", "next/kernel/pack", "next/conf", "next/domain/issues", "next/domain/issues/mdfiles", "next/domain/people", "next/domain/releases", "next/domain/cycle", "next/forge", "next/forge/github", "next/forge/gitlab", "next/domain/issues/issuesync", "next/tools", "next/store", "next/store/git", "next/store/md", "next/store/pg", "next/store/forgecopy", "next/view", "next/sync", "next/domain/releases/releasesync", "next/tools/ship", "next/tools/branches", "next/tools/code", "next/domain/releases/proof"},
+	"next/surface/http":                {"next/app", "next/conf", "next/kernel", "next/domain/issues", "next/domain/people", "next/forge"},
+	"next/surface/cli":                 {"next/app", "next/conf", "next/kernel", "next/domain/issues", "next/domain/people", "next/forge", "next/domain/releases", "next/tools/ship", "next/tools/branches", "next/surface/tui", "next/surface/http"},
+	"next/surface/tui":                 {"next/app", "next/domain/issues"},
+	"next/cmd/git-board-next":          {"next/surface/cli"},
+	"next/golden":                      {},
+	"next/golden/v1gen":                {"next/domain/issues", "next/domain/issues/issuesync", "next/domain/people", "next/forge"}, // its tests: the sync cross test
 }
 
 // v1gen writes the golden boards with v1's code (guard_test.go): the one
@@ -65,7 +73,7 @@ const webApp, webServer = "web", "next/surface/http"
 
 // testsMayImport is what a package's tests may import besides: the
 // datastores and the view, to run on real ones, and the conformance suite.
-var testsMayImport = []string{"next/store", "next/store/git", "next/store/mem", "next/store/md", "next/store/pg", "next/store/pg/pgtest", "next/store/storetest", "next/view", "next/view/viewtest", "next/kernel", "next/kernel/pack", "next/hermetic", "next/forge/fake", "next/forge/forgetest"}
+var testsMayImport = []string{"next/store", "next/store/git", "next/store/mem", "next/store/md", "next/store/pg", "next/store/pg/pgtest", "next/store/storetest", "next/view", "next/view/viewtest", "next/kernel", "next/kernel/pack", "next/hermetic", "next/forge/fake", "next/forge/forgetest", "next/tools/ship/shiptest"}
 
 // The layers hold, and next/ and v1 never import each other: deleting v1
 // is one git rm (design.md, section 5).

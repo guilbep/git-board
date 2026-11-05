@@ -1,0 +1,133 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: epfl-co2-calculator-prod
+patches:
+  # db-secret-crd
+  - target:
+      kind: InfisicalSecret
+      name: db-secret-crd
+    patch: |-
+      - op: replace
+        path: /spec/managedSecretReference/secretNamespace
+        value: epfl-co2-calculator-prod
+      - op: replace
+        path: /spec/authentication/universalAuth/secretsScope/envSlug
+        value: prod
+  # backend-secret-crd Oauth + Entra
+  - target:
+      kind: InfisicalSecret
+      name: backend-secret-crd
+    patch: |-
+      - op: replace
+        path: /spec/managedSecretReference/secretNamespace
+        value: epfl-co2-calculator-prod
+      - op: replace
+        path: /spec/authentication/universalAuth/secretsScope/envSlug
+        value: prod
+resources:
+  - ../../base
+images:
+  - name: ghcr.io/epfl-enac/epfl/co2-calculator/frontend
+    newTag: v1.4.19
+    digest: sha256:33b43e1158bfc41fbda59eccb96db5d9f535dc92d081e5043355df877053ea13
+  - name: ghcr.io/epfl-enac/epfl/co2-calculator/backend
+    newTag: v1.4.19
+    digest: sha256:64939de9917ed2bf1d5cb88740f6e7992fe1346535c5b67ed2c8c2f098df9503
+helmCharts:
+  - name: postgresql
+    valuesInline:
+      image:
+        repository: bitnamilegacy/postgresql
+      nameOverride: co2-calculator
+      global:
+        storageClass: nfs-client
+        postgresql:
+          auth:
+            username: "co2_user"
+            database: "co2_calculator"
+            existingSecret: db-secret
+            secretKeys:
+              adminPasswordKey: DB_PASSWORD
+              userPasswordKey: DB_PASSWORD
+    releaseName: db
+    version: 13.2.23
+    repo: https://charts.bitnami.com/bitnami
+  - name: co2-calculator
+    releaseName: co2-calculator
+    repo: oci://ghcr.io/epfl-enac/co2-calculator/helm
+    version: 1.0.1789
+    valuesInline:
+      ingress:
+        enabled: true
+        hosts:
+          - co2-calculator2.epfl.ch
+      frontend:
+        image:
+          # because we're on prod, always pull the latest image
+          pullPolicy: IfNotPresent
+        env:
+          APP_ACCESS_MANAGEMENT_PROVIDER_ABOUT_URL: "https://www.epfl.ch/campus/services/ressources/accred/"
+          APP_ROLES_DOC_URL: "https://epfl-enac.github.io/co2-calculator-back-office-doc/roles/"
+      backend:
+        image:
+          # because we're on prod, always pull the latest image
+          pullPolicy: IfNotPresent
+        livenessProbe:
+          initialDelaySeconds: 4
+          periodSeconds: 20
+          timeoutSeconds: 2
+          failureThreshold: 3
+        readinessProbe:
+          initialDelaySeconds: 2
+          periodSeconds: 5
+          timeoutSeconds: 2
+          failureThreshold: 3
+          successThreshold: 1
+        migrations:
+          enabled: true
+        env:
+          APP_NAME: "CO2 Calculator API prod"
+          APP_VERSION: "sprint-1-prod-2025-11-28"
+          DEBUG: "False"
+          API_VERSION: "/v1"
+          LOG_LEVEL: "INFO"
+          ALGORITHM: "HS256"
+          ACCESS_TOKEN_EXPIRE_MINUTES: "30"
+          REFRESH_TOKEN_EXPIRE_HOURS: "12"
+          ROLE_PROVIDER_PLUGIN: "accred"
+          PROVIDER_PLUGIN: "accred"
+          OAUTH_SCOPE: "openid profile email"
+          OAUTH_COOKIE_PATH: "/"
+          FRONTEND_URL: "https://co2-calculator2.epfl.ch"
+          ACCRED_API_HEALTH_URL: "https://api.epfl.ch/v1/authorizations?type=right&authid=calco2.backoffice.metier"
+        existingSecret:
+          enabled: true
+          name: "backend-secret"
+          keys:
+            oauthClientIdKey: "CLIENT_ID"
+            oauthClientSecretKey: "ID_SECRET"
+            oauthIssuerUrlKey: "OAUTH_ISSUER_URL"
+            oauthTenantIdKey: "TENANT_ID"
+            accredApiKeyKey: "PASSWORD"
+            accredApiUsernameKey: "USERNAME"
+            accredApiUrlKey: "ACCRED_API_URL"
+            filesEncryptionKeyKey: "FILES_ENCRYPTION_KEY"
+            filesEncryptionSaltKey: "FILES_ENCRYPTION_SALT"
+            filesMaxSizeMbKey: "FILES_MAX_SIZE_MB"
+            s3EndpointProtocolKey: "S3_ENDPOINT_PROTOCOL"
+            s3EndpointHostnameKey: "S3_ENDPOINT_HOSTNAME"
+            s3AccessKeyIdKey: "S3_ACCESS_KEY_ID"
+            s3SecretAccessKeyKey: "S3_SECRET_ACCESS_KEY"
+            s3RegionKey: "S3_REGION"
+            s3BucketKey: "S3_BUCKET"
+            s3PathPrefixKey: "S3_PATH_PREFIX"
+      database:
+        host: "db-co2-calculator"
+        port: 5432
+        existingSecret:
+          enabled: true
+          name: "db-secret" # existing secret name (if using one)
+          keys:
+            databaseNameKey: "DB_NAME"
+            usernameKey: "DB_USER"
+            passwordKey: "DB_PASSWORD"

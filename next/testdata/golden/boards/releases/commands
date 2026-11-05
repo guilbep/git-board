@@ -1,0 +1,13 @@
+release
+release status
+release notes
+release notes --all
+release yank v0.1.0
+release rollback prod v0.1.0
+release cut --version 1.0.1-rc.2
+release cut --version nope
+release promote
+deploy
+deploy prod
+deploy prod --watch
+deploy prod --release v9.9.9
