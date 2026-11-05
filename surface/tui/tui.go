@@ -121,7 +121,7 @@ type Model struct {
 	valueInput  textinput.Model
 	editField   string
 
-	// filterInput is the "f" structured-filter box (core/filter's
+	// filterInput is the "f" structured-filter box (domain/issues' filter, its
 	// field:value grammar — the same one ls/view/tui's launch argument
 	// use), distinct from bubbles/list's own "/" fuzzy text search.
 	// filterExpr is the currently-applied expression (empty = none);

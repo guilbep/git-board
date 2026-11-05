@@ -1,4 +1,4 @@
-<!-- Roll an environment back (internal/release Rollback) to a final older
+<!-- Roll an environment back (tools/ship Rollback) to a final older
      than what it runs: its images and chart, no tag moving, and why, for
      the record of what it ran. Rolling back starts a job: the dialog closes
      into the page's ReleaseJob. The States board's "Roll back prod". -->

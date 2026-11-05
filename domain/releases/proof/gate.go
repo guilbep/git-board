@@ -54,8 +54,8 @@ type GateResult struct {
 
 // Base is what a base branch commits for its proofs: what runs and who
 // may sign are the base's, never a branch's (ADR 0001, section 5). The
-// application reads it from its own file at the base (internal/config's
-// AtBase); the core reads no file of the application's (ADR 0005).
+// application reads it from its own file at the base (app's
+// AtBase); the domain reads no file of the application's (ADR 0005).
 type Base struct {
 	Branch string           // the base branch, as the gate's reason names it
 	Tests  map[string]Suite // [cycle.tests.*]

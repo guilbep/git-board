@@ -1,5 +1,5 @@
 // The presets: the project file's ready-made elements, drawn from the
-// default file (internal/config/default.git-board.toml) and the guide's
+// default file (app/starter/default.git-board.toml) and the guide's
 // examples, each with its one-line why. A preset menu adds and selects; it
 // never overwrites silently — a name the section already has comes back
 // with -2, as the board's "Save as new view" does.

@@ -405,7 +405,7 @@ a.gb-bar-step:hover .gb-bar-name { text-decoration: underline; text-underline-of
 }
 .gb-dialog { position: relative; left: auto; top: auto; transform: none; }
 
-/* the server's Markdown (internal/markdown): task lists, tables, images */
+/* the server's Markdown (surface/http/markdown.go): task lists, tables, images */
 .gb-md li:has(> input[type="checkbox"]), .gb-md li:has(> p:first-child > input[type="checkbox"]:first-child) { position: relative; list-style: none; margin-left: -1.25rem; padding-left: 1.5rem; } /* a hanging indent: a flex row made each word run and code a column; a loose list holds its box in a paragraph */
 .gb-md li > input[type="checkbox"], .gb-md li > p:first-child > input[type="checkbox"]:first-child { position: absolute; left: 0; top: .3rem; width: 1rem; height: 1rem; margin: 0; accent-color: var(--fg); }
 .gb-md table { display: block; max-width: 100%; overflow-x: auto; }

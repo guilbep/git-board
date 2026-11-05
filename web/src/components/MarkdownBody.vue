@@ -1,4 +1,4 @@
-<!-- Issue text: the server's clean HTML (internal/markdown), then #123 and
+<!-- Issue text: the server's clean HTML (surface/http/markdown.go), then #123 and
      @name as links (richtext.ts). A click on #123 is the parent's to take
      (open that issue here) before the browser follows it to the forge. -->
 <template>

@@ -1,6 +1,6 @@
 // Package work is the Work page's rows: every open issue's cycle, grouped
 // into what needs the viewer and what waits on others (the Inbox's shape,
-// core/inbox, with the cycle as its source).
+// domain/issues' inbox, with the cycle as its source).
 package work
 
 import (

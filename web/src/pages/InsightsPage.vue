@@ -1,5 +1,5 @@
 <!-- Insights: the issues' history, which git-bug keeps operation by
-     operation, replayed day by day (internal/insights): how the work
+     operation, replayed day by day (tools/insights): how the work
      flowed, how fast it closes, how long it takes, the sprint's burn-up,
      and the board as it was on any day (GET /api/insights). Each chart
      says its finding in one sentence. -->

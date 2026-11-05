@@ -12,7 +12,7 @@ export function mergeRows(fresh: InboxRow[], shown: InboxRow[], read: Map<string
   return { rows: [...fresh, ...kept].sort((a, b) => Date.parse(b.latest) - Date.parse(a.latest)), read: stillRead };
 }
 
-const PROJECT = ' (project)'; // internal/inbox: a role held for the whole project
+const PROJECT = ' (project)'; // domain/issues' inbox: a role held for the whole project
 
 // followLine: the side column's Inbox block, said. A role you hold for the
 // whole project (lead-dev, pm…) brings an issue's creation and closing only.

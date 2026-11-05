@@ -15,7 +15,7 @@ import (
 )
 
 // Sources is what Gather reads besides the thread: each is the app's to
-// read (internal/evidence), the cycle computes from it and fetches none.
+// read (app/evidence.go), the cycle computes from it and fetches none.
 type Sources struct {
 	Stages Stages
 	Kind   string         // the issue's kind ([branches] kinds): step 4's rule

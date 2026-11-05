@@ -16,8 +16,8 @@ import (
 
 // Config is the [release] table of .git-board.toml: how the project's
 // code gets to its environments, and the environments' roles. The
-// application reads and checks it (internal/config); internal/ship
-// cuts and deploys by it. Absent or without environments, the project
+// application reads and checks it (app); tools/ship cuts and deploys
+// by it. Absent or without environments, the project
 // has no releases.
 type Config struct {
 	Remote       string   `toml:"remote" json:"remote"`             // the authority for tags and release records, default origin

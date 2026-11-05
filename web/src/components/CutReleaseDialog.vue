@@ -1,4 +1,4 @@
-<!-- Cut a release (internal/release Draft, Cut): from what the followed
+<!-- Cut a release (tools/ship Draft, Cut): from what the followed
      environment runs, a version and where it goes (a candidate, or the
      final), the checks, the notes drafted from the issues, and what the cut
      does. Cutting starts a job: the dialog closes into the page's

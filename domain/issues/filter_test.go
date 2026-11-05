@@ -13,7 +13,7 @@ import (
 
 var today = time.Date(2026, 8, 31, 0, 0, 0, 0, time.UTC) // "delivery" is current, "post-delivery" is next
 
-// co2 is internal/config/testdata/git-board.toml's schema.
+// co2 is v1's internal/config/testdata/git-board.toml's schema.
 var co2 = &Schema{
 	Fields: map[string]Field{
 		"status":   {Single: true, Options: []string{"backlog", "comite", "ready", "in-progress", "in-review", "ready-for-validation", "qa", "tests-metier", "validated"}},
@@ -533,7 +533,7 @@ func TestFollowsTerm(t *testing.T) {
 	}
 }
 
-// A role the issue takes from the project (internal/config's roles) isn't
+// A role the issue takes from the project (`[roles]`) isn't
 // involvement: the project's lead-dev isn't in every issue's discussion.
 // pm:@me still finds it, as a field.
 func TestInvolvesLeavesOutProjectRoles(t *testing.T) {

@@ -2,7 +2,7 @@
      bell in the text color when the issue reaches your inbox, a grey
      bell-off when it doesn't, a grey bell when a project role brings its
      creation and closing only. Its popover offers git-board's three
-     choices (internal/server/inbox.go), applied on click. Without an
+     choices (GET /api/inbox, surface/http), applied on click. Without an
      identity, no bell: the inbox page says why. -->
 <template>
   <GbPopover v-if="follow" :label="bell.label" title="Your inbox" :button-class="`gb-icon-btn gb-bell is-${bell.tone}`" align="right">

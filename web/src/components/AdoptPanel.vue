@@ -1,4 +1,4 @@
-<!-- First time (internal/release Proposals, Adopt): each overlay that
+<!-- First time (tools/ship Proposals, Adopt): each overlay that
      doesn't say which commit it runs, with git-board's guess, from its
      release tag or its image's revision label; one it couldn't guess is
      typed in. Adopting writes each commit next to the digest. The States

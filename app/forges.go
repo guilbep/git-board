@@ -24,7 +24,7 @@ import (
 // The forges' sync (docs/spec/sync.md): issuesync's run, with the forges
 // of .git-board.toml, or those found in origin's URLs, whose sync is on, each opened fresh for its run, and
 // the settings the run reads from the board's config, as v1's
-// internal/store gives them.
+// internal/store gave them.
 // ponytail: v1's Quote and Published, which read the body's sections
 // (issuesync/meanings.go), and a check of a board kept outside git, are
 // v1's still.

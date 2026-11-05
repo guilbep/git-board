@@ -8,8 +8,8 @@ import (
 
 // PR is a pull request as the gate shows it: the code's way into a base
 // branch, found by its head branch's name and never stored. The words are
-// GitHub's (internal/ghpr reads them); a forge naming them otherwise maps
-// to them. The cycle reads it as evidence (core/cycle).
+// GitHub's (forge/github reads them); a forge naming them otherwise maps
+// to them. The cycle reads it as evidence (domain/cycle).
 type PR struct {
 	Number      int      `json:"number"`
 	URL         string   `json:"url"`

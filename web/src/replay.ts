@@ -5,7 +5,7 @@ import type { IssueEvent, Person } from './api/types.ts';
 import { lineDiff, type DiffLine } from './linediff.ts';
 import { isTick } from './sections.ts';
 
-// the core's operation names (core/issue/ops.go)
+// the core's operation names (domain/issues)
 export type Op = 'create' | 'comment' | 'edit-text' | 'change-labels' | 'set-status' | 'set-title' | 'set-meta';
 
 export interface Step {

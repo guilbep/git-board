@@ -154,8 +154,8 @@ func checkSingleCardinality(issues []issues.Issue, cfg *Config) []LintFinding {
 }
 
 // checkUnknownValues reuses fields.Field.KnownValue — the exact
-// value-against-Options check internal/ghbridge already applies (and warns
-// about) when a `bridge pull` value doesn't map to a configured option.
+// value-against-Options check tools/ghproject already applies (and warns
+// about) when a `project pull` value doesn't map to a configured option.
 // KnownValue treats an unconfigured field, or a configured one with no
 // Options, as "known" (nothing to validate against) — that's how a sprint
 // label (validated separately, against [[sprints.list]]) or a free-form

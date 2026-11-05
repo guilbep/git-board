@@ -57,7 +57,7 @@ export interface CycleEvidence {
   signoffs?: CycleSignoff[];
   runs?: { by: string; commit?: string; at: string }[];
   checks?: { index: number; by: string; commit?: string; at: string }[];
-  lanes?: CycleLane[]; // the issue's branches, branched out (core/cycle, PickLane)
+  lanes?: CycleLane[]; // the issue's branches, branched out (domain/cycle, PickLane)
 }
 
 export interface Cycle {

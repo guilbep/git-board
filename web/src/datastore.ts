@@ -73,7 +73,7 @@ export const kinds: { kind: StoreKind; label: string; gives: string; givesUp: st
 // What a board kept elsewhere than git can't do (ADR 0002, 3: the UI
 // doesn't offer what can't work): pull, push, a remote's fetch and
 // ahead/behind, start over. The server refuses them with 409 missing and
-// the sentence internal/store/datastore.go's missing writes; the page
+// the sentence v1's internal/store/datastore.go's missing writes; the page
 // disables them up front, that sentence their title.
 export type Kept = { name: string; replica: boolean }; // GET /api/datastore
 

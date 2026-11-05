@@ -8,7 +8,7 @@ export const STEPS = ['', 'Intent', 'Risk', 'Plan', 'Tests', 'Code', 'Review', '
 // the default list's ids by number: "6" is review
 export const DEFAULT_IDS: readonly string[] = ['', 'intent', 'risk', 'plan', 'tests', 'code', 'review', 'verify'];
 // listOf is the project's list ([cycle] steps), the default seven when the
-// server sends none (core/cycle's list)
+// server sends none (domain/cycle's list)
 export const listOf = (s: CycleStages | undefined): StageStep[] =>
   s?.steps?.length ? s.steps : DEFAULT_IDS.slice(1).map((id, i) => ({ id, kind: id === 'verify' ? 'signoff' : id, name: STEPS[i + 1]! }));
 // kindOf is an entry's kind as the step's number, 1 to 7: what its gate,
