@@ -1,14 +1,17 @@
 package cli
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 
 	"github.com/spf13/cobra"
 
+	"github.com/guilbep/git-board/next/app"
 	"github.com/guilbep/git-board/next/domain/issues"
 	"github.com/guilbep/git-board/next/kernel"
 )
@@ -29,22 +32,77 @@ func resolveMe(flag string) string {
 }
 
 func newNew() *cobra.Command {
-	var title, me string
+	var title, template, me string
 	var text textFlags
 	var force, noPrompt bool
 	var js *jsonOut
 	cmd := &cobra.Command{
 		Use:   "new [title] [field=value...]",
 		Short: "Create an issue",
+		Long: `Create an issue, as the person you write as (git board me), with its
+fields in the same change.
+
+The title is the first argument, or --title. The description comes from
+--body, --body-file (- for stdin) or --editor: with --editor the buffer's
+first line is the title and the rest the description, as gh's -e. The
+field=value arguments are set's (git board set --help): checked against
+.git-board.toml unless --force, @me and @next resolved.
+
+The first argument is read as the title unless it is a field=value: a
+title like "a=b" goes with --title.
+
+--template <name> starts from one of the repository's issue templates:
+GitHub's .github/ISSUE_TEMPLATE (*.md, and the issue forms, *.yml, as
+the text GitHub makes of them) and GitLab's .gitlab/issue_templates. Its
+text is the description unless --body or --body-file gives one; its
+labels and assignees are set first, the field=value arguments over
+them. Its title starts the title you are asked for, or the editor's
+first line; a title you give wins. A name no template has is exit code
+2, listing them.
+
+With no title on a terminal, new asks: a template first when the
+repository has some, then the title, then whether to write the
+description in your editor. It never asks when stdin is not a terminal,
+with --no-prompt, or when GIT_BOARD_NO_PROMPT is set: no title is exit
+code 2 then.
+
+It prints the new issue's id, alone on its line; --json prints the issue
+as ls --json prints each one. The issue goes to a forge with the next
+sync, nowhere before.`,
+		Example: `  git board new "Login fails on Safari"
+  git board new "Login fails on Safari" prio=p1 assignee=+@me sprint=@current
+  git board new "Export to CSV" -b "As ls --md, but CSV."
+  git board new "Crash report" -F crash.md label=+bug
+  git board new -e prio=p2
+  git board new "Login fails" --template "Bug report"
+  git board new                             # on a terminal: asks
+  id=$(git board new "Follow-up")       # the id, for a script`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if !cmd.Flags().Changed("title") && len(args) > 0 {
 				if _, err := issues.ParseAssignment(args[0]); err != nil {
 					title, args = args[0], args[1:]
 				}
 			}
-			_ = noPrompt // M2: no prompt yet; a title is needed
-			if title == "" && !text.editor {
+			prompt := !noPrompt && os.Getenv("GIT_BOARD_NO_PROMPT") == "" && isTerminal(cmd.InOrStdin())
+			if title == "" && !text.editor && !prompt {
 				return usageError{fmt.Errorf("a title: git board new <title>, or --editor")}
+			}
+			asks := prompt && title == "" && !text.editor
+			var tmpl *issueTemplate
+			var templates []issueTemplate
+			if template != "" || asks {
+				cwd, err := os.Getwd()
+				if err != nil {
+					return err
+				}
+				templates = loadTemplates(filepath.Dir(app.ConfigPath(cwd)))
+			}
+			if template != "" {
+				t, err := findTemplate(templates, template)
+				if err != nil {
+					return err
+				}
+				tmpl = &t
 			}
 			b, err := open(cmd, true)
 			if err != nil {
@@ -54,10 +112,58 @@ func newNew() *cobra.Command {
 			if _, err := b.People.Whom(); err != nil {
 				return err
 			}
-			body := ""
+			body, haveBody := "", false
+			if asks {
+				p := prompter{bufio.NewReader(cmd.InOrStdin()), cmd.ErrOrStderr()}
+				if tmpl == nil && len(templates) > 0 {
+					if tmpl, err = chooseTemplate(p, templates); err != nil {
+						return err
+					}
+				}
+				prefix := ""
+				if tmpl != nil {
+					prefix = tmpl.Title
+				}
+				typed, err := p.ask("Title: " + prefix)
+				if err != nil {
+					return err
+				}
+				if title = strings.TrimSpace(prefix + typed); typed == "" {
+					return usageError{fmt.Errorf("a title: nothing written")}
+				}
+				if !text.given(cmd) {
+					start := ""
+					if tmpl != nil {
+						start = tmpl.Body
+					}
+					answer, err := p.ask("Description: e to write it in your editor, enter to " + map[bool]string{true: "keep the template's", false: "leave it empty"}[start != ""] + ": ")
+					if err != nil {
+						return err
+					}
+					body, haveBody = start, true
+					if strings.EqualFold(answer, "e") {
+						buf, err := runEditor("new", start+"\n")
+						if err != nil {
+							return err
+						}
+						body = trimText(buf)
+					}
+				}
+			}
+			var initial []string
+			if tmpl != nil {
+				initial = tmpl.labels()
+			}
 			switch {
 			case text.editor:
-				buf, err := runEditor("new", title+"\n\n")
+				head, start := title, ""
+				if tmpl != nil {
+					start = tmpl.Body
+					if head == "" {
+						head = tmpl.Title
+					}
+				}
+				buf, err := runEditor("new", head+"\n\n"+start)
 				if err != nil {
 					return err
 				}
@@ -68,10 +174,12 @@ func newNew() *cobra.Command {
 				if body, err = text.read(cmd.InOrStdin()); err != nil {
 					return err
 				}
+			case !haveBody && tmpl != nil:
+				body = tmpl.Body
 			}
-			is, err := b.issues.New(cmd.Context(), issues.NewReq{Title: title, Body: body, Assign: args, Force: force, MeName: resolveMe(me)})
+			is, err := b.issues.New(cmd.Context(), issues.NewReq{Title: title, Body: body, Labels: initial, Assign: args, Force: force, MeName: resolveMe(me)})
 			if err != nil {
-				if text.editor || text.given(cmd) {
+				if text.editor || haveBody {
 					return keptErr(err, "new", title+"\n\n"+body)
 				}
 				return err
@@ -85,6 +193,7 @@ func newNew() *cobra.Command {
 	}
 	cmd.Flags().StringVarP(&title, "title", "t", "", "the title")
 	text.add(cmd, "description")
+	cmd.Flags().StringVarP(&template, "template", "T", "", "start from this issue template (.github/ISSUE_TEMPLATE, .gitlab/issue_templates)")
 	cmd.Flags().BoolVar(&noPrompt, "no-prompt", false, "never ask, even on a terminal (env GIT_BOARD_NO_PROMPT)")
 	js = addJSON(cmd, "print the new issue as JSON", jsonFields(issues.Issue{}), false)
 	cmd.Flags().BoolVar(&force, "force", false, "write field values .git-board.toml doesn't allow")

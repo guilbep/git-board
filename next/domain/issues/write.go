@@ -63,6 +63,7 @@ func (s *Service) do(ctx context.Context, name string, decide func(me kernel.ID,
 // NewReq asks for a new issue.
 type NewReq struct {
 	Title, Body string
+	Labels      []string // to start from (a template's): Assign goes over them
 	Assign      []string // field=value, as set's
 	Force       bool     // write values the config doesn't allow
 	MeName      string   // what @me means: --me; "" for who writes
@@ -80,7 +81,7 @@ func (s *Service) New(ctx context.Context, r NewReq) (Issue, error) {
 	if err != nil {
 		return Issue{}, err
 	}
-	labels, _, err := s.fold(nil, as)
+	labels, _, err := s.fold(r.Labels, as)
 	if err != nil {
 		return Issue{}, err
 	}
