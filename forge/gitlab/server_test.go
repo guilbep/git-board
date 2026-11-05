@@ -90,6 +90,9 @@ func (s *server) routes() http.Handler {
 	s.handle(m, "GET "+p+"/issues/{iid}/resource_state_events", s.states)
 	s.handle(m, "GET "+p+"/issues/{iid}/discussions", s.discussions)
 	s.handle(m, "POST "+p+"/issues/{iid}/discussions/{d}/notes", s.reply)
+	s.handle(m, "GET "+p+"/labels", s.labels)
+	s.handle(m, "POST "+p+"/labels", s.makeLabel)
+	s.handle(m, "PUT "+p+"/labels/{name}", s.editLabel)
 	s.handle(m, "GET "+p+"/releases", s.releases)
 	s.handle(m, "POST "+p+"/releases", s.createRelease)
 	s.handle(m, "PUT "+p+"/releases/{tag}", s.editRelease)
@@ -485,4 +488,66 @@ func (s *server) reply(w http.ResponseWriter, r *http.Request, view forge.Forge)
 	s.threads[c.ID] = root
 	s.mu.Unlock()
 	reply(w, 201, noteJSON(c))
+}
+
+// labels lists the fake's labels, colors with a #, as GitLab writes them.
+func (s *server) labels(w http.ResponseWriter, r *http.Request, view forge.Forge) {
+	ls, _ := view.(forge.Labeler).Labels(r.Context())
+	items := []any{}
+	for i, l := range ls {
+		items = append(items, map[string]any{"id": i + 1, "name": l.Name, "color": "#" + l.Color, "description": l.Description})
+	}
+	s.page(w, r, items)
+}
+
+// labelIn is a label write's body; GitLab requires a creation's color, #
+// and six hex digits.
+func labelIn(w http.ResponseWriter, r *http.Request, name string, create bool) (forge.Label, bool) {
+	var in struct {
+		Name, Description string
+		Color             *string
+	}
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		reply(w, 400, map[string]string{"message": err.Error()})
+		return forge.Label{}, false
+	}
+	l := forge.Label{Name: cmp.Or(name, in.Name), Description: in.Description}
+	if in.Color != nil {
+		c, ok := strings.CutPrefix(*in.Color, "#")
+		if !ok || len(c) != 6 {
+			reply(w, 400, map[string]any{"message": map[string][]string{"color": {"must be a valid color code"}}})
+			return forge.Label{}, false
+		}
+		l.Color = strings.ToLower(c)
+	} else if create {
+		reply(w, 400, map[string]string{"error": "color is missing"})
+		return forge.Label{}, false
+	}
+	return l, true
+}
+
+func (s *server) makeLabel(w http.ResponseWriter, r *http.Request, view forge.Forge) {
+	l, ok := labelIn(w, r, "", true)
+	if !ok {
+		return
+	}
+	if err := view.(forge.Labeler).SetLabel(r.Context(), l, false); errors.Is(err, forge.ErrRefused) {
+		reply(w, 409, map[string]string{"message": "Label already exists"})
+	} else if err != nil {
+		fail(w, err)
+	} else {
+		reply(w, 201, l)
+	}
+}
+
+func (s *server) editLabel(w http.ResponseWriter, r *http.Request, view forge.Forge) {
+	l, ok := labelIn(w, r, r.PathValue("name"), false)
+	if !ok {
+		return
+	}
+	if err := view.(forge.Labeler).SetLabel(r.Context(), l, true); err != nil {
+		fail(w, err)
+		return
+	}
+	reply(w, 200, l)
 }

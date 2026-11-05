@@ -1,0 +1,15 @@
+[
+  {"id": 1, "name": "bug", "color": "d73a4a", "description": "Something isn't working: should prefix branch by bug/"},
+  {"id": 2, "name": "chore", "color": "BFDADC", "description": "dependencies, CI, tooling, upgrades, housekeeping"},
+  {"id": 3, "name": "design", "color": "F9D0C4", "description": "design work (Figma), usually a sub-issue of the feat it designs"},
+  {"id": 4, "name": "docs", "color": "0075ca", "description": "Improvements or additions to documentation: should prefix branch by docs/"},
+  {"id": 5, "name": "feat", "color": "3A2CCD", "description": "New feature or request: should prefix branch by feat/"},
+  {"id": 6, "name": "hold:blocked", "color": "B60205", "description": "waiting for something outside the team, or for another issue"},
+  {"id": 7, "name": "hold:paused", "color": "D4C5F9", "description": "deprioritized, or its developer away for a while"},
+  {"id": 8, "name": "status:ready", "color": "0E8A16", "description": ""},
+  {"id": 9, "name": "area:backend", "color": "1D76DB", "description": "the API"},
+  {"id": 10, "name": "area:Front End", "color": "C5DEF5", "description": ""},
+  {"id": 11, "name": "prio:P0", "color": "B60205", "description": "on fire"},
+  {"id": 12, "name": "wontfix", "color": "FFFFFF", "description": "This will not be worked on"},
+  {"id": 13, "name": "good first issue", "color": "7057ff", "description": "Good for newcomers"}
+]

@@ -23,7 +23,7 @@ var ErrCrash = errors.New("fake: the write landed, then the connection broke")
 // Write is one write the forge was asked for, by the account As. Issue is
 // the issue's id, empty for create-issue.
 type Write struct {
-	Op    string // create-issue, create-comment, reply, edit-comment, set-title, set-body, set-status, change-labels, set-assignees, create-release, edit-release, attach, open-pr, edit-pr, merge-pr
+	Op    string // create-issue, create-comment, reply, edit-comment, set-title, set-body, set-status, change-labels, set-assignees, create-label, update-label, create-release, edit-release, attach, open-pr, edit-pr, merge-pr
 	As    forge.Account
 	Issue string
 	Args  []string
@@ -45,6 +45,7 @@ type project struct {
 	next          int
 	maxAssignees  int
 	refuseLabels  []string
+	labels        []forge.Label // the project's labels, as made
 	before, after func(Write) error
 	writes        []Write
 	releases      []*release

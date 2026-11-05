@@ -126,47 +126,56 @@ func fetchTemplate(url string) (string, error) {
 
 // InitConfig writes the project file at the root of the repository
 // holding dir, from the template spec names (StartConfig), and answers
-// its path, and notes: with origin on GitHub, that its labels and
-// Project weren't read (v1 starts the file from them). It never
+// its path, and what it says: with origin on GitHub or GitLab, the file
+// starts as its labels and its first Project (ReadForge, MergeForge),
+// a line saying what was read, and a line for what wasn't. It never
 // overwrites one.
-// ponytail: v1's fromforge (origin's GitHub labels and first Project
-// written over the template) isn't ported: the template, and the note.
-func InitConfig(dir, spec string) (string, []string, error) {
-	path, err := initConfig(dir, spec)
-	if err != nil {
-		return "", nil, err
-	}
-	var notes []string
-	if url, err := gitRun(context.Background(), filepath.Dir(path), "remote", "get-url", "origin"); err == nil {
-		if f, _ := forge.FromRemote(strings.TrimSpace(url)); f.Kind == "github" && f.Host == "github.com" {
-			notes = append(notes, fmt.Sprintf("%s not read: this git-board doesn't start the file from a forge's labels and Project yet: the template's (git-board v0.11's init does)", f.Project))
-		}
-	}
-	return path, notes, nil
-}
-
-func initConfig(dir, spec string) (string, error) {
+func InitConfig(ctx context.Context, dir, spec string) (string, []string, error) {
 	path := configPath(dir)
 	if path == conf.FileName {
-		return "", errors.New("not in a git repository")
+		return "", nil, errors.New("not in a git repository")
 	}
 	if _, err := os.Stat(path); err == nil {
-		return "", fmt.Errorf("%s already exists", path)
+		return "", nil, fmt.Errorf("%s already exists", path)
 	}
 	content, err := StartConfig(spec)
 	if err != nil {
-		return "", err
+		return "", nil, err
+	}
+	var lines []string
+	if t, ok := originForge(ctx, filepath.Dir(path)); ok {
+		from, notes := ReadForge(ctx, t)
+		if from.Project != nil || len(from.Labels) > 0 {
+			var more []string
+			if content, more, err = MergeForge(content, from); err != nil {
+				return "", nil, err
+			}
+			notes = append(notes, more...)
+			lines = append(lines, fmt.Sprintf("from %s: %d labels, Project %s", t.Project, len(from.Labels), from.ProjectName()))
+		}
+		lines = append(lines, notes...)
 	}
 	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
 	if errors.Is(err, fs.ErrExist) {
-		return "", fmt.Errorf("%s already exists", path)
+		return "", lines, fmt.Errorf("%s already exists", path)
 	}
 	if err != nil {
-		return "", err
+		return "", lines, err
 	}
 	if _, err := f.WriteString(content); err != nil {
 		f.Close()
-		return "", err
+		return "", lines, err
 	}
-	return path, f.Close()
+	return path, lines, f.Close()
+}
+
+// originForge is the forge project origin's URL names: a repository on
+// github.com, or a GitLab project; false for another or no origin.
+func originForge(ctx context.Context, root string) (forge.Table, bool) {
+	url, err := gitRun(ctx, root, "remote", "get-url", NumbersRemote)
+	if err != nil {
+		return forge.Table{}, false
+	}
+	t, _ := forge.FromRemote(NoCredentials(strings.TrimSpace(url)))
+	return t, t.Kind == "github" || t.Kind == "gitlab"
 }

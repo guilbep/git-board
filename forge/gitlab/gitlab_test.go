@@ -471,3 +471,21 @@ func TestReply(t *testing.T) {
 		t.Errorf("err = %v, want ErrNotFound", err)
 	}
 }
+
+// GitLab requires a new label's color: one made without gets GitHub's
+// grey. Labels are read over every page.
+func TestLabelWithoutColor(t *testing.T) {
+	t.Parallel()
+	f := fake.New("example.com/p")
+	for i := range 3 {
+		f.AddLabel(forge.Label{Name: fmt.Sprint("l", i), Color: "d73a4a"})
+	}
+	_, a := serve(t, f, "group/p") // two a page
+	if err := a.SetLabel(t.Context(), forge.Label{Name: "status:ready"}, false); err != nil {
+		t.Fatal(err)
+	}
+	got, err := a.Labels(t.Context())
+	if err != nil || len(got) != 4 || got[3] != (forge.Label{Name: "status:ready", Color: "ededed"}) {
+		t.Fatalf("labels %+v, %v", got, err)
+	}
+}

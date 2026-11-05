@@ -1,0 +1,5 @@
+from EPFL-ENAC/test: 13 labels, Project EPFL-ENAC/53, ENAC-IT4R Template
+EPFL-ENAC/test has 2 Projects: fields from the first, ENAC-IT4R Template
+the Project's Team is the field team, kept in labels: Settings › Fields moves it to the Project
+the label status:ready left out: status lives in the Project
+the label prio:P0 left out: prio lives in the Project

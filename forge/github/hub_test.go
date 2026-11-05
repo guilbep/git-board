@@ -48,8 +48,10 @@ func newHub(t *testing.T, f *fake.Forge) *hub {
 		"GET /repos/{o}/{r}/issues/{n}/comments":         h.comments,
 		"POST /repos/{o}/{r}/issues/{n}/comments":        h.comment,
 		"PATCH /repos/{o}/{r}/issues/comments/{id}":      h.editComment,
+		"GET /repos/{o}/{r}/labels":                      h.listLabels,
 		"GET /repos/{o}/{r}/labels/{name}":               h.getLabel,
 		"POST /repos/{o}/{r}/labels":                     h.makeLabel,
+		"PATCH /repos/{o}/{r}/labels/{name}":             h.editLabel,
 		"POST /repos/{o}/{r}/issues/{n}/labels":          h.addLabels,
 		"DELETE /repos/{o}/{r}/issues/{n}/labels/{name}": h.removeLabel,
 		"POST /graphql":                                  h.graphql,
@@ -298,9 +300,37 @@ func (h *hub) known(name string) bool {
 			return true
 		}
 	}
+	made, _ := h.f.Labels(context.Background())
+	if slices.ContainsFunc(made, func(l forge.Label) bool { return strings.EqualFold(l.Name, name) }) {
+		return true
+	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	return h.labels[strings.ToLower(name)]
+}
+
+// listLabels lists the fake's labels, made on its side or through the API.
+func (h *hub) listLabels(w http.ResponseWriter, r *http.Request, _ forge.Forge) {
+	made, _ := h.f.Labels(r.Context())
+	items := []any{}
+	for i, l := range made {
+		items = append(items, map[string]any{"id": i + 1, "name": l.Name, "color": l.Color, "description": l.Description})
+	}
+	h.page(w, r, items)
+}
+
+// editLabel edits the label's color and description, as its account.
+func (h *hub) editLabel(w http.ResponseWriter, r *http.Request, ff forge.Forge) {
+	var in struct{ Color, Description string }
+	if !read(w, r, &in) {
+		return
+	}
+	l := forge.Label{Name: r.PathValue("name"), Color: in.Color, Description: in.Description}
+	if err := ff.(forge.Labeler).SetLabel(r.Context(), l, true); err != nil {
+		fail(w, err)
+		return
+	}
+	write(w, http.StatusOK, l)
 }
 
 func (h *hub) getLabel(w http.ResponseWriter, r *http.Request, _ forge.Forge) {
@@ -312,7 +342,7 @@ func (h *hub) getLabel(w http.ResponseWriter, r *http.Request, _ forge.Forge) {
 }
 
 func (h *hub) makeLabel(w http.ResponseWriter, r *http.Request, _ forge.Forge) {
-	var in struct{ Name string }
+	var in struct{ Name, Color, Description string }
 	if !read(w, r, &in) {
 		return
 	}
@@ -323,6 +353,7 @@ func (h *hub) makeLabel(w http.ResponseWriter, r *http.Request, _ forge.Forge) {
 	h.mu.Lock()
 	h.labels[strings.ToLower(in.Name)] = true
 	h.mu.Unlock()
+	h.f.AddLabel(forge.Label{Name: in.Name, Color: in.Color, Description: in.Description})
 	write(w, http.StatusCreated, map[string]string{"name": in.Name})
 }
 

@@ -10,10 +10,10 @@ A repository without one starts from the default: **Start from the default** in 
 
 ### A new board: its forge, then a template
 
-`git board init` starts the file from a template, then, when origin is on GitHub, from the forge itself, so the two agree on the first day (Settings › Labels shows nothing to adopt):
+`git board init` starts the file from a template, then, when origin is on GitHub or GitLab, from the forge itself, so the two agree on the first day (Settings › Labels shows nothing to adopt):
 
 1. **The template.** `--template` names it: `enac` (built in: EPFL-ENAC's labels and GitHub Project, values spelled as GitHub has them, `P0`, `Must`), a file, or an `http(s)` URL. Without the flag, the global file's `template`; without that, the default above.
-2. **The forge.** With a token (`GITHUB_TOKEN`, else git's credential helper), init reads origin's labels and its first GitHub Project: their names, colors and descriptions, and each Project field's values in order. They win over the template, which fills only what the forge lacks. The Project goes in `[github-project]`, so its fields' labels are held there, not created. No token, or nothing read: the template, and a line saying what wasn't read.
+2. **The forge.** With the token a sync uses (`GITHUB_TOKEN` for github.com, `GITLAB_TOKEN` for `GITLAB_HOST`, else git's credential helper: [ADR 0010](../adr/0010-tokens-from-env-or-git-credential-helper.md)), init reads origin's labels and, on GitHub, its first Project: their names, colors and descriptions, and each Project field's values in order. They win over the template, which fills only what the forge lacks. A label `<field>:<value>` (`hold:blocked`, `prio:P0`) is a value of that field, a kind's label (`bug`) colors the kind, any other is a plain label in `[labels]`. The Project goes in `[github-project]`, so its fields' labels are held there, not created; with more than one, the first, and a line saying so. GitLab has no Projects: its labels alone, and a line saying so. No token, or nothing read: the template, and a line saying what wasn't read.
 
 The global file is `~/.config/git-board/config.toml` (`$XDG_CONFIG_HOME/git-board/config.toml` when it is set):
 
@@ -787,6 +787,6 @@ list = ["acme/app"]
 
 `list` is the GitHub repositories the project spans, the first one numbering the issues; without `[repos]`, origin's when it is on GitHub.
 
-Comparing the project's labels with each repository's on GitHub, and creating the missing ones there (v0.11's Settings › Labels and `git board lint --create-labels`), aren't in v0.12 yet: `lint --create-labels` says so.
+`git board lint --create-labels` compares the labels the file implies with each repository's, and each `[forges]` table's, and `--apply` makes the missing ones there with their colors and descriptions ([lint](cli.md#lint-drift-between-the-issues-and-the-file)). Settings › Labels doesn't compare them.
 
 An issue's `assignee:<login>` labels are always the forge's own assignees, on every forge (GitLab's free edition takes one; the others stay in git-board).

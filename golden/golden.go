@@ -210,8 +210,8 @@ type Result struct {
 }
 
 // Env is the environment every command runs in: a home of its own, no
-// system git config, UTC, the C locale, no terminal, and none of
-// git-board's own variables.
+// system git config, UTC, the C locale, no terminal, none of
+// git-board's own variables, and no automatic maintenance (noMaintenance).
 func Env(home string) []string {
 	var env []string
 	for _, kv := range os.Environ() {
@@ -223,9 +223,26 @@ func Env(home string) []string {
 			env = append(env, kv)
 		}
 	}
-	return append(env, "HOME="+home, "XDG_CONFIG_HOME="+filepath.Join(home, ".config"), "GIT_CONFIG_NOSYSTEM=1",
+	env = append(env, "HOME="+home, "XDG_CONFIG_HOME="+filepath.Join(home, ".config"), "GIT_CONFIG_NOSYSTEM=1",
 		"TZ=UTC", "LC_ALL=C", "LANG=C", "TERM=dumb", "NO_COLOR=1", "GIT_BOARD_NO_PROMPT=1",
 		"GIT_AUTHOR_NAME=golden", "GIT_AUTHOR_EMAIL=golden@example.com", "GIT_COMMITTER_NAME=golden", "GIT_COMMITTER_EMAIL=golden@example.com")
+	env = append(env, "GIT_CONFIG_COUNT="+strconv.Itoa(len(noMaintenance)))
+	for i, kv := range noMaintenance {
+		env = append(env, fmt.Sprintf("GIT_CONFIG_KEY_%d=%s", i, kv[0]), fmt.Sprintf("GIT_CONFIG_VALUE_%d=%s", i, kv[1]))
+	}
+	return env
+}
+
+// noMaintenance keeps git from maintaining a checkout behind a command's
+// back. A fetch ends with `git maintenance run --auto --detach`: with
+// the "geometric" strategy, git's default now (2.56 on CI), on a board of
+// 100 commits or more (the generated one) that writes a commit-graph into
+// .git/objects after the fetch, and the test, have returned, and the
+// temporary folder's removal fails ("objects: directory not empty").
+// Nothing runs, and what still would runs in the foreground.
+var noMaintenance = [][2]string{
+	{"maintenance.auto", "false"}, {"maintenance.autoDetach", "false"},
+	{"gc.auto", "0"}, {"gc.autoDetach", "false"},
 }
 
 // Run runs bin with the case's command line in checkout, and answers what

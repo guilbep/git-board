@@ -87,31 +87,34 @@ milestone built, is [docs/rewrite/design.md](docs/rewrite/design.md).
 
 ## Related work and inspiration
 
-git-board is one of several tools that keep issues, or other project data,
-beside the code:
+git-board is one of several tools that keep issues beside the code. The
+comparison, and what git-board takes from each, is in [Related
+work](docs/related-work.md).
 
-- **[git-bug](https://github.com/git-bug/git-bug)**: a distributed issue
-  tracker that keeps issues as objects in git, with bridges to GitHub and
-  GitLab. git-board started on a fork of it, then replaced it with a core
-  of its own ([ADR 0003](docs/adr/0003-own-core-instead-of-git-bug.md)).
+- **[git-bug](https://github.com/git-bug/git-bug)**: issues as operation
+  logs in git refs, with bridges to GitHub, GitLab, Jira and Launchpad.
+  git-board started on it, then on a fork, then on a core of its own
+  ([ADR 0003](docs/adr/0003-own-core-instead-of-git-bug.md)); that core
+  keeps git-bug's model of packs ordered by a Lamport clock.
 - **[git-issue](https://github.com/dspinellis/git-issue)**, by Diomidis
-  Spinellis: a minimalist decentralized issue tracker that keeps each issue
-  as plain-text files in a git repository of its own, with import from and
-  export to GitHub and GitLab.
+  Spinellis: one shell script that keeps each issue as plain-text files in
+  a git repository of its own (`.issues`), with import from and export to
+  GitHub and GitLab.
 - **GitHub** (and its [`gh`](https://cli.github.com/) CLI) and **GitLab**
   (and [`glab`](https://gitlab.com/gitlab-org/cli)): the forges git-board
   syncs with. Its command line follows `gh`'s and `glab`'s where it can,
   and its boards follow GitHub Projects'.
 
-Other distributed trackers and related tools:
+Others, most no longer maintained:
 
 - [bug](https://github.com/driusan/bug): an issue tracker in Go that keeps issues as plain-text files in an `issues/` directory, versioned with git or Mercurial.
-- [Bugs Everywhere](http://www.bugseverywhere.org/): a distributed bug tracker in Python that keeps bugs in the repository, for several version control systems.
+- [Bugs Everywhere](https://github.com/kalkin/be): a distributed bug tracker in Python that keeps bugs in the repository, for several version control systems. Its repository is read-only since 2020.
 - [deft](https://github.com/npryce/deft): a lightweight feature and issue tracker that keeps its database as plain-text files in the project's repository.
 - [Fossil](https://fossil-scm.org/): a distributed version control system with tickets, a wiki and a web interface built in, in one executable.
 - [git-appraise](https://github.com/google/git-appraise): distributed code review for git, its reviews and comments kept in git notes.
-- [git-dit](https://github.com/neithernut/git-dit): a distributed issue tracker for git that records each issue and comment as a commit.
+- [git-dit](https://github.com/git-dit/git-dit): a distributed issue tracker for git that records each issue and comment as a commit.
 - [Perceval](https://github.com/chaoss/grimoirelab-perceval): part of CHAOSS's GrimoireLab, it retrieves data from git, GitHub, GitLab, issue trackers and mailing lists.
+- [Radicle](https://lwn.net/Articles/966869/): a peer-to-peer forge on git, its issues CRDTs in git refs, its refs signed.
 - [SD, Simple Defects](https://syncwith.us/sd/): a peer-to-peer bug tracker for online and offline use, which syncs with other SD replicas and with trackers such as RT, Trac and GitHub.
 - [Distributed bug tracking](https://lwn.net/Articles/281849/), Jonathan Corbet, LWN.net, May 2008: an article on how bug tracking can work alongside distributed version control.
 

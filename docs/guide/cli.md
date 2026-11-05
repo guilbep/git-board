@@ -4,7 +4,8 @@ Everything you do to an issue on a forge, you can do with `git board`,
 offline: create one, read it with its comments, comment, edit, set its
 fields, close and reopen it. Every change is written to the board at once
 and reaches the forges with the next `git board sync`. No command but a
-sync touches the network.
+sync touches the network, unless it says so (`init`, `lint
+--create-labels`, `forge status --check`).
 
 `git board X` and `git-board X` are the same command: the binary is a git
 subcommand.
@@ -299,6 +300,32 @@ by field. Deleted issues don't count. `--json` prints `[{"label",
 one change each. A field's value is a label too. It doesn't check the new
 name against `.git-board.toml`: `git board lint` does.
 
+## `init`: a new board's file
+
+```bash
+git board init                    # the global file's template, else the default
+git board init --template enac    # a built-in template, a file or an http(s) URL
+```
+
+`init` writes `.git-board.toml` at the repository's root, and never
+overwrites one. When origin is on GitHub, the file starts as its labels
+and its first Project's fields (names, colors, descriptions, each
+field's values in order), written over the template, which fills what
+the forge lacks: [A new board](configuration.md#a-new-board-its-forge-then-a-template).
+On GitLab, its labels: GitLab has no Projects. It says what it read:
+
+```
+from EPFL-ENAC/test: 12 labels, Project EPFL-ENAC/53, ENAC-IT4R Template
+wrote /home/me/src/test/.git-board.toml: edit it in Settings › Project file (git board), or by hand
+```
+
+and a line for each thing it left to the template: a Project field kept
+in labels, a label whose field lives in the Project, a second Project.
+The forge is read with the token a sync uses: an environment variable,
+else git's credential helper ([ADR
+0010](../adr/0010-tokens-from-env-or-git-credential-helper.md)). No
+token, or nothing read: the template, and a line saying what wasn't read.
+
 ## `config`: settings
 
 ```bash
@@ -580,7 +607,45 @@ option no issue carries, closed ones included (`dead-option`), with
 or none at all (`two-kinds`, `kind-title`, `no-kind`), with `[labels]` a
 plain label outside the list (`label-outside`), and the labels' and issue
 templates' own problems. `--strict` exits 1
-when there are any, for CI. `--create-labels` is v0.11's, not in v0.12 yet.
+when there are any, for CI.
+
+```bash
+git board lint --create-labels           # what each forge lacks, writing nothing
+git board lint --create-labels --apply   # make and update those labels there
+```
+
+`--create-labels` checks something else: that every label the file
+implies exists on each forge, so the forge's issues show and filter it
+before the first sync. Those are a label per option of each
+`[fields.<name>]`, a `sprint:<slug>` per `[[sprints.list]]` entry (a
+flat kind as its plain label) and `[labels]` list's, each with the color
+the board shows and the file's description. The forges are `[repos]`
+list's GitHub repositories and the `[forges]` tables, GitHub's or
+GitLab's; with neither, the forge origin names. A label whose field
+lives elsewhere on a forge (a GitHub Project, the assignees, a
+milestone, `to = "none"`) isn't made there. Each forge goes through its
+adapter with the forge sync's token, the table's posting account's
+(`GITHUB_TOKEN`, `GITLAB_TOKEN`, else git's credential helper:
+[Forges](forges.md)). A line per label:
+
+```text
+EPFL-ENAC/co2-calculator: missing status:ready #00897f
+EPFL-ENAC/co2-calculator: update prio:p0: color d73a4a → e00000
+o/other: all labels present
+
+dry run — nothing written. Re-run with --apply to create and update these labels.
+```
+
+A missing label is made with its color and description; one the forge
+has is updated only where `.git-board.toml` sets its color or
+description, so an organization's labels keep their colors. `--apply`
+writes, and says `created` and `updated`. It also reports the labels an
+issue template (`.github/ISSUE_TEMPLATE`) applies that origin's GitHub
+repository doesn't have, which GitHub drops without a word; `--apply`
+doesn't make those (the fix is in the template), and a template check
+that can't run only warns. A forge that can't be read or written is
+told on its line, the others go on, and the run exits 1. `--apply`
+without `--create-labels` is an error.
 
 ## `sprint`: the configured sprints
 
