@@ -121,7 +121,7 @@ func gitDirAt(gitDir string) (*Store, bool) {
 
 // Caps: a version is a commit, which names its packs for good; the
 // counter is refs/board/seq.
-func (s *Store) Caps() store.Caps { return store.Caps{Pinned: true, Counter: s} }
+func (s *Store) Caps() store.Caps { return store.Caps{Pinned: true, Counter: s, Put: s} }
 
 // Folder is <common dir>/board, shared by every worktree.
 func (s *Store) Folder() string { return filepath.Join(s.commonDir, "board") }
@@ -441,4 +441,87 @@ func (s *Store) command(ctx context.Context, args ...string) *exec.Cmd {
 	cmd.Cancel = func() error { return interrupt(cmd.Process) }
 	cmd.WaitDelay = 5 * time.Second
 	return cmd
+}
+
+// Put writes another datastore's packs as commits, clocks and all
+// (datastore copy): each clock a level, each commit of a level on every
+// commit of the level below, and, when the top level has more than one,
+// a merge on them. On an entity git has at prev, the packs it lacks must
+// all sort after its head, the first a clock above it: they are chained
+// on it. Else git's history would have to be written again, and Put
+// refuses.
+func (s *Store) Put(ctx context.Context, kind, id string, packs [][]byte, prev string) (string, error) {
+	if !store.IsID(id) || kind == "" || strings.ContainsAny(kind, "/.") {
+		return "", fmt.Errorf("git: bad name %s", refName(kind, id))
+	}
+	have := map[string]bool{}
+	var base uint64
+	if prev != "" {
+		err := s.Load(ctx, []store.Ref{{Kind: kind, ID: id, Version: prev}}, func(_ store.Ref, mine [][]byte, err error) error {
+			for _, p := range mine {
+				have[pack.Hash(p)] = true
+				if c, _, err := pack.Header(p); err == nil {
+					base = max(base, c)
+				}
+			}
+			return err
+		})
+		if err != nil {
+			return "", err
+		}
+	}
+	levels := map[uint64][][]byte{}
+	var top uint64
+	for _, p := range packs {
+		h := pack.Hash(p)
+		if have[h] {
+			continue
+		}
+		have[h] = true
+		c, _, err := pack.Header(p)
+		if err != nil {
+			return "", fmt.Errorf("git: %s: pack %s: %w", refName(kind, id), h, err)
+		}
+		if c <= base {
+			return "", fmt.Errorf("git: %s: pack %s of clock %d is below the head's, %d: git can't take it without writing its history again", refName(kind, id), h, c, base)
+		}
+		levels[c] = append(levels[c], p)
+		top = max(top, c)
+	}
+	if top == 0 {
+		return prev, nil
+	}
+	var below []string
+	if prev != "" {
+		below = []string{prev}
+	}
+	for c := base + 1; c <= top; c++ {
+		if len(levels[c]) == 0 {
+			return "", fmt.Errorf("git: %s: no pack of clock %d, below one of %d", refName(kind, id), c, top)
+		}
+		var level []string
+		for _, p := range levels[c] {
+			commit, err := s.writePack(p, below)
+			if err != nil {
+				return "", err
+			}
+			level = append(level, commit)
+		}
+		below = level
+	}
+	head := below[0]
+	if len(below) > 1 {
+		var err error
+		if head, err = s.writePack(fmt.Appendf(nil, `{"clock":%d,"ops":[]}`, top+1), below); err != nil {
+			return "", err
+		}
+	}
+	old := prev
+	if old == "" {
+		old = zero
+	}
+	if err := s.updateRef(ctx, refName(kind, id), head, old); err != nil {
+		return "", err
+	}
+	return head, nil
 }
