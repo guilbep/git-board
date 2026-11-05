@@ -17,6 +17,7 @@ import (
 	"strings"
 
 	"github.com/guilbep/git-board/next/kernel"
+	"github.com/guilbep/git-board/next/kernel/pack"
 )
 
 // Account is one user on one forge server, named by (Server, ID).
@@ -74,7 +75,23 @@ func apply(p *Person, e kernel.Entry) error {
 		return fmt.Errorf("%w: %q, operation %s", ErrUnknownOp, e.Kind, e.ID)
 	}
 	var d data
-	if len(e.Data) > 0 {
+	ok := pack.Fields(e.Data, func(k string, r *pack.Reader) error {
+		switch strings.ToLower(k) {
+		case "name":
+			return r.String(&d.Name)
+		case "email":
+			return r.String(&d.Email)
+		case "server":
+			return r.String(&d.Server)
+		case "id":
+			return r.String(&d.ID)
+		case "login":
+			return r.String(&d.Login)
+		}
+		return r.Skip()
+	})
+	if !ok && len(e.Data) > 0 { // not plain: as v1's encoding/json reads it
+		d = data{}
 		if err := json.Unmarshal(e.Data, &d); err != nil {
 			return fmt.Errorf("people: operation %s: %w", e.ID, err)
 		}

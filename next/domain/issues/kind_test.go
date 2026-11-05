@@ -222,3 +222,22 @@ func TestRowCodec(t *testing.T) {
 		}
 	}
 }
+
+// An operation's data decodes as encoding/json decodes it.
+func FuzzDecodeData(f *testing.F) {
+	for _, s := range []string{`{"title":"t","body":"b"}`, `{"add":["a","b"],"remove":null}`, `{"meta":{"k":"v"},"Meta":{"x":"y"}}`,
+		`{"target":"x:0","status":"open","extra":[1,{"a":null}]}`, `{"TITLE":"éé","add":[]}`, `{"title":5}`, ``, `null`} {
+		f.Add([]byte(s))
+	}
+	f.Fuzz(func(t *testing.T, raw []byte) {
+		got, gerr := decode(raw)
+		var want data
+		var werr error
+		if len(raw) > 0 {
+			werr = json.Unmarshal(raw, &want)
+		}
+		if (gerr == nil) != (werr == nil) || gerr == nil && !reflect.DeepEqual(got, want) {
+			t.Fatalf("decode(%q) = %+v, %v; encoding/json: %+v, %v", raw, got, gerr, want, werr)
+		}
+	})
+}

@@ -27,8 +27,8 @@ var mayImport = map[string][]string{
 	"next/store/storetest":    {"next/store", "next/kernel/pack"},
 	"next/view":               {"next/kernel", "next/kernel/search"},
 	"next/conf":               {},
-	"next/domain/people":      {"next/kernel"},
-	"next/domain/issues":      {"next/kernel", "next/kernel/search", "next/conf", "next/domain/people"},
+	"next/domain/people":      {"next/kernel", "next/kernel/pack"},
+	"next/domain/issues":      {"next/kernel", "next/kernel/pack", "next/kernel/search", "next/conf", "next/domain/people"},
 	"next/surface/cli":        {"next/kernel", "next/conf", "next/domain/issues", "next/domain/people", "next/store/git", "next/view"},
 	"next/cmd/git-board-next": {"next/surface/cli"},
 }

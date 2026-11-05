@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/guilbep/git-board/next/kernel"
+	"github.com/guilbep/git-board/next/kernel/pack"
 )
 
 // Status is an issue's status: "open" or "closed".
@@ -96,6 +97,41 @@ type data struct {
 	Meta   map[string]string `json:"meta"`
 }
 
+// decode is an operation's data: in one pass when it is plain, as v1's
+// encoding/json reads it otherwise.
+func decode(raw []byte) (data, error) {
+	var d data
+	ok := pack.Fields(raw, func(k string, r *pack.Reader) error {
+		switch strings.ToLower(k) {
+		case "title":
+			return r.String(&d.Title)
+		case "body":
+			return r.String(&d.Body)
+		case "target":
+			return r.String((*string)(&d.Target))
+		case "status":
+			return r.String((*string)(&d.Status))
+		case "add":
+			return r.Strings(&d.Add)
+		case "remove":
+			return r.Strings(&d.Remove)
+		case "meta":
+			return r.StringMap(&d.Meta)
+		}
+		return r.Skip()
+	})
+	if ok {
+		return d, nil
+	}
+	d = data{}
+	if len(raw) > 0 {
+		if err := json.Unmarshal(raw, &d); err != nil {
+			return d, err
+		}
+	}
+	return d, nil
+}
+
 // apply is one operation, as data-model.md › Issue state says.
 func apply(is *State, e kernel.Entry) error {
 	if e.Author == "" {
@@ -104,11 +140,9 @@ func apply(is *State, e kernel.Entry) error {
 	if !slices.Contains(ops, e.Kind) {
 		return fmt.Errorf("%w: %q, operation %s", ErrUnknownOp, e.Kind, e.ID)
 	}
-	var d data
-	if len(e.Data) > 0 {
-		if err := json.Unmarshal(e.Data, &d); err != nil {
-			return fmt.Errorf("issue: operation %s: %w", e.ID, err)
-		}
+	d, err := decode(e.Data)
+	if err != nil {
+		return fmt.Errorf("issue: operation %s: %w", e.ID, err)
 	}
 	if !is.made && e.Kind != "create" {
 		return fmt.Errorf("issue: the first operation is %q, want create", e.Kind)

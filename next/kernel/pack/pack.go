@@ -71,9 +71,12 @@ func Encode(p Pack) ([]byte, error) {
 // equal keys: v1 reads so, and so does v2 (data-model.md, a known
 // ceiling).
 func Decode(data []byte) (Pack, error) {
-	var p Pack
-	if err := json.Unmarshal(data, &p); err != nil {
-		return p, err
+	p, err := decodeFast(data)
+	if err != nil {
+		p = Pack{}
+		if err := json.Unmarshal(data, &p); err != nil {
+			return p, err
+		}
 	}
 	return p, check(p.Ops)
 }
