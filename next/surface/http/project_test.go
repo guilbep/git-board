@@ -1,7 +1,6 @@
 package httpapi
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,15 +9,15 @@ import (
 	"github.com/guilbep/git-board/next/app"
 	"github.com/guilbep/git-board/next/forge"
 	"github.com/guilbep/git-board/next/forge/fake"
-	"github.com/guilbep/git-board/next/forge/github"
 	"github.com/guilbep/git-board/next/tools/ghproject"
 	"github.com/guilbep/git-board/next/tools/ghproject/projectfake"
 )
 
 // projectAPI is the test board, its issues 1 and 2 pulled from
 // github.com/o/r, its .git-board.toml naming o's Project 1, which
-// app.OpenProjectV2 opens on a fake for the test: it swaps a package
-// variable, so its tests are serial.
+// the bridge reads on a fake, through GitHub's API at app.GitHubAPI with
+// GITHUB_TOKEN: a package variable and the environment, so its tests are
+// serial.
 func projectAPI(t *testing.T, write bool) (*api, *projectfake.Fake) {
 	t.Helper()
 	dir, _ := newBoard(t)
@@ -48,11 +47,10 @@ func projectAPI(t *testing.T, write bool) (*api, *projectfake.Fake) {
 	p.Add(projectfake.Item{Number: 1, URL: "https://github.com/o/r/issues/1", Title: "One", Values: map[string]string{"Status": "Doing"}})
 	p.Add(projectfake.Item{Number: 2, URL: "https://github.com/o/r/issues/2", Title: "Two", Values: map[string]string{"Status": "Todo"}})
 	srv := p.Server(t)
-	was := app.OpenProjectV2
-	app.OpenProjectV2 = func(ctx context.Context, _, _, owner string, number int) (ghproject.Project, error) {
-		return github.OpenProject(ctx, github.Options{API: srv.URL, Token: func(context.Context, forge.Account) (string, error) { return "t", nil }}, owner, number)
-	}
-	t.Cleanup(func() { app.OpenProjectV2 = was })
+	was := app.GitHubAPI
+	app.GitHubAPI = srv.URL
+	t.Cleanup(func() { app.GitHubAPI = was })
+	t.Setenv("GITHUB_TOKEN", "t")
 	return newAPI(t, dir), p
 }
 

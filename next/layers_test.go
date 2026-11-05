@@ -62,7 +62,7 @@ var mayImport = map[string][]string{
 	"next/surface/tui":                 {"next/app", "next/domain/issues"},
 	"next/cmd/git-board-next":          {"next/surface/cli"},
 	"next/golden":                      {},
-	"next/golden/v1gen":                {"next/domain/issues", "next/domain/issues/issuesync", "next/domain/people", "next/forge"}, // its tests: the sync cross test
+	"next/golden/v1gen":                {"next/domain/issues", "next/domain/issues/issuesync", "next/domain/people", "next/forge", "next/conf", "next/forge/github", "next/tools/ghproject"}, // its tests: the sync and Project cross tests
 }
 
 // v1gen writes the golden boards with v1's code (guard_test.go): the one
