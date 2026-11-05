@@ -64,6 +64,7 @@ var mayImport = map[string][]string{
 	"tools/insights":              {},
 	"tools/boardgen":              {"kernel", "kernel/pack"},
 	"tools/perfcheck":             {},
+	"tools/flowgen":               {}, // reads the code as text, as this test does
 	"tools/uploads":               {"tools"},
 	"surface/tui":                 {"app", "domain/issues"},
 	"cmd/git-board":               {"surface/cli"},

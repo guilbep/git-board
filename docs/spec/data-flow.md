@@ -6,6 +6,15 @@ the path a write and a read take. [Storage](storage.md) gives the git
 datastore's format; [ADR 0002](../adr/0002-datastores.md) gives why the
 board is cut at the pack.
 
+**[Watch it move](data-flow.html)**: the packages as the binary links
+them, and a write, a list, a change event and a forge sync played through
+them, for each datastore and forge. The page is drawn from the code by
+`tools/flowgen`; its stories are [flows.json](flows.json), and each step
+is checked against the code (`make flow`, and `go test` while it is
+stale).
+
+<iframe src="../data-flow.html" title="How the data flows, animated" style="width: 100%; height: 820px; border: 0;"></iframe>
+
 ## The layers
 
 v0.12 (ADR 0021, [the design](../rewrite/design.md#packages)): each
