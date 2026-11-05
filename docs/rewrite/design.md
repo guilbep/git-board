@@ -937,7 +937,7 @@ whole sync's dry run (`sync --check`; `forge … --check` runs), reset
 guards and switch marks on pull and push, the quote over a thread
 comment and the note after a published body (v1's `Quote` and
 `Published`, which read the body's sections), and the GitHub Project
-step.
+step (built in M6, below).
 
 **M6, as built (2026-11-05, partial).** GitLab replies are posted as
 replies (ADR 0021): the wrapper that hears a run's writes forwards
@@ -954,10 +954,31 @@ cycle is `next/domain/cycle` (+ `work`), its evidence read in `app`;
 `next/tools/code` reads git, `next/tools/branches` names branches. The
 commands `release`, `deploy`, `verify`, `branch`, `sprint` and `tui` are
 v1's; a golden board, `releases`, holds the release reads, and basic the
-sprint, branch and verify cases. Left: the GitHub Project bridge (the
-third mapper, `project pull|push|sync`, the TUI's i/o keys: the TUI takes
-a `Bridge`, none yet), agents, insights, lint, export and import, and
+sprint, branch and verify cases. Left: agents, insights, lint, export
+and import, and
 the plan's HTML in the cycle's evidence (the caller renders).
+
+**The GitHub Project bridge, as built (2026-11-05).** `next/tools/ghproject`
+is v1's `internal/ghbridge`, copied and owned, the sync engine's third
+mapper (`ghproject.Mapper`): a Project's fields (single select,
+iteration, number, date, text) and the labels, decided field by field
+against the base both last agreed on, kept in the issue's metadata
+(`git-board:<owner>/<n>:<field>`, as v1), with v1's conflict rules and
+the assignees merged person by person. A date and a text column are
+v2's, by the column's type. v1 read the Project with the `gh` CLI; v2
+reads and writes it through GitHub's GraphQL API
+(`forge/github.ProjectV2`), with the GitHub forge's token (ADR 0010), and
+the assignees through REST. `project pull|push|sync` (`--check`,
+`--limit`), `resolve` and `configure` are v1's; `sync` runs it between
+the forges and the push when `[github-project]` names a Project (`--git`
+skips it); the TUI's i/o keys pull it. The API's routes 52 and 53 answer
+its last run and where each field lives (`places`); the web app has a
+Settings tab for it, its conflicts with their two sides, and Fields'
+places mark a column the Project hasn't. v1's ghbridge tests are
+ported; `projectfake` is a Project served by httptest; and
+`next/golden/v1gen`'s `TestProjectCross` has v1's bridge and v2's take
+turns on one board and one Project: they plan the same at every turn,
+and neither has anything left after the other ran.
 
 About 31,000 lines of Go where v1 has 55,000. One engineer with agents:
 M0 a week; M1 and M2 three weeks; M3 to M5 four; M6 three; with

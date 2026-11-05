@@ -12,6 +12,7 @@ import (
 	"github.com/guilbep/git-board/next/domain/issues"
 	"github.com/guilbep/git-board/next/domain/people"
 	"github.com/guilbep/git-board/next/forge"
+	"github.com/guilbep/git-board/next/forge/fake"
 	"github.com/guilbep/git-board/next/forge/github"
 	"github.com/guilbep/git-board/next/kernel"
 	"github.com/guilbep/git-board/next/store/git"
@@ -225,5 +226,31 @@ func TestAssigneesReachTheIssue(t *testing.T) {
 	}
 	if len(r.Plan.Changes[0].Warnings) != 1 {
 		t.Errorf("warnings %v, want eve's", r.Plan.Changes[0].Warnings)
+	}
+}
+
+// The bridge as the sync engine's mapper: it carries GitHub's forges, and
+// a pull takes the Project's values without writing there.
+func TestMapper(t *testing.T) {
+	t.Parallel()
+	s, ids := linkedBoard(t, 2)
+	f, p := fakeProject(t)
+	m := &Mapper{Project: p, Board: Service{s}, Config: &Config{Owner: "o", Number: 1, Write: true, Schema: s.Schema, Forge: ghTable}}
+	gh, gl := fake.New("github.com/o/r"), fake.New("gitlab.com/o/r")
+	if m.Kind() != "project" || !m.Carries(gh) || m.Carries(gl) {
+		t.Errorf("kind %q, carries GitHub %v, GitLab %v", m.Kind(), m.Carries(gh), m.Carries(gl))
+	}
+	if err := bsync.Run(t.Context(), s.Board, bsync.Pull, []forge.Forge{gh, gl}, m); err != nil {
+		t.Fatal(err)
+	}
+	if got := labelsOf(t, s, ids[1]); !slices.Equal(got, []string{"status:backlog"}) || m.Report.Side != Labels || !m.Report.Applied {
+		t.Errorf("after a pull: %v, %+v", got, m.Report)
+	}
+	m.Check = true
+	if _, err := s.ChangeLabels(t.Context(), ids[1], []string{"status:ready"}, []string{"status:backlog"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.Run(t.Context(), s.Board, bsync.Both, nil); err != nil || m.Report.Applied || len(m.Report.Plan.Edits) != 1 || len(f.Writes()) != 0 {
+		t.Errorf("a check: %+v, %v, writes %q", m.Report, err, f.Writes())
 	}
 }
