@@ -83,6 +83,7 @@ func Serve(ctx context.Context, o ServeOptions) error {
 	watch, stop := context.WithCancel(ctx)
 	defer stop()
 	go s.Watch(watch, cmpDuration(o.Watch, time.Second))
+	go s.index(watch)
 	errs := make(chan error, len(ls))
 	for _, l := range ls {
 		go func() { errs <- srv.Serve(l) }()
@@ -113,6 +114,22 @@ func Serve(ctx context.Context, o ServeOptions) error {
 		err = nil
 	}
 	return err
+}
+
+// index builds the free-text index in the background once the server
+// serves (design.md, 4): the first search then finds it built, or waits
+// for what is left of it.
+func (s *Server) index(ctx context.Context) {
+	h := s.boards.get()
+	defer s.boards.release(h)
+	start := time.Now()
+	if err := h.b.IndexTexts(ctx); err != nil {
+		if ctx.Err() == nil {
+			s.log.Warn("building the search index", "error", err)
+		}
+		return
+	}
+	s.log.Info("search index built", "took", time.Since(start).Round(time.Millisecond))
 }
 
 func cmpDuration(a, b time.Duration) time.Duration {

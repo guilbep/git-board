@@ -320,13 +320,17 @@ many.
 | | Route | Request | Response |
 |---|---|---|---|
 | 39 | `POST /api/markdown` | `{body}` | `{html}` |
-| 40 | `GET /api/uploads` | | `{enabled, where}` |
-| 41 | `POST /api/uploads` | multipart, `X-Git-Board-Upload: 1` | `{url, name, markdown}` |
-| 42 | `GET /api/media` | `url` | the picture, through this server |
+| 40 | `GET /api/uploads` | | `{enabled, where, max_bytes}` (built) |
+| 41 | `POST /api/uploads` | multipart, `X-Git-Board-Upload: 1`, the file in `file` | `{url, name, type, markdown}` (built); `missing` without a bucket |
+| 42 | `GET /api/media` | `url` | the picture, through this server (built): a forge's alone, with its token, kept in the board's folder |
 
 `POST /api/markdown` previews a text as the thread renders it, cleaned.
-Uploads and media are `[uploads]`'s, a tool's (*M6*): they are the
-first three of the 14 routes M6 builds.
+Uploads are `[uploads]`'s, a tool's (`next/tools/uploads`, v1's, ADR
+0015): the keys from the server's environment. Media (42) are the
+forges' pictures of issue text (GitHub's attachments, GitLab's uploads),
+which a private repository's page can't load without the forge's token:
+a thread's and a preview's HTML point them at this route, which fetches
+them with the token, from a forge's picture addresses alone.
 
 ### Domains that come with M6
 
@@ -336,15 +340,15 @@ Until then they answer 404 `not-found`.
 
 | | Route | What |
 |---|---|---|
-| 43 | `GET /api/releases` | the releases, `local`; the job running and the overlays proposed |
-| 44 | `POST /api/releases` | cut one; then a job, its steps as `progress` events |
-| 45 | `GET /api/releases/{tag}` | one release; the tag `next` is the draft (v1's `/releases/draft`) |
-| 46 | `PATCH /api/releases/{tag}` | `{notes}`, `{state: "promoted" or "yanked", reason}` |
-| 47 | `POST /api/releases/{tag}/comments` | a comment on it |
-| 48 | `POST /api/environments/{env}/deploy` | `{tag}`; a rollback is a deploy of an older tag with `reason` |
-| 49 | `GET /api/issues/{id}/cycle` | the cycle (experimental): steps, branches, pulls, tests, environments, as one read |
+| 43 | `GET /api/releases` | `local`: `{enabled, remote, trunk, environments, binaries, releases, proposals, job}`, as `release status` reads it (built) |
+| 44 | `POST /api/releases` | `{version, final, hotfix, commit, notes, deploy}`: cut one; 202, the job, its steps as `release` events (built) |
+| 45 | `GET /api/releases/{tag}` | one release, `{row, issues, candidates, history}`; the tag `next` is the draft (`final`), v1's `/releases/draft` (built) |
+| 46 | `PATCH /api/releases/{tag}` | `{notes}`, `{state: "yanked", reason}`, `{adopt: [proposal]}`: `{}`; `{state: "promoted"}`: 202, the job (built) |
+| 47 | `POST /api/releases/{tag}/comments` | `{body}`: a comment on its record (built) |
+| 48 | `POST /api/environments/{env}/deploy` | `{tag}` (none: the trunk's head, to the followed environment); a rollback is a deploy of an older tag with `reason`; 202, the job (built) |
+| 49 | `GET /api/issues/{id}/cycle` | the cycle (experimental): its step, gate and evidence (branches, plan, tests), as one read (built; the PRs and environments later); its list, `GET /api/cycle` (`who`: `me`, `team`), is the Work page's `{needs, waiting}` (built) |
 | 50 | `POST /api/issues/{id}/cycle/{action}` | a step's action: sign off, open or merge a pull, run the tests, review, resolve |
-| 51 | `GET /api/insights` | `field`, `days`, `view`, `sprint`: flow, throughput, and a sprint's report |
+| 51 | `GET /api/insights` | `field`, `days`, `view`: flow, throughput, cycle time, burn-up, as `insights --json` (built); `sprint` (`@current` or a slug): `{sprint, title, markdown}`, its report |
 | 52 | `GET /api/github-project` | the GitHub Project bridge: its last check, and where each field lives (*built*) |
 | 53 | `POST /api/github-project/{action}` | `check`, `apply` (`side`), `resolve`; its table is `PATCH /api/config`'s (*built*) |
 
@@ -412,7 +416,7 @@ data: {"kind":"issue","id":"a9f3…","version":"5c1e…","by":"k3j2h1"}
 | `inbox` | what you read or follow | |
 | `sync` | a run started or ended; a remote moved | the run |
 | `progress` | a run's step, in `step` | the run; `issue` when it is one issue's |
-| `release` | *M6* | the tag |
+| `release` | a release job's step, its end, or a write on a record | the tag, when known |
 
 `by` is the `X-Git-Board-Client` of the request that wrote it, when one
 did. The server sees every change, whoever made it: a write through the
@@ -509,7 +513,7 @@ built).
 | `PUT /api/me/view` | dropped: the classic and cycle pages are one in the new web app; `board.view` is the cycle's (*M6*) |
 | `PUT /api/me/avatars` | `PUT /api/me` with `avatars` |
 | `GET /api/inbox` | `GET /api/inbox` |
-| `GET /api/work` | `GET /api/issues?filter=assignee:@me` and the cycle's (*M6*) |
+| `GET /api/work` | `GET /api/cycle` (`who`): the cycle's rows; its agents dropped, the forges' pending its Sync |
 | `POST /api/inbox/seen` | `POST /api/inbox/seen` |
 | `GET /api/inbox/follow/{id}` | `GET /api/issues/{id}/follow` |
 | `PUT /api/inbox/follow/{id}` | `PUT /api/issues/{id}/follow` |

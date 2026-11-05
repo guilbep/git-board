@@ -20,6 +20,11 @@ type Board struct {
 
 	mu        sync.Mutex
 	observers []func(ctx context.Context, c []Change)
+	// freshening is held while a kind's rows are brought to the heads,
+	// and indexing while its search index is built: a read meanwhile
+	// waits for the one running rather than doing its work twice (a
+	// first build, a server's background index)
+	freshening, indexing sync.Mutex
 }
 
 // Open opens a board on ds, its view v, with its kinds.
@@ -143,6 +148,8 @@ func (b *Board) fresh(ctx context.Context, search bool, names ...string) error {
 // missing from the listing is dropped only once a point read says it is
 // gone (a listing that missed it costs a read, never a lost issue).
 func (b *Board) freshKind(ctx context.Context, k kindSpec, listing []Head, search bool) error {
+	b.freshening.Lock()
+	defer b.freshening.Unlock()
 	mark, err := b.view.Mark(ctx, k.name)
 	if err != nil {
 		return err
@@ -289,6 +296,8 @@ func (b *Board) put(k kindSpec, id ID, base, v Version, packs [][]byte, err erro
 // first query that searches builds it, not a first build (design.md:
 // the free-text index is indexed by the first query that asks for it).
 func (b *Board) searchable(ctx context.Context, k kindSpec) error {
+	b.indexing.Lock()
+	defer b.indexing.Unlock()
 	heads, err := b.view.Unsearchable(ctx, k.name)
 	if err != nil || len(heads) == 0 {
 		return err
@@ -305,6 +314,25 @@ func (b *Board) searchable(ctx context.Context, k kindSpec) error {
 	return b.stream(ctx, k, Write{Rev: k.rev, Search: true}, refs, func(r store.Ref, packs [][]byte, err error) (Put, *Head) {
 		return b.put(k, ID(r.ID), bases[ID(r.ID)], Version(r.Version), packs, err, true), nil
 	})
+}
+
+// Index builds the kinds' search index now, rather than on the first
+// query that searches: a server does it in the background once it
+// serves (design.md: the free-text index is indexed after the rows, in
+// the server's background, or by the first query that asks for it). A
+// query that searches meanwhile waits for it.
+func (b *Board) Index(ctx context.Context, kinds ...Kind) error {
+	for _, k := range kinds {
+		// the rows first, as a list builds them: its first page waits for
+		// them alone
+		if err := b.fresh(ctx, false, k.Name()); err != nil {
+			return err
+		}
+		if err := b.searchable(ctx, b.kinds[k.Name()]); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // Broken are the entities that fail to load, after bringing every kind

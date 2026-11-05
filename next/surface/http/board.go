@@ -64,6 +64,19 @@ func (s *Server) routes(mux *http.ServeMux) {
 	Route(mux, "POST /api/github-project/{action}", s.projectAction)
 
 	Route(mux, "POST /api/markdown", markdown)
+
+	Route(mux, "GET /api/releases", s.releases)
+	Route(mux, "POST /api/releases", s.cut)
+	Route(mux, "GET /api/releases/{tag}", s.release)
+	Route(mux, "PATCH /api/releases/{tag}", s.patchRelease)
+	Route(mux, "POST /api/releases/{tag}/comments", s.releaseComment)
+	Route(mux, "POST /api/environments/{env}/deploy", s.deploy)
+	Route(mux, "GET /api/uploads", uploadStatus)
+	mux.HandleFunc("GET /api/media", media)
+	mux.HandleFunc("POST /api/uploads", s.upload)
+	Route(mux, "GET /api/issues/{id}/cycle", issueCycle)
+	Route(mux, "GET /api/cycle", workRows)
+	Route(mux, "GET /api/insights", insights)
 }
 
 // none is a request with nothing to read.
@@ -313,8 +326,8 @@ type markdownReq struct {
 	Body string `json:"body"`
 }
 
-func markdown(_ context.Context, r markdownReq) (map[string]string, error) {
-	return map[string]string{"html": render(r.Body)}, nil
+func markdown(ctx context.Context, r markdownReq) (map[string]string, error) {
+	return map[string]string{"html": render(r.Body, board(ctx).MediaURL(ctx))}, nil
 }
 
 // gitDir is the repository's git directory, absolute: what a `git

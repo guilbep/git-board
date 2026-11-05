@@ -279,6 +279,9 @@ func NewAncestry(b code.Repo) *Ancestry {
 	return &Ancestry{b: b, sets: map[string]map[string]bool{}}
 }
 
+// Repo is the repository whose commits it reads.
+func (a *Ancestry) Repo() code.Repo { return a.b }
+
 // Of is the commit hash and every commit before it.
 func (a *Ancestry) Of(ctx context.Context, hash string) (map[string]bool, error) {
 	a.mu.Lock()

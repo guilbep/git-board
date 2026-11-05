@@ -135,7 +135,7 @@
           </div>
           <span class="gb-tabs-people"><PeopleButton :author="thread.author" :events="thread.events" /></span>
           </div>
-          <HistoryView v-if="reading.tab === 'history'" :thread="thread" :fields="fields" />
+          <HistoryView v-if="reading.tab === 'history'" :thread="thread" :fields="fields" :cycle="cycle" />
           <template v-else>
             <CommentCard v-if="created" :data-event="created.id" :event="created" :forges="thread.forges" :mine="created.author.id === meId" :save="edit" :role="roleOf(fields, created.author.login)" plain @ref="onRef" />
             <ol class="gb-tl" aria-label="Conversation">
@@ -171,7 +171,9 @@ import { issueWriter } from '@/issuewrite';
 import { loadVisit, saveVisit, visit } from '@/lastvisit';
 import type { Fields } from '@/fields';
 import { useIssue } from '@/issue';
-import { loadMe, me, meLoaded } from '@/me';
+import { cycleOn, loadMe, me, meLoaded } from '@/me';
+import { getCycle } from '@/api';
+import type { Cycle } from '@/api/cycletypes';
 import CommentCard from '@/components/CommentCard.vue';
 import HistoryView from '@/components/HistoryView.vue';
 import { loadReading, roleOf, saveReading } from '@/flow';
@@ -240,6 +242,18 @@ const rest = computed(() => thread.value?.events.filter((e) => ['comment', 'labe
 // in the browser, one for every issue
 const reading = reactive(loadReading());
 watch(reading, saveReading, { deep: true });
+// the cycle's step bars in History (experimental): read with the tab, and
+// again as the issue changes; none when the cycle is off or doesn't answer
+const cycle = ref<Cycle | null>(null);
+watch(
+  () => [cycleOn.value && reading.tab === 'history', thread.value?.version] as const,
+  async ([want]) => {
+    if (!want) return;
+    const id = props.id;
+    const c = await getCycle(id).catch(() => null);
+    if (id === props.id) cycle.value = c;
+  },
+);
 const changeCount = computed(() => (thread.value ? steps(thread.value.events).length : 0));
 // the board's fields, and any namespace this issue has besides
 const sideNames = computed(() => {

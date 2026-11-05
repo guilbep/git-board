@@ -56,8 +56,13 @@ on the same machine): the first rows 280 ms after navigation (median of
 five; 260 ms as a board by status); typing a field term, the list 200 to
 230 ms after the last key, each key handled in under 40 ms; scrolled
 100,000 px, 5,300 issues loaded and 25 rows in the DOM, frames at 17 ms
-(p95 33 ms). The first free-text filter on a fresh server waits for the
-words' index (5.5 s here); the next ones take 290 ms.
+(p95 33 ms). The server builds the words' index in the background once
+it serves, after the rows (`app.IndexTexts`; the CLI still builds it on
+the first query that searches): on a fresh copy of the 20,000-issue
+board the first rows come 3.0 s after the start, as before, the index is
+built 8.8 s after it, and a first free-text filter then takes 0.12 s
+(6.4 s before); one asked earlier waits for what is left of the index,
+never for a second build of it.
 
 ## Settings, as keys of the file
 
@@ -90,19 +95,36 @@ and cycle pages as a choice (one page), v1's per-issue sync (until the
 sync engine takes one issue), Labels' comparison with GitHub and lint
 (a tool), the clone's first-pull note (until v2 pulls on a first open).
 
-Waiting for their routes (M6, api.md routes 43 to 53): Releases,
-Insights, the Work page and the cycle's page, the GitHub Project and its
-conflicts, uploads. Their v1 pages stay in `web/` until then; the cycle's
+Insights is v1's page on route 51 (`GET /api/insights`, the replay in
+`next/tools/insights`, v1's, and `insights` on the CLI). Releases and a
+release's page are v1's on routes 43 to 48 (`next/tools/ship`): the
+adoption's proposals come with the list, a job's steps as `release`
+events; Enable binary release (v1's `/api/releases/setup`) is Settings ›
+Release now, a table of the file. The Work page (experimental: its link
+shows with the cycle on) is v1's on `GET /api/cycle`, without v1's
+agents and its aside (what waits for the forges is Sync's). It reads
+every open issue's thread and evidence, a few at once, the branches
+once: 71 s for the 12,000 open issues of the 20,000-issue board (224 s
+one at a time with each issue's git reads; v1 took over 400 s). An issue's
+History draws the cycle's step bars from `GET /api/issues/{id}/cycle`.
+Attaching files (paste, drop, pick in a text, as v1) works on routes 40
+and 41; a forge's pictures load through route 42. Waiting for their
+routes (M6, api.md routes 50 to 53): the cycle's actions and v1's cycle
+panels on an issue, the GitHub Project and its conflicts. Their v1 pages stay in `web/` until then; the cycle's
 settings form (a table of the file) and the experimental switch stay.
 
 ## Tests
 
 - `npm test` (`make next-web-check`): the pure modules, Node's runner.
-- `make next-web-e2e`: 78 browser tests on `git-board-next serve` over a
-  git board and a Markdown board (`next/web/e2e/serve.mjs`), ported from
-  v1's; `stale.spec.ts` (Reload, Overwrite, a form's), `live.spec.ts`
-  (the change events), `markdown.spec.ts` (an issue's life on the
-  Markdown board, in its file), `views.spec.ts` (a view saved from the
-  board) and `lanes.spec.ts` (a lane's and a table's pages) are new. Dropped with their features: the clone's
+- `make next-web-e2e`: 86 browser tests on `git-board-next serve` over a
+  git board and a Markdown board (`next/web/e2e/serve.mjs`, with a fake
+  GitHub and, for the Markdown board, a fake S3), ported from v1's;
+  `stale.spec.ts` (Reload, Overwrite, a form's), `live.spec.ts` (the
+  change events), `markdown.spec.ts` (an issue's life on the Markdown
+  board, in its file), `views.spec.ts` (a view saved from the board),
+  `lanes.spec.ts` (a lane's and a table's pages), `insights.spec.ts`,
+  `releases.spec.ts` (a cut to a bare authority, its record's writes),
+  `work.spec.ts` (the cycle on and off) and `uploads.spec.ts` (pick and
+  drop in a comment) are new. Dropped with their features: the clone's
   first pull, the ENAC template's labels, Labels' lint, a field's GitHub
   Project column, Start over.

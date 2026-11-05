@@ -21,12 +21,14 @@ func (b *Board) Evidence(ctx context.Context, th issues.Thread, me string, pulls
 	return b.EvidenceIn(ctx, branches.NewAncestry(b.Code()), th, me, pulls, render)
 }
 
-// EvidenceIn is Evidence, reading the branches' histories through anc:
-// one Ancestry for many issues reads their base's history once.
+// EvidenceIn is Evidence, reading the branches and their histories
+// through anc: one Ancestry for many issues reads their base's history
+// once, and with a repository that keeps its reads (code.Kept), the
+// branches once.
 func (b *Board) EvidenceIn(ctx context.Context, anc *branches.Ancestry, th issues.Thread, me string, pulls cycle.Pulls, render func(string) string) (cycle.Input, error) {
 	cfg := b.Config
 	th.Inherited = cfg.Schema.RolesFor(th.Labels)
-	sug, err := branches.Suggest(ctx, b.Code(), cfg.Branches, th.Issue)
+	sug, err := branches.Suggest(ctx, anc.Repo(), cfg.Branches, th.Issue)
 	if err != nil {
 		return cycle.Input{}, err
 	}

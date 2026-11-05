@@ -17,12 +17,43 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
 // Repo is a repository's code, at its work tree.
 type Repo struct {
 	Dir string // the work tree, or any folder inside it
+	// Kept, when set, keeps the reads that name no commit (the branches,
+	// a remote's HEAD, a ref's merges) for the Repo's copies to share: one
+	// page about many issues reads them once. Nil reads git each time.
+	Kept *Kept
+}
+
+// Kept is what a Repo read once, by the read and its arguments.
+type Kept struct {
+	mu sync.Mutex
+	m  map[string]any
+}
+
+// NewKept is an empty Kept.
+func NewKept() *Kept { return &Kept{m: map[string]any{}} }
+
+// kept is read's answer for key, read once when r keeps its reads.
+func kept[T any](r Repo, key string, read func() (T, error)) (T, error) {
+	if r.Kept == nil {
+		return read()
+	}
+	r.Kept.mu.Lock()
+	defer r.Kept.mu.Unlock()
+	if v, ok := r.Kept.m[key]; ok {
+		return v.(T), nil
+	}
+	v, err := read()
+	if err == nil {
+		r.Kept.m[key] = v
+	}
+	return v, err
 }
 
 // Branch is a local branch, or a remote's as last fetched.
@@ -40,6 +71,11 @@ var gitBugID = regexp.MustCompile(`^[0-9a-f]{64}$`)
 // identities an older git-board left there (refs/remotes/origin/bugs/<id>).
 // A remote's HEAD is symbolic: never listed.
 func (r Repo) Branches(ctx context.Context) ([]Branch, error) {
+	all, err := kept(r, "branches", func() ([]Branch, error) { return r.branches(ctx) })
+	return slices.Clone(all), err
+}
+
+func (r Repo) branches(ctx context.Context) ([]Branch, error) {
 	out, err := r.git(ctx, "for-each-ref", "--format=%(refname) %(objectname) %(symref)", "refs/heads/", "refs/remotes/")
 	if err != nil {
 		return nil, err
@@ -81,11 +117,14 @@ func (r Repo) HasBranch(ctx context.Context, name string) bool {
 // RemoteHead is the branch a remote's HEAD names, its default branch as
 // the clone recorded it; "" when unknown.
 func (r Repo) RemoteHead(ctx context.Context, remote string) string {
-	out, err := r.git(ctx, "symbolic-ref", "-q", "refs/remotes/"+remote+"/HEAD")
-	if err != nil {
-		return ""
-	}
-	name, _ := strings.CutPrefix(strings.TrimSpace(string(out)), "refs/remotes/"+remote+"/")
+	name, _ := kept(r, "head "+remote, func() (string, error) {
+		out, err := r.git(ctx, "symbolic-ref", "-q", "refs/remotes/"+remote+"/HEAD")
+		if err != nil {
+			return "", nil // none: kept as none
+		}
+		name, _ := strings.CutPrefix(strings.TrimSpace(string(out)), "refs/remotes/"+remote+"/")
+		return name, nil
+	})
 	return name
 }
 
@@ -148,11 +187,14 @@ func (r Repo) ChangesIn(ctx context.Context, base, branch string) bool {
 // first-parent line, where a merged branch's name stays once the branch
 // is deleted; none when git can't read them.
 func (r Repo) MergeSubjects(ctx context.Context, ref string, max int) []string {
-	out, err := r.git(ctx, "log", "--first-parent", "--merges", "--format=%s", "-n", strconv.Itoa(max), "--end-of-options", ref, "--")
-	if err != nil {
-		return nil
-	}
-	return lines(out)
+	subjects, _ := kept(r, fmt.Sprintf("merges %d %s", max, ref), func() ([]string, error) {
+		out, err := r.git(ctx, "log", "--first-parent", "--merges", "--format=%s", "-n", strconv.Itoa(max), "--end-of-options", ref, "--")
+		if err != nil {
+			return nil, nil // none: kept as none
+		}
+		return lines(out), nil
+	})
+	return slices.Clone(subjects)
 }
 
 // CreateBranch makes a local branch at start, tracking nothing: git

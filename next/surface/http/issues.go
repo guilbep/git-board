@@ -152,16 +152,17 @@ func thread(ctx context.Context, id string, status int) (Reply, error) {
 	if err != nil {
 		return Reply{}, err
 	}
-	return threadReply(th, status), nil
+	return threadReply(ctx, th, status), nil
 }
 
-func threadReply(th issues.Thread, status int) Reply {
+func threadReply(ctx context.Context, th issues.Thread, status int) Reply {
+	media := board(ctx).MediaURL(ctx)
 	for i, e := range th.Events {
 		if e.Body != "" {
-			th.Events[i].HTML = render(e.Body)
+			th.Events[i].HTML = render(e.Body, media)
 		}
 		for j, v := range e.History { // the description's versions
-			th.Events[i].History[j].HTML = render(v.Body)
+			th.Events[i].History[j].HTML = render(v.Body, media)
 		}
 	}
 	return Reply{Status: status, ETag: string(th.Version), Body: threadJSON{Thread: th, Version: string(th.Version)}}
@@ -183,7 +184,7 @@ func showIssue(ctx context.Context, r showReq) (Reply, error) {
 		if err != nil {
 			return Reply{}, err
 		}
-		rep := threadReply(th, http.StatusOK)
+		rep := threadReply(ctx, th, http.StatusOK)
 		rep.ETag = "" // as it was: no version to write from
 		return rep, nil
 	}
