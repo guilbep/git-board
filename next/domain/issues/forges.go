@@ -65,7 +65,7 @@ func (is *Issue) forged(recs []bsync.Record) {
 		if !isNumber(n) { // board data: anyone who can push refs/board/sync/* writes it
 			n = lastNumber(r.URL)
 		}
-		f := Forge{Name: ForgeName(r.URL), URL: webURL(r.URL), Number: n}
+		f := Forge{Name: ForgeName(r.URL), URL: webURL(r.URL), Number: n, Sync: r.Forge}
 		is.Forges = append(is.Forges, f)
 		if f.Name == "GitHub" && is.GithubURL == "" {
 			is.GithubURL = f.URL

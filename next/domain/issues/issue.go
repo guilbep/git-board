@@ -63,6 +63,10 @@ type Forge struct {
 	Name   string `json:"name"` // GitHub, GitLab, or the host
 	URL    string `json:"url"`
 	Number string `json:"number,omitempty"`
+	// Sync is the sync entity the link is in: sync.StateID of the forge
+	// project's key. It tells two projects of one host apart, which the
+	// URL doesn't for a GitLab table named by its numeric id.
+	Sync kernel.ID `json:"-"`
 }
 
 // BareNumber is the number a bare mention names it by (3075, fix/3075-…):
