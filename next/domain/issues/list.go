@@ -40,6 +40,9 @@ type ListReq struct {
 	Filter string    // ls's grammar; "" matches every issue
 	Me     string    // what @me means: --me, GIT_BOARD_ME; "" for the person who writes
 	Today  time.Time // what @today and sprints mean; zero is now
+	// Notice, when set, is told of each entity a list leaves out,
+	// broken, as v1 logs it.
+	Notice Notice
 }
 
 // List answers the issues r.Filter matches, oldest first (by creation,
@@ -53,7 +56,8 @@ func (s *Service) List(ctx context.Context, r ListReq) ([]Issue, error) {
 	if err != nil {
 		return nil, err
 	}
-	conds, me, err := s.prepare(ctx, dir, r)
+	// the free text's hits first: a first build then indexes as it reads
+	conds, me, err := s.prepare(ctx, dir, r, true)
 	if err != nil {
 		return nil, err
 	}
@@ -61,20 +65,37 @@ func (s *Service) List(ctx context.Context, r ListReq) ([]Issue, error) {
 	if err != nil {
 		return nil, fmt.Errorf("listing the issues: %w", err)
 	}
-	out := make([]Issue, 0, len(rows))
+	list := make([]Issue, 0, len(rows))
 	for _, l := range rows {
-		is := s.issue(l.ID, &l.Row, dir)
+		list = append(list, s.issue(l.ID, &l.Row, dir))
+	}
+	if r.Notice != nil {
+		broken, err := s.Board.Broken(ctx)
+		if err != nil {
+			return nil, err
+		}
+		for _, b := range broken {
+			r.Notice("%s %s: %v", b.Kind, b.ID, b.Err)
+		}
+	}
+	return s.keep(list, conds, me, r.Today), nil
+}
+
+// keep keeps the issues conds match, each with what it inherits.
+func (s *Service) keep(list []Issue, conds []Condition, me string, today time.Time) []Issue {
+	out := list[:0]
+	for _, is := range list {
 		is.Inherited = s.Schema.RolesFor(is.Labels) // a list's alone, as v1's
-		if Matches(is, conds, s.Schema, me, r.Today) {
+		if Matches(is, conds, s.Schema, me, today) {
 			out = append(out, is)
 		}
 	}
-	return out, nil
+	return out
 }
 
 // prepare parses a filter, refuses what can't be answered, finds who @me
 // is, and asks the view for each free text's hits (queries.md, Text).
-func (s *Service) prepare(ctx context.Context, dir people.Directory, r ListReq) ([]Condition, string, error) {
+func (s *Service) prepare(ctx context.Context, dir people.Directory, r ListReq, search bool) ([]Condition, string, error) {
 	conds := ParseFilter(r.Filter)
 	if err := CheckFilter(conds, r.Today); err != nil {
 		return nil, "", &FilterError{err}
@@ -96,7 +117,7 @@ func (s *Service) prepare(ctx context.Context, dir people.Directory, r ListReq) 
 	in := TextsIn(conds)
 	for i, c := range conds {
 		switch {
-		case c.Kind != QText:
+		case c.Kind != QText || !search:
 		case in != nil && len(in) == 0: // -in: of every text: nowhere
 			conds[i].Hits = map[string]bool{}
 		default:

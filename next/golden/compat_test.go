@@ -6,12 +6,18 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"sync"
 	"testing"
 )
 
 const (
 	root    = "../testdata/golden"
 	allowed = "../testdata/compat/allowed.txt"
+	pending = "../testdata/compat/pending.txt"
+	// PendingEnv set to 1 holds the binary to pending.txt too: v2's
+	// differences that a later milestone closes. make compat sets it with
+	// BIN=, v1 having none.
+	PendingEnv = "GIT_BOARD_COMPAT_PENDING"
 	// BinEnv names the binary TestCompat runs: make compat sets it, to
 	// v1's git-board by default, to git-board-next with BIN=.
 	BinEnv = "GIT_BOARD_COMPAT_BIN"
@@ -64,7 +70,26 @@ func TestCompat(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	var wait Pending
+	if os.Getenv(PendingEnv) == "1" {
+		if wait, err = ReadPending(pending); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var mu sync.Mutex
+	held := make([]bool, len(wait)) // the entries a difference needed
+	ran := map[string]bool{}
+	t.Cleanup(func() { // after every board's run
+		for i, p := range wait {
+			if !held[i] && (p.Board == "*" || ran[p.Board]) {
+				t.Errorf("pending.txt:%d (%s %s %s, %s) passes now: remove it from pending", p.Line, p.Board, p.Case, p.What, p.Milestone)
+			}
+		}
+	})
 	for _, b := range boards(t) {
+		mu.Lock()
+		ran[b.Name] = true
+		mu.Unlock()
 		t.Run(b.Name, func(t *testing.T) {
 			t.Parallel()
 			ctx := context.Background()
@@ -113,6 +138,13 @@ func TestCompat(t *testing.T) {
 						t.Logf("%s (%s): %s differs, allowed: %s", c.Name, c.Line, d.what, why)
 						continue
 					}
+					if i := wait.Waits(b.Name, c.Name, d.what); i >= 0 {
+						mu.Lock()
+						held[i] = true
+						mu.Unlock()
+						t.Logf("%s (%s): %s differs, pending %s: %s", c.Name, c.Line, d.what, wait[i].Milestone, wait[i].Why)
+						continue
+					}
 					if d.what == "exit" {
 						t.Errorf("%s (git-board %s): exit %d, want %d", c.Name, c.Line, got.Exit, want.Exit)
 						continue
@@ -147,6 +179,30 @@ func TestAllowedReads(t *testing.T) {
 	t.Parallel()
 	if _, err := ReadAllowed(allowed); err != nil {
 		t.Fatal(err)
+	}
+	if _, err := ReadPending(pending); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestPendingReads(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	for text, ok := range map[string]bool{
+		"basic ls stdout M4 forges come with sync records\n": true,
+		"basic ls stdout forges come with sync\n":            false,
+		"basic ls out M4 why\n":                              false,
+		"# nothing\n":                                        true,
+	} {
+		p := filepath.Join(dir, "p.txt")
+		os.WriteFile(p, []byte(text), 0o644)
+		if _, err := ReadPending(p); (err == nil) != ok {
+			t.Errorf("ReadPending(%q) = %v", text, err)
+		}
+	}
+	p := Pending{{Board: "basic", Case: "cmd*", What: "*", Milestone: "M2"}}
+	if p.Waits("basic", "cmd19-x", "stdout") != 0 || p.Waits("merge", "cmd19-x", "stdout") != -1 {
+		t.Error("Waits doesn't match as Allows does")
 	}
 }
 

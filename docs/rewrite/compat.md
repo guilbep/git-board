@@ -133,6 +133,23 @@ and one without a title; then the thread and the list again, and errors
 `stderr` or `*`. The reason is required. Today the file allows nothing:
 v1 against itself is the same, byte for byte.
 
+## Pending differences
+
+`next/testdata/compat/pending.txt`, one a line:
+
+```text
+<board> <case> <what> <milestone> <reason>
+```
+
+The differences `git-board-next` has for now, each closed by a later
+milestone (design.md, section 5): forges from sync records (M4), project
+numbers and the commands that write (M2), the Markdown datastore (M3).
+`make compat BIN=<git-board-next>` holds the binary to them as well as
+to `allowed.txt` (it sets `GIT_BOARD_COMPAT_PENDING=1`; v1, with no
+`BIN`, has none). Unlike an allowed difference, a pending one is to go:
+an entry no difference needs any more fails the run, "remove it from
+pending", so the list only shrinks.
+
 ## The import guard
 
 `next/guard_test.go`: nothing in `next/` imports `core/`, `internal/` or

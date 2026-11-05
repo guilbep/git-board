@@ -65,7 +65,21 @@ type Tables struct {
 	sprints  *conf.Handle[Sprints]
 	roles    *conf.Handle[map[string]string]
 	branches *conf.Handle[branches]
+	views    *conf.Handle[map[string]View]
 }
+
+// View is a named list of [views]: its filter, grouping and sort.
+type View struct {
+	Layout  string   `toml:"layout"`
+	Filter  string   `toml:"filter"`
+	Group   string   `toml:"group"`
+	Sort    string   `toml:"sort"`
+	Columns []string `toml:"columns"`
+	Lanes   []string `toml:"lanes"`
+}
+
+// Views are [views], by name.
+func (t Tables) Views() (map[string]View, []conf.Problem) { return t.views.Get() }
 
 type branches struct {
 	Kinds map[string]string `toml:"kinds"`
@@ -78,6 +92,7 @@ func Declare(f *conf.File) Tables {
 		sprints:  conf.Declare(f, conf.Table[Sprints]{Name: "sprints"}),
 		roles:    conf.Declare(f, conf.Table[map[string]string]{Name: "roles"}),
 		branches: conf.Declare(f, conf.Table[branches]{Name: "branches"}),
+		views:    conf.Declare(f, conf.Table[map[string]View]{Name: "views"}),
 	}
 }
 

@@ -26,6 +26,29 @@ func (k *K[S, R]) Log(ctx context.Context, b *Board, id ID) ([]Entry, Version, e
 	return es, v, err
 }
 
+// Logs reads every entity of the kind at the datastore's heads, and
+// gives each log to each, from several goroutines at once: what an
+// answer as the board stood then reads (ls --at), where the view holds
+// now's.
+func (k *K[S, R]) Logs(ctx context.Context, b *Board, each func(id ID, log []Entry, err error)) error {
+	heads, err := b.ds.Heads(ctx, k.s.Name)
+	if err != nil {
+		return err
+	}
+	refs := make([]store.Ref, len(heads))
+	for i, h := range heads {
+		refs[i] = store.Ref(h)
+	}
+	return b.load(ctx, refs, func(r store.Ref, packs [][]byte, err error) {
+		var es []Entry
+		if err == nil {
+			es, _, err = order(packs)
+			err = named(k.s.Name, ID(r.ID), err)
+		}
+		each(ID(r.ID), es, err)
+	})
+}
+
 // Fold is the state entries add up to: a log read with Log, or part of
 // one (a domain's "as it was then").
 func (k *K[S, R]) Fold(id ID, entries []Entry) (S, error) { return k.fold(id, entries) }

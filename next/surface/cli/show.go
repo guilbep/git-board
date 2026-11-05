@@ -18,6 +18,7 @@ import (
 
 func newShow() *cobra.Command {
 	var md, noComments bool
+	var at string
 	var js *jsonOut
 	cmd := &cobra.Command{
 		Use:   "show <id>",
@@ -27,17 +28,32 @@ func newShow() *cobra.Command {
 			if md && js.on() {
 				return usageError{fmt.Errorf("one of --md, --json, --web and --forge")}
 			}
+			var then time.Time
+			if at != "" {
+				var err error
+				if then, err = parseAt(at, time.Now()); err != nil {
+					return usageError{err}
+				}
+			}
 			ctx := cmd.Context()
 			b, err := open(ctx, true)
 			if err != nil {
 				return err
 			}
 			defer b.Close()
-			th, err := b.issues.Show(ctx, args[0])
+			var th issues.Thread
+			if then.IsZero() {
+				th, err = b.issues.Show(ctx, args[0])
+			} else {
+				th, err = b.issues.ShowAt(ctx, args[0], then)
+			}
 			if err != nil {
 				return err
 			}
 			out := cmd.OutOrStdout()
+			if !then.IsZero() && !js.on() {
+				fmt.Fprintf(out, "As it was on %s.\n\n", when(then))
+			}
 			switch {
 			case js.on():
 				if th.Participants == nil {
@@ -55,6 +71,7 @@ func newShow() *cobra.Command {
 			return nil
 		},
 	}
+	cmd.Flags().StringVar(&at, "at", "", "as it was then: a date (its end), a time (2026-10-01T14:30) or a while ago (36h, 7d)")
 	cmd.Flags().BoolVar(&md, "md", false, "render as Markdown")
 	js = addJSON(cmd, "render as JSON", jsonFields(issues.Thread{}), true)
 	cmd.Flags().BoolVar(&noComments, "no-comments", false, "leave the comments out")
@@ -219,7 +236,49 @@ func newLog() *cobra.Command {
 	return cmd
 }
 
-var daysAgo = regexp.MustCompile(`^(\d+)d$`)
+var (
+	daysAgo  = regexp.MustCompile(`^(\d+)d$`)
+	whileAgo = regexp.MustCompile(`^(\d+)([dw])$`)
+)
+
+// parseWhen is the span a moment names: a date its day, a time its
+// minute or second, a while ago (7d, 2w, 36h) its second.
+func parseWhen(s string, now time.Time) (from, until time.Time, err error) {
+	if t, err := time.ParseInLocation(time.DateOnly, s, time.Local); err == nil {
+		return t, t.AddDate(0, 0, 1), nil
+	}
+	for _, f := range []struct {
+		layout string
+		d      time.Duration
+	}{{"2006-01-02T15:04", time.Minute}, {"2006-01-02 15:04", time.Minute}, {"2006-01-02T15:04:05", time.Second}, {"2006-01-02 15:04:05", time.Second}} {
+		if t, err := time.ParseInLocation(f.layout, s, time.Local); err == nil {
+			return t, t.Add(f.d), nil
+		}
+	}
+	if t, err := time.Parse(time.RFC3339, s); err == nil {
+		return t, t.Add(time.Second), nil
+	}
+	if m := whileAgo.FindStringSubmatch(s); m != nil {
+		n, _ := strconv.Atoi(m[1])
+		if m[2] == "w" {
+			n *= 7
+		}
+		t := now.AddDate(0, 0, -n)
+		return t, t.Add(time.Second), nil
+	}
+	if d, err := time.ParseDuration(s); err == nil && d >= 0 {
+		t := now.Add(-d)
+		return t, t.Add(time.Second), nil
+	}
+	return time.Time{}, time.Time{}, fmt.Errorf("%q: a date (2026-10-01), a time (2026-10-01T14:30) or a while ago (36h, 7d)", s)
+}
+
+// parseAt is --at: the last second of the span named, so a date is the
+// board at the end of that day.
+func parseAt(s string, now time.Time) (time.Time, error) {
+	_, until, err := parseWhen(s, now)
+	return until.Add(-time.Second), err
+}
 
 // parseSince is a date, or a while before now: 36h, 7d.
 func parseSince(s string, now time.Time) (time.Time, error) {

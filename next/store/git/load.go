@@ -277,7 +277,8 @@ func (w *walker) read() (oid, typ string, body []byte, err error) {
 func (w *walker) answer(todo []request, rq request, oid, typ string, body []byte) []request {
 	e := rq.e
 	fail := func(format string, args ...any) []request {
-		e.err = fmt.Errorf("%s: "+format, append([]any{refName(e.ref.Kind, e.ref.ID)}, args...)...)
+		// as v1 words it: broken entities' lines are a contract
+		e.err = fmt.Errorf("oplog: %s: "+format, append([]any{refName(e.ref.Kind, e.ref.ID)}, args...)...)
 		return todo
 	}
 	ask := func(kind reqKind, oid string, n *node) {
@@ -369,10 +370,10 @@ func check(e *entity) ([]node, error) {
 			want = max(want, clocks[p]+1)
 		}
 		if n.clock != want {
-			return nil, fmt.Errorf("%s: commit %s: clock %d, want %d", refName(e.ref.Kind, e.ref.ID), n.commit, n.clock, want)
+			return nil, fmt.Errorf("oplog: %s: commit %s: clock %d, want %d", refName(e.ref.Kind, e.ref.ID), n.commit, n.clock, want)
 		}
 		if n.empty && len(n.parents) < 2 {
-			return nil, fmt.Errorf("%s: commit %s: %w", refName(e.ref.Kind, e.ref.ID), n.commit, pack.ErrEmpty)
+			return nil, fmt.Errorf("oplog: %s: commit %s: %w", refName(e.ref.Kind, e.ref.ID), n.commit, pack.ErrEmpty)
 		}
 		out[i] = *n
 	}

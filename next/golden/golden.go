@@ -408,12 +408,66 @@ func ReadAllowed(path string) (Allowed, error) {
 // Allows says whether a difference in what is allowed, and why.
 func (a Allowed) Allows(board, name, what string) (string, bool) {
 	for _, x := range a {
-		match := x.Case == name || x.Case == "*" || strings.HasSuffix(x.Case, "*") && strings.HasPrefix(name, strings.TrimSuffix(x.Case, "*"))
-		if (x.Board == board || x.Board == "*") && match && (x.What == what || x.What == "*") {
+		if x.matches(board, name, what) {
 			return x.Why, true
 		}
 	}
 	return "", false
+}
+
+func (x Allow) matches(board, name, what string) bool {
+	match := x.Case == name || x.Case == "*" || strings.HasSuffix(x.Case, "*") && strings.HasPrefix(name, strings.TrimSuffix(x.Case, "*"))
+	return (x.Board == board || x.Board == "*") && match && (x.What == what || x.What == "*")
+}
+
+// Pending is pending.txt: differences v2 has from the recorded outputs
+// for now, each closed by a milestone of the rewrite (design.md, section
+// 5). Unlike allowed.txt's, they are to go: an entry no difference
+// needs any more fails the run, so the list only shrinks.
+type Pending []Pend
+
+// Pend is one line: a board, a case and what differs, as in allowed.txt,
+// the milestone that closes it (M2…M7), and why it waits.
+type Pend struct {
+	Board, Case, What, Milestone, Why string
+	Line                              int
+}
+
+var milestone = regexp.MustCompile(`^M[0-9]$`)
+
+// ReadPending reads pending.txt: "board case what milestone why…" a line;
+// # starts a comment.
+func ReadPending(path string) (Pending, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var out Pending
+	for i, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		f := strings.Fields(line)
+		if len(f) < 5 || !milestone.MatchString(f[3]) {
+			return nil, fmt.Errorf("%s:%d: board, case, what (exit, stdout, stderr or *), the milestone that closes it (M2), then why", path, i+1)
+		}
+		if !slices.Contains([]string{"exit", "stdout", "stderr", "*"}, f[2]) {
+			return nil, fmt.Errorf("%s:%d: %q: exit, stdout, stderr or *", path, i+1, f[2])
+		}
+		out = append(out, Pend{f[0], f[1], f[2], f[3], strings.Join(f[4:], " "), i + 1})
+	}
+	return out, nil
+}
+
+// Waits is the entry that holds a difference in what, -1 for none.
+func (p Pending) Waits(board, name, what string) int {
+	for i, x := range p {
+		if (Allow{x.Board, x.Case, x.What, ""}).matches(board, name, what) {
+			return i
+		}
+	}
+	return -1
 }
 
 // Diff is a short account of where two outputs part: the first line that

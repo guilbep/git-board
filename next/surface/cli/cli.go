@@ -88,7 +88,7 @@ func newRoot() *cobra.Command {
 	}
 	root.PersistentFlags().StringVarP(&dir, "directory", "C", "", "run as if started in this directory, as git -C does")
 	root.SetFlagErrorFunc(func(_ *cobra.Command, err error) error { return usageError{err} })
-	root.AddCommand(newLs(), newShow(), newLog())
+	root.AddCommand(newLs(), newView(), newShow(), newLog())
 	var walk func(*cobra.Command)
 	walk = func(c *cobra.Command) {
 		if args := c.Args; args != nil {
@@ -170,6 +170,24 @@ func open(ctx context.Context, who bool) (*board, error) {
 		s.Me, s.Avatars = kernel.ID(set.me), people.ParseAvatars(set.avatars)
 	}
 	return &board{kb: kb, issues: s}, nil
+}
+
+// readViews are .git-board.toml's [views].
+func readViews() (map[string]issues.View, error) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return nil, err
+	}
+	f, err := conf.Load(configPath(cwd))
+	if err != nil {
+		return nil, err
+	}
+	t := issues.Declare(f)
+	views, probs := t.Views()
+	if len(probs) > 0 {
+		return nil, fmt.Errorf("%s: %w", conf.FileName, probs[0])
+	}
+	return views, nil
 }
 
 // configPath is the nearest .git-board.toml up to the repository's root,

@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"time"
 
 	"io"
 	"os"
@@ -13,7 +14,7 @@ import (
 )
 
 func newLs() *cobra.Command {
-	var group, sort, me string
+	var group, sort, me, at string
 	var md bool
 	var limit int
 	var js *jsonOut
@@ -32,22 +33,72 @@ func newLs() *cobra.Command {
 			if limit < 0 {
 				return usageError{fmt.Errorf("--limit %d: a count, 0 for all", limit)}
 			}
-			ctx := cmd.Context()
-			b, err := open(ctx, needsMe(req.Filter))
-			if err != nil {
-				return err
+			var when time.Time
+			if at != "" {
+				var err error
+				if when, err = parseAt(at, time.Now()); err != nil {
+					return usageError{err}
+				}
 			}
-			defer b.Close()
-			list, err := b.issues.List(ctx, req)
-			if err != nil {
-				return err
-			}
-			return render(cmd.OutOrStdout(), list, group, sort, limit, md, js, b.issues.Schema)
+			return list(cmd, req, when, group, sort, limit, md, js)
 		},
 	}
+	cmd.Flags().StringVar(&at, "at", "", "the board as it was then: a date (its end), a time (2026-10-01T14:30) or a while ago (36h, 7d)")
 	cmd.Flags().StringVar(&group, "group", "", "group results by field")
 	cmd.Flags().StringVar(&sort, "sort", "", `sort by created, updated, title or a field, then asc or desc: "prio asc", "updated desc"`)
 	cmd.Flags().IntVarP(&limit, "limit", "L", 0, "list this many at most, after sorting (0: all)")
+	cmd.Flags().BoolVar(&md, "md", false, "render as markdown")
+	cmd.Flags().StringVar(&me, "me", "", "current user, for @me filters/values (env GIT_BOARD_ME)")
+	js = addJSON(cmd, "render as JSON", jsonFields(issues.Issue{}), true)
+	return cmd
+}
+
+// list is ls and view: the issues req matches, now or at a time, then
+// rendered. What a list leaves out goes to stderr, as v1 logs it.
+func list(cmd *cobra.Command, req issues.ListReq, at time.Time, group, sort string, limit int, md bool, js *jsonOut) error {
+	ctx := cmd.Context()
+	b, err := open(ctx, needsMe(req.Filter))
+	if err != nil {
+		return err
+	}
+	defer b.Close()
+	stderr := cmd.ErrOrStderr()
+	req.Notice = func(format string, args ...any) { fmt.Fprintf(stderr, format+"\n", args...) }
+	var found []issues.Issue
+	if at.IsZero() {
+		found, err = b.issues.List(ctx, req)
+	} else {
+		found, err = b.issues.ListAt(ctx, req, at)
+	}
+	if err != nil {
+		return err
+	}
+	return render(cmd.OutOrStdout(), found, group, sort, limit, md, js, b.issues.Schema)
+}
+
+func newView() *cobra.Command {
+	var me string
+	var md bool
+	var js *jsonOut
+	cmd := &cobra.Command{
+		Use:   "view <name>",
+		Short: "Render a named view from .git-board.toml",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			views, err := readViews()
+			if err != nil {
+				return err
+			}
+			v, ok := views[args[0]]
+			if !ok {
+				return fmt.Errorf("unknown view %q", args[0])
+			}
+			if me == "" {
+				me = os.Getenv("GIT_BOARD_ME")
+			}
+			return list(cmd, issues.ListReq{Filter: v.Filter, Me: me}, time.Time{}, v.Group, v.Sort, 0, md, js)
+		},
+	}
 	cmd.Flags().BoolVar(&md, "md", false, "render as markdown")
 	cmd.Flags().StringVar(&me, "me", "", "current user, for @me filters/values (env GIT_BOARD_ME)")
 	js = addJSON(cmd, "render as JSON", jsonFields(issues.Issue{}), true)

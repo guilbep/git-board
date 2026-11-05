@@ -241,3 +241,36 @@ func FuzzDecodeData(f *testing.F) {
 		}
 	})
 }
+
+// At keeps what was made by then: an edit made later of a text made by
+// then is left out, one made "before" its text (clocks disagree) waits
+// for it, and an issue made later isn't there yet.
+func TestAt(t *testing.T) {
+	t.Parallel()
+	e := func(id string, kind string, time int64, data string) kernel.Entry {
+		o := op(kind, data)
+		o.Time = time
+		return kernel.Entry{ID: kernel.OpID(id), Op: o}
+	}
+	log := []kernel.Entry{
+		e("c:0", "create", 10, `{"title":"t","body":"b"}`),
+		e("d:0", "edit-text", 5, `{"target":"x:0","body":"early"}`),
+		e("x:0", "comment", 20, `{"body":"c"}`),
+		e("y:0", "edit-text", 30, `{"target":"c:0","body":"later"}`),
+		e("z:0", "set-title", 15, `{"title":"u"}`),
+	}
+	got, err := At(log, 20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ids []string
+	for _, x := range got {
+		ids = append(ids, string(x.ID))
+	}
+	if strings.Join(ids, " ") != "c:0 x:0 z:0" {
+		t.Fatalf("At(20) = %v", ids)
+	}
+	if _, err := At(log, 9); !errors.Is(err, ErrNotYet) {
+		t.Fatalf("At before the create = %v, want ErrNotYet", err)
+	}
+}

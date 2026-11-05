@@ -245,6 +245,8 @@ func (b *Board) put(k kindSpec, id ID, base, v Version, packs [][]byte, err erro
 		var es []Entry
 		if es, _, err = order(packs); err == nil {
 			p.Doc, err = k.fold(id, es)
+		} else {
+			err = named(k.name, id, err)
 		}
 	}
 	if err != nil {
@@ -299,7 +301,7 @@ func (b *Board) entity(ctx context.Context, kind string, id ID) ([]Entry, Versio
 		}
 		v = Version(r.Version)
 		es, clock, err = order(packs)
-		return err
+		return named(kind, id, err)
 	})
 	return es, v, clock, err
 }
@@ -323,4 +325,14 @@ func (b *Board) write(ctx context.Context, kind string, id ID, prev Version, clo
 	}
 	es, _, err := order([][]byte{data})
 	return Version(v), es, err
+}
+
+// named is an error reading an entity's packs, as v1 words it: "oplog:
+// <its ref>: …". Broken entities' lines are a contract (the golden
+// boards' stderr).
+func named(kind string, id ID, err error) error {
+	if err == nil {
+		return nil
+	}
+	return fmt.Errorf("oplog: refs/board/%s/%s: %w", kind, id, err)
 }

@@ -44,7 +44,7 @@ ci: web-check web-build build vet test compat ## Everything CI runs
 BIN ?=
 compat: ## Run a binary over the golden boards and compare with v1's outputs (BIN=path, default v1)
 	@set -e; bin="$(BIN)"; if [ -z "$$bin" ]; then d=$$(mktemp -d); trap 'rm -rf "$$d"' EXIT; bin=$$d/git-board; go build -o $$bin ./cmd/git-board; fi; \
-	GIT_BOARD_COMPAT_BIN=$$(cd $$(dirname $$bin) && pwd)/$$(basename $$bin) go test -count=1 -run 'TestCompat|TestGoldensComplete' ./next/golden/
+	GIT_BOARD_COMPAT_PENDING=$(if $(BIN),1,) GIT_BOARD_COMPAT_BIN=$$(cd $$(dirname $$bin) && pwd)/$$(basename $$bin) go test -count=1 -run 'TestCompat|TestGoldensComplete' ./next/golden/
 
 # Records what v1 prints on the golden boards, and what its API answers:
 # run it when a board or a command changes, and review the diff. v1 must
