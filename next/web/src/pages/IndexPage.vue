@@ -213,6 +213,7 @@
             @open="openIssue"
             @move="onMove"
             @move-many="onMoveMany"
+            @more="lists.more"
           />
         </div>
         <RoadmapView
@@ -234,6 +235,7 @@
           @open="openIssue"
           @sort="sortBy"
           @changed="load"
+          @more="lists.more"
           @update:columns="(c) => (columns = c)"
         />
       </div>
@@ -676,10 +678,15 @@ async function save(name: string) {
 
 const saveAs = () => save(newName.value.trim());
 
+// The file first (the views): the list waits for nothing else. The fields
+// come beside the first list, the values' colors and suggestions after it.
+let fieldsRead: Promise<Record<string, FieldConfig>> | null = null;
 async function loadConfig() {
   configError.value = '';
   try {
-    [, fields.value] = await Promise.all([loadConfigModel(), getFields(), loadColors()]);
+    await loadConfigModel();
+    fieldsRead = getFields();
+    fields.value = await fieldsRead;
   } catch (e: unknown) {
     configError.value = message(e);
   }
@@ -703,9 +710,14 @@ async function resetAll() {
 }
 
 let loaded = ''; // the filter last asked for
-function load() {
+let colorsAsked = false;
+async function load() {
   loaded = applied.value;
-  return lists.load({ filter: applied.value, group: groupField.value, sort: apiSort(sort.value, fields.value) });
+  await lists.load({ filter: applied.value, group: groupField.value, sort: apiSort(sort.value) });
+  if (!colorsAsked && fieldsRead) {
+    colorsAsked = true;
+    void fieldsRead.then(loadColors, () => {});
+  }
 }
 watch(sort, () => void load());
 
@@ -716,7 +728,7 @@ watch(activeView, resetView);
 let filterTimer: ReturnType<typeof setTimeout> | undefined;
 watch(applied, () => {
   clearTimeout(filterTimer);
-  filterTimer = setTimeout(() => applied.value !== loaded && void load(), 120);
+  filterTimer = setTimeout(() => applied.value !== loaded && void load(), 50);
 });
 
 // An older link (?q=words&f.status=ready): its filter, in the box.
@@ -729,7 +741,8 @@ function upgradeLink() {
 }
 
 onMounted(async () => {
-  await loadConfig();
+  void loadConfig();
+  await loadConfigModel(); // the views, for the first list
   await upgradeLink();
   watch(() => route.query, upgradeLink);
   // No saved view to switch to (none configured, or the config failed):
@@ -830,7 +843,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
 
 // live updates (live.ts): another page or a sync changed the issues or the
 // configuration; reload once a burst is over (the board keeps its scroll)
-const reloadLive = debounced(() => void Promise.all([load(), loadColors()]));
+const reloadLive = debounced(() => void Promise.all([load(), loadColors(fields.value)]));
 const reloadConfig = debounced(async () => {
   await loadConfig();
   void load();

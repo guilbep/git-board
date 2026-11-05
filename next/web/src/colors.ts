@@ -2,7 +2,7 @@
 // (GET /api/fields) and the values in use (GET /api/labels): asked again
 // with the board's config, so a new value gets its color.
 import { ref } from 'vue';
-import { getFields, getLabels } from '@/api';
+import { getFields, getLabels, type FieldConfig } from '@/api';
 import { hexRules, valueColors } from '@/valuecolors';
 
 export const colors = ref<Record<string, Record<string, string>>>({});
@@ -10,9 +10,10 @@ export const colors = ref<Record<string, Record<string, string>>>({});
 // (viewfilter.suggest)
 export const values = ref<Record<string, string[]>>({});
 
-export async function loadColors(): Promise<void> {
+// fields: the page's, when it has them already (else asked)
+export async function loadColors(given?: Record<string, FieldConfig>): Promise<void> {
   try {
-    const [fields, labels] = await Promise.all([getFields(), getLabels('')]);
+    const [fields, labels] = await Promise.all([given ?? getFields(), getLabels('')]);
     const inUse: Record<string, string[]> = {};
     for (const l of labels) if (l.field) (inUse[l.field] ??= []).push(l.value);
     values.value = inUse;

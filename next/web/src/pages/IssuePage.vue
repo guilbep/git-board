@@ -25,8 +25,9 @@ const names = ref<string[]>([]);
 
 onMounted(async () => {
   try {
-    const [, f] = await Promise.all([loadConfigModel(), getFields(), loadColors()]);
+    const [, f] = await Promise.all([loadConfigModel(), getFields()]);
     fields.value = f;
+    void loadColors(f);
     names.value = namespaces([], f);
   } catch {
     // the panel shows its own errors

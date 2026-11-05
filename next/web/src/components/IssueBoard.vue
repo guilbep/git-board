@@ -19,14 +19,14 @@
       :key="bucket.group"
       class="board-column"
       :class="[colorClass(group, bucket.group), { 'is-over': over === bucket.group && dragFrom !== bucket.group }]"
-      :aria-label="`${groupLabel(bucket.group)}, ${bucket.issues.length} issues`"
+      :aria-label="`${groupLabel(bucket.group)}, ${sizeOf(bucket)} issues`"
       @dragover="onOver(bucket.group, $event)"
       @dragleave="onLeave(bucket.group, $event)"
       @drop="onDrop(bucket.group, $event)"
     >
       <h2 class="column-title">
         <span class="column-name"><ValueMark v-if="group" :field="group" :value="bucket.group" />{{ groupLabel(bucket.group) }}</span>
-        <span class="column-count" :class="`is-${limitState(bucket.issues.length, limits?.[bucket.group]) || 'ok'}`" :title="limits?.[bucket.group] ? `At most ${limits[bucket.group]} cards here` : undefined">{{ bucket.issues.length }}<template v-if="limits?.[bucket.group]"> / {{ limits[bucket.group] }}</template></span>
+        <span class="column-count" :class="`is-${limitState(sizeOf(bucket), limits?.[bucket.group]) || 'ok'}`" :title="limits?.[bucket.group] ? `At most ${limits[bucket.group]} cards here` : undefined">{{ sizeOf(bucket).toLocaleString() }}<template v-if="limits?.[bucket.group]"> / {{ limits[bucket.group] }}</template></span>
         <select
           v-if="group && bucket.issues.length && buckets.length > 1"
           class="column-move"
@@ -71,6 +71,10 @@
             </span>
           </button>
         </li>
+        <!-- the lane's next page, asked as its end comes near -->
+        <li v-if="bucket.next" v-near="() => emit('more', bucket)" class="cards-more">
+          <button type="button" class="gb-linkbtn" :disabled="bucket.loading" @click="emit('more', bucket)">{{ bucket.loading ? 'Loading…' : `${(sizeOf(bucket) - bucket.issues.length).toLocaleString()} more` }}</button>
+        </li>
       </ul>
     </section>
   </div>
@@ -85,10 +89,13 @@ import { limitState, pickCards } from '@/lanes';
 import type { Issue } from '@/api';
 import type { Bucket } from '@/bucket';
 import { colorClass } from '@/colors';
+import { vNear } from '@/near';
 import { displayName, fieldValues, formatValue, otherLabels, type Fields } from '@/fields';
 
 const props = defineProps<{ buckets: Bucket[]; names: string[]; fields: Fields; group: string; changed?: Set<string>; limits?: Record<string, number> | undefined }>();
-const emit = defineEmits<{ open: [issue: Issue]; move: [issue: Issue, from: string, to: string]; moveMany: [moves: { issue: Issue; from: string }[], to: string] }>();
+const emit = defineEmits<{ open: [issue: Issue]; move: [issue: Issue, from: string, to: string]; moveMany: [moves: { issue: Issue; from: string }[], to: string]; more: [bucket: Bucket] }>();
+// a lane holds its first page: its count is the list's
+const sizeOf = (b: Bucket) => b.total ?? b.issues.length;
 
 // Several cards picked (Cmd/Ctrl-click toggles one, Shift-click a range in
 // its lane, the box on a card's corner too) move together: dragged, or
@@ -126,7 +133,8 @@ function moveAll(bucket: Bucket, e: Event) {
   const to = el.value;
   el.value = '';
   const n = bucket.issues.length;
-  if (!window.confirm(`Move all ${n} card${n === 1 ? '' : 's'} of ${groupLabel(bucket.group)} to ${groupLabel(to)}?`)) return;
+  const of = sizeOf(bucket) > n ? ` (the ${n} loaded of ${sizeOf(bucket).toLocaleString()})` : '';
+  if (!window.confirm(`Move all ${n} card${n === 1 ? '' : 's'} of ${groupLabel(bucket.group)}${of} to ${groupLabel(to)}?`)) return;
   emit('moveMany', bucket.issues.map((issue) => ({ issue, from: bucket.group })), to);
 }
 // the picked cards' bar holds the window's foot: the key line steps aside
@@ -287,4 +295,5 @@ function meta(issue: Issue) {
 .card-meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-3); min-width: 0; font-size: var(--fs-sm); }
 .meta-name { color: var(--fg-muted); }
 .card-other { font-size: var(--fs-xs); color: var(--fg-muted); }
+.cards-more { padding: .5rem; text-align: center; }
 </style>

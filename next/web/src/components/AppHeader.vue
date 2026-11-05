@@ -173,7 +173,9 @@ onMounted(() => {
   document.addEventListener('click', fold);
   if (!syncStatus.value) void loadSync();
   if (!me.value) void loadMe();
-  if (!inbox.value) void loadInbox();
+  // the inbox's count after what the page shows first (it reads every
+  // issue you follow)
+  if (!inbox.value) setTimeout(() => void loadInbox(), 600);
   stopLive = onLive((e) => {
     const own = e.by === clientId;
     if (!own && (e.kind === 'issue' || e.kind === 'inbox' || e.kind === 'resync')) reloadInbox();

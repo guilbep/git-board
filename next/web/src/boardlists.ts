@@ -22,11 +22,11 @@ export interface ListParams {
 export const PAGE = 100;
 
 // apiSort is a sort as the page holds it ({key: prio, desc}) for the API:
-// "prio desc"; '' for an order the API doesn't have (id, state, links)
-export function apiSort(s: { key: string; desc: boolean } | null, fields: Fields): string {
-  if (!s) return '';
-  const ok = s.key === 'title' || s.key === 'created' || s.key === 'updated' || s.key in fields;
-  return ok ? `${s.key} ${s.desc ? 'desc' : 'asc'}` : '';
+// "prio desc"; '' for an order the API doesn't have (id, state, links).
+// A field the server doesn't know answers invalid, said over the list.
+export function apiSort(s: { key: string; desc: boolean } | null): string {
+  if (!s || ['id', 'is', 'links', 'other'].includes(s.key)) return '';
+  return `${s.key} ${s.desc ? 'desc' : 'asc'}`;
 }
 
 export function useBoardLists(fields: Ref<Fields>) {
@@ -58,13 +58,15 @@ export function useBoardLists(fields: Ref<Fields>) {
     loading.value = true;
     error.value = '';
     try {
-      const labels = getLabels(p.filter, signal);
+      // ungrouped, the list goes first, alone: the counts after it
+      let labels: Promise<LabelCount[]> | undefined;
       let next: Bucket[];
       if (!p.group) {
         const first = await page(p.filter, signal);
         next = [{ group: '', issues: first.items, total: first.total, next: first.next }];
         total.value = first.total;
       } else {
+        labels = getLabels(p.filter, signal);
         const values = [...groupValues(await labels), NONE];
         const counted = new Map((await labels).filter((l) => l.field === p.group).map((l) => [l.value, l.open + l.closed]));
         const [all, ...pages] = await Promise.all([
@@ -82,7 +84,7 @@ export function useBoardLists(fields: Ref<Fields>) {
       if (signal.aborted) return;
       buckets.value = next;
       loading.value = false;
-      void loadFacets(p.filter, await labels, signal);
+      void loadFacets(p.filter, labels ?? getLabels(p.filter, signal), signal);
     } catch (e) {
       if (signal.aborted) return;
       error.value = e instanceof Error ? e.message : String(e);
@@ -92,22 +94,29 @@ export function useBoardLists(fields: Ref<Fields>) {
   }
 
   // the filters panel: the shared counts, and each facet the filter has a
-  // term on counted against the rest of it
-  async function loadFacets(filter: string, labels: LabelCount[], signal: AbortSignal) {
-    const counted = async (f: string, ls?: LabelCount[]): Promise<Counted> => {
-      const [l, open, closed] = await Promise.all([
-        ls ?? getLabels(f, signal),
-        listIssues({ filter: `${f} is:open`.trim(), limit: 1 }, signal).then((x) => x.total),
-        listIssues({ filter: `${f} is:closed`.trim(), limit: 1 }, signal).then((x) => x.total),
-      ]);
+  // term on counted against the rest of it. Open and closed are asked
+  // only where the state facet reads them, labels only where a field's
+  // does: on is:open (a view's default) that is the list, its labels and
+  // two counts
+  async function loadFacets(filter: string, labels: Promise<LabelCount[]>, signal: AbortSignal) {
+    // how many a filter matches: the list's own total when it is the
+    // list's filter (is:open, a view's default), else asked
+    const same = (a: string, b: string) => terms(a).map((t) => t.text).sort().join(' ') === terms(b).map((t) => t.text).sort().join(' ');
+    const count = (f: string) => (same(f, filter) ? Promise.resolve(total.value) : listIssues({ filter: f, limit: 1 }, signal).then((x) => x.total));
+    const totals = (f: string) => Promise.all([count(`${f} is:open`.trim()), count(`${f} is:closed`.trim())]);
+    const counted = async (f: string, ls: Promise<LabelCount[]> | null, states: boolean): Promise<Counted> => {
+      const [l, [open = 0, closed = 0]] = await Promise.all([ls ?? Promise.resolve([]), states ? totals(f) : Promise.resolve([0, 0])]);
       return { labels: l, open, closed };
     };
     try {
       const ts = terms(filter);
       const keys = new Set<string>();
       for (const t of ts) for (const k of [STATE, t.key === 'no' ? t.value : t.key === 'label' ? 'label' : t.key]) if (k && owns(k, t)) keys.add(k);
-      const shared = counted(filter, labels);
-      const own = new Map(await Promise.all([...keys].map(async (k) => [k, await counted(rest(filter, k))] as const)));
+      // the shared counts: open and closed when the state facet is no own
+      // one, else this list's total for a field's "not set"
+      const sharedStates = !keys.has(STATE);
+      const shared = counted(filter, labels, sharedStates).then((c) => (sharedStates ? c : { ...c, open: total.value, closed: 0 }));
+      const own = new Map(await Promise.all([...keys].map(async (k) => [k, await counted(rest(filter, k), k === STATE ? null : getLabels(rest(filter, k), signal), true)] as const)));
       const fs = facetsOf(filter, fields.value, await shared, own);
       if (!signal.aborted) facets.value = fs;
     } catch {

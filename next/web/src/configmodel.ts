@@ -5,44 +5,47 @@
 // those lines, comments kept, or answers 412 stale when the file moved
 // since: the tab offers to reload, or to overwrite. A tab that is dirty
 // says so in its row; leaving with a draft asks.
-import { computed, ref, watch } from 'vue';
-import { getBoard, getConfig, getSync, isStale, message, patchConfig, putConfig, type ConfigFile } from '@/api';
+import { computed, ref, shallowRef, watch } from 'vue';
+import { getConfig, isStale, message, patchConfig, putConfig, type ConfigFile } from '@/api';
+import { board } from '@/me';
+import { loadSync, syncStatus } from '@/sync';
 import { modelOf, type ConfigModel } from '@/configparse';
 import { sectionPatch } from '@/sectionpatch';
 import { reorderTables } from '@/tomlorder';
 
-export const configModel = ref<ConfigModel | null>(null);
-export const configModelError = ref('');
+// the file as last read or written; the model is it parsed, with the
+// forges GET /api/sync finds and the features GET /api/board says are on,
+// as their stores have them (the board page needs neither: it doesn't
+// wait for them)
+const file = shallowRef<ConfigFile | null>(null);
+export const configModel = computed<ConfigModel | null>(() =>
+  file.value ? modelOf({ text: file.value.text, version: file.value.version, exists: file.value.exists, forges: syncStatus.value?.forges ?? [], on: board.value?.experimental ?? [] }) : null,
+);
+const readError = ref('');
+export const configModelError = computed(() => readError.value || configModel.value?.error || (file.value?.problems ?? []).map((p) => `${p.table}: ${p.message}`).join('; '));
 let pending: Promise<void> | null = null;
 
-// loadConfigModel reads the file's sections once; a save refreshes. The
-// same promise for everyone calling while the first is in the air.
+// loadConfigModel reads the file; a save refreshes. The same promise for
+// everyone calling while the first is in the air.
 export function loadConfigModel(): Promise<void> {
   if (pending) return pending;
-  pending = Promise.all([getConfig(), getSync().catch(() => null), getBoard().catch(() => null)]).then(
-    ([file, sync, board]) => {
-      forges = sync?.forges ?? [];
-      on = board?.experimental ?? [];
-      takeFile(file);
+  pending = getConfig().then(
+    (f) => {
+      takeFile(f);
       pending = null;
     },
     (e) => {
-      configModelError.value = message(e);
+      readError.value = message(e);
       pending = null;
     },
   );
   return pending;
 }
 
-
-let forges: NonNullable<Parameters<typeof modelOf>[0]['forges']> = [];
-let on: string[] = [];
-
-// takeFile makes the model of the file a read or a write answered
+// takeFile keeps the file a read or a write answered
 export function takeFile(f: ConfigFile) {
-  const m = modelOf({ text: f.text, version: f.version, exists: f.exists, forges, on });
-  configModel.value = m;
-  configModelError.value = m.error ?? f.problems.map((p) => `${p.table}: ${p.message}`).join('; ');
+  readError.value = '';
+  file.value = f;
 }
 
 // inputValue reads a native input's or select's value out of its event:
@@ -107,8 +110,10 @@ export class SectionDraft<T> {
     this.saved.value = false;
   }
 
+  // the file, and the forges (a field's places are theirs): a draft made
+  // before they came would differ from the model they make
   load(): Promise<void> {
-    return loadConfigModel().then(() => {
+    return Promise.all([loadConfigModel(), syncStatus.value ? null : loadSync()]).then(() => {
       if (configModel.value) this.reset(configModel.value);
     });
   }
