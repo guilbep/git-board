@@ -240,7 +240,7 @@ it in this table; a test enforces it from day one.
 | `next/domain/cycle` | an issue's steps; experimental (ADR 0018) |
 | `next/app` | opens a board, wires the domains, the one API every surface calls, errors |
 | `next/surface/cli`, `http`, `tui` | adapters over `app`; `http` serves the web app |
-| `next/tools/…` | the GitHub Project bridge, the release runner, agents: apps over `app` |
+| `next/tools/…` | the GitHub Project bridge, the release runner: apps over `app` (agents left: section 5) |
 | `next/cmd/git-board` | `main`: the binary |
 
 `domain/*` never imports another domain upward: releases read issues,
@@ -919,7 +919,7 @@ Sizes are lines of Go, without tests; tests are about as many again.
 | **M3** | `store/pg` (with the view in PostgreSQL), `store/md`, `store/forgecopy`; `datastore copy` | `storetest` and `viewtest` on all; goldens on each | 3,000 |
 | **M4** | `forge` (ported), `sync` engine, issue and release mappers; `fetch`, `pull`, `push`, `sync` | `forgetest`; sync's tests from v1 ported and green; v1 and v2 sync one board alternately | 5,000 |
 | **M5** | `surface/http` on `app`, every route; change events | every transcript matches; `web/e2e` green on v2 | 4,000 |
-| **M6** | `domain/releases`, proof, `domain/cycle`, the TUI, the tools (the release runner, the GitHub Project bridge, agents, insights, lint, export and import) | every command of v1 exists in v2, or is dropped by a decision | 6,000 |
+| **M6** | `domain/releases`, proof, `domain/cycle`, the TUI, the tools (the release runner, the GitHub Project bridge, insights, lint, export and import; agents left, [below](#agents-and-wtx-their-own-binary)) | every command of v1 exists in v2, or is dropped by a decision | 6,000 |
 | **M7** | The switch: `next/` becomes the root, `cmd/git-board` is v2, v1 is deleted | below | 0 |
 
 **M4, as built (2026-11-05).** `ls` and `show` read the sync records
@@ -949,6 +949,21 @@ reported no difference for two weeks on real boards; the web e2e tests
 pass on v2; and a release of v2 as `git-board` (still `v0.x`) has run a
 week on Pierre's machines. Then one pull request moves `next/` to the
 root and deletes `core/`, `internal/` and the old `cmd/`.
+
+### Agents and wtx: their own binary
+
+v2 has no agents ([ADR 0021](../adr/0021-git-board-v2-same-data-new-code.md)).
+v1's (`internal/wtx`, `internal/ai`, the agent and worktree routes) are
+ported to `git-board-agents`, a Go module of its own in
+`contrib/board-agents/` (module `github.com/guilbep/board-agents`). It
+imports nothing of git-board's: it reads and writes the board through the
+`git-board` CLI's `--json` outputs and, for what only the server computes
+(the cycle, line comments located on the branch, the Work page's agents),
+through the HTTP API, all of it in one file (`internal/board/board.go`)
+to move to v2's routes at M5. Its README says how it leaves this
+repository with `git subtree split`. `make agents` builds and tests it;
+`make ci` doesn't: it is no longer part of git-board. It stays when v1 is
+deleted, until it moves out.
 
 ## 6. Risks and open questions
 

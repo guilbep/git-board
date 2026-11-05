@@ -69,6 +69,10 @@ sync engine, after the release mapper.
 
 ## Left open
 
-- The new repository's name for agents and `wtx`.
+- The new repository's name for agents and `wtx`. Proposed, and built in
+  `contrib/board-agents/` until that repository exists:
+  `github.com/guilbep/board-agents`, its binary `git-board-agents` (`git
+  board-agents`). See the design's
+  [Agents and wtx](../rewrite/design.md#agents-and-wtx-their-own-binary).
 - Whether the bridge is in v0.12 or v0.13: it is planned for v0.12, and
   ships in v0.13 if it would hold the release back.

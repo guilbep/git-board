@@ -1,4 +1,4 @@
-.PHONY: help build test test-pg web-e2e lint fmt vet licences ci compat golden golden-boards install install-latest web-dev web-check web-lint web-build dist docs docs-serve clean
+.PHONY: help build test test-pg web-e2e lint fmt vet licences ci compat golden golden-boards agents install install-latest web-dev web-check web-lint web-build dist docs docs-serve clean
 
 # The public targets, each with its ## line: a bare make prints them.
 help: ## List the make targets
@@ -35,6 +35,12 @@ licences: ## Check every licence, Go modules and the web app's packages
 # because the binary embeds web/dist.
 ci: web-check web-build build vet test compat ## Everything CI runs
 	@test -z "$$(gofmt -l .)" || (echo "gofmt needs to be run on:"; gofmt -l .; exit 1)
+
+# git-board-agents (contrib/board-agents): v1's agents and wtx, out of the
+# binary (ADR 0021). A module of its own, so ./... above never reaches it,
+# and not in ci: it builds and tests on its own, until it has its own repository.
+agents: ## Build, vet and test contrib/board-agents, its own module (not in make ci)
+	cd contrib/board-agents && go build ./... && go vet ./... && go test ./...
 
 # v2's contract with v1 (docs/rewrite/compat.md): the golden boards in
 # next/testdata/golden, v1's outputs on them, and the HTTP API's
