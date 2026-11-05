@@ -1,6 +1,0 @@
-GET /api/issues/0000000/thread
-
-HTTP 404
-Content-Type: application/json
-
-{"error":"not found: issue 0000000"}

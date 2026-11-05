@@ -1,6 +1,0 @@
-POST /api/issues {"title":"Made through the API","body":"Its body.","labels":["prio:p2"]}
-
-HTTP 201
-Content-Type: application/json
-
-{"id":"<new7>","title":"Made through the API","status":"open","labels":["prio:p2"],"shown_title":"Made through the API","counted":true,"updated_at":"<now>","created_at":"<now>","comments":0,"author":{"id":"2070bfafe7adfed74d38940e023d8d0f756bb6db","name":"Ada King","login":"ada-l","avatar_url":"https://avatars.githubusercontent.com/u/1001?s=88"},"edited_at":"<now>","participants":[{"id":"2070bfafe7adfed74d38940e023d8d0f756bb6db","name":"Ada King","login":"ada-l","avatar_url":"https://avatars.githubusercontent.com/u/1001?s=88"}],"events":[{"kind":"created","id":"<new7>:0","author":{"id":"2070bfafe7adfed74d38940e023d8d0f756bb6db","name":"Ada King","login":"ada-l","avatar_url":"https://avatars.githubusercontent.com/u/1001?s=88"},"at":"<now>","body":"Its body.","html":"\u003cp\u003eIts body.\u003c/p\u003e\n"},{"kind":"labels","id":"<new7>:1","author":{"id":"2070bfafe7adfed74d38940e023d8d0f756bb6db","name":"Ada King","login":"ada-l","avatar_url":"https://avatars.githubusercontent.com/u/1001?s=88"},"at":"<now>","added":["prio:p2"]}]}

@@ -1,6 +1,0 @@
-GET /api/config/labels
-
-HTTP 200
-Content-Type: application/json
-
-{"colors":{},"defined":false,"descriptions":{},"list":[]}

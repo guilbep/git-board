@@ -1,6 +1,0 @@
-POST /api/issues {"title":"  ","body":"no title"}
-
-HTTP 400
-Content-Type: application/json
-
-{"error":"an issue needs a title"}

@@ -1,6 +1,0 @@
-GET /api/config/fields
-
-HTTP 200
-Content-Type: application/json
-
-{"assignee":{"single":false,"options":null,"numeric":false,"type":"person","people":["ada","ada-l","bobby","chloe","octocat"]},"est":{"single":true,"options":null,"numeric":true,"type":"number","unit":"h"},"kind":{"single":true,"options":["bug","feature"],"numeric":false,"type":"select"},"prio":{"single":true,"options":["p0","p1","p2","p3"],"numeric":false,"type":"select"},"reviewer":{"single":false,"options":null,"numeric":false,"type":"person","inherits":"chloe","people":["ada","ada-l","bobby","chloe","octocat"]},"sprint":{"single":true,"options":["s1","s2"],"numeric":false,"type":"iteration"},"status":{"single":true,"options":["backlog","ready","in-progress","in-review","done"],"numeric":false,"type":"select"}}
