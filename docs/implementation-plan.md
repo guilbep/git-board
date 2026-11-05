@@ -1170,3 +1170,30 @@ without `internal/`. The four steps of ADR 0020 are done.
   short; a last line without its line feed that isn't JSON is left out.
   Test: `TestPackBeingAppendedIsLeftOut`.
 - `dstest`, "read while written": every datastore, PostgreSQL included.
+
+### Status 2026-11-05: v2's M1, a read-only `git-board-next`
+
+The rewrite's first milestone (docs/rewrite/design.md, section 5), on
+`rewrite/m1`, all in `next/`: the kernel and its pack format, the git and
+in-memory datastores and their conformance suite, the view (sqlite), the
+issue and person kinds, and `git-board-next` with `ls`, `show` and `log`.
+Nothing in `next/` imports v1, nor v1 `next/` (`next/layers_test.go`).
+
+- **Same output as v1, byte for byte**, text and `--json`/`--jq`/
+  `--template`, exit codes and error lines: compared on boardgen's 2,000,
+  5,000 and 20,000-issue boards, a board made with v1's commands (edits,
+  deletes, roles, flat kinds) and one written with git's plumbing (a
+  merge, a comment pulled twice, broken entities, refs that aren't
+  entities). Not yet: forges and project numbers (sync records, M4;
+  numbers, M2), `--at`, `follows:@me`'s hand-followed issues (the inbox,
+  M2).
+- **The budgets, 20,000 issues, 2 CPUs, medians**: `ls` 85 ms (v1 1.4 s),
+  a first `ls` 2.7 s (v1 13.7 s), `show` 23 ms (v1 157 ms), free text
+  204 ms (v1 1.7 s), after a pull of 500 issues 320 ms (budget 300).
+  Benchmarks: `next/surface/cli/bench_test.go`.
+- **Where v2 departs from the design**, each with its reason: rows are
+  read from a file per kind beside `view.db` (sqlite was 30 to 60 ms of a
+  100 ms `ls`); terms join texts as a search index built by the first
+  query that searches; objects are read through `git cat-file
+  --batch-command` and written as loose objects, go-git is not used
+  (design.md, open question 3).
