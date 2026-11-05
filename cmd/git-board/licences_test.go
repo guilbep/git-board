@@ -108,7 +108,7 @@ func allowed(expr string) bool {
 // "dev". It fails on any outside permissive. -v lists them: make licences.
 func TestLicencesOfTheWebApp(t *testing.T) {
 	t.Parallel()
-	data, err := os.ReadFile("../../next/web/package-lock.json")
+	data, err := os.ReadFile("../../web/package-lock.json")
 	if err != nil {
 		t.Fatal(err)
 	}
