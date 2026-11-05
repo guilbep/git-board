@@ -537,7 +537,9 @@ the datastore's heads every second for the others, which it tells a
 second later (an API write lands in the datastore just before its
 observer runs: the wait lets the observer tell it, with its `by`).
 `.git-board.toml` written by hand is seen the same way: the board opens
-again on it, and `config` is told. A page that falls 64 events behind is dropped: its stream closes,
+again on it, and `config` is told. A write of it through the API (24,
+25, 33 to 35) opens the board once and is told once, with its `by`: the
+watcher knows the server's own write. A page that falls 64 events behind is dropped: its stream closes,
 it reconnects (`retry`) and reloads. A comment line every 25 seconds
 keeps proxies from closing the stream.
 

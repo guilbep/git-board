@@ -5,6 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -153,5 +155,36 @@ func TestEventsNoGhostGone(t *testing.T) {
 	case data := <-sub:
 		t.Fatalf("an event for a kind the pages hear from the server: %s", data)
 	default:
+	}
+}
+
+// A config write through the API is told once, by its page, and opens
+// the board once: the watcher knows the server's own write (review
+// finding 4).
+func TestEventsConfigOnce(t *testing.T) {
+	t.Parallel()
+	dir, _ := newBoard(t)
+	a := newAPI(t, dir)
+	wctx, stop := context.WithCancel(ctx)
+	defer stop()
+	go a.s.Watch(wctx, 30*time.Millisecond)
+	ch := stream(t, a)
+	time.Sleep(100 * time.Millisecond)
+	want[configRes](t, a.do("PATCH", "/api/config", map[string]any{"set": map[string]any{"views.mine.sort": "updated"}}, "X-Git-Board-Client", "page-A"), 200)
+	var configs []Event
+	for _, e := range collect(ch, 300*time.Millisecond) {
+		if e.Kind == "config" {
+			configs = append(configs, e)
+		}
+	}
+	if len(configs) != 1 || configs[0].By != "page-A" {
+		t.Fatalf("config events = %+v, want one by page-A", configs)
+	}
+	// written by hand: told, by no page
+	if err := os.WriteFile(filepath.Join(dir, ".git-board.toml"), []byte(boardToml), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if e := next(t, ch, "config"); e.By != "" {
+		t.Fatalf("a hand edit = %+v", e)
 	}
 }

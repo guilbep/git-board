@@ -22,6 +22,7 @@ type Server struct {
 	events     broker
 	seen       seen
 	configPath string
+	own        ownConfig // the server's own writes of .git-board.toml
 	gitDir     string
 	version    string
 	exposed    []string

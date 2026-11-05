@@ -306,10 +306,12 @@ func (s *Server) putConfig(ctx context.Context, r putConfigReq) (Reply, error) {
 	if err != nil {
 		return Reply{}, on("text", err)
 	}
-	if err := app.SaveConfig(dir, []byte(r.Text), base, r.DryRun); err != nil {
-		return Reply{}, on("text", err)
+	if !r.DryRun {
+		if err := s.writeConfig(ctx, func() error { return app.SaveConfig(dir, []byte(r.Text), base, false) }); err != nil {
+			return Reply{}, on("text", err)
+		}
 	}
-	return s.configWritten(ctx, dir, []byte(r.Text), r.DryRun)
+	return configReply(dir, []byte(r.Text)), nil
 }
 
 type patchConfigReq struct {
@@ -343,11 +345,14 @@ func (s *Server) patchConfig(ctx context.Context, r patchConfigReq) (Reply, erro
 		return Reply{}, on("set", err)
 	}
 	if !r.DryRun {
-		if text, err = app.SetConfigKeys(dir, set, base, false); err != nil {
+		if err := s.writeConfig(ctx, func() (err error) {
+			text, err = app.SetConfigKeys(dir, set, base, false)
+			return err
+		}); err != nil {
 			return Reply{}, on("set", err)
 		}
 	}
-	return s.configWritten(ctx, dir, text, r.DryRun)
+	return configReply(dir, text), nil
 }
 
 // tomlish is a JSON value as TOML writes it: a whole number an integer.
@@ -369,17 +374,10 @@ func tomlish(v any) any {
 	return v
 }
 
-// configWritten opens the board again on a file written, tells the
-// pages, and answers the file.
-func (s *Server) configWritten(ctx context.Context, dir string, text []byte, dry bool) (Reply, error) {
-	if !dry {
-		if err := s.boards.reopen(ctx); err != nil {
-			return Reply{}, err
-		}
-		s.publish(ctx, Event{Kind: "config", By: clientOf(ctx)})
-	}
+// configReply answers the file.
+func configReply(dir string, text []byte) Reply {
 	c := configOf(dir, text)
-	return Reply{ETag: c.Version, Body: c}, nil
+	return Reply{ETag: c.Version, Body: c}
 }
 
 type markdownReq struct {

@@ -18,12 +18,11 @@ type forgeNameRes struct {
 }
 
 func (s *Server) addForge(ctx context.Context, r app.NewForge) (Reply, error) {
-	name, err := board(ctx).AddForge(ctx, r)
-	if name != "" {
-		if rerr := s.forgesWritten(ctx); rerr != nil && err == nil {
-			err = rerr
-		}
-	}
+	var name string
+	err := s.writeConfig(ctx, func() (err error) {
+		name, err = board(ctx).AddForge(ctx, r)
+		return err
+	})
 	if err != nil {
 		return Reply{}, on("url", err)
 	}
@@ -44,32 +43,22 @@ func (s *Server) patchForge(ctx context.Context, r forgeReq) (forgeSyncRes, erro
 	if r.Sync == nil {
 		return forgeSyncRes{}, invalid("sync", errNoSync)
 	}
-	if err := board(ctx).SetForgeSync(r.Name, *r.Sync); err != nil {
+	if err := s.writeConfig(ctx, func() error { return board(ctx).SetForgeSync(r.Name, *r.Sync) }); err != nil {
 		return forgeSyncRes{}, on("sync", err)
 	}
-	return forgeSyncRes{r.Name, *r.Sync}, s.forgesWritten(ctx)
+	return forgeSyncRes{r.Name, *r.Sync}, nil
 }
 
 func (s *Server) removeForge(ctx context.Context, r forgeReq) (Reply, error) {
-	if err := board(ctx).RemoveForge(r.Name); err != nil {
+	if err := s.writeConfig(ctx, func() error { return board(ctx).RemoveForge(r.Name) }); err != nil {
 		return Reply{}, err
 	}
-	return Reply{Status: http.StatusNoContent}, s.forgesWritten(ctx)
+	return Reply{Status: http.StatusNoContent}, nil
 }
 
 func credentials(ctx context.Context, _ none) (items[app.Credential], error) {
 	cs, err := board(ctx).Credentials(ctx)
 	return items[app.Credential]{Items: cs}, err
-}
-
-// forgesWritten opens the board again on its file written, and tells
-// the pages.
-func (s *Server) forgesWritten(ctx context.Context) error {
-	if err := s.boards.reopen(ctx); err != nil {
-		return err
-	}
-	s.publish(ctx, Event{Kind: "config", By: clientOf(ctx)})
-	return nil
 }
 
 var errNoSync = errors.New("sync: true or false")
