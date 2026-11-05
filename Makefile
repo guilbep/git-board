@@ -1,4 +1,4 @@
-.PHONY: help build test test-pg web-e2e lint fmt vet licences ci compat golden golden-boards agents install install-latest web-dev web-check web-lint web-build next-web-dev next-web-check next-web-build next-web-e2e dist docs docs-serve clean
+.PHONY: help build test test-pg perf web-e2e lint fmt vet licences ci compat golden golden-boards agents install install-latest web-dev web-check web-lint web-build next-web-dev next-web-check next-web-build next-web-e2e dist docs docs-serve clean
 
 # The public targets, each with its ## line: a bare make prints them.
 help: ## List the make targets
@@ -51,6 +51,32 @@ BIN ?=
 compat: ## Run a binary over the golden boards and compare with v1's outputs (BIN=path, default v1)
 	@set -e; bin="$(BIN)"; if [ -z "$$bin" ]; then d=$$(mktemp -d); trap 'rm -rf "$$d"' EXIT; bin=$$d/git-board; go build -o $$bin ./cmd/git-board; fi; \
 	GIT_BOARD_COMPAT_PENDING=$(if $(BIN),1,) GIT_BOARD_COMPAT_BIN=$$(cd $$(dirname $$bin) && pwd)/$$(basename $$bin) go test -count=1 -run 'TestCompat|TestGoldensComplete' ./next/golden/
+
+# The timed budgets (docs/guide/performance.md, v2): boardgen's boards of
+# 5,000 and 20,000 issues, made once for a seed in PERF_CACHE, each run on
+# a copy (the writes add to it); the CLI's and the server's benchmarks,
+# PERF_COUNT runs of each; their medians against
+# next/testdata/perf/budgets.txt. Fails when one is over its budget by
+# more than PERF_TOLERANCE. Meant for a quiet machine (CI's nightly job),
+# not make ci: a shared runner's noise would fail it.
+PERF_CACHE ?= $(HOME)/.cache/git-board/perf
+PERF_OUT ?= perf-results
+PERF_COUNT ?= 5
+PERF_TOLERANCE ?= 0.15
+PERF_SEED ?= 1
+PERF_BOARDS ?= 5k:5000 20k:20000
+perf: ## Time the CLI and the server on 5k and 20k issues against next/testdata/perf/budgets.txt
+	@set -e; mkdir -p "$(PERF_CACHE)" "$(PERF_OUT)"; args=""; \
+	for spec in $(PERF_BOARDS); do label=$${spec%%:*}; n=$${spec#*:}; \
+		board="$(PERF_CACHE)/boardgen-n$$n-seed$(PERF_SEED)"; \
+		if [ ! -d "$$board" ]; then rm -rf "$$board.tmp"; go run ./cmd/boardgen -n $$n -seed $(PERF_SEED) "$$board.tmp"; mv "$$board.tmp" "$$board"; fi; \
+		w=$$(mktemp -d); trap 'rm -rf "$$w"' EXIT; cp -r "$$board" "$$w/board"; \
+		printf '\n[experimental]\nfeatures = ["cycle"]\n' >> "$$w/board/.git-board.toml"; \
+		echo "perf: $$label ($$n issues)"; \
+		GIT_BOARD_BENCH_REPO="$$w/board" go test ./next/surface/cli ./next/surface/http -run - -bench . -benchtime 5x -count $(PERF_COUNT) -timeout 60m | tee "$(PERF_OUT)/bench-$$label.txt"; \
+		rm -rf "$$w"; args="$$args $$label=$(PERF_OUT)/bench-$$label.txt"; \
+	done; \
+	go run ./next/tools/perfcheck -budgets next/testdata/perf/budgets.txt -tolerance $(PERF_TOLERANCE) -report $(PERF_OUT)/report.md $$args
 
 # Records what v1 prints on the golden boards, and what its API answers:
 # run it when a board or a command changes, and review the diff. v1 must

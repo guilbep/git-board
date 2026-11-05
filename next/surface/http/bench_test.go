@@ -1,6 +1,8 @@
 package httpapi
 
 import (
+	"bufio"
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -8,6 +10,7 @@ import (
 	"os/exec"
 	"strings"
 	"testing"
+	"time"
 )
 
 // The server's budgets (docs/rewrite/design.md, section 4) on
@@ -94,5 +97,60 @@ func BenchmarkWorkTeamFirst(b *testing.B) {
 		b.StopTimer()
 		s.Close()
 		b.StartTimer()
+	}
+}
+
+// The filters panel's counts, every facet: what a board asks with its
+// list.
+func BenchmarkFacets(b *testing.B) { benchGet(b, "/api/labels") }
+
+// fanOut is how many pages listen to the change events in
+// BenchmarkEventsFanOut.
+const fanOut = 50
+
+// A comment through the API, told to fanOut pages: from the request to
+// the last page's event.
+func BenchmarkEventsFanOut(b *testing.B) {
+	_, h, dir := benchAPI(b)
+	srv := httptest.NewServer(h)
+	defer srv.Close()
+	got := make(chan struct{}, fanOut*4)
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	for range fanOut {
+		req, _ := http.NewRequestWithContext(ctx, "GET", srv.URL+"/api/events", nil)
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			b.Fatal(err)
+		}
+		go func() {
+			defer res.Body.Close()
+			sc := bufio.NewScanner(res.Body)
+			for sc.Scan() {
+				if strings.HasPrefix(sc.Text(), "data: ") && strings.Contains(sc.Text(), `"kind":"issue"`) {
+					got <- struct{}{}
+				}
+			}
+		}()
+	}
+	out, err := exec.Command("git", "-C", dir, "for-each-ref", "--count=1", "--format=%(refname:lstrip=3)", "refs/board/issue/").Output()
+	if err != nil {
+		b.Fatal(err)
+	}
+	path := srv.URL + "/api/issues/" + strings.TrimSpace(string(out)) + "/comments"
+	time.Sleep(100 * time.Millisecond) // every page subscribed
+	for b.Loop() {
+		res, err := http.Post(path, "application/json", strings.NewReader(`{"body":"from the fan-out benchmark"}`))
+		if err != nil || res.StatusCode != 201 {
+			b.Fatalf("POST: %v %v", res, err)
+		}
+		res.Body.Close()
+		for range fanOut {
+			select {
+			case <-got:
+			case <-time.After(10 * time.Second):
+				b.Fatal("a page had no event")
+			}
+		}
 	}
 }

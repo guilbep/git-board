@@ -103,9 +103,11 @@ events; Enable binary release (v1's `/api/releases/setup`) is Settings ›
 Release now, a table of the file. The Work page (experimental: its link
 shows with the cycle on) is v1's on `GET /api/cycle`, without v1's
 agents and its aside (what waits for the forges is Sync's). It reads
-every open issue's thread and evidence, a few at once, the branches
-once: 71 s for the 12,000 open issues of the 20,000-issue board (224 s
-one at a time with each issue's git reads; v1 took over 400 s). An issue's
+every open issue's thread at once and keeps each row by its version,
+the viewer and the code's refs: 2.7 s for the 12,000 open issues of the
+20,000-issue board the first time (71 s before; v1 took over 400 s),
+230 ms after, and it pages as the lists do (`limit`, `group`, `cursor`;
+performance.md, The Work page). An issue's
 History draws the cycle's step bars from `GET /api/issues/{id}/cycle`.
 Attaching files (paste, drop, pick in a text, as v1) works on routes 40
 and 41; a forge's pictures load through route 42. Waiting for their

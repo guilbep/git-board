@@ -346,7 +346,7 @@ Until then they answer 404 `not-found`.
 | 46 | `PATCH /api/releases/{tag}` | `{notes}`, `{state: "yanked", reason}`, `{adopt: [proposal]}`: `{}`; `{state: "promoted"}`: 202, the job (built) |
 | 47 | `POST /api/releases/{tag}/comments` | `{body}`: a comment on its record (built) |
 | 48 | `POST /api/environments/{env}/deploy` | `{tag}` (none: the trunk's head, to the followed environment); a rollback is a deploy of an older tag with `reason`; 202, the job (built) |
-| 49 | `GET /api/issues/{id}/cycle` | the cycle (experimental): its step, gate and evidence (branches, plan, tests), as one read (built; the PRs and environments later); its list, `GET /api/cycle` (`who`: `me`, `team`), is the Work page's `{needs, waiting}` (built) |
+| 49 | `GET /api/issues/{id}/cycle` | the cycle (experimental): its step, gate and evidence (branches, plan, tests), as one read (built; the PRs and environments later); its list, `GET /api/cycle` (`who`: `me`, `team`), is the Work page's `{needs, waiting}` (built), paged with `limit` (each group's first rows, `needs_total`, `needs_next`…) and `group`, `cursor` |
 | 50 | `POST /api/issues/{id}/cycle/{action}` | a step's action: sign off, open or merge a pull, run the tests, review, resolve |
 | 51 | `GET /api/insights` | `field`, `days`, `view`: flow, throughput, cycle time, burn-up, as `insights --json` (built); `sprint` (`@current` or a slug): `{sprint, title, markdown}`, its report |
 | 52 | `GET /api/github-project` | the GitHub Project bridge: its last check, and where each field lives (*built*) |

@@ -94,3 +94,23 @@ func BenchmarkLsFirst(b *testing.B) {
 		}
 	}
 }
+
+// ls with free text, first on a board whose view has no search index
+// yet: it builds it (budget 5 s at 20,000 issues).
+func BenchmarkLsTextFirst(b *testing.B) {
+	dir := benchRepo(b)
+	common, err := exec.Command("git", "-C", dir, "rev-parse", "--path-format=absolute", "--git-common-dir").Output()
+	if err != nil {
+		b.Fatal(err)
+	}
+	view := filepath.Join(strings.TrimSpace(string(common)), "board", "v2")
+	for b.Loop() {
+		b.StopTimer()
+		os.RemoveAll(view)
+		Main(ctx, []string{"-C", dir, "ls"}, io.Discard, io.Discard) // the rows, not the index
+		b.StartTimer()
+		if code := Main(ctx, []string{"-C", dir, "ls", "export crash"}, io.Discard, os.Stderr); code != 0 {
+			b.Fatalf("exit %d", code)
+		}
+	}
+}
