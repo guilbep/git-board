@@ -42,7 +42,7 @@ commits, which v1's merge stamps with the time (no output shows them).
 
 Each board is a folder: `board.bundle`, every ref of a git repository
 (`git bundle create --branches --tags --glob=refs/board/*`), or `files/`,
-the Markdown board's folder; `git-board.toml`, its `.git-board.toml`;
+the Markdown board's folder, or `tables.txt`, the PostgreSQL board's rows; `git-board.toml`, its `.git-board.toml`;
 `me`, its `board.me`; `datastore`, its `board.datastore` when it isn't
 git; `commands`, the cases recorded beyond the automatic ones, one command
 line each.
@@ -54,6 +54,7 @@ line each.
 | `broken` | One good issue, and issues no reader folds: an edit of an operation that isn't there, an unknown operation, a pack that isn't JSON, a wrong clock, a log that doesn't start with `create`, an operation with no author, a status that isn't one |
 | `generated` | `boardgen`'s board (15 issues, 5 persons, seed 7), as v1 writes a board of its own, and an issue with a long history: 160 packs of comments, edits, label changes, titles, closes and deletes |
 | `markdown` | A Markdown folder board (`markdown:issues`), copied from git by v1's `datastore copy` with its counter, then one issue written on two branches and merged by git's union driver, then rendered by v1: a description holding a `### ` line, a deleted issue, Unicode |
+| `postgres` | `basic`, copied into PostgreSQL by v1's `datastore copy` with its counter, kept as its tables' rows (`tables.txt`, bytes in hex). Each checkout loads them into a database of its own on the server `GIT_BOARD_TEST_POSTGRES` names, and drops it after; without one, the board is skipped (`make golden-boards` leaves it as it is). v1 prints on it what it prints on `basic`, file for file |
 
 ## The cases
 
@@ -143,7 +144,8 @@ v1 against itself is the same, byte for byte.
 
 The differences `git-board-next` has for now, each closed by a later
 milestone (design.md, section 5): forges from sync records (M4), project
-numbers and the commands that write (M2), the Markdown datastore (M3).
+numbers and the commands that write (M2), the Markdown datastore (M3,
+closed).
 `make compat BIN=<git-board-next>` holds the binary to them as well as
 to `allowed.txt` (it sets `GIT_BOARD_COMPAT_PENDING=1`; v1, with no
 `BIN`, has none). Unlike an allowed difference, a pending one is to go:

@@ -3,6 +3,7 @@ package golden
 import (
 	"bytes"
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"slices"
@@ -36,7 +37,10 @@ func checkout(t *testing.T, b Board) (dir, home string, cases []Case) {
 	if err := os.MkdirAll(home, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := b.Checkout(ctx, dir); err != nil {
+	t.Cleanup(func() { b.Drop(context.Background(), dir) })
+	if err := b.Checkout(ctx, dir); errors.Is(err, ErrNoPostgres) {
+		t.Skipf("%s: %v", b.Name, err)
+	} else if err != nil {
 		t.Fatal(err)
 	}
 	ids, err := b.IssueIDs(ctx, dir)
@@ -87,13 +91,13 @@ func TestCompat(t *testing.T) {
 		}
 	})
 	for _, b := range boards(t) {
-		mu.Lock()
-		ran[b.Name] = true
-		mu.Unlock()
 		t.Run(b.Name, func(t *testing.T) {
 			t.Parallel()
 			ctx := context.Background()
-			dir, home, cases := checkout(t, b)
+			dir, home, cases := checkout(t, b) // a board skipped didn't run: its pending entries wait
+			mu.Lock()
+			ran[b.Name] = true
+			mu.Unlock()
 			out := filepath.Join(root, "cli", b.Name)
 			if update {
 				results := map[string]Result{}
@@ -163,7 +167,16 @@ func TestGoldensComplete(t *testing.T) {
 	for _, b := range boards(t) {
 		t.Run(b.Name, func(t *testing.T) {
 			t.Parallel()
-			_, _, cases := checkout(t, b)
+			var cases []Case
+			if b.Datastore == postgres { // its cases are known without a server
+				ids, err := b.IssueIDs(context.Background(), "")
+				if err != nil {
+					t.Fatal(err)
+				}
+				cases = b.Cases(ids)
+			} else {
+				_, _, cases = checkout(t, b)
+			}
 			rec, err := Read(filepath.Join(root, "cli", b.Name))
 			if err != nil {
 				t.Fatalf("%v: make golden", err)

@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -56,12 +57,18 @@ func main() {
 		{"broken", broken},
 		{"generated", generated},
 		{"markdown", markdown},
+		{"postgres", postgres},
 	}
 	for _, b := range boards {
 		if *only != "" && *only != b.name {
 			continue
 		}
-		if err := build(ctx, filepath.Join(*out, b.name), b.make); err != nil {
+		err := build(ctx, filepath.Join(*out, b.name), b.make)
+		if errors.Is(err, errSkipped) {
+			fmt.Fprintf(os.Stderr, "v1gen: %s: %v, left as it is\n", b.name, err)
+			continue
+		}
+		if err != nil {
 			fmt.Fprintf(os.Stderr, "v1gen: %s: %v\n", b.name, err)
 			os.Exit(1)
 		}
@@ -76,6 +83,7 @@ type meta struct {
 	datastore string   // "" for git
 	commands  []string // recorded beyond the automatic ones
 	files     string   // the folder the Markdown board's files are copied from, else ""
+	tables    string   // the PostgreSQL board's tables, dumped, else ""
 }
 
 // build makes a board in a temporary repository and stores it at dir.
@@ -96,12 +104,19 @@ func build(ctx context.Context, dir string, mk func(context.Context, string) (me
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
-	if m.files != "" {
+	switch {
+	case m.files != "":
 		if err := run(ctx, "", "cp", "-R", m.files, filepath.Join(dir, "files")); err != nil {
 			return err
 		}
-	} else if err := run(ctx, repo, "git", "bundle", "create", "-q", filepath.Join(dir, "board.bundle"), "--branches", "--tags", "--glob=refs/board/*"); err != nil {
-		return err
+	case m.tables != "":
+		if err := run(ctx, "", "cp", m.tables, filepath.Join(dir, "tables.txt")); err != nil {
+			return err
+		}
+	default:
+		if err := run(ctx, repo, "git", "bundle", "create", "-q", filepath.Join(dir, "board.bundle"), "--branches", "--tags", "--glob=refs/board/*"); err != nil {
+			return err
+		}
 	}
 	write := map[string]string{"git-board.toml": m.toml, "me": m.me + "\n"}
 	if m.datastore != "" {

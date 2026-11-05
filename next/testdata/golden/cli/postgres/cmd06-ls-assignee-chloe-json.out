@@ -1,0 +1,50 @@
+[
+  {
+    "id": "999eab2e4a22d1af3d62abffe7e62e79db7d12ac",
+    "title": "Ünïcödé: 日本語のタイトル 🚀 — שלום \u0026 \u003cb\u003e (renamed)",
+    "status": "open",
+    "labels": [
+      "area:données",
+      "assignee:chloe",
+      "status:backlog",
+      "étiquette"
+    ],
+    "inherited": [
+      "reviewer:chloe"
+    ],
+    "forges": [
+      {
+        "name": "",
+        "url": ""
+      }
+    ],
+    "shown_title": "Ünïcödé: 日本語のタイトル 🚀 — שלום \u0026 \u003cb\u003e (renamed)",
+    "number": "GB-102",
+    "counted": true,
+    "updated_at": "2025-03-03T21:00:00Z",
+    "created_at": "2025-03-03T20:00:00Z",
+    "comments": 1
+  },
+  {
+    "id": "22c49b4cb2f9ebf5dc7e81d5b5476ec584fb5c71",
+    "title": "Label churn",
+    "status": "open",
+    "labels": [
+      "a",
+      "assignee:chloe",
+      "d",
+      "est:8",
+      "sprint:s2",
+      "status:in-review"
+    ],
+    "inherited": [
+      "reviewer:chloe"
+    ],
+    "shown_title": "Label churn",
+    "number": "GB-103",
+    "counted": true,
+    "updated_at": "2025-03-04T03:00:00Z",
+    "created_at": "2025-03-04T01:00:00Z",
+    "comments": 0
+  }
+]

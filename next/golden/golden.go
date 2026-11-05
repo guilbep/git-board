@@ -74,8 +74,10 @@ func Boards(root string) ([]Board, error) {
 
 // Checkout makes a checkout of the board at dir, a folder that doesn't
 // exist yet: a git repository on main with the board's refs, or with its
-// Markdown folder committed, its .git-board.toml, and board.me (and
-// board.datastore) in its git config. No remote: nothing is fetched.
+// Markdown folder committed, or with its own database loaded with the
+// PostgreSQL board's tables (Drop drops it; ErrNoPostgres without a
+// server); its .git-board.toml, and board.me (and board.datastore) in
+// its git config. No remote: nothing is fetched.
 func (b Board) Checkout(ctx context.Context, dir string) error {
 	toml, err := os.ReadFile(filepath.Join(b.Dir, "git-board.toml"))
 	if err != nil {
@@ -112,8 +114,14 @@ func (b Board) Checkout(ctx context.Context, dir string) error {
 	if err := Git(ctx, dir, "config", "board.me", b.Me); err != nil {
 		return err
 	}
-	if b.Datastore != "" {
-		return Git(ctx, dir, "config", "board.datastore", b.Datastore)
+	ds := b.Datastore
+	if ds == postgres {
+		if ds, err = b.loadPostgres(ctx, dir); err != nil {
+			return err
+		}
+	}
+	if ds != "" {
+		return Git(ctx, dir, "config", "board.datastore", ds)
 	}
 	return nil
 }
@@ -122,7 +130,12 @@ func (b Board) Checkout(ctx context.Context, dir string) error {
 // the ids of refs/board/issue/*, or of the Markdown folder's pack files.
 func (b Board) IssueIDs(ctx context.Context, checkout string) ([]string, error) {
 	var ids []string
-	if b.Datastore != "" {
+	if b.Datastore == postgres {
+		var err error
+		if ids, err = b.postgresIDs(); err != nil {
+			return nil, err
+		}
+	} else if b.Datastore != "" {
 		folder := strings.TrimPrefix(b.Datastore, "markdown:")
 		files, err := filepath.Glob(filepath.Join(checkout, folder, ".board", "issue", "*.jsonl"))
 		if err != nil {
