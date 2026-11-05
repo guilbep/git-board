@@ -441,10 +441,10 @@ func (s *Service) Follow(ctx context.Context, name string, set *bool, login stri
 // StatusReport is what status answers: your open issues, and your inbox
 // in two parts.
 type StatusReport struct {
-	Me       InboxMe `json:"me"`
-	Assigned []Issue `json:"assigned"`
-	Opened   []InboxRow   `json:"opened"`
-	Follows  []InboxRow   `json:"follows"`
+	Me       InboxMe    `json:"me"`
+	Assigned []Issue    `json:"assigned"`
+	Opened   []InboxRow `json:"opened"`
+	Follows  []InboxRow `json:"follows"`
 }
 
 // Status is what needs who writes: the open issues assigned to them, by
