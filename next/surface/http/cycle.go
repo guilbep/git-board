@@ -22,8 +22,15 @@ func cycleReply(v app.CycleView) Reply {
 	return Reply{ETag: v.Version, Body: v}
 }
 
+// withPlanRender renders a cycle's plan as a thread's texts: cleaned,
+// its pictures through the server.
+func withPlanRender(ctx context.Context) context.Context {
+	media := board(ctx).MediaURL(ctx)
+	return app.WithRender(ctx, func(src string) string { return render(src, media) })
+}
+
 func issueCycle(ctx context.Context, r cycleReq) (Reply, error) {
-	v, err := board(ctx).Cycle(ctx, r.ID, "")
+	v, err := board(ctx).Cycle(withPlanRender(ctx), r.ID, "")
 	return cycleReply(v), err
 }
 
@@ -63,7 +70,7 @@ func cycleAct(ctx context.Context, r actReq) (Reply, error) {
 	if err != nil {
 		return Reply{}, err
 	}
-	v, err := board(ctx).Act(ctx, app.CycleAct{Name: id, Action: r.Action, Risk: r.Risk, Verdict: r.Verdict, On: r.On, Body: r.Body,
+	v, err := board(ctx).Act(withPlanRender(ctx), app.CycleAct{Name: id, Action: r.Action, Risk: r.Risk, Verdict: r.Verdict, On: r.On, Body: r.Body,
 		Output: r.Output, Commit: r.Commit, Index: r.Index, Why: r.Why, State: r.State, Path: r.Path, Line: r.Line, Side: r.Side,
 		ReplyTo: r.ReplyTo, Comment: r.Comment, Resolved: r.Resolved, Branch: r.Branch, Number: r.Number, Title: r.Title, SHA: r.SHA})
 	if err != nil {

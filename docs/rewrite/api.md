@@ -447,7 +447,8 @@ skipped, note, waits, mine, actions, evidence, id, version,
 body_version, pr_checked_at, environments}`, with the issue's `version` as `ETag`: an
 action's `If-Match`. `evidence` is `cycle.Input`: the status, the
 criteria, the people holding each gate, the lanes (each branch's step,
-tests and PR chip), the plan, the runs, checks and sign-offs, and `pr`,
+tests and PR chip), the plan (its `html` rendered and cleaned as a
+thread's texts: a plan comes from any branch), the runs, checks and sign-offs, and `pr`,
 the evidence branch's pull request as the forge gates it (`{number, url,
 state, draft, title, body, base, head, merge_commit, author, decision,
 mergeable, merge_state, checks, reviews, requested, can_merge, checking,
