@@ -1,8 +1,10 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"slices"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -48,7 +50,43 @@ func newLabels() *cobra.Command {
 	}
 	js = addJSON(cmd, "print the labels as JSON", jsonFields(issues.LabelCount{}), true)
 	cmd.Flags().BoolVar(&plain, "plain", false, "only the plain labels, no field values")
+	cmd.AddCommand(newLabelsRename())
 	return cmd
+}
+
+func newLabelsRename() *cobra.Command {
+	return &cobra.Command{
+		Use:   "rename <old> <new>",
+		Short: "Rename a label on every issue that has it",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			old, new := args[0], args[1]
+			switch {
+			case old == new:
+				return usageError{errors.New("old and new are the same label")}
+			case strings.TrimSpace(new) != new || new == "" || strings.ContainsAny(new, "\n\r"):
+				return usageError{fmt.Errorf("%q: a label is a name with no space around it and no line break", new)}
+			}
+			b, err := open(cmd, true)
+			if err != nil {
+				return err
+			}
+			defer b.Close()
+			if _, err := b.People.Whom(); err != nil {
+				return err
+			}
+			n, err := b.issues.RenameLabel(cmd.Context(), old, new)
+			if err != nil {
+				return err
+			}
+			s := "s"
+			if n == 1 {
+				s = ""
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "%s → %s on %d issue%s\n", old, new, n, s)
+			return nil
+		},
+	}
 }
 
 // meRow is a person as me --ls --json prints them.

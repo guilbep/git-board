@@ -17,7 +17,7 @@ import (
 )
 
 func newShow() *cobra.Command {
-	var md, noComments bool
+	var md, noComments, web, forge bool
 	var at string
 	var js *jsonOut
 	cmd := &cobra.Command{
@@ -25,8 +25,14 @@ func newShow() *cobra.Command {
 		Short: "Show an issue: its fields, description and comments",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if md && js.on() {
+			if n := countTrue(md, js.on(), web, forge); n > 1 {
 				return usageError{fmt.Errorf("one of --md, --json, --web and --forge")}
+			}
+			if web || forge {
+				if at != "" {
+					return usageError{fmt.Errorf("--at shows the issue here: not with --web or --forge")}
+				}
+				return showOpen(cmd, args[0], forge)
 			}
 			var then time.Time
 			if at != "" {
@@ -75,7 +81,43 @@ func newShow() *cobra.Command {
 	cmd.Flags().BoolVar(&md, "md", false, "render as Markdown")
 	js = addJSON(cmd, "render as JSON", jsonFields(issues.Thread{}), true)
 	cmd.Flags().BoolVar(&noComments, "no-comments", false, "leave the comments out")
+	cmd.Flags().BoolVarP(&web, "web", "w", false, "open it in this repository's web UI")
+	cmd.Flags().BoolVar(&forge, "forge", false, "open it on its forge")
 	return cmd
+}
+
+func countTrue(bs ...bool) int {
+	n := 0
+	for _, b := range bs {
+		if b {
+			n++
+		}
+	}
+	return n
+}
+
+// showOpen opens the issue in the browser: on its forge, the first it
+// is on, or in the web UI (where its server runs, else started here).
+func showOpen(cmd *cobra.Command, name string, forge bool) error {
+	b, err := open(cmd, false)
+	if err != nil {
+		return err
+	}
+	is, err := b.issues.Get(cmd.Context(), name)
+	b.Close() // before a server opens the board
+	if err != nil {
+		return err
+	}
+	if !forge {
+		return runBoardAt(cmd, &logFlags{}, true, "/#/issues/"+is.ID)
+	}
+	for _, f := range is.Forges {
+		if f.URL != "" {
+			fmt.Fprintln(cmd.OutOrStdout(), f.URL)
+			return openURL(f.URL)
+		}
+	}
+	return fmt.Errorf("%w: %s is on no forge yet (git board sync sends it)", issues.ErrNotFound, shortID(is.ID))
 }
 
 // when is a time as the commands print it, in local time.

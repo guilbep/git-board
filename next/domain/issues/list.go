@@ -20,6 +20,9 @@ type Service struct {
 	Schema  *Schema        // never nil: an empty one without a config
 	Avatars people.Avatars // board.avatars
 	Me      kernel.ID      // who writes: board.me; "" for no one
+	// MeName is what @me means when a request doesn't say: serve's --me,
+	// GIT_BOARD_ME; "" for the person who writes.
+	MeName string
 	// Notice, when set, is told what a read leaves aside (an entity
 	// broken, a counter that doesn't read), as v1 logs it.
 	Notice Notice
@@ -129,7 +132,7 @@ func (s *Service) prepare(ctx context.Context, dir people.Directory, r ListReq, 
 	if err := CheckFilter(conds, r.Today); err != nil {
 		return nil, "", &FilterError{err}
 	}
-	me := r.Me
+	me := cmp.Or(r.Me, s.MeName)
 	if RequiresMe(conds) && me == "" {
 		mine := s.myNames(dir)
 		if len(mine) > 0 {

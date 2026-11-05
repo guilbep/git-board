@@ -45,6 +45,7 @@ type Options struct {
 	Dir     string // the repository's working directory
 	Log     *slog.Logger
 	Version string // the binary's
+	Me      string // what @me means: serve's --me, GIT_BOARD_ME; "" for who writes
 	Exposed []string
 	Static  fs.FS // the web app's files; nil serves none
 	// Open opens the board; nil is app.Open with who writes.
@@ -77,6 +78,7 @@ func New(ctx context.Context, o Options) (*Server, error) {
 		b, err := opener(ctx, dir)
 		if err == nil {
 			b.PRs = s.pulls
+			b.Issues.MeName = o.Me
 		}
 		return b, err
 	}
