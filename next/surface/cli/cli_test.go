@@ -84,6 +84,7 @@ func run(t *testing.T, args ...string) (string, string, int) {
 // The commands, end to end: they chdir (-C), so they run one at a time.
 func TestCommands(t *testing.T) {
 	dir, ids := newBoard(t)
+	t.Chdir(dir) // and back after: -C leaves the process there
 	short := func(i int) string { return string(ids[i][:8]) }
 	for _, c := range []struct {
 		args []string
